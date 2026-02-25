@@ -633,9 +633,6 @@ svc_stop_guarded() {
   return 0
 }
 
-for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server; do
-  svc_stop_guarded "$s"
-done
  for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd minidump minidump32 minidump64 bootstat poweroff_charger_log ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server; do 
   svc_stop_guarded "$s"
 done
