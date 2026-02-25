@@ -154,7 +154,7 @@ apply_vm() {
 
   writef_retry /proc/sys/vm/page-cluster 0 1 0 || true
   sysctlw vm.watermark_scale_factor 60
-  sysctlw vm.min_free_kbytes 65536
+  sysctlw vm.min_free_kbytes 32768
 }
 apply_vm
 # ASB:VM:END
@@ -579,15 +579,6 @@ if has resetprop; then
 # ASB:LOG:BEGIN
 if has settings; then
   settings put global dropbox_max_files 8 2>/dev/null || true
-  settings put global hidden_api_policy 0 2>/dev/null || true
-  settings put global hidden_api_policy_p_apps 0 2>/dev/null || true
-  settings put global hidden_api_policy_pre_p_apps 0 2>/dev/null || true
-  settings put global netstats_enabled 0 2>/dev/null || true
-  settings put global app_usage_enabled 0 2>/dev/null || true
-  settings put global package_usage_stats_enabled 0 2>/dev/null || true
-  settings put global recent_usage_data_enabled 0 2>/dev/null || true
-  settings put global memory_usage_profiling_enabled 0 2>/dev/null || true
-  settings put global package_verifier_enable 0 2>/dev/null || true
 fi
 
 apply_logd_props() {
