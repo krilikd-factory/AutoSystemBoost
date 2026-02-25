@@ -544,6 +544,9 @@ apply_logd_props() {
   setprop persist.logd.size.radio 32K 2>/dev/null
   setprop persist.logd.size.system 32K 2>/dev/null
   setprop persist.logd.size.crash 32K 2>/dev/null
+  setprop persist.logd.size.kernel 32K 2>/dev/null
+  setprop persist.logd.size.security 32K 2>/dev/null
+  setprop persist.logd.statistics false 2>/dev/null
 }
 
 apply_logd_props
@@ -578,7 +581,7 @@ svc_stop_guarded() {
   return 0
 }
 
-for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog; do
+for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server; do
   svc_stop_guarded "$s"
 done
 for s in atrace atrace_userdebug traced traced_perf traced_probes traceur logcat logcatd logtagd lpdumpd dumpstate bugreport dmesgd sensor_logger_daemon soccp_logger_daemon; do
