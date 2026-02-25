@@ -44,7 +44,7 @@ ________________________________________________________________________________
                 <Prop Name="vendor.debug.enable.lm" Value="false" />
                 <Prop Name="vendor.enable.prefetch" Value="false" />
                 <Prop Name="vendor.perf.fps_switch_hyst_time_secs" Value="20" />
-                <Prop Name="vendor.perf.gestureflingboost.enable" Value="true" />
+                <Prop Name="vendor.perf.gestureflingboost.enable" Value="false" />
                 <Prop Name="ro.vendor.at_library" Value="libqti-at.so" />
                 <Prop Name="vendor.perf.performancemode.support" Value="true" Target="canoe,alor_interposer,alor" />
                 <Prop Name="vendor.perf.topAppRenderThreadBoost.enable" Value="false" Target="canoe,alor_interposer,alor" />
