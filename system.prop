@@ -1121,4 +1121,13 @@ log.cffdump_with_ifh=0
 log.cffdump_no_memzero=0
 log.dumpx=0
 log.primitives=0
+log_ao=0
+log_fps_interval=0
+persist.vendor.cnss.debug.disabled=1
+persist.vendor.diag.mdlog.auto=false
+persist.sys.stability.mlogservice=false
+persist.sys.stability.record_reboot_file=false
+persist.sys.stability.record_dump_file=false
+persist.vendor.sys.modem.diag=0
+vendor.diag.port=none
 # ASB:LOG:END
