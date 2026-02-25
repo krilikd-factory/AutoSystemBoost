@@ -134,6 +134,18 @@ vidc.debug.level=0
 # ASB:VM:BEGIN
 # ASB:VM:END
 # ASB:NET:BEGIN
+net.tcp.buffersize.default=4096,131072,10485760,4096,131072,10485760
+net.tcp.buffersize.wifi=4096,131072,10485760,4096,131072,10485760
+net.tcp.buffersize.lte=4096,131072,10485760,4096,131072,10485760
+net.tcp.buffersize.5g=4096,131072,10485760,4096,131072,10485760
+net.tcp.buffersize.ethernet=4096,131072,10485760,4096,131072,10485760
+net.tcp.buffersize.hspap=4096,131072,8388608,4096,131072,8388608
+net.tcp.buffersize.hspa=4096,131072,4194304,4096,131072,4194304
+net.tcp.buffersize.umts=4096,128000,2097152,4096,128000,2097152
+net.tcp.buffersize.edge=4096,16384,524288,4096,16384,524288
+net.tcp.buffersize.gprs=4096,8192,262144,4096,8192,262144
+http.max_connections=32
+net.464xlat.cellular.enabled=true
 # ASB:NET:END
 # ASB:AUDIT: removed runtime-state/no-op props (wifi tracing state, runtcpdump command-state)
 # ASB:WIFI:BEGIN
@@ -1012,6 +1024,7 @@ debug.mdpcomp.logs=0
 debug.offline_log.enable=false
 debug.sf.ddms=0
 debug.sf.dump=0
+dmesgd.start=0
 # debug.vendor.perf.smart_touch=0
 debugtool.anrhistory=0
 dump_lightweight_trace.switch=0
