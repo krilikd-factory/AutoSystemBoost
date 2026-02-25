@@ -228,7 +228,9 @@ apply_net() {
 
   sysctlw net.ipv4.tcp_mtu_probing 1
   sysctlw net.ipv4.tcp_slow_start_after_idle 0
-  sysctlw net.ipv4.tcp_no_metrics_save 0
+  sysctlw net.ipv4.tcp_no_metrics_save 1
+  sysctlw net.ipv4.tcp_recovery 1
+  sysctlw net.ipv4.tcp_max_orphans 8192
 
   sysctlw net.ipv4.tcp_keepalive_time 7200
   sysctlw net.ipv4.tcp_keepalive_intvl 75
@@ -237,13 +239,53 @@ apply_net() {
   sysctlw net.core.somaxconn 512
   sysctlw net.ipv4.tcp_max_syn_backlog 2048
   sysctlw net.core.netdev_max_backlog 2000
-
   sysctlw net.core.netdev_budget 180
+  sysctlw net.core.netdev_budget_usecs 5000
+  sysctlw net.core.dev_weight 64
+  
 
   [ -e /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established ] && \
-    sysctlw net.netfilter.nf_conntrack_tcp_timeout_established 43200
+  sysctlw net.netfilter.nf_conntrack_tcp_timeout_established 600
+  [ -e /proc/sys/net/netfilter/nf_conntrack_buckets ] && \
+  sysctlw net.netfilter.nf_conntrack_buckets 16384
+  
 
   sysctlw net.ipv4.tcp_syncookies 1
+  sysctlw net.ipv4.tcp_rfc1337 1
+
+  sysctlw net.core.bpf_jit_enable 1
+  sysctlw net.core.bpf_jit_harden 0
+  sysctlw net.core.bpf_jit_kallsyms 1
+
+  sysctlw net.ipv4.conf.all.rp_filter 0
+  sysctlw net.ipv4.conf.default.rp_filter 0
+  sysctlw net.ipv4.conf.all.accept_redirects 0
+  sysctlw net.ipv4.conf.all.send_redirects 0
+  sysctlw net.ipv4.conf.all.secure_redirects 0
+  sysctlw net.ipv4.icmp_echo_ignore_broadcasts 1
+  sysctlw net.ipv4.icmp_ignore_bogus_error_responses 1
+  [ -e /proc/sys/net/ipv6/conf/all/accept_redirects ] && \
+    sysctlw net.ipv6.conf.all.accept_redirects 0
+  [ -e /proc/sys/net/ipv6/conf/all/accept_ra ] && \
+    sysctlw net.ipv6.conf.all.accept_ra 2
+  [ -e /proc/sys/net/ipv6/conf/all/accept_ra_mtu ] && \
+    sysctlw net.ipv6.conf.all.accept_ra_mtu 1
+  [ -e /proc/sys/net/ipv6/conf/default/accept_ra_mtu ] && \
+    sysctlw net.ipv6.conf.default.accept_ra_mtu 1
+  [ -e /proc/sys/net/ipv6/conf/all/use_tempaddr ] && \
+    sysctlw net.ipv6.conf.all.use_tempaddr 2
+  [ -e /proc/sys/net/ipv6/conf/default/use_tempaddr ] && \
+    sysctlw net.ipv6.conf.default.use_tempaddr 2
+
+  sysctlw net.ipv4.neigh.default.gc_thresh1 128
+  sysctlw net.ipv4.neigh.default.gc_thresh2 512
+  sysctlw net.ipv4.neigh.default.gc_thresh3 1024
+  [ -e /proc/sys/net/ipv6/neigh/default/gc_thresh1 ] && \
+    sysctlw net.ipv6.neigh.default.gc_thresh1 128
+  [ -e /proc/sys/net/ipv6/neigh/default/gc_thresh2 ] && \
+    sysctlw net.ipv6.neigh.default.gc_thresh2 512
+  [ -e /proc/sys/net/ipv6/neigh/default/gc_thresh3 ] && \
+    sysctlw net.ipv6.neigh.default.gc_thresh3 1024
 
 }
 
@@ -537,6 +579,15 @@ if has resetprop; then
 # ASB:LOG:BEGIN
 if has settings; then
   settings put global dropbox_max_files 8 2>/dev/null || true
+  settings put global hidden_api_policy 0 2>/dev/null || true
+  settings put global hidden_api_policy_p_apps 0 2>/dev/null || true
+  settings put global hidden_api_policy_pre_p_apps 0 2>/dev/null || true
+  settings put global netstats_enabled 0 2>/dev/null || true
+  settings put global app_usage_enabled 0 2>/dev/null || true
+  settings put global package_usage_stats_enabled 0 2>/dev/null || true
+  settings put global recent_usage_data_enabled 0 2>/dev/null || true
+  settings put global memory_usage_profiling_enabled 0 2>/dev/null || true
+  settings put global package_verifier_enable 0 2>/dev/null || true
 fi
 
 apply_logd_props() {
@@ -547,6 +598,7 @@ apply_logd_props() {
   setprop persist.logd.size.kernel 32K 2>/dev/null
   setprop persist.logd.size.security 32K 2>/dev/null
   setprop persist.logd.statistics false 2>/dev/null
+  setprop persist.logd.logpersistd stop 2>/dev/null
 }
 
 apply_logd_props
@@ -584,7 +636,7 @@ svc_stop_guarded() {
 for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server; do
   svc_stop_guarded "$s"
 done
-for s in atrace atrace_userdebug traced traced_perf traced_probes traceur logcat logcatd logtagd lpdumpd dumpstate bugreport dmesgd sensor_logger_daemon soccp_logger_daemon; do
+ for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd minidump minidump32 minidump64 bootstat poweroff_charger_log ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server; do 
   svc_stop_guarded "$s"
 done
 
