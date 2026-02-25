@@ -227,7 +227,7 @@ apply_net() {
   [ -e /proc/sys/net/ipv6/udp_wmem_min ] && sysctlw net.ipv6.udp_wmem_min 65536
 
   sysctlw net.ipv4.tcp_mtu_probing 1
-  sysctlw net.ipv4.tcp_slow_start_after_idle 1
+  sysctlw net.ipv4.tcp_slow_start_after_idle 0
   sysctlw net.ipv4.tcp_no_metrics_save 0
 
   sysctlw net.ipv4.tcp_keepalive_time 7200
