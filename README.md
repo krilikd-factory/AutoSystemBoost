@@ -1,8 +1,37 @@
 # AutoSystemBoost
-Copyright (c) 2011-2024 GitHub Inc.
+I've built my first AutoSystemBoost module for the OnePlus 15.
+This module is for those who want:
+Stability, less heat, and better battery life (without sacrificing performance).
+Very loud and high-quality sound from speakers and Bluetooth headphones.
+Improved photo and video quality.
+Fast mobile and WiFi internet, fast and accurate GPS.
+Reduced system logs and unnecessary system clutter.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+1. Audio: loud, clear, and without the clutter
+Maximum quality and volume for speakers and Bluetooth headphones.
+Improved compatibility between paths, profiles, and formats (A2DP/LE Audio).
+Precisely adjust effects without breaking the audio pipe.
+Enhanced Bluetooth profile (BT MAX) – an emphasis on high-quality codecs.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+2. Camera and video: always Ultra profiles
+Ultra profiles are now the default for photos and videos in all modes.
+Increased bitrate and detail (a slight increase in noise may occur – feedback welcome).
+Appearance retouching options are available – let me know which apps I'd like to add.
+
+3. GPS: Faster fixation and more accurate positioning
+Optimized GNSS + LBS behavior.
+Improved source priorities and more appropriate parameters.
+
+4. Wi-Fi / roaming: Faster connection, more stable network
+Fewer delays when switching between access points.
+Optimized scanning and driver behavior.
+
+5. Performance and battery life: a balanced approach
+Reduced heat output without sacrificing performance (no aggressive background reduction).
+Profile settings for everyday use.
+
+6. Google (GMS) HARD SAFE
+Disable secure telemetry/analytics components.
+Reduce AdServices/PrivacySandbox where possible, without breaking push notifications or data banks.
+All settings are applied automatically after loading.
