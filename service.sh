@@ -664,9 +664,6 @@ apply_zram
 apply_extra_settings() {
   has settings || return 0
   settings put global netstats_enabled 0 >/dev/null 2>&1 || true
-  settings put global hidden_api_policy 0 >/dev/null 2>&1 || true
-  settings put global hidden_api_policy_p_apps 0 >/dev/null 2>&1 || true
-  settings put global hidden_api_policy_pre_p_apps 0 >/dev/null 2>&1 || true
   settings put global audio_safe_volume_state 0 >/dev/null 2>&1 || true
   settings put global app_usage_enabled 0 >/dev/null 2>&1 || true
   settings put global package_usage_stats_enabled 0 >/dev/null 2>&1 || true
