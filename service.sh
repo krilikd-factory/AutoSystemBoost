@@ -277,6 +277,17 @@ apply_net() {
   [ -e /proc/sys/net/ipv6/conf/default/use_tempaddr ] && \
     sysctlw net.ipv6.conf.default.use_tempaddr 2
 
+  # ASB:NET_EXTRA IPv6 privacy and DPI bypass (from SysTwks)
+  [ -e /proc/sys/net/ipv6/icmp/echo_ignore_anycast ] && \
+    sysctlw net.ipv6.icmp.echo_ignore_anycast 1
+  [ -e /proc/sys/net/ipv6/icmp/echo_ignore_multicast ] && \
+    sysctlw net.ipv6.icmp.echo_ignore_multicast 1
+  [ -e /proc/sys/net/ipv6/conf/all/proxy_ndp ] && \
+    sysctlw net.ipv6.conf.all.proxy_ndp 1
+  sysctlw net.ipv4.conf.all.accept_source_route 0
+  [ -e /proc/sys/net/ipv6/conf/all/accept_source_route ] && \
+    sysctlw net.ipv6.conf.all.accept_source_route 0
+
   sysctlw net.ipv4.neigh.default.gc_thresh1 128
   sysctlw net.ipv4.neigh.default.gc_thresh2 512
   sysctlw net.ipv4.neigh.default.gc_thresh3 1024
@@ -628,6 +639,57 @@ svc_stop_guarded() {
   svc_stop_guarded "$s"
 done
 
+# ASB:ZRAM:BEGIN - ZRAM optimization (from SysTwks, conservative swappiness for battery)
+apply_zram() {
+  [ -e /sys/block/zram0 ] || return 0
+  HALF_MB=$(awk '/MemTotal/ {printf "%.0f", $2/1024/2}' /proc/meminfo 2>/dev/null)
+  [ -z "$HALF_MB" ] && return 0
+  CPU_CORES=$(nproc 2>/dev/null || echo 8)
+
+  swapoff /dev/block/zram0 >/dev/null 2>&1 || true
+  echo 1 > /sys/block/zram0/reset 2>/dev/null || return 0
+  sleep 2
+
+  echo zstd > /sys/block/zram0/comp_algorithm 2>/dev/null || \
+    echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+  echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
+  [ -f /sys/block/zram0/use_dedup ] && echo 1 > /sys/block/zram0/use_dedup 2>/dev/null || true
+  echo "${HALF_MB}M" > /sys/block/zram0/disksize 2>/dev/null || return 0
+  echo 0 > /sys/block/zram0/queue/iostats 2>/dev/null || true
+  echo 0 > /sys/block/zram0/queue/add_random 2>/dev/null || true
+
+  mkswap /dev/block/zram0 >/dev/null 2>&1 && \
+    swapon /dev/block/zram0 >/dev/null 2>&1 || true
+}
+apply_zram
+# ASB:ZRAM:END
+
+# ASB:EXTRA_SETTINGS:BEGIN - Additional battery/compat settings (from SysTwks/AIST)
+apply_extra_settings() {
+  has settings || return 0
+  settings put global netstats_enabled 0 >/dev/null 2>&1 || true
+  settings put global hidden_api_policy 0 >/dev/null 2>&1 || true
+  settings put global hidden_api_policy_p_apps 0 >/dev/null 2>&1 || true
+  settings put global hidden_api_policy_pre_p_apps 0 >/dev/null 2>&1 || true
+  settings put global audio_safe_volume_state 0 >/dev/null 2>&1 || true
+  settings put global app_usage_enabled 0 >/dev/null 2>&1 || true
+  settings put global package_usage_stats_enabled 0 >/dev/null 2>&1 || true
+}
+apply_extra_settings
+# ASB:EXTRA_SETTINGS:END
+
+# ASB:FUEL_GAUGE:BEGIN - Reset fuel gauge telemetry (from SysTwks)
+(
+  i=0
+  while [ $i -lt 30 ]; do
+    _fg="$(getprop persist.sys.power.fuel.gauge 2>/dev/null)"
+    [ "$_fg" != "0" ] && setprop persist.sys.power.fuel.gauge 0 2>/dev/null
+    sleep 10
+    i=$((i+1))
+  done
+) >/dev/null 2>&1 &
+# ASB:FUEL_GAUGE:END
+
 # ASB:RUNTIME-REAPPLY:BEGIN
 (
   for _delay in 20 60 180; do
@@ -643,6 +705,7 @@ done
     apply_wlan0_qdisc
     apply_mobile_qdisc
     apply_logd_props
+    apply_extra_settings
   done
 ) >/dev/null 2>&1 &
 # ASB:RUNTIME-REAPPLY:END
