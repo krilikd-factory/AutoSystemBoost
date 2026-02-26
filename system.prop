@@ -60,7 +60,77 @@ vendor.fm.a2dp.conc.disabled=true
 persist.bluetooth.a2dp.optional_codecs_enabled=1
 persist.vendor.qcom.bluetooth.aac_frm_ctl.enabled=true
 persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled=true
+# ASB:BT_POWER_SAVE BT sniff mode for battery (from AIST)
+persist.bluetooth.sniff_delay=1
+persist.bluetooth.sniff_max_interval=128
+persist.bluetooth.sniff_min_interval=120
+# ASB:BT_LE_SCAN LE scan throttling for battery (from AIST)
+persist.vendor.bluetooth.le.scan_interval=1000
+persist.vendor.bluetooth.le.scan_window=100
+# ASB:BT_SWB Super Wide Band for better BT call quality (from AIST)
+persist.vendor.bt.enable.swb=true
+persist.vendor.bt.enable.swbpm=true
+persist.vendor.btstack.enable.swb=true
+persist.vendor.btstack.enable.swbpm=true
+persist.vendor.qcom.bluetooth.enable.swb=true
+persist.vendor.qcom.bluetooth.enable.swbpm=true
+persist.vendor.qcom.bluetooth.swb.enabled=true
+persist.vendor.qcom.bluetooth.swbpm.enabled=true
+# ASB:BT_SBC_HD SBC HD and lossless BT support (from AIST)
+persist.bluetooth.sbc_hd_higher_bitrate=1
+persist.bt.sbc_hd_enabled=1
+persist.af.losslessbt.on=1
+# ASB:BT_LHDC LHDC v5 support (from AIST)
+persist.vendor.bluetooth.3rd.lhdcv5.support=true
+bluetooth.a2dp.lhdc=true
+persist.bluetooth.a2dp.lhdc=true
+ro.bluetooth.lhdcsupport=true
+ro.vendor.bluetooth.lhdcsupport=true
+# ASB:BT_ABR disable ABR for maximum audio quality (from AIST)
+vendor.bluetooth.sbc.abr=false
+vendor.bluetooth.aac.abr=false
+vendor.bluetooth.aptx.abr=false
+vendor.bluetooth.ldac.abr=false
+vendor.bluetooth.lhdc.abr=false
+vendor.bluetooth.lc3.abr=false
+# ASB:BT_APTX_ADAPTIVE AptX Adaptive R2 support (from AIST)
+persist.bluetooth.aptxadaptive_offload.enabled=true
+persist.vendor.qcom.bluetooth.aptxadaptiver2_1_support=true
+persist.vendor.qcom.bluetooth.aptxadaptiver2_2_support=true
+persist.vendor.qcom.bluetooth.aptxadaptiver2_3_support=true
+persist.vendor.qcom.bluetooth.lossless_aptx_adaptive_le.enabled=true
+# ASB:BT_CODEC_LATENCY A2DP codec latency optimization (from AIST)
+audio.a2dp.codec.latency=true
+vendor.audio.a2dp.codec.latency=true
+ro.vendor.audio.a2dp.codec.latency=true
+audio.effect.a2dp.enable=1
+vendor.audio.effect.a2dp.enable=1
 # ASB:BT:END
+# ASB:BT_PROFILES BT profile and offload support (from AIST)
+ro.bluetooth.a2dp_offload.supported=true
+vendor.audio.feature.a2dp_offload.enable=true
+bluetooth.profile.a2dp.source.enabled=true
+bluetooth.profile.avrcp.target.enabled=true
+bluetooth.profile.avrcp.controller.enabled=true
+bluetooth.profile.hfp.ag.enabled=true
+bluetooth.profile.hfp.wbs.enabled=true
+bluetooth.profile.asha.central.enabled=true
+bluetooth.profile.gatt.enabled=true
+bluetooth.profile.hid.host.enabled=true
+bluetooth.profile.hid.device.enabled=true
+bluetooth.profile.map.server.enabled=true
+bluetooth.profile.opp.enabled=true
+bluetooth.profile.pan.nap.enabled=true
+bluetooth.profile.pan.panu.enabled=true
+bluetooth.profile.pbap.server.enabled=true
+bluetooth.profile.pbap.client.enabled=true
+bluetooth.profile.bas.client.enabled=true
+bluetooth.profile.ccp.server.enabled=true
+bluetooth.profile.csip.set_coordinator.enabled=true
+bluetooth.profile.vcp.controller.enabled=true
+bluetooth.profile.hap.client.enabled=true
+bluetooth.profile.mcs.server.enabled=true
+bluetooth.profile.tbs.server.enabled=true
 # ASB:CAMERA:BEGIN
 # ASB:CAMERA_LOCK: regression-guard (no functional tweaks; only structure/audit baseline)
 persist.camera.tnr.preview=1
@@ -98,7 +168,7 @@ persist.vendor.camera.ltmforseemore=0
 persist.camera.picturesize.limit.enable=false
 persist.camera.tn.disable=0
 persist.camera.video.ubwc=1
-persist.sys.camera.cameraservice.micompactmemory.enable=true
+persist.sys.camera.cameraservice.micompactmemory.enable=false
 persist.sys.camera.ubwc.enabled=1
 persist.vendor.camera.dual_camera_sat=1
 persist.vendor.camera.eis.enable=1
@@ -147,6 +217,15 @@ net.tcp.buffersize.gprs=4096,8192,262144,4096,8192,262144
 http.max_connections=32
 net.464xlat.cellular.enabled=true
 # ASB:NET:END
+# ASB:RADIO_POWER:BEGIN
+persist.radio.power_save=1
+persist.vendor.radio.power_save=1
+persist.radio.add_power_save=1
+persist.vendor.radio.add_power_save=1
+persist.vendor.radio.poweron_opt=1
+persist.radio.data_no_toggle=1
+persist.radio.NO_STAPA=1
+# ASB:RADIO_POWER:END
 # ASB:AUDIT: removed runtime-state/no-op props (wifi tracing state, runtcpdump command-state)
 # ASB:WIFI:BEGIN
 persist.vendor.wifi.interrupt_test_mode=false
@@ -158,6 +237,27 @@ persist.vendor.wifienhancelog=0
 # ASB:NETGPS_AUDIT keep GNSS tuning in gps.conf/xtwifi.conf; avoid prop-layer overrides that fight vendor HAL
 # ASB:GPS:END
 # ASB:KERNEL:BEGIN
+# ASB:AUDIO_POWER_SAVE audio offload power saving (from AIST - saves battery via DSP offload)
+persist.vendor.audio.power.save.enable=true
+persist.vendor.audio.power.save.setting=0
+audio.lowpower=true
+vendor.audio.lowpower=true
+ro.vendor.audio.lowpower=true
+# ASB:AUDIO_ULL ultra-low latency priority (from AIST)
+vendor.audio.ull.rt.prio=true
+vendor.audio.ull.playback.support=true
+# ASB:DTS_EAGLE DTS Eagle spatial audio (from AIST)
+use.dts_eagle=true
+audio.use.dts_eagle=true
+vendor.audio.use.dts_eagle=true
+DTS_EAGLE_PLATFORM_SUPPORT=true
+vendor.dts.audio.skip_shadow=true
+vendor.dts.audio.set_bypass=true
+vendor.dts.audio.print_eagle=true
+# ASB:AUDIO_SPATIAL spatial audio support (from AIST)
+persist.vendor.audio.spatializer.enable=true
+vendor.audio.useXiaomiSpatializer=true
+ro.vendor.audio.spatializer.support.speaker=true
 audio.gef.debug.flags=false
 audio.gef.enable.traces=false
 persist.vendor.audio.audiologlevel.debug=false
@@ -220,6 +320,10 @@ persist.vendor.audio.fluence.audiorec=true
 persist.vendor.audio.fluence.speaker=true
 persist.vendor.audio.fluence.voicecall=true
 persist.vendor.audio.fluence.voicerec=true
+# ASB:AUDIO_QUALITY safe media bypass and low-latency bargein (from AIST)
+audio.safemedia.bypass=true
+vendor.audio.safemedia.bypass=true
+persist.vendor.audio.ll_playback_bargein=true
 persist.vendor.audio.format.24bit=true
 persist.vendor.audio.format.32bit=true
 persist.vendor.audio.format.float=true
@@ -231,9 +335,8 @@ persist.vendor.audio.hifi.volume=0
 persist.vendor.audio.hp=true
 persist.vendor.audio.induce_crash=false
 persist.vendor.audio.ozo.codec.enable=true
-persist.vendor.audio.scheme.acdb=true
+persist.vendor.audio.scheme.acdb=false
 persist.vendor.audio.silencelowpower.support=true
-persist.vendor.audio.spatializer.enable=false
 persist.vendor.audio.spv3.enable=false
 persist.vendor.audio.spv4.enable=false
 persist.vendor.audio.spv5.enable=false
@@ -641,6 +744,32 @@ persist.displayfeature.dc_backlight.enable=true
 persist.sys.adaptive_hdr_supported=true
 persist.sys.hwui.enable_texture_optimize=false
 ro.config.per_app_memcg=false
+# ASB:LMK_TUNING PSI-based LMK for better battery and memory management (from SysTwks)
+ro.lmk.use_psi=true
+ro.lmk.psi_partial=255
+ro.lmk.psi_complete=70
+ro.lmk.critical_upgrade=true
+ro.lmk.upgrade_low_free_pages=false
+ro.lmk.kill_heaviest_task_dup=false
+ro.lmk.enable_preferred_apps=false
+ro.lmk.use_minfree_levels=false
+ro.lmk.kill_heaviest_task=true
+ro.lmk.swap_compression_ratio=0
+ro.lmk.enhance_batch_kill=false
+ro.lmk.enable_adaptive_lmk=false
+ro.lmk.upgrade_pressure=100
+ro.lmk.swap_free_low_percentage=15
+persist.sys.lmkd.extend_reclaim.enable=false
+persist.sys.lmkd.double_watermark.enable=false
+persist.sys.lmkd.camera_adaptive_lmk.enable=false
+persist.sys.lmk.reportkills=false
+persist.sys.mms.write_lmkd=true
+# ASB:ZRAM ZRAM/swap support props (from SysTwks)
+ro.config.zram=true
+ro.config.zram.support=true
+ro.vendor.qti.config.swap=true
+persist.sys.swapservice.ctrl=true
+persist.sys.stability.swapEnable=true
 ro.vendor.display.ai_disp.enable=true
 ro.vendor.display.gallery_darkmode_dither.enable=true
 ro.vendor.display.gppservice.support=true
@@ -662,6 +791,17 @@ vendor.display.perf.ubwc_optimize=1
 vendor.display.ubwc_disable=0
 vendor.display.uir_support=1
 media.aac_51_output_enabled=true
+# ASB:MEDIA_PIPELINE stagefright improvements (from AIST)
+media.stagefright.enable-rtsp=true
+media.stagefright.enable-record=true
+media.stagefright.enable-meta=true
+media.stagefright.enable-player=true
+media.stagefright.enable-http=true
+media.stagefright.enable-aac=true
+media.stagefright.enable-scan=true
+media.stagefright.thumbnail.prefer_hw_codecs=true
+media.stagefright.audio.deep=true
+media.stagefright.audio.direct=true
 media.recorder.show_manufacturer_and_model=true
 media.stagefright.log-uri=0
 media.stagefright.thumbnail.prefer_ubwc=1
@@ -1134,8 +1274,6 @@ log.cffdump_with_ifh=0
 log.cffdump_no_memzero=0
 log.dumpx=0
 log.primitives=0
-log_ao=0
-log_fps_interval=0
 persist.vendor.cnss.debug.disabled=1
 persist.vendor.diag.mdlog.auto=false
 persist.sys.stability.mlogservice=false
