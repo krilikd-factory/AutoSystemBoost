@@ -25,7 +25,7 @@ setprop persist.vendor.qti.telemetry.disable 1 2>/dev/null
 
 
 if command -v resetprop >/dev/null 2>&1; then
-  resetprop -n tombstoned.max_tombstone_count 4 >/dev/null 2>&1 || true
+  resetprop -n tombstoned.max_tombstone_count 0 >/dev/null 2>&1 || true
   resetprop -n ro.lmk.log_stats false >/dev/null 2>&1 || true
   resetprop -n ro.lmk.debug false >/dev/null 2>&1 || true
   # ASB:MEDIA_LIMITS remove resolution limits
