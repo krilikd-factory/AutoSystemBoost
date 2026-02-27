@@ -1,7 +1,6 @@
 # ASB V13.1 Changelog
 
 ## Bug Fixes
-
 - **Fixed document scanner freeze** — disabled aggressive camera memory compaction (`micompactmemory`) that was blocking the document rectification pipeline after capture
 - Fixed ACDB scheme prop (changed to false — debug feature, not needed for production)
 - Added MTU cleanup in post-fs-data to let kernel auto-negotiate (prevents cellular data issues)
