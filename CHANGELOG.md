@@ -1,44 +1,47 @@
-# ASB V13.4
+# ASB V13.5
 
-## Camera Stability Improvement
+## CPU and Thermal Safety (Wild Kernel)
 
--   Fixed issue where "Document Scanner" mode would freeze after taking
-    a photo.
--   Text Scanner mode remains fully functional.
--   No changes to core image quality pipeline.
+-   Added Wild-kernel detection to avoid applying risky CPU group / cpuset tweaks that can cause constant boosting on some custom kernels.
+-   Kept performance stable on stock kernel while improving thermal stability on Wild.
 
-This resolves the post-capture processing hang without affecting other
-camera modes.
-
-------------------------------------------------------------------------
-
-## CPU and Thermal Adjustments
-
--   Improved uclamp tuning for better balance between performance and
-    stability.
--   Added safe re-application of `sched_util_clamp_min=0` (only if supported by the kernel).
--   Prevents forced clamp-boost behavior on certain custom kernels.
-
-Result: - More consistent frequency scaling - Reduced unnecessary heat
-spikes - Better idle stability
+Result:
+- More stable scaling on Wild
+- Less unnecessary heat in background
+- No impact to gaming behavior expected
 
 ------------------------------------------------------------------------
 
-## GPU Optimization
+## Uclamp Compatibility and Balance
 
--   Tuned `kgsl idle_timer` (when available).
--   Allows GPU to enter power-save state faster when idle.
+-   Reduced foreground uclamp minimum (less persistent UI boosting).
+-   Added support for alternative uclamp paths (cpu.uclamp.* and uclamp.*).
+-   Removed hard uclamp.max forcing (left to kernel/ROM policy).
 
-Improves efficiency during light usage.
+------------------------------------------------------------------------
+
+## Memory Management
+
+-   Updated VM writeback timings for smoother background behavior.
+-   Slightly increased compaction proactiveness to reduce fragmentation stalls.
+-   Tuned stat interval and min_free_kbytes for a more balanced idle/active behavior.
+
+------------------------------------------------------------------------
+
+## Network
+
+-   Removed forced TCP keepalive values (keeps ROM defaults for better standby battery).
+-   Removed security-sensitive BPF JIT and rp_filter overrides (left to ROM/kernel policy).
+-   Kept low-latency queue discipline configuration.
 
 ------------------------------------------------------------------------
 
 ## Summary
 
-ASB V13.4 focuses on:
+ASB V13.5 compared to V13.4 focuses on:
 
--   Fixing Document Scanner freeze
--   Improving thermal behavior on custom kernels
--   Maintaining overall system stability
+-   Improving thermal safety on Wild kernel (avoids risky CPU group tweaks)
+-   Better uclamp compatibility and less persistent boosting
+-   More balanced VM + network sysctl tuning for stability and standby
 
 Recommended for daily use.
