@@ -237,6 +237,20 @@ if ! $BOOTMODE; then
 fi
 
 unzip -o "$ZIPFILE" -x 'META-INF/*' 'common/functions.sh' -d $MODPATH >&2
+
+KVER="$(uname -r 2>/dev/null)"
+case "$KVER" in
+  *wild*) ;;
+  *)
+    if [ -d /vendor/etc/perf ] && [ "$(ls -A /vendor/etc/perf 2>/dev/null)" ]; then
+      mkdir -p $MODPATH/system/vendor/etc
+      cp -af /vendor/etc/perf $MODPATH/system/vendor/etc/ 2>/dev/null
+    elif [ -d /system/vendor/etc/perf ] && [ "$(ls -A /system/vendor/etc/perf 2>/dev/null)" ]; then
+      mkdir -p $MODPATH/system/vendor/etc
+      cp -af /system/vendor/etc/perf $MODPATH/system/vendor/etc/ 2>/dev/null
+    fi
+  ;;
+esac
 [ -f "$MODPATH/common/addon.tar.xz" ] && tar -xf $MODPATH/common/addon.tar.xz -C $MODPATH/common 2>/dev/null
 
 if [ ! -x /data/adb/magisk/busybox ]; then
