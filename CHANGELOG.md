@@ -1,35 +1,34 @@
-# ASB V13.5
+# ASB V13.3
 
-## ðŸ“¸ Camera Fix -- Flash Fully Stable
+## Camera Fix - Flash Fully Stable
 
-Good news: camera flash is now completely fixed.
+Camera flash is now completely fixed.
 
-In previous builds: - V13.2 â†’ Flash sometimes caused camera crashes -
-V13.4 â†’ Crash fixed, but flash photos had green tint
+In previous builds: Flash sometimes caused camera crashes -
 
-In V13.5: - No crashes - No green tint - Full image quality preserved
+In V13.3: - No crashes - No green tint - Full image quality preserved
 
 The internal Turbo RAW processing is kept for proper color and detail,
 but the unstable flash bracketing mode has been safely removed.
 
-Result: Stable flash + correct colors.
+Result: Stable flash and correct colors.
 
 ------------------------------------------------------------------------
 
-## âš™ï¸ Custom Kernel (OP-WILD) Improvements
+## Custom Kernel (OP-WILD) Improvements
 
 -   Automatic BBR detection
-    -   Custom kernel â†’ BBR enabled
-    -   Stock kernel â†’ cubic used automatically
+    -   Custom kernel -\> BBR enabled
+    -   Stock kernel -\> cubic used automatically
 -   sched_util_clamp_min is safely re-applied
     -   Prevents overheating caused by forced CPU boosting
     -   Restores proper dynamic frequency scaling
 
-Idle temperature improvement observed: \~97Â°C â†’ \~40Â°C (custom kernel)
+Idle temperature improvement observed: \~97C -\> \~40C (custom kernel)
 
 ------------------------------------------------------------------------
 
-## ðŸ”‹ Battery & Heat Improvements
+## Battery and Heat Improvements
 
 -   Faster GPU power-save transition (idle_timer tuned)
 -   Removed ineffective scheduler writes
@@ -40,7 +39,7 @@ performance
 
 ------------------------------------------------------------------------
 
-## ðŸ§¹ Harmful System Tweaks Removed
+## Harmful System Tweaks Removed
 
 Several properties that were hurting performance or stability were
 removed:
@@ -55,7 +54,7 @@ This makes the system cleaner and more stable.
 
 ------------------------------------------------------------------------
 
-## ðŸ›  Internal Cleanup
+## Internal Cleanup
 
 -   Removed dead code
 -   Improved kernel parameter enforcement reliability
@@ -65,7 +64,7 @@ This makes the system cleaner and more stable.
 
 ## Summary
 
-ASB V13.5 focuses on:
+ASB V13.3 focuses on:
 
 -   Stable camera flash
 -   Proper image colors
