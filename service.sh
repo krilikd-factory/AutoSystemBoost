@@ -137,12 +137,12 @@ apply_vm() {
     sysctlw vm.dirty_background_ratio 5
   fi
 
-  sysctlw vm.dirty_expire_centisecs 4000
-  sysctlw vm.dirty_writeback_centisecs 3000
+  sysctlw vm.dirty_expire_centisecs 6000
+  sysctlw vm.dirty_writeback_centisecs 5000
   sysctlw vm.vfs_cache_pressure 70
 
-  [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 1
-  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 10
+  [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
+  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 15
 
   writef_retry /proc/sys/vm/page-cluster 0 1 0 || true
   sysctlw vm.watermark_scale_factor 60
@@ -221,7 +221,7 @@ apply_net() {
   [ -e /proc/sys/net/ipv6/udp_wmem_min ] && sysctlw net.ipv6.udp_wmem_min 65536
 
   sysctlw net.ipv4.tcp_mtu_probing 1
-  sysctlw net.ipv4.tcp_slow_start_after_idle 0
+  sysctlw net.ipv4.tcp_slow_start_after_idle 1
   sysctlw net.ipv4.tcp_no_metrics_save 1
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_max_orphans 8192
@@ -460,6 +460,9 @@ apply_kernel
 
 # ASB:IDLE:BEGIN
 apply_idle() {
+  writef /sys/module/lpm_levels/parameters/sleep_disabled 0
+  [ -e /sys/class/kgsl/kgsl-3d0/min_pwrlevel ] && writef /sys/class/kgsl/kgsl-3d0/min_pwrlevel 6
+  [ -e /sys/class/kgsl/kgsl-3d0/bus_split ] && writef /sys/class/kgsl/kgsl-3d0/bus_split 1
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
     settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
@@ -670,7 +673,8 @@ apply_extra_settings
     sysctlw kernel.sched_schedstats 0
     sysctlw kernel.timer_migration 0
     [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
-    apply_cpu_groups
+    [ $IS_WILD -eq 0 ] && apply_cpu_groups
+    apply_idle
     apply_wlan0_txqlen
     apply_wlan0_qdisc
   done
