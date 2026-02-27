@@ -56,7 +56,6 @@ until [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; do
 done
 sleep 15
 
-# ASB:CPU:BEGIN
 cpu_present="$(cat /sys/devices/system/cpu/present 2>/dev/null | tr -d '\n')"
 cpu_max="7"
 case "$cpu_present" in
@@ -67,7 +66,6 @@ esac
 
 N=$((cpu_max + 1))
 
-# Detect cluster boundary: find first CPU with different max freq than cpu0
 _ref_freq="$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null)"
 _big_start="$N"
 if [ -n "$_ref_freq" ]; then
@@ -81,7 +79,6 @@ if [ -n "$_ref_freq" ]; then
     _i=$((_i + 1))
   done
 fi
-# Fallback: if detection failed, use N/2
 [ "$_big_start" -ge "$N" ] && _big_start=$((N / 2))
 [ "$_big_start" -lt 2 ] && _big_start=2
 
@@ -95,38 +92,34 @@ apply_cpu_groups() {
 
   writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive 1 3 0.25 || true
 
-  # uclamp.min: verified writes (these work on WALT 6.12)
   writef_retry /dev/cpuctl/background/cpu.uclamp.min 0 3 0.25 || true
   writef_retry /dev/cpuctl/system-background/cpu.uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 51 3 0.25 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 45 3 0.25 || true
 
-  # uclamp.max: best-effort direct writes (WALT may reject per-cgroup max caps)
   echo 256 > /dev/cpuctl/background/cpu.uclamp.max 2>/dev/null || true
   echo 384 > /dev/cpuctl/system-background/cpu.uclamp.max 2>/dev/null || true
   echo 768 > /dev/cpuctl/foreground/cpu.uclamp.max 2>/dev/null || true
   echo 1024 > /dev/cpuctl/top-app/cpu.uclamp.max 2>/dev/null || true
 
-  # ASB:GPU idle timer — faster power-down when GPU unused
   [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] && \
-    echo 58 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
+    echo 80 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
+
+  [ -w /proc/sys/kernel/sched_util_clamp_min ] && \
+    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
 }
 wait_path /dev/cpuset/background/cpus 8 || true
 wait_path /dev/cpuctl/top-app 8 || true
 
 apply_cpu_groups
 
-# ASB:CPU:END
-
 if has pm; then
   pm disable-user --user 0 com.android.traceur >/dev/null 2>&1 || true
 fi
 
-# ASB:VM:BEGIN
 apply_vm() {
   sysctlw vm.swappiness 20
 
   if [ -e /proc/sys/vm/dirty_bytes ] && [ -e /proc/sys/vm/dirty_background_bytes ]; then
-    # bytes must be written LAST - writing ratio clears bytes and vice versa
     sysctlw vm.dirty_ratio 0
     sysctlw vm.dirty_background_ratio 0
     sysctlw vm.dirty_bytes 67108864
@@ -136,21 +129,19 @@ apply_vm() {
     sysctlw vm.dirty_background_ratio 5
   fi
 
-  sysctlw vm.dirty_expire_centisecs 4000
-  sysctlw vm.dirty_writeback_centisecs 3000
+  sysctlw vm.dirty_expire_centisecs 6000
+  sysctlw vm.dirty_writeback_centisecs 5000
   sysctlw vm.vfs_cache_pressure 70
 
-  [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 1
-  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 10
+  [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
+  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 15
 
   writef_retry /proc/sys/vm/page-cluster 0 1 0 || true
   sysctlw vm.watermark_scale_factor 60
-  sysctlw vm.min_free_kbytes 32768
+  sysctlw vm.min_free_kbytes 49152
 }
 apply_vm
-# ASB:VM:END
 
-# ASB:NET:BEGIN
 sysctl_try() {
   k="$1"; shift
   p="/proc/sys/$(echo "$k" | tr . /)"
@@ -212,6 +203,8 @@ apply_net() {
   sysctlw net.ipv4.tcp_ecn 0
   sysctlw net.ipv4.tcp_early_retrans 3
 
+  [ -e /proc/sys/net/ipv4/tcp_notsent_lowat ] && sysctlw net.ipv4.tcp_notsent_lowat 131072
+
   sysctlw net.ipv4.udp_rmem_min 65536
   sysctlw net.ipv4.udp_wmem_min 65536
   [ -e /proc/sys/net/ipv6/udp_rmem_min ] && sysctlw net.ipv6.udp_rmem_min 65536
@@ -223,9 +216,9 @@ apply_net() {
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_max_orphans 8192
 
-  sysctlw net.ipv4.tcp_keepalive_time 7200
-  sysctlw net.ipv4.tcp_keepalive_intvl 75
-  sysctlw net.ipv4.tcp_keepalive_probes 9
+  sysctlw net.ipv4.tcp_keepalive_time 600
+  sysctlw net.ipv4.tcp_keepalive_intvl 30
+  sysctlw net.ipv4.tcp_keepalive_probes 5
 
   sysctlw net.core.somaxconn 512
   sysctlw net.ipv4.tcp_max_syn_backlog 2048
@@ -233,13 +226,13 @@ apply_net() {
   sysctlw net.core.netdev_budget 180
   sysctlw net.core.netdev_budget_usecs 5000
   sysctlw net.core.dev_weight 64
-  
 
   [ -e /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established ] && \
   sysctlw net.netfilter.nf_conntrack_tcp_timeout_established 600
   [ -e /proc/sys/net/netfilter/nf_conntrack_buckets ] && \
   sysctlw net.netfilter.nf_conntrack_buckets 16384
-  
+  [ -e /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_time_wait ] && \
+  sysctlw net.netfilter.nf_conntrack_tcp_timeout_time_wait 30
 
   sysctlw net.ipv4.tcp_syncookies 1
   sysctlw net.ipv4.tcp_rfc1337 1
@@ -268,7 +261,6 @@ apply_net() {
   [ -e /proc/sys/net/ipv6/conf/default/use_tempaddr ] && \
     sysctlw net.ipv6.conf.default.use_tempaddr 2
 
-  # ASB:NET_EXTRA IPv6 privacy and DPI bypass
   [ -e /proc/sys/net/ipv6/icmp/echo_ignore_anycast ] && \
     sysctlw net.ipv6.icmp.echo_ignore_anycast 1
   [ -e /proc/sys/net/ipv6/icmp/echo_ignore_multicast ] && \
@@ -292,9 +284,7 @@ apply_net() {
 }
 
 apply_net
-# ASB:NET:END
 
-# ASB:WIFI:BEGIN
 apply_wifi_settings() {
   has settings || return 0
   settings put global wifi_scan_always_enabled 0 >/dev/null 2>&1 || true
@@ -351,7 +341,6 @@ apply_netif_qdisc() {
   case "$_qk" in
     fq_codel|fq) return 0 ;;
     mq)
-      # mq root: replace child qdiscs instead
       tc qdisc show dev "$_if" 2>/dev/null | while read -r line; do
         _parent="$(echo "$line" | grep -oE 'parent [0-9a-f]+:[0-9a-f]+' | awk '{print $2}')"
         [ -n "$_parent" ] || continue
@@ -411,9 +400,6 @@ apply_mobile_qdisc
   done
 ) >/dev/null 2>&1 &
 
-# ASB:WIFI:END
-
-# ASB:GPS:BEGIN
 apply_gps_hygiene() {
   has settings || return 0
   [ "$(settings get global assisted_gps_enabled 2>/dev/null)" = "1" ] && return 0
@@ -421,9 +407,7 @@ apply_gps_hygiene() {
 }
 
 apply_gps_hygiene
-# ASB:GPS:END
 
-# ASB:KERNEL:BEGIN
 tune_io_queues() {
   for _b in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
     [ -d "$_b/queue" ] || continue
@@ -446,7 +430,8 @@ apply_kernel() {
   sysctlw kernel.panic_on_oops 0
   sysctlw vm.panic_on_oom 0
 
-  # ASB:PRINTK aggressive log suppression
+  [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
+
   writef_retry /proc/sys/kernel/printk_devkmsg off 1 0 || true
   writef_retry /proc/sys/kernel/printk "0 0 0 0" 1 0 || true
   [ -e /proc/sys/kernel/printk_ratelimit ] && \
@@ -454,12 +439,10 @@ apply_kernel() {
   [ -e /proc/sys/kernel/printk_ratelimit_burst ] && \
     sysctlw kernel.printk_ratelimit_burst 5
 
-  # ASB:DEBUG reduce overhead
   [ -e /proc/sys/vm/oom_dump_tasks ] && sysctlw vm.oom_dump_tasks 0
   [ -e /proc/sys/debug/exception-trace ] && \
     writef_retry /proc/sys/debug/exception-trace 0 1 0 || true
 
-  # ASB:WALT scheduler tuning (WALT-specific, not CFS)
   [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && \
     writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 2 1 0 || true
 
@@ -468,9 +451,7 @@ apply_kernel() {
   tune_io_queues
 }
 apply_kernel
-# ASB:KERNEL:END
 
-# ASB:BT:BEGIN
 apply_idle() {
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
@@ -512,6 +493,8 @@ apply_bt_codec_policy() {
     resetprop -n persist.vendor.bluetooth.a2dp.lhdc.quality best >/dev/null 2>&1 || true
     resetprop -n persist.bluetooth.a2dp.lhdc.channelmode stereo >/dev/null 2>&1 || true
     resetprop -n persist.vendor.bluetooth.a2dp.lhdc.channelmode stereo >/dev/null 2>&1 || true
+    resetprop -n persist.bluetooth.a2dp.lhdc.version 5 >/dev/null 2>&1 || true
+    resetprop -n persist.vendor.bluetooth.a2dp.lhdc.version 5 >/dev/null 2>&1 || true
   fi
 }
 
@@ -548,9 +531,14 @@ apply_bt_audio_hygiene() {
     resetprop -n persist.vendor.bluetooth.a2dp.lhdc.quality best >/dev/null 2>&1 || true
     resetprop -n persist.bluetooth.a2dp.lhdc.channelmode stereo >/dev/null 2>&1 || true
     resetprop -n persist.vendor.bluetooth.a2dp.lhdc.channelmode stereo >/dev/null 2>&1 || true
+    resetprop -n persist.bluetooth.a2dp.lhdc.version 5 >/dev/null 2>&1 || true
+    resetprop -n persist.vendor.bluetooth.a2dp.lhdc.version 5 >/dev/null 2>&1 || true
     resetprop -n persist.vendor.qcom.bluetooth.enable.lpa true >/dev/null 2>&1 || true
     resetprop -n persist.vendor.btstack.enable.lpa true >/dev/null 2>&1 || true
     resetprop -n persist.vendor.bt.enable.lpa true >/dev/null 2>&1 || true
+    resetprop -n persist.vendor.qcom.bluetooth.lc3_offload.enable true >/dev/null 2>&1 || true
+    resetprop -n persist.vendor.qcom.bluetooth.leaudio.enable true >/dev/null 2>&1 || true
+    resetprop -n persist.bluetooth.leaudio.enabled true >/dev/null 2>&1 || true
   fi
 }
 
@@ -578,9 +566,6 @@ if has resetprop; then
     done
   fi
 
-# ASB:BT:END
-
-# ASB:LOG:BEGIN
 if has settings; then
   settings put global dropbox_max_files 8 2>/dev/null || true
 fi
@@ -612,7 +597,7 @@ svc_stop() {
   svc_running "$s" || return 0
   svc_busy "$s" && return 0
 
-  sleep 1
+  sleep 0.5
 
   svc_running "$s" && stop "$s" 2>/dev/null || true
   return 0
@@ -628,11 +613,10 @@ svc_stop_guarded() {
   return 0
 }
 
- for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd minidump minidump32 minidump64 bootstat poweroff_charger_log ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server; do 
+for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd minidump minidump32 minidump64 bootstat poweroff_charger_log ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server tcpdump modem_svc logcat-debug; do
   svc_stop_guarded "$s"
 done
 
-# ASB:ZRAM ZRAM zstd optimization
 apply_zram() {
   [ -e /sys/block/zram0 ] || return 0
   HALF_MB=$(awk '/MemTotal/ {printf "%.0f", $2/1024/2}' /proc/meminfo 2>/dev/null)
@@ -659,38 +643,29 @@ apply_zram
 apply_extra_settings() {
   has settings || return 0
   settings put global audio_safe_volume_state 0 >/dev/null 2>&1 || true
-  # ASB:FIX restore usage stats broken by V13.0/V13.1 (needed for SuperQi)
   settings delete global netstats_enabled >/dev/null 2>&1 || true
   settings delete global app_usage_enabled >/dev/null 2>&1 || true
   settings delete global package_usage_stats_enabled >/dev/null 2>&1 || true
 }
 apply_extra_settings
-# ASB:FUEL_GAUGE single check (persist prop already set in system.prop)
+
 (
   sleep 30
   _fg="$(getprop persist.sys.power.fuel.gauge 2>/dev/null)"
   [ "$_fg" != "0" ] && setprop persist.sys.power.fuel.gauge 0 2>/dev/null
 ) >/dev/null 2>&1 &
 
-# ASB:RUNTIME-REAPPLY:BEGIN
-# Only reapply params that system services (PerfHAL, init) may reset.
-# BT/audio/logd persist after first write — no need to redo.
 (
   for _delay in 30 90 300; do
     sleep "$_delay"
-    # Critical: PerfHAL may reset clamp/schedstats
     writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
     sysctlw kernel.sched_schedstats 0
     sysctlw kernel.timer_migration 0
-    # Cpusets: init.rc may overwrite during late-init
+    [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
     apply_cpu_groups
-    # WiFi qdisc: only meaningful after WiFi connects
     apply_wlan0_txqlen
     apply_wlan0_qdisc
   done
 ) >/dev/null 2>&1 &
-# ASB:RUNTIME-REAPPLY:END
-
-# ASB:LOG:END
 
 exit 0
