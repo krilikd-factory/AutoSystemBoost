@@ -3179,7 +3179,7 @@
           {
             "defaultResult":{
               "ApsRequestFormat":"APS_IMAGE_FORMAT_RAW16",
-              "bracketMode":"APS_BRACKET_TR_PSL_FLASH",
+              "bracketMode":"APS_BRACKET_NONE",
               "featureType":"APS_FEATURE_TURBO_RAW",
               "motionScene":"APS_MOTION_NONE",
               "sceneMode":"APS_SCENE_TURBO_RAW",
