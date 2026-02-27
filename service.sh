@@ -95,14 +95,20 @@ apply_cpu_groups() {
 
   writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive 1 3 0.25 || true
 
-  # uclamp: use raw 0-1024 values (percentage format fails on WALT/kernel 6.12)
+  # uclamp.min: verified writes (these work on WALT 6.12)
   writef_retry /dev/cpuctl/background/cpu.uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/background/cpu.uclamp.max 256 3 0.25 || true
   writef_retry /dev/cpuctl/system-background/cpu.uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/system-background/cpu.uclamp.max 384 3 0.25 || true
-  writef_retry /dev/cpuctl/top-app/cpu.uclamp.max 1024 3 0.25 || true
   writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 51 3 0.25 || true
-  writef_retry /dev/cpuctl/foreground/cpu.uclamp.max 768 3 0.25 || true
+
+  # uclamp.max: best-effort direct writes (WALT may reject per-cgroup max caps)
+  echo 256 > /dev/cpuctl/background/cpu.uclamp.max 2>/dev/null || true
+  echo 384 > /dev/cpuctl/system-background/cpu.uclamp.max 2>/dev/null || true
+  echo 768 > /dev/cpuctl/foreground/cpu.uclamp.max 2>/dev/null || true
+  echo 1024 > /dev/cpuctl/top-app/cpu.uclamp.max 2>/dev/null || true
+
+  # ASB:GPU idle timer — faster power-down when GPU unused
+  [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] && \
+    echo 58 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
 }
 wait_path /dev/cpuset/background/cpus 8 || true
 wait_path /dev/cpuctl/top-app 8 || true
@@ -457,28 +463,7 @@ apply_kernel() {
   [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && \
     writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 2 1 0 || true
 
-  writef_retry /proc/sys/kernel/sched_util_clamp_min 0 1 0 || true
-  _migbase=""
-  for _b in /proc/sys/walt /proc/sys/kernel; do
-    [ -d "$_b" ] || continue
-    if [ -r "$_b/sched_upmigrate" ] || [ -r "$_b/sched_downmigrate" ] || [ -r "$_b/sched_group_upmigrate" ] || [ -r "$_b/sched_group_downmigrate" ]; then
-      _migbase="$_b"
-      break
-    fi
-  done
-  if [ -n "$_migbase" ]; then
-    for _n in "$_migbase/sched_upmigrate" "$_migbase/sched_downmigrate" "$_migbase/sched_group_upmigrate" "$_migbase/sched_group_downmigrate"; do
-      [ -r "$_n" ] || continue
-      _cur="$(readf "$_n")"
-      case "$_cur" in
-        *" "*) continue ;;
-      esac
-      case "${_n##*/}" in
-        *upmigrate)   writef "$_n" 95 ;;
-        *downmigrate) writef "$_n" 85 ;;
-      esac
-    done
-  fi
+  writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
 
   tune_io_queues
 }
@@ -680,32 +665,28 @@ apply_extra_settings() {
   settings delete global package_usage_stats_enabled >/dev/null 2>&1 || true
 }
 apply_extra_settings
-# ASB:FUEL_GAUGE reset fuel gauge telemetry
+# ASB:FUEL_GAUGE single check (persist prop already set in system.prop)
 (
-  i=0
-  while [ $i -lt 30 ]; do
-    _fg="$(getprop persist.sys.power.fuel.gauge 2>/dev/null)"
-    [ "$_fg" != "0" ] && setprop persist.sys.power.fuel.gauge 0 2>/dev/null
-    sleep 10
-    i=$((i+1))
-  done
+  sleep 30
+  _fg="$(getprop persist.sys.power.fuel.gauge 2>/dev/null)"
+  [ "$_fg" != "0" ] && setprop persist.sys.power.fuel.gauge 0 2>/dev/null
 ) >/dev/null 2>&1 &
+
 # ASB:RUNTIME-REAPPLY:BEGIN
+# Only reapply params that system services (PerfHAL, init) may reset.
+# BT/audio/logd persist after first write — no need to redo.
 (
-  for _delay in 20 60 180; do
+  for _delay in 30 90 300; do
     sleep "$_delay"
+    # Critical: PerfHAL may reset clamp/schedstats
+    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
+    sysctlw kernel.sched_schedstats 0
+    sysctlw kernel.timer_migration 0
+    # Cpusets: init.rc may overwrite during late-init
     apply_cpu_groups
-    apply_idle
-    apply_bt_settings
-    apply_bt_codec_policy
-    apply_bt_volume_behavior
-    apply_bt_audio_hygiene
-    apply_audio_effect_hygiene
+    # WiFi qdisc: only meaningful after WiFi connects
     apply_wlan0_txqlen
     apply_wlan0_qdisc
-    apply_mobile_qdisc
-    apply_logd_props
-    apply_extra_settings
   done
 ) >/dev/null 2>&1 &
 # ASB:RUNTIME-REAPPLY:END
