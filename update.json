@@ -1,6 +1,6 @@
- {
-  "version": "V13.1",
-  "versionCode": 131,
-  "zipUrl": "https://github.com/krilikd/AutoSystemBoost/releases/download/ASB/ASB-V13.1.zip",
+{
+  "version": "V13.2",
+  "versionCode": 132,
+  "zipUrl": "https://github.com/krilikd/AutoSystemBoost/releases/download/ASB/ASB-V13.2.zip",
   "changelog": "https://raw.githubusercontent.com/krilikd/AutoSystemBoost/main/CHANGELOG.md"
 }
