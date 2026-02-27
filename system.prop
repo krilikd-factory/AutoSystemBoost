@@ -246,6 +246,10 @@ persist.vendor.radio.add_power_save=1
 persist.vendor.radio.poweron_opt=1
 persist.radio.data_no_toggle=1
 persist.radio.NO_STAPA=1
+ro.ril.disable.power.collapse=0
+ro.ril.power_collapse=1
+ro.config.hw_fast_dormancy=1
+ro.config.hw_power_saving=1
 # ASB:NET:END
 # ASB:AUDIT: removed runtime-state/no-op props (wifi tracing state, runtcpdump command-state)
 # ASB:WIFI:BEGIN
@@ -1145,6 +1149,7 @@ log_ao=0
 log_fps_interval=0
 # ASB:KERNEL:END
 # ASB:LOG:BEGIN
+ro.config.nocheckin=1
 dalvik.vm.dex2oat-minidebuginfo=false
 dalvik.vm.minidebuginfo=false
 debug.c2.use_dmabufheaps=1
