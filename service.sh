@@ -57,6 +57,10 @@ done
 sleep 15
 # ASB:CPU:BEGIN
 
+KREL="$(uname -r 2>/dev/null)"
+IS_WILD=0
+echo "$KREL" | grep -qi "wild" && IS_WILD=1
+
 cpu_present="$(cat /sys/devices/system/cpu/present 2>/dev/null | tr -d '\n')"
 cpu_max="7"
 case "$cpu_present" in
@@ -95,12 +99,11 @@ apply_cpu_groups() {
 
   writef_retry /dev/cpuctl/background/cpu.uclamp.min 0 3 0.25 || true
   writef_retry /dev/cpuctl/system-background/cpu.uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 45 3 0.25 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 15 3 0.25 || true
 
-  echo 256 > /dev/cpuctl/background/cpu.uclamp.max 2>/dev/null || true
-  echo 384 > /dev/cpuctl/system-background/cpu.uclamp.max 2>/dev/null || true
-  echo 768 > /dev/cpuctl/foreground/cpu.uclamp.max 2>/dev/null || true
-  echo 1024 > /dev/cpuctl/top-app/cpu.uclamp.max 2>/dev/null || true
+  writef_retry /dev/cpuctl/background/uclamp.min 0 3 0.25 || true
+  writef_retry /dev/cpuctl/system-background/uclamp.min 0 3 0.25 || true
+  writef_retry /dev/cpuctl/foreground/uclamp.min 15 3 0.25 || true
 
   [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] && \
     echo 80 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
@@ -111,7 +114,9 @@ apply_cpu_groups() {
 wait_path /dev/cpuset/background/cpus 8 || true
 wait_path /dev/cpuctl/top-app 8 || true
 
-apply_cpu_groups
+if [ $IS_WILD -eq 0 ]; then
+  apply_cpu_groups
+fi
 # ASB:CPU:END
 
 if has pm; then
@@ -132,16 +137,16 @@ apply_vm() {
     sysctlw vm.dirty_background_ratio 5
   fi
 
-  sysctlw vm.dirty_expire_centisecs 6000
-  sysctlw vm.dirty_writeback_centisecs 5000
+  sysctlw vm.dirty_expire_centisecs 4000
+  sysctlw vm.dirty_writeback_centisecs 3000
   sysctlw vm.vfs_cache_pressure 70
 
-  [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
-  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 15
+  [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 1
+  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 10
 
   writef_retry /proc/sys/vm/page-cluster 0 1 0 || true
   sysctlw vm.watermark_scale_factor 60
-  sysctlw vm.min_free_kbytes 49152
+  sysctlw vm.min_free_kbytes 32768
 }
 apply_vm
 # ASB:VM:END
@@ -221,9 +226,7 @@ apply_net() {
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_max_orphans 8192
 
-  sysctlw net.ipv4.tcp_keepalive_time 600
-  sysctlw net.ipv4.tcp_keepalive_intvl 30
-  sysctlw net.ipv4.tcp_keepalive_probes 5
+  # keepalive defaults preserved for standby battery
 
   sysctlw net.core.somaxconn 512
   sysctlw net.ipv4.tcp_max_syn_backlog 2048
@@ -242,12 +245,7 @@ apply_net() {
   sysctlw net.ipv4.tcp_syncookies 1
   sysctlw net.ipv4.tcp_rfc1337 1
 
-  sysctlw net.core.bpf_jit_enable 1
-  sysctlw net.core.bpf_jit_harden 0
-  sysctlw net.core.bpf_jit_kallsyms 1
-
-  sysctlw net.ipv4.conf.all.rp_filter 0
-  sysctlw net.ipv4.conf.default.rp_filter 0
+  # security-sensitive JIT/filters left to ROM/kernel policy
   sysctlw net.ipv4.conf.all.accept_redirects 0
   sysctlw net.ipv4.conf.all.send_redirects 0
   sysctlw net.ipv4.conf.all.secure_redirects 0
