@@ -1,75 +1,44 @@
-# ASB V13.3
+# ASB V13.4
 
-## Camera Fix - Flash Fully Stable
+## Camera Stability Improvement
 
-Camera flash is now completely fixed.
+-   Fixed issue where "Document Scanner" mode would freeze after taking
+    a photo.
+-   Text Scanner mode remains fully functional.
+-   No changes to core image quality pipeline.
 
-In previous builds: Flash sometimes caused camera crashes -
-
-In V13.3: - No crashes - No green tint - Full image quality preserved
-
-The internal Turbo RAW processing is kept for proper color and detail,
-but the unstable flash bracketing mode has been safely removed.
-
-Result: Stable flash and correct colors.
+This resolves the post-capture processing hang without affecting other
+camera modes.
 
 ------------------------------------------------------------------------
 
-## Custom Kernel (OP-WILD) Improvements
+## CPU and Thermal Adjustments
 
--   Automatic BBR detection
-    -   Custom kernel -\> BBR enabled
-    -   Stock kernel -\> cubic used automatically
--   sched_util_clamp_min is safely re-applied
-    -   Prevents overheating caused by forced CPU boosting
-    -   Restores proper dynamic frequency scaling
+-   Improved uclamp tuning for better balance between performance and
+    stability.
+-   Added safe re-application of `sched_util_clamp_min=0` (only if supported by the kernel).
+-   Prevents forced clamp-boost behavior on certain custom kernels.
 
-Idle temperature improvement observed: \~97C -\> \~40C (custom kernel)
-
-------------------------------------------------------------------------
-
-## Battery and Heat Improvements
-
--   Faster GPU power-save transition (idle_timer tuned)
--   Removed ineffective scheduler writes
--   Improved overall background efficiency
-
-Real-world results: - Lower idle drain - Cooler device - More stable
-performance
+Result: - More consistent frequency scaling - Reduced unnecessary heat
+spikes - Better idle stability
 
 ------------------------------------------------------------------------
 
-## Harmful System Tweaks Removed
+## GPU Optimization
 
-Several properties that were hurting performance or stability were
-removed:
+-   Tuned `kgsl idle_timer` (when available).
+-   Allows GPU to enter power-save state faster when idle.
 
--   GPU texture upload override (was increasing heat)
--   Broken per-app memory tracking
--   Disabled GL thread boost
--   Over-sensitive touch parameter
--   Incorrect FUSE passthrough configuration (now fixed)
-
-This makes the system cleaner and more stable.
-
-------------------------------------------------------------------------
-
-## Internal Cleanup
-
--   Removed dead code
--   Improved kernel parameter enforcement reliability
--   Minor stability adjustments
+Improves efficiency during light usage.
 
 ------------------------------------------------------------------------
 
 ## Summary
 
-ASB V13.3 focuses on:
+ASB V13.4 focuses on:
 
--   Stable camera flash
--   Proper image colors
--   Lower temperatures
--   Better battery behavior
--   Cleaner system configuration
+-   Fixing Document Scanner freeze
+-   Improving thermal behavior on custom kernels
+-   Maintaining overall system stability
 
-This version is safe for daily use.
+Recommended for daily use.
