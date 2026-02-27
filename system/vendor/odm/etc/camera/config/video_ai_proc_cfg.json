@@ -1,0 +1,67 @@
+{
+ "AlgoSetting": {
+   "LogLevel": 1,
+   "processType": 0,
+   "DumpRangeIdx": 0,
+   "FrontCamNum": 1,
+   "RearCamNum": 4,
+   "SwitchFrameNum": 7,
+   "VideoAIProcPars": [
+     { "comment":"cam0:main",
+       "processEnable": 1,
+       "BoostValue4K": 20,
+       "BoostValue1080P": 20,
+       "BinNumber": 8,
+       "graphIdxNum": 8,
+       "NrStrength": [7, 12, 17, 23, 30, 36, 42, 49],
+       "ChromaNrStrength": [32, 32, 32, 32, 32, 35, 37, 39],
+       "ISOBinIndex":[800, 1600, 3200, 6400, 9200, 12800, 19200, 25600],
+       "graphIdxParam": [0, 0, 0, 1, 0, 0, 0, 0]
+     },
+     { "comment":"cam1:front",
+       "processEnable": 1,
+       "BoostValue4K": 20,
+       "BoostValue1080P": 20,
+       "BinNumber": 8,
+       "graphIdxNum": 8,
+       "NrStrength": [32, 32, 30, 30, 30, 30, 30, 30],
+       "ChromaNrStrength": [32, 32, 32, 32, 32, 31, 31, 31],
+       "ISOBinIndex":[800, 1600, 3200, 6400, 9200, 12800, 19200, 25600],
+       "graphIdxParam": [0, 0, 0, 1, 0, 0, 0, 0]
+     },
+     { "comment":"cam2:ultra wide",
+       "processEnable": 1,
+       "BoostValue4K": 20,
+       "BoostValue1080P": 20,
+       "BinNumber": 8,
+       "graphIdxNum": 8,
+       "NrStrength": [0, 12, 17, 23, 30, 36, 42, 49],
+       "ChromaNrStrength": [32, 32, 32, 32, 32, 35, 37, 39],
+       "ISOBinIndex":[800, 1600, 3200, 6400, 9200, 12800, 19200, 25600],
+       "graphIdxParam": [0, 0, 0, 1, 0, 0, 0, 0]
+     },
+     { "comment":"cam3:tele",
+       "processEnable": 1,
+       "BoostValue4K": 20,
+       "BoostValue1080P": 20,
+       "BinNumber": 8,
+       "graphIdxNum": 8,
+       "NrStrength": [0, 12, 17, 23, 30, 36, 42, 49],
+       "ChromaNrStrength": [32, 32, 32, 32, 32, 35, 37, 39],
+       "ISOBinIndex":[800, 1600, 3200, 6400, 9200, 12800, 19200, 25600],
+       "graphIdxParam": [0, 0, 0, 1, 0, 0, 0, 0]
+     },
+     { "comment":"cam4:ultra tele",
+       "processEnable": 1,
+       "BoostValue4K": 20,
+       "BoostValue1080P": 20,
+       "BinNumber": 8,
+       "graphIdxNum": 8,
+       "NrStrength": [0, 12, 17, 23, 30, 36, 42, 49],
+       "ChromaNrStrength": [32, 32, 32, 32, 32, 35, 37, 39],
+       "ISOBinIndex":[800, 1600, 3200, 6400, 9200, 12800, 19200, 25600],
+       "graphIdxParam": [0, 0, 0, 0, 0, 0, 0, 0]
+     }
+   ]
+ }
+}
