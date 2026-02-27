@@ -22,24 +22,6 @@ writef_retry() {
   return 1
 }
 
-uclamp_set_pct() {
-  _p="$1"
-  _pct="$2"
-  _tries="${3:-3}"
-  _delay="${4:-0.25}"
-  [ -e "$_p" ] || return 1
-  writef_retry "$_p" "$_pct" 1 "$_delay" >/dev/null 2>&1 || true
-  _cur="$(cat "$_p" 2>/dev/null | tr -d '\r\n')"
-  case "$_cur" in
-    max|MAX|*max*|*MAX*|'')
-      _p100="${_pct%.*}"
-      _ival=$(( (_p100 * 1024 + 50) / 100 ))
-      writef_retry "$_p" "$_ival" "$_tries" "$_delay" >/dev/null 2>&1 || true
-    ;;
-  esac
-  return 0
-}
-
 wait_path() {
   local _p="$1" _t="${2:-8}" i=0
   while [ $i -lt $_t ]; do
@@ -84,39 +66,43 @@ esac
 [ -n "$cpu_max" ] || cpu_max="7"
 
 N=$((cpu_max + 1))
-half=$((N / 2))
-[ "$half" -lt 2 ] && half=2
 
-little_start=0
-little_end=$((half - 1))
-mid_end=$((half + 1))
-[ "$mid_end" -gt "$cpu_max" ] && mid_end="$cpu_max"
+# Detect cluster boundary: find first CPU with different max freq than cpu0
+_ref_freq="$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null)"
+_big_start="$N"
+if [ -n "$_ref_freq" ]; then
+  _i=1
+  while [ $_i -le $cpu_max ]; do
+    _f="$(cat /sys/devices/system/cpu/cpu${_i}/cpufreq/cpuinfo_max_freq 2>/dev/null)"
+    if [ -n "$_f" ] && [ "$_f" != "$_ref_freq" ]; then
+      _big_start=$_i
+      break
+    fi
+    _i=$((_i + 1))
+  done
+fi
+# Fallback: if detection failed, use N/2
+[ "$_big_start" -ge "$N" ] && _big_start=$((N / 2))
+[ "$_big_start" -lt 2 ] && _big_start=2
 
-fg_start=$((half - 1))
-[ "$fg_start" -lt 0 ] && fg_start=0
+little_end=$((_big_start - 1))
 
 apply_cpu_groups() {
-  writef_retry /dev/cpuset/background/cpus           "${little_start}-${little_end}" 3 0.25 || true
-  writef_retry /dev/cpuset/system-background/cpus    "${little_start}-${little_end}" 3 0.25 || true
+  writef_retry /dev/cpuset/background/cpus           "0-${little_end}" 3 0.25 || true
+  writef_retry /dev/cpuset/system-background/cpus    "0-${little_end}" 3 0.25 || true
   writef_retry /dev/cpuset/foreground/cpus           "0-${cpu_max}" 3 0.25 || true
   writef_retry /dev/cpuset/top-app/cpus              "0-${cpu_max}" 3 0.25 || true
 
   writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive 1 3 0.25 || true
-  writef_retry /dev/stune/top-app/schedtune.prefer_idle 1 3 0.25 || true
 
-  uclamp_set_pct /dev/cpuctl/background/cpu.uclamp.min 0.00 3 0.25 || true
-  uclamp_set_pct /dev/cpuctl/background/cpu.uclamp.max 25.00 3 0.25 || true
-  uclamp_set_pct /dev/cpuctl/system-background/cpu.uclamp.min 0.00 3 0.25 || true
-  uclamp_set_pct /dev/cpuctl/system-background/cpu.uclamp.max 37.50 3 0.25 || true
-
-  writef_retry /dev/cpuctl/background/uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/background/uclamp.max 256 3 0.25 || true
-  writef_retry /dev/cpuctl/system-background/uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/system-background/uclamp.max 384 3 0.25 || true
-
-  uclamp_set_pct /dev/cpuctl/top-app/cpu.uclamp.max 100.00 3 0.25 || true
-  uclamp_set_pct /dev/cpuctl/foreground/cpu.uclamp.min 5.00 3 0.25 || true
-  uclamp_set_pct /dev/cpuctl/foreground/cpu.uclamp.max 75.00 3 0.25 || true
+  # uclamp: use raw 0-1024 values (percentage format fails on WALT/kernel 6.12)
+  writef_retry /dev/cpuctl/background/cpu.uclamp.min 0 3 0.25 || true
+  writef_retry /dev/cpuctl/background/cpu.uclamp.max 256 3 0.25 || true
+  writef_retry /dev/cpuctl/system-background/cpu.uclamp.min 0 3 0.25 || true
+  writef_retry /dev/cpuctl/system-background/cpu.uclamp.max 384 3 0.25 || true
+  writef_retry /dev/cpuctl/top-app/cpu.uclamp.max 1024 3 0.25 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 51 3 0.25 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.max 768 3 0.25 || true
 }
 wait_path /dev/cpuset/background/cpus 8 || true
 wait_path /dev/cpuctl/top-app 8 || true
@@ -134,17 +120,18 @@ apply_vm() {
   sysctlw vm.swappiness 20
 
   if [ -e /proc/sys/vm/dirty_bytes ] && [ -e /proc/sys/vm/dirty_background_bytes ]; then
-    sysctlw vm.dirty_bytes 67108864
-    sysctlw vm.dirty_background_bytes 16777216
+    # bytes must be written LAST - writing ratio clears bytes and vice versa
     sysctlw vm.dirty_ratio 0
     sysctlw vm.dirty_background_ratio 0
+    sysctlw vm.dirty_bytes 67108864
+    sysctlw vm.dirty_background_bytes 16777216
   else
     sysctlw vm.dirty_ratio 20
     sysctlw vm.dirty_background_ratio 5
   fi
 
-  sysctlw vm.dirty_expire_centisecs 3000
-  sysctlw vm.dirty_writeback_centisecs 1500
+  sysctlw vm.dirty_expire_centisecs 4000
+  sysctlw vm.dirty_writeback_centisecs 3000
   sysctlw vm.vfs_cache_pressure 70
 
   [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 1
@@ -357,6 +344,15 @@ apply_netif_qdisc() {
   _qk="$(netif_qdisc_kind "$_if")"
   case "$_qk" in
     fq_codel|fq) return 0 ;;
+    mq)
+      # mq root: replace child qdiscs instead
+      tc qdisc show dev "$_if" 2>/dev/null | while read -r line; do
+        _parent="$(echo "$line" | grep -oE 'parent [0-9a-f]+:[0-9a-f]+' | awk '{print $2}')"
+        [ -n "$_parent" ] || continue
+        tc qdisc replace dev "$_if" parent "$_parent" fq_codel >/dev/null 2>&1 || true
+      done
+      return 0
+      ;;
   esac
 
   tc qdisc replace dev "$_if" root fq_codel >/dev/null 2>&1 || \
@@ -439,10 +435,27 @@ tune_io_queues() {
 apply_kernel() {
   sysctlw kernel.perf_cpu_time_max_percent 2
   sysctlw kernel.sched_schedstats 0
-  sysctlw kernel.timer_migration 1
+  sysctlw kernel.timer_migration 0
   sysctlw kernel.panic 0
+  sysctlw kernel.panic_on_oops 0
   sysctlw vm.panic_on_oom 0
+
+  # ASB:PRINTK aggressive log suppression
   writef_retry /proc/sys/kernel/printk_devkmsg off 1 0 || true
+  writef_retry /proc/sys/kernel/printk "0 0 0 0" 1 0 || true
+  [ -e /proc/sys/kernel/printk_ratelimit ] && \
+    sysctlw kernel.printk_ratelimit 1
+  [ -e /proc/sys/kernel/printk_ratelimit_burst ] && \
+    sysctlw kernel.printk_ratelimit_burst 5
+
+  # ASB:DEBUG reduce overhead
+  [ -e /proc/sys/vm/oom_dump_tasks ] && sysctlw vm.oom_dump_tasks 0
+  [ -e /proc/sys/debug/exception-trace ] && \
+    writef_retry /proc/sys/debug/exception-trace 0 1 0 || true
+
+  # ASB:WALT scheduler tuning (WALT-specific, not CFS)
+  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && \
+    writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 2 1 0 || true
 
   writef_retry /proc/sys/kernel/sched_util_clamp_min 0 1 0 || true
   _migbase=""
@@ -474,9 +487,6 @@ apply_kernel
 
 # ASB:BT:BEGIN
 apply_idle() {
-  writef /sys/module/lpm_levels/parameters/sleep_disabled 0
-  [ -e /sys/class/kgsl/kgsl-3d0/min_pwrlevel ] && writef /sys/class/kgsl/kgsl-3d0/min_pwrlevel 6
-  [ -e /sys/class/kgsl/kgsl-3d0/bus_split ] && writef /sys/class/kgsl/kgsl-3d0/bus_split 1
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
     settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
@@ -663,10 +673,11 @@ apply_zram
 
 apply_extra_settings() {
   has settings || return 0
-  settings put global netstats_enabled 0 >/dev/null 2>&1 || true
   settings put global audio_safe_volume_state 0 >/dev/null 2>&1 || true
-  settings put global app_usage_enabled 0 >/dev/null 2>&1 || true
-  settings put global package_usage_stats_enabled 0 >/dev/null 2>&1 || true
+  # ASB:FIX restore usage stats broken by V13.0/V13.1 (needed for SuperQi)
+  settings delete global netstats_enabled >/dev/null 2>&1 || true
+  settings delete global app_usage_enabled >/dev/null 2>&1 || true
+  settings delete global package_usage_stats_enabled >/dev/null 2>&1 || true
 }
 apply_extra_settings
 # ASB:FUEL_GAUGE reset fuel gauge telemetry
