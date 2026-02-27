@@ -55,6 +55,7 @@ until [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; do
   sleep 2
 done
 sleep 15
+# ASB:CPU:BEGIN
 
 cpu_present="$(cat /sys/devices/system/cpu/present 2>/dev/null | tr -d '\n')"
 cpu_max="7"
@@ -111,11 +112,13 @@ wait_path /dev/cpuset/background/cpus 8 || true
 wait_path /dev/cpuctl/top-app 8 || true
 
 apply_cpu_groups
+# ASB:CPU:END
 
 if has pm; then
   pm disable-user --user 0 com.android.traceur >/dev/null 2>&1 || true
 fi
 
+# ASB:VM:BEGIN
 apply_vm() {
   sysctlw vm.swappiness 20
 
@@ -141,6 +144,7 @@ apply_vm() {
   sysctlw vm.min_free_kbytes 49152
 }
 apply_vm
+# ASB:VM:END
 
 sysctl_try() {
   k="$1"; shift
@@ -162,6 +166,7 @@ sysctl_try() {
   return 0
 }
 
+# ASB:NET:BEGIN
 apply_net() {
 
   sysctl_try net.core.default_qdisc fq_codel fq pfifo_fast
@@ -284,6 +289,7 @@ apply_net() {
 }
 
 apply_net
+# ASB:NET:END
 
 apply_wifi_settings() {
   has settings || return 0
@@ -422,6 +428,7 @@ tune_io_queues() {
   done
 }
 
+# ASB:KERNEL:BEGIN
 apply_kernel() {
   sysctlw kernel.perf_cpu_time_max_percent 2
   sysctlw kernel.sched_schedstats 0
@@ -451,7 +458,9 @@ apply_kernel() {
   tune_io_queues
 }
 apply_kernel
+# ASB:KERNEL:END
 
+# ASB:IDLE:BEGIN
 apply_idle() {
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
@@ -459,6 +468,7 @@ apply_idle() {
   fi
 }
 apply_idle
+# ASB:IDLE:END
 
 apply_bt_settings() {
   if has settings; then
