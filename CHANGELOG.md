@@ -1,14 +1,20 @@
-# ASB V13.7 - Changelog
+# ASB V13.8 - Changelog
 
-## Audio Improvements
-Enabled high-quality PSD resampler for 44.1kHz content (better resampling to 48kHz).
-Enabled 24-bit software decoders for AAC/FLAC/MP3/OPUS (where supported by the audio stack).
-Enabled extended resampler and custom stereo features.
-Enabled audio keep-alive and HAL output suspend support for faster and more reliable BT/TWS routing.
-Increased offload pause timeout (0 → 3s) to reduce audio session drops during device switching.
+- Improved Telegram notifications: Telegram is added to Doze whitelist.
+- Battery-friendly change: removed Google Play services (GMS) from Doze whitelist to reduce background wakeups.
+- Audio keep-alive is enabled statically for better BT stability (no periodic dumpsys monitoring).
+- UCLAMP tuning remains (works on stock kernels; on some custom WALT kernels it may be a harmless no-op).
 
-## GPU / Idle Behavior
-Removed forced GPU min_pwrlevel override to avoid potential kernel/ROM-specific side effects.
+  ------------------------------------------------------------------------
 
-## Notes
-Audio changes may slightly increase power usage during playback, while improving BT stability and sound quality.
+## Smart UCLAMP (Balanced)
+- Foreground clamp is now balanced (not 0 / not 15) for better UI smoothness without constant boosting.
+- Top-app clamp is set higher for responsive games/apps, background stays at 0.
+
+------------------------------------------------------------------------
+
+## Conditional Audio Keep-Alive
+- Audio keep-alive is enabled only when BT A2DP is connected AND media is playing.
+- When not playing, keep-alive is disabled to reduce background drain.
+
+------------------------------------------------------------------------
