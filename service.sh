@@ -89,24 +89,27 @@ fi
 
 little_end=$((_big_start - 1))
 
-apply_cpu_groups() {
+apply_cpuset_groups() {
   writef_retry /dev/cpuset/background/cpus           "0-${little_end}" 3 0.25 || true
   writef_retry /dev/cpuset/system-background/cpus    "0-${little_end}" 3 0.25 || true
   writef_retry /dev/cpuset/foreground/cpus           "0-${cpu_max}" 3 0.25 || true
   writef_retry /dev/cpuset/top-app/cpus              "0-${cpu_max}" 3 0.25 || true
+}
 
+apply_uclamp() {
+  # ASB:UCLAMP smart values: fg=8 (light tasks stay on LITTLE), top=12 (responsive without waste)
+  # On Wild kernel these writes don't stick (WALT overrides), harmless no-op
   writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive 1 3 0.25 || true
 
   writef_retry /dev/cpuctl/background/cpu.uclamp.min 0 3 0.25 || true
   writef_retry /dev/cpuctl/system-background/cpu.uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 15 3 0.25 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 8 3 0.25 || true
+  writef_retry /dev/cpuctl/top-app/cpu.uclamp.min 12 3 0.25 || true
 
   writef_retry /dev/cpuctl/background/uclamp.min 0 3 0.25 || true
   writef_retry /dev/cpuctl/system-background/uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/foreground/uclamp.min 15 3 0.25 || true
-
-  [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] && \
-    echo 80 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
+  writef_retry /dev/cpuctl/foreground/uclamp.min 8 3 0.25 || true
+  writef_retry /dev/cpuctl/top-app/uclamp.min 12 3 0.25 || true
 
   [ -w /proc/sys/kernel/sched_util_clamp_min ] && \
     writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
@@ -114,8 +117,10 @@ apply_cpu_groups() {
 wait_path /dev/cpuset/background/cpus 8 || true
 wait_path /dev/cpuctl/top-app 8 || true
 
+apply_uclamp
+
 if [ $IS_WILD -eq 0 ]; then
-  apply_cpu_groups
+  apply_cpuset_groups
 fi
 # ASB:CPU:END
 
@@ -461,7 +466,8 @@ apply_kernel
 # ASB:IDLE:BEGIN
 apply_idle() {
   writef /sys/module/lpm_levels/parameters/sleep_disabled 0
-  [ -e /sys/class/kgsl/kgsl-3d0/bus_split ] && writef /sys/class/kgsl/kgsl-3d0/bus_split 1
+  [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] && \
+    echo 80 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
     settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
@@ -559,7 +565,6 @@ apply_audio_effect_hygiene() {
     resetprop -n persist.vendor.audio_fx.waves.maxxsense false >/dev/null 2>&1 || true
     resetprop -n persist.vendor.audio_fx.waves.proc_twks false >/dev/null 2>&1 || true
     resetprop -n persist.vendor.audio_fx.waves.processing false >/dev/null 2>&1 || true
-    resetprop -n persist.vendor.audio.keep_alive.disabled true >/dev/null 2>&1 || true
 
     resetprop -p --delete persist.audio.matrix.limiter.enable >/dev/null 2>&1 || true
     resetprop -p --delete persist.vendor.audio.matrix.limiter.enable >/dev/null 2>&1 || true
@@ -568,6 +573,16 @@ apply_audio_effect_hygiene() {
 }
 
 apply_audio_effect_hygiene
+
+# ASB:DOZE_WHITELIST ensure notifications for messaging apps survive Doze
+# Without this, OxygenOS aggressive standby kills push receivers
+if has dumpsys; then
+  for _pkg in org.telegram.messenger org.telegram.messenger.web \
+              org.thunderdog.challegram org.telegram.plus \
+              ; do
+    dumpsys deviceidle whitelist +"$_pkg" >/dev/null 2>&1 || true
+  done
+fi
 
 if has resetprop; then
     for _k in media.resolution.limit.16bit media.resolution.limit.24bit media.resolution.limit.32bit \
@@ -672,7 +687,8 @@ apply_extra_settings
     sysctlw kernel.sched_schedstats 0
     sysctlw kernel.timer_migration 0
     [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
-    [ $IS_WILD -eq 0 ] && apply_cpu_groups
+    apply_uclamp
+    [ $IS_WILD -eq 0 ] && apply_cpuset_groups
     apply_idle
     apply_wlan0_txqlen
     apply_wlan0_qdisc
