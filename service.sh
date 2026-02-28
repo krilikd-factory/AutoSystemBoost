@@ -461,7 +461,6 @@ apply_kernel
 # ASB:IDLE:BEGIN
 apply_idle() {
   writef /sys/module/lpm_levels/parameters/sleep_disabled 0
-  [ -e /sys/class/kgsl/kgsl-3d0/min_pwrlevel ] && writef /sys/class/kgsl/kgsl-3d0/min_pwrlevel 6
   [ -e /sys/class/kgsl/kgsl-3d0/bus_split ] && writef /sys/class/kgsl/kgsl-3d0/bus_split 1
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
