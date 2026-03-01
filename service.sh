@@ -98,7 +98,6 @@ apply_cpuset_groups() {
 
 apply_uclamp() {
   # ASB:UCLAMP smart values: fg=8 (light tasks stay on LITTLE), top=12 (responsive without waste)
-  # On Wild kernel these writes don't stick (WALT overrides), harmless no-op
   writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive 1 3 0.25 || true
 
   writef_retry /dev/cpuctl/background/cpu.uclamp.min 0 3 0.25 || true
@@ -142,8 +141,8 @@ apply_vm() {
     sysctlw vm.dirty_background_ratio 5
   fi
 
-  sysctlw vm.dirty_expire_centisecs 3000
-  sysctlw vm.dirty_writeback_centisecs 3000
+  sysctlw vm.dirty_expire_centisecs 6000
+  sysctlw vm.dirty_writeback_centisecs 5000
   sysctlw vm.vfs_cache_pressure 70
 
   [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
@@ -226,13 +225,12 @@ apply_net() {
   [ -e /proc/sys/net/ipv6/udp_wmem_min ] && sysctlw net.ipv6.udp_wmem_min 65536
 
   sysctlw net.ipv4.tcp_mtu_probing 1
-  sysctlw net.ipv4.tcp_slow_start_after_idle 0
+  sysctlw net.ipv4.tcp_slow_start_after_idle 1
   sysctlw net.ipv4.tcp_no_metrics_save 1
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_max_orphans 8192
   sysctlw net.ipv4.tcp_fin_timeout 30
 
-  # keepalive defaults preserved for standby battery
 
   sysctlw net.core.somaxconn 512
   sysctlw net.ipv4.tcp_max_syn_backlog 2048
@@ -253,7 +251,6 @@ apply_net() {
   sysctlw net.ipv4.tcp_syncookies 1
   sysctlw net.ipv4.tcp_rfc1337 1
 
-  # security-sensitive JIT/filters left to ROM/kernel policy
   sysctlw net.ipv4.conf.all.accept_redirects 0
   sysctlw net.ipv4.conf.all.send_redirects 0
   sysctlw net.ipv4.conf.all.secure_redirects 0
@@ -472,6 +469,8 @@ apply_idle() {
   writef /sys/module/lpm_levels/parameters/sleep_disabled 0
   [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] && \
     echo 80 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
+  [ -e /sys/class/kgsl/kgsl-3d0/min_pwrlevel ] && writef /sys/class/kgsl/kgsl-3d0/min_pwrlevel 6
+  [ -e /sys/class/kgsl/kgsl-3d0/bus_split ] && writef /sys/class/kgsl/kgsl-3d0/bus_split 1
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
     settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
@@ -585,9 +584,6 @@ if has resetprop; then
     done
   fi
 
-if has settings; then
-  settings put global dropbox_max_files 8 2>/dev/null || true
-fi
 
 apply_logd_props() {
   setprop persist.logd.size 32K 2>/dev/null
@@ -636,8 +632,6 @@ for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd minidump mini
   svc_stop_guarded "$s"
 done
 
-if has stop && has start; then
-fi
 
 apply_zram() {
   [ -e /sys/block/zram0 ] || return 0
@@ -662,8 +656,6 @@ apply_zram() {
 }
 apply_zram
 
-if has stop && has start; then
-fi
 
 apply_extra_settings() {
   has settings || return 0
