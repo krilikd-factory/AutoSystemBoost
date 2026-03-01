@@ -142,8 +142,8 @@ apply_vm() {
     sysctlw vm.dirty_background_ratio 5
   fi
 
-  sysctlw vm.dirty_expire_centisecs 6000
-  sysctlw vm.dirty_writeback_centisecs 5000
+  sysctlw vm.dirty_expire_centisecs 3000
+  sysctlw vm.dirty_writeback_centisecs 3000
   sysctlw vm.vfs_cache_pressure 70
 
   [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
@@ -226,10 +226,11 @@ apply_net() {
   [ -e /proc/sys/net/ipv6/udp_wmem_min ] && sysctlw net.ipv6.udp_wmem_min 65536
 
   sysctlw net.ipv4.tcp_mtu_probing 1
-  sysctlw net.ipv4.tcp_slow_start_after_idle 1
+  sysctlw net.ipv4.tcp_slow_start_after_idle 0
   sysctlw net.ipv4.tcp_no_metrics_save 1
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_max_orphans 8192
+  sysctlw net.ipv4.tcp_fin_timeout 30
 
   # keepalive defaults preserved for standby battery
 
@@ -241,7 +242,7 @@ apply_net() {
   sysctlw net.core.dev_weight 64
 
   [ -e /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established ] && \
-  sysctlw net.netfilter.nf_conntrack_tcp_timeout_established 600
+  sysctlw net.netfilter.nf_conntrack_tcp_timeout_established 420
   [ -e /proc/sys/net/netfilter/nf_conntrack_buckets ] && \
   sysctlw net.netfilter.nf_conntrack_buckets 16384
   [ -e /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_time_wait ] && \
@@ -426,7 +427,7 @@ tune_io_queues() {
     writef "$_b/queue/rq_affinity" 2
     case "${_b##*/}" in
       dm-*)  writef "$_b/queue/read_ahead_kb" 128 ;;
-      *)     writef "$_b/queue/read_ahead_kb" 256 ;;
+      *)     writef "$_b/queue/read_ahead_kb" 128 ;;
     esac
   done
 }
@@ -573,16 +574,6 @@ apply_audio_effect_hygiene() {
 }
 
 apply_audio_effect_hygiene
-
-# ASB:DOZE_WHITELIST ensure notifications for messaging apps survive Doze
-# Without this, OxygenOS aggressive standby kills push receivers
-if has dumpsys; then
-  for _pkg in org.telegram.messenger org.telegram.messenger.web \
-              org.thunderdog.challegram org.telegram.plus \
-              ; do
-    dumpsys deviceidle whitelist +"$_pkg" >/dev/null 2>&1 || true
-  done
-fi
 
 if has resetprop; then
     for _k in media.resolution.limit.16bit media.resolution.limit.24bit media.resolution.limit.32bit \
