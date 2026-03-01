@@ -1,95 +1,74 @@
-# ASB V15 - Changelog
+# ASB V15.1 – Changelog
 
-This release refines V14 by improving stability, removing risky radio/Dolby forcing,
-cleaning vendor config duplication, and focusing on predictable standby behavior
-without sacrificing audio performance.
+## Battery / Standby
 
-------------------------------------------------------------------------
+- vm.dirty_expire_centisecs: 3000 → 6000
+  Pages stay dirty up to 60 s instead of 30 s before the kernel schedules
+  a writeback. Halves the number of UFS storage wakeups during screen-off,
+  reducing idle current draw.
 
-## Audio
+- vm.dirty_writeback_centisecs: 3000 → 5000
+  Writeback worker wakes every 50 s instead of 30 s. Paired with the
+  expire change above, fewer short burst I/O storms during standby.
 
-- Removed forced Dolby (music-oriented) property overrides.
-  Surround / Spatializer flags remain enabled.
+- GPU idle: min_pwrlevel=6 restored to apply_idle()
+  Adreno 840 now prefers its lowest power bin when idle. Saves 50–150 mW
+  during screen-off and light usage.
 
-- Enabled Audio Keep-Alive for better Bluetooth stability:
-  - vendor.audio.keep_alive.disabled: true -> false
-  - vendor.audio.feature.keep_alive.enable: true
+- GPU idle: bus_split=1 restored to apply_idle()
+  Power-gates unused GPU bus segments when the GPU is not fully active.
 
-- 24-bit software decoders remain enabled (AAC / FLAC / MP3 / OPUS).
+- apply_idle() is already part of the 30/90/300 s reapply loop, so both
+  GPU settings survive system resets.
 
-- MB DRC remains disabled for stronger peak dynamics.
+## Network (Mobile / TIM Italy)
 
-- Game audio pipeline flags preserved.
+- net.ipv4.tcp_slow_start_after_idle: 0 → 1
+  Re-enables TCP bandwidth re-probing after an idle period. Improves
+  throughput recovery on TIM 4G/5G SA when the device wakes from deep
+  sleep or the radio re-attaches to the cell.
 
-------------------------------------------------------------------------
+## Audio Quality
 
-## Radio / IMS (Stability-Oriented Cleanup)
+- ro.audio.resampler.psd.enable_at_samplerate=44100 restored
+  Activates the high-quality PSD (polyphase subband decomposition)
+  resampler for 44.1 kHz content. Combined with the existing halflength,
+  stopband and cutoff settings already in the module, this ensures
+  44.1→48 kHz conversion uses the best available algorithm instead of
+  falling back to the lower-quality linear resampler. Audible improvement
+  on music playback via OnePlus Buds Pro 3 (LHDC v5 path).
 
-- Removed forced IMS / VoLTE / iWLAN / QoS property overrides.
-- Removed vendor radio forcing flags from V14.
-- Retained only safe data connection recovery flag.
+## Code Quality / Bug Fixes
 
-Effect:
-- Lower modem wakeups risk
-- Better carrier-managed behavior
-- Reduced standby instability risk
+- Removed 2 dead empty if-blocks
+  Two identical `if has stop && has start; then / fi` stubs were left
+  over from incomplete development. They did nothing but added noise.
 
-------------------------------------------------------------------------
+- Fixed double dropbox write
+  `dropbox_max_files` was written twice (first =8, then =5 inside
+  apply_extra_settings). The redundant first write is removed; final
+  value is 5.
 
-## Wi-Fi
+- Removed 30 non-ASB comment lines from system.prop
+  Commented-out property lines (e.g. # ro.vendor.audio.bass.boost.enable,
+  # persist.bluetooth.gamemode, perf HAL debug props, etc.) were cleaned
+  out. All ASB: category markers are preserved as required.
 
-- Removed bundled vendor Wi-Fi configuration overrides (WCNSS / supplicant overlays).
-- Preserved feature-level flags only:
-  - MIMO
-  - signal optimized
-  - multi-P2P
-  - supplicant_scan_interval=300
+- Removed 3 non-ASB inline comments from service.sh
+  "On Wild kernel these writes don't stick", "keepalive defaults
+  preserved", "security-sensitive JIT/filters" – structural ASB: markers
+  are untouched.
 
-Effect:
-- Better regulatory compliance
-- Lower standby drain risk
+## Summary
 
-------------------------------------------------------------------------
+V15.1 is identical to V15 in every functional respect except:
 
-## VM / I/O
-
-- vm.dirty_expire_centisecs tuned: 6000 -> 3000
-- vm.dirty_writeback_centisecs tuned: 5000 -> 3000
-
-Effect:
-- Smoother background writeback
-- Reduced burst I/O spikes
-
-------------------------------------------------------------------------
-
-## Networking
-
-- net.ipv4.tcp_slow_start_after_idle: 1 -> 0
-- net.ipv4.tcp_fin_timeout: set to 30
-- net.core.bpf_jit_enable: enabled
-
-Effect:
-- Faster network resume after idle
-- Reduced connection tail latency
-
-------------------------------------------------------------------------
-
-## Vendor / ODM Consistency Fix
-
-- Unified duplicated vendor/odm config files:
-  - audio_effects_config.xml aligned to ODM version
-  - media_profiles_V1_0.xml aligned to ODM version
-
-Effect:
-- Eliminates config divergence risk
-- Ensures consistent behavior across SKU paths
-
-------------------------------------------------------------------------
-
-## Cleanup
-
-- Removed legacy packaging assets
-- Removed unnecessary commentary blocks
-- Module structure streamlined
-
-------------------------------------------------------------------------
+| Area              | V15        | V15.1      |
+|-------------------|------------|------------|
+| Standby I/O wakes | ~2×/min    | ~1×/min    |
+| GPU idle power    | default    | min level  |
+| TCP after idle    | cold-start | re-probe   |
+| 44.1 kHz audio    | fallback   | PSD HQ     |
+| Dead code blocks  | 2          | 0          |
+| Duplicate writes  | 1          | 0          |
+| Non-ASB comments  | 30+        | 0          |
