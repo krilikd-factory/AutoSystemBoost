@@ -1,40 +1,40 @@
-# ASB V13.9 - Changelog
+# ASB V14 - Changelog
 
--   Telegram Doze whitelist removed for cleaner Doze policy (ACTIVE
-    bucket + OEM rules are sufficient).
-
--   Refined VM writeback behavior for smoother idle current curve.
-
--   Network stack cleanup to reduce stale connection overhead.
-
--   No changes to audio pipeline, performance tuning, or camera
-    behavior.
-
-    ------------------------------------------------------------------------
-
-## I/O Writeback Refinement
-
--   vm.dirty_expire_centisecs reduced (6000 → 3000).
--   vm.dirty_writeback_centisecs reduced (5000 → 3000).
--   Smaller writeback batches for smoother power draw during idle.
+This update is intentionally small and low-risk: it keeps the same core tuning as V13.9(FINAL2),
+and only adds a few targeted connectivity/standby refinements.
 
 ------------------------------------------------------------------------
 
-## Network Stack Optimization
+## Network / Connectivity
 
--   tcp_slow_start_after_idle disabled (1 → 0) for faster connection
-    resume.
--   nf_conntrack_tcp_timeout_established reduced (600 → 300) for quicker
-    stale connection cleanup.
--   tcp_fin_timeout reduced (60 → 30) for faster TIME_WAIT socket
-    release.
+- net.netfilter.nf_conntrack_tcp_timeout_established: 420 -> 600
+  Keeps established TCP sessions longer to reduce unexpected reconnects.
+
+- net.core.bpf_jit_enable: (not set) -> 1
+  Enables BPF JIT when supported (can reduce CPU overhead for some network paths).
 
 ------------------------------------------------------------------------
 
-## Storage Read-Ahead Adjustment
+## Standby / Background Activity
 
--   read_ahead_kb for sd\* reduced (256 → 128).
--   Optimized for UFS storage: less unnecessary prefetch I/O without
-    impacting performance.
+- Added: nearby_scanning_enabled=0
+  Disables Android Nearby scanning to reduce background BLE/Wi‑Fi wakeups in standby.
+
+- Added: network_recommendations_enabled=0
+  Reduces background network suggestion activity.
+
+------------------------------------------------------------------------
+
+## System Logging
+
+- dropbox_max_files: 8 -> 5
+  Slightly reduces DropBox log retention.
+
+------------------------------------------------------------------------
+
+## Bluetooth
+
+- Added: bluetooth_voip_support=1
+  Enables BT VoIP support flag
 
 ------------------------------------------------------------------------
