@@ -75,7 +75,7 @@ Effect:
 
 ------------------------------------------------------------------------
 
-## Vendor / ODM Consistency Fix (fix2)
+## Vendor / ODM Consistency Fix
 
 - Unified duplicated vendor/odm config files:
   - audio_effects_config.xml aligned to ODM version
