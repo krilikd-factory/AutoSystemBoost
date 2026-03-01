@@ -48,7 +48,6 @@ Effect:
 Effect:
 - Better regulatory compliance
 - Lower standby drain risk
-- Fewer ROM conflicts
 
 ------------------------------------------------------------------------
 
