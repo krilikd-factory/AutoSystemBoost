@@ -57,7 +57,7 @@
 - Removed 3 non-ASB inline comments from service.sh
   "On Wild kernel these writes don't stick", "keepalive defaults
   preserved", "security-sensitive JIT/filters" – structural ASB: markers
-  are untouched.
+  are untouched. 
 
 ## Summary
 
