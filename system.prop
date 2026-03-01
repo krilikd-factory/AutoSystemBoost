@@ -12,7 +12,6 @@ persist.bluetooth.disableabsvol=false
 persist.bluetooth.dualconnection.supported=true
 persist.bluetooth.enablenewavrcp=true
 # ASB:BT_AUDIO let app/game mode control low-latency path (avoid forcing globally for music quality/efficiency)
-# persist.bluetooth.gamemode=true
 persist.bluetooth.hfp_available_guard=false
 persist.bluetooth.idmclient.conid=true
 persist.bluetooth.idmconnect.devicetype=true
@@ -44,7 +43,6 @@ persist.vendor.btstack.enable.gatt_robust_caching=true
 persist.vendor.btstack.enable.lpa=true
 persist.vendor.btstack.qhs_enable=false
 # ASB hotfix: removed conflicting duplicate (kept true below)
-# persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled=false
 persist.vendor.qcom.bluetooth.dualmode_transport_support=true
 persist.vendor.qcom.bluetooth.enable.lpa=true
 persist.vendor.qcom.bluetooth.pbap_pse_dynamic_version_upgrade=true
@@ -193,7 +191,6 @@ vidc.debug.level=0
 # ASB:CAMERA_AUDIT removed feature-spoof/debug/privacy/USB camera props (lab/gadget/perfSpy/mivi/street/variable-aperture/etc.)
 # ASB:CAMERA_AUDIT keep preview-decision config override only; stock-identical EIS/HW config overlays removed
 # ASB:CAMERA:FRONT_BEAUTY_STABILITY_FIX
-# Reverted risky forced props: enable_vpu, parallel_processing, focus_call_timeout, facetracker.support, zero_shutter_lag
 # ASB:CAMERA:END
 # ASB:CPU:BEGIN
 # ASB:CPU:END
@@ -289,7 +286,6 @@ audio.hal.boot.timeout.ms=4000
 audio.high.resolution.enable=true
 audio.hwacceffects.needed=true
 # ASB:AUDIO_SANITY disabled forced limiter (use stock tuning)
-# audio.matrix.limiter.enable=1
 audio.nat.codec.enabled=1
 audio.native.dsd.buffer.size.kb=2048
 audio.offload.buffer.size.kb=512
@@ -333,6 +329,7 @@ persist.vendor.audio.fluence.voicecall=true
 persist.vendor.audio.fluence.voicerec=true
 # ASB:AUDIO_QUALITY safe media bypass and low-latency bargein
 # ASB:AUDIO_RESAMPLER PSD polyphase subband decomposition resampler (high-quality 44.1kHz→48kHz)
+ro.audio.resampler.psd.enable_at_samplerate=44100
 ro.audio.resampler.psd.halflength=520
 ro.audio.resampler.psd.stopband=194
 ro.audio.resampler.psd.cutoff_percent=100
@@ -367,11 +364,8 @@ persist.vendor.audio_fx.waves.proc_twks=false
 persist.vendor.audio_fx.waves.processing=false
 persist.vendor.dolbyvision.flat_on=1
 # ASB:AUDIO_EFFECTS deconflict game-oriented Dolby path (keep music path neutral)
-# ro.vendor.audio.dolby.dax.game.enable=true
 # ASB:AUDIO_EFFECTS do not force Dolby spatial profile globally (let app/user profile win)
-# ro.vendor.audio.dolby.spatial.profile=music
 # ASB:AUDIO_EFFECTS do not force Dolby surround globally (avoid coloration/compat issues)
-# ro.vendor.audio.dolby.surround.enable=true
 ro.vendor.display.dolbyvision.support=true
 vendor.audio.3daudio.record.enable=true
 vendor.audio.aac.complexity.default=8
@@ -503,7 +497,6 @@ vendor.audio.hwacceffects.needed=true
 vendor.audio.keep_alive.disabled=false
 vendor.audio.kpi_optimize.enable=false
 # ASB:AUDIO_SANITY disabled forced vendor limiter (use stock tuning)
-# vendor.audio.matrix.limiter.enable=1
 vendor.audio.mp3.complexity.default=8
 vendor.audio.mp3.hw.decoder.24bit=true
 vendor.audio.mp3.quality=100
@@ -646,9 +639,6 @@ ro.vendor.audio.activity.monitor=false
 ro.vendor.audio.aiasst.support=false
 ro.vendor.audio.av.streaming.offload.enable=true
 # ASB:AUDIO_SANITY drop forced bass coloration flags (avoid muddy/bloated sound)
-# ro.vendor.audio.bass.boost.enable=true
-# ro.vendor.audio.bass.booster.enable=true
-# ro.vendor.audio.bass.enhancer.enable=true
 ro.vendor.audio.ce.compensation.need=false
 ro.vendor.audio.close.noise.reduction=true
 ro.vendor.audio.decoder_override_check=true
@@ -664,9 +654,6 @@ ro.vendor.audio.fast_track_multiplier=2
 ro.vendor.audio.feature.fade=true
 ro.vendor.audio.gain.support=true
 # ASB:AUDIO_EFFECTS drop forced game effect path (can color music playback)
-# ro.vendor.audio.game.effect=true
-# ro.vendor.audio.game.mode=true
-# ro.vendor.audio.game.vibrate=true
 ro.vendor.audio.identify_low_end_device=false
 ro.vendor.audio.lea.karaoke=false
 ro.vendor.audio.lowpower.pa.para.support=true
@@ -711,10 +698,7 @@ ro.vendor.audio.virtualizer.enable=false
 ro.vendor.audio.vocal.support=false
 ro.vendor.audio.voice.change.support=true
 # ASB:AUDIO_SANITY drop forced super-volume/modeler chain (clarity-first)
-# ro.vendor.audio.voice.super_volume=true
 ro.vendor.audio.voice.voip.holder.support=true
-# ro.vendor.audio.voice.volume.boost=auto
-# ro.vendor.audio.volume.modeler.enable=true
 ro.vendor.audio.zerodata.upload=true
 ro.vendor.audio.zoom.ahal.support=true
 ro.vendor.audio.zoom.directionalrecord.support=true
@@ -790,7 +774,6 @@ vendor.media.jpeg.quality=100
 vendor.media.jpg.quality=100
 vendor.mseccam.auto.start=false
 # ASB:PERF_PROP_AUDIT: let vendor PERF HAL defaults decide feature gates (avoid static false/forced flags)
-# vendor.perf.test_avc=false
 vendor.video.dec.disable_ubwc=0
 vendor.video.disable.ubwc=0
 vendor.video.enc.disable_ubwc=0
@@ -805,15 +788,6 @@ persist.vendor.thermal.throttle.enable=1
 ro.odm.build.media_performance_class=35
 ro.vendor.media_performance_class=35
 ro.vendor.mtp_boost.scheme=false
-# ro.vendor.perf.enable.prefapps=false
-# ro.vendor.perf.enable.prekill=false
-# ro.vendor.perf.enable.procomp=false
-# ro.vendor.use_perf_hal_for_preferredapps=true
-# vendor.enable.vending_perfcore=false
-# vendor.perf.enable_gplaf_hw=true
-# vendor.perf.pfar.enable=0
-# vendor.perf.pfar2.boost_level=0
-# vendor.perf.pfar2.enable=0
 af.fast_downmix=1
 af.fast_track_multiplier=2
 av.offload.enable=true
@@ -857,7 +831,6 @@ persist.sys.assert.state=false
 persist.sys.asserts=false
 persist.sys.bigdata.enable=0
 # ASB:BT_VOL_BEHAVIOR typo/no-op candidate; avoid forcing
-# persist.sys.btsatck.absvolfeature=true
 persist.sys.confidential.logs=0
 persist.sys.crash_dumps=0
 persist.sys.cross_process_jump_response_opt=true
@@ -950,7 +923,6 @@ persist.vendor.battery.health.optimise=true
 persist.vendor.batteryantiaging=0
 persist.vendor.bcl.ibat_limit=true
 # ASB:BT_VOL_BEHAVIOR typo/no-op candidate; avoid forcing
-# persist.vendor.btsatck.absvolfeature=true
 persist.vendor.chg_plcy_mgr.log_level=0
 persist.vendor.cnss_diag.enable=false
 persist.vendor.cp.log_level=0
@@ -1119,7 +1091,6 @@ debug.offline_log.enable=false
 debug.sf.ddms=0
 debug.sf.dump=0
 dmesgd.start=0
-# debug.vendor.perf.smart_touch=0
 debugtool.anrhistory=0
 dump_lightweight_trace.switch=0
 log.tag.Debug=ERROR
