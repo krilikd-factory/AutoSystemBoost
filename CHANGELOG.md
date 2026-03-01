@@ -21,11 +21,11 @@
 - apply_idle() is already part of the 30/90/300 s reapply loop, so both
   GPU settings survive system resets.
 
-## Network (Mobile / TIM Italy)
+## Network
 
 - net.ipv4.tcp_slow_start_after_idle: 0 → 1
   Re-enables TCP bandwidth re-probing after an idle period. Improves
-  throughput recovery on TIM 4G/5G SA when the device wakes from deep
+  throughput recovery on 4G/5G SA when the device wakes from deep
   sleep or the radio re-attaches to the cell.
 
 ## Audio Quality
