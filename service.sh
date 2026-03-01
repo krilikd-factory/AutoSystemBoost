@@ -241,8 +241,10 @@ apply_net() {
   sysctlw net.core.netdev_budget_usecs 5000
   sysctlw net.core.dev_weight 64
 
+  sysctlw net.core.bpf_jit_enable 1
+
   [ -e /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established ] && \
-  sysctlw net.netfilter.nf_conntrack_tcp_timeout_established 420
+  sysctlw net.netfilter.nf_conntrack_tcp_timeout_established 600
   [ -e /proc/sys/net/netfilter/nf_conntrack_buckets ] && \
   sysctlw net.netfilter.nf_conntrack_buckets 16384
   [ -e /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_time_wait ] && \
@@ -298,6 +300,7 @@ apply_net
 apply_wifi_settings() {
   has settings || return 0
   settings put global wifi_scan_always_enabled 0 >/dev/null 2>&1 || true
+  settings put global nearby_scanning_enabled 0 >/dev/null 2>&1 || true
   settings put global wifi_scan_throttle_enabled 1 >/dev/null 2>&1 || true
   settings put global wifi_suspend_optimizations_enabled 1 >/dev/null 2>&1 || true
 }
@@ -633,6 +636,9 @@ for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd minidump mini
   svc_stop_guarded "$s"
 done
 
+if has stop && has start; then
+fi
+
 apply_zram() {
   [ -e /sys/block/zram0 ] || return 0
   HALF_MB=$(awk '/MemTotal/ {printf "%.0f", $2/1024/2}' /proc/meminfo 2>/dev/null)
@@ -656,12 +662,18 @@ apply_zram() {
 }
 apply_zram
 
+if has stop && has start; then
+fi
+
 apply_extra_settings() {
   has settings || return 0
   settings put global audio_safe_volume_state 0 >/dev/null 2>&1 || true
   settings delete global netstats_enabled >/dev/null 2>&1 || true
   settings delete global app_usage_enabled >/dev/null 2>&1 || true
   settings delete global package_usage_stats_enabled >/dev/null 2>&1 || true
+  settings put global bluetooth_voip_support 1 >/dev/null 2>&1 || true
+  settings put global dropbox_max_files 5 >/dev/null 2>&1 || true
+  settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
 }
 apply_extra_settings
 
