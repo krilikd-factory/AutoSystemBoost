@@ -42,11 +42,11 @@
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="2160p60" fileFormat="mp4" duration="30">
-            <Video codec="h264" bitRate="194400000" width="3840" height="2160" frameRate="60" />
+            <Video codec="h264" bitRate="232200000" width="3840" height="2160" frameRate="60" />
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="2160p120" fileFormat="mp4" duration="30">
-            <Video codec="h264" bitRate="237600000" width="3840" height="2160" frameRate="120" />
+            <Video codec="h264" bitRate="270000000" width="3840" height="2160" frameRate="120" />
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="1080p60" fileFormat="mp4" duration="30">
@@ -61,7 +61,17 @@
         <ImageEncoding quality="80" />
         <ImageEncoding quality="70" />
         <ImageDecoding memCap="20000000" />
-    </CamcorderProfiles>
+        <EncoderProfile quality="8kuhd" fileFormat="3gp" duration="60">
+            <Video codec="h264" bitRate="190800000" width="7680" height="4320" frameRate="30" />
+            <Audio codec="amrnb" bitRate="12200" sampleRate="8000" channels="1" />
+        </EncoderProfile>
+        <EncoderProfile quality="8kuhd60" fileFormat="3gp" duration="60">
+            <Video codec="h264" bitRate="318000000" width="7680" height="4320" frameRate="60" />
+            <Audio codec="amrnb" bitRate="12200" sampleRate="8000" channels="1" />
+        </EncoderProfile>
+        <EncoderProfile quality="8kuhd120" fileFormat="3gp" duration="60">
+            <Audio codec="amrnb" bitRate="12200" sampleRate="8000" channels="1" />
+        </EncoderProfile></CamcorderProfiles>
     <CamcorderProfiles cameraId="1">
         <EncoderProfile quality="qvga" fileFormat="3gp" duration="60">
             <Video codec="h264" bitRate="20000000" width="320" height="240" frameRate="30" />
@@ -162,11 +172,11 @@
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="2160p60" fileFormat="mp4" duration="30">
-            <Video codec="h264" bitRate="194400000" width="3840" height="2160" frameRate="60" />
+            <Video codec="h264" bitRate="232200000" width="3840" height="2160" frameRate="60" />
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="2160p120" fileFormat="mp4" duration="30">
-            <Video codec="h264" bitRate="237600000" width="3840" height="2160" frameRate="120" />
+            <Video codec="h264" bitRate="270000000" width="3840" height="2160" frameRate="120" />
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="1080p60" fileFormat="mp4" duration="30">
@@ -216,11 +226,11 @@
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="2160p60" fileFormat="mp4" duration="30">
-            <Video codec="h264" bitRate="194400000" width="3840" height="2160" frameRate="60" />
+            <Video codec="h264" bitRate="232200000" width="3840" height="2160" frameRate="60" />
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="2160p120" fileFormat="mp4" duration="30">
-            <Video codec="h264" bitRate="237600000" width="3840" height="2160" frameRate="120" />
+            <Video codec="h264" bitRate="270000000" width="3840" height="2160" frameRate="120" />
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="1080p60" fileFormat="mp4" duration="30">
@@ -278,11 +288,11 @@
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="2160p60" fileFormat="mp4" duration="30">
-            <Video codec="h264" bitRate="194400000" width="3840" height="2160" frameRate="60" />
+            <Video codec="h264" bitRate="232200000" width="3840" height="2160" frameRate="60" />
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="2160p120" fileFormat="mp4" duration="30">
-            <Video codec="h264" bitRate="237600000" width="3840" height="2160" frameRate="120" />
+            <Video codec="h264" bitRate="270000000" width="3840" height="2160" frameRate="120" />
             <Audio codec="aac" bitRate="320000" sampleRate="48000" channels="2" />
         </EncoderProfile>
         <EncoderProfile quality="1080p60" fileFormat="mp4" duration="30">
@@ -342,7 +352,7 @@
     </CamcorderProfiles>
     <EncoderOutputFileFormat name="3gp" />
     <EncoderOutputFileFormat name="mp4" />
-    <VideoEncoderCap name="h264" enabled="true" minBitRate="64000" maxBitRate="250000000" minFrameWidth="176" maxFrameWidth="3840" minFrameHeight="144" maxFrameHeight="2160" minFrameRate="15" maxFrameRate="240" />
+    <VideoEncoderCap name="h264" enabled="true" minBitRate="64000" maxBitRate="320000000" minFrameWidth="176" maxFrameWidth="7680" minFrameHeight="144" maxFrameHeight="4320" minFrameRate="15" maxFrameRate="120" />
     <VideoEncoderCap name="h263" enabled="true" minBitRate="64000" maxBitRate="2000000" minFrameWidth="176" maxFrameWidth="800" minFrameHeight="144" maxFrameHeight="480" minFrameRate="15" maxFrameRate="30" />
     <VideoEncoderCap name="m4v" enabled="true" minBitRate="64000" maxBitRate="120000000" minFrameWidth="176" maxFrameWidth="1920" minFrameHeight="144" maxFrameHeight="1080" minFrameRate="15" maxFrameRate="60" />
     <AudioEncoderCap name="aac" enabled="true" minBitRate="758" maxBitRate="512000" minSampleRate="8000" maxSampleRate="96000" minChannels="1" maxChannels="2" />
