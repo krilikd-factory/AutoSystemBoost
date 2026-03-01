@@ -1,5 +1,6 @@
 # AutoSystemBoost
 <img width="788" height="421" alt="IMG_20260220_032624" src="https://github.com/user-attachments/assets/1881af42-dee0-46af-ba82-4bdaf7724ecd" />
+
 I've built my first AutoSystemBoost module for the OnePlus 15.
 This module is for those who want:
 Stability, less heat, and better battery life (without sacrificing performance).
