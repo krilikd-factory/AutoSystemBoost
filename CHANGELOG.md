@@ -1,7 +1,4 @@
-# AutoSystemBoost — GitHub Changelog
-
-> **OnePlus 15** · SM8750 · Adreno 840 · Android 16 / OxygenOS 15  
-> Module by [@Dima_Krylov](https://t.me/DKomsomol) · Channel: [@OnePlusMod](https://t.me/OnePlusMod)
+# AutoSystemBoost — Changelog
 
 ---
 
@@ -68,21 +65,3 @@ Unique props: 1187 → 1224       (+37)
 ```
 
 ---
-
-## [V15.1] — 2026-02-XX
-- Initial OnePlus 15 / Android 16 compatibility pass
-- WALT governor integration
-- BBR + conntrack tuning
-
-## [V15.0] — 2026-01-XX
-- OxygenOS 15 support
-
-## [V14] — 2025-XX-XX
-- SM8750 (Snapdragon 8 Elite) specific optimizations
-
-## [V13.6] — 2025-XX-XX
-- Stability and battery improvements
-
----
-
-*Full source: [github.com/krilikd/AutoSystemBoost](https://github.com/krilikd/AutoSystemBoost)*
