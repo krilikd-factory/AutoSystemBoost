@@ -136,6 +136,20 @@ apply_uclamp
 if [ $IS_WILD -eq 0 ]; then
   apply_cpuset_groups
 fi
+
+# ASB:V15.6 CPU governor battery hints
+apply_cpugov_hints() {
+  # schedutil rate_limit_us 0→2000: fewer governor timer wakeups from idle
+  for _pol in /sys/devices/system/cpu/cpufreq/policy*/schedutil/rate_limit_us; do
+    [ -w "$_pol" ] && echo 2000 > "$_pol" 2>/dev/null || true
+  done
+  # Small/mid clusters: raise hispeed_load → avoid unnecessary freq spikes
+  for _pol in /sys/devices/system/cpu/cpufreq/policy0               /sys/devices/system/cpu/cpufreq/policy4; do
+    [ -w "$_pol/schedutil/hispeed_load" ] &&       echo 90 > "$_pol/schedutil/hispeed_load" 2>/dev/null || true
+    [ -w "$_pol/schedutil/hispeed_freq" ] &&       echo 0   > "$_pol/schedutil/hispeed_freq" 2>/dev/null || true
+  done
+}
+apply_cpugov_hints
 # ASB:CPU:END
 
 if has pm; then
@@ -156,12 +170,12 @@ apply_vm() {
     sysctlw vm.dirty_background_ratio 5
   fi
 
-  sysctlw vm.dirty_expire_centisecs 6000
+  sysctlw vm.dirty_expire_centisecs 150   # ASB:V15.6 faster dirty flush
   sysctlw vm.dirty_writeback_centisecs 5000
   sysctlw vm.vfs_cache_pressure 50
 
   [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
-  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 15
+  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 10  # ASB:V15.6 fewer vmstat wakeups
 
   writef_retry /proc/sys/vm/page-cluster 0 1 0 || true
   sysctlw vm.watermark_scale_factor 60
@@ -256,6 +270,9 @@ apply_net() {
   sysctlw net.ipv4.tcp_keepalive_intvl  75
   sysctlw net.ipv4.tcp_keepalive_probes 9
   # tcp_max_tw_buckets kept at 16384 (memory, not battery relevant)
+  # ASB:V15.6 TCP battery (safe — not keepalive)
+  sysctlw net.ipv4.tcp_fin_timeout          20   # reclaim FIN_WAIT sockets 3× faster
+  sysctlw net.ipv4.tcp_no_metrics_save       1   # no route-metric cache churn on close
 
 
   sysctlw net.core.somaxconn 512
@@ -435,6 +452,12 @@ apply_wifi_pm() {
   setprop persist.vendor.wlan.scan_throttle 1 2>/dev/null || true
 }
 apply_wifi_pm
+# ASB:V15.6 Wi-Fi DTIM listen interval
+apply_wifi_dtim() {
+  iw dev wlan0 set listen-interval 3 >/dev/null 2>&1 || true
+  writef_retry /sys/module/wlan/parameters/enable_connected_scan_result 0 3 0.25 || true
+}
+apply_wifi_dtim
 # ASB:WIFI_PM:END
 
 (
@@ -530,6 +553,11 @@ apply_idle() {
   writef_retry /sys/class/kgsl/kgsl-3d0/force_rail_on 0 3 0.25 || true
   writef_retry /sys/class/kgsl/kgsl-3d0/force_clk_on  0 3 0.25 || true
   writef_retry /sys/class/kgsl/kgsl-3d0/force_bus_on  0 3 0.25 || true
+  # ASB:V15.6 GPU NAP governor
+  [ -w /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor ] && \
+    echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor 2>/dev/null || true
+  [ -w /sys/class/kgsl/kgsl-3d0/min_pwrlevel ] && \
+    echo 6 > /sys/class/kgsl/kgsl-3d0/min_pwrlevel 2>/dev/null || true
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
     settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
@@ -761,7 +789,7 @@ apply_doze() {
   # min_time_to_alarm=60000: suppress short alarms in deep Doze (1 min floor)
   has settings || return 0
   settings put global device_idle_constants \
-"light_after_inactive_to=30000,light_pre_idle_to=5000,light_max_idle_to=86400000,light_idle_to=10000,light_idle_factor=2.0,light_idle_maintenance_min_budget=2000,light_idle_maintenance_max_budget=15000,inactive_to=180000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=30000,idle_pending_to=5000,max_idle_pending_to=10000,idle_pending_factor=2.0,idle_to=3600000,max_idle_to=21600000,idle_factor=2.0,min_time_to_alarm=60000,max_temp_app_whitelist_duration=60000,mms_temp_app_whitelist_duration=30000,sms_temp_app_whitelist_duration=20000" \
+"light_after_inactive_to=30000,light_pre_idle_to=5000,light_max_idle_to=86400000,light_idle_to=10000,light_idle_factor=2.0,light_idle_maintenance_min_budget=2000,light_idle_maintenance_max_budget=15000,inactive_to=180000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=10000,idle_pending_to=5000,max_idle_pending_to=10000,idle_pending_factor=2.0,idle_to=3600000,max_idle_to=21600000,idle_factor=2.0,min_time_to_alarm=60000,max_temp_app_whitelist_duration=60000,mms_temp_app_whitelist_duration=30000,sms_temp_app_whitelist_duration=20000" \
     >/dev/null 2>&1 || true
 }
 apply_doze
@@ -775,6 +803,14 @@ apply_extra_settings() {
   settings put global bluetooth_voip_support 1 >/dev/null 2>&1 || true
   settings put global dropbox_max_files 5 >/dev/null 2>&1 || true
   settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
+  # ASB:V15.6 — additional OxygenOS telemetry/analytics disable
+  settings put global activity_starts_logging_enabled    0 >/dev/null 2>&1 || true
+  settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
+  settings put global send_action_app_error              0 >/dev/null 2>&1 || true
+  settings put global enhanced_connectivity_enabled      0 >/dev/null 2>&1 || true
+  settings put global captive_portal_mode                0 >/dev/null 2>&1 || true
+  settings put global wifi_scan_always_enabled           0 >/dev/null 2>&1 || true
+  settings put global wifi_wakeup_enabled                0 >/dev/null 2>&1 || true
 }
 apply_extra_settings
 
