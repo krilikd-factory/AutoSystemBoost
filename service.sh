@@ -166,6 +166,8 @@ apply_vm() {
   writef_retry /proc/sys/vm/page-cluster 0 1 0 || true
   sysctlw vm.watermark_scale_factor 60
   sysctlw vm.min_free_kbytes 32768
+  # ASB:V15.4 OOM — kill allocating task instead of full scan (faster + saves battery)
+  sysctlw vm.oom_kill_allocating_task 1
 }
 apply_vm
 # ASB:VM:END
@@ -245,6 +247,11 @@ apply_net() {
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_max_orphans 8192
   sysctlw net.ipv4.tcp_fin_timeout 30
+  # ASB:V15.4 TCP keepalive — free dead connections faster on cellular
+  sysctlw net.ipv4.tcp_keepalive_time   1800
+  sysctlw net.ipv4.tcp_keepalive_intvl  30
+  sysctlw net.ipv4.tcp_keepalive_probes 3
+  sysctlw net.ipv4.tcp_max_tw_buckets   16384
 
 
   sysctlw net.core.somaxconn 512
@@ -402,6 +409,19 @@ apply_mobile_qdisc() {
 apply_wlan0_qdisc
 apply_mobile_qdisc
 
+# ASB:WIFI_PM:BEGIN
+apply_wifi_pm() {
+  # ASB:V15.4 Wi-Fi Power Save Mode — 802.11 PSM for QCA WCN7750
+  wait_path /sys/class/net/wlan0 10 || return 0
+  iw dev wlan0 set power_save on >/dev/null 2>&1 || true
+  # QCA-specific module parameter (alternative path)
+  writef_retry /sys/module/wlan/parameters/wlan_pm 1 3 0.25 || true
+  # Keep scan throttle enforced
+  setprop persist.vendor.wlan.scan_throttle 1 2>/dev/null || true
+}
+apply_wifi_pm
+# ASB:WIFI_PM:END
+
 (
   _skip_wlan_wait=0
   if has settings; then
@@ -488,8 +508,13 @@ apply_kernel
 # ASB:IDLE:BEGIN
 apply_idle() {
   writef /sys/module/lpm_levels/parameters/sleep_disabled 0
+  # ASB:V15.4 GPU idle_timer 80→250 ms (deeper CX power-collapse)
   [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] && \
-    echo 80 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
+    echo 250 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
+  # ASB:V15.4 GPU force flags — ensure CX rail can collapse
+  writef_retry /sys/class/kgsl/kgsl-3d0/force_rail_on 0 3 0.25 || true
+  writef_retry /sys/class/kgsl/kgsl-3d0/force_clk_on  0 3 0.25 || true
+  writef_retry /sys/class/kgsl/kgsl-3d0/force_bus_on  0 3 0.25 || true
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
     settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
@@ -647,7 +672,22 @@ svc_stop_guarded() {
   return 0
 }
 
-for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd minidump minidump32 minidump64 bootstat poweroff_charger_log ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server tcpdump modem_svc logcat-debug midasd batterysecret; do
+# ASB:STOPLIST V15.4 — extended service stop list (+11 OxygenOS/QTI services)
+for s in \
+  qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd \
+  minidump minidump32 minidump64 bootstat poweroff_charger_log \
+  ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start \
+  mmi-diag qcom-diag tftp_server tcpdump modem_svc logcat-debug \
+  midasd batterysecret \
+  mdnsd \
+  oplus_sensor_fb vendor.oplus.sensor.fb \
+  statsd \
+  oplus_crash_report \
+  oplusdebuglogauto \
+  vendor.oplus.logkit oplus_logctl \
+  qcom_diag_relay vendor.qti.diag \
+  oplusd mlipay \
+; do
   svc_stop_guarded "$s"
 done
 
@@ -674,8 +714,40 @@ apply_zram() {
   mkswap /dev/block/zram0 >/dev/null 2>&1 && \
     swapon /dev/block/zram0 >/dev/null 2>&1 || true
 }
+apply_walt_boost() {
+  # ASB:WALT_BOOST V15.4 — disable WALT input_boost on SM8750
+  # SM8750 policy layout: policy0=little(0-3), policy4=mid(4-6), policy7=prime(7)
+  # Setting input_boost_freq=0 disables per-touch CPU freq spike (~2-4 mAh/h)
+  for _pol in 0 4 7; do
+    _wp="/sys/devices/system/cpu/cpufreq/policy${_pol}/walt"
+    [ -d "$_wp" ] || continue
+    writef_retry "$_wp/input_boost_freq" 0 3 0.25 || true
+    writef_retry "$_wp/input_boost_ms"   0 3 0.25 || true
+  done
+  # Global WALT sched_boost = 0
+  [ -w /proc/sys/kernel/sched_boost ] && \
+    writef_retry /proc/sys/kernel/sched_boost 0 3 0.25 || true
+  # Ensure Energy Aware Scheduling is ON
+  writef_retry /proc/sys/kernel/sched_energy_aware 1 3 0.25 || true
+}
+( sleep 5; apply_walt_boost ) >/dev/null 2>&1 &
+
 apply_zram
 
+
+apply_doze() {
+  # ASB:DOZE V15.4 — aggressive DeviceIdle constants for deep standby
+  # sensing_to=0: skip motion-sensing phase (saves accelerometer wakeups)
+  # locating_to=0: skip GPS location phase
+  # inactive_to=30000: Doze starts after 30 s screen-off (default: 30 min)
+  # idle_to=3600000: deep idle cycle 60 min
+  # min_time_to_alarm=60000: suppress short alarms in deep Doze (1 min floor)
+  has settings || return 0
+  settings put global device_idle_constants \
+"light_after_inactive_to=10000,light_pre_idle_to=3000,light_max_idle_to=86400000,light_idle_to=5000,light_idle_factor=2.0,light_idle_maintenance_min_budget=1000,light_idle_maintenance_max_budget=10000,inactive_to=30000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=15000,idle_pending_to=5000,max_idle_pending_to=10000,idle_pending_factor=2.0,idle_to=3600000,max_idle_to=21600000,idle_factor=2.0,min_time_to_alarm=60000,max_temp_app_whitelist_duration=30000,mms_temp_app_whitelist_duration=20000,sms_temp_app_whitelist_duration=15000" \
+    >/dev/null 2>&1 || true
+}
+apply_doze
 
 apply_extra_settings() {
   has settings || return 0
@@ -709,6 +781,9 @@ apply_extra_settings
     apply_wlan0_qdisc
     # ASB:V15.3 re-apply network_recommendations=0 (may be reset by GMS)
     has settings && settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
+    # ASB:V15.4 re-apply Wi-Fi PSM and Doze constants (can be reset by OEM services)
+    apply_wifi_pm
+    apply_doze
   done
 ) >/dev/null 2>&1 &
 
