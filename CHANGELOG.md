@@ -1,4 +1,4 @@
-# 🔧 AutoSystemBoost — Changelog **V15.9** (vs **V15.7**)
+# 🔧 ASB-15.9 — Changelog
 
 > ✅ **Scope:** only **XML / INI / conf** files were changed.  
 > 🚫 `service.sh` (runtime tweaks) **was NOT modified** in this update.
@@ -7,7 +7,7 @@
 
 ## 📌 Summary
 V15.9 is basically:
-- **All V15.8 connectivity + GPS refinements** (Wi‑Fi DTIM + GPS WIPER/outage behavior)
+- **All V15.7 connectivity + GPS refinements** (Wi‑Fi DTIM + GPS WIPER/outage behavior)
 - **Plus a targeted Bluetooth audio upgrade**: adds `PCM_24_BIT_PACKED` profiles for wider device/port compatibility.
 
 ---
@@ -81,11 +81,3 @@ Some stacks/devices expose 24‑bit audio as **packed** instead of **24‑in‑3
 | **Bluetooth listening** | **More stable negotiation** (format support widened; battery impact negligible) |
 
 ---
-
-## 🧾 Dev note
-If you want a brutally honest verification: run your `asb_diag` in three states:
-1) idle screen-off (Wi‑Fi on)  
-2) idle screen-off (Wi‑Fi off)  
-3) BT music A2DP (screen off)  
-
-and compare **wakeups/hour** and **wlan_rx_wake** deltas. That’s where these changes show up.
