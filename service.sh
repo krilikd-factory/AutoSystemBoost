@@ -170,12 +170,12 @@ apply_vm() {
     sysctlw vm.dirty_background_ratio 5
   fi
 
-  sysctlw vm.dirty_expire_centisecs 150   # ASB:V15.6 faster dirty flush
+  sysctlw vm.dirty_expire_centisecs 6000  # 60s — less writeback churn in standby
   sysctlw vm.dirty_writeback_centisecs 5000
   sysctlw vm.vfs_cache_pressure 50
 
   [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
-  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 10  # ASB:V15.6 fewer vmstat wakeups
+  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 15  # 15s = fewer vmstat wakeups than default 1s
 
   writef_retry /proc/sys/vm/page-cluster 0 1 0 || true
   sysctlw vm.watermark_scale_factor 60
@@ -257,10 +257,8 @@ apply_net() {
 
   sysctlw net.ipv4.tcp_mtu_probing 1
   sysctlw net.ipv4.tcp_slow_start_after_idle 0
-  sysctlw net.ipv4.tcp_no_metrics_save 1
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_max_orphans 8192
-  sysctlw net.ipv4.tcp_fin_timeout 30
   # ASB:V15.4 TCP keepalive — free dead connections faster on cellular
   # ASB:V15.5 TCP keepalive — restored to kernel defaults
   #   V15.4 used 1800s/30s/3 — can cause extra RRC wakeups on cellular
@@ -345,7 +343,6 @@ apply_net
 
 apply_wifi_settings() {
   has settings || return 0
-  settings put global wifi_scan_always_enabled 0 >/dev/null 2>&1 || true
   settings put global nearby_scanning_enabled 0 >/dev/null 2>&1 || true
   settings put global wifi_scan_throttle_enabled 1 >/dev/null 2>&1 || true
   settings put global wifi_suspend_optimizations_enabled 1 >/dev/null 2>&1 || true
@@ -556,12 +553,8 @@ apply_idle() {
   # ASB:V15.6 GPU NAP governor
   [ -w /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor ] && \
     echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor 2>/dev/null || true
-  [ -w /sys/class/kgsl/kgsl-3d0/min_pwrlevel ] && \
-    echo 6 > /sys/class/kgsl/kgsl-3d0/min_pwrlevel 2>/dev/null || true
-  if has settings; then
-    settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
-    settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
-  fi
+  # min_pwrlevel intentionally NOT set — level 6 blocks levels 7-8 (deep idle/sleep)
+  # Adreno idle reports level 9/17 in diag; setting min=6 was the V15.1 regression
 }
 apply_idle
 # ASB:IDLE:END
@@ -808,7 +801,6 @@ apply_extra_settings() {
   settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
   settings put global send_action_app_error              0 >/dev/null 2>&1 || true
   settings put global enhanced_connectivity_enabled      0 >/dev/null 2>&1 || true
-  settings put global captive_portal_mode                0 >/dev/null 2>&1 || true
   settings put global wifi_scan_always_enabled           0 >/dev/null 2>&1 || true
   settings put global wifi_wakeup_enabled                0 >/dev/null 2>&1 || true
 }
