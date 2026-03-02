@@ -51,17 +51,3 @@ Restored from V13.9 + new V14 spatial/game flags:
 | Duplicate props | 0 | 0 | ✅ |
 
 ---
-
-## [V15.1] — 2026-02-27
-- Restored `dirty_expire=6000` / `dirty_writeback=5000` from V13.4
-- Added PSD resampler props (`ro.audio.resampler.psd.*`) for LHDC v5
-- Removed 2 dead code blocks and 1 duplicate `dropbox_max_files`
-
-## [V15] — 2026-02-20
-- Wi-Fi MIMO, HDR10 / Dolby Vision / FRC / VPP / P3 / AIE codec flags
-- Bass boost, super volume, volume modeler, game effects
-- `persist.vendor.radio.data_con_recovery=true`, `bluetooth_voip_support=1`
-
-## [V14] — 2026-02-10
-- Split CPU scheduler into `apply_cpuset_groups()` + `apply_uclamp()`
-- `bpf_jit_enable=1`, `tcp_fin_timeout=30`, 24-bit SW decoders
