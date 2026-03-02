@@ -97,18 +97,18 @@ apply_cpuset_groups() {
 }
 
 apply_uclamp() {
-  # ASB:UCLAMP smart values: fg=8 (light tasks stay on LITTLE), top=12 (responsive without waste)
+  # ASB:UCLAMP smart values: fg=15 (battery-first, UI smooth), top=45 (V13.4 gaming floor)
   writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive 1 3 0.25 || true
 
   writef_retry /dev/cpuctl/background/cpu.uclamp.min 0 3 0.25 || true
   writef_retry /dev/cpuctl/system-background/cpu.uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 8 3 0.25 || true
-  writef_retry /dev/cpuctl/top-app/cpu.uclamp.min 12 3 0.25 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 15 3 0.25 || true
+  writef_retry /dev/cpuctl/top-app/cpu.uclamp.min 45 3 0.25 || true
 
   writef_retry /dev/cpuctl/background/uclamp.min 0 3 0.25 || true
   writef_retry /dev/cpuctl/system-background/uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/foreground/uclamp.min 8 3 0.25 || true
-  writef_retry /dev/cpuctl/top-app/uclamp.min 12 3 0.25 || true
+  writef_retry /dev/cpuctl/foreground/uclamp.min 15 3 0.25 || true
+  writef_retry /dev/cpuctl/top-app/uclamp.min 45 3 0.25 || true
 
   [ -w /proc/sys/kernel/sched_util_clamp_min ] && \
     writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
@@ -225,7 +225,7 @@ apply_net() {
   [ -e /proc/sys/net/ipv6/udp_wmem_min ] && sysctlw net.ipv6.udp_wmem_min 65536
 
   sysctlw net.ipv4.tcp_mtu_probing 1
-  sysctlw net.ipv4.tcp_slow_start_after_idle 1
+  sysctlw net.ipv4.tcp_slow_start_after_idle 0
   sysctlw net.ipv4.tcp_no_metrics_save 1
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_max_orphans 8192
@@ -240,6 +240,8 @@ apply_net() {
   sysctlw net.core.dev_weight 64
 
   sysctlw net.core.bpf_jit_enable 1
+  sysctlw net.core.bpf_jit_harden 0
+  sysctlw net.core.bpf_jit_kallsyms 1
 
   [ -e /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established ] && \
   sysctlw net.netfilter.nf_conntrack_tcp_timeout_established 600
@@ -251,6 +253,10 @@ apply_net() {
   sysctlw net.ipv4.tcp_syncookies 1
   sysctlw net.ipv4.tcp_rfc1337 1
 
+  sysctlw net.ipv4.conf.all.rp_filter 0
+  sysctlw net.ipv4.conf.default.rp_filter 0
+  sysctlw net.ipv4.ip_nonlocal_bind 1
+  [ -e /proc/sys/net/ipv6/ip_nonlocal_bind ] && sysctlw net.ipv6.ip_nonlocal_bind 1
   sysctlw net.ipv4.conf.all.accept_redirects 0
   sysctlw net.ipv4.conf.all.send_redirects 0
   sysctlw net.ipv4.conf.all.secure_redirects 0
@@ -469,8 +475,6 @@ apply_idle() {
   writef /sys/module/lpm_levels/parameters/sleep_disabled 0
   [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] && \
     echo 80 > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
-  [ -e /sys/class/kgsl/kgsl-3d0/min_pwrlevel ] && writef /sys/class/kgsl/kgsl-3d0/min_pwrlevel 6
-  [ -e /sys/class/kgsl/kgsl-3d0/bus_split ] && writef /sys/class/kgsl/kgsl-3d0/bus_split 1
   if has settings; then
     settings put global activity_starts_logging_enabled 0 >/dev/null 2>&1 || true
     settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
@@ -628,7 +632,7 @@ svc_stop_guarded() {
   return 0
 }
 
-for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd minidump minidump32 minidump64 bootstat poweroff_charger_log ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server tcpdump modem_svc logcat-debug; do
+for s in qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd minidump minidump32 minidump64 bootstat poweroff_charger_log ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start mmi-diag qcom-diag tftp_server tcpdump modem_svc logcat-debug midasd batterysecret; do
   svc_stop_guarded "$s"
 done
 
