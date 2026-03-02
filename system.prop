@@ -1253,3 +1253,45 @@ ro.vendor.audio.spatializer.support.speaker=true
 ro.vendor.audio.spatializer_enabled=true
 ro.vendor.audio.surround.headphone.only=false
 ro.vendor.audio.surround.support=false
+# ASB:V15.2_FIX Dolby audio pipeline (restored from V13.9 + new V14 surround/spatial/game)
+vendor.audio.dolby.ds2.enabled=true
+vendor.audio.dolby.ds2.hardbypass=false
+vendor.audio.dolby.control.support=true
+vendor.audio.dolby.control.tunning.by.volume.support=true
+dolby.dap.param.tee=false
+dolby.dax.param.tee=false
+vendor.dolby.dap.param.tee=false
+vendor.dolby.dax.param.tee=false
+ro.dolby.music_stream=true
+ro.oplus.audio.dolby.offload=1
+ro.platform.support.dolby=true
+ro.vendor.platform.support.dolby=true
+ro.vendor.audio.dolby.dialog_enchancement.parameter=true
+ro.vendor.audio.dolby.eq.half=false
+ro.vendor.audio.dolby.fade_switch=true
+ro.vendor.audio.dolby.vision.capture.support=true
+ro.vendor.audio.dolby.vision.support=false
+ro.vendor.audio.dolby.surround.enable=true
+ro.vendor.audio.dolby.spatial.profile=music
+ro.vendor.audio.dolby.dax.game.enable=true
+ro.vendor.audio.game.vibrate=true
+# ASB:V15.2_FIX radio power save (restored from V13.9 — battery savings)
+persist.radio.power_save=1
+persist.radio.add_power_save=1
+persist.radio.data_no_toggle=1
+persist.radio.NO_STAPA=1
+# ASB:V15.2_FIX BT quality + audio offload threshold
+persist.bluetooth.sbc_hd_higher_bitrate=1
+audio.offload.min.duration.secs=31
+vendor.audio.offload.min.duration.secs=31
+# ASB:V15.2_FIX IMS log suppression (battery savings)
+persist.ims.disableIMSLogs=1
+persist.ims.disableQXDMLogs=1
+persist.ims.enableADBLogs=0
+persist.ims.disableDebugLogs=1
+persist.ims.enableDebugLogs=0
+# ASB:V15.2_FIX charge + LMK + display + PM (restored from V13.9)
+persist.vendor.accelerate.charge=true
+ro.lmk.swap_compression_ratio=0
+ro.vendor.display.vivid_calibration.enable=1
+dev.pm.dyn_samplingrate=0
