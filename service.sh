@@ -97,21 +97,36 @@ apply_cpuset_groups() {
 }
 
 apply_uclamp() {
-  # ASB:UCLAMP smart values: fg=15 (battery-first, UI smooth), top=45 (V13.4 gaming floor)
-  writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive 1 3 0.25 || true
+  # ASB:UCLAMP V15.3 — multi-path write for kernel 6.12+ cgroup layout
+  # Path A: /dev/cpuctl (legacy, Android < 15)
+  writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive 1 5 0.3 || true
 
-  writef_retry /dev/cpuctl/background/cpu.uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/system-background/cpu.uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min 15 3 0.25 || true
-  writef_retry /dev/cpuctl/top-app/cpu.uclamp.min 45 3 0.25 || true
+  writef_retry /dev/cpuctl/background/cpu.uclamp.min        0  5 0.3 || true
+  writef_retry /dev/cpuctl/system-background/cpu.uclamp.min 0  5 0.3 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min        15 5 0.3 || true
+  writef_retry /dev/cpuctl/top-app/cpu.uclamp.min           45 5 0.3 || true
 
-  writef_retry /dev/cpuctl/background/uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/system-background/uclamp.min 0 3 0.25 || true
-  writef_retry /dev/cpuctl/foreground/uclamp.min 15 3 0.25 || true
-  writef_retry /dev/cpuctl/top-app/uclamp.min 45 3 0.25 || true
+  writef_retry /dev/cpuctl/background/uclamp.min        0  5 0.3 || true
+  writef_retry /dev/cpuctl/system-background/uclamp.min 0  5 0.3 || true
+  writef_retry /dev/cpuctl/foreground/uclamp.min        15 5 0.3 || true
+  writef_retry /dev/cpuctl/top-app/uclamp.min           45 5 0.3 || true
+
+  # Path B: /sys/fs/cgroup (Android 15+ / kernel 6.6+)
+  for _cg_root in /sys/fs/cgroup /dev/cgroup; do
+    [ -d "$_cg_root" ] || continue
+    for _tier in background system-background foreground top-app; do
+      _uval=0
+      [ "$_tier" = "foreground" ] && _uval=15
+      [ "$_tier" = "top-app" ]    && _uval=45
+      _node="$_cg_root/$_tier/cpu.uclamp.min"
+      [ -f "$_node" ] && writef_retry "$_node" "$_uval" 5 0.3 || true
+    done
+    _lat="$_cg_root/top-app/cpu.uclamp.latency_sensitive"
+    [ -f "$_lat" ] && writef_retry "$_lat" 1 5 0.3 || true
+  done
 
   [ -w /proc/sys/kernel/sched_util_clamp_min ] && \
-    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
+    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 5 0.3 || true
 }
 wait_path /dev/cpuset/background/cpus 8 || true
 wait_path /dev/cpuctl/top-app 8 || true
@@ -143,7 +158,7 @@ apply_vm() {
 
   sysctlw vm.dirty_expire_centisecs 6000
   sysctlw vm.dirty_writeback_centisecs 5000
-  sysctlw vm.vfs_cache_pressure 70
+  sysctlw vm.vfs_cache_pressure 50
 
   [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
   [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 15
@@ -638,10 +653,11 @@ done
 
 
 apply_zram() {
+  # ASB:ZRAM V15.3 — fixed 8 GB for OnePlus 15 (16 GB RAM), zstd preferred
   [ -e /sys/block/zram0 ] || return 0
-  HALF_MB=$(awk '/MemTotal/ {printf "%.0f", $2/1024/2}' /proc/meminfo 2>/dev/null)
-  [ -z "$HALF_MB" ] && return 0
   CPU_CORES=$(nproc 2>/dev/null || echo 8)
+  # Fixed size: 8192 MB (~53% of RAM) — optimal for 16 GB device with Android 16
+  ZRAM_SIZE_MB=8192
 
   swapoff /dev/block/zram0 >/dev/null 2>&1 || true
   echo 1 > /sys/block/zram0/reset 2>/dev/null || return 0
@@ -651,7 +667,7 @@ apply_zram() {
     echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
   echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
   [ -f /sys/block/zram0/use_dedup ] && echo 1 > /sys/block/zram0/use_dedup 2>/dev/null || true
-  echo "${HALF_MB}M" > /sys/block/zram0/disksize 2>/dev/null || return 0
+  echo "${ZRAM_SIZE_MB}M" > /sys/block/zram0/disksize 2>/dev/null || return 0
   echo 0 > /sys/block/zram0/queue/iostats 2>/dev/null || true
   echo 0 > /sys/block/zram0/queue/add_random 2>/dev/null || true
 
@@ -691,6 +707,8 @@ apply_extra_settings
     apply_idle
     apply_wlan0_txqlen
     apply_wlan0_qdisc
+    # ASB:V15.3 re-apply network_recommendations=0 (may be reset by GMS)
+    has settings && settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
   done
 ) >/dev/null 2>&1 &
 
