@@ -1,7 +1,5 @@
 # AutoSystemBoost — Changelog
 
-> OnePlus 15 · SM8750 · Adreno 840 · OxygenOS 15
-
 ---
 
 ## [V15.2] — 2026-03-02
