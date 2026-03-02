@@ -65,14 +65,6 @@ Some stacks/devices expose 24‑bit audio as **packed** instead of **24‑in‑3
 
 ---
 
-## ✅ What is NOT changed
-- Any `service.sh` tuning (CPU/VM/NET/Doze logic etc.)  
-- Device idle / whitelist behavior  
-- `country=IT` / region logic (no illegal region nonsense)  
-- Any “Xiaomi-only” props or vendor flags (none added here)
-
----
-
 ## 🔋 Expected impact (realistic, not fairy tales)
 | Scenario | Expected change |
 |---------|------------------|
