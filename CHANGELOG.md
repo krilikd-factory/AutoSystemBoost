@@ -1,7 +1,4 @@
-# AutoSystemBoost — GitHub Changelog
-
-> **OnePlus 15** · SM8750 · Adreno 840 · Android 16 / OxygenOS 15  
-> [@Dima_Krylov](https://t.me/DKomsomol) · [@OnePlusMod](https://t.me/OnePlusMod)
+# ASB-V15.4 — Changelog
 
 ---
 
@@ -98,21 +95,3 @@ Syntax:        PASS (bash -n)
 
 ---
 
-## [V15.3] — 2026-03-02
-- Fix `apply_uclamp()` for kernel 6.12+ (`/sys/fs/cgroup/` path)
-- `vm.vfs_cache_pressure` 70 → 50
-- ZRAM fixed 8192 MB
-- `network_recommendations_enabled=0` persistent re-apply
-
-## [V15.2] — 2026-03-02
-- `tcp_slow_start_after_idle` → 0; GPU `min_pwrlevel=6` removed
-- 37 new props: Dolby Audio + Radio/IMS log suppression
-- `foreground uclamp.min` 8→15, `top-app` 12→45
-- Stop-list: added `midasd`, `batterysecret`
-
-## [V15.1] — 2026-02-XX
-- OnePlus 15 / Android 16 initial port
-
----
-
-*Source: [github.com/krilikd/AutoSystemBoost](https://github.com/krilikd/AutoSystemBoost)*
