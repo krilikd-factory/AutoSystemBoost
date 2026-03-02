@@ -1,12 +1,8 @@
-# AutoSystemBoost — GitHub Changelog
-
-> **Module:** AutoSystemBoost OP15  
-> **Device:** OnePlus 15 (CPH2745) · SM8750 · Adreno 840 · Android 16 / OxygenOS 15 · Kernel 6.12  
-> **Author:** [@DKomsomol](https://t.me/DKomsomol) · Channel: [@OnePlusMod](https://t.me/OnePlusMod)
+# ASB-V15.7 — Changelog
 
 ---
 
-## [V15.7] — 2026-03-02 · Hotfix: V15.6 regressions
+## [V15.7] — 2026-03-02 · Hotfix
 
 > **5 regressions from V15.6 corrected. All V15.6 battery features retained.**
 
@@ -52,41 +48,3 @@
 New in V15.6: CPU schedutil hints · VM dirty/page-cluster · TCP fin_timeout · GPU NAP governor · Doze refinement · Wi-Fi DTIM=3 · OxygenOS telemetry kill · re-apply loop
 
 ---
-
-## [V15.5] — 2026-03-02 · Stability & Responsiveness
-
-> Full charge (Mixed Day): **42.1 h (1.75 days)** · vs V15.2: **+5.6 h**
-
-- WALT `input_boost_ms` 0 → 25 ms · Doze `inactive_to` 30 s → 3 min
-- `statsd` removed from stop-list · TCP keepalive reverted to defaults
-- Wi-Fi PSM smart mode (off during gaming/streaming)
-
----
-
-## [V15.4] — 2026-03-02 · Battery Optimization
-
-> Full charge (Mixed Day): **42.9 h (1.79 days)** · vs V15.2: **+6.4 h**
-
-- GPU idle_timer 80→250 ms · Wi-Fi PSM · aggressive Doze
-- WALT input_boost=0 · Stop-list +11 · EAS · OOM kill
-
----
-
-## [V15.3] — 2026-03-02 · Stability & Memory
-
-> Full charge: **37.0 h**
-
-- uclamp multi-path (kernel 6.12+) · ZRAM 8192 MB zstd
-- vfs_cache_pressure 70→50 · network_recommendations re-apply
-
----
-
-## [V15.2] — 2026-03-02 · Network & CPU
-
-> Full charge: **36.5 h (1.52 days)**
-
-- TCP BBR · swappiness=20 · Dolby/IMS props · batterysecret stop
-
----
-
-*Source: [github.com/krilikd/AutoSystemBoost](https://github.com/krilikd/AutoSystemBoost)*
