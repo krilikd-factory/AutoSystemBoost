@@ -7,11 +7,11 @@ net.bt.name=BT-INet
 persist.bluetooth.ble_drop_power=false
 persist.bluetooth.btsnoopenable=false
 persist.bluetooth.disable.mihc=false
-# ASB:BT_VOL_BEHAVIOR volume/compatibility-first default: disable absolute volume (better steps/ceiling on many TWS)
+# ASB:BT_VOL_BEHAVIOR
 persist.bluetooth.disableabsvol=false
 persist.bluetooth.dualconnection.supported=true
 persist.bluetooth.enablenewavrcp=true
-# ASB:BT_AUDIO let app/game mode control low-latency path (avoid forcing globally for music quality/efficiency)
+# ASB:BT_AUDIO
 persist.bluetooth.hfp_available_guard=false
 persist.bluetooth.idmclient.conid=true
 persist.bluetooth.idmconnect.devicetype=true
@@ -34,7 +34,7 @@ persist.sys.bluetooth_restricte_state=false
 persist.sys.bluetooth_restricte_state_Screen=false
 persist.vendor.bluetooth.asha_power_control=true
 persist.vendor.bluetooth.ble_drop_power=false
-# ASB:BT_VOL_BEHAVIOR vendor path aligned with default volume/compat policy
+# ASB:BT_VOL_BEHAVIOR
 persist.vendor.bluetooth.disableabsvol=false
 persist.vendor.bluetooth.haltest=false
 persist.vendor.bluetooth.heif=true
@@ -53,18 +53,18 @@ ro.vendor.qcom.bluetooth.nl_xdump.supported=false
 vendor.bluetooth.startbtlogger=false
 vendor.bt.pts.pbap=true
 vendor.fm.a2dp.conc.disabled=true
-# ASB:BT_CODEC_POLICY keep optional codecs enabled (runtime policy manages priorities/quality)
+# ASB:BT_CODEC_POLICY
 persist.bluetooth.a2dp.optional_codecs_enabled=1
 persist.vendor.qcom.bluetooth.aac_frm_ctl.enabled=true
 persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled=true
-# ASB:BT_POWER_SAVE sniff mode for battery savings
+# ASB:BT_POWER_SAVE
 persist.bluetooth.sniff_delay=1
 persist.bluetooth.sniff_max_interval=128
 persist.bluetooth.sniff_min_interval=120
-# ASB:BT_LE_SCAN LE scan throttling for battery savings
+# ASB:BT_LE_SCAN
 persist.vendor.bluetooth.le.scan_interval=1000
 persist.vendor.bluetooth.le.scan_window=100
-# ASB:BT_SWB Super Wide Band for better call quality
+# ASB:BT_SWB
 persist.vendor.bt.enable.swb=true
 persist.vendor.bt.enable.swbpm=true
 persist.vendor.btstack.enable.swb=true
@@ -73,29 +73,29 @@ persist.vendor.qcom.bluetooth.enable.swb=true
 persist.vendor.qcom.bluetooth.enable.swbpm=true
 persist.vendor.qcom.bluetooth.swb.enabled=true
 persist.vendor.qcom.bluetooth.swbpm.enabled=true
-# ASB:BT_SBC_HD SBC HD and lossless BT support
+# ASB:BT_SBC_HD
 persist.bt.sbc_hd_enabled=1
 persist.af.losslessbt.on=1
-# ASB:BT_LHDC LHDC v5 codec support
+# ASB:BT_LHDC
 persist.vendor.bluetooth.3rd.lhdcv5.support=true
 bluetooth.a2dp.lhdc=true
 persist.bluetooth.a2dp.lhdc=true
 ro.bluetooth.lhdcsupport=true
 ro.vendor.bluetooth.lhdcsupport=true
-# ASB:BT_ABR disable ABR for maximum audio quality
+# ASB:BT_ABR
 vendor.bluetooth.sbc.abr=false
 vendor.bluetooth.aac.abr=false
 vendor.bluetooth.aptx.abr=false
 vendor.bluetooth.ldac.abr=false
 vendor.bluetooth.lhdc.abr=false
 vendor.bluetooth.lc3.abr=false
-# ASB:BT_APTX_ADAPTIVE AptX Adaptive R2 codec support
+# ASB:BT_APTX_ADAPTIVE
 persist.bluetooth.aptxadaptive_offload.enabled=true
 persist.vendor.qcom.bluetooth.aptxadaptiver2_1_support=true
 persist.vendor.qcom.bluetooth.aptxadaptiver2_2_support=true
 persist.vendor.qcom.bluetooth.aptxadaptiver2_3_support=true
 persist.vendor.qcom.bluetooth.lossless_aptx_adaptive_le.enabled=true
-# ASB:BT_CODEC_LATENCY A2DP codec latency optimization
+# ASB:BT_CODEC_LATENCY
 audio.a2dp.codec.latency=true
 vendor.audio.a2dp.codec.latency=true
 ro.vendor.audio.a2dp.codec.latency=true
@@ -127,7 +127,7 @@ bluetooth.profile.mcs.server.enabled=true
 bluetooth.profile.tbs.server.enabled=true
 # ASB:BT:END
 # ASB:CAMERA:BEGIN
-# ASB:CAMERA_LOCK: regression-guard (no functional tweaks; only structure/audit baseline)
+# ASB:CAMERA_LOCK:
 persist.camera.tnr.preview=1
 persist.camera.tnr.video=1
 persist.camera.tnr_cds=0
@@ -188,8 +188,8 @@ vidc.enc.disable.pq=false
 vidc.enc.drc.enable=0
 vidc.enc.narrow.searchrange=1
 vidc.debug.level=0
-# ASB:CAMERA_AUDIT removed feature-spoof/debug/privacy/USB camera props (lab/gadget/perfSpy/mivi/street/variable-aperture/etc.)
-# ASB:CAMERA_AUDIT keep preview-decision config override only; stock-identical EIS/HW config overlays removed
+# ASB:CAMERA_AUDIT
+# ASB:CAMERA_AUDIT
 # ASB:CAMERA:FRONT_BEAUTY_STABILITY_FIX
 # ASB:CAMERA:END
 # ASB:CPU:BEGIN
@@ -240,27 +240,27 @@ ro.ril.power_collapse=1
 ro.config.hw_fast_dormancy=1
 ro.config.hw_power_saving=1
 # ASB:NET:END
-# ASB:AUDIT: removed runtime-state/no-op props (wifi tracing state, runtcpdump command-state)
+# ASB:AUDIT:
 # ASB:WIFI:BEGIN
 persist.vendor.wifi.interrupt_test_mode=false
 persist.vendor.wifienhancelog=0
-# ASB:AUDIT: removed sys.wifitracing.started (runtime/no-op/typo-duplicate)
-# ASB:AUDIT: removed vendor.hardware.wlan.runtcpdump (runtime/no-op/typo-duplicate)
+# ASB:AUDIT:
+# ASB:AUDIT:
 # ASB:WIFI:END
 # ASB:GPS:BEGIN
-# ASB:NETGPS_AUDIT keep GNSS tuning in gps.conf/xtwifi.conf; avoid prop-layer overrides that fight vendor HAL
+# ASB:NETGPS_AUDIT
 # ASB:GPS:END
 # ASB:KERNEL:BEGIN
-# ASB:AUDIO_POWER_SAVE audio offload power saving
+# ASB:AUDIO_POWER_SAVE
 persist.vendor.audio.power.save.enable=true
 persist.vendor.audio.power.save.setting=0
 audio.lowpower=true
 vendor.audio.lowpower=true
 ro.vendor.audio.lowpower=true
-# ASB:AUDIO_ULL ultra-low latency priority
+# ASB:AUDIO_ULL
 vendor.audio.ull.rt.prio=true
 vendor.audio.ull.playback.support=true
-# ASB:DTS_EAGLE DTS Eagle spatial audio
+# ASB:DTS_EAGLE
 use.dts_eagle=true
 audio.use.dts_eagle=true
 vendor.audio.use.dts_eagle=true
@@ -268,7 +268,7 @@ DTS_EAGLE_PLATFORM_SUPPORT=true
 vendor.dts.audio.skip_shadow=true
 vendor.dts.audio.set_bypass=true
 vendor.dts.audio.print_eagle=true
-# ASB:AUDIO_SPATIAL spatial audio support
+# ASB:AUDIO_SPATIAL
 audio.gef.debug.flags=false
 audio.gef.enable.traces=false
 persist.vendor.audio.audiologlevel.debug=false
@@ -285,7 +285,7 @@ audio.decoder_override_check=true
 audio.hal.boot.timeout.ms=4000
 audio.high.resolution.enable=true
 audio.hwacceffects.needed=true
-# ASB:AUDIO_SANITY disabled forced limiter (use stock tuning)
+# ASB:AUDIO_SANITY
 audio.nat.codec.enabled=1
 audio.native.dsd.buffer.size.kb=2048
 audio.offload.buffer.size.kb=512
@@ -327,8 +327,8 @@ persist.vendor.audio.fluence.audiorec=true
 persist.vendor.audio.fluence.speaker=true
 persist.vendor.audio.fluence.voicecall=true
 persist.vendor.audio.fluence.voicerec=true
-# ASB:AUDIO_QUALITY safe media bypass and low-latency bargein
-# ASB:AUDIO_RESAMPLER PSD polyphase subband decomposition resampler (high-quality 44.1kHz→48kHz)
+# ASB:AUDIO_QUALITY
+# ASB:AUDIO_RESAMPLER
 ro.audio.resampler.psd.enable_at_samplerate=44100
 ro.audio.resampler.psd.halflength=520
 ro.audio.resampler.psd.stopband=194
@@ -363,9 +363,9 @@ persist.vendor.audio_fx.waves.maxxsense=false
 persist.vendor.audio_fx.waves.proc_twks=false
 persist.vendor.audio_fx.waves.processing=false
 persist.vendor.dolbyvision.flat_on=1
-# ASB:AUDIO_EFFECTS deconflict game-oriented Dolby path (keep music path neutral)
-# ASB:AUDIO_EFFECTS do not force Dolby spatial profile globally (let app/user profile win)
-# ASB:AUDIO_EFFECTS do not force Dolby surround globally (avoid coloration/compat issues)
+# ASB:AUDIO_EFFECTS
+# ASB:AUDIO_EFFECTS
+# ASB:AUDIO_EFFECTS
 ro.vendor.display.dolbyvision.support=true
 vendor.audio.3daudio.record.enable=true
 vendor.audio.aac.complexity.default=8
@@ -449,9 +449,9 @@ vendor.audio.feature.flac_offload.enable=true
 vendor.audio.feature.hfp.enable=true
 vendor.audio.feature.hifi_audio.enable=true
 vendor.audio.feature.hwdep_cal.enable=false
-# ASB:AUDIO_ROUTE allow HAL output suspend for proper device-switching (BT TWS earbud swap, audio focus restore)
+# ASB:AUDIO_ROUTE
 vendor.audio.hal.output.suspend.supported=true
-# ASB:AUDIO_KEEPALIVE keep audio HAL session alive for faster BT re-routing
+# ASB:AUDIO_KEEPALIVE
 vendor.audio.feature.keep_alive.enable=true
 vendor.audio.feature.kpi_optimize.enable=false
 vendor.audio.feature.maxx_audio.enable=true
@@ -496,7 +496,7 @@ vendor.audio.high.resolution.enable=true
 vendor.audio.hwacceffects.needed=true
 vendor.audio.keep_alive.disabled=false
 vendor.audio.kpi_optimize.enable=false
-# ASB:AUDIO_SANITY disabled forced vendor limiter (use stock tuning)
+# ASB:AUDIO_SANITY
 vendor.audio.mp3.complexity.default=8
 vendor.audio.mp3.hw.decoder.24bit=true
 vendor.audio.mp3.quality=100
@@ -638,7 +638,7 @@ ro.vendor.audio.aac.para.modify.support=true
 ro.vendor.audio.activity.monitor=false
 ro.vendor.audio.aiasst.support=false
 ro.vendor.audio.av.streaming.offload.enable=true
-# ASB:AUDIO_SANITY drop forced bass coloration flags (avoid muddy/bloated sound)
+# ASB:AUDIO_SANITY
 ro.vendor.audio.ce.compensation.need=false
 ro.vendor.audio.close.noise.reduction=true
 ro.vendor.audio.decoder_override_check=true
@@ -653,7 +653,7 @@ ro.vendor.audio.extendtonecallendedlength=false
 ro.vendor.audio.fast_track_multiplier=2
 ro.vendor.audio.feature.fade=true
 ro.vendor.audio.gain.support=true
-# ASB:AUDIO_EFFECTS drop forced game effect path (can color music playback)
+# ASB:AUDIO_EFFECTS
 ro.vendor.audio.identify_low_end_device=false
 ro.vendor.audio.lea.karaoke=false
 ro.vendor.audio.lowpower.pa.para.support=true
@@ -697,7 +697,7 @@ ro.vendor.audio.videobox.switch=true
 ro.vendor.audio.virtualizer.enable=false
 ro.vendor.audio.vocal.support=false
 ro.vendor.audio.voice.change.support=true
-# ASB:AUDIO_SANITY drop forced super-volume/modeler chain (clarity-first)
+# ASB:AUDIO_SANITY
 ro.vendor.audio.voice.voip.holder.support=true
 ro.vendor.audio.zerodata.upload=true
 ro.vendor.audio.zoom.ahal.support=true
@@ -737,7 +737,7 @@ vendor.display.perf.ubwc_optimize=1
 vendor.display.ubwc_disable=0
 vendor.display.uir_support=1
 media.aac_51_output_enabled=true
-# ASB:MEDIA_PIPELINE stagefright media improvements
+# ASB:MEDIA_PIPELINE
 media.stagefright.enable-rtsp=true
 media.stagefright.enable-record=true
 media.stagefright.enable-meta=true
@@ -773,7 +773,7 @@ vendor.media.heif.quality=100
 vendor.media.jpeg.quality=100
 vendor.media.jpg.quality=100
 vendor.mseccam.auto.start=false
-# ASB:PERF_PROP_AUDIT: let vendor PERF HAL defaults decide feature gates (avoid static false/forced flags)
+# ASB:PERF_PROP_AUDIT:
 vendor.video.dec.disable_ubwc=0
 vendor.video.disable.ubwc=0
 vendor.video.enc.disable_ubwc=0
@@ -806,7 +806,7 @@ lab_options_visible=true
 logcat.live=disable
 persist.adb.notify=0
 persist.android.strictmode=0
-# ASB:AUDIT: removed persist.backup.ntpServer (system time fallback/no-op on modern builds; GNSS NTP handled in gps.conf)
+# ASB:AUDIT:
 persist.data.qmi.adb_logmask=0
 persist.delta_time.enable=false
 persist.device_config.aconfig_flags.nnapi_native.telemetry_enable=false
@@ -830,7 +830,7 @@ persist.sys.assert.panic=false
 persist.sys.assert.state=false
 persist.sys.asserts=false
 persist.sys.bigdata.enable=0
-# ASB:BT_VOL_BEHAVIOR typo/no-op candidate; avoid forcing
+# ASB:BT_VOL_BEHAVIOR
 persist.sys.confidential.logs=0
 persist.sys.crash_dumps=0
 persist.sys.cross_process_jump_response_opt=true
@@ -922,7 +922,7 @@ persist.vendor.battery.health=true
 persist.vendor.battery.health.optimise=true
 persist.vendor.batteryantiaging=0
 persist.vendor.bcl.ibat_limit=true
-# ASB:BT_VOL_BEHAVIOR typo/no-op candidate; avoid forcing
+# ASB:BT_VOL_BEHAVIOR
 persist.vendor.chg_plcy_mgr.log_level=0
 persist.vendor.cnss_diag.enable=false
 persist.vendor.cp.log_level=0
@@ -1003,10 +1003,10 @@ ro.vendor.qti.sys.fw.bservice_enable=true
 ro.vendor.soundtrigger.dfs.support=1
 ro.vendor.sre.enable=true
 screen.time.manage.multi.app=true
-# ASB:SANITY_PASS: removed runtime sys.* perf/debug props (stateful/override-prone)
+# ASB:SANITY_PASS:
 sys.haptic.intensityforkeyboard=true
 sys.haptic.media=true
-# ASB:SANITY_PASS: removed runtime sys.usb.mtp.* props (commonly overwritten/no-op on modern OOS)
+# ASB:SANITY_PASS:
 use.voice.path.for.pcm.voip=true
 vendor.common.hydra.feedback=0
 vendor.gralloc.disable_ubwc=0
@@ -1037,12 +1037,12 @@ ro.egl.destroy_after_detach=false
 logcast.live=disable
 live.logcat=disable
 rw.logger=0
-# ASB:AUDIT: removed net.ipv4.tcp_no_metrics_save (runtime/no-op/typo-duplicate)
+# ASB:AUDIT:
 vendor.vidc.enc.disable_bframes=0
 profiler.launch=false
 profiler.hung.dumpdobugreport=false
-# ASB:AUDIT: removed profiler.forse_disable_err_rpt (runtime/no-op/typo-duplicate)
-# ASB:AUDIT: removed profiler.forse_disable_ulog (runtime/no-op/typo-duplicate)
+# ASB:AUDIT:
+# ASB:AUDIT:
 ro.config.ksm.support=false
 ro.sf.battery_log=0
 persist.sys.wfd.virtual=0
@@ -1205,7 +1205,6 @@ persist.sys.stability.record_dump_file=false
 persist.vendor.sys.modem.diag=0
 vendor.diag.port=none
 # ASB:LOG:END
-
 # ASB:EXTRA_PROPS:BEGIN
 bluetooth.profile.le_audio.enabled=true
 persist.bluetooth.a2dp.lhdc.version=5
@@ -1224,7 +1223,7 @@ debug.config.video.hevchdr10.decode.support=true
 debug.config.video.hevchdr10.encode.support=true
 debug.config.video.p3.decode.support=true
 debug.config.video.p3.encode.support=true
-persist.vendor.audio.kv_mbdrc=false
+persist.vendor.audio.kv_mbdrc=true
 persist.vendor.radio.data_con_recovery=true
 persist.vendor.wlan.multi_p2p=true
 ro.vendor.audio.bass.boost.enable=true
@@ -1238,9 +1237,9 @@ ro.vendor.wlan.mimo=1
 ro.wifi.channels=241
 ro.wifi.signal.optimized=true
 ro.wlan.mimo=1
-vendor.audio.hph_mbdrc.enabled=false
+vendor.audio.hph_mbdrc.enabled=true
 vendor.audio.mspp.enable=false
-vendor.audio.vol_based_mbdrc.enabled=false
+vendor.audio.vol_based_mbdrc.enabled=true
 wifi.supplicant_scan_interval=300
 persist.bluetooth.spatial_audio_support=true
 persist.vendor.audio.spatializer.enable=true
@@ -1253,7 +1252,7 @@ ro.vendor.audio.spatializer.support.speaker=true
 ro.vendor.audio.spatializer_enabled=true
 ro.vendor.audio.surround.headphone.only=false
 ro.vendor.audio.surround.support=false
-# ASB:V15.2_FIX Dolby audio pipeline (restored from V13.9 + new V14 surround/spatial/game)
+# ASB:V15.2_FIX
 vendor.audio.dolby.ds2.enabled=true
 vendor.audio.dolby.ds2.hardbypass=false
 vendor.audio.dolby.control.support=true
@@ -1275,22 +1274,22 @@ ro.vendor.audio.dolby.surround.enable=true
 ro.vendor.audio.dolby.spatial.profile=music
 ro.vendor.audio.dolby.dax.game.enable=true
 ro.vendor.audio.game.vibrate=true
-# ASB:V15.2_FIX radio power save (restored from V13.9 — battery savings)
+# ASB:V15.2_FIX
 persist.radio.power_save=1
 persist.radio.add_power_save=1
 persist.radio.data_no_toggle=1
 persist.radio.NO_STAPA=1
-# ASB:V15.2_FIX BT quality + audio offload threshold
+# ASB:V15.2_FIX
 persist.bluetooth.sbc_hd_higher_bitrate=1
 audio.offload.min.duration.secs=31
 vendor.audio.offload.min.duration.secs=31
-# ASB:V15.2_FIX IMS log suppression (battery savings)
+# ASB:V15.2_FIX
 persist.ims.disableIMSLogs=1
 persist.ims.disableQXDMLogs=1
 persist.ims.enableADBLogs=0
 persist.ims.disableDebugLogs=1
 persist.ims.enableDebugLogs=0
-# ASB:V15.2_FIX charge + LMK + display + PM (restored from V13.9)
+# ASB:V15.2_FIX
 persist.vendor.accelerate.charge=true
 ro.lmk.swap_compression_ratio=0
 ro.vendor.display.vivid_calibration.enable=1
