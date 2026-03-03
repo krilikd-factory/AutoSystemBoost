@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<mixer>
+  <ctl name="TFA Profile" value="speaker"/>
+  <ctl name="TFA_CHIP_SELECTOR" value="0"/>
+  <path name="ftm-loudspeaker-test">
+    <ctl name="TFA_CHIP_SELECTOR" value="3"/>
+    <ctl name="TFA Profile" value="speaker"/>
+  </path>
+  <ctl name="Set HPX OnOff" value="1"/>
+  <ctl name="Set HPX ActiveBe" value="0"/>
+  <ctl name="DS2 OnOff" value="On"/>
+  <ctl name="THD3 Compensation" value="0"/>
+  <ctl name="MSM ASphere Set Param" value="0"/>
+  <ctl name="Codec Wideband" value="1"/>
+  <ctl name="Set Custom Stereo OnOff" value="0"/>
+  <ctl name="HiFi Function" value="On"/>
+  <ctl name="Virtual Bass Boost" value="Off"/>
+  <ctl name="WSA_RX0 EC_HQ Switch" value="0"/>
+  <ctl name="WSA_RX1 EC_HQ Switch" value="0"/>
+  <ctl name="WSA_RX2 EC_HQ Switch" value="0"/>
+  <ctl name="WSA_RX3 EC_HQ Switch" value="0"/>
+  <ctl name="WSA_RX4 EC_HQ Switch" value="0"/>
+  <ctl name="HPH Idle Detect" value="ON"/>
+  <ctl name="AUX_HPF Enable" value="Off"/>
+  <ctl name="A2DP_HPF Enable" value="Off"/>
+  <ctl name="BT_HPF Enable" value="Off"/>
+  <ctl name="HPF Enable" value="Off"/>
+  <ctl name="AUX_LPF Enable" value="Off"/>
+  <ctl name="A2DP_LPF Enable" value="Off"/>
+  <ctl name="BT_LPF Enable" value="Off"/>
+  <ctl name="LPF Enable" value="Off"/>
+  <ctl name="AUX_BPF Enable" value="Off"/>
+  <ctl name="A2DP_BPF Enable" value="Off"/>
+  <ctl name="BT_BPF Enable" value="Off"/>
+  <ctl name="BPF Enable" value="Off"/>
+  <ctl name="BDE Enable" value="0"/>
+  <ctl name="Amp DSP Enable" value="1"/>
+  <ctl name="HPHL Volume" value="20"/>
+  <ctl name="HPHR Volume" value="20"/>
+  <ctl name="Audiosphere Enable" value="Off"/>
+</mixer>
