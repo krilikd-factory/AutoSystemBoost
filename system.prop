@@ -125,6 +125,14 @@ bluetooth.profile.vcp.controller.enabled=true
 bluetooth.profile.hap.client.enabled=true
 bluetooth.profile.mcs.server.enabled=true
 bluetooth.profile.tbs.server.enabled=true
+bluetooth.hfp.codec_aptx_voice.enabled=true
+persist.vendor.audio.cloud.enable.hfpclient=true
+bluetooth.leaudio.dual_bidirection_swb.supported=true
+persist.bluetooth.opus.enabled=true
+persist.bluetooth.leaudio.notify.idle.during.call=true
+persist.bluetooth.leaudio.bypass_allow_list=true
+ro.bluetooth.leaudio_offload.supported=true
+ro.bluetooth.leaudio_switcher.supported=true
 # ASB:BT:END
 # ASB:CAMERA:BEGIN
 # ASB:CAMERA_LOCK:
@@ -239,6 +247,20 @@ ro.ril.disable.power.collapse=0
 ro.ril.power_collapse=1
 ro.config.hw_fast_dormancy=1
 ro.config.hw_power_saving=1
+persist.db.gsm.enablehdvoice=1
+persist.db.lte.enablehdvoice=1
+persist.db.volte.available=1
+persist.radio.ims.enabled=1
+persist.ims.qos.enabled=true
+persist.ims.qos.mode=2
+persist.ims.security.enabled=true
+persist.vendor.vonr_setting_support=1
+persist.vendor.radio.data_con_recovery=true
+persist.radio.RATE_ADAPT_ENABLE=1
+persist.data.iwlan.enable=true
+persist.vendor.data.iwlan.enable=true
+persist.data.iwlan.ims.enable=true
+persist.vendor.data.iwlan.ims.enable=true
 # ASB:NET:END
 # ASB:AUDIT:
 # ASB:WIFI:BEGIN
@@ -246,9 +268,27 @@ persist.vendor.wifi.interrupt_test_mode=false
 persist.vendor.wifienhancelog=0
 # ASB:AUDIT:
 # ASB:AUDIT:
+ro.wlan.mimo=1
+ro.vendor.wlan.mimo=1
+ro.wifi.channels=241
+ro.wifi.signal.optimized=true
+wifi.supplicant_scan_interval=300
+persist.vendor.wlan.multi_p2p=true
+ro.vendor.wifi.6ghz.capable=true
+persist.vendor.wifi.vht160_enable=1
+persist.vendor.wifi.he80_160_enable=1
+persist.vendor.wifi.6ghz.enable=1
+sys.wifitracing.started=0
 # ASB:WIFI:END
 # ASB:GPS:BEGIN
 # ASB:NETGPS_AUDIT
+persist.sys.gps.polaris=true
+persist.sys.gnssssru=true
+persist.sys.ssru.power.switch=1
+persist.sys.gps.agpsOpt=true
+ro.gps.agps_provider=2
+persist.sys.gps.support_block_list_prop=false
+persist.sys.gps.fence=false
 # ASB:GPS:END
 # ASB:KERNEL:BEGIN
 # ASB:AUDIO_POWER_SAVE
@@ -606,7 +646,6 @@ persist.vendor.service.bt.opp.cloudhighspeed=true
 persist.vendor.service.bt.opp.highspeed=true
 persist.vendor.service.bt.snooplog=false
 persist.vendor.usb.config.extra=dpl
-persist.vendor.vonr_setting_support=1
 ro.organization_owned=false
 ro.vendor.audio.extra.handle.support=true
 ro.vendor.audio.ring.filter=true
@@ -1214,7 +1253,6 @@ persist.vendor.camera.hfr.enable=1
 persist.vendor.camera.video.hdr.enable=1
 persist.vendor.qcom.bluetooth.lc3_offload.enable=true
 persist.vendor.qcom.bluetooth.leaudio.enable=true
-# ASB:EXTRA_PROPS:END
 debug.config.media.video.aie.support=true
 debug.config.media.video.dolby_vision_suports=true
 debug.config.media.video.frc.support=true
@@ -1224,8 +1262,6 @@ debug.config.video.hevchdr10.encode.support=true
 debug.config.video.p3.decode.support=true
 debug.config.video.p3.encode.support=true
 persist.vendor.audio.kv_mbdrc=true
-persist.vendor.radio.data_con_recovery=true
-persist.vendor.wlan.multi_p2p=true
 ro.vendor.audio.bass.boost.enable=true
 ro.vendor.audio.bass.booster.enable=true
 ro.vendor.audio.bass.enhancer.enable=true
@@ -1233,14 +1269,9 @@ ro.vendor.audio.game.effect=true
 ro.vendor.audio.game.mode=true
 ro.vendor.audio.voice.super_volume=true
 ro.vendor.audio.volume.modeler.enable=true
-ro.vendor.wlan.mimo=1
-ro.wifi.channels=241
-ro.wifi.signal.optimized=true
-ro.wlan.mimo=1
 vendor.audio.hph_mbdrc.enabled=true
 vendor.audio.mspp.enable=false
 vendor.audio.vol_based_mbdrc.enabled=true
-wifi.supplicant_scan_interval=300
 persist.bluetooth.spatial_audio_support=true
 persist.vendor.audio.spatializer.enable=true
 ro.audio.spatializer_binaural_enabled_default=false
@@ -1252,7 +1283,6 @@ ro.vendor.audio.spatializer.support.speaker=true
 ro.vendor.audio.spatializer_enabled=true
 ro.vendor.audio.surround.headphone.only=false
 ro.vendor.audio.surround.support=false
-# ASB:V15.2_FIX
 vendor.audio.dolby.ds2.enabled=true
 vendor.audio.dolby.ds2.hardbypass=false
 vendor.audio.dolby.control.support=true
@@ -1274,23 +1304,20 @@ ro.vendor.audio.dolby.surround.enable=true
 ro.vendor.audio.dolby.spatial.profile=music
 ro.vendor.audio.dolby.dax.game.enable=true
 ro.vendor.audio.game.vibrate=true
-# ASB:V15.2_FIX
 persist.radio.power_save=1
 persist.radio.add_power_save=1
 persist.radio.data_no_toggle=1
 persist.radio.NO_STAPA=1
-# ASB:V15.2_FIX
 persist.bluetooth.sbc_hd_higher_bitrate=1
 audio.offload.min.duration.secs=31
 vendor.audio.offload.min.duration.secs=31
-# ASB:V15.2_FIX
 persist.ims.disableIMSLogs=1
 persist.ims.disableQXDMLogs=1
 persist.ims.enableADBLogs=0
 persist.ims.disableDebugLogs=1
 persist.ims.enableDebugLogs=0
-# ASB:V15.2_FIX
 persist.vendor.accelerate.charge=true
 ro.lmk.swap_compression_ratio=0
 ro.vendor.display.vivid_calibration.enable=1
 dev.pm.dyn_samplingrate=0
+# ASB:EXTRA_PROPS:END
