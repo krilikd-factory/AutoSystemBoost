@@ -1,7 +1,7 @@
 id=AutoSystemBoost
 name=AutoSystemBoost OP15
-version=V16
-versionCode=160
+version=V16.5
+versionCode=165
 author=Dima_Krylov telegram: @DKomsomol
 description=@DKomsomol (Support)\n@OnePlusMod (Channel)\n\nThis module Improving System On OnePlus15
 updateJson=https://raw.githubusercontent.com/krilikd/AutoSystemBoost/main/update.json
