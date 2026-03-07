@@ -290,8 +290,21 @@ apply_wifi_settings() {
   settings put global nearby_scanning_enabled 0 >/dev/null 2>&1 || true
   settings put global wifi_scan_throttle_enabled 1 >/dev/null 2>&1 || true
   settings put global wifi_suspend_optimizations_enabled 1 >/dev/null 2>&1 || true
+  settings put global wifi_verbose_logging_enabled 0 >/dev/null 2>&1 || true
 }
 apply_wifi_settings
+apply_wifi_country() {
+  has iw && iw reg set IT >/dev/null 2>&1 || true
+  has cmd && {
+    cmd -w wifi force-country-code enabled IT >/dev/null 2>&1 || true
+    cmd -w wifi set-country-code IT >/dev/null 2>&1 || true
+  }
+  has settings && {
+    settings put global wifi_country_code IT >/dev/null 2>&1 || true
+    settings put global wifi_country_code_priority 1 >/dev/null 2>&1 || true
+  }
+}
+apply_wifi_country
 apply_wlan0_txqlen() {
   [ -e /sys/class/net/wlan0/tx_queue_len ] || return 0
   _txq="$(cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
@@ -409,12 +422,23 @@ apply_wifi_dtim
     [ "$q" = "512" ] && break
   done
 ) >/dev/null 2>&1 &
+# ASB:GPS:BEGIN
 apply_gps_hygiene() {
   has settings || return 0
   [ "$(settings get global assisted_gps_enabled 2>/dev/null)" = "1" ] && return 0
   settings put global assisted_gps_enabled 1 >/dev/null 2>&1 || true
+  settings put global accessibility_gps_enabled 1 >/dev/null 2>&1 || true
+  settings put global gps_xtra_data_enabled 1 >/dev/null 2>&1 || true
+  settings put global gps_xtra_server "http://xtrapath4.izatcloud.net/xtra3grcej.bin" >/dev/null 2>&1 || true
+  settings put global gps_xtra_server_1 "http://xtrapath1.izatcloud.net/xtra3grcej.bin" >/dev/null 2>&1 || true
+  settings put global gps_xtra_server_2 "http://xtrapath2.izatcloud.net/xtra3grcej.bin" >/dev/null 2>&1 || true
+  settings put global ntp_server time.google.com >/dev/null 2>&1 || true
+  settings put global ntp_server_2 0.it.pool.ntp.org >/dev/null 2>&1 || true
+  settings put global ntp_server_3 1.it.pool.ntp.org >/dev/null 2>&1 || true
+  settings put global ntp_server_4 ntp1.inrim.it >/dev/null 2>&1 || true
 }
 apply_gps_hygiene
+# ASB:GPS:END
 tune_io_queues() {
   for _b in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
     [ -d "$_b/queue" ] || continue
@@ -448,6 +472,12 @@ apply_kernel() {
     writef_retry /proc/sys/debug/exception-trace 0 1 0 || true
   [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && \
     writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 2 1 0 || true
+  [ -e /proc/sys/walt/sched_boost ] && \
+    writef_retry /proc/sys/walt/sched_boost 0 1 0 || true
+  [ -e /proc/sys/walt/sched_idle_enough ] && \
+    writef_retry /proc/sys/walt/sched_idle_enough 40 1 0 || true
+  [ -e /proc/sys/walt/sched_idle_enough_clust ] && \
+    writef_retry /proc/sys/walt/sched_idle_enough_clust 40 1 0 || true
   writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
   tune_io_queues
 }
@@ -463,12 +493,32 @@ apply_idle() {
   writef_retry /sys/class/kgsl/kgsl-3d0/force_rail_on 0 3 0.25 || true
   writef_retry /sys/class/kgsl/kgsl-3d0/force_clk_on  0 3 0.25 || true
   writef_retry /sys/class/kgsl/kgsl-3d0/force_bus_on  0 3 0.25 || true
+  [ -w /sys/class/kgsl/kgsl-3d0/bus_split ] && writef_retry /sys/class/kgsl/kgsl-3d0/bus_split 1 3 0.25 || true
+  [ -w /sys/class/kgsl/kgsl-3d0/force_no_nap ] && writef_retry /sys/class/kgsl/kgsl-3d0/force_no_nap 0 3 0.25 || true
   # ASB:V15.6
   [ -w /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor ] && \
     echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor 2>/dev/null || true
 }
 apply_idle
 # ASB:IDLE:END
+# ASB:CPU:BEGIN
+apply_freq_floors() {
+  for _pol_dir in /sys/devices/system/cpu/cpufreq/policy*; do
+    [ -d "$_pol_dir" ] || continue
+    _smin="$_pol_dir/scaling_min_freq"
+    [ -w "$_smin" ] || continue
+    _avail="$_pol_dir/scaling_available_frequencies"
+    if [ -r "$_avail" ]; then
+      _low="$(tr ' ' '\n' < "$_avail" | grep -v '^$' | sort -n | head -1)"
+      [ -n "$_low" ] && writef_retry "$_smin" "$_low" 3 0.25 || true
+    else
+      _cmin="$(cat "$_pol_dir/cpuinfo_min_freq" 2>/dev/null)"
+      [ -n "$_cmin" ] && writef_retry "$_smin" "$_cmin" 3 0.25 || true
+    fi
+  done
+}
+apply_freq_floors
+# ASB:CPU:END
 apply_bt_settings() {
   if has settings; then
     settings put global ble_scan_always_enabled 0 >/dev/null 2>&1 || true
@@ -658,13 +708,13 @@ apply_extra_settings() {
   settings put global bluetooth_voip_support 1 >/dev/null 2>&1 || true
   settings put global dropbox_max_files 5 >/dev/null 2>&1 || true
   settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
-  # ASB:V15.6
   settings put global activity_starts_logging_enabled    0 >/dev/null 2>&1 || true
   settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
   settings put global send_action_app_error              0 >/dev/null 2>&1 || true
   settings put global enhanced_connectivity_enabled      0 >/dev/null 2>&1 || true
   settings put global wifi_scan_always_enabled           0 >/dev/null 2>&1 || true
   settings put global wifi_wakeup_enabled                0 >/dev/null 2>&1 || true
+  settings put global adaptive_connectivity_enabled 0 >/dev/null 2>&1 || true
 }
 apply_extra_settings
 (
@@ -679,6 +729,10 @@ apply_extra_settings
     sysctlw kernel.sched_schedstats 0
     sysctlw kernel.timer_migration 0
     [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
+    [ -e /proc/sys/walt/sched_boost ] && writef_retry /proc/sys/walt/sched_boost 0 1 0 || true
+    [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 2 1 0 || true
+    [ -e /proc/sys/walt/sched_idle_enough ] && writef_retry /proc/sys/walt/sched_idle_enough 40 1 0 || true
+    [ -e /proc/sys/walt/sched_idle_enough_clust ] && writef_retry /proc/sys/walt/sched_idle_enough_clust 40 1 0 || true
     apply_uclamp
     [ $IS_WILD -eq 0 ] && apply_cpuset_groups
     apply_idle
@@ -686,9 +740,10 @@ apply_extra_settings
     apply_wlan0_qdisc
     # ASB:V15.3
     has settings && settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
-    # ASB:V15.4
     apply_wifi_pm
     apply_doze
+    apply_wifi_country
+    apply_freq_floors
   done
 ) >/dev/null 2>&1 &
 exit 0
