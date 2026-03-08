@@ -428,8 +428,6 @@ apply_gps_hygiene() {
   has settings || return 0
   [ "$(settings get global assisted_gps_enabled 2>/dev/null)" = "1" ] && return 0
   settings put global assisted_gps_enabled 1 >/dev/null 2>&1 || true
-  settings put global accessibility_gps_enabled 1 >/dev/null 2>&1 || true
-  settings put global gps_xtra_data_enabled 1 >/dev/null 2>&1 || true
   settings put global gps_xtra_server "http://xtrapath4.izatcloud.net/xtra3grcej.bin" >/dev/null 2>&1 || true
   settings put global gps_xtra_server_1 "http://xtrapath1.izatcloud.net/xtra3grcej.bin" >/dev/null 2>&1 || true
   settings put global gps_xtra_server_2 "http://xtrapath2.izatcloud.net/xtra3grcej.bin" >/dev/null 2>&1 || true
