@@ -1,93 +1,87 @@
-# 🚀 AutoSystemBoost V16.5 STABLE RELEASE!
-**Compared to V16**  
-**Date:** 2026-03-08
+# ðŸš€ AutoSystemBoost V16.6 STABLE RELEASE
+
+Compared to V16.5  
+Date: 2026-03-08
 
 ---
 
-## 🔧 Core Scheduler & Idle Refinement
+# ðŸ”§ Network Stack Refinement
 
-| Area | V16 | V16.5 |
-|----------|--------|--------|
-| Scheduler path handling | Mixed generic + device-specific logic | **Focused on real SM8750 / WALT paths** |
-| Idle tuning | Good baseline | **Cleaner WALT idle behavior** |
-| Unsupported paths | Some legacy / no-op logic remained | **Cleaned and reduced** |
+| Area | V16.5 | V16.6 |
+|-----|-----|-----|
+| TCP recovery | Standard BBR + tuning | Improved retransmission recovery |
+| Packet retransmission | Default behavior | tcp_retrans_collapse=0 |
+| Mobile network stability | Good | Better recovery on unstable LTE / 5G |
 
-✔ Better alignment with actual Snapdragon 8 Elite runtime paths  
-✔ Less dead code and fewer theoretical tweaks  
-✔ More honest device-specific tuning  
+âœ” Prevents collapsing retransmission segments  
+âœ” Improves packet recovery when packet loss occurs  
+âœ” Better behavior on mobile networks with unstable latency  
 
----
-
-## 🧠 Kernel / WALT Improvements
-
-- Added WALT idle threshold tuning for better scheduler idle behavior
-- Added cluster-aware WALT idle tuning
-- Preserved fast WALT response window tuning
-- Kept global WALT boost disabled for lower heat and steadier efficiency
-- Retained real KGSL bus_split handling
-- Retained safe GPU NAP behavior
-- Updated final release metadata for V16.5
-
-- Runtime logic is now closer to what was verified through Termux on the real device
-- Generic Qualcomm assumptions were reduced in favor of confirmed SM8750 behavior
-- Final release keeps responsiveness without forcing unnecessary boost behavior
+Result: cleaner TCP recovery and more stable data connections.
 
 ---
 
-## 🎮 GPU / KGSL Refinement
+# ðŸ”µ Bluetooth / LE Audio Power Fix
 
-| Area | V16 | V16.5 |
-|----------|--------|--------|
-| KGSL tuning | Strong base | **More accurate real-path handling** |
-| GPU idle balance | Stable | **Preserved with cleaner logic** |
-| Unsupported devfreq tuning | Possible leftover no-op paths | **Further reduced** |
+| Area | V16.5 | V16.6 |
+|-----|-----|-----|
+| LE Audio allowâ€‘list bypass | Enabled | Removed |
+| LE Audio idle call notifications | Enabled | Removed |
+| Background BLE scan risk | Possible | Reduced |
 
-✔ Keeps real working KGSL controls  
-✔ Avoids fake tuning on non-exported GPU devfreq paths  
-✔ Better confidence that runtime changes actually apply  
+Removed properties:
 
----
+persist.bluetooth.leaudio.bypass_allow_list=true  
+persist.bluetooth.leaudio.notify.idle.during.call=true  
 
-## 🔋 Stability, Battery & Runtime Accuracy
+These flags could allow applications to trigger BLE scans outside the normal allowâ€‘list, which may cause unnecessary Bluetooth activity during idle.
 
-- Improved consistency between script logic and actual kernel exports
-- Lower chance of no-op tuning blocks staying in the final release
-- Cleaner reapply behavior after boot
-- Better foundation for standby efficiency tuning
+Result:
 
-**Result:** V16.5 is less about “tuning everything” and more about **tuning what really exists and works**.
+âœ” Reduced background BLE wakeups  
+âœ” Lower chance of Bluetooth idle drain  
+âœ” Cleaner LE Audio behavior
 
----
+All important LE Audio optimizations remain active, including:
 
-## 🔊 Audio / Bluetooth / Platform Balance
-
-- Strong audio and Bluetooth tuning remains intact
-- No unnecessary regression to loudness, codec behavior or existing media path improvements
-- Final release focuses on system-side accuracy while keeping the audio-first design
+â€¢ LE Audio offload  
+â€¢ codec switching support  
+â€¢ SWB / Opus handling for modern TWS earbuds  
 
 ---
 
-## 📦 Internal Clean-Up
+# ðŸ”‹ Battery & Idle Behaviour
 
-| Type | Status |
-|----------|--------|
-| Runtime targeting | **Improved** |
-| Unsupported path noise | **Reduced** |
-| Device-specific maturity | **Higher** |
-| Final release consistency | **Improved** |
+The Bluetooth cleanup specifically targets background BLE scanning â€” a known source of idle battery drain when applications poll nearby devices.
+
+Expected improvements:
+
+| Scenario | V16.5 | V16.6 |
+|------|------|------|
+| Bluetooth idle activity | Normal | Reduced |
+| Background BLE scanning | Possible | Restricted |
+| Night battery drain | Normal | Potentially improved |
+
+Result: cleaner idle behavior with less unnecessary Bluetooth activity.
 
 ---
 
-## ✅ Final Summary
+# ðŸ“Š Summary
 
-**V16** was already strong.  
-**V16.5** is the version that feels more mature and more tightly matched to the real hardware.
+V16.6 is a refinement update focused on stability and power efficiency.
 
-Main difference:
+Main improvements:
 
-- fewer fake paths  
-- less dead tuning  
-- more confirmed real behavior  
-- better fit for OnePlus 15 + Snapdragon 8 Elite Gen 5  
+âœ” improved TCP retransmission handling  
+âœ” reduced background Bluetooth activity  
+âœ” safer LE Audio configuration  
+âœ” improved idle power behaviour  
 
-That is why **V16.5** is the better final branch.
+No aggressive changes were introduced.
+
+AutoSystemBoost continues to focus on:
+
+â€¢ system stability  
+â€¢ balanced performance  
+â€¢ battery efficiency  
+â€¢ highâ€‘quality audio and connectivity
