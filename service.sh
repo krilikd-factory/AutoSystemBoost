@@ -217,6 +217,7 @@ apply_net() {
   sysctlw net.ipv4.tcp_mtu_probing 1
   sysctlw net.ipv4.tcp_slow_start_after_idle 0
   sysctlw net.ipv4.tcp_recovery 1
+  sysctlw net.ipv4.tcp_retrans_collapse 0
   sysctlw net.ipv4.tcp_max_orphans 8192
   # ASB:V15.4
   # ASB:V15.5
@@ -742,7 +743,6 @@ apply_extra_settings
     has settings && settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
     apply_wifi_pm
     apply_doze
-    apply_wifi_country
     apply_freq_floors
   done
 ) >/dev/null 2>&1 &
