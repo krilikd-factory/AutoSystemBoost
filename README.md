@@ -132,9 +132,9 @@ The module reduces unnecessary CPU wakeups and improves idle behavior.
 More **deep sleep residency**  
 Less **background drain**
 
-Stock  [=====-----]
+Stock  50%
 
-ASB    [=========--]
+ASB    85%
 
 ---
 
