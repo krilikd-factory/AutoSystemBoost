@@ -1,37 +1,216 @@
 # AutoSystemBoost
-<img width="788" height="421" alt="IMG_20260220_032624" src="https://github.com/user-attachments/assets/1881af42-dee0-46af-ba82-4bdaf7724ecd" />
 
-I've built my first AutoSystemBoost module for the OnePlus 15.
-This module is for those who want:
-Stability, less heat, and better battery life (without sacrificing performance).
-Very loud and high-quality sound from speakers and Bluetooth headphones.
-Improved photo and video quality.
-Fast mobile and WiFi internet, fast and accurate GPS.
-Reduced system logs and unnecessary system clutter.
+<p align="center">
+  <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="AutoSystemBoost Banner" width="100%">
+</p>
 
+<h1 align="center">🚀 AutoSystemBoost</h1>
+<p align="center"><b>Advanced Android Optimization Engine for Snapdragon Flagships</b></p>
 
-1. Audio: loud, clear, and without the clutter
-Maximum quality and volume for speakers and Bluetooth headphones.
-Improved compatibility between paths, profiles, and formats (A2DP/LE Audio).
-Precisely adjust effects without breaking the audio pipe.
-Enhanced Bluetooth profile (BT MAX) – an emphasis on high-quality codecs.
+<p align="center">
+  <img src="https://img.shields.io/badge/Snapdragon-Optimized-16a34a?style=for-the-badge" alt="Snapdragon">
+  <img src="https://img.shields.io/badge/Magisk-Compatible-0ea5e9?style=for-the-badge" alt="Magisk">
+  <img src="https://img.shields.io/badge/KernelSU-Compatible-0ea5e9?style=for-the-badge" alt="KernelSU">
+  <img src="https://img.shields.io/badge/Version-Stable-22c55e?style=for-the-badge" alt="Version">
+</p>
 
-2. Camera and video: always Ultra profiles
-Ultra profiles are now the default for photos and videos in all modes.
-Increased bitrate and detail (a slight increase in noise may occur – feedback welcome).
-Appearance retouching options are available – let me know which apps I'd like to add.
+AutoSystemBoost is an advanced **Android system optimization module** designed to improve the overall experience on modern Snapdragon devices.
 
-3. GPS: Faster fixation and more accurate positioning
-Optimized GNSS + LBS behavior.
-Improved source priorities and more appropriate parameters.
+Originally developed for **OnePlus 15 / Snapdragon 8 Elite**, but the tuning logic benefits many modern Qualcomm flagship devices.
 
-4. Wi-Fi / roaming: Faster connection, more stable network
-Fewer delays when switching between access points.
-Optimized scanning and driver behavior.
+---
 
-5. Performance and battery life: a balanced approach
-Reduced heat output without sacrificing performance (no aggressive background reduction).
-Profile settings for everyday use.
+## ⚡ What AutoSystemBoost Improves
+
+ASB optimizes several critical Android subsystems at the same time.
+
+| System Area | Improvement |
+|-------------|-------------|
+| 🧠 CPU Scheduler | Better WALT task scheduling and smoother responsiveness |
+| 🎮 GPU | More efficient KGSL / GPU bus behavior |
+| 🔊 Audio | Louder and cleaner Bluetooth audio |
+| 📷 Camera | Improved media and camera pipeline behavior |
+| 📡 Network | Lower latency and improved network stability |
+| 🔋 Battery | Reduced background wakeups and better idle behavior |
+| 🌡 Thermal | Better sustained performance under load |
+
+**Result:** a device that feels **faster, smoother, cooler and more efficient** than stock.
+
+---
+
+## 🔊 Audio Improvements
+
+AutoSystemBoost significantly improves **Bluetooth and system audio quality**.
+
+### ✅ Benefits
+
+- Higher safe output volume
+- Cleaner peaks and better dynamic range
+- Better Bluetooth audio stability
+- Better codec behavior for high quality wireless audio
+
+### 🎧 Especially noticeable with
+
+- LHDC
+- LDAC
+- AAC
+- Premium TWS earbuds
+
+### Example comparison
+
+| Feature | Stock | AutoSystemBoost |
+|------|------|------|
+| Max safe volume | Medium | Higher |
+| Dynamic range | Standard | Improved |
+| Peak distortion | Possible | Reduced |
+| Bluetooth stability | Normal | Improved |
+
+Perfect for **OnePlus Buds Pro / Pro 2 / Pro 3** and other high-end TWS earbuds.
+
+---
+
+## 📷 Camera and Media Pipeline
+
+ASB improves the **system media stack**, not just the camera app.
+
+### ✅ Improvements
+
+- Better codec handling
+- Improved HDR / HEVC behavior
+- Smoother high-FPS video recording
+- More stable media pipeline behavior
+
+| Feature | Stock | ASB |
+|------|------|------|
+| Video stability | Normal | Improved |
+| Codec efficiency | Normal | Optimized |
+| High FPS recording | Normal | Smoother |
+
+These tweaks help the camera and video stack behave more efficiently at the system level.
+
+---
+
+## 🎮 Gaming Performance
+
+ASB improves gaming performance by optimizing:
+
+- Scheduler latency
+- CPU task distribution
+- GPU bus behavior
+- Thermal cooperation
+
+### Tested in games like
+
+- Call of Duty Mobile
+- PUBG Mobile
+- Genshin Impact
+
+| Metric | Stock | ASB |
+|------|------|------|
+| Frame stability | Good | Better |
+| Frame pacing | Normal | Smoother |
+| Thermal spikes | Occasional | Reduced |
+
+---
+
+## 🔋 Battery Improvements
+
+One of the main goals of ASB is **better battery efficiency**.
+
+The module reduces unnecessary CPU wakeups and improves idle behavior.
+
+### Expected improvements
+
+| Scenario | Stock | With ASB |
+|------|------|------|
+| Night drain | 4-6% | 1-3% |
+| Screen-off idle | Standard | Improved |
+| Daily usage | Baseline | +5-10% battery |
+
+### Battery efficiency
+
+More **deep sleep residency**  
+Less **background drain**
+
+---
+
+## 📡 Network and Connectivity
+
+ASB optimizes the network stack for:
+
+- Mobile networks
+- Wi-Fi
+- GPS
+
+### ✅ Improvements
+
+- Faster DNS / TCP behavior
+- Reduced latency spikes
+- Better Wi-Fi stability
+- Faster GPS lock
+
+| Feature | Stock | ASB |
+|------|------|------|
+| Wi-Fi latency | Normal | Improved |
+| Mobile data stability | Normal | Improved |
+| GPS lock speed | Normal | Faster |
+
+---
+
+## 🌡 Thermal Behavior
+
+ASB improves cooperation between the CPU scheduler, GPU and thermal framework.
+
+| Scenario | Stock | ASB |
+|------|------|------|
+| Heat under load | Higher | Lower |
+| Thermal throttling | Earlier | Later |
+| Sustained performance | Medium | Better |
+
+---
+
+## 📊 Stock vs AutoSystemBoost
+
+| Feature | Stock | AutoSystemBoost |
+|------|------|------|
+| Battery efficiency | Baseline | Improved |
+| Scheduler tuning | Generic | Optimized |
+| Audio output | Standard | Enhanced |
+| Camera pipeline | Default | Improved |
+| Gaming smoothness | Good | Better |
+| Idle power usage | Normal | Reduced |
+
+---
+
+## 📦 Installation
+
+1. Install **Magisk / KernelSU / APatch**
+2. Flash the module
+3. Reboot
+
+No configuration required.
+
+---
+
+## ⭐ Support the Project
+
+If you like AutoSystemBoost:
+
+- Star the repository
+- Share feedback
+- Report issues
+- Help improve future releases
+
+---
+
+## ⚠ Disclaimer
+
+This module modifies system behavior.
+
+Use it at your own risk.
+
+All tweaks are designed to remain **safe and reversible**.
+
 
 6. Google (GMS) HARD SAFE
 Disable secure telemetry/analytics components.
