@@ -213,9 +213,3 @@ This module modifies system behavior.
 Use it at your own risk.
 
 All tweaks are designed to remain **safe and reversible**.
-
-
-6. Google (GMS) HARD SAFE
-Disable secure telemetry/analytics components.
-Reduce AdServices/PrivacySandbox where possible, without breaking push notifications or data banks.
-All settings are applied automatically after loading.
