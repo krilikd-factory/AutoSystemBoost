@@ -280,13 +280,6 @@ sys.wifitracing.started=0
 # ASB:WIFI:END
 # ASB:GPS:BEGIN
 # ASB:NETGPS_AUDIT
-persist.sys.gps.polaris=true
-persist.sys.gnssssru=true
-persist.sys.ssru.power.switch=1
-persist.sys.gps.agpsOpt=true
-ro.gps.agps_provider=2
-persist.sys.gps.support_block_list_prop=false
-persist.sys.gps.fence=false
 # ASB:GPS:END
 # ASB:KERNEL:BEGIN
 # ASB:AUDIO_POWER_SAVE
