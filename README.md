@@ -1,10 +1,8 @@
-# AutoSystemBoost
-
+<h1 align="center">🚀 AutoSystemBoost</h1>
 <p align="center">
   <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="AutoSystemBoost Banner" width="100%">
 </p>
 
-<h1 align="center">🚀 AutoSystemBoost</h1>
 <p align="center"><b>Advanced Optimization Engine for OnePlus 15</b></p>
 
 <p align="center">
