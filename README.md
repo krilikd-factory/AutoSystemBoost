@@ -133,7 +133,6 @@ More **deep sleep residency**
 Less **background drain**
 
 Stock  50%
-
 ASB    85%
 
 ---
