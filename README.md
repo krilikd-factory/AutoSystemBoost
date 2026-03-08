@@ -80,7 +80,7 @@ ASB improves the **system media stack**, not just the camera app.
 - Smoother high-FPS video recording
 - More stable media pipeline behavior
 
-| Feature | Stock | ASB |
+| Feature | Stock | AutoSystemBoost |
 |------|------|------|
 | Video stability | Normal | Improved |
 | Codec efficiency | Normal | Optimized |
@@ -105,7 +105,7 @@ ASB improves gaming performance by optimizing:
 - PUBG Mobile
 - Genshin Impact
 
-| Metric | Stock | ASB |
+| Metric | Stock | AutoSystemBoost |
 |------|------|------|
 | Frame stability | Good | Better |
 | Frame pacing | Normal | Smoother |
@@ -121,7 +121,7 @@ The module reduces unnecessary CPU wakeups and improves idle behavior.
 
 ### Expected improvements
 
-| Scenario | Stock | With ASB |
+| Scenario | Stock | AutoSystemBoost |
 |------|------|------|
 | Night drain | 4-6% | 1-3% |
 | Screen-off idle | Standard | Improved |
@@ -152,7 +152,7 @@ ASB optimizes the network stack for:
 - Better Wi-Fi stability
 - Faster GPS lock
 
-| Feature | Stock | ASB |
+| Feature | Stock | AutoSystemBoost |
 |------|------|------|
 | Wi-Fi latency | Normal | Improved |
 | Mobile data stability | Normal | Improved |
@@ -164,7 +164,7 @@ ASB optimizes the network stack for:
 
 ASB improves cooperation between the CPU scheduler, GPU and thermal framework.
 
-| Scenario | Stock | ASB |
+| Scenario | Stock | AutoSystemBoost |
 |------|------|------|
 | Heat under load | Higher | Lower |
 | Thermal throttling | Earlier | Later |
