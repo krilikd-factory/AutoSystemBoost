@@ -1312,3 +1312,5 @@ ro.lmk.swap_compression_ratio=0
 ro.vendor.display.vivid_calibration.enable=1
 dev.pm.dyn_samplingrate=0
 # ASB:EXTRA_PROPS:END
+persist.bluetooth.leaudio.bypass_allow_list=false
+persist.bluetooth.leaudio.notify.idle.during.call=false
