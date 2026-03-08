@@ -469,15 +469,22 @@ apply_kernel() {
   [ -e /proc/sys/vm/oom_dump_tasks ] && sysctlw vm.oom_dump_tasks 0
   [ -e /proc/sys/debug/exception-trace ] && \
     writef_retry /proc/sys/debug/exception-trace 0 1 0 || true
-  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && \
-    writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 2 1 0 || true
   [ -e /proc/sys/walt/sched_boost ] && \
     writef_retry /proc/sys/walt/sched_boost 0 1 0 || true
   [ -e /proc/sys/walt/sched_idle_enough ] && \
-    writef_retry /proc/sys/walt/sched_idle_enough 40 1 0 || true
+    writef_retry /proc/sys/walt/sched_idle_enough 45 1 0 || true
   [ -e /proc/sys/walt/sched_idle_enough_clust ] && \
-    writef_retry /proc/sys/walt/sched_idle_enough_clust 40 1 0 || true
+    writef_retry /proc/sys/walt/sched_idle_enough_clust "45 45" 1 0 || true
   writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
+  [ -w /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq ] && writef_retry /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq 384000 3 0.25 || true
+  [ -w /sys/devices/system/cpu/cpufreq/policy6/scaling_min_freq ] && writef_retry /sys/devices/system/cpu/cpufreq/policy6/scaling_min_freq 768000 3 0.25 || true
+  [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct 45 1 0 || true
+  [ -e /proc/sys/walt/sched_cluster_util_thres_pct_clust ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct_clust "45 45" 1 0 || true
+  [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation 40 1 0 || true
+  [ -e /proc/sys/walt/sched_busy_hyst_ns ] && writef_retry /proc/sys/walt/sched_busy_hyst_ns 0 1 0 || true
+  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 3 3 0.5 || true
+  [ -e /proc/sys/walt/sched_pipeline_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_util_thres 20 1 0 || true
+  [ -e /proc/sys/walt/sched_pipeline_non_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_non_special_task_util_thres 20 1 0 || true
   tune_io_queues
 }
 apply_kernel
@@ -492,7 +499,6 @@ apply_idle() {
   writef_retry /sys/class/kgsl/kgsl-3d0/force_rail_on 0 3 0.25 || true
   writef_retry /sys/class/kgsl/kgsl-3d0/force_clk_on  0 3 0.25 || true
   writef_retry /sys/class/kgsl/kgsl-3d0/force_bus_on  0 3 0.25 || true
-  [ -w /sys/class/kgsl/kgsl-3d0/bus_split ] && writef_retry /sys/class/kgsl/kgsl-3d0/bus_split 1 3 0.25 || true
   [ -w /sys/class/kgsl/kgsl-3d0/force_no_nap ] && writef_retry /sys/class/kgsl/kgsl-3d0/force_no_nap 0 3 0.25 || true
   # ASB:V15.6
   [ -w /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor ] && \
@@ -729,10 +735,18 @@ apply_extra_settings
     sysctlw kernel.timer_migration 0
     [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
     [ -e /proc/sys/walt/sched_boost ] && writef_retry /proc/sys/walt/sched_boost 0 1 0 || true
-    [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 2 1 0 || true
-    [ -e /proc/sys/walt/sched_idle_enough ] && writef_retry /proc/sys/walt/sched_idle_enough 40 1 0 || true
-    [ -e /proc/sys/walt/sched_idle_enough_clust ] && writef_retry /proc/sys/walt/sched_idle_enough_clust 40 1 0 || true
+    [ -e /proc/sys/walt/sched_idle_enough ] && writef_retry /proc/sys/walt/sched_idle_enough 45 1 0 || true
+    [ -e /proc/sys/walt/sched_idle_enough_clust ] && writef_retry /proc/sys/walt/sched_idle_enough_clust "45 45" 1 0 || true
     apply_uclamp
+    [ -w /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq ] && writef_retry /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq 384000 3 0.25 || true
+    [ -w /sys/devices/system/cpu/cpufreq/policy6/scaling_min_freq ] && writef_retry /sys/devices/system/cpu/cpufreq/policy6/scaling_min_freq 768000 3 0.25 || true
+    [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct 45 1 0 || true
+    [ -e /proc/sys/walt/sched_cluster_util_thres_pct_clust ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct_clust "45 45" 1 0 || true
+    [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation 40 1 0 || true
+    [ -e /proc/sys/walt/sched_busy_hyst_ns ] && writef_retry /proc/sys/walt/sched_busy_hyst_ns 0 1 0 || true
+    [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 3 3 0.5 || true
+    [ -e /proc/sys/walt/sched_pipeline_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_util_thres 20 1 0 || true
+    [ -e /proc/sys/walt/sched_pipeline_non_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_non_special_task_util_thres 20 1 0 || true
     [ $IS_WILD -eq 0 ] && apply_cpuset_groups
     apply_idle
     apply_wlan0_txqlen
@@ -745,3 +759,8 @@ apply_extra_settings
   done
 ) >/dev/null 2>&1 &
 exit 0
+
+(
+  sleep 20
+  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks 3 5 1 || true
+) &
