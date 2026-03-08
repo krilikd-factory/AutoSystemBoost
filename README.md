@@ -5,7 +5,7 @@
 </p>
 
 <h1 align="center">🚀 AutoSystemBoost</h1>
-<p align="center"><b>Advanced Android Optimization Engine for Snapdragon Flagships</b></p>
+<p align="center"><b>Advanced Optimization Engine for OnePlus 15</b></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Snapdragon-Optimized-16a34a?style=for-the-badge" alt="Snapdragon">
