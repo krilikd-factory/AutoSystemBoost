@@ -183,7 +183,7 @@ ASB reduces heat by letting the CPU idle at lower frequencies and eliminating un
 | CPU LITTLE cores | ~36.0°C | ~35.5°C | **−0.5°C** |
 | CPU BIG cores | — | ~34.4°C | **below stock** |
 | GPU | — | ~31.0°C | **very cool** |
-| Battery | ~28.7°C | ~28.9°C | **≈ stock** |
+| Battery | ~28.7°C | ~28.4°C | **≈ stock** |
 
 Under sustained load (gaming), ASB runs **1-2°C cooler** → thermal throttling starts later → more stable FPS.
 
