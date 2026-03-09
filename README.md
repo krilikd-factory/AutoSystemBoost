@@ -219,7 +219,6 @@ If you like AutoSystemBoost:
 
 - ⭐ Star the repository
 - 💬 Share feedback via [Telegram](https://t.me/DKomsomol)
-- 📢 Follow updates on [Channel](https://t.me/OnePlusMod)
 - 🐛 Report issues
 
 ---
