@@ -13,7 +13,7 @@
 </p>
 <p align="center">
 AutoSystemBoost is an advanced **Android system optimization module** designed to improve the overall experience.
-Originally developed for **OnePlus 15**, but the tuning logic benefits many modern Qualcomm flagship devices.
+Originally developed for OnePlus 15, but the tuning logic benefits many modern Qualcomm flagship devices.
 </p>
 ---
 
