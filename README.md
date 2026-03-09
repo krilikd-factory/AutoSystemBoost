@@ -194,7 +194,6 @@ Under sustained load (gaming), ASB runs **1-2°C cooler** → thermal throttling
 | CPU idle frequency | 787-2362 MHz | **384-998 MHz (−58%)** |
 | Speaker volume | stock | **+5-7 dB louder** |
 | BT audio quality | standard codecs | **LHDC v5 24bit/96kHz** |
-| TCP congestion | cubic | **BBR** |
 | Camera profiles | standard | **Ultra (37 configs)** |
 | Idle temperature | ~36°C | **~35°C (−1°C)** |
 | Gaming sustained FPS | good | **better (cooler = later throttle)** |
