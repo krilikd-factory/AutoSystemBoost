@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Version-Stable-22c55e?style=for-the-badge" alt="Version">
 </p>
 
-AutoSystemBoost is an advanced **Android system optimization module** designed to improve the overall experience on modern Snapdragon devices.
+AutoSystemBoost is an advanced **Android system optimization module** designed to improve the overall experience.
 
 Originally developed for **OnePlus 15**, but the tuning logic benefits many modern Qualcomm flagship devices.
 
