@@ -28,7 +28,7 @@ Developed for <b>OnePlus 15</b>
 
 ## ⚡ What AutoSystemBoost Improves
 
-ASB optimizes several critical Android subsystems simultaneously, verified with real sysfs/procfs dumps on SM8750.
+ASB optimizes several critical Android subsystems simultaneously, verified with real sysfs/procfs dumps on SM8850.
 
 | System Area | Key Change | Measured Impact |
 |-------------|------------|-----------------|
