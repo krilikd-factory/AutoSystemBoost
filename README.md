@@ -156,7 +156,6 @@ The biggest gains come from fixing stock OxygenOS inefficiencies.
 
 | Feature | Stock | ASB |
 |---------|-------|-----|
-| Country code | auto | **IT** (correct regulatory for Italy) |
 | Telescopic DTIM | 0 | **1** (fewer beacon wakeups) |
 | Neighbor scan interval | 60s | **120s** (2× less roaming scan) |
 | Runtime PM delay | 500ms | **2000ms** (Wi-Fi driver sleeps deeper) |
@@ -167,8 +166,6 @@ The biggest gains come from fixing stock OxygenOS inefficiencies.
 ### GPS
 
 - **AGPS enabled** — faster cold fix
-- **XTRA servers** optimized for Europe (Italy)
-- **NTP servers**: time.google.com + Italian pool (0.it.pool.ntp.org, ntp1.inrim.it)
 - **GNSS outage recovery**: 30s (faster reacquisition)
 - **WIPER disabled** — no unnecessary Wi-Fi positioning drain
 
