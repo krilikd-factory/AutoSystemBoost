@@ -121,7 +121,7 @@ The biggest gains come from fixing stock OxygenOS inefficiencies.
 | swappiness | **100** | **20** | 5× less swap I/O |
 | stat_interval | **1 second** | **15 seconds** | 15× fewer vmstat wakeups |
 | sched_schedstats | **1** (enabled) | **0** (disabled) | Zero scheduler stats overhead |
-| sched_busy_hyst_ns | **0** (HAL can set 99M) | **0** (re-applied) | CPU drops freq immediately after spike |
+| sched_busy_hyst_ns | HAL can set 99M | **0** | CPU drops freq immediately after spike |
 | 35 debug services | running | **stopped** | Fewer background wakeups |
 
 ### Expected Battery Life
