@@ -1,4 +1,11 @@
-[<img src="https://img.shields.io/badge/Language-English-22c55e?style=for-the-badge" alt="English">](README.md) [<img src="https://img.shields.io/badge/Язык-Русский-0ea5e9?style=for-the-badge" alt="Русский">](README.ru.md)
+<p align="center">
+  <a href="README.md">
+    <img src="https://img.shields.io/badge/🇬🇧%20Русский-16a34a?style=flat-square" alt="English">
+  </a>
+  <a href="README.ru.md">
+    <img src="https://img.shields.io/badge/🇷🇺%20English-1f2937?style=flat-square" alt="Русский">
+  </a>
+</p>
 
 <h1 align="center">🚀 AutoSystemBoost</h1>
 <p align="center">
