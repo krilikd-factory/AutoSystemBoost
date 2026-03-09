@@ -6,7 +6,7 @@
 <p align="center"><b>Advanced Optimization Engine for OnePlus 15</b></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Snapdragon_8_Elite-SM8750-16a34a?style=for-the-badge" alt="Snapdragon">
+  <img src="https://img.shields.io/badge/Snapdragon_8_Elite_G5-SM8850-16a34a?style=for-the-badge" alt="Snapdragon">
   <img src="https://img.shields.io/badge/Magisk-Compatible-0ea5e9?style=for-the-badge" alt="Magisk">
   <img src="https://img.shields.io/badge/KernelSU-Compatible-0ea5e9?style=for-the-badge" alt="KernelSU">
   <img src="https://img.shields.io/badge/Version-Stable-22c55e?style=for-the-badge" alt="Version">
