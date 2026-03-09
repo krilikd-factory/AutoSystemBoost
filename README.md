@@ -25,7 +25,7 @@ ASB optimizes several critical Android subsystems simultaneously, verified with 
 |-------------|------------|-----------------|
 | 🧠 CPU Scheduler | WALT: ravg window 8→12ms, idle_enough 30→45, pipeline packing | CPU idle freq 2362→998 MHz (−58%) |
 | 🎮 GPU | CX collapse timer 80→250ms, force_rail/clk/bus=0, NAP enabled | GPU idle temp 33→31°C |
-| 🔊 Audio | Digital volume +5 dB, MBDRC, LHDC v5 24bit/96kHz, ViPER4Android | 384kHz hi-res, 7.1ch, Dolby full |
+| 🔊 Audio | Digital volume +5 dB, MBDRC, LHDC v5 24bit/96kHz | 384kHz hi-res, 7.1ch, Dolby full |
 | 📷 Camera | 37 optimized configs: gamma, bokeh, EIS, MLFT, TNR, UBWC | Ultra profiles as default |
 | 📡 Network | BBR congestion, TCP fastopen=3, fin_timeout 60→20s | Faster connections, less overhead |
 | 🔋 Battery | Freq floors 787→384 MHz, writeback 2→60s, swappiness 100→20 | −35-45% idle drain vs stock |
@@ -45,7 +45,6 @@ AutoSystemBoost significantly improves **speaker, wired, and Bluetooth audio qua
 - Speaker DRC **disabled** — cleaner output without dynamic compression
 - Hi-res support up to **384 kHz** sample rate
 - **7.1 channel** surround (AUDIO_CHANNEL_OUT_7POINT1)
-- **ViPER4Android** DSP library injected system-wide
 - Full **Dolby** stack: DS2 + Surround + Spatial Audio (music profile) + DAX Game
 
 ### 🎧 Bluetooth Audio
