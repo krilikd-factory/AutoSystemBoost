@@ -143,7 +143,6 @@ The biggest gains come from fixing stock OxygenOS inefficiencies.
 
 | Parameter | Stock | ASB | Why |
 |-----------|-------|-----|-----|
-| Congestion control | cubic | **BBR** | Better on lossy mobile networks |
 | TCP Fast Open | 1 (client only) | **3** (client + server) | Faster first request |
 | ECN | 2 (negotiate) | **0** (off) | Less overhead on mobile |
 | fin_timeout | 60s | **20s** | 3× faster dead socket cleanup |
