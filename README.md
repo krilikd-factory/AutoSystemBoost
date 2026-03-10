@@ -159,7 +159,7 @@ The module now behaves more safely on other OnePlus devices as well, including e
 - OnePlus 12 / 12R
 - OnePlus 11 / 11R
 - OnePlus Open
-- selected Ace / Nord / Pad models
+- Ace / Nord / Pad models
 
 ---
 
