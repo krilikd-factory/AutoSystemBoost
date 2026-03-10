@@ -107,7 +107,7 @@ Built for:
 |--------|-------------------|---------------|
 | 🔥 Performance | **~10–20% snappier foreground feel**, faster ramps, higher heat / power draw | gaming, stress sessions, heavy apps |
 | ⚖️ Balanced | **~5–12% cleaner daily feel**, smoother task handling, better consistency | everyday use |
-| 🔋 Battery | **~5–15% better standby/light-use efficiency**, lower wakeups, calmer memory behavior | travel, standby-heavy days, light use |
+| 🔋 Battery | **~5–20% better standby/light-use efficiency**, lower wakeups, calmer memory behavior | travel, standby-heavy days, light use |
 
 ### Expected battery direction vs stock
 
