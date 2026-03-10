@@ -161,15 +161,6 @@ The module now behaves more safely on other OnePlus devices as well, including e
 - OnePlus Open
 - selected Ace / Nord / Pad models
 
-### Honest note
-This does **not** mean every vendor-derived tweak is equally perfect on every device.
-
-It means the module is now much less likely to push **OnePlus 15-specific** files where they do not belong, especially in areas such as:
-
-- 📷 camera-related components
-- 🔊 audio-related components
-- 🎞️ media / vendor overlays
-
 ---
 
 ## 🛡️ Why the install logic matters
