@@ -12,7 +12,7 @@
   <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="AutoSystemBoost Banner" width="100%">
 </p>
 
-<p align="center"><b>Умный OnePlus-тюнинг с profile-based WebUI управлением</b></p>
+<p align="center"><b>Продвинутый модуль оптимизации для OnePlus</b></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Root-Magisk%20%7C%20KernelSU-7c3aed?style=for-the-badge" alt="Root">
