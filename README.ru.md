@@ -159,7 +159,7 @@ AutoSystemBoost меняет несколько важных частей сис
 - OnePlus 12 / 12R
 - OnePlus 11 / 11R
 - OnePlus Open
-- отдельные модели Ace / Nord / Pad
+- Ace / Nord / Pad модели
 
 ---
 
