@@ -163,20 +163,6 @@ The module now behaves more safely on other OnePlus devices as well, including e
 
 ---
 
-## 🛡️ Why the install logic matters
-
-The installer now detects device codes and uses safer conditional handling to reduce the risk of applying stock-derived files from one device class onto another.
-
-### Practical effect
-
-| Risk area | Stock system | AutoSystemBoost logic |
-|----------|--------------|-----------------------|
-| Camera mismatch from wrong overlays | not applicable in stock-only context | **reduced through selective install behavior** |
-| Audio/media mismatch risk | not applicable in stock-only context | **reduced through safer file handling** |
-| Device-specific tuning awareness | stock only knows itself | **module checks model / platform before applying some parts** |
-
----
-
 ## 🌡️ Performance philosophy
 
 | Profile | Heat | Battery | Response |
