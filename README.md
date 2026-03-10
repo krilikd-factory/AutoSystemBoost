@@ -203,10 +203,13 @@ Silicon still has the annoying habit of obeying physics.
 
 ---
 
-## 🙌 Credits
+## ⭐ Support the Project
 
-- **Dima_Krylov** — project author
-- community testing and tuning feedback
+If you like AutoSystemBoost:
+
+- ⭐ Star the repository
+- 💬 Share feedback via [Telegram](https://t.me/DKomsomol)
+- 🐛 Report issues
 
 ---
 
