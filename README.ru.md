@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/Root-Magisk%20%7C%20KernelSU-7c3aed?style=for-the-badge" alt="Root">
   <img src="https://img.shields.io/badge/WebUI-Performance%20%7C%20Balanced%20%7C%20Battery-16a34a?style=for-the-badge" alt="Profiles">
   <img src="https://img.shields.io/badge/OnePlus-Фокус%20на%2015-red?style=for-the-badge" alt="OnePlus 15 focused">
-  <img src="https://img.shields.io/badge/Cross--Device-Более%20безопасная%20установка-0ea5e9?style=for-the-badge" alt="Safer install">
+  <img src="https://img.shields.io/badge/Cross--Device-Безопасно-0ea5e9?style=for-the-badge" alt="Safer install">
 </p>
 
 ---
