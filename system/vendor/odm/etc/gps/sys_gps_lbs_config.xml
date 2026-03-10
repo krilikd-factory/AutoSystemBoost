@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<filter-conf>
+    <Android-Version>16</Android-Version>
+    <version>20250701</version>
+<integer ID="3087">1</integer>
+<integer ID="3083">15</integer>
+<bool ID="2064">true</bool>
+<string ID="5038">Q,300,4000</string>
+<bool ID="2075">true</bool>
+<bool ID="2078">true</bool>
+<bool ID="2069">true</bool>
+<integer ID="3046">23</integer>
+<string ID="5034">0,0,0,0,0,0,0,0,0,0,0,0,0,0,28.0,20.0,8,5,500.0,100.0,0.3,0.5,0.4,-0.3,-0.5,-0.4,-2.0,4765,5700,5150,5150,4765,0,0,0,0,0,5,3,3,3,3</string>
+<string ID="5039">100,5,7,85,75</string>
+<string ID="5040">1,5400,5500,5600,5900,6300,6700,7200,7700</string>
+<string ID="5041">1,5400,5500,5600,5900,6300,6700,7200,7700</string>
+<string ID="5042">1,5700,5800,5900,6100,6400,6800,7300,7800</string>
+<string ID="5043">1,5500,5600,5700,6000,6300,6700,7200,7700</string>
+<string ID="5044">1,5500,5600,5700,6000,6300,6700,7200,7700</string>
+</filter-conf>
