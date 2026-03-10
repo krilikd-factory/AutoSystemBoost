@@ -1,6 +1,9 @@
 <p align="center">
-  <a href="README.showcase.md">
-    <img src="https://img.shields.io/badge/Language-English-111827?style=for-the-badge&logo=googletranslate&logoColor=white" alt="English">
+  <a href="README.md">
+    <img src="https://img.shields.io/badge/🇬🇧%20English-1f2937?style=flat-square" alt="English">
+  </a>
+  <a href="README.ru.md">
+    <img src="https://img.shields.io/badge/🇷🇺%20Русский-16a34a?style=flat-square" alt="Русский">
   </a>
 </p>
 
