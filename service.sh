@@ -2,26 +2,97 @@
 exec >/dev/null 2>&1
 MODID="AutoSystemBoost"
 MODDIR="${0%/*}"
-[ -z "$MODDIR" ] || [ "$MODDIR" = "$0" ] && MODDIR="/data/adb/modules/$MODID"
+asb_resolve_moddir() {
+  for _d in     "$MODDIR"     "/data/adb/modules/$MODID"     "/data/adb/modules_update/$MODID"     "/data/adb/modules/${MODID}_TMP"     "/data/adb/modules_update/${MODID}_TMP"
+  do
+    [ -n "$_d" ] || continue
+    [ -f "$_d/module.prop" ] && { echo "$_d"; return 0; }
+  done
+  echo "/data/adb/modules/$MODID"
+}
+MODDIR="$(asb_resolve_moddir)"
+
+[ -r "$MODDIR/common/profile_core.sh" ] && . "$MODDIR/common/profile_core.sh"
+ASB_STATE_LOG="/dev/.asb_profile_state/runtime_apply.log"
+asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$ASB_STATE_LOG" 2>/dev/null || true; }
+
+asb_map_profile_vars() {
+  _P_RAVG="$RAVG_TICKS"
+  _P_IDLE="$WALT_IDLE"
+  _P_IDLEC="$WALT_IDLE_CLUST"
+  _P_CLUT="$WALT_CLUSTER"
+  _P_CLUTC="$WALT_CLUSTER_CLUST"
+  _P_COLOC="$WALT_COLOC"
+  _P_PIPE="$WALT_PIPE"
+  _P_PIPEN="$WALT_PIPE_NONSP"
+  _P_PIPES="$WALT_PIPE_SP"
+  _P_CPUL="$CPU_MIN_LITTLE"
+  _P_CPUB="$CPU_MIN_BIG"
+  _P_SWAP="$VM_SWAPPINESS"
+  _P_DEXP="$VM_DIRTY_EXPIRE"
+  _P_DWB="$VM_DIRTY_WRITEBACK"
+  _P_GTMR="$GPU_IDLE_TIMER"
+  _P_BHYST="$WALT_BUSY_HYST"
+  _P_EDB="$WALT_ED_BOOST"
+  _P_TOPW="$WALT_TOPAPP_WEIGHT"
+  _P_MINTB="$WALT_BOOST_MIN_UTIL"
+  _P_SBOOST="$WALT_SCHED_BOOST"
+  _P_UCL_BG="$UCL_BG_MIN"
+  _P_UCL_FG="$UCL_FG_MIN"
+  _P_UCL_TOP="$UCL_TOP_MIN"
+  _P_CPUCAP_L="${CPU_CAP_LITTLE:-}"
+  _P_CPUCAP_B="${CPU_CAP_BIG:-}"
+  _P_CPU_MAXL="$CPU_MAX_LITTLE"
+  _P_CPU_MAXB="$CPU_MAX_BIG"
+  case "$WIFI_PM_MODE" in
+    off) _P_WLAN_PM=0 ;;
+    on) _P_WLAN_PM=1 ;;
+    *) _P_WLAN_PM=2 ;;
+  esac
+  _P_WLAN_TXQLEN="$WIFI_TXQLEN"
+  _P_LATENCY_SENSITIVE="$LATENCY_SENSITIVE"
+  _P_GPU_MIN_PCT="$GPU_MIN_PCT"
+  _P_GPU_MAX_PCT="$GPU_MAX_PCT"
+  _P_VFS="$VM_VFS"
+  _P_STATINT="$VM_STAT_INTERVAL"
+  _P_WMARK="$VM_WMARK"
+  _P_MINFREE="$VM_MINFREE"
+  _P_QDISC="$NET_QDISC"
+  _P_TCP_RMEM="$NET_TCP_RMEM"
+  _P_TCP_WMEM="$NET_TCP_WMEM"
+  _P_TCP_NOTSENT="$NET_TCP_NOTSENT"
+  _P_NET_BACKLOG="$NET_BACKLOG"
+  _P_NET_BUDGET="$NET_BUDGET"
+  _P_NET_BUDGET_US="$NET_BUDGET_USECS"
+  _P_DEV_WEIGHT="$NET_DEV_WEIGHT"
+  _P_TCP_FASTOPEN="$NET_TCP_FASTOPEN"
+  _P_TCP_KEEPIDLE="$NET_TCP_KEEPIDLE"
+  _P_TCP_FIN="$NET_TCP_FIN"
+}
 
 asb_load_profile() {
-  local _p="$(cat "$MODDIR/current_profile" 2>/dev/null)"
-  case "$_p" in
-    performance)
-      _P_RAVG=2 _P_IDLE=22 _P_IDLEC="22 22" _P_CLUT=28 _P_CLUTC="28 28"
-      _P_COLOC=24 _P_PIPE=4 _P_PIPEN=4 _P_PIPES=2 _P_CPUL=1363200 _P_CPUB=1478400
-      _P_SWAP=40 _P_DEXP=900 _P_DWB=700 _P_GTMR=70 _P_BHYST=10000000 _P_EDB=24 _P_TOPW=125 _P_MINTB=24 _P_SBOOST=1 _P_UCL_BG=8 _P_UCL_FG=24 _P_UCL_TOP=72 ;;
-    battery)
-      _P_RAVG=6 _P_IDLE=80 _P_IDLEC="80 80" _P_CLUT=80 _P_CLUTC="80 80"
-      _P_COLOC=72 _P_PIPE=52 _P_PIPEN=52 _P_PIPES=44 _P_CPUL=384000 _P_CPUB=768000
-      _P_SWAP=60 _P_DEXP=24000 _P_DWB=20000 _P_GTMR=650 _P_BHYST=0 _P_EDB=0 _P_TOPW=86 _P_MINTB=96 _P_SBOOST=0 _P_UCL_BG=0 _P_UCL_FG=6 _P_UCL_TOP=24 ;;
-    *)
-      _P_RAVG=3 _P_IDLE=45 _P_IDLEC="45 45" _P_CLUT=45 _P_CLUTC="45 45"
-      _P_COLOC=40 _P_PIPE=20 _P_PIPEN=20 _P_PIPES=0 _P_CPUL=384000 _P_CPUB=768000
-      _P_SWAP=20 _P_DEXP=6000 _P_DWB=5000 _P_GTMR=250 _P_BHYST=0 _P_EDB=10 _P_TOPW=105 _P_MINTB=51 _P_SBOOST=0 _P_UCL_BG=0 _P_UCL_FG=15 _P_UCL_TOP=45 ;;
-  esac
+  ASB_PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+  case "$ASB_PROFILE" in performance|battery|balanced) : ;; *) ASB_PROFILE=balanced ;; esac
+  PROFILE="$ASB_PROFILE"
+  if [ -r "$MODDIR/profiles/$ASB_PROFILE.sh" ]; then
+    . "$MODDIR/profiles/$ASB_PROFILE.sh"
+  elif [ -r "$MODDIR/profiles/balanced.sh" ]; then
+    PROFILE=balanced
+    ASB_PROFILE=balanced
+    . "$MODDIR/profiles/balanced.sh"
+  fi
+  asb_map_profile_vars
 }
 asb_load_profile
+
+asb_feature_enabled() {
+  _key="$1"
+  [ -r "$MODDIR/features.conf" ] || return 0
+  _line="$(grep -E "^${_key}=" "$MODDIR/features.conf" 2>/dev/null | tail -n 1)"
+  [ -z "$_line" ] && return 0
+  [ "${_line#*=}" = "1" ]
+}
+
 has() { command -v "$1" >/dev/null 2>&1; }
 writef() { [ -w "$1" ] || return 1; echo "$2" > "$1" 2>/dev/null; }
 readf() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
@@ -59,8 +130,8 @@ writef_verify() {
 asb_update_desc() {
   _p="$(cat "$MODDIR/current_profile" 2>/dev/null)"
   case "$_p" in
-    performance) _s="description=status: performance 🔥 | active ✅ | gaming tuned" ;;
-    battery) _s="description=status: battery 🔋 | active ✅ | standby focused" ;;
+    performance) _s="description=status: performance 🔥 | active ✅ | benchmark tuned" ;;
+    battery) _s="description=status: battery 🔋 | active ✅ | ultra saver" ;;
     *) _s="description=status: balanced ⚖️ | active ✅ | default profile" ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
@@ -109,18 +180,54 @@ fi
 [ "$_big_start" -ge "$N" ] && _big_start=$((N / 2))
 [ "$_big_start" -lt 2 ] && _big_start=2
 little_end=$((_big_start - 1))
+# Динамические policy-пути (вместо хардкода policy0/policy6)
+LITTLE_POLICY="/sys/devices/system/cpu/cpufreq/policy0"
+BIG_POLICY="/sys/devices/system/cpu/cpufreq/policy${_big_start}"
+[ -d "$BIG_POLICY" ] || BIG_POLICY="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n | tail -1)"
+[ -d "$BIG_POLICY" ] || BIG_POLICY="$LITTLE_POLICY"
 apply_cpuset_groups() {
-  writef_retry /dev/cpuset/background/cpus           "0-${little_end}" 3 0.25 || true
-  writef_retry /dev/cpuset/system-background/cpus    "0-${little_end}" 3 0.25 || true
-  writef_retry /dev/cpuset/foreground/cpus           "0-${cpu_max}" 3 0.25 || true
-  writef_retry /dev/cpuset/top-app/cpus              "0-${cpu_max}" 3 0.25 || true
+  writef_retry /dev/cpuset/background/cpus        "0-${little_end}" 3 0.25 || true
+  writef_retry /dev/cpuset/system-background/cpus "0-${little_end}" 3 0.25 || true
+  if [ "$ASB_PROFILE" = "battery" ]; then
+    writef_retry /dev/cpuset/foreground/cpus      "0-${little_end}" 3 0.25 || true
+    writef_retry /dev/cpuset/top-app/cpus         "0-${little_end}" 3 0.25 || true
+  else
+    writef_retry /dev/cpuset/foreground/cpus      "0-${cpu_max}" 3 0.25 || true
+    writef_retry /dev/cpuset/top-app/cpus         "0-${cpu_max}" 3 0.25 || true
+  fi
+}
+apply_cpuset_groups_all() {
+  for _cg_root in /dev/cpuset /sys/fs/cgroup; do
+    [ -d "$_cg_root" ] || continue
+    _bg="0-${little_end}"
+    _fg="0-${cpu_max}"
+    if [ "$ASB_PROFILE" = "battery" ]; then
+      _fg="0-${little_end}"
+    fi
+    for _grp in background system-background; do
+      [ -e "$_cg_root/$_grp/cpus" ] && writef_retry "$_cg_root/$_grp/cpus" "$_bg" 5 0.3 || true
+      [ -e "$_cg_root/$_grp/cpuset.cpus" ] && writef_retry "$_cg_root/$_grp/cpuset.cpus" "$_bg" 5 0.3 || true
+    done
+    for _grp in foreground top-app; do
+      [ -e "$_cg_root/$_grp/cpus" ] && writef_retry "$_cg_root/$_grp/cpus" "$_fg" 5 0.3 || true
+      [ -e "$_cg_root/$_grp/cpuset.cpus" ] && writef_retry "$_cg_root/$_grp/cpuset.cpus" "$_fg" 5 0.3 || true
+    done
+  done
 }
 apply_uclamp() {
-  writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive 1 5 0.3 || true
+  writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive $_P_LATENCY_SENSITIVE 5 0.3 || true
   writef_retry /dev/cpuctl/background/cpu.uclamp.min        $_P_UCL_BG  5 0.3 || true
   writef_retry /dev/cpuctl/system-background/cpu.uclamp.min $_P_UCL_BG  5 0.3 || true
   writef_retry /dev/cpuctl/foreground/cpu.uclamp.min        $_P_UCL_FG 5 0.3 || true
   writef_retry /dev/cpuctl/top-app/cpu.uclamp.min           $_P_UCL_TOP 5 0.3 || true
+  # UCL_*_MAX читаем из профильных переменных (единый центр правды)
+  _ucl_bg_max="${UCL_BG_MAX:-40}"
+  _ucl_fg_max="${UCL_FG_MAX:-70}"
+  _ucl_top_max="${UCL_TOP_MAX:-85}"
+  writef_retry /dev/cpuctl/background/cpu.uclamp.max        $_ucl_bg_max 5 0.3 || true
+  writef_retry /dev/cpuctl/system-background/cpu.uclamp.max $_ucl_bg_max 5 0.3 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.max        $_ucl_fg_max 5 0.3 || true
+  writef_retry /dev/cpuctl/top-app/cpu.uclamp.max           $_ucl_top_max 5 0.3 || true
   writef_retry /dev/cpuctl/background/uclamp.min        $_P_UCL_BG  5 0.3 || true
   writef_retry /dev/cpuctl/system-background/uclamp.min $_P_UCL_BG  5 0.3 || true
   writef_retry /dev/cpuctl/foreground/uclamp.min        $_P_UCL_FG 5 0.3 || true
@@ -133,29 +240,41 @@ apply_uclamp() {
       [ "$_tier" = "top-app" ]    && _uval=$_P_UCL_TOP
       _node="$_cg_root/$_tier/cpu.uclamp.min"
       [ -f "$_node" ] && writef_retry "$_node" "$_uval" 5 0.3 || true
+      _mnode="$_cg_root/$_tier/cpu.uclamp.max"
+      _mval=$_ucl_bg_max
+      [ "$_tier" = "foreground" ] && _mval=$_ucl_fg_max
+      [ "$_tier" = "top-app" ] && _mval=$_ucl_top_max
+      [ -f "$_mnode" ] && writef_retry "$_mnode" "$_mval" 5 0.3 || true
     done
     _lat="$_cg_root/top-app/cpu.uclamp.latency_sensitive"
-    [ -f "$_lat" ] && writef_retry "$_lat" 1 5 0.3 || true
+    [ -f "$_lat" ] && writef_retry "$_lat" $_P_LATENCY_SENSITIVE 5 0.3 || true
   done
   [ -w /proc/sys/kernel/sched_util_clamp_min ] && \
     writef_retry /proc/sys/kernel/sched_util_clamp_min 0 5 0.3 || true
 }
 wait_path /dev/cpuset/background/cpus 8 || true
 wait_path /dev/cpuctl/top-app 8 || true
-apply_uclamp
-if [ $IS_WILD -eq 0 ]; then
+asb_feature_enabled CPU && apply_uclamp
+if asb_feature_enabled CPU; then
   apply_cpuset_groups
+  apply_cpuset_groups_all
 fi
 apply_cpugov_hints() {
-  for _pol in /sys/devices/system/cpu/cpufreq/policy*/schedutil/rate_limit_us; do
-    [ -w "$_pol" ] && echo 2000 > "$_pol" 2>/dev/null || true
-  done
-  for _pol in /sys/devices/system/cpu/cpufreq/policy0               /sys/devices/system/cpu/cpufreq/policy4; do
-    [ -w "$_pol/schedutil/hispeed_load" ] &&       echo 90 > "$_pol/schedutil/hispeed_load" 2>/dev/null || true
-    [ -w "$_pol/schedutil/hispeed_freq" ] &&       echo 0   > "$_pol/schedutil/hispeed_freq" 2>/dev/null || true
+  # Читаем из профильных переменных (единый центр правды)
+  _rate="${SCHED_RATE:-3000}"
+  _up_rate="${SCHED_UP_RATE:-1200}"
+  _down_rate="${SCHED_DOWN_RATE:-4000}"
+  _hispeed="${SCHED_HISPEED_LOAD:-88}"
+  for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
+    [ -d "$_pol" ] || continue
+    [ -w "$_pol/schedutil/rate_limit_us" ] && writef_retry "$_pol/schedutil/rate_limit_us" "$_rate" 3 0.2 || true
+    [ -w "$_pol/schedutil/up_rate_limit_us" ] && writef_retry "$_pol/schedutil/up_rate_limit_us" "$_up_rate" 3 0.2 || true
+    [ -w "$_pol/schedutil/down_rate_limit_us" ] && writef_retry "$_pol/schedutil/down_rate_limit_us" "$_down_rate" 3 0.2 || true
+    [ -w "$_pol/schedutil/hispeed_load" ] && writef_retry "$_pol/schedutil/hispeed_load" "$_hispeed" 3 0.2 || true
+    [ -w "$_pol/schedutil/hispeed_freq" ] && [ -n "$SCHED_HISPEED_FREQ" ] && writef_retry "$_pol/schedutil/hispeed_freq" "$SCHED_HISPEED_FREQ" 3 0.2 || true
   done
 }
-apply_cpugov_hints
+asb_feature_enabled CPU && apply_cpugov_hints
 # ASB:CPU:END
 if has pm; then
   pm disable-user --user 0 com.android.traceur >/dev/null 2>&1 || true
@@ -166,23 +285,47 @@ apply_vm() {
   if [ -e /proc/sys/vm/dirty_bytes ] && [ -e /proc/sys/vm/dirty_background_bytes ]; then
     sysctlw vm.dirty_ratio 0
     sysctlw vm.dirty_background_ratio 0
-    sysctlw vm.dirty_bytes 67108864
-    sysctlw vm.dirty_background_bytes 16777216
+    case "$ASB_PROFILE" in
+      performance)
+        sysctlw vm.dirty_bytes 33554432
+        sysctlw vm.dirty_background_bytes 8388608 ;;
+      battery)
+        sysctlw vm.dirty_bytes 134217728
+        sysctlw vm.dirty_background_bytes 33554432 ;;
+      *)
+        sysctlw vm.dirty_bytes 67108864
+        sysctlw vm.dirty_background_bytes 16777216 ;;
+    esac
   else
-    sysctlw vm.dirty_ratio 20
-    sysctlw vm.dirty_background_ratio 5
+    case "$ASB_PROFILE" in
+      performance) sysctlw vm.dirty_ratio 5; sysctlw vm.dirty_background_ratio 2 ;;
+      battery) sysctlw vm.dirty_ratio 40; sysctlw vm.dirty_background_ratio 10 ;;
+      *) sysctlw vm.dirty_ratio 20; sysctlw vm.dirty_background_ratio 5 ;;
+    esac
   fi
   sysctlw vm.dirty_expire_centisecs $_P_DEXP
   sysctlw vm.dirty_writeback_centisecs $_P_DWB
-  sysctlw vm.vfs_cache_pressure 50
+  sysctlw vm.vfs_cache_pressure $_P_VFS
   [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
-  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval 15
-  writef_retry /proc/sys/vm/page-cluster 0 1 0 || true
-  sysctlw vm.watermark_scale_factor 60
-  sysctlw vm.min_free_kbytes 32768
+  [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval $_P_STATINT
+  case "$ASB_PROFILE" in
+    performance) writef_retry /proc/sys/vm/page-cluster 0 1 0 || true ;;
+    battery) writef_retry /proc/sys/vm/page-cluster 3 1 0 || true ;;
+    *) writef_retry /proc/sys/vm/page-cluster 1 1 0 || true ;;
+  esac
+  sysctlw vm.watermark_scale_factor $_P_WMARK
+  sysctlw vm.min_free_kbytes $_P_MINFREE
   sysctlw vm.oom_kill_allocating_task 1
+  # Extra battery savings
+  if [ "$ASB_PROFILE" = "battery" ]; then
+    [ -e /proc/sys/vm/drop_caches ] || true
+    [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 5 || true
+    [ -e /proc/sys/vm/block_dump ] && writef_retry /proc/sys/vm/block_dump 0 1 0 || true
+  else
+    [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 0 || true
+  fi
 }
-apply_vm
+asb_feature_enabled VM && apply_vm
 # ASB:VM:END
 sysctl_try() {
   k="$1"; shift
@@ -221,25 +364,30 @@ apply_net() {
     sysctl_try net.ipv4.tcp_congestion_control bbr cubic reno
     [ -e /proc/sys/net/ipv6/tcp_congestion_control ] && sysctl_try net.ipv6.tcp_congestion_control bbr cubic reno
   fi
-  sysctlw net.ipv4.tcp_pacing_ca_ratio 110
-  sysctlw net.ipv4.tcp_pacing_ss_ratio 170
+  case "$ASB_PROFILE" in
+    performance) _pca=160; _pss=240; _rmem_max=67108864; _wmem_max=67108864; _optmem=4194304 ;;
+    battery) _pca=80; _pss=110; _rmem_max=1048576; _wmem_max=1048576; _optmem=65536 ;;
+    *) _pca=110; _pss=170; _rmem_max=16777216; _wmem_max=16777216; _optmem=1048576 ;;
+  esac
+  sysctlw net.ipv4.tcp_pacing_ca_ratio $_pca
+  sysctlw net.ipv4.tcp_pacing_ss_ratio $_pss
   [ -e /proc/sys/net/ipv6/tcp_ecn ] && sysctlw net.ipv6.tcp_ecn 0
-  [ -e /proc/sys/net/ipv6/tcp_rmem ] && sysctlw net.ipv6.tcp_rmem "4096 262144 16777216"
-  [ -e /proc/sys/net/ipv6/tcp_wmem ] && sysctlw net.ipv6.tcp_wmem "4096 262144 16777216"
+  [ -e /proc/sys/net/ipv6/tcp_rmem ] && sysctlw net.ipv6.tcp_rmem "$_P_TCP_RMEM"
+  [ -e /proc/sys/net/ipv6/tcp_wmem ] && sysctlw net.ipv6.tcp_wmem "$_P_TCP_WMEM"
   sysctlw net.ipv4.tcp_moderate_rcvbuf 1
-  sysctlw net.ipv4.tcp_rmem "4096 262144 16777216"
-  sysctlw net.ipv4.tcp_wmem "4096 262144 16777216"
-  sysctlw net.core.rmem_max 16777216
-  sysctlw net.core.wmem_max 16777216
-  sysctlw net.core.optmem_max 1048576
-  sysctlw net.ipv4.tcp_fastopen 3
+  sysctlw net.ipv4.tcp_rmem "$_P_TCP_RMEM"
+  sysctlw net.ipv4.tcp_wmem "$_P_TCP_WMEM"
+  sysctlw net.core.rmem_max $_rmem_max
+  sysctlw net.core.wmem_max $_wmem_max
+  sysctlw net.core.optmem_max $_optmem
+  sysctlw net.ipv4.tcp_fastopen $_P_TCP_FASTOPEN
   sysctlw net.ipv4.tcp_sack 1
   sysctlw net.ipv4.tcp_dsack 1
   sysctlw net.ipv4.tcp_window_scaling 1
   sysctlw net.ipv4.tcp_timestamps 1
   sysctlw net.ipv4.tcp_ecn 0
   sysctlw net.ipv4.tcp_early_retrans 3
-  [ -e /proc/sys/net/ipv4/tcp_notsent_lowat ] && sysctlw net.ipv4.tcp_notsent_lowat 131072
+  [ -e /proc/sys/net/ipv4/tcp_notsent_lowat ] && sysctlw net.ipv4.tcp_notsent_lowat $_P_TCP_NOTSENT
   sysctlw net.ipv4.udp_rmem_min 65536
   sysctlw net.ipv4.udp_wmem_min 65536
   [ -e /proc/sys/net/ipv6/udp_rmem_min ] && sysctlw net.ipv6.udp_rmem_min 65536
@@ -249,17 +397,17 @@ apply_net() {
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_retrans_collapse 0
   sysctlw net.ipv4.tcp_max_orphans 8192
-  sysctlw net.ipv4.tcp_keepalive_time   7200
+  sysctlw net.ipv4.tcp_keepalive_time   $_P_TCP_KEEPIDLE
   sysctlw net.ipv4.tcp_keepalive_intvl  75
   sysctlw net.ipv4.tcp_keepalive_probes 9
-  sysctlw net.ipv4.tcp_fin_timeout          20
+  sysctlw net.ipv4.tcp_fin_timeout          $_P_TCP_FIN
   sysctlw net.ipv4.tcp_no_metrics_save       1
   sysctlw net.core.somaxconn 512
   sysctlw net.ipv4.tcp_max_syn_backlog 2048
-  sysctlw net.core.netdev_max_backlog 2000
-  sysctlw net.core.netdev_budget 180
-  sysctlw net.core.netdev_budget_usecs 5000
-  sysctlw net.core.dev_weight 64
+  sysctlw net.core.netdev_max_backlog $_P_NET_BACKLOG
+  sysctlw net.core.netdev_budget $_P_NET_BUDGET
+  sysctlw net.core.netdev_budget_usecs $_P_NET_BUDGET_US
+  sysctlw net.core.dev_weight $_P_DEV_WEIGHT
   sysctlw net.core.bpf_jit_enable 1
   sysctlw net.core.bpf_jit_harden 0
   sysctlw net.core.bpf_jit_kallsyms 1
@@ -311,7 +459,7 @@ apply_net() {
   [ -e /proc/sys/net/ipv6/neigh/default/gc_thresh3 ] && \
     sysctlw net.ipv6.neigh.default.gc_thresh3 1024
 }
-apply_net
+asb_feature_enabled NET && apply_net
 # ASB:NET:END
 apply_wifi_settings() {
   has settings || return 0
@@ -320,27 +468,29 @@ apply_wifi_settings() {
   settings put global wifi_suspend_optimizations_enabled 1 >/dev/null 2>&1 || true
   settings put global wifi_verbose_logging_enabled 0 >/dev/null 2>&1 || true
 }
-apply_wifi_settings
+asb_feature_enabled WIFI && apply_wifi_settings
 apply_wifi_country() {
-  has iw && iw reg set IT >/dev/null 2>&1 || true
+  _cc="${WIFI_COUNTRY:-IT}"
+  has iw && iw reg set "$_cc" >/dev/null 2>&1 || true
   has cmd && {
-    cmd -w wifi force-country-code enabled IT >/dev/null 2>&1 || true
-    cmd -w wifi set-country-code IT >/dev/null 2>&1 || true
+    cmd -w wifi force-country-code enabled "$_cc" >/dev/null 2>&1 || true
+    cmd -w wifi set-country-code "$_cc" >/dev/null 2>&1 || true
   }
   has settings && {
-    settings put global wifi_country_code IT >/dev/null 2>&1 || true
+    settings put global wifi_country_code "$_cc" >/dev/null 2>&1 || true
     settings put global wifi_country_code_priority 1 >/dev/null 2>&1 || true
   }
 }
-apply_wifi_country
+asb_feature_enabled WIFI && apply_wifi_country
 apply_wlan0_txqlen() {
   [ -e /sys/class/net/wlan0/tx_queue_len ] || return 0
+  _want="${_P_WLAN_TXQLEN:-768}"
   _txq="$(cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
-  [ "$_txq" = "512" ] && return 0
-  echo 512 > /sys/class/net/wlan0/tx_queue_len 2>/dev/null || true
-  ip link set wlan0 txqueuelen 512 >/dev/null 2>&1 || true
+  [ "$_txq" = "$_want" ] && return 0
+  echo $_want > /sys/class/net/wlan0/tx_queue_len 2>/dev/null || true
+  ip link set wlan0 txqueuelen $_want >/dev/null 2>&1 || true
 }
-apply_wlan0_txqlen
+asb_feature_enabled WIFI && apply_wlan0_txqlen
 netif_oper_upish() {
   _if="$1"
   [ -n "$_if" ] || return 1
@@ -386,41 +536,87 @@ apply_netif_qdisc() {
     tc qdisc replace dev "$_if" root fq >/dev/null 2>&1 || true
 }
 apply_wlan0_qdisc() {
-  apply_netif_qdisc wlan0
+  if has tc && ip link show wlan0 >/dev/null 2>&1; then
+    if [ "$ASB_PROFILE" = "performance" ]; then
+      tc qdisc replace dev wlan0 root $_P_QDISC >/dev/null 2>&1 || apply_netif_qdisc wlan0
+    else
+      tc qdisc replace dev wlan0 root $_P_QDISC >/dev/null 2>&1 || apply_netif_qdisc wlan0
+    fi
+  fi
 }
 apply_mobile_qdisc() {
   for _dev in /sys/class/net/*; do
     [ -e "$_dev" ] || continue
     _if="${_dev##*/}"
     case "$_if" in
-      rmnet*|ccmni*) apply_netif_qdisc "$_if" ;;
+      rmnet*|ccmni*)
+        if has tc; then
+          tc qdisc replace dev "$_if" root "$_P_QDISC" >/dev/null 2>&1 || apply_netif_qdisc "$_if"
+        else
+          apply_netif_qdisc "$_if"
+        fi ;;
+
     esac
   done
 }
-apply_wlan0_qdisc
-apply_mobile_qdisc
+asb_feature_enabled WIFI && apply_wlan0_qdisc
+asb_feature_enabled NET && apply_mobile_qdisc
 # ASB:WIFI:BEGIN
 apply_wifi_pm() {
   wait_path /sys/class/net/wlan0 10 || return 0
-  _tx1=$(cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null || echo 0)
-  sleep 1
-  _tx2=$(cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null || echo 0)
-  _delta=$(( _tx2 - _tx1 ))
-  if [ "$_delta" -gt 524288 ]; then
-    iw dev wlan0 set power_save off >/dev/null 2>&1 || true
-    writef_retry /sys/module/wlan/parameters/wlan_pm 0 3 0.25 || true
-  else
-    iw dev wlan0 set power_save on >/dev/null 2>&1 || true
-    writef_retry /sys/module/wlan/parameters/wlan_pm 1 3 0.25 || true
-  fi
-  setprop persist.vendor.wlan.scan_throttle 1 2>/dev/null || true
+  # Wait for wlan0 to be actually associated/up before setting power_save
+  _wt=0
+  while [ $_wt -lt 15 ]; do
+    _wst="$(cat /sys/class/net/wlan0/operstate 2>/dev/null)"
+    case "$_wst" in up|dormant|unknown) break ;; esac
+    sleep 1
+    _wt=$((_wt+1))
+  done
+  case "$_P_WLAN_PM" in
+    0)
+      iw dev wlan0 set power_save off >/dev/null 2>&1 || true
+      sleep 0.5
+      iw dev wlan0 set power_save off >/dev/null 2>&1 || true
+      writef_retry /sys/module/wlan/parameters/wlan_pm 0 4 0.5 || true
+      setprop persist.vendor.wlan.scan_throttle 0 2>/dev/null || true
+      setprop persist.vendor.wlan.powersave 0 2>/dev/null || true
+      [ -e /sys/module/wlan/parameters/wlan_pm ] && writef_retry /sys/module/wlan/parameters/wlan_pm 0 6 0.5 || true
+      ;;
+    1)
+      iw dev wlan0 set power_save on >/dev/null 2>&1 || true
+      sleep 0.5
+      iw dev wlan0 set power_save on >/dev/null 2>&1 || true
+      writef_retry /sys/module/wlan/parameters/wlan_pm 1 4 0.5 || true
+      setprop persist.vendor.wlan.scan_throttle 1 2>/dev/null || true
+      setprop persist.vendor.wlan.powersave 1 2>/dev/null || true
+      [ -e /sys/module/wlan/parameters/wlan_pm ] && writef_retry /sys/module/wlan/parameters/wlan_pm 1 6 0.5 || true
+      ;;
+    *)
+      _tx1=$(cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null || echo 0)
+      sleep 1
+      _tx2=$(cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null || echo 0)
+      _delta=$(( _tx2 - _tx1 ))
+      if [ "$_delta" -gt 524288 ]; then
+        iw dev wlan0 set power_save off >/dev/null 2>&1 || true
+        writef_retry /sys/module/wlan/parameters/wlan_pm 0 3 0.25 || true
+      else
+        iw dev wlan0 set power_save on >/dev/null 2>&1 || true
+        writef_retry /sys/module/wlan/parameters/wlan_pm 1 3 0.25 || true
+      fi
+      setprop persist.vendor.wlan.scan_throttle 1 2>/dev/null || true
+      ;;
+  esac
 }
-apply_wifi_pm
+asb_feature_enabled WIFI && apply_wifi_pm
 apply_wifi_dtim() {
-  iw dev wlan0 set listen-interval 3 >/dev/null 2>&1 || true
+  case "$ASB_PROFILE" in
+    battery) iw dev wlan0 set listen-interval 10 >/dev/null 2>&1 || true ;;
+    performance) iw dev wlan0 set listen-interval 1 >/dev/null 2>&1 || true ;;
+    *) iw dev wlan0 set listen-interval 3 >/dev/null 2>&1 || true ;;
+  esac
   writef_retry /sys/module/wlan/parameters/enable_connected_scan_result 0 3 0.25 || true
 }
-apply_wifi_dtim
+asb_feature_enabled WIFI && apply_wifi_dtim
 # ASB:WIFI:END
 (
   _skip_wlan_wait=0
@@ -442,10 +638,10 @@ apply_wifi_dtim
   done
   for delay in 0 5 10 20 30 45; do
     [ $delay -gt 0 ] && sleep $delay
-    apply_wlan0_txqlen
-    apply_wlan0_qdisc
+    asb_feature_enabled WIFI && apply_wlan0_txqlen
+    asb_feature_enabled WIFI && apply_wlan0_qdisc
     q="$(cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
-    [ "$q" = "512" ] && break
+    [ "$q" = "${_P_WLAN_TXQLEN:-1024}" ] && break
   done
 ) >/dev/null 2>&1 &
 # ASB:GPS:BEGIN
@@ -461,7 +657,7 @@ apply_gps_hygiene() {
   settings put global ntp_server_3 1.it.pool.ntp.org >/dev/null 2>&1 || true
   settings put global ntp_server_4 ntp1.inrim.it >/dev/null 2>&1 || true
 }
-apply_gps_hygiene
+asb_feature_enabled GPS && apply_gps_hygiene
 # ASB:GPS:END
 tune_io_queues() {
   for _b in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
@@ -470,9 +666,16 @@ tune_io_queues() {
     writef "$_b/queue/iostats" 0
     writef "$_b/queue/add_random" 0
     writef "$_b/queue/rq_affinity" 2
-    case "${_b##*/}" in
-      dm-*)  writef "$_b/queue/read_ahead_kb" 128 ;;
-      *)     writef "$_b/queue/read_ahead_kb" 128 ;;
+    case "$ASB_PROFILE" in
+      performance)
+        writef "$_b/queue/read_ahead_kb" 512
+        [ -w "$_b/queue/nr_requests" ] && writef "$_b/queue/nr_requests" 256 || true ;;
+      battery)
+        writef "$_b/queue/read_ahead_kb" 64
+        [ -w "$_b/queue/nr_requests" ] && writef "$_b/queue/nr_requests" 64 || true ;;
+      *)
+        writef "$_b/queue/read_ahead_kb" 128
+        [ -w "$_b/queue/nr_requests" ] && writef "$_b/queue/nr_requests" 128 || true ;;
     esac
   done
 }
@@ -501,8 +704,8 @@ apply_kernel() {
   [ -e /proc/sys/walt/sched_idle_enough_clust ] && \
     writef_retry /proc/sys/walt/sched_idle_enough_clust "$_P_IDLEC" 1 0 || true
   writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
-  [ -w /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq ] && writef_retry /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq $_P_CPUL 3 0.25 || true
-  [ -w /sys/devices/system/cpu/cpufreq/policy6/scaling_min_freq ] && writef_retry /sys/devices/system/cpu/cpufreq/policy6/scaling_min_freq $_P_CPUB 3 0.25 || true
+  [ -w $LITTLE_POLICY/scaling_min_freq ] && writef_retry $LITTLE_POLICY/scaling_min_freq $_P_CPUL 3 0.25 || true
+  [ -w $BIG_POLICY/scaling_min_freq ] && writef_retry $BIG_POLICY/scaling_min_freq $_P_CPUB 3 0.25 || true
   [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct $_P_CLUT 1 0 || true
   [ -e /proc/sys/walt/sched_cluster_util_thres_pct_clust ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct_clust "$_P_CLUTC" 1 0 || true
   [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation $_P_COLOC 1 0 || true
@@ -511,33 +714,168 @@ apply_kernel() {
   [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks $_P_RAVG 3 0.5 || true
   [ -e /proc/sys/walt/sched_pipeline_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_util_thres $_P_PIPE 1 0 || true
   [ -e /proc/sys/walt/sched_pipeline_non_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_non_special_task_util_thres $_P_PIPEN 1 0 || true
-    [ -e /proc/sys/walt/sched_pipeline_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_special_task_util_thres $_P_PIPES 1 0 || true
-    [ -e /proc/sys/walt/sched_ed_boost ] && writef_retry /proc/sys/walt/sched_ed_boost $_P_EDB 1 0 || true
-    [ -e /proc/sys/walt/sched_topapp_weight_pct ] && writef_retry /proc/sys/walt/sched_topapp_weight_pct $_P_TOPW 1 0 || true
-    [ -e /proc/sys/walt/sched_min_task_util_for_boost ] && writef_retry /proc/sys/walt/sched_min_task_util_for_boost $_P_MINTB 1 0 || true
   [ -e /proc/sys/walt/sched_pipeline_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_special_task_util_thres $_P_PIPES 1 0 || true
   [ -e /proc/sys/walt/sched_ed_boost ] && writef_retry /proc/sys/walt/sched_ed_boost $_P_EDB 1 0 || true
   [ -e /proc/sys/walt/sched_topapp_weight_pct ] && writef_retry /proc/sys/walt/sched_topapp_weight_pct $_P_TOPW 1 0 || true
   [ -e /proc/sys/walt/sched_min_task_util_for_boost ] && writef_retry /proc/sys/walt/sched_min_task_util_for_boost $_P_MINTB 1 0 || true
+  # Per-profile kernel extras
+  case "$ASB_PROFILE" in
+    battery)
+      [ -e /proc/sys/kernel/sched_energy_aware ] && sysctlw kernel.sched_energy_aware 1 || true
+      [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 2 || true
+      [ -e /proc/sys/kernel/hrtimer_migration ] && writef_retry /proc/sys/kernel/hrtimer_migration 0 1 0 || true
+      [ -e /proc/sys/kernel/timer_migration ] && sysctlw kernel.timer_migration 0 || true
+      [ -e /proc/sys/walt/sched_conservative_pl ] && writef_retry /proc/sys/walt/sched_conservative_pl 1 1 0 || true
+      [ -e /proc/sys/walt/sched_suppress_region2_cpus ] && writef_retry /proc/sys/walt/sched_suppress_region2_cpus 1 1 0 || true
+      ;;
+    performance)
+      [ -e /proc/sys/kernel/sched_energy_aware ] && sysctlw kernel.sched_energy_aware 0 || true
+      [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 8 || true
+      [ -e /proc/sys/walt/sched_conservative_pl ] && writef_retry /proc/sys/walt/sched_conservative_pl 0 1 0 || true
+      [ -e /proc/sys/walt/sched_suppress_region2_cpus ] && writef_retry /proc/sys/walt/sched_suppress_region2_cpus 0 1 0 || true
+      ;;
+    *)
+      [ -e /proc/sys/kernel/sched_energy_aware ] && sysctlw kernel.sched_energy_aware 1 || true
+      [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4 || true
+      ;;
+  esac
   tune_io_queues
 }
-apply_kernel
+asb_feature_enabled KERNEL && apply_kernel
 # ASB:KERNEL:END
-# ASB:IDLE:BEGIN
+asb_freq_pick_pct() {
+  _dir="$1"; _pct="$2"
+  [ -d "$_dir" ] || return 1
+  _max="$(cat "$_dir/cpuinfo_max_freq" 2>/dev/null)"
+  [ -n "$_max" ] || return 1
+  _target=$(( _max * _pct / 100 ))
+  _avail="$_dir/scaling_available_frequencies"
+  if [ -r "$_avail" ]; then
+    _pick="$(tr ' ' '
+' < "$_avail" | grep -v '^$' | sort -n | awk -v t="$_target" '$1<=t{v=$1} END{print v}')"
+    [ -n "$_pick" ] || _pick="$(tr ' ' '
+' < "$_avail" | grep -v '^$' | sort -n | head -1)"
+  else
+    _pick="$_target"
+  fi
+  [ -n "$_pick" ] && echo "$_pick"
+}
+asb_gpu_pick_pct() {
+  _base="/sys/class/kgsl/kgsl-3d0/devfreq"
+  [ -d "$_base" ] || return 1
+  _max="$(cat "$_base/max_freq" 2>/dev/null)"
+  [ -n "$_max" ] || return 1
+  _target=$(( _max * $1 / 100 ))
+  _avail="$_base/available_frequencies"
+  if [ -r "$_avail" ]; then
+    _pick="$(tr ' ' '
+' < "$_avail" | grep -v '^$' | sort -n | awk -v t="$_target" '$1<=t{v=$1} END{print v}')"
+    [ -n "$_pick" ] || _pick="$(tr ' ' '
+' < "$_avail" | grep -v '^$' | sort -n | head -1)"
+  else
+    _pick="$_target"
+  fi
+  [ -n "$_pick" ] && echo "$_pick"
+}
+apply_gpu_caps() {
+  _gbase="/sys/class/kgsl/kgsl-3d0/devfreq"
+  [ -d "$_gbase" ] || return 0
+  _gmax="$(asb_gpu_pick_pct ${_P_GPU_MAX_PCT:-100})"
+  [ -n "$_gmax" ] && writef_retry "$_gbase/max_freq" "$_gmax" 3 0.25 || true
+  if [ "${_P_GPU_MIN_PCT:-0}" -gt 0 ] 2>/dev/null; then
+    _gmin="$(asb_gpu_pick_pct ${_P_GPU_MIN_PCT})"
+  else
+    _gmin="$(cat "$_gbase/available_frequencies" 2>/dev/null | tr ' ' '
+' | grep -v '^$' | sort -n | head -1)"
+    [ -n "$_gmin" ] || _gmin="$(cat "$_gbase/min_freq" 2>/dev/null)"
+  fi
+  [ -n "$_gmin" ] && writef_retry "$_gbase/min_freq" "$_gmin" 3 0.25 || true
+}
+apply_cpufreq_caps() {
+  for _pol_dir in /sys/devices/system/cpu/cpufreq/policy*; do
+    [ -d "$_pol_dir" ] || continue
+    _smax="$_pol_dir/scaling_max_freq"
+    [ -w "$_smax" ] || continue
+    _rel="$(cat "$_pol_dir/related_cpus" 2>/dev/null | awk '{print $1}')"
+    case "$_rel" in ''|*[!0-9]*) _rel=0 ;; esac
+    if [ "$_rel" -le "$little_end" ]; then
+      _pct="$_P_CPUCAP_L"
+    else
+      _pct="$_P_CPUCAP_B"
+    fi
+    if [ "$_rel" -le "$little_end" ]; then
+      _abs="$_P_CPU_MAXL"
+    else
+      _abs="$_P_CPU_MAXB"
+    fi
+    if [ -n "$_abs" ]; then
+      _want="$_abs"
+    elif [ "$_pct" -ge 100 ] 2>/dev/null; then
+      _want="$(cat "$_pol_dir/cpuinfo_max_freq" 2>/dev/null)"
+    else
+      _want="$(asb_freq_pick_pct "$_pol_dir" "$_pct")"
+    fi
+    [ -n "$_want" ] && writef_retry "$_smax" "$_want" 3 0.25 || true
+  done
+}
+asb_feature_enabled CPU && apply_cpufreq_caps
+asb_cpufreq_caps_drifted() {
+  asb_feature_enabled CPU || return 1
+  for _pol_dir in /sys/devices/system/cpu/cpufreq/policy*; do
+    [ -d "$_pol_dir" ] || continue
+    _smax="$_pol_dir/scaling_max_freq"
+    [ -r "$_smax" ] || continue
+    _rel="$(cat "$_pol_dir/related_cpus" 2>/dev/null | awk '{print $1}')"
+    case "$_rel" in ''|*[!0-9]*) _rel=0 ;; esac
+    if [ "$_rel" -le "$little_end" ]; then
+      _want="$_P_CPU_MAXL"
+    else
+      _want="$_P_CPU_MAXB"
+    fi
+    [ -n "$_want" ] || continue
+    _cur="$(cat "$_smax" 2>/dev/null | tr -d '\r')"
+    [ -n "$_cur" ] || continue
+    [ "$_cur" != "$_want" ] && return 0
+  done
+  return 1
+}
+asb_feature_enabled CPU && apply_gpu_caps
+apply_walt_live() {
+  asb_feature_enabled CPU || return 0
+  [ -d /proc/sys/walt ] || return 0
+  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks "$RAVG_TICKS" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_idle_enough ] && writef_retry /proc/sys/walt/sched_idle_enough "$WALT_IDLE" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_idle_enough_clust ] && writef_retry /proc/sys/walt/sched_idle_enough_clust "$WALT_IDLE_CLUST" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct "$WALT_CLUSTER" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_cluster_util_thres_pct_clust ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct_clust "$WALT_CLUSTER_CLUST" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation "$WALT_COLOC" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_pipeline_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_util_thres "$WALT_PIPE" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_pipeline_non_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_non_special_task_util_thres "$WALT_PIPE_NONSP" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_pipeline_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_special_task_util_thres "$WALT_PIPE_SP" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_busy_hyst_ns ] && writef_retry /proc/sys/walt/sched_busy_hyst_ns "$WALT_BUSY_HYST" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_ed_boost ] && writef_retry /proc/sys/walt/sched_ed_boost "$WALT_ED_BOOST" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_topapp_weight_pct ] && writef_retry /proc/sys/walt/sched_topapp_weight_pct "$WALT_TOPAPP_WEIGHT" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_min_task_util_for_boost ] && writef_retry /proc/sys/walt/sched_min_task_util_for_boost "$WALT_BOOST_MIN_UTIL" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_boost ] && writef_retry /proc/sys/walt/sched_boost "$WALT_SCHED_BOOST" 10 0.25 || true
+}
 apply_idle() {
   writef /sys/module/lpm_levels/parameters/sleep_disabled 0
-  [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] && \
-    echo $_P_GTMR > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
+  [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] &&     echo $_P_GTMR > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
   writef_retry /sys/class/kgsl/kgsl-3d0/force_rail_on 0 3 0.25 || true
   writef_retry /sys/class/kgsl/kgsl-3d0/force_clk_on  0 3 0.25 || true
   writef_retry /sys/class/kgsl/kgsl-3d0/force_bus_on  0 3 0.25 || true
-  [ -w /sys/class/kgsl/kgsl-3d0/force_no_nap ] && writef_retry /sys/class/kgsl/kgsl-3d0/force_no_nap 0 3 0.25 || true
-  [ -w /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor ] && \
-    echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor 2>/dev/null || true
+  [ -w /sys/class/kgsl/kgsl-3d0/force_no_nap ] && \
+    writef_retry /sys/class/kgsl/kgsl-3d0/force_no_nap "${GPU_FORCE_NO_NAP:-0}" 3 0.25 || true
+  # GPU bus/throttling/thermal — читаем из профильных переменных (единый центр правды)
+  [ -w /sys/class/kgsl/kgsl-3d0/bus_split ] && [ -n "$GPU_BUS_SPLIT" ] && \
+    writef_retry /sys/class/kgsl/kgsl-3d0/bus_split "$GPU_BUS_SPLIT" 3 0.25 || true
+  [ -w /sys/class/kgsl/kgsl-3d0/throttling ] && [ -n "$GPU_THROTTLING" ] && \
+    writef_retry /sys/class/kgsl/kgsl-3d0/throttling "$GPU_THROTTLING" 3 0.25 || true
+  [ -w /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] && [ -n "$GPU_THERMAL_PWRLEVEL" ] && \
+    writef_retry /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel "$GPU_THERMAL_PWRLEVEL" 3 0.25 || true
+  [ -w /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor ] &&     echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor 2>/dev/null || true
 }
-apply_idle
-# ASB:IDLE:END
-# ASB:CPU:BEGIN
+asb_feature_enabled CPU && apply_idle
 apply_freq_floors() {
   for _pol_dir in /sys/devices/system/cpu/cpufreq/policy*; do
     [ -d "$_pol_dir" ] || continue
@@ -553,7 +891,59 @@ apply_freq_floors() {
     fi
   done
 }
-apply_freq_floors
+
+# ASB:CPU:BEGIN
+apply_runtime_profile_now() {
+  asb_load_profile
+  PROFILE="$ASB_PROFILE"
+  asb_log "apply_runtime_profile_now profile=$ASB_PROFILE"
+  asb_feature_enabled CPU && asb_apply_profile_once
+  if asb_feature_enabled CPU; then
+    apply_walt_live
+    apply_uclamp
+    apply_cpuset_groups
+    apply_cpuset_groups_all
+    apply_idle
+    apply_cpufreq_caps
+    apply_gpu_caps
+    [ -w "$LITTLE_POLICY/scaling_min_freq" ] && writef_retry "$LITTLE_POLICY/scaling_min_freq" "$_P_CPUL" 4 0.25 || true
+    [ -w "$BIG_POLICY/scaling_min_freq" ] && writef_retry "$BIG_POLICY/scaling_min_freq" "$_P_CPUB" 4 0.25 || true
+    apply_cpugov_hints
+  fi
+  asb_feature_enabled VM && apply_vm
+  asb_feature_enabled NET && apply_net
+  asb_feature_enabled WIFI && apply_wlan0_txqlen
+  asb_feature_enabled WIFI && apply_wlan0_qdisc
+  asb_feature_enabled WIFI && apply_wifi_pm
+  asb_feature_enabled WIFI && apply_wifi_dtim
+  asb_feature_enabled VM && apply_doze
+  (
+    sleep 6
+    asb_load_profile
+    asb_feature_enabled CPU && apply_walt_live
+    asb_feature_enabled CPU && apply_uclamp
+    asb_feature_enabled CPU && apply_cpuset_groups
+    asb_feature_enabled CPU && apply_cpuset_groups_all
+    asb_feature_enabled CPU && apply_idle
+    asb_feature_enabled CPU && apply_cpufreq_caps
+    asb_feature_enabled CPU && apply_gpu_caps
+    asb_feature_enabled WIFI && apply_wifi_pm
+    asb_feature_enabled WIFI && apply_wifi_dtim
+  ) >/dev/null 2>&1 &
+  (
+    sleep 18
+    asb_load_profile
+    asb_feature_enabled CPU && apply_walt_live
+    asb_feature_enabled CPU && apply_uclamp
+    asb_feature_enabled CPU && apply_cpuset_groups
+    asb_feature_enabled CPU && apply_cpuset_groups_all
+    asb_feature_enabled CPU && apply_idle
+    asb_feature_enabled CPU && apply_cpufreq_caps
+    asb_feature_enabled CPU && apply_gpu_caps
+    asb_feature_enabled WIFI && apply_wifi_pm
+    asb_feature_enabled WIFI && apply_wifi_dtim
+  ) >/dev/null 2>&1 &
+}
 # ASB:CPU:END
 apply_bt_settings() {
   if has settings; then
@@ -564,7 +954,7 @@ apply_bt_settings() {
     settings delete global bluetooth_disabled_profiles >/dev/null 2>&1 || true
   fi
 }
-apply_bt_settings
+asb_feature_enabled BT && apply_bt_settings
 apply_bt_codec_policy() {
   if has settings; then
     settings put global bluetooth_a2dp_optional_codecs_enabled 1 2>/dev/null || true
@@ -586,7 +976,7 @@ apply_bt_codec_policy() {
     resetprop -n persist.vendor.bluetooth.a2dp.lhdc.version 5 >/dev/null 2>&1 || true
   fi
 }
-apply_bt_codec_policy
+asb_feature_enabled BT && apply_bt_codec_policy
 apply_bt_volume_behavior() {
   if has settings; then
     settings put global bluetooth_disable_absolute_volume 0 2>/dev/null || true
@@ -599,7 +989,7 @@ apply_bt_volume_behavior() {
     resetprop -p --delete persist.asb.force_enableabsvol >/dev/null 2>&1 || true
   fi
 }
-apply_bt_volume_behavior
+asb_feature_enabled BT && apply_bt_volume_behavior
 apply_bt_audio_hygiene() {
   if has resetprop; then
     resetprop -p --delete persist.vendor.bt.a2dp.lhdc.bitrate >/dev/null 2>&1 || true
@@ -624,7 +1014,7 @@ apply_bt_audio_hygiene() {
     resetprop -n persist.bluetooth.leaudio.enabled true >/dev/null 2>&1 || true
   fi
 }
-apply_bt_audio_hygiene
+asb_feature_enabled BT && apply_bt_audio_hygiene
 apply_audio_effect_hygiene() {
   if has resetprop; then
     resetprop -n persist.vendor.audio_fx.waves.maxxsense false >/dev/null 2>&1 || true
@@ -635,7 +1025,7 @@ apply_audio_effect_hygiene() {
     resetprop -p --delete persist.bluetooth.gamemode >/dev/null 2>&1 || true
   fi
 }
-apply_audio_effect_hygiene
+asb_feature_enabled KERNEL && apply_audio_effect_hygiene
 if has resetprop; then
     for _k in media.resolution.limit.16bit media.resolution.limit.24bit media.resolution.limit.32bit \
              audio.resolution.limit.16bit audio.resolution.limit.24bit audio.resolution.limit.32bit; do
@@ -652,7 +1042,7 @@ apply_logd_props() {
   setprop persist.logd.statistics false 2>/dev/null
   setprop persist.logd.logpersistd stop 2>/dev/null
 }
-apply_logd_props
+asb_feature_enabled LOG && apply_logd_props
 svc_state() { getprop "init.svc.$1" 2>/dev/null; }
 svc_exists() { [ -n "$(svc_state "$1")" ]; }
 svc_running() { [ "$(svc_state "$1")" = "running" ]; }
@@ -722,15 +1112,21 @@ apply_walt_boost() {
     writef_retry /proc/sys/kernel/sched_boost 0 3 0.25 || true
   writef_retry /proc/sys/kernel/sched_energy_aware 1 3 0.25 || true
 }
-( sleep 5; apply_walt_boost ) >/dev/null 2>&1 &
-apply_zram
+( sleep 5; asb_load_profile; apply_walt_boost; apply_walt_live ) >/dev/null 2>&1 &
+asb_feature_enabled VM && apply_zram
 apply_doze() {
   has settings || return 0
-  settings put global device_idle_constants \
-"light_after_inactive_to=30000,light_pre_idle_to=5000,light_max_idle_to=86400000,light_idle_to=10000,light_idle_factor=2.0,light_idle_maintenance_min_budget=2000,light_idle_maintenance_max_budget=15000,inactive_to=180000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=10000,idle_pending_to=5000,max_idle_pending_to=10000,idle_pending_factor=2.0,idle_to=3600000,max_idle_to=21600000,idle_factor=2.0,min_time_to_alarm=60000,max_temp_app_whitelist_duration=60000,mms_temp_app_whitelist_duration=30000,sms_temp_app_whitelist_duration=20000" \
-    >/dev/null 2>&1 || true
+  case "$ASB_PROFILE" in
+    battery)
+      _DIC="light_after_inactive_to=20000,light_pre_idle_to=3000,light_max_idle_to=86400000,light_idle_to=8000,light_idle_factor=2.5,light_idle_maintenance_min_budget=1500,light_idle_maintenance_max_budget=8000,inactive_to=60000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=5000,idle_pending_to=2500,max_idle_pending_to=5000,idle_pending_factor=2.5,idle_to=1800000,max_idle_to=43200000,idle_factor=2.5,min_time_to_alarm=60000,max_temp_app_whitelist_duration=30000,mms_temp_app_whitelist_duration=15000,sms_temp_app_whitelist_duration=10000" ;;
+    performance)
+      _DIC="light_after_inactive_to=60000,light_pre_idle_to=10000,light_max_idle_to=86400000,light_idle_to=15000,light_idle_factor=2.0,light_idle_maintenance_min_budget=2000,light_idle_maintenance_max_budget=15000,inactive_to=300000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=20000,idle_pending_to=10000,max_idle_pending_to=15000,idle_pending_factor=2.0,idle_to=3600000,max_idle_to=10800000,idle_factor=2.0,min_time_to_alarm=60000,max_temp_app_whitelist_duration=60000,mms_temp_app_whitelist_duration=30000,sms_temp_app_whitelist_duration=20000" ;;
+    *)
+      _DIC="light_after_inactive_to=30000,light_pre_idle_to=5000,light_max_idle_to=86400000,light_idle_to=10000,light_idle_factor=2.0,light_idle_maintenance_min_budget=2000,light_idle_maintenance_max_budget=15000,inactive_to=180000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=10000,idle_pending_to=5000,max_idle_pending_to=10000,idle_pending_factor=2.0,idle_to=3600000,max_idle_to=21600000,idle_factor=2.0,min_time_to_alarm=60000,max_temp_app_whitelist_duration=60000,mms_temp_app_whitelist_duration=30000,sms_temp_app_whitelist_duration=20000" ;;
+  esac
+  settings put global device_idle_constants "$_DIC" >/dev/null 2>&1 || true
 }
-apply_doze
+asb_feature_enabled VM && apply_doze
 apply_extra_settings() {
   has settings || return 0
   settings put global audio_safe_volume_state 0 >/dev/null 2>&1 || true
@@ -755,40 +1151,61 @@ apply_extra_settings
   [ "$_fg" != "0" ] && setprop persist.sys.power.fuel.gauge 0 2>/dev/null
 ) >/dev/null 2>&1 &
 (
-  for _delay in 30 90 300; do
+  _last_profile=""
+  while true; do
+    sleep 45
+    _now="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+    [ -z "$_now" ] && _now="balanced"
     asb_load_profile
+    _need=0
+    _reason=""
+    if [ "$_now" != "$_last_profile" ]; then
+      _need=1
+      _reason="profile-change"
+    else
+      if asb_feature_enabled CPU; then
+        _cur_topw="$(cat /proc/sys/walt/sched_topapp_weight_pct 2>/dev/null)"
+        [ -n "$_cur_topw" ] && [ "$_cur_topw" != "$WALT_TOPAPP_WEIGHT" ] && { _need=1; _reason="walt-topapp"; }
+        _cur_edb="$(cat /proc/sys/walt/sched_ed_boost 2>/dev/null)"
+        [ $_need -eq 0 ] && [ -n "$_cur_edb" ] && [ "$_cur_edb" != "$WALT_ED_BOOST" ] && { _need=1; _reason="walt-edboost"; }
+        _cur_ucl="$(cat /dev/cpuctl/top-app/cpu.uclamp.max 2>/dev/null | tr -d '\r')"
+        case "$_cur_ucl" in max) _cur_ucl="100" ;; esac
+        _want_ucl="${UCL_TOP_MAX:-85}"
+        case "$_want_ucl" in max) _want_ucl="100" ;; esac
+        [ $_need -eq 0 ] && [ -n "$_cur_ucl" ] && [ "$_cur_ucl" != "$_want_ucl" ] && { _need=1; _reason="uclamp"; }
+      fi
+      if [ $_need -eq 0 ] && asb_feature_enabled WIFI; then
+        _want_pm="$WIFI_PM_MODE"
+        _cur_pm=""
+        has iw && _cur_pm="$(iw dev wlan0 get power_save 2>/dev/null | awk -F': ' '/Power save/ {print tolower($2)}')"
+        case "$_want_pm" in
+          on) [ -n "$_cur_pm" ] && [ "$_cur_pm" != "on" ] && { _need=1; _reason="wifi-pm"; } ;;
+          off) [ -n "$_cur_pm" ] && [ "$_cur_pm" != "off" ] && { _need=1; _reason="wifi-pm"; } ;;
+        esac
+      fi
+    fi
+    if [ $_need -eq 1 ]; then
+      asb_update_desc
+      asb_log "runtime reconcile reason=$_reason profile=$_now"
+      apply_runtime_profile_now
+      [ "$_reason" = "profile-change" ] && sleep 2 && asb_load_profile && apply_runtime_profile_now
+      _last_profile="$_now"
+    fi
+  done
+) >/dev/null 2>&1 &
+(
+  for _delay in 30 90 300; do
     sleep "$_delay"
-    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
-    sysctlw kernel.sched_schedstats 0
-    sysctlw kernel.timer_migration 0
-    [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
-    [ -e /proc/sys/walt/sched_boost ] && writef_retry /proc/sys/walt/sched_boost 0 1 0 || true
-    [ -e /proc/sys/walt/sched_idle_enough ] && writef_retry /proc/sys/walt/sched_idle_enough $_P_IDLE 1 0 || true
-    [ -e /proc/sys/walt/sched_idle_enough_clust ] && writef_retry /proc/sys/walt/sched_idle_enough_clust "$_P_IDLEC" 1 0 || true
-    apply_uclamp
-    [ -w /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq ] && writef_retry /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq $_P_CPUL 3 0.25 || true
-    [ -w /sys/devices/system/cpu/cpufreq/policy6/scaling_min_freq ] && writef_retry /sys/devices/system/cpu/cpufreq/policy6/scaling_min_freq $_P_CPUB 3 0.25 || true
-    [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct $_P_CLUT 1 0 || true
-    [ -e /proc/sys/walt/sched_cluster_util_thres_pct_clust ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct_clust "$_P_CLUTC" 1 0 || true
-    [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation $_P_COLOC 1 0 || true
-    [ -e /proc/sys/walt/sched_busy_hyst_ns ] && writef_retry /proc/sys/walt/sched_busy_hyst_ns $_P_BHYST 1 0 || true
-    [ -e /proc/sys/walt/sched_boost ] && writef_retry /proc/sys/walt/sched_boost $_P_SBOOST 1 0 || true
-    [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks $_P_RAVG 3 0.5 || true
-    [ -e /proc/sys/walt/sched_pipeline_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_util_thres $_P_PIPE 1 0 || true
-    [ -e /proc/sys/walt/sched_pipeline_non_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_non_special_task_util_thres $_P_PIPEN 1 0 || true
-    [ $IS_WILD -eq 0 ] && apply_cpuset_groups
-    apply_idle
-    apply_wlan0_txqlen
-    apply_wlan0_qdisc
+    asb_load_profile
+    if asb_feature_enabled KERNEL; then
+      writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
+      sysctlw kernel.sched_schedstats 0
+      sysctlw kernel.timer_migration 0
+      [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
+    fi
+    asb_log "scheduled reinforce delay=$_delay profile=$ASB_PROFILE"
+    apply_runtime_profile_now
     has settings && settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
-    apply_wifi_pm
-    apply_doze
-    apply_freq_floors
   done
 ) >/dev/null 2>&1 &
 exit 0
-
-(
-  sleep 20
-  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks $_P_RAVG 5 1 || true
-) &
