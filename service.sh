@@ -94,8 +94,6 @@ asb_feature_enabled() {
 }
 
 has() { command -v "$1" >/dev/null 2>&1; }
-# Проверяет наличие модулей с нестандартным vendor монтированием (ZeroMount/OverlayFS/SUSFS)
-# При их наличии некоторые операции с vendor/WiFi могут вызвать нестабильность
 asb_has_risky_vendor_stack() {
   for _d in /data/adb/modules /data/adb/modules_update /data/adb/ksu/modules /data/adb/ksu/modules_update; do
     [ -d "$_d" ] || continue
@@ -189,7 +187,6 @@ fi
 [ "$_big_start" -ge "$N" ] && _big_start=$((N / 2))
 [ "$_big_start" -lt 2 ] && _big_start=2
 little_end=$((_big_start - 1))
-# Динамические policy-пути (вместо хардкода policy0/policy6)
 LITTLE_POLICY="/sys/devices/system/cpu/cpufreq/policy0"
 BIG_POLICY="/sys/devices/system/cpu/cpufreq/policy${_big_start}"
 [ -d "$BIG_POLICY" ] || BIG_POLICY="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n | tail -1)"
@@ -229,7 +226,6 @@ apply_uclamp() {
   writef_retry /dev/cpuctl/system-background/cpu.uclamp.min $_P_UCL_BG  5 0.3 || true
   writef_retry /dev/cpuctl/foreground/cpu.uclamp.min        $_P_UCL_FG 5 0.3 || true
   writef_retry /dev/cpuctl/top-app/cpu.uclamp.min           $_P_UCL_TOP 5 0.3 || true
-  # UCL_*_MAX читаем из профильных переменных (единый центр правды)
   _ucl_bg_max="${UCL_BG_MAX:-40}"
   _ucl_fg_max="${UCL_FG_MAX:-70}"
   _ucl_top_max="${UCL_TOP_MAX:-85}"
@@ -269,7 +265,6 @@ if asb_feature_enabled CPU; then
   apply_cpuset_groups_all
 fi
 apply_cpugov_hints() {
-  # Читаем из профильных переменных (единый центр правды)
   _rate="${SCHED_RATE:-3000}"
   _up_rate="${SCHED_UP_RATE:-1200}"
   _down_rate="${SCHED_DOWN_RATE:-4000}"
@@ -618,8 +613,6 @@ apply_wifi_pm() {
 }
 asb_feature_enabled WIFI && apply_wifi_pm
 apply_wifi_dtim() {
-  # При нестандартном vendor монтировании (ZeroMount/SUSFS) пропускаем
-  # iw listen-interval — может вызвать нестабильность WiFi
   asb_has_risky_vendor_stack && return 0
   case "$ASB_PROFILE" in
     battery) iw dev wlan0 set listen-interval 10 >/dev/null 2>&1 || true ;;
@@ -878,7 +871,6 @@ apply_idle() {
   writef_retry /sys/class/kgsl/kgsl-3d0/force_bus_on  0 3 0.25 || true
   [ -w /sys/class/kgsl/kgsl-3d0/force_no_nap ] && \
     writef_retry /sys/class/kgsl/kgsl-3d0/force_no_nap "${GPU_FORCE_NO_NAP:-0}" 3 0.25 || true
-  # GPU bus/throttling/thermal — читаем из профильных переменных (единый центр правды)
   [ -w /sys/class/kgsl/kgsl-3d0/bus_split ] && [ -n "$GPU_BUS_SPLIT" ] && \
     writef_retry /sys/class/kgsl/kgsl-3d0/bus_split "$GPU_BUS_SPLIT" 3 0.25 || true
   [ -w /sys/class/kgsl/kgsl-3d0/throttling ] && [ -n "$GPU_THROTTLING" ] && \
