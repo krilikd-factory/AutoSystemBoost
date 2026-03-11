@@ -16,7 +16,7 @@ if [ -z "$MMRL" ] && [ ! -z "$MAGISKTMP" ]; then
 fi
 
 PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
-echo "- AutoSystemBoost V19 KR-4 KR-3 Final"
+echo "- AutoSystemBoost V19.1"
 echo "- Current profile: $PROFILE"
 echo ""
 echo "- Install KSUWebUIStandalone or WebUI X"
