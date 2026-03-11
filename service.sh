@@ -94,6 +94,15 @@ asb_feature_enabled() {
 }
 
 has() { command -v "$1" >/dev/null 2>&1; }
+# Проверяет наличие модулей с нестандартным vendor монтированием (ZeroMount/OverlayFS/SUSFS)
+# При их наличии некоторые операции с vendor/WiFi могут вызвать нестабильность
+asb_has_risky_vendor_stack() {
+  for _d in /data/adb/modules /data/adb/modules_update /data/adb/ksu/modules /data/adb/ksu/modules_update; do
+    [ -d "$_d" ] || continue
+    ls "$_d" 2>/dev/null | grep -qiE 'zeromount|overlayfs|susfs' && return 0
+  done
+  return 1
+}
 writef() { [ -w "$1" ] || return 1; echo "$2" > "$1" 2>/dev/null; }
 readf() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
 writef_retry() {
@@ -609,6 +618,9 @@ apply_wifi_pm() {
 }
 asb_feature_enabled WIFI && apply_wifi_pm
 apply_wifi_dtim() {
+  # При нестандартном vendor монтировании (ZeroMount/SUSFS) пропускаем
+  # iw listen-interval — может вызвать нестабильность WiFi
+  asb_has_risky_vendor_stack && return 0
   case "$ASB_PROFILE" in
     battery) iw dev wlan0 set listen-interval 10 >/dev/null 2>&1 || true ;;
     performance) iw dev wlan0 set listen-interval 1 >/dev/null 2>&1 || true ;;
@@ -947,7 +959,6 @@ apply_runtime_profile_now() {
 # ASB:CPU:END
 apply_bt_settings() {
   if has settings; then
-    settings put global ble_scan_always_enabled 0 >/dev/null 2>&1 || true
     settings put global bluetooth_btsnoop_default_mode 0 >/dev/null 2>&1 || true
     settings put secure bluetooth_btsnoop_default_mode 0 >/dev/null 2>&1 || true
     settings put global bluetooth_btsnoop_log_mode disabled >/dev/null 2>&1 || true
@@ -1025,7 +1036,6 @@ apply_audio_effect_hygiene() {
     resetprop -p --delete persist.bluetooth.gamemode >/dev/null 2>&1 || true
   fi
 }
-asb_feature_enabled KERNEL && apply_audio_effect_hygiene
 if has resetprop; then
     for _k in media.resolution.limit.16bit media.resolution.limit.24bit media.resolution.limit.32bit \
              audio.resolution.limit.16bit audio.resolution.limit.24bit audio.resolution.limit.32bit; do
@@ -1140,8 +1150,6 @@ apply_extra_settings() {
   settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
   settings put global send_action_app_error              0 >/dev/null 2>&1 || true
   settings put global enhanced_connectivity_enabled      0 >/dev/null 2>&1 || true
-  settings put global wifi_scan_always_enabled           0 >/dev/null 2>&1 || true
-  settings put global wifi_wakeup_enabled                0 >/dev/null 2>&1 || true
   settings put global adaptive_connectivity_enabled 0 >/dev/null 2>&1 || true
 }
 apply_extra_settings
