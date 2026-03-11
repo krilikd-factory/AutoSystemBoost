@@ -1160,9 +1160,8 @@ AutoSystemBoost' $APIOCXM
 	if [ "${ASB_KERNEL}" = "true" ]; then
 	  settings put global audio_safe_volume_state 0
 	fi
-	if [ "${ASB_BT}" = "true" ] || [ "${ASB_WIFI}" = "true" ]; then
-	  settings put global ble_scan_always_enabled 0
-	fi
+	# ble_scan_always_enabled убран — может навсегда сломать BT сканирование
+	# особенно при ZeroMount/OverlayFS после перезагрузки
 
 	rm -rf $MODPATH/tools
 
@@ -1170,9 +1169,14 @@ AutoSystemBoost' $APIOCXM
 	  rm -rf /data/*bsplog*/*
 	  rm -rf /data/*/*bsplog*/*
 	  rm -rf /data/*/*/*bsplog*/*
-	  rm -rf /data/*dropbox*/*
-	  rm -rf /data/*/*dropbox*/*
-	  rm -rf /data/*/*/*dropbox*/*
+	  # Android DropBoxManager: оставляем не более 5 самых новых файлов
+	  # (синхронизировано с dropbox_max_files=5 в service.sh)
+	  for _dbdir in /data/system/dropbox /data/vendor/dropbox; do
+	    [ -d "$_dbdir" ] || continue
+	    ls -t "$_dbdir" 2>/dev/null | tail -n +6 | while read -r _f; do
+	      rm -f "$_dbdir/$_f" 2>/dev/null || true
+	    done
+	  done
 	  rm -rf /data/*ramdump*/*
 	  rm -rf /data/*/*ramdump*/*
 	  rm -rf /data/*/*/*ramdump*/*
