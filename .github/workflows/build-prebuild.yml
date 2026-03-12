@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install zip tools
-        run: sudo apt-get update && sudo apt-get install -y zip unzip curl file
+        run: sudo apt-get update && sudo apt-get install -y zip unzip curl file rsync
 
       - name: Download Android NDK
         run: |
@@ -33,23 +33,47 @@ jobs:
           test -x bin/arm64-v8a/asb_governor
           file bin/arm64-v8a/asb_governor || true
 
+      - name: Prepare package tree
+        run: |
+          PKG_DIR="$PWD/.pkg"
+          rm -rf "$PKG_DIR"
+          mkdir -p "$PKG_DIR"
+
+          rsync -a ./ "$PKG_DIR"/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'android-ndk.zip' \
+            --exclude 'android-ndk-r27c' \
+            --exclude '.pkg' \
+            --exclude '*.zip' \
+            --exclude '__MACOSX' \
+            --exclude '*.DS_Store'
+
+          rm -rf "$PKG_DIR/bin"
+          mkdir -p "$PKG_DIR/bin"
+          install -m 0755 bin/arm64-v8a/asb_governor "$PKG_DIR/bin/asb_governor"
+
+          rm -f "$PKG_DIR/bin/README-prebuilt.txt"
+          rm -f "$PKG_DIR/banner.png"
+          rm -f "$PKG_DIR/CHANGELOG.md"
+          rm -f "$PKG_DIR/README.md"
+          rm -f "$PKG_DIR/README.ru.md"
+          rm -f "$PKG_DIR/update.json"
+
       - name: Create release zip
         run: |
-          rm -f ASB-V22-AI-prebuilt.zip
-          zip -r ASB-V22-AI-prebuilt.zip . \
-            -x '.git/*' '.github/*' 'android-ndk.zip' 'android-ndk-r27c/*' \
-               '*.DS_Store' '__MACOSX/*'
+          rm -f ASB-V21.zip
+          cd .pkg
+          zip -r ../ASB-V21.zip .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ASB-V22-AI-prebuilt
-          path: |
-            bin/arm64-v8a/asb_governor
-            ASB-V22-AI-prebuilt.zip
+          name: ASB-V21
+          path: ASB-V21.zip
 
       - name: Upload release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: ASB-V22-AI-prebuilt.zip
+          files: ASB-V21.zip
