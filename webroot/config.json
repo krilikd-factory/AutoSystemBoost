@@ -1,0 +1,10 @@
+{
+  "title": "AutoSystemBoost",
+  "icon": "icon.png",
+  "windowResize": false,
+  "backInterceptor": "javascript",
+  "contentSecurityPolicy": "default-src 'self' data: blob: {domain}; script-src * 'unsafe-inline' 'unsafe-eval' {domain}; style-src 'self' 'unsafe-inline' {domain}; connect-src *; img-src *;",
+  "statusBarColor": "#020806",
+  "navigationBarColor": "#020806",
+  "fullscreen": true
+}
