@@ -164,35 +164,35 @@ done
 sleep 15
 asb_update_desc
 
-ASB_GOV="$MODDIR/bin/asb_governor"
+ASB_GOV="$MODDIR/bin/asb"
 ASB_GOV_ENABLED=0
 
-asb_governor_running() {
+asb_running() {
   [ -f /dev/.asb/governor.pid ] || return 1
   _gpid="$(cat /dev/.asb/governor.pid 2>/dev/null)"
   [ -n "$_gpid" ] && kill -0 "$_gpid" 2>/dev/null
 }
 
-asb_governor_start() {
+asb_start() {
   [ -x "$ASB_GOV" ] || return 1
-  asb_governor_running && return 0
+  asb_running && return 0
   mkdir -p /dev/.asb
   nice -n 10 "$ASB_GOV" >/dev/null 2>&1 &
   sleep 0.3
-  asb_governor_running || return 1
+  asb_running || return 1
   ASB_GOV_ENABLED=1
   asb_log "governor started (pid=$(cat /dev/.asb/governor.pid 2>/dev/null))"
   return 0
 }
 
-asb_governor_set_profile() {
+asb_set_profile() {
   [ "$ASB_GOV_ENABLED" -eq 1 ] || return 0
-  asb_governor_running || return 0
+  asb_running || return 0
   "$ASB_GOV" "profile:$ASB_PROFILE" >/dev/null 2>&1 || true
 }
 
 if asb_feature_enabled CPU && [ -x "$ASB_GOV" ]; then
-  asb_governor_start && ASB_GOV_ENABLED=1
+  asb_start && ASB_GOV_ENABLED=1
 fi
 
 # ASB:CPU:BEGIN
@@ -1287,7 +1287,7 @@ apply_extra_settings
   _reconcile_fast=3
   _last_wifi_check=0
   while true; do
-    if [ "$ASB_GOV_ENABLED" = "1" ] && asb_governor_running; then
+    if [ "$ASB_GOV_ENABLED" = "1" ] && asb_running; then
       _rec_scr=0
       for _rsp in /sys/kernel/oplus_display/panel_power_status                   /sys/class/backlight/panel0-backlight/brightness; do
         [ -r "$_rsp" ] || continue
@@ -1331,7 +1331,7 @@ apply_extra_settings
         _last_screen="$_cur_screen"
       fi
       if [ $_need -eq 0 ] && asb_feature_enabled CPU; then
-        if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_governor_running; then
+        if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_running; then
           _cur_topw="$(cat /proc/sys/walt/sched_topapp_weight_pct 2>/dev/null)"
           [ -n "$_cur_topw" ] && [ "$_cur_topw" != "$WALT_TOPAPP_WEIGHT" ] && { _need=1; _reason="walt-topapp"; }
           _cur_edb="$(cat /proc/sys/walt/sched_ed_boost 2>/dev/null)"
@@ -1364,9 +1364,9 @@ apply_extra_settings
       _reconcile_fast=3
       asb_update_desc
       asb_log "runtime reconcile reason=$_reason profile=$_now"
-      if [ "$ASB_GOV_ENABLED" = "1" ] && asb_governor_running; then
+      if [ "$ASB_GOV_ENABLED" = "1" ] && asb_running; then
         if [ "$_reason" = "profile-change" ]; then
-          asb_governor_set_profile
+          asb_set_profile
           asb_feature_enabled VM   && apply_vm
           asb_feature_enabled NET  && apply_net
           asb_feature_enabled WIFI && apply_wlan0_txqlen
@@ -1399,7 +1399,7 @@ apply_extra_settings
     [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
   fi
   if asb_feature_enabled CPU; then
-    if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_governor_running; then
+    if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_running; then
       apply_walt_live
     fi
   fi
@@ -1414,7 +1414,7 @@ apply_extra_settings
     [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
   fi
   asb_log "full reinforce 5m profile=$ASB_PROFILE"
-  if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_governor_running; then
+  if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_running; then
     asb_feature_enabled CPU && apply_walt_live
     asb_feature_enabled CPU && apply_uclamp
     asb_feature_enabled CPU && apply_screen_aware_caps
@@ -1427,9 +1427,9 @@ apply_extra_settings
   [ "$ASB_GOV_ENABLED" -eq 1 ] || exit 0
   while true; do
     sleep 300
-    if ! asb_governor_running; then
+    if ! asb_running; then
       asb_log "governor watchdog: process died, restarting"
-      asb_governor_start || {
+      asb_start || {
         asb_log "governor restart failed, entering shell fallback"
         asb_load_profile
         asb_feature_enabled CPU && apply_runtime_profile_now
@@ -1449,7 +1449,7 @@ apply_extra_settings
       _gpid="$(cat /dev/.asb/governor.pid 2>/dev/null)"
       [ -n "$_gpid" ] && kill "$_gpid" 2>/dev/null
       sleep 1
-      asb_governor_start || {
+      asb_start || {
         asb_log "governor restart failed after stale, shell fallback"
         asb_load_profile
         asb_feature_enabled CPU && apply_runtime_profile_now
