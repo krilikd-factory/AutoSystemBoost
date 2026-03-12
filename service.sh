@@ -72,7 +72,11 @@ asb_map_profile_vars() {
 
 asb_load_profile() {
   ASB_PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null)"
-  case "$ASB_PROFILE" in performance|battery|balanced) : ;; *) ASB_PROFILE=balanced ;; esac
+  case "$ASB_PROFILE" in
+    performance|battery|balanced) : ;;
+
+    *) ASB_PROFILE=balanced ;;
+  esac
   PROFILE="$ASB_PROFILE"
   if [ -r "$MODDIR/profiles/$ASB_PROFILE.sh" ]; then
     . "$MODDIR/profiles/$ASB_PROFILE.sh"
@@ -320,7 +324,6 @@ apply_vm() {
   sysctlw vm.watermark_scale_factor $_P_WMARK
   sysctlw vm.min_free_kbytes $_P_MINFREE
   sysctlw vm.oom_kill_allocating_task 1
-  # Extra battery savings
   if [ "$ASB_PROFILE" = "battery" ]; then
     [ -e /proc/sys/vm/drop_caches ] || true
     [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 5 || true
@@ -568,7 +571,6 @@ asb_feature_enabled NET && apply_mobile_qdisc
 # ASB:WIFI:BEGIN
 apply_wifi_pm() {
   wait_path /sys/class/net/wlan0 10 || return 0
-  # Wait for wlan0 to be actually associated/up before setting power_save
   _wt=0
   while [ $_wt -lt 15 ]; do
     _wst="$(cat /sys/class/net/wlan0/operstate 2>/dev/null)"
@@ -723,7 +725,6 @@ apply_kernel() {
   [ -e /proc/sys/walt/sched_ed_boost ] && writef_retry /proc/sys/walt/sched_ed_boost $_P_EDB 1 0 || true
   [ -e /proc/sys/walt/sched_topapp_weight_pct ] && writef_retry /proc/sys/walt/sched_topapp_weight_pct $_P_TOPW 1 0 || true
   [ -e /proc/sys/walt/sched_min_task_util_for_boost ] && writef_retry /proc/sys/walt/sched_min_task_util_for_boost $_P_MINTB 1 0 || true
-  # Per-profile kernel extras
   case "$ASB_PROFILE" in
     battery)
       [ -e /proc/sys/kernel/sched_energy_aware ] && sysctlw kernel.sched_energy_aware 1 || true
@@ -824,6 +825,55 @@ apply_cpufreq_caps() {
   done
 }
 asb_feature_enabled CPU && apply_cpufreq_caps
+
+asb_screen_on() {
+  dumpsys power 2>/dev/null | grep -q "mHoldingDisplaySuspendBlocker=true"
+}
+apply_screen_aware_caps() {
+  asb_feature_enabled CPU || return 0
+  asb_load_profile
+  _son=0
+  asb_screen_on && _son=1
+  case "$ASB_PROFILE" in
+    balanced)
+      if [ "$_son" -eq 1 ]; then
+        _P_CPUCAP_L=""
+        _P_CPUCAP_B=""
+        CPU_CAP_LITTLE=""
+        CPU_CAP_BIG=""
+      fi
+      ;;
+    battery)
+      if [ "$_son" -eq 1 ]; then
+        # Экран ON: plain caps — минимум для отзывчивости UI
+        CPU_CAP_LITTLE=729600
+        CPU_CAP_BIG=1075200
+      else
+        # Экран OFF: free caps — максимальная экономия
+        CPU_CAP_LITTLE=384000
+        CPU_CAP_BIG=768000
+      fi
+      _P_CPUCAP_L="$CPU_CAP_LITTLE"
+      _P_CPUCAP_B="$CPU_CAP_BIG"
+      ;;
+    performance)
+      if [ "$_son" -eq 1 ]; then
+        CPU_CAP_LITTLE=3072000
+        CPU_CAP_BIG=3648000
+      else
+        CPU_CAP_LITTLE=""
+        CPU_CAP_BIG=""
+      fi
+      _P_CPUCAP_L="${CPU_CAP_LITTLE:-}"
+      _P_CPUCAP_B="${CPU_CAP_BIG:-}"
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+  apply_cpufreq_caps
+  asb_log "screen_aware_caps: profile=$ASB_PROFILE screen_on=$_son cap_l=${CPU_CAP_LITTLE:-(none)} cap_b=${CPU_CAP_BIG:-(none)}"
+}
 asb_cpufreq_caps_drifted() {
   asb_feature_enabled CPU || return 1
   for _pol_dir in /sys/devices/system/cpu/cpufreq/policy*; do
@@ -908,7 +958,7 @@ apply_runtime_profile_now() {
     apply_cpuset_groups
     apply_cpuset_groups_all
     apply_idle
-    apply_cpufreq_caps
+    apply_screen_aware_caps
     apply_gpu_caps
     [ -w "$LITTLE_POLICY/scaling_min_freq" ] && writef_retry "$LITTLE_POLICY/scaling_min_freq" "$_P_CPUL" 4 0.25 || true
     [ -w "$BIG_POLICY/scaling_min_freq" ] && writef_retry "$BIG_POLICY/scaling_min_freq" "$_P_CPUB" 4 0.25 || true
@@ -929,7 +979,7 @@ apply_runtime_profile_now() {
     asb_feature_enabled CPU && apply_cpuset_groups
     asb_feature_enabled CPU && apply_cpuset_groups_all
     asb_feature_enabled CPU && apply_idle
-    asb_feature_enabled CPU && apply_cpufreq_caps
+    asb_feature_enabled CPU && apply_screen_aware_caps
     asb_feature_enabled CPU && apply_gpu_caps
     asb_feature_enabled WIFI && apply_wifi_pm
     asb_feature_enabled WIFI && apply_wifi_dtim
@@ -942,7 +992,7 @@ apply_runtime_profile_now() {
     asb_feature_enabled CPU && apply_cpuset_groups
     asb_feature_enabled CPU && apply_cpuset_groups_all
     asb_feature_enabled CPU && apply_idle
-    asb_feature_enabled CPU && apply_cpufreq_caps
+    asb_feature_enabled CPU && apply_screen_aware_caps
     asb_feature_enabled CPU && apply_gpu_caps
     asb_feature_enabled WIFI && apply_wifi_pm
     asb_feature_enabled WIFI && apply_wifi_dtim
@@ -1045,6 +1095,64 @@ apply_logd_props() {
   setprop persist.logd.logpersistd stop 2>/dev/null
 }
 asb_feature_enabled LOG && apply_logd_props
+
+apply_camera_experimental() {
+  _orig="$MODDIR/config/camera_orig.conf"
+
+  if [ ! -f "$_orig" ]; then
+    mkdir -p "$MODDIR/config"
+    echo "# ASB camera original values — для отката при удалении модуля" > "$_orig"
+    for _prop in \
+      persist.vendor.camera.mfnr.enable \
+      persist.vendor.camera.eis.enable \
+      persist.vendor.camera.sat.fallback.dist \
+      persist.vendor.camera.main.hfr \
+      persist.vendor.camera.fast.af; do
+      _v="$(getprop "$_prop" 2>/dev/null)"
+      echo "${_prop}=${_v}" >> "$_orig"
+    done
+    asb_log "camera: saved originals to camera_orig.conf"
+  fi
+
+  has resetprop || return 0
+  resetprop -n persist.vendor.camera.mfnr.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.eis.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.sat.fallback.dist 2.0 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.main.hfr 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.fast.af 1 >/dev/null 2>&1 || true
+  asb_log "camera experimental: applied (MFNR+EIS+SAT+HFR+FastAF)"
+}
+asb_feature_enabled CAMERA && apply_camera_experimental
+
+apply_audio_boost() {
+  _as_pid="$(pidof audioserver 2>/dev/null | head -1)"
+  [ -z "$_as_pid" ] && return 0
+  has chrt || return 0
+  renice -10 "$_as_pid" >/dev/null 2>&1 || true
+  chrt -r -p 52 "$_as_pid" >/dev/null 2>&1 || true
+  asb_log "audio boost: audioserver pid=$_as_pid renice=-10 chrt=RR/52"
+}
+asb_feature_enabled BT && ( sleep 15 && apply_audio_boost ) >/dev/null 2>&1 &
+
+asb_check_perfhal_drift() {
+  asb_load_profile
+  [ -z "$CPU_CAP_BIG" ] && return 0
+  _want="$CPU_CAP_BIG"
+  _drift_pol=""
+  for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
+    [ -d "$_pol" ] || continue
+    _rel="$(cat "$_pol/related_cpus" 2>/dev/null | awk '{print $1}')"
+    case "$_rel" in ''|*[!0-9]*) continue ;; esac
+    [ "$_rel" -gt "$little_end" ] 2>/dev/null && { _drift_pol="$_pol"; break; }
+  done
+  [ -z "$_drift_pol" ] && return 0
+  _cur="$(cat "$_drift_pol/scaling_max_freq" 2>/dev/null)"
+  [ -z "$_cur" ] && return 0
+  if [ "$_cur" != "$_want" ]; then
+    asb_log "PERF-HAL DRIFT: $(basename $_drift_pol) max=${_cur} (expected ${_want}) — likely overridden by PowerHAL/thermal"
+  fi
+}
+
 svc_state() { getprop "init.svc.$1" 2>/dev/null; }
 svc_exists() { [ -n "$(svc_state "$1")" ]; }
 svc_running() { [ "$(svc_state "$1")" = "running" ]; }
@@ -1152,10 +1260,14 @@ apply_extra_settings
 ) >/dev/null 2>&1 &
 (
   _last_profile=""
+  _last_screen="-1"
   while true; do
     sleep 45
     _now="$(cat "$MODDIR/current_profile" 2>/dev/null)"
-    [ -z "$_now" ] && _now="balanced"
+    case "$_now" in
+      battery|balanced|performance) : ;;
+      *) _now="balanced" ;;
+    esac
     asb_load_profile
     _need=0
     _reason=""
@@ -1163,7 +1275,14 @@ apply_extra_settings
       _need=1
       _reason="profile-change"
     else
-      if asb_feature_enabled CPU; then
+      _cur_screen=0
+      asb_screen_on && _cur_screen=1
+      if [ "$_cur_screen" != "$_last_screen" ]; then
+        _need=1
+        _reason="screen-state"
+        _last_screen="$_cur_screen"
+      fi
+      if [ $_need -eq 0 ] && asb_feature_enabled CPU; then
         _cur_topw="$(cat /proc/sys/walt/sched_topapp_weight_pct 2>/dev/null)"
         [ -n "$_cur_topw" ] && [ "$_cur_topw" != "$WALT_TOPAPP_WEIGHT" ] && { _need=1; _reason="walt-topapp"; }
         _cur_edb="$(cat /proc/sys/walt/sched_ed_boost 2>/dev/null)"
@@ -1187,8 +1306,13 @@ apply_extra_settings
     if [ $_need -eq 1 ]; then
       asb_update_desc
       asb_log "runtime reconcile reason=$_reason profile=$_now"
-      apply_runtime_profile_now
-      [ "$_reason" = "profile-change" ] && sleep 2 && asb_load_profile && apply_runtime_profile_now
+      if [ "$_reason" = "screen-state" ]; then
+        asb_feature_enabled CPU && apply_screen_aware_caps
+      else
+        apply_runtime_profile_now
+        [ "$_reason" = "profile-change" ] && sleep 2 && asb_load_profile && apply_runtime_profile_now
+      fi
+      asb_feature_enabled LOG && asb_check_perfhal_drift
       _last_profile="$_now"
     fi
   done
