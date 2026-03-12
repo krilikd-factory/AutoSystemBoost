@@ -20,3 +20,16 @@ if [ -f $INFO ]; then
   done < $INFO
   rm -f $INFO
 fi
+
+_cam_orig="/data/adb/modules/AutoSystemBoost/config/camera_orig.conf"
+if [ -f "$_cam_orig" ]; then
+  while IFS= read -r _line; do
+    case "$_line" in "#"*|"") continue ;; esac
+    _prop="${_line%%=*}"
+    _val="${_line#*=}"
+    if [ -n "$_prop" ]; then
+      resetprop "$_prop" "$_val" >/dev/null 2>&1 || true
+    fi
+  done < "$_cam_orig"
+  rm -f "$_cam_orig"
+fi
