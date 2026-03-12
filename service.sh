@@ -1287,7 +1287,16 @@ apply_extra_settings
   _reconcile_fast=3
   _last_wifi_check=0
   while true; do
-    if [ "$_reconcile_fast" -gt 0 ]; then
+    if [ "$ASB_GOV_ENABLED" = "1" ] && asb_governor_running; then
+      _rec_scr=0
+      for _rsp in /sys/kernel/oplus_display/panel_power_status                   /sys/class/backlight/panel0-backlight/brightness; do
+        [ -r "$_rsp" ] || continue
+        _rspv="$(cat "$_rsp" 2>/dev/null)"
+        case "$_rspv" in 0|"") ;; *) _rec_scr=1 ;; esac
+        break
+      done
+      [ "$_rec_scr" -eq 1 ] && sleep 120 || sleep 180
+    elif [ "$_reconcile_fast" -gt 0 ]; then
       sleep 45
       _reconcile_fast=$((_reconcile_fast - 1))
     else
@@ -1322,17 +1331,19 @@ apply_extra_settings
         _last_screen="$_cur_screen"
       fi
       if [ $_need -eq 0 ] && asb_feature_enabled CPU; then
-        _cur_topw="$(cat /proc/sys/walt/sched_topapp_weight_pct 2>/dev/null)"
-        [ -n "$_cur_topw" ] && [ "$_cur_topw" != "$WALT_TOPAPP_WEIGHT" ] && { _need=1; _reason="walt-topapp"; }
-        _cur_edb="$(cat /proc/sys/walt/sched_ed_boost 2>/dev/null)"
-        [ $_need -eq 0 ] && [ -n "$_cur_edb" ] && [ "$_cur_edb" != "$WALT_ED_BOOST" ] && { _need=1; _reason="walt-edboost"; }
-        _cur_ravg="$(cat /proc/sys/walt/sched_ravg_window_nr_ticks 2>/dev/null)"
-        [ $_need -eq 0 ] && [ -n "$_cur_ravg" ] && [ "$_cur_ravg" != "$RAVG_TICKS" ] && { _need=1; _reason="walt-ravg"; }
-        _cur_ucl="$(cat /dev/cpuctl/top-app/cpu.uclamp.max 2>/dev/null | tr -d '\r')"
-        case "$_cur_ucl" in max) _cur_ucl="100" ;; esac
-        _want_ucl="${UCL_TOP_MAX:-85}"
-        case "$_want_ucl" in max) _want_ucl="100" ;; esac
-        [ $_need -eq 0 ] && [ -n "$_cur_ucl" ] && [ "$_cur_ucl" != "$_want_ucl" ] && { _need=1; _reason="uclamp"; }
+        if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_governor_running; then
+          _cur_topw="$(cat /proc/sys/walt/sched_topapp_weight_pct 2>/dev/null)"
+          [ -n "$_cur_topw" ] && [ "$_cur_topw" != "$WALT_TOPAPP_WEIGHT" ] && { _need=1; _reason="walt-topapp"; }
+          _cur_edb="$(cat /proc/sys/walt/sched_ed_boost 2>/dev/null)"
+          [ $_need -eq 0 ] && [ -n "$_cur_edb" ] && [ "$_cur_edb" != "$WALT_ED_BOOST" ] && { _need=1; _reason="walt-edboost"; }
+          _cur_ravg="$(cat /proc/sys/walt/sched_ravg_window_nr_ticks 2>/dev/null)"
+          [ $_need -eq 0 ] && [ -n "$_cur_ravg" ] && [ "$_cur_ravg" != "$RAVG_TICKS" ] && { _need=1; _reason="walt-ravg"; }
+          _cur_ucl="$(cat /dev/cpuctl/top-app/cpu.uclamp.max 2>/dev/null | tr -d '\r')"
+          case "$_cur_ucl" in max) _cur_ucl="100" ;; esac
+          _want_ucl="${UCL_TOP_MAX:-85}"
+          case "$_want_ucl" in max) _want_ucl="100" ;; esac
+          [ $_need -eq 0 ] && [ -n "$_cur_ucl" ] && [ "$_cur_ucl" != "$_want_ucl" ] && { _need=1; _reason="uclamp"; }
+        fi
       fi
       if [ $_need -eq 0 ] && asb_feature_enabled WIFI; then
         _ts_now="$(date +%s 2>/dev/null || echo 0)"
@@ -1387,7 +1398,11 @@ apply_extra_settings
     sysctlw kernel.timer_migration 0
     [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
   fi
-  asb_feature_enabled CPU && apply_walt_live
+  if asb_feature_enabled CPU; then
+    if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_governor_running; then
+      apply_walt_live
+    fi
+  fi
   asb_log "light reinforce 60s profile=$ASB_PROFILE"
   has settings && settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
   sleep 240
@@ -1412,17 +1427,36 @@ apply_extra_settings
   [ "$ASB_GOV_ENABLED" -eq 1 ] || exit 0
   while true; do
     sleep 300
-    asb_governor_running && continue
-    # Governor упал — перезапускаем
-    asb_log "governor watchdog: restart"
-    asb_governor_start || {
-      asb_log "governor restart failed, fallback to sh mode"
-      # Fallback: применяем статичные caps
-      asb_load_profile
-      asb_feature_enabled CPU && apply_runtime_profile_now
-      # Выходим из watchdog (теперь reconcile loop управляет всем)
-      exit 0
-    }
+    if ! asb_governor_running; then
+      asb_log "governor watchdog: process died, restarting"
+      asb_governor_start || {
+        asb_log "governor restart failed, entering shell fallback"
+        asb_load_profile
+        asb_feature_enabled CPU && apply_runtime_profile_now
+        ASB_GOV_ENABLED=0
+        exit 0
+      }
+      continue
+    fi
+    _state_age=0
+    if [ -f /dev/.asb/state ]; then
+      _state_mtime="$(stat -c %Y /dev/.asb/state 2>/dev/null || echo 0)"
+      _now_ts="$(date +%s 2>/dev/null || echo 0)"
+      _state_age=$((_now_ts - _state_mtime))
+    fi
+    if [ "$_state_age" -gt 90 ] 2>/dev/null; then
+      asb_log "governor watchdog: state stale (${_state_age}s), restarting"
+      _gpid="$(cat /dev/.asb/governor.pid 2>/dev/null)"
+      [ -n "$_gpid" ] && kill "$_gpid" 2>/dev/null
+      sleep 1
+      asb_governor_start || {
+        asb_log "governor restart failed after stale, shell fallback"
+        asb_load_profile
+        asb_feature_enabled CPU && apply_runtime_profile_now
+        ASB_GOV_ENABLED=0
+        exit 0
+      }
+    fi
   done
 ) >/dev/null 2>&1 &
 
