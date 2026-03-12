@@ -163,6 +163,38 @@ until [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; do
 done
 sleep 15
 asb_update_desc
+
+ASB_GOV="$MODDIR/bin/asb_governor"
+ASB_GOV_ENABLED=0
+
+asb_governor_running() {
+  [ -f /dev/.asb/governor.pid ] || return 1
+  _gpid="$(cat /dev/.asb/governor.pid 2>/dev/null)"
+  [ -n "$_gpid" ] && kill -0 "$_gpid" 2>/dev/null
+}
+
+asb_governor_start() {
+  [ -x "$ASB_GOV" ] || return 1
+  asb_governor_running && return 0
+  mkdir -p /dev/.asb
+  nice -n 10 "$ASB_GOV" >/dev/null 2>&1 &
+  sleep 0.3
+  asb_governor_running || return 1
+  ASB_GOV_ENABLED=1
+  asb_log "governor started (pid=$(cat /dev/.asb/governor.pid 2>/dev/null))"
+  return 0
+}
+
+asb_governor_set_profile() {
+  [ "$ASB_GOV_ENABLED" -eq 1 ] || return 0
+  asb_governor_running || return 0
+  "$ASB_GOV" "profile:$ASB_PROFILE" >/dev/null 2>&1 || true
+}
+
+if asb_feature_enabled CPU && [ -x "$ASB_GOV" ]; then
+  asb_governor_start && ASB_GOV_ENABLED=1
+fi
+
 # ASB:CPU:BEGIN
 KREL="$(uname -r 2>/dev/null)"
 IS_WILD=0
@@ -326,7 +358,7 @@ apply_vm() {
   sysctlw vm.oom_kill_allocating_task 1
   if [ "$ASB_PROFILE" = "battery" ]; then
     [ -e /proc/sys/vm/drop_caches ] || true
-    [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 5 || true
+    [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 1 || true
     [ -e /proc/sys/vm/block_dump ] && writef_retry /proc/sys/vm/block_dump 0 1 0 || true
   else
     [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 0 || true
@@ -372,9 +404,9 @@ apply_net() {
     [ -e /proc/sys/net/ipv6/tcp_congestion_control ] && sysctl_try net.ipv6.tcp_congestion_control bbr cubic reno
   fi
   case "$ASB_PROFILE" in
-    performance) _pca=160; _pss=240; _rmem_max=67108864; _wmem_max=67108864; _optmem=4194304 ;;
-    battery) _pca=80; _pss=110; _rmem_max=1048576; _wmem_max=1048576; _optmem=65536 ;;
-    *) _pca=110; _pss=170; _rmem_max=16777216; _wmem_max=16777216; _optmem=1048576 ;;
+    performance) _pca=160; _pss=240 ;;
+    battery)     _pca=80;  _pss=110 ;;
+    *)           _pca=110; _pss=170 ;;
   esac
   sysctlw net.ipv4.tcp_pacing_ca_ratio $_pca
   sysctlw net.ipv4.tcp_pacing_ss_ratio $_pss
@@ -384,9 +416,9 @@ apply_net() {
   sysctlw net.ipv4.tcp_moderate_rcvbuf 1
   sysctlw net.ipv4.tcp_rmem "$_P_TCP_RMEM"
   sysctlw net.ipv4.tcp_wmem "$_P_TCP_WMEM"
-  sysctlw net.core.rmem_max $_rmem_max
-  sysctlw net.core.wmem_max $_wmem_max
-  sysctlw net.core.optmem_max $_optmem
+  sysctlw net.core.rmem_max "$NET_RMEM_MAX"
+  sysctlw net.core.wmem_max "$NET_WMEM_MAX"
+  sysctlw net.core.optmem_max "$NET_OPTMEM_MAX"
   sysctlw net.ipv4.tcp_fastopen $_P_TCP_FASTOPEN
   sysctlw net.ipv4.tcp_sack 1
   sysctlw net.ipv4.tcp_dsack 1
@@ -408,7 +440,7 @@ apply_net() {
   sysctlw net.ipv4.tcp_keepalive_intvl  75
   sysctlw net.ipv4.tcp_keepalive_probes 9
   sysctlw net.ipv4.tcp_fin_timeout          $_P_TCP_FIN
-  sysctlw net.ipv4.tcp_no_metrics_save       1
+  sysctlw net.ipv4.tcp_no_metrics_save 1
   sysctlw net.core.somaxconn 512
   sysctlw net.ipv4.tcp_max_syn_backlog 2048
   sysctlw net.core.netdev_max_backlog $_P_NET_BACKLOG
@@ -598,17 +630,8 @@ apply_wifi_pm() {
       [ -e /sys/module/wlan/parameters/wlan_pm ] && writef_retry /sys/module/wlan/parameters/wlan_pm 1 6 0.5 || true
       ;;
     *)
-      _tx1=$(cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null || echo 0)
-      sleep 1
-      _tx2=$(cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null || echo 0)
-      _delta=$(( _tx2 - _tx1 ))
-      if [ "$_delta" -gt 524288 ]; then
-        iw dev wlan0 set power_save off >/dev/null 2>&1 || true
-        writef_retry /sys/module/wlan/parameters/wlan_pm 0 3 0.25 || true
-      else
-        iw dev wlan0 set power_save on >/dev/null 2>&1 || true
-        writef_retry /sys/module/wlan/parameters/wlan_pm 1 3 0.25 || true
-      fi
+      iw dev wlan0 set power_save on >/dev/null 2>&1 || true
+      writef_retry /sys/module/wlan/parameters/wlan_pm 1 3 0.25 || true
       setprop persist.vendor.wlan.scan_throttle 1 2>/dev/null || true
       ;;
   esac
@@ -643,7 +666,7 @@ asb_feature_enabled WIFI && apply_wifi_dtim
     sleep 2
     t=$((t+2))
   done
-  for delay in 0 5 10 20 30 45; do
+  for delay in 0 15; do
     [ $delay -gt 0 ] && sleep $delay
     asb_feature_enabled WIFI && apply_wlan0_txqlen
     asb_feature_enabled WIFI && apply_wlan0_qdisc
@@ -733,6 +756,8 @@ apply_kernel() {
       [ -e /proc/sys/kernel/timer_migration ] && sysctlw kernel.timer_migration 0 || true
       [ -e /proc/sys/walt/sched_conservative_pl ] && writef_retry /proc/sys/walt/sched_conservative_pl 1 1 0 || true
       [ -e /proc/sys/walt/sched_suppress_region2_cpus ] && writef_retry /proc/sys/walt/sched_suppress_region2_cpus 1 1 0 || true
+      writef /sys/module/lpm_levels/parameters/sleep_disabled 0 || true
+      [ -e /sys/module/lpm_levels/parameters/lpm_prediction ] &&         writef /sys/module/lpm_levels/parameters/lpm_prediction 1 || true
       ;;
     performance)
       [ -e /proc/sys/kernel/sched_energy_aware ] && sysctlw kernel.sched_energy_aware 0 || true
@@ -827,6 +852,22 @@ apply_cpufreq_caps() {
 asb_feature_enabled CPU && apply_cpufreq_caps
 
 asb_screen_on() {
+  for _dp in /sys/kernel/oplus_display/panel_power_status               /sys/kernel/oplus_display/disp_on_notify; do
+    [ -r "$_dp" ] || continue
+    _dpv="$(cat "$_dp" 2>/dev/null)"
+    case "$_dpv" in 1|on|ON) return 0 ;; 0|off|OFF) return 1 ;; esac
+  done
+  for _df in /sys/class/drm/card0-DSI-1/status /sys/class/drm/card0-DSI-2/status; do
+    [ -r "$_df" ] || continue
+    [ "$(cat "$_df" 2>/dev/null)" = "connected" ] && return 0
+    return 1
+  done
+  for _bl in /sys/class/backlight/panel0-backlight/brightness               /sys/class/leds/lcd-backlight/brightness; do
+    [ -r "$_bl" ] || continue
+    _blv="$(cat "$_bl" 2>/dev/null)"
+    [ "${_blv:-0}" -gt 0 ] 2>/dev/null && return 0
+    return 1
+  done
   dumpsys power 2>/dev/null | grep -q "mHoldingDisplaySuspendBlocker=true"
 }
 apply_screen_aware_caps() {
@@ -845,11 +886,9 @@ apply_screen_aware_caps() {
       ;;
     battery)
       if [ "$_son" -eq 1 ]; then
-        # Экран ON: plain caps — минимум для отзывчивости UI
         CPU_CAP_LITTLE=729600
         CPU_CAP_BIG=1075200
       else
-        # Экран OFF: free caps — максимальная экономия
         CPU_CAP_LITTLE=384000
         CPU_CAP_BIG=768000
       fi
@@ -972,26 +1011,10 @@ apply_runtime_profile_now() {
   asb_feature_enabled WIFI && apply_wifi_dtim
   asb_feature_enabled VM && apply_doze
   (
-    sleep 6
+    sleep 10
     asb_load_profile
     asb_feature_enabled CPU && apply_walt_live
     asb_feature_enabled CPU && apply_uclamp
-    asb_feature_enabled CPU && apply_cpuset_groups
-    asb_feature_enabled CPU && apply_cpuset_groups_all
-    asb_feature_enabled CPU && apply_idle
-    asb_feature_enabled CPU && apply_screen_aware_caps
-    asb_feature_enabled CPU && apply_gpu_caps
-    asb_feature_enabled WIFI && apply_wifi_pm
-    asb_feature_enabled WIFI && apply_wifi_dtim
-  ) >/dev/null 2>&1 &
-  (
-    sleep 18
-    asb_load_profile
-    asb_feature_enabled CPU && apply_walt_live
-    asb_feature_enabled CPU && apply_uclamp
-    asb_feature_enabled CPU && apply_cpuset_groups
-    asb_feature_enabled CPU && apply_cpuset_groups_all
-    asb_feature_enabled CPU && apply_idle
     asb_feature_enabled CPU && apply_screen_aware_caps
     asb_feature_enabled CPU && apply_gpu_caps
     asb_feature_enabled WIFI && apply_wifi_pm
@@ -1228,7 +1251,7 @@ apply_doze() {
   has settings || return 0
   case "$ASB_PROFILE" in
     battery)
-      _DIC="light_after_inactive_to=20000,light_pre_idle_to=3000,light_max_idle_to=86400000,light_idle_to=8000,light_idle_factor=2.5,light_idle_maintenance_min_budget=1500,light_idle_maintenance_max_budget=8000,inactive_to=60000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=5000,idle_pending_to=2500,max_idle_pending_to=5000,idle_pending_factor=2.5,idle_to=1800000,max_idle_to=43200000,idle_factor=2.5,min_time_to_alarm=60000,max_temp_app_whitelist_duration=30000,mms_temp_app_whitelist_duration=15000,sms_temp_app_whitelist_duration=10000" ;;
+      _DIC="light_after_inactive_to=15000,light_pre_idle_to=2000,light_max_idle_to=86400000,light_idle_to=5000,light_idle_factor=3.0,light_idle_maintenance_min_budget=1000,light_idle_maintenance_max_budget=5000,inactive_to=30000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=3000,idle_pending_to=1500,max_idle_pending_to=3000,idle_pending_factor=3.0,idle_to=900000,max_idle_to=43200000,idle_factor=3.0,min_time_to_alarm=30000,max_temp_app_whitelist_duration=20000,mms_temp_app_whitelist_duration=10000,sms_temp_app_whitelist_duration=8000" ;;
     performance)
       _DIC="light_after_inactive_to=60000,light_pre_idle_to=10000,light_max_idle_to=86400000,light_idle_to=15000,light_idle_factor=2.0,light_idle_maintenance_min_budget=2000,light_idle_maintenance_max_budget=15000,inactive_to=300000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=20000,idle_pending_to=10000,max_idle_pending_to=15000,idle_pending_factor=2.0,idle_to=3600000,max_idle_to=10800000,idle_factor=2.0,min_time_to_alarm=60000,max_temp_app_whitelist_duration=60000,mms_temp_app_whitelist_duration=30000,sms_temp_app_whitelist_duration=20000" ;;
     *)
@@ -1261,8 +1284,24 @@ apply_extra_settings
 (
   _last_profile=""
   _last_screen="-1"
+  _reconcile_fast=3
+  _last_wifi_check=0
   while true; do
-    sleep 45
+    if [ "$_reconcile_fast" -gt 0 ]; then
+      sleep 45
+      _reconcile_fast=$((_reconcile_fast - 1))
+    else
+      _scr_idle=0
+      for _dpp in /sys/kernel/oplus_display/panel_power_status                   /sys/class/backlight/panel0-backlight/brightness; do
+        [ -r "$_dpp" ] || continue
+        _dppv="$(cat "$_dpp" 2>/dev/null)"
+        case "$_dppv" in
+          0|"") _scr_idle=1 ;;
+        esac
+        break
+      done
+      [ "$_scr_idle" -eq 1 ] && sleep 90 || sleep 45
+    fi
     _now="$(cat "$MODDIR/current_profile" 2>/dev/null)"
     case "$_now" in
       battery|balanced|performance) : ;;
@@ -1287,6 +1326,8 @@ apply_extra_settings
         [ -n "$_cur_topw" ] && [ "$_cur_topw" != "$WALT_TOPAPP_WEIGHT" ] && { _need=1; _reason="walt-topapp"; }
         _cur_edb="$(cat /proc/sys/walt/sched_ed_boost 2>/dev/null)"
         [ $_need -eq 0 ] && [ -n "$_cur_edb" ] && [ "$_cur_edb" != "$WALT_ED_BOOST" ] && { _need=1; _reason="walt-edboost"; }
+        _cur_ravg="$(cat /proc/sys/walt/sched_ravg_window_nr_ticks 2>/dev/null)"
+        [ $_need -eq 0 ] && [ -n "$_cur_ravg" ] && [ "$_cur_ravg" != "$RAVG_TICKS" ] && { _need=1; _reason="walt-ravg"; }
         _cur_ucl="$(cat /dev/cpuctl/top-app/cpu.uclamp.max 2>/dev/null | tr -d '\r')"
         case "$_cur_ucl" in max) _cur_ucl="100" ;; esac
         _want_ucl="${UCL_TOP_MAX:-85}"
@@ -1294,23 +1335,43 @@ apply_extra_settings
         [ $_need -eq 0 ] && [ -n "$_cur_ucl" ] && [ "$_cur_ucl" != "$_want_ucl" ] && { _need=1; _reason="uclamp"; }
       fi
       if [ $_need -eq 0 ] && asb_feature_enabled WIFI; then
-        _want_pm="$WIFI_PM_MODE"
-        _cur_pm=""
-        has iw && _cur_pm="$(iw dev wlan0 get power_save 2>/dev/null | awk -F': ' '/Power save/ {print tolower($2)}')"
-        case "$_want_pm" in
-          on) [ -n "$_cur_pm" ] && [ "$_cur_pm" != "on" ] && { _need=1; _reason="wifi-pm"; } ;;
-          off) [ -n "$_cur_pm" ] && [ "$_cur_pm" != "off" ] && { _need=1; _reason="wifi-pm"; } ;;
-        esac
+        _ts_now="$(date +%s 2>/dev/null || echo 0)"
+        _wifi_delta=$((_ts_now - _last_wifi_check))
+        if [ "$_wifi_delta" -ge 300 ] 2>/dev/null; then
+          _last_wifi_check="$_ts_now"
+          _want_pm="$WIFI_PM_MODE"
+          _cur_pm=""
+          has iw && _cur_pm="$(iw dev wlan0 get power_save 2>/dev/null | awk -F': ' '/Power save/ {print tolower($2)}')"
+          case "$_want_pm" in
+            on)  [ -n "$_cur_pm" ] && [ "$_cur_pm" != "on"  ] && { _need=1; _reason="wifi-pm"; } ;;
+            off) [ -n "$_cur_pm" ] && [ "$_cur_pm" != "off" ] && { _need=1; _reason="wifi-pm"; } ;;
+          esac
+        fi
       fi
     fi
     if [ $_need -eq 1 ]; then
+      _reconcile_fast=3
       asb_update_desc
       asb_log "runtime reconcile reason=$_reason profile=$_now"
-      if [ "$_reason" = "screen-state" ]; then
-        asb_feature_enabled CPU && apply_screen_aware_caps
+      if [ "$ASB_GOV_ENABLED" = "1" ] && asb_governor_running; then
+        if [ "$_reason" = "profile-change" ]; then
+          asb_governor_set_profile
+          asb_feature_enabled VM   && apply_vm
+          asb_feature_enabled NET  && apply_net
+          asb_feature_enabled WIFI && apply_wlan0_txqlen
+          asb_feature_enabled WIFI && apply_wifi_pm
+          asb_feature_enabled VM   && apply_doze
+        elif [ "$_reason" = "wifi-pm" ]; then
+          asb_feature_enabled WIFI && apply_wifi_pm
+          asb_feature_enabled WIFI && apply_wifi_dtim
+        fi
       else
-        apply_runtime_profile_now
-        [ "$_reason" = "profile-change" ] && sleep 2 && asb_load_profile && apply_runtime_profile_now
+        if [ "$_reason" = "screen-state" ]; then
+          asb_feature_enabled CPU && apply_screen_aware_caps
+        else
+          apply_runtime_profile_now
+          [ "$_reason" = "profile-change" ] && sleep 2 && asb_load_profile && apply_runtime_profile_now
+        fi
       fi
       asb_feature_enabled LOG && asb_check_perfhal_drift
       _last_profile="$_now"
@@ -1318,18 +1379,51 @@ apply_extra_settings
   done
 ) >/dev/null 2>&1 &
 (
-  for _delay in 30 90 300; do
-    sleep "$_delay"
-    asb_load_profile
-    if asb_feature_enabled KERNEL; then
-      writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
-      sysctlw kernel.sched_schedstats 0
-      sysctlw kernel.timer_migration 0
-      [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
-    fi
-    asb_log "scheduled reinforce delay=$_delay profile=$ASB_PROFILE"
-    apply_runtime_profile_now
-    has settings && settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
+  sleep 60
+  asb_load_profile
+  if asb_feature_enabled KERNEL; then
+    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
+    sysctlw kernel.sched_schedstats 0
+    sysctlw kernel.timer_migration 0
+    [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
+  fi
+  asb_feature_enabled CPU && apply_walt_live
+  asb_log "light reinforce 60s profile=$ASB_PROFILE"
+  has settings && settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
+  sleep 240
+  asb_load_profile
+  if asb_feature_enabled KERNEL; then
+    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
+    sysctlw kernel.sched_schedstats 0
+    sysctlw kernel.timer_migration 0
+    [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
+  fi
+  asb_log "full reinforce 5m profile=$ASB_PROFILE"
+  if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_governor_running; then
+    asb_feature_enabled CPU && apply_walt_live
+    asb_feature_enabled CPU && apply_uclamp
+    asb_feature_enabled CPU && apply_screen_aware_caps
+    asb_feature_enabled CPU && apply_gpu_caps
+  fi
+  asb_feature_enabled VM && apply_vm
+  asb_feature_enabled VM && apply_doze
+) >/dev/null 2>&1 &
+(
+  [ "$ASB_GOV_ENABLED" -eq 1 ] || exit 0
+  while true; do
+    sleep 300
+    asb_governor_running && continue
+    # Governor упал — перезапускаем
+    asb_log "governor watchdog: restart"
+    asb_governor_start || {
+      asb_log "governor restart failed, fallback to sh mode"
+      # Fallback: применяем статичные caps
+      asb_load_profile
+      asb_feature_enabled CPU && apply_runtime_profile_now
+      # Выходим из watchdog (теперь reconcile loop управляет всем)
+      exit 0
+    }
   done
 ) >/dev/null 2>&1 &
+
 exit 0
