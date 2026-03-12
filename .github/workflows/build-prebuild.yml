@@ -20,7 +20,7 @@ jobs:
       - name: Validate required source files
         run: |
           echo "Checking required files..."
-          for f in src/asb.c src/build_ndk_release.sh module.prop customize.sh service.sh; do
+          for f in src/asb_governor.c src/build_ndk_release.sh module.prop customize.sh service.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
@@ -65,7 +65,7 @@ jobs:
       # ── Строгая проверка бинарника ───────────────────────────────────────
       - name: Verify binary
         run: |
-          BIN="bin/arm64-v8a/asb"
+          BIN="bin/arm64-v8a/asb_governor"
           test -f "$BIN" || { echo "ERROR: binary not found"; exit 1; }
           test -x "$BIN" || { echo "ERROR: binary not executable"; exit 1; }
 
@@ -117,7 +117,7 @@ jobs:
 
           rm -rf "$PKG_DIR/bin"
           mkdir -p "$PKG_DIR/bin"
-          install -m 0755 bin/arm64-v8a/asb "$PKG_DIR/bin/asb"
+          install -m 0755 bin/arm64-v8a/asb_governor "$PKG_DIR/bin/asb_governor"
           find "$PKG_DIR" -name "README-prebuilt.txt" -delete
           find "$PKG_DIR" -name "*.log" -delete
 
@@ -140,8 +140,8 @@ jobs:
           unzip -l "$ZIP_NAME"
 
           # Обязательно должно быть
-          unzip -l "$ZIP_NAME" | grep -q "bin/asb" \
-            || { echo "ERROR: bin/asb missing!"; exit 1; }
+          unzip -l "$ZIP_NAME" | grep -q "bin/asb_governor" \
+            || { echo "ERROR: bin/asb_governor missing!"; exit 1; }
           unzip -l "$ZIP_NAME" | grep -q "service.sh" \
             || { echo "ERROR: service.sh missing!"; exit 1; }
           unzip -l "$ZIP_NAME" | grep -q "module.prop" \
@@ -184,7 +184,7 @@ jobs:
             echo "  Zip     : $ZIP_NAME ($(du -sh $ZIP_NAME | cut -f1))"
             VER=$(unzip -p "$ZIP_NAME" module.prop 2>/dev/null | grep '^version=' | cut -d= -f2)
             echo "  Version : ${VER:-unknown}"
-            BINSZ=$(unzip -p "$ZIP_NAME" bin/asb 2>/dev/null | wc -c)
+            BINSZ=$(unzip -p "$ZIP_NAME" bin/asb_governor 2>/dev/null | wc -c)
             echo "  Binary  : ${BINSZ} bytes"
           fi
           echo "========================================"
