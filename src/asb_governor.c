@@ -1,25 +1,26 @@
 /*
 
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <signal.h>
+#include <stdarg.h>
+#include <time.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <time.h>
-#include <math.h>
-#include <stdint.h>
-#include <sys/socket.h>
+
 #include <linux/netlink.h>
 
-#include "asb_metrics.h"
 #include "asb_fsm.h"
+#include "asb_metrics.h"
 #include "asb_learner.h"
 #include "asb_writer.h"
 #include "asb_socket.h"
