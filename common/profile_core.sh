@@ -324,7 +324,12 @@ asb_load_profile() {
     battery|balanced|performance) : ;;
     *) PROFILE=balanced ;;
   esac
-  . "$MODDIR/profiles/$PROFILE.sh"
+  if [ -f "$MODDIR/profiles/$PROFILE.sh" ]; then
+    . "$MODDIR/profiles/$PROFILE.sh"
+  else
+    PROFILE=balanced
+    . "$MODDIR/profiles/balanced.sh"
+  fi
 }
 
 asb_apply_profile_once() {
