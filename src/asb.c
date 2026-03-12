@@ -1,5 +1,5 @@
 /*
- * asb_governor.c — ASB Adaptive Runtime Governor
+ * asb.c — ASB Adaptive Runtime Governor
  *
  * Архитектура event loop:
  *
@@ -20,7 +20,7 @@
  *     проверки battery/thermal
  *
  * Компиляция в Termux:
- *   clang -O2 -o asb_governor asb_governor.c -lm
+ *   clang -O2 -o asb asb.c -lm
  *   (или через Makefile)
  */
 
@@ -284,7 +284,7 @@ int main(int argc, char **argv) {
             close(pfd);
             pid_t old = (pid_t)atoi(pidbuf);
             if (old > 1 && kill(old, 0) == 0) {
-                fprintf(stderr, "asb_governor already running (pid %d)\n", old);
+                fprintf(stderr, "asb already running (pid %d)\n", old);
                 return 1;
             }
         }
@@ -303,7 +303,7 @@ int main(int argc, char **argv) {
 
     /* Логирование */
     g_logf = fopen(LOG_FILE, "a");
-    asb_log("=== asb_governor starting (pid %d) ===", getpid());
+    asb_log("=== asb starting (pid %d) ===", getpid());
 
     /* Сигналы */
     signal(SIGTERM, sig_handler);
