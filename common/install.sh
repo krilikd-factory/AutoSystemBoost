@@ -108,9 +108,9 @@ asb_end_banner() {
 
 asb_install_prebuilt_governor() {
   local abi src dst
-  dst="$MODPATH/bin/asb_governor"
+  dst="$MODPATH/bin/asb"
   abi="arm64-v8a"
-  src="$MODPATH/bin/$abi/asb_governor"
+  src="$MODPATH/bin/$abi/asb"
   if [ -f "$src" ]; then
     cp -f "$src" "$dst" 2>/dev/null || cat "$src" > "$dst"
     chmod 0755 "$dst" 2>/dev/null || true
