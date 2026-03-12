@@ -11,69 +11,168 @@ on:
 jobs:
   build-arm64:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install zip tools
-        run: sudo apt-get update && sudo apt-get install -y zip unzip curl file rsync
+      - name: Validate required source files
+        run: |
+          echo "Checking required files..."
+          for f in src/asb_governor.c src/build_ndk_release.sh module.prop customize.sh service.sh; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: required file missing: $f"
+              exit 1
+            fi
+            echo "  v $f"
+          done
+          echo "All required files present."
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zip unzip curl file rsync
+
+      - name: Cache Android NDK
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: android-ndk-r27c
+          key: android-ndk-r27c
 
       - name: Download Android NDK
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
-          curl -L -o android-ndk.zip https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+          echo "NDK not cached, downloading..."
+          curl -L --retry 3 --retry-delay 5 \
+            -o android-ndk.zip \
+            https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
           unzip -q android-ndk.zip
-          echo "ANDROID_NDK_ROOT=$PWD/android-ndk-r27c" >> $GITHUB_ENV
-          echo "NDK_ROOT=$PWD/android-ndk-r27c" >> $GITHUB_ENV
+          rm -f android-ndk.zip
 
-      - name: Build arm64-v8a prebuilt
+      - name: Set NDK environment
+        run: |
+          echo "ANDROID_NDK_ROOT=$PWD/android-ndk-r27c" >> $GITHUB_ENV
+          echo "NDK_ROOT=$PWD/android-ndk-r27c"         >> $GITHUB_ENV
+
+      - name: Build arm64-v8a binary
         run: bash src/build_ndk_release.sh
 
       - name: Verify binary
         run: |
-          test -x bin/arm64-v8a/asb_governor
-          file bin/arm64-v8a/asb_governor || true
+          BIN="bin/arm64-v8a/asb_governor"
+          test -f "$BIN" || { echo "ERROR: binary not found"; exit 1; }
+          test -x "$BIN" || { echo "ERROR: binary not executable"; exit 1; }
 
-      - name: Prepare package tree
+          FILE_OUT="$(file "$BIN")"
+          echo "file: $FILE_OUT"
+          echo "$FILE_OUT" | grep -q "aarch64"          || { echo "ERROR: not aarch64!"; exit 1; }
+          echo "$FILE_OUT" | grep -q "ELF"              || { echo "ERROR: not ELF!"; exit 1; }
+          echo "$FILE_OUT" | grep -q "Android\|dynamic" || { echo "ERROR: not Android binary!"; exit 1; }
+
+          SIZE=$(wc -c < "$BIN")
+          echo "Size: $SIZE bytes"
+          [ "$SIZE" -gt 10000 ]   || { echo "ERROR: binary too small"; exit 1; }
+          [ "$SIZE" -lt 2000000 ] || { echo "ERROR: binary too large"; exit 1; }
+          echo "Binary OK: $SIZE bytes"
+
+      - name: Patch module.prop
+        run: |
+          TAG="${GITHUB_REF_NAME:-}"
+          if echo "$TAG" | grep -qE '^v[0-9]'; then
+            sed -i "s/^version=.*/version=${TAG}/" module.prop
+            echo "Version set to: $TAG"
+          fi
+          sed -i 's/AI governor/Adaptive governor/g' module.prop
+          cat module.prop
+
+      - name: Prepare release package
         run: |
           PKG_DIR="$PWD/.pkg"
           rm -rf "$PKG_DIR"
           mkdir -p "$PKG_DIR"
 
           rsync -a ./ "$PKG_DIR"/ \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude 'android-ndk.zip' \
-            --exclude 'android-ndk-r27c' \
-            --exclude '.pkg' \
-            --exclude '*.zip' \
-            --exclude '__MACOSX' \
-            --exclude '*.DS_Store'
+            --exclude '.git'          \
+            --exclude '.github'       \
+            --exclude 'android-ndk*'  \
+            --exclude '.pkg'          \
+            --exclude '*.zip'         \
+            --exclude '__MACOSX'      \
+            --exclude '*.DS_Store'    \
+            --exclude 'src'           \
+            --exclude 'bin/arm64-v8a' \
+            --exclude 'banner.png'    \
+            --exclude 'CHANGELOG.md'  \
+            --exclude 'README.md'     \
+            --exclude 'README.ru.md'  \
+            --exclude 'update.json'
 
           rm -rf "$PKG_DIR/bin"
           mkdir -p "$PKG_DIR/bin"
           install -m 0755 bin/arm64-v8a/asb_governor "$PKG_DIR/bin/asb_governor"
+          find "$PKG_DIR" -name "README-prebuilt.txt" -delete
+          find "$PKG_DIR" -name "*.log" -delete
 
-          rm -f "$PKG_DIR/bin/README-prebuilt.txt"
-          rm -f "$PKG_DIR/banner.png"
-          rm -f "$PKG_DIR/CHANGELOG.md"
-          rm -f "$PKG_DIR/README.md"
-          rm -f "$PKG_DIR/README.ru.md"
-          rm -f "$PKG_DIR/update.json"
+          echo "Package contents:"
+          find "$PKG_DIR" -type f | sort
 
       - name: Create release zip
         run: |
-          rm -f ASB-V21.zip
-          cd .pkg
-          zip -r ../ASB-V21.zip .
+          ZIP_NAME="ASB-V21.zip"
+          rm -f "$ZIP_NAME"
+          cd .pkg && zip -r "../$ZIP_NAME" . -x "*.DS_Store" && cd ..
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+          echo "Created: $ZIP_NAME ($(du -sh $ZIP_NAME | cut -f1))"
+
+      - name: Validate zip contents
+        run: |
+          echo "=== Zip contents ==="
+          unzip -l "$ZIP_NAME"
+
+          # Обязательно должно быть
+          unzip -l "$ZIP_NAME" | grep -q "bin/asb_governor" \
+            || { echo "ERROR: bin/asb_governor missing!"; exit 1; }
+          unzip -l "$ZIP_NAME" | grep -q "service.sh" \
+            || { echo "ERROR: service.sh missing!"; exit 1; }
+          unzip -l "$ZIP_NAME" | grep -q "module.prop" \
+            || { echo "ERROR: module.prop missing!"; exit 1; }
+
+          # НЕ должно быть
+          unzip -l "$ZIP_NAME" | grep -q "bin/arm64-v8a" \
+            && { echo "ERROR: bin/arm64-v8a leaked into zip!"; exit 1; } || true
+          unzip -l "$ZIP_NAME" | grep -q "android-ndk" \
+            && { echo "ERROR: NDK leaked into zip!"; exit 1; } || true
+
+          echo "Zip validation passed"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ASB-V21
-          path: ASB-V21.zip
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30
 
       - name: Upload release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: ASB-V21.zip
+          files: ${{ env.ZIP_NAME }}
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo ""
+          echo "========================================"
+          echo "  ASB Build Summary"
+          echo "========================================"
+          echo "  Trigger : ${{ github.event_name }}"
+          echo "  Ref     : ${GITHUB_REF_NAME:-unknown}"
+          if [ -f "${ZIP_NAME:-}" ]; then
+            echo "  Zip     : $ZIP_NAME ($(du -sh $ZIP_NAME | cut -f1))"
+            VER=$(unzip -p "$ZIP_NAME" module.prop 2>/dev/null | grep '^version=' | cut -d= -f2)
+            echo "  Version : ${VER:-unknown}"
+            BINSZ=$(unzip -p "$ZIP_NAME" bin/asb_governor 2>/dev/null | wc -c)
+            echo "  Binary  : ${BINSZ} bytes"
+          fi
+          echo "========================================"
