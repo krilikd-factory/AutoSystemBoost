@@ -1,182 +1,264 @@
-# 🚀 AutoSystemBoost V19.1 BUGFIX RELEASE
+# 🚀 AutoSystemBoost V20 MAJOR RELEASE
 
-Compared to V19.0  
-Date: 2026-03-11
-
----
-
-# 🛠 What Changed in V19.1
-
-`ASB-V19.1` is a focused **bugfix and safety update** for the V19 branch.
-
-This release does **not** try to reinvent the module.  
-Instead, it fixes several real issues reported after `ASB-V19`:
-
-- Dropbox app data being affected by overly broad cleanup paths
-- Wi-Fi / Bluetooth scanning related breakage on some systems after reboot
-- audio crackling / volume issues on some custom kernels
-- higher Wi-Fi instability risk on non-standard vendor stacks such as ZeroMount / OverlayFS / SUSFS
-
-In other words:
-
-**V19 = major structural platform update**  
-**V19.1 = stability + safety cleanup for real-world usage**
+Compared to V19.1  
+Date: 2026-03-12
 
 ---
 
-# 📦 ASB-V19.0 vs ASB-V19.1
+# 🌟 What Changed in V20
 
-| Area | V19.0 | V19.1 |
+`ASB-V20` is a major evolution of the V19 branch.
+
+While `ASB-V19.1` was primarily a **bugfix and safety release**, `ASB-V20` moves the module forward again as a **stronger runtime tuning platform** with:
+
+- smarter profile behavior
+- stronger OnePlus 15 detection
+- screen-aware CPU caps
+- much better real runtime profile retention
+- cleaner profile application flow
+- updated WebUI styling
+- a more complete and more mature profile identity for **Balanced / Battery / Performance**
+
+In simple terms:
+
+**V19.1 = safe and polished bugfix release**  
+**V20 = stronger, smarter and more complete major runtime release**
+
+---
+
+# 📦 ASB-V19.1 vs ASB-V20
+
+| Area | V19.1 | V20 |
 |------|------|------|
-| Dropbox cleanup safety | Risky wildcard cleanup | **Safe targeted cleanup** |
-| Wi-Fi / BT scan settings persistence | Could persist unwanted disabled scan state | **Removed problematic forced scan toggles** |
-| Audio behavior on some custom kernels | Could trigger limiter-related crackling | **Audio hygiene block disabled** |
-| ZeroMount / OverlayFS / SUSFS risk handling | More exposed | **Risk mitigation added** |
-| Overall daily safety | Good | **Better** |
-| Overall public release readiness | Strong | **Stronger** |
+| Release type | Bugfix / safety cleanup | **Major runtime upgrade** |
+| OP15 detection depth | Good | **Stronger** |
+| Profile architecture | Strong | **Further improved** |
+| Runtime profile retention | Good | **Much stronger** |
+| CPU cap behavior | Good baseline | **Greatly improved** |
+| Balanced profile | Good | **Better tuned** |
+| Battery profile | Strong | **More aggressive and more complete** |
+| Performance profile | Good | **Much stronger and more coherent** |
+| Screen-aware CPU logic | No | **Yes** |
+| WebUI style | Good | **Cleaner / more minimal** |
+| Public release maturity | Strong | **Stronger, but more ambitious** |
 
 ---
 
-# ☁️ Dropbox Bug Fixed
+# 🧠 Profile System Improvements
 
-## Problem
-In older V19 builds, cleanup logic used wildcard paths broad enough to match Dropbox app data paths.
+## V19.1
+`ASB-V19.1` already had the newer V19 profile architecture:
+- `profiles/*.sh`
+- `profile_core.sh`
+- runtime feature-aware logic
+- live profile switching
 
-That could hit:
+It was a solid base.
 
-- `com.dropbox.android`
+## V20
+`ASB-V20` keeps that base and pushes it further.
 
-and lead to broken app data or the impression that Dropbox was being removed.
-
-## Fix in V19.1
-The old broad cleanup behavior was replaced with **targeted Android DropBoxManager log cleanup only**:
-
-- `/data/system/dropbox`
-- `/data/vendor/dropbox`
-
-And instead of deleting everything, V19.1 keeps only the newest log files.
+### Main upgrades
+- improved profile data for **Balanced / Battery / Performance**
+- stronger runtime cap handling
+- more stable real-world application of CPU / scheduler / VM / NET / GPU parameters
+- improved profile consistency over time
 
 ### Result
-✅ Dropbox app data is no longer touched  
-✅ only Android system DropBox logs are trimmed  
-✅ much safer install behavior
+✅ profiles feel more complete  
+✅ profiles behave more like their intended identity  
+✅ runtime drift appears reduced in practical use
 
 ---
 
-# 📶 Wi-Fi / Bluetooth Scan Bug Fixed
+# ⚙️ Major Runtime Behavior Upgrade
 
-## Problem
-Some earlier V19 behavior could force these values to `0`:
+One of the most important practical changes in V20 is not cosmetic:
 
-- `wifi_scan_always_enabled`
-- `wifi_wakeup_enabled`
-- `ble_scan_always_enabled`
+## CPU cap behavior is significantly improved
+Earlier V19 variants could apply aggressive scheduler logic while real CPU ceilings still remained more limited than intended.
 
-On some systems those values could persist inside global settings and survive reboots.
+V20 improves this dramatically.
 
-That could lead to ugly behavior such as:
-- broken Wi-Fi state after reboot
-- scan-related weirdness
-- users thinking Wi-Fi itself was dead
+### What this means in practice
+- **Balanced** behaves more like a true balanced profile
+- **Performance** behaves much more like a real performance mode
+- **Battery** remains strongly limited and power-focused
+- profile ceilings match profile intent much better
 
-This was especially suspicious on more unusual mount / overlay setups.
-
-## Fix in V19.1
-These forced scan-related settings were removed from the active module logic.
-
-### Result
-✅ no more persistent forced-off scan toggles  
-✅ lower risk of Wi-Fi / BT state corruption after reboot  
-✅ safer behavior on more customized systems
+This is one of the biggest real functional improvements in V20.
 
 ---
 
-# 🔊 Audio Crackling / Volume Issue Fixed
+# 🖥 Screen-Aware CPU Cap Logic
 
-## Problem
-A kernel-related path in V19 could apply audio-effect hygiene that disabled limiter-related behavior.
+V20 introduces smarter behavior through screen-aware CPU cap logic.
 
-On some custom kernels and audio stacks, such as WildKernels-style setups, this could lead to:
+Instead of treating every state the same way, V20 can now adapt CPU cap behavior depending on screen state.
 
-- crackling
-- clipping
-- unstable loudness behavior
-
-## Fix in V19.1
-The audio hygiene block is no longer applied through the kernel optimization path.
+### Why this matters
+This helps improve:
+- smoothness while the screen is on
+- efficiency while the screen is off
+- better real-life balance between UX and battery life
 
 ### Result
-✅ lower chance of crackling on custom kernels  
-✅ safer behavior for aggressive custom audio / kernel stacks  
-✅ kernel optimizations no longer silently interfere with audio processing
+✅ smarter behavior  
+✅ less blunt static limitation  
+✅ better daily-use tuning philosophy
 
 ---
 
-# 🧩 ZeroMount / OverlayFS / SUSFS Risk Mitigation
+# ⚖️ Balanced Profile Improvements
 
-## Problem
-Users with more exotic vendor / meta-mount stacks may not behave like normal stock-style vendor overlay environments.
+Balanced in V20 is one of the strongest improvements in the module.
 
-In those environments, some Wi-Fi related commands can become more risky than useful.
-
-## Fix in V19.1
-V19.1 adds detection for risky vendor stack environments such as:
-
-- ZeroMount
-- OverlayFS
-- SUSFS
-
-When such a setup is detected, certain Wi-Fi DTIM / listen-interval behavior is skipped instead of forced.
+## Compared to V19.1
+Balanced now feels:
+- more complete
+- more intentional
+- better aligned with daily usage
+- better aligned with its CPU ceiling behavior
 
 ### Result
-✅ lower chance of Wi-Fi instability on non-standard vendor stacks  
-✅ safer behavior for users with advanced KSU / overlay setups  
-✅ better defensive runtime logic
+✅ smoother real daily profile  
+✅ more mature “default mode” identity  
+✅ stronger all-around usability
+
+---
+
+# 🔋 Battery Profile Changes
+
+Battery in V20 becomes more aggressive again in a deliberate and controlled way.
+
+This is not a random regression to old extreme values.  
+It is a conscious attempt to restore a stronger battery-saving identity while avoiding the most destructive old compromises.
+
+### Battery direction in V20
+- stronger scheduler conservatism
+- stronger VM saving behavior
+- stricter CPU limitation
+- more aggressive low-power philosophy
+
+### Result
+✅ stronger battery profile identity  
+✅ better separation from Balanced  
+✅ more serious saver behavior
 
 ### Important note
-This is **risk mitigation**, not a magical guarantee against every possible meta-mount configuration.  
-But it is still a meaningful safety improvement over V19.0.
+V20 Battery is intentionally stronger than V19.1.  
+This is by design.
 
 ---
 
-# 🧠 Runtime Safety Philosophy in V19.1
+# 🔥 Performance Profile Improvements
 
-V19.1 keeps the strengths of V19:
+Performance in V20 is one of the most important upgrades.
 
-- cleaner profile architecture
-- centralized runtime profile handling
-- feature-aware module logic
-- improved compatibility structure
-- stronger WebUI-based profile control
+## Compared to V19.1
+Performance becomes:
+- more coherent
+- more aggressive where it matters
+- better aligned with real profile ceilings
+- stronger as an actual high-performance mode
 
-But improves the practical side by being less reckless in several sensitive areas.
+### Result
+✅ stronger scheduler behavior  
+✅ better profile coherence  
+✅ more realistic “Performance” identity  
+✅ much better major-release profile feel
 
-### In short
+---
 
-| Goal | V19.0 | V19.1 |
-|------|------|------|
-| Strong tweak platform | ✅ | ✅ |
-| Better real-world safety | ⚠️ good, but rough in places | **✅ better** |
-| Bugfix maturity | Moderate | **Higher** |
-| Safer public release quality | Good | **Better** |
+# 📱 OnePlus 15 Detection Improvements
+
+V20 expands OP15 detection further.
+
+Compared to V19.1, V20 adds stronger fallback logic such as:
+- more project ID coverage
+- `/proc/device-tree` based checks
+- stronger hardware-level fallback logic
+
+### Why this matters
+This improves resilience against:
+- spoofed props
+- incomplete ROM identity exposure
+- more unusual environments
+
+### Result
+✅ better install-time detection  
+✅ lower chance of false compatibility mode  
+✅ stronger OP15-targeted accuracy
+
+---
+
+# 📸 Camera Category Behavior
+
+V20 continues the stronger camera category philosophy introduced in later V19 builds.
+
+The camera category is no longer treated as only a passive collection of harmless config files.  
+It now reflects a more intentional set of tested camera-oriented tuning behavior.
+
+### Result
+✅ camera category has clearer identity  
+✅ V20 continues the more serious camera-tuning direction of the newer ASB branch
+
+---
+
+# 🎨 WebUI Improvements
+
+V20 also improves the visual side of the module.
+
+### Changes
+- cleaner black background styling
+- softer green glow presentation
+- more minimal visual language
+- cleaner centered content layout
+- more polished profile page presentation
+
+### Result
+✅ cleaner look  
+✅ more mature minimalistic style  
+✅ stronger overall release presentation
+
+---
+
+# 🧩 Internal Codebase Changes
+
+Compared to V19.1, V20 includes meaningful work in:
+
+- `common/install.sh`
+- `common/profile_core.sh`
+- `profiles/balanced.sh`
+- `profiles/battery.sh`
+- `profiles/performance.sh`
+- `service.sh`
+- `webroot/index.html`
+
+This is not just a metadata bump.  
+V20 changes the module in the parts that actually matter.
 
 ---
 
 # ✅ Summary
 
-`ASB-V19.1` is a **real bugfix release**, not a cosmetic version bump.
+`ASB-V20` is a **real major release** over `ASB-V19.1`.
 
-Main fixes:
+Main improvements:
 
-✔ Dropbox cleanup logic made safe  
-✔ Wi-Fi / Bluetooth scan persistence bug fixed  
-✔ audio crackling risk reduced on custom kernels  
-✔ risky vendor stack mitigation added for Wi-Fi behavior  
-✔ safer real-world behavior for public release use
+✔ stronger OP15 detection  
+✔ better runtime profile behavior  
+✔ improved CPU cap handling  
+✔ stronger Balanced profile  
+✔ more serious Battery profile  
+✔ much stronger Performance profile  
+✔ screen-aware CPU cap logic  
+✔ cleaner WebUI styling  
+✔ more complete major-release identity
 
 ### Final verdict
 
-- **V19.0** = major structural release of the new ASB platform  
-- **V19.1** = the safer, cleaner and more reliable bugfix follow-up
+- **V19.1** = safe, polished bugfix release for the V19 platform  
+- **V20** = stronger, smarter and more complete next-generation ASB release
 
-If you are already on V19, then **V19.1 is the recommended public release build**.
+If `V19.1` was the safer refinement of V19, then **V20 is the release that pushes ASB forward again**.
