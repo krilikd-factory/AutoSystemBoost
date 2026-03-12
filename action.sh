@@ -1,28 +1,36 @@
 #!/system/bin/sh
-MODDIR="${0%/*}"
-MODID="AutoSystemBoost"
 
-# WebUI redirect for Magisk users
-# KSU/MMRL show WebUI button natively via webroot/
-if [ -z "$MMRL" ] && [ ! -z "$MAGISKTMP" ]; then
-  pm path io.github.a13e300.ksuwebui > /dev/null 2>&1 && {
-    am start -n "io.github.a13e300.ksuwebui/.WebUIActivity" -e id "$MODID"
-    exit 0
-  }
-  pm path com.dergoogler.mmrl.wx > /dev/null 2>&1 && {
-    am start -n "com.dergoogler.mmrl.wx/.ui.activity.webui.WebUIActivity" -e MOD_ID "$MODID"
-    exit 0
-  }
+MODID="AutoSystemBoost"
+MODDIR="/data/adb/modules/$MODID"
+ASB_GOV="$MODDIR/bin/asb_governor"
+
+CURRENT="$(cat "$MODDIR/current_profile" 2>/dev/null || echo "balanced")"
+
+case "$CURRENT" in
+  battery)     NEXT="balanced"     ;;
+  balanced)    NEXT="performance"  ;;
+  performance) NEXT="battery"      ;;
+  *)           NEXT="balanced"     ;;
+esac
+
+echo "$NEXT" > "$MODDIR/current_profile"
+
+GOV_PID="$(cat /dev/.asb/governor.pid 2>/dev/null)"
+if [ -n "$GOV_PID" ] && kill -0 "$GOV_PID" 2>/dev/null && [ -x "$ASB_GOV" ]; then
+    REPLY="$("$ASB_GOV" "profile:$NEXT" 2>/dev/null)"
+    STATUS="$("$ASB_GOV" "status"       2>/dev/null)"
+    echo "ui_print [ASB] Governor notified: $NEXT"
+    echo "ui_print [ASB] Status: $STATUS"
+else
+    [ -x "$MODDIR/apply_profile.sh" ] && sh "$MODDIR/apply_profile.sh"
+    echo "ui_print [ASB] Profile set (sh fallback): $NEXT"
 fi
 
-PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
-echo "- AutoSystemBoost V20"
-echo "- Current profile: $PROFILE"
-echo ""
-echo "- Install KSUWebUIStandalone or WebUI X"
-echo "  to access the profile switcher UI."
-echo ""
-echo "- Opening Telegram channel..."
+case "$NEXT" in
+  performance) DESC="status: performance 🔥 | AI governor ✅" ;;
+  battery)     DESC="status: battery 🔋 | AI governor ✅" ;;
+  *)           DESC="status: balanced ⚖️ | AI governor ✅" ;;
+esac
+sed -i "s/^description=.*/description=$DESC/" "$MODDIR/module.prop" 2>/dev/null || true
 
-su -c "am start -a android.intent.action.VIEW -d 'tg://resolve?domain=OnePlusMod'" >/dev/null 2>&1 || \
-su -c "am start -a android.intent.action.VIEW -d 'https://t.me/OnePlusMod'" >/dev/null 2>&1
+echo "ui_print [ASB] → $NEXT"
