@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<config><compat-change enableSinceTargetSdk="34" id="211757425" name="ENFORCE_CONNECT" /></config>
