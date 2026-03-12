@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Included>
+    <Decoders>
+        <MediaCodec name="OMX.google.opus.decoder" type="audio/opus" update="true" rank="100"/>
+    </Decoders>
+</Included>
