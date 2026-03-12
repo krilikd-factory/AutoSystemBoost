@@ -141,9 +141,9 @@ writef_verify() {
 asb_update_desc() {
   _p="$(cat "$MODDIR/current_profile" 2>/dev/null)"
   case "$_p" in
-    performance) _s="description=status: performance 🔥 | active ✅ | benchmark tuned" ;;
-    battery) _s="description=status: battery 🔋 | active ✅ | ultra saver" ;;
-    *) _s="description=status: balanced ⚖️ | active ✅ | default profile" ;;
+    performance) _s="description=status: performance 🔥 | active ✅" ;;
+    battery) _s="description=status: battery 🔋 | active ✅" ;;
+    *) _s="description=status: balanced ⚖️ | active ✅" ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q "^description=" "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
