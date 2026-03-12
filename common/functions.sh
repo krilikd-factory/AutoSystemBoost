@@ -329,7 +329,7 @@ done
 [ -f $MODPATH/service.sh ] && set_perm $MODPATH/service.sh 0 0 0755
 [ -f $MODPATH/action.sh ] && set_perm $MODPATH/action.sh 0 0 0755
 [ -f $MODPATH/apply_profile.sh ] && set_perm $MODPATH/apply_profile.sh 0 0 0755
-[ -f $MODPATH/bin/asb_governor ] && set_perm $MODPATH/bin/asb_governor 0 0 0755
+[ -f $MODPATH/bin/asb ] && set_perm $MODPATH/bin/asb 0 0 0755
 [ -f $MODPATH/common/profile_core.sh ] && set_perm $MODPATH/common/profile_core.sh 0 0 0755
 [ -d $MODPATH/profiles ] && set_perm_recursive $MODPATH/profiles 0 0 0755 0644
 set_permissions
