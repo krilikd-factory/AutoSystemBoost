@@ -1,8 +1,8 @@
 id=AutoSystemBoost
 name=AutoSystemBoost
-version=V21
+version=V21-r5
 versionCode=221
 author=Dima_Krylov
-description=status: balanced ⚖️ | AI governor ready | build bin/ first
+description=status: balanced ⚖️ | ✅
 updateJson=https://raw.githubusercontent.com/krilikd/AutoSystemBoost/main/update.json
 banner=https://raw.githubusercontent.com/krilikd/AutoSystemBoost/main/banner.png
