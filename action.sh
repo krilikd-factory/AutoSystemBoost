@@ -2,7 +2,7 @@
 
 MODID="AutoSystemBoost"
 MODDIR="/data/adb/modules/$MODID"
-ASB_GOV="$MODDIR/bin/asb_governor"
+ASB_GOV="$MODDIR/bin/asb"
 
 CURRENT="$(cat "$MODDIR/current_profile" 2>/dev/null || echo "balanced")"
 
