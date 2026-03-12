@@ -1,5 +1,4 @@
 PROFILE="performance"
-
 RAVG_TICKS=2
 WALT_IDLE=8
 WALT_IDLE_CLUST="8 8"
