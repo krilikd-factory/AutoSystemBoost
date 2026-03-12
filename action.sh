@@ -27,9 +27,9 @@ else
 fi
 
 case "$NEXT" in
-  performance) DESC="status: performance 🔥 | AI governor ✅" ;;
-  battery)     DESC="status: battery 🔋 | AI governor ✅" ;;
-  *)           DESC="status: balanced ⚖️ | AI governor ✅" ;;
+  performance) DESC="status: performance 🔥 | ✅" ;;
+  battery)     DESC="status: battery 🔋 | ✅" ;;
+  *)           DESC="status: balanced ⚖️ | ✅" ;;
 esac
 sed -i "s/^description=.*/description=$DESC/" "$MODDIR/module.prop" 2>/dev/null || true
 
