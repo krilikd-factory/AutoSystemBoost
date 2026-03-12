@@ -1,28 +1,4 @@
 /*
- * asb_governor.c — ASB Adaptive Runtime Governor
- *
- * Архитектура event loop:
- *
- *   epoll ждёт событий (блокирует без CPU):
- *     ├── timerfd_active  (2с)  — метрики когда экран ON
- *     ├── timerfd_idle    (5с)  — метрики когда экран OFF
- *     ├── ueventfd        — screen ON/OFF немедленно
- *     ├── timerfd_hourly  (1ч)  — обновление learner
- *     └── sockfd          — команды от action.sh
- *
- * В DEEP_IDLE: только timerfd_idle (5с) + ueventfd активны.
- * Таймер активных метрик приостановлен → CPU не будится зря.
- *
- * Потребление в DEEP_IDLE:
- *   - 0% CPU (epoll заблокирован)
- *   - ~50KB RSS (весь код + данные)
- *   - Просыпается только от uevent экрана или раз в 5с для
- *     проверки battery/thermal
- *
- * Компиляция в Termux:
- *   clang -O2 -o asb_governor asb_governor.c -lm
- *   (или через Makefile)
- */
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -39,6 +15,8 @@
 #include <time.h>
 #include <math.h>
 #include <stdint.h>
+#include <sys/socket.h>
+#include <linux/netlink.h>
 
 #include "asb_metrics.h"
 #include "asb_fsm.h"
