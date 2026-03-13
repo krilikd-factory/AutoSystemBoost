@@ -1,4 +1,4 @@
-name: Build ASB prebuilt binaries
+name: ASB-V22
 
 on:
   workflow_dispatch:   # Ручной запуск из GitHub UI → только artifact
@@ -127,7 +127,7 @@ jobs:
       # ── Упаковка zip ─────────────────────────────────────────────────────
       - name: Create release zip
         run: |
-          ZIP_NAME="ASB-V21.zip"
+          ZIP_NAME="ASB-V22.zip"
           rm -f "$ZIP_NAME"
           cd .pkg && zip -r "../$ZIP_NAME" . -x "*.DS_Store" && cd ..
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
