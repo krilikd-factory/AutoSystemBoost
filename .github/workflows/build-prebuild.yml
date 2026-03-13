@@ -40,8 +40,8 @@ jobs:
         id: cache-ndk
         uses: actions/cache@v4
         with:
-          path: android-ndk-r27c
-          key: android-ndk-r27c
+          path: android-ndk-r28c
+          key: android-ndk-r28c
 
       - name: Download Android NDK
         if: steps.cache-ndk.outputs.cache-hit != 'true'
@@ -49,14 +49,14 @@ jobs:
           echo "NDK not cached, downloading..."
           curl -L --retry 3 --retry-delay 5 \
             -o android-ndk.zip \
-            https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+            https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
           unzip -q android-ndk.zip
           rm -f android-ndk.zip
 
       - name: Set NDK environment
         run: |
-          echo "ANDROID_NDK_ROOT=$PWD/android-ndk-r27c" >> $GITHUB_ENV
-          echo "NDK_ROOT=$PWD/android-ndk-r27c"         >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$PWD/android-ndk-r28c" >> $GITHUB_ENV
+          echo "NDK_ROOT=$PWD/android-ndk-r28c"         >> $GITHUB_ENV
 
       # ── Сборка ───────────────────────────────────────────────────────────
       - name: Build arm64-v8a binary
