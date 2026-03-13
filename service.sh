@@ -176,6 +176,11 @@ asb_governor_running() {
 asb_governor_start() {
   [ -x "$ASB_GOV" ] || return 1
   asb_governor_running && return 0
+  # Создаём config директорию и копируем governor.conf если его нет
+  mkdir -p "$MODDIR/config"
+  if [ ! -f "$MODDIR/config/governor.conf" ] && [ -f "$MODDIR/config/governor.conf.default" ]; then
+    cp "$MODDIR/config/governor.conf.default" "$MODDIR/config/governor.conf"
+  fi
   mkdir -p /dev/.asb
   nice -n 10 "$ASB_GOV" >/dev/null 2>&1 &
   sleep 0.3
