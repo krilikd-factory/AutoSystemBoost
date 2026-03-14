@@ -87,6 +87,22 @@ static void asb_log(const char *fmt, ...) {
 }
 
 /* ─── State dump ────────────────────────────────────────────── */
+/* ─── Persistent session stats ─────────────────────────────── */
+#define PERSISTENT_STATS_FILE "/dev/.asb/session_stats.json"
+#define PERSISTENT_STATS_MAX_SESSIONS 10
+
+typedef struct {
+    int   session_count;
+    float avg_time_to_first_sus;    /* rolling avg seconds to first SUSTAINED */
+    float avg_time_to_first_thermal;/* rolling avg seconds to first thermal */
+    float avg_max_temp;             /* rolling avg peak temp °C */
+    float avg_gap_p0;               /* rolling avg cap gap kHz */
+    float avg_efficiency;           /* rolling avg sustained efficiency score */
+} asb_persistent_stats_t;
+
+static asb_persistent_stats_t g_pstats = {0};
+
+
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                         asb_prediction_t pred)
 {
@@ -111,7 +127,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "ses_gaming=%d\nses_sustained=%d\nses_thermal=%d\nses_unreachable=%d\n"
         "ses_t_heavy=%ld\nses_t_gaming=%ld\nses_t_sustained=%ld\n"
         "ses_avg_gap_p0=%d\nses_max_gap_p0=%d\nses_max_temp=%d\nses_auto_degraded=%d\n"
-        "bat_deep_idle=%ld\nbat_light_idle=%ld\nbat_wake_cycles=%d\n",
+        "bat_deep_idle=%ld\nbat_light_idle=%ld\nbat_wake_cycles=%d\n"
+        "ses_t2s=%ld\nses_t2thermal=%ld\nses_efficiency=%d\nses_recovery=%d\n"
+        "hist_sessions=%d\nhist_t2s=%.0f\nhist_temp=%.0f\nhist_gap=%.0f\nhist_eff=%.0f\n",
         asb_state_names[fsm->state],
         profile_names[fsm->profile_idx],
         m->bat.current_ma,
@@ -141,7 +159,16 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->ses_auto_degraded,
         fsm->bat_time_deep_idle_sec,
         fsm->bat_time_light_idle_sec,
-        fsm->bat_wake_cycles);
+        fsm->bat_wake_cycles,
+        fsm->ses_time_to_first_sus,
+        fsm->ses_time_to_first_thermal,
+        fsm->ses_sustained_efficiency,
+        fsm->ses_recovery_count,
+        g_pstats.session_count,
+        g_pstats.avg_time_to_first_sus,
+        g_pstats.avg_max_temp,
+        g_pstats.avg_gap_p0,
+        g_pstats.avg_efficiency);
     fclose(f);
 }
 
@@ -203,6 +230,61 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->bat_time_deep_idle_sec,
         fsm->bat_time_light_idle_sec,
         fsm->bat_wake_cycles);
+}
+
+
+
+static void persistent_stats_load(void) {
+    FILE *f = fopen(PERSISTENT_STATS_FILE, "r");
+    if (!f) return;
+    fscanf(f, "{\"count\":%d,\"t2s\":%f,\"t2th\":%f,\"temp\":%f,\"gap\":%f,\"eff\":%f}",
+           &g_pstats.session_count,
+           &g_pstats.avg_time_to_first_sus,
+           &g_pstats.avg_time_to_first_thermal,
+           &g_pstats.avg_max_temp,
+           &g_pstats.avg_gap_p0,
+           &g_pstats.avg_efficiency);
+    fclose(f);
+    if (g_pstats.session_count > PERSISTENT_STATS_MAX_SESSIONS)
+        g_pstats.session_count = PERSISTENT_STATS_MAX_SESSIONS;
+}
+
+static void persistent_stats_save(const asb_fsm_t *fsm) {
+    /* Only save if we have meaningful data */
+    if (fsm->ses_sustained_entries == 0 && fsm->ses_time_heavy_sec < 30)
+        return;
+    float alpha = 1.0f / (g_pstats.session_count + 1);
+    if (alpha < 0.1f) alpha = 0.1f; /* EMA: min weight 10% for new data */
+    /* Update rolling averages */
+    if (fsm->ses_time_to_first_sus > 0)
+        g_pstats.avg_time_to_first_sus =
+            g_pstats.avg_time_to_first_sus * (1 - alpha) + fsm->ses_time_to_first_sus * alpha;
+    if (fsm->ses_time_to_first_thermal > 0)
+        g_pstats.avg_time_to_first_thermal =
+            g_pstats.avg_time_to_first_thermal * (1 - alpha) + fsm->ses_time_to_first_thermal * alpha;
+    if (fsm->ses_max_temp > 0)
+        g_pstats.avg_max_temp =
+            g_pstats.avg_max_temp * (1 - alpha) + fsm->ses_max_temp * alpha;
+    if (fsm->ses_gap_samples > 0) {
+        int avg_gap = (int)(fsm->ses_gap_p0_sum / fsm->ses_gap_samples);
+        g_pstats.avg_gap_p0 =
+            g_pstats.avg_gap_p0 * (1 - alpha) + avg_gap * alpha;
+    }
+    if (fsm->ses_sustained_efficiency >= 0)
+        g_pstats.avg_efficiency =
+            g_pstats.avg_efficiency * (1 - alpha) + fsm->ses_sustained_efficiency * alpha;
+    if (g_pstats.session_count < PERSISTENT_STATS_MAX_SESSIONS)
+        g_pstats.session_count++;
+    FILE *f = fopen(PERSISTENT_STATS_FILE, "w");
+    if (!f) return;
+    fprintf(f, "{\"count\":%d,\"t2s\":%.1f,\"t2th\":%.1f,\"temp\":%.1f,\"gap\":%.0f,\"eff\":%.1f}",
+            g_pstats.session_count,
+            g_pstats.avg_time_to_first_sus,
+            g_pstats.avg_time_to_first_thermal,
+            g_pstats.avg_max_temp,
+            g_pstats.avg_gap_p0,
+            g_pstats.avg_efficiency);
+    fclose(f);
 }
 
 /* ─── Profile reader ────────────────────────────────────────── */
@@ -367,6 +449,10 @@ int main(int argc, char **argv) {
     asb_config_apply_highload_mode(&g_asb_cfg);
     thermal_discover();
     writer_init_cache();
+    persistent_stats_load();
+    asb_log("persistent stats: sessions=%d avg_t2s=%.0fs avg_temp=%.0f°C avg_gap=%.0f avg_eff=%.0f",
+            g_pstats.session_count, g_pstats.avg_time_to_first_sus,
+            g_pstats.avg_max_temp, g_pstats.avg_gap_p0, g_pstats.avg_efficiency);
 
     int profile_idx = read_profile_idx();
     asb_log("initial profile: %d", profile_idx);
@@ -466,7 +552,9 @@ int main(int argc, char **argv) {
                 g_asb_cfg.msm_perf_boost_only,
                     g_asb_cfg.thermal_throttle_temp,
                     g_asb_cfg.highload_mode == 1 ? "burst" :
-                    g_asb_cfg.highload_mode == 2 ? "stable" : "default");
+                    g_asb_cfg.highload_mode == 2 ? "stable" : "default",
+                    g_asb_cfg.bat_fast_idle_s,
+                    g_asb_cfg.bat_suppress_gaming);
         asb_log("diag: bat_fast_idle=%ds bat_light_idle_gpu=%d%% bat_suppress_gaming=%d",
                 g_asb_cfg.bat_fast_idle_s,
                 g_asb_cfg.bat_light_idle_gpu,
@@ -724,17 +812,38 @@ int main(int argc, char **argv) {
                             fsm.ses_thermal_entries++;
                             asb_log("enter_sustained: thermal temp>=%d thermal_cap=%d",
                                     g_asb_cfg.sustained_temp_enter, fsm.thermal_cap);
+                            /* Record time-to-first thermal SUSTAINED */
+                            if (fsm.ses_time_to_first_thermal == 0 && fsm.ses_start_ts > 0)
+                                fsm.ses_time_to_first_thermal = time(NULL) - fsm.ses_start_ts;
+                            /* Recovery counter: each thermal collapse after the first */
+                            if (fsm.ses_sustained_entries > 1)
+                                fsm.ses_recovery_count++;
                         }
                     }
                     if (fsm.prev_state == ASB_STATE_SUSTAINED) {
                         const char *reason = (metrics.therm.cpu_max_c < g_asb_cfg.sustained_temp_enter)
                                              ? "temp_dropped"
                                              : "no_longer_heavy";
-                        asb_log("exit_sustained: %s t=%d°C (exit_thresh=%d) -> %s cooldown=%ds",
+                        /* Compute sustained_efficiency score 0-100
+                         * High score = small cap gap + moderate temperature
+                         * Low score  = deep thermal throttle + hot chip */
+                        int _avg_gap = (fsm.ses_gap_samples > 0)
+                                       ? (int)(fsm.ses_gap_p0_sum / fsm.ses_gap_samples) : 0;
+                        int _gap_penalty  = (int)(_avg_gap / 15000);
+                        if (_gap_penalty > 50) _gap_penalty = 50;
+                        int _temp_penalty = (metrics.therm.cpu_max_c > 55)
+                                            ? (metrics.therm.cpu_max_c - 55) * 2 : 0;
+                        if (_temp_penalty > 50) _temp_penalty = 50;
+                        int _eff = 100 - _gap_penalty - _temp_penalty;
+                        if (_eff < 0) _eff = 0;
+                        /* Keep the worst (lowest) efficiency seen this session */
+                        if (fsm.ses_sustained_efficiency < 0 || _eff < fsm.ses_sustained_efficiency)
+                            fsm.ses_sustained_efficiency = _eff;
+                        asb_log("exit_sustained: %s t=%d°C (exit_thresh=%d) -> %s cooldown=%ds efficiency=%d/100",
                                 reason, metrics.therm.cpu_max_c,
                                 g_asb_cfg.sustained_temp_exit,
                                 asb_state_names[fsm.state],
-                                g_asb_cfg.gaming_retry_cooldown_s);
+                                g_asb_cfg.gaming_retry_cooldown_s, _eff);
                     }
                 }
             }
@@ -792,6 +901,8 @@ int main(int argc, char **argv) {
     if (uefd  >= 0) close(uefd);
     if (sockfd >= 0) close(sockfd);
     close(epfd);
+    persistent_stats_save(&fsm);
+    asb_log("persistent stats saved: sessions=%d", g_pstats.session_count);
     unlink(ASB_SOCK_PATH);
     unlink(PID_FILE);
     if (g_logf) fclose(g_logf);
