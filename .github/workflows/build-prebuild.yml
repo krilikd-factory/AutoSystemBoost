@@ -1,4 +1,4 @@
-name: ASB-V23
+name: ASB build
 
 on:
   workflow_dispatch:   # Ручной запуск из GitHub UI → только artifact
