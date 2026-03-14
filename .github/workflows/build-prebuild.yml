@@ -128,7 +128,7 @@ jobs:
       # ── Упаковка zip ─────────────────────────────────────────────────────
       - name: Create release zip
         run: |
-          ZIP_NAME="ASB-V22.zip"
+          ZIP_NAME="ASB-V23.zip"
           rm -f "$ZIP_NAME"
           cd .pkg && zip -r "../$ZIP_NAME" . -x "*.DS_Store" && cd ..
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
