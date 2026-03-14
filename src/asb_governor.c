@@ -583,6 +583,7 @@ int main(int argc, char **argv) {
                     if (strcmp(pname, "performance") == 0) new_idx = PROFILE_PERFORMANCE;
                     if (new_idx != fsm.profile_idx) {
                         fsm.profile_idx = new_idx;
+                        fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
                         profile_changed = 1;
                         force_write = 1;
                         need_metrics = 1;
