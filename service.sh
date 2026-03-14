@@ -176,7 +176,6 @@ asb_governor_running() {
 asb_governor_start() {
   [ -x "$ASB_GOV" ] || return 1
   asb_governor_running && return 0
-  # Создаём config директорию и копируем governor.conf если его нет
   mkdir -p "$MODDIR/config"
   if [ ! -f "$MODDIR/config/governor.conf" ] && [ -f "$MODDIR/config/governor.conf.default" ]; then
     cp "$MODDIR/config/governor.conf.default" "$MODDIR/config/governor.conf"
@@ -1129,7 +1128,7 @@ apply_camera_experimental() {
 
   if [ ! -f "$_orig" ]; then
     mkdir -p "$MODDIR/config"
-    echo "# ASB camera original values — для отката при удалении модуля" > "$_orig"
+    echo "# ASB camera original values" > "$_orig"
     for _prop in \
       persist.vendor.camera.mfnr.enable \
       persist.vendor.camera.eis.enable \
