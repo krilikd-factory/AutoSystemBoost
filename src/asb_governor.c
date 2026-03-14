@@ -454,7 +454,7 @@ int main(int argc, char **argv) {
         }
         asb_log("diag: msm_performance_interface=%s",
                 msm_perf_check() ? "available (kernel-level write)" : "not available (cpufreq only)");
-        asb_log("diag: cfg heavy_gpu=%d heavy_load=%.1f gaming_gpu=%d sustained_gpu=%d sustained_load=%.1f sustained_temp=%d/%d sustained_lvl=%.2f dwell=%d/%d/%d reassert=%d/%d boost_only=%d throttle_temp=%d highload_mode=%s",
+        asb_log("diag: cfg heavy_gpu=%d heavy_load=%.1f gaming_gpu=%d sustained_gpu=%d sustained_load=%.1f sustained_temp=%d/%d sustained_lvl=%.2f dwell=%d/%d/%d reassert=%d/%d boost_only=%d throttle_temp=%d highload_mode=%s bat_fast_idle=%d bat_suppress=%d",
                 g_asb_cfg.heavy_gpu_enter, g_asb_cfg.heavy_load_enter,
                 g_asb_cfg.gaming_gpu_enter, g_asb_cfg.sustained_gpu_min,
                 g_asb_cfg.sustained_load_min, g_asb_cfg.sustained_temp_enter,
@@ -467,6 +467,10 @@ int main(int argc, char **argv) {
                     g_asb_cfg.thermal_throttle_temp,
                     g_asb_cfg.highload_mode == 1 ? "burst" :
                     g_asb_cfg.highload_mode == 2 ? "stable" : "default");
+        asb_log("diag: bat_fast_idle=%ds bat_light_idle_gpu=%d%% bat_suppress_gaming=%d",
+                g_asb_cfg.bat_fast_idle_s,
+                g_asb_cfg.bat_light_idle_gpu,
+                g_asb_cfg.bat_suppress_gaming);
     }
     asb_log("initial state: %s mA=%d gpu=%d%% load=%.2f",
             asb_state_names[fsm.state],
