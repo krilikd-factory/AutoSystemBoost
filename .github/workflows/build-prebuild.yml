@@ -1,4 +1,4 @@
-name: Build ASB-V22
+name: Build ASB-V23
 
 on:
   workflow_dispatch:   # Ручной запуск из GitHub UI → только artifact
@@ -160,7 +160,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ASB-V22
+          name: ASB-V23
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
