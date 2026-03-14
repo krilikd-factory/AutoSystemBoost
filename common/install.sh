@@ -402,18 +402,15 @@ asb_prune_non_op15_vendor_overlays() {
   ui_print "[*] Keeping script/prop tweaks, pruning risky OP15 vendor overlays"
   ui_print "${SEPARATOR}"
 
-  # Bluetooth / audio policy overlays
   rm -f "$MODPATH/system/etc/permissions/Bluetooth.xml" 2>/dev/null || true
   rm -f "$MODPATH/system/etc/compatconfig/"*bluetooth*"xml" 2>/dev/null || true
   rm -f "$MODPATH/system/vendor/etc/"*bluetooth*"xml" 2>/dev/null || true
   rm -f "$MODPATH/system/vendor/etc/"*a2dp*"xml" 2>/dev/null || true
 
-  # Camera/media profiles are highly device-specific
   rm -f "$MODPATH/system/vendor/etc/media_profiles"*".xml" 2>/dev/null || true
   rm -f "$MODPATH/system/vendor/odm/etc/media_profiles"*".xml" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/etc/camera" 2>/dev/null || true
 
-  # Audio policy / mixer / audio codec overlays are device-specific
   rm -f "$MODPATH/system/etc/audio_effects.xml" 2>/dev/null || true
   for _f in audio_effects_config.xml audio_policy_configuration.xml ftm_mixer_paths.xml mixer_paths.xml resourcemanager.xml usb_audio_policy_configuration.xml virtual_audio_policy_configuration.xml; do
     rm -f "$MODPATH/system/vendor/etc/${_f}" 2>/dev/null || true
@@ -423,7 +420,6 @@ asb_prune_non_op15_vendor_overlays() {
   rm -rf "$MODPATH/system/vendor/etc/audio" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/etc/audio" 2>/dev/null || true
 
-  # GPS / Wi-Fi configs may also be vendor-tuned per device
   rm -rf "$MODPATH/system/vendor/etc/wifi" 2>/dev/null || true
   rm -f  "$MODPATH/system/vendor/etc/xtwifi.conf" 2>/dev/null || true
   rm -f  "$MODPATH/system/vendor/odm/etc/xtwifi.conf" 2>/dev/null || true
@@ -1204,18 +1200,14 @@ AutoSystemBoost' $APIOCXM
 	if [ "${ASB_KERNEL}" = "true" ]; then
 	  settings put global audio_safe_volume_state 0
 	fi
-	# ble_scan_always_enabled убран — может навсегда сломать BT сканирование
-	# особенно при ZeroMount/OverlayFS после перезагрузки
-
+	
 	rm -rf $MODPATH/tools
 
 	if [ "${ASB_LOG}" = "true" ]; then
 	  rm -rf /data/*bsplog*/*
 	  rm -rf /data/*/*bsplog*/*
 	  rm -rf /data/*/*/*bsplog*/*
-	  # Android DropBoxManager: оставляем не более 5 самых новых файлов
-	  # (синхронизировано с dropbox_max_files=5 в service.sh)
-	  for _dbdir in /data/system/dropbox /data/vendor/dropbox; do
+	  	  for _dbdir in /data/system/dropbox /data/vendor/dropbox; do
 	    [ -d "$_dbdir" ] || continue
 	    ls -t "$_dbdir" 2>/dev/null | tail -n +6 | while read -r _f; do
 	      rm -f "$_dbdir/$_f" 2>/dev/null || true
