@@ -1,26 +1,183 @@
+# 🚀 AutoSystemBoost V22 MAJOR RELEASE
+
+Compared to V21 | Date: 2026-03-14
+
+---
+
+# 🌟 What Changed in V22
+
+`ASB-V22` is not a maintenance patch on top of V21.  
+It is the release where AutoSystemBoost evolves from a working native governor into a **session-aware adaptive runtime** with a fundamentally smarter high-load engine.
+
+**V21 = first native adaptive governor release**  
+**V22 = first session-intelligent high-load governor release**
+
+---
+
+# 🧠 Session-Aware High-Load Engine
+
+| Area | V21 | V22 |
+|------|-----|-----|
+| SUSTAINED state | Basic thermal-reactive | **Gap-aware + session-intelligent** |
+| High-load strategy | Fixed behavior | **Configurable burst / stable / auto** |
+| Session telemetry | None | **Full counters, timings, gap tracking** |
+| Thermal sensor | Per-core hotspot (95–100°C) | **Cluster-level cpullc (55–70°C)** |
+| Battery governor | Generic FSM | **Dedicated battery mode + GAMING suppression** |
+| Auto degrade | None | **Burst → stable by gap or thermal ratio** |
+
+---
+
+# ⚙️ SUSTAINED State — Full Evolution
+
+### Gap-aware entry
+
+| Trigger | V21 | V22 |
+|---------|-----|-----|
+| Thermal throttle ≥ 65°C | ✅ | ✅ |
+| GAMING caps unreachable (gap > 1500 MHz for 8s) | ❌ | ✅ **new** |
+
+### Hysteresis and cycling prevention
+
+| Feature | V21 | V22 |
+|---------|-----|-----|
+| `sustained_temp_exit=55` — exit hysteresis | ❌ | ✅ |
+| `no_longer_heavy` exit obeys temp threshold | ❌ (bypassed) | ✅ fixed |
+| `sustained_reentry_cooldown_s=20` | ❌ | ✅ |
+| `gaming_retry_cooldown_s=30` | ❌ | ✅ |
+| `gaming_retry_temp_max=50` — temperature gate | ❌ | ✅ |
+
+### Result
+✅ Stable SUSTAINED episodes instead of rapid cycling  
+✅ GAMING entry only when thermally viable  
+✅ `cap_gap_p0/p1` visible in `asb status` — shows real throttle depth  
+
+---
+
+# 📊 Session Telemetry
+
+New in `asb status` and `cat /dev/.asb/state`:
+
+| Counter | Description |
+|---------|-------------|
+| `ses_gaming` | GAMING entries this session |
+| `ses_sustained` | SUSTAINED entries this session |
+| `ses_thermal` / `ses_unreachable` | Thermal vs gap-triggered SUSTAINED |
+| `ses_t_heavy` / `ses_t_gaming` / `ses_t_sustained` | Time in each state (seconds) |
+| `ses_avg_gap_p0` | Average GAMING cap gap (kHz) |
+| `ses_max_temp` | Peak temperature this session (°C) |
+| `ses_auto_degraded` | Whether auto mode degraded burst → stable |
+| `bat_deep_idle` / `bat_light_idle` | Deep/light idle time in battery mode |
+| `bat_wake_cycles` | Wake-from-deep-idle count |
+
+Reset: `asb reset-stats`
+
+---
+
+# 🎯 Adaptive High-Load Strategy (`highload_mode`)
+
+| Mode | Behavior | Best for |
+|------|----------|----------|
+| `default` | Parameters from config | Manual tuning |
+| `burst` | Aggressive retry, `sustained_level=0.85`, short cooldowns | Benchmarks |
+| `stable` | Conservative retry, `sustained_level=0.78`, long cooldowns | Long gaming |
+| `auto` | Starts as burst, degrades to stable on session data | All-purpose |
+
+**Auto degrade fires when either condition is met:**
+- `avg_gap_p0 > 800 MHz` AND `sus_entries ≥ 4 × gaming_entries`
+- `time_in_sustained > 60%` of active time (over 120s minimum)
+
+---
+
+# 🌡️ Thermal Sensor Fix — Critical for SD8 Elite
+
+| | V21 | V22 |
+|--|-----|-----|
+| Sensor | Per-core hotspot `cpu-1-1` | **Cluster average `cpullc-0-0`** |
+| Typical load reading | 95–100°C (false) | **55–70°C (accurate)** |
+| Impact | Premature SUSTAINED, instability | **Correct SUSTAINED timing** |
+
+---
+
+# 🔋 Battery Profile — Dedicated Governor Mode
+
+| Feature | V21 | V22 |
+|---------|-----|-----|
+| GAMING suppression | None | **`bat_suppress_gaming=1` — GAMING blocked** |
+| Fast deep idle | None | **`bat_fast_idle_s=15`** |
+| GPU cap in light idle | None | **`bat_light_idle_gpu=10` (10% GPU)** |
+| Battery telemetry | None | **3 new counters** |
+
+---
+
+# 🛠 Stability Fixes
+
+| Fix | Impact |
+|-----|--------|
+| Watchdog 90s → 240s | Eliminates spurious governor restarts during screen-off |
+| mA guard removed from GAMING | Noisy mA sensor no longer blocks GAMING at gpu=99% |
+| SUSTAINED hysteresis direction fix | `no_longer_heavy` exit now correctly blocked by temp |
+| Duplicate `fsm_session_reset` removed | Clean reload behavior |
+| `highload_mode=auto` display fix | Was showing `default` in diag |
+
+---
+
+# ⚙️ New governor.conf Parameters (V22)
+
+```ini
+sustained_temp_exit=55          # exit hysteresis °C
+gaming_retry_cooldown_s=30      # cooldown before GAMING retry
+gaming_retry_temp_max=50        # temperature gate for retry
+sustained_reentry_cooldown_s=20 # min interval between SUSTAINED episodes
+gaming_gap_thresh=1500000       # gap threshold for gap-aware entry (kHz)
+gaming_gap_ticks=4              # ticks above threshold to trigger
+highload_mode=default           # burst / stable / auto / default
+auto_degrade_gap_thresh=800000  # auto degrade gap threshold (kHz)
+auto_degrade_sus_ratio=4        # auto degrade sus/gaming ratio
+auto_degrade_thermal_pct=60     # auto degrade time-in-SUSTAINED %
+bat_fast_idle_s=15              # fast deep idle in battery mode
+bat_light_idle_gpu=10           # GPU % cap in LIGHT_IDLE battery mode
+bat_suppress_gaming=1           # block GAMING in battery mode
+```
+
+---
+
+# 📦 Developer Tools
+
+`tools/asb_analyze.py` — Python session log analyzer:
+
+```bash
+python3 asb_analyze.py session1.txt session2.txt
+```
+
+Outputs: state distribution, SUSTAINED episodes, gap stats, thermal escalation rate,  
+cycling detection, and a comparative table across sessions.
+
+---
+
+# ✅ V22 Summary
+
+✔ **gap-aware SUSTAINED** — practical mode when GAMING caps are unreachable  
+✔ **session telemetry** — 15 counters across all high-load states  
+✔ **adaptive `highload_mode`** — burst / stable / auto  
+✔ **thermal sensor fix** — cluster temp, not hotspot, on SD8 Elite  
+✔ **battery governor mode** — GAMING blocked, fast deep idle, battery counters  
+✔ **SUSTAINED hysteresis** — exit threshold, reentry cooldown, cycling fixed  
+✔ **5 structural bugfixes** — watchdog, mA guard, hysteresis direction, degrade display  
+✔ **Python log analyzer** — `tools/asb_analyze.py`  
+
+**V22 makes ASB understand what the session is actually doing — not just react to it.**
+
+---
+
 # 🚀 AutoSystemBoost V21 MAJOR RELEASE
 
-Compared to V20  
-Date: 2026-03-12
+Compared to V20 | Date: 2026-03-12
 
 ---
 
 # 🌟 What Changed in V21
 
-`ASB-V21` is not a small follow-up to V20.  
-It is the release where AutoSystemBoost moves from a strong profile-based module into a **native adaptive runtime platform**.
-
-While `V20` already introduced a smarter profile system with stronger runtime behavior, `V21` adds a much bigger leap:
-
-- a built-in **native governor**
-- adaptive runtime state handling
-- socket-based profile control
-- bundled governor binary inside the module
-- better profile retention and stronger real-world separation between modes
-- cleaner shell/runtime role split
-- more advanced diagnostics and developer visibility
-
-In simple terms:
+`ASB-V21` moves AutoSystemBoost from a profile-based module into a **native adaptive runtime platform**.
 
 **V20 = strong modern profile release**  
 **V21 = first native adaptive governor release**
@@ -30,316 +187,49 @@ In simple terms:
 # 🧠 Native Adaptive Governor
 
 | Area | V20 | V21 |
-|------|------|------|
-| Runtime brain | Shell-driven runtime logic | **Native governor daemon** |
-| Control path | Shell profile apply + runtime logic | **Socket-controlled adaptive runtime** |
-| Governor process | No | **Yes** |
-| State tracking | Implicit / script-driven | **Explicit runtime states** |
+|------|-----|-----|
+| Runtime brain | Shell-driven | **Native governor daemon** |
+| Control path | Shell profile apply | **Socket-controlled adaptive runtime** |
+| State tracking | Implicit | **Explicit FSM (5 states)** |
 | Adaptive FSM | No | **Yes** |
-| Runtime logs / state files | Basic | **Much stronger** |
+| Runtime logs | Basic | **`/dev/.asb/governor.log`** |
 
-The biggest V21 change is the introduction of a **native governor**.
+### FSM States
 
-This means AutoSystemBoost no longer relies only on shell logic for runtime control.  
-Instead, V21 introduces a dedicated binary runtime layer that can:
-
-- stay alive as a daemon
-- track runtime state
-- receive profile commands
-- manage adaptive transitions more intelligently
-- expose status/state information for diagnostics
-
-### Result
-✅ runtime behavior becomes more coherent  
-✅ profile switching is no longer just a file change  
-✅ the module feels more like a real governor platform than a shell tweak pack
-
----
-
-# ⚙️ Runtime State Engine
-
-| Area | V20 | V21 |
-|------|------|------|
-| Runtime state visibility | Limited | **Visible / structured** |
-| Adaptive state machine | No | **Yes** |
-| Idle / active distinction | Profile logic only | **Native runtime states** |
-| Heavy / gaming behavior | Indirect | **Explicitly modeled** |
-
-V21 introduces an adaptive runtime state model with states such as:
-
-- `DEEP_IDLE`
-- `LIGHT_IDLE`
-- `MODERATE`
-- `HEAVY`
-- `GAMING`
-
-Instead of treating runtime behavior as only static profile values, V21 can now adjust behavior according to what the device is actually doing.
-
-### Why this matters
-This creates a much more natural separation between:
-- idle behavior
-- everyday use
-- heavier activity
-- gaming / high GPU load
-
-### Result
-✅ better real-world behavior  
-✅ stronger runtime identity  
-✅ less dependence on blunt static assumptions
-
----
-
-# 🔄 Profile Switching Is More Real
-
-| Area | V20 | V21 |
-|------|------|------|
-| Live profile switching | Yes | **Yes** |
-| Runtime profile command path | Shell-heavy | **Governor-aware** |
-| Internal profile state | Good | **Stronger** |
-| Profile persistence / retention | Good | **Better** |
-
-V20 already had runtime profiles.  
-V21 makes them feel much more real.
-
-The profile system in V21 is no longer just:
-- write profile file
-- hope shell logic applies it cleanly
-
-Instead, V21 adds a stronger control path where profile changes can be communicated to the running governor.
-
-### Result
-✅ profile changes feel more coherent  
-✅ Battery / Balanced / Performance are more clearly separated  
-✅ runtime profile identity is stronger than in V20
-
----
-
-# 🔋 Battery Profile Maturity
-
-| Area | V20 | V21 |
-|------|------|------|
-| Battery profile identity | Strong | **More real and more reliable** |
-| Battery mode separation | Good | **Better** |
-| Runtime application confidence | Good | **Higher** |
-
-Battery in V21 feels less like a decorative saver label and more like a genuinely distinct runtime mode.
-
-Compared to V20, V21 improves:
-- profile control consistency
-- runtime ownership
-- actual differentiation from Balanced and Performance
-
-### Result
-✅ Battery behaves more like a true saver profile  
-✅ less chance of profile logic collapsing into a “balanced-only” feel  
-✅ stronger day-to-day confidence in the Battery profile
-
----
-
-# ⚖️ Balanced Profile Refinement
-
-Balanced was already very strong in V20.  
-V21 keeps that strength but places it inside a more advanced runtime system.
-
-### In practical terms
-Balanced in V21 becomes:
-- a more stable default profile
-- a cleaner middle ground between Battery and Performance
-- a better anchor for the adaptive governor logic
-
-### Result
-✅ stronger default daily profile  
-✅ cleaner interaction with runtime states  
-✅ better overall consistency
-
----
-
-# 🔥 Performance Profile Improvements
-
-| Area | V20 | V21 |
-|------|------|------|
-| Performance identity | Strong | **Stronger** |
-| Runtime handling | Profile-driven | **Governor-aware** |
-| High-load behavior | Better than older builds | **More structured** |
-| Gaming-oriented logic | Limited | **Improved** |
-
-Performance in V21 benefits from the new governor architecture more than any other profile.
-
-### Why
-Because Performance is the profile most sensitive to:
-- runtime state changes
-- high-load response
-- profile drift
-- real ceiling retention
-
-With V21, the module is much better positioned to behave like a real performance mode instead of only a set of static values.
-
-### Result
-✅ stronger high-load identity  
-✅ better platform for gaming-oriented behavior  
-✅ more mature direction for future runtime tuning
+- `DEEP_IDLE` — screen off, minimal wakeups
+- `LIGHT_IDLE` — screen on, low activity
+- `MODERATE` — medium CPU / background
+- `HEAVY` — sustained high load
+- `GAMING` — GPU ≥ 65%, full performance
 
 ---
 
 # 📦 Bundled Governor Binary
 
 | Area | V20 | V21 |
-|------|------|------|
-| Native binary included | No | **Yes** |
-| Runtime binary deployment | No | **Yes** |
-| Native source tree | No | **Yes** |
-
-V21 introduces a bundled native governor binary together with its source code.
-
-This is a major structural shift.
-
-The module is no longer only:
-- shell scripts
-- props
-- profile files
-- WebUI
-
-It now also contains:
-- native governor source
-- native build flow
-- packaged runtime binary
-
-### Result
-✅ stronger technical foundation  
-✅ better path for future growth  
-✅ clearer separation between runtime engine and shell helper layer
+|------|-----|-----|
+| Native binary | No | **Yes (`bin/asb`)** |
+| Source tree | No | **Yes (`src/`)** |
+| Runtime ownership | Shell | **Governor daemon + shell fallback** |
 
 ---
 
-# 🧩 Shell Layer vs Governor Layer
+# 🔍 Diagnostics
 
-One of the most important V21 improvements is architectural, not cosmetic.
-
-V20 still relied heavily on shell logic as the main runtime owner.  
-V21 begins to split responsibilities more cleanly:
-
-### Governor handles
-- adaptive runtime state
-- live governor logic
-- runtime profile ownership
-- state / log / socket control
-
-### Shell remains responsible for
-- module bootstrap
-- profile safety net
-- fallback behavior
-- supporting one-shot tasks
-
-### Result
-✅ cleaner runtime architecture  
-✅ less “everything in service.sh” pressure  
-✅ better long-term maintainability
+| Feature | V20 | V21 |
+|---------|-----|-----|
+| State file | No | **`/dev/.asb/state`** |
+| Governor log | No | **`/dev/.asb/governor.log`** |
+| JSON status | No | **`asb status`** |
+| Profile command | File change | **`asb profile:performance`** |
 
 ---
 
-# 🔍 Better Diagnostics & Debugging
+# ✅ V21 Summary
 
-| Area | V20 | V21 |
-|------|------|------|
-| Runtime visibility | Limited | **Much better** |
-| Explicit state file | No | **Yes** |
-| Governor log | No | **Yes** |
-| Runtime status reporting | Limited | **Yes** |
-
-V21 introduces a much stronger diagnostic layer through:
-
-- runtime state files
-- governor logging
-- explicit status reporting
-- better visibility into what the runtime layer is actually doing
-
-This matters not only for development, but also for trust:
-V21 is easier to verify and easier to debug than V20.
-
-### Result
-✅ better transparency  
-✅ better troubleshooting  
-✅ more confidence when validating Battery / Balanced / Performance behavior
-
----
-
-# 🎨 WebUI & Presentation
-
-| Area | V20 | V21 |
-|------|------|------|
-| WebUI baseline | Good | **Cleaner / more polished** |
-| Version presentation | Good | **Updated** |
-| Encoding / display handling | Good | **Improved** |
-| General product feel | Strong | **More mature** |
-
-V21 continues polishing the visual and user-facing layer with:
-- cleaner presentation
-- better handling of display details
-- a more product-like feel
-
-This is not the main reason to upgrade, but it contributes to the overall maturity of the release.
-
----
-
-# 🛠 Codebase Scope of the Upgrade
-
-Compared to V20, V21 adds or changes meaningful code in areas such as:
-
-- `service.sh`
-- `action.sh`
-- `module.prop`
-- `common/install.sh`
-- `common/functions.sh`
-- `webroot/index.html`
-- `src/asb_governor.c`
-- `src/asb_fsm.h`
-- `src/asb_metrics.h`
-- `src/asb_learner.h`
-- `src/asb_writer.h`
-- `src/asb_socket.h`
-- native build scripts / native Makefile
-- bundled governor binary
-
-This is a true platform-level change, not a cosmetic version bump.
-
----
-
-# 📊 Real Philosophy Shift
-
-V20 was the release where AutoSystemBoost became a strong profile platform.
-
-V21 is the release where AutoSystemBoost begins to behave like an **adaptive runtime system**.
-
-### In practical terms
-
-| Scenario | V20 | V21 |
-|------|------|------|
-| Strong profile-based tuning | Excellent | Excellent |
-| Native adaptive runtime | No | **Yes** |
-| Distinct profile identity | Good | **Better** |
-| Runtime introspection | Good | **Much better** |
-| Long-term governor foundation | Limited | **Strong** |
-
----
-
-# ✅ Summary
-
-`ASB-V21` is a **major architectural release** over `ASB-V20`.
-
-Main V21 additions:
-
-✔ built-in **native adaptive governor**  
-✔ explicit runtime state engine  
+✔ native adaptive governor daemon  
+✔ explicit 5-state runtime FSM  
 ✔ socket-based profile control  
-✔ bundled governor binary and source tree  
-✔ stronger Battery / Balanced / Performance separation  
-✔ cleaner shell vs runtime role split  
-✔ much better runtime diagnostics  
-✔ more mature WebUI and product polish  
-
-### Final verdict
-
-- **V20** = strong profile-based major release  
-- **V21** = first true native adaptive governor release
-
-If V20 moved ASB forward as a better runtime profile platform, then **V21 is the release that turns ASB into a real adaptive runtime system**.
+✔ bundled binary + source tree  
+✔ runtime diagnostics and state visibility  
+✔ cleaner shell vs governor role split  
