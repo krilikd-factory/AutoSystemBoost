@@ -243,6 +243,13 @@ typedef struct {
     struct timespec ses_state_enter;         /* timestamp of current state entry */
     int             ses_auto_degraded;       /* 1 = auto has degraded to stable-like mode */
 
+    /* Session intelligence — time-to-first metrics */
+    long            ses_time_to_first_sus;    /* seconds from session start to first SUSTAINED */
+    long            ses_time_to_first_thermal;/* seconds from session start to first thermal SUSTAINED */
+    int             ses_sustained_efficiency; /* 0-100 score: how good was SUSTAINED this session */
+    int             ses_recovery_count;       /* thermal collapses requiring recovery this session */
+    time_t          ses_start_ts;             /* session start timestamp for time-to-first calcs */
+
     /* Battery-mode telemetry */
     long            bat_time_deep_idle_sec;   /* total time in DEEP_IDLE in battery mode (s) */
     long            bat_time_light_idle_sec;  /* total time in LIGHT_IDLE in battery mode */
@@ -300,6 +307,11 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
     fsm->bat_time_light_idle_sec = 0;
     fsm->bat_wake_cycles         = 0;
     fsm->bat_gaming_suppressed   = 0;
+    fsm->ses_time_to_first_sus    = 0;
+    fsm->ses_time_to_first_thermal= 0;
+    fsm->ses_sustained_efficiency = -1; /* -1 = not yet computed */
+    fsm->ses_recovery_count       = 0;
+    fsm->ses_start_ts             = time(NULL);
 }
 
 /* ─── Transition logic ─────────────────────────────────────── */
@@ -427,9 +439,15 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             time_t now_t = time(NULL);
             int cooldown_active = (fsm->gaming_retry_until > 0 &&
                                    now_t < fsm->gaming_retry_until);
-            /* Temperature gate: retry only if chip has cooled */
+            /* Temperature gate: retry only if chip has cooled.
+             * Recovery discipline: after multiple thermal collapses this session,
+             * apply a stricter temperature gate (5°C lower than config). */
+            int temp_max = g_asb_cfg.gaming_retry_temp_max;
+            if (temp_max > 0 && fsm->ses_recovery_count >= 2)
+                temp_max -= 5; /* stricter after repeated thermal collapses */
+            if (temp_max < 30) temp_max = 30;
             int too_hot = (g_asb_cfg.gaming_retry_temp_max > 0 &&
-                           m->therm.cpu_max_c > g_asb_cfg.gaming_retry_temp_max &&
+                           m->therm.cpu_max_c > temp_max &&
                            fsm->gaming_retry_until > 0); /* only after SUSTAINED */
             if (cooldown_active || too_hot) {
                 desired = ASB_STATE_HEAVY;
@@ -567,8 +585,12 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         /* Count state entries */
         if (fsm->state == ASB_STATE_GAMING)
             fsm->ses_gaming_entries++;
-        if (fsm->state == ASB_STATE_SUSTAINED)
+        if (fsm->state == ASB_STATE_SUSTAINED) {
             fsm->ses_sustained_entries++;
+            /* Record time-to-first-SUSTAINED */
+            if (fsm->ses_time_to_first_sus == 0 && fsm->ses_start_ts > 0)
+                fsm->ses_time_to_first_sus = time(NULL) - fsm->ses_start_ts;
+        }
         /* Battery: count suppressed GAMING entries */
         if (fsm_profile_is_battery &&
             g_asb_cfg.bat_suppress_gaming &&
