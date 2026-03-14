@@ -172,7 +172,7 @@ static void fsm_interpolate_caps(
     asb_profile_caps_t *out)
 {
     float t = (state == ASB_STATE_SUSTAINED)
-              ? g_asb_cfg.sustained_level   /* configurable SUSTAINED level */
+              ? g_asb_cfg.sustained_level
               : g_state_level[state];
     const asb_profile_caps_t *f = &bounds->floor;
     const asb_profile_caps_t *c = &bounds->ceil;
@@ -183,6 +183,12 @@ static void fsm_interpolate_caps(
     }
     out->gpu_max_pct    = lerp_int(f->gpu_max_pct,    c->gpu_max_pct,    t);
     out->gpu_min_pct    = lerp_int(f->gpu_min_pct,    c->gpu_min_pct,    t);
+    /* Battery: cap GPU in LIGHT_IDLE to reduce idle power draw */
+    if (fsm_profile_is_battery &&
+        state == ASB_STATE_LIGHT_IDLE &&
+        g_asb_cfg.bat_light_idle_gpu >= 0 &&
+        out->gpu_max_pct > g_asb_cfg.bat_light_idle_gpu)
+        out->gpu_max_pct = g_asb_cfg.bat_light_idle_gpu;
     out->ravg_ticks     = lerp_int(f->ravg_ticks,     c->ravg_ticks,     t > 0.5f ? 1.0f : 0.0f);
     out->idle_enough    = lerp_int(f->idle_enough,    c->idle_enough,    t);
     out->uclamp_top_max = lerp_int(f->uclamp_top_max, c->uclamp_top_max, t);
@@ -447,6 +453,16 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                      ? fsm->up_window
                      : fsm->down_window;
         if (thermal_to_sustained) window = 1;
+        /* Battery: faster transition from LIGHT_IDLE to DEEP_IDLE */
+        if (fsm_profile_is_battery &&
+            g_asb_cfg.bat_fast_idle_s > 0 &&
+            fsm->state == ASB_STATE_LIGHT_IDLE &&
+            desired == ASB_STATE_DEEP_IDLE) {
+            /* bat_fast_idle_s is in seconds; convert to ticks (2s each) */
+            int fast_w = g_asb_cfg.bat_fast_idle_s / 2;
+            if (fast_w < 1) fast_w = 1;
+            if (fast_w < window) window = fast_w;
+        }
 
         if (fsm->pending_ticks >= window && desired != fsm->state) {
             int can_leave = 1;
