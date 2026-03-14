@@ -13,7 +13,7 @@ asb_resolve_moddir() {
 MODDIR="$(asb_resolve_moddir)"
 
 # Load utility functions and profile system
-[ -r "$MODDIR/common/asb_utils.sh" ]   && . "$MODDIR/common/asb_utils.sh"
+[ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
 [ -r "$MODDIR/common/profile_core.sh" ] && . "$MODDIR/common/profile_core.sh"
 ASB_STATE_LOG="/dev/.asb_profile_state/runtime_apply.log"
 asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$ASB_STATE_LOG" 2>/dev/null || true; }
@@ -1107,7 +1107,7 @@ apply_extra_settings
   [ "$_fg" != "0" ] && setprop persist.sys.power.fuel.gauge 0 2>/dev/null
 ) >/dev/null 2>&1 &
 (
-  [ -r "$MODDIR/common/asb_reconcile.sh" ] && . "$MODDIR/common/asb_reconcile.sh"
+  [ -r "$MODDIR/runtime/asb_reconcile.sh" ] && . "$MODDIR/runtime/asb_reconcile.sh"
 ) >/dev/null 2>&1 &
 (
   sleep 60
@@ -1144,7 +1144,7 @@ apply_extra_settings
   asb_feature_enabled VM && apply_doze
 ) >/dev/null 2>&1 &
 (
-  [ -r "$MODDIR/common/asb_watchdog.sh" ] && . "$MODDIR/common/asb_watchdog.sh"
+  [ -r "$MODDIR/runtime/asb_watchdog.sh" ] && . "$MODDIR/runtime/asb_watchdog.sh"
 ) >/dev/null 2>&1 &
 
 exit 0
