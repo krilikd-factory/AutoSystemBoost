@@ -481,6 +481,25 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                      ? fsm->up_window
                      : fsm->down_window;
         if (thermal_to_sustained) window = 1;
+        /* Battery: slower upward to HEAVY/MODERATE — resist brief spikes.
+         * Require 2× more ticks to enter HEAVY from LIGHT_IDLE in battery
+         * (4 ticks = 8s instead of 2 ticks = 4s). Prevents screen-wake
+         * load spikes from pushing governor into high states needlessly. */
+        if (fsm_profile_is_battery && desired > fsm->state &&
+            desired >= ASB_STATE_MODERATE &&
+            fsm->state <= ASB_STATE_LIGHT_IDLE) {
+            window = fsm->up_window * 2;
+        }
+        /* Battery: faster downward transitions.
+         * HEAVY/MODERATE → LIGHT_IDLE in battery uses half the normal
+         * down_window (2 ticks = 4s instead of 5 ticks = 10s).
+         * This prevents battery mode from lingering in high states. */
+        if (fsm_profile_is_battery && desired < fsm->state &&
+            fsm->state >= ASB_STATE_MODERATE) {
+            int bat_dw = fsm->down_window / 2;
+            if (bat_dw < 2) bat_dw = 2;
+            if (bat_dw < window) window = bat_dw;
+        }
         /* Battery: faster transition from LIGHT_IDLE to DEEP_IDLE */
         if (fsm_profile_is_battery &&
             g_asb_cfg.bat_fast_idle_s > 0 &&
