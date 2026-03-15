@@ -1,293 +1,193 @@
-# 🚀 AutoSystemBoost V23 MAJOR RELEASE
-
-Compared to V22 | Date: 2026-03-15
+# 🚀 AutoSystemBoost — Changelog
 
 ---
 
-# 🌟 What Changed in V23
+## V24 — Persistent Intelligence
 
-`ASB-V23` is not a maintenance patch on top of V22.  
-It is the release where AutoSystemBoost evolves from a session-aware adaptive governor into a **session-intelligent runtime with persistent memory, recovery discipline, and a modular architecture**.
-
-**V22 = first session-intelligent high-load governor release**  
-**V23 = first self-learning, recovery-aware, architecturally clean release**
+> **V23 = first session-aware governor with memory.**
+> **V24 = first governor that learns from its own past and changes behavior.**
 
 ---
 
-# 🧠 Session Intelligence — Time-to-First Metrics
+### 🧠 Core: Persistent Decision Layer
 
-V23 answers the question V22 could not: **how fast does this session actually break down?**
+V24 adds three feedback loops that read session history at startup and adjust governor behavior based on accumulated patterns. This is the transition from **reactive governor** to **adaptive system with memory**.
 
-| Metric | V22 | V23 |
-|--------|-----|-----|
-| Time to first SUSTAINED | ❌ | ✅ `ses_t2s` — seconds from reset to first SUSTAINED |
-| Time to first thermal collapse | ❌ | ✅ `ses_t2thermal` — seconds to first thermal-triggered SUSTAINED |
-| SUSTAINED quality score | ❌ | ✅ `ses_efficiency` — 0–100 score per session |
-| Thermal collapse counter | ❌ | ✅ `ses_recovery` — counts how many times thermal collapsed |
+#### Battery Feedback Loop #1 — Idle Discipline
 
-### What `ses_efficiency` measures
+Governor reads average `bat_ttd` (time-to-first-DEEP_IDLE) from past battery sessions:
+
+| Historical Pattern | Action | Result |
+|:-------------------|:-------|:-------|
+| `avg(bat_ttd)` > 60s | `bat_fast_idle_s` 15 → 10 | Faster sleep entry |
+| `avg(bat_ttd)` > 30s | `bat_fast_idle_s` 15 → 12 | Moderately faster |
+| `bat_fast_idle_s` < 5 | Clamped to floor **5s** | Safety guard |
+
+#### Battery Feedback Loop #2 — MODERATE Domination
+
+If battery sessions historically spend >60% of tracked idle time in MODERATE (instead of DEEP/LIGHT_IDLE), wake discipline is too loose:
 
 ```
-efficiency = 100 - gap_penalty - temp_penalty
-  gap_penalty  = avg_gap_p0 / 15000  (capped at 50)
-  temp_penalty = (max_temp - 55) × 2  (capped at 50)
+feedback: battery MODERATE=68% of idle time → bat_fast_idle 12→8
 ```
 
-- **100/100** = SUSTAINED at moderate temperature with small cap gap (useful throttle)
-- **~50/100** = deep thermal wall, heavily throttled
-- **< 30/100** = system was too hot and too throttled to be effective
+#### Auto History-Aware Startup
 
-**Logged on every SUSTAINED exit:**
+If >50% of accumulated sessions degraded from burst to stable, `highload_mode=auto` starts directly as stable — skipping the futile burst phase:
+
 ```
-exit_sustained: temp_dropped t=53°C → HEAVY cooldown=30s efficiency=87/100
+feedback: 6/10 sessions degraded → auto starting as stable
 ```
 
 ---
 
-# 💾 Persistent Session Memory
+### 📊 Session History (`session_history.jsonl`)
 
-V23 introduces the first **cross-session memory** in ASB history.
+Full session summaries stored as JSON Lines. Last 10 sessions, survives reboots.
 
-| | V22 | V23 |
-|-|-----|-----|
-| Session history | Resets on every restart | **Persists across runs** |
-| History file | None | `/dev/.asb/session_stats.json` |
-| Rolling average | None | **EMA across last 10 sessions** |
-
-### What is stored
+Each entry contains **24 fields** with schema version:
 
 ```json
-{"count":5,"t2s":95.0,"t2th":95.0,"temp":68.0,"gap":0.0,"eff":95.0}
+{"v":1,"ts":"2026-03-15 14:30","profile":"performance","mode":"auto","end":"screen_off",
+ "gaming":3,"sustained":2,"thermal":1,"unreachable":1,
+ "t_heavy":180,"t_gaming":95,"t_sustained":45,
+ "avg_gap":420000,"max_temp":67,"degraded":0,
+ "t2s":120,"t2th":180,"t2g":30,"eff":82,"recovery":1,"sus_pct":18,
+ "bat_deep":0,"bat_light":0,"bat_mod":0,"bat_wake":0,"bat_ttd":0}
 ```
 
-| Field | Meaning |
-|-------|---------|
-| `count` | Number of sessions accumulated |
-| `t2s` | Rolling avg seconds to first SUSTAINED |
-| `t2th` | Rolling avg seconds to first thermal collapse |
-| `temp` | Rolling avg peak temperature °C |
-| `gap` | Rolling avg GAMING cap gap kHz |
-| `eff` | Rolling avg sustained efficiency score |
+#### Session End Reasons
 
-**Shown in diag log at every governor startup:**
-```
-persistent stats: sessions=5 avg_t2s=95s avg_temp=68°C avg_gap=0 avg_eff=95
-```
+| `"end"` | Trigger |
+|:--------|:--------|
+| `screen_off` | Screen turned off (natural boundary) |
+| `shutdown` | Governor stopped (reboot / kill) |
+| `new_session` | `start-session:*` command received |
+| `idle_boundary` | 30 minutes of continuous DEEP_IDLE |
 
-**Visible in `asb status`:**
-```
-hist_sessions, hist_t2s, hist_temp, hist_gap, hist_eff
-```
+#### Atomic Write Protection
+
+History is written to `.tmp` first, then `rename()` to final path. If governor is killed mid-write, the previous valid history is preserved.
 
 ---
 
-# 🔁 Recovery Discipline
+### 🔋 Battery Telemetry V2
 
-V22 had cooling and retry cooldowns. V23 adds **recovery intelligence**: after the chip has already collapsed twice in the same session, GAMING retry becomes more conservative automatically.
-
-| Condition | V22 | V23 |
-|-----------|-----|-----|
-| After 1st thermal collapse | retry after cooldown | same |
-| After 2nd+ thermal collapse | same retry threshold | **temp_max reduced by 5°C** |
-
-```c
-/* Recovery discipline: ses_recovery_count >= 2 → stricter temp gate */
-if (temp_max > 0 && fsm->ses_recovery_count >= 2)
-    temp_max -= 5;
-```
-
-This means: if the session has already shown that the chip overheats under GAMING load, ASB stops trying to re-enter GAMING until the chip is 5°C cooler than normal. No config needed — fires automatically.
-
----
-
-# 🔋 Battery Branch — Active Improvements
-
-V22 introduced the battery governor mode. V23 makes it smarter based on real device data.
-
-### Problem observed in testing
-
-On screen wake from DEEP_IDLE, load spikes to 12–21 immediately (Android system overhead). With V22's `heavy_load_enter=2.0`, the governor jumped to HEAVY within 4 seconds of every screen-on event, defeating the purpose of the battery profile.
-
-### Fix: `bat_heavy_load_enter`
-
-| | V22 | V23 |
-|-|-----|-----|
-| HEAVY threshold in battery | `2.0` (global) | **`4.0` (battery-specific)** |
-| Screen wake behavior | HEAVY in 4s | Stays in LIGHT_IDLE through wake spike |
-| Config key | ❌ | `bat_heavy_load_enter=4.0` |
-
-### Battery params now wired (were config-only in V22)
-
-| Parameter | V22 | V23 |
-|-----------|-----|-----|
-| `bat_fast_idle_s=15` | Stored in config, unused | **Active: LIGHT_IDLE → DEEP_IDLE in 15s** |
-| `bat_light_idle_gpu=10` | Stored in config, unused | **Active: GPU capped at 10% in LIGHT_IDLE** |
-
-Both fields were declared in V22 but never connected to the FSM. Now wired.
-
----
-
-# 🎯 Profile-Aware `highload_mode`
-
-V22 required manually setting `highload_mode` in `governor.conf`.  
-V23 ties it to the active profile automatically.
-
-| Profile switch | V22 | V23 |
-|----------------|-----|-----|
-| → `performance` | No change to highload_mode | **burst applied automatically** |
-| → `battery` | No change to highload_mode | **burst cleared if active** |
-| → `balanced` | No change | No change (respects config) |
-
-**What burst means for performance profile:**
-```
-gaming_gap_ticks          = 3    (was 4)
-gaming_retry_cooldown_s   = 20   (was 30)
-gaming_retry_temp_max     = 50
-sustained_level           = 0.85 (was 0.80)
-sustained_reentry_cooldown_s = 10 (was 20)
-```
-
-**Logged on profile switch:**
-```
-profile:performance → highload burst applied
-profile:battery → highload burst cleared
-```
-
----
-
-# 🏗 Architecture — Modular Shell Layer
-
-V22 had a monolithic `service.sh` (1463 lines) that was the single point of failure for the entire module.
-
-V23 splits it into focused modules:
-
-| File | Role | Lines |
-|------|------|-------|
-| `service.sh` | Boot orchestrator, sources modules | ~1150 |
-| `runtime/asb_utils.sh` | Profile vars, governor lifecycle | 178 |
-| `runtime/asb_reconcile.sh` | Profile drift correction loop | 110 |
-| `runtime/asb_watchdog.sh` | Governor process watchdog | 35 |
-
-### Why `runtime/` not `common/`
-
-MMT installer (`functions.sh`) runs `rm -rf $MODPATH/common` after installation. Files in `common/` are for install-time only and are deleted before `service.sh` ever runs. V23 places persistent runtime files in `runtime/` which survives the install cleanup.
-
-### Watchdog threshold fix
-
-| | V22 | V23 |
-|-|-----|-----|
-| Stale state threshold | **90s** (caused 3–4 restarts/hour) | **240s** |
-| Root cause | DEEP_IDLE never writes state unless caps change | Keepalive write every 60s |
-
----
-
-# 🔊 Audio Fix — Spatial Audio / 3D Audio
-
-OnePlus 3D Audio (Pространственное аудио) buttons were non-functional in V22.
-
-| Property | V22 | V23 |
-|----------|-----|-----|
-| `ro.audio.spatializer_enabled` | `false` | **`true`** |
-| `ro.audio.spatializer_binaural_enabled_default` | `false` | **`true`** |
-| `ro.audio.spatializer_transaural_enabled_default` | `false` | **`true`** |
-
-All three modes now work: **Fixed**, **Head tracking**, and **Off**.
-
----
-
-# ⚙️ Profile Tuning (V22 → V23)
-
-### `performance.sh`
-
-| Parameter | V22 | V23 |
-|-----------|-----|-----|
-| `SCHED_RATE` | 1000 | **800** |
-| `SCHED_UP_RATE` | 400 | **300** |
-| `SCHED_DOWN_RATE` | 1500 | **1200** |
-| `SCHED_HISPEED_LOAD` | 65 | **60** |
-
-Faster CPU ramp-up response for performance workloads.
-
-### `balanced.sh`
-
-| Parameter | V22 | V23 |
-|-----------|-----|-----|
-| `WALT_TOPAPP_WEIGHT` | 105 | **110** |
-| `WALT_BOOST_MIN_UTIL` | 51 | **48** |
-| `SCHED_RATE` | 3000 | **2500** |
-| `SCHED_UP_RATE` | 1200 | **1000** |
-| `SCHED_DOWN_RATE` | 4000 | **3500** |
-| `SCHED_HISPEED_LOAD` | — | **85** |
-| `GPU_IDLE_TIMER` | — | **64** |
-
-Improved foreground app responsiveness, smoother GPU idle transitions.
-
-### `battery.sh`
-
-| Parameter | V22 | V23 |
-|-----------|-----|-----|
-| `WALT_TOPAPP_WEIGHT` | 60 | **65** |
-| `WALT_BOOST_MIN_UTIL` | 140 | **150** |
-| `UCL_TOP_MAX` | 16 | **18** |
-
-Slightly higher foreground responsiveness in battery mode without sacrificing idle efficiency.
-
----
-
-# 📊 New Session Telemetry Fields (V23)
-
-Full list of new fields in `asb status` and `cat /dev/.asb/state`:
+Three new FSM fields bring battery branch to the same maturity level as high-load:
 
 | Field | Description |
-|-------|-------------|
-| `ses_t2s` | Seconds from session start to first SUSTAINED |
-| `ses_t2thermal` | Seconds from session start to first thermal SUSTAINED |
-| `ses_efficiency` | SUSTAINED quality score 0–100 (last or worst episode) |
-| `ses_recovery` | Number of thermal collapses this session |
-| `hist_sessions` | Sessions accumulated in persistent stats |
-| `hist_t2s` | Rolling avg time-to-first-SUSTAINED (seconds) |
-| `hist_temp` | Rolling avg peak temperature (°C) |
-| `hist_gap` | Rolling avg GAMING cap gap (kHz) |
-| `hist_eff` | Rolling avg sustained efficiency score |
+|:------|:------------|
+| `bat_time_moderate_sec` | Time spent in MODERATE during battery mode |
+| `bat_screen_off_count` | Number of screen-off events in battery mode |
+| `bat_time_to_first_deep` | Seconds from session start to first DEEP_IDLE entry |
+
+All fields tracked in FSM, exposed in `write_state`, included in session_end log and session_history JSONL.
 
 ---
 
-# ⚙️ New `governor.conf` Parameters (V23)
+### ⏱️ New Metric: `ses_time_to_first_gaming` (t2g)
 
-```ini
-bat_heavy_load_enter=4.0    # battery: require load>4.0 for HEAVY (global default is 2.0)
+How fast does a gaming session actually start? Recorded on first GAMING entry, visible in:
+- `/dev/.asb/state` as `ses_t2g`
+- `session_end` log marker
+- `session_history.jsonl` as `"t2g"`
+
+---
+
+### 🛡️ DEEP_IDLE Auto-Boundary
+
+30 minutes of continuous DEEP_IDLE = automatic session end. Governor saves history, saves persistent stats, resets telemetry. Prevents stale metrics from accumulating during overnight sleep.
+
+---
+
+### 💾 Persistent Stats — Improvements
+
+| Change | V23 | V24 |
+|:-------|:----|:----|
+| Storage path | `/dev/.asb/` (tmpfs — **lost on reboot**) | `/data/adb/.../runtime/` (**survives reboot**) |
+| Save trigger | Governor shutdown only | **Every screen-off** + shutdown + start-session |
+| Fields | count, t2s, t2th, temp, gap, eff | + **`degrade_count`** (sessions where auto degraded) |
+| State file | `hist_sessions`, `hist_t2s`, `hist_temp`, `hist_gap`, `hist_eff` | + **`hist_deg`** |
+
+> **Critical fix:** V23's cross-session memory was stored in tmpfs and silently lost on every reboot. The entire `hist_*` feature was non-functional. V24 moves it to `/data/` partition.
+
+---
+
+### 🎯 Atomic Session Start
+
+New socket command for clean test setup:
+
+```bash
+asb start-session:performance:auto
 ```
 
-All other V22 parameters remain unchanged and compatible.
+Atomically: save previous session stats → save history → set profile → set highload mode → reset telemetry → log `session_start` marker. Eliminates dirty test data from mixed states.
 
 ---
 
-# 🛠 Bug Fixes
+### 📝 Session Markers
 
-| Bug | Impact | Fix |
-|-----|--------|-----|
-| `bat_fast_idle_s` and `bat_light_idle_gpu` were dead config fields | Battery LIGHT_IDLE had no GPU cap, no fast idle | Wired into FSM interpolation |
-| `bat_deep_idle` counter always 0 | Battery telemetry useless | `fsm_profile_is_battery` not set on socket-initiated profile switch — fixed |
-| `runtime/` files deleted by installer | governor crashed on boot (common/ wiped) | Moved to `runtime/` which survives MMT cleanup |
-| Watchdog killed governor every 5–16 min during DEEP_IDLE | 3–4 unnecessary restarts per hour | State keepalive write every 60s |
-| Watchdog threshold 90s too aggressive | Killed governor during normal DEEP_IDLE | Threshold raised to 240s |
-| Spatial audio buttons non-functional | OnePlus 3D Audio settings had no effect | Three `ro.audio.spatializer_*` props set to `true` |
+Machine-readable log entries for automated analysis:
+
+**On startup / start-session:**
+```
+session_start profile=performance highload=auto bat=85% temp=32
+```
+
+**On shutdown:**
+```
+session_end gaming=3 sustained=2 thermal=1 unreachable=1 t_heavy=180s t_gaming=95s t_sustained=45s avg_gap=420000 max_temp=67 auto_degraded=0 t2s=120s t2thermal=180s t2g=30s efficiency=82 recovery=1 bat_deep=0s bat_light=0s bat_mod=0s bat_wake=0 bat_ttd=0s sus_pct=18%
+```
 
 ---
 
-# ✅ V23 Summary
+### 🛠️ New Tools
 
-✔ **Session intelligence** — `ses_t2s`, `ses_t2thermal`, `ses_efficiency`, `ses_recovery`  
-✔ **Persistent session memory** — rolling EMA across 10 sessions in `/dev/.asb/session_stats.json`  
-✔ **Recovery discipline** — stricter GAMING retry after 2+ thermal collapses  
-✔ **Battery intelligence** — `bat_heavy_load_enter=4.0` prevents spurious HEAVY on screen wake  
-✔ **`bat_fast_idle_s` and `bat_light_idle_gpu` now active** — were config-only in V22  
-✔ **Profile-aware highload_mode** — burst auto-applied on `profile:performance`  
-✔ **Modular shell architecture** — `runtime/` layer, service.sh -313 lines  
-✔ **Watchdog stability** — 90s → 240s threshold + 60s keepalive  
-✔ **Spatial audio fix** — OnePlus 3D Audio fully functional  
-✔ **Profile tuning** — all three profiles refined from real device data  
+| Tool | Purpose |
+|:-----|:--------|
+| `tools/asb_session_report.py` | Markdown report from `session_history.jsonl` — trends, battery analysis, recommendations |
+| `tools/asb_compare_sessions.py` | Side-by-side comparison of multiple test log files |
 
-**V23 makes ASB remember what happened, understand why it happened, and behave differently next time.**
+#### Session Report Example Output
+
+```
+# 📊 ASB Session History Report
+Sessions: 8
+
+## 📉 Trends
+| Metric              | Average | Min | Max  |
+|---------------------|---------|-----|------|
+| Max temperature     | 65°C    | 58°C| 72°C |
+| Avg cap gap         | 380 kHz | 0   | 920k |
+| Efficiency          | 78%     | 45% | 95%  |
+
+## 💡 Recommendations
+- ⚠️ Auto degraded in 5/8 sessions — burst often non-viable
+```
+
+### ✅ V24 Summary
+
+| Feature | Status |
+|:--------|:------:|
+| Session history (JSONL, last 10, atomic write) | ✅ |
+| Schema version (`"v":1`) | ✅ |
+| 4 formal session end reasons | ✅ |
+| Battery feedback loop #1 (bat_ttd → idle discipline) | ✅ |
+| Battery feedback loop #2 (MODERATE domination) | ✅ |
+| Auto history-aware startup (degrade → stable) | ✅ |
+| Safety floor for bat_fast_idle_s (5s minimum) | ✅ |
+| DEEP_IDLE 30-min auto-boundary | ✅ |
+| Persistent stats on `/data/` (survives reboot) | ✅ |
+| Screen-off save (stats + history) | ✅ |
+| `degrade_count` in persistent stats | ✅ |
+| `ses_time_to_first_gaming` (t2g) | ✅ |
+| `bat_time_moderate_sec` / `bat_screen_off_count` / `bat_time_to_first_deep` | ✅ |
+| `start-session:profile:mode` atomic command | ✅ |
+| Session markers in log (session_start / session_end) | ✅ |
+| `tools/asb_session_report.py` | ✅ |
+| `tools/asb_compare_sessions.py` | ✅ |
+| README.md + README.ru.md rewritten | ✅ |
+
+**V24 makes ASB not just remember what happened — but change its own behavior based on what it learned.**
 
 ---
