@@ -73,8 +73,8 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->sustained_reentry_cooldown_s = 20;
     c->highload_mode = 0;
     c->auto_degrade_gap_thresh  = 800000; /* kHz: avg gap > 800MHz → gaming unreachable */
-    c->auto_degrade_sus_ratio   = 4;
-    c->auto_degrade_thermal_pct = 60;
+    c->auto_degrade_sus_ratio   = 2;  /* V24: was 4, too strict for CoD (ratio=1.09) */
+    c->auto_degrade_thermal_pct = 45; /* V24: was 60, CoD showed sus_pct=51% and didn't fire */
 
     /* Battery profile */
     c->bat_fast_idle_s     = 15; /* battery: 15s without activity → DEEP_IDLE */
@@ -238,5 +238,11 @@ static inline int asb_config_auto_should_degrade(
             if (sus_pct >= c->auto_degrade_thermal_pct) return 1;
         }
     }
+    /* Path 3 (V24): extreme gap — vendor HAL cuts caps by >2 GHz.
+     * If avg gap > 2M kHz with 3+ gaming entries, burst is clearly
+     * futile regardless of ratio. Real data from CoD: gap=2.37 GHz,
+     * ratio=1.09 (nearly equal GAMING/SUSTAINED), auto never fired. */
+    if (avg_gap_p0 > 2000000 && gaming_entries >= 3) return 1;
+
     return 0;
 }
