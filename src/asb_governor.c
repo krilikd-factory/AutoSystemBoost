@@ -88,7 +88,7 @@ static void asb_log(const char *fmt, ...) {
 
 /* ─── State dump ────────────────────────────────────────────── */
 /* ─── Persistent session stats ─────────────────────────────── */
-#define PERSISTENT_STATS_FILE "/dev/.asb/session_stats.json"
+#define PERSISTENT_STATS_FILE "/data/adb/modules/AutoSystemBoost/runtime/session_stats.json"
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 
 typedef struct {
@@ -566,6 +566,12 @@ int main(int argc, char **argv) {
             metrics.bat.current_ma,
             metrics.gpu.load_pct,
             metrics.cpu.load1);
+    asb_log("session_start profile=%s highload=%s bat=%d%% temp=%d",
+            profile_idx == 0 ? "battery" : profile_idx == 2 ? "performance" : "balanced",
+            g_asb_cfg.highload_mode == 1 ? "burst" :
+            g_asb_cfg.highload_mode == 2 ? "stable" :
+            g_asb_cfg.highload_mode == 3 ? "auto" : "default",
+            metrics.bat.capacity_pct, metrics.therm.cpu_max_c);
 
     /* ─── Reassert tracker ──────────────────────────────────── */
     /* ─── Event loop ─────────────────────────────────────────── */
@@ -666,6 +672,9 @@ int main(int argc, char **argv) {
                             arm_timerfd(tfd_active, TIMER_ACTIVE_S);
                         } else {
                             disarm_timerfd(tfd_active);
+                            /* Screen OFF = natural session boundary.
+                             * Save persistent stats so they survive reboot. */
+                            persistent_stats_save(&fsm);
                         }
                     }
                 }
@@ -733,6 +742,41 @@ int main(int argc, char **argv) {
                         force_write = 1;
                         need_metrics = 1;
                     }
+                    asb_sock_reply(sockfd, &src, srclen, "ok");
+                }
+                /* start-session: atomic profile+mode+reset in one command
+                 * Format: "start-session:PROFILE:MODE"
+                 * e.g. "start-session:performance:auto" */
+                else if (strncmp(cmd, "start-session:", 14) == 0) {
+                    char *rest = cmd + 14;
+                    char *colon = strchr(rest, ':');
+                    int new_idx = PROFILE_BALANCED;
+                    if (strncmp(rest, "battery", 7) == 0)     new_idx = PROFILE_BATTERY;
+                    if (strncmp(rest, "performance", 11) == 0) new_idx = PROFILE_PERFORMANCE;
+                    /* Save persistent stats from previous session */
+                    persistent_stats_save(&fsm);
+                    /* Apply profile */
+                    fsm.profile_idx = new_idx;
+                    fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
+                    /* Apply mode if specified */
+                    if (colon && *(colon+1)) {
+                        char *mode = colon + 1;
+                        if (strcmp(mode, "burst") == 0)  g_asb_cfg.highload_mode = 1;
+                        else if (strcmp(mode, "stable") == 0) g_asb_cfg.highload_mode = 2;
+                        else if (strcmp(mode, "auto") == 0)   g_asb_cfg.highload_mode = 3;
+                        else g_asb_cfg.highload_mode = 0;
+                        asb_config_apply_highload_mode(&g_asb_cfg);
+                    }
+                    /* Reset session telemetry */
+                    fsm_session_reset(&fsm);
+                    force_write = 1;
+                    need_metrics = 1;
+                    g_last_reassert = 0;
+                    asb_log("session_start profile=%s highload=%s (start-session cmd)",
+                            new_idx == 0 ? "battery" : new_idx == 2 ? "performance" : "balanced",
+                            g_asb_cfg.highload_mode == 1 ? "burst" :
+                            g_asb_cfg.highload_mode == 2 ? "stable" :
+                            g_asb_cfg.highload_mode == 3 ? "auto" : "default");
                     asb_sock_reply(sockfd, &src, srclen, "ok");
                 }
                 else if (strcmp(cmd, "quit") == 0) {
@@ -908,6 +952,28 @@ int main(int argc, char **argv) {
     } /* while running */
 
     /* ── Cleanup ─────────────────────────────────────────────── */
+    /* Session summary — log before shutdown */
+    {
+        long total_active = fsm.ses_time_heavy_sec + fsm.ses_time_gaming_sec
+                           + fsm.ses_time_sustained_sec;
+        int sus_pct = (total_active > 0)
+                      ? (int)(fsm.ses_time_sustained_sec * 100 / total_active) : 0;
+        int avg_gap = (fsm.ses_gap_samples > 0)
+                      ? (int)(fsm.ses_gap_p0_sum / fsm.ses_gap_samples) : 0;
+        asb_log("session_end gaming=%d sustained=%d thermal=%d unreachable=%d "
+                "t_heavy=%lds t_gaming=%lds t_sustained=%lds "
+                "avg_gap=%d max_temp=%d auto_degraded=%d "
+                "t2s=%lds t2thermal=%lds efficiency=%d recovery=%d "
+                "bat_deep_idle=%lds bat_wake=%d sus_pct=%d%%",
+                fsm.ses_gaming_entries, fsm.ses_sustained_entries,
+                fsm.ses_thermal_entries, fsm.ses_unreachable_entries,
+                fsm.ses_time_heavy_sec, fsm.ses_time_gaming_sec,
+                fsm.ses_time_sustained_sec,
+                avg_gap, fsm.ses_max_temp, fsm.ses_auto_degraded,
+                fsm.ses_time_to_first_sus, fsm.ses_time_to_first_thermal,
+                fsm.ses_sustained_efficiency, fsm.ses_recovery_count,
+                fsm.bat_time_deep_idle_sec, fsm.bat_wake_cycles, sus_pct);
+    }
     asb_log("governor stopping");
     close(tfd_active);
     close(tfd_idle);
