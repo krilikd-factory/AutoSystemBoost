@@ -92,6 +92,7 @@ static void asb_log(const char *fmt, ...) {
 #define SESSION_HISTORY_FILE  "/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
 #define SESSION_HISTORY_MAX   10
 #define PERSISTENT_STATS_MAX_SESSIONS 10
+#define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
 typedef struct {
     int   session_count;
@@ -343,7 +344,11 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     /* Keep only last N-1 entries to make room for new one */
     int start = (line_count >= SESSION_HISTORY_MAX) ? line_count - SESSION_HISTORY_MAX + 1 : 0;
 
-    FILE *wf = fopen(SESSION_HISTORY_FILE, "w");
+    /* Atomic write: write to .tmp, then rename.
+     * Prevents corrupt JSONL if governor is killed mid-write. */
+    char tmp_path[256];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", SESSION_HISTORY_FILE);
+    FILE *wf = fopen(tmp_path, "w");
     if (!wf) return;
     for (int i = start; i < line_count; i++)
         fprintf(wf, "%s\n", lines[i]);
@@ -377,6 +382,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         fsm->bat_time_moderate_sec,
         fsm->bat_wake_cycles, fsm->bat_time_to_first_deep);
     fclose(wf);
+    rename(tmp_path, SESSION_HISTORY_FILE);
 }
 
 /* ─── Profile reader ────────────────────────────────────────── */
@@ -627,6 +633,12 @@ int main(int argc, char **argv) {
             asb_log("feedback: %d/%d sessions degraded → auto starting as stable",
                     g_pstats.degrade_count, g_pstats.session_count);
         }
+    }
+    /* Safety floor: feedback loops cannot push bat_fast_idle_s below minimum */
+    if (g_asb_cfg.bat_fast_idle_s > 0 && g_asb_cfg.bat_fast_idle_s < BAT_FAST_IDLE_FLOOR) {
+        asb_log("feedback: bat_fast_idle_s=%d clamped to floor=%d",
+                g_asb_cfg.bat_fast_idle_s, BAT_FAST_IDLE_FLOOR);
+        g_asb_cfg.bat_fast_idle_s = BAT_FAST_IDLE_FLOOR;
     }
 
     int profile_idx = read_profile_idx();
