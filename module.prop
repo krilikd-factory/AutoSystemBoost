@@ -1,7 +1,7 @@
 id=AutoSystemBoost
 name=AutoSystemBoost
-version=V23
-versionCode=230
+version=V24
+versionCode=240
 author=Dima_Krylov
 description=status: balanced ⚖️ | active ✅
 updateJson=https://raw.githubusercontent.com/krilikd/AutoSystemBoost/main/update.json
