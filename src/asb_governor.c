@@ -555,10 +555,11 @@ int main(int argc, char **argv) {
                     g_asb_cfg.highload_mode == 2 ? "stable" : "default",
                     g_asb_cfg.bat_fast_idle_s,
                     g_asb_cfg.bat_suppress_gaming);
-        asb_log("diag: bat_fast_idle=%ds bat_light_idle_gpu=%d%% bat_suppress_gaming=%d",
+        asb_log("diag: bat_fast_idle=%ds bat_light_idle_gpu=%d%% bat_suppress_gaming=%d bat_heavy_load=%.1f",
                 g_asb_cfg.bat_fast_idle_s,
                 g_asb_cfg.bat_light_idle_gpu,
-                g_asb_cfg.bat_suppress_gaming);
+                g_asb_cfg.bat_suppress_gaming,
+                g_asb_cfg.bat_heavy_load_enter);
     }
     asb_log("initial state: %s mA=%d gpu=%d%% load=%.2f",
             asb_state_names[fsm.state],
@@ -687,6 +688,19 @@ int main(int argc, char **argv) {
                     if (new_idx != fsm.profile_idx) {
                         fsm.profile_idx = new_idx;
                         fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
+                        /* Profile-aware highload_mode:
+                         * performance → burst (faster retry, better gaming)
+                         * battery     → stable (conservative, no burst spikes)
+                         * balanced    → keep current config value            */
+                        if (new_idx == PROFILE_PERFORMANCE &&
+                            g_asb_cfg.highload_mode == 0) {
+                            asb_config_apply_burst_override(&g_asb_cfg);
+                            asb_log("profile:performance → highload burst applied");
+                        } else if (new_idx == PROFILE_BATTERY &&
+                                   g_asb_cfg.highload_mode == 1) {
+                            asb_config_defaults_highload(&g_asb_cfg);
+                            asb_log("profile:battery → highload burst cleared");
+                        }
                         profile_changed = 1;
                         force_write = 1;
                         need_metrics = 1;
