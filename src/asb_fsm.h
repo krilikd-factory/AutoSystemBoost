@@ -245,6 +245,7 @@ typedef struct {
 
     /* Session intelligence — time-to-first metrics */
     long            ses_time_to_first_sus;    /* seconds from session start to first SUSTAINED */
+    long            ses_time_to_first_gaming; /* V24: seconds from session start to first GAMING */
     long            ses_time_to_first_thermal;/* seconds from session start to first thermal SUSTAINED */
     int             ses_sustained_efficiency; /* 0-100 score: how good was SUSTAINED this session */
     int             ses_recovery_count;       /* thermal collapses requiring recovery this session */
@@ -253,8 +254,11 @@ typedef struct {
     /* Battery-mode telemetry */
     long            bat_time_deep_idle_sec;   /* total time in DEEP_IDLE in battery mode (s) */
     long            bat_time_light_idle_sec;  /* total time in LIGHT_IDLE in battery mode */
+    long            bat_time_moderate_sec;    /* V24: total time in MODERATE in battery mode */
     int             bat_wake_cycles;          /* wake-from-DEEP_IDLE count in battery mode */
     int             bat_gaming_suppressed;    /* times GAMING was suppressed by bat_suppress_gaming */
+    int             bat_screen_off_count;     /* V24: screen-off events in battery mode */
+    long            bat_time_to_first_deep;   /* V24: seconds from session start to first DEEP_IDLE */
 } asb_fsm_t;
 
 static inline long fsm_elapsed_sec(const asb_fsm_t *fsm) {
@@ -305,9 +309,13 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
     fsm->ses_auto_degraded      = 0;
     fsm->bat_time_deep_idle_sec  = 0;
     fsm->bat_time_light_idle_sec = 0;
+    fsm->bat_time_moderate_sec   = 0;
     fsm->bat_wake_cycles         = 0;
     fsm->bat_gaming_suppressed   = 0;
+    fsm->bat_screen_off_count    = 0;
+    fsm->bat_time_to_first_deep  = 0;
     fsm->ses_time_to_first_sus    = 0;
+    fsm->ses_time_to_first_gaming = 0;
     fsm->ses_time_to_first_thermal= 0;
     fsm->ses_sustained_efficiency = -1; /* -1 = not yet computed */
     fsm->ses_recovery_count       = 0;
@@ -575,6 +583,8 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                 if (fsm_profile_is_battery) { fsm->bat_time_deep_idle_sec  += spent; } break;
             case ASB_STATE_LIGHT_IDLE:
                 if (fsm_profile_is_battery) { fsm->bat_time_light_idle_sec += spent; } break;
+            case ASB_STATE_MODERATE:
+                if (fsm_profile_is_battery) { fsm->bat_time_moderate_sec   += spent; } break;
             default: break;
         }
         /* Battery wake cycle counter */
@@ -582,11 +592,20 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             fsm->prev_state == ASB_STATE_DEEP_IDLE &&
             fsm->state != ASB_STATE_DEEP_IDLE)
             fsm->bat_wake_cycles++;
+        /* V24: Track time-to-first-DEEP_IDLE */
+        if (fsm_profile_is_battery &&
+            fsm->state == ASB_STATE_DEEP_IDLE &&
+            fsm->bat_time_to_first_deep == 0 &&
+            fsm->ses_start_ts > 0)
+            fsm->bat_time_to_first_deep = time(NULL) - fsm->ses_start_ts;
         fsm->ses_state_enter = now_ts;
 
         /* Count state entries */
-        if (fsm->state == ASB_STATE_GAMING)
+        if (fsm->state == ASB_STATE_GAMING) {
             fsm->ses_gaming_entries++;
+            if (fsm->ses_time_to_first_gaming == 0 && fsm->ses_start_ts > 0)
+                fsm->ses_time_to_first_gaming = time(NULL) - fsm->ses_start_ts;
+        }
         if (fsm->state == ASB_STATE_SUSTAINED) {
             fsm->ses_sustained_entries++;
             /* Record time-to-first-SUSTAINED */
