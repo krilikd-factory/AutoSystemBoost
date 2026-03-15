@@ -337,7 +337,9 @@ static asb_state_t fsm_desired(const asb_metrics_t *m) {
      * we are already in HEAVY/GAMING (not from idle).                */
 
     if (m->gpu.load_pct >= g_asb_cfg.heavy_gpu_enter ||
-        m->cpu.load1 >= g_asb_cfg.heavy_load_enter) {
+        m->cpu.load1 >= (fsm_profile_is_battery && g_asb_cfg.bat_heavy_load_enter > 0
+                         ? g_asb_cfg.bat_heavy_load_enter
+                         : g_asb_cfg.heavy_load_enter)) {
         if (!ma_valid || m->bat.current_ma >= 150)
             return ASB_STATE_HEAVY;
     }
