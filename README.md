@@ -258,6 +258,6 @@ AutoSystemBoost is designed to make a rooted OnePlus device feel **deliberate**:
 
 This module modifies system behavior. Use at your own risk. All tweaks are **safe and reversible** — uninstalling restores stock.
 
-
+---
 
 <p align="center"><i>Not magic — just everything stock leaves on the table.</i></p>
