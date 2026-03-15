@@ -8,7 +8,7 @@
   <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="Banner" width="100%">
 </p>
 
-<p align="center"><b>Adaptive Runtime Engine for OnePlus 15 • Snapdragon 8 Elite</b></p>
+<p align="center"><b>Adaptive Runtime Engine for OnePlus 15 • Snapdragon 8 Elite Gen 5</b></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Snapdragon_8_Elite-Gen_5-16a34a?style=for-the-badge" alt="SM8750">
