@@ -11,7 +11,7 @@
 <p align="center"><b>Adaptive Runtime Engine for OnePlus 15 • Snapdragon 8 Elite</b></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Snapdragon_8_Elite-SM8750-16a34a?style=for-the-badge" alt="SM8750">
+  <img src="https://img.shields.io/badge/Snapdragon_8_Elite-Gen_5-16a34a?style=for-the-badge" alt="SM8750">
   <img src="https://img.shields.io/badge/Root-Magisk_%7C_KernelSU-7c3aed?style=for-the-badge" alt="Root">
   <img src="https://img.shields.io/badge/Governor-Native_C-0ea5e9?style=for-the-badge" alt="C">
   <img src="https://img.shields.io/badge/WebUI-Built--in-f59e0b?style=for-the-badge" alt="WebUI">
@@ -147,6 +147,23 @@ Auto logs degradation with context: `auto: degraded burst->stable avg_gap=920k s
 
 ---
 
+## 🔄 Persistent Feedback Loops
+
+Governor reads session history at startup and adjusts behavior based on past patterns:
+
+| Loop | Trigger | Action | Log |
+|:-----|:--------|:-------|:----|
+| 🔋 Battery idle #1 | `avg(bat_ttd)` > 60s | `bat_fast_idle_s` 15→10 | `feedback: avg_bat_ttd=72s >60s` |
+| 🔋 Battery idle #2 | `avg(bat_ttd)` > 30s | `bat_fast_idle_s` 15→12 | `feedback: avg_bat_ttd=45s >30s` |
+| 🔋 MODERATE domination | MODERATE > 60% of battery idle time | `bat_fast_idle_s` → 8 | `feedback: battery MODERATE=68%` |
+| ⚡ Auto startup | >50% sessions degraded burst→stable | auto starts as stable | `feedback: 6/10 degraded` |
+
+Safety: `bat_fast_idle_s` has a hard floor of **5 seconds** — feedback loops cannot push below this.
+
+All adjustments are **explainable** — every change is logged with the exact numbers that triggered it.
+
+---
+
 ## 📈 Session Telemetry (25+ metrics)
 
 | Metric | Description |
@@ -159,12 +176,22 @@ Auto logs degradation with context: `auto: degraded burst->stable avg_gap=920k s
 | `ses_t2s` / `ses_t2thermal` | Time to first SUSTAINED / thermal |
 | `ses_efficiency` | Quality score 0–100 |
 | `ses_recovery` | Thermal collapse count |
-| `bat_deep_idle` / `bat_wake_cycles` | Idle time / wake count |
+| `bat_deep_idle` / `bat_light_idle` / `bat_moderate` | Seconds in each idle state (battery mode) |
+| `bat_wake_cycles` | Wake-from-DEEP_IDLE count |
+| `bat_screen_off` | Screen-off events in battery mode |
+| `bat_ttd` | Time to first DEEP_IDLE entry (seconds) |
 | `hist_*` | **Persistent cross-reboot averages** (EMA, 10 sessions) |
 
 ### 🧠 Cross-Session Memory
 
-Stats saved to `/data/` on every screen-off event. Survives reboots. Governor starts with knowledge from past sessions.
+Two persistence layers, both survive reboots:
+
+| File | Format | Purpose |
+|:-----|:-------|:--------|
+| `runtime/session_stats.json` | EMA averages | Rolling stats across last 10 sessions (t2s, temp, gap, efficiency, degrade count) |
+| `runtime/session_history.jsonl` | JSON Lines (last 10) | Full session summaries with 20+ fields each — used by Python tools |
+
+Stats saved on every **screen-off** event. Governor starts with knowledge from past sessions. Python report tool reads history to generate trend analysis and recommendations.
 
 ---
 
@@ -211,6 +238,11 @@ tail -f /dev/.asb/governor.log        # live log
 # Analysis (PC)
 python3 tools/asb_analyze.py log.txt
 python3 tools/asb_compare_sessions.py log1.txt log2.txt
+python3 tools/asb_session_report.py session_history.jsonl -o report.md
+
+# Session history (persists across reboots)
+cat /data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl
+cat /data/adb/modules/AutoSystemBoost/runtime/session_stats.json
 ```
 
 ---
