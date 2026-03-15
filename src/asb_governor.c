@@ -859,10 +859,13 @@ int main(int argc, char **argv) {
                             arm_timerfd(tfd_active, TIMER_ACTIVE_S);
                         } else {
                             disarm_timerfd(tfd_active);
-                            /* Screen OFF = natural session boundary.
-                             * Save persistent stats so they survive reboot. */
+                            /* Screen OFF = save persistent stats (survives reboot).
+                             * Do NOT append to session_history here — screen-off
+                             * happens 50-100+ times/day, would fill history with
+                             * duplicates of the same session. History is written
+                             * only on real session boundaries: idle_boundary,
+                             * new_session, shutdown.                            */
                             persistent_stats_save(&fsm);
-                            session_history_append_ex(&fsm, "screen_off");
                             if (fsm_profile_is_battery)
                                 fsm.bat_screen_off_count++;
                         }
