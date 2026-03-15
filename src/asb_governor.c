@@ -89,6 +89,8 @@ static void asb_log(const char *fmt, ...) {
 /* ─── State dump ────────────────────────────────────────────── */
 /* ─── Persistent session stats ─────────────────────────────── */
 #define PERSISTENT_STATS_FILE "/data/adb/modules/AutoSystemBoost/runtime/session_stats.json"
+#define SESSION_HISTORY_FILE  "/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
+#define SESSION_HISTORY_MAX   10
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 
 typedef struct {
@@ -98,6 +100,7 @@ typedef struct {
     float avg_max_temp;             /* rolling avg peak temp °C */
     float avg_gap_p0;               /* rolling avg cap gap kHz */
     float avg_efficiency;           /* rolling avg sustained efficiency score */
+    int   degrade_count;            /* V24: sessions where auto degraded burst→stable */
 } asb_persistent_stats_t;
 
 static asb_persistent_stats_t g_pstats = {0};
@@ -127,9 +130,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "ses_gaming=%d\nses_sustained=%d\nses_thermal=%d\nses_unreachable=%d\n"
         "ses_t_heavy=%ld\nses_t_gaming=%ld\nses_t_sustained=%ld\n"
         "ses_avg_gap_p0=%d\nses_max_gap_p0=%d\nses_max_temp=%d\nses_auto_degraded=%d\n"
-        "bat_deep_idle=%ld\nbat_light_idle=%ld\nbat_wake_cycles=%d\n"
-        "ses_t2s=%ld\nses_t2thermal=%ld\nses_efficiency=%d\nses_recovery=%d\n"
-        "hist_sessions=%d\nhist_t2s=%.0f\nhist_temp=%.0f\nhist_gap=%.0f\nhist_eff=%.0f\n",
+        "bat_deep_idle=%ld\nbat_light_idle=%ld\nbat_moderate=%ld\nbat_wake_cycles=%d\n"
+        "bat_screen_off=%d\nbat_ttd=%ld\n"
+        "ses_t2s=%ld\nses_t2thermal=%ld\nses_t2g=%ld\nses_efficiency=%d\nses_recovery=%d\n"
+        "hist_sessions=%d\nhist_t2s=%.0f\nhist_temp=%.0f\nhist_gap=%.0f\nhist_eff=%.0f\nhist_deg=%d\n",
         asb_state_names[fsm->state],
         profile_names[fsm->profile_idx],
         m->bat.current_ma,
@@ -159,16 +163,21 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->ses_auto_degraded,
         fsm->bat_time_deep_idle_sec,
         fsm->bat_time_light_idle_sec,
+        fsm->bat_time_moderate_sec,
         fsm->bat_wake_cycles,
+        fsm->bat_screen_off_count,
+        fsm->bat_time_to_first_deep,
         fsm->ses_time_to_first_sus,
         fsm->ses_time_to_first_thermal,
+        fsm->ses_time_to_first_gaming,
         fsm->ses_sustained_efficiency,
         fsm->ses_recovery_count,
         g_pstats.session_count,
         g_pstats.avg_time_to_first_sus,
         g_pstats.avg_max_temp,
         g_pstats.avg_gap_p0,
-        g_pstats.avg_efficiency);
+        g_pstats.avg_efficiency,
+        g_pstats.degrade_count);
     fclose(f);
 }
 
@@ -237,13 +246,17 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
 static void persistent_stats_load(void) {
     FILE *f = fopen(PERSISTENT_STATS_FILE, "r");
     if (!f) return;
-    fscanf(f, "{\"count\":%d,\"t2s\":%f,\"t2th\":%f,\"temp\":%f,\"gap\":%f,\"eff\":%f}",
+    /* Read base fields (backward compatible with older format) */
+    fscanf(f, "{\"count\":%d,\"t2s\":%f,\"t2th\":%f,\"temp\":%f,\"gap\":%f,\"eff\":%f",
            &g_pstats.session_count,
            &g_pstats.avg_time_to_first_sus,
            &g_pstats.avg_time_to_first_thermal,
            &g_pstats.avg_max_temp,
            &g_pstats.avg_gap_p0,
            &g_pstats.avg_efficiency);
+    /* V24: try to read degrade_count if present */
+    if (fscanf(f, ",\"deg\":%d", &g_pstats.degrade_count) != 1)
+        g_pstats.degrade_count = 0;
     fclose(f);
     if (g_pstats.session_count > PERSISTENT_STATS_MAX_SESSIONS)
         g_pstats.session_count = PERSISTENT_STATS_MAX_SESSIONS;
@@ -275,16 +288,95 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
             g_pstats.avg_efficiency * (1 - alpha) + fsm->ses_sustained_efficiency * alpha;
     if (g_pstats.session_count < PERSISTENT_STATS_MAX_SESSIONS)
         g_pstats.session_count++;
+    if (fsm->ses_auto_degraded)
+        g_pstats.degrade_count++;
     FILE *f = fopen(PERSISTENT_STATS_FILE, "w");
     if (!f) return;
-    fprintf(f, "{\"count\":%d,\"t2s\":%.1f,\"t2th\":%.1f,\"temp\":%.1f,\"gap\":%.0f,\"eff\":%.1f}",
+    fprintf(f, "{\"count\":%d,\"t2s\":%.1f,\"t2th\":%.1f,\"temp\":%.1f,\"gap\":%.0f,\"eff\":%.1f,\"deg\":%d}",
             g_pstats.session_count,
             g_pstats.avg_time_to_first_sus,
             g_pstats.avg_time_to_first_thermal,
             g_pstats.avg_max_temp,
             g_pstats.avg_gap_p0,
-            g_pstats.avg_efficiency);
+            g_pstats.avg_efficiency,
+            g_pstats.degrade_count);
     fclose(f);
+}
+
+/* V24: Session history — append full session summary as JSON line.
+ * File: session_history.jsonl — one JSON object per line, last N entries.
+ * Used by Python tools and future auto-intelligence.                    */
+static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) {
+    if (fsm->ses_sustained_entries == 0 && fsm->ses_time_heavy_sec < 10
+        && fsm->bat_time_deep_idle_sec < 60)
+        return; /* skip trivial sessions */
+
+    static const char *profile_names[] = {"battery","balanced","performance"};
+    static const char *mode_names[] = {"default","burst","stable","auto"};
+    int mode_idx = g_asb_cfg.highload_mode;
+    if (mode_idx < 0 || mode_idx > 3) mode_idx = 0;
+    int avg_gap = (fsm->ses_gap_samples > 0)
+                  ? (int)(fsm->ses_gap_p0_sum / fsm->ses_gap_samples) : 0;
+    long total_active = fsm->ses_time_heavy_sec + fsm->ses_time_gaming_sec
+                       + fsm->ses_time_sustained_sec;
+    int sus_pct = (total_active > 0)
+                  ? (int)(fsm->ses_time_sustained_sec * 100 / total_active) : 0;
+
+    /* Read existing lines, keep last SESSION_HISTORY_MAX-1 */
+    char lines[SESSION_HISTORY_MAX][512];
+    int line_count = 0;
+    FILE *rf = fopen(SESSION_HISTORY_FILE, "r");
+    if (rf) {
+        char buf[512];
+        while (fgets(buf, sizeof(buf), rf) && line_count < SESSION_HISTORY_MAX) {
+            int len = strlen(buf);
+            if (len > 0 && buf[len-1] == '\n') buf[len-1] = '\0';
+            if (buf[0] == '{') { /* valid JSON line */
+                strncpy(lines[line_count], buf, 511);
+                lines[line_count][511] = '\0';
+                line_count++;
+            }
+        }
+        fclose(rf);
+    }
+
+    /* Keep only last N-1 entries to make room for new one */
+    int start = (line_count >= SESSION_HISTORY_MAX) ? line_count - SESSION_HISTORY_MAX + 1 : 0;
+
+    FILE *wf = fopen(SESSION_HISTORY_FILE, "w");
+    if (!wf) return;
+    for (int i = start; i < line_count; i++)
+        fprintf(wf, "%s\n", lines[i]);
+
+    /* Write new entry */
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M", tm);
+
+    fprintf(wf,
+        "{\"v\":1,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
+        "\"gaming\":%d,\"sustained\":%d,\"thermal\":%d,\"unreachable\":%d,"
+        "\"t_heavy\":%ld,\"t_gaming\":%ld,\"t_sustained\":%ld,"
+        "\"avg_gap\":%d,\"max_temp\":%d,\"degraded\":%d,"
+        "\"t2s\":%ld,\"t2th\":%ld,\"t2g\":%ld,\"eff\":%d,\"recovery\":%d,"
+        "\"sus_pct\":%d,"
+        "\"bat_deep\":%ld,\"bat_light\":%ld,\"bat_mod\":%ld,"
+        "\"bat_wake\":%d,\"bat_ttd\":%ld}\n",
+        ts, profile_names[fsm->profile_idx], mode_names[mode_idx], reason,
+        fsm->ses_gaming_entries, fsm->ses_sustained_entries,
+        fsm->ses_thermal_entries, fsm->ses_unreachable_entries,
+        fsm->ses_time_heavy_sec, fsm->ses_time_gaming_sec,
+        fsm->ses_time_sustained_sec,
+        avg_gap, fsm->ses_max_temp, fsm->ses_auto_degraded,
+        fsm->ses_time_to_first_sus, fsm->ses_time_to_first_thermal,
+        fsm->ses_time_to_first_gaming,
+        fsm->ses_sustained_efficiency, fsm->ses_recovery_count,
+        sus_pct,
+        fsm->bat_time_deep_idle_sec, fsm->bat_time_light_idle_sec,
+        fsm->bat_time_moderate_sec,
+        fsm->bat_wake_cycles, fsm->bat_time_to_first_deep);
+    fclose(wf);
 }
 
 /* ─── Profile reader ────────────────────────────────────────── */
@@ -450,9 +542,92 @@ int main(int argc, char **argv) {
     thermal_discover();
     writer_init_cache();
     persistent_stats_load();
-    asb_log("persistent stats: sessions=%d avg_t2s=%.0fs avg_temp=%.0f°C avg_gap=%.0f avg_eff=%.0f",
+    asb_log("persistent stats: sessions=%d avg_t2s=%.0fs avg_temp=%.0f°C avg_gap=%.0f avg_eff=%.0f degraded=%d",
             g_pstats.session_count, g_pstats.avg_time_to_first_sus,
-            g_pstats.avg_max_temp, g_pstats.avg_gap_p0, g_pstats.avg_efficiency);
+            g_pstats.avg_max_temp, g_pstats.avg_gap_p0, g_pstats.avg_efficiency,
+            g_pstats.degrade_count);
+
+    /* V24: History-aware startup adjustments.
+     * Uses persistent stats to make smarter initial decisions. */
+    if (g_pstats.session_count >= 3) {
+        /* Battery feedback: if device historically takes >60s to reach
+         * DEEP_IDLE, tighten bat_fast_idle_s for faster idle entry */
+        if (g_pstats.avg_time_to_first_sus > 0) { /* proxy: has real data */
+            /* Read avg bat_ttd from last session history if available */
+            FILE *_hf = fopen(SESSION_HISTORY_FILE, "r");
+            if (_hf) {
+                char _hbuf[512];
+                float _ttd_sum = 0; int _ttd_n = 0;
+                while (fgets(_hbuf, sizeof(_hbuf), _hf)) {
+                    char *_p = strstr(_hbuf, "\"bat_ttd\":");
+                    if (_p) {
+                        int _ttd = atoi(_p + 10);
+                        if (_ttd > 0) { _ttd_sum += _ttd; _ttd_n++; }
+                    }
+                }
+                fclose(_hf);
+                if (_ttd_n >= 2) {
+                    float avg_ttd = _ttd_sum / _ttd_n;
+                    if (avg_ttd > 60 && g_asb_cfg.bat_fast_idle_s > 10) {
+                        int old = g_asb_cfg.bat_fast_idle_s;
+                        g_asb_cfg.bat_fast_idle_s = 10;
+                        asb_log("feedback: avg_bat_ttd=%.0fs >60s → bat_fast_idle %d→%d",
+                                avg_ttd, old, g_asb_cfg.bat_fast_idle_s);
+                    } else if (avg_ttd > 30 && g_asb_cfg.bat_fast_idle_s > 12) {
+                        int old = g_asb_cfg.bat_fast_idle_s;
+                        g_asb_cfg.bat_fast_idle_s = 12;
+                        asb_log("feedback: avg_bat_ttd=%.0fs >30s → bat_fast_idle %d→%d",
+                                avg_ttd, old, g_asb_cfg.bat_fast_idle_s);
+                    }
+                }
+            }
+        }
+        /* Battery feedback #2: MODERATE-domination check.
+         * If battery sessions spend >60% of tracked time in MODERATE
+         * (instead of DEEP_IDLE/LIGHT_IDLE), wake discipline is too loose. */
+        {
+            FILE *_hf2 = fopen(SESSION_HISTORY_FILE, "r");
+            if (_hf2) {
+                char _hbuf2[512];
+                long _mod_sum = 0, _total_sum = 0; int _bat_n = 0;
+                while (fgets(_hbuf2, sizeof(_hbuf2), _hf2)) {
+                    /* Only battery sessions */
+                    if (!strstr(_hbuf2, "\"profile\":\"battery\"")) continue;
+                    char *_pd = strstr(_hbuf2, "\"bat_deep\":");
+                    char *_pl = strstr(_hbuf2, "\"bat_light\":");
+                    char *_pm = strstr(_hbuf2, "\"bat_mod\":");
+                    if (_pd && _pl && _pm) {
+                        long bd = atol(_pd + 11);
+                        long bl = atol(_pl + 12);
+                        long bm = atol(_pm + 10);
+                        long bt = bd + bl + bm;
+                        if (bt > 60) { /* at least 1 min of data */
+                            _mod_sum += bm; _total_sum += bt; _bat_n++;
+                        }
+                    }
+                }
+                fclose(_hf2);
+                if (_bat_n >= 2 && _total_sum > 0) {
+                    int mod_pct = (int)(_mod_sum * 100 / _total_sum);
+                    if (mod_pct > 60 && g_asb_cfg.bat_fast_idle_s > 8) {
+                        int old = g_asb_cfg.bat_fast_idle_s;
+                        g_asb_cfg.bat_fast_idle_s = 8;
+                        asb_log("feedback: battery MODERATE=%d%% of idle time "
+                                "→ bat_fast_idle %d→%d (tighter wake discipline)",
+                                mod_pct, old, g_asb_cfg.bat_fast_idle_s);
+                    }
+                }
+            }
+        }
+        /* Auto mode: if >50% of sessions degraded, start as stable
+         * instead of burst — burst is historically futile */
+        if (g_asb_cfg.highload_mode == 3 /* auto */ &&
+            g_pstats.degrade_count > g_pstats.session_count / 2) {
+            asb_config_apply_stable_override(&g_asb_cfg);
+            asb_log("feedback: %d/%d sessions degraded → auto starting as stable",
+                    g_pstats.degrade_count, g_pstats.session_count);
+        }
+    }
 
     int profile_idx = read_profile_idx();
     asb_log("initial profile: %d", profile_idx);
@@ -675,6 +850,9 @@ int main(int argc, char **argv) {
                             /* Screen OFF = natural session boundary.
                              * Save persistent stats so they survive reboot. */
                             persistent_stats_save(&fsm);
+                            session_history_append_ex(&fsm, "screen_off");
+                            if (fsm_profile_is_battery)
+                                fsm.bat_screen_off_count++;
                         }
                     }
                 }
@@ -755,7 +933,7 @@ int main(int argc, char **argv) {
                     if (strncmp(rest, "performance", 11) == 0) new_idx = PROFILE_PERFORMANCE;
                     /* Save persistent stats from previous session */
                     persistent_stats_save(&fsm);
-                    /* Apply profile */
+                    session_history_append_ex(&fsm, "new_session");
                     fsm.profile_idx = new_idx;
                     fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
                     /* Apply mode if specified */
@@ -826,6 +1004,18 @@ int main(int argc, char **argv) {
                     asb_log("auto: degraded burst->stable avg_gap=%d sus=%d gaming=%d sus_pct=%d",
                             avg_gap, fsm.ses_sustained_entries,
                             fsm.ses_gaming_entries, _sus_pct);
+                }
+            }
+            /* V24: DEEP_IDLE auto-boundary — 30 min idle = session end.
+             * Save history, reset counters. Prevents stale telemetry. */
+            if (fsm.state == ASB_STATE_DEEP_IDLE) {
+                long idle_sec = fsm_elapsed_sec(&fsm);
+                if (idle_sec >= 1800 && (fsm.ses_time_heavy_sec > 0 ||
+                    fsm.bat_time_deep_idle_sec > 60)) {
+                    session_history_append_ex(&fsm, "idle_boundary");
+                    persistent_stats_save(&fsm);
+                    fsm_session_reset(&fsm);
+                    asb_log("session_boundary: 30min DEEP_IDLE, stats saved+reset");
                 }
             }
             if (changed || force_write) {
@@ -963,16 +1153,20 @@ int main(int argc, char **argv) {
         asb_log("session_end gaming=%d sustained=%d thermal=%d unreachable=%d "
                 "t_heavy=%lds t_gaming=%lds t_sustained=%lds "
                 "avg_gap=%d max_temp=%d auto_degraded=%d "
-                "t2s=%lds t2thermal=%lds efficiency=%d recovery=%d "
-                "bat_deep_idle=%lds bat_wake=%d sus_pct=%d%%",
+                "t2s=%lds t2thermal=%lds t2g=%lds efficiency=%d recovery=%d "
+                "bat_deep=%lds bat_light=%lds bat_mod=%lds bat_wake=%d bat_ttd=%lds "
+                "sus_pct=%d%%",
                 fsm.ses_gaming_entries, fsm.ses_sustained_entries,
                 fsm.ses_thermal_entries, fsm.ses_unreachable_entries,
                 fsm.ses_time_heavy_sec, fsm.ses_time_gaming_sec,
                 fsm.ses_time_sustained_sec,
                 avg_gap, fsm.ses_max_temp, fsm.ses_auto_degraded,
                 fsm.ses_time_to_first_sus, fsm.ses_time_to_first_thermal,
+                fsm.ses_time_to_first_gaming,
                 fsm.ses_sustained_efficiency, fsm.ses_recovery_count,
-                fsm.bat_time_deep_idle_sec, fsm.bat_wake_cycles, sus_pct);
+                fsm.bat_time_deep_idle_sec, fsm.bat_time_light_idle_sec,
+                fsm.bat_time_moderate_sec, fsm.bat_wake_cycles,
+                fsm.bat_time_to_first_deep, sus_pct);
     }
     asb_log("governor stopping");
     close(tfd_active);
@@ -982,7 +1176,8 @@ int main(int argc, char **argv) {
     if (sockfd >= 0) close(sockfd);
     close(epfd);
     persistent_stats_save(&fsm);
-    asb_log("persistent stats saved: sessions=%d", g_pstats.session_count);
+    session_history_append_ex(&fsm, "shutdown");
+    asb_log("persistent stats saved: sessions=%d degrade=%d", g_pstats.session_count, g_pstats.degrade_count);
     unlink(ASB_SOCK_PATH);
     unlink(PID_FILE);
     if (g_logf) fclose(g_logf);
