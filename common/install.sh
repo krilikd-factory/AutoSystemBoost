@@ -1259,6 +1259,13 @@ AutoSystemBoost' $APIOCXM
 }
 EOF
 
+	# V25 fix: profile_core.sh is needed at runtime by apply_profile.sh
+	# but common/ is deleted after install. Copy to runtime/ which persists.
+	if [ -f "$MODPATH/common/profile_core.sh" ]; then
+		cp -f "$MODPATH/common/profile_core.sh" "$MODPATH/runtime/profile_core.sh"
+		chmod 0755 "$MODPATH/runtime/profile_core.sh"
+	fi
+
 	asb_prune_module
 	find $MODPATH -empty -type d -delete
 
