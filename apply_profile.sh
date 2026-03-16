@@ -20,6 +20,12 @@ asb_resolve_moddir() {
 }
 MODDIR="$(asb_resolve_moddir)"
 
+# V25 fix: profile_core.sh lives in runtime/ after install (common/ is deleted)
+PROFILE_CORE=""
+for _pc in "$MODDIR/runtime/profile_core.sh" "$MODDIR/common/profile_core.sh"; do
+  [ -r "$_pc" ] && { PROFILE_CORE="$_pc"; break; }
+done
+
 MODE="direct"
 PROFILE="${1:-balanced}"
 [ "$1" = "--worker" ] && { MODE="worker"; PROFILE="${2:-balanced}"; }
@@ -37,9 +43,9 @@ kill_prev_worker() {
 
 asb_update_desc_fallback() {
   case "$1" in
-    performance) _s='description=status: performance 🔥 | active ✅' ;;
-    battery) _s='description=status: battery 🔋 | active ✅' ;;
-    *) _s='description=status: balanced ⚖️ | active ✅' ;;
+    performance) _s='description=status: performance 馃敟 | active 鉁�' ;;
+    battery) _s='description=status: battery 馃攱 | active 鉁�' ;;
+    *) _s='description=status: balanced 鈿栵笍 | active 鉁�' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
@@ -47,9 +53,9 @@ asb_update_desc_fallback() {
 }
 
 update_desc_now() {
-  if [ -r "$MODDIR/common/profile_core.sh" ]; then
+  if [ -r "$PROFILE_CORE" ]; then
     PROFILE="$PROFILE"
-    . "$MODDIR/common/profile_core.sh" >/dev/null 2>&1 || true
+    . "$PROFILE_CORE" >/dev/null 2>&1 || true
     command -v asb_update_desc >/dev/null 2>&1 && {
       asb_update_desc
       return 0
@@ -74,13 +80,13 @@ quick_return_or_spawn() {
 }
 
 run_worker() {
-  if [ ! -r "$MODDIR/common/profile_core.sh" ]; then
-    asb_log "worker failed: missing $MODDIR/common/profile_core.sh"
+  if [ ! -r "$PROFILE_CORE" ]; then
+    asb_log "worker failed: missing profile_core.sh (checked runtime/ and common/)"
     exit 1
   fi
 
   PROFILE="$PROFILE"
-  . "$MODDIR/common/profile_core.sh" || {
+  . "$PROFILE_CORE" || {
     asb_log "worker failed: source profile_core"
     exit 1
   }
