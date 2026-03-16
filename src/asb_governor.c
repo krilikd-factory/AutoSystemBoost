@@ -57,6 +57,8 @@
 
 #define STATE_FILE      "/dev/.asb/state"
 #define LOG_FILE        "/dev/.asb/governor.log"
+#define LOG_MAX_BYTES   204800  /* 200KB max, then rotate */
+#define LOG_BACKUP      "/dev/.asb/governor.log.1"
 #define PID_FILE        "/dev/.asb/governor.pid"
 #define PROFILE_FILE    "/data/adb/modules/AutoSystemBoost/current_profile"
 #define CONFIG_FILE     "/data/adb/modules/AutoSystemBoost/config/governor.conf"
@@ -71,8 +73,20 @@ static int g_last_reassert_ok = 0;
 static int g_msm_boost_active = 0;
 
 static void asb_log(const char *fmt, ...) __attribute__((format(printf,1,2)));
+static int g_log_writes = 0;
 static void asb_log(const char *fmt, ...) {
     if (!g_logf) return;
+    /* Log rotation: check every 200 writes */
+    if (++g_log_writes % 200 == 0) {
+        long pos = ftell(g_logf);
+        if (pos > LOG_MAX_BYTES) {
+            fclose(g_logf);
+            rename(LOG_FILE, LOG_BACKUP);
+            g_logf = fopen(LOG_FILE, "w");
+            if (!g_logf) return;
+            fprintf(g_logf, "[rotated] previous log: %s\n", LOG_BACKUP);
+        }
+    }
     char ts[32];
     time_t t = time(NULL);
     struct tm *tm = localtime(&t);
@@ -403,11 +417,11 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
         /* If average gap > 1.5M kHz → vendor HAL consistently cuts caps.
          * Lower sustained_level to find a more stable operating point
          * instead of bouncing between GAMING and SUSTAINED.             */
-        if (avg_gap > 1500000 && g_asb_cfg.sustained_level > 0.70f) {
+        if (avg_gap > 1500000 && g_asb_cfg.sustained_level > 0.75f) {
             float old = g_asb_cfg.sustained_level;
-            g_asb_cfg.sustained_level -= 0.03f;
-            if (g_asb_cfg.sustained_level < 0.70f)
-                g_asb_cfg.sustained_level = 0.70f;
+            g_asb_cfg.sustained_level -= 0.02f;
+            if (g_asb_cfg.sustained_level < 0.75f)
+                g_asb_cfg.sustained_level = 0.75f;
             asb_log("self_tune: avg_gap=%d >1.5M → sustained_level %.2f→%.2f",
                     avg_gap, old, g_asb_cfg.sustained_level);
             tuned++;
@@ -1021,8 +1035,14 @@ int main(int argc, char **argv) {
                         force_write = 1;
                         need_metrics = 1;
                         g_last_reassert = 0;
+                        /* V25 fix: save+reset session on profile change.
+                         * Without this, old gaming/sustained counters from
+                         * performance bleed into battery session history. */
+                        session_history_append_ex(&fsm, "profile_change");
+                        session_end_self_tune(&fsm);
+                        fsm_session_reset(&fsm);
                         asb_sock_reply(sockfd, &src, srclen, "ok");
-                        asb_log("profile changed to %d", new_idx);
+                        asb_log("profile changed to %d (session reset)", new_idx);
                     } else {
                         asb_sock_reply(sockfd, &src, srclen, "ok:nochange");
                     }
