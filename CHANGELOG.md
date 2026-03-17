@@ -1,146 +1,189 @@
-# 🚀 AutoSystemBoost — Changelog
+# 🚀 AutoSystemBoost -- V26 Changelog
 
 ---
 
-## V25 — Stability & Real-World Fixes
+## V26 -- 🧠 Intelligence & Battery Maturity
 
-> **V24 = persistent intelligence, session history, feedback loops.**
-> **V25 = battle-tested on a real device for 24 hours. Every bug found — fixed.**
+> **V25 = bugfixes after real device testing.**
+> **V26 = governor learns in real time, battery finally catches up to performance.**
 
 ---
 
-### 🔴 Critical Fix: WebUI Profile Switching Broken
+### 🧠 Runtime Self-Tuning (Type 3 Learning)
 
-`apply_profile.sh` depended on `common/profile_core.sh`, but the MMT installer deletes `common/` after installation. **Every WebUI profile switch failed silently** — the shell worker logged `worker failed: missing profile_core.sh` and exited.
+Governor now analyzes each completed session and adjusts its own config on the fly -- no restart needed. Fires at session boundaries (idle_boundary, profile_change, shutdown).
 
-| Component | Fix |
-|:----------|:----|
-| `common/install.sh` | Copies `profile_core.sh` → `runtime/` before `common/` cleanup |
-| `apply_profile.sh` | Searches `runtime/` first, `common/` as fallback |
+**⚡ Performance rules:**
 
-### 🔴 Critical Fix: Dirty Session History
+| Condition | Action | Bounds |
+|:----------|:-------|:-------|
+| avg_gap > 1.5M kHz | sustained_level -0.02 | floor 0.75 |
+| efficiency < 30% | force stable mode | until reboot |
+| t2s < 60s | sustained_temp_enter +2 | max 72 |
 
-When switching profiles via WebUI (e.g. performance → battery), session telemetry was **not reset**. Old GAMING/SUSTAINED counters from performance bled into the next battery session. At `idle_boundary`, this contaminated data was written to `session_history.jsonl` — making feedback loops unreliable.
+**🔋 Battery rules:**
 
-**Real example from logs:**
-```
-profile=battery, gaming=9, sustained=9, avg_gap=2,369,225
-```
-9 GAMING entries in battery mode where `bat_suppress_gaming=1` — impossible data.
+| Condition | Action | Bounds |
+|:----------|:-------|:-------|
+| wake_rate > 1/5min | bat_fast_idle_s -2 | floor 5s |
+| HEAVY > 10% of battery session | bat_heavy_load_enter +0.5 | max 6.0 |
+| MODERATE > 40% of idle time | bat_light_idle_gpu -2% | floor 5% |
+| idle_q < 40 | bat_moderate_load_enter +1.0 | max 15.0 |
 
-| Fix | Detail |
-|:----|:-------|
-| Profile change via socket | Now calls `session_history_append_ex` + `session_end_self_tune` + `fsm_session_reset` |
-| New end reason | `"profile_change"` — visible in session history |
+All adjustments logged: `self_tune: bat idle_q=26 <40 -> bat_moderate_load 12.0->13.0`
 
-### 🟡 Fix: Benchmark Score Regression
+---
 
-`self_tune` lowered `sustained_level` too aggressively: `0.78 → 0.75 → 0.72` over two sessions. At 0.72, SUSTAINED used only 72% of the profile range — CPU got less frequency, but GAMING↔SUSTAINED cycling still generated heat. Result: lower benchmark scores AND higher temperatures.
+### 🔋 MODERATE Threshold Fix (SD8 Elite)
 
-| Parameter | V24 | V25 |
+SD8 Elite reports loadavg 8-10 even at idle (8 cores). Previous threshold of 1.5 meant governor sat in MODERATE 100% of the time with screen on -- killing battery idle quality.
+
+| Parameter | V25 | V26 |
 |:----------|:---:|:---:|
-| `sustained_level` step | −0.03 per session | **−0.02** |
-| `sustained_level` floor | 0.70 | **0.75** |
-| Max possible reduction | 0.78 → 0.70 (−10%) | 0.78 → 0.76 (−3%) |
+| moderate_load_enter | 1.5 (hardcoded) | **10.0** (configurable) |
+| bat_moderate_load_enter | -- | **12.0** (battery-specific) |
 
-### 📝 Log Rotation
-
-`governor.log` grew to 2100+ lines in one day (~3–5 MB/month). Now automatically rotated:
-
-| Parameter | Value |
-|:----------|:------|
-| Max size | **200 KB** |
-| Rotation | Current → `governor.log.1`, new file started |
-| Max disk usage | ~400 KB (current + one backup) |
-| Check frequency | Every 200 log writes |
-
-### ✅ V25 Summary
-
-| Fix | Impact | Status |
-|:----|:-------|:------:|
-| `profile_core.sh` missing after install | WebUI profile switching completely broken | ✅ Fixed |
-| Session telemetry not reset on profile change | History contaminated with wrong profile data | ✅ Fixed |
-| `sustained_level` self-tune too aggressive | Benchmark regression, no thermal benefit | ✅ Fixed |
-| Log rotation | Unbounded log growth | ✅ Fixed |
-
-**V25 is the first release validated against 24 hours of real device usage data — including sleep, daily use, benchmarks, andCall of Duty gaming sessions.**
-
----
--### 🎯 Atomic Session Start
-
-New socket command for clean test setup:
-
-```bash
-asb start-session:performance:auto
-```
-
-Atomically: save previous session stats → save history → set profile → set highload mode → reset telemetry → log `session_start` marker. Eliminates dirty test data from mixed states.
+Real impact from logs: battery session idle_q jumped from 26 to 70+ after this fix.
 
 ---
 
-### 📝 Session Markers
+### 🌡️ Thermal Trend Model
 
-Machine-readable log entries for automated analysis:
+Governor now tracks temperature rate of change, not just absolute value. Prevents thermal wall hits by entering SUSTAINED preemptively when temperature is climbing fast.
 
-**On startup / start-session:**
-```
-session_start profile=performance highload=auto bat=85% temp=32
-```
-
-**On shutdown:**
-```
-session_end gaming=3 sustained=2 thermal=1 unreachable=1 t_heavy=180s t_gaming=95s t_sustained=45s avg_gap=420000 max_temp=67 auto_degraded=0 t2s=120s t2thermal=180s t2g=30s efficiency=82 recovery=1 bat_deep=0s bat_light=0s bat_mod=0s bat_wake=0 bat_ttd=0s sus_pct=18%
-```
+| Feature | Detail |
+|:--------|:-------|
+| Circular buffer | Last 3 temperature deltas |
+| Preemptive SUSTAINED | Fires when trend >= +6 AND temp within 5 of threshold |
+| First-tick guard | Skips delta calculation when prev_temp is uninitialized |
 
 ---
 
-### 🛠️ New Tools
+### 📊 New Session Metrics
 
-| Tool | Purpose |
-|:-----|:--------|
-| `tools/asb_session_report.py` | Markdown report from `session_history.jsonl` — trends, battery analysis, recommendations |
-| `tools/asb_compare_sessions.py` | Side-by-side comparison of multiple test log files |
+| Metric | Where | Description |
+|:-------|:------|:------------|
+| `idle_q` | session_history | Battery idle quality 0-100 (% DEEP_IDLE - wake penalty) |
+| `cap_eff` | session_history | Cap efficiency 0-100 (% of requested caps delivered) |
+| `dur` | session_history | Session duration in seconds |
+| Schema | session_history | Bumped to `"v":2` |
 
-#### Session Report Example Output
+---
+
+### 🎮 Auto Degrade Fix (from Call of Duty data)
+
+Call of Duty testing revealed auto mode never degraded despite 10 futile GAMING/SUSTAINED cycles with avg_gap=2.37 GHz.
+
+| Change | V25 | V26 |
+|:-------|:---:|:---:|
+| auto_degrade_sus_ratio | 4 | **2** |
+| auto_degrade_thermal_pct | 60% | **45%** |
+| Path 3 (new) | -- | gap > 2M kHz + 3 gaming entries = instant degrade |
+
+---
+
+### 🔋 Battery FSM Improvements
+
+| Behavior | V25 | V26 |
+|:---------|:----|:----|
+| LIGHT_IDLE to HEAVY (battery) | 2 ticks (4s) | **4 ticks (8s)** -- resists screen-wake spikes |
+| HEAVY to LIGHT_IDLE (battery) | 5 ticks (10s) | **2-3 ticks (4-6s)** -- faster return to idle |
+
+---
+
+### 📝 Log System
+
+| Feature | Detail |
+|:--------|:-------|
+| `log_level=0` (default) | Only important: self_tune, feedback, profile changes, sustained, session boundaries |
+| `log_level=1` | Adds FSM ticks, reassert, boost, screen events, cmd echo |
+| Rotation | 200KB max, auto-rotate to `governor.log.1` |
+
+---
+
+### 🎯 end-session Command
 
 ```
-# 📊 ASB Session History Report
-Sessions: 8
-
-## 📉 Trends
-| Metric              | Average | Min | Max  |
-|---------------------|---------|-----|------|
-| Max temperature     | 65°C    | 58°C| 72°C |
-| Avg cap gap         | 380 kHz | 0   | 920k |
-| Efficiency          | 78%     | 45% | 95%  |
-
-## 💡 Recommendations
-- ⚠️ Auto degraded in 5/8 sessions — burst often non-viable
+asb end-session
 ```
 
-### ✅ V24 Summary
+Cleanly closes current session: save history, run self_tune, save persistent stats, reset telemetry.
+
+---
+
+### 🛡️ Profile Change Session Hygiene
+
+Session history is now saved **before** profile switch (correct label), then telemetry is reset. New end reason: `"profile_change"`.
+
+Previously switching performance->battery via WebUI contaminated battery history with performance GAMING/SUSTAINED counters.
+
+---
+
+### 🔊 Bluetooth Audio
+
+6 new props -- fixed bitrate instead of ABR for stable quality:
+
+| Property | Value | Effect |
+|:---------|:------|:-------|
+| `persist.vendor.bt.a2dp.hw_cdc` | true | Hardware A2DP codec |
+| `persist.vendor.bt.aac_vbr_frm_ctl.enabled` | true | AAC VBR framing |
+| `persist.bluetooth.a2dp_sbc_abr.enable` | false | Fixed SBC bitrate |
+| `persist.bluetooth.a2dp_aac_abr.enable` | false | Fixed AAC bitrate |
+| `persist.bluetooth.a2dp_ldac_abr.enable` | false | Fixed LDAC bitrate |
+| `persist.bluetooth.a2dp_lhdc_abr.enable` | false | Fixed LHDC bitrate |
+
+A2DP volume curve boosted +2.5 dB at top 3 steps in `default_volume_tables.xml`.
+
+---
+
+### 📡 GPS & Network
+
+- 🛰️ RTK disabled (`persist.sys.mqs.gps.rtk=OFF`) -- saves battery
+- 🌐 TCP buffers upgraded: 5G/WiFi/LTE max 10 MB -> **16 MB**
+
+---
+
+### 🛠️ Python Tools
+
+Session Report now includes:
+
+- 🔋 **Battery score** 0-100 with verdict (healthy / noisy / moderate-heavy / failed to settle)
+- ⚠️ **Anomaly detection** with severity (warning / CRITICAL)
+- 📈 **Normalized metrics** table (sustained/10min, thermal/10min, wake/hour)
+- 📋 **Executive summary** -- one-line per category (battery / high-load / auto)
+
+---
+
+### 🐛 Bug Fixes
+
+| Bug | Impact | Fix |
+|:----|:-------|:----|
+| Thermal trend false SUSTAINED on boot | prev_temp=0 caused delta=35 on first tick | Skip delta when prev_temp uninitialized |
+| Profile label wrong in history | profile_idx changed before history save | Save history first, then switch |
+| MODERATE dominated battery idle | load >= 1.5, SD8 Elite idle loadavg=8+ | Configurable threshold 10.0 / 12.0 |
+| `profile_core.sh` missing after install | MMT deletes `common/` | Copied to `runtime/` before cleanup |
+
+---
+
+### ✅ Summary
 
 | Feature | Status |
 |:--------|:------:|
-| Session history (JSONL, last 10, atomic write) | ✅ |
-| Schema version (`"v":1`) | ✅ |
-| 4 formal session end reasons | ✅ |
-| Battery feedback loop #1 (bat_ttd → idle discipline) | ✅ |
-| Battery feedback loop #2 (MODERATE domination) | ✅ |
-| Auto history-aware startup (degrade → stable) | ✅ |
-| Safety floor for bat_fast_idle_s (5s minimum) | ✅ |
-| DEEP_IDLE 30-min auto-boundary | ✅ |
-| Persistent stats on `/data/` (survives reboot) | ✅ |
-| Screen-off save (stats + history) | ✅ |
-| `degrade_count` in persistent stats | ✅ |
-| `ses_time_to_first_gaming` (t2g) | ✅ |
-| `bat_time_moderate_sec` / `bat_screen_off_count` / `bat_time_to_first_deep` | ✅ |
-| `start-session:profile:mode` atomic command | ✅ |
-| Session markers in log (session_start / session_end) | ✅ |
-| `tools/asb_session_report.py` | ✅ |
-| `tools/asb_compare_sessions.py` | ✅ |
-| README.md + README.ru.md rewritten | ✅ |
+| Runtime self-tuning (7 rules, bounded) | ✅ |
+| MODERATE threshold configurable + battery-aware | ✅ |
+| Thermal trend model with first-tick guard | ✅ |
+| idle_q / cap_eff / dur in session history (v2) | ✅ |
+| Auto degrade Path 3 + lowered thresholds | ✅ |
+| Battery FSM: slower up, faster down | ✅ |
+| log_level system (0=clean, 1=verbose) | ✅ |
+| end-session command | ✅ |
+| Profile change session hygiene | ✅ |
+| BT: 6 fixed-bitrate props + volume boost | ✅ |
+| GPS: RTK off | ✅ |
+| TCP: 16MB buffers for 5G/WiFi | ✅ |
+| Python: score + verdict + anomaly + normalized + summary | ✅ |
+| Thermal trend first-tick bug fix | ✅ |
 
-**V24 makes ASB not just remember what happened — but change its own behavior based on what it learned.**
+**V26 is where ASB stops being just a governor and becomes a system that observes, learns, and adapts -- in real time, on every session boundary, with bounded and explainable corrections.**
 
 ---
