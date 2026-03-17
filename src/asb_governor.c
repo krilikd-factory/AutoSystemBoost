@@ -373,15 +373,42 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     char ts[32];
     strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M", tm);
 
+    /* V25: Derived metrics */
+    int idle_quality = -1; /* 0-100, battery only */
+    if (fsm->profile_idx == PROFILE_BATTERY) {
+        long bat_total = fsm->bat_time_deep_idle_sec +
+                         fsm->bat_time_light_idle_sec +
+                         fsm->bat_time_moderate_sec;
+        if (bat_total > 60) {
+            idle_quality = (int)(fsm->bat_time_deep_idle_sec * 100 / bat_total);
+            /* Penalize high wake cycles: -5 per wake above 2 */
+            int wake_penalty = (fsm->bat_wake_cycles > 2)
+                               ? (fsm->bat_wake_cycles - 2) * 5 : 0;
+            idle_quality -= wake_penalty;
+            if (idle_quality < 0) idle_quality = 0;
+        }
+    }
+    int cap_eff = -1; /* 0-100, gaming only */
+    if (fsm->ses_gaming_entries > 0 && avg_gap > 0) {
+        /* How much of requested caps were actually delivered */
+        int target = g_profile_bounds[fsm->profile_idx].ceil.cpu_max[0];
+        if (target > 0) {
+            cap_eff = (int)((target - avg_gap) * 100 / target);
+            if (cap_eff < 0) cap_eff = 0;
+            if (cap_eff > 100) cap_eff = 100;
+        }
+    }
+
     fprintf(wf,
-        "{\"v\":1,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
+        "{\"v\":2,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
         "\"gaming\":%d,\"sustained\":%d,\"thermal\":%d,\"unreachable\":%d,"
         "\"t_heavy\":%ld,\"t_gaming\":%ld,\"t_sustained\":%ld,"
         "\"avg_gap\":%d,\"max_temp\":%d,\"degraded\":%d,"
         "\"t2s\":%ld,\"t2th\":%ld,\"t2g\":%ld,\"eff\":%d,\"recovery\":%d,"
         "\"sus_pct\":%d,"
         "\"bat_deep\":%ld,\"bat_light\":%ld,\"bat_mod\":%ld,"
-        "\"bat_wake\":%d,\"bat_ttd\":%ld}\n",
+        "\"bat_wake\":%d,\"bat_ttd\":%ld,"
+        "\"idle_q\":%d,\"cap_eff\":%d}\n",
         ts, profile_names[fsm->profile_idx], mode_names[mode_idx], reason,
         fsm->ses_gaming_entries, fsm->ses_sustained_entries,
         fsm->ses_thermal_entries, fsm->ses_unreachable_entries,
@@ -394,7 +421,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         sus_pct,
         fsm->bat_time_deep_idle_sec, fsm->bat_time_light_idle_sec,
         fsm->bat_time_moderate_sec,
-        fsm->bat_wake_cycles, fsm->bat_time_to_first_deep);
+        fsm->bat_wake_cycles, fsm->bat_time_to_first_deep,
+        idle_quality, cap_eff);
     fclose(wf);
     rename(tmp_path, SESSION_HISTORY_FILE);
 }
@@ -1016,9 +1044,14 @@ int main(int argc, char **argv) {
                     if (strcmp(pname, "battery")     == 0) new_idx = PROFILE_BATTERY;
                     if (strcmp(pname, "performance") == 0) new_idx = PROFILE_PERFORMANCE;
                     if (new_idx != fsm.profile_idx) {
+                        /* V25: save history with CURRENT profile before switching */
+                        session_history_append_ex(&fsm, "profile_change");
+                        session_end_self_tune(&fsm);
+                        fsm_session_reset(&fsm);
+
                         fsm.profile_idx = new_idx;
                         fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
-                        /* Profile-aware highload_mode:
+                        /* Profile-aware highload_mode */
                          * performance → burst (faster retry, better gaming)
                          * battery     → stable (conservative, no burst spikes)
                          * balanced    → keep current config value            */
@@ -1035,12 +1068,6 @@ int main(int argc, char **argv) {
                         force_write = 1;
                         need_metrics = 1;
                         g_last_reassert = 0;
-                        /* V25 fix: save+reset session on profile change.
-                         * Without this, old gaming/sustained counters from
-                         * performance bleed into battery session history. */
-                        session_history_append_ex(&fsm, "profile_change");
-                        session_end_self_tune(&fsm);
-                        fsm_session_reset(&fsm);
                         asb_sock_reply(sockfd, &src, srclen, "ok");
                         asb_log("profile changed to %d (session reset)", new_idx);
                     } else {
@@ -1105,6 +1132,15 @@ int main(int argc, char **argv) {
                             g_asb_cfg.highload_mode == 1 ? "burst" :
                             g_asb_cfg.highload_mode == 2 ? "stable" :
                             g_asb_cfg.highload_mode == 3 ? "auto" : "default");
+                    asb_sock_reply(sockfd, &src, srclen, "ok");
+                }
+                /* V25: end-session — cleanly close current session */
+                else if (strcmp(cmd, "end-session") == 0) {
+                    session_history_append_ex(&fsm, "manual_end");
+                    session_end_self_tune(&fsm);
+                    persistent_stats_save(&fsm);
+                    fsm_session_reset(&fsm);
+                    asb_log("session_end: manual end-session cmd");
                     asb_sock_reply(sockfd, &src, srclen, "ok");
                 }
                 else if (strcmp(cmd, "quit") == 0) {
