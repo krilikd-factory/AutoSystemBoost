@@ -168,7 +168,7 @@ static void metrics_read_battery(asb_battery_t *b) {
     b->capacity_pct = sysfs_read_int(PATH_BATT_CAPACITY, 50);
     b->temp_dC      = sysfs_read_int(PATH_BATT_TEMP, 250);
     /* OnePlus: on discharge current_now is NEGATIVE (-1500000 = 1500mA)
-     * abs() → always positive mA value                               */
+     * abs() -> always positive mA value                               */
     b->current_ma   = abs(b->current_ua) / 1000;
 
     char st[16] = {0};
@@ -256,7 +256,7 @@ static void metrics_read_cpu(asb_cpu_t *c) {
 /* ─── Thermal ───────────────────────────────────────────────── */
 /*
  * Find needed thermal zones once at startup.
- * Criterion: type contains "cpullc" or "cpu-1-1" → CPU cluster.
+ * Criterion: type contains "cpullc" or "cpu-1-1" -> CPU cluster.
  */
 static int g_thermal_cpu_zone  = -1;
 static int g_thermal_skin_zone = -1;
@@ -296,7 +296,7 @@ static void metrics_read_thermal(asb_thermal_t *t) {
         int v = sysfs_read_int(path, 0);
         /* Android thermal: usually in millidegrees (38000=38°C).
          * Some kernels report directly in °C (38=38°C).
-         * Heuristic: if > 200 → millidegrees, else °C already. */
+         * Heuristic: if > 200 -> millidegrees, else °C already. */
         t->cpu_max_c = (v > 200) ? (v / 1000) : v;
         if (t->cpu_max_c > g_asb_cfg.thermal_throttle_temp) t->throttling = 1;
     }
@@ -320,7 +320,7 @@ static int metrics_screen_on(void) {
     int bl = sysfs_read_int(PATH_BACKLIGHT, -1);
     if (bl > 0) return 1;
     if (bl == 0) return 0;
-    return 1; /* unknown → assume ON (safe) */
+    return 1; /* unknown -> assume ON (safe) */
 }
 
 /* ─── Network ──────────────────────────────────────────────── */
