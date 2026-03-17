@@ -1,5 +1,5 @@
 #pragma once
-/* ASB V23 runtime config: key=value parser */
+/* ASB V26 runtime config: key=value parser */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,7 +47,7 @@ typedef struct {
 static inline void asb_config_defaults(asb_runtime_config_t *c) {
     memset(c, 0, sizeof(*c));
     c->heavy_gpu_enter     = 35;
-    c->heavy_load_enter    = 2.0f;
+    c->heavy_load_enter    = 15.0f; /* V25: was 2.0, SD8 Elite loadavg is 8+ even idle */
     c->gaming_gpu_enter    = 65;
     c->sustained_gpu_min   = 45;
     c->sustained_load_min  = 4.0f;
@@ -80,7 +80,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->bat_fast_idle_s     = 15; /* battery: 15s without activity → DEEP_IDLE */
     c->bat_light_idle_gpu  = 10; /* battery: GPU max 10% in LIGHT_IDLE */
     c->bat_suppress_gaming = 1;
-    c->bat_heavy_load_enter = 4.0f; /* battery: require load>4.0 for HEAVY (vs global 2.0) */
+    c->bat_heavy_load_enter = 20.0f; /* V25: was 4.0, SD8 Elite needs higher threshold */
 }
 
 static inline char *asb_cfg_trim(char *s) {
