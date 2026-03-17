@@ -128,7 +128,7 @@ jobs:
       # ── Упаковка zip ─────────────────────────────────────────────────────
       - name: Create release zip
         run: |
-          ZIP_NAME="ASB-V25.zip"
+          ZIP_NAME="ASB-V26.zip"
           rm -f "$ZIP_NAME"
           cd .pkg && zip -r "../$ZIP_NAME" . -x "*.DS_Store" && cd ..
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
@@ -160,7 +160,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ASB-V25
+          name: ASB-V26
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
