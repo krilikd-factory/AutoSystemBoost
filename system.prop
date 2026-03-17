@@ -127,6 +127,13 @@ persist.vendor.qcom.bluetooth.lc3_offload.enable=true
 persist.vendor.qcom.bluetooth.leaudio.enable=true
 persist.bluetooth.spatial_audio_support=true
 persist.bluetooth.sbc_hd_higher_bitrate=1
+# V26: from AIST v2.1 - BT quality fixes
+persist.vendor.bt.a2dp.hw_cdc=true
+persist.vendor.bt.aac_vbr_frm_ctl.enabled=true
+persist.bluetooth.a2dp_sbc_abr.enable=false
+persist.bluetooth.a2dp_aac_abr.enable=false
+persist.bluetooth.a2dp_ldac_abr.enable=false
+persist.bluetooth.a2dp_lhdc_abr.enable=false
 # ASB:BT:END
 # ASB:CAMERA:BEGIN
 persist.camera.tnr.preview=1
@@ -231,11 +238,11 @@ persist.vendor.accelerate.charge=true
 ro.lmk.swap_compression_ratio=0
 # ASB:VM:END
 # ASB:NET:BEGIN
-net.tcp.buffersize.default=4096,131072,10485760,4096,131072,10485760
-net.tcp.buffersize.wifi=4096,131072,10485760,4096,131072,10485760
-net.tcp.buffersize.lte=4096,131072,10485760,4096,131072,10485760
-net.tcp.buffersize.5g=4096,131072,10485760,4096,131072,10485760
-net.tcp.buffersize.ethernet=4096,131072,10485760,4096,131072,10485760
+net.tcp.buffersize.default=4096,1048576,16777216,4096,1048576,16777216
+net.tcp.buffersize.wifi=4096,1048576,16777216,4096,1048576,16777216
+net.tcp.buffersize.lte=4096,524288,16777216,4096,524288,16777216
+net.tcp.buffersize.5g=4096,1048576,16777216,4096,1048576,16777216
+net.tcp.buffersize.ethernet=4096,1048576,16777216,4096,1048576,16777216
 net.tcp.buffersize.hspap=4096,131072,8388608,4096,131072,8388608
 net.tcp.buffersize.hspa=4096,131072,4194304,4096,131072,4194304
 net.tcp.buffersize.umts=4096,128000,2097152,4096,128000,2097152
@@ -285,6 +292,8 @@ persist.vendor.wifi.6ghz.enable=1
 sys.wifitracing.started=0
 # ASB:WIFI:END
 # ASB:GPS:BEGIN
+# V26: from GNSS v1.3 - disable RTK (saves battery, not needed in Italy)
+persist.sys.mqs.gps.rtk=OFF
 # ASB:GPS:END
 # ASB:KERNEL:BEGIN
 persist.vendor.audio.power.save.enable=true
