@@ -6,15 +6,15 @@
  * Each state sets CPU/GPU caps within the profile range.
  *
  * HYSTERESIS PRINCIPLE:
- *   Upward transition (IDLE→MODERATE): fast, 2-tick window
- *   Downward transition (MODERATE→IDLE): slow, 10-tick window
+ *   Upward transition (IDLE->MODERATE): fast, 2-tick window
+ *   Downward transition (MODERATE->IDLE): slow, 10-tick window
  *   Prevents flickering on brief load spikes.
  *
  * EVENT PRIORITY:
- *   1. screen OFF → DEEP_IDLE immediately (uevent)
- *   2. screen ON  → LIGHT_IDLE immediately (uevent)
- *   3. thermal throttle → overlay, does not change FSM state
- *   4. battery drain → FSM transition via windows
+ *   1. screen OFF -> DEEP_IDLE immediately (uevent)
+ *   2. screen ON  -> LIGHT_IDLE immediately (uevent)
+ *   3. thermal throttle -> overlay, does not change FSM state
+ *   4. battery drain -> FSM transition via windows
  */
 
 #include <time.h>
@@ -72,7 +72,7 @@ typedef struct {
 /* ─── Profile bounds — OnePlus 15 / Snapdragon 8 Elite ─────────────
  * CPU topology: policy0 (cpus 0-5, max 3628800)
  *               policy6 (cpus 6-7, max 4608000)
- * cpu_max[2] = 0 → unused (only 2 policies on this device)
+ * cpu_max[2] = 0 -> unused (only 2 policies on this device)
  *
  * Ranges chosen within vendor-permitted windows:
  * - battery: hard limit, power efficiency
@@ -148,7 +148,7 @@ static int fsm_profile_is_battery = 0;
 #define PROFILE_BALANCED    1
 #define PROFILE_PERFORMANCE 2
 
-/* ─── State → caps mapping ─────────────────────────────────── */
+/* ─── State -> caps mapping ─────────────────────────────────── */
 /*
  * For each state: how high in the profile range?
  * 0.0 = floor, 1.0 = ceil.
@@ -342,7 +342,7 @@ static asb_state_t fsm_desired(const asb_metrics_t *m) {
      * In battery profile GAMING is suppressed — efficiency over peak. */
     if (m->gpu.load_pct >= g_asb_cfg.gaming_gpu_enter) {
         if (g_asb_cfg.bat_suppress_gaming && fsm_profile_is_battery)
-            return ASB_STATE_HEAVY; /* battery: GAMING → HEAVY */
+            return ASB_STATE_HEAVY; /* battery: GAMING -> HEAVY */
         return ASB_STATE_GAMING;
     }
 
@@ -417,7 +417,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         }
         /* ── Path 1b: SUSTAINED via thermal TREND (V25) ──────
          * If temperature is rising fast (+6°C in 3 ticks) and
-         * already within 5°C of threshold → enter SUSTAINED
+         * already within 5°C of threshold -> enter SUSTAINED
          * preemptively instead of waiting for the thermal wall. */
         if (!thermal_to_sustained && !sustained_reentry_blocked &&
             fsm->thermal_trend >= 6 &&
@@ -511,7 +511,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             window = fsm->up_window * 2;
         }
         /* Battery: faster downward transitions.
-         * HEAVY/MODERATE → LIGHT_IDLE in battery uses half the normal
+         * HEAVY/MODERATE -> LIGHT_IDLE in battery uses half the normal
          * down_window (2 ticks = 4s instead of 5 ticks = 10s).
          * This prevents battery mode from lingering in high states. */
         if (fsm_profile_is_battery && desired < fsm->state &&
@@ -668,7 +668,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             fsm->state == ASB_STATE_HEAVY &&
             fsm->prev_state != ASB_STATE_GAMING) /* new entry only, not reassert */
         {
-            /* gpu >= gaming_gpu_enter → would be GAMING but suppressed */
+            /* gpu >= gaming_gpu_enter -> would be GAMING but suppressed */
         }
     }
 
