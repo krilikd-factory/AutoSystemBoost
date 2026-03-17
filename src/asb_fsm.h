@@ -597,11 +597,16 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
      * Circular buffer of last 3 deltas. Positive = rising, negative = cooling.
      * Used to enter SUSTAINED earlier when temp is climbing fast.           */
     {
-        int delta = m->therm.cpu_max_c - fsm->prev_temp;
-        fsm->prev_temp = m->therm.cpu_max_c;
-        fsm->trend_buf[fsm->trend_idx % 3] = delta;
-        fsm->trend_idx++;
-        fsm->thermal_trend = fsm->trend_buf[0] + fsm->trend_buf[1] + fsm->trend_buf[2];
+        if (fsm->prev_temp == 0) {
+            /* First tick after init/reset: seed prev_temp, no delta */
+            fsm->prev_temp = m->therm.cpu_max_c;
+        } else {
+            int delta = m->therm.cpu_max_c - fsm->prev_temp;
+            fsm->prev_temp = m->therm.cpu_max_c;
+            fsm->trend_buf[fsm->trend_idx % 3] = delta;
+            fsm->trend_idx++;
+            fsm->thermal_trend = fsm->trend_buf[0] + fsm->trend_buf[1] + fsm->trend_buf[2];
+        }
     }
 
     /* 2. Gap in GAMING -- accumulate each tick */
