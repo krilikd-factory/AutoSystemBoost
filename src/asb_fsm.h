@@ -202,6 +202,12 @@ typedef struct {
     int             profile_idx;
     int             thermal_cap;
 
+    /* V25: Thermal trend — rate of temperature change */
+    int             prev_temp;          /* previous tick temperature °C */
+    int             thermal_trend;      /* °C change over last 3 ticks (+rising, -falling, 0=stable) */
+    int             trend_buf[3];       /* circular buffer of temp deltas */
+    int             trend_idx;
+
     /* Hysteresis */
     int             pending_ticks;  /* ticks spent in pending */
     /* Up: 2 ticks (2s/tick = 4s), down: 5 ticks = 10s  */
@@ -409,6 +415,20 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             thermal_to_sustained = 1;
             fsm->sustained_reason = 0;
         }
+        /* ── Path 1b: SUSTAINED via thermal TREND (V25) ──────
+         * If temperature is rising fast (+6°C in 3 ticks) and
+         * already within 5°C of threshold → enter SUSTAINED
+         * preemptively instead of waiting for the thermal wall. */
+        if (!thermal_to_sustained && !sustained_reentry_blocked &&
+            fsm->thermal_trend >= 6 &&
+            m->therm.cpu_max_c >= (g_asb_cfg.sustained_temp_enter - 5) &&
+            fsm->state >= ASB_STATE_HEAVY &&
+            desired >= ASB_STATE_HEAVY)
+        {
+            desired = ASB_STATE_SUSTAINED;
+            thermal_to_sustained = 1;
+            fsm->sustained_reason = 0;
+        }
 
         /* ── Path 2: SUSTAINED via gap-aware logic ──────────── */
         /* If GAMING caps are physically unreachable for several consecutive ticks,
@@ -570,6 +590,17 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
     /* 1. Temperature */
     if (m->therm.cpu_max_c > fsm->ses_max_temp)
         fsm->ses_max_temp = m->therm.cpu_max_c;
+
+    /* V25: Thermal trend — compute rate of temperature change.
+     * Circular buffer of last 3 deltas. Positive = rising, negative = cooling.
+     * Used to enter SUSTAINED earlier when temp is climbing fast.           */
+    {
+        int delta = m->therm.cpu_max_c - fsm->prev_temp;
+        fsm->prev_temp = m->therm.cpu_max_c;
+        fsm->trend_buf[fsm->trend_idx % 3] = delta;
+        fsm->trend_idx++;
+        fsm->thermal_trend = fsm->trend_buf[0] + fsm->trend_buf[1] + fsm->trend_buf[2];
+    }
 
     /* 2. Gap in GAMING — accumulate each tick */
     if (fsm->state == ASB_STATE_GAMING) {
