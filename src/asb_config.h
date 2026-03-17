@@ -1,5 +1,5 @@
 #pragma once
-/* ASB V26 runtime config: key=value parser */
+/* ASB V23 runtime config: key=value parser */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,10 +32,10 @@ typedef struct {
     int   gaming_retry_temp_max;   /* °C — GAMING retry only if temp <= this value */
     int   sustained_reentry_cooldown_s; /* seconds — minimum interval between SUSTAINED episodes */
     int   highload_mode; /* 0=default, 1=burst, 2=stable, 3=auto */
-    /* auto-mode thresholds: when to degrade burst→stable */
-    int   auto_degrade_gap_thresh;   /* avg_gap_p0 > X → gaming caps unreachable */
-    int   auto_degrade_sus_ratio;    /* sus_entries / gaming_entries >= X → degrade to stable */
-    int   auto_degrade_thermal_pct;  /* % time in SUSTAINED of total → degrade without gaming entries */
+    /* auto-mode thresholds: when to degrade burst->stable */
+    int   auto_degrade_gap_thresh;   /* avg_gap_p0 > X -> gaming caps unreachable */
+    int   auto_degrade_sus_ratio;    /* sus_entries / gaming_entries >= X -> degrade to stable */
+    int   auto_degrade_thermal_pct;  /* % time in SUSTAINED of total -> degrade without gaming entries */
 
     /* Battery profile tuning */
     int   bat_fast_idle_s;       /* seconds to DEEP_IDLE in battery profile (0=off) */
@@ -72,12 +72,12 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->gaming_retry_temp_max    = 50;
     c->sustained_reentry_cooldown_s = 20;
     c->highload_mode = 0;
-    c->auto_degrade_gap_thresh  = 800000; /* kHz: avg gap > 800MHz → gaming unreachable */
+    c->auto_degrade_gap_thresh  = 800000; /* kHz: avg gap > 800MHz -> gaming unreachable */
     c->auto_degrade_sus_ratio   = 2;  /* V24: was 4, too strict for CoD (ratio=1.09) */
     c->auto_degrade_thermal_pct = 45; /* V24: was 60, CoD showed sus_pct=51% and didn't fire */
 
     /* Battery profile */
-    c->bat_fast_idle_s     = 15; /* battery: 15s without activity → DEEP_IDLE */
+    c->bat_fast_idle_s     = 15; /* battery: 15s without activity -> DEEP_IDLE */
     c->bat_light_idle_gpu  = 10; /* battery: GPU max 10% in LIGHT_IDLE */
     c->bat_suppress_gaming = 1;
     c->bat_heavy_load_enter = 20.0f; /* V25: was 4.0, SD8 Elite needs higher threshold */
@@ -208,7 +208,7 @@ static inline void asb_config_apply_stable_override(asb_runtime_config_t *c) {
     c->sustained_reentry_cooldown_s = 25;
 }
 
-/* AUTO degrade: burst→stable on poor gaming viability.
+/* AUTO degrade: burst->stable on poor gaming viability.
  * Both conditions must be met:
  *  1. avg_gap_p0 > auto_degrade_gap_thresh  (caps persistently unreachable)
  *  2. sus_entries >= gaming_entries * ratio  (GAMING rare, SUSTAINED dominant)
