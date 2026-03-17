@@ -11,7 +11,7 @@
  *     └── sockfd          — commands from action.sh
  *
  * In DEEP_IDLE: only timerfd_idle (5s) + ueventfd active.
- * Active metrics timer suspended → CPU not woken needlessly.
+ * Active metrics timer suspended -> CPU not woken needlessly.
  *
  * Power in DEEP_IDLE:
  *   - 0% CPU (epoll blocked)
@@ -115,7 +115,7 @@ typedef struct {
     float avg_max_temp;             /* rolling avg peak temp °C */
     float avg_gap_p0;               /* rolling avg cap gap kHz */
     float avg_efficiency;           /* rolling avg sustained efficiency score */
-    int   degrade_count;            /* V24: sessions where auto degraded burst→stable */
+    int   degrade_count;            /* V24: sessions where auto degraded burst->stable */
 } asb_persistent_stats_t;
 
 static asb_persistent_stats_t g_pstats = {0};
@@ -442,7 +442,7 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
         int avg_gap = (fsm->ses_gap_samples > 0)
                       ? (int)(fsm->ses_gap_p0_sum / fsm->ses_gap_samples) : 0;
 
-        /* If average gap > 1.5M kHz → vendor HAL consistently cuts caps.
+        /* If average gap > 1.5M kHz -> vendor HAL consistently cuts caps.
          * Lower sustained_level to find a more stable operating point
          * instead of bouncing between GAMING and SUSTAINED.             */
         if (avg_gap > 1500000 && g_asb_cfg.sustained_level > 0.75f) {
@@ -450,24 +450,24 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             g_asb_cfg.sustained_level -= 0.02f;
             if (g_asb_cfg.sustained_level < 0.75f)
                 g_asb_cfg.sustained_level = 0.75f;
-            asb_log("self_tune: avg_gap=%d >1.5M → sustained_level %.2f→%.2f",
+            asb_log("self_tune: avg_gap=%d >1.5M -> sustained_level %.2f->%.2f",
                     avg_gap, old, g_asb_cfg.sustained_level);
             tuned++;
         }
 
-        /* If efficiency < 30% → severe thermal pressure.
+        /* If efficiency < 30% -> severe thermal pressure.
          * Force stable mode for the rest of this boot.    */
         if (fsm->ses_sustained_efficiency >= 0 &&
             fsm->ses_sustained_efficiency < 30 &&
             g_asb_cfg.highload_mode != 2) {
             g_asb_cfg.highload_mode = 2;
             asb_config_apply_highload_mode(&g_asb_cfg);
-            asb_log("self_tune: efficiency=%d <30 → forced stable mode",
+            asb_log("self_tune: efficiency=%d <30 -> forced stable mode",
                     fsm->ses_sustained_efficiency);
             tuned++;
         }
 
-        /* If time_to_first_sustained < 60s → device throttles very fast.
+        /* If time_to_first_sustained < 60s -> device throttles very fast.
          * Raise sustained_temp_enter by 2°C to give HEAVY more headroom
          * (max 72°C to stay safe).                                       */
         if (fsm->ses_time_to_first_sus > 0 &&
@@ -477,7 +477,7 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             g_asb_cfg.sustained_temp_enter += 2;
             if (g_asb_cfg.sustained_temp_enter > 72)
                 g_asb_cfg.sustained_temp_enter = 72;
-            asb_log("self_tune: t2s=%lds <60s → sustained_temp_enter %d→%d",
+            asb_log("self_tune: t2s=%lds <60s -> sustained_temp_enter %d->%d",
                     fsm->ses_time_to_first_sus, old, g_asb_cfg.sustained_temp_enter);
             tuned++;
         }
@@ -489,7 +489,7 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
                          fsm->bat_time_light_idle_sec +
                          fsm->bat_time_moderate_sec;
 
-        /* If wake_cycles > 1 per 5 minutes of session → too many wakeups.
+        /* If wake_cycles > 1 per 5 minutes of session -> too many wakeups.
          * Tighten bat_fast_idle_s to re-enter DEEP_IDLE faster.          */
         if (bat_total > 300 && fsm->bat_wake_cycles > 0) {
             int wake_rate = (int)(fsm->bat_wake_cycles * 300 / bat_total);
@@ -498,13 +498,13 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
                 g_asb_cfg.bat_fast_idle_s -= 2;
                 if (g_asb_cfg.bat_fast_idle_s < BAT_FAST_IDLE_FLOOR)
                     g_asb_cfg.bat_fast_idle_s = BAT_FAST_IDLE_FLOOR;
-                asb_log("self_tune: bat wake_rate=%d/5min >1 → bat_fast_idle %d→%d",
+                asb_log("self_tune: bat wake_rate=%d/5min >1 -> bat_fast_idle %d->%d",
                         wake_rate, old, g_asb_cfg.bat_fast_idle_s);
                 tuned++;
             }
         }
 
-        /* If HEAVY time > 10% of battery session → something keeps
+        /* If HEAVY time > 10% of battery session -> something keeps
          * pushing load above bat_heavy_load_enter.
          * Raise threshold by 0.5 (max 6.0) to filter more spikes. */
         if (bat_total > 120 && fsm->ses_time_heavy_sec > 0) {
@@ -515,7 +515,7 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
                 g_asb_cfg.bat_heavy_load_enter += 0.5f;
                 if (g_asb_cfg.bat_heavy_load_enter > 6.0f)
                     g_asb_cfg.bat_heavy_load_enter = 6.0f;
-                asb_log("self_tune: bat HEAVY=%d%% >10%% → bat_heavy_load %.1f→%.1f",
+                asb_log("self_tune: bat HEAVY=%d%% >10%% -> bat_heavy_load %.1f->%.1f",
                         heavy_pct, old, g_asb_cfg.bat_heavy_load_enter);
                 tuned++;
             }
@@ -530,7 +530,7 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
                 g_asb_cfg.bat_light_idle_gpu -= 2;
                 if (g_asb_cfg.bat_light_idle_gpu < 5)
                     g_asb_cfg.bat_light_idle_gpu = 5;
-                asb_log("self_tune: bat MODERATE=%d%% >40%% → bat_light_idle_gpu %d→%d",
+                asb_log("self_tune: bat MODERATE=%d%% >40%% -> bat_light_idle_gpu %d->%d",
                         mod_pct, old, g_asb_cfg.bat_light_idle_gpu);
                 tuned++;
             }
@@ -733,12 +733,12 @@ int main(int argc, char **argv) {
                     if (avg_ttd > 60 && g_asb_cfg.bat_fast_idle_s > 10) {
                         int old = g_asb_cfg.bat_fast_idle_s;
                         g_asb_cfg.bat_fast_idle_s = 10;
-                        asb_log("feedback: avg_bat_ttd=%.0fs >60s → bat_fast_idle %d→%d",
+                        asb_log("feedback: avg_bat_ttd=%.0fs >60s -> bat_fast_idle %d->%d",
                                 avg_ttd, old, g_asb_cfg.bat_fast_idle_s);
                     } else if (avg_ttd > 30 && g_asb_cfg.bat_fast_idle_s > 12) {
                         int old = g_asb_cfg.bat_fast_idle_s;
                         g_asb_cfg.bat_fast_idle_s = 12;
-                        asb_log("feedback: avg_bat_ttd=%.0fs >30s → bat_fast_idle %d→%d",
+                        asb_log("feedback: avg_bat_ttd=%.0fs >30s -> bat_fast_idle %d->%d",
                                 avg_ttd, old, g_asb_cfg.bat_fast_idle_s);
                     }
                 }
@@ -775,7 +775,7 @@ int main(int argc, char **argv) {
                         int old = g_asb_cfg.bat_fast_idle_s;
                         g_asb_cfg.bat_fast_idle_s = 8;
                         asb_log("feedback: battery MODERATE=%d%% of idle time "
-                                "→ bat_fast_idle %d→%d (tighter wake discipline)",
+                                "-> bat_fast_idle %d->%d (tighter wake discipline)",
                                 mod_pct, old, g_asb_cfg.bat_fast_idle_s);
                     }
                 }
@@ -786,7 +786,7 @@ int main(int argc, char **argv) {
         if (g_asb_cfg.highload_mode == 3 /* auto */ &&
             g_pstats.degrade_count > g_pstats.session_count / 2) {
             asb_config_apply_stable_override(&g_asb_cfg);
-            asb_log("feedback: %d/%d sessions degraded → auto starting as stable",
+            asb_log("feedback: %d/%d sessions degraded -> auto starting as stable",
                     g_pstats.degrade_count, g_pstats.session_count);
         }
     }
@@ -1052,17 +1052,17 @@ int main(int argc, char **argv) {
                         fsm.profile_idx = new_idx;
                         fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
                         /* Profile-aware highload_mode */
-                         * performance → burst (faster retry, better gaming)
-                         * battery     → stable (conservative, no burst spikes)
-                         * balanced    → keep current config value            */
+                         * performance -> burst (faster retry, better gaming)
+                         * battery     -> stable (conservative, no burst spikes)
+                         * balanced    -> keep current config value            */
                         if (new_idx == PROFILE_PERFORMANCE &&
                             g_asb_cfg.highload_mode == 0) {
                             asb_config_apply_burst_override(&g_asb_cfg);
-                            asb_log("profile:performance → highload burst applied");
+                            asb_log("profile:performance -> highload burst applied");
                         } else if (new_idx == PROFILE_BATTERY &&
                                    g_asb_cfg.highload_mode == 1) {
                             asb_config_defaults_highload(&g_asb_cfg);
-                            asb_log("profile:battery → highload burst cleared");
+                            asb_log("profile:battery -> highload burst cleared");
                         }
                         profile_changed = 1;
                         force_write = 1;
@@ -1168,7 +1168,7 @@ int main(int argc, char **argv) {
 
             int changed = fsm_update(&fsm, &metrics);
 
-            /* AUTO degrade check: burst→stable when gaming caps unreachable */
+            /* AUTO degrade check: burst->stable when gaming caps unreachable */
             if (!fsm.ses_auto_degraded) {
                 int avg_gap = (fsm.ses_gap_samples > 0)
                               ? (int)(fsm.ses_gap_p0_sum / fsm.ses_gap_samples) : 0;
