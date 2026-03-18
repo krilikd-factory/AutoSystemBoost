@@ -45,9 +45,9 @@ asb_update_desc_fallback() {
   local _p="$1"
   local _s
   case "$_p" in
-    performance) _s="description=status: performance | active" ;;
-    battery)     _s="description=status: battery | active" ;;
-    *)           _s="description=status: balanced | active" ;;
+    performance) _s="description=status: performance 🔥 | active ✅" ;;
+    battery)     _s="description=status: battery 🔋 | active ✅" ;;
+    *)           _s="description=status: balanced ⚖️ | active ✅" ;;
   esac
   awk -v d="$_s" 'BEGIN{f=0}/^description=/{print d;f=1;next}{print}END{if(!f)print d}' \
     "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null
