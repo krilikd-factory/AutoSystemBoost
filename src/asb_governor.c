@@ -236,7 +236,8 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "\"dwell_sec\":%ld,\"boost\":%d,"
         "\"cap_gap_p0\":%d,\"cap_gap_p1\":%d,"
         "\"last_sustained_reason\":\"%s\",\"highload_mode\":\"%s\",\"ses_gaming\":%d,\"ses_sustained\":%d,\"ses_thermal\":%d,\"ses_unreachable\":%d,\"ses_t_heavy\":%ld,\"ses_t_gaming\":%ld,\"ses_t_sustained\":%ld,\"ses_avg_gap_p0\":%d,\"ses_max_gap_p0\":%d,\"ses_max_temp\":%d,\"ses_auto_degraded\":%d,\"bat_deep_idle\":%ld,\"bat_light_idle\":%ld,\"bat_wake_cycles\":%d,"
-        "\"eff_sus_lvl\":%.2f,\"eff_sus_temp\":%d,\"eff_bat_fi\":%d,\"eff_bat_hl\":%.1f,\"eff_bat_ml\":%.1f}",
+        "\"eff_sus_lvl\":%.2f,\"eff_sus_temp\":%d,\"eff_gr_cd\":%d,\"eff_gr_temp\":%d,"
+        "\"eff_bat_fi\":%d,\"eff_bat_hl\":%.1f,\"eff_bat_ml\":%.1f,\"eff_bat_gpu\":%d}",
         asb_state_names[fsm->state],
         profile_names[fsm->profile_idx],
         m->bat.current_ma, ma_valid, m->bat.charging,
@@ -271,9 +272,12 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->bat_wake_cycles,
         g_asb_cfg.sustained_level,
         g_asb_cfg.sustained_temp_enter,
+        g_asb_cfg.gaming_retry_cooldown_s,
+        g_asb_cfg.gaming_retry_temp_max,
         g_asb_cfg.bat_fast_idle_s,
         g_asb_cfg.bat_heavy_load_enter,
-        g_asb_cfg.bat_moderate_load_enter);
+        g_asb_cfg.bat_moderate_load_enter,
+        g_asb_cfg.bat_idle_gpu_enter);
 }
 
 
