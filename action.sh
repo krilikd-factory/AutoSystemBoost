@@ -31,10 +31,13 @@ else
 fi
 
 case "$NEXT" in
-  performance) DESC="status: performance 🔥 | active ✅" ;;
-  battery)     DESC="status: battery 🔋 | active ✅" ;;
-  *)           DESC="status: balanced ⚖️ | active ✅" ;;
+  performance) _DESC="description=status: performance 🔥 | active ✅" ;;
+  battery)     _DESC="description=status: battery 🔋 | active ✅" ;;
+  *)           _DESC="description=status: balanced ⚖️ | active ✅" ;;
 esac
-sed -i "s/^description=.*/description=$DESC/" "$MODDIR/module.prop" 2>/dev/null || true
+awk -v d="$_DESC" 'BEGIN{f=0}/^description=/{print d;f=1;next}{print}END{if(!f)print d}' \
+  "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null
+[ -s "$MODDIR/module.prop.tmp" ] && mv "$MODDIR/module.prop.tmp" "$MODDIR/module.prop"
+rm -f "$MODDIR/module.prop.tmp" 2>/dev/null || true
 
 echo "ui_print [ASB] → $NEXT"
