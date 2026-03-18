@@ -14,10 +14,11 @@ MODDIR="$(asb_resolve_moddir)"
 
 # Load utility functions and profile system
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
-# V27: profile_core.sh lives in runtime/ after install (common/ deleted by MMT)
+# profile_core.sh: try runtime/ first (common/ deleted by MMT installer)
 for _pc in "$MODDIR/runtime/profile_core.sh" "$MODDIR/common/profile_core.sh"; do
   [ -r "$_pc" ] && { . "$_pc"; break; }
 done
+unset _pc
 ASB_STATE_LOG="/dev/.asb_profile_state/runtime_apply.log"
 asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$ASB_STATE_LOG" 2>/dev/null || true; }
 
