@@ -6,7 +6,7 @@
  * 24 hours x 7 days = 168 slots.
  * Each slot stores: avg drain (mA), avg screen-on time.
  *
- * learn.bin: 168 x 8 bytes = 1344 bytes. Stored in tmpfs.
+ * learn.bin: 168 x 8 bytes = 1344 bytes. Stored in persistent runtime.
  *
  * EMA coefficient alpha = 0.15:
  *   - New data influences gradually
@@ -26,7 +26,7 @@
 
 #define LEARN_SLOTS     168   /* 24 x 7 */
 #define LEARN_ALPHA     0.15f /* EMA coefficient */
-#define LEARN_FILE      "/dev/.asb/learn.bin"
+#define LEARN_FILE      "/data/adb/modules/AutoSystemBoost/runtime/learn.bin"
 #define LEARN_IDLE_MA   30    /* quiet hour threshold, mA */
 #define LEARN_LIGHT_MA  70    /* light hour threshold, mA */
 
@@ -87,6 +87,11 @@ static void learner_save(asb_learn_db_t *db) {
 }
 
 static void learner_init(asb_learn_db_t *db) {
+    /* V27: migrate old tmpfs learn.bin to persistent if needed */
+    if (access(LEARN_FILE, F_OK) != 0 &&
+        access("/dev/.asb/learn.bin", F_OK) == 0) {
+        rename("/dev/.asb/learn.bin", LEARN_FILE);
+    }
     if (learner_load(db)) return;
     /* First run: initialize with neutral values */
     memset(db, 0, sizeof(*db));
