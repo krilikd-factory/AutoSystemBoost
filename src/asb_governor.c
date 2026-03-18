@@ -193,6 +193,20 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         g_pstats.avg_gap_p0,
         g_pstats.avg_efficiency,
         g_pstats.degrade_count);
+    /* V27: effective runtime config (after mode overrides + self_tune) */
+    fprintf(f,
+        "eff_sustained_level=%.2f\neff_sustained_temp=%d\n"
+        "eff_gaming_retry_cd=%d\neff_gaming_retry_temp=%d\n"
+        "eff_bat_fast_idle=%d\neff_bat_heavy_load=%.1f\n"
+        "eff_bat_moderate_load=%.1f\neff_bat_idle_gpu=%d\n",
+        g_asb_cfg.sustained_level,
+        g_asb_cfg.sustained_temp_enter,
+        g_asb_cfg.gaming_retry_cooldown_s,
+        g_asb_cfg.gaming_retry_temp_max,
+        g_asb_cfg.bat_fast_idle_s,
+        g_asb_cfg.bat_heavy_load_enter,
+        g_asb_cfg.bat_moderate_load_enter,
+        g_asb_cfg.bat_light_idle_gpu);
     fclose(f);
 }
 
@@ -409,7 +423,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         "\"sus_pct\":%d,"
         "\"bat_deep\":%ld,\"bat_light\":%ld,\"bat_mod\":%ld,"
         "\"bat_wake\":%d,\"bat_ttd\":%ld,"
-        "\"idle_q\":%d,\"cap_eff\":%d,\"dur\":%ld}\n",
+        "\"idle_q\":%d,\"cap_eff\":%d,\"dur\":%ld,"
+        "\"eff_sus\":%.2f,\"eff_bfi\":%d}\n",
         ts, profile_names[fsm->profile_idx], mode_names[mode_idx], reason,
         fsm->ses_gaming_entries, fsm->ses_sustained_entries,
         fsm->ses_thermal_entries, fsm->ses_unreachable_entries,
@@ -423,7 +438,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         fsm->bat_time_deep_idle_sec, fsm->bat_time_light_idle_sec,
         fsm->bat_time_moderate_sec,
         fsm->bat_wake_cycles, fsm->bat_time_to_first_deep,
-        idle_quality, cap_eff, dur);
+        idle_quality, cap_eff, dur,
+        g_asb_cfg.sustained_level, g_asb_cfg.bat_fast_idle_s);
     fclose(wf);
     rename(tmp_path, SESSION_HISTORY_FILE);
 }
@@ -933,6 +949,11 @@ int main(int argc, char **argv) {
             g_asb_cfg.highload_mode == 2 ? "stable" :
             g_asb_cfg.highload_mode == 3 ? "auto" : "default",
             metrics.bat.capacity_pct, metrics.therm.cpu_max_c);
+    asb_log("diag: eff sus_lvl=%.2f sus_temp=%d grc=%d grt=%d bfi=%d bhl=%.1f bml=%.1f big=%d",
+            g_asb_cfg.sustained_level, g_asb_cfg.sustained_temp_enter,
+            g_asb_cfg.gaming_retry_cooldown_s, g_asb_cfg.gaming_retry_temp_max,
+            g_asb_cfg.bat_fast_idle_s, g_asb_cfg.bat_heavy_load_enter,
+            g_asb_cfg.bat_moderate_load_enter, g_asb_cfg.bat_light_idle_gpu);
 
     /* --- Reassert tracker ------------------------------------ */
     /* --- Event loop ------------------------------------------- */
