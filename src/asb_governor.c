@@ -1105,10 +1105,11 @@ int main(int argc, char **argv) {
                          * performance -> burst
                          * battery     -> stable
                          * balanced    -> keep current */
-                        if (new_idx == PROFILE_PERFORMANCE &&
-                            g_asb_cfg.highload_mode == 0) {
+                        if (new_idx == PROFILE_PERFORMANCE) {
                             asb_config_apply_burst_override(&g_asb_cfg);
-                            asb_log("profile:performance -> highload burst applied");
+                            /* Clear existing cooldown so GAMING is immediately viable */
+                            fsm.gaming_retry_until = 0;
+                            asb_log("profile:performance -> burst applied, cooldown cleared");
                         } else if (new_idx == PROFILE_BATTERY &&
                                    g_asb_cfg.highload_mode == 1) {
                             asb_config_defaults_highload(&g_asb_cfg);
