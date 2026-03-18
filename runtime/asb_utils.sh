@@ -1,4 +1,4 @@
-# asb_utils.sh — utility functions, sourced by service.sh
+# asb_utils.sh â€” utility functions, sourced by service.sh
 
 asb_map_profile_vars() {
   _P_RAVG="$RAVG_TICKS"
@@ -124,9 +124,9 @@ writef_verify() {
 asb_update_desc() {
   _p="$(cat "$MODDIR/current_profile" 2>/dev/null)"
   case "$_p" in
-    performance) _s="description=status: performance 🔥 | active ✅" ;;
-    battery) _s="description=status: battery 🔋 | active ✅" ;;
-    *) _s="description=status: balanced ⚖️ | active ✅" ;;
+    performance) _s="description=status: performance ðŸ”¥ | active âœ…" ;;
+    battery) _s="description=status: battery ðŸ”‹ | active âœ…" ;;
+    *) _s="description=status: balanced âš–ï¸ | active âœ…" ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q "^description=" "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
@@ -168,7 +168,6 @@ asb_governor_start() {
 }
 
 asb_governor_set_profile() {
-  [ "$ASB_GOV_ENABLED" -eq 1 ] || return 0
   asb_governor_running || return 0
   "$ASB_GOV" "profile:$ASB_PROFILE" >/dev/null 2>&1 || true
 }
