@@ -103,7 +103,7 @@ static void asb_log(const char *fmt, ...) {
 /* --- State dump ---------------------------------------------- */
 /* --- Persistent session stats ------------------------------- */
 #define PERSISTENT_STATS_FILE "/data/adb/modules/AutoSystemBoost/runtime/session_stats.json"
-#define SESSION_HISTORY_FILE  "/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
+#define SESSION_HISTORY_FILE  "/data/adb/asb/session_history.jsonl"
 #define SESSION_HISTORY_MAX   10
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
@@ -276,7 +276,8 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         g_asb_cfg.gaming_retry_temp_max,
         g_asb_cfg.bat_fast_idle_s,
         g_asb_cfg.bat_heavy_load_enter,
-        g_asb_cfg.bat_moderate_load_enter);
+        g_asb_cfg.bat_moderate_load_enter,
+        g_asb_cfg.bat_light_idle_gpu);
 }
 
 
@@ -498,11 +499,11 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
          * (max 72degC to stay safe).                                       */
         if (fsm->ses_time_to_first_sus > 0 &&
             fsm->ses_time_to_first_sus < 60 &&
-            g_asb_cfg.sustained_temp_enter < 72) {
+            g_asb_cfg.sustained_temp_enter < 68) {
             int old = g_asb_cfg.sustained_temp_enter;
             g_asb_cfg.sustained_temp_enter += 2;
-            if (g_asb_cfg.sustained_temp_enter > 72)
-                g_asb_cfg.sustained_temp_enter = 72;
+            if (g_asb_cfg.sustained_temp_enter > 68)
+                g_asb_cfg.sustained_temp_enter = 68;
             asb_log("self_tune: t2s=%lds <60s -> sustained_temp_enter %d->%d",
                     fsm->ses_time_to_first_sus, old, g_asb_cfg.sustained_temp_enter);
             tuned++;
@@ -725,6 +726,7 @@ int main(int argc, char **argv) {
     }
 
     mkdir("/dev/.asb", 0700);
+    mkdir("/data/adb/asb", 0700);
 
     {
         char pidbuf[16];
@@ -1290,6 +1292,20 @@ int main(int argc, char **argv) {
                                     " gap_ticks=%d gap_thresh=%d",
                                     g_asb_cfg.gaming_gap_ticks,
                                     g_asb_cfg.gaming_gap_thresh);
+                            /* Mid-session gap tune: after 3+ gap episodes
+                             * lower sustained_level immediately instead of
+                             * waiting for session end. Floor: 0.72.        */
+                            if (fsm.ses_unreachable_entries >= 3 &&
+                                g_asb_cfg.sustained_level > 0.72f) {
+                                float _old_sl = g_asb_cfg.sustained_level;
+                                g_asb_cfg.sustained_level -= 0.02f;
+                                if (g_asb_cfg.sustained_level < 0.72f)
+                                    g_asb_cfg.sustained_level = 0.72f;
+                                asb_log("mid_tune: gap_episodes=%d >=3 "
+                                        "-> sustained_level %.2f->%.2f",
+                                        fsm.ses_unreachable_entries,
+                                        _old_sl, g_asb_cfg.sustained_level);
+                            }
                         }
                         else {
                             fsm.ses_thermal_entries++;
