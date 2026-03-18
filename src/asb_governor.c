@@ -235,7 +235,8 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "\"writes\":%d,\"last_write\":%ld,"
         "\"dwell_sec\":%ld,\"boost\":%d,"
         "\"cap_gap_p0\":%d,\"cap_gap_p1\":%d,"
-        "\"last_sustained_reason\":\"%s\",\"highload_mode\":\"%s\",\"ses_gaming\":%d,\"ses_sustained\":%d,\"ses_thermal\":%d,\"ses_unreachable\":%d,\"ses_t_heavy\":%ld,\"ses_t_gaming\":%ld,\"ses_t_sustained\":%ld,\"ses_avg_gap_p0\":%d,\"ses_max_gap_p0\":%d,\"ses_max_temp\":%d,\"ses_auto_degraded\":%d,\"bat_deep_idle\":%ld,\"bat_light_idle\":%ld,\"bat_wake_cycles\":%d}",
+        "\"last_sustained_reason\":\"%s\",\"highload_mode\":\"%s\",\"ses_gaming\":%d,\"ses_sustained\":%d,\"ses_thermal\":%d,\"ses_unreachable\":%d,\"ses_t_heavy\":%ld,\"ses_t_gaming\":%ld,\"ses_t_sustained\":%ld,\"ses_avg_gap_p0\":%d,\"ses_max_gap_p0\":%d,\"ses_max_temp\":%d,\"ses_auto_degraded\":%d,\"bat_deep_idle\":%ld,\"bat_light_idle\":%ld,\"bat_wake_cycles\":%d,"
+        "\"eff_sus_lvl\":%.2f,\"eff_sus_temp\":%d,\"eff_bat_fi\":%d,\"eff_bat_hl\":%.1f,\"eff_bat_ml\":%.1f}",
         asb_state_names[fsm->state],
         profile_names[fsm->profile_idx],
         m->bat.current_ma, ma_valid, m->bat.charging,
@@ -267,7 +268,12 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->ses_auto_degraded,
         fsm->bat_time_deep_idle_sec,
         fsm->bat_time_light_idle_sec,
-        fsm->bat_wake_cycles);
+        fsm->bat_wake_cycles,
+        g_asb_cfg.sustained_level,
+        g_asb_cfg.sustained_temp_enter,
+        g_asb_cfg.bat_fast_idle_s,
+        g_asb_cfg.bat_heavy_load_enter,
+        g_asb_cfg.bat_moderate_load_enter);
 }
 
 
@@ -1114,7 +1120,7 @@ int main(int argc, char **argv) {
                     }
                 }
                 else if (strcmp(cmd, "status") == 0) {
-                    char jbuf[512];
+                    char jbuf[768];
                     build_status_json(&fsm, &metrics, cur_pred, jbuf, sizeof(jbuf));
                     asb_sock_reply(sockfd, &src, srclen, jbuf);
                 }
