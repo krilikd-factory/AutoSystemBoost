@@ -1,5 +1,5 @@
 #pragma once
-/* ASB V23 runtime config: key=value parser */
+/* ASB V27 runtime config: key=value parser */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +8,7 @@
 typedef struct {
     int   heavy_gpu_enter;
     float heavy_load_enter;
-    float moderate_load_enter;  /* V26: load threshold for MODERATE (SD8 Elite idle=8+) */
+    float moderate_load_enter;  /* V27: load threshold for MODERATE (SD8 Elite idle=8+) */
     int   gaming_gpu_enter;
     int   sustained_gpu_min;
     float sustained_load_min;
@@ -43,15 +43,15 @@ typedef struct {
     int   bat_light_idle_gpu;    /* GPU % cap in LIGHT_IDLE in battery mode */
     int   bat_suppress_gaming;   /* 1 = GAMING blocked in battery profile */
     float bat_heavy_load_enter; /* separate load threshold for HEAVY in battery (0=use global) */
-    float bat_moderate_load_enter; /* V26: MODERATE threshold in battery */
-    int   log_level;            /* V26: 0=normal, 1=verbose (FSM ticks, reasserts) */
+    float bat_moderate_load_enter; /* V27: MODERATE threshold in battery */
+    int   log_level;            /* V27: 0=normal, 1=verbose (FSM ticks, reasserts) */
 } asb_runtime_config_t;
 
 static inline void asb_config_defaults(asb_runtime_config_t *c) {
     memset(c, 0, sizeof(*c));
     c->heavy_gpu_enter     = 35;
     c->heavy_load_enter    = 15.0f; /* V25: SD8 Elite loadavg is 8+ even idle */
-    c->moderate_load_enter = 10.0f; /* V26: loadavg above idle noise -> MODERATE */
+    c->moderate_load_enter = 10.0f; /* V27: loadavg above idle noise -> MODERATE */
     c->gaming_gpu_enter    = 65;
     c->sustained_gpu_min   = 45;
     c->sustained_load_min  = 4.0f;
@@ -72,7 +72,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     /* gap-aware SUSTAINED: enter if GAMING cap_gap > 1500 MHz for 4 ticks (~8s) */
     c->gaming_gap_thresh        = 1500000;
     c->gaming_gap_ticks         = 4;
-    c->gaming_retry_cooldown_s  = 30;
+    c->gaming_retry_cooldown_s  = 20;  /* default: was 30s, reduced for better GAMING recovery */
     c->gaming_retry_temp_max    = 50;
     c->sustained_reentry_cooldown_s = 20;
     c->highload_mode = 0;
@@ -86,7 +86,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->bat_suppress_gaming = 1;
     c->bat_heavy_load_enter = 4.0f;  /* battery: higher than global 2.0 to absorb wake spikes */
     c->bat_moderate_load_enter = 3.0f;  /* battery: moderate threshold above global ~1.5 */
-    c->log_level = 0; /* V26: 0=normal (clean), 1=verbose (debug) */
+    c->log_level = 0; /* V27: 0=normal (clean), 1=verbose (debug) */
 }
 
 static inline char *asb_cfg_trim(char *s) {
@@ -203,9 +203,9 @@ static inline void asb_config_defaults_highload(asb_runtime_config_t *c) {
 static inline void asb_config_apply_burst_override(asb_runtime_config_t *c) {
     c->highload_mode             = 1; /* burst */
     c->gaming_gap_ticks          = 3;
-    c->gaming_retry_cooldown_s   = 20;
-    c->gaming_retry_temp_max     = 50;
-    c->sustained_level           = 0.85f;
+    c->gaming_retry_cooldown_s      = 10;  /* aggressive: retry GAMING fast */
+    c->gaming_retry_temp_max        = 50;
+    c->sustained_level              = 0.85f;
     c->sustained_reentry_cooldown_s = 10;
 }
 
