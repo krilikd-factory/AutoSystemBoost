@@ -276,8 +276,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         g_asb_cfg.gaming_retry_temp_max,
         g_asb_cfg.bat_fast_idle_s,
         g_asb_cfg.bat_heavy_load_enter,
-        g_asb_cfg.bat_moderate_load_enter,
-        g_asb_cfg.bat_idle_gpu_enter);
+        g_asb_cfg.bat_moderate_load_enter);
 }
 
 
