@@ -42,17 +42,14 @@ kill_prev_worker() {
 }
 
 asb_update_desc_fallback() {
-  local _p="$1"
-  local _s
-  case "$_p" in
-    performance) _s="description=status: performance 🔥 | active ✅" ;;
-    battery)     _s="description=status: battery 🔋 | active ✅" ;;
-    *)           _s="description=status: balanced ⚖️ | active ✅" ;;
+  case "$1" in
+    performance) _s='description=status: performance 🔥 | active ✅' ;;
+    battery) _s='description=status: battery 🔋 | active ✅' ;;
+    *) _s='description=status: balanced ⚖️ | active ✅' ;;
   esac
-  awk -v d="$_s" 'BEGIN{f=0}/^description=/{print d;f=1;next}{print}END{if(!f)print d}' \
-    "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null
-  [ -s "$MODDIR/module.prop.tmp" ] && mv "$MODDIR/module.prop.tmp" "$MODDIR/module.prop"
-  rm -f "$MODDIR/module.prop.tmp" 2>/dev/null || true
+  sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
+  grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
+  rm -f "$MODDIR/module.prop.tmp"
 }
 
 update_desc_now() {
