@@ -84,8 +84,8 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->bat_fast_idle_s     = 15; /* battery: 15s without activity -> DEEP_IDLE */
     c->bat_light_idle_gpu  = 10; /* battery: GPU max 10% in LIGHT_IDLE */
     c->bat_suppress_gaming = 1;
-    c->bat_heavy_load_enter = 20.0f; /* V25: SD8 Elite needs higher threshold */
-    c->bat_moderate_load_enter = 12.0f; /* V26: battery ignores more load spikes */
+    c->bat_heavy_load_enter = 4.0f;  /* battery: higher than global 2.0 to absorb wake spikes */
+    c->bat_moderate_load_enter = 3.0f;  /* battery: moderate threshold above global ~1.5 */
     c->log_level = 0; /* V26: 0=normal (clean), 1=verbose (debug) */
 }
 
