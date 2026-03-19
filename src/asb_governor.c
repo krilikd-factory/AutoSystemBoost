@@ -193,6 +193,26 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         g_pstats.avg_gap_p0,
         g_pstats.avg_efficiency,
         g_pstats.degrade_count);
+    /* Live session quality metrics */
+    long _active = fsm->ses_time_heavy_sec + fsm->ses_time_gaming_sec + fsm->ses_time_sustained_sec;
+    int _sus_pct = (_active > 0) ? (int)(fsm->ses_time_sustained_sec * 100 / _active) : 0;
+    long _bat_tot = fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec + fsm->bat_time_moderate_sec;
+    int _idle_q = -1;
+    if (_bat_tot > 30) {
+        _idle_q = (int)(fsm->bat_time_deep_idle_sec * 100 / _bat_tot);
+        int _wp = (fsm->bat_wake_cycles > 2) ? (fsm->bat_wake_cycles - 2) * 5 : 0;
+        _idle_q -= _wp;
+        if (_idle_q < 0) _idle_q = 0;
+    }
+    int _cap_eff = -1;
+    if (fsm->ses_gaming_entries > 0 && fsm->ses_gap_samples > 0) {
+        int _avg_gap = (int)(fsm->ses_gap_p0_sum / fsm->ses_gap_samples);
+        int _target = (fsm->current_caps.cpu_max[0] > 0) ? fsm->current_caps.cpu_max[0] / 10 : 1;
+        _cap_eff = (int)((_target - _avg_gap) * 100 / _target);
+        if (_cap_eff < 0) _cap_eff = 0;
+        if (_cap_eff > 100) _cap_eff = 100;
+    }
+    fprintf(f, "sus_pct=%d\nidle_q=%d\ncap_eff=%d\n", _sus_pct, _idle_q, _cap_eff);
     fclose(f);
 }
 
@@ -927,12 +947,15 @@ int main(int argc, char **argv) {
             metrics.bat.current_ma,
             metrics.gpu.load_pct,
             metrics.cpu.load1);
-    asb_log("session_start profile=%s highload=%s bat=%d%% temp=%d",
+    asb_log("session_start profile=%s highload=%s bat=%d%% temp=%d sus_enter=%d sus_exit=%d gaming_gpu=%d",
             profile_idx == 0 ? "battery" : profile_idx == 2 ? "performance" : "balanced",
             g_asb_cfg.highload_mode == 1 ? "burst" :
             g_asb_cfg.highload_mode == 2 ? "stable" :
             g_asb_cfg.highload_mode == 3 ? "auto" : "default",
-            metrics.bat.capacity_pct, metrics.therm.cpu_max_c);
+            metrics.bat.capacity_pct, metrics.therm.cpu_max_c,
+                    g_asb_cfg.sustained_temp_enter,
+                    g_asb_cfg.sustained_temp_exit,
+                    g_asb_cfg.gaming_gpu_enter);
 
     /* --- Reassert tracker ------------------------------------ */
     /* --- Event loop ------------------------------------------- */
