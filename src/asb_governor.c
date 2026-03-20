@@ -274,6 +274,37 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->bat_time_deep_idle_sec,
         fsm->bat_time_light_idle_sec,
         fsm->bat_wake_cycles);
+    /* Append live quality metrics */
+    {
+        long _act = fsm->ses_time_heavy_sec + fsm->ses_time_gaming_sec + fsm->ses_time_sustained_sec;
+        int _sp = (_act > 0) ? (int)(fsm->ses_time_sustained_sec * 100 / _act) : 0;
+        long _bt = fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec + fsm->bat_time_moderate_sec;
+        int _iq = -1;
+        if (_bt > 30) {
+            _iq = (int)(fsm->bat_time_deep_idle_sec * 100 / _bt);
+            int _wp = (fsm->bat_wake_cycles > 2) ? (fsm->bat_wake_cycles - 2) * 5 : 0;
+            _iq -= _wp; if (_iq < 0) _iq = 0;
+        }
+        int _ce = -1;
+        if (fsm->ses_gaming_entries > 0 && fsm->ses_gap_samples > 0) {
+            int _ag = (int)(fsm->ses_gap_p0_sum / fsm->ses_gap_samples);
+            int _tg = fsm->current_caps.cpu_max[0] > 0 ? fsm->current_caps.cpu_max[0] / 10 : 1;
+            _ce = (int)((_tg - _ag) * 100 / _tg);
+            if (_ce < 0) _ce = 0; if (_ce > 100) _ce = 100;
+        }
+        /* Rewrite last '}' to append new fields */
+        snprintf(out + strlen(out) - 1, outlen - (int)strlen(out),
+            ",\"sus_pct\":%d,\"idle_q\":%d,\"cap_eff\":%d,"
+            "\"eff_sus_lvl\":%.2f,\"eff_sus_temp\":%d,\"eff_gr_cd\":%d,\"eff_gr_temp\":%d,"
+            "\"eff_bat_fi\":%d,\"eff_bat_hl\":%.1f,\"eff_bat_ml\":%.1f,\"eff_bat_idle_gpu\":%d}",
+            _sp, _iq, _ce,
+            g_asb_cfg.sustained_level, g_asb_cfg.sustained_temp_enter,
+            g_asb_cfg.gaming_retry_cooldown_s, g_asb_cfg.gaming_retry_temp_max,
+            g_asb_cfg.bat_fast_idle_s,
+            g_asb_cfg.bat_heavy_load_enter,
+            g_asb_cfg.bat_moderate_load_enter,
+            g_asb_cfg.bat_light_idle_gpu);
+    }
 }
 
 
