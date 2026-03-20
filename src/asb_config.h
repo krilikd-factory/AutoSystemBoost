@@ -1,5 +1,5 @@
 #pragma once
-/* ASB V23 runtime config: key=value parser */
+/* ASB V27 runtime config: key=value parser */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -199,9 +199,12 @@ static inline void asb_config_defaults_highload(asb_runtime_config_t *c) {
     /* Reset to config file values (caller should reload if needed) */
 }
 
-/* Apply burst parameters for performance profile */
+/* Apply burst parameters for performance profile.
+ * V28: starts as AUTO (3) -- identical burst-like params at cold start,
+ * but auto-degrade can kick in mid-session when thermal wall is hit.
+ * Previously mode=1 (burst) blocked all three degrade paths entirely. */
 static inline void asb_config_apply_burst_override(asb_runtime_config_t *c) {
-    c->highload_mode             = 1; /* burst */
+    c->highload_mode             = 3; /* auto: starts as burst, degrades if needed */
     c->gaming_gap_ticks          = 3;
     c->gaming_retry_cooldown_s      = 10;
     c->gaming_retry_temp_max        = 50;
@@ -218,10 +221,14 @@ static inline void asb_config_apply_stable_override(asb_runtime_config_t *c) {
 }
 
 /* AUTO degrade: burst->stable on poor gaming viability.
- * Both conditions must be met:
- *  1. avg_gap_p0 > auto_degrade_gap_thresh  (caps persistently unreachable)
- *  2. sus_entries >= gaming_entries * ratio  (GAMING rare, SUSTAINED dominant)
- * Minimum 2 gaming_entries required for statistics. */
+ * Three independent paths, each sufficient alone:
+ *  Path 1: avg_gap_p0 unreachable + SUSTAINED dominant (needs gaming data)
+ *  Path 2: thermal pressure alone (no gaming entries needed)
+ *  Path 3: extreme gap (needs 3+ gaming entries)
+ *
+ * V28: Path 2 no longer gated by gaming_entries >= 2.
+ * In benchmark/thermal scenarios device can go HEAVY->thermal->SUSTAINED
+ * with 0-1 gaming entries; thermal path must still fire. */
 static inline int asb_config_auto_should_degrade(
         const asb_runtime_config_t *c,
         int avg_gap_p0, int gaming_entries, int sustained_entries,
@@ -229,13 +236,15 @@ static inline int asb_config_auto_should_degrade(
         int already_degraded)
 {
     if (c->highload_mode != 3 || already_degraded) return 0;
-    if (gaming_entries < 2) return 0;
-    /* Path 1: gaming entries exist, caps unreachable */
-    int gap_bad   = (c->auto_degrade_gap_thresh > 0 &&
-                     avg_gap_p0 > c->auto_degrade_gap_thresh);
-    int ratio_bad = (c->auto_degrade_sus_ratio  > 0 &&
-                     sustained_entries >= gaming_entries * c->auto_degrade_sus_ratio);
-    if (gaming_entries >= 2 && gap_bad && ratio_bad) return 1;
+
+    /* Path 1: gaming entries exist, caps unreachable + SUSTAINED dominant */
+    if (gaming_entries >= 2) {
+        int gap_bad   = (c->auto_degrade_gap_thresh > 0 &&
+                         avg_gap_p0 > c->auto_degrade_gap_thresh);
+        int ratio_bad = (c->auto_degrade_sus_ratio  > 0 &&
+                         sustained_entries >= gaming_entries * c->auto_degrade_sus_ratio);
+        if (gap_bad && ratio_bad) return 1;
+    }
 
     /* Path 2: thermal pressure -- even without gaming entries.
      * If > auto_degrade_thermal_pct% of heavy time was in SUSTAINED
@@ -247,6 +256,7 @@ static inline int asb_config_auto_should_degrade(
             if (sus_pct >= c->auto_degrade_thermal_pct) return 1;
         }
     }
+
     /* Path 3 (V24): extreme gap -- vendor HAL cuts caps by >2 GHz.
      * If avg gap > 2M kHz with 3+ gaming entries, burst is clearly
      * futile regardless of ratio. Real data from CoD: gap=2.37 GHz,
