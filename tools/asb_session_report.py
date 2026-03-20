@@ -39,32 +39,47 @@ def battery_classify(s):
     """
     Classify battery session into one of four scenario types.
     Returns (class_label, emoji)
+
+    Priority order:
+    1. screen-on moderate-heavy  — device was being used actively
+    2. screen-off efficient      — device rested well
+    3. screen-off noisy          — screen off but too many wakes
+    4. mixed unstable            — unclear pattern
     """
-    dur   = s.get('dur', 0)
-    iq    = s.get('idle_q', -1)
-    bw    = s.get('bat_wake', 0)
-    bd    = s.get('bat_deep', 0)
-    bl    = s.get('bat_light', 0)
-    bm    = s.get('bat_mod', 0)
-    ttd   = s.get('bat_ttd', 0)
-    t_h   = s.get('t_heavy', 0)
+    dur = s.get('dur', 0)
+    iq  = s.get('idle_q', -1)
+    bw  = s.get('bat_wake', 0)
+    bd  = s.get('bat_deep', 0)
+    t_h = s.get('t_heavy', 0)
 
     if dur < 120:
         return ('too short', '⏱')
 
-    # screen-off efficient: most time in DEEP_IDLE, low wakes
-    if iq >= 60 and bw <= 4 and (bd / dur if dur > 0 else 0) >= 0.5:
-        return ('screen-off efficient', '🌙')
+    wph       = bw * 3600 / dur if dur > 0 else 0
+    deep_pct  = bd / dur if dur > 0 else 0
+    heavy_pct = t_h / dur if dur > 0 else 0
 
-    # screen-off noisy: screen was off but wakes were excessive
-    if bd > 0 and bw > 8 and t_h < dur * 0.5:
-        return ('screen-off noisy', '🔔')
-
-    # screen-on moderate-heavy: mostly HEAVY because screen was on
-    if t_h > dur * 0.5 and bd < dur * 0.2:
+    # 1. Screen-on: heavy load dominated OR very poor idle quality OR no deep idle
+    if iq >= 0 and iq < 40 and heavy_pct > 0.3:
+        return ('screen-on moderate-heavy', '📱')
+    if heavy_pct > 0.5 and deep_pct < 0.05:
         return ('screen-on moderate-heavy', '📱')
 
-    # mixed unstable: no clear pattern
+    # 2. Screen-off efficient: device rested well
+    #    Either deep%=100% or (wake/h <= 1 and deep%>=10%) or idle_q>=85
+    if deep_pct >= 0.99 and wph <= 1.0:
+        return ('screen-off efficient', '🌙')
+    if wph <= 1.0 and deep_pct >= 0.1:
+        return ('screen-off efficient', '🌙')
+    if iq >= 85 and wph <= 2.5:
+        return ('screen-off efficient', '🌙')
+    if iq >= 60 and wph <= 5 and heavy_pct < 0.5:
+        return ('screen-off efficient', '🌙')
+
+    # 3. Screen-off noisy: wake rate too high
+    if wph > 8:
+        return ('screen-off noisy', '🔔')
+
     return ('mixed unstable', '⚠️')
 
 def battery_stability_score(s):
@@ -87,11 +102,18 @@ def battery_stability_score(s):
     ttd  = s.get('bat_ttd', 0)
 
     # deep_share component (0-40)
+    # If idle_q is excellent, deep% is less relevant — device was clearly idle
     deep_share = bd / dur if dur > 0 else 0
-    pts_deep = min(40, int(deep_share * 40))
+    if iq >= 85:
+        pts_deep = min(40, max(20, int(deep_share * 40) + 15))
+    else:
+        pts_deep = min(40, int(deep_share * 40))
 
     # settle speed component (0-20)
-    if ttd <= 0:
+    # If idle_q is excellent, device clearly settled — don't penalize bat_ttd
+    if iq >= 85:
+        pts_settle = 18  # device settled well, proven by idle_q
+    elif ttd <= 0:
         pts_settle = 10  # no data, neutral
     elif ttd <= 60:
         pts_settle = 20
@@ -380,8 +402,14 @@ def generate_report(sessions):
         bat_iqs = [s.get('idle_q', -1) for s in bat_sessions if s.get('idle_q', -1) >= 0]
         if bat_iqs and avg(bat_iqs) < 40:
             recs.append(f"Battery: idle_q avg={int(avg(bat_iqs))} — MODERATE доминирует")
+    # Never say "all normal" if there are warnings or anomalies
     if not recs:
-        recs.append("All metrics within normal range ✓")
+        if anomalies:
+            recs.append("⚠️ See anomalies section above")
+        else:
+            recs.append("All metrics within normal range ✓")
+    elif anomalies and "anomalies" not in " ".join(recs):
+        recs.append("⚠️ See anomalies section above")
     for r in recs:
         lines.append(f"- {r}")
     lines.append("")
