@@ -26,7 +26,7 @@
 
 #define LEARN_SLOTS     168   /* 24 x 7 */
 #define LEARN_ALPHA     0.15f /* EMA coefficient */
-#define LEARN_FILE      "/dev/.asb/learn.bin"
+#define LEARN_FILE      "/data/adb/modules/AutoSystemBoost/runtime/learn.bin"
 #define LEARN_IDLE_MA   30    /* quiet hour threshold, mA */
 #define LEARN_LIGHT_MA  70    /* light hour threshold, mA */
 
