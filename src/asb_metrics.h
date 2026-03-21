@@ -1,9 +1,4 @@
 #pragma once
-/*
- * asb_metrics.h -- fast sysfs metrics reader
- * No fork, no sh, no alloc in hot-path.
- * All functions read directly via open/read/close.
- */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,7 +11,6 @@
 #include "asb_config.h"
 extern asb_runtime_config_t g_asb_cfg;
 
-/* --- Paths -------------------------------------------------- */
 #define PATH_BATT_CURRENT   "/sys/class/power_supply/battery/current_now"
 #define PATH_BATT_VOLTAGE   "/sys/class/power_supply/battery/voltage_now"
 #define PATH_BATT_CAPACITY  "/sys/class/power_supply/battery/capacity"
@@ -30,44 +24,33 @@ extern asb_runtime_config_t g_asb_cfg;
 #define PATH_LOADAVG        "/proc/loadavg"
 #define PATH_MEMINFO        "/proc/meminfo"
 
-/* OxygenOS / OnePlus 15 display state */
 #define PATH_SCREEN_STATUS  "/sys/kernel/oplus_display/panel_power_status"
 #define PATH_SCREEN_STATUS2 "/sys/kernel/oplus_display/disp_on_notify"
 #define PATH_BACKLIGHT      "/sys/class/backlight/panel0-backlight/brightness"
 
-/* CPU policy paths for OnePlus 15 (Snapdragon 8 Elite) */
 #define PATH_CPU_POLICY0    "/sys/devices/system/cpu/cpufreq/policy0"
 #define PATH_CPU_POLICY4    "/sys/devices/system/cpu/cpufreq/policy4"
 #define PATH_CPU_POLICY6    "/sys/devices/system/cpu/cpufreq/policy6"
 #define PATH_CPU_POLICY7    "/sys/devices/system/cpu/cpufreq/policy7"
 
-/* OnePlus 15 (Snapdragon 8 Elite) real topology:
- *   policy0: cpus 0-5 (little+mid cluster, max 3628800)
- *   policy6: cpus 6-7 (big cluster, max 4608000)
- * policy4/policy7 do not exist on this device.
- * Auto-discovery on startup. */
 #define PATH_CPU_POLICIES_DEFAULT "0,6"
 
-/* Thermal -- find CPU cluster thermal zone */
 #define THERMAL_BASE        "/sys/class/thermal"
 #define THERMAL_MAX_ZONES   30
 
-/* WALT sched */
 #define PATH_WALT_RAVG      "/proc/sys/walt/sched_ravg_window_nr_ticks"
 #define PATH_WALT_IDLE      "/proc/sys/walt/sched_idle_enough"
 
-/* Network */
 #define PATH_WLAN_TX        "/sys/class/net/wlan0/statistics/tx_bytes"
 #define PATH_WLAN_RX        "/sys/class/net/wlan0/statistics/rx_bytes"
 
-/* --- Structs ------------------------------------------------- */
 typedef struct {
-    int     current_ua;     /* uA, negative = discharging */
+    int     current_ua;
     int     voltage_uv;
     int     capacity_pct;
     int     temp_dC;
     int     charging;
-    int     current_ma;     /* abs(current_ua / 1000) */
+    int     current_ma;
 } asb_battery_t;
 
 typedef struct {
@@ -79,24 +62,23 @@ typedef struct {
 typedef struct {
     float   load1;
     float   load5;
-    int     cur_freq[3];    /* policy0, policy4, policy7 in MHz */
+    int     cur_freq[3];
     int     max_freq[3];
 } asb_cpu_t;
 
 typedef struct {
-    int     cpu_max_c;      /* degC, best proxy for CPU temp */
+    int     cpu_max_c;
     int     gpu_temp_c;
     int     skin_temp_c;
-    int     throttling;     /* 1 if any zone > throttle threshold */
+    int     throttling;
 } asb_thermal_t;
 
 typedef struct {
     int     screen_on;
-    long    wlan_tx_bps;    /* bytes/sec since last poll */
+    long    wlan_tx_bps;
     long    wlan_rx_bps;
 } asb_misc_t;
 
-/* Full metrics snapshot */
 typedef struct {
     asb_battery_t   bat;
     asb_gpu_t       gpu;
@@ -106,7 +88,6 @@ typedef struct {
     struct timespec ts;
 } asb_metrics_t;
 
-/* --- Helpers ------------------------------------------------- */
 static inline int sysfs_read_int(const char *path, int def) {
     char buf[32];
     int fd = open(path, O_RDONLY | O_CLOEXEC);
@@ -138,8 +119,6 @@ static inline int sysfs_read_str(const char *path, char *out, int maxlen) {
     return -1;
 }
 
-/* --- Battery ------------------------------------------------- */
-/* current_now paths in priority order for OnePlus / Qualcomm */
 static const char *g_batt_current_paths[] = {
     "/sys/class/power_supply/battery/current_now",
     "/sys/class/power_supply/bms/current_now",
@@ -167,8 +146,6 @@ static void metrics_read_battery(asb_battery_t *b) {
     b->voltage_uv   = sysfs_read_int(PATH_BATT_VOLTAGE, 3800000);
     b->capacity_pct = sysfs_read_int(PATH_BATT_CAPACITY, 50);
     b->temp_dC      = sysfs_read_int(PATH_BATT_TEMP, 250);
-    /* OnePlus: on discharge current_now is NEGATIVE (-1500000 = 1500mA)
-     * abs() -> always positive mA value                               */
     b->current_ma   = abs(b->current_ua) / 1000;
 
     char st[16] = {0};
@@ -176,7 +153,6 @@ static void metrics_read_battery(asb_battery_t *b) {
     b->charging = (st[0] == 'C') ? 1 : 0;
 }
 
-/* --- GPU ----------------------------------------------------- */
 static void metrics_read_gpu(asb_gpu_t *g) {
     g->load_pct  = sysfs_read_int(PATH_GPU_LOAD, 0);
     g->cur_freq_hz = sysfs_read_long(PATH_GPU_FREQ, 0);
@@ -184,19 +160,12 @@ static void metrics_read_gpu(asb_gpu_t *g) {
     if (g->max_freq_hz <= 0) g->max_freq_hz = 1000000000L;
 }
 
-/* --- CPU ----------------------------------------------------- */
-/* --- CPU topology auto-discovery ------------------------------
- * On first read, determine real policy layout.
- * Try standard SD8 Elite: policy0/policy6.
- * Fallback to legacy: policy0/policy4/policy7.
- */
 static int g_cpu_policy_ids[3]   = {0, 6, -1};
 static int g_cpu_policy_count    = 0;
 
 static void cpu_topology_discover(void) {
     if (g_cpu_policy_count > 0) return;
 
-    /* Try preferred layout: policy0 + policy6 */
     int fd6 = open("/sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq",
                    O_RDONLY | O_CLOEXEC);
     if (fd6 >= 0) {
@@ -207,14 +176,12 @@ static void cpu_topology_discover(void) {
         g_cpu_policy_count  = 2;
         return;
     }
-    /* Fallback: policy0 + policy4 + policy7 */
     g_cpu_policy_ids[0] = 0;
     g_cpu_policy_ids[1] = 4;
     g_cpu_policy_ids[2] = 7;
     g_cpu_policy_count  = 3;
 }
 
-/* Returns path to policy[slot]/file in static buffer */
 static const char *cpu_policy_path(int slot, const char *file) {
     static char buf[4][128];
     static int idx = 0;
@@ -229,12 +196,10 @@ static const char *cpu_policy_path(int slot, const char *file) {
 static void metrics_read_cpu(asb_cpu_t *c) {
     cpu_topology_discover();
 
-    /* loadavg */
     char buf[64] = {0};
     sysfs_read_str(PATH_LOADAVG, buf, sizeof(buf));
     sscanf(buf, "%f %f", &c->load1, &c->load5);
 
-    /* per-policy freq -- using auto-discovered topology */
     const char *cur_paths[3] = {
         cpu_policy_path(0, "scaling_cur_freq"),
         cpu_policy_path(1, "scaling_cur_freq"),
@@ -253,11 +218,6 @@ static void metrics_read_cpu(asb_cpu_t *c) {
     }
 }
 
-/* --- Thermal ------------------------------------------------- */
-/*
- * Find needed thermal zones once at startup.
- * Criterion: type contains "cpullc" or "cpu-1-1" -> CPU cluster.
- */
 static int g_thermal_cpu_zone  = -1;
 static int g_thermal_skin_zone = -1;
 
@@ -266,14 +226,10 @@ static void thermal_discover(void) {
     for (int z = 0; z < THERMAL_MAX_ZONES; z++) {
         snprintf(path, sizeof(path), THERMAL_BASE "/thermal_zone%d/type", z);
         if (sysfs_read_str(path, type, sizeof(type)) < 0) break;
-        /* Priority: cpullc (cluster avg) > cpu-1-1 (per-core hotspot)
-         * cpullc-0-0 on SD8 Elite = zone0, ~15-20degC lower than per-core hotspot */
         if (strstr(type, "cpullc")) {
-            /* Cluster-level temperature -- preferred */
             if (g_thermal_cpu_zone < 0) g_thermal_cpu_zone = z;
         } else if (strstr(type, "cpu-1-1") || strstr(type, "cpuss-0") ||
                    strstr(type, "cpu-1-4")) {
-            /* Per-core fallback if cpullc not found */
             if (g_thermal_cpu_zone < 0) g_thermal_cpu_zone = z;
         }
         if (strstr(type, "skin") || strstr(type, "back-therm") ||
@@ -294,9 +250,6 @@ static void metrics_read_thermal(asb_thermal_t *t) {
         snprintf(path, sizeof(path),
             THERMAL_BASE "/thermal_zone%d/temp", g_thermal_cpu_zone);
         int v = sysfs_read_int(path, 0);
-        /* Android thermal: usually in millidegrees (38000=38degC).
-         * Some kernels report directly in degC (38=38degC).
-         * Heuristic: if > 200 -> millidegrees, else degC already. */
         t->cpu_max_c = (v > 200) ? (v / 1000) : v;
         if (t->cpu_max_c > g_asb_cfg.thermal_throttle_temp) t->throttling = 1;
     }
@@ -307,23 +260,19 @@ static void metrics_read_thermal(asb_thermal_t *t) {
     }
 }
 
-/* --- Screen -------------------------------------------------- */
 static int metrics_screen_on(void) {
-    /* OxygenOS sysfs -- fastest path (~5us) */
     const char *paths[] = { PATH_SCREEN_STATUS, PATH_SCREEN_STATUS2, NULL };
     for (int i = 0; paths[i]; i++) {
         int v = sysfs_read_int(paths[i], -1);
         if (v == 1) return 1;
         if (v == 0) return 0;
     }
-    /* Fallback: backlight > 0 */
     int bl = sysfs_read_int(PATH_BACKLIGHT, -1);
     if (bl > 0) return 1;
     if (bl == 0) return 0;
-    return 1; /* unknown -> assume ON (safe) */
+    return 1;
 }
 
-/* --- Network ------------------------------------------------ */
 static long g_wlan_tx_prev = 0, g_wlan_rx_prev = 0;
 static struct timespec g_wlan_ts_prev = {0};
 
@@ -343,7 +292,6 @@ static void metrics_read_network(asb_misc_t *m, const struct timespec *now) {
     g_wlan_ts_prev = *now;
 }
 
-/* --- Full snapshot ------------------------------------------- */
 static void metrics_read_all(asb_metrics_t *m) {
     clock_gettime(CLOCK_MONOTONIC, &m->ts);
     metrics_read_battery(&m->bat);
