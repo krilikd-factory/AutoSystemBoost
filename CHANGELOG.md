@@ -7,7 +7,7 @@
 > **V26 = governor learns in real time.**
 > **V27 = governor understands *what it's doing*, *why it failed*, and *how to start smarter next time*.**
 
-**Benchmark impact:** AnTuTu V26 ≈ 3,400,000 → V27 ≈ 3,940,000 (+16%)
+**Benchmark impact:** (+16%)
 **Battery impact:** 8-hour night session — 4% drain (0.5%/h), 1 wake cycle
 
 ---
