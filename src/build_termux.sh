@@ -1,15 +1,4 @@
 #!/system/bin/sh
-# build_termux.sh — build asb_governor on-device with Termux
-#
-# INSTALL DEPENDENCIES (once):
-#   pkg update && pkg install clang
-#
-# BUILD:
-#   cd /path/to/AutoSystemBoost/src
-#   sh build_termux.sh
-#
-# OUTPUT:
-#   ../bin/asb  (ARM64 PIE binary, ~120KB stripped)
 
 set -e
 
