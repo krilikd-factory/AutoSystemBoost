@@ -1,4 +1,4 @@
-name: ASB build
+name: ASB-V28
 
 on:
   workflow_dispatch:   # Ручной запуск из GitHub UI → только artifact
@@ -128,7 +128,7 @@ jobs:
       # ── Упаковка zip ─────────────────────────────────────────────────────
       - name: Create release zip
         run: |
-          ZIP_NAME="ASB-V27.zip"
+          ZIP_NAME="ASB-V28.zip"
           rm -f "$ZIP_NAME"
           cd .pkg && zip -r "../$ZIP_NAME" . -x "*.DS_Store" && cd ..
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
@@ -160,7 +160,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ASB-V27
+          name: ASB-V28
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
