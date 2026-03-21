@@ -1,5 +1,4 @@
 #pragma once
-/* ASB V23 runtime config: key=value parser */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,13 +7,13 @@
 typedef struct {
     int   heavy_gpu_enter;
     float heavy_load_enter;
-    float moderate_load_enter;  /* V26: load threshold for MODERATE (SD8 Elite idle=8+) */
+    float moderate_load_enter;
     int   gaming_gpu_enter;
     int   sustained_gpu_min;
     float sustained_load_min;
-    int   sustained_temp_enter;  /* degC -- SUSTAINED entry threshold (default 65) */
-    int   sustained_temp_exit;   /* degC -- SUSTAINED exit hysteresis (default 55, < enter) */
-    float sustained_level;      /* 0.0-1.0 within profile range (default 0.80) */
+    int   sustained_temp_enter;
+    int   sustained_temp_exit;
+    float sustained_level;
     int   heavy_gpu_exit;
     int   gaming_gpu_exit;
     int   sustained_gpu_exit;
@@ -25,38 +24,35 @@ typedef struct {
     int   reassert_gaming_s;
     int   msm_perf_boost_only;
     int   thermal_overlay_pct;
-    int   thermal_throttle_temp; /* degC -- throttle detection threshold for SD8Elite (default 65) */
-    /* Gap-aware SUSTAINED */
-    int   gaming_gap_thresh;    /* kHz -- gap above which GAMING is considered unreachable */
-    int   gaming_gap_ticks;     /* consecutive ticks with large gap to trigger SUSTAINED */
-    int   gaming_retry_cooldown_s; /* seconds cooldown before GAMING retry after SUSTAINED */
-    int   gaming_retry_temp_max;   /* degC -- GAMING retry only if temp <= this value */
-    int   sustained_reentry_cooldown_s; /* seconds -- minimum interval between SUSTAINED episodes */
-    int   highload_mode; /* 0=default, 1=burst, 2=stable, 3=auto */
-    /* auto-mode thresholds: when to degrade burst->stable */
-    int   auto_degrade_gap_thresh;   /* avg_gap_p0 > X -> gaming caps unreachable */
-    int   auto_degrade_sus_ratio;    /* sus_entries / gaming_entries >= X -> degrade to stable */
-    int   auto_degrade_thermal_pct;  /* % time in SUSTAINED of total -> degrade without gaming entries */
+    int   thermal_throttle_temp;
+    int   gaming_gap_thresh;
+    int   gaming_gap_ticks;
+    int   gaming_retry_cooldown_s;
+    int   gaming_retry_temp_max;
+    int   sustained_reentry_cooldown_s;
+    int   highload_mode;
+    int   auto_degrade_gap_thresh;
+    int   auto_degrade_sus_ratio;
+    int   auto_degrade_thermal_pct;
 
-    /* Battery profile tuning */
-    int   bat_fast_idle_s;       /* seconds to DEEP_IDLE in battery profile (0=off) */
-    int   bat_light_idle_gpu;    /* GPU % cap in LIGHT_IDLE in battery mode */
-    int   bat_suppress_gaming;   /* 1 = GAMING blocked in battery profile */
-    float bat_heavy_load_enter; /* separate load threshold for HEAVY in battery (0=use global) */
-    float bat_moderate_load_enter; /* V26: MODERATE threshold in battery */
-    int   log_level;            /* V26: 0=normal, 1=verbose (FSM ticks, reasserts) */
+    int   bat_fast_idle_s;
+    int   bat_light_idle_gpu;
+    int   bat_suppress_gaming;
+    float bat_heavy_load_enter;
+    float bat_moderate_load_enter;
+    int   log_level;
 } asb_runtime_config_t;
 
 static inline void asb_config_defaults(asb_runtime_config_t *c) {
     memset(c, 0, sizeof(*c));
     c->heavy_gpu_enter     = 35;
-    c->heavy_load_enter    = 15.0f; /* V25: SD8 Elite loadavg is 8+ even idle */
-    c->moderate_load_enter = 10.0f; /* V26: loadavg above idle noise -> MODERATE */
+    c->heavy_load_enter    = 15.0f;
+    c->moderate_load_enter = 10.0f;
     c->gaming_gpu_enter    = 65;
     c->sustained_gpu_min   = 45;
     c->sustained_load_min  = 4.0f;
     c->sustained_temp_enter= 65;
-    c->sustained_temp_exit = 55; /* hysteresis 10degC -- do not exit while t > 55 */
+    c->sustained_temp_exit = 55;
     c->heavy_gpu_exit      = 25;
     c->gaming_gpu_exit     = 55;
     c->sustained_gpu_exit  = 35;
@@ -69,24 +65,22 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->thermal_overlay_pct   = 20;
     c->thermal_throttle_temp = 65;
     c->sustained_level       = 0.80f;
-    /* gap-aware SUSTAINED: enter if GAMING cap_gap > 1500 MHz for 4 ticks (~8s) */
     c->gaming_gap_thresh        = 1500000;
     c->gaming_gap_ticks         = 4;
     c->gaming_retry_cooldown_s  = 20;
     c->gaming_retry_temp_max    = 50;
     c->sustained_reentry_cooldown_s = 20;
     c->highload_mode = 0;
-    c->auto_degrade_gap_thresh  = 800000; /* kHz: avg gap > 800MHz -> gaming unreachable */
-    c->auto_degrade_sus_ratio   = 2;  /* V24: was 4, too strict for CoD (ratio=1.09) */
-    c->auto_degrade_thermal_pct = 35; /* V28r2: was 45, fire earlier on thermal pressure */
+    c->auto_degrade_gap_thresh  = 800000;
+    c->auto_degrade_sus_ratio   = 2;
+    c->auto_degrade_thermal_pct = 35;
 
-    /* Battery profile */
-    c->bat_fast_idle_s     = 15; /* battery: 15s without activity -> DEEP_IDLE */
-    c->bat_light_idle_gpu  = 10; /* battery: GPU max 10% in LIGHT_IDLE */
+    c->bat_fast_idle_s     = 15;
+    c->bat_light_idle_gpu  = 10;
     c->bat_suppress_gaming = 1;
     c->bat_heavy_load_enter = 4.0f;
     c->bat_moderate_load_enter = 3.0f;
-    c->log_level = 0; /* V26: 0=normal (clean), 1=verbose (debug) */
+    c->log_level = 0;
 }
 
 static inline char *asb_cfg_trim(char *s) {
@@ -139,7 +133,6 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     }
     else if (!strcmp(k, "sustained_level")) {
         float v_f = (float)atof(v);
-        /* clamp: guard against typos like 1.8 or 0.05 */
         if (v_f < 0.50f) v_f = 0.50f;
         if (v_f > 0.95f) v_f = 0.95f;
         c->sustained_level = v_f;
@@ -167,12 +160,6 @@ static inline int asb_config_load_file(const char *path, asb_runtime_config_t *c
     return 0;
 }
 
-/* Applies highload_mode over config.
- * Call after asb_config_parse() -- overrides only high-load parameters.
- * Explicitly set parameters in governor.conf will be overridden by the mode --
- * this is intentional: mode sets the behavioral character entirely. */
-/* Applies base mode parameters on start/reload.
- * auto=3 starts as burst; degrades at runtime. */
 static inline void asb_config_apply_highload_mode(asb_runtime_config_t *c) {
     if (c->highload_mode == 1 || c->highload_mode == 3) {
         c->gaming_gap_ticks             = 3;
@@ -187,35 +174,23 @@ static inline void asb_config_apply_highload_mode(asb_runtime_config_t *c) {
         c->sustained_level              = 0.78f;
         c->sustained_reentry_cooldown_s = 25;
     }
-    /* mode=0 (default): config parameters are not changed */
 }
 
-/* Applies stable parameters over current config (auto degrade).
- * Called once per session when governor decides burst is futile. */
-/* Reset highload burst override back to config defaults */
 static inline void asb_config_defaults_highload(asb_runtime_config_t *c) {
-    /* Reload from defaults -- burst was applied by profile:performance */
-    c->highload_mode = 0; /* back to default */
-    /* Reset to config file values (caller should reload if needed) */
+    c->highload_mode = 0;
 }
 
-/* Apply burst parameters for performance profile.
- * V28r2: softer burst-start to reduce thermal cycling.
- * Cold-start still fast (auto mode=3), but cooldowns are longer
- * so device doesn't thrash between SUSTAINED exits/re-entries.
- * V28r1 log showed: exit→20s→re-enter→100s→exit→65s→re-enter
- * with cooldown=10s. Doubling cooldowns gives thermal breathing room. */
 static inline void asb_config_apply_burst_override(asb_runtime_config_t *c) {
-    c->highload_mode             = 3; /* auto: starts as burst, degrades if needed */
+    c->highload_mode             = 3;
     c->gaming_gap_ticks          = 3;
-    c->gaming_retry_cooldown_s      = 20;  /* was 10: too fast retry after thermal */
-    c->gaming_retry_temp_max        = 47;  /* was 50: stricter temp gate for retry */
-    c->sustained_level              = 0.82f; /* was 0.85: less aggressive sustained ceiling */
-    c->sustained_reentry_cooldown_s = 20;  /* was 10: prevent rapid SUSTAINED cycling */
+    c->gaming_retry_cooldown_s      = 20;
+    c->gaming_retry_temp_max        = 47;
+    c->sustained_level              = 0.82f;
+    c->sustained_reentry_cooldown_s = 20;
 }
 
 static inline void asb_config_apply_stable_override(asb_runtime_config_t *c) {
-    c->highload_mode                = 2; /* stable: stops auto-degrade re-checking */
+    c->highload_mode                = 2;
     c->gaming_gap_ticks             = 4;
     c->gaming_retry_cooldown_s      = 35;
     c->gaming_retry_temp_max        = 45;
@@ -223,15 +198,6 @@ static inline void asb_config_apply_stable_override(asb_runtime_config_t *c) {
     c->sustained_reentry_cooldown_s = 25;
 }
 
-/* AUTO degrade: burst->stable on poor gaming viability.
- * Three independent paths, each sufficient alone:
- *  Path 1: avg_gap_p0 unreachable + SUSTAINED dominant (needs gaming data)
- *  Path 2: thermal pressure alone (no gaming entries needed)
- *  Path 3: extreme gap (needs 3+ gaming entries)
- *
- * V28: Path 2 no longer gated by gaming_entries >= 2.
- * In benchmark/thermal scenarios device can go HEAVY->thermal->SUSTAINED
- * with 0-1 gaming entries; thermal path must still fire. */
 static inline int asb_config_auto_should_degrade(
         const asb_runtime_config_t *c,
         int avg_gap_p0, int gaming_entries, int sustained_entries,
@@ -240,7 +206,6 @@ static inline int asb_config_auto_should_degrade(
 {
     if (c->highload_mode != 3 || already_degraded) return 0;
 
-    /* Path 1: gaming entries exist, caps unreachable + SUSTAINED dominant */
     if (gaming_entries >= 2) {
         int gap_bad   = (c->auto_degrade_gap_thresh > 0 &&
                          avg_gap_p0 > c->auto_degrade_gap_thresh);
@@ -249,10 +214,6 @@ static inline int asb_config_auto_should_degrade(
         if (gap_bad && ratio_bad) return 1;
     }
 
-    /* Path 2: thermal pressure -- even without gaming entries.
-     * If > auto_degrade_thermal_pct% of heavy time was in SUSTAINED
-     * and enough data accumulated (>90s) -- burst is futile.
-     * V28r2: was 120s, lowered to catch thermal wall faster. */
     if (c->auto_degrade_thermal_pct > 0) {
         long total = time_heavy + time_gaming + time_sustained;
         if (total >= 90 && time_sustained > 0) {
@@ -261,10 +222,6 @@ static inline int asb_config_auto_should_degrade(
         }
     }
 
-    /* Path 3 (V24): extreme gap -- vendor HAL cuts caps by >2 GHz.
-     * If avg gap > 2M kHz with 3+ gaming entries, burst is clearly
-     * futile regardless of ratio. Real data from CoD: gap=2.37 GHz,
-     * ratio=1.09 (nearly equal GAMING/SUSTAINED), auto never fired. */
     if (avg_gap_p0 > 2000000 && gaming_entries >= 3) return 1;
 
     return 0;
