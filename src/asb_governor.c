@@ -1,29 +1,3 @@
-/*
- * asb_governor.c -- ASB Adaptive Runtime Governor
- *
- * Event loop architecture:
- *
- *   epoll waits for events (blocks without CPU):
- *     |-- timerfd_active  (2s)  -- metrics when screen ON
- *     |-- timerfd_idle    (5s)  -- metrics when screen OFF
- *     |-- ueventfd        -- screen ON/OFF immediately
- *     |-- timerfd_hourly  (1h)  -- learner update
- *     |-- sockfd          -- commands from action.sh
- *
- * In DEEP_IDLE: only timerfd_idle (5s) + ueventfd active.
- * Active metrics timer suspended -> CPU not woken needlessly.
- *
- * Power in DEEP_IDLE:
- *   - 0% CPU (epoll blocked)
- *   - ~50KB RSS (full code + data)
- *   - Wakes only on screen uevent or every 5s for
- *     battery/thermal check
- *
- * Build in Termux:
- *   clang -O2 -o asb_governor asb_governor.c -lm
- *   (or via Makefile)
- */
-
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,7 +24,6 @@
 #include "asb_socket.h"
 #include "asb_config.h"
 
-/* --- Config -------------------------------------------------- */
 #define TIMER_ACTIVE_S  2   /* metrics interval, screen ON  */
 #define TIMER_IDLE_S    5   /* metrics interval, screen OFF */
 #define TIMER_HOURLY_S  3600
@@ -65,7 +38,6 @@
 
 #define MAX_EVENTS      8
 
-/* --- Logging ------------------------------------------------- */
 static FILE *g_logf = NULL;
 asb_runtime_config_t g_asb_cfg;
 static time_t g_last_reassert = 0;
@@ -76,7 +48,6 @@ static void asb_log(const char *fmt, ...) __attribute__((format(printf,1,2)));
 static int g_log_writes = 0;
 static void asb_log(const char *fmt, ...) {
     if (!g_logf) return;
-    /* Log rotation: check every 200 writes */
     if (++g_log_writes % 200 == 0) {
         long pos = ftell(g_logf);
         if (pos > LOG_MAX_BYTES) {
@@ -100,11 +71,8 @@ static void asb_log(const char *fmt, ...) {
     fflush(g_logf);
 }
 
-/* --- State dump ---------------------------------------------- */
-/* --- Persistent session stats ------------------------------- */
 #define PERSISTENT_STATS_DIR  "/data/adb/modules/AutoSystemBoost/runtime"
 #define PERSISTENT_STATS_FILE "/data/adb/modules/AutoSystemBoost/runtime/session_stats.json"
-/* V28r2: Per-profile stats files */
 static const char *g_pstats_files[3] = {
     PERSISTENT_STATS_DIR "/pstats_battery.json",
     PERSISTENT_STATS_DIR "/pstats_balanced.json",
@@ -115,7 +83,6 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-/* V28r2: Intent constants */
 #define INTENT_UNKNOWN    0
 #define INTENT_BENCHMARK  1
 #define INTENT_LONG_GAME  2
@@ -126,18 +93,17 @@ static const char *intent_names[] = {"unknown","benchmark","long_game","idle","m
 
 typedef struct {
     int   session_count;
-    float avg_time_to_first_sus;    /* rolling avg seconds to first SUSTAINED */
-    float avg_time_to_first_thermal;/* rolling avg seconds to first thermal */
-    float avg_max_temp;             /* rolling avg peak temp degC */
-    float avg_gap_p0;               /* rolling avg cap gap kHz */
-    float avg_efficiency;           /* rolling avg sustained efficiency score */
-    int   degrade_count;            /* V24: sessions where auto degraded burst->stable */
-    int   hot_fail_count;           /* V28r3: sessions where max_temp>=100 and sus_pct>=50 */
+    float avg_time_to_first_sus;
+    float avg_time_to_first_thermal;
+    float avg_max_temp;
+    float avg_gap_p0;
+    float avg_efficiency;
+    int   degrade_count;
+    int   hot_fail_count;
 } asb_persistent_stats_t;
 
-/* V28r2: per-profile stats + legacy global for backward compat */
 static asb_persistent_stats_t g_pstats_per[3] = {{0},{0},{0}};
-static asb_persistent_stats_t g_pstats = {0}; /* legacy: global aggregate */
+static asb_persistent_stats_t g_pstats = {0};
 
 
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
@@ -213,7 +179,6 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         g_pstats.avg_gap_p0,
         g_pstats.avg_efficiency,
         g_pstats.degrade_count);
-    /* Live session quality metrics */
     long _active = fsm->ses_time_heavy_sec + fsm->ses_time_gaming_sec + fsm->ses_time_sustained_sec;
     int _sus_pct = (_active > 0) ? (int)(fsm->ses_time_sustained_sec * 100 / _active) : 0;
     long _bat_tot = fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec + fsm->bat_time_moderate_sec;
@@ -233,7 +198,6 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         if (_cap_eff > 100) _cap_eff = 100;
     }
     fprintf(f, "sus_pct=%d\nidle_q=%d\ncap_eff=%d\n", _sus_pct, _idle_q, _cap_eff);
-    /* V27: Export intent, hot_fail, degrade_at_age to state file */
     {
         int _pidx = fsm->profile_idx;
         if (_pidx < 0 || _pidx > 2) _pidx = 1;
@@ -247,9 +211,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fclose(f);
 }
 
-/* --- JSON status --------------------------------------------- */
-static int g_total_writes = 0;        /* total sysfs writes */
-static time_t g_last_write_ts = 0;   /* timestamp of last write */
+static int g_total_writes = 0;
+static time_t g_last_write_ts = 0;
 
 static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
                                asb_prediction_t pred,
@@ -306,7 +269,6 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->bat_time_deep_idle_sec,
         fsm->bat_time_light_idle_sec,
         fsm->bat_wake_cycles);
-    /* Append live quality metrics */
     {
         long _act = fsm->ses_time_heavy_sec + fsm->ses_time_gaming_sec + fsm->ses_time_sustained_sec;
         int _sp = (_act > 0) ? (int)(fsm->ses_time_sustained_sec * 100 / _act) : 0;
@@ -324,7 +286,6 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
             _ce = (int)((_tg - _ag) * 100 / _tg);
             if (_ce < 0) _ce = 0; if (_ce > 100) _ce = 100;
         }
-        /* Rewrite last '}' to append new fields */
         snprintf(out + strlen(out) - 1, outlen - (int)strlen(out),
             ",\"sus_pct\":%d,\"idle_q\":%d,\"cap_eff\":%d,"
             "\"eff_sus_lvl\":%.2f,\"eff_sus_temp\":%d,\"eff_gr_cd\":%d,\"eff_gr_temp\":%d,"
@@ -336,7 +297,6 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_asb_cfg.bat_heavy_load_enter,
             g_asb_cfg.bat_moderate_load_enter,
             g_asb_cfg.bat_light_idle_gpu);
-        /* V27: Append intent and per-profile hot_fail */
         int _pidx = fsm->profile_idx;
         if (_pidx < 0 || _pidx > 2) _pidx = 1;
         snprintf(out + strlen(out) - 1, outlen - (int)strlen(out),
@@ -378,21 +338,18 @@ static void pstats_save_one(const char *path, const asb_persistent_stats_t *ps) 
 }
 
 static void persistent_stats_load(void) {
-    /* Load legacy global file */
     pstats_load_one(PERSISTENT_STATS_FILE, &g_pstats);
-    /* V28r2: Load per-profile files */
     for (int i = 0; i < 3; i++)
         pstats_load_one(g_pstats_files[i], &g_pstats_per[i]);
 }
 
 static void persistent_stats_save(const asb_fsm_t *fsm) {
-    /* Only save if we have meaningful data */
     if (fsm->ses_sustained_entries == 0 && fsm->ses_time_heavy_sec < 30
         && fsm->bat_time_deep_idle_sec < 60)
         return;
 
     int pidx = fsm->profile_idx;
-    if (pidx < 0 || pidx > 2) pidx = 1; /* safety: balanced */
+    if (pidx < 0 || pidx > 2) pidx = 1;
     asb_persistent_stats_t *ps = &g_pstats_per[pidx];
 
     float alpha = 1.0f / (ps->session_count + 1);
@@ -419,7 +376,6 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
         ps->session_count++;
     if (fsm->ses_auto_degraded)
         ps->degrade_count++;
-    /* V28r3: Track thermal wall hits (max_temp>=100 and sus_pct>=50 or t2s<=90) */
     {
         long total_act = fsm->ses_time_heavy_sec + fsm->ses_time_gaming_sec
                         + fsm->ses_time_sustained_sec;
@@ -435,8 +391,6 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
                     ps->hot_fail_count, reason, fsm->ses_max_temp, sp,
                     fsm->ses_time_to_first_sus);
         }
-        /* V27: Soft aging — good performance session reduces hot_fail_count.
-         * Prevents old failures from permanently locking stable-first startup. */
         if (pidx == PROFILE_PERFORMANCE &&
             fsm->ses_max_temp < 90 && !fsm->ses_auto_degraded &&
             ps->hot_fail_count > 0) {
@@ -444,7 +398,6 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
             asb_log("pstats: good perf session (temp=%d) -> hot_fail decayed to %d",
                     fsm->ses_max_temp, ps->hot_fail_count);
         }
-        /* Same soft aging for degrade_count */
         if (pidx == PROFILE_PERFORMANCE &&
             fsm->ses_max_temp < 90 && !fsm->ses_auto_degraded &&
             ps->degrade_count > 0) {
@@ -454,10 +407,8 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
         }
     }
 
-    /* Save per-profile file */
     pstats_save_one(g_pstats_files[pidx], ps);
 
-    /* Also update legacy global (backward compat with Python tools) */
     float ga = 1.0f / (g_pstats.session_count + 1);
     if (ga < 0.1f) ga = 0.1f;
     if (fsm->ses_time_to_first_sus > 0)
@@ -484,13 +435,10 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
     pstats_save_one(PERSISTENT_STATS_FILE, &g_pstats);
 }
 
-/* V24: Session history -- append full session summary as JSON line.
- * File: session_history.jsonl -- one JSON object per line, last N entries.
- * Used by Python tools and future auto-intelligence.                    */
 static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) {
     if (fsm->ses_sustained_entries == 0 && fsm->ses_time_heavy_sec < 10
         && fsm->bat_time_deep_idle_sec < 60)
-        return; /* skip trivial sessions */
+        return;
 
     static const char *profile_names[] = {"battery","balanced","performance"};
     static const char *mode_names[] = {"default","burst","stable","auto"};
@@ -503,7 +451,6 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     int sus_pct = (total_active > 0)
                   ? (int)(fsm->ses_time_sustained_sec * 100 / total_active) : 0;
 
-    /* Read existing lines, keep last SESSION_HISTORY_MAX-1 */
     char lines[SESSION_HISTORY_MAX][512];
     int line_count = 0;
     FILE *rf = fopen(SESSION_HISTORY_FILE, "r");
@@ -512,7 +459,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         while (fgets(buf, sizeof(buf), rf) && line_count < SESSION_HISTORY_MAX) {
             int len = strlen(buf);
             if (len > 0 && buf[len-1] == '\n') buf[len-1] = '\0';
-            if (buf[0] == '{') { /* valid JSON line */
+            if (buf[0] == '{') {
                 strncpy(lines[line_count], buf, 511);
                 lines[line_count][511] = '\0';
                 line_count++;
@@ -521,11 +468,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         fclose(rf);
     }
 
-    /* Keep only last N-1 entries to make room for new one */
     int start = (line_count >= SESSION_HISTORY_MAX) ? line_count - SESSION_HISTORY_MAX + 1 : 0;
 
-    /* Atomic write: write to .tmp, then rename.
-     * Prevents corrupt JSONL if governor is killed mid-write. */
     char tmp_path[256];
     snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", SESSION_HISTORY_FILE);
     FILE *wf = fopen(tmp_path, "w");
@@ -533,31 +477,27 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     for (int i = start; i < line_count; i++)
         fprintf(wf, "%s\n", lines[i]);
 
-    /* Write new entry */
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
     char ts[32];
     strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M", tm);
-
-    /* V25: Derived metrics */
+    
     long dur = (fsm->ses_start_ts > 0) ? (now - fsm->ses_start_ts) : 0;
-    int idle_quality = -1; /* 0-100, battery only */
+    int idle_quality = -1;
     if (fsm->profile_idx == PROFILE_BATTERY) {
         long bat_total = fsm->bat_time_deep_idle_sec +
                          fsm->bat_time_light_idle_sec +
                          fsm->bat_time_moderate_sec;
         if (bat_total > 60) {
             idle_quality = (int)(fsm->bat_time_deep_idle_sec * 100 / bat_total);
-            /* Penalize high wake cycles: -5 per wake above 2 */
             int wake_penalty = (fsm->bat_wake_cycles > 2)
                                ? (fsm->bat_wake_cycles - 2) * 5 : 0;
             idle_quality -= wake_penalty;
             if (idle_quality < 0) idle_quality = 0;
         }
     }
-    int cap_eff = -1; /* 0-100, gaming only */
+    int cap_eff = -1;
     if (fsm->ses_gaming_entries > 0 && avg_gap > 0) {
-        /* How much of requested caps were actually delivered */
         int target = g_profile_bounds[fsm->profile_idx].ceil.cpu_max[0];
         if (target > 0) {
             cap_eff = (int)((target - avg_gap) * 100 / target);
@@ -598,24 +538,13 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     rename(tmp_path, SESSION_HISTORY_FILE);
 }
 
-/* --- V24: Session-end self-tuning --------------------------
- * Analyzes the session that just ended and adjusts governor
- * config ON THE FLY, without restart. Called at idle_boundary
- * and shutdown -- at most once per 30 minutes. Cost: <1ms.
- *
- * This is the core of ASB's runtime learning: the governor
- * observes its own performance and corrects itself.          */
 static void session_end_self_tune(const asb_fsm_t *fsm) {
     int tuned = 0;
 
-    /* -- GAMING/PERFORMANCE tuning --------------------------- */
     if (fsm->ses_gaming_entries >= 2) {
         int avg_gap = (fsm->ses_gap_samples > 0)
                       ? (int)(fsm->ses_gap_p0_sum / fsm->ses_gap_samples) : 0;
 
-        /* If average gap > 1.5M kHz -> vendor HAL consistently cuts caps.
-         * Lower sustained_level to find a more stable operating point
-         * instead of bouncing between GAMING and SUSTAINED.             */
         if (avg_gap > 1500000 && g_asb_cfg.sustained_level > 0.75f) {
             float old = g_asb_cfg.sustained_level;
             g_asb_cfg.sustained_level -= 0.02f;
@@ -626,10 +555,6 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             tuned++;
         }
 
-        /* If efficiency < 50% -> significant thermal pressure.
-         * Force stable mode for the rest of this boot.
-         * V28: was 30%, too strict -- real data showed 45% efficiency
-         * with device already in sustained-dominant thermal-limited mode. */
         if (fsm->ses_sustained_efficiency >= 0 &&
             fsm->ses_sustained_efficiency < 50 &&
             g_asb_cfg.highload_mode != 2) {
@@ -640,9 +565,6 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             tuned++;
         }
 
-        /* If time_to_first_sustained < 60s -> device throttles very fast.
-         * Raise sustained_temp_enter by 2degC to give HEAVY more headroom
-         * (max 72degC to stay safe).                                       */
         if (fsm->ses_time_to_first_sus > 0 &&
             fsm->ses_time_to_first_sus < 60 &&
             g_asb_cfg.sustained_temp_enter < 68) {
@@ -655,10 +577,6 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             tuned++;
         }
 
-        /* V28r2: If max_temp >= 100 and SUSTAINED dominated active time,
-         * burst was thermally futile even if efficiency stayed above 50%.
-         * Real data: efficiency=71% but max_temp=105°C, device still hurt.
-         * Force stable for next session via highload_mode. */
         if (fsm->ses_max_temp >= 100 && g_asb_cfg.highload_mode != 2) {
             long total_act = fsm->ses_time_heavy_sec + fsm->ses_time_gaming_sec
                             + fsm->ses_time_sustained_sec;
@@ -674,14 +592,11 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
         }
     }
 
-    /* -- BATTERY tuning -------------------------------------- */
     if (fsm_profile_is_battery) {
         long bat_total = fsm->bat_time_deep_idle_sec +
                          fsm->bat_time_light_idle_sec +
                          fsm->bat_time_moderate_sec;
 
-        /* If wake_cycles > 1 per 5 minutes of session -> too many wakeups.
-         * Tighten bat_fast_idle_s to re-enter DEEP_IDLE faster.          */
         if (bat_total > 300 && fsm->bat_wake_cycles > 0) {
             int wake_rate = (int)(fsm->bat_wake_cycles * 300 / bat_total);
             if (wake_rate > 1 && g_asb_cfg.bat_fast_idle_s > BAT_FAST_IDLE_FLOOR) {
@@ -695,9 +610,6 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             }
         }
 
-        /* If HEAVY time > 10% of battery session -> something keeps
-         * pushing load above bat_heavy_load_enter.
-         * Raise threshold by 0.5 (max 6.0) to filter more spikes. */
         if (bat_total > 120 && fsm->ses_time_heavy_sec > 0) {
             int heavy_pct = (int)(fsm->ses_time_heavy_sec * 100 /
                                   (bat_total + fsm->ses_time_heavy_sec));
@@ -712,8 +624,6 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             }
         }
 
-        /* If MODERATE dominates idle time (>40%), LIGHT_IDLE GPU cap
-         * might be too generous. Lower it to reduce GPU-triggered wakes. */
         if (bat_total > 300 && fsm->bat_time_moderate_sec > 0) {
             int mod_pct = (int)(fsm->bat_time_moderate_sec * 100 / bat_total);
             if (mod_pct > 40 && g_asb_cfg.bat_light_idle_gpu > 5) {
@@ -727,8 +637,6 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             }
         }
 
-        /* V26: If idle quality is poor (<40), raise MODERATE threshold.
-         * This means the device needs even higher load to leave idle states. */
         if (bat_total > 300) {
             int iq = (int)(fsm->bat_time_deep_idle_sec * 100 / bat_total);
             int wake_pen = (fsm->bat_wake_cycles > 2)
@@ -749,7 +657,6 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
         asb_log("self_tune: %d adjustments applied (no restart needed)", tuned);
 }
 
-/* --- Profile reader ------------------------------------------ */
 static int read_profile_idx(void) {
     char buf[32] = {0};
     int fd = open(PROFILE_FILE, O_RDONLY | O_CLOEXEC);
@@ -765,7 +672,6 @@ static int read_profile_idx(void) {
     return PROFILE_BALANCED;
 }
 
-/* --- timerfd helpers ----------------------------------------- */
 static int make_timerfd(int secs) {
     int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     if (fd < 0) return -1;
@@ -792,18 +698,9 @@ static void disarm_timerfd(int fd) {
 
 static void timerfd_drain(int fd) {
     uint64_t exp;
-    read(fd, &exp, sizeof(exp)); /* drain the counter */
+    read(fd, &exp, sizeof(exp));
 }
 
-/* --- Uevent screen monitor ----------------------------------- */
-/*
- * Listen on kernel uevent socket.
- * Filter display/backlight events.
- * On screen event, immediately update timers.
- *
- * uevent format: "ACTION@/path\0key=val\0key=val\0..."
- * We care about SUBSYSTEM=backlight or SUBSYSTEM=drm
- */
 static int make_uevent_fd(void) {
     int fd = socket(AF_NETLINK, SOCK_RAW | SOCK_NONBLOCK | SOCK_CLOEXEC,
                     NETLINK_KOBJECT_UEVENT);
@@ -816,19 +713,11 @@ static int make_uevent_fd(void) {
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         close(fd); return -1;
     }
-    /* Increase buffer to avoid dropping events */
     int buf = 256 * 1024;
     setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &buf, sizeof(buf));
     return fd;
 }
 
-/*
- * Read uevent buffer, find screen-related event.
- * Returns:
- *   1  -- screen turned on
- *   0  -- screen turned off
- *  -1  -- not a screen event (ignore)
- */
 static int parse_uevent_screen(int fd) {
     char buf[4096];
     int n = recv(fd, buf, sizeof(buf)-1, MSG_DONTWAIT);
@@ -857,16 +746,13 @@ static int parse_uevent_screen(int fd) {
     return is_power;
 }
 
-/* --- Signal handling ----------------------------------------- */
 static volatile int g_running = 1;
 static void sig_handler(int sig) {
     (void)sig;
     g_running = 0;
 }
 
-/* --- Main ---------------------------------------------------- */
 int main(int argc, char **argv) {
-    /* Fast mode: "status" or "profile:X" -- just send command */
     if (argc >= 2) {
         char reply[512] = {0};
         asb_sock_send_cmd(argv[1], reply, sizeof(reply));
@@ -874,7 +760,6 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    /* Daemon: check if already running */
     {
         char pidbuf[16] = {0};
         int pfd = open(PID_FILE, O_RDONLY | O_CLOEXEC);
@@ -905,7 +790,6 @@ int main(int argc, char **argv) {
     signal(SIGINT,  sig_handler);
     signal(SIGPIPE, SIG_IGN);
 
-    /* Config and subsystem initialization */
     asb_config_defaults(&g_asb_cfg);
     asb_config_load_file(CONFIG_FILE, &g_asb_cfg);
     asb_config_apply_highload_mode(&g_asb_cfg);
@@ -917,13 +801,8 @@ int main(int argc, char **argv) {
             g_pstats.avg_max_temp, g_pstats.avg_gap_p0, g_pstats.avg_efficiency,
             g_pstats.degrade_count);
 
-    /* V24: History-aware startup adjustments.
-     * Uses persistent stats to make smarter initial decisions. */
     if (g_pstats.session_count >= 3) {
-        /* Battery feedback: if device historically takes >60s to reach
-         * DEEP_IDLE, tighten bat_fast_idle_s for faster idle entry */
-        if (g_pstats.avg_time_to_first_sus > 0) { /* proxy: has real data */
-            /* Read avg bat_ttd from last session history if available */
+        if (g_pstats.avg_time_to_first_sus > 0) {
             FILE *_hf = fopen(SESSION_HISTORY_FILE, "r");
             if (_hf) {
                 char _hbuf[512];
@@ -952,16 +831,12 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        /* Battery feedback #2: MODERATE-domination check.
-         * If battery sessions spend >60% of tracked time in MODERATE
-         * (instead of DEEP_IDLE/LIGHT_IDLE), wake discipline is too loose. */
         {
             FILE *_hf2 = fopen(SESSION_HISTORY_FILE, "r");
             if (_hf2) {
                 char _hbuf2[512];
                 long _mod_sum = 0, _total_sum = 0; int _bat_n = 0;
                 while (fgets(_hbuf2, sizeof(_hbuf2), _hf2)) {
-                    /* Only battery sessions */
                     if (!strstr(_hbuf2, "\"profile\":\"battery\"")) continue;
                     char *_pd = strstr(_hbuf2, "\"bat_deep\":");
                     char *_pl = strstr(_hbuf2, "\"bat_light\":");
@@ -971,7 +846,7 @@ int main(int argc, char **argv) {
                         long bl = atol(_pl + 12);
                         long bm = atol(_pm + 10);
                         long bt = bd + bl + bm;
-                        if (bt > 60) { /* at least 1 min of data */
+                        if (bt > 60) {
                             _mod_sum += bm; _total_sum += bt; _bat_n++;
                         }
                     }
@@ -989,16 +864,13 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        /* Auto mode: if >50% of sessions degraded, start as stable
-         * instead of burst -- burst is historically futile */
-        if (g_asb_cfg.highload_mode == 3 /* auto */ &&
+        if (g_asb_cfg.highload_mode == 3 &&
             g_pstats.degrade_count > g_pstats.session_count / 2) {
             asb_config_apply_stable_override(&g_asb_cfg);
             asb_log("feedback: %d/%d sessions degraded -> auto starting as stable",
                     g_pstats.degrade_count, g_pstats.session_count);
         }
     }
-    /* Safety floor: feedback loops cannot push bat_fast_idle_s below minimum */
     if (g_asb_cfg.bat_fast_idle_s > 0 && g_asb_cfg.bat_fast_idle_s < BAT_FAST_IDLE_FLOOR) {
         asb_log("feedback: bat_fast_idle_s=%d clamped to floor=%d",
                 g_asb_cfg.bat_fast_idle_s, BAT_FAST_IDLE_FLOOR);
@@ -1037,14 +909,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    /* Initially: active timer armed, idle timer armed.
-     * On DEEP_IDLE: disarm active, arm idle timer.  */
     int screen_on = metrics_screen_on();
     if (!screen_on) {
         disarm_timerfd(tfd_active);
     }
 
-    /* Add all fds to epoll */
     struct epoll_event ev = {0};
     ev.events = EPOLLIN;
 
@@ -1059,9 +928,8 @@ int main(int argc, char **argv) {
 
     metrics_read_all(&metrics);
     fsm_update(&fsm, &metrics);
-    writer_apply_caps(&fsm.current_caps, 1, fsm.state, fsm.thermal_cap); /* force=1 */
+    writer_apply_caps(&fsm.current_caps, 1, fsm.state, fsm.thermal_cap);
     write_state(&fsm, &metrics, cur_pred);
-    /* Startup diagnostics -- log what we found */
     {
         int bidx = metrics_find_batt_current_path();
         asb_log("diag: battery_current_path=%s (raw=%d uA = %d mA)",
@@ -1072,7 +940,6 @@ int main(int argc, char **argv) {
                 metrics.misc.screen_on, g_thermal_cpu_zone);
         asb_log("diag: gpu_load=%d%% gpu_maxfreq=%ld",
                 metrics.gpu.load_pct, metrics.gpu.max_freq_hz);
-        /* CPU topology: log which policies are active */
         cpu_topology_discover();
         if (g_cpu_policy_count == 2)
             asb_log("diag: cpu_topology=policy0+policy6 (2-cluster SD8Elite)");
@@ -1128,13 +995,9 @@ int main(int argc, char **argv) {
                     g_asb_cfg.sustained_temp_exit,
                     g_asb_cfg.gaming_gpu_enter);
 
-    /* --- Reassert tracker ------------------------------------ */
-    /* --- Event loop ------------------------------------------- */
     struct epoll_event events[MAX_EVENTS];
 
     while (g_running) {
-        /* epoll_wait: block until event.
-         * timeout=-1: infinite. CPU = 0% while idle. */
         int nev = epoll_wait(epfd, events, MAX_EVENTS, -1);
         if (nev < 0) {
             if (errno == EINTR) continue;
@@ -1145,8 +1008,6 @@ int main(int argc, char **argv) {
         int force_write  = 0;
         int profile_changed = 0;
 
-        /* Keepalive: write state every 60s regardless of caps change.
-         * Prevents watchdog from killing governor during long DEEP_IDLE. */
         static time_t g_last_state_touch = 0;
         static time_t g_last_heartbeat   = 0;
         {
@@ -1155,7 +1016,6 @@ int main(int argc, char **argv) {
                 write_state(&fsm, &metrics, cur_pred);
                 g_last_state_touch = _now;
             }
-            /* Heartbeat log every 15 minutes */
             if (g_last_heartbeat == 0) g_last_heartbeat = _now;
             if (_now - g_last_heartbeat >= 900) {
                 static const char *_snames[] = {"DEEP_IDLE","LIGHT_IDLE","MODERATE","HEAVY","GAMING","SUSTAINED"};
@@ -1177,21 +1037,17 @@ int main(int argc, char **argv) {
         for (int i = 0; i < nev; i++) {
             int fd = events[i].data.fd;
 
-            /* -- Active timer (2s) --------------------------- */
             if (fd == tfd_active) {
                 timerfd_drain(fd);
                 need_metrics = 1;
             }
-            /* -- Idle timer (5s) ------------------------------ */
             else if (fd == tfd_idle) {
                 timerfd_drain(fd);
                 need_metrics = 1;
             }
-            /* -- Hourly learner -------------------------------- */
             else if (fd == tfd_hourly) {
                 timerfd_drain(fd);
                 float avg_drain = 0, avg_screen = 0;
-                /* accum_tick not called here -- called in need_metrics path */
                 if (accum.drain_count > 0) {
                     avg_drain  = accum.drain_sum / accum.drain_count;
                     avg_screen = accum.total_ticks > 0
@@ -1211,18 +1067,14 @@ int main(int argc, char **argv) {
                     accum.total_ticks     = 0;
                 }
             }
-            /* -- Uevent (screen events) ------------------------ */
             else if (fd == uefd) {
-                /* Drain ALL accumulated uevent messages at once.
-                 * Kernel sends 20-50 events per millisecond on screen off --
-                 * drain all, take the last valid state. */
                 int final_scr = -1;
                 int cur;
                 int drained = 0;
                 while ((cur = parse_uevent_screen(uefd)) >= 0 || drained == 0) {
                     if (cur >= 0) final_scr = cur;
                     drained++;
-                    if (drained > 64) break; /* guard against infinite loop */
+                    if (drained > 64) break;
                     cur = parse_uevent_screen(uefd);
                     if (cur < 0 && drained > 0) break;
                     if (cur >= 0) final_scr = cur;
@@ -1230,10 +1082,7 @@ int main(int argc, char **argv) {
                 }
                 if (final_scr >= 0) {
                     int was_on = metrics.misc.screen_on;
-                    /* Verify via sysfs for confirmation (one read) */
                     int real_scr = metrics_screen_on();
-                    /* If uevent and sysfs agree -- accept.
-                     * If not -- sysfs takes priority (reflects reality). */
                     int confirmed = (final_scr == real_scr) ? final_scr : real_scr;
                     metrics.misc.screen_on = confirmed;
 
@@ -1245,12 +1094,6 @@ int main(int argc, char **argv) {
                             arm_timerfd(tfd_active, TIMER_ACTIVE_S);
                         } else {
                             disarm_timerfd(tfd_active);
-                            /* Screen OFF = save persistent stats (survives reboot).
-                             * Do NOT append to session_history here -- screen-off
-                             * happens 50-100+ times/day, would fill history with
-                             * duplicates of the same session. History is written
-                             * only on real session boundaries: idle_boundary,
-                             * new_session, shutdown.                            */
                             persistent_stats_save(&fsm);
                             if (fsm_profile_is_battery)
                                 fsm.bat_screen_off_count++;
@@ -1258,7 +1101,6 @@ int main(int argc, char **argv) {
                     }
                 }
             }
-            /* -- Control socket -------------------------------- */
             else if (fd == sockfd) {
                 char cmd[256] = {0};
                 struct sockaddr_un src = {0};
@@ -1274,7 +1116,6 @@ int main(int argc, char **argv) {
                     if (strcmp(pname, "battery")     == 0) new_idx = PROFILE_BATTERY;
                     if (strcmp(pname, "performance") == 0) new_idx = PROFILE_PERFORMANCE;
                     if (new_idx != fsm.profile_idx) {
-                        /* V25: save history with CURRENT profile before switching */
                         fsm_flush_state_time(&fsm);
                         session_history_append_ex(&fsm, "profile_change");
                         session_end_self_tune(&fsm);
@@ -1282,16 +1123,9 @@ int main(int argc, char **argv) {
 
                         fsm.profile_idx = new_idx;
                         fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
-                        /* Profile-aware highload_mode:
-                         * performance -> burst
-                         * battery     -> stable
-                         * balanced    -> keep current */
                         if (new_idx == PROFILE_PERFORMANCE) {
                             asb_config_apply_burst_override(&g_asb_cfg);
                             fsm.gaming_retry_until = 0;
-                            /* V28r2: History-aware start -- check per-profile perf stats.
-                             * If performance sessions consistently hit thermal wall,
-                             * skip burst entirely and start as stable. */
                             asb_persistent_stats_t *pps = &g_pstats_per[PROFILE_PERFORMANCE];
                             if (pps->session_count >= 3 &&
                                 pps->avg_max_temp >= 95.0f &&
@@ -1353,23 +1187,18 @@ int main(int argc, char **argv) {
                     }
                     asb_sock_reply(sockfd, &src, srclen, "ok");
                 }
-                /* start-session: atomic profile+mode+reset in one command
-                 * Format: "start-session:PROFILE:MODE"
-                 * e.g. "start-session:performance:auto" */
                 else if (strncmp(cmd, "start-session:", 14) == 0) {
                     char *rest = cmd + 14;
                     char *colon = strchr(rest, ':');
                     int new_idx = PROFILE_BALANCED;
                     if (strncmp(rest, "battery", 7) == 0)     new_idx = PROFILE_BATTERY;
                     if (strncmp(rest, "performance", 11) == 0) new_idx = PROFILE_PERFORMANCE;
-                    /* Save persistent stats from previous session */
                     fsm_flush_state_time(&fsm);
                     persistent_stats_save(&fsm);
                     session_history_append_ex(&fsm, "new_session");
                     session_end_self_tune(&fsm);
                     fsm.profile_idx = new_idx;
                     fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
-                    /* Apply mode if specified */
                     if (colon && *(colon+1)) {
                         char *mode = colon + 1;
                         if (strcmp(mode, "burst") == 0)  g_asb_cfg.highload_mode = 1;
@@ -1378,7 +1207,6 @@ int main(int argc, char **argv) {
                         else g_asb_cfg.highload_mode = 0;
                         asb_config_apply_highload_mode(&g_asb_cfg);
                     }
-                    /* Reset session telemetry */
                     fsm_session_reset(&fsm);
                     force_write = 1;
                     need_metrics = 1;
@@ -1390,7 +1218,6 @@ int main(int argc, char **argv) {
                             g_asb_cfg.highload_mode == 3 ? "auto" : "default");
                     asb_sock_reply(sockfd, &src, srclen, "ok");
                 }
-                /* V25: end-session -- cleanly close current session */
                 else if (strcmp(cmd, "end-session") == 0) {
                     fsm_flush_state_time(&fsm);
                     session_history_append_ex(&fsm, "manual_end");
@@ -1406,9 +1233,8 @@ int main(int argc, char **argv) {
                 }
                 (void)profile_changed;
             }
-        } /* for events */
+        }
 
-        /* -- Read metrics and update FSM ------------------- */
         if (need_metrics) {
             metrics_read_all(&metrics);
 
@@ -1417,7 +1243,6 @@ int main(int argc, char **argv) {
                            metrics.bat.current_ma,
                            metrics.misc.screen_on,
                            &dummy_drain, &dummy_screen)) {
-                /* Hour changed inside accum_tick */
                 learner_update(&learn, dummy_drain, dummy_screen);
                 cur_pred = learner_predict(&learn);
                 learner_adjust_windows(&learn, &fsm.up_window, &fsm.down_window);
@@ -1425,7 +1250,6 @@ int main(int argc, char **argv) {
 
             int changed = fsm_update(&fsm, &metrics);
 
-            /* AUTO degrade check: burst->stable when gaming caps unreachable */
             if (!fsm.ses_auto_degraded) {
                 int avg_gap = (fsm.ses_gap_samples > 0)
                               ? (int)(fsm.ses_gap_p0_sum / fsm.ses_gap_samples) : 0;
@@ -1451,24 +1275,18 @@ int main(int argc, char **argv) {
                             fsm.ses_gaming_entries, _sus_pct);
                 }
             }
-            /* V28r2: Session intent classifier.
-             * Runs once per session after 90s of data or first thermal event.
-             * Adjusts governor behavior based on detected workload pattern. */
             if (!fsm.ses_intent_locked && fsm.ses_start_ts > 0) {
                 long ses_age = time(NULL) - fsm.ses_start_ts;
                 int have_thermal = (fsm.ses_thermal_entries > 0);
                 int have_gaming  = (fsm.ses_gaming_entries > 0);
 
-                /* Classify after 90s or first thermal, whichever comes first */
                 if (ses_age >= 90 || have_thermal) {
-                    /* V28r3: flush counters so deep_idle time is accurate */
                     fsm_flush_state_time(&fsm);
                     long total_act = fsm.ses_time_heavy_sec +
                                      fsm.ses_time_gaming_sec +
                                      fsm.ses_time_sustained_sec;
 
                     if (fsm_profile_is_battery) {
-                        /* V28r3: sleep_idle = long screen-off with minimal wakes */
                         if (fsm.state == ASB_STATE_DEEP_IDLE &&
                             fsm.bat_wake_cycles <= 1 &&
                             ses_age >= 1800 &&
@@ -1481,7 +1299,6 @@ int main(int argc, char **argv) {
                         }
                     } else if (have_gaming && have_thermal &&
                                total_act > 30 && ses_age < 300) {
-                        /* High GPU + thermal in short session = benchmark */
                         fsm.ses_intent = INTENT_BENCHMARK;
                     } else if (have_gaming && ses_age >= 300) {
                         fsm.ses_intent = INTENT_LONG_GAME;
@@ -1495,12 +1312,9 @@ int main(int argc, char **argv) {
                                 intent_names[fsm.ses_intent], ses_age,
                                 have_gaming, have_thermal);
 
-                        /* Intent-aware adjustments for performance */
                         if (fsm.profile_idx == PROFILE_PERFORMANCE &&
                             g_asb_cfg.highload_mode == 3) {
                             if (fsm.ses_intent == INTENT_BENCHMARK && have_thermal) {
-                                /* Benchmark already hitting thermal wall:
-                                 * don't wait for Path 2 time gate — degrade now. */
                                 asb_config_apply_stable_override(&g_asb_cfg);
                                 fsm.ses_auto_degraded = 1;
                                 fsm.ses_degrade_at_age = (fsm.ses_start_ts > 0)
@@ -1508,7 +1322,6 @@ int main(int argc, char **argv) {
                                 asb_log("intent: benchmark+thermal -> immediate stable (age=%lds)",
                                         fsm.ses_degrade_at_age);
                             } else if (fsm.ses_intent == INTENT_LONG_GAME) {
-                                /* Long game: lengthen cooldowns for stability */
                                 if (g_asb_cfg.sustained_reentry_cooldown_s < 30)
                                     g_asb_cfg.sustained_reentry_cooldown_s = 30;
                                 asb_log("intent: long_game -> reentry_cooldown=30s");
@@ -1517,12 +1330,9 @@ int main(int argc, char **argv) {
                     }
                 }
             }
-            /* V24: DEEP_IDLE auto-boundary -- 30 min idle = session end.
-             * Save history, reset counters. Prevents stale telemetry. */
             if (fsm.state == ASB_STATE_DEEP_IDLE) {
                 long idle_sec = fsm_elapsed_sec(&fsm);
                 if (idle_sec >= 1800) {
-                    /* V28r3: flush current state time before saving */
                     fsm_flush_state_time(&fsm);
                     if (fsm.ses_time_heavy_sec > 0 ||
                         fsm.bat_time_deep_idle_sec > 60) {
@@ -1544,7 +1354,6 @@ int main(int argc, char **argv) {
 
                 if (fsm.state_changed) {
                     int ma_v = (metrics.bat.current_ma > 0 && !metrics.bat.charging) ? 1 : 0;
-                    /* cap_gap = difference between our target and actual sysfs max */
                     int fsm_rmax0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
                     int fsm_rmax1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
                     int gap0 = (fsm_rmax0 > 0) ? (fsm.current_caps.cpu_max[0] - fsm_rmax0) : 0;
@@ -1558,12 +1367,9 @@ int main(int argc, char **argv) {
                             metrics.therm.cpu_max_c,
                             gap0, gap1,
                             writes, g_total_writes);
-                    /* On high-state entry, reset reassert timer
-                     * to confirm caps immediately, not wait for interval */
                     if (fsm.state == ASB_STATE_HEAVY || fsm.state == ASB_STATE_GAMING)
                         g_last_reassert = 0;
 
-                    /* Log SUSTAINED entry/exit reasons */
                     if (fsm.state == ASB_STATE_SUSTAINED) {
                         if (fsm.sustained_reason == 1) {
                             fsm.ses_unreachable_entries++;
@@ -1585,10 +1391,8 @@ int main(int argc, char **argv) {
                             fsm.ses_thermal_entries++;
                             asb_log("enter_sustained: thermal temp>=%d thermal_cap=%d",
                                     g_asb_cfg.sustained_temp_enter, fsm.thermal_cap);
-                            /* Record time-to-first thermal SUSTAINED */
                             if (fsm.ses_time_to_first_thermal == 0 && fsm.ses_start_ts > 0)
                                 fsm.ses_time_to_first_thermal = time(NULL) - fsm.ses_start_ts;
-                            /* Recovery counter: each thermal collapse after the first */
                             if (fsm.ses_sustained_entries > 1)
                                 fsm.ses_recovery_count++;
                         }
@@ -1597,9 +1401,6 @@ int main(int argc, char **argv) {
                         const char *reason = (metrics.therm.cpu_max_c < g_asb_cfg.sustained_temp_enter)
                                              ? "temp_dropped"
                                              : "no_longer_heavy";
-                        /* Compute sustained_efficiency score 0-100
-                         * High score = small cap gap + moderate temperature
-                         * Low score  = deep thermal throttle + hot chip */
                         int _avg_gap = (fsm.ses_gap_samples > 0)
                                        ? (int)(fsm.ses_gap_p0_sum / fsm.ses_gap_samples) : 0;
                         int _gap_penalty  = (int)(_avg_gap / 15000);
@@ -1609,7 +1410,6 @@ int main(int argc, char **argv) {
                         if (_temp_penalty > 50) _temp_penalty = 50;
                         int _eff = 100 - _gap_penalty - _temp_penalty;
                         if (_eff < 0) _eff = 0;
-                        /* Keep the worst (lowest) efficiency seen this session */
                         if (fsm.ses_sustained_efficiency < 0 || _eff < fsm.ses_sustained_efficiency)
                             fsm.ses_sustained_efficiency = _eff;
                         asb_log("exit_sustained: %s t=%ddegC (exit_thresh=%d) -> %s cooldown=%ds efficiency=%d/100",
@@ -1621,12 +1421,10 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* -- Reassert caps for HEAVY/GAMING --------------- */
             {
                 int boost_want = (fsm.state == ASB_STATE_HEAVY || fsm.state == ASB_STATE_GAMING)
                                  && !fsm.thermal_cap
                                  && (fsm.profile_idx == PROFILE_PERFORMANCE);
-                /* Log boost_on / boost_off on state change */
                 if (boost_want && !g_msm_boost_active) {
                     if (g_asb_cfg.log_level >= 1) asb_log("boost_on: %s", asb_state_names[fsm.state]);
                 } else if (!boost_want && g_msm_boost_active) {
@@ -1664,10 +1462,8 @@ int main(int argc, char **argv) {
                 }
             }
         }
-    } /* while running */
+    }
 
-    /* -- Cleanup ----------------------------------------------- */
-    /* Session summary -- log before shutdown */
     fsm_flush_state_time(&fsm);
     {
         long total_active = fsm.ses_time_heavy_sec + fsm.ses_time_gaming_sec
