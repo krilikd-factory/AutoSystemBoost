@@ -1,19 +1,18 @@
 name: ASB-V28
 
 on:
-  workflow_dispatch:   # Ручной запуск из GitHub UI → только artifact
+  workflow_dispatch:
   push:
     tags:
-      - 'v*'           # git tag v21.5 && git push --tags → artifact
+      - 'v*'
   release:
-    types: [published] # При публикации Release → artifact + attach to release
+    types: [published]
 
 jobs:
   build-arm64:
     runs-on: ubuntu-latest
 
     steps:
-      # ── Fail-fast: проверяем обязательные файлы ДО любой работы ──────────
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -29,13 +28,11 @@ jobs:
           done
           echo "All required files present."
 
-      # ── Инструменты ──────────────────────────────────────────────────────
       - name: Install tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends zip unzip curl file rsync
 
-      # ── NDK с кэшированием ───────────────────────────────────────────────
       - name: Cache Android NDK
         id: cache-ndk
         uses: actions/cache@v4
@@ -58,11 +55,9 @@ jobs:
           echo "ANDROID_NDK_ROOT=$PWD/android-ndk-r28c" >> $GITHUB_ENV
           echo "NDK_ROOT=$PWD/android-ndk-r28c"         >> $GITHUB_ENV
 
-      # ── Сборка ───────────────────────────────────────────────────────────
       - name: Build arm64-v8a binary
         run: bash src/build_ndk_release.sh
-
-      # ── Строгая проверка бинарника ───────────────────────────────────────
+        
       - name: Verify binary
         run: |
           BIN="bin/arm64-v8a/asb"
@@ -81,7 +76,6 @@ jobs:
           [ "$SIZE" -lt 2000000 ] || { echo "ERROR: binary too large"; exit 1; }
           echo "Binary OK: $SIZE bytes"
 
-      # ── Патч module.prop ─────────────────────────────────────────────────
       - name: Patch module.prop
         run: |
           TAG="${GITHUB_REF_NAME:-}"
@@ -91,8 +85,7 @@ jobs:
           fi
           sed -i 's/AI governor/Adaptive governor/g' module.prop
           cat module.prop
-
-      # ── Сборка финального пакета ─────────────────────────────────────────
+          
       - name: Prepare release package
         run: |
           PKG_DIR="$PWD/.pkg"
@@ -125,7 +118,6 @@ jobs:
           echo "Package contents:"
           find "$PKG_DIR" -type f | sort
 
-      # ── Упаковка zip ─────────────────────────────────────────────────────
       - name: Create release zip
         run: |
           ZIP_NAME="ASB-V28.zip"
@@ -134,7 +126,6 @@ jobs:
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
           echo "Created: $ZIP_NAME ($(du -sh $ZIP_NAME | cut -f1))"
 
-      # ── Валидация содержимого zip ─────────────────────────────────────────
       - name: Validate zip contents
         run: |
           echo "=== Zip contents ==="
@@ -155,8 +146,7 @@ jobs:
             && { echo "ERROR: NDK leaked into zip!"; exit 1; } || true
 
           echo "Zip validation passed"
-
-      # ── Upload artifact (всегда) ─────────────────────────────────────────
+          
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -164,14 +154,12 @@ jobs:
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
-      # ── Attach to GitHub Release (только при release event) ──────────────
       - name: Upload release asset
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.ZIP_NAME }}
 
-      # ── Summary ──────────────────────────────────────────────────────────
       - name: Build summary
         if: always()
         run: |
