@@ -20,7 +20,6 @@ asb_resolve_moddir() {
 }
 MODDIR="$(asb_resolve_moddir)"
 
-# V25 fix: profile_core.sh lives in runtime/ after install (common/ is deleted)
 PROFILE_CORE=""
 for _pc in "$MODDIR/runtime/profile_core.sh" "$MODDIR/common/profile_core.sh"; do
   [ -r "$_pc" ] && { PROFILE_CORE="$_pc"; break; }
