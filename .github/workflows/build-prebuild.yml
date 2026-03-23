@@ -101,6 +101,7 @@ jobs:
             --exclude '__MACOSX'      \
             --exclude '*.DS_Store'    \
             --exclude 'src'           \
+            --exclude 'tools'           \
             --exclude 'bin/arm64-v8a' \
             --exclude 'banner.png'    \
             --exclude 'CHANGELOG.md'  \
