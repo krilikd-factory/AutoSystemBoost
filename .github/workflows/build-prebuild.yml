@@ -1,4 +1,4 @@
-name: ASB-V28
+name: ASB-V29
 
 on:
   workflow_dispatch:
@@ -101,7 +101,6 @@ jobs:
             --exclude '__MACOSX'      \
             --exclude '*.DS_Store'    \
             --exclude 'src'           \
-            --exclude 'tools'         \
             --exclude 'bin/arm64-v8a' \
             --exclude 'banner.png'    \
             --exclude 'CHANGELOG.md'  \
@@ -150,7 +149,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ASB-V28
+          name: ASB-V29
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
