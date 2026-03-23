@@ -1269,4 +1269,28 @@ EOF
 	asb_prune_module
 	find $MODPATH -empty -type d -delete
 
+	# === V29: Generate build manifest ===
+	_asb_ver="$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
+	_asb_date="$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo unknown)"
+	_gov_hash="$(sha256sum "$MODPATH/libs/arm64-v8a/asb_governor" 2>/dev/null | cut -c1-12 || echo none)"
+	_perf_hash="$(sha256sum "$MODPATH/profiles/performance.sh" 2>/dev/null | cut -c1-12 || echo none)"
+	_bat_hash="$(sha256sum "$MODPATH/profiles/battery.sh" 2>/dev/null | cut -c1-12 || echo none)"
+	_bal_hash="$(sha256sum "$MODPATH/profiles/balanced.sh" 2>/dev/null | cut -c1-12 || echo none)"
+	_conf_hash="$(sha256sum "$MODPATH/config/governor.conf" 2>/dev/null | cut -c1-12 || echo none)"
+	mkdir -p "$MODPATH/runtime" 2>/dev/null
+	cat > "$MODPATH/runtime/build_manifest.json" <<MANIFEST_EOF
+{
+  "asb_version": "$_asb_ver",
+  "build_date": "$_asb_date",
+  "schema_version": 5,
+  "hashes": {
+    "governor": "$_gov_hash",
+    "performance": "$_perf_hash",
+    "battery": "$_bat_hash",
+    "balanced": "$_bal_hash",
+    "governor_conf": "$_conf_hash"
+  }
+}
+MANIFEST_EOF
+
 asb_end_banner
