@@ -119,7 +119,7 @@ jobs:
 
       - name: Create release zip
         run: |
-          ZIP_NAME="ASB-V28.zip"
+          ZIP_NAME="ASB-V29.zip"
           rm -f "$ZIP_NAME"
           cd .pkg && zip -r "../$ZIP_NAME" . -x "*.DS_Store" && cd ..
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
