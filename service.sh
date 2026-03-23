@@ -20,6 +20,137 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 
 asb_load_profile
 
+# === V29: Device guard rails ===
+asb_device_guard() {
+  local _soc
+  _soc="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_soc" ] && _soc="$(getprop ro.hardware.chipname 2>/dev/null)"
+  case "$_soc" in
+    sun|sm8850*|pineapple) ASB_DEVICE_TIER="flagship" ;;
+    taro|sm8550*|sm8650*|kalama|crow) ASB_DEVICE_TIER="high" ;;
+    *) ASB_DEVICE_TIER="generic" ;;
+  esac
+  asb_log "device_guard: soc=$_soc tier=$ASB_DEVICE_TIER"
+  [ "$ASB_DEVICE_TIER" = "generic" ] && \
+    asb_log "device_guard: unknown SoC, conservative limits apply"
+}
+
+# === V29: Path capability probing ===
+asb_probe_paths() {
+  for _pp in \
+    "policy0_max:/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq" \
+    "policy6_max:/sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq" \
+    "gpu_max:/sys/class/kgsl/kgsl-3d0/max_pwrlevel" \
+    "vm_swappiness:/proc/sys/vm/swappiness" \
+    "uclamp_topapp:/dev/cpuctl/top-app/cpu.uclamp.max"; do
+    _label="${_pp%%:*}"; _path="${_pp#*:}"
+    if [ ! -e "$_path" ]; then
+      asb_log "probe: $_label MISSING"
+    elif [ -w "$_path" ]; then
+      asb_log "probe: $_label writable"
+    else
+      asb_log "probe: $_label read-only"
+    fi
+  done
+}
+
+# === V29: Conflict detector ===
+asb_conflict_scan() {
+  local _found=0 _mods="/data/adb/modules"
+  for _m in "$_mods"/*/; do
+    [ -f "$_m/disable" ] && continue
+    [ "$(basename "$_m")" = "$MODID" ] && continue
+    [ ! -f "$_m/module.prop" ] && continue
+    local _name; _name="$(grep '^name=' "$_m/module.prop" 2>/dev/null | cut -d= -f2)"
+    case "$_name" in *thermal*|*kernel*tuner*|*cpu*freq*|*governor*|*performance*tweak*)
+      asb_log "conflict: potential overlap with $_name"; _found=$((_found+1)) ;;
+    esac
+    grep -ql "scaling_max_freq\|cpufreq" "$_m/service.sh" 2>/dev/null && \
+      { asb_log "conflict: $_name may write cpufreq"; _found=$((_found+1)); }
+  done
+  [ $_found -eq 0 ] && asb_log "conflict: none detected"
+}
+
+# === V29: Drift watcher ===
+asb_read_msm_perf_cap() {
+  _cpu="$1"
+  _path="/sys/kernel/msm_performance/parameters/cpu_max_freq"
+  [ -r "$_path" ] || return 1
+  awk -v cpu="$_cpu" '{
+    for (i = 1; i <= NF; i++) {
+      split($i, a, ":")
+      if (a[1] == cpu) { print a[2]; exit }
+    }
+  }' "$_path" 2>/dev/null
+}
+asb_drift_check() {
+  local _prof="$1"; [ -z "$_prof" ] && return 0
+  sleep 1
+  asb_load_profile
+
+  local _p0_exp="${CPU_MAX_LITTLE:-}" _p6_exp="${CPU_MAX_BIG:-}"
+  local _p0_act="$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null)"
+  local _p6_act="$(cat /sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq 2>/dev/null)"
+  [ -z "$_p0_exp" ] || [ -z "$_p0_act" ] && return 0
+
+  local _d0=$(( _p0_exp - _p0_act )); [ $_d0 -lt 0 ] && _d0=$((-_d0))
+  local _d6=$(( ${_p6_exp:-0} - ${_p6_act:-0} )); [ $_d6 -lt 0 ] && _d6=$((-_d6))
+  local _sev="none"
+  [ $_d0 -gt 500000 ] || [ $_d6 -gt 500000 ] && _sev="severe"
+  [ "$_sev" = "none" ] && { [ $_d0 -gt 100000 ] || [ $_d6 -gt 100000 ]; } && _sev="moderate"
+  [ "$_sev" = "none" ] && { [ $_d0 -gt 0 ] || [ $_d6 -gt 0 ]; } && _sev="minor"
+  [ "$_sev" != "none" ] &&     asb_log "drift(abs): ${_sev} p0=${_p0_act}(exp ${_p0_exp}) p6=${_p6_act}(exp ${_p6_exp})"
+
+  local _son=0 _cap_l="" _cap_b=""
+  asb_screen_on && _son=1
+  if [ "$_son" -eq 1 ]; then
+    case "$ASB_PROFILE" in
+      balanced)
+        _cap_l=1190400
+        _cap_b=1881600
+        ;;
+      battery)
+        _cap_l=729600
+        _cap_b=1075200
+        ;;
+      performance)
+        _cap_l="${CPU_CAP_LITTLE:-}"
+        _cap_b="${CPU_CAP_BIG:-}"
+        ;;
+    esac
+  fi
+  if [ -n "$_cap_l" ] && [ -n "$_cap_b" ]; then
+    local _msm0="$(asb_read_msm_perf_cap 0)"
+    local _big_cpu=$((little_end + 1))
+    [ "$_big_cpu" -lt 6 ] 2>/dev/null && _big_cpu=6
+    local _msm6="$(asb_read_msm_perf_cap "$_big_cpu")"
+    if [ -n "$_msm0" ] || [ -n "$_msm6" ]; then
+      local _c0=${_msm0:-0} _c1=${_msm6:-0}
+      local _cd0=$(( ${_cap_l:-0} - _c0 )); [ $_cd0 -lt 0 ] && _cd0=$((-_cd0))
+      local _cd6=$(( ${_cap_b:-0} - _c1 )); [ $_cd6 -lt 0 ] && _cd6=$((-_cd6))
+      local _csev="none"
+      [ $_cd0 -gt 500000 ] || [ $_cd6 -gt 500000 ] && _csev="severe"
+      [ "$_csev" = "none" ] && { [ $_cd0 -gt 100000 ] || [ $_cd6 -gt 100000 ]; } && _csev="moderate"
+      [ "$_csev" = "none" ] && { [ $_cd0 -gt 0 ] || [ $_cd6 -gt 0 ]; } && _csev="minor"
+      [ "$_csev" != "none" ] &&         asb_log "drift(cap): ${_csev} msm_p0=${_c0}(cap ${_cap_l}) msm_p${_big_cpu}=${_c1}(cap ${_cap_b})"
+    fi
+  fi
+
+  local _gmin_path="/sys/class/kgsl/kgsl-3d0/devfreq/min_freq"
+  local _gmax_path="/sys/class/kgsl/kgsl-3d0/devfreq/max_freq"
+  if [ -r "$_gmin_path" ] && [ -r "$_gmax_path" ]; then
+    local _gmin _gmax
+    _gmin="$(cat "$_gmin_path" 2>/dev/null)"
+    _gmax="$(cat "$_gmax_path" 2>/dev/null)"
+    [ -n "$_gmin" ] && [ -n "$_gmax" ] && [ "$_gmin" -gt "$_gmax" ] 2>/dev/null &&       asb_log "drift(gpu): min_freq=${_gmin} > max_freq=${_gmax}"
+  fi
+}
+
+# Run V29 startup checks
+asb_device_guard
+asb_probe_paths
+asb_conflict_scan
+
 # ASB:CPU:BEGIN
 KREL="$(uname -r 2>/dev/null)"
 IS_WILD=0
