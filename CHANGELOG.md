@@ -7,7 +7,7 @@
 > **V27 = governor understands what it's doing and starts smarter.**
 > **V28 = governor knows who to trust, how to heal, and when to step aside.**
 
-**Benchmark impact:** 3,969,550 AnTuTu (thermal-limited by Snapdragon 8 Elite)
+**Benchmark impact:** 3,969,550 AnTuTu (thermal-limited by Snapdragon 8 Elite Gen 5)
 **Battery impact:** stability 72–78/100, idle_q avg 100, wake/h 0.0 on clean screen-off sessions
 
 ---
