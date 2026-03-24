@@ -83,7 +83,7 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-#define ASB_VERSION "V29"
+#define ASB_VERSION "V30"
 
 #define INTENT_UNKNOWN    0
 #define INTENT_BENCHMARK  1
@@ -731,8 +731,45 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     int hr_b70 = fsm->ses_headroom_below70;
     int hr_b50 = fsm->ses_headroom_below50;
 
+    /* V30: session-level limiter, reachability, battery reason */
+    const char *limiter = "none";
+    int reach = -1;
+    const char *bat_reason = "none";
+
+    if (fsm->profile_idx == PROFILE_BATTERY) {
+        /* Battery: compute reason from same logic as self_tune */
+        int cause = battery_fail_cause(fsm, idle_quality);
+        static const char *br_names[] = {"none","wake_noise","screen_on","no_settle"};
+        bat_reason = (cause >= 0 && cause <= 3) ? br_names[cause] : "none";
+    } else if (hr_avg >= 0 && fsm->ses_headroom_samples >= 10) {
+        /* Performance/Balanced: classify limiter from headroom data */
+        int hr_n = fsm->ses_headroom_samples;
+        int b50_pct = (hr_n > 0) ? (int)(100L * hr_b50 / hr_n) : 0;
+        int b70_pct = (hr_n > 0) ? (int)(100L * hr_b70 / hr_n) : 0;
+        int thermal_hot = (fsm->ses_max_temp >= 90);
+
+        if (cap_eff >= 70 && b70_pct < 10 && hr_min >= 70)
+            limiter = "reachable";
+        else if (cap_eff >= 0 && cap_eff < 55 && (b50_pct >= 15 || hr_min < 50) && !thermal_hot)
+            limiter = "vendor_clamp";
+        else if (thermal_hot && (b70_pct >= 20 || (cap_eff >= 0 && cap_eff < 60)))
+            limiter = "thermal";
+        else
+            limiter = "mixed";
+
+        /* Reachability score: 0-100, combines cap_eff and headroom */
+        if (cap_eff >= 0 && hr_avg >= 0) {
+            reach = (cap_eff + hr_avg) / 2;
+            if (reach > 100) reach = 100;
+        } else if (cap_eff >= 0) {
+            reach = cap_eff;
+        } else if (hr_avg >= 0) {
+            reach = hr_avg;
+        }
+    }
+
     fprintf(wf,
-        "{\"v\":5,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
+        "{\"v\":6,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
         "\"gaming\":%d,\"sustained\":%d,\"thermal\":%d,\"unreachable\":%d,"
         "\"t_heavy\":%ld,\"t_gaming\":%ld,\"t_sustained\":%ld,"
         "\"avg_gap\":%d,\"max_temp\":%d,\"degraded\":%d,"
@@ -743,7 +780,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         "\"idle_q\":%d,\"cap_eff\":%d,\"dur\":%ld,"
         "\"intent\":\"%s\",\"deg_age\":%ld,"
         "\"asb\":\"%s\",\"learn_exempt\":%d,"
-        "\"hr_avg\":%d,\"hr_min\":%d,\"hr_b70\":%d,\"hr_b50\":%d,\"hr_n\":%d}\n",
+        "\"hr_avg\":%d,\"hr_min\":%d,\"hr_b70\":%d,\"hr_b50\":%d,\"hr_n\":%d,"
+        "\"limiter\":\"%s\",\"reach\":%d,\"bat_reason\":\"%s\"}\n",
         ts, profile_names[fsm->profile_idx], mode_names[mode_idx], reason,
         fsm->ses_gaming_entries, fsm->ses_sustained_entries,
         fsm->ses_thermal_entries, fsm->ses_unreachable_entries,
@@ -763,7 +801,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         fsm->ses_degrade_at_age,
         ASB_VERSION,
         (fsm->ses_intent == INTENT_BENCHMARK) ? 1 : 0,
-        hr_avg, hr_min, hr_b70, hr_b50, fsm->ses_headroom_samples);
+        hr_avg, hr_min, hr_b70, hr_b50, fsm->ses_headroom_samples,
+        limiter, reach, bat_reason);
     fflush(wf);
     fsync(fileno(wf));
     fclose(wf);
