@@ -689,10 +689,10 @@
         <ctl name="HPHR XTALK" value="1" />
         <ctl name="HPHL_RDAC Switch" value="1" />
         <ctl name="HPHR_RDAC Switch" value="1" />
-        <ctl name="RX_RX0 Digital Volume" value="82" />
-        <ctl name="RX_RX1 Digital Volume" value="82" />
-        <ctl name="HPHL Volume" value="16" />
-        <ctl name="HPHR Volume" value="16" />
+        <ctl name="RX_RX0 Digital Volume" value="86" />
+        <ctl name="RX_RX1 Digital Volume" value="86" />
+        <ctl name="HPHL Volume" value="18" />
+        <ctl name="HPHR Volume" value="18" />
     </path>
 
     <path name="headphones-and-haptics">
