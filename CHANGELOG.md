@@ -174,26 +174,4 @@ sh asb_stock_mode_probe.sh diff balance highperf
 | 🧹 Hygiene | Boundary session filter | No more thermal carry-over noise |
 | 🔧 Tools | Stock mode probe script | Reverse-engineer OxygenOS modes |
 
-**Zero changes to:** battery thresholds (10.0/15.0) · benchmark isolation · trust gate · profile caps · governor decision logic
-
----
-
-> **V29 taught ASB to see. V30 taught it to speak honestly — and to be quiet when there's nothing to say.**
-
----
-
-## Previous Releases
-
-### V29 — 🏗️ Operational Maturity & PowerHAL-Aware Intelligence
-
-Battery threshold fix for SM8850-AC (10.0/15.0), headroom telemetry (5 session fields), conditional headroom reads, vendor clamp report section, atomic writes, stale session sweeper, 4 startup guard functions, watchdog safe mode (3 strikes), build manifest with SHA256, 3 new tool scripts (doctor/lint/release_pack).
-
-### V28 — 🛡️ Trust Architecture & Benchmark Intelligence
-
-Battery trust gate (dirty/partial/clean), benchmark dual-world bypass (learn_exempt), intent classifier (6 intents), per-profile persistent stats, performance profile tuned (lower idle floors), BT audio top volume boost.
-
-### V27 — 🔗 Consistency & Transparency
-
-service.sh path fix, learner persistence (tmpfs→persistent), effective config in state/status JSON, startup diagnostics.
-
 ---
