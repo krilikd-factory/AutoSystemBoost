@@ -1282,7 +1282,7 @@ EOF
 {
   "asb_version": "$_asb_ver",
   "build_date": "$_asb_date",
-  "schema_version": 5,
+  "schema_version": 7,
   "hashes": {
     "governor": "$_gov_hash",
     "performance": "$_perf_hash",
