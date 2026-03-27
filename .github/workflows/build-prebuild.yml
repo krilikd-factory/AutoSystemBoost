@@ -1,4 +1,4 @@
-name: ASB-V30
+name: ASB-V31
 
 on:
   workflow_dispatch:
@@ -120,7 +120,7 @@ jobs:
 
       - name: Create release zip
         run: |
-          ZIP_NAME="ASB-V30.zip"
+          ZIP_NAME="ASB-V31.zip"
           rm -f "$ZIP_NAME"
           cd .pkg && zip -r "../$ZIP_NAME" . -x "*.DS_Store" && cd ..
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
@@ -150,7 +150,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ASB-V30
+          name: ASB-V31
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
