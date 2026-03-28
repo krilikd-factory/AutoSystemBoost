@@ -71,9 +71,9 @@ benchmark_isolation_status() {
 # Detect context: source tree vs installed module
 IS_SOURCE=0
 IS_INSTALLED=0
-if [ -f "$MODDIR/src/asb_governor.c" ] && [ ! -x "$MODDIR/asb_governor" ]; then
+if [ -f "$MODDIR/src/asb_governor.c" ] && [ ! -x "$MODDIR/bin/asb" ]; then
   IS_SOURCE=1
-elif [ -x "$MODDIR/asb_governor" ]; then
+elif [ -x "$MODDIR/bin/asb" ]; then
   IS_INSTALLED=1
 elif [ -d "/dev/.asb" ]; then
   IS_INSTALLED=1
@@ -94,14 +94,22 @@ echo
 
 # --- Binary ---
 echo "🔧 Binary"
-if [ -x "$MODDIR/asb_governor" ]; then
-  ok "asb_governor binary exists and executable"
+GOV_BIN="$MODDIR/bin/asb"
+if [ -x "$GOV_BIN" ]; then
+  ok "governor binary exists ($GOV_BIN)"
 elif [ $IS_SOURCE -eq 1 ]; then
   ok "source tree detected (binary built via GitHub Actions, not expected here)"
 else
-  fail "asb_governor binary missing or not executable"
+  warn "governor binary not found at $GOV_BIN (shell fallback mode)"
 fi
-PID="$(pidof asb_governor 2>/dev/null)"
+PID=""
+if [ -f /dev/.asb/governor.pid ]; then
+  _pid="$(cat /dev/.asb/governor.pid 2>/dev/null)"
+  if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+    PID="$_pid"
+  fi
+fi
+[ -z "$PID" ] && PID="$(pidof asb 2>/dev/null)"
 if [ -n "$PID" ]; then
   ok "governor running (pid $PID)"
 elif [ $IS_SOURCE -eq 1 ]; then
