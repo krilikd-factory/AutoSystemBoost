@@ -127,7 +127,7 @@ persist.vendor.qcom.bluetooth.lc3_offload.enable=true
 persist.vendor.qcom.bluetooth.leaudio.enable=true
 persist.bluetooth.spatial_audio_support=true
 persist.bluetooth.sbc_hd_higher_bitrate=1
-# V26: from AIST v2.1 - BT quality fixes
+# BT quality fixes
 persist.vendor.bt.a2dp.hw_cdc=true
 persist.vendor.bt.aac_vbr_frm_ctl.enabled=true
 persist.bluetooth.a2dp_sbc_abr.enable=false
@@ -292,7 +292,7 @@ persist.vendor.wifi.6ghz.enable=1
 sys.wifitracing.started=0
 # ASB:WIFI:END
 # ASB:GPS:BEGIN
-# V26: from GNSS v1.3 - disable RTK (saves battery, not needed in Italy)
+# Disable RTK (saves battery)
 persist.sys.mqs.gps.rtk=OFF
 # ASB:GPS:END
 # ASB:KERNEL:BEGIN
@@ -637,7 +637,6 @@ persist.vendor.service.bt.iotinfo.report.enable=false
 persist.vendor.service.bt.opp.cloudhighspeed=true
 persist.vendor.service.bt.opp.highspeed=true
 persist.vendor.service.bt.snooplog=false
-persist.vendor.usb.config.extra=dpl
 ro.organization_owned=false
 ro.vendor.audio.extra.handle.support=true
 ro.vendor.audio.ring.filter=true
@@ -763,6 +762,9 @@ vendor.display.enable_spr_bypass=0
 vendor.display.enable_ubwc=1
 vendor.display.perf.ubwc_optimize=1
 vendor.display.ubwc_disable=0
+# VSync optimization
+persist.sys.vsync_optimization_enable=true
+vendor.display.enable_optimize_refresh=1
 vendor.display.uir_support=1
 media.aac_51_output_enabled=true
 media.stagefright.enable-rtsp=true
