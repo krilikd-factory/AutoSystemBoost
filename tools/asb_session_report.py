@@ -623,9 +623,10 @@ def generate_report(sessions):
                 w = hr_n if hr_n > 0 else max(dur, 1)
                 weighted[verdict] = weighted.get(verdict, 0) + w
                 early_s = ", early collapse" if early else ""
+                hold_s = " 🔒" if s.get('had_clamp_hold') or s.get('clamp_hold') else ""
                 lines.append(f"- {ts_s} ({dur_m}min): avg={ha}% worst={hm}% "
                              f"<70={b70_pct}% <50={b50_pct}% cap_eff={ce}% "
-                             f"**{verdict}**{early_s}")
+                             f"**{verdict}**{early_s}{hold_s}")
             # Duration-weighted aggregate for this profile
             total_w = sum(weighted.values()) or 1
             vc_w = weighted.get('vendor_clamp', 0) / total_w
@@ -766,6 +767,14 @@ def generate_report(sessions):
         if mt_counts:
             mt_parts = [f"{k}={v}" for k, v in mt_counts.items()]
             lines.append(f"- Mid-tune activity: {', '.join(mt_parts)}")
+
+        # V32: clamp hold telemetry
+        futility_sessions = [s for s in v7_sessions if s.get('had_futility')]
+        hold_sessions = [s for s in v7_sessions if s.get('had_clamp_hold')]
+        recovered = [s for s in hold_sessions if not s.get('clamp_hold')]
+        if futility_sessions:
+            lines.append(f"- 🔒 Futility: {len(futility_sessions)}/{len(v7_sessions)} sessions"
+                         f" (hold={len(hold_sessions)}, recovered={len(recovered)})")
 
     lines.append("")
     lines.append("---")
