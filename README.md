@@ -117,7 +117,7 @@ Every event (screen toggle, profile change, band cross) builds a **12-field plan
 
 ## ⚔️ Anti-Clamp System
 
-On Snapdragon 8 Elite, the vendor thermal stack often clamps frequencies below requested caps. ASB fights back — with a budget.
+On Snapdragon 8 Elite Gen 5, the vendor thermal stack often clamps frequencies below requested caps. ASB fights back — with a budget.
 
 | Stage | Behavior | Duration |
 |:------|:---------|:---------|
