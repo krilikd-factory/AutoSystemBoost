@@ -5,7 +5,7 @@
 
 <h1 align="center">🚀 AutoSystemBoost</h1>
 <p align="center">
-  <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="Banner" width="100%">
+  <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="Banner" width="80%">
 </p>
 
 <p align="center"><b>Адаптивный runtime-движок для OnePlus 15 • Snapdragon 8 Elite</b></p>
