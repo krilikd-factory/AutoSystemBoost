@@ -353,7 +353,7 @@ tail -f /dev/.asb/governor.log        # live log
 3. Reboot → governor starts automatically
 4. Open **WebUI** → choose profile
 
-<p align="center">
+   <p align="center">
   <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
     <img src="https://img.shields.io/badge/⬇️_Download_Latest_Release-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Download Latest Release">
   </a>
