@@ -16,9 +16,6 @@ PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
 echo "- AutoSystemBoost V33"
 echo "- Current profile: $PROFILE"
 echo ""
-echo "- Install KSUWebUIStandalone or WebUI X"
-echo "  to access the profile switcher UI."
-echo ""
 echo "- Opening Telegram channel..."
 
 su -c "am start -a android.intent.action.VIEW -d 'tg://resolve?domain=OnePlusMod'" >/dev/null 2>&1 || \
