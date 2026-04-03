@@ -120,10 +120,12 @@ jobs:
 
       - name: Create release zip
         run: |
-          ZIP_NAME="ASB-V33.zip"
+          ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
+          ZIP_NAME="ASB-${ASB_VER}.zip"
           rm -f "$ZIP_NAME"
           cd .pkg && zip -r "../$ZIP_NAME" . -x "*.DS_Store" && cd ..
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+          echo "ASB_VER=$ASB_VER" >> $GITHUB_ENV
           echo "Created: $ZIP_NAME ($(du -sh $ZIP_NAME | cut -f1))"
 
       - name: Validate zip contents
@@ -150,7 +152,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ASB-V33
+          name: ASB-${{ env.ASB_VER }}
           path: ${{ env.ZIP_NAME }}
           retention-days: 30
 
