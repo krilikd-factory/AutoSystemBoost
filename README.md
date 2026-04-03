@@ -30,25 +30,25 @@
 AutoSystemBoost is a **native C governor daemon** + shell orchestration + WebUI that makes real-time decisions about CPU, GPU, scheduler and thermal behavior every **2 seconds**.
 
 ```
-┌──────────────────────────────────────────────────┐
-│  WebUI — profile switch, live status             │
-├──────────────────────────────────────────────────┤
-│  action.sh → Unix socket → governor commands     │
-├──────────────────────────────────────────────────┤
-│  service.sh — boot orchestrator (1150 lines)     │
-│  runtime/ — reconcile, watchdog, utils           │
-├──────────────────────────────────────────────────┤
-│  bin/asb — NATIVE C DAEMON (2744 lines)          │
-│    ├── FSM: 6 states × 3 profiles                │
+┌───────────────────────────────────────────────────┐
+│  WebUI — profile switch, live status              │
+├───────────────────────────────────────────────────┤
+│  action.sh → Unix socket → governor commands      │
+├───────────────────────────────────────────────────┤
+│  service.sh — boot orchestrator (1150 lines)      │
+│  runtime/ — reconcile, watchdog, utils            │
+├───────────────────────────────────────────────────┤
+│  bin/asb — NATIVE C DAEMON (2744 lines)           │
+│    ├── FSM: 6 states × 3 profiles                 │
 │    ├── Session Plan: 12-field pre-computed policy │
 │    ├── Anti-Clamp: budgeted vendor clamp fighter  │
 │    ├── Storm Shield: ultra-light battery mode     │
 │    ├── Clamp Hold: calm behavior after futility   │
 │    ├── Persistent memory: EMA across reboots      │
-│    └── epoll: 0% CPU in DEEP_IDLE                │
-├──────────────────────────────────────────────────┤
-│  sysfs / procfs / cpufreq / WALT / KGSL          │
-└──────────────────────────────────────────────────┘
+│    └── epoll: 0% CPU in DEEP_IDLE                 │
+├───────────────────────────────────────────────────┤
+│  sysfs / procfs / cpufreq / WALT / KGSL           │
+└───────────────────────────────────────────────────┘
 ```
 
 ---
