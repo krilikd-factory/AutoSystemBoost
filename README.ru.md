@@ -352,6 +352,12 @@ tail -f /dev/.asb/governor.log        # живой лог
 2. Выбрать функции при установке (BT, Camera, CPU, VM, Net, WiFi, GPS, Kernel, Log)
 3. Перезагрузка → governor стартует автоматически
 4. Открыть **WebUI** → выбрать профиль
+   
+   <p align="center">
+  <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
+    <img src="https://img.shields.io/badge/⬇️_Скачать_последнюю_версию-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Скачать последнюю версию">
+  </a>
+</p>
 
 ---
 
@@ -368,14 +374,6 @@ tail -f /dev/.asb/governor.log        # живой лог
 <p align="center">
   <a href="https://paypal.me/lugaru46">
     <img src="https://img.shields.io/badge/PayPal-Поддержать-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="Поддержать через PayPal">
-  </a>
-</p>
-
----
-
-<p align="center">
-  <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
-    <img src="https://img.shields.io/badge/⬇️_Скачать_последнюю_версию-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Скачать последнюю версию">
   </a>
 </p>
 
