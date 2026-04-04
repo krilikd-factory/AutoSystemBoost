@@ -16,7 +16,15 @@
         case "$_rspv" in 0|"") ;; *) _rec_scr=1 ;; esac
         break
       done
-      [ "$_rec_scr" -eq 1 ] && sleep 120 || sleep 180
+      [ "$_rec_scr" -eq 1 ] && sleep 120 || {
+        # V33: Clean Night Lock — if battery + screen off, reconcile much less
+        _rec_prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+        if [ "$_rec_prof" = "battery" ]; then
+          sleep 600  # 10min — quiet battery night, minimal reconcile
+        else
+          sleep 180
+        fi
+      }
     elif [ "$_reconcile_fast" -gt 0 ]; then
       sleep 45
       _reconcile_fast=$((_reconcile_fast - 1))
