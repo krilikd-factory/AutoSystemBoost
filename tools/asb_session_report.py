@@ -776,6 +776,26 @@ def generate_report(sessions):
             lines.append(f"- 🔒 Futility: {len(futility_sessions)}/{len(v7_sessions)} sessions"
                          f" (hold={len(hold_sessions)}, recovered={len(recovered)})")
 
+        # V33: battery outcome summary
+        bat_sessions = [s for s in v7_sessions if s.get('profile') == 'battery']
+        if bat_sessions:
+            outcome_counts = {}
+            trust_counts = {0: 0, 1: 0, 2: 0}
+            for s in bat_sessions:
+                oc = s.get('bat_outcome', 'unknown')
+                outcome_counts[oc] = outcome_counts.get(oc, 0) + 1
+                bt = s.get('bat_trust', -1)
+                if bt in trust_counts: trust_counts[bt] += 1
+            oc_parts = [f"**{k}**={v}" for k, v in sorted(outcome_counts.items(), key=lambda x: -x[1])]
+            lines.append(f"\n## 🔋 Battery Outcomes ({len(bat_sessions)} sessions)\n")
+            lines.append(f"- Outcomes: {', '.join(oc_parts)}")
+            t_parts = []
+            if trust_counts[2]: t_parts.append(f"clean={trust_counts[2]}")
+            if trust_counts[1]: t_parts.append(f"partial={trust_counts[1]}")
+            if trust_counts[0]: t_parts.append(f"dirty={trust_counts[0]}")
+            if t_parts:
+                lines.append(f"- Trust: {', '.join(t_parts)}")
+
     lines.append("")
     lines.append("---")
     lines.append("*Отчёт сгенерирован tools/asb_session_report.py*")
