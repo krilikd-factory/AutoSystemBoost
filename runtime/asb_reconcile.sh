@@ -82,11 +82,14 @@
       fi
     fi
     if [ $_need -eq 1 ]; then
-      if [ "$_reason" = "profile-change" ] || [ "$_reason" = "screen-state" ]; then
-        _drift_streak=0
-      else
-        _drift_streak=$((_drift_streak + 1))
-      fi
+      case "$_reason" in
+        walt-topapp|walt-edboost|walt-ravg|uclamp)
+          _drift_streak=$((_drift_streak + 1)) ;;
+        profile-change|screen-state)
+          _drift_streak=0 ;;
+        *)
+          : ;; # wifi-pm etc don't affect drift streak
+      esac
       _reconcile_fast=3
       asb_update_desc
       asb_log "runtime reconcile reason=$_reason profile=$_now"
