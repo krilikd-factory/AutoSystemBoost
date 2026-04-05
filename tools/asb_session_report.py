@@ -796,6 +796,22 @@ def generate_report(sessions):
             if t_parts:
                 lines.append(f"- Trust: {', '.join(t_parts)}")
 
+        # V33: performance outcome summary
+        perf_sessions = [s for s in v7_sessions if s.get('profile') == 'performance']
+        if perf_sessions:
+            perf_oc = {}
+            for s in perf_sessions:
+                po = s.get('perf_outcome', 'unknown')
+                perf_oc[po] = perf_oc.get(po, 0) + 1
+            po_parts = [f"**{k}**={v}" for k, v in sorted(perf_oc.items(), key=lambda x: -x[1])]
+            lines.append(f"\n## 🔥 Performance Outcomes ({len(perf_sessions)} sessions)\n")
+            lines.append(f"- Outcomes: {', '.join(po_parts)}")
+            clamped = sum(1 for s in perf_sessions if s.get('had_futility'))
+            thermal = sum(1 for s in perf_sessions if s.get('max_temp', 0) >= 90)
+            clean = sum(1 for s in perf_sessions if s.get('perf_outcome') == 'clean')
+            if clamped or thermal or clean:
+                lines.append(f"- Detail: vendor_clamped={clamped}, thermal_hot={thermal}, clean={clean}")
+
     lines.append("")
     lines.append("---")
     lines.append("*Отчёт сгенерирован tools/asb_session_report.py*")
