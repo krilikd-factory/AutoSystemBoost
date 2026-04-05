@@ -197,19 +197,15 @@ typedef struct {
     int             ses_intent_locked;
     long            ses_degrade_at_age;
 
-    /* V29-r10: headroom telemetry per session */
     long            ses_headroom_sum;       /* accumulator for avg */
     int             ses_headroom_samples;
     int             ses_headroom_min;       /* min headroom seen */
     int             ses_headroom_below70;   /* ticks with headroom<70% */
     int             ses_headroom_below50;   /* ticks with headroom<50% */
 
-    /* V30: mid-session tune tracking */
     int             ses_mid_tune_count;     /* number of mid-tune adjustments */
     int             ses_mid_tune_dir;       /* net direction: +1 up, -1 down, 0 mixed */
 
-    /* V32: clamp-stable hold -- suppress gap-triggered SUSTAINED jitter
-     * after anti-clamp futility is confirmed */
     int             clamp_hold;             /* 1 = gap-triggered sustained suppressed */
     int             had_clamp_hold;         /* V32: session-latched -- was clamp_hold ever set? */
     int             had_futility;           /* V32: session-latched -- was futility ever triggered? */
@@ -227,9 +223,9 @@ typedef struct {
         uint8_t ac_budget;      /* max anti-clamp windows per session */
         uint8_t ac_used;        /* consumed anti-clamp budget (runtime) */
         uint8_t quarantine;     /* 1 = user-switch quarantine active */
-        uint8_t plan_class;     /* V31: session class enum (see PLAN_CLASS_*) */
-        uint8_t sensor_budget;  /* V31: max full-mode sensor reads per plan epoch */
-        uint8_t sensor_used;    /* V31: consumed sensor budget (runtime) */
+        uint8_t plan_class;
+        uint8_t sensor_budget;
+        uint8_t sensor_used;
     } plan;
 } asb_fsm_t;
 
@@ -391,18 +387,15 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
 
         int sustained_reentry_blocked = (fsm->sustained_reentry_until > 0 &&
                                          time(NULL) < fsm->sustained_reentry_until);
-        /* V33: profile-aware thermal floor for throttling-based SUSTAINED.
-         * Performance: 50C floor + debounce (2 consecutive ticks required)
-         * Battery/Balanced: 40C (already filters room-temp false positives) */
         int thermal_floor = (fsm->profile_idx == PROFILE_PERFORMANCE) ? 50 : 40;
-        /* V33: track consecutive throttle ticks for debounce */
+        /* V34: track consecutive throttle ticks for debounce */
         if (m->therm.throttling) {
             fsm->throttle_cap_ticks++;
         } else {
             fsm->throttle_cap_ticks = 0;
         }
         int throttle_confirmed = m->therm.throttling;
-        /* V33: performance requires 2+ consecutive throttle ticks OR temp already high */
+        /* V34: performance requires 2+ consecutive throttle ticks OR temp already high */
         if (fsm->profile_idx == PROFILE_PERFORMANCE && throttle_confirmed) {
             if (fsm->throttle_cap_ticks < 2 && m->therm.cpu_max_c < g_asb_cfg.sustained_temp_enter)
                 throttle_confirmed = 0;
@@ -428,10 +421,6 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             thermal_to_sustained = 1;
             fsm->sustained_reason = 0;
         }
-        /* V29: Headroom-based early thermal detection.
-         * If kernel already capped freq to <50% of max, burst is futile
-         * even if thermal zone temp hasn't crossed threshold yet.
-         * This gives ~1-2s earlier detection than temp-based path. */
         if (!thermal_to_sustained && !sustained_reentry_blocked &&
             m->therm.headroom_pct > 0 && m->therm.headroom_pct < 50 &&
             fsm->state >= ASB_STATE_HEAVY &&
@@ -443,7 +432,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         }
 
         if (!thermal_to_sustained && !sustained_reentry_blocked &&
-            !fsm->clamp_hold &&  /* V32: suppress gap jitter after futility */
+            !fsm->clamp_hold &&
             fsm->state == ASB_STATE_GAMING &&
             g_asb_cfg.gaming_gap_thresh > 0)
         {
@@ -496,7 +485,6 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             if (g_asb_cfg.gaming_retry_cooldown_s > 0)
                 fsm->gaming_retry_until = now_exit + g_asb_cfg.gaming_retry_cooldown_s;
             if (g_asb_cfg.sustained_reentry_cooldown_s > 0) {
-                /* V33: extend cooldown when vendor clamp or recovery cautious */
                 int cd = g_asb_cfg.sustained_reentry_cooldown_s;
                 if (fsm->clamp_hold) cd *= 2;
                 else if (fsm->recovery_cautious_until > 0 &&
