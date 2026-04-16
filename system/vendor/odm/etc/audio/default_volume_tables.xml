@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<volumes>
+    <reference name="FULL_SCALE_VOLUME_CURVE">
+        <point>0,0</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="SILENT_VOLUME_CURVE">
+        <point>0,-9600</point>
+        <point>100,-9600</point>
+    </reference>
+    <reference name="DEFAULT_VOICE_VOLUME_CURVE">
+        <point>0,-5200</point>
+        <point>1,-4500</point>
+        <point>2,-4000</point>
+        <point>3,-3600</point>
+        <point>4,-3200</point>
+        <point>5,-2800</point>
+        <point>6,-2400</point>
+        <point>7,-2000</point>
+        <point>8,-1600</point>
+        <point>9,-1300</point>
+        <point>10,-1000</point>
+        <point>11,-700</point>
+        <point>12,-400</point>
+        <point>13,-100</point>
+        <point>14,0</point>
+    </reference>
+    <reference name="DEFAULT_SYSTEM_VOLUME_CURVE">
+        <point>1,-5800</point>
+        <point>2,-2900</point>
+        <point>3,-2600</point>
+        <point>4,-2400</point>
+        <point>5,-2200</point>
+        <point>6,-2000</point>
+        <point>7,-1800</point>
+        <point>8,-1600</point>
+        <point>9,-1400</point>
+        <point>10,-1200</point>
+        <point>11,-1000</point>
+        <point>12,-800</point>
+        <point>13,-600</point>
+        <point>14,-400</point>
+        <point>15,-200</point>
+        <point>16,0</point>
+    </reference>
+    <reference name="DEFAULT_MEDIA_VOLUME_CURVE">
+        <point>1,-5800</point>
+        <point>20,-4000</point>
+        <point>60,-1700</point>
+        <point>100,0</point>
+        <point>1,-6800</point>
+        <point>5,-6000</point>
+        <point>10,-5500</point>
+        <point>15,-4900</point>
+        <point>20,-4300</point>
+        <point>25,-3800</point>
+        <point>30,-3300</point>
+        <point>35,-2900</point>
+        <point>40,-2500</point>
+        <point>45,-2200</point>
+        <point>50,-1900</point>
+        <point>55,-1500</point>
+        <point>60,-1100</point>
+        <point>65,-800</point>
+        <point>70,-500</point>
+        <point>75,-200</point>
+        <point>80,0</point>
+    </reference>
+    <reference name="DEFAULT_MEDIA_VOLUME_CURVE_USB_HEADSET">
+        <point>1,-6800</point>
+        <point>5,-6000</point>
+        <point>10,-5400</point>
+        <point>15,-4800</point>
+        <point>20,-4200</point>
+        <point>25,-3600</point>
+        <point>30,-3200</point>
+        <point>35,-2900</point>
+        <point>40,-2600</point>
+        <point>45,-2300</point>
+        <point>50,-2000</point>
+        <point>55,-1600</point>
+        <point>60,-1300</point>
+        <point>65,-1000</point>
+        <point>70,-600</point>
+        <point>75,-200</point>
+        <point>80,0</point>
+    </reference>
+    <reference name="DEFAULT_MEDIA_VOLUME_CURVE_A2DP">
+        <point>1,-6000</point>
+        <point>2,-5900</point>
+        <point>3,-5800</point>
+        <point>4,-5700</point>
+        <point>5,-5600</point>
+        <point>7,-5450</point>
+        <point>10,-5200</point>
+        <point>15,-4800</point>
+        <point>20,-4400</point>
+        <point>25,-4000</point>
+        <point>30,-3600</point>
+        <point>35,-3200</point>
+        <point>40,-2800</point>
+        <point>45,-2500</point>
+        <point>50,-2200</point>
+        <point>55,-1800</point>
+        <point>60,-1400</point>
+        <point>65,-1050</point>
+        <point>70,-500</point>
+        <point>75,300</point>
+    <point>78,450</point>
+        <point>80,600</point>
+</reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_HEADSET_VOLUME_CURVE">
+        <point>1,-4750</point>
+        <point>33,-3150</point>
+        <point>66,-1500</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE">
+        <point>1,-5800</point>
+        <point>20,-4000</point>
+        <point>60,-1700</point>
+        <point>100,0</point>
+        <point>1,-6800</point>
+        <point>5,-5450</point>
+        <point>10,-4400</point>
+        <point>15,-3600</point>
+        <point>20,-3050</point>
+        <point>25,-2550</point>
+        <point>30,-2150</point>
+        <point>35,-1800</point>
+        <point>40,-1500</point>
+        <point>45,-1300</point>
+        <point>50,-1100</point>
+        <point>55,-900</point>
+        <point>60,-600</point>
+        <point>65,-450</point>
+        <point>70,-300</point>
+        <point>75,0</point>
+        <point>80,0</point>
+    </reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_EARPIECE_VOLUME_CURVE">
+        <point>1,-4750</point>
+        <point>33,-3150</point>
+        <point>66,-1500</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_EXT_MEDIA_VOLUME_CURVE">
+        <point>1,-5600</point>
+        <point>20,-3800</point>
+        <point>60,-1900</point>
+        <point>100,-800</point>
+    </reference>
+    <reference name="DEFAULT_HEARING_AID_VOLUME_CURVE">
+        <point>1,-12500</point>
+        <point>20,-7800</point>
+        <point>60,-3800</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_VOLUME_CURVE">
+        <point>0,-5600</point>
+        <point>20,-3800</point>
+        <point>60,-1500</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_HEADSET_VOLUME_CURVE">
+        <point>0,-4750</point>
+        <point>33,-3150</point>
+        <point>66,-1500</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_SPEAKER_VOLUME_CURVE">
+        <point>0,-5600</point>
+        <point>20,-3800</point>
+        <point>60,-1500</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_EARPIECE_VOLUME_CURVE">
+        <point>0,-4750</point>
+        <point>33,-3150</point>
+        <point>66,-1500</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_EXT_VOLUME_CURVE">
+        <point>0,-5600</point>
+        <point>20,-3800</point>
+        <point>60,-1900</point>
+        <point>100,-800</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_HEARING_AID_VOLUME_CURVE">
+        <point>0,-12500</point>
+        <point>20,-7800</point>
+        <point>60,-3800</point>
+        <point>100,0</point>
+    </reference>
+</volumes>
