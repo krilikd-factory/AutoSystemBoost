@@ -1,7 +1,5 @@
 #!/system/bin/sh
 MODDIR="${MODDIR:-${0%/*}}"
-# WebUI redirect for Magisk users
-# KSU/MMRL show WebUI button natively via webroot/
 if [ -z "$MMRL" ] && [ ! -z "$MAGISKTMP" ]; then
   pm path io.github.a13e300.ksuwebui > /dev/null 2>&1 && {
     am start -n "io.github.a13e300.ksuwebui/.WebUIActivity" -e id "$MODID"
@@ -15,7 +13,6 @@ fi
 
 PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
 
-# Update module.prop description with real active profile
 case "$PROFILE" in
   performance) _desc='description=status: performance 🔥 | active ✅' ;;
   battery)     _desc='description=status: battery 🔋 | active ✅' ;;
@@ -27,7 +24,7 @@ if grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null; then
 fi
 rm -f "$MODDIR/module.prop.tmp"
 
-echo "- AutoSystemBoost V37"
+echo "- AutoSystemBoost V38"
 echo "- Current profile: $PROFILE"
 echo ""
 echo "- Opening Telegram channel..."
