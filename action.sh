@@ -27,7 +27,7 @@ if grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null; then
 fi
 rm -f "$MODDIR/module.prop.tmp"
 
-echo "- AutoSystemBoost V37"
+echo "- AutoSystemBoost V38"
 echo "- Current profile: $PROFILE"
 echo ""
 echo "- Opening Telegram channel..."
