@@ -352,8 +352,10 @@ asb_detect_compat() {
   esac
 
   echo "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" | grep -Eqi '(^|[[:space:]/._-])(cph27[45][0-9a-z]*|op611fl1|op611|plk110|pjz110|pkz110|oplus/cph27[45]|oneplus/cph27[45])([[:space:]/._-]|$)' && ASB_IS_OP15=true
+  # prj 24831/24833 = CPH2745/CPH2747 global; 24863 = IN/EX region (same OnePlus 15 hardware)
   echo "$ASB_PRJ_L" | grep -Eqi '^(24831|24833|24863)$' && ASB_IS_OP15=true
 
+  # Fallback 1: /proc/cmdline — not affected by integrity spoof
   if [ "$ASB_IS_OP15" != "true" ] && [ -r /proc/cmdline ]; then
     _cmdline_prj="$(cat /proc/cmdline 2>/dev/null | tr ' ' '\n' | grep -i 'prjname=' | cut -d= -f2 | head -1)"
     echo "$_cmdline_prj" | grep -Eqi '^(24831|24833|24863)$' && ASB_IS_OP15=true
@@ -361,6 +363,7 @@ asb_detect_compat() {
     echo "$_cmdline_model" | grep -Eqi '(cph274|cph275|op611fl1|plk110|pjz110|pkz110)' && ASB_IS_OP15=true
   fi
 
+  # Fallback 2: /proc/device-tree — hardware DT, cannot be spoofed by any integrity fix module
   if [ "$ASB_IS_OP15" != "true" ]; then
     _dt_compat=""
     for _dt_f in /proc/device-tree/compatible \
@@ -374,6 +377,7 @@ asb_detect_compat() {
     echo "$_dt_compat" | grep -Eqi '(cph274|cph275|op611|plk110|pjz110|pkz110|24831|24833|24863|oneplus15|oneplus-15)' && ASB_IS_OP15=true
   fi
 
+  # Fallback 3: hardware fingerprint — SM8750 + policy6 max 4608000 = Snapdragon 8 Elite (OnePlus 15)
   if [ "$ASB_IS_OP15" != "true" ]; then
     if [ -d /sys/devices/system/cpu/cpufreq/policy6 ]; then
       _max6="$(cat /sys/devices/system/cpu/cpufreq/policy6/cpuinfo_max_freq 2>/dev/null)"
@@ -1232,6 +1236,7 @@ AutoSystemBoost' $APIOCXM
 
 
 
+	# Capture stable device codes for WebUI (written once at install time)
 	ASB_WEB_MODEL_CODE="$(getprop ro.product.model 2>/dev/null)"
 	[ -z "$ASB_WEB_MODEL_CODE" ] && ASB_WEB_MODEL_CODE="$(getprop ro.product.name 2>/dev/null)"
 	[ -z "$ASB_WEB_MODEL_CODE" ] && ASB_WEB_MODEL_CODE="UNKNOWN"
@@ -1253,6 +1258,8 @@ AutoSystemBoost' $APIOCXM
 }
 EOF
 
+	# V25 fix: profile_core.sh is needed at runtime by apply_profile.sh
+	# but common/ is deleted after install. Copy to runtime/ which persists.
 	if [ -f "$MODPATH/common/profile_core.sh" ]; then
 		cp -f "$MODPATH/common/profile_core.sh" "$MODPATH/runtime/profile_core.sh"
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
@@ -1261,6 +1268,7 @@ EOF
 	asb_prune_module
 	find $MODPATH -empty -type d -delete
 
+	# === V29: Generate build manifest ===
 	_asb_ver="$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
 	_asb_date="$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo unknown)"
 	_gov_hash="$(sha256sum "$MODPATH/bin/asb" 2>/dev/null | cut -c1-12 || echo none)"
