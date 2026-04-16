@@ -1,3 +1,4 @@
+# ASB:BT:BEGIN
 log.tag.bluetooth=ERROR
 persist.log.tag.bluetooth=ERROR
 bluetooth.device.class_of_device=512,16711680,4
@@ -38,6 +39,7 @@ persist.vendor.bt.a2dp.lhdc=true
 persist.vendor.btstack.enable.gatt_robust_caching=true
 persist.vendor.btstack.enable.lpa=true
 persist.vendor.btstack.qhs_enable=false
+# ASB hotfix: removed conflicting duplicate (kept true below)
 persist.vendor.qcom.bluetooth.dualmode_transport_support=true
 persist.vendor.qcom.bluetooth.enable.lpa=true
 persist.vendor.qcom.bluetooth.pbap_pse_dynamic_version_upgrade=true
@@ -125,12 +127,15 @@ persist.vendor.qcom.bluetooth.lc3_offload.enable=true
 persist.vendor.qcom.bluetooth.leaudio.enable=true
 persist.bluetooth.spatial_audio_support=true
 persist.bluetooth.sbc_hd_higher_bitrate=1
+# BT quality fixes
 persist.vendor.bt.a2dp.hw_cdc=true
 persist.vendor.bt.aac_vbr_frm_ctl.enabled=true
 persist.bluetooth.a2dp_sbc_abr.enable=false
 persist.bluetooth.a2dp_aac_abr.enable=false
 persist.bluetooth.a2dp_ldac_abr.enable=false
 persist.bluetooth.a2dp_lhdc_abr.enable=false
+# ASB:BT:END
+# ASB:CAMERA:BEGIN
 persist.camera.tnr.preview=1
 persist.camera.tnr.video=1
 persist.camera.tnr_cds=0
@@ -202,6 +207,10 @@ debug.config.video.hevchdr10.encode.support=true
 debug.config.video.p3.decode.support=true
 debug.config.video.p3.encode.support=true
 ro.vendor.display.vivid_calibration.enable=1
+# ASB:CAMERA:END
+# ASB:CPU:BEGIN
+# ASB:CPU:END
+# ASB:VM:BEGIN
 ro.lmk.use_psi=true
 ro.lmk.psi_partial=255
 ro.lmk.psi_complete=70
@@ -227,6 +236,8 @@ persist.sys.swapservice.ctrl=true
 persist.sys.stability.swapEnable=true
 persist.vendor.accelerate.charge=true
 ro.lmk.swap_compression_ratio=0
+# ASB:VM:END
+# ASB:NET:BEGIN
 net.tcp.buffersize.default=4096,1048576,16777216,4096,1048576,16777216
 net.tcp.buffersize.wifi=4096,1048576,16777216,4096,1048576,16777216
 net.tcp.buffersize.lte=4096,524288,16777216,4096,524288,16777216
@@ -264,6 +275,8 @@ persist.radio.power_save=1
 persist.radio.add_power_save=1
 persist.radio.data_no_toggle=1
 persist.radio.NO_STAPA=1
+# ASB:NET:END
+# ASB:WIFI:BEGIN
 persist.vendor.wifi.interrupt_test_mode=false
 persist.vendor.wifienhancelog=0
 ro.wlan.mimo=1
@@ -277,7 +290,12 @@ persist.vendor.wifi.vht160_enable=1
 persist.vendor.wifi.he80_160_enable=1
 persist.vendor.wifi.6ghz.enable=1
 sys.wifitracing.started=0
+# ASB:WIFI:END
+# ASB:GPS:BEGIN
+# Disable RTK (saves battery)
 persist.sys.mqs.gps.rtk=OFF
+# ASB:GPS:END
+# ASB:KERNEL:BEGIN
 persist.vendor.audio.power.save.enable=true
 persist.vendor.audio.power.save.setting=0
 audio.lowpower=true
@@ -744,6 +762,7 @@ vendor.display.enable_spr_bypass=0
 vendor.display.enable_ubwc=1
 vendor.display.perf.ubwc_optimize=1
 vendor.display.ubwc_disable=0
+# VSync optimization
 persist.sys.vsync_optimization_enable=true
 vendor.display.enable_optimize_refresh=1
 vendor.display.uir_support=1
@@ -1120,6 +1139,8 @@ ro.vendor.audio.game.vibrate=true
 audio.offload.min.duration.secs=31
 vendor.audio.offload.min.duration.secs=31
 dev.pm.dyn_samplingrate=0
+# ASB:KERNEL:END
+# ASB:LOG:BEGIN
 ro.config.nocheckin=1
 dalvik.vm.dex2oat-minidebuginfo=false
 dalvik.vm.minidebuginfo=false
@@ -1253,10 +1274,4 @@ persist.ims.disableQXDMLogs=1
 persist.ims.enableADBLogs=0
 persist.ims.disableDebugLogs=1
 persist.ims.enableDebugLogs=0
-persist.bluetooth.a2dp_offload.disabled=false
-persist.vendor.bluetooth.a2dp_offload.disabled=false
-persist.bluetooth.a2dp.aac.vbr_supported=true
-persist.vendor.camera.raw.zsl.enable=1
-persist.vendor.camera.zsl.enable=1
-persist.vendor.camera.multiframe.nr.enable=1
-persist.sys.gps.lpp=3
+# ASB:LOG:END
