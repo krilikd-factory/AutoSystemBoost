@@ -866,11 +866,6 @@ apply_screen_aware_caps() {
       ;;
     performance)
       if [ "$_son" -eq 1 ]; then
-        # V38 RC4: screen-on for performance respects profile's CPU_CAP_BIG.
-        # Previously this hardcoded 3648000 which OVERRODE the profile's cooler
-        # cap (V38 RC set profile to 3168000 for thermal control), making the
-        # governor cooling policy partially ineffective. Now we leave profile's
-        # values intact on screen-on.
         CPU_CAP_LITTLE="$CPU_CAP_LITTLE"
         CPU_CAP_BIG="$CPU_CAP_BIG"
       else
