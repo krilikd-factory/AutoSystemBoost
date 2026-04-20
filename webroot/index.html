@@ -10,13 +10,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
-/* V38 RC: KSU WebUI insets.css is required — it triggers MMRL/KSU native runtime
- * to paint the Android status-bar area with theme-color. Removing it causes a
- * grey bar at the top. The file is tiny (~200 bytes) and cached after first use,
- * so any "slow open" perception was unfounded. */
 @import "https://mui.kernelsu.org/internal/insets.css";
-/* Inline fallback: if @import fails to load (offline, etc), the CSS vars below
- * still resolve via env() so layout doesn't break. */
+
 :root { --window-inset-top: env(safe-area-inset-top, 0px); --window-inset-bottom: env(safe-area-inset-bottom, 0px); }
 
 *, *::before, *::after {
