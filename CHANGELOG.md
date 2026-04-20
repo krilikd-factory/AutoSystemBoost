@@ -321,30 +321,6 @@ Minor refinements to bundled vendor configs (tracks OEM updates since V37):
 
 ---
 
-## 🚫 What V38 Explicitly Does NOT Do
-
-<table>
-<tr><th>Not Done</th><th>Why</th></tr>
-<tr>
-  <td>❌ Remove <code>@import</code> from webroot/index.html</td>
-  <td>Tested in earlier RCs — caused a grey Android status bar because MMRL/KSU paints the native status bar only when that stylesheet is loaded. Kept with an inline <code>env()</code> fallback.</td>
-</tr>
-<tr>
-  <td>❌ Mass cull of system.prop</td>
-  <td>The static property layer is large but a tier-classification pass is scoped for V39. V38 is release polish, not architectural rework.</td>
-</tr>
-<tr>
-  <td>❌ New benchmark or self-tuning behaviors</td>
-  <td>Adaptive logic is inherited from V37 and earlier — no new adaptive paths in V38.</td>
-</tr>
-<tr>
-  <td>❌ Touch battery.sh or balanced.sh profiles</td>
-  <td>Both tested well in extended sessions. "Don't fix what isn't broken."</td>
-</tr>
-</table>
-
----
-
 ## 📁 File Change Summary
 
 ### Modified from V37
