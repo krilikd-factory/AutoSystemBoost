@@ -377,14 +377,6 @@ Minor refinements to bundled vendor configs (tracks OEM updates since V37):
 
 ---
 
-## 🙏 Thanks
-
-- To everyone who shared on-device logs — 9 RCs of iteration could not have happened without real telemetry
-- To the OP15 KernelSU-Next community for kernel support
-- To Dima Krylov 🌙 for the relentless iteration cycle
-
----
-
 <p align="center">
   <b>🚀 V38 is a data-driven release. Every number came from a real session on a real device.</b>
 </p>
