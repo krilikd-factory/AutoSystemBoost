@@ -446,7 +446,7 @@ body::after {
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V38</div>
+      <div class="badge" id="verBadge">V39</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -595,8 +595,6 @@ function toast(msg, type) {
 }
 
 async function haptic() {
-  /* V38 RC: shell-first haptic -- navigator.vibrate() is unreliable in KSU/MMRL
-   * WebView; shell fallback via ksu.exec always works on rooted devices. */
   try { await run("cmd vibrator vibrate 18 >/dev/null 2>&1 || service call vibrator 1 i32 18 >/dev/null 2>&1"); } catch(e) {}
   try { if (navigator.vibrate) navigator.vibrate(18); } catch(e) {}
 }
@@ -614,9 +612,6 @@ async function go(p) {
   const btn = document.querySelector('[data-p="' + p + '"]');
   if (switching || btn.classList.contains('on')) return;
   switching = true;
-  /* V38 RC fix: spinner only on the clicked button, not all three.
-   * Pre-existing bug since at least V6: forEach(add('ld')) caused all
-   * profile buttons to briefly show the loading circle during a switch. */
   btn.classList.add('ld');
   const r = await run('sh ' + MD + '/apply_profile.sh ' + p);
   /* Cleanup still uses forEach in case any stale 'ld' class is lingering */
