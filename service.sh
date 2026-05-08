@@ -19,10 +19,6 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 
 asb_load_profile
 
-# Schema-versioned config migration. Persisted /data/.../governor.conf carries
-# values from older module versions that may silently disadvantage users with
-# stale tunings. On schema bump, backup user's config and copy fresh defaults
-# from the sealed reference governor.conf.shipped.
 asb_migrate_governor_conf() {
   local _expected_schema=12
   local _conf_dir="$MODDIR/config"
