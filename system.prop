@@ -132,6 +132,9 @@ persist.bluetooth.a2dp_sbc_abr.enable=false
 persist.bluetooth.a2dp_aac_abr.enable=false
 persist.bluetooth.a2dp_ldac_abr.enable=false
 persist.bluetooth.a2dp_lhdc_abr.enable=false
+persist.bluetooth.a2dp_offload.disabled=false
+persist.vendor.bluetooth.a2dp_offload.disabled=false
+persist.bluetooth.a2dp.aac.vbr_supported=true
 # ASB:BT:END
 # ASB:CAMERA:BEGIN
 persist.camera.tnr.preview=1
@@ -233,6 +236,9 @@ persist.vendor.camera.eis.disable=0
 persist.vendor.camera.fdvideo=1
 persist.vendor.camera.opt_mode.video=2
 persist.vendor.camera.smyuv.enable=1
+persist.vendor.camera.raw.zsl.enable=1
+persist.vendor.camera.zsl.enable=1
+persist.vendor.camera.multiframe.nr.enable=1
 # ASB:CAMERA:END
 # ASB:CPU:BEGIN
 # ASB:CPU:END
@@ -336,6 +342,7 @@ sys.wifitracing.started=0
 # ASB:GPS:BEGIN
 # Disable RTK (speculative — specific semantics of mqs.gps.rtk unconfirmed)
 persist.sys.mqs.gps.rtk=OFF
+persist.sys.gps.lpp=3
 # ASB:GPS:END
 # ASB:KERNEL:BEGIN
 persist.vendor.audio.power.save.enable=true
@@ -1341,10 +1348,28 @@ persist.vendor.radio.adb_log_on=0
 persist.vendor.radio.log_loc=0
 persist.radio.low_priority_static_log=1
 # ASB:LOG:END
-persist.bluetooth.a2dp_offload.disabled=false
-persist.vendor.bluetooth.a2dp_offload.disabled=false
-persist.bluetooth.a2dp.aac.vbr_supported=true
-persist.vendor.camera.raw.zsl.enable=1
-persist.vendor.camera.zsl.enable=1
-persist.vendor.camera.multiframe.nr.enable=1
-persist.sys.gps.lpp=3
+
+# ASB:RADIO_IMS:BEGIN
+persist.ims.auth.scheme=1
+persist.ims.auth.type=1
+persist.vendor.ims.qmi_ott_feature=1
+persist.vendor.ims.QmiOttEnable=1
+# ASB:RADIO_IMS:END
+# ASB:DISPLAY:BEGIN
+vendor.display.enable_dpps_dynamic_fps=1
+vendor.display.enable_async_vds=1
+vendor.display.backlight_smooth=1
+ro.qualcomm.cabl=1
+vendor.display.enable_cabl=1
+# ASB:DISPLAY:END
+# ASB:FPS:BEGIN
+ro.media.recorder-max-base-layer-fps=240
+persist.vendor.disable_idle_fps=false
+debug.graphics.video_default_frame_rate.disabled=true
+debug.graphics.game_default_frame_rate.disabled=true
+# ASB:FPS:END
+# ASB:SECURITY:BEGIN
+security.perf_harden=0
+persist.radio.snapshot_enabled=0
+ro.memory.isSupportSnapshot=false
+# ASB:SECURITY:END

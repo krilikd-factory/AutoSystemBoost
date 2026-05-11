@@ -462,6 +462,11 @@ apply_net() {
   sysctlw net.netfilter.nf_conntrack_buckets 16384
   [ -e /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_time_wait ] && \
   sysctlw net.netfilter.nf_conntrack_tcp_timeout_time_wait 30
+  [ -e /proc/sys/net/netfilter/nf_conntrack_max ] && \
+  sysctlw net.netfilter.nf_conntrack_max 65536
+  [ -e /proc/sys/net/core/tstamp_allow_data ] && \
+  sysctlw net.core.tstamp_allow_data 1
+  sysctlw net.ipv4.ip_no_pmtu_disc 0
   sysctlw net.ipv4.tcp_syncookies 1
   sysctlw net.ipv4.tcp_rfc1337 1
   sysctlw net.ipv4.conf.all.rp_filter 0
