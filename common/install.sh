@@ -435,7 +435,7 @@ asb_prune_module() {
   local prop="$MODPATH/system.prop"
   local pfd="$MODPATH/post-fs-data.sh"
 
-  for c in BT CAMERA CPU VM NET WIFI GPS KERNEL LOG; do
+  for c in BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY; do
     asb_drop_block_if_off "$c" "$svc"
     asb_drop_block_if_off "$c" "$prop"
     asb_drop_block_if_off "$c" "$pfd"
@@ -511,6 +511,10 @@ ASB_WIFI=true
 ASB_GPS=true
 ASB_KERNEL=true
 ASB_LOG=true
+ASB_RADIO_IMS=true
+ASB_DISPLAY=true
+ASB_FPS=true
+ASB_SECURITY=true
 
 asb_install_prebuilt_governor
 asb_big_banner
@@ -523,6 +527,10 @@ asb_choose_cat WIFI   "$ASB_MENU_WIFI"
 asb_choose_cat GPS    "$ASB_MENU_GPS"
 asb_choose_cat KERNEL "$ASB_MENU_KERNEL"
 asb_choose_cat LOG    "$ASB_MENU_LOG"
+asb_choose_cat RADIO_IMS "$ASB_MENU_RADIO_IMS"
+asb_choose_cat DISPLAY   "$ASB_MENU_DISPLAY"
+asb_choose_cat FPS       "$ASB_MENU_FPS"
+asb_choose_cat SECURITY  "$ASB_MENU_SECURITY"
 
 asb_detect_compat
 if [ "$ASB_IS_OP15" = "true" ]; then
@@ -546,6 +554,10 @@ WIFI=$([ "$ASB_WIFI" = "true" ] && echo 1 || echo 0)
 GPS=$([ "$ASB_GPS" = "true" ] && echo 1 || echo 0)
 KERNEL=$([ "$ASB_KERNEL" = "true" ] && echo 1 || echo 0)
 LOG=$([ "$ASB_LOG" = "true" ] && echo 1 || echo 0)
+RADIO_IMS=$([ "$ASB_RADIO_IMS" = "true" ] && echo 1 || echo 0)
+DISPLAY=$([ "$ASB_DISPLAY" = "true" ] && echo 1 || echo 0)
+FPS=$([ "$ASB_FPS" = "true" ] && echo 1 || echo 0)
+SECURITY=$([ "$ASB_SECURITY" = "true" ] && echo 1 || echo 0)
 EOF
 
   for module in $MODPATH/system
