@@ -12,7 +12,7 @@
 
 ## 🚀 V40 — FSM Rebuild + Profile Recalibration + Stutter Elimination
 
-### 📊 What you'll feel after upgrading from V39 r5a
+### 📊 What you'll feel after upgrading from V39
 
 | Symptom on V39 | Behaviour on V40 |
 |---|---|
@@ -58,7 +58,7 @@ V39 inherited profile caps from older Snapdragon parts. Real-device telemetry on
 + GPU_MAX_PCT=70                                    # 840 MHz Adreno — efficient zone
 ```
 
-**Balanced profile** kept V39 r3 values — they were already correct.
+**Balanced profile** kept V39 values — they were already correct.
 
 The corresponding C-side `g_profile_bounds[]` table in `src/asb_fsm.h` is recalibrated to match. Floor and ceil bounds for each profile derive from the `.sh` values via lerp by FSM state position. Comments document the kernel-agnostic thermal envelope target.
 
