@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Current_Release-V40-16a34a?style=for-the-badge" alt="V40">
-  <img src="https://img.shields.io/badge/Previous-V39_r5a-6b7280?style=for-the-badge" alt="V39 r5a">
+  <img src="https://img.shields.io/badge/Previous-V39-6b7280?style=for-the-badge" alt="V39">
   <img src="https://img.shields.io/badge/versionCode-400-0ea5e9?style=for-the-badge" alt="versionCode">
 </p>
 
@@ -276,7 +276,7 @@ Compile passes `-Wall -Wextra -D_FORTIFY_SOURCE=2` with **0 warnings**. All 28 s
 - **Does not include `BattFake.sh`-style battery health spoofing.** That hides real degradation.
 - **Does not bypass `tombstoned` or `debuggerd`.** Those mask real app failures.
 
-### 📦 Upgrade from V39 r5a
+### 📦 Upgrade from V39
 
 1. Flash V40 over existing V39. No need to uninstall first.
 2. Reboot.
@@ -314,9 +314,9 @@ su -c 'grep ses_max_temp /dev/.asb/state'
 # Expect: ses_max_temp < 65 (vs V39 baseline of 75-82)
 ```
 
-### 📂 Files changed vs V39 r5a
+### 📂 Files changed vs V39
 
-- `module.prop` — V39 r5a → V40, versionCode 396 → 400, name banner emoji updated
+- `module.prop` — V39 → V40, versionCode 396 → 400, name banner emoji updated
 - `profiles/battery.sh`, `profiles/performance.sh` — full recalibration (balanced unchanged)
 - `config/governor.conf` + `config/governor.conf.shipped` — threshold tuning across multiple sections
 - `service.sh` — added migration function, RPS/XPS steering, DSP runtime PM, kernel battery additions, schema bump
@@ -340,7 +340,3 @@ su -c 'grep ses_max_temp /dev/.asb/state'
 </p>
 
 ---
-
-## Previous releases
-
-For V39 r5a, V39 r5, V39 r3, V39 r2, V39, V38 and earlier history, see git tags.
