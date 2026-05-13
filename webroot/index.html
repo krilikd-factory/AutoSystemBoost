@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AutoSystemBoost</title>
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+@import "https://mui.kernelsu.org/internal/insets.css";
+
+:root {
+  --window-inset-top: env(safe-area-inset-top, 0px);
+  --window-inset-bottom: env(safe-area-inset-bottom, 0px);
+  
+  --bg: #000000;
+  --surface: rgba(255,255,255,0.04);
+  --surface-hover: rgba(255,255,255,0.06);
+  
+  --accent: #00f0b4;
+  --accent-glow: rgba(0,240,180,0.35);
+  --accent2: #00d4ff;
+  
+  --perf: #ff1a1a;
+  --perf-glow: rgba(255,26,26,0.4);
+  --bal: #ffa502;
+  --bal-glow: rgba(255,165,2,0.4);
+  --bat: #2ed573;
+  --bat-glow: rgba(46,213,115,0.4);
+  
+  --text: #ffffff;
+  --text-secondary: rgba(255,255,255,0.55);
+  --text-tertiary: rgba(255,255,255,0.3);
+  
+  --border: rgba(255,255,255,0.07);
+  --border-active: rgba(255,255,255,0.15);
+  
+  --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+}
+
+*, *::before, *::after {
+  margin: 0; padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  overflow-x: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  padding-top: var(--window-inset-top);
+  padding-bottom: var(--window-inset-bottom);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+body::before, body::after {
+  display: none;
+}
+
+.page {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  min-height: calc(100vh - var(--window-inset-top) - var(--window-inset-bottom));
+  padding: 24px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.header {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 32px;
+  gap: 0;
+}
+
+.logo-c {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 20px;
+}
+
+.logo-glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: 24px;
+  background: conic-gradient(from 0deg, var(--accent), var(--accent2), var(--accent), transparent, var(--accent));
+  opacity: 0.35;
+  animation: rotate 8s linear infinite;
+  filter: blur(8px);
+}
+
+.logo-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 22px;
+  background: conic-gradient(from 180deg, var(--accent), var(--accent2), var(--accent));
+  opacity: 0.55;
+  animation: rotate 4s linear infinite;
+}
+
+.logo-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(0,240,180,0.12), rgba(0,212,255,0.06));
+  border: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  z-index: 1;
+  box-shadow: 
+    inset 0 1px 1px rgba(255,255,255,0.1),
+    0 8px 32px rgba(0,0,0,0.5);
+}
+
+@keyframes rotate {
+  to { transform: rotate(360deg); }
+}
+
+.app-name {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #fff 30%, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+
+.device-line {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+}
+
+.badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.badge {
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  color: var(--text-tertiary);
+  background: var(--surface);
+}
+
+.badge-a {
+  background: linear-gradient(135deg, rgba(0,240,180,0.12), rgba(0,212,255,0.08));
+  border-color: rgba(0,240,180,0.25);
+  color: var(--accent);
+  box-shadow: 0 0 20px rgba(0,240,180,0.06);
+}
+
+.status-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  border-radius: 100px;
+  background: linear-gradient(135deg, rgba(0,240,180,0.08), rgba(0,212,255,0.05));
+  border: 1px solid rgba(0,240,180,0.15);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow), 0 0 30px rgba(0,240,180,0.25);
+  animation: pulse 2.5s ease-in-out infinite;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  opacity: 0.3;
+  animation: pulseRing 2.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.9); }
+}
+
+@keyframes pulseRing {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.5); opacity: 0; }
+}
+
+.status-label { 
+  font-size: 12px; 
+  color: var(--text-secondary); 
+  font-weight: 500;
+}
+
+.status-val {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.sec {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+.sec-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-active), transparent);
+}
+.sec-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.profiles {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pbtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.pbtn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.pbtn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  opacity: 0.5;
+}
+
+.pbtn:active { 
+  transform: scale(0.97); 
+  transition-duration: 0.1s;
+}
+
+.pbtn[data-p="performance"] { --c: var(--perf); --cg: rgba(255,26,26,0.12); --cg-strong: var(--perf-glow); }
+.pbtn[data-p="balanced"]    { --c: var(--bal);  --cg: rgba(255,165,2,0.12);  --cg-strong: var(--bal-glow); }
+.pbtn[data-p="battery"]     { --c: var(--bat);  --cg: rgba(46,213,115,0.12); --cg-strong: var(--bat-glow); }
+
+.pbtn.on {
+  border-color: var(--c) !important;
+  background: linear-gradient(135deg, var(--cg), rgba(20,20,20,0.9)) !important;
+  box-shadow: 
+    0 0 0 1px var(--c),
+    0 0 25px var(--cg),
+    inset 0 1px 1px rgba(255,255,255,0.08);
+}
+
+.pbtn.on::before {
+  opacity: 1;
+  background: radial-gradient(circle at 80% 50%, var(--cg-strong), transparent 70%);
+}
+
+.pico {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.pbtn.on .pico {
+  background: linear-gradient(135deg, var(--cg), rgba(255,255,255,0.04));
+  border-color: var(--c);
+  box-shadow: 0 0 15px var(--cg-strong);
+  transform: scale(1.05);
+}
+
+.pinfo { 
+  flex: 1; 
+  min-width: 0; 
+  position: relative; 
+  z-index: 1; 
+  display: flex;
+  align-items: center;
+}
+
+.pname {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+  transition: all 0.3s ease;
+  line-height: 1;
+}
+
+.pbtn.on .pname { 
+  color: var(--c); 
+  text-shadow: 0 0 20px var(--cg-strong);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.pchk {
+  width: 24px; 
+  height: 24px; 
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.1);
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); 
+  flex-shrink: 0;
+  position: relative; 
+  z-index: 1;
+}
+
+.pbtn.on .pchk {
+  border-color: var(--c);
+  background: var(--c);
+  box-shadow: 0 0 12px var(--cg-strong);
+  transform: scale(1.1);
+}
+
+.pchk svg { 
+  width: 12px; 
+  height: 12px; 
+  fill: #000; 
+  opacity: 0; 
+  transition: all 0.2s ease; 
+  transform: scale(0.5);
+}
+
+.pbtn.on .pchk svg { 
+  opacity: 1; 
+  transform: scale(1);
+}
+
+.pload {
+  display: none; 
+  width: 20px; 
+  height: 20px;
+  border: 2.5px solid rgba(255,255,255,0.08);
+  border-top-color: var(--c);
+  border-radius: 50%; 
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0; 
+  position: relative; 
+  z-index: 1;
+}
+
+.pbtn.ld .pload { display: block; }
+.pbtn.ld .pchk  { display: none; }
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+.tg-link-wrap {
+  width: 100%;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.tg-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(0,240,180,0.08), rgba(0,212,255,0.05));
+  border: 1px solid rgba(0,240,180,0.15);
+  text-decoration: none;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.tg-link::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent, rgba(255,255,255,0.05), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.tg-link:hover::before,
+.tg-link:active::before {
+  opacity: 1;
+}
+
+.tg-link:active { 
+  transform: scale(0.96); 
+  border-color: rgba(0,240,180,0.3);
+}
+
+.tg-link-ico { 
+  font-size: 16px; 
+  filter: drop-shadow(0 0 8px rgba(0,240,180,0.3));
+}
+
+.tg-link-main {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: -0.2px;
+}
+
+.tg-link-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.5px;
+}
+
+.footer {
+  width: 100%;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 8px;
+}
+
+.toast {
+  position: fixed; 
+  bottom: calc(24px + var(--window-inset-bottom));
+  left: 50%; 
+  transform: translateX(-50%) translateY(80px) scale(0.9);
+  padding: 12px 24px; 
+  border-radius: 16px;
+  font-family: var(--mono);
+  font-size: 13px; 
+  font-weight: 600;
+  opacity: 0; 
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 100; 
+  pointer-events: none;
+  border: 1px solid; 
+  white-space: nowrap; 
+  letter-spacing: 0.5px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.toast.show { 
+  opacity: 1; 
+  transform: translateX(-50%) translateY(0) scale(1); 
+}
+
+.toast.t-performance { 
+  background: rgba(40,10,10,0.95); 
+  color: #ff4d4d; 
+  border-color: rgba(255,26,26,0.35); 
+  box-shadow: 0 0 25px rgba(255,26,26,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.toast.t-balanced { 
+  background: rgba(35,25,5,0.95); 
+  color: #ffc048; 
+  border-color: rgba(255,165,2,0.35); 
+  box-shadow: 0 0 25px rgba(255,165,2,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.toast.t-battery { 
+  background: rgba(10,30,15,0.95); 
+  color: #7bed9f; 
+  border-color: rgba(46,213,115,0.35); 
+  box-shadow: 0 0 25px rgba(46,213,115,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.toast.t-err { 
+  background: rgba(40,10,10,0.95);  
+  color: #ff4d4d;    
+  border-color: rgba(255,26,26,0.3);  
+  box-shadow: 0 0 20px rgba(255,26,26,0.1); 
+}
+
+.page > * { 
+  animation: fadeSlideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both; 
+}
+
+.page > *:nth-child(1) { animation-delay: 0.05s; }
+.page > *:nth-child(2) { animation-delay: 0.1s; }
+.page > *:nth-child(3) { animation-delay: 0.15s; }
+.page > *:nth-child(4) { animation-delay: 0.2s; }
+.page > *:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes fadeSlideUp { 
+  from { opacity: 0; transform: translateY(20px); } 
+  to { opacity: 1; transform: translateY(0); } 
+}
+
+.profiles .pbtn:nth-child(1) { animation-delay: 0.3s; }
+.profiles .pbtn:nth-child(2) { animation-delay: 0.38s; }
+.profiles .pbtn:nth-child(3) { animation-delay: 0.46s; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-c">
+      <div class="logo-glow"></div>
+      <div class="logo-ring"></div>
+      <div class="logo-inner">🛸</div>
+    </div>
+    <div class="app-name">AutoSystemBoost</div>
+    <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
+    <div class="badges">
+      <div class="badge badge-a" id="socBadge">DEVICE</div>
+      <div class="badge" id="verBadge">V41</div>
+    </div>
+    <div class="status-row">
+      <div class="dot"></div>
+      <span class="status-label">Profile:&nbsp;</span>
+      <span class="status-val" id="curProfile">balanced</span>
+    </div>
+  </div>
+
+  <!-- PROFILES -->
+  <div class="sec">
+    <div class="sec-line"></div>
+    <div class="sec-label">Power Profile</div>
+    <div class="sec-line"></div>
+  </div>
+  <div class="profiles">
+
+    <div class="pbtn" data-p="performance" onclick="go('performance')">
+      <div class="pico">🔥</div>
+      <div class="pinfo">
+        <div class="pname">Performance</div>
+      </div>
+      <div class="pload"></div>
+      <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+    </div>
+
+    <div class="pbtn on" data-p="balanced" onclick="go('balanced')">
+      <div class="pico">⚖️</div>
+      <div class="pinfo">
+        <div class="pname">Balanced</div>
+      </div>
+      <div class="pload"></div>
+      <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+    </div>
+
+    <div class="pbtn" data-p="battery" onclick="go('battery')">
+      <div class="pico">🔋</div>
+      <div class="pinfo">
+        <div class="pname">Battery</div>
+      </div>
+      <div class="pload"></div>
+      <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+    </div>
+
+  </div>
+
+  <!-- TELEGRAM -->
+  <div class="tg-link-wrap">
+    <a class="tg-link" href="tg://resolve?domain=DKomsomol" onclick="openTelegram(event)">
+      <span class="tg-link-ico">✉️</span>
+      <span class="tg-link-main">@DKomsomol</span>
+    </a>
+    <div class="tg-link-sub">by Dima_Krylov</div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer"></div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const clickAudio = new Audio("switch.mp3"); clickAudio.preload = "auto"; try { clickAudio.load(); } catch(e) {}
+const MD = '/data/adb/modules/AutoSystemBoost';
+
+const MODEL_MAP = {
+  "CPH2745":"OnePlus 15","OP611FL1":"OnePlus 15","PJZ110":"OnePlus 15","PKZ110":"OnePlus 15",
+  "CPH2721":"OnePlus 13","PJE110":"OnePlus 13","CPH2723":"OnePlus 13s",
+  "CPH2645":"OnePlus 13R","PJV110":"OnePlus 13R",
+  "CPH2581":"OnePlus 12","CPH2613":"OnePlus 12","CPH2573":"OnePlus 12","PJD110":"OnePlus 12",
+  "CPH2609":"OnePlus 12R","CPH2611":"OnePlus 12R","CPH2639":"OnePlus 12R",
+  "CPH2447":"OnePlus 11","CPH2449":"OnePlus 11","CPH2451":"OnePlus 11","PHB110":"OnePlus 11",
+  "CPH2491":"OnePlus Open","CPH2551":"OnePlus Open","CPH2553":"OnePlus Open",
+  "CPH2413":"OnePlus Nord 3","CPH2467":"OnePlus Nord CE3",
+  "CPH2487":"OnePlus Nord CE4","CPH2675":"OnePlus Nord 4",
+  "CPH2529":"OnePlus Ace 3","CPH2599":"OnePlus Ace 3 Pro","CPH2607":"OnePlus Ace 3V",
+  "PHK110":"OnePlus Ace 2","PHP110":"OnePlus Ace 2 Pro",
+  "CPH2665":"OnePlus Pad 2","CPH2705":"OnePlus Pad"
+};
+const SOC_MAP = {
+  "SM8850":"Snapdragon 8 Elite Gen 5","SM8750":"Snapdragon 8 Elite",
+  "SM8650":"Snapdragon 8 Gen 3","SM8635":"Snapdragon 8s Gen 3",
+  "SM8550":"Snapdragon 8 Gen 2","SM8475":"Snapdragon 8+ Gen 1",
+  "SM8450":"Snapdragon 8 Gen 1","SM7675":"Snapdragon 7+ Gen 3",
+  "SM7550":"Snapdragon 7 Gen 3","SM7435":"Snapdragon 7s Gen 3"
+};
+
+function prettyModel(code, alias) {
+  const c = (code||'').trim().toUpperCase();
+  const a = (alias||'').trim().toUpperCase();
+  if (MODEL_MAP[c]) return MODEL_MAP[c];
+  if (MODEL_MAP[a]) return MODEL_MAP[a];
+  const s = (c + ' ' + a).replace(/[_-]/g,' ');
+  if (/ONEPLUS\s*15/.test(s))          return 'OnePlus 15';
+  if (/ONEPLUS\s*13\s*T|13T/.test(s))  return 'OnePlus 13T';
+  if (/ONEPLUS\s*13\s*S|13S/.test(s))  return 'OnePlus 13s';
+  if (/ONEPLUS\s*13\s*R|13R/.test(s))  return 'OnePlus 13R';
+  if (/ONEPLUS\s*13/.test(s))          return 'OnePlus 13';
+  if (/ONEPLUS\s*12\s*R|12R/.test(s))  return 'OnePlus 12R';
+  if (/ONEPLUS\s*12/.test(s))          return 'OnePlus 12';
+  if (/ACE\s*6\s*PRO/.test(s))         return 'OnePlus Ace 6 Pro';
+  if (/ACE\s*6/.test(s))               return 'OnePlus Ace 6';
+  if (/ACE\s*5\s*PRO/.test(s))         return 'OnePlus Ace 5 Pro';
+  if (/ACE\s*5/.test(s))               return 'OnePlus Ace 5';
+  if (/ACE\s*3\s*PRO/.test(s))         return 'OnePlus Ace 3 Pro';
+  if (/ACE\s*3/.test(s))               return 'OnePlus Ace 3';
+  if (/ACE\s*2\s*PRO/.test(s))         return 'OnePlus Ace 2 Pro';
+  if (/ACE\s*2/.test(s))               return 'OnePlus Ace 2';
+  if (/OPEN/.test(s))                  return 'OnePlus Open';
+  if (/NORD\s*4/.test(s))              return 'OnePlus Nord 4';
+  if (/NORD\s*3/.test(s))              return 'OnePlus Nord 3';
+  return c || a || 'OnePlus Device';
+}
+
+function prettySoc(code) {
+  const c = (code||'').trim().toUpperCase();
+  return SOC_MAP[c] || c || 'Qualcomm Snapdragon';
+}
+
+async function loadDeviceInfo() {
+  try {
+    const r = await fetch('device_info.json?ts=' + Date.now());
+    if (!r.ok) return;
+    const d = await r.json();
+    const model = prettyModel(d.model_code||'', d.name_code||'');
+    const soc   = prettySoc(d.soc_code||'');
+    const chip  = (d.soc_code||'').trim().toUpperCase() || 'DEVICE';
+    document.getElementById('deviceLine').textContent = model + ' / ' + soc;
+    document.getElementById('socBadge').textContent   = chip;
+  } catch(e) {}
+}
+
+let _id = 0;
+function run(cmd) {
+  return new Promise(ok => {
+    const cb = 'asb_' + (++_id) + '_' + Date.now();
+    window[cb] = (e,o,r) => { ok({errno:e, stdout:o||'', stderr:r||''}); delete window[cb]; };
+    try {
+      if (typeof ksu !== 'undefined') ksu.exec(cmd, '{}', cb);
+      else ok({errno:1, stdout:'', stderr:'no ksu'});
+    } catch(x) { ok({errno:1, stdout:'', stderr:''+x}); }
+  });
+}
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.className = 'toast t-' + type;
+  t.textContent = msg;
+  requestAnimationFrame(() => {
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  });
+}
+
+async function haptic() {
+  try { await run("cmd vibrator vibrate 18 >/dev/null 2>&1 || service call vibrator 1 i32 18 >/dev/null 2>&1"); } catch(e) {}
+  try { if (navigator.vibrate) navigator.vibrate(18); } catch(e) {}
+}
+
+function ui(p) {
+  document.querySelectorAll('.pbtn').forEach(b => {
+    b.classList.toggle('on', b.dataset.p === p);
+    b.classList.remove('ld');
+  });
+  document.getElementById('curProfile').textContent = p;
+}
+
+let switching = false;
+async function go(p) {
+  const btn = document.querySelector('[data-p="' + p + '"]');
+  if (switching || btn.classList.contains('on')) return;
+  
+  switching = true;
+  btn.classList.add('ld');
+  const r = await run('sh ' + MD + '/apply_profile.sh ' + p);
+  document.querySelectorAll('.pbtn').forEach(b => b.classList.remove('ld'));
+  if (r.errno === 0) {
+    haptic();
+    try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
+    ui(p);
+    toast('\u2713 ' + p.charAt(0).toUpperCase() + p.slice(1) + ' applied', p);
+  } else {
+    toast('\u2717 Error applying profile', 'err');
+  }
+  switching = false;
+}
+
+function openTelegram(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  run("sh -c 'am start -a android.intent.action.VIEW -d \"tg://resolve?domain=DKomsomol\" >/dev/null 2>&1 || am start -a android.intent.action.VIEW -d \"https://t.me/DKomsomol\" >/dev/null 2>&1'");
+}
+
+(async () => {
+  requestAnimationFrame(() => setTimeout(loadDeviceInfo, 0));
+  const r = await run('cat ' + MD + '/current_profile 2>/dev/null || echo balanced');
+  const p = (r.stdout || 'balanced').trim();
+  ui(['performance','balanced','battery'].includes(p) ? p : 'balanced');
+})();
+</script>
+</body>
+</html>
