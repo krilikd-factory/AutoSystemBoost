@@ -10,7 +10,7 @@
 
 ---
 
-## 🛡️ V41 — Vendor Overlay Phase 1 + WiFi Bonding Integration
+## 🛡️ V41 — Vendor Overlay Phase 1 + WiFi mod
 
 ### 🔬 Qualcomm Performance Engine (QAPE) thermal trigger tune
 
@@ -45,7 +45,7 @@ QAPE boost cycles last half as long and only one cycle per game session instead 
 
 The resetprop fallback in `post-fs-data.sh` covers the case where perf-hal-service has already read `perfconfigstore.xml` before Magisk's overlay is active — these `ro.vendor.perf.qape.*` properties are then forced via `resetprop -n` to match the overlay values.
 
-### 📶 WiFi bonding configuration (unified across all chip variants)
+### 📶 WiFi mod configuration (unified across all chip variants)
 
 OnePlus 15 ships with three WCNSS variants (kiwi_v2, wcn7750, peach_v2) plus an ODM-specific overlay. Vendor stock had `gChannelBondingMode5GHz=1` set on all four files but the other three relevant settings only on the ODM file, leaving the chip-specific configs incomplete.
 
@@ -63,8 +63,6 @@ Files updated:
 - `system/vendor/etc/wifi/wcn7750/WCNSS_qcom_cfg.ini`
 - `system/vendor/etc/wifi/peach_v2/WCNSS_qcom_cfg.ini`
 - `system/vendor/odm/vendor/etc/wifi/WCNSS_qcom_cfg.ini`
-
-This replaces the need for a separate `wifi-bonding` module — the same logic is now natively part of ASB and gated by the existing `ASB:WIFI` installer toggle, so users who skip WIFI category at install time also skip the WCNSS tweaks.
 
 ### 🩹 Bootloop protection
 
@@ -184,7 +182,3 @@ su -c 'grep ses_max_temp /dev/.asb/state'
 </p>
 
 ---
-
-## Previous releases
-
-For V40, V39 r5a, V39 r5, V39 r3, V39 r2, V39, V38 and earlier history, see git tags.
