@@ -24,7 +24,7 @@ asb_load_profile
 # stale tunings. On schema bump, backup user's config and copy fresh defaults
 # from the sealed reference governor.conf.shipped.
 asb_migrate_governor_conf() {
-  local _expected_schema=13
+  local _expected_schema=14
   local _conf_dir="$MODDIR/config"
   local _user_conf="$_conf_dir/governor.conf"
   local _shipped_conf="$MODDIR/config/governor.conf"
