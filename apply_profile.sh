@@ -28,8 +28,13 @@ done
 MODE="direct"
 PROFILE="${1:-balanced}"
 PROFILE_FLAG=""
-[ "$1" = "--worker" ] && { MODE="worker"; PROFILE="${2:-balanced}"; PROFILE_FLAG="${3:-}"; }
-[ "$MODE" = "direct" ] && PROFILE_FLAG="${2:-}"
+if [ "$1" = "--worker" ]; then
+  MODE="worker"
+  PROFILE="${2:-balanced}"
+  PROFILE_FLAG="${3:-}"
+else
+  PROFILE_FLAG="${2:-}"
+fi
 case "$PROFILE" in
   performance|balanced|battery) : ;;
   *) PROFILE="balanced" ;;
