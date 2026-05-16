@@ -364,11 +364,33 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
     fsm->up_window   = 2;
     fsm->down_window = 5;
     fsm->plan.thermal_div = 1;  /* safe default: read every tick */
-    fsm->auto_battery_restore_idx = -1;  /* V42: no saved profile yet */
+    fsm->auto_battery_restore_idx = -1;
+    fsm->auto_battery_active = 0;
+    fsm->auto_battery_last_action = 0;
+    {
+        FILE *_abf = fopen("/dev/.asb/auto_battery_state", "r");
+        if (_abf) {
+            int _act = 0, _ridx = -1;
+            if (fscanf(_abf, "%d %d", &_act, &_ridx) == 2) {
+                if (_act == 1 && _ridx >= 0 && _ridx < 3 && _ridx != PROFILE_BATTERY) {
+                    fsm->auto_battery_active = 1;
+                    fsm->auto_battery_restore_idx = _ridx;
+                }
+            }
+            fclose(_abf);
+        }
+    }
     clock_gettime(CLOCK_MONOTONIC, &fsm->last_transition);
     clock_gettime(CLOCK_MONOTONIC, &fsm->ses_state_enter);
     fsm_interpolate_caps(&g_profile_bounds[profile_idx],
                          profile_idx, fsm->state, &fsm->current_caps);
+}
+
+static inline void fsm_auto_battery_persist(const asb_fsm_t *fsm) {
+    FILE *f = fopen("/dev/.asb/auto_battery_state", "w");
+    if (!f) return;
+    fprintf(f, "%d %d\n", fsm->auto_battery_active, fsm->auto_battery_restore_idx);
+    fclose(f);
 }
 
 static inline void fsm_session_reset(asb_fsm_t *fsm) {

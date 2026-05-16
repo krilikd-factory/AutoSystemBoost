@@ -2643,6 +2643,19 @@ int main(int argc, char **argv) {
 
                 if (strncmp(cmd, "profile:", 8) == 0) {
                     const char *pname = cmd + 8;
+                    char _pbuf[16];
+                    int _is_auto = 0;
+                    {
+                        size_t _plen = strlen(pname);
+                        if (_plen >= 5 && strcmp(pname + _plen - 5, ":auto") == 0) {
+                            _is_auto = 1;
+                            if (_plen - 5 < sizeof(_pbuf)) {
+                                memcpy(_pbuf, pname, _plen - 5);
+                                _pbuf[_plen - 5] = '\0';
+                                pname = _pbuf;
+                            }
+                        }
+                    }
                     int new_idx = PROFILE_BALANCED;
                     if (strcmp(pname, "battery")     == 0) new_idx = PROFILE_BATTERY;
                     if (strcmp(pname, "performance") == 0) new_idx = PROFILE_PERFORMANCE;
@@ -2654,18 +2667,11 @@ int main(int argc, char **argv) {
                         fsm_session_reset(&fsm);
                         fsm.plan.ac_used = 0;  /* budget reset on new session */
 
-                        /* V42: distinguish auto-battery's own profile switches from
-                         * user-initiated ones. If auto_battery_active=1 and we just
-                         * triggered the switch (within last ~5s), keep state intact;
-                         * otherwise (user manual switch) clear auto-battery state. */
-                        if (fsm.auto_battery_active) {
-                            time_t _now_t = time(NULL);
-                            if (fsm.auto_battery_last_action == 0 ||
-                                (_now_t - fsm.auto_battery_last_action) > 5) {
-                                asb_log("auto_battery: cleared by user profile change");
-                                fsm.auto_battery_active = 0;
-                                fsm.auto_battery_restore_idx = -1;
-                            }
+                        if (fsm.auto_battery_active && !_is_auto) {
+                            asb_log("auto_battery: cleared by user profile change");
+                            fsm.auto_battery_active = 0;
+                            fsm.auto_battery_restore_idx = -1;
+                            fsm_auto_battery_persist(&fsm);
                         }
 
                         fsm.profile_idx = new_idx;
@@ -3008,11 +3014,12 @@ int main(int argc, char **argv) {
                     fsm.auto_battery_restore_idx = fsm.profile_idx;
                     fsm.auto_battery_active = 1;
                     fsm.auto_battery_last_action = _now_t;
-                    asb_log("auto_battery: trigger bat=%d%% (low=%d) saving=%d -> spawning apply_profile.sh battery",
+                    fsm_auto_battery_persist(&fsm);
+                    asb_log("auto_battery: trigger bat=%d%% (low=%d) saving=%d -> spawning apply_profile.sh battery auto",
                             metrics.bat.capacity_pct,
                             g_asb_cfg.auto_battery_low_pct,
                             fsm.auto_battery_restore_idx);
-                    int _rc = system("sh /data/adb/modules/AutoSystemBoost/apply_profile.sh battery >/dev/null 2>&1 &");
+                    int _rc = system("sh /data/adb/modules/AutoSystemBoost/apply_profile.sh battery auto >/dev/null 2>&1 &");
                     (void)_rc;
                 } else if (fsm.auto_battery_active &&
                            metrics.bat.capacity_pct >= g_asb_cfg.auto_battery_high_pct &&
@@ -3024,12 +3031,13 @@ int main(int argc, char **argv) {
                     fsm.auto_battery_active = 0;
                     fsm.auto_battery_restore_idx = -1;
                     fsm.auto_battery_last_action = _now_t;
-                    asb_log("auto_battery: restore bat=%d%% (high=%d) -> spawning apply_profile.sh %s",
+                    fsm_auto_battery_persist(&fsm);
+                    asb_log("auto_battery: restore bat=%d%% (high=%d) -> spawning apply_profile.sh %s auto",
                             metrics.bat.capacity_pct,
                             g_asb_cfg.auto_battery_high_pct, _pname);
                     char _cmd[160];
                     snprintf(_cmd, sizeof(_cmd),
-                             "sh /data/adb/modules/AutoSystemBoost/apply_profile.sh %s >/dev/null 2>&1 &",
+                             "sh /data/adb/modules/AutoSystemBoost/apply_profile.sh %s auto >/dev/null 2>&1 &",
                              _pname);
                     int _rc = system(_cmd);
                     (void)_rc;
