@@ -435,12 +435,34 @@ asb_prune_module() {
   local prop="$MODPATH/system.prop"
   local pfd="$MODPATH/post-fs-data.sh"
 
-  for c in BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY; do
+  for c in AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY; do
     asb_drop_block_if_off "$c" "$svc"
     asb_drop_block_if_off "$c" "$prop"
     asb_drop_block_if_off "$c" "$pfd"
   done
 
+
+  if [ "${ASB_AUDIO}" != "true" ]; then
+    rm -f  "$MODPATH/system/etc/audio_effects.xml" 2>/dev/null || true
+    rm -rf "$MODPATH/system/vendor/etc/audio" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/audio_effects_config.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/audio_policy_configuration.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/a2dp_audio_policy_configuration.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/bluetooth_qti_audio_policy_configuration.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/bluetooth_qti_hearing_aid_audio_policy_configuration.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/virtual_audio_policy_configuration.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/mixer_paths.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/ftm_mixer_paths.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/media_codecs_c2_audio.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/media_codecs_google_audio.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/media_codecs_google_c2_audio.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/etc/media_codecs_vendor_audio.xml" 2>/dev/null || true
+    rm -rf "$MODPATH/system/vendor/odm/etc/audio" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/odm/etc/audio_effects_config.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/odm/etc/mixer_paths.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/odm/etc/ftm_mixer_paths.xml" 2>/dev/null || true
+    rm -f  "$MODPATH/system/vendor/odm/etc/virtual_audio_policy_configuration.xml" 2>/dev/null || true
+  fi
 
   if [ "${ASB_BT}" != "true" ]; then
     rm -f "$MODPATH/system/etc/permissions/Bluetooth.xml" 2>/dev/null || true
@@ -502,6 +524,7 @@ asb_prune_module() {
   find "$MODPATH/system" -type d -empty -print -delete 2>/dev/null || true
 }
 
+ASB_AUDIO=true
 ASB_BT=true
 ASB_CAMERA=true
 ASB_CPU=true
@@ -518,6 +541,7 @@ ASB_SECURITY=true
 
 asb_install_prebuilt_governor
 asb_big_banner
+asb_choose_cat AUDIO  "$ASB_MENU_AUDIO"
 asb_choose_cat BT     "$ASB_MENU_BT"
 asb_choose_cat CAMERA "$ASB_MENU_CAMERA"
 asb_choose_cat CPU    "$ASB_MENU_CPU"
@@ -545,6 +569,7 @@ if [ "$ASB_IS_OP15" != "true" ]; then
 fi
 
 cat > "$MODPATH/features.conf" <<EOF
+AUDIO=$([ "$ASB_AUDIO" = "true" ] && echo 1 || echo 0)
 BT=$([ "$ASB_BT" = "true" ] && echo 1 || echo 0)
 CAMERA=$([ "$ASB_CAMERA" = "true" ] && echo 1 || echo 0)
 CPU=$([ "$ASB_CPU" = "true" ] && echo 1 || echo 0)
@@ -1312,6 +1337,11 @@ EOF
 	if [ -f "$MODPATH/config/governor.conf" ]; then
 	  cp -f "$MODPATH/config/governor.conf" "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
 	  chmod 644 "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
+	fi
+
+	if [ -d "$MODPATH/config" ]; then
+	  echo 14 > "$MODPATH/config/.schema_version" 2>/dev/null || true
+	  chmod 644 "$MODPATH/config/.schema_version" 2>/dev/null || true
 	fi
 
 	_asb_ver="$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
