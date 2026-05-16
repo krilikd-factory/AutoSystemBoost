@@ -27,10 +27,16 @@ done
 
 MODE="direct"
 PROFILE="${1:-balanced}"
-[ "$1" = "--worker" ] && { MODE="worker"; PROFILE="${2:-balanced}"; }
+PROFILE_FLAG=""
+[ "$1" = "--worker" ] && { MODE="worker"; PROFILE="${2:-balanced}"; PROFILE_FLAG="${3:-}"; }
+[ "$MODE" = "direct" ] && PROFILE_FLAG="${2:-}"
 case "$PROFILE" in
   performance|balanced|battery) : ;;
   *) PROFILE="balanced" ;;
+esac
+case "$PROFILE_FLAG" in
+  auto) : ;;
+  *) PROFILE_FLAG="" ;;
 esac
 
 kill_prev_worker() {
@@ -65,9 +71,9 @@ update_desc_now() {
 
 spawn_worker() {
   kill_prev_worker
-  nohup /system/bin/sh "$MODDIR/apply_profile.sh" --worker "$PROFILE" >/dev/null 2>&1 &
+  nohup /system/bin/sh "$MODDIR/apply_profile.sh" --worker "$PROFILE" "$PROFILE_FLAG" >/dev/null 2>&1 &
   echo $! > "$PIDFILE" 2>/dev/null || true
-  asb_log "scheduled profile=$PROFILE moddir=$MODDIR"
+  asb_log "scheduled profile=$PROFILE flag=$PROFILE_FLAG moddir=$MODDIR"
 }
 
 notify_governor() {
@@ -77,7 +83,13 @@ notify_governor() {
   # session metrics attributed to wrong profile, state file shows stale profile.
   _gov="$MODDIR/bin/asb"
   [ -x "$_gov" ] || _gov="$MODDIR/bin/$(uname -m)/asb"
-  [ -x "$_gov" ] && "$_gov" "profile:$PROFILE" >/dev/null 2>&1 &
+  if [ -x "$_gov" ]; then
+    if [ "$PROFILE_FLAG" = "auto" ]; then
+      "$_gov" "profile:${PROFILE}:auto" >/dev/null 2>&1 &
+    else
+      "$_gov" "profile:$PROFILE" >/dev/null 2>&1 &
+    fi
+  fi
 }
 
 quick_return_or_spawn() {

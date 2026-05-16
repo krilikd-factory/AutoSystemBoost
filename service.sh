@@ -21,13 +21,13 @@ asb_load_profile
 
 # Schema-versioned config migration. Persisted /data/.../governor.conf carries
 # values from older module versions that may silently disadvantage users with
-# stale tunings. On schema bump, backup user's config and copy fresh defaults
-# from the sealed reference governor.conf.shipped.
+# stale tunings. On schema bump, back up user's config, then add only the
+# missing keys with shipped defaults, preserving all user-edited values.
 asb_migrate_governor_conf() {
   local _expected_schema=14
   local _conf_dir="$MODDIR/config"
   local _user_conf="$_conf_dir/governor.conf"
-  local _shipped_conf="$MODDIR/config/governor.conf"
+  local _shipped_conf="$_conf_dir/governor.conf.shipped"
   local _schema_marker="$_conf_dir/.schema_version"
 
   [ -f "$_user_conf" ] || return 0
@@ -45,33 +45,54 @@ asb_migrate_governor_conf() {
     return 0
   fi
 
-  asb_log "config_migrate: schema=$_current_schema -> $_expected_schema, migrating"
+  asb_log "config_migrate: schema=$_current_schema -> $_expected_schema, additive merge"
+
+  if [ ! -f "$_shipped_conf" ]; then
+    asb_log "config_migrate: WARN no governor.conf.shipped found, leaving existing config"
+    echo "$_expected_schema" > "$_schema_marker" 2>/dev/null
+    chmod 644 "$_schema_marker" 2>/dev/null || true
+    return 0
+  fi
 
   local _ts="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo manual)"
   local _backup="$_user_conf.bak.schema${_current_schema}.${_ts}"
-  if cp "$_user_conf" "$_backup" 2>/dev/null; then
-    asb_log "config_migrate: backup saved at $_backup"
-  else
+  if ! cp "$_user_conf" "$_backup" 2>/dev/null; then
     asb_log "config_migrate: WARN could not create backup at $_backup, aborting"
     return 1
   fi
 
-  if [ -f "$_conf_dir/governor.conf.shipped" ]; then
-    if cp "$_conf_dir/governor.conf.shipped" "$_user_conf" 2>/dev/null; then
-      asb_log "config_migrate: copied shipped defaults from governor.conf.shipped"
+  local _added=0 _kept=0
+  local _tmp="$_user_conf.merge.$$"
+  cp "$_user_conf" "$_tmp" 2>/dev/null || { rm -f "$_tmp"; return 1; }
+
+  local _line _k
+  while IFS= read -r _line || [ -n "$_line" ]; do
+    case "$_line" in
+      ''|\#*) continue ;;
+      *=*) _k="${_line%%=*}" ;;
+      *) continue ;;
+    esac
+    if grep -q "^[[:space:]]*${_k}=" "$_tmp" 2>/dev/null; then
+      _kept=$((_kept + 1))
     else
-      asb_log "config_migrate: WARN could not copy shipped, aborting"
-      return 1
+      printf '%s\n' "$_line" >> "$_tmp"
+      _added=$((_added + 1))
     fi
+  done < "$_shipped_conf"
+
+  if mv "$_tmp" "$_user_conf" 2>/dev/null; then
+    chmod 644 "$_user_conf" 2>/dev/null || true
+    asb_log "config_migrate: kept $_kept user values, added $_added new keys (backup: $_backup)"
   else
-    asb_log "config_migrate: WARN no governor.conf.shipped found, leaving existing config"
+    rm -f "$_tmp" 2>/dev/null
+    asb_log "config_migrate: WARN merge write failed, original preserved"
     return 1
   fi
 
   echo "$_expected_schema" > "$_schema_marker" 2>/dev/null
   chmod 644 "$_schema_marker" 2>/dev/null || true
 
-  asb_log "config_migrate: complete, schema=$_expected_schema (backup at $_backup)"
+  asb_log "config_migrate: complete, schema=$_expected_schema"
 }
 asb_migrate_governor_conf
 
@@ -722,6 +743,22 @@ apply_gps_hygiene() {
 }
 asb_feature_enabled GPS && apply_gps_hygiene
 # ASB:GPS:END
+# ASB:AUDIO:BEGIN
+apply_audio_runtime() {
+  setprop persist.audio.hifi.int_codec true 2>/dev/null || true
+  setprop persist.vendor.audio.hifi.int_codec true 2>/dev/null || true
+  setprop persist.audio.uhqa 1 2>/dev/null || true
+  setprop persist.vendor.audio.uhqa true 2>/dev/null || true
+  setprop audio.matrix.limiter.enable false 2>/dev/null || true
+  setprop vendor.audio.matrix.limiter.enable false 2>/dev/null || true
+  setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
+  setprop audio.hal.output.suspend.supported false 2>/dev/null || true
+  setprop vendor.qc2audio.suspend.enabled false 2>/dev/null || true
+  setprop persist.vendor.audio.aec_ref.enable false 2>/dev/null || true
+  setprop vendor.audio.feature.aec_ref.enable false 2>/dev/null || true
+}
+asb_feature_enabled AUDIO && apply_audio_runtime
+# ASB:AUDIO:END
 apply_bt_runtime() {
   setprop persist.bluetooth.a2dp_offload.disabled false 2>/dev/null || true
   setprop persist.vendor.bluetooth.a2dp_offload.disabled false 2>/dev/null || true
