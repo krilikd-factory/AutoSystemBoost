@@ -28,6 +28,42 @@ jobs:
           done
           echo "All required files present."
 
+      - name: Validate profile bounds source-of-truth
+        run: |
+          echo "Running tools/gen_bounds.sh to verify generated artefacts are up-to-date..."
+          if [ ! -f config/profile_bounds.conf ]; then
+            echo "ERROR: config/profile_bounds.conf missing"
+            exit 1
+          fi
+          if [ ! -f tools/gen_bounds.sh ]; then
+            echo "ERROR: tools/gen_bounds.sh missing"
+            exit 1
+          fi
+          cp config/profile_bounds.generated.sh /tmp/_bounds_sh.before 2>/dev/null || true
+          cp src/asb_fsm_bounds.generated.h    /tmp/_bounds_h.before  2>/dev/null || true
+          bash tools/gen_bounds.sh
+          if ! diff -q /tmp/_bounds_sh.before config/profile_bounds.generated.sh >/dev/null 2>&1 \
+            || ! diff -q /tmp/_bounds_h.before src/asb_fsm_bounds.generated.h >/dev/null 2>&1; then
+            echo "ERROR: generated bounds files are STALE"
+            echo "       config/profile_bounds.conf changed but generated files were not regenerated."
+            echo "       Run 'bash tools/gen_bounds.sh' locally and commit the resulting files."
+            exit 1
+          fi
+          echo "Generated bounds artefacts up-to-date."
+
+      - name: Run asb_lint.sh
+        run: |
+          echo "Running tools/asb_lint.sh against source tree..."
+          if [ ! -f tools/asb_lint.sh ]; then
+            echo "WARNING: tools/asb_lint.sh missing — skipping"
+            exit 0
+          fi
+          MODDIR="$(pwd)" bash tools/asb_lint.sh || {
+            echo "ERROR: asb_lint.sh reported errors"
+            exit 1
+          }
+          echo "Lint passed."
+
       - name: Install tools
         run: |
           sudo apt-get update -qq
@@ -93,21 +129,24 @@ jobs:
           mkdir -p "$PKG_DIR"
 
           rsync -a ./ "$PKG_DIR"/ \
-            --exclude '.git'          \
-            --exclude '.github'       \
-            --exclude 'android-ndk*'  \
-            --exclude '.pkg'          \
-            --exclude '*.zip'         \
-            --exclude '__MACOSX'      \
-            --exclude '*.DS_Store'    \
-            --exclude 'src'           \
-            --exclude 'tools'           \
-            --exclude 'bin/arm64-v8a' \
-            --exclude 'banner.png'    \
-            --exclude 'CHANGELOG.md'  \
-            --exclude 'README.md'     \
-            --exclude 'README.ru.md'  \
-            --exclude 'update.json'
+            --exclude '.git'                          \
+            --exclude '.github'                       \
+            --exclude 'android-ndk*'                  \
+            --exclude '.pkg'                          \
+            --exclude '*.zip'                         \
+            --exclude '__MACOSX'                      \
+            --exclude '*.DS_Store'                    \
+            --exclude 'src'                           \
+            --exclude 'bin/arm64-v8a'                 \
+            --exclude 'banner.png'                    \
+            --exclude 'CHANGELOG.md'                  \
+            --exclude 'README.md'                     \
+            --exclude 'README.ru.md'                  \
+            --exclude 'update.json'                   \
+            --exclude 'RELEASE_CHECKLIST.md'          \
+            --exclude 'docs'                          \
+            --exclude 'tools/gen_bounds.sh'           \
+            --exclude 'config/profile_bounds.conf'
 
           rm -rf "$PKG_DIR/bin"
           mkdir -p "$PKG_DIR/bin"
