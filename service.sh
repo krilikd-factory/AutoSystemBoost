@@ -759,53 +759,98 @@ apply_audio_runtime() {
 }
 asb_feature_enabled AUDIO && apply_audio_runtime
 # ASB:AUDIO:END
+# V43 recovery: previous V43 builds disabled com.oplus.aimemory,
+# com.oplus.deepthinker, com.oplus.athena under BG_TRIM. This broke the
+# "AI Suggestions" widget and the 3D lockscreen wallpaper. Re-enable these
+# packages unconditionally at every boot. Runs regardless of BG_TRIM state
+# because the damage may have been done by an earlier V43 install where the
+# user has now updated, or where they tried BG_TRIM=ON and want to roll back
+# only these three packages while keeping the rest of BG_TRIM active.
+asb_recover_ai_packages() {
+  for _p in com.oplus.aimemory com.oplus.deepthinker com.oplus.athena \
+            com.oplus.pantanal.ums com.oplus.appsense \
+            com.oplus.healthservice com.oplus.romupdate \
+            com.oplus.wirelesssettings com.oplus.qualityprotect \
+            com.oplus.appplatform com.oplus.appbooster \
+            com.oplus.powermonitor com.oplus.nas com.oplus.nhs \
+            com.oplus.epona com.oplus.sauhelper com.oplus.sau; do
+    pm enable "$_p" >/dev/null 2>&1 || true
+  done
+  # Restore stock Doze for users who had aggressive constants set by initial V43.
+  # Deleting the setting reverts to Android defaults from the device's framework.
+  settings delete global device_idle_constants >/dev/null 2>&1 || true
+  # Re-enable adaptive WiFi wakeup. WiFi scan we still leave at 0 since BG_TRIM
+  # always sets it back to 0 when enabled. Users with BG_TRIM=OFF get default.
+  settings delete global network_stats_poll_interval >/dev/null 2>&1 || true
+}
+asb_recover_ai_packages
 # ASB:BG_TRIM:BEGIN
 apply_bg_trim_runtime() {
-  for _p in com.oplus.midas com.oplus.qualityprotect com.oplus.athena \
-            com.oplus.appplatform com.oplus.appsense com.oplus.deepthinker \
-            com.oplus.appbooster com.oplus.metis com.oplus.aimemory \
-            com.oplus.romupdate com.oplus.olc com.oplus.onetrace \
-            com.oplus.powermonitor com.oplus.crashbox com.oplus.healthservice \
-            com.oplus.logkit com.oplus.epona com.oplus.sauhelper com.oplus.sau \
-            com.oplus.nas com.oplus.nhs com.oplus.trafficmonitor \
-            com.oplus.statistics.rom com.oplus.wirelesssettings; do
+  # MINIMAL-SAFE list: only pure telemetry/analytics uploaders. Anything that
+  # might be a dependency of a user-visible feature has been moved out.
+  #
+  # NEVER touched (with reasons):
+  #   com.oplus.battery         — charging control
+  #   com.oplus.cosa            — camera optimisation
+  #   com.oplus.aimemory        — AI Suggestions widget
+  #   com.oplus.deepthinker     — 3D lockscreen wallpaper engine
+  #   com.oplus.athena          — AI engine for smart features
+  #   com.oplus.pantanal.ums    — smart suggestions backbone
+  #   com.oplus.appsense        — AI widget data backbone
+  #   com.oplus.healthservice   — Health services (steps, heart rate, workouts)
+  #   com.oplus.romupdate       — vendor config patches
+  #   com.oplus.wirelesssettings — wireless settings UI
+  #   com.oplus.qualityprotect  — charging/signal protection (unclear, kept safe)
+  #   com.oplus.appplatform     — platform framework dependency
+  #   com.oplus.appbooster      — background task scheduler
+  #   com.oplus.powermonitor    — power stats backend for Settings
+  #   com.oplus.nas             — Network Assistance (VoLTE/5G handoff)
+  #   com.oplus.nhs             — Network Health (signal quality)
+  #   com.oplus.epona           — IPC framework (other apps depend on it)
+  #   com.oplus.sauhelper / sau — System App Update
+  #   biometrics, vibrator, display feature, charger HAL
+  for _p in com.oplus.midas \
+            com.oplus.metis \
+            com.oplus.onetrace \
+            com.oplus.olc \
+            com.oplus.statistics.rom \
+            com.oplus.crashbox \
+            com.oplus.logkit \
+            com.oplus.trafficmonitor; do
     pm disable-user --user 0 "$_p" >/dev/null 2>&1 || true
   done
-  for _svc in opluscvtmanager oplus_kevent oplus_gaia \
-              vendor.oplus.hardware.cammidasservice-V1-service \
-              vendor.oplus.hardware.olc2-V3-service \
-              vendor-oplus-hardware-power-powermonitor-V1-service \
-              vendor-oplus-hardware-engineer-V1-service \
-              vendor.oplus.hardware.urcc-service; do
+  # Vendor HAL services — only stop pure telemetry uploaders, never functional ones.
+  # urcc-service has high CPU time in user captures — it's an active functional
+  # service, not idle telemetry. Same for powermonitor (provides power stats to
+  # Settings). Both kept untouched.
+  for _svc in vendor.oplus.hardware.cammidasservice-V1-service \
+              vendor.oplus.hardware.olc2-V3-service; do
     stop "$_svc" >/dev/null 2>&1 || true
   done
-  pkill -9 -f oplus_gaia >/dev/null 2>&1 || true
-  pkill -9 -f cammidasservice >/dev/null 2>&1 || true
-  setprop persist.sys.oplus.gaia.enable 0 2>/dev/null || true
-  setprop persist.sys.midasd.enable 0 2>/dev/null || true
-  setprop persist.sys.midasd.start 0 2>/dev/null || true
-  for _p in com.google.android.gms com.google.android.gsf \
-            com.google.android.googlequicksearchbox com.android.vending \
-            com.google.android.configupdater com.google.android.partnersetup \
-            com.google.android.apps.maps com.google.android.youtube; do
+  # Wakeup throttling — only apps known to be wakeup-noisy with no critical
+  # user-visible feature lost. Core Google services (gms/gsf) NOT throttled —
+  # they handle push notifications, sync, FCM. Throttling them would delay
+  # messenger notifications and break account sync.
+  for _p in com.android.vending \
+            com.google.android.partnersetup \
+            com.google.android.youtube; do
     am set-standby-bucket "$_p" rare >/dev/null 2>&1 || true
   done
-  for _p in com.facebook.katana com.facebook.orca com.instagram.android \
-            com.whatsapp com.snapchat.android com.zhiliaoapp.musically \
-            com.discord com.spotify.music com.netflix.mediaclient; do
+  # Social/media apps where standby-rare is broadly accepted to save battery
+  # without breaking foreground use. User can switch them to "active" via Settings
+  # → Battery → App standby buckets if they want notifications faster.
+  for _p in com.facebook.katana com.instagram.android \
+            com.snapchat.android com.zhiliaoapp.musically \
+            com.spotify.music com.netflix.mediaclient; do
     am set-standby-bucket "$_p" rare >/dev/null 2>&1 || true
   done
-  for _p in com.google.android.gms com.google.android.googlequicksearchbox \
-            com.facebook.katana com.facebook.orca com.instagram.android; do
-    cmd appops set "$_p" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 || true
-  done
+  # WiFi scan throttling — saves real battery, no user feature broken.
   settings put global wifi_scan_always_enabled 0 >/dev/null 2>&1 || true
   settings put global wifi_wakeup_enabled 0 >/dev/null 2>&1 || true
-  settings put global network_stats_poll_interval 7200000 >/dev/null 2>&1 || true
-  settings put global device_idle_constants \
-"light_after_inactive_to=20000,light_pre_idle_to=180000,light_idle_to=600000,light_idle_factor=2.0,max_light_idle_to=900000,light_idle_maintenance_min_budget=60000,light_idle_maintenance_max_budget=120000,min_time_to_alarm=60000,max_temp_app_whitelist_duration=300000,mms_temp_app_whitelist_duration=60000,sms_temp_app_whitelist_duration=20000,inactive_to=600000,sensing_to=120000,locating_to=30000,motion_inactive_to=600000,idle_after_inactive_to=120000,idle_pending_to=300000,max_idle_pending_to=600000,idle_pending_factor=2.0,idle_to=1800000,max_idle_to=21600000,idle_factor=2.0" \
-    >/dev/null 2>&1 || true
-  dumpsys deviceidle enable >/dev/null 2>&1 || true
+  # Doze constants intentionally NOT touched. Aggressive Doze tuning can delay
+  # notifications by up to 30 minutes which is user-surprising. Stock Android Doze
+  # already handles screen-off battery well. If a user wants more aggressive Doze,
+  # they can install a dedicated module for that.
 }
 asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
 # ASB:BG_TRIM:END
