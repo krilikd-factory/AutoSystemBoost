@@ -773,7 +773,8 @@ asb_recover_ai_packages() {
             com.oplus.wirelesssettings com.oplus.qualityprotect \
             com.oplus.appplatform com.oplus.appbooster \
             com.oplus.powermonitor com.oplus.nas com.oplus.nhs \
-            com.oplus.epona com.oplus.sauhelper com.oplus.sau; do
+            com.oplus.epona com.oplus.sauhelper com.oplus.sau \
+            com.oplus.metis com.oplus.statistics.rom; do
     pm enable "$_p" >/dev/null 2>&1 || true
   done
   # Restore stock Doze for users who had aggressive constants set by initial V43.
@@ -808,12 +809,12 @@ apply_bg_trim_runtime() {
   #   com.oplus.nhs             — Network Health (signal quality)
   #   com.oplus.epona           — IPC framework (other apps depend on it)
   #   com.oplus.sauhelper / sau — System App Update
+  #   com.oplus.metis           — internal observability used by other components
+  #   com.oplus.statistics.rom  — ROM stats; tied into OnePlus account/sync
   #   biometrics, vibrator, display feature, charger HAL
   for _p in com.oplus.midas \
-            com.oplus.metis \
             com.oplus.onetrace \
             com.oplus.olc \
-            com.oplus.statistics.rom \
             com.oplus.crashbox \
             com.oplus.logkit \
             com.oplus.trafficmonitor; do
