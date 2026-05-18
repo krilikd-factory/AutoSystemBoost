@@ -18,3 +18,5 @@ rm -rf /dev/.asb_profile_state 2>/dev/null
 rm -f /data/adb/asb_vendor_mounts.log 2>/dev/null
 rm -f /data/adb/asb_vendor_overlay_active 2>/dev/null
 rm -f /data/adb/asb_vendor_boot_counter 2>/dev/null
+# V43: /data/adb/asb_user_config is intentionally NOT removed here so user
+# category choices survive uninstall + reinstall. To wipe: rm by hand.
