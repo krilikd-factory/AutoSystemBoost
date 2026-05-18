@@ -5,6 +5,12 @@ ASB_TIMEOUT="! Time is up (10 seconds). Installation canceled."
 
 ASB_HELP="VOL+ = enable  |  VOL- = skip  |  10s timeout = cancel"
 
+ASB_CFG_FOUND_TITLE="Saved configuration found"
+ASB_CFG_FOUND_HINT="VOL+ = use saved  |  VOL- = re-select categories"
+ASB_CFG_USING_SAVED="Using saved configuration from:"
+ASB_CFG_RESELECT="Re-selecting categories..."
+ASB_CFG_SAVED_TO="Configuration saved to:"
+
 ASB_MENU_AUDIO=" 1) AUDIO (HAL/Codecs/Effects/Mixers)"
 ASB_MENU_BT="2) Bluetooth (A2DP/LE Audio/Codecs)"
 ASB_MENU_CAMERA="3) CAMERA (Photo/Video)"
@@ -19,6 +25,7 @@ ASB_MENU_RADIO_IMS="11) RADIO/IMS (VoLTE/VoNR/IMS auth)"
 ASB_MENU_DISPLAY="12) DISPLAY (CABL/DPPS/Backlight)"
 ASB_MENU_FPS="13) FPS (Frame rate caps/Recorder)"
 ASB_MENU_SECURITY="14) SECURITY (Perf events/Snapshots)"
+ASB_MENU_BG_TRIM="15) BG_TRIM (Telemetry + Wakeups + Doze)"
 
 ASB_DONE_TITLE="ASB"
 ASB_DONE_MSG="Module installed! Reboot required."

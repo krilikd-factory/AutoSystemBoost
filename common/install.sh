@@ -435,7 +435,7 @@ asb_prune_module() {
   local prop="$MODPATH/system.prop"
   local pfd="$MODPATH/post-fs-data.sh"
 
-  for c in AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY; do
+  for c in AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM; do
     asb_drop_block_if_off "$c" "$svc"
     asb_drop_block_if_off "$c" "$prop"
     asb_drop_block_if_off "$c" "$pfd"
@@ -538,23 +538,110 @@ ASB_RADIO_IMS=true
 ASB_DISPLAY=true
 ASB_FPS=true
 ASB_SECURITY=true
+ASB_BG_TRIM=false
 
 asb_install_prebuilt_governor
 asb_big_banner
-asb_choose_cat AUDIO  "$ASB_MENU_AUDIO"
-asb_choose_cat BT     "$ASB_MENU_BT"
-asb_choose_cat CAMERA "$ASB_MENU_CAMERA"
-asb_choose_cat CPU    "$ASB_MENU_CPU"
-asb_choose_cat VM     "$ASB_MENU_VM"
-asb_choose_cat NET    "$ASB_MENU_NET"
-asb_choose_cat WIFI   "$ASB_MENU_WIFI"
-asb_choose_cat GPS    "$ASB_MENU_GPS"
-asb_choose_cat KERNEL "$ASB_MENU_KERNEL"
-asb_choose_cat LOG    "$ASB_MENU_LOG"
-asb_choose_cat RADIO_IMS "$ASB_MENU_RADIO_IMS"
-asb_choose_cat DISPLAY   "$ASB_MENU_DISPLAY"
-asb_choose_cat FPS       "$ASB_MENU_FPS"
-asb_choose_cat SECURITY  "$ASB_MENU_SECURITY"
+
+# V43: config persistence layer
+# Saved config lives outside the module directory so it survives module
+# removal/reinstall. On install, we check for a saved set of category
+# choices and offer to reuse it instead of forcing the user through all
+# prompts again.
+ASB_USER_CFG="/data/adb/asb_user_config"
+ASB_CFG_USED_SAVED=0
+
+asb_apply_saved_config() {
+  # Read saved config and assign ASB_<CAT>=true/false. Tolerates unknown
+  # keys (older saved files won't have BG_TRIM — leaves default).
+  [ -f "$ASB_USER_CFG" ] || return 1
+  local _line _k _v
+  while IFS='=' read -r _k _v; do
+    case "$_k" in ''|\#*) continue ;; esac
+    case "$_k" in
+      AUDIO|BT|CAMERA|CPU|VM|NET|WIFI|GPS|KERNEL|LOG|RADIO_IMS|DISPLAY|FPS|SECURITY|BG_TRIM) : ;;
+      *) continue ;;
+    esac
+    case "$_v" in
+      1|true) eval "ASB_${_k}=true" ;;
+      0|false) eval "ASB_${_k}=false" ;;
+    esac
+  done < "$ASB_USER_CFG"
+  return 0
+}
+
+asb_save_user_config() {
+  mkdir -p "$(dirname "$ASB_USER_CFG")" 2>/dev/null || true
+  {
+    echo "# AutoSystemBoost saved user config — auto-generated at install"
+    echo "# Edit by hand only if you know what you're doing"
+    echo "# Used on next install/update to skip the 15 category prompts"
+    echo "saved_at=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo unknown)"
+    echo "saved_from_version=$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
+    for c in AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM; do
+      eval "_v=\$ASB_${c}"
+      case "$_v" in
+        true) printf '%s=1\n' "$c" ;;
+        *) printf '%s=0\n' "$c" ;;
+      esac
+    done
+  } > "$ASB_USER_CFG" 2>/dev/null
+  chmod 644 "$ASB_USER_CFG" 2>/dev/null || true
+  ui_print "  ${ASB_CFG_SAVED_TO:-Config saved to:} $ASB_USER_CFG"
+}
+
+# Decide: ask user about saved config, or run prompts from scratch
+if [ -f "$ASB_USER_CFG" ]; then
+  _saved_at="$(grep '^saved_at=' "$ASB_USER_CFG" 2>/dev/null | head -1 | cut -d= -f2-)"
+  _saved_ver="$(grep '^saved_from_version=' "$ASB_USER_CFG" 2>/dev/null | head -1 | cut -d= -f2-)"
+  ui_print ""
+  ui_print "================================================"
+  ui_print "  ${ASB_CFG_FOUND_TITLE:-Saved configuration found}"
+  ui_print "    from: ${_saved_at:-unknown date}"
+  ui_print "    ver:  ${_saved_ver:-unknown version}"
+  ui_print "  ${ASB_CFG_FOUND_HINT:-VOL+ = use saved | VOL- = re-select}"
+  ui_print "================================================"
+  _cfg_key="$(asb_wait_key_timed 10)"
+  case "$_cfg_key" in
+    up)
+      ui_print "  ${ASB_CFG_USING_SAVED:-Using saved configuration from:} ${_saved_at:-unknown}"
+      if asb_apply_saved_config; then
+        ASB_CFG_USED_SAVED=1
+      fi
+      ;;
+    down)
+      ui_print "  ${ASB_CFG_RESELECT:-Re-selecting categories...}"
+      ;;
+    *)
+      # Timeout: be conservative — use saved config rather than abort.
+      # User saw the prompt, didn't react: they likely wanted no surprises.
+      ui_print "  ${ASB_CFG_USING_SAVED:-Using saved configuration from:} ${_saved_at:-unknown} (timeout default)"
+      if asb_apply_saved_config; then
+        ASB_CFG_USED_SAVED=1
+      fi
+      ;;
+  esac
+fi
+
+if [ "$ASB_CFG_USED_SAVED" -ne 1 ]; then
+  asb_choose_cat AUDIO  "$ASB_MENU_AUDIO"
+  asb_choose_cat BT     "$ASB_MENU_BT"
+  asb_choose_cat CAMERA "$ASB_MENU_CAMERA"
+  asb_choose_cat CPU    "$ASB_MENU_CPU"
+  asb_choose_cat VM     "$ASB_MENU_VM"
+  asb_choose_cat NET    "$ASB_MENU_NET"
+  asb_choose_cat WIFI   "$ASB_MENU_WIFI"
+  asb_choose_cat GPS    "$ASB_MENU_GPS"
+  asb_choose_cat KERNEL "$ASB_MENU_KERNEL"
+  asb_choose_cat LOG    "$ASB_MENU_LOG"
+  asb_choose_cat RADIO_IMS "$ASB_MENU_RADIO_IMS"
+  asb_choose_cat DISPLAY   "$ASB_MENU_DISPLAY"
+  asb_choose_cat FPS       "$ASB_MENU_FPS"
+  asb_choose_cat SECURITY  "$ASB_MENU_SECURITY"
+  asb_choose_cat BG_TRIM   "$ASB_MENU_BG_TRIM"
+fi
+
+asb_save_user_config
 
 asb_detect_compat
 if [ "$ASB_IS_OP15" = "true" ]; then
@@ -583,6 +670,7 @@ RADIO_IMS=$([ "$ASB_RADIO_IMS" = "true" ] && echo 1 || echo 0)
 DISPLAY=$([ "$ASB_DISPLAY" = "true" ] && echo 1 || echo 0)
 FPS=$([ "$ASB_FPS" = "true" ] && echo 1 || echo 0)
 SECURITY=$([ "$ASB_SECURITY" = "true" ] && echo 1 || echo 0)
+BG_TRIM=$([ "$ASB_BG_TRIM" = "true" ] && echo 1 || echo 0)
 VENDOR_OVERLAY=1
 EOF
 
