@@ -247,7 +247,7 @@ done
 echo
 echo "🔧 Features"
 FEAT="$MODDIR/features.conf"
-KNOWN_FEATURES="AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY VENDOR_OVERLAY"
+KNOWN_FEATURES="AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY"
 if [ -f "$FEAT" ]; then
   F_DUPES="$(awk -F= '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {k=$1; gsub(/[[:space:]]+$/, "", k); print k}' "$FEAT" | sort | uniq -d)"
   [ -n "$F_DUPES" ] && warn "duplicate feature keys: $F_DUPES" || ok "no duplicate feature keys"
