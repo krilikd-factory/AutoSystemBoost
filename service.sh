@@ -19,10 +19,6 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 
 asb_load_profile
 
-# Schema-versioned config migration. Persisted /data/.../governor.conf carries
-# values from older module versions that may silently disadvantage users with
-# stale tunings. On schema bump, back up user's config, then add only the
-# missing keys with shipped defaults, preserving all user-edited values.
 asb_migrate_governor_conf() {
   local _expected_schema=14
   local _conf_dir="$MODDIR/config"
@@ -95,6 +91,29 @@ asb_migrate_governor_conf() {
   asb_log "config_migrate: complete, schema=$_expected_schema"
 }
 asb_migrate_governor_conf
+
+
+asb_run_soterfix() {
+  local _t=0 _end _svc
+  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 300 ]; do
+    sleep 5
+    _t=$((_t + 5))
+  done
+  [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || return 0
+  pm path com.tencent.soter.soterserver >/dev/null 2>&1 || return 0
+  _svc="$(getprop init.svc.vendor.soter 2>/dev/null)"
+  [ -n "$_svc" ] || return 0
+  _end=$(( $(date +%s) + 300 ))
+  while [ "$(date +%s)" -lt "$_end" ]; do
+    stop vendor.soter >/dev/null 2>&1 || true
+    sleep 1
+    pm clear com.tencent.soter.soterserver >/dev/null 2>&1 || true
+    start vendor.soter >/dev/null 2>&1 || true
+    sleep 4
+  done
+  asb_log "soterfix: completed"
+}
+(asb_run_soterfix) >/dev/null 2>&1 &
 
 (
   _t=0
@@ -384,7 +403,17 @@ apply_vm() {
   sysctlw vm.dirty_expire_centisecs $_P_DEXP
   sysctlw vm.dirty_writeback_centisecs $_P_DWB
   sysctlw vm.vfs_cache_pressure $_P_VFS
-  [ -e /proc/sys/vm/compaction_proactiveness ] && sysctlw vm.compaction_proactiveness 0
+
+  if [ -e /proc/sys/vm/compaction_proactiveness ]; then
+    case "$ASB_PROFILE" in
+      performance) sysctlw vm.compaction_proactiveness 0 ;;
+      battery)     sysctlw vm.compaction_proactiveness 20 ;;
+      *)           sysctlw vm.compaction_proactiveness 10 ;;
+    esac
+  fi
+
+  [ -w /sys/kernel/mm/lru_gen/enabled ] && echo 7 > /sys/kernel/mm/lru_gen/enabled 2>/dev/null
+
   [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval $_P_STATINT
   case "$ASB_PROFILE" in
     performance) writef_retry /proc/sys/vm/page-cluster 0 1 0 || true ;;
@@ -759,39 +788,6 @@ apply_audio_runtime() {
 }
 asb_feature_enabled AUDIO && apply_audio_runtime
 # ASB:AUDIO:END
-# V43 recovery: previous V43 builds disabled com.oplus.aimemory,
-# com.oplus.deepthinker, com.oplus.athena under BG_TRIM. This broke the
-# "AI Suggestions" widget and the 3D lockscreen wallpaper. Re-enable these
-# packages unconditionally at every boot. Runs regardless of BG_TRIM state
-# because the damage may have been done by an earlier V43 install where the
-# user has now updated, or where they tried BG_TRIM=ON and want to roll back
-# only these three packages while keeping the rest of BG_TRIM active.
-# V43 OnePlus feature recovery hook.
-#
-# Design principle:
-#   This hook does NOT track "what we ourselves disabled". It just enforces
-#   the desired state — packages we know are needed for OnePlus features must
-#   be enabled, period. `pm enable` on an already-enabled package is a no-op,
-#   so this is safe to run every boot regardless of state.
-#
-# Why this matters:
-#   Users often have other modules, manual `pm disable` history, or stale
-#   state from older ASB versions. A recovery hook that only restores "what
-#   we ourselves disabled" misses these. The current hook acts as a positive
-#   contract: "after ASB boot, these OnePlus features are guaranteed enabled."
-#
-# Categories covered:
-#   1. Smart features (AI Suggestions widget, 3D wallpaper, smart suggestions)
-#   2. Health / activity widgets (steps, heart rate, workouts)
-#   3. Network quality features (VoLTE/5G handoff, signal Health)
-#   4. System updates (vendor config, app updates)
-#   5. Platform / IPC dependencies
-#   6. Wireless settings UI
-#   7. Internal observability framework
-#   8. Customization framework (widgets, themes, wallpaper, AOD)
-#   9. Power stats in Settings
-#
-# Stock Doze and network polling overrides are also cleared here.
 asb_recover_oneplus_features() {
   for _p in com.oplus.aimemory com.oplus.deepthinker com.oplus.athena \
             com.oplus.pantanal.ums com.oplus.appsense \
@@ -805,89 +801,195 @@ asb_recover_oneplus_features() {
             com.oplus.customize.coreapp \
             com.oplus.customize.cust_manage \
             com.oplus.customize.systemui \
-            com.oplus.customize.opmconfigs; do
+            com.oplus.customize.opmconfigs \
+            com.oplus.gameopt \
+            com.oplus.gamespaceui; do
     pm enable "$_p" >/dev/null 2>&1 || true
   done
-  # Restore stock Doze (some earlier V43 builds set aggressive constants).
   settings delete global device_idle_constants >/dev/null 2>&1 || true
   settings delete global network_stats_poll_interval >/dev/null 2>&1 || true
 }
 asb_recover_oneplus_features
-# Keep the old name as an alias for any external scripts that call it.
 asb_recover_ai_packages() { asb_recover_oneplus_features; }
 # ASB:BG_TRIM:BEGIN
+
+
+
+_BG_TRIM_NEVER="
+com.android.systemui
+com.android.launcher3
+net.oneplus.launcher
+com.oneplus.launcher
+com.android.inputmethod.latin
+com.google.android.inputmethod.latin
+com.touchtype.swiftkey
+com.android.dialer
+com.google.android.dialer
+com.oneplus.camera
+com.oplus.camera
+com.android.camera2
+com.google.android.apps.maps
+com.waze
+"
+
+_BG_TRIM_MESSENGER="
+com.whatsapp
+org.telegram.messenger
+org.thunderdog.challegram
+com.viber.voip
+com.facebook.orca
+com.facebook.mlite
+com.discord
+com.signal.android
+org.thoughtcrime.securesms
+com.skype.raider
+com.tencent.mm
+com.microsoft.teams
+"
+
+_BG_TRIM_RECENT_WORKSET="
+com.adobe.lrmobile
+com.adobe.photoshopmix
+com.android.gallery3d
+com.coloros.gallery3d
+com.oneplus.gallery
+com.google.android.apps.photos
+com.spotify.music
+com.aspiro.tidal
+com.deezer.android.app
+com.google.android.youtube.music
+"
+
+_BG_TRIM_HEAVY="
+com.facebook.katana
+com.instagram.android
+com.snapchat.android
+com.zhiliaoapp.musically
+com.ss.android.ugc.trill
+com.netflix.mediaclient
+com.amazon.mShop.android.shopping
+com.aliexpress.buyer
+"
+
+_BG_TRIM_DISABLE="
+com.oplus.midas
+com.oplus.olc
+com.oplus.crashbox
+com.oplus.logkit
+"
+
+asb_bg_trim_is_top() {
+  local _pkg="$1"
+  local _top
+  _top=$(dumpsys activity activities 2>/dev/null \
+    | grep -m1 'topResumedActivity\|mResumedActivity' \
+    | grep -oE '[a-z][a-z0-9_.]+/[a-zA-Z0-9_.$]+' \
+    | head -1 | cut -d/ -f1)
+  [ "$_top" = "$_pkg" ]
+}
+
+asb_bg_trim_screen_off() {
+  local _state
+  _state=$(dumpsys power 2>/dev/null \
+    | grep -m1 'mWakefulness=' | cut -d= -f2)
+  case "$_state" in
+    Asleep|Dozing) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+asb_bg_trim_pkg() {
+  local _pkg="$1" _level="$2"
+  asb_bg_trim_is_top "$_pkg" && return 0
+  local _pids
+  _pids=$(pidof "$_pkg" 2>/dev/null)
+  [ -z "$_pids" ] && return 0
+  local _pid
+  for _pid in $_pids; do
+    [ "$_pid" -gt 100 ] 2>/dev/null && \
+      am send-trim-memory --user 0 "$_pid" "$_level" >/dev/null 2>&1
+  done
+}
+
+asb_bg_trim_apply_buckets() {
+  local _p
+  for _p in $_BG_TRIM_MESSENGER; do
+    am set-standby-bucket "$_p" active >/dev/null 2>&1 || true
+  done
+  for _p in $_BG_TRIM_RECENT_WORKSET; do
+    am set-standby-bucket "$_p" working_set >/dev/null 2>&1 || true
+  done
+  for _p in $_BG_TRIM_HEAVY; do
+    am set-standby-bucket "$_p" rare >/dev/null 2>&1 || true
+  done
+}
+
+asb_bg_trim_apply_memcg() {
+  [ -d /sys/fs/cgroup ] || return 0
+  [ -e /sys/fs/cgroup/cgroup.controllers ] || return 0
+
+  local _pkg _uid _path
+  for _pkg in $_BG_TRIM_NEVER $_BG_TRIM_MESSENGER; do
+    _uid=$(dumpsys package "$_pkg" 2>/dev/null \
+      | grep -m1 'userId=' | cut -d= -f2 | tr -d ' ')
+    case "$_uid" in ''|*[!0-9]*) continue ;; esac
+    _path=/sys/fs/cgroup/uid_${_uid}
+    [ -d "$_path" ] || continue
+    [ -w "$_path/memory.low" ] && echo 67108864 > "$_path/memory.low" 2>/dev/null
+  done
+
+  for _pkg in $_BG_TRIM_HEAVY; do
+    _uid=$(dumpsys package "$_pkg" 2>/dev/null \
+      | grep -m1 'userId=' | cut -d= -f2 | tr -d ' ')
+    case "$_uid" in ''|*[!0-9]*) continue ;; esac
+    _path=/sys/fs/cgroup/uid_${_uid}
+    [ -d "$_path" ] || continue
+    [ -w "$_path/memory.high" ] && echo 268435456 > "$_path/memory.high" 2>/dev/null
+  done
+}
+
+asb_bg_trim_oplus_tune() {
+  setprop persist.sys.oplus.athena.reclaim_enable 1 2>/dev/null
+  setprop persist.sys.oplus.athena.force_kill 0    2>/dev/null
+  setprop persist.sys.oplus.athena.limit_count 120 2>/dev/null
+  setprop persist.sys.oplus.deepthinker.reclaim_hint 1 2>/dev/null
+}
+
+asb_bg_trim_reclaim_once() {
+  local _p
+  for _p in $_BG_TRIM_HEAVY; do
+    asb_bg_trim_pkg "$_p" 40
+  done
+  if asb_bg_trim_screen_off; then
+    for _p in $_BG_TRIM_RECENT_WORKSET; do
+      asb_bg_trim_pkg "$_p" 20
+    done
+  fi
+}
+
 apply_bg_trim_runtime() {
-  # MINIMAL-SAFE list: only pure telemetry/analytics uploaders. Anything that
-  # might be a dependency of a user-visible feature has been moved out.
-  #
-  # NEVER touched (with reasons):
-  #   com.oplus.battery         — charging control
-  #   com.oplus.cosa            — camera optimisation
-  #   com.oplus.aimemory        — AI Suggestions widget
-  #   com.oplus.deepthinker     — 3D lockscreen wallpaper engine
-  #   com.oplus.athena          — AI engine for smart features
-  #   com.oplus.pantanal.ums    — smart suggestions backbone
-  #   com.oplus.appsense        — AI widget data backbone
-  #   com.oplus.healthservice   — Health services (steps, heart rate, workouts)
-  #   com.oplus.romupdate       — vendor config patches
-  #   com.oplus.wirelesssettings — wireless settings UI
-  #   com.oplus.qualityprotect  — charging/signal protection (unclear, kept safe)
-  #   com.oplus.appplatform     — platform framework dependency
-  #   com.oplus.appbooster      — background task scheduler
-  #   com.oplus.powermonitor    — power stats backend for Settings
-  #   com.oplus.nas             — Network Assistance (VoLTE/5G handoff)
-  #   com.oplus.nhs             — Network Health (signal quality)
-  #   com.oplus.epona           — IPC framework (other apps depend on it)
-  #   com.oplus.sauhelper / sau — System App Update
-  #   com.oplus.metis           — internal observability used by other components
-  #   com.oplus.statistics.rom  — ROM stats; tied into OnePlus account/sync
-  #   com.oplus.trafficmonitor  — on OxygenOS also feeds activity/steps widget
-  #   com.oplus.onetrace        — tracing framework; ContentProviders for widgets
-  #   com.oplus.customize.*     — core customization framework (widgets, themes,
-  #                               wallpaper, lockscreen widgets, AOD customization).
-  #                               If disabled by user or another module, recovery
-  #                               hook will re-enable. NEVER added to disable list.
-  #   biometrics, vibrator, display feature, charger HAL
-  for _p in com.oplus.midas \
-            com.oplus.olc \
-            com.oplus.crashbox \
-            com.oplus.logkit; do
+  local _p
+  for _p in $_BG_TRIM_DISABLE; do
     pm disable-user --user 0 "$_p" >/dev/null 2>&1 || true
   done
-  # Vendor HAL services — only stop pure telemetry uploaders, never functional ones.
-  # urcc-service has high CPU time in user captures — it's an active functional
-  # service, not idle telemetry. Same for powermonitor (provides power stats to
-  # Settings). Both kept untouched.
-  for _svc in vendor.oplus.hardware.cammidasservice-V1-service \
-              vendor.oplus.hardware.olc2-V3-service; do
-    stop "$_svc" >/dev/null 2>&1 || true
-  done
-  # Wakeup throttling — only apps known to be wakeup-noisy with no critical
-  # user-visible feature lost. Core Google services (gms/gsf) NOT throttled —
-  # they handle push notifications, sync, FCM. Throttling them would delay
-  # messenger notifications and break account sync.
-  for _p in com.android.vending \
-            com.google.android.partnersetup \
-            com.google.android.youtube; do
-    am set-standby-bucket "$_p" rare >/dev/null 2>&1 || true
-  done
-  # Social/media apps where standby-rare is broadly accepted to save battery
-  # without breaking foreground use. User can switch them to "active" via Settings
-  # → Battery → App standby buckets if they want notifications faster.
-  for _p in com.facebook.katana com.instagram.android \
-            com.snapchat.android com.zhiliaoapp.musically \
-            com.spotify.music com.netflix.mediaclient; do
-    am set-standby-bucket "$_p" rare >/dev/null 2>&1 || true
-  done
-  # WiFi scan throttling — saves real battery, no user feature broken.
+
+  stop vendor.oplus.hardware.cammidasservice-V1-service >/dev/null 2>&1 || true
+  stop vendor.oplus.hardware.olc2-V3-service           >/dev/null 2>&1 || true
+
   settings put global wifi_scan_always_enabled 0 >/dev/null 2>&1 || true
-  settings put global wifi_wakeup_enabled 0 >/dev/null 2>&1 || true
-  # Doze constants intentionally NOT touched. Aggressive Doze tuning can delay
-  # notifications by up to 30 minutes which is user-surprising. Stock Android Doze
-  # already handles screen-off battery well. If a user wants more aggressive Doze,
-  # they can install a dedicated module for that.
+  settings put global wifi_wakeup_enabled 0      >/dev/null 2>&1 || true
+
+  asb_bg_trim_oplus_tune
+
+  asb_bg_trim_apply_buckets
+
+  asb_bg_trim_apply_memcg
+
+  ( sleep 30; asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
 }
+
 asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
+
 # ASB:BG_TRIM:END
 apply_bt_runtime() {
   setprop persist.bluetooth.a2dp_offload.disabled false 2>/dev/null || true
@@ -907,7 +1009,6 @@ apply_camera_runtime() {
   setprop persist.vendor.camera.video.hdr.enable 1 2>/dev/null || true
   setprop persist.vendor.camera.eis.enable 1 2>/dev/null || true
   setprop persist.vendor.camera.video.4k60.eis.enable 1 2>/dev/null || true
-  # OnePlus Hasselblad/Explorer enable: ro.vendor.* requires resetprop
   if has resetprop; then
     resetprop -n ro.vendor.oplus.camera.isSupportExplorer 1 >/dev/null 2>&1 || true
     resetprop -n ro.vendor.oplus.camera.isHasselbladCamera 1 >/dev/null 2>&1 || true
@@ -1144,7 +1245,6 @@ apply_screen_aware_caps() {
       ;;
     performance)
       if [ "$_son" -eq 1 ]; then
-        # Performance: screen-on respects profile's CPU_CAP_BIG (no hardcoded override).
         CPU_CAP_LITTLE="$CPU_CAP_LITTLE"
         CPU_CAP_BIG="$CPU_CAP_BIG"
       else
