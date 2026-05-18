@@ -766,7 +766,33 @@ asb_feature_enabled AUDIO && apply_audio_runtime
 # because the damage may have been done by an earlier V43 install where the
 # user has now updated, or where they tried BG_TRIM=ON and want to roll back
 # only these three packages while keeping the rest of BG_TRIM active.
-asb_recover_ai_packages() {
+# V43 OnePlus feature recovery hook.
+#
+# Design principle:
+#   This hook does NOT track "what we ourselves disabled". It just enforces
+#   the desired state — packages we know are needed for OnePlus features must
+#   be enabled, period. `pm enable` on an already-enabled package is a no-op,
+#   so this is safe to run every boot regardless of state.
+#
+# Why this matters:
+#   Users often have other modules, manual `pm disable` history, or stale
+#   state from older ASB versions. A recovery hook that only restores "what
+#   we ourselves disabled" misses these. The current hook acts as a positive
+#   contract: "after ASB boot, these OnePlus features are guaranteed enabled."
+#
+# Categories covered:
+#   1. Smart features (AI Suggestions widget, 3D wallpaper, smart suggestions)
+#   2. Health / activity widgets (steps, heart rate, workouts)
+#   3. Network quality features (VoLTE/5G handoff, signal Health)
+#   4. System updates (vendor config, app updates)
+#   5. Platform / IPC dependencies
+#   6. Wireless settings UI
+#   7. Internal observability framework
+#   8. Customization framework (widgets, themes, wallpaper, AOD)
+#   9. Power stats in Settings
+#
+# Stock Doze and network polling overrides are also cleared here.
+asb_recover_oneplus_features() {
   for _p in com.oplus.aimemory com.oplus.deepthinker com.oplus.athena \
             com.oplus.pantanal.ums com.oplus.appsense \
             com.oplus.healthservice com.oplus.romupdate \
@@ -775,14 +801,20 @@ asb_recover_ai_packages() {
             com.oplus.powermonitor com.oplus.nas com.oplus.nhs \
             com.oplus.epona com.oplus.sauhelper com.oplus.sau \
             com.oplus.metis com.oplus.statistics.rom \
-            com.oplus.trafficmonitor com.oplus.onetrace; do
+            com.oplus.trafficmonitor com.oplus.onetrace \
+            com.oplus.customize.coreapp \
+            com.oplus.customize.cust_manage \
+            com.oplus.customize.systemui \
+            com.oplus.customize.opmconfigs; do
     pm enable "$_p" >/dev/null 2>&1 || true
   done
-  # Restore stock Doze for users who had aggressive constants set by initial V43.
+  # Restore stock Doze (some earlier V43 builds set aggressive constants).
   settings delete global device_idle_constants >/dev/null 2>&1 || true
   settings delete global network_stats_poll_interval >/dev/null 2>&1 || true
 }
-asb_recover_ai_packages
+asb_recover_oneplus_features
+# Keep the old name as an alias for any external scripts that call it.
+asb_recover_ai_packages() { asb_recover_oneplus_features; }
 # ASB:BG_TRIM:BEGIN
 apply_bg_trim_runtime() {
   # MINIMAL-SAFE list: only pure telemetry/analytics uploaders. Anything that
@@ -811,6 +843,10 @@ apply_bg_trim_runtime() {
   #   com.oplus.statistics.rom  — ROM stats; tied into OnePlus account/sync
   #   com.oplus.trafficmonitor  — on OxygenOS also feeds activity/steps widget
   #   com.oplus.onetrace        — tracing framework; ContentProviders for widgets
+  #   com.oplus.customize.*     — core customization framework (widgets, themes,
+  #                               wallpaper, lockscreen widgets, AOD customization).
+  #                               If disabled by user or another module, recovery
+  #                               hook will re-enable. NEVER added to disable list.
   #   biometrics, vibrator, display feature, charger HAL
   for _p in com.oplus.midas \
             com.oplus.olc \
