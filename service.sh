@@ -94,22 +94,21 @@ asb_migrate_governor_conf
 
 
 asb_run_soterfix() {
-  local _t=0 _end _svc
+  local _t=0 _start _end
   while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 300 ]; do
     sleep 5
     _t=$((_t + 5))
   done
   [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || return 0
-  pm path com.tencent.soter.soterserver >/dev/null 2>&1 || return 0
-  _svc="$(getprop init.svc.vendor.soter 2>/dev/null)"
-  [ -n "$_svc" ] || return 0
-  _end=$(( $(date +%s) + 300 ))
+  _start="$(date +%s)"
+  _end=$((_start + 300))
   while [ "$(date +%s)" -lt "$_end" ]; do
     stop vendor.soter >/dev/null 2>&1 || true
     sleep 1
     pm clear com.tencent.soter.soterserver >/dev/null 2>&1 || true
     start vendor.soter >/dev/null 2>&1 || true
-    sleep 4
+    sleep 1
+    sleep 3
   done
   asb_log "soterfix: completed"
 }
