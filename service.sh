@@ -774,14 +774,12 @@ asb_recover_ai_packages() {
             com.oplus.appplatform com.oplus.appbooster \
             com.oplus.powermonitor com.oplus.nas com.oplus.nhs \
             com.oplus.epona com.oplus.sauhelper com.oplus.sau \
-            com.oplus.metis com.oplus.statistics.rom; do
+            com.oplus.metis com.oplus.statistics.rom \
+            com.oplus.trafficmonitor com.oplus.onetrace; do
     pm enable "$_p" >/dev/null 2>&1 || true
   done
   # Restore stock Doze for users who had aggressive constants set by initial V43.
-  # Deleting the setting reverts to Android defaults from the device's framework.
   settings delete global device_idle_constants >/dev/null 2>&1 || true
-  # Re-enable adaptive WiFi wakeup. WiFi scan we still leave at 0 since BG_TRIM
-  # always sets it back to 0 when enabled. Users with BG_TRIM=OFF get default.
   settings delete global network_stats_poll_interval >/dev/null 2>&1 || true
 }
 asb_recover_ai_packages
@@ -811,13 +809,13 @@ apply_bg_trim_runtime() {
   #   com.oplus.sauhelper / sau — System App Update
   #   com.oplus.metis           — internal observability used by other components
   #   com.oplus.statistics.rom  — ROM stats; tied into OnePlus account/sync
+  #   com.oplus.trafficmonitor  — on OxygenOS also feeds activity/steps widget
+  #   com.oplus.onetrace        — tracing framework; ContentProviders for widgets
   #   biometrics, vibrator, display feature, charger HAL
   for _p in com.oplus.midas \
-            com.oplus.onetrace \
             com.oplus.olc \
             com.oplus.crashbox \
-            com.oplus.logkit \
-            com.oplus.trafficmonitor; do
+            com.oplus.logkit; do
     pm disable-user --user 0 "$_p" >/dev/null 2>&1 || true
   done
   # Vendor HAL services — only stop pure telemetry uploaders, never functional ones.
