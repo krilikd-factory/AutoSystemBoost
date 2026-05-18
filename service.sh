@@ -759,6 +759,56 @@ apply_audio_runtime() {
 }
 asb_feature_enabled AUDIO && apply_audio_runtime
 # ASB:AUDIO:END
+# ASB:BG_TRIM:BEGIN
+apply_bg_trim_runtime() {
+  for _p in com.oplus.midas com.oplus.qualityprotect com.oplus.athena \
+            com.oplus.appplatform com.oplus.appsense com.oplus.deepthinker \
+            com.oplus.appbooster com.oplus.metis com.oplus.aimemory \
+            com.oplus.romupdate com.oplus.olc com.oplus.onetrace \
+            com.oplus.powermonitor com.oplus.crashbox com.oplus.healthservice \
+            com.oplus.logkit com.oplus.epona com.oplus.sauhelper com.oplus.sau \
+            com.oplus.nas com.oplus.nhs com.oplus.trafficmonitor \
+            com.oplus.statistics.rom com.oplus.wirelesssettings; do
+    pm disable-user --user 0 "$_p" >/dev/null 2>&1 || true
+  done
+  for _svc in opluscvtmanager oplus_kevent oplus_gaia \
+              vendor.oplus.hardware.cammidasservice-V1-service \
+              vendor.oplus.hardware.olc2-V3-service \
+              vendor-oplus-hardware-power-powermonitor-V1-service \
+              vendor-oplus-hardware-engineer-V1-service \
+              vendor.oplus.hardware.urcc-service; do
+    stop "$_svc" >/dev/null 2>&1 || true
+  done
+  pkill -9 -f oplus_gaia >/dev/null 2>&1 || true
+  pkill -9 -f cammidasservice >/dev/null 2>&1 || true
+  setprop persist.sys.oplus.gaia.enable 0 2>/dev/null || true
+  setprop persist.sys.midasd.enable 0 2>/dev/null || true
+  setprop persist.sys.midasd.start 0 2>/dev/null || true
+  for _p in com.google.android.gms com.google.android.gsf \
+            com.google.android.googlequicksearchbox com.android.vending \
+            com.google.android.configupdater com.google.android.partnersetup \
+            com.google.android.apps.maps com.google.android.youtube; do
+    am set-standby-bucket "$_p" rare >/dev/null 2>&1 || true
+  done
+  for _p in com.facebook.katana com.facebook.orca com.instagram.android \
+            com.whatsapp com.snapchat.android com.zhiliaoapp.musically \
+            com.discord com.spotify.music com.netflix.mediaclient; do
+    am set-standby-bucket "$_p" rare >/dev/null 2>&1 || true
+  done
+  for _p in com.google.android.gms com.google.android.googlequicksearchbox \
+            com.facebook.katana com.facebook.orca com.instagram.android; do
+    cmd appops set "$_p" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 || true
+  done
+  settings put global wifi_scan_always_enabled 0 >/dev/null 2>&1 || true
+  settings put global wifi_wakeup_enabled 0 >/dev/null 2>&1 || true
+  settings put global network_stats_poll_interval 7200000 >/dev/null 2>&1 || true
+  settings put global device_idle_constants \
+"light_after_inactive_to=20000,light_pre_idle_to=180000,light_idle_to=600000,light_idle_factor=2.0,max_light_idle_to=900000,light_idle_maintenance_min_budget=60000,light_idle_maintenance_max_budget=120000,min_time_to_alarm=60000,max_temp_app_whitelist_duration=300000,mms_temp_app_whitelist_duration=60000,sms_temp_app_whitelist_duration=20000,inactive_to=600000,sensing_to=120000,locating_to=30000,motion_inactive_to=600000,idle_after_inactive_to=120000,idle_pending_to=300000,max_idle_pending_to=600000,idle_pending_factor=2.0,idle_to=1800000,max_idle_to=21600000,idle_factor=2.0" \
+    >/dev/null 2>&1 || true
+  dumpsys deviceidle enable >/dev/null 2>&1 || true
+}
+asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
+# ASB:BG_TRIM:END
 apply_bt_runtime() {
   setprop persist.bluetooth.a2dp_offload.disabled false 2>/dev/null || true
   setprop persist.vendor.bluetooth.a2dp_offload.disabled false 2>/dev/null || true
