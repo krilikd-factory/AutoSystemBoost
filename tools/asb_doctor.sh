@@ -302,7 +302,6 @@ else
   warn "$THERMAL_BASE not accessible"
 fi
 
-
 echo
 echo "═══════════════════════════════════════"
 echo "  Results: ✅ $PASS passed  ⚠️  $WARN warnings  ❌ $FAIL failures"
