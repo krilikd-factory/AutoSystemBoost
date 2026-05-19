@@ -92,25 +92,30 @@ asb_migrate_governor_conf() {
 }
 asb_migrate_governor_conf
 
-
 asb_run_soterfix() {
-  local _t=0 _start _end
+  local _t=0 _i=0 _ok_streak=0
   while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 300 ]; do
     sleep 5
     _t=$((_t + 5))
   done
   [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || return 0
-  _start="$(date +%s)"
-  _end=$((_start + 300))
-  while [ "$(date +%s)" -lt "$_end" ]; do
+  pm list packages 2>/dev/null | grep -q "^package:com.tencent.soter.soterserver$" || return 0
+  sleep 10
+  while [ "$_i" -lt 12 ] && [ "$_ok_streak" -lt 2 ]; do
     stop vendor.soter >/dev/null 2>&1 || true
     sleep 1
     pm clear com.tencent.soter.soterserver >/dev/null 2>&1 || true
-    start vendor.soter >/dev/null 2>&1 || true
     sleep 1
-    sleep 3
+    start vendor.soter >/dev/null 2>&1 || true
+    sleep 4
+    if [ "$(getprop init.svc.vendor.soter 2>/dev/null)" = "running" ]; then
+      _ok_streak=$((_ok_streak + 1))
+    else
+      _ok_streak=0
+    fi
+    _i=$((_i + 1))
   done
-  asb_log "soterfix: completed"
+  asb_log "soterfix: completed (attempts=$_i ok_streak=$_ok_streak)"
 }
 (asb_run_soterfix) >/dev/null 2>&1 &
 
@@ -780,8 +785,6 @@ apply_audio_runtime() {
   setprop audio.matrix.limiter.enable false 2>/dev/null || true
   setprop vendor.audio.matrix.limiter.enable false 2>/dev/null || true
   setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
-  setprop audio.hal.output.suspend.supported false 2>/dev/null || true
-  setprop vendor.qc2audio.suspend.enabled false 2>/dev/null || true
   setprop persist.vendor.audio.aec_ref.enable false 2>/dev/null || true
   setprop vendor.audio.feature.aec_ref.enable false 2>/dev/null || true
 }
@@ -807,12 +810,14 @@ asb_recover_oneplus_features() {
   done
   settings delete global device_idle_constants >/dev/null 2>&1 || true
   settings delete global network_stats_poll_interval >/dev/null 2>&1 || true
+  resetprop -p --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
+  resetprop -p --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
+  resetprop --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
+  resetprop --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
 }
 asb_recover_oneplus_features
 asb_recover_ai_packages() { asb_recover_oneplus_features; }
 # ASB:BG_TRIM:BEGIN
-
-
 
 _BG_TRIM_NEVER="
 com.android.systemui
