@@ -100,10 +100,6 @@ asb_end_banner() {
   ui_print " "
 }
 
-
-
-
-
 asb_install_prebuilt_governor() {
   local abi src dst
   dst="$MODPATH/bin/asb"
@@ -148,7 +144,6 @@ if echo "$LANG" | grep -qiE '(^|[, ])ru-|ru_' ; then
 else
   . "$MODPATH/common/englishtext.sh"
 fi
-
 
 ASB_SED_INPLACE_MODE=''
 _asb_sed_do() {
@@ -212,7 +207,6 @@ asb_poll_key() {
   esac
 }
 
-
 asb_wait_key_timed() {
   local timeout_sec="$1"
   local start now elapsed k
@@ -275,7 +269,6 @@ asb_abort_timeout() {
   abort
 }
 
-
 asb_choose_cat() {
   local cat="$1" title="$2"
   ui_print " "
@@ -294,7 +287,6 @@ asb_choose_cat() {
   esac
 }
 
-
 asb_drop_block_if_off() {
   local cat="$1" file="$2"
   eval "local on=\${ASB_${cat}}"
@@ -302,7 +294,6 @@ asb_drop_block_if_off() {
   [ -f "$file" ] || return 0
   sedi "/^# *ASB:${cat}:BEGIN\$/,/^# *ASB:${cat}:END\$/d" "$file" 2>/dev/null || true
 }
-
 
 asb_prop_first() {
   local v
@@ -440,7 +431,6 @@ asb_prune_module() {
     asb_drop_block_if_off "$c" "$prop"
     asb_drop_block_if_off "$c" "$pfd"
   done
-
 
   if [ "${ASB_AUDIO}" != "true" ]; then
     rm -f  "$MODPATH/system/etc/audio_effects.xml" 2>/dev/null || true
@@ -1386,9 +1376,6 @@ AutoSystemBoost' $APIOCXM
 	  rm -rf /data/memorydump/*
 	  rm -rf /data/dumplog/*
 	fi
-
-
-
 
 	ASB_WEB_MODEL_CODE="$(getprop ro.product.model 2>/dev/null)"
 	[ -z "$ASB_WEB_MODEL_CODE" ] && ASB_WEB_MODEL_CODE="$(getprop ro.product.name 2>/dev/null)"
