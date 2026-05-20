@@ -96,16 +96,30 @@ asb_migrate_governor_conf
   until [ "$(getprop sys.boot_completed)" = "1" ]; do
     sleep 5
   done
-  _start=$(date +%s)
-  _end=$((_start + 300))
-  while [ "$(date +%s)" -lt "$_end" ]; do
-    /system/bin/stop vendor.soter
-    sleep 1
-    /system/bin/pm clear com.tencent.soter.soterserver
-    /system/bin/start vendor.soter
-    sleep 1
-    sleep 3
-  done
+  # V44: defensive Soter loop — self-disable if vendor.soter is not a known
+  # service on this device, avoiding wasted `pm clear` floods that can stress
+  # the early-boot system. Use PATH-based command lookup (toybox builtins)
+  # instead of absolute paths like /system/bin/stop which may not exist.
+  if ! getprop init.svc.vendor.soter >/dev/null 2>&1; then
+    # Probe once: if vendor.soter isn't defined as an init service, skip loop.
+    _soter_state="$(getprop init.svc.vendor.soter 2>/dev/null)"
+    if [ -z "$_soter_state" ]; then
+      asb_log "soter_loop: vendor.soter not present, skipping repair loop"
+    fi
+  fi
+  _soter_state="$(getprop init.svc.vendor.soter 2>/dev/null)"
+  if [ -n "$_soter_state" ]; then
+    _start=$(date +%s)
+    _end=$((_start + 300))
+    while [ "$(date +%s)" -lt "$_end" ]; do
+      stop vendor.soter
+      sleep 1
+      pm clear com.tencent.soter.soterserver
+      start vendor.soter
+      sleep 1
+      sleep 3
+    done
+  fi
 ) &
 
 (
