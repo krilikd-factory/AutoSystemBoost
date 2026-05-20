@@ -13,7 +13,15 @@ set_permissions() {
     [ -f "$f" ] && set_perm "$f" 0 0 0755
   done
   for d in "$MODPATH/runtime" "$MODPATH/profiles" "$MODPATH/tools" "$MODPATH/common"; do
-    [ -d "$d" ] && find "$d" -type f -name "*.sh" -exec set_perm {} 0 0 0755 \;
+    [ -d "$d" ] || continue
+    for f in "$d"/*.sh; do
+      [ -f "$f" ] && set_perm "$f" 0 0 0755
+    done
+    if [ -d "$d/logkit" ]; then
+      for f in "$d/logkit"/*.sh; do
+        [ -f "$f" ] && set_perm "$f" 0 0 0755
+      done
+    fi
   done
 }
 
