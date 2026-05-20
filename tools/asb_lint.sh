@@ -146,10 +146,6 @@ for p in battery balanced performance; do
   [ ! -f "$f" ] && { err "$p.sh missing"; continue; }
   check_shell_syntax "$f"
 
-  # V42: bound values now live in generated include; .sh files
-  # carry only profile-specific tunables (SCHED_*, UCL_*, GPU_MIN_PCT, etc.).
-  # Read freqs and GPU_MAX_PCT from generated file, fall back to .sh only if
-  # generated is absent (e.g. user hasn't run gen_bounds.sh yet).
   P="$(echo "$p" | tr '[:lower:]' '[:upper:]')"
   if [ -f "$MODDIR/config/profile_bounds.generated.sh" ]; then
     _src="$MODDIR/config/profile_bounds.generated.sh"
@@ -185,8 +181,6 @@ done
 
 echo
 echo "📊 Profile Hierarchy"
-# V42: read from generated source-of-truth, not directly from
-# profiles/*.sh (which now use ${VAR:-fallback} expansions, not literal values).
 _bsh="$MODDIR/config/profile_bounds.generated.sh"
 _bcf="$MODDIR/config/profile_bounds.conf"
 _hierarchy_src=""
@@ -327,9 +321,6 @@ if [ -f "$_bc" ] && [ -f "$_bsh" ] && [ -f "$_bh" ] && [ -f "$_gen" ]; then
   done
   ok "shell↔C bounds parity checked (BATTERY/BALANCED/PERFORMANCE)"
 elif [ -f "$_bsh" ] && [ ! -f "$_bc" ] && [ ! -f "$_gen" ]; then
-  # Release-deployed: generated shell include is present, source-of-truth and
-  # generator are stripped from the release zip (by design). Validate that the
-  # generated file at least looks well-formed.
   if grep -qE "^BATTERY_CPU_MIN_LITTLE=[0-9]+" "$_bsh" && \
      grep -qE "^BALANCED_CPU_MIN_LITTLE=[0-9]+" "$_bsh" && \
      grep -qE "^PERFORMANCE_CPU_MIN_LITTLE=[0-9]+" "$_bsh"; then

@@ -1,19 +1,4 @@
 #!/system/bin/sh
-# asb_drain_analyzer.sh — compute battery drain rate from 2 logkit captures
-#
-# Usage:
-#   asb_drain_analyzer.sh <START_LOGKIT_DIR> <END_LOGKIT_DIR>
-#
-# Reads the governor.log from each capture, extracts heartbeat lines with
-# bat=N (battery percentage) and timestamp. Computes:
-#   - Total drain over the window
-#   - Avg drain rate %/hour
-#   - Drain rate by profile (estimated from time-in-profile share)
-#   - Drain rate by state band (DEEP_IDLE / LIGHT_IDLE / MODERATE+ )
-#
-# Heuristic, not perfect: a capture window with mixed profiles/states
-# attributes drain proportionally to time spent in each. Still useful for
-# profile A vs profile B comparison if you control conditions.
 
 START_DIR="$1"
 END_DIR="$2"
@@ -28,11 +13,6 @@ if [ ! -f "$START_DIR/governor.log" ] || [ ! -f "$END_DIR/governor.log" ]; then
     echo "ERROR: governor.log not found in one of the dirs." >&2
     exit 1
 fi
-
-# Combine both logs in time order. Heartbeats look like:
-# [05-04 23:48:47] heartbeat: state=LIGHT_IDLE profile=0 ... bat=68 ...
-# Timestamps are MM-DD HH:MM:SS (no year). For drain calc we need monotonic
-# epoch — assume all entries are within current year.
 
 YEAR=$(date +%Y)
 TODAY_EPOCH=$(date +%s)
@@ -50,14 +30,11 @@ fi
 
 echo "Heartbeat samples: $LINES"
 
-# Parse each line into: epoch_ts profile state bat
 awk -v year="$YEAR" '
 /heartbeat/ {
-    # Extract [MM-DD HH:MM:SS]
     if (match($0, /\[[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+\]/)) {
         ts = substr($0, RSTART+1, RLENGTH-2)
         gsub(/[\[\]]/, "", ts)
-        # ts = "MM-DD HH:MM:SS"
         split(ts, t1, " ")
         split(t1[1], d, "-")
         split(t1[2], h, ":")
@@ -105,7 +82,6 @@ NR==1 {
     delta_t = cur_ts - prev_ts
     delta_b = prev_bat - cur_bat   # drain is positive when battery decreases
     if (delta_t > 0 && delta_t < 3600) {
-        # Attribute this delta to current profile/state band
         pname = profile_name[cur_profile + 0]
         if (pname == "") pname = "?"
         time_in_profile[pname] += delta_t
