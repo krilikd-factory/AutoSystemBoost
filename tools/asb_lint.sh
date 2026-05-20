@@ -380,7 +380,7 @@ if [ -f "$_mp" ] && [ -f "$_uj" ]; then
   fi
   _ac="$MODDIR/action.sh"
   if [ -f "$_ac" ] && [ -n "$_mp_ver" ]; then
-    if grep -qE "AutoSystemBoost\s+${_mp_ver}\b" "$_ac" 2>/dev/null; then
+    if grep -qE "(AutoSystemBoost|ASB)\s+${_mp_ver}\b" "$_ac" 2>/dev/null; then
       ok "action.sh banner matches $_mp_ver"
     else
       warn "action.sh banner does not match module.prop:version=$_mp_ver"
