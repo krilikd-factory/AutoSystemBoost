@@ -111,10 +111,6 @@ asb_install_prebuilt_governor() {
     ui_print "- Prebuilt governor installed: $abi"
     return 0
   fi
-  # V39: removed misleading "fallback to shell mode" message — there is no
-  # shell-mode fallback in modern ASB; the governor is the binary, and if it
-  # isn't present the module simply won't start its daemon. Staying silent
-  # keeps the installer UI clean when the binary is sideloaded separately.
   return 1
 }
 sedi() {
@@ -533,17 +529,10 @@ ASB_BG_TRIM=false
 asb_install_prebuilt_governor
 asb_big_banner
 
-# V43: config persistence layer
-# Saved config lives outside the module directory so it survives module
-# removal/reinstall. On install, we check for a saved set of category
-# choices and offer to reuse it instead of forcing the user through all
-# prompts again.
 ASB_USER_CFG="/data/adb/asb_user_config"
 ASB_CFG_USED_SAVED=0
 
 asb_apply_saved_config() {
-  # Read saved config and assign ASB_<CAT>=true/false. Tolerates unknown
-  # keys (older saved files won't have BG_TRIM — leaves default).
   [ -f "$ASB_USER_CFG" ] || return 1
   local _line _k _v
   while IFS='=' read -r _k _v; do
@@ -580,7 +569,6 @@ asb_save_user_config() {
   ui_print "  ${ASB_CFG_SAVED_TO:-Config saved to:} $ASB_USER_CFG"
 }
 
-# Decide: ask user about saved config, or run prompts from scratch
 if [ -f "$ASB_USER_CFG" ]; then
   _saved_at="$(grep '^saved_at=' "$ASB_USER_CFG" 2>/dev/null | head -1 | cut -d= -f2-)"
   _saved_ver="$(grep '^saved_from_version=' "$ASB_USER_CFG" 2>/dev/null | head -1 | cut -d= -f2-)"
@@ -603,8 +591,6 @@ if [ -f "$ASB_USER_CFG" ]; then
       ui_print "  ${ASB_CFG_RESELECT:-Re-selecting categories...}"
       ;;
     *)
-      # Timeout: be conservative — use saved config rather than abort.
-      # User saw the prompt, didn't react: they likely wanted no surprises.
       ui_print "  ${ASB_CFG_USING_SAVED:-Using saved configuration from:} ${_saved_at:-unknown} (timeout default)"
       if asb_apply_saved_config; then
         ASB_CFG_USED_SAVED=1
@@ -806,22 +792,11 @@ fi
   if [ "${ASB_BT}" = "true" ]; then
   for OA2DPXML in ${A2DPXML}; do
 	cp_ch $ORIGDIR$OA2DPXML $A2DPXM
-	# V39: removed unsafe /<!--/,/-->/d range delete.
-	# Multi-line codec disabled-comment blocks like:
-	#   <!-- Opus codec is OEM-specific
-	#   <a2dp_codec name="opus" priority="..." />
-	#   -->
-	# get partially mangled by the range delete, leaving phantom codec
-	# entries the vendor stack can't service. Confirmed cause of Opus
-	# handshake hang on Pixel Buds Pro 2 paired with non-Pixel SoCs.
-	# Now we ONLY strip blank lines to avoid disturbing codec semantics.
 	sedi '/^ *$/d' $A2DPXM
 	done
 
   for OBTQTIXML in ${BTQTIXML}; do
 	cp_ch $ORIGDIR$OBTQTIXML $BTQTIXM
-	# Same safety fix for bluetooth_qti.xml — also contains multi-line
-	# vendor codec metadata that should not be touched.
 	sedi '/^ *$/d' $BTQTIXM
 	done
 
@@ -870,19 +845,11 @@ fi
   if [ "${ASB_BT}" = "true" ]; then
   for OBTCONF in ${BTCONF}; do
 	cp_ch $ORIGDIR$OBTCONF $BTCON
-	# V39: removed unsafe XML range-delete and # line strip.
-	# bt_configstore.conf is KEY=VALUE with # line comments; vendor
-	# blobs sometimes ship with intentionally-disabled codec defaults
-	# (`# enable_opus_codec=false`) that should stay disabled. The
-	# previous sed deleted ALL # lines plus XML comment ranges that
-	# don't apply to .conf files anyway. Keep only blank-line trim.
 	sedi '/^ *$/d' $BTCON
 	done
 
   for OBTCONF2 in ${BTCONF2}; do
 	cp_ch $ORIGDIR$OBTCONF2 $BTCON2
-	# Same safety fix for bt_stack.conf — vendor sometimes ships
-	# disabled-by-default codec/feature flags that affect handshake.
 	sedi '/^ *$/d' $BTCON2
 	done
 
@@ -1406,9 +1373,6 @@ EOF
 	asb_prune_module
 	find $MODPATH -empty -type d -delete
 
-	# V39: ensure governor.conf.shipped is a sealed reference copy
-	# of governor.conf at install time, so service.sh migration can
-	# restore defaults without depending on Magisk file-merge semantics.
 	if [ -f "$MODPATH/config/governor.conf" ]; then
 	  cp -f "$MODPATH/config/governor.conf" "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
 	  chmod 644 "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
