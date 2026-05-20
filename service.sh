@@ -99,10 +99,10 @@ asb_migrate_governor_conf
   _start=$(date +%s)
   _end=$((_start + 300))
   while [ "$(date +%s)" -lt "$_end" ]; do
-    stop vendor.soter
+    /system/bin/stop vendor.soter
     sleep 1
-    pm clear com.tencent.soter.soterserver
-    start vendor.soter
+    /system/bin/pm clear com.tencent.soter.soterserver
+    /system/bin/start vendor.soter
     sleep 1
     sleep 3
   done

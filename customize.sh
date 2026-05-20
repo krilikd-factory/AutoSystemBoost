@@ -6,7 +6,15 @@ REPLACE="
 "
 
 set_permissions() {
-  :
+  set_perm_recursive "$MODPATH" 0 0 0755 0644
+  [ -f "$MODPATH/system/bin/asb" ] && set_perm "$MODPATH/system/bin/asb" 0 2000 0755
+  [ -f "$MODPATH/bin/asb" ] && set_perm "$MODPATH/bin/asb" 0 0 0755
+  for f in "$MODPATH/service.sh" "$MODPATH/post-fs-data.sh" "$MODPATH/boot-completed.sh" "$MODPATH/uninstall.sh" "$MODPATH/action.sh" "$MODPATH/apply_profile.sh"; do
+    [ -f "$f" ] && set_perm "$f" 0 0 0755
+  done
+  for d in "$MODPATH/runtime" "$MODPATH/profiles" "$MODPATH/tools" "$MODPATH/common"; do
+    [ -d "$d" ] && find "$d" -type f -name "*.sh" -exec set_perm {} 0 0 0755 \;
+  done
 }
 
 SKIPUNZIP=1

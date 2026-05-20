@@ -95,4 +95,8 @@ if asb_feature_enabled VENDOR_OVERLAY && [ -d "$MODDIR/system/vendor/etc/perf" ]
 fi
 # ASB:VENDOR_OVERLAY:END
 
+[ -f "$MODDIR/system/bin/asb" ] && chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
+[ -f "$MODDIR/bin/asb" ] && chmod 0755 "$MODDIR/bin/asb" 2>/dev/null
+[ -f "$MODDIR/boot-completed.sh" ] && chmod 0755 "$MODDIR/boot-completed.sh" 2>/dev/null
+
 exit 0
