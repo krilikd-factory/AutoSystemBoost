@@ -137,9 +137,11 @@ persist.vendor.bluetooth.a2dp_offload.disabled=false
 persist.bluetooth.a2dp.aac.vbr_supported=true
 # ASB:BT:END
 # ASB:AUDIO:BEGIN
+# V44 — minimal safe audio profile. V44-test-2 included qc2audio per_frame
+# overrides and audio.hal.output.suspend.supported=false which on OnePlus 15
+# caused audiohalservice.qti to NULL-deref during init (SIGSEGV at 0x18 in
+# codec lookup), respawning every 5s and bootlooping the device.
 persist.audio.hifi=false
-ro.audio.hifi=false
-ro.vendor.audio.hifi=false
 persist.audio.hifi.int_codec=true
 persist.vendor.audio.hifi.int_codec=true
 persist.audio.uhqa=1
@@ -147,35 +149,8 @@ persist.vendor.audio.uhqa=true
 ro.audio.ullunique=true
 ro.audio.audiozoom=true
 ro.audio.bt.connect.disable.mute=true
-audio.hal.output.suspend.supported=false
-media.stagefright.audio.cbk=true
-audio.matrix.limiter.enable=false
-vendor.audio.matrix.limiter.enable=false
 persist.vendor.audio.aec_ref.enable=false
 vendor.audio.feature.aec_ref.enable=false
-vendor.qc2audio.suspend.enabled=false
-vendor.qc2audio.per_frame.aac.dec.enabled=false
-vendor.qc2audio.per_frame.aac.enc.enabled=false
-vendor.qc2audio.per_frame.aac_adts.dec.enabled=false
-vendor.qc2audio.per_frame.aac_adts.enc.enabled=false
-vendor.qc2audio.per_frame.alac.dec.enabled=false
-vendor.qc2audio.per_frame.alac.enc.enabled=false
-vendor.qc2audio.per_frame.ape.dec.enabled=false
-vendor.qc2audio.per_frame.ape.enc.enabled=false
-vendor.qc2audio.per_frame.flac.dec.enabled=false
-vendor.qc2audio.per_frame.flac.enc.enabled=false
-vendor.qc2audio.per_frame.mp3.dec.enabled=false
-vendor.qc2audio.per_frame.mp3.enc.enabled=false
-vendor.qc2audio.per_frame.mpegh.dec.enabled=false
-vendor.qc2audio.per_frame.mpegh.enc.enabled=false
-vendor.qc2audio.per_frame.opus.dec.enabled=false
-vendor.qc2audio.per_frame.opus.enc.enabled=false
-vendor.qc2audio.per_frame.raw.dec.enabled=false
-vendor.qc2audio.per_frame.raw.enc.enabled=false
-vendor.qc2audio.per_frame.vorbis.dec.enabled=false
-vendor.qc2audio.per_frame.vorbis.enc.enabled=false
-vendor.qc2audio.per_frame.wma.dec.enabled=false
-vendor.qc2audio.per_frame.wma.enc.enabled=false
 # ASB:AUDIO:END
 # ASB:CAMERA:BEGIN
 persist.camera.tnr.preview=1

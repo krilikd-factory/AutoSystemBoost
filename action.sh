@@ -76,7 +76,7 @@ if [ "$_remain_mah" -gt 0 ] 2>/dev/null; then
 fi
 
 echo ""
-echo "  ASB V44 · ${PROFILE}"
+echo "  ASB V44-test-2 · ${PROFILE}"
 echo ""
 echo "  🌡  CPU      : ${_cputemp}°C"
 if [ "$_btempC" -gt 0 ]; then
