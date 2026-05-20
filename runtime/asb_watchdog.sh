@@ -10,6 +10,7 @@ asb_enter_safe_mode() {
   asb_log "SAFE_MODE: $ASB_FAIL_COUNT consecutive failures, entering balanced-safe"
   echo "1" > "$ASB_SAFE_MODE_FILE"
   echo "balanced" > "$MODDIR/current_profile"
+  echo "balanced" > /data/adb/asb_active_profile 2>/dev/null || true
   asb_load_profile
   asb_feature_enabled CPU && apply_runtime_profile_now
   ASB_GOV_ENABLED=0

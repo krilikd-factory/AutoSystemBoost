@@ -5,21 +5,11 @@
   _reconcile_fast=3
   _last_wifi_check=0
   _drift_streak=0
-  # V39: lease-based reassert after profile change / screen state change.
-  # Observed V39 battery log showed scaling_max_freq drifted to 1228/1382 MHz
-  # (profile wants 614/922 MHz) because reconcile slept 600s in battery mode.
-  # Anything touching scaling_max_freq (vendor perf_boost on screen wake, user-space
-  # thermal daemon, etc.) had 10 minutes to drift before reconcile noticed.
-  # Fix: after profile change or screen toggle, open a short reassert window
-  # sampling at t=2s, 6s, 20s, 60s before returning to the long idle sleep.
-  # Keeps cap ownership but doesn't turn into a write-war with vendor HAL.
   _lease_remaining=0           # ticks left in current lease window
   _lease_delays="2 4 14 40"    # additive delays — sum ≈ 60s probation
   _lease_last_reassert_ts=0
   while true; do
-    # Determine sleep duration this iteration.
     if [ "$_lease_remaining" -gt 0 ]; then
-      # Inside lease window — use one of the staged delays.
       _d=$(echo "$_lease_delays" | awk -v i="$_lease_remaining" '{print $(NF - i + 1)}')
       [ -z "$_d" ] || [ "$_d" = "0" ] && _d=2
       sleep "$_d"
@@ -66,8 +56,6 @@
     if [ "$_now" != "$_last_profile" ]; then
       _need=1
       _reason="profile-change"
-      # V39: open lease window — poll rapidly for 60s to re-assert caps
-      # against anything that tries to drift them.
       _lease_remaining=4
     else
       _cur_screen=0
@@ -76,39 +64,17 @@
         _need=1
         _reason="screen-state"
         _last_screen="$_cur_screen"
-        # V39: screen transitions are when vendor perf_boost most often
-        # raises scaling_max_freq. Open lease window to catch the drift.
         _lease_remaining=4
       fi
-      # V40: direction-aware cap drift check — only fight vendor if it
-      # is raising us ABOVE FSM's current desired cap.
-      #
-      # V39 compared sysfs against static CPU_CAP_LITTLE/BIG from profile.sh
-      # (DEEP_IDLE floor values). FSM dynamically writes much higher caps for
-      # HEAVY/SUSTAINED/GAMING states. Result: every time FSM raised the cap
-      # legitimately for HEAVY work, reconcile.sh saw "drift" and fought it
-      # back down. Real telemetry showed 1700+ reconciles/hour on balanced —
-      # write storm conflicting with FSM's authority.
-      #
-      # V40 reads fsm.current_caps.cpu_max[] from /dev/.asb/state, which
-      # reflects what FSM currently wants. Drift = sysfs > FSM_desired + tolerance.
-      # Rate limit prevents runaway when vendor PowerHAL persistently overrides.
       if [ $_need -eq 0 ] && asb_feature_enabled CPU; then
         _cur_p0_max=$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null)
         _cur_p6_max=$(cat /sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq 2>/dev/null)
-        # Read FSM's current desired caps from /dev/.asb/state.
-        # Format: "cpu_max=p0,p6,reserved"
         _fsm_caps=$(grep "^cpu_max=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
         _want_p0_max=$(echo "$_fsm_caps" | cut -d, -f1)
         _want_p6_max=$(echo "$_fsm_caps" | cut -d, -f2)
-        # Fall back to static profile.sh values if FSM state unavailable
-        # (e.g. governor not yet started, state file absent).
         case "$_want_p0_max" in ''|*[!0-9]*) _want_p0_max="${CPU_CAP_LITTLE:-0}" ;; esac
         case "$_want_p6_max" in ''|*[!0-9]*) _want_p6_max="${CPU_CAP_BIG:-0}" ;; esac
 
-        # Rate limit: track reconciles per cluster within rolling 60s window.
-        # If we've reconciled 5+ times in 60s, vendor PowerHAL is winning
-        # persistently — give up for the rest of the window.
         _drift_state="/dev/.asb/drift_rate"
         _now_ts=$(date +%s 2>/dev/null || echo 0)
         _window_start=0
@@ -123,22 +89,18 @@
           case "$_p0_count" in ''|*[!0-9]*) _p0_count=0 ;; esac
           case "$_p6_count" in ''|*[!0-9]*) _p6_count=0 ;; esac
         fi
-        # Reset window if older than 60s
         if [ $((_now_ts - _window_start)) -ge 60 ]; then
           _window_start=$_now_ts
           _p0_count=0
           _p6_count=0
         fi
 
-        # Only battery/balanced enforce strict direction check —
-        # performance is intentionally permissive to let vendor boost.
         case "$_now" in
           battery|balanced)
             if [ -n "$_cur_p0_max" ] && [ "$_want_p0_max" -gt 0 ] 2>/dev/null \
                && [ "$_cur_p0_max" -gt "$_want_p0_max" ] 2>/dev/null \
                && [ "$_p0_count" -lt 5 ]; then
               _diff_p0=$((_cur_p0_max - _want_p0_max))
-              # Allow 100MHz tolerance (vendor freq table alignment + thermal headroom)
               if [ "$_diff_p0" -gt 100000 ]; then
                 _need=1; _reason="cap-drift-up-p0"
                 _lease_remaining=8
@@ -158,7 +120,6 @@
             ;;
         esac
 
-        # Persist drift counters
         printf '%s\n%s\n%s\n' "$_window_start" "$_p0_count" "$_p6_count" > "$_drift_state" 2>/dev/null
       fi
       if [ $_need -eq 0 ] && asb_feature_enabled CPU; then
@@ -196,9 +157,6 @@
         walt-topapp|walt-edboost|walt-ravg|uclamp)
           _drift_streak=$((_drift_streak + 1)) ;;
         cap-drift-up-p0|cap-drift-up-p6)
-          # V39: cap drift isn't a slow WALT drift — it's vendor writing
-          # above profile. Don't count toward drift_streak economy sleep
-          # (which would back off at exactly the wrong time).
           : ;;
         profile-change|screen-state)
           _drift_streak=0 ;;
@@ -220,9 +178,6 @@
           asb_feature_enabled WIFI && apply_wifi_pm
           asb_feature_enabled WIFI && apply_wifi_dtim
         elif [ "$_reason" = "cap-drift-up-p0" ] || [ "$_reason" = "cap-drift-up-p6" ]; then
-          # V39: vendor raised caps above profile. Reassert via shell
-          # even when governor is active, because battery profile doesn't
-          # use msm_performance (allow_hr=0) so governor alone can't fix this.
           asb_feature_enabled CPU && apply_screen_aware_caps
         fi
       else
