@@ -779,33 +779,10 @@ apply_audio_runtime() {
 }
 asb_feature_enabled AUDIO && apply_audio_runtime
 # ASB:AUDIO:END
-asb_recover_oneplus_features() {
-  for _p in com.oplus.aimemory com.oplus.deepthinker com.oplus.athena \
-            com.oplus.pantanal.ums com.oplus.appsense \
-            com.oplus.healthservice com.oplus.romupdate \
-            com.oplus.wirelesssettings com.oplus.qualityprotect \
-            com.oplus.appplatform com.oplus.appbooster \
-            com.oplus.powermonitor com.oplus.nas com.oplus.nhs \
-            com.oplus.epona com.oplus.sauhelper com.oplus.sau \
-            com.oplus.metis com.oplus.statistics.rom \
-            com.oplus.trafficmonitor com.oplus.onetrace \
-            com.oplus.customize.coreapp \
-            com.oplus.customize.cust_manage \
-            com.oplus.customize.systemui \
-            com.oplus.customize.opmconfigs \
-            com.oplus.gameopt \
-            com.oplus.gamespaceui; do
-    pm enable "$_p" >/dev/null 2>&1 || true
-  done
-  settings delete global device_idle_constants >/dev/null 2>&1 || true
-  settings delete global network_stats_poll_interval >/dev/null 2>&1 || true
-  resetprop -p --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
-  resetprop -p --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
-  resetprop --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
-  resetprop --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
-}
-asb_recover_oneplus_features
-asb_recover_ai_packages() { asb_recover_oneplus_features; }
+resetprop -p --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
+resetprop -p --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
+resetprop --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
+resetprop --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
 # ASB:BG_TRIM:BEGIN
 
 _BG_TRIM_NEVER="

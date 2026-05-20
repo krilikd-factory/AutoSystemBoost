@@ -53,7 +53,7 @@
 </table>
 
 <p align="center">
-  <code>FSM</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>Thermal Debt</code> · <code>Quarantine</code>
+  <code>FSM</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>BG_TRIM</code> · <code>Memcg v2</code>
 </p>
 
 ---
@@ -139,20 +139,22 @@
 |:----------|:--------------:|:-----------:|:----------:|
 | CPU min LITTLE | **1190 MHz** | 787 MHz | **307 MHz** |
 | CPU min BIG | **1114 MHz** | 883 MHz | **614 MHz** |
-| CPU max LITTLE | **3629 MHz** | 3302 MHz | **1133 MHz** |
-| CPU max BIG | **4608 MHz** | 3974 MHz | **998 MHz** |
-| CPU cap LITTLE | **3072 MHz** | 1190 MHz | **614 MHz** |
-| CPU cap BIG | **2976 MHz** | 1882 MHz | **922 MHz** |
-| GPU cap | **84%** (≈1008 MHz) | 85% (1020 MHz) | **15%** (≈180 MHz) |
-| RAVG window | **2** (8 ms) | 3 (12 ms) | **10** (40 ms) |
-| Top-app weight | **150** | 110 | **40** |
-| ED boost | **30** | 10 | **0** |
-| UCL FG | **60–96%** | 15–70% | **0–8%** |
-| UCL Top | **88–100%** | 40–100% | **0–10%** |
+| CPU max LITTLE | **2957 MHz** | 3302 MHz | **1805 MHz** |
+| CPU max BIG | **3302 MHz** | 3974 MHz | **2208 MHz** |
+| CPU cap LITTLE | **2304 MHz** | 1190 MHz | **922 MHz** |
+| CPU cap BIG | **2611 MHz** | 1882 MHz | **922 MHz** |
+| GPU cap | **70%** | 85% | **50%** |
+| GPU min floor | **8%** | 0% | **0%** |
+| RAVG window | **2** (8 ms) | 3 (12 ms) | **8** (32 ms) |
+| UCL_TOP max | **84%** | 85% | **50%** |
+| UCL_BG max | **60%** | 35% | **40%** |
 | Swappiness | **12** | 35 | **200** |
 | Dirty writeback | **0.8 s** | 4 s | **240 s** |
-| WiFi PSM | **OFF** | auto | **ON** |
-| Sched rate (µs) | **800** | 2500 | **16000** |
+| VFS cache pressure | **30** | 80 | **400** |
+| Stat interval | **8 s** | 30 s | **240 s** |
+| Min free KB | **32768** | 32768 | **114688** |
+| Compaction proactive | **0** | 10 | **20** |
+| WiFi power-save | **OFF** | auto | **ON** |
 | GAMING state | ✅ allowed | ✅ allowed | **🚫 blocked** |
 | SUSTAINED enter / exit | **59 / 56 °C** | 57 / 49 °C | — |
 | Time-based escape | **≥ 180 s** | — | — |
@@ -260,27 +262,6 @@ Only **4 pure analytics uploaders** are disabled: `com.oplus.midas`, `com.oplus.
 
 ---
 
-## 🛡️ OnePlus Feature Recovery
-
-A startup hook enforces **27 OnePlus packages as enabled** on every boot — fixes packages disabled by old modules, manual `pm disable`, or stale state from any source. `pm enable` on already-enabled packages is a no-op, so this is free.
-
-| Category | Packages |
-|:---------|:---------|
-| AI / smart features | aimemory, deepthinker, athena, pantanal.ums, appsense |
-| Health / activity | healthservice, trafficmonitor |
-| Network quality | nas, nhs |
-| System updates | sauhelper, sau, romupdate |
-| Platform deps | appplatform, appbooster, epona |
-| Customization | customize.coreapp, customize.cust_manage, customize.systemui, customize.opmconfigs |
-| UI / settings | wirelesssettings, powermonitor |
-| Charging / signal | qualityprotect |
-| Observability | metis, statistics.rom, onetrace |
-| Gaming network | gameopt, gamespaceui |
-
-Audio HAL suspend-blocker props (legacy from earlier builds) are also cleared every boot — prevents audio pipeline from keeping the kernel awake after BT audio sessions.
-
----
-
 ## 🔑 Tencent Soter Auto-Fix
 
 WeChat, Alipay, and several Chinese banks use the Tencent Soter biometric protocol. On OnePlus global ROMs, the `vendor.soter` daemon often misbehaves after boot — losing fingerprint auth in those apps.
@@ -377,13 +358,15 @@ Repeated for 5 minutes. Users without Tencent apps are unaffected — the loop i
 
 | Parameter | Balanced | Battery | Performance |
 |:----------|:--------:|:-------:|:-----------:|
-| `swappiness` | 20 | 180 | 60 |
-| `dirty_ratio` | 40% | 90% | 20% |
-| `dirty_expire_centisecs` | 400 | 18000 | 80 |
-| `vfs_cache_pressure` | 60 | 10 | 100 |
-| `page-cluster` | 0 | 0 | 0 |
-| `stat_interval` | 15 | 60 | 5 |
-| `min_free_kbytes` | 32768 | 16384 | 65536 |
+| `swappiness` | 35 | 200 | 12 |
+| `dirty_expire_centisecs` | 6000 | 240000 | 1000 |
+| `dirty_writeback_centisecs` | 4000 | 240000 | 800 |
+| `vfs_cache_pressure` | 80 | 400 | 30 |
+| `page-cluster` | 1 | 3 | 0 |
+| `stat_interval` | 30 | 240 | 8 |
+| `min_free_kbytes` | 32768 | 114688 | 32768 |
+| `compaction_proactiveness` | 10 | 20 | 0 |
+| `lru_gen` (if writable) | 7 | 7 | 7 |
 
 ### I/O
 
@@ -426,30 +409,6 @@ ASB stops **35+ debug/diagnostic services** at boot:
 
 ---
 
-## 👤 User-Switch Quarantine
-
-When Android user changes (clone, guest): **90s quarantine** — anti-clamp OFF, learning SKIP, headroom OFF. Prevents user-switch storm from contaminating session data.
-
----
-
-## 🌡️ Thermal Debt
-
-If previous perf session ended hot (≥75°C) and new one starts within 120s → `ac_budget` **halved**. No immediate re-launch into thermal wall.
-
----
-
-## 📡 Device Capability Detection
-
-Probed **once** at startup:
-
-```
-caps: msm=1 hr=1 thermal_cpu=1 thermal_skin=1 gpu=1 uclamp=0
-```
-
-Governor adapts to device capabilities — no hardcoded assumptions.
-
----
-
 ## 🩺 Diagnostics
 
 | Tool | Purpose |
@@ -465,14 +424,18 @@ Governor adapts to device capabilities — no hardcoded assumptions.
 
 ## 🔧 Commands
 
+Run as root (`su -c` from any terminal — Termux, ADB shell, root file manager terminal):
+
 ```bash
-asb status                            # JSON status
-asb profile:performance               # switch live
-asb start-session:performance:auto    # profile + mode + reset
-asb reload                            # re-read config
-cat /dev/.asb/state                   # state snapshot
-tail -f /dev/.asb/governor.log        # live log
+su -c 'asb status'                          # JSON status
+su -c 'asb profile:performance'             # switch profile live
+su -c 'asb start-session:performance:auto'  # profile + session mode + reset
+su -c 'asb reload'                          # re-read config
+su -c 'cat /dev/.asb/state'                 # state snapshot
+su -c 'tail -f /dev/.asb/governor.log'      # live log
 ```
+
+The `asb` binary is exposed through `/system/bin/asb` (a small wrapper that forwards to the module's binary at `/data/adb/modules/AutoSystemBoost/bin/asb`). The governor needs root to run, so all `asb` commands must be invoked via `su`. The wrapper is created automatically by the module — no PATH setup needed.
 
 ---
 

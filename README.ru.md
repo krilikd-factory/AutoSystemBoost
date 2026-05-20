@@ -53,7 +53,7 @@
 </table>
 
 <p align="center">
-  <code>FSM</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>Thermal Debt</code> · <code>Quarantine</code>
+  <code>FSM</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>BG_TRIM</code> · <code>Memcg v2</code>
 </p>
 
 ---
@@ -139,24 +139,28 @@
 |:---------|:--------------:|:-----------:|:----------:|
 | CPU мин LITTLE | **1190 МГц** | 787 МГц | **307 МГц** |
 | CPU мин BIG | **1114 МГц** | 883 МГц | **614 МГц** |
-| CPU макс LITTLE | **3629 МГц** | 3302 МГц | **1133 МГц** |
-| CPU макс BIG | **4608 МГц** | 3974 МГц | **998 МГц** |
-| CPU cap LITTLE | **3072 МГц** | 1190 МГц | **614 МГц** |
-| CPU cap BIG | **2976 МГц** | 1882 МГц | **922 МГц** |
-| GPU лимит | **84%** (≈1008 МГц) | 85% (1020 МГц) | **15%** (≈180 МГц) |
-| RAVG окно | **2** (8 мс) | 3 (12 мс) | **10** (40 мс) |
-| Top-app вес | **150** | 110 | **40** |
-| ED boost | **30** | 10 | **0** |
-| UCL FG | **60–96%** | 15–70% | **0–8%** |
-| UCL Top | **88–100%** | 40–100% | **0–10%** |
+| CPU макс LITTLE | **2957 МГц** | 3302 МГц | **1805 МГц** |
+| CPU макс BIG | **3302 МГц** | 3974 МГц | **2208 МГц** |
+| CPU cap LITTLE | **2304 МГц** | 1190 МГц | **922 МГц** |
+| CPU cap BIG | **2611 МГц** | 1882 МГц | **922 МГц** |
+| GPU лимит | **70%** | 85% | **50%** |
+| GPU мин floor | **8%** | 0% | **0%** |
+| RAVG окно | **2** (8 мс) | 3 (12 мс) | **8** (32 мс) |
+| UCL_TOP макс | **84%** | 85% | **50%** |
+| UCL_BG макс | **60%** | 35% | **40%** |
 | Swappiness | **12** | 35 | **200** |
 | Dirty writeback | **0.8 с** | 4 с | **240 с** |
-| WiFi PSM | **ВЫКЛ** | авто | **ВКЛ** |
-| Sched rate (µс) | **800** | 2500 | **16000** |
+| VFS cache pressure | **30** | 80 | **400** |
+| Stat interval | **8 с** | 30 с | **240 с** |
+| Min free KB | **32768** | 32768 | **114688** |
+| Compaction proactive | **0** | 10 | **20** |
+| WiFi power-save | **ВЫКЛ** | авто | **ВКЛ** |
 | GAMING состояние | ✅ разрешено | ✅ разрешено | **🚫 заблокировано** |
 | SUSTAINED вход / выход | **59 / 56 °C** | 57 / 49 °C | — |
 | Time-based escape | **≥ 180 с** | — | — |
 | Быстрый deep idle | — | — | **8 секунд** |
+
+---
 
 ---
 
@@ -260,27 +264,6 @@
 
 ---
 
-## 🛡️ Восстановление функций OnePlus
-
-Startup-хук обеспечивает **27 пакетов OnePlus как включённые** на каждой загрузке — фиксит пакеты отключённые старыми модулями, ручным `pm disable` или stale-состоянием. `pm enable` на уже-включённом пакете — no-op, поэтому это бесплатно.
-
-| Категория | Пакеты |
-|:----------|:-------|
-| AI / умные функции | aimemory, deepthinker, athena, pantanal.ums, appsense |
-| Здоровье / активность | healthservice, trafficmonitor |
-| Качество сети | nas, nhs |
-| Обновления системы | sauhelper, sau, romupdate |
-| Платформенные зависимости | appplatform, appbooster, epona |
-| Кастомизация | customize.coreapp, customize.cust_manage, customize.systemui, customize.opmconfigs |
-| UI / настройки | wirelesssettings, powermonitor |
-| Зарядка / сигнал | qualityprotect |
-| Observability | metis, statistics.rom, onetrace |
-| Игровая сеть | gameopt, gamespaceui |
-
-Audio HAL suspend-blocker props (legacy от ранних сборок) также удаляются каждой загрузкой — предотвращает удержание kernel awake после BT audio сессий.
-
----
-
 ## 🔑 Авто-фикс Tencent Soter
 
 WeChat, Alipay и ряд китайских банков используют биометрический протокол Tencent Soter. На OnePlus global ROM демон `vendor.soter` часто ведёт себя некорректно после загрузки — теряется отпечаток в этих приложениях.
@@ -377,13 +360,15 @@ start vendor.soter
 
 | Параметр | Balanced | Battery | Performance |
 |:---------|:--------:|:-------:|:-----------:|
-| `swappiness` | 20 | 180 | 60 |
-| `dirty_ratio` | 40% | 90% | 20% |
-| `dirty_expire_centisecs` | 400 | 18000 | 80 |
-| `vfs_cache_pressure` | 60 | 10 | 100 |
-| `page-cluster` | 0 | 0 | 0 |
-| `stat_interval` | 15 | 60 | 5 |
-| `min_free_kbytes` | 32768 | 16384 | 65536 |
+| `swappiness` | 35 | 200 | 12 |
+| `dirty_expire_centisecs` | 6000 | 240000 | 1000 |
+| `dirty_writeback_centisecs` | 4000 | 240000 | 800 |
+| `vfs_cache_pressure` | 80 | 400 | 30 |
+| `page-cluster` | 1 | 3 | 0 |
+| `stat_interval` | 30 | 240 | 8 |
+| `min_free_kbytes` | 32768 | 114688 | 32768 |
+| `compaction_proactiveness` | 10 | 20 | 0 |
+| `lru_gen` (если writable) | 7 | 7 | 7 |
 
 ### Ввод-вывод
 
@@ -426,30 +411,6 @@ ASB останавливает **35+ отладочных/диагностиче
 
 ---
 
-## 👤 Карантин при смене пользователя
-
-При переключении Android-пользователя (клон, гость): **90-секундный карантин** — anti-clamp ВЫКЛ, обучение ПРОПУСК, headroom ВЫКЛ. Шторм сервисов не заражает данные сессии.
-
----
-
-## 🌡️ Thermal Debt
-
-Если предыдущая perf-сессия закончилась горячей (≥75°C) и новая стартует менее чем через 2 минуты → `ac_budget` **урезается вдвое**. Модуль не летит сразу в ракету после горячей сессии.
-
----
-
-## 📡 Определение возможностей устройства
-
-Проверяется **один раз** при старте:
-
-```
-caps: msm=1 hr=1 thermal_cpu=1 thermal_skin=1 gpu=1 uclamp=0
-```
-
-Governor адаптируется к возможностям устройства — без жёстко зашитых предположений.
-
----
-
 ## 🩺 Диагностика
 
 | Инструмент | Назначение |
@@ -465,14 +426,18 @@ Governor адаптируется к возможностям устройств
 
 ## 🔧 Команды
 
+Запускать с root (`su -c` из любого терминала — Termux, ADB shell, root file manager terminal):
+
 ```bash
-asb status                            # JSON-статус
-asb profile:performance               # переключить профиль
-asb start-session:performance:auto    # профиль + режим + сброс
-asb reload                            # перечитать конфиг
-cat /dev/.asb/state                   # снимок состояния
-tail -f /dev/.asb/governor.log        # живой лог
+su -c 'asb status'                          # JSON-статус
+su -c 'asb profile:performance'             # переключить профиль вживую
+su -c 'asb start-session:performance:auto'  # профиль + режим сессии + сброс
+su -c 'asb reload'                          # перечитать конфиг
+su -c 'cat /dev/.asb/state'                 # снимок состояния
+su -c 'tail -f /dev/.asb/governor.log'      # живой лог
 ```
+
+Бинарь `asb` доступен через `/system/bin/asb` (маленький wrapper, форвардящий в `/data/adb/modules/AutoSystemBoost/bin/asb`). Governor требует root, поэтому все команды `asb` нужно вызывать через `su`. Wrapper создаётся модулем автоматически — настройка PATH не нужна.
 
 ---
 
