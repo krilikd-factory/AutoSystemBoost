@@ -82,10 +82,6 @@ spawn_worker() {
 }
 
 notify_governor() {
-  # Tell governor about the profile change immediately, instead of waiting
-  # for asb_reconcile.sh to poll-detect (which can take 45-600s). Without this,
-  # the C-side FSM uses old profile_idx during the lag — wrong bounds applied,
-  # session metrics attributed to wrong profile, state file shows stale profile.
   _gov="$MODDIR/bin/asb"
   [ -x "$_gov" ] || _gov="$MODDIR/bin/$(uname -m)/asb"
   if [ -x "$_gov" ]; then
@@ -99,6 +95,7 @@ notify_governor() {
 
 quick_return_or_spawn() {
   echo "$PROFILE" > "$MODDIR/current_profile" 2>/dev/null || true
+  echo "$PROFILE" > /data/adb/asb_active_profile 2>/dev/null || true
   notify_governor
   update_desc_now
   spawn_worker
