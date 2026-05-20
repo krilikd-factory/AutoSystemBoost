@@ -1,11 +1,4 @@
 #!/system/bin/sh
-# ASB V38 RC5 logkit common library
-# Sourced by asb_log_battery_sleep.sh, asb_log_battery_mixed.sh, asb_log_perf.sh
-# Provides: module discovery, thermal zone mapping, before/after snapshots,
-# status polling, trace polling, finalization+packaging.
-#
-# All functions are prefixed with lk_ to avoid collisions.
-# Output directory is passed as LK_OUT_DIR by the caller.
 
 MODID="${MODID:-AutoSystemBoost}"
 
@@ -23,7 +16,6 @@ lk_resolve_moddir() {
 }
 
 lk_resolve_gov_log() {
-  # Prefer RAM-tmpfs log first (fast writes, no wear). Fall back to module dir.
   for p in \
     "/dev/.asb/governor.log" \
     "$MODDIR/runtime/governor.log" \
@@ -38,10 +30,6 @@ lk_have() { command -v "$1" >/dev/null 2>&1; }
 lk_get_prop() { getprop "$1" 2>/dev/null; }
 
 lk_status_json() {
-  # Emit current ASB status as a single JSON line.
-  # V38 RC6: the previous implementation relied on `command -v asb` which fails
-  # because $MODDIR/bin/asb isn't in PATH. Check the module-relative path first,
-  # then PATH, then runtime/status.json, then empty.
   if [ -x "$MODDIR/bin/asb" ]; then
     "$MODDIR/bin/asb" status 2>/dev/null | head -1
     return 0
@@ -51,7 +39,6 @@ lk_status_json() {
     return 0
   fi
   if [ -f "$MODDIR/runtime/status.json" ]; then
-    # status.json is maintained by governor and written atomically; safe to read
     cat "$MODDIR/runtime/status.json" 2>/dev/null
     return 0
   fi
@@ -59,7 +46,6 @@ lk_status_json() {
 }
 
 lk_probe_env() {
-  # One-shot environment probe — phone+OS+kernel+ASB metadata.
   {
     echo "===== ENVIRONMENT PROBE $(date -u '+%Y-%m-%dT%H:%M:%SZ') ====="
     echo ""
@@ -108,12 +94,9 @@ lk_probe_env() {
 }
 
 lk_dump_build_manifest() {
-  # Copy ASB build_manifest.json if present; it's generated at module build time
-  # and carries source tree hashes for reproducibility. Absent in source tree.
   if [ -f "$MODDIR/build_manifest.json" ]; then
     cp "$MODDIR/build_manifest.json" "$LK_OUT_DIR/build_manifest.json"
   else
-    # Synthesize a minimal manifest so downstream tools always have something.
     {
       echo "{"
       echo "  \"asb_version\":       \"$(awk -F= '/^version=/{print $2}' "$MODDIR/module.prop" 2>/dev/null)\","
@@ -127,8 +110,6 @@ lk_dump_build_manifest() {
 }
 
 lk_discover_zones() {
-  # Walk thermal_zone* and emit name->id map. Useful for correlating perf_trace
-  # columns with specific sensors on this boot (zone IDs vary per boot on OP15).
   {
     echo "# thermal zone discovery $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     for zd in /sys/class/thermal/thermal_zone*; do
@@ -139,7 +120,6 @@ lk_discover_zones() {
       echo "zone${_id}|${_t}|raw=${_raw}"
     done
   } > "$LK_OUT_DIR/thermal_zones.txt"
-  # Also emit Дима's short-form aliases.
   {
     _socd=$(grep '|socd|'            "$LK_OUT_DIR/thermal_zones.txt" 2>/dev/null | head -1 | cut -d'|' -f1 | tr -d 'zone')
     _prime=$(grep '|cpu-1-1-0|'      "$LK_OUT_DIR/thermal_zones.txt" 2>/dev/null | head -1 | cut -d'|' -f1 | tr -d 'zone')
@@ -166,8 +146,6 @@ lk_discover_zones() {
 }
 
 lk_snapshot_state() {
-  # Big state dump for a single moment in time. Name reflects when it runs
-  # (before / after / snapshot_<epoch>). Expensive; use sparingly.
   _tag="$1"
   _target="$LK_OUT_DIR/${_tag}.txt"
   {
@@ -223,7 +201,6 @@ lk_snapshot_state() {
 }
 
 lk_copy_runtime_artifacts() {
-  # Copy the governor-owned artifacts needed for analysis into the log dir.
   [ -f "$LK_GOV_LOG" ] && cp "$LK_GOV_LOG" "$LK_OUT_DIR/governor.log"
   for f in \
     "$MODDIR/runtime/session_history.jsonl" \
@@ -248,18 +225,9 @@ lk_copy_runtime_artifacts() {
 }
 
 lk_verify_caps() {
-  # V39: multi-source cap verification with governor-side source attribution.
-  #
-  # V38 cap_verify only compared `scaling_max_freq` to the profile's expected
-  # cap — real-device V38 logs showed 100% DESYNC rates, which was misleading.
-  # V39 probes three layers (scaling_max_freq / cpuinfo_max_freq / status JSON
-  # perf_cap_*) AND reads the governor's own cap_source_p0/p6 classification
-  # from status JSON — so the authoritative source attribution comes from the
-  # governor's own classifier, not from a shell re-implementation.
   . "$MODDIR/profiles/$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced).sh" 2>/dev/null
   _profile="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
 
-  # Pull the governor's own cap_source verdict and its declared caps.
   _j=$(lk_status_json)
   _asb_p0_cap=$(echo "$_j" | awk -F'"perf_cap_p0":' '{print $2}' | awk -F, '{print $1}')
   _asb_p6_cap=$(echo "$_j" | awk -F'"perf_cap_p6":' '{print $2}' | awk -F, '{print $1}')
@@ -301,16 +269,10 @@ lk_verify_caps() {
         _gov_src="$_gov_src_p0"
       fi
 
-      # V39: source classification mirrors the governor's cap_source_classify()
-      # including the shell-only branch (when asb_declared=0, caps are shell-applied
-      # via service.sh not governor runtime). This eliminates the V39
-      # false-positive where battery-profile caps were misreported as vendor_clamp.
       if [ -z "$_expect" ] || [ -z "$_smax" ]; then
         _status="unset"
         _source="-"
       elif [ -z "$_asb_declared" ] || [ "$_asb_declared" = "0" ]; then
-        # Shell-only branch: governor didn't register runtime caps (typical battery).
-        # Compare against profile directly.
         if [ "$_smax" = "$_expect" ]; then
           _status="ok (shell-applied)"
           _source="shell_applied"
@@ -318,7 +280,6 @@ lk_verify_caps() {
           _status="DESYNC_shell_overridden_up (profile=$_expect actual=$_smax over=+$((_smax - _expect)))"
           _source="shell_overridden_up"
         else
-          # actual < profile — could be legitimate vendor cooldown below our target
           _status="shell_overridden_down (profile=$_expect actual=$_smax under=$((_expect - _smax)))"
           _source="shell_overridden_down"
         fi
@@ -351,13 +312,6 @@ lk_verify_caps() {
 }
 
 lk_grep_governor_log_events() {
-  # Extract the events that matter most for post-mortem analysis into
-  # per-category files.
-  #
-  # V39: byte-offset slicing. Instead of matching [MM-DD HH:MM...] prefixes
-  # (which could leak prior-session lines into current analysis), we tail
-  # only the bytes appended AFTER capture began. This is deterministic
-  # regardless of log formatting or timestamp collisions.
   [ -f "$LK_OUT_DIR/governor.log" ] || return 0
 
   _start_off="${LK_GOV_LOG_OFFSET:-0}"
@@ -365,18 +319,12 @@ lk_grep_governor_log_events() {
   _total_bytes="${_total_bytes:-0}"
 
   if [ "$_start_off" -gt 0 ] && [ "$_total_bytes" -gt "$_start_off" ]; then
-    # tail -c +N takes characters starting at byte N+1. Since _start_off is
-    # the pre-session size, bytes after that are the session's appended content.
     tail -c "+$((_start_off + 1))" "$LK_OUT_DIR/governor.log" > "$LK_OUT_DIR/governor.log.session"
     _slice_mode="byte-offset"
   else
-    # Fallback: either we had 0 offset (log rotated mid-capture or didn't
-    # exist at start) or offset >= total (log rotated, lost our anchor).
-    # Use the whole log — better to over-include than miss events.
     cp "$LK_OUT_DIR/governor.log" "$LK_OUT_DIR/governor.log.session"
     _slice_mode="full-log-fallback"
   fi
-  # Leave a breadcrumb showing how slicing was done
   echo "slice_mode=$_slice_mode start_offset=$_start_off total_bytes=$_total_bytes session_bytes=$((_total_bytes - _start_off))" \
     > "$LK_OUT_DIR/_slice_info.txt"
 
@@ -390,9 +338,6 @@ lk_grep_governor_log_events() {
 }
 
 lk_emit_state_transitions() {
-  # Scan status_watch.txt and emit a compact list of FSM state transitions
-  # with timestamp+temp+reason. This is what perf analysis actually needs —
-  # not every tick, just the moments state changed.
   _src="$LK_OUT_DIR/status_watch.txt"
   _dst="$LK_OUT_DIR/state_transitions.txt"
   [ -f "$_src" ] || return 0
@@ -416,12 +361,6 @@ lk_emit_state_transitions() {
 }
 
 lk_emit_cap_source_summary() {
-  # V39: post-capture summary of how much time each cap_source state held.
-  # Reads status_watch.txt (which has per-tick status JSON snapshots) and
-  # counts the cap_source_p0 / cap_source_p6 occurrences. This is the
-  # headline diagnostic for "who really controls the CPU caps on OP15":
-  # if vendor_clamp dominates then the vendor HAL is running the show;
-  # if asb dominates then our governor writes are sticking.
   _src="$LK_OUT_DIR/status_watch.txt"
   [ -f "$_src" ] || return 0
   awk '
@@ -448,9 +387,6 @@ lk_emit_cap_source_summary() {
 }
 
 lk_emit_drift_summary() {
-  # Summarize cap-drift-up reconcile events from runtime_apply.log.
-  # Helps quantify how often vendor PowerHAL is overriding ASB's caps and
-  # whether the V40 rate-limiter is engaging.
   local _src="$LK_OUT_DIR/runtime_apply.log"
   [ -f "$_src" ] || return 0
   {
@@ -468,7 +404,6 @@ lk_emit_drift_summary() {
 }
 
 lk_finalize() {
-  # Called on normal exit or signal. Collects everything, packages as zip.
   echo "" >&2
   echo "[$(date '+%H:%M:%S')] lk_finalize: closing capture, collecting artifacts..." >&2
   lk_snapshot_state "after"
@@ -478,7 +413,6 @@ lk_finalize() {
   lk_emit_state_transitions
   lk_emit_cap_source_summary
   lk_emit_drift_summary
-  # Write _index.txt
   {
     echo "===== FILE LIST ====="
     ls -la "$LK_OUT_DIR"
@@ -496,7 +430,6 @@ lk_finalize() {
     echo "ticks_captured: $LK_TICK_COUNT"
   } > "$LK_OUT_DIR/_index.txt"
 
-  # Package as zip (prefer /sdcard for user accessibility).
   _zip_parent="${LK_ZIP_PARENT:-/sdcard}"
   mkdir -p "$_zip_parent" 2>/dev/null
   _zip_path="$_zip_parent/asb_${LK_SCENARIO}_$(date +%Y%m%d_%H%M).zip"
@@ -510,27 +443,21 @@ lk_finalize() {
 }
 
 lk_status_watch_header() {
-  # Single header line for status_watch entry
   echo ""
   echo "===== $(date) ====="
 }
 
 lk_perf_trace_header() {
-  # CSV-like header for the tight trace file. Columns match what post-processors
-  # (asb_analyze.py, session_report.py) expect plus V38 RC additions.
   cat <<'EOF' > "$LK_OUT_DIR/perf_trace.txt"
-# epoch|date|socd_raw|cpu_prime_raw|cpu_perf_raw|cpullc_raw|shell_f|shell_fr|shell_b|sys_t6|board|battery_tz|p0_cur|p0_max|p6_cur|p6_max|gpu_busy|gpu_clk|gpu_max|gpu_min|gpu_gov|batt_curr|batt_volt|load1|load5|load15|temp|temp_valid|temp_age_s|temp_reason|cpu_type|cpu_zone|skin_zone|surface_zone|skin_temp|surface_hotspot|ses_max_temp|ses_max_surface_temp|board_temp|headroom_valid|headroom_invalid_reason|fallback_type
 EOF
 }
 
 lk_battery_trace_header() {
   cat <<'EOF' > "$LK_OUT_DIR/battery_trace.txt"
-# epoch|date|state|profile|screen|bat_pct|bat_mA|bat_volt|bat_temp_10x|cpu_temp|skin|surface|board|idle_q|bat_deep|bat_light|bat_mod|bat_wake|headroom_pct|headroom_valid|headroom_invalid|thermal_cpu_type|fallback_type|wlan_rx|wlan_tx|rmnet_rx|rmnet_tx|load1|dwell_sec
 EOF
 }
 
 lk_capture_perf_trace_row() {
-  # One row of perf_trace.txt. Fast — reads sysfs directly, no json parse.
   _e=$(date +%s)
   _d=$(date '+%Y-%m-%d %H:%M:%S')
   _f() { cat "$1" 2>/dev/null; }
@@ -557,7 +484,6 @@ lk_capture_perf_trace_row() {
   _bc=$(_f /sys/class/power_supply/battery/current_now)
   _bv=$(_f /sys/class/power_supply/battery/voltage_now)
   read -r _l1 _l5 _l15 _rest < /proc/loadavg
-  # Status JSON — parse required fields via awk for speed.
   _j=$(lk_status_json)
   _temp=$(echo "$_j"    | awk -F'"temp":'                     '{print $2}' | awk -F, '{print $1}')
   _tv=$(echo "$_j"      | awk -F'"temp_valid":'               '{print $2}' | awk -F, '{print $1}')
@@ -579,7 +505,6 @@ lk_capture_perf_trace_row() {
 }
 
 lk_capture_battery_trace_row() {
-  # Battery-focused trace row. Runs at lower frequency than perf trace.
   _e=$(date +%s)
   _d=$(date '+%Y-%m-%d %H:%M:%S')
   _bpct=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
@@ -609,12 +534,10 @@ lk_capture_battery_trace_row() {
   _ct=$(echo "$_j"    | awk -F'"thermal_cpu_type":"'         '{print $2}' | awk -F'"' '{print $1}')
   _fb=$(echo "$_j"    | awk -F'"thermal_cpu_fallback_type":"' '{print $2}' | awk -F'"' '{print $1}')
   _dw=$(echo "$_j"    | awk -F'"dwell_sec":'                 '{print $2}' | awk -F, '{print $1}')
-  # bat_mod tracking — no equivalent field in live status, fill blank
   echo "${_e}|${_d}|${_st}|${_pr}|${_sc}|${_bpct}|${_bma}|${_bv}|${_btmp}|${_temp}|${_sk}|${_surf}|${_brd}|${_iq}|${_bd}|${_bl}||${_bw}|${_hp}|${_hv}|${_hir}|${_ct}|${_fb}|${_wrx}|${_wtx}|${_rrx}|${_rtx}|${_l1}|${_dw}" >> "$LK_OUT_DIR/battery_trace.txt"
 }
 
 lk_check_profile_matches() {
-  # Safety gate: refuse to run if current profile is not what the script is for.
   _expect="$1"
   _cur=$(cat "$MODDIR/current_profile" 2>/dev/null)
   if [ "$_cur" != "$_expect" ]; then
@@ -626,7 +549,6 @@ lk_check_profile_matches() {
 }
 
 lk_init() {
-  # Must be called by scenario scripts after setting LK_SCENARIO/LK_OUT_DIR/etc.
   MODDIR="$(lk_resolve_moddir)"
   LK_GOV_LOG="$(lk_resolve_gov_log)"
   mkdir -p "$LK_OUT_DIR" || { echo "Cannot create $LK_OUT_DIR"; exit 1; }
@@ -634,11 +556,6 @@ lk_init() {
   LK_START_ISO=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
   LK_TICK_COUNT=0
 
-  # V39: byte-offset session slicing.
-  # Timestamp-based filtering was unreliable — events from prior sessions
-  # could still leak through if log timestamps were ambiguous. Now we record
-  # the exact byte length of governor.log at capture start, and on finalize
-  # we only grep the bytes APPENDED during the session.
   if [ -f "$LK_GOV_LOG" ]; then
     LK_GOV_LOG_OFFSET=$(wc -c < "$LK_GOV_LOG" 2>/dev/null | tr -d ' ')
     LK_GOV_LOG_OFFSET="${LK_GOV_LOG_OFFSET:-0}"

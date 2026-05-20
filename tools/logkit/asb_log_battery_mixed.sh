@@ -1,21 +1,4 @@
 #!/system/bin/sh
-# asb_log_battery_mixed.sh — ASB V38 RC5 log collection for daytime mixed use
-#
-# Scenario: phone on battery profile during normal daytime use — screen on/off
-# transitions, light app use, background sync, some radio activity.
-# Goal: see whether V38 RC5's relaxed TRUST_PARTIAL gate actually catches
-# typical daytime sessions (iq=14-15, wph=8-11, wake=16-23) and produces
-# trust=1 (PARTIAL) instead of trust=0 (DIRTY) as in pre-RC builds.
-#
-# Design:
-#   - 20s poll interval — tighter than sleep, loose enough to not interfere
-#   - Snapshot every 10 minutes
-#   - Screen-transition timeline + radio activity log
-#   - Hourly TRUST evaluation dump from governor.log
-#   - Runs up to 8h by default
-#
-# Usage:  sh asb_log_battery_mixed.sh [hours=4]
-# Output: /sdcard/asb_battery_mixed_<timestamp>.zip
 
 set -u
 LK_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
@@ -37,7 +20,6 @@ lk_battery_trace_header
 echo "[$(date '+%H:%M:%S')] battery mixed-day capture running for up to ${LK_HOURS}h."
 echo "                     Use phone normally. Ctrl-C to stop."
 
-# Record initial governor.log tail position so we can diff "new lines since start"
 _gov_start_lines=$(wc -l < "$LK_GOV_LOG" 2>/dev/null)
 _gov_start_lines="${_gov_start_lines:-0}"
 
@@ -58,21 +40,18 @@ while : ; do
   lk_capture_battery_trace_row
   LK_TICK_COUNT=$((LK_TICK_COUNT + 1))
 
-  # Screen on/off timeline — a big signal for mixed-day behavior
   _screen=$(dumpsys power 2>/dev/null | grep -m1 "mWakefulness=" | sed 's/.*mWakefulness=//;s/ .*//')
   if [ -n "$_screen" ] && [ "$_screen" != "$_last_screen" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') wakefulness=$_screen (elapsed=${_elapsed}s)" >> "$LK_OUT_DIR/screen_timeline.txt"
     _last_screen="$_screen"
   fi
 
-  # Periodic big snapshot
   if [ $(( _now - _last_snapshot )) -ge "$LK_SNAPSHOT_S" ]; then
     lk_snapshot_state "snapshot_${_now}"
     lk_verify_caps
     _last_snapshot=$_now
   fi
 
-  # Hourly TRUST dump — tracks gate evaluations over time
   if [ $(( _now - _last_trust_dump )) -ge "$_trust_dump_interval" ]; then
     {
       echo "--- TRUST snapshot at $(date) (elapsed=${_elapsed}s) ---"
