@@ -1370,6 +1370,14 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
+	if [ -f "$MODPATH/system/bin/asb" ]; then
+	  chmod 0755 "$MODPATH/system/bin/asb"
+	fi
+
+	if [ -f "$MODPATH/bin/asb" ]; then
+	  chmod 0755 "$MODPATH/bin/asb"
+	fi
+
 	asb_prune_module
 	find $MODPATH -empty -type d -delete
 
