@@ -93,29 +93,24 @@ asb_migrate_governor_conf() {
 asb_migrate_governor_conf
 
 asb_run_soterfix() {
-  local _t=0 _i=0 _ok_streak=0
+  _t=0
   while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 300 ]; do
     sleep 5
     _t=$((_t + 5))
   done
   [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || return 0
-  pm list packages 2>/dev/null | grep -q "^package:com.tencent.soter.soterserver$" || return 0
-  sleep 10
-  while [ "$_i" -lt 12 ] && [ "$_ok_streak" -lt 2 ]; do
+  sleep 5
+  _i=0
+  while [ "$_i" -lt 15 ]; do
     stop vendor.soter >/dev/null 2>&1 || true
     sleep 1
     pm clear com.tencent.soter.soterserver >/dev/null 2>&1 || true
     sleep 1
     start vendor.soter >/dev/null 2>&1 || true
-    sleep 4
-    if [ "$(getprop init.svc.vendor.soter 2>/dev/null)" = "running" ]; then
-      _ok_streak=$((_ok_streak + 1))
-    else
-      _ok_streak=0
-    fi
+    sleep 2
     _i=$((_i + 1))
   done
-  asb_log "soterfix: completed (attempts=$_i ok_streak=$_ok_streak)"
+  asb_log "soterfix: completed ($_i attempts)"
 }
 (asb_run_soterfix) >/dev/null 2>&1 &
 
