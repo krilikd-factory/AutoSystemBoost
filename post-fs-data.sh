@@ -97,6 +97,5 @@ fi
 
 [ -f "$MODDIR/system/bin/asb" ] && chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 [ -f "$MODDIR/bin/asb" ] && chmod 0755 "$MODDIR/bin/asb" 2>/dev/null
-[ -f "$MODDIR/boot-completed.sh" ] && chmod 0755 "$MODDIR/boot-completed.sh" 2>/dev/null
 
 exit 0
