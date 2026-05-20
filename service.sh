@@ -92,27 +92,21 @@ asb_migrate_governor_conf() {
 }
 asb_migrate_governor_conf
 
-asb_run_soterfix() {
-  _t=0
-  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 300 ]; do
+(
+  until [ "$(getprop sys.boot_completed)" = "1" ]; do
     sleep 5
-    _t=$((_t + 5))
   done
-  [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || return 0
-  sleep 5
-  _i=0
-  while [ "$_i" -lt 15 ]; do
-    stop vendor.soter >/dev/null 2>&1 || true
+  _start=$(date +%s)
+  _end=$((_start + 300))
+  while [ "$(date +%s)" -lt "$_end" ]; do
+    stop vendor.soter
     sleep 1
-    pm clear com.tencent.soter.soterserver >/dev/null 2>&1 || true
+    pm clear com.tencent.soter.soterserver
+    start vendor.soter
     sleep 1
-    start vendor.soter >/dev/null 2>&1 || true
-    sleep 2
-    _i=$((_i + 1))
+    sleep 3
   done
-  asb_log "soterfix: completed ($_i attempts)"
-}
-(asb_run_soterfix) >/dev/null 2>&1 &
+) &
 
 (
   _t=0

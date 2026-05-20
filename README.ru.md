@@ -225,6 +225,78 @@
 
 ---
 
+## 🧠 BG_TRIM — Smart Reclaim Engine (опционально)
+
+При включении на установке BG_TRIM работает в фоне для снижения давления на память **без убийства приложений**. Селективно, по группам, с учётом foreground state.
+
+### Стратегия standby buckets
+
+| Группа приложений | Bucket | Trim Level | Memcg |
+|:------------------|:------:|:----------:|:-----:|
+| Лаунчер, клавиатура, телефон, камера, карты, SystemUI | (system) | **никогда** | `memory.low` (защита) |
+| Мессенджеры (WhatsApp, Telegram, Signal, Viber, Messenger, Discord, Teams, WeChat) | **active** | **никогда** | `memory.low` (защита) |
+| Галерея, фоторедакторы, музыкальные плееры | **working_set** | HIDDEN (только при экране off) | — |
+| Тяжёлые соцсети/медиа (Facebook, Instagram, Snapchat, TikTok, Netflix) | **rare** | BACKGROUND | `memory.high` (soft throttle) |
+
+### Чего BG_TRIM НЕ делает
+
+- ❌ Не trim'ит foreground app (`dumpsys activity` top-app проверка)
+- ❌ Не ставит `persist.sys.oplus.high_performance=1` (противоречит цели)
+- ❌ Не трогает `memory.max` (убивает приложения)
+- ❌ Не throttle'ит GMS / Play Store / Quick Search (свой scheduling)
+- ❌ Не использует агрессивный `device_idle_constants` (задерживает уведомления)
+- ❌ Не использует wildcard package matching (только явные списки)
+
+### Тюнинг OxygenOS Athena
+
+- `persist.sys.oplus.athena.reclaim_enable=1` — разрешить reclaim
+- `persist.sys.oplus.athena.force_kill=0` — запретить kill процессов
+- `persist.sys.oplus.athena.limit_count=120`
+- DeepThinker остаётся включён (нужен для AI Suggestions виджета, 3D обоев)
+
+### Отключение только телеметрии
+
+Отключаются только **4 чистых analytics-аплоадера**: `com.oplus.midas`, `com.oplus.olc`, `com.oplus.crashbox`, `com.oplus.logkit`. Останавливаются 2 telemetry HAL сервиса: `cammidasservice-V1`, `olc2-V3`. **Никаких** ContentProvider'ов, **никакого** IPC framework, **никакой** кастомизации.
+
+---
+
+## 🛡️ Восстановление функций OnePlus
+
+Startup-хук обеспечивает **27 пакетов OnePlus как включённые** на каждой загрузке — фиксит пакеты отключённые старыми модулями, ручным `pm disable` или stale-состоянием. `pm enable` на уже-включённом пакете — no-op, поэтому это бесплатно.
+
+| Категория | Пакеты |
+|:----------|:-------|
+| AI / умные функции | aimemory, deepthinker, athena, pantanal.ums, appsense |
+| Здоровье / активность | healthservice, trafficmonitor |
+| Качество сети | nas, nhs |
+| Обновления системы | sauhelper, sau, romupdate |
+| Платформенные зависимости | appplatform, appbooster, epona |
+| Кастомизация | customize.coreapp, customize.cust_manage, customize.systemui, customize.opmconfigs |
+| UI / настройки | wirelesssettings, powermonitor |
+| Зарядка / сигнал | qualityprotect |
+| Observability | metis, statistics.rom, onetrace |
+| Игровая сеть | gameopt, gamespaceui |
+
+Audio HAL suspend-blocker props (legacy от ранних сборок) также удаляются каждой загрузкой — предотвращает удержание kernel awake после BT audio сессий.
+
+---
+
+## 🔑 Авто-фикс Tencent Soter
+
+WeChat, Alipay и ряд китайских банков используют биометрический протокол Tencent Soter. На OnePlus global ROM демон `vendor.soter` часто ведёт себя некорректно после загрузки — теряется отпечаток в этих приложениях.
+
+ASB запускает автоматическое восстановление в фоне после `sys.boot_completed=1`:
+
+```
+stop vendor.soter
+pm clear com.tencent.soter.soterserver
+start vendor.soter
+```
+
+Повторяется в течение 5 минут. Пользователи без Tencent-приложений не затронуты — цикл становится no-op на устройствах без этих пакетов.
+
+---
+
 ## 📊 Сток vs ASB — реальные измерения
 
 > Данные из реальных sysfs/procfs дампов OnePlus 15
@@ -416,15 +488,59 @@ tail -f /dev/.asb/governor.log        # живой лог
 ## 📦 Установка
 
 1. Прошить через **KSU / KSUN / APatch / ReSuKiSu / Magisk**
-2. Выбрать функции при установке (BT, Camera, CPU, VM, Net, WiFi, GPS, Kernel, Log)
+2. Выбрать функции при установке — **15 категорий** (сохраняются между обновлениями):
+   - **Включены по умолчанию**: AUDIO, BT, CAMERA, CPU, VM, NET, WIFI, GPS, KERNEL, LOG, RADIO/IMS, DISPLAY, FPS, SECURITY
+   - **Опционально**: BG_TRIM (Smart Reclaim + телеметрия OPPO)
 3. Перезагрузка → governor стартует автоматически
-4. Открыть **WebUI** → выбрать профиль
-   
+4. Открыть **WebUI** → выбрать профиль, либо тапнуть **Action** в списке модулей для статуса
+
    <p align="center">
   <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
     <img src="https://img.shields.io/badge/⬇️_%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C_%D0%BF%D0%BE%D1%81%D0%BB%D0%B5%D0%B4%D0%BD%D1%8E%D1%8E_%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8E-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Скачать последнюю версию">
   </a>
 </p>
+
+---
+
+## 💾 Сохранение конфигурации
+
+Выбранные категории сохраняются в `/data/adb/asb_user_config` — **вне директории модуля**. При обновлении установщик находит сохранённый конфиг:
+
+```
+================================================
+  Найдена сохранённая конфигурация
+    от:   2026-05-20 12:30:00
+    ver:  Vxx
+  VOL+ = использовать  |  VOL- = выбрать заново
+================================================
+```
+
+- **VOL+** — применить сохранённые настройки, установка ~3 секунды
+- **VOL-** — пройти выбор заново, сохранить новые
+- **таймаут (10с)** — использовать сохранённые (консервативно)
+
+Активный профиль также сохраняется в `/data/adb/asb_active_profile` — выбор `performance` / `balanced` / `battery` переживает переустановку.
+
+---
+
+## 🎯 Кнопка Action — живой статус
+
+Тапни **Action** в списке модулей (Magisk/KSU) — получишь моментальный отчёт:
+
+```
+  ASB · battery
+
+  🌡  CPU      : 39°C
+  🔋 Battery  : 31.5°C   78%
+
+  Прогноз разряда до 0%:
+    📱 экран вкл : ~9ч 22м
+    💤 экран выкл: ~75ч 0м
+
+  Открытие Telegram канала...
+```
+
+Температура CPU, батареи + уровень, прогноз времени работы (экран вкл/выкл, калиброванный под профиль). Затем автоматически открывается канал поддержки.
 
 ---
 

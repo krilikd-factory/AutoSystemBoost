@@ -225,6 +225,78 @@ When battery screen-off session is noisy (wake_cycles ≥ 5):
 
 ---
 
+## 🧠 BG_TRIM — Smart Reclaim Engine (opt-in)
+
+When enabled at install, BG_TRIM runs in the background to reduce memory pressure **without killing apps**. Selective, app-aware, and respects foreground state.
+
+### Standby Bucket Strategy
+
+| App Group | Bucket | Trim Level | Memcg |
+|:----------|:------:|:----------:|:-----:|
+| Launcher, keyboard, dialer, camera, maps, SystemUI | (system) | **never** | `memory.low` (protect) |
+| Messengers (WhatsApp, Telegram, Signal, Viber, Messenger, Discord, Teams, WeChat) | **active** | **never** | `memory.low` (protect) |
+| Gallery, photo editors, music players | **working_set** | HIDDEN (screen-off only) | — |
+| Heavy social/media (Facebook, Instagram, Snapchat, TikTok, Netflix) | **rare** | BACKGROUND | `memory.high` (soft throttle) |
+
+### What BG_TRIM Does Not Do
+
+- ❌ Never trim foreground app (`dumpsys activity` top-app check)
+- ❌ Never set `persist.sys.oplus.high_performance=1` (contradicts the goal)
+- ❌ Never touch `memory.max` (kills apps)
+- ❌ Never throttle GMS / Play Store / Quick Search (handles its own scheduling)
+- ❌ No aggressive `device_idle_constants` (delays notifications)
+- ❌ No wildcard package matching (explicit lists only)
+
+### OxygenOS Athena Tuning
+
+- `persist.sys.oplus.athena.reclaim_enable=1` — allow reclaim
+- `persist.sys.oplus.athena.force_kill=0` — forbid outright kills
+- `persist.sys.oplus.athena.limit_count=120`
+- DeepThinker kept enabled (needed for AI Suggestions widget, 3D wallpaper)
+
+### Telemetry-Only Disable
+
+Only **4 pure analytics uploaders** are disabled: `com.oplus.midas`, `com.oplus.olc`, `com.oplus.crashbox`, `com.oplus.logkit`. Two telemetry HAL services stopped: `cammidasservice-V1`, `olc2-V3`. **No** ContentProviders, **no** IPC framework, **no** customization.
+
+---
+
+## 🛡️ OnePlus Feature Recovery
+
+A startup hook enforces **27 OnePlus packages as enabled** on every boot — fixes packages disabled by old modules, manual `pm disable`, or stale state from any source. `pm enable` on already-enabled packages is a no-op, so this is free.
+
+| Category | Packages |
+|:---------|:---------|
+| AI / smart features | aimemory, deepthinker, athena, pantanal.ums, appsense |
+| Health / activity | healthservice, trafficmonitor |
+| Network quality | nas, nhs |
+| System updates | sauhelper, sau, romupdate |
+| Platform deps | appplatform, appbooster, epona |
+| Customization | customize.coreapp, customize.cust_manage, customize.systemui, customize.opmconfigs |
+| UI / settings | wirelesssettings, powermonitor |
+| Charging / signal | qualityprotect |
+| Observability | metis, statistics.rom, onetrace |
+| Gaming network | gameopt, gamespaceui |
+
+Audio HAL suspend-blocker props (legacy from earlier builds) are also cleared every boot — prevents audio pipeline from keeping the kernel awake after BT audio sessions.
+
+---
+
+## 🔑 Tencent Soter Auto-Fix
+
+WeChat, Alipay, and several Chinese banks use the Tencent Soter biometric protocol. On OnePlus global ROMs, the `vendor.soter` daemon often misbehaves after boot — losing fingerprint auth in those apps.
+
+ASB runs an automatic repair in the background after `sys.boot_completed=1`:
+
+```
+stop vendor.soter
+pm clear com.tencent.soter.soterserver
+start vendor.soter
+```
+
+Repeated for 5 minutes. Users without Tencent apps are unaffected — the loop is a no-op on devices without those packages.
+
+---
+
 ## 📊 Stock vs ASB — Verified Measurements
 
 > From real sysfs/procfs dumps on OnePlus 15
@@ -416,15 +488,59 @@ tail -f /dev/.asb/governor.log        # live log
 ## 📦 Installation
 
 1. Flash in **KSU / KSUN / APatch / ReSuKiSu / Magisk**
-2. Select features at install (BT, Camera, CPU, VM, Net, WiFi, GPS, Kernel, Log)
+2. Select features at install — **15 categories** (saved between updates):
+   - **Always on by default**: AUDIO, BT, CAMERA, CPU, VM, NET, WIFI, GPS, KERNEL, LOG, RADIO/IMS, DISPLAY, FPS, SECURITY
+   - **Opt-in**: BG_TRIM (Smart Reclaim + OPPO telemetry trim)
 3. Reboot → governor starts automatically
-4. Open **WebUI** → choose profile
+4. Open **WebUI** → choose profile, or tap **Action** in module list for live status
 
    <p align="center">
   <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
     <img src="https://img.shields.io/badge/⬇️_Download_Latest_Release-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Download Latest Release">
   </a>
 </p>
+
+---
+
+## 💾 Config Persistence
+
+Your category selections are saved to `/data/adb/asb_user_config` — **outside the module directory**. When you flash an update, the installer detects the saved configuration:
+
+```
+================================================
+  Saved configuration found
+    from: 2026-05-20 12:30:00
+    ver:  Vxx
+  VOL+ = use saved  |  VOL- = re-select
+================================================
+```
+
+- **VOL+** — apply saved choices, install completes in ~3 seconds
+- **VOL-** — re-run the interactive flow, save new choices
+- **timeout (10s)** — defaults to saved (conservative)
+
+Active profile is also mirrored to `/data/adb/asb_active_profile` — your `performance` / `balanced` / `battery` choice survives reinstall.
+
+---
+
+## 🎯 Action Button — Live Status
+
+Tap **Action** in the module list (Magisk/KSU) for an instant readout:
+
+```
+  ASB · battery
+
+  🌡  CPU      : 39°C
+  🔋 Battery  : 31.5°C   78%
+
+  Estimated time to 0%:
+    📱 screen on  : ~9h 22m
+    💤 screen off : ~75h 0m
+
+  Opening Telegram channel...
+```
+
+CPU temp, battery temp + level, time-to-empty estimates (screen on / screen off, calibrated per profile). Then automatically opens the support channel.
 
 ---
 
