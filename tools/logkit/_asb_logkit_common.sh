@@ -195,6 +195,62 @@ lk_snapshot_state() {
     echo "===== THERMAL SERVICE DUMP ====="
     dumpsys thermalservice 2>/dev/null | head -200
     echo ""
+    echo "===== BG_TRIM STATE ====="
+    echo "--- standby buckets (curated apps) ---"
+    for _pkg in com.android.systemui com.oneplus.launcher \
+                com.whatsapp org.telegram.messenger com.discord \
+                com.facebook.katana com.instagram.android com.zhiliaoapp.musically \
+                com.netflix.mediaclient com.google.android.gms com.android.vending; do
+      _b=$(am get-standby-bucket "$_pkg" 2>/dev/null)
+      [ -n "$_b" ] && echo "  $_pkg : $_b"
+    done
+    echo ""
+    echo "--- top-app (current foreground) ---"
+    dumpsys activity activities 2>/dev/null | grep -E "topResumedActivity|ResumedActivity" | head -3
+    echo ""
+    echo "--- memcg v2 state ---"
+    if [ -d /sys/fs/cgroup ]; then
+      [ -r /sys/fs/cgroup/cgroup.controllers ] && echo "  controllers: $(cat /sys/fs/cgroup/cgroup.controllers 2>/dev/null)"
+      for _grp in /sys/fs/cgroup/uid_*/cgroup.procs; do
+        [ -f "$_grp" ] || continue
+        _d=$(dirname "$_grp")
+        _ml=$(cat "$_d/memory.low" 2>/dev/null)
+        _mh=$(cat "$_d/memory.high" 2>/dev/null)
+        _mm=$(cat "$_d/memory.max" 2>/dev/null)
+        [ "$_ml" = "0" ] && [ "$_mh" = "max" ] && [ "$_mm" = "max" ] && continue
+        echo "  $(basename "$_d") : low=$_ml high=$_mh max=$_mm"
+      done | head -20
+    fi
+    echo ""
+    echo "--- doze constants (must be empty for stock Doze) ---"
+    settings get global device_idle_constants 2>/dev/null
+    echo ""
+    echo "===== AUDIO HAL STATE ====="
+    echo "  vendor.soter init.svc: $(getprop init.svc.vendor.soter 2>/dev/null)"
+    echo "  audio.hal.output.suspend.supported: $(getprop audio.hal.output.suspend.supported 2>/dev/null)"
+    echo "  vendor.qc2audio.suspend.enabled: $(getprop vendor.qc2audio.suspend.enabled 2>/dev/null)"
+    echo "  ro.audio.hifi: $(getprop ro.audio.hifi 2>/dev/null)"
+    echo "  persist.audio.uhqa: $(getprop persist.audio.uhqa 2>/dev/null)"
+    echo ""
+    echo "===== NET STATE ====="
+    echo "  tcp_congestion_control: $(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
+    echo "  default_qdisc: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
+    echo "  tcp_mtu_probing: $(cat /proc/sys/net/ipv4/tcp_mtu_probing 2>/dev/null)"
+    echo "  udp_mem: $(cat /proc/sys/net/ipv4/udp_mem 2>/dev/null)"
+    echo "  tcp_rmem: $(cat /proc/sys/net/ipv4/tcp_rmem 2>/dev/null)"
+    echo "  tcp_wmem: $(cat /proc/sys/net/ipv4/tcp_wmem 2>/dev/null)"
+    echo ""
+    echo "===== WAKELOCKS (top 20 by active time) ====="
+    if [ -r /sys/kernel/debug/wakeup_sources ]; then
+      head -1 /sys/kernel/debug/wakeup_sources
+      tail -n +2 /sys/kernel/debug/wakeup_sources | sort -k7 -n -r | head -20
+    elif [ -r /d/wakeup_sources ]; then
+      head -1 /d/wakeup_sources
+      tail -n +2 /d/wakeup_sources | sort -k7 -n -r | head -20
+    else
+      echo "  (wakeup_sources not accessible)"
+    fi
+    echo ""
     echo "===== GOVERNOR LOG TAIL (last 50 lines) ====="
     tail -50 "$LK_GOV_LOG" 2>/dev/null
   } > "$_target" 2>&1
@@ -516,6 +572,13 @@ lk_capture_battery_trace_row() {
   _rrx=$(cat /sys/class/net/rmnet_data0/statistics/rx_bytes 2>/dev/null)
   _rtx=$(cat /sys/class/net/rmnet_data0/statistics/tx_bytes 2>/dev/null)
   read -r _l1 _rest < /proc/loadavg
+  _mfree=$(awk '/^MemAvailable:/{print $2; exit}' /proc/meminfo 2>/dev/null)
+  _swfree=$(awk '/^SwapFree:/{print $2; exit}' /proc/meminfo 2>/dev/null)
+  _zram_used=$(awk 'BEGIN{u=0} /^SwapTotal:/{t=$2} /^SwapFree:/{f=$2} END{print t-f}' /proc/meminfo 2>/dev/null)
+  _wakelocks=0
+  if [ -r /sys/kernel/debug/wakeup_sources ]; then
+    _wakelocks=$(awk 'NR>1 && $7>0 {n++} END{print n+0}' /sys/kernel/debug/wakeup_sources 2>/dev/null)
+  fi
   _j=$(lk_status_json)
   _st=$(echo "$_j"    | awk -F'"state":"'                    '{print $2}' | awk -F'"' '{print $1}')
   _pr=$(echo "$_j"    | awk -F'"profile":"'                  '{print $2}' | awk -F'"' '{print $1}')
@@ -534,7 +597,7 @@ lk_capture_battery_trace_row() {
   _ct=$(echo "$_j"    | awk -F'"thermal_cpu_type":"'         '{print $2}' | awk -F'"' '{print $1}')
   _fb=$(echo "$_j"    | awk -F'"thermal_cpu_fallback_type":"' '{print $2}' | awk -F'"' '{print $1}')
   _dw=$(echo "$_j"    | awk -F'"dwell_sec":'                 '{print $2}' | awk -F, '{print $1}')
-  echo "${_e}|${_d}|${_st}|${_pr}|${_sc}|${_bpct}|${_bma}|${_bv}|${_btmp}|${_temp}|${_sk}|${_surf}|${_brd}|${_iq}|${_bd}|${_bl}||${_bw}|${_hp}|${_hv}|${_hir}|${_ct}|${_fb}|${_wrx}|${_wtx}|${_rrx}|${_rtx}|${_l1}|${_dw}" >> "$LK_OUT_DIR/battery_trace.txt"
+  echo "${_e}|${_d}|${_st}|${_pr}|${_sc}|${_bpct}|${_bma}|${_bv}|${_btmp}|${_temp}|${_sk}|${_surf}|${_brd}|${_iq}|${_bd}|${_bl}||${_bw}|${_hp}|${_hv}|${_hir}|${_ct}|${_fb}|${_wrx}|${_wtx}|${_rrx}|${_rtx}|${_l1}|${_dw}|${_mfree}|${_swfree}|${_zram_used}|${_wakelocks}" >> "$LK_OUT_DIR/battery_trace.txt"
 }
 
 lk_check_profile_matches() {
