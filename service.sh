@@ -96,7 +96,12 @@ asb_migrate_governor_conf
   until [ "$(getprop sys.boot_completed)" = "1" ]; do
     sleep 5
   done
+  # V44: defensive Soter loop — self-disable if vendor.soter is not a known
+  # service on this device, avoiding wasted `pm clear` floods that can stress
+  # the early-boot system. Use PATH-based command lookup (toybox builtins)
+  # instead of absolute paths like /system/bin/stop which may not exist.
   if ! getprop init.svc.vendor.soter >/dev/null 2>&1; then
+    # Probe once: if vendor.soter isn't defined as an init service, skip loop.
     _soter_state="$(getprop init.svc.vendor.soter 2>/dev/null)"
     if [ -z "$_soter_state" ]; then
       asb_log "soter_loop: vendor.soter not present, skipping repair loop"
@@ -500,13 +505,11 @@ apply_net() {
   sysctlw net.ipv4.udp_wmem_min 65536
   [ -e /proc/sys/net/ipv6/udp_rmem_min ] && sysctlw net.ipv6.udp_rmem_min 65536
   [ -e /proc/sys/net/ipv6/udp_wmem_min ] && sysctlw net.ipv6.udp_wmem_min 65536
-  sysctlw net.ipv4.tcp_mtu_probing 2
+  sysctlw net.ipv4.tcp_mtu_probing 1
   sysctlw net.ipv4.tcp_slow_start_after_idle 0
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_retrans_collapse 0
   sysctlw net.ipv4.tcp_max_orphans 8192
-  sysctlw net.ipv4.tcp_rfc1337 1
-  [ -e /proc/sys/net/ipv4/udp_mem ] && sysctlw net.ipv4.udp_mem "4096 8192 16384"
   sysctlw net.ipv4.tcp_keepalive_time   $_P_TCP_KEEPIDLE
   sysctlw net.ipv4.tcp_keepalive_intvl  75
   sysctlw net.ipv4.tcp_keepalive_probes 9
@@ -780,13 +783,8 @@ asb_feature_enabled GPS && apply_gps_hygiene
 apply_audio_runtime() {
   setprop persist.audio.hifi.int_codec true 2>/dev/null || true
   setprop persist.vendor.audio.hifi.int_codec true 2>/dev/null || true
-  setprop ro.audio.hifi true 2>/dev/null || true
-  setprop ro.vendor.audio.hifi true 2>/dev/null || true
-  setprop persist.audio.hifi true 2>/dev/null || true
-  setprop persist.vendor.audio.hifi true 2>/dev/null || true
   setprop persist.audio.uhqa 1 2>/dev/null || true
   setprop persist.vendor.audio.uhqa true 2>/dev/null || true
-  setprop persist.vendor.audio.power.save.setting 1 2>/dev/null || true
   setprop audio.matrix.limiter.enable false 2>/dev/null || true
   setprop vendor.audio.matrix.limiter.enable false 2>/dev/null || true
   setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
@@ -972,6 +970,16 @@ apply_bg_trim_runtime() {
   asb_bg_trim_apply_memcg
 
   ( sleep 30; asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
+
+  (
+    while : ; do
+      sleep 21600
+      asb_bg_trim_apply_buckets >/dev/null 2>&1
+      if asb_bg_trim_screen_off; then
+        asb_bg_trim_reclaim_once >/dev/null 2>&1
+      fi
+    done
+  ) >/dev/null 2>&1 &
 }
 
 asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
