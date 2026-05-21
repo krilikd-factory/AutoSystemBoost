@@ -218,7 +218,7 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
     fsm->plan.sensor_used = 0;
 
     if (p == PROFILE_BATTERY && !screen_on && idle_band) {
-        fsm->plan.sensor_tier  = 2;  /* SPARSE */
+        fsm->plan.sensor_tier  = 2;
         fsm->plan.thermal_div  = 3;
         fsm->plan.allow_hr     = 0;
         fsm->plan.ac_eligible  = 0;
@@ -226,12 +226,17 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
         fsm->plan.ac_budget    = 0;
         fsm->plan.sensor_budget = 0;
         fsm->plan.plan_class   = PLAN_CLASS_IDLE_CLEAN;
-        /* V34: Start-of-session Priming -- if last session was hostile,
-         * don't immediately trust quiet; start as NOISY until proven. */
         if (g_last_session_env == ENV_HOSTILE) {
-            fsm->plan.thermal_div = 1;  /* more frequent checks initially */
-            fsm->plan.plan_class = PLAN_CLASS_IDLE_NOISY;
-            asb_log("plan: primed as IDLE_NOISY (last session env=hostile)");
+            int in_session_clean = (fsm->bat_time_deep_idle_sec >= 600 &&
+                                    fsm->bat_wake_cycles <= 3);
+            if (!in_session_clean) {
+                fsm->plan.thermal_div = 1;
+                fsm->plan.plan_class = PLAN_CLASS_IDLE_NOISY;
+                asb_log("plan: primed as IDLE_NOISY (last session env=hostile)");
+            } else {
+                asb_log("plan: clean in-session metrics override hostile prime (deep=%lds, wake=%d)",
+                        fsm->bat_time_deep_idle_sec, fsm->bat_wake_cycles);
+            }
         }
     } else if (p == PROFILE_BATTERY && !screen_on) {
         fsm->plan.sensor_tier  = 1;  /* REDUCED */
@@ -347,7 +352,7 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-#define ASB_VERSION "V39"
+#define ASB_VERSION "V44"
 
 static const char *intent_names[] = {"unknown","benchmark","long_game","idle","mixed","sleep_idle"};
 
