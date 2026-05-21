@@ -58,30 +58,24 @@
 
 ---
 
-## 📊 Measured Performance
+## 🧠 FSM — 6-State Machine
 
-<p align="center"><i>Every number below was measured on a real OnePlus 15 — multi-hour COD 144 fps sessions, overnight sleep, typical mixed daytime use. No simulations, no bench-only data.</i></p>
+| State | Entry Condition | CPU Caps (Balanced) | GPU | Polling |
+|:------|:----------------|:-------------------:|:---:|:-------:|
+| 🌙 `DEEP_IDLE` | Screen OFF | floor only | 0% | 10s |
+| 💤 `LIGHT_IDLE` | Screen ON, low activity | 1.19 / 1.88 GHz | 15% | 2s |
+| 📱 `MODERATE` | load ≥ 1.5 | dynamic | 40% | 2s |
+| ⚡ `HEAVY` | GPU ≥ 35% or load ≥ 2.0 | 2.4 / 3.3 GHz | 65% | 2s |
+| 🎮 `GAMING` | GPU ≥ 65% | 3.3 / 4.0 GHz | 100% | 2s |
+| 🛡️ `SUSTAINED` | temp ≥ 59°C (perf) or caps unreachable | 70% range | 80% | 2s |
 
-<table align="center">
-<tr><th colspan="2">🎮 Heavy Gaming (COD 144 fps, sustained load)</th></tr>
-<tr><td><b>Time spent in SUSTAINED</b></td><td align="center"><b>🟢 8.9 %</b> of session</td></tr>
-<tr><td><b>Longest SUSTAINED lock</b></td><td align="center"><b>🟢 &lt; 2 min</b> (FSM self-escapes)</td></tr>
-<tr><td><b>CPU temp — average under load</b></td><td align="center"><b>🟢 43.7 °C</b></td></tr>
-<tr><td><b>CPU temp — max observed</b></td><td align="center"><b>🟢 76 °C</b></td></tr>
-<tr><td><b>Surface hotspot — max</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
-<tr><td><b>Board temp — max</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
-<tr><td><b>Thermal sensor binding drift</b></td><td align="center"><b>🟢 0 events</b></td></tr>
-<tr><td><b>Invalid/spike sensor reads</b></td><td align="center"><b>🟢 0 ticks</b> (cross-validated guard)</td></tr>
-</table>
+**Transitions:** ⬆️ Up: 2 ticks (4s) · ⬇️ Down: 5 ticks (10s) · 📴 Screen OFF → `DEEP_IDLE`: instant
 
-<table align="center">
-<tr><th colspan="2">🌙 Overnight Battery Sleep</th></tr>
-<tr><td><b>Outcome classification</b></td><td align="center"><b>🟢 clean_night</b></td></tr>
-<tr><td><b>Idle quality score</b></td><td align="center"><b>🟢 98 / 100</b></td></tr>
-<tr><td><b>Spurious wake events</b></td><td align="center"><b>🟢 0</b></td></tr>
-<tr><td><b>Bat trust level</b></td><td align="center"><b>🟢 CLEAN</b></td></tr>
-<tr><td><b>Drain over 7.5 h</b></td><td align="center"><b>🟢 &lt; 4 %</b></td></tr>
-</table>
+**`SUSTAINED` escape paths:**
+- 🌡️ Temp drops below exit threshold (56°C for perf, 49°C for balanced) → normal exit
+- ⏱️ **Time-based escape**: After ≥ 180s in SUSTAINED with temp ≤ `enter − 3` and flat/falling trend → forced exit
+
+**`DEEP_IDLE` power:** epoll blocks = **0% CPU**, ~50 KB RSS.
 
 ---
 
@@ -112,27 +106,6 @@
 
 ---
 
-## 🧠 FSM — 6-State Machine
-
-| State | Entry Condition | CPU Caps (Balanced) | GPU | Polling |
-|:------|:----------------|:-------------------:|:---:|:-------:|
-| 🌙 `DEEP_IDLE` | Screen OFF | floor only | 0% | 10s |
-| 💤 `LIGHT_IDLE` | Screen ON, low activity | 1.19 / 1.88 GHz | 15% | 2s |
-| 📱 `MODERATE` | load ≥ 1.5 | dynamic | 40% | 2s |
-| ⚡ `HEAVY` | GPU ≥ 35% or load ≥ 2.0 | 2.4 / 3.3 GHz | 65% | 2s |
-| 🎮 `GAMING` | GPU ≥ 65% | 3.3 / 4.0 GHz | 100% | 2s |
-| 🛡️ `SUSTAINED` | temp ≥ 59°C (perf) or caps unreachable | 70% range | 80% | 2s |
-
-**Transitions:** ⬆️ Up: 2 ticks (4s) · ⬇️ Down: 5 ticks (10s) · 📴 Screen OFF → `DEEP_IDLE`: instant
-
-**`SUSTAINED` escape paths:**
-- 🌡️ Temp drops below exit threshold (56°C for perf, 49°C for balanced) → normal exit
-- ⏱️ **Time-based escape**: After ≥ 180s in SUSTAINED with temp ≤ `enter − 3` and flat/falling trend → forced exit
-
-**`DEEP_IDLE` power:** epoll blocks = **0% CPU**, ~50 KB RSS.
-
----
-
 ## 🎯 Profile Comparison — Real Numbers
 
 | Parameter | 🔥 Performance | ⚖️ Balanced | 🔋 Battery |
@@ -159,6 +132,33 @@
 | SUSTAINED enter / exit | **59 / 56 °C** | 57 / 49 °C | — |
 | Time-based escape | **≥ 180 s** | — | — |
 | Fast deep idle | — | — | **8 seconds** |
+
+---
+
+## 📊 Measured Performance
+
+<p align="center"><i>Every number below was measured on a real OnePlus 15 — multi-hour COD 144 fps sessions, overnight sleep, typical mixed daytime use. No simulations, no bench-only data.</i></p>
+
+<table align="center">
+<tr><th colspan="2">🎮 Heavy Gaming (COD 144 fps, sustained load)</th></tr>
+<tr><td><b>Time spent in SUSTAINED</b></td><td align="center"><b>🟢 8.9 %</b> of session</td></tr>
+<tr><td><b>Longest SUSTAINED lock</b></td><td align="center"><b>🟢 &lt; 2 min</b> (FSM self-escapes)</td></tr>
+<tr><td><b>CPU temp — average under load</b></td><td align="center"><b>🟢 43.7 °C</b></td></tr>
+<tr><td><b>CPU temp — max observed</b></td><td align="center"><b>🟢 76 °C</b></td></tr>
+<tr><td><b>Surface hotspot — max</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
+<tr><td><b>Board temp — max</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
+<tr><td><b>Thermal sensor binding drift</b></td><td align="center"><b>🟢 0 events</b></td></tr>
+<tr><td><b>Invalid/spike sensor reads</b></td><td align="center"><b>🟢 0 ticks</b> (cross-validated guard)</td></tr>
+</table>
+
+<table align="center">
+<tr><th colspan="2">🌙 Overnight Battery Sleep</th></tr>
+<tr><td><b>Outcome classification</b></td><td align="center"><b>🟢 clean_night</b></td></tr>
+<tr><td><b>Idle quality score</b></td><td align="center"><b>🟢 98 / 100</b></td></tr>
+<tr><td><b>Spurious wake events</b></td><td align="center"><b>🟢 0</b></td></tr>
+<tr><td><b>Bat trust level</b></td><td align="center"><b>🟢 CLEAN</b></td></tr>
+<tr><td><b>Drain over 7.5 h</b></td><td align="center"><b>🟢 &lt; 4 %</b></td></tr>
+</table>
 
 ---
 

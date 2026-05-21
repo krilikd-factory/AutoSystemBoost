@@ -58,30 +58,24 @@
 
 ---
 
-## 📊 Измеренные показатели
+## 🧠 FSM — Конечный автомат из 6 состояний
 
-<p align="center"><i>Каждая цифра ниже измерена на реальном OnePlus 15 — многочасовые сессии COD 144 fps, ночной сон, типичное дневное смешанное использование. Никаких симуляций, никакого чистого бенча.</i></p>
+| Состояние | Условие входа | CPU Caps (Balanced) | GPU | Опрос |
+|:----------|:--------------|:-------------------:|:---:|:-----:|
+| 🌙 `DEEP_IDLE` | Экран выключен | минимум | 0% | 10с |
+| 💤 `LIGHT_IDLE` | Экран включён, мало активности | 1.19 / 1.88 ГГц | 15% | 2с |
+| 📱 `MODERATE` | load ≥ 1.5 | динамически | 40% | 2с |
+| ⚡ `HEAVY` | GPU ≥ 35% или load ≥ 2.0 | 2.4 / 3.3 ГГц | 65% | 2с |
+| 🎮 `GAMING` | GPU ≥ 65% | 3.3 / 4.0 ГГц | 100% | 2с |
+| 🛡️ `SUSTAINED` | temp ≥ 59°C (perf) или caps недостижимы | 70% диапазона | 80% | 2с |
 
-<table align="center">
-<tr><th colspan="2">🎮 Тяжёлые игры (COD 144 fps, длительная нагрузка)</th></tr>
-<tr><td><b>Время в SUSTAINED</b></td><td align="center"><b>🟢 8.9 %</b> от сессии</td></tr>
-<tr><td><b>Самый долгий SUSTAINED-лок</b></td><td align="center"><b>🟢 &lt; 2 мин</b> (FSM сам выходит)</td></tr>
-<tr><td><b>CPU температура — средняя под нагрузкой</b></td><td align="center"><b>🟢 43.7 °C</b></td></tr>
-<tr><td><b>CPU температура — максимум</b></td><td align="center"><b>🟢 76 °C</b></td></tr>
-<tr><td><b>Surface hotspot — максимум</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
-<tr><td><b>Board температура — максимум</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
-<tr><td><b>Дрейф привязки термосенсора</b></td><td align="center"><b>🟢 0 событий</b></td></tr>
-<tr><td><b>Невалидные/spike показания</b></td><td align="center"><b>🟢 0 тиков</b> (cross-validated guard)</td></tr>
-</table>
+**Переходы:** ⬆️ Вверх: 2 тика (4с) · ⬇️ Вниз: 5 тиков (10с) · 📴 Экран OFF → `DEEP_IDLE`: мгновенно
 
-<table align="center">
-<tr><th colspan="2">🌙 Ночной сон на батарее</th></tr>
-<tr><td><b>Классификация исхода</b></td><td align="center"><b>🟢 clean_night</b></td></tr>
-<tr><td><b>Качество простоя (idle quality)</b></td><td align="center"><b>🟢 98 / 100</b></td></tr>
-<tr><td><b>Паразитные пробуждения</b></td><td align="center"><b>🟢 0</b></td></tr>
-<tr><td><b>Уровень доверия (bat trust)</b></td><td align="center"><b>🟢 CLEAN</b></td></tr>
-<tr><td><b>Разряд за 7.5 ч</b></td><td align="center"><b>🟢 &lt; 4 %</b></td></tr>
-</table>
+**Выходы из `SUSTAINED`:**
+- 🌡️ Температура упала ниже exit-порога (56°C perf, 49°C balanced) → обычный выход
+- ⏱️ **Time-based escape**: После ≥ 180с в SUSTAINED при temp ≤ `enter − 3` и плоском/падающем тренде → принудительный выход
+
+**`DEEP_IDLE`:** epoll блокирует = **0% CPU**, ~50 КБ RAM.
 
 ---
 
@@ -109,27 +103,6 @@
   <td>Три встроенных скрипта сбора для сценариев сон / дневное / игры. Pre-извлекает события, которые действительно важны (SUSTAINED переходы, смена thermal source, TRUST gates, cap verification) — post-mortem анализ в одно <code>grep</code>.</td>
 </tr>
 </table>
-
----
-
-## 🧠 FSM — Конечный автомат из 6 состояний
-
-| Состояние | Условие входа | CPU Caps (Balanced) | GPU | Опрос |
-|:----------|:--------------|:-------------------:|:---:|:-----:|
-| 🌙 `DEEP_IDLE` | Экран выключен | минимум | 0% | 10с |
-| 💤 `LIGHT_IDLE` | Экран включён, мало активности | 1.19 / 1.88 ГГц | 15% | 2с |
-| 📱 `MODERATE` | load ≥ 1.5 | динамически | 40% | 2с |
-| ⚡ `HEAVY` | GPU ≥ 35% или load ≥ 2.0 | 2.4 / 3.3 ГГц | 65% | 2с |
-| 🎮 `GAMING` | GPU ≥ 65% | 3.3 / 4.0 ГГц | 100% | 2с |
-| 🛡️ `SUSTAINED` | temp ≥ 59°C (perf) или caps недостижимы | 70% диапазона | 80% | 2с |
-
-**Переходы:** ⬆️ Вверх: 2 тика (4с) · ⬇️ Вниз: 5 тиков (10с) · 📴 Экран OFF → `DEEP_IDLE`: мгновенно
-
-**Выходы из `SUSTAINED`:**
-- 🌡️ Температура упала ниже exit-порога (56°C perf, 49°C balanced) → обычный выход
-- ⏱️ **Time-based escape**: После ≥ 180с в SUSTAINED при temp ≤ `enter − 3` и плоском/падающем тренде → принудительный выход
-
-**`DEEP_IDLE`:** epoll блокирует = **0% CPU**, ~50 КБ RAM.
 
 ---
 
@@ -161,6 +134,33 @@
 | Быстрый deep idle | — | — | **8 секунд** |
 
 ---
+
+---
+
+## 📊 Измеренные показатели
+
+<p align="center"><i>Каждая цифра ниже измерена на реальном OnePlus 15 — многочасовые сессии COD 144 fps, ночной сон, типичное дневное смешанное использование. Никаких симуляций, никакого чистого бенча.</i></p>
+
+<table align="center">
+<tr><th colspan="2">🎮 Тяжёлые игры (COD 144 fps, длительная нагрузка)</th></tr>
+<tr><td><b>Время в SUSTAINED</b></td><td align="center"><b>🟢 8.9 %</b> от сессии</td></tr>
+<tr><td><b>Самый долгий SUSTAINED-лок</b></td><td align="center"><b>🟢 &lt; 2 мин</b> (FSM сам выходит)</td></tr>
+<tr><td><b>CPU температура — средняя под нагрузкой</b></td><td align="center"><b>🟢 43.7 °C</b></td></tr>
+<tr><td><b>CPU температура — максимум</b></td><td align="center"><b>🟢 76 °C</b></td></tr>
+<tr><td><b>Surface hotspot — максимум</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
+<tr><td><b>Board температура — максимум</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
+<tr><td><b>Дрейф привязки термосенсора</b></td><td align="center"><b>🟢 0 событий</b></td></tr>
+<tr><td><b>Невалидные/spike показания</b></td><td align="center"><b>🟢 0 тиков</b> (cross-validated guard)</td></tr>
+</table>
+
+<table align="center">
+<tr><th colspan="2">🌙 Ночной сон на батарее</th></tr>
+<tr><td><b>Классификация исхода</b></td><td align="center"><b>🟢 clean_night</b></td></tr>
+<tr><td><b>Качество простоя (idle quality)</b></td><td align="center"><b>🟢 98 / 100</b></td></tr>
+<tr><td><b>Паразитные пробуждения</b></td><td align="center"><b>🟢 0</b></td></tr>
+<tr><td><b>Уровень доверия (bat trust)</b></td><td align="center"><b>🟢 CLEAN</b></td></tr>
+<tr><td><b>Разряд за 7.5 ч</b></td><td align="center"><b>🟢 &lt; 4 %</b></td></tr>
+</table>
 
 ---
 
