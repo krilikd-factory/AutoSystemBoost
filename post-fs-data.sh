@@ -2,6 +2,9 @@
 MODID="AutoSystemBoost"
 MODDIR="${0%/*}"
 [ -z "$MODDIR" ] || [ "$MODDIR" = "$0" ] && MODDIR="/data/adb/modules/$MODID"
+
+chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
+
 asb_feature_enabled() {
   _key="$1"
   [ -r "$MODDIR/features.conf" ] || return 0
