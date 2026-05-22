@@ -300,11 +300,32 @@ asb_apply_net() {
   [ -e /proc/sys/net/ipv4/tcp_notsent_lowat ] && sysctlw net.ipv4.tcp_notsent_lowat "$NET_TCP_NOTSENT" || true
   sysctlw net.ipv4.tcp_keepalive_time "$NET_TCP_KEEPIDLE" || true
   sysctlw net.ipv4.tcp_fin_timeout "$NET_TCP_FIN" || true
+  [ -n "$NET_TCP_MTU_PROBING" ] && sysctlw net.ipv4.tcp_mtu_probing "$NET_TCP_MTU_PROBING" || true
+  [ -n "$NET_UDP_MEM" ] && [ -e /proc/sys/net/ipv4/udp_mem ] && sysctlw net.ipv4.udp_mem "$NET_UDP_MEM" || true
+  if [ -n "$NET_HAPPY_EYEBALLS" ] && has settings; then
+    settings put system cloud_dns_happy_eyeballs_priority_enabled "$NET_HAPPY_EYEBALLS" >/dev/null 2>&1 || true
+  fi
   if has tc; then
     for _if in $(ls /sys/class/net 2>/dev/null | tr '\n' ' '); do
       case "$_if" in wlan0|rmnet*|ccmni*) tc qdisc replace dev "$_if" root "$NET_QDISC" >/dev/null 2>&1 || true ;; esac
     done
   fi
+}
+
+asb_apply_ux() {
+  asb_feature_enabled VM || return 0
+  has settings || return 0
+  if [ -n "$UX_ANIM_SCALE" ]; then
+    settings put global animator_duration_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
+    settings put global transition_animation_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
+    settings put global window_animation_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
+  fi
+  [ -n "$UX_LONG_PRESS" ] && settings put secure long_press_timeout "$UX_LONG_PRESS" >/dev/null 2>&1 || true
+  [ -n "$UX_MULTI_PRESS" ] && settings put secure multi_press_timeout "$UX_MULTI_PRESS" >/dev/null 2>&1 || true
+  [ -n "$UX_ADAPTIVE_BAT" ] && settings put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT" >/dev/null 2>&1 || true
+  [ -n "$UX_RAM_EXPAND" ] && settings put global ram_expand_size "$UX_RAM_EXPAND" >/dev/null 2>&1 || true
+  [ -n "$UX_LOW_HEAT" ] && settings put global sem_low_heat_mode "$UX_LOW_HEAT" >/dev/null 2>&1 || true
+  settings put global google_core_control 0 >/dev/null 2>&1 || true
 }
 
 asb_apply_wifi() {
@@ -342,4 +363,5 @@ asb_apply_profile_once() {
   asb_apply_vm
   asb_apply_net
   asb_apply_wifi
+  asb_apply_ux
 }
