@@ -96,12 +96,7 @@ asb_migrate_governor_conf
   until [ "$(getprop sys.boot_completed)" = "1" ]; do
     sleep 5
   done
-  # V44: defensive Soter loop — self-disable if vendor.soter is not a known
-  # service on this device, avoiding wasted `pm clear` floods that can stress
-  # the early-boot system. Use PATH-based command lookup (toybox builtins)
-  # instead of absolute paths like /system/bin/stop which may not exist.
   if ! getprop init.svc.vendor.soter >/dev/null 2>&1; then
-    # Probe once: if vendor.soter isn't defined as an init service, skip loop.
     _soter_state="$(getprop init.svc.vendor.soter 2>/dev/null)"
     if [ -z "$_soter_state" ]; then
       asb_log "soter_loop: vendor.soter not present, skipping repair loop"
@@ -505,11 +500,14 @@ apply_net() {
   sysctlw net.ipv4.udp_wmem_min 65536
   [ -e /proc/sys/net/ipv6/udp_rmem_min ] && sysctlw net.ipv6.udp_rmem_min 65536
   [ -e /proc/sys/net/ipv6/udp_wmem_min ] && sysctlw net.ipv6.udp_wmem_min 65536
-  sysctlw net.ipv4.tcp_mtu_probing 1
+  sysctlw net.ipv4.tcp_mtu_probing "$_P_TCP_MTU_PROBING"
   sysctlw net.ipv4.tcp_slow_start_after_idle 0
   sysctlw net.ipv4.tcp_recovery 1
   sysctlw net.ipv4.tcp_retrans_collapse 0
   sysctlw net.ipv4.tcp_max_orphans 8192
+  sysctlw net.ipv4.tcp_rfc1337 1
+  [ -n "$_P_UDP_MEM" ] && [ -e /proc/sys/net/ipv4/udp_mem ] && sysctlw net.ipv4.udp_mem "$_P_UDP_MEM"
+  [ -n "$_P_HAPPY_EYEBALLS" ] && settings put system cloud_dns_happy_eyeballs_priority_enabled "$_P_HAPPY_EYEBALLS" >/dev/null 2>&1 || true
   sysctlw net.ipv4.tcp_keepalive_time   $_P_TCP_KEEPIDLE
   sysctlw net.ipv4.tcp_keepalive_intvl  75
   sysctlw net.ipv4.tcp_keepalive_probes 9
@@ -783,8 +781,18 @@ asb_feature_enabled GPS && apply_gps_hygiene
 apply_audio_runtime() {
   setprop persist.audio.hifi.int_codec true 2>/dev/null || true
   setprop persist.vendor.audio.hifi.int_codec true 2>/dev/null || true
+  setprop ro.audio.hifi true 2>/dev/null || true
+  setprop ro.vendor.audio.hifi true 2>/dev/null || true
+  setprop persist.audio.hifi true 2>/dev/null || true
+  setprop persist.vendor.audio.hifi true 2>/dev/null || true
   setprop persist.audio.uhqa 1 2>/dev/null || true
   setprop persist.vendor.audio.uhqa true 2>/dev/null || true
+  setprop persist.vendor.audio.power.save.setting 1 2>/dev/null || true
+  setprop af.resampler.quality 255 2>/dev/null || true
+  setprop audio.offload.min.duration.secs 20 2>/dev/null || true
+  setprop vendor.audio.offload.min.duration.secs 20 2>/dev/null || true
+  setprop audio.offload.buffer.size.kb 256 2>/dev/null || true
+  setprop vendor.audio.offload.buffer.size.kb 256 2>/dev/null || true
   setprop audio.matrix.limiter.enable false 2>/dev/null || true
   setprop vendor.audio.matrix.limiter.enable false 2>/dev/null || true
   setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
@@ -1575,6 +1583,8 @@ apply_extra_settings() {
   settings put global adaptive_connectivity_enabled 0 >/dev/null 2>&1 || true
 }
 apply_extra_settings
+asb_load_profile
+[ "$(type -t asb_apply_ux 2>/dev/null)" = "function" ] && asb_apply_ux >/dev/null 2>&1
 (
   sleep 30
   _fg="$(getprop persist.sys.power.fuel.gauge 2>/dev/null)"
