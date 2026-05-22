@@ -227,15 +227,24 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
         fsm->plan.sensor_budget = 0;
         fsm->plan.plan_class   = PLAN_CLASS_IDLE_CLEAN;
         if (g_last_session_env == ENV_HOSTILE) {
-            int in_session_clean = (fsm->bat_time_deep_idle_sec >= 600 &&
-                                    fsm->bat_wake_cycles <= 3);
-            if (!in_session_clean) {
+            long _bt_in_s = fsm->bat_time_deep_idle_sec
+                          + fsm->bat_time_light_idle_sec
+                          + fsm->bat_time_moderate_sec;
+            int _in_iq = (_bt_in_s > 0)
+                ? (int)(fsm->bat_time_deep_idle_sec * 100 / _bt_in_s) : 0;
+            int strict_clean = (fsm->bat_time_deep_idle_sec >= 600 &&
+                                fsm->bat_wake_cycles <= 3);
+            int relaxed_clean = (fsm->bat_time_deep_idle_sec >= 900 &&
+                                 fsm->bat_wake_cycles <= 8 &&
+                                 _in_iq >= 60);
+            if (!strict_clean && !relaxed_clean) {
                 fsm->plan.thermal_div = 1;
                 fsm->plan.plan_class = PLAN_CLASS_IDLE_NOISY;
                 asb_log("plan: primed as IDLE_NOISY (last session env=hostile)");
             } else {
-                asb_log("plan: clean in-session metrics override hostile prime (deep=%lds, wake=%d)",
-                        fsm->bat_time_deep_idle_sec, fsm->bat_wake_cycles);
+                asb_log("plan: clean in-session override hostile prime (deep=%lds, wake=%d, iq=%d, mode=%s)",
+                        fsm->bat_time_deep_idle_sec, fsm->bat_wake_cycles, _in_iq,
+                        strict_clean ? "strict" : "relaxed");
             }
         }
     } else if (p == PROFILE_BATTERY && !screen_on) {
@@ -2521,7 +2530,7 @@ int main(int argc, char **argv) {
                 fsm_flush_state_time(&fsm);  /* V33: flush before heartbeat so bat_deep/light/mod are current */
                 int _hb_env = classify_environment(&fsm);
                 asb_log("heartbeat: state=%s profile=%d temp=%d%s headroom=%d%% load=%.1f gpu=%d bat=%d "
-                        "ses_heavy=%lds ses_sus=%lds bat_deep=%lds env=%s waste=%d sc=%d hc=%d",
+                        "ses_heavy=%lds ses_sus=%lds bat_deep=%lds bat_wake=%d env=%s waste=%d sc=%d hc=%d",
                         (fsm.state >= 0 && fsm.state < 6) ? _snames[fsm.state] : "?",
                         fsm.profile_idx,
                         metrics.therm.cpu_max_c,
@@ -2533,6 +2542,7 @@ int main(int argc, char **argv) {
                         fsm.ses_time_heavy_sec,
                         fsm.ses_time_sustained_sec,
                         fsm.bat_time_deep_idle_sec,
+                        fsm.bat_wake_cycles,
                         _enames[_hb_env],
                         g_action_waste,
                         metrics.therm.soft_clamp,
