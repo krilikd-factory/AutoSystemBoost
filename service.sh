@@ -796,25 +796,35 @@ asb_feature_enabled GPS && apply_gps_hygiene
 # ASB:GPS:END
 # ASB:AUDIO:BEGIN
 apply_audio_runtime() {
+  # V44 — VoIP-safe core (always applied when AUDIO=1).
+  # These props are conservative — no UHQA, no large offload buffers, no power-save
+  # tweaks that conflict with TWS earbuds + VoIP calls (Telegram/WhatsApp/Discord).
+  # Field-reported issue: V38-V40 broke Pixel Buds Pro 2 + Telegram calls on OnePlus 13R.
   setprop persist.audio.hifi.int_codec true 2>/dev/null || true
   setprop persist.vendor.audio.hifi.int_codec true 2>/dev/null || true
-  setprop ro.audio.hifi true 2>/dev/null || true
-  setprop ro.vendor.audio.hifi true 2>/dev/null || true
-  setprop persist.audio.hifi true 2>/dev/null || true
-  setprop persist.vendor.audio.hifi true 2>/dev/null || true
-  setprop persist.audio.uhqa 1 2>/dev/null || true
-  setprop persist.vendor.audio.uhqa true 2>/dev/null || true
-  setprop persist.vendor.audio.power.save.setting 1 2>/dev/null || true
-  setprop af.resampler.quality 255 2>/dev/null || true
-  setprop audio.offload.min.duration.secs 20 2>/dev/null || true
-  setprop vendor.audio.offload.min.duration.secs 20 2>/dev/null || true
-  setprop audio.offload.buffer.size.kb 256 2>/dev/null || true
-  setprop vendor.audio.offload.buffer.size.kb 256 2>/dev/null || true
-  setprop audio.matrix.limiter.enable false 2>/dev/null || true
-  setprop vendor.audio.matrix.limiter.enable false 2>/dev/null || true
   setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
   setprop persist.vendor.audio.aec_ref.enable false 2>/dev/null || true
   setprop vendor.audio.feature.aec_ref.enable false 2>/dev/null || true
+  setprop audio.matrix.limiter.enable false 2>/dev/null || true
+  setprop vendor.audio.matrix.limiter.enable false 2>/dev/null || true
+
+  # V44 — aggressive audio enhancements. Opt-in via governor.conf:AUDIO_AGGRESSIVE=1.
+  # WARNING: known to cause issues with TWS earbuds + VoIP on some devices.
+  # Recommended only if you do NOT use Bluetooth earbuds for calls.
+  if [ "${AUDIO_AGGRESSIVE:-0}" = "1" ]; then
+    setprop ro.audio.hifi true 2>/dev/null || true
+    setprop ro.vendor.audio.hifi true 2>/dev/null || true
+    setprop persist.audio.hifi true 2>/dev/null || true
+    setprop persist.vendor.audio.hifi true 2>/dev/null || true
+    setprop persist.audio.uhqa 1 2>/dev/null || true
+    setprop persist.vendor.audio.uhqa true 2>/dev/null || true
+    setprop persist.vendor.audio.power.save.setting 1 2>/dev/null || true
+    setprop af.resampler.quality 255 2>/dev/null || true
+    setprop audio.offload.min.duration.secs 20 2>/dev/null || true
+    setprop vendor.audio.offload.min.duration.secs 20 2>/dev/null || true
+    setprop audio.offload.buffer.size.kb 256 2>/dev/null || true
+    setprop vendor.audio.offload.buffer.size.kb 256 2>/dev/null || true
+  fi
 }
 asb_feature_enabled AUDIO && apply_audio_runtime
 # ASB:AUDIO:END
