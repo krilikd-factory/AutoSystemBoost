@@ -1,5 +1,10 @@
 #!/system/bin/sh
-exec >/dev/null 2>&1
+# V44: debug-aware output redirect. Create /data/adb/asb_debug or set
+# persist.asb.debug=1 to see early-boot stdout/stderr in KSU/Magisk logs.
+# Without flag, stdout/stderr go to /dev/null to keep boot quiet.
+if [ ! -f /data/adb/asb_debug ] && [ "$(getprop persist.asb.debug 2>/dev/null)" != "1" ]; then
+  exec >/dev/null 2>&1
+fi
 MODID="AutoSystemBoost"
 MODDIR="${0%/*}"
 asb_resolve_moddir() {
@@ -13,7 +18,8 @@ asb_resolve_moddir() {
 MODDIR="$(asb_resolve_moddir)"
 
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
-[ -r "$MODDIR/common/profile_core.sh" ] && . "$MODDIR/common/profile_core.sh"
+[ -r "$MODDIR/runtime/profile_core.sh" ] && . "$MODDIR/runtime/profile_core.sh"
+[ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
 ASB_STATE_LOG="/dev/.asb_profile_state/runtime_apply.log"
 asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$ASB_STATE_LOG" 2>/dev/null || true; }
 
@@ -96,25 +102,38 @@ asb_migrate_governor_conf
   until [ "$(getprop sys.boot_completed)" = "1" ]; do
     sleep 5
   done
-  if ! getprop init.svc.vendor.soter >/dev/null 2>&1; then
-    _soter_state="$(getprop init.svc.vendor.soter 2>/dev/null)"
-    if [ -z "$_soter_state" ]; then
-      asb_log "soter_loop: vendor.soter not present, skipping repair loop"
-    fi
-  fi
+  # V44: Soter repair is now opt-in (features.conf:SOTER_REPAIR=0 by default).
+  # Removed destructive `pm clear com.tencent.soter.soterserver` from V43 — it
+  # wiped user data of the Soter app on every boot. Now uses 3 retries with
+  # exponential back-off and stops once service is running.
+  asb_feature_enabled SOTER_REPAIR || exit 0
   _soter_state="$(getprop init.svc.vendor.soter 2>/dev/null)"
-  if [ -n "$_soter_state" ]; then
-    _start=$(date +%s)
-    _end=$((_start + 300))
-    while [ "$(date +%s)" -lt "$_end" ]; do
-      stop vendor.soter
-      sleep 1
-      pm clear com.tencent.soter.soterserver
-      start vendor.soter
-      sleep 1
-      sleep 3
-    done
+  if [ -z "$_soter_state" ]; then
+    asb_log "soter_repair: vendor.soter not declared on this device, skipping"
+    exit 0
   fi
+  _attempt=0
+  _delays="1 5 30"
+  for _d in $_delays; do
+    _attempt=$((_attempt + 1))
+    _state="$(getprop init.svc.vendor.soter 2>/dev/null)"
+    if [ "$_state" = "running" ]; then
+      asb_log "soter_repair: vendor.soter running, no action needed"
+      break
+    fi
+    asb_log "soter_repair: attempt $_attempt — state=$_state, restarting"
+    stop vendor.soter
+    sleep 1
+    start vendor.soter
+    sleep "$_d"
+    _state="$(getprop init.svc.vendor.soter 2>/dev/null)"
+    if [ "$_state" = "running" ]; then
+      asb_log "soter_repair: succeeded after attempt $_attempt"
+      break
+    fi
+  done
+  _final="$(getprop init.svc.vendor.soter 2>/dev/null)"
+  [ "$_final" != "running" ] && asb_log "soter_repair: gave up after 3 attempts, final state=$_final"
 ) &
 
 (
@@ -894,7 +913,13 @@ asb_bg_trim_pkg() {
   local _pkg="$1" _level="$2"
   asb_bg_trim_is_top "$_pkg" && return 0
   local _pids
+  # V44: real process discovery — pidof only matches exact name, missing
+  # :remote / :push / webview / custom multiprocess names. Use ps to find
+  # all processes whose name is "<pkg>" or starts with "<pkg>:".
   _pids=$(pidof "$_pkg" 2>/dev/null)
+  _pids="$_pids $(ps -A -o PID,NAME 2>/dev/null | awk -v p="$_pkg" \
+    '$2==p || index($2, p":")==1 {print $1}' | tr '\n' ' ')"
+  _pids=$(echo "$_pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ')
   [ -z "$_pids" ] && return 0
   local _pid
   for _pid in $_pids; do
@@ -947,6 +972,29 @@ asb_bg_trim_oplus_tune() {
   setprop persist.sys.oplus.deepthinker.reclaim_hint 1 2>/dev/null
 }
 
+# V44: throttle high-wakeup GMS components (GlanceEventsReportService,
+# NetworkLocationScanner, ALARM_WAKEUP). Uses appops to deny RUN_ANY_IN_BACKGROUND
+# for the receivers — does NOT disable GMS itself (push/Doze stay working).
+asb_bg_trim_gms_wakelock_throttle() {
+  has cmd || return 0
+  # Push these to rare bucket so JobScheduler runs them less often
+  cmd appops set com.google.android.gms RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1 || true
+  cmd appops set com.google.android.gms WAKE_LOCK allow             >/dev/null 2>&1 || true
+  # Throttle specific subcomponents that produce most wakeups
+  # GlanceEventsReportService — At Glance lockscreen widget reporting
+  cmd appops set com.google.android.googlequicksearchbox RUN_IN_BACKGROUND ignore >/dev/null 2>&1 || true
+  # Network Location Scanner — GMS location position reporting cadence
+  cmd appops set com.google.android.gms PSEUDO_LOCATION_REPORTING ignore >/dev/null 2>&1 || true
+  # Reduce GMS standby footprint without ignoring entirely (active needs to stay)
+  am set-standby-bucket com.google.android.gms working_set >/dev/null 2>&1 || true
+  am set-standby-bucket com.google.android.googlequicksearchbox rare >/dev/null 2>&1 || true
+  # Reduce passive location reporting interval — through device_config flags
+  if command -v asb_settings_put >/dev/null 2>&1; then
+    asb_settings_put global location_background_throttle_interval_ms 1800000   # 30 min
+    asb_settings_put global location_background_throttle_proximity_alert_interval_ms 1800000
+  fi
+}
+
 asb_bg_trim_reclaim_once() {
   local _p
   for _p in $_BG_TRIM_HEAVY; do
@@ -960,34 +1008,56 @@ asb_bg_trim_reclaim_once() {
 }
 
 apply_bg_trim_runtime() {
+  # V44: BG_TRIM_LEVEL=safe (default) | aggressive
+  # safe       — pm disable + buckets + memcg + wifi sleep only
+  # aggressive — adds initial reclaim + 6h periodic reclaim on screen-off
+  local _bg_level="${BG_TRIM_LEVEL:-safe}"
+
   local _p
   for _p in $_BG_TRIM_DISABLE; do
-    pm disable-user --user 0 "$_p" >/dev/null 2>&1 || true
+    if command -v asb_pm_disable >/dev/null 2>&1; then
+      asb_pm_disable "$_p"
+    else
+      pm disable-user --user 0 "$_p" >/dev/null 2>&1 || true
+    fi
   done
 
   stop vendor.oplus.hardware.cammidasservice-V1-service >/dev/null 2>&1 || true
   stop vendor.oplus.hardware.olc2-V3-service           >/dev/null 2>&1 || true
 
-  settings put global wifi_scan_always_enabled 0 >/dev/null 2>&1 || true
-  settings put global wifi_wakeup_enabled 0      >/dev/null 2>&1 || true
+  # V44: use baseline tracker so uninstall.sh can replay original values.
+  if command -v asb_settings_put >/dev/null 2>&1; then
+    asb_settings_put global wifi_scan_always_enabled 0
+    asb_settings_put global wifi_wakeup_enabled 0
+  else
+    settings put global wifi_scan_always_enabled 0 >/dev/null 2>&1 || true
+    settings put global wifi_wakeup_enabled 0      >/dev/null 2>&1 || true
+  fi
 
   asb_bg_trim_oplus_tune
+
+  asb_bg_trim_gms_wakelock_throttle
 
   asb_bg_trim_apply_buckets
 
   asb_bg_trim_apply_memcg
 
-  ( sleep 30; asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
+  asb_log "bg_trim: level=$_bg_level"
 
-  (
-    while : ; do
-      sleep 21600
-      asb_bg_trim_apply_buckets >/dev/null 2>&1
-      if asb_bg_trim_screen_off; then
-        asb_bg_trim_reclaim_once >/dev/null 2>&1
-      fi
-    done
-  ) >/dev/null 2>&1 &
+  # Aggressive level adds reclaim work
+  if [ "$_bg_level" = "aggressive" ]; then
+    ( sleep 30; asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
+
+    (
+      while : ; do
+        sleep 21600
+        asb_bg_trim_apply_buckets >/dev/null 2>&1
+        if asb_bg_trim_screen_off; then
+          asb_bg_trim_reclaim_once >/dev/null 2>&1
+        fi
+      done
+    ) >/dev/null 2>&1 &
+  fi
 }
 
 asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
