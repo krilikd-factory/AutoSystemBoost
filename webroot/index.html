@@ -656,11 +656,12 @@ body::before, body::after {
   background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
   border: 1px solid var(--border);
   border-radius: 20px;
-  padding: 12px 16px;
-  min-height: 58px;
+  padding: 18px 20px;
+  height: 84px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  box-sizing: border-box;
 }
 .live-cell-full { grid-column: 1 / -1; }
 .live-cell-wide { grid-column: span 1; }
@@ -684,14 +685,6 @@ body::before, body::after {
 .live-cell-value.cap-clamp { color: var(--perf); }
 .live-cell-value.cap-raised { color: var(--bal); }
 .live-cell-value.cap-shell { color: var(--accent2); }
-.live-foot {
-  text-align: center;
-  font: 11px/1 var(--mono);
-  color: var(--text-tertiary);
-  letter-spacing: 0.06em;
-  margin: 12px 0 4px 0;
-  text-transform: uppercase;
-}
 
 </style>
 </head>
@@ -847,8 +840,6 @@ body::before, body::after {
         <div class="live-cell-value" id="liveLearner">—</div>
       </div>
     </div>
-
-    <div class="live-foot" id="liveFoot">Updated just now</div>
 
   </div>
 
@@ -1167,14 +1158,6 @@ async function pollLive(visible) {
       _el('liveLearner').textContent = '(no session data yet)';
     }
 
-    const ft = _el('liveFoot');
-    if (ft) {
-      const now = new Date();
-      const hh = String(now.getHours()).padStart(2, '0');
-      const mm = String(now.getMinutes()).padStart(2, '0');
-      const ss = String(now.getSeconds()).padStart(2, '0');
-      ft.textContent = 'Updated ' + hh + ':' + mm + ':' + ss;
-    }
   } catch(e) { }
 }
 
