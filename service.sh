@@ -596,10 +596,10 @@ asb_feature_enabled NET && apply_net
 # ASB:NET:END
 apply_wifi_settings() {
   has settings || return 0
-  settings put global nearby_scanning_enabled 0 >/dev/null 2>&1 || true
-  settings put global wifi_scan_throttle_enabled 1 >/dev/null 2>&1 || true
-  settings put global wifi_suspend_optimizations_enabled 1 >/dev/null 2>&1 || true
-  settings put global wifi_verbose_logging_enabled 0 >/dev/null 2>&1 || true
+  asb_settings_put global nearby_scanning_enabled 0
+  asb_settings_put global wifi_scan_throttle_enabled 1
+  asb_settings_put global wifi_suspend_optimizations_enabled 1
+  asb_settings_put global wifi_verbose_logging_enabled 0
 }
 asb_feature_enabled WIFI && apply_wifi_settings
 apply_wifi_country() {
@@ -610,8 +610,8 @@ apply_wifi_country() {
     cmd -w wifi set-country-code "$_cc" >/dev/null 2>&1 || true
   }
   has settings && {
-    settings put global wifi_country_code "$_cc" >/dev/null 2>&1 || true
-    settings put global wifi_country_code_priority 1 >/dev/null 2>&1 || true
+    asb_settings_put global wifi_country_code "$_cc"
+    asb_settings_put global wifi_country_code_priority 1
   }
 }
 asb_feature_enabled WIFI && apply_wifi_country
@@ -783,14 +783,14 @@ asb_feature_enabled NET && apply_net_steering
 # ASB:GPS:BEGIN
 apply_gps_hygiene() {
   has settings || return 0
-  settings put global assisted_gps_enabled 1 >/dev/null 2>&1 || true
-  settings put global gps_xtra_server "https://xtra3.gpsonextra.net/xtra3grc.bin" >/dev/null 2>&1 || true
-  settings put global gps_xtra_server_1 "https://xtra2.gpsonextra.net/xtra2.bin" >/dev/null 2>&1 || true
-  settings put global gps_xtra_server_2 "https://xtra1.gpsonextra.net/xtra.bin" >/dev/null 2>&1 || true
-  settings put global ntp_server time.google.com >/dev/null 2>&1 || true
-  settings put global ntp_server_2 ntp1.inrim.it >/dev/null 2>&1 || true
-  settings put global ntp_server_3 0.it.pool.ntp.org >/dev/null 2>&1 || true
-  settings put global ntp_server_4 1.it.pool.ntp.org >/dev/null 2>&1 || true
+  asb_settings_put global assisted_gps_enabled 1
+  asb_settings_put global gps_xtra_server "https://xtra3.gpsonextra.net/xtra3grc.bin"
+  asb_settings_put global gps_xtra_server_1 "https://xtra2.gpsonextra.net/xtra2.bin"
+  asb_settings_put global gps_xtra_server_2 "https://xtra1.gpsonextra.net/xtra.bin"
+  asb_settings_put global ntp_server time.google.com
+  asb_settings_put global ntp_server_2 ntp1.inrim.it
+  asb_settings_put global ntp_server_3 0.it.pool.ntp.org
+  asb_settings_put global ntp_server_4 1.it.pool.ntp.org
 }
 asb_feature_enabled GPS && apply_gps_hygiene
 # ASB:GPS:END
@@ -1418,22 +1418,22 @@ apply_runtime_profile_now() {
 # ASB:CPU:END
 apply_bt_settings() {
   if has settings; then
-    settings put global bluetooth_btsnoop_default_mode 0 >/dev/null 2>&1 || true
-    settings put secure bluetooth_btsnoop_default_mode 0 >/dev/null 2>&1 || true
-    settings put global bluetooth_btsnoop_log_mode disabled >/dev/null 2>&1 || true
+    asb_settings_put global bluetooth_btsnoop_default_mode 0
+    asb_settings_put secure bluetooth_btsnoop_default_mode 0
+    asb_settings_put global bluetooth_btsnoop_log_mode disabled
     settings delete global bluetooth_disabled_profiles >/dev/null 2>&1 || true
   fi
 }
 asb_feature_enabled BT && apply_bt_settings
 apply_bt_codec_policy() {
   if has settings; then
-    settings put global bluetooth_a2dp_optional_codecs_enabled 1 2>/dev/null || true
-    settings put global bluetooth_a2dp_codec_priority_lhdc 1200 2>/dev/null || true
-    settings put global bluetooth_a2dp_codec_priority_ldac 1100 2>/dev/null || true
-    settings put global bluetooth_a2dp_codec_priority_aac 1000 2>/dev/null || true
-    settings put global bluetooth_a2dp_ldac_quality_index 0 2>/dev/null || true
-    settings put global bluetooth_a2dp_codec_ldac_quality_index 0 2>/dev/null || true
-    settings put global bluetooth_a2dp_codec_ldac_playback_quality 990 2>/dev/null || true
+    asb_settings_put global bluetooth_a2dp_optional_codecs_enabled 1
+    asb_settings_put global bluetooth_a2dp_codec_priority_lhdc 1200
+    asb_settings_put global bluetooth_a2dp_codec_priority_ldac 1100
+    asb_settings_put global bluetooth_a2dp_codec_priority_aac 1000
+    asb_settings_put global bluetooth_a2dp_ldac_quality_index 0
+    asb_settings_put global bluetooth_a2dp_codec_ldac_quality_index 0
+    asb_settings_put global bluetooth_a2dp_codec_ldac_playback_quality 990
   fi
   if has resetprop; then
     resetprop -n persist.vendor.qcom.bluetooth.aac_frm_ctl.enabled true >/dev/null 2>&1 || true
@@ -1449,8 +1449,8 @@ apply_bt_codec_policy() {
 asb_feature_enabled BT && apply_bt_codec_policy
 apply_bt_volume_behavior() {
   if has settings; then
-    settings put global bluetooth_disable_absolute_volume 0 2>/dev/null || true
-    settings put secure bluetooth_disable_absolute_volume 0 2>/dev/null || true
+    asb_settings_put global bluetooth_disable_absolute_volume 0
+    asb_settings_put secure bluetooth_disable_absolute_volume 0
   fi
   if has resetprop; then
     resetprop -n persist.bluetooth.disableabsvol false >/dev/null 2>&1 || true
@@ -1641,23 +1641,23 @@ apply_doze() {
     *)
       _DIC="light_after_inactive_to=30000,light_pre_idle_to=5000,light_max_idle_to=86400000,light_idle_to=10000,light_idle_factor=2.0,light_idle_maintenance_min_budget=2000,light_idle_maintenance_max_budget=15000,inactive_to=180000,sensing_to=0,locating_to=0,location_accuracy=2000.0,motion_inactive_to=0,idle_after_inactive_to=10000,idle_pending_to=5000,max_idle_pending_to=10000,idle_pending_factor=2.0,idle_to=3600000,max_idle_to=21600000,idle_factor=2.0,min_time_to_alarm=60000,max_temp_app_whitelist_duration=60000,mms_temp_app_whitelist_duration=30000,sms_temp_app_whitelist_duration=20000" ;;
   esac
-  settings put global device_idle_constants "$_DIC" >/dev/null 2>&1 || true
+  asb_settings_put global device_idle_constants "$_DIC"
 }
 asb_feature_enabled VM && apply_doze
 apply_extra_settings() {
   has settings || return 0
-  settings put global audio_safe_volume_state 0 >/dev/null 2>&1 || true
+  asb_settings_put global audio_safe_volume_state 0
   settings delete global netstats_enabled >/dev/null 2>&1 || true
   settings delete global app_usage_enabled >/dev/null 2>&1 || true
   settings delete global package_usage_stats_enabled >/dev/null 2>&1 || true
-  settings put global bluetooth_voip_support 1 >/dev/null 2>&1 || true
-  settings put global dropbox_max_files 5 >/dev/null 2>&1 || true
-  settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
-  settings put global activity_starts_logging_enabled    0 >/dev/null 2>&1 || true
-  settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
-  settings put global send_action_app_error              0 >/dev/null 2>&1 || true
-  settings put global enhanced_connectivity_enabled      0 >/dev/null 2>&1 || true
-  settings put global adaptive_connectivity_enabled 0 >/dev/null 2>&1 || true
+  asb_settings_put global bluetooth_voip_support 1
+  asb_settings_put global dropbox_max_files 5
+  asb_settings_put global network_recommendations_enabled 0
+  asb_settings_put global activity_starts_logging_enabled 0
+  asb_settings_put global settings_enable_monitor_phantom_procs false
+  asb_settings_put global send_action_app_error 0
+  asb_settings_put global enhanced_connectivity_enabled 0
+  asb_settings_put global adaptive_connectivity_enabled 0
 }
 apply_extra_settings
 asb_load_profile
