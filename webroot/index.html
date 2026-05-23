@@ -575,6 +575,39 @@ body::before, body::after {
 .profiles .pbtn:nth-child(1) { animation-delay: 0.3s; }
 .profiles .pbtn:nth-child(2) { animation-delay: 0.38s; }
 .profiles .pbtn:nth-child(3) { animation-delay: 0.46s; }
+/* V44: live status grid */
+.live-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 0 16px;
+  margin-top: 4px;
+}
+.live-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.live-tile-wide { grid-column: 1 / -1; }
+.live-tile-label {
+  font: 11px/1.2 var(--mono);
+  color: var(--text-tertiary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.live-tile-value {
+  font: 600 14px/1.3 var(--sans);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+.live-tile-value.cap-asb { color: var(--accent); }
+.live-tile-value.cap-clamp { color: var(--perf); }
+.live-tile-value.cap-raised { color: var(--bal); }
+.live-tile-value.cap-shell { color: var(--accent2); }
+
 </style>
 </head>
 <body>
@@ -635,6 +668,48 @@ body::before, body::after {
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
     </div>
 
+  </div>
+
+  <!-- V44: LIVE STATUS -->
+  <div class="sec" id="liveSec" style="display:none;">
+    <div class="sec-line"></div>
+    <div class="sec-label">Live Status</div>
+    <div class="sec-line"></div>
+  </div>
+
+  <div class="live-grid" id="liveGrid" style="display:none;">
+    <div class="live-tile">
+      <div class="live-tile-label">Profile</div>
+      <div class="live-tile-value" id="liveProfile">—</div>
+    </div>
+    <div class="live-tile">
+      <div class="live-tile-label">State</div>
+      <div class="live-tile-value" id="liveState">—</div>
+    </div>
+    <div class="live-tile">
+      <div class="live-tile-label">CPU °C</div>
+      <div class="live-tile-value" id="liveCpu">—</div>
+    </div>
+    <div class="live-tile">
+      <div class="live-tile-label">Skin °C</div>
+      <div class="live-tile-value" id="liveSkin">—</div>
+    </div>
+    <div class="live-tile">
+      <div class="live-tile-label">Battery</div>
+      <div class="live-tile-value" id="liveBat">—</div>
+    </div>
+    <div class="live-tile">
+      <div class="live-tile-label">Cap Source</div>
+      <div class="live-tile-value" id="liveCapSrc">—</div>
+    </div>
+    <div class="live-tile live-tile-wide">
+      <div class="live-tile-label">Modes</div>
+      <div class="live-tile-value" id="liveModes">—</div>
+    </div>
+    <div class="live-tile live-tile-wide">
+      <div class="live-tile-label">Learner</div>
+      <div class="live-tile-value" id="liveLearner">—</div>
+    </div>
   </div>
 
   <!-- TELEGRAM -->
@@ -789,6 +864,105 @@ function openTelegram(e) {
   const p = (r.stdout || 'balanced').trim();
   ui(['performance','balanced','battery'].includes(p) ? p : 'balanced');
 })();
+
+/* V44: live status — polls /dev/.asb/state every 5s.
+ * Reveals tiles only when state file exists (governor running). */
+function fmtTempC(deci) {
+  if (deci == null || isNaN(deci)) return '—';
+  if (deci > 1000) return (deci / 1000).toFixed(0);
+  if (deci > 100)  return (deci / 10).toFixed(0);
+  return String(Math.round(deci));
+}
+function el(id) { return document.getElementById(id); }
+function pickJsonField(json, key) {
+  try {
+    const v = json[key];
+    if (v === undefined || v === null) return null;
+    return v;
+  } catch(e) { return null; }
+}
+async function pollLive() {
+  try {
+    const r = await run('cat /dev/.asb/state 2>/dev/null');
+    if (!r || !r.stdout || !r.stdout.trim()) return;
+    /* state file is mostly key=value, but has a JSON block from build_status_json
+     * appended for some fields. Try to parse what we can. */
+    const raw = r.stdout;
+    const kv = {};
+    raw.split(/\r?\n/).forEach(line => {
+      const eq = line.indexOf('=');
+      if (eq > 0 && line[0] !== '{') {
+        kv[line.slice(0, eq)] = line.slice(eq + 1);
+      }
+    });
+
+    const lj = await run('cat /dev/.asb/learner_state.json 2>/dev/null');
+    let learner = null;
+    if (lj && lj.stdout && lj.stdout.trim()) {
+      try { learner = JSON.parse(lj.stdout); } catch(e) {}
+    }
+
+    /* Pull status JSON */
+    let st = null;
+    try {
+      const sj = await run('/data/adb/modules/AutoSystemBoost/bin/asb status 2>/dev/null');
+      if (sj && sj.stdout) st = JSON.parse(sj.stdout);
+    } catch(e) {}
+
+    el('liveSec').style.display = '';
+    el('liveGrid').style.display = '';
+
+    const profile = (st && st.profile) || kv.profile || '—';
+    const state = (st && st.state) || kv.state || '—';
+    el('liveProfile').textContent = profile;
+    el('liveState').textContent = state;
+
+    /* CPU temp from kv.thermal (dC*10) or st.temp */
+    const cpuT = (st && st.temp) || parseInt(kv.thermal || '0', 10);
+    el('liveCpu').textContent = cpuT ? fmtTempC(cpuT) + '°' : '—';
+
+    const skinT = (st && st.skin_temp) || 0;
+    el('liveSkin').textContent = skinT ? skinT + '°' : '—';
+
+    const bcap = (st && st.capacity) || parseInt(kv.capacity || '0', 10);
+    const bma = (st && st.mA) || parseInt(kv.mA || '0', 10);
+    el('liveBat').textContent = (bcap ? bcap + '%' : '—') + (bma ? ' · ' + bma + ' mA' : '');
+
+    const capSrc = (st && st.cap_source_p0) || '—';
+    const capEl = el('liveCapSrc');
+    capEl.textContent = capSrc;
+    capEl.className = 'live-tile-value';
+    if (capSrc === 'asb' || capSrc === 'asb_dynamic') capEl.classList.add('cap-asb');
+    else if (capSrc === 'vendor_clamp') capEl.classList.add('cap-clamp');
+    else if (capSrc === 'vendor_raised') capEl.classList.add('cap-raised');
+    else if (capSrc && capSrc.startsWith('shell')) capEl.classList.add('cap-shell');
+
+    const modes = [];
+    if (st) {
+      if (st.auto_bat === 1) {
+        const reason = st.auto_bat_reason || 'low_pct';
+        modes.push('🔻 auto-battery (' + reason + ')');
+      }
+      if (st.qn_active === 1) modes.push('🌙 night-quiet');
+    }
+    el('liveModes').textContent = modes.length ? modes.join(' · ') : '—';
+
+    if (learner) {
+      const tier = learner.trust_tier || '—';
+      const sessions = learner.sessions ? learner.sessions.battery : 0;
+      const outcome = learner.last_outcome || '—';
+      el('liveLearner').textContent =
+        'trust: ' + tier +
+        ' · sessions: ' + sessions +
+        ' · last: ' + outcome;
+    } else {
+      el('liveLearner').textContent = '(no session data yet)';
+    }
+  } catch(e) { /* silent — WebUI keeps working without live data */ }
+}
+/* Start polling 1s after page load; refresh every 5s */
+setTimeout(pollLive, 1000);
+setInterval(pollLive, 5000);
 </script>
 </body>
 </html>
