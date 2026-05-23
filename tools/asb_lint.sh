@@ -241,7 +241,9 @@ done
 echo
 echo "🔧 Features"
 FEAT="$MODDIR/features.conf"
-KNOWN_FEATURES="AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY"
+KNOWN_FEATURES="AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR"
+# V44: features explicitly declared as RESERVED (no runtime path yet)
+RESERVED_FEATURES="RADIO_IMS DISPLAY FPS SECURITY"
 if [ -f "$FEAT" ]; then
   F_DUPES="$(awk -F= '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {k=$1; gsub(/[[:space:]]+$/, "", k); print k}' "$FEAT" | sort | uniq -d)"
   [ -n "$F_DUPES" ] && warn "duplicate feature keys: $F_DUPES" || ok "no duplicate feature keys"
@@ -249,16 +251,81 @@ if [ -f "$FEAT" ]; then
     [ -z "$key" ] && continue
     case "$key" in ''|\#*) continue ;; esac
     key="$(echo "$key" | tr -d '[:space:]')"
-    val="$(echo "$val" | tr -d '[:space:]')"
+    # V44: strip inline # comments and surrounding whitespace from value
+    val="$(echo "$val" | sed 's/#.*$//' | tr -d '[:space:]')"
     case " $KNOWN_FEATURES " in
       *" $key "*) : ;;
       *) warn "unknown feature key: $key" ;;
     esac
     case "$val" in 0|1) : ;; *) warn "features.conf: $key=$val (expected 0 or 1)" ;; esac
   done < "$FEAT"
+  # V44: check RESERVED features and warn (not err) if declared
+  for _rf in $RESERVED_FEATURES; do
+    if grep -qE "^${_rf}=" "$FEAT" 2>/dev/null; then
+      warn "feature $_rf is RESERVED (declared but no runtime code yet)"
+    fi
+  done
   ok "features.conf parsed"
 else
   err "features.conf missing"
+fi
+
+echo
+echo "🩺 V44 — Operational Health"
+# Check 1: common/profile_core.sh must NOT exist (V44 deduped — only runtime/ remains)
+if [ -f "$MODDIR/common/profile_core.sh" ]; then
+  err "common/profile_core.sh present — V44 expects only runtime/profile_core.sh (V27-class regression risk)"
+elif [ ! -f "$MODDIR/runtime/profile_core.sh" ]; then
+  err "runtime/profile_core.sh missing"
+else
+  ok "profile_core.sh: only runtime/ copy (V44 deduplication enforced)"
+fi
+
+# Check 2: baseline helper must exist (V44 restore safety net)
+if [ -f "$MODDIR/runtime/asb_baseline.sh" ]; then
+  ok "runtime/asb_baseline.sh present (restore path enabled)"
+else
+  warn "runtime/asb_baseline.sh missing — persistent settings will not be restored on uninstall"
+fi
+
+# Check 3: BG_TRIM_LEVEL must be safe or aggressive
+if [ -f "$MODDIR/config/governor.conf.shipped" ]; then
+  _bgl="$(grep -E "^BG_TRIM_LEVEL=" "$MODDIR/config/governor.conf.shipped" 2>/dev/null | tail -1 | cut -d= -f2)"
+  case "$_bgl" in
+    safe|aggressive) ok "BG_TRIM_LEVEL=$_bgl (valid)" ;;
+    "") warn "BG_TRIM_LEVEL not set in shipped config (will default to safe at runtime)" ;;
+    *) err "BG_TRIM_LEVEL=$_bgl (must be safe or aggressive)" ;;
+  esac
+fi
+
+# Check 4: KERNEL block must not contain audio props (V44 fix for Chinese OnePlus 15)
+if [ -f "$MODDIR/system.prop" ]; then
+  _kern_audio="$(sed -n '/# ASB:KERNEL:BEGIN/,/# ASB:KERNEL:END/p' "$MODDIR/system.prop" | grep -cE "^(persist\.|ro\.|vendor\.).*audio|^(persist\.|ro\.|vendor\.).*dts|^(persist\.|ro\.|vendor\.).*dolby")"
+  if [ "$_kern_audio" -gt 0 ]; then
+    err "system.prop ASB:KERNEL block contains $_kern_audio audio props (V44 regression — moved to docs/removed_audio_props_v44.txt)"
+  else
+    ok "system.prop KERNEL block free of audio overrides"
+  fi
+fi
+
+# Check 5: Soter loop must be opt-in (SOTER_REPAIR=0 default)
+if grep -qE "^SOTER_REPAIR=" "$MODDIR/features.conf" 2>/dev/null; then
+  _sv="$(grep -E "^SOTER_REPAIR=" "$MODDIR/features.conf" | tail -1 | sed 's/SOTER_REPAIR=//;s/#.*//;s/[[:space:]]//g')"
+  if [ "$_sv" = "0" ]; then
+    ok "SOTER_REPAIR=0 (opt-in, default off)"
+  elif [ "$_sv" = "1" ]; then
+    warn "SOTER_REPAIR=1 — Soter repair runs on every boot"
+  fi
+fi
+
+# Check 6: pm clear in Soter loop must NOT be present (V44 — destructive, removed)
+if [ -f "$MODDIR/service.sh" ]; then
+  # Exclude comments — grep for pm clear NOT preceded by '#'
+  if grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -qE "pm clear com\.tencent\.soter\.soterserver"; then
+    err "service.sh contains destructive 'pm clear com.tencent.soter.soterserver' (V44 fix — should be removed)"
+  else
+    ok "Soter loop free of pm clear (V44 safe)"
+  fi
 fi
 
 echo
