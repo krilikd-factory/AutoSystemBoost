@@ -320,6 +320,12 @@ typedef struct {
     int             auto_battery_active;       /* 1 if auto-switch triggered, 0 otherwise */
     int             auto_battery_restore_idx;  /* profile to restore (-1 if none) */
     time_t          auto_battery_last_action;  /* rate limit: min interval between switches */
+    /* V44: reason + timestamp of last auto-battery state transition.
+     * Reasons: "none", "low_pct", "high_pct_restore", "manual_clear"
+     * Used by status JSON and audit logs.
+     */
+    char            auto_battery_reason[24];
+    time_t          auto_battery_since;
 } asb_fsm_t;
 
 static inline long fsm_elapsed_sec(const asb_fsm_t *fsm) {
@@ -371,6 +377,10 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
     fsm->auto_battery_restore_idx = -1;
     fsm->auto_battery_active = 0;
     fsm->auto_battery_last_action = 0;
+    /* V44 */
+    strncpy(fsm->auto_battery_reason, "none", sizeof(fsm->auto_battery_reason) - 1);
+    fsm->auto_battery_reason[sizeof(fsm->auto_battery_reason) - 1] = '\0';
+    fsm->auto_battery_since = 0;
     {
         FILE *_abf = fopen("/dev/.asb/auto_battery_state", "r");
         if (_abf) {

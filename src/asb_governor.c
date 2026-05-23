@@ -795,6 +795,123 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
 static int g_total_writes = 0;
 static time_t g_last_write_ts = 0;
 
+/* V44: conflict tracking — count cap_source classifications across time. */
+static unsigned long g_v44_clamp_total = 0;       /* total times we saw "vendor_clamp" */
+static unsigned long g_v44_raised_total = 0;      /* total times we saw "vendor_raised" */
+static unsigned long g_v44_clamp_1h = 0;          /* rolling 1h window */
+static time_t        g_v44_clamp_1h_start = 0;    /* window start ts */
+static char          g_v44_last_clamp_source[32] = "";  /* last cap_source seen (any non-asb) */
+static time_t        g_v44_last_clamp_ts = 0;
+
+static void v44_conflict_record(const char *cap_source) {
+    if (!cap_source) return;
+    /* Track all non-asb / non-shell sources of cap changes. */
+    int is_clamp  = (strcmp(cap_source, "vendor_clamp") == 0);
+    int is_raised = (strcmp(cap_source, "vendor_raised") == 0);
+    int is_thermal = (strcmp(cap_source, "thermal_overlay") == 0);
+    if (!is_clamp && !is_raised && !is_thermal) return;
+    time_t now = time(NULL);
+    if (g_v44_clamp_1h_start == 0) g_v44_clamp_1h_start = now;
+    if (now - g_v44_clamp_1h_start >= 3600) {
+        g_v44_clamp_1h = 0;
+        g_v44_clamp_1h_start = now;
+    }
+    if (is_clamp)  { g_v44_clamp_total++;  g_v44_clamp_1h++; }
+    if (is_raised) { g_v44_raised_total++; }
+    strncpy(g_v44_last_clamp_source, cap_source, sizeof(g_v44_last_clamp_source) - 1);
+    g_v44_last_clamp_source[sizeof(g_v44_last_clamp_source) - 1] = '\0';
+    g_v44_last_clamp_ts = now;
+}
+
+/* V44: write /dev/.asb/conflicts.json — exposes vendor_clamp / vendor_raised
+ * counts and last writer info for WebUI dashboard. */
+static void write_conflicts_json(void) {
+    FILE *f = fopen("/dev/.asb/conflicts.json.tmp", "w");
+    if (!f) return;
+    fprintf(f,
+        "{\n"
+        "  \"last_cap_source\": \"%s\",\n"
+        "  \"last_cap_source_ts\": %lld,\n"
+        "  \"vendor_clamp_total\": %lu,\n"
+        "  \"vendor_raised_total\": %lu,\n"
+        "  \"vendor_clamp_1h\": %lu\n"
+        "}\n",
+        g_v44_last_clamp_source[0] ? g_v44_last_clamp_source : "none",
+        (long long)g_v44_last_clamp_ts,
+        g_v44_clamp_total,
+        g_v44_raised_total,
+        g_v44_clamp_1h);
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+    rename("/dev/.asb/conflicts.json.tmp", "/dev/.asb/conflicts.json");
+}
+
+/* V44: write /dev/.asb/learner_state.json — exposes battery learner trust,
+ * session counts, last outcome, and current self-tuned thresholds. */
+static int g_v44_last_bat_trust = -1;          /* -1=unknown, 0=dirty, 1=partial, 2=clean */
+static char g_v44_last_bat_outcome[24] = "";   /* "clean", "partial", "dirty", "noise" */
+
+static void write_learner_state_json(const asb_fsm_t *fsm) {
+    FILE *f = fopen("/dev/.asb/learner_state.json.tmp", "w");
+    if (!f) return;
+    const char *tier_name = "unknown";
+    if (g_v44_last_bat_trust == 0) tier_name = "dirty";
+    else if (g_v44_last_bat_trust == 1) tier_name = "partial";
+    else if (g_v44_last_bat_trust == 2) tier_name = "clean";
+
+    int bat_sessions = g_pstats_per[PROFILE_BATTERY].session_count;
+    int balanced_sessions = g_pstats_per[PROFILE_BALANCED].session_count;
+    int perf_sessions = g_pstats_per[PROFILE_PERFORMANCE].session_count;
+    int night_count = g_pstats_per[PROFILE_BATTERY].night_count;
+    int day_count = g_pstats_per[PROFILE_BATTERY].day_count;
+
+    fprintf(f,
+        "{\n"
+        "  \"trust_tier\": \"%s\",\n"
+        "  \"trust_tier_num\": %d,\n"
+        "  \"last_outcome\": \"%s\",\n"
+        "  \"sessions\": {\n"
+        "    \"battery\": %d,\n"
+        "    \"balanced\": %d,\n"
+        "    \"performance\": %d,\n"
+        "    \"night\": %d,\n"
+        "    \"day\": %d\n"
+        "  },\n"
+        "  \"self_tuned\": {\n"
+        "    \"bat_fast_idle_s\": %d,\n"
+        "    \"bat_heavy_load_enter\": %.0f,\n"
+        "    \"bat_moderate_load_enter\": %.0f,\n"
+        "    \"bat_light_idle_gpu\": %d\n"
+        "  },\n"
+        "  \"battery_aggregates\": {\n"
+        "    \"avg_idle_q\": %.1f,\n"
+        "    \"avg_wph\": %.2f,\n"
+        "    \"night_avg_iq\": %.1f,\n"
+        "    \"day_avg_iq\": %.1f,\n"
+        "    \"clean_night_count\": %d\n"
+        "  }\n"
+        "}\n",
+        tier_name,
+        g_v44_last_bat_trust,
+        g_v44_last_bat_outcome[0] ? g_v44_last_bat_outcome : "unknown",
+        bat_sessions, balanced_sessions, perf_sessions, night_count, day_count,
+        g_asb_cfg.bat_fast_idle_s,
+        g_asb_cfg.bat_heavy_load_enter,
+        g_asb_cfg.bat_moderate_load_enter,
+        g_asb_cfg.bat_light_idle_gpu,
+        g_pstats_per[PROFILE_BATTERY].avg_idle_q,
+        g_pstats_per[PROFILE_BATTERY].avg_wph,
+        g_pstats_per[PROFILE_BATTERY].night_avg_iq,
+        g_pstats_per[PROFILE_BATTERY].day_avg_iq,
+        g_pstats_per[PROFILE_BATTERY].clean_night_count);
+    (void)fsm;
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+    rename("/dev/.asb/learner_state.json.tmp", "/dev/.asb/learner_state.json");
+}
+
 static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
                                asb_prediction_t pred,
                                char *out, int outlen)
@@ -822,6 +939,9 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
     const char *cap_src_p6 = cap_source_classify(profile_cap_p6,
                                                  m->therm.perf_cap_p6,
                                                  real_max_p1, hw_ceil_p1);
+    /* V44: record conflicts to /dev/.asb/conflicts.json (written below). */
+    v44_conflict_record(cap_src_p0);
+    v44_conflict_record(cap_src_p6);
     snprintf(out, outlen,
         "{\"state\":\"%s\",\"profile\":\"%s\","
         "\"mA\":%d,\"mA_valid\":%d,\"charging\":%d,"
@@ -931,14 +1051,17 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         if (_pidx < 0 || _pidx > 2) _pidx = 1;
         snprintf(out + strlen(out) - 1, outlen - (int)strlen(out),
             ",\"intent\":\"%s\",\"hot_fail\":%d,\"deg_age\":%ld,"
-            "\"auto_bat\":%d,\"auto_bat_restore\":%d,\"qn_active\":%d}",
+            "\"auto_bat\":%d,\"auto_bat_restore\":%d,\"qn_active\":%d,"
+            "\"auto_bat_reason\":\"%s\",\"auto_bat_since\":%lld}",
             (fsm->ses_intent >= 0 && fsm->ses_intent <= 5)
                 ? intent_names[fsm->ses_intent] : "unknown",
             g_pstats_per[_pidx].hot_fail_count,
             fsm->ses_degrade_at_age,
             fsm->auto_battery_active,
             fsm->auto_battery_restore_idx,
-            g_quiet_night_active);
+            g_quiet_night_active,
+            fsm->auto_battery_reason[0] ? fsm->auto_battery_reason : "none",
+            (long long)fsm->auto_battery_since);
     }
 }
 
@@ -1078,6 +1201,18 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
     float trust_weight = 1.0f;  /* V33: learning weight -- clean=1.0, partial=0.25, dirty=0 */
     if (pidx == PROFILE_BATTERY) {
         int trust = battery_session_trust(fsm);
+        /* V44: expose trust + outcome to learner_state.json */
+        g_v44_last_bat_trust = trust;
+        if (trust == BAT_TRUST_DIRTY) {
+            strncpy(g_v44_last_bat_outcome, "dirty", sizeof(g_v44_last_bat_outcome) - 1);
+            g_v44_last_bat_outcome[sizeof(g_v44_last_bat_outcome) - 1] = '\0';
+        } else if (trust == BAT_TRUST_PARTIAL) {
+            strncpy(g_v44_last_bat_outcome, "partial", sizeof(g_v44_last_bat_outcome) - 1);
+            g_v44_last_bat_outcome[sizeof(g_v44_last_bat_outcome) - 1] = '\0';
+        } else if (trust == BAT_TRUST_CLEAN) {
+            strncpy(g_v44_last_bat_outcome, "clean", sizeof(g_v44_last_bat_outcome) - 1);
+            g_v44_last_bat_outcome[sizeof(g_v44_last_bat_outcome) - 1] = '\0';
+        }
         if (trust == BAT_TRUST_DIRTY) {
             skip_per_profile = 1;
             /* V33: bootstrap pstats_battery.json on first meaningful session
@@ -2521,6 +2656,9 @@ int main(int argc, char **argv) {
                     g_last_profile_sync = _now;
                 }
                 write_state(&fsm, &metrics, cur_pred);
+                /* V44: also write conflicts.json and learner_state.json for WebUI. */
+                write_conflicts_json();
+                write_learner_state_json(&fsm);
                 g_last_state_touch = _now;
             }
             if (g_last_heartbeat == 0) g_last_heartbeat = _now;
@@ -2686,6 +2824,10 @@ int main(int argc, char **argv) {
                             asb_log("auto_battery: cleared by user profile change");
                             fsm.auto_battery_active = 0;
                             fsm.auto_battery_restore_idx = -1;
+                            /* V44 */
+                            strncpy(fsm.auto_battery_reason, "manual_clear", sizeof(fsm.auto_battery_reason) - 1);
+                            fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
+                            fsm.auto_battery_since = time(NULL);
                             fsm_auto_battery_persist(&fsm);
                         }
 
@@ -3029,6 +3171,10 @@ int main(int argc, char **argv) {
                     fsm.auto_battery_restore_idx = fsm.profile_idx;
                     fsm.auto_battery_active = 1;
                     fsm.auto_battery_last_action = _now_t;
+                    /* V44 */
+                    strncpy(fsm.auto_battery_reason, "low_pct", sizeof(fsm.auto_battery_reason) - 1);
+                    fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
+                    fsm.auto_battery_since = time(NULL);
                     fsm_auto_battery_persist(&fsm);
                     asb_log("auto_battery: trigger bat=%d%% (low=%d) saving=%d -> spawning apply_profile.sh battery auto",
                             metrics.bat.capacity_pct,
@@ -3046,6 +3192,10 @@ int main(int argc, char **argv) {
                     fsm.auto_battery_active = 0;
                     fsm.auto_battery_restore_idx = -1;
                     fsm.auto_battery_last_action = _now_t;
+                    /* V44 */
+                    strncpy(fsm.auto_battery_reason, "high_pct_restore", sizeof(fsm.auto_battery_reason) - 1);
+                    fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
+                    fsm.auto_battery_since = time(NULL);
                     fsm_auto_battery_persist(&fsm);
                     asb_log("auto_battery: restore bat=%d%% (high=%d) -> spawning apply_profile.sh %s auto",
                             metrics.bat.capacity_pct,
@@ -3360,6 +3510,9 @@ int main(int argc, char **argv) {
                     g_last_write_ts = time(NULL);
                 }
                 write_state(&fsm, &metrics, cur_pred);
+                /* V44 */
+                write_conflicts_json();
+                write_learner_state_json(&fsm);
 
                 if (fsm.state_changed) {
                     int ma_v = (metrics.bat.current_ma > 0 && !metrics.bat.charging) ? 1 : 0;
