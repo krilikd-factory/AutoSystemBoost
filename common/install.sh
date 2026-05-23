@@ -1365,8 +1365,7 @@ AutoSystemBoost' $APIOCXM
 }
 EOF
 
-	if [ -f "$MODPATH/common/profile_core.sh" ]; then
-		cp -f "$MODPATH/common/profile_core.sh" "$MODPATH/runtime/profile_core.sh"
+	if [ -f "$MODPATH/runtime/profile_core.sh" ]; then
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
