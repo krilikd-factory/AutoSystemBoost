@@ -613,48 +613,58 @@ body::before, body::after {
 
 .live-page {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: var(--bg);
   z-index: 100;
-  /* V44 fix: inherit .page flex layout (column + center) so Live content
-   * sits at the same vertical position as the profile grid on main page.
-   * Without this, content stuck at top — visually asymmetric. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: calc(var(--window-inset-top) + 24px);
+  padding-right: 20px;
+  padding-bottom: calc(var(--window-inset-bottom) + 40px);
+  padding-left: 20px;
   transform: translateX(100%);
   transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   pointer-events: none;
 }
+.live-page > * {
+  width: 100%;
+  max-width: 420px;
+}
 .live-page.open {
   transform: translateX(0);
   pointer-events: auto;
 }
 .live-metrics {
-  /* V44 fix: match .profiles container width so live tiles align with
-   * the profile button positions on main page (visual symmetry). */
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 .live-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 12px;
 }
 .live-cell {
-  background: var(--surface);
+  background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 10px 12px;
-  min-height: 56px;
+  border-radius: 20px;
+  padding: 12px 16px;
+  min-height: 58px;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
-.live-cell-wide { grid-column: span 1; }
 .live-cell-full { grid-column: 1 / -1; }
-.live-row:has(.live-cell-wide:nth-child(2)) {
+.live-cell-wide { grid-column: span 1; }
+.live-row:has(.live-cell-wide:nth-child(2):last-child) {
   grid-template-columns: 1fr 1fr;
 }
 .live-cell-label {
@@ -674,14 +684,12 @@ body::before, body::after {
 .live-cell-value.cap-clamp { color: var(--perf); }
 .live-cell-value.cap-raised { color: var(--bal); }
 .live-cell-value.cap-shell { color: var(--accent2); }
-.live-cell-value.mode-active { color: var(--accent); }
-.live-cell-value.mode-idle { color: var(--text-tertiary); font-weight: 500; }
 .live-foot {
   text-align: center;
   font: 11px/1 var(--mono);
   color: var(--text-tertiary);
   letter-spacing: 0.06em;
-  margin: 14px 0 6px 0;
+  margin: 12px 0 4px 0;
   text-transform: uppercase;
 }
 
@@ -830,21 +838,11 @@ body::before, body::after {
     </div>
 
     <div class="live-row">
-      <div class="live-cell live-cell-full">
+      <div class="live-cell live-cell-wide">
         <div class="live-cell-label">Cap Source</div>
         <div class="live-cell-value" id="liveCapSrc">—</div>
       </div>
-    </div>
-
-    <div class="live-row">
-      <div class="live-cell live-cell-full">
-        <div class="live-cell-label">Active Modes</div>
-        <div class="live-cell-value" id="liveModes">—</div>
-      </div>
-    </div>
-
-    <div class="live-row">
-      <div class="live-cell live-cell-full">
+      <div class="live-cell live-cell-wide">
         <div class="live-cell-label">Battery Learner</div>
         <div class="live-cell-value" id="liveLearner">—</div>
       </div>
@@ -1156,28 +1154,6 @@ async function pollLive(visible) {
     else if (capSrc === 'vendor_clamp') capEl.classList.add('cap-clamp');
     else if (capSrc === 'vendor_raised') capEl.classList.add('cap-raised');
     else if (capSrc && capSrc.startsWith('shell')) capEl.classList.add('cap-shell');
-
-    const modes = [];
-    let modesActive = false;
-    if (st) {
-      if (st.auto_bat === 1) {
-        const reason = st.auto_bat_reason || 'low_pct';
-        modes.push('🔻 Auto-Battery (' + reason + ')');
-        modesActive = true;
-      }
-      if (st.qn_active === 1) {
-        modes.push('🌙 Night-Quiet');
-        modesActive = true;
-      }
-    }
-    const modesEl = _el('liveModes');
-    if (modes.length) {
-      modesEl.textContent = modes.join(' · ');
-      modesEl.className = 'live-cell-value mode-active';
-    } else {
-      modesEl.textContent = 'No active modes';
-      modesEl.className = 'live-cell-value mode-idle';
-    }
 
     if (learner) {
       const tier = learner.trust_tier || '—';
