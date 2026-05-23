@@ -368,8 +368,6 @@ apply_uclamp() {
     _lat="$_cg_root/top-app/cpu.uclamp.latency_sensitive"
     [ -f "$_lat" ] && writef_retry "$_lat" $_P_LATENCY_SENSITIVE 5 0.3 || true
   done
-  [ -w /proc/sys/kernel/sched_util_clamp_min ] && \
-    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 5 0.3 || true
 }
 wait_path /dev/cpuset/background/cpus 8 || true
 wait_path /dev/cpuctl/top-app 8 || true
@@ -1109,7 +1107,7 @@ tune_io_queues() {
 }
 # ASB:KERNEL:BEGIN
 apply_kernel() {
-  sysctlw kernel.perf_cpu_time_max_percent 2
+  sysctlw kernel.perf_cpu_time_max_percent 25
   sysctlw kernel.sched_schedstats 0
   sysctlw kernel.timer_migration 0
   sysctlw kernel.panic 0
@@ -1117,7 +1115,7 @@ apply_kernel() {
   sysctlw vm.panic_on_oom 0
   [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
   writef_retry /proc/sys/kernel/printk_devkmsg off 1 0 || true
-  writef_retry /proc/sys/kernel/printk "0 0 0 0" 1 0 || true
+  writef_retry /proc/sys/kernel/printk "3 4 1 7" 1 0 || true
   [ -e /proc/sys/kernel/printk_ratelimit ] && \
     sysctlw kernel.printk_ratelimit 1
   [ -e /proc/sys/kernel/printk_ratelimit_burst ] && \
@@ -1131,7 +1129,6 @@ apply_kernel() {
     writef_retry /proc/sys/walt/sched_idle_enough $_P_IDLE 1 0 || true
   [ -e /proc/sys/walt/sched_idle_enough_clust ] && \
     writef_retry /proc/sys/walt/sched_idle_enough_clust "$_P_IDLEC" 1 0 || true
-  writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
   [ -w $LITTLE_POLICY/scaling_min_freq ] && writef_retry $LITTLE_POLICY/scaling_min_freq $_P_CPUL 3 0.25 || true
   [ -w $BIG_POLICY/scaling_min_freq ] && writef_retry $BIG_POLICY/scaling_min_freq $_P_CPUB 3 0.25 || true
   [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct $_P_CLUT 1 0 || true
@@ -1667,7 +1664,6 @@ asb_load_profile
   sleep 60
   asb_load_profile
   if asb_feature_enabled KERNEL; then
-    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
     sysctlw kernel.sched_schedstats 0
     sysctlw kernel.timer_migration 0
     [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
@@ -1682,7 +1678,6 @@ asb_load_profile
   sleep 240
   asb_load_profile
   if asb_feature_enabled KERNEL; then
-    writef_retry /proc/sys/kernel/sched_util_clamp_min 0 3 0.25 || true
     sysctlw kernel.sched_schedstats 0
     sysctlw kernel.timer_migration 0
     [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
