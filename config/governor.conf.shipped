@@ -66,3 +66,6 @@ auto_battery_min_gap_s=300
 night_quiet_enable=1
 night_quiet_hour_start=23
 night_quiet_hour_end=6
+
+# V44 — BG_TRIM aggressiveness: safe | aggressive
+BG_TRIM_LEVEL=safe
