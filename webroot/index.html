@@ -575,38 +575,111 @@ body::before, body::after {
 .profiles .pbtn:nth-child(1) { animation-delay: 0.3s; }
 .profiles .pbtn:nth-child(2) { animation-delay: 0.38s; }
 .profiles .pbtn:nth-child(3) { animation-delay: 0.46s; }
-/* V44: live status grid */
-.live-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  padding: 0 16px;
-  margin-top: 4px;
+.live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+  padding: 5px 10px 5px 8px;
+  background: rgba(0,240,180,0.10);
+  border: 1px solid rgba(0,240,180,0.35);
+  border-radius: 999px;
+  color: var(--accent);
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.live-tile {
+.live-chip:hover { background: rgba(0,240,180,0.18); }
+.live-chip:active { transform: scale(0.95); }
+.live-chip-ico {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.live-chip.has-issue {
+  background: rgba(255,165,2,0.10);
+  border-color: rgba(255,165,2,0.40);
+  color: var(--bal);
+}
+.live-chip.has-issue .live-chip-ico { color: var(--bal); }
+.live-chip.has-error {
+  background: rgba(255,26,26,0.10);
+  border-color: rgba(255,26,26,0.40);
+  color: var(--perf);
+}
+.live-chip.has-error .live-chip-ico { color: var(--perf); }
+
+.live-page {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 100;
+  display: block;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  pointer-events: none;
+}
+.live-page.open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+.live-metrics {
+  padding: 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.live-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.live-cell {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 10px 12px;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
-.live-tile-wide { grid-column: 1 / -1; }
-.live-tile-label {
+.live-cell-wide { grid-column: span 1; }
+.live-cell-full { grid-column: 1 / -1; }
+.live-row:has(.live-cell-wide:nth-child(2)) {
+  grid-template-columns: 1fr 1fr;
+}
+.live-cell-label {
   font: 11px/1.2 var(--mono);
   color: var(--text-tertiary);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   margin-bottom: 4px;
 }
-.live-tile-value {
-  font: 600 14px/1.3 var(--sans);
+.live-cell-value {
+  font: 600 15px/1.3 var(--sans);
   color: var(--text);
   font-variant-numeric: tabular-nums;
   word-break: break-word;
 }
-.live-tile-value.cap-asb { color: var(--accent); }
-.live-tile-value.cap-clamp { color: var(--perf); }
-.live-tile-value.cap-raised { color: var(--bal); }
-.live-tile-value.cap-shell { color: var(--accent2); }
+.live-cell-value.cap-asb { color: var(--accent); }
+.live-cell-value.cap-clamp { color: var(--perf); }
+.live-cell-value.cap-raised { color: var(--bal); }
+.live-cell-value.cap-shell { color: var(--accent2); }
+.live-cell-value.mode-active { color: var(--accent); }
+.live-cell-value.mode-idle { color: var(--text-tertiary); font-weight: 500; }
+.live-foot {
+  text-align: center;
+  font: 11px/1 var(--mono);
+  color: var(--text-tertiary);
+  letter-spacing: 0.06em;
+  margin: 14px 0 6px 0;
+  text-transform: uppercase;
+}
 
 </style>
 </head>
@@ -630,6 +703,12 @@ body::before, body::after {
       <div class="dot"></div>
       <span class="status-label">Profile:&nbsp;</span>
       <span class="status-val" id="curProfile">balanced</span>
+      <button class="live-chip" id="liveChip" onclick="openLivePage()" aria-label="Open Live Status page">
+        <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12h3l3-9 4 18 3-9h5"></path>
+        </svg>
+        <span>Live</span>
+      </button>
     </div>
   </div>
 
@@ -670,48 +749,6 @@ body::before, body::after {
 
   </div>
 
-  <!-- V44: LIVE STATUS -->
-  <div class="sec" id="liveSec" style="display:none;">
-    <div class="sec-line"></div>
-    <div class="sec-label">Live Status</div>
-    <div class="sec-line"></div>
-  </div>
-
-  <div class="live-grid" id="liveGrid" style="display:none;">
-    <div class="live-tile">
-      <div class="live-tile-label">Profile</div>
-      <div class="live-tile-value" id="liveProfile">—</div>
-    </div>
-    <div class="live-tile">
-      <div class="live-tile-label">State</div>
-      <div class="live-tile-value" id="liveState">—</div>
-    </div>
-    <div class="live-tile">
-      <div class="live-tile-label">CPU °C</div>
-      <div class="live-tile-value" id="liveCpu">—</div>
-    </div>
-    <div class="live-tile">
-      <div class="live-tile-label">Skin °C</div>
-      <div class="live-tile-value" id="liveSkin">—</div>
-    </div>
-    <div class="live-tile">
-      <div class="live-tile-label">Battery</div>
-      <div class="live-tile-value" id="liveBat">—</div>
-    </div>
-    <div class="live-tile">
-      <div class="live-tile-label">Cap Source</div>
-      <div class="live-tile-value" id="liveCapSrc">—</div>
-    </div>
-    <div class="live-tile live-tile-wide">
-      <div class="live-tile-label">Modes</div>
-      <div class="live-tile-value" id="liveModes">—</div>
-    </div>
-    <div class="live-tile live-tile-wide">
-      <div class="live-tile-label">Learner</div>
-      <div class="live-tile-value" id="liveLearner">—</div>
-    </div>
-  </div>
-
   <!-- TELEGRAM -->
   <div class="tg-link-wrap">
     <a class="tg-link" href="tg://resolve?domain=DKomsomol" onclick="openTelegram(event)">
@@ -725,6 +762,106 @@ body::before, body::after {
   <div class="footer"></div>
 
 </div>
+
+<!-- V44: LIVE STATUS PAGE (overlay) -->
+<div class="page live-page" id="livePage" aria-hidden="true">
+
+  <div class="header">
+    <div class="logo-c">
+      <div class="logo-glow"></div>
+      <div class="logo-ring"></div>
+      <div class="logo-inner">🛸</div>
+    </div>
+    <div class="app-name">AutoSystemBoost</div>
+    <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
+    <div class="badges">
+      <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
+      <div class="badge" id="liveVerBadge">V44</div>
+    </div>
+    <div class="status-row">
+      <div class="dot"></div>
+      <span class="status-label">Profile:&nbsp;</span>
+      <span class="status-val" id="liveCurProfile">balanced</span>
+      <button class="live-chip" id="liveBackChip" onclick="closeLivePage()" aria-label="Back to main">
+        <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"></path>
+        </svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-line"></div>
+    <div class="sec-label">Live Status</div>
+    <div class="sec-line"></div>
+  </div>
+
+  <div class="live-metrics">
+
+    <div class="live-row">
+      <div class="live-cell">
+        <div class="live-cell-label">FSM State</div>
+        <div class="live-cell-value" id="liveState">—</div>
+      </div>
+      <div class="live-cell">
+        <div class="live-cell-label">CPU</div>
+        <div class="live-cell-value" id="liveCpu">—</div>
+      </div>
+      <div class="live-cell">
+        <div class="live-cell-label">Skin</div>
+        <div class="live-cell-value" id="liveSkin">—</div>
+      </div>
+    </div>
+
+    <div class="live-row">
+      <div class="live-cell live-cell-wide">
+        <div class="live-cell-label">Screen-on time</div>
+        <div class="live-cell-value" id="liveEtaOn">—</div>
+      </div>
+      <div class="live-cell live-cell-wide">
+        <div class="live-cell-label">Screen-off time</div>
+        <div class="live-cell-value" id="liveEtaOff">—</div>
+      </div>
+    </div>
+
+    <div class="live-row">
+      <div class="live-cell live-cell-full">
+        <div class="live-cell-label">Cap Source</div>
+        <div class="live-cell-value" id="liveCapSrc">—</div>
+      </div>
+    </div>
+
+    <div class="live-row">
+      <div class="live-cell live-cell-full">
+        <div class="live-cell-label">Active Modes</div>
+        <div class="live-cell-value" id="liveModes">—</div>
+      </div>
+    </div>
+
+    <div class="live-row">
+      <div class="live-cell live-cell-full">
+        <div class="live-cell-label">Battery Learner</div>
+        <div class="live-cell-value" id="liveLearner">—</div>
+      </div>
+    </div>
+
+    <div class="live-foot" id="liveFoot">Updated just now</div>
+
+  </div>
+
+  <div class="tg-link-wrap">
+    <a class="tg-link" href="tg://resolve?domain=DKomsomol" onclick="openTelegram(event)">
+      <span class="tg-link-ico">✉️</span>
+      <span class="tg-link-main">@DKomsomol</span>
+    </a>
+    <div class="tg-link-sub">by Dima_Krylov</div>
+  </div>
+
+  <div class="footer"></div>
+
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -865,28 +1002,69 @@ function openTelegram(e) {
   ui(['performance','balanced','battery'].includes(p) ? p : 'balanced');
 })();
 
-/* V44: live status — polls /dev/.asb/state every 5s.
- * Reveals tiles only when state file exists (governor running). */
 function fmtTempC(deci) {
   if (deci == null || isNaN(deci)) return '—';
   if (deci > 1000) return (deci / 1000).toFixed(0);
   if (deci > 100)  return (deci / 10).toFixed(0);
   return String(Math.round(deci));
 }
-function el(id) { return document.getElementById(id); }
-function pickJsonField(json, key) {
-  try {
-    const v = json[key];
-    if (v === undefined || v === null) return null;
-    return v;
-  } catch(e) { return null; }
+function _el(id) { return document.getElementById(id); }
+
+let _liveTimer = null;
+let _liveBgTimer = null;
+let _liveOpen = false;
+
+function openLivePage() {
+  const p = _el('livePage');
+  if (!p) return;
+  p.classList.add('open');
+  p.setAttribute('aria-hidden', 'false');
+  _liveOpen = true;
+  pollLive(true);
+  if (_liveTimer) clearInterval(_liveTimer);
+  _liveTimer = setInterval(() => pollLive(true), 3000);
 }
-async function pollLive() {
+
+function closeLivePage() {
+  const p = _el('livePage');
+  if (!p) return;
+  p.classList.remove('open');
+  p.setAttribute('aria-hidden', 'true');
+  _liveOpen = false;
+  if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
+}
+
+window.addEventListener('popstate', () => {
+  if (_liveOpen) closeLivePage();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && _liveOpen) closeLivePage();
+});
+
+let _batCapFullMah = 0;
+
+async function pollLive(visible) {
   try {
     const r = await run('cat /dev/.asb/state 2>/dev/null');
-    if (!r || !r.stdout || !r.stdout.trim()) return;
-    /* state file is mostly key=value, but has a JSON block from build_status_json
-     * appended for some fields. Try to parse what we can. */
+    if (!r || !r.stdout || !r.stdout.trim()) {
+      const chip = _el('liveChip');
+      if (chip) chip.style.display = 'none';
+      return;
+    }
+    const chip = _el('liveChip');
+    if (chip) chip.style.display = '';
+
+    if (!_batCapFullMah) {
+      try {
+        const cf = await run('cat /sys/class/power_supply/battery/charge_full 2>/dev/null');
+        if (cf && cf.stdout) {
+          const v = parseInt(cf.stdout.trim(), 10);
+          if (v > 0) _batCapFullMah = Math.floor(v / 1000);
+        }
+      } catch(e) {}
+      if (!_batCapFullMah) _batCapFullMah = 7300;
+    }
+
     const raw = r.stdout;
     const kv = {};
     raw.split(/\r?\n/).forEach(line => {
@@ -896,73 +1074,132 @@ async function pollLive() {
       }
     });
 
-    const lj = await run('cat /dev/.asb/learner_state.json 2>/dev/null');
     let learner = null;
-    if (lj && lj.stdout && lj.stdout.trim()) {
-      try { learner = JSON.parse(lj.stdout); } catch(e) {}
+    if (visible) {
+      const lj = await run('cat /dev/.asb/learner_state.json 2>/dev/null');
+      if (lj && lj.stdout && lj.stdout.trim()) {
+        try { learner = JSON.parse(lj.stdout); } catch(e) {}
+      }
     }
 
-    /* Pull status JSON */
     let st = null;
     try {
       const sj = await run('/data/adb/modules/AutoSystemBoost/bin/asb status 2>/dev/null');
       if (sj && sj.stdout) st = JSON.parse(sj.stdout);
     } catch(e) {}
 
-    el('liveSec').style.display = '';
-    el('liveGrid').style.display = '';
+    const capSrc = (st && st.cap_source_p0) || '';
+    if (chip) {
+      chip.classList.remove('has-issue', 'has-error');
+      if (capSrc === 'vendor_clamp') chip.classList.add('has-error');
+      else if (capSrc === 'vendor_raised' || capSrc === 'thermal_overlay') chip.classList.add('has-issue');
+    }
+
+    if (!visible) return;
 
     const profile = (st && st.profile) || kv.profile || '—';
     const state = (st && st.state) || kv.state || '—';
-    el('liveProfile').textContent = profile;
-    el('liveState').textContent = state;
 
-    /* CPU temp from kv.thermal (dC*10) or st.temp */
+    const mainDevLine = _el('deviceLine'); const liveDevLine = _el('liveDeviceLine');
+    if (mainDevLine && liveDevLine) liveDevLine.textContent = mainDevLine.textContent;
+    const mainSocBadge = _el('socBadge'); const liveSocBadge = _el('liveSocBadge');
+    if (mainSocBadge && liveSocBadge) liveSocBadge.textContent = mainSocBadge.textContent;
+    const mainVerBadge = _el('verBadge'); const liveVerBadge = _el('liveVerBadge');
+    if (mainVerBadge && liveVerBadge) liveVerBadge.textContent = mainVerBadge.textContent;
+    const liveCurProfile = _el('liveCurProfile');
+    if (liveCurProfile) liveCurProfile.textContent = profile;
+
+    _el('liveState').textContent = state;
+
     const cpuT = (st && st.temp) || parseInt(kv.thermal || '0', 10);
-    el('liveCpu').textContent = cpuT ? fmtTempC(cpuT) + '°' : '—';
+    _el('liveCpu').textContent = cpuT ? fmtTempC(cpuT) + '°C' : '—';
 
     const skinT = (st && st.skin_temp) || 0;
-    el('liveSkin').textContent = skinT ? skinT + '°' : '—';
+    _el('liveSkin').textContent = skinT ? skinT + '°C' : '—';
 
     const bcap = (st && st.capacity) || parseInt(kv.capacity || '0', 10);
-    const bma = (st && st.mA) || parseInt(kv.mA || '0', 10);
-    el('liveBat').textContent = (bcap ? bcap + '%' : '—') + (bma ? ' · ' + bma + ' mA' : '');
+    const bma_raw = (st && st.mA) || parseInt(kv.mA || '0', 10);
+    const bma = bma_raw < 0 ? -bma_raw : bma_raw;
+    const cap_full_mah = _batCapFullMah || 7300;
+    let on_ma, off_ma, eta_note;
+    if (bma > 0) {
+      on_ma = bma;
+      off_ma = Math.max(20, Math.floor(bma / 8));
+      eta_note = '';
+    } else {
+      if (profile === 'performance') { on_ma = 650; off_ma = 85; }
+      else if (profile === 'battery') { on_ma = 400; off_ma = 45; }
+      else { on_ma = 500; off_ma = 60; }
+      eta_note = ' (est.)';
+    }
+    const remain_mah = bcap > 0 ? Math.floor(cap_full_mah * bcap / 100) : 0;
+    const fmtHm = (mins) => {
+      if (!mins || mins <= 0) return '—';
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
+    };
+    const ton_min = (remain_mah > 0 && on_ma > 0) ? Math.floor(remain_mah * 60 / on_ma) : 0;
+    const toff_min = (remain_mah > 0 && off_ma > 0) ? Math.floor(remain_mah * 60 / off_ma) : 0;
+    _el('liveEtaOn').textContent = fmtHm(ton_min) + eta_note;
+    _el('liveEtaOff').textContent = fmtHm(toff_min) + eta_note;
 
-    const capSrc = (st && st.cap_source_p0) || '—';
-    const capEl = el('liveCapSrc');
-    capEl.textContent = capSrc;
-    capEl.className = 'live-tile-value';
+    const capLabel = capSrc || '—';
+    const capEl = _el('liveCapSrc');
+    capEl.textContent = capLabel;
+    capEl.className = 'live-cell-value';
     if (capSrc === 'asb' || capSrc === 'asb_dynamic') capEl.classList.add('cap-asb');
     else if (capSrc === 'vendor_clamp') capEl.classList.add('cap-clamp');
     else if (capSrc === 'vendor_raised') capEl.classList.add('cap-raised');
     else if (capSrc && capSrc.startsWith('shell')) capEl.classList.add('cap-shell');
 
     const modes = [];
+    let modesActive = false;
     if (st) {
       if (st.auto_bat === 1) {
         const reason = st.auto_bat_reason || 'low_pct';
-        modes.push('🔻 auto-battery (' + reason + ')');
+        modes.push('🔻 Auto-Battery (' + reason + ')');
+        modesActive = true;
       }
-      if (st.qn_active === 1) modes.push('🌙 night-quiet');
+      if (st.qn_active === 1) {
+        modes.push('🌙 Night-Quiet');
+        modesActive = true;
+      }
     }
-    el('liveModes').textContent = modes.length ? modes.join(' · ') : '—';
+    const modesEl = _el('liveModes');
+    if (modes.length) {
+      modesEl.textContent = modes.join(' · ');
+      modesEl.className = 'live-cell-value mode-active';
+    } else {
+      modesEl.textContent = 'No active modes';
+      modesEl.className = 'live-cell-value mode-idle';
+    }
 
     if (learner) {
       const tier = learner.trust_tier || '—';
-      const sessions = learner.sessions ? learner.sessions.battery : 0;
+      const sessions = (learner.sessions && learner.sessions.battery) || 0;
       const outcome = learner.last_outcome || '—';
-      el('liveLearner').textContent =
-        'trust: ' + tier +
-        ' · sessions: ' + sessions +
-        ' · last: ' + outcome;
+      _el('liveLearner').textContent =
+        'Trust: ' + tier +
+        ' · Sessions: ' + sessions +
+        ' · Last: ' + outcome;
     } else {
-      el('liveLearner').textContent = '(no session data yet)';
+      _el('liveLearner').textContent = '(no session data yet)';
     }
-  } catch(e) { /* silent — WebUI keeps working without live data */ }
+
+    const ft = _el('liveFoot');
+    if (ft) {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const ss = String(now.getSeconds()).padStart(2, '0');
+      ft.textContent = 'Updated ' + hh + ':' + mm + ':' + ss;
+    }
+  } catch(e) { }
 }
-/* Start polling 1s after page load; refresh every 5s */
-setTimeout(pollLive, 1000);
-setInterval(pollLive, 5000);
+
+_liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
+setTimeout(() => pollLive(false), 1500);
 </script>
 </body>
 </html>
