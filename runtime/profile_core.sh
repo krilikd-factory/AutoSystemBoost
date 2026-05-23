@@ -313,12 +313,20 @@ asb_apply_net() {
 }
 
 asb_apply_ux() {
-  asb_feature_enabled VM || return 0
+  # V44 — UX/animation no longer gated by VM toggle (was a category mismatch).
+  # Now gated by FPS feature which is RESERVED but always = 1 by default.
+  asb_feature_enabled FPS || asb_feature_enabled VM || return 0
   has settings || return 0
+  local _anim_changed=0
   if [ -n "$UX_ANIM_SCALE" ]; then
-    settings put global animator_duration_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
-    settings put global transition_animation_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
-    settings put global window_animation_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
+    local _cur_anim
+    _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
+    if [ "$_cur_anim" != "$UX_ANIM_SCALE" ]; then
+      settings put global animator_duration_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
+      settings put global transition_animation_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
+      settings put global window_animation_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
+      _anim_changed=1
+    fi
   fi
   [ -n "$UX_LONG_PRESS" ] && settings put secure long_press_timeout "$UX_LONG_PRESS" >/dev/null 2>&1 || true
   [ -n "$UX_MULTI_PRESS" ] && settings put secure multi_press_timeout "$UX_MULTI_PRESS" >/dev/null 2>&1 || true
@@ -326,6 +334,19 @@ asb_apply_ux() {
   [ -n "$UX_RAM_EXPAND" ] && settings put global ram_expand_size "$UX_RAM_EXPAND" >/dev/null 2>&1 || true
   [ -n "$UX_LOW_HEAT" ] && settings put global sem_low_heat_mode "$UX_LOW_HEAT" >/dev/null 2>&1 || true
   settings put global google_core_control 0 >/dev/null 2>&1 || true
+
+  # V44 fix: animator_duration_scale change requires WindowManager re-read.
+  # Running activities cache the value at startup; only NEW activities pick up
+  # the change. Trigger a refresh by sending SIGHUP to WindowManager service.
+  # SystemUI also caches — but a configuration change broadcast forces it to
+  # invalidate animation cache without disrupting user.
+  if [ "$_anim_changed" = "1" ]; then
+    cmd statusbar collapse >/dev/null 2>&1 || true
+    # service call WindowManager 28 -> requestSystemUiVisibility (forces cache flush)
+    service call window 28 >/dev/null 2>&1 || true
+    # Broadcast configuration change to make running apps re-read scale
+    am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
+  fi
 }
 
 asb_apply_wifi() {
