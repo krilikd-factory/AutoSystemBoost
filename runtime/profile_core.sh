@@ -335,16 +335,26 @@ asb_apply_ux() {
   [ -n "$UX_LOW_HEAT" ] && settings put global sem_low_heat_mode "$UX_LOW_HEAT" >/dev/null 2>&1 || true
   settings put global google_core_control 0 >/dev/null 2>&1 || true
 
-  # V44 fix: animator_duration_scale change requires WindowManager re-read.
-  # Running activities cache the value at startup; only NEW activities pick up
-  # the change. Trigger a refresh by sending SIGHUP to WindowManager service.
-  # SystemUI also caches — but a configuration change broadcast forces it to
-  # invalidate animation cache without disrupting user.
+  # V44 — animation scale honest implementation.
+  #
+  # Reality check: Android caches ValueAnimator.sDurationScale per-process at
+  # class init. Running activities (SystemUI, foreground app) never re-read
+  # the value, even after `settings put global *_scale`. New activities pick
+  # up the new value. There is NO standard API to force-refresh running apps.
+  #
+  # The only effective options are:
+  #   1. Wait — new activities will use new scale (passive, recommended)
+  #   2. Restart SystemUI — jarring but works (opt-in via UX_ANIM_FORCE_RESTART=1)
+  #   3. Reboot
+  #
+  # V44 default = option 1 (passive). User can enable option 2 in governor.conf.
   if [ "$_anim_changed" = "1" ]; then
-    cmd statusbar collapse >/dev/null 2>&1 || true
-    # service call WindowManager 28 -> requestSystemUiVisibility (forces cache flush)
-    service call window 28 >/dev/null 2>&1 || true
-    # Broadcast configuration change to make running apps re-read scale
+    if [ "${UX_ANIM_FORCE_RESTART:-0}" = "1" ]; then
+      # Opt-in: pkill SystemUI so new launch picks up new scale.
+      # Brief screen flash. SystemUI auto-respawns within ~1 sec.
+      pkill -f com.android.systemui >/dev/null 2>&1 || true
+    fi
+    # Always-on best-effort hints (cheap, may help on some Android variants):
     am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
   fi
 }
