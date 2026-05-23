@@ -372,6 +372,9 @@ asb_apply_wifi() {
 }
 
 asb_load_profile() {
+  if [ -z "$PROFILE" ] && [ -r "$MODDIR/current_profile" ]; then
+    PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+  fi
   case "$PROFILE" in
     battery|balanced|performance) : ;;
     *) PROFILE=balanced ;;
