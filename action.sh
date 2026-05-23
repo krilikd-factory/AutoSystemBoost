@@ -1,18 +1,11 @@
 #!/system/bin/sh
+# AutoSystemBoost — action.sh (V44)
+# Triggered from KSU/Magisk action button. Shows current state.
+# V44: no longer overwrites module.prop (was writing every press).
+
 MODDIR="${MODDIR:-${0%/*}}"
 
 PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
-
-case "$PROFILE" in
-  performance) _desc='description=status: performance 🔥 | active ✅' ;;
-  battery)     _desc='description=status: battery 🔋 | active ✅' ;;
-  *)           _desc='description=status: balanced ⚖️ | active ✅' ;;
-esac
-sed "s/^description=.*/$_desc/" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null
-if grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null; then
-  cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
-fi
-rm -f "$MODDIR/module.prop.tmp"
 
 _lvl=$(dumpsys battery 2>/dev/null | grep -m1 ' level:' | awk '{print $2}')
 _btemp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null)
@@ -51,32 +44,49 @@ else
   _btempCx=0
 fi
 
+# V44: try to read smoothed mA from state JSON if available, fallback to heuristic
+_state_mA=$(grep -oE '"current_now":[-0-9]+' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
+if [ -n "$_state_mA" ] && [ "$_state_mA" -ne 0 ] 2>/dev/null; then
+  # Use absolute value of real current draw
+  _real_mA_abs=$(( _state_mA < 0 ? -_state_mA : _state_mA ))
+  _on_ma=$_real_mA_abs
+  _off_ma=$(( _real_mA_abs / 8 ))   # rough heuristic for screen-off
+  _eta_note="(measured)"
+else
+  case "$PROFILE" in
+    performance) _on_ma=650;  _off_ma=85  ;;
+    battery)     _on_ma=400;  _off_ma=45  ;;
+    *)           _on_ma=500;  _off_ma=60  ;;
+  esac
+  _eta_note="(heuristic)"
+fi
+
 _remain_mah=0
 if [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null && [ -n "$_lvl" ]; then
   _remain_mah=$(( (_cap_uah / 1000) * _lvl / 100 ))
 fi
 
-case "$PROFILE" in
-  performance) _on_ma=650;  _off_ma=85  ;;
-  battery)     _on_ma=400;  _off_ma=45  ;;
-  *)           _on_ma=500;  _off_ma=60  ;;
-esac
-
 _ton_h=0
 _ton_m=0
 _toff_h=0
 _toff_m=0
-if [ "$_remain_mah" -gt 0 ] 2>/dev/null; then
+if [ "$_remain_mah" -gt 0 ] 2>/dev/null && [ "$_on_ma" -gt 0 ] 2>/dev/null; then
   _ton_min=$(( _remain_mah * 60 / _on_ma ))
   _ton_h=$(( _ton_min / 60 ))
   _ton_m=$(( _ton_min % 60 ))
+fi
+if [ "$_remain_mah" -gt 0 ] 2>/dev/null && [ "$_off_ma" -gt 0 ] 2>/dev/null; then
   _toff_min=$(( _remain_mah * 60 / _off_ma ))
   _toff_h=$(( _toff_min / 60 ))
   _toff_m=$(( _toff_min % 60 ))
 fi
 
+# V44: pull a few live state fields for visibility
+_auto_bat=$(grep -oE '"auto_bat":[01]' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
+_qn_active=$(grep -oE '"qn_active":[01]' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
+
 echo ""
-echo "  ASB V44-test-2 · ${PROFILE}"
+echo "  ASB V44 · ${PROFILE}"
 echo ""
 echo "  🌡  CPU      : ${_cputemp}°C"
 if [ "$_btempC" -gt 0 ]; then
@@ -84,8 +94,10 @@ if [ "$_btempC" -gt 0 ]; then
 else
   echo "  🔋 Battery  : ${_lvl:-?}%"
 fi
+[ "$_auto_bat" = "1" ] && echo "  🔻 Auto-battery active"
+[ "$_qn_active" = "1" ] && echo "  🌙 Night-quiet active"
 echo ""
-echo "  Estimated time to 0%:"
+echo "  Estimated time to 0%  $_eta_note:"
 echo "    📱 screen on  : ~${_ton_h}h ${_ton_m}m"
 echo "    💤 screen off : ~${_toff_h}h ${_toff_m}m"
 echo ""

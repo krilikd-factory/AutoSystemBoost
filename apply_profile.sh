@@ -129,6 +129,16 @@ run_worker() {
     _i=$((_i + 1))
   done
   asb_log "worker done profile=$PROFILE rc=$_rc"
+
+  # V44: profile switch audit log
+  if [ "$_rc" = "0" ]; then
+    _ts="$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || date)"
+    _prev="$(cat /data/adb/asb_active_profile 2>/dev/null || echo unknown)"
+    _trigger="${PROFILE_FLAG:-user}"
+    printf '%s\t%s -> %s\ttrigger=%s\n' "$_ts" "$_prev" "$PROFILE" "$_trigger" >> /data/adb/asb_profile_switches.log 2>/dev/null
+    echo "$PROFILE" > /data/adb/asb_active_profile 2>/dev/null
+  fi
+
   exit $_rc
 }
 
