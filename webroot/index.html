@@ -616,12 +616,25 @@ body::before, body::after {
   inset: 0;
   background: var(--bg);
   z-index: 100;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   transform: translateX(100%);
   transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   pointer-events: none;
+}
+.live-page > .header, 
+.live-page > .sec, 
+.live-page > .live-metrics, 
+.live-page > .tg-link-wrap, 
+.live-page > .footer {
+  width: 100%;
+  max-width: 420px;
+}
+.live-page .header {
+  padding-top: 24px;
 }
 .live-page.open {
   transform: translateX(0);
@@ -1155,16 +1168,18 @@ async function pollLive(visible) {
 
     const modes = [];
     let modesActive = false;
-    if (st) {
-      if (st.auto_bat === 1) {
-        const reason = st.auto_bat_reason || 'low_pct';
-        modes.push('🔻 Auto-Battery (' + reason + ')');
-        modesActive = true;
-      }
-      if (st.qn_active === 1) {
-        modes.push('🌙 Night-Quiet');
-        modesActive = true;
-      }
+    // V44 fix: also check kv for state file fallback
+    const isAutoBat = (st && st.auto_bat === 1) || (kv.auto_bat === "1");
+    const isQnActive = (st && st.qn_active === 1) || (kv.qn_active === "1");
+    
+    if (isAutoBat) {
+      const reason = (st && st.auto_bat_reason) || kv.auto_bat_reason || 'low_pct';
+      modes.push('🔻 Auto-Battery (' + reason + ')');
+      modesActive = true;
+    }
+    if (isQnActive) {
+      modes.push('🌙 Night-Quiet');
+      modesActive = true;
     }
     const modesEl = _el('liveModes');
     if (modes.length) {
