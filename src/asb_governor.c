@@ -475,6 +475,12 @@ static int rewrite_last_history_end(const char *new_end) {
     while (fgets(buf, sizeof(buf), rf)) {
         if (count == cap) {
             size_t new_cap = cap ? cap * 2 : 64;
+            if (new_cap > SIZE_MAX / sizeof(char *)) {
+                fclose(rf);
+                for (size_t i = 0; i < count; i++) free(lines[i]);
+                free(lines);
+                return 0;
+            }
             char **tmp = (char **)realloc(lines, new_cap * sizeof(char *));
             if (!tmp) {
                 fclose(rf);
