@@ -25,6 +25,23 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 
 asb_load_profile
 
+# V46: one-shot cleanup for users upgrading from V44/V45 that had Athena
+# persist props set. These caused system_server deadlock on OnePlus Ace 5
+# (SM8635 + OxygenOS 16). resetprop --delete removes them from /data/property,
+# breaking the lockup-on-reboot cycle. Marker file prevents repeated work.
+if [ ! -f /data/adb/asb_v46_athena_cleanup_done ]; then
+  for _ath_p in \
+      persist.sys.oplus.athena.reclaim_enable \
+      persist.sys.oplus.athena.force_kill \
+      persist.sys.oplus.athena.limit_count \
+      persist.sys.oplus.deepthinker.reclaim_hint; do
+    if [ -n "$(getprop "$_ath_p" 2>/dev/null)" ]; then
+      resetprop --delete "$_ath_p" >/dev/null 2>&1 || true
+    fi
+  done
+  touch /data/adb/asb_v46_athena_cleanup_done 2>/dev/null
+fi
+
 # V45 fix: write module.prop description immediately at boot so the KSU/Magisk
 # manager card shows the active profile from the start. Without this, description
 # stays at install-time default ("balanced") until the reconcile loop fires a
@@ -986,13 +1003,31 @@ asb_bg_trim_apply_memcg() {
 }
 
 asb_bg_trim_oplus_tune() {
-  asb_persist_safe persist.sys.oplus.athena.reclaim_enable 1
-  asb_persist_safe persist.sys.oplus.athena.force_kill 0
-  asb_persist_safe persist.sys.oplus.athena.limit_count 120
-  asb_persist_safe persist.sys.oplus.deepthinker.reclaim_hint 1
+  # V46 — REMOVED Athena/deepthinker persist setprops that previously lived here:
+  #   persist.sys.oplus.athena.reclaim_enable=1
+  #   persist.sys.oplus.athena.force_kill=0
+  #   persist.sys.oplus.athena.limit_count=120
+  #   persist.sys.oplus.deepthinker.reclaim_hint=1
+  #
+  # Reason: on OnePlus Ace 5 (SM8635 Snapdragon 8s Gen 3, OxygenOS 16.0.7.200),
+  # setting `athena.reclaim_enable=1` activates the Athena reclaim daemon which
+  # calls into system_server's CachedAppOptimizer. On this device family, COSA
+  # (ColorOS adaptive auto-tuning) also queries CachedAppOptimizer in parallel.
+  # The two services deadlock — system_server respawns athena_optimize in a
+  # tight loop, hitting 100% CPU on all cores. Reported by user as fully
+  # confirmed reproduction: install → lag, disable module → still lagging
+  # (persist props survive), uninstall + manual cleanup of /data/property → OK.
+  #
+  # OnePlus 15 (SM8850 Elite Gen 5) does NOT have this bug because its Athena
+  # implementation predates the CachedAppOptimizer integration. But since ASB
+  # ships to multiple OnePlus devices, the safe default is to not touch these
+  # props at all. The memcg cgroup work (asb_bg_trim_apply_memcg) covers the
+  # same use case via standard Linux APIs, no vendor daemon involvement.
+  :
 }
 
-# V44: throttle high-wakeup GMS components (GlanceEventsReportService,
+# V46: GMS wakeup throttle for high-wakeup services. Stays gated behind
+# BG_TRIM=1 + the runtime command checks.
 # NetworkLocationScanner, ALARM_WAKEUP). Uses appops to deny RUN_ANY_IN_BACKGROUND
 # for the receivers — does NOT disable GMS itself (push/Doze stay working).
 asb_bg_trim_gms_wakelock_throttle() {
