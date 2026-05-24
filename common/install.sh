@@ -1332,7 +1332,11 @@ AutoSystemBoost' $APIOCXM
 	  rm -rf /data/anr/*
 	  rm -rf /data/system/package_cache/*/*
 	  rm -rf /data/local/*trace*/*
-	  rm -rf /data/local/*tmp*/*
+	  # V45 — REMOVED `rm -rf /data/local/*tmp*/*` — that wildcard wipes
+	  # /data/local/tmp which is the standard Android testing/development
+	  # directory. Users keep legitimate files there (e.g. targetlist.json
+	  # for other modules, adb-pushed scripts, custom configs). Even with
+	  # LOG=1, ASB has no business deleting that directory.
 	  rm -rf /data/mlog/*
 	  rm -rf /data/klog/*
 	  rm -rf /data/ap-log/*
