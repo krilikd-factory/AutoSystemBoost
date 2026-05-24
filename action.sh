@@ -85,8 +85,25 @@ fi
 _auto_bat=$(grep -oE '"auto_bat":[01]' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
 _qn_active=$(grep -oE '"qn_active":[01]' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
 
+_rec_count=0
+_rec_disabled=0
+_rec_reason=""
+if [ -r /dev/.asb/recovery.json ]; then
+  _rec_line=$(cat /dev/.asb/recovery.json 2>/dev/null)
+  _rec_count=$(echo "$_rec_line" | sed -n 's/.*"recovery_count":\([0-9]*\).*/\1/p')
+  _rec_disabled=$(echo "$_rec_line" | sed -n 's/.*"gov_disabled":\([0-9]*\).*/\1/p')
+  _rec_reason=$(echo "$_rec_line" | sed -n 's/.*"last_recovery_reason":"\([^"]*\)".*/\1/p')
+  case "$_rec_count" in ''|*[!0-9]*) _rec_count=0 ;; esac
+  case "$_rec_disabled" in ''|*[!0-9]*) _rec_disabled=0 ;; esac
+fi
+
 echo ""
-echo "  ASB V45 · ${PROFILE}"
+echo "  ASB V46 · ${PROFILE}"
+if [ "$_rec_disabled" = "1" ]; then
+  echo "  ⚠️  SAFE MODE  : governor disabled (${_rec_reason:-recovery})"
+elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
+  echo "  ⚠️  Recovery  : ${_rec_count} restart(s) — ${_rec_reason:-unknown}"
+fi
 echo ""
 echo "  🌡  CPU      : ${_cputemp}°C"
 if [ "$_btempC" -gt 0 ]; then
