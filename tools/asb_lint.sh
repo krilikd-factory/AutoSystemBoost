@@ -328,6 +328,18 @@ if [ -f "$MODDIR/service.sh" ]; then
   fi
 fi
 
+# V46 check: Athena/COSA persist setprops must not be in service.sh non-comment lines
+# Reason: setting persist.sys.oplus.athena.reclaim_enable=1 on OnePlus Ace 5
+# (SM8635, OxygenOS 16) caused system_server deadlock with CachedAppOptimizer.
+if [ -f "$MODDIR/service.sh" ]; then
+  _athena_writes="$(grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -cE "(asb_persist_safe|setprop)[[:space:]]+persist\\.sys\\.oplus\\.(athena|deepthinker)" 2>/dev/null)"
+  if [ "$_athena_writes" -gt 0 ] 2>/dev/null; then
+    err "service.sh writes $_athena_writes Athena/deepthinker persist props (V46 regression — causes deadlock on OnePlus Ace 5)"
+  else
+    ok "Athena/COSA persist props not written (V46 safe)"
+  fi
+fi
+
 echo
 echo "🏗  Bounds Source-of-Truth (V42)"
 _bc="$MODDIR/config/profile_bounds.conf"
