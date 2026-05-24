@@ -25,6 +25,14 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 
 asb_load_profile
 
+# V45 fix: write module.prop description immediately at boot so the KSU/Magisk
+# manager card shows the active profile from the start. Without this, description
+# stays at install-time default ("balanced") until the reconcile loop fires a
+# profile-change event — which never happens if profile didn't change since last
+# boot (the common case for daily users). asb_update_desc is defined in
+# runtime/profile_core.sh; sourced above on line 21.
+command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
+
 asb_migrate_governor_conf() {
   local _expected_schema=14
   local _conf_dir="$MODDIR/config"
@@ -393,7 +401,11 @@ apply_cpugov_hints() {
 asb_feature_enabled CPU && apply_cpugov_hints
 # ASB:CPU:END
 if has pm; then
-  pm disable-user --user 0 com.android.traceur >/dev/null 2>&1 || true
+  if command -v asb_pm_disable >/dev/null 2>&1; then
+    asb_pm_disable com.android.traceur
+  else
+    pm disable-user --user 0 com.android.traceur >/dev/null 2>&1 || true
+  fi
 fi
 # ASB:VM:BEGIN
 apply_vm() {
@@ -710,8 +722,8 @@ apply_wifi_pm() {
       sleep 0.5
       iw dev wlan0 set power_save off >/dev/null 2>&1 || true
       writef_retry /sys/module/wlan/parameters/wlan_pm 0 4 0.5 || true
-      setprop persist.vendor.wlan.scan_throttle 0 2>/dev/null || true
-      setprop persist.vendor.wlan.powersave 0 2>/dev/null || true
+      asb_persist_safe persist.vendor.wlan.scan_throttle 0
+      asb_persist_safe persist.vendor.wlan.powersave 0
       [ -e /sys/module/wlan/parameters/wlan_pm ] && writef_retry /sys/module/wlan/parameters/wlan_pm 0 6 0.5 || true
       ;;
     1)
@@ -719,14 +731,14 @@ apply_wifi_pm() {
       sleep 0.5
       iw dev wlan0 set power_save on >/dev/null 2>&1 || true
       writef_retry /sys/module/wlan/parameters/wlan_pm 1 4 0.5 || true
-      setprop persist.vendor.wlan.scan_throttle 1 2>/dev/null || true
-      setprop persist.vendor.wlan.powersave 1 2>/dev/null || true
+      asb_persist_safe persist.vendor.wlan.scan_throttle 1
+      asb_persist_safe persist.vendor.wlan.powersave 1
       [ -e /sys/module/wlan/parameters/wlan_pm ] && writef_retry /sys/module/wlan/parameters/wlan_pm 1 6 0.5 || true
       ;;
     *)
       iw dev wlan0 set power_save on >/dev/null 2>&1 || true
       writef_retry /sys/module/wlan/parameters/wlan_pm 1 3 0.25 || true
-      setprop persist.vendor.wlan.scan_throttle 1 2>/dev/null || true
+      asb_persist_safe persist.vendor.wlan.scan_throttle 1
       ;;
   esac
 }
@@ -800,10 +812,10 @@ apply_audio_runtime() {
   # These props are conservative — no UHQA, no large offload buffers, no power-save
   # tweaks that conflict with TWS earbuds + VoIP calls (Telegram/WhatsApp/Discord).
   # Field-reported issue: V38-V40 broke Pixel Buds Pro 2 + Telegram calls on OnePlus 13R.
-  setprop persist.audio.hifi.int_codec true 2>/dev/null || true
-  setprop persist.vendor.audio.hifi.int_codec true 2>/dev/null || true
+  asb_persist_safe persist.audio.hifi.int_codec true
+  asb_persist_safe persist.vendor.audio.hifi.int_codec true
   setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
-  setprop persist.vendor.audio.aec_ref.enable false 2>/dev/null || true
+  asb_persist_safe persist.vendor.audio.aec_ref.enable false
   setprop vendor.audio.feature.aec_ref.enable false 2>/dev/null || true
   setprop audio.matrix.limiter.enable false 2>/dev/null || true
   setprop vendor.audio.matrix.limiter.enable false 2>/dev/null || true
@@ -814,11 +826,11 @@ apply_audio_runtime() {
   if [ "${AUDIO_AGGRESSIVE:-0}" = "1" ]; then
     setprop ro.audio.hifi true 2>/dev/null || true
     setprop ro.vendor.audio.hifi true 2>/dev/null || true
-    setprop persist.audio.hifi true 2>/dev/null || true
-    setprop persist.vendor.audio.hifi true 2>/dev/null || true
-    setprop persist.audio.uhqa 1 2>/dev/null || true
-    setprop persist.vendor.audio.uhqa true 2>/dev/null || true
-    setprop persist.vendor.audio.power.save.setting 1 2>/dev/null || true
+    asb_persist_safe persist.audio.hifi true
+    asb_persist_safe persist.vendor.audio.hifi true
+    asb_persist_safe persist.audio.uhqa 1
+    asb_persist_safe persist.vendor.audio.uhqa true
+    asb_persist_safe persist.vendor.audio.power.save.setting 1
     setprop af.resampler.quality 255 2>/dev/null || true
     setprop audio.offload.min.duration.secs 20 2>/dev/null || true
     setprop vendor.audio.offload.min.duration.secs 20 2>/dev/null || true
@@ -974,10 +986,10 @@ asb_bg_trim_apply_memcg() {
 }
 
 asb_bg_trim_oplus_tune() {
-  setprop persist.sys.oplus.athena.reclaim_enable 1 2>/dev/null
-  setprop persist.sys.oplus.athena.force_kill 0    2>/dev/null
-  setprop persist.sys.oplus.athena.limit_count 120 2>/dev/null
-  setprop persist.sys.oplus.deepthinker.reclaim_hint 1 2>/dev/null
+  asb_persist_safe persist.sys.oplus.athena.reclaim_enable 1
+  asb_persist_safe persist.sys.oplus.athena.force_kill 0
+  asb_persist_safe persist.sys.oplus.athena.limit_count 120
+  asb_persist_safe persist.sys.oplus.deepthinker.reclaim_hint 1
 }
 
 # V44: throttle high-wakeup GMS components (GlanceEventsReportService,
@@ -1072,23 +1084,23 @@ asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
 
 # ASB:BG_TRIM:END
 apply_bt_runtime() {
-  setprop persist.bluetooth.a2dp_offload.disabled false 2>/dev/null || true
-  setprop persist.vendor.bluetooth.a2dp_offload.disabled false 2>/dev/null || true
-  setprop persist.bluetooth.a2dp.optional_codecs_enabled 1 2>/dev/null || true
-  setprop persist.bluetooth.leaudio.enabled true 2>/dev/null || true
-  setprop persist.bluetooth.spatial_audio_support true 2>/dev/null || true
-  setprop persist.vendor.bt.enable.swb true 2>/dev/null || true
-  setprop persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true 2>/dev/null || true
-  setprop persist.vendor.qcom.bluetooth.leaudio.enable true 2>/dev/null || true
+  asb_persist_safe persist.bluetooth.a2dp_offload.disabled false
+  asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled false
+  asb_persist_safe persist.bluetooth.a2dp.optional_codecs_enabled 1
+  asb_persist_safe persist.bluetooth.leaudio.enabled true
+  asb_persist_safe persist.bluetooth.spatial_audio_support true
+  asb_persist_safe persist.vendor.bt.enable.swb true
+  asb_persist_safe persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true
+  asb_persist_safe persist.vendor.qcom.bluetooth.leaudio.enable true
 }
 asb_feature_enabled BT && apply_bt_runtime
 apply_camera_runtime() {
-  setprop persist.camera.tnr.preview 1 2>/dev/null || true
-  setprop persist.camera.tnr.video 1 2>/dev/null || true
-  setprop persist.vendor.camera.hdr.enable 1 2>/dev/null || true
-  setprop persist.vendor.camera.video.hdr.enable 1 2>/dev/null || true
-  setprop persist.vendor.camera.eis.enable 1 2>/dev/null || true
-  setprop persist.vendor.camera.video.4k60.eis.enable 1 2>/dev/null || true
+  asb_persist_safe persist.camera.tnr.preview 1
+  asb_persist_safe persist.camera.tnr.video 1
+  asb_persist_safe persist.vendor.camera.hdr.enable 1
+  asb_persist_safe persist.vendor.camera.video.hdr.enable 1
+  asb_persist_safe persist.vendor.camera.eis.enable 1
+  asb_persist_safe persist.vendor.camera.video.4k60.eis.enable 1
   if has resetprop; then
     resetprop -n ro.vendor.oplus.camera.isSupportExplorer 1 >/dev/null 2>&1 || true
     resetprop -n ro.vendor.oplus.camera.isHasselbladCamera 1 >/dev/null 2>&1 || true
@@ -1492,14 +1504,14 @@ if has resetprop; then
     done
   fi
 apply_logd_props() {
-  setprop persist.logd.size 32K 2>/dev/null
-  setprop persist.logd.size.radio 32K 2>/dev/null
-  setprop persist.logd.size.system 32K 2>/dev/null
-  setprop persist.logd.size.crash 32K 2>/dev/null
-  setprop persist.logd.size.kernel 32K 2>/dev/null
-  setprop persist.logd.size.security 32K 2>/dev/null
-  setprop persist.logd.statistics false 2>/dev/null
-  setprop persist.logd.logpersistd stop 2>/dev/null
+  asb_persist_safe persist.logd.size 32K
+  asb_persist_safe persist.logd.size.radio 32K
+  asb_persist_safe persist.logd.size.system 32K
+  asb_persist_safe persist.logd.size.crash 32K
+  asb_persist_safe persist.logd.size.kernel 32K
+  asb_persist_safe persist.logd.size.security 32K
+  asb_persist_safe persist.logd.statistics false
+  asb_persist_safe persist.logd.logpersistd stop
 }
 asb_feature_enabled LOG && apply_logd_props
 
@@ -1665,7 +1677,7 @@ asb_load_profile
 (
   sleep 30
   _fg="$(getprop persist.sys.power.fuel.gauge 2>/dev/null)"
-  [ "$_fg" != "0" ] && setprop persist.sys.power.fuel.gauge 0 2>/dev/null
+  [ "$_fg" != "0" ] && asb_persist_safe persist.sys.power.fuel.gauge 0
 ) >/dev/null 2>&1 &
 (
   [ -r "$MODDIR/runtime/asb_reconcile.sh" ] && . "$MODDIR/runtime/asb_reconcile.sh"

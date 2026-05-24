@@ -86,7 +86,7 @@ _auto_bat=$(grep -oE '"auto_bat":[01]' /dev/.asb/state 2>/dev/null | head -1 | c
 _qn_active=$(grep -oE '"qn_active":[01]' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
 
 echo ""
-echo "  ASB V44 · ${PROFILE}"
+echo "  ASB V45 · ${PROFILE}"
 echo ""
 echo "  🌡  CPU      : ${_cputemp}°C"
 if [ "$_btempC" -gt 0 ]; then
