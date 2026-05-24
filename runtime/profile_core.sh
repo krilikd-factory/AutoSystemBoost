@@ -56,11 +56,12 @@ asb_feature_enabled() {
 }
 
 asb_update_desc() {
-  local _s
-  case "$PROFILE" in
+  local _s _p
+  _p="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+  case "$_p" in
     performance) _s='description=status: performance 🔥 | active ✅' ;;
-    battery) _s='description=status: battery 🔋 | active ✅' ;;
-    *) _s='description=status: balanced ⚖️ | active ✅' ;;
+    battery)     _s='description=status: battery 🔋 | active ✅' ;;
+    *)           _s='description=status: balanced ⚖️ | active ✅' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
@@ -372,8 +373,9 @@ asb_apply_wifi() {
 }
 
 asb_load_profile() {
-  if [ -z "$PROFILE" ] && [ -r "$MODDIR/current_profile" ]; then
-    PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+  if [ -r "$MODDIR/current_profile" ]; then
+    _cp="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+    [ -n "$_cp" ] && PROFILE="$_cp"
   fi
   case "$PROFILE" in
     battery|balanced|performance) : ;;
