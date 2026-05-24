@@ -328,15 +328,35 @@ if [ -f "$MODDIR/service.sh" ]; then
   fi
 fi
 
-# V46 check: Athena/COSA persist setprops must not be in service.sh non-comment lines
+# V45 check: Athena/COSA persist setprops must not be in service.sh non-comment lines
 # Reason: setting persist.sys.oplus.athena.reclaim_enable=1 on OnePlus Ace 5
 # (SM8635, OxygenOS 16) caused system_server deadlock with CachedAppOptimizer.
 if [ -f "$MODDIR/service.sh" ]; then
   _athena_writes="$(grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -cE "(asb_persist_safe|setprop)[[:space:]]+persist\\.sys\\.oplus\\.(athena|deepthinker)" 2>/dev/null)"
   if [ "$_athena_writes" -gt 0 ] 2>/dev/null; then
-    err "service.sh writes $_athena_writes Athena/deepthinker persist props (V46 regression — causes deadlock on OnePlus Ace 5)"
+    err "service.sh writes $_athena_writes Athena/deepthinker persist props (V45 regression — causes deadlock on OnePlus Ace 5)"
   else
-    ok "Athena/COSA persist props not written (V46 safe)"
+    ok "Athena/COSA persist props not written (V45 safe)"
+  fi
+fi
+
+# V45 check: matrix.limiter.enable=false and ro.audio.audiozoom=true must
+# not be in service.sh or system.prop non-comment lines.
+# Reason: both cause stereo widening / center channel weakness (user-reported).
+if [ -f "$MODDIR/service.sh" ]; then
+  _widening_writes="$(grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -cE "(matrix\\.limiter\\.enable[[:space:]]+false|audiozoom[[:space:]]+true)" 2>/dev/null)"
+  if [ "$_widening_writes" -gt 0 ] 2>/dev/null; then
+    err "service.sh writes $_widening_writes stereo-widening props (V45 regression — causes side-bias/weak center)"
+  else
+    ok "Stereo-widening props not written (V45 safe)"
+  fi
+fi
+if [ -f "$MODDIR/system.prop" ]; then
+  _widening_sysprop="$(grep -vE "^[[:space:]]*#" "$MODDIR/system.prop" | grep -cE "^(audio\\.matrix\\.limiter\\.enable=false|vendor\\.audio\\.matrix\\.limiter\\.enable=false|ro\\.audio\\.audiozoom=true)" 2>/dev/null)"
+  if [ "$_widening_sysprop" -gt 0 ] 2>/dev/null; then
+    err "system.prop has $_widening_sysprop stereo-widening defaults (V45 regression)"
+  else
+    ok "system.prop free of stereo-widening defaults (V45 safe)"
   fi
 fi
 
