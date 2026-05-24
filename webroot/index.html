@@ -702,7 +702,7 @@ body::before, body::after {
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V45</div>
+      <div class="badge" id="verBadge">V46</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -781,7 +781,7 @@ body::before, body::after {
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
-      <div class="badge" id="liveVerBadge">V44</div>
+      <div class="badge" id="liveVerBadge">V46</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1082,10 +1082,24 @@ async function pollLive(visible) {
     } catch(e) {}
 
     const capSrc = (st && st.cap_source_p0) || '';
+    const advActive = (st && st.adv_active) || 0;
+    let recCount = 0, recDisabled = 0, recReason = '';
+    try {
+      const rj = await run('cat /dev/.asb/recovery.json 2>/dev/null');
+      if (rj && rj.stdout && rj.stdout.trim()) {
+        const ro = JSON.parse(rj.stdout);
+        recCount = ro.recovery_count || 0;
+        recDisabled = ro.gov_disabled || 0;
+        recReason = ro.last_recovery_reason || '';
+      }
+    } catch(e) {}
     if (chip) {
       chip.classList.remove('has-issue', 'has-error');
-      if (capSrc === 'vendor_clamp') chip.classList.add('has-error');
+      if (recDisabled === 1) chip.classList.add('has-error');
+      else if (recCount > 0) chip.classList.add('has-issue');
+      else if (capSrc === 'vendor_clamp') chip.classList.add('has-error');
       else if (capSrc === 'vendor_raised' || capSrc === 'thermal_overlay') chip.classList.add('has-issue');
+      else if (advActive === 1) chip.classList.add('has-issue');
     }
 
     if (!visible) return;
@@ -1146,7 +1160,18 @@ async function pollLive(visible) {
     else if (capSrc === 'vendor_raised') capEl.classList.add('cap-raised');
     else if (capSrc && capSrc.startsWith('shell')) capEl.classList.add('cap-shell');
 
-    if (learner) {
+    if (recCount > 0 || recDisabled === 1) {
+      const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
+      if (learnerLabel) learnerLabel.textContent = recDisabled === 1 ? 'SAFE MODE' : 'Recovery';
+      const learnerEl = _el('liveLearner');
+      learnerEl.className = recDisabled === 1 ? 'live-cell-value cap-clamp' : 'live-cell-value cap-raised';
+      learnerEl.textContent = recDisabled === 1
+        ? 'Gov disabled · ' + (recReason || 'recovery')
+        : recCount + ' restart(s) · ' + (recReason || 'unknown');
+    } else if (learner) {
+      const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
+      if (learnerLabel) learnerLabel.textContent = 'Battery Learner';
+      _el('liveLearner').className = 'live-cell-value';
       const tier = learner.trust_tier || '—';
       const sessions = (learner.sessions && learner.sessions.battery) || 0;
       const outcome = learner.last_outcome || '—';
@@ -1155,6 +1180,9 @@ async function pollLive(visible) {
         ' · Sessions: ' + sessions +
         ' · Last: ' + outcome;
     } else {
+      const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
+      if (learnerLabel) learnerLabel.textContent = 'Battery Learner';
+      _el('liveLearner').className = 'live-cell-value';
       _el('liveLearner').textContent = '(no session data yet)';
     }
 
