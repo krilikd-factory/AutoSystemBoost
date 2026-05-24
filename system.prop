@@ -137,17 +137,22 @@ persist.vendor.bluetooth.a2dp_offload.disabled=false
 persist.bluetooth.a2dp.aac.vbr_supported=true
 # ASB:BT:END
 # ASB:AUDIO:BEGIN
-# V44 — minimal safe audio profile. V44-test-2 included qc2audio per_frame
-# overrides and audio.hal.output.suspend.supported=false which on OnePlus 15
-# caused audiohalservice.qti to NULL-deref during init (SIGSEGV at 0x18 in
-# codec lookup), respawning every 5s and bootlooping the device.
+# V45 — minimal safe audio profile. Conservative defaults that don't alter
+# stereo balance or conflict with VoIP routing.
+#
+# V45 fix: removed `ro.audio.audiozoom=true` (intentional stereo widening
+# via Qualcomm AudioZoom — pushed content to sides, weakened center channel).
+# User reported as "звук в сайд уводит, в центре слабо все начинает играть".
+#
+# V44 had also removed qc2audio per_frame overrides and
+# audio.hal.output.suspend.supported=false which caused audiohalservice.qti
+# NULL-deref bootloop on OnePlus 15.
 persist.audio.hifi=false
 persist.audio.hifi.int_codec=true
 persist.vendor.audio.hifi.int_codec=true
 persist.audio.uhqa=1
 persist.vendor.audio.uhqa=true
 ro.audio.ullunique=true
-ro.audio.audiozoom=true
 ro.audio.bt.connect.disable.mute=true
 persist.vendor.audio.aec_ref.enable=false
 vendor.audio.feature.aec_ref.enable=false

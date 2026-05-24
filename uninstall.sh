@@ -1,10 +1,10 @@
 #!/system/bin/sh
-# AutoSystemBoost uninstall — V46
+# AutoSystemBoost uninstall — V45
 # 1. Replay baseline (restores all settings/persist props/pm states that ASB changed)
 # 2. Restore camera vendor props from camera_orig.conf
-# 3. V46: force-delete Athena/COSA persist props that V44/V45 may have set on
-#    OnePlus Ace 5-class devices (caused system_server deadlock); safe no-op
-#    on devices that never had these set
+# 3. V45: force-delete problematic persist props that V44 may have set:
+#    - Athena/COSA props (caused system_server deadlock on OnePlus Ace 5)
+#    - Audio widening props (caused stereo side-bias, weak center channel)
 # 4. Clean ASB scratch dirs and state files
 
 MODDIR=${0%/*}
@@ -26,17 +26,20 @@ if [ -f "$_cam_orig" ]; then
   done < "$_cam_orig"
 fi
 
-# V46 cleanup: remove Athena/COSA persist props that V44/V45 may have written.
-# These caused system_server deadlock on OnePlus Ace 5 (SM8635 + OxygenOS 16).
-# `resetprop --delete` removes the persist file from /data/property, breaking
-# the lockup-on-reboot cycle for users upgrading from a buggy version. On
-# devices that never had these set, resetprop --delete is a no-op.
-for _athena_prop in \
+# V45 cleanup: remove problematic persist props that V44 may have written.
+# Two categories:
+# - Athena/COSA props: caused system_server deadlock on OnePlus Ace 5
+# - Audio widening props: caused stereo side-bias, weak center
+# `resetprop --delete` removes the persist file from /data/property. On devices
+# that never had these set, resetprop --delete is a no-op.
+for _stale_prop in \
     persist.sys.oplus.athena.reclaim_enable \
     persist.sys.oplus.athena.force_kill \
     persist.sys.oplus.athena.limit_count \
-    persist.sys.oplus.deepthinker.reclaim_hint; do
-  resetprop --delete "$_athena_prop" >/dev/null 2>&1 || true
+    persist.sys.oplus.deepthinker.reclaim_hint \
+    ro.audio.audiozoom \
+    persist.bluetooth.spatial_audio_support; do
+  resetprop --delete "$_stale_prop" >/dev/null 2>&1 || true
 done
 
 # Clean baseline file itself
@@ -51,4 +54,4 @@ rm -f /data/adb/asb_vendor_boot_counter 2>/dev/null
 rm -f /data/adb/asb_active_profile 2>/dev/null
 rm -f /data/adb/asb_user_config 2>/dev/null
 rm -f /data/adb/asb_debug 2>/dev/null
-rm -f /data/adb/asb_v46_athena_cleanup_done 2>/dev/null
+rm -f /data/adb/asb_v45_cleanup_done 2>/dev/null

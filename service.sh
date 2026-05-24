@@ -25,21 +25,29 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 
 asb_load_profile
 
-# V46: one-shot cleanup for users upgrading from V44/V45 that had Athena
-# persist props set. These caused system_server deadlock on OnePlus Ace 5
-# (SM8635 + OxygenOS 16). resetprop --delete removes them from /data/property,
-# breaking the lockup-on-reboot cycle. Marker file prevents repeated work.
-if [ ! -f /data/adb/asb_v46_athena_cleanup_done ]; then
-  for _ath_p in \
+# V45: one-shot cleanup for users upgrading from V44 that had problematic
+# props set. Two issues being cleaned:
+#
+# 1. Athena/COSA persist props that caused system_server deadlock on
+#    OnePlus Ace 5 (SM8635 + OxygenOS 16) — V44 set these globally.
+# 2. Audio widening props that pushed stereo image to sides and weakened
+#    center channel — user-reported on V44.
+#
+# resetprop --delete removes them from /data/property, restoring vendor defaults.
+# Marker file prevents repeated work.
+if [ ! -f /data/adb/asb_v45_cleanup_done ]; then
+  for _stale_p in \
       persist.sys.oplus.athena.reclaim_enable \
       persist.sys.oplus.athena.force_kill \
       persist.sys.oplus.athena.limit_count \
-      persist.sys.oplus.deepthinker.reclaim_hint; do
-    if [ -n "$(getprop "$_ath_p" 2>/dev/null)" ]; then
-      resetprop --delete "$_ath_p" >/dev/null 2>&1 || true
+      persist.sys.oplus.deepthinker.reclaim_hint \
+      ro.audio.audiozoom \
+      persist.bluetooth.spatial_audio_support; do
+    if [ -n "$(getprop "$_stale_p" 2>/dev/null)" ]; then
+      resetprop --delete "$_stale_p" >/dev/null 2>&1 || true
     fi
   done
-  touch /data/adb/asb_v46_athena_cleanup_done 2>/dev/null
+  touch /data/adb/asb_v45_cleanup_done 2>/dev/null
 fi
 
 # V45 fix: write module.prop description immediately at boot so the KSU/Magisk
@@ -825,17 +833,22 @@ asb_feature_enabled GPS && apply_gps_hygiene
 # ASB:GPS:END
 # ASB:AUDIO:BEGIN
 apply_audio_runtime() {
-  # V44 — VoIP-safe core (always applied when AUDIO=1).
-  # These props are conservative — no UHQA, no large offload buffers, no power-save
-  # tweaks that conflict with TWS earbuds + VoIP calls (Telegram/WhatsApp/Discord).
-  # Field-reported issue: V38-V40 broke Pixel Buds Pro 2 + Telegram calls on OnePlus 13R.
+  # V45 — VoIP-safe core (always applied when AUDIO=1).
+  # Conservative: only props that don't conflict with TWS+VoIP routing AND
+  # don't alter stereo balance.
+  #
+  # V45 fix (user-reported): removed `audio.matrix.limiter.enable=false`
+  # and `vendor.audio.matrix.limiter.enable=false`. Matrix limiter is on by
+  # default in Qualcomm audio HAL for a reason — it balances L/R/Center
+  # channels and prevents stereo widening that pushes content to sides while
+  # weakening center. User report: "улучшалка аудио звук прям сильно в сайд
+  # уводит, в центре слабо все начинает играть". The matrix limiter was the
+  # cause. Removed entirely — Qualcomm default behaviour restored.
   asb_persist_safe persist.audio.hifi.int_codec true
   asb_persist_safe persist.vendor.audio.hifi.int_codec true
   setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
   asb_persist_safe persist.vendor.audio.aec_ref.enable false
   setprop vendor.audio.feature.aec_ref.enable false 2>/dev/null || true
-  setprop audio.matrix.limiter.enable false 2>/dev/null || true
-  setprop vendor.audio.matrix.limiter.enable false 2>/dev/null || true
 
   # V44 — aggressive audio enhancements. Opt-in via governor.conf:AUDIO_AGGRESSIVE=1.
   # WARNING: known to cause issues with TWS earbuds + VoIP on some devices.
@@ -1119,14 +1132,21 @@ asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
 
 # ASB:BG_TRIM:END
 apply_bt_runtime() {
+  # V45 fix: removed `persist.bluetooth.spatial_audio_support=true` from
+  # default BT runtime. Spatial audio on TWS earbuds without proper
+  # head-tracking can produce stereo imbalance similar to the matrix.limiter
+  # issue (wide perception, weak center). Now opt-in via AUDIO_AGGRESSIVE=1.
   asb_persist_safe persist.bluetooth.a2dp_offload.disabled false
   asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled false
   asb_persist_safe persist.bluetooth.a2dp.optional_codecs_enabled 1
   asb_persist_safe persist.bluetooth.leaudio.enabled true
-  asb_persist_safe persist.bluetooth.spatial_audio_support true
   asb_persist_safe persist.vendor.bt.enable.swb true
   asb_persist_safe persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true
   asb_persist_safe persist.vendor.qcom.bluetooth.leaudio.enable true
+  # Spatial audio — opt-in only (can cause stereo imbalance on TWS without head-tracking)
+  if [ "${AUDIO_AGGRESSIVE:-0}" = "1" ]; then
+    asb_persist_safe persist.bluetooth.spatial_audio_support true
+  fi
 }
 asb_feature_enabled BT && apply_bt_runtime
 apply_camera_runtime() {
