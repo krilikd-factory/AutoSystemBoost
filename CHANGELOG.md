@@ -6,8 +6,6 @@
   <img src="https://img.shields.io/badge/versionCode-462-0ea5e9?style=for-the-badge" alt="versionCode">
 </p>
 
-> **V45 is a stability and trust release. Four critical user-reported bugs from V44 release are fixed, the V44 baseline-tracking work is completed, the performance profile thermal headroom is widened based on field telemetry, and the CHANGELOG focuses exclusively on what changed from V44 — no historical noise. Three of the four bugs caused real harm to real users: a OnePlus Ace 5 device deadlocked, another user lost a config file in `/data/local/tmp`, and a third reported audio with weak center channel and side-bias. The fourth bug was cosmetic but disorienting — the module card lied about which profile was active.**
-
 ---
 
 ## ⚡ V45 — Critical Bug Fixes + Field-Tuned Profiles
@@ -218,10 +216,3 @@ perf_hot_guard_temp:          66°C (was 63°C in V44)
 - **FSM scheduling logic, profile bounds, battery learner thresholds** — bit-exact identical to V44 apart from `perf_hot_guard_temp`. Reproducibility of V44 baseline behaviour preserved for battery and balanced profiles.
 - **Italian NTP servers and Italian WIFI_COUNTRY=IT default** — kept by author's explicit choice. Both baseline-tracked so uninstall restores user's original values.
 - **WebUI Live overlay layout** — unchanged from V44. Layout was already symmetric and minimal.
-
-### 🙏 Credits
-
-- **Primary user** — reported the module card description bug with a complete 81-minute battery log proving the FSM was correct while the card lied. Also reported the follow-up profile-revert race condition that uncovered the three-implementation `asb_update_desc` divergence.
-- **`/data/local/tmp` user** — reported the wildcard wipe of `/data/local/tmp` after losing `targetlist.json` from another module.
-- **Audio user** — reported the stereo widening with weak center channel issue: "звук прям сильно в сайд уводит, в центре слабо все начинает играть". Three different aggressive props were collectively responsible.
-- **OnePlus Ace 5 user** — for the methodical bug report using adb + htop + SukiSU logs to trace `system_server` deadlock to `persist.sys.oplus.athena.*` props. Identified ASB as source via UID, confirmed reproduction by disable/uninstall sequence. This level of debugging is rare and made the fix straightforward to scope.
