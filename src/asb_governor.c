@@ -1058,7 +1058,9 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         snprintf(out + strlen(out) - 1, outlen - (int)strlen(out),
             ",\"intent\":\"%s\",\"hot_fail\":%d,\"deg_age\":%ld,"
             "\"auto_bat\":%d,\"auto_bat_restore\":%d,\"qn_active\":%d,"
-            "\"auto_bat_reason\":\"%s\",\"auto_bat_since\":%lld}",
+            "\"auto_bat_reason\":\"%s\",\"auto_bat_since\":%lld,"
+            "\"adv_score\":%d,\"adv_active\":%d,\"cold_skin\":%d,\"cold_surface\":%d,\"cold_board\":%d,"
+            "\"vote_skin\":%d,\"vote_surface\":%d,\"vote_board\":%d,\"would_bias_exit\":%d}",
             (fsm->ses_intent >= 0 && fsm->ses_intent <= 5)
                 ? intent_names[fsm->ses_intent] : "unknown",
             g_pstats_per[_pidx].hot_fail_count,
@@ -1067,7 +1069,16 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
             fsm->auto_battery_restore_idx,
             g_quiet_night_active,
             fsm->auto_battery_reason[0] ? fsm->auto_battery_reason : "none",
-            (long long)fsm->auto_battery_since);
+            (long long)fsm->auto_battery_since,
+            fsm->thermal_advisory_score,
+            fsm->thermal_advisory_active,
+            fsm->cold_baseline_skin,
+            fsm->cold_baseline_surface,
+            fsm->cold_baseline_board,
+            fsm->thermal_vote_skin,
+            fsm->thermal_vote_surface,
+            fsm->thermal_vote_board,
+            fsm->would_bias_exit_gaming);
     }
 }
 
@@ -1722,8 +1733,32 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             perf_outcome = "mixed";
     }
 
+    /* V46 P1a: candidate-tier evaluation (LOGGING ONLY — no behavior change).
+     * Computes whether this session would qualify for a hypothetical
+     * BAT_TRUST_NOISY tier (mixed-use, high-wake but still has real idle
+     * time). After 2-3 weeks of field data, V47 will decide if the tier
+     * should actually be implemented and what thresholds to use. */
+    int would_be_noisy = 0;
+    char noisy_dim[96] = "";
+    if (fsm->profile_idx == PROFILE_BATTERY) {
+        long _bt = fsm->bat_time_deep_idle_sec
+                   + fsm->bat_time_light_idle_sec
+                   + fsm->bat_time_moderate_sec;
+        float _wph = (dur > 0)
+                     ? (float)fsm->bat_wake_cycles * 3600.0f / dur : 0.0f;
+        if (idle_quality >= 8 && idle_quality <= 19
+            && _wph >= 12.0f && _wph <= 25.0f
+            && fsm->bat_wake_cycles >= 10 && fsm->bat_wake_cycles <= 50
+            && dur >= 1800 && _bt > 600) {
+            would_be_noisy = 1;
+        }
+        snprintf(noisy_dim, sizeof(noisy_dim),
+                 "iq=%d wph=%.1f wake=%d dur=%ld bt=%ld",
+                 idle_quality, _wph, fsm->bat_wake_cycles, dur, _bt);
+    }
+
     fprintf(wf,
-        "{\"v\":9,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
+        "{\"v\":10,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
         "\"gaming\":%d,\"sustained\":%d,\"thermal\":%d,\"unreachable\":%d,"
         "\"t_heavy\":%ld,\"t_gaming\":%ld,\"t_sustained\":%ld,"
         "\"avg_gap\":%d,\"max_temp\":%d,\"skin_max_temp\":%d,\"surface_max_temp\":%d,\"board_max_temp\":%d,\"degraded\":%d,"
@@ -1741,7 +1776,9 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         "\"conf\":\"%s\",\"sig\":\"%s\",\"mid_tune\":\"%s\",\"mid_n\":%d,\"anomaly\":\"%s\","
         "\"clamp_hold\":%d,\"had_clamp_hold\":%d,\"had_futility\":%d,"
         "\"bat_trust\":%d,\"bat_outcome\":\"%s\",\"perf_outcome\":\"%s\","
-        "\"env\":\"%s\"}\n",
+        "\"env\":\"%s\","
+        "\"would_be_noisy\":%d,\"noisy_dim\":\"%s\","
+        "\"adv_score\":%d,\"adv_active\":%d,\"adv_vote_skin\":%d,\"adv_vote_surface\":%d,\"adv_vote_board\":%d,\"adv_would_bias\":%d}\n",
         ts, profile_names[fsm->profile_idx], mode_names[mode_idx], reason,
         fsm->ses_gaming_entries, fsm->ses_sustained_entries,
         fsm->ses_thermal_entries, fsm->ses_unreachable_entries,
@@ -1769,7 +1806,11 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         conf, sig, mid_tune, mid_tune_n, anomaly,
         fsm->clamp_hold, fsm->had_clamp_hold, fsm->had_futility,
         bat_trust_val, bat_outcome, perf_outcome,
-        (const char *[]){"quiet","noisy","hostile"}[classify_environment(fsm)]);
+        (const char *[]){"quiet","noisy","hostile"}[classify_environment(fsm)],
+        would_be_noisy, noisy_dim,
+        fsm->thermal_advisory_score, fsm->thermal_advisory_active,
+        fsm->thermal_vote_skin, fsm->thermal_vote_surface, fsm->thermal_vote_board,
+        fsm->would_bias_exit_gaming);
     fflush(wf);
     fsync(fileno(wf));
     fclose(wf);

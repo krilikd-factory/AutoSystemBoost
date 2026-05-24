@@ -293,6 +293,26 @@ typedef struct {
     time_t          recovery_cautious_until; /* V33: after clamp lift, stay cautious */
     int             perf_hot_guard_ticks;
     int             perf_hot_guard_active;
+    /* V46: multi-sensor advisory (skin/surface/board contribute to soft
+     * hot-guard, NOT hard panic). Cold baseline = first 30s avg captured
+     * at governor start. Concern = current - baseline (delta-from-cold).
+     * Advisory active = weighted score > 50 for >=20 ticks. */
+    int             cold_baseline_skin;
+    int             cold_baseline_surface;
+    int             cold_baseline_board;
+    int             cold_baseline_ticks;    /* >= 30: baseline captured */
+    int             cold_baseline_sum_skin;
+    int             cold_baseline_sum_surface;
+    int             cold_baseline_sum_board;
+    int             thermal_advisory_score;     /* 0-90 weighted */
+    int             thermal_advisory_ticks;     /* consecutive ticks > 50 */
+    int             thermal_advisory_active;
+    /* V46 P2 observe-only: per-zone vote breakdown + would-bias flag.
+     * V46 collects this data; V47 decides whether to enable behavioral effect. */
+    int             thermal_vote_skin;          /* 0-100 per-zone */
+    int             thermal_vote_surface;
+    int             thermal_vote_board;
+    int             would_bias_exit_gaming;     /* would have downgraded GAMING->HEAVY */
     /* V34: Ceiling-Adaptive Reshaping -- governor sets these from observed freq */
     int             virtual_ceiling_p0;
     int             virtual_ceiling_p1;
@@ -460,6 +480,20 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
     fsm->recovery_cautious_until  = 0;
     fsm->perf_hot_guard_ticks      = 0;
     fsm->perf_hot_guard_active     = 0;
+    fsm->cold_baseline_skin        = 0;
+    fsm->cold_baseline_surface     = 0;
+    fsm->cold_baseline_board       = 0;
+    fsm->cold_baseline_ticks       = 0;
+    fsm->cold_baseline_sum_skin    = 0;
+    fsm->cold_baseline_sum_surface = 0;
+    fsm->cold_baseline_sum_board   = 0;
+    fsm->thermal_advisory_score    = 0;
+    fsm->thermal_advisory_ticks    = 0;
+    fsm->thermal_advisory_active   = 0;
+    fsm->thermal_vote_skin         = 0;
+    fsm->thermal_vote_surface      = 0;
+    fsm->thermal_vote_board        = 0;
+    fsm->would_bias_exit_gaming    = 0;
     fsm->virtual_ceiling_p0       = 0;
     fsm->virtual_ceiling_p1       = 0;
 }
@@ -646,6 +680,74 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                 thermal_to_sustained = 1;
                 throttle_confirmed = 1;
                 fsm->sustained_reason = 0;
+            }
+        }
+
+        if (fsm->cold_baseline_ticks < 30) {
+            if (m->therm.skin_temp_c > 0)
+                fsm->cold_baseline_sum_skin += m->therm.skin_temp_c;
+            if (m->therm.surface_hotspot_c > 0)
+                fsm->cold_baseline_sum_surface += m->therm.surface_hotspot_c;
+            if (m->therm.board_temp_c > 0)
+                fsm->cold_baseline_sum_board += m->therm.board_temp_c;
+            fsm->cold_baseline_ticks++;
+            if (fsm->cold_baseline_ticks == 30) {
+                fsm->cold_baseline_skin    = fsm->cold_baseline_sum_skin / 30;
+                fsm->cold_baseline_surface = fsm->cold_baseline_sum_surface / 30;
+                fsm->cold_baseline_board   = fsm->cold_baseline_sum_board / 30;
+            }
+        } else {
+            int score = 0;
+            int vote_skin = 0, vote_surface = 0, vote_board = 0;
+            if (m->therm.skin_temp_c > 0 && fsm->cold_baseline_skin > 0) {
+                int delta = m->therm.skin_temp_c - fsm->cold_baseline_skin;
+                if (delta > 0) {
+                    int s = (delta * 100) / 8;
+                    if (s > 100) s = 100;
+                    vote_skin = s;
+                    score += (s * 30) / 100;
+                }
+            }
+            if (m->therm.surface_hotspot_c > 0 && fsm->cold_baseline_surface > 0) {
+                int delta = m->therm.surface_hotspot_c - fsm->cold_baseline_surface;
+                if (delta > 0) {
+                    int s = (delta * 100) / 10;
+                    if (s > 100) s = 100;
+                    vote_surface = s;
+                    score += (s * 40) / 100;
+                }
+            }
+            if (m->therm.board_temp_c > 0 && fsm->cold_baseline_board > 0) {
+                int delta = m->therm.board_temp_c - fsm->cold_baseline_board;
+                if (delta > 0) {
+                    int s = (delta * 100) / 10;
+                    if (s > 100) s = 100;
+                    vote_board = s;
+                    score += (s * 20) / 100;
+                }
+            }
+            if (score > 90) score = 90;
+            fsm->thermal_advisory_score = score;
+            fsm->thermal_vote_skin    = vote_skin;
+            fsm->thermal_vote_surface = vote_surface;
+            fsm->thermal_vote_board   = vote_board;
+
+            if (score > 50) {
+                fsm->thermal_advisory_ticks++;
+                if (fsm->thermal_advisory_ticks >= 20) {
+                    fsm->thermal_advisory_active = 1;
+                    if (fsm->profile_idx == PROFILE_PERFORMANCE &&
+                        desired == ASB_STATE_GAMING) {
+                        fsm->would_bias_exit_gaming = 1;
+                    }
+                }
+            } else if (score < 30) {
+                if (fsm->thermal_advisory_ticks > 0)
+                    fsm->thermal_advisory_ticks--;
+                if (fsm->thermal_advisory_ticks == 0) {
+                    fsm->thermal_advisory_active = 0;
+                    fsm->would_bias_exit_gaming = 0;
+                }
             }
         }
 
