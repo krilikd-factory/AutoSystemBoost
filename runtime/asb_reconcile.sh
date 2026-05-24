@@ -50,6 +50,13 @@
       battery|balanced|performance) : ;;
       *) _now="balanced" ;;
     esac
+    if [ -f /dev/.asb/safe_mode ]; then
+      _last_profile="$_now"
+      continue
+    fi
+    if [ -f /dev/.asb/recovery.lock ]; then
+      continue
+    fi
     asb_load_profile
     _need=0
     _reason=""
