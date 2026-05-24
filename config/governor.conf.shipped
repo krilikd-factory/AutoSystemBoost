@@ -55,7 +55,12 @@ hard_clamp_headroom_pct=48
 perf_sustained_temp_enter=53
 perf_sustained_temp_exit=48
 perf_sustained_level=0.70
-perf_hot_guard_temp=63
+# V45 — raised from 63°C based on field logs showing perf profile holds well
+# up to 73°C with cap_source=shell_overridden_down (no vendor_clamp, no hot_fail).
+# Triggering perf_hot_guard at 63°C transitioned out of HEAVY/GAMING too early
+# during sustained gaming sessions. 66°C gives more headroom while still firing
+# before vendor thermal HAL kicks in (~75°C on OnePlus 15 SM8850).
+perf_hot_guard_temp=66
 perf_hot_guard_ticks=2
 balanced_sustained_temp_enter=57
 balanced_sustained_temp_exit=49
