@@ -6,7 +6,7 @@ ASB_FAIL_COUNT=0
 ASB_SAFE_MODE_FILE="/dev/.asb/safe_mode"
 ASB_RECOVERY_LOCK="/dev/.asb/recovery.lock"
 ASB_RECOVERY_JSON="/dev/.asb/recovery.json"
-ASB_RECOVERY_DISABLED_MARKER="/data/adb/asb_recovery_disabled"
+ASB_RECOVERY_DISABLED_MARKER="/data/adb/asb/recovery_disabled"
 ASB_MAX_CONSECUTIVE_FAILS=3
 ASB_RECOVERY_WINDOW_S=1800
 ASB_L2_THRESHOLD=2
@@ -95,7 +95,7 @@ asb_recovery_level3_safe_mode() {
   _gpid="$(cat /dev/.asb/governor.pid 2>/dev/null)"
   [ -n "$_gpid" ] && kill "$_gpid" 2>/dev/null
   echo "balanced" > "$MODDIR/current_profile" 2>/dev/null
-  echo "balanced" > /data/adb/asb_active_profile 2>/dev/null
+  echo "balanced" > /data/adb/asb/active_profile 2>/dev/null
   asb_load_profile
   asb_feature_enabled CPU && apply_runtime_profile_now 2>/dev/null
   ASB_GOV_ENABLED=0

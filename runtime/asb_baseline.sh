@@ -1,5 +1,5 @@
 
-ASB_BASELINE="/data/adb/asb_baseline.txt"
+ASB_BASELINE="/data/adb/asb/baseline.txt"
 
 asb_baseline_init() {
   [ -f "$ASB_BASELINE" ] && return 0
