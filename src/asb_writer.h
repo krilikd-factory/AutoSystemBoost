@@ -53,29 +53,6 @@ static void writer_init_paths(void) {
     g_writer_paths_ready = 1;
 }
 
-/* V39: GPU control on Qualcomm KGSL uses POWER LEVELS, not Hz values.
- *
- * On SM8850 (and most modern Qualcomm SoCs) the KGSL driver does NOT expose
- * writable /max_freq nodes. The control interface is:
- *   /sys/class/kgsl/kgsl-3d0/max_pwrlevel  — integer 0..N-1 (0=HIGHEST freq)
- *   /sys/class/kgsl/kgsl-3d0/min_pwrlevel  — integer 0..N-1 (N-1=LOWEST freq)
- *   /sys/class/kgsl/kgsl-3d0/num_pwrlevels — read: count of levels
- *   /sys/class/kgsl/kgsl-3d0/gpu_available_frequencies — freq list (desc order)
- *
- * IMPORTANT: Power levels are INVERTED — 0 = maximum frequency, N-1 = minimum.
- * Writing max_pwrlevel=2 means "cannot go to level 0 or 1" i.e. freq capped.
- *
- * r5's kludge (open(O_WRONLY)-probe on max_gpuclk/max_freq) on SM8850 picked
- * max_gpuclk which opens writable but EINVAL's actual writes (it's a status
- * node). Result: 18 silent FAIL lines in write_errors during HEAVY session.
- *
- * This rewrite:
- *   1. Skip Hz-path candidates (max_freq nodes) since they don't exist on this SoC
- *   2. Use kgsl /max_pwrlevel+/min_pwrlevel directly if present
- *   3. Fall back to /devfreq/max_freq only if pwrlevel interface absent
- *   4. Translate gpu_max_pct into the closest pwrlevel by scanning the freq table
- */
-
 #define GPU_PATH_CANDIDATES_MAX 6
 static char g_gpu_max_path[160]      = {0};   /* either pwrlevel or max_freq */
 static char g_gpu_min_path[160]      = {0};
@@ -86,29 +63,10 @@ static int  g_gpu_num_pwrlevels      = 0;     /* count of levels if pwrlevel mod
 static long g_gpu_freq_table[32]     = {0};   /* frequencies in descending order */
 static int  g_gpu_freq_table_len     = 0;
 
-/* V39: thermal_pwrlevel monitoring infrastructure.
- *
- * On Qualcomm KGSL, /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel is a vendor cap
- * that the kernel raises when the GPU gets thermally stressed. It works as an
- * additional ceiling on top of our max_pwrlevel write — effective level is
- * max(max_pwrlevel, thermal_pwrlevel). When thermal_pwrlevel > our max_pwrlevel,
- * the kernel is overriding our cap, which is a useful signal for FSM.
- *
- * Cost-conscious design (per user request — "must not eat battery"):
- *   - fd cached at discovery (no open/close per read)
- *   - pread() instead of seek+read (one syscall instead of two)
- *   - skip read entirely on screen-off
- *   - skip in DEEP_IDLE (thermal does not change without load)
- *   - in LIGHT_IDLE/MODERATE: read every 3rd tick (configurable via bat_thermal_pwrlevel_div)
- *   - in HEAVY/SUSTAINED/GAMING: read every tick (thermal can change rapidly under load)
- *
- * Estimated cost: ~5,000 reads/day = 0.05s CPU/day = below noise floor.
- */
 static char g_gpu_thermal_pwrlevel_path[160] = {0};
 static int  g_gpu_thermal_pwrlevel_fd        = -1;   /* cached read fd, -1 if absent */
 static int  g_gpu_thermal_pwrlevel_last      = -1;   /* last read value */
 
-/* Audit counters — exposed in status JSON / governor.log to validate cost claim */
 static unsigned long g_thermal_pl_reads_count   = 0;  /* total successful reads */
 static unsigned long g_thermal_pl_skip_count    = 0;  /* gated skips */
 static unsigned long g_thermal_pl_us_total      = 0;  /* total microseconds spent reading */
@@ -120,9 +78,6 @@ static int gpu_try_readable(const char *path) {
     return 1;
 }
 
-/* Probe whether a path accepts writes (not just O_WRONLY open).
- * Writes current value back to itself — non-destructive. Returns 1 if write
- * succeeded, 0 if write failed with any error (EINVAL, EACCES, etc.). */
 static int gpu_try_probe_write(const char *path) {
     int rfd = open(path, O_RDONLY | O_CLOEXEC);
     if (rfd < 0) return 0;
@@ -247,7 +202,7 @@ static void writer_discover_gpu_paths(void) {
         }
     }
 
-    /* V39: thermal_pwrlevel discovery — vendor thermal cap, read-only for us
+    /* thermal_pwrlevel discovery — vendor thermal cap, read-only for us
      * but kernel writes to it dynamically. Cache fd to avoid open/close per read.
      * If the file doesn't exist, g_gpu_thermal_pwrlevel_fd stays -1 and reader
      * functions short-circuit. */
@@ -288,15 +243,6 @@ static void writer_discover_gpu_paths(void) {
     g_gpu_paths_ready = 1;
 }
 
-/* V39: read thermal_pwrlevel using cached fd + pread (single syscall).
- * Returns level or -1 if unavailable. Includes audit timing.
- *
- * Three levels of caution as discussed:
- *   1. Skip if screen off (thermal doesn't matter when GPU is idle)
- *   2. Skip in DEEP_IDLE (thermal doesn't change without load)
- *   3. Skip every 2nd/3rd tick in LIGHT_IDLE/MODERATE (configurable)
- * Caller is responsible for the gating; this function just performs the read.
- */
 static int gpu_read_thermal_pwrlevel(void) {
     if (g_gpu_thermal_pwrlevel_fd < 0) return -1;
 
@@ -336,18 +282,6 @@ static int gpu_thermal_pl_audit_path(char *out, size_t outlen) {
         g_gpu_thermal_pwrlevel_path[0] ? g_gpu_thermal_pwrlevel_path : "(none)");
 }
 
-/* V40: vendor pwrlevel override detector.
- *
- * Reads current /sys/class/kgsl/kgsl-3d0/{max,min}_pwrlevel and compares to
- * what we last wrote. Mismatch = vendor PowerHAL or thermal HAL stomped our
- * value. Increments per-direction counters and logs the first 50 events of
- * each kind to /dev/.asb/vendor_overrides for human inspection.
- *
- * Caller decides when to invoke this — keep it cheap by skipping in DEEP_IDLE
- * and gating on a tick interval like thermal_pwrlevel monitoring already does.
- */
-/* Translate a target Hz into a pwrlevel index (0 = highest freq, larger = lower).
- * Returns the lowest index (== highest freq) that is <= target_hz. */
 static int gpu_hz_to_pwrlevel_max(long target_hz) {
     if (g_gpu_freq_table_len <= 0) return 0;
     for (int i = 0; i < g_gpu_freq_table_len; i++) {
@@ -357,8 +291,6 @@ static int gpu_hz_to_pwrlevel_max(long target_hz) {
     return g_gpu_freq_table_len - 1;
 }
 
-/* For min: return the highest index (== lowest freq) that is >= target_hz.
- * This becomes the floor of allowed frequencies. */
 static int gpu_hz_to_pwrlevel_min(long target_hz) {
     if (g_gpu_freq_table_len <= 0) return 0;
     for (int i = g_gpu_freq_table_len - 1; i >= 0; i--) {
@@ -385,16 +317,13 @@ typedef struct {
     int uclamp_bg_max;
     long gpu_hw_max_freq;
     int  initialized;
-    /* V40: last actual pwrlevel values we wrote, for vendor-override detection */
+    /* last actual pwrlevel values we wrote, for vendor-override detection */
     int last_max_pwrlevel_written;
     int last_min_pwrlevel_written;
 } asb_writer_cache_t;
 
 static asb_writer_cache_t g_wcache = {0};
 
-/* V40: vendor-override audit counters. Incremented when periodic re-read
- * finds max/min_pwrlevel different from what we last wrote — that's vendor
- * PowerHAL or thermal HAL stomping our values. */
 static unsigned long g_vendor_override_max = 0;
 static unsigned long g_vendor_override_min = 0;
 static int g_last_observed_max_pwrlevel = -1;

@@ -4,7 +4,7 @@
 #include <string.h>
 #include "asb_metrics.h"
 #include "asb_config.h"
-#include "asb_fsm_bounds.generated.h"  /* V42: bounds from config/profile_bounds.conf */
+#include "asb_fsm_bounds.generated.h"  /* bounds from config/profile_bounds.conf */
 
 extern asb_runtime_config_t g_asb_cfg;
 
@@ -39,7 +39,7 @@ typedef struct {
 } asb_profile_bounds_t;
 
 static const asb_profile_bounds_t g_profile_bounds[3] = {
-    /* V39: ALL THREE profile bounds realigned with their .sh scripts.
+    /* ALL THREE profile bounds realigned with their .sh scripts.
      *
      * Background: termux probe on real device confirmed the FSM was using its
      * own hardcoded g_profile_bounds table for state interpolation, completely
@@ -62,8 +62,7 @@ static const asb_profile_bounds_t g_profile_bounds[3] = {
      * If user edits CPU_CAP/CPU_MAX/GPU_MAX in .sh, the FSM bounds still reflect
      * the values below until the C binary is rebuilt. A runtime loader would
      * eliminate this duplication but is deferred to V40 (needs careful design
-     * to avoid race with profile-change events).
-     */
+     * to avoid race with profile-change events). */
 
     /* PROFILE_BATTERY — from battery.sh:
      * CPU_MIN={307200, 614400}  CPU_CAP={1132800, 1113600}  CPU_MAX={1804800, 2400000}  GPU_MAX=55%
@@ -244,9 +243,9 @@ typedef struct {
     int             ses_max_gap_p1;
     int             ses_max_temp;
     int             ses_max_skin_temp;
-    int             ses_max_surface_temp;  /* V37-r7: surface hotspot (ghost hotspot channel) */
-    int             ses_max_board_temp;    /* V38: board_temp peak for long-gaming heat analysis */
-    /* V37: track sensor health across the session for release-quality diagnostics */
+    int             ses_max_surface_temp;  /* surface hotspot (ghost hotspot channel) */
+    int             ses_max_board_temp;    /* board_temp peak for long-gaming heat analysis */
+    /* track sensor health across the session for release-quality diagnostics */
     int             ses_temp_invalid_count; /* number of read cycles where temp_valid=0 */
     char            ses_last_temp_reason[16]; /* last value of temp_invalid_reason seen this session */
 
@@ -264,10 +263,10 @@ typedef struct {
     long            bat_time_light_idle_sec;
     long            bat_time_moderate_sec;
     int             bat_wake_cycles;
-    /* V34: Wake Attribution -- track what causes wakes */
+    /* Wake Attribution -- track what causes wakes */
     int             bat_wake_screen;    /* wakes due to screen ON */
     int             bat_wake_bg;        /* background wakes (no screen) */
-    /* V34: radio-aware -- count ticks with heavy mobile data during battery screen-off */
+    /* radio-aware -- count ticks with heavy mobile data during battery screen-off */
     int             bat_radio_active_ticks;
     int             bat_gaming_suppressed;
     int             bat_screen_off_count;
@@ -287,13 +286,13 @@ typedef struct {
     int             ses_mid_tune_dir;       /* net direction: +1 up, -1 down, 0 mixed */
 
     int             clamp_hold;             /* 1 = gap-triggered sustained suppressed */
-    int             had_clamp_hold;         /* V32: session-latched -- was clamp_hold ever set? */
-    int             had_futility;           /* V32: session-latched -- was futility ever triggered? */
-    int             throttle_cap_ticks;     /* V33: consecutive ticks with thermal_cap=1 */
-    time_t          recovery_cautious_until; /* V33: after clamp lift, stay cautious */
+    int             had_clamp_hold;         /* session-latched -- was clamp_hold ever set? */
+    int             had_futility;           /* session-latched -- was futility ever triggered? */
+    int             throttle_cap_ticks;     /* consecutive ticks with thermal_cap=1 */
+    time_t          recovery_cautious_until; /* after clamp lift, stay cautious */
     int             perf_hot_guard_ticks;
     int             perf_hot_guard_active;
-    /* V46: multi-sensor advisory (skin/surface/board contribute to soft
+    /* multi-sensor advisory (skin/surface/board contribute to soft
      * hot-guard, NOT hard panic). Cold baseline = first 30s avg captured
      * at governor start. Concern = current - baseline (delta-from-cold).
      * Advisory active = weighted score > 50 for >=20 ticks. */
@@ -313,11 +312,11 @@ typedef struct {
     int             thermal_vote_surface;
     int             thermal_vote_board;
     int             would_bias_exit_gaming;     /* would have downgraded GAMING->HEAVY */
-    /* V34: Ceiling-Adaptive Reshaping -- governor sets these from observed freq */
+    /* Ceiling-Adaptive Reshaping -- governor sets these from observed freq */
     int             virtual_ceiling_p0;
     int             virtual_ceiling_p1;
 
-    /* V31: session plan -- pre-computed policy decisions (rebuilt on events, not per-tick) */
+    /* session plan -- pre-computed policy decisions (rebuilt on events, not per-tick) */
     struct {
         uint8_t sensor_tier;    /* 0=FULL 1=REDUCED 2=SPARSE */
         uint8_t thermal_div;    /* thermal read every N ticks (1=every, 3=sparse) */
@@ -333,17 +332,16 @@ typedef struct {
         uint8_t sensor_used;
     } plan;
 
-    /* V42: low-battery auto-switch state.
+    /* low-battery auto-switch state.
      * When battery drops below threshold, FSM auto-switches to PROFILE_BATTERY.
      * Original profile is remembered so we can restore on recharge.
      * Hysteresis prevents flapping near threshold. */
     int             auto_battery_active;       /* 1 if auto-switch triggered, 0 otherwise */
     int             auto_battery_restore_idx;  /* profile to restore (-1 if none) */
     time_t          auto_battery_last_action;  /* rate limit: min interval between switches */
-    /* V44: reason + timestamp of last auto-battery state transition.
+    /* reason + timestamp of last auto-battery state transition.
      * Reasons: "none", "low_pct", "high_pct_restore", "manual_clear"
-     * Used by status JSON and audit logs.
-     */
+     * Used by status JSON and audit logs. */
     char            auto_battery_reason[24];
     time_t          auto_battery_since;
 } asb_fsm_t;
@@ -509,7 +507,7 @@ static asb_state_t fsm_desired(const asb_metrics_t *m) {
         return ASB_STATE_GAMING;
     }
 
-    /* V35: 3-tier load thresholds: battery > balanced > global(performance)
+    /* 3-tier load thresholds: battery > balanced > global(performance)
      * Battery uses bat_*, balanced uses balanced_*, performance uses global */
     float heavy_thr = g_asb_cfg.heavy_load_enter;
     float mod_thr   = g_asb_cfg.moderate_load_enter;
@@ -577,7 +575,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
     else {
         asb_state_t desired = fsm_desired(m);
 
-        /* V34: comfort-first battery brain -- when battery + screen on + device warm,
+        /* comfort-first battery brain -- when battery + screen on + device warm,
          * prevent pushing into SUSTAINED/GAMING heat targets.
          *
          * V39: Old behavior capped to MODERATE which crippled UI in mixed-use:
@@ -588,7 +586,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
          * the deeper SUSTAINED/GAMING entry that would actually heat the device. */
         if (fsm_profile_is_battery && m->misc.screen_on &&
             m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp && desired > ASB_STATE_HEAVY) {
-            /* V40: log first time this fires per minute for visibility */
+            /* log first time this fires per minute for visibility */
             static time_t g_last_comfort_log = 0;
             time_t _now = time(NULL);
             if (_now - g_last_comfort_log >= 60 && g_asb_cfg.log_level >= 1) {
@@ -623,24 +621,24 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                                          time(NULL) < fsm->sustained_reentry_until);
         int thermal_floor = (fsm->profile_idx == PROFILE_PERFORMANCE) ? sustained_temp_exit : 40;
 
-        /* V35: throttle signal = real thermal OR hard vendor clamp.
+        /* throttle signal = real thermal OR hard vendor clamp.
          * soft_clamp (headroom < 70%) is advisory only -- reduces aggression
          * but does NOT trigger sustained entry. */
         int throttle_signal = m->therm.throttling || m->therm.hard_clamp;
 
-        /* V35: track consecutive throttle ticks for debounce */
+        /* track consecutive throttle ticks for debounce */
         if (throttle_signal) {
             fsm->throttle_cap_ticks++;
         } else {
             fsm->throttle_cap_ticks = 0;
         }
         int throttle_confirmed = throttle_signal;
-        /* V34: performance requires 2+ consecutive throttle ticks OR temp already high */
+        /* performance requires 2+ consecutive throttle ticks OR temp already high */
         if (fsm->profile_idx == PROFILE_PERFORMANCE && throttle_confirmed) {
             if (fsm->throttle_cap_ticks < 2 && m->therm.cpu_max_c < sustained_temp_enter)
                 throttle_confirmed = 0;
         }
-        /* V35: balanced requires 2+ ticks when entry is from hard_clamp only (not real thermal).
+        /* balanced requires 2+ ticks when entry is from hard_clamp only (not real thermal).
          * Also raise thermal floor to 48C for balanced to filter vendor advisory noise. */
         if (fsm->profile_idx == PROFILE_BALANCED && throttle_confirmed) {
             if (!m->therm.throttling) {
@@ -649,7 +647,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                 if (fsm->throttle_cap_ticks < 2) throttle_confirmed = 0;
             }
         }
-        /* V35: warmup grace -- don't rush into sustained after session start.
+        /* warmup grace -- don't rush into sustained after session start.
          * Exception: temp >= 60C or headroom < 40% (real emergency). */
         int warmup_grace = 0;
         if (fsm->ses_start_ts > 0 &&
@@ -772,7 +770,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             thermal_to_sustained = 1;
             fsm->sustained_reason = 0;
         }
-        /* V36: removed legacy headroom<50 shortcut.
+        /* removed legacy headroom<50 shortcut.
          * All SUSTAINED entries now go through unified V35 path:
          * throttle_signal -> throttle_confirmed -> warmup_grace -> debounce. */
 
@@ -806,7 +804,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         if (!thermal_to_sustained && !gap_to_sustained &&
             desired == ASB_STATE_GAMING)
         {
-            /* V34-r15: ceiling_lock -- if virtual ceiling on big cluster
+            /* ceiling_lock -- if virtual ceiling on big cluster
              * is below 1.5GHz, GAMING is pointless. Demote to HEAVY. */
             if (fsm->virtual_ceiling_p1 > 0 && fsm->virtual_ceiling_p1 < 1500000) {
                 desired = ASB_STATE_HEAVY;
@@ -886,24 +884,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                 sustained_temp_exit > 0 &&
                 m->therm.cpu_max_c >= sustained_temp_exit)
                 can_leave = 0;
-            /* V38 RC7: time-based SUSTAINED escape.
-             *
-             * Real-device perf logs showed device can get stuck in SUSTAINED
-             * for 297+ consecutive ticks because the steady-state under load
-             * naturally floors at 55-67C, making the exit_threshold (55C)
-             * unreachable for the whole game session. This is suboptimal:
-             *   - device has already cooled as much as it will under load
-             *   - thermal trend is flat, not rising
-             *   - but FSM can't leave SUSTAINED, so caps stay pulled down
-             *
-             * If we've been in SUSTAINED for >= 180s AND temp is at least 3C
-             * below enter threshold AND trend is not rising (<=3), allow the
-             * transition. This preserves thermal safety (temp must still be
-             * meaningfully below enter) but breaks out of the lock-in so the
-             * device can try running at normal caps again. If it gets hot
-             * again it re-enters SUSTAINED via the normal path.
-             */
-            if (!can_leave &&
+if (!can_leave &&
                 fsm->state == ASB_STATE_SUSTAINED &&
                 fsm->profile_idx == PROFILE_PERFORMANCE &&
                 fsm_elapsed_sec(fsm) >= 180 &&
@@ -930,7 +911,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         }
     }
 
-    /* V35: thermal_cap = real thermal OR hard vendor clamp.
+    /* thermal_cap = real thermal OR hard vendor clamp.
      * soft_clamp (headroom 50-70%) does not set thermal_cap. */
     int new_thermal = m->therm.throttling || m->therm.hard_clamp;
     if (new_thermal != fsm->thermal_cap) {
@@ -971,7 +952,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         fsm->ses_max_surface_temp = m->therm.surface_hotspot_c;
     if (m->therm.board_temp_c > fsm->ses_max_board_temp)
         fsm->ses_max_board_temp = m->therm.board_temp_c;
-    /* V37: sensor health tracking for session-level visibility */
+    /* sensor health tracking for session-level visibility */
     if (!m->therm.temp_valid) {
         fsm->ses_temp_invalid_count++;
         if (m->therm.temp_invalid_reason[0]) {
@@ -997,7 +978,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         int cur_max_p0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
         int cur_max_p1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
         if (cur_max_p0 > 0) {
-            /* V34: Ceiling-Adaptive Reshaping -- when virtual ceiling is set,
+            /* Ceiling-Adaptive Reshaping -- when virtual ceiling is set,
              * measure gap relative to observed ceiling, not target caps.
              * This reflects real efficiency within the available headroom. */
             int ref_p0 = (fsm->virtual_ceiling_p0 > 0) ? fsm->virtual_ceiling_p0
@@ -1036,7 +1017,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             fsm->prev_state == ASB_STATE_DEEP_IDLE &&
             fsm->state != ASB_STATE_DEEP_IDLE) {
             fsm->bat_wake_cycles++;
-            /* V34: Wake Attribution */
+            /* Wake Attribution */
             if (m->misc.screen_on)
                 fsm->bat_wake_screen++;
             else

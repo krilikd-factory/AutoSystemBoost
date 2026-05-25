@@ -26,7 +26,7 @@
 
 #define TIMER_ACTIVE_S  2   /* metrics interval, screen ON  */
 #define TIMER_IDLE_S    5   /* metrics interval, screen OFF */
-#define TIMER_DEEP_S   10   /* metrics interval, battery deep idle (V30) */
+#define TIMER_DEEP_S   10   /* metrics interval, battery deep idle */
 #define TIMER_HOURLY_S  3600
 
 #define STATE_FILE      "/dev/.asb/state"
@@ -45,23 +45,17 @@ asb_runtime_config_t g_asb_cfg;
 static time_t g_last_reassert = 0;
 static int g_last_reassert_ok = 0;
 
-/* V39: shell_overridden_up tracker for non-perf profiles.
- * When sysfs scaling_max_freq is consistently ABOVE profile CPU_CAP_*, anti-clamp
- * doesn't fire (anti-clamp only handles DOWN-clamps). We rewrite scaling_max_freq
- * directly after N consecutive leak ticks, with its own cadence to avoid write wars. */
 static int    g_leak_streak_p0        = 0;
 static int    g_leak_streak_p1        = 0;
 static time_t g_last_leak_reassert    = 0;
 static int    g_leak_reassert_count   = 0;
 static int g_msm_boost_active = 0;
 
-/* V31: anti-clamp cadence ladder state (file scope so it can be reset externally) */
 #define AC_STAGE_IDLE    0
 #define AC_STAGE_BURST   1  /* aggressive 2s, max 3 attempts */
 #define AC_STAGE_HOLD    2  /* maintenance 4s */
 #define AC_STAGE_BACKOFF 3  /* pause 30s */
 
-/* V31: plan_class -- human-readable session classification for hot path */
 #define PLAN_CLASS_IDLE_CLEAN    0  /* battery screen-off deep idle */
 #define PLAN_CLASS_IDLE_NOISY    1  /* battery screen-off but noisy (wakes/moderate) */
 #define PLAN_CLASS_DAILY_ACTIVE  2  /* battery/balanced screen-on daily use */
@@ -70,7 +64,6 @@ static int g_msm_boost_active = 0;
 #define PLAN_CLASS_BENCHMARK     5  /* benchmark session */
 #define PLAN_CLASS_QUARANTINE    6  /* user-switch quarantine */
 
-/* Session intent IDs (moved here so session_plan_build can reference them) */
 #define INTENT_UNKNOWN    0
 #define INTENT_BENCHMARK  1
 #define INTENT_LONG_GAME  2
@@ -78,7 +71,6 @@ static int g_msm_boost_active = 0;
 #define INTENT_MIXED      4
 #define INTENT_SLEEP_IDLE 5
 
-/* V31: runtime capability flags -- probed once at startup */
 static struct {
     uint8_t has_msm_perf;       /* /sys/kernel/msm_performance writable */
     uint8_t has_headroom;       /* msm_performance/cpu_max_freq readable */
@@ -94,16 +86,11 @@ static time_t g_ac_backoff_until = 0;
 static int g_ac_backoff_count = 0;  /* backoffs this session */
 static int g_ac_futile = 0;        /* 1 = anti-clamp suspended (futility) */
 static int g_clamp_probe_skip = 0; /* ticks until next recovery probe */
-static int g_probe_good_hits = 0;  /* V32: consecutive good probes needed to lift hold */
-static time_t g_clamp_hold_since = 0;  /* V32: when clamp_hold was first set */
-/* V34: Ceiling-Adaptive Reshaping -- observed freq ceiling under vendor clamp.
- * When clamp is confirmed, these replace target caps for gap/eff calculations. */
+static int g_probe_good_hits = 0;  /* consecutive good probes needed to lift hold */
+static time_t g_clamp_hold_since = 0;  /* when clamp_hold was first set */
 static int g_virtual_ceiling_p0 = 0;
 static int g_virtual_ceiling_p1 = 0;
 
-/* V34-r15: Burst Probation -- detect early ceiling collapse in first 60s
- * of performance session. If big cluster drops below 2GHz early,
- * skip remaining burst budget and go straight to economy. */
 static int g_burst_probation = 0;     /* 1 = in probation window */
 static int g_burst_early_collapse = 0; /* 1 = early collapse detected */
 
@@ -121,39 +108,25 @@ static void anti_clamp_reset(void) {
     g_burst_early_collapse = 0;
 }
 
-/* V34: action cost economy -- track how many governor actions produced
- * no useful result. When high, governor globally reduces activity. */
 static int g_action_waste = 0;
 
 static void action_waste_reset(void) { g_action_waste = 0; }
 
-/* V34: Quiet Night Baseline -- ultra-low-power mode when battery sleep confirmed.
- * Extends tick interval, skips non-essential reads. */
 static int g_quiet_night_active = 0;
 static time_t g_quiet_night_since = 0;
 static int g_quiet_night_ticks = 0;       /* consecutive quiet deep-idle ticks */
 
-/* V34: Clean-Night Reward -- if last battery session was clean_night,
- * enter quiet mode faster and with more trust. */
 static int g_last_bat_clean_night = 0;
 
-/* V34: environment hostility levels (defined early for static initializer) */
 #define ENV_QUIET    0
 #define ENV_NOISY    1
 #define ENV_HOSTILE  2
 
-/* V34: Start-of-session Priming -- remember last session's environment */
 static int g_last_session_env = ENV_QUIET;
 
-/* V34: Exit-from-Quiet Brain -- gradual wake after quiet night.
- * Counts ticks since screen ON to ramp up sensor reads. */
 static int g_quiet_wake_ramp = 0;
-static int g_quiet_noise_ticks = 0;  /* V34: hysteresis -- consecutive non-quiet ticks */
+static int g_quiet_noise_ticks = 0;  /* hysteresis -- consecutive non-quiet ticks */
 
-/* V31-r10: user-switch quarantine -- suppress learning and anti-clamp
- * for 90s after Android user change (clone/guest/secondary).
- * User switch causes system storm (service starts, wakes, thermal spikes)
- * that isn't representative workload. */
 #define USER_QUARANTINE_SEC 90
 static int g_last_user_id = -1;
 static time_t g_user_quarantine_until = 0;
@@ -169,7 +142,6 @@ static int get_current_user_id(void) {
     return uid;
 }
 
-/* Returns 1 if quarantine just expired this call */
 static int user_quarantine_check(asb_fsm_t *fsm) {
     time_t now = time(NULL);
     if (g_user_quarantine_active && now >= g_user_quarantine_until) {
@@ -180,21 +152,15 @@ static int user_quarantine_check(asb_fsm_t *fsm) {
     return 0;
 }
 
-/* V31: thermal debt -- remember last perf session heat to avoid
- * immediately re-launching burst into a still-hot device */
 static time_t g_last_perf_end_ts = 0;
 static int g_last_perf_max_temp = 0;
-/* V33: clamp debt -- if last perf session was vendor_clamped,
- * next session starts with reduced optimism */
 static int g_last_perf_was_clamped = 0;
 
-/* V31: storm shield -- ultra-light mode for noisy battery screen-off.
- * Activated when wake_cycles exceed threshold early in session. */
 static int g_storm_shield_active = 0;
 static int g_shield_calm_ticks = 0;
 static int g_shield_last_wakes = -1;
-static int g_shield_exit_wakes = 0;      /* V32: wake count at last smart exit */
-static time_t g_shield_rearm_until = 0;  /* V32: cooldown after smart exit */
+static int g_shield_exit_wakes = 0;      /* wake count at last smart exit */
+static time_t g_shield_rearm_until = 0;  /* cooldown after smart exit */
 
 static void storm_shield_reset(void) {
     g_storm_shield_active = 0;
@@ -204,9 +170,6 @@ static void storm_shield_reset(void) {
     g_shield_rearm_until = 0;
 }
 
-/* V31: Build session plan -- pre-compute policy decisions once on events,
- * not every tick. Rebuilt on: session start, screen toggle, profile change,
- * state band cross (idle<->active<->heavy). */
 static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
     int p = fsm->profile_idx;
     int idle_band = (fsm->state <= ASB_STATE_LIGHT_IDLE);
@@ -277,7 +240,7 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
         fsm->plan.plan_class   = (fsm->ses_intent == INTENT_BENCHMARK)
                                   ? PLAN_CLASS_BENCHMARK : PLAN_CLASS_PERF_ACTIVE;
 
-        /* V31: thermal debt -- halve ac_budget if last perf session
+        /* thermal debt -- halve ac_budget if last perf session
          * was hot (>=75degC) and ended less than 120s ago */
         if (p == PROFILE_PERFORMANCE && g_last_perf_end_ts > 0) {
             time_t elapsed = time(NULL) - g_last_perf_end_ts;
@@ -285,7 +248,7 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
                 fsm->plan.ac_budget = fsm->plan.ac_budget / 2;
                 if (fsm->plan.ac_budget < 1) fsm->plan.ac_budget = 1;
             }
-            /* V33: clamp debt -- if last perf session was vendor_clamped,
+            /* clamp debt -- if last perf session was vendor_clamped,
              * reduce budget and sensor reads for less aggressive start */
             if (elapsed < 300 && g_last_perf_was_clamped) {
                 fsm->plan.ac_budget = fsm->plan.ac_budget / 2;
@@ -296,7 +259,7 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
         }
     }
 
-    /* V31-r10: user-switch quarantine overrides aggressive settings */
+    /* user-switch quarantine overrides aggressive settings */
     if (g_user_quarantine_active) {
         fsm->plan.quarantine   = 1;
         fsm->plan.ac_eligible  = 0;
@@ -309,7 +272,7 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
         fsm->plan.quarantine   = 0;
     }
 
-    /* V31: storm shield -- ultra-light for noisy battery screen-off */
+    /* storm shield -- ultra-light for noisy battery screen-off */
     if (g_storm_shield_active && p == PROFILE_BATTERY && !screen_on) {
         fsm->plan.sensor_tier   = 2;
         fsm->plan.thermal_div   = 5;
@@ -361,14 +324,10 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-#define ASB_VERSION "V44"
+#define ASB_VERSION "V46"
 
 static const char *intent_names[] = {"unknown","benchmark","long_game","idle","mixed","sleep_idle"};
 
-/* V38 RC8: canonical string mapping for fsm->sustained_reason.
- * Used wherever SUSTAINED entry reason is written to user-visible surfaces
- * (state file, live status JSON, session history, logs). Keeping this in one
- * place avoids drift between the three callsites. */
 static inline const char *sustained_reason_name(int r) {
     switch (r) {
         case 0:  return "thermal";
@@ -378,36 +337,6 @@ static inline const char *sustained_reason_name(int r) {
     }
 }
 
-/* V39: cap-source classifier for cap_verify diagnostics.
- *
- * The V38 cap_verify.txt found ~100% DESYNC rates, which was misleading.
- * The mismatch between `scaling_max_freq` and the profile's expected cap
- * is normal when:
- *   - ASB itself is dynamically clamping (SUSTAINED, thermal overlay)
- *   - Vendor HAL is clamping below hardware max (thermal policy)
- *   - Vendor HAL is raising above hardware max (perf boost)
- *
- * V39 refinement:
- * The classifier takes both profile's nominal cap AND ASB's current runtime
- * declared cap (from msm_performance). In battery profile, runtime_declared
- * is 0 because the governor doesn't use msm_performance (battery caps are
- * shell-applied via service.sh). So we also need a "shell-only" branch that
- * compares actual_sysfs vs profile_cap directly and reports shell_applied /
- * shell_overridden_up / shell_overridden_down instead of misreporting as
- * vendor_clamp.
- *
- * States:
- *   - "asb"                    — runtime == profile == actual (clean, governor tracked)
- *   - "asb_dynamic"            — actual == runtime != profile (dynamic clamp active)
- *   - "thermal_overlay"        — actual == profile but runtime differs
- *   - "vendor_clamp"           — runtime>0, actual < runtime < hw_ceiling (HAL clamp)
- *   - "vendor_raised"          — runtime>0, actual > runtime (HAL boosted)
- *   - "shell_applied"          — runtime==0, actual == profile (shell-only, stuck)
- *   - "shell_overridden_up"    — runtime==0, actual > profile (something raised above)
- *   - "shell_overridden_down"  — runtime==0, actual < profile (something below profile)
- *   - "policy_unknown"         — sysfs read failed or nonsensical
- *   - "mismatch"               — none of the above (edge case, investigate)
- */
 static inline const char *cap_source_classify(int profile_cap,
                                               int runtime_declared,
                                               int actual_sysfs,
@@ -449,7 +378,6 @@ static inline const char *cap_source_classify(int profile_cap,
     return "mismatch";
 }
 
-/* --- Atomic file write helper --- */
 static int atomic_write_file(const char *path, const char *content) {
     char tmp[256];
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
@@ -462,7 +390,6 @@ static int atomic_write_file(const char *path, const char *content) {
     return rename(tmp, path);
 }
 
-/* --- Stale session sweeper --- */
 static int rewrite_last_history_end(const char *new_end) {
     FILE *rf = fopen(SESSION_HISTORY_FILE, "r");
     if (!rf) return 0;
@@ -629,17 +556,17 @@ typedef struct {
     int   hot_fail_count;
     float avg_degrade_age;
     int   bat_tune_cooldown;
-    /* V30: cause streak -- consecutive sessions with same limiter/reason */
+    /* cause streak -- consecutive sessions with same limiter/reason */
     int   cause_streak;       /* how many consecutive same-cause sessions */
     int   cause_streak_type;  /* 0=none 1=wake_noise 2=screen_on 3=no_settle 4=vendor_clamp 5=thermal */
-    /* V30: OTA quarantine -- skip learning after environment change */
+    /* OTA quarantine -- skip learning after environment change */
     int   quarantine_remaining; /* >0 = skip pstats learning for N more clean sessions */
-    /* V34: Battery Memory V2 -- battery-specific aggregates */
+    
     float avg_idle_q;            /* average idle quality across clean sessions */
     float avg_wph;               /* average wakes per hour */
     int   clean_night_count;     /* how many clean_night sessions recorded */
     float avg_quiet_duration_min;/* average quiet night duration in minutes */
-    /* V34: Battery Memory Split -- separate night vs day tracking */
+    /* Battery Memory Split -- separate night vs day tracking */
     float night_avg_iq;
     float night_avg_wph;
     int   night_count;
@@ -651,8 +578,6 @@ typedef struct {
 static asb_persistent_stats_t g_pstats_per[3] = {{0},{0},{0}};
 static asb_persistent_stats_t g_pstats = {0};
 
-/* V31: apply ac_prearm after plan build (needs pstats visibility)
- * Narrow: only performance + vendor_clamp streak >= 3 + heavy band */
 static void session_plan_apply_prearm(asb_fsm_t *fsm) {
     if (fsm->profile_idx != PROFILE_PERFORMANCE) return;
     if (fsm->state < ASB_STATE_HEAVY) return;
@@ -661,8 +586,6 @@ static void session_plan_apply_prearm(asb_fsm_t *fsm) {
         fsm->plan.ac_prearm = 1;
 }
 
-/* V31-r7: unified reset -- session + budget + anti-clamp + plan rebuild.
- * Use this instead of bare fsm_session_reset() to keep plan in sync. */
 static void session_reset_and_replan(asb_fsm_t *fsm, int screen_on) {
     fsm_session_reset(fsm);
     fsm->plan.ac_used = 0;
@@ -672,7 +595,6 @@ static void session_reset_and_replan(asb_fsm_t *fsm, int screen_on) {
     session_plan_build(fsm, screen_on);
     session_plan_apply_prearm(fsm);
 }
-
 
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                         asb_prediction_t pred)
@@ -801,7 +723,6 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
 static int g_total_writes = 0;
 static time_t g_last_write_ts = 0;
 
-/* V44: conflict tracking — count cap_source classifications across time. */
 static unsigned long g_v44_clamp_total = 0;       /* total times we saw "vendor_clamp" */
 static unsigned long g_v44_raised_total = 0;      /* total times we saw "vendor_raised" */
 static unsigned long g_v44_clamp_1h = 0;          /* rolling 1h window */
@@ -829,8 +750,6 @@ static void v44_conflict_record(const char *cap_source) {
     g_v44_last_clamp_ts = now;
 }
 
-/* V44: write /dev/.asb/conflicts.json — exposes vendor_clamp / vendor_raised
- * counts and last writer info for WebUI dashboard. */
 static void write_conflicts_json(void) {
     FILE *f = fopen("/dev/.asb/conflicts.json.tmp", "w");
     if (!f) return;
@@ -853,8 +772,6 @@ static void write_conflicts_json(void) {
     rename("/dev/.asb/conflicts.json.tmp", "/dev/.asb/conflicts.json");
 }
 
-/* V44: write /dev/.asb/learner_state.json — exposes battery learner trust,
- * session counts, last outcome, and current self-tuned thresholds. */
 static int g_v44_last_bat_trust = -1;          /* -1=unknown, 0=dirty, 1=partial, 2=clean */
 static char g_v44_last_bat_outcome[24] = "";   /* "clean", "partial", "dirty", "noise" */
 
@@ -929,12 +846,12 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
     int real_max_p1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
     int cap_gap_p0  = (real_max_p0 > 0) ? (fsm->current_caps.cpu_max[0] - real_max_p0) : 0;
     int cap_gap_p1  = (real_max_p1 > 0) ? (fsm->current_caps.cpu_max[1] - real_max_p1) : 0;
-    /* V39: cap_source classification — who controls the actual cap right now. */
+    /* cap_source classification — who controls the actual cap right now. */
     int hw_ceil_p0 = sysfs_read_int(cpu_policy_path(0, "cpuinfo_max_freq"), 0);
     int hw_ceil_p1 = sysfs_read_int(cpu_policy_path(1, "cpuinfo_max_freq"), 0);
     int profile_cap_p0 = g_profile_bounds[fsm->profile_idx].ceil.cpu_max[0];
     int profile_cap_p6 = g_profile_bounds[fsm->profile_idx].ceil.cpu_max[1];
-    /* V39: classifier gets runtime_declared from msm_performance read (m->therm.perf_cap_*),
+    /* classifier gets runtime_declared from msm_performance read (m->therm.perf_cap_*),
      * not from fsm->current_caps. current_caps is what FSM *wants* to write; perf_cap_* is what
      * actually registered with the kernel via msm_performance. When perf_cap_*==0, shell branch
      * fires (shell_applied / shell_overridden_up / shell_overridden_down) instead of
@@ -945,7 +862,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
     const char *cap_src_p6 = cap_source_classify(profile_cap_p6,
                                                  m->therm.perf_cap_p6,
                                                  real_max_p1, hw_ceil_p1);
-    /* V44: record conflicts to /dev/.asb/conflicts.json (written below). */
+    /* record conflicts to /dev/.asb/conflicts.json (written below). */
     v44_conflict_record(cap_src_p0);
     v44_conflict_record(cap_src_p6);
     snprintf(out, outlen,
@@ -1082,8 +999,6 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
     }
 }
 
-
-
 static void pstats_load_one(const char *path, asb_persistent_stats_t *ps) {
     FILE *f = fopen(path, "r");
     if (!f) return;
@@ -1106,7 +1021,7 @@ static void pstats_load_one(const char *path, asb_persistent_stats_t *ps) {
         ps->cause_streak_type = 0;
     if (fscanf(f, ",\"quar\":%d", &ps->quarantine_remaining) != 1)
         ps->quarantine_remaining = 0;
-    /* V34: Battery Memory V2 fields */
+    
     if (fscanf(f, ",\"iq\":%f", &ps->avg_idle_q) != 1)
         ps->avg_idle_q = 0;
     if (fscanf(f, ",\"wph\":%f", &ps->avg_wph) != 1)
@@ -1115,7 +1030,7 @@ static void pstats_load_one(const char *path, asb_persistent_stats_t *ps) {
         ps->clean_night_count = 0;
     if (fscanf(f, ",\"qmin\":%f", &ps->avg_quiet_duration_min) != 1)
         ps->avg_quiet_duration_min = 0;
-    /* V34: Battery Memory Split */
+    /* Battery Memory Split */
     if (fscanf(f, ",\"niq\":%f", &ps->night_avg_iq) != 1)
         ps->night_avg_iq = 0;
     if (fscanf(f, ",\"nwph\":%f", &ps->night_avg_wph) != 1)
@@ -1172,7 +1087,7 @@ static int classify_environment(const asb_fsm_t *fsm);
 static int battery_fail_cause(const asb_fsm_t *fsm, int iq);
 
 static void persistent_stats_save(const asb_fsm_t *fsm) {
-    /* V33: battery-aware save gate. Battery sessions rarely have sustained/heavy
+    /* battery-aware save gate. Battery sessions rarely have sustained/heavy
      * entries, but still have meaningful bat_total (deep+light+moderate).
      * Universal gate stays for perf/balanced; battery gets its own path. */
     if (fsm->profile_idx == PROFILE_BATTERY) {
@@ -1191,13 +1106,13 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
     int pidx = fsm->profile_idx;
     if (pidx < 0 || pidx > 2) pidx = 1;
 
-    /* V31: record thermal debt for performance sessions */
+    /* record thermal debt for performance sessions */
     if (pidx == PROFILE_PERFORMANCE) {
         g_last_perf_end_ts = time(NULL);
         g_last_perf_max_temp = fsm->ses_max_temp;
         g_last_perf_was_clamped = (fsm->had_futility && fsm->clamp_hold) ? 1 : 0;
     }
-    /* V34: Clean-Night Reward -- remember if last battery session was a good night */
+    /* Clean-Night Reward -- remember if last battery session was a good night */
     if (pidx == PROFILE_BATTERY) {
         long _dur = (fsm->ses_start_ts > 0) ? (time(NULL) - fsm->ses_start_ts) : 0;
         long _bt = fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec
@@ -1209,16 +1124,16 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
         if (g_last_bat_clean_night)
             asb_log("pstats: clean_night_reward active for next battery session");
     }
-    /* V34: Start-of-session Priming -- save env for next session */
+    /* Start-of-session Priming -- save env for next session */
     g_last_session_env = classify_environment(fsm);
 
     asb_persistent_stats_t *ps = &g_pstats_per[pidx];
 
     int skip_per_profile = 0;
-    float trust_weight = 1.0f;  /* V33: learning weight -- clean=1.0, partial=0.25, dirty=0 */
+    float trust_weight = 1.0f;  /* learning weight -- clean=1.0, partial=0.25, dirty=0 */
     if (pidx == PROFILE_BATTERY) {
         int trust = battery_session_trust(fsm);
-        /* V44: expose trust + outcome to learner_state.json */
+        /* expose trust + outcome to learner_state.json */
         g_v44_last_bat_trust = trust;
         if (trust == BAT_TRUST_DIRTY) {
             strncpy(g_v44_last_bat_outcome, "dirty", sizeof(g_v44_last_bat_outcome) - 1);
@@ -1232,14 +1147,14 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
         }
         if (trust == BAT_TRUST_DIRTY) {
             skip_per_profile = 1;
-            /* V33: bootstrap pstats_battery.json on first meaningful session
+            /* bootstrap pstats_battery.json on first meaningful session
              * even if noisy. File exists = doctor happy. Learning = untouched. */
             if (access(g_pstats_files[pidx], F_OK) != 0) {
                 pstats_save_one(g_pstats_files[pidx], ps);
                 asb_log("pstats: battery trust=%d, bootstrapped %s (no learning)",
                         trust, g_pstats_files[pidx]);
             } else {
-                /* V33: log specific reason for rejection */
+                /* log specific reason for rejection */
                 long _bt = fsm->bat_time_deep_idle_sec +
                            fsm->bat_time_light_idle_sec +
                            fsm->bat_time_moderate_sec;
@@ -1259,18 +1174,18 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
         skip_per_profile = 1;
         asb_log("pstats: benchmark session, skipping per-profile memory update");
     }
-    /* V31-r10: quarantine -- don't learn from user-switch storm */
+    /* quarantine -- don't learn from user-switch storm */
     if (fsm->plan.quarantine) {
         skip_per_profile = 1;
         asb_log("pstats: quarantine active, skipping per-profile memory update");
     }
-    /* V31: storm shield -- don't learn from noisy battery data */
+    /* storm shield -- don't learn from noisy battery data */
     if (g_storm_shield_active) {
         skip_per_profile = 1;
         asb_log("pstats: storm shield active, skipping per-profile memory update");
     }
 
-    /* V30: OTA quarantine -- skip learning during environment adjustment
+    /* OTA quarantine -- skip learning during environment adjustment
      * Only decrement on quality sessions (dur >= 120, not benchmark) */
     if (!skip_per_profile && ps->quarantine_remaining > 0) {
         long dur = (fsm->ses_start_ts > 0) ? (time(NULL) - fsm->ses_start_ts) : 0;
@@ -1288,7 +1203,7 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
     if (!skip_per_profile) {
         float alpha = 1.0f / (ps->session_count + 1);
         if (alpha < 0.1f) alpha = 0.1f;
-        alpha *= trust_weight;  /* V33: partial trust = 25% learning rate */
+        alpha *= trust_weight;  /* partial trust = 25% learning rate */
 
         if (fsm->ses_time_to_first_sus > 0)
             ps->avg_time_to_first_sus =
@@ -1351,7 +1266,7 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
             }
         }
 
-        /* V30: cause_streak -- track consecutive same-cause sessions */
+        /* cause_streak -- track consecutive same-cause sessions */
         {
             int cur_cause = 0;
             if (pidx == PROFILE_BATTERY) {
@@ -1387,7 +1302,7 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
             }
         }
 
-        /* V34: Battery Memory V2 -- battery-specific aggregates */
+        
         if (pidx == PROFILE_BATTERY) {
             long _dur_bm = (fsm->ses_start_ts > 0) ? (time(NULL) - fsm->ses_start_ts) : 0;
             long _bt_bm = fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec
@@ -1405,7 +1320,7 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
                 ps->avg_quiet_duration_min =
                     ps->avg_quiet_duration_min * (1 - cn_a) + qn_min * cn_a;
             }
-            /* V34: Battery Memory Split -- night vs day */
+            /* Battery Memory Split -- night vs day */
             int is_night = (_dur_bm >= 7200 && _iq_bm >= 30 && !fsm->ses_auto_degraded);
             if (is_night) {
                 ps->night_count++;
@@ -1451,7 +1366,6 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
     pstats_save_one(PERSISTENT_STATS_FILE, &g_pstats);
 }
 
-/* V30-r3: Session confidence -- how trustworthy is this session's data */
 static const char *classify_confidence(
     const asb_fsm_t *fsm, long dur, int hr_n, int idle_quality)
 {
@@ -1474,7 +1388,6 @@ static const char *classify_confidence(
     return "low";
 }
 
-/* V30-r3: Session signature -- what kind of session was this */
 static const char *classify_signature(
     const asb_fsm_t *fsm, int sus_pct,
     const char *limiter, int reach, const char *bat_reason,
@@ -1509,7 +1422,6 @@ static const char *classify_signature(
     return "mixed";
 }
 
-/* V30-r3: Anomaly tag -- quick flag for obvious problems */
 static const char *classify_anomaly(
     const asb_fsm_t *fsm, long dur, int idle_quality, int cap_eff)
 {
@@ -1536,7 +1448,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         && fsm->bat_time_deep_idle_sec < 60)
         return;
 
-    /* V30: skip boundary carry-over sessions
+    /* skip boundary carry-over sessions
      * dur<=0: impossible real session for any profile -- always skip
      * dur<60: short hot profile switches for non-battery non-benchmark */
     long _dur = (fsm->ses_start_ts > 0) ? (time(NULL) - fsm->ses_start_ts) : 0;
@@ -1614,14 +1526,14 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             if (cap_eff > 100) cap_eff = 100;
         }
     }
-    /* V29-r10: headroom session metrics */
+    /* headroom session metrics */
     int hr_avg = (fsm->ses_headroom_samples > 0)
                  ? (int)(fsm->ses_headroom_sum / fsm->ses_headroom_samples) : -1;
     int hr_min = (fsm->ses_headroom_samples > 0) ? fsm->ses_headroom_min : -1;
     int hr_b70 = fsm->ses_headroom_below70;
     int hr_b50 = fsm->ses_headroom_below50;
 
-    /* V30: session-level limiter, reachability, battery reason */
+    /* session-level limiter, reachability, battery reason */
     const char *limiter = "none";
     int reach = -1;
     const char *bat_reason = "none";
@@ -1656,7 +1568,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             limiter = "vendor_clamp";  /* unreachable-dominant: massive gap, moderate headroom, not thermal */
         else if (cap_eff >= 0 && cap_eff < 40 && !thermal_hot
                  && fsm->clamp_hold && b50_pct < 10)
-            limiter = "vendor_clamp";  /* V32: hold-aware -- futility confirmed clamp, unreachable suppressed */
+            limiter = "vendor_clamp";  /* hold-aware -- futility confirmed clamp, unreachable suppressed */
         else if (cap_eff >= 0 && cap_eff < 55 && (b50_pct >= 15 || hr_min < 50) && !thermal_hot)
             limiter = "vendor_clamp";
         else if (thermal_hot && (b70_pct >= 20 || (cap_eff >= 0 && cap_eff < 60)))
@@ -1675,12 +1587,12 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         }
     }
 
-    /* V30-r3: session-level classification fields */
+    /* session-level classification fields */
     const char *conf = classify_confidence(fsm, dur, fsm->ses_headroom_samples, idle_quality);
     const char *sig  = classify_signature(fsm, sus_pct, limiter, reach, bat_reason, conf, idle_quality);
     const char *anomaly = classify_anomaly(fsm, dur, idle_quality, cap_eff);
 
-    /* V30: cap reach when anomaly shows session was clearly limited */
+    /* cap reach when anomaly shows session was clearly limited */
     if (strcmp(anomaly, "extreme_temp") == 0 && reach > 75) {
         reach = 75;
         if (fsm->ses_time_to_first_sus > 0 && fsm->ses_time_to_first_sus < 90)
@@ -1690,7 +1602,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     const char *mid_tune = "none";
     if (mid_tune_n > 0) mid_tune = (mid_tune_n >= 3) ? "heavy" : "light";
 
-    /* V33: battery outcome classification + trust for session history */
+    /* battery outcome classification + trust for session history */
     int bat_trust_val = -1;
     const char *bat_outcome = "none";
     if (fsm->profile_idx == PROFILE_BATTERY) {
@@ -1716,7 +1628,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             bat_outcome = "mixed";
     }
 
-    /* V33: performance outcome classification */
+    /* performance outcome classification */
     const char *perf_outcome = "none";
     if (fsm->profile_idx == PROFILE_PERFORMANCE) {
         if (fsm->had_futility && fsm->clamp_hold && cap_eff < 40)
@@ -1733,11 +1645,6 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             perf_outcome = "mixed";
     }
 
-    /* V46 P1a: candidate-tier evaluation (LOGGING ONLY — no behavior change).
-     * Computes whether this session would qualify for a hypothetical
-     * BAT_TRUST_NOISY tier (mixed-use, high-wake but still has real idle
-     * time). After 2-3 weeks of field data, V47 will decide if the tier
-     * should actually be implemented and what thresholds to use. */
     int would_be_noisy = 0;
     char noisy_dim[96] = "";
     if (fsm->profile_idx == PROFILE_BATTERY) {
@@ -1827,10 +1734,6 @@ static int battery_session_trust(const asb_fsm_t *fsm) {
         return BAT_TRUST_PARTIAL;
     if (fsm->ses_intent == INTENT_SLEEP_IDLE)
         return BAT_TRUST_PARTIAL;
-    /* V34: use penalized iq (same formula as session_history) so wake-heavy
-     * sessions don't sneak through. V33 used raw iq which missed wake penalty.
-     * Example: deep=481 total=1484 wake=7 -> raw_iq=32% (passed) but
-     *          penalized_iq=7% (should be DIRTY). */
     int iq = 0;
     if (bat_total > 0) {
         iq = (int)(fsm->bat_time_deep_idle_sec * 100 / bat_total);
@@ -1838,13 +1741,7 @@ static int battery_session_trust(const asb_fsm_t *fsm) {
         iq -= wp;
         if (iq < 0) iq = 0;
     }
-    /* V38 final: compute wph early so we can use it in the partial-trust gate. */
     float wph = (dur > 0) ? (float)fsm->bat_wake_cycles * 3600.0f / dur : 0;
-    /* V38 RC: partial-trust tier for mixed-day sessions. Relaxed from V38-final
-     * after real logs showed typical daytime sessions land at iq=14-15, wph=8-11,
-     * wake=16-23 -- all rejected by the tighter V38-final gate. New gate:
-     *   iq in [12,19] AND dur >= 600s AND wph < 12/h AND wake_cycles < 24.
-     * Extreme-wake or short sessions still fall through to DIRTY. */
     if (iq >= 12 && iq < 20 && dur >= 600 &&
         wph < 12.0f && fsm->bat_wake_cycles < 24)
         return BAT_TRUST_PARTIAL;
@@ -1855,7 +1752,6 @@ static int battery_session_trust(const asb_fsm_t *fsm) {
     return BAT_TRUST_CLEAN;
 }
 
-/* V34: environment hostility classification */
 static int classify_environment(const asb_fsm_t *fsm) {
     long dur = (fsm->ses_start_ts > 0) ? (time(NULL) - fsm->ses_start_ts) : 0;
     if (dur < 60) return ENV_QUIET;
@@ -1870,7 +1766,7 @@ static int classify_environment(const asb_fsm_t *fsm) {
         if (iq < 0) iq = 0;
     }
     float wph = (dur > 0) ? (float)fsm->bat_wake_cycles * 3600.0f / dur : 0;
-    /* V34: radio-aware -- heavy mobile data activity during screen-off
+    /* radio-aware -- heavy mobile data activity during screen-off
      * is a sign of hostile radio environment (push services, sync storms) */
     int radio_noisy = 0;
     if (dur > 120) {
@@ -1909,12 +1805,12 @@ static int battery_fail_cause(const asb_fsm_t *fsm, int iq) {
 static void session_end_self_tune(const asb_fsm_t *fsm) {
     int tuned = 0;
 
-    /* V31-r10: don't self-tune during quarantine */
+    /* don't self-tune during quarantine */
     if (fsm->plan.quarantine) {
         asb_log("self_tune: quarantine active, skipping");
         return;
     }
-    /* V31: don't self-tune during storm shield (noisy battery data) */
+    /* don't self-tune during storm shield (noisy battery data) */
     if (g_storm_shield_active) {
         asb_log("self_tune: storm shield active, skipping");
         return;
@@ -2190,7 +2086,7 @@ static void sig_handler(int sig) {
 
 int main(int argc, char **argv) {
     if (argc >= 2) {
-        /* V37-r8 fix: V37-r7 expanded status JSON with 6 new thermal fields
+        /* expanded status JSON with 6 new thermal fields
          * (skin_temp, surface_hotspot, thermal_cpu_zone/type, thermal_skin_zone,
          * thermal_surface_zone, ses_max_surface_temp) pushed worst-case payload
          * to ~1000 bytes. Old 512-byte client buffer truncated mid-field
@@ -2240,18 +2136,6 @@ int main(int argc, char **argv) {
     asb_config_defaults(&g_asb_cfg);
     asb_config_load_file(CONFIG_FILE, &g_asb_cfg);
     asb_config_apply_highload_mode(&g_asb_cfg);
-
-    /* V39: stale-config detector. User's persisted /data/.../governor.conf
-     * may carry values from much older module versions (V37 era shipped
-     * heavy_load_enter=5.4, V38 shipped 8.0, current r9+ ships 20.0).
-     * Loading these old values into a modern FSM produces "glitchy" behavior
-     * — confirmed in user log where heavy_load=5.4 caused HEAVY entries on
-     * routine background activity.
-     *
-     * Policy: never auto-overwrite (breaks legitimate user customizations).
-     * Just warn loudly so user sees the issue in logs and can act.
-     * Threshold heuristic: any tunable below half its current default is
-     * suspicious (could be old default OR aggressive customization). */
     {
         int stale_warnings = 0;
         if (g_asb_cfg.heavy_load_enter < 10.0f) {
@@ -2292,7 +2176,7 @@ int main(int argc, char **argv) {
     persistent_stats_load();
     sweep_stale_session();
 
-    /* V30: OTA quarantine -- detect environment changes */
+    /* OTA quarantine -- detect environment changes */
     {
         #define ENV_FP_FILE PERSISTENT_STATS_DIR "/env_fingerprint"
         #define QUARANTINE_SESSIONS 3
@@ -2472,7 +2356,7 @@ int main(int argc, char **argv) {
     metrics_read_all(&metrics, 1, 1);  /* startup: always read headroom + thermal */
     fsm_update(&fsm, &metrics);
 
-    /* V31-r10: detect initial user ID */
+    /* detect initial user ID */
     g_last_user_id = get_current_user_id();
 
     session_plan_build(&fsm, metrics.misc.screen_on);
@@ -2520,7 +2404,7 @@ int main(int argc, char **argv) {
                     g_thermal_cpu_type[0] ? g_thermal_cpu_type : "unknown",
                     g_thermal_cpu_reason);
         }
-        /* V37-r6: dump every thermal zone on startup -- one line per zone -- so
+        /* dump every thermal zone on startup -- one line per zone -- so
          * next tuning cycle doesn't require pulling thermal_zones from adb. */
         {
             char _zt_path[128], _zt_type[64], _zt_tmp[32];
@@ -2551,7 +2435,7 @@ int main(int argc, char **argv) {
             }
             asb_log("tz_dump: total=%d zones scanned", _dumped);
         }
-        /* V37.1: one-line thermal summary so users don't have to read 96 tz_dump lines.
+        /* one-line thermal summary so users don't have to read 96 tz_dump lines.
          * Format: thermal_summary: cpu=<type>(z<N>,val=<C>,valid=<0|1>) skin=<type>(z<N>,val=<C>) surface=<type>(z<N>,val=<C>) */
         {
             char _ttype[3][64]; int _tval[3] = {0,0,0}; int _zlist[3];
@@ -2595,7 +2479,7 @@ int main(int argc, char **argv) {
         asb_log("diag: msm_performance_interface=%s",
                 msm_perf_check() ? "available (kernel-level write)" : "not available (cpufreq only)");
 
-        /* V31: probe device capabilities once at startup */
+        /* probe device capabilities once at startup */
         memset(&g_device_caps, 0, sizeof(g_device_caps));
         g_device_caps.has_msm_perf = msm_perf_check() ? 1 : 0;
         g_device_caps.has_headroom = (access("/sys/kernel/msm_performance/parameters/cpu_max_freq", R_OK) == 0);
@@ -2664,7 +2548,7 @@ int main(int argc, char **argv) {
         {
             time_t _now = time(NULL);
             if (_now - g_last_state_touch >= 60) {
-                /* V40: profile drift safety net. apply_profile.sh
+                /* profile drift safety net. apply_profile.sh
                  * normally notifies via socket, but if that path failed (gov
                  * not yet up at boot, socket EAGAIN, manual file edit, etc.),
                  * fsm.profile_idx may be stale. Re-read current_profile and
@@ -2703,7 +2587,7 @@ int main(int argc, char **argv) {
                     g_last_profile_sync = _now;
                 }
                 write_state(&fsm, &metrics, cur_pred);
-                /* V44: also write conflicts.json and learner_state.json for WebUI. */
+                /* also write conflicts.json and learner_state.json for WebUI. */
                 write_conflicts_json();
                 write_learner_state_json(&fsm);
                 g_last_state_touch = _now;
@@ -2712,7 +2596,7 @@ int main(int argc, char **argv) {
             if (_now - g_last_heartbeat >= 900) {
                 static const char *_snames[] = {"DEEP_IDLE","LIGHT_IDLE","MODERATE","HEAVY","GAMING","SUSTAINED"};
                 static const char *_enames[] = {"quiet","noisy","hostile"};
-                fsm_flush_state_time(&fsm);  /* V33: flush before heartbeat so bat_deep/light/mod are current */
+                fsm_flush_state_time(&fsm);  /* flush before heartbeat so bat_deep/light/mod are current */
                 int _hb_env = classify_environment(&fsm);
                 asb_log("heartbeat: state=%s profile=%d temp=%d%s headroom=%d%% load=%.1f gpu=%d bat=%d "
                         "ses_heavy=%lds ses_sus=%lds bat_deep=%lds bat_wake=%d env=%s waste=%d sc=%d hc=%d",
@@ -2733,7 +2617,7 @@ int main(int argc, char **argv) {
                         metrics.therm.soft_clamp,
                         metrics.therm.hard_clamp);
                 g_last_heartbeat = _now;
-                /* V34: action waste decay -- env-aware.
+                /* action waste decay -- env-aware.
                  * Quiet env = faster recovery. Hostile/clamp = slower recovery. */
                 if (g_action_waste > 0) {
                     int _hb_env_d = classify_environment(&fsm);
@@ -2810,7 +2694,7 @@ int main(int argc, char **argv) {
                                 storm_shield_reset();
                                 asb_log("storm_shield: cleared (screen ON)");
                             }
-                            /* V31-r10: check user switch on screen ON */
+                            /* check user switch on screen ON */
                             int cur_uid = get_current_user_id();
                             if (cur_uid >= 0 && g_last_user_id >= 0 && cur_uid != g_last_user_id) {
                                 asb_log("user_quarantine: user switch %d -> %d, active for %ds",
@@ -2871,7 +2755,7 @@ int main(int argc, char **argv) {
                             asb_log("auto_battery: cleared by user profile change");
                             fsm.auto_battery_active = 0;
                             fsm.auto_battery_restore_idx = -1;
-                            /* V44 */
+                            
                             strncpy(fsm.auto_battery_reason, "manual_clear", sizeof(fsm.auto_battery_reason) - 1);
                             fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
                             fsm.auto_battery_since = time(NULL);
@@ -2952,7 +2836,7 @@ int main(int argc, char **argv) {
                     asb_config_defaults(&g_asb_cfg);
                     asb_config_load_file(CONFIG_FILE, &g_asb_cfg);
                     asb_config_apply_highload_mode(&g_asb_cfg);
-                    /* V36: if profile is changing, preserve old session in history
+                    /* if profile is changing, preserve old session in history
                      * BEFORE resetting. Previously reload silently discarded
                      * running sessions, leaving history with stale attribution. */
                     if (new_idx != fsm.profile_idx) {
@@ -3026,20 +2910,20 @@ int main(int argc, char **argv) {
         }
 
         if (need_metrics) {
-            /* V31: sensor scheduler reads from session plan.
+            /* sensor scheduler reads from session plan.
              * sensor_budget limits expensive full-mode reads per plan epoch. */
             static int g_sensor_skip = 0;
             int need_hr = fsm.plan.allow_hr;
             int need_thermal = 1;
 
-            /* V34: Quiet Night Baseline -- after sustained quiet DEEP_IDLE,
+            /* Quiet Night Baseline -- after sustained quiet DEEP_IDLE,
              * enter ultra-quiet mode: even less reads, longer ticks. */
             if (fsm.state == ASB_STATE_DEEP_IDLE &&
                 fsm.profile_idx == PROFILE_BATTERY &&
                 !metrics.misc.screen_on) {
                 g_quiet_night_ticks++;
-                g_quiet_noise_ticks = 0;  /* V34: reset hysteresis -- we're quiet again */
-                /* V42: night-window acceleration.
+                g_quiet_noise_ticks = 0;  /* reset hysteresis -- we're quiet again */
+                /* night-window acceleration.
                  * If current local hour is within [night_quiet_hour_start, night_quiet_hour_end)
                  * (e.g. 23:00 - 06:00), use fast threshold regardless of clean_night reward.
                  * Crossing midnight handled by start > end -> hour >= start OR hour < end.
@@ -3071,7 +2955,7 @@ int main(int argc, char **argv) {
                             (_use_fast == 2) ? " night_window=fast" : "");
                 }
             } else {
-                /* V34: Quiet Lock Hysteresis -- don't exit quiet on single noise burst.
+                /* Quiet Lock Hysteresis -- don't exit quiet on single noise burst.
                  * Require 3+ consecutive non-quiet ticks to truly exit.
                  * One alarm/job waking briefly shouldn't kill the whole quiet lock. */
                 if (g_quiet_night_active) {
@@ -3093,7 +2977,7 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* V34: deep idle economy -- in battery DEEP_IDLE with screen off,
+            /* deep idle economy -- in battery DEEP_IDLE with screen off,
              * GPU/headroom/thermal reads are waste. Only battery level matters. */
             int deep_idle_economy = (fsm.state == ASB_STATE_DEEP_IDLE &&
                                      fsm.profile_idx == PROFILE_BATTERY &&
@@ -3103,7 +2987,7 @@ int main(int argc, char **argv) {
                 need_thermal = 0;
             }
 
-            /* V34: Quiet Night ultra-economy -- skip even battery current reads
+            /* Quiet Night ultra-economy -- skip even battery current reads
              * on alternating ticks. Device is sleeping, minimal governor footprint. */
             if (g_quiet_night_active) {
                 static int g_qn_skip = 0;
@@ -3114,7 +2998,7 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* V34: Exit-from-Quiet Brain -- after quiet night ends,
+            /* Exit-from-Quiet Brain -- after quiet night ends,
              * ramp up sensor reads gradually instead of full blast.
              * Tick 1: battery only. Tick 2: +thermal. Tick 3: full reads. */
             if (g_quiet_wake_ramp > 0) {
@@ -3123,7 +3007,7 @@ int main(int argc, char **argv) {
                 g_quiet_wake_ramp--;
             }
 
-            /* V34-r15: Burst Probation Window -- detect early ceiling collapse.
+            /* Burst Probation Window -- detect early ceiling collapse.
              * In perf sessions, if p6_max drops below 2GHz within first 60s
              * while clamp_hold is already set, this is vendor preemptive throttle.
              * Response: activate clamp_economy immediately + halve ac_budget. */
@@ -3148,10 +3032,10 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* V34: ceiling-adaptive economy -- when vendor clamp confirmed >45s,
+            /* ceiling-adaptive economy -- when vendor clamp confirmed >45s,
              * headroom reads are pointless (always clamped) and thermal reads
              * can be reduced (device is stable, not in thermal danger).
-             * V34-r15: early_collapse bypasses the timer entirely. */
+             * early_collapse bypasses the timer entirely. */
             int clamp_economy = (fsm.clamp_hold && g_clamp_hold_since > 0 &&
                                  ((time(NULL) - g_clamp_hold_since) > g_asb_cfg.clamp_economy_after_s ||
                                   g_burst_early_collapse) &&
@@ -3162,7 +3046,7 @@ int main(int argc, char **argv) {
                 static int g_clamp_thermal_skip = 0;
                 g_clamp_thermal_skip++;
                 if (g_clamp_thermal_skip % g_asb_cfg.clamp_thermal_every_n != 0) need_thermal = 0;
-                /* V34: Ceiling-Adaptive Reshaping -- track actual ceiling with EMA.
+                /* Ceiling-Adaptive Reshaping -- track actual ceiling with EMA.
                  * This becomes the reference for gap/eff instead of target. */
                 int obs_p0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
                 int obs_p1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
@@ -3185,7 +3069,7 @@ int main(int argc, char **argv) {
             } else {
                 g_sensor_skip = 0;
             }
-            /* V31: sensor budget -- downgrade to reduced when budget exhausted */
+            /* sensor budget -- downgrade to reduced when budget exhausted */
             if (need_hr && fsm.plan.sensor_budget > 0) {
                 if (fsm.plan.sensor_used >= fsm.plan.sensor_budget) {
                     need_hr = 0;  /* budget exhausted, skip headroom reads */
@@ -3195,7 +3079,7 @@ int main(int argc, char **argv) {
             }
             metrics_read_all(&metrics, need_hr, need_thermal);
 
-            /* V42: low-battery auto-switch.
+            /* low-battery auto-switch.
              *
              * Trigger PROFILE_BATTERY automatically when capacity drops below
              * auto_battery_low_pct; restore previous profile when capacity
@@ -3218,7 +3102,7 @@ int main(int argc, char **argv) {
                     fsm.auto_battery_restore_idx = fsm.profile_idx;
                     fsm.auto_battery_active = 1;
                     fsm.auto_battery_last_action = _now_t;
-                    /* V44 */
+                    
                     strncpy(fsm.auto_battery_reason, "low_pct", sizeof(fsm.auto_battery_reason) - 1);
                     fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
                     fsm.auto_battery_since = time(NULL);
@@ -3239,7 +3123,7 @@ int main(int argc, char **argv) {
                     fsm.auto_battery_active = 0;
                     fsm.auto_battery_restore_idx = -1;
                     fsm.auto_battery_last_action = _now_t;
-                    /* V44 */
+                    
                     strncpy(fsm.auto_battery_reason, "high_pct_restore", sizeof(fsm.auto_battery_reason) - 1);
                     fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
                     fsm.auto_battery_since = time(NULL);
@@ -3256,7 +3140,7 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* V38 RC: log thermal CPU source flips (primary <-> fallback)
+            /* log thermal CPU source flips (primary <-> fallback)
              * visible in governor.log for runtime thermal path diagnostics. */
             if (metrics.therm.fallback_just_flipped) {
                 asb_log("thermal_cpu_switch: primary=%s fallback=%s -> used_fallback=%d (cpu_max=%dC)",
@@ -3276,24 +3160,23 @@ int main(int argc, char **argv) {
                 learner_adjust_windows(&learn, &fsm.up_window, &fsm.down_window);
             }
 
-            /* V34: radio-aware -- track mobile data activity during battery idle */
+            /* radio-aware -- track mobile data activity during battery idle */
             if (fsm.profile_idx == PROFILE_BATTERY && !metrics.misc.screen_on) {
                 long net_bps = metrics.misc.rmnet_rx_bps + metrics.misc.rmnet_tx_bps;
                 if (net_bps > 5000)  /* >5KB/s = active data transfer */
                     fsm.bat_radio_active_ticks++;
             }
 
-            /* V34: pass virtual ceiling to FSM for gap reshaping */
+            /* pass virtual ceiling to FSM for gap reshaping */
             fsm.virtual_ceiling_p0 = g_virtual_ceiling_p0;
             fsm.virtual_ceiling_p1 = g_virtual_ceiling_p1;
 
-            /* V39: thermal_pwrlevel monitoring with three caution gates.
+            /* thermal_pwrlevel monitoring with three caution gates.
              *
              * Cost-conscious GPU thermal observability for KGSL devices where
              * msm_performance is dead. We discovered thermal_pwrlevel at startup
              * and cached its fd; reading is one pread() syscall.
              *
-             * V39: added minimum interval gate. The main loop is event-driven
              * via epoll; uevent, IPC, profile-change events all set need_metrics=1
              * within a single physical FSM tick (~3-4s). Without a time gate, a
              * single FSM tick can trigger 5-10 thermal reads. Real deploy data
@@ -3306,10 +3189,9 @@ int main(int argc, char **argv) {
              *   1. Skip if monitoring disabled (div_idle == 0)
              *   2. Skip if screen off (vendor thermal not relevant when GPU idle)
              *   3. Skip in DEEP_IDLE state (no GPU work, no thermal change)
-             *   4. Skip if read happened within last 2 seconds (V39)
+             *   4. Skip if read happened within last 2 seconds
              *   5. In LIGHT_IDLE/MODERATE: read every Nth qualified tick
-             *   6. In HEAVY/SUSTAINED/GAMING: read every qualified tick
-             */
+             *   6. In HEAVY/SUSTAINED/GAMING: read every qualified tick */
             {
                 int monitor_skipped = 1;
                 static time_t g_last_thermal_pl_read = 0;
@@ -3344,7 +3226,7 @@ int main(int argc, char **argv) {
                 }
                 if (monitor_skipped) gpu_thermal_pl_record_skip();
 
-                /* V39: thread thermal_pwrlevel into thermal struct for FSM use.
+                /* thread thermal_pwrlevel into thermal struct for FSM use.
                  * If vendor is capping above our max_pwrlevel, mark soft_clamp.
                  * This backstops the dead msm_performance signal on SM8850. */
                 {
@@ -3398,7 +3280,7 @@ int main(int argc, char **argv) {
                         }
                         g_thermal_pl_last_audit = now_s;
 
-                        /* V40: also flush vendor-override audit alongside */
+                        /* also flush vendor-override audit alongside */
                         char vo_buf[256];
                         gpu_vendor_override_audit_path(vo_buf, sizeof(vo_buf));
                         asb_log("vendor_override_audit: %s", vo_buf);
@@ -3410,7 +3292,7 @@ int main(int argc, char **argv) {
                     }
                 }
 
-                /* V40: vendor override detection — check if vendor
+                /* vendor override detection — check if vendor
                  * PowerHAL or thermal HAL stomped our pwrlevel writes. Same
                  * cost gating as thermal_pwrlevel monitor (skip DEEP_IDLE,
                  * skip screen-off, 2s minimum interval). */
@@ -3422,7 +3304,7 @@ int main(int argc, char **argv) {
 
             int changed = fsm_update(&fsm, &metrics);
 
-            /* V31: rebuild plan on state band cross (idle<->active<->heavy) */
+            /* rebuild plan on state band cross (idle<->active<->heavy) */
             if (changed) {
                 int new_band = (fsm.state <= ASB_STATE_LIGHT_IDLE) ? 0
                              : (fsm.state < ASB_STATE_HEAVY) ? 1 : 2;
@@ -3433,7 +3315,7 @@ int main(int argc, char **argv) {
                     g_last_band = new_band;
                 }
             }
-            /* V29-r10: accumulate headroom telemetry (only real reads) */
+            /* accumulate headroom telemetry (only real reads) */
             if (metrics.therm.headroom_valid) {
                 fsm.ses_headroom_sum += metrics.therm.headroom_pct;
                 fsm.ses_headroom_samples++;
@@ -3521,7 +3403,7 @@ int main(int argc, char **argv) {
 
                 }
             }
-            /* V33: benchmark false-positive guard -- runs EVERY tick
+            /* benchmark false-positive guard -- runs EVERY tick
              * regardless of lock status. No real benchmark lasts 15min.
              * Must be OUTSIDE !ses_intent_locked block to actually fire. */
             if (fsm.ses_intent == INTENT_BENCHMARK &&
@@ -3536,7 +3418,7 @@ int main(int argc, char **argv) {
                 }
             }
             if (fsm.state == ASB_STATE_DEEP_IDLE) {
-                /* V33: use session age, not fsm_elapsed (which resets on heartbeat flush) */
+                /* use session age, not fsm_elapsed (which resets on heartbeat flush) */
                 long ses_age_b = (fsm.ses_start_ts > 0) ? (time(NULL) - fsm.ses_start_ts) : 0;
                 if (ses_age_b >= 1800 && fsm.bat_time_deep_idle_sec > 900) {
                     fsm_flush_state_time(&fsm);
@@ -3557,7 +3439,7 @@ int main(int argc, char **argv) {
                     g_last_write_ts = time(NULL);
                 }
                 write_state(&fsm, &metrics, cur_pred);
-                /* V44 */
+                
                 write_conflicts_json();
                 write_learner_state_json(&fsm);
 
@@ -3606,7 +3488,7 @@ int main(int argc, char **argv) {
                                         metrics.therm.perf_cap_p0,
                                         metrics.therm.perf_cap_p6);
                             } else {
-                                /* V38: explicit reason for every enter_sustained instead of "unknown".
+                                /* explicit reason for every enter_sustained instead of "unknown".
                                  * The FSM can enter SUSTAINED via three non-headroom paths:
                                  *   - perf_hot_guard: temp exceeded per-profile hot guard for N ticks
                                  *   - thermal_trend: rising trend (>=6) + temp near sustained threshold
@@ -3637,7 +3519,7 @@ int main(int argc, char **argv) {
                         }
                     }
                     if (fsm.prev_state == ASB_STATE_SUSTAINED) {
-                        /* V38 RC8: sustained_reason=2 set by FSM time-based escape.
+                        /* sustained_reason=2 set by FSM time-based escape.
                          * When we see it on exit, surface it in the log so the
                          * new mechanism is visible in post-mortem analysis. */
                         const char *reason =
@@ -3683,7 +3565,7 @@ int main(int argc, char **argv) {
             }
             if ((fsm.state == ASB_STATE_HEAVY || fsm.state == ASB_STATE_GAMING
                  || fsm.state == ASB_STATE_SUSTAINED) && !fsm.thermal_cap) {
-                /* V31: anti-clamp with cadence ladder
+                /* anti-clamp with cadence ladder
                  * Stages: IDLE -> BURST(2s,3 attempts) -> HOLD(4s) -> BACKOFF(30s)
                  * Detection: gap > 500kHz on either cluster + temp < 95 + headroom >= 60%
                  * Backoff: 5 ineffective attempts -> pause 30s */
@@ -3710,7 +3592,7 @@ int main(int argc, char **argv) {
                         if (max_gap > 500000 && metrics.therm.cpu_max_c < 95 && headroom_ok) {
                             vendor_clamping = 1;
                             if (g_ac_stage == AC_STAGE_IDLE) {
-                                /* V31-r7: budget counts anti-clamp WINDOWS, not individual writes.
+                                /* budget counts anti-clamp WINDOWS, not individual writes.
                                  * Each window = BURST(3 writes) + HOLD + BACKOFF cycle.
                                  * budget=6 means 6 windows x ~3 writes = ~18 actual dual-writes max,
                                  * spread across the full session instead of burning in 90 seconds. */
@@ -3740,7 +3622,7 @@ int main(int argc, char **argv) {
                 /* Cadence ladder */
                 int reassert_interval;
                 if (g_ac_futile) {
-                    /* V31: futility fallback -- vendor clamp won, reduce writes.
+                    /* futility fallback -- vendor clamp won, reduce writes.
                      * Double the reassert interval since fighting is pointless. */
                     reassert_interval = (fsm.state == ASB_STATE_GAMING)
                                         ? g_asb_cfg.reassert_gaming_s * 2
@@ -3753,7 +3635,7 @@ int main(int argc, char **argv) {
                     reassert_interval = (fsm.state == ASB_STATE_GAMING)
                                         ? g_asb_cfg.reassert_gaming_s
                                         : g_asb_cfg.reassert_heavy_s;
-                /* V34: action cost economy -- wasted actions slow everything */
+                /* action cost economy -- wasted actions slow everything */
                 if (g_action_waste >= g_asb_cfg.action_waste_threshold)
                     reassert_interval = reassert_interval * 2;
 
@@ -3791,7 +3673,7 @@ int main(int argc, char **argv) {
                                 asb_log("anti_clamp: backoff 30s (5 ineffective, actual=[%d,%d]) backoffs=%d",
                                         post_p0, post_p1, g_ac_backoff_count);
                                 g_action_waste++;
-                                /* V31: futility suspend -- if 2+ backoffs this session,
+                                /* futility suspend -- if 2+ backoffs this session,
                                  * anti-clamp is clearly losing. Stop wasting writes. */
                                 if (g_ac_backoff_count >= 2) {
                                     g_ac_futile = 1;
@@ -3806,7 +3688,7 @@ int main(int argc, char **argv) {
                             }
                         } else {
                             g_ac_fails = 0;
-                            /* V34: Action Waste Reward -- successful action reduces waste */
+                            /* Action Waste Reward -- successful action reduces waste */
                             if (g_action_waste > 0) {
                                 g_action_waste -= 2;
                                 if (g_action_waste < 0) g_action_waste = 0;
@@ -3853,16 +3735,14 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* V39: shell_overridden_up watchdog
+            /* shell_overridden_up watchdog
              * Anti-clamp above handles vendor DOWN-clamps (gap > 0). Battery profile
-             * V40: previously this block actively rewrote scaling_max_freq when
              * actual > desired+100MHz for 2+ ticks. That role has moved to
              * runtime/asb_reconcile.sh which uses fsm.current_caps via /dev/.asb/state
              * and includes hard rate-limiting (5/min/cluster, 60s window). Having
              * both C-side and shell-side write to the same sysfs node created
              * thrash and double-counted in audit. Now this block is reporter-only:
-             * tracks streaks for diagnostic visibility, no writes.
-             */
+             * tracks streaks for diagnostic visibility, no writes. */
             if (fsm.profile_idx != PROFILE_PERFORMANCE &&
                 (fsm.state == ASB_STATE_DEEP_IDLE || fsm.state == ASB_STATE_LIGHT_IDLE ||
                  fsm.state == ASB_STATE_MODERATE  || fsm.state == ASB_STATE_HEAVY)) {
@@ -3898,7 +3778,7 @@ int main(int argc, char **argv) {
                 g_leak_streak_p1 = 0;
             }
 
-            /* V31-r10: check quarantine expiry (runs each idle tick = 5-10s) */
+            /* check quarantine expiry (runs each idle tick = 5-10s) */
             if (g_user_quarantine_active) {
                 if (user_quarantine_check(&fsm)) {
                     asb_log("user_quarantine: expired, resuming normal policy");
@@ -3907,7 +3787,7 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* V31-r11: periodic user ID check (~every 30s when screen on).
+            /* periodic user ID check (~every 30s when screen on).
              * Catches user switch that happens without screen toggle
              * (e.g. in-UI clone/guest switch while screen stays on). */
             if (metrics.misc.screen_on && !g_user_quarantine_active) {
@@ -3928,9 +3808,7 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* V31: storm shield -- activate for noisy battery screen-off.
-             * V32: re-arm hysteresis -- after smart exit, require new noise + cooldown
-             * V39: context-aware threshold. The V39 battery_mixed log showed
+            /* storm shield -- activate for noisy battery screen-off.
              * storm_shield firing at wakes=5..12 on normal daytime mixed use,
              * which is too aggressive — that's just a daytime phone, not a
              * sleep-hostile night. Split the thresholds:
@@ -3939,8 +3817,7 @@ int main(int argc, char **argv) {
              *     wph >= 12 AND wake_cycles >= 8 AND age >= 480s
              *
              * This keeps storm_shield sharp for actual noisy nights while
-             * leaving daytime battery sessions alone.
-             */
+             * leaving daytime battery sessions alone. */
             if (!g_storm_shield_active && fsm_profile_is_battery
                 && !metrics.misc.screen_on
                 && fsm.bat_wake_cycles >= 5) {
@@ -3952,7 +3829,7 @@ int main(int argc, char **argv) {
                     if (new_wakes < 3 || time(NULL) < g_shield_rearm_until)
                         rearm_ok = 0;
                 }
-                /* V39: daytime-mixed gating */
+                /* daytime-mixed gating */
                 int daytime_mixed = (fsm.ses_intent == INTENT_MIXED);
                 int daytime_gate_ok = 1;
                 if (daytime_mixed) {
@@ -3971,7 +3848,7 @@ int main(int argc, char **argv) {
                             fsm.bat_wake_cycles, ses_age, fsm.ses_intent);
                 }
             }
-            /* V31: storm shield smart exit -- if noise calmed down for ~10min,
+            /* storm shield smart exit -- if noise calmed down for ~10min,
              * exit shield and resume normal battery behavior */
             if (g_storm_shield_active && fsm_profile_is_battery
                 && !metrics.misc.screen_on) {
@@ -3982,7 +3859,7 @@ int main(int argc, char **argv) {
                     if (g_shield_calm_ticks >= 60) {  /* ~10min at 10s deep ticks */
                         int exit_wakes = fsm.bat_wake_cycles;
                         storm_shield_reset();
-                        /* V32: re-arm hysteresis -- remember exit point */
+                        /* re-arm hysteresis -- remember exit point */
                         g_shield_exit_wakes = exit_wakes;
                         g_shield_rearm_until = time(NULL) + 120;  /* 2min cooldown */
                         session_plan_build(&fsm, 0);
@@ -3995,9 +3872,9 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* V31: adaptive tick reads from session plan */
+            /* adaptive tick reads from session plan */
 
-            /* V32: clamp recovery probe -- periodically check if vendor clamp lifted.
+            /* clamp recovery probe -- periodically check if vendor clamp lifted.
              * Dual-cluster: both policy0 AND policy6 must be unclamped.
              * Debounced: require 2+ consecutive good probes to lift hold.
              * Economy: after 10min of confirmed hold, probe every ~10min instead of ~5min. */
@@ -4006,7 +3883,7 @@ int main(int argc, char **argv) {
                 if (g_clamp_hold_since > 0 &&
                     (time(NULL) - g_clamp_hold_since) >= 600)
                     probe_interval = 120;  /* ~10min economy after 10min hold */
-                /* V34: action cost economy -- more waste = longer between probes */
+                /* action cost economy -- more waste = longer between probes */
                 if (g_action_waste >= g_asb_cfg.action_waste_threshold)
                     probe_interval = probe_interval * 2;
                 if (++g_clamp_probe_skip >= probe_interval) {
@@ -4029,7 +3906,7 @@ int main(int argc, char **argv) {
                             g_probe_good_hits = 0;
                             g_clamp_probe_skip = 0;
                             g_clamp_hold_since = 0;
-                            /* V33: recovery cautious -- don't immediately go full aggressive */
+                            /* recovery cautious -- don't immediately go full aggressive */
                             fsm.recovery_cautious_until = time(NULL) + 300;
                             session_plan_build(&fsm, metrics.misc.screen_on);
                             session_plan_apply_prearm(&fsm);
@@ -4052,7 +3929,7 @@ int main(int argc, char **argv) {
             {
                 static int g_idle_interval = TIMER_IDLE_S;
                 int want = fsm.plan.deep_sleep ? TIMER_DEEP_S : TIMER_IDLE_S;
-                /* V34: Quiet Night Baseline -- even longer ticks in ultra-quiet */
+                /* Quiet Night Baseline -- even longer ticks in ultra-quiet */
                 if (g_quiet_night_active) want = g_asb_cfg.quiet_tick_s;
                 if (want != g_idle_interval) {
                     int old = g_idle_interval;

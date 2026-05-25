@@ -19,7 +19,7 @@ typedef struct {
     float perf_sustained_level;
     int   perf_hot_guard_temp;
     int   perf_hot_guard_ticks;
-    /* V36: balanced-specific thermal ceiling (softer than perf) */
+    /* balanced-specific thermal ceiling (softer than perf) */
     int   balanced_sustained_temp_enter;
     int   balanced_sustained_temp_exit;
     int   heavy_gpu_exit;
@@ -50,7 +50,7 @@ typedef struct {
     float bat_moderate_load_enter;
     int   log_level;
 
-    /* V39: thermal_pwrlevel monitoring rate control.
+    /* thermal_pwrlevel monitoring rate control.
      * thermal_pwrlevel_div_idle: in LIGHT_IDLE/MODERATE on battery, read
      *   thermal_pwrlevel only every Nth tick. Default 3 = read every ~30-45s.
      *   Set to 1 to read every tick (more responsive, slightly more energy).
@@ -60,7 +60,7 @@ typedef struct {
     int   thermal_pwrlevel_div_idle;
     int   thermal_pwrlevel_audit_log_s;
 
-    /* V34: configurable thresholds (previously hardcoded) */
+    /* configurable thresholds (previously hardcoded) */
     int   env_iq_quiet;            /* idle quality threshold for quiet env */
     int   env_iq_hostile;          /* idle quality threshold for hostile env */
     float env_wph_noisy;           /* wakes/hour threshold for noisy env */
@@ -75,7 +75,7 @@ typedef struct {
     int   action_waste_threshold;  /* waste level that doubles intervals */
     int   virtual_ceiling_alpha;   /* EMA weight for virtual ceiling (0-100, /8) */
 
-    /* V35: balanced-specific thresholds */
+    /* balanced-specific thresholds */
     float balanced_heavy_load_enter;    /* load threshold for HEAVY in balanced */
     float balanced_moderate_load_enter; /* load threshold for MODERATE in balanced */
     int   balanced_warmup_grace_s;      /* seconds to suppress sustained after start */
@@ -85,7 +85,7 @@ typedef struct {
     int   soft_clamp_headroom_pct;      /* advisory headroom threshold */
     int   hard_clamp_headroom_pct;      /* actionable headroom threshold */
 
-    /* V42: low-battery auto-switch.
+    /* low-battery auto-switch.
      * When auto_battery_enable=1 and bat_pct drops below auto_battery_low_pct,
      * profile auto-switches to battery (saving original profile for restore).
      * Restore happens when bat_pct >= auto_battery_high_pct.
@@ -95,7 +95,7 @@ typedef struct {
     int   auto_battery_high_pct;   /* restore threshold (default 30) */
     int   auto_battery_min_gap_s;  /* min seconds between auto-switches (default 300) */
 
-    /* V42: night-window quiet_night acceleration.
+    /* night-window quiet_night acceleration.
      * Between night_quiet_hour_start (default 23) and night_quiet_hour_end (default 6),
      * quiet_night entry uses quiet_fast_ticks regardless of clean_night reward.
      * Saves ~5min of background activity per night. */
@@ -107,7 +107,7 @@ typedef struct {
 static inline void asb_config_defaults(asb_runtime_config_t *c) {
     memset(c, 0, sizeof(*c));
     c->heavy_gpu_enter     = 35;
-    /* V39: HEAVY load thresholds raised for Snapdragon 8 Elite Gen 5.
+    /* HEAVY load thresholds raised for Snapdragon 8 Elite Gen 5.
      *
      * Linux loadavg-1min represents avg # tasks in run queue over 1 min.
      * On 8-core Oryon with modern Android (VPN + GMS + LSPosed + ZygiskNeo +
@@ -119,8 +119,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
      * Recalibrated:
      *   moderate_load_enter: 10 → 14   (above typical idle, below true work)
      *   heavy_load_enter:    15 → 20   (real CPU pressure, not background noise)
-     * Battery profile gets stricter still (idle is more permissive there).
-     */
+     * Battery profile gets stricter still (idle is more permissive there). */
     c->heavy_load_enter    = 20.0f;
     c->moderate_load_enter = 14.0f;
     c->gaming_gpu_enter    = 65;
@@ -160,16 +159,16 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->bat_fast_idle_s     = 12;
     c->bat_light_idle_gpu  = 10;
     c->bat_suppress_gaming = 1;
-    /* V39: same recalibration for battery profile */
+    /* same recalibration for battery profile */
     c->bat_heavy_load_enter = 20.0f;     /* was 15 */
     c->bat_moderate_load_enter = 14.0f;  /* was 10 */
     c->log_level = 0;
 
-    /* V39: thermal_pwrlevel monitoring */
+    /* thermal_pwrlevel monitoring */
     c->thermal_pwrlevel_div_idle      = 3;     /* every 3rd tick in LIGHT_IDLE/MODERATE */
     c->thermal_pwrlevel_audit_log_s   = 3600;  /* hourly audit summary */
 
-    /* V34 defaults */
+    /* defaults */
     c->env_iq_quiet         = 25;
     c->env_iq_hostile       = 10;
     c->env_wph_noisy        = 6.0f;
@@ -184,7 +183,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->action_waste_threshold = 5;
     c->virtual_ceiling_alpha = 7;   /* EMA: (old*7 + new*1)/8 */
 
-    /* V35: balanced-specific */
+    /* balanced-specific */
     c->balanced_heavy_load_enter    = 0;  /* 0 = use global heavy_load_enter */
     c->balanced_moderate_load_enter = 0;  /* 0 = use global moderate_load_enter */
     c->balanced_warmup_grace_s      = 45;
@@ -249,7 +248,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "moderate_load_enter"))  c->moderate_load_enter = (float)atof(v);
     else if (!strcmp(k, "bat_moderate_load_enter")) c->bat_moderate_load_enter = (float)atof(v);
     else if (!strcmp(k, "log_level"))            c->log_level = atoi(v);
-    /* V34 configurable thresholds */
+    /* configurable thresholds */
     else if (!strcmp(k, "env_iq_quiet"))          c->env_iq_quiet = atoi(v);
     else if (!strcmp(k, "env_iq_hostile"))        c->env_iq_hostile = atoi(v);
     else if (!strcmp(k, "env_wph_noisy"))         c->env_wph_noisy = (float)atof(v);

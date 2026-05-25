@@ -43,7 +43,6 @@ extern asb_runtime_config_t g_asb_cfg;
 
 #define PATH_WLAN_TX        "/sys/class/net/wlan0/statistics/tx_bytes"
 #define PATH_WLAN_RX        "/sys/class/net/wlan0/statistics/rx_bytes"
-/* V34: radio-aware v2 -- scan multiple mobile data interfaces */
 static long sysfs_read_long(const char *path, long def);
 
 static long rmnet_read_total(const char *direction) {
@@ -85,24 +84,24 @@ typedef struct {
     int     cpu_max_c;
     int     gpu_temp_c;
     int     skin_temp_c;           /* literal shell (front/frame/back) */
-    int     surface_hotspot_c;     /* V37-r7: hottest body-adjacent zone (sys-therm-6 etc) */
-    int     board_temp_c;          /* V38: explicit board_temp for long-gaming heat analysis */
+    int     surface_hotspot_c;     /* hottest body-adjacent zone (sys-therm-6 etc) */
+    int     board_temp_c;          /* explicit board_temp for long-gaming heat analysis */
     int     throttling;     /* real thermal: temp >= threshold */
-    int     soft_clamp;     /* V35: vendor advisory: headroom < soft_pct */
-    int     hard_clamp;     /* V35: vendor actionable: headroom < hard_pct */
-    int     temp_valid;     /* V35: 1=fresh read, 0=stale/skipped */
-    int     temp_age_s;     /* V35: seconds since last real thermal read */
-    /* V37: when temp_valid=0, this records WHY for diagnostic clarity.
+    int     soft_clamp;     /* vendor advisory: headroom < soft_pct */
+    int     hard_clamp;     /* vendor actionable: headroom < hard_pct */
+    int     temp_valid;     /* 1=fresh read, 0=stale/skipped */
+    int     temp_age_s;     /* seconds since last real thermal read */
+    /* when temp_valid=0, this records WHY for diagnostic clarity.
      * Values: "ok", "no_zone", "read_fail", "stale", "raw_too_low", "init", "fb_used" */
     char    temp_invalid_reason[16];
     int     perf_cap_p0;    /* kernel-allowed max freq for policy0 (kHz) */
     int     perf_cap_p6;    /* kernel-allowed max freq for policy6 (kHz) */
     int     headroom_pct;   /* thermal headroom: 100=full, 0=fully throttled */
     int     headroom_valid; /* 1=real read, 0=skipped or failed */
-    char    headroom_invalid_reason[16];  /* V38 RC: "ok","stuck_100","read_fail","no_iface" */
-    int     used_fallback;  /* V38 RC: 1 if this tick used fallback CPU zone instead of primary */
-    int     fallback_just_flipped; /* V38 RC: 1 for one tick when used_fallback state flips */
-    /* V39: GPU vendor thermal cap (KGSL pwrlevel). Larger value = lower freq.
+    char    headroom_invalid_reason[16];  /* "ok","stuck_100","read_fail","no_iface" */
+    int     used_fallback;  /* 1 if this tick used fallback CPU zone instead of primary */
+    int     fallback_just_flipped; /* 1 for one tick when used_fallback state flips */
+    /* GPU vendor thermal cap (KGSL pwrlevel). Larger value = lower freq.
      * 0/-1 = unavailable. Used as backstop signal for soft_clamp when
      * msm_performance is dead. */
     int     gpu_thermal_pwrlevel;
@@ -113,7 +112,7 @@ typedef struct {
     int     screen_on;
     long    wlan_tx_bps;
     long    wlan_rx_bps;
-    /* V34: radio-aware -- mobile data activity */
+    /* radio-aware -- mobile data activity */
     long    rmnet_tx_bps;
     long    rmnet_rx_bps;
 } asb_misc_t;
@@ -156,7 +155,7 @@ static inline int sysfs_read_str(const char *path, char *out, int maxlen) {
     close(fd);
     if (n > 0) {
         out[n] = '\0';
-        /* V37-r7 fix: strip trailing newline/CR/space. sysfs text nodes almost
+        /* strip trailing newline/CR/space. sysfs text nodes almost
          * always end with '\n' which breaks JSON embedding downstream. */
         while (n > 0 && (out[n-1] == '\n' || out[n-1] == '\r' || out[n-1] == ' ')) {
             out[--n] = '\0';
@@ -314,28 +313,13 @@ static void metrics_read_cpu(asb_cpu_t *c) {
 
 static int g_thermal_cpu_zone     = -1;
 static int g_thermal_skin_zone    = -1;  /* literal shell_front/frame/back only */
-static int g_thermal_surface_zone = -1;  /* V37-r7: hottest body-adjacent zone (sys-therm-6 etc) */
-/* V38: board_temp zone tracked separately for surface_hotspot = max(sys-therm-6, board_temp).
- * sys-therm-6 on OP15 reads nearly static 40C, while board_temp actually rises under load
- * (up to 47-50C in heavy gaming), making the composite value far more informative. */
+static int g_thermal_surface_zone = -1;  /* hottest body-adjacent zone (sys-therm-6 etc) */
 static int g_thermal_board_zone  = -1;
-/* V38: fallback CPU zone for runtime re-binding if primary (socd) goes rogue.
- * Populated during thermal_discover() with the best non-socd cpu sensor
- * (cpu-1-1-*, cpu-0-5-*, cpullc-0-* in that order). */
 static int g_thermal_cpu_fallback_zone = -1;
 static char g_thermal_cpu_fallback_type[64] = "";
 static char g_thermal_cpu_type[64] = "";
 static char g_thermal_cpu_reason[256] = "uninitialized";
 
-/* V33: priority-based thermal discovery with V34 sensor reliability layer.
- * After finding a candidate, validate it with a real read.
- * Dead sensors (0, negative, >120C, flat 95000 mC) are rejected. */
-/* V37-r7: unified dual-format normalization.
- * Most thermal_zone/temp sysfs nodes return millidegrees (e.g. 40500 = 40.5C),
- * but some sensors on certain SoCs return raw Celsius directly (e.g. socd on
- * OP15 returns 74). Heuristic: values > 200 are almost certainly millidegrees
- * (raw Celsius above 200C would mean the silicon is literally on fire).
- * Everything below 200 is treated as already-normalized Celsius. */
 static inline int thermal_raw_to_c(int raw) {
     if (raw <= 0) return 0;
     return (raw > 200) ? (raw / 1000) : raw;
@@ -360,24 +344,7 @@ static void thermal_discover(void) {
     int best_cpu_prio = 99;
     int best_skin_prio = 99;
     int best_surface_prio = 99;
-
-    /* V38 RC9: preserve already-validated CPU zone across rescans.
-     *
-     * Rescans fire every 60s as long as skin_zone is -1 (SM8850 has no shell
-     * sensors, so skin_zone stays -1 forever, meaning rescan runs forever).
-     * Previously rescan blindly reset g_thermal_cpu_zone and re-discovered
-     * from scratch. During startup, socd read nonsense (34C vs peer 102C) so
-     * the rejection gate fired and we bound to cpu-1-1-0. But 60s later on
-     * rescan, socd happened to be reading a plausible value, got picked as
-     * priority-1 primary, rejection gate didn't trigger (cross-check passed
-     * at that moment), and stuck for the rest of the session even though
-     * socd later returned to reporting raw=0.
-     *
-     * Fix: only clear CPU-related globals if we currently don't have a valid
-     * bound zone. Skin/surface can be re-scanned freely — they don't have
-     * the same "briefly-valid-then-broken" failure mode.
-     */
-    int preserve_cpu = (g_thermal_cpu_zone >= 0 && g_thermal_cpu_type[0] != '\0');
+int preserve_cpu = (g_thermal_cpu_zone >= 0 && g_thermal_cpu_type[0] != '\0');
     if (!preserve_cpu) {
         g_thermal_cpu_zone = -1;
         g_thermal_cpu_type[0] = '\0';
@@ -394,7 +361,7 @@ static void thermal_discover(void) {
     for (int z = 0; z < THERMAL_MAX_ZONES; z++) {
         snprintf(path, sizeof(path), THERMAL_BASE "/thermal_zone%d/type", z);
         if (sysfs_read_str(path, type, sizeof(type)) < 0) continue;
-        /* V37-r7 fix: strip trailing newline. sysfs reads return "socd\n" not "socd",
+        /* strip trailing newline. sysfs reads return "socd\n" not "socd",
          * and the embedded \n later breaks JSON parsing when thermal_cpu_type is
          * emitted into the status payload. */
         {
@@ -403,23 +370,7 @@ static void thermal_discover(void) {
                 type[--_tl] = '\0';
             }
         }
-
-        /* V37.1: OP15-accurate CPU hotspot priority with socd sanity gate.
-         * Confirmed on OnePlus 15 (SM8850 / SD8 Elite Gen5):
-         *   - socd: real die hotspot when calibrated, but on some firmware
-         *     versions reads as raw=5 (essentially garbage). Without a
-         *     sanity gate it would win priority 1 and feed nonsense into
-         *     temp/temp_valid for the entire FSM.
-         *   - cpu-1-1-* (zones 26/27): prime core per-core sensors
-         *   - cpu-0-5-* (zones 15/16): top perf core sensors
-         *   - cpullc-0-* (zones 0/1): little cluster aggregate
-         * V37.1 socd gate: if socd reads <= 10C while real cpu-* sensors
-         * report >= 30C, treat socd as broken on this boot and skip it.
-         * thermal_sensor_validate handles dead/flat sensors generally,
-         * but socd's "looks alive but reports nonsense" failure mode
-         * needs an explicit cross-check.
-         */
-        int cpu_prio = -1;
+int cpu_prio = -1;
         const char *cpu_reason = NULL;
         if (strcmp(type, "socd") == 0) {
             cpu_prio = 1;
@@ -443,7 +394,7 @@ static void thermal_discover(void) {
         }
 
         if (cpu_prio > 0 && cpu_prio <= best_cpu_prio) {
-            /* V38: when same priority (e.g. two cpu-1-1-* sensors), pick the
+            /* when same priority (e.g. two cpu-1-1-* sensors), pick the
              * hotter reading for more stable/honest telemetry between boots. */
             int dominated = 0;
             if (cpu_prio == best_cpu_prio && g_thermal_cpu_zone >= 0) {
@@ -456,7 +407,7 @@ static void thermal_discover(void) {
             }
             if (!dominated) {
             int sensor_ok = thermal_sensor_validate(z);
-            /* V38: first pass — accept socd tentatively if the basic sanity floor
+            /* first pass — accept socd tentatively if the basic sanity floor
              * (c > 10) passes. Cross-reference against peer CPU sensors happens
              * in a second pass after the whole zone table is scanned so we can
              * actually compare values.
@@ -507,7 +458,7 @@ static void thermal_discover(void) {
             }
         }
 
-        /* V37-r7: SURFACE HOTSPOT priority (surface_hotspot_c channel).
+        /* SURFACE HOTSPOT priority (surface_hotspot_c channel).
          * Ghost hotspot -- the hottest general body-adjacent zone, not a
          * literal shell sensor. On OP15 this is sys-therm-6 (40.9C at idle),
          * which is the best proxy for "where the hot spot on the back really
@@ -528,13 +479,13 @@ static void thermal_discover(void) {
                 best_surface_prio = surface_prio;
             }
         }
-        /* V38: track board_temp zone separately for surface_hotspot = max(sys-therm-6, board_temp) */
+        /* track board_temp zone separately for surface_hotspot = max(sys-therm-6, board_temp) */
         if (strcmp(type, "board_temp") == 0 && thermal_sensor_validate(z)) {
             g_thermal_board_zone = z;
         }
     }
 
-    /* V38: two-pass socd cross-reference sanity check.
+    /* two-pass socd cross-reference sanity check.
      *
      * First pass selected socd if it passed the >10C floor. But socd on some
      * OP15 firmwares drifts — it reads plausibly at boot (e.g. 55C) and then
@@ -547,8 +498,7 @@ static void thermal_discover(void) {
      * fall back to the best available cpu-* sensor.
      *
      * Also: always record a fallback zone during the scan so read-time
-     * rejections can re-bind without losing the sensor entirely.
-     */
+     * rejections can re-bind without losing the sensor entirely. */
     {
         int ref_max_c = 0;
         char ref_max_type[64] = "";
@@ -636,14 +586,14 @@ static void thermal_discover(void) {
     }
 }
 
-static time_t g_last_thermal_read_ts = 0;  /* V35: when we last actually read temp */
-static int    g_last_thermal_value = 0;     /* V35: cached last real temp */
-static time_t g_last_thermal_rescan = 0;    /* V37-r6: periodic rescan if skin zone missing */
+static time_t g_last_thermal_read_ts = 0;  /* when we last actually read temp */
+static int    g_last_thermal_value = 0;     /* cached last real temp */
+static time_t g_last_thermal_rescan = 0;    /* periodic rescan if skin zone missing */
 
 static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
     char path[128];
 
-    /* V37-r6: if any of the three thermal zones (cpu / skin / surface) wasn't
+    /* if any of the three thermal zones (cpu / skin / surface) wasn't
      * found at startup (validate failed on a transient read), retry every 60
      * seconds. Cheap -- iterates 128 sysfs files. Only triggers while at least
      * one zone is still -1. V37-r7 polish: include surface channel for full
@@ -681,14 +631,13 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
         int v = sysfs_read_int(path, 0);
         if (v > 0) {
             int c_now = thermal_raw_to_c(v);
-            /* V38: runtime socd drift detection.
+            /* runtime socd drift detection.
              * If the bound zone is socd AND a fallback zone was discovered
              * AND the fallback reads significantly hotter than socd,
              * trust the fallback instead (don't flap: just use it for THIS
              * read, keep socd bound for next cycle — the next cycle will
              * re-check). This prevents socd reporting "20C" during active
-             * use while cpu cores are at 33C from cascading into FSM.
-             */
+             * use while cpu cores are at 33C from cascading into FSM. */
             int used_fallback = 0;
             int fb_c = 0;
             if (strcmp(g_thermal_cpu_type, "socd") == 0 &&
@@ -706,7 +655,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
                     }
                 }
             }
-            /* V38 RC: expose flip detection to governor.c so it can log the
+            /* expose flip detection to governor.c so it can log the
              * transition without needing asb_log linkage from this header. */
             t->used_fallback = used_fallback;
             {
@@ -716,7 +665,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
                 prev_used_fallback = used_fallback;
             }
 
-            /* V37: explicit guard for "looks alive but reports nonsense" sensors
+            /* explicit guard for "looks alive but reports nonsense" sensors
              * like socd on broken firmware. If validate accepted the zone but
              * a live read is now <=10C while the rest of the system is hot,
              * treat as invalid for THIS read but keep the zone bound. */
@@ -779,24 +728,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
             } else {
                 /* Plausible reading — reset the streak */
                 raw_too_low_streak = 0;
-                /* V38 RC6: sensor spike guard.
-                 *
-                 * Real-device logs showed socd (and rarely cpu-1-1-*) reporting
-                 * one-tick spikes like 93C while adjacent sensors sit at 54C
-                 * and previous tick was also ~55C. That is unphysical — real
-                 * CPU core temperature cannot rise 30+C in a single read cycle
-                 * without the rest of the die and board temps moving with it.
-                 *
-                 * Cross-check against the fallback sensor (always available
-                 * whenever we have a bound thermal_cpu_zone on OP15). If our
-                 * primary reads >=25C hotter than fallback AND the jump from
-                 * last tick is >=25C, this is a spike: reject for THIS tick,
-                 * hold last good value, mark reason=spike.
-                 *
-                 * The fallback cross-check prevents false-rejection during
-                 * genuine fast heating (both sensors would rise together).
-                 */
-                int spike_detected = 0;
+int spike_detected = 0;
                 if (g_last_thermal_value > 0 &&
                     c_now >= g_last_thermal_value + 25 &&
                     g_thermal_cpu_fallback_zone >= 0 &&
@@ -825,7 +757,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
                              used_fallback ? "fb_used" : "ok");
                     g_last_thermal_read_ts = time(NULL);
                     g_last_thermal_value = t->cpu_max_c;
-                    /* V35: throttling = ONLY real temperature exceeding threshold */
+                    /* throttling = ONLY real temperature exceeding threshold */
                     if (t->cpu_max_c > g_asb_cfg.thermal_throttle_temp) t->throttling = 1;
                 }
             }
@@ -842,7 +774,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
         snprintf(t->temp_invalid_reason, sizeof(t->temp_invalid_reason), "no_zone");
     }
 
-    /* V35: compute staleness */
+    /* compute staleness */
     if (g_last_thermal_read_ts > 0) {
         t->temp_age_s = (int)(time(NULL) - g_last_thermal_read_ts);
         /* Mark stale if age exceeds configurable threshold */
@@ -859,7 +791,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
         t->skin_temp_c = thermal_raw_to_c(sv);
     }
 
-    /* V38: surface_hotspot = max(sys-therm-6, board_temp).
+    /* surface_hotspot = max(sys-therm-6, board_temp).
      * sys-therm-6 on OP15 reads nearly static 40C even under load.
      * board_temp actually rises (up to 47-50C in heavy gaming) and better
      * reflects heat accumulation across the PCB. Using max() of both gives
@@ -881,7 +813,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
         }
     }
 
-    /* V29: Read kernel-enforced freq caps from msm_performance */
+    /* Read kernel-enforced freq caps from msm_performance */
     if (need_headroom) {
         char buf[256];
         int fd = open("/sys/kernel/msm_performance/parameters/cpu_max_freq",
@@ -906,7 +838,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
                     t->headroom_pct = (int)((long)t->perf_cap_p0 * 100 / hw_max_p0);
                     if (t->headroom_pct > 100) t->headroom_pct = 100;
                     if (t->headroom_pct < 0)   t->headroom_pct = 0;
-                    /* V35: split into soft/hard clamp instead of blunt throttling.
+                    /* split into soft/hard clamp instead of blunt throttling.
                      * soft_clamp = advisory (reduce aggression, no SUSTAINED)
                      * hard_clamp = actionable (can lead to SUSTAINED if confirmed) */
                     int soft_pct = (g_asb_cfg.soft_clamp_headroom_pct > 0)
@@ -917,7 +849,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
                     if (t->headroom_pct < hard_pct) t->hard_clamp = 1;
                     t->headroom_valid = 1;
                     snprintf(t->headroom_invalid_reason, sizeof(t->headroom_invalid_reason), "ok");
-                    /* V38: detect "dead" headroom signal on SoCs like SM8850 where
+                    /* detect "dead" headroom signal on SoCs like SM8850 where
                      * msm_performance always reports max freq → headroom permanently 100%.
                      * If headroom has been 100% for 10+ consecutive reads, downgrade
                      * to headroom_valid=0 (advisory-only) so the FSM doesn't rely on
