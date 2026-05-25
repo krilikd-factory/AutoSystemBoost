@@ -20,6 +20,8 @@ asb_resolve_moddir() {
 }
 MODDIR="$(asb_resolve_moddir)"
 
+mkdir -p /data/adb/asb 2>/dev/null
+
 PROFILE_CORE=""
 for _pc in "$MODDIR/runtime/profile_core.sh" "$MODDIR/common/profile_core.sh"; do
   [ -r "$_pc" ] && { PROFILE_CORE="$_pc"; break; }
@@ -94,11 +96,11 @@ notify_governor() {
 }
 
 quick_return_or_spawn() {
-  _prev="$(cat /data/adb/asb_active_profile 2>/dev/null)"
+  _prev="$(cat /data/adb/asb/active_profile 2>/dev/null)"
   [ -z "$_prev" ] && _prev="unknown"
   echo "$_prev" > "$STATE_DIR/prev_profile" 2>/dev/null || true
   echo "$PROFILE" > "$MODDIR/current_profile" 2>/dev/null || true
-  echo "$PROFILE" > /data/adb/asb_active_profile 2>/dev/null || true
+  echo "$PROFILE" > /data/adb/asb/active_profile 2>/dev/null || true
   notify_governor
   update_desc_now
   spawn_worker
@@ -138,7 +140,7 @@ run_worker() {
     _prev="$(cat "$STATE_DIR/prev_profile" 2>/dev/null)"
     [ -z "$_prev" ] && _prev="unknown"
     _trigger="${PROFILE_FLAG:-user}"
-    printf '%s\t%s -> %s\ttrigger=%s\n' "$_ts" "$_prev" "$PROFILE" "$_trigger" >> /data/adb/asb_profile_switches.log 2>/dev/null
+    printf '%s\t%s -> %s\ttrigger=%s\n' "$_ts" "$_prev" "$PROFILE" "$_trigger" >> /data/adb/asb/profile_switches.log 2>/dev/null
     rm -f "$STATE_DIR/prev_profile" 2>/dev/null || true
   fi
 

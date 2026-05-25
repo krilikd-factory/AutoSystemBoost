@@ -1,5 +1,5 @@
 #!/system/bin/sh
-if [ ! -f /data/adb/asb_debug ] && [ "$(getprop persist.asb.debug 2>/dev/null)" != "1" ]; then
+if [ ! -f /data/adb/asb/debug ] && [ "$(getprop persist.asb.debug 2>/dev/null)" != "1" ]; then
   exec >/dev/null 2>&1
 fi
 MODID="AutoSystemBoost"
@@ -14,6 +14,29 @@ asb_resolve_moddir() {
 }
 MODDIR="$(asb_resolve_moddir)"
 
+mkdir -p /data/adb/asb 2>/dev/null
+for _legacy_pair in \
+    "asb_active_profile:active_profile" \
+    "asb_baseline.txt:baseline.txt" \
+    "asb_profile_switches.log:profile_switches.log" \
+    "asb_user_config:user_config" \
+    "asb_v45_cleanup_done:v45_cleanup_done" \
+    "asb_v46_athena_cleanup_done:v46_athena_cleanup_done" \
+    "asb_vendor_boot_counter:vendor_boot_counter" \
+    "asb_vendor_mounts.log:vendor_mounts.log" \
+    "asb_vendor_overlay_active:vendor_overlay_active" \
+    "asb_recovery_disabled:recovery_disabled" \
+    "asb_recovery_lock:recovery_lock" \
+    "asb_debug:debug"; do
+  _old="${_legacy_pair%:*}"
+  _new="${_legacy_pair#*:}"
+  if [ -e "/data/adb/$_old" ] && [ ! -e "/data/adb/asb/$_new" ]; then
+    mv "/data/adb/$_old" "/data/adb/asb/$_new" 2>/dev/null || true
+  elif [ -e "/data/adb/$_old" ]; then
+    rm -f "/data/adb/$_old" 2>/dev/null || true
+  fi
+done
+
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
 [ -r "$MODDIR/runtime/profile_core.sh" ] && . "$MODDIR/runtime/profile_core.sh"
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
@@ -22,7 +45,7 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 
 asb_load_profile
 
-if [ ! -f /data/adb/asb_v45_cleanup_done ]; then
+if [ ! -f /data/adb/asb/v45_cleanup_done ]; then
   for _stale_p in \
       persist.sys.oplus.athena.reclaim_enable \
       persist.sys.oplus.athena.force_kill \
@@ -34,7 +57,7 @@ if [ ! -f /data/adb/asb_v45_cleanup_done ]; then
       resetprop --delete "$_stale_p" >/dev/null 2>&1 || true
     fi
   done
-  touch /data/adb/asb_v45_cleanup_done 2>/dev/null
+  touch /data/adb/asb/v45_cleanup_done 2>/dev/null
 fi
 
 command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
@@ -153,7 +176,7 @@ asb_migrate_governor_conf
     _t=$((_t + 5))
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
-    echo 0 > /data/adb/asb_vendor_boot_counter 2>/dev/null
+    echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
   fi
 ) >/dev/null 2>&1 &
 

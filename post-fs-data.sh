@@ -5,6 +5,20 @@ MODDIR="${0%/*}"
 
 chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 
+mkdir -p /data/adb/asb 2>/dev/null
+for _legacy_pair in \
+    "asb_vendor_boot_counter:vendor_boot_counter" \
+    "asb_vendor_mounts.log:vendor_mounts.log" \
+    "asb_vendor_overlay_active:vendor_overlay_active"; do
+  _old="${_legacy_pair%:*}"
+  _new="${_legacy_pair#*:}"
+  if [ -e "/data/adb/$_old" ] && [ ! -e "/data/adb/asb/$_new" ]; then
+    mv "/data/adb/$_old" "/data/adb/asb/$_new" 2>/dev/null || true
+  elif [ -e "/data/adb/$_old" ]; then
+    rm -f "/data/adb/$_old" 2>/dev/null || true
+  fi
+done
+
 asb_feature_enabled() {
   _key="$1"
   [ -r "$MODDIR/features.conf" ] || return 0
@@ -76,9 +90,9 @@ asb_feature_enabled BT && setprop persist.vendor.bluetooth.btsnoopenable false 2
 # ASB:BT:END
 # ASB:VENDOR_OVERLAY:BEGIN
 if asb_feature_enabled VENDOR_OVERLAY && [ -d "$MODDIR/system/vendor/etc/perf" ]; then
-  _mounts_log="/data/adb/asb_vendor_mounts.log"
-  _bootflag="/data/adb/asb_vendor_overlay_active"
-  _bootctr="/data/adb/asb_vendor_boot_counter"
+  _mounts_log="/data/adb/asb/vendor_mounts.log"
+  _bootflag="/data/adb/asb/vendor_overlay_active"
+  _bootctr="/data/adb/asb/vendor_boot_counter"
   _cur_ctr=$(cat "$_bootctr" 2>/dev/null || echo 0)
   case "$_cur_ctr" in ''|*[!0-9]*) _cur_ctr=0 ;; esac
   if [ "$_cur_ctr" -ge 3 ]; then

@@ -27,14 +27,15 @@ for _stale_prop in \
   resetprop --delete "$_stale_prop" >/dev/null 2>&1 || true
 done
 
-rm -f /data/adb/asb_baseline.txt 2>/dev/null
-
 rm -rf /dev/.asb 2>/dev/null
 rm -rf /dev/.asb_profile_state 2>/dev/null
-rm -f /data/adb/asb_vendor_mounts.log 2>/dev/null
-rm -f /data/adb/asb_vendor_overlay_active 2>/dev/null
-rm -f /data/adb/asb_vendor_boot_counter 2>/dev/null
-rm -f /data/adb/asb_active_profile 2>/dev/null
-rm -f /data/adb/asb_user_config 2>/dev/null
-rm -f /data/adb/asb_debug 2>/dev/null
-rm -f /data/adb/asb_v45_cleanup_done 2>/dev/null
+
+rm -rf /data/adb/asb 2>/dev/null
+
+for _legacy in asb_active_profile asb_baseline.txt asb_profile_switches.log \
+               asb_user_config asb_v45_cleanup_done asb_v46_athena_cleanup_done \
+               asb_vendor_boot_counter asb_vendor_mounts.log \
+               asb_vendor_overlay_active asb_recovery_disabled \
+               asb_recovery_lock asb_debug; do
+  rm -f "/data/adb/$_legacy" 2>/dev/null
+done
