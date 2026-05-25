@@ -5,8 +5,8 @@
   _reconcile_fast=3
   _last_wifi_check=0
   _drift_streak=0
-  _lease_remaining=0           # ticks left in current lease window
-  _lease_delays="2 4 14 40"    # additive delays — sum ≈ 60s probation
+  _lease_remaining=0
+  _lease_delays="2 4 14 40"
   _lease_last_reassert_ts=0
   while true; do
     if [ "$_lease_remaining" -gt 0 ]; then
@@ -25,7 +25,7 @@
       [ "$_rec_scr" -eq 1 ] && sleep 120 || {
         _rec_prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"
         if [ "$_rec_prof" = "battery" ]; then
-          sleep 600  # 10min — quiet battery night, minimal reconcile
+          sleep 600
         else
           sleep 180
         fi
