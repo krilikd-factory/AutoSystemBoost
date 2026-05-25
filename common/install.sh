@@ -529,8 +529,14 @@ ASB_BG_TRIM=false
 asb_install_prebuilt_governor
 asb_big_banner
 
-ASB_USER_CFG="/data/adb/asb_user_config"
+ASB_USER_CFG="/data/adb/asb/user_config"
+ASB_USER_CFG_LEGACY="/data/adb/asb_user_config"
 ASB_CFG_USED_SAVED=0
+
+if [ -f "$ASB_USER_CFG_LEGACY" ] && [ ! -f "$ASB_USER_CFG" ]; then
+  mkdir -p "$(dirname "$ASB_USER_CFG")" 2>/dev/null || true
+  mv "$ASB_USER_CFG_LEGACY" "$ASB_USER_CFG" 2>/dev/null || true
+fi
 
 asb_apply_saved_config() {
   [ -f "$ASB_USER_CFG" ] || return 1
@@ -650,8 +656,8 @@ BG_TRIM=$([ "$ASB_BG_TRIM" = "true" ] && echo 1 || echo 0)
 VENDOR_OVERLAY=1
 EOF
 
-echo 0 > "/data/adb/asb_vendor_boot_counter" 2>/dev/null
-rm -f "/data/adb/asb_vendor_overlay_active" 2>/dev/null
+echo 0 > "/data/adb/asb/vendor_boot_counter" 2>/dev/null
+rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
 
   for module in $MODPATH/system
   do
