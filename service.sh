@@ -1,7 +1,4 @@
 #!/system/bin/sh
-# V44: debug-aware output redirect. Create /data/adb/asb_debug or set
-# persist.asb.debug=1 to see early-boot stdout/stderr in KSU/Magisk logs.
-# Without flag, stdout/stderr go to /dev/null to keep boot quiet.
 if [ ! -f /data/adb/asb_debug ] && [ "$(getprop persist.asb.debug 2>/dev/null)" != "1" ]; then
   exec >/dev/null 2>&1
 fi
@@ -25,16 +22,6 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 
 asb_load_profile
 
-# V45: one-shot cleanup for users upgrading from V44 that had problematic
-# props set. Two issues being cleaned:
-#
-# 1. Athena/COSA persist props that caused system_server deadlock on
-#    OnePlus Ace 5 (SM8635 + OxygenOS 16) — V44 set these globally.
-# 2. Audio widening props that pushed stereo image to sides and weakened
-#    center channel — user-reported on V44.
-#
-# resetprop --delete removes them from /data/property, restoring vendor defaults.
-# Marker file prevents repeated work.
 if [ ! -f /data/adb/asb_v45_cleanup_done ]; then
   for _stale_p in \
       persist.sys.oplus.athena.reclaim_enable \
@@ -50,12 +37,6 @@ if [ ! -f /data/adb/asb_v45_cleanup_done ]; then
   touch /data/adb/asb_v45_cleanup_done 2>/dev/null
 fi
 
-# V45 fix: write module.prop description immediately at boot so the KSU/Magisk
-# manager card shows the active profile from the start. Without this, description
-# stays at install-time default ("balanced") until the reconcile loop fires a
-# profile-change event — which never happens if profile didn't change since last
-# boot (the common case for daily users). asb_update_desc is defined in
-# runtime/profile_core.sh; sourced above on line 21.
 command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
 
 asb_migrate_governor_conf() {
@@ -135,10 +116,6 @@ asb_migrate_governor_conf
   until [ "$(getprop sys.boot_completed)" = "1" ]; do
     sleep 5
   done
-  # V44: Soter repair is now opt-in (features.conf:SOTER_REPAIR=0 by default).
-  # Removed destructive `pm clear com.tencent.soter.soterserver` from V43 — it
-  # wiped user data of the Soter app on every boot. Now uses 3 retries with
-  # exponential back-off and stops once service is running.
   asb_feature_enabled SOTER_REPAIR || exit 0
   _soter_state="$(getprop init.svc.vendor.soter 2>/dev/null)"
   if [ -z "$_soter_state" ]; then
@@ -833,26 +810,12 @@ asb_feature_enabled GPS && apply_gps_hygiene
 # ASB:GPS:END
 # ASB:AUDIO:BEGIN
 apply_audio_runtime() {
-  # V45 — VoIP-safe core (always applied when AUDIO=1).
-  # Conservative: only props that don't conflict with TWS+VoIP routing AND
-  # don't alter stereo balance.
-  #
-  # V45 fix (user-reported): removed `audio.matrix.limiter.enable=false`
-  # and `vendor.audio.matrix.limiter.enable=false`. Matrix limiter is on by
-  # default in Qualcomm audio HAL for a reason — it balances L/R/Center
-  # channels and prevents stereo widening that pushes content to sides while
-  # weakening center. User report: "улучшалка аудио звук прям сильно в сайд
-  # уводит, в центре слабо все начинает играть". The matrix limiter was the
-  # cause. Removed entirely — Qualcomm default behaviour restored.
   asb_persist_safe persist.audio.hifi.int_codec true
   asb_persist_safe persist.vendor.audio.hifi.int_codec true
   setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
   asb_persist_safe persist.vendor.audio.aec_ref.enable false
   setprop vendor.audio.feature.aec_ref.enable false 2>/dev/null || true
 
-  # V44 — aggressive audio enhancements. Opt-in via governor.conf:AUDIO_AGGRESSIVE=1.
-  # WARNING: known to cause issues with TWS earbuds + VoIP on some devices.
-  # Recommended only if you do NOT use Bluetooth earbuds for calls.
   if [ "${AUDIO_AGGRESSIVE:-0}" = "1" ]; then
     setprop ro.audio.hifi true 2>/dev/null || true
     setprop ro.vendor.audio.hifi true 2>/dev/null || true
@@ -963,9 +926,6 @@ asb_bg_trim_pkg() {
   local _pkg="$1" _level="$2"
   asb_bg_trim_is_top "$_pkg" && return 0
   local _pids
-  # V44: real process discovery — pidof only matches exact name, missing
-  # :remote / :push / webview / custom multiprocess names. Use ps to find
-  # all processes whose name is "<pkg>" or starts with "<pkg>:".
   _pids=$(pidof "$_pkg" 2>/dev/null)
   _pids="$_pids $(ps -A -o PID,NAME 2>/dev/null | awk -v p="$_pkg" \
     '$2==p || index($2, p":")==1 {print $1}' | tr '\n' ' ')"
@@ -1016,49 +976,19 @@ asb_bg_trim_apply_memcg() {
 }
 
 asb_bg_trim_oplus_tune() {
-  # V46 — REMOVED Athena/deepthinker persist setprops that previously lived here:
-  #   persist.sys.oplus.athena.reclaim_enable=1
-  #   persist.sys.oplus.athena.force_kill=0
-  #   persist.sys.oplus.athena.limit_count=120
-  #   persist.sys.oplus.deepthinker.reclaim_hint=1
-  #
-  # Reason: on OnePlus Ace 5 (SM8635 Snapdragon 8s Gen 3, OxygenOS 16.0.7.200),
-  # setting `athena.reclaim_enable=1` activates the Athena reclaim daemon which
-  # calls into system_server's CachedAppOptimizer. On this device family, COSA
-  # (ColorOS adaptive auto-tuning) also queries CachedAppOptimizer in parallel.
-  # The two services deadlock — system_server respawns athena_optimize in a
-  # tight loop, hitting 100% CPU on all cores. Reported by user as fully
-  # confirmed reproduction: install → lag, disable module → still lagging
-  # (persist props survive), uninstall + manual cleanup of /data/property → OK.
-  #
-  # OnePlus 15 (SM8850 Elite Gen 5) does NOT have this bug because its Athena
-  # implementation predates the CachedAppOptimizer integration. But since ASB
-  # ships to multiple OnePlus devices, the safe default is to not touch these
-  # props at all. The memcg cgroup work (asb_bg_trim_apply_memcg) covers the
-  # same use case via standard Linux APIs, no vendor daemon involvement.
   :
 }
 
-# V46: GMS wakeup throttle for high-wakeup services. Stays gated behind
-# BG_TRIM=1 + the runtime command checks.
-# NetworkLocationScanner, ALARM_WAKEUP). Uses appops to deny RUN_ANY_IN_BACKGROUND
-# for the receivers — does NOT disable GMS itself (push/Doze stay working).
 asb_bg_trim_gms_wakelock_throttle() {
   has cmd || return 0
-  # Push these to rare bucket so JobScheduler runs them less often
   cmd appops set com.google.android.gms RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1 || true
   cmd appops set com.google.android.gms WAKE_LOCK allow             >/dev/null 2>&1 || true
-  # Throttle specific subcomponents that produce most wakeups
-  # GlanceEventsReportService — At Glance lockscreen widget reporting
   cmd appops set com.google.android.googlequicksearchbox RUN_IN_BACKGROUND ignore >/dev/null 2>&1 || true
-  # Network Location Scanner — GMS location position reporting cadence
   cmd appops set com.google.android.gms PSEUDO_LOCATION_REPORTING ignore >/dev/null 2>&1 || true
-  # Reduce GMS standby footprint without ignoring entirely (active needs to stay)
   am set-standby-bucket com.google.android.gms working_set >/dev/null 2>&1 || true
   am set-standby-bucket com.google.android.googlequicksearchbox rare >/dev/null 2>&1 || true
-  # Reduce passive location reporting interval — through device_config flags
   if command -v asb_settings_put >/dev/null 2>&1; then
-    asb_settings_put global location_background_throttle_interval_ms 1800000   # 30 min
+    asb_settings_put global location_background_throttle_interval_ms 1800000
     asb_settings_put global location_background_throttle_proximity_alert_interval_ms 1800000
   fi
 }
@@ -1076,9 +1006,6 @@ asb_bg_trim_reclaim_once() {
 }
 
 apply_bg_trim_runtime() {
-  # V44: BG_TRIM_LEVEL=safe (default) | aggressive
-  # safe       — pm disable + buckets + memcg + wifi sleep only
-  # aggressive — adds initial reclaim + 6h periodic reclaim on screen-off
   local _bg_level="${BG_TRIM_LEVEL:-safe}"
 
   local _p
@@ -1093,7 +1020,6 @@ apply_bg_trim_runtime() {
   stop vendor.oplus.hardware.cammidasservice-V1-service >/dev/null 2>&1 || true
   stop vendor.oplus.hardware.olc2-V3-service           >/dev/null 2>&1 || true
 
-  # V44: use baseline tracker so uninstall.sh can replay original values.
   if command -v asb_settings_put >/dev/null 2>&1; then
     asb_settings_put global wifi_scan_always_enabled 0
     asb_settings_put global wifi_wakeup_enabled 0
@@ -1112,7 +1038,6 @@ apply_bg_trim_runtime() {
 
   asb_log "bg_trim: level=$_bg_level"
 
-  # Aggressive level adds reclaim work
   if [ "$_bg_level" = "aggressive" ]; then
     ( sleep 30; asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
 
@@ -1132,10 +1057,6 @@ asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
 
 # ASB:BG_TRIM:END
 apply_bt_runtime() {
-  # V45 fix: removed `persist.bluetooth.spatial_audio_support=true` from
-  # default BT runtime. Spatial audio on TWS earbuds without proper
-  # head-tracking can produce stereo imbalance similar to the matrix.limiter
-  # issue (wide perception, weak center). Now opt-in via AUDIO_AGGRESSIVE=1.
   asb_persist_safe persist.bluetooth.a2dp_offload.disabled false
   asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled false
   asb_persist_safe persist.bluetooth.a2dp.optional_codecs_enabled 1
@@ -1143,7 +1064,6 @@ apply_bt_runtime() {
   asb_persist_safe persist.vendor.bt.enable.swb true
   asb_persist_safe persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true
   asb_persist_safe persist.vendor.qcom.bluetooth.leaudio.enable true
-  # Spatial audio — opt-in only (can cause stereo imbalance on TWS without head-tracking)
   if [ "${AUDIO_AGGRESSIVE:-0}" = "1" ]; then
     asb_persist_safe persist.bluetooth.spatial_audio_support true
   fi

@@ -1,7 +1,4 @@
 #!/system/bin/sh
-# AutoSystemBoost — action.sh (V44)
-# Triggered from KSU/Magisk action button. Shows current state.
-# V44: no longer overwrites module.prop (was writing every press).
 
 MODDIR="${MODDIR:-${0%/*}}"
 
@@ -44,13 +41,11 @@ else
   _btempCx=0
 fi
 
-# V44: try to read smoothed mA from state JSON if available, fallback to heuristic
 _state_mA=$(grep -oE '"current_now":[-0-9]+' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
 if [ -n "$_state_mA" ] && [ "$_state_mA" -ne 0 ] 2>/dev/null; then
-  # Use absolute value of real current draw
   _real_mA_abs=$(( _state_mA < 0 ? -_state_mA : _state_mA ))
   _on_ma=$_real_mA_abs
-  _off_ma=$(( _real_mA_abs / 8 ))   # rough heuristic for screen-off
+  _off_ma=$(( _real_mA_abs / 8 ))
   _eta_note="(measured)"
 else
   case "$PROFILE" in
@@ -81,7 +76,6 @@ if [ "$_remain_mah" -gt 0 ] 2>/dev/null && [ "$_off_ma" -gt 0 ] 2>/dev/null; the
   _toff_m=$(( _toff_min % 60 ))
 fi
 
-# V44: pull a few live state fields for visibility
 _auto_bat=$(grep -oE '"auto_bat":[01]' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
 _qn_active=$(grep -oE '"qn_active":[01]' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
 
