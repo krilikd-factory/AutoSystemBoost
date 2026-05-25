@@ -319,7 +319,7 @@ static const char *g_pstats_files[3] = {
 };
 #define SESSION_HISTORY_FILE  "/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
 #define SESSION_HISTORY_MAX   10
-#define SESSION_HISTORY_LINE_MAX 1024
+#define SESSION_HISTORY_LINE_MAX 2048
 #define STATUS_JSON_MAX          4096
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
