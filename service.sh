@@ -60,6 +60,15 @@ if [ ! -f /data/adb/asb/v45_cleanup_done ]; then
   touch /data/adb/asb/v45_cleanup_done 2>/dev/null
 fi
 
+# V46 fix: explicitly reset vm.oom_kill_allocating_task to 0 (kernel default)
+# at every boot. V44/V45 set this to 1 which caused false-positive OOM kills
+# of legitimately allocating apps (App Market, WhatsApp). Even though V46
+# removed the setter from apply_vm(), this one-shot ensures immediate effect
+# for users upgrading without waiting for first profile apply.
+if [ -w /proc/sys/vm/oom_kill_allocating_task ]; then
+  echo 0 > /proc/sys/vm/oom_kill_allocating_task 2>/dev/null || true
+fi
+
 command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
 
 asb_migrate_governor_conf() {
@@ -478,7 +487,14 @@ apply_vm() {
   esac
   sysctlw vm.watermark_scale_factor $_P_WMARK
   sysctlw vm.min_free_kbytes $_P_MINFREE
-  sysctlw vm.oom_kill_allocating_task 1
+  # V46 fix: REMOVED `sysctlw vm.oom_kill_allocating_task 1`.
+  # That setting made kernel kill the task that triggered allocation when OOM
+  # occurs, instead of picking highest oom_score victim. Combined with battery
+  # profile swappiness=200 + minfree=112MB, this caused false-positive OOM kills
+  # of legitimately allocating apps:
+  #   - App Market downloading APK → "недостаточно памяти" error
+  #   - WhatsApp loading chat DB after long idle → cache clear was workaround
+  # Android stock behavior (kill by oom_score) is safer and is now restored.
   if [ "$ASB_PROFILE" = "battery" ]; then
     [ -e /proc/sys/vm/drop_caches ] || true
     [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 1 || true
