@@ -360,6 +360,31 @@ if [ -f "$MODDIR/system.prop" ]; then
   fi
 fi
 
+# V46 check: vm.oom_kill_allocating_task=1 must not be written anywhere
+# in service.sh. This setting caused false-positive OOM kills of legitimately
+# allocating apps (App Market, WhatsApp) on V44/V45 under battery profile
+# memory pressure (swappiness=200 + minfree=112MB).
+if [ -f "$MODDIR/service.sh" ]; then
+  _oom_writes="$(grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -cE "sysctlw[[:space:]]+vm\\.oom_kill_allocating_task[[:space:]]+1|echo[[:space:]]+1[[:space:]]*>.*oom_kill_allocating_task" 2>/dev/null)"
+  if [ "$_oom_writes" -gt 0 ] 2>/dev/null; then
+    err "service.sh sets vm.oom_kill_allocating_task=1 ($_oom_writes occurrences) — V46 regression, causes false-positive OOM kills"
+  else
+    ok "vm.oom_kill_allocating_task not forced to 1 (V46 safe)"
+  fi
+fi
+
+# V46 check: battery profile VM_SWAPPINESS must not exceed 175. V44/V45 had
+# 200 (kernel default is 60) which combined with oom_kill_allocating_task=1
+# caused app kills under normal memory pressure. 175 is the safe ceiling.
+if [ -f "$MODDIR/profiles/battery.sh" ]; then
+  _swap_bat="$(grep -E "^VM_SWAPPINESS=" "$MODDIR/profiles/battery.sh" | cut -d= -f2)"
+  if [ -n "$_swap_bat" ] && [ "$_swap_bat" -gt 175 ] 2>/dev/null; then
+    err "battery profile VM_SWAPPINESS=$_swap_bat exceeds safe ceiling 175 (V46 regression — causes app kills under memory pressure)"
+  else
+    ok "battery profile VM_SWAPPINESS=$_swap_bat within safe range (V46)"
+  fi
+fi
+
 echo
 echo "🏗  Bounds Source-of-Truth (V42)"
 _bc="$MODDIR/config/profile_bounds.conf"
