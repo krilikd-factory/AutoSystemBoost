@@ -92,7 +92,7 @@ if [ -r /dev/.asb/recovery.json ]; then
 fi
 
 echo ""
-echo "  ASB V46 · ${PROFILE}"
+echo "  ASB V47 · ${PROFILE}"
 if [ "$_rec_disabled" = "1" ]; then
   echo "  ⚠️  SAFE MODE  : governor disabled (${_rec_reason:-recovery})"
 elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
