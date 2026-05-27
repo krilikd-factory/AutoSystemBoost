@@ -385,6 +385,25 @@ if [ -f "$MODDIR/profiles/battery.sh" ]; then
   fi
 fi
 
+if [ -f "$MODDIR/src/asb_governor.c" ]; then
+  if grep -qE "^#define BAT_TRUST_NOISY[[:space:]]" "$MODDIR/src/asb_governor.c"; then
+    ok "BAT_TRUST_NOISY constant present (V47 active)"
+  else
+    err "BAT_TRUST_NOISY constant missing from asb_governor.c (V47 regression)"
+  fi
+  _intent_names_count="$(grep -E "^static const char \*intent_names\[\]" "$MODDIR/src/asb_governor.c" | grep -oE '"[^"]+"' | wc -l)"
+  if [ "$_intent_names_count" = "7" ]; then
+    ok "intent_names[] has 7 entries (V47 IDLE_WARM present)"
+  else
+    err "intent_names[] has $_intent_names_count entries (V47 expects 7 including idle_warm)"
+  fi
+  if grep -qE "asb_log_critical|asb_log_persist" "$MODDIR/src/asb_governor.c"; then
+    ok "persistent log mirror present (V47)"
+  else
+    err "persistent log mirror missing (V47 regression)"
+  fi
+fi
+
 echo
 echo "🏗  Bounds Source-of-Truth (V42)"
 _bc="$MODDIR/config/profile_bounds.conf"

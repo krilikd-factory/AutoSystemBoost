@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-ASB V46 Field Report — aggregate analysis of session_history.jsonl.
+ASB V47 Field Report — aggregate analysis of session_history.jsonl.
 
-Focuses on V46 schema v10 fields collected for V47 decisions:
+Focuses on V47 schema v11 fields collected for V47 decisions:
   - would_be_noisy candidate flag (P1a)
   - adv_score / adv_active / adv_would_bias / per-zone votes (P2)
   - recovery.json state (P0)
@@ -30,7 +30,7 @@ from datetime import datetime
 DEFAULT_INPUT = "/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
 DEFAULT_RECOVERY = "/dev/.asb/recovery.json"
 
-TRUST_LABELS = {0: "DIRTY", 1: "PARTIAL", 2: "CLEAN", -1: "no-data"}
+TRUST_LABELS = {0: "DIRTY", 1: "PARTIAL", 2: "CLEAN", 3: "NOISY", -1: "no-data"}
 INTENT_NAMES = ["benchmark", "gaming", "sleep_idle", "mixed", "video", "unknown"]
 
 
@@ -334,6 +334,17 @@ def advisory_summary(sessions):
     out["would_bias_exit_count"] = would_bias_count
     out["would_bias_exit_pct"] = pct(would_bias_count, len(sessions_with_adv))
 
+    mode_a_total = sum(s.get("bias_mode_a_count", 0) for s in sessions_with_adv)
+    mode_b_total = sum(s.get("bias_mode_b_count", 0) for s in sessions_with_adv)
+    mode_a_sessions = sum(1 for s in sessions_with_adv if s.get("bias_mode_a_count", 0) > 0)
+    mode_b_sessions = sum(1 for s in sessions_with_adv if s.get("bias_mode_b_count", 0) > 0)
+    out["bias_mode_a_total_fires"] = mode_a_total
+    out["bias_mode_b_total_fires"] = mode_b_total
+    out["bias_mode_a_session_count"] = mode_a_sessions
+    out["bias_mode_b_session_count"] = mode_b_sessions
+    out["bias_mode_a_session_pct"] = pct(mode_a_sessions, len(sessions_with_adv))
+    out["bias_mode_b_session_pct"] = pct(mode_b_sessions, len(sessions_with_adv))
+
     scores = [s.get("adv_score", 0) for s in sessions_with_adv]
     nonzero = [v for v in scores if v > 0]
     out["adv_score_nonzero_pct"] = pct(len(nonzero), len(scores))
@@ -362,7 +373,7 @@ def format_report(agg, recovery, show_bands=True):
     push = lines.append
 
     push("=" * 72)
-    push("  ASB V46 Field Report")
+    push("  ASB V47 Field Report")
     push("=" * 72)
     push(f"  Generated:           {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     push(f"  Total sessions:      {agg['total_sessions']}")
@@ -529,9 +540,11 @@ def _format_thermal(p, push):
 def _format_advisory(p, push):
     if "adv_active_count" not in p:
         return
-    push("  V46 P2 Multi-sensor advisory (observe-only):")
+    push("  Multi-sensor advisory (observe-only):")
     push(f"    adv_active sessions:    {p['adv_active_count']} ({fmt_n(p.get('adv_active_pct', 0))}%)")
-    push(f"    would_bias_exit:        {p.get('would_bias_exit_count', 0)} ({fmt_n(p.get('would_bias_exit_pct', 0))}%)")
+    push(f"    V46 would_bias (perf+gaming): {p.get('would_bias_exit_count', 0)} ({fmt_n(p.get('would_bias_exit_pct', 0))}%)")
+    push(f"    V47 Mode A (adv>=70 + gaming>5m): {p.get('bias_mode_a_session_count', 0)} sessions, {p.get('bias_mode_a_total_fires', 0)} total fires")
+    push(f"    V47 Mode B (skin+surface hot, cpu cool): {p.get('bias_mode_b_session_count', 0)} sessions, {p.get('bias_mode_b_total_fires', 0)} total fires")
     push(f"    Sessions with adv>0:    {fmt_n(p.get('adv_score_nonzero_pct', 0))}%")
     if p.get("adv_score_avg_nonzero") is not None:
         push(f"    Score avg (nonzero):    {fmt_n(p['adv_score_avg_nonzero'])}")
@@ -548,7 +561,7 @@ def _format_advisory(p, push):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="ASB V46 Field Report — aggregates session_history.jsonl",
+        description="ASB Field Report — aggregates session_history.jsonl",
     )
     ap.add_argument("--input", "-i", default=DEFAULT_INPUT,
                     help=f"Path to session_history.jsonl (default: {DEFAULT_INPUT})")
