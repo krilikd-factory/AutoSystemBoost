@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Current_Release-V46-16a34a?style=for-the-badge" alt="V46">
   <img src="https://img.shields.io/badge/Previous-V45-6b7280?style=for-the-badge" alt="V45">
-  <img src="https://img.shields.io/badge/versionCode-464-0ea5e9?style=for-the-badge" alt="versionCode">
+  <img src="https://img.shields.io/badge/versionCode-460-0ea5e9?style=for-the-badge" alt="versionCode">
 </p>
 
 > **V46 is the "make V45 mature" release. One critical user-reported memory bug is fixed (App Market + WhatsApp "недостаточно памяти" despite plenty of free RAM), and three reliability investments are added in observe-only mode following ChatGPT's framework evaluation: tiered crash recovery (P0), NOISY trust tier candidate logging (P1a), and multi-sensor hot-guard scoring (P2). The observe-only P1/P2 work collects field data so V47 can decide behavioral activation based on real distribution, not guesswork. Field validation over 5.7 hours of clean operation confirmed the OOM fix works (zero crashes, zero false-positive kills) and that the NOISY criteria capture ~12.5% of mixed-use sessions — right in the target range.**
@@ -217,9 +217,3 @@ Field report tool:                        tools/asb_field_report.{sh,py}
 - **NOISY tier behavioral change** — collecting data first (P1b deferred to V47)
 - **Multi-sensor hot guard behavioral change** — collecting data first (P2 decision deferred to V47)
 - **All V45 critical bug fixes preserved bit-exact:** description boot-init, `/data/local/tmp` wildcard removal, Athena/COSA persist cleanup, audio widening props removal, audio matrix limiter removal
-
-### 🙏 Credits
-
-- **Memory bug reporter** — "При попытке обновить приложение через App Market вылетает ошибка что недостаточно памяти" was the V46 motivator. Three root causes (`oom_kill_allocating_task`, `swappiness=200`, `minfree=112MB`) wouldn't have been found without the specific symptom report (App Market + WhatsApp cache clear was the diagnostic key — it pointed to working-set restore from swap, which led to the swappiness analysis).
-- **ChatGPT framework evaluation** — for the principle *"V46 не должен быть умнее, V46 должен быть умнее ровно там где это снижает ошибки"*. This phrasing crystallized the right scope: three reliability investments, all observe-only first, no new headline features.
-- **Field validation user** — 5.7 hours of post-fix telemetry confirmed OOM bug gone, NOISY tier captures 12.5% of sessions (target range), multi-sensor `adv_would_bias` criteria need widening for V47 (caught by observe-only mode before activating dead logic).
