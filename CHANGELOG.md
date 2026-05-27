@@ -1,218 +1,225 @@
 # AutoSystemBoost — Changelog
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Current_Release-V45-16a34a?style=for-the-badge" alt="V45">
-  <img src="https://img.shields.io/badge/Previous-V44-6b7280?style=for-the-badge" alt="V44">
-  <img src="https://img.shields.io/badge/versionCode-450-0ea5e9?style=for-the-badge" alt="versionCode">
+  <img src="https://img.shields.io/badge/Current_Release-V46-16a34a?style=for-the-badge" alt="V46">
+  <img src="https://img.shields.io/badge/Previous-V45-6b7280?style=for-the-badge" alt="V45">
+  <img src="https://img.shields.io/badge/versionCode-464-0ea5e9?style=for-the-badge" alt="versionCode">
 </p>
+
+> **V46 is the "make V45 mature" release. One critical user-reported memory bug is fixed (App Market + WhatsApp "недостаточно памяти" despite plenty of free RAM), and three reliability investments are added in observe-only mode following ChatGPT's framework evaluation: tiered crash recovery (P0), NOISY trust tier candidate logging (P1a), and multi-sensor hot-guard scoring (P2). The observe-only P1/P2 work collects field data so V47 can decide behavioral activation based on real distribution, not guesswork. Field validation over 5.7 hours of clean operation confirmed the OOM fix works (zero crashes, zero false-positive kills) and that the NOISY criteria capture ~12.5% of mixed-use sessions — right in the target range.**
 
 ---
 
-## ⚡ V45 — Critical Bug Fixes + Field-Tuned Profiles
+## ⚡ V46 — Memory OOM Fix + Reliability Hardening
 
-### 🐛 Critical bug #1 — Module card description stuck on "balanced"
+### 🐛 Critical bug — App Market and WhatsApp "недостаточно памяти"
 
-**Reported by primary user with V44 battery-mixed deploy log.** The KSU/Magisk manager card displayed `status: balanced ⚖️ | active ✅` for an entire 81-minute battery session, despite the FSM correctly running the `battery` profile (verified in snapshots: `"profile":"battery"`, `"cap_source_p0":"shell_overridden_down"`, `"ses_max_temp":58°C`).
+**Reported by primary user:**
 
-A follow-up report described a related race condition: when manually switching from `balanced` to `battery` via WebUI, the card briefly showed `battery` then reverted to `balanced` within seconds — while WebUI itself, `asb status` from termux, and the FSM all correctly showed `battery`.
+> "При попытке обновить приложение через App Market вылетает ошибка что недостаточно памяти, хотя по факту свободной памяти предостаточно. Так же не открывался WhatsApp из-за нехватки памяти, помогла отчистка кэша приложения WhatsApp."
 
-**Root cause:** two layered issues.
+**Root cause:** three settings in V45 combined to create false-positive OOM kills:
 
-First, `service.sh` never called `asb_update_desc` during boot. The function is defined in `runtime/profile_core.sh` and sourced at service.sh:21, but was invoked only by `apply_profile.sh` worker (on user-initiated switch), `runtime/asb_reconcile.sh` (only on `profile-change` / `screen-state` / `drift` reasons), and `runtime/profile_core.sh:asb_apply_profile_once` (called by `apply_runtime_profile_now()` which was never invoked from service.sh boot path). So on every reboot where the active profile was the same as last boot — the common case for daily users — description stayed at install-time default `balanced` until the user manually switched profile.
+1. **`vm.oom_kill_allocating_task=1`** (unconditional in `apply_vm()`) — when OOM occurs, kill the **task that triggered the allocation** rather than the highest oom_score victim. This is the opposite of Android's stock behavior. Android default is `0` — kernel picks victim by `oom_score_adj` (background apps go first, foreground apps last). With this flag set, any app that happened to be allocating at the wrong moment got killed even if it had low oom_score.
 
-Second, `asb_update_desc` had **three different implementations** across the codebase (`runtime/profile_core.sh`, `runtime/asb_utils.sh`, `apply_profile.sh`). Two used `$PROFILE` shell variable as the source of truth, one used `cat "$MODDIR/current_profile"`. Because `service.sh` sourced `asb_utils.sh` first and then `profile_core.sh`, the second sourcing **overrode** the first's `asb_update_desc` definition. In the reconcile background subshell, `$PROFILE` could become stale or empty between loop iterations, causing the `*` default case (`balanced`) to fire — overwriting the correct description that a recent profile switch had just written.
+2. **Battery profile `VM_SWAPPINESS=200`** — extreme (kernel default is 60). Aggressively swaps anonymous pages to ZRAM. When user opens an app, kernel must decompress + page back in. Under any concurrent allocation pressure, ZRAM gets bottlenecked.
 
-**Fix:**
+3. **Battery profile `VM_MINFREE=114688` (112 MB) and `VM_WMARK=400`** — reserves a large always-free pool with high watermark scale factor. Even when system has 4-6 GB physically free, kernel treats anything below the reserve as critical pressure.
 
-1. Added explicit `asb_update_desc` call in `service.sh` right after `asb_load_profile`:
+**The failure chain:**
+- App Market downloads APK → needs ~50 MB allocation for buffer
+- Allocation triggers `__alloc_pages_slowpath` because watermark is unhappy (`VM_MINFREE` + `VM_WMARK`)
+- ZRAM is busy decompressing other apps' pages from `swappiness=200`
+- Kernel decides to invoke OOM killer to free memory
+- `oom_kill_allocating_task=1` → **kills App Market** (the task that just allocated)
+- User sees "недостаточно памяти" despite 4+ GB free in `free -h`
 
-   ```sh
-   command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
-   ```
+WhatsApp had the same issue when loading chat database after long idle (when its working set was mostly swapped out). Cache clear "fixed" it because clearing the on-disk DB reduced the working-set restore size.
 
-   Now the module card shows the correct profile from the first second of boot.
+**V46 fix — four changes:**
 
-2. Both `asb_update_desc` definitions in `runtime/profile_core.sh` and `runtime/asb_utils.sh` now read profile from the file (`cat "$MODDIR/current_profile"`) — a single source of truth instead of a shell variable that varies by subshell context. The fallback in `apply_profile.sh` takes the profile as an explicit argument.
+1. **Removed `vm.oom_kill_allocating_task=1`** from `apply_vm()` in `service.sh`. Kernel now uses default behavior (kill by `oom_score`). The line is replaced with a permanent comment explaining why it must never return.
 
-After V45, the card description always matches the FSM-active profile regardless of how the profile was set (boot-time persistence, manual switch via WebUI, action.sh, or auto-battery), and stays correct across reconcile loop iterations.
+2. **Battery profile VM tuning relaxed:**
+   - `VM_SWAPPINESS`: 200 → **150** (still aggressive for battery but not pathological)
+   - `VM_MINFREE`: 114688 → **65536** (112 MB → 64 MB)
+   - `VM_WMARK`: 400 → **150** (less reserved-pool pressure)
 
-### 🐛 Critical bug #2 — Installer wiping `/data/local/tmp` contents
+3. **One-shot cleanup on boot:** `service.sh` now explicitly writes `/proc/sys/vm/oom_kill_allocating_task = 0` every boot. This ensures users upgrading from V45 immediately get the safe default without waiting for VM profile re-apply (which could take seconds during which apps might already be running).
 
-**Reported by user keeping `targetlist.json` in `/data/local/tmp` for another module.** ASB's installer was silently deleting their file on every install/upgrade.
+4. **Lint regression guards added:**
+   - `vm.oom_kill_allocating_task=1` writes in service.sh → lint error
+   - Battery `VM_SWAPPINESS > 175` → lint error
 
-**Root cause:** `common/install.sh` line 1335 (in the LOG category cleanup block):
+**Field validation:** 5.7 hours of post-fix operation, zero OOM kills, zero crashes, zero recovery events. The user-reported symptom is gone.
 
-```sh
-if [ "${ASB_LOG}" = "true" ]; then
-  ...
-  rm -rf /data/local/*trace*/*
-  rm -rf /data/local/*tmp*/*   # ← this line wipes /data/local/tmp/* entirely
-  rm -rf /data/mlog/*
-  ...
-fi
+### 🛡 P0 — Crash Recovery v2 (tiered)
+
+V45's watchdog had basic crash counting (3 fails → safe mode). V46 introduces a **tiered recovery model** with proper observability:
+
+**Level 1 (single fault):**
+- Detect: governor process dead OR `/dev/.asb/state` stale > 120s
+- Action: kill stale governor process, restart binary
+- Telemetry: `recovery_count++`, append to `/dev/.asb/recovery_history.log`
+
+**Level 2 (2nd fault within 5-minute window):**
+- Action: shell fallback applies safe balanced bounds while governor restart attempts continue
+- Telemetry: `recovery_level=2`, governor restart still attempted but with longer cooldown
+
+**Level 3 (3rd fault in same boot session):**
+- Action: give up. Set `ASB_GOV_ENABLED=0`, touch `/data/adb/asb/recovery_disabled` marker, apply shell-fallback safe bounds permanently for this boot
+- Telemetry: `recovery_level=3`, module.prop description shows `⚠️ recovery mode — governor disabled`
+- Next boot: marker is honored, governor stays disabled. User can clear via `rm /data/adb/asb/recovery_disabled` or uninstall+reinstall.
+
+**Lock file mechanism (`/dev/.asb/recovery.lock`)** prevents `runtime/asb_reconcile.sh` from competing with watchdog during recovery operations. Reconcile checks the lock at start of each iteration and yields if held. Stale lock (>60s old) is broken automatically.
+
+**`/dev/.asb/recovery.json` endpoint** (mirrors V44 `conflicts.json` / `learner_state.json` pattern):
+
+```json
+{
+  "recovery_count": 1,
+  "current_level": 1,
+  "last_recovery_ts": 1779820800,
+  "last_recovery_reason": "process_dead",
+  "governor_disabled": 0,
+  "disabled_marker_exists": 0
+}
 ```
 
-`/data/local/tmp` is the standard Android testing and development directory. Users keep all kinds of legitimate files there:
-- Module configs from other Magisk/KSU modules (the reporting user's `targetlist.json`)
-- adb-pushed scripts and binaries
-- Custom configs from other system utilities
-- Test artifacts from rooted-device development workflows
+**Tighter watchdog cadence:** V45 polled every 5 minutes. V46 polls every 60 seconds for faster fault detection. On healthy systems, this adds negligible CPU overhead (one process check + one stat call per minute). On unhealthy systems, recovery happens 5× faster.
 
-ASB had no business deleting that directory. The line was added during early development thinking it was a "log-like" temp directory — that assumption was wrong. The wildcard `/data/local/*tmp*/*` would also have matched any user directory named `tmpcache`, `tmpstore`, etc.
+### 🧪 P1 — BAT_TRUST_NOISY tier (observe-only in V46, behavior in V47)
 
-**Fix:** removed the line entirely. LOG=1 no longer touches `/data/local/tmp` in any form. A comment in `install.sh` now documents why this line must never be re-added.
+V45 had three tiers: `CLEAN`, `PARTIAL`, `DIRTY`. Real-world data showed most users' sessions land in `DIRTY` because mixed daily use has high wake counts and only moderate idle quality. The learner refused to learn from these and stayed stuck in stale state.
 
-**Workaround for users hit before V45:** files in `/data/local/tmp` deleted by previous installs cannot be recovered (no backup was taken). Affected users should reinstall their module configs.
+**V46 — observe-only NOISY classification:**
 
-This was a real data-loss bug that affected real users. The fix is one line removed, but the lesson is bigger — installer cleanup operations need explicit allowlists, not wildcards.
+The C governor now classifies sessions that would qualify for a future `BAT_TRUST_NOISY` tier:
+- `iq` (idle quality) in `[8, 20)`
+- `wph` (wakes per hour) in `[10, 25]`
+- `wake_cycles` in `[12, 45]`
+- `dur >= 1800` (at least 30 min)
+- `bat_total >= 600` (some genuine idle time existed)
 
-### 🐛 Critical bug #3 — Audio enhancement causing stereo widening with weak center
+**Crucially: in V46, the classification only sets a flag (`would_be_noisy`). Learner behavior is unchanged from V45 — sessions still treated as DIRTY.**
 
-**Reported by user:**
+This is by design. We need field data showing the actual distribution of `would_be_noisy` candidates before committing to a behavioral change. If 0% of real sessions qualify, the tier is useless. If 80% qualify, the criteria are too loose.
 
-> "меня еще смутила у тебя улучшалка аудио, она почему-то звук прям сильно в сайд уводит, в центре слабо все начинает играть"
+**Field validation:** 5.7-hour session captured 1 NOISY candidate out of 8 sessions = **12.5% capture rate**. Right in the target range — not too few, not too many.
 
-**Root cause:** three properties were collectively responsible:
+**`tools/asb_field_report.py` and `tools/asb_field_report.sh`** (new in V46) — analyze `session_history.jsonl` to show:
+- Distribution of `would_be_noisy` by profile
+- Histograms of iq/wph/wake/duration
+- Per-zone advisory scores (see P2 below)
+- Recovery counts from `recovery.json`
 
-1. **`audio.matrix.limiter.enable=false` + `vendor.audio.matrix.limiter.enable=false`** in `apply_audio_runtime()` (service.sh) — matrix limiter is the Qualcomm HAL component that balances L/R/Center channels and applies dynamic range compression to keep center channel audible. Disabling it widens the stereo image at the cost of center channel strength — exactly what the user described. The default is enabled for a reason; ASB had no business turning it off.
+Run via `sh tools/asb_field_report.sh` from termux or adb shell. Output is plain text, designed to share in bug reports.
 
-2. **`ro.audio.audiozoom=true`** in `system.prop` AUDIO block — Qualcomm AudioZoom is intentional stereo widening for media playback. It's a vendor enhancement for users who want a wider soundstage, but it's not appropriate as an unconditional default because it shifts the mix away from how mastering engineers intended.
+**V47 plan:** if 2-3 weeks of field data confirm NOISY catches a meaningful slice of real sessions without polluting with noise, V47 will activate the tier with learner weight = 0.10 (vs PARTIAL's 0.25 and CLEAN's 1.0).
 
-3. **`persist.bluetooth.spatial_audio_support=true`** in `apply_bt_runtime()` (BT category) — spatial audio on TWS earbuds requires head-tracking hardware to work correctly. Without it, the spatial processing produces stereo imbalance similar to the matrix.limiter issue: wide perceptual image, weakened phantom center. On Pixel Buds Pro 2 with head-tracking this works; on most other TWS it just sounds wrong.
+### 🌡 P2 — Multi-sensor hot guard (observe-only in V46, decision logic in V47)
 
-**Fix:**
+V45's hot guard fired on CPU zone alone at `perf_hot_guard_temp=66°C`. V46 collects multi-sensor data to inform a future weighted policy:
 
-- **Matrix limiter writes** removed entirely. Qualcomm HAL default (enabled) restored. No code path in V45 disables matrix limiter.
-- **AudioZoom** removed from `system.prop` AUDIO block. Stock vendor default restored.
-- **BT spatial audio** moved from default BT runtime to `AUDIO_AGGRESSIVE=1` opt-in. Users with head-tracking-capable TWS who specifically want spatial audio can enable it; default behaviour leaves BT audio path untouched.
+**Cold baseline (per boot session):** first 30 ticks of governor startup, average skin/surface/board temps are captured as cold baseline. All subsequent zone readings are evaluated as **delta-from-cold** instead of absolute temp. This prevents false advisories when device starts in a warm pocket or warm room.
 
-After V45, the VoIP-safe core in `apply_audio_runtime()` is down to **5 props**: `persist.audio.hifi.int_codec`, `persist.vendor.audio.hifi.int_codec`, `ro.audio.bt.connect.disable.mute`, `persist.vendor.audio.aec_ref.enable`, `vendor.audio.feature.aec_ref.enable`. None alter stereo balance. The aggressive layer (`AUDIO_AGGRESSIVE=1`) keeps the UHQA + hifi flags + offload tuning for users who explicitly want them.
+**Per-zone vote scoring (0-100):**
+- Skin: weight 0.30 — score climbs as `(current - cold_baseline)` exceeds threshold
+- Surface: weight 0.40 — same delta-based scoring
+- Board: weight 0.20 — same delta-based scoring
+- CPU primary remains weight 1.0 (unchanged)
 
-### 🐛 Critical bug #4 — system_server deadlock on OnePlus Ace 5
+**Weighted advisory score:** sum of weighted zone scores. When score > 50 for 20 consecutive ticks (5+ minutes sustained advisory), `thermal_advisory_active=1`.
 
-**Reported by a OnePlus Ace 5 user (SM8635 Snapdragon 8s Gen 3, OxygenOS 16.0.7.200) running ASB V44 under SukiSU.** The reproduction is detailed and unambiguous:
+**`would_bias_exit_gaming` flag** — if advisory active AND CPU is in moderate range (not hot enough for primary hot_guard), this would have biased the FSM to exit GAMING → HEAVY earlier. **In V46 this is only a flag. The FSM does NOT actually bias.** Data collection only.
 
-> "v44 ломает system_server. cacheoptimizer кидает сервер в лок, а Athena и COSA пытаются его запустить, по итогу ЦПУ долбится в 100%. Я еле нашёл виновника — снимал лок через adb, смотрел в htop. Athena, COSA и ещё какой-то сервис долбят system_server, а system_server рушит CachedAppOptimizer. Потом system_server лихорадочно пытается запустить athena_optimize, а он в локе из-за CachedAppOptimizer. В htop процессов system просто дохулиард. По UID — это SukiSU. Снимаю лог с SukiSU — там модуль ASB циклично создаёт процессы system. Отключаю (не удаляю) — лаги на месте. Удаляю и чищу папку через рут — идеально всё работает."
+**Field validation:** `adv_active=1` fired 11 times during the 5.7-hour session (during warm-but-idle device states). **`adv_would_bias=0` always** — current criteria for the bias trigger are too narrow. This is an important finding from observe-only mode: without telemetry we would have activated dead logic in V47. V47 will need to widen the bias criteria.
 
-**Root cause:** `service.sh:asb_bg_trim_oplus_tune()` in V44 set four persistent Oplus properties:
+**Fields added to `session_history.jsonl`:**
+- `adv_score_avg` — average advisory score across session
+- `adv_active_ticks` — total ticks where advisory was active
+- `adv_would_bias_count` — number of times `would_bias_exit_gaming` fired
+- `vote_skin_max`, `vote_surface_max`, `vote_board_max` — peak per-zone scores
 
-```sh
-asb_persist_safe persist.sys.oplus.athena.reclaim_enable 1
-asb_persist_safe persist.sys.oplus.athena.force_kill 0
-asb_persist_safe persist.sys.oplus.athena.limit_count 120
-asb_persist_safe persist.sys.oplus.deepthinker.reclaim_hint 1
-```
+**V47 plan:** widen `would_bias_exit_gaming` criteria based on V46 field data before activating behavioral effect. Current narrow criteria (CPU moderate AND advisory active) never fire in practice.
 
-On OnePlus 15 (SM8850 Snapdragon 8 Elite Gen 5), these activate older Athena code paths that work standalone. On OnePlus Ace 5 with OxygenOS 16.0.7.200, Athena's `reclaim_enable=1` triggers a newer reclaim daemon that calls into `system_server`'s `CachedAppOptimizer` API. Simultaneously, COSA (ColorOS adaptive auto-tuning) also queries `CachedAppOptimizer` for its own memory management. Both services compete for the same kernel cgroup write path, deadlocking `system_server`. The kernel respawns `athena_optimize` in a tight loop — 100% CPU on all eight cores, device unusable.
+### 📁 State namespace migration — `/data/adb/asb/`
 
-**Why disabling the module didn't help the user:** ASB used `asb_persist_safe` (V44 baseline-tracking) to set these. The wrapper writes to `/data/property/persist.sys.oplus.athena.*` files which survive across reboots AND survive module disable. The persist filesystem is independent of which modules are mounted. Only `resetprop --delete` or manual deletion of the files in `/data/property` removes them.
-
-**V45 fix — three layers:**
-
-1. **Removed the offending writes.** `asb_bg_trim_oplus_tune()` is now a no-op stub with a long comment explaining why the props were removed. memcg cgroup writes in `asb_bg_trim_apply_memcg` cover the same memory-reclaim use case via standard Linux APIs — no vendor daemon involvement, works on all OnePlus devices, no deadlock potential.
-
-2. **One-shot cleanup on first boot of V45.** `service.sh` runs a guarded cleanup early in boot, before any background daemons spawn:
-
-   ```sh
-   if [ ! -f /data/adb/asb_v45_cleanup_done ]; then
-     for _stale_p in \
-         persist.sys.oplus.athena.reclaim_enable \
-         persist.sys.oplus.athena.force_kill \
-         persist.sys.oplus.athena.limit_count \
-         persist.sys.oplus.deepthinker.reclaim_hint \
-         ro.audio.audiozoom \
-         persist.bluetooth.spatial_audio_support; do
-       [ -n "$(getprop "$_stale_p" 2>/dev/null)" ] && resetprop --delete "$_stale_p"
-     done
-     touch /data/adb/asb_v45_cleanup_done
-   fi
-   ```
-
-   Marker file prevents repeated work. Loop also catches the V44 audio widening props from bug #3 — single cleanup pass handles both regressions.
-
-3. **Lint regression guards.** Three new rules in `tools/asb_lint.sh`:
-   - Athena/COSA persist writes must not appear in service.sh non-comment lines
-   - matrix.limiter disable / audiozoom enable must not appear in service.sh
-   - matrix.limiter / audiozoom defaults must not appear in system.prop
-
-   If any future version accidentally reintroduces these, lint fails before the build is packaged.
-
-**`uninstall.sh` extension:** even though `asb_baseline_replay` should restore the props via the baseline file, V45's uninstall now also runs `resetprop --delete` on the six problematic props unconditionally — handles edge cases where baseline file was corrupted, deleted, or never captured the original value.
-
-**Lesson:** vendor-specific tweaks (Athena, COSA, vendor.oplus.*) are dangerous across device families. Oplus changes these between ColorOS/OxygenOS releases. Standard Linux APIs (cgroup, settings, sysfs) are safer because they're identical on all Android devices.
-
-### 🛡 Baseline tracking completion — 100% coverage
-
-V44 introduced `runtime/asb_baseline.sh` with `asb_settings_put`, `asb_persist_safe`, and `asb_pm_disable` wrappers that capture original Android values before ASB modifies them, so `uninstall.sh` can replay the originals. V44 migrated 42 `settings put global` calls — that part was complete. But:
-
-- **`setprop persist.*` calls** — 40 of them in service.sh, **none** baseline-tracked in V44
-- **`pm disable-user` calls** — only 2 of 4 baseline-tracked
-
-After V45 migration:
-
-| Category | V44 raw | V44 tracked | V45 raw | V45 tracked |
-|---|---:|---:|---:|---:|
-| `settings put` | 2 (fallback) | 42 | 2 (fallback) | 42 |
-| `setprop persist.*` | 40 | 0 | 0 | 36 |
-| `pm disable-user` | 2 | 2 | 2 (fallback) | 4 |
-
-The 4 remaining raw calls are all inside explicit `if asb_*_safe; then ... else fallback fi` blocks for the edge case where the helper isn't sourced yet (early boot before module helpers load).
-
-**Coverage breakdown of new V45 baseline tracking:**
-
-- **WLAN tuning:** `persist.vendor.wlan.scan_throttle`, `persist.vendor.wlan.powersave` (per-profile values, screen-on vs screen-off variants)
-- **Audio VoIP-safe core:** `persist.audio.hifi.int_codec`, `persist.vendor.audio.hifi.int_codec`, `persist.vendor.audio.aec_ref.enable`
-- **Audio aggressive (when AUDIO_AGGRESSIVE=1):** `persist.audio.hifi`, `persist.vendor.audio.hifi`, `persist.audio.uhqa`, `persist.vendor.audio.uhqa`, `persist.vendor.audio.power.save.setting`
-- **Bluetooth audio stack:** `persist.bluetooth.a2dp_offload.disabled`, `persist.vendor.bluetooth.a2dp_offload.disabled`, `persist.bluetooth.a2dp.optional_codecs_enabled`, `persist.bluetooth.leaudio.enabled`, `persist.vendor.bt.enable.swb`, `persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled`, `persist.vendor.qcom.bluetooth.leaudio.enable`
-- **Camera enhancements:** `persist.camera.tnr.preview`, `persist.camera.tnr.video`, `persist.vendor.camera.hdr.enable`, `persist.vendor.camera.video.hdr.enable`, `persist.vendor.camera.eis.enable`, `persist.vendor.camera.video.4k60.eis.enable`
-- **Log size reduction (LOG category):** `persist.logd.size`, `persist.logd.size.radio`, `persist.logd.size.system`, `persist.logd.size.crash`, `persist.logd.size.kernel`, `persist.logd.size.security`, `persist.logd.statistics`, `persist.logd.logpersistd`
-- **Power management:** `persist.sys.power.fuel.gauge`
-
-**`com.android.traceur`** package disable (CPU category cleanup) — migrated from raw `pm disable-user` to `asb_pm_disable` with fallback. Now after uninstall, traceur is re-enabled if user had it enabled originally.
-
-Final tally: **82 baseline-aware calls, 4 raw calls** (all in explicit fallback branches for early-boot before helper sourced).
-
-### 🌡 Profile tuning — performance hot-guard widened
-
-**Based on V45 performance profile log:**
+V44 and V45 scattered state files across `/data/adb/` with `asb_*` prefix (e.g. `asb_baseline.txt`, `asb_active_profile`, `asb_v45_cleanup_done`). V46 migrates these to a clean `/data/adb/asb/` directory:
 
 ```
-Profile:              performance
-ses_max_temp:         73°C
-ses_t_sustained:      330s (5.5 min in sustained state)
-ses_t_gaming:         145s
-ses_t_heavy:          385s
-cap_source_p0:        shell_overridden_down (ASB still controlling, no vendor_clamp)
-hot_fail:             0
-ses_auto_degraded:    0
+/data/adb/asb/
+├── active_profile
+├── baseline.txt
+├── profile_switches.log
+├── user_config
+├── v45_cleanup_done
+├── vendor_boot_counter
+├── vendor_mounts.log
+├── vendor_overlay_active
+├── recovery_disabled       (V46 marker)
+├── recovery_lock           (V46 lock file)
+└── debug
 ```
 
-The session held thermal line correctly — no vendor PowerHAL override, no hot-fail event. But `perf_hot_guard` triggered SUSTAINED transition at 63°C, exiting HEAVY/GAMING earlier than needed during sustained gaming. Vendor thermal HAL on OnePlus 15 SM8850 doesn't kick in until ~75°C.
+**Migration is automatic and one-shot.** `service.sh` early-boot block moves legacy `/data/adb/asb_*` files to `/data/adb/asb/*` on first V46 boot, then removes leftover legacy paths. No user action needed.
 
-**V45 change:** `perf_hot_guard_temp` raised from 63°C → 66°C in `config/governor.conf.shipped`. Gives performance profile more headroom during sustained gaming while still firing well before vendor HAL thermal clamp. `perf_hot_guard_ticks=2` unchanged.
-
-Battery profile, balanced profile, and all other tunable thresholds bit-exact identical to V44 — no other tuning changes in V45.
+This namespace makes uninstallation cleaner (`rm -rf /data/adb/asb`) and prevents accidental collisions with other modules that scan `/data/adb/` directly.
 
 ### 📋 Verification
 
 ```
-Compile (gcc -Wall -Wextra):  0 warnings, 0 errors
-Shell syntax (32 files):      32/32 clean
-Lint:                         0 errors, 5 warnings (4× RESERVED + 1 informational)
-asb_settings_put calls:       42 (same as V44)
-asb_persist_safe calls:       36 (was 0 in V44)
-asb_pm_disable calls:         4 (was 2 in V44)
-Raw setprop persist.*:        0 (was 40 in V44)
-/data/local/tmp wipe:         REMOVED
-Description boot init:        FIXED
-asb_update_desc unified:      FIXED (single source of truth = current_profile file)
-Athena/COSA persist writes:   0
-Audio widening props:         0
-perf_hot_guard_temp:          66°C (was 63°C in V44)
+Compile (gcc -Wall -Wextra):              0 warnings, 0 errors
+Shell syntax (33 files):                  33/33 clean
+Lint:                                     0 errors, 6 warnings (4× RESERVED + 2 informational)
+Athena/COSA persist writes:               0 (V45 fix preserved)
+Audio widening props:                     0 (V45 fix preserved)
+vm.oom_kill_allocating_task in code:      0 (V46 fix, was 1 in V45)
+Battery VM_SWAPPINESS:                    150 (was 200 in V45)
+Battery VM_MINFREE:                       64 MB (was 112 MB in V45)
+Battery VM_WMARK:                         150 (was 400 in V45)
+Recovery v2:                              tiered L1/L2/L3 with lock + recovery.json
+NOISY tier:                               observe-only data collection (P1a)
+Multi-sensor hot guard:                   observe-only data collection (P2)
+Field report tool:                        tools/asb_field_report.{sh,py}
+/data/adb/asb/ namespace:                 migrated from legacy /data/adb/asb_*
 ```
 
-### 🚫 What V45 deliberately does NOT change
+### 📂 Files changed vs V45 release
 
-- **FSM scheduling logic, profile bounds, battery learner thresholds** — bit-exact identical to V44 apart from `perf_hot_guard_temp`. Reproducibility of V44 baseline behaviour preserved for battery and balanced profiles.
-- **Italian NTP servers and Italian WIFI_COUNTRY=IT default** — kept by author's explicit choice. Both baseline-tracked so uninstall restores user's original values.
-- **WebUI Live overlay layout** — unchanged from V44. Layout was already symmetric and minimal.
+| File | What changed |
+|---|---|
+| `service.sh` | Removed `vm.oom_kill_allocating_task=1`, added one-shot OOM cleanup at boot, V46 tiered recovery hooks, `/data/adb/asb/` state namespace migration, recovery_disabled marker handling |
+| `profiles/battery.sh` | `VM_SWAPPINESS` 200→150, `VM_MINFREE` 112MB→64MB, `VM_WMARK` 400→150 |
+| `runtime/asb_watchdog.sh` | Full rewrite — tiered Level 1/2/3 recovery, lock file, `recovery.json` endpoint, 60s polling cadence |
+| `runtime/asb_reconcile.sh` | Recovery lock yield at start of each loop iteration |
+| `runtime/asb_baseline.sh` | Moved state files from `/data/adb/asb_*` to `/data/adb/asb/*` namespace |
+| `runtime/profile_core.sh` | Minor cleanup of inline comments |
+| `apply_profile.sh` | Minor refinements to description-update path |
+| `src/asb_governor.c` | NOISY classification logic (observe-only), multi-sensor advisory scoring (observe-only), cold baseline capture, `would_bias_exit_gaming` flag, expanded `session_history.jsonl` schema |
+| `src/asb_fsm.h` | New fields: `cold_baseline_skin/surface/board`, `cold_baseline_ticks/sum_*`, `thermal_advisory_score/ticks/active`, `thermal_vote_skin/surface/board`, `would_bias_exit_gaming`, `would_be_noisy` |
+| `src/asb_config.h`, `src/asb_metrics.h`, `src/asb_writer.h` | Internal struct additions for V46 observe-only telemetry |
+| `tools/asb_lint.sh` | V46 regression guards for `oom_kill_allocating_task` and `VM_SWAPPINESS > 175` |
+| `tools/asb_field_report.sh` | **NEW** — wrapper to run field report from termux/adb |
+| `tools/asb_field_report.py` | **NEW** — Python analyzer of `session_history.jsonl` and `recovery.json` |
+| `common/install.sh` | Version bump |
+| `post-fs-data.sh` | State namespace migration support |
+| `uninstall.sh` | Clean `/data/adb/asb/` directory on removal |
+| `webroot/index.html`, `action.sh` | Version label V45→V46 |
+| `module.prop`, `update.json`, `CHANGELOG.md` | Version metadata + this changelog |
+
+### 🚫 What V46 deliberately does NOT change
+
+- **Profile bounds for performance and balanced** — unchanged from V45
+- **FSM scheduling logic** — bit-exact identical apart from new observation hooks
+- **Per-app auto-profile switching** — still deferred (polling daemon would burn battery)
+- **Idle quality predictor** — V47+ territory if ever
+- **NOISY tier behavioral change** — collecting data first (P1b deferred to V47)
+- **Multi-sensor hot guard behavioral change** — collecting data first (P2 decision deferred to V47)
+- **All V45 critical bug fixes preserved bit-exact:** description boot-init, `/data/local/tmp` wildcard removal, Athena/COSA persist cleanup, audio widening props removal, audio matrix limiter removal
+
+### 🙏 Credits
+
+- **Memory bug reporter** — "При попытке обновить приложение через App Market вылетает ошибка что недостаточно памяти" was the V46 motivator. Three root causes (`oom_kill_allocating_task`, `swappiness=200`, `minfree=112MB`) wouldn't have been found without the specific symptom report (App Market + WhatsApp cache clear was the diagnostic key — it pointed to working-set restore from swap, which led to the swappiness analysis).
+- **ChatGPT framework evaluation** — for the principle *"V46 не должен быть умнее, V46 должен быть умнее ровно там где это снижает ошибки"*. This phrasing crystallized the right scope: three reliability investments, all observe-only first, no new headline features.
+- **Field validation user** — 5.7 hours of post-fix telemetry confirmed OOM bug gone, NOISY tier captures 12.5% of sessions (target range), multi-sensor `adv_would_bias` criteria need widening for V47 (caught by observe-only mode before activating dead logic).
