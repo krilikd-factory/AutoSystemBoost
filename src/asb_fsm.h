@@ -311,7 +311,12 @@ typedef struct {
     int             thermal_vote_skin;          /* 0-100 per-zone */
     int             thermal_vote_surface;
     int             thermal_vote_board;
-    int             would_bias_exit_gaming;     /* would have downgraded GAMING->HEAVY */
+    int             would_bias_exit_gaming;     /* V46 criterion: PERFORMANCE + GAMING + advisory (never fires in field) */
+    int             would_bias_mode_a;
+    int             would_bias_mode_b;
+    int             would_bias_mode_a_count;    /* lifetime fire count (session-level) */
+    int             would_bias_mode_b_count;
+    int             adv_score_high_streak;      /* consecutive ticks adv_score>=70 (for mode A) */
     /* Ceiling-Adaptive Reshaping -- governor sets these from observed freq */
     int             virtual_ceiling_p0;
     int             virtual_ceiling_p1;
@@ -492,6 +497,11 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
     fsm->thermal_vote_surface      = 0;
     fsm->thermal_vote_board        = 0;
     fsm->would_bias_exit_gaming    = 0;
+    fsm->would_bias_mode_a         = 0;
+    fsm->would_bias_mode_b         = 0;
+    fsm->would_bias_mode_a_count   = 0;
+    fsm->would_bias_mode_b_count   = 0;
+    fsm->adv_score_high_streak     = 0;
     fsm->virtual_ceiling_p0       = 0;
     fsm->virtual_ceiling_p1       = 0;
 }
@@ -746,6 +756,39 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                     fsm->thermal_advisory_active = 0;
                     fsm->would_bias_exit_gaming = 0;
                 }
+            }
+
+            /* Mode A: sustained high advisory + significant gaming time, any profile.
+             * Captures "device been gaming a while AND secondary zones hot". */
+            if (score >= 70) {
+                fsm->adv_score_high_streak++;
+            } else {
+                fsm->adv_score_high_streak = 0;
+            }
+            int prev_mode_a = fsm->would_bias_mode_a;
+            if (fsm->adv_score_high_streak >= 3 &&
+                fsm->ses_time_gaming_sec > 300) {  /* >5 min gaming this session */
+                fsm->would_bias_mode_a = 1;
+                if (!prev_mode_a) {
+                    fsm->would_bias_mode_a_count++;
+                }
+            } else if (fsm->adv_score_high_streak == 0) {
+                fsm->would_bias_mode_a = 0;
+            }
+
+            /* Mode B: "hot in hand without CPU panic" — skin and surface both warm
+             * but CPU is cool. Captures device-comfort issue from passive heat
+             * (charging, prolonged playback, warm pocket).
+             * cpu_max_c < 60 = CPU is genuinely cool (not just exited from hot state). */
+            int prev_mode_b = fsm->would_bias_mode_b;
+            if (vote_skin >= 75 && vote_surface >= 75 &&
+                m->therm.cpu_max_c > 0 && m->therm.cpu_max_c < 60) {
+                fsm->would_bias_mode_b = 1;
+                if (!prev_mode_b) {
+                    fsm->would_bias_mode_b_count++;
+                }
+            } else if (vote_skin < 60 || vote_surface < 60) {
+                fsm->would_bias_mode_b = 0;
             }
         }
 

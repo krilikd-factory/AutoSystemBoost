@@ -70,6 +70,7 @@ static int g_msm_boost_active = 0;
 #define INTENT_IDLE       3
 #define INTENT_MIXED      4
 #define INTENT_SLEEP_IDLE 5
+#define INTENT_IDLE_WARM  6
 
 static struct {
     uint8_t has_msm_perf;       /* /sys/kernel/msm_performance writable */
@@ -285,6 +286,60 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
 }
 
 static int g_log_writes = 0;
+#define LOG_PERSIST_FILE   "/data/adb/asb/governor_persist.log"
+#define LOG_PERSIST_BACKUP "/data/adb/asb/governor_persist.log.1"
+#define LOG_PERSIST_MAX_BYTES (256 * 1024)
+static FILE *g_logf_persist = NULL;
+static int g_log_persist_writes = 0;
+
+static void asb_log_persist(const char *fmt, va_list ap_in) {
+    if (!g_logf_persist) {
+        g_logf_persist = fopen(LOG_PERSIST_FILE, "a");
+        if (!g_logf_persist) return;
+    }
+    if (++g_log_persist_writes % 50 == 0) {
+        long pos = ftell(g_logf_persist);
+        if (pos > LOG_PERSIST_MAX_BYTES) {
+            fclose(g_logf_persist);
+            rename(LOG_PERSIST_FILE, LOG_PERSIST_BACKUP);
+            g_logf_persist = fopen(LOG_PERSIST_FILE, "w");
+            if (!g_logf_persist) return;
+            fprintf(g_logf_persist, "[rotated] previous: %s\n", LOG_PERSIST_BACKUP);
+        }
+    }
+    char ts[32];
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    strftime(ts, sizeof(ts), "%m-%d %H:%M:%S", tm);
+    fprintf(g_logf_persist, "[%s] ", ts);
+    vfprintf(g_logf_persist, fmt, ap_in);
+    fprintf(g_logf_persist, "\n");
+    fflush(g_logf_persist);
+}
+
+static void asb_log_critical(const char *fmt, ...) __attribute__((format(printf,1,2)));
+static void asb_log_critical(const char *fmt, ...) {
+    /* Write to transient log first */
+    if (g_logf) {
+        char ts[32];
+        time_t t = time(NULL);
+        struct tm *tm = localtime(&t);
+        strftime(ts, sizeof(ts), "%m-%d %H:%M:%S", tm);
+        fprintf(g_logf, "[%s] [crit] ", ts);
+        va_list ap;
+        va_start(ap, fmt);
+        vfprintf(g_logf, fmt, ap);
+        va_end(ap);
+        fprintf(g_logf, "\n");
+        fflush(g_logf);
+    }
+    /* Mirror to persistent log */
+    va_list ap2;
+    va_start(ap2, fmt);
+    asb_log_persist(fmt, ap2);
+    va_end(ap2);
+}
+
 static void asb_log(const char *fmt, ...) {
     if (!g_logf) return;
     if (++g_log_writes % 200 == 0) {
@@ -324,9 +379,9 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-#define ASB_VERSION "V46"
+#define ASB_VERSION "V47"
 
-static const char *intent_names[] = {"unknown","benchmark","long_game","idle","mixed","sleep_idle"};
+static const char *intent_names[] = {"unknown","benchmark","long_game","idle","mixed","sleep_idle","idle_warm"};
 
 static inline const char *sustained_reason_name(int r) {
     switch (r) {
@@ -573,6 +628,10 @@ typedef struct {
     float day_avg_iq;
     float day_avg_wph;
     int   day_count;
+    long  last_tune_ts_fast_idle;
+    long  last_tune_ts_heavy_load;
+    long  last_tune_ts_moderate_load;
+    long  last_tune_ts_light_gpu;
 } asb_persistent_stats_t;
 
 static asb_persistent_stats_t g_pstats_per[3] = {{0},{0},{0}};
@@ -696,7 +755,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         int _pidx = fsm->profile_idx;
         if (_pidx < 0 || _pidx > 2) _pidx = 1;
         fprintf(f, "intent=%s\nhot_fail=%d\ndegrade_at_age=%ld\nprofile_deg=%d\n",
-                (fsm->ses_intent >= 0 && fsm->ses_intent <= 5)
+                (fsm->ses_intent >= 0 && fsm->ses_intent <= 6)
                     ? intent_names[fsm->ses_intent] : "unknown",
                 g_pstats_per[_pidx].hot_fail_count,
                 fsm->ses_degrade_at_age,
@@ -782,6 +841,7 @@ static void write_learner_state_json(const asb_fsm_t *fsm) {
     if (g_v44_last_bat_trust == 0) tier_name = "dirty";
     else if (g_v44_last_bat_trust == 1) tier_name = "partial";
     else if (g_v44_last_bat_trust == 2) tier_name = "clean";
+    else if (g_v44_last_bat_trust == 3) tier_name = "noisy";
 
     int bat_sessions = g_pstats_per[PROFILE_BATTERY].session_count;
     int balanced_sessions = g_pstats_per[PROFILE_BALANCED].session_count;
@@ -978,7 +1038,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
             "\"auto_bat_reason\":\"%s\",\"auto_bat_since\":%lld,"
             "\"adv_score\":%d,\"adv_active\":%d,\"cold_skin\":%d,\"cold_surface\":%d,\"cold_board\":%d,"
             "\"vote_skin\":%d,\"vote_surface\":%d,\"vote_board\":%d,\"would_bias_exit\":%d}",
-            (fsm->ses_intent >= 0 && fsm->ses_intent <= 5)
+            (fsm->ses_intent >= 0 && fsm->ses_intent <= 6)
                 ? intent_names[fsm->ses_intent] : "unknown",
             g_pstats_per[_pidx].hot_fail_count,
             fsm->ses_degrade_at_age,
@@ -1043,18 +1103,27 @@ static void pstats_load_one(const char *path, asb_persistent_stats_t *ps) {
         ps->day_avg_wph = 0;
     if (fscanf(f, ",\"dc\":%d", &ps->day_count) != 1)
         ps->day_count = 0;
+    if (fscanf(f, ",\"tfi\":%ld", &ps->last_tune_ts_fast_idle) != 1)
+        ps->last_tune_ts_fast_idle = 0;
+    if (fscanf(f, ",\"thl\":%ld", &ps->last_tune_ts_heavy_load) != 1)
+        ps->last_tune_ts_heavy_load = 0;
+    if (fscanf(f, ",\"tml\":%ld", &ps->last_tune_ts_moderate_load) != 1)
+        ps->last_tune_ts_moderate_load = 0;
+    if (fscanf(f, ",\"tlg\":%ld", &ps->last_tune_ts_light_gpu) != 1)
+        ps->last_tune_ts_light_gpu = 0;
     fclose(f);
     if (ps->session_count > PERSISTENT_STATS_MAX_SESSIONS)
         ps->session_count = PERSISTENT_STATS_MAX_SESSIONS;
 }
 
 static void pstats_save_one(const char *path, const asb_persistent_stats_t *ps) {
-    char buf[768];
+    char buf[896];
     snprintf(buf, sizeof(buf),
         "{\"count\":%d,\"t2s\":%.1f,\"t2th\":%.1f,\"temp\":%.1f,\"gap\":%.0f,\"eff\":%.1f,"
         "\"deg\":%d,\"hot\":%d,\"deg_age\":%.1f,\"btcd\":%d,\"cstrk\":%d,\"ctype\":%d,\"quar\":%d,"
         "\"iq\":%.1f,\"wph\":%.1f,\"cn\":%d,\"qmin\":%.0f,"
-        "\"niq\":%.1f,\"nwph\":%.1f,\"nc\":%d,\"diq\":%.1f,\"dwph\":%.1f,\"dc\":%d}",
+        "\"niq\":%.1f,\"nwph\":%.1f,\"nc\":%d,\"diq\":%.1f,\"dwph\":%.1f,\"dc\":%d,"
+        "\"tfi\":%ld,\"thl\":%ld,\"tml\":%ld,\"tlg\":%ld}",
             ps->session_count, ps->avg_time_to_first_sus,
             ps->avg_time_to_first_thermal, ps->avg_max_temp,
             ps->avg_gap_p0, ps->avg_efficiency, ps->degrade_count,
@@ -1064,7 +1133,9 @@ static void pstats_save_one(const char *path, const asb_persistent_stats_t *ps) 
             ps->avg_idle_q, ps->avg_wph,
             ps->clean_night_count, ps->avg_quiet_duration_min,
             ps->night_avg_iq, ps->night_avg_wph, ps->night_count,
-            ps->day_avg_iq, ps->day_avg_wph, ps->day_count);
+            ps->day_avg_iq, ps->day_avg_wph, ps->day_count,
+            ps->last_tune_ts_fast_idle, ps->last_tune_ts_heavy_load,
+            ps->last_tune_ts_moderate_load, ps->last_tune_ts_light_gpu);
     if (atomic_write_file(path, buf) != 0)
         asb_log("pstats: atomic write failed for %s", path);
 }
@@ -1078,6 +1149,7 @@ static void persistent_stats_load(void) {
 #define BAT_TRUST_DIRTY   0
 #define BAT_TRUST_PARTIAL 1
 #define BAT_TRUST_CLEAN   2
+#define BAT_TRUST_NOISY   3
 #define BAT_CAUSE_NONE       0
 #define BAT_CAUSE_WAKE_NOISE 1
 #define BAT_CAUSE_SCREEN_ON  2
@@ -1130,13 +1202,16 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
     asb_persistent_stats_t *ps = &g_pstats_per[pidx];
 
     int skip_per_profile = 0;
-    float trust_weight = 1.0f;  /* learning weight -- clean=1.0, partial=0.25, dirty=0 */
+    float trust_weight = 1.0f;  /* learning weight: clean=1.0, partial=0.25, noisy=0.10, dirty=0 */
     if (pidx == PROFILE_BATTERY) {
         int trust = battery_session_trust(fsm);
         /* expose trust + outcome to learner_state.json */
         g_v44_last_bat_trust = trust;
         if (trust == BAT_TRUST_DIRTY) {
             strncpy(g_v44_last_bat_outcome, "dirty", sizeof(g_v44_last_bat_outcome) - 1);
+            g_v44_last_bat_outcome[sizeof(g_v44_last_bat_outcome) - 1] = '\0';
+        } else if (trust == BAT_TRUST_NOISY) {
+            strncpy(g_v44_last_bat_outcome, "noisy", sizeof(g_v44_last_bat_outcome) - 1);
             g_v44_last_bat_outcome[sizeof(g_v44_last_bat_outcome) - 1] = '\0';
         } else if (trust == BAT_TRUST_PARTIAL) {
             strncpy(g_v44_last_bat_outcome, "partial", sizeof(g_v44_last_bat_outcome) - 1);
@@ -1165,6 +1240,9 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
                         "skipping per-profile memory update",
                         trust, _iq, _wph, fsm->bat_wake_cycles);
             }
+        } else if (trust == BAT_TRUST_NOISY) {
+            trust_weight = 0.10f;
+            asb_log("pstats: battery trust=noisy, learning with weight=0.10");
         } else if (trust == BAT_TRUST_PARTIAL) {
             trust_weight = 0.25f;
             asb_log("pstats: battery trust=partial, learning with weight=0.25");
@@ -1665,7 +1743,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     }
 
     fprintf(wf,
-        "{\"v\":10,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
+        "{\"v\":11,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
         "\"gaming\":%d,\"sustained\":%d,\"thermal\":%d,\"unreachable\":%d,"
         "\"t_heavy\":%ld,\"t_gaming\":%ld,\"t_sustained\":%ld,"
         "\"avg_gap\":%d,\"max_temp\":%d,\"skin_max_temp\":%d,\"surface_max_temp\":%d,\"board_max_temp\":%d,\"degraded\":%d,"
@@ -1685,7 +1763,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         "\"bat_trust\":%d,\"bat_outcome\":\"%s\",\"perf_outcome\":\"%s\","
         "\"env\":\"%s\","
         "\"would_be_noisy\":%d,\"noisy_dim\":\"%s\","
-        "\"adv_score\":%d,\"adv_active\":%d,\"adv_vote_skin\":%d,\"adv_vote_surface\":%d,\"adv_vote_board\":%d,\"adv_would_bias\":%d}\n",
+        "\"adv_score\":%d,\"adv_active\":%d,\"adv_vote_skin\":%d,\"adv_vote_surface\":%d,\"adv_vote_board\":%d,\"adv_would_bias\":%d,"
+        "\"bias_mode_a_count\":%d,\"bias_mode_b_count\":%d}\n",
         ts, profile_names[fsm->profile_idx], mode_names[mode_idx], reason,
         fsm->ses_gaming_entries, fsm->ses_sustained_entries,
         fsm->ses_thermal_entries, fsm->ses_unreachable_entries,
@@ -1703,7 +1782,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         fsm->bat_wake_cycles, fsm->bat_time_to_first_deep,
         fsm->bat_wake_screen, fsm->bat_wake_bg, fsm->bat_radio_active_ticks,
         idle_quality, cap_eff, dur,
-        (fsm->ses_intent >= 0 && fsm->ses_intent <= 5)
+        (fsm->ses_intent >= 0 && fsm->ses_intent <= 6)
             ? intent_names[fsm->ses_intent] : "unknown",
         fsm->ses_degrade_at_age,
         ASB_VERSION,
@@ -1717,7 +1796,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         would_be_noisy, noisy_dim,
         fsm->thermal_advisory_score, fsm->thermal_advisory_active,
         fsm->thermal_vote_skin, fsm->thermal_vote_surface, fsm->thermal_vote_board,
-        fsm->would_bias_exit_gaming);
+        fsm->would_bias_exit_gaming,
+        fsm->would_bias_mode_a_count, fsm->would_bias_mode_b_count);
     fflush(wf);
     fsync(fileno(wf));
     fclose(wf);
@@ -1734,6 +1814,8 @@ static int battery_session_trust(const asb_fsm_t *fsm) {
         return BAT_TRUST_PARTIAL;
     if (fsm->ses_intent == INTENT_SLEEP_IDLE)
         return BAT_TRUST_PARTIAL;
+    if (fsm->ses_intent == INTENT_IDLE_WARM)
+        return BAT_TRUST_PARTIAL;
     int iq = 0;
     if (bat_total > 0) {
         iq = (int)(fsm->bat_time_deep_idle_sec * 100 / bat_total);
@@ -1745,6 +1827,10 @@ static int battery_session_trust(const asb_fsm_t *fsm) {
     if (iq >= 12 && iq < 20 && dur >= 600 &&
         wph < 12.0f && fsm->bat_wake_cycles < 24)
         return BAT_TRUST_PARTIAL;
+    if (iq >= 8 && iq < 20 && dur >= 1800 && bat_total > 600 &&
+        wph >= 12.0f && wph <= 25.0f &&
+        fsm->bat_wake_cycles >= 10 && fsm->bat_wake_cycles <= 50)
+        return BAT_TRUST_NOISY;
     if (iq < 20 && dur >= 300)
         return BAT_TRUST_DIRTY;
     if (wph > 10.0f)
@@ -1886,30 +1972,61 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
         int cause = battery_fail_cause(fsm, iq);
         static const char *cause_names[] = {"none","wake_noise","screen_on","no_settle"};
         asb_persistent_stats_t *bps = &g_pstats_per[PROFILE_BATTERY];
+        long _now_ts = time(NULL);
+        const long TUNE_MIN_GAP_S = 2 * 3600;
 
         if (trust == BAT_TRUST_DIRTY) {
             asb_log("self_tune: bat session dirty (too short), skipping");
         } else if (trust == BAT_TRUST_PARTIAL) {
             asb_log("self_tune: bat session partial (sleep/insufficient signal), skipping");
+        } else if (trust == BAT_TRUST_NOISY) {
+            asb_log("self_tune: bat session noisy (mixed-use), defensive tune only");
+            /* Fall through to the cause-driven block via shared logic — */
+            /* Implementation: jump directly to the bad-iq path below */
+            if (iq >= 0 && iq < 40 && bat_total > 300 && cause != BAT_CAUSE_NONE) {
+                asb_log("self_tune: noisy + bad iq=%d cause=%s, tuning by cause",
+                        iq, cause_names[cause]);
+                switch (cause) {
+                case BAT_CAUSE_WAKE_NOISE:
+                    if (g_asb_cfg.bat_fast_idle_s > BAT_FAST_IDLE_FLOOR &&
+                        (_now_ts - bps->last_tune_ts_fast_idle) >= TUNE_MIN_GAP_S) {
+                        int old = g_asb_cfg.bat_fast_idle_s;
+                        g_asb_cfg.bat_fast_idle_s -= 1;
+                        bps->last_tune_ts_fast_idle = _now_ts;
+                        asb_log("self_tune: noisy+wake_noise -> bat_fast_idle %d->%d (cadence-gated)",
+                                old, g_asb_cfg.bat_fast_idle_s);
+                        tuned++;
+                    }
+                    break;
+                default:
+                    /* don't adjust on noisy + non-wake-noise causes */
+                    break;
+                }
+            }
         } else if (bps->bat_tune_cooldown > 0) {
             bps->bat_tune_cooldown--;
             asb_log("self_tune: bat cooldown=%d, skipping tune this session", bps->bat_tune_cooldown + 1);
         } else if (iq >= 70 && bat_total > 300) {
-            if (g_asb_cfg.bat_fast_idle_s < 8) {
+            if (g_asb_cfg.bat_fast_idle_s < 8 &&
+                (_now_ts - bps->last_tune_ts_fast_idle) >= TUNE_MIN_GAP_S) {
                 int old = g_asb_cfg.bat_fast_idle_s;
                 g_asb_cfg.bat_fast_idle_s += 1;
+                bps->last_tune_ts_fast_idle = _now_ts;
                 asb_log("self_tune: bat good iq=%d -> bat_fast_idle %d->%d (relax)",
                         iq, old, g_asb_cfg.bat_fast_idle_s);
                 tuned++;
             }
-            if (g_asb_cfg.bat_heavy_load_enter > 10.0f) {
+            if (g_asb_cfg.bat_heavy_load_enter > 10.0f &&
+                (_now_ts - bps->last_tune_ts_heavy_load) >= TUNE_MIN_GAP_S) {
                 float old = g_asb_cfg.bat_heavy_load_enter;
                 g_asb_cfg.bat_heavy_load_enter -= 1.0f;
+                bps->last_tune_ts_heavy_load = _now_ts;
                 asb_log("self_tune: bat good iq=%d -> bat_heavy_load %.1f->%.1f (relax)",
                         iq, old, g_asb_cfg.bat_heavy_load_enter);
                 tuned++;
             }
-            if (g_asb_cfg.bat_moderate_load_enter > 8.0f) {
+            if (g_asb_cfg.bat_moderate_load_enter > 8.0f &&
+                (_now_ts - bps->last_tune_ts_moderate_load) >= TUNE_MIN_GAP_S) {
                 float old = g_asb_cfg.bat_moderate_load_enter;
                 g_asb_cfg.bat_moderate_load_enter -= 1.0f;
                 asb_log("self_tune: bat good iq=%d -> bat_moderate_load %.1f->%.1f (relax)",
@@ -1922,46 +2039,56 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
                     iq, cause_names[cause]);
             switch (cause) {
             case BAT_CAUSE_WAKE_NOISE:
-                if (g_asb_cfg.bat_fast_idle_s > BAT_FAST_IDLE_FLOOR) {
+                if (g_asb_cfg.bat_fast_idle_s > BAT_FAST_IDLE_FLOOR &&
+                    (_now_ts - bps->last_tune_ts_fast_idle) >= TUNE_MIN_GAP_S) {
                     int old = g_asb_cfg.bat_fast_idle_s;
                     g_asb_cfg.bat_fast_idle_s -= 1;
                     if (g_asb_cfg.bat_fast_idle_s < BAT_FAST_IDLE_FLOOR)
                         g_asb_cfg.bat_fast_idle_s = BAT_FAST_IDLE_FLOOR;
-                    asb_log("self_tune: wake_noise -> bat_fast_idle %d->%d",
+                    bps->last_tune_ts_fast_idle = _now_ts;
+                    asb_log("self_tune: wake_noise -> bat_fast_idle %d->%d (cadence-gated)",
                             old, g_asb_cfg.bat_fast_idle_s);
                     tuned++;
                 }
                 break;
             case BAT_CAUSE_SCREEN_ON:
-                if (g_asb_cfg.bat_moderate_load_enter < 15.0f) {
+                if (g_asb_cfg.bat_moderate_load_enter < 15.0f &&
+                    (_now_ts - bps->last_tune_ts_moderate_load) >= TUNE_MIN_GAP_S) {
                     float old = g_asb_cfg.bat_moderate_load_enter;
                     g_asb_cfg.bat_moderate_load_enter += 1.0f;
-                    asb_log("self_tune: screen_on -> bat_moderate_load %.1f->%.1f",
+                    bps->last_tune_ts_moderate_load = _now_ts;
+                    asb_log("self_tune: screen_on -> bat_moderate_load %.1f->%.1f (cadence-gated)",
                             old, g_asb_cfg.bat_moderate_load_enter);
                     tuned++;
                 }
-                if (g_asb_cfg.bat_heavy_load_enter < 20.0f) {
+                if (g_asb_cfg.bat_heavy_load_enter < 20.0f &&
+                    (_now_ts - bps->last_tune_ts_heavy_load) >= TUNE_MIN_GAP_S) {
                     float old = g_asb_cfg.bat_heavy_load_enter;
                     g_asb_cfg.bat_heavy_load_enter += 1.0f;
-                    asb_log("self_tune: screen_on -> bat_heavy_load %.1f->%.1f",
+                    bps->last_tune_ts_heavy_load = _now_ts;
+                    asb_log("self_tune: screen_on -> bat_heavy_load %.1f->%.1f (cadence-gated)",
                             old, g_asb_cfg.bat_heavy_load_enter);
                     tuned++;
                 }
                 break;
             case BAT_CAUSE_NO_SETTLE:
-                if (g_asb_cfg.bat_fast_idle_s > BAT_FAST_IDLE_FLOOR) {
+                if (g_asb_cfg.bat_fast_idle_s > BAT_FAST_IDLE_FLOOR &&
+                    (_now_ts - bps->last_tune_ts_fast_idle) >= TUNE_MIN_GAP_S) {
                     int old = g_asb_cfg.bat_fast_idle_s;
                     g_asb_cfg.bat_fast_idle_s -= 1;
                     if (g_asb_cfg.bat_fast_idle_s < BAT_FAST_IDLE_FLOOR)
                         g_asb_cfg.bat_fast_idle_s = BAT_FAST_IDLE_FLOOR;
-                    asb_log("self_tune: no_settle -> bat_fast_idle %d->%d",
+                    bps->last_tune_ts_fast_idle = _now_ts;
+                    asb_log("self_tune: no_settle -> bat_fast_idle %d->%d (cadence-gated)",
                             old, g_asb_cfg.bat_fast_idle_s);
                     tuned++;
                 }
-                if (g_asb_cfg.bat_moderate_load_enter < 15.0f) {
+                if (g_asb_cfg.bat_moderate_load_enter < 15.0f &&
+                    (_now_ts - bps->last_tune_ts_moderate_load) >= TUNE_MIN_GAP_S) {
                     float old = g_asb_cfg.bat_moderate_load_enter;
                     g_asb_cfg.bat_moderate_load_enter += 1.0f;
-                    asb_log("self_tune: no_settle -> bat_moderate_load %.1f->%.1f",
+                    bps->last_tune_ts_moderate_load = _now_ts;
+                    asb_log("self_tune: no_settle -> bat_moderate_load %.1f->%.1f (cadence-gated)",
                             old, g_asb_cfg.bat_moderate_load_enter);
                     tuned++;
                 }
@@ -1970,14 +2097,16 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             bps->bat_tune_cooldown = 2;
         }
 
-        if (bat_total > 300 && fsm->bat_time_moderate_sec > 0) {
+        if (bat_total > 300 && fsm->bat_time_moderate_sec > 0 &&
+            (_now_ts - bps->last_tune_ts_light_gpu) >= TUNE_MIN_GAP_S) {
             int mod_pct = (int)(fsm->bat_time_moderate_sec * 100 / bat_total);
             if (mod_pct > 40 && g_asb_cfg.bat_light_idle_gpu > 5) {
                 int old = g_asb_cfg.bat_light_idle_gpu;
                 g_asb_cfg.bat_light_idle_gpu -= 2;
                 if (g_asb_cfg.bat_light_idle_gpu < 5)
                     g_asb_cfg.bat_light_idle_gpu = 5;
-                asb_log("self_tune: bat MODERATE=%d%% -> bat_light_idle_gpu %d->%d",
+                bps->last_tune_ts_light_gpu = _now_ts;
+                asb_log("self_tune: bat MODERATE=%d%% -> bat_light_idle_gpu %d->%d (cadence-gated)",
                         mod_pct, old, g_asb_cfg.bat_light_idle_gpu);
                 tuned++;
             }
@@ -2214,7 +2343,7 @@ int main(int argc, char **argv) {
         atomic_write_file(ENV_FP_FILE, cur_fp);
     }
 
-    asb_log("asb_governor %s started", ASB_VERSION);
+    asb_log_critical("asb_governor %s started (pid %d)", ASB_VERSION, getpid());
     asb_log("persistent stats: sessions=%d avg_t2s=%.0fs avg_temp=%.0fdegC avg_gap=%.0f avg_eff=%.0f degraded=%d",
             g_pstats.session_count, g_pstats.avg_time_to_first_sus,
             g_pstats.avg_max_temp, g_pstats.avg_gap_p0, g_pstats.avg_efficiency,
@@ -2816,7 +2945,7 @@ int main(int argc, char **argv) {
                         session_plan_build(&fsm, metrics.misc.screen_on);
                         session_plan_apply_prearm(&fsm);
                         asb_sock_reply(sockfd, &src, srclen, "ok");
-                        asb_log("profile changed to %d (session reset)", new_idx);
+                        asb_log_critical("profile changed to %d (session reset)", new_idx);
                     } else {
                         asb_sock_reply(sockfd, &src, srclen, "ok:nochange");
                     }
@@ -3371,7 +3500,12 @@ int main(int argc, char **argv) {
                             fsm.bat_time_deep_idle_sec > ses_age / 2) {
                             fsm.ses_intent = INTENT_SLEEP_IDLE;
                         } else if (fsm.bat_time_deep_idle_sec > 60) {
-                            fsm.ses_intent = INTENT_IDLE;
+                            if (fsm.ses_time_sustained_sec > 300 ||
+                                fsm.ses_max_temp >= 65) {
+                                fsm.ses_intent = INTENT_IDLE_WARM;
+                            } else {
+                                fsm.ses_intent = INTENT_IDLE;
+                            }
                         } else {
                             fsm.ses_intent = INTENT_MIXED;
                         }
