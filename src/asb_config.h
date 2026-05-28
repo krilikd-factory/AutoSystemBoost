@@ -19,6 +19,7 @@ typedef struct {
     float perf_sustained_level;
     int   perf_hot_guard_temp;
     int   perf_hot_guard_ticks;
+    int   perf_skin_hot_thresh;
     /* balanced-specific thermal ceiling (softer than perf) */
     int   balanced_sustained_temp_enter;
     int   balanced_sustained_temp_exit;
@@ -132,6 +133,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->perf_sustained_level      = 0.0f;
     c->perf_hot_guard_temp       = 0;
     c->perf_hot_guard_ticks      = 0;
+    c->perf_skin_hot_thresh      = 0;
     c->balanced_sustained_temp_enter = 0;  /* 0 = use global sustained_temp_enter */
     c->balanced_sustained_temp_exit  = 0;  /* 0 = use global sustained_temp_exit */
     c->heavy_gpu_exit      = 25;
@@ -298,6 +300,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     }
     else if (!strcmp(k, "perf_hot_guard_temp")) c->perf_hot_guard_temp = atoi(v);
     else if (!strcmp(k, "perf_hot_guard_ticks")) c->perf_hot_guard_ticks = atoi(v);
+    else if (!strcmp(k, "perf_skin_hot_thresh")) c->perf_skin_hot_thresh = atoi(v);
 }
 
 static inline int asb_config_load_file(const char *path, asb_runtime_config_t *c) {

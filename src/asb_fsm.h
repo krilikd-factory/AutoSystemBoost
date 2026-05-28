@@ -689,6 +689,17 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                 throttle_confirmed = 1;
                 fsm->sustained_reason = 0;
             }
+
+            if (g_asb_cfg.perf_skin_hot_thresh > 0 &&
+                desired >= ASB_STATE_HEAVY &&
+                fsm->thermal_vote_skin >= g_asb_cfg.perf_skin_hot_thresh &&
+                fsm->thermal_vote_surface >= g_asb_cfg.perf_skin_hot_thresh) {
+                fsm->perf_hot_guard_active = 1;
+                desired = ASB_STATE_SUSTAINED;
+                thermal_to_sustained = 1;
+                throttle_confirmed = 1;
+                fsm->sustained_reason = 0;
+            }
         }
 
         if (fsm->cold_baseline_ticks < 30) {
