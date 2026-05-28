@@ -1037,7 +1037,8 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
             "\"auto_bat\":%d,\"auto_bat_restore\":%d,\"qn_active\":%d,"
             "\"auto_bat_reason\":\"%s\",\"auto_bat_since\":%lld,"
             "\"adv_score\":%d,\"adv_active\":%d,\"cold_skin\":%d,\"cold_surface\":%d,\"cold_board\":%d,"
-            "\"vote_skin\":%d,\"vote_surface\":%d,\"vote_board\":%d,\"would_bias_exit\":%d}",
+            "\"vote_skin\":%d,\"vote_surface\":%d,\"vote_board\":%d,\"would_bias_exit\":%d,"
+            "\"bias_a\":%d,\"bias_b\":%d}",
             (fsm->ses_intent >= 0 && fsm->ses_intent <= 6)
                 ? intent_names[fsm->ses_intent] : "unknown",
             g_pstats_per[_pidx].hot_fail_count,
@@ -1055,7 +1056,9 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
             fsm->thermal_vote_skin,
             fsm->thermal_vote_surface,
             fsm->thermal_vote_board,
-            fsm->would_bias_exit_gaming);
+            fsm->would_bias_exit_gaming,
+            fsm->would_bias_mode_a,
+            fsm->would_bias_mode_b);
     }
 }
 
