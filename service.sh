@@ -20,8 +20,6 @@ for _legacy_pair in \
     "asb_baseline.txt:baseline.txt" \
     "asb_profile_switches.log:profile_switches.log" \
     "asb_user_config:user_config" \
-    "asb_v45_cleanup_done:v45_cleanup_done" \
-    "asb_v46_athena_cleanup_done:v46_athena_cleanup_done" \
     "asb_vendor_boot_counter:vendor_boot_counter" \
     "asb_vendor_mounts.log:vendor_mounts.log" \
     "asb_vendor_overlay_active:vendor_overlay_active" \
@@ -45,7 +43,9 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 
 asb_load_profile
 
-if [ ! -f /data/adb/asb/v45_cleanup_done ]; then
+rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done 2>/dev/null
+
+if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
   for _stale_p in \
       persist.sys.oplus.athena.reclaim_enable \
       persist.sys.oplus.athena.force_kill \
@@ -57,7 +57,7 @@ if [ ! -f /data/adb/asb/v45_cleanup_done ]; then
       resetprop --delete "$_stale_p" >/dev/null 2>&1 || true
     fi
   done
-  touch /data/adb/asb/v45_cleanup_done 2>/dev/null
+  touch /data/adb/asb/stale_props_cleaned 2>/dev/null
 fi
 
 # V46 fix: explicitly reset vm.oom_kill_allocating_task to 0 (kernel default)
