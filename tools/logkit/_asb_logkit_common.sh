@@ -274,6 +274,11 @@ lk_snapshot_state() {
     elif [ -r /d/wakeup_sources ]; then
       head -1 /d/wakeup_sources
       tail -n +2 /d/wakeup_sources | sort -k7 -n -r | head -20
+    elif command -v dumpsys >/dev/null 2>&1; then
+      echo "  (debugfs unavailable, using dumpsys power)"
+      dumpsys power 2>/dev/null | sed -n '/^  Wake Locks:/,/^  Suspend Blockers:/p' | head -30
+      echo "  ----"
+      dumpsys power 2>/dev/null | sed -n '/^  Suspend Blockers:/,/^[A-Z]/p' | head -25
     else
       echo "  (wakeup_sources not accessible)"
     fi
