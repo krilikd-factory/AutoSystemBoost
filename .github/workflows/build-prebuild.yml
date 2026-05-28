@@ -19,7 +19,19 @@ jobs:
       - name: Validate required source files
         run: |
           echo "Checking required files..."
-          for f in src/asb_governor.c src/build_ndk_release.sh module.prop customize.sh service.sh; do
+          for f in \
+            src/asb_governor.c \
+            src/asb_metrics.h \
+            src/asb_fsm.h \
+            src/asb_learner.h \
+            src/asb_writer.h \
+            src/asb_socket.h \
+            src/asb_config.h \
+            src/asb_fsm_bounds.generated.h \
+            src/build_ndk_release.sh \
+            module.prop \
+            customize.sh \
+            service.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
@@ -172,19 +184,67 @@ jobs:
           echo "=== Zip contents ==="
           unzip -l "$ZIP_NAME"
 
-          # Обязательно должно быть
-          unzip -l "$ZIP_NAME" | grep -q "bin/asb" \
-            || { echo "ERROR: bin/asb missing!"; exit 1; }
-          unzip -l "$ZIP_NAME" | grep -q "service.sh" \
-            || { echo "ERROR: service.sh missing!"; exit 1; }
-          unzip -l "$ZIP_NAME" | grep -q "module.prop" \
-            || { echo "ERROR: module.prop missing!"; exit 1; }
+          # Must be present — core
+          for required in \
+            "bin/asb" \
+            "service.sh" \
+            "module.prop" \
+            "post-fs-data.sh" \
+            "apply_profile.sh" \
+            "action.sh" \
+            "uninstall.sh" \
+            "customize.sh" \
+            "features.conf"; do
+            unzip -l "$ZIP_NAME" | grep -q "$required" \
+              || { echo "ERROR: required file missing from zip: $required"; exit 1; }
+          done
 
-          # НЕ должно быть
+          # Must be present — runtime engine
+          for required in \
+            "runtime/asb_watchdog.sh" \
+            "runtime/asb_reconcile.sh" \
+            "runtime/profile_core.sh" \
+            "runtime/asb_baseline.sh" \
+            "runtime/asb_utils.sh"; do
+            unzip -l "$ZIP_NAME" | grep -q "$required" \
+              || { echo "ERROR: required runtime file missing from zip: $required"; exit 1; }
+          done
+
+          # Must be present — profiles + their generated bounds dependency
+          for required in \
+            "profiles/battery.sh" \
+            "profiles/balanced.sh" \
+            "profiles/performance.sh" \
+            "config/profile_bounds.generated.sh" \
+            "config/governor.conf.shipped"; do
+            unzip -l "$ZIP_NAME" | grep -q "$required" \
+              || { echo "ERROR: required profile/config file missing from zip: $required"; exit 1; }
+          done
+
+          # Must be present — WebUI + diagnostics tooling
+          for required in \
+            "webroot/index.html" \
+            "tools/asb_lint.sh" \
+            "tools/asb_field_report.py" \
+            "tools/asb_field_report.sh" \
+            "tools/logkit/_asb_logkit_common.sh" \
+            "tools/logkit/asb_log_battery_mixed.sh" \
+            "tools/logkit/asb_log_battery_sleep.sh" \
+            "tools/logkit/asb_log_perf.sh" \
+            "tools/logkit/asb_log_bgtrim_snapshot.sh"; do
+            unzip -l "$ZIP_NAME" | grep -q "$required" \
+              || { echo "ERROR: required tooling file missing from zip: $required"; exit 1; }
+          done
+
+          # Must NOT be present
           unzip -l "$ZIP_NAME" | grep -q "bin/arm64-v8a" \
             && { echo "ERROR: bin/arm64-v8a leaked into zip!"; exit 1; } || true
           unzip -l "$ZIP_NAME" | grep -q "android-ndk" \
             && { echo "ERROR: NDK leaked into zip!"; exit 1; } || true
+          unzip -l "$ZIP_NAME" | grep -qE "src/asb_governor\.c|src/asb_fsm\.h" \
+            && { echo "ERROR: C source leaked into zip!"; exit 1; } || true
+          unzip -l "$ZIP_NAME" | grep -q "tools/gen_bounds.sh" \
+            && { echo "ERROR: gen_bounds.sh (build-only) leaked into zip!"; exit 1; } || true
 
           echo "Zip validation passed"
           
