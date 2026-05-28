@@ -225,6 +225,19 @@ lk_snapshot_state() {
     echo "--- doze constants (must be empty for stock Doze) ---"
     settings get global device_idle_constants 2>/dev/null
     echo ""
+    echo "===== ASB OBSERVABILITY ENDPOINTS ====="
+    echo "--- recovery.json ---"
+    cat /dev/.asb/recovery.json 2>/dev/null || echo "  (absent — no recovery events)"
+    echo ""
+    echo "--- learner_state.json ---"
+    cat /dev/.asb/learner_state.json 2>/dev/null || echo "  (absent)"
+    echo ""
+    echo "--- conflicts.json ---"
+    cat /dev/.asb/conflicts.json 2>/dev/null || echo "  (absent)"
+    echo ""
+    echo "--- governor_persist.log tail (last 20, survives reboot) ---"
+    tail -20 /data/adb/asb/governor_persist.log 2>/dev/null || echo "  (absent)"
+    echo ""
     echo "===== AUDIO HAL STATE ====="
     echo "  vendor.soter init.svc: $(getprop init.svc.vendor.soter 2>/dev/null)"
     echo "  audio.hal.output.suspend.supported: $(getprop audio.hal.output.suspend.supported 2>/dev/null)"
@@ -287,11 +300,26 @@ lk_copy_runtime_artifacts() {
     "/dev/.asb/config_stale_detected" \
     "/dev/.asb/vendor_overrides" \
     "/dev/.asb/vendor_override_audit" \
-    "/dev/.asb/thermal_events"; do
+    "/dev/.asb/thermal_events" \
+    "/dev/.asb/recovery.json" \
+    "/dev/.asb/learner_state.json" \
+    "/dev/.asb/conflicts.json" \
+    "/dev/.asb/recovery_history.log" \
+    "/dev/.asb/state" \
+    "/data/adb/asb/governor_persist.log" \
+    "/data/adb/asb/governor_persist.log.1"; do
     [ -f "$f" ] || continue
-    cp "$f" "$LK_OUT_DIR/"
+    cp "$f" "$LK_OUT_DIR/" 2>/dev/null
   done
   echo "$LK_GOV_LOG" > "$LK_OUT_DIR/_govlog_source.txt"
+
+  if [ -f "$MODDIR/tools/asb_field_report.py" ] && command -v python3 >/dev/null 2>&1; then
+    python3 "$MODDIR/tools/asb_field_report.py" \
+      --input "$LK_OUT_DIR/session_history.jsonl" \
+      --recovery "$LK_OUT_DIR/recovery.json" \
+      --text-out "$LK_OUT_DIR/field_report.txt" \
+      --quiet 2>/dev/null
+  fi
 }
 
 lk_verify_caps() {
