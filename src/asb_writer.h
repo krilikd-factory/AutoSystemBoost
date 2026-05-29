@@ -225,6 +225,7 @@ static void writer_discover_gpu_paths(void) {
     gpu_read_freq_table();
 
     /* Observability */
+#if ASB_DEBUG_BUILD
     FILE *lf = fopen("/dev/.asb/gpu_path_discovery", "w");
     if (lf) {
         fprintf(lf, "max=%s\nmin=%s\navail=%s\nthermal=%s\nmode=%s\nnum_pwrlevels=%d\nfreq_table_len=%d\n",
@@ -239,6 +240,7 @@ static void writer_discover_gpu_paths(void) {
             fprintf(lf, "freq[%d]=%ld\n", i, g_gpu_freq_table[i]);
         fclose(lf);
     }
+#endif
 
     g_gpu_paths_ready = 1;
 }
@@ -364,8 +366,7 @@ static void gpu_check_vendor_override(int profile_idx, const char *state_name) {
     if (max_overridden) g_vendor_override_max++;
     if (min_overridden) g_vendor_override_min++;
 
-    /* Log first 50 events of each kind for human inspection. After that just
-     * keep counting. Format is simple key=value for grep-friendly analysis. */
+#if ASB_DEBUG_BUILD
     if ((max_overridden && g_vendor_override_max <= 50) ||
         (min_overridden && g_vendor_override_min <= 50)) {
         FILE *ef = fopen("/dev/.asb/vendor_overrides", "a");
@@ -380,6 +381,7 @@ static void gpu_check_vendor_override(int profile_idx, const char *state_name) {
             fclose(ef);
         }
     }
+#endif
 
     g_last_observed_max_pwrlevel = cur_max;
     g_last_observed_min_pwrlevel = cur_min;

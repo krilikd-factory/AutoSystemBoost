@@ -24,15 +24,25 @@ if [ ! -x "$CC" ]; then
   exit 1
 fi
 
+ASB_BUILD_MODE="${ASB_BUILD_MODE:-release}"
+case "$ASB_BUILD_MODE" in
+  release) ASB_BIN_NAME="asb" ;;
+  debug)   ASB_BIN_NAME="asb-debug" ;;
+  *) echo "[ASB] ASB_BUILD_MODE must be 'release' or 'debug' (got: $ASB_BUILD_MODE)" >&2; exit 1 ;;
+esac
+
 CFLAGS=(
   -O2 -fstack-protector-strong -fPIE -pie
   -D_FORTIFY_SOURCE=2
   -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
   -I"$SCRIPT_DIR"
 )
+if [ "$ASB_BUILD_MODE" = "debug" ]; then
+  CFLAGS+=(-DASB_DEBUG_BUILD=1)
+fi
 LDFLAGS=(-lm)
 
-"$CC" "${CFLAGS[@]}" "$SCRIPT_DIR/asb_governor.c" "${LDFLAGS[@]}" -o "$OUT_DIR/asb"
-"$STRIP" "$OUT_DIR/asb" || true
-chmod 0755 "$OUT_DIR/asb"
-ls -lh "$OUT_DIR/asb"
+"$CC" "${CFLAGS[@]}" "$SCRIPT_DIR/asb_governor.c" "${LDFLAGS[@]}" -o "$OUT_DIR/$ASB_BIN_NAME"
+"$STRIP" "$OUT_DIR/$ASB_BIN_NAME" || true
+chmod 0755 "$OUT_DIR/$ASB_BIN_NAME"
+ls -lh "$OUT_DIR/$ASB_BIN_NAME"

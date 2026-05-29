@@ -33,6 +33,10 @@
 #define LOG_FILE        "/dev/.asb/governor.log"
 #define LOG_MAX_BYTES   409600  /* 400KB max, then rotate */
 #define LOG_BACKUP      "/dev/.asb/governor.log.1"
+
+#ifndef ASB_DEBUG_BUILD
+#define ASB_DEBUG_BUILD 0
+#endif
 #define PID_FILE        "/dev/.asb/governor.pid"
 #define PROFILE_FILE    "/data/adb/modules/AutoSystemBoost/current_profile"
 #define CONFIG_FILE     "/data/adb/modules/AutoSystemBoost/config/governor.conf"
@@ -2258,7 +2262,11 @@ int main(int argc, char **argv) {
         }
     }
 
+#if ASB_DEBUG_BUILD
     g_logf = fopen(LOG_FILE, "a");
+#else
+    g_logf = NULL;
+#endif
     asb_log("=== asb_governor starting (pid %d) ===", getpid());
 
     signal(SIGTERM, sig_handler);
@@ -3403,24 +3411,26 @@ int main(int argc, char **argv) {
                         gpu_thermal_pl_audit_path(audit_buf, sizeof(audit_buf));
                         asb_log("thermal_pl_audit: %s elapsed_s=%ld",
                                 audit_buf, (long)(now_s - g_thermal_pl_last_audit));
-                        /* Also write a separate file for tooling */
+#if ASB_DEBUG_BUILD
                         FILE *af = fopen("/dev/.asb/thermal_pl_audit", "w");
                         if (af) {
                             fprintf(af, "%s\nelapsed_s=%ld\n",
                                     audit_buf, (long)(now_s - g_thermal_pl_last_audit));
                             fclose(af);
                         }
+#endif
                         g_thermal_pl_last_audit = now_s;
 
-                        /* also flush vendor-override audit alongside */
                         char vo_buf[256];
                         gpu_vendor_override_audit_path(vo_buf, sizeof(vo_buf));
                         asb_log("vendor_override_audit: %s", vo_buf);
+#if ASB_DEBUG_BUILD
                         FILE *vf = fopen("/dev/.asb/vendor_override_audit", "w");
                         if (vf) {
                             fprintf(vf, "%s\n", vo_buf);
                             fclose(vf);
                         }
+#endif
                     }
                 }
 
