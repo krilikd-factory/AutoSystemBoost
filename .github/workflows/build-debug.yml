@@ -1,0 +1,226 @@
+name: ASB · Build Debug
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-debug:
+    runs-on: ubuntu-latest
+    name: Debug (full diagnostics)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required source files
+        run: |
+          for f in \
+            src/asb_governor.c \
+            src/asb_metrics.h \
+            src/asb_fsm.h \
+            src/asb_learner.h \
+            src/asb_writer.h \
+            src/asb_socket.h \
+            src/asb_config.h \
+            src/asb_fsm_bounds.generated.h \
+            src/build_ndk_release.sh \
+            module.prop \
+            customize.sh \
+            service.sh; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: required file missing: $f"
+              exit 1
+            fi
+            echo "  v $f"
+          done
+
+      - name: Validate profile bounds source-of-truth
+        run: |
+          cp config/profile_bounds.generated.sh /tmp/_bounds_sh.before 2>/dev/null || true
+          cp src/asb_fsm_bounds.generated.h    /tmp/_bounds_h.before  2>/dev/null || true
+          bash tools/gen_bounds.sh
+          if ! diff -q /tmp/_bounds_sh.before config/profile_bounds.generated.sh >/dev/null 2>&1 \
+            || ! diff -q /tmp/_bounds_h.before src/asb_fsm_bounds.generated.h >/dev/null 2>&1; then
+            echo "ERROR: generated bounds files are STALE"
+            echo "       Run 'bash tools/gen_bounds.sh' locally and commit."
+            exit 1
+          fi
+          echo "Generated bounds artefacts up-to-date."
+
+      - name: Run asb_lint.sh
+        run: |
+          if [ ! -f tools/asb_lint.sh ]; then
+            echo "WARNING: tools/asb_lint.sh missing — skipping"
+            exit 0
+          fi
+          MODDIR="$(pwd)" bash tools/asb_lint.sh
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zip unzip curl file rsync
+
+      - name: Cache Android NDK
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: android-ndk-r28c
+          key: android-ndk-r28c
+
+      - name: Download Android NDK
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        run: |
+          curl -L --retry 3 --retry-delay 5 \
+            -o android-ndk.zip \
+            https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
+          unzip -q android-ndk.zip
+          rm -f android-ndk.zip
+
+      - name: Set NDK environment
+        run: |
+          echo "ANDROID_NDK_ROOT=$PWD/android-ndk-r28c" >> $GITHUB_ENV
+          echo "NDK_ROOT=$PWD/android-ndk-r28c"         >> $GITHUB_ENV
+
+      - name: Patch module.prop
+        run: |
+          TAG="${GITHUB_REF_NAME:-}"
+          if echo "$TAG" | grep -qE '^v[0-9]'; then
+            sed -i "s/^version=.*/version=${TAG}/" module.prop
+          fi
+          sed -i 's/AI governor/Adaptive governor/g' module.prop
+          cat module.prop
+
+      - name: Build DEBUG binary (full diagnostics)
+        run: ASB_BUILD_MODE=debug bash src/build_ndk_release.sh
+
+      - name: Verify debug binary
+        run: |
+          B="bin/arm64-v8a/asb-debug"
+          test -f "$B" || { echo "ERROR: $B not found"; exit 1; }
+          test -x "$B" || { echo "ERROR: $B not executable"; exit 1; }
+          FILE_OUT="$(file "$B")"
+          echo "$B file: $FILE_OUT"
+          echo "$FILE_OUT" | grep -q "aarch64"          || { echo "ERROR: not aarch64!"; exit 1; }
+          echo "$FILE_OUT" | grep -q "ELF"              || { echo "ERROR: not ELF!"; exit 1; }
+          echo "$FILE_OUT" | grep -q "Android\|dynamic" || { echo "ERROR: not Android binary!"; exit 1; }
+          SIZE=$(wc -c < "$B")
+          echo "Binary size: $SIZE bytes"
+          [ "$SIZE" -gt 10000 ]   || { echo "ERROR: too small"; exit 1; }
+          [ "$SIZE" -lt 2000000 ] || { echo "ERROR: too large"; exit 1; }
+
+      - name: Package DEBUG zip
+        run: |
+          PKG_DBG="$PWD/.pkg-debug"
+          rm -rf "$PKG_DBG"
+          mkdir -p "$PKG_DBG"
+
+          rsync -a ./ "$PKG_DBG"/ \
+            --exclude '.git'                          \
+            --exclude '.github'                       \
+            --exclude 'android-ndk*'                  \
+            --exclude '.pkg-*'                        \
+            --exclude '*.zip'                         \
+            --exclude '__MACOSX'                      \
+            --exclude '*.DS_Store'                    \
+            --exclude '__pycache__'                   \
+            --exclude '*.pyc'                         \
+            --exclude 'src'                           \
+            --exclude 'bin/arm64-v8a'                 \
+            --exclude 'banner.png'                    \
+            --exclude 'CHANGELOG.md'                  \
+            --exclude 'README.md'                     \
+            --exclude 'README.ru.md'                  \
+            --exclude 'update.json'                   \
+            --exclude 'RELEASE_CHECKLIST.md'          \
+            --exclude 'docs'                          \
+            --exclude 'tools/gen_bounds.sh'           \
+            --exclude 'config/profile_bounds.conf'
+
+          mkdir -p "$PKG_DBG/bin"
+          install -m 0755 bin/arm64-v8a/asb-debug "$PKG_DBG/bin/asb"
+          find "$PKG_DBG" -name "*.log" -delete
+
+          ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
+          ZIP_DBG="ASB-${ASB_VER}-debug.zip"
+          rm -f "$ZIP_DBG"
+          ( cd "$PKG_DBG" && zip -rq "../$ZIP_DBG" . -x "*.DS_Store" )
+          echo "ZIP_DBG=$ZIP_DBG" >> $GITHUB_ENV
+          echo "ASB_VER=$ASB_VER" >> $GITHUB_ENV
+          echo "Created: $ZIP_DBG ($(du -sh $ZIP_DBG | cut -f1))"
+
+      - name: Validate DEBUG zip
+        run: |
+          echo "=== Zip contents ==="
+          unzip -l "$ZIP_DBG"
+
+          for required in \
+            "bin/asb" \
+            "service.sh" \
+            "module.prop" \
+            "post-fs-data.sh" \
+            "apply_profile.sh" \
+            "action.sh" \
+            "uninstall.sh" \
+            "customize.sh" \
+            "features.conf" \
+            "runtime/asb_watchdog.sh" \
+            "runtime/asb_reconcile.sh" \
+            "runtime/profile_core.sh" \
+            "runtime/asb_baseline.sh" \
+            "runtime/asb_utils.sh" \
+            "profiles/battery.sh" \
+            "profiles/balanced.sh" \
+            "profiles/performance.sh" \
+            "config/profile_bounds.generated.sh" \
+            "config/governor.conf.shipped" \
+            "webroot/index.html" \
+            "tools/asb_lint.sh" \
+            "tools/asb_field_report.py" \
+            "tools/asb_field_report.sh" \
+            "tools/logkit/_asb_logkit_common.sh" \
+            "tools/logkit/asb_log_battery_mixed.sh" \
+            "tools/logkit/asb_log_battery_sleep.sh" \
+            "tools/logkit/asb_log_perf.sh" \
+            "tools/logkit/asb_log_bgtrim_snapshot.sh" \
+            "tools/asb_state_sampler.sh" \
+            "tools/asb_drain_analyzer.sh" \
+            "tools/asb_session_report.py" \
+            "tools/asb_analyze.py"; do
+            unzip -l "$ZIP_DBG" | grep -q "$required" \
+              || { echo "ERROR: $ZIP_DBG missing $required"; exit 1; }
+          done
+
+          for forbidden in \
+            "bin/arm64-v8a" \
+            "android-ndk" \
+            "src/asb_governor.c" \
+            "tools/gen_bounds.sh"; do
+            if unzip -l "$ZIP_DBG" | grep -qE "$forbidden"; then
+              echo "ERROR: $ZIP_DBG leaked $forbidden"
+              exit 1
+            fi
+          done
+          echo "DEBUG zip validation passed"
+
+      - name: Upload debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ASB-${{ env.ASB_VER }}-debug
+          path: ${{ env.ZIP_DBG }}
+          retention-days: 30
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo ""
+          echo "========================================"
+          echo "  ASB Debug Build Summary"
+          echo "========================================"
+          echo "  Trigger : ${{ github.event_name }}"
+          echo "  Version : ${ASB_VER:-unknown}"
+          if [ -f "${ZIP_DBG:-}" ]; then
+            echo "  ZIP     : $ZIP_DBG ($(du -sh $ZIP_DBG | cut -f1))"
+            BINSZ=$(unzip -p "$ZIP_DBG" bin/asb 2>/dev/null | wc -c)
+            echo "  Binary  : ${BINSZ} bytes (with debug logs)"
+          fi
+          echo "========================================"
