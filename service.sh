@@ -41,6 +41,19 @@ done
 ASB_STATE_LOG="/dev/.asb_profile_state/runtime_apply.log"
 asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$ASB_STATE_LOG" 2>/dev/null || true; }
 
+if [ -r /data/adb/asb/active_profile ]; then
+  _saved_profile="$(cat /data/adb/asb/active_profile 2>/dev/null)"
+  case "$_saved_profile" in
+    battery|balanced|performance)
+      _current_profile="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+      if [ "$_saved_profile" != "$_current_profile" ]; then
+        echo "$_saved_profile" > "$MODDIR/current_profile" 2>/dev/null
+        asb_log "profile restored from active_profile: $_current_profile -> $_saved_profile"
+      fi
+      ;;
+  esac
+fi
+
 asb_load_profile
 
 rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done 2>/dev/null
