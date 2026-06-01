@@ -668,6 +668,13 @@ static void session_reset_and_replan(asb_fsm_t *fsm, int screen_on) {
     session_plan_apply_prearm(fsm);
 }
 
+/* V47 vendor clamp counters — declared early so write_state can emit them.
+ * Incremented from v44_conflict_record() during status JSON build. */
+static unsigned long g_v44_clamp_total = 0;       /* total times we saw "vendor_clamp" */
+static unsigned long g_v44_raised_total = 0;      /* total times we saw "vendor_raised" */
+static unsigned long g_v44_clamp_1h = 0;          /* rolling 1h window */
+static time_t        g_v44_clamp_1h_start = 0;    /* window start ts */
+
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                         asb_prediction_t pred)
 {
@@ -812,6 +819,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
 #endif
     fprintf(f, "smart_pkg_hash=%016llx\n",
             (unsigned long long)g_smart_rt.app_hash);
+    /* Vendor clamp counters for WebUI Live page */
+    fprintf(f, "vendor_clamp_1h=%lu\nvendor_clamp_total=%lu\nvendor_raised_total=%lu\n",
+            g_v44_clamp_1h, g_v44_clamp_total, g_v44_raised_total);
     fflush(f);
     fsync(fileno(f));
     fclose(f);
@@ -821,10 +831,6 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
 static int g_total_writes = 0;
 static time_t g_last_write_ts = 0;
 
-static unsigned long g_v44_clamp_total = 0;       /* total times we saw "vendor_clamp" */
-static unsigned long g_v44_raised_total = 0;      /* total times we saw "vendor_raised" */
-static unsigned long g_v44_clamp_1h = 0;          /* rolling 1h window */
-static time_t        g_v44_clamp_1h_start = 0;    /* window start ts */
 static char          g_v44_last_clamp_source[32] = "";  /* last cap_source seen (any non-asb) */
 static time_t        g_v44_last_clamp_ts = 0;
 
