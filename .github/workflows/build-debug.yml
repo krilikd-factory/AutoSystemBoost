@@ -23,6 +23,8 @@ jobs:
             src/asb_socket.h \
             src/asb_config.h \
             src/asb_fsm_bounds.generated.h \
+            src/asb_smart.h \
+            src/asb_smart_defs.h \
             src/build_ndk_release.sh \
             module.prop \
             customize.sh \
@@ -185,6 +187,8 @@ jobs:
             "tools/asb_state_sampler.sh" \
             "tools/asb_drain_analyzer.sh" \
             "tools/asb_session_report.py" \
+            "tools/asb_smart_mode.sh" \
+            "tools/asb_vendor_thermal_probe.sh" \
             "tools/asb_analyze.py"; do
             unzip -l "$ZIP_DBG" | grep -q "$required" \
               || { echo "ERROR: $ZIP_DBG missing $required"; exit 1; }

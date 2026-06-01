@@ -28,6 +28,8 @@ jobs:
             src/asb_socket.h \
             src/asb_config.h \
             src/asb_fsm_bounds.generated.h \
+            src/asb_smart.h \
+            src/asb_smart_defs.h \
             src/build_ndk_release.sh \
             module.prop \
             customize.sh \
@@ -147,6 +149,12 @@ jobs:
           install -m 0755 bin/arm64-v8a/asb "$PKG_REL/bin/asb"
           find "$PKG_REL" -name "*.log" -delete
 
+          # V48: ship the Smart Mode user-facing CLI tool (rest of tools/ is dev-only)
+          if [ -f "tools/asb_smart_mode.sh" ]; then
+            mkdir -p "$PKG_REL/tools"
+            install -m 0755 tools/asb_smart_mode.sh "$PKG_REL/tools/asb_smart_mode.sh"
+          fi
+
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
           ZIP_REL="ASB-${ASB_VER}.zip"
           rm -f "$ZIP_REL"
@@ -180,13 +188,18 @@ jobs:
             "profiles/performance.sh" \
             "config/profile_bounds.generated.sh" \
             "config/governor.conf.shipped" \
+            "tools/asb_smart_mode.sh" \
             "webroot/index.html"; do
             unzip -l "$ZIP_REL" | grep -q "$required" \
               || { echo "ERROR: $ZIP_REL missing $required"; exit 1; }
           done
 
           for forbidden in \
-            "tools/" \
+            "tools/asb_lint.sh" \
+            "tools/gen_bounds.sh" \
+            "tools/asb_vendor_thermal_probe.sh" \
+            "tools/asb_field_report.py" \
+            "tools/logkit/" \
             "docs/" \
             "tests/" \
             "bin/arm64-v8a" \
