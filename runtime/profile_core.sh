@@ -61,6 +61,7 @@ asb_update_desc() {
   case "$_p" in
     performance) _s='description=status: performance 🔥 | active ✅' ;;
     battery)     _s='description=status: battery 🔋 | active ✅' ;;
+    smart)       _s='description=status: 🤖 Smart Mode (alpha) | active ✅' ;;
     *)           _s='description=status: balanced ⚖️ | active ✅' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
@@ -361,14 +362,23 @@ asb_load_profile() {
   fi
   case "$PROFILE" in
     battery|balanced|performance) : ;;
+    smart)
+      # V48 Smart Mode: persisted profile = 'smart', shell bootstraps from
+      # balanced.sh (no smart.sh exists — C governor blends bounds at runtime).
+      # We deliberately do NOT change PROFILE so callers see the real persisted
+      # name; we only redirect which file gets sourced below.
+      _SHELL_BOOT_PROFILE=balanced
+      ;;
     *) PROFILE=balanced ;;
   esac
-  if [ -f "$MODDIR/profiles/$PROFILE.sh" ]; then
-    . "$MODDIR/profiles/$PROFILE.sh"
+  _SHELL_BOOT_PROFILE="${_SHELL_BOOT_PROFILE:-$PROFILE}"
+  if [ -f "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh" ]; then
+    . "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh"
   else
-    PROFILE=balanced
+    _SHELL_BOOT_PROFILE=balanced
     . "$MODDIR/profiles/balanced.sh"
   fi
+  unset _SHELL_BOOT_PROFILE
 }
 
 asb_apply_profile_once() {

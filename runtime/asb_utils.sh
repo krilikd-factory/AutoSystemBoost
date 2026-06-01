@@ -128,6 +128,7 @@ asb_update_desc() {
   case "$_p" in
     performance) _s="description=status: performance 🔥 | active ✅" ;;
     battery) _s="description=status: battery 🔋 | active ✅" ;;
+    smart) _s="description=status: 🤖 Smart Mode (alpha) | active ✅" ;;
     *) _s="description=status: balanced ⚖️ | active ✅" ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true

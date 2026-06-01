@@ -47,7 +47,7 @@
     fi
     _now="$(cat "$MODDIR/current_profile" 2>/dev/null)"
     case "$_now" in
-      battery|balanced|performance) : ;;
+      battery|balanced|performance|smart) : ;;
       *) _now="balanced" ;;
     esac
     if [ -f /dev/.asb/safe_mode ]; then
