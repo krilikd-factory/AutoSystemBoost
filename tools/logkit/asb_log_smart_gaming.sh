@@ -2,10 +2,12 @@
 #
 # ASB V47 Smart Mode — GAMING SESSION capture
 #
-# Usage:
+# Usage (SAFE — survives Termux closure / screen lock during gaming):
 #   su
 #   export MODDIR=/data/adb/modules/AutoSystemBoost
-#   sh $MODDIR/tools/logkit/asb_log_smart_gaming.sh [MINUTES]
+#   nohup sh $MODDIR/tools/logkit/asb_log_smart_gaming.sh [MINUTES] >/data/local/tmp/smart_game.out 2>&1 &
+#   # Then open the game; can close Termux freely
+#   # to stop early:  killall asb_log_smart_gaming.sh
 #
 # Default: 90 minutes. Typical long COD-Mobile / Genshin session.
 # What it captures:
@@ -16,14 +18,25 @@
 #   - Compare avg CPU temp by alpha range to verify cooler-than-balanced claim
 #
 # How to run:
-#   1. Open COD-Mobile (or your game) BEFORE starting the script
-#   2. Then in a separate root shell, run this script
-#   3. Play the game continuously — don't lock the screen
-#   4. Ctrl-C to stop, or it auto-stops at MINUTES limit
+#   1. Run the nohup command above BEFORE opening the game
+#   2. Then open COD-Mobile (or your game) and play
+#   3. Don't worry about Termux being closed — capture is detached
+#   4. After session, retrieve logs from /data/local/tmp/asb_log_smart_gaming_*/
 
 set -u
 LK_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
 . "$LK_SCRIPT_DIR/_asb_logkit_common.sh"
+
+# Auto-detach via setsid so capture survives terminal closure
+if [ -t 0 ]; then
+  if command -v setsid >/dev/null 2>&1; then
+    if [ -z "${ASB_LOGKIT_DETACHED:-}" ]; then
+      export ASB_LOGKIT_DETACHED=1
+      echo "[autodetach] Re-launching detached so capture survives Termux closure"
+      exec setsid sh "$0" "$@" </dev/null
+    fi
+  fi
+fi
 
 LK_SCENARIO="smart_gaming"
 LK_OUT_DIR="${TMPDIR:-/data/local/tmp}/asb_log_${LK_SCENARIO}_$$"

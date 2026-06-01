@@ -2,10 +2,11 @@
 #
 # ASB V47 Smart Mode — NIGHT SLEEP capture
 #
-# Usage:
+# Usage (SAFE for overnight — survives Termux closure):
 #   su
 #   export MODDIR=/data/adb/modules/AutoSystemBoost
-#   sh $MODDIR/tools/logkit/asb_log_smart_sleep.sh [HOURS]
+#   nohup sh $MODDIR/tools/logkit/asb_log_smart_sleep.sh [HOURS] >/data/local/tmp/smart_sleep.out 2>&1 &
+#   # then you can close Termux and go to bed
 #
 # Default: 9 hours. Recommended 7-10h overnight.
 # What it captures:
@@ -24,13 +25,24 @@
 # Setup:
 #   1. Plug in to charge briefly so battery is ≥60% but unplug before sleep
 #   2. Verify Smart Mode is on: sh tools/asb_smart_mode.sh status
-#   3. Start this script in a detached/tmux session BEFORE bed
-#   4. Don't touch phone overnight
-#   5. In morning: collect the output dir
+#   3. Run the nohup command above BEFORE bed
+#   4. Close Termux — capture continues in background
+#   5. In morning: collect the output dir from /data/local/tmp/
 
 set -u
 LK_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
 . "$LK_SCRIPT_DIR/_asb_logkit_common.sh"
+
+# Auto-detach so overnight capture survives Termux closure / phone sleep
+if [ -t 0 ]; then
+  if command -v setsid >/dev/null 2>&1; then
+    if [ -z "${ASB_LOGKIT_DETACHED:-}" ]; then
+      export ASB_LOGKIT_DETACHED=1
+      echo "[autodetach] Re-launching detached for overnight capture"
+      exec setsid sh "$0" "$@" </dev/null
+    fi
+  fi
+fi
 
 LK_SCENARIO="smart_sleep"
 LK_OUT_DIR="${TMPDIR:-/data/local/tmp}/asb_log_${LK_SCENARIO}_$$"

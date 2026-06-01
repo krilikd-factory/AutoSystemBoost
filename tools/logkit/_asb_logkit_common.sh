@@ -717,14 +717,29 @@ lk_capture_smart_trace_row() {
   _app=$(lk_state_kv smart_app_hint)
   _pkghash=$(lk_state_kv smart_pkg_hash)
 
-  # Context fields
-  _cpuC=$(lk_state_kv cpu_max_c)
+  # CPU temp: state file uses 'cap_temp' (degC), not 'cpu_max_c'
+  _cpuC=$(lk_state_kv cap_temp)
   _state=$(lk_state_kv state)
   _pidx=$(lk_state_kv profile_idx)
-  _bpct=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
+  _bpct=$(lk_state_kv capacity)
+  [ -z "$_bpct" ] && _bpct=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   _btmp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null)
-  _scr=$(dumpsys power 2>/dev/null | grep -m1 'mWakefulness=' | sed 's/.*mWakefulness=//;s/ .*//')
-  _chg=$(cat /sys/class/power_supply/battery/status 2>/dev/null | head -c 1)
+
+  # Screen state: convert Awake/Asleep/Dozing text to 1/0
+  _scr_raw=$(dumpsys power 2>/dev/null | grep -m1 'mWakefulness=' | sed 's/.*mWakefulness=//;s/ .*//')
+  case "$_scr_raw" in
+    Awake) _scr=1 ;;
+    Asleep|Dozing) _scr=0 ;;
+    *) _scr=- ;;
+  esac
+
+  # Charging state from battery status
+  _chg_raw=$(cat /sys/class/power_supply/battery/status 2>/dev/null)
+  case "$_chg_raw" in
+    Charging|Full) _chg=1 ;;
+    Discharging|"Not charging") _chg=0 ;;
+    *) _chg=- ;;
+  esac
 
   # Fallback empty fields to '-' so columns stay aligned
   for v in _bucket _dp _wkd _fb _conf _alpha _inter _night _veto _app _pkghash _cpuC _state _pidx _bpct _btmp _scr _chg; do
@@ -783,21 +798,21 @@ lk_emit_smart_summary() {
     echo ""
 
     # Count rows where smart was actually active (not '-')
-    _rows=$(grep -cvE '^#|^epoch' "$_trace" 2>/dev/null)
-    _smart_rows=$(awk 'NR>1 && /^[0-9]+ / && $3 != "-"' "$_trace" 2>/dev/null | wc -l)
+    _rows=$(grep -cE '^[0-9]' "$_trace" 2>/dev/null)
+    _smart_rows=$(awk '/^[0-9]/ && $3 != "-"' "$_trace" 2>/dev/null | wc -l)
     echo "data rows:           $_rows"
     echo "with smart fields:   $_smart_rows"
     echo ""
 
     # Bucket distribution (which buckets did we hit during capture?)
     echo "── Bucket distribution ──"
-    awk 'NR>1 && $3 != "-" { c[$3]++ } END { for (k in c) printf "  bucket #%s : %d ticks\n", k, c[k] }' \
+    awk '/^[0-9]/ && $3 != "-" { c[$3]++ } END { for (k in c) printf "  bucket #%s : %d ticks\n", k, c[k] }' \
       "$_trace" 2>/dev/null | sort
     echo ""
 
     # Daypart distribution
     echo "── Daypart distribution ──"
-    awk 'NR>1 && $4 != "-" {
+    awk '/^[0-9]/ && $4 != "-" {
       n[$4]++
     } END {
       for (k in n) {
@@ -812,7 +827,7 @@ lk_emit_smart_summary() {
 
     # Fallback distribution (how often did we have a real exact match?)
     echo "── Fallback distribution ──"
-    awk 'NR>1 && $6 != "-" {
+    awk '/^[0-9]/ && $6 != "-" {
       n[$6]++
     } END {
       for (k in n) {
@@ -827,7 +842,7 @@ lk_emit_smart_summary() {
 
     # Confidence stats
     echo "── Confidence (x1000) ──"
-    awk 'NR>1 && $7 != "-" {
+    awk '/^[0-9]/ && $7 != "-" {
       v=$7+0; sum+=v; n++
       if (n==1 || v<min) min=v
       if (n==1 || v>max) max=v
@@ -840,27 +855,30 @@ lk_emit_smart_summary() {
 
     # Alpha distribution (how battery-leaning was the blend?)
     echo "── Alpha_battery (x1000, 0=balanced 1000=battery) ──"
-    awk 'NR>1 && $8 != "-" {
+    awk '/^[0-9]/ && $8 != "-" {
       v=$8+0; sum+=v; n++
       if (n==1 || v<min) min=v
       if (n==1 || v>max) max=v
       bin = int(v/100)*100
       b[bin]++
     } END {
-      if (n>0) printf "  ticks=%d  avg=%.0f  min=%d  max=%d\n", n, sum/n, min, max
-      for (k=0; k<=1000; k+=100) {
-        cnt = b[k]+0
-        bar = ""
-        for (i=0; i<cnt; i+=max(1,int(n/40))) bar = bar "#"
-        printf "  %3d-%3d : %s (%d)\n", k, k+99, bar, cnt
-      }
-    } function max(a,b) { return a>b?a:b }' "$_trace" 2>/dev/null
+      if (n>0) {
+        printf "  ticks=%d  avg=%.0f  min=%d  max=%d\n", n, sum/n, min, max
+        for (k=0; k<=1000; k+=100) {
+          cnt = b[k]+0
+          bar = ""
+          step = int(n/40); if (step<1) step=1
+          for (i=0; i<cnt; i+=step) bar = bar "#"
+          printf "  %3d-%3d : %s (%d)\n", k, k+99, bar, cnt
+        }
+      } else print "  (no alpha data)"
+    }' "$_trace" 2>/dev/null
     echo ""
 
     # Override / veto rates
     echo "── Override / Veto firing rate ──"
-    awk 'NR>1 && $10 != "-" { n10++; if ($10+0==1) o++; }
-         NR>1 && $11 != "-" { n11++; if ($11+0==1) v++; }
+    awk '/^[0-9]/ && $10 != "-" { n10++; if ($10+0==1) o++; }
+         /^[0-9]/ && $11 != "-" { n11++; if ($11+0==1) v++; }
          END {
            if (n10>0) printf "  night_safe_override: %d/%d ticks (%.1f%%)\n", o+0, n10, (o+0)*100.0/n10
            if (n11>0) printf "  thermal_veto:        %d/%d ticks (%.1f%%)\n", v+0, n11, (v+0)*100.0/n11
@@ -869,7 +887,7 @@ lk_emit_smart_summary() {
 
     # App hint distribution
     echo "── App hint distribution ──"
-    awk 'NR>1 && $12 != "-" {
+    awk '/^[0-9]/ && $12 != "-" {
       n[$12]++
     } END {
       for (k in n) {
@@ -884,14 +902,19 @@ lk_emit_smart_summary() {
 
     # Thermal correlation: avg CPU temp grouped by alpha range
     echo "── Avg CPU temp by alpha range (does battery-lean run cooler?) ──"
-    awk 'NR>1 && $8 != "-" && $14 != "-" {
+    awk '/^[0-9]/ && $8 != "-" && $14 != "-" && $14+0 > 0 {
       a=$8+0; t=$14+0
       band=int(a/200)*200
       tsum[band]+=t; n[band]++
     } END {
+      any=0
       for (k=0; k<=1000; k+=200) {
-        if (n[k] > 0) printf "  alpha %3d-%3d : %d ticks, avg CPU %.1f°C\n", k, k+199, n[k], tsum[k]/n[k]
+        if (n[k] > 0) {
+          printf "  alpha %3d-%3d : %d ticks, avg CPU %.1f°C\n", k, k+199, n[k], tsum[k]/n[k]
+          any=1
+        }
       }
+      if (!any) print "  (no valid CPU temp samples — check cap_temp state field)"
     }' "$_trace" 2>/dev/null
 
     # Final ASB Smart Mode CLI status snapshot

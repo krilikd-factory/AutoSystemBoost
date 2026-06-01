@@ -2,10 +2,13 @@
 #
 # ASB V47 Smart Mode — DAILY USE capture
 #
-# Usage:
+# Usage (the SAFE way — survives terminal closure):
 #   su
 #   export MODDIR=/data/adb/modules/AutoSystemBoost
-#   sh $MODDIR/tools/logkit/asb_log_smart_daily.sh [HOURS]
+#   nohup sh $MODDIR/tools/logkit/asb_log_smart_daily.sh [HOURS] >/data/local/tmp/smart_daily.out 2>&1 &
+#   # then you can close Termux — capture keeps running in background
+#   # to check progress: ls -la /data/local/tmp/asb_log_smart_daily_*/
+#   # to stop early:     killall asb_log_smart_daily.sh
 #
 # Default: 6 hours. Recommended 4-12h covering a normal weekday daytime.
 # What it captures:
@@ -15,12 +18,27 @@
 #   - CPU temp & battery alongside Smart state for correlation
 #   - Snapshot of buckets.bin before and after for learning diff
 #
-# Best run on a normal weekday from morning to evening to capture multiple
-# dayparts (wake/morn/day/eve) and daypart transitions where smoothing fires.
+# IMPORTANT: if you just run "sh asb_log_smart_daily.sh 6" without nohup,
+# closing Termux or losing SSH will KILL the script. Always use the nohup
+# pattern above for any capture longer than a few minutes.
 
 set -u
 LK_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
 . "$LK_SCRIPT_DIR/_asb_logkit_common.sh"
+
+# Detach from controlling terminal if we have one (survives Termux closure)
+# This is best-effort — if setsid/nohup isn't available, we continue anyway
+if [ -t 0 ]; then
+  if command -v setsid >/dev/null 2>&1; then
+    # If we haven't already been re-exec'd in a new session, do so now
+    if [ -z "${ASB_LOGKIT_DETACHED:-}" ]; then
+      export ASB_LOGKIT_DETACHED=1
+      echo "[autodetach] Re-launching in new session so capture survives Termux closure"
+      echo "[autodetach] PID: $$ -> new session via setsid"
+      exec setsid sh "$0" "$@" </dev/null
+    fi
+  fi
+fi
 
 LK_SCENARIO="smart_daily"
 LK_OUT_DIR="${TMPDIR:-/data/local/tmp}/asb_log_${LK_SCENARIO}_$$"
