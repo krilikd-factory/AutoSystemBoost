@@ -314,6 +314,105 @@ body::before, body::after {
 .pbtn[data-p="performance"] { --c: var(--perf); --cg: rgba(255,26,26,0.12); --cg-strong: var(--perf-glow); }
 .pbtn[data-p="balanced"]    { --c: var(--bal);  --cg: rgba(255,165,2,0.12);  --cg-strong: var(--bal-glow); }
 .pbtn[data-p="battery"]     { --c: var(--bat);  --cg: rgba(46,213,115,0.12); --cg-strong: var(--bat-glow); }
+.pbtn[data-p="smart"]       { --c: #a78bfa; --cg: rgba(167,139,250,0.14); --cg-strong: rgba(167,139,250,0.35); }
+
+/* V48 Smart Mode: AI-style primary button with animated gradient + glow */
+.pbtn-smart {
+  background: linear-gradient(135deg,
+    rgba(167,139,250,0.10) 0%,
+    rgba(99,179,237,0.06) 50%,
+    rgba(20,20,20,0.90) 100%) !important;
+  border-color: rgba(167,139,250,0.30) !important;
+  position: relative;
+}
+.pbtn-smart::before {
+  background: linear-gradient(120deg,
+    rgba(167,139,250,0.18) 0%,
+    rgba(99,179,237,0.10) 40%,
+    transparent 70%) !important;
+  opacity: 1 !important;
+}
+.pbtn-smart.on {
+  border-color: #a78bfa !important;
+  background: linear-gradient(135deg,
+    rgba(167,139,250,0.22) 0%,
+    rgba(99,179,237,0.12) 50%,
+    rgba(30,20,50,0.90) 100%) !important;
+  box-shadow:
+    0 0 0 1px #a78bfa,
+    0 0 30px rgba(167,139,250,0.30),
+    inset 0 1px 1px rgba(255,255,255,0.10);
+}
+.pbtn-smart.on::before {
+  background: radial-gradient(circle at 80% 50%, rgba(167,139,250,0.45), transparent 70%) !important;
+}
+
+/* Smart icon: animated ring around emoji */
+.pico-smart {
+  background: radial-gradient(circle at 30% 30%, rgba(167,139,250,0.22), rgba(99,179,237,0.06) 70%) !important;
+  border-color: rgba(167,139,250,0.35) !important;
+  position: relative;
+  overflow: hidden;
+}
+.pbtn-smart.on .pico-smart {
+  background: radial-gradient(circle at 30% 30%, rgba(167,139,250,0.45), rgba(99,179,237,0.18) 70%) !important;
+  border-color: #a78bfa !important;
+  box-shadow: 0 0 20px rgba(167,139,250,0.55);
+}
+.pico-smart .ai-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  background: conic-gradient(from 0deg,
+    rgba(167,139,250,0.0),
+    rgba(167,139,250,0.6),
+    rgba(99,179,237,0.6),
+    rgba(167,139,250,0.6),
+    rgba(167,139,250,0.0));
+  filter: blur(4px);
+  opacity: 0;
+  animation: ai-spin 4s linear infinite;
+  pointer-events: none;
+}
+.pbtn-smart.on .pico-smart .ai-glow {
+  opacity: 0.85;
+}
+@keyframes ai-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.pico-smart .ai-emoji {
+  position: relative;
+  z-index: 2;
+  font-size: 22px;
+}
+
+/* Alpha tag inside name */
+.alpha-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  margin-left: 6px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(167,139,250,0.30), rgba(99,179,237,0.25));
+  color: #c4b5fd;
+  text-transform: uppercase;
+  vertical-align: middle;
+  border: 1px solid rgba(167,139,250,0.35);
+}
+
+/* Sub-line under Smart button name (bucket/conf/status) */
+.psub {
+  font-size: 11px;
+  color: rgba(196,181,253,0.75);
+  margin-top: 2px;
+  font-weight: 400;
+}
+.pbtn-smart.on .psub {
+  color: rgba(196,181,253,1.0);
+}
 
 .pbtn.on {
   border-color: var(--c) !important;
@@ -715,6 +814,16 @@ body::before, body::after {
         <span>Live</span>
       </button>
     </div>
+    <!-- V48 Smart Mode minimal status (hidden when smart_mode=0) -->
+    <div class="status-row" id="smartRow" style="display:none; margin-top:6px; font-size:11px; opacity:0.85;">
+      <span style="opacity:0.7">🤖 Smart:</span>&nbsp;
+      <span id="smartBucket">—</span>&nbsp;·&nbsp;
+      <span id="smartConf">—</span>&nbsp;conf&nbsp;·&nbsp;
+      <span id="smartAlpha">—</span>&nbsp;battery
+      <span id="smartFb" style="display:none; opacity:0.6">&nbsp;·&nbsp;<span id="smartFbText">fallback</span></span>
+      <span id="smartNight" style="display:none; color:#7dd3fc">&nbsp;·&nbsp;🌙 night-safe</span>
+      <span id="smartVeto"  style="display:none; color:#f59e0b">&nbsp;·&nbsp;🔥 veto</span>
+    </div>
   </div>
 
   <!-- PROFILES -->
@@ -724,6 +833,19 @@ body::before, body::after {
     <div class="sec-line"></div>
   </div>
   <div class="profiles">
+
+    <div class="pbtn pbtn-smart" data-p="smart" onclick="go('smart')">
+      <div class="pico pico-smart">
+        <div class="ai-glow"></div>
+        <span class="ai-emoji">🤖</span>
+      </div>
+      <div class="pinfo">
+        <div class="pname">Smart <span class="alpha-tag">alpha</span></div>
+        <div class="psub" id="smartSubLine">adaptive · learning</div>
+      </div>
+      <div class="pload"></div>
+      <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+    </div>
 
     <div class="pbtn" data-p="performance" onclick="go('performance')">
       <div class="pico">🔥</div>
@@ -992,7 +1114,7 @@ function openTelegram(e) {
   requestAnimationFrame(() => setTimeout(loadDeviceInfo, 0));
   const r = await run('cat ' + MD + '/current_profile 2>/dev/null || echo balanced');
   const p = (r.stdout || 'balanced').trim();
-  ui(['performance','balanced','battery'].includes(p) ? p : 'balanced');
+  ui(['performance','balanced','battery','smart'].includes(p) ? p : 'balanced');
 })();
 
 function fmtTempC(deci) {
@@ -1039,13 +1161,14 @@ let _batCapFullMah = 0;
 async function pollLive(visible) {
   try {
     const r = await run('cat /dev/.asb/state 2>/dev/null');
-    if (!r || !r.stdout || !r.stdout.trim()) {
-      const chip = _el('liveChip');
-      if (chip) chip.style.display = 'none';
-      return;
-    }
+    /* V48: keep Live chip always visible — Live page handles its own
+     * empty-state fallback. Hiding the chip on a momentarily empty
+     * /dev/.asb/state (race at WebUI load) made the chip seem to disappear. */
     const chip = _el('liveChip');
     if (chip) chip.style.display = '';
+    if (!r || !r.stdout || !r.stdout.trim()) {
+      return;
+    }
 
     if (!_batCapFullMah) {
       try {
@@ -1066,6 +1189,55 @@ async function pollLive(visible) {
         kv[line.slice(0, eq)] = line.slice(eq + 1);
       }
     });
+
+    /* V48 Smart Mode minimal status row */
+    try {
+      const smartRow = _el('smartRow');
+      const smartSub = _el('smartSubLine');
+      if (smartRow) {
+        const enabled = parseInt(kv.smart_mode || '0', 10);
+        if (enabled === 1) {
+          const bid = parseInt(kv.smart_bucket_id || '0', 10);
+          const dp  = parseInt(kv.smart_daypart   || '0', 10);
+          const we  = parseInt(kv.smart_is_weekend|| '0', 10);
+          const conf= parseInt(kv.smart_confidence|| '0', 10);
+          const alpha=parseInt(kv.smart_alpha_battery|| '500', 10);
+          const fb  = parseInt(kv.smart_fallback_level || '0', 10);
+          const night = parseInt(kv.smart_sleep_override || '0', 10);
+          const veto  = parseInt(kv.smart_thermal_veto   || '0', 10);
+          const dpNames = ['sleep','wake','morn','day','evening','late'];
+          const dpName = (dp >= 0 && dp < dpNames.length) ? dpNames[dp] : '?';
+          const weTag = we ? ' (weekend)' : ' (weekday)';
+          _el('smartBucket').textContent = '#' + bid + ' ' + dpName + weTag;
+          _el('smartConf').textContent = Math.round(conf / 10) + '%';
+          _el('smartAlpha').textContent = Math.round(alpha / 10) + '%';
+          /* Fallback indicator */
+          const fbNames = {1:'daypart fallback', 2:'class fallback', 3:'global fallback', 4:'cold start'};
+          const fbEl = _el('smartFb');
+          if (fb >= 1 && fb <= 4) {
+            _el('smartFbText').textContent = fbNames[fb] || 'fallback';
+            fbEl.style.display = '';
+          } else {
+            fbEl.style.display = 'none';
+          }
+          _el('smartNight').style.display = night ? '' : 'none';
+          _el('smartVeto').style.display  = veto  ? '' : 'none';
+          smartRow.style.display = '';
+
+          /* Update Smart button sub-line with live daypart + alpha */
+          if (smartSub) {
+            let sub = dpName + ' · ' + Math.round(alpha/10) + '% battery-lean';
+            if (night)      sub = '🌙 night-safe override';
+            else if (veto)  sub = '🔥 thermal veto active';
+            else if (fb === 4) sub = 'cold start · learning';
+            smartSub.textContent = sub;
+          }
+        } else {
+          smartRow.style.display = 'none';
+          if (smartSub) smartSub.textContent = 'disabled · tap to enable';
+        }
+      }
+    } catch(e) {}
 
     let learner = null;
     if (visible) {
