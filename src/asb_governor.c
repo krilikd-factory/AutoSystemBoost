@@ -23,6 +23,7 @@
 #include "asb_writer.h"
 #include "asb_socket.h"
 #include "asb_config.h"
+#include "asb_smart.h"
 
 #define TIMER_ACTIVE_S  2   /* metrics interval, screen ON  */
 #define TIMER_IDLE_S    5   /* metrics interval, screen OFF */
@@ -48,6 +49,14 @@ static void asb_log(const char *fmt, ...) __attribute__((format(printf,1,2)));  
 asb_runtime_config_t g_asb_cfg;
 static time_t g_last_reassert = 0;
 static int g_last_reassert_ok = 0;
+
+/* V48 Smart Mode globals */
+static asb_smart_store_t   g_smart_store;
+static asb_smart_runtime_t g_smart_rt;
+static int                 g_smart_store_loaded = 0;
+static time_t              g_smart_last_save_ts = 0;
+static time_t              g_smart_last_backup_ts = 0;
+static int                 g_smart_sessions_since_save = 0;
 
 static int    g_leak_streak_p0        = 0;
 static int    g_leak_streak_p1        = 0;
@@ -662,7 +671,7 @@ static void session_reset_and_replan(asb_fsm_t *fsm, int screen_on) {
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                         asb_prediction_t pred)
 {
-    static const char *profile_names[] = {"battery","balanced","performance"};
+    static const char *profile_names[] = {"battery","balanced","performance","smart"};
     static const char *pred_names[] = {"unknown","idle","light","active"};
 
     FILE *f = fopen(STATE_FILE ".tmp", "w");
@@ -777,6 +786,32 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "quarantine=%d\nuser_id=%d\nquarantine_left=%ld\n",
                 fsm->plan.quarantine, g_last_user_id, qleft);
     }
+    /* V48 Smart Mode state fields */
+    fprintf(f,
+            "smart_mode=%d\nsmart_bucket_id=%d\nsmart_daypart=%d\nsmart_is_weekend=%d\n"
+            "smart_confidence=%d\nsmart_alpha_battery=%d\nsmart_interactive_bonus=%d\n"
+            "smart_sleep_override=%d\nsmart_thermal_veto=%d\n"
+            "smart_app_hint=%d\nsmart_fallback_level=%d\n",
+            g_smart_rt.enabled,
+            g_smart_rt.bucket_id,
+            g_smart_rt.daypart,
+            g_smart_rt.is_weekend,
+            g_smart_rt.conf_x1000,
+            g_smart_rt.alpha_battery_x1000,
+            g_smart_rt.interactive_bonus_x1000,
+            g_smart_rt.night_safe_override ? 1 : 0,
+            g_smart_rt.thermal_veto ? 1 : 0,
+            g_smart_rt.app_hint,
+            g_smart_rt.fallback_level);
+    /* Debug build only: include plaintext pkg if cached */
+#if ASB_DEBUG_BUILD
+    if (g_asb_cfg.smart_pkg_plaintext || ASB_DEBUG_BUILD) {
+        fprintf(f, "smart_pkg=%s\n",
+                g_smart_rt.app_pkg_cached[0] ? g_smart_rt.app_pkg_cached : "");
+    }
+#endif
+    fprintf(f, "smart_pkg_hash=%016llx\n",
+            (unsigned long long)g_smart_rt.app_hash);
     fflush(f);
     fsync(fileno(f));
     fclose(f);
@@ -903,7 +938,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
                                asb_prediction_t pred,
                                char *out, int outlen)
 {
-    static const char *profile_names[] = {"battery","balanced","performance"};
+    static const char *profile_names[] = {"battery","balanced","performance","smart"};
     static const char *pred_names[] = {"unknown","idle","light","active"};
     int ma_valid = (m->bat.current_ma > 0 && !m->bat.charging);
     int real_max_p0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
@@ -913,8 +948,8 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
     /* cap_source classification — who controls the actual cap right now. */
     int hw_ceil_p0 = sysfs_read_int(cpu_policy_path(0, "cpuinfo_max_freq"), 0);
     int hw_ceil_p1 = sysfs_read_int(cpu_policy_path(1, "cpuinfo_max_freq"), 0);
-    int profile_cap_p0 = g_profile_bounds[fsm->profile_idx].ceil.cpu_max[0];
-    int profile_cap_p6 = g_profile_bounds[fsm->profile_idx].ceil.cpu_max[1];
+    int profile_cap_p0 = asb_profile_bounds_for(fsm->profile_idx)->ceil.cpu_max[0];
+    int profile_cap_p6 = asb_profile_bounds_for(fsm->profile_idx)->ceil.cpu_max[1];
     /* classifier gets runtime_declared from msm_performance read (m->therm.perf_cap_*),
      * not from fsm->current_caps. current_caps is what FSM *wants* to write; perf_cap_* is what
      * actually registered with the kernel via msm_performance. When perf_cap_*==0, shell branch
@@ -1544,7 +1579,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         return;
     }
 
-    static const char *profile_names[] = {"battery","balanced","performance"};
+    static const char *profile_names[] = {"battery","balanced","performance","smart"};
     static const char *mode_names[] = {"default","burst","stable","auto"};
     int mode_idx = g_asb_cfg.highload_mode;
     if (mode_idx < 0 || mode_idx > 3) mode_idx = 0;
@@ -1604,7 +1639,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     }
     int cap_eff = -1;
     if (fsm->ses_gaming_entries > 0 && avg_gap > 0) {
-        int target = g_profile_bounds[fsm->profile_idx].ceil.cpu_max[0];
+        int target = asb_profile_bounds_for(fsm->profile_idx)->ceil.cpu_max[0];
         if (target > 0) {
             cap_eff = (int)((target - avg_gap) * 100 / target);
             if (cap_eff < 0) cap_eff = 0;
@@ -1750,7 +1785,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     }
 
     fprintf(wf,
-        "{\"v\":11,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
+        "{\"v\":15,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
         "\"gaming\":%d,\"sustained\":%d,\"thermal\":%d,\"unreachable\":%d,"
         "\"t_heavy\":%ld,\"t_gaming\":%ld,\"t_sustained\":%ld,"
         "\"avg_gap\":%d,\"max_temp\":%d,\"skin_max_temp\":%d,\"surface_max_temp\":%d,\"board_max_temp\":%d,\"degraded\":%d,"
@@ -1771,7 +1806,11 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         "\"env\":\"%s\","
         "\"would_be_noisy\":%d,\"noisy_dim\":\"%s\","
         "\"adv_score\":%d,\"adv_active\":%d,\"adv_vote_skin\":%d,\"adv_vote_surface\":%d,\"adv_vote_board\":%d,\"adv_would_bias\":%d,"
-        "\"bias_mode_a_count\":%d,\"bias_mode_b_count\":%d}\n",
+        "\"bias_mode_a_count\":%d,\"bias_mode_b_count\":%d,"
+        "\"smart_mode\":%d,\"bucket_id\":%d,\"daypart\":%d,\"is_weekend\":%d,"
+        "\"bucket_confidence\":%d,\"alpha_battery\":%d,"
+        "\"smart_fallback_level\":%d,\"sleep_override_n\":%d,\"thermal_veto_n\":%d,"
+        "\"app_hint_top\":%d,\"pkg_hash_top\":\"%016llx\"}\n",
         ts, profile_names[fsm->profile_idx], mode_names[mode_idx], reason,
         fsm->ses_gaming_entries, fsm->ses_sustained_entries,
         fsm->ses_thermal_entries, fsm->ses_unreachable_entries,
@@ -1804,7 +1843,53 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         fsm->thermal_advisory_score, fsm->thermal_advisory_active,
         fsm->thermal_vote_skin, fsm->thermal_vote_surface, fsm->thermal_vote_board,
         fsm->would_bias_exit_gaming,
-        fsm->would_bias_mode_a_count, fsm->would_bias_mode_b_count);
+        fsm->would_bias_mode_a_count, fsm->would_bias_mode_b_count,
+        /* V48 Smart Mode fields */
+        g_smart_rt.enabled,
+        g_smart_rt.bucket_id,
+        g_smart_rt.daypart,
+        g_smart_rt.is_weekend,
+        g_smart_rt.conf_x1000,
+        g_smart_rt.alpha_battery_x1000,
+        g_smart_rt.fallback_level,
+        /* sleep_override_n / thermal_veto_n: V48 alpha tracks current state only,
+         * not session counters (deferred to V49 dedicated counters) */
+        g_smart_rt.night_safe_override ? 1 : 0,
+        g_smart_rt.thermal_veto ? 1 : 0,
+        g_smart_rt.app_hint_session_top,
+        (unsigned long long)g_smart_rt.app_hash_session_top);
+
+    /* V48 Smart Mode: feed session outcome into bucket learning (smart_mode=1 only) */
+    if (g_smart_rt.enabled && g_smart_store_loaded && dur > 0) {
+        asb_smart_session_input_t sin = {0};
+        sin.dur_s = (int)dur;
+        sin.max_temp_c = fsm->ses_max_temp;
+        sin.max_skin_c = fsm->ses_max_skin_temp;
+        sin.trust = (bat_trust_val >= 0) ? bat_trust_val : ASB_TRUST_PARTIAL;
+        sin.was_heavy = (fsm->ses_time_heavy_sec > 60 || fsm->ses_time_gaming_sec > 60) ? 1 : 0;
+        sin.was_thermal_hit = (fsm->ses_thermal_entries > 0) ? 1 : 0;
+        sin.sustained_pct = sus_pct;
+        sin.idle_q_x10 = (idle_quality >= 0) ? idle_quality * 10 : 0;
+        /* Heuristic drain rate calc: if dur > 60s and battery dropped, derive mAh/h.
+         * V48 alpha: use simple proxy from current_ma if available, else 0. */
+        sin.drain_mah_per_hour = 0;  /* deferred to V49 fine-tuning */
+        /* Estimate screen_on_pct from bat_wake counters (rough approximation) */
+        if (fsm->bat_wake_cycles > 0 && dur > 0) {
+            sin.screen_on_pct = (int)((fsm->bat_wake_screen * 100L) / fsm->bat_wake_cycles);
+        }
+
+        /* Find current bucket and update */
+        int bid = (int)asb_smart_bucket_id(g_smart_rt.daypart, g_smart_rt.is_weekend);
+        if (bid >= 0 && bid < ASB_SMART_BUCKETS) {
+            asb_smart_bucket_update_from_session(
+                &g_smart_store.buckets[bid], &sin, time(NULL));
+            g_smart_sessions_since_save++;
+        }
+
+        /* Reset session-top tracking for next session */
+        g_smart_rt.app_hint_session_top = 0;
+        g_smart_rt.app_hash_session_top = 0;
+    }
     fflush(wf);
     fsync(fileno(wf));
     fclose(wf);
@@ -2136,6 +2221,7 @@ static int read_profile_idx(void) {
         if (buf[i] == '\n' || buf[i] == '\r') { buf[i] = '\0'; break; }
     if (strcmp(buf, "battery")     == 0) return PROFILE_BATTERY;
     if (strcmp(buf, "performance") == 0) return PROFILE_PERFORMANCE;
+    if (strcmp(buf, "smart")       == 0) return PROFILE_SMART;
     return PROFILE_BALANCED;
 }
 
@@ -2214,10 +2300,298 @@ static int parse_uevent_screen(int fd) {
     return is_power;
 }
 
+/* V48 Smart Mode tick — compute effective runtime values and update
+ * g_smart_bounds slot if a meaningful change occurred.
+ * Called every metrics tick. No-op if smart_mode_enabled=0 AND profile != PROFILE_SMART.
+ *
+ * Inputs: current metrics + FSM state (to read profile_idx).
+ * Side effect: updates g_smart_rt and (when slot-gate triggers) g_smart_bounds.
+ *
+ * Returns: 1 if g_smart_bounds was updated this tick (caller should refresh
+ * FSM caps immediately so they reflect the new bounds), 0 otherwise.
+ */
+static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
+    if (!m) return 0;
+    /* Defensive consistency: if FSM is in PROFILE_SMART, ensure runtime flag
+     * is on so g_smart_bounds gets refreshed (FSM reads from it). */
+    if (fsm && fsm->profile_idx == PROFILE_SMART) {
+        g_smart_rt.enabled = 1;
+    }
+    if (!g_smart_rt.enabled || !g_smart_store_loaded) return 0;
+
+    time_t now = time(NULL);
+
+    /* 1. Build context */
+    int daypart = asb_smart_daypart_now(now);
+    int is_weekend = asb_smart_is_weekend(now);
+    int bid = (int)asb_smart_bucket_id(daypart, is_weekend);
+    int charging = m->bat.charging;
+    int screen_on = m->misc.screen_on;
+    int battery_pct = m->bat.capacity_pct;
+    int cpu_max_c = m->therm.cpu_max_c;
+
+    /* Daypart transition detection (for smoothing) */
+    if (g_smart_rt.prev_daypart >= 0 &&
+        g_smart_rt.prev_daypart != daypart &&
+        g_smart_rt.smoothing_start_ts == 0) {
+        g_smart_rt.smoothing_start_ts = now;
+        g_smart_rt.smoothing_active = 1;
+    }
+
+    g_smart_rt.daypart = daypart;
+    g_smart_rt.is_weekend = is_weekend;
+    g_smart_rt.bucket_id = bid;
+
+    /* 2. App hint cache (10s) — V48 alpha uses simple time-based refresh.
+     * Full app reading from cgroup top-app is deferred to V49 to keep V48
+     * conservative. For now, default app_hint to IDLE/MEDIUM based on
+     * screen_on and load. */
+    if (now - g_smart_rt.app_cache_last_refresh >= ASB_SMART_APP_CACHE_S) {
+        if (!screen_on) {
+            g_smart_rt.app_hint = ASB_APP_IDLE;
+        } else {
+            /* Heuristic: GAMING state implies gaming-class app */
+            int fsm_state = -1;
+            /* fsm reference is global through tick; we read from g_state_var
+             * via state file as proxy if no direct access. For V48 alpha,
+             * use simple thresholds on the metrics directly. */
+            (void)fsm_state;
+            if (m->cpu.load1 >= 12.0f) g_smart_rt.app_hint = ASB_APP_HEAVY;
+            else if (m->cpu.load1 >= 6.0f) g_smart_rt.app_hint = ASB_APP_MEDIUM;
+            else g_smart_rt.app_hint = ASB_APP_LIGHT;
+        }
+        g_smart_rt.app_cache_last_refresh = now;
+    }
+    /* Track session-top app hint (max-of-session) */
+    if (g_smart_rt.app_hint > g_smart_rt.app_hint_session_top) {
+        g_smart_rt.app_hint_session_top = g_smart_rt.app_hint;
+    }
+
+    /* 3. Bucket lookup with fallback hierarchy */
+    asb_smart_bucket_t *b = asb_smart_lookup_bucket(
+        &g_smart_store, daypart, is_weekend, now, &g_smart_rt.fallback_level);
+    if (g_smart_rt.fallback_level == ASB_SMART_FALLBACK_EXACT) {
+        g_smart_rt.exact_bucket_hits++;
+    } else {
+        g_smart_rt.fallback_hits++;
+    }
+
+    int conf = asb_smart_confidence_x1000(b, now);
+    asb_smart_compute_effective(b, conf, &g_smart_rt);
+
+    /* 4. Safety overrides — these can lift floors but never reduce safety */
+    asb_smart_apply_night_override(daypart, screen_on, charging,
+                                   g_smart_rt.app_hint, battery_pct, &g_smart_rt);
+
+    /* Get vendor_clamp_1h from anti-clamp counter (V44 tracking).
+     * g_v44_clamp_1h is a sliding hourly window counter maintained
+     * by write_conflicts_json() and similar checkpoints. */
+    int vendor_clamp_1h = (int)g_v44_clamp_1h;
+    int recovery_active = 0;  /* V46 recovery state; conservatively 0 in V48 alpha */
+    asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
+
+    /* 5. Slot-update gating: should we rebuild g_smart_bounds? */
+    int do_update = asb_smart_should_update_slot(&g_smart_rt, now, charging, g_smart_rt.app_hint);
+    if (!do_update) return 0;
+
+    /* 6. Blend battery↔balanced into g_smart_bounds */
+    const asb_profile_bounds_t *bat = &g_profile_bounds[PROFILE_BATTERY];
+    const asb_profile_bounds_t *bal = &g_profile_bounds[PROFILE_BALANCED];
+    asb_profile_bounds_t out;
+    memset(&out, 0, sizeof(out));
+
+    int alpha = g_smart_rt.alpha_battery_x1000;
+
+    /* V48 daypart smoothing: when we just crossed a daypart boundary
+     * and BOTH the previous bucket and the current bucket had decent
+     * confidence (≥ low threshold), linearly blend from prev_alpha to
+     * current_alpha over ASB_SMART_SMOOTH_S (5 min). Outside that window,
+     * or if either side is low-confidence, fall back to hard switch.
+     * Thermal veto and night override break smoothing — they're already
+     * applied above and force alpha to safety floor, which we must respect. */
+    if (g_smart_rt.smoothing_active &&
+        !g_smart_rt.night_safe_override &&
+        !g_smart_rt.thermal_veto)
+    {
+        int prev_conf = g_smart_rt.smoothing_from_alpha_x1000 > 0 ? ASB_SMART_CONF_LOW_X1000 : 0;
+        int cur_conf  = g_smart_rt.conf_x1000;
+        int factor = asb_smart_daypart_smoothing_factor_x100(
+            g_smart_rt.smoothing_start_ts, now, prev_conf, cur_conf);
+        if (factor < 100) {
+            /* Blend: result = from + (to - from) × factor/100 */
+            int from = g_smart_rt.smoothing_from_alpha_x1000;
+            int to   = alpha;
+            alpha = from + ((to - from) * factor) / 100;
+        } else {
+            /* Smoothing window finished */
+            g_smart_rt.smoothing_active = 0;
+            g_smart_rt.smoothing_start_ts = 0;
+        }
+    }
+    /* Remember current alpha for the next daypart transition */
+    if (g_smart_rt.smoothing_start_ts == 0) {
+        g_smart_rt.smoothing_from_alpha_x1000 = (uint16_t)alpha;
+    }
+
+    /* CPU max (floor → DEEP_IDLE cap, ceil → GAMING peak) per cluster */
+    int bat_vals[3], bal_vals[3], out_vals[3];
+    for (int i = 0; i < 3; i++) bat_vals[i] = bat->floor.cpu_max[i];
+    for (int i = 0; i < 3; i++) bal_vals[i] = bal->floor.cpu_max[i];
+    asb_smart_blend_values_int(bat_vals, bal_vals, 3, alpha, out_vals);
+    for (int i = 0; i < 3; i++) out.floor.cpu_max[i] = out_vals[i];
+
+    for (int i = 0; i < 3; i++) bat_vals[i] = bat->ceil.cpu_max[i];
+    for (int i = 0; i < 3; i++) bal_vals[i] = bal->ceil.cpu_max[i];
+    asb_smart_blend_values_int(bat_vals, bal_vals, 3, alpha, out_vals);
+    /* Apply interactive bonus on ceil (peak) — capped at balanced */
+    for (int i = 0; i < 3; i++) {
+        out.ceil.cpu_max[i] = asb_smart_apply_interactive_bonus(
+            out_vals[i], bal->ceil.cpu_max[i], g_smart_rt.interactive_bonus_x1000);
+    }
+
+    /* CPU min — no interactive bonus (it's the floor for DEEP_IDLE / GAMING) */
+    for (int i = 0; i < 3; i++) bat_vals[i] = bat->floor.cpu_min[i];
+    for (int i = 0; i < 3; i++) bal_vals[i] = bal->floor.cpu_min[i];
+    asb_smart_blend_values_int(bat_vals, bal_vals, 3, alpha, out_vals);
+    for (int i = 0; i < 3; i++) out.floor.cpu_min[i] = out_vals[i];
+
+    for (int i = 0; i < 3; i++) bat_vals[i] = bat->ceil.cpu_min[i];
+    for (int i = 0; i < 3; i++) bal_vals[i] = bal->ceil.cpu_min[i];
+    asb_smart_blend_values_int(bat_vals, bal_vals, 3, alpha, out_vals);
+    for (int i = 0; i < 3; i++) out.ceil.cpu_min[i] = out_vals[i];
+
+    /* GPU pcts */
+    int gpu_min_bat[1] = { bat->floor.gpu_min_pct };
+    int gpu_min_bal[1] = { bal->floor.gpu_min_pct };
+    int gpu_min_out[1];
+    asb_smart_blend_values_int(gpu_min_bat, gpu_min_bal, 1, alpha, gpu_min_out);
+    out.floor.gpu_min_pct = gpu_min_out[0];
+
+    int gpu_max_bat[1] = { bat->floor.gpu_max_pct };
+    int gpu_max_bal[1] = { bal->floor.gpu_max_pct };
+    int gpu_max_out[1];
+    asb_smart_blend_values_int(gpu_max_bat, gpu_max_bal, 1, alpha, gpu_max_out);
+    out.floor.gpu_max_pct = gpu_max_out[0];
+
+    gpu_min_bat[0] = bat->ceil.gpu_min_pct;
+    gpu_min_bal[0] = bal->ceil.gpu_min_pct;
+    asb_smart_blend_values_int(gpu_min_bat, gpu_min_bal, 1, alpha, gpu_min_out);
+    out.ceil.gpu_min_pct = gpu_min_out[0];
+
+    gpu_max_bat[0] = bat->ceil.gpu_max_pct;
+    gpu_max_bal[0] = bal->ceil.gpu_max_pct;
+    asb_smart_blend_values_int(gpu_max_bat, gpu_max_bal, 1, alpha, gpu_max_out);
+    out.ceil.gpu_max_pct = gpu_max_out[0];
+
+    /* Hard invariant: never exceed balanced sustained envelope */
+    for (int i = 0; i < 3; i++) {
+        if (out.ceil.cpu_max[i] > bal->ceil.cpu_max[i]) out.ceil.cpu_max[i] = bal->ceil.cpu_max[i];
+        if (out.ceil.cpu_min[i] > bal->ceil.cpu_min[i]) out.ceil.cpu_min[i] = bal->ceil.cpu_min[i];
+    }
+    if (out.ceil.gpu_max_pct > bal->ceil.gpu_max_pct) out.ceil.gpu_max_pct = bal->ceil.gpu_max_pct;
+
+    /* Commit to global slot */
+    g_smart_bounds = out;
+    g_smart_bounds_initialized = 1;
+
+    asb_smart_mark_slot_updated(&g_smart_rt, now, charging, g_smart_rt.app_hint);
+
+    if (g_asb_cfg.smart_debug_log) {
+        asb_log("smart_tick: bucket=%d daypart=%d we=%d fb=%d conf=%d alpha=%d "
+                "night=%d veto=%d app=%d cpu=%d",
+                bid, daypart, is_weekend, g_smart_rt.fallback_level,
+                g_smart_rt.conf_x1000, g_smart_rt.alpha_battery_x1000,
+                g_smart_rt.night_safe_override, g_smart_rt.thermal_veto,
+                g_smart_rt.app_hint, cpu_max_c);
+    }
+    return 1;
+}
+
+/* V48 Smart Mode periodic persistence. Saves buckets.bin every ~5 minutes
+ * (when changes occurred) and copies to .bak every week. */
+static void asb_smart_persist_check(void) {
+    if (!g_smart_rt.enabled || !g_smart_store_loaded) return;
+    time_t now = time(NULL);
+    /* Save throttled: at most once per 5 minutes */
+    if (now - g_smart_last_save_ts >= 300) {
+        g_smart_store.last_update_ts = (uint32_t)now;
+        int rc = asb_smart_store_save_atomic(&g_smart_store, ASB_SMART_STORE_FILE);
+        if (rc == 0) {
+            g_smart_last_save_ts = now;
+        }
+    }
+    /* Weekly backup */
+    if (now - g_smart_last_backup_ts >= ASB_SMART_BACKUP_PERIOD_S) {
+        int rc = asb_smart_store_backup(ASB_SMART_STORE_FILE, ASB_SMART_STORE_BAK);
+        if (rc == 0) {
+            g_smart_last_backup_ts = now;
+            asb_log("smart_persist: weekly backup written");
+        }
+    }
+}
+
 static volatile int g_running = 1;
 static void sig_handler(int sig) {
     (void)sig;
     g_running = 0;
+}
+
+/* V48 Smart Mode init helpers.
+ * Reads file flag /data/adb/asb/smart_mode_enabled (created by service.sh
+ * migration). Loads buckets.bin with fallback to .bak and seed defaults.
+ * Initialises g_smart_bounds to BALANCED so safe fallback exists immediately.
+ * Returns 1 if Smart Mode enabled, 0 otherwise. */
+static int asb_smart_init(void) {
+    /* Initialise g_smart_bounds to BALANCED defaults so any reads during
+     * boot/uninit get a safe envelope */
+    memcpy(&g_smart_bounds, &g_profile_bounds[PROFILE_BALANCED], sizeof(g_smart_bounds));
+    g_smart_bounds_initialized = 1;
+
+    /* Initialise runtime state */
+    memset(&g_smart_rt, 0, sizeof(g_smart_rt));
+    g_smart_rt.prev_bucket_id = -1;
+    g_smart_rt.prev_daypart = -1;
+    g_smart_rt.last_conf_tier = -1;
+    g_smart_rt.last_charging = -1;
+    g_smart_rt.last_app_hint_tier = -1;
+    g_smart_rt.last_night_override = -1;
+    g_smart_rt.last_thermal_veto = -1;
+
+    /* Read on/off flag */
+    int flag = asb_smart_flag_read();
+    if (flag < 0) {
+        /* No flag file yet — treat as disabled, but still load the store
+         * so a manual profile switch to 'smart' (e.g. via apply_profile.sh)
+         * can immediately get fresh bounds without waiting for a reboot. */
+        g_smart_rt.enabled = 0;
+        g_asb_cfg.smart_mode_enabled = 0;
+        flag = 0;
+    } else {
+        g_smart_rt.enabled = flag;
+        g_asb_cfg.smart_mode_enabled = flag;
+    }
+
+    /* Load bucket store (chain: main → bak → seed defaults) regardless of
+     * flag — store availability and on/off are separate concerns. */
+    asb_smart_load_outcome_t outcome;
+    int rc = asb_smart_store_load(&g_smart_store, &outcome);
+    g_smart_store_loaded = 1;
+
+    if (outcome.loaded_from_main) {
+        asb_log("smart_init: loaded main store, %d buckets, version %d",
+            g_smart_store.bucket_count, g_smart_store.version);
+    } else if (outcome.loaded_from_backup) {
+        asb_log("smart_init: main store invalid (reason=%d), restored from backup",
+            outcome.reset_reason);
+    } else if (outcome.seeded) {
+        asb_log("smart_init: store unreadable (reason=%d), seeded fresh defaults",
+            outcome.reset_reason);
+    }
+    (void)rc;
+
+    g_smart_last_save_ts = time(NULL);
+    g_smart_last_backup_ts = g_smart_last_save_ts;
+    return flag;
 }
 
 int main(int argc, char **argv) {
@@ -2315,6 +2689,9 @@ int main(int argc, char **argv) {
     writer_init_cache();
     persistent_stats_load();
     sweep_stale_session();
+
+    /* V48 Smart Mode init (no-op if smart_mode_enabled file flag not set) */
+    asb_smart_init();
 
     /* OTA quarantine -- detect environment changes */
     {
@@ -2514,6 +2891,24 @@ int main(int argc, char **argv) {
                 fsm.plan.ac_budget, fsm.plan.ac_prearm, fsm.plan.sensor_budget,
                 fsm.plan.quarantine, g_last_user_id);
     }
+    /* V48: run smart_tick BEFORE the first writer_apply_caps so the boot
+     * write already reflects fresh g_smart_bounds when profile is SMART.
+     * Without this, the first write uses BALANCED defaults until the next
+     * tick refreshes — visible as a brief envelope flicker at boot. */
+    {
+        int _smart_updated = asb_smart_tick(&metrics, &fsm);
+        if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
+            asb_profile_caps_t _new_caps;
+            fsm_interpolate_caps(asb_profile_bounds_for(fsm.profile_idx),
+                                 fsm.profile_idx, fsm.state, &_new_caps);
+            if (fsm.thermal_cap && fsm.state != ASB_STATE_SUSTAINED) {
+                float keep = (100 - g_asb_cfg.thermal_overlay_pct) / 100.0f;
+                for (int i = 0; i < 3; i++)
+                    _new_caps.cpu_max[i] = (int)(_new_caps.cpu_max[i] * keep);
+            }
+            fsm.current_caps = _new_caps;
+        }
+    }
     writer_apply_caps(&fsm.current_caps, 1, fsm.state, fsm.thermal_cap);
     write_state(&fsm, &metrics, cur_pred);
     {
@@ -2660,7 +3055,7 @@ int main(int argc, char **argv) {
             metrics.gpu.load_pct,
             metrics.cpu.load1);
     asb_log("session_start profile=%s highload=%s bat=%d%% temp=%d sus_enter=%d sus_exit=%d gaming_gpu=%d",
-            profile_idx == 0 ? "battery" : profile_idx == 2 ? "performance" : "balanced",
+            asb_profile_name(profile_idx),
             g_asb_cfg.highload_mode == 1 ? "burst" :
             g_asb_cfg.highload_mode == 2 ? "stable" :
             g_asb_cfg.highload_mode == 3 ? "auto" : "default",
@@ -2715,7 +3110,7 @@ int main(int argc, char **argv) {
                         session_plan_apply_prearm(&fsm);
                         asb_log("session_start profile=%s highload=%s bat=%d%% temp=%d "
                                 "sus_enter=%d sus_exit=%d gaming_gpu=%d (drift_resync)",
-                                _file_idx == 0 ? "battery" : _file_idx == 2 ? "performance" : "balanced",
+                                asb_profile_name(_file_idx),
                                 g_asb_cfg.highload_mode == 1 ? "burst" :
                                 g_asb_cfg.highload_mode == 2 ? "stable" :
                                 g_asb_cfg.highload_mode == 3 ? "auto" : "default",
@@ -2725,6 +3120,32 @@ int main(int argc, char **argv) {
                                 g_asb_cfg.gaming_gpu_enter);
                     }
                     g_last_profile_sync = _now;
+                }
+                {
+                    int _smart_updated = asb_smart_tick(&metrics, &fsm);
+                    if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
+                        asb_profile_caps_t _new_caps;
+                        fsm_interpolate_caps(asb_profile_bounds_for(fsm.profile_idx),
+                                             fsm.profile_idx, fsm.state, &_new_caps);
+                        if (fsm.thermal_cap && fsm.state != ASB_STATE_SUSTAINED) {
+                            float keep = (100 - g_asb_cfg.thermal_overlay_pct) / 100.0f;
+                            for (int i = 0; i < 3; i++)
+                                _new_caps.cpu_max[i] = (int)(_new_caps.cpu_max[i] * keep);
+                        }
+                        int _diff = 0;
+                        for (int i = 0; i < 3; i++) {
+                            if (_new_caps.cpu_max[i] != fsm.current_caps.cpu_max[i]) { _diff = 1; break; }
+                            if (_new_caps.cpu_min[i] != fsm.current_caps.cpu_min[i]) { _diff = 1; break; }
+                        }
+                        if (_diff) {
+                            fsm.current_caps = _new_caps;
+                            int _w = writer_apply_caps(&fsm.current_caps, 1, fsm.state, fsm.thermal_cap);
+                            if (_w > 0) { g_total_writes += _w; g_last_write_ts = time(NULL); }
+                            if (g_asb_cfg.smart_debug_log) {
+                                asb_log("smart_tick(heartbeat): forced caps refresh");
+                            }
+                        }
+                    }
                 }
                 write_state(&fsm, &metrics, cur_pred);
                 /* also write conflicts.json and learner_state.json for WebUI. */
@@ -2883,6 +3304,7 @@ int main(int argc, char **argv) {
                     int new_idx = PROFILE_BALANCED;
                     if (strcmp(pname, "battery")     == 0) new_idx = PROFILE_BATTERY;
                     if (strcmp(pname, "performance") == 0) new_idx = PROFILE_PERFORMANCE;
+                    if (strcmp(pname, "smart")       == 0) new_idx = PROFILE_SMART;
                     if (new_idx != fsm.profile_idx) {
                         fsm_flush_state_time(&fsm);
                         persistent_stats_save(&fsm);
@@ -3026,7 +3448,7 @@ int main(int argc, char **argv) {
                     need_metrics = 1;
                     g_last_reassert = 0;
                     asb_log("session_start profile=%s highload=%s (start-session cmd)",
-                            new_idx == 0 ? "battery" : new_idx == 2 ? "performance" : "balanced",
+                            asb_profile_name(new_idx),
                             g_asb_cfg.highload_mode == 1 ? "burst" :
                             g_asb_cfg.highload_mode == 2 ? "stable" :
                             g_asb_cfg.highload_mode == 3 ? "auto" : "default");
@@ -3257,9 +3679,8 @@ int main(int argc, char **argv) {
                            metrics.bat.capacity_pct >= g_asb_cfg.auto_battery_high_pct &&
                            _can_act) {
                     int _restore = fsm.auto_battery_restore_idx;
-                    if (_restore < 0 || _restore >= 3) _restore = PROFILE_BALANCED;
-                    const char *_pname = (_restore == PROFILE_BATTERY) ? "battery" :
-                                         (_restore == PROFILE_PERFORMANCE) ? "performance" : "balanced";
+                    if (_restore < 0 || _restore >= ASB_PROFILE_COUNT) _restore = PROFILE_BALANCED;
+                    const char *_pname = asb_profile_name(_restore);
                     fsm.auto_battery_active = 0;
                     fsm.auto_battery_restore_idx = -1;
                     fsm.auto_battery_last_action = _now_t;
@@ -3579,12 +4000,52 @@ int main(int argc, char **argv) {
                     }
                 }
             }
+            /* V48 Smart Mode tick: refresh g_smart_bounds BEFORE writer_apply_caps.
+             * If bounds were updated AND current profile is SMART, recompute
+             * fsm.current_caps so the caps about to be written reflect the
+             * fresh blended values. Force a write so the change reaches sysfs
+             * immediately rather than waiting for the next state transition.
+             */
+            int smart_updated = asb_smart_tick(&metrics, &fsm);
+            asb_smart_persist_check();
+            if (smart_updated && fsm.profile_idx == PROFILE_SMART) {
+                asb_profile_caps_t _new_caps;
+                fsm_interpolate_caps(asb_profile_bounds_for(fsm.profile_idx),
+                                     fsm.profile_idx, fsm.state, &_new_caps);
+                /* Apply same thermal overlay as the normal FSM path */
+                if (fsm.thermal_cap && fsm.state != ASB_STATE_SUSTAINED) {
+                    float keep = (100 - g_asb_cfg.thermal_overlay_pct) / 100.0f;
+                    for (int i = 0; i < 3; i++)
+                        _new_caps.cpu_max[i] = (int)(_new_caps.cpu_max[i] * keep);
+                }
+                /* Detect if caps actually changed to avoid spurious writes */
+                int _diff = 0;
+                for (int i = 0; i < 3; i++) {
+                    if (_new_caps.cpu_max[i] != fsm.current_caps.cpu_max[i]) { _diff = 1; break; }
+                    if (_new_caps.cpu_min[i] != fsm.current_caps.cpu_min[i]) { _diff = 1; break; }
+                }
+                if (!_diff &&
+                    (_new_caps.gpu_max_pct != fsm.current_caps.gpu_max_pct ||
+                     _new_caps.gpu_min_pct != fsm.current_caps.gpu_min_pct)) {
+                    _diff = 1;
+                }
+                if (_diff) {
+                    fsm.current_caps = _new_caps;
+                    force_write = 1;
+                    if (g_asb_cfg.smart_debug_log) {
+                        asb_log("smart_tick: forced caps refresh (alpha=%d, fb=%d)",
+                                g_smart_rt.alpha_battery_x1000,
+                                g_smart_rt.fallback_level);
+                    }
+                }
+            }
             if (changed || force_write) {
                 int writes = writer_apply_caps(&fsm.current_caps, force_write, fsm.state, fsm.thermal_cap);
                 if (writes > 0) {
                     g_total_writes += writes;
                     g_last_write_ts = time(NULL);
                 }
+
                 write_state(&fsm, &metrics, cur_pred);
                 
                 write_conflicts_json();
@@ -3913,7 +4374,7 @@ int main(int argc, char **argv) {
                     if (leak_now - g_last_leak_reassert >= 60) {
                         asb_log("leak_observed[%s/%s]: p0=%d(want %d) p1=%d(want %d) — reconcile.sh handles",
                                 asb_state_names[fsm.state],
-                                (fsm.profile_idx == PROFILE_BATTERY) ? "battery" : "balanced",
+                                asb_profile_name(fsm.profile_idx),
                                 actual_p0, want_p0, actual_p1, want_p1);
                         g_last_leak_reassert = leak_now;
                         g_leak_reassert_count++;

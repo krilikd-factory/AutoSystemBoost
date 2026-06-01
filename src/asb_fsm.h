@@ -160,6 +160,45 @@ static int fsm_profile_is_battery = 0;
 static int fsm_profile_is_balanced = 0;
 #define PROFILE_BALANCED    1
 #define PROFILE_PERFORMANCE 2
+#define PROFILE_SMART       3
+#define ASB_PROFILE_COUNT   4
+
+/* V48 Smart Mode runtime bounds (mutable, written by smart blend math).
+ * Initialized to BALANCED defaults at boot; smart logic blends battery↔balanced
+ * into this slot when smart_mode_enabled=1 and FSM profile_idx==PROFILE_SMART.
+ * When smart_mode_enabled=0, this slot is unused and FSM uses PROFILE_BATTERY/
+ * BALANCED/PERFORMANCE from g_profile_bounds[] as before.
+ *
+ * IMPORTANT: g_profile_bounds[] above is const and stays const (V47 envelope
+ * source). Smart Mode does NOT modify the V47 profile bounds; it computes
+ * a blended bounds struct in this separate slot and reads from it instead.
+ */
+static asb_profile_bounds_t g_smart_bounds;
+static int g_smart_bounds_initialized = 0;
+
+/* Dispatch profile_idx to its bounds source. PROFILE_SMART reads from mutable
+ * g_smart_bounds; other profiles read from compile-time const g_profile_bounds.
+ * If smart bounds not yet initialized, falls back to BALANCED. */
+static inline const asb_profile_bounds_t *asb_profile_bounds_for(int profile_idx) {
+    if (profile_idx == PROFILE_SMART) {
+        if (g_smart_bounds_initialized) return &g_smart_bounds;
+        return &g_profile_bounds[PROFILE_BALANCED];
+    }
+    if (profile_idx < 0 || profile_idx >= 3) return &g_profile_bounds[PROFILE_BALANCED];
+    return &g_profile_bounds[profile_idx];
+}
+
+/* Single source of truth: profile_idx → human-readable name string.
+ * Used by logging, JSON output, and profile-name display sites. */
+static inline const char *asb_profile_name(int profile_idx) {
+    switch (profile_idx) {
+        case PROFILE_BATTERY:     return "battery";
+        case PROFILE_BALANCED:    return "balanced";
+        case PROFILE_PERFORMANCE: return "performance";
+        case PROFILE_SMART:       return "smart";
+        default:                  return "balanced";
+    }
+}
 
 static const float g_state_level[ASB_STATE_COUNT] = {
     [ASB_STATE_DEEP_IDLE]  = 0.0f,
@@ -419,7 +458,7 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
     }
     clock_gettime(CLOCK_MONOTONIC, &fsm->last_transition);
     clock_gettime(CLOCK_MONOTONIC, &fsm->ses_state_enter);
-    fsm_interpolate_caps(&g_profile_bounds[profile_idx],
+    fsm_interpolate_caps(asb_profile_bounds_for(profile_idx),
                          profile_idx, fsm->state, &fsm->current_caps);
 }
 
@@ -974,7 +1013,7 @@ if (!can_leave &&
     }
 
     asb_profile_caps_t new_caps;
-    fsm_interpolate_caps(&g_profile_bounds[fsm->profile_idx],
+    fsm_interpolate_caps(asb_profile_bounds_for(fsm->profile_idx),
                          fsm->profile_idx, fsm->state, &new_caps);
     
     if (fsm->thermal_cap && fsm->state != ASB_STATE_SUSTAINED) {

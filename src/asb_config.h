@@ -103,6 +103,25 @@ typedef struct {
     int   night_quiet_enable;      /* 1=enable feature, 0=disable */
     int   night_quiet_hour_start;  /* hour 0-23 when night-fast starts (default 23) */
     int   night_quiet_hour_end;    /* hour 0-23 when night-fast ends (default 6) */
+
+    /* V48 Smart Mode (alpha) — additive adaptive layer on top of V47 envelopes.
+     * Off by default for V47 upgraders, on by default for fresh V48 installs
+     * (managed via /data/adb/asb/smart_mode_enabled file flag, not this field).
+     * This field is the runtime mirror of the file flag after boot.
+     * See V48_LOCKED.md for full specification. */
+    int   smart_mode_enabled;
+    int   smart_conf_low;             /* low threshold x1000, default 350 */
+    int   smart_conf_high;            /* high threshold x1000, default 650 */
+    int   smart_eff_obs_full;         /* full-confidence eff_obs x100, default 2000 */
+    int   smart_pkg_plaintext;        /* 0=hash, 1=plaintext (default 0; debug build forces 1) */
+    int   smart_night_start_hour;     /* night override start hour, default 0 */
+    int   smart_night_end_hour;       /* night override end hour, default 6 */
+    int   smart_interactive_max;      /* bias clamp max x1000, default 150 */
+    int   smart_idle_bias_min;        /* bias clamp min x1000, default -200 */
+    int   smart_idle_bias_max;        /* bias clamp max x1000, default 200 */
+    int   smart_sleep_bias_max;       /* bias clamp max x1000, default 1000 */
+    int   smart_net_conservative_max; /* bias clamp max x1000, default 1000 */
+    int   smart_debug_log;            /* extra logging for alpha, default 0 */
 } asb_runtime_config_t;
 
 static inline void asb_config_defaults(asb_runtime_config_t *c) {
@@ -201,6 +220,21 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->night_quiet_enable           = 1;
     c->night_quiet_hour_start       = 23;
     c->night_quiet_hour_end         = 6;
+
+    /* V48 Smart Mode defaults — actual on/off comes from /data/adb/asb/smart_mode_enabled */
+    c->smart_mode_enabled           = 0;     /* file flag overrides at boot */
+    c->smart_conf_low               = 350;
+    c->smart_conf_high              = 650;
+    c->smart_eff_obs_full           = 2000;
+    c->smart_pkg_plaintext          = 0;
+    c->smart_night_start_hour       = 0;
+    c->smart_night_end_hour         = 6;
+    c->smart_interactive_max        = 150;
+    c->smart_idle_bias_min          = -200;
+    c->smart_idle_bias_max          = 200;
+    c->smart_sleep_bias_max         = 1000;
+    c->smart_net_conservative_max   = 1000;
+    c->smart_debug_log              = 0;
 }
 
 static inline char *asb_cfg_trim(char *s) {
@@ -301,6 +335,21 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "perf_hot_guard_temp")) c->perf_hot_guard_temp = atoi(v);
     else if (!strcmp(k, "perf_hot_guard_ticks")) c->perf_hot_guard_ticks = atoi(v);
     else if (!strcmp(k, "perf_skin_hot_thresh")) c->perf_skin_hot_thresh = atoi(v);
+
+    /* V48 Smart Mode */
+    else if (!strcmp(k, "smart_mode_enabled"))      c->smart_mode_enabled = atoi(v);
+    else if (!strcmp(k, "smart_conf_low"))          c->smart_conf_low = atoi(v);
+    else if (!strcmp(k, "smart_conf_high"))         c->smart_conf_high = atoi(v);
+    else if (!strcmp(k, "smart_eff_obs_full"))      c->smart_eff_obs_full = atoi(v);
+    else if (!strcmp(k, "smart_pkg_plaintext"))     c->smart_pkg_plaintext = atoi(v);
+    else if (!strcmp(k, "smart_night_start_hour"))  c->smart_night_start_hour = atoi(v);
+    else if (!strcmp(k, "smart_night_end_hour"))    c->smart_night_end_hour = atoi(v);
+    else if (!strcmp(k, "smart_interactive_max"))   c->smart_interactive_max = atoi(v);
+    else if (!strcmp(k, "smart_idle_bias_min"))     c->smart_idle_bias_min = atoi(v);
+    else if (!strcmp(k, "smart_idle_bias_max"))     c->smart_idle_bias_max = atoi(v);
+    else if (!strcmp(k, "smart_sleep_bias_max"))    c->smart_sleep_bias_max = atoi(v);
+    else if (!strcmp(k, "smart_net_conservative_max")) c->smart_net_conservative_max = atoi(v);
+    else if (!strcmp(k, "smart_debug_log"))         c->smart_debug_log = atoi(v);
 }
 
 static inline int asb_config_load_file(const char *path, asb_runtime_config_t *c) {
@@ -365,12 +414,16 @@ static inline void asb_config_apply_stable_override(asb_runtime_config_t *c) {
 static inline int asb_config_profile_sustained_temp_enter(const asb_runtime_config_t *c, int profile_idx) {
     if (profile_idx == 2 && c->perf_sustained_temp_enter > 0) return c->perf_sustained_temp_enter;
     if (profile_idx == 1 && c->balanced_sustained_temp_enter > 0) return c->balanced_sustained_temp_enter;
+    /* V48 PROFILE_SMART (3): use balanced thresholds — Smart must never run
+     * with thermal envelope hotter than balanced. */
+    if (profile_idx == 3 && c->balanced_sustained_temp_enter > 0) return c->balanced_sustained_temp_enter;
     return c->sustained_temp_enter;
 }
 
 static inline int asb_config_profile_sustained_temp_exit(const asb_runtime_config_t *c, int profile_idx) {
     if (profile_idx == 2 && c->perf_sustained_temp_exit > 0) return c->perf_sustained_temp_exit;
     if (profile_idx == 1 && c->balanced_sustained_temp_exit > 0) return c->balanced_sustained_temp_exit;
+    if (profile_idx == 3 && c->balanced_sustained_temp_exit > 0) return c->balanced_sustained_temp_exit;
     return c->sustained_temp_exit;
 }
 
