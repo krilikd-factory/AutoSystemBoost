@@ -658,6 +658,253 @@ lk_check_profile_matches() {
   return 0
 }
 
+# ===== V47 Smart Mode logkit helpers ============================================
+# These capture the Smart Mode adaptive layer state per tick + final summary.
+
+lk_check_smart_mode_active() {
+  # Verify both: profile == smart AND smart_mode_enabled flag == 1
+  _cur=$(cat "$MODDIR/current_profile" 2>/dev/null)
+  _flag=$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)
+  if [ "$_cur" != "smart" ]; then
+    echo "⚠️  Current profile is '$_cur', expected 'smart'."
+    echo "    Tap 🤖 Smart in WebUI or run: sh $MODDIR/tools/asb_smart_mode.sh enable"
+    return 1
+  fi
+  if [ "$_flag" != "1" ]; then
+    echo "⚠️  smart_mode_enabled file flag is '$_flag', expected '1'."
+    echo "    Run: sh $MODDIR/tools/asb_smart_mode.sh enable"
+    return 1
+  fi
+  return 0
+}
+
+lk_smart_trace_header() {
+  {
+    echo "# V47 Smart Mode trace — one row per poll"
+    echo "# Columns:"
+    echo "#   epoch  iso_time  bucket_id  daypart  is_weekend  fb_level"
+    echo "#   conf_x1000  alpha_battery_x1000  interactive_bonus_x1000"
+    echo "#   sleep_override  thermal_veto  app_hint  pkg_hash"
+    echo "#   cpu_max_c  bat_pct  bat_temp_dC  screen_on  charging"
+    echo "#   fsm_state  fsm_profile_idx"
+    echo "# Daypart: 0=sleep 1=wake 2=morn 3=day 4=eve 5=late"
+    echo "# Fallback: 0=exact 1=daypart 2=class 3=global 4=safe_default(cold-start)"
+    echo "# App hint: 0=idle 1=light 2=medium 3=heavy 4=gaming"
+    echo "epoch iso bucket dp wkd fb conf alpha inter night veto app pkghash cpuC batpct batT scr chg state pidx"
+  } > "$LK_OUT_DIR/smart_trace.tsv"
+}
+
+# Extract a single key=value from /dev/.asb/state (returns "" if missing)
+lk_state_kv() {
+  _k="$1"
+  grep -m1 "^${_k}=" /dev/.asb/state 2>/dev/null | sed "s/^${_k}=//"
+}
+
+lk_capture_smart_trace_row() {
+  _e=$(date +%s)
+  _d=$(date '+%Y-%m-%dT%H:%M:%S')
+
+  # Smart-specific fields written by C governor each tick
+  _bucket=$(lk_state_kv smart_bucket_id)
+  _dp=$(lk_state_kv smart_daypart)
+  _wkd=$(lk_state_kv smart_is_weekend)
+  _fb=$(lk_state_kv smart_fallback_level)
+  _conf=$(lk_state_kv smart_confidence)
+  _alpha=$(lk_state_kv smart_alpha_battery)
+  _inter=$(lk_state_kv smart_interactive_bonus)
+  _night=$(lk_state_kv smart_sleep_override)
+  _veto=$(lk_state_kv smart_thermal_veto)
+  _app=$(lk_state_kv smart_app_hint)
+  _pkghash=$(lk_state_kv smart_pkg_hash)
+
+  # Context fields
+  _cpuC=$(lk_state_kv cpu_max_c)
+  _state=$(lk_state_kv state)
+  _pidx=$(lk_state_kv profile_idx)
+  _bpct=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
+  _btmp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null)
+  _scr=$(dumpsys power 2>/dev/null | grep -m1 'mWakefulness=' | sed 's/.*mWakefulness=//;s/ .*//')
+  _chg=$(cat /sys/class/power_supply/battery/status 2>/dev/null | head -c 1)
+
+  # Fallback empty fields to '-' so columns stay aligned
+  for v in _bucket _dp _wkd _fb _conf _alpha _inter _night _veto _app _pkghash _cpuC _state _pidx _bpct _btmp _scr _chg; do
+    eval "_val=\$$v"
+    [ -z "$_val" ] && eval "$v=-"
+  done
+
+  echo "$_e $_d $_bucket $_dp $_wkd $_fb $_conf $_alpha $_inter $_night $_veto $_app $_pkghash $_cpuC $_bpct $_btmp $_scr $_chg $_state $_pidx" \
+    >> "$LK_OUT_DIR/smart_trace.tsv"
+}
+
+# Append session_history.jsonl entries that arrived during this capture window
+lk_capture_smart_sessions_window() {
+  _src="/data/adb/asb/session_history.jsonl"
+  [ -r "$_src" ] || return 0
+  _dst="$LK_OUT_DIR/session_history_window.jsonl"
+  # Find lines whose timestamps fall within the capture window
+  awk -v start="$LK_START_EPOCH" '
+    {
+      if (match($0, /"ts":"[0-9T:Z\-]+"/)) {
+        t = substr($0, RSTART+6, RLENGTH-7)
+        # Convert ISO ts to epoch via system date
+        cmd = "date -d \"" t "\" +%s 2>/dev/null"
+        cmd | getline epoch
+        close(cmd)
+        if (epoch != "" && epoch+0 >= start+0) print $0
+      }
+    }
+  ' "$_src" > "$_dst" 2>/dev/null
+  _n=$(wc -l < "$_dst" 2>/dev/null | tr -d ' ')
+  echo "[smart] captured $_n session_history entries in window" >&2
+}
+
+# Save the bucket store snapshot at end of capture for diff vs start
+lk_snapshot_smart_store() {
+  _suffix="$1"
+  _bin=/data/adb/asb/buckets.bin
+  if [ -r "$_bin" ]; then
+    cp "$_bin" "$LK_OUT_DIR/buckets_${_suffix}.bin" 2>/dev/null
+    # Also hex-dump for easy inspection
+    od -An -v -tx1 "$_bin" 2>/dev/null | head -50 > "$LK_OUT_DIR/buckets_${_suffix}.hex" 2>/dev/null
+  fi
+}
+
+# End-of-run Smart Mode aggregate summary
+lk_emit_smart_summary() {
+  _trace="$LK_OUT_DIR/smart_trace.tsv"
+  _out="$LK_OUT_DIR/_smart_summary.txt"
+  [ -r "$_trace" ] || return 0
+
+  {
+    echo "===== V47 Smart Mode capture summary ====="
+    echo "scenario:    $LK_SCENARIO"
+    echo "duration:    $(( $(date +%s) - LK_START_EPOCH ))s"
+    echo "ticks:       $LK_TICK_COUNT"
+    echo ""
+
+    # Count rows where smart was actually active (not '-')
+    _rows=$(grep -cvE '^#|^epoch' "$_trace" 2>/dev/null)
+    _smart_rows=$(awk 'NR>1 && /^[0-9]+ / && $3 != "-"' "$_trace" 2>/dev/null | wc -l)
+    echo "data rows:           $_rows"
+    echo "with smart fields:   $_smart_rows"
+    echo ""
+
+    # Bucket distribution (which buckets did we hit during capture?)
+    echo "── Bucket distribution ──"
+    awk 'NR>1 && $3 != "-" { c[$3]++ } END { for (k in c) printf "  bucket #%s : %d ticks\n", k, c[k] }' \
+      "$_trace" 2>/dev/null | sort
+    echo ""
+
+    # Daypart distribution
+    echo "── Daypart distribution ──"
+    awk 'NR>1 && $4 != "-" {
+      n[$4]++
+    } END {
+      for (k in n) {
+        name = "?"
+        if (k == 0) name = "sleep"; else if (k == 1) name = "wake"
+        else if (k == 2) name = "morn"; else if (k == 3) name = "day"
+        else if (k == 4) name = "eve"; else if (k == 5) name = "late"
+        printf "  daypart %s (%s) : %d ticks\n", k, name, n[k]
+      }
+    }' "$_trace" 2>/dev/null | sort
+    echo ""
+
+    # Fallback distribution (how often did we have a real exact match?)
+    echo "── Fallback distribution ──"
+    awk 'NR>1 && $6 != "-" {
+      n[$6]++
+    } END {
+      for (k in n) {
+        name = "?"
+        if (k == 0) name = "exact"; else if (k == 1) name = "daypart_pair"
+        else if (k == 2) name = "class"; else if (k == 3) name = "global"
+        else if (k == 4) name = "safe_default(cold)"
+        printf "  level %s (%s) : %d ticks\n", k, name, n[k]
+      }
+    }' "$_trace" 2>/dev/null | sort
+    echo ""
+
+    # Confidence stats
+    echo "── Confidence (x1000) ──"
+    awk 'NR>1 && $7 != "-" {
+      v=$7+0; sum+=v; n++
+      if (n==1 || v<min) min=v
+      if (n==1 || v>max) max=v
+    } END {
+      if (n>0) printf "  ticks=%d  avg=%.0f  min=%d  max=%d  (1000=full conf, 350=low gate, 650=strong gate)\n",
+        n, sum/n, min, max
+      else print "  (no data)"
+    }' "$_trace" 2>/dev/null
+    echo ""
+
+    # Alpha distribution (how battery-leaning was the blend?)
+    echo "── Alpha_battery (x1000, 0=balanced 1000=battery) ──"
+    awk 'NR>1 && $8 != "-" {
+      v=$8+0; sum+=v; n++
+      if (n==1 || v<min) min=v
+      if (n==1 || v>max) max=v
+      bin = int(v/100)*100
+      b[bin]++
+    } END {
+      if (n>0) printf "  ticks=%d  avg=%.0f  min=%d  max=%d\n", n, sum/n, min, max
+      for (k=0; k<=1000; k+=100) {
+        cnt = b[k]+0
+        bar = ""
+        for (i=0; i<cnt; i+=max(1,int(n/40))) bar = bar "#"
+        printf "  %3d-%3d : %s (%d)\n", k, k+99, bar, cnt
+      }
+    } function max(a,b) { return a>b?a:b }' "$_trace" 2>/dev/null
+    echo ""
+
+    # Override / veto rates
+    echo "── Override / Veto firing rate ──"
+    awk 'NR>1 && $10 != "-" { n10++; if ($10+0==1) o++; }
+         NR>1 && $11 != "-" { n11++; if ($11+0==1) v++; }
+         END {
+           if (n10>0) printf "  night_safe_override: %d/%d ticks (%.1f%%)\n", o+0, n10, (o+0)*100.0/n10
+           if (n11>0) printf "  thermal_veto:        %d/%d ticks (%.1f%%)\n", v+0, n11, (v+0)*100.0/n11
+         }' "$_trace" 2>/dev/null
+    echo ""
+
+    # App hint distribution
+    echo "── App hint distribution ──"
+    awk 'NR>1 && $12 != "-" {
+      n[$12]++
+    } END {
+      for (k in n) {
+        name = "?"
+        if (k == 0) name = "idle"; else if (k == 1) name = "light"
+        else if (k == 2) name = "medium"; else if (k == 3) name = "heavy"
+        else if (k == 4) name = "gaming"
+        printf "  hint %s (%s) : %d ticks\n", k, name, n[k]
+      }
+    }' "$_trace" 2>/dev/null | sort
+    echo ""
+
+    # Thermal correlation: avg CPU temp grouped by alpha range
+    echo "── Avg CPU temp by alpha range (does battery-lean run cooler?) ──"
+    awk 'NR>1 && $8 != "-" && $14 != "-" {
+      a=$8+0; t=$14+0
+      band=int(a/200)*200
+      tsum[band]+=t; n[band]++
+    } END {
+      for (k=0; k<=1000; k+=200) {
+        if (n[k] > 0) printf "  alpha %3d-%3d : %d ticks, avg CPU %.1f°C\n", k, k+199, n[k], tsum[k]/n[k]
+      }
+    }' "$_trace" 2>/dev/null
+
+    # Final ASB Smart Mode CLI status snapshot
+    echo ""
+    echo "── End-of-capture Smart status snapshot ──"
+    sh "$MODDIR/tools/asb_smart_mode.sh" status 2>/dev/null | head -30
+  } > "$_out"
+
+  cat "$_out"
+}
+
+# ===== end Smart Mode helpers ===================================================
+
 lk_init() {
   MODDIR="$(lk_resolve_moddir)"
   LK_GOV_LOG="$(lk_resolve_gov_log)"
