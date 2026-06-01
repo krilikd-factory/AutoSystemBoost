@@ -91,8 +91,54 @@ if [ -r /dev/.asb/recovery.json ]; then
   case "$_rec_disabled" in ''|*[!0-9]*) _rec_disabled=0 ;; esac
 fi
 
+# V48 Smart Mode status
+_smart_enabled=0
+_smart_bucket=0
+_smart_daypart=0
+_smart_we=0
+_smart_conf=0
+_smart_alpha=500
+_smart_fb=4
+_smart_app=0
+_smart_sleep=0
+_smart_veto=0
+if [ -r /data/adb/asb/smart_mode_enabled ]; then
+  _smart_enabled=$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)
+  case "$_smart_enabled" in ''|*[!0-9]*) _smart_enabled=0 ;; esac
+fi
+if [ "$_smart_enabled" = "1" ] && [ -r /dev/.asb/state ]; then
+  _smart_bucket=$(grep -m1 '^smart_bucket_id=' /dev/.asb/state | cut -d= -f2)
+  _smart_daypart=$(grep -m1 '^smart_daypart=' /dev/.asb/state | cut -d= -f2)
+  _smart_we=$(grep -m1 '^smart_is_weekend=' /dev/.asb/state | cut -d= -f2)
+  _smart_conf=$(grep -m1 '^smart_confidence=' /dev/.asb/state | cut -d= -f2)
+  _smart_alpha=$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state | cut -d= -f2)
+  _smart_fb=$(grep -m1 '^smart_fallback_level=' /dev/.asb/state | cut -d= -f2)
+  _smart_app=$(grep -m1 '^smart_app_hint=' /dev/.asb/state | cut -d= -f2)
+  _smart_sleep=$(grep -m1 '^smart_sleep_override=' /dev/.asb/state | cut -d= -f2)
+  _smart_veto=$(grep -m1 '^smart_thermal_veto=' /dev/.asb/state | cut -d= -f2)
+  for _v in _smart_bucket _smart_daypart _smart_we _smart_conf _smart_alpha _smart_fb _smart_app _smart_sleep _smart_veto; do
+    eval _val="\$$_v"
+    case "$_val" in ''|*[!0-9]*) eval "$_v=0" ;; esac
+  done
+fi
+_daypart_name=""
+case "$_smart_daypart" in
+  0) _daypart_name="sleep" ;;
+  1) _daypart_name="wake" ;;
+  2) _daypart_name="morn" ;;
+  3) _daypart_name="day" ;;
+  4) _daypart_name="evening" ;;
+  5) _daypart_name="late" ;;
+esac
+_we_name=""
+[ "$_smart_we" = "1" ] && _we_name=" (weekend)" || _we_name=" (weekday)"
+
 echo ""
-echo "  ASB V47 · ${PROFILE}"
+if [ "$_smart_enabled" = "1" ]; then
+  echo "  ASB V47 · 🤖 Smart Mode"
+else
+  echo "  ASB V47 · ${PROFILE}"
+fi
 if [ "$_rec_disabled" = "1" ]; then
   echo "  ⚠️  SAFE MODE  : governor disabled (${_rec_reason:-recovery})"
 elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
@@ -107,6 +153,36 @@ else
 fi
 [ "$_auto_bat" = "1" ] && echo "  🔻 Auto-battery active"
 [ "$_qn_active" = "1" ] && echo "  🌙 Night-quiet active"
+
+if [ "$_smart_enabled" = "1" ]; then
+  echo ""
+  _conf_pct=$((_smart_conf / 10))
+  _alpha_pct=$((_smart_alpha / 10))
+  echo "  🤖 Smart : bucket=${_smart_bucket} ${_daypart_name}${_we_name}"
+  echo "             conf=${_conf_pct}%  alpha_battery=${_alpha_pct}%"
+  if [ "$_smart_fb" != "0" ]; then
+    _fb_name=""
+    case "$_smart_fb" in
+      1) _fb_name="daypart fallback" ;;
+      2) _fb_name="class fallback" ;;
+      3) _fb_name="global fallback" ;;
+      4) _fb_name="cold start (safe default)" ;;
+    esac
+    echo "             [${_fb_name}]"
+  fi
+  [ "$_smart_sleep" = "1" ] && echo "             🌙 night-safe override active"
+  [ "$_smart_veto" = "1" ] && echo "             🔥 thermal veto active"
+  echo ""
+  echo "  To disable Smart Mode:"
+  echo "    sh $MODDIR/tools/asb_smart_mode.sh disable"
+  echo "  To reset Smart learning (wipe buckets.bin):"
+  echo "    sh $MODDIR/tools/asb_smart_mode.sh reset"
+else
+  echo ""
+  echo "  To enable Smart Mode (adaptive battery↔balanced):"
+  echo "    sh $MODDIR/tools/asb_smart_mode.sh enable"
+  echo "  (or tap the 🤖 Smart button in WebUI)"
+fi
 echo ""
 echo "  Estimated time to 0%  $_eta_note:"
 echo "    📱 screen on  : ~${_ton_h}h ${_ton_m}m"

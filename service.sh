@@ -44,7 +44,7 @@ asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$A
 if [ -r /data/adb/asb/active_profile ]; then
   _saved_profile="$(cat /data/adb/asb/active_profile 2>/dev/null)"
   case "$_saved_profile" in
-    battery|balanced|performance)
+    battery|balanced|performance|smart)
       _current_profile="$(cat "$MODDIR/current_profile" 2>/dev/null)"
       if [ "$_saved_profile" != "$_current_profile" ]; then
         echo "$_saved_profile" > "$MODDIR/current_profile" 2>/dev/null
@@ -52,6 +52,35 @@ if [ -r /data/adb/asb/active_profile ]; then
       fi
       ;;
   esac
+fi
+
+# V47 Smart Mode migration logic
+# - V46 upgrader (active_profile or user config exists, smart flag does not): smart_mode=0
+# - Fresh V47 install (no signs of prior user state): smart_mode=1 (alpha default-on)
+# - Existing smart_mode flag: leave alone (user already configured)
+mkdir -p /data/adb/asb 2>/dev/null
+if [ ! -f /data/adb/asb/smart_mode_enabled ]; then
+  _prior_signs=0
+  [ -r /data/adb/asb/active_profile ] && _prior_signs=1
+  [ -r /data/adb/asb/user_config ] && _prior_signs=1
+  [ -d /data/adb/asb/learn ] && _prior_signs=1
+  [ -r /data/adb/asb/pstats_battery.json ] && _prior_signs=1
+  [ -r /data/adb/asb/pstats_balanced.json ] && _prior_signs=1
+  if [ "$_prior_signs" = "1" ]; then
+    echo "0" > /data/adb/asb/smart_mode_enabled 2>/dev/null
+    _cur_prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+    [ -z "$_cur_prof" ] && _cur_prof=balanced
+    echo "$_cur_prof" > /data/adb/asb/smart_prev_profile 2>/dev/null
+    asb_log "smart_migration: existing user state detected, smart_mode=off, prev_profile=$_cur_prof"
+  else
+    echo "1" > /data/adb/asb/smart_mode_enabled 2>/dev/null
+    echo "balanced" > /data/adb/asb/smart_prev_profile 2>/dev/null
+    # Fresh V47 install: persist current_profile=smart so read_profile_idx()
+    # picks up PROFILE_SMART at boot. This is what actually activates Smart Mode.
+    echo "smart" > "$MODDIR/current_profile" 2>/dev/null
+    echo "smart" > /data/adb/asb/active_profile 2>/dev/null
+    asb_log "smart_migration: fresh install, smart_mode=on (alpha), current_profile=smart"
+  fi
 fi
 
 asb_load_profile
