@@ -967,6 +967,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
     snprintf(out, outlen,
         "{\"state\":\"%s\",\"profile\":\"%s\","
         "\"mA\":%d,\"mA_valid\":%d,\"charging\":%d,"
+        "\"capacity\":%d,\"bat_temp_dC\":%d,"
         "\"gpu\":%d,\"load\":%.2f,"
         "\"cpu_max\":[%d,%d,%d],"
         "\"thermal\":%d,\"temp\":%d,\"temp_valid\":%d,\"temp_age_s\":%d,\"temp_invalid_reason\":\"%s\","
@@ -986,6 +987,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         asb_state_names[fsm->state],
         profile_names[fsm->profile_idx],
         m->bat.current_ma, ma_valid, m->bat.charging,
+        m->bat.capacity_pct, m->bat.temp_dC,
         m->gpu.load_pct,
         m->cpu.load1,
         fsm->current_caps.cpu_max[0],
@@ -3428,6 +3430,7 @@ int main(int argc, char **argv) {
                     int new_idx = PROFILE_BALANCED;
                     if (strncmp(rest, "battery", 7) == 0)     new_idx = PROFILE_BATTERY;
                     if (strncmp(rest, "performance", 11) == 0) new_idx = PROFILE_PERFORMANCE;
+                    if (strncmp(rest, "smart", 5) == 0)       new_idx = PROFILE_SMART;
                     fsm_flush_state_time(&fsm);
                     persistent_stats_save(&fsm);
                     session_history_append_ex(&fsm, "new_session");
