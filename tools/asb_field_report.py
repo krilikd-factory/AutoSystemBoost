@@ -156,12 +156,85 @@ def aggregate(sessions):
         "profiles": {},
         "schema_versions": Counter(s.get("v", "?") for s in sessions),
         "asb_versions": Counter(s.get("asb", "?") for s in sessions),
+        "smart_summary": smart_mode_summary(sessions),
     }
 
     for prof, sl in by_profile.items():
         result["profiles"][prof] = profile_summary(prof, sl)
 
     return result
+
+
+def smart_mode_summary(sessions):
+    """V48 Smart Mode: aggregate bucket usage, confidence, fallback distribution.
+
+    Reads fields added in session_history schema v15:
+      smart_mode, bucket_id, daypart, is_weekend,
+      bucket_confidence, alpha_battery, smart_fallback_level,
+      sleep_override_n, thermal_veto_n, app_hint_top, pkg_hash_top
+    """
+    smart_sessions = [s for s in sessions if s.get("smart_mode") == 1]
+    if not smart_sessions:
+        return {"smart_session_count": 0, "note": "no Smart Mode sessions in this dataset"}
+
+    daypart_names = {0: "sleep", 1: "wake", 2: "morn", 3: "day", 4: "eve", 5: "late"}
+    fb_names = {
+        0: "exact", 1: "daypart_only", 2: "class", 3: "global", 4: "safe_default"
+    }
+    app_hint_names = {0: "idle", 1: "light", 2: "medium", 3: "heavy", 4: "gaming"}
+
+    buckets = Counter()
+    dayparts = Counter()
+    weekend_split = Counter()
+    fb_dist = Counter()
+    app_hint_dist = Counter()
+    conf_vals = []
+    alpha_vals = []
+    night_overrides = 0
+    thermal_vetoes = 0
+
+    for s in smart_sessions:
+        buckets[s.get("bucket_id", -1)] += 1
+        dp = s.get("daypart", -1)
+        dayparts[daypart_names.get(dp, "?")] += 1
+        weekend_split["weekend" if s.get("is_weekend") == 1 else "weekday"] += 1
+        fb_dist[fb_names.get(s.get("smart_fallback_level", -1), "?")] += 1
+        app_hint_dist[app_hint_names.get(s.get("app_hint_top", -1), "?")] += 1
+        c = s.get("bucket_confidence")
+        if isinstance(c, (int, float)):
+            conf_vals.append(c)
+        a = s.get("alpha_battery")
+        if isinstance(a, (int, float)):
+            alpha_vals.append(a)
+        if s.get("sleep_override_n", 0) == 1:
+            night_overrides += 1
+        if s.get("thermal_veto_n", 0) == 1:
+            thermal_vetoes += 1
+
+    return {
+        "smart_session_count": len(smart_sessions),
+        "buckets_used": dict(buckets.most_common()),
+        "daypart_distribution": dict(dayparts.most_common()),
+        "weekend_vs_weekday": dict(weekend_split),
+        "fallback_distribution": dict(fb_dist.most_common()),
+        "app_hint_session_top": dict(app_hint_dist.most_common()),
+        "confidence_x1000": {
+            "avg": int(avg(conf_vals)) if conf_vals else 0,
+            "p50": int(percentile(conf_vals, 50)) if conf_vals else 0,
+            "p90": int(percentile(conf_vals, 90)) if conf_vals else 0,
+            "min": min(conf_vals) if conf_vals else 0,
+            "max": max(conf_vals) if conf_vals else 0,
+        },
+        "alpha_battery_x1000": {
+            "avg": int(avg(alpha_vals)) if alpha_vals else 0,
+            "p50": int(percentile(alpha_vals, 50)) if alpha_vals else 0,
+            "p90": int(percentile(alpha_vals, 90)) if alpha_vals else 0,
+        },
+        "night_override_sessions": night_overrides,
+        "thermal_veto_sessions": thermal_vetoes,
+        "night_override_rate": pct(night_overrides, len(smart_sessions)),
+        "thermal_veto_rate": pct(thermal_vetoes, len(smart_sessions)),
+    }
 
 
 def profile_summary(prof, sessions):
@@ -402,7 +475,39 @@ def format_report(agg, recovery, show_bands=True):
             push(f"  last_recovery_ts:     {datetime.fromtimestamp(last_ts).strftime('%Y-%m-%d %H:%M:%S')}")
         push("")
 
-    for prof_name in ("battery", "balanced", "performance"):
+    # V48 Smart Mode summary block
+    sm = agg.get("smart_summary", {})
+    if sm.get("smart_session_count", 0) > 0:
+        push("─" * 72)
+        push("  Smart Mode (V47 alpha)")
+        push("─" * 72)
+        push(f"  Smart sessions:        {sm['smart_session_count']}")
+        push(f"  Buckets seen:          {len(sm.get('buckets_used', {}))}/12")
+        push(f"  Confidence avg:        {sm.get('confidence_x1000', {}).get('avg', 0)/10:.0f}% "
+             f"(p50={sm.get('confidence_x1000', {}).get('p50', 0)/10:.0f}% "
+             f"p90={sm.get('confidence_x1000', {}).get('p90', 0)/10:.0f}%)")
+        push(f"  Alpha_battery avg:     {sm.get('alpha_battery_x1000', {}).get('avg', 0)/10:.0f}% "
+             f"(p50={sm.get('alpha_battery_x1000', {}).get('p50', 0)/10:.0f}%)")
+        push(f"  Night override rate:   {sm.get('night_override_rate', '—')} "
+             f"({sm.get('night_override_sessions', 0)} sessions)")
+        push(f"  Thermal veto rate:     {sm.get('thermal_veto_rate', '—')} "
+             f"({sm.get('thermal_veto_sessions', 0)} sessions)")
+        push("")
+        dp = sm.get("daypart_distribution", {})
+        if dp:
+            dp_str = ", ".join(f"{k}={v}" for k, v in dp.items())
+            push(f"  Daypart distribution:  {dp_str}")
+        fb = sm.get("fallback_distribution", {})
+        if fb:
+            fb_str = ", ".join(f"{k}={v}" for k, v in fb.items())
+            push(f"  Fallback distribution: {fb_str}")
+        ah = sm.get("app_hint_session_top", {})
+        if ah:
+            ah_str = ", ".join(f"{k}={v}" for k, v in ah.items())
+            push(f"  App hint top:          {ah_str}")
+        push("")
+
+    for prof_name in ("battery", "balanced", "performance", "smart"):
         p = agg["profiles"].get(prof_name)
         if not p:
             continue

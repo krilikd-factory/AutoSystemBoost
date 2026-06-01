@@ -549,6 +549,85 @@ if [ -f "$_ss" ]; then
   fi
 fi
 
+# V48 Smart Mode consistency checks
+echo
+echo "── V48 Smart Mode checks ──"
+_sm_h="$MODDIR/src/asb_smart.h"
+_sm_defs="$MODDIR/src/asb_smart_defs.h"
+_cfg="$MODDIR/src/asb_config.h"
+_gconf="$MODDIR/config/governor.conf.shipped"
+
+if [ -f "$_sm_h" ] && [ -f "$_sm_defs" ]; then
+  ok "asb_smart.h + asb_smart_defs.h present"
+else
+  err "asb_smart.h or asb_smart_defs.h missing"
+fi
+
+if [ -f "$_cfg" ] && [ -f "$_gconf" ]; then
+  # Verify every smart_ key in shipped config has a parser branch in asb_config.h
+  _missing=""
+  for _k in $(grep "^smart_" "$_gconf" | cut -d= -f1); do
+    if ! grep -q "\"$_k\"" "$_cfg"; then
+      _missing="$_missing $_k"
+    fi
+  done
+  if [ -n "$_missing" ]; then
+    err "Smart Mode keys in governor.conf.shipped not parsed by asb_config.h:$_missing"
+  else
+    ok "all smart_ keys in shipped config have parser branches"
+  fi
+
+  # Verify Smart Mode struct field count matches parser count
+  _struct_fields=$(grep "smart_" "$_cfg" | grep -c "int\s*smart_" || echo 0)
+  _parser_brs=$(grep -c "\"smart_" "$_cfg" || echo 0)
+  if [ "$_struct_fields" -gt 0 ] && [ "$_parser_brs" -gt 0 ]; then
+    if [ "$_struct_fields" = "$_parser_brs" ]; then
+      ok "Smart Mode: $_struct_fields struct fields == $_parser_brs parser branches"
+    else
+      warn "Smart Mode: struct fields ($_struct_fields) != parser branches ($_parser_brs)"
+    fi
+  fi
+fi
+
+# PROFILE_SMART enum should be defined
+if [ -f "$MODDIR/src/asb_fsm.h" ]; then
+  if grep -q "^#define PROFILE_SMART" "$MODDIR/src/asb_fsm.h"; then
+    ok "PROFILE_SMART enum defined in asb_fsm.h"
+  else
+    err "PROFILE_SMART enum missing from asb_fsm.h"
+  fi
+fi
+
+# Smart Mode CLI tool should exist and be executable
+_smcli="$MODDIR/tools/asb_smart_mode.sh"
+if [ -f "$_smcli" ]; then
+  if bash -n "$_smcli" 2>/dev/null; then
+    ok "tools/asb_smart_mode.sh syntax OK"
+  else
+    err "tools/asb_smart_mode.sh has syntax errors"
+  fi
+fi
+
+# Check: smart_pkg_plaintext defaults to 0 (privacy by default)
+if [ -f "$_gconf" ]; then
+  _pkg_plain=$(grep "^smart_pkg_plaintext=" "$_gconf" | cut -d= -f2)
+  if [ "$_pkg_plain" = "0" ]; then
+    ok "smart_pkg_plaintext=0 (privacy by default)"
+  else
+    err "smart_pkg_plaintext=$_pkg_plain in shipped config (must be 0 for privacy)"
+  fi
+fi
+
+# Check: smart_mode_enabled defaults to 0 in shipped config (per migration design)
+if [ -f "$_gconf" ]; then
+  _sm_en=$(grep "^smart_mode_enabled=" "$_gconf" | cut -d= -f2)
+  if [ "$_sm_en" = "0" ]; then
+    ok "smart_mode_enabled=0 in shipped config (controlled by file flag at boot)"
+  else
+    warn "smart_mode_enabled=$_sm_en in shipped config (should be 0; flag governs runtime)"
+  fi
+fi
+
 echo
 echo "═══════════════════════════════"
 echo "  Lint: ❌ $ERRORS errors  ⚠️  $WARNS warnings"
