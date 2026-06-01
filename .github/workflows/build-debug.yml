@@ -184,6 +184,9 @@ jobs:
             "tools/logkit/asb_log_battery_sleep.sh" \
             "tools/logkit/asb_log_perf.sh" \
             "tools/logkit/asb_log_bgtrim_snapshot.sh" \
+            "tools/logkit/asb_log_smart_daily.sh" \
+            "tools/logkit/asb_log_smart_gaming.sh" \
+            "tools/logkit/asb_log_smart_sleep.sh" \
             "tools/asb_state_sampler.sh" \
             "tools/asb_drain_analyzer.sh" \
             "tools/asb_session_report.py" \
