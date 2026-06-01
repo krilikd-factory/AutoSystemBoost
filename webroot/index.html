@@ -541,7 +541,10 @@ body::before, body::after {
 
 .tg-link-wrap {
   width: 100%;
-  margin-top: 32px;
+  max-width: 420px;
+  margin-top: auto;
+  margin-left: auto;
+  margin-right: auto;
   padding-top: 24px;
   border-top: 1px solid var(--border);
   text-align: center;
@@ -730,7 +733,7 @@ body::before, body::after {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding-top: calc(var(--window-inset-top) + 32px);
+  padding-top: calc(var(--window-inset-top) + 64px);
   padding-right: 20px;
   padding-bottom: calc(var(--window-inset-bottom) + 40px);
   padding-left: 20px;
@@ -796,14 +799,81 @@ body::before, body::after {
 .live-cell-value.cap-raised { color: var(--bal); }
 .live-cell-value.cap-shell { color: var(--accent2); }
 
-/* Live page: smaller header to leave room for all metric cells */
-.live-page .header { margin-bottom: 20px; }
-.live-page .logo-c { width: 56px; height: 56px; margin-bottom: 12px; }
-.live-page .app-name { font-size: 22px; }
-.live-page .device-line { font-size: 11px; }
-
-/* Smart Mode section divider: compact */
+/* Smart Mode section divider: compact on Live page */
 .live-page .sec { margin-top: 14px !important; margin-bottom: 6px !important; }
+
+/* Smart Mode info banner — shows under Profile row on Live page */
+.smart-banner {
+  width: 100%;
+  margin-top: 12px;
+  margin-bottom: 24px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg,
+    rgba(167,139,250,0.10) 0%,
+    rgba(99,179,237,0.05) 100%);
+  border: 1px solid rgba(167,139,250,0.20);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.smart-banner-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px 8px;
+  align-items: baseline;
+  font: 11px/1.2 var(--sans);
+}
+.smart-banner-row.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.smart-banner-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+.smart-banner-label {
+  font: 8px/1 var(--mono);
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.smart-banner-value {
+  font: 600 12px/1.1 var(--sans);
+  color: #c4b5fd;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.smart-banner-tag {
+  display: inline-block;
+  font: 600 9px/1 var(--mono);
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(167,139,250,0.18);
+  border: 1px solid rgba(167,139,250,0.30);
+  color: #c4b5fd;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.smart-banner-tag.warn {
+  background: rgba(245,158,11,0.15);
+  border-color: rgba(245,158,11,0.35);
+  color: #fbbf24;
+}
+.smart-banner-tag.veto {
+  background: rgba(239,68,68,0.15);
+  border-color: rgba(239,68,68,0.35);
+  color: #fca5a5;
+}
 
 </style>
 </head>
@@ -928,6 +998,31 @@ body::before, body::after {
     </div>
   </div>
 
+  <!-- V47 Smart Mode info banner (hidden when Smart Mode disabled) -->
+  <div class="smart-banner" id="liveSmartBanner" style="display:none;">
+    <div class="smart-banner-row">
+      <div class="smart-banner-item">
+        <span class="smart-banner-label">🤖 Bucket</span>
+        <span class="smart-banner-value" id="bnBucket">—</span>
+      </div>
+      <div class="smart-banner-item">
+        <span class="smart-banner-label">Conf</span>
+        <span class="smart-banner-value" id="bnConf">—</span>
+      </div>
+      <div class="smart-banner-item">
+        <span class="smart-banner-label">Alpha</span>
+        <span class="smart-banner-value" id="bnAlpha">—</span>
+      </div>
+      <div class="smart-banner-item">
+        <span class="smart-banner-label">App</span>
+        <span class="smart-banner-value" id="bnApp">—</span>
+      </div>
+    </div>
+    <div class="smart-banner-row tags" id="bnTagRow">
+      <span class="smart-banner-tag" id="bnFb">cold start</span>
+    </div>
+  </div>
+
   <div class="sec">
     <div class="sec-line"></div>
     <div class="sec-label">Live Status</div>
@@ -938,10 +1033,17 @@ body::before, body::after {
 
     <!-- Thermal & power -->
     <div class="live-row">
-      <div class="live-cell">
+      <div class="live-cell live-cell-wide">
         <div class="live-cell-label">FSM</div>
         <div class="live-cell-value" id="liveState">—</div>
       </div>
+      <div class="live-cell live-cell-wide">
+        <div class="live-cell-label">Clamp 1h / total</div>
+        <div class="live-cell-value" id="liveClamp">—</div>
+      </div>
+    </div>
+
+    <div class="live-row">
       <div class="live-cell">
         <div class="live-cell-label">CPU</div>
         <div class="live-cell-value" id="liveCpu">—</div>
@@ -949,17 +1051,6 @@ body::before, body::after {
       <div class="live-cell">
         <div class="live-cell-label">Skin</div>
         <div class="live-cell-value" id="liveSkin">—</div>
-      </div>
-    </div>
-
-    <div class="live-row">
-      <div class="live-cell">
-        <div class="live-cell-label">Battery</div>
-        <div class="live-cell-value" id="liveBat">—</div>
-      </div>
-      <div class="live-cell">
-        <div class="live-cell-label">Bat T</div>
-        <div class="live-cell-value" id="liveBatT">—</div>
       </div>
       <div class="live-cell">
         <div class="live-cell-label">Surface</div>
@@ -988,67 +1079,6 @@ body::before, body::after {
       <div class="live-cell live-cell-wide">
         <div class="live-cell-label">Learner</div>
         <div class="live-cell-value" id="liveLearner">—</div>
-      </div>
-    </div>
-
-    <div class="live-row">
-      <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">Clamp 1h</div>
-        <div class="live-cell-value" id="liveClamp">—</div>
-      </div>
-      <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">Recovery</div>
-        <div class="live-cell-value" id="liveRecovery">—</div>
-      </div>
-    </div>
-
-    <!-- Smart Mode section (hidden when off) -->
-    <div id="liveSmartSection" style="display:none; width:100%;">
-      <div class="sec" style="margin-top:20px; margin-bottom:8px;">
-        <div class="sec-line"></div>
-        <div class="sec-label">🤖 Smart Mode</div>
-        <div class="sec-line"></div>
-      </div>
-
-      <div class="live-row">
-        <div class="live-cell">
-          <div class="live-cell-label">Bucket</div>
-          <div class="live-cell-value" id="liveSmBucket">—</div>
-        </div>
-        <div class="live-cell">
-          <div class="live-cell-label">Daypart</div>
-          <div class="live-cell-value" id="liveSmDaypart">—</div>
-        </div>
-        <div class="live-cell">
-          <div class="live-cell-label">Conf</div>
-          <div class="live-cell-value" id="liveSmConf">—</div>
-        </div>
-      </div>
-
-      <div class="live-row">
-        <div class="live-cell">
-          <div class="live-cell-label">Alpha</div>
-          <div class="live-cell-value" id="liveSmAlpha">—</div>
-        </div>
-        <div class="live-cell">
-          <div class="live-cell-label">App</div>
-          <div class="live-cell-value" id="liveSmApp">—</div>
-        </div>
-        <div class="live-cell">
-          <div class="live-cell-label">Fallback</div>
-          <div class="live-cell-value" id="liveSmFb">—</div>
-        </div>
-      </div>
-
-      <div class="live-row">
-        <div class="live-cell live-cell-wide">
-          <div class="live-cell-label">Overrides</div>
-          <div class="live-cell-value" id="liveSmOverrides">none</div>
-        </div>
-        <div class="live-cell live-cell-wide">
-          <div class="live-cell-label">Sessions</div>
-          <div class="live-cell-value" id="liveSmSessions">—</div>
-        </div>
       </div>
     </div>
 
@@ -1424,17 +1454,6 @@ async function pollLive(visible) {
 
     /* V47 extended Live metrics */
     try {
-      // Battery percent: prefer JSON, fall back to kv
-      const batPctEl = _el('liveBat');
-      const cap = (st && st.capacity) || bcap || 0;
-      if (batPctEl) batPctEl.textContent = cap > 0 ? cap + '%' : '—';
-      // Battery temperature from JSON (deci-Celsius)
-      const batTEl = _el('liveBatT');
-      if (batTEl) {
-        const bt_dC = (st && st.bat_temp_dC) || parseInt(kv.bat_temp_dC || '0', 10);
-        if (bt_dC > 0) batTEl.textContent = (bt_dC / 10).toFixed(1) + '°C';
-        else batTEl.textContent = '—';
-      }
       // Surface hotspot — correct JSON key is surface_hotspot (not surface_hotspot_c)
       const surfaceEl = _el('liveSurface');
       if (surfaceEl) {
@@ -1442,43 +1461,29 @@ async function pollLive(visible) {
         surfaceEl.textContent = surf > 0 ? surf + '°C' : '—';
       }
 
-      // Vendor clamp 1h count
+      // Vendor clamp counts
       const clampEl = _el('liveClamp');
       if (clampEl) {
         const c1h = parseInt(kv.vendor_clamp_1h || '0', 10);
         const cTot = parseInt(kv.vendor_clamp_total || '0', 10);
         if (c1h > 0 || cTot > 0) {
-          clampEl.textContent = c1h + ' · total ' + cTot;
+          clampEl.textContent = c1h + ' / ' + cTot;
           if (c1h >= 300) clampEl.classList.add('cap-clamp');
           else clampEl.classList.remove('cap-clamp');
         } else {
           clampEl.textContent = 'none';
-        }
-      }
-
-      // Recovery state (separate from Battery Learner cell)
-      const recoveryEl = _el('liveRecovery');
-      if (recoveryEl) {
-        if (recDisabled === 1) {
-          recoveryEl.textContent = 'SAFE MODE';
-          recoveryEl.className = 'live-cell-value cap-clamp';
-        } else if (recCount > 0) {
-          recoveryEl.textContent = recCount + ' restart(s)';
-          recoveryEl.className = 'live-cell-value cap-raised';
-        } else {
-          recoveryEl.textContent = 'OK';
-          recoveryEl.className = 'live-cell-value';
+          clampEl.classList.remove('cap-clamp');
         }
       }
     } catch(e) {}
 
-    /* V47 Smart Mode Live section */
+    /* V47 Smart Mode banner — top-of-Live-page, no scroll needed */
     try {
-      const smartSection = _el('liveSmartSection');
+      const banner = _el('liveSmartBanner');
       const smEn = parseInt(kv.smart_mode || '0', 10);
-      if (smartSection) {
+      if (banner) {
         if (smEn === 1) {
-          smartSection.style.display = '';
+          banner.style.display = '';
           const bid = parseInt(kv.smart_bucket_id || '0', 10);
           const dp  = parseInt(kv.smart_daypart   || '0', 10);
           const we  = parseInt(kv.smart_is_weekend|| '0', 10);
@@ -1489,28 +1494,38 @@ async function pollLive(visible) {
           const veto  = parseInt(kv.smart_thermal_veto   || '0', 10);
           const appH  = parseInt(kv.smart_app_hint || '0', 10);
           const dpNames = ['sleep','wake','morn','day','eve','late'];
-          const fbNames = ['exact','daypart','class','global','cold-start'];
+          const fbNames = ['exact','daypart','class','global','cold start'];
           const appNames = ['idle','light','medium','heavy','gaming'];
 
-          _el('liveSmBucket').textContent = '#' + bid;
-          _el('liveSmDaypart').textContent = (dpNames[dp] || '?') + (we ? ' (we)' : '');
-          _el('liveSmConf').textContent = Math.round(conf / 10) + '%';
-          _el('liveSmAlpha').textContent = Math.round(alpha / 10) + '%';
-          _el('liveSmApp').textContent = appNames[appH] || '?';
-          _el('liveSmFb').textContent = fbNames[fb] || '?';
+          _el('bnBucket').textContent = '#' + bid + ' ' + (dpNames[dp] || '?') + (we ? '·we' : '·wd');
+          _el('bnConf').textContent = Math.round(conf / 10) + '%';
+          _el('bnAlpha').textContent = Math.round(alpha / 10) + '% bat';
+          _el('bnApp').textContent = appNames[appH] || '?';
 
-          let overrides = [];
-          if (night) overrides.push('🌙 night-safe');
-          if (veto)  overrides.push('🔥 thermal veto');
-          const ovEl = _el('liveSmOverrides');
-          ovEl.textContent = overrides.length ? overrides.join(' · ') : 'none';
-          ovEl.className = overrides.length ? 'live-cell-value cap-raised' : 'live-cell-value';
-
-          // Session count is approximate — pull from session_history if available
-          // For now show a placeholder; could be wired to session_history line count later
-          _el('liveSmSessions').textContent = (learner && learner.sessions && learner.sessions.smart) || '—';
+          // Tag row: fallback + overrides
+          const tagRow = _el('bnTagRow');
+          if (tagRow) {
+            tagRow.innerHTML = '';
+            const fbTag = document.createElement('span');
+            fbTag.className = 'smart-banner-tag';
+            if (fb === 4) fbTag.classList.add('warn');
+            fbTag.textContent = (fbNames[fb] || 'fallback') + (fb > 0 && fb < 4 ? ' fallback' : '');
+            tagRow.appendChild(fbTag);
+            if (night) {
+              const t = document.createElement('span');
+              t.className = 'smart-banner-tag';
+              t.textContent = '🌙 night-safe';
+              tagRow.appendChild(t);
+            }
+            if (veto) {
+              const t = document.createElement('span');
+              t.className = 'smart-banner-tag veto';
+              t.textContent = '🔥 thermal veto';
+              tagRow.appendChild(t);
+            }
+          }
         } else {
-          smartSection.style.display = 'none';
+          banner.style.display = 'none';
         }
       }
     } catch(e) {}
