@@ -172,16 +172,6 @@ if [ "$_smart_enabled" = "1" ]; then
   fi
   [ "$_smart_sleep" = "1" ] && echo "             🌙 night-safe override active"
   [ "$_smart_veto" = "1" ] && echo "             🔥 thermal veto active"
-  echo ""
-  echo "  To disable Smart Mode:"
-  echo "    sh $MODDIR/tools/asb_smart_mode.sh disable"
-  echo "  To reset Smart learning (wipe buckets.bin):"
-  echo "    sh $MODDIR/tools/asb_smart_mode.sh reset"
-else
-  echo ""
-  echo "  To enable Smart Mode (adaptive battery↔balanced):"
-  echo "    sh $MODDIR/tools/asb_smart_mode.sh enable"
-  echo "  (or tap the 🤖 Smart button in WebUI)"
 fi
 echo ""
 echo "  Estimated time to 0%  $_eta_note:"
