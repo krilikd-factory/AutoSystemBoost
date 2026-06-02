@@ -140,17 +140,17 @@ while : ; do
   _cur_state=$(lk_state_kv state)
   if [ -n "$_cur_state" ] && [ -n "$_last_state" ] && [ "$_cur_state" != "$_last_state" ]; then
     _state_transitions=$((_state_transitions + 1))
-    _cpu=$(lk_state_kv cpu_max_c)
+    _cpu=$(lk_state_kv cap_temp)
     _alpha=$(lk_state_kv smart_alpha_battery)
     _veto=$(lk_state_kv smart_thermal_veto)
     {
-      echo "$(date '+%Y-%m-%d %H:%M:%S') state $_last_state -> $_cur_state  cpu=${_cpu}°C alpha=${_alpha} veto=${_veto}"
+      echo "$(date '+%Y-%m-%d %H:%M:%S') state $_last_state -> $_cur_state  cpu=${_cpu:-?}°C alpha=${_alpha:-?} veto=${_veto:-?}"
     } >> "$LK_OUT_DIR/state_transitions.txt"
   fi
   [ -n "$_cur_state" ] && _last_state="$_cur_state"
 
   # Track peak CPU
-  _cpu=$(lk_state_kv cpu_max_c)
+  _cpu=$(lk_state_kv cap_temp)
   case "$_cpu" in
     ''|*[!0-9]*) : ;;
     *)

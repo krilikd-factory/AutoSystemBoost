@@ -728,7 +728,17 @@ lk_capture_smart_trace_row() {
   # CPU temp: state file uses 'cap_temp' (degC), not 'cpu_max_c'
   _cpuC=$(lk_state_kv cap_temp)
   _state=$(lk_state_kv state)
-  _pidx=$(lk_state_kv profile_idx)
+  # state file exposes 'profile' as a string name; map to numeric idx so the
+  # trace schema stays stable and machine-parseable.
+  _pname=$(lk_state_kv profile)
+  case "$_pname" in
+    battery)     _pidx=0 ;;
+    balanced)    _pidx=1 ;;
+    performance) _pidx=2 ;;
+    smart)       _pidx=3 ;;
+    "")          _pidx=- ;;
+    *)           _pidx="$_pname" ;;
+  esac
   _bpct=$(lk_state_kv capacity)
   [ -z "$_bpct" ] && _bpct=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   _btmp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null)
