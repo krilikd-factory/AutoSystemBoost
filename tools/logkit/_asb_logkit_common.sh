@@ -328,8 +328,16 @@ lk_copy_runtime_artifacts() {
 }
 
 lk_verify_caps() {
-  . "$MODDIR/profiles/$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced).sh" 2>/dev/null
   _profile="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
+  # V47 Smart Mode: 'smart' profile doesn't have a smart.sh file by design —
+  # it blends battery/balanced bounds at C-runtime. For shell-side cap verify
+  # we use balanced.sh as the source-of-truth envelope (same as profile_core.sh).
+  _src_profile="$_profile"
+  [ "$_src_profile" = "smart" ] && _src_profile="balanced"
+  # Initialize cap variables to avoid 'set -u' issues if source fails
+  CPU_CAP_BIG="${CPU_CAP_BIG:-(unset)}"
+  CPU_CAP_LITTLE="${CPU_CAP_LITTLE:-(unset)}"
+  . "$MODDIR/profiles/${_src_profile}.sh" 2>/dev/null || true
 
   _j=$(lk_status_json)
   _asb_p0_cap=$(echo "$_j" | awk -F'"perf_cap_p0":' '{print $2}' | awk -F, '{print $1}')
