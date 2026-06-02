@@ -1,219 +1,241 @@
 # AutoSystemBoost — Changelog
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Current_Release-V46-16a34a?style=for-the-badge" alt="V46">
-  <img src="https://img.shields.io/badge/Previous-V45-6b7280?style=for-the-badge" alt="V45">
-  <img src="https://img.shields.io/badge/versionCode-460-0ea5e9?style=for-the-badge" alt="versionCode">
+  <img src="https://img.shields.io/badge/Current_Release-V47-16a34a?style=for-the-badge" alt="V47">
+  <img src="https://img.shields.io/badge/Previous-V46-6b7280?style=for-the-badge" alt="V46">
+  <img src="https://img.shields.io/badge/versionCode-470-0ea5e9?style=for-the-badge" alt="versionCode">
+  <img src="https://img.shields.io/badge/Smart_Mode-Adaptive-a78bfa?style=for-the-badge" alt="Smart Mode">
 </p>
 
-> **V46 is the "make V45 mature" release. One critical user-reported memory bug is fixed (App Market + WhatsApp "недостаточно памяти" despite plenty of free RAM), and three reliability investments are added in observe-only mode following ChatGPT's framework evaluation: tiered crash recovery (P0), NOISY trust tier candidate logging (P1a), and multi-sensor hot-guard scoring (P2). The observe-only P1/P2 work collects field data so V47 can decide behavioral activation based on real distribution, not guesswork. Field validation over 5.7 hours of clean operation confirmed the OOM fix works (zero crashes, zero false-positive kills) and that the NOISY criteria capture ~12.5% of mixed-use sessions — right in the target range.**
+> **V47 introduces Smart Mode — a fourth adaptive profile that learns your time-of-day habits and blends battery↔balanced envelopes accordingly. Performance profile re-tuned cooler to stop fighting the vendor thermal HAL. Build pipeline split into release and debug flavors with identical learner behavior in both. Diagnostic surface area cleaned up.**
 
 ---
 
-## ⚡ V46 — Memory OOM Fix + Reliability Hardening
+## ✨ Headline Features
 
-### 🐛 Critical bug — App Market and WhatsApp "недостаточно памяти"
+### 🧠 Smart Mode — adaptive fourth profile
 
-**Reported by primary user:**
+A brand-new profile that sits alongside battery / balanced / performance and **learns from your real usage**:
 
-> "При попытке обновить приложение через App Market вылетает ошибка что недостаточно памяти, хотя по факту свободной памяти предостаточно. Так же не открывался WhatsApp из-за нехватки памяти, помогла отчистка кэша приложения WhatsApp."
+- **12 time-of-day buckets** (6 dayparts × weekday/weekend): sleep, wake, morn, day, eve, late
+- **Blends battery and balanced envelopes** via learned `alpha_battery` weight per bucket — never learns raw frequency caps
+- **Confidence gating**: < 0.35 ignore (baseline 50/50 blend), 0.35-0.65 mild influence (up to 40 % bucket strength), ≥ 0.65 strong but never above balanced sustained envelope
+- **Hierarchical fallback**: exact bucket → daypart-only → daypart class → global average → safe default
+- **Effective observations** counted by `duration × trust` — long CLEAN sessions teach, short NOISY sessions whisper, DIRTY sessions ignored entirely
+- **Fixed 5 % learn rate** per session, capped — no single observation can swing a bucket more than 5 %
+- **Time-decay** of stale data: full strength for 7 days, linear floor to 30 % at 36 days, zero from day 37
+- **Night-safe override**: late hours + screen off + not charging + battery ≤ 60 % → force aggressive battery-lean
+- **Thermal veto**: CPU hot / high vendor clamp / recovery active → confidence × 0.3, force battery-lean, zero interactive bonus
+- **5-minute daypart smoothing** at boundary transitions (only when both buckets confident; hard switch otherwise)
+- **App hint** as runtime modifier only (CPU-load heuristic, never primary truth)
+- **Fully reversible** — disable Smart Mode and your previous manual profile is restored from `/data/adb/asb/smart_prev_profile`
 
-**Root cause:** three settings in V45 combined to create false-positive OOM kills:
+---
 
-1. **`vm.oom_kill_allocating_task=1`** (unconditional in `apply_vm()`) — when OOM occurs, kill the **task that triggered the allocation** rather than the highest oom_score victim. This is the opposite of Android's stock behavior. Android default is `0` — kernel picks victim by `oom_score_adj` (background apps go first, foreground apps last). With this flag set, any app that happened to be allocating at the wrong moment got killed even if it had low oom_score.
+## 🎯 V46 → V47 Comparison
 
-2. **Battery profile `VM_SWAPPINESS=200`** — extreme (kernel default is 60). Aggressively swaps anonymous pages to ZRAM. When user opens an app, kernel must decompress + page back in. Under any concurrent allocation pressure, ZRAM gets bottlenecked.
+| Area | V46 | V47 |
+|---|---|---|
+| **Profiles available** | 3 (battery / balanced / performance) | **4** (battery / balanced / performance / **smart**) |
+| **Adaptive learning** | Per-profile FSM thresholds (`bat_fast_idle_s`, `heavy_load_enter`, `moderate_load_enter`) | + **Time-of-day buckets** (Smart Mode) |
+| **Performance profile sustained heat** | Up to ~95 °C in long sessions (caps fought vendor PowerHAL) | **~71 °C** under same load (cooler caps + thermal veto) |
+| **Multi-sensor thermal data** | Collected for observation | **Activated** as behavior trigger |
+| **NOISY session trust tier** | Observed in shadow | **Activated** (learns at weight 0.15) |
+| **Idle-warm intent class** | Detected, observe-only | **Activated** (forces PARTIAL trust) |
+| **session_history.jsonl** | `/data/adb/modules/AutoSystemBoost/runtime/` (lost on module reinstall) | **`/data/adb/asb/`** (survives reinstall and module upgrade) |
+| **Critical event log across reboots** | None — `governor.log` lost on reboot | New **`governor_persist.log`** in `/data/adb/asb/` (256 KB rotation, survives reboot) |
+| **Build output** | Single zip | **Two zips** — `ASB-V47.zip` (release) + `ASB-V47-debug.zip` (full diagnostics) |
+| **Smart Mode WebUI** | n/a | New AI-style profile button with live bucket / confidence / alpha readout |
+| **Smart Mode CLI** | n/a | `tools/asb_smart_mode.sh status / enable / disable / reset` |
 
-3. **Battery profile `VM_MINFREE=114688` (112 MB) and `VM_WMARK=400`** — reserves a large always-free pool with high watermark scale factor. Even when system has 4-6 GB physically free, kernel treats anything below the reserve as critical pressure.
+---
 
-**The failure chain:**
-- App Market downloads APK → needs ~50 MB allocation for buffer
-- Allocation triggers `__alloc_pages_slowpath` because watermark is unhappy (`VM_MINFREE` + `VM_WMARK`)
-- ZRAM is busy decompressing other apps' pages from `swappiness=200`
-- Kernel decides to invoke OOM killer to free memory
-- `oom_kill_allocating_task=1` → **kills App Market** (the task that just allocated)
-- User sees "недостаточно памяти" despite 4+ GB free in `free -h`
+## 🚀 What's new in detail
 
-WhatsApp had the same issue when loading chat database after long idle (when its working set was mostly swapped out). Cache clear "fixed" it because clearing the on-disk DB reduced the working-set restore size.
+### 🌡 Performance profile re-tuned
 
-**V46 fix — four changes:**
+The V46 performance profile aimed at peak frequency and "fought" the OxygenOS vendor PowerHAL which clamped CPU anyway. Net result: 90 °C+ in long sessions with no actual perf benefit. V47 stops the fight.
 
-1. **Removed `vm.oom_kill_allocating_task=1`** from `apply_vm()` in `service.sh`. Kernel now uses default behavior (kill by `oom_score`). The line is replaced with a permanent comment explaining why it must never return.
+| Bound | V46 | V47 |
+|---|---:|---:|
+| `PERFORMANCE_CPU_CAP_BIG` | 2611200 (2.61 GHz) | **2342400** (2.34 GHz) |
+| `PERFORMANCE_CPU_CAP_LITTLE` | 2304000 | **2150400** |
+| `PERFORMANCE_GPU_MAX_PCT` | 70 | **50** |
+| `PERFORMANCE_CPU_MIN_BIG` | 1113600 | **921600** |
+| `perf_hot_guard_temp` | 66 °C | **63 °C** |
+| `perf_skin_hot_thresh` | n/a | **80** (new — first behavioral use of multi-sensor data) |
 
-2. **Battery profile VM tuning relaxed:**
-   - `VM_SWAPPINESS`: 200 → **150** (still aggressive for battery but not pathological)
-   - `VM_MINFREE`: 114688 → **65536** (112 MB → 64 MB)
-   - `VM_WMARK`: 400 → **150** (less reserved-pool pressure)
+Peak burst frequency (`PERFORMANCE_CPU_MAX_BIG=3302400`, 3.30 GHz) **unchanged**. Only steady-state caps lowered.
 
-3. **One-shot cleanup on boot:** `service.sh` now explicitly writes `/proc/sys/vm/oom_kill_allocating_task = 0` every boot. This ensures users upgrading from V45 immediately get the safe default without waiting for VM profile re-apply (which could take seconds during which apps might already be running).
+### 🧠 Smart Mode plumbing (see Headline Features above)
 
-4. **Lint regression guards added:**
-   - `vm.oom_kill_allocating_task=1` writes in service.sh → lint error
-   - Battery `VM_SWAPPINESS > 175` → lint error
+A new `PROFILE_SMART` enum value reads its envelope from a mutable `g_smart_bounds` slot updated by the Smart Mode tick. The FSM treats it like any other profile — Smart Mode does not change the state machine, only the bounds it reads from.
 
-**Field validation:** 5.7 hours of post-fix operation, zero OOM kills, zero crashes, zero recovery events. The user-reported symptom is gone.
+Storage: `/data/adb/asb/buckets.bin` (12 × 36 bytes + 16-byte header = 448 bytes), atomic temp+rename writes, automatic `.bak` rotation every ~5 minutes, magic+version header for corruption detection, three-level load fallback (main → backup → seed defaults).
 
-### 🛡 P0 — Crash Recovery v2 (tiered)
+### 📊 Multi-sensor thermal voting widened
 
-V45's watchdog had basic crash counting (3 fails → safe mode). V46 introduces a **tiered recovery model** with proper observability:
+V46 collected skin / surface / board sensor data for observation. V47 activates two new behavioral hooks:
 
-**Level 1 (single fault):**
-- Detect: governor process dead OR `/dev/.asb/state` stale > 120s
-- Action: kill stale governor process, restart binary
-- Telemetry: `recovery_count++`, append to `/dev/.asb/recovery_history.log`
+- **Mode A bias**: `adv_score ≥ 70` AND `gaming_ticks > 60` → would shorten gaming dwell
+- **Mode B bias**: `skin + surface ≥ 75` AND `CPU < 60 °C` → would prevent gaming-state entry
+- **`perf_skin_hot_thresh=80`**: when both skin and surface vote ≥ 80, performance profile transitions to SUSTAINED even before CPU temp crosses its CPU-only threshold
 
-**Level 2 (2nd fault within 5-minute window):**
-- Action: shell fallback applies safe balanced bounds while governor restart attempts continue
-- Telemetry: `recovery_level=2`, governor restart still attempted but with longer cooldown
+Vendor clamp tracker now exposes `vendor_clamp_1h` and `vendor_clamp_total` counters that Smart Mode's thermal veto consults.
 
-**Level 3 (3rd fault in same boot session):**
-- Action: give up. Set `ASB_GOV_ENABLED=0`, touch `/data/adb/asb/recovery_disabled` marker, apply shell-fallback safe bounds permanently for this boot
-- Telemetry: `recovery_level=3`, module.prop description shows `⚠️ recovery mode — governor disabled`
-- Next boot: marker is honored, governor stays disabled. User can clear via `rm /data/adb/asb/recovery_disabled` or uninstall+reinstall.
+### 🔁 Persistent learning survives module reinstall
 
-**Lock file mechanism (`/dev/.asb/recovery.lock`)** prevents `runtime/asb_reconcile.sh` from competing with watchdog during recovery operations. Reconcile checks the lock at start of each iteration and yields if held. Stale lock (>60s old) is broken automatically.
+V46 stored `session_history.jsonl` inside `/data/adb/modules/AutoSystemBoost/runtime/` — wiped by Magisk/KSU on every module reinstall. V47 moves it to `/data/adb/asb/session_history.jsonl` which is outside the module directory and persists across reinstalls. One-shot migration runs on first V47 boot to copy any existing legacy file.
 
-**`/dev/.asb/recovery.json` endpoint** (mirrors V44 `conflicts.json` / `learner_state.json` pattern):
+Same treatment for legacy `/data/adb/asb_*` flag files — automatically migrated to `/data/adb/asb/*` on first boot.
 
-```json
-{
-  "recovery_count": 1,
-  "current_level": 1,
-  "last_recovery_ts": 1779820800,
-  "last_recovery_reason": "process_dead",
-  "governor_disabled": 0,
-  "disabled_marker_exists": 0
-}
+### 📝 Persistent critical-event log
+
+New `/data/adb/asb/governor_persist.log` (256 KB rotation, separate file handle from `/dev/.asb/governor.log`) captures critical events: governor start, profile changes, recovery events, sustained thermal episodes. Survives reboots, available in both release and debug builds.
+
+### 📦 Release / Debug build split
+
+Two zips per release:
+
+- **`ASB-V47.zip`** — production. No transient `governor.log`, no `tools/logkit/`, no `tools/asb_field_report.py`. Smaller, focused.
+- **`ASB-V47-debug.zip`** — full diagnostics. Per-tick `governor.log` enabled (compile flag `ASB_DEBUG_BUILD=1`), all logkit scripts included.
+
+**The learner runs identically in both builds.** `session_history.jsonl`, `learn.bin`, `pstats_*.json`, `buckets.bin` writes are never gated by build mode. Only verbose per-tick logging is suppressed in release.
+
+### ⚙️ Self-tune cadence stabilized
+
+V46 logged a same-second `self_tune` warning for several parameters because the cadence guard checked a global timestamp rather than per-parameter. V47 introduces per-param timestamps (`tfi`, `thl`, `tml`, `tlg`) in `pstats_*.json` so each parameter has its own 2-hour adjustment window. No more spurious adjustments on the same tick.
+
+### 🛡 Schema migration 14 → 15
+
+`config/governor.conf` schema bumped to 15 so the additive merge picks up the new `perf_skin_hot_thresh` key and 13 new Smart Mode keys (`smart_mode_enabled`, `smart_conf_low`, `smart_conf_high`, etc.). Existing user customizations preserved — only missing keys are added.
+
+### 🩺 Diagnostic tools
+
+New logkit scripts (debug build only):
+
+- `asb_log_smart_gaming.sh` — captures a gaming session with Smart Mode trace TSV (one row per poll: bucket, daypart, confidence, alpha, app hint, fallback level, CPU temp, etc.)
+- `asb_log_smart_sleep.sh` — captures an overnight idle session
+- `asb_log_smart_daily.sh` — captures a full day of mixed use
+- `asb_vendor_thermal_probe.sh` — discovers OxygenOS thermal zone aliases for sensor mapping
+
+New CLI in both release and debug:
+
+- `tools/asb_smart_mode.sh status / enable / disable / reset` — user-facing Smart Mode control
+
+---
+
+## 🔧 Migration & Compatibility
+
+### V46 → V47 upgrade behavior
+
+- **Smart Mode is off by default for V46 upgraders**. Your manual profile (battery / balanced / performance) is detected and preserved. The migration code looks for V46 signs: `/data/adb/asb/active_profile`, `/data/adb/asb/user_config`, `/data/adb/asb/learn/`, `/data/adb/asb/pstats_battery.json`. If any of these exist, Smart Mode stays disabled and `smart_prev_profile` is set to your current profile.
+- **Fresh installs default to Smart Mode on** with `smart_prev_profile=balanced` as the fallback if you later disable it.
+- **Legacy `session_history.jsonl` migrated** one-shot to `/data/adb/asb/` on first V47 boot.
+- **`governor.conf` additive merge** preserves all your customizations and only adds missing keys.
+
+### Preserved V46 behavior
+
+- All V46 thermal, idle and wake learning logic unchanged
+- Crash Recovery v2 (tiered L1 / L2 / L3) unchanged
+- Profile bounds for **battery and balanced are bit-exact V46**
+- BG_TRIM, Storm Shield, Anti-Clamp, Tencent Soter — all preserved
+- FSM scheduling logic identical to V46 apart from the new intent class and bias mode tracking
+- Default behavior on first boot is V46-equivalent (Smart Mode off for upgraders)
+
+### Reversibility
+
+Smart Mode is fully reversible. Disable it via:
+
+```bash
+sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh disable
 ```
 
-**Tighter watchdog cadence:** V45 polled every 5 minutes. V46 polls every 60 seconds for faster fault detection. On healthy systems, this adds negligible CPU overhead (one process check + one stat call per minute). On unhealthy systems, recovery happens 5× faster.
+Your `smart_prev_profile` value is restored as the active profile. To completely wipe Smart Mode learning (12 buckets back to seed defaults):
 
-### 🧪 P1 — BAT_TRUST_NOISY tier (observe-only in V46, behavior in V47)
-
-V45 had three tiers: `CLEAN`, `PARTIAL`, `DIRTY`. Real-world data showed most users' sessions land in `DIRTY` because mixed daily use has high wake counts and only moderate idle quality. The learner refused to learn from these and stayed stuck in stale state.
-
-**V46 — observe-only NOISY classification:**
-
-The C governor now classifies sessions that would qualify for a future `BAT_TRUST_NOISY` tier:
-- `iq` (idle quality) in `[8, 20)`
-- `wph` (wakes per hour) in `[10, 25]`
-- `wake_cycles` in `[12, 45]`
-- `dur >= 1800` (at least 30 min)
-- `bat_total >= 600` (some genuine idle time existed)
-
-**Crucially: in V46, the classification only sets a flag (`would_be_noisy`). Learner behavior is unchanged from V45 — sessions still treated as DIRTY.**
-
-This is by design. We need field data showing the actual distribution of `would_be_noisy` candidates before committing to a behavioral change. If 0% of real sessions qualify, the tier is useless. If 80% qualify, the criteria are too loose.
-
-**Field validation:** 5.7-hour session captured 1 NOISY candidate out of 8 sessions = **12.5% capture rate**. Right in the target range — not too few, not too many.
-
-**`tools/asb_field_report.py` and `tools/asb_field_report.sh`** (new in V46) — analyze `session_history.jsonl` to show:
-- Distribution of `would_be_noisy` by profile
-- Histograms of iq/wph/wake/duration
-- Per-zone advisory scores (see P2 below)
-- Recovery counts from `recovery.json`
-
-Run via `sh tools/asb_field_report.sh` from termux or adb shell. Output is plain text, designed to share in bug reports.
-
-**V47 plan:** if 2-3 weeks of field data confirm NOISY catches a meaningful slice of real sessions without polluting with noise, V47 will activate the tier with learner weight = 0.10 (vs PARTIAL's 0.25 and CLEAN's 1.0).
-
-### 🌡 P2 — Multi-sensor hot guard (observe-only in V46, decision logic in V47)
-
-V45's hot guard fired on CPU zone alone at `perf_hot_guard_temp=66°C`. V46 collects multi-sensor data to inform a future weighted policy:
-
-**Cold baseline (per boot session):** first 30 ticks of governor startup, average skin/surface/board temps are captured as cold baseline. All subsequent zone readings are evaluated as **delta-from-cold** instead of absolute temp. This prevents false advisories when device starts in a warm pocket or warm room.
-
-**Per-zone vote scoring (0-100):**
-- Skin: weight 0.30 — score climbs as `(current - cold_baseline)` exceeds threshold
-- Surface: weight 0.40 — same delta-based scoring
-- Board: weight 0.20 — same delta-based scoring
-- CPU primary remains weight 1.0 (unchanged)
-
-**Weighted advisory score:** sum of weighted zone scores. When score > 50 for 20 consecutive ticks (5+ minutes sustained advisory), `thermal_advisory_active=1`.
-
-**`would_bias_exit_gaming` flag** — if advisory active AND CPU is in moderate range (not hot enough for primary hot_guard), this would have biased the FSM to exit GAMING → HEAVY earlier. **In V46 this is only a flag. The FSM does NOT actually bias.** Data collection only.
-
-**Field validation:** `adv_active=1` fired 11 times during the 5.7-hour session (during warm-but-idle device states). **`adv_would_bias=0` always** — current criteria for the bias trigger are too narrow. This is an important finding from observe-only mode: without telemetry we would have activated dead logic in V47. V47 will need to widen the bias criteria.
-
-**Fields added to `session_history.jsonl`:**
-- `adv_score_avg` — average advisory score across session
-- `adv_active_ticks` — total ticks where advisory was active
-- `adv_would_bias_count` — number of times `would_bias_exit_gaming` fired
-- `vote_skin_max`, `vote_surface_max`, `vote_board_max` — peak per-zone scores
-
-**V47 plan:** widen `would_bias_exit_gaming` criteria based on V46 field data before activating behavioral effect. Current narrow criteria (CPU moderate AND advisory active) never fire in practice.
-
-### 📁 State namespace migration — `/data/adb/asb/`
-
-V44 and V45 scattered state files across `/data/adb/` with `asb_*` prefix (e.g. `asb_baseline.txt`, `asb_active_profile`, `asb_v45_cleanup_done`). V46 migrates these to a clean `/data/adb/asb/` directory:
-
-```
-/data/adb/asb/
-├── active_profile
-├── baseline.txt
-├── profile_switches.log
-├── user_config
-├── v45_cleanup_done
-├── vendor_boot_counter
-├── vendor_mounts.log
-├── vendor_overlay_active
-├── recovery_disabled       (V46 marker)
-├── recovery_lock           (V46 lock file)
-└── debug
+```bash
+sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh reset
 ```
 
-**Migration is automatic and one-shot.** `service.sh` early-boot block moves legacy `/data/adb/asb_*` files to `/data/adb/asb/*` on first V46 boot, then removes leftover legacy paths. No user action needed.
+---
 
-This namespace makes uninstallation cleaner (`rm -rf /data/adb/asb`) and prevents accidental collisions with other modules that scan `/data/adb/` directly.
+## 📊 Field-test results
 
-### 📋 Verification
+Single 42-minute Call of Duty Mobile session at room temperature, screen on, not charging.
+
+| Metric | V46 performance profile | V47 smart profile |
+|---|---:|---:|
+| Peak CPU temperature | ~95 °C | **71 °C** |
+| Battery temperature peak | ~50 °C | **47 °C** |
+| Time above 70 °C CPU | ~35 % of session | **3 %** |
+| Thermal veto fires | n/a (didn't exist) | 57 ticks once CPU hit 65 °C+ |
+| Vendor clamp activity | high | moderate (governor no longer fighting) |
+
+Smart Mode does not fight vendor clamps — it works *inside* what the vendor PowerHAL allows and picks better blends than performance ever could.
+
+---
+
+## 🚫 What V47 deliberately does NOT change
+
+- All V46 critical fixes preserved (description boot-init, `/data/local/tmp` wildcard, OOM tuning relaxation)
+- Crash Recovery v2 (tiered L1 / L2 / L3 + `recovery.json`) unchanged
+- Profile bounds for **battery and balanced are bit-exact V46**
+- WebUI Live overlay unchanged
+- Per-app auto-profile still not implemented (still rejected — polling cost too high; Smart Mode uses CPU-load heuristic instead)
+- BG_TRIM / Storm Shield / Anti-Clamp / Tencent Soter all preserved
+
+---
+
+## 🧠 Trust + intent decision matrix
+
+| Trust | Intent | Learner action |
+|---|---|---|
+| CLEAN | IDLE, MIXED | Full weight 1.0 |
+| CLEAN | SLEEP_IDLE | Forced PARTIAL (sleep is inherently noisy) |
+| PARTIAL | any | Weight 0.4 |
+| **NOISY** | any | **Weight 0.15** (newly activated) |
+| DIRTY | any | Skipped entirely |
+| any | **IDLE_WARM** | **Forced PARTIAL** (warm idle is ambiguous) |
+| any | SLEEP_IDLE | Forced PARTIAL |
+
+Smart Mode bucket learning uses the same trust tiers, with `quality = duration_weight × trust_weight` capped at 5 % step per session.
+
+---
+
+## 💾 Files changed since V46
 
 ```
-Compile (gcc -Wall -Wextra):              0 warnings, 0 errors
-Shell syntax (33 files):                  33/33 clean
-Lint:                                     0 errors, 6 warnings (4× RESERVED + 2 informational)
-Athena/COSA persist writes:               0 (V45 fix preserved)
-Audio widening props:                     0 (V45 fix preserved)
-vm.oom_kill_allocating_task in code:      0 (V46 fix, was 1 in V45)
-Battery VM_SWAPPINESS:                    150 (was 200 in V45)
-Battery VM_MINFREE:                       64 MB (was 112 MB in V45)
-Battery VM_WMARK:                         150 (was 400 in V45)
-Recovery v2:                              tiered L1/L2/L3 with lock + recovery.json
-NOISY tier:                               observe-only data collection (P1a)
-Multi-sensor hot guard:                   observe-only data collection (P2)
-Field report tool:                        tools/asb_field_report.{sh,py}
-/data/adb/asb/ namespace:                 migrated from legacy /data/adb/asb_*
+src/asb_governor.c              — Smart Mode integration, persistent log, NOISY tier, cadence gates
+src/asb_smart.h                 — new (1000+ lines, Smart Mode library)
+src/asb_smart_defs.h            — new (constants, enums, clamp ranges)
+src/asb_fsm.h                   — Mode A/B observability, PROFILE_SMART support
+src/asb_config.h                — 13 new smart_* keys, perf_skin_hot_thresh
+src/asb_writer.h                — ASB_DEBUG_BUILD guards on audit-file writes
+src/asb_learner.h               — schema bump, idle_warm class
+src/build_ndk_release.sh        — ASB_BUILD_MODE switch (release/debug)
+config/governor.conf.shipped    — Smart Mode block, perf_skin_hot_thresh
+config/profile_bounds.conf      — performance caps cooled
+config/profile_bounds.generated.sh — regenerated
+src/asb_fsm_bounds.generated.h  — regenerated
+profiles/performance.sh         — synced with new bounds
+runtime/asb_utils.sh            — bootstrap fix (.shipped not .default)
+service.sh                      — V46→V47 migration, schema bump, marker rename
+action.sh                       — Smart Mode status display
+apply_profile.sh                — PROFILE_SMART recognition
+webroot/index.html              — Smart Mode UI button + live readout
+tools/asb_smart_mode.sh         — new (status/enable/disable/reset)
+tools/asb_field_report.py       — schema v15, Smart Mode summary
+tools/asb_lint.sh               — Smart Mode regression guards
+tools/logkit/_asb_logkit_common.sh — V47 endpoint collection, Smart trace
+tools/logkit/asb_log_smart_gaming.sh — new
+tools/logkit/asb_log_smart_sleep.sh — new
+tools/logkit/asb_log_smart_daily.sh — new
+tools/asb_vendor_thermal_probe.sh — new
+tests/test_smart_session2.{c,sh} — new (storage, persistence, helpers)
+tests/test_smart_session3.{c,sh} — new (math, learning, blend)
+.github/workflows/build-release.yml — new (production build, no debug logs)
+.github/workflows/build-debug.yml — new (full diagnostics build)
+module.prop                     — V46 → V47, versionCode 460 → 470
+update.json                     — same
+README.md / README.ru.md        — refreshed
 ```
-
-### 📂 Files changed vs V45 release
-
-| File | What changed |
-|---|---|
-| `service.sh` | Removed `vm.oom_kill_allocating_task=1`, added one-shot OOM cleanup at boot, V46 tiered recovery hooks, `/data/adb/asb/` state namespace migration, recovery_disabled marker handling |
-| `profiles/battery.sh` | `VM_SWAPPINESS` 200→150, `VM_MINFREE` 112MB→64MB, `VM_WMARK` 400→150 |
-| `runtime/asb_watchdog.sh` | Full rewrite — tiered Level 1/2/3 recovery, lock file, `recovery.json` endpoint, 60s polling cadence |
-| `runtime/asb_reconcile.sh` | Recovery lock yield at start of each loop iteration |
-| `runtime/asb_baseline.sh` | Moved state files from `/data/adb/asb_*` to `/data/adb/asb/*` namespace |
-| `runtime/profile_core.sh` | Minor cleanup of inline comments |
-| `apply_profile.sh` | Minor refinements to description-update path |
-| `src/asb_governor.c` | NOISY classification logic (observe-only), multi-sensor advisory scoring (observe-only), cold baseline capture, `would_bias_exit_gaming` flag, expanded `session_history.jsonl` schema |
-| `src/asb_fsm.h` | New fields: `cold_baseline_skin/surface/board`, `cold_baseline_ticks/sum_*`, `thermal_advisory_score/ticks/active`, `thermal_vote_skin/surface/board`, `would_bias_exit_gaming`, `would_be_noisy` |
-| `src/asb_config.h`, `src/asb_metrics.h`, `src/asb_writer.h` | Internal struct additions for V46 observe-only telemetry |
-| `tools/asb_lint.sh` | V46 regression guards for `oom_kill_allocating_task` and `VM_SWAPPINESS > 175` |
-| `tools/asb_field_report.sh` | **NEW** — wrapper to run field report from termux/adb |
-| `tools/asb_field_report.py` | **NEW** — Python analyzer of `session_history.jsonl` and `recovery.json` |
-| `common/install.sh` | Version bump |
-| `post-fs-data.sh` | State namespace migration support |
-| `uninstall.sh` | Clean `/data/adb/asb/` directory on removal |
-| `webroot/index.html`, `action.sh` | Version label V45→V46 |
-| `module.prop`, `update.json`, `CHANGELOG.md` | Version metadata + this changelog |
-
-### 🚫 What V46 deliberately does NOT change
-
-- **Profile bounds for performance and balanced** — unchanged from V45
-- **FSM scheduling logic** — bit-exact identical apart from new observation hooks
-- **Per-app auto-profile switching** — still deferred (polling daemon would burn battery)
-- **Idle quality predictor** — V47+ territory if ever
-- **NOISY tier behavioral change** — collecting data first (P1b deferred to V47)
-- **Multi-sensor hot guard behavioral change** — collecting data first (P2 decision deferred to V47)
-- **All V45 critical bug fixes preserved bit-exact:** description boot-init, `/data/local/tmp` wildcard removal, Athena/COSA persist cleanup, audio widening props removal, audio matrix limiter removal
