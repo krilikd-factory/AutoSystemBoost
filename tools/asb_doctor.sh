@@ -165,10 +165,12 @@ for pf in pstats_battery.json pstats_balanced.json pstats_performance.json; do
     warn "$pf not found (will be created on first session)"
   fi
 done
-HIST="$RTDIR/session_history.jsonl"
+HIST="/data/adb/asb/session_history.jsonl"
+[ ! -f "$HIST" ] && HIST="$RTDIR/session_history.jsonl"
 if [ -f "$HIST" ]; then
   LINES="$(wc -l < "$HIST" 2>/dev/null | tr -d ' ')"
-  ok "session_history.jsonl (${LINES:-0} entries)"
+  SIZE_KB="$(du -k "$HIST" 2>/dev/null | awk '{print $1}')"
+  ok "session_history.jsonl (${LINES:-0} entries, ${SIZE_KB:-0} KB, $HIST)"
   if last_perf_unfinalized "$HIST"; then
     warn "last performance session may not be finalized"
   fi
