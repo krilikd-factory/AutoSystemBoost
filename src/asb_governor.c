@@ -385,9 +385,15 @@ static const char *g_pstats_files[3] = {
     PERSISTENT_STATS_DIR "/pstats_balanced.json",
     PERSISTENT_STATS_DIR "/pstats_performance.json"
 };
-#define SESSION_HISTORY_FILE  "/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
-#define SESSION_HISTORY_MAX   10
+/* V47: session_history.jsonl moved to persistent /data/adb/asb/ so learning
+ * survives module reinstall/upgrade. Legacy path kept for one-time migration. */
+#define SESSION_HISTORY_FILE        "/data/adb/asb/session_history.jsonl"
+#define SESSION_HISTORY_FILE_LEGACY "/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
+#define SESSION_HISTORY_MAX   500
 #define SESSION_HISTORY_LINE_MAX 2048
+/* Hard size cap to prevent unbounded growth. 5 MB = ~2500 max-size lines,
+ * comfortably above SESSION_HISTORY_MAX=500 × 2KB/line worst case. */
+#define SESSION_HISTORY_SIZE_CAP_BYTES (5 * 1024 * 1024)
 #define STATUS_JSON_MAX          4096
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
@@ -1598,33 +1604,65 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     int sus_pct = (total_active > 0)
                   ? (int)(fsm->ses_time_sustained_sec * 100 / total_active) : 0;
 
-    char lines[SESSION_HISTORY_MAX][SESSION_HISTORY_LINE_MAX];
+    /* V47 session_history rotation — stream-based to avoid 1 MB stack allocation.
+     * Pass 1: count valid lines + total file size.
+     * Pass 2: stream-copy lines from offset that keeps the last SESSION_HISTORY_MAX,
+     *         then append new entry.
+     * If file exceeds SESSION_HISTORY_SIZE_CAP_BYTES, force tighter trim by skipping
+     * more lines until the resulting file fits. */
     int line_count = 0;
-    FILE *rf = fopen(SESSION_HISTORY_FILE, "r");
-    if (rf) {
-        char buf[SESSION_HISTORY_LINE_MAX];
-        while (fgets(buf, sizeof(buf), rf) && line_count < SESSION_HISTORY_MAX) {
-            int len = strlen(buf);
-            if (len > 0 && buf[len-1] == '\n') buf[len-1] = '\0';
-            if (buf[0] == '{') {
-                size_t bn = strlen(buf);
-                if (bn >= SESSION_HISTORY_LINE_MAX) bn = SESSION_HISTORY_LINE_MAX - 1;
-                memcpy(lines[line_count], buf, bn);
-                lines[line_count][bn] = '\0';
-                line_count++;
+    long file_size = 0;
+    {
+        FILE *rf = fopen(SESSION_HISTORY_FILE, "r");
+        if (rf) {
+            char buf[SESSION_HISTORY_LINE_MAX];
+            while (fgets(buf, sizeof(buf), rf)) {
+                file_size += (long)strlen(buf);
+                if (buf[0] == '{') line_count++;
             }
+            fclose(rf);
         }
-        fclose(rf);
     }
 
-    int start = (line_count >= SESSION_HISTORY_MAX) ? line_count - SESSION_HISTORY_MAX + 1 : 0;
+    /* Determine how many lines to skip from the start to keep last (MAX-1) */
+    int skip = (line_count >= SESSION_HISTORY_MAX) ? line_count - SESSION_HISTORY_MAX + 1 : 0;
+
+    /* Hard size cap: if estimated retained bytes still exceed cap, increase skip */
+    if (file_size > SESSION_HISTORY_SIZE_CAP_BYTES && line_count > 0) {
+        long avg_line = file_size / (line_count > 0 ? line_count : 1);
+        if (avg_line < 1) avg_line = 1;
+        long max_lines_for_cap = SESSION_HISTORY_SIZE_CAP_BYTES / avg_line;
+        if (max_lines_for_cap > 0 && line_count - skip > (int)max_lines_for_cap) {
+            skip = line_count - (int)max_lines_for_cap + 1;
+            if (skip < 0) skip = 0;
+        }
+    }
 
     char tmp_path[256];
     snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", SESSION_HISTORY_FILE);
     FILE *wf = fopen(tmp_path, "w");
     if (!wf) return;
-    for (int i = start; i < line_count; i++)
-        fprintf(wf, "%s\n", lines[i]);
+
+    /* Pass 2: stream existing lines, skipping first `skip` */
+    {
+        FILE *rf = fopen(SESSION_HISTORY_FILE, "r");
+        if (rf) {
+            char buf[SESSION_HISTORY_LINE_MAX];
+            int idx = 0;
+            while (fgets(buf, sizeof(buf), rf)) {
+                if (buf[0] != '{') continue;
+                if (idx >= skip) {
+                    /* strip trailing newline then re-emit */
+                    int len = (int)strlen(buf);
+                    if (len > 0 && buf[len-1] == '\n') buf[len-1] = '\0';
+                    fputs(buf, wf);
+                    fputc('\n', wf);
+                }
+                idx++;
+            }
+            fclose(rf);
+        }
+    }
 
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
