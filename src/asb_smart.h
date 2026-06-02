@@ -141,6 +141,7 @@ static uint32_t asb_smart_bucket_id(int daypart, int is_weekend) {
     return (uint32_t)(daypart * 2 + is_weekend);
 }
 
+__attribute__((unused))
 static uint64_t asb_smart_pkg_hash64(const char *pkg) {
     if (!pkg || !*pkg) return 0ull;
     /* FNV-1a 64-bit */
@@ -152,6 +153,7 @@ static uint64_t asb_smart_pkg_hash64(const char *pkg) {
     return h;
 }
 
+__attribute__((unused))
 static int asb_smart_app_hint_from_pkg(const char *pkg) {
     if (!pkg || !*pkg) return ASB_APP_IDLE;
     /* Heuristic mapping. User can override via /data/adb/asb/app_categories.conf
@@ -365,6 +367,7 @@ static int asb_smart_flag_read(void) {
     return (v != 0) ? 1 : 0;
 }
 
+__attribute__((unused))
 static int asb_smart_flag_write(int enabled) {
     FILE *f = fopen(ASB_SMART_FLAG_FILE, "w");
     if (!f) return -1;
@@ -375,6 +378,7 @@ static int asb_smart_flag_write(int enabled) {
     return 0;
 }
 
+__attribute__((unused))
 static int asb_smart_prev_profile_read(char *out, size_t outsz) {
     if (!out || outsz < 2) return -1;
     FILE *f = fopen(ASB_SMART_PREV_PROF, "r");
@@ -391,6 +395,7 @@ static int asb_smart_prev_profile_read(char *out, size_t outsz) {
     return (L > 0) ? 0 : -1;
 }
 
+__attribute__((unused))
 static int asb_smart_prev_profile_write(const char *prof) {
     if (!prof || !*prof) return -1;
     FILE *f = fopen(ASB_SMART_PREV_PROF, "w");
@@ -402,6 +407,7 @@ static int asb_smart_prev_profile_write(const char *prof) {
     return 0;
 }
 
+__attribute__((unused))
 static int asb_smart_app_hash_to_hex(uint64_t h, char *out, size_t outsz) {
     if (!out || outsz < 17) return -1;
     snprintf(out, outsz, "%016llx", (unsigned long long)h);
