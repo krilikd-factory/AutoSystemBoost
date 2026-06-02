@@ -45,9 +45,18 @@ LK_SNAPSHOT_S=600
 LK_MINUTES="${1:-90}"
 LK_MAX_SEC=$(( LK_MINUTES * 60 ))
 
+LK_WAKELOCK_NAME="asb_logkit_$$"
+LK_HAVE_WAKELOCK=0
+if [ -w /sys/power/wake_lock ]; then
+  echo "$LK_WAKELOCK_NAME" > /sys/power/wake_lock 2>/dev/null && LK_HAVE_WAKELOCK=1
+fi
+
 trap 'lk_finalize_smart_gaming; exit 0' INT TERM HUP EXIT
 
 lk_finalize_smart_gaming() {
+  if [ "$LK_HAVE_WAKELOCK" = "1" ]; then
+    echo "$LK_WAKELOCK_NAME" > /sys/power/wake_unlock 2>/dev/null
+  fi
   lk_capture_smart_sessions_window
   lk_snapshot_smart_store "after"
   lk_emit_smart_summary

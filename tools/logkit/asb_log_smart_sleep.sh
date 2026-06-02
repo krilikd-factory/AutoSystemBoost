@@ -51,9 +51,31 @@ LK_SNAPSHOT_S=3600
 LK_HOURS="${1:-9}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
 
+# V47: Acquire kernel partial wakelock so the CPU stays awake during deep sleep.
+# Without this, Android Doze mode pauses /bin/sh in long sleep() calls — capture
+# gets only a handful of ticks over 2+ hours instead of one every LK_POLL_S sec.
+# We write a unique name into /sys/power/wake_lock; the kernel keeps CPU awake
+# while that name is registered. Released in lk_finalize_smart_sleep.
+LK_WAKELOCK_NAME="asb_logkit_$$"
+LK_HAVE_WAKELOCK=0
+if [ -w /sys/power/wake_lock ]; then
+  echo "$LK_WAKELOCK_NAME" > /sys/power/wake_lock 2>/dev/null && LK_HAVE_WAKELOCK=1
+  if [ "$LK_HAVE_WAKELOCK" = "1" ]; then
+    echo "[wakelock] acquired '$LK_WAKELOCK_NAME' — CPU will stay awake during capture"
+  fi
+fi
+if [ "$LK_HAVE_WAKELOCK" = "0" ]; then
+  echo "[wakelock] WARNING: /sys/power/wake_lock not writable — Doze may freeze the capture"
+  echo "           (try: chmod 666 /sys/power/wake_lock as root, or run script as root)"
+fi
+
 trap 'lk_finalize_smart_sleep; exit 0' INT TERM HUP EXIT
 
 lk_finalize_smart_sleep() {
+  # Release kernel wakelock first so device can return to deep sleep
+  if [ "$LK_HAVE_WAKELOCK" = "1" ]; then
+    echo "$LK_WAKELOCK_NAME" > /sys/power/wake_unlock 2>/dev/null
+  fi
   lk_capture_smart_sessions_window
   lk_snapshot_smart_store "after"
   lk_emit_smart_summary
