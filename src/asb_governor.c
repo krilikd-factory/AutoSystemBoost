@@ -398,7 +398,7 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-#define ASB_VERSION "V47"
+#define ASB_VERSION "V48"
 
 static const char *intent_names[] = {"unknown","benchmark","long_game","idle","mixed","sleep_idle","idle_warm"};
 
@@ -2435,6 +2435,11 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int vendor_clamp_1h = (int)g_v44_clamp_1h;
     int recovery_active = 0;  /* V46 recovery state; conservatively 0 in V48 alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
+
+    /* V48: intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
+     * gaming relax. Each is a no-op if its signal is unavailable on this device,
+     * and all skip when night_override or thermal_veto fired (those keep priority). */
+    asb_smart_apply_v48_modifiers(g_smart_rt.app_hint, cpu_max_c, &g_smart_rt);
 
     /* 5. Slot-update gating: should we rebuild g_smart_bounds? */
     int do_update = asb_smart_should_update_slot(&g_smart_rt, now, charging, g_smart_rt.app_hint);

@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <dirent.h>
 
 #include "asb_smart_defs.h"
 
@@ -630,20 +631,29 @@ static void asb_smart_compute_effective(
     }
     rt->conf_x1000 = conf_x1000;
 
-    /* effective scale: 0 if conf<low, smooth ramp up to ~0.4 at high, 1.0 at full */
+    /* V48 effective scale: NEVER zero out the seed/learned bias.
+     * Even at zero confidence we apply seed-encoded daypart priors at 25% influence.
+     * Rationale: sleep daypart seeds alpha=950 for good reason (battery-lean at night);
+     * dropping to neutral 500 means the user gets no benefit until weeks of learning.
+     *
+     * Tiers:
+     *   conf < low:    25%  influence (seed priors honored)
+     *   low → high:    25% → 60%
+     *   high → max:    60% → 100% */
     int eff_scale_x1000;
     if (conf_x1000 < ASB_SMART_CONF_LOW_X1000) {
-        eff_scale_x1000 = 0;
+        /* V48: was 0. Now 250 — always honor seeded priors. */
+        eff_scale_x1000 = 250;
     } else if (conf_x1000 < ASB_SMART_CONF_HIGH_X1000) {
-        /* Linear: low→0, high→400 (max 40% influence in mild tier) */
+        /* Linear: low→250, high→600 */
         int span = ASB_SMART_CONF_HIGH_X1000 - ASB_SMART_CONF_LOW_X1000;
         int into = conf_x1000 - ASB_SMART_CONF_LOW_X1000;
-        eff_scale_x1000 = (400 * into) / span;
+        eff_scale_x1000 = 250 + (350 * into) / span;
     } else {
-        /* Strong tier: linear from 400 at high→1000 at full conf */
+        /* Strong tier: linear from 600 at high→1000 at full conf */
         int span = ASB_SMART_CONF_MAX_X1000 - ASB_SMART_CONF_HIGH_X1000;
         int into = conf_x1000 - ASB_SMART_CONF_HIGH_X1000;
-        eff_scale_x1000 = 400 + ((1000 - 400) * into) / span;
+        eff_scale_x1000 = 600 + ((1000 - 600) * into) / span;
         if (eff_scale_x1000 > 1000) eff_scale_x1000 = 1000;
     }
 
@@ -727,6 +737,189 @@ static void asb_smart_apply_thermal_veto(
         /* Trim interactive bonus */
         rt->interactive_bonus_x1000 /= 2;
     }
+}
+
+/* ============================================================
+ * V48 intelligent runtime modifiers
+ *
+ * Each modifier adjusts the computed runtime within safe bounds. They run AFTER
+ * the night_override and thermal_veto so those keep priority. The contract:
+ *   - never reduce alpha below 0 or above 1000
+ *   - never touch night_safe_override or thermal_veto flags
+ *   - skip entirely if a higher-priority override (night/veto) already fired
+ *
+ * Reading sysfs/procfs here is cheap (one short read per tick = a few µs).
+ * All paths are best-effort: if a file doesn't exist on this device, the
+ * modifier is a no-op for that signal. Zero risk of breaking other devices.
+ * ============================================================ */
+
+/* V48 — Memory pressure adaptation.
+ * Read /proc/pressure/memory (PSI). When the system is already memory-stressed
+ * (heavy swapping, oom-prone), there's no real perf benefit to high CPU caps —
+ * the bottleneck is RAM. Bias toward battery to stop burning power on stalls.
+ *
+ * PSI format:
+ *   some avg10=0.00 avg60=0.00 avg300=0.00 total=...
+ *   full avg10=0.00 ...
+ *
+ * Returns shift to add to alpha_battery_x1000 (0 if no pressure, +50/+100 if some). */
+static int asb_smart_memory_pressure_shift(void) {
+    FILE *f = fopen("/proc/pressure/memory", "r");
+    if (!f) return 0;
+    char line[256];
+    int shift = 0;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "some ", 5) != 0) continue;
+        /* Parse avg10=X.YZ */
+        char *p = strstr(line, "avg10=");
+        if (!p) break;
+        p += 6;
+        int whole = 0, frac = 0;
+        if (sscanf(p, "%d.%d", &whole, &frac) >= 1) {
+            /* avg10 ≥ 20.0 → high pressure → +100 to alpha (more battery-lean)
+             * avg10 ≥ 5.0  → mild pressure → +50
+             * else no-op */
+            if (whole >= 20) shift = 100;
+            else if (whole >= 5) shift = 50;
+        }
+        break;
+    }
+    fclose(f);
+    return shift;
+}
+
+static void asb_smart_apply_memory_pressure(asb_smart_runtime_t *rt) {
+    if (!rt) return;
+    if (rt->night_safe_override || rt->thermal_veto) return;  /* higher prio wins */
+    int shift = asb_smart_memory_pressure_shift();
+    if (shift > 0) {
+        int a = rt->alpha_battery_x1000 + shift;
+        if (a > ASB_SMART_ALPHA_BATTERY_MAX_X1000) a = ASB_SMART_ALPHA_BATTERY_MAX_X1000;
+        rt->alpha_battery_x1000 = a;
+    }
+}
+
+/* V48 — Signal-aware net_conservative adjustment.
+ * When cellular signal is weak, the modem burns disproportionate power scanning
+ * and ramping PA to maintain link. Bumping net_conservative makes the governor
+ * prefer holding existing connections rather than aggressively reconnecting.
+ *
+ * Signal quality estimate: scan /sys/class/net/rmnet[NUM]/operstate. If we see
+ * mostly 'down' or 'dormant' on cellular interfaces, treat as weak signal.
+ * Best-effort — different devices expose signal differently. */
+static int asb_smart_radio_weak_signal(void) {
+    DIR *d = opendir("/sys/class/net");
+    if (!d) return 0;
+    struct dirent *e;
+    int rmnet_up = 0, rmnet_total = 0;
+    while ((e = readdir(d)) != NULL) {
+        if (strncmp(e->d_name, "rmnet", 5) != 0) continue;
+        rmnet_total++;
+        char path[256];
+        snprintf(path, sizeof(path), "/sys/class/net/%s/operstate", e->d_name);
+        FILE *f = fopen(path, "r");
+        if (!f) continue;
+        char state[32] = {0};
+        if (fgets(state, sizeof(state), f)) {
+            if (strncmp(state, "up", 2) == 0) rmnet_up++;
+        }
+        fclose(f);
+    }
+    closedir(d);
+    /* If 0 rmnet interfaces, we can't tell — return 0 (no signal info) */
+    if (rmnet_total == 0) return 0;
+    /* "Weak" heuristic: less than half of rmnet interfaces are up */
+    return (rmnet_up * 2 < rmnet_total) ? 1 : 0;
+}
+
+static void asb_smart_apply_signal_aware(asb_smart_runtime_t *rt) {
+    if (!rt) return;
+    if (rt->night_safe_override || rt->thermal_veto) return;
+    if (asb_smart_radio_weak_signal()) {
+        /* Weak signal — bump net_conservative by +200 (clamped to max) */
+        int nc = rt->net_conservative_x1000 + 200;
+        if (nc > ASB_SMART_NET_CONSERV_MAX_X1000) nc = ASB_SMART_NET_CONSERV_MAX_X1000;
+        rt->net_conservative_x1000 = nc;
+    }
+}
+
+/* V48 — Refresh-rate-aware interactive_bonus shift.
+ * Lower panel refresh rate (60 Hz vs 144 Hz) inherently means less GPU/CPU
+ * frame work per second. The interactive_bonus (peak headroom) can be
+ * slightly reduced at low refresh rates with no UX impact.
+ *
+ * Read /sys/class/drm/sde-crtc-0/measured_fps if present (Qualcomm),
+ * or /sys/class/graphics/fb0/measured_fps as fallback.
+ * Returns 0 if unknown, else multiplier × 100 to apply to interactive_bonus. */
+static int asb_smart_refresh_rate_hz(void) {
+    static const char *paths[] = {
+        "/sys/class/drm/sde-crtc-0/measured_fps",
+        "/sys/class/graphics/fb0/measured_fps",
+        "/sys/class/drm/card0-DSI-1/measured_fps",
+        NULL
+    };
+    for (int i = 0; paths[i]; i++) {
+        FILE *f = fopen(paths[i], "r");
+        if (!f) continue;
+        int fps = 0;
+        if (fscanf(f, "%d", &fps) == 1) {
+            fclose(f);
+            if (fps > 0) return fps;
+        } else {
+            fclose(f);
+        }
+    }
+    return 0;
+}
+
+static void asb_smart_apply_refresh_rate(asb_smart_runtime_t *rt) {
+    if (!rt) return;
+    if (rt->night_safe_override || rt->thermal_veto) return;
+    int hz = asb_smart_refresh_rate_hz();
+    if (hz <= 0) return;
+    /* At 60 Hz, reduce interactive_bonus by ~30% (save more without UX hit).
+     * At 90 Hz reduce by ~15%. At 120+ Hz no change. */
+    int scale_x100;
+    if (hz <= 65) scale_x100 = 70;          /* 60 Hz */
+    else if (hz <= 95) scale_x100 = 85;     /* 90 Hz */
+    else return;                            /* ≥ 120 Hz: full bonus */
+
+    int reduced = (rt->interactive_bonus_x1000 * scale_x100) / 100;
+    if (reduced < ASB_SMART_INTERACTIVE_MIN_X1000) reduced = ASB_SMART_INTERACTIVE_MIN_X1000;
+    rt->interactive_bonus_x1000 = reduced;
+}
+
+/* V48 — Gaming app cap relaxation.
+ * When user explicitly chose a high-perf app (GAMING hint) AND device has
+ * thermal headroom, soften the alpha so the app gets closer to balanced.
+ * Respect the user's intent without giving up battery during cool gaming
+ * sessions. If device is hot, thermal_veto already locked us → no-op.
+ *
+ * Triggers: app_hint == GAMING + cpu_max_c < 65 °C + no thermal_veto.
+ * Effect:   clamp alpha to ≤ 400 (balanced-leaning) for this tick. */
+static void asb_smart_apply_gaming_relax(int app_hint, int cpu_max_c,
+                                          asb_smart_runtime_t *rt) {
+    if (!rt) return;
+    if (rt->night_safe_override || rt->thermal_veto) return;
+    if (app_hint < ASB_APP_GAMING) return;
+    if (cpu_max_c >= 65) return;   /* device warm — don't relax */
+    if (rt->alpha_battery_x1000 > 400) {
+        rt->alpha_battery_x1000 = 400;
+    }
+}
+
+/* ============================================================
+ * V48 modifiers — combined apply. Call after night_override+thermal_veto. */
+static void asb_smart_apply_v48_modifiers(
+        int app_hint,
+        int cpu_max_c,
+        asb_smart_runtime_t *rt)
+{
+    if (!rt) return;
+    asb_smart_apply_memory_pressure(rt);
+    asb_smart_apply_signal_aware(rt);
+    asb_smart_apply_refresh_rate(rt);
+    asb_smart_apply_gaming_relax(app_hint, cpu_max_c, rt);
 }
 
 /* Blend two profile bounds structures using alpha_battery_x1000.
