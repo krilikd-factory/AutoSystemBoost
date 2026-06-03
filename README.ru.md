@@ -33,7 +33,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/2744_lines-Native_C-0ea5e9?style=flat-square" alt="C">
   <img src="https://img.shields.io/badge/6_states-FSM-7c3aed?style=flat-square" alt="FSM">
-  <img src="https://img.shields.io/badge/3_profiles-Adaptive-16a34a?style=flat-square" alt="Profiles">
+  <img src="https://img.shields.io/badge/4_profiles-Adaptive-16a34a?style=flat-square" alt="Profiles">
+  <img src="https://img.shields.io/badge/Smart_Mode-Self--learning-a78bfa?style=flat-square" alt="Smart Mode">
   <img src="https://img.shields.io/badge/12_fields-Session_Plan-e85d04?style=flat-square" alt="Plan">
   <img src="https://img.shields.io/badge/0%25_CPU-DEEP__IDLE-1f2937?style=flat-square" alt="Idle">
 </p>
@@ -53,7 +54,7 @@
 </table>
 
 <p align="center">
-  <code>FSM</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>BG_TRIM</code> · <code>Memcg v2</code>
+  <code>FSM</code> · <code>Smart Mode</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>BG_TRIM</code> · <code>Memcg v2</code>
 </p>
 
 ---
@@ -133,7 +134,108 @@
 | Time-based escape | **≥ 180 с** | — | — |
 | Быстрый deep idle | — | — | **8 секунд** |
 
+> **Smart** профиль (4-й, адаптивный) — описан в секции ниже. В этой статической таблице его нет, потому что его caps не фиксированы: они **смешиваются в рантайме** между envelope'ами **battery** и **balanced** на основе обучения по времени суток. Никогда не превышает sustained-envelope **balanced** и не опускается ниже safety-floor **battery**.
+
 ---
+
+## 🧠 Smart Mode — адаптивный четвёртый профиль
+
+Smart Mode — это **не новый набор frequency caps**. Это *слой смешивания* поверх уже существующих envelope'ов **battery** и **balanced**, который выбирает какую долю каждого применить в текущем контексте. FSM не меняется — Smart Mode просто подменяет bounds, которые читает FSM.
+
+### 12 buckets по времени суток
+
+```
+            Будни   Выходные
+SLEEP  (00-06)   #0       #1
+WAKE   (06-09)   #2       #3
+MORN   (09-12)   #4       #5
+DAY    (12-17)   #6       #7
+EVE    (17-21)   #8       #9
+LATE   (21-24)   #10      #11
+```
+
+Каждый bucket хранит **веса смешивания, а не сырые частоты**:
+
+| Вес | Диапазон | Что делает |
+|:----|:--------:|:-----------|
+| `alpha_battery` | 0.00–1.00 | 0 = чистый balanced, 1 = чистый battery |
+| `interactive_bonus` | 0.00–0.15 | Лёгкий буст отзывчивости UI когда позволяет контекст |
+| `idle_bias` | -0.20–+0.20 | Сделать idle-пороги жёстче или мягче |
+| `sleep_bias` | 0.00–1.00 | Предпочитать deep-idle поведение в этом bucket'е |
+| `net_conservative_bias` | 0.00–1.00 | Быть консервативнее с сетью в этом bucket'е |
+
+Cold-start seed'ы совпадают с baseline-поведением, поэтому Smart Mode **не ощущается вялым в первый день** — днём он работает как **balanced**, ночью как **battery**, ещё до того как обучился.
+
+### Чему Smart Mode учится из каждой сессии
+
+Каждая завершённая сессия обновляет активный bucket. Направление выбирается по результату сессии:
+
+| Результат сессии | Эффект на bucket |
+|:-----------------|:-----------------|
+| Жарко, большой drain, долгая sustained-нагрузка | `alpha_battery` ↑ (в сторону battery) |
+| Прохладно, чисто, экран включён, интерактивно | `alpha_battery` ↓ (в сторону balanced) |
+| Ночь, экран выключен, мало wake | `sleep_bias` ↑ и `net_conservative_bias` ↑ |
+| Жаркая сессия со срабатываниями thermal veto | `interactive_bonus` ↓ |
+
+Скорость обучения **зафиксирована на 5 % за сессию**, взвешенно по `duration × trust`:
+
+| Сессия | вес длительности | вес доверия | фактический шаг |
+|:-------|:----------------:|:-----------:|:---------------:|
+| Длинная CLEAN (≥ 30 мин) | 1.00 | 1.00 | **5.00 %** |
+| Средняя CLEAN | 0.50 | 1.00 | 2.50 % |
+| Длинная PARTIAL | 1.00 | 0.40 | 2.00 % |
+| Длинная NOISY | 1.00 | 0.15 | 0.75 % |
+| Любая DIRTY | любой | **0.00** | **0 %** (игнорируется) |
+
+Ни одно наблюдение не сдвинет bucket больше чем на 5 %.
+
+### Confidence gate — привычка предлагает, математика решает
+
+Влияние bucket'а зависит от количества **effective observations** и того как давно он использовался:
+
+| Confidence | Эффект |
+|:----------:|:-------|
+| < 0.35 | bucket игнорируется, baseline 50/50 blend |
+| 0.35 – 0.65 | мягкое смешивание (до 40 % силы bucket'а) |
+| ≥ 0.65 | bucket ведёт, но **никогда не выше balanced envelope** |
+
+Старые данные деградируют: полная сила первые 7 дней, линейный спуск до пола 30 % к 36 дню, ноль с 37-го дня. Bucket который ты перестал использовать будет вежливо забыт, а не заморозит телефон в устаревшем паттерне.
+
+### Иерархический fallback — никогда не наказывает за отсутствие данных
+
+Если в bucket'е "воскресный вечер" нет данных:
+
+1. точный поиск `(EVE, weekend)`
+2. fallback к `(EVE, *)` — попробовать будний вариант
+3. fallback к **классу** (buckets evening-класса, усреднённые)
+4. fallback к **глобальному** усреднению по всем заполненным buckets
+5. fallback к **safe default** (baseline-поведение)
+
+Cold-start всегда приземляется на что-то разумное.
+
+### Safety overlays — всегда выше habit
+
+Два жёстких override'а, которые никакое обучение не может обойти:
+
+| Override | Когда триггерится | Что форсирует |
+|:---------|:------------------|:--------------|
+| 🌙 **Night-safe override** | экран выключен + поздний час + не на зарядке + батарея ≤ 60 % | `alpha_battery ≥ 0.70`, обнулить `interactive_bonus`, поднять `idle_bias` |
+| 🌡 **Thermal veto** | CPU ≥ 65 °C ИЛИ высокая активность vendor clamp ИЛИ recovery активен | confidence × 0.3, force `alpha_battery ≥ 0.70`, обнулить `interactive_bonus` |
+
+**Habit may suggest. Thermal reality decides.**
+
+### Обратимость
+
+Smart Mode полностью обратим — выключи его, и предыдущий manual профиль восстановится из `/data/adb/asb/smart_prev_profile`. Данные обучения buckets хранятся в `/data/adb/asb/buckets.bin` (+ автоматический `.bak`) и переживают переустановку модуля. Используй команду `reset` если нужен чистый старт.
+
+```bash
+su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh status'
+su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh enable'
+su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh disable'
+su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh reset'
+```
+
+WebUI выводит Smart Mode-кнопку рядом с тремя классическими профилями с live-readout'ом текущего bucket'а, daypart'а, процента confidence, текущего `alpha_battery` и признака активности safety overlay.
 
 ---
 

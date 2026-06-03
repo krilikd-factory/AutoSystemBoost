@@ -33,7 +33,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/2744_lines-Native_C-0ea5e9?style=flat-square" alt="C">
   <img src="https://img.shields.io/badge/6_states-FSM-7c3aed?style=flat-square" alt="FSM">
-  <img src="https://img.shields.io/badge/3_profiles-Adaptive-16a34a?style=flat-square" alt="Profiles">
+  <img src="https://img.shields.io/badge/4_profiles-Adaptive-16a34a?style=flat-square" alt="Profiles">
+  <img src="https://img.shields.io/badge/Smart_Mode-Self--learning-a78bfa?style=flat-square" alt="Smart Mode">
   <img src="https://img.shields.io/badge/12_fields-Session_Plan-e85d04?style=flat-square" alt="Plan">
   <img src="https://img.shields.io/badge/0%25_CPU-DEEP__IDLE-1f2937?style=flat-square" alt="Idle">
 </p>
@@ -53,7 +54,7 @@
 </table>
 
 <p align="center">
-  <code>FSM</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>BG_TRIM</code> · <code>Memcg v2</code>
+  <code>FSM</code> · <code>Smart Mode</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>BG_TRIM</code> · <code>Memcg v2</code>
 </p>
 
 ---
@@ -132,6 +133,109 @@
 | SUSTAINED enter / exit | **59 / 56 °C** | 57 / 49 °C | — |
 | Time-based escape | **≥ 180 s** | — | — |
 | Fast deep idle | — | — | **8 seconds** |
+
+> **Smart** profile (4th, adaptive) — see section below. It does not appear in this static table because its caps are not fixed: they are blended at runtime between **battery** and **balanced** envelopes based on time-of-day learning. It never exceeds the **balanced** sustained envelope and never drops below the **battery** safety floor.
+
+---
+
+## 🧠 Smart Mode — Adaptive Fourth Profile
+
+Smart Mode is **not a new set of frequency caps**. It is a *blend layer* on top of the existing **battery** and **balanced** envelopes that picks how much of each to apply based on the current context. The FSM is unchanged — Smart Mode swaps the bounds the FSM reads from.
+
+### 12 time-of-day buckets
+
+```
+            Weekday   Weekend
+SLEEP  (00-06)   #0       #1
+WAKE   (06-09)   #2       #3
+MORN   (09-12)   #4       #5
+DAY    (12-17)   #6       #7
+EVE    (17-21)   #8       #9
+LATE   (21-24)   #10      #11
+```
+
+Each bucket stores **blend weights, not raw frequencies**:
+
+| Weight | Range | What it does |
+|:-------|:-----:|:-------------|
+| `alpha_battery` | 0.00–1.00 | 0 = pure balanced, 1 = pure battery |
+| `interactive_bonus` | 0.00–0.15 | Slight UI snappiness boost when context allows |
+| `idle_bias` | -0.20–+0.20 | Pull idle thresholds tighter or looser |
+| `sleep_bias` | 0.00–1.00 | Prefer deep-idle behavior in this bucket |
+| `net_conservative_bias` | 0.00–1.00 | Be more conservative with network during this bucket |
+
+Cold-start seeds match baseline behavior so Smart Mode **does not feel sluggish on day one** — it acts like **balanced** during the day and like **battery** at night, before any learning has happened.
+
+### What Smart Mode learns from each session
+
+Every finalized session updates the active bucket. Direction is chosen by session outcome:
+
+| Session outcome | Effect on bucket |
+|:----------------|:-----------------|
+| Hot, drainy, or long sustained load | `alpha_battery` ↑ (toward battery) |
+| Cool, clean, screen-on, interactive | `alpha_battery` ↓ (toward balanced) |
+| Night screen-off with low wake count | `sleep_bias` ↑ and `net_conservative_bias` ↑ |
+| Hot session with thermal vetoes | `interactive_bonus` ↓ |
+
+The learning rate is **fixed at 5 % per session**, weighted by `duration × trust`:
+
+| Session | duration weight | trust weight | actual step |
+|:--------|:---------------:|:------------:|:-----------:|
+| Long CLEAN (≥ 30 min) | 1.00 | 1.00 | **5.00 %** |
+| Medium CLEAN | 0.50 | 1.00 | 2.50 % |
+| Long PARTIAL | 1.00 | 0.40 | 2.00 % |
+| Long NOISY | 1.00 | 0.15 | 0.75 % |
+| Any DIRTY | any | **0.00** | **0 %** (ignored) |
+
+No single observation can swing a bucket more than 5 %.
+
+### Confidence gate — habit suggests, math decides
+
+A bucket's influence depends on its **effective observations** and how recently it was seen:
+
+| Confidence | Effect |
+|:----------:|:-------|
+| < 0.35 | bucket ignored, baseline 50/50 blend |
+| 0.35 – 0.65 | soft blend (up to 40 % of bucket strength) |
+| ≥ 0.65 | bucket leads, but **never above balanced envelope** |
+
+Old data decays: full strength for 7 days, linear floor down to 30 % at 36 days, zero from day 37 onward. A bucket you stopped using will be politely forgotten rather than freezing your phone in a stale pattern.
+
+### Hierarchical fallback — never punished for missing data
+
+If your "Sunday evening" bucket has no data:
+
+1. exact `(EVE, weekend)` lookup
+2. fall back to `(EVE, *)` — try the weekday version
+3. fall back to **class** (evening-class buckets, averaged)
+4. fall back to **global** average across all populated buckets
+5. fall back to **safe default** (baseline behavior)
+
+Cold-start always lands somewhere reasonable.
+
+### Safety overlays — always above habit
+
+Two hard overrides that no learning can bypass:
+
+| Override | When it triggers | What it forces |
+|:---------|:-----------------|:---------------|
+| 🌙 **Night-safe override** | screen off + late hours + not charging + battery ≤ 60 % | `alpha_battery ≥ 0.70`, zero out `interactive_bonus`, raise `idle_bias` |
+| 🌡 **Thermal veto** | CPU ≥ 65 °C OR high vendor clamp activity OR recovery active | scale bucket confidence × 0.3, force `alpha_battery ≥ 0.70`, zero out `interactive_bonus` |
+
+**Habit may suggest. Thermal reality decides.**
+
+### Reversibility
+
+Smart Mode is fully reversible — turn it off and your previous manual profile is restored from `/data/adb/asb/smart_prev_profile`. Bucket learning data lives in `/data/adb/asb/buckets.bin` (+ `.bak` automatic backup) and survives module reinstall. Wipe it via the `reset` command if you want a clean start.
+
+```bash
+su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh status'
+su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh enable'
+su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh disable'
+su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh reset'
+```
+
+The WebUI exposes a Smart Mode button next to the three classic profiles with a live readout of the current bucket, daypart, confidence percentage, current `alpha_battery`, and whether any safety overlay is active.
 
 ---
 
