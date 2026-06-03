@@ -318,7 +318,13 @@ asb_apply_ux() {
   asb_feature_enabled FPS || asb_feature_enabled VM || return 0
   has settings || return 0
   local _anim_changed=0
-  if [ -n "$UX_ANIM_SCALE" ]; then
+  # V48 fix: Animation scale changes are OPT-IN only.
+  # Previously ASB unconditionally overrode user-set animation scales every time
+  # a profile was applied (reboot, charging events, profile switches), which
+  # silently clobbered values like 0.5 set in developer options.
+  # Users who want ASB to manage animation scale can opt in via
+  # UX_MANAGE_ANIM_SCALE=1 in /data/adb/asb/user_config or governor.conf.
+  if [ -n "$UX_ANIM_SCALE" ] && [ "${UX_MANAGE_ANIM_SCALE:-0}" = "1" ]; then
     local _cur_anim
     _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
     if [ "$_cur_anim" != "$UX_ANIM_SCALE" ]; then
@@ -328,8 +334,15 @@ asb_apply_ux() {
       _anim_changed=1
     fi
   fi
-  [ -n "$UX_LONG_PRESS" ] && settings put secure long_press_timeout "$UX_LONG_PRESS" >/dev/null 2>&1 || true
-  [ -n "$UX_MULTI_PRESS" ] && settings put secure multi_press_timeout "$UX_MULTI_PRESS" >/dev/null 2>&1 || true
+  # V48 fix: long_press/multi_press timeouts also touch user-facing settings.
+  # Same opt-in policy — don't override unless user asked.
+  if [ -n "$UX_LONG_PRESS" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
+    settings put secure long_press_timeout "$UX_LONG_PRESS" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$UX_MULTI_PRESS" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
+    settings put secure multi_press_timeout "$UX_MULTI_PRESS" >/dev/null 2>&1 || true
+  fi
+  # These are system tuning knobs, not user-visible UI — keep applying.
   [ -n "$UX_ADAPTIVE_BAT" ] && settings put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT" >/dev/null 2>&1 || true
   [ -n "$UX_RAM_EXPAND" ] && settings put global ram_expand_size "$UX_RAM_EXPAND" >/dev/null 2>&1 || true
   [ -n "$UX_LOW_HEAT" ] && settings put global sem_low_heat_mode "$UX_LOW_HEAT" >/dev/null 2>&1 || true
