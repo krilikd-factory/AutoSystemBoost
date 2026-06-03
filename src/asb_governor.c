@@ -50,13 +50,34 @@ asb_runtime_config_t g_asb_cfg;
 static time_t g_last_reassert = 0;
 static int g_last_reassert_ok = 0;
 
-/* V48 Smart Mode globals */
+/* Smart Mode globals */
 static asb_smart_store_t   g_smart_store;
 static asb_smart_runtime_t g_smart_rt;
 static int                 g_smart_store_loaded = 0;
 static time_t              g_smart_last_save_ts = 0;
 static time_t              g_smart_last_backup_ts = 0;
 static int                 g_smart_sessions_since_save = 0;
+
+/* — Foreground package detection observability.
+ * These mirror the most recent detection outcome so write_state() can publish
+ * them to /dev/.asb/state for logkit + WebUI. Updated each app_cache_refresh. */
+static int g_pkg_detect_ok = 0;        /* 1 if last detection got a real pkg */
+static int g_pkg_detect_source = 0;    /* 1=cmd activity top, 2=resumed, 3=window focus */
+static int g_pkg_detect_status = 0;    /* asb_pkg_status_t code */
+
+/* — Smart session accounting.
+ * Previously Smart sessions were silently mapped into balanced counters in
+ * learner_state.json. ChatGPT review caught this — Smart Mode looks "unused"
+ * when in reality it's the active profile. These counters separate the story. */
+static int g_smart_sessions_total    = 0;  /* every smart session counted */
+static int g_smart_sessions_day      = 0;  /* daypart 2/3/4 (morn/day/eve) */
+static int g_smart_sessions_night    = 0;  /* daypart 0/5 (sleep/late) */
+static int g_smart_sessions_gaming   = 0;  /* session_top app_hint >= GAMING */
+static int g_smart_bucket_updates    = 0;  /* successful bucket_update_from_session calls */
+static int g_smart_last_bucket_id    = -1;
+static int g_smart_last_daypart      = -1;
+static int g_smart_last_confidence   = 0;
+static time_t g_smart_last_update_ts = 0;
 
 static int    g_leak_streak_p0        = 0;
 static int    g_leak_streak_p1        = 0;
@@ -385,7 +406,7 @@ static const char *g_pstats_files[3] = {
     PERSISTENT_STATS_DIR "/pstats_balanced.json",
     PERSISTENT_STATS_DIR "/pstats_performance.json"
 };
-/* V47: session_history.jsonl moved to persistent /data/adb/asb/ so learning
+/* session_history.jsonl moved to persistent /data/adb/asb/ so learning
  * survives module reinstall/upgrade. Legacy path kept for one-time migration. */
 #define SESSION_HISTORY_FILE        "/data/adb/asb/session_history.jsonl"
 #define SESSION_HISTORY_FILE_LEGACY "/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
@@ -674,12 +695,24 @@ static void session_reset_and_replan(asb_fsm_t *fsm, int screen_on) {
     session_plan_apply_prearm(fsm);
 }
 
-/* V47 vendor clamp counters — declared early so write_state can emit them.
+/* vendor clamp counters — declared early so write_state can emit them.
  * Incremented from v44_conflict_record() during status JSON build. */
 static unsigned long g_v44_clamp_total = 0;       /* total times we saw "vendor_clamp" */
 static unsigned long g_v44_raised_total = 0;      /* total times we saw "vendor_raised" */
 static unsigned long g_v44_clamp_1h = 0;          /* rolling 1h window */
 static time_t        g_v44_clamp_1h_start = 0;    /* window start ts */
+
+/* cap ownership — declared early so write_state can emit them.
+ * Updated by asb_cap_compute_owner() from status JSON path. */
+static int    g_cap_owner_eff = 0;
+static time_t g_cap_owner_since = 0;
+static int    g_cap_recent_vendor_clamps = 0;
+static time_t g_cap_recent_window_start = 0;
+static time_t g_cap_vendor_hold_until = 0;
+
+/* Forward declarations for write_state */
+static int asb_cap_writes_should_back_off(void);
+static const char *asb_cap_owner_name(int o);
 
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                         asb_prediction_t pred)
@@ -799,7 +832,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "quarantine=%d\nuser_id=%d\nquarantine_left=%ld\n",
                 fsm->plan.quarantine, g_last_user_id, qleft);
     }
-    /* V48 Smart Mode state fields */
+    /* Smart Mode state fields */
     fprintf(f,
             "smart_mode=%d\nsmart_bucket_id=%d\nsmart_daypart=%d\nsmart_is_weekend=%d\n"
             "smart_confidence=%d\nsmart_alpha_battery=%d\nsmart_interactive_bonus=%d\n"
@@ -825,6 +858,14 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
 #endif
     fprintf(f, "smart_pkg_hash=%016llx\n",
             (unsigned long long)g_smart_rt.app_hash);
+    /* — Foreground package detection observability */
+    fprintf(f, "smart_pkg_detect_ok=%d\nsmart_pkg_source=%d\nsmart_pkg_status=%d\n",
+            g_pkg_detect_ok, g_pkg_detect_source, g_pkg_detect_status);
+    /* — Cap ownership */
+    fprintf(f, "cap_owner=%s\ncap_owner_since=%ld\ncap_vendor_holddown=%d\n",
+            asb_cap_owner_name(g_cap_owner_eff),
+            (long)g_cap_owner_since,
+            asb_cap_writes_should_back_off());
     /* Vendor clamp counters for WebUI Live page */
     fprintf(f, "vendor_clamp_1h=%lu\nvendor_clamp_total=%lu\nvendor_raised_total=%lu\n",
             g_v44_clamp_1h, g_v44_clamp_total, g_v44_raised_total);
@@ -860,6 +901,75 @@ static void v44_conflict_record(const char *cap_source) {
     g_v44_last_clamp_ts = now;
 }
 
+/* — Cap ownership model.
+ * Tracks who effectively controls cpufreq caps. ChatGPT review showed cap
+ * desync was rampant: ASB declares X, shell raises to Y, vendor clamps to Z.
+ * Reporting one owner field clarifies the picture and provides a hook for
+ * anti-thrash: when vendor has been clamping ≥3 times in a short window,
+ * mark vendor as owner and let asb_reconcile back off for hold-down period.
+ * Globals declared earlier (before write_state); helpers defined here. */
+typedef enum {
+    ASB_CAP_OWNER_UNKNOWN = 0,
+    ASB_CAP_OWNER_ASB     = 1,
+    ASB_CAP_OWNER_SHELL   = 2,
+    ASB_CAP_OWNER_VENDOR  = 3,
+} asb_cap_owner_t;
+
+/* Compute effective owner from observed cap_source. Updates sticky state.
+ * Returns the owner enum. Should be called after each cap_source observation. */
+static int asb_cap_compute_owner(const char *cap_source) {
+    time_t now = time(NULL);
+    int owner;
+    if (!cap_source) owner = ASB_CAP_OWNER_UNKNOWN;
+    else if (strcmp(cap_source, "vendor_clamp") == 0 ||
+             strcmp(cap_source, "vendor_raised") == 0) {
+        owner = ASB_CAP_OWNER_VENDOR;
+    }
+    else if (strncmp(cap_source, "shell_", 6) == 0) owner = ASB_CAP_OWNER_SHELL;
+    else if (strcmp(cap_source, "asb") == 0 ||
+             strncmp(cap_source, "asb_", 4) == 0) {
+        owner = ASB_CAP_OWNER_ASB;
+    }
+    else owner = ASB_CAP_OWNER_UNKNOWN;
+
+    /* Track recent vendor clamp burst for anti-thrash */
+    if (owner == ASB_CAP_OWNER_VENDOR) {
+        if (g_cap_recent_window_start == 0 || (now - g_cap_recent_window_start) > 60) {
+            g_cap_recent_window_start = now;
+            g_cap_recent_vendor_clamps = 1;
+        } else {
+            g_cap_recent_vendor_clamps++;
+        }
+        /* 3+ vendor clamps within 60s → vendor effectively owns caps;
+         * set hold-down so we stop writing for 30s to avoid thrashing. */
+        if (g_cap_recent_vendor_clamps >= 3) {
+            g_cap_vendor_hold_until = now + 30;
+        }
+    }
+
+    if (owner != g_cap_owner_eff) {
+        g_cap_owner_eff = owner;
+        g_cap_owner_since = now;
+    }
+    return owner;
+}
+
+/* Anti-thrash gate: returns 1 if ASB should back off cap writes right now. */
+static int asb_cap_writes_should_back_off(void) {
+    time_t now = time(NULL);
+    return (g_cap_vendor_hold_until > 0 && now < g_cap_vendor_hold_until) ? 1 : 0;
+}
+
+/* Translate owner enum to short string for JSON */
+static const char *asb_cap_owner_name(int o) {
+    switch (o) {
+        case ASB_CAP_OWNER_ASB:    return "asb";
+        case ASB_CAP_OWNER_SHELL:  return "shell";
+        case ASB_CAP_OWNER_VENDOR: return "vendor";
+        default:                   return "unknown";
+    }
+}
+
 static void write_conflicts_json(void) {
     FILE *f = fopen("/dev/.asb/conflicts.json.tmp", "w");
     if (!f) return;
@@ -869,13 +979,21 @@ static void write_conflicts_json(void) {
         "  \"last_cap_source_ts\": %lld,\n"
         "  \"vendor_clamp_total\": %lu,\n"
         "  \"vendor_raised_total\": %lu,\n"
-        "  \"vendor_clamp_1h\": %lu\n"
+        "  \"vendor_clamp_1h\": %lu,\n"
+        "  \"cap_owner\": \"%s\",\n"
+        "  \"cap_owner_since\": %ld,\n"
+        "  \"cap_vendor_holddown_active\": %d,\n"
+        "  \"cap_recent_vendor_clamps_60s\": %d\n"
         "}\n",
         g_v44_last_clamp_source[0] ? g_v44_last_clamp_source : "none",
         (long long)g_v44_last_clamp_ts,
         g_v44_clamp_total,
         g_v44_raised_total,
-        g_v44_clamp_1h);
+        g_v44_clamp_1h,
+        asb_cap_owner_name(g_cap_owner_eff),
+        (long)g_cap_owner_since,
+        asb_cap_writes_should_back_off(),
+        g_cap_recent_vendor_clamps);
     fflush(f);
     fsync(fileno(f));
     fclose(f);
@@ -912,6 +1030,17 @@ static void write_learner_state_json(const asb_fsm_t *fsm) {
         "    \"night\": %d,\n"
         "    \"day\": %d\n"
         "  },\n"
+        "  \"smart_sessions\": {\n"
+        "    \"total\": %d,\n"
+        "    \"day\": %d,\n"
+        "    \"night\": %d,\n"
+        "    \"gaming\": %d,\n"
+        "    \"bucket_updates\": %d,\n"
+        "    \"last_bucket_id\": %d,\n"
+        "    \"last_daypart\": %d,\n"
+        "    \"last_confidence\": %d,\n"
+        "    \"last_update_ts\": %ld\n"
+        "  },\n"
         "  \"self_tuned\": {\n"
         "    \"bat_fast_idle_s\": %d,\n"
         "    \"bat_heavy_load_enter\": %.0f,\n"
@@ -930,6 +1059,10 @@ static void write_learner_state_json(const asb_fsm_t *fsm) {
         g_v44_last_bat_trust,
         g_v44_last_bat_outcome[0] ? g_v44_last_bat_outcome : "unknown",
         bat_sessions, balanced_sessions, perf_sessions, night_count, day_count,
+        g_smart_sessions_total, g_smart_sessions_day, g_smart_sessions_night,
+        g_smart_sessions_gaming, g_smart_bucket_updates,
+        g_smart_last_bucket_id, g_smart_last_daypart, g_smart_last_confidence,
+        (long)g_smart_last_update_ts,
         g_asb_cfg.bat_fast_idle_s,
         g_asb_cfg.bat_heavy_load_enter,
         g_asb_cfg.bat_moderate_load_enter,
@@ -976,6 +1109,10 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
     /* record conflicts to /dev/.asb/conflicts.json (written below). */
     v44_conflict_record(cap_src_p0);
     v44_conflict_record(cap_src_p6);
+    /* compute effective cap owner from observed source. The owner with
+     * the more-restrictive cap wins; default to p6 since prime cores matter
+     * most for perf decisions. */
+    asb_cap_compute_owner(cap_src_p6);
     snprintf(out, outlen,
         "{\"state\":\"%s\",\"profile\":\"%s\","
         "\"mA\":%d,\"mA_valid\":%d,\"charging\":%d,"
@@ -1604,7 +1741,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     int sus_pct = (total_active > 0)
                   ? (int)(fsm->ses_time_sustained_sec * 100 / total_active) : 0;
 
-    /* V47 session_history rotation — stream-based to avoid 1 MB stack allocation.
+    /* session_history rotation — stream-based to avoid 1 MB stack allocation.
      * Pass 1: count valid lines + total file size.
      * Pass 2: stream-copy lines from offset that keeps the last SESSION_HISTORY_MAX,
      *         then append new entry.
@@ -1890,7 +2027,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         fsm->thermal_vote_skin, fsm->thermal_vote_surface, fsm->thermal_vote_board,
         fsm->would_bias_exit_gaming,
         fsm->would_bias_mode_a_count, fsm->would_bias_mode_b_count,
-        /* V48 Smart Mode fields */
+        /* Smart Mode fields */
         g_smart_rt.enabled,
         g_smart_rt.bucket_id,
         g_smart_rt.daypart,
@@ -1899,13 +2036,13 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         g_smart_rt.alpha_battery_x1000,
         g_smart_rt.fallback_level,
         /* sleep_override_n / thermal_veto_n: V48 alpha tracks current state only,
-         * not session counters (deferred to V49 dedicated counters) */
+         * not session counters (deferred to V48dedicated counters) */
         g_smart_rt.night_safe_override ? 1 : 0,
         g_smart_rt.thermal_veto ? 1 : 0,
         g_smart_rt.app_hint_session_top,
         (unsigned long long)g_smart_rt.app_hash_session_top);
 
-    /* V48 Smart Mode: feed session outcome into bucket learning (smart_mode=1 only) */
+    /* Smart Mode: feed session outcome into bucket learning (smart_mode=1 only) */
     if (g_smart_rt.enabled && g_smart_store_loaded && dur > 0) {
         asb_smart_session_input_t sin = {0};
         sin.dur_s = (int)dur;
@@ -1918,7 +2055,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         sin.idle_q_x10 = (idle_quality >= 0) ? idle_quality * 10 : 0;
         /* Heuristic drain rate calc: if dur > 60s and battery dropped, derive mAh/h.
          * V48 alpha: use simple proxy from current_ma if available, else 0. */
-        sin.drain_mah_per_hour = 0;  /* deferred to V49 fine-tuning */
+        sin.drain_mah_per_hour = 0;  /* deferred to V48fine-tuning */
         /* Estimate screen_on_pct from bat_wake counters (rough approximation) */
         if (fsm->bat_wake_cycles > 0 && dur > 0) {
             sin.screen_on_pct = (int)((fsm->bat_wake_screen * 100L) / fsm->bat_wake_cycles);
@@ -1930,6 +2067,22 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             asb_smart_bucket_update_from_session(
                 &g_smart_store.buckets[bid], &sin, time(NULL));
             g_smart_sessions_since_save++;
+            /* separate Smart-specific accounting */
+            g_smart_sessions_total++;
+            g_smart_bucket_updates++;
+            g_smart_last_bucket_id = bid;
+            g_smart_last_daypart = g_smart_rt.daypart;
+            g_smart_last_confidence = g_smart_rt.conf_x1000;
+            g_smart_last_update_ts = time(NULL);
+            /* Day = morn/day/eve (2/3/4); Night = sleep/late (0/5); wake=1 floats */
+            if (g_smart_rt.daypart == 0 || g_smart_rt.daypart == 5) {
+                g_smart_sessions_night++;
+            } else if (g_smart_rt.daypart >= 2 && g_smart_rt.daypart <= 4) {
+                g_smart_sessions_day++;
+            }
+            if (g_smart_rt.app_hint_session_top >= ASB_APP_GAMING) {
+                g_smart_sessions_gaming++;
+            }
         }
 
         /* Reset session-top tracking for next session */
@@ -2346,7 +2499,7 @@ static int parse_uevent_screen(int fd) {
     return is_power;
 }
 
-/* V48 Smart Mode tick — compute effective runtime values and update
+/* Smart Mode tick — compute effective runtime values and update
  * g_smart_bounds slot if a meaningful change occurred.
  * Called every metrics tick. No-op if smart_mode_enabled=0 AND profile != PROFILE_SMART.
  *
@@ -2388,23 +2541,54 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     g_smart_rt.is_weekend = is_weekend;
     g_smart_rt.bucket_id = bid;
 
-    /* 2. App hint cache (10s) — V48 alpha uses simple time-based refresh.
-     * Full app reading from cgroup top-app is deferred to V49 to keep V48
-     * conservative. For now, default app_hint to IDLE/MEDIUM based on
-     * screen_on and load. */
+    /* app detection: cascading foreground package sources.
+     * Refresh every ASB_SMART_APP_CACHE_S (10s) — that's a typical user app
+     * switch interval and keeps popen cost low (~1-3 ms per detection).
+     * Falls back to load-based heuristic only when no source returned a pkg.
+     *
+     * On every refresh we set:
+     *   g_smart_rt.app_hint, app_hash       — from package or load fallback
+     *   g_pkg_detect_ok                     — 1 if we got a real pkg this cycle
+     *   g_pkg_detect_source                 — which source (1/2/3) succeeded
+     *   g_pkg_detect_status                 — OK/MISSING/STALE/SYS_UI enum
+     */
     if (now - g_smart_rt.app_cache_last_refresh >= ASB_SMART_APP_CACHE_S) {
         if (!screen_on) {
             g_smart_rt.app_hint = ASB_APP_IDLE;
+            g_smart_rt.app_hash = 0;
+            g_pkg_detect_ok = 0;
+            g_pkg_detect_source = 0;
+            g_pkg_detect_status = ASB_PKG_MISSING;
         } else {
-            /* Heuristic: GAMING state implies gaming-class app */
-            int fsm_state = -1;
-            /* fsm reference is global through tick; we read from g_state_var
-             * via state file as proxy if no direct access. For V48 alpha,
-             * use simple thresholds on the metrics directly. */
-            (void)fsm_state;
-            if (m->cpu.load1 >= 12.0f) g_smart_rt.app_hint = ASB_APP_HEAVY;
-            else if (m->cpu.load1 >= 6.0f) g_smart_rt.app_hint = ASB_APP_MEDIUM;
-            else g_smart_rt.app_hint = ASB_APP_LIGHT;
+            char fg_pkg[128] = {0};
+            uint64_t fg_hash = 0;
+            int fg_hint = ASB_APP_MEDIUM;
+            int fg_source = 0;
+            asb_pkg_status_t pst = asb_smart_detect_foreground_pkg(
+                fg_pkg, sizeof(fg_pkg), &fg_hash, &fg_hint, &fg_source);
+
+            g_pkg_detect_status = pst;
+            g_pkg_detect_source = fg_source;
+
+            if (pst == ASB_PKG_OK || pst == ASB_PKG_STALE) {
+                /* Real package signal — use it */
+                g_smart_rt.app_hash = fg_hash;
+                g_smart_rt.app_hint = fg_hint;
+                g_pkg_detect_ok = 1;
+                /* For heavy/gaming hints, double-check with load to avoid
+                 * stale cache mistakes (e.g. user backgrounded the game) */
+                if (fg_hint >= ASB_APP_HEAVY && m->cpu.load1 < 3.0f) {
+                    g_smart_rt.app_hint = ASB_APP_LIGHT;
+                }
+            } else {
+                /* No package signal — fall back to load-based heuristic,
+                 * but mark detect_ok=0 so observability shows the gap */
+                g_smart_rt.app_hash = 0;
+                g_pkg_detect_ok = 0;
+                if (m->cpu.load1 >= 12.0f) g_smart_rt.app_hint = ASB_APP_HEAVY;
+                else if (m->cpu.load1 >= 6.0f) g_smart_rt.app_hint = ASB_APP_MEDIUM;
+                else g_smart_rt.app_hint = ASB_APP_LIGHT;
+            }
         }
         g_smart_rt.app_cache_last_refresh = now;
     }
@@ -2433,10 +2617,10 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
      * g_v44_clamp_1h is a sliding hourly window counter maintained
      * by write_conflicts_json() and similar checkpoints. */
     int vendor_clamp_1h = (int)g_v44_clamp_1h;
-    int recovery_active = 0;  /* V46 recovery state; conservatively 0 in V48 alpha */
+    int recovery_active = 0;  /* recovery state; conservatively 0 in V48 alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
 
-    /* V48: intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
+    /* intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
      * gaming relax. Each is a no-op if its signal is unavailable on this device,
      * and all skip when night_override or thermal_veto fired (those keep priority). */
     asb_smart_apply_v48_modifiers(g_smart_rt.app_hint, cpu_max_c, &g_smart_rt);
@@ -2453,7 +2637,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
 
     int alpha = g_smart_rt.alpha_battery_x1000;
 
-    /* V48 daypart smoothing: when we just crossed a daypart boundary
+    /* daypart smoothing: when we just crossed a daypart boundary
      * and BOTH the previous bucket and the current bucket had decent
      * confidence (≥ low threshold), linearly blend from prev_alpha to
      * current_alpha over ASB_SMART_SMOOTH_S (5 min). Outside that window,
@@ -2558,7 +2742,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     return 1;
 }
 
-/* V48 Smart Mode periodic persistence. Saves buckets.bin every ~5 minutes
+/* Smart Mode periodic persistence. Saves buckets.bin every ~5 minutes
  * (when changes occurred) and copies to .bak every week. */
 static void asb_smart_persist_check(void) {
     if (!g_smart_rt.enabled || !g_smart_store_loaded) return;
@@ -2587,7 +2771,7 @@ static void sig_handler(int sig) {
     g_running = 0;
 }
 
-/* V48 Smart Mode init helpers.
+/* Smart Mode init helpers.
  * Reads file flag /data/adb/asb/smart_mode_enabled (created by service.sh
  * migration). Loads buckets.bin with fallback to .bak and seed defaults.
  * Initialises g_smart_bounds to BALANCED so safe fallback exists immediately.
@@ -2741,7 +2925,7 @@ int main(int argc, char **argv) {
     persistent_stats_load();
     sweep_stale_session();
 
-    /* V48 Smart Mode init (no-op if smart_mode_enabled file flag not set) */
+    /* Smart Mode init (no-op if smart_mode_enabled file flag not set) */
     asb_smart_init();
 
     /* OTA quarantine -- detect environment changes */
@@ -2942,7 +3126,7 @@ int main(int argc, char **argv) {
                 fsm.plan.ac_budget, fsm.plan.ac_prearm, fsm.plan.sensor_budget,
                 fsm.plan.quarantine, g_last_user_id);
     }
-    /* V48: run smart_tick BEFORE the first writer_apply_caps so the boot
+    /* run smart_tick BEFORE the first writer_apply_caps so the boot
      * write already reflects fresh g_smart_bounds when profile is SMART.
      * Without this, the first write uses BALANCED defaults until the next
      * tick refreshes — visible as a brief envelope flicker at boot. */
@@ -4052,7 +4236,7 @@ int main(int argc, char **argv) {
                     }
                 }
             }
-            /* V48 Smart Mode tick: refresh g_smart_bounds BEFORE writer_apply_caps.
+            /* Smart Mode tick: refresh g_smart_bounds BEFORE writer_apply_caps.
              * If bounds were updated AND current profile is SMART, recompute
              * fsm.current_caps so the caps about to be written reflect the
              * fresh blended values. Force a write so the change reaches sysfs

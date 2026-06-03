@@ -672,7 +672,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
             static int raw_too_low_streak = 0;
             int rebound_this_tick = 0;
             if (c_now > 0 && c_now <= 10) {
-                /* V38 RC9: runtime socd rebind.
+                /* RC9: runtime socd rebind.
                  *
                  * Previous behavior: every tick where socd reads <=10C we mark
                  * temp_invalid_reason=raw_too_low and use last cached value.
@@ -855,19 +855,37 @@ int spike_detected = 0;
                      * to headroom_valid=0 (advisory-only) so the FSM doesn't rely on
                      * a perpetually optimistic signal for decision-making.
                      *
-                     * V39: track lifetime stuck count too — once we've seen
+                     * track lifetime stuck count too — once we've seen
                      * 60+ consecutive stuck_100 readings (10 minutes at default tick),
                      * mark the source permanently unreliable for this boot session.
                      * Stops costly read attempts and lets FSM avoid re-checking. */
                     {
                         static int headroom_100_streak = 0;
                         static int headroom_dead_session = 0;
+                        static int implausible_hot_streak = 0;
                         if (headroom_dead_session) {
                             t->headroom_valid = 0;
                             snprintf(t->headroom_invalid_reason,
                                      sizeof(t->headroom_invalid_reason), "dead_iface");
                         } else if (t->headroom_pct >= 100) {
                             headroom_100_streak++;
+                            /* implausible_hot_100 detector — chatgpt review flagged
+                             * that headroom=100 while CPU=60-69°C is physically wrong.
+                             * On SM8850 msm_performance overestimates under real thermal
+                             * pressure. Track separate streak: 3+ ticks of headroom=100
+                             * with CPU>=60°C → downgrade trust immediately. */
+                            if (t->cpu_max_c >= 60 && t->headroom_pct >= 95) {
+                                implausible_hot_streak++;
+                                if (implausible_hot_streak >= 3) {
+                                    t->headroom_valid = 0;
+                                    snprintf(t->headroom_invalid_reason,
+                                             sizeof(t->headroom_invalid_reason),
+                                             "implausible_hot");
+                                    goto headroom_status_done;
+                                }
+                            } else {
+                                implausible_hot_streak = 0;
+                            }
                             if (headroom_100_streak >= 60) {
                                 /* msm_performance is permanently broken on this device;
                                  * don't keep paying the cost of reads + don't keep
@@ -883,7 +901,9 @@ int spike_detected = 0;
                             }
                         } else {
                             headroom_100_streak = 0;
+                            implausible_hot_streak = 0;
                         }
+                    headroom_status_done: ;
                     }
                 }
             }

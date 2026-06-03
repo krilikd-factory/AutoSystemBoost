@@ -67,14 +67,14 @@ static const asb_profile_bounds_t g_profile_bounds[3] = {
     /* PROFILE_BATTERY — from battery.sh:
      * CPU_MIN={307200, 614400}  CPU_CAP={1132800, 1113600}  CPU_MAX={1804800, 2400000}  GPU_MAX=55%
      *
-     * V39: caps recalibrated for Snapdragon 8 Elite Gen 5 (4.6GHz P-cluster, 1200MHz GPU).
+     * caps recalibrated for Snapdragon 8 Elite Gen 5 (4.6GHz P-cluster, 1200MHz GPU).
      * Old V39 caps (CPU_CAP=614/921, uclamp top=10..25) physically prevented basic UI:
      *   - top-app uclamp 10-25% × 4608MHz P-cluster = 460-1152MHz cap on UI tasks
      *   - bg uclamp 5-10% = 230-460MHz cap on GMS/LMKD/GC → memory not freed → OOM
      *   - GPU 5-15% = 60-180MHz, far below 144Hz UI composer needs
      * On older Qualcomm SoCs these % values gave usable freqs. On 8 Elite Gen 5 they don't.
      *
-     * V42: numeric values now come from asb_fsm_bounds.generated.h,
+     * numeric values now come from asb_fsm_bounds.generated.h,
      * which is generated from config/profile_bounds.conf via tools/gen_bounds.sh.
      */
     {
@@ -163,7 +163,7 @@ static int fsm_profile_is_balanced = 0;
 #define PROFILE_SMART       3
 #define ASB_PROFILE_COUNT   4
 
-/* V48 Smart Mode runtime bounds (mutable, written by smart blend math).
+/* Smart Mode runtime bounds (mutable, written by smart blend math).
  * Initialized to BALANCED defaults at boot; smart logic blends battery↔balanced
  * into this slot when smart_mode_enabled=1 and FSM profile_idx==PROFILE_SMART.
  * When smart_mode_enabled=0, this slot is unused and FSM uses PROFILE_BATTERY/
@@ -345,12 +345,12 @@ typedef struct {
     int             thermal_advisory_score;     /* 0-90 weighted */
     int             thermal_advisory_ticks;     /* consecutive ticks > 50 */
     int             thermal_advisory_active;
-    /* V46 P2 observe-only: per-zone vote breakdown + would-bias flag.
+    /* P2 observe-only: per-zone vote breakdown + would-bias flag.
      * V46 collects this data; V47 decides whether to enable behavioral effect. */
     int             thermal_vote_skin;          /* 0-100 per-zone */
     int             thermal_vote_surface;
     int             thermal_vote_board;
-    int             would_bias_exit_gaming;     /* V46 criterion: PERFORMANCE + GAMING + advisory (never fires in field) */
+    int             would_bias_exit_gaming;     /* criterion: PERFORMANCE + GAMING + advisory (never fires in field) */
     int             would_bias_mode_a;
     int             would_bias_mode_b;
     int             would_bias_mode_a_count;    /* lifetime fire count (session-level) */
@@ -439,7 +439,7 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
     fsm->auto_battery_restore_idx = -1;
     fsm->auto_battery_active = 0;
     fsm->auto_battery_last_action = 0;
-    /* V44 */
+    /* */
     strncpy(fsm->auto_battery_reason, "none", sizeof(fsm->auto_battery_reason) - 1);
     fsm->auto_battery_reason[sizeof(fsm->auto_battery_reason) - 1] = '\0';
     fsm->auto_battery_since = 0;
@@ -627,7 +627,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         /* comfort-first battery brain -- when battery + screen on + device warm,
          * prevent pushing into SUSTAINED/GAMING heat targets.
          *
-         * V39: Old behavior capped to MODERATE which crippled UI in mixed-use:
+         * Old behavior capped to MODERATE which crippled UI in mixed-use:
          * any time CPU hit 42C (which on SD8 Elite Gen 5 happens routinely just from
          * scrolling + VPN + bg services), FSM dropped from HEAVY caps to MODERATE caps.
          * Each transition is a write storm + frequency dip + missed UI frames.

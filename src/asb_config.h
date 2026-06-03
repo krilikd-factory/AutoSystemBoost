@@ -104,7 +104,7 @@ typedef struct {
     int   night_quiet_hour_start;  /* hour 0-23 when night-fast starts (default 23) */
     int   night_quiet_hour_end;    /* hour 0-23 when night-fast ends (default 6) */
 
-    /* V48 Smart Mode (alpha) — additive adaptive layer on top of V47 envelopes.
+    /* Smart Mode (alpha) — additive adaptive layer on top of V47 envelopes.
      * Off by default for V47 upgraders, on by default for fresh V48 installs
      * (managed via /data/adb/asb/smart_mode_enabled file flag, not this field).
      * This field is the runtime mirror of the file flag after boot.
@@ -221,7 +221,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->night_quiet_hour_start       = 23;
     c->night_quiet_hour_end         = 6;
 
-    /* V48 Smart Mode defaults — actual on/off comes from /data/adb/asb/smart_mode_enabled */
+    /* Smart Mode defaults — actual on/off comes from /data/adb/asb/smart_mode_enabled */
     c->smart_mode_enabled           = 0;     /* file flag overrides at boot */
     c->smart_conf_low               = 350;
     c->smart_conf_high              = 650;
@@ -336,7 +336,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "perf_hot_guard_ticks")) c->perf_hot_guard_ticks = atoi(v);
     else if (!strcmp(k, "perf_skin_hot_thresh")) c->perf_skin_hot_thresh = atoi(v);
 
-    /* V48 Smart Mode */
+    /* Smart Mode */
     else if (!strcmp(k, "smart_mode_enabled"))      c->smart_mode_enabled = atoi(v);
     else if (!strcmp(k, "smart_conf_low"))          c->smart_conf_low = atoi(v);
     else if (!strcmp(k, "smart_conf_high"))         c->smart_conf_high = atoi(v);
@@ -414,7 +414,7 @@ static inline void asb_config_apply_stable_override(asb_runtime_config_t *c) {
 static inline int asb_config_profile_sustained_temp_enter(const asb_runtime_config_t *c, int profile_idx) {
     if (profile_idx == 2 && c->perf_sustained_temp_enter > 0) return c->perf_sustained_temp_enter;
     if (profile_idx == 1 && c->balanced_sustained_temp_enter > 0) return c->balanced_sustained_temp_enter;
-    /* V48 PROFILE_SMART (3): use balanced thresholds — Smart must never run
+    /* PROFILE_SMART (3): use balanced thresholds — Smart must never run
      * with thermal envelope hotter than balanced. */
     if (profile_idx == 3 && c->balanced_sustained_temp_enter > 0) return c->balanced_sustained_temp_enter;
     return c->sustained_temp_enter;

@@ -202,6 +202,253 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
     return ASB_APP_MEDIUM;
 }
 
+/* ============================================================
+ * foreground package detection
+ *
+ * Cascading source strategy — try each in order until we get a non-empty
+ * package name. Each source has its own quirks/SELinux story; the cascade
+ * provides resilience.
+ *
+ * Status codes returned alongside the package:
+ *   ASB_PKG_OK             — got a real package name
+ *   ASB_PKG_MISSING        — no source returned anything (binary missing,
+ *                            SELinux deny, dumpsys hung)
+ *   ASB_PKG_STALE          — using last_known_good cache (TTL < 60s)
+ *   ASB_PKG_SYS_UI         — got a system UI/launcher (filtered out)
+ *
+ * Sources (in order):
+ *   1. cmd activity get-current-user-id + dumpsys activity top  (Android 10+)
+ *   2. dumpsys activity activities | grep mResumedActivity
+ *   3. dumpsys window windows | grep mCurrentFocus
+ *
+ * All sources use popen() with short timeout. Returns through out_pkg.
+ * ============================================================ */
+typedef enum {
+    ASB_PKG_OK = 0,
+    ASB_PKG_MISSING = 1,
+    ASB_PKG_STALE = 2,
+    ASB_PKG_SYS_UI = 3,
+} asb_pkg_status_t;
+
+/* Cache for last known good package — used as fallback if all sources fail.
+ * 60s TTL: long enough to ride out transient deny/hang, short enough that
+ * stale data is bounded. */
+typedef struct {
+    char     pkg[128];
+    uint64_t hash;
+    int      hint;
+    time_t   last_seen_ts;
+    int      last_source;   /* 1=cmd, 2=activity, 3=window */
+} asb_pkg_cache_t;
+
+static asb_pkg_cache_t g_pkg_cache = {0};
+
+/* Filter: known system UI/launcher packages should not be treated as
+ * "user is doing X" — they're background scaffold. */
+static int asb_smart_is_system_ui(const char *pkg) {
+    if (!pkg || !*pkg) return 0;
+    static const char *sys_pkgs[] = {
+        "com.android.systemui",
+        "com.oplus.launcher",
+        "com.oneplus.launcher",
+        "com.android.launcher",
+        "com.google.android.apps.nexuslauncher",
+        "com.miui.home",
+        "com.sec.android.app.launcher",
+        "android",
+        NULL
+    };
+    for (int i = 0; sys_pkgs[i]; i++) {
+        if (strncmp(pkg, sys_pkgs[i], strlen(sys_pkgs[i])) == 0) return 1;
+    }
+    return 0;
+}
+
+/* Strip activity component suffix from "com.foo/.MainActivity" → "com.foo" */
+static void asb_smart_strip_activity(char *s) {
+    if (!s) return;
+    char *slash = strchr(s, '/');
+    if (slash) *slash = '\0';
+    /* Strip whitespace */
+    char *e = s + strlen(s);
+    while (e > s && (e[-1] == ' ' || e[-1] == '\t' || e[-1] == '\n' || e[-1] == '\r')) {
+        *--e = '\0';
+    }
+}
+
+/* Source 1: cmd activity get-current-user-id (Android 10+).
+ * Run: dumpsys activity top | grep -m1 ACTIVITY
+ * The first ACTIVITY line is the top-most resumed.
+ * Returns 1 on success (pkg filled). */
+static int asb_smart_pkg_via_activity_top(char *out_pkg, size_t outsz) {
+    if (!out_pkg || outsz == 0) return 0;
+    out_pkg[0] = '\0';
+    FILE *p = popen("timeout 1 dumpsys activity top 2>/dev/null | grep -m1 'ACTIVITY '", "r");
+    if (!p) return 0;
+    char line[512];
+    int got = 0;
+    if (fgets(line, sizeof(line), p)) {
+        /* line: "  ACTIVITY com.activision.callofduty.shooter/.ui... u0 pid=..."  */
+        char *act = strstr(line, "ACTIVITY ");
+        if (act) {
+            act += 9;
+            /* copy up to first space */
+            int i = 0;
+            while (*act && *act != ' ' && *act != '\t' && i < (int)outsz - 1) {
+                out_pkg[i++] = *act++;
+            }
+            out_pkg[i] = '\0';
+            asb_smart_strip_activity(out_pkg);
+            if (out_pkg[0]) got = 1;
+        }
+    }
+    pclose(p);
+    return got;
+}
+
+/* Source 2: dumpsys activity activities | mResumedActivity */
+static int asb_smart_pkg_via_resumed(char *out_pkg, size_t outsz) {
+    if (!out_pkg || outsz == 0) return 0;
+    out_pkg[0] = '\0';
+    FILE *p = popen("timeout 1 dumpsys activity activities 2>/dev/null | grep -m1 mResumedActivity", "r");
+    if (!p) return 0;
+    char line[512];
+    int got = 0;
+    if (fgets(line, sizeof(line), p)) {
+        /* line: "  mResumedActivity: ActivityRecord{... u0 com.foo/.Bar t123}" */
+        char *u0 = strstr(line, " u0 ");
+        if (!u0) u0 = strstr(line, " u10 ");
+        if (u0) {
+            char *start = strchr(u0 + 1, ' ');
+            if (start) {
+                start++;
+                int i = 0;
+                while (*start && *start != ' ' && *start != '\t' && *start != '}' && i < (int)outsz - 1) {
+                    out_pkg[i++] = *start++;
+                }
+                out_pkg[i] = '\0';
+                asb_smart_strip_activity(out_pkg);
+                if (out_pkg[0]) got = 1;
+            }
+        }
+    }
+    pclose(p);
+    return got;
+}
+
+/* Source 3: dumpsys window | mCurrentFocus */
+static int asb_smart_pkg_via_window_focus(char *out_pkg, size_t outsz) {
+    if (!out_pkg || outsz == 0) return 0;
+    out_pkg[0] = '\0';
+    FILE *p = popen("timeout 1 dumpsys window windows 2>/dev/null | grep -m1 mCurrentFocus", "r");
+    if (!p) return 0;
+    char line[512];
+    int got = 0;
+    if (fgets(line, sizeof(line), p)) {
+        /* line: "  mCurrentFocus=Window{abcdef u0 com.foo/.Bar}" */
+        char *u0 = strstr(line, " u0 ");
+        if (!u0) u0 = strstr(line, " u10 ");
+        if (u0) {
+            char *start = strchr(u0 + 1, ' ');
+            if (start) {
+                start++;
+                int i = 0;
+                while (*start && *start != ' ' && *start != '\t' && *start != '}' && i < (int)outsz - 1) {
+                    out_pkg[i++] = *start++;
+                }
+                out_pkg[i] = '\0';
+                asb_smart_strip_activity(out_pkg);
+                if (out_pkg[0]) got = 1;
+            }
+        }
+    }
+    pclose(p);
+    return got;
+}
+
+/* Master detection: try sources in order, validate, cache.
+ * Returns status code; out_pkg/out_hash/out_hint populated. */
+static asb_pkg_status_t asb_smart_detect_foreground_pkg(
+        char *out_pkg, size_t outsz,
+        uint64_t *out_hash, int *out_hint, int *out_source)
+{
+    char pkg[128];
+    int source = 0;
+    time_t now = time(NULL);
+
+    if (asb_smart_pkg_via_activity_top(pkg, sizeof(pkg))) source = 1;
+    else if (asb_smart_pkg_via_resumed(pkg, sizeof(pkg))) source = 2;
+    else if (asb_smart_pkg_via_window_focus(pkg, sizeof(pkg))) source = 3;
+    else pkg[0] = '\0';
+
+    asb_pkg_status_t st;
+    if (!pkg[0]) {
+        /* All sources failed. Check cache. */
+        if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < 60) {
+            /* Use stale cache */
+            if (out_pkg && outsz > 0) {
+                strncpy(out_pkg, g_pkg_cache.pkg, outsz - 1);
+                out_pkg[outsz - 1] = '\0';
+            }
+            if (out_hash) *out_hash = g_pkg_cache.hash;
+            if (out_hint) *out_hint = g_pkg_cache.hint;
+            if (out_source) *out_source = g_pkg_cache.last_source;
+            return ASB_PKG_STALE;
+        }
+        if (out_pkg && outsz > 0) out_pkg[0] = '\0';
+        if (out_hash) *out_hash = 0;
+        if (out_hint) *out_hint = ASB_APP_MEDIUM;
+        if (out_source) *out_source = 0;
+        return ASB_PKG_MISSING;
+    }
+
+    /* Got a real package. Filter system UI. */
+    if (asb_smart_is_system_ui(pkg)) {
+        /* Treat as "no real app" but cache survives. Return SYS_UI;
+         * caller should keep using cached hint if recent. */
+        if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < 60) {
+            if (out_pkg && outsz > 0) {
+                strncpy(out_pkg, g_pkg_cache.pkg, outsz - 1);
+                out_pkg[outsz - 1] = '\0';
+            }
+            if (out_hash) *out_hash = g_pkg_cache.hash;
+            if (out_hint) *out_hint = g_pkg_cache.hint;
+            if (out_source) *out_source = g_pkg_cache.last_source;
+            return ASB_PKG_SYS_UI;
+        }
+        if (out_pkg && outsz > 0) {
+            strncpy(out_pkg, pkg, outsz - 1);
+            out_pkg[outsz - 1] = '\0';
+        }
+        if (out_hash) *out_hash = 0;  /* sys UI doesn't get a hash */
+        if (out_hint) *out_hint = ASB_APP_LIGHT;
+        if (out_source) *out_source = source;
+        return ASB_PKG_SYS_UI;
+    }
+
+    /* Valid user package — hash + classify + cache */
+    uint64_t h = asb_smart_pkg_hash64(pkg);
+    int hint = asb_smart_app_hint_from_pkg(pkg);
+
+    /* Update cache */
+    strncpy(g_pkg_cache.pkg, pkg, sizeof(g_pkg_cache.pkg) - 1);
+    g_pkg_cache.pkg[sizeof(g_pkg_cache.pkg) - 1] = '\0';
+    g_pkg_cache.hash = h;
+    g_pkg_cache.hint = hint;
+    g_pkg_cache.last_seen_ts = now;
+    g_pkg_cache.last_source = source;
+
+    if (out_pkg && outsz > 0) {
+        strncpy(out_pkg, pkg, outsz - 1);
+        out_pkg[outsz - 1] = '\0';
+    }
+    if (out_hash) *out_hash = h;
+    if (out_hint) *out_hint = hint;
+    if (out_source) *out_source = source;
+    st = ASB_PKG_OK;
+    return st;
+}
+
 static void asb_smart_store_seed_defaults(asb_smart_store_t *st) {
     if (!st) return;
     memset(st, 0, sizeof(*st));
@@ -631,7 +878,7 @@ static void asb_smart_compute_effective(
     }
     rt->conf_x1000 = conf_x1000;
 
-    /* V48 effective scale: NEVER zero out the seed/learned bias.
+    /* effective scale: NEVER zero out the seed/learned bias.
      * Even at zero confidence we apply seed-encoded daypart priors at 25% influence.
      * Rationale: sleep daypart seeds alpha=950 for good reason (battery-lean at night);
      * dropping to neutral 500 means the user gets no benefit until weeks of learning.
@@ -642,7 +889,7 @@ static void asb_smart_compute_effective(
      *   high → max:    60% → 100% */
     int eff_scale_x1000;
     if (conf_x1000 < ASB_SMART_CONF_LOW_X1000) {
-        /* V48: was 0. Now 250 — always honor seeded priors. */
+        /* was 0. Now 250 — always honor seeded priors. */
         eff_scale_x1000 = 250;
     } else if (conf_x1000 < ASB_SMART_CONF_HIGH_X1000) {
         /* Linear: low→250, high→600 */
@@ -740,7 +987,7 @@ static void asb_smart_apply_thermal_veto(
 }
 
 /* ============================================================
- * V48 intelligent runtime modifiers
+ * intelligent runtime modifiers
  *
  * Each modifier adjusts the computed runtime within safe bounds. They run AFTER
  * the night_override and thermal_veto so those keep priority. The contract:
@@ -753,7 +1000,7 @@ static void asb_smart_apply_thermal_veto(
  * modifier is a no-op for that signal. Zero risk of breaking other devices.
  * ============================================================ */
 
-/* V48 — Memory pressure adaptation.
+/* — Memory pressure adaptation.
  * Read /proc/pressure/memory (PSI). When the system is already memory-stressed
  * (heavy swapping, oom-prone), there's no real perf benefit to high CPU caps —
  * the bottleneck is RAM. Bias toward battery to stop burning power on stalls.
@@ -799,7 +1046,7 @@ static void asb_smart_apply_memory_pressure(asb_smart_runtime_t *rt) {
     }
 }
 
-/* V48 — Signal-aware net_conservative adjustment.
+/* — Signal-aware net_conservative adjustment.
  * When cellular signal is weak, the modem burns disproportionate power scanning
  * and ramping PA to maintain link. Bumping net_conservative makes the governor
  * prefer holding existing connections rather than aggressively reconnecting.
@@ -843,7 +1090,7 @@ static void asb_smart_apply_signal_aware(asb_smart_runtime_t *rt) {
     }
 }
 
-/* V48 — Refresh-rate-aware interactive_bonus shift.
+/* — Refresh-rate-aware interactive_bonus shift.
  * Lower panel refresh rate (60 Hz vs 144 Hz) inherently means less GPU/CPU
  * frame work per second. The interactive_bonus (peak headroom) can be
  * slightly reduced at low refresh rates with no UX impact.
@@ -889,7 +1136,7 @@ static void asb_smart_apply_refresh_rate(asb_smart_runtime_t *rt) {
     rt->interactive_bonus_x1000 = reduced;
 }
 
-/* V48 — Gaming app cap relaxation.
+/* — Gaming app cap relaxation.
  * When user explicitly chose a high-perf app (GAMING hint) AND device has
  * thermal headroom, soften the alpha so the app gets closer to balanced.
  * Respect the user's intent without giving up battery during cool gaming
@@ -909,7 +1156,7 @@ static void asb_smart_apply_gaming_relax(int app_hint, int cpu_max_c,
 }
 
 /* ============================================================
- * V48 modifiers — combined apply. Call after night_override+thermal_veto. */
+ * modifiers: combined apply. Call after night_override+thermal_veto. */
 static void asb_smart_apply_v48_modifiers(
         int app_hint,
         int cpu_max_c,

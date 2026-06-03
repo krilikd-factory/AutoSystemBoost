@@ -44,7 +44,7 @@ typedef enum {
 #define ASB_SMART_CONF_HIGH_X1000  650
 #define ASB_SMART_CONF_MAX_X1000   1000
 
-/* V48: lowered from 2000. Reach full conf in ~8 sessions per bucket
+/* lowered from 2000. Reach full conf in ~8 sessions per bucket
  * instead of 20. Combined with seed_baseline mode (25% min eff_scale),
  * this gives meaningful learning much faster. */
 #define ASB_SMART_EFF_OBS_FULL_X100 800
@@ -90,7 +90,7 @@ typedef enum {
 
 #define ASB_SMART_NIGHT_HOUR_START  0
 #define ASB_SMART_NIGHT_HOUR_END    6
-/* V48: was 60. Battery pct must NOT block night-safe override — the whole
+/* was 60. Battery pct must NOT block night-safe override — the whole
  * point of override is to save battery overnight. At 90% you still want to
  * conserve. Set to 100 to make it effectively unconditional on battery_pct.
  * Override remains gated by: night daypart + screen off + not charging + no heavy app. */
@@ -115,7 +115,7 @@ typedef enum {
 
 #define ASB_SMART_BACKUP_PERIOD_S    (24 * 3600 * 7)
 
-/* V48: 50→80. Faster bias adaptation per session outcome. */
+/* 50→80. Faster bias adaptation per session outcome. */
 #define ASB_SMART_LEARN_RATE_X1000 80
 
 #endif
