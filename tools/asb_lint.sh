@@ -242,7 +242,7 @@ echo
 echo "🔧 Features"
 FEAT="$MODDIR/features.conf"
 KNOWN_FEATURES="AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR"
-# V44: features explicitly declared as RESERVED (no runtime path yet)
+# features explicitly declared as RESERVED (no runtime path yet)
 RESERVED_FEATURES="RADIO_IMS DISPLAY FPS SECURITY"
 if [ -f "$FEAT" ]; then
   F_DUPES="$(awk -F= '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {k=$1; gsub(/[[:space:]]+$/, "", k); print k}' "$FEAT" | sort | uniq -d)"
@@ -251,7 +251,7 @@ if [ -f "$FEAT" ]; then
     [ -z "$key" ] && continue
     case "$key" in ''|\#*) continue ;; esac
     key="$(echo "$key" | tr -d '[:space:]')"
-    # V44: strip inline # comments and surrounding whitespace from value
+    # strip inline # comments and surrounding whitespace from value
     val="$(echo "$val" | sed 's/#.*$//' | tr -d '[:space:]')"
     case " $KNOWN_FEATURES " in
       *" $key "*) : ;;
@@ -259,7 +259,7 @@ if [ -f "$FEAT" ]; then
     esac
     case "$val" in 0|1) : ;; *) warn "features.conf: $key=$val (expected 0 or 1)" ;; esac
   done < "$FEAT"
-  # V44: check RESERVED features and warn (not err) if declared
+  # check RESERVED features and warn (not err) if declared
   for _rf in $RESERVED_FEATURES; do
     if grep -qE "^${_rf}=" "$FEAT" 2>/dev/null; then
       warn "feature $_rf is RESERVED (declared but no runtime code yet)"
