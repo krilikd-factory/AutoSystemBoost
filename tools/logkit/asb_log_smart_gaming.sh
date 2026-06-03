@@ -1,6 +1,6 @@
 #!/system/bin/sh
 #
-# ASB V47 Smart Mode — GAMING SESSION capture
+# ASB V48 Smart Mode — GAMING SESSION capture
 #
 # Usage (SAFE — survives Termux closure / screen lock during gaming):
 #   su

@@ -1,6 +1,6 @@
 #!/system/bin/sh
 #
-# ASB V47 Smart Mode — DAILY USE capture
+# ASB V48 Smart Mode — DAILY USE capture
 #
 # Usage (the SAFE way — survives terminal closure):
 #   su
@@ -47,7 +47,7 @@ LK_SNAPSHOT_S=1800
 LK_HOURS="${1:-6}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
 
-# V47: Acquire kernel partial wakelock to prevent Doze from freezing the script.
+# Acquire kernel partial wakelock to prevent Doze from freezing the script.
 LK_WAKELOCK_NAME="asb_logkit_$$"
 LK_HAVE_WAKELOCK=0
 if [ -w /sys/power/wake_lock ]; then

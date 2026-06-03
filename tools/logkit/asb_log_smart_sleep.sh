@@ -1,6 +1,6 @@
 #!/system/bin/sh
 #
-# ASB V47 Smart Mode — NIGHT SLEEP capture
+# ASB V48 Smart Mode — NIGHT SLEEP capture
 #
 # Usage (SAFE for overnight — survives Termux closure):
 #   su
@@ -51,7 +51,7 @@ LK_SNAPSHOT_S=3600
 LK_HOURS="${1:-9}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
 
-# V47: Acquire kernel partial wakelock so the CPU stays awake during deep sleep.
+# Acquire kernel partial wakelock so the CPU stays awake during deep sleep.
 # Without this, Android Doze mode pauses /bin/sh in long sleep() calls — capture
 # gets only a handful of ticks over 2+ hours instead of one every LK_POLL_S sec.
 # We write a unique name into /sys/power/wake_lock; the kernel keeps CPU awake
