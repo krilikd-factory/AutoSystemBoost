@@ -57,6 +57,17 @@
     if [ -f /dev/.asb/recovery.lock ]; then
       continue
     fi
+    #V48anti-thrash: if vendor is repeatedly clamping, the C governor sets
+    # cap_vendor_holddown=1 in state. Back off here too so we stop fighting.
+    _vhd=0
+    if [ -r /dev/.asb/state ]; then
+      _vhd="$(awk -F= '/^cap_vendor_holddown=/{print $2; exit}' /dev/.asb/state 2>/dev/null)"
+      [ -z "$_vhd" ] && _vhd=0
+    fi
+    if [ "$_vhd" = "1" ]; then
+      # vendor owns caps right now — don't apply profile to avoid thrash
+      continue
+    fi
     asb_load_profile
     _need=0
     _reason=""
