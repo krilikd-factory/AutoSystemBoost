@@ -83,7 +83,7 @@ if [ ! -f /data/adb/asb/smart_mode_enabled ]; then
   fi
 fi
 
-# V47: migrate session_history.jsonl from /data/adb/modules/.../runtime/ (wiped on
+# migrate session_history.jsonl from /data/adb/modules/.../runtime/ (wiped on
 # reinstall) to /data/adb/asb/ (persistent across reinstalls). One-shot via flag.
 if [ ! -f /data/adb/asb/session_history_migrated_v47 ]; then
   _legacy_hist="/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
