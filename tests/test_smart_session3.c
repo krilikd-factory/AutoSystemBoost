@@ -89,11 +89,12 @@ static void test_confidence(void) {
     /* Empty bucket */
     EXPECT(asb_smart_confidence_x1000(&b, now) == 0, "empty bucket → 0");
 
-    /* Mid eff_obs, fresh */
-    b.eff_obs_x100 = 1000;  /* 10.0 effective obs */
+    /* Mid eff_obs, fresh (V48: EFF_OBS_FULL_X100 = 800, so 1000 saturates to max)
+     * Test changed to use 400 (half of full) to get ~500 conf. */
+    b.eff_obs_x100 = 400;  /* 4.0 effective obs = 50% of EFF_OBS_FULL=800 */
     b.last_seen_ts = (uint32_t)(now - 3600);
     int c1 = asb_smart_confidence_x1000(&b, now);
-    EXPECT_NEAR(c1, 500, 5, "eff_obs=10/20 fresh → ~500");
+    EXPECT_NEAR(c1, 500, 5, "eff_obs=4/8 fresh → ~500");
 
     /* Full eff_obs, fresh */
     b.eff_obs_x100 = 2000;
@@ -231,9 +232,13 @@ static void test_compute_effective_no_conf(void) {
 
     asb_smart_runtime_t rt = {0};
     asb_smart_compute_effective(&b, 100, &rt);  /* below low threshold */
-    EXPECT(rt.alpha_battery_x1000 == 500, "below low conf → neutral (500)");
-    EXPECT(rt.interactive_bonus_x1000 == 0, "below low conf → no bonus");
-    EXPECT(rt.idle_bias_x1000 == 0, "below low conf → no bias");
+    /* V48: seed_baseline mode — 25% influence at zero conf instead of 0.
+     * alpha = 500 + (900-500) * 0.25 = 500 + 100 = 600 */
+    EXPECT_NEAR(rt.alpha_battery_x1000, 600, 5, "below low conf → seed_baseline 25% (600)");
+    /* interactive = 100 * 0.25 = 25 */
+    EXPECT_NEAR(rt.interactive_bonus_x1000, 25, 2, "below low conf → 25% bonus");
+    /* idle_bias = 100 * 0.25 = 25 */
+    EXPECT_NEAR(rt.idle_bias_x1000, 25, 2, "below low conf → 25% bias");
 }
 
 static void test_compute_effective_mild(void) {
@@ -243,13 +248,13 @@ static void test_compute_effective_mild(void) {
     b.interactive_bonus_x1000 = 100;
 
     asb_smart_runtime_t rt = {0};
-    /* conf 500 → mid-mild tier */
+    /* conf 500 → mid-mild tier (V48 curve: 250→600 linear over low(350)→high(650)) */
     asb_smart_compute_effective(&b, 500, &rt);
-    /* eff_scale linear from 0 at 350 to 400 at 650, so at 500: (400*150)/300 = 200 */
-    /* alpha = 500 + (900-500) * 200/1000 = 500 + 80 = 580 */
-    EXPECT_NEAR(rt.alpha_battery_x1000, 580, 5, "mild blend alpha~580");
-    /* interactive = (100 * 200)/1000 = 20 */
-    EXPECT_NEAR(rt.interactive_bonus_x1000, 20, 2, "mild blend interactive~20");
+    /* eff_scale: into=150, span=300, eff = 250 + (350*150)/300 = 425
+     * alpha = 500 + (900-500) * 425/1000 = 500 + 170 = 670 */
+    EXPECT_NEAR(rt.alpha_battery_x1000, 670, 5, "mild blend alpha~670");
+    /* interactive = (100 * 425)/1000 = 42 */
+    EXPECT_NEAR(rt.interactive_bonus_x1000, 42, 2, "mild blend interactive~42");
 }
 
 static void test_compute_effective_strong(void) {
