@@ -1338,7 +1338,7 @@ AutoSystemBoost' $APIOCXM
 	  rm -rf /data/anr/*
 	  rm -rf /data/system/package_cache/*/*
 	  rm -rf /data/local/*trace*/*
-	  # V45 — REMOVED `rm -rf /data/local/*tmp*/*` — that wildcard wipes
+	  # REMOVED `rm -rf /data/local/*tmp*/*` — that wildcard wipes
 	  # /data/local/tmp which is the standard Android testing/development
 	  # directory. Users keep legitimate files there (e.g. targetlist.json
 	  # for other modules, adb-pushed scripts, custom configs). Even with
