@@ -76,6 +76,14 @@ BG_TRIM_LEVEL=safe
 # 1 = force restart SystemUI on profile switch (jarring but instant effect)
 UX_ANIM_FORCE_RESTART=0
 
+# V48 — Manage user-facing Android Settings (opt-in).
+# By default ASB does NOT touch animation scales or input timeouts because they
+# are user-set preferences in Developer Options. Reports of 0.5 values being
+# silently reset to 1.0 on reboot or while charging were caused by this. Set
+# to 1 to restore the V47-and-earlier behaviour.
+UX_MANAGE_ANIM_SCALE=0
+UX_MANAGE_TIMEOUTS=0
+
 # V44 — Audio enhancement aggressiveness
 # 0 = VoIP-safe (default): only essential tweaks, safe for TWS+Telegram/WhatsApp calls
 # 1 = aggressive: full UHQA + offload tuning (known to break TWS+VoIP on some devices)
