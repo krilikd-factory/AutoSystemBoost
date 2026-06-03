@@ -875,6 +875,64 @@ body::before, body::after {
   color: #fca5a5;
 }
 
+/* V48 tablet + large-screen adaptation
+ * Default mobile-first layout uses max-width: 420px (set on .page, .live-page,
+ * .header, .tg-link-wrap). On larger displays we relax to give better
+ * proportions without stretching content edge-to-edge. */
+
+/* Small tablets and large phones in landscape (640-768 px) */
+@media (min-width: 640px) {
+  .page, .live-page > *, .tg-link-wrap {
+    max-width: 480px !important;
+  }
+  .header { max-width: 480px !important; }
+  .app-name { font-size: 28px; }
+}
+
+/* Tablets in portrait (768-1024 px) */
+@media (min-width: 768px) {
+  .page, .live-page > *, .tg-link-wrap {
+    max-width: 560px !important;
+  }
+  .header { max-width: 560px !important; }
+  .logo-c { width: 88px; height: 88px; }
+  .app-name { font-size: 32px; }
+  .device-line { font-size: 14px; }
+  .badge { font-size: 11px; padding: 5px 12px; }
+  .status-row { font-size: 14px; padding: 14px 24px; }
+  .pbtn { padding: 16px 18px; }
+  .pname { font-size: 17px; }
+  .live-cell { padding: 14px 16px; }
+  .live-cell-label { font-size: 10px; }
+  .live-cell-value { font-size: 16px; }
+  /* Smart banner: more breathing room on tablets */
+  .smart-banner { padding: 18px 22px; }
+  .smart-banner-row { font-size: 13px; gap: 8px 14px; }
+  .smart-banner-label { font-size: 10px; }
+  .smart-banner-value { font-size: 15px; }
+  .smart-banner-tag { font-size: 11px; padding: 4px 9px; }
+}
+
+/* Large tablets / desktop browsers (≥ 1024 px) */
+@media (min-width: 1024px) {
+  .page, .live-page > *, .tg-link-wrap {
+    max-width: 640px !important;
+  }
+  .header { max-width: 640px !important; }
+  /* On wide screens, lay out Live Status metric cells in 2 columns
+   * when they would naturally be 1 column, to use horizontal space better */
+  .live-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .live-row { width: 100%; }
+  .live-cell-full { grid-column: 1 / -1; }
+}
+
+/* Landscape orientation on phones (height < 500 px) — keep tighter spacing */
+@media (max-height: 500px) and (orientation: landscape) {
+  .header { margin-bottom: 12px; padding-top: 8px; }
+  .logo-c { width: 48px; height: 48px; margin-bottom: 4px; }
+  .app-name { font-size: 20px; }
+}
+
 </style>
 </head>
 <body>
@@ -891,7 +949,7 @@ body::before, body::after {
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V47</div>
+      <div class="badge" id="verBadge">V48</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
