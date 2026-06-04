@@ -157,23 +157,38 @@ static uint64_t asb_smart_pkg_hash64(const char *pkg) {
 __attribute__((unused))
 static int asb_smart_app_hint_from_pkg(const char *pkg) {
     if (!pkg || !*pkg) return ASB_APP_IDLE;
-    /* Heuristic mapping. User can override via /data/adb/asb/app_categories.conf
-     * in future revisions. (alpha): built-in table only. */
+
+    /* Prefix table — most specific matches first. */
     struct map_entry { const char *prefix; int hint; };
     static const struct map_entry T[] = {
+        /* Known game publishers + popular titles. */
         { "com.activision.callofduty", ASB_APP_GAMING },
+        { "com.activision.",           ASB_APP_GAMING },
+        { "com.tencent.tmgp.",         ASB_APP_GAMING },
         { "com.tencent.ig",            ASB_APP_GAMING },
-        { "com.pubg.imobile",          ASB_APP_GAMING },
-        { "com.pubg.krmobile",         ASB_APP_GAMING },
-        { "com.miHoYo.GenshinImpact",  ASB_APP_GAMING },
-        { "com.miHoYo.hkrpg",          ASB_APP_GAMING },
-        { "com.dts.freefireth",        ASB_APP_GAMING },
-        { "com.garena.game",           ASB_APP_GAMING },
-        { "com.gameloft.android",      ASB_APP_GAMING },
-        { "com.supercell.clashroyale", ASB_APP_GAMING },
-        { "com.king.candycrushsaga",   ASB_APP_HEAVY  },
+        { "com.tencent.cod",           ASB_APP_GAMING },
+        { "com.pubg.",                 ASB_APP_GAMING },
+        { "com.miHoYo.",               ASB_APP_GAMING },
+        { "com.HoYoverse.",            ASB_APP_GAMING },
+        { "com.dts.freefire",          ASB_APP_GAMING },
+        { "com.garena.",               ASB_APP_GAMING },
+        { "com.gameloft.",             ASB_APP_GAMING },
+        { "com.supercell.",            ASB_APP_GAMING },
+        { "com.epicgames.",            ASB_APP_GAMING },
+        { "com.ea.gp.",                ASB_APP_GAMING },
+        { "com.ea.game.",              ASB_APP_GAMING },
+        { "com.king.candycrush",       ASB_APP_HEAVY  },
+        { "com.king.",                 ASB_APP_HEAVY  },
+        { "com.axlebolt.standoff",     ASB_APP_GAMING },
+        { "com.netease.",              ASB_APP_GAMING },
+        { "com.riotgames.",            ASB_APP_GAMING },
+        { "com.mobile.legends",        ASB_APP_GAMING },
+        { "com.callofduty.",           ASB_APP_GAMING },
+        { "com.codm.",                 ASB_APP_GAMING },
+        { "com.warzone.",              ASB_APP_GAMING },
         { "com.adobe.lrmobile",        ASB_APP_HEAVY  },
         { "com.adobe.psmobile",        ASB_APP_HEAVY  },
+        { "com.adobe.premiere",        ASB_APP_HEAVY  },
         { "com.google.android.apps.maps", ASB_APP_HEAVY },
         { "com.google.earth",          ASB_APP_HEAVY  },
         { "com.google.android.youtube",ASB_APP_MEDIUM },
@@ -184,8 +199,14 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
         { "com.brave.browser",         ASB_APP_MEDIUM },
         { "com.opera.browser",         ASB_APP_MEDIUM },
         { "org.mozilla.firefox",       ASB_APP_MEDIUM },
+        { "com.yandex.browser",        ASB_APP_MEDIUM },
+        { "com.microsoft.emmx",        ASB_APP_MEDIUM },
+        { "com.zhiliaoapp.musically",  ASB_APP_MEDIUM },
+        { "com.ss.android.ugc.trill",  ASB_APP_MEDIUM },
+        { "tv.danmaku.bili",           ASB_APP_MEDIUM },
         { "com.google.android.gm",     ASB_APP_LIGHT  },
-        { "org.telegram.messenger",    ASB_APP_LIGHT  },
+        { "org.telegram.",             ASB_APP_LIGHT  },
+        { "org.thunderdog.",           ASB_APP_LIGHT  },
         { "com.whatsapp",              ASB_APP_LIGHT  },
         { "com.discord",               ASB_APP_LIGHT  },
         { "com.facebook.katana",       ASB_APP_LIGHT  },
@@ -193,11 +214,35 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
         { "com.twitter.android",       ASB_APP_LIGHT  },
         { "com.viber.voip",            ASB_APP_LIGHT  },
         { "com.google.android.apps.messaging", ASB_APP_LIGHT },
+        { "ru.ok.android",             ASB_APP_LIGHT  },
+        { "com.vkontakte.android",     ASB_APP_LIGHT  },
         { NULL, 0 }
     };
     for (int i = 0; T[i].prefix; i++) {
         size_t pl = strlen(T[i].prefix);
         if (strncmp(pkg, T[i].prefix, pl) == 0) return T[i].hint;
+    }
+
+    /* Substring fallback — covers regional variants, beta builds, repackaged
+     * games. Searches anywhere in the package id (not just prefix). */
+    static const struct map_entry SUB[] = {
+        { "callofduty",   ASB_APP_GAMING },
+        { ".shooter",     ASB_APP_GAMING },
+        { ".cod",         ASB_APP_GAMING },
+        { ".codm",        ASB_APP_GAMING },
+        { ".pubg",        ASB_APP_GAMING },
+        { ".battlefield", ASB_APP_GAMING },
+        { "freefire",     ASB_APP_GAMING },
+        { "genshin",      ASB_APP_GAMING },
+        { "fortnite",     ASB_APP_GAMING },
+        { "warzone",      ASB_APP_GAMING },
+        { "minecraft",    ASB_APP_HEAVY  },
+        { "roblox",       ASB_APP_HEAVY  },
+        { ".browser",     ASB_APP_MEDIUM },
+        { NULL, 0 }
+    };
+    for (int i = 0; SUB[i].prefix; i++) {
+        if (strstr(pkg, SUB[i].prefix)) return SUB[i].hint;
     }
     return ASB_APP_MEDIUM;
 }

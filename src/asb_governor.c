@@ -719,6 +719,8 @@ static int    g_cap_owner_eff = 0;
 static time_t g_cap_owner_since = 0;
 static int    g_cap_recent_vendor_clamps = 0;
 static time_t g_cap_recent_window_start = 0;
+static int    g_cap_slow_vendor_clamps = 0;
+static time_t g_cap_slow_window_start = 0;
 static time_t g_cap_vendor_hold_until = 0;
 
 /* Forward declarations for write_state */
@@ -943,18 +945,39 @@ static int asb_cap_compute_owner(const char *cap_source) {
     }
     else owner = ASB_CAP_OWNER_UNKNOWN;
 
-    /* Track recent vendor clamp burst for anti-thrash */
+    /* Track recent vendor clamp pattern for anti-thrash.
+     *
+     * Two-mode detector:
+     *
+     *   Burst mode: 3+ clamps within a 60-second sliding window. Hold-down
+     *   for 15 seconds (was 30 — shorter so cap policy stays responsive).
+     *
+     *   Slow-thrash mode: 8+ clamps within a 5-minute sliding window. Same
+     *   hold-down, catches the case where vendor clamps every 30-40 seconds
+     *   without ever tripping the burst threshold.
+     *
+     * Both windows roll independently — whichever fires first wins. The
+     * 15-second hold-down is long enough to let vendor PowerHAL settle but
+     * short enough that we resume cap writes on the next reconcile pass. */
     if (owner == ASB_CAP_OWNER_VENDOR) {
+        /* Burst window (60s) */
         if (g_cap_recent_window_start == 0 || (now - g_cap_recent_window_start) > 60) {
             g_cap_recent_window_start = now;
             g_cap_recent_vendor_clamps = 1;
         } else {
             g_cap_recent_vendor_clamps++;
         }
-        /* 3+ vendor clamps within 60s → vendor effectively owns caps;
-         * set hold-down so we stop writing for 30s to avoid thrashing. */
-        if (g_cap_recent_vendor_clamps >= 3) {
-            g_cap_vendor_hold_until = now + 30;
+        /* Slow-thrash window (5 min) */
+        if (g_cap_slow_window_start == 0 || (now - g_cap_slow_window_start) > 300) {
+            g_cap_slow_window_start = now;
+            g_cap_slow_vendor_clamps = 1;
+        } else {
+            g_cap_slow_vendor_clamps++;
+        }
+        int burst_trip = (g_cap_recent_vendor_clamps >= 3);
+        int slow_trip  = (g_cap_slow_vendor_clamps  >= 8);
+        if (burst_trip || slow_trip) {
+            g_cap_vendor_hold_until = now + 15;
         }
     }
 
@@ -2600,12 +2623,33 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 else if (m->cpu.load1 >= 6.0f) g_smart_rt.app_hint = ASB_APP_MEDIUM;
                 else g_smart_rt.app_hint = ASB_APP_LIGHT;
             }
+            /* FSM-state-based gaming upgrade.
+             * Some packages (regional CODM variants, repackaged games, beta
+             * builds) aren't in the prefix/substring table, so they land at
+             * MEDIUM. But the FSM still correctly classifies sustained heat
+             * + CPU pressure as GAMING/SUSTAINED. When that happens and we
+             * have screen-on for at least 30 seconds, force hint to GAMING
+             * so smart_sessions.gaming counts correctly and bucket learning
+             * sees the right intent. */
+            if (g_smart_rt.app_hint < ASB_APP_GAMING &&
+                m->misc.screen_on && fsm &&
+                (fsm->state == ASB_STATE_GAMING ||
+                 (fsm->state == ASB_STATE_SUSTAINED && cpu_max_c >= 58))) {
+                g_smart_rt.app_hint = ASB_APP_GAMING;
+            }
         }
         g_smart_rt.app_cache_last_refresh = now;
     }
-    /* Track session-top app hint (max-of-session) */
+    /* Track session-top app hint + hash (max-of-session). Sync both so the
+     * session record at end-of-session shows the actual heaviest app's hash. */
     if (g_smart_rt.app_hint > g_smart_rt.app_hint_session_top) {
         g_smart_rt.app_hint_session_top = g_smart_rt.app_hint;
+        g_smart_rt.app_hash_session_top = g_smart_rt.app_hash;
+    } else if (g_smart_rt.app_hint == g_smart_rt.app_hint_session_top &&
+               g_smart_rt.app_hash != 0 &&
+               g_smart_rt.app_hash_session_top == 0) {
+        /* Same level but we now have a real hash where we had none — record it */
+        g_smart_rt.app_hash_session_top = g_smart_rt.app_hash;
     }
 
     /* 3. Bucket lookup with fallback hierarchy */
