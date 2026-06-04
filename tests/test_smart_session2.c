@@ -1,4 +1,4 @@
-/* tests/test_smart_session2.c — V48 Session 2 unit test seam */
+/* tests/test_smart_session2.c — unit test seam */
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -163,7 +163,7 @@ static void test_persistence_roundtrip(void) {
 }
 
 int main(void) {
-    printf("=== V48 Session 2 unit tests ===\n\n");
+    printf("=== Session unit tests ===\n\n");
 
     test_daypart();
     test_bucket_id();

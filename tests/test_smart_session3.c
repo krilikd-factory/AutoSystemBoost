@@ -1,4 +1,4 @@
-/* tests/test_smart_session3.c — V48 Session 3 unit tests
+/* tests/test_smart_session3.c — Session unit tests
  * Covers: weights, decay, confidence, fallback hierarchy, blend math,
  *         night override, thermal veto, bucket learning, slot gating. */
 
@@ -89,7 +89,7 @@ static void test_confidence(void) {
     /* Empty bucket */
     EXPECT(asb_smart_confidence_x1000(&b, now) == 0, "empty bucket → 0");
 
-    /* Mid eff_obs, fresh (V48: EFF_OBS_FULL_X100 = 800, so 1000 saturates to max)
+    /* Mid eff_obs, fresh (EFF_OBS_FULL_X100 = 800, so 1000 saturates to max)
      * Test changed to use 400 (half of full) to get ~500 conf. */
     b.eff_obs_x100 = 400;  /* 4.0 effective obs = 50% of EFF_OBS_FULL=800 */
     b.last_seen_ts = (uint32_t)(now - 3600);
@@ -232,7 +232,7 @@ static void test_compute_effective_no_conf(void) {
 
     asb_smart_runtime_t rt = {0};
     asb_smart_compute_effective(&b, 100, &rt);  /* below low threshold */
-    /* V48: seed_baseline mode — 25% influence at zero conf instead of 0.
+    /* seed_baseline mode — 25% influence at zero conf instead of 0.
      * alpha = 500 + (900-500) * 0.25 = 500 + 100 = 600 */
     EXPECT_NEAR(rt.alpha_battery_x1000, 600, 5, "below low conf → seed_baseline 25% (600)");
     /* interactive = 100 * 0.25 = 25 */
@@ -248,7 +248,7 @@ static void test_compute_effective_mild(void) {
     b.interactive_bonus_x1000 = 100;
 
     asb_smart_runtime_t rt = {0};
-    /* conf 500 → mid-mild tier (V48 curve: 250→600 linear over low(350)→high(650)) */
+    /* conf 500 → mid-mild tier */
     asb_smart_compute_effective(&b, 500, &rt);
     /* eff_scale: into=150, span=300, eff = 250 + (350*150)/300 = 425
      * alpha = 500 + (900-500) * 425/1000 = 500 + 170 = 670 */
@@ -545,7 +545,7 @@ static void test_daypart_smoothing_factor(void) {
 }
 
 int main(void) {
-    printf("=== V48 Session 3 unit tests ===\n\n");
+    printf("=== Session unit tests ===\n\n");
 
     test_duration_weight();
     test_trust_weight();
