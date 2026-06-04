@@ -60,34 +60,23 @@ static const asb_profile_bounds_t g_profile_bounds[3] = {
      *
      * Profile-script values referenced at build time, not loaded at runtime.
      * If user edits CPU_CAP/CPU_MAX/GPU_MAX in .sh, the FSM bounds still reflect
-     * the values below until the C binary is rebuilt. A runtime loader would
-     * eliminate this duplication but is deferred to V40 (needs careful design
-     * to avoid race with profile-change events). */
+     * the values below until the C binary is rebuilt. */
 
-    /* PROFILE_BATTERY — from battery.sh:
-     * CPU_MIN={307200, 614400}  CPU_CAP={1132800, 1113600}  CPU_MAX={1804800, 2400000}  GPU_MAX=55%
-     *
-     * caps recalibrated for Snapdragon 8 Elite Gen 5 (4.6GHz P-cluster, 1200MHz GPU).
-     * Old V39 caps (CPU_CAP=614/921, uclamp top=10..25) physically prevented basic UI:
-     *   - top-app uclamp 10-25% × 4608MHz P-cluster = 460-1152MHz cap on UI tasks
-     *   - bg uclamp 5-10% = 230-460MHz cap on GMS/LMKD/GC → memory not freed → OOM
-     *   - GPU 5-15% = 60-180MHz, far below 144Hz UI composer needs
-     * On older Qualcomm SoCs these % values gave usable freqs. On 8 Elite Gen 5 they don't.
-     *
-     * numeric values now come from asb_fsm_bounds.generated.h,
-     * which is generated from config/profile_bounds.conf via tools/gen_bounds.sh.
+    /* PROFILE_BATTERY:
+     * Caps tuned for Snapdragon 8 Elite Gen 5 (4.6GHz P-cluster, 1200MHz GPU).
+     * Numeric values come from asb_fsm_bounds.generated.h, generated from
+     * config/profile_bounds.conf via tools/gen_bounds.sh.
      */
     {
         .floor = {
             .cpu_max    = { ASB_BATTERY_FLOOR_CPU_MAX_LITTLE, ASB_BATTERY_FLOOR_CPU_MAX_BIG, 0 },
             .cpu_min    = { ASB_BATTERY_FLOOR_CPU_MIN_LITTLE, ASB_BATTERY_FLOOR_CPU_MIN_BIG, 0 },
-            /* GPU floor raised 30→45%: V40 deploy revealed vendor PowerHAL on
-             * SM8850 clamps GPU max_pwrlevel to 17 (160MHz) when it sees low
-             * FSM cpu_max + LIGHT_IDLE state. Raising GPU max floor to 45%
-             * (540MHz target) breaks that vendor heuristic and stops the
-             * stutter during shelf/menu scrolling. gpu_min_pct stays 0 — V40
-             * deploy showed vendor immediately overrides any min_pwrlevel
-             * write (870 overrides per session), so writing it is wasted. */
+            /* GPU floor raised to 45%: SM8850 vendor PowerHAL clamps GPU
+             * max_pwrlevel to 17 (160 MHz) when it sees low FSM cpu_max +
+             * LIGHT_IDLE. Raising GPU max floor to 45% (540 MHz target) breaks
+             * that heuristic and stops stutter during shelf/menu scrolling.
+             * gpu_min_pct stays 0 — vendor immediately overrides any
+             * min_pwrlevel write, so writing it is wasted. */
             .gpu_max_pct = ASB_BATTERY_FLOOR_GPU_MAX_PCT, .gpu_min_pct = ASB_BATTERY_FLOOR_GPU_MIN_PCT,
             .ravg_ticks = ASB_BATTERY_FLOOR_RAVG_TICKS, .idle_enough = ASB_BATTERY_FLOOR_IDLE_ENOUGH,
             .uclamp_top_max = ASB_BATTERY_FLOOR_UCLAMP_TOP, .uclamp_bg_max = ASB_BATTERY_FLOOR_UCLAMP_BG
@@ -101,14 +90,7 @@ static const asb_profile_bounds_t g_profile_bounds[3] = {
         }
     },
 
-    /* PROFILE_BALANCED — from balanced.sh:
-     * CPU_MIN={787200, 883200}  CPU_CAP={1190400, 1881600}  CPU_MAX={3302400, 3974400}  GPU_MAX=85%
-     *
-     * Before V39: FSM wrote DEEP_IDLE={1728, 2266}/HEAVY={2461, 3261} — floor
-     * 538/384 MHz ABOVE the user's CPU_CAP (1190/1882), and ceil 557/326 MHz
-     * BELOW the user's CPU_MAX (3302/3974). So balanced was simultaneously
-     * hotter in idle AND slower in gaming than .sh intended.
-     */
+    /* PROFILE_BALANCED */
     {
         .floor = {
             .cpu_max    = { ASB_BALANCED_FLOOR_CPU_MAX_LITTLE, ASB_BALANCED_FLOOR_CPU_MAX_BIG, 0 },
@@ -127,16 +109,9 @@ static const asb_profile_bounds_t g_profile_bounds[3] = {
     },
 
     /* PROFILE_PERFORMANCE — sustained-optimized for COD Mobile and similar.
-     * From performance.sh: CPU_MIN={1190400, 1113600}  CPU_CAP={2304000, 2611200}
-     *                      CPU_MAX={2956800, 3302400}  GPU_MAX=70%
-     *
-     * V40 tune for sustained gaming (30-60 min sessions without thermal throttle).
-     * Thermal envelope target: peak ≤58°C, sustained ≤48°C on both stock and
-     * custom kernels. Stock kernel has more aggressive vendor PowerHAL clamps
-     * than Krylov-OP-Kernel, so caps deliberately conservative to stay below
-     * vendor's reactive triggers on stock too. Synthetic peak scores lower vs
-     * vendor defaults; real game sessions stable for 60+ min on either kernel.
-     */
+     * Thermal envelope target: peak ≤ 58 °C, sustained ≤ 48 °C on both stock
+     * and custom kernels. Caps stay below vendor PowerHAL's reactive triggers
+     * to avoid mid-session clamps. */
     {
         .floor = {
             .cpu_max    = { ASB_PERFORMANCE_FLOOR_CPU_MAX_LITTLE, ASB_PERFORMANCE_FLOOR_CPU_MAX_BIG, 0 },
@@ -167,11 +142,11 @@ static int fsm_profile_is_balanced = 0;
  * Initialized to BALANCED defaults at boot; smart logic blends battery↔balanced
  * into this slot when smart_mode_enabled=1 and FSM profile_idx==PROFILE_SMART.
  * When smart_mode_enabled=0, this slot is unused and FSM uses PROFILE_BATTERY/
- * BALANCED/PERFORMANCE from g_profile_bounds[] as before.
+ * BALANCED/PERFORMANCE from g_profile_bounds[].
  *
- * IMPORTANT: g_profile_bounds[] above is const and stays const (V47 envelope
- * source). Smart Mode does NOT modify the V47 profile bounds; it computes
- * a blended bounds struct in this separate slot and reads from it instead.
+ * g_profile_bounds[] above is const and stays const — the envelope. Smart Mode
+ * does NOT modify the profile bounds; it computes a blended struct in this
+ * separate slot and reads from it instead.
  */
 static asb_profile_bounds_t g_smart_bounds;
 static int g_smart_bounds_initialized = 0;
@@ -345,8 +320,7 @@ typedef struct {
     int             thermal_advisory_score;     /* 0-90 weighted */
     int             thermal_advisory_ticks;     /* consecutive ticks > 50 */
     int             thermal_advisory_active;
-    /* P2 observe-only: per-zone vote breakdown + would-bias flag.
-     * V46 collects this data; V47 decides whether to enable behavioral effect. */
+    /* P2 observe-only: per-zone vote breakdown + would-bias flag. */
     int             thermal_vote_skin;          /* 0-100 per-zone */
     int             thermal_vote_surface;
     int             thermal_vote_board;
@@ -864,7 +838,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             fsm->sustained_reason = 0;
         }
         /* removed legacy headroom<50 shortcut.
-         * All SUSTAINED entries now go through unified V35 path:
+         * All SUSTAINED entries go through unified path:
          * throttle_signal -> throttle_confirmed -> warmup_grace -> debounce. */
 
         if (!thermal_to_sustained && !sustained_reentry_blocked &&
@@ -941,11 +915,11 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                      : fsm->down_window;
         if (thermal_to_sustained) window = 1;
         /* UI-burst fast escalation: when desired bumped up by gpu.load_pct≥12
-         * on screen-on (the V40 UI-burst rule), bypass the battery up_window×2
-         * doubling. The 2× was anti-flap for normal load triggers, but on UI
-         * scrolling it adds 8-10 seconds of stutter before FSM gives MODERATE
-         * caps to GPU. With this bypass, scroll-triggered MODERATE happens at
-         * window=1 (immediate next tick). */
+         * on screen-on, bypass the battery up_window×2 doubling. The 2× is
+         * anti-flap for normal load triggers, but on UI scrolling it adds
+         * 8-10 seconds of stutter before FSM gives MODERATE caps to GPU. With
+         * this bypass, scroll-triggered MODERATE happens at window=1
+         * (immediate next tick). */
         int ui_burst_path = (m->misc.screen_on && m->gpu.load_pct >= 12 &&
                              desired == ASB_STATE_MODERATE &&
                              fsm->state == ASB_STATE_LIGHT_IDLE);

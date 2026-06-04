@@ -408,10 +408,9 @@ int cpu_prio = -1;
             if (!dominated) {
             int sensor_ok = thermal_sensor_validate(z);
             /* first pass — accept socd tentatively if the basic sanity floor
-             * (c > 10) passes. Cross-reference against peer CPU sensors happens
-             * in a second pass after the whole zone table is scanned so we can
-             * actually compare values.
-             * See V38 post-scan cross-check below. */
+             * (c > 10) passes. Cross-reference against peer CPU sensors
+             * happens in a second pass after the whole zone table is scanned
+             * so we can actually compare values. */
             if (sensor_ok && strcmp(type, "socd") == 0) {
                 char vp[128];
                 snprintf(vp, sizeof(vp), THERMAL_BASE "/thermal_zone%d/temp", z);
@@ -432,13 +431,11 @@ int cpu_prio = -1;
             } /* end if (!dominated) */
         }
 
-        /* V37.1: skin_temp = LITERAL shell sensors only.
-         * Previously V37-r8 fell back to sys-therm-6 when shell_* read 0,
-         * but that collapsed skin and surface into the same channel which
-         * made the dual-channel taxonomy meaningless.
-         * If shell_front/frame/back all return 0 on this firmware, we
-         * accept skin_temp = 0 and signal that explicitly via
-         * thermal_skin_zone = -1. Surface hotspot keeps its own channel. */
+        /* skin_temp = LITERAL shell sensors only. If shell_front/frame/back
+         * all return 0 on this firmware, accept skin_temp = 0 and signal
+         * that via thermal_skin_zone = -1. Surface hotspot keeps its own
+         * channel. Falling back to sys-therm-6 collapses skin and surface
+         * into the same channel, which destroys the dual-channel taxonomy. */
         int skin_prio = -1;
         if (strcmp(type, "shell_frame") == 0)
             skin_prio = 1;
@@ -595,9 +592,8 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
 
     /* if any of the three thermal zones (cpu / skin / surface) wasn't
      * found at startup (validate failed on a transient read), retry every 60
-     * seconds. Cheap -- iterates 128 sysfs files. Only triggers while at least
-     * one zone is still -1. V37-r7 polish: include surface channel for full
-     * symmetry across all three thermal sources. */
+     * seconds. Cheap — iterates 128 sysfs files. Only triggers while at
+     * least one zone is still -1. */
     if (g_thermal_skin_zone < 0 || g_thermal_cpu_zone < 0 || g_thermal_surface_zone < 0) {
         time_t now = time(NULL);
         if (now - g_last_thermal_rescan >= 60) {

@@ -104,11 +104,9 @@ typedef struct {
     int   night_quiet_hour_start;  /* hour 0-23 when night-fast starts (default 23) */
     int   night_quiet_hour_end;    /* hour 0-23 when night-fast ends (default 6) */
 
-    /* Smart Mode (alpha) — additive adaptive layer on top of V47 envelopes.
-     * Off by default for V47 upgraders, on by default for fresh V48 installs
-     * (managed via /data/adb/asb/smart_mode_enabled file flag, not this field).
-     * This field is the runtime mirror of the file flag after boot.
-     * See V48_LOCKED.md for full specification. */
+    /* Smart Mode — additive adaptive layer on top of the profile envelopes.
+     * Master on/off lives in /data/adb/asb/smart_mode_enabled (file flag);
+     * this field is the runtime mirror of that flag. */
     int   smart_mode_enabled;
     int   smart_conf_low;             /* low threshold x1000, default 350 */
     int   smart_conf_high;            /* high threshold x1000, default 650 */
@@ -127,19 +125,11 @@ typedef struct {
 static inline void asb_config_defaults(asb_runtime_config_t *c) {
     memset(c, 0, sizeof(*c));
     c->heavy_gpu_enter     = 35;
-    /* HEAVY load thresholds raised for Snapdragon 8 Elite Gen 5.
-     *
-     * Linux loadavg-1min represents avg # tasks in run queue over 1 min.
-     * On 8-core Oryon with modern Android (VPN + GMS + LSPosed + ZygiskNeo +
-     * background services), idle loadavg routinely sits at 6-12 even with
-     * minimal real CPU work. Old V36 thresholds (heavy=15, moderate=10) cause
-     * FSM to enter HEAVY almost permanently — confirmed in user log where
-     * ses_heavy=7747s (2h9min continuous HEAVY at temp=27-32C, gpu=0%).
-     *
-     * Recalibrated:
-     *   moderate_load_enter: 10 → 14   (above typical idle, below true work)
-     *   heavy_load_enter:    15 → 20   (real CPU pressure, not background noise)
-     * Battery profile gets stricter still (idle is more permissive there). */
+    /* HEAVY/MODERATE load thresholds raised for Snapdragon 8 Elite Gen 5.
+     * On 8-core Oryon with modern Android (VPN + GMS + LSPosed + background
+     * services), idle loadavg routinely sits at 6-12 even with minimal real
+     * CPU work. Lower thresholds would put FSM into permanent HEAVY at idle.
+     * Battery profile gets stricter still (defined separately below). */
     c->heavy_load_enter    = 20.0f;
     c->moderate_load_enter = 14.0f;
     c->gaming_gpu_enter    = 65;

@@ -158,7 +158,7 @@ __attribute__((unused))
 static int asb_smart_app_hint_from_pkg(const char *pkg) {
     if (!pkg || !*pkg) return ASB_APP_IDLE;
     /* Heuristic mapping. User can override via /data/adb/asb/app_categories.conf
-     * in future revisions. V48 alpha: built-in table only. */
+     * in future revisions. (alpha): built-in table only. */
     struct map_entry { const char *prefix; int hint; };
     static const struct map_entry T[] = {
         { "com.activision.callofduty", ASB_APP_GAMING },
@@ -676,7 +676,7 @@ static uint16_t asb_smart_duration_weight_x100(int dur_s) {
     return ASB_SMART_DUR_W_VLONG_X100;
 }
 
-/* Map trust tier (0=DIRTY .. 3=NOISY, V47 enum) to weight × 100.
+/* Map trust tier (0=DIRTY .. 3=NOISY) to weight × 100.
  * CLEAN=1.00, PARTIAL=0.40, NOISY=0.15, DIRTY=0.00 */
 static uint16_t asb_smart_trust_weight_x100(int trust) {
     switch (trust) {
@@ -860,7 +860,7 @@ static asb_smart_bucket_t* asb_smart_lookup_bucket(
 }
 
 /* Compute effective runtime smart params from a chosen bucket + confidence.
- * Applies confidence gating per V48_LOCKED rules. */
+ * Applies confidence gating per locked rules. */
 static void asb_smart_compute_effective(
         const asb_smart_bucket_t *b,
         int conf_x1000,

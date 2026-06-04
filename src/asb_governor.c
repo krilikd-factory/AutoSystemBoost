@@ -65,19 +65,30 @@ static int g_pkg_detect_ok = 0;        /* 1 if last detection got a real pkg */
 static int g_pkg_detect_source = 0;    /* 1=cmd activity top, 2=resumed, 3=window focus */
 static int g_pkg_detect_status = 0;    /* asb_pkg_status_t code */
 
-/* — Smart session accounting.
- * Previously Smart sessions were silently mapped into balanced counters in
- * learner_state.json. ChatGPT review caught this — Smart Mode looks "unused"
- * when in reality it's the active profile. These counters separate the story. */
-static int g_smart_sessions_total    = 0;  /* every smart session counted */
-static int g_smart_sessions_day      = 0;  /* daypart 2/3/4 (morn/day/eve) */
-static int g_smart_sessions_night    = 0;  /* daypart 0/5 (sleep/late) */
-static int g_smart_sessions_gaming   = 0;  /* session_top app_hint >= GAMING */
-static int g_smart_bucket_updates    = 0;  /* successful bucket_update_from_session calls */
+/* Smart Mode session counters, kept separate from the legacy battery/balanced/
+ * performance counters so learner_state.json shows Smart activity honestly. */
+static int g_smart_sessions_total    = 0;
+static int g_smart_sessions_day      = 0;
+static int g_smart_sessions_night    = 0;
+static int g_smart_sessions_gaming   = 0;
+static int g_smart_bucket_updates    = 0;
 static int g_smart_last_bucket_id    = -1;
 static int g_smart_last_daypart      = -1;
 static int g_smart_last_confidence   = 0;
 static time_t g_smart_last_update_ts = 0;
+
+/* Smart Mode periodic learning trackers.
+ * g_smart_last_seen_bucket: previous bucket_id; mismatch fires a soft session.
+ * g_smart_last_periodic_ts: rate-limit timestamp for the duration-based
+ *                           trigger (avoid more than one fire per 20 minutes). */
+static int    g_smart_last_seen_bucket = -1;
+static time_t g_smart_last_periodic_ts = 0;
+
+/* Smart Mode dynamic tuner state. The tuner shell script gets re-invoked
+ * whenever the (app_hint, thermal_bucket, screen_on) signature changes;
+ * sig+ts together rate-limit so we don't spam shell forks. */
+static int    g_smart_last_tune_sig = -1;
+static time_t g_smart_last_tune_ts  = 0;
 
 static int    g_leak_streak_p0        = 0;
 static int    g_leak_streak_p1        = 0;
@@ -2035,8 +2046,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         g_smart_rt.conf_x1000,
         g_smart_rt.alpha_battery_x1000,
         g_smart_rt.fallback_level,
-        /* sleep_override_n / thermal_veto_n: V48 alpha tracks current state only,
-         * not session counters (deferred to V48dedicated counters) */
+        /* sleep_override_n / thermal_veto_n: alpha tracks current state only,
+         * not session counters (deferred to dedicated counters) */
         g_smart_rt.night_safe_override ? 1 : 0,
         g_smart_rt.thermal_veto ? 1 : 0,
         g_smart_rt.app_hint_session_top,
@@ -2054,8 +2065,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         sin.sustained_pct = sus_pct;
         sin.idle_q_x10 = (idle_quality >= 0) ? idle_quality * 10 : 0;
         /* Heuristic drain rate calc: if dur > 60s and battery dropped, derive mAh/h.
-         * V48 alpha: use simple proxy from current_ma if available, else 0. */
-        sin.drain_mah_per_hour = 0;  /* deferred to V48fine-tuning */
+         * (alpha): use simple proxy from current_ma if available, else 0. */
+        sin.drain_mah_per_hour = 0;  /* deferred to fine-tuning */
         /* Estimate screen_on_pct from bat_wake counters (rough approximation) */
         if (fsm->bat_wake_cycles > 0 && dur > 0) {
             sin.screen_on_pct = (int)((fsm->bat_wake_screen * 100L) / fsm->bat_wake_cycles);
@@ -2613,11 +2624,11 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     asb_smart_apply_night_override(daypart, screen_on, charging,
                                    g_smart_rt.app_hint, battery_pct, &g_smart_rt);
 
-    /* Get vendor_clamp_1h from anti-clamp counter (V44 tracking).
+    /* Get vendor_clamp_1h from anti-clamp counter 
      * g_v44_clamp_1h is a sliding hourly window counter maintained
      * by write_conflicts_json() and similar checkpoints. */
     int vendor_clamp_1h = (int)g_v44_clamp_1h;
-    int recovery_active = 0;  /* recovery state; conservatively 0 in V48 alpha */
+    int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
 
     /* intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
@@ -2730,6 +2741,26 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     g_smart_bounds_initialized = 1;
 
     asb_smart_mark_slot_updated(&g_smart_rt, now, charging, g_smart_rt.app_hint);
+
+    /* Dynamic tuner: re-apply readahead/MGLRU/VM/swappiness when the scenario
+     * meaningfully changed. Rate-limited to once per 30 seconds and only on
+     * a change in hint or thermal bucket or screen-on state. */
+    {
+        int therm_bucket = (cpu_max_c >= 60) ? 2 : (cpu_max_c >= 50 ? 1 : 0);
+        int screen_on_v  = m->misc.screen_on ? 1 : 0;
+        int sig = (g_smart_rt.app_hint << 4) | (therm_bucket << 2) | screen_on_v;
+        if (sig != g_smart_last_tune_sig && (now - g_smart_last_tune_ts) >= 30) {
+            char cmd[256];
+            snprintf(cmd, sizeof(cmd),
+                     "/data/adb/modules/AutoSystemBoost/runtime/smart_dynamic_tune.sh "
+                     "%d %d %d >/dev/null 2>&1 &",
+                     g_smart_rt.app_hint, therm_bucket, screen_on_v);
+            int _rc = system(cmd);
+            (void)_rc;
+            g_smart_last_tune_sig = sig;
+            g_smart_last_tune_ts  = now;
+        }
+    }
 
     if (g_asb_cfg.smart_debug_log) {
         asb_log("smart_tick: bucket=%d daypart=%d we=%d fb=%d conf=%d alpha=%d "
@@ -2888,7 +2919,7 @@ int main(int argc, char **argv) {
     {
         int stale_warnings = 0;
         if (g_asb_cfg.heavy_load_enter < 10.0f) {
-            asb_log("config_audit: heavy_load_enter=%.1f is much lower than r9+ default (20.0). "
+            asb_log("config_audit: heavy_load_enter=%.1f is much lower than the default (20.0). "
                     "If you didn't customize this, your config may be stale. "
                     "To restore defaults: rm /data/adb/modules/AutoSystemBoost/config/governor.conf "
                     "&& reflash module.",
@@ -2896,13 +2927,13 @@ int main(int argc, char **argv) {
             stale_warnings++;
         }
         if (g_asb_cfg.bat_heavy_load_enter < 10.0f && g_asb_cfg.bat_heavy_load_enter > 0) {
-            asb_log("config_audit: bat_heavy_load_enter=%.1f is much lower than r9+ default (20.0). "
-                    "Likely stale config from V37/V38.",
+            asb_log("config_audit: bat_heavy_load_enter=%.1f is much lower than the default (20.0). "
+                    "Likely stale config.",
                     g_asb_cfg.bat_heavy_load_enter);
             stale_warnings++;
         }
         if (g_asb_cfg.bat_fast_idle_s < 10) {
-            asb_log("config_audit: bat_fast_idle_s=%d is much lower than r9+ default (15). "
+            asb_log("config_audit: bat_fast_idle_s=%d is much lower than the default (15). "
                     "Likely stale config.",
                     g_asb_cfg.bat_fast_idle_s);
             stale_warnings++;
@@ -4235,6 +4266,44 @@ int main(int argc, char **argv) {
                         asb_log("session_boundary: 30min DEEP_IDLE, stats saved+reset");
                     }
                 }
+            }
+
+            /* Smart Mode periodic learning: keep learning even when the user
+             * never switches profiles. Two triggers fire here:
+             *  1. Daypart-bucket rollover: when the bucket_id changes (e.g. day
+             *     → eve), close out the previous bucket's session-window. Lets
+             *     learning advance across the day without needing a manual
+             *     profile change.
+             *  2. Smart-active timer: if smart_mode is on for ≥ 1200 seconds
+             *     with at least one heavy/gaming minute observed, fire a soft
+             *     session. Keeps confidence growing during continuous use.
+             * Both reset the FSM session_time counters and update g_smart_*. */
+            if (fsm.profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
+                g_smart_store_loaded) {
+                long _ses_age = (fsm.ses_start_ts > 0)
+                                ? (time(NULL) - fsm.ses_start_ts) : 0;
+                int _bucket_rollover =
+                    (g_smart_last_seen_bucket >= 0 &&
+                     g_smart_last_seen_bucket != (int)g_smart_rt.bucket_id);
+                int _smart_age_trigger =
+                    (_ses_age >= 1200 && fsm.ses_time_heavy_sec > 60 &&
+                     (time(NULL) - g_smart_last_periodic_ts) >= 1200);
+                if (_bucket_rollover || _smart_age_trigger) {
+                    const char *_reason = _bucket_rollover
+                                          ? "smart_bucket_rollover"
+                                          : "smart_periodic";
+                    fsm_flush_state_time(&fsm);
+                    session_history_append_ex(&fsm, _reason);
+                    session_end_self_tune(&fsm);
+                    persistent_stats_save(&fsm);
+                    session_reset_and_replan(&fsm, metrics.misc.screen_on);
+                    g_smart_last_periodic_ts = time(NULL);
+                    asb_log("smart_learn: %s fired (age=%lds, bucket=%u, heavy=%lds)",
+                            _reason, _ses_age,
+                            (unsigned)g_smart_rt.bucket_id,
+                            fsm.ses_time_heavy_sec);
+                }
+                g_smart_last_seen_bucket = (int)g_smart_rt.bucket_id;
             }
             /* Smart Mode tick: refresh g_smart_bounds BEFORE writer_apply_caps.
              * If bounds were updated AND current profile is SMART, recompute
