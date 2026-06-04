@@ -271,17 +271,17 @@ else
 fi
 
 echo
-echo "🩺 V44 — Operational Health"
-# Check 1: common/profile_core.sh must NOT exist (V44 deduped — only runtime/ remains)
+echo "🩺  — Operational Health"
+# common/profile_core.sh must not exist (only runtime/ copy is canonical)
 if [ -f "$MODDIR/common/profile_core.sh" ]; then
-  err "common/profile_core.sh present — V44 expects only runtime/profile_core.sh (V27-class regression risk)"
+  err "common/profile_core.sh present —  expects only runtime/profile_core.sh (canonical-source guard)"
 elif [ ! -f "$MODDIR/runtime/profile_core.sh" ]; then
   err "runtime/profile_core.sh missing"
 else
-  ok "profile_core.sh: only runtime/ copy (V44 deduplication enforced)"
+  ok "profile_core.sh: only runtime/ copy"
 fi
 
-# Check 2: baseline helper must exist (V44 restore safety net)
+# Check 2: baseline helper must exist
 if [ -f "$MODDIR/runtime/asb_baseline.sh" ]; then
   ok "runtime/asb_baseline.sh present (restore path enabled)"
 else
@@ -298,11 +298,11 @@ if [ -f "$MODDIR/config/governor.conf.shipped" ]; then
   esac
 fi
 
-# Check 4: KERNEL block must not contain audio props (V44 fix for Chinese OnePlus 15)
+# Check 4: KERNEL block must not contain audio props
 if [ -f "$MODDIR/system.prop" ]; then
   _kern_audio="$(sed -n '/# ASB:KERNEL:BEGIN/,/# ASB:KERNEL:END/p' "$MODDIR/system.prop" | grep -cE "^(persist\.|ro\.|vendor\.).*audio|^(persist\.|ro\.|vendor\.).*dts|^(persist\.|ro\.|vendor\.).*dolby")"
   if [ "$_kern_audio" -gt 0 ]; then
-    err "system.prop ASB:KERNEL block contains $_kern_audio audio props (V44 regression — moved to docs/removed_audio_props_v44.txt)"
+    err "system.prop ASB:KERNEL block contains $_kern_audio audio props"
   else
     ok "system.prop KERNEL block free of audio overrides"
   fi
@@ -318,94 +318,94 @@ if grep -qE "^SOTER_REPAIR=" "$MODDIR/features.conf" 2>/dev/null; then
   fi
 fi
 
-# Check 6: pm clear in Soter loop must NOT be present (V44 — destructive, removed)
+# Check 6: pm clear in Soter loop must NOT be present (destructive — removed)
 if [ -f "$MODDIR/service.sh" ]; then
   # Exclude comments — grep for pm clear NOT preceded by '#'
   if grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -qE "pm clear com\.tencent\.soter\.soterserver"; then
-    err "service.sh contains destructive 'pm clear com.tencent.soter.soterserver' (V44 fix — should be removed)"
+    err "service.sh contains destructive 'pm clear com.tencent.soter.soterserver'"
   else
-    ok "Soter loop free of pm clear (V44 safe)"
+    ok "Soter loop free of pm clear"
   fi
 fi
 
-# V45 check: Athena/COSA persist setprops must not be in service.sh non-comment lines
+#  check: Athena/COSA persist setprops must not be in service.sh non-comment lines
 # Reason: setting persist.sys.oplus.athena.reclaim_enable=1 on OnePlus Ace 5
 # (SM8635, OxygenOS 16) caused system_server deadlock with CachedAppOptimizer.
 if [ -f "$MODDIR/service.sh" ]; then
   _athena_writes="$(grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -cE "(asb_persist_safe|setprop)[[:space:]]+persist\\.sys\\.oplus\\.(athena|deepthinker)" 2>/dev/null)"
   if [ "$_athena_writes" -gt 0 ] 2>/dev/null; then
-    err "service.sh writes $_athena_writes Athena/deepthinker persist props (V45 regression — causes deadlock on OnePlus Ace 5)"
+    err "service.sh writes $_athena_writes Athena/deepthinker persist props"
   else
-    ok "Athena/COSA persist props not written (V45 safe)"
+    ok "Athena/COSA persist props not written"
   fi
 fi
 
-# V45 check: matrix.limiter.enable=false and ro.audio.audiozoom=true must
+#  check: matrix.limiter.enable=false and ro.audio.audiozoom=true must
 # not be in service.sh or system.prop non-comment lines.
 # Reason: both cause stereo widening / center channel weakness (user-reported).
 if [ -f "$MODDIR/service.sh" ]; then
   _widening_writes="$(grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -cE "(matrix\\.limiter\\.enable[[:space:]]+false|audiozoom[[:space:]]+true)" 2>/dev/null)"
   if [ "$_widening_writes" -gt 0 ] 2>/dev/null; then
-    err "service.sh writes $_widening_writes stereo-widening props (V45 regression — causes side-bias/weak center)"
+    err "service.sh writes $_widening_writes stereo-widening props"
   else
-    ok "Stereo-widening props not written (V45 safe)"
+    ok "Stereo-widening props not written"
   fi
 fi
 if [ -f "$MODDIR/system.prop" ]; then
   _widening_sysprop="$(grep -vE "^[[:space:]]*#" "$MODDIR/system.prop" | grep -cE "^(audio\\.matrix\\.limiter\\.enable=false|vendor\\.audio\\.matrix\\.limiter\\.enable=false|ro\\.audio\\.audiozoom=true)" 2>/dev/null)"
   if [ "$_widening_sysprop" -gt 0 ] 2>/dev/null; then
-    err "system.prop has $_widening_sysprop stereo-widening defaults (V45 regression)"
+    err "system.prop has $_widening_sysprop stereo-widening defaults"
   else
-    ok "system.prop free of stereo-widening defaults (V45 safe)"
+    ok "system.prop free of stereo-widening defaults"
   fi
 fi
 
-# V46 check: vm.oom_kill_allocating_task=1 must not be written anywhere
+#  check: vm.oom_kill_allocating_task=1 must not be written anywhere
 # in service.sh. This setting caused false-positive OOM kills of legitimately
-# allocating apps (App Market, WhatsApp) on V44/V45 under battery profile
+# allocating apps (App Market, WhatsApp) under battery profile
 # memory pressure (swappiness=200 + minfree=112MB).
 if [ -f "$MODDIR/service.sh" ]; then
   _oom_writes="$(grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -cE "sysctlw[[:space:]]+vm\\.oom_kill_allocating_task[[:space:]]+1|echo[[:space:]]+1[[:space:]]*>.*oom_kill_allocating_task" 2>/dev/null)"
   if [ "$_oom_writes" -gt 0 ] 2>/dev/null; then
-    err "service.sh sets vm.oom_kill_allocating_task=1 ($_oom_writes occurrences) — V46 regression, causes false-positive OOM kills"
+    err "service.sh sets vm.oom_kill_allocating_task=1 ($_oom_writes occurrences) —  regression, causes false-positive OOM kills"
   else
-    ok "vm.oom_kill_allocating_task not forced to 1 (V46 safe)"
+    ok "vm.oom_kill_allocating_task not forced to 1"
   fi
 fi
 
-# V46 check: battery profile VM_SWAPPINESS must not exceed 175. V44/V45 had
+#  check: battery profile VM_SWAPPINESS must not exceed 175. had
 # 200 (kernel default is 60) which combined with oom_kill_allocating_task=1
 # caused app kills under normal memory pressure. 175 is the safe ceiling.
 if [ -f "$MODDIR/profiles/battery.sh" ]; then
   _swap_bat="$(grep -E "^VM_SWAPPINESS=" "$MODDIR/profiles/battery.sh" | cut -d= -f2)"
   if [ -n "$_swap_bat" ] && [ "$_swap_bat" -gt 175 ] 2>/dev/null; then
-    err "battery profile VM_SWAPPINESS=$_swap_bat exceeds safe ceiling 175 (V46 regression — causes app kills under memory pressure)"
+    err "battery profile VM_SWAPPINESS=$_swap_bat exceeds safe ceiling 175"
   else
-    ok "battery profile VM_SWAPPINESS=$_swap_bat within safe range (V46)"
+    ok "battery profile VM_SWAPPINESS=$_swap_bat within safe range"
   fi
 fi
 
 if [ -f "$MODDIR/src/asb_governor.c" ]; then
   if grep -qE "^#define BAT_TRUST_NOISY[[:space:]]" "$MODDIR/src/asb_governor.c"; then
-    ok "BAT_TRUST_NOISY constant present (V47 active)"
+    ok "BAT_TRUST_NOISY constant present"
   else
-    err "BAT_TRUST_NOISY constant missing from asb_governor.c (V47 regression)"
+    err "BAT_TRUST_NOISY constant missing from asb_governor.c"
   fi
   _intent_names_count="$(grep -E "^static const char \*intent_names\[\]" "$MODDIR/src/asb_governor.c" | grep -oE '"[^"]+"' | wc -l)"
   if [ "$_intent_names_count" = "7" ]; then
-    ok "intent_names[] has 7 entries (V47 IDLE_WARM present)"
+    ok "intent_names[] has 7 entries (IDLE_WARM present)"
   else
-    err "intent_names[] has $_intent_names_count entries (V47 expects 7 including idle_warm)"
+    err "intent_names[] has $_intent_names_count entries"
   fi
   if grep -qE "asb_log_critical|asb_log_persist" "$MODDIR/src/asb_governor.c"; then
-    ok "persistent log mirror present (V47)"
+    ok "persistent log mirror present"
   else
-    err "persistent log mirror missing (V47 regression)"
+    err "persistent log mirror missing"
   fi
 fi
 
 echo
-echo "🏗  Bounds Source-of-Truth (V42)"
+echo "🏗  Bounds Source-of-Truth"
 _bc="$MODDIR/config/profile_bounds.conf"
 _bsh="$MODDIR/config/profile_bounds.generated.sh"
 _bh="$MODDIR/src/asb_fsm_bounds.generated.h"
@@ -549,9 +549,9 @@ if [ -f "$_ss" ]; then
   fi
 fi
 
-# V48 Smart Mode consistency checks
+#  Smart Mode consistency checks
 echo
-echo "── V48 Smart Mode checks ──"
+echo "──  Smart Mode checks ──"
 _sm_h="$MODDIR/src/asb_smart.h"
 _sm_defs="$MODDIR/src/asb_smart_defs.h"
 _cfg="$MODDIR/src/asb_config.h"

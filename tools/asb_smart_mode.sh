@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# ASB V48 — Smart Mode toggle/reset/status command
+# ASB  — Smart Mode toggle/reset/status command
 #
 # Usage (as root):
 #   sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh status
@@ -22,7 +22,7 @@ BAK="$ASB_DIR/buckets.bin.bak"
 
 usage() {
   cat <<HELP
-ASB V48 Smart Mode control
+ASB  Smart Mode control
 
 Usage: sh $0 <command>
 

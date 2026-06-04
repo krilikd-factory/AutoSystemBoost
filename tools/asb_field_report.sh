@@ -25,7 +25,7 @@ DEFAULT_RECOVERY="/dev/.asb/recovery.json"
 
 USAGE() {
   cat <<EOF
-ASB V46 Field Report
+ASB  Field Report
 
 Usage: $ME [options]
 

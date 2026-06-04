@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# AutoSystemBoost — system state audit (V44)
+# AutoSystemBoost — system state audit
 #
 # Dumps current state of everything ASB might have modified, so you can:
 # - Confirm settings were actually applied (cross-check with baseline)
