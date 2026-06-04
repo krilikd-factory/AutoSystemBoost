@@ -1338,11 +1338,6 @@ AutoSystemBoost' $APIOCXM
 	  rm -rf /data/anr/*
 	  rm -rf /data/system/package_cache/*/*
 	  rm -rf /data/local/*trace*/*
-	  # REMOVED `rm -rf /data/local/*tmp*/*` — that wildcard wipes
-	  # /data/local/tmp which is the standard Android testing/development
-	  # directory. Users keep legitimate files there (e.g. targetlist.json
-	  # for other modules, adb-pushed scripts, custom configs). Even with
-	  # LOG=1, ASB has no business deleting that directory.
 	  rm -rf /data/mlog/*
 	  rm -rf /data/klog/*
 	  rm -rf /data/ap-log/*
@@ -1352,6 +1347,53 @@ AutoSystemBoost' $APIOCXM
 	  rm -rf /data/dontpanic/*
 	  rm -rf /data/memorydump/*
 	  rm -rf /data/dumplog/*
+
+	  GMS_PKG="com.google.android.gms"
+	  GMS_STR1="allow-in-power-save package=\"$GMS_PKG\""
+	  GMS_STR2="allow-in-data-usage-save package=\"$GMS_PKG\""
+	  GMS_STR3="allow-unthrottled-location package=\"$GMS_PKG\""
+	  GMS_STR4="allow-ignore-location-settings package=\"$GMS_PKG\""
+	  GMS_STR5="<wl>$GMS_PKG</wl>"
+	  GMS_ROOTS="/system_ext /my_product /system /product /vendor /india /my_bigball"
+	  for _r in $GMS_ROOTS; do
+	    [ -d "$_r" ] || continue
+	    for _x in $(find "$_r" -type f -iname "*.xml" 2>/dev/null); do
+	      if grep -qE "$GMS_STR1|$GMS_STR2|$GMS_STR3|$GMS_STR4" "$_x" 2>/dev/null || \
+	         grep -qF "$GMS_STR5" "$_x" 2>/dev/null; then
+	        _dst="$MODPATH/system${_x#/system}"
+	        [ "${_x#/system/}" = "$_x" ] && _dst="$MODPATH${_x}"
+	        mkdir -p "$(dirname "$_dst")" 2>/dev/null
+	        cp -af "$_x" "$_dst" 2>/dev/null || continue
+	        sed -i \
+	          -e "/$GMS_STR1/d" \
+	          -e "/$GMS_STR2/d" \
+	          -e "/$GMS_STR3/d" \
+	          -e "/$GMS_STR4/d" \
+	          "$_dst" 2>/dev/null
+	        grep -vF "$GMS_STR5" "$_dst" > "$_dst.tmp" 2>/dev/null && mv -f "$_dst.tmp" "$_dst" 2>/dev/null
+	      fi
+	    done
+	  done
+	  for _p in product vendor system_ext my_product india my_bigball; do
+	    if [ -d "$MODPATH/$_p" ]; then
+	      mkdir -p "$MODPATH/system/$_p" 2>/dev/null
+	      cp -af "$MODPATH/$_p/." "$MODPATH/system/$_p/" 2>/dev/null
+	      rm -rf "$MODPATH/$_p" 2>/dev/null
+	    fi
+	  done
+	  for _mx in $(find /data/adb/modules -type f -iname "*.xml" 2>/dev/null); do
+	    case "$_mx" in
+	      */AutoSystemBoost/*) continue ;;
+	    esac
+	    if grep -qE "$GMS_STR1|$GMS_STR2|$GMS_STR3|$GMS_STR4" "$_mx" 2>/dev/null; then
+	      sed -i \
+	        -e "/$GMS_STR1/d" \
+	        -e "/$GMS_STR2/d" \
+	        -e "/$GMS_STR3/d" \
+	        -e "/$GMS_STR4/d" \
+	        "$_mx" 2>/dev/null
+	    fi
+	  done
 	fi
 
 	ASB_WEB_MODEL_CODE="$(getprop ro.product.model 2>/dev/null)"
