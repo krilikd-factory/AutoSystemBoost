@@ -54,10 +54,7 @@ if [ -r /data/adb/asb/active_profile ]; then
   esac
 fi
 
-# V47 Smart Mode migration logic
-# - V46 upgrader (active_profile or user config exists, smart flag does not): smart_mode=0
-# - Fresh V47 install (no signs of prior user state): smart_mode=1 (alpha default-on)
-# - Existing smart_mode flag: leave alone (user already configured)
+# Smart Mode default-on for fresh installs; preserve previous behaviour for upgrades.
 mkdir -p /data/adb/asb 2>/dev/null
 if [ ! -f /data/adb/asb/smart_mode_enabled ]; then
   _prior_signs=0
@@ -75,16 +72,14 @@ if [ ! -f /data/adb/asb/smart_mode_enabled ]; then
   else
     echo "1" > /data/adb/asb/smart_mode_enabled 2>/dev/null
     echo "balanced" > /data/adb/asb/smart_prev_profile 2>/dev/null
-    # Fresh V47 install: persist current_profile=smart so read_profile_idx()
-    # picks up PROFILE_SMART at boot. This is what actually activates Smart Mode.
     echo "smart" > "$MODDIR/current_profile" 2>/dev/null
     echo "smart" > /data/adb/asb/active_profile 2>/dev/null
-    asb_log "smart_migration: fresh install, smart_mode=on (alpha), current_profile=smart"
+    asb_log "smart_migration: fresh install, smart_mode=on, current_profile=smart"
   fi
 fi
 
-# migrate session_history.jsonl from /data/adb/modules/.../runtime/ (wiped on
-# reinstall) to /data/adb/asb/ (persistent across reinstalls). One-shot via flag.
+# One-shot migration: session_history.jsonl from the module's runtime dir
+# (wiped on reinstall) into /data/adb/asb/ (persistent across reinstalls).
 if [ ! -f /data/adb/asb/session_history_migrated_v47 ]; then
   _legacy_hist="/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
   _new_hist="/data/adb/asb/session_history.jsonl"
@@ -115,11 +110,9 @@ if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
   touch /data/adb/asb/stale_props_cleaned 2>/dev/null
 fi
 
-# V46 fix: explicitly reset vm.oom_kill_allocating_task to 0 (kernel default)
-# at every boot. V44/V45 set this to 1 which caused false-positive OOM kills
-# of legitimately allocating apps (App Market, WhatsApp). Even though V46
-# removed the setter from apply_vm(), this one-shot ensures immediate effect
-# for users upgrading without waiting for first profile apply.
+# Reset vm.oom_kill_allocating_task to kernel default (0) at every boot.
+# Leaving it at 1 caused false-positive OOM kills of legitimately allocating
+# apps (App Market, WhatsApp).
 if [ -w /proc/sys/vm/oom_kill_allocating_task ]; then
   echo 0 > /proc/sys/vm/oom_kill_allocating_task 2>/dev/null || true
 fi
@@ -542,14 +535,9 @@ apply_vm() {
   esac
   sysctlw vm.watermark_scale_factor $_P_WMARK
   sysctlw vm.min_free_kbytes $_P_MINFREE
-  # V46 fix: REMOVED `sysctlw vm.oom_kill_allocating_task 1`.
-  # That setting made kernel kill the task that triggered allocation when OOM
-  # occurs, instead of picking highest oom_score victim. Combined with battery
-  # profile swappiness=200 + minfree=112MB, this caused false-positive OOM kills
-  # of legitimately allocating apps:
-  #   - App Market downloading APK → "недостаточно памяти" error
-  #   - WhatsApp loading chat DB after long idle → cache clear was workaround
-  # Android stock behavior (kill by oom_score) is safer and is now restored.
+  # NOTE: do not set vm.oom_kill_allocating_task=1. That picks the allocating
+  # task as the OOM victim instead of the highest oom_score, which caused
+  # false-positive kills of legitimately allocating apps (App Market, WhatsApp).
   if [ "$ASB_PROFILE" = "battery" ]; then
     [ -e /proc/sys/vm/drop_caches ] || true
     [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 1 || true

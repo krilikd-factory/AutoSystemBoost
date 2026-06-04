@@ -91,7 +91,7 @@ if [ -r /dev/.asb/recovery.json ]; then
   case "$_rec_disabled" in ''|*[!0-9]*) _rec_disabled=0 ;; esac
 fi
 
-# V48 Smart Mode status
+# Smart Mode status
 _smart_enabled=0
 _smart_bucket=0
 _smart_daypart=0
