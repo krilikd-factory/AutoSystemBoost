@@ -45,6 +45,23 @@ setprop persist.vendor.sys.log.collector 0 2>/dev/null
 setprop persist.sys.perfetto.disable 1 2>/dev/null
 setprop persist.vendor.perfetto.disable 1 2>/dev/null
 setprop persist.vendor.qti.telemetry.disable 1 2>/dev/null
+(
+  _gms_pkg="com.google.android.gms"
+  _try=0
+  while [ "$_try" -lt 60 ]; do
+    if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
+      break
+    fi
+    sleep 5
+    _try=$((_try + 1))
+  done
+  if command -v dumpsys >/dev/null 2>&1; then
+    dumpsys deviceidle whitelist -$_gms_pkg >/dev/null 2>&1 || true
+  fi
+  if command -v cmd >/dev/null 2>&1; then
+    cmd deviceidle whitelist -$_gms_pkg >/dev/null 2>&1 || true
+  fi
+) &
 fi
 # ASB:LOG:END
 if command -v resetprop >/dev/null 2>&1; then
