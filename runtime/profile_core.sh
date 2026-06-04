@@ -318,7 +318,7 @@ asb_apply_ux() {
   asb_feature_enabled FPS || asb_feature_enabled VM || return 0
   has settings || return 0
   local _anim_changed=0
-  # V48 fix: Animation scale changes are OPT-IN only.
+  # Animation scale changes are OPT-IN only.
   # Previously ASB unconditionally overrode user-set animation scales every time
   # a profile was applied (reboot, charging events, profile switches), which
   # silently clobbered values like 0.5 set in developer options.
@@ -334,7 +334,7 @@ asb_apply_ux() {
       _anim_changed=1
     fi
   fi
-  # V48 fix: long_press/multi_press timeouts also touch user-facing settings.
+  # long_press/multi_press timeouts also touch user-facing settings.
   # Same opt-in policy — don't override unless user asked.
   if [ -n "$UX_LONG_PRESS" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
     settings put secure long_press_timeout "$UX_LONG_PRESS" >/dev/null 2>&1 || true
@@ -376,7 +376,7 @@ asb_load_profile() {
   case "$PROFILE" in
     battery|balanced|performance) : ;;
     smart)
-      # V48 Smart Mode: persisted profile = 'smart', shell bootstraps from
+      # persisted profile = 'smart', shell bootstraps from
       # balanced.sh (no smart.sh exists — C governor blends bounds at runtime).
       # We deliberately do NOT change PROFILE so callers see the real persisted
       # name; we only redirect which file gets sourced below.

@@ -57,7 +57,7 @@
     if [ -f /dev/.asb/recovery.lock ]; then
       continue
     fi
-    #V48anti-thrash: if vendor is repeatedly clamping, the C governor sets
+    # Anti-thrash: if vendor is repeatedly clamping, the C governor sets
     # cap_vendor_holddown=1 in state. Back off here too so we stop fighting.
     _vhd=0
     if [ -r /dev/.asb/state ]; then
