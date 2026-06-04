@@ -329,7 +329,7 @@ lk_copy_runtime_artifacts() {
 
 lk_verify_caps() {
   _profile="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
-  # V47 Smart Mode: 'smart' profile doesn't have a smart.sh file by design —
+  #  Smart Mode: 'smart' profile doesn't have a smart.sh file by design —
   # it blends battery/balanced bounds at C-runtime. For shell-side cap verify
   # we use balanced.sh as the source-of-truth envelope (same as profile_core.sh).
   _src_profile="$_profile"
@@ -666,7 +666,7 @@ lk_check_profile_matches() {
   return 0
 }
 
-# ===== V47 Smart Mode logkit helpers ============================================
+# =====  Smart Mode logkit helpers ============================================
 # These capture the Smart Mode adaptive layer state per tick + final summary.
 
 lk_check_smart_mode_active() {
@@ -688,7 +688,7 @@ lk_check_smart_mode_active() {
 
 lk_smart_trace_header() {
   {
-    echo "# V47 Smart Mode trace — one row per poll"
+    echo "#  Smart Mode trace — one row per poll"
     echo "# Columns:"
     echo "#   epoch  iso_time  bucket_id  daypart  is_weekend  fb_level"
     echo "#   conf_x1000  alpha_battery_x1000  interactive_bonus_x1000"
@@ -809,7 +809,7 @@ lk_emit_smart_summary() {
   [ -r "$_trace" ] || return 0
 
   {
-    echo "===== V47 Smart Mode capture summary ====="
+    echo "=====  Smart Mode capture summary ====="
     echo "scenario:    $LK_SCENARIO"
     echo "duration:    $(( $(date +%s) - LK_START_EPOCH ))s"
     echo "ticks:       $LK_TICK_COUNT"

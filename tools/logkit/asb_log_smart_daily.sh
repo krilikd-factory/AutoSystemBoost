@@ -1,6 +1,6 @@
 #!/system/bin/sh
 #
-# ASB V48 Smart Mode — DAILY USE capture
+# ASB  Smart Mode — DAILY USE capture
 #
 # Usage (the SAFE way — survives terminal closure):
 #   su

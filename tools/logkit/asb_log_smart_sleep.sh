@@ -1,6 +1,6 @@
 #!/system/bin/sh
 #
-# ASB V48 Smart Mode — NIGHT SLEEP capture
+# ASB  Smart Mode — NIGHT SLEEP capture
 #
 # Usage (SAFE for overnight — survives Termux closure):
 #   su
@@ -20,7 +20,7 @@
 #   1. night_safe_override == 1 for most of 00:00-06:00 window
 #   2. alpha_battery ≥ 900 during night_safe periods
 #   3. interactive_bonus == 0 (no daytime-style perf headroom)
-#   4. Drain rate (mAh/h) should be lower than V46/V47-without-smart baseline
+#   4. Drain rate (mAh/h) should be lower than baseline without smart
 #
 # Setup:
 #   1. Plug in to charge briefly so battery is ≥60% but unplug before sleep
