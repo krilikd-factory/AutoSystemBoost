@@ -694,11 +694,12 @@ lk_smart_trace_header() {
     echo "#   conf_x1000  alpha_battery_x1000  interactive_bonus_x1000"
     echo "#   sleep_override  thermal_veto  app_hint  pkg_hash"
     echo "#   cpu_max_c  bat_pct  bat_temp_dC  screen_on  charging"
-    echo "#   fsm_state  fsm_profile_idx"
+    echo "#   fsm_state  fsm_profile_idx  pkg_detect_ok  pkg_source  cap_owner"
     echo "# Daypart: 0=sleep 1=wake 2=morn 3=day 4=eve 5=late"
     echo "# Fallback: 0=exact 1=daypart 2=class 3=global 4=safe_default(cold-start)"
     echo "# App hint: 0=idle 1=light 2=medium 3=heavy 4=gaming"
-    echo "epoch iso bucket dp wkd fb conf alpha inter night veto app pkghash cpuC batpct batT scr chg state pidx"
+    echo "# pkg_source: 0=none 1=activity_top 2=resumed 3=window_focus"
+    echo "epoch iso bucket dp wkd fb conf alpha inter night veto app pkghash cpuC batpct batT scr chg state pidx pkgok pkgsrc capowner"
   } > "$LK_OUT_DIR/smart_trace.tsv"
 }
 
@@ -724,6 +725,9 @@ lk_capture_smart_trace_row() {
   _veto=$(lk_state_kv smart_thermal_veto)
   _app=$(lk_state_kv smart_app_hint)
   _pkghash=$(lk_state_kv smart_pkg_hash)
+  _pkgok=$(lk_state_kv smart_pkg_detect_ok)
+  _pkgsrc=$(lk_state_kv smart_pkg_source)
+  _capowner=$(lk_state_kv cap_owner)
 
   # CPU temp: state file uses 'cap_temp' (degC), not 'cpu_max_c'
   _cpuC=$(lk_state_kv cap_temp)
@@ -760,12 +764,12 @@ lk_capture_smart_trace_row() {
   esac
 
   # Fallback empty fields to '-' so columns stay aligned
-  for v in _bucket _dp _wkd _fb _conf _alpha _inter _night _veto _app _pkghash _cpuC _state _pidx _bpct _btmp _scr _chg; do
+  for v in _bucket _dp _wkd _fb _conf _alpha _inter _night _veto _app _pkghash _cpuC _state _pidx _bpct _btmp _scr _chg _pkgok _pkgsrc _capowner; do
     eval "_val=\$$v"
     [ -z "$_val" ] && eval "$v=-"
   done
 
-  echo "$_e $_d $_bucket $_dp $_wkd $_fb $_conf $_alpha $_inter $_night $_veto $_app $_pkghash $_cpuC $_bpct $_btmp $_scr $_chg $_state $_pidx" \
+  echo "$_e $_d $_bucket $_dp $_wkd $_fb $_conf $_alpha $_inter $_night $_veto $_app $_pkghash $_cpuC $_bpct $_btmp $_scr $_chg $_state $_pidx $_pkgok $_pkgsrc $_capowner" \
     >> "$LK_OUT_DIR/smart_trace.tsv"
 }
 
