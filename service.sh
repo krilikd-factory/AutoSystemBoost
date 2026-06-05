@@ -892,6 +892,13 @@ asb_feature_enabled GPS && apply_gps_hygiene
 # ASB:GPS:END
 # ASB:AUDIO:BEGIN
 apply_audio_runtime() {
+  if [ "${AUDIO_EQ_COMPAT:-0}" = "1" ]; then
+    setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
+    asb_persist_safe persist.audio.uhqa 0
+    asb_persist_safe persist.vendor.audio.uhqa false
+    setprop af.resampler.quality 0 2>/dev/null || true
+    return
+  fi
   asb_persist_safe persist.audio.hifi.int_codec true
   asb_persist_safe persist.vendor.audio.hifi.int_codec true
   setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
