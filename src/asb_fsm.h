@@ -590,8 +590,8 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         fsm->state_changed = 1;
     }
     else if (m->misc.screen_on && fsm->state == ASB_STATE_DEEP_IDLE) {
-        fsm->state   = ASB_STATE_LIGHT_IDLE;
-        fsm->pending = ASB_STATE_LIGHT_IDLE;
+        fsm->state   = ASB_STATE_MODERATE;
+        fsm->pending = ASB_STATE_MODERATE;
         fsm->pending_ticks = 0;
         fsm->state_changed = 1;
     }

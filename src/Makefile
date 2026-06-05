@@ -13,7 +13,7 @@ CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
 LDFLAGS = -lm
 
 ifdef DEBUG
-CFLAGS  = -g -O0 -fPIE -pie -I$(SRCDIR) -DASB_DEBUG
+CFLAGS  = -g -O0 -fPIE -pie -I$(SRCDIR) -DASB_DEBUG_BUILD=1
 CFLAGS += -Wall -Wextra -Wno-unused-parameter
 endif
 
