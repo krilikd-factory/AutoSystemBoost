@@ -1,203 +1,121 @@
 # AutoSystemBoost — Changelog
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Current_Release-V47-16a34a?style=for-the-badge" alt="V47">
-  <img src="https://img.shields.io/badge/Previous-V46-6b7280?style=for-the-badge" alt="V46">
-  <img src="https://img.shields.io/badge/versionCode-470-0ea5e9?style=for-the-badge" alt="versionCode">
-  <img src="https://img.shields.io/badge/Smart_Mode-Adaptive-a78bfa?style=for-the-badge" alt="Smart Mode">
+  <img src="https://img.shields.io/badge/Release-V48-16a34a?style=for-the-badge" alt="V48">
+  <img src="https://img.shields.io/badge/Previous-V47-6b7280?style=for-the-badge" alt="V47">
+  <img src="https://img.shields.io/badge/versionCode-480-0ea5e9?style=for-the-badge" alt="versionCode">
 </p>
 
-> **V47 introduces Smart Mode — a fourth adaptive profile that learns your time-of-day habits and blends battery↔balanced envelopes accordingly. Performance profile re-tuned cooler to stop fighting the vendor thermal HAL. Build pipeline split into release and debug flavors with identical learner behavior in both. Diagnostic surface area cleaned up.**
+## V48
 
----
+### Smart Mode learning fixed
 
-## ✨ Headline Features
+In V47, Smart Mode learning was effectively dead. The confidence gate dropped `eff_scale` to zero below 350/1000 confidence, mathematically erasing every seeded daypart prior to a neutral 500. Confidence accumulated slowly (~7 sessions just to reach the low gate), and learning fired only on profile switches. Users got no Smart Mode benefit for weeks.
 
-### 🧠 Smart Mode — adaptive fourth profile
+V48 introduces **seed_baseline mode**: minimum 25% influence at zero confidence, scaling up as learning accumulates:
 
-A brand-new profile that sits alongside battery / balanced / performance and **learns from your real usage**:
+| Confidence | V47 influence | V48 influence |
+|:--|:--|:--|
+| < low (350) | 0% (neutral 500) | **25%** (seed honored) |
+| low → high | 0% → 40% | **25% → 60%** |
+| high → max | 40% → 100% | **60% → 100%** |
 
-- **12 time-of-day buckets** (6 dayparts × weekday/weekend): sleep, wake, morn, day, eve, late
-- **Blends battery and balanced envelopes** via learned `alpha_battery` weight per bucket — never learns raw frequency caps
-- **Confidence gating**: < 0.35 ignore (baseline 50/50 blend), 0.35-0.65 mild influence (up to 40 % bucket strength), ≥ 0.65 strong but never above balanced sustained envelope
-- **Hierarchical fallback**: exact bucket → daypart-only → daypart class → global average → safe default
-- **Effective observations** counted by `duration × trust` — long CLEAN sessions teach, short NOISY sessions whisper, DIRTY sessions ignored entirely
-- **Fixed 5 % learn rate** per session, capped — no single observation can swing a bucket more than 5 %
-- **Time-decay** of stale data: full strength for 7 days, linear floor to 30 % at 36 days, zero from day 37
-- **Night-safe override**: late hours + screen off + not charging + battery ≤ 60 % → force aggressive battery-lean
-- **Thermal veto**: CPU hot / high vendor clamp / recovery active → confidence × 0.3, force battery-lean, zero interactive bonus
-- **5-minute daypart smoothing** at boundary transitions (only when both buckets confident; hard switch otherwise)
-- **App hint** as runtime modifier only (CPU-load heuristic, never primary truth)
-- **Fully reversible** — disable Smart Mode and your previous manual profile is restored from `/data/adb/asb/smart_prev_profile`
+`EFF_OBS_FULL` lowered 2000 → 800 (full confidence in ~8 sessions vs ~20). `LEARN_RATE` raised 50 → 80.
 
----
+### Continuous learning without profile switches
 
-## 🎯 V46 → V47 Comparison
+V47 fed bucket learning only on profile changes and 30-minute deep-idle boundaries. Users on permanent Smart Mode got zero learning during the day.
 
-| Area | V46 | V47 |
-|---|---|---|
-| **Profiles available** | 3 (battery / balanced / performance) | **4** (battery / balanced / performance / **smart**) |
-| **Adaptive learning** | Per-profile FSM thresholds (`bat_fast_idle_s`, `heavy_load_enter`, `moderate_load_enter`) | + **Time-of-day buckets** (Smart Mode) |
-| **Performance profile sustained heat** | Up to ~95 °C in long sessions (caps fought vendor PowerHAL) | **~71 °C** under same load (cooler caps + thermal veto) |
-| **Multi-sensor thermal data** | Collected for observation | **Activated** as behavior trigger |
-| **NOISY session trust tier** | Observed in shadow | **Activated** (learns at weight 0.15) |
-| **Idle-warm intent class** | Detected, observe-only | **Activated** (forces PARTIAL trust) |
-| **session_history.jsonl** | `/data/adb/modules/AutoSystemBoost/runtime/` (lost on module reinstall) | **`/data/adb/asb/`** (survives reinstall and module upgrade) |
-| **Critical event log across reboots** | None — `governor.log` lost on reboot | New **`governor_persist.log`** in `/data/adb/asb/` (256 KB rotation, survives reboot) |
-| **Build output** | Single zip | **Two zips** — `ASB-V47.zip` (release) + `ASB-V47-debug.zip` (full diagnostics) |
-| **Smart Mode WebUI** | n/a | New AI-style profile button with live bucket / confidence / alpha readout |
-| **Smart Mode CLI** | n/a | `tools/asb_smart_mode.sh status / enable / disable / reset` |
+V48 adds two new learning triggers:
+- **Bucket rollover** — when the time-of-day bucket changes (day → eve, eve → late), the previous bucket gets a session update.
+- **Periodic** — every 20 minutes of active Smart use with non-trivial heavy time, a soft session fires.
 
----
+Reasons appear in `session_history.jsonl` as `smart_bucket_rollover` and `smart_periodic`.
 
-## 🚀 What's new in detail
+### Foreground package detection rebuilt
 
-### 🌡 Performance profile re-tuned
+V47 detected packages via load heuristics only — `app_hint` stuck at MEDIUM even during 6-hour Call of Duty sessions, `pkg_hash` stayed at zero. Half of Smart Mode's design value was erased.
 
-The V46 performance profile aimed at peak frequency and "fought" the OxygenOS vendor PowerHAL which clamped CPU anyway. Net result: 90 °C+ in long sessions with no actual perf benefit. V47 stops the fight.
+V48 uses a cascading detector: `dumpsys activity top` → `mResumedActivity` → `mCurrentFocus`. Each source has its own SELinux/availability characteristics; the cascade survives any one failing. A 60-second last-known-good cache rides out transient denies. System UI and launcher packages are filtered. Status reported per tick:
+- `smart_pkg_detect_ok` — 1 if real package detected
+- `smart_pkg_source` — which source (1/2/3) succeeded
+- `smart_pkg_status` — OK / MISSING / STALE / SYS_UI
 
-| Bound | V46 | V47 |
-|---|---:|---:|
-| `PERFORMANCE_CPU_CAP_BIG` | 2611200 (2.61 GHz) | **2342400** (2.34 GHz) |
-| `PERFORMANCE_CPU_CAP_LITTLE` | 2304000 | **2150400** |
-| `PERFORMANCE_GPU_MAX_PCT` | 70 | **50** |
-| `PERFORMANCE_CPU_MIN_BIG` | 1113600 | **921600** |
-| `perf_hot_guard_temp` | 66 °C | **63 °C** |
-| `perf_skin_hot_thresh` | n/a | **80** (new — first behavioral use of multi-sensor data) |
+The mapping table covers known publishers (Activision, Tencent, miHoYo, HoYoverse, NetEase, Riot, EA, Gameloft, Supercell, Epic Games) plus substring fallback (`callofduty`, `.shooter`, `.cod`, `.codm`, `.pubg`, `freefire`, `genshin`, `fortnite`, `warzone`). Unknown packages that the FSM has independently classified as GAMING or SUSTAINED with CPU ≥ 58 °C are auto-upgraded to GAMING hint, so regional CODM variants and beta builds work without a table entry.
 
-Peak burst frequency (`PERFORMANCE_CPU_MAX_BIG=3302400`, 3.30 GHz) **unchanged**. Only steady-state caps lowered.
+### Cap ownership and anti-thrash
 
-### 🧠 Smart Mode plumbing (see Headline Features above)
+V47 had no model of who actually controls cpufreq caps. ASB and vendor PowerHAL fought every tick — `cap_verify.txt` showed three sources (ASB declared, shell overridden, vendor clamped) racing, generating thousands of `DESYNC_shell_overridden_up` events per hour.
 
-A new `PROFILE_SMART` enum value reads its envelope from a mutable `g_smart_bounds` slot updated by the Smart Mode tick. The FSM treats it like any other profile — Smart Mode does not change the state machine, only the bounds it reads from.
+V48 introduces an effective cap owner model with two-mode anti-thrash:
 
-Storage: `/data/adb/asb/buckets.bin` (12 × 36 bytes + 16-byte header = 448 bytes), atomic temp+rename writes, automatic `.bak` rotation every ~5 minutes, magic+version header for corruption detection, three-level load fallback (main → backup → seed defaults).
+- **Burst mode**: 3+ vendor clamps within 60 seconds → 15-second hold-down.
+- **Slow-thrash mode**: 8+ vendor clamps within 5 minutes → same hold-down.
 
-### 📊 Multi-sensor thermal voting widened
+During hold-down, `asb_reconcile.sh` reads `cap_vendor_holddown=1` from `/dev/.asb/state` and skips re-applying caps. ASB and vendor stop fighting per tick. Owner state visible in both `state` and `conflicts.json` as `asb` / `shell` / `vendor` / `unknown`.
 
-V46 collected skin / surface / board sensor data for observation. V47 activates two new behavioral hooks:
+### Smart session accounting
 
-- **Mode A bias**: `adv_score ≥ 70` AND `gaming_ticks > 60` → would shorten gaming dwell
-- **Mode B bias**: `skin + surface ≥ 75` AND `CPU < 60 °C` → would prevent gaming-state entry
-- **`perf_skin_hot_thresh=80`**: when both skin and surface vote ≥ 80, performance profile transitions to SUSTAINED even before CPU temp crosses its CPU-only threshold
+V47 mapped Smart sessions silently into balanced counters. `learner_state.json` reported `trust_tier: unknown, balanced: 10` and zero Smart-specific anything — even when Smart was the active profile.
 
-Vendor clamp tracker now exposes `vendor_clamp_1h` and `vendor_clamp_total` counters that Smart Mode's thermal veto consults.
+V48 adds a dedicated `smart_sessions` block:
+- `total`, `day`, `night`, `gaming`
+- `bucket_updates`
+- `last_bucket_id`, `last_daypart`, `last_confidence`, `last_update_ts`
 
-### 🔁 Persistent learning survives module reinstall
+### Headroom trust on SM8850
 
-V46 stored `session_history.jsonl` inside `/data/adb/modules/AutoSystemBoost/runtime/` — wiped by Magisk/KSU on every module reinstall. V47 moves it to `/data/adb/asb/session_history.jsonl` which is outside the module directory and persists across reinstalls. One-shot migration runs on first V47 boot to copy any existing legacy file.
+On Snapdragon 8 Elite Gen 5, `msm_performance` returns optimistic headroom under thermal pressure — readings of 100% while CPU sits at 65 °C. V47's `stuck_100` detector required 10 consecutive max readings, which the oscillating signal never tripped.
 
-Same treatment for legacy `/data/adb/asb_*` flag files — automatically migrated to `/data/adb/asb/*` on first boot.
+V48 adds an `implausible_hot_100` detector: 3+ ticks of `headroom_pct ≥ 95 && cpu_max_c ≥ 60` immediately invalidates the signal with reason `implausible_hot`. Doesn't false-positive on actually-cool devices.
 
-### 📝 Persistent critical-event log
+### Night-safe and idle-screen overrides
 
-New `/data/adb/asb/governor_persist.log` (256 KB rotation, separate file handle from `/dev/.asb/governor.log`) captures critical events: governor start, profile changes, recovery events, sustained thermal episodes. Survives reboots, available in both release and debug builds.
+V47's night-safe override only fired for SLEEP and LATE dayparts, and required `battery_pct ≤ 60` (backwards logic — it's supposed to save battery overnight, not skip when battery is low).
 
-### 📦 Release / Debug build split
+V48 fixes both:
+- `NIGHT_BAT_PCT_MAX` 60 → 100 (no battery threshold gating).
+- WAKE daypart (06:00–09:00) included in night-safe condition when screen is off and not charging.
+- New idle-screen override: after 30 minutes of screen-off + no heavy app + not charging, force alpha ≥ 850 regardless of daypart. Universal idle saver for daytime when the phone is left on a desk.
 
-Two zips per release:
+WAKE seed alpha raised 500 → 650 (early morning trends idle, not active).
 
-- **`ASB-V47.zip`** — production. No transient `governor.log`, no `tools/logkit/`, no `tools/asb_field_report.py`. Smaller, focused.
-- **`ASB-V47-debug.zip`** — full diagnostics. Per-tick `governor.log` enabled (compile flag `ASB_DEBUG_BUILD=1`), all logkit scripts included.
+### Dynamic system tuning
 
-**The learner runs identically in both builds.** `session_history.jsonl`, `learn.bin`, `pstats_*.json`, `buckets.bin` writes are never gated by build mode. Only verbose per-tick logging is suppressed in release.
+V48 re-applies lightweight system tweaks whenever the (foreground app hint, thermal bucket, screen state) signature changes. Rate-limited to once per 30 seconds:
 
-### ⚙️ Self-tune cadence stabilized
+| Setting | Idle | Light | Medium | Heavy | Gaming | Hot |
+|:--|:--|:--|:--|:--|:--|:--|
+| Block I/O read-ahead (KB) | 64 | 96 | 192 | 384 | 512 | 64 |
+| `nr_requests` per device | 64 | 64 | 128 | 192 | 256 | 64 |
+| `lru_gen/enabled` (MGLRU) | 5 | 5 | 5 | 7 | 7 | — |
+| `vm.swappiness` | 100 | 100 | 100 | 80 | 60 | — |
 
-V46 logged a same-second `self_tune` warning for several parameters because the cadence guard checked a global timestamp rather than per-parameter. V47 introduces per-param timestamps (`tfi`, `thl`, `tml`, `tlg`) in `pstats_*.json` so each parameter has its own 2-hour adjustment window. No more spurious adjustments on the same tick.
+Screen-off triggers `vm.laptop_mode=1` plus aggressive dirty ratios for fast writeback during idle. Screen-on heavy/gaming uses tight dirty ratios (5/2) to prevent writeback stalls.
 
-### 🛡 Schema migration 14 → 15
+### Animation scale and input timeouts
 
-`config/governor.conf` schema bumped to 15 so the additive merge picks up the new `perf_skin_hot_thresh` key and 13 new Smart Mode keys (`smart_mode_enabled`, `smart_conf_low`, `smart_conf_high`, etc.). Existing user customizations preserved — only missing keys are added.
+V47 unconditionally pushed each profile's `UX_ANIM_SCALE` into Android Settings on every profile apply, silently clobbering user-set values like 0.5 from Developer Options. Reported by an OP15 user whose `window_animation_scale` reset to 1.0 after every reboot and on charging events.
 
-### 🩺 Diagnostic tools
+V48 makes these opt-in only. Default: ASB does not touch `window_animation_scale`, `transition_animation_scale`, `animator_duration_scale`, `long_press_timeout`, or `multi_press_timeout`. To restore V47 behaviour set `UX_MANAGE_ANIM_SCALE=1` or `UX_MANAGE_TIMEOUTS=1` in `governor.conf`.
 
-New logkit scripts (debug build only):
+### WebUI
 
-- `asb_log_smart_gaming.sh` — captures a gaming session with Smart Mode trace TSV (one row per poll: bucket, daypart, confidence, alpha, app hint, fallback level, CPU temp, etc.)
-- `asb_log_smart_sleep.sh` — captures an overnight idle session
-- `asb_log_smart_daily.sh` — captures a full day of mixed use
-- `asb_vendor_thermal_probe.sh` — discovers OxygenOS thermal zone aliases for sensor mapping
+Responsive layout added: phone-portrait by default, two-column metric grid on tablets and desktop, compact header on phone landscape. Smart Mode banner shows when active.
 
-New CLI in both release and debug:
+### Migration
 
-- `tools/asb_smart_mode.sh status / enable / disable / reset` — user-facing Smart Mode control
+V47 → V48 is in-place. Bucket store format unchanged (`ASB_SMART_VER = 1`); existing buckets carry over. Confidence values reset visually (`EFF_OBS_FULL` decreased) but real influence is larger thanks to seed_baseline.
 
----
+Fresh installs: Smart Mode enabled by default. Existing V47 installs: previous behaviour preserved (Smart Mode flag respects the existing setting).
 
-## 🔧 Migration & Compatibility
+## File locations
 
-### V46 → V47 upgrade behavior
-
-- **Smart Mode is off by default for V46 upgraders**. Your manual profile (battery / balanced / performance) is detected and preserved. The migration code looks for V46 signs: `/data/adb/asb/active_profile`, `/data/adb/asb/user_config`, `/data/adb/asb/learn/`, `/data/adb/asb/pstats_battery.json`. If any of these exist, Smart Mode stays disabled and `smart_prev_profile` is set to your current profile.
-- **Fresh installs default to Smart Mode on** with `smart_prev_profile=balanced` as the fallback if you later disable it.
-- **Legacy `session_history.jsonl` migrated** one-shot to `/data/adb/asb/` on first V47 boot.
-- **`governor.conf` additive merge** preserves all your customizations and only adds missing keys.
-
-### Preserved V46 behavior
-
-- All V46 thermal, idle and wake learning logic unchanged
-- Crash Recovery v2 (tiered L1 / L2 / L3) unchanged
-- Profile bounds for **battery and balanced are bit-exact V46**
-- BG_TRIM, Storm Shield, Anti-Clamp, Tencent Soter — all preserved
-- FSM scheduling logic identical to V46 apart from the new intent class and bias mode tracking
-- Default behavior on first boot is V46-equivalent (Smart Mode off for upgraders)
-
-### Reversibility
-
-Smart Mode is fully reversible. Disable it via:
-
-```bash
-sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh disable
-```
-
-Your `smart_prev_profile` value is restored as the active profile. To completely wipe Smart Mode learning (12 buckets back to seed defaults):
-
-```bash
-sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh reset
-```
-
----
-
-## 📊 Field-test results
-
-Single 42-minute Call of Duty Mobile session at room temperature, screen on, not charging.
-
-| Metric | V46 performance profile | V47 smart profile |
-|---|---:|---:|
-| Peak CPU temperature | ~95 °C | **71 °C** |
-| Battery temperature peak | ~50 °C | **47 °C** |
-| Time above 70 °C CPU | ~35 % of session | **3 %** |
-| Thermal veto fires | n/a (didn't exist) | 57 ticks once CPU hit 65 °C+ |
-| Vendor clamp activity | high | moderate (governor no longer fighting) |
-
-Smart Mode does not fight vendor clamps — it works *inside* what the vendor PowerHAL allows and picks better blends than performance ever could.
-
----
-
-## 🚫 What V47 deliberately does NOT change
-
-- All V46 critical fixes preserved (description boot-init, `/data/local/tmp` wildcard, OOM tuning relaxation)
-- Crash Recovery v2 (tiered L1 / L2 / L3 + `recovery.json`) unchanged
-- Profile bounds for **battery and balanced are bit-exact V46**
-- WebUI Live overlay unchanged
-- Per-app auto-profile still not implemented (still rejected — polling cost too high; Smart Mode uses CPU-load heuristic instead)
-- BG_TRIM / Storm Shield / Anti-Clamp / Tencent Soter all preserved
-
----
-
-## 🧠 Trust + intent decision matrix
-
-| Trust | Intent | Learner action |
-|---|---|---|
-| CLEAN | IDLE, MIXED | Full weight 1.0 |
-| CLEAN | SLEEP_IDLE | Forced PARTIAL (sleep is inherently noisy) |
-| PARTIAL | any | Weight 0.4 |
-| **NOISY** | any | **Weight 0.15** (newly activated) |
-| DIRTY | any | Skipped entirely |
-| any | **IDLE_WARM** | **Forced PARTIAL** (warm idle is ambiguous) |
-| any | SLEEP_IDLE | Forced PARTIAL |
-
-Smart Mode bucket learning uses the same trust tiers, with `quality = duration_weight × trust_weight` capped at 5 % step per session.
-
----
+| Path | Purpose |
+|:--|:--|
+| `/data/adb/asb/smart_mode_enabled` | Master on/off flag (0 or 1) |
+| `/data/adb/asb/buckets.bin` | Persistent learned per-daypart store |
+| `/data/adb/asb/session_history.jsonl` | Append-only session log (rotated at 5 MB) |
+| `/dev/.asb/state` | Live key=value status, refreshed every tick |
+| `/dev/.asb/learner_state.json` | Summary including `smart_sessions` block |
+| `/dev/.asb/conflicts.json` | Vendor clamp and cap owner observability |
