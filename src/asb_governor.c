@@ -2618,19 +2618,16 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 else if (m->cpu.load1 >= 6.0f) g_smart_rt.app_hint = ASB_APP_MEDIUM;
                 else g_smart_rt.app_hint = ASB_APP_LIGHT;
             }
-            /* FSM-state-based gaming upgrade.
-             * Some packages (regional CODM variants, repackaged games, beta
-             * builds) aren't in the prefix/substring table, so they land at
-             * MEDIUM. But the FSM still correctly classifies sustained heat
-             * + CPU pressure as GAMING/SUSTAINED. When that happens and we
-             * have screen-on for at least 30 seconds, force hint to GAMING
-             * so smart_sessions.gaming counts correctly and bucket learning
-             * sees the right intent. */
             if (g_smart_rt.app_hint < ASB_APP_GAMING &&
-                m->misc.screen_on && fsm &&
-                (fsm->state == ASB_STATE_GAMING ||
-                 (fsm->state == ASB_STATE_SUSTAINED && cpu_max_c >= 58))) {
-                g_smart_rt.app_hint = ASB_APP_GAMING;
+                m->misc.screen_on && fsm) {
+                int fresh_pkg = (pst == ASB_PKG_OK);
+                if (fsm->state == ASB_STATE_GAMING && fresh_pkg) {
+                    g_smart_rt.app_hint = ASB_APP_GAMING;
+                } else if (fsm->state == ASB_STATE_SUSTAINED &&
+                           cpu_max_c >= 60 && m->gpu.load_pct >= 30 &&
+                           fresh_pkg) {
+                    g_smart_rt.app_hint = ASB_APP_GAMING;
+                }
             }
         }
         g_smart_rt.app_cache_last_refresh = now;

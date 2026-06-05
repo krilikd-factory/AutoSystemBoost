@@ -936,6 +936,11 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             if (bat_dw < 2) bat_dw = 2;
             if (bat_dw < window) window = bat_dw;
         }
+        if (m->misc.screen_on && m->gpu.load_pct >= 8 &&
+            desired < ASB_STATE_MODERATE && fsm->state >= ASB_STATE_MODERATE) {
+            int ui_hold = fsm->down_window * 2;
+            if (ui_hold > window) window = ui_hold;
+        }
         if (fsm_profile_is_battery &&
             g_asb_cfg.bat_fast_idle_s > 0 &&
             fsm->state == ASB_STATE_LIGHT_IDLE &&

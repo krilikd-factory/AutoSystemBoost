@@ -407,15 +407,21 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
 
     asb_pkg_status_t st;
     if (!pkg[0]) {
-        /* All sources failed. Check cache. */
-        if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < 60) {
-            /* Use stale cache */
+        /* All sources failed. Check cache (20s window — long enough to ride
+         * out a transient SELinux deny, short enough that a closed game's
+         * hint doesn't linger). Decay gaming/heavy one level while stale so a
+         * backgrounded game stops reporting full gaming intent. */
+        if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < 20) {
             if (out_pkg && outsz > 0) {
                 strncpy(out_pkg, g_pkg_cache.pkg, outsz - 1);
                 out_pkg[outsz - 1] = '\0';
             }
             if (out_hash) *out_hash = g_pkg_cache.hash;
-            if (out_hint) *out_hint = g_pkg_cache.hint;
+            if (out_hint) {
+                int h = g_pkg_cache.hint;
+                if (h >= ASB_APP_HEAVY) h -= 1;
+                *out_hint = h;
+            }
             if (out_source) *out_source = g_pkg_cache.last_source;
             return ASB_PKG_STALE;
         }
@@ -428,9 +434,7 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
 
     /* Got a real package. Filter system UI. */
     if (asb_smart_is_system_ui(pkg)) {
-        /* Treat as "no real app" but cache survives. Return SYS_UI;
-         * caller should keep using cached hint if recent. */
-        if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < 60) {
+        if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < 20) {
             if (out_pkg && outsz > 0) {
                 strncpy(out_pkg, g_pkg_cache.pkg, outsz - 1);
                 out_pkg[outsz - 1] = '\0';
