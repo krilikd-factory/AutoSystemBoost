@@ -86,6 +86,10 @@ UX_MANAGE_TIMEOUTS=0
 # 1 = aggressive: full UHQA + offload tuning (may break TWS+VoIP on some devices)
 AUDIO_AGGRESSIVE=0
 
+# External equalizer compatibility
+# 1 = skip ASB audio effect-chain processing so external EQ apps own the DSP
+AUDIO_EQ_COMPAT=0
+
 # Smart Mode — additive adaptive layer.
 # Master on/off lives in /data/adb/asb/smart_mode_enabled (file flag).
 smart_mode_enabled=0
