@@ -736,9 +736,9 @@ body::before, body::after {
   background: var(--bg);
   z-index: 100;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-start;
   padding-top: calc(var(--window-inset-top) + 64px);
   padding-right: 20px;
   padding-bottom: calc(var(--window-inset-bottom) + 40px);
@@ -752,9 +752,11 @@ body::before, body::after {
   pointer-events: none;
   visibility: hidden;
 }
-.live-page > * {
+.live-inner {
   width: 100%;
   max-width: 420px;
+  flex: 0 1 auto;
+  display: block;
 }
 .live-page.open {
   transform: translateX(0);
@@ -762,6 +764,9 @@ body::before, body::after {
   visibility: visible;
   transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
               visibility 0s linear 0s;
+}
+body.live-active .page:not(.live-page) {
+  visibility: hidden;
 }
 .live-metrics {
   width: 100%;
@@ -894,7 +899,7 @@ body::before, body::after {
 
 /* Small tablets and large phones in landscape (640-768 px) */
 @media (min-width: 640px) {
-  .page, .live-page > *, .tg-link-wrap {
+  .page, .live-inner, .tg-link-wrap {
     max-width: 480px !important;
   }
   .header { max-width: 480px !important; }
@@ -903,7 +908,7 @@ body::before, body::after {
 
 /* Tablets in portrait (768-1024 px) */
 @media (min-width: 768px) {
-  .page, .live-page > *, .tg-link-wrap {
+  .page, .live-inner, .tg-link-wrap {
     max-width: 560px !important;
   }
   .header { max-width: 560px !important; }
@@ -927,7 +932,7 @@ body::before, body::after {
 
 /* Large tablets / desktop browsers (≥ 1024 px) */
 @media (min-width: 1024px) {
-  .page, .live-page > *, .tg-link-wrap {
+  .page, .live-inner, .tg-link-wrap {
     max-width: 640px !important;
   }
   .header { max-width: 640px !important; }
@@ -1044,6 +1049,7 @@ body::before, body::after {
 
 <!-- LIVE STATUS PAGE (overlay) -->
 <div class="page live-page" id="livePage" aria-hidden="true">
+  <div class="live-inner">
 
   <div class="header">
     <div class="logo-c">
@@ -1166,6 +1172,7 @@ body::before, body::after {
 
   <div class="footer"></div>
 
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1324,10 +1331,8 @@ function openLivePage() {
   const p = _el('livePage');
   if (!p) return;
   p.classList.add('open');
+  document.body.classList.add('live-active');
   p.setAttribute('aria-hidden', 'false');
-  /* Reset scroll to top so the header (logo + badges + profile row) is visible.
-   * Without this, an old scroll position from previous open could push the
-   * header up under the status bar. */
   p.scrollTop = 0;
   _liveOpen = true;
   pollLive(true);
@@ -1339,6 +1344,7 @@ function closeLivePage() {
   const p = _el('livePage');
   if (!p) return;
   p.classList.remove('open');
+  document.body.classList.remove('live-active');
   p.setAttribute('aria-hidden', 'true');
   _liveOpen = false;
   if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
