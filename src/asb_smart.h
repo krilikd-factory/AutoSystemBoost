@@ -247,27 +247,6 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
     return ASB_APP_MEDIUM;
 }
 
-/* ============================================================
- * foreground package detection
- *
- * Cascading source strategy — try each in order until we get a non-empty
- * package name. Each source has its own quirks/SELinux story; the cascade
- * provides resilience.
- *
- * Status codes returned alongside the package:
- *   ASB_PKG_OK             — got a real package name
- *   ASB_PKG_MISSING        — no source returned anything (binary missing,
- *                            SELinux deny, dumpsys hung)
- *   ASB_PKG_STALE          — using last_known_good cache (TTL < 60s)
- *   ASB_PKG_SYS_UI         — got a system UI/launcher (filtered out)
- *
- * Sources (in order):
- *   1. cmd activity get-current-user-id + dumpsys activity top  (Android 10+)
- *   2. dumpsys activity activities | grep mResumedActivity
- *   3. dumpsys window windows | grep mCurrentFocus
- *
- * All sources use popen() with short timeout. Returns through out_pkg.
- * ============================================================ */
 typedef enum {
     ASB_PKG_OK = 0,
     ASB_PKG_MISSING = 1,
@@ -520,7 +499,7 @@ static void asb_smart_store_seed_defaults(asb_smart_store_t *st) {
                 case ASB_DAYPART_LATE:
                     alpha_seed = 750; inter_seed = 20;  sleep_seed = 500; net_seed = 500; break;
                 case ASB_DAYPART_WAKE:
-                    alpha_seed = 500; inter_seed = 60;  sleep_seed = 100; net_seed = 200; break;
+                    alpha_seed = 650; inter_seed = 40;  sleep_seed = 300; net_seed = 400; break;
                 case ASB_DAYPART_MORN:
                 case ASB_DAYPART_DAY:
                     alpha_seed = 300; inter_seed = 100; sleep_seed = 0;   net_seed = 100; break;
@@ -721,8 +700,6 @@ static uint16_t asb_smart_duration_weight_x100(int dur_s) {
     return ASB_SMART_DUR_W_VLONG_X100;
 }
 
-/* Map trust tier (0=DIRTY .. 3=NOISY) to weight × 100.
- * CLEAN=1.00, PARTIAL=0.40, NOISY=0.15, DIRTY=0.00 */
 static uint16_t asb_smart_trust_weight_x100(int trust) {
     switch (trust) {
         case ASB_TRUST_CLEAN:   return ASB_SMART_TRUST_W_CLEAN_X100;
@@ -974,8 +951,6 @@ static void asb_smart_compute_effective(
         ASB_SMART_NET_CONSERV_MIN_X1000, ASB_SMART_NET_CONSERV_MAX_X1000);
 }
 
-/* Night-safe override: if late/sleep daypart + screen off + not charging +
- * no heavy foreground + low battery → force aggressive battery-lean state. */
 static void asb_smart_apply_night_override(
         int daypart,
         int screen_on,
@@ -987,7 +962,9 @@ static void asb_smart_apply_night_override(
     if (!rt) return;
     rt->night_safe_override = 0;
 
-    int is_night_part = (daypart == ASB_DAYPART_SLEEP || daypart == ASB_DAYPART_LATE);
+    int is_night_part = (daypart == ASB_DAYPART_SLEEP ||
+                         daypart == ASB_DAYPART_LATE ||
+                         daypart == ASB_DAYPART_WAKE);
     int idle_screen = (screen_on == 0);
     int not_charging = (charging == 0);
     int no_heavy = (app_hint < ASB_APP_HEAVY);
@@ -1002,8 +979,26 @@ static void asb_smart_apply_night_override(
     }
 }
 
-/* Thermal veto: if device already hot or vendor heavily clamping, force
- * battery-lean alpha and downscale interactive ambitions. */
+static void asb_smart_apply_idle_screen_override(
+        int screen_on,
+        int charging,
+        int app_hint,
+        long screen_off_seconds,
+        asb_smart_runtime_t *rt)
+{
+    if (!rt) return;
+    if (rt->night_safe_override) return;
+    if (screen_on) return;
+    if (charging) return;
+    if (app_hint >= ASB_APP_HEAVY) return;
+    if (screen_off_seconds < 1800) return;
+
+    if (rt->alpha_battery_x1000 < 850) rt->alpha_battery_x1000 = 850;
+    if (rt->sleep_bias_x1000 < 600)    rt->sleep_bias_x1000 = 600;
+    if (rt->net_conservative_x1000 < 600) rt->net_conservative_x1000 = 600;
+    if (rt->interactive_bonus_x1000 > 20) rt->interactive_bonus_x1000 = 20;
+}
+
 static void asb_smart_apply_thermal_veto(
         int cpu_max_c,
         int vendor_clamp_1h,
@@ -1031,19 +1026,6 @@ static void asb_smart_apply_thermal_veto(
     }
 }
 
-/* ============================================================
- * intelligent runtime modifiers
- *
- * Each modifier adjusts the computed runtime within safe bounds. They run AFTER
- * the night_override and thermal_veto so those keep priority. The contract:
- *   - never reduce alpha below 0 or above 1000
- *   - never touch night_safe_override or thermal_veto flags
- *   - skip entirely if a higher-priority override (night/veto) already fired
- *
- * Reading sysfs/procfs here is cheap (one short read per tick = a few µs).
- * All paths are best-effort: if a file doesn't exist on this device, the
- * modifier is a no-op for that signal. Zero risk of breaking other devices.
- * ============================================================ */
 
 /* — Memory pressure adaptation.
  * Read /proc/pressure/memory (PSI). When the system is already memory-stressed

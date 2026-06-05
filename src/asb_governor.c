@@ -77,16 +77,11 @@ static int g_smart_last_daypart      = -1;
 static int g_smart_last_confidence   = 0;
 static time_t g_smart_last_update_ts = 0;
 
-/* Smart Mode periodic learning trackers.
- * g_smart_last_seen_bucket: previous bucket_id; mismatch fires a soft session.
- * g_smart_last_periodic_ts: rate-limit timestamp for the duration-based
- *                           trigger (avoid more than one fire per 20 minutes). */
 static int    g_smart_last_seen_bucket = -1;
 static time_t g_smart_last_periodic_ts = 0;
+static time_t g_smart_screen_off_since = 0;
+static int    g_smart_last_screen_on = 1;
 
-/* Smart Mode dynamic tuner state. The tuner shell script gets re-invoked
- * whenever the (app_hint, thermal_bucket, screen_on) signature changes;
- * sig+ts together rate-limit so we don't spam shell forks. */
 static int    g_smart_last_tune_sig = -1;
 static time_t g_smart_last_tune_ts  = 0;
 
@@ -2668,9 +2663,20 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     asb_smart_apply_night_override(daypart, screen_on, charging,
                                    g_smart_rt.app_hint, battery_pct, &g_smart_rt);
 
-    /* Get vendor_clamp_1h from anti-clamp counter 
-     * g_v44_clamp_1h is a sliding hourly window counter maintained
-     * by write_conflicts_json() and similar checkpoints. */
+    if (screen_on != g_smart_last_screen_on) {
+        if (!screen_on) {
+            g_smart_screen_off_since = now;
+        } else {
+            g_smart_screen_off_since = 0;
+        }
+        g_smart_last_screen_on = screen_on;
+    }
+    long screen_off_secs = (g_smart_screen_off_since > 0)
+                           ? (long)(now - g_smart_screen_off_since) : 0;
+    asb_smart_apply_idle_screen_override(screen_on, charging,
+                                          g_smart_rt.app_hint,
+                                          screen_off_secs, &g_smart_rt);
+
     int vendor_clamp_1h = (int)g_v44_clamp_1h;
     int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
