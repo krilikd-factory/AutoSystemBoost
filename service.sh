@@ -78,22 +78,9 @@ if [ ! -f /data/adb/asb/smart_mode_enabled ]; then
   fi
 fi
 
-# One-shot migration: session_history.jsonl from the module's runtime dir
-# (wiped on reinstall) into /data/adb/asb/ (persistent across reinstalls).
-if [ ! -f /data/adb/asb/session_history_migrated_v47 ]; then
-  _legacy_hist="/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
-  _new_hist="/data/adb/asb/session_history.jsonl"
-  if [ -f "$_legacy_hist" ] && [ ! -f "$_new_hist" ]; then
-    cp "$_legacy_hist" "$_new_hist" 2>/dev/null
-    _lines=$(wc -l < "$_new_hist" 2>/dev/null | tr -d ' ')
-    asb_log "session_history migrated to /data/adb/asb/ (${_lines:-0} entries preserved)"
-  fi
-  touch /data/adb/asb/session_history_migrated_v47 2>/dev/null
-fi
-
 asb_load_profile
 
-rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done 2>/dev/null
+rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done /data/adb/asb/session_history_migrated_v47 2>/dev/null
 
 if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
   for _stale_p in \
