@@ -731,22 +731,20 @@ body::before, body::after {
 .live-page {
   position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
   bottom: 0;
+  left: 50%;
   width: 100%;
-  max-width: 100vw;
+  max-width: 420px;
   background: var(--bg);
   z-index: 100;
   display: flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 64px 20px 40px;
   padding-top: calc(var(--window-inset-top) + 64px);
-  padding-right: 20px;
   padding-bottom: calc(var(--window-inset-bottom) + 40px);
-  padding-left: 20px;
-  transform: translateX(100%);
+  transform: translateX(-50%) translateX(120%);
   transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
               visibility 0s linear 0.28s;
   overflow-y: auto;
@@ -757,18 +755,17 @@ body::before, body::after {
 }
 .live-inner {
   width: 100%;
-  max-width: 420px;
-  flex: 0 1 auto;
-  margin-left: auto;
-  margin-right: auto;
   display: block;
 }
 .live-page.open {
-  transform: translateX(0);
+  transform: translateX(-50%) translateX(0);
   pointer-events: auto;
   visibility: visible;
   transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
               visibility 0s linear 0s;
+}
+body.live-active {
+  overflow: hidden;
 }
 body.live-active .page:not(.live-page) {
   visibility: hidden;
@@ -904,7 +901,7 @@ body.live-active .page:not(.live-page) {
 
 /* Small tablets and large phones in landscape (640-768 px) */
 @media (min-width: 640px) {
-  .page, .live-inner, .tg-link-wrap {
+  .page, .live-page, .tg-link-wrap {
     max-width: 480px !important;
   }
   .header { max-width: 480px !important; }
@@ -913,7 +910,7 @@ body.live-active .page:not(.live-page) {
 
 /* Tablets in portrait (768-1024 px) */
 @media (min-width: 768px) {
-  .page, .live-inner, .tg-link-wrap {
+  .page, .live-page, .tg-link-wrap {
     max-width: 560px !important;
   }
   .header { max-width: 560px !important; }
@@ -937,7 +934,7 @@ body.live-active .page:not(.live-page) {
 
 /* Large tablets / desktop browsers (≥ 1024 px) */
 @media (min-width: 1024px) {
-  .page, .live-inner, .tg-link-wrap {
+  .page, .live-page, .tg-link-wrap {
     max-width: 640px !important;
   }
   .header { max-width: 640px !important; }
