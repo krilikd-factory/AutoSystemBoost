@@ -1681,7 +1681,17 @@ apply_zram() {
   [ -e /sys/block/zram0 ] || return 0
   CPU_CORES=$(nproc 2>/dev/null || echo 8)
   ZRAM_SIZE_MB=8192
-  swapoff /dev/block/zram0 >/dev/null 2>&1 || true
+  _cur_disksize=$(cat /sys/block/zram0/disksize 2>/dev/null || echo 0)
+  _want_bytes=$((ZRAM_SIZE_MB * 1024 * 1024))
+  if [ "$_cur_disksize" = "$_want_bytes" ] && \
+     grep -q "/dev/block/zram0" /proc/swaps 2>/dev/null; then
+    return 0
+  fi
+  swapoff /dev/block/zram0 >/dev/null 2>&1
+  _t=0
+  while grep -q "/dev/block/zram0" /proc/swaps 2>/dev/null && [ "$_t" -lt 5 ]; do
+    sleep 1; swapoff /dev/block/zram0 >/dev/null 2>&1; _t=$((_t + 1))
+  done
   echo 1 > /sys/block/zram0/reset 2>/dev/null || return 0
   sleep 2
   echo zstd > /sys/block/zram0/comp_algorithm 2>/dev/null || \
