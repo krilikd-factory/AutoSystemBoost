@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>AutoSystemBoost</title>
 <meta name="theme-color" content="#000000">
@@ -756,6 +759,8 @@ body::before, body::after {
   width: 100%;
   max-width: 420px;
   flex: 0 1 auto;
+  margin-left: auto;
+  margin-right: auto;
   display: block;
 }
 .live-page.open {
@@ -1445,8 +1450,8 @@ async function pollLive(visible) {
       chip.classList.remove('has-issue', 'has-error');
       if (recDisabled === 1) chip.classList.add('has-error');
       else if (recCount > 0) chip.classList.add('has-issue');
-      else if (capSrc === 'vendor_clamp') chip.classList.add('has-error');
-      else if (capSrc === 'vendor_raised' || capSrc === 'thermal_overlay') chip.classList.add('has-issue');
+      else if (capSrc === 'vendor_clamp' || capSrc === 'vendor_raised' ||
+               capSrc === 'thermal_overlay') chip.classList.add('has-issue');
       else if (advActive === 1) chip.classList.add('has-issue');
     }
 
