@@ -971,7 +971,10 @@ static int asb_cap_compute_owner(const char *cap_source) {
         }
         int burst_trip = (g_cap_recent_vendor_clamps >= 3);
         int slow_trip  = (g_cap_slow_vendor_clamps  >= 8);
-        if (burst_trip || slow_trip) {
+        int persistent = (g_cap_slow_vendor_clamps  >= 20);
+        if (persistent) {
+            g_cap_vendor_hold_until = now + 30;
+        } else if (burst_trip || slow_trip) {
             g_cap_vendor_hold_until = now + 15;
         }
     }
