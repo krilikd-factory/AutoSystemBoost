@@ -224,27 +224,6 @@ asb_migrate_governor_conf
   fi
 ) >/dev/null 2>&1 &
 
-(
-  _t=0
-  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 180 ]; do
-    sleep 5
-    _t=$((_t + 5))
-  done
-  if command -v ksud >/dev/null 2>&1; then
-    for _sp in \
-        /system_ext/framework/oplusex/com.oplus.CustCore \
-        /system_ext/framework/oplusex/com.oplus.NetworkAssistSys \
-        /system_ext/framework/oplusex/com.oplus.fancyIconLoader \
-        /system_ext/framework/oplusex/com.oplus.moduleservices \
-        /system_ext/framework/oplusex/com.oplus.odmf \
-        /system_ext/lib64/oplusex/com.oplus.NetworkAssistSys \
-        /system_ext/lib64/oplusex/com.oplus.moduleservices \
-        /system_ext/lib64/oplusex/com.oplus.odmf; do
-      ksud kernel umount add "$_sp" --flags 2 >/dev/null 2>&1
-    done
-  fi
-) >/dev/null 2>&1 &
-
 asb_device_guard() {
   local _soc
   _soc="$(getprop ro.board.platform 2>/dev/null)"
