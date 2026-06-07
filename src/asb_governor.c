@@ -1164,7 +1164,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "\"writes\":%d,\"last_write\":%ld,"
         "\"dwell_sec\":%ld,\"boost\":%d,"
         "\"cap_gap_p0\":%d,\"cap_gap_p1\":%d,"
-        "\"last_sustained_reason\":\"%s\",\"highload_mode\":\"%s\",\"ses_gaming\":%d,\"ses_sustained\":%d,\"ses_thermal\":%d,\"ses_unreachable\":%d,\"ses_t_heavy\":%ld,\"ses_t_gaming\":%ld,\"ses_t_sustained\":%ld,\"ses_avg_gap_p0\":%d,\"ses_max_gap_p0\":%d,\"ses_max_temp\":%d,\"ses_max_skin_temp\":%d,\"ses_max_surface_temp\":%d,\"ses_max_board_temp\":%d,\"ses_auto_degraded\":%d,\"bat_deep_idle\":%ld,\"bat_light_idle\":%ld,\"bat_wake_cycles\":%d,\"clamp_hold\":%d}",
+        "\"last_sustained_reason\":\"%s\",\"highload_mode\":\"%s\",\"ses_gaming\":%d,\"ses_sustained\":%d,\"ses_thermal\":%d,\"ses_unreachable\":%d,\"ses_t_heavy\":%ld,\"ses_t_gaming\":%ld,\"ses_t_sustained\":%ld,\"ses_avg_gap_p0\":%d,\"ses_max_gap_p0\":%d,\"ses_max_temp\":%d,\"ses_max_skin_temp\":%d,\"ses_max_surface_temp\":%d,\"ses_max_board_temp\":%d,\"ses_auto_degraded\":%d,\"bat_deep_idle\":%ld,\"bat_light_idle\":%ld,\"bat_wake_cycles\":%d,\"clamp_hold\":%d,\"cap_owner\":\"%s\",\"cap_vendor_holddown_active\":%d,\"cap_recent_vendor_clamps_60s\":%d,\"vendor_clamp_1h\":%lu}",
         asb_state_names[fsm->state],
         profile_names[fsm->profile_idx],
         m->bat.current_ma, ma_valid, m->bat.charging,
@@ -1221,7 +1221,11 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->bat_time_deep_idle_sec,
         fsm->bat_time_light_idle_sec,
         fsm->bat_wake_cycles,
-        fsm->clamp_hold);
+        fsm->clamp_hold,
+        asb_cap_owner_name(g_cap_owner_eff),
+        (g_cap_vendor_hold_until > time(NULL)) ? 1 : 0,
+        g_cap_recent_vendor_clamps,
+        g_v44_clamp_1h);
     {
         long _act = fsm->ses_time_heavy_sec + fsm->ses_time_gaming_sec + fsm->ses_time_sustained_sec;
         int _sp = (_act > 0) ? (int)(fsm->ses_time_sustained_sec * 100 / _act) : 0;
@@ -4334,7 +4338,8 @@ int main(int argc, char **argv) {
                                 ? (time(NULL) - fsm.ses_start_ts) : 0;
                 int _bucket_rollover =
                     (g_smart_last_seen_bucket >= 0 &&
-                     g_smart_last_seen_bucket != (int)g_smart_rt.bucket_id);
+                     g_smart_last_seen_bucket != (int)g_smart_rt.bucket_id &&
+                     metrics.misc.screen_on);
                 int _smart_age_trigger =
                     (_ses_age >= 1200 && fsm.ses_time_heavy_sec > 60 &&
                      (time(NULL) - g_smart_last_periodic_ts) >= 1200);
