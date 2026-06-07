@@ -755,7 +755,10 @@ body::before, body::after {
 }
 .live-inner {
   width: 100%;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 auto;
 }
 .live-page.open {
   transform: translateX(-50%) translateX(0);
@@ -1162,6 +1165,20 @@ body.live-active .page:not(.live-page) {
       </div>
     </div>
 
+    <!-- GPU & headroom -->
+    <div class="live-row">
+      <div class="live-cell live-cell-wide">
+        <div class="live-cell-label">GPU Load</div>
+        <div class="live-cell-value" id="liveGpu">—</div>
+      </div>
+      <div class="live-cell live-cell-wide">
+        <div class="live-cell-label">Headroom</div>
+        <div class="live-cell-value" id="liveHeadroom">—</div>
+      </div>
+    </div>
+
+  </div>
+
   </div>
 
   <div class="tg-link-wrap">
@@ -1174,7 +1191,6 @@ body.live-active .page:not(.live-page) {
 
   <div class="footer"></div>
 
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1509,6 +1525,18 @@ async function pollLive(visible) {
     else if (capSrc === 'vendor_clamp') capEl.classList.add('cap-clamp');
     else if (capSrc === 'vendor_raised') capEl.classList.add('cap-raised');
     else if (capSrc && capSrc.startsWith('shell')) capEl.classList.add('cap-shell');
+
+    const gpuEl = _el('liveGpu');
+    if (gpuEl) {
+      const gpu = (st && typeof st.gpu === 'number') ? st.gpu : null;
+      gpuEl.textContent = (gpu === null) ? '—' : (gpu + '%');
+    }
+    const hrEl = _el('liveHeadroom');
+    if (hrEl) {
+      const hrValid = (st && st.headroom_valid) || 0;
+      const hr = (st && typeof st.headroom_pct === 'number') ? st.headroom_pct : null;
+      hrEl.textContent = (hr === null || hrValid !== 1) ? 'n/a' : (hr + '%');
+    }
 
     if (recCount > 0 || recDisabled === 1) {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
