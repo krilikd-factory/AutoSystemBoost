@@ -2616,6 +2616,17 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 if (fg_hint >= ASB_APP_HEAVY && m->cpu.load1 < 3.0f) {
                     g_smart_rt.app_hint = ASB_APP_LIGHT;
                 }
+                /* Game/heavy app is foreground but the FSM has settled into an
+                 * idle state with low GPU — the game is paused, in a menu, or
+                 * loading. Drop one level so we don't hold gaming frequencies
+                 * for a static screen. The FSM-state upgrade below re-promotes
+                 * the moment real render load returns. */
+                else if (fg_hint >= ASB_APP_HEAVY && fsm &&
+                         (fsm->state == ASB_STATE_DEEP_IDLE ||
+                          fsm->state == ASB_STATE_LIGHT_IDLE) &&
+                         m->gpu.load_pct < 15) {
+                    g_smart_rt.app_hint = fg_hint - 1;
+                }
             } else {
                 /* No package signal — fall back to load-based heuristic,
                  * but mark detect_ok=0 so observability shows the gap */
