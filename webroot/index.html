@@ -61,6 +61,19 @@ html, body {
   font-family: var(--sans);
   overflow-x: hidden;
   overscroll-behavior: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.live-page::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+.live-page {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 body {
