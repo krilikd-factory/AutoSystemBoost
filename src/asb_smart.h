@@ -1027,6 +1027,24 @@ static void asb_smart_apply_thermal_veto(
         }
         /* Trim interactive bonus */
         rt->interactive_bonus_x1000 /= 2;
+        return;
+    }
+
+    /* Soft pre-lean: between 50 °C and the hard veto threshold, nudge alpha
+     * toward battery proportionally. Keeps the device running cooler during
+     * sustained daily use rather than waiting for the abrupt 65 °C veto.
+     * At 50 °C the nudge is zero; it ramps to a +150 alpha bump just below
+     * the veto threshold. */
+    int soft_lo = 50;
+    int soft_hi = ASB_SMART_VETO_CPU_TEMP_C;
+    if (cpu_max_c > soft_lo && soft_hi > soft_lo) {
+        int span = soft_hi - soft_lo;
+        int over = cpu_max_c - soft_lo;
+        if (over > span) over = span;
+        int bump = (150 * over) / span;
+        int target = rt->alpha_battery_x1000 + bump;
+        if (target > 1000) target = 1000;
+        if (target > rt->alpha_battery_x1000) rt->alpha_battery_x1000 = target;
     }
 }
 
