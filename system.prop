@@ -169,7 +169,6 @@ persist.vendor.audio.aec_ref.enable=false
 vendor.audio.feature.aec_ref.enable=false
 ro.qc.sdk.audio.ssr=true
 ro.vendor.audio.sdk.ssr=true
-ro.audio.flinger_wakelock=true
 # ASB:AUDIO:END
 # ASB:CAMERA:BEGIN
 persist.camera.tnr.preview=1
@@ -862,6 +861,7 @@ persist.vendor.radio.adb_log_on=0
 persist.vendor.radio.log_loc=0
 persist.radio.low_priority_static_log=1
 # ASB:LOG:END
+
 # ASB:RADIO_IMS:BEGIN
 persist.ims.auth.scheme=1
 persist.ims.auth.type=1
