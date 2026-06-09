@@ -64,6 +64,7 @@ typedef struct {
     int night_safe_override;
     int thermal_veto;
     int low_battery_override;
+    int thermal_trend_bump;
 
     int conf_x1000;
     int alpha_battery_x1000;
@@ -1032,11 +1033,19 @@ static void asb_smart_apply_low_battery_override(
 
     if (g_smart_lowbat_engaged) {
         rt->low_battery_override = 1;
-        if (rt->alpha_battery_x1000 < ASB_SMART_LOWBAT_FORCE_ALPHA_X1000) {
-            rt->alpha_battery_x1000 = ASB_SMART_LOWBAT_FORCE_ALPHA_X1000;
+        /* Critical tier: at ≤10% and discharging, force a stronger battery
+         * lean (night-override strength). The regular tier applies otherwise. */
+        int force = ASB_SMART_LOWBAT_FORCE_ALPHA_X1000;
+        int crit = (battery_pct >= 0 &&
+                    battery_pct <= ASB_SMART_LOWBAT_CRIT_PCT && !charging);
+        if (crit) force = ASB_SMART_LOWBAT_CRIT_ALPHA_X1000;
+        if (rt->alpha_battery_x1000 < force) {
+            rt->alpha_battery_x1000 = force;
         }
-        if (rt->net_conservative_x1000 < 500) rt->net_conservative_x1000 = 500;
-        if (rt->interactive_bonus_x1000 > 40) rt->interactive_bonus_x1000 = 40;
+        if (rt->net_conservative_x1000 < (crit ? 600 : 500))
+            rt->net_conservative_x1000 = (crit ? 600 : 500);
+        if (rt->interactive_bonus_x1000 > (crit ? 20 : 40))
+            rt->interactive_bonus_x1000 = (crit ? 20 : 40);
     }
 }
 
@@ -1079,6 +1088,76 @@ static void asb_smart_apply_thermal_veto(
         int over = cpu_max_c - soft_lo;
         if (over > span) over = span;
         int bump = (150 * over) / span;
+        int target = rt->alpha_battery_x1000 + bump;
+        if (target > 1000) target = 1000;
+        if (target > rt->alpha_battery_x1000) rt->alpha_battery_x1000 = target;
+    }
+}
+
+/* — Predictive thermal trend (D-term).
+ * The soft pre-lean above reacts to the temperature LEVEL (P-term). This
+ * reacts to the heating RATE: if the device is warming fast (≥3 °C/min
+ * sustained) and already at ≥45 °C, lean toward battery BEFORE the level
+ * thresholds trip. A fast ramp at 47 °C reliably predicts 55–60 °C within
+ * a couple of minutes on SD8E — leaning a little now avoids leaning a lot
+ * later, which is both cooler and smoother (no abrupt cap drop).
+ * The bump only ever raises alpha (never reduces safety) and is skipped
+ * entirely while the hard veto holds (alpha already forced ≥700). */
+static int asb_smart_thermal_trend_bump_calc(int cpu_max_c, int slope_mc_per_min)
+{
+    if (cpu_max_c < ASB_SMART_TREND_MIN_TEMP_C) return 0;
+    if (slope_mc_per_min <= ASB_SMART_TREND_MIN_SLOPE_MC_MIN) return 0;
+    int span = ASB_SMART_TREND_MAX_SLOPE_MC_MIN - ASB_SMART_TREND_MIN_SLOPE_MC_MIN;
+    int over = slope_mc_per_min - ASB_SMART_TREND_MIN_SLOPE_MC_MIN;
+    if (over > span) over = span;
+    return (ASB_SMART_TREND_MAX_BUMP_X1000 * over) / span;
+}
+
+static int g_smart_trend_prev_c = 0;
+static time_t g_smart_trend_prev_ts = 0;
+static int g_smart_trend_slope_mc_min = 0;
+
+static void asb_smart_apply_thermal_trend(
+        int cpu_max_c,
+        time_t now,
+        asb_smart_runtime_t *rt)
+{
+    if (!rt) return;
+    rt->thermal_trend_bump = 0;
+
+    if (cpu_max_c <= 0) {
+        g_smart_trend_prev_ts = 0;
+        g_smart_trend_slope_mc_min = 0;
+        return;
+    }
+    /* Seed / re-seed the sampling window on first run or after a stale gap
+     * (deep sleep, daemon pause) — a slope across a gap is meaningless. */
+    if (g_smart_trend_prev_ts == 0 ||
+        (long)(now - g_smart_trend_prev_ts) > ASB_SMART_TREND_STALE_S ||
+        now < g_smart_trend_prev_ts) {
+        g_smart_trend_prev_c = cpu_max_c;
+        g_smart_trend_prev_ts = now;
+        g_smart_trend_slope_mc_min = 0;
+        return;
+    }
+    long dt = (long)(now - g_smart_trend_prev_ts);
+    if (dt >= ASB_SMART_TREND_WINDOW_S) {
+        /* ≥30 s windows smooth the 1 °C sensor quantization; EWMA (1/2)
+         * smooths window-to-window noise. Cooling windows pull the EWMA
+         * back down, so the bump decays naturally once the ramp stops. */
+        long raw = ((long)(cpu_max_c - g_smart_trend_prev_c) * 60000L) / dt;
+        if (raw > 60000L) raw = 60000L;
+        if (raw < -60000L) raw = -60000L;
+        g_smart_trend_slope_mc_min = (g_smart_trend_slope_mc_min + (int)raw) / 2;
+        g_smart_trend_prev_c = cpu_max_c;
+        g_smart_trend_prev_ts = now;
+    }
+
+    if (rt->thermal_veto) return;
+
+    int bump = asb_smart_thermal_trend_bump_calc(cpu_max_c, g_smart_trend_slope_mc_min);
+    if (bump > 0) {
+        rt->thermal_trend_bump = bump;
         int target = rt->alpha_battery_x1000 + bump;
         if (target > 1000) target = 1000;
         if (target > rt->alpha_battery_x1000) rt->alpha_battery_x1000 = target;

@@ -857,6 +857,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.thermal_veto ? 1 : 0,
             g_smart_rt.app_hint,
             g_smart_rt.fallback_level);
+    fprintf(f, "smart_lowbat_override=%d\nsmart_thermal_trend=%d\nsmart_trend_slope=%d\n",
+            g_smart_rt.low_battery_override ? 1 : 0,
+            g_smart_rt.thermal_trend_bump,
+            g_smart_trend_slope_mc_min);
     /* Debug build only: include plaintext pkg if cached */
 #if ASB_DEBUG_BUILD
     if (g_asb_cfg.smart_pkg_plaintext || ASB_DEBUG_BUILD) {
@@ -2697,6 +2701,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int vendor_clamp_1h = (int)g_v44_clamp_1h;
     int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
+    asb_smart_apply_thermal_trend(cpu_max_c, now, &g_smart_rt);
 
     /* intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
      * gaming relax. Each is a no-op if its signal is unavailable on this device,
@@ -4353,8 +4358,18 @@ int main(int argc, char **argv) {
                     (g_smart_last_seen_bucket >= 0 &&
                      g_smart_last_seen_bucket != (int)g_smart_rt.bucket_id &&
                      metrics.misc.screen_on);
+                /* Fire a soft session after the session has run long enough,
+                 * regardless of whether it was heavy. Light daily use (browsing,
+                 * messaging, idle) must advance the learner too — otherwise a
+                 * user who never switches profiles would never accumulate
+                 * confidence. A session counts as meaningful if it saw any
+                 * screen-on time or any active (non-deep-idle) time. */
+                long _active_s = fsm.ses_time_heavy_sec
+                               + fsm.ses_time_gaming_sec
+                               + fsm.ses_time_sustained_sec;
+                int _meaningful = (_active_s > 60 || fsm.bat_wake_screen > 0);
                 int _smart_age_trigger =
-                    (_ses_age >= 1200 && fsm.ses_time_heavy_sec > 60 &&
+                    (_ses_age >= 1200 && _meaningful &&
                      (time(NULL) - g_smart_last_periodic_ts) >= 1200);
                 if (_bucket_rollover || _smart_age_trigger) {
                     const char *_reason = _bucket_rollover
