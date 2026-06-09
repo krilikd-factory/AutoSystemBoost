@@ -575,10 +575,9 @@ body::before, body::after {
 }
 .live-page .tg-link-wrap {
   margin-top: auto;
-  margin-bottom: 18px;
 }
 .live-inner {
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 .tg-link {
@@ -761,14 +760,14 @@ body::before, body::after {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 64px 20px 40px;
+  padding: 64px 20px 22px;
   padding-top: calc(var(--window-inset-top) + 64px);
-  padding-bottom: calc(var(--window-inset-bottom) + 40px);
+  padding-bottom: calc(var(--window-inset-bottom) + 22px);
   box-sizing: border-box;
   transform: translateX(-50%) translateX(120%);
   transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
               visibility 0s linear 0.28s;
-  overflow-y: auto;
+  overflow-y: hidden;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   pointer-events: none;
@@ -798,19 +797,19 @@ body.live-active .page:not(.live-page) {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .live-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
 .live-cell {
   background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 10px 12px;
-  height: 60px;
+  padding: 8px 12px;
+  height: 54px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -970,12 +969,19 @@ body.live-active .page:not(.live-page) {
 }
 
 /* Landscape orientation on phones (height < 500 px) — keep tighter spacing */
+@media (orientation: landscape) {
+  .live-page { overflow-y: auto; }
+}
+
 @media (max-height: 500px) and (orientation: landscape) {
   .header { margin-bottom: 12px; padding-top: 8px; }
   .logo-c { width: 48px; height: 48px; margin-bottom: 4px; }
   .app-name { font-size: 20px; }
   .page { padding-top: 32px; }
-  .live-page { padding-top: calc(var(--window-inset-top) + 32px); }
+  .live-page {
+    padding-top: calc(var(--window-inset-top) + 32px);
+    overflow-y: auto;
+  }
 }
 
 </style>
