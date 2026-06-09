@@ -2692,6 +2692,8 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                                           g_smart_rt.app_hint,
                                           screen_off_secs, &g_smart_rt);
 
+    asb_smart_apply_low_battery_override(battery_pct, charging, &g_smart_rt);
+
     int vendor_clamp_1h = (int)g_v44_clamp_1h;
     int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);

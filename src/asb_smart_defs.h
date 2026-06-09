@@ -95,6 +95,9 @@ typedef enum {
  * conserve. Set to 100 to make it effectively unconditional on battery_pct.
  * Override remains gated by: night daypart + screen off + not charging + no heavy app. */
 #define ASB_SMART_NIGHT_BAT_PCT_MAX 100
+#define ASB_SMART_LOWBAT_ENGAGE_PCT 20
+#define ASB_SMART_LOWBAT_RESTORE_PCT 40
+#define ASB_SMART_LOWBAT_FORCE_ALPHA_X1000 800
 
 #define ASB_SMART_VETO_CPU_TEMP_C        65
 #define ASB_SMART_VETO_VENDOR_CLAMP_1H   300

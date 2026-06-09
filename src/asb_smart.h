@@ -63,6 +63,7 @@ typedef struct {
 
     int night_safe_override;
     int thermal_veto;
+    int low_battery_override;
 
     int conf_x1000;
     int alpha_battery_x1000;
@@ -1001,6 +1002,42 @@ static void asb_smart_apply_idle_screen_override(
     if (rt->sleep_bias_x1000 < 600)    rt->sleep_bias_x1000 = 600;
     if (rt->net_conservative_x1000 < 600) rt->net_conservative_x1000 = 600;
     if (rt->interactive_bonus_x1000 > 20) rt->interactive_bonus_x1000 = 20;
+}
+
+static int g_smart_lowbat_engaged = 0;
+
+static void asb_smart_apply_low_battery_override(
+        int battery_pct,
+        int charging,
+        asb_smart_runtime_t *rt)
+{
+    if (!rt) return;
+    rt->low_battery_override = 0;
+
+    /* Hysteresis: engage at or below the low threshold, release only once the
+     * battery has recovered past the higher restore threshold. This prevents
+     * flapping around a single cutoff and, crucially, automatically restores
+     * normal behaviour as the phone charges back up — no manual toggle needed. */
+    if (battery_pct >= 0) {
+        if (!g_smart_lowbat_engaged) {
+            if (battery_pct <= ASB_SMART_LOWBAT_ENGAGE_PCT && !charging) {
+                g_smart_lowbat_engaged = 1;
+            }
+        } else {
+            if (battery_pct >= ASB_SMART_LOWBAT_RESTORE_PCT || charging) {
+                g_smart_lowbat_engaged = 0;
+            }
+        }
+    }
+
+    if (g_smart_lowbat_engaged) {
+        rt->low_battery_override = 1;
+        if (rt->alpha_battery_x1000 < ASB_SMART_LOWBAT_FORCE_ALPHA_X1000) {
+            rt->alpha_battery_x1000 = ASB_SMART_LOWBAT_FORCE_ALPHA_X1000;
+        }
+        if (rt->net_conservative_x1000 < 500) rt->net_conservative_x1000 = 500;
+        if (rt->interactive_bonus_x1000 > 40) rt->interactive_bonus_x1000 = 40;
+    }
 }
 
 static void asb_smart_apply_thermal_veto(
