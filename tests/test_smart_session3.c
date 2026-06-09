@@ -340,6 +340,127 @@ static void test_thermal_veto(void) {
     EXPECT(rt4.alpha_battery_x1000 == 300, "alpha untouched without veto");
 }
 
+static void test_thermal_trend_calc(void) {
+    printf("test_thermal_trend_calc\n");
+    EXPECT(asb_smart_thermal_trend_bump_calc(40, 12000) == 0, "cool device → no trend bump");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 0) == 0, "flat temp → no bump");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, -6000) == 0, "cooling → no bump");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 3000) == 0, "slope at min threshold → 0");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 7500) == 60, "mid slope → 60");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 12000) == 120, "max slope → 120");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 50000) == 120, "slope clamps at 120");
+    EXPECT(asb_smart_thermal_trend_bump_calc(45, 12000) == 120, "45°C boundary engages");
+    EXPECT(asb_smart_thermal_trend_bump_calc(44, 12000) == 0, "44°C below boundary");
+}
+
+static void test_thermal_trend_state(void) {
+    printf("test_thermal_trend_state\n");
+    g_smart_trend_prev_ts = 0;
+    g_smart_trend_slope_mc_min = 0;
+    time_t t0 = 1000000;
+
+    asb_smart_runtime_t rt = {0};
+    rt.alpha_battery_x1000 = 300;
+
+    /* First sample seeds the window — no bump */
+    asb_smart_apply_thermal_trend(48, t0, &rt);
+    EXPECT(rt.thermal_trend_bump == 0, "seed sample → no bump");
+    EXPECT(rt.alpha_battery_x1000 == 300, "seed sample → alpha untouched");
+
+    /* +3°C over 30s = 6000 m°C/min raw, EWMA (0+6000)/2 = 3000 → still ≤ min */
+    asb_smart_apply_thermal_trend(51, t0 + 30, &rt);
+    EXPECT(rt.thermal_trend_bump == 0, "first window EWMA at threshold → no bump");
+
+    /* Another +3°C/30s: EWMA (3000+6000)/2 = 4500 → bump = 120*1500/9000 = 20 */
+    asb_smart_apply_thermal_trend(54, t0 + 60, &rt);
+    EXPECT(rt.thermal_trend_bump == 20, "sustained ramp → bump 20");
+    EXPECT(rt.alpha_battery_x1000 == 320, "bump raises alpha");
+
+    /* Cooling window pulls EWMA back down */
+    asb_smart_apply_thermal_trend(50, t0 + 90, &rt);
+    EXPECT(rt.thermal_trend_bump == 0, "cooling window decays trend");
+
+    /* Veto active → trend never stacks on top */
+    g_smart_trend_prev_ts = 0;
+    g_smart_trend_slope_mc_min = 9000;
+    g_smart_trend_prev_c = 55;
+    asb_smart_runtime_t rt2 = {0};
+    rt2.alpha_battery_x1000 = 700;
+    rt2.thermal_veto = 1;
+    asb_smart_apply_thermal_trend(55, t0, &rt2);
+    asb_smart_apply_thermal_trend(58, t0 + 30, &rt2);
+    EXPECT(rt2.thermal_trend_bump == 0, "veto active → trend skipped");
+    EXPECT(rt2.alpha_battery_x1000 == 700, "veto active → alpha untouched by trend");
+
+    /* Stale gap re-seeds instead of computing a slope across deep sleep */
+    g_smart_trend_prev_ts = 0;
+    g_smart_trend_slope_mc_min = 0;
+    asb_smart_runtime_t rt3 = {0};
+    rt3.alpha_battery_x1000 = 300;
+    asb_smart_apply_thermal_trend(40, t0, &rt3);
+    asb_smart_apply_thermal_trend(55, t0 + 600, &rt3);
+    EXPECT(rt3.thermal_trend_bump == 0, "stale gap → re-seed, no bump");
+    EXPECT(g_smart_trend_slope_mc_min == 0, "stale gap → slope reset");
+
+    /* Invalid temp resets state */
+    asb_smart_apply_thermal_trend(0, t0 + 630, &rt3);
+    EXPECT(g_smart_trend_prev_ts == 0, "invalid temp → state reset");
+}
+
+static void test_low_battery_override(void) {
+    printf("test_low_battery_override\n");
+
+    /* Above engage threshold → no override */
+    g_smart_lowbat_engaged = 0;
+    asb_smart_runtime_t rt = {0};
+    rt.alpha_battery_x1000 = 300;
+    asb_smart_apply_low_battery_override(25, 0, &rt);
+    EXPECT(rt.low_battery_override == 0, "25% → no override");
+    EXPECT(rt.alpha_battery_x1000 == 300, "25% → alpha untouched");
+
+    /* At 20% discharging → engages, alpha ≥ 800 */
+    asb_smart_apply_low_battery_override(20, 0, &rt);
+    EXPECT(rt.low_battery_override == 1, "20% discharging → override");
+    EXPECT(rt.alpha_battery_x1000 == 800, "20% → alpha forced to 800");
+
+    /* Hysteresis: recovery to 30% keeps it engaged */
+    rt.alpha_battery_x1000 = 300;
+    asb_smart_apply_low_battery_override(30, 0, &rt);
+    EXPECT(rt.low_battery_override == 1, "30% after engage → still engaged");
+    EXPECT(rt.alpha_battery_x1000 == 800, "hysteresis keeps 800 floor");
+
+    /* Restore threshold releases */
+    rt.alpha_battery_x1000 = 300;
+    asb_smart_apply_low_battery_override(40, 0, &rt);
+    EXPECT(rt.low_battery_override == 0, "40% → released");
+    EXPECT(rt.alpha_battery_x1000 == 300, "released → alpha untouched");
+
+    /* Critical tier: ≤10% → alpha ≥ 900, tighter interactive */
+    g_smart_lowbat_engaged = 0;
+    asb_smart_runtime_t rt2 = {0};
+    rt2.alpha_battery_x1000 = 300;
+    rt2.interactive_bonus_x1000 = 100;
+    asb_smart_apply_low_battery_override(8, 0, &rt2);
+    EXPECT(rt2.low_battery_override == 1, "8% → override");
+    EXPECT(rt2.alpha_battery_x1000 == 900, "8% → critical alpha 900");
+    EXPECT(rt2.interactive_bonus_x1000 == 20, "critical → interactive ≤ 20");
+
+    /* Charging releases immediately even at low % */
+    asb_smart_runtime_t rt3 = {0};
+    rt3.alpha_battery_x1000 = 300;
+    asb_smart_apply_low_battery_override(8, 1, &rt3);
+    EXPECT(rt3.low_battery_override == 0, "charging → released");
+
+    /* Engaging requires discharging */
+    g_smart_lowbat_engaged = 0;
+    asb_smart_runtime_t rt4 = {0};
+    rt4.alpha_battery_x1000 = 300;
+    asb_smart_apply_low_battery_override(15, 1, &rt4);
+    EXPECT(rt4.low_battery_override == 0, "15% on charger → no engage");
+
+    g_smart_lowbat_engaged = 0;
+}
+
 static void test_blend_values(void) {
     printf("test_blend_values\n");
     /* Battery CPU caps lower than balanced */
@@ -567,6 +688,9 @@ int main(void) {
 
     test_night_override();
     test_thermal_veto();
+    test_thermal_trend_calc();
+    test_thermal_trend_state();
+    test_low_battery_override();
 
     test_blend_values();
     test_interactive_bonus();
