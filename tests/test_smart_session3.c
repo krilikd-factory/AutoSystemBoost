@@ -342,15 +342,115 @@ static void test_thermal_veto(void) {
 
 static void test_thermal_trend_calc(void) {
     printf("test_thermal_trend_calc\n");
-    EXPECT(asb_smart_thermal_trend_bump_calc(40, 12000) == 0, "cool device → no trend bump");
-    EXPECT(asb_smart_thermal_trend_bump_calc(50, 0) == 0, "flat temp → no bump");
-    EXPECT(asb_smart_thermal_trend_bump_calc(50, -6000) == 0, "cooling → no bump");
-    EXPECT(asb_smart_thermal_trend_bump_calc(50, 3000) == 0, "slope at min threshold → 0");
-    EXPECT(asb_smart_thermal_trend_bump_calc(50, 7500) == 60, "mid slope → 60");
-    EXPECT(asb_smart_thermal_trend_bump_calc(50, 12000) == 120, "max slope → 120");
-    EXPECT(asb_smart_thermal_trend_bump_calc(50, 50000) == 120, "slope clamps at 120");
-    EXPECT(asb_smart_thermal_trend_bump_calc(45, 12000) == 120, "45°C boundary engages");
-    EXPECT(asb_smart_thermal_trend_bump_calc(44, 12000) == 0, "44°C below boundary");
+    EXPECT(asb_smart_thermal_trend_bump_calc(40, 12000, 0) == 0, "cool device → no trend bump");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 0, 0) == 0, "flat temp → no bump");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, -6000, 0) == 0, "cooling → no bump");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 3000, 0) == 0, "slope at min threshold → 0");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 7500, 0) == 60, "mid slope → 60");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 12000, 0) == 120, "max slope → 120");
+    EXPECT(asb_smart_thermal_trend_bump_calc(50, 50000, 0) == 120, "slope clamps at 120");
+    EXPECT(asb_smart_thermal_trend_bump_calc(45, 12000, 0) == 120, "45°C boundary engages");
+    EXPECT(asb_smart_thermal_trend_bump_calc(44, 12000, 0) == 0, "44°C below boundary");
+    EXPECT(asb_smart_thermal_trend_bump_calc(42, 12000, 1) == 120, "hot app → engages from 40°C");
+    EXPECT(asb_smart_thermal_trend_bump_calc(39, 12000, 1) == 0, "hot app → 39°C still cool");
+    EXPECT(asb_smart_thermal_trend_bump_calc(45, 2500, 1) > 0, "hot app → lower slope threshold");
+    EXPECT(asb_smart_thermal_trend_bump_calc(45, 2500, 0) == 0, "normal app → 2500 below threshold");
+    EXPECT(asb_smart_thermal_trend_bump_calc(45, 2000, 1) == 0, "hot app → 2000 at threshold");
+}
+
+static void test_appheat_table(void) {
+    printf("test_appheat_table\n");
+    memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
+    time_t t0 = 1000000;
+
+    EXPECT(asb_smart_appheat_score(0x1111ULL, t0) == 0, "unknown app → score 0");
+    EXPECT(asb_smart_appheat_score(0, t0) == 0, "zero hash → score 0");
+
+    asb_smart_appheat_bump(0x1111ULL, t0);
+    EXPECT(asb_smart_appheat_score(0x1111ULL, t0) == 2, "one bump → score 2");
+
+    for (int i = 0; i < 4; i++) asb_smart_appheat_bump(0x1111ULL, t0);
+    EXPECT(asb_smart_appheat_score(0x1111ULL, t0) == 10, "five bumps → hot threshold");
+
+    for (int i = 0; i < 200; i++) asb_smart_appheat_bump(0x1111ULL, t0);
+    EXPECT(asb_smart_appheat_score(0x1111ULL, t0) == ASB_SMART_APPHEAT_MAX, "score caps at max");
+
+    asb_smart_appheat_bump(0, t0);
+    EXPECT(asb_smart_appheat_find(0) == NULL, "zero hash never stored");
+
+    EXPECT(asb_smart_appheat_score(0x1111ULL, t0 + 86400L * 20) ==
+           ASB_SMART_APPHEAT_MAX - 20, "decays 1 per day");
+
+    memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
+    for (int i = 0; i < ASB_SMART_APPHEAT_N; i++) {
+        asb_smart_appheat_bump(0x2000ULL + i, t0 + i);
+    }
+    asb_smart_appheat_bump(0x9999ULL, t0 + 100);
+    EXPECT(asb_smart_appheat_find(0x9999ULL) != NULL, "LRU insert when full");
+    EXPECT(asb_smart_appheat_find(0x2000ULL) == NULL, "oldest entry evicted");
+    EXPECT(asb_smart_appheat_find(0x2001ULL) != NULL, "newer entries kept");
+
+    memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
+}
+
+static void test_bucket_learn_drain_loop(void) {
+    printf("test_bucket_learn_drain_loop\n");
+    asb_smart_bucket_t b = {0};
+    b.alpha_battery_x1000 = 500;
+    asb_smart_session_input_t s = {0};
+    s.dur_s = 1800;
+    s.max_temp_c = 58;
+    s.trust = ASB_TRUST_CLEAN;
+    s.drain_pctph_x10 = 80;
+    s.drain_on_sec = 1800;
+
+    asb_smart_bucket_update_from_session(&b, &s, time(NULL));
+    EXPECT(b.avg_drain_pctph_x10 == 80, "first sample seeds drain EWMA");
+    int alpha_after_seed = b.alpha_battery_x1000;
+
+    s.drain_pctph_x10 = 160;
+    asb_smart_bucket_update_from_session(&b, &s, time(NULL));
+    EXPECT(b.alpha_battery_x1000 > alpha_after_seed, "drain spike → alpha leans battery");
+    EXPECT(b.avg_drain_pctph_x10 == 100, "EWMA blends spike (80*3+160)/4");
+
+    asb_smart_bucket_t b2 = {0};
+    b2.alpha_battery_x1000 = 600;
+    b2.avg_drain_pctph_x10 = 100;
+    asb_smart_session_input_t s2 = {0};
+    s2.dur_s = 1800;
+    s2.max_temp_c = 60;
+    s2.trust = ASB_TRUST_CLEAN;
+    s2.drain_pctph_x10 = 60;
+    s2.drain_on_sec = 1800;
+    asb_smart_bucket_update_from_session(&b2, &s2, time(NULL));
+    EXPECT(b2.alpha_battery_x1000 < 600, "low drain + clean → alpha drifts back");
+    EXPECT(b2.avg_drain_pctph_x10 == 90, "EWMA tracks down (100*3+60)/4");
+
+    asb_smart_bucket_t b3 = {0};
+    b3.alpha_battery_x1000 = 500;
+    b3.avg_drain_pctph_x10 = 100;
+    asb_smart_session_input_t s3 = {0};
+    s3.dur_s = 1800;
+    s3.max_temp_c = 58;
+    s3.trust = ASB_TRUST_CLEAN;
+    s3.drain_pctph_x10 = 300;
+    s3.drain_on_sec = 120;
+    asb_smart_bucket_update_from_session(&b3, &s3, time(NULL));
+    EXPECT(b3.avg_drain_pctph_x10 == 100, "short window → sample ignored");
+    EXPECT(b3.alpha_battery_x1000 == 500, "short window → no feedback");
+
+    asb_smart_bucket_t b4 = {0};
+    b4.alpha_battery_x1000 = 500;
+    b4.avg_drain_pctph_x10 = 100;
+    asb_smart_session_input_t s4 = {0};
+    s4.dur_s = 1800;
+    s4.max_temp_c = 72;
+    s4.trust = ASB_TRUST_CLEAN;
+    s4.was_thermal_hit = 1;
+    s4.drain_pctph_x10 = 200;
+    s4.drain_on_sec = 1800;
+    asb_smart_bucket_update_from_session(&b4, &s4, time(NULL));
+    EXPECT(b4.avg_drain_pctph_x10 == 125, "thermal session still updates EWMA");
 }
 
 static void test_thermal_trend_state(void) {
@@ -363,21 +463,21 @@ static void test_thermal_trend_state(void) {
     rt.alpha_battery_x1000 = 300;
 
     /* First sample seeds the window — no bump */
-    asb_smart_apply_thermal_trend(48, t0, &rt);
+    asb_smart_apply_thermal_trend(48, t0, 0, &rt);
     EXPECT(rt.thermal_trend_bump == 0, "seed sample → no bump");
     EXPECT(rt.alpha_battery_x1000 == 300, "seed sample → alpha untouched");
 
     /* +3°C over 30s = 6000 m°C/min raw, EWMA (0+6000)/2 = 3000 → still ≤ min */
-    asb_smart_apply_thermal_trend(51, t0 + 30, &rt);
+    asb_smart_apply_thermal_trend(51, t0 + 30, 0, &rt);
     EXPECT(rt.thermal_trend_bump == 0, "first window EWMA at threshold → no bump");
 
     /* Another +3°C/30s: EWMA (3000+6000)/2 = 4500 → bump = 120*1500/9000 = 20 */
-    asb_smart_apply_thermal_trend(54, t0 + 60, &rt);
+    asb_smart_apply_thermal_trend(54, t0 + 60, 0, &rt);
     EXPECT(rt.thermal_trend_bump == 20, "sustained ramp → bump 20");
     EXPECT(rt.alpha_battery_x1000 == 320, "bump raises alpha");
 
     /* Cooling window pulls EWMA back down */
-    asb_smart_apply_thermal_trend(50, t0 + 90, &rt);
+    asb_smart_apply_thermal_trend(50, t0 + 90, 0, &rt);
     EXPECT(rt.thermal_trend_bump == 0, "cooling window decays trend");
 
     /* Veto active → trend never stacks on top */
@@ -387,8 +487,8 @@ static void test_thermal_trend_state(void) {
     asb_smart_runtime_t rt2 = {0};
     rt2.alpha_battery_x1000 = 700;
     rt2.thermal_veto = 1;
-    asb_smart_apply_thermal_trend(55, t0, &rt2);
-    asb_smart_apply_thermal_trend(58, t0 + 30, &rt2);
+    asb_smart_apply_thermal_trend(55, t0, 0, &rt2);
+    asb_smart_apply_thermal_trend(58, t0 + 30, 0, &rt2);
     EXPECT(rt2.thermal_trend_bump == 0, "veto active → trend skipped");
     EXPECT(rt2.alpha_battery_x1000 == 700, "veto active → alpha untouched by trend");
 
@@ -397,13 +497,13 @@ static void test_thermal_trend_state(void) {
     g_smart_trend_slope_mc_min = 0;
     asb_smart_runtime_t rt3 = {0};
     rt3.alpha_battery_x1000 = 300;
-    asb_smart_apply_thermal_trend(40, t0, &rt3);
-    asb_smart_apply_thermal_trend(55, t0 + 600, &rt3);
+    asb_smart_apply_thermal_trend(40, t0, 0, &rt3);
+    asb_smart_apply_thermal_trend(55, t0 + 600, 0, &rt3);
     EXPECT(rt3.thermal_trend_bump == 0, "stale gap → re-seed, no bump");
     EXPECT(g_smart_trend_slope_mc_min == 0, "stale gap → slope reset");
 
     /* Invalid temp resets state */
-    asb_smart_apply_thermal_trend(0, t0 + 630, &rt3);
+    asb_smart_apply_thermal_trend(0, t0 + 630, 0, &rt3);
     EXPECT(g_smart_trend_prev_ts == 0, "invalid temp → state reset");
 }
 
@@ -528,7 +628,8 @@ static void test_bucket_learn_hot(void) {
     asb_smart_session_input_t s = {0};
     s.dur_s = 1800;          /* 30 min */
     s.max_temp_c = 82;       /* very hot */
-    s.drain_mah_per_hour = 700;  /* drainy */
+    s.drain_pctph_x10 = 2000;
+    s.drain_on_sec = 1800;
     s.trust = ASB_TRUST_CLEAN;
     s.sustained_pct = 40;
     s.was_heavy = 1;
@@ -549,7 +650,8 @@ static void test_bucket_learn_cool(void) {
     asb_smart_session_input_t s = {0};
     s.dur_s = 1800;
     s.max_temp_c = 48;       /* cool */
-    s.drain_mah_per_hour = 200;  /* low drain */
+    s.drain_pctph_x10 = 0;
+    s.drain_on_sec = 0;
     s.trust = ASB_TRUST_CLEAN;
 
     int alpha_before = b.alpha_battery_x1000;
@@ -567,7 +669,8 @@ static void test_bucket_learn_thermal_hit(void) {
     asb_smart_session_input_t s = {0};
     s.dur_s = 1800;
     s.max_temp_c = 85;
-    s.drain_mah_per_hour = 800;
+    s.drain_pctph_x10 = 2200;
+    s.drain_on_sec = 1800;
     s.trust = ASB_TRUST_CLEAN;
     s.was_thermal_hit = 1;
     s.sustained_pct = 50;
@@ -585,7 +688,8 @@ static void test_bucket_learn_clamping(void) {
     asb_smart_session_input_t s = {0};
     s.dur_s = 5400;
     s.max_temp_c = 90;
-    s.drain_mah_per_hour = 900;
+    s.drain_pctph_x10 = 2500;
+    s.drain_on_sec = 1800;
     s.trust = ASB_TRUST_CLEAN;
     s.was_thermal_hit = 1;
     s.sustained_pct = 70;
@@ -603,7 +707,8 @@ static void test_bucket_learn_sleep_quality(void) {
     asb_smart_session_input_t s = {0};
     s.dur_s = 3600 * 6;       /* 6 hours */
     s.max_temp_c = 30;
-    s.drain_mah_per_hour = 50;  /* low drain */
+    s.drain_pctph_x10 = 0;
+    s.drain_on_sec = 0;
     s.trust = ASB_TRUST_CLEAN;
     s.screen_on_pct = 0;
     s.idle_q_x10 = 80;        /* good idle */
@@ -690,6 +795,8 @@ int main(void) {
     test_thermal_veto();
     test_thermal_trend_calc();
     test_thermal_trend_state();
+    test_appheat_table();
+    test_bucket_learn_drain_loop();
     test_low_battery_override();
 
     test_blend_values();
