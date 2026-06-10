@@ -65,6 +65,8 @@ typedef struct {
     int thermal_veto;
     int low_battery_override;
     int thermal_trend_bump;
+    int budget_severity;
+    int budget_pred_h_x10;
 
     int conf_x1000;
     int alpha_battery_x1000;
@@ -1099,7 +1101,7 @@ static int asb_smart_thermal_trend_bump_calc(int cpu_max_c, int slope_mc_per_min
 typedef struct {
     uint64_t hash;
     uint16_t score;
-    uint16_t reserved;
+    uint16_t drain_score;
     uint32_t last_ts;
 } asb_smart_appheat_entry_t;
 
@@ -1123,12 +1125,21 @@ static asb_smart_appheat_entry_t *asb_smart_appheat_find(uint64_t hash) {
 }
 
 static void asb_smart_appheat_decay(asb_smart_appheat_entry_t *e, time_t now) {
-    if (!e || e->score == 0 || e->last_ts == 0) return;
+    if (!e || e->last_ts == 0) return;
     long days = ((long)now - (long)e->last_ts) / 86400L;
     if (days <= 0) return;
     long dec = days * ASB_SMART_APPHEAT_DECAY_PER_DAY;
     if (dec >= e->score) e->score = 0;
     else e->score = (uint16_t)(e->score - dec);
+    if (dec >= e->drain_score) e->drain_score = 0;
+    else e->drain_score = (uint16_t)(e->drain_score - dec);
+}
+
+static int asb_smart_appheat_drain(uint64_t hash, time_t now) {
+    asb_smart_appheat_entry_t *e = asb_smart_appheat_find(hash);
+    if (!e) return 0;
+    asb_smart_appheat_decay(e, now);
+    return (int)e->drain_score;
 }
 
 static int asb_smart_appheat_score(uint64_t hash, time_t now) {
@@ -1157,6 +1168,23 @@ static void asb_smart_appheat_bump(uint64_t hash, time_t now) {
     int ns = (int)e->score + ASB_SMART_APPHEAT_BUMP;
     if (ns > ASB_SMART_APPHEAT_MAX) ns = ASB_SMART_APPHEAT_MAX;
     e->score = (uint16_t)ns;
+    e->last_ts = (uint32_t)now;
+    g_smart_appheat_dirty = 1;
+}
+
+static void asb_smart_appheat_drain_bump(uint64_t hash, time_t now) {
+    if (hash == 0) return;
+    asb_smart_appheat_entry_t *e = asb_smart_appheat_find(hash);
+    if (!e) {
+        asb_smart_appheat_bump(hash, now);
+        e = asb_smart_appheat_find(hash);
+        if (!e) return;
+        e->score = 0;
+    }
+    asb_smart_appheat_decay(e, now);
+    int ns = (int)e->drain_score + ASB_SMART_APPHEAT_DRAIN_BUMP;
+    if (ns > ASB_SMART_APPHEAT_MAX) ns = ASB_SMART_APPHEAT_MAX;
+    e->drain_score = (uint16_t)ns;
     e->last_ts = (uint32_t)now;
     g_smart_appheat_dirty = 1;
 }
@@ -1194,6 +1222,85 @@ static void asb_smart_appheat_save(void) {
 static int g_smart_trend_prev_c = 0;
 static time_t g_smart_trend_prev_ts = 0;
 static int g_smart_trend_slope_mc_min = 0;
+
+static int g_smart_budget_sev = 0;
+static time_t g_smart_budget_since = 0;
+
+static void asb_smart_apply_energy_budget(
+        int battery_pct,
+        int charging,
+        int drain_ewma_x10,
+        time_t now,
+        asb_smart_runtime_t *rt)
+{
+    if (!rt) return;
+    rt->budget_severity = 0;
+    rt->budget_pred_h_x10 = -1;
+
+    if (charging || battery_pct <= 0 || battery_pct > 100 || drain_ewma_x10 <= 0) {
+        g_smart_budget_sev = 0;
+        g_smart_budget_since = now;
+        return;
+    }
+
+    long pred = ((long)battery_pct * 100L) / drain_ewma_x10;
+    if (pred > 999) pred = 999;
+    rt->budget_pred_h_x10 = (int)pred;
+
+    int want = 0;
+    if (battery_pct <= ASB_SMART_BUDGET_MAX_PCT) {
+        if (pred < ASB_SMART_BUDGET_EMERG_H_X10) want = 2;
+        else if (pred < ASB_SMART_BUDGET_WARN_H_X10) want = 1;
+    }
+
+    if (want > g_smart_budget_sev) {
+        g_smart_budget_sev = want;
+        g_smart_budget_since = now;
+    } else if (want < g_smart_budget_sev) {
+        if ((long)(now - g_smart_budget_since) >= ASB_SMART_BUDGET_DWELL_S) {
+            g_smart_budget_sev = want;
+            g_smart_budget_since = now;
+        }
+    }
+
+    rt->budget_severity = g_smart_budget_sev;
+    if (g_smart_budget_sev == 2) {
+        if (rt->alpha_battery_x1000 < ASB_SMART_BUDGET_EMERG_ALPHA_X1000)
+            rt->alpha_battery_x1000 = ASB_SMART_BUDGET_EMERG_ALPHA_X1000;
+        if (rt->net_conservative_x1000 < 500) rt->net_conservative_x1000 = 500;
+    } else if (g_smart_budget_sev == 1) {
+        if (rt->alpha_battery_x1000 < ASB_SMART_BUDGET_WARN_ALPHA_X1000)
+            rt->alpha_battery_x1000 = ASB_SMART_BUDGET_WARN_ALPHA_X1000;
+        if (rt->net_conservative_x1000 < 400) rt->net_conservative_x1000 = 400;
+    }
+}
+
+static int asb_smart_session_quality(
+        int drain_pctph_x10,
+        int drain_valid,
+        int max_temp_c,
+        int thermal_entries,
+        int recovery_count)
+{
+    int heat;
+    if (max_temp_c <= ASB_SMART_QUALITY_HEAT_GOOD_C) heat = 100;
+    else if (max_temp_c >= ASB_SMART_QUALITY_HEAT_BAD_C) heat = 0;
+    else heat = ((ASB_SMART_QUALITY_HEAT_BAD_C - max_temp_c) * 100) /
+                (ASB_SMART_QUALITY_HEAT_BAD_C - ASB_SMART_QUALITY_HEAT_GOOD_C);
+
+    int stab = 100 - 20 * thermal_entries - 10 * recovery_count;
+    if (stab < 0) stab = 0;
+
+    if (drain_valid) {
+        int bat;
+        if (drain_pctph_x10 <= ASB_SMART_QUALITY_BAT_GOOD_X10) bat = 100;
+        else if (drain_pctph_x10 >= ASB_SMART_QUALITY_BAT_BAD_X10) bat = 0;
+        else bat = ((ASB_SMART_QUALITY_BAT_BAD_X10 - drain_pctph_x10) * 100) /
+                   (ASB_SMART_QUALITY_BAT_BAD_X10 - ASB_SMART_QUALITY_BAT_GOOD_X10);
+        return (35 * bat + 35 * heat + 30 * stab) / 100;
+    }
+    return (55 * heat + 45 * stab) / 100;
+}
 
 static void asb_smart_apply_thermal_trend(
         int cpu_max_c,

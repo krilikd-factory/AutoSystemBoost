@@ -71,6 +71,14 @@ static time_t g_smart_drain_prev_ts  = 0;
 static int    g_smart_drain_prev_pct = -1;
 static long   g_smart_drain_on_sec   = 0;
 static long   g_smart_drain_drop_x100 = 0;
+static int    g_smart_drain_rate_ewma_x10 = 0;
+static int    g_smart_last_quality = -1;
+static int    g_smart_quality_ewma = -1;
+static int    g_anom_code = 0;
+static int    g_anom_count_1h = 0;
+static time_t g_anom_window_start = 0;
+static long   g_anom_pkg_total = 0;
+static long   g_anom_pkg_ok = 0;
 
 static int g_smart_sessions_total    = 0;
 static int g_smart_sessions_day      = 0;
@@ -879,6 +887,16 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "smart_drain_window_s=%ld\nsmart_drain_pctph_x10=%ld\n"
                    "smart_app_hot=%d\nsmart_appheat_n=%d\n",
                 g_smart_drain_on_sec, live_x10, hot, known);
+        fprintf(f, "smart_budget_sev=%d\nsmart_budget_pred_h_x10=%d\n"
+                   "smart_drain_ewma_x10=%d\n"
+                   "smart_quality_last=%d\nsmart_quality_avg=%d\n"
+                   "smart_app_drain=%d\n"
+                   "anomaly_code=%d\nanomaly_count_1h=%d\n",
+                g_smart_rt.budget_severity, g_smart_rt.budget_pred_h_x10,
+                g_smart_drain_rate_ewma_x10,
+                g_smart_last_quality, g_smart_quality_ewma,
+                asb_smart_appheat_drain(g_smart_rt.app_hash, time(NULL)),
+                g_anom_code, g_anom_count_1h);
     }
     /* Debug build only: include plaintext pkg if cached */
 #if ASB_DEBUG_BUILD
@@ -1094,7 +1112,9 @@ static void write_learner_state_json(const asb_fsm_t *fsm) {
         "    \"last_bucket_id\": %d,\n"
         "    \"last_daypart\": %d,\n"
         "    \"last_confidence\": %d,\n"
-        "    \"last_update_ts\": %ld\n"
+        "    \"last_update_ts\": %ld,\n"
+        "    \"last_quality\": %d,\n"
+        "    \"avg_quality\": %d\n"
         "  },\n"
         "  \"self_tuned\": {\n"
         "    \"bat_fast_idle_s\": %d,\n"
@@ -1118,6 +1138,7 @@ static void write_learner_state_json(const asb_fsm_t *fsm) {
         g_smart_sessions_gaming, g_smart_bucket_updates,
         g_smart_last_bucket_id, g_smart_last_daypart, g_smart_last_confidence,
         (long)g_smart_last_update_ts,
+        g_smart_last_quality, g_smart_quality_ewma,
         g_asb_cfg.bat_fast_idle_s,
         g_asb_cfg.bat_heavy_load_enter,
         g_asb_cfg.bat_moderate_load_enter,
@@ -2120,6 +2141,27 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             if (r > 6000) r = 6000;
             sin.drain_pctph_x10 = (int)r;
         }
+        if (sin.drain_pctph_x10 > 0) {
+            if (g_smart_drain_rate_ewma_x10 <= 0)
+                g_smart_drain_rate_ewma_x10 = sin.drain_pctph_x10;
+            else
+                g_smart_drain_rate_ewma_x10 =
+                    (g_smart_drain_rate_ewma_x10 * 3 + sin.drain_pctph_x10) / 4;
+            if (sin.drain_pctph_x10 >= ASB_SMART_APPHEAT_DRAIN_SAMPLE_X10 &&
+                g_smart_rt.app_hash_session_top != 0) {
+                asb_smart_appheat_drain_bump(g_smart_rt.app_hash_session_top, time(NULL));
+            }
+        }
+        {
+            int _qv = (sin.drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC);
+            int _q = asb_smart_session_quality(sin.drain_pctph_x10, _qv,
+                                               fsm->ses_max_temp,
+                                               fsm->ses_thermal_entries,
+                                               fsm->ses_recovery_count);
+            g_smart_last_quality = _q;
+            if (g_smart_quality_ewma < 0) g_smart_quality_ewma = _q;
+            else g_smart_quality_ewma = (g_smart_quality_ewma * 3 + _q) / 4;
+        }
         g_smart_drain_on_sec = 0;
         g_smart_drain_drop_x100 = 0;
         /* Estimate screen_on_pct from bat_wake counters (rough approximation) */
@@ -2723,6 +2765,8 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                                           screen_off_secs, &g_smart_rt);
 
     asb_smart_apply_low_battery_override(battery_pct, charging, &g_smart_rt);
+    asb_smart_apply_energy_budget(battery_pct, charging,
+                                  g_smart_drain_rate_ewma_x10, now, &g_smart_rt);
 
     if (battery_pct >= 1 && battery_pct <= 100) {
         if (screen_on && !charging && g_smart_drain_prev_ts > 0 &&
@@ -2738,6 +2782,10 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         }
         g_smart_drain_prev_ts = now;
         g_smart_drain_prev_pct = battery_pct;
+        if (screen_on) {
+            g_anom_pkg_total++;
+            if (g_pkg_detect_ok) g_anom_pkg_ok++;
+        }
     } else {
         g_smart_drain_prev_ts = 0;
         g_smart_drain_prev_pct = -1;
@@ -4115,6 +4163,42 @@ int main(int argc, char **argv) {
                     int _rc2 = system("sh /data/adb/modules/AutoSystemBoost/apply_profile.sh smart auto >/dev/null 2>&1 &");
                     (void)_rc2;
                 }
+            }
+
+            {
+                time_t _an_now = time(NULL);
+                if (g_anom_window_start == 0 ||
+                    (long)(_an_now - g_anom_window_start) >= 3600) {
+                    g_anom_window_start = _an_now;
+                    g_anom_count_1h = 0;
+                    g_anom_pkg_total = 0;
+                    g_anom_pkg_ok = 0;
+                }
+                int _code = ASB_ANOM_NONE;
+                long _live_x10 = 0;
+                if (g_smart_drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC &&
+                    g_smart_drain_drop_x100 > 0) {
+                    _live_x10 = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
+                }
+                if (_live_x10 >= ASB_ANOM_DRAIN_SPIKE_X10) {
+                    _code = ASB_ANOM_DRAIN_SPIKE;
+                } else if (g_v44_clamp_1h >= ASB_ANOM_VENDOR_WAR_CLAMPS_1H) {
+                    _code = ASB_ANOM_VENDOR_WAR;
+                } else if (fsm.profile_idx == PROFILE_BATTERY &&
+                           !metrics.bat.charging &&
+                           metrics.bat.capacity_pct >=
+                               g_asb_cfg.auto_battery_high_pct + 10 &&
+                           asb_smart_flag_read() == 1) {
+                    _code = ASB_ANOM_STUCK_BATTERY;
+                } else if (g_anom_pkg_total >= 50 &&
+                           g_anom_pkg_ok * 10 < g_anom_pkg_total) {
+                    _code = ASB_ANOM_PKG_MISSING;
+                }
+                if (_code != ASB_ANOM_NONE && g_anom_code == ASB_ANOM_NONE) {
+                    g_anom_count_1h++;
+                    asb_log("anomaly: code=%d count_1h=%d", _code, g_anom_count_1h);
+                }
+                g_anom_code = _code;
             }
 
             /* log thermal CPU source flips (primary <-> fallback)
