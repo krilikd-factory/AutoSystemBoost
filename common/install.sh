@@ -422,7 +422,7 @@ asb_prune_module() {
   local prop="$MODPATH/system.prop"
   local pfd="$MODPATH/post-fs-data.sh"
 
-  for c in AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM; do
+  for c in AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM; do
     asb_drop_block_if_off "$c" "$svc"
     asb_drop_block_if_off "$c" "$prop"
     asb_drop_block_if_off "$c" "$pfd"
@@ -512,7 +512,9 @@ asb_prune_module() {
 
 ASB_AUDIO=true
 ASB_BT=true
+ASB_NFC=true
 ASB_CAMERA=true
+ASB_MEDIA=true
 ASB_CPU=true
 ASB_VM=true
 ASB_NET=true
@@ -563,7 +565,7 @@ asb_save_user_config() {
     echo "# Used on next install/update to skip the 15 category prompts"
     echo "saved_at=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo unknown)"
     echo "saved_from_version=$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
-    for c in AUDIO BT CAMERA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM; do
+    for c in AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM; do
       eval "_v=\$ASB_${c}"
       case "$_v" in
         true) printf '%s=1\n' "$c" ;;
@@ -640,7 +642,9 @@ fi
 cat > "$MODPATH/features.conf" <<EOF
 AUDIO=$([ "$ASB_AUDIO" = "true" ] && echo 1 || echo 0)
 BT=$([ "$ASB_BT" = "true" ] && echo 1 || echo 0)
+NFC=$([ "$ASB_NFC" = "true" ] && echo 1 || echo 0)
 CAMERA=$([ "$ASB_CAMERA" = "true" ] && echo 1 || echo 0)
+MEDIA=$([ "$ASB_MEDIA" = "true" ] && echo 1 || echo 0)
 CPU=$([ "$ASB_CPU" = "true" ] && echo 1 || echo 0)
 VM=$([ "$ASB_VM" = "true" ] && echo 1 || echo 0)
 NET=$([ "$ASB_NET" = "true" ] && echo 1 || echo 0)
