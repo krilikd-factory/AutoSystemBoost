@@ -105,9 +105,9 @@
         <point>60,-1400</point>
         <point>65,-1050</point>
         <point>70,-500</point>
-        <point>75,300</point>
-    <point>78,450</point>
-        <point>80,600</point>
+        <point>75,-200</point>
+    <point>78,-100</point>
+        <point>80,0</point>
 </reference>
     <reference name="DEFAULT_DEVICE_CATEGORY_HEADSET_VOLUME_CURVE">
         <point>1,-4750</point>
