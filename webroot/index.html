@@ -1577,9 +1577,16 @@ async function pollLive(visible) {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
       if (learnerLabel) learnerLabel.textContent = 'Learner';
       _el('liveLearner').className = 'live-cell-value';
-      const tier = learner.trust_tier || '—';
-      const sessions = (learner.sessions && learner.sessions.battery) || 0;
-      _el('liveLearner').textContent = tier + ' · ' + sessions + ' ses';
+      const sm = learner.smart_sessions;
+      if (profile === 'smart' && sm && sm.total > 0) {
+        const conf = sm.last_confidence || 0;
+        const stier = conf >= 650 ? 'strong' : (conf >= 350 ? 'active' : 'learning');
+        _el('liveLearner').textContent = stier + ' ' + Math.round(conf / 10) + '% · ' + sm.total + ' ses';
+      } else {
+        const tier = learner.trust_tier || '—';
+        const sessions = (learner.sessions && learner.sessions.battery) || 0;
+        _el('liveLearner').textContent = tier + ' · ' + sessions + ' ses';
+      }
     } else {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
       if (learnerLabel) learnerLabel.textContent = 'Learner';
