@@ -430,7 +430,7 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-#define ASB_VERSION "V49"
+#define ASB_VERSION "V50"
 
 static const char *intent_names[] = {"unknown","benchmark","long_game","idle","mixed","sleep_idle","idle_warm"};
 
@@ -3690,6 +3690,21 @@ int main(int argc, char **argv) {
                     if (strcmp(pname, "battery")     == 0) new_idx = PROFILE_BATTERY;
                     if (strcmp(pname, "performance") == 0) new_idx = PROFILE_PERFORMANCE;
                     if (strcmp(pname, "smart")       == 0) new_idx = PROFILE_SMART;
+                    if (!_is_auto) {
+                        FILE *_amf = fopen("/data/adb/asb/auto_switch_marker", "r");
+                        if (_amf) {
+                            char _am[32];
+                            if (fgets(_am, sizeof(_am), _amf)) {
+                                size_t _aml = strlen(_am);
+                                while (_aml > 0 && (_am[_aml-1] == '\n' || _am[_aml-1] == '\r' || _am[_aml-1] == ' ')) {
+                                    _am[--_aml] = '\0';
+                                }
+                                if (strcmp(_am, pname) == 0) _is_auto = 1;
+                            }
+                            fclose(_amf);
+                            remove("/data/adb/asb/auto_switch_marker");
+                        }
+                    }
                     if (new_idx != fsm.profile_idx) {
                         fsm_flush_state_time(&fsm);
                         persistent_stats_save(&fsm);
