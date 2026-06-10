@@ -418,11 +418,11 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
     fsm->auto_battery_reason[sizeof(fsm->auto_battery_reason) - 1] = '\0';
     fsm->auto_battery_since = 0;
     {
-        FILE *_abf = fopen("/dev/.asb/auto_battery_state", "r");
+        FILE *_abf = fopen("/data/adb/asb/auto_battery_state", "r");
         if (_abf) {
             int _act = 0, _ridx = -1;
             if (fscanf(_abf, "%d %d", &_act, &_ridx) == 2) {
-                if (_act == 1 && _ridx >= 0 && _ridx < 3 && _ridx != PROFILE_BATTERY) {
+                if (_act == 1 && _ridx >= 0 && _ridx < ASB_PROFILE_COUNT && _ridx != PROFILE_BATTERY) {
                     fsm->auto_battery_active = 1;
                     fsm->auto_battery_restore_idx = _ridx;
                 }
@@ -437,7 +437,7 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
 }
 
 static inline void fsm_auto_battery_persist(const asb_fsm_t *fsm) {
-    FILE *f = fopen("/dev/.asb/auto_battery_state", "w");
+    FILE *f = fopen("/data/adb/asb/auto_battery_state", "w");
     if (!f) return;
     fprintf(f, "%d %d\n", fsm->auto_battery_active, fsm->auto_battery_restore_idx);
     fclose(f);

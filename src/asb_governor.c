@@ -4099,6 +4099,21 @@ int main(int argc, char **argv) {
                              _pname);
                     int _rc = system(_cmd);
                     (void)_rc;
+                } else if (!fsm.auto_battery_active &&
+                           fsm.profile_idx == PROFILE_BATTERY &&
+                           metrics.bat.capacity_pct >= g_asb_cfg.auto_battery_high_pct &&
+                           _can_act &&
+                           asb_smart_flag_read() == 1) {
+                    fsm.auto_battery_last_action = _now_t;
+                    strncpy(fsm.auto_battery_reason, "smart_recovery", sizeof(fsm.auto_battery_reason) - 1);
+                    fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
+                    fsm.auto_battery_since = time(NULL);
+                    fsm_auto_battery_persist(&fsm);
+                    asb_log("auto_battery: smart recovery restore bat=%d%% (high=%d) -> spawning apply_profile.sh smart auto",
+                            metrics.bat.capacity_pct,
+                            g_asb_cfg.auto_battery_high_pct);
+                    int _rc2 = system("sh /data/adb/modules/AutoSystemBoost/apply_profile.sh smart auto >/dev/null 2>&1 &");
+                    (void)_rc2;
                 }
             }
 
