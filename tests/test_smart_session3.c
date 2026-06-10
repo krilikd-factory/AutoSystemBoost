@@ -507,6 +507,93 @@ static void test_thermal_trend_state(void) {
     EXPECT(g_smart_trend_prev_ts == 0, "invalid temp → state reset");
 }
 
+static void test_energy_budget(void) {
+    printf("test_energy_budget\n");
+    time_t t0 = 1000000;
+
+    g_smart_budget_sev = 0; g_smart_budget_since = 0;
+    asb_smart_runtime_t rt = {0};
+    rt.alpha_battery_x1000 = 400;
+    asb_smart_apply_energy_budget(40, 0, 0, t0, &rt);
+    EXPECT(rt.budget_severity == 0, "no drain history \u2192 budget inactive");
+    EXPECT(rt.budget_pred_h_x10 == -1, "no drain history \u2192 no prediction");
+
+    asb_smart_apply_energy_budget(40, 0, 80, t0, &rt);
+    EXPECT(rt.budget_pred_h_x10 == 50, "40% at 8%/h \u2192 5.0h predicted");
+    EXPECT(rt.budget_severity == 0, "5h left \u2192 no budget pressure");
+    EXPECT(rt.alpha_battery_x1000 == 400, "inactive budget \u2192 alpha untouched");
+
+    asb_smart_apply_energy_budget(30, 0, 100, t0 + 10, &rt);
+    EXPECT(rt.budget_pred_h_x10 == 30, "30% at 10%/h \u2192 3.0h");
+    EXPECT(rt.budget_severity == 1, "3h < 4h target \u2192 warn tier");
+    EXPECT(rt.alpha_battery_x1000 == 600, "warn tier \u2192 alpha floor 600");
+
+    rt.alpha_battery_x1000 = 400;
+    asb_smart_apply_energy_budget(20, 0, 110, t0 + 20, &rt);
+    EXPECT(rt.budget_pred_h_x10 == 18, "20% at 11%/h \u2192 1.8h");
+    EXPECT(rt.budget_severity == 2, "under 2h \u2192 emergency tier");
+    EXPECT(rt.alpha_battery_x1000 == 700, "emergency \u2192 alpha floor 700");
+
+    rt.alpha_battery_x1000 = 400;
+    asb_smart_apply_energy_budget(45, 0, 80, t0 + 30, &rt);
+    EXPECT(rt.budget_severity == 2, "improvement inside dwell \u2192 severity held");
+
+    rt.alpha_battery_x1000 = 400;
+    asb_smart_apply_energy_budget(45, 0, 80, t0 + 30 + 200, &rt);
+    EXPECT(rt.budget_severity == 0, "improvement after dwell \u2192 released");
+    EXPECT(rt.alpha_battery_x1000 == 400, "released \u2192 alpha untouched");
+
+    g_smart_budget_sev = 2; g_smart_budget_since = t0;
+    asb_smart_runtime_t rt2 = {0};
+    rt2.alpha_battery_x1000 = 400;
+    asb_smart_apply_energy_budget(20, 1, 110, t0 + 5, &rt2);
+    EXPECT(rt2.budget_severity == 0, "charging \u2192 budget off immediately");
+
+    g_smart_budget_sev = 0; g_smart_budget_since = 0;
+    asb_smart_runtime_t rt3 = {0};
+    rt3.alpha_battery_x1000 = 400;
+    asb_smart_apply_energy_budget(80, 0, 300, t0, &rt3);
+    EXPECT(rt3.budget_pred_h_x10 == 26, "80% at 30%/h \u2192 2.7h predicted");
+    EXPECT(rt3.budget_severity == 0, "above 50% \u2192 budget never engages");
+
+    g_smart_budget_sev = 0; g_smart_budget_since = 0;
+}
+
+static void test_session_quality(void) {
+    printf("test_session_quality\n");
+    EXPECT(asb_smart_session_quality(40, 1, 40, 0, 0) == 100, "cool clean cheap \u2192 100");
+    EXPECT(asb_smart_session_quality(250, 1, 75, 5, 5) == 0, "hot drainy unstable \u2192 0");
+    EXPECT(asb_smart_session_quality(150, 1, 60, 0, 0) == 65, "mid drain mid heat \u2192 65");
+    EXPECT(asb_smart_session_quality(0, 0, 40, 0, 0) == 100, "no drain data \u2192 heat+stab only");
+    EXPECT(asb_smart_session_quality(0, 0, 60, 1, 0) == 63, "no drain, warm, one thermal \u2192 63");
+    EXPECT(asb_smart_session_quality(40, 1, 40, 10, 0) == 70, "stab clamps at 0");
+    EXPECT(asb_smart_session_quality(40, 1, 90, 0, 0) == 65, "heat clamps at 0 above 75C");
+}
+
+static void test_appheat_drain(void) {
+    printf("test_appheat_drain\n");
+    memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
+    time_t t0 = 1000000;
+
+    EXPECT(asb_smart_appheat_drain(0x5555ULL, t0) == 0, "unknown app \u2192 drain 0");
+
+    asb_smart_appheat_drain_bump(0x5555ULL, t0);
+    EXPECT(asb_smart_appheat_drain(0x5555ULL, t0) == 2, "one bump \u2192 drain 2");
+    EXPECT(asb_smart_appheat_score(0x5555ULL, t0) == 0, "drain bump leaves heat score 0");
+
+    asb_smart_appheat_bump(0x5555ULL, t0);
+    EXPECT(asb_smart_appheat_score(0x5555ULL, t0) == 2, "heat bump independent");
+    EXPECT(asb_smart_appheat_drain(0x5555ULL, t0) == 2, "heat bump leaves drain");
+
+    for (int i = 0; i < 200; i++) asb_smart_appheat_drain_bump(0x5555ULL, t0);
+    EXPECT(asb_smart_appheat_drain(0x5555ULL, t0) == ASB_SMART_APPHEAT_MAX, "drain caps at max");
+
+    EXPECT(asb_smart_appheat_drain(0x5555ULL, t0 + 86400L * 10) ==
+           ASB_SMART_APPHEAT_MAX - 10, "drain decays 1 per day");
+
+    memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
+}
+
 static void test_low_battery_override(void) {
     printf("test_low_battery_override\n");
 
@@ -797,6 +884,9 @@ int main(void) {
     test_thermal_trend_state();
     test_appheat_table();
     test_bucket_learn_drain_loop();
+    test_energy_budget();
+    test_session_quality();
+    test_appheat_drain();
     test_low_battery_override();
 
     test_blend_values();
