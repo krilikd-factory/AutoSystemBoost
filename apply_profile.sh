@@ -64,6 +64,13 @@ case "$PROFILE_FLAG" in
   *) PROFILE_FLAG="" ;;
 esac
 
+if [ "$PROFILE" != "smart" ] && [ "$PROFILE_FLAG" != "auto" ]; then
+  if [ "$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)" = "1" ]; then
+    echo "0" > /data/adb/asb/smart_mode_enabled 2>/dev/null
+    rm -f /data/adb/asb/smart_prev_profile 2>/dev/null
+  fi
+fi
+
 if [ "$PROFILE_FLAG" = "auto" ]; then
   echo "$PROFILE" > /data/adb/asb/auto_switch_marker 2>/dev/null || true
 fi
