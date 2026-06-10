@@ -67,6 +67,11 @@ static int g_pkg_detect_status = 0;    /* asb_pkg_status_t code */
 
 /* Smart Mode session counters, kept separate from the legacy battery/balanced/
  * performance counters so learner_state.json shows Smart activity honestly. */
+static time_t g_smart_drain_prev_ts  = 0;
+static int    g_smart_drain_prev_pct = -1;
+static long   g_smart_drain_on_sec   = 0;
+static long   g_smart_drain_drop_x100 = 0;
+
 static int g_smart_sessions_total    = 0;
 static int g_smart_sessions_day      = 0;
 static int g_smart_sessions_night    = 0;
@@ -861,6 +866,20 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.low_battery_override ? 1 : 0,
             g_smart_rt.thermal_trend_bump,
             g_smart_trend_slope_mc_min);
+    {
+        long live_x10 = 0;
+        if (g_smart_drain_on_sec >= 300 && g_smart_drain_drop_x100 > 0) {
+            live_x10 = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
+        }
+        int hot = (asb_smart_appheat_score(g_smart_rt.app_hash, time(NULL))
+                   >= ASB_SMART_APPHEAT_HOT_SCORE);
+        int known = 0;
+        for (int i = 0; i < ASB_SMART_APPHEAT_N; i++)
+            if (g_smart_appheat.entries[i].hash != 0) known++;
+        fprintf(f, "smart_drain_window_s=%ld\nsmart_drain_pctph_x10=%ld\n"
+                   "smart_app_hot=%d\nsmart_appheat_n=%d\n",
+                g_smart_drain_on_sec, live_x10, hot, known);
+    }
     /* Debug build only: include plaintext pkg if cached */
 #if ASB_DEBUG_BUILD
     if (g_asb_cfg.smart_pkg_plaintext || ASB_DEBUG_BUILD) {
@@ -2093,9 +2112,16 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         sin.was_thermal_hit = (fsm->ses_thermal_entries > 0) ? 1 : 0;
         sin.sustained_pct = sus_pct;
         sin.idle_q_x10 = (idle_quality >= 0) ? idle_quality * 10 : 0;
-        /* Heuristic drain rate calc: if dur > 60s and battery dropped, derive mAh/h.
-         * (alpha): use simple proxy from current_ma if available, else 0. */
-        sin.drain_mah_per_hour = 0;  /* deferred to fine-tuning */
+        sin.drain_pctph_x10 = 0;
+        sin.drain_on_sec = (int)g_smart_drain_on_sec;
+        if (g_smart_drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC) {
+            long r = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
+            if (r < 0) r = 0;
+            if (r > 6000) r = 6000;
+            sin.drain_pctph_x10 = (int)r;
+        }
+        g_smart_drain_on_sec = 0;
+        g_smart_drain_drop_x100 = 0;
         /* Estimate screen_on_pct from bat_wake counters (rough approximation) */
         if (fsm->bat_wake_cycles > 0 && dur > 0) {
             sin.screen_on_pct = (int)((fsm->bat_wake_screen * 100L) / fsm->bat_wake_cycles);
@@ -2698,10 +2724,29 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
 
     asb_smart_apply_low_battery_override(battery_pct, charging, &g_smart_rt);
 
+    if (battery_pct >= 1 && battery_pct <= 100) {
+        if (screen_on && !charging && g_smart_drain_prev_ts > 0 &&
+            g_smart_drain_prev_pct >= 1) {
+            long ddt = (long)(now - g_smart_drain_prev_ts);
+            if (ddt > 0 && ddt <= 30) {
+                g_smart_drain_on_sec += ddt;
+                int ddrop = g_smart_drain_prev_pct - battery_pct;
+                if (ddrop > 0 && ddrop <= 5) {
+                    g_smart_drain_drop_x100 += (long)ddrop * 100L;
+                }
+            }
+        }
+        g_smart_drain_prev_ts = now;
+        g_smart_drain_prev_pct = battery_pct;
+    } else {
+        g_smart_drain_prev_ts = 0;
+        g_smart_drain_prev_pct = -1;
+    }
+
     int vendor_clamp_1h = (int)g_v44_clamp_1h;
     int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
-    asb_smart_apply_thermal_trend(cpu_max_c, now, &g_smart_rt);
+    asb_smart_apply_thermal_trend(cpu_max_c, now, g_smart_rt.app_hash, &g_smart_rt);
 
     /* intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
      * gaming relax. Each is a no-op if its signal is unavailable on this device,
@@ -2857,6 +2902,7 @@ static void asb_smart_persist_check(void) {
         if (rc == 0) {
             g_smart_last_save_ts = now;
         }
+        asb_smart_appheat_save();
     }
     /* Weekly backup */
     if (now - g_smart_last_backup_ts >= ASB_SMART_BACKUP_PERIOD_S) {
@@ -2913,6 +2959,7 @@ static int asb_smart_init(void) {
      * flag — store availability and on/off are separate concerns. */
     asb_smart_load_outcome_t outcome;
     int rc = asb_smart_store_load(&g_smart_store, &outcome);
+    asb_smart_appheat_load();
     g_smart_store_loaded = 1;
 
     if (outcome.loaded_from_main) {

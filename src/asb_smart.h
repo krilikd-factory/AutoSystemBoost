@@ -30,7 +30,7 @@ typedef struct {
 
     uint16_t avg_idle_q_x10;
     uint16_t avg_wph_x10;
-    uint16_t avg_drain_mahph_x10;
+    uint16_t avg_drain_pctph_x10;
     uint16_t avg_max_temp_x10;
 } asb_smart_bucket_t;
 
@@ -521,7 +521,7 @@ static void asb_smart_store_seed_defaults(asb_smart_store_t *st) {
             b->net_conservative_x1000  = net_seed;
             b->avg_idle_q_x10 = 0;
             b->avg_wph_x10 = 0;
-            b->avg_drain_mahph_x10 = 0;
+            b->avg_drain_pctph_x10 = 0;
             b->avg_max_temp_x10 = 0;
         }
     }
@@ -1015,10 +1015,6 @@ static void asb_smart_apply_low_battery_override(
     if (!rt) return;
     rt->low_battery_override = 0;
 
-    /* Hysteresis: engage at or below the low threshold, release only once the
-     * battery has recovered past the higher restore threshold. This prevents
-     * flapping around a single cutoff and, crucially, automatically restores
-     * normal behaviour as the phone charges back up — no manual toggle needed. */
     if (battery_pct >= 0) {
         if (!g_smart_lowbat_engaged) {
             if (battery_pct <= ASB_SMART_LOWBAT_ENGAGE_PCT && !charging) {
@@ -1033,8 +1029,6 @@ static void asb_smart_apply_low_battery_override(
 
     if (g_smart_lowbat_engaged) {
         rt->low_battery_override = 1;
-        /* Critical tier: at ≤10% and discharging, force a stronger battery
-         * lean (night-override strength). The regular tier applies otherwise. */
         int force = ASB_SMART_LOWBAT_FORCE_ALPHA_X1000;
         int crit = (battery_pct >= 0 &&
                     battery_pct <= ASB_SMART_LOWBAT_CRIT_PCT && !charging);
@@ -1076,11 +1070,6 @@ static void asb_smart_apply_thermal_veto(
         return;
     }
 
-    /* Soft pre-lean: between 50 °C and the hard veto threshold, nudge alpha
-     * toward battery proportionally. Keeps the device running cooler during
-     * sustained daily use rather than waiting for the abrupt 65 °C veto.
-     * At 50 °C the nudge is zero; it ramps to a +150 alpha bump just below
-     * the veto threshold. */
     int soft_lo = 50;
     int soft_hi = ASB_SMART_VETO_CPU_TEMP_C;
     if (cpu_max_c > soft_lo && soft_hi > soft_lo) {
@@ -1094,23 +1083,112 @@ static void asb_smart_apply_thermal_veto(
     }
 }
 
-/* — Predictive thermal trend (D-term).
- * The soft pre-lean above reacts to the temperature LEVEL (P-term). This
- * reacts to the heating RATE: if the device is warming fast (≥3 °C/min
- * sustained) and already at ≥45 °C, lean toward battery BEFORE the level
- * thresholds trip. A fast ramp at 47 °C reliably predicts 55–60 °C within
- * a couple of minutes on SD8E — leaning a little now avoids leaning a lot
- * later, which is both cooler and smoother (no abrupt cap drop).
- * The bump only ever raises alpha (never reduces safety) and is skipped
- * entirely while the hard veto holds (alpha already forced ≥700). */
-static int asb_smart_thermal_trend_bump_calc(int cpu_max_c, int slope_mc_per_min)
+static int asb_smart_thermal_trend_bump_calc(int cpu_max_c, int slope_mc_per_min, int hot_app)
 {
-    if (cpu_max_c < ASB_SMART_TREND_MIN_TEMP_C) return 0;
-    if (slope_mc_per_min <= ASB_SMART_TREND_MIN_SLOPE_MC_MIN) return 0;
-    int span = ASB_SMART_TREND_MAX_SLOPE_MC_MIN - ASB_SMART_TREND_MIN_SLOPE_MC_MIN;
-    int over = slope_mc_per_min - ASB_SMART_TREND_MIN_SLOPE_MC_MIN;
+    int min_temp = hot_app ? ASB_SMART_TREND_HOT_MIN_TEMP_C : ASB_SMART_TREND_MIN_TEMP_C;
+    int min_slope = hot_app ? ASB_SMART_TREND_HOT_MIN_SLOPE_MC_MIN : ASB_SMART_TREND_MIN_SLOPE_MC_MIN;
+    if (cpu_max_c < min_temp) return 0;
+    if (slope_mc_per_min <= min_slope) return 0;
+    int span = ASB_SMART_TREND_MAX_SLOPE_MC_MIN - min_slope;
+    int over = slope_mc_per_min - min_slope;
     if (over > span) over = span;
+    if (span <= 0) return 0;
     return (ASB_SMART_TREND_MAX_BUMP_X1000 * over) / span;
+}
+
+typedef struct {
+    uint64_t hash;
+    uint16_t score;
+    uint16_t reserved;
+    uint32_t last_ts;
+} asb_smart_appheat_entry_t;
+
+typedef struct {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t count;
+    asb_smart_appheat_entry_t entries[ASB_SMART_APPHEAT_N];
+} asb_smart_appheat_t;
+
+static asb_smart_appheat_t g_smart_appheat;
+static int g_smart_appheat_dirty = 0;
+
+static asb_smart_appheat_entry_t *asb_smart_appheat_find(uint64_t hash) {
+    if (hash == 0) return NULL;
+    for (int i = 0; i < ASB_SMART_APPHEAT_N; i++) {
+        if (g_smart_appheat.entries[i].hash == hash)
+            return &g_smart_appheat.entries[i];
+    }
+    return NULL;
+}
+
+static void asb_smart_appheat_decay(asb_smart_appheat_entry_t *e, time_t now) {
+    if (!e || e->score == 0 || e->last_ts == 0) return;
+    long days = ((long)now - (long)e->last_ts) / 86400L;
+    if (days <= 0) return;
+    long dec = days * ASB_SMART_APPHEAT_DECAY_PER_DAY;
+    if (dec >= e->score) e->score = 0;
+    else e->score = (uint16_t)(e->score - dec);
+}
+
+static int asb_smart_appheat_score(uint64_t hash, time_t now) {
+    asb_smart_appheat_entry_t *e = asb_smart_appheat_find(hash);
+    if (!e) return 0;
+    asb_smart_appheat_decay(e, now);
+    return (int)e->score;
+}
+
+static void asb_smart_appheat_bump(uint64_t hash, time_t now) {
+    if (hash == 0) return;
+    asb_smart_appheat_entry_t *e = asb_smart_appheat_find(hash);
+    if (!e) {
+        asb_smart_appheat_entry_t *oldest = &g_smart_appheat.entries[0];
+        for (int i = 0; i < ASB_SMART_APPHEAT_N; i++) {
+            asb_smart_appheat_entry_t *c = &g_smart_appheat.entries[i];
+            if (c->hash == 0) { oldest = c; break; }
+            if (c->last_ts < oldest->last_ts) oldest = c;
+        }
+        oldest->hash = hash;
+        oldest->score = 0;
+        oldest->last_ts = (uint32_t)now;
+        e = oldest;
+    }
+    asb_smart_appheat_decay(e, now);
+    int ns = (int)e->score + ASB_SMART_APPHEAT_BUMP;
+    if (ns > ASB_SMART_APPHEAT_MAX) ns = ASB_SMART_APPHEAT_MAX;
+    e->score = (uint16_t)ns;
+    e->last_ts = (uint32_t)now;
+    g_smart_appheat_dirty = 1;
+}
+
+static void asb_smart_appheat_load(void) {
+    memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
+    g_smart_appheat.magic = ASB_SMART_APPHEAT_MAGIC;
+    g_smart_appheat.version = ASB_SMART_APPHEAT_VERSION;
+    FILE *f = fopen(ASB_SMART_APPHEAT_FILE, "rb");
+    if (!f) return;
+    asb_smart_appheat_t tmp;
+    size_t n = fread(&tmp, 1, sizeof(tmp), f);
+    fclose(f);
+    if (n != sizeof(tmp)) return;
+    if (tmp.magic != ASB_SMART_APPHEAT_MAGIC) return;
+    if (tmp.version != ASB_SMART_APPHEAT_VERSION) return;
+    g_smart_appheat = tmp;
+}
+
+static void asb_smart_appheat_save(void) {
+    if (!g_smart_appheat_dirty) return;
+    char tmp_path[160];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", ASB_SMART_APPHEAT_FILE);
+    FILE *f = fopen(tmp_path, "wb");
+    if (!f) return;
+    size_t n = fwrite(&g_smart_appheat, 1, sizeof(g_smart_appheat), f);
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+    if (n == sizeof(g_smart_appheat)) rename(tmp_path, ASB_SMART_APPHEAT_FILE);
+    else unlink(tmp_path);
+    g_smart_appheat_dirty = 0;
 }
 
 static int g_smart_trend_prev_c = 0;
@@ -1120,6 +1198,7 @@ static int g_smart_trend_slope_mc_min = 0;
 static void asb_smart_apply_thermal_trend(
         int cpu_max_c,
         time_t now,
+        uint64_t app_hash,
         asb_smart_runtime_t *rt)
 {
     if (!rt) return;
@@ -1130,8 +1209,6 @@ static void asb_smart_apply_thermal_trend(
         g_smart_trend_slope_mc_min = 0;
         return;
     }
-    /* Seed / re-seed the sampling window on first run or after a stale gap
-     * (deep sleep, daemon pause) — a slope across a gap is meaningless. */
     if (g_smart_trend_prev_ts == 0 ||
         (long)(now - g_smart_trend_prev_ts) > ASB_SMART_TREND_STALE_S ||
         now < g_smart_trend_prev_ts) {
@@ -1142,20 +1219,22 @@ static void asb_smart_apply_thermal_trend(
     }
     long dt = (long)(now - g_smart_trend_prev_ts);
     if (dt >= ASB_SMART_TREND_WINDOW_S) {
-        /* ≥30 s windows smooth the 1 °C sensor quantization; EWMA (1/2)
-         * smooths window-to-window noise. Cooling windows pull the EWMA
-         * back down, so the bump decays naturally once the ramp stops. */
         long raw = ((long)(cpu_max_c - g_smart_trend_prev_c) * 60000L) / dt;
         if (raw > 60000L) raw = 60000L;
         if (raw < -60000L) raw = -60000L;
         g_smart_trend_slope_mc_min = (g_smart_trend_slope_mc_min + (int)raw) / 2;
         g_smart_trend_prev_c = cpu_max_c;
         g_smart_trend_prev_ts = now;
+        if (g_smart_trend_slope_mc_min >= ASB_SMART_APPHEAT_LEARN_SLOPE_MC_MIN &&
+            cpu_max_c >= ASB_SMART_TREND_MIN_TEMP_C) {
+            asb_smart_appheat_bump(app_hash, now);
+        }
     }
 
     if (rt->thermal_veto) return;
 
-    int bump = asb_smart_thermal_trend_bump_calc(cpu_max_c, g_smart_trend_slope_mc_min);
+    int hot_app = (asb_smart_appheat_score(app_hash, now) >= ASB_SMART_APPHEAT_HOT_SCORE);
+    int bump = asb_smart_thermal_trend_bump_calc(cpu_max_c, g_smart_trend_slope_mc_min, hot_app);
     if (bump > 0) {
         rt->thermal_trend_bump = bump;
         int target = rt->alpha_battery_x1000 + bump;
@@ -1389,7 +1468,8 @@ typedef struct {
     int dur_s;
     int max_temp_c;
     int max_skin_c;
-    int drain_mah_per_hour;
+    int drain_pctph_x10;
+    int drain_on_sec;
     int trust;            /* ASB_TRUST_* */
     int was_heavy;        /* 0/1 had heavy/gaming time */
     int was_thermal_hit;  /* 0/1 reached thermal_throttle */
@@ -1434,7 +1514,10 @@ static void asb_smart_bucket_update_from_session(
 
     int hot = (s->max_temp_c >= 70);
     int very_hot = (s->max_temp_c >= 80);
-    int drainy = (s->drain_mah_per_hour > 600);
+    int drain_valid = (s->drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC &&
+                       s->drain_pctph_x10 >= 0);
+    int drainy = (drain_valid &&
+                  s->drain_pctph_x10 >= ASB_SMART_DRAIN_HEAVY_PCTPH_X10);
     int sustained_heavy = (s->sustained_pct >= 30);
     int clean_cool = (s->max_temp_c < 55 && s->trust == ASB_TRUST_CLEAN);
 
@@ -1490,8 +1573,28 @@ static void asb_smart_bucket_update_from_session(
     if (b->avg_max_temp_x10 == 0) b->avg_max_temp_x10 = (uint16_t)(s->max_temp_c * 10);
     else b->avg_max_temp_x10 = (uint16_t)((b->avg_max_temp_x10 * 4 + s->max_temp_c * 10) / 5);
 
-    if (b->avg_drain_mahph_x10 == 0) b->avg_drain_mahph_x10 = (uint16_t)(s->drain_mah_per_hour * 10);
-    else b->avg_drain_mahph_x10 = (uint16_t)((b->avg_drain_mahph_x10 * 4 + s->drain_mah_per_hour * 10) / 5);
+    if (drain_valid) {
+        int sample = s->drain_pctph_x10;
+        if (sample > 6000) sample = 6000;
+        int ewma = (int)b->avg_drain_pctph_x10;
+        if (ewma == 0) {
+            b->avg_drain_pctph_x10 = (uint16_t)sample;
+        } else {
+            int hi = (ewma * ASB_SMART_DRAIN_HI_NUM) / ASB_SMART_DRAIN_HI_DEN;
+            int lo = (ewma * ASB_SMART_DRAIN_LO_NUM) / ASB_SMART_DRAIN_LO_DEN;
+            int feedback = 0;
+            if (sample > hi && !s->was_thermal_hit) feedback = 60;
+            else if (sample < lo && s->trust == ASB_TRUST_CLEAN) feedback = -30;
+            if (feedback != 0) {
+                feedback = (feedback * lr) / 1000;
+                int na = (int)b->alpha_battery_x1000 + feedback;
+                b->alpha_battery_x1000 = asb_clamp_u16(na,
+                    ASB_SMART_ALPHA_BATTERY_MIN_X1000,
+                    ASB_SMART_ALPHA_BATTERY_MAX_X1000);
+            }
+            b->avg_drain_pctph_x10 = (uint16_t)((ewma * 3 + sample) / 4);
+        }
+    }
 
     if (s->idle_q_x10 > 0) {
         if (b->avg_idle_q_x10 == 0) b->avg_idle_q_x10 = (uint16_t)s->idle_q_x10;
