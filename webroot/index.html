@@ -1522,16 +1522,21 @@ async function pollLive(visible) {
     const bma = bma_raw < 0 ? -bma_raw : bma_raw;
     const cap_full_mah = _batCapFullMah || 7300;
     let on_ma, off_ma, eta_note;
-    if (bma > 0) {
-      on_ma = bma;
-      off_ma = Math.max(20, Math.floor(bma / 8));
+    const ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
+    if (ewma_x10 > 0) {
+      on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
       eta_note = '';
+    } else if (bma > 0) {
+      window._asbEtaMa = window._asbEtaMa ? Math.round((window._asbEtaMa * 3 + bma) / 4) : bma;
+      on_ma = Math.max(50, window._asbEtaMa);
+      eta_note = ' (mA)';
     } else {
-      if (profile === 'performance') { on_ma = 650; off_ma = 85; }
-      else if (profile === 'battery') { on_ma = 400; off_ma = 45; }
-      else { on_ma = 500; off_ma = 60; }
+      if (profile === 'performance') { on_ma = 650; }
+      else if (profile === 'battery') { on_ma = 400; }
+      else { on_ma = 500; }
       eta_note = ' (est.)';
     }
+    off_ma = Math.max(20, Math.floor(on_ma / 10));
     const remain_mah = bcap > 0 ? Math.floor(cap_full_mah * bcap / 100) : 0;
     const fmtHm = (mins) => {
       if (!mins || mins <= 0) return '—';
