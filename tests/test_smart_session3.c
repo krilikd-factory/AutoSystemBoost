@@ -570,6 +570,39 @@ static void test_session_quality(void) {
     EXPECT(asb_smart_session_quality(40, 1, 90, 0, 0) == 65, "heat clamps at 0 above 75C");
 }
 
+static void test_session_quality_ex(void) {
+    printf("test_session_quality_ex\n");
+    asb_smart_quality_t q;
+
+    int r = asb_smart_session_quality_ex(40, 1, 40, 0, 0, 3, &q);
+    EXPECT(r == 100, "all clean incl vendor \u2192 100");
+    EXPECT(q.q_battery == 100 && q.q_heat == 100 && q.q_stability == 100 &&
+           q.q_vendor == 100, "breakdown all 100");
+    EXPECT(q.primary_failure == ASB_QFAIL_NONE, "no failure");
+
+    r = asb_smart_session_quality_ex(40, 1, 40, 0, 0, 60, &q);
+    EXPECT(r == 85, "vendor war floor \u2192 85");
+    EXPECT(q.q_vendor == 0, "60 clamps/h \u2192 vendor 0");
+    EXPECT(q.primary_failure == ASB_QFAIL_VENDOR_WAR, "primary failure = vendor war");
+
+    r = asb_smart_session_quality_ex(40, 1, 40, 0, 0, 33, &q);
+    EXPECT(q.q_vendor == 49, "33 clamps/h \u2192 vendor 49");
+    EXPECT(r == 92, "mid vendor war \u2192 92");
+
+    r = asb_smart_session_quality_ex(0, 0, 60, 0, 0, 10, &q);
+    EXPECT(r == 75, "no drain data + vendor \u2192 75");
+    EXPECT(q.q_battery == -1, "no drain \u2192 bat -1");
+    EXPECT(q.primary_failure == ASB_QFAIL_HEAT, "heat is worst \u2192 heat failure");
+
+    r = asb_smart_session_quality_ex(60, 1, 50, 0, 0, -1, &q);
+    EXPECT(r == 92, "no vendor data \u2192 legacy weights");
+    EXPECT(q.q_vendor == -1, "no vendor data \u2192 vendor -1");
+    EXPECT(q.primary_failure == ASB_QFAIL_NONE, "all >=70 \u2192 no failure");
+
+    r = asb_smart_session_quality_ex(250, 1, 40, 0, 0, 3, &q);
+    EXPECT(q.primary_failure == ASB_QFAIL_BATTERY, "drain worst \u2192 battery failure");
+}
+
 static void test_appheat_drain(void) {
     printf("test_appheat_drain\n");
     memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
@@ -592,6 +625,35 @@ static void test_appheat_drain(void) {
            ASB_SMART_APPHEAT_MAX - 10, "drain decays 1 per day");
 
     memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
+}
+
+static void test_idle_pocket_tier(void) {
+    printf("test_idle_pocket_tier\n");
+    asb_smart_runtime_t rt = {0};
+    rt.alpha_battery_x1000 = 400;
+    rt.interactive_bonus_x1000 = 100;
+
+    asb_smart_apply_idle_screen_override(0, 0, 1, 60, &rt);
+    EXPECT(rt.alpha_battery_x1000 == 400, "under 120s \u2192 no pocket lean");
+
+    asb_smart_apply_idle_screen_override(0, 0, 1, 300, &rt);
+    EXPECT(rt.alpha_battery_x1000 == 700, "pocket tier \u2192 alpha floor 700");
+    EXPECT(rt.net_conservative_x1000 == 400, "pocket tier \u2192 net 400");
+    EXPECT(rt.interactive_bonus_x1000 == 60, "pocket tier \u2192 bonus cap 60");
+
+    rt.alpha_battery_x1000 = 400;
+    asb_smart_apply_idle_screen_override(0, 0, 1, 2000, &rt);
+    EXPECT(rt.alpha_battery_x1000 == 850, "full tier \u2192 alpha floor 850");
+    EXPECT(rt.net_conservative_x1000 == 600, "full tier \u2192 net 600");
+
+    asb_smart_runtime_t rt2 = {0};
+    rt2.alpha_battery_x1000 = 400;
+    asb_smart_apply_idle_screen_override(1, 0, 1, 300, &rt2);
+    EXPECT(rt2.alpha_battery_x1000 == 400, "screen on \u2192 untouched");
+    asb_smart_apply_idle_screen_override(0, 1, 1, 300, &rt2);
+    EXPECT(rt2.alpha_battery_x1000 == 400, "charging \u2192 untouched");
+    asb_smart_apply_idle_screen_override(0, 0, ASB_APP_HEAVY, 300, &rt2);
+    EXPECT(rt2.alpha_battery_x1000 == 400, "heavy app \u2192 untouched");
 }
 
 static void test_cap_detente(void) {
@@ -898,8 +960,10 @@ int main(void) {
     test_appheat_table();
     test_bucket_learn_drain_loop();
     test_energy_budget();
+    test_idle_pocket_tier();
     test_cap_detente();
     test_session_quality();
+    test_session_quality_ex();
     test_appheat_drain();
     test_low_battery_override();
 
