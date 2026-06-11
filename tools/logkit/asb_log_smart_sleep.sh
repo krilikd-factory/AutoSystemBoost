@@ -91,24 +91,35 @@ lk_emit_sleep_night_report() {
     echo "===== Night-sleep Smart Mode verification ====="
     echo ""
 
-    # Count ticks where smart_sleep_override was active
-    echo "── Night_safe_override firing rate ──"
-    awk 'NR>1 && $10 != "-" {
+    # Override firing measured inside the sleep core only (daypart sleep/late).
+    # A long morning tail in the capture must not poison the night verdict.
+    echo "── Night_safe_override firing rate (sleep core: daypart sleep+late) ──"
+    awk '$1+0 >= 1000000000 && $10 != "-" {
       n++; if ($10+0 == 1) o++
+      if ($4+0 == 0 || $4+0 == 5) { cn++; if ($10+0 == 1) co++ }
+      else { tn++; if ($10+0 == 1) to++ }
     } END {
-      if (n>0) {
-        printf "  total ticks:      %d\n", n
-        printf "  override active:  %d (%.1f%%)\n", o+0, (o+0)*100.0/n
-        if ((o+0)*100.0/n >= 70) print "  ✓ Healthy: override fired for majority of night"
-        else if ((o+0)*100.0/n >= 30) print "  ⚠️  Partial: override fired for some night ticks"
-        else print "  ✗ POOR: override rarely fired — check conditions (daypart, screen, charging, app)"
+      if (cn > 0) {
+        printf "  sleep-core ticks: %d\n", cn
+        printf "  override active:  %d (%.1f%%)\n", co+0, (co+0)*100.0/cn
+        if ((co+0)*100.0/cn >= 70) print "  ✓ Healthy: override fired for majority of sleep core"
+        else if ((co+0)*100.0/cn >= 30) print "  ⚠️  Partial: override fired for some sleep-core ticks"
+        else print "  ✗ POOR: override rarely fired in sleep core — check conditions (screen, charging, app)"
+      } else {
+        print "  (no sleep-core ticks captured — capture window missed the night?)"
+      }
+      if (tn > 0) {
+        printf "  wake/day tail:    %d ticks, override %d (%.1f%%) — informational only\n", tn, to+0, (to+0)*100.0/tn
+      }
+      if (n > 0) {
+        printf "  full capture:     %d ticks, override %d (%.1f%%)\n", n, o+0, (o+0)*100.0/n
       }
     }' "$_trace"
     echo ""
 
     # When override fires, verify alpha is actually high
     echo "── Alpha_battery during override windows ──"
-    awk 'NR>1 && $10+0 == 1 && $8 != "-" {
+    awk '$1+0 >= 1000000000 && $10+0 == 1 && $8 != "-" {
       n++; v=$8+0; sum+=v
       if (n==1 || v<min) min=v
       if (n==1 || v>max) max=v
@@ -124,7 +135,7 @@ lk_emit_sleep_night_report() {
 
     # Daypart accounting — should mostly be sleep+late
     echo "── Daypart distribution during capture ──"
-    awk 'NR>1 && $4 != "-" {
+    awk '$1+0 >= 1000000000 && $4 != "-" {
       n[$4]++; tot++
     } END {
       for (k=0; k<6; k++) {
@@ -139,10 +150,28 @@ lk_emit_sleep_night_report() {
     }' "$_trace"
     echo ""
 
+    # Battery drain inside the sleep core
+    echo "── Battery drain (sleep core only) ──"
+    awk '$1+0 >= 1000000000 && ($4+0 == 0 || $4+0 == 5) && $15 != "-" && $1 != "-" {
+      if (!seen) { f=$15; ft=$1; seen=1 }
+      l=$15; lt=$1
+    } END {
+      if (seen && lt > ft) {
+        d = f - l
+        h = (lt - ft) / 3600.0
+        printf "  core start: %d%%  core end: %d%%  drop: %d%%  over %.1fh", f, l, d, h
+        if (h > 0.5) printf "  = %.2f%%/h", d/h
+        printf "\n"
+      } else {
+        print "  (insufficient sleep-core battery samples)"
+      }
+    }' "$_trace"
+    echo ""
+
     # Battery drain over capture
-    echo "── Battery drain over capture ──"
-    _first=$(awk 'NR>1 && $15 != "-" { print $15; exit }' "$_trace")
-    _last=$(awk 'NR>1 && $15 != "-" { v=$15 } END { print v }' "$_trace")
+    echo "── Battery drain over capture (incl. wake tail) ──"
+    _first=$(awk '$1+0 >= 1000000000 && $15 != "-" { print $15; exit }' "$_trace")
+    _last=$(awk '$1+0 >= 1000000000 && $15 != "-" { v=$15 } END { print v }' "$_trace")
     if [ -n "$_first" ] && [ -n "$_last" ]; then
       _delta=$(( _first - _last ))
       _dur_h=$(awk -v s="$LK_START_EPOCH" 'BEGIN { print (systime()-s)/3600 }')

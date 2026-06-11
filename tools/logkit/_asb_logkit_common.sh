@@ -83,7 +83,9 @@ lk_probe_env() {
     echo ""
     echo "current_profile: $(cat "$MODDIR/current_profile" 2>/dev/null || echo '(unreadable)')"
     echo "asb_binary:      $(lk_have asb && which asb || echo missing)"
-    echo "governor_pid:    $(pgrep -f asb_governor 2>/dev/null | tr '\n' ' ')"
+    _gpid=$(cat /dev/.asb/governor.pid 2>/dev/null)
+    [ -z "$_gpid" ] && _gpid=$(pgrep -f "bin/asb" 2>/dev/null | tr '\n' ' ')
+    echo "governor_pid:    $_gpid"
     echo "governor_log:    $LK_GOV_LOG"
     echo ""
     echo "# battery"
@@ -351,6 +353,12 @@ lk_verify_caps() {
 
   {
     echo "# cap_verify v3 at $(date -u '+%Y-%m-%dT%H:%M:%SZ')  profile=$_profile"
+    if [ "$_profile" = "smart" ]; then
+      echo "# NOTE: profile_cpu_cap_* below is the STATIC profile baseline."
+      echo "# On smart, asb_declared_* is synthesized dynamically from alpha/state"
+      echo "# and is EXPECTED to differ from the static baseline. Compare observed"
+      echo "# policy caps against asb_declared_*, not against profile_cpu_cap_*."
+    fi
     echo "# profile_cpu_cap_big:     ${CPU_CAP_BIG:-(none)}"
     echo "# profile_cpu_cap_little:  ${CPU_CAP_LITTLE:-(none)}"
     echo "# asb_declared_p0:         ${_asb_p0_cap}"
