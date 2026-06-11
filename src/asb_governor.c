@@ -73,6 +73,13 @@ static long   g_smart_drain_on_sec   = 0;
 static long   g_smart_drain_drop_x100 = 0;
 static int    g_smart_drain_rate_ewma_x10 = 0;
 static int    g_smart_last_quality = -1;
+static int    g_smart_budget_src = 0;
+static int    g_smart_q_bat = -1;
+static int    g_smart_q_heat = -1;
+static int    g_smart_q_stab = -1;
+static int    g_smart_q_vendor = -1;
+static int    g_smart_q_fail = 0;
+static unsigned long g_smart_ses_clamp_start = 0;
 static int    g_smart_quality_ewma = -1;
 static int    g_anom_code = 0;
 static int    g_anom_count_1h = 0;
@@ -900,6 +907,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 g_smart_last_quality, g_smart_quality_ewma,
                 asb_smart_appheat_drain(g_smart_rt.app_hash, time(NULL)),
                 g_anom_code, g_anom_count_1h);
+        fprintf(f, "smart_q_bat=%d\nsmart_q_heat=%d\nsmart_q_stab=%d\n"
+                   "smart_q_vendor=%d\nsmart_q_fail=%d\nsmart_budget_src=%d\n",
+                g_smart_q_bat, g_smart_q_heat, g_smart_q_stab,
+                g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
         fprintf(f, "cap_sleep_detente=%d\ncap_detente_skipped=%ld\n"
                    "build_flavor=%s\nbat_cur_unit=%d\n",
                 g_cap_detente_active, g_cap_detente_skipped,
@@ -2165,13 +2176,28 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         }
         {
             int _qv = (sin.drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC);
-            int _q = asb_smart_session_quality(sin.drain_pctph_x10, _qv,
+            int _vph = -1;
+            if (sin.dur_s >= 300 &&
+                g_v44_clamp_total >= g_smart_ses_clamp_start) {
+                unsigned long _cd = g_v44_clamp_total - g_smart_ses_clamp_start;
+                _vph = (int)((_cd * 3600UL) / (unsigned long)sin.dur_s);
+                if (_vph > 9999) _vph = 9999;
+            }
+            asb_smart_quality_t _qb;
+            int _q = asb_smart_session_quality_ex(sin.drain_pctph_x10, _qv,
                                                fsm->ses_max_temp,
                                                fsm->ses_thermal_entries,
-                                               fsm->ses_recovery_count);
+                                               fsm->ses_recovery_count,
+                                               _vph, &_qb);
             g_smart_last_quality = _q;
+            g_smart_q_bat = _qb.q_battery;
+            g_smart_q_heat = _qb.q_heat;
+            g_smart_q_stab = _qb.q_stability;
+            g_smart_q_vendor = _qb.q_vendor;
+            g_smart_q_fail = _qb.primary_failure;
             if (g_smart_quality_ewma < 0) g_smart_quality_ewma = _q;
             else g_smart_quality_ewma = (g_smart_quality_ewma * 3 + _q) / 4;
+            g_smart_ses_clamp_start = g_v44_clamp_total;
         }
         g_smart_drain_on_sec = 0;
         g_smart_drain_drop_x100 = 0;
@@ -2776,8 +2802,20 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                                           screen_off_secs, &g_smart_rt);
 
     asb_smart_apply_low_battery_override(battery_pct, charging, &g_smart_rt);
-    asb_smart_apply_energy_budget(battery_pct, charging,
-                                  g_smart_drain_rate_ewma_x10, now, &g_smart_rt);
+    {
+        int _budget_rate = g_smart_drain_rate_ewma_x10;
+        g_smart_budget_src = 0;
+        if (g_smart_rt.bucket_id < ASB_SMART_BUCKETS &&
+            g_smart_rt.conf_x1000 >= 350) {
+            int _bew = (int)g_smart_store.buckets[g_smart_rt.bucket_id].avg_drain_pctph_x10;
+            if (_bew > 0) {
+                _budget_rate = _bew;
+                g_smart_budget_src = 1;
+            }
+        }
+        asb_smart_apply_energy_budget(battery_pct, charging,
+                                      _budget_rate, now, &g_smart_rt);
+    }
 
     if (battery_pct >= 1 && battery_pct <= 100) {
         if (screen_on && !charging && g_smart_drain_prev_ts > 0 &&
@@ -4599,20 +4637,29 @@ int main(int argc, char **argv) {
             {
                 int _det = asb_cap_detente_check(
                         metrics.misc.screen_on,
-                        fsm.state == ASB_STATE_DEEP_IDLE,
+                        fsm.state == ASB_STATE_DEEP_IDLE ||
+                            fsm.state == ASB_STATE_LIGHT_IDLE,
                         g_cap_owner_eff == ASB_CAP_OWNER_VENDOR,
                         (long)(time(NULL) - g_cap_owner_since),
                         metrics.therm.cpu_max_c,
                         fsm.thermal_cap);
+                static int _det_false_ticks = 0;
+                int _hard_exit = (metrics.misc.screen_on || fsm.thermal_cap);
+                if (_det) _det_false_ticks = 0;
                 if (_det && !g_cap_detente_active) {
                     g_cap_detente_active = 1;
                     g_cap_detente_since = time(NULL);
                     asb_log("cap_detente: enter (vendor-owned deep idle, freezing cap writes)");
                 } else if (!_det && g_cap_detente_active) {
-                    g_cap_detente_active = 0;
-                    asb_log("cap_detente: exit after %lds (skipped %ld writes)",
-                            (long)(time(NULL) - g_cap_detente_since),
-                            g_cap_detente_skipped);
+                    _det_false_ticks++;
+                    if (_hard_exit || _det_false_ticks >= 3) {
+                        g_cap_detente_active = 0;
+                        _det_false_ticks = 0;
+                        asb_log("cap_detente: exit after %lds (%s, skipped %ld writes total)",
+                                (long)(time(NULL) - g_cap_detente_since),
+                                _hard_exit ? "wake/thermal" : "conditions faded",
+                                g_cap_detente_skipped);
+                    }
                 }
             }
             if ((changed || force_write) && g_cap_detente_active) {

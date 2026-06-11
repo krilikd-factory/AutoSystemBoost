@@ -999,7 +999,15 @@ static void asb_smart_apply_idle_screen_override(
     if (screen_on) return;
     if (charging) return;
     if (app_hint >= ASB_APP_HEAVY) return;
-    if (screen_off_seconds < 1800) return;
+    if (screen_off_seconds < 120) return;
+
+    if (screen_off_seconds < 1800) {
+        if (rt->alpha_battery_x1000 < 700) rt->alpha_battery_x1000 = 700;
+        if (rt->sleep_bias_x1000 < 300)    rt->sleep_bias_x1000 = 300;
+        if (rt->net_conservative_x1000 < 400) rt->net_conservative_x1000 = 400;
+        if (rt->interactive_bonus_x1000 > 60) rt->interactive_bonus_x1000 = 60;
+        return;
+    }
 
     if (rt->alpha_battery_x1000 < 850) rt->alpha_battery_x1000 = 850;
     if (rt->sleep_bias_x1000 < 600)    rt->sleep_bias_x1000 = 600;
@@ -1292,12 +1300,28 @@ static int asb_cap_detente_check(
     return 1;
 }
 
-static int asb_smart_session_quality(
+typedef struct {
+    int q_battery;
+    int q_heat;
+    int q_stability;
+    int q_vendor;
+    int primary_failure;
+} asb_smart_quality_t;
+
+#define ASB_QFAIL_NONE 0
+#define ASB_QFAIL_BATTERY 1
+#define ASB_QFAIL_HEAT 2
+#define ASB_QFAIL_STABILITY 3
+#define ASB_QFAIL_VENDOR_WAR 4
+
+static int asb_smart_session_quality_ex(
         int drain_pctph_x10,
         int drain_valid,
         int max_temp_c,
         int thermal_entries,
-        int recovery_count)
+        int recovery_count,
+        int vendor_clamps_per_h,
+        asb_smart_quality_t *out)
 {
     int heat;
     if (max_temp_c <= ASB_SMART_QUALITY_HEAT_GOOD_C) heat = 100;
@@ -1308,15 +1332,55 @@ static int asb_smart_session_quality(
     int stab = 100 - 20 * thermal_entries - 10 * recovery_count;
     if (stab < 0) stab = 0;
 
+    int vendor;
+    if (vendor_clamps_per_h < 0) vendor = -1;
+    else if (vendor_clamps_per_h <= 5) vendor = 100;
+    else if (vendor_clamps_per_h >= 60) vendor = 0;
+    else vendor = ((60 - vendor_clamps_per_h) * 100) / 55;
+
+    int bat = -1;
     if (drain_valid) {
-        int bat;
         if (drain_pctph_x10 <= ASB_SMART_QUALITY_BAT_GOOD_X10) bat = 100;
         else if (drain_pctph_x10 >= ASB_SMART_QUALITY_BAT_BAD_X10) bat = 0;
         else bat = ((ASB_SMART_QUALITY_BAT_BAD_X10 - drain_pctph_x10) * 100) /
                    (ASB_SMART_QUALITY_BAT_BAD_X10 - ASB_SMART_QUALITY_BAT_GOOD_X10);
-        return (35 * bat + 35 * heat + 30 * stab) / 100;
     }
-    return (55 * heat + 45 * stab) / 100;
+
+    int overall;
+    if (bat >= 0 && vendor >= 0)
+        overall = (30 * bat + 30 * heat + 25 * stab + 15 * vendor) / 100;
+    else if (bat >= 0)
+        overall = (35 * bat + 35 * heat + 30 * stab) / 100;
+    else if (vendor >= 0)
+        overall = (45 * heat + 35 * stab + 20 * vendor) / 100;
+    else
+        overall = (55 * heat + 45 * stab) / 100;
+
+    if (out) {
+        out->q_battery = bat;
+        out->q_heat = heat;
+        out->q_stability = stab;
+        out->q_vendor = vendor;
+        int worst = 101, code = ASB_QFAIL_NONE;
+        if (bat >= 0 && bat < worst)    { worst = bat;    code = ASB_QFAIL_BATTERY; }
+        if (heat < worst)               { worst = heat;   code = ASB_QFAIL_HEAT; }
+        if (stab < worst)               { worst = stab;   code = ASB_QFAIL_STABILITY; }
+        if (vendor >= 0 && vendor < worst) { worst = vendor; code = ASB_QFAIL_VENDOR_WAR; }
+        out->primary_failure = (worst < 70) ? code : ASB_QFAIL_NONE;
+    }
+    return overall;
+}
+
+static int __attribute__((unused)) asb_smart_session_quality(
+        int drain_pctph_x10,
+        int drain_valid,
+        int max_temp_c,
+        int thermal_entries,
+        int recovery_count)
+{
+    return asb_smart_session_quality_ex(drain_pctph_x10, drain_valid,
+                                        max_temp_c, thermal_entries,
+                                        recovery_count, -1, NULL);
 }
 
 static void asb_smart_apply_thermal_trend(
