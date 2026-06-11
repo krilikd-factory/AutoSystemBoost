@@ -62,10 +62,10 @@ asb_update_desc() {
   local _s _p
   _p="$(cat "$MODDIR/current_profile" 2>/dev/null)"
   case "$_p" in
-    performance) _s='description=status: performance 🔥 | active ✅' ;;
-    battery)     _s='description=status: battery 🔋 | active ✅' ;;
-    smart)       _s='description=status: 🤖 Smart Mode (alpha) | active ✅' ;;
-    *)           _s='description=status: balanced ⚖️ | active ✅' ;;
+    performance) _s='description=status: Performance 🔥 | active ✅' ;;
+    battery)     _s='description=status: Battery 🔋 | active ✅' ;;
+    smart)       _s='description=status: Smart Mode 🤖 | active ✅' ;;
+    *)           _s='description=status: Balanced ⚖️ | active ✅' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
@@ -321,12 +321,6 @@ asb_apply_ux() {
   asb_feature_enabled FPS || asb_feature_enabled VM || return 0
   has settings || return 0
   local _anim_changed=0
-  # Animation scale changes are OPT-IN only.
-  # Previously ASB unconditionally overrode user-set animation scales every time
-  # a profile was applied (reboot, charging events, profile switches), which
-  # silently clobbered values like 0.5 set in developer options.
-  # Users who want ASB to manage animation scale can opt in via
-  # UX_MANAGE_ANIM_SCALE=1 in /data/adb/asb/user_config or governor.conf.
   if [ -n "$UX_ANIM_SCALE" ] && [ "${UX_MANAGE_ANIM_SCALE:-0}" = "1" ]; then
     local _cur_anim
     _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
@@ -337,15 +331,12 @@ asb_apply_ux() {
       _anim_changed=1
     fi
   fi
-  # long_press/multi_press timeouts also touch user-facing settings.
-  # Same opt-in policy — don't override unless user asked.
   if [ -n "$UX_LONG_PRESS" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
     asb_settings_put secure long_press_timeout "$UX_LONG_PRESS"
   fi
   if [ -n "$UX_MULTI_PRESS" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
     asb_settings_put secure multi_press_timeout "$UX_MULTI_PRESS"
   fi
-  # These are system tuning knobs, not user-visible UI — keep applying.
   [ -n "$UX_ADAPTIVE_BAT" ] && asb_settings_put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT"
   [ -n "$UX_RAM_EXPAND" ] && asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
   [ -n "$UX_LOW_HEAT" ] && asb_settings_put global sem_low_heat_mode "$UX_LOW_HEAT"
@@ -379,10 +370,6 @@ asb_load_profile() {
   case "$PROFILE" in
     battery|balanced|performance) : ;;
     smart)
-      # persisted profile = 'smart', shell bootstraps from
-      # balanced.sh (no smart.sh exists — C governor blends bounds at runtime).
-      # We deliberately do NOT change PROFILE so callers see the real persisted
-      # name; we only redirect which file gets sourced below.
       _SHELL_BOOT_PROFILE=balanced
       ;;
     *) PROFILE=balanced ;;
