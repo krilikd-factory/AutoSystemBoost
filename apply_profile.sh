@@ -42,10 +42,6 @@ case "$PROFILE" in
   performance|balanced|battery)
     : ;;
   smart)
-    # Smart Mode: persisted profile is 'smart', C governor enters PROFILE_SMART
-    # via read_profile_idx() reading current_profile=smart at boot/socket-notify.
-    # profile_core.sh handles shell-side bootstrap (uses balanced.sh as the
-    # envelope file, since no smart.sh exists by design).
     mkdir -p /data/adb/asb 2>/dev/null
     echo "1" > /data/adb/asb/smart_mode_enabled 2>/dev/null
     if [ ! -r /data/adb/asb/smart_prev_profile ]; then
@@ -85,10 +81,10 @@ kill_prev_worker() {
 
 asb_update_desc_fallback() {
   case "$1" in
-    performance) _s='description=status: performance 🔥 | active ✅' ;;
-    battery) _s='description=status: battery 🔋 | active ✅' ;;
-    smart) _s='description=status: 🤖 Smart Mode | active ✅' ;;
-    *) _s='description=status: balanced ⚖️ | active ✅' ;;
+    performance) _s='description=status: Performance 🔥 | active ✅' ;;
+    battery) _s='description=status: Battery 🔋 | active ✅' ;;
+    smart) _s='description=status: Smart Mode 🤖 | active ✅' ;;
+    *) _s='description=status: Balanced ⚖️ | active ✅' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
