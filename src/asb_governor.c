@@ -730,6 +730,9 @@ static time_t g_cap_recent_window_start = 0;
 static int    g_cap_slow_vendor_clamps = 0;
 static time_t g_cap_slow_window_start = 0;
 static time_t g_cap_vendor_hold_until = 0;
+static int    g_cap_detente_active = 0;
+static time_t g_cap_detente_since = 0;
+static long   g_cap_detente_skipped = 0;
 
 /* Forward declarations for write_state */
 static int asb_cap_writes_should_back_off(void);
@@ -897,6 +900,11 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 g_smart_last_quality, g_smart_quality_ewma,
                 asb_smart_appheat_drain(g_smart_rt.app_hash, time(NULL)),
                 g_anom_code, g_anom_count_1h);
+        fprintf(f, "cap_sleep_detente=%d\ncap_detente_skipped=%ld\n"
+                   "build_flavor=%s\nbat_cur_unit=%d\n",
+                g_cap_detente_active, g_cap_detente_skipped,
+                ASB_DEBUG_BUILD ? "debug" : "release",
+                g_batt_cur_unit);
     }
     /* Debug build only: include plaintext pkg if cached */
 #if ASB_DEBUG_BUILD
@@ -1056,7 +1064,9 @@ static void write_conflicts_json(void) {
         "  \"cap_owner\": \"%s\",\n"
         "  \"cap_owner_since\": %ld,\n"
         "  \"cap_vendor_holddown_active\": %d,\n"
-        "  \"cap_recent_vendor_clamps_60s\": %d\n"
+        "  \"cap_recent_vendor_clamps_60s\": %d,\n"
+        "  \"cap_sleep_detente\": %d,\n"
+        "  \"cap_detente_skipped\": %ld\n"
         "}\n",
         g_v44_last_clamp_source[0] ? g_v44_last_clamp_source : "none",
         (long long)g_v44_last_clamp_ts,
@@ -1066,7 +1076,8 @@ static void write_conflicts_json(void) {
         asb_cap_owner_name(g_cap_owner_eff),
         (long)g_cap_owner_since,
         asb_cap_writes_should_back_off(),
-        g_cap_recent_vendor_clamps);
+        g_cap_recent_vendor_clamps,
+        g_cap_detente_active, g_cap_detente_skipped);
     fflush(f);
     fsync(fileno(f));
     fclose(f);
@@ -3069,12 +3080,9 @@ int main(int argc, char **argv) {
         }
     }
 
-#if ASB_DEBUG_BUILD
     g_logf = fopen(LOG_FILE, "a");
-#else
-    g_logf = NULL;
-#endif
-    asb_log("=== asb_governor starting (pid %d) ===", getpid());
+    asb_log("=== asb_governor starting (pid %d, flavor=%s) ===", getpid(),
+            ASB_DEBUG_BUILD ? "debug" : "release");
 
     signal(SIGTERM, sig_handler);
     signal(SIGINT,  sig_handler);
@@ -4588,7 +4596,35 @@ int main(int argc, char **argv) {
                     }
                 }
             }
-            if (changed || force_write) {
+            {
+                int _det = asb_cap_detente_check(
+                        metrics.misc.screen_on,
+                        fsm.state == ASB_STATE_DEEP_IDLE,
+                        g_cap_owner_eff == ASB_CAP_OWNER_VENDOR,
+                        (long)(time(NULL) - g_cap_owner_since),
+                        metrics.therm.cpu_max_c,
+                        fsm.thermal_cap);
+                if (_det && !g_cap_detente_active) {
+                    g_cap_detente_active = 1;
+                    g_cap_detente_since = time(NULL);
+                    asb_log("cap_detente: enter (vendor-owned deep idle, freezing cap writes)");
+                } else if (!_det && g_cap_detente_active) {
+                    g_cap_detente_active = 0;
+                    asb_log("cap_detente: exit after %lds (skipped %ld writes)",
+                            (long)(time(NULL) - g_cap_detente_since),
+                            g_cap_detente_skipped);
+                }
+            }
+            if ((changed || force_write) && g_cap_detente_active) {
+                g_cap_detente_skipped++;
+            } else if ((changed || force_write) &&
+                       asb_cap_writes_should_back_off() &&
+                       !force_write && !metrics.misc.screen_on &&
+                       (fsm.state == ASB_STATE_DEEP_IDLE ||
+                        fsm.state == ASB_STATE_LIGHT_IDLE) &&
+                       !fsm.thermal_cap) {
+                g_cap_detente_skipped++;
+            } else if (changed || force_write) {
                 int writes = writer_apply_caps(&fsm.current_caps, force_write, fsm.state, fsm.thermal_cap);
                 if (writes > 0) {
                     g_total_writes += writes;

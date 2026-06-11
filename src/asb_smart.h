@@ -1275,6 +1275,23 @@ static void asb_smart_apply_energy_budget(
     }
 }
 
+static int asb_cap_detente_check(
+        int screen_on,
+        int state_is_deep_idle,
+        int owner_is_vendor,
+        long owner_age_s,
+        int cpu_max_c,
+        int thermal_cap)
+{
+    if (screen_on) return 0;
+    if (!state_is_deep_idle) return 0;
+    if (!owner_is_vendor) return 0;
+    if (owner_age_s < 120) return 0;
+    if (cpu_max_c <= 0 || cpu_max_c >= 45) return 0;
+    if (thermal_cap) return 0;
+    return 1;
+}
+
 static int asb_smart_session_quality(
         int drain_pctph_x10,
         int drain_valid,
