@@ -622,7 +622,6 @@ ro.config.low_ram=false
 ro.config.volume_not_share=false
 ro.cp_system_other_odex=1
 ro.cutoff_voltage_mv=3000
-ro.dalvik.vm.enable_uffd_gc=false
 ro.have_aacdecode_feature=1
 ro.have_aacencode_feature=1
 ro.min_pointer_dur=2
@@ -700,8 +699,6 @@ dev.pm.dyn_samplingrate=0
 # ASB:KERNEL:END
 # ASB:LOG:BEGIN
 ro.config.nocheckin=1
-dalvik.vm.dex2oat-minidebuginfo=false
-dalvik.vm.minidebuginfo=false
 debug.c2.use_dmabufheaps=1
 debug.enable_mem_profiling=0
 debug.gralloc.enable_fb_ubwc=1
