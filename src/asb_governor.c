@@ -74,6 +74,8 @@ static long   g_smart_drain_drop_x100 = 0;
 static int    g_smart_drain_rate_ewma_x10 = 0;
 static int    g_smart_last_quality = -1;
 static int    g_smart_budget_src = 0;
+static time_t g_gov_start_ts = 0;
+static int    g_smart_boot_settle = 0;
 static int    g_smart_q_bat = -1;
 static int    g_smart_q_heat = -1;
 static int    g_smart_q_stab = -1;
@@ -911,6 +913,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                    "smart_q_vendor=%d\nsmart_q_fail=%d\nsmart_budget_src=%d\n",
                 g_smart_q_bat, g_smart_q_heat, g_smart_q_stab,
                 g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
+        fprintf(f, "smart_boot_settle=%d\n", g_smart_boot_settle);
         fprintf(f, "cap_sleep_detente=%d\ncap_detente_skipped=%ld\n"
                    "build_flavor=%s\nbat_cur_unit=%d\n",
                 g_cap_detente_active, g_cap_detente_skipped,
@@ -2843,7 +2846,13 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int vendor_clamp_1h = (int)g_v44_clamp_1h;
     int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
-    asb_smart_apply_thermal_trend(cpu_max_c, now, g_smart_rt.app_hash, &g_smart_rt);
+    {
+        int _settle = (g_gov_start_ts > 0 &&
+                       (long)(now - g_gov_start_ts) < 900);
+        asb_smart_apply_thermal_trend(cpu_max_c, now, g_smart_rt.app_hash,
+                                      _settle, &g_smart_rt);
+        g_smart_boot_settle = _settle;
+    }
 
     /* intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
      * gaming relax. Each is a no-op if its signal is unavailable on this device,
@@ -3118,6 +3127,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    g_gov_start_ts = time(NULL);
     g_logf = fopen(LOG_FILE, "a");
     asb_log("=== asb_governor starting (pid %d, flavor=%s) ===", getpid(),
             ASB_DEBUG_BUILD ? "debug" : "release");

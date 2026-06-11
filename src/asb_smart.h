@@ -1387,6 +1387,7 @@ static void asb_smart_apply_thermal_trend(
         int cpu_max_c,
         time_t now,
         uint64_t app_hash,
+        int early_engage,
         asb_smart_runtime_t *rt)
 {
     if (!rt) return;
@@ -1421,7 +1422,8 @@ static void asb_smart_apply_thermal_trend(
 
     if (rt->thermal_veto) return;
 
-    int hot_app = (asb_smart_appheat_score(app_hash, now) >= ASB_SMART_APPHEAT_HOT_SCORE);
+    int hot_app = early_engage ||
+        (asb_smart_appheat_score(app_hash, now) >= ASB_SMART_APPHEAT_HOT_SCORE);
     int bump = asb_smart_thermal_trend_bump_calc(cpu_max_c, g_smart_trend_slope_mc_min, hot_app);
     if (bump > 0) {
         rt->thermal_trend_bump = bump;
