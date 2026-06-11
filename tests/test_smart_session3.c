@@ -453,6 +453,32 @@ static void test_bucket_learn_drain_loop(void) {
     EXPECT(b4.avg_drain_pctph_x10 == 125, "thermal session still updates EWMA");
 }
 
+static void test_boot_settle_trend(void) {
+    printf("test_boot_settle_trend\n");
+    g_smart_trend_prev_ts = 0;
+    g_smart_trend_slope_mc_min = 0;
+    time_t t0 = 1000000;
+    asb_smart_runtime_t rt = {0};
+    rt.alpha_battery_x1000 = 300;
+
+    asb_smart_apply_thermal_trend(38, t0, 0, 1, &rt);
+    asb_smart_apply_thermal_trend(41, t0 + 30, 0, 1, &rt);
+    asb_smart_apply_thermal_trend(44, t0 + 60, 0, 1, &rt);
+    EXPECT(rt.thermal_trend_bump > 0, "settle window engages trend from 40C");
+
+    g_smart_trend_prev_ts = 0;
+    g_smart_trend_slope_mc_min = 0;
+    asb_smart_runtime_t rt2 = {0};
+    rt2.alpha_battery_x1000 = 300;
+    asb_smart_apply_thermal_trend(38, t0, 0, 0, &rt2);
+    asb_smart_apply_thermal_trend(41, t0 + 30, 0, 0, &rt2);
+    asb_smart_apply_thermal_trend(44, t0 + 60, 0, 0, &rt2);
+    EXPECT(rt2.thermal_trend_bump == 0, "no settle keeps standard 45C threshold");
+
+    g_smart_trend_prev_ts = 0;
+    g_smart_trend_slope_mc_min = 0;
+}
+
 static void test_thermal_trend_state(void) {
     printf("test_thermal_trend_state\n");
     g_smart_trend_prev_ts = 0;
@@ -463,21 +489,21 @@ static void test_thermal_trend_state(void) {
     rt.alpha_battery_x1000 = 300;
 
     /* First sample seeds the window — no bump */
-    asb_smart_apply_thermal_trend(48, t0, 0, &rt);
+    asb_smart_apply_thermal_trend(48, t0, 0, 0, &rt);
     EXPECT(rt.thermal_trend_bump == 0, "seed sample → no bump");
     EXPECT(rt.alpha_battery_x1000 == 300, "seed sample → alpha untouched");
 
     /* +3°C over 30s = 6000 m°C/min raw, EWMA (0+6000)/2 = 3000 → still ≤ min */
-    asb_smart_apply_thermal_trend(51, t0 + 30, 0, &rt);
+    asb_smart_apply_thermal_trend(51, t0 + 30, 0, 0, &rt);
     EXPECT(rt.thermal_trend_bump == 0, "first window EWMA at threshold → no bump");
 
     /* Another +3°C/30s: EWMA (3000+6000)/2 = 4500 → bump = 120*1500/9000 = 20 */
-    asb_smart_apply_thermal_trend(54, t0 + 60, 0, &rt);
+    asb_smart_apply_thermal_trend(54, t0 + 60, 0, 0, &rt);
     EXPECT(rt.thermal_trend_bump == 20, "sustained ramp → bump 20");
     EXPECT(rt.alpha_battery_x1000 == 320, "bump raises alpha");
 
     /* Cooling window pulls EWMA back down */
-    asb_smart_apply_thermal_trend(50, t0 + 90, 0, &rt);
+    asb_smart_apply_thermal_trend(50, t0 + 90, 0, 0, &rt);
     EXPECT(rt.thermal_trend_bump == 0, "cooling window decays trend");
 
     /* Veto active → trend never stacks on top */
@@ -487,8 +513,8 @@ static void test_thermal_trend_state(void) {
     asb_smart_runtime_t rt2 = {0};
     rt2.alpha_battery_x1000 = 700;
     rt2.thermal_veto = 1;
-    asb_smart_apply_thermal_trend(55, t0, 0, &rt2);
-    asb_smart_apply_thermal_trend(58, t0 + 30, 0, &rt2);
+    asb_smart_apply_thermal_trend(55, t0, 0, 0, &rt2);
+    asb_smart_apply_thermal_trend(58, t0 + 30, 0, 0, &rt2);
     EXPECT(rt2.thermal_trend_bump == 0, "veto active → trend skipped");
     EXPECT(rt2.alpha_battery_x1000 == 700, "veto active → alpha untouched by trend");
 
@@ -497,13 +523,13 @@ static void test_thermal_trend_state(void) {
     g_smart_trend_slope_mc_min = 0;
     asb_smart_runtime_t rt3 = {0};
     rt3.alpha_battery_x1000 = 300;
-    asb_smart_apply_thermal_trend(40, t0, 0, &rt3);
-    asb_smart_apply_thermal_trend(55, t0 + 600, 0, &rt3);
+    asb_smart_apply_thermal_trend(40, t0, 0, 0, &rt3);
+    asb_smart_apply_thermal_trend(55, t0 + 600, 0, 0, &rt3);
     EXPECT(rt3.thermal_trend_bump == 0, "stale gap → re-seed, no bump");
     EXPECT(g_smart_trend_slope_mc_min == 0, "stale gap → slope reset");
 
     /* Invalid temp resets state */
-    asb_smart_apply_thermal_trend(0, t0 + 630, 0, &rt3);
+    asb_smart_apply_thermal_trend(0, t0 + 630, 0, 0, &rt3);
     EXPECT(g_smart_trend_prev_ts == 0, "invalid temp → state reset");
 }
 
@@ -957,6 +983,7 @@ int main(void) {
     test_thermal_veto();
     test_thermal_trend_calc();
     test_thermal_trend_state();
+    test_boot_settle_trend();
     test_appheat_table();
     test_bucket_learn_drain_loop();
     test_energy_budget();
