@@ -594,6 +594,19 @@ static void test_appheat_drain(void) {
     memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
 }
 
+static void test_cap_detente(void) {
+    printf("test_cap_detente\n");
+    EXPECT(asb_cap_detente_check(0, 1, 1, 300, 35, 0) == 1, "vendor-owned cool deep idle \u2192 detente");
+    EXPECT(asb_cap_detente_check(1, 1, 1, 300, 35, 0) == 0, "screen on \u2192 no detente");
+    EXPECT(asb_cap_detente_check(0, 0, 1, 300, 35, 0) == 0, "not deep idle \u2192 no detente");
+    EXPECT(asb_cap_detente_check(0, 1, 0, 300, 35, 0) == 0, "asb owns caps \u2192 no detente");
+    EXPECT(asb_cap_detente_check(0, 1, 1, 60, 35, 0) == 0, "vendor owner too fresh \u2192 no detente");
+    EXPECT(asb_cap_detente_check(0, 1, 1, 300, 45, 0) == 0, "45C \u2192 no detente");
+    EXPECT(asb_cap_detente_check(0, 1, 1, 300, 0, 0) == 0, "invalid temp \u2192 no detente");
+    EXPECT(asb_cap_detente_check(0, 1, 1, 300, 35, 1) == 0, "thermal cap active \u2192 no detente");
+    EXPECT(asb_cap_detente_check(0, 1, 1, 120, 44, 0) == 1, "boundary 120s/44C \u2192 detente");
+}
+
 static void test_low_battery_override(void) {
     printf("test_low_battery_override\n");
 
@@ -885,6 +898,7 @@ int main(void) {
     test_appheat_table();
     test_bucket_learn_drain_loop();
     test_energy_budget();
+    test_cap_detente();
     test_session_quality();
     test_appheat_drain();
     test_low_battery_override();
