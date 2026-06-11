@@ -79,6 +79,7 @@ lk_finalize_smart_sleep() {
   lk_capture_smart_sessions_window
   lk_snapshot_smart_store "after"
   lk_emit_smart_summary
+  lk_emit_report_card
   lk_emit_sleep_night_report
   lk_finalize
 }

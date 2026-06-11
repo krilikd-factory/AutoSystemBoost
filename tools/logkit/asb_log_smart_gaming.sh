@@ -60,6 +60,7 @@ lk_finalize_smart_gaming() {
   lk_capture_smart_sessions_window
   lk_snapshot_smart_store "after"
   lk_emit_smart_summary
+  lk_emit_report_card
   lk_emit_gaming_thermal_correlation
   lk_finalize
 }

@@ -228,6 +228,9 @@ lk_snapshot_state() {
     settings get global device_idle_constants 2>/dev/null
     echo ""
     echo "===== ASB OBSERVABILITY ENDPOINTS ====="
+    echo "--- state (key=value) ---"
+    cat /dev/.asb/state 2>/dev/null || echo "  (absent)"
+    echo ""
     echo "--- recovery.json ---"
     cat /dev/.asb/recovery.json 2>/dev/null || echo "  (absent — no recovery events)"
     echo ""
@@ -815,6 +818,49 @@ lk_snapshot_smart_store() {
 }
 
 # End-of-run Smart Mode aggregate summary
+lk_kv_state() {
+  grep "^$1=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2
+}
+
+lk_emit_report_card() {
+  _out="$LK_OUT_DIR/_report_card.txt"
+  _dur_h=$(awk -v s="$LK_START_EPOCH" 'BEGIN { printf "%.2f", (systime()-s)/3600 }')
+  _q_last=$(lk_kv_state smart_quality_last)
+  _q_avg=$(lk_kv_state smart_quality_avg)
+  _q_fail=$(lk_kv_state smart_q_fail)
+  _budget_sev=$(lk_kv_state smart_budget_sev)
+  _budget_pred=$(lk_kv_state smart_budget_pred_h_x10)
+  _budget_src=$(lk_kv_state smart_budget_src)
+  _ewma=$(lk_kv_state smart_drain_ewma_x10)
+  _anom=$(lk_kv_state anomaly_code)
+  _anom_n=$(lk_kv_state anomaly_count_1h)
+  _det=$(lk_kv_state cap_detente_skipped)
+  _flavor=$(lk_kv_state build_flavor)
+  _unit=$(lk_kv_state bat_cur_unit)
+  _clamp1h=$(lk_kv_state vendor_clamp_1h 2>/dev/null)
+  [ -z "$_clamp1h" ] && _clamp1h=$(grep -o '"vendor_clamp_1h": [0-9]*' /dev/.asb/conflicts.json 2>/dev/null | grep -o '[0-9]*')
+  case "$_q_fail" in
+    1) _fail_name="battery" ;;
+    2) _fail_name="heat" ;;
+    3) _fail_name="stability" ;;
+    4) _fail_name="vendor_war" ;;
+    *) _fail_name="none" ;;
+  esac
+  {
+    echo "===== ASB Report Card ====="
+    echo "capture:         ${LK_SCENARIO:-unknown}  duration: ${_dur_h}h  flavor: ${_flavor:-?}"
+    echo ""
+    echo "session quality: last=${_q_last:--}  avg=${_q_avg:--}  primary_failure=${_fail_name}"
+    echo "energy budget:   severity=${_budget_sev:--}  predicted_h_x10=${_budget_pred:--}  src=$([ "$_budget_src" = "1" ] && echo bucket || echo global)  drain_ewma_x10=${_ewma:--}"
+    echo "vendor war:      clamp_1h=${_clamp1h:--}  detente_skipped_total=${_det:--}"
+    echo "anomalies:       code=${_anom:-0}  episodes_1h=${_anom_n:-0}"
+    echo "sensors:         bat_cur_unit=${_unit:--} (0=undecided 1=uA 2=mA)"
+    echo ""
+    echo "score key: quality 0-100 (>=80 good), budget sev 0=ok 1=warn 2=emergency"
+  } > "$_out"
+  lk_log "report card -> $_out"
+}
+
 lk_emit_smart_summary() {
   _trace="$LK_OUT_DIR/smart_trace.tsv"
   _out="$LK_OUT_DIR/_smart_summary.txt"
