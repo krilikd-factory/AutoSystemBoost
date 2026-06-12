@@ -843,6 +843,7 @@ body.live-active .page:not(.live-page) {
 
 /* Smart Mode section divider: compact on Live page */
 .live-page .sec { margin-top: 14px !important; margin-bottom: 6px !important; }
+.config-page .sec { margin-top: 0 !important; }
 
 /* Smart Mode info banner — shows under Profile row on Live page */
 .smart-banner {
@@ -1284,7 +1285,7 @@ body.live-active .page:not(.live-page) {
         <div class="live-cell-value" id="liveSkin">—</div>
       </div>
       <div class="live-cell">
-        <div class="live-cell-label">Surface</div>
+        <div class="live-cell-label">Hotspot · internal</div>
         <div class="live-cell-value" id="liveSurface">—</div>
       </div>
     </div>
@@ -1593,17 +1594,17 @@ const CFG_ITEMS = [
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While plugged in: leans toward performance when the battery is cool, and automatically backs off the moment the pack heats up, so charging stays fast and the device stays cool.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Night Quiet Mode',
-    desc:'Ultra-quiet sleep: the governor minimizes its own sensor reads and background activity during your night window.' },
+    desc:'Ultra-quiet sleep: during your night window the governor minimizes its own sensor reads and background activity. Works with the fixed 23:00\u201306:00 window even if schedule learning is OFF.' },
   { key:'night_quiet_auto', type:'bool', def:'1', name:'Learn My Sleep Schedule',
-    desc:'Learns when you actually go to sleep and wake up (from screen activity) and replaces the fixed 23:00\u201306:00 window with your personal one after a few nights.' },
+    desc:'Learns your real bedtime and wake time from screen activity and, after a few nights, replaces the fixed 23:00\u201306:00 window everywhere it is used \u2014 both for Night Quiet Mode and for Smart\u2019s sleep override. Useful even if Night Quiet is OFF.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Automatically switches to the Battery profile when charge is low and restores your previous profile after charging back up.' },
   { key:'UX_MANAGE_ANIM_SCALE', type:'bool', def:'0', name:'Manage Animation Scales',
-    desc:'Lets ASB adjust system animation scales per profile (snappier in Performance). OFF keeps your own animation settings untouched.' },
+    desc:'Per-profile animation speed: Performance shortens system animations (~0.8x) so the UI feels snappier, Battery keeps them stock. Pure visual responsiveness \u2014 no battery cost either way. OFF = ASB never touches your animation settings.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
-    desc:'Lets ASB tune long-press and multi-press touch timeouts per profile. OFF keeps system defaults.' },
+    desc:'Per-profile touch timing: in Performance, long-press and multi-tap detection windows are shortened so holds and double-taps register faster. Some people find shorter long-press too sensitive \u2014 if holds start triggering accidentally, keep this OFF (system defaults).' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
-    desc:'Re-applies animation scales with a forced restart of the animation pipeline after profile switches. Only useful together with Manage Animation Scales.' }
+    desc:'Workaround for OOS builds that ignore live animation-scale changes: re-applies the scale twice to force the UI to pick it up after a profile switch. Does nothing on its own \u2014 only matters if Manage Animation Scales is ON and you notice animations not changing.' }
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -1838,22 +1839,18 @@ async function pollLive(visible) {
     const bma_raw = (st && st.mA) || parseInt(kv.mA || '0', 10);
     const bma = bma_raw < 0 ? -bma_raw : bma_raw;
     const cap_full_mah = _batCapFullMah || 7300;
-    let on_ma, off_ma, eta_note;
+    let on_ma, eta_note;
     const ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
     if (ewma_x10 > 0) {
       on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
-      eta_note = '';
-    } else if (bma > 0) {
-      window._asbEtaMa = window._asbEtaMa ? Math.round((window._asbEtaMa * 3 + bma) / 4) : bma;
-      on_ma = Math.max(50, window._asbEtaMa);
-      eta_note = ' (mA)';
+      eta_note = ' (measured)';
     } else {
       if (profile === 'performance') { on_ma = 650; }
       else if (profile === 'battery') { on_ma = 400; }
       else { on_ma = 500; }
       eta_note = ' (est.)';
     }
-    off_ma = Math.max(20, Math.floor(on_ma / 10));
+    const off_ma = Math.max(20, Math.floor(on_ma / 10));
     const remain_mah = bcap > 0 ? Math.floor(cap_full_mah * bcap / 100) : 0;
     const fmtHm = (mins) => {
       if (!mins || mins <= 0) return '—';
