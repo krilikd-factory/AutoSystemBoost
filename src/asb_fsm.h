@@ -132,6 +132,15 @@ static const asb_profile_bounds_t g_profile_bounds[3] = {
 
 #define PROFILE_BATTERY     0
 static int fsm_profile_is_battery = 0;
+/* V50: smart profile spends most of a night exactly like battery, but the
+ * idle telemetry below only accumulated under PROFILE_BATTERY. With all
+ * counters stuck at zero, idle_quality read 0, classify_environment()
+ * reported hostile for flawless nights, clean-night reward was unreachable
+ * and the next session was primed IDLE_NOISY. Track idle telemetry for
+ * smart too; FSM *shaping* (entry thresholds, gaming suppression) stays
+ * battery-only via fsm_profile_is_battery. */
+static int fsm_profile_is_smart = 0;
+#define fsm_profile_tracks_idle (fsm_profile_is_battery || fsm_profile_is_smart)
 static int fsm_profile_is_balanced = 0;
 #define PROFILE_BALANCED    1
 #define PROFILE_PERFORMANCE 2
@@ -389,13 +398,13 @@ static inline void fsm_flush_state_time(asb_fsm_t *fsm) {
         case ASB_STATE_GAMING:    fsm->ses_time_gaming_sec    += spent; break;
         case ASB_STATE_SUSTAINED: fsm->ses_time_sustained_sec += spent; break;
         case ASB_STATE_DEEP_IDLE:
-            if (fsm_profile_is_battery) { fsm->bat_time_deep_idle_sec  += spent; }
+            if (fsm_profile_tracks_idle) { fsm->bat_time_deep_idle_sec  += spent; }
             break;
         case ASB_STATE_LIGHT_IDLE:
-            if (fsm_profile_is_battery) { fsm->bat_time_light_idle_sec += spent; }
+            if (fsm_profile_tracks_idle) { fsm->bat_time_light_idle_sec += spent; }
             break;
         case ASB_STATE_MODERATE:
-            if (fsm_profile_is_battery) { fsm->bat_time_moderate_sec   += spent; }
+            if (fsm_profile_tracks_idle) { fsm->bat_time_moderate_sec   += spent; }
             break;
         default: break;
     }
@@ -418,11 +427,11 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
     fsm->auto_battery_reason[sizeof(fsm->auto_battery_reason) - 1] = '\0';
     fsm->auto_battery_since = 0;
     {
-        FILE *_abf = fopen("/dev/.asb/auto_battery_state", "r");
+        FILE *_abf = fopen("/data/adb/asb/auto_battery_state", "r");
         if (_abf) {
             int _act = 0, _ridx = -1;
             if (fscanf(_abf, "%d %d", &_act, &_ridx) == 2) {
-                if (_act == 1 && _ridx >= 0 && _ridx < 3 && _ridx != PROFILE_BATTERY) {
+                if (_act == 1 && _ridx >= 0 && _ridx < ASB_PROFILE_COUNT && _ridx != PROFILE_BATTERY) {
                     fsm->auto_battery_active = 1;
                     fsm->auto_battery_restore_idx = _ridx;
                 }
@@ -437,7 +446,7 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
 }
 
 static inline void fsm_auto_battery_persist(const asb_fsm_t *fsm) {
-    FILE *f = fopen("/dev/.asb/auto_battery_state", "w");
+    FILE *f = fopen("/data/adb/asb/auto_battery_state", "w");
     if (!f) return;
     fprintf(f, "%d %d\n", fsm->auto_battery_active, fsm->auto_battery_restore_idx);
     fclose(f);
@@ -519,15 +528,25 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
     fsm->virtual_ceiling_p1       = 0;
 }
 
+static int g_gaming_confirm_streak = 0;
+
 static asb_state_t fsm_desired(const asb_metrics_t *m) {
     if (!m->misc.screen_on) return ASB_STATE_DEEP_IDLE;
 
     int ma_valid = (m->bat.current_ma > 0 && !m->bat.charging);
 
     if (m->gpu.load_pct >= g_asb_cfg.gaming_gpu_enter) {
+        if (g_gaming_confirm_streak < 10000) g_gaming_confirm_streak++;
+    } else if (m->gpu.load_pct < g_asb_cfg.gaming_gpu_exit) {
+        g_gaming_confirm_streak = 0;
+    }
+
+    if (m->gpu.load_pct >= g_asb_cfg.gaming_gpu_enter) {
         if (g_asb_cfg.bat_suppress_gaming && fsm_profile_is_battery)
             return ASB_STATE_HEAVY;
-        return ASB_STATE_GAMING;
+        if (g_gaming_confirm_streak >= g_asb_cfg.gaming_confirm_ticks)
+            return ASB_STATE_GAMING;
+        return ASB_STATE_HEAVY;
     }
 
     /* 3-tier load thresholds: battery > balanced > global(performance)
@@ -588,6 +607,7 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         fsm->pending = ASB_STATE_DEEP_IDLE;
         fsm->pending_ticks = 0;
         fsm->state_changed = 1;
+        g_gaming_confirm_streak = 0;
     }
     else if (m->misc.screen_on && fsm->state == ASB_STATE_DEEP_IDLE) {
         fsm->state   = ASB_STATE_MODERATE;
@@ -1078,14 +1098,14 @@ if (!can_leave &&
             case ASB_STATE_GAMING:   fsm->ses_time_gaming_sec   += spent; break;
             case ASB_STATE_SUSTAINED:fsm->ses_time_sustained_sec+= spent; break;
             case ASB_STATE_DEEP_IDLE:
-                if (fsm_profile_is_battery) { fsm->bat_time_deep_idle_sec  += spent; } break;
+                if (fsm_profile_tracks_idle) { fsm->bat_time_deep_idle_sec  += spent; } break;
             case ASB_STATE_LIGHT_IDLE:
-                if (fsm_profile_is_battery) { fsm->bat_time_light_idle_sec += spent; } break;
+                if (fsm_profile_tracks_idle) { fsm->bat_time_light_idle_sec += spent; } break;
             case ASB_STATE_MODERATE:
-                if (fsm_profile_is_battery) { fsm->bat_time_moderate_sec   += spent; } break;
+                if (fsm_profile_tracks_idle) { fsm->bat_time_moderate_sec   += spent; } break;
             default: break;
         }
-        if (fsm_profile_is_battery &&
+        if (fsm_profile_tracks_idle &&
             fsm->prev_state == ASB_STATE_DEEP_IDLE &&
             fsm->state != ASB_STATE_DEEP_IDLE) {
             fsm->bat_wake_cycles++;
@@ -1095,7 +1115,7 @@ if (!can_leave &&
             else
                 fsm->bat_wake_bg++;
         }
-        if (fsm_profile_is_battery &&
+        if (fsm_profile_tracks_idle &&
             fsm->state == ASB_STATE_DEEP_IDLE &&
             fsm->bat_time_to_first_deep == 0 &&
             fsm->ses_start_ts > 0)

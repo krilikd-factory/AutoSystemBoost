@@ -9,6 +9,7 @@ typedef struct {
     float heavy_load_enter;
     float moderate_load_enter;
     int   gaming_gpu_enter;
+    int   gaming_confirm_ticks;
     int   sustained_gpu_min;
     float sustained_load_min;
     int   sustained_temp_enter;
@@ -104,6 +105,26 @@ typedef struct {
     int   night_quiet_hour_start;  /* hour 0-23 when night-fast starts (default 23) */
     int   night_quiet_hour_end;    /* hour 0-23 when night-fast ends (default 6) */
 
+    /* V50: per-user night window learning.
+     * When night_quiet_auto=1 the governor observes when the screen goes
+     * off for the night and when the first sustained morning screen-on
+     * happens, EWMA-learns both as minutes-of-day with circular wrap, and
+     * (after night_quiet_auto_min_samples nights) replaces the static
+     * hour_start/hour_end pair with the learned window. The static hours
+     * stay as the seed/fallback until enough nights are observed. */
+    int   night_quiet_auto;             /* 1=learn window per user (default 1) */
+    int   night_quiet_auto_min_samples; /* nights required before learned window is used (default 3) */
+
+    /* V50: charge-aware layer.
+     * While charging, Smart Mode may lean toward performance (screen on,
+     * battery cool) and must lean away from it the moment battery
+     * temperature says the charger is already heating the pack.
+     * Temperatures are in deci-degC to match power_supply battery/temp. */
+    int   charge_aware_enable;       /* 1=enable feature (default 1) */
+    int   charge_assist_alpha_max;   /* alpha_battery ceiling while assisting, x1000 (default 450) */
+    int   charge_temp_warn_dC;       /* batt temp where assist is dropped (default 390 = 39.0C) */
+    int   charge_temp_hot_dC;        /* batt temp where cool-charge guard engages (default 415 = 41.5C) */
+
     /* Smart Mode — additive adaptive layer on top of the profile envelopes.
      * Master on/off lives in /data/adb/asb/smart_mode_enabled (file flag);
      * this field is the runtime mirror of that flag. */
@@ -133,6 +154,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->heavy_load_enter    = 20.0f;
     c->moderate_load_enter = 14.0f;
     c->gaming_gpu_enter    = 65;
+    c->gaming_confirm_ticks = 6;
     c->sustained_gpu_min   = 45;
     c->sustained_load_min  = 4.0f;
     c->sustained_temp_enter= 65;
@@ -210,6 +232,12 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->night_quiet_enable           = 1;
     c->night_quiet_hour_start       = 23;
     c->night_quiet_hour_end         = 6;
+    c->night_quiet_auto             = 1;
+    c->night_quiet_auto_min_samples = 3;
+    c->charge_aware_enable          = 1;
+    c->charge_assist_alpha_max      = 450;
+    c->charge_temp_warn_dC          = 390;
+    c->charge_temp_hot_dC           = 415;
 
     /* Smart Mode defaults — actual on/off comes from /data/adb/asb/smart_mode_enabled */
     c->smart_mode_enabled           = 0;     /* file flag overrides at boot */
@@ -239,6 +267,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     if (!strcmp(k, "heavy_gpu_enter")) c->heavy_gpu_enter = atoi(v);
     else if (!strcmp(k, "heavy_load_enter")) c->heavy_load_enter = (float)atof(v);
     else if (!strcmp(k, "gaming_gpu_enter")) c->gaming_gpu_enter = atoi(v);
+    else if (!strcmp(k, "gaming_confirm_ticks")) c->gaming_confirm_ticks = atoi(v);
     else if (!strcmp(k, "sustained_gpu_min")) c->sustained_gpu_min = atoi(v);
     else if (!strcmp(k, "sustained_load_min")) c->sustained_load_min = (float)atof(v);
     else if (!strcmp(k, "sustained_temp_enter")) c->sustained_temp_enter = atoi(v);
@@ -303,6 +332,12 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "night_quiet_enable"))      c->night_quiet_enable      = atoi(v);
     else if (!strcmp(k, "night_quiet_hour_start"))  c->night_quiet_hour_start  = atoi(v);
     else if (!strcmp(k, "night_quiet_hour_end"))    c->night_quiet_hour_end    = atoi(v);
+    else if (!strcmp(k, "night_quiet_auto"))             c->night_quiet_auto             = atoi(v);
+    else if (!strcmp(k, "night_quiet_auto_min_samples")) c->night_quiet_auto_min_samples = atoi(v);
+    else if (!strcmp(k, "charge_aware_enable"))     c->charge_aware_enable     = atoi(v);
+    else if (!strcmp(k, "charge_assist_alpha_max")) c->charge_assist_alpha_max = atoi(v);
+    else if (!strcmp(k, "charge_temp_warn_dC"))     c->charge_temp_warn_dC     = atoi(v);
+    else if (!strcmp(k, "charge_temp_hot_dC"))      c->charge_temp_hot_dC      = atoi(v);
     else if (!strcmp(k, "sustained_reentry_cooldown_s")) c->sustained_reentry_cooldown_s = atoi(v);
     else if (!strcmp(k, "highload_mode")) {
         if (!strcmp(v, "burst"))   c->highload_mode = 1;

@@ -182,6 +182,27 @@ static int metrics_find_batt_current_path(void) {
     return -1;
 }
 
+static int g_batt_cur_unit = 0;
+static int g_batt_cur_samples = 0;
+static long g_batt_cur_peak = 0;
+
+static int asb_batt_current_to_ma(long raw) {
+    long a = labs(raw);
+    if (g_batt_cur_unit == 0) {
+        if (a > g_batt_cur_peak) g_batt_cur_peak = a;
+        if (a >= 100000) g_batt_cur_unit = 1;
+        else {
+            g_batt_cur_samples++;
+            if (g_batt_cur_samples >= 30 && g_batt_cur_peak > 0 &&
+                g_batt_cur_peak < 50000) {
+                g_batt_cur_unit = 2;
+            }
+        }
+    }
+    if (g_batt_cur_unit == 2) return (int)(a > 100000 ? 0 : a);
+    return (int)(a / 1000);
+}
+
 static void metrics_read_battery(asb_battery_t *b) {
     int idx = metrics_find_batt_current_path();
     if (idx >= 0) {
@@ -192,7 +213,7 @@ static void metrics_read_battery(asb_battery_t *b) {
     b->voltage_uv   = sysfs_read_int(PATH_BATT_VOLTAGE, 3800000);
     b->capacity_pct = sysfs_read_int(PATH_BATT_CAPACITY, 50);
     b->temp_dC      = sysfs_read_int(PATH_BATT_TEMP, 250);
-    b->current_ma   = abs(b->current_ua) / 1000;
+    b->current_ma   = asb_batt_current_to_ma(b->current_ua);
 
     char st[16] = {0};
     sysfs_read_str(PATH_BATT_STATUS, st, sizeof(st));

@@ -106,6 +106,42 @@ typedef enum {
 #define ASB_SMART_TREND_MAX_BUMP_X1000 120
 #define ASB_SMART_TREND_WINDOW_S 30
 #define ASB_SMART_TREND_STALE_S 180
+#define ASB_SMART_TREND_HOT_MIN_TEMP_C 40
+#define ASB_SMART_TREND_HOT_MIN_SLOPE_MC_MIN 2000
+#define ASB_SMART_DRAIN_MIN_ON_SEC 600
+#define ASB_SMART_DRAIN_HEAVY_PCTPH_X10 1500
+#define ASB_SMART_DRAIN_HI_NUM 5
+#define ASB_SMART_DRAIN_HI_DEN 4
+#define ASB_SMART_DRAIN_LO_NUM 4
+#define ASB_SMART_DRAIN_LO_DEN 5
+#define ASB_SMART_APPHEAT_N 16
+#define ASB_SMART_APPHEAT_MAGIC 0x41534148u
+#define ASB_SMART_APPHEAT_VERSION 1
+#define ASB_SMART_APPHEAT_BUMP 2
+#define ASB_SMART_APPHEAT_MAX 100
+#define ASB_SMART_APPHEAT_HOT_SCORE 10
+#define ASB_SMART_APPHEAT_LEARN_SLOPE_MC_MIN 6000
+#define ASB_SMART_APPHEAT_DECAY_PER_DAY 1
+#define ASB_SMART_APPHEAT_FILE "/data/adb/asb/smart_appheat.bin"
+#define ASB_SMART_APPHEAT_DRAIN_BUMP 2
+#define ASB_SMART_APPHEAT_DRAIN_SAMPLE_X10 1200
+#define ASB_SMART_BUDGET_MAX_PCT 50
+#define ASB_SMART_BUDGET_EMERG_H_X10 20
+#define ASB_SMART_BUDGET_WARN_H_X10 40
+#define ASB_SMART_BUDGET_EMERG_ALPHA_X1000 700
+#define ASB_SMART_BUDGET_WARN_ALPHA_X1000 600
+#define ASB_SMART_BUDGET_DWELL_S 120
+#define ASB_SMART_QUALITY_BAT_GOOD_X10 50
+#define ASB_SMART_QUALITY_BAT_BAD_X10 250
+#define ASB_SMART_QUALITY_HEAT_GOOD_C 45
+#define ASB_SMART_QUALITY_HEAT_BAD_C 75
+#define ASB_ANOM_NONE 0
+#define ASB_ANOM_PKG_MISSING 1
+#define ASB_ANOM_VENDOR_WAR 2
+#define ASB_ANOM_DRAIN_SPIKE 3
+#define ASB_ANOM_STUCK_BATTERY 4
+#define ASB_ANOM_VENDOR_WAR_CLAMPS_1H 400
+#define ASB_ANOM_DRAIN_SPIKE_X10 250
 
 #define ASB_SMART_VETO_CPU_TEMP_C        65
 #define ASB_SMART_VETO_VENDOR_CLAMP_1H   300
@@ -128,5 +164,33 @@ typedef enum {
 
 /* 50→80. Faster bias adaptation per session outcome. */
 #define ASB_SMART_LEARN_RATE_X1000 80
+
+/* V50: charge-aware layer.
+ * Power classes derived from |current| × voltage at the pack.
+ * Cool-charge floors mirror the idle-screen override levels. */
+#define ASB_CHARGE_POWER_FAST_W      12
+#define ASB_CHARGE_POWER_SUPER_W     33
+#define ASB_CHARGE_CLASS_NONE        0
+#define ASB_CHARGE_CLASS_SLOW        1
+#define ASB_CHARGE_CLASS_FAST        2
+#define ASB_CHARGE_CLASS_SUPER       3
+#define ASB_CHARGE_COOL_ALPHA_X1000      850
+#define ASB_CHARGE_HOT_ALPHA_X1000       800
+#define ASB_CHARGE_SUPER_WARN_BIAS_DC    10
+
+/* V50: night window learner.
+ * Minutes-of-day EWMA with circular wrap; onset = screen-off that
+ * survives ASB_NIGHT_ONSET_HOLD_S, wake = first screen-on after
+ * ASB_NIGHT_MIN_SLEEP_S of cumulative darkness. */
+#define ASB_NIGHT_ONSET_HOLD_S     3600
+#define ASB_NIGHT_MIN_SLEEP_S      (3 * 3600)
+#define ASB_NIGHT_EWMA_NUM         1
+#define ASB_NIGHT_EWMA_DEN         4
+#define ASB_NIGHT_ONSET_WIN_FROM   (19 * 60)
+#define ASB_NIGHT_ONSET_WIN_TO     (5 * 60)
+#define ASB_NIGHT_WAKE_WIN_FROM    (4 * 60)
+#define ASB_NIGHT_WAKE_WIN_TO      (14 * 60)
+#define ASB_NIGHT_MARGIN_PRE_MIN   15
+#define ASB_NIGHT_MARGIN_POST_MIN  20
 
 #endif
