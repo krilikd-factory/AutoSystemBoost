@@ -157,6 +157,20 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
 - `quarantine` — 1 if config-stale detection active
 - `user_id`, `quarantine_left` — quarantine status
 
+**Charge-aware (V50)**
+- `charging` — 1 while the pack reports Charging
+- `smart_charge_assist` — 1 when Smart leans toward performance because plugged + cool
+- `smart_charge_cool` — 1 when the cool-charge guard is leaning toward battery (pack warm or screen off while plugged)
+- `smart_charge_class` — 0 none, 1 slow (<12W), 2 fast (12–33W), 3 super (≥33W)
+- `smart_charge_w_x10` — estimated charge power, W×10, observability only
+
+**Night window learner (V50)**
+- `night_auto` — config `night_quiet_auto` mirror
+- `night_auto_ready` — 1 once enough nights observed and the learned window is in control
+- `night_window_active` — 1 while current time is inside the learned window
+- `night_sleep_min`, `night_wake_min` — learned minutes-of-day (-1 until first sample)
+- `night_samples` — number of complete nights observed
+
 ---
 
 ## `/dev/.asb/auto_battery_state` — V42 persistence
