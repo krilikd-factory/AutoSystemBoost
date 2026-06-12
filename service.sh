@@ -107,7 +107,7 @@ fi
 command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
 
 asb_migrate_governor_conf() {
-  local _expected_schema=15
+  local _expected_schema=16
   local _conf_dir="$MODDIR/config"
   local _user_conf="$_conf_dir/governor.conf"
   local _shipped_conf="$_conf_dir/governor.conf.shipped"
@@ -473,7 +473,7 @@ if has pm; then
   if command -v asb_pm_disable >/dev/null 2>&1; then
     asb_pm_disable com.android.traceur
   else
-    pm disable-user --user 0 com.android.traceur >/dev/null 2>&1 || true
+    asb_pm_disable com.android.traceur
   fi
 fi
 # ASB:VM:BEGIN
@@ -607,7 +607,7 @@ apply_net() {
   sysctlw net.ipv4.tcp_max_orphans 8192
   sysctlw net.ipv4.tcp_rfc1337 1
   [ -n "$_P_UDP_MEM" ] && [ -e /proc/sys/net/ipv4/udp_mem ] && sysctlw net.ipv4.udp_mem "$_P_UDP_MEM"
-  [ -n "$_P_HAPPY_EYEBALLS" ] && settings put system cloud_dns_happy_eyeballs_priority_enabled "$_P_HAPPY_EYEBALLS" >/dev/null 2>&1 || true
+  [ -n "$_P_HAPPY_EYEBALLS" ] && asb_settings_put system cloud_dns_happy_eyeballs_priority_enabled "$_P_HAPPY_EYEBALLS"
   sysctlw net.ipv4.tcp_keepalive_time   $_P_TCP_KEEPIDLE
   sysctlw net.ipv4.tcp_keepalive_intvl  75
   sysctlw net.ipv4.tcp_keepalive_probes 9
@@ -690,6 +690,7 @@ apply_wifi_country() {
   has iw && iw reg set "$_cc" >/dev/null 2>&1 || true
   has cmd && {
     cmd -w wifi force-country-code enabled "$_cc" >/dev/null 2>&1 || true
+    echo 1 > /data/adb/asb/wifi_cc_forced 2>/dev/null || true
     cmd -w wifi set-country-code "$_cc" >/dev/null 2>&1 || true
   }
   has settings && {
@@ -1100,8 +1101,8 @@ apply_bg_trim_runtime() {
     asb_settings_put global wifi_scan_always_enabled 0
     asb_settings_put global wifi_wakeup_enabled 0
   else
-    settings put global wifi_scan_always_enabled 0 >/dev/null 2>&1 || true
-    settings put global wifi_wakeup_enabled 0      >/dev/null 2>&1 || true
+    asb_settings_put global wifi_scan_always_enabled 0
+    asb_settings_put global wifi_wakeup_enabled 0
   fi
 
   asb_bg_trim_oplus_tune
@@ -1757,7 +1758,7 @@ asb_load_profile
     fi
   fi
   asb_log "light reinforce 60s profile=$ASB_PROFILE"
-  has settings && settings put global network_recommendations_enabled 0 >/dev/null 2>&1 || true
+  has settings && asb_settings_put global network_recommendations_enabled 0
   sleep 240
   asb_load_profile
   if asb_feature_enabled KERNEL; then

@@ -19,6 +19,9 @@ for _legacy_pair in \
   fi
 done
 
+[ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
+command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
+
 asb_feature_enabled() {
   _key="$1"
   [ -r "$MODDIR/features.conf" ] || return 0
@@ -28,23 +31,23 @@ asb_feature_enabled() {
 }
 # ASB:LOG:BEGIN
 if asb_feature_enabled LOG; then
-setprop persist.vendor.radio.adb_log_on 0 2>/dev/null
-setprop persist.vendor.radio.log_loc 0 2>/dev/null
-setprop persist.radio.low_priority_static_log 0 2>/dev/null
-setprop persist.vendor.ims.disableADBLogs 1 2>/dev/null
-setprop persist.vendor.ims.disableDebugDataPathLogs 1 2>/dev/null
-setprop persist.vendor.ims.disableDebugLogs 1 2>/dev/null
-setprop persist.vendor.ims.disableIMSLogs 1 2>/dev/null
-setprop persist.vendor.ims.disableQXDMLogs 1 2>/dev/null
-setprop persist.vendor.ims.dumpWiFiLogs 0 2>/dev/null
-setprop persist.vendor.ims.vt.enableadb 0 2>/dev/null
-setprop persist.vendor.logkit.ctrl 0 2>/dev/null
-setprop persist.vendor.logkit.logcat 0 2>/dev/null
-setprop persist.vendor.qcomlog.enable 0 2>/dev/null
-setprop persist.vendor.sys.log.collector 0 2>/dev/null
-setprop persist.sys.perfetto.disable 1 2>/dev/null
-setprop persist.vendor.perfetto.disable 1 2>/dev/null
-setprop persist.vendor.qti.telemetry.disable 1 2>/dev/null
+asb_persist_safe persist.vendor.radio.adb_log_on 0
+asb_persist_safe persist.vendor.radio.log_loc 0
+asb_persist_safe persist.radio.low_priority_static_log 0
+asb_persist_safe persist.vendor.ims.disableADBLogs 1
+asb_persist_safe persist.vendor.ims.disableDebugDataPathLogs 1
+asb_persist_safe persist.vendor.ims.disableDebugLogs 1
+asb_persist_safe persist.vendor.ims.disableIMSLogs 1
+asb_persist_safe persist.vendor.ims.disableQXDMLogs 1
+asb_persist_safe persist.vendor.ims.dumpWiFiLogs 0
+asb_persist_safe persist.vendor.ims.vt.enableadb 0
+asb_persist_safe persist.vendor.logkit.ctrl 0
+asb_persist_safe persist.vendor.logkit.logcat 0
+asb_persist_safe persist.vendor.qcomlog.enable 0
+asb_persist_safe persist.vendor.sys.log.collector 0
+asb_persist_safe persist.sys.perfetto.disable 1
+asb_persist_safe persist.vendor.perfetto.disable 1
+asb_persist_safe persist.vendor.qti.telemetry.disable 1
 fi
 # ASB:LOG:END
 if command -v resetprop >/dev/null 2>&1; then
@@ -83,10 +86,10 @@ if command -v resetprop >/dev/null 2>&1; then
   # ASB:KERNEL:END
 fi
 # ASB:WIFI:BEGIN
-asb_feature_enabled WIFI && setprop persist.vendor.wlan.scan_throttle 1 2>/dev/null
+asb_feature_enabled WIFI && asb_persist_safe persist.vendor.wlan.scan_throttle 1
 # ASB:WIFI:END
 # ASB:BT:BEGIN
-asb_feature_enabled BT && setprop persist.vendor.bluetooth.btsnoopenable false 2>/dev/null
+asb_feature_enabled BT && asb_persist_safe persist.vendor.bluetooth.btsnoopenable false
 # ASB:BT:END
 # ASB:VENDOR_OVERLAY:BEGIN
 if asb_feature_enabled VENDOR_OVERLAY && [ -d "$MODDIR/system/vendor/etc/perf" ]; then

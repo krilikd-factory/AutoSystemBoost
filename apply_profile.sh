@@ -23,6 +23,7 @@ MODDIR="$(asb_resolve_moddir)"
 mkdir -p /data/adb/asb 2>/dev/null
 
 PROFILE_CORE=""
+[ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
 for _pc in "$MODDIR/runtime/profile_core.sh" "$MODDIR/common/profile_core.sh"; do
   [ -r "$_pc" ] && { PROFILE_CORE="$_pc"; break; }
 done
@@ -59,6 +60,17 @@ case "$PROFILE_FLAG" in
   auto) : ;;
   *) PROFILE_FLAG="" ;;
 esac
+
+if [ "$PROFILE" != "smart" ] && [ "$PROFILE_FLAG" != "auto" ]; then
+  if [ "$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)" = "1" ]; then
+    echo "0" > /data/adb/asb/smart_mode_enabled 2>/dev/null
+    rm -f /data/adb/asb/smart_prev_profile 2>/dev/null
+  fi
+fi
+
+if [ "$PROFILE_FLAG" = "auto" ]; then
+  echo "$PROFILE" > /data/adb/asb/auto_switch_marker 2>/dev/null || true
+fi
 
 kill_prev_worker() {
   [ -r "$PIDFILE" ] || return 0

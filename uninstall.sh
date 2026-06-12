@@ -2,8 +2,53 @@
 
 MODDIR=${0%/*}
 
-[ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
-command -v asb_baseline_replay >/dev/null 2>&1 && asb_baseline_replay
+_BL=/data/adb/asb/baseline.txt
+_BL_TMP=/data/adb/.asb_uninstall_baseline
+_CC_FORCED=0
+[ -f /data/adb/asb/wifi_cc_forced ] && _CC_FORCED=1
+
+if [ -f "$_BL" ]; then
+  cp -f "$_BL" "$_BL_TMP" 2>/dev/null
+  while IFS='|' read -r _type _a1 _a2 _a3; do
+    [ "$_type" = "prop" ] || continue
+    if [ -z "$_a2" ]; then
+      resetprop -p --delete "$_a1" >/dev/null 2>&1 || resetprop --delete "$_a1" >/dev/null 2>&1 || true
+    else
+      setprop "$_a1" "$_a2" 2>/dev/null || resetprop "$_a1" "$_a2" >/dev/null 2>&1 || true
+    fi
+  done < "$_BL"
+fi
+
+if [ -f "$_BL_TMP" ] || [ "$_CC_FORCED" = "1" ]; then
+  (
+    _t=0
+    while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 240 ]; do
+      sleep 5
+      _t=$((_t + 5))
+    done
+    sleep 5
+    if [ -f "$_BL_TMP" ]; then
+      while IFS='|' read -r _type _a1 _a2 _a3; do
+        case "$_type" in
+          settings)
+            if [ -z "$_a3" ]; then
+              settings delete "$_a1" "$_a2" >/dev/null 2>&1 || true
+            else
+              settings put "$_a1" "$_a2" "$_a3" >/dev/null 2>&1 || true
+            fi
+            ;;
+          pm)
+            [ "$_a2" = "enabled" ] && pm enable --user 0 "$_a1" >/dev/null 2>&1 || true
+            ;;
+        esac
+      done < "$_BL_TMP"
+      rm -f "$_BL_TMP" 2>/dev/null
+    fi
+    if [ "$_CC_FORCED" = "1" ]; then
+      cmd -w wifi force-country-code disabled >/dev/null 2>&1 || true
+    fi
+  ) &
+fi
 
 _cam_orig="$MODDIR/config/camera_orig.conf"
 if [ -f "$_cam_orig" ]; then
