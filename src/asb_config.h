@@ -9,7 +9,6 @@ typedef struct {
     float heavy_load_enter;
     float moderate_load_enter;
     int   gaming_gpu_enter;
-    int   gaming_confirm_ticks;
     int   sustained_gpu_min;
     float sustained_load_min;
     int   sustained_temp_enter;
@@ -134,7 +133,6 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->heavy_load_enter    = 20.0f;
     c->moderate_load_enter = 14.0f;
     c->gaming_gpu_enter    = 65;
-    c->gaming_confirm_ticks = 6;
     c->sustained_gpu_min   = 45;
     c->sustained_load_min  = 4.0f;
     c->sustained_temp_enter= 65;
@@ -241,7 +239,6 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     if (!strcmp(k, "heavy_gpu_enter")) c->heavy_gpu_enter = atoi(v);
     else if (!strcmp(k, "heavy_load_enter")) c->heavy_load_enter = (float)atof(v);
     else if (!strcmp(k, "gaming_gpu_enter")) c->gaming_gpu_enter = atoi(v);
-    else if (!strcmp(k, "gaming_confirm_ticks")) c->gaming_confirm_ticks = atoi(v);
     else if (!strcmp(k, "sustained_gpu_min")) c->sustained_gpu_min = atoi(v);
     else if (!strcmp(k, "sustained_load_min")) c->sustained_load_min = (float)atof(v);
     else if (!strcmp(k, "sustained_temp_enter")) c->sustained_temp_enter = atoi(v);

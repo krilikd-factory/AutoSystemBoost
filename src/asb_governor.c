@@ -67,28 +67,6 @@ static int g_pkg_detect_status = 0;    /* asb_pkg_status_t code */
 
 /* Smart Mode session counters, kept separate from the legacy battery/balanced/
  * performance counters so learner_state.json shows Smart activity honestly. */
-static time_t g_smart_drain_prev_ts  = 0;
-static int    g_smart_drain_prev_pct = -1;
-static long   g_smart_drain_on_sec   = 0;
-static long   g_smart_drain_drop_x100 = 0;
-static int    g_smart_drain_rate_ewma_x10 = 0;
-static int    g_smart_last_quality = -1;
-static int    g_smart_budget_src = 0;
-static time_t g_gov_start_ts = 0;
-static int    g_smart_boot_settle = 0;
-static int    g_smart_q_bat = -1;
-static int    g_smart_q_heat = -1;
-static int    g_smart_q_stab = -1;
-static int    g_smart_q_vendor = -1;
-static int    g_smart_q_fail = 0;
-static unsigned long g_smart_ses_clamp_start = 0;
-static int    g_smart_quality_ewma = -1;
-static int    g_anom_code = 0;
-static int    g_anom_count_1h = 0;
-static time_t g_anom_window_start = 0;
-static long   g_anom_pkg_total = 0;
-static long   g_anom_pkg_ok = 0;
-
 static int g_smart_sessions_total    = 0;
 static int g_smart_sessions_day      = 0;
 static int g_smart_sessions_night    = 0;
@@ -447,7 +425,7 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-#define ASB_VERSION "V50"
+#define ASB_VERSION "V49"
 
 static const char *intent_names[] = {"unknown","benchmark","long_game","idle","mixed","sleep_idle","idle_warm"};
 
@@ -739,9 +717,6 @@ static time_t g_cap_recent_window_start = 0;
 static int    g_cap_slow_vendor_clamps = 0;
 static time_t g_cap_slow_window_start = 0;
 static time_t g_cap_vendor_hold_until = 0;
-static int    g_cap_detente_active = 0;
-static time_t g_cap_detente_since = 0;
-static long   g_cap_detente_skipped = 0;
 
 /* Forward declarations for write_state */
 static int asb_cap_writes_should_back_off(void);
@@ -886,40 +861,6 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.low_battery_override ? 1 : 0,
             g_smart_rt.thermal_trend_bump,
             g_smart_trend_slope_mc_min);
-    {
-        long live_x10 = 0;
-        if (g_smart_drain_on_sec >= 300 && g_smart_drain_drop_x100 > 0) {
-            live_x10 = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
-        }
-        int hot = (asb_smart_appheat_score(g_smart_rt.app_hash, time(NULL))
-                   >= ASB_SMART_APPHEAT_HOT_SCORE);
-        int known = 0;
-        for (int i = 0; i < ASB_SMART_APPHEAT_N; i++)
-            if (g_smart_appheat.entries[i].hash != 0) known++;
-        fprintf(f, "smart_drain_window_s=%ld\nsmart_drain_pctph_x10=%ld\n"
-                   "smart_app_hot=%d\nsmart_appheat_n=%d\n",
-                g_smart_drain_on_sec, live_x10, hot, known);
-        fprintf(f, "smart_budget_sev=%d\nsmart_budget_pred_h_x10=%d\n"
-                   "smart_drain_ewma_x10=%d\n"
-                   "smart_quality_last=%d\nsmart_quality_avg=%d\n"
-                   "smart_app_drain=%d\n"
-                   "anomaly_code=%d\nanomaly_count_1h=%d\n",
-                g_smart_rt.budget_severity, g_smart_rt.budget_pred_h_x10,
-                g_smart_drain_rate_ewma_x10,
-                g_smart_last_quality, g_smart_quality_ewma,
-                asb_smart_appheat_drain(g_smart_rt.app_hash, time(NULL)),
-                g_anom_code, g_anom_count_1h);
-        fprintf(f, "smart_q_bat=%d\nsmart_q_heat=%d\nsmart_q_stab=%d\n"
-                   "smart_q_vendor=%d\nsmart_q_fail=%d\nsmart_budget_src=%d\n",
-                g_smart_q_bat, g_smart_q_heat, g_smart_q_stab,
-                g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
-        fprintf(f, "smart_boot_settle=%d\n", g_smart_boot_settle);
-        fprintf(f, "cap_sleep_detente=%d\ncap_detente_skipped=%ld\n"
-                   "build_flavor=%s\nbat_cur_unit=%d\n",
-                g_cap_detente_active, g_cap_detente_skipped,
-                ASB_DEBUG_BUILD ? "debug" : "release",
-                g_batt_cur_unit);
-    }
     /* Debug build only: include plaintext pkg if cached */
 #if ASB_DEBUG_BUILD
     if (g_asb_cfg.smart_pkg_plaintext || ASB_DEBUG_BUILD) {
@@ -1078,9 +1019,7 @@ static void write_conflicts_json(void) {
         "  \"cap_owner\": \"%s\",\n"
         "  \"cap_owner_since\": %ld,\n"
         "  \"cap_vendor_holddown_active\": %d,\n"
-        "  \"cap_recent_vendor_clamps_60s\": %d,\n"
-        "  \"cap_sleep_detente\": %d,\n"
-        "  \"cap_detente_skipped\": %ld\n"
+        "  \"cap_recent_vendor_clamps_60s\": %d\n"
         "}\n",
         g_v44_last_clamp_source[0] ? g_v44_last_clamp_source : "none",
         (long long)g_v44_last_clamp_ts,
@@ -1090,8 +1029,7 @@ static void write_conflicts_json(void) {
         asb_cap_owner_name(g_cap_owner_eff),
         (long)g_cap_owner_since,
         asb_cap_writes_should_back_off(),
-        g_cap_recent_vendor_clamps,
-        g_cap_detente_active, g_cap_detente_skipped);
+        g_cap_recent_vendor_clamps);
     fflush(f);
     fsync(fileno(f));
     fclose(f);
@@ -1137,9 +1075,7 @@ static void write_learner_state_json(const asb_fsm_t *fsm) {
         "    \"last_bucket_id\": %d,\n"
         "    \"last_daypart\": %d,\n"
         "    \"last_confidence\": %d,\n"
-        "    \"last_update_ts\": %ld,\n"
-        "    \"last_quality\": %d,\n"
-        "    \"avg_quality\": %d\n"
+        "    \"last_update_ts\": %ld\n"
         "  },\n"
         "  \"self_tuned\": {\n"
         "    \"bat_fast_idle_s\": %d,\n"
@@ -1163,7 +1099,6 @@ static void write_learner_state_json(const asb_fsm_t *fsm) {
         g_smart_sessions_gaming, g_smart_bucket_updates,
         g_smart_last_bucket_id, g_smart_last_daypart, g_smart_last_confidence,
         (long)g_smart_last_update_ts,
-        g_smart_last_quality, g_smart_quality_ewma,
         g_asb_cfg.bat_fast_idle_s,
         g_asb_cfg.bat_heavy_load_enter,
         g_asb_cfg.bat_moderate_load_enter,
@@ -2158,52 +2093,9 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         sin.was_thermal_hit = (fsm->ses_thermal_entries > 0) ? 1 : 0;
         sin.sustained_pct = sus_pct;
         sin.idle_q_x10 = (idle_quality >= 0) ? idle_quality * 10 : 0;
-        sin.drain_pctph_x10 = 0;
-        sin.drain_on_sec = (int)g_smart_drain_on_sec;
-        if (g_smart_drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC) {
-            long r = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
-            if (r < 0) r = 0;
-            if (r > 6000) r = 6000;
-            sin.drain_pctph_x10 = (int)r;
-        }
-        if (sin.drain_pctph_x10 > 0) {
-            if (g_smart_drain_rate_ewma_x10 <= 0)
-                g_smart_drain_rate_ewma_x10 = sin.drain_pctph_x10;
-            else
-                g_smart_drain_rate_ewma_x10 =
-                    (g_smart_drain_rate_ewma_x10 * 3 + sin.drain_pctph_x10) / 4;
-            if (sin.drain_pctph_x10 >= ASB_SMART_APPHEAT_DRAIN_SAMPLE_X10 &&
-                g_smart_rt.app_hash_session_top != 0) {
-                asb_smart_appheat_drain_bump(g_smart_rt.app_hash_session_top, time(NULL));
-            }
-        }
-        {
-            int _qv = (sin.drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC);
-            int _vph = -1;
-            if (sin.dur_s >= 300 &&
-                g_v44_clamp_total >= g_smart_ses_clamp_start) {
-                unsigned long _cd = g_v44_clamp_total - g_smart_ses_clamp_start;
-                _vph = (int)((_cd * 3600UL) / (unsigned long)sin.dur_s);
-                if (_vph > 9999) _vph = 9999;
-            }
-            asb_smart_quality_t _qb;
-            int _q = asb_smart_session_quality_ex(sin.drain_pctph_x10, _qv,
-                                               fsm->ses_max_temp,
-                                               fsm->ses_thermal_entries,
-                                               fsm->ses_recovery_count,
-                                               _vph, &_qb);
-            g_smart_last_quality = _q;
-            g_smart_q_bat = _qb.q_battery;
-            g_smart_q_heat = _qb.q_heat;
-            g_smart_q_stab = _qb.q_stability;
-            g_smart_q_vendor = _qb.q_vendor;
-            g_smart_q_fail = _qb.primary_failure;
-            if (g_smart_quality_ewma < 0) g_smart_quality_ewma = _q;
-            else g_smart_quality_ewma = (g_smart_quality_ewma * 3 + _q) / 4;
-            g_smart_ses_clamp_start = g_v44_clamp_total;
-        }
-        g_smart_drain_on_sec = 0;
-        g_smart_drain_drop_x100 = 0;
+        /* Heuristic drain rate calc: if dur > 60s and battery dropped, derive mAh/h.
+         * (alpha): use simple proxy from current_ma if available, else 0. */
+        sin.drain_mah_per_hour = 0;  /* deferred to fine-tuning */
         /* Estimate screen_on_pct from bat_wake counters (rough approximation) */
         if (fsm->bat_wake_cycles > 0 && dur > 0) {
             sin.screen_on_pct = (int)((fsm->bat_wake_screen * 100L) / fsm->bat_wake_cycles);
@@ -2805,54 +2697,11 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                                           screen_off_secs, &g_smart_rt);
 
     asb_smart_apply_low_battery_override(battery_pct, charging, &g_smart_rt);
-    {
-        int _budget_rate = g_smart_drain_rate_ewma_x10;
-        g_smart_budget_src = 0;
-        if (g_smart_rt.bucket_id < ASB_SMART_BUCKETS &&
-            g_smart_rt.conf_x1000 >= 350) {
-            int _bew = (int)g_smart_store.buckets[g_smart_rt.bucket_id].avg_drain_pctph_x10;
-            if (_bew > 0) {
-                _budget_rate = _bew;
-                g_smart_budget_src = 1;
-            }
-        }
-        asb_smart_apply_energy_budget(battery_pct, charging,
-                                      _budget_rate, now, &g_smart_rt);
-    }
-
-    if (battery_pct >= 1 && battery_pct <= 100) {
-        if (screen_on && !charging && g_smart_drain_prev_ts > 0 &&
-            g_smart_drain_prev_pct >= 1) {
-            long ddt = (long)(now - g_smart_drain_prev_ts);
-            if (ddt > 0 && ddt <= 30) {
-                g_smart_drain_on_sec += ddt;
-                int ddrop = g_smart_drain_prev_pct - battery_pct;
-                if (ddrop > 0 && ddrop <= 5) {
-                    g_smart_drain_drop_x100 += (long)ddrop * 100L;
-                }
-            }
-        }
-        g_smart_drain_prev_ts = now;
-        g_smart_drain_prev_pct = battery_pct;
-        if (screen_on) {
-            g_anom_pkg_total++;
-            if (g_pkg_detect_ok) g_anom_pkg_ok++;
-        }
-    } else {
-        g_smart_drain_prev_ts = 0;
-        g_smart_drain_prev_pct = -1;
-    }
 
     int vendor_clamp_1h = (int)g_v44_clamp_1h;
     int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
-    {
-        int _settle = (g_gov_start_ts > 0 &&
-                       (long)(now - g_gov_start_ts) < 900);
-        asb_smart_apply_thermal_trend(cpu_max_c, now, g_smart_rt.app_hash,
-                                      _settle, &g_smart_rt);
-        g_smart_boot_settle = _settle;
-    }
+    asb_smart_apply_thermal_trend(cpu_max_c, now, &g_smart_rt);
 
     /* intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
      * gaming relax. Each is a no-op if its signal is unavailable on this device,
@@ -3008,7 +2857,6 @@ static void asb_smart_persist_check(void) {
         if (rc == 0) {
             g_smart_last_save_ts = now;
         }
-        asb_smart_appheat_save();
     }
     /* Weekly backup */
     if (now - g_smart_last_backup_ts >= ASB_SMART_BACKUP_PERIOD_S) {
@@ -3065,7 +2913,6 @@ static int asb_smart_init(void) {
      * flag — store availability and on/off are separate concerns. */
     asb_smart_load_outcome_t outcome;
     int rc = asb_smart_store_load(&g_smart_store, &outcome);
-    asb_smart_appheat_load();
     g_smart_store_loaded = 1;
 
     if (outcome.loaded_from_main) {
@@ -3127,10 +2974,12 @@ int main(int argc, char **argv) {
         }
     }
 
-    g_gov_start_ts = time(NULL);
+#if ASB_DEBUG_BUILD
     g_logf = fopen(LOG_FILE, "a");
-    asb_log("=== asb_governor starting (pid %d, flavor=%s) ===", getpid(),
-            ASB_DEBUG_BUILD ? "debug" : "release");
+#else
+    g_logf = NULL;
+#endif
+    asb_log("=== asb_governor starting (pid %d) ===", getpid());
 
     signal(SIGTERM, sig_handler);
     signal(SIGINT,  sig_handler);
@@ -3794,21 +3643,6 @@ int main(int argc, char **argv) {
                     if (strcmp(pname, "battery")     == 0) new_idx = PROFILE_BATTERY;
                     if (strcmp(pname, "performance") == 0) new_idx = PROFILE_PERFORMANCE;
                     if (strcmp(pname, "smart")       == 0) new_idx = PROFILE_SMART;
-                    if (!_is_auto) {
-                        FILE *_amf = fopen("/data/adb/asb/auto_switch_marker", "r");
-                        if (_amf) {
-                            char _am[32];
-                            if (fgets(_am, sizeof(_am), _amf)) {
-                                size_t _aml = strlen(_am);
-                                while (_aml > 0 && (_am[_aml-1] == '\n' || _am[_aml-1] == '\r' || _am[_aml-1] == ' ')) {
-                                    _am[--_aml] = '\0';
-                                }
-                                if (strcmp(_am, pname) == 0) _is_auto = 1;
-                            }
-                            fclose(_amf);
-                            remove("/data/adb/asb/auto_switch_marker");
-                        }
-                    }
                     if (new_idx != fsm.profile_idx) {
                         fsm_flush_state_time(&fsm);
                         persistent_stats_save(&fsm);
@@ -4203,58 +4037,7 @@ int main(int argc, char **argv) {
                              _pname);
                     int _rc = system(_cmd);
                     (void)_rc;
-                } else if (!fsm.auto_battery_active &&
-                           fsm.profile_idx == PROFILE_BATTERY &&
-                           metrics.bat.capacity_pct >= g_asb_cfg.auto_battery_high_pct &&
-                           _can_act &&
-                           asb_smart_flag_read() == 1) {
-                    fsm.auto_battery_last_action = _now_t;
-                    strncpy(fsm.auto_battery_reason, "smart_recovery", sizeof(fsm.auto_battery_reason) - 1);
-                    fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
-                    fsm.auto_battery_since = time(NULL);
-                    fsm_auto_battery_persist(&fsm);
-                    asb_log("auto_battery: smart recovery restore bat=%d%% (high=%d) -> spawning apply_profile.sh smart auto",
-                            metrics.bat.capacity_pct,
-                            g_asb_cfg.auto_battery_high_pct);
-                    int _rc2 = system("sh /data/adb/modules/AutoSystemBoost/apply_profile.sh smart auto >/dev/null 2>&1 &");
-                    (void)_rc2;
                 }
-            }
-
-            {
-                time_t _an_now = time(NULL);
-                if (g_anom_window_start == 0 ||
-                    (long)(_an_now - g_anom_window_start) >= 3600) {
-                    g_anom_window_start = _an_now;
-                    g_anom_count_1h = 0;
-                    g_anom_pkg_total = 0;
-                    g_anom_pkg_ok = 0;
-                }
-                int _code = ASB_ANOM_NONE;
-                long _live_x10 = 0;
-                if (g_smart_drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC &&
-                    g_smart_drain_drop_x100 > 0) {
-                    _live_x10 = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
-                }
-                if (_live_x10 >= ASB_ANOM_DRAIN_SPIKE_X10) {
-                    _code = ASB_ANOM_DRAIN_SPIKE;
-                } else if (g_v44_clamp_1h >= ASB_ANOM_VENDOR_WAR_CLAMPS_1H) {
-                    _code = ASB_ANOM_VENDOR_WAR;
-                } else if (fsm.profile_idx == PROFILE_BATTERY &&
-                           !metrics.bat.charging &&
-                           metrics.bat.capacity_pct >=
-                               g_asb_cfg.auto_battery_high_pct + 10 &&
-                           asb_smart_flag_read() == 1) {
-                    _code = ASB_ANOM_STUCK_BATTERY;
-                } else if (g_anom_pkg_total >= 50 &&
-                           g_anom_pkg_ok * 10 < g_anom_pkg_total) {
-                    _code = ASB_ANOM_PKG_MISSING;
-                }
-                if (_code != ASB_ANOM_NONE && g_anom_code == ASB_ANOM_NONE) {
-                    g_anom_count_1h++;
-                    asb_log("anomaly: code=%d count_1h=%d", _code, g_anom_count_1h);
-                }
-                g_anom_code = _code;
             }
 
             /* log thermal CPU source flips (primary <-> fallback)
@@ -4644,44 +4427,7 @@ int main(int argc, char **argv) {
                     }
                 }
             }
-            {
-                int _det = asb_cap_detente_check(
-                        metrics.misc.screen_on,
-                        fsm.state == ASB_STATE_DEEP_IDLE ||
-                            fsm.state == ASB_STATE_LIGHT_IDLE,
-                        g_cap_owner_eff == ASB_CAP_OWNER_VENDOR,
-                        (long)(time(NULL) - g_cap_owner_since),
-                        metrics.therm.cpu_max_c,
-                        fsm.thermal_cap);
-                static int _det_false_ticks = 0;
-                int _hard_exit = (metrics.misc.screen_on || fsm.thermal_cap);
-                if (_det) _det_false_ticks = 0;
-                if (_det && !g_cap_detente_active) {
-                    g_cap_detente_active = 1;
-                    g_cap_detente_since = time(NULL);
-                    asb_log("cap_detente: enter (vendor-owned deep idle, freezing cap writes)");
-                } else if (!_det && g_cap_detente_active) {
-                    _det_false_ticks++;
-                    if (_hard_exit || _det_false_ticks >= 3) {
-                        g_cap_detente_active = 0;
-                        _det_false_ticks = 0;
-                        asb_log("cap_detente: exit after %lds (%s, skipped %ld writes total)",
-                                (long)(time(NULL) - g_cap_detente_since),
-                                _hard_exit ? "wake/thermal" : "conditions faded",
-                                g_cap_detente_skipped);
-                    }
-                }
-            }
-            if ((changed || force_write) && g_cap_detente_active) {
-                g_cap_detente_skipped++;
-            } else if ((changed || force_write) &&
-                       asb_cap_writes_should_back_off() &&
-                       !force_write && !metrics.misc.screen_on &&
-                       (fsm.state == ASB_STATE_DEEP_IDLE ||
-                        fsm.state == ASB_STATE_LIGHT_IDLE) &&
-                       !fsm.thermal_cap) {
-                g_cap_detente_skipped++;
-            } else if (changed || force_write) {
+            if (changed || force_write) {
                 int writes = writer_apply_caps(&fsm.current_caps, force_write, fsm.state, fsm.thermal_cap);
                 if (writes > 0) {
                     g_total_writes += writes;
