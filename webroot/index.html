@@ -1000,7 +1000,7 @@ body.live-active .page:not(.live-page) {
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V50</div>
+      <div class="badge" id="verBadge">V49</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1093,7 +1093,7 @@ body.live-active .page:not(.live-page) {
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
-      <div class="badge" id="liveVerBadge">V50</div>
+      <div class="badge" id="liveVerBadge">V49</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1522,21 +1522,16 @@ async function pollLive(visible) {
     const bma = bma_raw < 0 ? -bma_raw : bma_raw;
     const cap_full_mah = _batCapFullMah || 7300;
     let on_ma, off_ma, eta_note;
-    const ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
-    if (ewma_x10 > 0) {
-      on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
+    if (bma > 0) {
+      on_ma = bma;
+      off_ma = Math.max(20, Math.floor(bma / 8));
       eta_note = '';
-    } else if (bma > 0) {
-      window._asbEtaMa = window._asbEtaMa ? Math.round((window._asbEtaMa * 3 + bma) / 4) : bma;
-      on_ma = Math.max(50, window._asbEtaMa);
-      eta_note = ' (mA)';
     } else {
-      if (profile === 'performance') { on_ma = 650; }
-      else if (profile === 'battery') { on_ma = 400; }
-      else { on_ma = 500; }
+      if (profile === 'performance') { on_ma = 650; off_ma = 85; }
+      else if (profile === 'battery') { on_ma = 400; off_ma = 45; }
+      else { on_ma = 500; off_ma = 60; }
       eta_note = ' (est.)';
     }
-    off_ma = Math.max(20, Math.floor(on_ma / 10));
     const remain_mah = bcap > 0 ? Math.floor(cap_full_mah * bcap / 100) : 0;
     const fmtHm = (mins) => {
       if (!mins || mins <= 0) return '—';
@@ -1582,16 +1577,9 @@ async function pollLive(visible) {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
       if (learnerLabel) learnerLabel.textContent = 'Learner';
       _el('liveLearner').className = 'live-cell-value';
-      const sm = learner.smart_sessions;
-      if (profile === 'smart' && sm && sm.total > 0) {
-        const conf = sm.last_confidence || 0;
-        const stier = conf >= 650 ? 'strong' : (conf >= 350 ? 'active' : 'learning');
-        _el('liveLearner').textContent = stier + ' ' + Math.round(conf / 10) + '% · ' + sm.total + ' ses';
-      } else {
-        const tier = learner.trust_tier || '—';
-        const sessions = (learner.sessions && learner.sessions.battery) || 0;
-        _el('liveLearner').textContent = tier + ' · ' + sessions + ' ses';
-      }
+      const tier = learner.trust_tier || '—';
+      const sessions = (learner.sessions && learner.sessions.battery) || 0;
+      _el('liveLearner').textContent = tier + ' · ' + sessions + ' ses';
     } else {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
       if (learnerLabel) learnerLabel.textContent = 'Learner';
