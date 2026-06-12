@@ -4870,14 +4870,17 @@ int main(int argc, char **argv) {
                 }
                 /* Detect if caps actually changed to avoid spurious writes */
                 int _diff = 0;
+                int _thr = fsm.thermal_cap ? 1 : 38400;
                 for (int i = 0; i < 3; i++) {
-                    if (_new_caps.cpu_max[i] != fsm.current_caps.cpu_max[i]) { _diff = 1; break; }
-                    if (_new_caps.cpu_min[i] != fsm.current_caps.cpu_min[i]) { _diff = 1; break; }
+                    if (abs(_new_caps.cpu_max[i] - fsm.current_caps.cpu_max[i]) >= _thr) { _diff = 1; break; }
+                    if (abs(_new_caps.cpu_min[i] - fsm.current_caps.cpu_min[i]) >= _thr) { _diff = 1; break; }
                 }
-                if (!_diff &&
-                    (_new_caps.gpu_max_pct != fsm.current_caps.gpu_max_pct ||
-                     _new_caps.gpu_min_pct != fsm.current_caps.gpu_min_pct)) {
-                    _diff = 1;
+                if (!_diff) {
+                    int _gthr = fsm.thermal_cap ? 1 : 2;
+                    if (abs(_new_caps.gpu_max_pct - fsm.current_caps.gpu_max_pct) >= _gthr ||
+                        abs(_new_caps.gpu_min_pct - fsm.current_caps.gpu_min_pct) >= _gthr) {
+                        _diff = 1;
+                    }
                 }
                 if (_diff) {
                     fsm.current_caps = _new_caps;
