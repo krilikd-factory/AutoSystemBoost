@@ -984,6 +984,120 @@ body.live-active .page:not(.live-page) {
   }
 }
 
+
+/* ── Config page (boot-level settings) ──────────────────────────── */
+.config-page { overflow-y: auto !important; }
+.cfg-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cfg-row {
+  width: 100%;
+  background: var(--card, rgba(255,255,255,0.03));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+}
+.cfg-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cfg-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.cfg-desc {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.55;
+  text-align: left;
+}
+.cfg-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.cfg-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.75);
+  transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.25s ease;
+}
+.cfg-switch.on {
+  background: linear-gradient(135deg, rgba(0,240,180,0.35), rgba(0,212,255,0.25));
+  border-color: rgba(0,240,180,0.45);
+}
+.cfg-switch.on::after {
+  transform: translateX(18px);
+  background: #fff;
+}
+.cfg-switch.busy { opacity: 0.45; pointer-events: none; }
+.cfg-seg {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cfg-seg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.cfg-seg button.on {
+  background: linear-gradient(135deg, rgba(0,240,180,0.30), rgba(0,212,255,0.20));
+  opacity: 1;
+  font-weight: 600;
+}
+.cfg-note {
+  width: 100%;
+  margin: 4px 0 12px;
+  padding: 10px 14px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid rgba(255,196,0,0.25);
+  background: rgba(255,196,0,0.07);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+}
+.cfg-reboot {
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255,26,26,0.35);
+  background: rgba(255,26,26,0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -1000,7 +1114,7 @@ body.live-active .page:not(.live-page) {
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V49</div>
+      <div class="badge" id="verBadge">V50</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1011,6 +1125,13 @@ body.live-active .page:not(.live-page) {
           <path d="M3 12h3l3-9 4 18 3-9h5"></path>
         </svg>
         <span>Live</span>
+      </button>
+      <button class="live-chip" id="configChip" onclick="openConfigPage()" aria-label="Open Config page">
+        <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span>Config</span>
       </button>
     </div>
   </div>
@@ -1093,7 +1214,7 @@ body.live-active .page:not(.live-page) {
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
-      <div class="badge" id="liveVerBadge">V49</div>
+      <div class="badge" id="liveVerBadge">V50</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1205,6 +1326,62 @@ body.live-active .page:not(.live-page) {
     </div>
 
   </div>
+
+  </div>
+
+  <div class="tg-link-wrap">
+    <a class="tg-link" href="tg://resolve?domain=DKomsomol" onclick="openTelegram(event)">
+      <span class="tg-link-ico">✉️</span>
+      <span class="tg-link-main">@DKomsomol</span>
+    </a>
+    <div class="tg-link-sub">by Dima_Krylov</div>
+  </div>
+
+  <div class="footer"></div>
+
+</div>
+
+
+<!-- CONFIG PAGE (overlay) -->
+<div class="page live-page config-page" id="configPage" aria-hidden="true">
+  <div class="live-inner">
+
+  <div class="header">
+    <div class="logo-c">
+      <div class="logo-glow"></div>
+      <div class="logo-ring"></div>
+      <div class="logo-inner">🛸</div>
+    </div>
+    <div class="app-name">AutoSystemBoost</div>
+    <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
+    <div class="badges">
+      <div class="badge badge-a" id="cfgSocBadge">DEVICE</div>
+      <div class="badge" id="cfgVerBadge">V50</div>
+    </div>
+    <div class="status-row">
+      <div class="dot"></div>
+      <span class="status-label">Profile:&nbsp;</span>
+      <span class="status-val" id="cfgCurProfile">balanced</span>
+      <button class="live-chip" id="cfgBackChip" onclick="closeConfigPage()" aria-label="Back to main">
+        <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"></path>
+        </svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-line"></div>
+    <div class="sec-label">Configuration</div>
+    <div class="sec-line"></div>
+  </div>
+
+  <div class="cfg-note">These settings are saved to <b>governor.conf</b> and take effect after a device reboot.</div>
+
+  <div class="cfg-list" id="cfgList"></div>
+
+  <button class="cfg-reboot" onclick="cfgReboot()">↻ Reboot device</button>
 
   </div>
 
@@ -1397,10 +1574,150 @@ function closeLivePage() {
 
 window.addEventListener('popstate', () => {
   if (_liveOpen) closeLivePage();
+  if (_cfgOpen) closeConfigPage();
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && _liveOpen) closeLivePage();
+  if (e.key === 'Escape' && _cfgOpen) closeConfigPage();
 });
+
+/* ── Config page ─────────────────────────────────────────────── */
+const CFG_FILE = MD + '/config/governor.conf';
+const CFG_ITEMS = [
+  { key:'AUDIO_EQ_COMPAT', type:'bool', def:'1', name:'Audio EQ Compatibility',
+    desc:'Keeps the audio chain compatible with Flow Equalizer and other global EQ apps. Recommended ON if you use a system-wide equalizer.' },
+  { key:'AUDIO_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Audio Tweaks',
+    desc:'Enables the extended audio prop set beyond the stock-safe chain. May conflict with some BT headsets or DSP effects \u2014 leave OFF unless you know you need it.' },
+  { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
+    desc:'How hard cached background apps are trimmed. Aggressive frees more RAM for games but cold-restarts background apps more often.' },
+  { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
+    desc:'While plugged in: leans toward performance when the battery is cool, and automatically backs off the moment the pack heats up, so charging stays fast and the device stays cool.' },
+  { key:'night_quiet_enable', type:'bool', def:'1', name:'Night Quiet Mode',
+    desc:'Ultra-quiet sleep: the governor minimizes its own sensor reads and background activity during your night window.' },
+  { key:'night_quiet_auto', type:'bool', def:'1', name:'Learn My Sleep Schedule',
+    desc:'Learns when you actually go to sleep and wake up (from screen activity) and replaces the fixed 23:00\u201306:00 window with your personal one after a few nights.' },
+  { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
+    desc:'Automatically switches to the Battery profile when charge is low and restores your previous profile after charging back up.' },
+  { key:'UX_MANAGE_ANIM_SCALE', type:'bool', def:'0', name:'Manage Animation Scales',
+    desc:'Lets ASB adjust system animation scales per profile (snappier in Performance). OFF keeps your own animation settings untouched.' },
+  { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
+    desc:'Lets ASB tune long-press and multi-press touch timeouts per profile. OFF keeps system defaults.' },
+  { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
+    desc:'Re-applies animation scales with a forced restart of the animation pipeline after profile switches. Only useful together with Manage Animation Scales.' }
+];
+let _cfgVals = {};
+let _cfgOpen = false;
+
+async function cfgLoad() {
+  const r = await run('cat ' + CFG_FILE + ' 2>/dev/null');
+  _cfgVals = {};
+  (r.stdout || '').split(/\r?\n/).forEach(line => {
+    const eq = line.indexOf('=');
+    if (eq > 0) _cfgVals[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+  });
+  cfgRender();
+}
+
+function cfgRender() {
+  const list = _el('cfgList');
+  if (!list) return;
+  list.innerHTML = '';
+  CFG_ITEMS.forEach(it => {
+    const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
+    const row = document.createElement('div');
+    row.className = 'cfg-row';
+    const top = document.createElement('div');
+    top.className = 'cfg-row-top';
+    const nm = document.createElement('div');
+    nm.className = 'cfg-name';
+    nm.textContent = it.name;
+    top.appendChild(nm);
+    if (it.type === 'bool') {
+      const sw = document.createElement('div');
+      sw.className = 'cfg-switch' + (cur === '1' ? ' on' : '');
+      sw.setAttribute('role', 'switch');
+      sw.setAttribute('aria-checked', cur === '1' ? 'true' : 'false');
+      sw.onclick = () => cfgSet(it.key, (cur === '1') ? '0' : '1', sw);
+      top.appendChild(sw);
+    } else {
+      const seg = document.createElement('div');
+      seg.className = 'cfg-seg';
+      it.opts.forEach(o => {
+        const b = document.createElement('button');
+        b.textContent = o;
+        if (o === cur) b.classList.add('on');
+        b.onclick = () => cfgSet(it.key, o, seg);
+        seg.appendChild(b);
+      });
+      top.appendChild(seg);
+    }
+    row.appendChild(top);
+    const d = document.createElement('div');
+    d.className = 'cfg-desc';
+    d.textContent = it.desc;
+    row.appendChild(d);
+    list.appendChild(row);
+  });
+}
+
+async function cfgSet(key, val, ctl) {
+  if (ctl) ctl.classList.add('busy');
+  const f = CFG_FILE;
+  const cmd = "sh -c 'if grep -q \"^" + key + "=\" " + f + " 2>/dev/null; then " +
+              "sed -i \"s|^" + key + "=.*|" + key + "=" + val + "|\" " + f + "; " +
+              "else echo " + key + "=" + val + " >> " + f + "; fi'";
+  const r = await run(cmd);
+  if (ctl) ctl.classList.remove('busy');
+  if (r.errno === 0) {
+    _cfgVals[key] = val;
+    haptic();
+    try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
+    toast('\u2713 ' + key + ' = ' + val + ' \u00b7 reboot to apply', 'balanced');
+  } else {
+    toast('\u2717 Failed to write config', 'err');
+  }
+  cfgRender();
+}
+
+let _cfgRebootArmed = 0;
+async function cfgReboot() {
+  const now = Date.now();
+  if (now - _cfgRebootArmed > 4000) {
+    _cfgRebootArmed = now;
+    toast('Tap again to reboot', 'perf');
+    return;
+  }
+  _cfgRebootArmed = 0;
+  toast('Rebooting\u2026', 'perf');
+  await run('svc power reboot 2>/dev/null || reboot');
+}
+
+function openConfigPage() {
+  const p = _el('configPage');
+  if (!p) return;
+  try {
+    _el('cfgDeviceLine').textContent = _el('deviceLine').textContent;
+    _el('cfgSocBadge').textContent   = _el('socBadge').textContent;
+    _el('cfgVerBadge').textContent   = _el('verBadge').textContent;
+    _el('cfgCurProfile').textContent = _el('curProfile').textContent;
+  } catch(e) {}
+  p.classList.add('open');
+  document.body.classList.add('live-active');
+  p.setAttribute('aria-hidden', 'false');
+  p.scrollTop = 0;
+  _cfgOpen = true;
+  cfgLoad();
+}
+
+function closeConfigPage() {
+  const p = _el('configPage');
+  if (!p) return;
+  p.classList.remove('open');
+  document.body.classList.remove('live-active');
+  p.setAttribute('aria-hidden', 'true');
+  _cfgOpen = false;
+}
+
 
 let _batCapFullMah = 0;
 
@@ -1522,16 +1839,21 @@ async function pollLive(visible) {
     const bma = bma_raw < 0 ? -bma_raw : bma_raw;
     const cap_full_mah = _batCapFullMah || 7300;
     let on_ma, off_ma, eta_note;
-    if (bma > 0) {
-      on_ma = bma;
-      off_ma = Math.max(20, Math.floor(bma / 8));
+    const ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
+    if (ewma_x10 > 0) {
+      on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
       eta_note = '';
+    } else if (bma > 0) {
+      window._asbEtaMa = window._asbEtaMa ? Math.round((window._asbEtaMa * 3 + bma) / 4) : bma;
+      on_ma = Math.max(50, window._asbEtaMa);
+      eta_note = ' (mA)';
     } else {
-      if (profile === 'performance') { on_ma = 650; off_ma = 85; }
-      else if (profile === 'battery') { on_ma = 400; off_ma = 45; }
-      else { on_ma = 500; off_ma = 60; }
+      if (profile === 'performance') { on_ma = 650; }
+      else if (profile === 'battery') { on_ma = 400; }
+      else { on_ma = 500; }
       eta_note = ' (est.)';
     }
+    off_ma = Math.max(20, Math.floor(on_ma / 10));
     const remain_mah = bcap > 0 ? Math.floor(cap_full_mah * bcap / 100) : 0;
     const fmtHm = (mins) => {
       if (!mins || mins <= 0) return '—';
@@ -1577,9 +1899,16 @@ async function pollLive(visible) {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
       if (learnerLabel) learnerLabel.textContent = 'Learner';
       _el('liveLearner').className = 'live-cell-value';
-      const tier = learner.trust_tier || '—';
-      const sessions = (learner.sessions && learner.sessions.battery) || 0;
-      _el('liveLearner').textContent = tier + ' · ' + sessions + ' ses';
+      const sm = learner.smart_sessions;
+      if (profile === 'smart' && sm && sm.total > 0) {
+        const conf = sm.last_confidence || 0;
+        const stier = conf >= 650 ? 'strong' : (conf >= 350 ? 'active' : 'learning');
+        _el('liveLearner').textContent = stier + ' ' + Math.round(conf / 10) + '% · ' + sm.total + ' ses';
+      } else {
+        const tier = learner.trust_tier || '—';
+        const sessions = (learner.sessions && learner.sessions.battery) || 0;
+        _el('liveLearner').textContent = tier + ' · ' + sessions + ' ses';
+      }
     } else {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
       if (learnerLabel) learnerLabel.textContent = 'Learner';
