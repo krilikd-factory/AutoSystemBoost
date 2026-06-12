@@ -41,20 +41,23 @@ else
   _btempCx=0
 fi
 
-_state_mA=$(grep -oE '"current_now":[-0-9]+' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)
-if [ -n "$_state_mA" ] && [ "$_state_mA" -ne 0 ] 2>/dev/null; then
-  _real_mA_abs=$(( _state_mA < 0 ? -_state_mA : _state_mA ))
-  _on_ma=$_real_mA_abs
-  _off_ma=$(( _real_mA_abs / 8 ))
+_ewma_x10=$(grep "^smart_drain_ewma_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+_on_ma=0
+if [ -n "$_ewma_x10" ] && [ "$_ewma_x10" -gt 0 ] 2>/dev/null && \
+   [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null; then
+  _on_ma=$(( (_cap_uah / 1000) * _ewma_x10 / 1000 ))
   _eta_note="(measured)"
-else
+fi
+if [ "$_on_ma" -lt 50 ] 2>/dev/null; then
   case "$PROFILE" in
-    performance) _on_ma=650;  _off_ma=85  ;;
-    battery)     _on_ma=400;  _off_ma=45  ;;
-    *)           _on_ma=500;  _off_ma=60  ;;
+    performance) _on_ma=650 ;;
+    battery)     _on_ma=400 ;;
+    *)           _on_ma=500 ;;
   esac
   _eta_note="(heuristic)"
 fi
+_off_ma=$(( _on_ma / 10 ))
+[ "$_off_ma" -lt 20 ] && _off_ma=20
 
 _remain_mah=0
 if [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null && [ -n "$_lvl" ]; then
