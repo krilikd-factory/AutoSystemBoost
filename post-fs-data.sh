@@ -1,4 +1,12 @@
 #!/system/bin/sh
+
+find "$MODDIR" -type d ! -perm 0755 -exec chmod 0755 {} + 2>/dev/null
+find "$MODDIR" -type f ! -perm 0644 -exec chmod 0644 {} + 2>/dev/null
+for _x in "$MODDIR"/*.sh "$MODDIR"/bin/* "$MODDIR"/tools/*.sh "$MODDIR"/tools/*.py \
+          "$MODDIR"/tools/logkit/*.sh "$MODDIR"/runtime/*.sh "$MODDIR"/profiles/*.sh; do
+  [ -e "$_x" ] && chmod 0755 "$_x" 2>/dev/null
+done
+
 MODID="AutoSystemBoost"
 MODDIR="${0%/*}"
 [ -z "$MODDIR" ] || [ "$MODDIR" = "$0" ] && MODDIR="/data/adb/modules/$MODID"
