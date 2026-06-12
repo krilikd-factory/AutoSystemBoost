@@ -23,7 +23,6 @@ MODDIR="$(asb_resolve_moddir)"
 mkdir -p /data/adb/asb 2>/dev/null
 
 PROFILE_CORE=""
-[ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
 for _pc in "$MODDIR/runtime/profile_core.sh" "$MODDIR/common/profile_core.sh"; do
   [ -r "$_pc" ] && { PROFILE_CORE="$_pc"; break; }
 done
@@ -42,6 +41,10 @@ case "$PROFILE" in
   performance|balanced|battery)
     : ;;
   smart)
+    # Smart Mode: persisted profile is 'smart', C governor enters PROFILE_SMART
+    # via read_profile_idx() reading current_profile=smart at boot/socket-notify.
+    # profile_core.sh handles shell-side bootstrap (uses balanced.sh as the
+    # envelope file, since no smart.sh exists by design).
     mkdir -p /data/adb/asb 2>/dev/null
     echo "1" > /data/adb/asb/smart_mode_enabled 2>/dev/null
     if [ ! -r /data/adb/asb/smart_prev_profile ]; then
@@ -61,17 +64,6 @@ case "$PROFILE_FLAG" in
   *) PROFILE_FLAG="" ;;
 esac
 
-if [ "$PROFILE" != "smart" ] && [ "$PROFILE_FLAG" != "auto" ]; then
-  if [ "$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)" = "1" ]; then
-    echo "0" > /data/adb/asb/smart_mode_enabled 2>/dev/null
-    rm -f /data/adb/asb/smart_prev_profile 2>/dev/null
-  fi
-fi
-
-if [ "$PROFILE_FLAG" = "auto" ]; then
-  echo "$PROFILE" > /data/adb/asb/auto_switch_marker 2>/dev/null || true
-fi
-
 kill_prev_worker() {
   [ -r "$PIDFILE" ] || return 0
   _oldpid="$(cat "$PIDFILE" 2>/dev/null)"
@@ -81,10 +73,10 @@ kill_prev_worker() {
 
 asb_update_desc_fallback() {
   case "$1" in
-    performance) _s='description=status: Performance 🔥 | active ✅' ;;
-    battery) _s='description=status: Battery 🔋 | active ✅' ;;
-    smart) _s='description=status: Smart Mode 🤖 | active ✅' ;;
-    *) _s='description=status: Balanced ⚖️ | active ✅' ;;
+    performance) _s='description=status: performance 🔥 | active ✅' ;;
+    battery) _s='description=status: battery 🔋 | active ✅' ;;
+    smart) _s='description=status: 🤖 Smart Mode | active ✅' ;;
+    *) _s='description=status: balanced ⚖️ | active ✅' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
   grep -q '^description=' "$MODDIR/module.prop.tmp" 2>/dev/null && cat "$MODDIR/module.prop.tmp" > "$MODDIR/module.prop"
