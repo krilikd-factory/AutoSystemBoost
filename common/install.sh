@@ -1395,7 +1395,7 @@ EOF
 	fi
 
 	if [ -d "$MODPATH/config" ]; then
-	  echo 15 > "$MODPATH/config/.schema_version" 2>/dev/null || true
+	  echo 16 > "$MODPATH/config/.schema_version" 2>/dev/null || true
 	  chmod 644 "$MODPATH/config/.schema_version" 2>/dev/null || true
 	fi
 
@@ -1411,7 +1411,7 @@ EOF
 {
   "asb_version": "$_asb_ver",
   "build_date": "$_asb_date",
-  "schema_version": 15,
+  "schema_version": 16,
   "hashes": {
     "governor": "$_gov_hash",
     "performance": "$_perf_hash",
