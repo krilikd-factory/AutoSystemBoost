@@ -279,7 +279,7 @@ static void test_night_override(void) {
     rt.interactive_bonus_x1000 = 80;
 
     /* Night conditions all met */
-    asb_smart_apply_night_override(ASB_DAYPART_SLEEP, 0, 0, ASB_APP_IDLE, 50, &rt);
+    asb_smart_apply_night_override(ASB_DAYPART_SLEEP, 0, 0, 0, ASB_APP_IDLE, 50, &rt);
     EXPECT(rt.night_safe_override == 1, "night override fires");
     EXPECT(rt.alpha_battery_x1000 >= 900, "alpha forced ≥ 900");
     EXPECT(rt.sleep_bias_x1000 >= 800, "sleep_bias forced ≥ 800");
@@ -289,20 +289,25 @@ static void test_night_override(void) {
     /* Day condition — should not fire */
     asb_smart_runtime_t rt2 = {0};
     rt2.alpha_battery_x1000 = 400;
-    asb_smart_apply_night_override(ASB_DAYPART_DAY, 1, 0, ASB_APP_IDLE, 50, &rt2);
+    asb_smart_apply_night_override(ASB_DAYPART_DAY, 0, 1, 0, ASB_APP_IDLE, 50, &rt2);
     EXPECT(rt2.night_safe_override == 0, "day → no override");
     EXPECT(rt2.alpha_battery_x1000 == 400, "alpha preserved");
+
+    asb_smart_runtime_t rt2b = {0};
+    rt2b.alpha_battery_x1000 = 300;
+    asb_smart_apply_night_override(ASB_DAYPART_DAY, 1, 0, 0, ASB_APP_IDLE, 50, &rt2b);
+    EXPECT(rt2b.night_safe_override == 1, "learned night window fires outside static dayparts");
 
     /* Night but charging — should not fire */
     asb_smart_runtime_t rt3 = {0};
     rt3.alpha_battery_x1000 = 400;
-    asb_smart_apply_night_override(ASB_DAYPART_SLEEP, 0, 1, ASB_APP_IDLE, 50, &rt3);
+    asb_smart_apply_night_override(ASB_DAYPART_SLEEP, 0, 0, 1, ASB_APP_IDLE, 50, &rt3);
     EXPECT(rt3.night_safe_override == 0, "charging → no override");
 
     /* Night but heavy app foreground — should not fire */
     asb_smart_runtime_t rt4 = {0};
     rt4.alpha_battery_x1000 = 400;
-    asb_smart_apply_night_override(ASB_DAYPART_SLEEP, 0, 0, ASB_APP_GAMING, 50, &rt4);
+    asb_smart_apply_night_override(ASB_DAYPART_SLEEP, 0, 0, 0, ASB_APP_GAMING, 50, &rt4);
     EXPECT(rt4.night_safe_override == 0, "heavy app → no override");
 }
 
@@ -688,6 +693,7 @@ static void test_cap_detente(void) {
     EXPECT(asb_cap_detente_check(1, 1, 1, 300, 35, 0) == 0, "screen on \u2192 no detente");
     EXPECT(asb_cap_detente_check(0, 0, 1, 300, 35, 0) == 0, "not deep idle \u2192 no detente");
     EXPECT(asb_cap_detente_check(0, 1, 0, 300, 35, 0) == 0, "asb owns caps \u2192 no detente");
+    EXPECT(asb_cap_detente_check(0, 1, 1, 300, 35, 0) == 1, "shell or vendor owner both count as foreign");
     EXPECT(asb_cap_detente_check(0, 1, 1, 60, 35, 0) == 0, "vendor owner too fresh \u2192 no detente");
     EXPECT(asb_cap_detente_check(0, 1, 1, 300, 45, 0) == 0, "45C \u2192 no detente");
     EXPECT(asb_cap_detente_check(0, 1, 1, 300, 0, 0) == 0, "invalid temp \u2192 no detente");
