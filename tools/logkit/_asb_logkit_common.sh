@@ -852,7 +852,8 @@ lk_emit_report_card() {
     echo ""
     echo "session quality: last=${_q_last:--}  avg=${_q_avg:--}  primary_failure=${_fail_name}"
     echo "energy budget:   severity=${_budget_sev:--}  predicted_h_x10=${_budget_pred:--}  src=$([ "$_budget_src" = "1" ] && echo bucket || echo global)  drain_ewma_x10=${_ewma:--}"
-    echo "vendor war:      clamp_1h=${_clamp1h:--}  detente_skipped_total=${_det:--}"
+    _own=$(lk_kv_state cap_owner)
+    echo "vendor war:      clamp_1h=${_clamp1h:--}  detente_skipped_total=${_det:--}  cap_owner=${_own:--}"
     echo "anomalies:       code=${_anom:-0}  episodes_1h=${_anom_n:-0}"
     echo "sensors:         bat_cur_unit=${_unit:--} (0=undecided 1=uA 2=mA)"
     echo ""
