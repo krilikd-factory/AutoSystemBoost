@@ -1,3 +1,6 @@
+command -v asb_settings_put >/dev/null 2>&1 || asb_settings_put() {
+  settings put "$1" "$2" "$3" >/dev/null 2>&1 || true
+}
 #!/system/bin/sh
 MODID="AutoSystemBoost"
 ASB_STATE_DIR="/dev/.asb_profile_state"
@@ -305,7 +308,7 @@ asb_apply_net() {
   [ -n "$NET_TCP_MTU_PROBING" ] && sysctlw net.ipv4.tcp_mtu_probing "$NET_TCP_MTU_PROBING" || true
   [ -n "$NET_UDP_MEM" ] && [ -e /proc/sys/net/ipv4/udp_mem ] && sysctlw net.ipv4.udp_mem "$NET_UDP_MEM" || true
   if [ -n "$NET_HAPPY_EYEBALLS" ] && has settings; then
-    settings put system cloud_dns_happy_eyeballs_priority_enabled "$NET_HAPPY_EYEBALLS" >/dev/null 2>&1 || true
+    asb_settings_put system cloud_dns_happy_eyeballs_priority_enabled "$NET_HAPPY_EYEBALLS"
   fi
   if has tc; then
     for _if in $(ls /sys/class/net 2>/dev/null | tr '\n' ' '); do
@@ -322,22 +325,22 @@ asb_apply_ux() {
     local _cur_anim
     _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
     if [ "$_cur_anim" != "$UX_ANIM_SCALE" ]; then
-      settings put global animator_duration_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
-      settings put global transition_animation_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
-      settings put global window_animation_scale "$UX_ANIM_SCALE" >/dev/null 2>&1 || true
+      asb_settings_put global animator_duration_scale "$UX_ANIM_SCALE"
+      asb_settings_put global transition_animation_scale "$UX_ANIM_SCALE"
+      asb_settings_put global window_animation_scale "$UX_ANIM_SCALE"
       _anim_changed=1
     fi
   fi
   if [ -n "$UX_LONG_PRESS" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
-    settings put secure long_press_timeout "$UX_LONG_PRESS" >/dev/null 2>&1 || true
+    asb_settings_put secure long_press_timeout "$UX_LONG_PRESS"
   fi
   if [ -n "$UX_MULTI_PRESS" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
-    settings put secure multi_press_timeout "$UX_MULTI_PRESS" >/dev/null 2>&1 || true
+    asb_settings_put secure multi_press_timeout "$UX_MULTI_PRESS"
   fi
-  [ -n "$UX_ADAPTIVE_BAT" ] && settings put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT" >/dev/null 2>&1 || true
-  [ -n "$UX_RAM_EXPAND" ] && settings put global ram_expand_size "$UX_RAM_EXPAND" >/dev/null 2>&1 || true
-  [ -n "$UX_LOW_HEAT" ] && settings put global sem_low_heat_mode "$UX_LOW_HEAT" >/dev/null 2>&1 || true
-  settings put global google_core_control 0 >/dev/null 2>&1 || true
+  [ -n "$UX_ADAPTIVE_BAT" ] && asb_settings_put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT"
+  [ -n "$UX_RAM_EXPAND" ] && asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
+  [ -n "$UX_LOW_HEAT" ] && asb_settings_put global sem_low_heat_mode "$UX_LOW_HEAT"
+  asb_settings_put global google_core_control 0
 
   if [ "$_anim_changed" = "1" ]; then
     if [ "${UX_ANIM_FORCE_RESTART:-0}" = "1" ]; then

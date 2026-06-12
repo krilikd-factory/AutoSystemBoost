@@ -58,7 +58,7 @@ asb_baseline_replay() {
         ;;
       prop)
         if [ -z "$_a2" ]; then
-          resetprop --delete "$_a1" >/dev/null 2>&1 || true
+          resetprop -p --delete "$_a1" >/dev/null 2>&1 || resetprop --delete "$_a1" >/dev/null 2>&1 || true
         else
           setprop "$_a1" "$_a2" 2>/dev/null || true
         fi
