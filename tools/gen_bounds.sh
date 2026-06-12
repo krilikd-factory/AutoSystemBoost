@@ -94,7 +94,6 @@ trap 'rm -f "$tmp_sh" "$tmp_h"' EXIT
       eval "v=\$${P}_${K}"
       printf '%s_%s=%s\n' "$P" "$K" "$v"
     done
-    printf '\n'
   done
 } > "$tmp_sh"
 
