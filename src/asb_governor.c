@@ -906,6 +906,7 @@ static void asb_night_window_tick(int screen_on, time_t now) {
         return;
     }
     if (!g_night_onset_recorded && g_night_off_since > 0 &&
+        g_night_dark_accum_s < ASB_NIGHT_MIN_SLEEP_S &&
         now - g_night_off_since >= ASB_NIGHT_ONSET_HOLD_S &&
         asb_min_in_window(g_night_off_minute, ASB_NIGHT_ONSET_WIN_FROM,
                           ASB_NIGHT_ONSET_WIN_TO)) {
@@ -2382,6 +2383,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             int _qv = (sin.drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC);
             int _vph = -1;
             if (sin.dur_s >= 300 &&
+                sin.drain_on_sec >= 600 &&
                 g_v44_clamp_total >= g_smart_ses_clamp_start) {
                 unsigned long _cd = g_v44_clamp_total - g_smart_ses_clamp_start;
                 _vph = (int)((_cd * 3600UL) / (unsigned long)sin.dur_s);
@@ -4892,7 +4894,8 @@ int main(int argc, char **argv) {
                         metrics.misc.screen_on,
                         fsm.state == ASB_STATE_DEEP_IDLE ||
                             fsm.state == ASB_STATE_LIGHT_IDLE,
-                        g_cap_owner_eff == ASB_CAP_OWNER_VENDOR,
+                        g_cap_owner_eff == ASB_CAP_OWNER_VENDOR ||
+                            g_cap_owner_eff == ASB_CAP_OWNER_SHELL,
                         (long)(time(NULL) - g_cap_owner_since),
                         metrics.therm.cpu_max_c,
                         fsm.thermal_cap);
@@ -4902,7 +4905,7 @@ int main(int argc, char **argv) {
                 if (_det && !g_cap_detente_active) {
                     g_cap_detente_active = 1;
                     g_cap_detente_since = time(NULL);
-                    asb_log("cap_detente: enter (vendor-owned deep idle, freezing cap writes)");
+                    asb_log("cap_detente: enter (foreign-owned deep idle, freezing cap writes)");
                 } else if (!_det && g_cap_detente_active) {
                     _det_false_ticks++;
                     if (_hard_exit || _det_false_ticks >= 3) {
