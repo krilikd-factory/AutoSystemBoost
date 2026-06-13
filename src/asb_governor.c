@@ -2391,12 +2391,18 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         {
             int _qv = (sin.drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC);
             int _vph = -1;
-            if (sin.dur_s >= 300 &&
+            if (sin.dur_s >= 900 &&
                 sin.drain_on_sec >= 600 &&
                 g_v44_clamp_total >= g_smart_ses_clamp_start) {
                 unsigned long _cd = g_v44_clamp_total - g_smart_ses_clamp_start;
-                _vph = (int)((_cd * 3600UL) / (unsigned long)sin.dur_s);
-                if (_vph > 9999) _vph = 9999;
+                /* Only judge vendor-war when the absolute clamp count is
+                   meaningful; a handful of clamps extrapolated over a short
+                   session produces a misleading per-hour rate and false
+                   primary_failure=vendor_war verdicts. */
+                if (_cd >= 20) {
+                    _vph = (int)((_cd * 3600UL) / (unsigned long)sin.dur_s);
+                    if (_vph > 9999) _vph = 9999;
+                }
             }
             asb_smart_quality_t _qb;
             int _q = asb_smart_session_quality_ex(sin.drain_pctph_x10, _qv,
