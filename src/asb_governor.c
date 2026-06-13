@@ -756,6 +756,11 @@ static time_t g_cap_vendor_hold_until = 0;
 static int    g_cap_detente_active = 0;
 static time_t g_cap_detente_since = 0;
 static long   g_cap_detente_skipped = 0;
+static long   g_write_attempts = 0;
+static long   g_write_skipped_detente = 0;
+static long   g_write_skipped_backoff = 0;
+static int    g_drain_spike_bump = 0;
+static time_t g_drain_spike_until = 0;
 
 /* Forward declarations for write_state */
 static int asb_cap_writes_should_back_off(void);
@@ -1097,6 +1102,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 asb_night_window_ready(),
                 asb_night_window_active(time(NULL)),
                 g_night_sleep_min, g_night_wake_min, g_night_samples);
+        fprintf(f, "write_attempts=%ld\nwrite_skipped_detente=%ld\n"
+                   "write_skipped_backoff=%ld\nbudget_spike_bump=%d\n",
+                g_write_attempts, g_write_skipped_detente,
+                g_write_skipped_backoff, g_drain_spike_bump);
         fprintf(f, "cap_sleep_detente=%d\ncap_detente_skipped=%ld\n"
                    "build_flavor=%s\nbat_cur_unit=%d\n",
                 g_cap_detente_active, g_cap_detente_skipped,
@@ -3046,8 +3055,19 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 g_smart_budget_src = 1;
             }
         }
+        g_drain_spike_bump = (g_drain_spike_until > now) ? 1 : 0;
         asb_smart_apply_energy_budget(battery_pct, charging,
                                       _budget_rate, now, &g_smart_rt);
+        if (g_drain_spike_bump && g_smart_rt.budget_severity < 2 &&
+            !charging && battery_pct <= ASB_SMART_BUDGET_MAX_PCT) {
+            g_smart_rt.budget_severity++;
+            if (g_smart_rt.budget_severity == 1 &&
+                g_smart_rt.alpha_battery_x1000 < ASB_SMART_BUDGET_WARN_ALPHA_X1000)
+                g_smart_rt.alpha_battery_x1000 = ASB_SMART_BUDGET_WARN_ALPHA_X1000;
+            else if (g_smart_rt.budget_severity == 2 &&
+                     g_smart_rt.alpha_battery_x1000 < ASB_SMART_BUDGET_EMERG_ALPHA_X1000)
+                g_smart_rt.alpha_battery_x1000 = ASB_SMART_BUDGET_EMERG_ALPHA_X1000;
+        }
     }
 
     if (battery_pct >= 1 && battery_pct <= 100) {
@@ -4480,6 +4500,7 @@ int main(int argc, char **argv) {
                 }
                 if (_live_x10 >= ASB_ANOM_DRAIN_SPIKE_X10) {
                     _code = ASB_ANOM_DRAIN_SPIKE;
+                    g_drain_spike_until = _an_now + ASB_BUDGET_SPIKE_WINDOW_S;
                 } else if (v44_clamp_1h_now() >= ASB_ANOM_VENDOR_WAR_CLAMPS_1H) {
                     _code = ASB_ANOM_VENDOR_WAR;
                 } else if (fsm.profile_idx == PROFILE_BATTERY &&
@@ -4923,6 +4944,7 @@ int main(int argc, char **argv) {
             }
             if ((changed || force_write) && g_cap_detente_active) {
                 g_cap_detente_skipped++;
+                g_write_skipped_detente++;
             } else if ((changed || force_write) &&
                        asb_cap_writes_should_back_off() &&
                        !force_write && !metrics.misc.screen_on &&
@@ -4930,7 +4952,9 @@ int main(int argc, char **argv) {
                         fsm.state == ASB_STATE_LIGHT_IDLE) &&
                        !fsm.thermal_cap) {
                 g_cap_detente_skipped++;
+                g_write_skipped_backoff++;
             } else if (changed || force_write) {
+                g_write_attempts++;
                 int writes = writer_apply_caps(&fsm.current_caps, force_write, fsm.state, fsm.thermal_cap);
                 if (writes > 0) {
                     g_total_writes += writes;
