@@ -6,6 +6,17 @@ MODDIR="${0%/*}"
 chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 
 mkdir -p /data/adb/asb 2>/dev/null
+
+# Clean up a phantom /data/adb/magisk/busybox symlink that earlier builds
+# created on KernelSU systems (where /data/adb/magisk should not exist).
+# Only remove it when it's a dangling/broken symlink AND real Magisk is absent
+# (no magisk binary in that dir), so a genuine Magisk install is never touched.
+if [ ! -x /data/adb/magisk/magisk ] && [ ! -x /data/adb/magisk/magisk64 ]; then
+  if [ -L /data/adb/magisk/busybox ] && [ ! -e /data/adb/magisk/busybox ]; then
+    rm -f /data/adb/magisk/busybox 2>/dev/null
+    rmdir /data/adb/magisk 2>/dev/null
+  fi
+fi
 for _legacy_pair in \
     "asb_vendor_boot_counter:vendor_boot_counter" \
     "asb_vendor_mounts.log:vendor_mounts.log" \
