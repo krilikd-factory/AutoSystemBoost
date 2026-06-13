@@ -3078,7 +3078,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
     {
         int _settle = (g_gov_start_ts > 0 &&
-                       (long)(now - g_gov_start_ts) < 900);
+                       (long)(now - g_gov_start_ts) < 1200);
         asb_smart_apply_thermal_trend(cpu_max_c, now, g_smart_rt.app_hash,
                                       _settle, &g_smart_rt);
         g_smart_boot_settle = _settle;

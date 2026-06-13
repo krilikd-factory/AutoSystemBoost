@@ -208,7 +208,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->env_wph_hostile      = 12.0f;
     c->quiet_entry_ticks    = 60;   /* ~10min at 10s ticks */
     c->quiet_fast_ticks     = 30;   /* ~5min with clean-night reward */
-    c->quiet_tick_s         = 20;
+    c->quiet_tick_s         = 30;
     c->quiet_exit_grace     = 3;
     c->bat_comfort_temp     = 48;
     c->clamp_economy_after_s = 120;
