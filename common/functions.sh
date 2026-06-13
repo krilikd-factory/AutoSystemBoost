@@ -239,15 +239,6 @@ fi
 unzip -o "$ZIPFILE" -x 'META-INF/*' 'common/functions.sh' -d $MODPATH >&2
 [ -f "$MODPATH/common/addon.tar.xz" ] && tar -xf $MODPATH/common/addon.tar.xz -C $MODPATH/common 2>/dev/null
 
-if [ ! -x /data/adb/magisk/busybox ]; then
-  BB_BIN="$(command -v busybox 2>/dev/null)"
-  [ -z "$BB_BIN" ] && [ -x /data/adb/ksu/bin/busybox ] && BB_BIN=/data/adb/ksu/bin/busybox
-  if [ -n "$BB_BIN" ]; then
-    mkdir -p /data/adb/magisk 2>/dev/null
-    ln -sf "$BB_BIN" /data/adb/magisk/busybox 2>/dev/null
-  fi
-fi
-
 if [ "$(ls -A $MODPATH/common/addon/*/install.sh 2>/dev/null)" ]; then
   for i in $MODPATH/common/addon/*/install.sh; do
     . $i
