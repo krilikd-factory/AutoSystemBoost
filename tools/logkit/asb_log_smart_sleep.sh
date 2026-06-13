@@ -175,7 +175,9 @@ lk_emit_sleep_night_report() {
     _last=$(awk '$1+0 >= 1000000000 && $15 != "-" { v=$15 } END { print v }' "$_trace")
     if [ -n "$_first" ] && [ -n "$_last" ]; then
       _delta=$(( _first - _last ))
-      _dur_h=$(awk -v s="$LK_START_EPOCH" 'BEGIN { print (systime()-s)/3600 }')
+      _t_first=$(awk '$1+0 >= 1000000000 { print $1; exit }' "$_trace")
+      _t_last=$(awk '$1+0 >= 1000000000 { v=$1 } END { print v }' "$_trace")
+      _dur_h=$(awk -v a="$_t_first" -v b="$_t_last" 'BEGIN { if (b>a) printf "%.2f", (b-a)/3600; else print "0" }')
       _rate=$(awk -v d="$_delta" -v h="$_dur_h" 'BEGIN { if (h>0) printf "%.2f", d/h; else print "0" }')
       echo "  start: ${_first}%   end: ${_last}%   drop: ${_delta}%"
       echo "  duration: ${_dur_h}h   drain rate: ${_rate}%/h"

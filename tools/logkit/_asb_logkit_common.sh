@@ -824,7 +824,9 @@ lk_kv_state() {
 
 lk_emit_report_card() {
   _out="$LK_OUT_DIR/_report_card.txt"
-  _dur_h=$(awk -v s="$LK_START_EPOCH" 'BEGIN { printf "%.2f", (systime()-s)/3600 }')
+  _dur_s=$(( $(date +%s) - LK_START_EPOCH ))
+  [ "$_dur_s" -lt 0 ] 2>/dev/null && _dur_s=0
+  _dur_h=$(awk -v s="$_dur_s" 'BEGIN { printf "%.2f", s/3600 }')
   _q_last=$(lk_kv_state smart_quality_last)
   _q_avg=$(lk_kv_state smart_quality_avg)
   _q_fail=$(lk_kv_state smart_q_fail)
