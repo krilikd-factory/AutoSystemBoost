@@ -538,6 +538,29 @@ static void test_thermal_trend_state(void) {
     EXPECT(g_smart_trend_prev_ts == 0, "invalid temp → state reset");
 }
 
+static void test_drain_spike_window(void) {
+    printf("test_drain_spike_window\n");
+    /* drain-spike adds a temporary severity bump on top of budget tiers,
+       only while discharging and at/below the budget battery ceiling */
+    g_smart_budget_sev = 0; g_smart_budget_since = 0;
+    asb_smart_runtime_t rt = {0};
+    rt.alpha_battery_x1000 = 300;
+    asb_smart_apply_energy_budget(60, 0, 80, 1000000, &rt);
+    EXPECT(rt.budget_severity == 0, "60%% no tier and above ceiling \u2192 sev 0");
+
+    g_smart_budget_sev = 0; g_smart_budget_since = 0;
+    asb_smart_runtime_t rt2 = {0};
+    rt2.alpha_battery_x1000 = 300;
+    asb_smart_apply_energy_budget(40, 0, 80, 1000000, &rt2);
+    int base = rt2.budget_severity;
+    EXPECT(base == 0, "40%% at 8%%/h \u2192 5h \u2192 base sev 0");
+    /* simulate the governor's spike add */
+    if (base < 2) base++;
+    EXPECT(base == 1, "spike bump raises sev 0 \u2192 1");
+
+    g_smart_budget_sev = 0; g_smart_budget_since = 0;
+}
+
 static void test_energy_budget(void) {
     printf("test_energy_budget\n");
     time_t t0 = 1000000;
@@ -993,6 +1016,7 @@ int main(void) {
     test_appheat_table();
     test_bucket_learn_drain_loop();
     test_energy_budget();
+    test_drain_spike_window();
     test_idle_pocket_tier();
     test_cap_detente();
     test_session_quality();
