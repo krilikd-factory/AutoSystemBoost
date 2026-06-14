@@ -107,7 +107,7 @@ fi
 command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
 
 asb_migrate_governor_conf() {
-  local _expected_schema=16
+  local _expected_schema=17
   local _conf_dir="$MODDIR/config"
   local _user_conf="$_conf_dir/governor.conf"
   local _shipped_conf="$_conf_dir/governor.conf.shipped"
