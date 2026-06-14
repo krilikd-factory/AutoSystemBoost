@@ -1613,8 +1613,10 @@ async function cfgLoad() {
   const r = await run('cat ' + CFG_FILE + ' 2>/dev/null');
   _cfgVals = {};
   (r.stdout || '').split(/\r?\n/).forEach(line => {
-    const eq = line.indexOf('=');
-    if (eq > 0) _cfgVals[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+    const t = line.trim();
+    if (!t || t.charAt(0) === '#') return;
+    const eq = t.indexOf('=');
+    if (eq > 0) _cfgVals[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
   });
   cfgRender();
 }
