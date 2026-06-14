@@ -90,6 +90,7 @@ smart_debug_log=0
 night_quiet_auto=1
 night_quiet_auto_min_samples=3
 charge_aware_enable=1
+cool_gaming=0
 charge_assist_alpha_max=450
 charge_temp_warn_dC=390
 charge_temp_hot_dC=415
