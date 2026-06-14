@@ -655,6 +655,13 @@ static void test_session_quality_ex(void) {
 
     r = asb_smart_session_quality_ex(250, 1, 40, 0, 0, 3, &q);
     EXPECT(q.primary_failure == ASB_QFAIL_BATTERY, "drain worst \u2192 battery failure");
+
+    /* Gaming: heavy drain + hot + moderate vendor clamps. Battery/heat are the
+       honest failure; vendor's low score must not hijack primary_failure. */
+    r = asb_smart_session_quality_ex(240, 1, 60, 1, 0, 44, &q);
+    EXPECT(q.q_vendor < 30, "44 clamps/h \u2192 low vendor score");
+    EXPECT(q.primary_failure != ASB_QFAIL_VENDOR_WAR,
+           "gaming: bat/heat dominate, vendor not primary failure");
 }
 
 static void test_appheat_drain(void) {
