@@ -382,6 +382,12 @@ asb_load_profile() {
     . "$MODDIR/profiles/balanced.sh"
   fi
   unset _SHELL_BOOT_PROFILE
+  # Populate the _P_* mapped variables that service.sh's apply_* helpers read.
+  # Without this the helpers ran with empty values (harmless no-ops, since the
+  # asb_apply_* engine in this file applies the real NET_/VM_ values directly,
+  # but the empty sysctl writes were wasted work and a latent risk of clobbering
+  # a freshly-applied value on some kernels).
+  command -v asb_map_profile_vars >/dev/null 2>&1 && asb_map_profile_vars
 }
 
 asb_apply_profile_once() {
