@@ -1593,6 +1593,8 @@ const CFG_ITEMS = [
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM for games but cold-restarts background apps more often.' },
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While plugged in: leans toward performance when the battery is cool, and automatically backs off the moment the pack heats up, so charging stays fast and the device stays cool.' },
+  { key:'cool_gaming', type:'bool', def:'0', name:'Cool Gaming',
+    desc:'Engages the predictive thermal lean earlier when a game is running (from ~40\u00b0C instead of ~45\u00b0C), trading a little peak performance for a cooler, more even thermal profile during play. OFF by default \u2014 turn this on only if you prefer lower temperatures over maximum fps. Heat in games is mostly chip physics; this caps how hard the SoC is pushed, it cannot break thermodynamics.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Night Quiet Mode',
     desc:'Ultra-quiet sleep: during your night window the governor minimizes its own sensor reads and background activity. Works with the fixed 23:00\u201306:00 window even if schedule learning is OFF.' },
   { key:'night_quiet_auto', type:'bool', def:'1', name:'Learn My Sleep Schedule',
@@ -1865,7 +1867,19 @@ async function pollLive(visible) {
     _el('liveEtaOn').textContent = fmtHm(ton_min) + eta_note;
     _el('liveEtaOff').textContent = fmtHm(toff_min) + eta_note;
 
-    const capLabel = capSrc || '—';
+    const CAP_SRC_LABELS = {
+      'asb': 'ASB',
+      'asb_dynamic': 'ASB',
+      'shell_applied': 'Shell',
+      'shell_overridden_up': 'Shell',
+      'shell_overridden_down': 'Shell',
+      'vendor_clamp': 'Vendor',
+      'vendor_raised': 'Vendor',
+      'thermal_overlay': 'Thermal',
+      'policy_unknown': '—',
+      'mismatch': '—'
+    };
+    const capLabel = capSrc ? (CAP_SRC_LABELS[capSrc] || capSrc) : '—';
     const capEl = _el('liveCapSrc');
     capEl.textContent = capLabel;
     capEl.className = 'live-cell-value';
