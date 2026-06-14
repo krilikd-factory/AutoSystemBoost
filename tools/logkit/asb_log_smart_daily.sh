@@ -113,6 +113,10 @@ while : ; do
     lk_snapshot_state "snapshot_${_now}"
     lk_verify_caps
     lk_snapshot_smart_store "mid_${_now}"
+    # Emit the report card on every snapshot too, not only at finalize —
+    # if the capture is stopped in a way that bypasses the EXIT trap
+    # (setsid, SIGKILL, detached parent), the latest card still exists.
+    lk_emit_report_card 2>/dev/null || true
     _last_snapshot=$_now
   fi
 

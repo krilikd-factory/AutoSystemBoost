@@ -260,6 +260,8 @@ while : ; do
   if [ $(( _now - _last_snapshot )) -ge "$LK_SNAPSHOT_S" ]; then
     lk_snapshot_state "snapshot_${_now}"
     lk_verify_caps
+    lk_emit_report_card 2>/dev/null || true
+    lk_emit_sleep_night_report 2>/dev/null || true
     _last_snapshot=$_now
   fi
 
