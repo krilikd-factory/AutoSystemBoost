@@ -95,6 +95,15 @@ lk_emit_sleep_night_report() {
     echo "===== Night-sleep Smart Mode verification ====="
     echo ""
 
+    _nsa=$(lk_kv_state night_samples_accepted)
+    _nsr=$(lk_kv_state night_samples_rejected)
+    _nwa=$(lk_kv_state night_window_active)
+    if [ -n "$_nsa" ] || [ -n "$_nsr" ]; then
+      echo "── Night-window learner hygiene ──"
+      echo "  samples accepted: ${_nsa:-0}   rejected: ${_nsr:-0}   window_active: ${_nwa:-0}"
+      echo ""
+    fi
+
     # Override firing measured inside the sleep core only (daypart sleep/late).
     # A long morning tail in the capture must not poison the night verdict.
     echo "── Night_safe_override firing rate (sleep core: daypart sleep+late) ──"

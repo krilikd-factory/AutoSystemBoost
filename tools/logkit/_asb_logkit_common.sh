@@ -856,6 +856,17 @@ lk_emit_report_card() {
     echo ""
     echo "session quality: last=${_q_last:--}  avg=${_q_avg:--}  primary_failure=${_fail_name}"
     echo "energy budget:   severity=${_budget_sev:--}  predicted_h_x10=${_budget_pred:--}  src=$([ "$_budget_src" = "1" ] && echo bucket || echo global)  drain_ewma_x10=${_ewma:--}"
+    _bacc=$(lk_kv_state budget_accuracy_score)
+    _berr=$(lk_kv_state budget_error_pct)
+    _bstreak=$(lk_kv_state budget_bias_streak)
+    _bdir=$(lk_kv_state budget_bias_dir)
+    if [ -n "$_bacc" ] && [ "$_bacc" != "-1" ]; then
+      _corr=""
+      if [ -n "$_bstreak" ] && [ "$_bstreak" -ge 3 ] 2>/dev/null; then
+        _corr="  correcting=$([ "$_bdir" = "1" ] && echo 'rate+' || echo 'rate-')"
+      fi
+      echo "budget accuracy: score=${_bacc}/100  error=${_berr}%${_corr}"
+    fi
     _own=$(lk_kv_state cap_owner)
     _wa=$(lk_kv_state write_attempts)
     _wsd=$(lk_kv_state write_skipped_detente)
