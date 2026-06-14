@@ -1435,7 +1435,13 @@ static int asb_smart_session_quality_ex(
         if (bat >= 0 && bat < worst)    { worst = bat;    code = ASB_QFAIL_BATTERY; }
         if (heat < worst)               { worst = heat;   code = ASB_QFAIL_HEAT; }
         if (stab < worst)               { worst = stab;   code = ASB_QFAIL_STABILITY; }
-        if (vendor >= 0 && vendor < worst) { worst = vendor; code = ASB_QFAIL_VENDOR_WAR; }
+        /* Vendor-war is named the primary failure only when it is the dominant
+           cause by a clear margin. Under heavy load (gaming) the vendor clamps
+           for legitimate thermal protection, which scores q_vendor low without
+           being the real problem — there, battery and heat are the honest
+           verdict. Requiring vendor to beat the next-worst component by 15
+           points stops it from hijacking the verdict on a hot, hungry session. */
+        if (vendor >= 0 && vendor < worst - 15) { worst = vendor; code = ASB_QFAIL_VENDOR_WAR; }
         out->primary_failure = (worst < 70) ? code : ASB_QFAIL_NONE;
     }
     return overall;

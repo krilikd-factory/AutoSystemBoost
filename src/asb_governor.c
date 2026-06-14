@@ -761,6 +761,14 @@ static long   g_write_skipped_detente = 0;
 static long   g_write_skipped_backoff = 0;
 static int    g_drain_spike_bump = 0;
 static time_t g_drain_spike_until = 0;
+/* Budget accuracy: snapshot a prediction, then grade it after a window. */
+static time_t g_budget_acc_anchor_ts = 0;
+static int    g_budget_acc_anchor_pct = -1;
+static int    g_budget_acc_pred_h_x10 = -1;
+static int    g_budget_acc_error_pct = -1;
+static int    g_budget_acc_score = -1;
+static int    g_budget_bias_dir = 0;
+static int    g_budget_bias_streak = 0;
 
 /* Forward declarations for write_state */
 static int asb_cap_writes_should_back_off(void);
@@ -785,6 +793,11 @@ static int    g_night_samples   = 0;
 static time_t g_night_off_since = 0;
 static int    g_night_off_minute = -1;
 static int    g_night_onset_recorded = 0;
+static int    g_night_samples_accepted = 0;
+static int    g_night_samples_rejected = 0;
+static int    g_night_reject_reason = 0;
+#define ASB_NIGHT_REJECT_NONE 0
+#define ASB_NIGHT_REJECT_WAKE_OUT_OF_WINDOW 1
 static long   g_night_dark_accum_s = 0;
 static int    g_night_prev_screen = -1;
 static int    g_night_pending_wake_min = -1;
@@ -887,7 +900,13 @@ static void asb_night_window_tick(int screen_on, time_t now) {
                     g_night_pending_wake_min = m;
                     g_night_pending_wake_ts = now;
                 } else {
+                    /* Woke outside the plausible wake window — likely an
+                       irregular night (nap, travel, odd schedule). Reject the
+                       sample rather than dragging the learned wake time toward
+                       a one-off outlier. */
                     g_night_dark_accum_s = 0;
+                    g_night_samples_rejected++;
+                    g_night_reject_reason = ASB_NIGHT_REJECT_WAKE_OUT_OF_WINDOW;
                 }
             }
             g_night_off_since = 0;
@@ -900,6 +919,7 @@ static void asb_night_window_tick(int screen_on, time_t now) {
             now - g_night_pending_wake_ts >= 600) {
             asb_night_ewma(&g_night_wake_min, g_night_pending_wake_min);
             if (g_night_samples < 100000) g_night_samples++;
+            g_night_samples_accepted++;
             asb_log("night_window: wake sample %02d:%02d -> learned %02d:%02d (n=%d)",
                     g_night_pending_wake_min / 60, g_night_pending_wake_min % 60,
                     g_night_wake_min / 60, g_night_wake_min % 60, g_night_samples);
@@ -1091,6 +1111,15 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 g_smart_q_bat, g_smart_q_heat, g_smart_q_stab,
                 g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
         fprintf(f, "smart_boot_settle=%d\n", g_smart_boot_settle);
+        fprintf(f, "cool_gaming=%d\n", g_asb_cfg.cool_gaming);
+        fprintf(f, "budget_accuracy_score=%d\nbudget_error_pct=%d\n",
+                g_budget_acc_score, g_budget_acc_error_pct);
+        fprintf(f, "budget_bias_dir=%d\nbudget_bias_streak=%d\n",
+                g_budget_bias_dir, g_budget_bias_streak);
+        fprintf(f, "night_samples_accepted=%d\nnight_samples_rejected=%d\n"
+                   "night_reject_reason=%d\n",
+                g_night_samples_accepted, g_night_samples_rejected,
+                g_night_reject_reason);
         fprintf(f, "charging=%d\nsmart_charge_assist=%d\nsmart_charge_cool=%d\n"
                    "smart_charge_class=%d\nsmart_charge_w_x10=%d\n",
                 m->bat.charging,
@@ -3061,9 +3090,72 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 g_smart_budget_src = 1;
             }
         }
+        /* Self-correction: when the forecast has consistently missed in the same
+           direction across several windows, nudge the drain rate fed to the
+           budget by a small bounded factor (max +-12%). Under-prediction
+           (actual drain higher than forecast) raises the rate so the budget
+           leans a little sooner; over-prediction lowers it. The streak gate and
+           the cap keep this from oscillating or running away. */
+        if (g_budget_bias_streak >= ASB_BUDGET_ACC_BIAS_STREAK) {
+            int _adj = g_budget_bias_streak - ASB_BUDGET_ACC_BIAS_STREAK + 1;
+            if (_adj > 12) _adj = 12;
+            _budget_rate += (g_budget_bias_dir * _budget_rate * _adj) / 100;
+            if (_budget_rate < 1) _budget_rate = 1;
+        }
         g_drain_spike_bump = (g_drain_spike_until > now) ? 1 : 0;
         asb_smart_apply_energy_budget(battery_pct, charging,
                                       _budget_rate, now, &g_smart_rt);
+        /* Budget accuracy grading. Anchor a prediction while discharging, then
+           after a fixed window compare predicted depletion pace against the
+           actual battery delta. Charging or a missing reading resets the
+           anchor (a charge event invalidates the discharge forecast). */
+        if (charging || battery_pct < 0) {
+            g_budget_acc_anchor_ts = 0;
+            g_budget_acc_anchor_pct = -1;
+        } else if (g_budget_acc_anchor_ts == 0 &&
+                   g_smart_rt.budget_pred_h_x10 > 0) {
+            g_budget_acc_anchor_ts = now;
+            g_budget_acc_anchor_pct = battery_pct;
+            g_budget_acc_pred_h_x10 = g_smart_rt.budget_pred_h_x10;
+        } else if (g_budget_acc_anchor_ts > 0 &&
+                   (long)(now - g_budget_acc_anchor_ts) >= ASB_BUDGET_ACC_WINDOW_S &&
+                   g_budget_acc_anchor_pct >= 0) {
+            long _elapsed = (long)(now - g_budget_acc_anchor_ts);
+            int _actual_drop = g_budget_acc_anchor_pct - battery_pct;
+            if (_actual_drop > 0 && g_budget_acc_pred_h_x10 > 0) {
+                /* predicted drop over the window = elapsed_h / pred_h * 100 */
+                long _pred_drop_x100 =
+                    (_elapsed * 100L * 100L) /
+                    ((long)g_budget_acc_pred_h_x10 * 360L);
+                long _actual_x100 = (long)_actual_drop * 100L;
+                long _err = _actual_x100 - _pred_drop_x100;
+                if (_err < 0) _err = -_err;
+                long _err_pct = (_actual_x100 > 0)
+                    ? (_err * 100L) / _actual_x100 : 100;
+                if (_err_pct > 100) _err_pct = 100;
+                g_budget_acc_error_pct = (int)_err_pct;
+                g_budget_acc_score = (int)(100 - _err_pct);
+                /* Signed bias: did we under- or over-predict drain? Track a
+                   streak of same-direction misses. A correction is applied only
+                   when several consecutive windows agree, so a single noisy
+                   window never moves anything. */
+                int _signed = (_actual_x100 > _pred_drop_x100) ? 1
+                            : (_actual_x100 < _pred_drop_x100) ? -1 : 0;
+                if (_err_pct >= ASB_BUDGET_ACC_BIAS_MIN_ERR_PCT && _signed != 0) {
+                    if (_signed == g_budget_bias_dir) {
+                        if (g_budget_bias_streak < 100) g_budget_bias_streak++;
+                    } else {
+                        g_budget_bias_dir = _signed;
+                        g_budget_bias_streak = 1;
+                    }
+                } else {
+                    g_budget_bias_streak = 0;
+                    g_budget_bias_dir = 0;
+                }
+            }
+            g_budget_acc_anchor_ts = 0;
+            g_budget_acc_anchor_pct = -1;
+        }
         if (g_drain_spike_bump && g_smart_rt.budget_severity < 2 &&
             !charging && battery_pct <= ASB_SMART_BUDGET_MAX_PCT) {
             g_smart_rt.budget_severity++;
@@ -3105,8 +3197,15 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     {
         int _settle = (g_gov_start_ts > 0 &&
                        (long)(now - g_gov_start_ts) < 1200);
+        /* Cool-gaming: when enabled, treat an active game like a known-hot app
+           so the predictive thermal lean engages early (from 40 C / 2 C/min
+           instead of 45 C / 3 C/min). This trades a little sustained frequency
+           headroom for a cooler, more even thermal profile during play. Opt-in
+           only — off by default, since it can cost a few fps under load. */
+        int _cool_game = g_asb_cfg.cool_gaming &&
+                         g_smart_rt.app_hint >= ASB_APP_GAMING;
         asb_smart_apply_thermal_trend(cpu_max_c, now, g_smart_rt.app_hash,
-                                      _settle, &g_smart_rt);
+                                      _settle || _cool_game, &g_smart_rt);
         g_smart_boot_settle = _settle;
     }
 
@@ -3323,6 +3422,19 @@ static int asb_smart_init(void) {
     int rc = asb_smart_store_load(&g_smart_store, &outcome);
     asb_smart_appheat_load();
     g_smart_store_loaded = 1;
+
+    /* The runtime session counters reset on every daemon start, which made the
+       WebUI show "0 ses" after a reboot even though the learning itself (the
+       bucket observations) persisted fine. Seed the display total from the
+       persisted observation count so the learner's progress is continuous
+       across reboots. */
+    {
+        unsigned long _obs = 0;
+        for (int _b = 0; _b < ASB_SMART_BUCKETS; _b++)
+            _obs += g_smart_store.buckets[_b].observations_raw;
+        g_smart_sessions_total = (int)_obs;
+        g_smart_bucket_updates = (int)_obs;
+    }
 
     if (outcome.loaded_from_main) {
         asb_log("smart_init: loaded main store, %d buckets, version %d",
