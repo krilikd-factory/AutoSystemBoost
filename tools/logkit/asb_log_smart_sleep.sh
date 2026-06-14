@@ -76,11 +76,14 @@ lk_finalize_smart_sleep() {
   if [ "$LK_HAVE_WAKELOCK" = "1" ]; then
     echo "$LK_WAKELOCK_NAME" > /sys/power/wake_unlock 2>/dev/null
   fi
-  lk_capture_smart_sessions_window
-  lk_snapshot_smart_store "after"
-  lk_emit_smart_summary
-  lk_emit_report_card
-  lk_emit_sleep_night_report
+  # Emit the trace-derived reports FIRST. They depend only on files already
+  # on disk (smart_trace.tsv, /dev/.asb/state), so even if a later step is
+  # killed when the device drops back into deep sleep, the verdict survives.
+  lk_snapshot_smart_store "after" 2>/dev/null || true
+  lk_emit_report_card 2>/dev/null || true
+  lk_emit_sleep_night_report 2>/dev/null || true
+  lk_capture_smart_sessions_window 2>/dev/null || true
+  lk_emit_smart_summary 2>/dev/null || true
   lk_finalize
 }
 

@@ -789,19 +789,21 @@ lk_capture_smart_sessions_window() {
   _src="/data/adb/asb/session_history.jsonl"
   [ -r "$_src" ] || return 0
   _dst="$LK_OUT_DIR/session_history_window.jsonl"
-  # Find lines whose timestamps fall within the capture window
-  awk -v start="$LK_START_EPOCH" '
+  # Cap work: only consider the last 400 sessions (matches the on-disk trim),
+  # so finalize can never stall forking `date` over an unbounded file while
+  # the device is trying to return to deep sleep.
+  tail -n 400 "$_src" 2>/dev/null | awk -v start="$LK_START_EPOCH" '
     {
       if (match($0, /"ts":"[0-9T:Z\-]+"/)) {
         t = substr($0, RSTART+6, RLENGTH-7)
-        # Convert ISO ts to epoch via system date
         cmd = "date -d \"" t "\" +%s 2>/dev/null"
-        cmd | getline epoch
+        epoch = ""
+        if ((cmd | getline epoch) <= 0) epoch = ""
         close(cmd)
         if (epoch != "" && epoch+0 >= start+0) print $0
       }
     }
-  ' "$_src" > "$_dst" 2>/dev/null
+  ' > "$_dst" 2>/dev/null || true
   _n=$(wc -l < "$_dst" 2>/dev/null | tr -d ' ')
   echo "[smart] captured $_n session_history entries in window" >&2
 }
