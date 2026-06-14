@@ -94,7 +94,6 @@ jobs:
           if echo "$TAG" | grep -qE '^v[0-9]'; then
             sed -i "s/^version=.*/version=${TAG}/" module.prop
           fi
-          sed -i 's/AI governor/Adaptive governor/g' module.prop
           cat module.prop
 
       - name: Build RELEASE binary (no debug logs)
