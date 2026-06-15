@@ -31,10 +31,10 @@
 <p align="center"><i>Нативный C-демон, который каждые 2 секунды считывает состояние устройства<br>и принимает решения о поведении CPU, GPU, термалов и планировщика в реальном времени.</i></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/2744_lines-Native_C-0ea5e9?style=flat-square" alt="C">
+  <img src="https://img.shields.io/badge/5600+_lines-Native_C-0ea5e9?style=flat-square" alt="C">
   <img src="https://img.shields.io/badge/6_states-FSM-7c3aed?style=flat-square" alt="FSM">
   <img src="https://img.shields.io/badge/4_profiles-Adaptive-16a34a?style=flat-square" alt="Profiles">
-  <img src="https://img.shields.io/badge/Smart_Mode-Self--learning-a78bfa?style=flat-square" alt="Smart Mode">
+  <img src="https://img.shields.io/badge/Smart_Mode-Self--checking-a78bfa?style=flat-square" alt="Smart Mode">
   <img src="https://img.shields.io/badge/12_fields-Session_Plan-e85d04?style=flat-square" alt="Plan">
   <img src="https://img.shields.io/badge/0%25_CPU-DEEP__IDLE-1f2937?style=flat-square" alt="Idle">
 </p>
@@ -120,9 +120,9 @@
 | GPU лимит | **70%** | 85% | **50%** |
 | GPU мин floor | **8%** | 0% | **0%** |
 | RAVG окно | **2** (8 мс) | 3 (12 мс) | **8** (32 мс) |
-| UCL_TOP макс | **84%** | 85% | **50%** |
+| UCL_TOP макс | **90%** | 85% | **50%** |
 | UCL_BG макс | **60%** | 35% | **40%** |
-| Swappiness | **12** | 35 | **200** |
+| Swappiness | **12** | 35 | **100** |
 | Dirty writeback | **0.8 с** | 4 с | **240 с** |
 | VFS cache pressure | **30** | 80 | **400** |
 | Stat interval | **8 с** | 30 с | **240 с** |
@@ -188,6 +188,17 @@ Cold-start seed'ы совпадают с baseline-поведением, поэт
 | Любая DIRTY | любой | **0.00** | **0 %** (игнорируется) |
 
 Ни одно наблюдение не сдвинет bucket больше чем на 5 %.
+
+### Самопроверка
+
+Smart Mode не просто прогнозирует — он проверяет и корректирует себя:
+
+| Возможность | Что делает |
+|:------------|:-----------|
+| **Цикл точности бюджета** | Оценивает собственный прогноз батареи против реального расхода (`budget_accuracy_score` 0–100), и при односторонней ошибке 3 окна подряд подправляет drain-rate в пределах ±12 % — полностью паузится ночью, где сравнение бессмысленно |
+| **Гигиена ночного обучения** | Отклоняет wake-сэмплы вне правдоподобного окна, чтобы одна странная ночь (дрёма, поездка) не сбила выученный график |
+| **Честный вердикт качества** | Давление vendor-клампа называется главной причиной только когда явно доминирует — горячая игра под терморегуляцией больше не помечается ложно как «vendor war» |
+| **Cool Gaming** *(опционально)* | Раньше включает предиктивный термонаклон в играх для более холодного профиля ценой пика fps — выключено по умолчанию |
 
 ### Confidence gate — привычка предлагает, математика решает
 
@@ -462,7 +473,7 @@ start vendor.soter
 
 | Параметр | Balanced | Battery | Performance |
 |:---------|:--------:|:-------:|:-----------:|
-| `swappiness` | 35 | 200 | 12 |
+| `swappiness` | 35 | 100 | 12 |
 | `dirty_expire_centisecs` | 6000 | 240000 | 1000 |
 | `dirty_writeback_centisecs` | 4000 | 240000 | 800 |
 | `vfs_cache_pressure` | 80 | 400 | 30 |

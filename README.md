@@ -31,10 +31,10 @@
 <p align="center"><i>A native C daemon that reads the device every 2 seconds<br>and makes real-time decisions about CPU, GPU, thermals, and scheduler.</i></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/2744_lines-Native_C-0ea5e9?style=flat-square" alt="C">
+  <img src="https://img.shields.io/badge/5600+_lines-Native_C-0ea5e9?style=flat-square" alt="C">
   <img src="https://img.shields.io/badge/6_states-FSM-7c3aed?style=flat-square" alt="FSM">
   <img src="https://img.shields.io/badge/4_profiles-Adaptive-16a34a?style=flat-square" alt="Profiles">
-  <img src="https://img.shields.io/badge/Smart_Mode-Self--learning-a78bfa?style=flat-square" alt="Smart Mode">
+  <img src="https://img.shields.io/badge/Smart_Mode-Self--checking-a78bfa?style=flat-square" alt="Smart Mode">
   <img src="https://img.shields.io/badge/12_fields-Session_Plan-e85d04?style=flat-square" alt="Plan">
   <img src="https://img.shields.io/badge/0%25_CPU-DEEP__IDLE-1f2937?style=flat-square" alt="Idle">
 </p>
@@ -120,9 +120,9 @@
 | GPU cap | **70%** | 85% | **50%** |
 | GPU min floor | **8%** | 0% | **0%** |
 | RAVG window | **2** (8 ms) | 3 (12 ms) | **8** (32 ms) |
-| UCL_TOP max | **84%** | 85% | **50%** |
+| UCL_TOP max | **90%** | 85% | **50%** |
 | UCL_BG max | **60%** | 35% | **40%** |
-| Swappiness | **12** | 35 | **200** |
+| Swappiness | **12** | 35 | **100** |
 | Dirty writeback | **0.8 s** | 4 s | **240 s** |
 | VFS cache pressure | **30** | 80 | **400** |
 | Stat interval | **8 s** | 30 s | **240 s** |
@@ -188,6 +188,17 @@ The learning rate is **fixed at 5 % per session**, weighted by `duration × trus
 | Any DIRTY | any | **0.00** | **0 %** (ignored) |
 
 No single observation can swing a bucket more than 5 %.
+
+### Self-checking
+
+Smart Mode doesn't just predict — it verifies and corrects itself:
+
+| Capability | What it does |
+|:-----------|:-------------|
+| **Budget accuracy loop** | Grades its own battery forecast against actual drain (`budget_accuracy_score` 0–100), and when it misses the same way for 3 windows running, nudges the drain rate by a bounded ±12 % — pausing entirely overnight where the comparison is meaningless |
+| **Night-learner hygiene** | Rejects wake samples that land outside a plausible window, so one odd night (nap, travel) can't drag your learned schedule off |
+| **Honest quality verdict** | Vendor-clamp pressure is named the primary failure only when it clearly dominates — a hot game thermal-clamping is no longer mislabeled a "vendor war" |
+| **Cool Gaming** *(opt-in)* | Engages the predictive thermal lean earlier in games for a cooler profile, trading a little peak fps — off by default |
 
 ### Confidence gate — habit suggests, math decides
 
@@ -462,7 +473,7 @@ Repeated for 5 minutes. Users without Tencent apps are unaffected — the loop i
 
 | Parameter | Balanced | Battery | Performance |
 |:----------|:--------:|:-------:|:-----------:|
-| `swappiness` | 35 | 200 | 12 |
+| `swappiness` | 35 | 100 | 12 |
 | `dirty_expire_centisecs` | 6000 | 240000 | 1000 |
 | `dirty_writeback_centisecs` | 4000 | 240000 | 800 |
 | `vfs_cache_pressure` | 80 | 400 | 30 |
