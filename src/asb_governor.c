@@ -959,7 +959,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "mA=%d\ngpu_pct=%d\nload1=%.2f\n"
         "cpu_max=%d,%d,%d\n"
         "thermal=%d\ncap_temp=%d\n"
-        "headroom_pct=%d\nperf_cap_p0=%d\nperf_cap_p6=%d\n"
+        "headroom_pct=%d\nheadroom_valid=%d\nperf_cap_p0=%d\nperf_cap_p6=%d\n"
         "predict=%s\n"
         "screen=%d\ncapacity=%d\n"
         "dwell_sec=%ld\nboost=%d\n"
@@ -984,6 +984,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->thermal_cap,
         m->therm.cpu_max_c,
         m->therm.headroom_pct,
+        m->therm.headroom_valid,
         m->therm.perf_cap_p0,
         m->therm.perf_cap_p6,
         pred_names[pred],
