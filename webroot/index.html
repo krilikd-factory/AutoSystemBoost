@@ -1293,11 +1293,11 @@ body.live-active .page:not(.live-page) {
     <!-- Battery ETA -->
     <div class="live-row">
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">On time</div>
+        <div class="live-cell-label">Est. on</div>
         <div class="live-cell-value" id="liveEtaOn">—</div>
       </div>
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">Off time</div>
+        <div class="live-cell-label">Est. idle</div>
         <div class="live-cell-value" id="liveEtaOff">—</div>
       </div>
     </div>
@@ -1854,7 +1854,13 @@ async function pollLive(visible) {
       else { on_ma = 500; }
       eta_note = ' (est.)';
     }
-    const off_ma = Math.max(20, Math.floor(on_ma / 10));
+    /* Idle draw: anchor to a realistic deep-idle floor (~55 mA on this class of
+       device) rather than a fixed fraction of the active draw, which made the
+       idle estimate swing wildly (to 80+ h) as the active EWMA moved. Clamp to
+       a sane band so the figure stays a stable ballpark, not a moving target. */
+    let off_ma = Math.round(on_ma / 10);
+    if (off_ma < 40) off_ma = 40;
+    if (off_ma > 90) off_ma = 90;
     const remain_mah = bcap > 0 ? Math.floor(cap_full_mah * bcap / 100) : 0;
     const fmtHm = (mins) => {
       if (!mins || mins <= 0) return '—';
