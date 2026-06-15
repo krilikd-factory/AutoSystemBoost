@@ -57,7 +57,8 @@ if [ "$_on_ma" -lt 50 ] 2>/dev/null; then
   _eta_note="(heuristic)"
 fi
 _off_ma=$(( _on_ma / 10 ))
-[ "$_off_ma" -lt 20 ] && _off_ma=20
+[ "$_off_ma" -lt 40 ] && _off_ma=40
+[ "$_off_ma" -gt 90 ] && _off_ma=90
 
 _remain_mah=0
 if [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null && [ -n "$_lvl" ]; then
