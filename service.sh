@@ -1660,6 +1660,7 @@ for s in \
   oplus_crash_report \
   oplusdebuglogauto \
   vendor.oplus.logkit oplus_logctl \
+  oplus_gaia oplus_theia theia_screen_monitor \
   qcom_diag_relay vendor.qti.diag \
   oplusd mlipay \
 ; do
