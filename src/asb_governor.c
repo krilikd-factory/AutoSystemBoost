@@ -3108,10 +3108,21 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         /* Budget accuracy grading. Anchor a prediction while discharging, then
            after a fixed window compare predicted depletion pace against the
            actual battery delta. Charging or a missing reading resets the
-           anchor (a charge event invalidates the discharge forecast). */
-        if (charging || battery_pct < 0) {
+           anchor (a charge event invalidates the discharge forecast). The
+           anchor is also suspended while the night/sleep override is active:
+           deep-idle drain (often <0.3%/h) is a different regime from the active
+           EWMA the budget predicts with, so grading — and especially the
+           self-correction — must not learn from it, or it would drag the
+           daytime rate down and then under-predict once normal use resumes. */
+        if (charging || battery_pct < 0 || g_smart_rt.night_safe_override) {
             g_budget_acc_anchor_ts = 0;
             g_budget_acc_anchor_pct = -1;
+            if (g_smart_rt.night_safe_override) {
+                /* Don't let a streak built from deep-idle windows persist into
+                   a correction — reset it as we enter the night regime. */
+                g_budget_bias_streak = 0;
+                g_budget_bias_dir = 0;
+            }
         } else if (g_budget_acc_anchor_ts == 0 &&
                    g_smart_rt.budget_pred_h_x10 > 0) {
             g_budget_acc_anchor_ts = now;
