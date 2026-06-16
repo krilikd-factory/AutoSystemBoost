@@ -1113,8 +1113,17 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
         fprintf(f, "smart_boot_settle=%d\n", g_smart_boot_settle);
         fprintf(f, "cool_gaming=%d\n", g_asb_cfg.cool_gaming);
-        fprintf(f, "budget_accuracy_score=%d\nbudget_error_pct=%d\n",
-                g_budget_acc_score, g_budget_acc_error_pct);
+        {
+            /* While grading is suspended (charging or the night/sleep override),
+               don't publish a stale accuracy figure — it reads as a failed
+               forecast when really the loop is just paused. Emit the no-data
+               sentinel so the report card shows nothing instead of 0/100. */
+            int _acc_pub = g_budget_acc_score;
+            int _err_pub = g_budget_acc_error_pct;
+            if (g_smart_rt.night_safe_override) { _acc_pub = -1; _err_pub = -1; }
+            fprintf(f, "budget_accuracy_score=%d\nbudget_error_pct=%d\n",
+                    _acc_pub, _err_pub);
+        }
         fprintf(f, "budget_bias_dir=%d\nbudget_bias_streak=%d\n",
                 g_budget_bias_dir, g_budget_bias_streak);
         fprintf(f, "night_samples_accepted=%d\nnight_samples_rejected=%d\n"
