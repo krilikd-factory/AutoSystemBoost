@@ -868,11 +868,6 @@ persist.vendor.ims.qmi_ott_feature=1
 persist.vendor.ims.QmiOttEnable=1
 # ASB:RADIO_IMS:END
 # ASB:DISPLAY:BEGIN
-# Window blur is GPU-expensive; disabling it lightens the compositor and can
-# smooth weaker thermal states. Visual-only — recents/notification-shade blur
-# is replaced by a flat scrim.
-persist.sys.sf.disable_blurs=1
-ro.surface_flinger.supports_background_blur=0
 vendor.display.enable_dpps_dynamic_fps=1
 vendor.display.enable_async_vds=1
 vendor.display.backlight_smooth=1
