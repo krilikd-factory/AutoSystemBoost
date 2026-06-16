@@ -108,6 +108,13 @@ typedef enum {
 #define ASB_SMART_TREND_STALE_S 180
 #define ASB_SMART_TREND_HOT_MIN_TEMP_C 40
 #define ASB_SMART_TREND_HOT_MIN_SLOPE_MC_MIN 2000
+/* Charge-aware cool gaming: when gaming while charging with a warm battery,
+   the worst thermal scenario (render heat + charge heat), engage the lean
+   even earlier and on a gentler slope than normal cool gaming. */
+#define ASB_SMART_TREND_CHARGE_MIN_TEMP_C 38
+#define ASB_SMART_TREND_CHARGE_MIN_SLOPE_MC_MIN 1500
+/* Battery temp (deci-C) above which charge-aware cool gaming tightens. */
+#define ASB_SMART_CHARGE_WARM_BAT_DC 380
 #define ASB_SMART_DRAIN_MIN_ON_SEC 600
 #define ASB_SMART_DRAIN_HEAVY_PCTPH_X10 1500
 #define ASB_SMART_DRAIN_HI_NUM 5

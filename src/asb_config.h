@@ -121,7 +121,7 @@ typedef struct {
      * temperature says the charger is already heating the pack.
      * Temperatures are in deci-degC to match power_supply battery/temp. */
     int   charge_aware_enable;       /* 1=enable feature (default 1) */
-    int   cool_gaming;               /* 1=earlier/stronger thermal lean in games (costs fps), default 0 */
+    int   cool_gaming;               /* 1=earlier/stronger thermal lean in games, default 1 */
     int   charge_assist_alpha_max;   /* alpha_battery ceiling while assisting, x1000 (default 450) */
     int   charge_temp_warn_dC;       /* batt temp where assist is dropped (default 390 = 39.0C) */
     int   charge_temp_hot_dC;        /* batt temp where cool-charge guard engages (default 415 = 41.5C) */
@@ -236,7 +236,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->night_quiet_auto             = 1;
     c->night_quiet_auto_min_samples = 3;
     c->charge_aware_enable          = 1;
-    c->cool_gaming                  = 0;
+    c->cool_gaming                  = 1;
     c->charge_assist_alpha_max      = 450;
     c->charge_temp_warn_dC          = 390;
     c->charge_temp_hot_dC           = 415;

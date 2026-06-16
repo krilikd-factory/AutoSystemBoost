@@ -1165,8 +1165,18 @@ static void asb_smart_apply_thermal_veto(
 
 static int asb_smart_thermal_trend_bump_calc(int cpu_max_c, int slope_mc_per_min, int hot_app)
 {
-    int min_temp = hot_app ? ASB_SMART_TREND_HOT_MIN_TEMP_C : ASB_SMART_TREND_MIN_TEMP_C;
-    int min_slope = hot_app ? ASB_SMART_TREND_HOT_MIN_SLOPE_MC_MIN : ASB_SMART_TREND_MIN_SLOPE_MC_MIN;
+    /* hot_app: 0=normal, 1=hot/cool-gaming engage, 2=charge-aware (earlier still) */
+    int min_temp, min_slope;
+    if (hot_app >= 2) {
+        min_temp = ASB_SMART_TREND_CHARGE_MIN_TEMP_C;
+        min_slope = ASB_SMART_TREND_CHARGE_MIN_SLOPE_MC_MIN;
+    } else if (hot_app == 1) {
+        min_temp = ASB_SMART_TREND_HOT_MIN_TEMP_C;
+        min_slope = ASB_SMART_TREND_HOT_MIN_SLOPE_MC_MIN;
+    } else {
+        min_temp = ASB_SMART_TREND_MIN_TEMP_C;
+        min_slope = ASB_SMART_TREND_MIN_SLOPE_MC_MIN;
+    }
     if (cpu_max_c < min_temp) return 0;
     if (slope_mc_per_min <= min_slope) return 0;
     int span = ASB_SMART_TREND_MAX_SLOPE_MC_MIN - min_slope;
@@ -1498,8 +1508,11 @@ static void asb_smart_apply_thermal_trend(
 
     if (rt->thermal_veto) return;
 
-    int hot_app = early_engage ||
-        (asb_smart_appheat_score(app_hash, now) >= ASB_SMART_APPHEAT_HOT_SCORE);
+    int appheat_hot = (asb_smart_appheat_score(app_hash, now) >= ASB_SMART_APPHEAT_HOT_SCORE);
+    /* early_engage carries the level: 0=none, 1=cool-gaming/known-hot,
+       2=charge-aware cool gaming. A known-hot app maps to level 1. */
+    int hot_app = early_engage;
+    if (hot_app < 1 && appheat_hot) hot_app = 1;
     int bump = asb_smart_thermal_trend_bump_calc(cpu_max_c, g_smart_trend_slope_mc_min, hot_app);
     if (bump > 0) {
         rt->thermal_trend_bump = bump;

@@ -89,6 +89,7 @@ static int    g_smart_last_quality = -1;
 static int    g_smart_budget_src = 0;
 static time_t g_gov_start_ts = 0;
 static int    g_smart_boot_settle = 0;
+static int    g_smart_cool_gaming_lvl = 0;
 static int    g_smart_q_bat = -1;
 static int    g_smart_q_heat = -1;
 static int    g_smart_q_stab = -1;
@@ -1113,6 +1114,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
         fprintf(f, "smart_boot_settle=%d\n", g_smart_boot_settle);
         fprintf(f, "cool_gaming=%d\n", g_asb_cfg.cool_gaming);
+        fprintf(f, "cool_gaming_level=%d\n", g_smart_cool_gaming_lvl);
         {
             /* While grading is suspended (charging or the night/sleep override),
                don't publish a stale accuracy figure — it reads as a failed
@@ -3216,18 +3218,27 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
     {
-        int _settle = (g_gov_start_ts > 0 &&
-                       (long)(now - g_gov_start_ts) < 1200);
-        /* Cool-gaming: when enabled, treat an active game like a known-hot app
-           so the predictive thermal lean engages early (from 40 C / 2 C/min
-           instead of 45 C / 3 C/min). This trades a little sustained frequency
-           headroom for a cooler, more even thermal profile during play. Opt-in
-           only — off by default, since it can cost a few fps under load. */
-        int _cool_game = g_asb_cfg.cool_gaming &&
-                         g_smart_rt.app_hint >= ASB_APP_GAMING;
+        /* Cool-gaming engage level fed to the thermal lean:
+           0 = none, 1 = game active (engage from 40 C / 2 C/min),
+           2 = charge-aware: game active AND charging AND the battery is warm,
+               the worst thermal case (render heat stacked on charge heat) —
+               engage even earlier (38 C / 1.5 C/min). Boot settle maps to
+               level 1 (its original behavior). */
+        int _settle_lvl = (g_gov_start_ts > 0 &&
+                           (long)(now - g_gov_start_ts) < 1200) ? 1 : 0;
+        int _cool_lvl = 0;
+        if (g_asb_cfg.cool_gaming && g_smart_rt.app_hint >= ASB_APP_GAMING) {
+            _cool_lvl = 1;
+            if (m->bat.charging &&
+                m->bat.temp_dC >= ASB_SMART_CHARGE_WARM_BAT_DC) {
+                _cool_lvl = 2;
+            }
+        }
+        int _engage = _settle_lvl > _cool_lvl ? _settle_lvl : _cool_lvl;
         asb_smart_apply_thermal_trend(cpu_max_c, now, g_smart_rt.app_hash,
-                                      _settle || _cool_game, &g_smart_rt);
-        g_smart_boot_settle = _settle;
+                                      _engage, &g_smart_rt);
+        g_smart_boot_settle = (_settle_lvl > 0);
+        g_smart_cool_gaming_lvl = _cool_lvl;
     }
 
     /* intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
