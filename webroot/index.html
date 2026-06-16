@@ -1634,24 +1634,29 @@ document.addEventListener('keydown', (e) => {
 /* ── Config page ─────────────────────────────────────────────── */
 const CFG_FILE = MD + '/config/governor.conf';
 const CFG_ITEMS = [
+  // --- Audio ---
   { key:'AUDIO_EQ_COMPAT', type:'bool', def:'1', name:'Audio EQ Compatibility',
     desc:'Keeps the audio chain compatible with Flow Equalizer and other global EQ apps. Recommended ON if you use a system-wide equalizer.' },
   { key:'AUDIO_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Audio Tweaks',
     desc:'Enables the extended audio prop set beyond the stock-safe chain. May conflict with some BT headsets or DSP effects \u2014 leave OFF unless you know you need it.' },
-  { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
-    desc:'How hard cached background apps are trimmed. Aggressive frees more RAM for games but cold-restarts background apps more often.' },
-  { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
-    desc:'While plugged in: leans toward performance when the battery is cool, and automatically backs off the moment the pack heats up, so charging stays fast and the device stays cool.' },
-  { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
-    desc:'Engages the predictive thermal lean earlier when a game is running (from ~40\u00b0C instead of ~45\u00b0C), for a cooler, more even thermal profile during play. Field-tested to lower peak current and temperature with no noticeable fps loss (COD Mobile at 165 Hz stayed smooth), so it is ON by default. When you game while charging with a warm battery \u2014 the hottest case \u2014 it automatically tightens further, since that scenario stacks render heat on charge heat. Heat in games is mostly chip physics; this caps how hard the SoC is pushed, it cannot break thermodynamics. Turn it off if you want the SoC unrestrained for absolute peak fps.' },
-  { key:'night_quiet_enable', type:'bool', def:'1', name:'Night Quiet Mode',
-    desc:'Ultra-quiet sleep: during your night window the governor minimizes its own sensor reads and background activity. Works with the fixed 23:00\u201306:00 window even if schedule learning is OFF.' },
   { key:'bt_absvol_mode', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Volume Mode',
     desc:'Controls Bluetooth absolute volume. OFF keeps the stock single-control behavior (safest). ON disables absolute volume so the phone drives the speaker or car head-unit directly \u2014 can be louder on some sinks, but may change the volume scale or step size. AUTO currently behaves like OFF, reserved for future per-sink logic.' },
-  { key:'night_quiet_auto', type:'bool', def:'1', name:'Learn My Sleep Schedule',
-    desc:'Learns your real bedtime and wake time from screen activity and, after a few nights, replaces the fixed 23:00\u201306:00 window everywhere it is used \u2014 both for Night Quiet Mode and for Smart\u2019s sleep override. Useful even if Night Quiet is OFF.' },
+  // --- Gaming & thermals ---
+  { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
+    desc:'Engages the predictive thermal lean earlier when a game is running (from ~40\u00b0C instead of ~45\u00b0C), for a cooler, more even thermal profile during play. Field-tested to lower peak current and temperature with no noticeable fps loss (COD Mobile at 165 Hz stayed smooth), so it is ON by default. When you game while charging with a warm battery \u2014 the hottest case \u2014 it automatically tightens further, since that scenario stacks render heat on charge heat. Heat in games is mostly chip physics; this caps how hard the SoC is pushed, it cannot break thermodynamics. Turn it off if you want the SoC unrestrained for absolute peak fps.' },
+  // --- Power & battery ---
+  { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
+    desc:'While plugged in: leans toward performance when the battery is cool, and automatically backs off the moment the pack heats up, so charging stays fast and the device stays cool.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Automatically switches to the Battery profile when charge is low and restores your previous profile after charging back up.' },
+  // --- Sleep ---
+  { key:'night_quiet_enable', type:'bool', def:'1', name:'Night Quiet Mode',
+    desc:'Ultra-quiet sleep: during your night window the governor minimizes its own sensor reads and background activity. Works with the fixed 23:00\u201306:00 window even if schedule learning is OFF.' },
+  { key:'night_quiet_auto', type:'bool', def:'1', name:'Learn My Sleep Schedule',
+    desc:'Learns your real bedtime and wake time from screen activity and, after a few nights, replaces the fixed 23:00\u201306:00 window everywhere it is used \u2014 both for Night Quiet Mode and for Smart\u2019s sleep override. Useful even if Night Quiet is OFF.' },
+  // --- Memory & UX ---
+  { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
+    desc:'How hard cached background apps are trimmed. Aggressive frees more RAM for games but cold-restarts background apps more often.' },
   { key:'UX_MANAGE_ANIM_SCALE', type:'bool', def:'0', name:'Manage Animation Scales',
     desc:'Per-profile animation speed: Performance shortens system animations (~0.8x) so the UI feels snappier, Battery keeps them stock. Pure visual responsiveness \u2014 no battery cost either way. OFF = ASB never touches your animation settings.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
@@ -1676,10 +1681,19 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_ICONS = {
-  AUDIO_EQ_COMPAT:'\uD83C\uDF9B\uFE0F', AUDIO_AGGRESSIVE:'\uD83D\uDD0A',
-  BG_TRIM_LEVEL:'\uD83E\uDDF9', charge_aware_enable:'\uD83D\uDD0C',
-  cool_gaming:'\uD83C\uDFAE', night_quiet_enable:'\uD83C\uDF19',
-  bt_absvol_mode:'\uD83D\uDD08', region_allow_locale:'\uD83C\uDF0D'
+  AUDIO_EQ_COMPAT:'\uD83C\uDF9A\uFE0F',       // studio mic / EQ
+  AUDIO_AGGRESSIVE:'\uD83C\uDFA7',             // headphones
+  bt_absvol_mode:'\uD83D\uDD0A',              // loud speaker (BT volume)
+  cool_gaming:'\uD83C\uDFAE',                 // gamepad
+  charge_aware_enable:'\u26A1',                // high voltage (charging)
+  auto_battery_enable:'\uD83D\uDD0B',         // battery
+  night_quiet_enable:'\uD83C\uDF19',          // crescent moon
+  night_quiet_auto:'\u23F0',                   // alarm clock (sleep learning)
+  BG_TRIM_LEVEL:'\uD83E\uDDF9',               // broom (RAM trim)
+  UX_MANAGE_ANIM_SCALE:'\u2728',               // sparkles (animation)
+  UX_MANAGE_TIMEOUTS:'\uD83D\uDC46',          // pointing finger (touch)
+  UX_ANIM_FORCE_RESTART:'\uD83D\uDD04',       // restart arrows
+  region_allow_locale:'\uD83C\uDF0D'          // globe
 };
 function cfgStatus(it, cur) {
   // returns {cls, text} — a short colored badge describing the active state
