@@ -992,40 +992,88 @@ body.live-active .page:not(.live-page) {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .cfg-row {
   width: 100%;
-  background: var(--card, rgba(255,255,255,0.03));
+  background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 12px 14px;
+  border-radius: 18px;
+  padding: 14px 15px;
   box-sizing: border-box;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.cfg-row.is-on {
+  border-color: rgba(0,225,200,0.28);
+  background: linear-gradient(160deg, rgba(0,225,200,0.06), rgba(255,255,255,0.015));
 }
 .cfg-row-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 13px;
+}
+.cfg-icon {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.cfg-row.is-on .cfg-icon {
+  background: rgba(0,225,200,0.12);
+  border-color: rgba(0,225,200,0.30);
+}
+.cfg-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
 }
 .cfg-name {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 650;
   letter-spacing: 0.2px;
 }
-.cfg-desc {
+.cfg-status {
+  display: inline-block;
   margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 1.3;
+}
+.cfg-status.good {
+  color: #5ce6c4;
+  background: rgba(0,225,200,0.10);
+}
+.cfg-status.warn {
+  color: #e6b860;
+  background: rgba(230,170,60,0.12);
+}
+.cfg-status.neutral {
+  color: rgba(255,255,255,0.55);
+  background: rgba(255,255,255,0.06);
+}
+.cfg-desc {
+  margin-top: 9px;
   font-size: 11px;
-  line-height: 1.45;
-  opacity: 0.55;
+  line-height: 1.5;
+  opacity: 0.5;
   text-align: left;
 }
 .cfg-switch {
   position: relative;
   flex: 0 0 auto;
-  width: 42px;
-  height: 24px;
-  border-radius: 12px;
+  width: 46px;
+  height: 27px;
+  border-radius: 14px;
   background: rgba(255,255,255,0.10);
   border: 1px solid var(--border);
   cursor: pointer;
@@ -1036,18 +1084,19 @@ body.live-active .page:not(.live-page) {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 18px;
-  height: 18px;
+  width: 21px;
+  height: 21px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.75);
+  background: rgba(255,255,255,0.78);
   transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.25s ease;
 }
 .cfg-switch.on {
-  background: linear-gradient(135deg, rgba(0,240,180,0.35), rgba(0,212,255,0.25));
-  border-color: rgba(0,240,180,0.45);
+  background: linear-gradient(135deg, rgba(0,225,200,0.55), rgba(0,200,235,0.4));
+  border-color: rgba(0,225,200,0.55);
+  box-shadow: 0 0 14px rgba(0,225,200,0.25);
 }
 .cfg-switch.on::after {
-  transform: translateX(18px);
+  transform: translateX(19px);
   background: #fff;
 }
 .cfg-switch.busy { opacity: 0.45; pointer-events: none; }
@@ -1055,7 +1104,7 @@ body.live-active .page:not(.live-page) {
   display: inline-flex;
   flex: 0 0 auto;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 11px;
   overflow: hidden;
 }
 .cfg-seg button {
@@ -1065,12 +1114,12 @@ body.live-active .page:not(.live-page) {
   color: inherit;
   font: inherit;
   font-size: 11px;
-  padding: 5px 12px;
+  padding: 6px 13px;
   cursor: pointer;
   opacity: 0.6;
 }
 .cfg-seg button.on {
-  background: linear-gradient(135deg, rgba(0,240,180,0.30), rgba(0,212,255,0.20));
+  background: linear-gradient(135deg, rgba(0,225,200,0.35), rgba(0,200,235,0.22));
   opacity: 1;
   font-weight: 600;
 }
@@ -1594,9 +1643,11 @@ const CFG_ITEMS = [
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While plugged in: leans toward performance when the battery is cool, and automatically backs off the moment the pack heats up, so charging stays fast and the device stays cool.' },
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
-    desc:'Engages the predictive thermal lean earlier when a game is running (from ~40\u00b0C instead of ~45\u00b0C), for a cooler, more even thermal profile during play. Field-tested to lower peak current and temperature with no noticeable fps loss (COD Mobile at 165 Hz stayed smooth), so it is ON by default. Heat in games is mostly chip physics; this caps how hard the SoC is pushed, it cannot break thermodynamics. Turn it off if you want the SoC unrestrained for absolute peak fps.' },
+    desc:'Engages the predictive thermal lean earlier when a game is running (from ~40\u00b0C instead of ~45\u00b0C), for a cooler, more even thermal profile during play. Field-tested to lower peak current and temperature with no noticeable fps loss (COD Mobile at 165 Hz stayed smooth), so it is ON by default. When you game while charging with a warm battery \u2014 the hottest case \u2014 it automatically tightens further, since that scenario stacks render heat on charge heat. Heat in games is mostly chip physics; this caps how hard the SoC is pushed, it cannot break thermodynamics. Turn it off if you want the SoC unrestrained for absolute peak fps.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Night Quiet Mode',
     desc:'Ultra-quiet sleep: during your night window the governor minimizes its own sensor reads and background activity. Works with the fixed 23:00\u201306:00 window even if schedule learning is OFF.' },
+  { key:'bt_absvol_mode', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Volume Mode',
+    desc:'Controls Bluetooth absolute volume. OFF keeps the stock single-control behavior (safest). ON disables absolute volume so the phone drives the speaker or car head-unit directly \u2014 can be louder on some sinks, but may change the volume scale or step size. AUTO currently behaves like OFF, reserved for future per-sink logic.' },
   { key:'night_quiet_auto', type:'bool', def:'1', name:'Learn My Sleep Schedule',
     desc:'Learns your real bedtime and wake time from screen activity and, after a few nights, replaces the fixed 23:00\u201306:00 window everywhere it is used \u2014 both for Night Quiet Mode and for Smart\u2019s sleep override. Useful even if Night Quiet is OFF.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
@@ -1623,20 +1674,51 @@ async function cfgLoad() {
   cfgRender();
 }
 
+// Icon + status hints for the config cards (ASB's own palette/iconography).
+const CFG_ICONS = {
+  AUDIO_EQ_COMPAT:'\uD83C\uDF9B\uFE0F', AUDIO_AGGRESSIVE:'\uD83D\uDD0A',
+  BG_TRIM_LEVEL:'\uD83E\uDDF9', charge_aware_enable:'\uD83D\uDD0C',
+  cool_gaming:'\uD83C\uDFAE', night_quiet_enable:'\uD83C\uDF19',
+  bt_absvol_mode:'\uD83D\uDD08', region_allow_locale:'\uD83C\uDF0D'
+};
+function cfgStatus(it, cur) {
+  // returns {cls, text} — a short colored badge describing the active state
+  if (it.type === 'bool') {
+    if (cur === '1') return { cls:'good', text:'Enabled' };
+    return { cls:'neutral', text:'Disabled' };
+  }
+  return { cls: (cur === it.def ? 'neutral' : 'warn'), text: String(cur).toUpperCase() };
+}
 function cfgRender() {
   const list = _el('cfgList');
   if (!list) return;
   list.innerHTML = '';
   CFG_ITEMS.forEach(it => {
     const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
+    const isOn = (it.type === 'bool' && cur === '1');
     const row = document.createElement('div');
-    row.className = 'cfg-row';
+    row.className = 'cfg-row' + (isOn ? ' is-on' : '');
     const top = document.createElement('div');
     top.className = 'cfg-row-top';
+
+    const ic = document.createElement('div');
+    ic.className = 'cfg-icon';
+    ic.textContent = CFG_ICONS[it.key] || '\u2699\uFE0F';
+    top.appendChild(ic);
+
+    const main = document.createElement('div');
+    main.className = 'cfg-main';
     const nm = document.createElement('div');
     nm.className = 'cfg-name';
     nm.textContent = it.name;
-    top.appendChild(nm);
+    main.appendChild(nm);
+    const st = cfgStatus(it, cur);
+    const badge = document.createElement('div');
+    badge.className = 'cfg-status ' + st.cls;
+    badge.textContent = st.text;
+    main.appendChild(badge);
+    top.appendChild(main);
+
     if (it.type === 'bool') {
       const sw = document.createElement('div');
       sw.className = 'cfg-switch' + (cur === '1' ? ' on' : '');
