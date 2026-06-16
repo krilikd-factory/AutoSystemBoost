@@ -469,6 +469,179 @@ asb_apply_device_overlay() {
   ui_print "    patched in-place during the audio/media pass."
 }
 
+# ---------------------------------------------------------------------------
+# Per-device perf tuning (OP12 / OP13).
+#
+# The OP15 package ships pre-tuned perf XML as full-file replacements, valid
+# only for the 'canoe' target. OP12 ('pineapple','cliffs') and OP13
+# ('sun','tuna','kera') have different stock perf files, so instead of shipping
+# a fragile pre-edited copy we patch the LIVE device's stock files in place —
+# the same philosophy ASB already uses for audio. This survives OS updates: we
+# always patch whatever perfconfigstore/qapegameconfig the device currently has.
+#
+# The tuning mirrors OP15 exactly (same intent, device-correct values):
+#   * qapegameconfig.txt: per-game thermal/current ceilings lowered
+#       48000/1150/1000 -> 44000/900/800  (games throttle earlier, run cooler)
+#   * perfconfigstore.xml:
+#       - debug daemons off (enable.lm, memperfd, prekill) — pure overhead
+#       - topAppRenderThreadBoost on — smoother foreground UI thread
+#       - qape boost_duration 10->3, max_boost_count 3->1 — shorter blind boosts
+#       - fps_switch_hyst 10->12 — fewer refresh-rate flips
+#       - wlc.exit.timeout 120000->30000, active_reqs_max 30->28 (only if present)
+#   * perfboostsconfig.xml: idle render-thread boost 0x10A7 2000->1600ms
+#
+# Only props/rows that already exist are touched; missing ones are skipped, so
+# OP12 (no qapegameconfig, no wlc/active_reqs props) degrades gracefully.
+# ---------------------------------------------------------------------------
+asb_perf_patch_configstore() {
+  _f="$1"; [ -f "$_f" ] || return 0
+  sedi 's/\(Name="vendor.debug.enable.lm" Value="\)true/\1false/g' "$_f"
+  sedi 's/\(Name="vendor.debug.enable.memperfd"[^V]*Value="\)true/\1false/g' "$_f"
+  sedi 's/\(Name="ro.vendor.perf.enable.prekill"[^V]*Value="\)true/\1false/g' "$_f"
+  sedi 's/\(Name="vendor.perf.topAppRenderThreadBoost.enable" Value="\)false/\1true/g' "$_f"
+  sedi 's/\(Name="ro.vendor.perf.qape.boost_duration" Value="\)10"/\13"/g' "$_f"
+  sedi 's/\(Name="ro.vendor.perf.qape.max_boost_count" Value="\)3"/\11"/g' "$_f"
+  sedi 's/\(Name="vendor.perf.fps_switch_hyst_time_secs" Value="\)10"/\112"/g' "$_f"
+  sedi 's/\(Name="ro.vendor.wlc.exit.timeout" Value="\)120000"/\130000"/g' "$_f"
+  sedi 's/\(Name="ro.vendor.perf.active_reqs_max" Value="\)30"/\128"/g' "$_f"
+}
+
+asb_perf_patch_gameconfig() {
+  _f="$1"; [ -f "$_f" ] || return 0
+  # data rows: <id> <apk> 48000 1150 1000  ->  ... 44000 900 800
+  sedi 's/^\([0-9][0-9]*[ 	][ 	]*[^ 	][^ 	]*[ 	][ 	]*\)48000\([ 	][ 	]*\)1150\([ 	][ 	]*\)1000/\144000\2900\3800/' "$_f"
+}
+
+asb_patch_perf_inplace() {
+  # $1 = human label
+  _label="$1"
+  [ "$ASB_CPU" = "true" ] || { ui_print "[*] CPU/perf category off — skipping perf tuning"; return 0; }
+
+  # Locate the live stock perf dir (vendor first, then odm/system_ext mirrors).
+  _perfsrc=""
+  for _d in /vendor/etc/perf /odm/etc/perf /system/vendor/etc/perf /system_ext/etc/perf; do
+    if [ -f "$_d/perfconfigstore.xml" ] || [ -f "$_d/qapegameconfig.txt" ]; then
+      _perfsrc="$_d"; break
+    fi
+  done
+  if [ -z "$_perfsrc" ]; then
+    ui_print "[*] No stock perf dir found — skipping perf tuning"
+    return 0
+  fi
+
+  ui_print " "
+  ui_print "${SEPARATOR}"
+  ui_print "[*] Perf tuning for $_label"
+  ui_print "[*] Source: $_perfsrc (patched in-place, OS-update safe)"
+  ui_print "${SEPARATOR}"
+
+  _dst="$MODPATH/system/vendor/etc/perf"
+  # The shipped perf dir is OP15-only (canoe target). Its qapegameconfig.txt
+  # has no Target column and would apply canoe caps globally on this device,
+  # and qapeboostsconfig.xml is canoe-keyed. Remove the whole shipped dir and
+  # rebuild only the files we patch from the live stock perf.
+  rm -rf "$_dst" 2>/dev/null || true
+  mkdir -p "$_dst" 2>/dev/null
+
+  # Clone only the files we tune (full replacement of those, nothing else),
+  # so the rest of the stock perf framework keeps loading from vendor.
+  for _pf in perfconfigstore.xml qapegameconfig.txt perfboostsconfig.xml; do
+    if [ -f "$_perfsrc/$_pf" ]; then
+      cp -f "$_perfsrc/$_pf" "$_dst/$_pf" 2>/dev/null || continue
+      chmod 0644 "$_dst/$_pf" 2>/dev/null || true
+    fi
+  done
+
+  asb_perf_patch_configstore "$_dst/perfconfigstore.xml" \
+    && [ -f "$_dst/perfconfigstore.xml" ] && ui_print "    + perfconfigstore.xml tuned"
+  if [ -f "$_dst/qapegameconfig.txt" ]; then
+    asb_perf_patch_gameconfig "$_dst/qapegameconfig.txt"
+    ui_print "    + qapegameconfig.txt cooled (44C / 900mA caps)"
+  else
+    ui_print "    - qapegameconfig.txt absent on this platform (older perf fw)"
+  fi
+  if [ -f "$_dst/perfboostsconfig.xml" ]; then
+    # idle render-thread boost: shorten hold to cut idle heat (2000 -> 1600)
+    sedi 's/\(Id="0x000010A7"[^>]*Timeout="\)2000"/\11600"/g' "$_dst/perfboostsconfig.xml"
+    ui_print "    + perfboostsconfig.xml idle-boost trimmed"
+  fi
+
+  ui_print "[*] Perf tuning applied."
+}
+
+# ---------------------------------------------------------------------------
+# Per-device location/GPS-assist tuning (OP12 / OP13).
+#
+# OP15 ships tuned xtwifi.conf (Qualcomm GTP / XTRA assisted-GNSS) and
+# lowi.conf (WiFi RTT ranging) as static canoe copies. The tweaks are pure
+# value edits and device-agnostic, so — like perf and audio — we patch the
+# live device's own files in place. Mirrors OP15 intent:
+#   xtwifi: assisted-GNSS cache 5MB -> 32MB (more almanac/XTRA cached = faster
+#           re-locks), debug logging off, MODEL_ID set to the real device
+#           (some GTP backends tune response by model id).
+#   lowi:   verbose logging off, low-power WiFi RTT path on.
+# Only keys that already exist are rewritten. Gated by the GPS category.
+# ---------------------------------------------------------------------------
+asb_loc_patch_xtwifi() {
+  _f="$1"; _model="$2"; [ -f "$_f" ] || return 0
+  sedi 's/^\([[:space:]]*SIZE_BYTE_TOTAL_CACHE[[:space:]]*=[[:space:]]*\)5000000/\132000000/' "$_f"
+  sedi 's/^\([[:space:]]*DEBUG_GLOBAL_LOG_LEVEL[[:space:]]*=[[:space:]]*\)2/\10/' "$_f"
+  sedi "s/^\([[:space:]]*MODEL_ID_IN_REQUEST_TO_SERVER[[:space:]]*=[[:space:]]*\)\"UNKNOWN\"/\1\"$_model\"/" "$_f"
+}
+asb_loc_patch_lowi() {
+  _f="$1"; [ -f "$_f" ] || return 0
+  sedi 's/^\([[:space:]]*LOWI_LOG_LEVEL[[:space:]]*=[[:space:]]*\)4/\10/' "$_f"
+  sedi 's/^\([[:space:]]*LOWI_USE_LOWI_LP[[:space:]]*=[[:space:]]*\)0/\11/' "$_f"
+}
+
+asb_patch_location_inplace() {
+  # $1 = device model id for GTP (e.g. OnePlus13)
+  _model="$1"
+  [ "$ASB_GPS" = "true" ] || { ui_print "[*] GPS category off — skipping location tuning"; return 0; }
+
+  ui_print " "
+  ui_print "${SEPARATOR}"
+  ui_print "[*] Location/GPS-assist tuning ($_model)"
+  ui_print "[*] In-place patch of live xtwifi/lowi (OS-update safe)"
+  ui_print "${SEPARATOR}"
+
+  # Remove the shipped OP15 (canoe) copies — they carry MODEL_ID="OnePlus15"
+  # and OP15-only GTP server entries. We rebuild from the live device files.
+  rm -f "$MODPATH/system/vendor/etc/xtwifi.conf" \
+        "$MODPATH/system/vendor/odm/etc/xtwifi.conf" \
+        "$MODPATH/system/odm/etc/xtwifi.conf" \
+        "$MODPATH/system/vendor/etc/lowi.conf" \
+        "$MODPATH/system/odm/etc/lowi.conf" 2>/dev/null || true
+
+  _did=0
+  for _src in /vendor/etc/xtwifi.conf /odm/etc/xtwifi.conf /vendor/odm/etc/xtwifi.conf; do
+    if [ -f "$_src" ]; then
+      _rel="system${_src}"
+      mkdir -p "$MODPATH/$(dirname "$_rel")" 2>/dev/null
+      cp -f "$_src" "$MODPATH/$_rel" 2>/dev/null && {
+        chmod 0644 "$MODPATH/$_rel" 2>/dev/null
+        asb_loc_patch_xtwifi "$MODPATH/$_rel" "$_model"
+        ui_print "    + xtwifi.conf (cache 32MB, model=$_model)"
+        _did=1
+      }
+    fi
+  done
+  for _src in /vendor/etc/lowi.conf /odm/etc/lowi.conf; do
+    if [ -f "$_src" ]; then
+      _rel="system${_src}"
+      mkdir -p "$MODPATH/$(dirname "$_rel")" 2>/dev/null
+      cp -f "$_src" "$MODPATH/$_rel" 2>/dev/null && {
+        chmod 0644 "$MODPATH/$_rel" 2>/dev/null
+        asb_loc_patch_lowi "$MODPATH/$_rel"
+        ui_print "    + lowi.conf (low-power WiFi RTT on)"
+        _did=1
+      }
+    fi
+  done
+  [ "$_did" = "1" ] || ui_print "    - no xtwifi/lowi on this device — skipped"
+  ui_print "[*] Location tuning applied."
+}
+
 asb_prune_non_op15_vendor_overlays() {
   ui_print " "
   ui_print "${SEPARATOR}"
@@ -730,8 +903,12 @@ if [ "$ASB_IS_OP15" = "true" ]; then
   : # OP15: keep the full shipped overlay as-is
 elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_apply_device_overlay op13_overlay "OnePlus 13 (CPH2649 / SM8750 'sun')"
+  asb_patch_perf_inplace "OnePlus 13 (sun / tuna / kera)"
+  asb_patch_location_inplace "OnePlus13"
 elif [ "$ASB_IS_OP12" = "true" ]; then
   asb_apply_device_overlay op12_overlay "OnePlus 12 (CPH2581 / SM8650 'pineapple')"
+  asb_patch_perf_inplace "OnePlus 12 (pineapple / cliffs)"
+  asb_patch_location_inplace "OnePlus12"
 else
   asb_prune_non_op15_vendor_overlays
 fi
@@ -1080,15 +1257,34 @@ fi
 
   for OAEFFECT in ${AEFFECT}; do
 	sedi '/"audiosphere"/d' $EFFECT
-	sedi '/effect name="volume"/d' $EFFECT
-	sedi '/"dvl"/d' $EFFECT
-	sedi '/"agc"/d' $EFFECT
-	sedi '/"volume_listener"/d' $EFFECT
-	sedi '/"audio_pre_processing"/d' $EFFECT
-	sedi '/v4a_standard_re/d' $EFFECT
-	sedi '/v4a_re/d' $EFFECT
-	sedi '/<libraries>/ a\        <library name=\"v4a_re\" path=\"libv4a_re.so\"\/>' $EFFECT
-	sedi '/<effects>/ a\        <effect name=\"v4a_standard_re\" library=\"v4a_re\" uuid=\"90380da3-8536-4744-a6a3-5731970e640f\"\/>' $EFFECT
+	# V4A (ViPER4Android FX) wiring is only safe when libv4a_re.so actually
+	# exists on the device. OP15's OxygenOS ships it; some OP13/OP12 builds do
+	# not. Referencing a missing effect library makes audioserver fail to load
+	# audio_effects at boot -> audio HAL crash loop -> BOOTLOOP. So we detect
+	# the library first and only then strip the stock volume chain and inject
+	# V4A. If the library is absent, the stock volume_listener/effects are left
+	# fully intact (no audio enhancement, but the device boots).
+	_v4a_lib=""
+	for _vd in /vendor/lib64/soundfx /vendor/lib/soundfx \
+	           /odm/lib64/soundfx /odm/lib/soundfx \
+	           /system/lib64/soundfx /system/lib/soundfx \
+	           /system/vendor/lib64/soundfx /system/vendor/lib/soundfx; do
+	  if [ -f "$_vd/libv4a_re.so" ]; then _v4a_lib="$_vd/libv4a_re.so"; break; fi
+	done
+	if [ -n "$_v4a_lib" ]; then
+	  sedi '/effect name="volume"/d' $EFFECT
+	  sedi '/"dvl"/d' $EFFECT
+	  sedi '/"agc"/d' $EFFECT
+	  sedi '/"volume_listener"/d' $EFFECT
+	  sedi '/"audio_pre_processing"/d' $EFFECT
+	  sedi '/v4a_standard_re/d' $EFFECT
+	  sedi '/v4a_re/d' $EFFECT
+	  sedi '/<libraries>/ a\        <library name=\"v4a_re\" path=\"libv4a_re.so\"\/>' $EFFECT
+	  sedi '/<effects>/ a\        <effect name=\"v4a_standard_re\" library=\"v4a_re\" uuid=\"90380da3-8536-4744-a6a3-5731970e640f\"\/>' $EFFECT
+	  ui_print "[*] V4A effect wired (libv4a_re.so present)"
+	else
+	  ui_print "[*] V4A skipped — libv4a_re.so absent (stock audio kept, prevents bootloop)"
+	fi
 	done
 
   for OACCXML in ${ACCXML}; do
