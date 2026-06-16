@@ -54,6 +54,55 @@ asb_big_banner() {
   ui_print "${SEPARATOR}"
 }
 
+asb_normalize_module_layout() {
+  # CRITICAL boot-safety step. A Magisk/KernelSU module must keep ALL of its
+  # mounted files under $MODPATH/system/ — the framework maps system/vendor ->
+  # /vendor, system/odm -> /odm, etc. via magic-mount. If a REAL top-level
+  # vendor/ (or odm/, product/, system_ext/) directory exists at the module
+  # root, the root layer can bind that partial directory over the WHOLE real
+  # /vendor partition, hiding everything the device needs -> vendor init fails
+  # -> BOOTLOOP. This was the OnePlus 13 failure: the device-overlay + in-place
+  # passes left a real /vendor with only ~32 files shadowing the stock 1000s.
+  #
+  # OP15 happened to dodge it (its full shipped system/vendor produced a clean
+  # symlink), but on OP12/OP13 the pruned+rebuilt tree materialised a real dir.
+  # Here we fold any stray top-level partition dir back into system/ and delete
+  # the root copy, so every device ends with the single safe system/-only tree.
+  for _part in vendor odm product system_ext my_product mi_ext; do
+    _root="$MODPATH/$_part"
+    # Skip if absent, or if it is a symlink (the framework's own valid link).
+    [ -e "$_root" ] || continue
+    if [ -L "$_root" ]; then continue; fi
+    [ -d "$_root" ] || continue
+
+    ui_print "[*] Layout fix: folding stray /$_part into system/$_part (boot-safety)"
+    # Move every file under the stray dir to system/<part>/, without clobbering
+    # a file the proper pass already placed there (system/ copy wins).
+    for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
+      _target="$MODPATH/system/$_part/$_f"
+      if [ ! -f "$_target" ]; then
+        mkdir -p "$(dirname "$_target")" 2>/dev/null
+        cp -f "$_root/$_f" "$_target" 2>/dev/null || true
+      fi
+    done
+    rm -rf "$_root" 2>/dev/null || true
+  done
+
+  # Also drop the framework's per-file restore manifest entries that point at a
+  # root-level partition path, so uninstall/reinstall never resurrects them.
+  if [ -f "$INFO" ]; then
+    for _part in vendor odm product system_ext my_product mi_ext; do
+      sed -i "\|^$MODPATH/$_part/|d" "$INFO" 2>/dev/null || true
+    done
+  fi
+
+  # Final guard: never ship an empty stray dir either.
+  for _part in vendor odm product system_ext my_product mi_ext; do
+    [ -L "$MODPATH/$_part" ] && continue
+    [ -d "$MODPATH/$_part" ] && rmdir "$MODPATH/$_part" 2>/dev/null || true
+  done
+}
+
 asb_end_banner() {
   local i=0
   while [ $i -lt 2 ]; do
@@ -1826,4 +1875,5 @@ EOF
 }
 MANIFEST_EOF
 
+asb_normalize_module_layout
 asb_end_banner
