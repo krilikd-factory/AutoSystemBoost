@@ -360,6 +360,13 @@ static void test_thermal_trend_calc(void) {
     EXPECT(asb_smart_thermal_trend_bump_calc(39, 12000, 1) == 0, "hot app → 39°C still cool");
     EXPECT(asb_smart_thermal_trend_bump_calc(45, 2500, 1) > 0, "hot app → lower slope threshold");
     EXPECT(asb_smart_thermal_trend_bump_calc(45, 2500, 0) == 0, "normal app → 2500 below threshold");
+
+    /* Charge-aware cool gaming (level 2): engages even earlier than level 1. */
+    EXPECT(asb_smart_thermal_trend_bump_calc(38, 12000, 2) > 0, "charge-aware → engages from 38°C");
+    EXPECT(asb_smart_thermal_trend_bump_calc(38, 12000, 1) == 0, "level 1 → 38°C still below its 40°C floor");
+    EXPECT(asb_smart_thermal_trend_bump_calc(45, 1800, 2) > 0, "charge-aware → lower slope threshold (1500)");
+    EXPECT(asb_smart_thermal_trend_bump_calc(45, 1800, 1) == 0, "level 1 → 1800 below its 2000 slope floor");
+    EXPECT(asb_smart_thermal_trend_bump_calc(37, 12000, 2) == 0, "charge-aware → 37°C still below its 38°C floor");
     EXPECT(asb_smart_thermal_trend_bump_calc(45, 2000, 1) == 0, "hot app → 2000 at threshold");
 }
 
