@@ -90,6 +90,13 @@ static int    g_smart_budget_src = 0;
 static time_t g_gov_start_ts = 0;
 static int    g_smart_boot_settle = 0;
 static int    g_smart_cool_gaming_lvl = 0;
+/* Gaming-session peak tracking (reset when a game session is not active).
+   Cheap running maxima surfaced in the report card so charge-aware cooling
+   can be judged on numbers, not feel. */
+static int    g_game_bat_temp_peak_dc = 0;
+static int    g_game_cpu_max_peak_c   = 0;
+static int    g_game_cool_lvl_peak    = 0;
+static int    g_game_charging_seen    = 0;
 static int    g_smart_q_bat = -1;
 static int    g_smart_q_heat = -1;
 static int    g_smart_q_stab = -1;
@@ -1115,6 +1122,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "smart_boot_settle=%d\n", g_smart_boot_settle);
         fprintf(f, "cool_gaming=%d\n", g_asb_cfg.cool_gaming);
         fprintf(f, "cool_gaming_level=%d\n", g_smart_cool_gaming_lvl);
+        fprintf(f, "game_charging=%d\ngame_bat_temp_peak_dc=%d\n"
+                   "game_cpu_max_peak_c=%d\ngame_cool_lvl_peak=%d\n",
+                g_game_charging_seen, g_game_bat_temp_peak_dc,
+                g_game_cpu_max_peak_c, g_game_cool_lvl_peak);
         {
             /* While grading is suspended (charging or the night/sleep override),
                don't publish a stale accuracy figure — it reads as a failed
@@ -3129,9 +3140,11 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         if (charging || battery_pct < 0 || g_smart_rt.night_safe_override) {
             g_budget_acc_anchor_ts = 0;
             g_budget_acc_anchor_pct = -1;
-            if (g_smart_rt.night_safe_override) {
-                /* Don't let a streak built from deep-idle windows persist into
-                   a correction — reset it as we enter the night regime. */
+            if (g_smart_rt.night_safe_override || charging) {
+                /* Don't let a streak built from a non-representative regime
+                   (deep-idle night, or charging windows) persist into a
+                   correction — reset it as we enter that regime. The daytime
+                   budget must only learn from genuine on-battery discharge. */
                 g_budget_bias_streak = 0;
                 g_budget_bias_dir = 0;
             }
@@ -3239,6 +3252,24 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                                       _engage, &g_smart_rt);
         g_smart_boot_settle = (_settle_lvl > 0);
         g_smart_cool_gaming_lvl = _cool_lvl;
+
+        /* Gaming-session peak tracking: while a game is the foreground app,
+           accumulate running maxima; when it isn't, decay the session so the
+           next game starts clean. Lightweight — just a few comparisons. */
+        if (g_smart_rt.app_hint >= ASB_APP_GAMING) {
+            if (m->bat.temp_dC > g_game_bat_temp_peak_dc)
+                g_game_bat_temp_peak_dc = m->bat.temp_dC;
+            if (cpu_max_c > g_game_cpu_max_peak_c)
+                g_game_cpu_max_peak_c = cpu_max_c;
+            if (_cool_lvl > g_game_cool_lvl_peak)
+                g_game_cool_lvl_peak = _cool_lvl;
+            if (m->bat.charging) g_game_charging_seen = 1;
+        } else {
+            g_game_bat_temp_peak_dc = 0;
+            g_game_cpu_max_peak_c   = 0;
+            g_game_cool_lvl_peak    = 0;
+            g_game_charging_seen    = 0;
+        }
     }
 
     /* intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
