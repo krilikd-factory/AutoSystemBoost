@@ -866,6 +866,8 @@ lk_emit_report_card() {
         _corr="  correcting=$([ "$_bdir" = "1" ] && echo 'rate+' || echo 'rate-')"
       fi
       echo "budget accuracy: score=${_bacc}/100  error=${_berr}%${_corr}"
+    elif [ "$_bacc" = "-1" ]; then
+      echo "budget accuracy: paused (grading suspended during sleep/charge)"
     fi
     _own=$(lk_kv_state cap_owner)
     _wa=$(lk_kv_state write_attempts)
