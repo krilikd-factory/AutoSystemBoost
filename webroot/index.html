@@ -1640,10 +1640,10 @@ const CFG_ITEMS = [
   { key:'AUDIO_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Audio Tweaks',
     desc:'Enables the extended audio prop set beyond the stock-safe chain. May conflict with some BT headsets or DSP effects \u2014 leave OFF unless you know you need it.' },
   { key:'bt_absvol_mode', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Volume Mode',
-    desc:'Controls Bluetooth absolute volume. OFF keeps the stock single-control behavior (safest). ON disables absolute volume so the phone drives the speaker or car head-unit directly \u2014 can be louder on some sinks, but may change the volume scale or step size. AUTO currently behaves like OFF, reserved for future per-sink logic.' },
+    desc:'ON disables BT absolute volume so the phone drives the speaker/car directly \u2014 can be louder, but may change the volume scale. OFF (and AUTO) keep stock behavior \u2014 safest.' },
   // --- Gaming & thermals ---
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
-    desc:'Engages the predictive thermal lean earlier when a game is running (from ~40\u00b0C instead of ~45\u00b0C), for a cooler, more even thermal profile during play. Field-tested to lower peak current and temperature with no noticeable fps loss (COD Mobile at 165 Hz stayed smooth), so it is ON by default. When you game while charging with a warm battery \u2014 the hottest case \u2014 it automatically tightens further, since that scenario stacks render heat on charge heat. Heat in games is mostly chip physics; this caps how hard the SoC is pushed, it cannot break thermodynamics. Turn it off if you want the SoC unrestrained for absolute peak fps.' },
+    desc:'Cools games by engaging the thermal lean earlier (~40\u00b0C). Field-tested with no noticeable fps loss, and tightens further when gaming on a warm charge. ON by default; turn off for unrestrained peak fps.' },
   // --- Power & battery ---
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While plugged in: leans toward performance when the battery is cool, and automatically backs off the moment the pack heats up, so charging stays fast and the device stays cool.' },
@@ -1653,16 +1653,16 @@ const CFG_ITEMS = [
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Night Quiet Mode',
     desc:'Ultra-quiet sleep: during your night window the governor minimizes its own sensor reads and background activity. Works with the fixed 23:00\u201306:00 window even if schedule learning is OFF.' },
   { key:'night_quiet_auto', type:'bool', def:'1', name:'Learn My Sleep Schedule',
-    desc:'Learns your real bedtime and wake time from screen activity and, after a few nights, replaces the fixed 23:00\u201306:00 window everywhere it is used \u2014 both for Night Quiet Mode and for Smart\u2019s sleep override. Useful even if Night Quiet is OFF.' },
+    desc:'Learns your real bedtime and wake time from screen activity, replacing the fixed 23:00\u201306:00 window after a few nights. Useful even if Night Quiet is OFF.' },
   // --- Memory & UX ---
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM for games but cold-restarts background apps more often.' },
   { key:'UX_MANAGE_ANIM_SCALE', type:'bool', def:'0', name:'Manage Animation Scales',
-    desc:'Per-profile animation speed: Performance shortens system animations (~0.8x) so the UI feels snappier, Battery keeps them stock. Pure visual responsiveness \u2014 no battery cost either way. OFF = ASB never touches your animation settings.' },
+    desc:'Performance shortens system animations (~0.8x) for a snappier UI; Battery keeps them stock. No battery cost. OFF = ASB never touches animation settings.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
-    desc:'Per-profile touch timing: in Performance, long-press and multi-tap detection windows are shortened so holds and double-taps register faster. Some people find shorter long-press too sensitive \u2014 if holds start triggering accidentally, keep this OFF (system defaults).' },
+    desc:'In Performance, shortens long-press and multi-tap windows so they register faster. If holds start triggering accidentally, keep OFF (system defaults).' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
-    desc:'Workaround for OOS builds that ignore live animation-scale changes: re-applies the scale twice to force the UI to pick it up after a profile switch. Does nothing on its own \u2014 only matters if Manage Animation Scales is ON and you notice animations not changing.' }
+    desc:'Workaround for OOS builds that ignore live animation-scale changes \u2014 re-applies the scale to force it. Only matters if Manage Animation Scales is ON and animations aren\u2019t changing.' }
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
