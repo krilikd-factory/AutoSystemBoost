@@ -748,53 +748,78 @@ rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
 # ---------------------------------------------------------------------------
 asb_localize_region() {
   _cc=""
-  # Prefer SIM country, then network operator country, then locale region.
-  for _p in gsm.sim.operator.iso-country gsm.operator.iso-country \
-            persist.sys.oplus.region ro.csc.countryiso_code \
-            ro.product.locale.region; do
+  _src="none"
+  # Trust only the modem's ISO country (SIM first, then network operator).
+  # locale is deliberately NOT used by default — locale != real location, and
+  # rewriting a Wi-Fi regulatory domain on a guess is risky. A user who wants
+  # locale as a last resort can set region_allow_locale=1 in the config.
+  for _p in gsm.sim.operator.iso-country gsm.operator.iso-country; do
     _v="$(getprop "$_p" 2>/dev/null | tr '[:lower:]' '[:upper:]' | tr -d ' ')"
-    # take only a 2-letter ISO code if present
     case "$_v" in
-      [A-Z][A-Z]) _cc="$_v"; break ;;
-      [A-Z][A-Z]-*|[A-Z][A-Z]_*) _cc="$(echo "$_v" | cut -c1-2)"; break ;;
+      [A-Z][A-Z]) _cc="$_v"; _src="$([ "$_p" = "gsm.sim.operator.iso-country" ] && echo sim || echo operator)"; break ;;
     esac
   done
-  # ro.product.locale can be like "en-US" — extract region after the dash.
+
+  # Optional opt-in: locale region only as a last resort, only if asked.
   if [ -z "$_cc" ]; then
-    _loc="$(getprop ro.product.locale 2>/dev/null)"
-    case "$_loc" in
-      *-[A-Za-z][A-Za-z]) _cc="$(echo "$_loc" | sed 's/.*-//' | tr '[:lower:]' '[:upper:]')" ;;
-    esac
+    _allow_locale="$(grep -E '^[[:space:]]*region_allow_locale=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
+    if [ "$_allow_locale" = "1" ]; then
+      _loc="$(getprop ro.product.locale 2>/dev/null)"
+      case "$_loc" in
+        *-[A-Za-z][A-Za-z]) _cc="$(echo "$_loc" | sed 's/.*-//' | tr '[:lower:]' '[:upper:]')"; _src="locale" ;;
+      esac
+    fi
   fi
 
+  ASB_REGION_SOURCE="$_src"
+  ASB_REGION_APPLIED="unchanged"
+
+  # NTP -> global pool is region-neutral and always safe; do it regardless.
+  for _gf in $(find "$MODPATH/system" -type f -iname "gps.conf" 2>/dev/null); do
+    [ -f "$_gf" ] && sed -i "s|^NTP_SERVER=.*|NTP_SERVER=pool.ntp.org|g" "$_gf" 2>/dev/null
+  done
+
   if [ -z "$_cc" ]; then
-    ui_print "[*] Region: could not detect country — leaving WiFi/GPS region as-is"
+    ui_print "[*] Region: no confident SIM/operator country - Wi-Fi left as-is"
     return 0
   fi
-  ui_print "[*] Region detected: $_cc — localizing WiFi/GPS regulatory settings"
+  ui_print "[*] Region: $_cc (from $_src) - localizing Wi-Fi country"
 
-  # NTP: the safest universal choice is the global pool, which always resolves
-  # and routes to nearby servers automatically. (A per-country subdomain like
-  # xx.pool.ntp.org doesn't exist for every country, and a dead one breaks time
-  # sync entirely — worse than a distant-but-working server.)
-  _ntp="pool.ntp.org"
-
-  # Rewrite WiFi country in every shipped WCNSS ini and supplicant conf.
+  # Wi-Fi country: only rewrite when we have a confident SIM/operator code.
   for _wf in $(find "$MODPATH/system" -type f \( -iname "WCNSS_qcom_cfg*.ini" -o -iname "wpa_supplicant*.conf" -o -iname "p2p_supplicant*.conf" \) 2>/dev/null); do
     [ -f "$_wf" ] || continue
     sed -i "s/^gCountryCode=.*/gCountryCode=$_cc/g" "$_wf" 2>/dev/null
     sed -i "s/^country=.*/country=$_cc/g" "$_wf" 2>/dev/null
   done
-
-  # Rewrite NTP server in every shipped gps.conf.
-  for _gf in $(find "$MODPATH/system" -type f -iname "gps.conf" 2>/dev/null); do
-    [ -f "$_gf" ] || continue
-    sed -i "s|^NTP_SERVER=.*|NTP_SERVER=$_ntp|g" "$_gf" 2>/dev/null
-  done
-
-  ui_print "    + WiFi country -> $_cc, NTP -> $_ntp"
+  ASB_REGION_APPLIED="$_cc"
+  ui_print "    + Wi-Fi country -> $_cc, NTP -> pool.ntp.org"
 }
 asb_localize_region
+
+# ---------------------------------------------------------------------------
+# Bluetooth absolute-volume mode (bt_absvol_mode = auto|on|off).
+# Absolute volume delegates loudness to the BT sink. Disabling it can be
+# louder on some car head-units / speakers, but it can also change the volume
+# scale, step granularity and dual-control behavior — so it is NOT a safe
+# universal default. We honor an explicit config choice; auto = off for now.
+# ---------------------------------------------------------------------------
+asb_apply_bt_absvol() {
+  _prop="$MODPATH/system.prop"
+  [ -f "$_prop" ] || return 0
+  _mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
+  [ -n "$_mode" ] || _mode="auto"
+  case "$_mode" in
+    on)  _val="true" ;;
+    off) _val="false" ;;
+    auto|*) _val="false" ;;   # auto currently maps to off (safe default)
+  esac
+  # Only the BT block ships these props; rewrite both to the chosen value.
+  sed -i "s/^persist.bluetooth.disableabsvol=.*/persist.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
+  sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
+  ASB_BT_ABSVOL_APPLIED="mode=$_mode disableabsvol=$_val"
+  ui_print "[*] BT absolute-volume mode: $_mode (disableabsvol=$_val)"
+}
+[ "$ASB_BT" = "true" ] && asb_apply_bt_absvol
 
 cat > "$MODPATH/features.conf" <<EOF
 AUDIO=$([ "$ASB_AUDIO" = "true" ] && echo 1 || echo 0)
@@ -816,6 +841,32 @@ SECURITY=$([ "$ASB_SECURITY" = "true" ] && echo 1 || echo 0)
 BG_TRIM=$([ "$ASB_BG_TRIM" = "true" ] && echo 1 || echo 0)
 VENDOR_OVERLAY=1
 EOF
+
+# ---------------------------------------------------------------------------
+# Install summary — a single human-readable file capturing what was applied,
+# so post-install debugging doesn't require guessing. Lives next to the module.
+# ---------------------------------------------------------------------------
+{
+  echo "ASB install summary"
+  echo "date:            $(date 2>/dev/null || echo n/a)"
+  echo "module version:  $(grep -E '^version=' "$MODPATH/module.prop" 2>/dev/null | sed 's/version=//')"
+  if [ "$ASB_IS_OP15" = "true" ]; then _dev="OnePlus 15 (full shipped overlay)";
+  elif [ "$ASB_IS_OP13" = "true" ]; then _dev="OnePlus 13 (op13 overlay)";
+  elif [ "$ASB_IS_OP12" = "true" ]; then _dev="OnePlus 12 (op12 overlay)";
+  else _dev="generic OnePlus (sed patches only, vendor overlay pruned)"; fi
+  echo "device detected: $_dev"
+  echo "  model=$ASB_MODEL_RAW device=$ASB_DEVICE_RAW platform=$(getprop ro.board.platform 2>/dev/null)"
+  echo "region source:   ${ASB_REGION_SOURCE:-none}"
+  echo "region applied:  ${ASB_REGION_APPLIED:-unchanged}"
+  echo "bt absvol:       ${ASB_BT_ABSVOL_APPLIED:-not-applied (BT category off)}"
+  echo "camera/media:    $([ "$ASB_CAMERA" = "true" ] && echo applied || echo skipped)"
+  echo "gps overlay:     $([ "$ASB_GPS" = "true" ] && echo applied || echo skipped)"
+  echo "wifi localized:  $([ "${ASB_REGION_APPLIED:-unchanged}" != "unchanged" ] && echo yes || echo no)"
+  echo "audio category:  $([ "$ASB_AUDIO" = "true" ] && echo on || echo off)"
+} > "$MODPATH/install_summary.txt" 2>/dev/null
+cp -f "$MODPATH/install_summary.txt" /data/adb/asb/install_summary.txt 2>/dev/null || true
+ui_print " "
+ui_print "[*] Install summary written (install_summary.txt)"
 
 echo 0 > "/data/adb/asb/vendor_boot_counter" 2>/dev/null
 rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
