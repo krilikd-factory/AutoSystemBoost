@@ -333,6 +333,8 @@ asb_detect_compat() {
 
   ASB_IS_ONEPLUS=false
   ASB_IS_OP15=false
+  ASB_IS_OP13=false
+  ASB_IS_OP12=false
 
   echo "$ASB_MANUFACTURER_L $ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_ONEPLUS=true
 
@@ -340,6 +342,35 @@ asb_detect_compat() {
     *"oneplus 15"*|*"oneplus15"*|*"op15"*|*"cph274"*|*"cph275"*|*"op611fl1"*|*"plk110"*|*"pjz110"*|*"pkz110"*)
       ASB_IS_OP15=true ;;
   esac
+
+  # OnePlus 13 — chipset "sun"/SM8750, model CPH2649, device OP5D55*
+  case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
+    *"oneplus 13"*|*"oneplus13"*|*"op13"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"op5d55"*)
+      ASB_IS_OP13=true ;;
+  esac
+  # platform/SoC fallback for OP13 (sun / SM8750) — only if not already OP15
+  if [ "$ASB_IS_OP15" != "true" ]; then
+    ASB_PLATFORM_L="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
+    case "$ASB_PLATFORM_L" in
+      *"sm8750"*|*"sun"*)
+        echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP13=true ;;
+    esac
+  fi
+
+  # OnePlus 12 — chipset "pineapple"/SM8650, model CPH2581, device OP595*
+  case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
+    *"oneplus 12"*|*"oneplus12"*|*"op12"*|*"cph2581"*|*"cph2583"*|*"cph2573"*|*"op595"*)
+      ASB_IS_OP12=true ;;
+  esac
+  # platform/SoC fallback for OP12 (pineapple / SM8650) — only if not OP15/OP13.
+  # NOTE: OP12 platform string is "pineapple" (SM8650); guard against OP15/OP13.
+  if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ]; then
+    ASB_PLATFORM_L="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
+    case "$ASB_PLATFORM_L" in
+      *"sm8650"*)
+        echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP12=true ;;
+    esac
+  fi
 
   echo "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" | grep -Eqi '(^|[[:space:]/._-])(cph27[45][0-9a-z]*|op611fl1|op611|plk110|pjz110|pkz110|oplus/cph27[45]|oneplus/cph27[45])([[:space:]/._-]|$)' && ASB_IS_OP15=true
   echo "$ASB_PRJ_L" | grep -Eqi '^(24831|24833|24863)$' && ASB_IS_OP15=true
@@ -376,6 +407,66 @@ asb_detect_compat() {
   if [ "$ASB_IS_OP15" != "true" ]; then
     ui_print "[*] Detect debug: manufacturer=$ASB_MANUFACTURER_RAW | model=$ASB_MODEL_RAW | device=$ASB_DEVICE_RAW | prj=$ASB_PRJ_RAW"
   fi
+  # OP15 is primary — if both matched, OP15 wins. OP12/OP13 are mutually exclusive too.
+  [ "$ASB_IS_OP15" = "true" ] && ASB_IS_OP13=false && ASB_IS_OP12=false
+  [ "$ASB_IS_OP13" = "true" ] && ASB_IS_OP12=false
+}
+
+asb_apply_device_overlay() {
+  # $1 = overlay dir name (op12_overlay / op13_overlay)
+  # $2 = human label (e.g. "OnePlus 13 (CPH2649 / SM8750 'sun')")
+  _ov="$1"; _label="$2"
+  ui_print " "
+  ui_print "${SEPARATOR}"
+  ui_print "[*] $_label detected"
+  ui_print "[*] Applying device-tuned overlay (GPS, camera, media)"
+  ui_print "[*] Audio/volume/codecs apply via device-agnostic patches"
+  ui_print "${SEPARATOR}"
+
+  # Remove the OP15-specific shipped overlays that don't fit this device
+  # (OP15 SKU audio dirs, OP15 camera calibration, OP15 wifi SKU, OP15 media).
+  rm -rf "$MODPATH/system/vendor/etc/audio" 2>/dev/null || true
+  rm -rf "$MODPATH/system/vendor/odm/etc/audio" 2>/dev/null || true
+  rm -rf "$MODPATH/system/vendor/etc/wifi" 2>/dev/null || true
+  rm -rf "$MODPATH/system/vendor/odm/vendor/etc/wifi" 2>/dev/null || true
+  rm -rf "$MODPATH/system/vendor/odm/etc/camera" 2>/dev/null || true
+  rm -f  "$MODPATH/system/vendor/etc/media_profiles"*".xml" 2>/dev/null || true
+  rm -f  "$MODPATH/system/vendor/odm/etc/media_profiles"*".xml" 2>/dev/null || true
+  rm -f  "$MODPATH/system/vendor/etc/gps.conf" 2>/dev/null || true
+  rm -f  "$MODPATH/system/vendor/odm/etc/gps.conf" 2>/dev/null || true
+  rm -f  "$MODPATH/system/vendor/etc/izat.conf" 2>/dev/null || true
+  rm -f  "$MODPATH/system/vendor/odm/etc/izat.conf" 2>/dev/null || true
+
+  if [ -d "$MODPATH/$_ov" ]; then
+    # GPS overlay — gated by GPS category
+    if [ "$ASB_GPS" = "true" ]; then
+      for _f in vendor/etc/gps.conf vendor/odm/etc/gps.conf \
+                vendor/etc/izat.conf vendor/odm/etc/izat.conf; do
+        if [ -f "$MODPATH/$_ov/$_f" ]; then
+          mkdir -p "$MODPATH/system/$(dirname "$_f")" 2>/dev/null
+          cp -f "$MODPATH/$_ov/$_f" "$MODPATH/system/$_f" 2>/dev/null \
+            && ui_print "    + GPS: $_f"
+        fi
+      done
+    fi
+    # Camera/media overlay — gated by CAMERA category
+    if [ "$ASB_CAMERA" = "true" ]; then
+      for _f in vendor/etc/media_profiles.xml \
+                vendor/odm/etc/camera/media_profiles.xml \
+                vendor/odm/etc/camera/conf_tuning_params.json; do
+        if [ -f "$MODPATH/$_ov/$_f" ]; then
+          mkdir -p "$MODPATH/system/$(dirname "$_f")" 2>/dev/null
+          cp -f "$MODPATH/$_ov/$_f" "$MODPATH/system/$_f" 2>/dev/null \
+            && ui_print "    + Camera/media: $_f"
+        fi
+      done
+    fi
+  fi
+
+  # Clean up both staging dirs (only the live device's was used).
+  rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
+  ui_print "[*] Overlay applied. Audio EQ/volume/hi-res + codecs are"
+  ui_print "    patched in-place during the audio/media pass."
 }
 
 asb_prune_non_op15_vendor_overlays() {
@@ -635,9 +726,75 @@ if [ "$ASB_IS_OP15" = "true" ]; then
   ui_print "${SEPARATOR}"
 fi
 asb_prune_module
-if [ "$ASB_IS_OP15" != "true" ]; then
+if [ "$ASB_IS_OP15" = "true" ]; then
+  : # OP15: keep the full shipped overlay as-is
+elif [ "$ASB_IS_OP13" = "true" ]; then
+  asb_apply_device_overlay op13_overlay "OnePlus 13 (CPH2649 / SM8750 'sun')"
+elif [ "$ASB_IS_OP12" = "true" ]; then
+  asb_apply_device_overlay op12_overlay "OnePlus 12 (CPH2581 / SM8650 'pineapple')"
+else
   asb_prune_non_op15_vendor_overlays
 fi
+# Clean up any unused overlay staging dirs on non-OP12/13 paths too.
+rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Regional localization: the shipped WiFi/GPS configs were authored with an
+# Italian regulatory domain (gCountryCode=IT, country=IT, it.pool.ntp.org).
+# WiFi country code is regulatory — a wrong one blocks channels or violates
+# local rules — so we detect the installing device's country and rewrite it.
+# Source of truth (no network needed): the SIM/network ISO country from the
+# modem. Falls back to leaving the value untouched if nothing is detectable.
+# ---------------------------------------------------------------------------
+asb_localize_region() {
+  _cc=""
+  # Prefer SIM country, then network operator country, then locale region.
+  for _p in gsm.sim.operator.iso-country gsm.operator.iso-country \
+            persist.sys.oplus.region ro.csc.countryiso_code \
+            ro.product.locale.region; do
+    _v="$(getprop "$_p" 2>/dev/null | tr '[:lower:]' '[:upper:]' | tr -d ' ')"
+    # take only a 2-letter ISO code if present
+    case "$_v" in
+      [A-Z][A-Z]) _cc="$_v"; break ;;
+      [A-Z][A-Z]-*|[A-Z][A-Z]_*) _cc="$(echo "$_v" | cut -c1-2)"; break ;;
+    esac
+  done
+  # ro.product.locale can be like "en-US" — extract region after the dash.
+  if [ -z "$_cc" ]; then
+    _loc="$(getprop ro.product.locale 2>/dev/null)"
+    case "$_loc" in
+      *-[A-Za-z][A-Za-z]) _cc="$(echo "$_loc" | sed 's/.*-//' | tr '[:lower:]' '[:upper:]')" ;;
+    esac
+  fi
+
+  if [ -z "$_cc" ]; then
+    ui_print "[*] Region: could not detect country — leaving WiFi/GPS region as-is"
+    return 0
+  fi
+  ui_print "[*] Region detected: $_cc — localizing WiFi/GPS regulatory settings"
+
+  # NTP: the safest universal choice is the global pool, which always resolves
+  # and routes to nearby servers automatically. (A per-country subdomain like
+  # xx.pool.ntp.org doesn't exist for every country, and a dead one breaks time
+  # sync entirely — worse than a distant-but-working server.)
+  _ntp="pool.ntp.org"
+
+  # Rewrite WiFi country in every shipped WCNSS ini and supplicant conf.
+  for _wf in $(find "$MODPATH/system" -type f \( -iname "WCNSS_qcom_cfg*.ini" -o -iname "wpa_supplicant*.conf" -o -iname "p2p_supplicant*.conf" \) 2>/dev/null); do
+    [ -f "$_wf" ] || continue
+    sed -i "s/^gCountryCode=.*/gCountryCode=$_cc/g" "$_wf" 2>/dev/null
+    sed -i "s/^country=.*/country=$_cc/g" "$_wf" 2>/dev/null
+  done
+
+  # Rewrite NTP server in every shipped gps.conf.
+  for _gf in $(find "$MODPATH/system" -type f -iname "gps.conf" 2>/dev/null); do
+    [ -f "$_gf" ] || continue
+    sed -i "s|^NTP_SERVER=.*|NTP_SERVER=$_ntp|g" "$_gf" 2>/dev/null
+  done
+
+  ui_print "    + WiFi country -> $_cc, NTP -> $_ntp"
+}
+asb_localize_region
 
 cat > "$MODPATH/features.conf" <<EOF
 AUDIO=$([ "$ASB_AUDIO" = "true" ] && echo 1 || echo 0)
