@@ -877,6 +877,47 @@ lk_emit_report_card() {
     echo "cap writes:      attempts=${_wa:--}  skipped_detente=${_wsd:--}  skipped_backoff=${_wsb:--}"
     echo "anomalies:       code=${_anom:-0}  episodes_1h=${_anom_n:-0}"
     echo "sensors:         bat_cur_unit=${_unit:--} (0=undecided 1=uA 2=mA)"
+
+    # Gaming session peaks (only meaningful right after / during a game)
+    _gchg=$(lk_kv_state game_charging)
+    _gbt=$(lk_kv_state game_bat_temp_peak_dc)
+    _gcpu=$(lk_kv_state game_cpu_max_peak_c)
+    _gclvl=$(lk_kv_state game_cool_lvl_peak)
+    if [ -n "$_gcpu" ] && [ "$_gcpu" -gt 0 ] 2>/dev/null; then
+      _gbt_c=""
+      [ -n "$_gbt" ] && [ "$_gbt" -gt 0 ] 2>/dev/null && _gbt_c="$(( _gbt / 10 ))C"
+      echo "gaming peaks:    charging=${_gchg:-0}  bat_temp_peak=${_gbt_c:--}  cpu_max_peak=${_gcpu}C  cool_level_peak=${_gclvl:-0}"
+    fi
+
+    # Plain-language diagnosis: rank the weakest quality component and suggest
+    # one concrete next step. Built from the same subscores the verdict uses.
+    _qh=$(lk_kv_state smart_q_heat); _qv=$(lk_kv_state smart_q_vendor)
+    _qb=$(lk_kv_state smart_q_bat);  _qs=$(lk_kv_state smart_q_stab)
+    _diag_primary=""; _diag_secondary=""; _diag_hint=""
+    # collect (name,score) pairs that are valid (>=0), find two lowest
+    _lowest=101; _lowest2=101
+    for _pair in "heat:$_qh" "vendor:$_qv" "battery:$_qb" "stability:$_qs"; do
+      _nm="${_pair%%:*}"; _sc="${_pair##*:}"
+      case "$_sc" in ''|*[!0-9-]*) continue ;; esac
+      [ "$_sc" -lt 0 ] 2>/dev/null && continue
+      if [ "$_sc" -lt "$_lowest" ] 2>/dev/null; then
+        _lowest2=$_lowest; _diag_secondary=$_diag_primary
+        _lowest=$_sc; _diag_primary=$_nm
+      elif [ "$_sc" -lt "$_lowest2" ] 2>/dev/null; then
+        _lowest2=$_sc; _diag_secondary=$_nm
+      fi
+    done
+    if [ -n "$_diag_primary" ] && [ "$_lowest" -lt 80 ] 2>/dev/null; then
+      case "$_diag_primary" in
+        heat)      _diag_hint="run hot games with cool_gaming on; lower screen brightness/refresh" ;;
+        vendor)    _diag_hint="vendor thermal-clamps under load — expected when hot; no action if heat is the real cause" ;;
+        battery)   _diag_hint="background drain high; check sync/push-heavy apps" ;;
+        stability) _diag_hint="caps oscillating; consider easing cool_gaming if it's on" ;;
+      esac
+      echo ""
+      echo "diagnosis:       primary=${_diag_primary}  secondary=${_diag_secondary:-none}"
+      echo "improvement:     ${_diag_hint}"
+    fi
     echo ""
     echo "score key: quality 0-100 (>=80 good), budget sev 0=ok 1=warn 2=emergency"
   } > "$_out"
