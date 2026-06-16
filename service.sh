@@ -1567,6 +1567,36 @@ apply_logd_props() {
 }
 asb_feature_enabled LOG && apply_logd_props
 
+# Runtime GMS/analytics tracking suppression via the settings DB. Props can't
+# reach these — they live in 'settings global'. Each write is recorded so the
+# module's uninstall can put them back, and only applied when LOG is enabled.
+apply_tracking_block() {
+  _trk_log="/data/adb/asb/tracking_restore.log"
+  : > "$_trk_log" 2>/dev/null
+  _sp() {
+    # _sp <key> <value> — save the old value, then set the new one.
+    _old="$(settings get global "$1" 2>/dev/null)"
+    echo "$1|$_old" >> "$_trk_log" 2>/dev/null
+    settings put global "$1" "$2" >/dev/null 2>&1
+  }
+  _sp clearcut_enabled 0
+  _sp clearcut_events 0
+  _sp clearcut_gcm 0
+  _sp gmscorestat_enabled 0
+  _sp ga_collection_enabled 0
+  _sp analytics_enabled 0
+  _sp uploading_enabled 0
+  _sp usage_stats_enabled 0
+  _sp usagestats_collection_enabled 0
+  _sp network_watchlist_enabled 0
+  _sp limit_ad_tracking 1
+  _sp tron_enabled 0
+  _sp play_store_panel_logging_enabled 0
+  _sp phenotype_flags "disable_log_upload=1,disable_log_for_missing_debug_id=1"
+  _sp binder_calls_stats "sampling_interval=600000000,detailed_tracking=disable,enabled=false,upload_data=false"
+}
+asb_feature_enabled LOG && apply_tracking_block
+
 apply_camera_experimental() {
   _orig="$MODDIR/config/camera_orig.conf"
 

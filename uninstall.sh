@@ -75,6 +75,19 @@ done
 rm -rf /dev/.asb 2>/dev/null
 rm -rf /dev/.asb_profile_state 2>/dev/null
 
+# Restore any runtime tracking settings we changed (settings DB), then remove
+# the data dir. Reading the log before deleting it is intentional.
+if [ -f /data/adb/asb/tracking_restore.log ]; then
+  while IFS='|' read -r _k _v; do
+    [ -n "$_k" ] || continue
+    if [ -z "$_v" ] || [ "$_v" = "null" ]; then
+      settings delete global "$_k" >/dev/null 2>&1 || true
+    else
+      settings put global "$_k" "$_v" >/dev/null 2>&1 || true
+    fi
+  done < /data/adb/asb/tracking_restore.log
+fi
+
 rm -rf /data/adb/asb 2>/dev/null
 
 for _legacy in asb_active_profile asb_baseline.txt asb_profile_switches.log \

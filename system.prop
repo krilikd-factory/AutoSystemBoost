@@ -7,7 +7,7 @@ net.bt.name=BT-INet
 persist.bluetooth.ble_drop_power=false
 persist.bluetooth.btsnoopenable=false
 persist.bluetooth.disable.mihc=false
-persist.bluetooth.disableabsvol=true
+persist.bluetooth.disableabsvol=false
 persist.bluetooth.dualconnection.supported=true
 persist.bluetooth.enablenewavrcp=true
 persist.bluetooth.hfp_available_guard=false
@@ -32,7 +32,7 @@ persist.sys.bluetooth_restricte_state=false
 persist.sys.bluetooth_restricte_state_Screen=false
 persist.vendor.bluetooth.asha_power_control=true
 persist.vendor.bluetooth.ble_drop_power=false
-persist.vendor.bluetooth.disableabsvol=true
+persist.vendor.bluetooth.disableabsvol=false
 persist.vendor.bluetooth.haltest=false
 persist.vendor.bluetooth.heif=true
 persist.vendor.bt.a2dp.lhdc=true
@@ -701,6 +701,14 @@ dev.pm.dyn_samplingrate=0
 # ASB:KERNEL:END
 # ASB:LOG:BEGIN
 ro.config.nocheckin=1
+# GMS analytics/telemetry: reduce Clearcut/Phenotype/usage-stats reporting and
+# ad personalization at the framework level. Best-effort via stable flags;
+# Google may still gate some of these server-side.
+persist.sys.disable_clearcut=1
+persist.log.tag.Phenotype=S
+persist.log.tag.ClearcutLogger=S
+persist.log.tag.UsageReporting=S
+ro.com.google.gmsversion_reporting=0
 debug.c2.use_dmabufheaps=1
 debug.enable_mem_profiling=0
 debug.gralloc.enable_fb_ubwc=1
@@ -860,6 +868,11 @@ persist.vendor.ims.qmi_ott_feature=1
 persist.vendor.ims.QmiOttEnable=1
 # ASB:RADIO_IMS:END
 # ASB:DISPLAY:BEGIN
+# Window blur is GPU-expensive; disabling it lightens the compositor and can
+# smooth weaker thermal states. Visual-only — recents/notification-shade blur
+# is replaced by a flat scrim.
+persist.sys.sf.disable_blurs=1
+ro.surface_flinger.supports_background_blur=0
 vendor.display.enable_dpps_dynamic_fps=1
 vendor.display.enable_async_vds=1
 vendor.display.backlight_smooth=1
