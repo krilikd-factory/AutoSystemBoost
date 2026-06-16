@@ -691,6 +691,85 @@ asb_patch_location_inplace() {
   ui_print "[*] Location tuning applied."
 }
 
+# ---------------------------------------------------------------------------
+# Per-device audio + wifi config dirs (OP12 / OP13).
+#
+# The shipped system/vendor/etc/audio (sku_canoe/sku_alor) and .../wifi
+# (wcn7750/kiwi_v2/peach_v2) dirs are OnePlus-15 hardware-specific. The overlay
+# path correctly DELETES them for OP12/OP13 — but never replaces them, so those
+# devices were left with no SKU audio dir and a WRONG top-level mixer_paths.xml
+# (the OP15 canoe one), while their real per-codec configs live under
+# sku_sun / sku_kera / sku_tuna (OP13) and sku_pineapple / sku_cliffs (OP12).
+#
+# Android's audio HAL selects its mixer/policy/resourcemanager by SKU at
+# runtime (ro.vendor.audio.* / hw sku), so a module that overlays only the
+# generic top-level file — with values for a different codec — can mis-route or
+# mute paths. WiFi (WCNSS_qcom_cfg*.ini) is regulatory/chip-specific too.
+#
+# Fix: clone the LIVE device's own audio + wifi dirs into the module so it ships
+# the device-correct configs, and drop the OP15 top-level audio policy/mixer
+# files that don't belong. We do NOT cross-port OP15's tuned values onto a
+# different codec/chip — that is unsafe — we restore the device's own working
+# configs. (Audio EQ/volume/codec tuning still happens via the device-agnostic
+# in-place pass, which name-matches and patches the device's own files.)
+# ---------------------------------------------------------------------------
+asb_clone_dir_from_live() {
+  # $1 = absolute live source dir (e.g. /vendor/etc/audio)
+  # $2 = module-relative dest under system/ (e.g. system/vendor/etc/audio)
+  _src="$1"; _rel="$2"
+  [ -d "$_src" ] || return 1
+  _dest="$MODPATH/$_rel"
+  rm -rf "$_dest" 2>/dev/null
+  mkdir -p "$_dest" 2>/dev/null
+  # copy recursively, preserving structure; tolerate odd filenames
+  ( cd "$_src" && find . -type f 2>/dev/null | while IFS= read -r _f; do
+      _f="${_f#./}"
+      mkdir -p "$_dest/$(dirname "$_f")" 2>/dev/null
+      cp -f "$_src/$_f" "$_dest/$_f" 2>/dev/null || true
+    done )
+  return 0
+}
+
+asb_clone_device_audio_wifi() {
+  # $1 = human label
+  _label="$1"
+
+  if [ "$ASB_AUDIO" = "true" ]; then
+    ui_print " "
+    ui_print "${SEPARATOR}"
+    ui_print "[*] Device audio configs for $_label"
+    ui_print "${SEPARATOR}"
+    # Drop OP15 top-level audio files that are canoe/alor-specific and would
+    # otherwise shadow the device's own with wrong-codec values.
+    for _af in mixer_paths.xml ftm_mixer_paths.xml resourcemanager.xml \
+               audio_module_config_primary.xml; do
+      rm -f "$MODPATH/system/vendor/etc/$_af" 2>/dev/null || true
+      rm -f "$MODPATH/system/vendor/odm/etc/$_af" 2>/dev/null || true
+    done
+    # Clone the device's own audio dir (sku_* live here) from the live tree.
+    _audio_done=0
+    for _asrc in /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio; do
+      if [ -d "$_asrc" ]; then
+        asb_clone_dir_from_live "$_asrc" "system${_asrc}" \
+          && { ui_print "    + audio: $_asrc -> system${_asrc}"; _audio_done=1; }
+      fi
+    done
+    [ "$_audio_done" = "1" ] || ui_print "    - no device audio dir found"
+  fi
+
+  if [ "$ASB_WIFI" = "true" ]; then
+    ui_print "[*] Device wifi configs for $_label"
+    _wifi_done=0
+    for _wsrc in /vendor/etc/wifi /odm/etc/wifi /system/vendor/etc/wifi; do
+      if [ -d "$_wsrc" ]; then
+        asb_clone_dir_from_live "$_wsrc" "system${_wsrc}" \
+          && { ui_print "    + wifi: $_wsrc -> system${_wsrc}"; _wifi_done=1; }
+      fi
+    done
+    [ "$_wifi_done" = "1" ] || ui_print "    - no device wifi dir found"
+  fi
+}
+
 asb_prune_non_op15_vendor_overlays() {
   ui_print " "
   ui_print "${SEPARATOR}"
@@ -952,10 +1031,12 @@ if [ "$ASB_IS_OP15" = "true" ]; then
   : # OP15: keep the full shipped overlay as-is
 elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_apply_device_overlay op13_overlay "OnePlus 13 (CPH2649 / SM8750 'sun')"
+  asb_clone_device_audio_wifi "OnePlus 13 (sun / tuna / kera)"
   asb_patch_perf_inplace "OnePlus 13 (sun / tuna / kera)"
   asb_patch_location_inplace "OnePlus13"
 elif [ "$ASB_IS_OP12" = "true" ]; then
   asb_apply_device_overlay op12_overlay "OnePlus 12 (CPH2581 / SM8650 'pineapple')"
+  asb_clone_device_audio_wifi "OnePlus 12 (pineapple / cliffs)"
   asb_patch_perf_inplace "OnePlus 12 (pineapple / cliffs)"
   asb_patch_location_inplace "OnePlus12"
 else
