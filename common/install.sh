@@ -102,20 +102,13 @@ asb_normalize_module_layout() {
     [ -d "$MODPATH/$_part" ] && rmdir "$MODPATH/$_part" 2>/dev/null || true
   done
 
-  # Bake in the OP15-style whiteout. On OP15 the working module carries a
-  # ZERO-BYTE, mode-000 FILE named "vendor" (and odm) at its root — an
-  # opaque/whiteout marker that tells the KSU/Magisk overlay "do NOT
-  # materialise a real <part>/ here". Without it, a kernel resolving the
-  # device's /system/<part> -> /<part> symlink rebuilds a real <part>/ dir at
-  # the module root that then shadows the whole partition (the OP13/OP12
-  # root-vendor duplication). We reproduce the exact OP15 marker: only when the
-  # canonical system/<part> exists and nothing already occupies the root slot.
-  for _part in vendor odm; do
-    [ -e "$MODPATH/$_part" ] && continue
-    if [ -d "$MODPATH/system/$_part" ]; then
-      : > "$MODPATH/$_part" 2>/dev/null && chmod 000 "$MODPATH/$_part" 2>/dev/null || true
-    fi
-  done
+  # NOTE: KernelSU Next runs its own "Handle partition /vendor" step AFTER this
+  # script finishes, which materialises a service vendor/ at the module root as
+  # part of its magic-mount (mirror + per-file merge). That root vendor/ is a
+  # framework artifact, NOT a shadow of the whole /vendor partition — the device
+  # keeps its stock files and only ASB's files are merged on top. So we do NOT
+  # fight it here (no whiteout, no symlink); the fold above only cleans a
+  # genuinely malformed layout left by an older buggy build.
 }
 
 asb_end_banner() {
@@ -513,10 +506,13 @@ asb_apply_device_overlay() {
   rm -f  "$MODPATH/system/vendor/odm/etc/izat.conf" 2>/dev/null || true
 
   if [ -d "$MODPATH/$_ov" ]; then
-    # GPS overlay — gated by GPS category
+    # GPS overlay — gated by GPS category. We write BOTH the /vendor/odm and
+    # the /odm partition copies: some devices (OP13) read camera/location
+    # configs from /odm first, others (OP15) from /vendor/odm, so we cover both.
     if [ "$ASB_GPS" = "true" ]; then
       for _f in vendor/etc/gps.conf vendor/odm/etc/gps.conf \
-                vendor/etc/izat.conf vendor/odm/etc/izat.conf; do
+                vendor/etc/izat.conf vendor/odm/etc/izat.conf \
+                odm/etc/gps.conf odm/etc/izat.conf; do
         if [ -f "$MODPATH/$_ov/$_f" ]; then
           mkdir -p "$MODPATH/system/$(dirname "$_f")" 2>/dev/null
           cp -f "$MODPATH/$_ov/$_f" "$MODPATH/system/$_f" 2>/dev/null \
@@ -524,12 +520,17 @@ asb_apply_device_overlay() {
         fi
       done
     fi
-    # Camera/media overlay — gated by CAMERA category
+    # Camera/media overlay — gated by CAMERA category. Same dual-path reasoning:
+    # OP13's camera HAL reads video_beauty / tone / media_profiles from the
+    # /odm partition, so the /vendor/odm-only overlay was invisible there.
     if [ "$ASB_CAMERA" = "true" ]; then
       for _f in vendor/etc/media_profiles.xml \
                 vendor/odm/etc/camera/media_profiles.xml \
                 vendor/odm/etc/camera/conf_tuning_params.json \
-                vendor/odm/etc/camera/config/video_beauty_default_config; do
+                vendor/odm/etc/camera/config/video_beauty_default_config \
+                odm/etc/camera/media_profiles.xml \
+                odm/etc/camera/conf_tuning_params.json \
+                odm/etc/camera/config/video_beauty_default_config; do
         if [ -f "$MODPATH/$_ov/$_f" ]; then
           mkdir -p "$MODPATH/system/$(dirname "$_f")" 2>/dev/null
           cp -f "$MODPATH/$_ov/$_f" "$MODPATH/system/$_f" 2>/dev/null \
