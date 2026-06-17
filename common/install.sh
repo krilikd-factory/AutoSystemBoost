@@ -588,8 +588,6 @@ asb_patch_perf_inplace() {
     return 0
   fi
 
-  ui_print "[*] Perf tuning ($_label, patched in-place)"
-
   _dst="$MODPATH/system/vendor/etc/perf"
   # The shipped perf dir is OP15-only (canoe target). Its qapegameconfig.txt
   # has no Target column and would apply canoe caps globally on this device,
@@ -610,16 +608,11 @@ asb_patch_perf_inplace() {
   asb_perf_patch_configstore "$_dst/perfconfigstore.xml"
   if [ -f "$_dst/qapegameconfig.txt" ]; then
     asb_perf_patch_gameconfig "$_dst/qapegameconfig.txt"
-    _perf_game="game caps 44C/900mA"
-  else
-    _perf_game="no game-config (older fw)"
   fi
   if [ -f "$_dst/perfboostsconfig.xml" ]; then
     # idle render-thread boost: shorten hold to cut idle heat (2000 -> 1600)
     sedi 's/\(Id="0x000010A7"[^>]*Timeout="\)2000"/\11600"/g' "$_dst/perfboostsconfig.xml"
   fi
-
-  ui_print "    + applied (configstore, $_perf_game, idle-boost trimmed)"
 }
 
 # ---------------------------------------------------------------------------
@@ -652,8 +645,6 @@ asb_patch_location_inplace() {
   _model="$1"
   [ "$ASB_GPS" = "true" ] || { ui_print "[*] GPS category off — skipping location tuning"; return 0; }
 
-  ui_print "[*] Location/GPS-assist tuning ($_model, patched in-place)"
-
   # Remove the shipped OP15 (canoe) copies — they carry MODEL_ID="OnePlus15"
   # and OP15-only GTP server entries. We rebuild from the live device files.
   rm -f "$MODPATH/system/vendor/etc/xtwifi.conf" \
@@ -662,7 +653,6 @@ asb_patch_location_inplace() {
         "$MODPATH/system/vendor/etc/lowi.conf" \
         "$MODPATH/system/odm/etc/lowi.conf" 2>/dev/null || true
 
-  _did=0; _nx=0; _nl=0
   for _src in /vendor/etc/xtwifi.conf /odm/etc/xtwifi.conf /vendor/odm/etc/xtwifi.conf; do
     if [ -f "$_src" ]; then
       _rel="system${_src}"
@@ -670,7 +660,6 @@ asb_patch_location_inplace() {
       cp -f "$_src" "$MODPATH/$_rel" 2>/dev/null && {
         chmod 0644 "$MODPATH/$_rel" 2>/dev/null
         asb_loc_patch_xtwifi "$MODPATH/$_rel" "$_model"
-        _nx=$((_nx+1)); _did=1
       }
     fi
   done
@@ -681,15 +670,9 @@ asb_patch_location_inplace() {
       cp -f "$_src" "$MODPATH/$_rel" 2>/dev/null && {
         chmod 0644 "$MODPATH/$_rel" 2>/dev/null
         asb_loc_patch_lowi "$MODPATH/$_rel"
-        _nl=$((_nl+1)); _did=1
       }
     fi
   done
-  if [ "$_did" = "1" ]; then
-    ui_print "    + xtwifi x$_nx (cache 32MB), lowi x$_nl (low-power RTT)"
-  else
-    ui_print "    - no xtwifi/lowi on this device — skipped"
-  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -1152,10 +1135,8 @@ asb_localize_region() {
   done
 
   if [ -z "$_cc" ]; then
-    ui_print "[*] Region: no confident SIM/operator country - Wi-Fi left as-is"
     return 0
   fi
-  ui_print "[*] Region: $_cc (from $_src) - localizing Wi-Fi country"
 
   # Wi-Fi country: only REPLACE an existing country line — never insert one.
   # If a device ships WCNSS/supplicant without an explicit gCountryCode (e.g.
@@ -1177,10 +1158,8 @@ asb_localize_region() {
   done
   if [ "$_wrote" = "1" ]; then
     ASB_REGION_APPLIED="$_cc"
-    ui_print "    + Wi-Fi country -> $_cc, NTP -> pool.ntp.org"
   else
     ASB_REGION_APPLIED="unchanged (modem-driven regdomain)"
-    ui_print "    + NTP -> pool.ntp.org (Wi-Fi regdomain left to modem)"
   fi
 }
 asb_localize_region
@@ -1206,7 +1185,8 @@ asb_apply_bt_absvol() {
   sed -i "s/^persist.bluetooth.disableabsvol=.*/persist.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
   sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
   ASB_BT_ABSVOL_APPLIED="mode=$_mode disableabsvol=$_val"
-  ui_print "[*] BT absolute-volume mode: $_mode (disableabsvol=$_val)"
+  # Only announce when the user picked a non-default mode (auto is silent).
+  [ "$_mode" = "auto" ] || ui_print "[*] BT volume mode: $_mode"
 }
 [ "$ASB_BT" = "true" ] && asb_apply_bt_absvol
 
@@ -1254,8 +1234,6 @@ EOF
   echo "audio category:  $([ "$ASB_AUDIO" = "true" ] && echo on || echo off)"
 } > "$MODPATH/install_summary.txt" 2>/dev/null
 cp -f "$MODPATH/install_summary.txt" /data/adb/asb/install_summary.txt 2>/dev/null || true
-ui_print " "
-ui_print "[*] Install summary written (install_summary.txt)"
 
 echo 0 > "/data/adb/asb/vendor_boot_counter" 2>/dev/null
 rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
