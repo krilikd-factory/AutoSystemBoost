@@ -1,0 +1,74 @@
+{
+    "module": "segdepth_hairmatting",
+    "comment":
+    [
+        "QCOM performanceMode(BALANCED , HIGH_PERFORMANCE , POWER_SAVER , SYSTEM_SETTINGS , SUSTAINED_HIGH_PERFORMANCE ,",
+        "BURST , LOW_POWER_SAVER , HIGH_POWER_SAVER , LOW_BALANCED)",
+
+        "QCOM runtime(CPU_FLOAT32, GPU_FLOAT32_16_HYBRID, GPU_FLOAT16, DSP_FIXED8_TF, AIP_FIXED8_TF)",
+
+        "MTK performanceMode(kLowPower , kFastSingleAnswer , kSustainedSpeed)",
+        "WinTFLite runtime(UNKNOWN)",
+        "WinTFLite performanceMode(UNKNOWN)",
+        "MTK runtime(FLOAT, UINT8)",
+        "APS_API_VERSION: 5.0, 6.0",
+
+        "ImageWidth/ImageHeight(576, 768)",
+        "ROIMode(inner, outer)",
+        "OdnnRuntime: CPU_FLOAT32, GPU_FLOAT32_16_HYBRID, DSP_FIXED8_TF, GPU_FLOAT16, AIP_FIXED8_TF, AIP_FIXED_TF, CPU, GPU, DSP",
+        "OdnnBoostValue: [0, 110] Example:  low power  30 or 50 ; normal performance 70; high performance 100;super performance 110;",
+        "OdnnLogLevel: ERROR, WARING, INFO, DEBUG, PRINTF",
+        "OdnnPriority: NORMAL, HIGH, LOW",
+        "OdnnProfilingLevel: OFF, BASIC, DETAILED"
+    ],
+    "product": "8850",
+    "VENDOR": "ODNN_QNN",
+    "BrandModels": "BrandA_oplus",
+    "ODNN_VERSION": "1.1.1.0523",
+    "QNN_VERSION": "236002",
+    "APS_API_VERSION": "6.0",
+    "param":
+    [
+        {
+            "product_name": "8850",
+            "SegMode": "DSP",
+            "DepthMode": "DSP",
+            "SegResizeOnCpu":true,
+            "DepthResizeOnCpu":true,
+            "SegPerformanceMode": "HIGH_PERFORMANCE",
+            "DepthPerformanceMode": "HIGH_PERFORMANCE",
+            "OutputMask_WH":"864,1152",
+            "SegModel_In_WHC":"480,640,3",
+            "SegModel_Out_WHC":"480,640,2",
+            "DepthModel_In_WHC":"432,576,3",
+            "DepthModel_Out_WHC":"432,576,1",
+            "segPersonScale": 0.40907588601112368,
+            "segPersonZeroPoint": 133,
+            "segHairScale": 0.3869645595550537,
+            "segHairZeroPoint": 132,
+            "depthScale": 0.00390625,
+            "depthZeroPoint": 0,
+            "DepthVersion" : 3.0,
+            "SegEnable": true,
+            "DepthEnable": true,
+            "MattingEnable": true,
+            "HairMattingVersion": "2",
+            "HairMattingRuntime": "DSP_FIXED8_TF",
+            "HairMattingPerformanceMode": "HIGH_PERFORMANCE",
+            "HairMattingImageWidth": 1152,
+            "HairMattingImageHeight": 1536,
+            "HairMattingInputDelta": 0.003921568859368563,
+            "HairMattingInputOffset": 0,
+            "HairMattingOutputDelta": 0.006076745223253965,
+            "HairMattingOutputOffset": 42,
+            "HairMattingROIMode": "inner",
+            "NeonPerformanceMode":0,
+            "BokehLutPerformanceMode":0,
+            "OdnnRuntime": "DSP",
+            "OdnnBoostValue": 100,
+            "OdnnLogLevel": "ERROR",
+            "OdnnPriority": "NORMAL",
+            "OdnnProfilingLevel": "OFF"
+        }
+    ]
+}

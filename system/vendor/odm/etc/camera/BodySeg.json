@@ -1,0 +1,57 @@
+{
+    "Module": "BodySegmentV04",
+    "AIParamComment":
+    [
+        "########################MTK Neuropilot Options####################",
+        "AccelerationMode(NP_ACCELERATION_CPU,NP_ACCELERATION_NNAPI,NP_ACCELERATION_NEURON)",
+        "AcceleratorName(none,mtk-neuron,mtk-mdla,mtk-vpu)",
+        "ExecutionPreference(kUndefined,kLowPower,kFastSingleAnswer,kSustainedSpeed)",
+        "######################MTK NeuronRuntime Options###################",
+        "DeviceKind(kEnvOptNullDevice,kEnvOptCModelDevice,kEnvOptHardware)",
+        "MDLACoreOption(Auto,Single,Dual)",
+        "RuntimeAPIQoSPreference(NEURONRUNTIME_PREFER_PERFORMANCE,NEURONRUNTIME_PREFER_POWER)",
+        "RuntimeAPIQoSPriority(NEURONRUNTIME_PRIORITY_LOW,NEURONRUNTIME_PRIORITY_MED,NEURONRUNTIME_PRIORITY_HIGH)",
+        "RuntimeAPIQoSBoostValue(NEURONRUNTIME_BOOSTVALUE_PROFILED=101,NEURONRUNTIME_BOOSTVALUE_MAX=100,NEURONRUNTIME_BOOSTVALUE_MIN=0)",
+        "######################QCOM NeuronRuntime Options##################",
+        "PerformanceProfile_t(BALANCED,HIGH_PERFORMANCE,POWER_SAVER,SYSTEM_SETTINGS,SUSTAINED_HIGH_PERFORMANCE,BURST,LOW_POWER_SAVER,HIGH_POWER_SAVER,LOW_BALANCED)"
+    ],
+    "GeneralParamComment":
+    [
+        "Decrption(true,false)",
+        "RunAiModel(true,false)",
+        "Country(China)",
+        "NetWidth(480)",
+        "NetHeight(640)",
+        "NetOutChannel(5,4)",
+        "NetClass(5,4)",
+        "NetInputBgr(true,false)",
+        "HeadUpRight(true,false)"
+    ],
+    "SelectionParamComment":
+    [
+        "Product(2303)",
+        "Platform(MTK,QCOM,COMMON)",
+        "AiSdk(NEUROPILOT,NEURON_RUNTIME,SNPE,ODNN)"
+    ],
+    "Product": "2303",
+    "Platform": "COMMON",
+    "AiSdk": "ODNN",
+    "ParamGroup":
+    [
+        {
+            "Product": "2303",
+            "Platform": "COMMON",
+            "AiSdk": "ODNN",
+            "PerformanceProfileT": 30,
+            "Decrption": false,
+            "RunAiModel": true,
+            "Country": "China",
+            "NetWidth": 480,
+            "NetHeight": 640,
+            "NetOutChannel": 4,
+            "NetClass": 4,
+            "NetInputBgr": true,
+            "HeadUpRight": true
+        }
+    ]
+}
