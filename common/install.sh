@@ -502,7 +502,8 @@ asb_apply_device_overlay() {
     if [ "$ASB_CAMERA" = "true" ]; then
       for _f in vendor/etc/media_profiles.xml \
                 vendor/odm/etc/camera/media_profiles.xml \
-                vendor/odm/etc/camera/conf_tuning_params.json; do
+                vendor/odm/etc/camera/conf_tuning_params.json \
+                vendor/odm/etc/camera/config/video_beauty_default_config; do
         if [ -f "$MODPATH/$_ov/$_f" ]; then
           mkdir -p "$MODPATH/system/$(dirname "$_f")" 2>/dev/null
           cp -f "$MODPATH/$_ov/$_f" "$MODPATH/system/$_f" 2>/dev/null \
@@ -714,19 +715,26 @@ asb_patch_location_inplace() {
 # in-place pass, which name-matches and patches the device's own files.)
 # ---------------------------------------------------------------------------
 asb_clone_dir_from_live() {
-  # $1 = absolute live source dir (e.g. /vendor/etc/audio)
-  # $2 = module-relative dest under system/ (e.g. system/vendor/etc/audio)
-  _src="$1"; _rel="$2"
+  # $1 = absolute live source dir (e.g. /vendor/etc/audio or /system/vendor/etc/audio)
+  # Computes a single canonical module dest under system/, collapsing a leading
+  # /system so /system/vendor/... and /vendor/... both land at system/vendor/...
+  # (never system/system/...). Returns 0 on a successful clone.
+  _src="$1"
   [ -d "$_src" ] || return 1
-  _dest="$MODPATH/$_rel"
+  # canonical partition-relative path: strip a leading /system if present
+  _canon="$_src"
+  case "$_canon" in
+    /system/*) _canon="${_canon#/system}" ;;
+  esac
+  _dest="$MODPATH/system${_canon}"
   rm -rf "$_dest" 2>/dev/null
   mkdir -p "$_dest" 2>/dev/null
-  # copy recursively, preserving structure; tolerate odd filenames
   ( cd "$_src" && find . -type f 2>/dev/null | while IFS= read -r _f; do
       _f="${_f#./}"
       mkdir -p "$_dest/$(dirname "$_f")" 2>/dev/null
       cp -f "$_src/$_f" "$_dest/$_f" 2>/dev/null || true
     done )
+  ui_print "    + ${_src} -> system${_canon}"
   return 0
 }
 
@@ -746,12 +754,13 @@ asb_clone_device_audio_wifi() {
       rm -f "$MODPATH/system/vendor/etc/$_af" 2>/dev/null || true
       rm -f "$MODPATH/system/vendor/odm/etc/$_af" 2>/dev/null || true
     done
-    # Clone the device's own audio dir (sku_* live here) from the live tree.
+    # Clone the device's own audio dir from the FIRST live source that exists.
+    # /vendor and /system/vendor usually resolve to the same files, so we take
+    # only one to avoid cloning the same tree to two dests.
     _audio_done=0
     for _asrc in /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio; do
       if [ -d "$_asrc" ]; then
-        asb_clone_dir_from_live "$_asrc" "system${_asrc}" \
-          && { ui_print "    + audio: $_asrc -> system${_asrc}"; _audio_done=1; }
+        asb_clone_dir_from_live "$_asrc" && { _audio_done=1; break; }
       fi
     done
     [ "$_audio_done" = "1" ] || ui_print "    - no device audio dir found"
@@ -762,12 +771,57 @@ asb_clone_device_audio_wifi() {
     _wifi_done=0
     for _wsrc in /vendor/etc/wifi /odm/etc/wifi /system/vendor/etc/wifi; do
       if [ -d "$_wsrc" ]; then
-        asb_clone_dir_from_live "$_wsrc" "system${_wsrc}" \
-          && { ui_print "    + wifi: $_wsrc -> system${_wsrc}"; _wifi_done=1; }
+        asb_clone_dir_from_live "$_wsrc" && { _wifi_done=1; break; }
       fi
     done
     [ "$_wifi_done" = "1" ] || ui_print "    - no device wifi dir found"
   fi
+}
+
+# ---------------------------------------------------------------------------
+# Per-device mixer tuning (OP12 / OP13) — the portable subset of the OP15 sound.
+#
+# OnePlus 15 ships a hand-tuned canoe mixer with ~44 control changes. Most are
+# canoe-codec-specific (HiFi Function, DS2 OnOff, Amp DSP Enable, Audiosphere,
+# Virtual Bass …) and DO NOT exist on OP13's WCD9395 / OP12's WCD9395 mixer, so
+# injecting them would be wrong or harmful. What IS shared across all three
+# codecs — verified against each device's own stock mixer — is the *character*
+# of the tune:
+#   * RX_RX0/1/2 Digital Volume 84 -> 88   (the +4-step louder playback)
+#   * IIR0 Enable Band1..5 -> 0            (flatten the stock EQ coloring)
+#   * HPHL/HPHR_RDAC Switch 0 -> 1         (Class-H headphone DAC always armed)
+# These edits use name-anchored sed so they only touch controls that already
+# exist; on a codec lacking a given control the edit is simply a no-op. Applied
+# to the device's freshly-cloned mixer files (every sku_* / cdp/mtp/qrd variant).
+# Gated by the audio category.
+# ---------------------------------------------------------------------------
+asb_patch_one_mixer() {
+  _f="$1"; [ -f "$_f" ] || return 0
+  # louder playback: digital volume 84 -> 88 on the three RX paths
+  sedi 's/\(name="RX_RX[012] Digital Volume" value="\)84"/\188"/g' "$_f"
+  # flat EQ: disable IIR0 bands that stock leaves engaged
+  sedi 's/\(name="IIR0 Enable Band[1-5]" value="\)1"/\10"/g' "$_f"
+  # Class-H headphone DAC armed
+  sedi 's/\(name="HPH[LR]_RDAC Switch" value="\)0"/\11"/g' "$_f"
+}
+
+asb_patch_audio_inplace() {
+  # $1 = human label
+  [ "$ASB_AUDIO" = "true" ] || { ui_print "[*] Audio category off — skipping mixer tune"; return 0; }
+  _adir="$MODPATH/system/vendor/etc/audio"
+  [ -d "$_adir" ] || { ui_print "[*] No cloned audio dir — skipping mixer tune"; return 0; }
+
+  ui_print " "
+  ui_print "${SEPARATOR}"
+  ui_print "[*] Mixer tune for $1 (portable OP15 sound)"
+  ui_print "${SEPARATOR}"
+
+  _n=0
+  for _mx in $(find "$_adir" -type f -name "mixer_paths*.xml" 2>/dev/null); do
+    asb_patch_one_mixer "$_mx"
+    _n=$((_n + 1))
+  done
+  ui_print "    + tuned $_n mixer file(s): vol 84->88, flat EQ, Class-H DAC"
 }
 
 asb_prune_non_op15_vendor_overlays() {
@@ -1028,15 +1082,21 @@ if [ "$ASB_IS_OP15" = "true" ]; then
 fi
 asb_prune_module
 if [ "$ASB_IS_OP15" = "true" ]; then
-  : # OP15: keep the full shipped overlay as-is
+  # OP15: keep the hand-tuned audio/wifi overlay (irreproducible by sed), but
+  # run perf + location the same dynamic in-place way as OP13/OP12 so those
+  # static files can be dropped from the shipped archive.
+  asb_patch_perf_inplace "OnePlus 15 (canoe)"
+  asb_patch_location_inplace "OnePlus15"
 elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_apply_device_overlay op13_overlay "OnePlus 13 (CPH2649 / SM8750 'sun')"
   asb_clone_device_audio_wifi "OnePlus 13 (sun / tuna / kera)"
+  asb_patch_audio_inplace "OnePlus 13 (sun / tuna / kera)"
   asb_patch_perf_inplace "OnePlus 13 (sun / tuna / kera)"
   asb_patch_location_inplace "OnePlus13"
 elif [ "$ASB_IS_OP12" = "true" ]; then
   asb_apply_device_overlay op12_overlay "OnePlus 12 (CPH2581 / SM8650 'pineapple')"
   asb_clone_device_audio_wifi "OnePlus 12 (pineapple / cliffs)"
+  asb_patch_audio_inplace "OnePlus 12 (pineapple / cliffs)"
   asb_patch_perf_inplace "OnePlus 12 (pineapple / cliffs)"
   asb_patch_location_inplace "OnePlus12"
 else
