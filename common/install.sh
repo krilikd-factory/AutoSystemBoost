@@ -422,10 +422,12 @@ asb_detect_compat() {
   esac
   # platform/SoC fallback for OP12 (pineapple / SM8650) — only if not OP15/OP13.
   # NOTE: OP12 platform string is "pineapple" (SM8650); guard against OP15/OP13.
+  # Some ROMs hide ro.soc.model, so match the platform codename too, mirroring
+  # how OP13 matches both "sm8750" and "sun".
   if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ]; then
     ASB_PLATFORM_L="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
     case "$ASB_PLATFORM_L" in
-      *"sm8650"*)
+      *"sm8650"*|*"pineapple"*)
         echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP12=true ;;
     esac
   fi
@@ -569,6 +571,54 @@ asb_perf_patch_gameconfig() {
   _f="$1"; [ -f "$_f" ] || return 0
   # data rows: <id> <apk> 48000 1150 1000  ->  ... 44000 900 800
   sedi 's/^\([0-9][0-9]*[ 	][ 	]*[^ 	][^ 	]*[ 	][ 	]*\)48000\([ 	][ 	]*\)1150\([ 	][ 	]*\)1000/\144000\2900\3800/' "$_f"
+}
+
+# ---------------------------------------------------------------------------
+# Wi-Fi driver tuning (all devices). We clone the device's own stock WCNSS_*.ini
+# from the live partition and sed-patch a SMALL, conservative set of values in
+# place — exactly like the audio/perf passes. This is device-safe: we only
+# rewrite keys that already exist, so a device that lacks one just keeps stock.
+#
+# CRITICAL: we never touch wpa_supplicant_overlay.conf / p2p_supplicant_overlay
+# (the p2p_disabled / tdls_disabled lines there are load-bearing — removing them
+# stops the Wi-Fi toggle from enabling on OP15). We also never touch roaming
+# thresholds (RoamRssiDiff, gNeighborScan*) or the regulatory country — those
+# are stability/regdomain sensitive.
+#
+# Tuning applied (only to keys present in the file):
+#   gRuntimePMDelay        3000 -> 2000   power: quicker runtime-PM idle entry
+#   gActiveMaxChannelTime    45 -> 40     latency: shorter active-scan dwell
+#   gBusBandwidthVeryHighThreshold 15000->12000  throughput: engage high-perf bus sooner
+asb_patch_one_wcnss() {
+  _f="$1"; [ -f "$_f" ] || return 0
+  sed -i 's/^gRuntimePMDelay=.*/gRuntimePMDelay=2000/'                       "$_f" 2>/dev/null || true
+  sed -i 's/^gActiveMaxChannelTime=.*/gActiveMaxChannelTime=40/'            "$_f" 2>/dev/null || true
+  sed -i 's/^gBusBandwidthVeryHighThreshold=.*/gBusBandwidthVeryHighThreshold=12000/' "$_f" 2>/dev/null || true
+}
+
+asb_patch_wifi_inplace() {
+  # $1 = human label
+  _label="$1"
+  [ "$ASB_WIFI" = "true" ] || return 0
+
+  # Clone the live stock wifi dir (vendor first, then odm/system mirrors) into
+  # the module under system/, then patch the WCNSS .ini files in place. The
+  # supplicant .conf files are copied verbatim (NOT patched) so the toggle-
+  # critical p2p_disabled/tdls lines are preserved exactly as the device ships.
+  _wifi_src=""
+  for _ws in /vendor/etc/wifi /odm/etc/wifi /system/vendor/etc/wifi; do
+    [ -d "$_ws" ] && { _wifi_src="$_ws"; break; }
+  done
+  [ -n "$_wifi_src" ] || return 0
+
+  asb_clone_dir_from_live "$_wifi_src" >/dev/null 2>&1 || return 0
+
+  # Patch every cloned WCNSS_*.ini (covers per-SKU subdirs too). Supplicant
+  # .conf files are deliberately left untouched.
+  _wdir="$MODPATH/system${_wifi_src#/system}"
+  for _wf in $(find "$_wdir" -type f -iname "WCNSS_qcom_cfg*.ini" 2>/dev/null); do
+    asb_patch_one_wcnss "$_wf"
+  done
 }
 
 asb_patch_perf_inplace() {
@@ -749,16 +799,11 @@ asb_clone_device_audio_wifi() {
     [ "$_audio_done" = "1" ] || ui_print "    - no device audio dir found"
   fi
 
-  if [ "$ASB_WIFI" = "true" ]; then
-    ui_print "[*] Device wifi configs for $_label"
-    _wifi_done=0
-    for _wsrc in /vendor/etc/wifi /odm/etc/wifi /system/vendor/etc/wifi; do
-      if [ -d "$_wsrc" ]; then
-        asb_clone_dir_from_live "$_wsrc" && { _wifi_done=1; break; }
-      fi
-    done
-    [ "$_wifi_done" = "1" ] || ui_print "    - no device wifi dir found"
-  fi
+  # NOTE: Wi-Fi is handled separately by asb_patch_wifi_inplace, which clones
+  # the device's stock wifi dir and sed-patches only the WCNSS driver .ini
+  # values — never the supplicant .conf files (their p2p_disabled/tdls lines are
+  # load-bearing for the Wi-Fi toggle). Regulatory country stays runtime in
+  # service.sh.
 }
 
 # ---------------------------------------------------------------------------
@@ -1075,18 +1120,21 @@ if [ "$ASB_IS_OP15" = "true" ]; then
   # static files can be dropped from the shipped archive.
   asb_patch_perf_inplace "OnePlus 15 (canoe)"
   asb_patch_location_inplace "OnePlus15"
+  asb_patch_wifi_inplace "OnePlus 15 (canoe)"
 elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_apply_device_overlay op13_overlay "OnePlus 13 (CPH2649 / SM8750 'sun')"
   asb_clone_device_audio_wifi "OnePlus 13 (sun / tuna / kera)"
   asb_patch_audio_inplace "OnePlus 13 (sun / tuna / kera)"
   asb_patch_perf_inplace "OnePlus 13 (sun / tuna / kera)"
   asb_patch_location_inplace "OnePlus13"
+  asb_patch_wifi_inplace "OnePlus 13 (sun / tuna / kera)"
 elif [ "$ASB_IS_OP12" = "true" ]; then
   asb_apply_device_overlay op12_overlay "OnePlus 12 (CPH2581 / SM8650 'pineapple')"
   asb_clone_device_audio_wifi "OnePlus 12 (pineapple / cliffs)"
   asb_patch_audio_inplace "OnePlus 12 (pineapple / cliffs)"
   asb_patch_perf_inplace "OnePlus 12 (pineapple / cliffs)"
   asb_patch_location_inplace "OnePlus12"
+  asb_patch_wifi_inplace "OnePlus 12 (pineapple / cliffs)"
 else
   asb_prune_non_op15_vendor_overlays
 fi
