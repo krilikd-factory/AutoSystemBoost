@@ -47,6 +47,9 @@ asb_fix_layout() {
     [ -L "$_root" ] && continue        # valid framework symlink — leave it
     [ -d "$_root" ] || continue
     ui_print "- Layout fix: folding /$_part into system/$_part"
+    while grep -q " $_root " /proc/mounts 2>/dev/null; do
+      umount "$_root" 2>/dev/null || umount -l "$_root" 2>/dev/null || break
+    done
     for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
       _t="$MODPATH/system/$_part/$_f"
       if [ ! -f "$_t" ]; then
@@ -55,6 +58,11 @@ asb_fix_layout() {
       fi
     done
     rm -rf "$_root" 2>/dev/null || true
+    # If a KSU kernel re-materialises it, fall back to the OP15-style symlink.
+    if [ -d "$_root" ] && [ ! -L "$_root" ] && [ -d "$MODPATH/system/$_part" ]; then
+      rm -rf "$_root" 2>/dev/null
+      [ -e "$_root" ] || ln -s "./system/$_part" "$_root" 2>/dev/null || true
+    fi
   done
 
   # prune stray-path entries from the restore manifest so reinstall stays clean

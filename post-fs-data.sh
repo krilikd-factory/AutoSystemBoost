@@ -17,6 +17,10 @@ for _part in vendor odm product system_ext my_product mi_ext; do
   [ -e "$_root" ] || continue
   [ -L "$_root" ] && continue
   [ -d "$_root" ] || continue
+  # If KSU/Magisk left it as a live mountpoint, unmount before touching it.
+  while grep -q " $_root " /proc/mounts 2>/dev/null; do
+    umount "$_root" 2>/dev/null || umount -l "$_root" 2>/dev/null || break
+  done
   for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
     _t="$MODDIR/system/$_part/$_f"
     if [ ! -f "$_t" ]; then
@@ -25,6 +29,14 @@ for _part in vendor odm product system_ext my_product mi_ext; do
     fi
   done
   rm -rf "$_root" 2>/dev/null || true
+  # Some KSU kernels re-materialise a real vendor/ from system/vendor on every
+  # boot. If the directory refused to go and the canonical system/<part>
+  # exists, replace it with a symlink — the exact layout OnePlus 15 ships and
+  # boots with — so it never duplicates again.
+  if [ -d "$_root" ] && [ ! -L "$_root" ] && [ -d "$MODDIR/system/$_part" ]; then
+    rm -rf "$_root" 2>/dev/null
+    [ -e "$_root" ] || ln -s "./system/$_part" "$_root" 2>/dev/null || true
+  fi
 done
 
 # Clean up a phantom /data/adb/magisk/busybox symlink that earlier builds
