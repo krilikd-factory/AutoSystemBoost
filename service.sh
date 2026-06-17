@@ -685,17 +685,36 @@ apply_wifi_settings() {
   asb_settings_put global wifi_verbose_logging_enabled 0
 }
 asb_feature_enabled WIFI && apply_wifi_settings
+asb_wifi_cc_heal() {
+  # One-time heal: older versions ran `force-country-code enabled IT`, which
+  # could block the Wi-Fi toggle. If that stale flag exists, undo the force now
+  # and clear the flag so the toggle works again. Runs regardless of category.
+  if [ -f /data/adb/asb/wifi_cc_forced ]; then
+    has cmd && cmd -w wifi force-country-code disabled >/dev/null 2>&1 || true
+    rm -f /data/adb/asb/wifi_cc_forced 2>/dev/null || true
+  fi
+}
+asb_wifi_cc_heal
+
 apply_wifi_country() {
-  _cc="${WIFI_COUNTRY:-IT}"
-  has iw && iw reg set "$_cc" >/dev/null 2>&1 || true
-  has cmd && {
-    cmd -w wifi force-country-code enabled "$_cc" >/dev/null 2>&1 || true
-    echo 1 > /data/adb/asb/wifi_cc_forced 2>/dev/null || true
-    cmd -w wifi set-country-code "$_cc" >/dev/null 2>&1 || true
-  }
+  # Determine the regulatory country the same way the installer does: from the
+  # SIM, then the network operator. Only act on a confident 2-letter ISO code.
+  # We deliberately do NOT force a hardcoded default (was "IT") and do NOT use
+  # `force-country-code enabled` — forcing a regdomain that disagrees with what
+  # the modem reports can block the Wi-Fi toggle from turning on. We only set
+  # the soft country hint, letting the driver/modem keep authority.
+  _cc=""
+  for _p in gsm.sim.operator.iso-country gsm.operator.iso-country; do
+    _v="$(getprop "$_p" 2>/dev/null | tr '[:lower:]' '[:upper:]' | tr -d ' ')"
+    case "$_v" in [A-Z][A-Z]) _cc="$_v"; break ;; esac
+  done
+  # Honour an explicit override if the user set one in config.
+  [ -n "$WIFI_COUNTRY" ] && _cc="$WIFI_COUNTRY"
+  # No confident code -> leave the regulatory domain entirely to the modem.
+  [ -n "$_cc" ] || return 0
+
   has settings && {
     asb_settings_put global wifi_country_code "$_cc"
-    asb_settings_put global wifi_country_code_priority 1
   }
 }
 asb_feature_enabled WIFI && apply_wifi_country
