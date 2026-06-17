@@ -1174,14 +1174,14 @@ body.live-active .page:not(.live-page) {
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 12h3l3-9 4 18 3-9h5"></path>
         </svg>
-        <span>Live</span>
+        <span data-i18n="nav_live">Live</span>
       </button>
       <button class="live-chip" id="configChip" onclick="openConfigPage()" aria-label="Open Config page">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
         </svg>
-        <span>Config</span>
+        <span data-i18n="nav_config">Config</span>
       </button>
     </div>
   </div>
@@ -1189,7 +1189,7 @@ body.live-active .page:not(.live-page) {
   <!-- PROFILES -->
   <div class="sec">
     <div class="sec-line"></div>
-    <div class="sec-label">Power Profile</div>
+    <div class="sec-label" data-i18n="sec_power">Power Profile</div>
     <div class="sec-line"></div>
   </div>
   <div class="profiles">
@@ -1200,7 +1200,7 @@ body.live-active .page:not(.live-page) {
         <span class="ai-emoji">🤖</span>
       </div>
       <div class="pinfo">
-        <div class="pname">Smart <span class="alpha-tag">alpha</span></div>
+        <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" data-i18n="tag_alpha">alpha</span></div>
         <div class="psub" id="smartSubLine">adaptive · learning</div>
       </div>
       <div class="pload"></div>
@@ -1210,7 +1210,7 @@ body.live-active .page:not(.live-page) {
     <div class="pbtn" data-p="performance" onclick="go('performance')">
       <div class="pico">🔥</div>
       <div class="pinfo">
-        <div class="pname">Performance</div>
+        <div class="pname" data-i18n="prof_performance">Performance</div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
@@ -1219,7 +1219,7 @@ body.live-active .page:not(.live-page) {
     <div class="pbtn on" data-p="balanced" onclick="go('balanced')">
       <div class="pico">⚖️</div>
       <div class="pinfo">
-        <div class="pname">Balanced</div>
+        <div class="pname" data-i18n="prof_balanced">Balanced</div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
@@ -1228,7 +1228,7 @@ body.live-active .page:not(.live-page) {
     <div class="pbtn" data-p="battery" onclick="go('battery')">
       <div class="pico">🔋</div>
       <div class="pinfo">
-        <div class="pname">Battery</div>
+        <div class="pname" data-i18n="prof_battery">Battery</div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
@@ -1274,7 +1274,7 @@ body.live-active .page:not(.live-page) {
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6"></path>
         </svg>
-        <span>Back</span>
+        <span data-i18n="nav_back">Back</span>
       </button>
     </div>
   </div>
@@ -1291,11 +1291,11 @@ body.live-active .page:not(.live-page) {
         <span class="smart-banner-value" id="bnConf">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label">Alpha</span>
+        <span class="smart-banner-label" data-i18n="lv_alpha">Alpha</span>
         <span class="smart-banner-value" id="bnAlpha">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label">App</span>
+        <span class="smart-banner-label" data-i18n="lv_app">App</span>
         <span class="smart-banner-value" id="bnApp">—</span>
       </div>
     </div>
@@ -1306,7 +1306,7 @@ body.live-active .page:not(.live-page) {
 
   <div class="sec">
     <div class="sec-line"></div>
-    <div class="sec-label">Live Status</div>
+    <div class="sec-label" data-i18n="sec_live">Live Status</div>
     <div class="sec-line"></div>
   </div>
 
@@ -1315,26 +1315,26 @@ body.live-active .page:not(.live-page) {
     <!-- Thermal & power -->
     <div class="live-row">
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">FSM</div>
+        <div class="live-cell-label" data-i18n="lv_fsm">FSM</div>
         <div class="live-cell-value" id="liveState">—</div>
       </div>
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">Clamp 1h / total</div>
+        <div class="live-cell-label" data-i18n="lv_clamp">Clamp 1h / total</div>
         <div class="live-cell-value" id="liveClamp">—</div>
       </div>
     </div>
 
     <div class="live-row">
       <div class="live-cell">
-        <div class="live-cell-label">CPU</div>
+        <div class="live-cell-label" data-i18n="lv_cpu">CPU</div>
         <div class="live-cell-value" id="liveCpu">—</div>
       </div>
       <div class="live-cell">
-        <div class="live-cell-label">Skin</div>
+        <div class="live-cell-label" data-i18n="lv_skin">Skin</div>
         <div class="live-cell-value" id="liveSkin">—</div>
       </div>
       <div class="live-cell">
-        <div class="live-cell-label">Hotspot · internal</div>
+        <div class="live-cell-label" data-i18n="lv_hotspot">Hotspot · internal</div>
         <div class="live-cell-value" id="liveSurface">—</div>
       </div>
     </div>
@@ -1342,11 +1342,11 @@ body.live-active .page:not(.live-page) {
     <!-- Battery ETA -->
     <div class="live-row">
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">Est. on</div>
+        <div class="live-cell-label" data-i18n="lv_est_on">Est. on</div>
         <div class="live-cell-value" id="liveEtaOn">—</div>
       </div>
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">Est. idle</div>
+        <div class="live-cell-label" data-i18n="lv_est_idle">Est. idle</div>
         <div class="live-cell-value" id="liveEtaOff">—</div>
       </div>
     </div>
@@ -1354,11 +1354,11 @@ body.live-active .page:not(.live-page) {
     <!-- Governor diagnostics -->
     <div class="live-row">
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">Cap Src</div>
+        <div class="live-cell-label" data-i18n="lv_capsrc">Cap Src</div>
         <div class="live-cell-value" id="liveCapSrc">—</div>
       </div>
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">Learner</div>
+        <div class="live-cell-label" data-i18n="lv_learner">Learner</div>
         <div class="live-cell-value" id="liveLearner">—</div>
       </div>
     </div>
@@ -1366,11 +1366,11 @@ body.live-active .page:not(.live-page) {
     <!-- GPU & headroom -->
     <div class="live-row">
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">GPU Load</div>
+        <div class="live-cell-label" data-i18n="lv_gpuload">GPU Load</div>
         <div class="live-cell-value" id="liveGpu">—</div>
       </div>
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label">Headroom</div>
+        <div class="live-cell-label" data-i18n="lv_headroom">Headroom</div>
         <div class="live-cell-value" id="liveHeadroom">—</div>
       </div>
     </div>
@@ -1416,22 +1416,22 @@ body.live-active .page:not(.live-page) {
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6"></path>
         </svg>
-        <span>Back</span>
+        <span data-i18n="nav_back">Back</span>
       </button>
     </div>
   </div>
 
   <div class="sec">
     <div class="sec-line"></div>
-    <div class="sec-label">Configuration</div>
+    <div class="sec-label" data-i18n="sec_config">Configuration</div>
     <div class="sec-line"></div>
   </div>
 
-  <div class="cfg-note">These settings are saved to <b>governor.conf</b> and take effect after a device reboot.</div>
+  <div class="cfg-note" data-i18n="cfg_note" data-i18n-html="1">These settings are saved to <b>governor.conf</b> and take effect after a device reboot.</div>
 
   <div class="cfg-list" id="cfgList"></div>
 
-  <button class="cfg-reboot" onclick="cfgReboot()">↻ Reboot device</button>
+  <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
 
   </div>
 
@@ -1452,6 +1452,101 @@ body.live-active .page:not(.live-page) {
 <script>
 const clickAudio = new Audio("switch.mp3"); clickAudio.preload = "auto"; try { clickAudio.load(); } catch(e) {}
 const MD = '/data/adb/modules/AutoSystemBoost';
+
+/* ── i18n: Russian localization for ru-locale devices ──────────────────────
+ * Activates automatically when the device/browser language is Russian. All
+ * English UI strings stay as the in-markup default (fallback); the RU map
+ * below overrides them. Static elements carry data-i18n keys; dynamic strings
+ * (config items, toasts) are looked up via T(). */
+const ASB_LANG = (function() {
+  try {
+    var l = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+    return l.indexOf('ru') === 0 ? 'ru' : 'en';
+  } catch (e) { return 'en'; }
+})();
+
+const I18N = {
+  ru: {
+    // nav / sections
+    nav_live: 'Монитор', nav_config: 'Настройки', nav_back: 'Назад',
+    sec_power: 'Профиль питания', sec_live: 'Монитор в реальном времени',
+    sec_config: 'Конфигурация',
+    // profiles
+    prof_smart: 'Смарт', prof_performance: 'Производительность',
+    prof_balanced: 'Баланс', prof_battery: 'Экономия', tag_alpha: 'альфа',
+    // live cells
+    lv_alpha: 'Альфа', lv_app: 'Прил.', lv_fsm: 'FSM',
+    lv_clamp: 'Клампы 1ч / всего', lv_cpu: 'ЦП', lv_skin: 'Корпус',
+    lv_hotspot: 'Горяч. точка · внутр.', lv_est_on: 'Прогноз (экран)',
+    lv_est_idle: 'Прогноз (покой)', lv_capsrc: 'Источник кэпа',
+    lv_learner: 'Обучение', lv_gpuload: 'Нагрузка GPU', lv_headroom: 'Запас',
+    // config page
+    cfg_note: 'Эти настройки сохраняются в <b>governor.conf</b> и применяются после перезагрузки устройства.',
+    cfg_reboot: '↻ Перезагрузить устройство',
+    // device line
+    device_line: 'Устройство OnePlus · Qualcomm Snapdragon',
+    // toasts
+    t_profile_err: '✗ Ошибка применения профиля',
+    t_cfg_saved: ' · перезагрузите для применения',
+    t_cfg_err: '✗ Не удалось записать конфигурацию',
+    t_reboot_confirm: 'Нажмите ещё раз для перезагрузки',
+    t_rebooting: 'Перезагрузка…',
+    // config items: name + desc keyed by config key
+    cfg: {
+      AUDIO_EQ_COMPAT: { name: 'Совместимость аудио-эквалайзера',
+        desc: 'Сохраняет совместимость аудио-цепочки с Flow Equalizer и другими системными эквалайзерами. Рекомендуется ВКЛ, если вы используете системный эквалайзер.' },
+      AUDIO_AGGRESSIVE: { name: 'Агрессивные аудио-твики',
+        desc: 'Включает расширенный набор аудио-свойств за пределами безопасного стокового набора. Может конфликтовать с некоторыми BT-наушниками или DSP-эффектами — оставьте ВЫКЛ, если не уверены.' },
+      bt_absvol_mode: { name: 'Режим громкости Bluetooth',
+        desc: 'ВКЛ отключает абсолютную громкость BT, чтобы телефон напрямую управлял колонкой/магнитолой — может быть громче, но шкала громкости изменится. ВЫКЛ (и АВТО) сохраняют стоковое поведение — безопаснее всего.' },
+      cool_gaming: { name: 'Холодные игры',
+        desc: 'Охлаждает игры, включая термо-уклон раньше (~40°C). Проверено в полевых условиях без заметной потери fps, а на тёплой зарядке ужесточается ещё сильнее. ВКЛ по умолчанию; выключите для безграничного пикового fps.' },
+      charge_aware_enable: { name: 'Учёт зарядки',
+        desc: 'На зарядке: склоняется к производительности, когда батарея холодная, и автоматически отступает, как только пакет нагревается, чтобы зарядка оставалась быстрой, а устройство — холодным.' },
+      auto_battery_enable: { name: 'Авто-профиль батареи',
+        desc: 'Автоматически переключается на профиль Экономия при низком заряде и восстанавливает предыдущий профиль после зарядки.' },
+      night_quiet_enable: { name: 'Тихий ночной режим',
+        desc: 'Ультра-тихий сон: в ночном окне губернатор минимизирует собственные чтения сенсоров и фоновую активность. Работает с фиксированным окном 23:00–06:00, даже если обучение расписания ВЫКЛ.' },
+      night_quiet_auto: { name: 'Изучать моё расписание сна',
+        desc: 'Изучает ваше реальное время отхода ко сну и пробуждения по активности экрана, заменяя фиксированное окно 23:00–06:00 через несколько ночей. Полезно, даже если Тихий режим ВЫКЛ.' },
+      BG_TRIM_LEVEL: { name: 'Уровень очистки фона',
+        desc: 'Насколько агрессивно очищаются кэшированные фоновые приложения. Агрессивный освобождает больше ОЗУ для игр, но чаще перезапускает фоновые приложения с нуля.' },
+      UX_MANAGE_ANIM_SCALE: { name: 'Управление масштабом анимаций',
+        desc: 'Производительность укорачивает системные анимации (~0.8x) для более отзывчивого интерфейса; Экономия оставляет стоковые. Без расхода батареи. ВЫКЛ = ASB не трогает настройки анимаций.' },
+      UX_MANAGE_TIMEOUTS: { name: 'Управление таймаутами касаний',
+        desc: 'В режиме Производительность укорачивает окна долгого нажатия и мульти-тапа, чтобы они срабатывали быстрее. Если удержания начинают срабатывать случайно — оставьте ВЫКЛ (системные значения).' },
+      UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
+        desc: 'Обходной путь для сборок OOS, игнорирующих изменение масштаба анимаций «на лету» — повторно применяет масштаб принудительно. Имеет смысл только если Управление масштабом анимаций ВКЛ, а анимации не меняются.' }
+    },
+    // segmented option labels
+    opt: { auto: 'авто', on: 'вкл', off: 'выкл', safe: 'безопасно', aggressive: 'агрессивно' }
+  }
+};
+
+function T(key, fallback) {
+  if (ASB_LANG === 'ru' && I18N.ru[key] != null) return I18N.ru[key];
+  return fallback != null ? fallback : key;
+}
+function Tcfg(cfgKey, field, fallback) {
+  if (ASB_LANG === 'ru' && I18N.ru.cfg[cfgKey] && I18N.ru.cfg[cfgKey][field] != null)
+    return I18N.ru.cfg[cfgKey][field];
+  return fallback;
+}
+function Topt(o) {
+  if (ASB_LANG === 'ru' && I18N.ru.opt[o] != null) return I18N.ru.opt[o];
+  return o;
+}
+function applyStaticI18n() {
+  if (ASB_LANG === 'en') return;
+  var nodes = document.querySelectorAll('[data-i18n]');
+  for (var i = 0; i < nodes.length; i++) {
+    var k = nodes[i].getAttribute('data-i18n');
+    var v = I18N.ru[k];
+    if (v == null) continue;
+    if (nodes[i].getAttribute('data-i18n-html') === '1') nodes[i].innerHTML = v;
+    else nodes[i].textContent = v;
+  }
+}
 
 const MODEL_MAP = {
   "CPH2745":"OnePlus 15","OP611FL1":"OnePlus 15","PJZ110":"OnePlus 15","PKZ110":"OnePlus 15",
@@ -1568,9 +1663,9 @@ async function go(p) {
     haptic();
     try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
     ui(p);
-    toast('\u2713 ' + p.charAt(0).toUpperCase() + p.slice(1) + ' applied', p);
+    toast('\u2713 ' + (ASB_LANG==='ru' ? T('prof_'+p, p) : (p.charAt(0).toUpperCase()+p.slice(1))) + (ASB_LANG==='ru' ? ' \u2014 \u043f\u0440\u0438\u043c\u0435\u043d\u0451\u043d' : ' applied'), p);
   } else {
-    toast('\u2717 Error applying profile', 'err');
+    toast(T('t_profile_err', '\u2717 Error applying profile'), 'err');
   }
   switching = false;
 }
@@ -1724,7 +1819,7 @@ function cfgRender() {
     main.className = 'cfg-main';
     const nm = document.createElement('div');
     nm.className = 'cfg-name';
-    nm.textContent = it.name;
+    nm.textContent = Tcfg(it.key, "name", it.name);
     main.appendChild(nm);
     const st = cfgStatus(it, cur);
     const badge = document.createElement('div');
@@ -1745,7 +1840,7 @@ function cfgRender() {
       seg.className = 'cfg-seg';
       it.opts.forEach(o => {
         const b = document.createElement('button');
-        b.textContent = o;
+        b.textContent = Topt(o);
         if (o === cur) b.classList.add('on');
         b.onclick = () => cfgSet(it.key, o, seg);
         seg.appendChild(b);
@@ -1755,7 +1850,7 @@ function cfgRender() {
     row.appendChild(top);
     const d = document.createElement('div');
     d.className = 'cfg-desc';
-    d.textContent = it.desc;
+    d.textContent = Tcfg(it.key, "desc", it.desc);
     row.appendChild(d);
     list.appendChild(row);
   });
@@ -1773,9 +1868,9 @@ async function cfgSet(key, val, ctl) {
     _cfgVals[key] = val;
     haptic();
     try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
-    toast('\u2713 ' + key + ' = ' + val + ' \u00b7 reboot to apply', 'balanced');
+    toast('\u2713 ' + key + ' = ' + val + T('t_cfg_saved', ' \u00b7 reboot to apply'), 'balanced');
   } else {
-    toast('\u2717 Failed to write config', 'err');
+    toast(T('t_cfg_err', '\u2717 Failed to write config'), 'err');
   }
   cfgRender();
 }
@@ -1785,11 +1880,11 @@ async function cfgReboot() {
   const now = Date.now();
   if (now - _cfgRebootArmed > 4000) {
     _cfgRebootArmed = now;
-    toast('Tap again to reboot', 'perf');
+    toast(T('t_reboot_confirm', 'Tap again to reboot'), 'perf');
     return;
   }
   _cfgRebootArmed = 0;
-  toast('Rebooting\u2026', 'perf');
+  toast(T('t_rebooting', 'Rebooting\u2026'), 'perf');
   await run('svc power reboot 2>/dev/null || reboot');
 }
 
@@ -2113,6 +2208,20 @@ async function pollLive(visible) {
 }
 
 _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
+
+// ── apply Russian localization on load (no-op for en) ──
+(function() {
+  try {
+    applyStaticI18n();
+    if (ASB_LANG === 'ru') {
+      var dl = I18N.ru.device_line;
+      ['deviceLine','liveDeviceLine','cfgDeviceLine'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el && /OnePlus Device/.test(el.textContent)) el.textContent = dl;
+      });
+    }
+  } catch (e) {}
+})();
 setTimeout(() => pollLive(false), 1500);
 </script>
 </body>
