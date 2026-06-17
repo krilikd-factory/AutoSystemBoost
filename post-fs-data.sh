@@ -7,35 +7,35 @@ chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 
 mkdir -p /data/adb/asb 2>/dev/null
 
-# Boot-safety: fold any stray top-level partition dir (vendor/ odm/ product/ …)
-# inside the module back into system/ and remove the root copy. A real root
-# vendor/ can bind a partial dir over the whole /vendor partition. This runs
-# pre-mount so it heals modules left in a bad layout by an older build, before
-# the framework mounts anything. Framework symlinks are left untouched.
-for _part in vendor odm product system_ext my_product mi_ext; do
+# Boot-safety: keep stray top-level partition dirs (vendor/ odm/) from
+# duplicating over the real partitions. Root cause: when system/<part> is a
+# real directory, some KSU/Magisk kernels resolve the device's
+# /system/<part> -> /<part> symlink by materialising a real <part>/ at the
+# module root, which then binds a PARTIAL dir over the whole /vendor partition.
+# OnePlus 15's working module carries a zero-byte, mode-000 FILE named "vendor"
+# (and "odm") at its root — an opaque/whiteout marker that suppresses exactly
+# that. We reproduce it: fold any real root <part>/ into system/<part>/, remove
+# it, then drop the whiteout file so the kernel never rebuilds the dir.
+for _part in vendor odm; do
   _root="$MODDIR/$_part"
-  [ -e "$_root" ] || continue
-  [ -L "$_root" ] && continue
-  [ -d "$_root" ] || continue
-  # If KSU/Magisk left it as a live mountpoint, unmount before touching it.
-  while grep -q " $_root " /proc/mounts 2>/dev/null; do
-    umount "$_root" 2>/dev/null || umount -l "$_root" 2>/dev/null || break
-  done
-  for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
-    _t="$MODDIR/system/$_part/$_f"
-    if [ ! -f "$_t" ]; then
-      mkdir -p "$(dirname "$_t")" 2>/dev/null
-      cp -f "$_root/$_f" "$_t" 2>/dev/null || true
-    fi
-  done
-  rm -rf "$_root" 2>/dev/null || true
-  # Some KSU kernels re-materialise a real vendor/ from system/vendor on every
-  # boot. If the directory refused to go and the canonical system/<part>
-  # exists, replace it with a symlink — the exact layout OnePlus 15 ships and
-  # boots with — so it never duplicates again.
-  if [ -d "$_root" ] && [ ! -L "$_root" ] && [ -d "$MODDIR/system/$_part" ]; then
-    rm -rf "$_root" 2>/dev/null
-    [ -e "$_root" ] || ln -s "./system/$_part" "$_root" 2>/dev/null || true
+  if [ -d "$_root" ] && [ ! -L "$_root" ]; then
+    # If KSU/Magisk left it as a live mountpoint, unmount before touching it.
+    while grep -q " $_root " /proc/mounts 2>/dev/null; do
+      umount "$_root" 2>/dev/null || umount -l "$_root" 2>/dev/null || break
+    done
+    for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
+      _t="$MODDIR/system/$_part/$_f"
+      if [ ! -f "$_t" ]; then
+        mkdir -p "$(dirname "$_t")" 2>/dev/null
+        cp -f "$_root/$_f" "$_t" 2>/dev/null || true
+      fi
+    done
+    rm -rf "$_root" 2>/dev/null || true
+  fi
+  # Drop the OP15-style whiteout marker whenever the canonical dir exists and
+  # the root slot is free (not already a file/symlink the framework placed).
+  if [ ! -e "$_root" ] && [ -d "$MODDIR/system/$_part" ]; then
+    : > "$_root" 2>/dev/null && chmod 000 "$_root" 2>/dev/null || true
   fi
 done
 
