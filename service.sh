@@ -1531,13 +1531,23 @@ apply_bt_codec_policy() {
 }
 asb_feature_enabled BT && apply_bt_codec_policy
 apply_bt_volume_behavior() {
+  # Respect the user's bt_absvol_mode (auto|on|off) from governor.conf — the
+  # same source the installer reads. Hardcoding 0/false here would silently
+  # override the "on" mode (which disables absolute volume) on every boot.
+  _bt_mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
+  [ -n "$_bt_mode" ] || _bt_mode="auto"
+  case "$_bt_mode" in
+    on)  _bt_dav=1; _bt_prop="true"  ;;   # disable absolute volume
+    off) _bt_dav=0; _bt_prop="false" ;;
+    auto|*) _bt_dav=0; _bt_prop="false" ;; # auto maps to off (safe default)
+  esac
   if has settings; then
-    asb_settings_put global bluetooth_disable_absolute_volume 0
-    asb_settings_put secure bluetooth_disable_absolute_volume 0
+    asb_settings_put global bluetooth_disable_absolute_volume "$_bt_dav"
+    asb_settings_put secure bluetooth_disable_absolute_volume "$_bt_dav"
   fi
   if has resetprop; then
-    resetprop -n persist.bluetooth.disableabsvol false >/dev/null 2>&1 || true
-    resetprop -n persist.vendor.bluetooth.disableabsvol false >/dev/null 2>&1 || true
+    resetprop -n persist.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
+    resetprop -n persist.vendor.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
     resetprop -p --delete persist.asb.force_disableabsvol >/dev/null 2>&1 || true
     resetprop -p --delete persist.asb.force_enableabsvol >/dev/null 2>&1 || true
   fi

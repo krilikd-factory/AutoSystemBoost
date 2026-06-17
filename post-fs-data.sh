@@ -7,6 +7,26 @@ chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 
 mkdir -p /data/adb/asb 2>/dev/null
 
+# Boot-safety: fold any stray top-level partition dir (vendor/ odm/ product/ …)
+# inside the module back into system/ and remove the root copy. A real root
+# vendor/ can bind a partial dir over the whole /vendor partition. This runs
+# pre-mount so it heals modules left in a bad layout by an older build, before
+# the framework mounts anything. Framework symlinks are left untouched.
+for _part in vendor odm product system_ext my_product mi_ext; do
+  _root="$MODDIR/$_part"
+  [ -e "$_root" ] || continue
+  [ -L "$_root" ] && continue
+  [ -d "$_root" ] || continue
+  for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
+    _t="$MODDIR/system/$_part/$_f"
+    if [ ! -f "$_t" ]; then
+      mkdir -p "$(dirname "$_t")" 2>/dev/null
+      cp -f "$_root/$_f" "$_t" 2>/dev/null || true
+    fi
+  done
+  rm -rf "$_root" 2>/dev/null || true
+done
+
 # Clean up a phantom /data/adb/magisk/busybox symlink that earlier builds
 # created on KernelSU systems (where /data/adb/magisk should not exist).
 # Only remove it when it's a dangling/broken symlink AND real Magisk is absent
