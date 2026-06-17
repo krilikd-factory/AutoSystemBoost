@@ -838,6 +838,34 @@ asb_patch_one_mixer() {
   sedi 's/\(name="HPH[LR]_RDAC Switch" value="\)0"/\11"/g' "$_f"
 }
 
+asb_guard_v4a_effects() {
+  # Strip V4A wiring from all module audio_effects files unless libv4a_re.so
+  # exists on the device. Prevents the missing-library audioserver boot crash.
+  _v4a_present=""
+  for _vd in /vendor/lib64/soundfx /vendor/lib/soundfx \
+             /odm/lib64/soundfx /odm/lib/soundfx \
+             /system/lib64/soundfx /system/lib/soundfx \
+             /system/vendor/lib64/soundfx /system/vendor/lib/soundfx; do
+    if [ -f "$_vd/libv4a_re.so" ]; then _v4a_present="$_vd/libv4a_re.so"; break; fi
+  done
+  if [ -n "$_v4a_present" ]; then
+    ui_print "[*] V4A kept — libv4a_re.so present"
+    return 0
+  fi
+  _stripped=0
+  for _ef in $(find "$MODPATH/system" -type f -name "audio_effects*.xml" 2>/dev/null); do
+    if grep -q 'v4a_re' "$_ef" 2>/dev/null; then
+      # Surgical inline removal — the v4a effect can share a line with a
+      # closing </effectProxy>, so deleting whole lines would break the XML.
+      sedi 's#<effect name="v4a_standard_re"[^/]*/>##g' "$_ef"
+      sedi 's#<library name="v4a_re"[^/]*/>##g' "$_ef"
+      _stripped=$((_stripped + 1))
+    fi
+  done
+  [ "$_stripped" -gt 0 ] && ui_print "[*] V4A stripped from $_stripped effect file(s) — libv4a_re.so absent (prevents bootloop)"
+  return 0
+}
+
 asb_patch_audio_inplace() {
   # $1 = human label
   [ "$ASB_AUDIO" = "true" ] || { ui_print "[*] Audio category off — skipping mixer tune"; return 0; }
@@ -2036,6 +2064,14 @@ EOF
   }
 }
 MANIFEST_EOF
+
+# BOOTLOOP GUARD (all devices, runs after ALL audio processing): module
+# audio_effects files may carry a V4A (ViPER4Android FX) library reference —
+# either shipped baked-in or re-added by the dynamic effect pass. If
+# libv4a_re.so is absent, audioserver fails to load effects at boot -> audio
+# HAL crash loop -> BOOTLOOP (this bricked OnePlus 12). Strip V4A unless the
+# library exists. OnePlus 15 (which ships the lib) keeps it.
+asb_guard_v4a_effects
 
 asb_normalize_module_layout
 asb_end_banner
