@@ -7,36 +7,24 @@ chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 
 mkdir -p /data/adb/asb 2>/dev/null
 
-# Boot-safety: keep stray top-level partition dirs (vendor/ odm/) from
-# duplicating over the real partitions. Root cause: when system/<part> is a
-# real directory, some KSU/Magisk kernels resolve the device's
-# /system/<part> -> /<part> symlink by materialising a real <part>/ at the
-# module root, which then binds a PARTIAL dir over the whole /vendor partition.
-# OnePlus 15's working module carries a zero-byte, mode-000 FILE named "vendor"
-# (and "odm") at its root — an opaque/whiteout marker that suppresses exactly
-# that. We reproduce it: fold any real root <part>/ into system/<part>/, remove
-# it, then drop the whiteout file so the kernel never rebuilds the dir.
-for _part in vendor odm; do
+# Boot-safety: fold a genuinely malformed root partition dir back into system/.
+# This only matters for modules left in a broken layout by an OLD buggy build.
+# It does NOT try to suppress KernelSU Next's own root vendor/: KSU recreates
+# that on every boot via its "Handle partition" magic-mount (mirror + per-file
+# merge), and it is a benign framework artifact — the device keeps its stock
+# /vendor and only ASB's files are merged on top, so there is nothing to fight.
+for _part in vendor odm product system_ext my_product mi_ext; do
   _root="$MODDIR/$_part"
-  if [ -d "$_root" ] && [ ! -L "$_root" ]; then
-    # If KSU/Magisk left it as a live mountpoint, unmount before touching it.
-    while grep -q " $_root " /proc/mounts 2>/dev/null; do
-      umount "$_root" 2>/dev/null || umount -l "$_root" 2>/dev/null || break
-    done
-    for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
-      _t="$MODDIR/system/$_part/$_f"
-      if [ ! -f "$_t" ]; then
-        mkdir -p "$(dirname "$_t")" 2>/dev/null
-        cp -f "$_root/$_f" "$_t" 2>/dev/null || true
-      fi
-    done
-    rm -rf "$_root" 2>/dev/null || true
-  fi
-  # Drop the OP15-style whiteout marker whenever the canonical dir exists and
-  # the root slot is free (not already a file/symlink the framework placed).
-  if [ ! -e "$_root" ] && [ -d "$MODDIR/system/$_part" ]; then
-    : > "$_root" 2>/dev/null && chmod 000 "$_root" 2>/dev/null || true
-  fi
+  [ -L "$_root" ] && continue
+  [ -d "$_root" ] || continue
+  # Fold any file not already present under system/<part>; leave the dir for KSU.
+  for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
+    _t="$MODDIR/system/$_part/$_f"
+    if [ ! -f "$_t" ]; then
+      mkdir -p "$(dirname "$_t")" 2>/dev/null
+      cp -f "$_root/$_f" "$_t" 2>/dev/null || true
+    fi
+  done
 done
 
 # Clean up a phantom /data/adb/magisk/busybox symlink that earlier builds
