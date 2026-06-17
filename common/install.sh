@@ -104,6 +104,15 @@ asb_normalize_module_layout() {
 }
 
 asb_end_banner() {
+  # Remove the legacy Magisk-template index file (.$MODID-files) if it was
+  # left behind empty. ASB ships its own uninstall.sh and does not rely on
+  # this per-file tracking list, so an empty one is just litter in modules/.
+  if [ -n "$INFO" ] && [ -f "$INFO" ] && [ ! -s "$INFO" ]; then
+    rm -f "$INFO" 2>/dev/null || true
+  fi
+  [ -f "$NVBASE/modules/.$MODID-files" ] && [ ! -s "$NVBASE/modules/.$MODID-files" ] \
+    && rm -f "$NVBASE/modules/.$MODID-files" 2>/dev/null || true
+
   local i=0
   while [ $i -lt 2 ]; do
     ui_print " "
@@ -579,11 +588,7 @@ asb_patch_perf_inplace() {
     return 0
   fi
 
-  ui_print " "
-  ui_print "${SEPARATOR}"
-  ui_print "[*] Perf tuning for $_label"
-  ui_print "[*] Source: $_perfsrc (patched in-place, OS-update safe)"
-  ui_print "${SEPARATOR}"
+  ui_print "[*] Perf tuning ($_label, patched in-place)"
 
   _dst="$MODPATH/system/vendor/etc/perf"
   # The shipped perf dir is OP15-only (canoe target). Its qapegameconfig.txt
@@ -602,21 +607,19 @@ asb_patch_perf_inplace() {
     fi
   done
 
-  asb_perf_patch_configstore "$_dst/perfconfigstore.xml" \
-    && [ -f "$_dst/perfconfigstore.xml" ] && ui_print "    + perfconfigstore.xml tuned"
+  asb_perf_patch_configstore "$_dst/perfconfigstore.xml"
   if [ -f "$_dst/qapegameconfig.txt" ]; then
     asb_perf_patch_gameconfig "$_dst/qapegameconfig.txt"
-    ui_print "    + qapegameconfig.txt cooled (44C / 900mA caps)"
+    _perf_game="game caps 44C/900mA"
   else
-    ui_print "    - qapegameconfig.txt absent on this platform (older perf fw)"
+    _perf_game="no game-config (older fw)"
   fi
   if [ -f "$_dst/perfboostsconfig.xml" ]; then
     # idle render-thread boost: shorten hold to cut idle heat (2000 -> 1600)
     sedi 's/\(Id="0x000010A7"[^>]*Timeout="\)2000"/\11600"/g' "$_dst/perfboostsconfig.xml"
-    ui_print "    + perfboostsconfig.xml idle-boost trimmed"
   fi
 
-  ui_print "[*] Perf tuning applied."
+  ui_print "    + applied (configstore, $_perf_game, idle-boost trimmed)"
 }
 
 # ---------------------------------------------------------------------------
@@ -649,11 +652,7 @@ asb_patch_location_inplace() {
   _model="$1"
   [ "$ASB_GPS" = "true" ] || { ui_print "[*] GPS category off — skipping location tuning"; return 0; }
 
-  ui_print " "
-  ui_print "${SEPARATOR}"
-  ui_print "[*] Location/GPS-assist tuning ($_model)"
-  ui_print "[*] In-place patch of live xtwifi/lowi (OS-update safe)"
-  ui_print "${SEPARATOR}"
+  ui_print "[*] Location/GPS-assist tuning ($_model, patched in-place)"
 
   # Remove the shipped OP15 (canoe) copies — they carry MODEL_ID="OnePlus15"
   # and OP15-only GTP server entries. We rebuild from the live device files.
@@ -663,7 +662,7 @@ asb_patch_location_inplace() {
         "$MODPATH/system/vendor/etc/lowi.conf" \
         "$MODPATH/system/odm/etc/lowi.conf" 2>/dev/null || true
 
-  _did=0
+  _did=0; _nx=0; _nl=0
   for _src in /vendor/etc/xtwifi.conf /odm/etc/xtwifi.conf /vendor/odm/etc/xtwifi.conf; do
     if [ -f "$_src" ]; then
       _rel="system${_src}"
@@ -671,8 +670,7 @@ asb_patch_location_inplace() {
       cp -f "$_src" "$MODPATH/$_rel" 2>/dev/null && {
         chmod 0644 "$MODPATH/$_rel" 2>/dev/null
         asb_loc_patch_xtwifi "$MODPATH/$_rel" "$_model"
-        ui_print "    + xtwifi.conf (cache 32MB, model=$_model)"
-        _did=1
+        _nx=$((_nx+1)); _did=1
       }
     fi
   done
@@ -683,13 +681,15 @@ asb_patch_location_inplace() {
       cp -f "$_src" "$MODPATH/$_rel" 2>/dev/null && {
         chmod 0644 "$MODPATH/$_rel" 2>/dev/null
         asb_loc_patch_lowi "$MODPATH/$_rel"
-        ui_print "    + lowi.conf (low-power WiFi RTT on)"
-        _did=1
+        _nl=$((_nl+1)); _did=1
       }
     fi
   done
-  [ "$_did" = "1" ] || ui_print "    - no xtwifi/lowi on this device — skipped"
-  ui_print "[*] Location tuning applied."
+  if [ "$_did" = "1" ]; then
+    ui_print "    + xtwifi x$_nx (cache 32MB), lowi x$_nl (low-power RTT)"
+  else
+    ui_print "    - no xtwifi/lowi on this device — skipped"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -797,8 +797,13 @@ asb_clone_device_audio_wifi() {
 # ---------------------------------------------------------------------------
 asb_patch_one_mixer() {
   _f="$1"; [ -f "$_f" ] || return 0
-  # louder playback: digital volume 84 -> 88 on the three RX paths
-  sedi 's/\(name="RX_RX[012] Digital Volume" value="\)84"/\188"/g' "$_f"
+  # Louder playback: raise Digital Volume to 88 on both the RX (headphone)
+  # and WSA (speaker amp) paths — matches what the OP15 mixer pass does, so
+  # the speaker gets the same boost as headphones. Covers stock 80-87.
+  for _v in 80 81 82 83 84 85 86 87; do
+    sedi "s/\\(name=\"RX_RX[012] Digital Volume\" value=\"\\)${_v}\"/\\188\"/g" "$_f"
+    sedi "s/\\(name=\"WSA_RX[01] Digital Volume\" value=\"\\)${_v}\"/\\188\"/g" "$_f"
+  done
   # flat EQ: disable IIR0 bands that stock leaves engaged
   sedi 's/\(name="IIR0 Enable Band[1-5]" value="\)1"/\10"/g' "$_f"
   # Class-H headphone DAC armed
@@ -821,7 +826,7 @@ asb_patch_audio_inplace() {
     asb_patch_one_mixer "$_mx"
     _n=$((_n + 1))
   done
-  ui_print "    + tuned $_n mixer file(s): vol 84->88, flat EQ, Class-H DAC"
+  ui_print "    + tuned $_n mixer file(s): vol->88 (RX+speaker), flat EQ, Class-H DAC"
 }
 
 asb_prune_non_op15_vendor_overlays() {
@@ -1152,14 +1157,31 @@ asb_localize_region() {
   fi
   ui_print "[*] Region: $_cc (from $_src) - localizing Wi-Fi country"
 
-  # Wi-Fi country: only rewrite when we have a confident SIM/operator code.
-  for _wf in $(find "$MODPATH/system" -type f \( -iname "WCNSS_qcom_cfg*.ini" -o -iname "wpa_supplicant*.conf" -o -iname "p2p_supplicant*.conf" \) 2>/dev/null); do
+  # Wi-Fi country: only REPLACE an existing country line — never insert one.
+  # If a device ships WCNSS/supplicant without an explicit gCountryCode (e.g.
+  # OP13), that's intentional: the modem drives the regulatory domain at
+  # runtime. Forcing a SIM-derived country there could set the wrong regdomain
+  # (travel, roaming), so we leave those files untouched.
+  _wrote=0
+  for _wf in $(find "$MODPATH/system" -type f \( -iname "WCNSS_qcom_cfg*.ini" \) 2>/dev/null); do
     [ -f "$_wf" ] || continue
-    sed -i "s/^gCountryCode=.*/gCountryCode=$_cc/g" "$_wf" 2>/dev/null
-    sed -i "s/^country=.*/country=$_cc/g" "$_wf" 2>/dev/null
+    if grep -q "^gCountryCode=" "$_wf" 2>/dev/null; then
+      sed -i "s/^gCountryCode=.*/gCountryCode=$_cc/g" "$_wf" 2>/dev/null && _wrote=1
+    fi
   done
-  ASB_REGION_APPLIED="$_cc"
-  ui_print "    + Wi-Fi country -> $_cc, NTP -> pool.ntp.org"
+  for _wf in $(find "$MODPATH/system" -type f \( -iname "wpa_supplicant*.conf" -o -iname "p2p_supplicant*.conf" \) 2>/dev/null); do
+    [ -f "$_wf" ] || continue
+    if grep -q "^country=" "$_wf" 2>/dev/null; then
+      sed -i "s/^country=.*/country=$_cc/g" "$_wf" 2>/dev/null && _wrote=1
+    fi
+  done
+  if [ "$_wrote" = "1" ]; then
+    ASB_REGION_APPLIED="$_cc"
+    ui_print "    + Wi-Fi country -> $_cc, NTP -> pool.ntp.org"
+  else
+    ASB_REGION_APPLIED="unchanged (modem-driven regdomain)"
+    ui_print "    + NTP -> pool.ntp.org (Wi-Fi regdomain left to modem)"
+  fi
 }
 asb_localize_region
 
@@ -1422,45 +1444,21 @@ fi
 	sedi "/^ *$/d" $ACONF
 	done
 
-  for OAEFFECT in ${AEFFECT}; do
-	cp_ch $ORIGDIR$OAEFFECT $EFFECT
-	sedi "/^ *$/d" $EFFECT
-	done
-
-  if [ "${ASB_BT}" = "true" ]; then
-  for OBTCONF in ${BTCONF}; do
-	cp_ch $ORIGDIR$OBTCONF $BTCON
-	sedi '/^ *$/d' $BTCON
-	done
-
-  for OBTCONF2 in ${BTCONF2}; do
-	cp_ch $ORIGDIR$OBTCONF2 $BTCON2
-	sedi '/^ *$/d' $BTCON2
-	done
-
-  fi
-
-  for ODAXXML in ${DAXXML}; do
-	cp_ch $ORIGDIR$ODAXXML $DAXXM
-	sedi "/^ *$/d" $DAXXM
-	done
-
+  # V4A (ViPER4Android FX) wiring is only safe when libv4a_re.so actually
+  # exists on the device. OP15's OxygenOS ships it; some OP13/OP12 builds do
+  # not. Referencing a missing effect library makes audioserver fail to load
+  # audio_effects at boot -> audio HAL crash loop -> BOOTLOOP. Detect the
+  # library ONCE here, report status once, then apply across all effect files.
+  _v4a_lib=""
+  for _vd in /vendor/lib64/soundfx /vendor/lib/soundfx \
+             /odm/lib64/soundfx /odm/lib/soundfx \
+             /system/lib64/soundfx /system/lib/soundfx \
+             /system/vendor/lib64/soundfx /system/vendor/lib/soundfx; do
+    if [ -f "$_vd/libv4a_re.so" ]; then _v4a_lib="$_vd/libv4a_re.so"; break; fi
+  done
+  # V4A is wired only when the library exists; applied silently either way.
   for OAEFFECT in ${AEFFECT}; do
 	sedi '/"audiosphere"/d' $EFFECT
-	# V4A (ViPER4Android FX) wiring is only safe when libv4a_re.so actually
-	# exists on the device. OP15's OxygenOS ships it; some OP13/OP12 builds do
-	# not. Referencing a missing effect library makes audioserver fail to load
-	# audio_effects at boot -> audio HAL crash loop -> BOOTLOOP. So we detect
-	# the library first and only then strip the stock volume chain and inject
-	# V4A. If the library is absent, the stock volume_listener/effects are left
-	# fully intact (no audio enhancement, but the device boots).
-	_v4a_lib=""
-	for _vd in /vendor/lib64/soundfx /vendor/lib/soundfx \
-	           /odm/lib64/soundfx /odm/lib/soundfx \
-	           /system/lib64/soundfx /system/lib/soundfx \
-	           /system/vendor/lib64/soundfx /system/vendor/lib/soundfx; do
-	  if [ -f "$_vd/libv4a_re.so" ]; then _v4a_lib="$_vd/libv4a_re.so"; break; fi
-	done
 	if [ -n "$_v4a_lib" ]; then
 	  sedi '/effect name="volume"/d' $EFFECT
 	  sedi '/"dvl"/d' $EFFECT
@@ -1469,11 +1467,8 @@ fi
 	  sedi '/"audio_pre_processing"/d' $EFFECT
 	  sedi '/v4a_standard_re/d' $EFFECT
 	  sedi '/v4a_re/d' $EFFECT
-	  sedi '/<libraries>/ a\        <library name=\"v4a_re\" path=\"libv4a_re.so\"\/>' $EFFECT
-	  sedi '/<effects>/ a\        <effect name=\"v4a_standard_re\" library=\"v4a_re\" uuid=\"90380da3-8536-4744-a6a3-5731970e640f\"\/>' $EFFECT
-	  ui_print "[*] V4A effect wired (libv4a_re.so present)"
-	else
-	  ui_print "[*] V4A skipped — libv4a_re.so absent (stock audio kept, prevents bootloop)"
+	  sedi '/<libraries>/ a\\        <library name=\\"v4a_re\\" path=\\"libv4a_re.so\\"\\/>' $EFFECT
+	  sedi '/<effects>/ a\\        <effect name=\\"v4a_standard_re\\" library=\\"v4a_re\\" uuid=\\"90380da3-8536-4744-a6a3-5731970e640f\\"\\/>' $EFFECT
 	fi
 	done
 
