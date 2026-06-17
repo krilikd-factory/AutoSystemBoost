@@ -101,6 +101,21 @@ asb_normalize_module_layout() {
     [ -L "$MODPATH/$_part" ] && continue
     [ -d "$MODPATH/$_part" ] && rmdir "$MODPATH/$_part" 2>/dev/null || true
   done
+
+  # Bake in the OP15-style whiteout. On OP15 the working module carries a
+  # ZERO-BYTE, mode-000 FILE named "vendor" (and odm) at its root — an
+  # opaque/whiteout marker that tells the KSU/Magisk overlay "do NOT
+  # materialise a real <part>/ here". Without it, a kernel resolving the
+  # device's /system/<part> -> /<part> symlink rebuilds a real <part>/ dir at
+  # the module root that then shadows the whole partition (the OP13/OP12
+  # root-vendor duplication). We reproduce the exact OP15 marker: only when the
+  # canonical system/<part> exists and nothing already occupies the root slot.
+  for _part in vendor odm; do
+    [ -e "$MODPATH/$_part" ] && continue
+    if [ -d "$MODPATH/system/$_part" ]; then
+      : > "$MODPATH/$_part" 2>/dev/null && chmod 000 "$MODPATH/$_part" 2>/dev/null || true
+    fi
+  done
 }
 
 asb_end_banner() {
@@ -839,30 +854,51 @@ asb_patch_one_mixer() {
 }
 
 asb_guard_v4a_effects() {
-  # Strip V4A wiring from all module audio_effects files unless libv4a_re.so
-  # exists on the device. Prevents the missing-library audioserver boot crash.
-  _v4a_present=""
-  for _vd in /vendor/lib64/soundfx /vendor/lib/soundfx \
-             /odm/lib64/soundfx /odm/lib/soundfx \
-             /system/lib64/soundfx /system/lib/soundfx \
-             /system/vendor/lib64/soundfx /system/vendor/lib/soundfx; do
-    if [ -f "$_vd/libv4a_re.so" ]; then _v4a_present="$_vd/libv4a_re.so"; break; fi
+  # Decide whether V4A (ViPER4Android FX) is safe on THIS device, then keep or
+  # strip it from the module's audio_effects files accordingly.
+  #
+  # Detection: probe the live device's OWN stock audio_effects for a v4a
+  # reference. If the stock config already wires v4a, the platform ships
+  # libv4a_re.so (Android is loading it today) and V4A is safe to keep. If no
+  # stock config mentions v4a, the library is absent and referencing it would
+  # crash audioserver at boot -> BOOTLOOP, so we strip it. This stock-reference
+  # signal is far more reliable than probing soundfx lib paths directly (which
+  # can miss the lib due to SELinux or non-standard locations and false-strip a
+  # device that actually has V4A — that mistake removed OnePlus 15's V4A).
+  _v4a_ok=0
+  for _sd in /odm/etc /vendor/etc /vendor/odm/etc /system/vendor/etc \
+             /system/vendor/odm/etc /system/etc; do
+    for _sf in "$_sd"/audio_effects.xml "$_sd"/audio_effects_config.xml; do
+      if [ -f "$_sf" ] && grep -q 'v4a_re' "$_sf" 2>/dev/null; then
+        _v4a_ok=1; break
+      fi
+    done
+    [ "$_v4a_ok" = "1" ] && break
   done
-  if [ -n "$_v4a_present" ]; then
-    ui_print "[*] V4A kept — libv4a_re.so present"
+  # Also scan the device's per-sku audio dirs (where OP12/OP13/OP15 keep them).
+  if [ "$_v4a_ok" = "0" ]; then
+    for _sf in $(find /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio \
+                      -type f -name "audio_effects*.xml" 2>/dev/null); do
+      if grep -q 'v4a_re' "$_sf" 2>/dev/null; then _v4a_ok=1; break; fi
+    done
+  fi
+
+  if [ "$_v4a_ok" = "1" ]; then
+    ui_print "[*] V4A kept — device stock already wires ViPER (libv4a_re.so present)"
     return 0
   fi
+
   _stripped=0
   for _ef in $(find "$MODPATH/system" -type f -name "audio_effects*.xml" 2>/dev/null); do
     if grep -q 'v4a_re' "$_ef" 2>/dev/null; then
-      # Surgical inline removal — the v4a effect can share a line with a
-      # closing </effectProxy>, so deleting whole lines would break the XML.
+      # Inline removal — the v4a effect can share a line with a closing
+      # </effectProxy>, so whole-line deletion would corrupt the XML.
       sedi 's#<effect name="v4a_standard_re"[^/]*/>##g' "$_ef"
       sedi 's#<library name="v4a_re"[^/]*/>##g' "$_ef"
       _stripped=$((_stripped + 1))
     fi
   done
-  [ "$_stripped" -gt 0 ] && ui_print "[*] V4A stripped from $_stripped effect file(s) — libv4a_re.so absent (prevents bootloop)"
+  [ "$_stripped" -gt 0 ] && ui_print "[*] V4A stripped from $_stripped effect file(s) — no ViPER on this platform (prevents bootloop)"
   return 0
 }
 
