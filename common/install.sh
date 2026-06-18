@@ -882,9 +882,13 @@ asb_camera_aggr_flag() {
   _ASB_CAMERA_AGGR="$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   [ -n "$_ASB_CAMERA_AGGR" ] || _ASB_CAMERA_AGGR=0
   # Separate, riskier opt-in: INJECT tone keys the device's stock conf_tuning
-  # doesn't ship (its camera HAL may not consume them). Its own toggle/button.
-  _ASB_CAMERA_INJECT="$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE_INJECT=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
-  [ -n "$_ASB_CAMERA_INJECT" ] || _ASB_CAMERA_INJECT=0
+  # doesn't ship (its camera HAL may not consume them). Sub-control of the
+  # camera toggle, a seg with values safe|aggressive (aggressive = inject).
+  _inj_raw="$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE_INJECT=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_inj_raw" in
+    aggressive|1) _ASB_CAMERA_INJECT=1 ;;
+    *)            _ASB_CAMERA_INJECT=0 ;;
+  esac
 }
 
 asb_guard_v4a_effects() {
