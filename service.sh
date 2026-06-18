@@ -1165,7 +1165,117 @@ apply_bt_runtime() {
   fi
 }
 asb_feature_enabled BT && apply_bt_runtime
+apply_camera_props_static() {
+  # Camera prop layer relocated out of system.prop so it can be device-gated.
+  # OP12 (pineapple/SM8650) crashes the camera to a black screen when these
+  # are forced (none exist in OP12 stock), so pineapple is skipped entirely.
+  # Every other device gets the same set system.prop used to apply globally.
+  _cp_plat="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_cp_plat" ] && _cp_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
+  case "$_cp_plat" in
+    pineapple|sm8650*)
+      asb_log "camera props: pineapple/OP12 -> skipped (HAL-safe)"
+      return 0 ;;
+  esac
+  has resetprop || return 0
+  resetprop -n persist.camera.tnr.preview 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.tnr.video 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.tnr_cds 0 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.mfnr.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.tnr.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.tnr.preview 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.tnr.video 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.tnr_cds 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.mfnr.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.hdr.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.snapshot.disable 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.preview.ubwc 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.ubwc 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.dual_camera_sat 1 >/dev/null 2>&1 || true
+  resetprop -n ro.vendor.audio.camera.bt.record.support true >/dev/null 2>&1 || true
+  resetprop -n ro.vendor.audio.camera.loopback.support true >/dev/null 2>&1 || true
+  resetprop -n ro.vendor.audio.camera.videorecord.gain true >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.hdr.enable 1 >/dev/null 2>&1 || true
+  resetprop -n ro.camera.disableHeicUltraHDR false >/dev/null 2>&1 || true
+  resetprop -n persist.camera.dcrf.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.isp.ltm_disable 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.jpeg.dumpqtable 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.jpeg_burst 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.llnoise 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.ltmforseemore 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.max_prev.enable 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.maxgain.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.llnoise 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.maxgain.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.ltmforseemore 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.picturesize.limit.enable false >/dev/null 2>&1 || true
+  resetprop -n persist.camera.tn.disable 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.video.ubwc 1 >/dev/null 2>&1 || true
+  resetprop -n persist.sys.camera.cameraservice.micompactmemory.enable true >/dev/null 2>&1 || true
+  resetprop -n persist.sys.camera.ubwc.enabled 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.dual_camera_sat 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.eis.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.picturesize.limit.enable false >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.preview.ubwc 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.snapshot.disable 0 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.ubwc 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.video.ubwc 1 >/dev/null 2>&1 || true
+  resetprop -n ro.camera.disableJpegR false >/dev/null 2>&1 || true
+  resetprop -n ro.camera.enableCompositeAPI0JpegR true >/dev/null 2>&1 || true
+  resetprop -n ro.vendor.camera.use_srgb_gamma true >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.hfr.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.video.hdr.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.global.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.mct.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.sensor.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.iface.logs 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.isp.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.stats.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.stats.af.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.stats.aec.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.stats.awb.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.stats.asd.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.stats.afd.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.stats.q3a.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.stats.is.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.stats.haf.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.pproc.debug.mask 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.cpp.debug.mask 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.c2d.debug.mask 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.imglib.logs 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.mmstill.logs 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.debug.enable 0 >/dev/null 2>&1 || true
+  resetprop -n persist.camera.kpi.debug 0 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.cpp.duplicate_strip_dump 0 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.cpp.zoom.opt 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.eis.disable 0 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.fdvideo 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.opt_mode.video 2 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.smyuv.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.raw.zsl.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.zsl.enable 1 >/dev/null 2>&1 || true
+  resetprop -n persist.vendor.camera.multiframe.nr.enable 1 >/dev/null 2>&1 || true
+  resetprop -n ro.camerax.extensions.enabled true >/dev/null 2>&1 || true
+  resetprop -n vendor.camera.algo.jpeghwdecode 1 >/dev/null 2>&1 || true
+  resetprop -n vendor.camera.algo.jpeghwencode 1 >/dev/null 2>&1 || true
+  resetprop -n vendor.camera.picturesize.limit.enable false >/dev/null 2>&1 || true
+  asb_log "camera props: applied static set (81 props)"
+}
+asb_feature_enabled CAMERA && apply_camera_props_static
+
 apply_camera_runtime() {
+  # CAMERA PROP DIET for OP12 (pineapple / SM8650). The OP12 camera HAL crashes
+  # to a black screen when ASB forces its camera prop layer — none of these
+  # persist.*camera* props exist in OP12 stock, and even with the file overlays
+  # removed the crash persists, which isolates it to the prop layer. So on
+  # pineapple we apply NO camera props at all and let the stock camera stand.
+  _cam_plat="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_cam_plat" ] && _cam_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
+  case "$_cam_plat" in
+    pineapple|sm8650*)
+      asb_log "camera: pineapple/OP12 -> skipping camera prop layer (HAL-safe)"
+      return 0 ;;
+  esac
   asb_persist_safe persist.camera.tnr.preview 1
   asb_persist_safe persist.camera.tnr.video 1
   asb_persist_safe persist.vendor.camera.hdr.enable 1
@@ -1637,6 +1747,14 @@ apply_tracking_block() {
 asb_feature_enabled LOG && apply_tracking_block
 
 apply_camera_experimental() {
+  # Same OP12 camera prop diet: pineapple gets no experimental camera props.
+  _cam_plat2="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_cam_plat2" ] && _cam_plat2="$(getprop ro.hardware.chipname 2>/dev/null)"
+  case "$_cam_plat2" in
+    pineapple|sm8650*)
+      asb_log "camera experimental: pineapple/OP12 -> skipped (HAL-safe)"
+      return 0 ;;
+  esac
   _orig="$MODDIR/config/camera_orig.conf"
 
   if [ ! -f "$_orig" ]; then
