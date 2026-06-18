@@ -36,6 +36,23 @@ emit() {
 
 PASS=0; FAIL=0; NA=0
 
+# Discover the real installed module dir instead of hardcoding the KSU path —
+# APatch/Magisk/KSU put modules in different roots, and the id can be matched
+# from module.prop. Falls back to the canonical KSU path if nothing matches.
+ASB_MODDIR=""
+for _mroot in /data/adb/modules /data/adb/ap/modules /data/adb/ksu/modules; do
+  [ -d "$_mroot" ] || continue
+  for _m in "$_mroot"/*; do
+    [ -d "$_m" ] || continue
+    [ -f "$_m/module.prop" ] || continue
+    if grep -q '^id=AutoSystemBoost$' "$_m/module.prop" 2>/dev/null; then
+      ASB_MODDIR="$_m"; break
+    fi
+  done
+  [ -n "$ASB_MODDIR" ] && break
+done
+[ -z "$ASB_MODDIR" ] && [ -d /data/adb/modules/AutoSystemBoost ] && ASB_MODDIR=/data/adb/modules/AutoSystemBoost
+
 # result helper: $1 label, $2 expected, $3 actual, $4 mode(eq|contains|ne_empty)
 check() {
   _label="$1"; _exp="$2"; _act="$3"; _mode="${4:-eq}"
@@ -67,7 +84,7 @@ emit "================================================================"
 emit " AutoSystemBoost — on-device tweak verification"
 emit " date:   $(date 2>/dev/null)"
 emit " device: $(getprop ro.product.model 2>/dev/null) / platform=$(getprop ro.board.platform 2>/dev/null) / soc=$(getprop ro.soc.model 2>/dev/null)"
-emit " ASB:    $(grep -E '^version=' /data/adb/modules/AutoSystemBoost/module.prop 2>/dev/null | cut -d= -f2)"
+emit " ASB:    $(grep -E '^version=' $ASB_MODDIR/module.prop 2>/dev/null | cut -d= -f2)"
 emit "================================================================"
 
 # ---------------------------------------------------------------------
@@ -137,8 +154,13 @@ else
 
   # base tweaks
   if [ "$VOL_FILES" -gt 0 ]; then
-    check "Digital Volume raised to 88 (across mixers, >=1)" "1" "$VOL88_TOTAL" ge
-    check "No leftover 80-87 Digital Volume entries (expect 0)" "0" "$VOL_UNPATCHED" eq
+    # Success signal is: no Digital Volume left at the stock 80-87 range (they
+    # were all raised to 88). Some SKUs expose the loud control under a
+    # different name or already sit at 88/other values, so a positive count of
+    # "==88" can legitimately be 0 while the patch still fully applied — hence
+    # we judge by "nothing left to patch", and only report the 88-count as info.
+    emit "  (info) Digital Volume ==88 entries across mixers: $VOL88_TOTAL"
+    check "No stock 80-87 Digital Volume left (all raised; expect 0)" "0" "$VOL_UNPATCHED" eq
   else
     emit "  [N/A ] no RX_RX/WSA Digital Volume control in any mixer"; NA=$((NA+1))
   fi
@@ -149,7 +171,7 @@ else
   fi
 
   # aggressive (only meaningful if toggle ON)
-  AGGR=$(grep -E '^[[:space:]]*AUDIO_AGGRESSIVE=' /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')
+  AGGR=$(grep -E '^[[:space:]]*AUDIO_AGGRESSIVE=' $ASB_MODDIR/config/governor.conf 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')
   emit "  (AUDIO_AGGRESSIVE toggle = ${AGGR:-0})"
   if [ "${AGGR:-0}" = "1" ]; then
     if [ "$COMP_FILES" -gt 0 ]; then
@@ -170,7 +192,7 @@ fi
 # Mount-gap diagnostic: does the LIVE active mixer match the module's staging
 # copy? If the module file is patched but the live file is not, KSU/Magisk did
 # not mount that path (a framework issue, not an ASB bug).
-_STAGE_AUDIO="/data/adb/modules/AutoSystemBoost/system/vendor/etc/audio"
+_STAGE_AUDIO="$ASB_MODDIR/system/vendor/etc/audio"
 if [ -n "$ACTIVE_MIX" ] && [ -d "$_STAGE_AUDIO" ]; then
   _rel="${ACTIVE_MIX#*/etc/audio/}"
   _stage="$_STAGE_AUDIO/$_rel"
@@ -261,14 +283,14 @@ for CT in $CT_LIST; do
   emit "  (file: $CT)"
   check "Camera tone-fix sunsetBrightScale=0.9" "0.9" "$TONE" eq
   # Aggressive camera (only meaningful if the WebUI toggle is ON)
-  CAGGR=$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE=' /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')
+  CAGGR=$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE=' $ASB_MODDIR/config/governor.conf 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')
   emit "  (CAMERA_AGGRESSIVE toggle = ${CAGGR:-0})"
   if [ "${CAGGR:-0}" = "1" ]; then
     SAT=$(grep -o '"sunsetSatScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')
     check "Aggressive: sunsetSatScale lowered to 1.4" "1.4" "$SAT" eq
-    INJ=$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE_INJECT=' /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')
-    emit "  (CAMERA_AGGRESSIVE_INJECT toggle = ${INJ:-0})"
-    if [ "${INJ:-0}" = "1" ]; then
+    INJ=$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE_INJECT=' $ASB_MODDIR/config/governor.conf 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')
+    emit "  (CAMERA_AGGRESSIVE_INJECT mode = ${INJ:-safe})"
+    if [ "${INJ:-safe}" = "aggressive" ] || [ "${INJ:-safe}" = "1" ]; then
       BLUE=$(grep -o '"blueSatParam": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')
       NIGHT=$(grep -o '"nightDownGainParam": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')
       check "Inject: blueSatParam present = 1.05" "1.05" "$BLUE" eq
@@ -282,7 +304,13 @@ CMP="$(firstfile '/odm/etc/camera/media_profiles.xml' '/vendor/odm/etc/camera/me
 if [ -n "$CMP" ]; then
   BR=$(awk '/quality="1080p"/{f=1} f&&/bitRate=/{match($0,/bitRate="[0-9]+"/);print substr($0,RSTART+9,RLENGTH-10);exit}' "$CMP" 2>/dev/null)
   emit "  (file: $CMP)"
-  check "1080p video bitRate raised to 37300000" "37300000" "$BR" eq
+  # OP15 (canoe) ships a 40 Mbps 1080p profile; OP13/OP12 overlays use 37.3 Mbps.
+  _plat="$(getprop ro.board.platform 2>/dev/null)"
+  case "$_plat" in
+    canoe|sm8850*) _br_exp="40000000" ;;
+    *)             _br_exp="37300000" ;;
+  esac
+  check "1080p video bitRate raised to ${_br_exp}" "$_br_exp" "$BR" eq
 else
   emit "  [N/A ] camera media_profiles.xml not found"; NA=$((NA+1))
 fi
@@ -313,7 +341,7 @@ emit "  ASB governor running: $_govrun"
 BT=$(settings get global bluetooth_disable_absolute_volume 2>/dev/null)
 emit "  bluetooth_disable_absolute_volume (global): ${BT:-<unset>}"
 HIRES_PROP=$(getprop persist.vendor.audio.hifi.dac 2>/dev/null)
-emit "  (info) module dir present: $([ -d /data/adb/modules/AutoSystemBoost ] && echo yes || echo NO)"
+emit "  (info) module dir present: $([ -d $ASB_MODDIR ] && echo yes || echo NO)"
 
 # ---------------------------------------------------------------------
 emit ""
