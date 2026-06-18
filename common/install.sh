@@ -132,6 +132,10 @@ asb_end_banner() {
   ui_print "${ASB_DONE_MSG:-Module installed. Reboot.}"
   ui_print "${SEPARATOR}"
   ui_print " "
+  ui_print "  Diagnostics: after reboot, run in a root shell:"
+  ui_print "      su -c asbdiag"
+  ui_print "  -> full system audit saved to /sdcard/asb_diag_report.txt"
+  ui_print " "
   ui_print "      #####      "
   ui_print "     ##      ##     "
   ui_print "    ##        ##    "
@@ -1035,6 +1039,41 @@ asb_prune_non_op15_vendor_overlays() {
   rm -rf "$MODPATH/system/vendor/odm/etc/gps" 2>/dev/null || true
 
   find "$MODPATH/system" -type d -empty -print -delete 2>/dev/null || true
+}
+
+asb_preserve_user_config() {
+  # On REINSTALL, carry the user's WebUI choices over the freshly-shipped
+  # governor.conf. The previous install is still on disk while we run, so its
+  # config/governor.conf holds the user's saved toggles. For each known
+  # user-settable key, if the old file has a value, overwrite the shipped
+  # default with it. Untouched keys keep the new shipped default; brand-new
+  # keys in this version are introduced cleanly.
+  _new_conf="$MODPATH/config/governor.conf"
+  _old_conf="$NVBASE/modules/$MODID/config/governor.conf"
+  [ -f "$_new_conf" ] || return 0
+  [ -f "$_old_conf" ] || { ui_print "[*] Fresh install - using default config"; return 0; }
+
+  _user_keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
+auto_battery_enable charge_aware_enable \
+night_quiet_enable night_quiet_auto \
+UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS \
+region_allow_locale"
+
+  _migrated=0
+  for _k in $_user_keys; do
+    _oldval="$(grep -E "^[[:space:]]*$_k=" "$_old_conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
+    [ -n "$_oldval" ] || continue
+    if grep -qE "^[[:space:]]*$_k=" "$_new_conf" 2>/dev/null; then
+      _esc="$(printf '%s' "$_oldval" | sed 's/[&/\|]/\\&/g')"
+      sed -i "s|^\\([[:space:]]*$_k=\\).*|\\1$_esc|" "$_new_conf" 2>/dev/null \
+        && _migrated=$((_migrated + 1))
+    else
+      printf '%s=%s\n' "$_k" "$_oldval" >> "$_new_conf"
+      _migrated=$((_migrated + 1))
+    fi
+  done
+  ui_print "[*] Preserved $_migrated WebUI setting(s) from previous install"
 }
 
 asb_prune_module() {
@@ -2150,12 +2189,25 @@ EOF
 	  chmod 0755 "$MODPATH/system/bin/asb"
 	fi
 
+	# Diagnostic launcher (short command: `su -c asbdiag`) + the script it runs.
+	if [ -f "$MODPATH/system/bin/asbdiag" ]; then
+	  chmod 0755 "$MODPATH/system/bin/asbdiag"
+	fi
+	if [ -f "$MODPATH/tools/asb_diag.sh" ]; then
+	  chmod 0755 "$MODPATH/tools/asb_diag.sh"
+	fi
+	if [ -f "$MODPATH/tools/asb_verify_device.sh" ]; then
+	  chmod 0755 "$MODPATH/tools/asb_verify_device.sh"
+	fi
+
 	if [ -f "$MODPATH/bin/asb" ]; then
 	  chmod 0755 "$MODPATH/bin/asb"
 	fi
 
 	asb_prune_module
 	find $MODPATH -empty -type d -delete
+
+	asb_preserve_user_config
 
 	if [ -f "$MODPATH/config/governor.conf" ]; then
 	  cp -f "$MODPATH/config/governor.conf" "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
