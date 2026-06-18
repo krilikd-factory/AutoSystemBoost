@@ -53,6 +53,15 @@ done
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
 command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
 
+# Apply / revert the opt-in aggressive audio + camera layers from their saved
+# baselines according to the current WebUI toggles. This is what makes a plain
+# reboot turn AUDIO_AGGRESSIVE / CAMERA_AGGRESSIVE / CAMERA_AGGRESSIVE_INJECT on
+# or off without reinstalling the module.
+if [ -r "$MODDIR/runtime/asb_tweaks.sh" ]; then
+  . "$MODDIR/runtime/asb_tweaks.sh"
+  asb_apply_dynamic_tweaks "$MODDIR"
+fi
+
 asb_feature_enabled() {
   _key="$1"
   [ -r "$MODDIR/features.conf" ] || return 0
