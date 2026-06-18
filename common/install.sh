@@ -134,6 +134,8 @@ asb_end_banner() {
   ui_print " "
   ui_print "  Diagnostics: after reboot, run in a root shell:"
   ui_print "      su -c asbdiag"
+  ui_print "  If that says \"Permission denied\", use this instead:"
+  ui_print "      su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_diag.sh'"
   ui_print "  -> full system audit saved to /sdcard/asb_diag_report.txt"
   ui_print " "
   ui_print "      #####      "
