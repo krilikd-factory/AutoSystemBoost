@@ -1007,6 +1007,33 @@ body.live-active .page:not(.live-page) {
   border-color: rgba(0,225,200,0.28);
   background: linear-gradient(160deg, rgba(0,225,200,0.06), rgba(255,255,255,0.015));
 }
+.cfg-sub {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px dashed rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cfg-sub.disabled { opacity: 0.45; }
+.cfg-sub-label {
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  color: rgba(255,255,255,0.72);
+}
+.cfg-sub-hint {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.42);
+}
+.cfg-seg.small button {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+.cfg-seg.small.disabled { pointer-events: none; }
 .cfg-row-top {
   display: flex;
   align-items: center;
@@ -1488,6 +1515,8 @@ const I18N = {
     // toasts
     t_profile_err: '✗ Ошибка применения профиля',
     t_cfg_saved: ' · перезагрузите для применения',
+    cfg_camera_mode_label: 'Режим tone-ключей',
+    cfg_camera_mode_hint: 'Агрессивный инжектирует недостающие ключи (риск)',
     t_cfg_err: '✗ Не удалось записать конфигурацию',
     t_reboot_confirm: 'Нажмите ещё раз для перезагрузки',
     t_rebooting: 'Перезагрузка…',
@@ -1499,8 +1528,8 @@ const I18N = {
         desc: 'Расширенная аудиофильская цепь: компандеры наушников выкл + режим ЦАП Class-H HIFI (чище и динамичнее звук в наушниках ценой небольшого расхода), плюс расширенный набор аудио-свойств. Может конфликтовать с BT-наушниками или DSP. Изменения микшера применяются после обычной перезагрузки. Оставьте ВЫКЛ, если не нужно.' },
       CAMERA_AGGRESSIVE: { name: 'Агрессивные твики камеры',
         desc: 'Опциональные сдвиги цвета/тона для видео: менее перенасыщенные закаты, чуть насыщеннее синее небо, приподнятые ночные и дневные тени для большей детализации. Субъективно — на вкус. Применяется после обычной перезагрузки. Оставьте ВЫКЛ для стокового вида OnePlus.' },
-      CAMERA_AGGRESSIVE_INJECT: { name: 'Инъекция недостающих tone-ключей (риск)',
-        desc: 'Работает только при включённых Агрессивных твиках камеры. Добавляет tone-ключи, которых нет в стоковом конфиге камеры вашей модели (напр. OnePlus 13/12), чтобы применился полный агрессивный набор. РИСКОВАННО: камера может игнорировать неизвестные ключи или сбоить. Включайте только для теста и выключите, если камера капризничает. Применяется после обычной перезагрузки.' },
+      CAMERA_AGGRESSIVE_INJECT: { name: 'Режим tone-ключей',
+        desc: 'БЕЗОПАСНЫЙ настраивает только tone-ключи, которые уже есть в вашей модели. АГРЕССИВНЫЙ дополнительно инжектирует недостающие в стоковом конфиге камеры ключи (напр. OnePlus 13/12) для полного набора — рискованно: камера может их игнорировать или сбоить, переключите обратно на БЕЗОПАСНЫЙ, если что-то не так. Применяется после обычной перезагрузки.' },
       bt_absvol_mode: { name: 'Режим громкости Bluetooth',
         desc: 'ВКЛ отключает абсолютную громкость BT, чтобы телефон напрямую управлял колонкой/магнитолой — может быть громче, но шкала громкости изменится. ВЫКЛ (и АВТО) сохраняют стоковое поведение — безопаснее всего.' },
       cool_gaming: { name: 'Холодные игры',
@@ -1739,12 +1768,10 @@ const CFG_ITEMS = [
     desc:'Keeps the audio chain compatible with Flow Equalizer and other global EQ apps. Recommended ON if you use a system-wide equalizer.' },
   { key:'AUDIO_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Audio Tweaks',
     desc:'Extended audiophile chain: headphone companders off + Class-H HIFI DAC mode (cleaner, more dynamic headphones at a small power cost), plus the extended audio prop set. May conflict with some BT headsets or DSP effects. Mixer changes apply after a normal reboot. Leave OFF unless you want it.' },
-  { key:'CAMERA_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Camera Tweaks',
-    desc:'Opt-in colour/tone shifts for video: less over-saturated sunsets, slightly richer blue sky, lifted night and daytime shadows for more detail. Subjective \u2014 a matter of taste. Applies after a normal reboot. Leave OFF for the stock OnePlus look.' },
-  { key:'CAMERA_AGGRESSIVE_INJECT', type:'bool', def:'0', name:'Inject Missing Tone Keys (risky)',
-    desc:'Only with Aggressive Camera ON. Adds tone keys your model\u2019s stock camera config doesn\u2019t ship (e.g. OnePlus 13/12) so the full aggressive set applies. RISKY: the camera may ignore unknown keys or misbehave. Enable only to test, and turn OFF if the camera acts up. Applies after a normal reboot.' },
   { key:'bt_absvol_mode', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Volume Mode',
     desc:'ON disables BT absolute volume so the phone drives the speaker/car directly \u2014 can be louder, but may change the volume scale. OFF (and AUTO) keep stock behavior \u2014 safest.' },
+  { key:'CAMERA_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Camera Tweaks',
+    desc:'Opt-in colour/tone shifts for video: less over-saturated sunsets, slightly richer blue sky, lifted night and daytime shadows for more detail. Subjective \\u2014 a matter of taste. Applies after a normal reboot. Leave OFF for the stock OnePlus look.' },
   // --- Gaming & thermals ---
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
     desc:'Cools games by engaging the thermal lean earlier (~40\u00b0C). Field-tested with no noticeable fps loss, and tightens further when gaming on a warm charge. ON by default; turn off for unrestrained peak fps.' },
@@ -1788,7 +1815,7 @@ const CFG_ICONS = {
   AUDIO_EQ_COMPAT:'\uD83C\uDF9A\uFE0F',       // studio mic / EQ
   AUDIO_AGGRESSIVE:'\uD83C\uDFA7',             // headphones
   CAMERA_AGGRESSIVE:'\uD83D\uDCF7',           // camera
-  CAMERA_AGGRESSIVE_INJECT:'\u26A0\uFE0F',     // warning
+  CAMERA_AGGRESSIVE_INJECT:'\uD83C\uDF9B\uFE0F',  // slider/mode
   bt_absvol_mode:'\uD83D\uDD0A',              // loud speaker (BT volume)
   cool_gaming:'\uD83C\uDFAE',                 // gamepad
   charge_aware_enable:'\u26A1',                // high voltage (charging)
@@ -1863,6 +1890,32 @@ function cfgRender() {
     d.className = 'cfg-desc';
     d.textContent = Tcfg(it.key, "desc", it.desc);
     row.appendChild(d);
+
+    // Compact nested sub-control for the camera card: tone-key mode safe|aggressive.
+    // Lives inside the Aggressive Camera card and is dimmed/locked until that
+    // master toggle is ON. "aggressive" = also inject the missing tone keys.
+    if (it.key === 'CAMERA_AGGRESSIVE') {
+      const injCur = (_cfgVals['CAMERA_AGGRESSIVE_INJECT'] !== undefined) ? _cfgVals['CAMERA_AGGRESSIVE_INJECT'] : 'safe';
+      const sub = document.createElement('div');
+      sub.className = 'cfg-sub' + (cur === '1' ? '' : ' disabled');
+      const subLabel = document.createElement('div');
+      subLabel.className = 'cfg-sub-label';
+      subLabel.innerHTML = T('cfg_camera_mode_label', 'Tone-key mode') +
+        '<span class="cfg-sub-hint">' + T('cfg_camera_mode_hint', 'Aggressive injects keys your model lacks (risky)') + '</span>';
+      sub.appendChild(subLabel);
+      const subSeg = document.createElement('div');
+      subSeg.className = 'cfg-seg small' + (cur === '1' ? '' : ' disabled');
+      ['safe','aggressive'].forEach(o => {
+        const b = document.createElement('button');
+        b.textContent = Topt(o);
+        if (o === injCur) b.classList.add('on');
+        b.onclick = () => { if (cur === '1') cfgSet('CAMERA_AGGRESSIVE_INJECT', o, subSeg); };
+        subSeg.appendChild(b);
+      });
+      sub.appendChild(subSeg);
+      row.appendChild(sub);
+    }
+
     list.appendChild(row);
   });
 }
