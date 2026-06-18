@@ -1496,7 +1496,11 @@ const I18N = {
       AUDIO_EQ_COMPAT: { name: 'Совместимость аудио-эквалайзера',
         desc: 'Сохраняет совместимость аудио-цепочки с Flow Equalizer и другими системными эквалайзерами. Рекомендуется ВКЛ, если вы используете системный эквалайзер.' },
       AUDIO_AGGRESSIVE: { name: 'Агрессивные аудио-твики',
-        desc: 'Включает расширенный набор аудио-свойств за пределами безопасного стокового набора. Может конфликтовать с некоторыми BT-наушниками или DSP-эффектами — оставьте ВЫКЛ, если не уверены.' },
+        desc: 'Расширенная аудиофильская цепь: компандеры наушников выкл + режим ЦАП Class-H HIFI (чище и динамичнее звук в наушниках ценой небольшого расхода), плюс расширенный набор аудио-свойств. Может конфликтовать с BT-наушниками или DSP. Изменения микшера применяются при следующей переустановке модуля. Оставьте ВЫКЛ, если не нужно.' },
+      CAMERA_AGGRESSIVE: { name: 'Агрессивные твики камеры',
+        desc: 'Опциональные сдвиги цвета/тона для видео: менее перенасыщенные закаты, чуть насыщеннее синее небо, приподнятые ночные и дневные тени для большей детализации. Субъективно — на вкус. Применяется при следующей переустановке модуля. Оставьте ВЫКЛ для стокового вида OnePlus.' },
+      CAMERA_AGGRESSIVE_INJECT: { name: 'Инъекция недостающих tone-ключей (риск)',
+        desc: 'Работает только при включённых Агрессивных твиках камеры. Добавляет tone-ключи, которых нет в стоковом конфиге камеры вашей модели (напр. OnePlus 13/12), чтобы применился полный агрессивный набор. РИСКОВАННО: камера может игнорировать неизвестные ключи или сбоить. Включайте только для теста и выключите, если камера капризничает. Применяется при следующей переустановке.' },
       bt_absvol_mode: { name: 'Режим громкости Bluetooth',
         desc: 'ВКЛ отключает абсолютную громкость BT, чтобы телефон напрямую управлял колонкой/магнитолой — может быть громче, но шкала громкости изменится. ВЫКЛ (и АВТО) сохраняют стоковое поведение — безопаснее всего.' },
       cool_gaming: { name: 'Холодные игры',
@@ -1734,7 +1738,11 @@ const CFG_ITEMS = [
   { key:'AUDIO_EQ_COMPAT', type:'bool', def:'1', name:'Audio EQ Compatibility',
     desc:'Keeps the audio chain compatible with Flow Equalizer and other global EQ apps. Recommended ON if you use a system-wide equalizer.' },
   { key:'AUDIO_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Audio Tweaks',
-    desc:'Enables the extended audio prop set beyond the stock-safe chain. May conflict with some BT headsets or DSP effects \u2014 leave OFF unless you know you need it.' },
+    desc:'Extended audiophile chain: headphone companders off + Class-H HIFI DAC mode (cleaner, more dynamic headphones at a small power cost), plus the extended audio prop set. May conflict with some BT headsets or DSP effects. Mixer changes apply on the next module reinstall. Leave OFF unless you want it.' },
+  { key:'CAMERA_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Camera Tweaks',
+    desc:'Opt-in colour/tone shifts for video: less over-saturated sunsets, slightly richer blue sky, lifted night and daytime shadows for more detail. Subjective \u2014 a matter of taste. Applies on the next module reinstall. Leave OFF for the stock OnePlus look.' },
+  { key:'CAMERA_AGGRESSIVE_INJECT', type:'bool', def:'0', name:'Inject Missing Tone Keys (risky)',
+    desc:'Only with Aggressive Camera ON. Adds tone keys your model\u2019s stock camera config doesn\u2019t ship (e.g. OnePlus 13/12) so the full aggressive set applies. RISKY: the camera may ignore unknown keys or misbehave. Enable only to test, and turn OFF if the camera acts up. Applies on the next reinstall.' },
   { key:'bt_absvol_mode', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Volume Mode',
     desc:'ON disables BT absolute volume so the phone drives the speaker/car directly \u2014 can be louder, but may change the volume scale. OFF (and AUTO) keep stock behavior \u2014 safest.' },
   // --- Gaming & thermals ---
@@ -1779,6 +1787,8 @@ async function cfgLoad() {
 const CFG_ICONS = {
   AUDIO_EQ_COMPAT:'\uD83C\uDF9A\uFE0F',       // studio mic / EQ
   AUDIO_AGGRESSIVE:'\uD83C\uDFA7',             // headphones
+  CAMERA_AGGRESSIVE:'\uD83D\uDCF7',           // camera
+  CAMERA_AGGRESSIVE_INJECT:'\u26A0\uFE0F',     // warning
   bt_absvol_mode:'\uD83D\uDD0A',              // loud speaker (BT volume)
   cool_gaming:'\uD83C\uDFAE',                 // gamepad
   charge_aware_enable:'\u26A1',                // high voltage (charging)
