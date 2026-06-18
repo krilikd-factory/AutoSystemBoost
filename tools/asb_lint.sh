@@ -92,7 +92,9 @@ for f in \
   "$MODDIR/service.sh" \
   "$MODDIR/runtime/asb_watchdog.sh" \
   "$MODDIR/runtime/asb_reconcile.sh" \
+  "$MODDIR/runtime/asb_tweaks.sh" \
   "$MODDIR/tools/asb_doctor.sh" \
+  "$MODDIR/tools/asb_verify_device.sh" \
   "$MODDIR/tools/asb_release_pack.sh"; do
   [ -f "$f" ] && check_shell_syntax "$f"
 done
