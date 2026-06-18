@@ -532,19 +532,22 @@ asb_apply_device_overlay() {
             && ui_print "    + Camera/media: $_f"
         fi
       done
-      # Opt-in aggressive camera tone tweaks (WebUI CAMERA_AGGRESSIVE toggle).
+      # Camera tone: baseline (stock conf_tuning) is saved here; the opt-in
+      # aggressive tone + inject layers are applied at boot by post-fs-data from
+      # that baseline, so the CAMERA_AGGRESSIVE / _INJECT toggles take effect on
+      # a plain reboot instead of only on reinstall.
+      _ctf="$MODPATH/system/vendor/odm/etc/camera/conf_tuning_params.json"
+      if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
+        . "$MODPATH/runtime/asb_tweaks.sh"
+        asb_tw_save_base "$_ctf" force
+        asb_apply_dynamic_tweaks "$MODPATH"
+      fi
       asb_camera_aggr_flag
-      if [ "$_ASB_CAMERA_AGGR" = "1" ]; then
-        _ctf="$MODPATH/system/vendor/odm/etc/camera/conf_tuning_params.json"
-        if [ -f "$_ctf" ]; then
-          # Optional riskier step first: inject tone keys this device lacks.
-          [ "$_ASB_CAMERA_INJECT" = "1" ] && asb_inject_camera_tone_keys "$_ctf"
-          asb_patch_camera_tone_aggr "$_ctf"
-          if [ "$_ASB_CAMERA_INJECT" = "1" ]; then
-            ui_print "    + Camera aggressive tone applied (incl. injected keys)"
-          else
-            ui_print "    + Camera aggressive tone applied (existing keys only)"
-          fi
+      if [ "$_ASB_CAMERA_AGGR" = "1" ] && [ -f "$_ctf" ]; then
+        if [ "$_ASB_CAMERA_INJECT" = "1" ]; then
+          ui_print "    + Camera aggressive tone applied (incl. injected keys)"
+        else
+          ui_print "    + Camera aggressive tone applied (existing keys only)"
         fi
       fi
     fi
@@ -862,20 +865,9 @@ asb_patch_one_mixer() {
   sedi 's/\(name="IIR0 Enable Band[1-5]" value="\)1"/\10"/g' "$_f"
   # Class-H headphone DAC armed
   sedi 's/\(name="HPH[LR]_RDAC Switch" value="\)0"/\11"/g' "$_f"
-
-  # --- Aggressive audiophile tweaks (gated by the WebUI AUDIO_AGGRESSIVE
-  # toggle on the Config page). OFF by default: these change the headphone
-  # amplifier character and are a matter of taste / power trade-off, so the
-  # user opts in. When OFF we leave every one of these at stock.
-  if [ "$_ASB_AUDIO_AGGR" = "1" ]; then
-    # Headphone companders OFF: removes the dynamic-range compression on the
-    # HPHL/HPHR path for a cleaner, more dynamic signal.
-    sedi 's/\(name="HPH[LR] Compander" value="\)1"/\10"/g' "$_f"
-    # Headphone DAC class: CLS_H_ULP (ultra-low-power) -> CLS_H_HIFI. Higher
-    # fidelity at a small power cost; only rewrite the ULP value so we never
-    # touch a path the firmware already set to something else.
-    sedi 's/\(name="RX HPH Mode" value="\)CLS_H_ULP"/\1CLS_H_HIFI"/g' "$_f"
-  fi
+  # NOTE: the opt-in aggressive layer (compander off, HPH HIFI) is NOT applied
+  # here anymore — it is applied at boot by post-fs-data from the .asbbase
+  # baseline so the AUDIO_AGGRESSIVE toggle takes effect on a plain reboot.
 }
 
 asb_patch_audio_inplace_aggr_flag() {
@@ -893,52 +885,6 @@ asb_camera_aggr_flag() {
   # doesn't ship (its camera HAL may not consume them). Its own toggle/button.
   _ASB_CAMERA_INJECT="$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE_INJECT=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   [ -n "$_ASB_CAMERA_INJECT" ] || _ASB_CAMERA_INJECT=0
-}
-
-asb_inject_camera_tone_keys() {
-  # RISKY (separate toggle CAMERA_AGGRESSIVE_INJECT): add the aggressive tone
-  # keys that THIS device's stock conf_tuning doesn't already have, so a trimmed
-  # platform (OP13) can still get the full aggressive tone set. We insert them
-  # into TMCParamsSet right after the always-present "sunsetBrightScale" anchor,
-  # and ONLY keys that are currently absent (so we never duplicate). The camera
-  # HAL may ignore unknown keys (best case) or misbehave — hence the extra opt-in
-  # button. JSON validity is preserved (we add well-formed "key": value, lines).
-  _cf="$1"; [ -f "$_cf" ] || return 0
-  grep -q '"sunsetBrightScale"' "$_cf" || return 0   # no safe anchor -> skip
-  # detect the indentation used on the anchor line
-  _ind="$(sed -n 's/\([[:space:]]*\)"sunsetBrightScale".*/\1/p' "$_cf" | head -1)"
-  _added=0
-  for _kv in "blueSatParam:1.05" "nightDownGainParam:0.4" \
-             "nightDownGainParamHizoom:0.4" "nightDownGainParamFront:0.4" \
-             "dayDownGainDarkBoostParam:1.4"; do
-    _k="${_kv%%:*}"; _val="${_kv#*:}"
-    grep -q "\"$_k\"" "$_cf" && continue   # already present -> leave to patch fn
-    # insert after the sunsetBrightScale line, matching indentation, with comma
-    sedi "/\"sunsetBrightScale\"/a\\
-${_ind}\"${_k}\": ${_val}," "$_cf"
-    _added=$((_added + 1))
-  done
-  return 0
-}
-
-asb_patch_camera_tone_aggr() {
-  # Apply the OPT-IN aggressive camera tone tweaks to a conf_tuning_params.json,
-  # gated by the WebUI CAMERA_AGGRESSIVE toggle. Each sed rewrites only the exact
-  # stock value, and only keys present on this device are touched — so OP13 (which
-  # ships a trimmed conf_tuning) gets the subset it has and OP12 (no conf_tuning)
-  # gets nothing. Small, reversible colour/tone shifts, a matter of taste:
-  #   sunsetSatScale 1.6/1.7 -> 1.4   less over-saturated sunset (more natural)
-  #   blueSatParam   0.95 -> 1.05     slightly richer blue sky
-  #   nightDownGainParam* 0.3 -> 0.4  lift night shadows a touch (more detail)
-  #   dayDownGainDarkBoostParam 1.3 -> 1.4  brighter daytime shadows
-  _cf="$1"; [ -f "$_cf" ] || return 0
-  sedi 's/\("sunsetSatScale": *\)1\.6/\11.4/g'            "$_cf"
-  sedi 's/\("sunsetSatScale": *\)1\.7/\11.4/g'            "$_cf"
-  sedi 's/\("blueSatParam": *\)0\.95/\11.05/g'            "$_cf"
-  sedi 's/\("nightDownGainParam": *\)0\.3/\10.4/g'        "$_cf"
-  sedi 's/\("nightDownGainParamHizoom": *\)0\.3/\10.4/g'  "$_cf"
-  sedi 's/\("nightDownGainParamFront": *\)0\.3/\10.4/g'   "$_cf"
-  sedi 's/\("dayDownGainDarkBoostParam": *\)1\.3/\11.4/g' "$_cf"
 }
 
 asb_guard_v4a_effects() {
@@ -1001,13 +947,19 @@ asb_patch_audio_inplace() {
   ui_print "[*] Mixer tune for $1 (portable OP15 sound)"
   ui_print "${SEPARATOR}"
 
-  asb_patch_audio_inplace_aggr_flag
-
   _n=0
   for _mx in $(find "$_adir" -type f -name "mixer_paths*.xml" 2>/dev/null); do
     asb_patch_one_mixer "$_mx"
     _n=$((_n + 1))
   done
+  # Save baselines (base tweaks, no aggressive) to the external store and reflect
+  # the current toggle state immediately; boot keeps it in sync afterwards.
+  if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
+    . "$MODPATH/runtime/asb_tweaks.sh"
+    asb_save_dynamic_baselines "$MODPATH"
+    asb_apply_dynamic_tweaks "$MODPATH"
+  fi
+  asb_patch_audio_inplace_aggr_flag
   if [ "$_ASB_AUDIO_AGGR" = "1" ]; then
     ui_print "    + tuned $_n mixer file(s): vol->88, flat EQ, Class-H DAC, +aggressive (compander off, HPH HIFI)"
   else
@@ -1279,31 +1231,16 @@ if [ "$ASB_IS_OP15" = "true" ]; then
   asb_patch_perf_inplace "OnePlus 15 (canoe)"
   asb_patch_location_inplace "OnePlus15"
   asb_patch_wifi_inplace "OnePlus 15 (canoe)"
-  # The shipped OP15 mixers already carry vol=88 / flat EQ / Class-H DAC. Apply
-  # only the opt-in aggressive layer (compander off, HPH HIFI) when the WebUI
-  # toggle is on — the stock-safe baseline is already baked into the overlay.
-  if [ "$ASB_AUDIO" = "true" ]; then
-    asb_patch_audio_inplace_aggr_flag
-    if [ "$_ASB_AUDIO_AGGR" = "1" ]; then
-      _n15=0
-      for _mx in $(find "$MODPATH/system/vendor/etc/audio" -type f -name "mixer_paths*.xml" 2>/dev/null); do
-        sedi 's/\(name="HPH[LR] Compander" value="\)1"/\10"/g' "$_mx"
-        sedi 's/\(name="RX HPH Mode" value="\)CLS_H_ULP"/\1CLS_H_HIFI"/g' "$_mx"
-        _n15=$((_n15 + 1))
-      done
-      ui_print "[*] OP15 aggressive audio applied to $_n15 mixer file(s): compander off, HPH HIFI"
-    fi
-  fi
-  # OP15 ships conf_tuning in system/; apply opt-in aggressive camera tone there.
-  if [ "$ASB_CAMERA" = "true" ]; then
-    asb_camera_aggr_flag
-    if [ "$_ASB_CAMERA_AGGR" = "1" ]; then
-      _ctf15="$MODPATH/system/vendor/odm/etc/camera/conf_tuning_params.json"
-      if [ -f "$_ctf15" ]; then
-        [ "$_ASB_CAMERA_INJECT" = "1" ] && asb_inject_camera_tone_keys "$_ctf15"
-        asb_patch_camera_tone_aggr "$_ctf15"
-        ui_print "[*] OP15 aggressive camera tone tweaks applied"
-      fi
+  # The shipped OP15 mixers already carry vol=88 / flat EQ / Class-H DAC, and
+  # the conf_tuning is in system/. Save baselines and apply the opt-in
+  # aggressive layers through the dynamic engine so the AUDIO_AGGRESSIVE /
+  # CAMERA_AGGRESSIVE / _INJECT toggles take effect on a plain reboot.
+  if [ "$ASB_AUDIO" = "true" ] || [ "$ASB_CAMERA" = "true" ]; then
+    if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
+      . "$MODPATH/runtime/asb_tweaks.sh"
+      asb_save_dynamic_baselines "$MODPATH"
+      asb_apply_dynamic_tweaks "$MODPATH"
+      ui_print "[*] OP15 aggressive audio/camera wired to boot-time toggles"
     fi
   fi
 elif [ "$ASB_IS_OP13" = "true" ]; then
