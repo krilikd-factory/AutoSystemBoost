@@ -1,0 +1,11 @@
+#!/system/bin/sh
+# ASB diagnostic launcher — mounted into /system/bin so it's on PATH.
+# Run from any root shell (Termux/adb) with just:  su -c asbdiag
+# Finds the module dir across KernelSU / APatch / Magisk roots.
+for _r in /data/adb/modules /data/adb/ap/modules /data/adb/ksu/modules; do
+  if [ -f "$_r/AutoSystemBoost/tools/asb_diag.sh" ]; then
+    exec /system/bin/sh "$_r/AutoSystemBoost/tools/asb_diag.sh" "$@"
+  fi
+done
+echo "asbdiag: AutoSystemBoost module not found (is it installed & enabled?)" >&2
+exit 1
