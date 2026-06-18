@@ -506,30 +506,57 @@ asb_apply_device_overlay() {
   rm -f  "$MODPATH/system/vendor/odm/etc/izat.conf" 2>/dev/null || true
 
   if [ -d "$MODPATH/$_ov" ]; then
-    # GPS overlay — gated by GPS category. We only write the /vendor/odm copy:
-    # KernelSU Next only runs "Handle partition /vendor" (it builds the partition
-    # list from what the zip ships, and the module ships only system/vendor), so
-    # a system/odm overlay created at install time never gets mounted into /odm.
+    # IMPORTANT (OP12 fix): OnePlus 12/13 have a SEPARATE real /odm partition,
+    # and the camera/GPS HAL reads /odm directly — not /vendor/odm. Earlier
+    # builds wrote only system/vendor/odm, leaving /odm stock; on OP12 that
+    # showed up as /odm vs /vendor/odm desync (camera crash, stale GPS). We now
+    # ALSO write the overlay into system/odm so KSU/Magisk mounts it into the
+    # real /odm partition (the manager builds its partition list from the dirs
+    # the module ships under system/, and creates an /odm mirror for exactly
+    # this). We keep the system/vendor/odm copy too, so whichever path the HAL
+    # reads is patched. _odm_targets maps a shipped overlay path to the system/
+    # destinations it must land in.
+    _odm_dups() {
+      # $1 = relative overlay path under the overlay dir. echoes the system/
+      # destination paths (space-separated) this file should be copied to.
+      case "$1" in
+        vendor/odm/*)
+          _sub="${1#vendor/odm/}"
+          echo "system/vendor/odm/$_sub system/odm/$_sub"
+          ;;
+        vendor/*)
+          echo "system/$1"
+          ;;
+        *)
+          echo "system/$1"
+          ;;
+      esac
+    }
+    # GPS overlay — gated by GPS category. Write every destination path.
     if [ "$ASB_GPS" = "true" ]; then
       for _f in vendor/etc/gps.conf vendor/odm/etc/gps.conf \
                 vendor/etc/izat.conf vendor/odm/etc/izat.conf; do
         if [ -f "$MODPATH/$_ov/$_f" ]; then
-          mkdir -p "$MODPATH/system/$(dirname "$_f")" 2>/dev/null
-          cp -f "$MODPATH/$_ov/$_f" "$MODPATH/system/$_f" 2>/dev/null \
-            && ui_print "    + GPS: $_f"
+          for _dst in $(_odm_dups "$_f"); do
+            mkdir -p "$MODPATH/$(dirname "$_dst")" 2>/dev/null
+            cp -f "$MODPATH/$_ov/$_f" "$MODPATH/$_dst" 2>/dev/null \
+              && ui_print "    + GPS: $_dst"
+          done
         fi
       done
     fi
-    # Camera/media overlay — gated by CAMERA category. Same /vendor-only reason.
+    # Camera/media overlay — gated by CAMERA category. Same dual-path write.
     if [ "$ASB_CAMERA" = "true" ]; then
       for _f in vendor/etc/media_profiles.xml \
                 vendor/odm/etc/camera/media_profiles.xml \
                 vendor/odm/etc/camera/conf_tuning_params.json \
                 vendor/odm/etc/camera/config/video_beauty_default_config; do
         if [ -f "$MODPATH/$_ov/$_f" ]; then
-          mkdir -p "$MODPATH/system/$(dirname "$_f")" 2>/dev/null
-          cp -f "$MODPATH/$_ov/$_f" "$MODPATH/system/$_f" 2>/dev/null \
-            && ui_print "    + Camera/media: $_f"
+          for _dst in $(_odm_dups "$_f"); do
+            mkdir -p "$MODPATH/$(dirname "$_dst")" 2>/dev/null
+            cp -f "$MODPATH/$_ov/$_f" "$MODPATH/$_dst" 2>/dev/null \
+              && ui_print "    + Camera/media: $_dst"
+          done
         fi
       done
       # Camera tone: baseline (stock conf_tuning) is saved here; the opt-in
@@ -2170,6 +2197,25 @@ MANIFEST_EOF
 # HAL crash loop -> BOOTLOOP (this bricked OnePlus 12). Strip V4A unless the
 # library exists. OnePlus 15 (which ships the lib) keeps it.
 asb_guard_v4a_effects
+
+# P1 hygiene: some stock video_beauty_default_config files carry a // line
+# comment (e.g. "// Sort by English alphabet"). The file is otherwise JSON and
+# a strict parser can choke on it. Strip whole-line // comments from every copy
+# the module ships, on all devices and both odm paths.
+for _vb in $(find "$MODPATH/system" -type f -name "video_beauty_default_config" 2>/dev/null); do
+  if grep -q '//' "$_vb" 2>/dev/null; then
+    _vbt="${_vb}.asbc$$"
+    if sed '/^[[:space:]]*\/\//d' "$_vb" > "$_vbt" 2>/dev/null; then
+      chmod --reference="$_vb" "$_vbt" 2>/dev/null || chmod 0644 "$_vbt" 2>/dev/null
+      _vbctx="$(ls -Z "$_vb" 2>/dev/null | awk '{print $1}')"
+      case "$_vbctx" in u:object_r:*) chcon "$_vbctx" "$_vbt" 2>/dev/null ;; esac
+      mv -f "$_vbt" "$_vb" 2>/dev/null || { cat "$_vbt" > "$_vb" 2>/dev/null; rm -f "$_vbt"; }
+      ui_print "    + Stripped // comment from ${_vb#$MODPATH/}"
+    else
+      rm -f "$_vbt" 2>/dev/null
+    fi
+  fi
+done
 
 asb_normalize_module_layout
 asb_end_banner
