@@ -27,8 +27,21 @@ asb_tw_sedi() {
   for _f in "$@"; do
     [ -f "$_f" ] || continue
     _t="${_f}.asbtw$$"
-    sed "$_e" "$_f" > "$_t" 2>/dev/null && cat "$_t" > "$_f" 2>/dev/null
-    rm -f "$_t" 2>/dev/null
+    # Write to a temp file, copy over the original's mode/owner/SELinux context,
+    # then atomically rename into place. An in-place "cat > file" leaves a window
+    # where a reader (e.g. the camera HAL) can see a truncated/half-written file
+    # and the file can lose its SELinux label — on devices whose camera HAL reads
+    # the config early at boot that surfaced as "storage loading / camera
+    # unavailable" on first launch. mv is atomic on the same filesystem.
+    if sed "$_e" "$_f" > "$_t" 2>/dev/null; then
+      chmod --reference="$_f" "$_t" 2>/dev/null || chmod 0644 "$_t" 2>/dev/null
+      chown --reference="$_f" "$_t" 2>/dev/null
+      _ctx="$(ls -Z "$_f" 2>/dev/null | awk '{print $1}')"
+      case "$_ctx" in u:object_r:*) chcon "$_ctx" "$_t" 2>/dev/null ;; esac
+      mv -f "$_t" "$_f" 2>/dev/null || { cat "$_t" > "$_f" 2>/dev/null; rm -f "$_t" 2>/dev/null; }
+    else
+      rm -f "$_t" 2>/dev/null
+    fi
   done
 }
 
@@ -100,7 +113,16 @@ asb_tw_restore_base() {
   _f="$1"
   _bp="$(asb_tw_base_path "$_f")"
   [ -f "$_bp" ] || return 1
-  cp -f "$_bp" "$_f" 2>/dev/null || true
+  _t="${_f}.asbrb$$"
+  if cat "$_bp" > "$_t" 2>/dev/null; then
+    chmod --reference="$_f" "$_t" 2>/dev/null || chmod 0644 "$_t" 2>/dev/null
+    chown --reference="$_f" "$_t" 2>/dev/null
+    _ctx="$(ls -Z "$_f" 2>/dev/null | awk '{print $1}')"
+    case "$_ctx" in u:object_r:*) chcon "$_ctx" "$_t" 2>/dev/null ;; esac
+    mv -f "$_t" "$_f" 2>/dev/null || { cp -f "$_bp" "$_f" 2>/dev/null; rm -f "$_t" 2>/dev/null; }
+  else
+    rm -f "$_t" 2>/dev/null; cp -f "$_bp" "$_f" 2>/dev/null || true
+  fi
   return 0
 }
 
@@ -122,14 +144,26 @@ asb_apply_dynamic_tweaks() {
     [ "$_audio_aggr" = "1" ] && asb_tw_aggr_audio "$_mx"
   done
 
-  # --- CAMERA conf_tuning ---
-  _cf="$_md/system/vendor/odm/etc/camera/conf_tuning_params.json"
-  if asb_tw_restore_base "$_cf"; then
+  # --- CAMERA conf_tuning --- patch BOTH the /vendor/odm and the direct /odm
+  # copy (OP12/OP13 ship both; the HAL may read either partition).
+  for _cf in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
+             "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
+    asb_tw_restore_base "$_cf" || continue
     if [ "$_cam_aggr" = "1" ]; then
       [ "$_cam_inject" = "1" ] && asb_tw_inject_camera "$_cf"
       asb_tw_aggr_camera "$_cf"
+      # Safety net: if the patched conf is no longer well-formed (unbalanced
+      # braces — a cheap structural check that needs no JSON parser on device),
+      # revert to the baseline so the camera HAL never sees a broken file.
+      if [ -f "$_cf" ]; then
+        _ob="$(tr -cd '{' < "$_cf" 2>/dev/null | wc -c)"
+        _cb="$(tr -cd '}' < "$_cf" 2>/dev/null | wc -c)"
+        if [ "$_ob" != "$_cb" ] || [ "${_ob:-0}" = "0" ]; then
+          asb_tw_restore_base "$_cf"
+        fi
+      fi
     fi
-  fi
+  done
 }
 
 # Install-time entry: (re)save baselines for every affected file. Forces an
@@ -142,4 +176,5 @@ asb_save_dynamic_baselines() {
     asb_tw_save_base "$_mx" force
   done
   asb_tw_save_base "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" force
+  asb_tw_save_base "$_md/system/odm/etc/camera/conf_tuning_params.json" force
 }
