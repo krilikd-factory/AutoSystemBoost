@@ -207,7 +207,6 @@ persist.vendor.camera.picturesize.limit.enable=false
 persist.vendor.camera.preview.ubwc=1
 persist.vendor.camera.snapshot.disable=0
 persist.vendor.camera.ubwc=1
-persist.vendor.camera.video.4k60.eis.enable=1
 persist.vendor.camera.video.ubwc=1
 ro.camera.disableJpegR=false
 ro.camera.enableCompositeAPI0JpegR=true

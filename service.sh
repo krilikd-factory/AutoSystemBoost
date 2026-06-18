@@ -1169,13 +1169,23 @@ apply_camera_runtime() {
   asb_persist_safe persist.camera.tnr.preview 1
   asb_persist_safe persist.camera.tnr.video 1
   asb_persist_safe persist.vendor.camera.hdr.enable 1
-  asb_persist_safe persist.vendor.camera.video.hdr.enable 1
   asb_persist_safe persist.vendor.camera.eis.enable 1
-  asb_persist_safe persist.vendor.camera.video.4k60.eis.enable 1
-  if has resetprop; then
-    resetprop -n ro.vendor.oplus.camera.isSupportExplorer 1 >/dev/null 2>&1 || true
-    resetprop -n ro.vendor.oplus.camera.isHasselbladCamera 1 >/dev/null 2>&1 || true
-  fi
+  # OP15 (canoe) ONLY: video HDR, 4K60 EIS, Hasselblad/Explorer are OnePlus 15
+  # camera-HAL features. Forcing them on OP13/OP12 (which have no such pipeline)
+  # can make the camera HAL try to load a non-existent path and crash the
+  # camera app — observed on OP12. Gate them strictly to the canoe platform.
+  _cam_soc="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_cam_soc" ] && _cam_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
+  case "$_cam_soc" in
+    canoe|sm8850*)
+      asb_persist_safe persist.vendor.camera.video.hdr.enable 1
+      asb_persist_safe persist.vendor.camera.video.4k60.eis.enable 1
+      if has resetprop; then
+        resetprop -n ro.vendor.oplus.camera.isSupportExplorer 1 >/dev/null 2>&1 || true
+        resetprop -n ro.vendor.oplus.camera.isHasselbladCamera 1 >/dev/null 2>&1 || true
+      fi
+      ;;
+  esac
 }
 asb_feature_enabled CAMERA && apply_camera_runtime
 tune_io_queues() {
