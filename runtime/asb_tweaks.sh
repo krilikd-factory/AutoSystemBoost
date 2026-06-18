@@ -56,7 +56,10 @@ asb_tw_flag() {
   _k="$1"; _conf="$2"
   [ -f "$_conf" ] || { echo 0; return; }
   _v="$(grep -E "^[[:space:]]*${_k}=" "$_conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
-  case "$_v" in 1) echo 1 ;; *) echo 0 ;; esac
+  # Accept both the bool form (1) and the segmented form (aggressive/on) that
+  # the WebUI now writes for some toggles, e.g. CAMERA_AGGRESSIVE_INJECT which
+  # stores safe|aggressive. "aggressive" and "on" both mean enabled.
+  case "$_v" in 1|on|aggressive) echo 1 ;; *) echo 0 ;; esac
 }
 
 # --- aggressive AUDIO layer (one mixer file) ---
