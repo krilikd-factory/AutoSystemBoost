@@ -6,7 +6,21 @@ REPLACE="
 "
 
 set_permissions() {
-  :
+  # The template's set_perm_recursive makes every file 0644 (non-exec), then
+  # explicitly re-marks the known launchers 0755. system/bin/asbdiag and the
+  # tools/*.sh diagnostics aren't in that built-in list, so mark them here or
+  # `su -c asbdiag` fails with "Permission denied". Give the wrapper the proper
+  # system_file context so it can be exec'd from a plain root shell.
+  if [ -f "$MODPATH/system/bin/asbdiag" ]; then
+    set_perm "$MODPATH/system/bin/asbdiag" 0 0 0755 u:object_r:system_file:s0 2>/dev/null \
+      || set_perm "$MODPATH/system/bin/asbdiag" 0 0 0755 2>/dev/null || true
+  fi
+  if [ -f "$MODPATH/system/bin/asb" ]; then
+    set_perm "$MODPATH/system/bin/asb" 0 0 0755 u:object_r:system_file:s0 2>/dev/null \
+      || set_perm "$MODPATH/system/bin/asb" 0 0 0755 2>/dev/null || true
+  fi
+  [ -f "$MODPATH/tools/asb_diag.sh" ] && set_perm "$MODPATH/tools/asb_diag.sh" 0 0 0755 2>/dev/null || true
+  [ -f "$MODPATH/tools/asb_verify_device.sh" ] && set_perm "$MODPATH/tools/asb_verify_device.sh" 0 0 0755 2>/dev/null || true
 }
 
 SKIPUNZIP=1
