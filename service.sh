@@ -1270,7 +1270,7 @@ apply_camera_props_static() {
         resetprop -p --delete vendor.camera.algo.jpeghwencode >/dev/null 2>&1 || true
         resetprop -p --delete vendor.camera.picturesize.limit.enable >/dev/null 2>&1 || true
       fi
-      asb_log "camera props: pineapple/OP12 -> stripped (HAL-safe diet)"
+      asb_log "camera category: pineapple/OP12 -> fully disabled (files + props), HAL-safe"
       return 0 ;;
   esac
   has resetprop || return 0
