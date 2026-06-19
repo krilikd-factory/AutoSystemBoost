@@ -310,8 +310,13 @@ asb_drift_check() {
         _cap_b=1881600
         ;;
       battery)
-        _cap_l=729600
-        _cap_b=1075200
+        # Screen-ON battery caps. The old 729600/1075200 made the UI lag badly
+        # (users reported heavy jank in battery, and near-unusable below ~25%).
+        # Raise the screen-on floor so interactive work stays smooth — this is
+        # still far below the per-cluster max so it keeps saving power; the
+        # bigger savings come screen-OFF (handled in the else branch below).
+        _cap_l=1132800
+        _cap_b=1612800
         ;;
       performance)
         _cap_l="${CPU_CAP_LITTLE:-}"
@@ -1541,24 +1546,49 @@ apply_gpu_caps() {
   [ -n "$_gmin" ] && writef_retry "$_gbase/min_freq" "$_gmin" 3 0.25 || true
 }
 apply_cpufreq_caps() {
-  for _pol_dir in /sys/devices/system/cpu/cpufreq/policy*; do
+  # Topology-aware capping. 2-cluster SoCs (OP15 canoe, OP13 sun) map cleanly to
+  # LITTLE/BIG. OP12 (pineapple, SM8650) is a 4-cluster part (policy0 little +
+  # policy2 ×3 mid + policy5 ×2 perf + policy7 ×2 prime); policy2 is the main
+  # UI/app workhorse. The old 2-tier model treated every policy above policy0 as
+  # "BIG" and, in battery, capped them all to the BIG cap (~1.07 GHz screen-on),
+  # crippling the mid cluster and making OP12 lag. With 3+ clusters we treat the
+  # MIDDLE cluster(s) — neither policy0 nor the top/prime policy — as a MID tier
+  # with a higher cap so the workhorse stays responsive while the prime cluster
+  # still saves power.
+  _pol_list="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n)"
+  _pol_count="$(echo "$_pol_list" | grep -c .)"
+  _top_pol="$(echo "$_pol_list" | tail -1)"
+  _top_rel=0
+  if [ -n "$_top_pol" ]; then
+    _top_rel="$(cat "$_top_pol/related_cpus" 2>/dev/null | awk '{print $1}')"
+    case "$_top_rel" in ''|*[!0-9]*) _top_rel=0 ;; esac
+  fi
+  for _pol_dir in $_pol_list; do
     [ -d "$_pol_dir" ] || continue
     _smax="$_pol_dir/scaling_max_freq"
     [ -w "$_smax" ] || continue
     _rel="$(cat "$_pol_dir/related_cpus" 2>/dev/null | awk '{print $1}')"
     case "$_rel" in ''|*[!0-9]*) _rel=0 ;; esac
+    _is_mid=0
+    if [ "$_pol_count" -ge 3 ] && [ "$_rel" -gt "$little_end" ] && [ "$_rel" -lt "$_top_rel" ]; then
+      _is_mid=1
+    fi
+    # _P_CPUCAP_* are PERCENTS of this cluster's cpuinfo_max_freq (empty = no cap).
     if [ "$_rel" -le "$little_end" ]; then
       _pct="$_P_CPUCAP_L"
     else
       _pct="$_P_CPUCAP_B"
     fi
-    if [ "$_rel" -le "$little_end" ]; then
-      _abs="$_P_CPU_MAXL"
-    else
-      _abs="$_P_CPU_MAXB"
+    if [ "$_is_mid" = "1" ] && [ -n "$_P_CPUCAP_L" ] && [ -n "$_P_CPUCAP_B" ]; then
+      # MID cluster (the OP12 policy2 workhorse): cap halfway between the LITTLE
+      # percent and 100%, so it keeps real headroom in battery while the prime
+      # cluster stays at the lower BIG percent. e.g. LITTLE 55% -> MID ~77%.
+      _hi="$_P_CPUCAP_L"; [ "$_P_CPUCAP_B" -gt "$_hi" ] 2>/dev/null && _hi="$_P_CPUCAP_B"
+      _pct="$(( _hi + (100 - _hi) / 2 ))"
     fi
-    if [ -n "$_abs" ]; then
-      _want="$_abs"
+    if [ -z "$_pct" ]; then
+      # no cap for this tier — restore the cluster's full hardware ceiling.
+      _want="$(cat "$_pol_dir/cpuinfo_max_freq" 2>/dev/null)"
     elif [ "$_pct" -ge 100 ] 2>/dev/null; then
       _want="$(cat "$_pol_dir/cpuinfo_max_freq" 2>/dev/null)"
     else
@@ -1593,36 +1623,38 @@ apply_screen_aware_caps() {
   asb_load_profile
   _son=0
   asb_screen_on && _son=1
+  # Caps are expressed as a PERCENT of each cluster's own cpuinfo_max_freq, not
+  # absolute kHz. The three targets have very different ceilings (OP12 prime
+  # ~3.3 GHz, OP13 ~?, OP15 prime 4.6 GHz), so a single absolute value either
+  # crippled the fast device (OP15 prime was pinned near 1.6 GHz) or barely
+  # capped the slow one. Percentages auto-scale: apply_cpufreq_caps already
+  # snaps "<100" values to the nearest available frequency per cluster.
+  _P_CPUCAP_L=""; _P_CPUCAP_B=""
+  CPU_CAP_LITTLE=""; CPU_CAP_BIG=""
   case "$ASB_PROFILE" in
     balanced)
       if [ "$_son" -eq 1 ]; then
-        _P_CPUCAP_L=""
-        _P_CPUCAP_B=""
-        CPU_CAP_LITTLE=""
-        CPU_CAP_BIG=""
+        # screen-on: let the scheduler use the full range; balance comes from
+        # the WALT/uclamp tuning, not a hard cap.
+        _P_CPUCAP_L=""; _P_CPUCAP_B=""
+      else
+        # screen-off: trim to keep background work cheap.
+        _P_CPUCAP_L=55; _P_CPUCAP_B=45
       fi
       ;;
     battery)
       if [ "$_son" -eq 1 ]; then
-        CPU_CAP_LITTLE=729600
-        CPU_CAP_BIG=1075200
+        # screen-on: enough headroom to stay smooth (≈55% little / ≈40% big);
+        # on a 4-cluster SoC apply_cpufreq_caps lifts the mid workhorse further.
+        _P_CPUCAP_L=55; _P_CPUCAP_B=40
       else
-        CPU_CAP_LITTLE=384000
-        CPU_CAP_BIG=768000
+        # screen-off: aggressive savings.
+        _P_CPUCAP_L=35; _P_CPUCAP_B=25
       fi
-      _P_CPUCAP_L="$CPU_CAP_LITTLE"
-      _P_CPUCAP_B="$CPU_CAP_BIG"
       ;;
     performance)
-      if [ "$_son" -eq 1 ]; then
-        CPU_CAP_LITTLE="$CPU_CAP_LITTLE"
-        CPU_CAP_BIG="$CPU_CAP_BIG"
-      else
-        CPU_CAP_LITTLE=""
-        CPU_CAP_BIG=""
-      fi
-      _P_CPUCAP_L="${CPU_CAP_LITTLE:-}"
-      _P_CPUCAP_B="${CPU_CAP_BIG:-}"
+      # never cap performance: full hardware range on every cluster.
+      _P_CPUCAP_L=""; _P_CPUCAP_B=""
       ;;
     *)
       return 0

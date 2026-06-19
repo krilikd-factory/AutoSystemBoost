@@ -19,6 +19,16 @@ for _part in vendor odm product system_ext my_product mi_ext; do
   [ -d "$_root" ] || continue
   # Fold any file not already present under system/<part>; leave the dir for KSU.
   for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
+    # NEVER fold camera tuning or media_profiles into system/odm (or any part).
+    # On OP12 (pineapple) the vendor multicamera HAL SIGABRTs
+    # (ChiMcxRoiTranslator::Initialize) when an OP15-shaped camera env appears on
+    # the real /odm partition. The camera/media overlay is placed deliberately
+    # at install time into system/vendor/odm only; re-materialising it here from
+    # a root odm/ dir at every boot would re-create exactly that crashing mirror.
+    case "$_f" in
+      */etc/camera/*|*/etc/media_profiles*.xml|etc/camera/*|etc/media_profiles*.xml)
+        continue ;;
+    esac
     _t="$MODDIR/system/$_part/$_f"
     if [ ! -f "$_t" ]; then
       mkdir -p "$(dirname "$_t")" 2>/dev/null
@@ -26,6 +36,10 @@ for _part in vendor odm product system_ext my_product mi_ext; do
     fi
   done
 done
+# Belt-and-braces: if any earlier boot (or an old build) already folded a camera
+# mirror into system/odm, scrub it so the multicamera HAL never sees it on /odm.
+rm -rf "$MODDIR/system/odm/etc/camera" 2>/dev/null || true
+rm -f  "$MODDIR/system/odm/etc/media_profiles"*.xml 2>/dev/null || true
 
 # Clean up a phantom /data/adb/magisk/busybox symlink that earlier builds
 # created on KernelSU systems (where /data/adb/magisk should not exist).
