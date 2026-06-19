@@ -321,13 +321,59 @@ fi
 
 # =====================================================================
 SEC "7. PERFORMANCE / CPU / GPU"
-P "  CPU policies (max freq):"
-for _pol in /sys/devices/system/cpu/cpufreq/policy*/scaling_max_freq; do
-  [ -f "$_pol" ] || continue
-  _cl=$(echo "$_pol" | grep -oE 'policy[0-9]+')
-  P "    $_cl: $(cat "$_pol" 2>/dev/null) (gov $(cat $(dirname "$_pol")/scaling_governor 2>/dev/null))"
+P "  CPU policies (scaling max vs hardware max — shows how hard each cluster is capped):"
+# Work out the topology so we can label little / mid / prime, matching the
+# governor's own classification (first policy = little, last = prime, anything
+# between on a 3+ cluster part = mid workhorse).
+_pol_dirs="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n)"
+_npol="$(echo "$_pol_dirs" | grep -c .)"
+_first_pol="$(echo "$_pol_dirs" | head -1)"
+_last_pol="$(echo "$_pol_dirs" | tail -1)"
+for _pol in $_pol_dirs; do
+  [ -d "$_pol" ] || continue
+  _cl=$(basename "$_pol")
+  _smax=$(cat "$_pol/scaling_max_freq" 2>/dev/null)
+  _hmax=$(cat "$_pol/cpuinfo_max_freq" 2>/dev/null)
+  _gov=$(cat "$_pol/scaling_governor" 2>/dev/null)
+  _pctmax="?"
+  if [ -n "$_smax" ] && [ -n "$_hmax" ] && [ "$_hmax" -gt 0 ] 2>/dev/null; then
+    _pctmax=$(( _smax * 100 / _hmax ))
+  fi
+  _tier="big/prime"
+  if [ "$_pol" = "$_first_pol" ]; then
+    _tier="little"
+  elif [ "$_pol" = "$_last_pol" ]; then
+    _tier="prime"
+  elif [ "$_npol" -ge 3 ]; then
+    _tier="mid"
+  fi
+  P "    $_cl ($_tier): max=${_smax}/${_hmax} kHz (${_pctmax}% of hw) gov=$_gov"
 done
 P "  GPU: $(cat /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null || echo n/a)  max_pwrlevel=$(cat /sys/class/kgsl/kgsl-3d0/max_pwrlevel 2>/dev/null)"
+NOTE "tier shows the governor's cluster role; %-of-hw shows the active cap. In"
+NOTE "performance every cluster should read ~100%; in battery the prime cluster"
+NOTE "is capped low while little/mid keep enough headroom to stay smooth."
+# Profile-aware sanity: confirm the active profile produced sensible caps for
+# THIS device (the caps are percentages of each cluster's own max, so this works
+# across OP12/13/15 without hardcoded kHz). performance must not be throttled;
+# battery must actually cap the prime cluster.
+_prof_now="$(cat "$MODDIR/current_profile" 2>/dev/null || gp persist.asb.profile)"
+_prime_smax=$(cat "$_last_pol/scaling_max_freq" 2>/dev/null)
+_prime_hmax=$(cat "$_last_pol/cpuinfo_max_freq" 2>/dev/null)
+_prime_pct="?"
+if [ -n "$_prime_smax" ] && [ -n "$_prime_hmax" ] && [ "$_prime_hmax" -gt 0 ] 2>/dev/null; then
+  _prime_pct=$(( _prime_smax * 100 / _prime_hmax ))
+fi
+case "$_prof_now" in
+  performance)
+    V "performance: prime cluster near full speed (>=90% of hw)" "1" \
+      "$([ "$_prime_pct" != "?" ] && [ "$_prime_pct" -ge 90 ] 2>/dev/null && echo 1 || echo 0)" eq ;;
+  battery)
+    V "battery: prime cluster actually capped (<=70% of hw)" "1" \
+      "$([ "$_prime_pct" != "?" ] && [ "$_prime_pct" -le 70 ] 2>/dev/null && echo 1 || echo 0)" eq ;;
+  *)
+    NOTE "profile=$_prof_now -> prime cluster at ${_prime_pct}% of hw (balanced/smart vary by load)" ;;
+esac
 # cool gaming
 _cool="$(cfg cool_gaming)"; NOTE "cool_gaming toggle = ${_cool:-0}"
 QAPE="$(firstf '/vendor/etc/perf/qapegameconfig.txt' '/odm/etc/perf/qapegameconfig.txt')"
