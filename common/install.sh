@@ -1418,17 +1418,28 @@ asb_apply_bt_absvol() {
   [ -f "$_prop" ] || return 0
   _mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
   [ -n "$_mode" ] || _mode="auto"
+  if [ "$_mode" = "auto" ]; then
+    # AUTO = hands-off. Strip our absolute-volume / AVRCP-override props from
+    # system.prop so we don't force values on every boot (which desyncs BT
+    # volume until an audio restart, e.g. opening ViPER). None of these exist
+    # in OP12 stock, and forcing newavrcp changes volume negotiation. The stock
+    # BT stack keeps its own behavior.
+    sed -i '/^persist\.bluetooth\.disableabsvol=/d' "$_prop" 2>/dev/null
+    sed -i '/^persist\.vendor\.bluetooth\.disableabsvol=/d' "$_prop" 2>/dev/null
+    sed -i '/^persist\.bluetooth\.enablenewavrcp=/d' "$_prop" 2>/dev/null
+    ASB_BT_ABSVOL_APPLIED="mode=auto (absolute-volume + avrcp left stock)"
+    return 0
+  fi
   case "$_mode" in
     on)  _val="true" ;;
     off) _val="false" ;;
-    auto|*) _val="false" ;;   # auto currently maps to off (safe default)
+    *)   _val="false" ;;
   esac
   # Only the BT block ships these props; rewrite both to the chosen value.
   sed -i "s/^persist.bluetooth.disableabsvol=.*/persist.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
   sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
   ASB_BT_ABSVOL_APPLIED="mode=$_mode disableabsvol=$_val"
-  # Only announce when the user picked a non-default mode (auto is silent).
-  [ "$_mode" = "auto" ] || ui_print "[*] BT volume mode: $_mode"
+  ui_print "[*] BT volume mode: $_mode"
 }
 [ "$ASB_BT" = "true" ] && asb_apply_bt_absvol
 
