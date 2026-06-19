@@ -1345,6 +1345,25 @@ elif [ "$ASB_IS_OP12" = "true" ]; then
   # "hard camera-off" path plus the system/odm mirror were themselves the
   # regression that SIGABRTed the multicamera HAL. OP12 camera is back to the
   # proven working path (overlay to system/vendor/odm only, no /odm mirror).
+  #
+  # UPGRADE PATH FIX: a user coming FROM a regressed build still has that build's
+  # system/odm/etc/camera mirror in the previous install dir, which the manager
+  # may keep mounted into the real /odm until reboot — so the camera kept
+  # crashing even after installing the corrected module. Scrub the camera/media
+  # mirror out of the previous install (and our own staging, belt-and-braces) so
+  # nothing re-mounts the OP15-shaped multicamera env into /odm on OP12.
+  for _stale in \
+      "$NVBASE/modules/$MODID/system/odm/etc/camera" \
+      "$NVBASE/modules_update/$MODID/system/odm/etc/camera" \
+      "$MODPATH/system/odm/etc/camera"; do
+    [ -e "$_stale" ] && rm -rf "$_stale" 2>/dev/null || true
+  done
+  for _stalemp in \
+      "$NVBASE/modules/$MODID/system/odm/etc/media_profiles"*.xml \
+      "$NVBASE/modules_update/$MODID/system/odm/etc/media_profiles"*.xml; do
+    [ -e "$_stalemp" ] && rm -f "$_stalemp" 2>/dev/null || true
+  done
+  ui_print "[*] OP12: camera overlay -> system/vendor/odm only (no /odm mirror)"
   asb_clone_device_audio_wifi "OnePlus 12 (pineapple / cliffs)"
   asb_patch_audio_inplace "OnePlus 12 (pineapple / cliffs)"
   asb_patch_perf_inplace "OnePlus 12 (pineapple / cliffs)"
