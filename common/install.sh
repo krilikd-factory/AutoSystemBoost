@@ -1299,6 +1299,38 @@ if [ "$ASB_IS_OP15" = "true" ]; then
   ui_print "${SEPARATOR}"
 fi
 asb_prune_module
+asb_op12_camera_off() {
+  # OP12 (pineapple/SM8650) HARD camera-off. The vendor multicamera HAL
+  # (ChiMcxRoiTranslator / ChiMulticameraBase) SIGABRTs during configure_streams
+  # when it sees ANY non-stock camera/media environment - even syntactically
+  # valid, prop-clean overlays. Confirmed by the APatch crash log. So OP12 gets
+  # the stock camera environment, full stop: no camera dir, no media_profiles,
+  # in EVERY location the manager might mount, including root-level paths the
+  # system/-only cleanup missed and that APatch in particular can still mount.
+  for _cdir in \
+      "$MODPATH/system/vendor/odm/etc/camera" \
+      "$MODPATH/system/odm/etc/camera" \
+      "$MODPATH/system/vendor/etc/camera" \
+      "$MODPATH/vendor/odm/etc/camera" \
+      "$MODPATH/odm/etc/camera" \
+      "$MODPATH/vendor/etc/camera"; do
+    rm -rf "$_cdir" 2>/dev/null || true
+  done
+  rm -f "$MODPATH/system/vendor/etc/media_profiles"*.xml 2>/dev/null || true
+  rm -f "$MODPATH/system/vendor/odm/etc/media_profiles"*.xml 2>/dev/null || true
+  rm -f "$MODPATH/system/odm/etc/media_profiles"*.xml 2>/dev/null || true
+  rm -f "$MODPATH/vendor/etc/media_profiles"*.xml 2>/dev/null || true
+  rm -f "$MODPATH/vendor/odm/etc/media_profiles"*.xml 2>/dev/null || true
+  rm -f "$MODPATH/odm/etc/media_profiles"*.xml 2>/dev/null || true
+  rm -rf "$MODPATH/op12_overlay/vendor/odm/etc/camera" 2>/dev/null || true
+  rm -f  "$MODPATH/op12_overlay/vendor/odm/etc/media_profiles"*.xml 2>/dev/null || true
+  rm -f  "$MODPATH/op12_overlay/vendor/etc/media_profiles"*.xml 2>/dev/null || true
+  rm -rf /data/adb/asb/tweak_base/*camera* 2>/dev/null || true
+  rm -f  "$MODPATH/config/camera_orig.conf" 2>/dev/null || true
+  ASB_CAMERA="false"
+  ui_print "[*] OP12: camera category fully disabled (stock camera, HAL-safe)"
+}
+
 if [ "$ASB_IS_OP15" = "true" ]; then
   # OP15: keep the hand-tuned audio/wifi overlay (irreproducible by sed), but
   # run perf + location the same dynamic in-place way as OP13/OP12 so those
@@ -1327,6 +1359,7 @@ elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_patch_wifi_inplace "OnePlus 13 (sun / tuna / kera)"
 elif [ "$ASB_IS_OP12" = "true" ]; then
   asb_apply_device_overlay op12_overlay "OnePlus 12 (CPH2581 / SM8650 'pineapple')"
+  asb_op12_camera_off
   asb_clone_device_audio_wifi "OnePlus 12 (pineapple / cliffs)"
   asb_patch_audio_inplace "OnePlus 12 (pineapple / cliffs)"
   asb_patch_perf_inplace "OnePlus 12 (pineapple / cliffs)"
