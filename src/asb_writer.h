@@ -32,6 +32,13 @@ static inline int sysfs_write_long(const char *path, long val) {
 
 static char g_cpu_max_paths[3][128];
 static char g_cpu_min_paths[3][128];
+/* Per-physical-cluster paths (OP12 = 4). Each entry knows which slot's cap to
+ * use, so every cluster is governed even when there are more clusters than the
+ * 3 logical slots. */
+static char g_cpu_all_max_paths[16][128];
+static char g_cpu_all_min_paths[16][128];
+static int  g_cpu_all_paths_slot[16];
+static int  g_cpu_all_paths_n = 0;
 static int  g_writer_paths_ready = 0;
 
 static void writer_init_paths(void) {
@@ -48,6 +55,23 @@ static void writer_init_paths(void) {
         } else {
             g_cpu_max_paths[i][0] = '\0';
             g_cpu_min_paths[i][0] = '\0';
+        }
+    }
+    /* Build the full per-cluster path list (falls back to the 3 slots if the
+     * discover step didn't populate the all-list, e.g. 1-cluster oddities). */
+    g_cpu_all_paths_n = 0;
+    if (g_cpu_all_count > 0) {
+        for (int i = 0; i < g_cpu_all_count && g_cpu_all_paths_n < 16; i++) {
+            snprintf(g_cpu_all_max_paths[g_cpu_all_paths_n],
+                sizeof(g_cpu_all_max_paths[g_cpu_all_paths_n]),
+                "/sys/devices/system/cpu/cpufreq/policy%d/scaling_max_freq",
+                g_cpu_all_ids[i]);
+            snprintf(g_cpu_all_min_paths[g_cpu_all_paths_n],
+                sizeof(g_cpu_all_min_paths[g_cpu_all_paths_n]),
+                "/sys/devices/system/cpu/cpufreq/policy%d/scaling_min_freq",
+                g_cpu_all_ids[i]);
+            g_cpu_all_paths_slot[g_cpu_all_paths_n] = g_cpu_all_slot[i];
+            g_cpu_all_paths_n++;
         }
     }
     g_writer_paths_ready = 1;
@@ -489,6 +513,27 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             }
         }
     }
+    /* EXTRA CLUSTERS: on SoCs with more physical clusters than logical slots
+     * (OP12 pineapple: 4 policies vs 3 slots), apply each slot's max-cap to
+     * every physical cluster that belongs to that slot but isn't one of the 3
+     * representative paths above. Without this, OP12's second big cluster
+     * (policy2 or policy5 — whichever wasn't picked as the slot-1 rep) keeps
+     * the stock/pinned max and the phone stays sluggish in battery mode. */
+    for (int j = 0; j < g_cpu_all_paths_n; j++) {
+        if (!g_cpu_all_max_paths[j][0]) continue;
+        int slot = g_cpu_all_paths_slot[j];
+        if (slot < 0 || slot > 2) continue;
+        /* skip the 3 representative paths — already handled above */
+        if (g_cpu_max_paths[slot][0] &&
+            strcmp(g_cpu_all_max_paths[j], g_cpu_max_paths[slot]) == 0) continue;
+        int target = caps->cpu_max[slot];
+        if (target <= 0) continue;
+        int cur = sysfs_read_int(g_cpu_all_max_paths[j], 0);
+        if (force || cur != target) {
+            if (sysfs_write_int(g_cpu_all_max_paths[j], target) == 0)
+                writes++;
+        }
+    }
     if (!thermal_cap) {
         for (int i = 0; i < 3; i++) {
             if (!g_cpu_min_paths[i][0]) continue;
@@ -502,6 +547,22 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                     g_wcache.cpu_min[i] = want_min;
                     writes++;
                 }
+            }
+        }
+        /* EXTRA CLUSTERS min-freq: same idea for the min cap. */
+        for (int j = 0; j < g_cpu_all_paths_n; j++) {
+            if (!g_cpu_all_min_paths[j][0]) continue;
+            int slot = g_cpu_all_paths_slot[j];
+            if (slot < 0 || slot > 2) continue;
+            if (g_cpu_min_paths[slot][0] &&
+                strcmp(g_cpu_all_min_paths[j], g_cpu_min_paths[slot]) == 0) continue;
+            int want_min = caps->cpu_min[slot];
+            if (want_min <= 0) continue;
+            int cur_max = sysfs_read_int(g_cpu_all_max_paths[j], 0);
+            if (cur_max > 0 && want_min > cur_max) want_min = cur_max;
+            if (force || sysfs_read_int(g_cpu_all_min_paths[j], 0) != want_min) {
+                if (sysfs_write_int(g_cpu_all_min_paths[j], want_min) == 0)
+                    writes++;
             }
         }
     }

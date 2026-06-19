@@ -275,25 +275,103 @@ static void metrics_read_gpu(asb_gpu_t *g) {
 }
 
 static int g_cpu_policy_ids[3]   = {0, 6, -1};
+/* Every physical cpufreq policy id discovered (OP12 has 4: 0,2,5,7), plus the
+ * slot (0=little,1=big,2=prime) each one is governed by. Lets the writer apply
+ * a slot's cap to ALL clusters that belong to it, not just the representative
+ * one — without this, OP12's second big cluster (policy2 or policy5) stays
+ * unmanaged and pinned low in battery mode. */
+static int g_cpu_all_ids[16];
+static int g_cpu_all_slot[16];
+static int g_cpu_all_count = 0;
 static int g_cpu_policy_count    = 0;
 
 static void cpu_topology_discover(void) {
     if (g_cpu_policy_count > 0) return;
 
-    int fd6 = open("/sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq",
-                   O_RDONLY | O_CLOEXEC);
-    if (fd6 >= 0) {
-        close(fd6);
+    /* Dynamically enumerate the real cpufreq policies instead of assuming a
+     * fixed layout. SoCs differ: OP15 canoe / OP13 sun expose policy0+policy6
+     * (a 6+2), but OP12 pineapple (SM8650) exposes FOUR policies
+     * policy0/2/5/7 (1+3+2+1). The old code only knew policy6 (->{0,6}) or a
+     * {0,4,7} fallback — neither matches OP12, so its big clusters policy2 and
+     * policy5 were never managed and stayed pinned near their minimum in the
+     * battery profile, which is exactly the "phone is unusable in battery
+     * mode" sluggishness. We now scan policy0..policy15 and record up to 3
+     * representative slots: the first (little), the last (prime), and the
+     * widest-range middle cluster, so the governor's 2-3 slot model maps onto
+     * whatever the hardware actually has. */
+    int found[16]; int nf = 0;
+    for (int p = 0; p < 16 && nf < 16; p++) {
+        char path[128];
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpufreq/policy%d/scaling_max_freq", p);
+        int fd = open(path, O_RDONLY | O_CLOEXEC);
+        if (fd >= 0) { close(fd); found[nf++] = p; }
+    }
+
+    if (nf <= 0) {
+        /* nothing found — keep the old safe default */
         g_cpu_policy_ids[0] = 0;
         g_cpu_policy_ids[1] = 6;
         g_cpu_policy_ids[2] = -1;
         g_cpu_policy_count  = 2;
         return;
     }
-    g_cpu_policy_ids[0] = 0;
-    g_cpu_policy_ids[1] = 4;
-    g_cpu_policy_ids[2] = 7;
+    if (nf == 1) {
+        g_cpu_policy_ids[0] = found[0];
+        g_cpu_policy_ids[1] = -1;
+        g_cpu_policy_ids[2] = -1;
+        g_cpu_policy_count  = 1;
+        return;
+    }
+    if (nf == 2) {
+        g_cpu_policy_ids[0] = found[0];
+        g_cpu_policy_ids[1] = found[1];
+        g_cpu_policy_ids[2] = -1;
+        g_cpu_policy_count  = 2;
+        g_cpu_all_ids[0] = found[0]; g_cpu_all_slot[0] = 0;
+        g_cpu_all_ids[1] = found[1]; g_cpu_all_slot[1] = 1;
+        g_cpu_all_count = 2;
+        return;
+    }
+    /* 3+ clusters (OP12 has 4): map slot0=little(first), slot2=prime(last),
+     * slot1=the strongest middle cluster (highest cpuinfo_max_freq among the
+     * middles) so the "big" slot tracks the cluster that actually carries the
+     * interactive load. This keeps every physical cluster represented by one
+     * of the three managed slots. */
+    int first = found[0];
+    int last  = found[nf - 1];
+    int mid   = found[1];
+    int mid_best = -1;
+    for (int i = 1; i < nf - 1; i++) {
+        char path[128];
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpufreq/policy%d/cpuinfo_max_freq",
+                 found[i]);
+        int fd = open(path, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) continue;
+        char b[32] = {0};
+        int n = read(fd, b, sizeof(b) - 1); close(fd);
+        if (n > 0) { int v = atoi(b); if (v > mid_best) { mid_best = v; mid = found[i]; } }
+    }
+    g_cpu_policy_ids[0] = first;
+    g_cpu_policy_ids[1] = mid;
+    g_cpu_policy_ids[2] = last;
     g_cpu_policy_count  = 3;
+
+    /* Record EVERY physical policy and which slot governs it, so the writer can
+     * mirror a slot's cap onto all clusters it represents. Assignment: the
+     * first policy -> little(0); the last -> prime(2); every middle policy ->
+     * big(1). On OP12 that puts BOTH policy2 and policy5 under the big slot. */
+    g_cpu_all_count = 0;
+    for (int i = 0; i < nf && g_cpu_all_count < 16; i++) {
+        int slot;
+        if (found[i] == first)      slot = 0;
+        else if (found[i] == last)  slot = 2;
+        else                        slot = 1;
+        g_cpu_all_ids[g_cpu_all_count]  = found[i];
+        g_cpu_all_slot[g_cpu_all_count] = slot;
+        g_cpu_all_count++;
+    }
 }
 
 static const char *cpu_policy_path(int slot, const char *file) {
