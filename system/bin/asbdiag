@@ -138,9 +138,16 @@ APOL="$(firstf '/vendor/etc/audio_policy_configuration*.xml' '/odm/etc/audio_pol
 [ -n "$APOL" ] && V "Hi-res 384000 present in audio policy" "1" "$(grep -c '384000' "$APOL" 2>/dev/null)" ge || NOTE "audio_policy_configuration not found"
 # runtime audio props
 P "  runtime audio props:"
-for _p in persist.audio.hifi persist.audio.uhqa vendor.audio.hifi.dac; do
+for _p in persist.audio.hifi persist.audio.uhqa vendor.audio.hifi.dac \
+          vendor.audio.feature.hifi_audio.enable \
+          persist.vendor.audio.hifi.dac.enable \
+          ro.vendor.audio.sdk.fluencetype \
+          vendor.audio.offload.buffer.size.kb \
+          persist.vendor.audio.ull.period.size; do
   P "    $_p = $(gp $_p)"
 done
+# AUDIO_EQ_COMPAT toggle state
+NOTE "AUDIO_EQ_COMPAT = $(cfg AUDIO_EQ_COMPAT)"
 
 # =====================================================================
 SEC "2. BLUETOOTH"
@@ -198,56 +205,119 @@ P "  live wifi link: $(dumpsys wifi 2>/dev/null | grep -m1 -iE 'mWifiInfo|SSID' 
 # =====================================================================
 SEC "5. NETWORK / TCP"
 P "  net.tcp buffer sizes (live props):"
-for _p in net.tcp.buffersize.wifi net.tcp.buffersize.lte net.tcp.buffersize.5g; do
+for _p in net.tcp.buffersize.wifi net.tcp.buffersize.lte net.tcp.buffersize.5g \
+          net.tcp.buffersize.default; do
   P "    $_p = $(gp $_p)"
 done
 P "  kernel tcp:"
 P "    rmem_max = $(cat /proc/sys/net/core/rmem_max 2>/dev/null)"
 P "    wmem_max = $(cat /proc/sys/net/core/wmem_max 2>/dev/null)"
+P "    rmem_default = $(cat /proc/sys/net/core/rmem_default 2>/dev/null)"
 P "    congestion = $(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
+P "    available_congestion = $(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
+P "    tcp_fastopen = $(cat /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null)"
+P "    default_qdisc = $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
+# DNS / connectivity props ASB may touch
+P "  connectivity props:"
+for _p in net.dns1 net.dns2 persist.sys.use_dingtalk_dns ro.ril.disable.power.collapse; do
+  P "    $_p = $(gp $_p)"
+done
 
 # =====================================================================
 SEC "6. CAMERA"
 _cam_plat="$(gp ro.board.platform)"
-case "$_cam_plat" in
-  pineapple|sm8650*) NOTE "platform=$_cam_plat -> ASB intentionally applies NO camera props (OP12 HAL-safe diet)";;
-esac
-# video_beauty list (read paths the HAL may use)
-for VB in /odm/etc/camera/config/video_beauty_default_config /vendor/odm/etc/camera/config/video_beauty_default_config; do
-  [ -f "$VB" ] || continue
-  P "  file: $VB"
-  V "  retouch app count >= 7" "7" "$(grep -c packageName "$VB" 2>/dev/null)" ge
-  V "  Telegram present" "1" "$(grep -c org.telegram.messenger "$VB" 2>/dev/null)" ge
-  V "  strict JSON (no // comments)" "0" "$(grep -c '//' "$VB" 2>/dev/null)" eq
+[ -z "$_cam_plat" ] && _cam_plat="$(gp ro.hardware.chipname)"
+_is_pineapple=0
+case "$_cam_plat" in pineapple|sm8650*) _is_pineapple=1 ;; esac
+
+# --- 6a. Multicamera HAL props (the crash is in ChiMcxRoiTranslator) ---
+P "  multicamera / HAL props:"
+for _p in \
+    ro.vendor.oplus.camera.isHasselbladCamera \
+    ro.vendor.oplus.camera.isSupportExplorer \
+    persist.vendor.camera.video.4k60.eis.enable \
+    persist.vendor.camera.mfnr.enable \
+    persist.vendor.camera.multiframe.nr.enable \
+    persist.vendor.camera.dual_camera_sat \
+    persist.vendor.camera.sat.fallback.dist \
+    vendor.camera.aux.packagelist \
+    ro.vendor.oplus.camera.backCamSize; do
+  P "    $_p = $(gp $_p)"
 done
-# tone fix + aggressive
-CT="$(firstf '/odm/etc/camera/conf_tuning_params.json' '/vendor/odm/etc/camera/conf_tuning_params.json')"
-if [ -n "$CT" ]; then
-  P "  file: $CT"
-  V "  tone-fix sunsetBrightScale=0.9" "0.9" "$(grep -o '"sunsetBrightScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
-  _caggr="$(cfg CAMERA_AGGRESSIVE)"; NOTE "CAMERA_AGGRESSIVE toggle = ${_caggr:-0}"
-  if [ "${_caggr:-0}" = "1" ]; then
-    V "  aggressive sunsetSatScale=1.4" "1.4" "$(grep -o '"sunsetSatScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
-    _inj="$(cfg CAMERA_AGGRESSIVE_INJECT)"; NOTE "tone-key mode = ${_inj:-safe}"
-    if [ "${_inj:-safe}" = "aggressive" ]; then
-      V "  injected blueSatParam=1.05" "1.05" "$(grep -o '"blueSatParam": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+# camera provider service health (the process that SIGABRTs on OP12)
+P "  camera provider service: init.svc=$(gp init.svc.vendor.camera-provider) cameraserver=$(gp init.svc.cameraserver)"
+
+# --- 6b. OP12 HARD camera-off verification (no non-stock camera env allowed) ---
+if [ "$_is_pineapple" = "1" ]; then
+  NOTE "platform=$_cam_plat -> OP12: camera category should be FULLY stock (no overlays/props)"
+  # The vendor multicamera HAL crashes on ANY non-stock camera config, so the
+  # PASS condition here is the OPPOSITE of other devices: our files must be ABSENT.
+  _mvg_v="/odm/etc/camera/mvg_sat_config.json"
+  if [ -f "$_mvg_v" ]; then
+    _mvg_sz="$(wc -c < "$_mvg_v" 2>/dev/null | tr -d ' ')"
+    # OP12 stock mvg_sat is ~2636 bytes; our OP15 one is ~3081. Flag the OP15 one.
+    if [ "${_mvg_sz:-0}" -gt 2800 ] 2>/dev/null; then
+      V "  mvg_sat_config is STOCK (not the OP15 multicam config)" "stock" "OP15-sized:${_mvg_sz}b" eq
+    else
+      P "  [PASS] mvg_sat_config looks stock (${_mvg_sz}b)"; PASS=$((PASS+1))
+    fi
+  else
+    NOTE "mvg_sat_config.json absent on /odm"
+  fi
+  # our overlay markers must NOT be present (8-app retouch list, raised bitrate)
+  for VB in /odm/etc/camera/config/video_beauty_default_config \
+            /vendor/odm/etc/camera/config/video_beauty_default_config; do
+    [ -f "$VB" ] || continue
+    _napp="$(grep -c packageName "$VB" 2>/dev/null)"
+    _tg="$(grep -c org.telegram.messenger "$VB" 2>/dev/null)"
+    # On a true camera-off, Telegram (our addition) should be GONE.
+    if [ "${_tg:-0}" = "0" ]; then
+      P "  [PASS] $VB is stock (no ASB retouch additions)"; PASS=$((PASS+1))
+    else
+      V "  $VB should be STOCK (our overlay still live!)" "stock" "ASB-overlay(${_napp}apps,TG)" eq
+    fi
+  done
+  CMP="$(firstf '/odm/etc/camera/media_profiles.xml' '/vendor/odm/etc/camera/media_profiles.xml')"
+  if [ -n "$CMP" ]; then
+    _br=$(awk '/quality="1080p"/{f=1} f&&/bitRate=/{match($0,/bitRate="[0-9]+"/);print substr($0,RSTART+9,RLENGTH-10);exit}' "$CMP" 2>/dev/null)
+    # stock OP12 1080p is 20 Mbps; our overlay raised it to 37.3 Mbps.
+    if [ "${_br:-0}" = "37300000" ]; then
+      V "  media_profiles should be STOCK (our 37.3M overlay still live!)" "stock" "ASB-37.3M" eq
+    else
+      P "  [PASS] media_profiles 1080p looks stock (${_br})"; PASS=$((PASS+1))
     fi
   fi
 else
-  NOTE "conf_tuning_params.json absent (normal on OP12/Gen3)"
+  # --- 6c. OP13/OP15: camera overlays SHOULD be applied ---
+  for VB in /odm/etc/camera/config/video_beauty_default_config /vendor/odm/etc/camera/config/video_beauty_default_config; do
+    [ -f "$VB" ] || continue
+    P "  file: $VB"
+    V "  retouch app count >= 7" "7" "$(grep -c packageName "$VB" 2>/dev/null)" ge
+    V "  Telegram present" "1" "$(grep -c org.telegram.messenger "$VB" 2>/dev/null)" ge
+    V "  strict JSON (no // comments)" "0" "$(grep -c '//' "$VB" 2>/dev/null)" eq
+  done
+  CT="$(firstf '/odm/etc/camera/conf_tuning_params.json' '/vendor/odm/etc/camera/conf_tuning_params.json')"
+  if [ -n "$CT" ]; then
+    P "  file: $CT"
+    V "  tone-fix sunsetBrightScale=0.9" "0.9" "$(grep -o '"sunsetBrightScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+    _caggr="$(cfg CAMERA_AGGRESSIVE)"; NOTE "CAMERA_AGGRESSIVE toggle = ${_caggr:-0}"
+    if [ "${_caggr:-0}" = "1" ]; then
+      V "  aggressive sunsetSatScale=1.4" "1.4" "$(grep -o '"sunsetSatScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+      _inj="$(cfg CAMERA_AGGRESSIVE_INJECT)"; NOTE "tone-key mode = ${_inj:-safe}"
+      if [ "${_inj:-safe}" = "aggressive" ]; then
+        V "  injected blueSatParam=1.05" "1.05" "$(grep -o '"blueSatParam": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+      fi
+    fi
+  else
+    NOTE "conf_tuning_params.json absent"
+  fi
+  CMP="$(firstf '/odm/etc/camera/media_profiles.xml' '/vendor/odm/etc/camera/media_profiles.xml')"
+  if [ -n "$CMP" ]; then
+    _br=$(awk '/quality="1080p"/{f=1} f&&/bitRate=/{match($0,/bitRate="[0-9]+"/);print substr($0,RSTART+9,RLENGTH-10);exit}' "$CMP" 2>/dev/null)
+    case "$_cam_plat" in canoe|sm8850*) _bexp=40000000 ;; *) _bexp=37300000 ;; esac
+    V "  1080p video bitrate raised" "$_bexp" "$_br" eq
+  fi
 fi
-# media_profiles bitrate
-CMP="$(firstf '/odm/etc/camera/media_profiles.xml' '/vendor/odm/etc/camera/media_profiles.xml')"
-if [ -n "$CMP" ]; then
-  _br=$(awk '/quality="1080p"/{f=1} f&&/bitRate=/{match($0,/bitRate="[0-9]+"/);print substr($0,RSTART+9,RLENGTH-10);exit}' "$CMP" 2>/dev/null)
-  case "$_cam_plat" in canoe|sm8850*) _bexp=40000000 ;; *) _bexp=37300000 ;; esac
-  V "  1080p video bitrate raised" "$_bexp" "$_br" eq
-fi
-# any forced camera props live? (should be none on pineapple)
-P "  live camera props sample:"
-for _p in persist.vendor.camera.mfnr.enable ro.vendor.oplus.camera.isHasselbladCamera persist.vendor.camera.video.4k60.eis.enable; do
-  P "    $_p = $(gp $_p)"
-done
 
 # =====================================================================
 SEC "7. PERFORMANCE / CPU / GPU"
@@ -264,6 +334,41 @@ QAPE="$(firstf '/vendor/etc/perf/qapegameconfig.txt' '/odm/etc/perf/qapegameconf
 [ -n "$QAPE" ] && NOTE "qapegameconfig present: $QAPE" || NOTE "qapegameconfig absent (normal on OP12)"
 # thermal
 P "  thermal: $(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null) (zone0 raw)"
+
+# =====================================================================
+SEC "7b. MEMORY / LMKD / ZRAM"
+# RAM overview
+if [ -r /proc/meminfo ]; then
+  _memtot=$(grep -m1 MemTotal /proc/meminfo | awk '{print $2}')
+  _memfree=$(grep -m1 MemAvailable /proc/meminfo | awk '{print $2}')
+  P "  RAM: total=$((${_memtot:-0}/1024))MB available=$((${_memfree:-0}/1024))MB"
+fi
+# swap / zram
+if [ -r /proc/swaps ]; then
+  P "  swap devices:"
+  tail -n +2 /proc/swaps 2>/dev/null | while read _sn _st _ssz _su _sp; do
+    P "    $_sn ($_st) size=$((${_ssz:-0}/1024))MB used=$((${_su:-0}/1024))MB"
+  done
+fi
+for _zr in /sys/block/zram0/comp_algorithm /sys/block/zram0/disksize; do
+  [ -r "$_zr" ] && P "    zram $(basename $_zr): $(cat $_zr 2>/dev/null)"
+done
+# LMKD tunables ASB may touch
+P "  LMKD / vmpressure props:"
+for _p in ro.lmk.use_psi ro.lmk.thrashing_limit ro.lmk.swap_util_max \
+          persist.device_config.lmkd_native.thrashing_limit \
+          persist.sys.lmkd.camera_adaptive_lmk.enable; do
+  P "    $_p = $(gp $_p)"
+done
+# kernel VM tunables
+P "  kernel VM:"
+for _vm in swappiness vfs_cache_pressure watermark_scale_factor; do
+  [ -r "/proc/sys/vm/$_vm" ] && P "    vm.$_vm = $(cat /proc/sys/vm/$_vm 2>/dev/null)"
+done
+# memory cgroup presence (ASB BG_TRIM depends on memcg)
+_memcg="$(firstf '/dev/memcg' '/sys/fs/cgroup/memory')"
+[ -n "$_memcg" ] && NOTE "memcg present: $_memcg (BG_TRIM can act)" || NOTE "no memcg path (BG_TRIM limited)"
+_bgtrim="$(cfg BG_TRIM_LEVEL)"; NOTE "BG_TRIM_LEVEL = ${_bgtrim:-safe}"
 
 # =====================================================================
 SEC "8. DISPLAY / UX"
@@ -285,7 +390,148 @@ else
 fi
 
 # =====================================================================
-SEC "SUMMARY"
+SEC "10. HARDWARE PROFILE  (for per-SoC governor / profile tuning)"
+P "  This section captures the full CPU/GPU/thermal topology so the governor,"
+P "  profiles and Smart mode can be tuned individually per SoC (canoe/sun/"
+P "  pineapple). The clusters and frequency tables differ per chip, which is why"
+P "  one set of battery caps can feel sluggish on OP12 but fine on OP15."
+P ""
+
+# --- 10a. CPU cluster topology + full frequency tables ---
+P "  CPU CLUSTERS (policy = a cluster; lists every available frequency):"
+for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
+  [ -d "$_pol" ] || continue
+  _pn=$(basename "$_pol")
+  _cpus=$(cat "$_pol/affected_cpus" 2>/dev/null)
+  _cmin=$(cat "$_pol/cpuinfo_min_freq" 2>/dev/null)
+  _cmax=$(cat "$_pol/cpuinfo_max_freq" 2>/dev/null)
+  _smin=$(cat "$_pol/scaling_min_freq" 2>/dev/null)
+  _smax=$(cat "$_pol/scaling_max_freq" 2>/dev/null)
+  _cur=$(cat "$_pol/scaling_cur_freq" 2>/dev/null)
+  _gov=$(cat "$_pol/scaling_governor" 2>/dev/null)
+  P "  [$_pn] cpus={$_cpus} gov=$_gov"
+  P "        hw_range : $_cmin .. $_cmax"
+  P "        scaling  : min=$_smin max=$_smax cur=$_cur"
+  P "        available: $(cat "$_pol/scaling_available_frequencies" 2>/dev/null)"
+  # governor tunables that shape responsiveness (schedutil / walt)
+  for _t in schedutil/rate_limit_us schedutil/up_rate_limit_us \
+            schedutil/down_rate_limit_us schedutil/hispeed_freq \
+            walt/target_loads walt/up_rate_limit_us walt/down_rate_limit_us; do
+    [ -r "$_pol/$_t" ] && P "        tunable $_t = $(cat "$_pol/$_t" 2>/dev/null)"
+  done
+  # boost / scaling driver
+  [ -r "$_pol/scaling_driver" ] && P "        driver   = $(cat "$_pol/scaling_driver" 2>/dev/null)"
+done
+P ""
+# how many distinct clusters -> tells us the topology class
+_ncl=$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | wc -l)
+NOTE "cluster count = $_ncl  (canoe/sun usually 3 policies for a 2+6; pineapple 1+5+2)"
+# per-core: which cluster + online state
+P "  PER-CORE map:"
+for _c in /sys/devices/system/cpu/cpu[0-9]*; do
+  _cn=$(basename "$_c")
+  [ -r "$_c/cpufreq/scaling_cur_freq" ] || continue
+  P "    $_cn: online=$(cat "$_c/online" 2>/dev/null || echo 1) cur=$(cat "$_c/cpufreq/scaling_cur_freq" 2>/dev/null)"
+done
+
+# --- 10b. CPU capacity / EAS energy model (key for Smart scheduling) ---
+P ""
+P "  CPU CAPACITY (EAS energy model — relative core strength):"
+for _c in /sys/devices/system/cpu/cpu[0-9]*; do
+  _cn=$(basename "$_c")
+  [ -r "$_c/cpu_capacity" ] && P "    $_cn capacity = $(cat "$_c/cpu_capacity" 2>/dev/null)"
+done
+
+# --- 10c. sched / walt knobs ASB's governor reasons about ---
+P ""
+P "  SCHED / WALT globals:"
+for _s in /proc/sys/kernel/sched_util_clamp_min /proc/sys/kernel/sched_util_clamp_max \
+          /proc/sys/kernel/sched_schedstats; do
+  [ -r "$_s" ] && P "    $(basename $_s) = $(cat $_s 2>/dev/null)"
+done
+for _wp in /sys/devices/system/cpu/walt/sched_boost \
+           /proc/sys/walt/sched_boost; do
+  [ -r "$_wp" ] && P "    $(echo $_wp|sed 's#.*/##') = $(cat $_wp 2>/dev/null)"
+done
+# msm_performance (governor writes cpu_max_freq here)
+[ -r /sys/kernel/msm_performance/parameters/cpu_max_freq ] && \
+  P "    msm_performance cpu_max_freq = $(cat /sys/kernel/msm_performance/parameters/cpu_max_freq 2>/dev/null)"
+
+# --- 10d. GPU full profile ---
+P ""
+P "  GPU (Adreno):"
+_kg=/sys/class/kgsl/kgsl-3d0
+if [ -d "$_kg" ]; then
+  P "    model          = $(cat $_kg/gpu_model 2>/dev/null)"
+  P "    governor       = $(cat $_kg/devfreq/governor 2>/dev/null)"
+  P "    cur_freq       = $(cat $_kg/devfreq/cur_freq 2>/dev/null)"
+  P "    min/max_freq   = $(cat $_kg/devfreq/min_freq 2>/dev/null) / $(cat $_kg/devfreq/max_freq 2>/dev/null)"
+  P "    available_freq = $(cat $_kg/devfreq/available_frequencies 2>/dev/null)"
+  P "    max_pwrlevel   = $(cat $_kg/max_pwrlevel 2>/dev/null)  (num_pwrlevels=$(cat $_kg/num_pwrlevels 2>/dev/null))"
+  P "    min_pwrlevel   = $(cat $_kg/min_pwrlevel 2>/dev/null)"
+  P "    default_pwr    = $(cat $_kg/default_pwrlevel 2>/dev/null)"
+  P "    busy_pct       = $(cat $_kg/gpubusy 2>/dev/null)"
+  P "    throttling     = $(cat $_kg/throttling 2>/dev/null)"
+else
+  NOTE "kgsl-3d0 not found"
+fi
+
+# --- 10e. Thermal zones + cooling (why OP12 throttles differently) ---
+P ""
+P "  THERMAL zones (live temps; governor reads these to back off):"
+for _tz in /sys/class/thermal/thermal_zone*; do
+  [ -d "$_tz" ] || continue
+  _ty=$(cat "$_tz/type" 2>/dev/null)
+  _tp=$(cat "$_tz/temp" 2>/dev/null)
+  case "$_ty" in
+    *cpu*|*gpu*|*skin*|*shell*|*soc*|*battery*|*modem*|*ddr*)
+      P "    $(basename $_tz) [$_ty] = $_tp" ;;
+  esac
+done
+# thermal config / mitigation
+[ -d /sys/class/thermal/cooling_device0 ] && \
+  P "  cooling devices present: $(ls -d /sys/class/thermal/cooling_device* 2>/dev/null | wc -l)"
+
+# --- 10f. Battery state (affects what the battery profile should target) ---
+P ""
+P "  BATTERY:"
+_bp=/sys/class/power_supply/battery
+if [ -d "$_bp" ]; then
+  P "    capacity   = $(cat $_bp/capacity 2>/dev/null)%"
+  P "    status     = $(cat $_bp/status 2>/dev/null)"
+  P "    temp       = $(cat $_bp/temp 2>/dev/null)"
+  P "    current_now= $(cat $_bp/current_now 2>/dev/null)"
+  P "    health     = $(cat $_bp/health 2>/dev/null)"
+fi
+
+# --- 10g. ASB governor live state (what it actually decided) ---
+P ""
+P "  ASB GOVERNOR live state:"
+P "    current_profile = $(cat "$MODDIR/current_profile" 2>/dev/null || gp persist.asb.profile)"
+for _gp in persist.asb.profile persist.asb.smart.alpha persist.asb.last_plan \
+           persist.asb.battery.session persist.asb.smart.state; do
+  _gv="$(gp $_gp)"; [ -n "$_gv" ] && P "    $_gp = $_gv"
+done
+# governor's own log tail (decisions, throttle events)
+for _lg in "$MODDIR/asb.log" /data/adb/asb/asb.log /data/local/tmp/asb.log; do
+  [ -f "$_lg" ] && { P "    log tail ($_lg):"; tail -8 "$_lg" 2>/dev/null | while IFS= read -r _l; do P "      $_l"; done; break; }
+done
+
+# --- 10h. profile_bounds the module shipped (compare vs hardware above) ---
+P ""
+P "  SHIPPED profile_bounds.conf (BATTERY caps — compare against hw freqs above):"
+_pb="$MODDIR/config/profile_bounds.conf"
+if [ -f "$_pb" ]; then
+  grep -E '^(BATTERY|BALANCED|PERFORMANCE)_CPU_(MIN|MAX|CAP)_' "$_pb" 2>/dev/null | while IFS= read -r _l; do P "    $_l"; done
+else
+  NOTE "profile_bounds.conf not found in module"
+fi
+P ""
+P "  >>> TUNING HINT: compare BATTERY_CPU_MAX_* above with each cluster's real"
+P "      'available' table. If a battery cap doesn't line up with an actual"
+P "      frequency step for THIS SoC's clusters, the governor may be pinning the"
+P "      wrong cluster low (the likely cause of OP12 battery-mode sluggishness)."
+
 P "  PASS=$PASS   FAIL=$FAIL   N/A=$NA   info=$INFO"
 P ""
 P "  How to read this:"
