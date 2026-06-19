@@ -1360,26 +1360,18 @@ apply_camera_props_static() {
 asb_feature_enabled CAMERA && apply_camera_props_static
 
 apply_camera_runtime() {
-  # CAMERA PROP DIET for OP12 (pineapple / SM8650). The OP12 camera HAL crashes
-  # to a black screen when ASB forces its camera prop layer — none of these
-  # persist.*camera* props exist in OP12 stock, and even with the file overlays
-  # removed the crash persists, which isolates it to the prop layer. So on
-  # pineapple we apply NO camera props at all and let the stock camera stand.
-  _cam_plat="$(getprop ro.board.platform 2>/dev/null)"
-  [ -z "$_cam_plat" ] && _cam_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
-  case "$_cam_plat" in
-    pineapple|sm8650*)
-      asb_log "camera: pineapple/OP12 -> skipping camera prop layer (HAL-safe)"
-      return 0 ;;
-  esac
+  # Base camera props — safe on every device. The proven-working OP12 build set
+  # these on pineapple too and the camera worked, so they are NOT gated out for
+  # OP12 (the earlier "skip all camera props on pineapple" was a misdiagnosis:
+  # the real OP12 regression was the install-side system/odm camera mirror, now
+  # reverted, not this prop layer).
   asb_persist_safe persist.camera.tnr.preview 1
   asb_persist_safe persist.camera.tnr.video 1
   asb_persist_safe persist.vendor.camera.hdr.enable 1
   asb_persist_safe persist.vendor.camera.eis.enable 1
   # OP15 (canoe) ONLY: video HDR, 4K60 EIS, Hasselblad/Explorer are OnePlus 15
-  # camera-HAL features. Forcing them on OP13/OP12 (which have no such pipeline)
-  # can make the camera HAL try to load a non-existent path and crash the
-  # camera app — observed on OP12. Gate them strictly to the canoe platform.
+  # camera-HAL features; keep them gated to canoe so other devices never try to
+  # load a pipeline they don't have.
   _cam_soc="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_cam_soc" ] && _cam_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
   case "$_cam_soc" in
@@ -1852,14 +1844,10 @@ apply_tracking_block() {
 asb_feature_enabled LOG && apply_tracking_block
 
 apply_camera_experimental() {
-  # Same OP12 camera prop diet: pineapple gets no experimental camera props.
-  _cam_plat2="$(getprop ro.board.platform 2>/dev/null)"
-  [ -z "$_cam_plat2" ] && _cam_plat2="$(getprop ro.hardware.chipname 2>/dev/null)"
-  case "$_cam_plat2" in
-    pineapple|sm8650*)
-      asb_log "camera experimental: pineapple/OP12 -> skipped (HAL-safe)"
-      return 0 ;;
-  esac
+  # The proven-working OP12 build ran this on pineapple too (it set MFNR/EIS/SAT/
+  # HFR/FastAF and the camera worked), so there is no pineapple skip here. The
+  # OP12 regression was the install-side system/odm camera mirror, not this prop
+  # layer. Originals are saved to camera_orig.conf so they can be restored.
   _orig="$MODDIR/config/camera_orig.conf"
 
   if [ ! -f "$_orig" ]; then
