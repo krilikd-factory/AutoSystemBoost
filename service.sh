@@ -1241,6 +1241,15 @@ apply_camera_props_static() {
         resetprop -p --delete persist.vendor.camera.raw.zsl.enable >/dev/null 2>&1 || true
         resetprop -p --delete persist.vendor.camera.smyuv.enable >/dev/null 2>&1 || true
         resetprop -p --delete persist.vendor.camera.snapshot.disable >/dev/null 2>&1 || true
+        # SAT (Smooth Auto Transition) = the multi-camera zoom path. A prior
+        # build set sat.fallback.dist=2.0; if it lingers it can drive the
+        # multicamera ROI translator (ChiMcxRoiTranslator::Initialize) into the
+        # SIGABRT seen on OP12. main.hfr / fast.af were also force-set by older
+        # builds and are not in OP12 stock — delete all three so a reinstall
+        # over an old build leaves OP12 truly stock-clean.
+        resetprop -p --delete persist.vendor.camera.sat.fallback.dist >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.main.hfr >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.fast.af >/dev/null 2>&1 || true
         resetprop -p --delete persist.vendor.camera.tnr.enable >/dev/null 2>&1 || true
         resetprop -p --delete persist.vendor.camera.tnr.preview >/dev/null 2>&1 || true
         resetprop -p --delete persist.vendor.camera.tnr.video >/dev/null 2>&1 || true
