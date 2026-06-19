@@ -504,6 +504,7 @@ asb_apply_device_overlay() {
   rm -rf "$MODPATH/system/vendor/etc/wifi" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/vendor/etc/wifi" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/etc/camera" 2>/dev/null || true
+  rm -rf "$MODPATH/system/odm/etc/camera" 2>/dev/null || true   # OP12/OP13: strip OP15 multicam set from /odm copy too (ChiMcx crash fix)
   rm -f  "$MODPATH/system/vendor/etc/media_profiles"*".xml" 2>/dev/null || true
   rm -f  "$MODPATH/system/vendor/odm/etc/media_profiles"*".xml" 2>/dev/null || true
   rm -f  "$MODPATH/system/vendor/etc/gps.conf" 2>/dev/null || true
@@ -1020,6 +1021,7 @@ asb_prune_non_op15_vendor_overlays() {
   rm -f "$MODPATH/system/vendor/etc/media_profiles"*".xml" 2>/dev/null || true
   rm -f "$MODPATH/system/vendor/odm/etc/media_profiles"*".xml" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/etc/camera" 2>/dev/null || true
+  rm -rf "$MODPATH/system/odm/etc/camera" 2>/dev/null || true   # OP12/OP13: strip OP15 multicam set from /odm copy too (ChiMcx crash fix)
 
   rm -f "$MODPATH/system/etc/audio_effects.xml" 2>/dev/null || true
   for _f in audio_effects_config.xml audio_policy_configuration.xml ftm_mixer_paths.xml mixer_paths.xml resourcemanager.xml usb_audio_policy_configuration.xml virtual_audio_policy_configuration.xml; do
@@ -1122,6 +1124,7 @@ asb_prune_module() {
     rm -f "$MODPATH/system/vendor/etc/media_profiles"*".xml" 2>/dev/null || true
     rm -f "$MODPATH/system/vendor/odm/etc/media_profiles"*".xml" 2>/dev/null || true
     rm -rf "$MODPATH/system/vendor/odm/etc/camera" 2>/dev/null || true
+  rm -rf "$MODPATH/system/odm/etc/camera" 2>/dev/null || true   # OP12/OP13: strip OP15 multicam set from /odm copy too (ChiMcx crash fix)
   fi
 
   if [ "${ASB_CPU}" != "true" ]; then
