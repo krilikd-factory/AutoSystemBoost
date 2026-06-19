@@ -165,6 +165,15 @@ asb_apply_dynamic_tweaks() {
 
   # --- CAMERA conf_tuning --- patch BOTH the /vendor/odm and the direct /odm
   # copy (OP12/OP13 ship both; the HAL may read either partition).
+  # OP12 (pineapple/SM8650): camera category is fully disabled (the vendor
+  # multicamera HAL crashes on any non-stock camera env), so never touch camera
+  # config here — no baseline, no restore, no aggressive, no inject.
+  _tw_plat="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_tw_plat" ] && _tw_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
+  case "$_tw_plat" in
+    pineapple|sm8650*)
+      return 0 ;;
+  esac
   for _cf in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
              "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
     [ -f "$_cf" ] || continue
