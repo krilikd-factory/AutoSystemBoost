@@ -116,6 +116,14 @@ asb_tw_restore_base() {
   _f="$1"
   _bp="$(asb_tw_base_path "$_f")"
   [ -f "$_bp" ] || return 1
+  # If the live file already equals the baseline, do NOT rewrite it. Rewriting
+  # an unchanged file on every boot needlessly churns the camera conf on a
+  # separate /odm partition (OP13/OP12), and the camera HAL reading /odm early
+  # at boot can catch that write and report "storage loading / camera
+  # unavailable" on first launch. cmp is a cheap byte compare; skip on match.
+  if cmp -s "$_bp" "$_f" 2>/dev/null; then
+    return 0
+  fi
   _t="${_f}.asbrb$$"
   if cat "$_bp" > "$_t" 2>/dev/null; then
     chmod --reference="$_f" "$_t" 2>/dev/null || chmod 0644 "$_t" 2>/dev/null
