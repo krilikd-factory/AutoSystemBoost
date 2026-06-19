@@ -1174,7 +1174,94 @@ apply_camera_props_static() {
   [ -z "$_cp_plat" ] && _cp_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
   case "$_cp_plat" in
     pineapple|sm8650*)
-      asb_log "camera props: pineapple/OP12 -> skipped (HAL-safe)"
+      # ROBUST DIET: actively DELETE any camera props a prior build (or
+      # anything else) may have set, not just skip applying. Makes OP12
+      # HAL-safe even after upgrading from a build that forced them, and
+      # regardless of service.sh timing on APatch vs KSU.
+      if has resetprop; then
+        resetprop -p --delete persist.camera.c2d.debug.mask >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.cpp.debug.mask >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.dcrf.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.debug.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.dual_camera_sat >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.global.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.hdr.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.iface.logs >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.imglib.logs >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.isp.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.isp.ltm_disable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.jpeg.dumpqtable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.jpeg_burst >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.kpi.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.llnoise >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.ltmforseemore >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.max_prev.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.maxgain.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.mct.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.mfnr.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.mmstill.logs >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.picturesize.limit.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.pproc.debug.mask >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.preview.ubwc >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.sensor.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.snapshot.disable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.stats.aec.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.stats.af.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.stats.afd.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.stats.asd.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.stats.awb.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.stats.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.stats.haf.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.stats.is.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.stats.q3a.debug >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.tn.disable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.tnr.preview >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.tnr.video >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.tnr_cds >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.ubwc >/dev/null 2>&1 || true
+        resetprop -p --delete persist.camera.video.ubwc >/dev/null 2>&1 || true
+        resetprop -p --delete persist.sys.camera.cameraservice.micompactmemory.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.sys.camera.ubwc.enabled >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.cpp.duplicate_strip_dump >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.cpp.zoom.opt >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.dual_camera_sat >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.eis.disable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.eis.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.fdvideo >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.hdr.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.hfr.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.llnoise >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.ltmforseemore >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.maxgain.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.mfnr.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.multiframe.nr.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.opt_mode.video >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.picturesize.limit.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.preview.ubwc >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.raw.zsl.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.smyuv.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.snapshot.disable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.tnr.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.tnr.preview >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.tnr.video >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.tnr_cds >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.ubwc >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.video.hdr.enable >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.video.ubwc >/dev/null 2>&1 || true
+        resetprop -p --delete persist.vendor.camera.zsl.enable >/dev/null 2>&1 || true
+        resetprop -p --delete ro.camera.disableHeicUltraHDR >/dev/null 2>&1 || true
+        resetprop -p --delete ro.camera.disableJpegR >/dev/null 2>&1 || true
+        resetprop -p --delete ro.camera.enableCompositeAPI0JpegR >/dev/null 2>&1 || true
+        resetprop -p --delete ro.camerax.extensions.enabled >/dev/null 2>&1 || true
+        resetprop -p --delete ro.vendor.audio.camera.bt.record.support >/dev/null 2>&1 || true
+        resetprop -p --delete ro.vendor.audio.camera.loopback.support >/dev/null 2>&1 || true
+        resetprop -p --delete ro.vendor.audio.camera.videorecord.gain >/dev/null 2>&1 || true
+        resetprop -p --delete ro.vendor.camera.use_srgb_gamma >/dev/null 2>&1 || true
+        resetprop -p --delete vendor.camera.algo.jpeghwdecode >/dev/null 2>&1 || true
+        resetprop -p --delete vendor.camera.algo.jpeghwencode >/dev/null 2>&1 || true
+        resetprop -p --delete vendor.camera.picturesize.limit.enable >/dev/null 2>&1 || true
+      fi
+      asb_log "camera props: pineapple/OP12 -> stripped (HAL-safe diet)"
       return 0 ;;
   esac
   has resetprop || return 0
@@ -1656,10 +1743,19 @@ apply_bt_volume_behavior() {
   # override the "on" mode (which disables absolute volume) on every boot.
   _bt_mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
   [ -n "$_bt_mode" ] || _bt_mode="auto"
+  # AUTO = truly hands-off: do NOT touch absolute-volume at all, so the stock
+  # BT volume negotiation is left intact. Forcing it on every boot (even to the
+  # "stock" value) re-writes the setting after the BT stack has initialised,
+  # which desyncs the volume scale — symptom: very quiet BT audio on YouTube
+  # until an audio-session restart (e.g. opening ViPER) re-negotiates it.
+  if [ "$_bt_mode" = "auto" ]; then
+    asb_log "bt absvol: mode=auto -> leaving stock absolute-volume untouched"
+    return 0
+  fi
   case "$_bt_mode" in
     on)  _bt_dav=1; _bt_prop="true"  ;;   # disable absolute volume
     off) _bt_dav=0; _bt_prop="false" ;;
-    auto|*) _bt_dav=0; _bt_prop="false" ;; # auto maps to off (safe default)
+    *)   _bt_dav=0; _bt_prop="false" ;;
   esac
   if has settings; then
     asb_settings_put global bluetooth_disable_absolute_volume "$_bt_dav"
