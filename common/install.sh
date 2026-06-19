@@ -526,10 +526,22 @@ asb_apply_device_overlay() {
     _odm_dups() {
       # $1 = relative overlay path under the overlay dir. echoes the system/
       # destination paths (space-separated) this file should be copied to.
+      # OP12 REGRESSION FIX: the old working OP12 build wrote the overlay ONLY
+      # to system/vendor/odm (never the direct system/odm mirror), and its
+      # camera worked. Mirroring camera/media into system/odm changed the
+      # multicamera environment the vendor HAL sees and made
+      # ChiMcxRoiTranslator::Initialize SIGABRT on OP12. So on OP12 we emit only
+      # the system/vendor/odm destination (working behavior). OP13 still gets
+      # the dual path (its separate /odm partition genuinely needs it and the
+      # camera works there).
       case "$1" in
         vendor/odm/*)
           _sub="${1#vendor/odm/}"
-          echo "system/vendor/odm/$_sub system/odm/$_sub"
+          if [ "$ASB_IS_OP12" = "true" ]; then
+            echo "system/vendor/odm/$_sub"
+          else
+            echo "system/vendor/odm/$_sub system/odm/$_sub"
+          fi
           ;;
         vendor/*)
           echo "system/$1"
@@ -1299,37 +1311,6 @@ if [ "$ASB_IS_OP15" = "true" ]; then
   ui_print "${SEPARATOR}"
 fi
 asb_prune_module
-asb_op12_camera_off() {
-  # OP12 (pineapple/SM8650) HARD camera-off. The vendor multicamera HAL
-  # (ChiMcxRoiTranslator / ChiMulticameraBase) SIGABRTs during configure_streams
-  # when it sees ANY non-stock camera/media environment - even syntactically
-  # valid, prop-clean overlays. Confirmed by the APatch crash log. So OP12 gets
-  # the stock camera environment, full stop: no camera dir, no media_profiles,
-  # in EVERY location the manager might mount, including root-level paths the
-  # system/-only cleanup missed and that APatch in particular can still mount.
-  for _cdir in \
-      "$MODPATH/system/vendor/odm/etc/camera" \
-      "$MODPATH/system/odm/etc/camera" \
-      "$MODPATH/system/vendor/etc/camera" \
-      "$MODPATH/vendor/odm/etc/camera" \
-      "$MODPATH/odm/etc/camera" \
-      "$MODPATH/vendor/etc/camera"; do
-    rm -rf "$_cdir" 2>/dev/null || true
-  done
-  rm -f "$MODPATH/system/vendor/etc/media_profiles"*.xml 2>/dev/null || true
-  rm -f "$MODPATH/system/vendor/odm/etc/media_profiles"*.xml 2>/dev/null || true
-  rm -f "$MODPATH/system/odm/etc/media_profiles"*.xml 2>/dev/null || true
-  rm -f "$MODPATH/vendor/etc/media_profiles"*.xml 2>/dev/null || true
-  rm -f "$MODPATH/vendor/odm/etc/media_profiles"*.xml 2>/dev/null || true
-  rm -f "$MODPATH/odm/etc/media_profiles"*.xml 2>/dev/null || true
-  rm -rf "$MODPATH/op12_overlay/vendor/odm/etc/camera" 2>/dev/null || true
-  rm -f  "$MODPATH/op12_overlay/vendor/odm/etc/media_profiles"*.xml 2>/dev/null || true
-  rm -f  "$MODPATH/op12_overlay/vendor/etc/media_profiles"*.xml 2>/dev/null || true
-  rm -rf /data/adb/asb/tweak_base/*camera* 2>/dev/null || true
-  rm -f  "$MODPATH/config/camera_orig.conf" 2>/dev/null || true
-  ASB_CAMERA="false"
-  ui_print "[*] OP12: camera category fully disabled (stock camera, HAL-safe)"
-}
 
 if [ "$ASB_IS_OP15" = "true" ]; then
   # OP15: keep the hand-tuned audio/wifi overlay (irreproducible by sed), but
@@ -1359,7 +1340,11 @@ elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_patch_wifi_inplace "OnePlus 13 (sun / tuna / kera)"
 elif [ "$ASB_IS_OP12" = "true" ]; then
   asb_apply_device_overlay op12_overlay "OnePlus 12 (CPH2581 / SM8650 'pineapple')"
-  asb_op12_camera_off
+  # NOTE: no asb_op12_camera_off here. The old working OP12 build simply applied
+  # the overlay to system/vendor/odm and the camera worked; the later
+  # "hard camera-off" path plus the system/odm mirror were themselves the
+  # regression that SIGABRTed the multicamera HAL. OP12 camera is back to the
+  # proven working path (overlay to system/vendor/odm only, no /odm mirror).
   asb_clone_device_audio_wifi "OnePlus 12 (pineapple / cliffs)"
   asb_patch_audio_inplace "OnePlus 12 (pineapple / cliffs)"
   asb_patch_perf_inplace "OnePlus 12 (pineapple / cliffs)"
