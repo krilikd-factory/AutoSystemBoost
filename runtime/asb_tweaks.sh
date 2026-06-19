@@ -143,15 +143,25 @@ asb_apply_dynamic_tweaks() {
   # --- AUDIO mixer files ---
   for _mx in $(find "$_md/system/vendor/etc/audio" "$_md/system/vendor/odm/etc/audio" \
                     -type f -name "mixer_paths*.xml" 2>/dev/null); do
-    asb_tw_restore_base "$_mx" || continue      # only manage files we baselined
-    [ "$_audio_aggr" = "1" ] && asb_tw_aggr_audio "$_mx"
+    # Capture a baseline of the current (pre-aggressive) file if we have none
+    # yet — this is the clean base-tweaked mixer. Then restore from baseline so
+    # toggling OFF reverts cleanly. Crucially we no longer SKIP the file when no
+    # baseline exists (the old "|| continue" meant AUDIO_AGGRESSIVE silently did
+    # nothing on APatch, where the install-time save hadn't populated the store).
+    asb_tw_save_base "$_mx"          # no-op if a baseline already exists
+    asb_tw_restore_base "$_mx"       # revert to clean base before re-applying
+    if [ "$_audio_aggr" = "1" ]; then
+      asb_tw_aggr_audio "$_mx"
+    fi
   done
 
   # --- CAMERA conf_tuning --- patch BOTH the /vendor/odm and the direct /odm
   # copy (OP12/OP13 ship both; the HAL may read either partition).
   for _cf in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
              "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
-    asb_tw_restore_base "$_cf" || continue
+    [ -f "$_cf" ] || continue
+    asb_tw_save_base "$_cf"          # no-op if a baseline already exists
+    asb_tw_restore_base "$_cf"       # revert to clean base before re-applying
     if [ "$_cam_aggr" = "1" ]; then
       [ "$_cam_inject" = "1" ] && asb_tw_inject_camera "$_cf"
       asb_tw_aggr_camera "$_cf"
