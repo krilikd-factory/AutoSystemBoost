@@ -425,7 +425,23 @@ done
 P ""
 # how many distinct clusters -> tells us the topology class
 _ncl=$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | wc -l)
-NOTE "cluster count = $_ncl  (canoe/sun usually 3 policies for a 2+6; pineapple 1+5+2)"
+NOTE "cluster count = $_ncl  (canoe/sun usually 2 policies for a 6+2; pineapple 4: 1+3+2+1)"
+# Show how ASB's governor maps physical policies -> logical slots (little/big/
+# prime). On a 4-cluster OP12 the governor now assigns first->little, last->
+# prime, all middles->big, and applies the big cap to BOTH middle clusters.
+_pol_ids=""
+for _pp in /sys/devices/system/cpu/cpufreq/policy*; do
+  [ -d "$_pp" ] && _pol_ids="$_pol_ids $(basename "$_pp" | sed 's/policy//')"
+done
+_pol_ids="$(echo $_pol_ids | tr ' ' '\n' | sort -n | tr '\n' ' ')"
+P "  governor slot mapping (physical policy -> slot):"
+_first=""; _last=""
+for _id in $_pol_ids; do [ -z "$_first" ] && _first="$_id"; _last="$_id"; done
+for _id in $_pol_ids; do
+  if [ "$_id" = "$_first" ]; then P "    policy$_id -> slot0 (little)"
+  elif [ "$_id" = "$_last" ]; then P "    policy$_id -> slot2 (prime)"
+  else P "    policy$_id -> slot1 (big) [gets BATTERY/BALANCED_CPU_MAX_BIG cap]"; fi
+done
 # per-core: which cluster + online state
 P "  PER-CORE map:"
 for _c in /sys/devices/system/cpu/cpu[0-9]*; do
