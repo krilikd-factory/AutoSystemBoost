@@ -483,7 +483,14 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
      * governor still acts ONLY as a thermal safety net: when thermal_cap is
      * engaged it may pull frequencies DOWN, but it never raises/sets the normal
      * profile ceiling. Smart mode is fully governor-owned and unaffected. */
-    int manual_cap_skip = (!fsm_profile_is_smart && !thermal_cap);
+    /* manual_cap_skip: in MANUAL battery/balanced the shell owns caps, so the
+     * governor stays out (only thermal net pulls down). PERFORMANCE is special:
+     * OnePlus PowerHAL aggressively re-clamps the prime cluster back down (OP15
+     * prime seen pinned at 1.63 GHz despite the shell writing the 4.6 GHz
+     * ceiling once), so here we DO let the governor keep re-asserting the cap to
+     * defend the high ceiling against vendor clawback. Smart is fully governor-
+     * owned as before. */
+    int manual_cap_skip = (!fsm_profile_is_smart && !fsm_profile_is_performance && !thermal_cap);
     if (manual_cap_skip) {
         /* still let GPU / non-cap writes proceed below; just skip CPU caps */
         goto skip_cpu_caps;

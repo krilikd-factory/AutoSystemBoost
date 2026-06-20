@@ -140,6 +140,7 @@ static int fsm_profile_is_battery = 0;
  * smart too; FSM *shaping* (entry thresholds, gaming suppression) stays
  * battery-only via fsm_profile_is_battery. */
 static int fsm_profile_is_smart = 0;
+static int fsm_profile_is_performance = 0;
 #define fsm_profile_tracks_idle (fsm_profile_is_battery || fsm_profile_is_smart)
 static int fsm_profile_is_balanced = 0;
 #define PROFILE_BALANCED    1

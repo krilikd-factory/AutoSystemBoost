@@ -3747,6 +3747,7 @@ int main(int argc, char **argv) {
     asb_fsm_t fsm;
     fsm_init(&fsm, profile_idx);
     fsm_profile_is_battery = (profile_idx == PROFILE_BATTERY);
+    fsm_profile_is_performance = (profile_idx == PROFILE_PERFORMANCE);
     fsm_profile_is_smart   = (profile_idx == PROFILE_SMART);
     fsm_profile_is_balanced = (profile_idx == PROFILE_BALANCED);
 
@@ -4023,6 +4024,7 @@ int main(int argc, char **argv) {
                         fsm.plan.ac_used = 0;
                         fsm.profile_idx = _file_idx;
                         fsm_profile_is_battery = (_file_idx == PROFILE_BATTERY);
+                        fsm_profile_is_performance = (_file_idx == PROFILE_PERFORMANCE);
                         fsm_profile_is_smart   = (_file_idx == PROFILE_SMART);
                         fsm_profile_is_balanced = (_file_idx == PROFILE_BALANCED);
                         force_write = 1;
@@ -4264,6 +4266,7 @@ int main(int argc, char **argv) {
 
                         fsm.profile_idx = new_idx;
                         fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
+                        fsm_profile_is_performance = (new_idx == PROFILE_PERFORMANCE);
                         fsm_profile_is_smart   = (new_idx == PROFILE_SMART);
                         fsm_profile_is_balanced = (new_idx == PROFILE_BALANCED);
                         if (new_idx == PROFILE_PERFORMANCE) {
@@ -4353,6 +4356,7 @@ int main(int argc, char **argv) {
                     if (new_idx != fsm.profile_idx) {
                         fsm.profile_idx = new_idx;
                         fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
+                        fsm_profile_is_performance = (new_idx == PROFILE_PERFORMANCE);
                         fsm_profile_is_smart   = (new_idx == PROFILE_SMART);
                         fsm_profile_is_balanced = (new_idx == PROFILE_BALANCED);
                         force_write = 1;
@@ -4375,6 +4379,7 @@ int main(int argc, char **argv) {
                     session_end_self_tune(&fsm);
                     fsm.profile_idx = new_idx;
                     fsm_profile_is_battery = (new_idx == PROFILE_BATTERY);
+                    fsm_profile_is_performance = (new_idx == PROFILE_PERFORMANCE);
                     fsm_profile_is_smart   = (new_idx == PROFILE_SMART);
                     fsm_profile_is_balanced = (new_idx == PROFILE_BALANCED);
                     if (colon && *(colon+1)) {
