@@ -1790,12 +1790,12 @@ const CFG_ITEMS = [
   // --- Memory & UX ---
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM for games but cold-restarts background apps more often.' },
+  { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
+    desc:'Lets ASB change OxygenOS system toggles: RAM expansion, Adaptive Battery, Low-Heat mode. OFF (default) = ASB never touches them, so your Settings choices stick (fixes RAM expansion re-enabling itself after reboot). Enable only if you want profiles to drive them.' },
   { key:'UX_MANAGE_ANIM_SCALE', type:'bool', def:'0', name:'Manage Animation Scales',
     desc:'Performance shortens system animations (~0.8x) for a snappier UI; Battery keeps them stock. No battery cost. OFF = ASB never touches animation settings.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
     desc:'In Performance, shortens long-press and multi-tap windows so they register faster. If holds start triggering accidentally, keep OFF (system defaults).' },
-  { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
-    desc:'Lets ASB change OxygenOS system toggles: RAM expansion, Adaptive Battery, Low-Heat mode. OFF (default) = ASB never touches them, so your Settings choices stick (fixes RAM expansion re-enabling itself after reboot). Enable only if you want profiles to drive them.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Workaround for OOS builds that ignore live animation-scale changes \u2014 re-applies the scale to force it. Only matters if Manage Animation Scales is ON and animations aren\u2019t changing.' }
 ];
