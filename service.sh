@@ -1482,7 +1482,12 @@ apply_cpufreq_caps() {
     fi
   done
 }
-asb_feature_enabled CPU && apply_cpufreq_caps
+# NOTE: apply_cpufreq_caps is NOT called standalone here. It must only run via
+# apply_screen_aware_caps, which first sets _P_CPUCAP_L/_P_CPUCAP_B to the
+# correct per-device PERCENT values. Calling it directly at service start used
+# the absolute CPU_CAP_* left in _P_CPUCAP_* by asb_load_profile, which this
+# percent-based function misread as ">=100%" and briefly uncapped every cluster.
+# apply_screen_aware_caps runs at startup and on every profile/screen change.
 
 asb_screen_on() {
   for _dp in /sys/kernel/oplus_display/panel_power_status               /sys/kernel/oplus_display/disp_on_notify; do
@@ -1824,6 +1829,14 @@ apply_audio_boost() {
 asb_feature_enabled BT && ( sleep 15 && apply_audio_boost ) >/dev/null 2>&1 &
 
 asb_check_perfhal_drift() {
+  # DISABLED: caps are now a percent of each cluster's own max (see
+  # apply_screen_aware_caps), so the old absolute CPU_CAP_BIG comparison no
+  # longer means anything and would log spurious "drift". Kept as a no-op so any
+  # external caller is harmless; real cap drift is visible via asb_diag's
+  # per-cluster %-of-hw readout instead.
+  return 0
+}
+asb_check_perfhal_drift_legacy_unused() {
   asb_load_profile
   [ -z "$CPU_CAP_BIG" ] && return 0
   _want="$CPU_CAP_BIG"
