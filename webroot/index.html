@@ -1548,6 +1548,8 @@ const I18N = {
         desc: 'Производительность укорачивает системные анимации (~0.8x) для более отзывчивого интерфейса; Экономия оставляет стоковые. Без расхода батареи. ВЫКЛ = ASB не трогает настройки анимаций.' },
       UX_MANAGE_TIMEOUTS: { name: 'Управление таймаутами касаний',
         desc: 'В режиме Производительность укорачивает окна долгого нажатия и мульти-тапа, чтобы они срабатывали быстрее. Если удержания начинают срабатывать случайно — оставьте ВЫКЛ (системные значения).' },
+      UX_MANAGE_OEM_TOGGLES: { name: 'Управление системными тумблерами (ОЗУ/батарея/нагрев)',
+        desc: 'Позволяет ASB менять системные тумблеры OxygenOS: Расширение ОЗУ, Адаптивная батарея, Режим низкого нагрева. ВЫКЛ (по умолчанию) = ASB НЕ трогает их, и ваш выбор в Настройках сохраняется. Включайте только если хотите, чтобы профили ими управляли.' },
       UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
         desc: 'Обходной путь для сборок OOS, игнорирующих изменение масштаба анимаций «на лету» — повторно применяет масштаб принудительно. Имеет смысл только если Управление масштабом анимаций ВКЛ, а анимации не меняются.' }
     },
@@ -1792,6 +1794,8 @@ const CFG_ITEMS = [
     desc:'Performance shortens system animations (~0.8x) for a snappier UI; Battery keeps them stock. No battery cost. OFF = ASB never touches animation settings.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
     desc:'In Performance, shortens long-press and multi-tap windows so they register faster. If holds start triggering accidentally, keep OFF (system defaults).' },
+  { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
+    desc:'Lets ASB change OxygenOS system toggles: RAM expansion, Adaptive Battery, Low-Heat mode. OFF (default) = ASB never touches them, so your Settings choices stick (fixes RAM expansion re-enabling itself after reboot). Enable only if you want profiles to drive them.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Workaround for OOS builds that ignore live animation-scale changes \u2014 re-applies the scale to force it. Only matters if Manage Animation Scales is ON and animations aren\u2019t changing.' }
 ];
@@ -1825,6 +1829,7 @@ const CFG_ICONS = {
   BG_TRIM_LEVEL:'\uD83E\uDDF9',               // broom (RAM trim)
   UX_MANAGE_ANIM_SCALE:'\u2728',               // sparkles (animation)
   UX_MANAGE_TIMEOUTS:'\uD83D\uDC46',          // pointing finger (touch)
+  UX_MANAGE_OEM_TOGGLES:'\uD83E\uDDE9',         // puzzle piece (OEM toggles)
   UX_ANIM_FORCE_RESTART:'\uD83D\uDD04',       // restart arrows
   region_allow_locale:'\uD83C\uDF0D'          // globe
 };
