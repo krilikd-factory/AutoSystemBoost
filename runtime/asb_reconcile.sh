@@ -115,26 +115,16 @@
 
         case "$_now" in
           battery|balanced)
-            if [ -n "$_cur_p0_max" ] && [ "$_want_p0_max" -gt 0 ] 2>/dev/null \
-               && [ "$_cur_p0_max" -gt "$_want_p0_max" ] 2>/dev/null \
-               && [ "$_p0_count" -lt 5 ]; then
-              _diff_p0=$((_cur_p0_max - _want_p0_max))
-              if [ "$_diff_p0" -gt 100000 ]; then
-                _need=1; _reason="cap-drift-up-p0"
-                _lease_remaining=8
-                _p0_count=$((_p0_count + 1))
-              fi
-            fi
-            if [ $_need -eq 0 ] && [ -n "$_cur_p6_max" ] && [ "$_want_p6_max" -gt 0 ] 2>/dev/null \
-               && [ "$_cur_p6_max" -gt "$_want_p6_max" ] 2>/dev/null \
-               && [ "$_p6_count" -lt 5 ]; then
-              _diff_p6=$((_cur_p6_max - _want_p6_max))
-              if [ "$_diff_p6" -gt 100000 ]; then
-                _need=1; _reason="cap-drift-up-p6"
-                _lease_remaining=8
-                _p6_count=$((_p6_count + 1))
-              fi
-            fi
+            # CAP-DRIFT CHECK DISABLED. Caps are now a percent of each cluster's
+            # own max and are owned/re-applied by service.sh apply_screen_aware_caps
+            # on every screen-state and profile change (idempotently). The old
+            # check here compared policy0/policy6 against the absolute
+            # CPU_CAP_LITTLE/BIG, which (a) no longer matches the live % cap so it
+            # fired false "cap-drift" re-applies, and (b) only looked at a 2-cluster
+            # layout, missing OP12's policy2/5/7. Screen-state transitions above
+            # already retrigger a correct, topology-aware re-apply, so PowerHAL/
+            # thermal clawback is corrected without this stale comparison.
+            :
             ;;
         esac
 

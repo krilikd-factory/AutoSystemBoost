@@ -190,20 +190,36 @@ asb_apply_dynamic_tweaks() {
              "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
     [ -f "$_cf" ] || continue
     asb_tw_save_base "$_cf"          # no-op if a baseline already exists
-    asb_tw_restore_base "$_cf"       # revert to clean base before re-applying
+    _bp="$(asb_tw_base_path "$_cf")"
+    [ -f "$_bp" ] || continue
+    # Build the DESIRED final conf in a temp from the clean baseline, apply the
+    # aggressive/inject layers there, then swap it in ONLY if it differs from the
+    # live file. This makes the whole step idempotent: when nothing changed
+    # (e.g. a normal reboot with the same toggles) the /odm conf is not rewritten
+    # at all. Rewriting it every boot — restore-to-baseline then re-apply — is
+    # what raced the OP13 camera HAL reading /odm early and flashed
+    # "storage loading / camera unavailable" on first launch.
+    _des="${_cf}.asbdes$$"
+    cp -f "$_bp" "$_des" 2>/dev/null || { rm -f "$_des"; continue; }
     if [ "$_cam_aggr" = "1" ]; then
-      [ "$_cam_inject" = "1" ] && asb_tw_inject_camera "$_cf"
-      asb_tw_aggr_camera "$_cf"
-      # Safety net: if the patched conf is no longer well-formed (unbalanced
-      # braces — a cheap structural check that needs no JSON parser on device),
-      # revert to the baseline so the camera HAL never sees a broken file.
-      if [ -f "$_cf" ]; then
-        _ob="$(tr -cd '{' < "$_cf" 2>/dev/null | wc -c)"
-        _cb="$(tr -cd '}' < "$_cf" 2>/dev/null | wc -c)"
-        if [ "$_ob" != "$_cb" ] || [ "${_ob:-0}" = "0" ]; then
-          asb_tw_restore_base "$_cf"
-        fi
+      [ "$_cam_inject" = "1" ] && asb_tw_inject_camera "$_des"
+      asb_tw_aggr_camera "$_des"
+      # structural safety net: unbalanced braces -> fall back to the baseline.
+      _ob="$(tr -cd '{' < "$_des" 2>/dev/null | wc -c)"
+      _cb="$(tr -cd '}' < "$_des" 2>/dev/null | wc -c)"
+      if [ "$_ob" != "$_cb" ] || [ "${_ob:-0}" = "0" ]; then
+        cp -f "$_bp" "$_des" 2>/dev/null
       fi
+    fi
+    # swap in only on a real difference, preserving mode/owner/SELinux context.
+    if ! cmp -s "$_des" "$_cf" 2>/dev/null; then
+      chmod --reference="$_cf" "$_des" 2>/dev/null || chmod 0644 "$_des" 2>/dev/null
+      chown --reference="$_cf" "$_des" 2>/dev/null
+      _ctx="$(ls -Z "$_cf" 2>/dev/null | awk '{print $1}')"
+      case "$_ctx" in u:object_r:*) chcon "$_ctx" "$_des" 2>/dev/null ;; esac
+      mv -f "$_des" "$_cf" 2>/dev/null || { cat "$_des" > "$_cf" 2>/dev/null; rm -f "$_des"; }
+    else
+      rm -f "$_des" 2>/dev/null
     fi
   done
 }

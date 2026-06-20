@@ -198,42 +198,14 @@ asb_apply_cpu() {
   asb_feature_enabled CPU || return 0
   for _p in /sys/devices/system/cpu/cpufreq/policy*; do
     [ -d "$_p" ] || continue
-    _rel="$(cat "$_p/related_cpus" 2>/dev/null | awk '{print $1}')"
-    case "$_rel" in ''|*[!0-9]*) _rel=0 ;; esac
-    if [ "$_rel" -le "$LITTLE_END" ]; then
-      _cap="$CPU_CAP_LITTLE"
-      _min="$CPU_MIN_LITTLE"
-      _max_abs="$CPU_MAX_LITTLE"
-    else
-      _cap="$CPU_CAP_BIG"
-      _min="$CPU_MIN_BIG"
-      _max_abs="$CPU_MAX_BIG"
-    fi
-
-    _want=""
-    if [ -n "$_max_abs" ]; then
-      _want="$(asb_pick_nearest_freq "$_p" "$_max_abs")"
-    elif [ -n "$_cap" ]; then
-      if [ "$_cap" -ge 100 ] 2>/dev/null; then
-        if [ -r "$_p/scaling_available_frequencies" ]; then
-          _want="$(tr ' ' '\n' < "$_p/scaling_available_frequencies" | grep -v '^$' | sort -n | tail -1)"
-        else
-          _want="$(cat "$_p/cpuinfo_max_freq" 2>/dev/null)"
-        fi
-      else
-        _want="$(asb_pick_freq_pct "$_p" "$_cap")"
-      fi
-    fi
-
-    # CPU CAP OWNERSHIP (single-owner refactor): profile_core no longer writes
-    # scaling_max_freq / scaling_min_freq. Manual profiles (battery/balanced/
-    # performance) are owned exclusively by service.sh apply_screen_aware_caps
-    # (which has the correct per-device, screen-aware, 4-cluster MID-tier logic),
-    # and Smart is owned by the C governor. Having three writers race on the same
-    # sysfs nodes produced the contradictory caps seen in diag (performance prime
-    # stuck at 39-58%, OP12 battery prime > balanced prime). We keep ONLY the
-    # schedutil tunables below (they don't conflict with the cap owners).
-    : # caps intentionally not written here
+    # CPU CAP OWNERSHIP: scaling_max/min are written ONLY by service.sh
+    # apply_screen_aware_caps (per-device %, screen-aware, 4-cluster MID tier).
+    # profile_core just applies the schedutil tunables below. The old per-cluster
+    # _cap/_max_abs computation was removed — it read the legacy absolute
+    # CPU_CAP_*/CPU_MAX_* values that are no longer authoritative and only caused
+    # confusion (a second, conflicting cap source). Smart is owned by the C
+    # governor. One writer per node = no contradictory caps.
+    : # caps intentionally not computed or written here
 
     [ -w "$_p/schedutil/rate_limit_us" ] && writef_retry "$_p/schedutil/rate_limit_us" "$SCHED_RATE" 6 0.18 || true
     [ -w "$_p/schedutil/up_rate_limit_us" ] && writef_retry "$_p/schedutil/up_rate_limit_us" "$SCHED_UP_RATE" 6 0.18 || true
@@ -356,6 +328,22 @@ asb_apply_ux() {
         _restore=1
       fi
       [ "$_restore" = "1" ] && _anim_changed=1
+    else
+      # No baseline saved, but the toggle is OFF. An EARLIER build may have
+      # forced a profile scale (0.8 / 0.9) without ever saving a baseline, which
+      # is exactly how a user with the toggle off ends up stuck at 0.9. If the
+      # live scale matches a value ASB is known to set, reset it to stock 1.0 so
+      # the user's "off" state is honoured. We never touch a value the user
+      # themselves chose (anything other than our known 0.8/0.9).
+      _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
+      case "$_cur_anim" in
+        0.8|0.80|0.9|0.90)
+          asb_settings_put global animator_duration_scale 1.0
+          asb_settings_put global transition_animation_scale 1.0
+          asb_settings_put global window_animation_scale 1.0
+          _anim_changed=1
+          ;;
+      esac
     fi
   fi
 

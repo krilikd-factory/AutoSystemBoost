@@ -23,10 +23,14 @@ asb_map_profile_vars() {
   _P_UCL_BG="$UCL_BG_MIN"
   _P_UCL_FG="$UCL_FG_MIN"
   _P_UCL_TOP="$UCL_TOP_MIN"
-  _P_CPUCAP_L="${CPU_CAP_LITTLE:-}"
-  _P_CPUCAP_B="${CPU_CAP_BIG:-}"
-  _P_CPU_MAXL="$CPU_MAX_LITTLE"
-  _P_CPU_MAXB="$CPU_MAX_BIG"
+  # CPU caps are NOT loaded here. _P_CPUCAP_L/_P_CPUCAP_B are PERCENTS set by
+  # service.sh apply_screen_aware_caps (per-device, screen-aware). Leaving the
+  # legacy absolute CPU_CAP_*/CPU_MAX_* in them caused apply_cpufreq_caps to
+  # misread an absolute kHz as a percent. Leave them empty here.
+  _P_CPUCAP_L=""
+  _P_CPUCAP_B=""
+  _P_CPU_MAXL=""
+  _P_CPU_MAXB=""
   case "$WIFI_PM_MODE" in
     off) _P_WLAN_PM=0 ;;
     on) _P_WLAN_PM=1 ;;
