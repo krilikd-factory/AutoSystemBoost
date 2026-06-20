@@ -225,22 +225,15 @@ asb_apply_cpu() {
       fi
     fi
 
-    if [ -w "$_p/scaling_max_freq" ] && [ -n "$_want" ]; then
-      writef_retry "$_p/scaling_max_freq" "$_want" 10 0.15 || true
-    fi
-
-    if [ -w "$_p/scaling_min_freq" ] && [ -n "$_min" ]; then
-      _min_pick="$(asb_pick_nearest_freq "$_p" "$_min")"
-      [ -n "$_min_pick" ] && writef_retry "$_p/scaling_min_freq" "$_min_pick" 10 0.15 || true
-    fi
-
-    if [ -r "$_p/scaling_max_freq" ] && [ -r "$_p/scaling_min_freq" ]; then
-      _curmax="$(cat "$_p/scaling_max_freq" 2>/dev/null)"
-      _curmin="$(cat "$_p/scaling_min_freq" 2>/dev/null)"
-      if [ -n "$_curmax" ] && [ -n "$_curmin" ] && [ "$_curmin" -gt "$_curmax" ] 2>/dev/null; then
-        writef_retry "$_p/scaling_min_freq" "$_curmax" 6 0.12 || true
-      fi
-    fi
+    # CPU CAP OWNERSHIP (single-owner refactor): profile_core no longer writes
+    # scaling_max_freq / scaling_min_freq. Manual profiles (battery/balanced/
+    # performance) are owned exclusively by service.sh apply_screen_aware_caps
+    # (which has the correct per-device, screen-aware, 4-cluster MID-tier logic),
+    # and Smart is owned by the C governor. Having three writers race on the same
+    # sysfs nodes produced the contradictory caps seen in diag (performance prime
+    # stuck at 39-58%, OP12 battery prime > balanced prime). We keep ONLY the
+    # schedutil tunables below (they don't conflict with the cap owners).
+    : # caps intentionally not written here
 
     [ -w "$_p/schedutil/rate_limit_us" ] && writef_retry "$_p/schedutil/rate_limit_us" "$SCHED_RATE" 6 0.18 || true
     [ -w "$_p/schedutil/up_rate_limit_us" ] && writef_retry "$_p/schedutil/up_rate_limit_us" "$SCHED_UP_RATE" 6 0.18 || true
@@ -321,7 +314,22 @@ asb_apply_ux() {
   asb_feature_enabled FPS || asb_feature_enabled VM || return 0
   has settings || return 0
   local _anim_changed=0
+  local _ux_base="$MODDIR/config/ux_baseline.conf"
+
+  # ANIMATION SCALES — manage OR restore.
   if [ -n "$UX_ANIM_SCALE" ] && [ "${UX_MANAGE_ANIM_SCALE:-0}" = "1" ]; then
+    # Save the user's stock scales ONCE, before we ever override them, so we can
+    # put them back when the toggle is turned off.
+    if [ ! -f "$_ux_base" ]; then
+      mkdir -p "$MODDIR/config" 2>/dev/null
+      {
+        echo "BASE_WIN_ANIM=$(settings get global window_animation_scale 2>/dev/null)"
+        echo "BASE_TRANS_ANIM=$(settings get global transition_animation_scale 2>/dev/null)"
+        echo "BASE_DUR_ANIM=$(settings get global animator_duration_scale 2>/dev/null)"
+        echo "BASE_LONG_PRESS=$(settings get secure long_press_timeout 2>/dev/null)"
+        echo "BASE_MULTI_PRESS=$(settings get secure multi_press_timeout 2>/dev/null)"
+      } > "$_ux_base" 2>/dev/null
+    fi
     local _cur_anim
     _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
     if [ "$_cur_anim" != "$UX_ANIM_SCALE" ]; then
@@ -330,13 +338,39 @@ asb_apply_ux() {
       asb_settings_put global window_animation_scale "$UX_ANIM_SCALE"
       _anim_changed=1
     fi
+  else
+    # Toggle is OFF — if we previously overrode the scales, RESTORE the saved
+    # baseline (this is the fix for scales sticking at 0.9 forever). Default
+    # back to 1.0 if we somehow have no baseline value.
+    if [ -f "$_ux_base" ]; then
+      . "$_ux_base" 2>/dev/null
+      local _restore=0
+      _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
+      case "$BASE_WIN_ANIM" in ''|null) BASE_WIN_ANIM=1 ;; esac
+      case "$BASE_TRANS_ANIM" in ''|null) BASE_TRANS_ANIM=1 ;; esac
+      case "$BASE_DUR_ANIM" in ''|null) BASE_DUR_ANIM=1 ;; esac
+      if [ "$_cur_anim" != "$BASE_WIN_ANIM" ]; then
+        asb_settings_put global animator_duration_scale "$BASE_DUR_ANIM"
+        asb_settings_put global transition_animation_scale "$BASE_TRANS_ANIM"
+        asb_settings_put global window_animation_scale "$BASE_WIN_ANIM"
+        _restore=1
+      fi
+      [ "$_restore" = "1" ] && _anim_changed=1
+    fi
   fi
-  if [ -n "$UX_LONG_PRESS" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
-    asb_settings_put secure long_press_timeout "$UX_LONG_PRESS"
+
+  # TOUCH TIMEOUTS — manage OR restore.
+  if [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
+    [ -n "$UX_LONG_PRESS" ] && asb_settings_put secure long_press_timeout "$UX_LONG_PRESS"
+    [ -n "$UX_MULTI_PRESS" ] && asb_settings_put secure multi_press_timeout "$UX_MULTI_PRESS"
+  elif [ -f "$_ux_base" ]; then
+    . "$_ux_base" 2>/dev/null
+    [ -n "$BASE_LONG_PRESS" ] && [ "$BASE_LONG_PRESS" != "null" ] && \
+      asb_settings_put secure long_press_timeout "$BASE_LONG_PRESS"
+    [ -n "$BASE_MULTI_PRESS" ] && [ "$BASE_MULTI_PRESS" != "null" ] && \
+      asb_settings_put secure multi_press_timeout "$BASE_MULTI_PRESS"
   fi
-  if [ -n "$UX_MULTI_PRESS" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
-    asb_settings_put secure multi_press_timeout "$UX_MULTI_PRESS"
-  fi
+
   [ -n "$UX_ADAPTIVE_BAT" ] && asb_settings_put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT"
   [ -n "$UX_RAM_EXPAND" ] && asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
   [ -n "$UX_LOW_HEAT" ] && asb_settings_put global sem_low_heat_mode "$UX_LOW_HEAT"

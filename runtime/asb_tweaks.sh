@@ -74,13 +74,25 @@ asb_tw_aggr_audio() {
 # --- aggressive CAMERA tone layer (one conf_tuning_params.json) ---
 asb_tw_aggr_camera() {
   _f="$1"; [ -f "$_f" ] || return 0
-  asb_tw_sedi 's/\("sunsetSatScale": *\)1\.6/\11.4/g'            "$_f"
-  asb_tw_sedi 's/\("sunsetSatScale": *\)1\.7/\11.4/g'            "$_f"
-  asb_tw_sedi 's/\("blueSatParam": *\)0\.95/\11.05/g'            "$_f"
-  asb_tw_sedi 's/\("nightDownGainParam": *\)0\.3/\10.4/g'        "$_f"
-  asb_tw_sedi 's/\("nightDownGainParamHizoom": *\)0\.3/\10.4/g'  "$_f"
-  asb_tw_sedi 's/\("nightDownGainParamFront": *\)0\.3/\10.4/g'   "$_f"
-  asb_tw_sedi 's/\("dayDownGainDarkBoostParam": *\)1\.3/\11.4/g' "$_f"
+  # DEVICE-AWARE strength. The full-aggressive tone is tuned for OP15 (canoe);
+  # on OP13 (sun) users reported visible low-light banding / saturation jumps,
+  # so sun gets a softer grade (blueSat 1.02 instead of 1.05, nightDownGain 0.35
+  # instead of 0.4, dayDarkBoost 1.3 instead of 1.4). OP12 has no camera overlay.
+  _atc_soc="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_atc_soc" ] && _atc_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
+  case "$_atc_soc" in
+    sun|sm8750*)
+      _BSAT="1.02"; _NDG="0.35"; _DDB="1.3"; _SSS="1.3" ;;
+    *)
+      _BSAT="1.05"; _NDG="0.4";  _DDB="1.4"; _SSS="1.4" ;;
+  esac
+  asb_tw_sedi "s/\\(\"sunsetSatScale\": *\\)1\\.6/\\1${_SSS}/g"            "$_f"
+  asb_tw_sedi "s/\\(\"sunsetSatScale\": *\\)1\\.7/\\1${_SSS}/g"            "$_f"
+  asb_tw_sedi "s/\\(\"blueSatParam\": *\\)0\\.95/\\1${_BSAT}/g"            "$_f"
+  asb_tw_sedi "s/\\(\"nightDownGainParam\": *\\)0\\.3/\\1${_NDG}/g"        "$_f"
+  asb_tw_sedi "s/\\(\"nightDownGainParamHizoom\": *\\)0\\.3/\\1${_NDG}/g"  "$_f"
+  asb_tw_sedi "s/\\(\"nightDownGainParamFront\": *\\)0\\.3/\\1${_NDG}/g"   "$_f"
+  asb_tw_sedi "s/\\(\"dayDownGainDarkBoostParam\": *\\)1\\.3/\\1${_DDB}/g" "$_f"
 }
 
 # --- inject the aggressive tone keys a trimmed stock conf_tuning lacks ---
