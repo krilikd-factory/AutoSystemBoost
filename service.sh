@@ -1560,7 +1560,7 @@ apply_screen_aware_caps() {
         # OP12 battery prime (55%) was higher than balanced prime (41%).
         case "$_dev" in
           op15) _P_CPUCAP_L=50; _P_CPUCAP_B=38 ;;
-          op13) _P_CPUCAP_L=50; _P_CPUCAP_B=44 ;;   # was 32/32 -> jank; lifted
+          op13) _P_CPUCAP_L=58; _P_CPUCAP_B=48 ;;   # raised: UI stayed janky at 50/44
           op12) _P_CPUCAP_L=60; _P_CPUCAP_B=45 ;;   # MID lifts to ~72%
           *)    _P_CPUCAP_L=52; _P_CPUCAP_B=40 ;;
         esac
