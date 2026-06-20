@@ -511,7 +511,7 @@ asb_apply_device_overlay() {
     # and the camera/GPS HAL reads /odm directly — not /vendor/odm. Earlier
     # builds wrote only system/vendor/odm, leaving /odm stock; on OP12 that
     # showed up as /odm vs /vendor/odm desync (camera crash, stale GPS). We now
-    # ALSO write the overlay into system/odm so KSU/Magisk mounts it into the
+    # ALSO write the overlay into system/odm so the manager mounts it into the
     # real /odm partition (the manager builds its partition list from the dirs
     # the module ships under system/, and creates an /odm mirror for exactly
     # this). We keep the system/vendor/odm copy too, so whichever path the HAL
@@ -520,22 +520,19 @@ asb_apply_device_overlay() {
     _odm_dups() {
       # $1 = relative overlay path under the overlay dir. echoes the system/
       # destination paths (space-separated) this file should be copied to.
-      # OP12 REGRESSION FIX: the old working OP12 build wrote the overlay ONLY
-      # to system/vendor/odm (never the direct system/odm mirror), and its
-      # camera worked. Mirroring camera/media into system/odm changed the
-      # multicamera environment the vendor HAL sees and made
-      # ChiMcxRoiTranslator::Initialize SIGABRT on OP12. So on OP12 we emit only
-      # the system/vendor/odm destination (working behavior). OP13 still gets
-      # the dual path (its separate /odm partition genuinely needs it and the
-      # camera works there).
+      #
+      # CAMERA DESYNC FIX (proven by diag, 1190): the OP12 multicamera HAL reads
+      # the real /odm partition. On KernelSU the overlay is mounted into BOTH
+      # /odm and /vendor/odm, they agree, and the camera works. On APatch only
+      # /vendor/odm was patched (we used to ship OP12 to system/vendor/odm ONLY),
+      # so /odm stayed stock, the two disagreed, and ChiMcxRoiTranslator SIGABRTd
+      # during configure_streams. The earlier "OP12 = vendor/odm only" rule was
+      # based on a disproven theory and was itself the APatch breakage. OP12 now
+      # gets the SAME dual path as OP13 so /odm and /vendor/odm always agree.
       case "$1" in
         vendor/odm/*)
           _sub="${1#vendor/odm/}"
-          if [ "$ASB_IS_OP12" = "true" ]; then
-            echo "system/vendor/odm/$_sub"
-          else
-            echo "system/vendor/odm/$_sub system/odm/$_sub"
-          fi
+          echo "system/vendor/odm/$_sub system/odm/$_sub"
           ;;
         vendor/*)
           echo "system/$1"
@@ -1131,7 +1128,11 @@ asb_prune_module() {
     rm -f "$MODPATH/system/vendor/etc/media_profiles"*".xml" 2>/dev/null || true
     rm -f "$MODPATH/system/vendor/odm/etc/media_profiles"*".xml" 2>/dev/null || true
     rm -rf "$MODPATH/system/vendor/odm/etc/camera" 2>/dev/null || true
-  rm -rf "$MODPATH/system/odm/etc/camera" 2>/dev/null || true   # OP12/OP13: strip OP15 multicam set from /odm copy too (ChiMcx crash fix)
+  # NOTE: system/odm/etc/camera is intentionally NOT stripped here anymore. The
+  # OP12 multicamera HAL reads the real /odm partition, and the camera only works
+  # when /odm matches /vendor/odm (proven on KernelSU). We now deliberately
+  # mirror the OP12 camera overlay into system/odm so the manager patches /odm
+  # too; wiping it here would re-create the APatch desync crash.
   fi
 
   if [ "${ASB_CPU}" != "true" ]; then
