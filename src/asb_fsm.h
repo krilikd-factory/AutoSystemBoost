@@ -208,8 +208,8 @@ static void fsm_interpolate_caps(
     const asb_profile_caps_t *c = &bounds->ceil;
 
     for (int i = 0; i < 3; i++) {
-        out->cpu_max[i] = lerp_int(f->cpu_max[i], c->cpu_max[i], t);
-        out->cpu_min[i] = lerp_int(f->cpu_min[i], c->cpu_min[i], t);
+        out->cpu_max[i] = asb_bounds_scale(i, lerp_int(f->cpu_max[i], c->cpu_max[i], t));
+        out->cpu_min[i] = asb_bounds_scale(i, lerp_int(f->cpu_min[i], c->cpu_min[i], t));
     }
     out->gpu_max_pct    = lerp_int(f->gpu_max_pct,    c->gpu_max_pct,    t);
     out->gpu_min_pct    = lerp_int(f->gpu_min_pct,    c->gpu_min_pct,    t);

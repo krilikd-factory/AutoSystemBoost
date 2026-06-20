@@ -284,6 +284,18 @@ static int g_cpu_all_ids[16];
 static int g_cpu_all_slot[16];
 static int g_cpu_all_count = 0;
 static int g_cpu_policy_count    = 0;
+/* Real cpuinfo_max_freq (kHz) for each of the 3 logical slots, captured during
+ * topology discovery. The FSM cap bounds in asb_fsm_bounds.generated.h are
+ * absolute kHz authored against the SM8650 (OP12) reference (~2.0 GHz little /
+ * ~3.3 GHz big). On OP13 (sun, big ~4.32 GHz) and OP15 (canoe, prime 4.6 GHz)
+ * those raw numbers are far too low — e.g. the battery FLOOR of 921600 is 21%
+ * of OP13's prime, so when smart mode or the thermal net pulls to the floor the
+ * UI freezes. We scale every bound by real_hwmax/reference_hwmax per slot so the
+ * same bounds table tracks each device's real silicon. */
+static int g_cpu_slot_hwmax[3] = {0, 0, 0};
+#define ASB_BOUNDS_REF_HWMAX_LITTLE 2035200  /* SM8650 policy0 reference */
+#define ASB_BOUNDS_REF_HWMAX_BIG    3302400  /* SM8650 policy7 reference */
+static void cpu_capture_slot_hwmax(void);
 
 static void cpu_topology_discover(void) {
     if (g_cpu_policy_count > 0) return;
@@ -314,6 +326,7 @@ static void cpu_topology_discover(void) {
         g_cpu_policy_ids[1] = 6;
         g_cpu_policy_ids[2] = -1;
         g_cpu_policy_count  = 2;
+        cpu_capture_slot_hwmax();
         return;
     }
     if (nf == 1) {
@@ -321,6 +334,7 @@ static void cpu_topology_discover(void) {
         g_cpu_policy_ids[1] = -1;
         g_cpu_policy_ids[2] = -1;
         g_cpu_policy_count  = 1;
+        cpu_capture_slot_hwmax();
         return;
     }
     if (nf == 2) {
@@ -331,6 +345,7 @@ static void cpu_topology_discover(void) {
         g_cpu_all_ids[0] = found[0]; g_cpu_all_slot[0] = 0;
         g_cpu_all_ids[1] = found[1]; g_cpu_all_slot[1] = 1;
         g_cpu_all_count = 2;
+        cpu_capture_slot_hwmax();
         return;
     }
     /* 3+ clusters (OP12 has 4): map slot0=little(first), slot2=prime(last),
@@ -372,6 +387,41 @@ static void cpu_topology_discover(void) {
         g_cpu_all_slot[g_cpu_all_count] = slot;
         g_cpu_all_count++;
     }
+    cpu_capture_slot_hwmax();
+}
+
+/* Fill g_cpu_slot_hwmax[] from each slot's representative policy. Safe to call
+ * after g_cpu_policy_ids[] is set. */
+static void cpu_capture_slot_hwmax(void) {
+    for (int s = 0; s < 3; s++) {
+        g_cpu_slot_hwmax[s] = 0;
+        if (g_cpu_policy_ids[s] < 0) continue;
+        char path[128];
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpufreq/policy%d/cpuinfo_max_freq",
+                 g_cpu_policy_ids[s]);
+        int fd = open(path, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) continue;
+        char b[32] = {0};
+        int n = read(fd, b, sizeof(b) - 1); close(fd);
+        if (n > 0) g_cpu_slot_hwmax[s] = atoi(b);
+    }
+}
+
+/* Scale an absolute bound (authored against the SM8650 reference) to this
+ * device's real silicon for the given slot. slot 0 uses the little reference,
+ * slots 1/2 use the big reference. Returns the input unchanged if we have no
+ * hwmax (keeps old behaviour as a safe fallback). */
+static int asb_bounds_scale(int slot, int kHz) {
+    if (kHz <= 0 || slot < 0 || slot > 2) return kHz;
+    int hw = g_cpu_slot_hwmax[slot];
+    if (hw <= 0) return kHz;
+    int ref = (slot == 0) ? ASB_BOUNDS_REF_HWMAX_LITTLE : ASB_BOUNDS_REF_HWMAX_BIG;
+    if (ref <= 0) return kHz;
+    long scaled = (long)kHz * hw / ref;
+    if (scaled > hw) scaled = hw;          /* never exceed the cluster ceiling */
+    if (scaled < 300000) scaled = 300000;  /* never below a sane floor */
+    return (int)scaled;
 }
 
 static const char *cpu_policy_path(int slot, const char *file) {
