@@ -402,6 +402,29 @@ if [ -r /proc/meminfo ]; then
   _memtot=$(grep -m1 MemTotal /proc/meminfo | awk '{print $2}')
   _memfree=$(grep -m1 MemAvailable /proc/meminfo | awk '{print $2}')
   P "  RAM: total=$((${_memtot:-0}/1024))MB available=$((${_memfree:-0}/1024))MB"
+  # Detailed breakdown so we can see WHAT occupies RAM (the headline "available"
+  # number swings with whatever apps are open at snapshot time, which makes
+  # cross-profile comparisons misleading). Cached+Buffers+SReclaimable is
+  # reclaimable cache (counts as "used" in some UIs but is free on demand);
+  # Active(anon)/Inactive(anon) is real app memory; Shmem is shared/ashmem.
+  _mi() { grep -m1 "^$1:" /proc/meminfo 2>/dev/null | awk '{print $2}'; }
+  _mb() { echo "$(( ${1:-0} / 1024 ))MB"; }
+  _free=$(_mi MemFree); _cached=$(_mi Cached); _buffers=$(_mi Buffers)
+  _srecl=$(_mi SReclaimable); _sunrecl=$(_mi SUnreclaim); _shmem=$(_mi Shmem)
+  _aanon=$(_mi 'Active(anon)'); _ianon=$(_mi 'Inactive(anon)')
+  _afile=$(_mi 'Active(file)'); _ifile=$(_mi 'Inactive(file)')
+  _swcached=$(_mi SwapCached); _mapped=$(_mi Mapped); _kreclaim=$(_mi KReclaimable)
+  P "    MemFree=$(_mb $_free)  Cached=$(_mb $_cached)  Buffers=$(_mb $_buffers)  SwapCached=$(_mb $_swcached)"
+  P "    Active(anon)=$(_mb $_aanon)  Inactive(anon)=$(_mb $_ianon)   <- real app (anon) memory"
+  P "    Active(file)=$(_mb $_afile)  Inactive(file)=$(_mb $_ifile)   <- file cache (reclaimable)"
+  P "    SReclaimable=$(_mb $_srecl)  SUnreclaim=$(_mb $_sunrecl)  KReclaimable=$(_mb $_kreclaim)  Shmem=$(_mb $_shmem)  Mapped=$(_mb $_mapped)"
+  # Derived: reclaimable cache that the kernel can hand back under pressure, vs
+  # genuinely committed memory. This is the apples-to-apples figure to compare
+  # across profiles, not the raw "available".
+  _reclaimable=$(( ${_cached:-0} + ${_buffers:-0} + ${_srecl:-0} ))
+  _anon=$(( ${_aanon:-0} + ${_ianon:-0} ))
+  P "    => reclaimable cache ~$(_mb $_reclaimable), committed app(anon) ~$(_mb $_anon)"
+  NOTE "compare app(anon) across profiles, NOT 'available' — 'available' swings with whatever is open at snapshot time"
 fi
 # swap / zram
 if [ -r /proc/swaps ]; then
