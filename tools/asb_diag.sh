@@ -595,6 +595,16 @@ P "      frequency step for THIS SoC's clusters, the governor may be pinning the
 P "      wrong cluster low (the likely cause of OP12 battery-mode sluggishness)."
 
 P "  PASS=$PASS   FAIL=$FAIL   N/A=$NA   info=$INFO"
+# Normalized score so devices are comparable. Raw PASS counts mislead (a device
+# with more applicable checks, e.g. bt_absvol=on + aggressive toggles, racks up
+# more PASS without being "better optimized"). pass_ratio = PASS / applicable.
+_applicable=$((PASS + FAIL))
+if [ "$_applicable" -gt 0 ]; then
+  _ratio=$(( PASS * 100 / _applicable ))
+  P "  applicable=$_applicable   pass_ratio=${_ratio}%   (PASS/(PASS+FAIL); N/A & info excluded)"
+  P "  >>> Compare devices by pass_ratio, NOT raw PASS — a higher PASS count"
+  P "      usually just means more checks applied on that model."
+fi
 P ""
 P "  How to read this:"
 P "   - PASS  = ASB's change is live in the system."
