@@ -132,12 +132,6 @@ asb_end_banner() {
   ui_print "${ASB_DONE_MSG:-Module installed. Reboot.}"
   ui_print "${SEPARATOR}"
   ui_print " "
-  ui_print "  Diagnostics: after reboot, run in a root shell:"
-  ui_print "      su -c asbdiag"
-  ui_print "  If that says \"Permission denied\", use this instead:"
-  ui_print "      su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_diag.sh'"
-  ui_print "  -> full system audit saved to /sdcard/asb_diag_report.txt"
-  ui_print " "
   ui_print "      #####      "
   ui_print "     ##      ##     "
   ui_print "    ##        ##    "
@@ -982,7 +976,6 @@ asb_guard_v4a_effects() {
       _stripped=$((_stripped + 1))
     fi
   done
-  [ "$_stripped" -gt 0 ] && ui_print "[*] V4A stripped from $_stripped effect file(s) — no ViPER on this platform (prevents bootloop)"
   return 0
 }
 
@@ -1066,6 +1059,9 @@ asb_preserve_user_config() {
   # keys in this version are introduced cleanly.
   _new_conf="$MODPATH/config/governor.conf"
   _old_conf="$NVBASE/modules/$MODID/config/governor.conf"
+  # Fall back to the update-staging dir if the live module dir has no config yet
+  # (some KSU/APatch flows stage the previous install under modules_update).
+  [ -f "$_old_conf" ] || _old_conf="$NVBASE/modules_update/$MODID/config/governor.conf"
   [ -f "$_new_conf" ] || return 0
   [ -f "$_old_conf" ] || { ui_print "[*] Fresh install - using default config"; return 0; }
 
@@ -1089,7 +1085,6 @@ region_allow_locale"
       _migrated=$((_migrated + 1))
     fi
   done
-  ui_print "[*] Preserved $_migrated WebUI setting(s) from previous install"
 }
 
 asb_prune_module() {
@@ -1328,7 +1323,6 @@ if [ "$ASB_IS_OP15" = "true" ]; then
       . "$MODPATH/runtime/asb_tweaks.sh"
       asb_save_dynamic_baselines "$MODPATH"
       asb_apply_dynamic_tweaks "$MODPATH"
-      ui_print "[*] OP15 aggressive audio/camera wired to boot-time toggles"
     fi
   fi
 elif [ "$ASB_IS_OP13" = "true" ]; then
@@ -2315,7 +2309,6 @@ for _vb in $(find "$MODPATH/system" -type f -name "video_beauty_default_config" 
       _vbctx="$(ls -Z "$_vb" 2>/dev/null | awk '{print $1}')"
       case "$_vbctx" in u:object_r:*) chcon "$_vbctx" "$_vbt" 2>/dev/null ;; esac
       mv -f "$_vbt" "$_vb" 2>/dev/null || { cat "$_vbt" > "$_vb" 2>/dev/null; rm -f "$_vbt"; }
-      ui_print "    + Stripped // comment from ${_vb#$MODPATH/}"
     else
       rm -f "$_vbt" 2>/dev/null
     fi
