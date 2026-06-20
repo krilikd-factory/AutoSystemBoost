@@ -247,46 +247,51 @@ done
 # camera provider service health (the process that SIGABRTs on OP12)
 P "  camera provider service: init.svc=$(gp init.svc.vendor.camera-provider) cameraserver=$(gp init.svc.cameraserver)"
 
-# --- 6b. OP12 HARD camera-off verification (no non-stock camera env allowed) ---
+# --- 6b. OP12 camera env: must MATCH the proven-working module, and /odm must
+#     stay in sync with /vendor/odm (a desync between the two is the prime
+#     multicamera-HAL crash suspect on APatch). ---
 if [ "$_is_pineapple" = "1" ]; then
-  NOTE "platform=$_cam_plat -> OP12: camera category should be FULLY stock (no overlays/props)"
-  # The vendor multicamera HAL crashes on ANY non-stock camera config, so the
-  # PASS condition here is the OPPOSITE of other devices: our files must be ABSENT.
-  _mvg_v="/odm/etc/camera/mvg_sat_config.json"
-  if [ -f "$_mvg_v" ]; then
-    _mvg_sz="$(wc -c < "$_mvg_v" 2>/dev/null | tr -d ' ')"
-    # OP12 stock mvg_sat is ~2636 bytes; our OP15 one is ~3081. Flag the OP15 one.
-    if [ "${_mvg_sz:-0}" -gt 2800 ] 2>/dev/null; then
-      V "  mvg_sat_config is STOCK (not the OP15 multicam config)" "stock" "OP15-sized:${_mvg_sz}b" eq
+  NOTE "platform=$_cam_plat -> OP12: camera overlay should match the known-good module; /odm and /vendor/odm must agree"
+  # CRITICAL: compare media_profiles on the real /odm partition vs /vendor/odm.
+  # The OP12 HAL reads /odm directly; if the module patched /vendor/odm but not
+  # /odm (or vice-versa), the two disagree and multicamera configure_streams can
+  # SIGABRT. This is the single most useful camera check on OP12/APatch.
+  _mp_odm="/odm/etc/camera/media_profiles.xml"
+  _mp_vodm="/vendor/odm/etc/camera/media_profiles.xml"
+  _sz_odm="$( [ -f "$_mp_odm" ] && wc -c < "$_mp_odm" 2>/dev/null | tr -d ' ' )"
+  _sz_vodm="$( [ -f "$_mp_vodm" ] && wc -c < "$_mp_vodm" 2>/dev/null | tr -d ' ' )"
+  P "  media_profiles sizes: /odm=${_sz_odm:-absent}  /vendor/odm=${_sz_vodm:-absent}"
+  if [ -n "$_sz_odm" ] && [ -n "$_sz_vodm" ]; then
+    if [ "$_sz_odm" = "$_sz_vodm" ]; then
+      P "  [PASS] /odm and /vendor/odm media_profiles agree (no desync)"; PASS=$((PASS+1))
     else
-      P "  [PASS] mvg_sat_config looks stock (${_mvg_sz}b)"; PASS=$((PASS+1))
+      V "  /odm vs /vendor/odm media_profiles DESYNC (HAL crash suspect)" "in-sync" "odm=${_sz_odm}/vodm=${_sz_vodm}" eq
     fi
-  else
-    NOTE "mvg_sat_config.json absent on /odm"
   fi
-  # our overlay markers must NOT be present (8-app retouch list, raised bitrate)
+  # Owner/timestamp tell us whether the module wrote /vendor/odm directly (group
+  # shell + recent date) vs a clean magic-mount. Informational, helps debugging.
+  if [ -f "$_mp_vodm" ]; then
+    _own="$(ls -l "$_mp_vodm" 2>/dev/null | awk '{print $3":"$4}')"
+    P "  /vendor/odm media_profiles owner = ${_own:-?} (root:root = stock/mount, *:shell = module wrote it)"
+  fi
+  # conf_tuning / video_beauty presence (these SHOULD be present now — we apply
+  # the same overlay as the working module, no longer a camera-off).
   for VB in /odm/etc/camera/config/video_beauty_default_config \
             /vendor/odm/etc/camera/config/video_beauty_default_config; do
     [ -f "$VB" ] || continue
-    _napp="$(grep -c packageName "$VB" 2>/dev/null)"
-    _tg="$(grep -c org.telegram.messenger "$VB" 2>/dev/null)"
-    # On a true camera-off, Telegram (our addition) should be GONE.
-    if [ "${_tg:-0}" = "0" ]; then
-      P "  [PASS] $VB is stock (no ASB retouch additions)"; PASS=$((PASS+1))
+    _cm=$(grep -c '//' "$VB" 2>/dev/null)
+    if [ "${_cm:-0}" = "0" ]; then
+      P "  [PASS] $VB present, strict JSON (no // comments)"; PASS=$((PASS+1))
     else
-      V "  $VB should be STOCK (our overlay still live!)" "stock" "ASB-overlay(${_napp}apps,TG)" eq
+      V "  $VB has // comments (HAL JSON parser may reject)" "0" "$_cm" eq
     fi
   done
-  CMP="$(firstf '/odm/etc/camera/media_profiles.xml' '/vendor/odm/etc/camera/media_profiles.xml')"
-  if [ -n "$CMP" ]; then
-    _br=$(awk '/quality="1080p"/{f=1} f&&/bitRate=/{match($0,/bitRate="[0-9]+"/);print substr($0,RSTART+9,RLENGTH-10);exit}' "$CMP" 2>/dev/null)
-    # stock OP12 1080p is 20 Mbps; our overlay raised it to 37.3 Mbps.
-    if [ "${_br:-0}" = "37300000" ]; then
-      V "  media_profiles should be STOCK (our 37.3M overlay still live!)" "stock" "ASB-37.3M" eq
-    else
-      P "  [PASS] media_profiles 1080p looks stock (${_br})"; PASS=$((PASS+1))
-    fi
-  fi
+  # multicamera/HAL props that must be live for configure_streams to succeed.
+  P "  multicamera props live:"
+  for _p in persist.vendor.camera.mfnr.enable ro.vendor.oplus.camera.isSupportExplorer \
+            persist.camera.dual_camera_sat persist.vendor.camera.sat.fallback.dist; do
+    P "    $_p = $(gp $_p)"
+  done
 else
   # --- 6c. OP13/OP15: camera overlays SHOULD be applied ---
   for VB in /odm/etc/camera/config/video_beauty_default_config /vendor/odm/etc/camera/config/video_beauty_default_config; do
@@ -455,7 +460,11 @@ for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
   _smax=$(cat "$_pol/scaling_max_freq" 2>/dev/null)
   _cur=$(cat "$_pol/scaling_cur_freq" 2>/dev/null)
   _gov=$(cat "$_pol/scaling_governor" 2>/dev/null)
-  P "  [$_pn] cpus={$_cpus} gov=$_gov"
+  # Writability of scaling_max_freq: if ASB can't write it, the per-device caps
+  # never take effect and the values above are whatever the kernel/OEM set. This
+  # is the decisive check when live caps don't match ASB's intended percentages.
+  if [ -w "$_pol/scaling_max_freq" ]; then _wf="writable"; else _wf="NOT-writable"; fi
+  P "  [$_pn] cpus={$_cpus} gov=$_gov scaling_max=$_wf"
   P "        hw_range : $_cmin .. $_cmax"
   P "        scaling  : min=$_smin max=$_smax cur=$_cur"
   P "        available: $(cat "$_pol/scaling_available_frequencies" 2>/dev/null)"
@@ -569,14 +578,59 @@ fi
 # --- 10g. ASB governor live state (what it actually decided) ---
 P ""
 P "  ASB GOVERNOR live state:"
+# WRITE-TEST: prove whether ASB can actually set scaling_max_freq on this device.
+# We read the current max, write a known available frequency, read it back, then
+# restore the original. If readback != what we wrote, the OEM/kernel is rejecting
+# or overriding ASB's caps — which fully explains caps that never match ASB's
+# intended per-device percentages (and battery-mode jank if caps don't apply).
+_wt_pol="/sys/devices/system/cpu/cpufreq/policy0"
+if [ -w "$_wt_pol/scaling_max_freq" ]; then
+  _wt_orig="$(cat "$_wt_pol/scaling_max_freq" 2>/dev/null)"
+  # pick a mid available freq distinct from current
+  _wt_try="$(tr ' ' '\n' < "$_wt_pol/scaling_available_frequencies" 2>/dev/null | grep -v '^$' | sort -n | awk 'NR==3{print}')"
+  if [ -n "$_wt_try" ] && [ "$_wt_try" != "$_wt_orig" ]; then
+    echo "$_wt_try" > "$_wt_pol/scaling_max_freq" 2>/dev/null
+    sleep 1
+    _wt_read="$(cat "$_wt_pol/scaling_max_freq" 2>/dev/null)"
+    if [ "$_wt_read" = "$_wt_try" ]; then
+      P "    [PASS] scaling_max write-test: wrote $_wt_try, read back $_wt_read (ASB CAN control caps)"
+    else
+      P "    [FAIL] scaling_max write-test: wrote $_wt_try but read back $_wt_read (OEM/kernel OVERRIDES ASB caps!)"
+    fi
+    # restore
+    echo "$_wt_orig" > "$_wt_pol/scaling_max_freq" 2>/dev/null
+  else
+    P "    write-test skipped (no distinct available freq)"
+  fi
+else
+  P "    [FAIL] scaling_max_freq is NOT writable on policy0 (ASB cannot cap CPU here!)"
+fi
 P "    current_profile = $(cat "$MODDIR/current_profile" 2>/dev/null || gp persist.asb.profile)"
+# smart_mode flag decides whether the governor owns caps (smart) or the shell
+# does (manual). If this is 1 while a manual profile is selected, the governor
+# may be fighting apply_screen_aware_caps for the cap — the #1 thing to check
+# when the live caps don't match the per-device percentages.
+_smf="$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)"
+P "    smart_mode_enabled flag = ${_smf:-<absent>}"
+P "    smart_prev_profile = $(cat /data/adb/asb/smart_prev_profile 2>/dev/null || echo '<absent>')"
 for _gp in persist.asb.profile persist.asb.smart.alpha persist.asb.last_plan \
            persist.asb.battery.session persist.asb.smart.state; do
   _gv="$(gp $_gp)"; [ -n "$_gv" ] && P "    $_gp = $_gv"
 done
-# governor's own log tail (decisions, throttle events)
-for _lg in "$MODDIR/asb.log" /data/adb/asb/asb.log /data/local/tmp/asb.log; do
-  [ -f "$_lg" ] && { P "    log tail ($_lg):"; tail -8 "$_lg" 2>/dev/null | while IFS= read -r _l; do P "      $_l"; done; break; }
+# governor's own log tail (decisions, throttle events). The persistent log is
+# the authoritative one; check it plus the volatile copies.
+for _lg in /data/adb/asb/governor_persist.log "$MODDIR/asb.log" \
+           /data/adb/asb/asb.log /data/local/tmp/asb.log; do
+  [ -f "$_lg" ] && { P "    log tail ($_lg):"; tail -12 "$_lg" 2>/dev/null | while IFS= read -r _l; do P "      $_l"; done; break; }
+done
+# Pull the most recent screen_aware_caps decision (what the shell INTENDED to
+# write) so it can be compared against the live %-of-hw readout above. A
+# mismatch means something overwrote the shell caps after they were applied.
+for _lg in /data/adb/asb/governor_persist.log "$MODDIR/asb.log" /data/adb/asb/asb.log; do
+  [ -f "$_lg" ] || continue
+  _sac="$(grep "screen_aware_caps:" "$_lg" 2>/dev/null | tail -1)"
+  [ -n "$_sac" ] && P "    last screen_aware_caps: $_sac"
+  break
 done
 
 # --- 10h. profile_bounds the module shipped (compare vs hardware above) ---
