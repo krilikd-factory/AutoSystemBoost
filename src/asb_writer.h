@@ -474,6 +474,21 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
     int writes = 0;
     writer_init_paths();
 
+    /* CAP OWNERSHIP: for MANUAL profiles (battery/balanced/performance) the
+     * shell layer (service.sh apply_screen_aware_caps) is the sole owner of
+     * scaling_max/min — it has the correct per-device, screen-aware, 4-cluster
+     * caps. The governor must NOT also push its bounds-derived ceiling there, or
+     * the two race and you get the contradictory diag values (performance prime
+     * stuck at 39-58%, OP12 battery prime > balanced). In manual mode the
+     * governor still acts ONLY as a thermal safety net: when thermal_cap is
+     * engaged it may pull frequencies DOWN, but it never raises/sets the normal
+     * profile ceiling. Smart mode is fully governor-owned and unaffected. */
+    int manual_cap_skip = (!fsm_profile_is_smart && !thermal_cap);
+    if (manual_cap_skip) {
+        /* still let GPU / non-cap writes proceed below; just skip CPU caps */
+        goto skip_cpu_caps;
+    }
+
     {
         int c0_target = -1, c1_target = -1;
         int c0_changed = 0, c1_changed = 0;
@@ -567,6 +582,7 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
         }
     }
 
+skip_cpu_caps: ;
     writer_discover_gpu_paths();
     long hw_max = writer_gpu_hw_max();
     long gmax = hw_max * caps->gpu_max_pct / 100;
