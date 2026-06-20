@@ -19,12 +19,11 @@ for _part in vendor odm product system_ext my_product mi_ext; do
   [ -d "$_root" ] || continue
   # Fold any file not already present under system/<part>; leave the dir for KSU.
   for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
-    # NEVER fold camera tuning or media_profiles into system/odm (or any part).
-    # On OP12 (pineapple) the vendor multicamera HAL SIGABRTs
-    # (ChiMcxRoiTranslator::Initialize) when an OP15-shaped camera env appears on
-    # the real /odm partition. The camera/media overlay is placed deliberately
-    # at install time into system/vendor/odm only; re-materialising it here from
-    # a root odm/ dir at every boot would re-create exactly that crashing mirror.
+    # Skip camera/media here: the camera overlay is placed at install time into
+    # BOTH system/vendor/odm AND system/odm (see _odm_dups), which is what keeps
+    # /odm and /vendor/odm in sync and the OP12 multicamera HAL happy. Folding it
+    # again from a top-level odm/ dir would be redundant and could race; the
+    # dedicated OP12 sync block below handles any /odm mismatch explicitly.
     case "$_f" in
       */etc/camera/*|*/etc/media_profiles*.xml|etc/camera/*|etc/media_profiles*.xml)
         continue ;;
@@ -36,10 +35,39 @@ for _part in vendor odm product system_ext my_product mi_ext; do
     fi
   done
 done
-# Belt-and-braces: if any earlier boot (or an old build) already folded a camera
-# mirror into system/odm, scrub it so the multicamera HAL never sees it on /odm.
-rm -rf "$MODDIR/system/odm/etc/camera" 2>/dev/null || true
-rm -f  "$MODDIR/system/odm/etc/media_profiles"*.xml 2>/dev/null || true
+# Belt-and-braces: an OLD build may have left a system/odm/etc/camera mirror.
+# The current approach matches the proven-working module (same camera env on
+# every device), so a stale system/odm mirror is only harmful if it DISAGREES
+# with /vendor/odm. We no longer blanket-scrub; instead we sync below.
+:
+
+# --- OP12 /odm <-> /vendor/odm camera SYNC (APatch fix) ---
+# Root cause of the OP12/APatch camera crash, proven by diag: KernelSU mounts the
+# overlay so /odm and /vendor/odm BOTH show our media_profiles (58506) and the
+# camera works; APatch mounts only /vendor/odm, leaving the real /odm partition
+# STOCK (58480), so the two disagree and the multicamera HAL SIGABRTs during
+# configure_streams. The fix is to make /odm agree with /vendor/odm at boot by
+# bind-mounting the MODULE's own camera files onto the live /odm when they
+# differ. Sourcing from the module dir (always present) avoids any dependency on
+# /vendor/odm being mounted yet. No-op when /odm already matches (KSU), so only
+# the APatch case changes.
+_pf_plat="$(getprop ro.board.platform 2>/dev/null)"
+case "$_pf_plat" in
+  pineapple|sm8650*)
+    for _cf in etc/camera/media_profiles.xml etc/camera/config/video_beauty_default_config; do
+      _src="$MODDIR/system/vendor/odm/$_cf"
+      _dst="/odm/$_cf"
+      [ -f "$_src" ] || continue
+      [ -e "$_dst" ] || continue
+      if cmp -s "$_src" "$_dst" 2>/dev/null; then
+        continue
+      fi
+      mount -o bind "$_src" "$_dst" 2>/dev/null \
+        && log -t ASB "post-fs-data: OP12 bind-synced /odm/$_cf <- module" \
+        || true
+    done
+    ;;
+esac
 
 # Clean up a phantom /data/adb/magisk/busybox symlink that earlier builds
 # created on KernelSU systems (where /data/adb/magisk should not exist).
