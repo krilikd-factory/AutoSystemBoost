@@ -438,6 +438,15 @@ for _zr in /sys/block/zram0/comp_algorithm /sys/block/zram0/disksize; do
 done
 # LMKD tunables ASB may touch
 P "  LMKD / vmpressure props:"
+# OEM system toggles ASB can optionally manage (only when UX_MANAGE_OEM_TOGGLES=1).
+# Shown here so we can confirm whether RAM expansion is actually OFF and whether
+# the "off" value the OEM uses is really 0 (some builds use a byte/GB size). If
+# the user disabled RAM expansion but it reads non-zero after a reboot, OxygenOS
+# re-enabled it and they need to turn ON "Manage OEM Toggles" so ASB enforces it.
+P "  OEM toggles (managed only if UX_MANAGE_OEM_TOGGLES=1):"
+for _ot in ram_expand_size adaptive_battery_management_enabled sem_low_heat_mode; do
+  P "    settings global $_ot = $(settings get global $_ot 2>/dev/null)"
+done
 for _p in ro.lmk.use_psi ro.lmk.thrashing_limit ro.lmk.swap_util_max \
           persist.device_config.lmkd_native.thrashing_limit \
           persist.sys.lmkd.camera_adaptive_lmk.enable; do
