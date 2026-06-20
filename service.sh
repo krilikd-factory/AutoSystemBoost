@@ -288,59 +288,25 @@ asb_drift_check() {
   sleep 1
   asb_load_profile
 
-  local _p0_exp="${CPU_MAX_LITTLE:-}" _p6_exp="${CPU_MAX_BIG:-}"
-  local _p0_act="$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null)"
-  local _p6_act="$(cat /sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq 2>/dev/null)"
-  [ -z "$_p0_exp" ] || [ -z "$_p0_act" ] && return 0
+  # Caps are per-device PERCENTAGES now, not the absolute CPU_MAX_* in the
+  # profile files, so comparing policy max against CPU_MAX_LITTLE/BIG would log
+  # false drift every cycle. Instead do a genuinely useful sanity check: flag any
+  # cluster where scaling_min_freq > scaling_max_freq (a real misconfiguration).
+  for _dchk in /sys/devices/system/cpu/cpufreq/policy*; do
+    [ -d "$_dchk" ] || continue
+    local _mn _mx
+    _mn="$(cat "$_dchk/scaling_min_freq" 2>/dev/null)"
+    _mx="$(cat "$_dchk/scaling_max_freq" 2>/dev/null)"
+    [ -n "$_mn" ] && [ -n "$_mx" ] && [ "$_mn" -gt "$_mx" ] 2>/dev/null && \
+      asb_log "drift(cpu): $(basename "$_dchk") min=${_mn} > max=${_mx}"
+  done
 
-  local _d0=$(( _p0_exp - _p0_act )); [ $_d0 -lt 0 ] && _d0=$((-_d0))
-  local _d6=$(( ${_p6_exp:-0} - ${_p6_act:-0} )); [ $_d6 -lt 0 ] && _d6=$((-_d6))
-  local _sev="none"
-  [ $_d0 -gt 500000 ] || [ $_d6 -gt 500000 ] && _sev="severe"
-  [ "$_sev" = "none" ] && { [ $_d0 -gt 100000 ] || [ $_d6 -gt 100000 ]; } && _sev="moderate"
-  [ "$_sev" = "none" ] && { [ $_d0 -gt 0 ] || [ $_d6 -gt 0 ]; } && _sev="minor"
-  [ "$_sev" != "none" ] &&     asb_log "drift(abs): ${_sev} p0=${_p0_act}(exp ${_p0_exp}) p6=${_p6_act}(exp ${_p6_exp})"
-
-  local _son=0 _cap_l="" _cap_b=""
-  asb_screen_on && _son=1
-  if [ "$_son" -eq 1 ]; then
-    case "$ASB_PROFILE" in
-      balanced)
-        _cap_l=1190400
-        _cap_b=1881600
-        ;;
-      battery)
-        # Screen-ON battery caps. The old 729600/1075200 made the UI lag badly
-        # (users reported heavy jank in battery, and near-unusable below ~25%).
-        # Raise the screen-on floor so interactive work stays smooth — this is
-        # still far below the per-cluster max so it keeps saving power; the
-        # bigger savings come screen-OFF (handled in the else branch below).
-        _cap_l=1132800
-        _cap_b=1612800
-        ;;
-      performance)
-        _cap_l="${CPU_CAP_LITTLE:-}"
-        _cap_b="${CPU_CAP_BIG:-}"
-        ;;
-    esac
-  fi
-  if [ -n "$_cap_l" ] && [ -n "$_cap_b" ]; then
-    local _msm0="$(asb_read_msm_perf_cap 0)"
-    local _big_cpu=$((little_end + 1))
-    [ "$_big_cpu" -lt 6 ] 2>/dev/null && _big_cpu=6
-    local _msm6="$(asb_read_msm_perf_cap "$_big_cpu")"
-    if [ -n "$_msm0" ] || [ -n "$_msm6" ]; then
-      local _c0=${_msm0:-0} _c1=${_msm6:-0}
-      local _cd0=$(( ${_cap_l:-0} - _c0 )); [ $_cd0 -lt 0 ] && _cd0=$((-_cd0))
-      local _cd6=$(( ${_cap_b:-0} - _c1 )); [ $_cd6 -lt 0 ] && _cd6=$((-_cd6))
-      local _csev="none"
-      [ $_cd0 -gt 500000 ] || [ $_cd6 -gt 500000 ] && _csev="severe"
-      [ "$_csev" = "none" ] && { [ $_cd0 -gt 100000 ] || [ $_cd6 -gt 100000 ]; } && _csev="moderate"
-      [ "$_csev" = "none" ] && { [ $_cd0 -gt 0 ] || [ $_cd6 -gt 0 ]; } && _csev="minor"
-      [ "$_csev" != "none" ] &&         asb_log "drift(cap): ${_csev} msm_p0=${_c0}(cap ${_cap_l}) msm_p${_big_cpu}=${_c1}(cap ${_cap_b})"
-    fi
-  fi
-
+  # NOTE: the previous drift(cap) comparison hardcoded absolute kHz expectations
+  # (1132800/1612800 etc.) and only looked at policy0/policy6. After the move to
+  # per-device PERCENT caps (and OP12's 4 clusters), those absolutes are wrong and
+  # would log constant false "drift". Cap-drift monitoring is dropped here; the
+  # scaling_max abs-drift log above and the GPU sanity check below still apply.
+  :
   local _gmin_path="/sys/class/kgsl/kgsl-3d0/devfreq/min_freq"
   local _gmax_path="/sys/class/kgsl/kgsl-3d0/devfreq/max_freq"
   if [ -r "$_gmin_path" ] && [ -r "$_gmax_path" ]; then
@@ -1171,113 +1137,15 @@ apply_bt_runtime() {
 }
 asb_feature_enabled BT && apply_bt_runtime
 apply_camera_props_static() {
-  # Camera prop layer relocated out of system.prop so it can be device-gated.
-  # OP12 (pineapple/SM8650) crashes the camera to a black screen when these
-  # are forced (none exist in OP12 stock), so pineapple is skipped entirely.
-  # Every other device gets the same set system.prop used to apply globally.
+  # Camera prop layer. IMPORTANT REVERSAL: the known-good debug module that has
+  # a WORKING camera on OP12/APatch FORCES the full camera prop set on every
+  # device (pineapple included) and the camera works. Our earlier "diet" that
+  # DELETED these props on pineapple was the actual regression — it left the
+  # camera HAL in an inconsistent/partial state and crashed the multicamera
+  # session. So pineapple now gets the SAME full prop set as OP13/OP15, exactly
+  # like the working module. No device gating, no deletion.
   _cp_plat="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_cp_plat" ] && _cp_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
-  case "$_cp_plat" in
-    pineapple|sm8650*)
-      # ROBUST DIET: actively DELETE any camera props a prior build (or
-      # anything else) may have set, not just skip applying. Makes OP12
-      # HAL-safe even after upgrading from a build that forced them, and
-      # regardless of service.sh timing on APatch vs KSU.
-      if has resetprop; then
-        resetprop -p --delete persist.camera.c2d.debug.mask >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.cpp.debug.mask >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.dcrf.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.debug.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.dual_camera_sat >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.global.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.hdr.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.iface.logs >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.imglib.logs >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.isp.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.isp.ltm_disable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.jpeg.dumpqtable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.jpeg_burst >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.kpi.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.llnoise >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.ltmforseemore >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.max_prev.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.maxgain.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.mct.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.mfnr.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.mmstill.logs >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.picturesize.limit.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.pproc.debug.mask >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.preview.ubwc >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.sensor.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.snapshot.disable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.stats.aec.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.stats.af.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.stats.afd.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.stats.asd.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.stats.awb.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.stats.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.stats.haf.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.stats.is.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.stats.q3a.debug >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.tn.disable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.tnr.preview >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.tnr.video >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.tnr_cds >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.ubwc >/dev/null 2>&1 || true
-        resetprop -p --delete persist.camera.video.ubwc >/dev/null 2>&1 || true
-        resetprop -p --delete persist.sys.camera.cameraservice.micompactmemory.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.sys.camera.ubwc.enabled >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.cpp.duplicate_strip_dump >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.cpp.zoom.opt >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.dual_camera_sat >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.eis.disable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.eis.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.fdvideo >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.hdr.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.hfr.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.llnoise >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.ltmforseemore >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.maxgain.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.mfnr.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.multiframe.nr.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.opt_mode.video >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.picturesize.limit.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.preview.ubwc >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.raw.zsl.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.smyuv.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.snapshot.disable >/dev/null 2>&1 || true
-        # SAT (Smooth Auto Transition) = the multi-camera zoom path. A prior
-        # build set sat.fallback.dist=2.0; if it lingers it can drive the
-        # multicamera ROI translator (ChiMcxRoiTranslator::Initialize) into the
-        # SIGABRT seen on OP12. main.hfr / fast.af were also force-set by older
-        # builds and are not in OP12 stock — delete all three so a reinstall
-        # over an old build leaves OP12 truly stock-clean.
-        resetprop -p --delete persist.vendor.camera.sat.fallback.dist >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.main.hfr >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.fast.af >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.tnr.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.tnr.preview >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.tnr.video >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.tnr_cds >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.ubwc >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.video.hdr.enable >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.video.ubwc >/dev/null 2>&1 || true
-        resetprop -p --delete persist.vendor.camera.zsl.enable >/dev/null 2>&1 || true
-        resetprop -p --delete ro.camera.disableHeicUltraHDR >/dev/null 2>&1 || true
-        resetprop -p --delete ro.camera.disableJpegR >/dev/null 2>&1 || true
-        resetprop -p --delete ro.camera.enableCompositeAPI0JpegR >/dev/null 2>&1 || true
-        resetprop -p --delete ro.camerax.extensions.enabled >/dev/null 2>&1 || true
-        resetprop -p --delete ro.vendor.audio.camera.bt.record.support >/dev/null 2>&1 || true
-        resetprop -p --delete ro.vendor.audio.camera.loopback.support >/dev/null 2>&1 || true
-        resetprop -p --delete ro.vendor.audio.camera.videorecord.gain >/dev/null 2>&1 || true
-        resetprop -p --delete ro.vendor.camera.use_srgb_gamma >/dev/null 2>&1 || true
-        resetprop -p --delete vendor.camera.algo.jpeghwdecode >/dev/null 2>&1 || true
-        resetprop -p --delete vendor.camera.algo.jpeghwencode >/dev/null 2>&1 || true
-        resetprop -p --delete vendor.camera.picturesize.limit.enable >/dev/null 2>&1 || true
-      fi
-      asb_log "camera category: pineapple/OP12 -> fully disabled (files + props), HAL-safe"
-      return 0 ;;
-  esac
   has resetprop || return 0
   resetprop -n persist.camera.tnr.preview 1 >/dev/null 2>&1 || true
   resetprop -n persist.camera.tnr.video 1 >/dev/null 2>&1 || true
@@ -1435,8 +1303,9 @@ apply_kernel() {
     writef_retry /proc/sys/walt/sched_idle_enough $_P_IDLE 1 0 || true
   [ -e /proc/sys/walt/sched_idle_enough_clust ] && \
     writef_retry /proc/sys/walt/sched_idle_enough_clust "$_P_IDLEC" 1 0 || true
-  [ -w $LITTLE_POLICY/scaling_min_freq ] && writef_retry $LITTLE_POLICY/scaling_min_freq $_P_CPUL 3 0.25 || true
-  [ -w $BIG_POLICY/scaling_min_freq ] && writef_retry $BIG_POLICY/scaling_min_freq $_P_CPUB 3 0.25 || true
+  # NOTE: per-cluster scaling_min_freq is now set inside apply_cpufreq_caps
+  # (4-cluster aware, single owner). The old 2-cluster LITTLE/BIG min writes
+  # here were removed to avoid a second writer fighting it on OP12.
   [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct $_P_CLUT 1 0 || true
   [ -e /proc/sys/walt/sched_cluster_util_thres_pct_clust ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct_clust "$_P_CLUTC" 1 0 || true
   [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation $_P_COLOC 1 0 || true
@@ -1594,7 +1463,23 @@ apply_cpufreq_caps() {
     else
       _want="$(asb_freq_pick_pct "$_pol_dir" "$_pct")"
     fi
-    [ -n "$_want" ] && writef_retry "$_smax" "$_want" 3 0.25 || true
+    if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 3 0.25; then :; fi
+    # Per-cluster min-freq floor (single owner, 4-cluster aware). little cluster
+    # uses CPU_MIN_LITTLE; mid/prime use CPU_MIN_BIG. Clamp the floor to the cap
+    # we just set so min never exceeds max. Empty floor -> leave kernel default.
+    _smin="$_pol_dir/scaling_min_freq"
+    if [ -w "$_smin" ]; then
+      if [ "$_rel" -le "$little_end" ]; then _minw="$CPU_MIN_LITTLE"; else _minw="$CPU_MIN_BIG"; fi
+      if [ -n "$_minw" ]; then
+        _minpick="$(asb_pick_nearest_freq "$_pol_dir" "$_minw" 2>/dev/null)"
+        [ -z "$_minpick" ] && _minpick="$_minw"
+        _curmax_now="$(cat "$_smax" 2>/dev/null)"
+        if [ -n "$_curmax_now" ] && [ -n "$_minpick" ] && [ "$_minpick" -gt "$_curmax_now" ] 2>/dev/null; then
+          _minpick="$_curmax_now"
+        fi
+        [ -n "$_minpick" ] && writef_retry "$_smin" "$_minpick" 3 0.25 || true
+      fi
+    fi
   done
 }
 asb_feature_enabled CPU && apply_cpufreq_caps
@@ -1623,45 +1508,67 @@ apply_screen_aware_caps() {
   asb_load_profile
   _son=0
   asb_screen_on && _son=1
-  # Caps are expressed as a PERCENT of each cluster's own cpuinfo_max_freq, not
-  # absolute kHz. The three targets have very different ceilings (OP12 prime
-  # ~3.3 GHz, OP13 ~?, OP15 prime 4.6 GHz), so a single absolute value either
-  # crippled the fast device (OP15 prime was pinned near 1.6 GHz) or barely
-  # capped the slow one. Percentages auto-scale: apply_cpufreq_caps already
-  # snaps "<100" values to the nearest available frequency per cluster.
+  # Caps are PERCENT of each cluster's own cpuinfo_max_freq (apply_cpufreq_caps
+  # snaps to the nearest available step and lifts the MID workhorse on OP12).
+  #
+  # PER-DEVICE tuning: the three SoCs have different cluster shapes and the same
+  # percentage felt very different on each (OP15 fine, OP13 janky in battery,
+  # OP12 unusable < 25%). We pick caps per SoC. Values are screen-on targets
+  # that keep the UI smooth; screen-off trims harder for real savings.
+  _soc="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_soc" ] && _soc="$(getprop ro.hardware.chipname 2>/dev/null)"
+  case "$_soc" in
+    canoe|sm8850*) _dev="op15" ;;
+    sun|sm8750*)   _dev="op13" ;;
+    pineapple|sm8650*) _dev="op12" ;;
+    *)             _dev="generic" ;;
+  esac
+
   _P_CPUCAP_L=""; _P_CPUCAP_B=""
   CPU_CAP_LITTLE=""; CPU_CAP_BIG=""
   case "$ASB_PROFILE" in
+    performance)
+      # never cap performance: full hardware range on every cluster, every SoC.
+      _P_CPUCAP_L=""; _P_CPUCAP_B=""
+      ;;
     balanced)
       if [ "$_son" -eq 1 ]; then
-        # screen-on: let the scheduler use the full range; balance comes from
-        # the WALT/uclamp tuning, not a hard cap.
-        _P_CPUCAP_L=""; _P_CPUCAP_B=""
+        # screen-on balanced: light touch; balance comes from WALT/uclamp. OP15
+        # is already happy uncapped; OP13/OP12 get a gentle ceiling so balanced
+        # is distinct from performance without hurting smoothness.
+        case "$_dev" in
+          op15) _P_CPUCAP_L=""; _P_CPUCAP_B="" ;;
+          op13) _P_CPUCAP_L=72; _P_CPUCAP_B=58 ;;
+          op12) _P_CPUCAP_L=78; _P_CPUCAP_B=58 ;;   # MID lifts to ~79%
+          *)    _P_CPUCAP_L=72; _P_CPUCAP_B=55 ;;
+        esac
       else
-        # screen-off: trim to keep background work cheap.
-        _P_CPUCAP_L=55; _P_CPUCAP_B=45
+        _P_CPUCAP_L=55; _P_CPUCAP_B=45             # screen-off: cheap background
       fi
       ;;
     battery)
       if [ "$_son" -eq 1 ]; then
-        # screen-on: enough headroom to stay smooth (≈55% little / ≈40% big);
-        # on a 4-cluster SoC apply_cpufreq_caps lifts the mid workhorse further.
-        _P_CPUCAP_L=55; _P_CPUCAP_B=40
+        # screen-on battery: MUST stay usable. Prime is capped for savings but
+        # little/mid keep enough headroom that the UI doesn't jank. Note OP12's
+        # big% must be BELOW its balanced big% so the profile shape is monotone
+        # (battery <= balanced <= performance), fixing the old inversion where
+        # OP12 battery prime (55%) was higher than balanced prime (41%).
+        case "$_dev" in
+          op15) _P_CPUCAP_L=50; _P_CPUCAP_B=38 ;;
+          op13) _P_CPUCAP_L=50; _P_CPUCAP_B=44 ;;   # was 32/32 -> jank; lifted
+          op12) _P_CPUCAP_L=60; _P_CPUCAP_B=45 ;;   # MID lifts to ~72%
+          *)    _P_CPUCAP_L=52; _P_CPUCAP_B=40 ;;
+        esac
       else
-        # screen-off: aggressive savings.
-        _P_CPUCAP_L=35; _P_CPUCAP_B=25
+        _P_CPUCAP_L=35; _P_CPUCAP_B=25             # screen-off: aggressive
       fi
-      ;;
-    performance)
-      # never cap performance: full hardware range on every cluster.
-      _P_CPUCAP_L=""; _P_CPUCAP_B=""
       ;;
     *)
       return 0
       ;;
   esac
   apply_cpufreq_caps
-  asb_log "screen_aware_caps: profile=$ASB_PROFILE screen_on=$_son cap_l=${CPU_CAP_LITTLE:-(none)} cap_b=${CPU_CAP_BIG:-(none)}"
+  asb_log "screen_aware_caps: dev=$_dev profile=$ASB_PROFILE screen_on=$_son cap_l=${_P_CPUCAP_L:-(none)} cap_b=${_P_CPUCAP_B:-(none)}"
 }
 asb_feature_enabled CPU && apply_gpu_caps
 apply_walt_live() {
@@ -1714,8 +1621,7 @@ apply_runtime_profile_now() {
     apply_idle
     apply_screen_aware_caps
     apply_gpu_caps
-    [ -w "$LITTLE_POLICY/scaling_min_freq" ] && writef_retry "$LITTLE_POLICY/scaling_min_freq" "$_P_CPUL" 4 0.25 || true
-    [ -w "$BIG_POLICY/scaling_min_freq" ] && writef_retry "$BIG_POLICY/scaling_min_freq" "$_P_CPUB" 4 0.25 || true
+    # (min-freq now handled inside apply_cpufreq_caps; stray LITTLE/BIG writes removed)
     apply_cpugov_hints
   fi
   asb_feature_enabled VM && apply_vm
