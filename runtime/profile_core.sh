@@ -359,9 +359,17 @@ asb_apply_ux() {
       asb_settings_put secure multi_press_timeout "$BASE_MULTI_PRESS"
   fi
 
-  [ -n "$UX_ADAPTIVE_BAT" ] && asb_settings_put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT"
-  [ -n "$UX_RAM_EXPAND" ] && asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
-  [ -n "$UX_LOW_HEAT" ] && asb_settings_put global sem_low_heat_mode "$UX_LOW_HEAT"
+  # OEM-owned settings (RAM expansion, adaptive battery, low-heat). These are
+  # user/OEM-facing toggles in Settings, and OxygenOS re-asserts them at boot.
+  # ASB writing them unconditionally on every profile apply fought the OEM (e.g.
+  # RAM expansion kept re-enabling itself after a reboot and the user saw storage
+  # shrink). Only touch them when the user explicitly opts in via
+  # UX_MANAGE_OEM_TOGGLES; otherwise leave the user's own choice alone.
+  if [ "${UX_MANAGE_OEM_TOGGLES:-0}" = "1" ]; then
+    [ -n "$UX_ADAPTIVE_BAT" ] && asb_settings_put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT"
+    [ -n "$UX_RAM_EXPAND" ] && asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
+    [ -n "$UX_LOW_HEAT" ] && asb_settings_put global sem_low_heat_mode "$UX_LOW_HEAT"
+  fi
   asb_settings_put global google_core_control 0
 
   if [ "$_anim_changed" = "1" ]; then
