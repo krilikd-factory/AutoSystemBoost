@@ -72,10 +72,12 @@ else
 fi
 
 # Swappiness — light apps tolerate compressed pages; gaming wants files in RAM.
+# Capped at 90 (not 100): maxing swappiness made the UI stutter on zram even
+# with free RAM (same jank fixed in the battery profile).
 case "$HINT" in
   4) writef /proc/sys/vm/swappiness 60  ;;
   3) writef /proc/sys/vm/swappiness 80  ;;
-  *) writef /proc/sys/vm/swappiness 100 ;;
+  *) writef /proc/sys/vm/swappiness 90  ;;
 esac
 
 # Thermal back-off: when bucket=2 (hot), force shorter readahead and shallower

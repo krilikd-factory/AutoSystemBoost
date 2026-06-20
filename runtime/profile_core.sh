@@ -224,21 +224,12 @@ asb_apply_gpu() {
   [ -w /sys/class/kgsl/kgsl-3d0/bus_split ] && [ -n "$GPU_BUS_SPLIT" ] && writef_retry /sys/class/kgsl/kgsl-3d0/bus_split "$GPU_BUS_SPLIT" 6 0.18 || true
   [ -w /sys/class/kgsl/kgsl-3d0/throttling ] && [ -n "$GPU_THROTTLING" ] && writef_retry /sys/class/kgsl/kgsl-3d0/throttling "$GPU_THROTTLING" 6 0.18 || true
   [ -w /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] && [ -n "$GPU_THERMAL_PWRLEVEL" ] && writef_retry /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel "$GPU_THERMAL_PWRLEVEL" 6 0.18 || true
-  if [ -d /sys/class/kgsl/kgsl-3d0/devfreq ]; then
-    if [ -n "$GPU_MAX_FREQ" ]; then
-      _gmax="$GPU_MAX_FREQ"
-    else
-      _gmax="$(asb_pick_gpu_pct "$GPU_MAX_PCT")"
-    fi
-    [ -n "$_gmax" ] && writef_retry /sys/class/kgsl/kgsl-3d0/devfreq/max_freq "$_gmax" 6 0.18 || true
-    if [ -n "$GPU_MIN_FREQ" ]; then
-      _gmin="$GPU_MIN_FREQ"
-      [ -n "$_gmin" ] && writef_retry /sys/class/kgsl/kgsl-3d0/devfreq/min_freq "$_gmin" 6 0.18 || true
-    elif [ "$GPU_MIN_PCT" -gt 0 ] 2>/dev/null; then
-      _gmin="$(asb_pick_gpu_pct "$GPU_MIN_PCT")"
-      [ -n "$_gmin" ] && writef_retry /sys/class/kgsl/kgsl-3d0/devfreq/min_freq "$_gmin" 6 0.18 || true
-    fi
-  fi
+  # GPU FREQ OWNERSHIP (single-owner, mirrors the CPU refactor): devfreq
+  # max_freq/min_freq are written ONLY by service.sh apply_gpu_caps (percent of
+  # this GPU's own max, per-device aware). profile_core no longer writes them, so
+  # the two don't race on the same node. Non-frequency GPU tunables above stay
+  # here since apply_gpu_caps doesn't touch them.
+  : # GPU freq caps intentionally not written here
 }
 
 asb_apply_vm() {
