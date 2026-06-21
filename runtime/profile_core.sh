@@ -279,6 +279,27 @@ asb_apply_ux() {
   local _anim_changed=0
   local _ux_base="$MODDIR/config/ux_baseline.conf"
 
+  # Load the WebUI-controlled UX_MANAGE_* flags from governor.conf. These are
+  # NOT defined in the per-profile files (only the target values like
+  # UX_RAM_EXPAND are), and nothing else sources governor.conf into this
+  # environment — so without this read the gates below always saw the default
+  # 0 and the WebUI toggles had no effect (a user enabling "Manage OEM Toggles"
+  # changed nothing). Read them point-wise (not a blind `.` source, since the
+  # conf may hold non-shell-safe segmented values). Only override when the key
+  # is actually present, so callers that already exported a value still win.
+  _ux_conf="$MODDIR/config/governor.conf"
+  if [ -r "$_ux_conf" ]; then
+    for _uxk in UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
+                UX_ANIM_FORCE_RESTART; do
+      _uxv="$(grep -E "^[[:space:]]*${_uxk}=" "$_ux_conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+      case "$_uxv" in
+        1|on)  eval "$_uxk=1" ;;
+        0|off) eval "$_uxk=0" ;;
+        # absent or unexpected → leave whatever is already set (default 0 via :-)
+      esac
+    done
+  fi
+
   # ANIMATION SCALES — manage OR restore.
   if [ -n "$UX_ANIM_SCALE" ] && [ "${UX_MANAGE_ANIM_SCALE:-0}" = "1" ]; then
     # Save the user's stock scales ONCE, before we ever override them, so we can

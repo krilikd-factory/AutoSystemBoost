@@ -229,10 +229,34 @@ asb_apply_dynamic_tweaks() {
 asb_save_dynamic_baselines() {
   _md="$1"
   [ -n "$_md" ] && [ -d "$_md" ] || return 0
+  # Build the set of baseline names that SHOULD exist for this install, saving
+  # each as we go. We collect the valid names so we can prune orphans afterwards.
+  _valid_bases=""
   for _mx in $(find "$_md/system/vendor/etc/audio" "$_md/system/vendor/odm/etc/audio" \
                     -type f -name "mixer_paths*.xml" 2>/dev/null); do
     asb_tw_save_base "$_mx" force
+    _valid_bases="$_valid_bases $(basename "$(asb_tw_base_path "$_mx")")"
   done
-  asb_tw_save_base "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" force
-  asb_tw_save_base "$_md/system/odm/etc/camera/conf_tuning_params.json" force
+  for _cam in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
+              "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
+    [ -f "$_cam" ] || continue
+    asb_tw_save_base "$_cam" force
+    _valid_bases="$_valid_bases $(basename "$(asb_tw_base_path "$_cam")")"
+  done
+  # Orphan prune: remove any .asbbase whose source file is no longer shipped by
+  # this build (e.g. a device that previously had OP15 canoe/alor SKUs and now
+  # ships device-specific ones, or a build that dropped a SKU). This keeps
+  # /data/adb/asb/tweak_base from accumulating stale baselines across reinstalls.
+  # Only baselines NOT in the freshly-built valid set are touched, so every
+  # active baseline is preserved.
+  if [ -d "$ASB_TWEAK_BASE_DIR" ]; then
+    for _bf in "$ASB_TWEAK_BASE_DIR"/*.asbbase; do
+      [ -e "$_bf" ] || continue
+      _bn="$(basename "$_bf")"
+      case " $_valid_bases " in
+        *" $_bn "*) : ;;                      # still valid — keep
+        *) rm -f "$_bf" 2>/dev/null || true ;;  # orphan — remove
+      esac
+    done
+  fi
 }
