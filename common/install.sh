@@ -519,20 +519,22 @@ asb_apply_device_overlay() {
     # destinations it must land in.
     _odm_dups() {
       # $1 = relative overlay path under the overlay dir. echoes the system/
-      # destination paths (space-separated) this file should be copied to.
+      # destination path(s) this file should be copied to.
       #
-      # CAMERA DESYNC FIX (proven by diag, 1190): the OP12 multicamera HAL reads
-      # the real /odm partition. On KernelSU the overlay is mounted into BOTH
-      # /odm and /vendor/odm, they agree, and the camera works. On APatch only
-      # /vendor/odm was patched (we used to ship OP12 to system/vendor/odm ONLY),
-      # so /odm stayed stock, the two disagreed, and ChiMcxRoiTranslator SIGABRTd
-      # during configure_streams. The earlier "OP12 = vendor/odm only" rule was
-      # based on a disproven theory and was itself the APatch breakage. OP12 now
-      # gets the SAME dual path as OP13 so /odm and /vendor/odm always agree.
+      # CAMERA FIX (final, proven by direct comparison of the known-good 20000
+      # build vs the regressed 3590): the working module writes the camera/media
+      # overlay to system/vendor/odm ONLY and the camera works on BOTH KernelSU
+      # AND APatch. The "also mirror into system/odm" approach (added to chase an
+      # APatch /odm desync) was itself the regression: on APatch, shipping
+      # system/odm/etc/camera makes the manager stack a separate mount over the
+      # real /odm partition, which breaks the multicamera HAL (ChiMcxRoiTranslator
+      # SIGABRT). KernelSU tolerates it (its /odm is a symlink to /vendor/odm), so
+      # only APatch broke. So we now match the working module exactly: camera and
+      # media_profiles go to system/vendor/odm only — NO system/odm mirror.
       case "$1" in
         vendor/odm/*)
           _sub="${1#vendor/odm/}"
-          echo "system/vendor/odm/$_sub system/odm/$_sub"
+          echo "system/vendor/odm/$_sub"
           ;;
         vendor/*)
           echo "system/$1"
@@ -555,7 +557,8 @@ asb_apply_device_overlay() {
         fi
       done
     fi
-    # Camera/media overlay — gated by CAMERA category. Same dual-path write.
+    # Camera/media overlay — gated by CAMERA category. Camera goes to
+    # system/vendor/odm ONLY (via _odm_dups), matching the known-good module.
     if [ "$ASB_CAMERA" = "true" ]; then
       for _f in vendor/etc/media_profiles.xml \
                 vendor/odm/etc/camera/media_profiles.xml \
@@ -1128,12 +1131,14 @@ asb_prune_module() {
     rm -f "$MODPATH/system/vendor/etc/media_profiles"*".xml" 2>/dev/null || true
     rm -f "$MODPATH/system/vendor/odm/etc/media_profiles"*".xml" 2>/dev/null || true
     rm -rf "$MODPATH/system/vendor/odm/etc/camera" 2>/dev/null || true
-  # NOTE: system/odm/etc/camera is intentionally NOT stripped here anymore. The
-  # OP12 multicamera HAL reads the real /odm partition, and the camera only works
-  # when /odm matches /vendor/odm (proven on KernelSU). We now deliberately
-  # mirror the OP12 camera overlay into system/odm so the manager patches /odm
-  # too; wiping it here would re-create the APatch desync crash.
   fi
+  # Always strip any system/odm/etc/camera mirror: we ship the camera overlay to
+  # system/vendor/odm ONLY (matching the known-good module). A system/odm camera
+  # copy is what made APatch stack a mount over the real /odm and crash the
+  # multicamera HAL, so we remove it unconditionally to clean up any stale mirror
+  # a previous (broken) build may have left.
+  rm -rf "$MODPATH/system/odm/etc/camera" 2>/dev/null || true
+  rm -f  "$MODPATH/system/odm/etc/media_profiles"*".xml" 2>/dev/null || true
 
   if [ "${ASB_CPU}" != "true" ]; then
     rm -rf "$MODPATH/system/vendor/etc/perf" 2>/dev/null || true
