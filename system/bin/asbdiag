@@ -307,10 +307,20 @@ else
     V "  tone-fix sunsetBrightScale=0.9" "0.9" "$(grep -o '"sunsetBrightScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
     _caggr="$(cfg CAMERA_AGGRESSIVE)"; NOTE "CAMERA_AGGRESSIVE toggle = ${_caggr:-0}"
     if [ "${_caggr:-0}" = "1" ]; then
-      V "  aggressive sunsetSatScale=1.4" "1.4" "$(grep -o '"sunsetSatScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+      # Device-aware expected values: OP13 (sun) gets a softer grade than OP15
+      # (canoe) — sunsetSatScale 1.3 and blueSatParam 1.02 vs 1.4 / 1.05 — to
+      # avoid low-light banding. Pick the expected value from the live SoC so we
+      # don't false-FAIL OP13 against OP15's numbers.
+      _cam_soc="$(getprop ro.board.platform 2>/dev/null)"
+      [ -z "$_cam_soc" ] && _cam_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
+      case "$_cam_soc" in
+        sun|sm8750*) _exp_sss="1.3"; _exp_bsat="1.02" ;;
+        *)           _exp_sss="1.4"; _exp_bsat="1.05" ;;
+      esac
+      V "  aggressive sunsetSatScale=$_exp_sss" "$_exp_sss" "$(grep -o '"sunsetSatScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
       _inj="$(cfg CAMERA_AGGRESSIVE_INJECT)"; NOTE "tone-key mode = ${_inj:-safe}"
       if [ "${_inj:-safe}" = "aggressive" ]; then
-        V "  injected blueSatParam=1.05" "1.05" "$(grep -o '"blueSatParam": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+        V "  injected blueSatParam=$_exp_bsat" "$_exp_bsat" "$(grep -o '"blueSatParam": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
       fi
     fi
   else
