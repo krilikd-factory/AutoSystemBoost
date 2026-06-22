@@ -1,23 +1,14 @@
 #!/system/bin/sh
 # ASB dynamic aggressive-tweak engine (shared by install.sh and post-fs-data.sh)
 #
-# The "aggressive" audio (AUDIO_AGGRESSIVE) and camera (CAMERA_AGGRESSIVE /
-# CAMERA_AGGRESSIVE_INJECT) layers are applied ON TOP of a saved baseline so a
-# plain reboot can turn them on or off without reinstalling the module.
-#
-# Model:
-#   * install.sh saves the baseline copy of each affected file (that baseline
-#     already contains the always-on tweaks — volume, flat EQ, Class-H RDAC,
-#     stock camera tone — but NOT the aggressive layer) under
-#     /data/adb/asb/tweak_base/. Baselines live OUTSIDE the module's system/
-#     tree on purpose: anything under system/ is magic-mounted into /vendor,
-#     so a .asbbase there would leak a stray file into the live partition.
-#   * On every boot post-fs-data.sh calls asb_apply_dynamic_tweaks: it restores
-#     each module file from its baseline (clean) and then, only if the WebUI
-#     toggle is ON, re-applies the aggressive layer on top. This edits the
-#     module's own system/ source BEFORE KSU/Magisk mounts it, so the change is
-#     live on that boot.
-# Net effect: toggle + reboot = state change, fully reversible, no reinstall.
+# AUDIO_AGGRESSIVE / CAMERA_AGGRESSIVE(_INJECT) are applied on top of a saved
+# baseline, so a plain reboot toggles them without reinstalling. install.sh saves
+# each affected file's clean baseline (always-on tweaks included, aggressive layer
+# NOT) under /data/adb/asb/tweak_base/ — outside system/ on purpose, since system/
+# is magic-mounted into /vendor and a stray .asbbase there would leak into the
+# live partition. Each boot, post-fs-data restores from baseline then re-applies
+# the aggressive layer only if the toggle is ON, editing the module's system/
+# source before the manager mounts it. Net: toggle + reboot = reversible change.
 
 ASB_TWEAK_BASE_DIR="/data/adb/asb/tweak_base"
 
