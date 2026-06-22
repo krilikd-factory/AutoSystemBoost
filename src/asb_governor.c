@@ -4740,21 +4740,12 @@ int main(int argc, char **argv) {
             fsm.virtual_ceiling_p0 = g_virtual_ceiling_p0;
             fsm.virtual_ceiling_p1 = g_virtual_ceiling_p1;
 
-            /* thermal_pwrlevel monitoring with three caution gates.
+            /* thermal_pwrlevel monitoring (KGSL devices where msm_performance is
+             * dead). One pread() per read on a cached fd. A 2s minimum gate stops
+             * read amplification when many epoll events set need_metrics in one
+             * FSM tick (~3-4s).
              *
-             * Cost-conscious GPU thermal observability for KGSL devices where
-             * msm_performance is dead. We discovered thermal_pwrlevel at startup
-             * and cached its fd; reading is one pread() syscall.
-             *
-             * via epoll; uevent, IPC, profile-change events all set need_metrics=1
-             * within a single physical FSM tick (~3-4s). Without a time gate, a
-             * single FSM tick can trigger 5-10 thermal reads. Real deploy data
-             * showed 9030 reads vs 1029 FSM ticks per hour — 9x amplification.
-             * Total cost was still 60ms CPU/hour (negligible) but the audit count
-             * was misleading. Fixed: minimum 2s between reads regardless of how
-             * many epoll events fire need_metrics.
-             *
-             * Gates (in order of cheapness — cheapest first):
+             * Gates (cheapest first):
              *   1. Skip if monitoring disabled (div_idle == 0)
              *   2. Skip if screen off (vendor thermal not relevant when GPU idle)
              *   3. Skip in DEEP_IDLE state (no GPU work, no thermal change)
