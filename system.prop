@@ -420,11 +420,9 @@ persist.sys.mqs.gps.rtk=OFF
 persist.sys.gps.lpp=3
 # ASB:GPS:END
 # ASB:KERNEL:BEGIN
-# V44 — audio props moved to ASB:AUDIO_EXT (optional, default OFF).
-# This block now contains only pure kernel/perf/logging/system tweaks.
-# Chinese OnePlus 15 reported audio glitches when KERNEL=1 in earlier V44s
-# because DTS Eagle / Dolby props were here and conflicted with vendor stack.
-# (See features.conf AUDIO_EXT=0 to enable extended audio tuning.)
+# Pure kernel/perf/logging/system tweaks. Audio props live in ASB:AUDIO_EXT
+# (optional, default OFF — see features.conf AUDIO_EXT=0): keeping them here
+# caused audio glitches on Chinese OP15 units that conflicted with the vendor stack.
 
 ro.com.google.ime.kb_pad_port_r=
 ro.com.google.ime.kb_pad_land_l=
