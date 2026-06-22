@@ -7,7 +7,7 @@
 #   export MODDIR=/data/adb/modules/AutoSystemBoost
 #   nohup sh $MODDIR/tools/logkit/asb_log_smart_daily.sh [HOURS] >/data/local/tmp/smart_daily.out 2>&1 &
 #   # then you can close Termux — capture keeps running in background
-#   # to check progress: ls -la /data/local/tmp/asb_log_smart_daily_*/
+#   # to check progress: ls -la /sdcard/asb_log_smart_daily_*/
 #   # to stop early:     killall asb_log_smart_daily.sh
 #
 # Default: 6 hours. Recommended 4-12h covering a normal weekday daytime.
@@ -41,7 +41,7 @@ if [ -t 0 ]; then
 fi
 
 LK_SCENARIO="smart_daily"
-LK_OUT_DIR="${TMPDIR:-/data/local/tmp}/asb_log_${LK_SCENARIO}_$$"
+LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"
 LK_POLL_S=60
 LK_SNAPSHOT_S=1800
 LK_HOURS="${1:-6}"

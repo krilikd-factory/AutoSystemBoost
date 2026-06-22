@@ -27,7 +27,7 @@
 #   2. Verify Smart Mode is on: sh tools/asb_smart_mode.sh status
 #   3. Run the nohup command above BEFORE bed
 #   4. Close Termux — capture continues in background
-#   5. In morning: collect the output dir from /data/local/tmp/
+#   5. In morning: collect the output dir from /sdcard/
 
 set -u
 LK_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
@@ -45,7 +45,7 @@ if [ -t 0 ]; then
 fi
 
 LK_SCENARIO="smart_sleep"
-LK_OUT_DIR="${TMPDIR:-/data/local/tmp}/asb_log_${LK_SCENARIO}_$$"
+LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"
 LK_POLL_S=90
 LK_SNAPSHOT_S=3600
 LK_HOURS="${1:-9}"

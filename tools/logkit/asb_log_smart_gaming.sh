@@ -21,7 +21,7 @@
 #   1. Run the nohup command above BEFORE opening the game
 #   2. Then open COD-Mobile (or your game) and play
 #   3. Don't worry about Termux being closed — capture is detached
-#   4. After session, retrieve logs from /data/local/tmp/asb_log_smart_gaming_*/
+#   4. After session, retrieve logs from /sdcard/asb_log_smart_gaming_*/
 
 set -u
 LK_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
@@ -39,7 +39,7 @@ if [ -t 0 ]; then
 fi
 
 LK_SCENARIO="smart_gaming"
-LK_OUT_DIR="${TMPDIR:-/data/local/tmp}/asb_log_${LK_SCENARIO}_$$"
+LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"
 LK_POLL_S=15
 LK_SNAPSHOT_S=600
 LK_MINUTES="${1:-90}"

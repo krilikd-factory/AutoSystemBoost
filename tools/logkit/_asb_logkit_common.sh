@@ -25,6 +25,21 @@ lk_resolve_gov_log() {
   echo "/dev/.asb/governor.log"
 }
 
+# Pick a base dir the USER can actually reach, like asb_diag lands on /sdcard.
+# $TMPDIR under Termux points at Termux's private dir (invisible from a file
+# manager), so we deliberately do NOT use it. Preference: storage root first so
+# the folder sits next to asb_diag_report.txt, then /data/local/tmp as fallback.
+lk_resolve_outbase() {
+  for _b in /sdcard /storage/emulated/0 /data/local/tmp; do
+    [ -d "$_b" ] || continue
+    if mkdir -p "$_b/.asb_lk_wtest" 2>/dev/null; then
+      rmdir "$_b/.asb_lk_wtest" 2>/dev/null
+      echo "$_b"; return 0
+    fi
+  done
+  echo "/data/local/tmp"
+}
+
 lk_have() { command -v "$1" >/dev/null 2>&1; }
 
 lk_get_prop() { getprop "$1" 2>/dev/null; }
@@ -706,11 +721,13 @@ lk_smart_trace_header() {
     echo "#   sleep_override  thermal_veto  app_hint  pkg_hash"
     echo "#   cpu_max_c  bat_pct  bat_temp_dC  screen_on  charging"
     echo "#   fsm_state  fsm_profile_idx  pkg_detect_ok  pkg_source  cap_owner"
+    echo "#   draw_mA  gpu_busy_pct  little_cur_MHz  prime_cur_MHz"
     echo "# Daypart: 0=sleep 1=wake 2=morn 3=day 4=eve 5=late"
     echo "# Fallback: 0=exact 1=daypart 2=class 3=global 4=safe_default(cold-start)"
     echo "# App hint: 0=idle 1=light 2=medium 3=heavy 4=gaming"
     echo "# pkg_source: 0=none 1=activity_top 2=resumed 3=window_focus"
-    echo "epoch iso bucket dp wkd fb conf alpha inter night veto app pkghash cpuC batpct batT scr chg state pidx pkgok pkgsrc capowner"
+    echo "# draw_mA: battery current magnitude (mA); pair with charging col for direction"
+    echo "epoch iso bucket dp wkd fb conf alpha inter night veto app pkghash cpuC batpct batT scr chg state pidx pkgok pkgsrc capowner drawmA gpubusy f0MHz fpMHz"
   } > "$LK_OUT_DIR/smart_trace.tsv"
 }
 
@@ -774,13 +791,34 @@ lk_capture_smart_trace_row() {
     *) _chg=- ;;
   esac
 
+  # --- autonomy fields (added so drain correlates with Smart state in one row) ---
+  # Battery current draw in mA (the single most useful drain signal). current_now
+  # is uA on most OnePlus; sign varies by kernel, so we report the magnitude and
+  # let the charging flag give direction. Negative-on-discharge kernels still give
+  # a usable magnitude here.
+  _ima=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null)
+  if [ -n "$_ima" ]; then
+    _ima_abs=${_ima#-}
+    # uA -> mA when the value is clearly in microamps (5+ digits)
+    if [ "${#_ima_abs}" -ge 5 ]; then _ima=$(( _ima_abs / 1000 )); else _ima=$_ima_abs; fi
+  fi
+  # GPU busy % (activity — high GPU busy off-screen is a drain red flag)
+  _gbusy=$(cat /sys/class/kgsl/kgsl-3d0/gpubusy 2>/dev/null | awk '{ if ($2>0) printf "%d", $1*100/$2; else print 0 }')
+  # Actual current freq of the little (policy0) and prime (top policy) clusters,
+  # in MHz — shows whether cores are really idling down under each profile.
+  _f0=$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq 2>/dev/null)
+  [ -n "$_f0" ] && _f0=$(( _f0 / 1000 ))
+  _ptop=$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t y -k3 -n | tail -1)
+  _fp=$(cat "$_ptop/scaling_cur_freq" 2>/dev/null)
+  [ -n "$_fp" ] && _fp=$(( _fp / 1000 ))
+
   # Fallback empty fields to '-' so columns stay aligned
-  for v in _bucket _dp _wkd _fb _conf _alpha _inter _night _veto _app _pkghash _cpuC _state _pidx _bpct _btmp _scr _chg _pkgok _pkgsrc _capowner; do
+  for v in _bucket _dp _wkd _fb _conf _alpha _inter _night _veto _app _pkghash _cpuC _state _pidx _bpct _btmp _scr _chg _pkgok _pkgsrc _capowner _ima _gbusy _f0 _fp; do
     eval "_val=\$$v"
     [ -z "$_val" ] && eval "$v=-"
   done
 
-  echo "$_e $_d $_bucket $_dp $_wkd $_fb $_conf $_alpha $_inter $_night $_veto $_app $_pkghash $_cpuC $_bpct $_btmp $_scr $_chg $_state $_pidx $_pkgok $_pkgsrc $_capowner" \
+  echo "$_e $_d $_bucket $_dp $_wkd $_fb $_conf $_alpha $_inter $_night $_veto $_app $_pkghash $_cpuC $_bpct $_btmp $_scr $_chg $_state $_pidx $_pkgok $_pkgsrc $_capowner $_ima $_gbusy $_f0 $_fp" \
     >> "$LK_OUT_DIR/smart_trace.tsv"
 }
 
@@ -1054,6 +1092,37 @@ lk_emit_smart_summary() {
         }
       }
       if (!any) print "  (no valid CPU temp samples — check cap_temp state field)"
+    }' "$_trace" 2>/dev/null
+
+    # Battery drain analysis (the autonomy view). draw_mA is col 24, screen col
+    # 17, charging col 18, profile_idx col 20. We only average DISCHARGING ticks.
+    echo ""
+    echo "── Battery drain (discharging only; draw_mA col) ──"
+    awk '/^[0-9]/ && $24 != "-" && $18 == "0" {
+      v=$24+0; n++; sum+=v
+      if ($17=="1") { son_n++; son_sum+=v } else if ($17=="0") { soff_n++; soff_sum+=v }
+      # by profile idx (col 20): 0=batt 1=bal 2=perf 3=smart
+      pn[$20]++; ps[$20]+=v
+    } END {
+      if (n>0) {
+        printf "  overall: ticks=%d  avg=%d mA\n", n, sum/n
+        if (son_n>0)  printf "  screen ON : ticks=%d  avg=%d mA\n", son_n, son_sum/son_n
+        if (soff_n>0) printf "  screen OFF: ticks=%d  avg=%d mA  (idle/standby drain)\n", soff_n, soff_sum/soff_n
+        for (k=0;k<=3;k++) if (pn[k]>0) {
+          name=(k==0?"battery":k==1?"balanced":k==2?"performance":"smart")
+          printf "  profile %s: ticks=%d  avg=%d mA\n", name, pn[k], ps[k]/pn[k]
+        }
+      } else print "  (no discharging draw_mA samples)"
+    }' "$_trace" 2>/dev/null
+    echo ""
+    echo "── GPU activity & CPU idle (off-screen high values = drain red flags) ──"
+    awk '/^[0-9]/ && $17 == "0" && $18 == "0" {
+      if ($25 != "-") { gn++; gsum+=$25 }
+      if ($26 != "-") { fn++; fsum+=$26; if (fn==1||$26<fmin) fmin=$26 }
+    } END {
+      if (gn>0) printf "  off-screen GPU busy avg=%d%% (should be ~0)\n", gsum/gn
+      if (fn>0) printf "  off-screen little-cluster freq avg=%d MHz min=%d MHz (low=good)\n", fsum/fn, fmin
+      if (gn==0 && fn==0) print "  (no off-screen samples)"
     }' "$_trace" 2>/dev/null
 
     # Final ASB Smart Mode CLI status snapshot
