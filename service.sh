@@ -1396,17 +1396,51 @@ asb_gpu_pick_pct() {
 }
 apply_gpu_caps() {
   _gbase="/sys/class/kgsl/kgsl-3d0/devfreq"
-  [ -d "$_gbase" ] || return 0
-  _gmax="$(asb_gpu_pick_pct ${_P_GPU_MAX_PCT:-100})"
-  [ -n "$_gmax" ] && writef_retry "$_gbase/max_freq" "$_gmax" 3 0.25 || true
-  if [ "${_P_GPU_MIN_PCT:-0}" -gt 0 ] 2>/dev/null; then
-    _gmin="$(asb_gpu_pick_pct ${_P_GPU_MIN_PCT})"
-  else
-    _gmin="$(cat "$_gbase/available_frequencies" 2>/dev/null | tr ' ' '
-' | grep -v '^$' | sort -n | head -1)"
-    [ -n "$_gmin" ] || _gmin="$(cat "$_gbase/min_freq" 2>/dev/null)"
+  # Primary path: devfreq frequency capping (OP13 Adreno 830 and any GPU that
+  # populates devfreq/max_freq + available_frequencies).
+  if [ -d "$_gbase" ] && [ -n "$(cat "$_gbase/max_freq" 2>/dev/null)" ] && [ -s "$_gbase/available_frequencies" ]; then
+    _gmax="$(asb_gpu_pick_pct ${_P_GPU_MAX_PCT:-100})"
+    [ -n "$_gmax" ] && writef_retry "$_gbase/max_freq" "$_gmax" 3 0.25 || true
+    if [ "${_P_GPU_MIN_PCT:-0}" -gt 0 ] 2>/dev/null; then
+      _gmin="$(asb_gpu_pick_pct ${_P_GPU_MIN_PCT})"
+    else
+      _gmin="$(cat "$_gbase/available_frequencies" 2>/dev/null | tr ' ' '\n' | grep -v '^$' | sort -n | head -1)"
+      [ -n "$_gmin" ] || _gmin="$(cat "$_gbase/min_freq" 2>/dev/null)"
+    fi
+    [ -n "$_gmin" ] && writef_retry "$_gbase/min_freq" "$_gmin" 3 0.25 || true
+    return 0
   fi
-  [ -n "$_gmin" ] && writef_retry "$_gbase/min_freq" "$_gmin" 3 0.25 || true
+  # Fallback: pwrlevel capping. OP15 Adreno 840 leaves devfreq freq nodes empty
+  # and controls the GPU via max_pwrlevel instead, so the GPU % from the profiles
+  # was a silent no-op there. pwrlevel is an INVERTED index: 0 = fastest,
+  # num_pwrlevels-1 = slowest.
+  #
+  # SAFETY: the vendor sets max_pwrlevel as a thermal/power ceiling (e.g. 6 on
+  # OP15). We must NEVER write a level below it — that would unlock the GPU above
+  # the vendor limit and overheat an already throttle-prone SoC. We capture the
+  # vendor value ONCE (first boot, before ASB ever writes it) as a floor and only
+  # ever raise the level (slow the GPU) for power-saving profiles; performance
+  # (100%) leaves the vendor ceiling untouched.
+  _pmax_node="/sys/class/kgsl/kgsl-3d0/max_pwrlevel"
+  _nlvl="$(cat /sys/class/kgsl/kgsl-3d0/num_pwrlevels 2>/dev/null)"
+  if [ -w "$_pmax_node" ] && [ -n "$_nlvl" ] && [ "$_nlvl" -gt 1 ] 2>/dev/null; then
+    _floor_file="/data/adb/asb/gpu_pwrlevel_floor"
+    if [ ! -f "$_floor_file" ]; then
+      mkdir -p /data/adb/asb 2>/dev/null
+      cat "$_pmax_node" 2>/dev/null > "$_floor_file" 2>/dev/null || true
+    fi
+    _vfloor="$(cat "$_floor_file" 2>/dev/null)"
+    case "$_vfloor" in ''|*[!0-9]*) _vfloor=0 ;; esac
+    _pct="${_P_GPU_MAX_PCT:-100}"
+    [ "$_pct" -gt 100 ] 2>/dev/null && _pct=100
+    [ "$_pct" -lt 1 ] 2>/dev/null && _pct=1
+    _last=$(( _nlvl - 1 ))
+    _lvl=$(( (100 - _pct) * _last / 100 ))
+    # Clamp into [vendor_floor .. slowest]: never faster than the vendor cap.
+    [ "$_lvl" -lt "$_vfloor" ] 2>/dev/null && _lvl="$_vfloor"
+    [ "$_lvl" -gt "$_last" ] 2>/dev/null && _lvl="$_last"
+    writef_retry "$_pmax_node" "$_lvl" 3 0.25 || true
+  fi
 }
 apply_cpufreq_caps() {
   # Topology-aware capping. 2-cluster SoCs (OP15 canoe, OP13 sun) map cleanly to
