@@ -364,7 +364,15 @@ for _pol in $_pol_dirs; do
   fi
   P "    $_cl ($_tier): max=${_smax}/${_hmax} kHz (${_pctmax}% of hw) gov=$_gov"
 done
-P "  GPU: $(cat /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null || echo n/a)  max_pwrlevel=$(cat /sys/class/kgsl/kgsl-3d0/max_pwrlevel 2>/dev/null)"
+_gpu_gov="$(cat /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null)"
+_gpu_pwr="$(cat /sys/class/kgsl/kgsl-3d0/max_pwrlevel 2>/dev/null)"
+_gpu_floor="$(cat /data/adb/asb/gpu_pwrlevel_floor 2>/dev/null)"
+if [ -n "$_gpu_gov" ]; then
+  P "  GPU: $_gpu_gov  max_pwrlevel=$_gpu_pwr (devfreq-capped)"
+else
+  # devfreq freq nodes empty (e.g. OP15 Adreno 840) -> ASB caps via pwrlevel.
+  P "  GPU: pwrlevel-controlled  max_pwrlevel=$_gpu_pwr${_gpu_floor:+ (vendor floor=$_gpu_floor)}"
+fi
 NOTE "tier shows the governor's cluster role; %-of-hw shows the active cap. In"
 NOTE "performance every cluster should read ~100%; in battery the prime cluster"
 NOTE "is capped low while little/mid keep enough headroom to stay smooth."
@@ -594,6 +602,39 @@ if [ -d "$_kg" ]; then
   P "    default_pwr    = $(cat $_kg/default_pwrlevel 2>/dev/null)"
   P "    busy_pct       = $(cat $_kg/gpubusy 2>/dev/null)"
   P "    throttling     = $(cat $_kg/throttling 2>/dev/null)"
+  # GPU write-test: does ASB actually control the GPU ceiling, or does the vendor
+  # governor (msm-adreno-tz) override it like walt does for CPU? Mirrors the CPU
+  # write-test: pick a mid available freq, write devfreq/max_freq, read back,
+  # then restore. On devices where devfreq is empty (OP15 Adreno 840) we instead
+  # test max_pwrlevel.
+  _gdv="$_kg/devfreq"
+  if [ -w "$_gdv/max_freq" ] && [ -s "$_gdv/available_frequencies" ]; then
+    _g_orig="$(cat "$_gdv/max_freq" 2>/dev/null)"
+    _g_try="$(tr ' ' '\n' < "$_gdv/available_frequencies" 2>/dev/null | grep -v '^$' | sort -n | awk 'NR==3{print}')"
+    if [ -n "$_g_try" ] && [ "$_g_try" != "$_g_orig" ]; then
+      echo "$_g_try" > "$_gdv/max_freq" 2>/dev/null
+      _g_read="$(cat "$_gdv/max_freq" 2>/dev/null)"
+      if [ "$_g_read" = "$_g_try" ]; then
+        P "    [PASS] GPU max_freq write-test: wrote $_g_try, read back $_g_read (ASB CAN cap the GPU)"
+      else
+        P "    [FAIL] GPU max_freq write-test: wrote $_g_try but read back $_g_read (vendor governor OVERRIDES the GPU cap)"
+      fi
+      [ -n "$_g_orig" ] && echo "$_g_orig" > "$_gdv/max_freq" 2>/dev/null
+    else
+      P "    GPU write-test skipped (no distinct available freq)"
+    fi
+  elif [ -w "$_kg/max_pwrlevel" ]; then
+    _p_orig="$(cat "$_kg/max_pwrlevel" 2>/dev/null)"
+    _p_try=$(( ${_p_orig:-0} + 1 ))
+    echo "$_p_try" > "$_kg/max_pwrlevel" 2>/dev/null
+    _p_read="$(cat "$_kg/max_pwrlevel" 2>/dev/null)"
+    if [ "$_p_read" = "$_p_try" ]; then
+      P "    [PASS] GPU max_pwrlevel write-test: wrote $_p_try, read back $_p_read (ASB CAN cap via pwrlevel)"
+    else
+      P "    [FAIL] GPU max_pwrlevel write-test: wrote $_p_try but read back $_p_read (vendor OVERRIDES pwrlevel)"
+    fi
+    [ -n "$_p_orig" ] && echo "$_p_orig" > "$_kg/max_pwrlevel" 2>/dev/null
+  fi
 else
   NOTE "kgsl-3d0 not found"
 fi
