@@ -301,11 +301,10 @@ asb_drift_check() {
       asb_log "drift(cpu): $(basename "$_dchk") min=${_mn} > max=${_mx}"
   done
 
-  # NOTE: the previous drift(cap) comparison hardcoded absolute kHz expectations
-  # (1132800/1612800 etc.) and only looked at policy0/policy6. After the move to
-  # per-device PERCENT caps (and OP12's 4 clusters), those absolutes are wrong and
-  # would log constant false "drift". Cap-drift monitoring is dropped here; the
-  # scaling_max abs-drift log above and the GPU sanity check below still apply.
+  # Cap-drift comparison intentionally omitted: caps are per-device percents (and
+  # OP12 has 4 clusters), so the old absolute-kHz policy0/policy6 check logged
+  # false drift. The scaling_max abs-drift log above and GPU sanity check below
+  # still apply.
   :
   local _gmin_path="/sys/class/kgsl/kgsl-3d0/devfreq/min_freq"
   local _gmax_path="/sys/class/kgsl/kgsl-3d0/devfreq/max_freq"
@@ -493,9 +492,9 @@ apply_vm() {
   esac
   sysctlw vm.watermark_scale_factor $_P_WMARK
   sysctlw vm.min_free_kbytes $_P_MINFREE
-  # NOTE: do not set vm.oom_kill_allocating_task=1. That picks the allocating
-  # task as the OOM victim instead of the highest oom_score, which caused
-  # false-positive kills of legitimately allocating apps (App Market, WhatsApp).
+  # Do not set vm.oom_kill_allocating_task=1 (see boot-time reset above): it
+  # kills the allocating task instead of the highest oom_score, causing false
+  # kills of apps like App Market/WhatsApp.
   if [ "$ASB_PROFILE" = "battery" ]; then
     [ -e /proc/sys/vm/drop_caches ] || true
     [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 1 || true
@@ -668,21 +667,16 @@ asb_wifi_cc_heal() {
 asb_wifi_cc_heal
 
 apply_wifi_country() {
-  # Determine the regulatory country the same way the installer does: from the
-  # SIM, then the network operator. Only act on a confident 2-letter ISO code.
-  # We deliberately do NOT force a hardcoded default (was "IT") and do NOT use
-  # `force-country-code enabled` — forcing a regdomain that disagrees with what
-  # the modem reports can block the Wi-Fi toggle from turning on. We only set
-  # the soft country hint, letting the driver/modem keep authority.
+  # Country from SIM then operator; only a confident 2-letter ISO code. We set
+  # only the soft hint (no `force-country-code enabled`): forcing a regdomain the
+  # modem disagrees with can block the Wi-Fi toggle.
   _cc=""
   for _p in gsm.sim.operator.iso-country gsm.operator.iso-country; do
     _v="$(getprop "$_p" 2>/dev/null | tr '[:lower:]' '[:upper:]' | tr -d ' ')"
     case "$_v" in [A-Z][A-Z]) _cc="$_v"; break ;; esac
   done
-  # Honour an explicit override if the user set one in config.
-  [ -n "$WIFI_COUNTRY" ] && _cc="$WIFI_COUNTRY"
-  # No confident code -> leave the regulatory domain entirely to the modem.
-  [ -n "$_cc" ] || return 0
+  [ -n "$WIFI_COUNTRY" ] && _cc="$WIFI_COUNTRY"   # explicit user override
+  [ -n "$_cc" ] || return 0                        # none -> leave it to the modem
 
   has settings && {
     asb_settings_put global wifi_country_code "$_cc"
@@ -1482,12 +1476,9 @@ apply_cpufreq_caps() {
     fi
   done
 }
-# NOTE: apply_cpufreq_caps is NOT called standalone here. It must only run via
-# apply_screen_aware_caps, which first sets _P_CPUCAP_L/_P_CPUCAP_B to the
-# correct per-device PERCENT values. Calling it directly at service start used
-# the absolute CPU_CAP_* left in _P_CPUCAP_* by asb_load_profile, which this
-# percent-based function misread as ">=100%" and briefly uncapped every cluster.
-# apply_screen_aware_caps runs at startup and on every profile/screen change.
+# apply_cpufreq_caps must run ONLY via apply_screen_aware_caps, which first sets
+# _P_CPUCAP_L/_B to per-device PERCENTs. Calling it directly would misread the
+# absolute CPU_CAP_* (left by asb_load_profile) as ">=100%" and briefly uncap.
 
 asb_screen_on() {
   for _dp in /sys/kernel/oplus_display/panel_power_status               /sys/kernel/oplus_display/disp_on_notify; do
