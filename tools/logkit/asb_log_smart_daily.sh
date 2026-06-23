@@ -113,6 +113,22 @@ while : ; do
     lk_snapshot_state "snapshot_${_now}"
     lk_verify_caps
     lk_snapshot_smart_store "mid_${_now}"
+    # Top wake sources right now, so standby drain can be attributed to a real
+    # holder (modem, Wi-Fi, an app) rather than guessed. Logged to one growing
+    # file with timestamps. Note: this script holds its own asb_logkit wakelock
+    # to survive Doze, so expect to see that one — it is the logger, not a leak.
+    {
+      echo "===== wake sources @ $(date '+%H:%M:%S') ====="
+      if [ -r /sys/kernel/debug/wakeup_sources ]; then
+        head -1 /sys/kernel/debug/wakeup_sources
+        tail -n +2 /sys/kernel/debug/wakeup_sources 2>/dev/null | awk '$6>0 || $3>0' | sort -k6 -n -r | head -12
+      elif [ -r /d/wakeup_sources ]; then
+        head -1 /d/wakeup_sources
+        tail -n +2 /d/wakeup_sources 2>/dev/null | awk '$6>0 || $3>0' | sort -k6 -n -r | head -12
+      else
+        echo "(wakeup_sources not accessible)"
+      fi
+    } >> "$LK_OUT_DIR/wake_sources.txt" 2>/dev/null
     # Emit the report card on every snapshot too, not only at finalize —
     # if the capture is stopped in a way that bypasses the EXIT trap
     # (setsid, SIGKILL, detached parent), the latest card still exists.

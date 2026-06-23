@@ -1098,6 +1098,9 @@ lk_emit_smart_summary() {
     # 17, charging col 18, profile_idx col 20. We only average DISCHARGING ticks.
     echo ""
     echo "── Battery drain (discharging only; draw_mA col) ──"
+    echo "   NOTE: this capture holds a partial wakelock to survive Doze, so the"
+    echo "   device never enters true deep sleep — screen-OFF mA here is an UPPER"
+    echo "   bound, real standby is lower. See wake_sources.txt to attribute it."
     awk '/^[0-9]/ && $24 != "-" && $18 == "0" {
       v=$24+0; n++; sum+=v
       if ($17=="1") { son_n++; son_sum+=v } else if ($17=="0") { soff_n++; soff_sum+=v }
