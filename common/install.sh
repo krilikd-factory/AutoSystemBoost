@@ -414,12 +414,38 @@ asb_detect_compat() {
     *"oneplus 13"*|*"oneplus13"*|*"op13"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"op5d55"*)
       ASB_IS_OP13=true ;;
   esac
-  # platform/SoC fallback for OP13 (sun / SM8750) — only if not already OP15
-  if [ "$ASB_IS_OP15" != "true" ]; then
+  # platform/SoC fallback for OP13 (sun / SM8750) — only if not already OP15.
+  #
+  # CRITICAL: SM8750 is shared by a LOT of OnePlus devices that are NOT the
+  # OnePlus 13 and do NOT share the OP13 'sun' vendor partition layout — e.g.
+  # Ace 6 (ktm), 13T/13s (pagani), Ace 5 Pro (hummer), Ace 5 Ultra (emira),
+  # Ace 5 Race (subaru). Applying the OP13 'sun' device overlay (camera/audio/
+  # perf XMLs authored for sun) to any of those mismatches the HALs and bootloops
+  # — this is the "Ace 6 won't boot on V52" regression (pre-V52 had no OP13 path,
+  # so those devices fell through to the generic-safe path and booted fine).
+  #
+  # So the SoC fallback is an ALLOWLIST, not a blanket SoC match: an unidentified
+  # SM8750 OnePlus is only treated as OP13 when its codename/model is positively
+  # in the OP13 'sun' family. Everything else on SM8750 falls through to the
+  # generic-safe path (governor + sed only, no device overlay), which boots on
+  # any device. Real OP13 is already caught by the explicit model match above;
+  # this fallback only adds OP13 when the platform is sun AND the codename
+  # confirms it, so a hidden-model OP13 still works without risking foreign SoC
+  # siblings.
+  if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ]; then
     ASB_PLATFORM_L="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
     case "$ASB_PLATFORM_L" in
       *"sm8750"*|*"sun"*)
-        echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP13=true ;;
+        # Only the OP13 'sun' family — confirmed by codename/model — gets the
+        # overlay. 'sun' is the OP13 codename; CPH2649/53/55 and OP5D55 are OP13
+        # models. Foreign SM8750 codenames (ktm/pagani/hummer/emira/subaru/…)
+        # deliberately do NOT match and stay on the generic-safe path.
+        case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L" in
+          *"sun"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"op5d55"*)
+            echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP13=true ;;
+          *)
+            ui_print "[*] SM8750 device, non-OP13 codename — generic-safe tuning (no OP13 overlay, boots on any SM8750 sibling)" ;;
+        esac ;;
     esac
   fi
 
@@ -429,14 +455,25 @@ asb_detect_compat() {
       ASB_IS_OP12=true ;;
   esac
   # platform/SoC fallback for OP12 (pineapple / SM8650) — only if not OP15/OP13.
-  # NOTE: OP12 platform string is "pineapple" (SM8650); guard against OP15/OP13.
-  # Some ROMs hide ro.soc.model, so match the platform codename too, mirroring
-  # how OP13 matches both "sm8750" and "sun".
-  if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ]; then
+  #
+  # Same allowlist discipline as the SM8750 path above: SM8650 (Snapdragon 8
+  # Gen 3) is shared by many OnePlus devices that are NOT the OP12 and don't
+  # share its 'pineapple' vendor layout (Ace 3, Ace 3 Pro, Ace 3V, …). Applying
+  # the OP12 device overlay to one of those would mismatch the HALs and risk a
+  # bootloop, so the fallback only treats an unidentified SM8650 OnePlus as OP12
+  # when its codename/model positively confirms the 'pineapple' family. Everything
+  # else on SM8650 stays on the generic-safe path (governor + sed only), which
+  # boots on any sibling. Real OP12 is already caught by the explicit match above.
+  if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ] && [ "$ASB_IS_OP12" != "true" ]; then
     ASB_PLATFORM_L="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
     case "$ASB_PLATFORM_L" in
       *"sm8650"*|*"pineapple"*)
-        echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP12=true ;;
+        case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L" in
+          *"pineapple"*|*"cph2581"*|*"cph2583"*|*"cph2573"*|*"op595"*)
+            echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP12=true ;;
+          *)
+            ui_print "[*] SM8650 device, non-OP12 codename — generic-safe tuning (no OP12 overlay, boots on any SM8650 sibling)" ;;
+        esac ;;
     esac
   fi
 
@@ -467,7 +504,24 @@ asb_detect_compat() {
     if [ -d /sys/devices/system/cpu/cpufreq/policy6 ]; then
       _max6="$(cat /sys/devices/system/cpu/cpufreq/policy6/cpuinfo_max_freq 2>/dev/null)"
       if echo "$_max6" | grep -q '^4[56][0-9][0-9][0-9][0-9][0-9]$'; then
-        echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP15=true
+        # CPU-clock heuristic for OP15 (SM8850 prime ~4.5-4.6 GHz), but SM8850 is
+        # also used by other OnePlus devices that are NOT the OP15 and don't share
+        # its 'canoe' vendor layout (Ace 6T/15R 'macan', 15T 'fairlady', Ace 6 Pro).
+        # Forcing OP15 on those would apply the canoe overlay and risk a bootloop,
+        # so only accept this heuristic when the codename/model isn't a known
+        # foreign SM8850 sibling. Unknown SM8850 codenames still pass (so a
+        # hidden-model OP15 works), but the known siblings are excluded and fall
+        # through to the generic-safe path.
+        _sm8850_foreign=0
+        case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L" in
+          *"macan"*|*"fairlady"*|*"15r"*|*"ace 6t"*|*"ace6t"*|*"15t"*|*"plr110"*|*"plz110"*|*"pmb110"*|*"cph276"*|*"cph277"*)
+            _sm8850_foreign=1 ;;
+        esac
+        if [ "$_sm8850_foreign" != "1" ]; then
+          echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP15=true
+        else
+          ui_print "[*] SM8850 device, non-OP15 codename — generic-safe tuning (no OP15 overlay)"
+        fi
       fi
     fi
   fi
