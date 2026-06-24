@@ -1,50 +1,25 @@
 # AutoSystemBoost — Changelog
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Release-V52-16a34a?style=for-the-badge" alt="V52">
-  <img src="https://img.shields.io/badge/Previous-V51-6b7280?style=for-the-badge" alt="V51">
-  <img src="https://img.shields.io/badge/versionCode-520-0ea5e9?style=for-the-badge" alt="versionCode">
+  <img src="https://img.shields.io/badge/Release-V53-16a34a?style=for-the-badge" alt="V53">
+  <img src="https://img.shields.io/badge/Previous-V52-6b7280?style=for-the-badge" alt="V52">
+  <img src="https://img.shields.io/badge/versionCode-530-0ea5e9?style=for-the-badge" alt="versionCode">
 </p>
 
 ---
 
-## V52 — *three devices, one engine*
+## V53 — *compatibility & cleanup*
 
-The big one: **full, first-class support for OnePlus 15, 13 and 12** — three SoC generations (SM8850 / SM8750 / SM8650), each device-tuned and tested on real hardware. Plus a long-standing OnePlus 12 + APatch camera bug solved at the root, a more autonomous Smart mode, and a round of fixes driven entirely by on-device logs.
+A focused follow-up to V52: fixes a boot regression on OnePlus devices that share a flagship's chip, resolves an LSPosed conflict, and tidies the learner readout. No setting changes — flash over V52 and reboot.
 
-> Cumulative on top of V51 — nothing removed. Every setting and all learned data carry across the update; reboot once after flashing.
+### 🛠️ Boot fix for SoC-siblings (Ace 6 & others)
+- V52's new per-device tuning matched purely on the SoC, so any OnePlus on the same chip as the 15/13/12 was handed the flagship's vendor overlay. On a different device (e.g. **OnePlus Ace 6**, codename `ktm`, same SM8750 as the 13) that overlay mismatched the HALs and **bootlooped** — which is why every pre-V52 build worked.
+- Detection is now an **allowlist**: only the real `canoe` / `sun` / `pineapple` families get a device overlay. Every other OnePlus on those chips (Ace 6, Ace 5/3 family, 13T/13s, 15R/15T…) falls through to the generic-safe path — full governor tuning, no overlay, **boots on any sibling**.
 
-### 📱 Tri-device support
-- OnePlus 15 (`canoe` / SM8850), OnePlus 13 (`sun` / SM8750) and OnePlus 12 (`pineapple` / SM8650) are now all primary targets — per-device CPU/GPU topology, audio SKU, camera/media overlays and thermal shapes, validated on real units.
+### 🧩 LSPosed compatibility
+- Removed the USAP app-process-pool props (`usap_pool_enabled` & friends). Force-enabling the pool makes processes fork past the zygote hook point, which sent **LSPosed into safe mode**. With them gone, LSPosed and ASB run together cleanly.
 
-### 📷 OnePlus 12 + APatch camera — fixed at the root
-- The multicamera HAL crash that broke the camera on OP12 under APatch (even with camera tweaks off) is solved. Root cause: the tweak engine touched the camera config at install **and** boot, which APatch's separate `/odm` mount couldn't tolerate.
-- Now scoped precisely by reliable root-manager detection: **OP12 + APatch** keeps the camera byte-for-byte stock, while **OP12 + KernelSU** and **OP13/OP15** keep the full tweak set.
+### 📊 WebUI learner readout
+- The learner no longer shows "learning 0%" after a reboot. Session history was already restored, but the displayed confidence was only written on a live session commit; it's now seeded on load from the best persisted bucket, so the readout stays continuous.
 
-### 🔋 Smart mode — more autonomy, safely
-- **New short screen-off tier (30–120 s):** reclaims the easy battery savings in brief "glance and put down" windows the logs showed Smart was missing — zero cost to responsiveness during active use.
-- **New Smart Battery Bias slider** in the WebUI (under Aggressive Camera Tweaks): an optional dial to lean Smart further toward economy. Default off; scaled by confidence and clamped so it shifts the lean without flipping fully to battery.
-
-### 🛰️ GPU & sensors
-- **OP15 GPU caps now actually apply.** The Adreno 840 leaves devfreq frequency nodes empty and is driven by pwrlevel, so per-profile GPU caps were a silent no-op. A safe pwrlevel fallback fixes it — never overclocking past the vendor's thermal ceiling.
-- **"Запас" (headroom) no longer stuck on n/a.** On SM8850 the kernel headroom signal latches as unreliable early in a boot and never recovered; it now re-validates once the signal proves trustworthy again.
-
-### 🧪 Logkit (smart/gaming/sleep captures)
-- Output lands on `/sdcard` next to the diag report instead of inside Termux's private dir.
-- Trace now records real battery-current draw, GPU busy and live cluster frequencies; the summary adds a drain breakdown (screen on/off, per profile).
-- A periodic wake-source snapshot lets standby drain be attributed instead of guessed — with an honest note that the capture holds a wakelock, so screen-off mA is an upper bound.
-
-### 🌐 Battery / network
-- **`network_stats_poll_interval`** stretched to 2 h in effective-battery states to trim wakeups — gated to the **LOG** category and applied in the battery profile (or Smart when strongly battery-leaning), fully reversible otherwise.
-
-### 🩺 Diagnostics
-- `asbdiag` now reports GPU control honestly on pwrlevel devices and runs a GPU write-test (does the cap stick, or does the vendor governor override it).
-- Fixed a false OP13 camera FAIL (device-aware tone values) and a "GPU: n/a" display on OP15.
-
-### 🧹 Housekeeping & pre-release audit
-- Version string synced (governor reported V50 while everything else said V52) — triggers a clean one-time Smart relearn on update.
-- Shipped-config parity restored, orphan tweak-baselines pruned, WebUI config descriptions shortened, history-narrative comments removed (markers/contracts kept).
-- Verified: balanced section markers, up-to-date FSM bounds, valid CI workflows (NDK r28c), all `rm -rf` scoped, clean uninstall.
-
-### 💾 Persistence
-- All WebUI toggles and sliders (including the new Smart Battery Bias) carry over `governor.conf` on reinstall; active profile and everything Smart has learned live under `/data/adb/asb/`, outside the module — untouched by updates.
+> Cumulative on top of V52 — nothing removed. All settings and learned data carry across the update.
