@@ -147,6 +147,27 @@ asb_apply_dynamic_tweaks() {
   [ -n "$_md" ] && [ -d "$_md" ] || return 0
   _conf="$_md/config/governor.conf"
 
+  # Detect OP12 (pineapple/SM8650) and whether we're on APatch. The camera-conf
+  # churn only crashes the multicamera HAL on OP12 + APatch (APatch's /odm is a
+  # real separate mount). On OP12 + KernelSU (/odm is a symlink to /vendor/odm)
+  # the camera tolerates the engine, and OP13/OP15 are unaffected — so only the
+  # OP12+APatch combination must skip the camera path. The audio layer is safe on
+  # all of them. Filesystem markers are reliable at boot; getprop is fine here too.
+  _tw_plat="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_tw_plat" ] && _tw_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
+  _is_op12=false
+  case "$_tw_plat" in pineapple|sm8650*) _is_op12=true ;; esac
+  _is_apatch=false
+  if [ "${APATCH:-}" = "true" ] || [ -d /data/adb/ap ] || [ -f /data/adb/apd ]; then
+    if [ "${KSU:-}" = "true" ] || [ -f /data/adb/ksud ]; then
+      [ "${APATCH:-}" = "true" ] && _is_apatch=true
+    else
+      _is_apatch=true
+    fi
+  fi
+  _skip_cam=false
+  [ "$_is_op12" = "true" ] && [ "$_is_apatch" = "true" ] && _skip_cam=true
+
   _audio_aggr="$(asb_tw_flag AUDIO_AGGRESSIVE "$_conf")"
   _cam_aggr="$(asb_tw_flag CAMERA_AGGRESSIVE "$_conf")"
   _cam_inject="$(asb_tw_flag CAMERA_AGGRESSIVE_INJECT "$_conf")"
@@ -167,16 +188,10 @@ asb_apply_dynamic_tweaks() {
   done
 
   # --- CAMERA conf_tuning --- patch BOTH the /vendor/odm and the direct /odm
-  # copy (OP12/OP13 ship both; the HAL may read either partition).
-  # OP12 (pineapple/SM8650): camera category is fully disabled (the vendor
-  # multicamera HAL crashes on any non-stock camera env), so never touch camera
-  # config here — no baseline, no restore, no aggressive, no inject.
-  _tw_plat="$(getprop ro.board.platform 2>/dev/null)"
-  [ -z "$_tw_plat" ] && _tw_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
-  case "$_tw_plat" in
-    pineapple|sm8650*)
-      return 0 ;;
-  esac
+  # copy (OP13 ships both; the HAL may read either partition). Skipped entirely
+  # on OP12 + APatch (_skip_cam) — that combination crashes the multicamera HAL
+  # on any camera-conf churn. OP12 + KernelSU and OP13/OP15 patch normally.
+  if [ "$_skip_cam" != "true" ]; then
   for _cf in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
              "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
     [ -f "$_cf" ] || continue
@@ -213,6 +228,7 @@ asb_apply_dynamic_tweaks() {
       rm -f "$_des" 2>/dev/null
     fi
   done
+  fi
 }
 
 # Install-time entry: (re)save baselines for every affected file. Forces an
