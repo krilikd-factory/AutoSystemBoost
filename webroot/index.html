@@ -1150,6 +1150,48 @@ body.live-active .page:not(.live-page) {
   opacity: 1;
   font-weight: 600;
 }
+.cfg-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+}
+.cfg-range input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 116px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--border);
+  outline: none;
+}
+.cfg-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(0,225,200,1), rgba(0,200,235,0.85));
+  cursor: pointer;
+  border: 0;
+}
+.cfg-range input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(0,225,200,1), rgba(0,200,235,0.85));
+  cursor: pointer;
+  border: 0;
+}
+.cfg-range.busy { opacity: 0.45; pointer-events: none; }
+.cfg-range-val {
+  min-width: 30px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--accent, #00e1c8);
+}
 .cfg-note {
   width: 100%;
   margin: 4px 0 12px;
@@ -1528,6 +1570,8 @@ const I18N = {
         desc: 'Аудиофильская цепь: компандеры выкл + Class-H HIFI ЦАП (чище звук, малый расход). Может конфликтовать с BT/DSP. Применяется после перезагрузки. ВЫКЛ, если не нужно.' },
       CAMERA_AGGRESSIVE: { name: 'Агрессивные твики камеры',
         desc: 'Сдвиги цвета/тона видео: мягче закаты, насыщеннее небо, приподняты тени. На вкус. После перезагрузки. ВЫКЛ = стоковый вид.' },
+      smart_battery_bias: { name: 'Уклон Smart в автономность',
+        desc: 'Склоняет режим Smart к экономии (0 = выкл, выше = больше автономности, чуть менее отзывчиво). Влияет только на Smart.' },
       CAMERA_AGGRESSIVE_INJECT: { name: 'Режим tone-ключей',
         desc: 'БЕЗОПАСНЫЙ — только имеющиеся tone-ключи. АГРЕССИВНЫЙ инжектирует недостающие (OnePlus 13/12) — рискованно, верните БЕЗОПАСНЫЙ при сбоях. После перезагрузки.' },
       bt_absvol_mode: { name: 'Режим громкости Bluetooth',
@@ -1774,6 +1818,8 @@ const CFG_ITEMS = [
     desc:'ON disables BT absolute volume (phone drives the speaker directly \u2014 louder, but volume scale changes). OFF/AUTO = stock, safest.' },
   { key:'CAMERA_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Camera Tweaks',
     desc:'Video colour/tone shifts: softer sunsets, richer sky, lifted shadows. Subjective. Reboot to apply. OFF = stock look.' },
+  { key:'smart_battery_bias', type:'range', def:'0', min:0, max:300, step:50, name:'Smart Battery Bias',
+    desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
   // --- Gaming & thermals ---
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
     desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
@@ -1819,6 +1865,7 @@ const CFG_ICONS = {
   AUDIO_EQ_COMPAT:'\uD83C\uDF9A\uFE0F',       // studio mic / EQ
   AUDIO_AGGRESSIVE:'\uD83C\uDFA7',             // headphones
   CAMERA_AGGRESSIVE:'\uD83D\uDCF7',           // camera
+  smart_battery_bias:'\uD83D\uDD0B',           // battery
   CAMERA_AGGRESSIVE_INJECT:'\uD83C\uDF9B\uFE0F',  // slider/mode
   bt_absvol_mode:'\uD83D\uDD0A',              // loud speaker (BT volume)
   cool_gaming:'\uD83C\uDFAE',                 // gamepad
@@ -1838,6 +1885,11 @@ function cfgStatus(it, cur) {
   if (it.type === 'bool') {
     if (cur === '1') return { cls:'good', text:'Enabled' };
     return { cls:'neutral', text:'Disabled' };
+  }
+  if (it.type === 'range') {
+    const n = parseInt(cur, 10);
+    if (isNaN(n) || n === 0) return { cls:'neutral', text:'Off' };
+    return { cls:'good', text:String(n) };
   }
   return { cls: (cur === it.def ? 'neutral' : 'warn'), text: String(cur).toUpperCase() };
 }
@@ -1878,6 +1930,23 @@ function cfgRender() {
       sw.setAttribute('aria-checked', cur === '1' ? 'true' : 'false');
       sw.onclick = () => cfgSet(it.key, (cur === '1') ? '0' : '1', sw);
       top.appendChild(sw);
+    } else if (it.type === 'range') {
+      // Slider control. Live value shows next to the handle; commit on release
+      // (change) so we don't spam config writes while dragging.
+      const wrap = document.createElement('div');
+      wrap.className = 'cfg-range';
+      const rng = document.createElement('input');
+      rng.type = 'range';
+      rng.min = it.min; rng.max = it.max; rng.step = it.step;
+      rng.value = (cur === '' || isNaN(parseInt(cur, 10))) ? it.def : cur;
+      const val = document.createElement('span');
+      val.className = 'cfg-range-val';
+      val.textContent = (parseInt(rng.value, 10) === 0) ? Topt('off') : rng.value;
+      rng.oninput = () => { val.textContent = (parseInt(rng.value, 10) === 0) ? Topt('off') : rng.value; };
+      rng.onchange = () => cfgSet(it.key, rng.value, wrap);
+      wrap.appendChild(rng);
+      wrap.appendChild(val);
+      top.appendChild(wrap);
     } else {
       const seg = document.createElement('div');
       seg.className = 'cfg-seg';
