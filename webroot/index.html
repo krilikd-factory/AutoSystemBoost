@@ -1568,8 +1568,8 @@ const I18N = {
         desc: 'Совместимость аудио с системными эквалайзерами (Flow Equalizer и др). ВКЛ, если пользуетесь.' },
       AUDIO_AGGRESSIVE: { name: 'Агрессивные аудио-твики',
         desc: 'Аудиофильская цепь: компандеры выкл + Class-H HIFI ЦАП (чище звук, малый расход). Может конфликтовать с BT/DSP. Применяется после перезагрузки. ВЫКЛ, если не нужно.' },
-      CAMERA_AGGRESSIVE: { name: 'Агрессивные твики камеры',
-        desc: 'Сдвиги цвета/тона видео: мягче закаты, насыщеннее небо, приподняты тени. На вкус. После перезагрузки. ВЫКЛ = стоковый вид.' },
+      CAMERA_LEVEL: { name: 'Степень обработки камеры',
+        desc: 'Сила цвета/тона для ФОТО и видео. 0 = сток (выкл). 1 безопасно \\u2192 4 максимум: всё насыщеннее небо, цвета и контраст теней. Высокие уровни — сочно, в глубоких тенях возможен бандинг. Настроено под устройство (OP15/OP13/OP12). После перезагрузки.' },
       smart_battery_bias: { name: 'Уклон Smart в автономность',
         desc: 'Склоняет режим Smart к экономии (0 = выкл, выше = больше автономности, чуть менее отзывчиво). Влияет только на Smart.' },
       CAMERA_AGGRESSIVE_INJECT: { name: 'Режим tone-ключей',
@@ -1816,8 +1816,8 @@ const CFG_ITEMS = [
     desc:'Audiophile chain: companders off + Class-H HIFI DAC (cleaner headphones, small power cost). May clash with BT/DSP. Reboot to apply. OFF if unsure.' },
   { key:'bt_absvol_mode', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Volume Mode',
     desc:'ON disables BT absolute volume (phone drives the speaker directly \u2014 louder, but volume scale changes). OFF/AUTO = stock, safest.' },
-  { key:'CAMERA_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Camera Tweaks',
-    desc:'Video colour/tone shifts: softer sunsets, richer sky, lifted shadows. Subjective. Reboot to apply. OFF = stock look.' },
+  { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:4, step:1, name:'Camera Grade',
+    desc:'Photo + video colour/tone strength. 0 = stock (off). 1 safe \\u2192 4 max: progressively richer saturation, sky and shadow contrast. Higher levels are punchy and can band in deep shadows. Per-device tuned (OP15/OP13/OP12). Reboot to apply.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:300, step:50, name:'Smart Battery Bias',
     desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
   // --- Gaming & thermals ---
@@ -1864,7 +1864,7 @@ async function cfgLoad() {
 const CFG_ICONS = {
   AUDIO_EQ_COMPAT:'\uD83C\uDF9A\uFE0F',       // studio mic / EQ
   AUDIO_AGGRESSIVE:'\uD83C\uDFA7',             // headphones
-  CAMERA_AGGRESSIVE:'\uD83D\uDCF7',           // camera
+  CAMERA_LEVEL:'\uD83D\uDCF7',                // camera
   smart_battery_bias:'\uD83D\uDD0B',           // battery
   CAMERA_AGGRESSIVE_INJECT:'\uD83C\uDF9B\uFE0F',  // slider/mode
   bt_absvol_mode:'\uD83D\uDD0A',              // loud speaker (BT volume)
@@ -1889,6 +1889,10 @@ function cfgStatus(it, cur) {
   if (it.type === 'range') {
     const n = parseInt(cur, 10);
     if (isNaN(n) || n === 0) return { cls:'neutral', text:'Off' };
+    if (it.key === 'CAMERA_LEVEL') {
+      const names = ['Off','Safe','Moderate','Strong','Max'];
+      return { cls:'good', text:(names[n] || String(n)) };
+    }
     return { cls:'good', text:String(n) };
   }
   return { cls: (cur === it.def ? 'neutral' : 'warn'), text: String(cur).toUpperCase() };
@@ -1966,24 +1970,25 @@ function cfgRender() {
     row.appendChild(d);
 
     // Compact nested sub-control for the camera card: tone-key mode safe|aggressive.
-    // Lives inside the Aggressive Camera card and is dimmed/locked until that
-    // master toggle is ON. "aggressive" = also inject the missing tone keys.
-    if (it.key === 'CAMERA_AGGRESSIVE') {
+    // Lives inside the Camera Grade card and is dimmed/locked until the grade is
+    // above 0 (stock). "aggressive" = also inject the missing tone keys.
+    if (it.key === 'CAMERA_LEVEL') {
+      const lvlOn = (parseInt(cur, 10) || 0) > 0;
       const injCur = (_cfgVals['CAMERA_AGGRESSIVE_INJECT'] !== undefined) ? _cfgVals['CAMERA_AGGRESSIVE_INJECT'] : 'safe';
       const sub = document.createElement('div');
-      sub.className = 'cfg-sub' + (cur === '1' ? '' : ' disabled');
+      sub.className = 'cfg-sub' + (lvlOn ? '' : ' disabled');
       const subLabel = document.createElement('div');
       subLabel.className = 'cfg-sub-label';
       subLabel.innerHTML = T('cfg_camera_mode_label', 'Tone-key mode') +
         '<span class="cfg-sub-hint">' + T('cfg_camera_mode_hint', 'Aggressive injects keys your model lacks (risky)') + '</span>';
       sub.appendChild(subLabel);
       const subSeg = document.createElement('div');
-      subSeg.className = 'cfg-seg small' + (cur === '1' ? '' : ' disabled');
+      subSeg.className = 'cfg-seg small' + (lvlOn ? '' : ' disabled');
       ['safe','aggressive'].forEach(o => {
         const b = document.createElement('button');
         b.textContent = Topt(o);
         if (o === injCur) b.classList.add('on');
-        b.onclick = () => { if (cur === '1') cfgSet('CAMERA_AGGRESSIVE_INJECT', o, subSeg); };
+        b.onclick = () => { if (lvlOn) cfgSet('CAMERA_AGGRESSIVE_INJECT', o, subSeg); };
         subSeg.appendChild(b);
       });
       sub.appendChild(subSeg);
