@@ -3056,6 +3056,26 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int conf = asb_smart_confidence_x1000(b, now);
     asb_smart_compute_effective(b, conf, &g_smart_rt);
 
+    /* Optional user autonomy dial: smart_battery_bias (governor.conf, x1000,
+     * default 0 = unchanged) nudges the effective battery lean upward so Smart
+     * leans harder toward economy without touching the learner or the profiles.
+     * Applied here, before the safety overrides, so night/idle floors still take
+     * precedence. Bias is clamped to a sane 0..300 so it can't flip Smart fully
+     * to battery on its own — it shifts the lean, the learner still drives the
+     * shape. Only meaningful when confidence is non-trivial (scale the bias by
+     * eff_scale via conf so a cold-start Smart isn't dragged battery-ward before
+     * it has learned anything). */
+    if (g_asb_cfg.smart_battery_bias > 0) {
+        int bbias = g_asb_cfg.smart_battery_bias;
+        if (bbias > 300) bbias = 300;
+        /* scale by confidence so low-confidence Smart isn't over-biased */
+        int scaled = (bbias * conf) / 1000;
+        int biased = (int)g_smart_rt.alpha_battery_x1000 + scaled;
+        if (biased > ASB_SMART_ALPHA_BATTERY_MAX_X1000)
+            biased = ASB_SMART_ALPHA_BATTERY_MAX_X1000;
+        g_smart_rt.alpha_battery_x1000 = biased;
+    }
+
     /* 4. Safety overrides — these can lift floors but never reduce safety */
     asb_smart_apply_night_override(daypart,
                                    asb_night_window_active(now),

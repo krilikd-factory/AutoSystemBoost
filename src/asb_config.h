@@ -141,6 +141,7 @@ typedef struct {
     int   smart_idle_bias_max;        /* bias clamp max x1000, default 200 */
     int   smart_sleep_bias_max;       /* bias clamp max x1000, default 1000 */
     int   smart_net_conservative_max; /* bias clamp max x1000, default 1000 */
+    int   smart_battery_bias;         /* extra battery lean added to effective alpha, x1000, default 0 */
     int   smart_debug_log;            /* extra logging for alpha, default 0 */
 } asb_runtime_config_t;
 
@@ -254,6 +255,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->smart_idle_bias_max          = 200;
     c->smart_sleep_bias_max         = 1000;
     c->smart_net_conservative_max   = 1000;
+    c->smart_battery_bias           = 0;
     c->smart_debug_log              = 0;
 }
 
@@ -377,6 +379,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "smart_idle_bias_max"))     c->smart_idle_bias_max = atoi(v);
     else if (!strcmp(k, "smart_sleep_bias_max"))    c->smart_sleep_bias_max = atoi(v);
     else if (!strcmp(k, "smart_net_conservative_max")) c->smart_net_conservative_max = atoi(v);
+    else if (!strcmp(k, "smart_battery_bias"))      c->smart_battery_bias = atoi(v);
     else if (!strcmp(k, "smart_debug_log"))         c->smart_debug_log = atoi(v);
 }
 

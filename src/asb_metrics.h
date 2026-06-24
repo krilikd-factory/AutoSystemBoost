@@ -1008,10 +1008,39 @@ int spike_detected = 0;
                         static int headroom_100_streak = 0;
                         static int headroom_dead_session = 0;
                         static int implausible_hot_streak = 0;
+                        static int headroom_recover_streak = 0;
                         if (headroom_dead_session) {
-                            t->headroom_valid = 0;
-                            snprintf(t->headroom_invalid_reason,
-                                     sizeof(t->headroom_invalid_reason), "dead_iface");
+                            /* Previously latched as a dead/stuck msm_performance
+                             * interface. But on SM8850 the signal is only dead
+                             * SOME of the time (it reports a real capped value once
+                             * the kernel actually clamps, e.g. 2227200 = 61%). If we
+                             * now see a plausible, non-100% reading for several reads
+                             * in a row, the interface is alive again — recover so the
+                             * WebUI "headroom" stops showing a permanent n/a. A
+                             * single good read isn't enough (avoids flapping); 5 in a
+                             * row clears the latch. */
+                            if (t->headroom_pct < 100 &&
+                                !(t->cpu_max_c >= 60 && t->headroom_pct >= 95)) {
+                                headroom_recover_streak++;
+                                if (headroom_recover_streak >= 5) {
+                                    headroom_dead_session = 0;
+                                    headroom_100_streak = 0;
+                                    implausible_hot_streak = 0;
+                                    headroom_recover_streak = 0;
+                                    t->headroom_valid = 1;
+                                    snprintf(t->headroom_invalid_reason,
+                                             sizeof(t->headroom_invalid_reason), "ok");
+                                } else {
+                                    t->headroom_valid = 0;
+                                    snprintf(t->headroom_invalid_reason,
+                                             sizeof(t->headroom_invalid_reason), "dead_iface");
+                                }
+                            } else {
+                                headroom_recover_streak = 0;
+                                t->headroom_valid = 0;
+                                snprintf(t->headroom_invalid_reason,
+                                         sizeof(t->headroom_invalid_reason), "dead_iface");
+                            }
                         } else if (t->headroom_pct >= 100) {
                             headroom_100_streak++;
                             /* implausible_hot_100 detector — chatgpt review flagged

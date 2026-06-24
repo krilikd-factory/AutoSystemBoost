@@ -1069,7 +1069,20 @@ static void asb_smart_apply_idle_screen_override(
     if (screen_on) return;
     if (charging) return;
     if (app_hint >= ASB_APP_HEAVY) return;
-    if (screen_off_seconds < 120) return;
+    if (screen_off_seconds < 30) return;
+
+    /* Short screen-off (30-120s): the common "glance and put down" window. The
+     * data showed Smart sitting at its low learned daytime alpha (~400) through
+     * these gaps because the only floor kicked in at 120s — leaving easy economy
+     * on the table with zero UX cost (the screen is off). Apply a gentle lean
+     * here: enough to back the GPU/big cores off, but below the 700 floor of the
+     * sustained-off tier so a quick re-wake isn't sluggish. */
+    if (screen_off_seconds < 120) {
+        if (rt->alpha_battery_x1000 < 600) rt->alpha_battery_x1000 = 600;
+        if (rt->sleep_bias_x1000 < 150)    rt->sleep_bias_x1000 = 150;
+        if (rt->interactive_bonus_x1000 > 90) rt->interactive_bonus_x1000 = 90;
+        return;
+    }
 
     if (screen_off_seconds < 1800) {
         if (rt->alpha_battery_x1000 < 700) rt->alpha_battery_x1000 = 700;
