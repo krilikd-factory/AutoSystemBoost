@@ -7,40 +7,16 @@ chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 
 mkdir -p /data/adb/asb 2>/dev/null
 
-# Boot-safety: fold a genuinely malformed root partition dir back into system/.
-# This only matters for modules left in a broken layout by an OLD buggy build.
-# It does NOT try to suppress KernelSU Next's own root vendor/: KSU recreates
-# that on every boot via its "Handle partition" magic-mount (mirror + per-file
-# merge), and it is a benign framework artifact — the device keeps its stock
-# /vendor and only ASB's files are merged on top, so there is nothing to fight.
-for _part in vendor odm product system_ext my_product mi_ext; do
-  _root="$MODDIR/$_part"
-  [ -L "$_root" ] && continue
-  [ -d "$_root" ] || continue
-  # Fold any file not already present under system/<part>; leave the dir for KSU.
-  for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
-    # Skip camera/media here: the camera overlay is placed at install time into
-    # BOTH system/vendor/odm AND system/odm (see _odm_dups), which is what keeps
-    # /odm and /vendor/odm in sync and the OP12 multicamera HAL happy. Folding it
-    # again from a top-level odm/ dir would be redundant and could race; the
-    # dedicated OP12 sync block below handles any /odm mismatch explicitly.
-    case "$_f" in
-      */etc/camera/*|*/etc/media_profiles*.xml|etc/camera/*|etc/media_profiles*.xml)
-        continue ;;
-    esac
-    _t="$MODDIR/system/$_part/$_f"
-    if [ ! -f "$_t" ]; then
-      mkdir -p "$(dirname "$_t")" 2>/dev/null
-      cp -f "$_root/$_f" "$_t" 2>/dev/null || true
-    fi
-  done
-done
-# OP12 camera note: the camera/media overlay is shipped to system/vendor/odm
-# ONLY (see install.sh _odm_dups), exactly like the known-good module. We do NOT
-# touch the real /odm partition or stack any bind-mount onto it — doing so is
-# what broke the multicamera HAL on APatch. KernelSU and APatch both work with
-# the plain /vendor/odm overlay, so there is nothing to do here at runtime.
-:
+# Camera/media overlay is shipped to system/vendor/odm ONLY (see install.sh),
+# exactly like the known-good module. We deliberately do NOT fold any top-level
+# partition dir (vendor/odm/product/...) back into system/ here, and we do NOT
+# touch the real /odm partition or stack any bind-mount onto it. An earlier build
+# added a "fold root partition dirs into system/" loop plus a system/odm camera
+# mirror to chase an APatch /odm desync — that was itself the regression: on
+# APatch it made the manager stack a separate mount over the real /odm, which
+# SIGABRTed the OP12 multicamera HAL (ChiMcxRoiTranslator). The known-good module
+# has no such loop and the camera works on BOTH KernelSU and APatch, so there is
+# nothing to do here at runtime.
 
 # Clean up a phantom /data/adb/magisk/busybox symlink that earlier builds
 # created on KernelSU systems (where /data/adb/magisk should not exist).
