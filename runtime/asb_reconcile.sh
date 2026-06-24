@@ -5,6 +5,7 @@
   _reconcile_fast=3
   _last_wifi_check=0
   _drift_streak=0
+  _last_eff_batt="-1"
   _lease_remaining=0
   _lease_delays="2 4 14 40"
   _lease_last_reassert_ts=0
@@ -159,6 +160,24 @@
           esac
         fi
       fi
+      # Smart effective-battery transition: network_stats_poll follows whether the
+      # current state is battery-equivalent. In the battery profile this is fixed
+      # and handled by profile-change, but in Smart the alpha lean drifts without a
+      # profile switch — so watch for it crossing the >=800 (battery-lean) boundary
+      # and re-apply only on the transition, not every tick (avoids write churn).
+      if [ $_need -eq 0 ] && [ "$_now" = "smart" ] && asb_feature_enabled VM && asb_feature_enabled LOG; then
+        _cur_eff=0
+        _ralpha="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | sed 's/^smart_alpha_battery=//')"
+        case "$_ralpha" in
+          ''|*[!0-9]*) : ;;
+          *) [ "$_ralpha" -ge 800 ] 2>/dev/null && _cur_eff=1 ;;
+        esac
+        if [ "$_cur_eff" != "$_last_eff_batt" ]; then
+          _last_eff_batt="$_cur_eff"
+          _need=1
+          _reason="smart-eff-batt"
+        fi
+      fi
     fi
     if [ $_need -eq 1 ]; then
       case "$_reason" in
@@ -182,9 +201,12 @@
           asb_feature_enabled WIFI && apply_wlan0_txqlen
           asb_feature_enabled WIFI && apply_wifi_pm
           asb_feature_enabled VM   && apply_doze
+          asb_feature_enabled VM   && apply_network_stats_poll
         elif [ "$_reason" = "wifi-pm" ]; then
           asb_feature_enabled WIFI && apply_wifi_pm
           asb_feature_enabled WIFI && apply_wifi_dtim
+        elif [ "$_reason" = "smart-eff-batt" ]; then
+          asb_feature_enabled VM && apply_network_stats_poll
         elif [ "$_reason" = "cap-drift-up-p0" ] || [ "$_reason" = "cap-drift-up-p6" ]; then
           asb_feature_enabled CPU && apply_screen_aware_caps
         fi
