@@ -8,12 +8,14 @@
   <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="Banner" width="80%">
 </p>
 
-<p align="center"><b>Adaptive Runtime Engine for OnePlus</b></p>
+<p align="center"><b>Adaptive Runtime Engine for OnePlus 15 · 13 · 12 — Snapdragon 8 Elite / Gen 3</b></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Snapdragon_8_Elite-Gen_5-dc2626?style=for-the-badge" alt="SM8850">
-  <img src="https://img.shields.io/badge/Root-KSU_%7C_KSUN_%7C_APATCH_%7C_RESUKISU_%7C_MAGISK-16a34a?style=for-the-badge" alt="Root">
+  <img src="https://img.shields.io/badge/OnePlus_15-SM8850-dc2626?style=for-the-badge" alt="OP15">
+  <img src="https://img.shields.io/badge/OnePlus_13-SM8750-ea580c?style=for-the-badge" alt="OP13">
+  <img src="https://img.shields.io/badge/OnePlus_12-SM8650-f59e0b?style=for-the-badge" alt="OP12">
   <br>
+  <img src="https://img.shields.io/badge/Root-KSU_%7C_KSUN_%7C_APATCH_%7C_RESUKISU_%7C_MAGISK-16a34a?style=for-the-badge" alt="Root">
   <img src="https://img.shields.io/badge/Governor-Native_C-0ea5e9?style=for-the-badge" alt="C">
   <img src="https://img.shields.io/badge/WebUI-Built--in-f59e0b?style=for-the-badge" alt="WebUI">
 </p>
@@ -55,6 +57,36 @@
 
 <p align="center">
   <code>FSM</code> · <code>Smart Mode</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>BG_TRIM</code> · <code>Memcg v2</code>
+</p>
+
+---
+
+## 📱 Device Support
+
+| Tier | Devices | SoC | Codename |
+|:-----|:--------|:----|:---------|
+| ✅ **Primary — fully tuned** | OnePlus 15 (CPH2745 / CPH2747) | Snapdragon 8 Elite Gen 5 (SM8850) | `canoe` |
+| ✅ **Primary — fully tuned** | OnePlus 13 (CPH2649) | Snapdragon 8 Elite (SM8750) | `sun` |
+| ✅ **Primary — fully tuned** | OnePlus 12 (CPH2581) | Snapdragon 8 Gen 3 (SM8650) | `pineapple` |
+| ✅ Supported | OnePlus 13R/13s/13T, 12R, 11/11R, Open, Ace/Nord/Pad | various | — |
+
+Each primary device gets its own CPU/GPU topology mapping, audio SKU, camera/media overlays and thermal profile — validated on real hardware, not simulated. Other OnePlus models run on the generic tuning path (governor + sed patches, vendor overlay pruned).
+
+---
+
+## 📦 Installation
+
+1. Flash in **KSU / KSUN / APatch / ReSuKiSu / Magisk**
+2. Select features at install — **15 categories** (saved between updates):
+   - **Always on by default**: AUDIO, BT, CAMERA, CPU, VM, NET, WIFI, GPS, KERNEL, LOG, RADIO/IMS, DISPLAY, FPS, SECURITY
+   - **Opt-in**: BG_TRIM (Smart Reclaim + OPPO telemetry trim)
+3. Reboot → governor starts automatically
+4. Open **WebUI** → choose profile, or tap **Action** in module list for live status
+
+   <p align="center">
+  <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
+    <img src="https://img.shields.io/badge/⬇️_Download_Latest_Release-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Download Latest Release">
+  </a>
 </p>
 
 ---
@@ -252,7 +284,7 @@ The WebUI exposes a Smart Mode button next to the three classic profiles with a 
 
 ## 📊 Measured Performance
 
-<p align="center"><i>Every number below was measured on a real OnePlus 15 — multi-hour COD 144 fps sessions, overnight sleep, typical mixed daytime use. No simulations, no bench-only data.</i></p>
+<p align="center"><i>Every number below was measured on real hardware — primarily OnePlus 15, with OnePlus 13 and 12 in the test fleet — across multi-hour COD 144 fps sessions, overnight sleep, and typical mixed daytime use. No simulations, no bench-only data.</i></p>
 
 <table align="center">
 <tr><th colspan="2">🎮 Heavy Gaming (COD 144 fps, sustained load)</th></tr>
@@ -395,7 +427,7 @@ Repeated for 5 minutes. Users without Tencent apps are unaffected — the loop i
 
 ## 📊 Stock vs ASB — Verified Measurements
 
-> From real sysfs/procfs dumps on OnePlus 15
+> From real sysfs/procfs dumps on OnePlus 15 / 13 / 12
 
 ### ⚡ Scheduler & CPU
 
@@ -554,50 +586,15 @@ The `asb` binary is exposed through `/system/bin/asb` (a small wrapper that forw
 
 ---
 
-## 📱 Device Support
-
-| Tier | Devices |
-|:-----|:--------|
-| ✅ **Primary** | OnePlus 15 (CPH2745 / CPH2747) — fully tuned |
-| ✅ Supported | OnePlus 13/13R/13s/13T, 12/12R, 11/11R, Open, Ace/Nord/Pad |
-
----
-
-## 📦 Installation
-
-1. Flash in **KSU / KSUN / APatch / ReSuKiSu / Magisk**
-2. Select features at install — **15 categories** (saved between updates):
-   - **Always on by default**: AUDIO, BT, CAMERA, CPU, VM, NET, WIFI, GPS, KERNEL, LOG, RADIO/IMS, DISPLAY, FPS, SECURITY
-   - **Opt-in**: BG_TRIM (Smart Reclaim + OPPO telemetry trim)
-3. Reboot → governor starts automatically
-4. Open **WebUI** → choose profile, or tap **Action** in module list for live status
-
-   <p align="center">
-  <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
-    <img src="https://img.shields.io/badge/⬇️_Download_Latest_Release-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Download Latest Release">
-  </a>
-</p>
-
----
-
 ## 💾 Config Persistence
 
-Your category selections are saved to `/data/adb/asb_user_config` — **outside the module directory**. When you flash an update, the installer detects the saved configuration:
+Your settings survive reinstalls and updates — nothing resets when you flash a new version.
 
-```
-================================================
-  Saved configuration found
-    from: 2026-05-20 12:30:00
-    ver:  Vxx
-  VOL+ = use saved  |  VOL- = re-select
-================================================
-```
+- **WebUI toggles & sliders** (aggressive audio/camera, Cool Gaming, Smart Battery Bias, background trim, UX management, …) live in `config/governor.conf`. On every reinstall the installer carries your saved values over the freshly-shipped defaults, key by key — your choices win, brand-new keys for the version are introduced cleanly.
+- **Active profile** (`performance` / `balanced` / `battery` / `smart`) is mirrored to `/data/adb/asb/active_profile`, **outside** the module directory, and restored at boot.
+- **Smart mode state and everything it has learned** — your time-of-day buckets, session history, battery-budget model — live under `/data/adb/asb/`, also outside the module, so an update never makes Smart re-learn from scratch.
 
-- **VOL+** — apply saved choices, install completes in ~3 seconds
-- **VOL-** — re-run the interactive flow, save new choices
-- **timeout (10s)** — defaults to saved (conservative)
-
-Active profile is also mirrored to `/data/adb/asb_active_profile` — your `performance` / `balanced` / `battery` choice survives reinstall.
+Flash an update straight over the top and reboot; every setting and all learned data come back.
 
 ---
 

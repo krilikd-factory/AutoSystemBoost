@@ -8,12 +8,14 @@
   <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="Banner" width="80%">
 </p>
 
-<p align="center"><b>Адаптивный runtime-движок для OnePlus 15 • Snapdragon 8 Elite</b></p>
+<p align="center"><b>Адаптивный runtime-движок для OnePlus 15 · 13 · 12 — Snapdragon 8 Elite / Gen 3</b></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Snapdragon_8_Elite-Gen_5-dc2626?style=for-the-badge" alt="SM8850">
-  <img src="https://img.shields.io/badge/Root-KSU_%7C_KSUN_%7C_APATCH_%7C_RESUKISU_%7C_MAGISK-16a34a?style=for-the-badge" alt="Root">
+  <img src="https://img.shields.io/badge/OnePlus_15-SM8850-dc2626?style=for-the-badge" alt="OP15">
+  <img src="https://img.shields.io/badge/OnePlus_13-SM8750-ea580c?style=for-the-badge" alt="OP13">
+  <img src="https://img.shields.io/badge/OnePlus_12-SM8650-f59e0b?style=for-the-badge" alt="OP12">
   <br>
+  <img src="https://img.shields.io/badge/Root-KSU_%7C_KSUN_%7C_APATCH_%7C_RESUKISU_%7C_MAGISK-16a34a?style=for-the-badge" alt="Root">
   <img src="https://img.shields.io/badge/Governor-Native_C-0ea5e9?style=for-the-badge" alt="C">
   <img src="https://img.shields.io/badge/WebUI-Built--in-f59e0b?style=for-the-badge" alt="WebUI">
 </p>
@@ -55,6 +57,36 @@
 
 <p align="center">
   <code>FSM</code> · <code>Smart Mode</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>BG_TRIM</code> · <code>Memcg v2</code>
+</p>
+
+---
+
+## 📱 Поддержка устройств
+
+| Уровень | Устройства | SoC | Кодовое имя |
+|:--------|:-----------|:----|:------------|
+| ✅ **Основное — полная настройка** | OnePlus 15 (CPH2745 / CPH2747) | Snapdragon 8 Elite Gen 5 (SM8850) | `canoe` |
+| ✅ **Основное — полная настройка** | OnePlus 13 (CPH2649) | Snapdragon 8 Elite (SM8750) | `sun` |
+| ✅ **Основное — полная настройка** | OnePlus 12 (CPH2581) | Snapdragon 8 Gen 3 (SM8650) | `pineapple` |
+| ✅ Поддержка | OnePlus 13R/13s/13T, 12R, 11/11R, Open, Ace/Nord/Pad | разные | — |
+
+Каждое основное устройство получает собственное сопоставление топологии CPU/GPU, аудио-SKU, оверлеи камеры/медиа и термопрофиль — проверено на реальном железе, не в симуляции. Остальные модели OnePlus работают на общем пути настройки (governor + sed-патчи, vendor-оверлей вырезается).
+
+---
+
+## 📦 Установка
+
+1. Прошить через **KSU / KSUN / APatch / ReSuKiSu / Magisk**
+2. Выбрать функции при установке — **15 категорий** (сохраняются между обновлениями):
+   - **Включены по умолчанию**: AUDIO, BT, CAMERA, CPU, VM, NET, WIFI, GPS, KERNEL, LOG, RADIO/IMS, DISPLAY, FPS, SECURITY
+   - **Опционально**: BG_TRIM (Smart Reclaim + телеметрия OPPO)
+3. Перезагрузка → governor стартует автоматически
+4. Открыть **WebUI** → выбрать профиль, либо тапнуть **Action** в списке модулей для статуса
+
+   <p align="center">
+  <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
+    <img src="https://img.shields.io/badge/⬇️_%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C_%D0%BF%D0%BE%D1%81%D0%BB%D0%B5%D0%B4%D0%BD%D1%8E%D1%8E_%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8E-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Скачать последнюю версию">
+  </a>
 </p>
 
 ---
@@ -252,7 +284,7 @@ WebUI выводит Smart Mode-кнопку рядом с тремя класс
 
 ## 📊 Измеренные показатели
 
-<p align="center"><i>Каждая цифра ниже измерена на реальном OnePlus 15 — многочасовые сессии COD 144 fps, ночной сон, типичное дневное смешанное использование. Никаких симуляций, никакого чистого бенча.</i></p>
+<p align="center"><i>Каждая цифра ниже измерена на реальном железе — преимущественно OnePlus 15, с OnePlus 13 и 12 в тестовом парке — в многочасовых сессиях COD 144 fps, ночном сне и типичном дневном смешанном использовании. Никаких симуляций, никакого чистого бенча.</i></p>
 
 <table align="center">
 <tr><th colspan="2">🎮 Тяжёлые игры (COD 144 fps, длительная нагрузка)</th></tr>
@@ -395,7 +427,7 @@ start vendor.soter
 
 ## 📊 Сток vs ASB — реальные измерения
 
-> Данные из реальных sysfs/procfs дампов OnePlus 15
+> Данные из реальных sysfs/procfs дампов OnePlus 15 / 13 / 12
 
 ### ⚡ Планировщик и CPU
 
@@ -554,50 +586,15 @@ su -c 'tail -f /dev/.asb/governor.log'      # живой лог
 
 ---
 
-## 📱 Поддержка устройств
-
-| Уровень | Устройства |
-|:--------|:-----------|
-| ✅ **Основное** | OnePlus 15 (CPH2745 / CPH2747) — полная настройка |
-| ✅ Поддержка | OnePlus 13/13R/13s/13T, 12/12R, 11/11R, Open, Ace/Nord/Pad |
-
----
-
-## 📦 Установка
-
-1. Прошить через **KSU / KSUN / APatch / ReSuKiSu / Magisk**
-2. Выбрать функции при установке — **15 категорий** (сохраняются между обновлениями):
-   - **Включены по умолчанию**: AUDIO, BT, CAMERA, CPU, VM, NET, WIFI, GPS, KERNEL, LOG, RADIO/IMS, DISPLAY, FPS, SECURITY
-   - **Опционально**: BG_TRIM (Smart Reclaim + телеметрия OPPO)
-3. Перезагрузка → governor стартует автоматически
-4. Открыть **WebUI** → выбрать профиль, либо тапнуть **Action** в списке модулей для статуса
-
-   <p align="center">
-  <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
-    <img src="https://img.shields.io/badge/⬇️_%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C_%D0%BF%D0%BE%D1%81%D0%BB%D0%B5%D0%B4%D0%BD%D1%8E%D1%8E_%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8E-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Скачать последнюю версию">
-  </a>
-</p>
-
----
-
 ## 💾 Сохранение конфигурации
 
-Выбранные категории сохраняются в `/data/adb/asb_user_config` — **вне директории модуля**. При обновлении установщик находит сохранённый конфиг:
+Ваши настройки переживают переустановки и обновления — ничего не сбрасывается при прошивке новой версии.
 
-```
-================================================
-  Найдена сохранённая конфигурация
-    от:   2026-05-20 12:30:00
-    ver:  Vxx
-  VOL+ = использовать  |  VOL- = выбрать заново
-================================================
-```
+- **Переключатели и ползунки WebUI** (агрессивные аудио/камера-твики, Cool Gaming, Уклон Smart в автономность, трим фона, управление UX, …) хранятся в `config/governor.conf`. При каждой переустановке установщик переносит ваши сохранённые значения поверх свежих дефолтов, ключ за ключом — ваш выбор побеждает, а новые для версии ключи добавляются чисто.
+- **Активный профиль** (`performance` / `balanced` / `battery` / `smart`) дублируется в `/data/adb/asb/active_profile`, **вне** директории модуля, и восстанавливается при загрузке.
+- **Состояние Smart-режима и всё, что он выучил** — ваши бакеты по времени суток, история сессий, модель бюджета батареи — лежат в `/data/adb/asb/`, тоже вне модуля, поэтому обновление не заставляет Smart учиться с нуля.
 
-- **VOL+** — применить сохранённые настройки, установка ~3 секунды
-- **VOL-** — пройти выбор заново, сохранить новые
-- **таймаут (10с)** — использовать сохранённые (консервативно)
-
-Активный профиль также сохраняется в `/data/adb/asb_active_profile` — выбор `performance` / `balanced` / `battery` переживает переустановку.
+Прошивайте обновление прямо поверх и перезагрузитесь — все настройки и выученные данные вернутся.
 
 ---
 
