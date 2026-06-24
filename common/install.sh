@@ -1012,9 +1012,16 @@ asb_patch_audio_inplace_aggr_flag() {
 }
 
 asb_camera_aggr_flag() {
-  # Read the CAMERA_AGGRESSIVE toggle from governor.conf. Default 0 (stock-safe).
+  # Read the camera grade LEVEL (0..4) from governor.conf, with back-compat for
+  # the old CAMERA_AGGRESSIVE bool (=1 -> level 3). Default 0 (stock-safe).
+  _ASB_CAMERA_LEVEL="$(grep -E '^[[:space:]]*CAMERA_LEVEL=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_ASB_CAMERA_LEVEL" in ''|*[!0-9]*) _ASB_CAMERA_LEVEL="" ;; esac
   _ASB_CAMERA_AGGR="$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   [ -n "$_ASB_CAMERA_AGGR" ] || _ASB_CAMERA_AGGR=0
+  if [ -z "$_ASB_CAMERA_LEVEL" ]; then
+    [ "$_ASB_CAMERA_AGGR" = "1" ] && _ASB_CAMERA_LEVEL=3 || _ASB_CAMERA_LEVEL=0
+  fi
+  [ "$_ASB_CAMERA_LEVEL" -gt 0 ] 2>/dev/null && _ASB_CAMERA_AGGR=1 || _ASB_CAMERA_AGGR=0
   # Separate, riskier opt-in: INJECT tone keys the device's stock conf_tuning
   # doesn't ship (its camera HAL may not consume them). Sub-control of the
   # camera toggle, a seg with values safe|aggressive (aggressive = inject).
@@ -1159,7 +1166,7 @@ asb_preserve_user_config() {
   [ -f "$_new_conf" ] || return 0
   [ -f "$_old_conf" ] || { ui_print "[*] Fresh install - using default config"; return 0; }
 
-  _user_keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+  _user_keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
 bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
