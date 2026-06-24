@@ -701,8 +701,14 @@ static void test_idle_pocket_tier(void) {
     rt.alpha_battery_x1000 = 400;
     rt.interactive_bonus_x1000 = 100;
 
+    /* New short screen-off tier: 30-120s now gets a gentle lean (alpha floor
+     * 600) instead of nothing, to reclaim the easy economy in brief glance-and-
+     * put-down windows the daily logs showed Smart was missing. */
+    asb_smart_apply_idle_screen_override(0, 0, 1, 20, &rt);
+    EXPECT(rt.alpha_battery_x1000 == 400, "under 30s \u2192 no pocket lean");
+
     asb_smart_apply_idle_screen_override(0, 0, 1, 60, &rt);
-    EXPECT(rt.alpha_battery_x1000 == 400, "under 120s \u2192 no pocket lean");
+    EXPECT(rt.alpha_battery_x1000 == 600, "30-120s \u2192 gentle pocket lean 600");
 
     asb_smart_apply_idle_screen_override(0, 0, 1, 300, &rt);
     EXPECT(rt.alpha_battery_x1000 == 700, "pocket tier \u2192 alpha floor 700");
