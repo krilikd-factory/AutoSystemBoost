@@ -53,6 +53,35 @@ asb_tw_flag() {
   case "$_v" in 1|on|aggressive) echo 1 ;; *) echo 0 ;; esac
 }
 
+# Read an integer-valued key (used by the graded camera strength slider).
+# Returns the integer, or the supplied default when absent/non-numeric.
+asb_tw_int() {
+  _k="$1"; _conf="$2"; _def="$3"
+  [ -f "$_conf" ] || { echo "$_def"; return; }
+  _v="$(grep -E "^[[:space:]]*${_k}=" "$_conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_v" in
+    ''|*[!0-9]*) echo "$_def" ;;
+    *) echo "$_v" ;;
+  esac
+}
+
+# Resolve the effective camera strength LEVEL (0..4) from config, with back-compat
+# for the old CAMERA_AGGRESSIVE bool:
+#   CAMERA_LEVEL present  -> use it (0 stock .. 4 max)
+#   else CAMERA_AGGRESSIVE=1 -> level 3 (the old "aggressive" grade)
+#   else                  -> 0 (stock / off)
+asb_tw_camera_level() {
+  _conf="$1"
+  _lv="$(asb_tw_int CAMERA_LEVEL "$_conf" -1)"
+  if [ "$_lv" = "-1" ]; then
+    if [ "$(asb_tw_flag CAMERA_AGGRESSIVE "$_conf")" = "1" ]; then _lv=3; else _lv=0; fi
+  fi
+  # clamp 0..4
+  [ "$_lv" -lt 0 ] 2>/dev/null && _lv=0
+  [ "$_lv" -gt 4 ] 2>/dev/null && _lv=4
+  echo "$_lv"
+}
+
 # --- aggressive AUDIO layer (one mixer file) ---
 asb_tw_aggr_audio() {
   _f="$1"; [ -f "$_f" ] || return 0
@@ -65,18 +94,44 @@ asb_tw_aggr_audio() {
 # --- aggressive CAMERA tone layer (one conf_tuning_params.json) ---
 asb_tw_aggr_camera() {
   _f="$1"; [ -f "$_f" ] || return 0
-  # DEVICE-AWARE strength. The full-aggressive tone is tuned for OP15 (canoe);
-  # on OP13 (sun) users reported visible low-light banding / saturation jumps,
-  # so sun gets a softer grade (blueSat 1.02 instead of 1.05, nightDownGain 0.35
-  # instead of 0.4, dayDarkBoost 1.3 instead of 1.4). OP12 has no camera overlay.
+  _lvl="$2"; [ -z "$_lvl" ] && _lvl=3
+  [ "$_lvl" = "0" ] && return 0          # level 0 = stock, change nothing
+
+  # GRADED camera grade (levels 1..4) applied to BOTH photo and video paths of
+  # conf_tuning_params.json. The grade scales a coherent set of tone/colour/
+  # contrast/noise keys so each step is visibly stronger than the last, from a
+  # gentle "safe" lift up to a punchy "max". Per the OP13 owner's request the
+  # higher levels intentionally push saturation/contrast hard (shadow banding at
+  # max is accepted). Device-aware: OP15 (canoe) is the reference; OP13 (sun) is
+  # offset one notch softer at matched levels (it banded earlier in testing);
+  # OP12 (pineapple) has no overlay so this is a no-op there.
   _atc_soc="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_atc_soc" ] && _atc_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
-  case "$_atc_soc" in
-    sun|sm8750*)
-      _BSAT="1.02"; _NDG="0.35"; _DDB="1.3"; _SSS="1.3" ;;
-    *)
-      _BSAT="1.05"; _NDG="0.4";  _DDB="1.4"; _SSS="1.4" ;;
-  esac
+  _soft=0
+  case "$_atc_soc" in sun|sm8750*) _soft=1 ;; esac
+
+  # Per-level value tables (index = level 1..4). Columns:
+  #   SSS  sunsetSatScale            (sunset saturation; base 1.6/1.7)
+  #   BSAT blueSatParam              (blue/sky saturation; base 0.95)
+  #   NDG  nightDownGainParam*       (night detail lift; base 0.3)
+  #   DDB  dayDownGainDarkBoostParam (shadow/contrast boost; base 1.3)
+  #   SCS  SatuColorScale            (global colour, PHOTO+VIDEO; base 1)
+  #   CON  low20XcontrastScale       (local contrast, PHOTO+VIDEO; base 1)
+  #   SKD  skyDarkenScale            (sky depth; base 0.1)
+  # canoe (reference) tables:
+  set -- \
+    "1.45 0.99 0.34 1.30 1.05 1.05 0.12" \
+    "1.40 1.02 0.38 1.40 1.12 1.12 0.16" \
+    "1.30 1.05 0.42 1.50 1.20 1.20 0.20" \
+    "1.20 1.10 0.48 1.65 1.30 1.30 0.26"
+  # if this SoC bands earlier (sun), shift one level softer (clamp at 1)
+  _row="$_lvl"
+  if [ "$_soft" = "1" ]; then _row=$((_lvl - 1)); [ "$_row" -lt 1 ] && _row=1; fi
+  eval "_vals=\${$_row}"
+  set -- $_vals
+  _SSS="$1"; _BSAT="$2"; _NDG="$3"; _DDB="$4"; _SCS="$5"; _CON="$6"; _SKD="$7"
+
+  # --- tone / colour (affects photo + video) ---
   asb_tw_sedi "s/\\(\"sunsetSatScale\": *\\)1\\.6/\\1${_SSS}/g"            "$_f"
   asb_tw_sedi "s/\\(\"sunsetSatScale\": *\\)1\\.7/\\1${_SSS}/g"            "$_f"
   asb_tw_sedi "s/\\(\"blueSatParam\": *\\)0\\.95/\\1${_BSAT}/g"            "$_f"
@@ -84,6 +139,14 @@ asb_tw_aggr_camera() {
   asb_tw_sedi "s/\\(\"nightDownGainParamHizoom\": *\\)0\\.3/\\1${_NDG}/g"  "$_f"
   asb_tw_sedi "s/\\(\"nightDownGainParamFront\": *\\)0\\.3/\\1${_NDG}/g"   "$_f"
   asb_tw_sedi "s/\\(\"dayDownGainDarkBoostParam\": *\\)1\\.3/\\1${_DDB}/g" "$_f"
+  # global colour + local contrast — these live in TMCParamsSet and are honoured
+  # by both the photo and video pipelines, so they are what makes the grade show
+  # up in stills, not just video.
+  asb_tw_sedi "s/\\(\"SatuColorScale\": *\\)1\\([,}]\\)/\\1${_SCS}\\2/g"        "$_f"
+  asb_tw_sedi "s/\\(\"SatuColorScale\": *\\)1\\.0\\([,}]\\)/\\1${_SCS}\\2/g"    "$_f"
+  asb_tw_sedi "s/\\(\"low20XcontrastScale\": *\\)1\\([,}]\\)/\\1${_CON}\\2/g"     "$_f"
+  asb_tw_sedi "s/\\(\"low20XcontrastScale\": *\\)1\\.0\\([,}]\\)/\\1${_CON}\\2/g" "$_f"
+  asb_tw_sedi "s/\\(\"skyDarkenScale\": *\\)0\\.1\\([,}]\\)/\\1${_SKD}\\2/g"      "$_f"
 }
 
 # --- inject the aggressive tone keys a trimmed stock conf_tuning lacks ---
@@ -171,6 +234,7 @@ asb_apply_dynamic_tweaks() {
   _audio_aggr="$(asb_tw_flag AUDIO_AGGRESSIVE "$_conf")"
   _cam_aggr="$(asb_tw_flag CAMERA_AGGRESSIVE "$_conf")"
   _cam_inject="$(asb_tw_flag CAMERA_AGGRESSIVE_INJECT "$_conf")"
+  _cam_level="$(asb_tw_camera_level "$_conf")"
 
   # --- AUDIO mixer files ---
   for _mx in $(find "$_md/system/vendor/etc/audio" "$_md/system/vendor/odm/etc/audio" \
@@ -207,9 +271,9 @@ asb_apply_dynamic_tweaks() {
     # "storage loading / camera unavailable" on first launch.
     _des="${_cf}.asbdes$$"
     cp -f "$_bp" "$_des" 2>/dev/null || { rm -f "$_des"; continue; }
-    if [ "$_cam_aggr" = "1" ]; then
+    if [ "$_cam_level" -gt 0 ] 2>/dev/null; then
       [ "$_cam_inject" = "1" ] && asb_tw_inject_camera "$_des"
-      asb_tw_aggr_camera "$_des"
+      asb_tw_aggr_camera "$_des" "$_cam_level"
       # structural safety net: unbalanced braces -> fall back to the baseline.
       _ob="$(tr -cd '{' < "$_des" 2>/dev/null | wc -c)"
       _cb="$(tr -cd '}' < "$_des" 2>/dev/null | wc -c)"
