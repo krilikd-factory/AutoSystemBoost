@@ -1106,6 +1106,7 @@ asb_preserve_user_config() {
   [ -f "$_old_conf" ] || { ui_print "[*] Fresh install - using default config"; return 0; }
 
   _user_keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+smart_battery_bias \
 bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
