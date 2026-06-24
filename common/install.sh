@@ -480,6 +480,32 @@ asb_detect_compat() {
   [ "$ASB_IS_OP13" = "true" ] && ASB_IS_OP12=false
 }
 
+# Detect the root manager at install time. Used to scope the OP12 camera-engine
+# exclusion to APatch ONLY: the OP12 multicamera HAL crash is APatch-specific
+# (APatch's /odm is a real separate mount, so any camera-conf churn stacks/
+# disturbs a mount the HAL is reading); on KernelSU /odm is a symlink to
+# /vendor/odm and the camera tolerates the tweak engine fine. We rely on the
+# manager-exported env vars first (KSU / APATCH are set by the boot scripts that
+# run module install) and fall back to the on-disk control dirs, which are far
+# more reliable here than getprop in the install/recovery environment.
+ASB_IS_APATCH=false
+asb_detect_manager() {
+  if [ "${APATCH:-}" = "true" ] || [ -d /data/adb/ap ] || [ -f /data/adb/apd ]; then
+    # KernelSU also ships some /data/adb/ap-like staging in odd setups, so prefer
+    # an explicit APatch marker and make sure this isn't actually KSU.
+    if [ "${KSU:-}" = "true" ] || [ -f /data/adb/ksud ]; then
+      # Both markers present — trust the explicit APATCH env if set, else treat
+      # as KSU (the camera works there, so the safe default is "not APatch").
+      [ "${APATCH:-}" = "true" ] && ASB_IS_APATCH=true || ASB_IS_APATCH=false
+    else
+      ASB_IS_APATCH=true
+    fi
+  fi
+  if [ "$ASB_IS_APATCH" = "true" ]; then
+    ui_print "[*] Root manager: APatch (OP12 camera engine exclusion will apply)"
+  fi
+}
+
 asb_apply_device_overlay() {
   # $1 = overlay dir name (op12_overlay / op13_overlay)
   # $2 = human label (e.g. "OnePlus 13 (CPH2649 / SM8750 'sun')")
@@ -576,19 +602,33 @@ asb_apply_device_overlay() {
       # aggressive tone + inject layers are applied at boot by post-fs-data from
       # that baseline, so the CAMERA_AGGRESSIVE / _INJECT toggles take effect on
       # a plain reboot instead of only on reinstall.
+      #
+      # CRITICAL OP12+APatch EXCLUSION: skip the install-time tweak engine on the
+      # camera conf ONLY when this is OP12 running APatch. The multicamera HAL
+      # crash is APatch-specific (its /odm is a real separate mount; any churn of
+      # the camera conf disturbs a mount the HAL reads). On OP12 + KernelSU (where
+      # /odm is a symlink to /vendor/odm) the camera tolerates the engine, so KSU
+      # OP12 keeps the full reversible-tweak path like OP13/OP15. asb_apply_dynamic_tweaks
+      # has a pineapple guard, but it relies on getprop which is unreliable in the
+      # install/recovery environment, and asb_tw_save_base would touch the file
+      # before that guard — so we gate on the reliable install-time flags here.
       _ctf="$MODPATH/system/vendor/odm/etc/camera/conf_tuning_params.json"
-      if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
+      _skip_cam_engine=false
+      [ "$ASB_IS_OP12" = "true" ] && [ "$ASB_IS_APATCH" = "true" ] && _skip_cam_engine=true
+      if [ "$_skip_cam_engine" != "true" ] && [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
         . "$MODPATH/runtime/asb_tweaks.sh"
         asb_tw_save_base "$_ctf" force
         asb_apply_dynamic_tweaks "$MODPATH"
-      fi
-      asb_camera_aggr_flag
-      if [ "$_ASB_CAMERA_AGGR" = "1" ] && [ -f "$_ctf" ]; then
-        if [ "$_ASB_CAMERA_INJECT" = "1" ]; then
-          ui_print "    + Camera aggressive tone applied (incl. injected keys)"
-        else
-          ui_print "    + Camera aggressive tone applied (existing keys only)"
+        asb_camera_aggr_flag
+        if [ "$_ASB_CAMERA_AGGR" = "1" ] && [ -f "$_ctf" ]; then
+          if [ "$_ASB_CAMERA_INJECT" = "1" ]; then
+            ui_print "    + Camera aggressive tone applied (incl. injected keys)"
+          else
+            ui_print "    + Camera aggressive tone applied (existing keys only)"
+          fi
         fi
+      elif [ "$_skip_cam_engine" = "true" ]; then
+        ui_print "    + OP12/APatch: camera kept stock (tweak engine skipped)"
       fi
     fi
   fi
@@ -1305,6 +1345,7 @@ fi
 asb_save_user_config
 
 asb_detect_compat
+asb_detect_manager
 if [ "$ASB_IS_OP15" = "true" ]; then
   ui_print " "
   ui_print "${SEPARATOR}"
