@@ -1975,6 +1975,39 @@ apply_doze() {
   asb_settings_put global device_idle_constants "$_DIC"
 }
 asb_feature_enabled VM && apply_doze
+# network_stats_poll_interval: how often the framework polls per-app network
+# statistics. The stock cadence wakes the device fairly often; stretching it to
+# 2h in battery-heavy situations trims those wakeups (data-usage numbers just
+# update less often, no functional loss). Borrowed from the DisableServers
+# battery module, but scoped tightly here:
+#   - Only when the user enabled the LOG category at install (asb_feature_enabled
+#     LOG) — this is a telemetry/logging-reduction tweak, so it belongs to LOG.
+#   - Only in an EFFECTIVE battery state: the battery profile, OR Smart mode when
+#     its blend is strongly battery-leaning (alpha_battery >= 800/1000, the same
+#     >=80% threshold the governor itself uses to treat Smart as battery).
+#   - Otherwise it restores the AOSP default (1800000) so the change is fully
+#     reversible the moment you leave battery/heavy-lean, and asb_settings_put
+#     captures the user's original value into the restore manifest for uninstall.
+apply_network_stats_poll() {
+  has settings || return 0
+  asb_feature_enabled LOG || return 0
+  _eff_batt=0
+  if [ "$ASB_PROFILE" = "battery" ]; then
+    _eff_batt=1
+  elif [ "$ASB_PROFILE" = "smart" ]; then
+    _alpha="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | sed 's/^smart_alpha_battery=//')"
+    case "$_alpha" in
+      ''|*[!0-9]*) : ;;                                  # no/!num reading -> leave default
+      *) [ "$_alpha" -ge 800 ] 2>/dev/null && _eff_batt=1 ;;
+    esac
+  fi
+  if [ "$_eff_batt" = "1" ]; then
+    asb_settings_put global network_stats_poll_interval 7200000
+  else
+    asb_settings_put global network_stats_poll_interval 1800000
+  fi
+}
+asb_feature_enabled VM && apply_network_stats_poll
 apply_extra_settings() {
   has settings || return 0
   asb_settings_put global audio_safe_volume_state 0
