@@ -3517,6 +3517,20 @@ static int asb_smart_init(void) {
             _obs += g_smart_store.buckets[_b].observations_raw;
         g_smart_sessions_total = (int)_obs;
         g_smart_bucket_updates = (int)_obs;
+        /* Also seed the displayed confidence from the best persisted bucket.
+           g_smart_last_confidence is only written when a live session commits, so
+           after a reboot it sat at 0 and the WebUI showed "learning 0%" even
+           though 186 sessions and the buckets' confidence had persisted. Seed it
+           from the highest-confidence bucket (the same metric the live decision
+           uses) so the learner readout is continuous across reboots until the
+           next session updates it. */
+        time_t _now_seed = time(NULL);
+        int _best_conf = 0;
+        for (int _b = 0; _b < ASB_SMART_BUCKETS; _b++) {
+            int _c = asb_smart_confidence_x1000(&g_smart_store.buckets[_b], _now_seed);
+            if (_c > _best_conf) _best_conf = _c;
+        }
+        g_smart_last_confidence = _best_conf;
     }
 
     if (outcome.loaded_from_main) {
