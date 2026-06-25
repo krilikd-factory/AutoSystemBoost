@@ -399,18 +399,27 @@ asb_apply_ux() {
   if [ "${UX_MANAGE_OEM_TOGGLES:-0}" = "1" ]; then
     [ -n "$UX_ADAPTIVE_BAT" ] && asb_settings_put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT"
     if [ -n "$UX_RAM_EXPAND" ]; then
-      # OxygenOS reads RAM expansion from more than one key, and which one wins
-      # varies by build — setting only ram_expand_size let OOS re-enable it from
-      # the companion keys on some devices (OP13 testers saw it switch back on
-      # after every reboot). Write the whole known set so "off" actually sticks.
-      # 0 = disabled. All are harmless no-ops on builds that lack a given key.
-      asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
-      asb_settings_put global ram_expand_size_list "$UX_RAM_EXPAND"
-      asb_settings_put system ram_expand_size "$UX_RAM_EXPAND"
+      # Record what OOS currently has BEFORE we touch it, so a field report can
+      # show whether our write actually stuck (and in what value format this
+      # build uses — it differs: the size can be bytes/index, and "off" is 0 on
+      # some builds but a sentinel like -1 on others).
+      if has settings; then
+        _re_before=$(settings get global ram_expand_size 2>/dev/null)
+        mkdir -p /data/adb/asb 2>/dev/null || true
+        echo "$(date '+%F %T') apply ram_expand: before=${_re_before} want=${UX_RAM_EXPAND}" >> /data/adb/asb/ram_expand.log 2>/dev/null || true
+      fi
+      # Disable = ram_expand_size 0 (+ list 0). Confirmed on the OP13 OxygenOS
+      # build: when the user turns the feature off in Settings, OOS stores
+      # exactly 0 / 0, so 0 is the correct "off" value. (An earlier build of this
+      # module wrote extra guessed keys alongside it — ram_expand_switch_state,
+      # oplus_customize_ram_expand_size, etc. — which OOS evidently reacted to by
+      # re-enabling; those are gone now. Just the two real keys.) A non-zero
+      # UX_RAM_EXPAND is written through as the requested size.
       if [ "$UX_RAM_EXPAND" = "0" ]; then
-        asb_settings_put global ram_expand_switch_state 0
-        asb_settings_put global oplus_customize_ram_expand_size 0
-        asb_settings_put secure ram_expand_user_enable 0
+        asb_settings_put global ram_expand_size 0
+        asb_settings_put global ram_expand_size_list 0
+      else
+        asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
       fi
     fi
     [ -n "$UX_LOW_HEAT" ] && asb_settings_put global sem_low_heat_mode "$UX_LOW_HEAT"
