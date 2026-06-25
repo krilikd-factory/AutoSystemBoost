@@ -3,7 +3,7 @@
   <a href="README.ru.md"><img src="https://img.shields.io/badge/🇷🇺%20Русский-1f2937?style=flat-square" alt="Русский"></a>
 </p>
 
-<h1 align="center">🚀 AutoSystemBoost</h1>
+<h1 align="center">🛸 AutoSystemBoost</h1>
 <p align="center">
   <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="Banner" width="80%">
 </p>
