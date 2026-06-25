@@ -163,6 +163,20 @@ persist.vendor.audio.aec_ref.enable=false
 vendor.audio.feature.aec_ref.enable=false
 ro.qc.sdk.audio.ssr=true
 ro.vendor.audio.sdk.ssr=true
+# HD microphone recording: enable 24/32-bit capture so the mic records at higher
+# bit depth instead of the default 16-bit. Pairs the support flags with the PCM
+# capture-path enables and turns OFF compressed (AAC) capture so the recording
+# path stays linear PCM. record_play_concurency lets capture and playback run at
+# once (e.g. monitoring while recording). All vendor-side, no app changes needed.
+vendor.audio.support.24bit.record=true
+vendor.audio.support.32bit.record=true
+ro.vendor.audio.recording.hd=true
+audio.capture.pcm.24bit.enable=true
+audio.capture.pcm.32bit.enable=true
+vendor.audio.capture.pcm.24bit.enable=true
+vendor.audio.capture.pcm.32bit.enable=true
+vendor.audio.compress_capture.enabled=false
+vendor.audio.feature.record_play_concurency.enable=true
 # ASB:AUDIO:END
 # ASB:CAMERA:BEGIN
 persist.camera.tnr.preview=1

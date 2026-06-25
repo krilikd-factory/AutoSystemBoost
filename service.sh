@@ -2049,6 +2049,18 @@ asb_load_profile
   fi
   asb_log "light reinforce 60s profile=$ASB_PROFILE"
   has settings && asb_settings_put global network_recommendations_enabled 0
+  # If the user opted to manage OEM toggles, OxygenOS often re-enables RAM
+  # expansion a little while AFTER boot (losing the write asb_apply_ux did at
+  # boot). Re-assert it here, once the system has settled, so it actually stays
+  # off. Read the flag/value straight from governor.conf to stay self-contained.
+  if [ -r "$MODDIR/config/governor.conf" ]; then
+    _oem="$(grep -E '^[[:space:]]*UX_MANAGE_OEM_TOGGLES=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    if [ "$_oem" = "1" ] || [ "$_oem" = "on" ]; then
+      _rex="$(grep -E '^[[:space:]]*UX_RAM_EXPAND=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+      case "$_rex" in ''|*[!0-9]*) _rex=0 ;; esac
+      has settings && asb_settings_put global ram_expand_size "$_rex"
+    fi
+  fi
   sleep 240
   asb_load_profile
   if asb_feature_enabled KERNEL; then

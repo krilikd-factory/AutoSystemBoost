@@ -75,6 +75,21 @@ done
 rm -rf /dev/.asb 2>/dev/null
 rm -rf /dev/.asb_profile_state 2>/dev/null
 
+# Some root managers / mount helpers leave a per-module work artifact next to the
+# module dir (e.g. a hidden ".AutoSystemBoost-files" marker and a "CLEAR" dir)
+# that they do NOT remove when the module is deleted. They are harmless but look
+# like litter, so clean them from every modules root we know about.
+for _mroot in /data/adb/modules /data/adb/modules_update \
+              /data/adb/ksu/modules /data/adb/ksu/modules_update \
+              /data/adb/ap/modules /data/adb/ap/modules_update; do
+  rm -f  "$_mroot/.AutoSystemBoost-files" 2>/dev/null
+  rm -rf "$_mroot/AutoSystemBoost/CLEAR" 2>/dev/null
+done
+# the snapshot of WebUI settings is intentionally kept across a plain reinstall,
+# but on a real uninstall it should go too (it lives under /data/adb/asb which is
+# removed below, so this is just belt-and-braces if that dir moved).
+rm -f /data/adb/asb/governor.conf.snapshot 2>/dev/null
+
 # Restore any runtime tracking settings we changed (settings DB), then remove
 # the data dir. Reading the log before deleting it is intentional.
 if [ -f /data/adb/asb/tracking_restore.log ]; then
