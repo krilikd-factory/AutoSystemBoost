@@ -84,6 +84,12 @@ lk_finalize_smart_sleep() {
   lk_emit_sleep_night_report 2>/dev/null || true
   lk_capture_smart_sessions_window 2>/dev/null || true
   lk_emit_smart_summary 2>/dev/null || true
+  # Wakelock attribution for the night: end snapshot + delta vs baseline + the
+  # Android-side batterystats view. These name the actual sources that kept the
+  # device awake so ASB tuning can target them.
+  lk_wakelock_kernel_snapshot "end" 2>/dev/null || true
+  lk_wakelock_kernel_delta 2>/dev/null || true
+  lk_wakelock_batterystats_dump 2>/dev/null || true
   lk_finalize
 }
 
@@ -221,6 +227,13 @@ lk_check_smart_mode_active || exit 1
 lk_smart_trace_header
 lk_snapshot_smart_store "before"
 
+# Wakelock attribution baseline: snapshot kernel sources now and reset the
+# Android batterystats window, so the end-of-run delta/dump covers only the
+# night. Our own capture wakelock (asb_logkit_$$) is excluded by the helpers.
+lk_wakelock_kernel_baseline
+lk_wakelock_kernel_snapshot "start"
+lk_wakelock_batterystats_reset
+
 echo "[$(date '+%H:%M:%S')] Smart Mode NIGHT SLEEP capture running for up to ${LK_HOURS}h."
 echo "                     Screen OFF + unplugged recommended. Don't touch the phone overnight."
 
@@ -241,6 +254,8 @@ while : ; do
   } >> "$LK_OUT_DIR/status_watch.txt"
   lk_capture_battery_trace_row
   lk_capture_smart_trace_row
+  lk_wakelock_live_row
+  lk_oem_toggle_row
   LK_TICK_COUNT=$((LK_TICK_COUNT + 1))
 
   # Wakefulness transitions

@@ -681,6 +681,140 @@ lk_capture_battery_trace_row() {
   echo "${_e}|${_d}|${_st}|${_pr}|${_sc}|${_bpct}|${_bma}|${_bv}|${_btmp}|${_temp}|${_sk}|${_surf}|${_brd}|${_iq}|${_bd}|${_bl}||${_bw}|${_hp}|${_hv}|${_hir}|${_ct}|${_fb}|${_wrx}|${_wtx}|${_rrx}|${_rtx}|${_l1}|${_dw}|${_mfree}|${_swfree}|${_zram_used}|${_wakelocks}" >> "$LK_OUT_DIR/battery_trace.txt"
 }
 
+# ──────────────────────────────────────────────────────────────────────────
+# WAKELOCK / WAKE-SOURCE collection
+# ──────────────────────────────────────────────────────────────────────────
+# These capture WHO is keeping the device awake, by name, so drain can be
+# attributed to a concrete kernel wakeup source / app wakelock / alarm rather
+# than guessed at. Every consumer excludes this script's own wakelock
+# (asb_logkit_$$, exported as LK_WAKELOCK_NAME) so the capture rig never shows
+# up as the top offender.
+
+# One full snapshot of kernel wakeup_sources, written as a timestamped block.
+# /sys/kernel/debug/wakeup_sources columns (kernel ABI):
+#   name active_count event_count wakeup_count expire_count active_since
+#   total_time max_time last_change prevent_suspend_time
+# We keep name, active_count, active_since(ms), total_time(ms),
+# prevent_suspend_time(ms) — the fields that say "this source blocked suspend".
+lk_wakelock_kernel_snapshot() {
+  _tag="${1:-snap}"
+  _src=/sys/kernel/debug/wakeup_sources
+  [ -r "$_src" ] || { _src=/d/wakeup_sources; [ -r "$_src" ] || return 0; }
+  {
+    echo "===== wakeup_sources ${_tag} $(date '+%Y-%m-%d %H:%M:%S') ====="
+    # header + rows where the source has been active at least once, sorted by
+    # the time it actively prevented suspend (most disruptive first).
+    awk -v self="$LK_WAKELOCK_NAME" '
+      NR==1 { next }
+      {
+        name=$1;
+        if (name==self) next;             # skip our own capture wakelock
+        ac=$2+0; as=$6+0; tt=$7+0; pst=$10+0;
+        if (ac>0 || as>0 || pst>0)
+          printf "%-28s active=%-6d active_since_ms=%-10d total_ms=%-10d prevent_suspend_ms=%-10d\n", name, ac, as, tt, pst
+      }
+    ' "$_src" 2>/dev/null | sort -t= -k5 -rn | head -40
+    echo ""
+  } >> "$LK_OUT_DIR/wake_sources.txt"
+}
+
+# Delta of the top kernel wakeup sources between two snapshots, so we can see
+# which sources accumulated active time DURING the capture (not lifetime totals
+# that are dominated by boot-time one-shots). Call lk_wakelock_kernel_baseline
+# once at start, then lk_wakelock_kernel_delta at the end.
+lk_wakelock_kernel_baseline() {
+  _src=/sys/kernel/debug/wakeup_sources
+  [ -r "$_src" ] || { _src=/d/wakeup_sources; [ -r "$_src" ] || return 0; }
+  awk 'NR>1{print $1"|"$7"|"$10}' "$_src" 2>/dev/null > "$LK_OUT_DIR/.wl_kernel_base"
+}
+lk_wakelock_kernel_delta() {
+  _src=/sys/kernel/debug/wakeup_sources
+  [ -r "$_src" ] || { _src=/d/wakeup_sources; [ -r "$_src" ] || return 0; }
+  [ -r "$LK_OUT_DIR/.wl_kernel_base" ] || return 0
+  awk 'NR>1{print $1"|"$7"|"$10}' "$_src" 2>/dev/null > "$LK_OUT_DIR/.wl_kernel_end"
+  {
+    echo "===== wakeup_sources DELTA over capture (active time gained) ====="
+    echo "# source | d_total_ms | d_prevent_suspend_ms"
+    awk -F'|' -v self="$LK_WAKELOCK_NAME" '
+      FNR==NR { bt[$1]=$2; bp[$1]=$3; next }
+      {
+        if ($1==self) next;
+        dt=$2-(bt[$1]+0); dp=$3-(bp[$1]+0);
+        if (dt>0 || dp>0) printf "%-28s %-12d %-12d\n", $1, dt, dp
+      }
+    ' "$LK_OUT_DIR/.wl_kernel_base" "$LK_OUT_DIR/.wl_kernel_end" \
+      | sort -k3 -rn | head -30
+    echo ""
+  } >> "$LK_OUT_DIR/wake_sources.txt"
+  rm -f "$LK_OUT_DIR/.wl_kernel_base" "$LK_OUT_DIR/.wl_kernel_end" 2>/dev/null
+}
+
+# Android-side wakelock + alarm attribution via batterystats/dumpsys. This is
+# the per-APP view (kernel sources above are per-driver). Best called once at
+# start (reset) and once at end so the window is just the capture.
+lk_wakelock_batterystats_reset() {
+  lk_have dumpsys || return 0
+  dumpsys batterystats --reset >/dev/null 2>&1 || true
+}
+lk_wakelock_batterystats_dump() {
+  lk_have dumpsys || return 0
+  {
+    echo "===== batterystats wakelock/alarm attribution $(date '+%Y-%m-%d %H:%M:%S') ====="
+    echo "# --- top wakelocks (app-held) ---"
+    # The "Wake lock" lines under the per-uid section carry realtime totals.
+    dumpsys batterystats 2>/dev/null \
+      | grep -iE "Wake lock|Wakelock" \
+      | grep -ivE "$LK_WAKELOCK_NAME" \
+      | sed 's/^[[:space:]]*//' \
+      | head -40
+    echo ""
+    echo "# --- top alarms (wakeup count) ---"
+    dumpsys batterystats 2>/dev/null \
+      | grep -iE "Alarm|\*walarm\*|wakeups" \
+      | sed 's/^[[:space:]]*//' \
+      | head -30
+    echo ""
+  } >> "$LK_OUT_DIR/wake_sources.txt"
+}
+
+# Live "what is awake right now" — current partial wakelocks held and the power
+# manager's view. Cheap; safe to call each poll. Appends a compact one-liner.
+lk_wakelock_live_row() {
+  _e=$(date +%s)
+  # active kernel sources count (excluding ours)
+  _ksrc=/sys/kernel/debug/wakeup_sources
+  [ -r "$_ksrc" ] || _ksrc=/d/wakeup_sources
+  _kactive=0; _ktop=""
+  if [ -r "$_ksrc" ]; then
+    _kactive=$(awk -v self="$LK_WAKELOCK_NAME" 'NR>1 && $1!=self && $2>0 {n++} END{print n+0}' "$_ksrc" 2>/dev/null)
+    _ktop=$(awk -v self="$LK_WAKELOCK_NAME" 'NR>1 && $1!=self && $6>0 {print $1"("$6")"}' "$_ksrc" 2>/dev/null | head -3 | tr '\n' ',')
+  fi
+  # app partial wakelocks currently held (power manager)
+  _plock=""
+  if lk_have dumpsys; then
+    _plock=$(dumpsys power 2>/dev/null | sed -n '/Wake Locks:/,/^$/p' \
+             | grep -iE "PARTIAL_WAKE_LOCK|FULL_WAKE_LOCK" \
+             | grep -iv "$LK_WAKELOCK_NAME" | head -3 \
+             | sed 's/^[[:space:]]*//' | tr '\n' ';')
+  fi
+  echo "${_e}|kactive=${_kactive}|ktop=${_ktop}|plocks=${_plock}" >> "$LK_OUT_DIR/wake_live.txt"
+}
+
+# OEM toggle state tracker — records the LIVE value of the OnePlus toggles ASB
+# manages (RAM expansion, adaptive battery, low-heat) every poll, so a log can
+# prove whether ASB's "off" actually sticks or OOS flips it back after boot.
+# This is the evidence for the OP13 "RAM expansion re-enables" report.
+lk_oem_toggle_row() {
+  _e=$(date +%s)
+  lk_have settings || return 0
+  _re=$(settings get global ram_expand_size 2>/dev/null)
+  _rel=$(settings get global ram_expand_size_list 2>/dev/null)
+  _ress=$(settings get global ram_expand_switch_state 2>/dev/null)
+  _ab=$(settings get global adaptive_battery_management_enabled 2>/dev/null)
+  _lh=$(settings get global sem_low_heat_mode 2>/dev/null)
+  echo "${_e}|ram_expand_size=${_re}|ram_expand_size_list=${_rel}|switch_state=${_ress}|adaptive_bat=${_ab}|low_heat=${_lh}" >> "$LK_OUT_DIR/oem_toggles_trace.txt"
+}
+
 lk_check_profile_matches() {
   _expect="$1"
   _cur=$(cat "$MODDIR/current_profile" 2>/dev/null)
