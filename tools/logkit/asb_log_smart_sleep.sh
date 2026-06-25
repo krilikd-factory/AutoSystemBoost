@@ -1,33 +1,5 @@
 #!/system/bin/sh
 #
-# ASB  Smart Mode — NIGHT SLEEP capture
-#
-# Usage (SAFE for overnight — survives Termux closure):
-#   su
-#   export MODDIR=/data/adb/modules/AutoSystemBoost
-#   nohup sh $MODDIR/tools/logkit/asb_log_smart_sleep.sh [HOURS] >/data/local/tmp/smart_sleep.out 2>&1 &
-#   # then you can close Termux and go to bed
-#
-# Default: 9 hours. Recommended 7-10h overnight.
-# What it captures:
-#   - Smart Mode state every 90s (idle is slow-changing)
-#   - night_safe_override firing (MUST be 1 most of the night between 00-06h)
-#   - Wakefulness events (notifications, alarms — note their effect on alpha)
-#   - Battery drain trajectory for idle quality calculation
-#   - Whether alpha stays high (battery-lean) consistently during sleep
-#
-# What to verify:
-#   1. night_safe_override == 1 for most of 00:00-06:00 window
-#   2. alpha_battery ≥ 900 during night_safe periods
-#   3. interactive_bonus == 0 (no daytime-style perf headroom)
-#   4. Drain rate (mAh/h) should be lower than baseline without smart
-#
-# Setup:
-#   1. Plug in to charge briefly so battery is ≥60% but unplug before sleep
-#   2. Verify Smart Mode is on: sh tools/asb_smart_mode.sh status
-#   3. Run the nohup command above BEFORE bed
-#   4. Close Termux — capture continues in background
-#   5. In morning: collect the output dir from /sdcard/
 
 set -u
 LK_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
@@ -52,10 +24,6 @@ LK_HOURS="${1:-9}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
 
 # Acquire kernel partial wakelock so the CPU stays awake during deep sleep.
-# Without this, Android Doze mode pauses /bin/sh in long sleep() calls — capture
-# gets only a handful of ticks over 2+ hours instead of one every LK_POLL_S sec.
-# We write a unique name into /sys/power/wake_lock; the kernel keeps CPU awake
-# while that name is registered. Released in lk_finalize_smart_sleep.
 LK_WAKELOCK_NAME="asb_logkit_$$"
 LK_HAVE_WAKELOCK=0
 if [ -w /sys/power/wake_lock ]; then
@@ -77,16 +45,12 @@ lk_finalize_smart_sleep() {
     echo "$LK_WAKELOCK_NAME" > /sys/power/wake_unlock 2>/dev/null
   fi
   # Emit the trace-derived reports FIRST. They depend only on files already
-  # on disk (smart_trace.tsv, /dev/.asb/state), so even if a later step is
-  # killed when the device drops back into deep sleep, the verdict survives.
   lk_snapshot_smart_store "after" 2>/dev/null || true
   lk_emit_report_card 2>/dev/null || true
   lk_emit_sleep_night_report 2>/dev/null || true
   lk_capture_smart_sessions_window 2>/dev/null || true
   lk_emit_smart_summary 2>/dev/null || true
   # Wakelock attribution for the night: end snapshot + delta vs baseline + the
-  # Android-side batterystats view. These name the actual sources that kept the
-  # device awake so ASB tuning can target them.
   lk_wakelock_kernel_snapshot "end" 2>/dev/null || true
   lk_wakelock_kernel_delta 2>/dev/null || true
   lk_wakelock_batterystats_dump 2>/dev/null || true
@@ -228,8 +192,6 @@ lk_smart_trace_header
 lk_snapshot_smart_store "before"
 
 # Wakelock attribution baseline: snapshot kernel sources now and reset the
-# Android batterystats window, so the end-of-run delta/dump covers only the
-# night. Our own capture wakelock (asb_logkit_$$) is excluded by the helpers.
 lk_wakelock_kernel_baseline
 lk_wakelock_kernel_snapshot "start"
 lk_wakelock_batterystats_reset

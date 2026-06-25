@@ -1,39 +1,5 @@
 #!/system/bin/sh
 #
-# ASB — FULL-DAY universal phase-aware capture
-#
-# One capture, run for ~24h, that classifies what the phone is doing minute to
-# minute (charging / heavy gaming / sleep / post-wake / idle / active) and logs
-# CPU/GPU frequency, thermals, throttling, drain AND wakelock attribution for
-# each phase. The goal is hard data to make ASB more autonomous, cooler, and
-# faster exactly where it matters — not vibes.
-#
-# Usage (SAFE for a full day — survives Termux closure & Doze):
-#   su
-#   export MODDIR=/data/adb/modules/AutoSystemBoost
-#   nohup sh $MODDIR/tools/logkit/asb_log_full_day.sh [HOURS] >/data/local/tmp/asb_full_day.out 2>&1 &
-#   # then just use the phone normally for the day — game, charge, sleep, etc.
-#
-# Default: 24 hours.
-#
-# Use the phone NORMALLY. The more varied the day (a gaming session, a charge
-# cycle, a night's sleep, some idle), the more useful the report. Don't babysit
-# it. In the morning/next day, grab the output dir from /sdcard/ and send it.
-#
-# What it produces (in the output dir):
-#   phase_timeline.txt   — every phase change with the trigger
-#   phase_summary.txt    — per-phase: duration, drain rate, temps, freq, throttle
-#   perf_trace.txt       — per-poll CPU/GPU freq + every thermal zone
-#   battery_trace.txt    — per-poll battery/current/mem/net + wakelock count
-#   wake_sources.txt     — named kernel wakeup sources + app wakelocks + alarms
-#   wake_live.txt        — per-poll "what's awake right now"
-#   throttle_trace.txt   — when scaling_max dropped below hardware max (capping)
-#   _full_day_report.txt — the headline analysis + concrete ASB suggestions
-#
-# It adapts its own poll rate to the phase: fast (15s) during gaming/charging so
-# transients aren't missed, slow (90s) during sleep/idle so it doesn't itself
-# cost battery. The capture holds a kernel wakelock only while polling and is
-# excluded from all wakelock results.
 
 set -u
 LK_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
@@ -78,9 +44,6 @@ lk_wl_release() {
 }
 
 # ── phase detection ────────────────────────────────────────────────────────
-# Signals: charging status, screen on/off, GPU busy %, top-app cpu, load, and
-# how long the screen has been off. Returns one of:
-#   charging_active charging_idle gaming active post_wake idle sleep
 LK_SCREEN_OFF_SINCE=0
 LK_LAST_SCREEN="unknown"
 LK_WOKE_AT=0
@@ -141,9 +104,6 @@ lk_poll_for_phase() {
 }
 
 # ── throttle detection ─────────────────────────────────────────────────────
-# Record whenever a cluster's scaling_max_freq is below its cpuinfo_max_freq
-# (i.e. something — thermal/vendor/ASB — is capping it) along with the temps, so
-# we can see WHY peak performance was unavailable.
 LK_P0_HWMAX=$(cat /sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq 2>/dev/null)
 LK_P6_HWMAX=$(cat /sys/devices/system/cpu/cpufreq/policy6/cpuinfo_max_freq 2>/dev/null)
 lk_throttle_row() {
@@ -162,8 +122,6 @@ lk_throttle_row() {
 }
 
 # ── per-phase accounting ───────────────────────────────────────────────────
-# We keep a tiny per-phase ledger appended to phase_ledger.tsv:
-#   phase  start_epoch  end_epoch  start_pct  end_pct  max_cpu_temp  max_surf  max_p6  gaming_gpu_avg  throttle_ticks  wake_active_peak
 LK_CUR_PHASE=""
 LK_PH_START=0
 LK_PH_START_PCT=0
@@ -315,6 +273,8 @@ printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAv
 lk_wakelock_kernel_baseline
 lk_wakelock_kernel_snapshot "start"
 lk_wakelock_batterystats_reset
+lk_oem_ram_expand_probe "start"
+lk_oem_toggle_row
 
 echo "[$(date '+%H:%M:%S')] FULL-DAY capture running up to ${LK_HOURS}h. Use the phone normally."
 
@@ -378,6 +338,7 @@ lk_phase_ledger_flush
 lk_wakelock_kernel_snapshot "end"
 lk_wakelock_kernel_delta
 lk_wakelock_batterystats_dump
+lk_oem_ram_expand_probe "end"
 lk_emit_phase_summary
 lk_emit_full_day_report
 lk_snapshot_state "after"

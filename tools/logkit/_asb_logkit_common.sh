@@ -26,9 +26,6 @@ lk_resolve_gov_log() {
 }
 
 # Pick a base dir the USER can actually reach, like asb_diag lands on /sdcard.
-# $TMPDIR under Termux points at Termux's private dir (invisible from a file
-# manager), so we deliberately do NOT use it. Preference: storage root first so
-# the folder sits next to asb_diag_report.txt, then /data/local/tmp as fallback.
 lk_resolve_outbase() {
   for _b in /sdcard /storage/emulated/0 /data/local/tmp; do
     [ -d "$_b" ] || continue
@@ -350,8 +347,6 @@ lk_copy_runtime_artifacts() {
 lk_verify_caps() {
   _profile="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
   #  Smart Mode: 'smart' profile doesn't have a smart.sh file by design —
-  # it blends battery/balanced bounds at C-runtime. For shell-side cap verify
-  # we use balanced.sh as the source-of-truth envelope (same as profile_core.sh).
   _src_profile="$_profile"
   [ "$_src_profile" = "smart" ] && _src_profile="balanced"
   # Initialize cap variables to avoid 'set -u' issues if source fails
@@ -681,21 +676,9 @@ lk_capture_battery_trace_row() {
   echo "${_e}|${_d}|${_st}|${_pr}|${_sc}|${_bpct}|${_bma}|${_bv}|${_btmp}|${_temp}|${_sk}|${_surf}|${_brd}|${_iq}|${_bd}|${_bl}||${_bw}|${_hp}|${_hv}|${_hir}|${_ct}|${_fb}|${_wrx}|${_wtx}|${_rrx}|${_rtx}|${_l1}|${_dw}|${_mfree}|${_swfree}|${_zram_used}|${_wakelocks}" >> "$LK_OUT_DIR/battery_trace.txt"
 }
 
-# ──────────────────────────────────────────────────────────────────────────
 # WAKELOCK / WAKE-SOURCE collection
-# ──────────────────────────────────────────────────────────────────────────
-# These capture WHO is keeping the device awake, by name, so drain can be
-# attributed to a concrete kernel wakeup source / app wakelock / alarm rather
-# than guessed at. Every consumer excludes this script's own wakelock
-# (asb_logkit_$$, exported as LK_WAKELOCK_NAME) so the capture rig never shows
-# up as the top offender.
 
 # One full snapshot of kernel wakeup_sources, written as a timestamped block.
-# /sys/kernel/debug/wakeup_sources columns (kernel ABI):
-#   name active_count event_count wakeup_count expire_count active_since
-#   total_time max_time last_change prevent_suspend_time
-# We keep name, active_count, active_since(ms), total_time(ms),
-# prevent_suspend_time(ms) — the fields that say "this source blocked suspend".
 lk_wakelock_kernel_snapshot() {
   _tag="${1:-snap}"
   _src=/sys/kernel/debug/wakeup_sources
@@ -719,9 +702,6 @@ lk_wakelock_kernel_snapshot() {
 }
 
 # Delta of the top kernel wakeup sources between two snapshots, so we can see
-# which sources accumulated active time DURING the capture (not lifetime totals
-# that are dominated by boot-time one-shots). Call lk_wakelock_kernel_baseline
-# once at start, then lk_wakelock_kernel_delta at the end.
 lk_wakelock_kernel_baseline() {
   _src=/sys/kernel/debug/wakeup_sources
   [ -r "$_src" ] || { _src=/d/wakeup_sources; [ -r "$_src" ] || return 0; }
@@ -750,8 +730,6 @@ lk_wakelock_kernel_delta() {
 }
 
 # Android-side wakelock + alarm attribution via batterystats/dumpsys. This is
-# the per-APP view (kernel sources above are per-driver). Best called once at
-# start (reset) and once at end so the window is just the capture.
 lk_wakelock_batterystats_reset() {
   lk_have dumpsys || return 0
   dumpsys batterystats --reset >/dev/null 2>&1 || true
@@ -801,9 +779,6 @@ lk_wakelock_live_row() {
 }
 
 # OEM toggle state tracker — records the LIVE value of the OnePlus toggles ASB
-# manages (RAM expansion, adaptive battery, low-heat) every poll, so a log can
-# prove whether ASB's "off" actually sticks or OOS flips it back after boot.
-# This is the evidence for the OP13 "RAM expansion re-enables" report.
 lk_oem_toggle_row() {
   _e=$(date +%s)
   lk_have settings || return 0
@@ -813,6 +788,25 @@ lk_oem_toggle_row() {
   _ab=$(settings get global adaptive_battery_management_enabled 2>/dev/null)
   _lh=$(settings get global sem_low_heat_mode 2>/dev/null)
   echo "${_e}|ram_expand_size=${_re}|ram_expand_size_list=${_rel}|switch_state=${_ress}|adaptive_bat=${_ab}|low_heat=${_lh}" >> "$LK_OUT_DIR/oem_toggles_trace.txt"
+}
+
+# One-shot deep dump of EVERY ram/expand-related key across all settings
+lk_oem_ram_expand_probe() {
+  _tag="${1:-probe}"
+  {
+    echo "===== RAM-EXPAND KEY PROBE ${_tag} $(date '+%Y-%m-%d %H:%M:%S') ====="
+    if lk_have settings; then
+      for _ns in global system secure; do
+        echo "# --- settings $_ns (ram/expand/vram) ---"
+        settings list "$_ns" 2>/dev/null | grep -iE "ram_expand|expand_size|vram|ram_boost|swap|extend.*mem|mem.*extend" \
+          | grep -v "^$" | sed 's/^/    /'
+      done
+    fi
+    echo "# --- getprop (ram/expand/vram/swap) ---"
+    getprop 2>/dev/null | grep -iE "ram_expand|vram|ram_boost|swapfile|extend.*ram|ram.*extend|oplus.*ram|oplus.*mem" \
+      | sed 's/^/    /'
+    echo ""
+  } >> "$LK_OUT_DIR/oem_ram_expand_probe.txt"
 }
 
 lk_check_profile_matches() {
@@ -926,10 +920,6 @@ lk_capture_smart_trace_row() {
   esac
 
   # --- autonomy fields (added so drain correlates with Smart state in one row) ---
-  # Battery current draw in mA (the single most useful drain signal). current_now
-  # is uA on most OnePlus; sign varies by kernel, so we report the magnitude and
-  # let the charging flag give direction. Negative-on-discharge kernels still give
-  # a usable magnitude here.
   _ima=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null)
   if [ -n "$_ima" ]; then
     _ima_abs=${_ima#-}
@@ -962,8 +952,6 @@ lk_capture_smart_sessions_window() {
   [ -r "$_src" ] || return 0
   _dst="$LK_OUT_DIR/session_history_window.jsonl"
   # Cap work: only consider the last 400 sessions (matches the on-disk trim),
-  # so finalize can never stall forking `date` over an unbounded file while
-  # the device is trying to return to deep sleep.
   tail -n 400 "$_src" 2>/dev/null | awk -v start="$LK_START_EPOCH" '
     {
       if (match($0, /"ts":"[0-9T:Z\-]+"/)) {
