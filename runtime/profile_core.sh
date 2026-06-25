@@ -398,7 +398,21 @@ asb_apply_ux() {
   # UX_MANAGE_OEM_TOGGLES; otherwise leave the user's own choice alone.
   if [ "${UX_MANAGE_OEM_TOGGLES:-0}" = "1" ]; then
     [ -n "$UX_ADAPTIVE_BAT" ] && asb_settings_put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT"
-    [ -n "$UX_RAM_EXPAND" ] && asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
+    if [ -n "$UX_RAM_EXPAND" ]; then
+      # OxygenOS reads RAM expansion from more than one key, and which one wins
+      # varies by build — setting only ram_expand_size let OOS re-enable it from
+      # the companion keys on some devices (OP13 testers saw it switch back on
+      # after every reboot). Write the whole known set so "off" actually sticks.
+      # 0 = disabled. All are harmless no-ops on builds that lack a given key.
+      asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
+      asb_settings_put global ram_expand_size_list "$UX_RAM_EXPAND"
+      asb_settings_put system ram_expand_size "$UX_RAM_EXPAND"
+      if [ "$UX_RAM_EXPAND" = "0" ]; then
+        asb_settings_put global ram_expand_switch_state 0
+        asb_settings_put global oplus_customize_ram_expand_size 0
+        asb_settings_put secure ram_expand_user_enable 0
+      fi
+    fi
     [ -n "$UX_LOW_HEAT" ] && asb_settings_put global sem_low_heat_mode "$UX_LOW_HEAT"
   fi
   asb_settings_put global google_core_control 0
