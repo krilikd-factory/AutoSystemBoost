@@ -186,11 +186,17 @@ jobs:
             "tools/logkit/asb_log_smart_daily.sh" \
             "tools/logkit/asb_log_smart_gaming.sh" \
             "tools/logkit/asb_log_smart_sleep.sh" \
+            "tools/logkit/asb_log_full_day.sh" \
             "tools/asb_state_sampler.sh" \
             "tools/asb_drain_analyzer.sh" \
             "tools/asb_session_report.py" \
             "tools/asb_smart_mode.sh" \
             "tools/asb_vendor_thermal_probe.sh" \
+            "tools/asb_diag.sh" \
+            "tools/asb_doctor.sh" \
+            "tools/asb_audit_state.sh" \
+            "tools/asb_verify_device.sh" \
+            "tools/asb_compare_sessions.py" \
             "tools/asb_analyze.py"; do
             unzip -l "$ZIP_DBG" | grep -q "$required" \
               || { echo "ERROR: $ZIP_DBG missing $required"; exit 1; }
