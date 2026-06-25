@@ -199,12 +199,6 @@ asb_apply_cpu() {
   for _p in /sys/devices/system/cpu/cpufreq/policy*; do
     [ -d "$_p" ] || continue
     # CPU CAP OWNERSHIP: scaling_max/min are written ONLY by service.sh
-    # apply_screen_aware_caps (per-device %, screen-aware, 4-cluster MID tier).
-    # profile_core just applies the schedutil tunables below. The old per-cluster
-    # _cap/_max_abs computation was removed — it read the legacy absolute
-    # CPU_CAP_*/CPU_MAX_* values that are no longer authoritative and only caused
-    # confusion (a second, conflicting cap source). Smart is owned by the C
-    # governor. One writer per node = no contradictory caps.
     : # caps intentionally not computed or written here
 
     [ -w "$_p/schedutil/rate_limit_us" ] && writef_retry "$_p/schedutil/rate_limit_us" "$SCHED_RATE" 6 0.18 || true
@@ -225,10 +219,6 @@ asb_apply_gpu() {
   [ -w /sys/class/kgsl/kgsl-3d0/throttling ] && [ -n "$GPU_THROTTLING" ] && writef_retry /sys/class/kgsl/kgsl-3d0/throttling "$GPU_THROTTLING" 6 0.18 || true
   [ -w /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] && [ -n "$GPU_THERMAL_PWRLEVEL" ] && writef_retry /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel "$GPU_THERMAL_PWRLEVEL" 6 0.18 || true
   # GPU FREQ OWNERSHIP (single-owner, mirrors the CPU refactor): devfreq
-  # max_freq/min_freq are written ONLY by service.sh apply_gpu_caps (percent of
-  # this GPU's own max, per-device aware). profile_core no longer writes them, so
-  # the two don't race on the same node. Non-frequency GPU tunables above stay
-  # here since apply_gpu_caps doesn't touch them.
   : # GPU freq caps intentionally not written here
 }
 
@@ -280,13 +270,6 @@ asb_apply_ux() {
   local _ux_base="$MODDIR/config/ux_baseline.conf"
 
   # Load the WebUI-controlled UX_MANAGE_* flags from governor.conf. These are
-  # NOT defined in the per-profile files (only the target values like
-  # UX_RAM_EXPAND are), and nothing else sources governor.conf into this
-  # environment — so without this read the gates below always saw the default
-  # 0 and the WebUI toggles had no effect (a user enabling "Manage OEM Toggles"
-  # changed nothing). Read them point-wise (not a blind `.` source, since the
-  # conf may hold non-shell-safe segmented values). Only override when the key
-  # is actually present, so callers that already exported a value still win.
   _ux_conf="$MODDIR/config/governor.conf"
   if [ -r "$_ux_conf" ]; then
     for _uxk in UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
@@ -299,10 +282,6 @@ asb_apply_ux() {
       esac
     done
     # Also read the OEM-toggle TARGET values (what to actually write when the user
-    # opts in). These are NOT in the per-profile files, so without reading them
-    # here UX_RAM_EXPAND was always empty and the "[ -n ]" guard below silently
-    # skipped the write — so enabling "Manage OEM Toggles" did nothing and OOS
-    # kept re-enabling RAM expansion every boot. Read them point-wise.
     for _uxk in UX_RAM_EXPAND UX_ADAPTIVE_BAT UX_LOW_HEAT; do
       _uxv="$(grep -E "^[[:space:]]*${_uxk}=" "$_ux_conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
       case "$_uxv" in
@@ -312,9 +291,6 @@ asb_apply_ux() {
     done
   fi
   # When the user turns ON "Manage OEM Toggles" without having picked explicit
-  # target values, default to the intent the card describes: hold RAM Expansion
-  # OFF (size 0). Adaptive battery / low-heat are left untouched unless the user
-  # set them, so we don't fight choices we weren't asked to manage.
   if [ "${UX_MANAGE_OEM_TOGGLES:-0}" = "1" ] && [ -z "$UX_RAM_EXPAND" ]; then
     UX_RAM_EXPAND=0
   fi
@@ -343,8 +319,6 @@ asb_apply_ux() {
     fi
   else
     # Toggle is OFF — if we previously overrode the scales, RESTORE the saved
-    # baseline (this is the fix for scales sticking at 0.9 forever). Default
-    # back to 1.0 if we somehow have no baseline value.
     if [ -f "$_ux_base" ]; then
       . "$_ux_base" 2>/dev/null
       local _restore=0
@@ -361,11 +335,6 @@ asb_apply_ux() {
       [ "$_restore" = "1" ] && _anim_changed=1
     else
       # No baseline saved, but the toggle is OFF. An EARLIER build may have
-      # forced a profile scale (0.8 / 0.9) without ever saving a baseline, which
-      # is exactly how a user with the toggle off ends up stuck at 0.9. If the
-      # live scale matches a value ASB is known to set, reset it to stock 1.0 so
-      # the user's "off" state is honoured. We never touch a value the user
-      # themselves chose (anything other than our known 0.8/0.9).
       _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
       case "$_cur_anim" in
         0.8|0.80|0.9|0.90)
@@ -391,30 +360,16 @@ asb_apply_ux() {
   fi
 
   # OEM-owned settings (RAM expansion, adaptive battery, low-heat). These are
-  # user/OEM-facing toggles in Settings, and OxygenOS re-asserts them at boot.
-  # ASB writing them unconditionally on every profile apply fought the OEM (e.g.
-  # RAM expansion kept re-enabling itself after a reboot and the user saw storage
-  # shrink). Only touch them when the user explicitly opts in via
-  # UX_MANAGE_OEM_TOGGLES; otherwise leave the user's own choice alone.
   if [ "${UX_MANAGE_OEM_TOGGLES:-0}" = "1" ]; then
     [ -n "$UX_ADAPTIVE_BAT" ] && asb_settings_put global adaptive_battery_management_enabled "$UX_ADAPTIVE_BAT"
     if [ -n "$UX_RAM_EXPAND" ]; then
       # Record what OOS currently has BEFORE we touch it, so a field report can
-      # show whether our write actually stuck (and in what value format this
-      # build uses — it differs: the size can be bytes/index, and "off" is 0 on
-      # some builds but a sentinel like -1 on others).
       if has settings; then
         _re_before=$(settings get global ram_expand_size 2>/dev/null)
         mkdir -p /data/adb/asb 2>/dev/null || true
         echo "$(date '+%F %T') apply ram_expand: before=${_re_before} want=${UX_RAM_EXPAND}" >> /data/adb/asb/ram_expand.log 2>/dev/null || true
       fi
       # Disable = ram_expand_size 0 (+ list 0). Confirmed on the OP13 OxygenOS
-      # build: when the user turns the feature off in Settings, OOS stores
-      # exactly 0 / 0, so 0 is the correct "off" value. (An earlier build of this
-      # module wrote extra guessed keys alongside it — ram_expand_switch_state,
-      # oplus_customize_ram_expand_size, etc. — which OOS evidently reacted to by
-      # re-enabling; those are gone now. Just the two real keys.) A non-zero
-      # UX_RAM_EXPAND is written through as the requested size.
       if [ "$UX_RAM_EXPAND" = "0" ]; then
         asb_settings_put global ram_expand_size 0
         asb_settings_put global ram_expand_size_list 0
@@ -467,10 +422,6 @@ asb_load_profile() {
   fi
   unset _SHELL_BOOT_PROFILE
   # Populate the _P_* mapped variables that service.sh's apply_* helpers read.
-  # Without this the helpers ran with empty values (harmless no-ops, since the
-  # asb_apply_* engine in this file applies the real NET_/VM_ values directly,
-  # but the empty sysctl writes were wasted work and a latent risk of clobbering
-  # a freshly-applied value on some kernels).
   command -v asb_map_profile_vars >/dev/null 2>&1 && asb_map_profile_vars
 }
 

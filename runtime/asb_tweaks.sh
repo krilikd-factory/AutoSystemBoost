@@ -1,14 +1,5 @@
 #!/system/bin/sh
 # ASB dynamic aggressive-tweak engine (shared by install.sh and post-fs-data.sh)
-#
-# AUDIO_AGGRESSIVE / CAMERA_AGGRESSIVE(_INJECT) are applied on top of a saved
-# baseline, so a plain reboot toggles them without reinstalling. install.sh saves
-# each affected file's clean baseline (always-on tweaks included, aggressive layer
-# NOT) under /data/adb/asb/tweak_base/ — outside system/ on purpose, since system/
-# is magic-mounted into /vendor and a stray .asbbase there would leak into the
-# live partition. Each boot, post-fs-data restores from baseline then re-applies
-# the aggressive layer only if the toggle is ON, editing the module's system/
-# source before the manager mounts it. Net: toggle + reboot = reversible change.
 
 ASB_TWEAK_BASE_DIR="/data/adb/asb/tweak_base"
 
@@ -19,11 +10,6 @@ asb_tw_sedi() {
     [ -f "$_f" ] || continue
     _t="${_f}.asbtw$$"
     # Write to a temp file, copy over the original's mode/owner/SELinux context,
-    # then atomically rename into place. An in-place "cat > file" leaves a window
-    # where a reader (e.g. the camera HAL) can see a truncated/half-written file
-    # and the file can lose its SELinux label — on devices whose camera HAL reads
-    # the config early at boot that surfaced as "storage loading / camera
-    # unavailable" on first launch. mv is atomic on the same filesystem.
     if sed "$_e" "$_f" > "$_t" 2>/dev/null; then
       chmod --reference="$_f" "$_t" 2>/dev/null || chmod 0644 "$_t" 2>/dev/null
       chown --reference="$_f" "$_t" 2>/dev/null
@@ -48,8 +34,6 @@ asb_tw_flag() {
   [ -f "$_conf" ] || { echo 0; return; }
   _v="$(grep -E "^[[:space:]]*${_k}=" "$_conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   # Accept both the bool form (1) and the segmented form (aggressive/on) that
-  # the WebUI now writes for some toggles, e.g. CAMERA_AGGRESSIVE_INJECT which
-  # stores safe|aggressive. "aggressive" and "on" both mean enabled.
   case "$_v" in 1|on|aggressive) echo 1 ;; *) echo 0 ;; esac
 }
 
@@ -66,10 +50,6 @@ asb_tw_int() {
 }
 
 # Resolve the effective camera strength LEVEL (0..4) from config, with back-compat
-# for the old CAMERA_AGGRESSIVE bool:
-#   CAMERA_LEVEL present  -> use it (0 stock .. 4 max)
-#   else CAMERA_AGGRESSIVE=1 -> level 3 (the old "aggressive" grade)
-#   else                  -> 0 (stock / off)
 asb_tw_camera_level() {
   _conf="$1"
   _lv="$(asb_tw_int CAMERA_LEVEL "$_conf" -1)"
@@ -98,27 +78,12 @@ asb_tw_aggr_camera() {
   [ "$_lvl" = "0" ] && return 0          # level 0 = stock, change nothing
 
   # GRADED camera grade (levels 1..4) applied to BOTH photo and video paths of
-  # conf_tuning_params.json. The grade scales a coherent set of tone/colour/
-  # contrast/noise keys so each step is visibly stronger than the last, from a
-  # gentle "safe" lift up to a punchy "max". Per the OP13 owner's request the
-  # higher levels intentionally push saturation/contrast hard (shadow banding at
-  # max is accepted). Device-aware: OP15 (canoe) is the reference; OP13 (sun) is
-  # offset one notch softer at matched levels (it banded earlier in testing);
-  # OP12 (pineapple) has no overlay so this is a no-op there.
   _atc_soc="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_atc_soc" ] && _atc_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
   _soft=0
   case "$_atc_soc" in sun|sm8750*) _soft=1 ;; esac
 
   # Per-level value tables (index = level 1..4). Columns:
-  #   SSS  sunsetSatScale            (sunset saturation; base 1.6/1.7)
-  #   BSAT blueSatParam              (blue/sky saturation; base 0.95)
-  #   NDG  nightDownGainParam*       (night detail lift; base 0.3)
-  #   DDB  dayDownGainDarkBoostParam (shadow/contrast boost; base 1.3)
-  #   SCS  SatuColorScale            (global colour, PHOTO+VIDEO; base 1)
-  #   CON  low20XcontrastScale       (local contrast, PHOTO+VIDEO; base 1)
-  #   SKD  skyDarkenScale            (sky depth; base 0.1)
-  # canoe (reference) tables:
   set -- \
     "1.45 0.99 0.34 1.30 1.05 1.05 0.12" \
     "1.40 1.02 0.38 1.40 1.12 1.12 0.16" \
@@ -140,8 +105,6 @@ asb_tw_aggr_camera() {
   asb_tw_sedi "s/\\(\"nightDownGainParamFront\": *\\)0\\.3/\\1${_NDG}/g"   "$_f"
   asb_tw_sedi "s/\\(\"dayDownGainDarkBoostParam\": *\\)1\\.3/\\1${_DDB}/g" "$_f"
   # global colour + local contrast — these live in TMCParamsSet and are honoured
-  # by both the photo and video pipelines, so they are what makes the grade show
-  # up in stills, not just video.
   asb_tw_sedi "s/\\(\"SatuColorScale\": *\\)1\\([,}]\\)/\\1${_SCS}\\2/g"        "$_f"
   asb_tw_sedi "s/\\(\"SatuColorScale\": *\\)1\\.0\\([,}]\\)/\\1${_SCS}\\2/g"    "$_f"
   asb_tw_sedi "s/\\(\"low20XcontrastScale\": *\\)1\\([,}]\\)/\\1${_CON}\\2/g"     "$_f"
@@ -150,8 +113,6 @@ asb_tw_aggr_camera() {
 }
 
 # --- inject the aggressive tone keys a trimmed stock conf_tuning lacks ---
-# (CAMERA_AGGRESSIVE_INJECT). Adds only absent keys, after the always-present
-# "sunsetBrightScale" anchor, preserving JSON validity.
 asb_tw_inject_camera() {
   _f="$1"; [ -f "$_f" ] || return 0
   grep -q '"sunsetBrightScale"' "$_f" || return 0
@@ -183,10 +144,6 @@ asb_tw_restore_base() {
   _bp="$(asb_tw_base_path "$_f")"
   [ -f "$_bp" ] || return 1
   # If the live file already equals the baseline, do NOT rewrite it. Rewriting
-  # an unchanged file on every boot needlessly churns the camera conf on a
-  # separate /odm partition (OP13/OP12), and the camera HAL reading /odm early
-  # at boot can catch that write and report "storage loading / camera
-  # unavailable" on first launch. cmp is a cheap byte compare; skip on match.
   if cmp -s "$_bp" "$_f" 2>/dev/null; then
     return 0
   fi
@@ -211,11 +168,6 @@ asb_apply_dynamic_tweaks() {
   _conf="$_md/config/governor.conf"
 
   # Detect OP12 (pineapple/SM8650) and whether we're on APatch. The camera-conf
-  # churn only crashes the multicamera HAL on OP12 + APatch (APatch's /odm is a
-  # real separate mount). On OP12 + KernelSU (/odm is a symlink to /vendor/odm)
-  # the camera tolerates the engine, and OP13/OP15 are unaffected — so only the
-  # OP12+APatch combination must skip the camera path. The audio layer is safe on
-  # all of them. Filesystem markers are reliable at boot; getprop is fine here too.
   _tw_plat="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_tw_plat" ] && _tw_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
   _is_op12=false
@@ -240,10 +192,6 @@ asb_apply_dynamic_tweaks() {
   for _mx in $(find "$_md/system/vendor/etc/audio" "$_md/system/vendor/odm/etc/audio" \
                     -type f -name "mixer_paths*.xml" 2>/dev/null); do
     # Capture a baseline of the current (pre-aggressive) file if we have none
-    # yet — this is the clean base-tweaked mixer. Then restore from baseline so
-    # toggling OFF reverts cleanly. Crucially we no longer SKIP the file when no
-    # baseline exists (the old "|| continue" meant AUDIO_AGGRESSIVE silently did
-    # nothing on APatch, where the install-time save hadn't populated the store).
     asb_tw_save_base "$_mx"          # no-op if a baseline already exists
     asb_tw_restore_base "$_mx"       # revert to clean base before re-applying
     if [ "$_audio_aggr" = "1" ]; then
@@ -252,9 +200,6 @@ asb_apply_dynamic_tweaks() {
   done
 
   # --- CAMERA conf_tuning --- patch BOTH the /vendor/odm and the direct /odm
-  # copy (OP13 ships both; the HAL may read either partition). Skipped entirely
-  # on OP12 + APatch (_skip_cam) — that combination crashes the multicamera HAL
-  # on any camera-conf churn. OP12 + KernelSU and OP13/OP15 patch normally.
   if [ "$_skip_cam" != "true" ]; then
   for _cf in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
              "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
@@ -263,12 +208,6 @@ asb_apply_dynamic_tweaks() {
     _bp="$(asb_tw_base_path "$_cf")"
     [ -f "$_bp" ] || continue
     # Build the DESIRED final conf in a temp from the clean baseline, apply the
-    # aggressive/inject layers there, then swap it in ONLY if it differs from the
-    # live file. This makes the whole step idempotent: when nothing changed
-    # (e.g. a normal reboot with the same toggles) the /odm conf is not rewritten
-    # at all. Rewriting it every boot — restore-to-baseline then re-apply — is
-    # what raced the OP13 camera HAL reading /odm early and flashed
-    # "storage loading / camera unavailable" on first launch.
     _des="${_cf}.asbdes$$"
     cp -f "$_bp" "$_des" 2>/dev/null || { rm -f "$_des"; continue; }
     if [ "$_cam_level" -gt 0 ] 2>/dev/null; then
@@ -315,11 +254,6 @@ asb_save_dynamic_baselines() {
     _valid_bases="$_valid_bases $(basename "$(asb_tw_base_path "$_cam")")"
   done
   # Orphan prune: remove any .asbbase whose source file is no longer shipped by
-  # this build (e.g. a device that previously had OP15 canoe/alor SKUs and now
-  # ships device-specific ones, or a build that dropped a SKU). This keeps
-  # /data/adb/asb/tweak_base from accumulating stale baselines across reinstalls.
-  # Only baselines NOT in the freshly-built valid set are touched, so every
-  # active baseline is preserved.
   if [ -d "$ASB_TWEAK_BASE_DIR" ]; then
     for _bf in "$ASB_TWEAK_BASE_DIR"/*.asbbase; do
       [ -e "$_bf" ] || continue

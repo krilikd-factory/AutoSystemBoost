@@ -117,14 +117,6 @@
         case "$_now" in
           battery|balanced)
             # CAP-DRIFT CHECK DISABLED. Caps are now a percent of each cluster's
-            # own max and are owned/re-applied by service.sh apply_screen_aware_caps
-            # on every screen-state and profile change (idempotently). The old
-            # check here compared policy0/policy6 against the absolute
-            # CPU_CAP_LITTLE/BIG, which (a) no longer matches the live % cap so it
-            # fired false "cap-drift" re-applies, and (b) only looked at a 2-cluster
-            # layout, missing OP12's policy2/5/7. Screen-state transitions above
-            # already retrigger a correct, topology-aware re-apply, so PowerHAL/
-            # thermal clawback is corrected without this stale comparison.
             :
             ;;
         esac
@@ -161,10 +153,6 @@
         fi
       fi
       # Smart effective-battery transition: network_stats_poll follows whether the
-      # current state is battery-equivalent. In the battery profile this is fixed
-      # and handled by profile-change, but in Smart the alpha lean drifts without a
-      # profile switch — so watch for it crossing the >=800 (battery-lean) boundary
-      # and re-apply only on the transition, not every tick (avoids write churn).
       if [ $_need -eq 0 ] && [ "$_now" = "smart" ] && asb_feature_enabled VM && asb_feature_enabled LOG; then
         _cur_eff=0
         _ralpha="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | sed 's/^smart_alpha_battery=//')"
