@@ -91,5 +91,22 @@ asb_fix_layout() {
   if [ -d "$MODPATH/system/vendor/etc" ]; then
     set_perm_recursive "$MODPATH/system/vendor/etc" 0 2000 0755 0644 u:object_r:vendor_configs_file:s0 2>/dev/null || true
   fi
+
+  # FINAL cleanup — this is the very last thing the installer does. The Magisk
+  # template's set_perm/set_perm_recursive writes a per-file restore index to
+  # /data/adb/modules/.$MODID-files; after the pruning above it can still hold a
+  # few stray entries, and the template keeps it whenever it's non-empty. ASB
+  # ships its own uninstall.sh and never uses this list, so the file is pure
+  # litter in modules/. Remove it unconditionally here (after every set_perm has
+  # run, so nothing recreates it), plus the matching leftover in every modules
+  # root and the stray CLEAR dir.
+  for _mroot in /data/adb/modules /data/adb/modules_update \
+                /data/adb/ksu/modules /data/adb/ksu/modules_update \
+                /data/adb/ap/modules /data/adb/ap/modules_update; do
+    rm -f  "$_mroot/.$MODID-files" 2>/dev/null || true
+    rm -f  "$_mroot/.AutoSystemBoost-files" 2>/dev/null || true
+    rm -rf "$_mroot/AutoSystemBoost/CLEAR" 2>/dev/null || true
+  done
+  [ -n "$INFO" ] && rm -f "$INFO" 2>/dev/null || true
 }
 asb_fix_layout
