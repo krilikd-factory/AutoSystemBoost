@@ -1152,19 +1152,25 @@ asb_prune_non_op15_vendor_overlays() {
 }
 
 asb_preserve_user_config() {
-  # On REINSTALL, carry the user's WebUI choices over the freshly-shipped
-  # governor.conf. The previous install is still on disk while we run, so its
-  # config/governor.conf holds the user's saved toggles. For each known
-  # user-settable key, if the old file has a value, overwrite the shipped
-  # default with it. Untouched keys keep the new shipped default; brand-new
-  # keys in this version are introduced cleanly.
+  # On REINSTALL/UPDATE, carry the user's WebUI choices over the freshly-shipped
+  # governor.conf. We look in TWO places for the old values, in priority order:
+  #   1. the previous install's config/governor.conf (live or update-staged), and
+  #   2. an external snapshot at /data/adb/asb/governor.conf.snapshot that we
+  #      write at the end of every install (below). The snapshot is the reliable
+  #      one: on a version jump or certain KSU/APatch update flows the old module
+  #      dir may already be swapped out when we run, which is why users saw their
+  #      V52 toggles reset on the V54 update. The snapshot lives outside the
+  #      module so it always survives.
   _new_conf="$MODPATH/config/governor.conf"
   _old_conf="$NVBASE/modules/$MODID/config/governor.conf"
-  # Fall back to the update-staging dir if the live module dir has no config yet
-  # (some KSU/APatch flows stage the previous install under modules_update).
   [ -f "$_old_conf" ] || _old_conf="$NVBASE/modules_update/$MODID/config/governor.conf"
+  _snap_conf="/data/adb/asb/governor.conf.snapshot"
   [ -f "$_new_conf" ] || return 0
-  [ -f "$_old_conf" ] || { ui_print "[*] Fresh install - using default config"; return 0; }
+  # Pick the best available source of old values.
+  _src=""
+  [ -f "$_old_conf" ] && _src="$_old_conf"
+  [ -z "$_src" ] && [ -f "$_snap_conf" ] && _src="$_snap_conf"
+  if [ -z "$_src" ]; then ui_print "[*] Fresh install - using default config"; return 0; fi
 
   _user_keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
@@ -1176,7 +1182,12 @@ region_allow_locale"
 
   _migrated=0
   for _k in $_user_keys; do
-    _oldval="$(grep -E "^[[:space:]]*$_k=" "$_old_conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
+    # prefer the live old config, but fall back per-key to the snapshot so a
+    # value present in either source is preserved.
+    _oldval="$(grep -E "^[[:space:]]*$_k=" "$_src" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
+    if [ -z "$_oldval" ] && [ "$_src" != "$_snap_conf" ] && [ -f "$_snap_conf" ]; then
+      _oldval="$(grep -E "^[[:space:]]*$_k=" "$_snap_conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
+    fi
     [ -n "$_oldval" ] || continue
     if grep -qE "^[[:space:]]*$_k=" "$_new_conf" 2>/dev/null; then
       _esc="$(printf '%s' "$_oldval" | sed 's/[&/\|]/\\&/g')"
@@ -1187,6 +1198,29 @@ region_allow_locale"
       _migrated=$((_migrated + 1))
     fi
   done
+  [ "$_migrated" -gt 0 ] && ui_print "  [*] Restored $_migrated saved setting(s)"
+}
+
+# Write an external snapshot of the user-settable keys so the NEXT install can
+# restore them even if the old module dir is gone (see asb_preserve_user_config).
+asb_snapshot_user_config() {
+  _new_conf="$MODPATH/config/governor.conf"
+  _snap_conf="/data/adb/asb/governor.conf.snapshot"
+  [ -f "$_new_conf" ] || return 0
+  mkdir -p "$(dirname "$_snap_conf")" 2>/dev/null || true
+  _keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
+auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
+UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
+region_allow_locale"
+  {
+    echo "# ASB WebUI settings snapshot — survives module update/reinstall"
+    for _k in $_keys; do
+      _v="$(grep -E "^[[:space:]]*$_k=" "$_new_conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
+      [ -n "$_v" ] && printf '%s=%s\n' "$_k" "$_v"
+    done
+  } > "$_snap_conf" 2>/dev/null
+  chmod 644 "$_snap_conf" 2>/dev/null || true
 }
 
 asb_prune_module() {
@@ -1309,6 +1343,17 @@ ASB_BG_TRIM=false
 
 asb_install_prebuilt_governor
 asb_big_banner
+
+# Clean up the per-module work litter some root managers leave next to the
+# module dir (".AutoSystemBoost-files" marker + "CLEAR" dir). Do it at INSTALL
+# too, not just uninstall, so a reinstall over a previous version clears any
+# stale artifact immediately instead of waiting for a future removal.
+for _mroot in /data/adb/modules /data/adb/modules_update \
+              /data/adb/ksu/modules /data/adb/ksu/modules_update \
+              /data/adb/ap/modules /data/adb/ap/modules_update; do
+  rm -f  "$_mroot/.AutoSystemBoost-files" 2>/dev/null
+  rm -rf "$_mroot/AutoSystemBoost/CLEAR" 2>/dev/null
+done
 
 ASB_USER_CFG="/data/adb/asb/user_config"
 ASB_USER_CFG_LEGACY="/data/adb/asb_user_config"
@@ -2369,6 +2414,11 @@ EOF
 	  cp -f "$MODPATH/config/governor.conf" "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
 	  chmod 644 "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
 	fi
+
+	# Persist the (possibly just-restored) WebUI settings to an external snapshot
+	# so the NEXT update/reinstall can recover them even if the old module dir is
+	# gone — this is what stops toggles resetting across a version jump.
+	asb_snapshot_user_config
 
 	if [ -d "$MODPATH/config" ]; then
 	  echo 17 > "$MODPATH/config/.schema_version" 2>/dev/null || true
