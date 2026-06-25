@@ -298,6 +298,25 @@ asb_apply_ux() {
         # absent or unexpected → leave whatever is already set (default 0 via :-)
       esac
     done
+    # Also read the OEM-toggle TARGET values (what to actually write when the user
+    # opts in). These are NOT in the per-profile files, so without reading them
+    # here UX_RAM_EXPAND was always empty and the "[ -n ]" guard below silently
+    # skipped the write — so enabling "Manage OEM Toggles" did nothing and OOS
+    # kept re-enabling RAM expansion every boot. Read them point-wise.
+    for _uxk in UX_RAM_EXPAND UX_ADAPTIVE_BAT UX_LOW_HEAT; do
+      _uxv="$(grep -E "^[[:space:]]*${_uxk}=" "$_ux_conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+      case "$_uxv" in
+        ''|*[!0-9]*) : ;;            # absent/non-numeric → leave unset
+        *) eval "$_uxk=$_uxv" ;;
+      esac
+    done
+  fi
+  # When the user turns ON "Manage OEM Toggles" without having picked explicit
+  # target values, default to the intent the card describes: hold RAM Expansion
+  # OFF (size 0). Adaptive battery / low-heat are left untouched unless the user
+  # set them, so we don't fight choices we weren't asked to manage.
+  if [ "${UX_MANAGE_OEM_TOGGLES:-0}" = "1" ] && [ -z "$UX_RAM_EXPAND" ]; then
+    UX_RAM_EXPAND=0
   fi
 
   # ANIMATION SCALES — manage OR restore.
