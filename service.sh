@@ -98,8 +98,6 @@ if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
 fi
 
 # Reset vm.oom_kill_allocating_task to kernel default (0) at every boot.
-# Leaving it at 1 caused false-positive OOM kills of legitimately allocating
-# apps (App Market, WhatsApp).
 if [ -w /proc/sys/vm/oom_kill_allocating_task ]; then
   echo 0 > /proc/sys/vm/oom_kill_allocating_task 2>/dev/null || true
 fi
@@ -289,9 +287,6 @@ asb_drift_check() {
   asb_load_profile
 
   # Caps are per-device PERCENTAGES now, not the absolute CPU_MAX_* in the
-  # profile files, so comparing policy max against CPU_MAX_LITTLE/BIG would log
-  # false drift every cycle. Instead do a genuinely useful sanity check: flag any
-  # cluster where scaling_min_freq > scaling_max_freq (a real misconfiguration).
   for _dchk in /sys/devices/system/cpu/cpufreq/policy*; do
     [ -d "$_dchk" ] || continue
     local _mn _mx
@@ -302,9 +297,6 @@ asb_drift_check() {
   done
 
   # Cap-drift comparison intentionally omitted: caps are per-device percents (and
-  # OP12 has 4 clusters), so the old absolute-kHz policy0/policy6 check logged
-  # false drift. The scaling_max abs-drift log above and GPU sanity check below
-  # still apply.
   :
   local _gmin_path="/sys/class/kgsl/kgsl-3d0/devfreq/min_freq"
   local _gmax_path="/sys/class/kgsl/kgsl-3d0/devfreq/max_freq"
@@ -493,8 +485,6 @@ apply_vm() {
   sysctlw vm.watermark_scale_factor $_P_WMARK
   sysctlw vm.min_free_kbytes $_P_MINFREE
   # Do not set vm.oom_kill_allocating_task=1 (see boot-time reset above): it
-  # kills the allocating task instead of the highest oom_score, causing false
-  # kills of apps like App Market/WhatsApp.
   if [ "$ASB_PROFILE" = "battery" ]; then
     [ -e /proc/sys/vm/drop_caches ] || true
     [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 1 || true
@@ -657,8 +647,6 @@ apply_wifi_settings() {
 asb_feature_enabled WIFI && apply_wifi_settings
 asb_wifi_cc_heal() {
   # One-time heal: older versions ran `force-country-code enabled IT`, which
-  # could block the Wi-Fi toggle. If that stale flag exists, undo the force now
-  # and clear the flag so the toggle works again. Runs regardless of category.
   if [ -f /data/adb/asb/wifi_cc_forced ]; then
     has cmd && cmd -w wifi force-country-code disabled >/dev/null 2>&1 || true
     rm -f /data/adb/asb/wifi_cc_forced 2>/dev/null || true
@@ -668,8 +656,6 @@ asb_wifi_cc_heal
 
 apply_wifi_country() {
   # Country from SIM then operator; only a confident 2-letter ISO code. We set
-  # only the soft hint (no `force-country-code enabled`): forcing a regdomain the
-  # modem disagrees with can block the Wi-Fi toggle.
   _cc=""
   for _p in gsm.sim.operator.iso-country gsm.operator.iso-country; do
     _v="$(getprop "$_p" 2>/dev/null | tr '[:lower:]' '[:upper:]' | tr -d ' ')"
@@ -1132,12 +1118,6 @@ apply_bt_runtime() {
 asb_feature_enabled BT && apply_bt_runtime
 apply_camera_props_static() {
   # Camera prop layer. IMPORTANT REVERSAL: the known-good debug module that has
-  # a WORKING camera on OP12/APatch FORCES the full camera prop set on every
-  # device (pineapple included) and the camera works. Our earlier "diet" that
-  # DELETED these props on pineapple was the actual regression — it left the
-  # camera HAL in an inconsistent/partial state and crashed the multicamera
-  # session. So pineapple now gets the SAME full prop set as OP13/OP15, exactly
-  # like the working module. No device gating, no deletion.
   _cp_plat="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_cp_plat" ] && _cp_plat="$(getprop ro.hardware.chipname 2>/dev/null)"
   has resetprop || return 0
@@ -1228,17 +1208,11 @@ asb_feature_enabled CAMERA && apply_camera_props_static
 
 apply_camera_runtime() {
   # Base camera props — safe on every device. The proven-working OP12 build set
-  # these on pineapple too and the camera worked, so they are NOT gated out for
-  # OP12 (the earlier "skip all camera props on pineapple" was a misdiagnosis:
-  # the real OP12 regression was the install-side system/odm camera mirror, now
-  # reverted, not this prop layer).
   asb_persist_safe persist.camera.tnr.preview 1
   asb_persist_safe persist.camera.tnr.video 1
   asb_persist_safe persist.vendor.camera.hdr.enable 1
   asb_persist_safe persist.vendor.camera.eis.enable 1
   # OP15 (canoe) ONLY: video HDR, 4K60 EIS, Hasselblad/Explorer are OnePlus 15
-  # camera-HAL features; keep them gated to canoe so other devices never try to
-  # load a pipeline they don't have.
   _cam_soc="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_cam_soc" ] && _cam_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
   case "$_cam_soc" in
@@ -1298,8 +1272,6 @@ apply_kernel() {
   [ -e /proc/sys/walt/sched_idle_enough_clust ] && \
     writef_retry /proc/sys/walt/sched_idle_enough_clust "$_P_IDLEC" 1 0 || true
   # NOTE: per-cluster scaling_min_freq is now set inside apply_cpufreq_caps
-  # (4-cluster aware, single owner). The old 2-cluster LITTLE/BIG min writes
-  # here were removed to avoid a second writer fighting it on OP12.
   [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct $_P_CLUT 1 0 || true
   [ -e /proc/sys/walt/sched_cluster_util_thres_pct_clust ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct_clust "$_P_CLUTC" 1 0 || true
   [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation $_P_COLOC 1 0 || true
@@ -1411,16 +1383,6 @@ apply_gpu_caps() {
     return 0
   fi
   # Fallback: pwrlevel capping. OP15 Adreno 840 leaves devfreq freq nodes empty
-  # and controls the GPU via max_pwrlevel instead, so the GPU % from the profiles
-  # was a silent no-op there. pwrlevel is an INVERTED index: 0 = fastest,
-  # num_pwrlevels-1 = slowest.
-  #
-  # SAFETY: the vendor sets max_pwrlevel as a thermal/power ceiling (e.g. 6 on
-  # OP15). We must NEVER write a level below it — that would unlock the GPU above
-  # the vendor limit and overheat an already throttle-prone SoC. We capture the
-  # vendor value ONCE (first boot, before ASB ever writes it) as a floor and only
-  # ever raise the level (slow the GPU) for power-saving profiles; performance
-  # (100%) leaves the vendor ceiling untouched.
   _pmax_node="/sys/class/kgsl/kgsl-3d0/max_pwrlevel"
   _nlvl="$(cat /sys/class/kgsl/kgsl-3d0/num_pwrlevels 2>/dev/null)"
   if [ -w "$_pmax_node" ] && [ -n "$_nlvl" ] && [ "$_nlvl" -gt 1 ] 2>/dev/null; then
@@ -1444,14 +1406,6 @@ apply_gpu_caps() {
 }
 apply_cpufreq_caps() {
   # Topology-aware capping. 2-cluster SoCs (OP15 canoe, OP13 sun) map cleanly to
-  # LITTLE/BIG. OP12 (pineapple, SM8650) is a 4-cluster part (policy0 little +
-  # policy2 ×3 mid + policy5 ×2 perf + policy7 ×2 prime); policy2 is the main
-  # UI/app workhorse. The old 2-tier model treated every policy above policy0 as
-  # "BIG" and, in battery, capped them all to the BIG cap (~1.07 GHz screen-on),
-  # crippling the mid cluster and making OP12 lag. With 3+ clusters we treat the
-  # MIDDLE cluster(s) — neither policy0 nor the top/prime policy — as a MID tier
-  # with a higher cap so the workhorse stays responsive while the prime cluster
-  # still saves power.
   _pol_list="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n)"
   _pol_count="$(echo "$_pol_list" | grep -c .)"
   _top_pol="$(echo "$_pol_list" | tail -1)"
@@ -1478,8 +1432,6 @@ apply_cpufreq_caps() {
     fi
     if [ "$_is_mid" = "1" ] && [ -n "$_P_CPUCAP_L" ] && [ -n "$_P_CPUCAP_B" ]; then
       # MID cluster (the OP12 policy2 workhorse): cap halfway between the LITTLE
-      # percent and 100%, so it keeps real headroom in battery while the prime
-      # cluster stays at the lower BIG percent. e.g. LITTLE 55% -> MID ~77%.
       _hi="$_P_CPUCAP_L"; [ "$_P_CPUCAP_B" -gt "$_hi" ] 2>/dev/null && _hi="$_P_CPUCAP_B"
       _pct="$(( _hi + (100 - _hi) / 2 ))"
     fi
@@ -1493,8 +1445,6 @@ apply_cpufreq_caps() {
     fi
     if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 3 0.25; then :; fi
     # Per-cluster min-freq floor (single owner, 4-cluster aware). little cluster
-    # uses CPU_MIN_LITTLE; mid/prime use CPU_MIN_BIG. Clamp the floor to the cap
-    # we just set so min never exceeds max. Empty floor -> leave kernel default.
     _smin="$_pol_dir/scaling_min_freq"
     if [ -w "$_smin" ]; then
       if [ "$_rel" -le "$little_end" ]; then _minw="$CPU_MIN_LITTLE"; else _minw="$CPU_MIN_BIG"; fi
@@ -1511,8 +1461,6 @@ apply_cpufreq_caps() {
   done
 }
 # apply_cpufreq_caps must run ONLY via apply_screen_aware_caps, which first sets
-# _P_CPUCAP_L/_B to per-device PERCENTs. Calling it directly would misread the
-# absolute CPU_CAP_* (left by asb_load_profile) as ">=100%" and briefly uncap.
 
 asb_screen_on() {
   for _dp in /sys/kernel/oplus_display/panel_power_status               /sys/kernel/oplus_display/disp_on_notify; do
@@ -1539,12 +1487,6 @@ apply_screen_aware_caps() {
   _son=0
   asb_screen_on && _son=1
   # Caps are PERCENT of each cluster's own cpuinfo_max_freq (apply_cpufreq_caps
-  # snaps to the nearest available step and lifts the MID workhorse on OP12).
-  #
-  # PER-DEVICE tuning: the three SoCs have different cluster shapes and the same
-  # percentage felt very different on each (OP15 fine, OP13 janky in battery,
-  # OP12 unusable < 25%). We pick caps per SoC. Values are screen-on targets
-  # that keep the UI smooth; screen-off trims harder for real savings.
   _soc="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_soc" ] && _soc="$(getprop ro.hardware.chipname 2>/dev/null)"
   case "$_soc" in
@@ -1564,8 +1506,6 @@ apply_screen_aware_caps() {
     balanced)
       if [ "$_son" -eq 1 ]; then
         # screen-on balanced: light touch; balance comes from WALT/uclamp. OP15
-        # is already happy uncapped; OP13/OP12 get a gentle ceiling so balanced
-        # is distinct from performance without hurting smoothness.
         case "$_dev" in
           op15) _P_CPUCAP_L=""; _P_CPUCAP_B="" ;;
           op13) _P_CPUCAP_L=72; _P_CPUCAP_B=58 ;;
@@ -1579,10 +1519,6 @@ apply_screen_aware_caps() {
     battery)
       if [ "$_son" -eq 1 ]; then
         # screen-on battery: MUST stay usable. Prime is capped for savings but
-        # little/mid keep enough headroom that the UI doesn't jank. Note OP12's
-        # big% must be BELOW its balanced big% so the profile shape is monotone
-        # (battery <= balanced <= performance), fixing the old inversion where
-        # OP12 battery prime (55%) was higher than balanced prime (41%).
         case "$_dev" in
           op15) _P_CPUCAP_L=50; _P_CPUCAP_B=38 ;;
           op13) _P_CPUCAP_L=58; _P_CPUCAP_B=48 ;;   # raised: UI stayed janky at 50/44
@@ -1708,15 +1644,9 @@ apply_bt_codec_policy() {
 asb_feature_enabled BT && apply_bt_codec_policy
 apply_bt_volume_behavior() {
   # Respect the user's bt_absvol_mode (auto|on|off) from governor.conf — the
-  # same source the installer reads. Hardcoding 0/false here would silently
-  # override the "on" mode (which disables absolute volume) on every boot.
   _bt_mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
   [ -n "$_bt_mode" ] || _bt_mode="auto"
   # AUTO = truly hands-off: do NOT touch absolute-volume at all, so the stock
-  # BT volume negotiation is left intact. Forcing it on every boot (even to the
-  # "stock" value) re-writes the setting after the BT stack has initialised,
-  # which desyncs the volume scale — symptom: very quiet BT audio on YouTube
-  # until an audio-session restart (e.g. opening ViPER) re-negotiates it.
   if [ "$_bt_mode" = "auto" ]; then
     asb_log "bt absvol: mode=auto -> leaving stock absolute-volume untouched"
     return 0
@@ -1782,8 +1712,6 @@ apply_logd_props() {
 asb_feature_enabled LOG && apply_logd_props
 
 # Runtime GMS/analytics tracking suppression via the settings DB. Props can't
-# reach these — they live in 'settings global'. Each write is recorded so the
-# module's uninstall can put them back, and only applied when LOG is enabled.
 apply_tracking_block() {
   _trk_log="/data/adb/asb/tracking_restore.log"
   : > "$_trk_log" 2>/dev/null
@@ -1813,9 +1741,6 @@ asb_feature_enabled LOG && apply_tracking_block
 
 apply_camera_experimental() {
   # The proven-working OP12 build ran this on pineapple too (it set MFNR/EIS/SAT/
-  # HFR/FastAF and the camera worked), so there is no pineapple skip here. The
-  # OP12 regression was the install-side system/odm camera mirror, not this prop
-  # layer. Originals are saved to camera_orig.conf so they can be restored.
   _orig="$MODDIR/config/camera_orig.conf"
 
   if [ ! -f "$_orig" ]; then
@@ -1855,10 +1780,6 @@ asb_feature_enabled BT && ( sleep 15 && apply_audio_boost ) >/dev/null 2>&1 &
 
 asb_check_perfhal_drift() {
   # DISABLED: caps are now a percent of each cluster's own max (see
-  # apply_screen_aware_caps), so the old absolute CPU_CAP_BIG comparison no
-  # longer means anything and would log spurious "drift". Kept as a no-op so any
-  # external caller is harmless; real cap drift is visible via asb_diag's
-  # per-cluster %-of-hw readout instead.
   return 0
 }
 asb_check_perfhal_drift_legacy_unused() {
@@ -1976,18 +1897,6 @@ apply_doze() {
 }
 asb_feature_enabled VM && apply_doze
 # network_stats_poll_interval: how often the framework polls per-app network
-# statistics. The stock cadence wakes the device fairly often; stretching it to
-# 2h in battery-heavy situations trims those wakeups (data-usage numbers just
-# update less often, no functional loss). Borrowed from the DisableServers
-# battery module, but scoped tightly here:
-#   - Only when the user enabled the LOG category at install (asb_feature_enabled
-#     LOG) — this is a telemetry/logging-reduction tweak, so it belongs to LOG.
-#   - Only in an EFFECTIVE battery state: the battery profile, OR Smart mode when
-#     its blend is strongly battery-leaning (alpha_battery >= 800/1000, the same
-#     >=80% threshold the governor itself uses to treat Smart as battery).
-#   - Otherwise it restores the AOSP default (1800000) so the change is fully
-#     reversible the moment you leave battery/heavy-lean, and asb_settings_put
-#     captures the user's original value into the restore manifest for uninstall.
 apply_network_stats_poll() {
   has settings || return 0
   asb_feature_enabled LOG || return 0
@@ -2050,9 +1959,6 @@ asb_load_profile
   asb_log "light reinforce 60s profile=$ASB_PROFILE"
   has settings && asb_settings_put global network_recommendations_enabled 0
   # If the user opted to manage OEM toggles, OxygenOS often re-enables RAM
-  # expansion a little while AFTER boot (losing the write asb_apply_ux did at
-  # boot). Re-assert it here, once the system has settled, so it actually stays
-  # off. Read the flag/value straight from governor.conf to stay self-contained.
   if [ -r "$MODDIR/config/governor.conf" ]; then
     _oem="$(grep -E '^[[:space:]]*UX_MANAGE_OEM_TOGGLES=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
     if [ "$_oem" = "1" ] || [ "$_oem" = "on" ]; then

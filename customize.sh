@@ -7,10 +7,6 @@ REPLACE="
 
 set_permissions() {
   # The template's set_perm_recursive makes every file 0644 (non-exec), then
-  # explicitly re-marks the known launchers 0755. system/bin/asbdiag and the
-  # tools/*.sh diagnostics aren't in that built-in list, so mark them here or
-  # `su -c asbdiag` fails with "Permission denied". Give the wrapper the proper
-  # system_file context so it can be exec'd from a plain root shell.
   if [ -f "$MODPATH/system/bin/asbdiag" ]; then
     set_perm "$MODPATH/system/bin/asbdiag" 0 0 0755 u:object_r:system_file:s0 2>/dev/null \
       || set_perm "$MODPATH/system/bin/asbdiag" 0 0 0755 2>/dev/null || true
@@ -28,16 +24,6 @@ unzip -qjo "$ZIPFILE" 'common/functions.sh' -d $TMPDIR >&2
 . $TMPDIR/functions.sh
 
 # ── FINAL layout normalization ──────────────────────────────────────────────
-# Runs AFTER functions.sh (and the install.sh it sources) have fully finished,
-# so nothing downstream can re-create a stray tree. A Magisk/KernelSU module
-# must keep every mounted file under $MODPATH/system/. Two faults are repaired
-# here unconditionally, on every device:
-#   1) a nested system/system/... (can appear when a /system/* live path is
-#      cloned with the system/ prefix re-applied) — folded into system/...
-#   2) a REAL top-level vendor/ odm/ product/ system_ext/ ... directory beside
-#      system/ — folded into system/<part>/ and removed. A real root vendor/
-#      can bind a partial dir over the whole /vendor partition -> bootloop.
-# Framework-created symlinks (the valid layout) are left untouched.
 asb_fix_layout() {
   [ -n "$MODPATH" ] && [ -d "$MODPATH" ] || return 0
 
@@ -93,13 +79,6 @@ asb_fix_layout() {
   fi
 
   # FINAL cleanup — this is the very last thing the installer does. The Magisk
-  # template's set_perm/set_perm_recursive writes a per-file restore index to
-  # /data/adb/modules/.$MODID-files; after the pruning above it can still hold a
-  # few stray entries, and the template keeps it whenever it's non-empty. ASB
-  # ships its own uninstall.sh and never uses this list, so the file is pure
-  # litter in modules/. Remove it unconditionally here (after every set_perm has
-  # run, so nothing recreates it), plus the matching leftover in every modules
-  # root and the stray CLEAR dir.
   for _mroot in /data/adb/modules /data/adb/modules_update \
                 /data/adb/ksu/modules /data/adb/ksu/modules_update \
                 /data/adb/ap/modules /data/adb/ap/modules_update; do

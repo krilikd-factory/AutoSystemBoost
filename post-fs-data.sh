@@ -8,20 +8,8 @@ chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 mkdir -p /data/adb/asb 2>/dev/null
 
 # Camera/media overlay is shipped to system/vendor/odm ONLY (see install.sh),
-# exactly like the known-good module. We deliberately do NOT fold any top-level
-# partition dir (vendor/odm/product/...) back into system/ here, and we do NOT
-# touch the real /odm partition or stack any bind-mount onto it. An earlier build
-# added a "fold root partition dirs into system/" loop plus a system/odm camera
-# mirror to chase an APatch /odm desync — that was itself the regression: on
-# APatch it made the manager stack a separate mount over the real /odm, which
-# SIGABRTed the OP12 multicamera HAL (ChiMcxRoiTranslator). The known-good module
-# has no such loop and the camera works on BOTH KernelSU and APatch, so there is
-# nothing to do here at runtime.
 
 # Clean up a phantom /data/adb/magisk/busybox symlink that earlier builds
-# created on KernelSU systems (where /data/adb/magisk should not exist).
-# Only remove it when it's a dangling/broken symlink AND real Magisk is absent
-# (no magisk binary in that dir), so a genuine Magisk install is never touched.
 if [ ! -x /data/adb/magisk/magisk ] && [ ! -x /data/adb/magisk/magisk64 ]; then
   if [ -L /data/adb/magisk/busybox ] && [ ! -e /data/adb/magisk/busybox ]; then
     rm -f /data/adb/magisk/busybox 2>/dev/null
@@ -45,9 +33,6 @@ done
 command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
 
 # Apply / revert the opt-in aggressive audio + camera layers from their saved
-# baselines according to the current WebUI toggles. This is what makes a plain
-# reboot turn AUDIO_AGGRESSIVE / CAMERA_AGGRESSIVE / CAMERA_AGGRESSIVE_INJECT on
-# or off without reinstalling the module.
 if [ -r "$MODDIR/runtime/asb_tweaks.sh" ]; then
   . "$MODDIR/runtime/asb_tweaks.sh"
   asb_apply_dynamic_tweaks "$MODDIR"
