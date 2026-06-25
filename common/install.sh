@@ -1198,7 +1198,6 @@ region_allow_locale"
       _migrated=$((_migrated + 1))
     fi
   done
-  [ "$_migrated" -gt 0 ] && ui_print "  [*] Restored $_migrated saved setting(s)"
 }
 
 # Write an external snapshot of the user-settable keys so the NEXT install can
