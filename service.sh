@@ -2058,7 +2058,18 @@ asb_load_profile
     if [ "$_oem" = "1" ] || [ "$_oem" = "on" ]; then
       _rex="$(grep -E '^[[:space:]]*UX_RAM_EXPAND=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
       case "$_rex" in ''|*[!0-9]*) _rex=0 ;; esac
-      has settings && asb_settings_put global ram_expand_size "$_rex"
+      if has settings; then
+        # Same complete key set as profile_core — OOS re-enables from companion
+        # keys on some builds if only ram_expand_size is written.
+        asb_settings_put global ram_expand_size "$_rex"
+        asb_settings_put global ram_expand_size_list "$_rex"
+        asb_settings_put system ram_expand_size "$_rex"
+        if [ "$_rex" = "0" ]; then
+          asb_settings_put global ram_expand_switch_state 0
+          asb_settings_put global oplus_customize_ram_expand_size 0
+          asb_settings_put secure ram_expand_user_enable 0
+        fi
+      fi
     fi
   fi
   sleep 240
