@@ -184,7 +184,6 @@ asb_apply_dynamic_tweaks() {
   [ "$_is_op12" = "true" ] && [ "$_is_apatch" = "true" ] && _skip_cam=true
 
   _audio_aggr="$(asb_tw_flag AUDIO_AGGRESSIVE "$_conf")"
-  _cam_aggr="$(asb_tw_flag CAMERA_AGGRESSIVE "$_conf")"
   _cam_inject="$(asb_tw_flag CAMERA_AGGRESSIVE_INJECT "$_conf")"
   _cam_level="$(asb_tw_camera_level "$_conf")"
 
