@@ -1810,6 +1810,14 @@ document.addEventListener('keydown', (e) => {
 
 /* ── Config page ─────────────────────────────────────────────── */
 const CFG_FILE = MD + '/config/governor.conf';
+// Keys that are mirrored into the external user snapshot on every change so a
+// reinstall / root-manager re-trigger can restore them. Must stay in sync with
+// the _user_keys / snapshot list in common/install.sh.
+const SNAP_KEYS = ['AUDIO_AGGRESSIVE','AUDIO_EQ_COMPAT','CAMERA_LEVEL','CAMERA_AGGRESSIVE',
+  'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
+  'auto_battery_enable','charge_aware_enable','night_quiet_enable','night_quiet_auto',
+  'UX_ANIM_FORCE_RESTART','UX_MANAGE_ANIM_SCALE','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
+  'region_allow_locale'];
 const CFG_ITEMS = [
   // --- Audio ---
   { key:'AUDIO_EQ_COMPAT', type:'bool', def:'1', name:'Audio EQ Compatibility',
@@ -2013,6 +2021,17 @@ async function cfgSet(key, val, ctl) {
   if (ctl) ctl.classList.remove('busy');
   if (r.errno === 0) {
     _cfgVals[key] = val;
+    // Mirror this change into the external user snapshot so a reinstall /
+    // root-manager re-trigger restores it (fixes toggles reverting to defaults).
+    if ((typeof SNAP_KEYS !== 'undefined') && SNAP_KEYS.indexOf(key) >= 0) {
+      const snap = '/data/adb/asb/governor.conf.snapshot';
+      const scmd = "sh -c 'mkdir -p /data/adb/asb 2>/dev/null; touch " + snap +
+                   " 2>/dev/null; if grep -q \"^" + key + "=\" " + snap +
+                   " 2>/dev/null; then sed -i \"s|^" + key + "=.*|" + key + "=" +
+                   val + "|\" " + snap + "; else echo " + key + "=" + val +
+                   " >> " + snap + "; fi; chmod 644 " + snap + " 2>/dev/null'";
+      try { run(scmd); } catch(e) {}
+    }
     haptic();
     try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
     toast('\u2713 ' + key + ' = ' + val + T('t_cfg_saved', ' \u00b7 reboot to apply'), 'balanced');
