@@ -313,6 +313,7 @@ typedef struct {
     int             had_clamp_hold;         /* session-latched -- was clamp_hold ever set? */
     int             had_futility;           /* session-latched -- was futility ever triggered? */
     int             throttle_cap_ticks;     /* consecutive ticks with thermal_cap=1 */
+    int             gpu_video_ticks;        /* consecutive ticks of sustained-high GPU at low CPU load = likely video; gates GPU-ceiling trim */
     time_t          recovery_cautious_until; /* after clamp lift, stay cautious */
     int             perf_hot_guard_ticks;
     int             perf_hot_guard_active;
@@ -1028,6 +1029,46 @@ if (!can_leave &&
     if (fsm->profile_idx == PROFILE_PERFORMANCE && fsm->perf_hot_guard_active) {
         if (new_caps.cpu_max[1] > 3520000) new_caps.cpu_max[1] = 3520000;
         if (new_caps.gpu_max_pct > 90) new_caps.gpu_max_pct = 90;
+    }
+
+    /* ── Video-aware GPU ceiling trim (battery/heat saver) ────────────────
+       A full-day capture showed the GPU is the dominant power/heat driver
+       (~728 mA at >40% busy vs ~231 mA near idle) and that high-GPU moments
+       split into two kinds: video playback (high GPU + LOW cpu load) and
+       gaming (high GPU + high cpu load / GAMING state). Cutting either hurts
+       (video stutter / fps loss). But outside both, the GPU ceiling sits well
+       above what light UI ever needs, letting brief spikes ramp the GPU higher
+       than necessary. We trim the ceiling a little ONLY when it's neither video
+       nor gaming, saving the wasteful ramp without touching the cases that need
+       it. Disabled in performance profile and gated off entirely when video is
+       detected. */
+    {
+        int vid_gpu = g_asb_cfg.gpu_video_busy_min > 0
+                      ? g_asb_cfg.gpu_video_busy_min : 40;   /* GPU% that counts as "media-heavy" */
+        /* video heuristic: GPU busy high AND cpu load low (not gaming-like) */
+        int load_x100 = (int)(m->cpu.load1 * 100.0f);
+        int low_cpu   = load_x100 < 1200;                    /* load < 12.0 */
+        if (m->gpu.load_pct >= vid_gpu && low_cpu &&
+            fsm->state != ASB_STATE_GAMING) {
+            if (fsm->gpu_video_ticks < 1000) fsm->gpu_video_ticks++;
+        } else {
+            fsm->gpu_video_ticks = 0;
+        }
+        int video_active = fsm->gpu_video_ticks >= 2;        /* ~2 polls sustained */
+
+        int trim = g_asb_cfg.gpu_idle_trim_pct;              /* 0 disables (default set below) */
+        if (trim > 0 &&
+            fsm->profile_idx != PROFILE_PERFORMANCE &&
+            !video_active &&
+            !fsm->thermal_cap &&
+            (fsm->state == ASB_STATE_LIGHT_IDLE ||
+             fsm->state == ASB_STATE_MODERATE)) {
+            int floor_gpu = g_asb_cfg.gpu_idle_trim_floor > 0
+                            ? g_asb_cfg.gpu_idle_trim_floor : 55;
+            int trimmed = new_caps.gpu_max_pct - trim;
+            if (trimmed < floor_gpu) trimmed = floor_gpu;    /* never below a usable floor */
+            if (trimmed < new_caps.gpu_max_pct) new_caps.gpu_max_pct = trimmed;
+        }
     }
 
     if (fsm->state_changed ||

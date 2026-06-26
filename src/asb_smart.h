@@ -1535,7 +1535,6 @@ static void asb_smart_apply_thermal_trend(
     }
 }
 
-
 /* — Memory pressure adaptation.
  * Read /proc/pressure/memory (PSI). When the system is already memory-stressed
  * (heavy swapping, oom-prone), there's no real perf benefit to high CPU caps —

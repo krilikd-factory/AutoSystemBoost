@@ -8,6 +8,9 @@ typedef struct {
     int   heavy_gpu_enter;
     float heavy_load_enter;
     float moderate_load_enter;
+    int   gpu_idle_trim_pct;    /* trim GPU ceiling by this % in light non-video states (0=off) */
+    int   gpu_idle_trim_floor;  /* never trim GPU ceiling below this % (0=default 55) */
+    int   gpu_video_busy_min;   /* GPU busy%% that counts as media-heavy/video (0=default 40) */
     int   gaming_gpu_enter;
     int   gaming_confirm_ticks;
     int   sustained_gpu_min;
@@ -155,6 +158,9 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
      * Battery profile gets stricter still (defined separately below). */
     c->heavy_load_enter    = 20.0f;
     c->moderate_load_enter = 14.0f;
+    c->gpu_idle_trim_pct = 8;
+    c->gpu_idle_trim_floor = 55;
+    c->gpu_video_busy_min = 40;
     c->gaming_gpu_enter    = 65;
     c->gaming_confirm_ticks = 6;
     c->sustained_gpu_min   = 45;
@@ -305,6 +311,9 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "thermal_pwrlevel_audit_log_s")) c->thermal_pwrlevel_audit_log_s = atoi(v);
     else if (!strcmp(k, "bat_heavy_load_enter")) c->bat_heavy_load_enter = (float)atof(v);
     else if (!strcmp(k, "moderate_load_enter"))  c->moderate_load_enter = (float)atof(v);
+    else if (!strcmp(k, "gpu_idle_trim_pct"))    c->gpu_idle_trim_pct = atoi(v);
+    else if (!strcmp(k, "gpu_idle_trim_floor"))  c->gpu_idle_trim_floor = atoi(v);
+    else if (!strcmp(k, "gpu_video_busy_min"))   c->gpu_video_busy_min = atoi(v);
     else if (!strcmp(k, "bat_moderate_load_enter")) c->bat_moderate_load_enter = (float)atof(v);
     else if (!strcmp(k, "log_level"))            c->log_level = atoi(v);
     /* configurable thresholds */

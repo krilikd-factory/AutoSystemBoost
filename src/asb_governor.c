@@ -1230,7 +1230,6 @@ static unsigned long v44_clamp_1h_now(void) {
     return g_v44_clamp_1h;
 }
 
-
 /* — Cap ownership model.
  * Tracks who effectively controls cpufreq caps. ChatGPT review showed cap
  * desync was rampant: ASB declares X, shell raises to Y, vendor clamps to Z.
@@ -3060,14 +3059,19 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
      * default 0 = unchanged) nudges the effective battery lean upward so Smart
      * leans harder toward economy without touching the learner or the profiles.
      * Applied here, before the safety overrides, so night/idle floors still take
-     * precedence. Bias is clamped to a sane 0..300 so it can't flip Smart fully
-     * to battery on its own — it shifts the lean, the learner still drives the
-     * shape. Only meaningful when confidence is non-trivial (scale the bias by
-     * eff_scale via conf so a cold-start Smart isn't dragged battery-ward before
-     * it has learned anything). */
+     * precedence. Bias is clamped to 0..600 and is confidence-scaled; the final
+     * alpha is still hard-capped at ASB_SMART_ALPHA_BATTERY_MAX_X1000 (1000), so
+     * it can never exceed pure-battery behaviour. The 600 ceiling (was 300)
+     * exists because full-day logs showed that at bias=300 / confidence=1000 an
+     * active-context base alpha (~410) only reached ~710 — short of the 800
+     * "behave like battery" threshold — so the old max couldn't push active use
+     * into the deeper economies even when the user asked for maximum lean. The
+     * learner still drives the shape; this only shifts how far the user can lean.
+     * Only meaningful when confidence is non-trivial (scaled by conf so a
+     * cold-start Smart isn't dragged battery-ward before it has learned). */
     if (g_asb_cfg.smart_battery_bias > 0) {
         int bbias = g_asb_cfg.smart_battery_bias;
-        if (bbias > 300) bbias = 300;
+        if (bbias > 600) bbias = 600;
         /* scale by confidence so low-confidence Smart isn't over-biased */
         int scaled = (bbias * conf) / 1000;
         int biased = (int)g_smart_rt.alpha_battery_x1000 + scaled;
