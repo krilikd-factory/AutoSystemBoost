@@ -236,13 +236,18 @@ lk_emit_full_day_report() {
     fi
     echo ""
     echo "----- WAKE SOURCES (who kept the device awake) -----"
-    if [ -s "$LK_OUT_DIR/wake_sources.txt" ]; then
+    if [ -s "$LK_OUT_DIR/_wakelock_report.txt" ]; then
+      echo "Android batterystats attribution (works without debugfs):"
+      echo "see _wakelock_report.txt for the ranked offenders. Top of it:"
+      sed -n '/TOP PARTIAL WAKELOCK HOLDERS/,/TOP ALARM/p' \
+        "$LK_OUT_DIR/_wakelock_report.txt" 2>/dev/null | head -12
+    elif [ -s "$LK_OUT_DIR/wake_sources.txt" ]; then
       echo "see wake_sources.txt for full detail. DELTA (active time gained"
       echo "during capture) is the actionable part — top offenders:"
       awk '/DELTA over capture/{f=1;next} /^=====/{f=0} f&&NF>=3 && $1!~/^#/{print}' \
         "$LK_OUT_DIR/wake_sources.txt" | head -12
     else
-      echo "wakeup_sources not readable on this device (no debugfs access)."
+      echo "wakeup attribution unavailable (no debugfs and no dumpsys)."
     fi
     echo ""
     echo "----- READING THIS -----"
@@ -325,6 +330,11 @@ while : ; do
     lk_verify_caps
     lk_emit_phase_summary 2>/dev/null || true
     lk_emit_full_day_report 2>/dev/null || true
+    # Android-side wakelock attribution snapshot each hour (works without
+    # debugfs). Dumps + refreshes the parsed offenders report, then resets the
+    # batterystats window so the next hour is attributed cleanly.
+    lk_wakelock_batterystats_dump 2>/dev/null || true
+    lk_wakelock_batterystats_reset 2>/dev/null || true
     _last_snapshot=$_now
   fi
 

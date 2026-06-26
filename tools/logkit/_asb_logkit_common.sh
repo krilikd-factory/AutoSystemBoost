@@ -730,29 +730,153 @@ lk_wakelock_kernel_delta() {
 }
 
 # Android-side wakelock + alarm attribution via batterystats/dumpsys. This is
+# the per-APP view (the kernel sources above are per-driver) and — crucially —
+# it works with NO debugfs access, which is the common case on OP15 where
+# /sys/kernel/debug/wakeup_sources isn't readable. Call _reset at the start and
+# _dump at the end so the window is just the capture.
 lk_wakelock_batterystats_reset() {
   lk_have dumpsys || return 0
   dumpsys batterystats --reset >/dev/null 2>&1 || true
+  # record when the window opened so the report can show elapsed
+  date +%s > "$LK_OUT_DIR/.bstats_reset_epoch" 2>/dev/null || true
 }
+
+# Capture the raw batterystats once to a file, then parse several distinct
+# sections out of that single snapshot (cheaper than calling dumpsys repeatedly
+# and keeps all views time-consistent).
 lk_wakelock_batterystats_dump() {
   lk_have dumpsys || return 0
+  _raw="$LK_OUT_DIR/.bstats_raw.txt"
+  dumpsys batterystats 2>/dev/null > "$_raw" || return 0
+  _self="$LK_WAKELOCK_NAME"
   {
     echo "===== batterystats wakelock/alarm attribution $(date '+%Y-%m-%d %H:%M:%S') ====="
-    echo "# --- top wakelocks (app-held) ---"
-    # The "Wake lock" lines under the per-uid section carry realtime totals.
-    dumpsys batterystats 2>/dev/null \
-      | grep -iE "Wake lock|Wakelock" \
-      | grep -ivE "$LK_WAKELOCK_NAME" \
-      | sed 's/^[[:space:]]*//' \
-      | head -40
+    if [ -r "$LK_OUT_DIR/.bstats_reset_epoch" ]; then
+      _re=$(cat "$LK_OUT_DIR/.bstats_reset_epoch" 2>/dev/null)
+      _now=$(date +%s)
+      echo "# window: $(( (_now - _re) / 60 )) min since reset"
+    fi
     echo ""
-    echo "# --- top alarms (wakeup count) ---"
-    dumpsys batterystats 2>/dev/null \
-      | grep -iE "Alarm|\*walarm\*|wakeups" \
+
+    # 1) Partial wakelocks held by apps (the "Wake lock <name> realtime" lines).
+    #    These carry the total time each app held a partial wakelock during the
+    #    window — the single best signal for "what kept the CPU awake".
+    echo "# --- partial wakelocks (app-held, by realtime) ---"
+    grep -iE "Wake lock|Wakelock" "$_raw" 2>/dev/null \
+      | grep -ivE "$_self" \
       | sed 's/^[[:space:]]*//' \
+      | grep -iE "realtime|[0-9]+m[0-9]+s|[0-9]+s [0-9]" \
       | head -30
     echo ""
+
+    # 2) Alarms / scheduled wakeups (the *walarm* and "wakeup" lines). High
+    #    wakeup counts = an app polling on a timer; a frequent offender for
+    #    standby drain.
+    echo "# --- alarm wakeups (by count) ---"
+    grep -iE "\*walarm\*|Alarm [0-9]|wakeups|: [0-9]+ wakeup" "$_raw" 2>/dev/null \
+      | sed 's/^[[:space:]]*//' \
+      | head -25
+    echo ""
+
+    # 3) Top "Estimated power use" by UID if present (newer OOS includes a
+    #    computed mAh breakdown — directly names the heaviest apps).
+    echo "# --- estimated power use (mAh, if reported) ---"
+    awk '/Estimated power use/{f=1} f{print} /^$/{if(f)c++; if(c>=2)f=0}' "$_raw" 2>/dev/null \
+      | grep -iE "uid|mah|screen|cpu|wifi|cell|gps|[0-9]+\.[0-9]+" \
+      | grep -iv "$_self" \
+      | head -25
+    echo ""
+
+    # 4) Job scheduler activity (background jobs that wake the device).
+    echo "# --- top jobs (by count/time) ---"
+    grep -iE "Job [0-9]|JobScheduler|: [0-9]+ jobs" "$_raw" 2>/dev/null \
+      | sed 's/^[[:space:]]*//' \
+      | head -15
+    echo ""
   } >> "$LK_OUT_DIR/wake_sources.txt"
+
+  # Build a compact, ranked ACTIONABLE report from the same snapshot so the user
+  # (and we) don't have to wade through the raw dump.
+  lk_wakelock_emit_report "$_raw"
+  rm -f "$_raw" 2>/dev/null || true
+}
+
+# Parse the raw batterystats into a ranked offenders report. Pure text parsing,
+# no jq/python dependency. The goal: name the top wakelock holders and alarm
+# sources with numbers, so an ASB prop/standby change can target a real culprit.
+lk_wakelock_emit_report() {
+  _raw="$1"
+  [ -r "$_raw" ] || return 0
+  _self="$LK_WAKELOCK_NAME"
+  _out="$LK_OUT_DIR/_wakelock_report.txt"
+  {
+    echo "==================================================================="
+    echo " WAKELOCK / WAKEUP REPORT (Android batterystats) — $(date '+%F %T')"
+    echo "==================================================================="
+    echo ""
+    echo "Source: dumpsys batterystats (works without kernel debugfs)."
+    echo "This names the apps/components that kept the device awake during the"
+    echo "capture window, so ASB standby tuning can target a real offender."
+    echo ""
+
+    echo "----- TOP PARTIAL WAKELOCK HOLDERS -----"
+    echo "(app held a partial wakelock = CPU couldn't fully sleep)"
+    # Lines look like: "Wake lock <pkg> <name>: <time> realtime" or with "partial".
+    # Extract a time token (e.g. 1m23s456ms / 12s / 4h2m) and the owner, sort by
+    # a normalised seconds value.
+    grep -iE "Wake lock|partial" "$_raw" 2>/dev/null \
+      | grep -ivE "$_self" \
+      | sed 's/^[[:space:]]*//' \
+      | awk '
+        {
+          line=$0;
+          # find a duration like 1h2m3s / 4m5s / 6s / 700ms
+          secs=0; matched=0;
+          if (match(line, /[0-9]+h[0-9]+m[0-9]+s/)) { matched=1; t=substr(line,RSTART,RLENGTH); }
+          else if (match(line, /[0-9]+m[0-9]+s/))   { matched=1; t=substr(line,RSTART,RLENGTH); }
+          else if (match(line, /[0-9]+s[0-9]+ms/))  { matched=1; t=substr(line,RSTART,RLENGTH); }
+          else if (match(line, /[0-9]+s/))          { matched=1; t=substr(line,RSTART,RLENGTH); }
+          if (!matched) next;
+          # parse t into seconds
+          tmp=t; h=0;m=0;s=0;
+          if (match(tmp,/[0-9]+h/)){h=substr(tmp,RSTART,RLENGTH-1)+0}
+          if (match(tmp,/[0-9]+m/)){m=substr(tmp,RSTART,RLENGTH-1)+0}
+          if (match(tmp,/[0-9]+s/)){s=substr(tmp,RSTART,RLENGTH-1)+0}
+          secs=h*3600+m*60+s;
+          if (secs<=0) next;
+          printf "%08d|%s\n", secs, line;
+        }' \
+      | sort -rn | head -15 \
+      | awk -F'|' '{printf "  %6ds  %s\n", substr($1,1)+0, $2}'
+    echo ""
+
+    echo "----- TOP ALARM / WAKEUP SOURCES -----"
+    echo "(scheduled wakeups = app polling on a timer)"
+    grep -iE "\*walarm\*|wakeups|Alarm [0-9]" "$_raw" 2>/dev/null \
+      | sed 's/^[[:space:]]*//' \
+      | awk '
+        {
+          # find a wakeup/alarm count like "123 wakeups" or ": 45 alarms"
+          n=0;
+          if (match($0,/[0-9]+ wakeup/))  { n=substr($0,RSTART,RLENGTH); sub(/ wakeup.*/,"",n); n+=0; }
+          else if (match($0,/[0-9]+ alarm/)){ n=substr($0,RSTART,RLENGTH); sub(/ alarm.*/,"",n); n+=0; }
+          else if (match($0,/: [0-9]+/))   { n=substr($0,RSTART,RLENGTH); sub(/: /,"",n); n+=0; }
+          if (n<=0) next;
+          printf "%08d|%s\n", n, $0;
+        }' \
+      | sort -rn | head -15 \
+      | awk -F'|' '{printf "  %5d  %s\n", substr($1,1)+0, $2}'
+    echo ""
+
+    echo "----- HOW TO READ -----"
+    echo "* A non-system app near the top of either list that you don't need"
+    echo "  running in the background is a candidate for restriction (or an ASB"
+    echo "  standby-bucket / wakelock-throttle entry)."
+    echo "* System wakelocks (e.g. *alarm*, NetworkStats, AlarmManager) are"
+    echo "  usually unavoidable; focus on named third-party packages."
+    echo "* Cross-check the timestamp against phase_timeline.txt — wakeups during"
+    echo "  'sleep'/'idle' phases are the ones that actually cost standby battery."
+  } > "$_out"
 }
 
 # Live "what is awake right now" — current partial wakelocks held and the power
