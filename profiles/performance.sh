@@ -85,4 +85,6 @@ UX_RAM_EXPAND=0
 UX_LOW_HEAT=0
 WIFI_PM_MODE=off
 WIFI_TXQLEN=3072
-WIFI_COUNTRY=IT
+# WIFI_COUNTRY: empty = derive from SIM/operator country (the correct default).
+# Set a 2-letter ISO code here only to FORCE a regulatory domain (manual override).
+WIFI_COUNTRY=
