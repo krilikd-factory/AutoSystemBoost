@@ -114,3 +114,6 @@ region_allow_locale=0
 charge_assist_alpha_max=450
 charge_temp_warn_dC=390
 charge_temp_hot_dC=415
+gpu_idle_trim_pct=12
+gpu_idle_trim_floor=55
+gpu_video_busy_min=40
