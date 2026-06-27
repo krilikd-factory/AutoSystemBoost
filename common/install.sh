@@ -1675,6 +1675,14 @@ EOF
 } > "$MODPATH/install_summary.txt" 2>/dev/null
 cp -f "$MODPATH/install_summary.txt" /data/adb/asb/install_summary.txt 2>/dev/null || true
 
+# Device discovery (facts only — writes /data/adb/asb/device_caps.env, changes
+# no tunable). Captures the real CPU topology, GPU back-end, thermal zone count
+# and subsystem path presence so asbdiag can show them and future per-device
+# tuning has a stable, inspectable input. Safe to run at every install.
+if [ -f "$MODPATH/tools/asb_discover.sh" ]; then
+  sh "$MODPATH/tools/asb_discover.sh" >/dev/null 2>&1 || true
+fi
+
 echo 0 > "/data/adb/asb/vendor_boot_counter" 2>/dev/null
 rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
 
@@ -2387,6 +2395,10 @@ EOF
 
 	if [ -f "$MODPATH/system/bin/asb" ]; then
 	  chmod 0755 "$MODPATH/system/bin/asb"
+	fi
+
+	if [ -f "$MODPATH/tools/asb_discover.sh" ]; then
+	  chmod 0755 "$MODPATH/tools/asb_discover.sh"
 	fi
 
 	# Diagnostic launcher (short command: `su -c asbdiag`) + the script it runs.
