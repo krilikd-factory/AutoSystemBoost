@@ -52,10 +52,3 @@ A full pass of tuning grounded in real full-day OP15 logs, aimed squarely at hea
 - Re-added the AEC (echo cancellation) and NS (noise suppression) pre-processing effects to the OP15 (canoe/alor) effects config, alongside the volume-listener restoration above, matching the stock voice pipeline.
 
 > Cumulative — nothing removed. All settings and learned data carry across the update.
-
----
-
-## V53
-
-- **LSPosed compatibility.** Removed the USAP app-process-pool properties (`dalvik.vm.usap_pool_enabled`, `persist.sys.dynamic_usap_enabled`, `persist.sys.usap_pool_enabled`). Force-enabling the unspecialized app-process pool made processes fork past the zygote hook point, which sent **LSPosed into safe mode**. Confirmed on OnePlus 13: with them gone, LSPosed and ASB run together cleanly.
-- **WebUI learner readout.** The learner no longer shows "learning 0%" after a reboot. Session history was already restored on boot, but the displayed confidence was only written on a live session commit, so it sat at 0 until the next session. It's now also seeded on load from the highest-confidence persisted bucket, so the readout stays continuous across reboots.
