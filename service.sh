@@ -177,6 +177,10 @@ asb_migrate_governor_conf() {
 }
 asb_migrate_governor_conf
 
+# Refresh device facts at boot (read-only; rewrites /data/adb/asb/device_caps.env
+# so it tracks kernel/topology changes between installs). No tunable is touched.
+[ -f "$MODDIR/tools/asb_discover.sh" ] && sh "$MODDIR/tools/asb_discover.sh" >/dev/null 2>&1 &
+
 (
   until [ "$(getprop sys.boot_completed)" = "1" ]; do
     sleep 5
