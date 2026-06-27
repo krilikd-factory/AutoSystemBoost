@@ -89,7 +89,64 @@ if [ -z "$MODDIR" ]; then
 fi
 
 # =====================================================================
-SEC "0. MODULE STATE  (running, mounts, governor)"
+# EFFECTIVE STATE — the computed source-of-truth summary.
+# This block answers, in one place, the questions that are easy to get
+# wrong by reading raw files: is Smart actually on (and from where), who
+# owns the CPU caps right now, what the autonomy dial resolves to, and
+# which root manager the module is treating as canonical. Everything here
+# is DERIVED (read-only) so nobody has to infer it from governor.conf —
+# e.g. smart_mode_enabled in the config is only a shipped fallback; the
+# real switch is the file-flag, shown explicitly below.
+# =====================================================================
+SEC "0. EFFECTIVE STATE  (computed source-of-truth — read this first)"
+# --- Smart enable: file-flag is truth, config is fallback ---
+_sm_flag="$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)"
+_sm_cfg="$(cfg smart_mode_enabled)"
+if [ -n "$_sm_flag" ]; then
+  _sm_eff="$_sm_flag"; _sm_src="file-flag (/data/adb/asb/smart_mode_enabled)"
+else
+  _sm_eff="${_sm_cfg:-0}"; _sm_src="config-fallback (governor.conf, no file-flag yet)"
+fi
+[ "$_sm_eff" = "1" ] && _sm_word="ON" || _sm_word="OFF"
+P "  smart_mode_effective : $_sm_word  ($_sm_eff)"
+P "  smart_mode_source    : $_sm_src"
+[ -n "$_sm_cfg" ] && [ -n "$_sm_flag" ] && [ "$_sm_cfg" != "$_sm_flag" ] && \
+  NOTE "config says $_sm_cfg but the file-flag ($_sm_flag) wins — config value is just the shipped default."
+# --- active profile + who owns the CPU caps right now ---
+_prof="$(cat "$MODDIR/current_profile" 2>/dev/null || gp persist.asb.profile)"
+_prof="${_prof:-<unknown>}"
+P "  active_profile       : $_prof"
+if [ "$_sm_eff" = "1" ] || [ "$_prof" = "smart" ]; then
+  _cap_owner="smart (governor/FSM synthesises caps from profile_bounds rails)"
+  _fsm_active=1; _manual_active=0; _mode="smart"
+else
+  case "$_prof" in
+    performance) _cap_owner="manual (service.sh — performance leaves clusters uncapped)" ;;
+    *)           _cap_owner="manual (service.sh per-device % of cpuinfo_max — _P_CPUCAP_*)" ;;
+  esac
+  _fsm_active=0; _manual_active=1; _mode="manual"
+fi
+P "  cpu_cap_owner        : $_cap_owner"
+P "  effective_profile_mode: $_mode    (fsm_bounds_active=$_fsm_active manual_caps_active=$_manual_active)"
+NOTE "thermal override (writer/governor) can clamp on top of EITHER owner when the SoC runs hot."
+# --- autonomy dial: smart_battery_bias resolves to an alpha lean ---
+_bias="$(cfg smart_battery_bias)"; _bias="${_bias:-0}"
+if [ "$_mode" = "smart" ] && [ "$_bias" -gt 0 ] 2>/dev/null; then
+  P "  smart_battery_bias   : $_bias  (battery-lean nudge; scaled by learner confidence, hard-capped at pure-battery)"
+  [ "$_bias" -ge 400 ] 2>/dev/null && NOTE "bias >= 400 can pin active-use alpha into battery-like behaviour — Smart then rides the BATTERY rail in profile_bounds.conf."
+else
+  P "  smart_battery_bias   : $_bias  (0 = no extra lean)"
+fi
+# --- canonical root manager (single detection, mirrors the module's own logic) ---
+_rm="other"
+[ -d /data/adb/ap ] && _rm="apatch"
+[ -d /data/adb/ksu ] && _rm="ksu"
+[ -f /data/adb/magisk/magisk ] && _rm="magisk-like"
+P "  root_manager         : $_rm"
+[ "$_rm" = "apatch" ] && NOTE "APatch path: OP12 camera handling is scoped specifically for APatch (real /odm mount)."
+
+# =====================================================================
+SEC "0b. MODULE STATE  (running, mounts, governor)"
 P "  module flags:"
 for _fl in disable remove update skip_mount; do
   [ -f "$MODDIR/$_fl" ] && P "    - $_fl present (!!)" || P "    - $_fl absent (ok)"
