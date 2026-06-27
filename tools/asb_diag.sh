@@ -146,6 +146,26 @@ P "  root_manager         : $_rm"
 [ "$_rm" = "apatch" ] && NOTE "APatch path: OP12 camera handling is scoped specifically for APatch (real /odm mount)."
 
 # =====================================================================
+SEC "0a. DEVICE CAPABILITIES  (discovered facts — from device_caps.env)"
+_caps="/data/adb/asb/device_caps.env"
+if [ -f "$_caps" ]; then
+  _cget() { grep -E "^$1=" "$_caps" 2>/dev/null | head -1 | sed 's/^[^=]*=//'; }
+  P "  soc / codename       : $(_cget soc_platform) / $(_cget codename)  ($(_cget model))"
+  P "  android api / kernel : $(_cget android_api) / $(_cget kernel)"
+  P "  cpu policies         : $(_cget cpu_policy_count) clusters [$(_cget cpu_policy_list)]"
+  for _pid in $(_cget cpu_policy_list); do
+    _hm="$(_cget cpu_policy${_pid}_hwmax)"; _nf="$(_cget cpu_policy${_pid}_nfreq)"
+    P "    - policy${_pid}: hw_max=${_hm} kHz, ${_nf} freq steps"
+  done
+  P "  gpu backend          : $(_cget gpu_backend)"
+  P "  thermal zones        : $(_cget thermal_zone_count)"
+  P "  paths: odm_camera=$(_cget has_odm_camera_dir) vendor_audio=$(_cget has_vendor_audio_dir) wlan_txqlen=$(_cget has_wlan_txqlen)"
+  NOTE "These are raw discovered facts. Per-device bound synthesis (deriving caps from the OP15 reference ratios) is a separate, later stage that reads this file."
+else
+  P "  (device_caps.env not present yet — run a reinstall, or it writes on next boot)"
+fi
+
+# =====================================================================
 SEC "0b. MODULE STATE  (running, mounts, governor)"
 P "  module flags:"
 for _fl in disable remove update skip_mount; do
