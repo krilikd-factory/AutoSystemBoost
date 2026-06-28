@@ -1855,7 +1855,10 @@ const CFG_ITEMS = [
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
     desc:'Performance shortens long-press/multi-tap windows for faster response. OFF if holds misfire.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
-    desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage Animation Scales is ON.' }
+    desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage Animation Scales is ON.' },
+  // --- Advanced / experimental ---
+  { key:'device_bounds_override', type:'bool', def:'0', name:'Device-Adaptive Bounds (experimental)',
+    desc:'ON: the governor uses frequency ceilings computed at install for your hardware (scaled from the OP15 reference). On OP15 these equal the shipped values \\u2014 no behaviour change. On other devices this is not yet field-validated. OFF = shipped ceilings.' }
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
