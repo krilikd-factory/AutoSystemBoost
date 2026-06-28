@@ -18,7 +18,14 @@
 :root {
   --window-inset-top: env(safe-area-inset-top, 0px);
   --window-inset-bottom: env(safe-area-inset-bottom, 0px);
-  
+
+  /* Unified page-transition motion. One duration + one easing for every
+     screen change so Main↔Live and Live↔Config feel identical. The curve is a
+     gentle easeInOutCubic (slow-in, slow-out) and the duration is a touch
+     longer than before, which is what removes the "jerky" feel. */
+  --page-anim-dur: 0.42s;
+  --page-anim-ease: cubic-bezier(0.45, 0, 0.25, 1);
+
   --bg: #000000;
   --surface: rgba(255,255,255,0.04);
   --surface-hover: rgba(255,255,255,0.06);
@@ -693,15 +700,20 @@ body::before, body::after {
   box-shadow: 0 0 20px rgba(255,26,26,0.1); 
 }
 
-.page > * { 
-  animation: fadeSlideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both; 
+/* Content stagger (children fade up on first paint). Restrict it to the Main
+   page only: live-page / config-page already animate via the horizontal slide,
+   and running this stagger on their children at the same time was a second,
+   competing animation — a real source of the "jerky" feel. The :not() keeps it
+   off both overlay screens. */
+.page:not(.live-page) > * {
+  animation: fadeSlideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
-.page > *:nth-child(1) { animation-delay: 0.05s; }
-.page > *:nth-child(2) { animation-delay: 0.1s; }
-.page > *:nth-child(3) { animation-delay: 0.15s; }
-.page > *:nth-child(4) { animation-delay: 0.2s; }
-.page > *:nth-child(5) { animation-delay: 0.25s; }
+.page:not(.live-page) > *:nth-child(1) { animation-delay: 0.05s; }
+.page:not(.live-page) > *:nth-child(2) { animation-delay: 0.1s; }
+.page:not(.live-page) > *:nth-child(3) { animation-delay: 0.15s; }
+.page:not(.live-page) > *:nth-child(4) { animation-delay: 0.2s; }
+.page:not(.live-page) > *:nth-child(5) { animation-delay: 0.25s; }
 
 @keyframes fadeSlideUp { 
   from { opacity: 0; transform: translateY(20px); } 
@@ -765,8 +777,8 @@ body::before, body::after {
   padding-bottom: calc(var(--window-inset-bottom) + 22px);
   box-sizing: border-box;
   transform: translateX(-50%) translateX(120%);
-  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
-              visibility 0s linear 0.28s;
+  transition: transform var(--page-anim-dur) var(--page-anim-ease),
+              visibility 0s linear var(--page-anim-dur);
   overflow-y: hidden;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -784,14 +796,28 @@ body::before, body::after {
   transform: translateX(-50%) translateX(0);
   pointer-events: auto;
   visibility: visible;
-  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+  transition: transform var(--page-anim-dur) var(--page-anim-ease),
               visibility 0s linear 0s;
 }
 body.live-active {
   overflow: hidden;
 }
+/* Main page fades and eases back slightly (no horizontal translate — it's a
+   position:relative page, so sliding it could shift layout) while a live-page
+   slides over it. Same duration/curve as every other transition so the whole
+   set feels uniform and smooth. Kept mounted (opacity, not visibility) so the
+   fade actually animates instead of snapping. */
 body.live-active .page:not(.live-page) {
-  visibility: hidden;
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity var(--page-anim-dur) var(--page-anim-ease),
+              transform var(--page-anim-dur) var(--page-anim-ease);
+  pointer-events: none;
+}
+.page:not(.live-page) {
+  transform-origin: center center;
+  transition: opacity var(--page-anim-dur) var(--page-anim-ease),
+              transform var(--page-anim-dur) var(--page-anim-ease);
 }
 .live-metrics {
   width: 100%;
@@ -844,6 +870,37 @@ body.live-active .page:not(.live-page) {
 /* Smart Mode section divider: compact on Live page */
 .live-page .sec { margin-top: 14px !important; margin-bottom: 6px !important; }
 .config-page .sec { margin-top: 0 !important; }
+/* Config sits one layer ABOVE Live so the Live↔Config transition is a clean
+   slide of Config over Live, instead of two same-z pages fighting (which made
+   that specific transition feel janky). Config keeps the same horizontal slide
+   timing as the Main↔Live transition the user likes.
+
+   Spatial model is  Main | Live | Config  (left→right). Moving Live→Config goes
+   RIGHTWARD: Config should enter from the right while Live slides out to the
+   LEFT — like advancing a page — instead of both sliding from the right at once
+   (which is what made it feel wrong). We drive Live's leftward exit off a body
+   flag set only while Config is open. */
+#configPage {
+  z-index: 120;
+}
+#configPage.open {
+  transform: translateX(-50%) translateX(0);
+}
+/* While Config is open *after coming from Live*, push the still-mounted Live
+   page out to the left so the two move as a coherent left/right pair. Only set
+   on the Live→Config path (not Main→Config, where Live was never open). */
+/* When Config opens over Live, Live fades and eases back underneath — exactly
+   the same motion Main uses under Live — so Live↔Config is identical to
+   Main↔Live. Config (z above Live) slides in from the right; Live fades. Only
+   applies when Live is actually open (.open), so Main→Config doesn't flash an
+   empty Live page. */
+body.config-active #livePage.open {
+  opacity: 0;
+  transform: translateX(-50%) scale(0.97);
+  transition: opacity var(--page-anim-dur) var(--page-anim-ease),
+              transform var(--page-anim-dur) var(--page-anim-ease);
+  visibility: visible;
+}
 
 /* Smart Mode info banner — shows under Profile row on Live page */
 .smart-banner {
@@ -1481,7 +1538,7 @@ body.live-active .page:not(.live-page) {
       <div class="dot"></div>
       <span class="status-label">Profile:&nbsp;</span>
       <span class="status-val" id="cfgCurProfile">balanced</span>
-      <button class="live-chip" id="cfgBackChip" onclick="closeConfigPage()" aria-label="Back to main">
+      <button class="live-chip" id="cfgBackChip" onclick="closeConfigPage(true)" aria-label="Back to main">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6"></path>
         </svg>
@@ -1803,11 +1860,11 @@ function closeLivePage() {
 
 window.addEventListener('popstate', () => {
   if (_liveOpen) closeLivePage();
-  if (_cfgOpen) closeConfigPage();
+  if (_cfgOpen) closeConfigPage(true);
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && _liveOpen) closeLivePage();
-  if (e.key === 'Escape' && _cfgOpen) closeConfigPage();
+  if (e.key === 'Escape' && _cfgOpen) closeConfigPage(true);
 });
 
 /* ── Config page ─────────────────────────────────────────────── */
@@ -2070,17 +2127,28 @@ function openConfigPage() {
   } catch(e) {}
   p.classList.add('open');
   document.body.classList.add('live-active');
+  document.body.classList.add('config-active');
   p.setAttribute('aria-hidden', 'false');
   p.scrollTop = 0;
   _cfgOpen = true;
   cfgLoad();
 }
 
-function closeConfigPage() {
+function closeConfigPage(toMain) {
   const p = _el('configPage');
   if (!p) return;
   p.classList.remove('open');
-  document.body.classList.remove('live-active');
+  document.body.classList.remove('config-active');
+  // Two exit paths:
+  //  - swipe-right from Config when Live is mounted underneath: just drop
+  //    config-active and Live fades straight back in (no tear-down → no double
+  //    animation). We keep live-active so Main stays faded behind Live.
+  //  - Back button / Escape (toMain=true), or no Live underneath: go all the
+  //    way to Main, tearing Live down and un-fading Main.
+  if (toMain || !_liveOpen) {
+    if (_liveOpen && typeof closeLivePage === 'function') closeLivePage();
+    document.body.classList.remove('live-active');
+  }
   p.setAttribute('aria-hidden', 'true');
   _cfgOpen = false;
 }
@@ -2118,12 +2186,19 @@ function closeConfigPage() {
     var haveLive = (typeof openLivePage === 'function');
     var haveCfg  = (typeof openConfigPage === 'function');
     if (_cfgOpen) {
-      // rightmost screen: swipe right -> back to Live (middle)
-      if (right) { closeConfigPage(); if (haveLive) openLivePage(); }
+      // rightmost screen: swipe right -> back to Live (middle). If Live is
+      // mounted underneath (Live→Config path) closeConfigPage just fades it
+      // back in; if Config was reached from Main, fall through to Main.
+      if (right) {
+        if (_liveOpen) { closeConfigPage(false); }
+        else { closeConfigPage(true); }
+      }
     } else if (_liveOpen) {
-      // middle screen: right -> Main, left -> Config
+      // middle screen: right -> Main, left -> Config. For Live->Config we keep
+      // Live mounted underneath; the config-active CSS fades Live back while
+      // Config slides in from the right — the same motion as Main->Live.
       if (right) { closeLivePage(); }
-      else if (haveCfg) { closeLivePage(); openConfigPage(); }
+      else if (haveCfg) { openConfigPage(); }
     } else {
       // leftmost screen (Main): left -> Live
       if (!right && haveLive) openLivePage();
