@@ -187,17 +187,29 @@ static int asb_device_bounds_apply_kv(const char *key, long val) {
     if (val <= 0 || val > 6000000) return 0;
 
     struct { const char *name; int prof; int is_ceil; int field; int slot; } map[] = {
-        /* field: 0=cpu_max, 1=cpu_min ; slot: 0=little,1=big */
+        /* field: 0=cpu_max, 1=cpu_min ; slot: 0=little, 1=big/mid, 2=prime.
+         * On a 2-cluster SoC (OP15/OP13) the synthesis emits *_BIG -> slot 1
+         * (which is prime there). On a 3/4-cluster SoC (OP12) it emits *_MID ->
+         * slot 1 (the strongest middle, which the writer also mirrors onto the
+         * other middles) and *_PRIME -> slot 2 (the last/prime cluster, which is
+         * otherwise left at the compiled 0 = unmanaged). Only one of BIG/MID is
+         * ever emitted per device, so sharing slot 1 is unambiguous. */
         { "BATTERY_CPU_MAX_LITTLE",     PROFILE_BATTERY,     1, 0, 0 },
         { "BATTERY_CPU_MAX_BIG",        PROFILE_BATTERY,     1, 0, 1 },
+        { "BATTERY_CPU_MAX_MID",        PROFILE_BATTERY,     1, 0, 1 },
+        { "BATTERY_CPU_MAX_PRIME",      PROFILE_BATTERY,     1, 0, 2 },
         { "BATTERY_CPU_CAP_LITTLE",     PROFILE_BATTERY,     0, 0, 0 },
         { "BATTERY_CPU_CAP_BIG",        PROFILE_BATTERY,     0, 0, 1 },
         { "BALANCED_CPU_MAX_LITTLE",    PROFILE_BALANCED,    1, 0, 0 },
         { "BALANCED_CPU_MAX_BIG",       PROFILE_BALANCED,    1, 0, 1 },
+        { "BALANCED_CPU_MAX_MID",       PROFILE_BALANCED,    1, 0, 1 },
+        { "BALANCED_CPU_MAX_PRIME",     PROFILE_BALANCED,    1, 0, 2 },
         { "BALANCED_CPU_CAP_LITTLE",    PROFILE_BALANCED,    0, 0, 0 },
         { "BALANCED_CPU_CAP_BIG",       PROFILE_BALANCED,    0, 0, 1 },
         { "PERFORMANCE_CPU_MAX_LITTLE", PROFILE_PERFORMANCE, 1, 0, 0 },
         { "PERFORMANCE_CPU_MAX_BIG",    PROFILE_PERFORMANCE, 1, 0, 1 },
+        { "PERFORMANCE_CPU_MAX_MID",    PROFILE_PERFORMANCE, 1, 0, 1 },
+        { "PERFORMANCE_CPU_MAX_PRIME",  PROFILE_PERFORMANCE, 1, 0, 2 },
     };
     for (unsigned i = 0; i < sizeof(map)/sizeof(map[0]); i++) {
         if (strcmp(key, map[i].name) != 0) continue;
@@ -235,16 +247,22 @@ static int asb_load_device_bounds_override(int enabled,
         applied += asb_device_bounds_apply_kv(key, val);
     }
     fclose(f);
-    /* Post-validate: never let an override break MIN<=CAP<=MAX. If a profile's
-     * floor.cpu_max now exceeds ceil.cpu_max for any slot, revert that profile. */
+    /* Post-validate the invariant floor.cpu_max <= ceil.cpu_max for every slot.
+     * A per-device override may legitimately push a ceiling BELOW the compiled
+     * floor (e.g. a smaller SoC's little ceiling lands under OP15's little
+     * floor). In that case we clamp the floor DOWN to the new ceiling rather
+     * than discarding the override — the override is the intent, the floor is
+     * just the DEEP_IDLE start and must not exceed it. Only if a ceiling itself
+     * became non-positive (a real corruption) do we revert that profile. */
     for (int p = 0; p < 3; p++) {
-        for (int s = 0; s < 2; s++) {
-            if (g_profile_bounds[p].floor.cpu_max[s] > g_profile_bounds[p].ceil.cpu_max[s] &&
-                g_profile_bounds[p].ceil.cpu_max[s] > 0) {
-                g_profile_bounds[p] = defaults[p];  /* revert this profile wholesale */
-                break;
-            }
+        int corrupt = 0;
+        for (int s = 0; s < 3; s++) {
+            int ce = g_profile_bounds[p].ceil.cpu_max[s];
+            int fl = g_profile_bounds[p].floor.cpu_max[s];
+            if (ce < 0) { corrupt = 1; break; }
+            if (ce > 0 && fl > ce) g_profile_bounds[p].floor.cpu_max[s] = ce;  /* clamp floor down */
         }
+        if (corrupt) g_profile_bounds[p] = defaults[p];
     }
     return applied;
 }
