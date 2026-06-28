@@ -752,12 +752,39 @@ asb_perf_patch_gameconfig() {
 #   gRuntimePMDelay        3000 -> 2000   power: quicker runtime-PM idle entry
 #   gActiveMaxChannelTime    45 -> 40     latency: shorter active-scan dwell
 #   gBusBandwidthVeryHighThreshold 15000->12000  throughput: engage high-perf bus sooner
+# asb_clamp_down_key FILE KEY CEILING — set KEY=CEILING only if the live value
+# is numeric AND strictly greater than CEILING. If the key is absent or already
+# at/below the ceiling, the file is left untouched (so a device that ships a
+# better value keeps it). Pure-integer compare; non-numeric values are skipped.
+asb_clamp_down_key() {
+  _ck_f="$1"; _ck_k="$2"; _ck_ceil="$3"
+  [ -f "$_ck_f" ] || return 0
+  _ck_cur=$(grep -E "^${_ck_k}=" "$_ck_f" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
+  case "$_ck_cur" in
+    ''|*[!0-9]*) return 0 ;;   # absent or non-numeric -> leave stock
+  esac
+  if [ "$_ck_cur" -gt "$_ck_ceil" ] 2>/dev/null; then
+    sed -i "s/^${_ck_k}=.*/${_ck_k}=${_ck_ceil}/" "$_ck_f" 2>/dev/null || true
+  fi
+}
+
 asb_patch_one_wcnss() {
   _f="$1"; [ -f "$_f" ] || return 0
-  sed -i 's/^gRuntimePMDelay=.*/gRuntimePMDelay=2000/'                       "$_f" 2>/dev/null || true
-  sed -i 's/^gActiveMaxChannelTime=.*/gActiveMaxChannelTime=40/'            "$_f" 2>/dev/null || true
-  sed -i 's/^gBusBandwidthVeryHighThreshold=.*/gBusBandwidthVeryHighThreshold=12000/' "$_f" 2>/dev/null || true
+  # Device-safe patching: these keys are tuned by COMPARING the device's own
+  # stock value and only moving it in the beneficial direction. Forcing a fixed
+  # value blindly is wrong across devices — e.g. gRuntimePMDelay ships 3000 on
+  # OP15 (canoe) but 500 on OP12/OP13 (pineapple/sun); rewriting to 2000 helps
+  # OP15 (3000->2000 = quicker runtime-PM idle, saves power) but would HURT
+  # OP12/OP13 (500->2000 = 4x slower idle entry). So we clamp toward the target
+  # and never push a device that already sits past it.
+  #   gRuntimePMDelay              : lower = quicker idle  -> cap at <= 2000
+  #   gActiveMaxChannelTime        : lower = shorter dwell -> cap at <= 40
+  #   gBusBandwidthVeryHighThreshold: lower = engage sooner-> cap at <= 12000
+  asb_clamp_down_key "$_f" gRuntimePMDelay 2000
+  asb_clamp_down_key "$_f" gActiveMaxChannelTime 40
+  asb_clamp_down_key "$_f" gBusBandwidthVeryHighThreshold 12000
 }
+
 
 asb_patch_wifi_inplace() {
   # $1 = human label
