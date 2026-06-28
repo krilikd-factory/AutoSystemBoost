@@ -154,6 +154,16 @@ jobs:
             install -m 0755 tools/asb_smart_mode.sh "$PKG_REL/tools/asb_smart_mode.sh"
           fi
 
+          # Device-adaptive layer (must ship so install/boot can run them):
+          #   asb_discover.sh        — writes device_caps.env (facts)
+          #   asb_synthesize_bounds.sh — writes device_bounds.env (OP15-ratio bounds)
+          for _t in asb_discover.sh asb_synthesize_bounds.sh; do
+            if [ -f "tools/$_t" ]; then
+              mkdir -p "$PKG_REL/tools"
+              install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"
+            fi
+          done
+
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
           ZIP_REL="ASB-${ASB_VER}.zip"
           rm -f "$ZIP_REL"
@@ -188,6 +198,8 @@ jobs:
             "config/profile_bounds.generated.sh" \
             "config/governor.conf.shipped" \
             "tools/asb_smart_mode.sh" \
+            "tools/asb_discover.sh" \
+            "tools/asb_synthesize_bounds.sh" \
             "webroot/index.html"; do
             unzip -l "$ZIP_REL" | grep -q "$required" \
               || { echo "ERROR: $ZIP_REL missing $required"; exit 1; }
