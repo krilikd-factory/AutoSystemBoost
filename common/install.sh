@@ -1683,6 +1683,16 @@ if [ -f "$MODPATH/tools/asb_discover.sh" ]; then
   sh "$MODPATH/tools/asb_discover.sh" >/dev/null 2>&1 || true
 fi
 
+# Bounds synthesis (Phase 2): reads the just-written device_caps.env and scales
+# the OP15 reference ratios onto THIS device's real frequencies, writing
+# /data/adb/asb/device_bounds.env. The governor only consumes that file when
+# device_bounds_override=1 (off by default), and on OP15 the synthesised values
+# equal the shipped bounds — so this is safe to run at every install. On a
+# non-2-cluster SoC it writes a low-confidence marker and emits no overrides.
+if [ -f "$MODPATH/tools/asb_synthesize_bounds.sh" ]; then
+  sh "$MODPATH/tools/asb_synthesize_bounds.sh" >/dev/null 2>&1 || true
+fi
+
 echo 0 > "/data/adb/asb/vendor_boot_counter" 2>/dev/null
 rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
 
@@ -2399,6 +2409,10 @@ EOF
 
 	if [ -f "$MODPATH/tools/asb_discover.sh" ]; then
 	  chmod 0755 "$MODPATH/tools/asb_discover.sh"
+	fi
+
+	if [ -f "$MODPATH/tools/asb_synthesize_bounds.sh" ]; then
+	  chmod 0755 "$MODPATH/tools/asb_synthesize_bounds.sh"
 	fi
 
 	# Diagnostic launcher (short command: `su -c asbdiag`) + the script it runs.
