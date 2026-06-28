@@ -1047,6 +1047,13 @@ asb_bg_trim_gms_wakelock_throttle() {
   if command -v asb_settings_put >/dev/null 2>&1; then
     asb_settings_put global location_background_throttle_interval_ms 1800000
     asb_settings_put global location_background_throttle_proximity_alert_interval_ms 1800000
+    # Full-day OP15 logs showed GMS activity-recognition (the
+    # ALARM_WAKEUP_ACTIVITY_DETECTION alarm) as a top idle wakeup source —
+    # second only to AOD. Lengthen its sampling interval so it polls far less
+    # often in the background. This only relaxes how often activity is sampled,
+    # it does NOT disable location; foreground requests are unaffected.
+    asb_settings_put global activity_recognition_mode 0
+    asb_settings_put global gms_activity_recognition_interval_ms 1800000
   fi
 }
 
