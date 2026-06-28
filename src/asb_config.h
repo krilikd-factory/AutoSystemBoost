@@ -9,6 +9,7 @@ typedef struct {
     float heavy_load_enter;
     float moderate_load_enter;
     int   gpu_idle_trim_pct;    /* trim GPU ceiling by this % in light non-video states (0=off) */
+    int   device_bounds_override; /* 1 = apply per-device synthesised bounds from device_bounds.env (0=off, compiled defaults) */
     int   gpu_idle_trim_floor;  /* never trim GPU ceiling below this % (0=default 55) */
     int   gpu_video_busy_min;   /* GPU busy%% that counts as media-heavy/video (0=default 40) */
     int   gaming_gpu_enter;
@@ -159,6 +160,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->heavy_load_enter    = 20.0f;
     c->moderate_load_enter = 14.0f;
     c->gpu_idle_trim_pct = 8;
+    c->device_bounds_override = 0;
     c->gpu_idle_trim_floor = 55;
     c->gpu_video_busy_min = 40;
     c->gaming_gpu_enter    = 65;
@@ -312,6 +314,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "bat_heavy_load_enter")) c->bat_heavy_load_enter = (float)atof(v);
     else if (!strcmp(k, "moderate_load_enter"))  c->moderate_load_enter = (float)atof(v);
     else if (!strcmp(k, "gpu_idle_trim_pct"))    c->gpu_idle_trim_pct = atoi(v);
+    else if (!strcmp(k, "device_bounds_override")) c->device_bounds_override = atoi(v);
     else if (!strcmp(k, "gpu_idle_trim_floor"))  c->gpu_idle_trim_floor = atoi(v);
     else if (!strcmp(k, "gpu_video_busy_min"))   c->gpu_video_busy_min = atoi(v);
     else if (!strcmp(k, "bat_moderate_load_enter")) c->bat_moderate_load_enter = (float)atof(v);

@@ -3608,6 +3608,18 @@ int main(int argc, char **argv) {
     asb_config_defaults(&g_asb_cfg);
     asb_config_load_file(CONFIG_FILE, &g_asb_cfg);
     asb_config_apply_highload_mode(&g_asb_cfg);
+    /* Per-device bounds override (Phase 2, opt-in via device_bounds_override=1).
+     * Snapshot the compiled defaults first so a malformed override can revert a
+     * profile wholesale. No-op unless the flag is set AND device_bounds.env is
+     * present & valid; on OP15 the file equals the compiled values. */
+    {
+        static asb_profile_bounds_t _bounds_defaults[3];
+        memcpy(_bounds_defaults, g_profile_bounds, sizeof(_bounds_defaults));
+        int _ovr = asb_load_device_bounds_override(g_asb_cfg.device_bounds_override,
+                                                   _bounds_defaults);
+        if (_ovr > 0) asb_log("device_bounds: applied %d per-device override(s) from %s",
+                              _ovr, ASB_DEVICE_BOUNDS_FILE);
+    }
     asb_night_window_load();
     {
         int stale_warnings = 0;

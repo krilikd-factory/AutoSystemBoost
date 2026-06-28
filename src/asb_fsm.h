@@ -38,7 +38,16 @@ typedef struct {
     asb_profile_caps_t ceil;
 } asb_profile_bounds_t;
 
-static const asb_profile_bounds_t g_profile_bounds[3] = {
+/* Was `const`: now a mutable copy initialised from the compile-time values
+ * below. The compiled values remain the authoritative DEFAULT/envelope — they
+ * are what ships and what every device falls back to. asb_load_device_bounds_
+ * override() (called once at startup, gated on a flag + a validated override
+ * file) may scale specific CPU ceilings per-device from the discovered hardware,
+ * using the OP15 reference ratios. If the override file is absent, malformed, or
+ * the flag is off, these values stand unchanged — i.e. behaviour is byte-for-byte
+ * identical to the const version. On OP15 itself the synthesised values equal
+ * these, so even when enabled nothing changes for the reference device. */
+static asb_profile_bounds_t g_profile_bounds[3] = {
     /* ALL THREE profile bounds realigned with their .sh scripts.
      *
      * Background: termux probe on real device confirmed the FSM was using its
@@ -147,6 +156,99 @@ static int fsm_profile_is_balanced = 0;
 #define PROFILE_PERFORMANCE 2
 #define PROFILE_SMART       3
 #define ASB_PROFILE_COUNT   4
+
+/* ---------------------------------------------------------------------------
+ * Per-device bounds override (Phase 2 of device-adaptive tuning).
+ *
+ * Reads /data/adb/asb/device_bounds.env — a flat KEY=value file written at
+ * install time by tools/asb_synthesize_bounds.sh, which scales the OP15
+ * reference ratios onto THIS device's real hardware and snaps to real freqs.
+ * Only a small, explicit allow-list of CPU ceiling/cap fields can be overridden;
+ * everything else (GPU, uclamp, ravg, mins) keeps the compiled value. Each value
+ * is validated (positive, not absurd, not above a sane hardware ceiling) before
+ * it is applied. Any parse/validation failure for a key simply leaves that key
+ * at its compiled default — there is no partial-corruption path.
+ *
+ * SAFETY CONTRACT:
+ *   - file absent            -> no change (compiled defaults stand)
+ *   - flag device_bounds_override == 0 (default) -> not even read
+ *   - any malformed value    -> that key skipped, others still validated
+ *   - on OP15 the file equals the compiled values -> zero behavioural change
+ * The caller passes the runtime flag; this keeps the published build identical
+ * until a user/device explicitly opts in.
+ * ------------------------------------------------------------------------- */
+#define ASB_DEVICE_BOUNDS_FILE "/data/adb/asb/device_bounds.env"
+
+/* Apply one KEY=val pair to g_profile_bounds if KEY is in the allow-list and
+ * val passes range validation. Returns 1 if applied, 0 otherwise. */
+static int asb_device_bounds_apply_kv(const char *key, long val) {
+    /* Range guard: CPU freqs are in kHz. Reject <=0 or > 6.0 GHz (no current
+     * mobile cluster exceeds this; anything larger is a parse error). */
+    if (val <= 0 || val > 6000000) return 0;
+
+    struct { const char *name; int prof; int is_ceil; int field; int slot; } map[] = {
+        /* field: 0=cpu_max, 1=cpu_min ; slot: 0=little,1=big */
+        { "BATTERY_CPU_MAX_LITTLE",     PROFILE_BATTERY,     1, 0, 0 },
+        { "BATTERY_CPU_MAX_BIG",        PROFILE_BATTERY,     1, 0, 1 },
+        { "BATTERY_CPU_CAP_LITTLE",     PROFILE_BATTERY,     0, 0, 0 },
+        { "BATTERY_CPU_CAP_BIG",        PROFILE_BATTERY,     0, 0, 1 },
+        { "BALANCED_CPU_MAX_LITTLE",    PROFILE_BALANCED,    1, 0, 0 },
+        { "BALANCED_CPU_MAX_BIG",       PROFILE_BALANCED,    1, 0, 1 },
+        { "BALANCED_CPU_CAP_LITTLE",    PROFILE_BALANCED,    0, 0, 0 },
+        { "BALANCED_CPU_CAP_BIG",       PROFILE_BALANCED,    0, 0, 1 },
+        { "PERFORMANCE_CPU_MAX_LITTLE", PROFILE_PERFORMANCE, 1, 0, 0 },
+        { "PERFORMANCE_CPU_MAX_BIG",    PROFILE_PERFORMANCE, 1, 0, 1 },
+    };
+    for (unsigned i = 0; i < sizeof(map)/sizeof(map[0]); i++) {
+        if (strcmp(key, map[i].name) != 0) continue;
+        asb_profile_bounds_t *b = &g_profile_bounds[map[i].prof];
+        asb_profile_caps_t *cs = map[i].is_ceil ? &b->ceil : &b->floor;
+        if (map[i].field == 0) cs->cpu_max[map[i].slot] = (int)val;
+        else                   cs->cpu_min[map[i].slot] = (int)val;
+        return 1;
+    }
+    return 0;
+}
+
+/* Load + apply the override file. Enforces per-profile invariant
+ * floor.cpu_max <= ceil.cpu_max after applying; if an override would invert it,
+ * the whole profile is reverted to compiled defaults (passed in via `defaults`).
+ * Returns number of keys applied (0 if file missing / flag off). */
+static int asb_load_device_bounds_override(int enabled,
+                                           const asb_profile_bounds_t *defaults) {
+    if (!enabled) return 0;
+    FILE *f = fopen(ASB_DEVICE_BOUNDS_FILE, "r");
+    if (!f) return 0;
+    int applied = 0;
+    char line[160];
+    while (fgets(line, sizeof(line), f)) {
+        if (line[0] == '#' || line[0] == '\n') continue;
+        char *eq = strchr(line, '=');
+        if (!eq) continue;
+        *eq = '\0';
+        char *key = line;
+        char *valstr = eq + 1;
+        /* trim trailing whitespace/newline on key */
+        char *ke = key + strlen(key);
+        while (ke > key && (ke[-1] == ' ' || ke[-1] == '\t')) *--ke = '\0';
+        long val = atol(valstr);
+        applied += asb_device_bounds_apply_kv(key, val);
+    }
+    fclose(f);
+    /* Post-validate: never let an override break MIN<=CAP<=MAX. If a profile's
+     * floor.cpu_max now exceeds ceil.cpu_max for any slot, revert that profile. */
+    for (int p = 0; p < 3; p++) {
+        for (int s = 0; s < 2; s++) {
+            if (g_profile_bounds[p].floor.cpu_max[s] > g_profile_bounds[p].ceil.cpu_max[s] &&
+                g_profile_bounds[p].ceil.cpu_max[s] > 0) {
+                g_profile_bounds[p] = defaults[p];  /* revert this profile wholesale */
+                break;
+            }
+        }
+    }
+    return applied;
+}
+
 
 /* Smart Mode runtime bounds (mutable, written by smart blend math).
  * Initialized to BALANCED defaults at boot; smart logic blends battery↔balanced
