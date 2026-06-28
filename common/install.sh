@@ -469,7 +469,14 @@ asb_detect_compat() {
     case "$ASB_PLATFORM_L" in
       *"sm8650"*|*"pineapple"*)
         case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L" in
-          *"pineapple"*|*"cph2581"*|*"cph2583"*|*"cph2573"*|*"op595"*)
+          *"pineapple"*|*"cph2581"*|*"cph2583"*|*"cph2573"*|*"op595"*|*"ossi"*|*"22877"*)
+            # 'ossi' / project 22877 / OP595DL1 are the OnePlus 12 (CPH2581)
+            # variant whose model/device props report the marketing codename
+            # 'ossi' rather than 'pineapple' or the CPH number. This branch is
+            # already gated on ro.board.platform = sm8650/pineapple AND a OnePlus
+            # manufacturer, so matching these tokens cannot pull in a non-pineapple
+            # SoC. Confirmed against a real unit: discovery reports pineapple /
+            # OP595DL1 (CPH2581), 4 clusters [0 2 5 7].
             echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP12=true ;;
           *)
             ui_print "[*] SM8650 device, non-OP12 codename — generic-safe tuning (no OP12 overlay, boots on any SM8650 sibling)" ;;
