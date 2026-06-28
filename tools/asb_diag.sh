@@ -39,6 +39,7 @@ V() {
     eq)      [ "$_a" = "$_e" ] && _st="PASS" ;;
     has)     printf '%s' "$_a" | grep -q -- "$_e" && _st="PASS" ;;
     ge)      [ -n "$_a" ] && [ "$_a" -ge "$_e" ] 2>/dev/null && _st="PASS" ;;
+    le)      [ -n "$_a" ] && [ "$_a" -le "$_e" ] 2>/dev/null && _st="PASS" ;;
     present) [ -n "$_a" ] && _st="PASS" ;;
   esac
   if [ -z "$_a" ] && [ "$_m" != "eq" ]; then _st="N/A "; NA=$((NA+1));
@@ -278,7 +279,11 @@ for GP in /vendor/etc/gps.conf /odm/etc/gps.conf /vendor/odm/etc/gps.conf /syste
   _cap=$(grep -E '^CAPABILITIES=' "$GP" 2>/dev/null | head -1 | tr -d ' \r')
   _ntp=$(grep -E '^(NTP_SERVER|XTRA_SERVER_1)=' "$GP" 2>/dev/null | head -1 | tr -d ' \r')
   P "  file: $GP"
-  V "  CAPABILITIES=0x3F" "CAPABILITIES=0x3F" "$_cap" eq
+  # CAPABILITIES is a hardware capability bitmask that legitimately differs per
+  # SoC (OP15 canoe=0x3F, OP12 pineapple=0x17). It must NOT be forced to a fixed
+  # value — doing so could advertise GNSS features the chip lacks. Report it as
+  # info, not a pass/fail against another device's mask.
+  [ -n "$_cap" ] && NOTE "GNSS $_cap (device-native bitmask; not forced)"
   [ -n "$_ntp" ] && NOTE "NTP/XTRA: $_ntp"
 done
 [ "$_gfound" = 0 ] && { NA=$((NA+1)); P "  [N/A ] no gps.conf found in live system"; }
@@ -293,9 +298,13 @@ for WF in /vendor/etc/wifi/*/WCNSS_qcom_cfg.ini /vendor/etc/wifi/WCNSS_qcom_cfg.
   _pmd=$(grep -E '^gRuntimePMDelay=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
   _amc=$(grep -E '^gActiveMaxChannelTime=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
   _bbw=$(grep -E '^gBusBandwidthVeryHighThreshold=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
-  [ -n "$_pmd" ] && V "  gRuntimePMDelay=2000" "2000" "$_pmd" eq
-  [ -n "$_amc" ] && V "  gActiveMaxChannelTime=40" "40" "$_amc" eq
-  [ -n "$_bbw" ] && V "  gBusBandwidthVeryHighThreshold=12000" "12000" "$_bbw" eq
+  # Device-safe clamp semantics: the patch only LOWERS these toward a ceiling and
+  # never raises a device that already ships a better (lower) value. So a value
+  # at-or-below the ceiling is correct — checking '== ceiling' would wrongly FAIL
+  # OP12/OP13 (stock gRuntimePMDelay=500, which is better than the 2000 ceiling).
+  [ -n "$_pmd" ] && V "  gRuntimePMDelay<=2000 (lower=quicker idle)" "2000" "$_pmd" le
+  [ -n "$_amc" ] && V "  gActiveMaxChannelTime<=40 (lower=shorter dwell)" "40" "$_amc" le
+  [ -n "$_bbw" ] && V "  gBusBandwidthVeryHighThreshold<=12000" "12000" "$_bbw" le
 done
 [ "$_wfound" = 0 ] && { NA=$((NA+1)); P "  [N/A ] no WCNSS_qcom_cfg.ini found"; }
 # supplicant safety
