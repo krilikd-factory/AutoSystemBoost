@@ -1597,7 +1597,9 @@ const I18N = {
       UX_MANAGE_OEM_TOGGLES: { name: 'Управление системными тумблерами (ОЗУ/батарея/нагрев)',
         desc: 'Управление тумблерами OxygenOS (Расширение ОЗУ, Адаптивная батарея, Низкий нагрев). ВЫКЛ = не трогать (OOS может включать Расширение ОЗУ после ребута). ВКЛ = держит Расширение ОЗУ ВЫКЛ при каждой загрузке.' },
       UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
-        desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление масштабом анимаций ВКЛ.' }
+        desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление масштабом анимаций ВКЛ.' },
+      device_bounds_override: { name: 'Авто-границы под устройство (эксперимент)',
+        desc: 'ВКЛ: governor берёт частотные потолки, рассчитанные при установке под ваше железо (масштаб от эталона OP15). На OP15 значения совпадают с заводскими — поведение не меняется. Для других устройств это пока не проверено полевыми логами. ВЫКЛ = заводские потолки.' }
     },
     // segmented option labels
     opt: { auto: 'авто', on: 'вкл', off: 'выкл', safe: 'безопасно', aggressive: 'агрессивно' }
@@ -1815,7 +1817,7 @@ const CFG_FILE = MD + '/config/governor.conf';
 // the _user_keys / snapshot list in common/install.sh.
 const SNAP_KEYS = ['AUDIO_AGGRESSIVE','AUDIO_EQ_COMPAT','CAMERA_LEVEL','CAMERA_AGGRESSIVE',
   'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
-  'auto_battery_enable','charge_aware_enable','night_quiet_enable','night_quiet_auto',
+  'auto_battery_enable','charge_aware_enable','night_quiet_enable','night_quiet_auto','device_bounds_override',
   'UX_ANIM_FORCE_RESTART','UX_MANAGE_ANIM_SCALE','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
   'region_allow_locale'];
 const CFG_ITEMS = [
