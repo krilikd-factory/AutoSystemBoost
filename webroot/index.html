@@ -1598,8 +1598,8 @@ const I18N = {
         desc: 'Управление тумблерами OxygenOS (Расширение ОЗУ, Адаптивная батарея, Низкий нагрев). ВЫКЛ = не трогать (OOS может включать Расширение ОЗУ после ребута). ВКЛ = держит Расширение ОЗУ ВЫКЛ при каждой загрузке.' },
       UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
         desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление масштабом анимаций ВКЛ.' },
-      device_bounds_override: { name: 'Авто-границы под устройство (эксперимент)',
-        desc: 'ВКЛ: governor берёт частотные потолки, рассчитанные при установке под ваше железо (масштаб от эталона OP15). На OP15 значения совпадают с заводскими — поведение не меняется. Для других устройств это пока не проверено полевыми логами. ВЫКЛ = заводские потолки.' }
+      device_bounds_override: { name: 'Авто-границы под устройство',
+        desc: 'Governor использует частотные потолки, рассчитанные при установке под ваше железо (масштаб от эталона OP15, привязка к вашим реальным частотам). По умолчанию ВКЛ. Выключите, чтобы форсировать заводские потолки OP15.' }
     },
     // segmented option labels
     opt: { auto: 'авто', on: 'вкл', off: 'выкл', safe: 'безопасно', aggressive: 'агрессивно' }
@@ -1856,9 +1856,9 @@ const CFG_ITEMS = [
     desc:'Performance shortens long-press/multi-tap windows for faster response. OFF if holds misfire.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage Animation Scales is ON.' },
-  // --- Advanced / experimental ---
-  { key:'device_bounds_override', type:'bool', def:'0', name:'Device-Adaptive Bounds (experimental)',
-    desc:'ON: the governor uses frequency ceilings computed at install for your hardware (scaled from the OP15 reference). On OP15 these equal the shipped values \\u2014 no behaviour change. On other devices this is not yet field-validated. OFF = shipped ceilings.' }
+  // --- Advanced ---
+  { key:'device_bounds_override', type:'bool', def:'1', name:'Device-Adaptive Bounds',
+    desc:'Governor uses frequency ceilings computed at install for your exact hardware (scaled from the OP15 reference and snapped to your real frequencies). Default ON. Turn OFF to force the compiled OP15 ceilings instead.' }
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -2084,6 +2084,54 @@ function closeConfigPage() {
   p.setAttribute('aria-hidden', 'true');
   _cfgOpen = false;
 }
+
+/* ---- Swipe navigation -------------------------------------------------
+ * Three screens laid out left-to-right:
+ *        Main (profiles)  |  Live (monitoring)  |  Config
+ * Swiping left moves toward the RIGHT neighbour, swiping right toward the LEFT:
+ *   - Main  : swipe left  -> Live          (swipe right: nothing, leftmost)
+ *   - Live  : swipe left  -> Config ,  swipe right -> Main
+ *   - Config: swipe right -> Live          (swipe left: nothing, rightmost)
+ * A gesture only counts when it is clearly horizontal (dx dominates dy) and
+ * long enough, so it never fights vertical scrolling inside a page. */
+(function initSwipeNav() {
+  var x0 = null, y0 = null, t0 = 0, tracking = false;
+  var MIN_DX = 60;     // minimum horizontal travel (px)
+  var MAX_OFF = 0.6;   // |dy| must stay below this fraction of |dx|
+  var MAX_MS = 800;    // ignore slow drags (likely scroll/scrub)
+
+  function start(e) {
+    if (e.touches && e.touches.length > 1) { tracking = false; return; }
+    var t = e.touches ? e.touches[0] : e;
+    x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); tracking = true;
+  }
+  function end(e) {
+    if (!tracking || x0 === null) return;
+    tracking = false;
+    var t = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e;
+    var dx = t.clientX - x0, dy = t.clientY - y0, dt = Date.now() - t0;
+    x0 = y0 = null;
+    if (dt > MAX_MS) return;
+    if (Math.abs(dx) < MIN_DX) return;
+    if (Math.abs(dy) > Math.abs(dx) * MAX_OFF) return;  // too vertical
+    var right = dx > 0;   // swipe-right gesture (finger moves right)
+    var haveLive = (typeof openLivePage === 'function');
+    var haveCfg  = (typeof openConfigPage === 'function');
+    if (_cfgOpen) {
+      // rightmost screen: swipe right -> back to Live (middle)
+      if (right) { closeConfigPage(); if (haveLive) openLivePage(); }
+    } else if (_liveOpen) {
+      // middle screen: right -> Main, left -> Config
+      if (right) { closeLivePage(); }
+      else if (haveCfg) { closeLivePage(); openConfigPage(); }
+    } else {
+      // leftmost screen (Main): left -> Live
+      if (!right && haveLive) openLivePage();
+    }
+  }
+  document.addEventListener('touchstart', start, { passive: true });
+  document.addEventListener('touchend', end, { passive: true });
+})();
 
 
 let _batCapFullMah = 0;
