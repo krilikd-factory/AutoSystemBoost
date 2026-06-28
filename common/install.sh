@@ -1178,7 +1178,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale"
+region_allow_locale device_bounds_override"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -1211,7 +1211,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale"
+region_allow_locale device_bounds_override"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
