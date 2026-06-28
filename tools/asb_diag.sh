@@ -160,9 +160,33 @@ if [ -f "$_caps" ]; then
   P "  gpu backend          : $(_cget gpu_backend)"
   P "  thermal zones        : $(_cget thermal_zone_count)"
   P "  paths: odm_camera=$(_cget has_odm_camera_dir) vendor_audio=$(_cget has_vendor_audio_dir) wlan_txqlen=$(_cget has_wlan_txqlen)"
-  NOTE "These are raw discovered facts. Per-device bound synthesis (deriving caps from the OP15 reference ratios) is a separate, later stage that reads this file."
+  NOTE "Raw discovered facts. These feed the per-device bounds synthesis below."
 else
   P "  (device_caps.env not present yet — run a reinstall, or it writes on next boot)"
+fi
+
+# =====================================================================
+SEC "0a2. DEVICE-ADAPTIVE BOUNDS  (OP15-ratio synthesis — device_bounds.env)"
+_dbounds="/data/adb/asb/device_bounds.env"
+_ovr_flag="$(cfg device_bounds_override)"
+P "  override active       : ${_ovr_flag:-0}  (governor consumes device_bounds.env only when =1)"
+if [ -f "$_dbounds" ]; then
+  _dconf="$(grep -E '^# confidence=' "$_dbounds" 2>/dev/null | head -1 | sed 's/^# confidence=//')"
+  P "  synthesis confidence  : ${_dconf:-unknown}"
+  _nvals="$(grep -cE '^[A-Z].*=' "$_dbounds" 2>/dev/null)"
+  if [ "${_nvals:-0}" -gt 0 ] 2>/dev/null; then
+    P "  synthesised bounds (scaled from OP15 ratios, snapped to this device):"
+    grep -E '^[A-Z].*=' "$_dbounds" 2>/dev/null | while IFS= read -r _l; do P "    $_l"; done
+    if [ "${_ovr_flag:-0}" != "1" ]; then
+      NOTE "These are a PREVIEW — not applied (override flag is off). The governor is using its compiled defaults. On OP15 the synthesised values equal those defaults anyway."
+    else
+      NOTE "ACTIVE: the governor loaded these over its compiled defaults at boot."
+    fi
+  else
+    P "  (no overrides emitted — see confidence note above; compiled defaults stand)"
+  fi
+else
+  P "  (device_bounds.env not present yet — writes at install or next boot)"
 fi
 
 # =====================================================================
@@ -382,22 +406,35 @@ else
   if [ -n "$CT" ]; then
     P "  file: $CT"
     V "  tone-fix sunsetBrightScale=0.9" "0.9" "$(grep -o '"sunsetBrightScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
-    _caggr="$(cfg CAMERA_AGGRESSIVE)"; NOTE "CAMERA_AGGRESSIVE toggle = ${_caggr:-0}"
-    if [ "${_caggr:-0}" = "1" ]; then
-      # Device-aware expected values: OP13 (sun) gets a softer grade than OP15
-      # (canoe) — sunsetSatScale 1.3 and blueSatParam 1.02 vs 1.4 / 1.05 — to
-      # avoid low-light banding. Pick the expected value from the live SoC so we
-      # don't false-FAIL OP13 against OP15's numbers.
+    # Camera grade is driven by CAMERA_LEVEL (0..4 slider). Legacy CAMERA_AGGRESSIVE=1
+    # maps to level 3. Mirror the runtime value table (runtime/asb_tweaks.sh) so the
+    # expected sunsetSatScale/blueSatParam match the user's actual level instead of
+    # false-FAILing against the old fixed aggressive numbers. The sun SoC bands one
+    # level softer, same as runtime.
+    _clvl="$(cfg CAMERA_LEVEL)"
+    _caggr="$(cfg CAMERA_AGGRESSIVE)"
+    if [ -z "$_clvl" ] || [ "$_clvl" = "0" ]; then
+      [ "${_caggr:-0}" = "1" ] && _clvl=3 || _clvl=0
+    fi
+    NOTE "CAMERA_LEVEL = ${_clvl} (legacy CAMERA_AGGRESSIVE=${_caggr:-0} maps to level 3)"
+    if [ "${_clvl:-0}" -ge 1 ] 2>/dev/null; then
       _cam_soc="$(getprop ro.board.platform 2>/dev/null)"
       [ -z "$_cam_soc" ] && _cam_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
-      case "$_cam_soc" in
-        sun|sm8750*) _exp_sss="1.3"; _exp_bsat="1.02" ;;
-        *)           _exp_sss="1.4"; _exp_bsat="1.05" ;;
+      _row="$_clvl"
+      case "$_cam_soc" in sun|sm8750*) _row=$((_clvl - 1)); [ "$_row" -lt 1 ] && _row=1 ;; esac
+      case "$_row" in
+        1) _exp_sss="1.45"; _exp_bsat="0.99" ;;
+        2) _exp_sss="1.40"; _exp_bsat="1.02" ;;
+        3) _exp_sss="1.30"; _exp_bsat="1.05" ;;
+        4) _exp_sss="1.20"; _exp_bsat="1.10" ;;
+        *) _exp_sss=""; _exp_bsat="" ;;
       esac
-      V "  aggressive sunsetSatScale=$_exp_sss" "$_exp_sss" "$(grep -o '"sunsetSatScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
-      _inj="$(cfg CAMERA_AGGRESSIVE_INJECT)"; NOTE "tone-key mode = ${_inj:-safe}"
-      if [ "${_inj:-safe}" = "aggressive" ]; then
-        V "  injected blueSatParam=$_exp_bsat" "$_exp_bsat" "$(grep -o '"blueSatParam": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+      if [ -n "$_exp_sss" ]; then
+        V "  grade(lvl$_clvl) sunsetSatScale=$_exp_sss" "$_exp_sss" "$(grep -o '"sunsetSatScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+        _inj="$(cfg CAMERA_AGGRESSIVE_INJECT)"; NOTE "inject mode = ${_inj:-safe}"
+        if [ "${_inj:-safe}" = "aggressive" ]; then
+          V "  grade(lvl$_clvl) blueSatParam=$_exp_bsat" "$_exp_bsat" "$(grep -o '"blueSatParam": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+        fi
       fi
     fi
   else
@@ -804,12 +841,20 @@ done
 
 # --- 10h. profile_bounds the module shipped (compare vs hardware above) ---
 P ""
-P "  SHIPPED profile_bounds.conf (BATTERY caps — compare against hw freqs above):"
-_pb="$MODDIR/config/profile_bounds.conf"
-if [ -f "$_pb" ]; then
+P "  SHIPPED battery rails (compare against hw freqs above):"
+# The source profile_bounds.conf is intentionally NOT shipped in the installed
+# module (it's a dev/source artifact); what ships is the generated .sh (and the
+# values baked into the governor binary). Read whichever is present so this is
+# accurate on a real install, not just in the source tree.
+_pb=""
+for _cand in "$MODDIR/config/profile_bounds.generated.sh" "$MODDIR/config/profile_bounds.conf"; do
+  [ -f "$_cand" ] && { _pb="$_cand"; break; }
+done
+if [ -n "$_pb" ]; then
+  P "    (source: $(basename "$_pb"))"
   grep -E '^(BATTERY|BALANCED|PERFORMANCE)_CPU_(MIN|MAX|CAP)_' "$_pb" 2>/dev/null | while IFS= read -r _l; do P "    $_l"; done
 else
-  NOTE "profile_bounds.conf not found in module"
+  NOTE "no shipped bounds file found (generated.sh expected in module/config)"
 fi
 P ""
 P "  >>> TUNING HINT: compare BATTERY_CPU_MAX_* above with each cluster's real"
