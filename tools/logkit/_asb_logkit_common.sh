@@ -820,61 +820,69 @@ lk_wakelock_emit_report() {
     echo ""
 
     echo "----- TOP PARTIAL WAKELOCK HOLDERS -----"
-    echo "(app held a partial wakelock = CPU couldn't fully sleep)"
-    # Lines look like: "Wake lock <pkg> <name>: <time> realtime" or with "partial".
-    # Extract a time token (e.g. 1m23s456ms / 12s / 4h2m) and the owner, sort by
-    # a normalised seconds value.
-    grep -iE "Wake lock|partial" "$_raw" 2>/dev/null \
-      | grep -ivE "$_self" \
-      | sed 's/^[[:space:]]*//' \
-      | awk '
-        {
-          line=$0;
-          # find a duration like 1h2m3s / 4m5s / 6s / 700ms
-          secs=0; matched=0;
-          if (match(line, /[0-9]+h[0-9]+m[0-9]+s/)) { matched=1; t=substr(line,RSTART,RLENGTH); }
-          else if (match(line, /[0-9]+m[0-9]+s/))   { matched=1; t=substr(line,RSTART,RLENGTH); }
-          else if (match(line, /[0-9]+s[0-9]+ms/))  { matched=1; t=substr(line,RSTART,RLENGTH); }
-          else if (match(line, /[0-9]+s/))          { matched=1; t=substr(line,RSTART,RLENGTH); }
-          if (!matched) next;
-          # parse t into seconds
-          tmp=t; h=0;m=0;s=0;
-          if (match(tmp,/[0-9]+h/)){h=substr(tmp,RSTART,RLENGTH-1)+0}
-          if (match(tmp,/[0-9]+m/)){m=substr(tmp,RSTART,RLENGTH-1)+0}
-          if (match(tmp,/[0-9]+s/)){s=substr(tmp,RSTART,RLENGTH-1)+0}
-          secs=h*3600+m*60+s;
-          if (secs<=0) next;
-          printf "%08d|%s\n", secs, line;
-        }' \
-      | sort -rn | head -15 \
-      | awk -F'|' '{printf "  %6ds  %s\n", substr($1,1)+0, $2}'
+    echo "(app/component held a partial wakelock = CPU couldn't fully sleep)"
+    # OxygenOS batterystats lists these two ways depending on section/build:
+    #   (a) "Wake lock <owner> <name>: <dur> realtime"  (dur present)
+    #   (b) "Wake lock <owner/name> realtime"           (no dur on this build)
+    # and the history stream uses "+wake_lock=<uid>:\"<name>\"". We rank by
+    # whichever signal exists: duration if present, else how many times the
+    # wakelock appears (a proxy for how often it was taken). Either way the
+    # capture's own wakelock is excluded.
+    {
+      # form (a): lines with an explicit duration before "realtime"
+      grep -iE "Wake lock" "$_raw" 2>/dev/null \
+        | grep -ivE "$_self" \
+        | awk '
+          {
+            line=$0;
+            if (match(line,/[0-9]+h[0-9]+m[0-9]+s/)||match(line,/[0-9]+m[0-9]+s/)||match(line,/[0-9]+s[0-9]+ms/)) {
+              t=substr(line,RSTART,RLENGTH); tmp=t; h=0;m=0;s=0;
+              if(match(tmp,/[0-9]+h/))h=substr(tmp,RSTART,RLENGTH-1)+0;
+              if(match(tmp,/[0-9]+m/))m=substr(tmp,RSTART,RLENGTH-1)+0;
+              if(match(tmp,/[0-9]+s/))s=substr(tmp,RSTART,RLENGTH-1)+0;
+              secs=h*3600+m*60+s;
+              # owner = strip leading "Wake lock " and trailing ": ... realtime"
+              o=line; sub(/^.*Wake lock[[:space:]]*/,"",o); sub(/:.*$/,"",o);
+              if(secs>0) printf "DUR|%08d|%s\n", secs, o;
+            }
+          }'
+      # form (b)+history: count occurrences by wakelock name when no duration
+      { grep -oiE "Wake lock [^:]+ realtime" "$_raw" 2>/dev/null | sed 's/^Wake lock //;s/ realtime$//';
+        grep -oE '\+wake_lock=[0-9a-z]+:"[^"]+"' "$_raw" 2>/dev/null | sed 's/.*"//;s/"$//'; } \
+        | grep -ivE "$_self" \
+        | sed 's/^[[:space:]]*//' | grep -vE '^$' \
+        | sort | uniq -c | sort -rn \
+        | awk '$1>0 {n=$1; $1=""; sub(/^ /,""); printf "CNT|%08d|%s\n", n, $0}'
+    } | sort -t'|' -k1,1 -k2,2rn | awk -F'|' '
+        $1=="DUR" {printf "  %6ds held  %s\n", $2+0, $3; d++; next}
+        $1=="CNT" && d<3 {printf "  x%-4d taken  %s\n", $2+0, $3}
+      ' | head -18
     echo ""
 
     echo "----- TOP ALARM / WAKEUP SOURCES -----"
-    echo "(scheduled wakeups = app polling on a timer)"
-    grep -iE "\*walarm\*|wakeups|Alarm [0-9]" "$_raw" 2>/dev/null \
-      | sed 's/^[[:space:]]*//' \
-      | awk '
-        {
-          # find a wakeup/alarm count like "123 wakeups" or ": 45 alarms"
-          n=0;
-          if (match($0,/[0-9]+ wakeup/))  { n=substr($0,RSTART,RLENGTH); sub(/ wakeup.*/,"",n); n+=0; }
-          else if (match($0,/[0-9]+ alarm/)){ n=substr($0,RSTART,RLENGTH); sub(/ alarm.*/,"",n); n+=0; }
-          else if (match($0,/: [0-9]+/))   { n=substr($0,RSTART,RLENGTH); sub(/: /,"",n); n+=0; }
-          if (n<=0) next;
-          printf "%08d|%s\n", n, $0;
-        }' \
-      | sort -rn | head -15 \
-      | awk -F'|' '{printf "  %5d  %s\n", substr($1,1)+0, $2}'
+    echo "(scheduled wakeups = something polling on an RTC timer)"
+    # Real format on this build: history lines carrying *walarm*:<name>. Count
+    # by alarm name. Also surface the kernel wake_reason tokens (what actually
+    # pulled the SoC out of suspend).
+    grep -oE '\*walarm\*:[^"]+' "$_raw" 2>/dev/null \
+      | sort | uniq -c | sort -rn | head -15 \
+      | awk '{n=$1; $1=""; sub(/^ /,""); printf "  x%-4d  %s\n", n+0, $0}'
+    echo ""
+    echo "  -- kernel wake_reason (what resumed the SoC) --"
+    grep -oE 'wake_reason=[0-9]*:"[^"]+"' "$_raw" 2>/dev/null \
+      | sed 's/wake_reason=[0-9]*://' \
+      | sort | uniq -c | sort -rn | head -8 \
+      | awk '{n=$1; $1=""; sub(/^ /,""); printf "  x%-4d  %s\n", n+0, $0}'
     echo ""
 
     echo "----- HOW TO READ -----"
-    echo "* A non-system app near the top of either list that you don't need"
-    echo "  running in the background is a candidate for restriction (or an ASB"
-    echo "  standby-bucket / wakelock-throttle entry)."
-    echo "* System wakelocks (e.g. *alarm*, NetworkStats, AlarmManager) are"
-    echo "  usually unavoidable; focus on named third-party packages."
-    echo "* Cross-check the timestamp against phase_timeline.txt — wakeups during"
+    echo "* A named third-party package high in either list that you don't need"
+    echo "  in the background is a candidate for a standby-bucket / wakelock"
+    echo "  restriction."
+    echo "* AOD (systemui.aod.*) and location (activity-detection, GnssLocation,"
+    echo "  NetworkLocationScanner) alarms are common standby drains — they're"
+    echo "  user-facing features, so weigh battery vs the feature before cutting."
+    echo "* Cross-check timestamps against phase_timeline.txt — wakeups during"
     echo "  'sleep'/'idle' phases are the ones that actually cost standby battery."
   } > "$_out"
 }
