@@ -117,3 +117,13 @@ charge_temp_hot_dC=415
 gpu_idle_trim_pct=12
 gpu_idle_trim_floor=55
 gpu_video_busy_min=40
+
+# --- Device-adaptive bounds (Phase 2) ---
+# 0 = governor uses its compiled-in OP15 bounds (default, what ships).
+# 1 = governor loads per-device bounds from /data/adb/asb/device_bounds.env,
+#     synthesised at install/boot by scaling the OP15 reference ratios onto this
+#     device's real frequencies. On OP15 the synthesised values equal the
+#     compiled ones, so enabling this changes nothing on the reference device.
+#     Malformed/missing file or an inverted invariant -> silent fallback to
+#     compiled defaults. Opt-in while the derivation is validated on more devices.
+device_bounds_override=0
