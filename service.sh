@@ -950,6 +950,9 @@ com.ss.android.ugc.trill
 com.netflix.mediaclient
 com.amazon.mShop.android.shopping
 com.aliexpress.buyer
+com.heytap.htms
+com.heytap.pictorial
+com.heytap.market
 "
 
 _BG_TRIM_DISABLE="
