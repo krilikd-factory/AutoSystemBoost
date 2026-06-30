@@ -647,6 +647,29 @@ asb_apply_device_overlay() {
     # Camera/media overlay — gated by CAMERA category. Camera goes to
     # system/vendor/odm ONLY (via _odm_dups), matching the known-good module.
     if [ "$ASB_CAMERA" = "true" ]; then
+      # Device-native camera tone: clone THIS device's own stock
+      # conf_tuning_params.json / video_beauty_default_config from live /odm (or
+      # /vendor/odm) into the overlay staging dir, so the graded tone engine has
+      # the device's real file to patch instead of an OP15 one. Many non-OP15
+      # SoCs ship this file (OP13/sun has it, modelID 2); some do not (OP12/
+      # pineapple has none) — when absent we simply clone nothing and the engine
+      # no-ops, leaving the camera fully stock. This is the camera analogue of
+      # the in-place wifi/audio patching: patch the device's own stock by key,
+      # never impose the OP15 tree.
+      for _cf_rel in vendor/odm/etc/camera/conf_tuning_params.json \
+                     vendor/odm/etc/camera/config/video_beauty_default_config; do
+        _cf_base="${_cf_rel#vendor/odm/etc/camera/}"
+        for _live in "/odm/etc/camera/$_cf_base" \
+                     "/vendor/odm/etc/camera/$_cf_base" \
+                     "/system/vendor/odm/etc/camera/$_cf_base"; do
+          if [ -f "$_live" ] && [ ! -f "$MODPATH/$_ov/$_cf_rel" ]; then
+            mkdir -p "$MODPATH/$_ov/$(dirname "$_cf_rel")" 2>/dev/null
+            cp -f "$_live" "$MODPATH/$_ov/$_cf_rel" 2>/dev/null \
+              && ui_print "    + Camera tone: cloned device-stock $_cf_base"
+            break
+          fi
+        done
+      done
       for _f in vendor/etc/media_profiles.xml \
                 vendor/odm/etc/camera/media_profiles.xml \
                 vendor/odm/etc/camera/conf_tuning_params.json \
@@ -1494,6 +1517,24 @@ if [ "$ASB_IS_OP15" = "true" ]; then
 fi
 asb_prune_module
 
+# Install-time stock-file inventory & analysis. Records THIS device's real
+# cluster topology, GPU back-end, audio SKU + mixer/effects files, camera/media
+# presence, Wi-Fi WCNSS/SKU, GPS and perf — so the per-device patching below is
+# informed and auditable rather than blind, and so a returned bundle shows
+# exactly what was patchable on the installing model. Pure observation: it
+# modifies no stock file. Runs on every device, every install.
+if [ -f "$MODPATH/tools/asb_install_probe.sh" ]; then
+  sh "$MODPATH/tools/asb_install_probe.sh" "$MODPATH/install_probe.txt" >/dev/null 2>&1 || true
+  cp -f "$MODPATH/install_probe.txt" /data/adb/asb/install_probe.txt 2>/dev/null || true
+  if [ -f "$MODPATH/install_probe.txt" ]; then
+    ui_print " "
+    ui_print "[*] Device stock-file analysis:"
+    sed -n '/SUMMARY (what ASB can tune/,/Inventory only/p' "$MODPATH/install_probe.txt" 2>/dev/null \
+      | grep -E '^[[:space:]]+(audio|wifi|perf|gps|camera|cpu)[[:space:]]+:' \
+      | while IFS= read -r _line; do ui_print "   $_line"; done
+  fi
+fi
+
 if [ "$ASB_IS_OP15" = "true" ]; then
   # OP15: keep the hand-tuned audio/wifi overlay (irreproducible by sed), but
   # run perf + location the same dynamic in-place way as OP13/OP12 so those
@@ -1552,6 +1593,28 @@ elif [ "$ASB_IS_OP12" = "true" ]; then
   asb_patch_wifi_inplace "OnePlus 12 (pineapple / cliffs)"
 else
   asb_prune_non_op15_vendor_overlays
+  # ── Universality: generic-safe tuning for any other OnePlus ───────────────
+  # Devices that aren't the three reference models (or a confirmed sibling of
+  # one) don't get a static vendor overlay — that's what keeps them booting.
+  # But the *in-place* patches are different: each one locates the device's OWN
+  # live stock files (perf / audio / wifi / location), clones only those, and
+  # tunes the copies. They never apply foreign canoe/sun/pineapple files, so
+  # they're safe on any OnePlus and give the broad model base the same CPU/perf,
+  # portable-sound, Wi-Fi-band and GPS tuning the reference devices get — instead
+  # of governor-only. Each patch is independently gated on its ASB_* category
+  # toggle and self-skips if the device has no matching stock dir, so nothing is
+  # forced where it doesn't belong.
+  if [ "$ASB_IS_ONEPLUS" = "true" ]; then
+    ui_print " "
+    ui_print "${SEPARATOR}"
+    ui_print "[*] Generic OnePlus — applying safe in-place tuning (no device overlay)"
+    ui_print "${SEPARATOR}"
+    asb_clone_device_audio_wifi "OnePlus (generic, in-place)"
+    asb_patch_audio_inplace     "OnePlus (generic, in-place)"
+    asb_patch_perf_inplace      "OnePlus (generic, in-place)"
+    asb_patch_location_inplace  "OnePlus"
+    asb_patch_wifi_inplace      "OnePlus (generic, in-place)"
+  fi
 fi
 # Clean up any unused overlay staging dirs on non-OP12/13 paths too.
 rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
