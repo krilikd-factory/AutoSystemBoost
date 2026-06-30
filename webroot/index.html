@@ -23,7 +23,10 @@
      screen change so Main↔Live and Live↔Config feel identical. The curve is a
      gentle easeInOutCubic (slow-in, slow-out) and the duration is a touch
      longer than before, which is what removes the "jerky" feel. */
-  --page-anim-dur: 0.42s;
+  /* Unified page-transition motion. Same gentle easeInOutCubic curve (this is
+     what gives the smooth feel); duration trimmed from 0.42s to 0.32s so the
+     same motion just resolves quicker — snappier without losing smoothness. */
+  --page-anim-dur: 0.32s;
   --page-anim-ease: cubic-bezier(0.45, 0, 0.25, 1);
 
   --bg: #000000;
@@ -659,7 +662,11 @@ body::before, body::after {
   font-weight: 600;
   opacity: 0; 
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  z-index: 100; 
+  /* Above every page (Main z1, Live z100, Config z120) so the confirmation
+     popup is never hidden underneath the screen that triggered it — the bug was
+     a config-value change on the Config page firing a toast at z100, below the
+     z120 page. A high value keeps it on top regardless of which page is open. */
+  z-index: 1000; 
   pointer-events: none;
   border: 1px solid; 
   white-space: nowrap; 
@@ -1654,9 +1661,7 @@ const I18N = {
       UX_MANAGE_OEM_TOGGLES: { name: 'Управление системными тумблерами (ОЗУ/батарея/нагрев)',
         desc: 'Управление тумблерами OxygenOS (Расширение ОЗУ, Адаптивная батарея, Низкий нагрев). ВЫКЛ = не трогать (OOS может включать Расширение ОЗУ после ребута). ВКЛ = держит Расширение ОЗУ ВЫКЛ при каждой загрузке.' },
       UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
-        desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление масштабом анимаций ВКЛ.' },
-      device_bounds_override: { name: 'Авто-границы под устройство',
-        desc: 'Governor использует частотные потолки, рассчитанные при установке под ваше железо (масштаб от эталона OP15, привязка к вашим реальным частотам). По умолчанию ВКЛ. Выключите, чтобы форсировать заводские потолки OP15.' }
+        desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление масштабом анимаций ВКЛ.' }
     },
     // segmented option labels
     opt: { auto: 'авто', on: 'вкл', off: 'выкл', safe: 'безопасно', aggressive: 'агрессивно' }
@@ -1874,7 +1879,7 @@ const CFG_FILE = MD + '/config/governor.conf';
 // the _user_keys / snapshot list in common/install.sh.
 const SNAP_KEYS = ['AUDIO_AGGRESSIVE','AUDIO_EQ_COMPAT','CAMERA_LEVEL','CAMERA_AGGRESSIVE',
   'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
-  'auto_battery_enable','charge_aware_enable','night_quiet_enable','night_quiet_auto','device_bounds_override',
+  'auto_battery_enable','charge_aware_enable','night_quiet_enable','night_quiet_auto',
   'UX_ANIM_FORCE_RESTART','UX_MANAGE_ANIM_SCALE','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
   'region_allow_locale'];
 const CFG_ITEMS = [
@@ -1912,10 +1917,14 @@ const CFG_ITEMS = [
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
     desc:'Performance shortens long-press/multi-tap windows for faster response. OFF if holds misfire.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
-    desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage Animation Scales is ON.' },
+    desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage Animation Scales is ON.' }
   // --- Advanced ---
-  { key:'device_bounds_override', type:'bool', def:'1', name:'Device-Adaptive Bounds',
-    desc:'Governor uses frequency ceilings computed at install for your exact hardware (scaled from the OP15 reference and snapped to your real frequencies). Default ON. Turn OFF to force the compiled OP15 ceilings instead.' }
+  // NOTE: device_bounds_override is intentionally NOT exposed as a UI toggle.
+  // The device-adaptive frequency bounds (scaled per-device at install) are now
+  // always-on: the module ships governor.conf with device_bounds_override=1 and
+  // the governor honors it. There is no user reason to force the compiled OP15
+  // ceilings on non-OP15 hardware, so the control is hidden while the mechanism
+  // stays active. To override for debugging, edit governor.conf directly.
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
