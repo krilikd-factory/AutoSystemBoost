@@ -1491,9 +1491,30 @@ asb_apply_device_native_tuning() {
   asb_patch_location_inplace    "$2"
   asb_patch_wifi_inplace        "$_label"
 
-  # Save dynamic baselines + apply the opt-in aggressive layers through the
-  # tweak engine so the AUDIO_AGGRESSIVE / CAMERA_AGGRESSIVE / _INJECT toggles
-  # take effect on a plain reboot (post-fs-data re-reads the .asbbase baseline).
+  # OP15 ONLY: the camera app reads its recording profile from the real /odm
+  # partition (/odm/etc/camera/media_profiles.xml), which the system/vendor/odm
+  # overlay never mounts onto — so the 1080p bitrate lift wasn't reaching actual
+  # video capture (asbdiag reads that /odm path and flagged it). The multicamera
+  # crash on OP12/OP13 came from stacking the camera CONFIG set (conf_tuning /
+  # multicam calibration) over /odm; media_profiles.xml is a plain bitrate/quality
+  # XML, NOT HAL config, so placing just that one lifted file into
+  # system/odm/etc/camera is safe and does not recreate the crash. OP12/OP13 keep
+  # the full /odm-camera strip (they're the ones that crashed); this is canoe-only.
+  # asb_patch_media_profiles_inplace already produced the lifted copy under
+  # system/vendor/odm (or system/vendor/etc); we mirror that patched copy across.
+  if [ "$ASB_IS_OP15" = "true" ] && [ "$ASB_CAMERA" = "true" ]; then
+    _op15_mp_src=""
+    for _c in "$MODPATH/system/vendor/odm/etc/camera/media_profiles.xml" \
+              "$MODPATH/system/vendor/etc/media_profiles.xml"; do
+      [ -f "$_c" ] && { _op15_mp_src="$_c"; break; }
+    done
+    if [ -n "$_op15_mp_src" ]; then
+      mkdir -p "$MODPATH/system/odm/etc/camera" 2>/dev/null
+      cp -f "$_op15_mp_src" "$MODPATH/system/odm/etc/camera/media_profiles.xml" 2>/dev/null \
+        && chmod 0644 "$MODPATH/system/odm/etc/camera/media_profiles.xml" 2>/dev/null \
+        && ui_print "    + OP15: lifted media_profiles placed on /odm camera path (bitrate XML only, no HAL config)"
+    fi
+  fi
   if [ "$ASB_AUDIO" = "true" ] || [ "$ASB_CAMERA" = "true" ]; then
     if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
       . "$MODPATH/runtime/asb_tweaks.sh"
@@ -1689,7 +1710,9 @@ asb_prune_module() {
   # system/vendor/odm ONLY (matching the known-good module). A system/odm camera
   # copy is what made APatch stack a mount over the real /odm and crash the
   # multicamera HAL, so we remove it unconditionally to clean up any stale mirror
-  # a previous (broken) build may have left.
+  # a previous (broken) build may have left. (OP15 re-places just the lifted
+  # media_profiles.xml here later, inside asb_apply_device_native_tuning, AFTER
+  # the media pass has produced it — see that function.)
   rm -rf "$MODPATH/system/odm/etc/camera" 2>/dev/null || true
   rm -f  "$MODPATH/system/odm/etc/media_profiles"*".xml" 2>/dev/null || true
 
