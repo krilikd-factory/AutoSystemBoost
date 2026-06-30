@@ -27,7 +27,11 @@ mkdir -p "$(dirname "$OUT")" 2>/dev/null
 _gp() { getprop "$1" 2>/dev/null; }
 _count_glob() {  # $1=dir $2=pattern  -> count of matching files (0 if none)
   _d="$1"; _pat="$2"; [ -d "$_d" ] || { echo 0; return; }
-  find "$_d" -type f -name "$_pat" 2>/dev/null | grep -c . 2>/dev/null || echo 0
+  # grep -c already prints 0 on no match, but it EXITS non-zero then, so a
+  # "|| echo 0" would append a SECOND 0 and yield a two-line value that breaks
+  # the caller's $((...)) with "Illegal number". Count with wc -l instead (always
+  # one clean integer, exit 0) and strip whitespace.
+  find "$_d" -type f -name "$_pat" 2>/dev/null | wc -l | tr -d ' \n'
 }
 
 # Roots to scan, in the order Android's HALs resolve them. /vendor and
@@ -114,7 +118,7 @@ _ROOTS="/vendor /system/vendor /odm /vendor/odm /system/vendor/odm /system/odm"
   for _r in $_ROOTS; do
     _cd="$_r/etc/camera"
     [ -d "$_cd" ] || continue
-    _cn=$(find "$_cd" -type f 2>/dev/null | grep -c . 2>/dev/null || echo 0)
+    _cn=$(find "$_cd" -type f 2>/dev/null | wc -l | tr -d ' \n')
     _cam_total=$((_cam_total + _cn))
     echo "  [$_r/etc/camera] files=$_cn"
   done
