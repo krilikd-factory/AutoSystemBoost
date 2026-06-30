@@ -193,6 +193,7 @@ jobs:
             "tools/asb_smart_mode.sh" \
             "tools/asb_vendor_thermal_probe.sh" \
             "tools/asb_diag.sh" \
+            "tools/asb_install_probe.sh" \
             "tools/asb_doctor.sh" \
             "tools/asb_audit_state.sh" \
             "tools/asb_verify_device.sh" \

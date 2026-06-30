@@ -157,7 +157,8 @@ jobs:
           # Device-adaptive layer (must ship so install/boot can run them):
           #   asb_discover.sh        — writes device_caps.env (facts)
           #   asb_synthesize_bounds.sh — writes device_bounds.env (OP15-ratio bounds)
-          for _t in asb_discover.sh asb_synthesize_bounds.sh; do
+          #   asb_install_probe.sh   — install-time stock-file inventory/analysis
+          for _t in asb_discover.sh asb_synthesize_bounds.sh asb_install_probe.sh; do
             if [ -f "tools/$_t" ]; then
               mkdir -p "$PKG_REL/tools"
               install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"
