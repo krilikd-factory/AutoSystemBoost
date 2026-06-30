@@ -1087,6 +1087,18 @@ apply_bg_trim_runtime() {
   stop vendor.oplus.hardware.cammidasservice-V1-service >/dev/null 2>&1 || true
   stop vendor.oplus.hardware.olc2-V3-service           >/dev/null 2>&1 || true
 
+  # Stop debug/crash-dump/telemetry daemons that run in the background but serve
+  # no purpose on a user's daily driver. These only collect logs/ramdumps for
+  # developers; stopping them frees a little CPU/RAM and removes some wakeups.
+  # All are safe to stop (they re-spawn on next boot if a stop didn't take, and
+  # none are required for normal operation). Kept conservative — no system_server
+  # or connectivity daemons here.
+  for _svc in minidump minidump32 minidump64 qseelogd wlanramdumpcollector \
+              mqsasd bootstat poweroff_charger_log mtdoopslog ostatsd \
+              charge_logger cnss_diag tcpdump; do
+    stop "$_svc" >/dev/null 2>&1 || true
+  done
+
   if command -v asb_settings_put >/dev/null 2>&1; then
     asb_settings_put global wifi_scan_always_enabled 0
     asb_settings_put global wifi_wakeup_enabled 0
@@ -1951,6 +1963,19 @@ apply_extra_settings() {
   asb_settings_put global send_action_app_error 0
   asb_settings_put global enhanced_connectivity_enabled 0
   asb_settings_put global adaptive_connectivity_enabled 0
+  # Connectivity (captive-portal) check: point it at Cloudflare's generate_204
+  # endpoint with a gstatic fallback. The stock Google-only endpoint can be slow
+  # to answer (or blocked in some regions), which shows up as a laggy "no
+  # internet" state on a working connection or delayed connectivity after wake.
+  # Cloudflare's 204 is fast and globally anycast; the fallback keeps detection
+  # working if it's ever unreachable. Device-agnostic, no battery cost.
+  asb_settings_put global captive_portal_mode 1
+  asb_settings_put global captive_portal_detection_enabled 1
+  asb_settings_put global captive_portal_use_https 1
+  asb_settings_put global captive_portal_http_url "http://cp.cloudflare.com/generate_204"
+  asb_settings_put global captive_portal_https_url "https://cp.cloudflare.com/generate_204"
+  asb_settings_put global captive_portal_fallback_url "http://connectivitycheck.gstatic.com/generate_204"
+  asb_settings_put global captive_portal_other_fallback_url "https://www.google.com/generate_204"
 }
 apply_extra_settings
 asb_load_profile
