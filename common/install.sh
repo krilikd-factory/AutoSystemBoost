@@ -954,6 +954,13 @@ asb_loc_patch_izat() {
 asb_patch_media_profiles_inplace() {
   [ "$ASB_CAMERA" = "true" ] || { ui_print "[*] Camera/media category off - skipping media_profiles lift"; return 0; }
   _mpp_done=0
+  # Canoe (or SM8850 sibling) gets the 40 Mbit 1080p target; everything else
+  # 37.3 Mbit. Matches what asbdiag verifies per platform.
+  _ASB_MP_CANOE=0
+  case "$(getprop ro.board.platform 2>/dev/null)$(getprop ro.product.device 2>/dev/null)" in
+    *canoe*|*sm8850*|*SM8850*) _ASB_MP_CANOE=1 ;;
+  esac
+  [ "$ASB_IS_OP15" = "true" ] && _ASB_MP_CANOE=1
   # Enumerate the device's own live media_profiles files (skip vintf/manifest copies).
   for _mp_live in $(find /vendor /odm /system/vendor /system/odm /system_ext /product \
                       -type f -name 'media_profiles*.xml' 2>/dev/null \
@@ -962,9 +969,37 @@ asb_patch_media_profiles_inplace() {
     mkdir -p "$MODPATH/$(dirname "$_mp_rel")" 2>/dev/null
     cp -f "$_mp_live" "$MODPATH/$_mp_rel" 2>/dev/null || continue
     chmod 0644 "$MODPATH/$_mp_rel" 2>/dev/null
-    awk '
+    # Resolution-aware bitrate lift. We parse each <Video .../> line for its
+    # width/height so 1080p and 4K get clean, intended targets instead of a
+    # value-bracket guess (the old bracket math landed 1080p on 37.3M, which is
+    # below the canoe target and read as a FAIL). 1080p -> 40 Mbit on canoe
+    # (37.3 Mbit elsewhere), 2160p/4K -> 100 Mbit, and any remaining bitRate that
+    # isn't on a sized Video line still gets the conservative bracket bump so
+    # audio/other caps are untouched. Never lowers a value.
+    awk -v is_canoe="$_ASB_MP_CANOE" '
+    function lift_sized(b, w, h,   t) {
+      t = b
+      if (w == 1920 && h == 1080) t = (is_canoe ? 40000000 : 37300000)
+      else if (w == 3840 && h == 2160) t = 100000000
+      else if (w == 1280 && h == 720)  t = (b < 20000000 ? 20000000 : b)
+      if (t < b) t = b
+      return t
+    }
     {
-      line = $0; out = ""
+      line = $0
+      # Sized video line: lift by resolution.
+      if (match(line, /width="[0-9]+"/) && match(line, /height="[0-9]+"/)) {
+        w = line; sub(/.*width="/, "", w); sub(/".*/, "", w); w = w + 0
+        h = line; sub(/.*height="/, "", h); sub(/".*/, "", h); h = h + 0
+        if (match(line, /bitRate="[0-9]+"/)) {
+          b = substr(line, RSTART, RLENGTH); gsub(/[^0-9]/, "", b); b = b + 0
+          nb = lift_sized(b, w, h)
+          sub(/bitRate="[0-9]+"/, "bitRate=\"" nb "\"", line)
+        }
+        print line; next
+      }
+      # Unsized line: keep the conservative bracket bump (back-compat).
+      out = ""
       while (match(line, /bitRate="[0-9]+"/)) {
         pre = substr(line, 1, RSTART-1)
         m = substr(line, RSTART, RLENGTH)
@@ -1538,6 +1573,13 @@ asb_preserve_user_config() {
   [ -f "$_old_conf" ] || _old_conf="$NVBASE/modules_update/$MODID/config/governor.conf"
   _snap_conf="/data/adb/asb/governor.conf.snapshot"
   [ -f "$_new_conf" ] || return 0
+  # One-time cleanup: device_bounds_override stopped being a user toggle and is
+  # now always-on. Scrub any stale line out of the previous config and the
+  # snapshot so a value saved back when the toggle still existed (possibly =0)
+  # can't leak forward. The freshly-shipped governor.conf already carries =1.
+  for _stale_conf in "$_old_conf" "$_snap_conf"; do
+    [ -f "$_stale_conf" ] && sed -i '/^[[:space:]]*device_bounds_override=/d' "$_stale_conf" 2>/dev/null || true
+  done
   # Pick the best available source of old values.
   _src=""
   [ -f "$_old_conf" ] && _src="$_old_conf"
@@ -1550,7 +1592,11 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale device_bounds_override"
+region_allow_locale"
+  # NOTE: device_bounds_override is deliberately NOT migrated. It's no longer a
+  # user toggle — the device-adaptive bounds are always-on — so the freshly
+  # shipped governor.conf value (=1) must always win, even if an older install or
+  # snapshot carried a stale =0 from when the toggle still existed.
 
   _migrated=0
   for _k in $_user_keys; do
@@ -1583,7 +1629,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale device_bounds_override"
+region_allow_locale"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
