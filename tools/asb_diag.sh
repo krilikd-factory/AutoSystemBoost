@@ -477,7 +477,13 @@ else
   else
     NOTE "conf_tuning_params.json absent"
   fi
-  CMP="$(firstf '/odm/etc/camera/media_profiles.xml' '/vendor/odm/etc/camera/media_profiles.xml')"
+  # Read the bitrate from the file the recording pipeline actually uses AND that
+  # the module can overlay. On OP15 the camera's own /odm/etc/camera/media_profiles
+  # sits on a read-only opex partition the module can't touch, so checking it
+  # reports stock and falsely fails — the media framework reads the bitrate from
+  # /vendor/etc/media_profiles*.xml, which ASB DOES overlay and lift. Prefer those;
+  # fall back to the camera-path copies only if the framework ones are absent.
+  CMP="$(firstf '/vendor/etc/media_profiles.xml' '/vendor/etc/media_profiles_V1_0.xml' '/odm/etc/camera/media_profiles.xml' '/vendor/odm/etc/camera/media_profiles.xml')"
   if [ -n "$CMP" ]; then
     _br=$(awk '/quality="1080p"/{f=1} f&&/bitRate=/{match($0,/bitRate="[0-9]+"/);print substr($0,RSTART+9,RLENGTH-10);exit}' "$CMP" 2>/dev/null)
     case "$_cam_plat" in canoe|sm8850*) _bexp=40000000 ;; *) _bexp=37300000 ;; esac
