@@ -8,16 +8,20 @@ persist.bluetooth.ble_drop_power=false
 persist.bluetooth.btsnoopenable=false
 persist.bluetooth.disable.mihc=false
 persist.bluetooth.disableabsvol=false
-persist.bluetooth.dualconnection.supported=true
 persist.bluetooth.enablenewavrcp=true
 persist.bluetooth.hfp_available_guard=false
 persist.bluetooth.idmclient.conid=true
 persist.bluetooth.idmconnect.devicetype=true
 persist.bluetooth.support.idm_service=true
 persist.bluetooth.support.sar=0
-persist.bluetooth.support_le_conn_interval_change=true
-persist.bluetooth.support_limit_remote_name_request=false
-persist.bluetooth.support_page_scan_change=true
+# NOTE: the connection-behaviour forces support_le_conn_interval_change,
+# support_page_scan_change, dualconnection.supported and
+# qcom.bluetooth.dualmode_transport_support were removed. They override how the
+# stack negotiates connection interval, page scan and dual-mode transport. On
+# standard A2DP/HFP headsets they are harmless, but they changed the negotiation
+# enough to interfere with binding low-power single-transport wearables (the
+# Amazfit/Zepp pairing failure). Letting the stock stack negotiate restores
+# reliable pairing; audio codec props (LDAC/LHDC/aptX/LC3 etc.) are untouched.
 persist.enable.bluetooth.voipleawar=true
 persist.sys.bluetooth.abnormal_sco_notify=true
 persist.sys.bluetooth.ble.retry.support=true
@@ -39,7 +43,6 @@ persist.vendor.bt.a2dp.lhdc=true
 persist.vendor.btstack.enable.gatt_robust_caching=true
 persist.vendor.btstack.enable.lpa=true
 persist.vendor.btstack.qhs_enable=false
-persist.vendor.qcom.bluetooth.dualmode_transport_support=true
 persist.vendor.qcom.bluetooth.enable.lpa=true
 persist.vendor.qcom.bluetooth.pbap_pse_dynamic_version_upgrade=true
 persist.vendor.qcom.bluetooth.vsc_enabled=true
@@ -55,8 +58,13 @@ persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled=true
 persist.bluetooth.sniff_delay=1
 persist.bluetooth.sniff_max_interval=128
 persist.bluetooth.sniff_min_interval=120
-persist.vendor.bluetooth.le.scan_interval=1000
-persist.vendor.bluetooth.le.scan_window=100
+# NOTE: persist.vendor.bluetooth.le.scan_interval / le.scan_window were removed
+# here. Forcing window/interval = 100/1000 set the BLE scan duty cycle to ~10%,
+# which made the radio listen only a tenth of the time while scanning. Low-power
+# wearables (e.g. Amazfit watches paired through the Zepp app) advertise at
+# intervals that this sparse window routinely missed, so the companion app could
+# never discover or bind the watch. Leaving these unset lets the BT stack use its
+# stock adaptive scan window, which finds advertising peripherals reliably.
 persist.vendor.bt.enable.swb=true
 persist.vendor.bt.enable.swbpm=true
 persist.vendor.btstack.enable.swb=true

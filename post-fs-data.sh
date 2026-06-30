@@ -108,7 +108,7 @@ asb_feature_enabled WIFI && asb_persist_safe persist.vendor.wlan.scan_throttle 1
 asb_feature_enabled BT && asb_persist_safe persist.vendor.bluetooth.btsnoopenable false
 # ASB:BT:END
 # ASB:VENDOR_OVERLAY:BEGIN
-if asb_feature_enabled VENDOR_OVERLAY && [ -d "$MODDIR/system/vendor/etc/perf" ]; then
+if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf" ] || [ -d "$MODDIR/system/vendor/odm/etc/camera" ] || [ -d "$MODDIR/system/odm/etc/camera" ] || [ -d "$MODDIR/system/vendor/etc/audio" ] || [ -f "$MODDIR/generated_overlay_manifest.txt" ]; }; then
   _mounts_log="/data/adb/asb/vendor_mounts.log"
   _bootflag="/data/adb/asb/vendor_overlay_active"
   _bootctr="/data/adb/asb/vendor_boot_counter"
@@ -118,6 +118,36 @@ if asb_feature_enabled VENDOR_OVERLAY && [ -d "$MODDIR/system/vendor/etc/perf" ]
     echo "ts=$(date +%s) action=skip reason=bootloop_protection counter=$_cur_ctr" > "$_mounts_log"
     rm -f "$_bootflag" 2>/dev/null
     rm -f "$MODDIR"/system/vendor/etc/perf/* 2>/dev/null
+    # The unified device-native pipeline clones THIS device's own audio, camera,
+    # media, GPS and perf into the module. If the device has failed to boot 3x,
+    # tear the whole generated overlay back out so it returns fully stock for all
+    # of these (everything re-clones on the next clean reinstall). Audio is
+    # included because a malformed mixer/effects file is a plausible boot blocker.
+    # We remove by category AND replay the manifest, so anything generated is
+    # covered even if the category list ever drifts.
+    rm -rf "$MODDIR/system/vendor/etc/audio" \
+           "$MODDIR/system/vendor/odm/etc/audio" \
+           "$MODDIR/system/odm/etc/audio" 2>/dev/null
+    rm -rf "$MODDIR/system/vendor/odm/etc/camera" \
+           "$MODDIR/system/odm/etc/camera" \
+           "$MODDIR/system/vendor/etc/camera" 2>/dev/null
+    rm -f  "$MODDIR/system/vendor/etc/media_profiles"*.xml \
+           "$MODDIR/system/vendor/odm/etc/media_profiles"*.xml \
+           "$MODDIR/system/odm/etc/media_profiles"*.xml 2>/dev/null
+    rm -f  "$MODDIR/system/vendor/etc/gps.conf" "$MODDIR/system/odm/etc/gps.conf" \
+           "$MODDIR/system/vendor/odm/etc/gps.conf" \
+           "$MODDIR/system/vendor/etc/izat.conf" "$MODDIR/system/odm/etc/izat.conf" \
+           "$MODDIR/system/vendor/odm/etc/izat.conf" 2>/dev/null
+    # Manifest replay: delete every file the generator recorded (belt + braces).
+    if [ -f "$MODDIR/generated_overlay_manifest.txt" ]; then
+      while IFS= read -r _gf; do
+        case "$_gf" in '#'*|'') continue ;; esac
+        rm -f "$MODDIR/$_gf" 2>/dev/null
+      done < "$MODDIR/generated_overlay_manifest.txt"
+      mv -f "$MODDIR/generated_overlay_manifest.txt" \
+            "$MODDIR/generated_overlay_manifest.reverted.txt" 2>/dev/null
+    fi
+    echo "ts=$(date +%s) action=revert_generated_overlay reason=bootloop_protection" >> "$_mounts_log"
   else
     _next_ctr=$((_cur_ctr + 1))
     echo "$_next_ctr" > "$_bootctr"
