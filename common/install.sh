@@ -1491,30 +1491,14 @@ asb_apply_device_native_tuning() {
   asb_patch_location_inplace    "$2"
   asb_patch_wifi_inplace        "$_label"
 
-  # OP15 ONLY: the camera app reads its recording profile from the real /odm
-  # partition (/odm/etc/camera/media_profiles.xml), which the system/vendor/odm
-  # overlay never mounts onto — so the 1080p bitrate lift wasn't reaching actual
-  # video capture (asbdiag reads that /odm path and flagged it). The multicamera
-  # crash on OP12/OP13 came from stacking the camera CONFIG set (conf_tuning /
-  # multicam calibration) over /odm; media_profiles.xml is a plain bitrate/quality
-  # XML, NOT HAL config, so placing just that one lifted file into
-  # system/odm/etc/camera is safe and does not recreate the crash. OP12/OP13 keep
-  # the full /odm-camera strip (they're the ones that crashed); this is canoe-only.
-  # asb_patch_media_profiles_inplace already produced the lifted copy under
-  # system/vendor/odm (or system/vendor/etc); we mirror that patched copy across.
-  if [ "$ASB_IS_OP15" = "true" ] && [ "$ASB_CAMERA" = "true" ]; then
-    _op15_mp_src=""
-    for _c in "$MODPATH/system/vendor/odm/etc/camera/media_profiles.xml" \
-              "$MODPATH/system/vendor/etc/media_profiles.xml"; do
-      [ -f "$_c" ] && { _op15_mp_src="$_c"; break; }
-    done
-    if [ -n "$_op15_mp_src" ]; then
-      mkdir -p "$MODPATH/system/odm/etc/camera" 2>/dev/null
-      cp -f "$_op15_mp_src" "$MODPATH/system/odm/etc/camera/media_profiles.xml" 2>/dev/null \
-        && chmod 0644 "$MODPATH/system/odm/etc/camera/media_profiles.xml" 2>/dev/null \
-        && ui_print "    + OP15: lifted media_profiles placed on /odm camera path (bitrate XML only, no HAL config)"
-    fi
-  fi
+  # NOTE on the camera recording profile: on OP15 the camera's own
+  # /odm/etc/camera/media_profiles.xml lives on a read-only opex/dynamic-odm
+  # partition (mounted via /mnt/opex/com.oplus.odmf, with /vendor/odm a symlink to
+  # /odm), which the module system cannot overlay — so there's no point shipping a
+  # system/odm copy (an earlier attempt did nothing). It doesn't matter: the media
+  # framework reads /vendor/etc/media_profiles*.xml for the recording bitrate, and
+  # those ARE overlaid and lifted to 40 Mbit by asb_patch_media_profiles_inplace
+  # above. Video capture gets the higher bitrate through that path.
   if [ "$ASB_AUDIO" = "true" ] || [ "$ASB_CAMERA" = "true" ]; then
     if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
       . "$MODPATH/runtime/asb_tweaks.sh"
