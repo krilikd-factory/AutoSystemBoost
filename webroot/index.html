@@ -2179,6 +2179,16 @@ function closeConfigPage(toMain) {
 
   function start(e) {
     if (e.touches && e.touches.length > 1) { tracking = false; return; }
+    // Ignore gestures that begin on an interactive control. Dragging a range
+    // slider moves the finger horizontally, which otherwise looked exactly like
+    // a page swipe and flipped the page mid-drag. Skip tracking when the touch
+    // starts on a slider/input/button (or inside the .cfg-range wrapper), so the
+    // control gets the drag and the page stays put.
+    var tgt = e.target;
+    if (tgt && tgt.closest &&
+        tgt.closest('input, select, textarea, button, .cfg-range, .cfg-seg, [type="range"]')) {
+      tracking = false; x0 = y0 = null; return;
+    }
     var t = e.touches ? e.touches[0] : e;
     x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); tracking = true;
   }
