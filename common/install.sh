@@ -1563,6 +1563,49 @@ asb_prune_non_op15_vendor_overlays() {
   find "$MODPATH/system" -type d -empty -print -delete 2>/dev/null || true
 }
 
+asb_reset_learning_on_upgrade_to_v56() {
+  # V56 changed the environment classifier (it used to mislabel active screen-on
+  # sessions as "hostile", poisoning the learned buckets) and extended the
+  # session-record schema. So on an upgrade FROM V55 or earlier we reset ONLY the
+  # learned state, letting Smart Mode re-learn cleanly under the fixed classifier.
+  # User settings (config snapshot, smart-mode on/off, night window, profile) and
+  # device detection are deliberately preserved — a learning reset, not a wipe.
+  # First install (no prior version) is left alone.
+  _asb_dir="/data/adb/asb"
+  _marker="$_asb_dir/v56_learning_reset_done"
+  [ -f "$_marker" ] && return 0   # already done on this device
+
+  _old_prop="$NVBASE/modules/$MODID/module.prop"
+  [ -f "$_old_prop" ] || _old_prop="$NVBASE/modules_update/$MODID/module.prop"
+  [ -f "$_old_prop" ] || return 0   # no prior install -> nothing learned yet
+  _old_vc="$(grep -E '^versionCode=' "$_old_prop" 2>/dev/null | head -1 | sed 's/[^0-9]//g')"
+  case "$_old_vc" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_old_vc" -le 550 ] || return 0   # 560+ already has the fixed classifier
+
+  ui_print " "
+  ui_print "${SEPARATOR}"
+  ui_print "[*] Upgrade from V55 or earlier: resetting Smart Mode learning"
+  ui_print "    (classifier was fixed; old buckets were trained under the buggy"
+  ui_print "     one). Your settings and device data are kept."
+  ui_print "${SEPARATOR}"
+
+  # Learned state only — trained under the old classifier / old schema:
+  rm -f "$_asb_dir/buckets.bin" "$_asb_dir/buckets.bin.bak" \
+        "$_asb_dir/pstats_balanced.json" "$_asb_dir/pstats_battery.json" \
+        "$_asb_dir/smart_appheat.bin" \
+        "$_asb_dir/session_history.jsonl" \
+        "$_asb_dir/session_history_migrated_v47" \
+        "$_asb_dir/auto_battery_state" 2>/dev/null || true
+
+  # PRESERVED on purpose (NOT deleted): governor.conf.snapshot, user_config,
+  # smart_mode_enabled, night_window.conf, active_profile, smart_prev_profile,
+  # device_bounds.env, device_caps.env.
+
+  mkdir -p "$_asb_dir" 2>/dev/null
+  : > "$_marker" 2>/dev/null
+  ui_print "    + learning reset; settings and device data preserved"
+}
+
 asb_preserve_user_config() {
   # On REINSTALL/UPDATE, carry the user's WebUI choices over the freshly-shipped
   # governor.conf. We look in TWO places for the old values, in priority order:
@@ -2854,6 +2897,7 @@ EOF
 	asb_prune_module
 	find $MODPATH -empty -type d -delete
 
+	asb_reset_learning_on_upgrade_to_v56
 	asb_preserve_user_config
 
 	if [ -f "$MODPATH/config/governor.conf" ]; then
