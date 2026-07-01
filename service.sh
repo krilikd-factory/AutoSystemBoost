@@ -1139,13 +1139,15 @@ apply_bt_runtime() {
   asb_persist_safe persist.bluetooth.a2dp_offload.disabled false
   asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled false
   asb_persist_safe persist.bluetooth.a2dp.optional_codecs_enabled 1
-  asb_persist_safe persist.bluetooth.leaudio.enabled true
   asb_persist_safe persist.vendor.bt.enable.swb true
   asb_persist_safe persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true
-  asb_persist_safe persist.vendor.qcom.bluetooth.leaudio.enable true
-  if [ "${AUDIO_AGGRESSIVE:-0}" = "1" ]; then
-    asb_persist_safe persist.bluetooth.spatial_audio_support true
-  fi
+  # LE Audio is deliberately NOT forced on here, to stay consistent with
+  # system.prop (which had the LE Audio / profile / class_of_device forces removed
+  # to fix classic-BLE watch pairing — Amazfit / T-Rex Ultra 2 via Zepp). In
+  # practice the system.prop change alone fixes pairing, because the offending
+  # keys are read early at BT-stack init; this late setprop ran after the stack
+  # was already up. It is dropped anyway so the module never re-forces LE Audio
+  # from any layer. A2DP codec quality for headphones is unaffected.
 }
 asb_feature_enabled BT && apply_bt_runtime
 apply_camera_props_static() {
@@ -1719,9 +1721,8 @@ apply_bt_audio_hygiene() {
     resetprop -n persist.vendor.qcom.bluetooth.enable.lpa true >/dev/null 2>&1 || true
     resetprop -n persist.vendor.btstack.enable.lpa true >/dev/null 2>&1 || true
     resetprop -n persist.vendor.bt.enable.lpa true >/dev/null 2>&1 || true
-    resetprop -n persist.vendor.qcom.bluetooth.lc3_offload.enable true >/dev/null 2>&1 || true
-    resetprop -n persist.vendor.qcom.bluetooth.leaudio.enable true >/dev/null 2>&1 || true
-    resetprop -n persist.bluetooth.leaudio.enabled true >/dev/null 2>&1 || true
+    # LE Audio (lc3_offload / leaudio.enable / leaudio.enabled) intentionally not
+    # forced — see apply_bt_runtime note: it breaks classic-BLE watch pairing.
   fi
 }
 asb_feature_enabled BT && apply_bt_audio_hygiene

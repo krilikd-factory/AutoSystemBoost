@@ -1,18 +1,28 @@
 # ASB:BT:BEGIN
+# --- Watch/wearable pairing fix (V56) ---------------------------------------
+# A user reported the Zepp app could not pair an Amazfit / T-Rex Ultra 2 watch
+# while ASB was active; removing system.prop entirely fixed it. Removing only the
+# BLE scan-window throttle was not enough, so the following override groups were
+# also dropped, because each can break a classic-BLE watch's connect/pair flow:
+#   * bluetooth.device.class_of_device force (changes the phone's advertised CoD)
+#   * LE Audio forcing (leaudio.enabled, le_audio profile, lc3/opus/spatial, the
+#     CSIP/VCP/HAP/MCS/TBS/BAS/CCP coordinated-set + ASHA profiles) — a watch on
+#     classic BLE GATT can fail to bind once the stack advertises LE Audio
+#   * GATT / pairing behaviour overrides (gatt cache, robust caching, ble retry,
+#     oob, linkkey_enc, wearcheck_support, rssi-distance)
+#   * IDM device-management props (mihc, idmclient/idmconnect/idm_service)
+# Audio *codec* quality for headphones (LHDC/aptX Adaptive/AAC/SBC-HD, A2DP
+# offload, codec latency/effect, ABR) is intentionally kept — it does not affect
+# BLE peripheral pairing.
 log.tag.bluetooth=ERROR
 persist.log.tag.bluetooth=ERROR
-bluetooth.device.class_of_device=512,16711680,4
 bt.max.hfpclient.connections=5
 net.bt.name=BT-INet
 persist.bluetooth.ble_drop_power=false
 persist.bluetooth.btsnoopenable=false
-persist.bluetooth.disable.mihc=false
 persist.bluetooth.disableabsvol=false
 persist.bluetooth.enablenewavrcp=true
 persist.bluetooth.hfp_available_guard=false
-persist.bluetooth.idmclient.conid=true
-persist.bluetooth.idmconnect.devicetype=true
-persist.bluetooth.support.idm_service=true
 persist.bluetooth.support.sar=0
 # NOTE: the connection-behaviour forces support_le_conn_interval_change,
 # support_page_scan_change, dualconnection.supported and
@@ -24,14 +34,6 @@ persist.bluetooth.support.sar=0
 # reliable pairing; audio codec props (LDAC/LHDC/aptX/LC3 etc.) are untouched.
 persist.enable.bluetooth.voipleawar=true
 persist.sys.bluetooth.abnormal_sco_notify=true
-persist.sys.bluetooth.ble.retry.support=true
-persist.sys.bluetooth.gatt.cache.support=true
-persist.sys.bluetooth.linkkey_enc.support=true
-persist.sys.bluetooth.oob.support=true
-persist.sys.bluetooth.read_rssi_from_cmd=false
-persist.sys.bluetooth.rssi_distance.balanced=false
-persist.sys.bluetooth.rssi_distance.support=true
-persist.sys.bluetooth.wearcheck_support=true
 persist.sys.bluetooth_restricte_state=false
 persist.sys.bluetooth_restricte_state_Screen=false
 persist.vendor.bluetooth.asha_power_control=true
@@ -40,7 +42,6 @@ persist.vendor.bluetooth.disableabsvol=false
 persist.vendor.bluetooth.haltest=false
 persist.vendor.bluetooth.heif=true
 persist.vendor.bt.a2dp.lhdc=true
-persist.vendor.btstack.enable.gatt_robust_caching=true
 persist.vendor.btstack.enable.lpa=true
 persist.vendor.btstack.qhs_enable=false
 persist.vendor.qcom.bluetooth.enable.lpa=true
@@ -84,7 +85,6 @@ persist.bluetooth.aptxadaptive_offload.enabled=true
 persist.vendor.qcom.bluetooth.aptxadaptiver2_1_support=true
 persist.vendor.qcom.bluetooth.aptxadaptiver2_2_support=true
 persist.vendor.qcom.bluetooth.aptxadaptiver2_3_support=true
-persist.vendor.qcom.bluetooth.lossless_aptx_adaptive_le.enabled=true
 audio.a2dp.codec.latency=true
 vendor.audio.a2dp.codec.latency=true
 ro.vendor.audio.a2dp.codec.latency=true
@@ -97,7 +97,6 @@ bluetooth.profile.avrcp.target.enabled=true
 bluetooth.profile.avrcp.controller.enabled=true
 bluetooth.profile.hfp.ag.enabled=true
 bluetooth.profile.hfp.wbs.enabled=true
-bluetooth.profile.asha.central.enabled=true
 bluetooth.profile.gatt.enabled=true
 bluetooth.profile.hid.host.enabled=true
 bluetooth.profile.hid.device.enabled=true
@@ -107,26 +106,10 @@ bluetooth.profile.pan.nap.enabled=true
 bluetooth.profile.pan.panu.enabled=true
 bluetooth.profile.pbap.server.enabled=true
 bluetooth.profile.pbap.client.enabled=true
-bluetooth.profile.bas.client.enabled=true
-bluetooth.profile.ccp.server.enabled=true
-bluetooth.profile.csip.set_coordinator.enabled=true
-bluetooth.profile.vcp.controller.enabled=true
-bluetooth.profile.hap.client.enabled=true
-bluetooth.profile.mcs.server.enabled=true
-bluetooth.profile.tbs.server.enabled=true
 bluetooth.hfp.codec_aptx_voice.enabled=true
 persist.vendor.audio.cloud.enable.hfpclient=true
-bluetooth.leaudio.dual_bidirection_swb.supported=true
-persist.bluetooth.opus.enabled=true
-ro.bluetooth.leaudio_offload.supported=true
-ro.bluetooth.leaudio_switcher.supported=true
-bluetooth.profile.le_audio.enabled=true
 persist.bluetooth.a2dp.lhdc.version=5
-persist.bluetooth.leaudio.enabled=true
 persist.vendor.bluetooth.a2dp.lhdc.version=5
-persist.vendor.qcom.bluetooth.lc3_offload.enable=true
-persist.vendor.qcom.bluetooth.leaudio.enable=true
-persist.bluetooth.spatial_audio_support=true
 persist.bluetooth.sbc_hd_higher_bitrate=1
 persist.vendor.bt.a2dp.hw_cdc=true
 persist.vendor.bt.aac_vbr_frm_ctl.enabled=true
@@ -138,7 +121,6 @@ persist.bluetooth.a2dp_offload.disabled=false
 persist.vendor.bluetooth.a2dp_offload.disabled=false
 persist.bluetooth.a2dp.aac.vbr_supported=true
 persist.bt.iot.enablelogging=false
-persist.sys.bt.oob.support=true
 persist.sys.bt.virtual_comm_spp=true
 persist.vendor.bt.enable.lpa=true
 persist.vendor.bt.iotinfo.report.enable=false
