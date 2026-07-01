@@ -1,11 +1,28 @@
 # AutoSystemBoost — Changelog
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Release-V55-16a34a?style=for-the-badge" alt="V55">
+  <img src="https://img.shields.io/badge/Previous-V54-6b7280?style=for-the-badge" alt="V54">
+  <img src="https://img.shields.io/badge/versionCode-550-0ea5e9?style=for-the-badge" alt="versionCode">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/OnePlus%2015-canoe-ef4444?style=flat-square" alt="OP15">
+  <img src="https://img.shields.io/badge/OnePlus%2013-sun-f59e0b?style=flat-square" alt="OP13">
+  <img src="https://img.shields.io/badge/OnePlus%2012-pineapple-eab308?style=flat-square" alt="OP12">
+  <img src="https://img.shields.io/badge/+%20any%20OnePlus-device--native-8b5cf6?style=flat-square" alt="any OnePlus">
+</p>
+
+---
+
 ## V55 — *device-adaptive: per-device CPU bounds + device-native vendor overlays*
 
-The "works properly on more than one phone" release. CPU ceilings now scale to the
-installing device's real hardware, and per-model vendor tuning (audio / camera /
-media / GPS / Wi-Fi) is built live from each device's own stock files instead of
-shipping pre-baked overlays (76 fewer files shipped as a result).
+The **"works properly on more than one phone"** release. Two shifts underneath it:
+CPU ceilings now scale to the installing device's real hardware, and per-model
+vendor tuning — audio, camera, media, GPS, Wi-Fi — is built **live from each
+device's own stock files** at install instead of shipping pre-baked overlays.
+Net result: **76 fewer files** shipped, and any OnePlus (not just the 15/13/12)
+gets real tuning. Cumulative over V54 — all settings and learned data carry across.
 
 ### 📱 Device-native vendor overlays for every OnePlus
 Dropped all pre-baked per-model overlays (canoe/alor audio SKUs, canoe
