@@ -468,7 +468,7 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-#define ASB_VERSION "V55"
+#define ASB_VERSION "V56"
 
 static const char *intent_names[] = {"unknown","benchmark","long_game","idle","mixed","sleep_idle","idle_warm"};
 
@@ -1573,9 +1573,11 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         }
         snprintf(out + strlen(out) - 1, outlen - (int)strlen(out),
             ",\"sus_pct\":%d,\"idle_q\":%d,\"cap_eff\":%d,"
+            "\"mem_psi_peak\":%d,\"mem_press_ticks\":%d,"
             "\"eff_sus_lvl\":%.2f,\"eff_sus_temp\":%d,\"eff_gr_cd\":%d,\"eff_gr_temp\":%d,"
             "\"eff_bat_fi\":%d,\"eff_bat_hl\":%.1f,\"eff_bat_ml\":%.1f,\"eff_bat_idle_gpu\":%d}",
             _sp, _iq, _ce,
+            fsm->mem_psi_peak_x100, fsm->mem_pressure_ticks,
             g_asb_cfg.sustained_level,
             asb_config_profile_sustained_temp_enter(&g_asb_cfg, fsm->profile_idx),
             g_asb_cfg.gaming_retry_cooldown_s, g_asb_cfg.gaming_retry_temp_max,
@@ -2546,6 +2548,30 @@ static int battery_session_trust(const asb_fsm_t *fsm) {
     return BAT_TRUST_CLEAN;
 }
 
+/* V56: read /proc/pressure/memory 'some avg10' as an integer x100 (e.g. 5.23 ->
+ * 523). Returns -1 if PSI is unavailable. Cheap single-line read; gives the
+ * session record memory visibility. Note asb_smart.h has its own bucketed PSI
+ * reader for the alpha-bias path; this one returns the raw scaled value for
+ * telemetry, which is why it's separate. */
+static int asb_read_mem_psi_x100(void) {
+    FILE *f = fopen("/proc/pressure/memory", "r");
+    if (!f) return -1;
+    char line[256];
+    int out = -1;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "some ", 5) != 0) continue;
+        char *p = strstr(line, "avg10=");
+        if (!p) break;
+        p += 6;
+        int whole = 0, frac = 0;
+        if (sscanf(p, "%d.%d", &whole, &frac) >= 1)
+            out = whole * 100 + frac;
+        break;
+    }
+    fclose(f);
+    return out;
+}
+
 static int classify_environment(const asb_fsm_t *fsm) {
     long dur = (fsm->ses_start_ts > 0) ? (time(NULL) - fsm->ses_start_ts) : 0;
     if (dur < 60) return ENV_QUIET;
@@ -2568,9 +2594,28 @@ static int classify_environment(const asb_fsm_t *fsm) {
                               (dur / (TIMER_IDLE_S > 0 ? TIMER_IDLE_S : 5)));
         if (radio_pct > 30) radio_noisy = 1;  /* >30% of ticks had active data */
     }
-    if (wph > g_asb_cfg.env_wph_hostile || iq < g_asb_cfg.env_iq_hostile || (radio_noisy && iq < 20))
+    /* V56 FIX: the idle-quality (iq) branch below is only meaningful when the
+     * session is genuinely idle/screen-off dominant. During active screen-on use
+     * (gaming, browsing, mixed) deep-idle time is naturally ~0, which the old
+     * code read as iq=0 and flagged HOSTILE -- mislabelling ordinary usage and
+     * poisoning battery learning (telemetry: 66% of "hostile" sessions had <=3
+     * wakes, i.e. no radio storm at all, and hostile sessions settled 0% of the
+     * time vs 98% for quiet). So the iq-based hostile/noisy verdict is gated on
+     * the session actually being idle-dominant: at least half its tracked time in
+     * an idle state. Wake-rate and real radio activity still classify regardless,
+     * since those ARE valid hostility signals even in a short active session. */
+    int idle_dominant = (bat_total > 0 &&
+                         (fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec)
+                             * 2 >= bat_total);
+
+    /* Real radio-storm / excessive-wake signals apply in any session. */
+    if (wph > g_asb_cfg.env_wph_hostile || (radio_noisy && iq < 20 && idle_dominant))
         return ENV_HOSTILE;
-    if (wph > g_asb_cfg.env_wph_noisy || iq < g_asb_cfg.env_iq_quiet || radio_noisy)
+    /* Idle-quality-based hostility only when the session is idle-dominant. */
+    if (idle_dominant && iq < g_asb_cfg.env_iq_hostile)
+        return ENV_HOSTILE;
+    if (wph > g_asb_cfg.env_wph_noisy || radio_noisy ||
+        (idle_dominant && iq < g_asb_cfg.env_iq_quiet))
         return ENV_NOISY;
     return ENV_QUIET;
 }
@@ -4784,6 +4829,17 @@ int main(int argc, char **argv) {
                 long net_bps = metrics.misc.rmnet_rx_bps + metrics.misc.rmnet_tx_bps;
                 if (net_bps > 5000)  /* >5KB/s = active data transfer */
                     fsm.bat_radio_active_ticks++;
+            }
+
+            /* V56: sample memory pressure (PSI some avg10) every tick so the
+             * session record can carry a peak + a pressured-tick count. Pure
+             * observation -- gives the module its first memory visibility. */
+            {
+                int _mp = asb_read_mem_psi_x100();
+                if (_mp >= 0) {
+                    if (_mp > fsm.mem_psi_peak_x100) fsm.mem_psi_peak_x100 = _mp;
+                    if (_mp >= 500) fsm.mem_pressure_ticks++;  /* >=5.0 avg10 */
+                }
             }
 
             /* pass virtual ceiling to FSM for gap reshaping */

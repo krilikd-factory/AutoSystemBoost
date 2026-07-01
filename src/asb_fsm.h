@@ -412,6 +412,12 @@ typedef struct {
     int             bat_wake_bg;        /* background wakes (no screen) */
     /* radio-aware -- count ticks with heavy mobile data during battery screen-off */
     int             bat_radio_active_ticks;
+    /* V56: peak memory-pressure (PSI some avg10, x100) seen during the session,
+     * and count of ticks under meaningful pressure. Gives the module its first
+     * visibility into RAM/swap stress so memory can be tracked and, later,
+     * learned against -- previously nothing about memory was recorded. */
+    int             mem_psi_peak_x100;
+    int             mem_pressure_ticks;
     int             bat_gaming_suppressed;
     int             bat_screen_off_count;
     long            bat_time_to_first_deep;
@@ -603,6 +609,8 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
     fsm->bat_wake_screen         = 0;
     fsm->bat_wake_bg             = 0;
     fsm->bat_radio_active_ticks  = 0;
+    fsm->mem_psi_peak_x100       = 0;
+    fsm->mem_pressure_ticks      = 0;
     fsm->bat_gaming_suppressed   = 0;
     fsm->bat_screen_off_count    = 0;
     fsm->bat_time_to_first_deep  = 0;
