@@ -1,19 +1,4 @@
 # ASB:BT:BEGIN
-# --- Watch/wearable pairing fix (V56) ---------------------------------------
-# A user reported the Zepp app could not pair an Amazfit / T-Rex Ultra 2 watch
-# while ASB was active; removing system.prop entirely fixed it. Removing only the
-# BLE scan-window throttle was not enough, so the following override groups were
-# also dropped, because each can break a classic-BLE watch's connect/pair flow:
-#   * bluetooth.device.class_of_device force (changes the phone's advertised CoD)
-#   * LE Audio forcing (leaudio.enabled, le_audio profile, lc3/opus/spatial, the
-#     CSIP/VCP/HAP/MCS/TBS/BAS/CCP coordinated-set + ASHA profiles) — a watch on
-#     classic BLE GATT can fail to bind once the stack advertises LE Audio
-#   * GATT / pairing behaviour overrides (gatt cache, robust caching, ble retry,
-#     oob, linkkey_enc, wearcheck_support, rssi-distance)
-#   * IDM device-management props (mihc, idmclient/idmconnect/idm_service)
-# Audio *codec* quality for headphones (LHDC/aptX Adaptive/AAC/SBC-HD, A2DP
-# offload, codec latency/effect, ABR) is intentionally kept — it does not affect
-# BLE peripheral pairing.
 log.tag.bluetooth=ERROR
 persist.log.tag.bluetooth=ERROR
 bt.max.hfpclient.connections=5
@@ -24,14 +9,6 @@ persist.bluetooth.disableabsvol=false
 persist.bluetooth.enablenewavrcp=true
 persist.bluetooth.hfp_available_guard=false
 persist.bluetooth.support.sar=0
-# NOTE: the connection-behaviour forces support_le_conn_interval_change,
-# support_page_scan_change, dualconnection.supported and
-# qcom.bluetooth.dualmode_transport_support were removed. They override how the
-# stack negotiates connection interval, page scan and dual-mode transport. On
-# standard A2DP/HFP headsets they are harmless, but they changed the negotiation
-# enough to interfere with binding low-power single-transport wearables (the
-# Amazfit/Zepp pairing failure). Letting the stock stack negotiate restores
-# reliable pairing; audio codec props (LDAC/LHDC/aptX/LC3 etc.) are untouched.
 persist.enable.bluetooth.voipleawar=true
 persist.sys.bluetooth.abnormal_sco_notify=true
 persist.sys.bluetooth_restricte_state=false
@@ -59,13 +36,6 @@ persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled=true
 persist.bluetooth.sniff_delay=1
 persist.bluetooth.sniff_max_interval=128
 persist.bluetooth.sniff_min_interval=120
-# NOTE: persist.vendor.bluetooth.le.scan_interval / le.scan_window were removed
-# here. Forcing window/interval = 100/1000 set the BLE scan duty cycle to ~10%,
-# which made the radio listen only a tenth of the time while scanning. Low-power
-# wearables (e.g. Amazfit watches paired through the Zepp app) advertise at
-# intervals that this sparse window routinely missed, so the companion app could
-# never discover or bind the watch. Leaving these unset lets the BT stack use its
-# stock adaptive scan window, which finds advertising peripherals reliably.
 persist.vendor.bt.enable.swb=true
 persist.vendor.bt.enable.swbpm=true
 persist.vendor.btstack.enable.swb=true
@@ -153,11 +123,6 @@ persist.vendor.audio.aec_ref.enable=false
 vendor.audio.feature.aec_ref.enable=false
 ro.qc.sdk.audio.ssr=true
 ro.vendor.audio.sdk.ssr=true
-# HD microphone recording: enable 24/32-bit capture so the mic records at higher
-# bit depth instead of the default 16-bit. Pairs the support flags with the PCM
-# capture-path enables and turns OFF compressed (AAC) capture so the recording
-# path stays linear PCM. record_play_concurency lets capture and playback run at
-# once (e.g. monitoring while recording). All vendor-side, no app changes needed.
 vendor.audio.support.24bit.record=true
 vendor.audio.support.32bit.record=true
 ro.vendor.audio.recording.hd=true
@@ -419,15 +384,10 @@ persist.vendor.wifi.6ghz.enable=1
 sys.wifitracing.started=0
 # ASB:WIFI:END
 # ASB:GPS:BEGIN
-# Disable RTK (speculative — specific semantics of mqs.gps.rtk unconfirmed)
 persist.sys.mqs.gps.rtk=OFF
 persist.sys.gps.lpp=3
 # ASB:GPS:END
 # ASB:KERNEL:BEGIN
-# Pure kernel/perf/logging/system tweaks. Audio props live in ASB:AUDIO_EXT
-# (optional, default OFF — see features.conf AUDIO_EXT=0): keeping them here
-# caused audio glitches on Chinese OP15 units that conflicted with the vendor stack.
-
 ro.com.google.ime.kb_pad_port_r=
 ro.com.google.ime.kb_pad_land_l=
 ro.com.google.ime.top_icon_num=
@@ -695,9 +655,6 @@ dev.pm.dyn_samplingrate=0
 # ASB:KERNEL:END
 # ASB:LOG:BEGIN
 ro.config.nocheckin=1
-# GMS analytics/telemetry: reduce Clearcut/Phenotype/usage-stats reporting and
-# ad personalization at the framework level. Best-effort via stable flags;
-# Google may still gate some of these server-side.
 persist.sys.disable_clearcut=1
 persist.log.tag.Phenotype=S
 persist.log.tag.ClearcutLogger=S
@@ -851,7 +808,6 @@ persist.vendor.radio.adb_log_on=0
 persist.vendor.radio.log_loc=0
 persist.radio.low_priority_static_log=1
 # ASB:LOG:END
-
 # ASB:RADIO_IMS:BEGIN
 persist.ims.auth.scheme=1
 persist.ims.auth.type=1
