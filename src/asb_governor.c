@@ -256,6 +256,19 @@ static void storm_shield_reset(void) {
 
 static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
     int p = fsm->profile_idx;
+    /* V56 HEAT FIX: SMART matched none of the branches below and fell through
+     * to the else = the PERFORMANCE plan — full sensor polling + headroom reads
+     * + the anti-clamp armed (ASB re-raising vendor thermal clamps up to 95°C)
+     * even with the screen OFF, and deep_sleep never enabled. Field logs showed
+     * exactly that: cap_owner=vendor on 59% of ticks (a write war with the
+     * vendor thermal engine), 96-235 mA and 40°C surface in DEEP_IDLE, and the
+     * user report "smart = boiler, balanced = fine". Smart is by design a blend
+     * of battery and balanced, so it plans as its battery self when idle /
+     * screen-off (it already tracks idle telemetry battery-style) and as
+     * balanced when active — never as performance. */
+    if (p == PROFILE_SMART)
+        p = (!screen_on || fsm->state <= ASB_STATE_LIGHT_IDLE)
+            ? PROFILE_BATTERY : PROFILE_BALANCED;
     int idle_band = (fsm->state <= ASB_STATE_LIGHT_IDLE);
     int heavy_band = (fsm->state >= ASB_STATE_HEAVY);
 
