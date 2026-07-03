@@ -1601,6 +1601,15 @@ asb_reset_learning_on_upgrade_to_v56() {
   # smart_mode_enabled, night_window.conf, active_profile, smart_prev_profile,
   # device_bounds.env, device_caps.env.
 
+  # The OLD governor daemon is still RUNNING during install and re-saves
+  # buckets.bin / pstats from memory every ~5 minutes — which resurrects the
+  # learned state right after the deletion above (seen in the field: 286
+  # pre-reset bucket sessions with last_seen older than the reset marker).
+  # Leave a pending marker that service.sh consumes at the NEXT BOOT, before
+  # the governor starts — deleting again when no old daemon is alive to
+  # resurrect anything makes the reset actually stick.
+  : > "$_asb_dir/learning_reset_pending" 2>/dev/null || true
+
   mkdir -p "$_asb_dir" 2>/dev/null
   : > "$_marker" 2>/dev/null
   ui_print "    + learning reset; settings and device data preserved"
@@ -1985,6 +1994,28 @@ fi
 # Clean up any unused overlay staging dirs (kept for backward-compat with older
 # trees that still shipped them; harmless when absent).
 rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
+
+# --- Device-aware default for device_bounds_override (V56 regression fix) -----
+# V55 shipped this ON for everyone. On OP15 the synthesized bounds equal the
+# hand-validated shipped values (no behaviour change), but on other models the
+# synthesis scales OP15's THERMAL-derived ratios (e.g. BALANCED little ~72% of
+# hwmax) onto clusters with different roles: OP15's "little" is six performance
+# Oryon cores, while e.g. OP12's little is true efficiency cores — the same
+# ratio there cuts UI clocks hard and users reported V55 as laggy (rolled back
+# to V54). Default is now per-device: ON only on OP15, OFF elsewhere. We WRITE
+# the value in both cases because a config preserved from V55 carries the old
+# =1 default, which is not a deliberate user choice; the WebUI toggle remains
+# for opt-in.
+_gc="$MODPATH/config/governor.conf"
+if [ -f "$_gc" ]; then
+  if [ "$ASB_IS_OP15" = "true" ]; then
+    sed -i 's/^device_bounds_override=.*/device_bounds_override=1/' "$_gc" 2>/dev/null || true
+    ui_print "[*] Device-adaptive bounds: ON (OP15 — values match shipped tuning)"
+  else
+    sed -i 's/^device_bounds_override=.*/device_bounds_override=0/' "$_gc" 2>/dev/null || true
+    ui_print "[*] Device-adaptive bounds: OFF by default on this model (opt-in via WebUI)"
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Regional localization: the shipped WiFi/GPS configs were authored with an
