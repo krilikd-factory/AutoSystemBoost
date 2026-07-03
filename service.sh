@@ -35,6 +35,34 @@ for _legacy_pair in \
   fi
 done
 
+# ── V56 learning-reset boot sweep ────────────────────────────────────────────
+# Must run BEFORE asb_utils.sh is sourced below (sourcing it auto-starts the
+# governor), i.e. at a point in a fresh boot where NO governor instance is
+# alive. Two jobs:
+#  (a) consume the install-time pending marker: install.sh deletes the learned
+#      state, but the OLD still-running governor re-saves buckets.bin/pstats
+#      from memory within ~5 minutes, resurrecting it before the reboot.
+#      Deleting again here — with no daemon alive — makes the reset stick.
+#  (b) one-shot repair for devices that upgraded before this fix existed and
+#      already got their store resurrected (field data: 286 pre-reset bucket
+#      sessions, last_seen older than the reset marker). Learner state only —
+#      the append-only session_history.jsonl survived the race cleanly and is
+#      genuinely fresh, so it is kept.
+if [ -f /data/adb/asb/learning_reset_pending ]; then
+  rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak \
+        /data/adb/asb/pstats_balanced.json /data/adb/asb/pstats_battery.json \
+        /data/adb/asb/smart_appheat.bin /data/adb/asb/auto_battery_state \
+        /data/adb/asb/session_history.jsonl \
+        /data/adb/asb/session_history_migrated_v47 2>/dev/null
+  rm -f /data/adb/asb/learning_reset_pending 2>/dev/null
+  : > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
+elif [ -f /data/adb/asb/v56_learning_reset_done ] && [ ! -f /data/adb/asb/v56_resurrect_sweep_done ]; then
+  rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak \
+        /data/adb/asb/pstats_balanced.json /data/adb/asb/pstats_battery.json \
+        /data/adb/asb/smart_appheat.bin /data/adb/asb/auto_battery_state 2>/dev/null
+  : > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
+fi
+
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
 [ -r "$MODDIR/runtime/profile_core.sh" ] && . "$MODDIR/runtime/profile_core.sh"
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
