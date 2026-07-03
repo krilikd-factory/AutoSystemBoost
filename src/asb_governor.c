@@ -279,10 +279,12 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
                           + fsm->bat_time_moderate_sec;
             int _in_iq = (_bt_in_s > 0)
                 ? (int)(fsm->bat_time_deep_idle_sec * 100 / _bt_in_s) : 0;
+            /* V56: judge cleanliness by BACKGROUND wakes only -- the user
+             * checking the phone (screen wakes) is not environment noise. */
             int strict_clean = (fsm->bat_time_deep_idle_sec >= 600 &&
-                                fsm->bat_wake_cycles <= 3);
+                                fsm->bat_wake_bg <= 3);
             int relaxed_clean = (fsm->bat_time_deep_idle_sec >= 900 &&
-                                 fsm->bat_wake_cycles <= 8 &&
+                                 fsm->bat_wake_bg <= 8 &&
                                  _in_iq >= 60);
             if (!strict_clean && !relaxed_clean) {
                 fsm->plan.thermal_div = 1;
@@ -1036,7 +1038,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     int _idle_q = -1;
     if (_bat_tot > 30) {
         _idle_q = (int)(fsm->bat_time_deep_idle_sec * 100 / _bat_tot);
-        int _wp = (fsm->bat_wake_cycles > 2) ? (fsm->bat_wake_cycles - 2) * 5 : 0;
+        int _wp = (fsm->bat_wake_bg > 2) ? (fsm->bat_wake_bg - 2) * 5 : 0;
         _idle_q -= _wp;
         if (_idle_q < 0) _idle_q = 0;
     }
@@ -1560,7 +1562,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         int _iq = -1;
         if (_bt > 30) {
             _iq = (int)(fsm->bat_time_deep_idle_sec * 100 / _bt);
-            int _wp = (fsm->bat_wake_cycles > 2) ? (fsm->bat_wake_cycles - 2) * 5 : 0;
+            int _wp = (fsm->bat_wake_bg > 2) ? (fsm->bat_wake_bg - 2) * 5 : 0;
             _iq -= _wp; if (_iq < 0) _iq = 0;
         }
         int _ce = -1;
@@ -1751,7 +1753,7 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
                    + fsm->bat_time_moderate_sec;
         int _iq = (_bt > 0) ? (int)(fsm->bat_time_deep_idle_sec * 100 / _bt) : 0;
         g_last_bat_clean_night = (_dur >= 7200 && _iq >= 40 &&
-                                  fsm->bat_wake_cycles <= 4 &&
+                                  fsm->bat_wake_bg <= 4 &&
                                   !fsm->ses_auto_degraded) ? 1 : 0;
         if (g_last_bat_clean_night)
             asb_log("pstats: clean_night_reward active for next battery session");
@@ -1795,10 +1797,10 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
                            fsm->bat_time_moderate_sec;
                 int _iq = (_bt > 0) ? (int)(fsm->bat_time_deep_idle_sec * 100 / _bt) : 0;
                 long _dur = (fsm->ses_start_ts > 0) ? (time(NULL) - fsm->ses_start_ts) : 0;
-                float _wph = (_dur > 0) ? (float)fsm->bat_wake_cycles * 3600.0f / _dur : 0;
-                asb_log("pstats: battery trust=%d (iq=%d wph=%.1f wake=%d), "
+                float _wph = (_dur > 0) ? (float)fsm->bat_wake_bg * 3600.0f / _dur : 0;
+                asb_log("pstats: battery trust=%d (iq=%d bg_wph=%.1f wake_bg=%d wake_scr=%d), "
                         "skipping per-profile memory update",
-                        trust, _iq, _wph, fsm->bat_wake_cycles);
+                        trust, _iq, _wph, fsm->bat_wake_bg, fsm->bat_wake_screen);
             }
         } else if (trust == BAT_TRUST_NOISY) {
             trust_weight = 0.10f;
@@ -1913,7 +1915,7 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
                 int iq = -1;
                 if (bt > 60) {
                     iq = (int)(fsm->bat_time_deep_idle_sec * 100 / bt);
-                    int wp = (fsm->bat_wake_cycles > 2) ? (fsm->bat_wake_cycles - 2) * 5 : 0;
+                    int wp = (fsm->bat_wake_bg > 2) ? (fsm->bat_wake_bg - 2) * 5 : 0;
                     iq -= wp; if (iq < 0) iq = 0;
                 }
                 int bc = battery_fail_cause(fsm, iq);
@@ -1946,11 +1948,11 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
             long _bt_bm = fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec
                           + fsm->bat_time_moderate_sec;
             int _iq_bm = (_bt_bm > 0) ? (int)(fsm->bat_time_deep_idle_sec * 100 / _bt_bm) : 0;
-            float _wph_bm = (_dur_bm > 0) ? (float)fsm->bat_wake_cycles * 3600.0f / _dur_bm : 0;
+            float _wph_bm = (_dur_bm > 0) ? (float)fsm->bat_wake_bg * 3600.0f / _dur_bm : 0;
             ps->avg_idle_q = ps->avg_idle_q * (1 - alpha) + _iq_bm * alpha;
             ps->avg_wph = ps->avg_wph * (1 - alpha) + _wph_bm * alpha;
             /* Track clean nights separately */
-            if (_dur_bm >= 7200 && _iq_bm >= 40 && fsm->bat_wake_cycles <= 4) {
+            if (_dur_bm >= 7200 && _iq_bm >= 40 && fsm->bat_wake_bg <= 4) {
                 ps->clean_night_count++;
                 float qn_min = _dur_bm / 60.0f;
                 float cn_a = 1.0f / ps->clean_night_count;
@@ -2076,7 +2078,7 @@ static const char *classify_anomaly(
     if (fsm->profile_idx == PROFILE_BATTERY && dur >= 900
         && idle_quality >= 0 && idle_quality < 25)
         return "failed_settle";
-    if (fsm->profile_idx == PROFILE_BATTERY && fsm->bat_wake_cycles >= 10) return "wake_spike";
+    if (fsm->profile_idx == PROFILE_BATTERY && fsm->bat_wake_bg >= 10) return "wake_spike";
     if (dur < 60) return "too_short";
     return "none";
 }
@@ -2182,8 +2184,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
                          fsm->bat_time_moderate_sec;
         if (bat_total > 60) {
             idle_quality = (int)(fsm->bat_time_deep_idle_sec * 100 / bat_total);
-            int wake_penalty = (fsm->bat_wake_cycles > 2)
-                               ? (fsm->bat_wake_cycles - 2) * 5 : 0;
+            int wake_penalty = (fsm->bat_wake_bg > 2)
+                               ? (fsm->bat_wake_bg - 2) * 5 : 0;
             idle_quality -= wake_penalty;
             if (idle_quality < 0) idle_quality = 0;
         }
@@ -2282,7 +2284,10 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         long _bt_o = fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec
                      + fsm->bat_time_moderate_sec;
         int _iq_o = (_bt_o > 0) ? (int)(fsm->bat_time_deep_idle_sec * 100 / _bt_o) : 0;
-        float _wph_o = (dur > 0) ? (float)fsm->bat_wake_cycles * 3600.0f / dur : 0;
+        /* V56: noise = BACKGROUND wakes; the user's own screen checks are not
+         * wake noise (field data: 53% of sessions were rejected as wake_noisy
+         * with wake_bg=0 -- every single wake was the user's screen). */
+        float _wph_o = (dur > 0) ? (float)fsm->bat_wake_bg * 3600.0f / dur : 0;
         if (bat_trust_val == BAT_TRUST_CLEAN && _iq_o >= 40 && _wph_o < 2.0f
             && dur >= 7200 && !fsm->ses_auto_degraded)
             bat_outcome = "clean_night";
@@ -2332,12 +2337,13 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             would_be_noisy = 1;
         }
         snprintf(noisy_dim, sizeof(noisy_dim),
-                 "iq=%d wph=%.1f wake=%d dur=%ld bt=%ld",
-                 idle_quality, _wph, fsm->bat_wake_cycles, dur, _bt);
+                 "iq=%d wph=%.1f wake=%d bg=%d scr=%d dur=%ld bt=%ld",
+                 idle_quality, _wph, fsm->bat_wake_cycles,
+                 fsm->bat_wake_bg, fsm->bat_wake_screen, dur, _bt);
     }
 
     fprintf(wf,
-        "{\"v\":15,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
+        "{\"v\":16,\"ts\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\",\"end\":\"%s\","
         "\"gaming\":%d,\"sustained\":%d,\"thermal\":%d,\"unreachable\":%d,"
         "\"t_heavy\":%ld,\"t_gaming\":%ld,\"t_sustained\":%ld,"
         "\"avg_gap\":%d,\"max_temp\":%d,\"skin_max_temp\":%d,\"surface_max_temp\":%d,\"board_max_temp\":%d,\"degraded\":%d,"
@@ -2356,6 +2362,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         "\"clamp_hold\":%d,\"had_clamp_hold\":%d,\"had_futility\":%d,"
         "\"bat_trust\":%d,\"bat_outcome\":\"%s\",\"perf_outcome\":\"%s\","
         "\"env\":\"%s\","
+        "\"mem_psi_peak\":%d,\"mem_press_ticks\":%d,"
         "\"would_be_noisy\":%d,\"noisy_dim\":\"%s\","
         "\"adv_score\":%d,\"adv_active\":%d,\"adv_vote_skin\":%d,\"adv_vote_surface\":%d,\"adv_vote_board\":%d,\"adv_would_bias\":%d,"
         "\"bias_mode_a_count\":%d,\"bias_mode_b_count\":%d,"
@@ -2391,6 +2398,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         fsm->clamp_hold, fsm->had_clamp_hold, fsm->had_futility,
         bat_trust_val, bat_outcome, perf_outcome,
         (const char *[]){"quiet","noisy","hostile"}[classify_environment(fsm)],
+        fsm->mem_psi_peak_x100, fsm->mem_pressure_ticks,
         would_be_noisy, noisy_dim,
         fsm->thermal_advisory_score, fsm->thermal_advisory_active,
         fsm->thermal_vote_skin, fsm->thermal_vote_surface, fsm->thermal_vote_board,
@@ -2529,17 +2537,18 @@ static int battery_session_trust(const asb_fsm_t *fsm) {
     int iq = 0;
     if (bat_total > 0) {
         iq = (int)(fsm->bat_time_deep_idle_sec * 100 / bat_total);
-        int wp = (fsm->bat_wake_cycles > 2) ? (fsm->bat_wake_cycles - 2) * 5 : 0;
+        int wp = (fsm->bat_wake_bg > 2) ? (fsm->bat_wake_bg - 2) * 5 : 0;
         iq -= wp;
         if (iq < 0) iq = 0;
     }
-    float wph = (dur > 0) ? (float)fsm->bat_wake_cycles * 3600.0f / dur : 0;
+    /* V56: wake NOISE = background wakes only; screen wakes are the user. */
+    float wph = (dur > 0) ? (float)fsm->bat_wake_bg * 3600.0f / dur : 0;
     if (iq >= 12 && iq < 20 && dur >= 600 &&
-        wph < 12.0f && fsm->bat_wake_cycles < 24)
+        wph < 12.0f && fsm->bat_wake_bg < 24)
         return BAT_TRUST_PARTIAL;
     if (iq >= 8 && iq < 20 && dur >= 1800 && bat_total > 600 &&
         wph >= 12.0f && wph <= 25.0f &&
-        fsm->bat_wake_cycles >= 10 && fsm->bat_wake_cycles <= 50)
+        fsm->bat_wake_bg >= 10 && fsm->bat_wake_bg <= 50)
         return BAT_TRUST_NOISY;
     if (iq < 20 && dur >= 300)
         return BAT_TRUST_DIRTY;
@@ -2581,11 +2590,14 @@ static int classify_environment(const asb_fsm_t *fsm) {
     int iq = 0;
     if (bat_total > 0) {
         iq = (int)(fsm->bat_time_deep_idle_sec * 100 / bat_total);
-        int wp = (fsm->bat_wake_cycles > 2) ? (fsm->bat_wake_cycles - 2) * 5 : 0;
+        int wp = (fsm->bat_wake_bg > 2) ? (fsm->bat_wake_bg - 2) * 5 : 0;
         iq -= wp;
         if (iq < 0) iq = 0;
     }
-    float wph = (dur > 0) ? (float)fsm->bat_wake_cycles * 3600.0f / dur : 0;
+    /* V56: environment hostility is about the RADIO/BACKGROUND environment;
+     * the user picking the phone up is not a hostile environment. wph is
+     * therefore background-wake rate (screen wakes excluded). */
+    float wph = (dur > 0) ? (float)fsm->bat_wake_bg * 3600.0f / dur : 0;
     /* radio-aware -- heavy mobile data activity during screen-off
      * is a sign of hostile radio environment (push services, sync storms) */
     int radio_noisy = 0;
@@ -2626,7 +2638,7 @@ static int battery_fail_cause(const asb_fsm_t *fsm, int iq) {
     long bat_total = fsm->bat_time_deep_idle_sec +
                      fsm->bat_time_light_idle_sec +
                      fsm->bat_time_moderate_sec;
-    float wph = (dur > 0) ? (float)fsm->bat_wake_cycles * 3600 / dur : 0;
+    float wph = (dur > 0) ? (float)fsm->bat_wake_bg * 3600 / dur : 0;
     float heavy_pct = (bat_total + fsm->ses_time_heavy_sec > 0)
                       ? (float)fsm->ses_time_heavy_sec /
                         (bat_total + fsm->ses_time_heavy_sec) : 0;
