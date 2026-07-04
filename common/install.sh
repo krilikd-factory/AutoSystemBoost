@@ -2310,6 +2310,9 @@ BTCONF="$(find /system /vendor /system_ext /product /odm /my_product -depth -typ
 BTCONF2="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "bt_stack*.conf" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
 MEDCA="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "media_codecs*audio.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
 SNDTRPL="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "sound_trigger_platform_info*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*" -o -iname "resourcemanager*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+if [ -f /data/adb/asb/vendor_overlay_blocked ]; then
+  A2DPXML=""; ACCXML=""; ACONFS=""; AEFFECT=""; APCXML=""; APINF=""; APIOCXML=""; BTCONF=""; BTCONF2=""; BTQTIXML=""; MEDCA=""; MPATHS=""; SNDTRPL=""; USBXML=""; VEHXML=""; VIRTXML=""
+fi
 
 mkdir -p $MODPATH/tools
 EXTTOOLS="$MODPATH/common/addon/External-Tools/tools/$ARCH32"
@@ -2319,32 +2322,38 @@ if [ -d "$EXTTOOLS" ] && ls "$EXTTOOLS"/* >/dev/null 2>&1; then
 fi
 
   for OACCXML in ${ACCXML}; do
+  	ACCXM=$MODPATH${OACCXML}
 	cp_ch $ORIGDIR$OACCXML $ACCXM
 	sedi "/^ *$/d" $ACCXM
 	done
 
   for OSNDTRPL in ${SNDTRPL}; do
+  	SNDTRP=$MODPATH${OSNDTRPL}
 	cp_ch $ORIGDIR$OSNDTRPL $SNDTRP
 	sedi "/^ *$/d" $SNDTRP
 	done
 
   for OMEDCX in ${MEDCA}; do
+  	MEDCX=$MODPATH${OMEDCX}
 	cp_ch $ORIGDIR$OMEDCX $MEDCX
 	sedi "/^ *$/d" $MEDCX
 	done
 
   for OMIX in ${MPATHS}; do
+  	MIX=$MODPATH${OMIX}
 	cp_ch $ORIGDIR$OMIX $MIX
 	sedi "/^ *$/d" $MIX
 	done
 
   if [ "${ASB_BT}" = "true" ]; then
   for OA2DPXML in ${A2DPXML}; do
+  	A2DPXM=$MODPATH${OA2DPXML}
 	cp_ch $ORIGDIR$OA2DPXML $A2DPXM
 	sedi '/^ *$/d' $A2DPXM
 	done
 
   for OBTQTIXML in ${BTQTIXML}; do
+  	BTQTIXM=$MODPATH${OBTQTIXML}
 	cp_ch $ORIGDIR$OBTQTIXML $BTQTIXM
 	sedi '/^ *$/d' $BTQTIXM
 	done
@@ -2352,36 +2361,43 @@ fi
   fi
 
   for OVEHXML in ${VEHXML}; do
+  	VEHXM=$MODPATH${OVEHXML}
 	cp_ch $ORIGDIR$OVEHXML $VEHXM
 	sedi "/^ *$/d" $VEHXM
 	done
 
   for OVIRTXML in ${VIRTXML}; do
+  	VIRTXM=$MODPATH${OVIRTXML}
 	cp_ch $ORIGDIR$OVIRTXML $VIRTXM
 	sedi "/^ *$/d" $VIRTXM
 	done
 
   for OUSBXML in ${USBXML}; do
+  	USBXM=$MODPATH${OUSBXML}
 	cp_ch $ORIGDIR$OUSBXML $USBXM
 	sedi "/^ *$/d" $USBXM
 	done
 
   for OAPCXM in ${APCXML}; do
+  	APCXM=$MODPATH${OAPCXM}
 	cp_ch $ORIGDIR$OAPCXM $APCXM
 	sedi "/^ *$/d" $APCXM
 	done
 
   for OAPIOCXM in ${APIOCXML}; do
+  	APIOCXM=$MODPATH${OAPIOCXM}
 	cp_ch $ORIGDIR$OAPIOCXM $APIOCXM
 	sedi "/^ *$/d" $APIOCXM
 	done
 
   for OAPLI in ${APINF}; do
+  	APLI=$MODPATH${OAPLI}
 	cp_ch $ORIGDIR$OAPLI $APLI
 	sedi "/^ *$/d" $APLI
 	done
 
   for OACONF in ${ACONFS}; do
+  	ACONF=$MODPATH${OACONF}
 	cp_ch $ORIGDIR$OACONF $ACONF
 	sedi "/^ *$/d" $ACONF
 	done
@@ -2400,6 +2416,7 @@ fi
   done
   # V4A is wired only when the library exists; applied silently either way.
   for OAEFFECT in ${AEFFECT}; do
+  	EFFECT=$MODPATH${OAEFFECT}
 	sedi '/"audiosphere"/d' $EFFECT
 	if [ -n "$_v4a_lib" ]; then
 	  sedi '/effect name="volume"/d' $EFFECT
@@ -2415,6 +2432,7 @@ fi
 	done
 
   for OACCXML in ${ACCXML}; do
+  	ACCXM=$MODPATH${OACCXML}
 	sedi '/<kara_app_name_list>/a\
         <com.neutroncode.mp/>\
         <ru.yandex.music/>\
@@ -2450,10 +2468,12 @@ fi
 	
   if [ "${ASB_BT}" = "true" ]; then
   for OBTCONF in ${BTCONF}; do
+  	BTCON=$MODPATH${OBTCONF}
 	sedi 's/aacFrameCtlEnabled = true/aacFrameCtlEnabled = false/g' $BTCON
 	done
 
   for OBTCONF2 in ${BTCONF2}; do
+  	BTCON2=$MODPATH${OBTCONF2}
 	sedi 's/TraceConf=true/TraceConf=false/g' $BTCON2
 	sedi 's/TRC_BTM=2/TRC_BTM=0/g' $BTCON2
 	sedi 's/TRC_HCI=2/TRC_HCI=0/g' $BTCON2
@@ -2480,6 +2500,7 @@ fi
   fi
 
   for ODAXXML in ${DAXXML}; do
+  	DAXXM=$MODPATH${ODAXXML}
 	sedi 's/mi-dv-leveler-steering-enable value="true"/mi-dv-leveler-steering-enable value="false"/g' $DAXXM
 	sedi 's/mi-surround-compressor-steering-enable value="true"/mi-surround-compressor-steering-enable value="false"/g' $DAXXM
 	sedi 's/mi-dialog-enhancer-steering-enable value="false"/mi-dialog-enhancer-steering-enable value="true"/g' $DAXXM
@@ -2511,6 +2532,7 @@ fi
 	done
 
   for OSNDTRPL in ${SNDTRPL}; do
+  	SNDTRP=$MODPATH${OSNDTRPL}
 	sedi 's/"hifi_filter" value="false"/"hifi_filter" value="true"/g' $SNDTRP
 	sedi 's/ec_ref="true"/ec_ref="false"/g' $SNDTRP
 	sedi 's/support_nlpi_switch="false"/support_nlpi_switch="true"/g' $SNDTRP
@@ -2528,6 +2550,7 @@ fi
 	done
 
   for OMEDCX in ${MEDCA}; do
+  	MEDCX=$MODPATH${OMEDCX}
 	sedi 's/name="sample-rate" ranges="8000,11025,12000,16000,22050,24000,32000,44100,48000"/name="sample-rate" ranges="1-192000"/g' $MEDCX
 	sedi 's/name="sample-rate" ranges="32000,44100,48000"/name="sample-rate" ranges="1-192000"/g' $MEDCX
 	sedi 's/name="sample-rate" ranges="48000"/name="sample-rate" ranges="1-192000"/g' $MEDCX
@@ -2558,6 +2581,7 @@ fi
 	done
 
   for OAPLI in ${APINF}; do
+  	APLI=$MODPATH${OAPLI}
 	sedi 's/bit_width="16"/bit_width="32"/g' $APLI
 	sedi 's/bit_width="24"/bit_width="32"/g' $APLI
 	sedi '/<bit_width_configs/a\
@@ -2572,6 +2596,7 @@ fi
 	done
 
   for OA2DPXML in ${A2DPXML}; do
+  	A2DPXM=$MODPATH${OA2DPXML}
 	sedi 's/samplingRates="44100,48000,88200,96000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000"/g' $A2DPXM
 	sedi 's/samplingRates="44100 48000 88200 96000"/samplingRates="8000 11025 12000 16000 22050 24000 32000 44100 48000 64000 88200 96000 128000 176400 192000"/g' $A2DPXM
 	sedi 's/samplingRates="44100,48000,96000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000"/g' $A2DPXM
@@ -2589,6 +2614,7 @@ fi
 	done
 
   for OBTQTIXML in ${BTQTIXML}; do
+  	BTQTIXM=$MODPATH${OBTQTIXML}
 	sedi 's/samplingRates="44100,48000,88200,96000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000"/g' $BTQTIXM
 	sedi 's/samplingRates="44100 48000 88200 96000"/samplingRates="8000 11025 12000 16000 22050 24000 32000 44100 48000 64000 88200 96000 128000 176400 192000"/g' $BTQTIXM
 	sedi 's/samplingRates="44100,48000,96000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000"/g' $BTQTIXM
@@ -2606,10 +2632,12 @@ fi
 	done
 
   for OUSBXML in ${USBXML}; do
+  	USBXM=$MODPATH${OUSBXML}
 	sedi 's/samplingRates="44100"/samplingRates="48000"/g' $USBXM
 	done
 
   for OAPCXM in ${APCXML}; do
+  	APCXM=$MODPATH${OAPCXM}
 	sedi 's/AUDIO_FORMAT_PCM_32_BIT/AUDIO_FORMAT_PCM_FLOAT/g' $APCXM
 	sedi 's/samplingRates="44100"/samplingRates="48000"/g' $APCXM
 	sedi 's/samplingRates="44100,48000" channelMasks="AUDIO_CHANNEL_OUT_STEREO"/samplingRates="44100,48000,96000" channelMasks="AUDIO_CHANNEL_OUT_STEREO"/g' $APCXM
@@ -2651,6 +2679,7 @@ fi
 	done
 
   for OAPIOCXM in ${APIOCXML}; do
+  	APIOCXM=$MODPATH${OAPIOCXM}
 	sedi 's/sampling_rates 44100|48000|88200|96000|176400|192000|352800|384000/sampling_rates 8000|11025|12000|16000|22050|24000|32000|44100|48000|88200|96000|176400|192000|352800|384000/g' $APIOCXM
 	sedi 's/sampling_rates 32000|44100|48000|88200|96000|176400|192000|352800/sampling_rates 8000|11025|12000|16000|22050|24000|32000|44100|48000|88200|96000|176400|192000|352800|384000/g' $APIOCXM
 	sedi 's/AUDIO_FORMAT_PCM_32_BIT/AUDIO_FORMAT_PCM_FLOAT/g' $APIOCXM
@@ -2663,6 +2692,7 @@ AutoSystemBoost' $APIOCXM
 	done
 
   for OMIX in ${MPATHS}; do
+  	MIX=$MODPATH${OMIX}
 	sedi 's/IIR0 Enable Band1" value="1"/IIR0 Enable Band1" value="0"/g' $MIX
 	sedi 's/IIR0 Enable Band2" value="1"/IIR0 Enable Band2" value="0"/g' $MIX
 	sedi 's/IIR0 Enable Band3" value="1"/IIR0 Enable Band3" value="0"/g' $MIX
@@ -2781,6 +2811,7 @@ AutoSystemBoost' $APIOCXM
 	done
 
   for OACONF in ${ACONFS}; do
+  	ACONF=$MODPATH${OACONF}
 	ASB_xml -u $ACONF '/configs/property[@name="audio.offload.disable"]' "false"
 	ASB_xml -u $ACONF '/configs/property[@name="av.offload.enable"]' "true"
 	ASB_xml -u $ACONF '/configs/property[@name="audio.offload.video"]' "true"
@@ -2938,6 +2969,14 @@ EOF
 
 	asb_prune_module
 	find $MODPATH -empty -type d -delete
+
+	if [ -d "$MODPATH/system" ]; then
+	  _man="$MODPATH/generated_overlay_manifest.txt"
+	  { echo "# ASB generated overlay manifest (install sweep)"
+	    find "$MODPATH/system" -type f ! -path "*/system/bin/*" 2>/dev/null | sed "s|^$MODPATH/||"
+	  } > "$_man"
+	  cp -f "$_man" /data/adb/asb/generated_overlay_manifest.txt 2>/dev/null || true
+	fi
 
 	asb_reset_learning_on_upgrade_to_v56
 	asb_preserve_user_config
