@@ -479,6 +479,9 @@ fi
 # ASB:VM:BEGIN
 apply_vm() {
   sysctlw vm.swappiness $_P_SWAP
+  for _swp_p in sys.sysctl.swappiness sys.mem.swappiness_on_launcher sys.mem.swappiness_on_start; do
+    [ -n "$(getprop $_swp_p 2>/dev/null)" ] && command -v resetprop >/dev/null 2>&1 && resetprop $_swp_p "$_P_SWAP" 2>/dev/null
+  done
   if [ -e /proc/sys/vm/dirty_bytes ] && [ -e /proc/sys/vm/dirty_background_bytes ]; then
     sysctlw vm.dirty_ratio 0
     sysctlw vm.dirty_background_ratio 0
@@ -612,6 +615,20 @@ apply_net() {
   sysctlw net.ipv4.tcp_fin_timeout          $_P_TCP_FIN
   sysctlw net.ipv4.tcp_no_metrics_save 1
   sysctlw net.core.somaxconn 512
+  _tcp_mem_kb=$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null)
+  if [ -n "$_tcp_mem_kb" ] && [ "$_tcp_mem_kb" -gt 0 ] 2>/dev/null; then
+    _tm_pg=$((_tcp_mem_kb / 4))
+    _tm_low=$((_tm_pg * 3 / 100))
+    _tm_pressure=$((_tm_pg * 6 / 100))
+    _tm_high=$((_tm_pg / 10))
+    [ -e /proc/sys/net/ipv4/tcp_mem ] && sysctlw net.ipv4.tcp_mem "$_tm_low $_tm_pressure $_tm_high"
+  fi
+  [ -e /proc/sys/net/ipv4/tcp_thin_linear_timeouts ] && sysctlw net.ipv4.tcp_thin_linear_timeouts "${_P_TCP_THIN:-1}"
+  [ -e /proc/sys/net/ipv4/tcp_thin_dupack ] && sysctlw net.ipv4.tcp_thin_dupack "${_P_TCP_THIN:-1}"
+  [ -e /proc/sys/net/ipv4/tcp_plb_enabled ] && sysctlw net.ipv4.tcp_plb_enabled 1
+  [ -e /proc/sys/net/ipv4/tcp_plb_idle_retransmit_rounds ] && sysctlw net.ipv4.tcp_plb_idle_retransmit_rounds 2
+  [ -e /proc/sys/net/ipv4/tcp_plb_retransmit_threshold ] && sysctlw net.ipv4.tcp_plb_retransmit_threshold 3
+  [ -e /proc/sys/net/ipv4/tcp_rto_max ] && sysctlw net.ipv4.tcp_rto_max "${_P_TCP_RTO_MAX:-15000}"
   sysctlw net.ipv4.tcp_max_syn_backlog 2048
   sysctlw net.core.netdev_max_backlog $_P_NET_BACKLOG
   sysctlw net.core.netdev_budget $_P_NET_BUDGET
