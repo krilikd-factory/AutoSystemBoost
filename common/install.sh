@@ -1727,6 +1727,12 @@ SNDTRPL="$(find /system /vendor /system_ext /product /odm /my_product -depth -ty
 if [ -f /data/adb/asb/vendor_overlay_blocked ]; then
   A2DPXML=""; ACCXML=""; ACONFS=""; AEFFECT=""; APCXML=""; APINF=""; APIOCXML=""; BTCONF=""; BTCONF2=""; BTQTIXML=""; MEDCA=""; MPATHS=""; SNDTRPL=""; USBXML=""; VEHXML=""; VIRTXML=""
 fi
+# Structural audio/BT XML sed-tuning is verified only against OP15/OP13/OP12 stock;
+# on an unknown firmware it can corrupt vendor HAL configs (field bootloop: Ace 6).
+if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ] && [ "$ASB_IS_OP12" != "true" ]; then
+  A2DPXML=""; ACONFS=""; AEFFECT=""; APCXML=""; APINF=""; APIOCXML=""; BTCONF=""; BTCONF2=""; BTQTIXML=""; DAXXML=""; SNDTRPL=""; USBXML=""; VEHXML=""; VIRTXML=""
+  ui_print "[*] Non-reference OnePlus: structural audio/BT XML patches skipped; mixer/codec/GPS/Wi-Fi tuning stays on"
+fi
 
 mkdir -p $MODPATH/tools
 EXTTOOLS="$MODPATH/common/addon/External-Tools/tools/$ARCH32"
