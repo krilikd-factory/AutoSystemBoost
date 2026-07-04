@@ -1297,7 +1297,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V56</div>
+      <div class="badge" id="verBadge">V57</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1397,7 +1397,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
-      <div class="badge" id="liveVerBadge">V56</div>
+      <div class="badge" id="liveVerBadge">V57</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1539,7 +1539,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="cfgSocBadge">DEVICE</div>
-      <div class="badge" id="cfgVerBadge">V56</div>
+      <div class="badge" id="cfgVerBadge">V57</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1917,14 +1917,17 @@ const CFG_ITEMS = [
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
     desc:'Performance shortens long-press/multi-tap windows for faster response. OFF if holds misfire.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
-    desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage Animation Scales is ON.' }
+    desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage Animation Scales is ON.' },
   // --- Advanced ---
-  // NOTE: device_bounds_override is intentionally NOT exposed as a UI toggle.
-  // The device-adaptive frequency bounds (scaled per-device at install) are now
-  // always-on: the module ships governor.conf with device_bounds_override=1 and
-  // the governor honors it. There is no user reason to force the compiled OP15
-  // ceilings on non-OP15 hardware, so the control is hidden while the mechanism
-  // stays active. To override for debugging, edit governor.conf directly.
+  // device_bounds_override default is DEVICE-AWARE, set by the installer:
+  // ON for OP15 (synthesized values equal the shipped hand-validated tuning),
+  // OFF elsewhere. Rationale: the synthesis scales OP15's thermal-derived
+  // ratios, and on models whose "little" cluster is true efficiency cores
+  // (e.g. OP12) the same ratios under-clock the UI clusters — a V55 field
+  // report of system-wide lag on OP12 traced to exactly this. The toggle
+  // stays exposed so non-OP15 users can opt in deliberately.
+  { key:'device_bounds_override', type:'bool', def:'0', name:'Device-Adaptive Bounds',
+    desc:'Frequency ceilings computed at install for your hardware (scaled from the OP15 reference). Auto-ON on OP15 only, where values match the shipped tuning. On other models the OP15 ratios can under-clock UI clusters, so it is OFF by default — enable to experiment.' }
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
