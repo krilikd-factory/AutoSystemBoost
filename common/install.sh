@@ -75,7 +75,6 @@ asb_normalize_module_layout() {
     if [ -L "$_root" ]; then continue; fi
     [ -d "$_root" ] || continue
 
-    ui_print "[*] Layout fix: folding stray /$_part into system/$_part (boot-safety)"
     # Move every file under the stray dir to system/<part>/, without clobbering
     # a file the proper pass already placed there (system/ copy wins).
     for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
