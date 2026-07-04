@@ -1982,13 +1982,26 @@ elif [ "$ASB_IS_OP12" = "true" ]; then
   asb_apply_device_native_tuning "OnePlus 12 (pineapple / cliffs)" "OnePlus12"
 else
   asb_prune_non_op15_vendor_overlays
-  # ── Universality: same device-native pipeline for any other OnePlus ───────
-  # Non-reference models get the identical clone-and-patch the reference devices
-  # now use. It only ever touches the device's OWN files, so it's safe on any
-  # OnePlus and gives the broad model base full audio/camera/media/GPS/perf/Wi-Fi
-  # tuning, not governor-only. Self-skips per category when a stock dir is absent.
+  # ── Non-reference OnePlus: generic-safe path (field-proven, issue #8) ─────
+  # V55/V56 ran the clone-and-patch pipeline here too; Ace 6 (ktm, SM8750,
+  # ColorOS-based layout) bootlooped on it twice in the field. Policy reverted
+  # to what V53/V54 proved: device overlays ONLY for the reference families
+  # (canoe / sun / pineapple) — everything else boots governor-only. The strip
+  # below is mandatory: shipped static vendor content is OP15-shaped and is the
+  # original "Ace 6 won't boot" bug if it reaches a sibling's mount.
   if [ "$ASB_IS_ONEPLUS" = "true" ]; then
-    asb_apply_device_native_tuning "OnePlus (generic)" "OnePlus"
+    ui_print "[*] Non-reference OnePlus: generic-safe tuning (governor + props, no device overlay)"
+    rm -rf "$MODPATH/system/vendor" "$MODPATH/system/odm" 2>/dev/null || true
+    rm -f  "$MODPATH/system/etc/audio_effects.xml" 2>/dev/null || true
+    for _gen_stale in \
+        "$NVBASE/modules/$MODID/system/vendor" \
+        "$NVBASE/modules/$MODID/system/odm" \
+        "$NVBASE/modules/$MODID/system/etc/audio_effects.xml" \
+        "$NVBASE/modules_update/$MODID/system/vendor" \
+        "$NVBASE/modules_update/$MODID/system/odm" \
+        "$NVBASE/modules_update/$MODID/system/etc/audio_effects.xml"; do
+      [ -e "$_gen_stale" ] && rm -rf "$_gen_stale" 2>/dev/null || true
+    done
   fi
 fi
 # Clean up any unused overlay staging dirs (kept for backward-compat with older
