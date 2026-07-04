@@ -195,6 +195,13 @@
           asb_feature_enabled WIFI && apply_wifi_dtim
         elif [ "$_reason" = "smart-eff-batt" ]; then
           asb_feature_enabled VM && apply_network_stats_poll
+          if asb_feature_enabled NET; then
+            if [ "$_last_eff_batt" = "1" ] && [ -r "$MODDIR/profiles/battery.sh" ]; then
+              ( . "$MODDIR/profiles/battery.sh"; asb_map_profile_vars; apply_net )
+            else
+              apply_net
+            fi
+          fi
         elif [ "$_reason" = "cap-drift-up-p0" ] || [ "$_reason" = "cap-drift-up-p6" ]; then
           asb_feature_enabled CPU && apply_screen_aware_caps
         fi
