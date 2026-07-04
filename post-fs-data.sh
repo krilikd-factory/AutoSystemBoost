@@ -112,10 +112,16 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
   _mounts_log="/data/adb/asb/vendor_mounts.log"
   _bootflag="/data/adb/asb/vendor_overlay_active"
   _bootctr="/data/adb/asb/vendor_boot_counter"
+  _ovl_class="$(cat "$MODDIR/overlay_device_class" 2>/dev/null)"
+  _strike_max=3
+  [ "$_ovl_class" = "generic" ] && _strike_max=1
   _cur_ctr=$(cat "$_bootctr" 2>/dev/null || echo 0)
   case "$_cur_ctr" in ''|*[!0-9]*) _cur_ctr=0 ;; esac
-  if [ "$_cur_ctr" -ge 3 ]; then
-    echo "ts=$(date +%s) action=skip reason=bootloop_protection counter=$_cur_ctr" > "$_mounts_log"
+  if [ "$_cur_ctr" -ge "$_strike_max" ]; then
+    echo "ts=$(date +%s) action=skip reason=bootloop_protection counter=$_cur_ctr class=$_ovl_class" > "$_mounts_log"
+    if [ "$_ovl_class" = "generic" ]; then
+      echo "ts=$(date +%s) reason=boot_failed_${_cur_ctr}x class=generic" > /data/adb/asb/vendor_overlay_blocked
+    fi
     rm -f "$_bootflag" 2>/dev/null
     rm -f "$MODDIR"/system/vendor/etc/perf/* 2>/dev/null
     # The unified device-native pipeline clones THIS device's own audio, camera,
