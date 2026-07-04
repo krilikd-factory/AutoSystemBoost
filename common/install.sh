@@ -55,28 +55,12 @@ asb_big_banner() {
 }
 
 asb_normalize_module_layout() {
-  # CRITICAL boot-safety step. A Magisk/KernelSU module must keep ALL of its
-  # mounted files under $MODPATH/system/ — the framework maps system/vendor ->
-  # /vendor, system/odm -> /odm, etc. via magic-mount. If a REAL top-level
-  # vendor/ (or odm/, product/, system_ext/) directory exists at the module
-  # root, the root layer can bind that partial directory over the WHOLE real
-  # /vendor partition, hiding everything the device needs -> vendor init fails
-  # -> BOOTLOOP. This was the OnePlus 13 failure: the device-overlay + in-place
-  # passes left a real /vendor with only ~32 files shadowing the stock 1000s.
-  #
-  # OP15 happened to dodge it (its full shipped system/vendor produced a clean
-  # symlink), but on OP12/OP13 the pruned+rebuilt tree materialised a real dir.
-  # Here we fold any stray top-level partition dir back into system/ and delete
-  # the root copy, so every device ends with the single safe system/-only tree.
   for _part in vendor odm product system_ext my_product mi_ext; do
     _root="$MODPATH/$_part"
-    # Skip if absent, or if it is a symlink (the framework's own valid link).
     [ -e "$_root" ] || continue
     if [ -L "$_root" ]; then continue; fi
     [ -d "$_root" ] || continue
 
-    # Move every file under the stray dir to system/<part>/, without clobbering
-    # a file the proper pass already placed there (system/ copy wins).
     for _f in $(cd "$_root" && find . -type f 2>/dev/null | sed 's|^\./||'); do
       _target="$MODPATH/system/$_part/$_f"
       if [ ! -f "$_target" ]; then
@@ -87,33 +71,20 @@ asb_normalize_module_layout() {
     rm -rf "$_root" 2>/dev/null || true
   done
 
-  # Also drop the framework's per-file restore manifest entries that point at a
-  # root-level partition path, so uninstall/reinstall never resurrects them.
   if [ -f "$INFO" ]; then
     for _part in vendor odm product system_ext my_product mi_ext; do
       sed -i "\|^$MODPATH/$_part/|d" "$INFO" 2>/dev/null || true
     done
   fi
 
-  # Final guard: never ship an empty stray dir either.
   for _part in vendor odm product system_ext my_product mi_ext; do
     [ -L "$MODPATH/$_part" ] && continue
     [ -d "$MODPATH/$_part" ] && rmdir "$MODPATH/$_part" 2>/dev/null || true
   done
 
-  # NOTE: KernelSU Next runs its own "Handle partition /vendor" step AFTER this
-  # script finishes, which materialises a service vendor/ at the module root as
-  # part of its magic-mount (mirror + per-file merge). That root vendor/ is a
-  # framework artifact, NOT a shadow of the whole /vendor partition — the device
-  # keeps its stock files and only ASB's files are merged on top. So we do NOT
-  # fight it here (no whiteout, no symlink); the fold above only cleans a
-  # genuinely malformed layout left by an older buggy build.
 }
 
 asb_end_banner() {
-  # Remove the legacy Magisk-template index file (.$MODID-files) if it was
-  # left behind empty. ASB ships its own uninstall.sh and does not rely on
-  # this per-file tracking list, so an empty one is just litter in modules/.
   if [ -n "$INFO" ] && [ -f "$INFO" ] && [ ! -s "$INFO" ]; then
     rm -f "$INFO" 2>/dev/null || true
   fi
@@ -408,37 +379,14 @@ asb_detect_compat() {
       ASB_IS_OP15=true ;;
   esac
 
-  # OnePlus 13 — chipset "sun"/SM8750, model CPH2649, device OP5D55*
   case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
     *"oneplus 13"*|*"oneplus13"*|*"op13"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"op5d55"*)
       ASB_IS_OP13=true ;;
   esac
-  # platform/SoC fallback for OP13 (sun / SM8750) — only if not already OP15.
-  #
-  # CRITICAL: SM8750 is shared by a LOT of OnePlus devices that are NOT the
-  # OnePlus 13 and do NOT share the OP13 'sun' vendor partition layout — e.g.
-  # Ace 6 (ktm), 13T/13s (pagani), Ace 5 Pro (hummer), Ace 5 Ultra (emira),
-  # Ace 5 Race (subaru). Applying the OP13 'sun' device overlay (camera/audio/
-  # perf XMLs authored for sun) to any of those mismatches the HALs and bootloops
-  # — this is the "Ace 6 won't boot on V52" regression (pre-V52 had no OP13 path,
-  # so those devices fell through to the generic-safe path and booted fine).
-  #
-  # So the SoC fallback is an ALLOWLIST, not a blanket SoC match: an unidentified
-  # SM8750 OnePlus is only treated as OP13 when its codename/model is positively
-  # in the OP13 'sun' family. Everything else on SM8750 falls through to the
-  # generic-safe path (governor + sed only, no device overlay), which boots on
-  # any device. Real OP13 is already caught by the explicit model match above;
-  # this fallback only adds OP13 when the platform is sun AND the codename
-  # confirms it, so a hidden-model OP13 still works without risking foreign SoC
-  # siblings.
   if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ]; then
     ASB_PLATFORM_L="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
     case "$ASB_PLATFORM_L" in
       *"sm8750"*|*"sun"*)
-        # Only the OP13 'sun' family — confirmed by codename/model — gets the
-        # overlay. 'sun' is the OP13 codename; CPH2649/53/55 and OP5D55 are OP13
-        # models. Foreign SM8750 codenames (ktm/pagani/hummer/emira/subaru/…)
-        # deliberately do NOT match and stay on the generic-safe path.
         case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L" in
           *"sun"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"op5d55"*)
             echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP13=true ;;
@@ -448,34 +396,16 @@ asb_detect_compat() {
     esac
   fi
 
-  # OnePlus 12 — chipset "pineapple"/SM8650, model CPH2581, device OP595*
   case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
     *"oneplus 12"*|*"oneplus12"*|*"op12"*|*"cph2581"*|*"cph2583"*|*"cph2573"*|*"op595"*)
       ASB_IS_OP12=true ;;
   esac
-  # platform/SoC fallback for OP12 (pineapple / SM8650) — only if not OP15/OP13.
-  #
-  # Same allowlist discipline as the SM8750 path above: SM8650 (Snapdragon 8
-  # Gen 3) is shared by many OnePlus devices that are NOT the OP12 and don't
-  # share its 'pineapple' vendor layout (Ace 3, Ace 3 Pro, Ace 3V, …). Applying
-  # the OP12 device overlay to one of those would mismatch the HALs and risk a
-  # bootloop, so the fallback only treats an unidentified SM8650 OnePlus as OP12
-  # when its codename/model positively confirms the 'pineapple' family. Everything
-  # else on SM8650 stays on the generic-safe path (governor + sed only), which
-  # boots on any sibling. Real OP12 is already caught by the explicit match above.
   if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ] && [ "$ASB_IS_OP12" != "true" ]; then
     ASB_PLATFORM_L="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
     case "$ASB_PLATFORM_L" in
       *"sm8650"*|*"pineapple"*)
         case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L" in
           *"pineapple"*|*"cph2581"*|*"cph2583"*|*"cph2573"*|*"op595"*|*"ossi"*|*"22877"*)
-            # 'ossi' / project 22877 / OP595DL1 are the OnePlus 12 (CPH2581)
-            # variant whose model/device props report the marketing codename
-            # 'ossi' rather than 'pineapple' or the CPH number. This branch is
-            # already gated on ro.board.platform = sm8650/pineapple AND a OnePlus
-            # manufacturer, so matching these tokens cannot pull in a non-pineapple
-            # SoC. Confirmed against a real unit: discovery reports pineapple /
-            # OP595DL1 (CPH2581), 4 clusters [0 2 5 7].
             echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP12=true ;;
           *)
             ui_print "[*] SM8650 device, non-OP12 codename — generic-safe tuning (no OP12 overlay, boots on any SM8650 sibling)" ;;
@@ -510,14 +440,6 @@ asb_detect_compat() {
     if [ -d /sys/devices/system/cpu/cpufreq/policy6 ]; then
       _max6="$(cat /sys/devices/system/cpu/cpufreq/policy6/cpuinfo_max_freq 2>/dev/null)"
       if echo "$_max6" | grep -q '^4[56][0-9][0-9][0-9][0-9][0-9]$'; then
-        # CPU-clock heuristic for OP15 (SM8850 prime ~4.5-4.6 GHz), but SM8850 is
-        # also used by other OnePlus devices that are NOT the OP15 and don't share
-        # its 'canoe' vendor layout (Ace 6T/15R 'macan', 15T 'fairlady', Ace 6 Pro).
-        # Forcing OP15 on those would apply the canoe overlay and risk a bootloop,
-        # so only accept this heuristic when the codename/model isn't a known
-        # foreign SM8850 sibling. Unknown SM8850 codenames still pass (so a
-        # hidden-model OP15 works), but the known siblings are excluded and fall
-        # through to the generic-safe path.
         _sm8850_foreign=0
         case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L" in
           *"macan"*|*"fairlady"*|*"15r"*|*"ace 6t"*|*"ace6t"*|*"15t"*|*"plr110"*|*"plz110"*|*"pmb110"*|*"cph276"*|*"cph277"*)
@@ -535,27 +457,14 @@ asb_detect_compat() {
   if [ "$ASB_IS_OP15" != "true" ]; then
     ui_print "[*] Detect debug: manufacturer=$ASB_MANUFACTURER_RAW | model=$ASB_MODEL_RAW | device=$ASB_DEVICE_RAW | prj=$ASB_PRJ_RAW"
   fi
-  # OP15 is primary — if both matched, OP15 wins. OP12/OP13 are mutually exclusive too.
   [ "$ASB_IS_OP15" = "true" ] && ASB_IS_OP13=false && ASB_IS_OP12=false
   [ "$ASB_IS_OP13" = "true" ] && ASB_IS_OP12=false
 }
 
-# Detect the root manager at install time. Used to scope the OP12 camera-engine
-# exclusion to APatch ONLY: the OP12 multicamera HAL crash is APatch-specific
-# (APatch's /odm is a real separate mount, so any camera-conf churn stacks/
-# disturbs a mount the HAL is reading); on KernelSU /odm is a symlink to
-# /vendor/odm and the camera tolerates the tweak engine fine. We rely on the
-# manager-exported env vars first (KSU / APATCH are set by the boot scripts that
-# run module install) and fall back to the on-disk control dirs, which are far
-# more reliable here than getprop in the install/recovery environment.
 ASB_IS_APATCH=false
 asb_detect_manager() {
   if [ "${APATCH:-}" = "true" ] || [ -d /data/adb/ap ] || [ -f /data/adb/apd ]; then
-    # KernelSU also ships some /data/adb/ap-like staging in odd setups, so prefer
-    # an explicit APatch marker and make sure this isn't actually KSU.
     if [ "${KSU:-}" = "true" ] || [ -f /data/adb/ksud ]; then
-      # Both markers present — trust the explicit APATCH env if set, else treat
-      # as KSU (the camera works there, so the safe default is "not APatch").
       [ "${APATCH:-}" = "true" ] && ASB_IS_APATCH=true || ASB_IS_APATCH=false
     else
       ASB_IS_APATCH=true
@@ -567,8 +476,6 @@ asb_detect_manager() {
 }
 
 asb_apply_device_overlay() {
-  # $1 = overlay dir name (op12_overlay / op13_overlay)
-  # $2 = human label (e.g. "OnePlus 13 (CPH2649 / SM8750 'sun')")
   _ov="$1"; _label="$2"
   ui_print " "
   ui_print "${SEPARATOR}"
@@ -577,8 +484,6 @@ asb_apply_device_overlay() {
   ui_print "[*] Audio/volume/codecs apply via device-agnostic patches"
   ui_print "${SEPARATOR}"
 
-  # Remove the OP15-specific shipped overlays that don't fit this device
-  # (OP15 SKU audio dirs, OP15 camera calibration, OP15 wifi SKU, OP15 media).
   rm -rf "$MODPATH/system/vendor/etc/audio" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/etc/audio" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/etc/wifi" 2>/dev/null || true
@@ -593,30 +498,7 @@ asb_apply_device_overlay() {
   rm -f  "$MODPATH/system/vendor/odm/etc/izat.conf" 2>/dev/null || true
 
   if [ -d "$MODPATH/$_ov" ]; then
-    # IMPORTANT (OP12 fix): OnePlus 12/13 have a SEPARATE real /odm partition,
-    # and the camera/GPS HAL reads /odm directly — not /vendor/odm. Earlier
-    # builds wrote only system/vendor/odm, leaving /odm stock; on OP12 that
-    # showed up as /odm vs /vendor/odm desync (camera crash, stale GPS). We now
-    # ALSO write the overlay into system/odm so the manager mounts it into the
-    # real /odm partition (the manager builds its partition list from the dirs
-    # the module ships under system/, and creates an /odm mirror for exactly
-    # this). We keep the system/vendor/odm copy too, so whichever path the HAL
-    # reads is patched. _odm_targets maps a shipped overlay path to the system/
-    # destinations it must land in.
     _odm_dups() {
-      # $1 = relative overlay path under the overlay dir. echoes the system/
-      # destination path(s) this file should be copied to.
-      #
-      # CAMERA FIX (final, proven by direct comparison of the known-good 20000
-      # build vs the regressed 3590): the working module writes the camera/media
-      # overlay to system/vendor/odm ONLY and the camera works on BOTH KernelSU
-      # AND APatch. The "also mirror into system/odm" approach (added to chase an
-      # APatch /odm desync) was itself the regression: on APatch, shipping
-      # system/odm/etc/camera makes the manager stack a separate mount over the
-      # real /odm partition, which breaks the multicamera HAL (ChiMcxRoiTranslator
-      # SIGABRT). KernelSU tolerates it (its /odm is a symlink to /vendor/odm), so
-      # only APatch broke. So we now match the working module exactly: camera and
-      # media_profiles go to system/vendor/odm only — NO system/odm mirror.
       case "$1" in
         vendor/odm/*)
           _sub="${1#vendor/odm/}"
@@ -630,7 +512,6 @@ asb_apply_device_overlay() {
           ;;
       esac
     }
-    # GPS overlay — gated by GPS category. Write every destination path.
     if [ "$ASB_GPS" = "true" ]; then
       for _f in vendor/etc/gps.conf vendor/odm/etc/gps.conf \
                 vendor/etc/izat.conf vendor/odm/etc/izat.conf; do
@@ -643,18 +524,7 @@ asb_apply_device_overlay() {
         fi
       done
     fi
-    # Camera/media overlay — gated by CAMERA category. Camera goes to
-    # system/vendor/odm ONLY (via _odm_dups), matching the known-good module.
     if [ "$ASB_CAMERA" = "true" ]; then
-      # Device-native camera tone: clone THIS device's own stock
-      # conf_tuning_params.json / video_beauty_default_config from live /odm (or
-      # /vendor/odm) into the overlay staging dir, so the graded tone engine has
-      # the device's real file to patch instead of an OP15 one. Many non-OP15
-      # SoCs ship this file (OP13/sun has it, modelID 2); some do not (OP12/
-      # pineapple has none) — when absent we simply clone nothing and the engine
-      # no-ops, leaving the camera fully stock. This is the camera analogue of
-      # the in-place wifi/audio patching: patch the device's own stock by key,
-      # never impose the OP15 tree.
       for _cf_rel in vendor/odm/etc/camera/conf_tuning_params.json \
                      vendor/odm/etc/camera/config/video_beauty_default_config; do
         _cf_base="${_cf_rel#vendor/odm/etc/camera/}"
@@ -681,20 +551,6 @@ asb_apply_device_overlay() {
           done
         fi
       done
-      # Camera tone: baseline (stock conf_tuning) is saved here; the opt-in
-      # aggressive tone + inject layers are applied at boot by post-fs-data from
-      # that baseline, so the CAMERA_AGGRESSIVE / _INJECT toggles take effect on
-      # a plain reboot instead of only on reinstall.
-      #
-      # CRITICAL OP12+APatch EXCLUSION: skip the install-time tweak engine on the
-      # camera conf ONLY when this is OP12 running APatch. The multicamera HAL
-      # crash is APatch-specific (its /odm is a real separate mount; any churn of
-      # the camera conf disturbs a mount the HAL reads). On OP12 + KernelSU (where
-      # /odm is a symlink to /vendor/odm) the camera tolerates the engine, so KSU
-      # OP12 keeps the full reversible-tweak path like OP13/OP15. asb_apply_dynamic_tweaks
-      # has a pineapple guard, but it relies on getprop which is unreliable in the
-      # install/recovery environment, and asb_tw_save_base would touch the file
-      # before that guard — so we gate on the reliable install-time flags here.
       _ctf="$MODPATH/system/vendor/odm/etc/camera/conf_tuning_params.json"
       _skip_cam_engine=false
       [ "$ASB_IS_OP12" = "true" ] && [ "$ASB_IS_APATCH" = "true" ] && _skip_cam_engine=true
@@ -716,36 +572,11 @@ asb_apply_device_overlay() {
     fi
   fi
 
-  # Clean up both staging dirs (only the live device's was used).
   rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
   ui_print "[*] Overlay applied. Audio EQ/volume/hi-res + codecs are"
   ui_print "    patched in-place during the audio/media pass."
 }
 
-# ---------------------------------------------------------------------------
-# Per-device perf tuning (OP12 / OP13).
-#
-# The OP15 package ships pre-tuned perf XML as full-file replacements, valid
-# only for the 'canoe' target. OP12 ('pineapple','cliffs') and OP13
-# ('sun','tuna','kera') have different stock perf files, so instead of shipping
-# a fragile pre-edited copy we patch the LIVE device's stock files in place —
-# the same philosophy ASB already uses for audio. This survives OS updates: we
-# always patch whatever perfconfigstore/qapegameconfig the device currently has.
-#
-# The tuning mirrors OP15 exactly (same intent, device-correct values):
-#   * qapegameconfig.txt: per-game thermal/current ceilings lowered
-#       48000/1150/1000 -> 44000/900/800  (games throttle earlier, run cooler)
-#   * perfconfigstore.xml:
-#       - debug daemons off (enable.lm, memperfd, prekill) — pure overhead
-#       - topAppRenderThreadBoost on — smoother foreground UI thread
-#       - qape boost_duration 10->3, max_boost_count 3->1 — shorter blind boosts
-#       - fps_switch_hyst 10->12 — fewer refresh-rate flips
-#       - wlc.exit.timeout 120000->30000, active_reqs_max 30->28 (only if present)
-#   * perfboostsconfig.xml: idle render-thread boost 0x10A7 2000->1600ms
-#
-# Only props/rows that already exist are touched; missing ones are skipped, so
-# OP12 (no qapegameconfig, no wlc/active_reqs props) degrades gracefully.
-# ---------------------------------------------------------------------------
 asb_perf_patch_configstore() {
   _f="$1"; [ -f "$_f" ] || return 0
   sedi 's/\(Name="vendor.debug.enable.lm" Value="\)true/\1false/g' "$_f"
@@ -761,30 +592,9 @@ asb_perf_patch_configstore() {
 
 asb_perf_patch_gameconfig() {
   _f="$1"; [ -f "$_f" ] || return 0
-  # data rows: <id> <apk> 48000 1150 1000  ->  ... 44000 900 800
   sedi 's/^\([0-9][0-9]*[ 	][ 	]*[^ 	][^ 	]*[ 	][ 	]*\)48000\([ 	][ 	]*\)1150\([ 	][ 	]*\)1000/\144000\2900\3800/' "$_f"
 }
 
-# ---------------------------------------------------------------------------
-# Wi-Fi driver tuning (all devices). We clone the device's own stock WCNSS_*.ini
-# from the live partition and sed-patch a SMALL, conservative set of values in
-# place — exactly like the audio/perf passes. This is device-safe: we only
-# rewrite keys that already exist, so a device that lacks one just keeps stock.
-#
-# CRITICAL: we never touch wpa_supplicant_overlay.conf / p2p_supplicant_overlay
-# (the p2p_disabled / tdls_disabled lines there are load-bearing — removing them
-# stops the Wi-Fi toggle from enabling on OP15). We also never touch roaming
-# thresholds (RoamRssiDiff, gNeighborScan*) or the regulatory country — those
-# are stability/regdomain sensitive.
-#
-# Tuning applied (only to keys present in the file):
-#   gRuntimePMDelay        3000 -> 2000   power: quicker runtime-PM idle entry
-#   gActiveMaxChannelTime    45 -> 40     latency: shorter active-scan dwell
-#   gBusBandwidthVeryHighThreshold 15000->12000  throughput: engage high-perf bus sooner
-# asb_clamp_down_key FILE KEY CEILING — set KEY=CEILING only if the live value
-# is numeric AND strictly greater than CEILING. If the key is absent or already
-# at/below the ceiling, the file is left untouched (so a device that ships a
-# better value keeps it). Pure-integer compare; non-numeric values are skipped.
 asb_clamp_down_key() {
   _ck_f="$1"; _ck_k="$2"; _ck_ceil="$3"
   [ -f "$_ck_f" ] || return 0
@@ -799,31 +609,15 @@ asb_clamp_down_key() {
 
 asb_patch_one_wcnss() {
   _f="$1"; [ -f "$_f" ] || return 0
-  # Device-safe patching: these keys are tuned by COMPARING the device's own
-  # stock value and only moving it in the beneficial direction. Forcing a fixed
-  # value blindly is wrong across devices — e.g. gRuntimePMDelay ships 3000 on
-  # OP15 (canoe) but 500 on OP12/OP13 (pineapple/sun); rewriting to 2000 helps
-  # OP15 (3000->2000 = quicker runtime-PM idle, saves power) but would HURT
-  # OP12/OP13 (500->2000 = 4x slower idle entry). So we clamp toward the target
-  # and never push a device that already sits past it.
-  #   gRuntimePMDelay              : lower = quicker idle  -> cap at <= 2000
-  #   gActiveMaxChannelTime        : lower = shorter dwell -> cap at <= 40
-  #   gBusBandwidthVeryHighThreshold: lower = engage sooner-> cap at <= 12000
   asb_clamp_down_key "$_f" gRuntimePMDelay 2000
   asb_clamp_down_key "$_f" gActiveMaxChannelTime 40
   asb_clamp_down_key "$_f" gBusBandwidthVeryHighThreshold 12000
 }
 
-
 asb_patch_wifi_inplace() {
-  # $1 = human label
   _label="$1"
   [ "$ASB_WIFI" = "true" ] || return 0
 
-  # Clone the live stock wifi dir (vendor first, then odm/system mirrors) into
-  # the module under system/, then patch the WCNSS .ini files in place. The
-  # supplicant .conf files are copied verbatim (NOT patched) so the toggle-
-  # critical p2p_disabled/tdls lines are preserved exactly as the device ships.
   _wifi_src=""
   for _ws in /vendor/etc/wifi /odm/etc/wifi /system/vendor/etc/wifi; do
     [ -d "$_ws" ] && { _wifi_src="$_ws"; break; }
@@ -832,8 +626,6 @@ asb_patch_wifi_inplace() {
 
   asb_clone_dir_from_live "$_wifi_src" >/dev/null 2>&1 || return 0
 
-  # Patch every cloned WCNSS_*.ini (covers per-SKU subdirs too). Supplicant
-  # .conf files are deliberately left untouched.
   _wdir="$MODPATH/system${_wifi_src#/system}"
   for _wf in $(find "$_wdir" -type f -iname "WCNSS_qcom_cfg*.ini" 2>/dev/null); do
     asb_patch_one_wcnss "$_wf"
@@ -841,11 +633,9 @@ asb_patch_wifi_inplace() {
 }
 
 asb_patch_perf_inplace() {
-  # $1 = human label
   _label="$1"
   [ "$ASB_CPU" = "true" ] || { ui_print "[*] CPU/perf category off — skipping perf tuning"; return 0; }
 
-  # Locate the live stock perf dir (vendor first, then odm/system_ext mirrors).
   _perfsrc=""
   for _d in /vendor/etc/perf /odm/etc/perf /system/vendor/etc/perf /system_ext/etc/perf; do
     if [ -f "$_d/perfconfigstore.xml" ] || [ -f "$_d/qapegameconfig.txt" ]; then
@@ -858,15 +648,9 @@ asb_patch_perf_inplace() {
   fi
 
   _dst="$MODPATH/system/vendor/etc/perf"
-  # The shipped perf dir is OP15-only (canoe target). Its qapegameconfig.txt
-  # has no Target column and would apply canoe caps globally on this device,
-  # and qapeboostsconfig.xml is canoe-keyed. Remove the whole shipped dir and
-  # rebuild only the files we patch from the live stock perf.
   rm -rf "$_dst" 2>/dev/null || true
   mkdir -p "$_dst" 2>/dev/null
 
-  # Clone only the files we tune (full replacement of those, nothing else),
-  # so the rest of the stock perf framework keeps loading from vendor.
   for _pf in perfconfigstore.xml qapegameconfig.txt perfboostsconfig.xml; do
     if [ -f "$_perfsrc/$_pf" ]; then
       cp -f "$_perfsrc/$_pf" "$_dst/$_pf" 2>/dev/null || continue
@@ -879,24 +663,10 @@ asb_patch_perf_inplace() {
     asb_perf_patch_gameconfig "$_dst/qapegameconfig.txt"
   fi
   if [ -f "$_dst/perfboostsconfig.xml" ]; then
-    # idle render-thread boost: shorten hold to cut idle heat (2000 -> 1600)
     sedi 's/\(Id="0x000010A7"[^>]*Timeout="\)2000"/\11600"/g' "$_dst/perfboostsconfig.xml"
   fi
 }
 
-# ---------------------------------------------------------------------------
-# Per-device location/GPS-assist tuning (OP12 / OP13).
-#
-# OP15 ships tuned xtwifi.conf (Qualcomm GTP / XTRA assisted-GNSS) and
-# lowi.conf (WiFi RTT ranging) as static canoe copies. The tweaks are pure
-# value edits and device-agnostic, so — like perf and audio — we patch the
-# live device's own files in place. Mirrors OP15 intent:
-#   xtwifi: assisted-GNSS cache 5MB -> 32MB (more almanac/XTRA cached = faster
-#           re-locks), debug logging off, MODEL_ID set to the real device
-#           (some GTP backends tune response by model id).
-#   lowi:   verbose logging off, low-power WiFi RTT path on.
-# Only keys that already exist are rewritten. Gated by the GPS category.
-# ---------------------------------------------------------------------------
 asb_loc_patch_xtwifi() {
   _f="$1"; _model="$2"; [ -f "$_f" ] || return 0
   sedi 's/^\([[:space:]]*SIZE_BYTE_TOTAL_CACHE[[:space:]]*=[[:space:]]*\)5000000/\132000000/' "$_f"
@@ -909,14 +679,6 @@ asb_loc_patch_lowi() {
   sedi 's/^\([[:space:]]*LOWI_USE_LOWI_LP[[:space:]]*=[[:space:]]*\)0/\11/' "$_f"
 }
 
-# asb_loc_patch_gps FILE — device-safe gps.conf key tuning. Patches ONLY portable
-# behaviour/quality keys (lower debug, tighter time/accuracy, full LPP, fewer diag
-# logs). It deliberately NEVER touches hardware/firmware keys: CAPABILITIES is a
-# per-SoC GNSS bitmask (OP15=0x3F, OP12=0x17) and XTRA_*/CA paths are firmware
-# specific — forcing those across devices breaks GNSS. Each sed only rewrites a
-# key that is actually present, so cloning a device's own stock gps.conf and
-# running this yields that device's native config plus the safe tuning. This is
-# why the static OP15 gps.conf/izat.conf no longer need to ship.
 asb_loc_patch_gps() {
   _f="$1"; [ -f "$_f" ] || return 0
   sedi 's/^\([[:space:]]*DEBUG_LEVEL[[:space:]]*=[[:space:]]*\)[0-9][0-9]*/\10/'                 "$_f"
@@ -926,41 +688,23 @@ asb_loc_patch_gps() {
   sedi 's/^\([[:space:]]*BUFFER_DIAG_LOGGING[[:space:]]*=[[:space:]]*\)1/\10/'                    "$_f"
   sedi 's/^\([[:space:]]*LOC_DIAGIFACE_ENABLED[[:space:]]*=[[:space:]]*\)1/\10/'                  "$_f"
   sedi 's/^\([[:space:]]*LPP_PROFILE[[:space:]]*=[[:space:]]*\)[0-9][0-9]*/\115/'                 "$_f"
-  # SUPL protocol version and NMEA cadence are protocol/behaviour, not hardware,
-  # so they are safe to lift on any device (the pre-baked op1x overlays set these
-  # too). CAPABILITIES is deliberately NOT in this list — see note above.
   sedi 's/^\([[:space:]]*SUPL_VER[[:space:]]*=[[:space:]]*\)0x10000/\10x20000/'                   "$_f"
   sedi 's/^\([[:space:]]*NMEA_REPORT_RATE[[:space:]]*=[[:space:]]*\)NHZ/\11HZ/'                   "$_f"
 }
 
-# asb_loc_patch_izat FILE — device-safe izat.conf tuning (debug off only). Other
-# izat differences in the OP15 file are process-name / SAP-mode values that are
-# environment specific; we leave them at the device's own stock to stay safe.
 asb_loc_patch_izat() {
   _f="$1"; [ -f "$_f" ] || return 0
   sedi 's/^\([[:space:]]*IZAT_DEBUG_LEVEL[[:space:]]*=[[:space:]]*\)[0-9][0-9]*/\10/'             "$_f"
 }
 
-# asb_patch_media_profiles_inplace — device-native video-bitrate lift. Clones the
-# device's OWN stock media_profiles*.xml (wherever they live) into the module and
-# raises ONLY high-resolution VIDEO bitrates: 10-15 Mbps -> x1.27, 15-30 Mbps ->
-# 37.3 Mbps, >=30 Mbps left as-is, and anything below 10 Mbps (all audio bitrates
-# and low-res video) untouched so audio/AMR/AAC streams are never corrupted. This
-# replaces the per-model pre-baked media_profiles overlays with one rule that
-# works on any device, and is intentionally conservative: a device whose stock
-# uses unusual values simply gets less lift, never a broken profile. Reversible
-# (module overlay). Gated on the MEDIA/CAMERA category staying on via ASB_CAMERA.
 asb_patch_media_profiles_inplace() {
   [ "$ASB_CAMERA" = "true" ] || { ui_print "[*] Camera/media category off - skipping media_profiles lift"; return 0; }
   _mpp_done=0
-  # Canoe (or SM8850 sibling) gets the 40 Mbit 1080p target; everything else
-  # 37.3 Mbit. Matches what asbdiag verifies per platform.
   _ASB_MP_CANOE=0
   case "$(getprop ro.board.platform 2>/dev/null)$(getprop ro.product.device 2>/dev/null)" in
     *canoe*|*sm8850*|*SM8850*) _ASB_MP_CANOE=1 ;;
   esac
   [ "$ASB_IS_OP15" = "true" ] && _ASB_MP_CANOE=1
-  # Enumerate the device's own live media_profiles files (skip vintf/manifest copies).
   for _mp_live in $(find /vendor /odm /system/vendor /system/odm /system_ext /product \
                       -type f -name 'media_profiles*.xml' 2>/dev/null \
                       | grep -vE '/vintf/|/manifest' | sort -u); do
@@ -968,13 +712,6 @@ asb_patch_media_profiles_inplace() {
     mkdir -p "$MODPATH/$(dirname "$_mp_rel")" 2>/dev/null
     cp -f "$_mp_live" "$MODPATH/$_mp_rel" 2>/dev/null || continue
     chmod 0644 "$MODPATH/$_mp_rel" 2>/dev/null
-    # Resolution-aware bitrate lift. We parse each <Video .../> line for its
-    # width/height so 1080p and 4K get clean, intended targets instead of a
-    # value-bracket guess (the old bracket math landed 1080p on 37.3M, which is
-    # below the canoe target and read as a FAIL). 1080p -> 40 Mbit on canoe
-    # (37.3 Mbit elsewhere), 2160p/4K -> 100 Mbit, and any remaining bitRate that
-    # isn't on a sized Video line still gets the conservative bracket bump so
-    # audio/other caps are untouched. Never lowers a value.
     awk -v is_canoe="$_ASB_MP_CANOE" '
     function lift_sized(b, w, h,   t) {
       t = b
@@ -1019,13 +756,6 @@ asb_patch_media_profiles_inplace() {
   return 0
 }
 
-# asb_clone_device_camera_tone — clone THIS device's own stock camera tone files
-# (conf_tuning_params.json / video_beauty_default_config) from live /odm (or
-# /vendor/odm) into the module so the graded tone engine has a device-native file
-# to key-patch. Used on the generic OnePlus path (the reference models do this via
-# asb_apply_device_overlay). Clones nothing when the device lacks the file, so the
-# camera simply stays stock. Mirrors into the /odm and /vendor/odm module dirs the
-# engine looks at.
 asb_clone_device_camera_tone() {
   [ "$ASB_CAMERA" = "true" ] || return 0
   for _ct_base in conf_tuning_params.json config/video_beauty_default_config; do
@@ -1033,11 +763,6 @@ asb_clone_device_camera_tone() {
                     "/vendor/odm/etc/camera/$_ct_base" \
                     "/system/vendor/odm/etc/camera/$_ct_base"; do
       [ -f "$_ct_live" ] || continue
-      # Destination set. OP12 is special: writing a camera dir into system/odm
-      # (which the manager mounts into the real /odm partition) makes the
-      # multicamera HAL SIGABRT — the proven-safe OP12 path is system/vendor/odm
-      # ONLY. So on OP12 we deliberately skip the system/odm mirror; every other
-      # device gets both so whichever path its camera HAL reads is patched.
       if [ "$ASB_IS_OP12" = "true" ]; then
         _ct_dsts="system/vendor/odm/etc/camera/$_ct_base"
       else
@@ -1057,12 +782,9 @@ asb_clone_device_camera_tone() {
 }
 
 asb_patch_location_inplace() {
-  # $1 = device model id for GTP (e.g. OnePlus13)
   _model="$1"
   [ "$ASB_GPS" = "true" ] || { ui_print "[*] GPS category off — skipping location tuning"; return 0; }
 
-  # Remove the shipped OP15 (canoe) copies — they carry MODEL_ID="OnePlus15"
-  # and OP15-only GTP server entries. We rebuild from the live device files.
   rm -f "$MODPATH/system/vendor/etc/xtwifi.conf" \
         "$MODPATH/system/vendor/odm/etc/xtwifi.conf" \
         "$MODPATH/system/odm/etc/xtwifi.conf" \
@@ -1090,12 +812,6 @@ asb_patch_location_inplace() {
     fi
   done
 
-  # gps.conf / izat.conf: same device-native model as xtwifi/lowi. Previously the
-  # OP15 copies were shipped statically (and pruned on other devices). Instead we
-  # now clone the device's OWN stock file and key-patch only the portable tuning
-  # keys (see asb_loc_patch_gps/izat — CAPABILITIES and XTRA paths are left at the
-  # device's native values). This removes the shipped gps.conf/izat.conf entirely
-  # while still applying the tuning on every device that has the file.
   for _src in /vendor/etc/gps.conf /odm/etc/gps.conf /vendor/odm/etc/gps.conf; do
     if [ -f "$_src" ]; then
       _rel="system${_src}"
@@ -1118,36 +834,9 @@ asb_patch_location_inplace() {
   done
 }
 
-# ---------------------------------------------------------------------------
-# Per-device audio + wifi config dirs (OP12 / OP13).
-#
-# The shipped system/vendor/etc/audio (sku_canoe/sku_alor) and .../wifi
-# (wcn7750/kiwi_v2/peach_v2) dirs are OnePlus-15 hardware-specific. The overlay
-# path correctly DELETES them for OP12/OP13 — but never replaces them, so those
-# devices were left with no SKU audio dir and a WRONG top-level mixer_paths.xml
-# (the OP15 canoe one), while their real per-codec configs live under
-# sku_sun / sku_kera / sku_tuna (OP13) and sku_pineapple / sku_cliffs (OP12).
-#
-# Android's audio HAL selects its mixer/policy/resourcemanager by SKU at
-# runtime (ro.vendor.audio.* / hw sku), so a module that overlays only the
-# generic top-level file — with values for a different codec — can mis-route or
-# mute paths. WiFi (WCNSS_qcom_cfg*.ini) is regulatory/chip-specific too.
-#
-# Fix: clone the LIVE device's own audio + wifi dirs into the module so it ships
-# the device-correct configs, and drop the OP15 top-level audio policy/mixer
-# files that don't belong. We do NOT cross-port OP15's tuned values onto a
-# different codec/chip — that is unsafe — we restore the device's own working
-# configs. (Audio EQ/volume/codec tuning still happens via the device-agnostic
-# in-place pass, which name-matches and patches the device's own files.)
-# ---------------------------------------------------------------------------
 asb_clone_dir_from_live() {
-  # $1 = absolute live source dir (e.g. /vendor/etc/audio or /system/vendor/etc/audio)
-  # Computes a single canonical module dest under system/, collapsing a leading
-  # /system so /system/vendor/... and /vendor/... both land at system/vendor/...
-  # (never system/system/...). Returns 0 on a successful clone.
   _src="$1"
   [ -d "$_src" ] || return 1
-  # canonical partition-relative path: strip a leading /system if present
   _canon="$_src"
   case "$_canon" in
     /system/*) _canon="${_canon#/system}" ;;
@@ -1165,7 +854,6 @@ asb_clone_dir_from_live() {
 }
 
 asb_clone_device_audio_wifi() {
-  # $1 = human label
   _label="$1"
 
   if [ "$ASB_AUDIO" = "true" ]; then
@@ -1173,16 +861,11 @@ asb_clone_device_audio_wifi() {
     ui_print "${SEPARATOR}"
     ui_print "[*] Device audio configs for $_label"
     ui_print "${SEPARATOR}"
-    # Drop OP15 top-level audio files that are canoe/alor-specific and would
-    # otherwise shadow the device's own with wrong-codec values.
     for _af in mixer_paths.xml ftm_mixer_paths.xml resourcemanager.xml \
                audio_module_config_primary.xml; do
       rm -f "$MODPATH/system/vendor/etc/$_af" 2>/dev/null || true
       rm -f "$MODPATH/system/vendor/odm/etc/$_af" 2>/dev/null || true
     done
-    # Clone the device's own audio dir from the FIRST live source that exists.
-    # /vendor and /system/vendor usually resolve to the same files, so we take
-    # only one to avoid cloning the same tree to two dests.
     _audio_done=0
     for _asrc in /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio; do
       if [ -d "$_asrc" ]; then
@@ -1192,58 +875,24 @@ asb_clone_device_audio_wifi() {
     [ "$_audio_done" = "1" ] || ui_print "    - no device audio dir found"
   fi
 
-  # NOTE: Wi-Fi is handled separately by asb_patch_wifi_inplace, which clones
-  # the device's stock wifi dir and sed-patches only the WCNSS driver .ini
-  # values — never the supplicant .conf files (their p2p_disabled/tdls lines are
-  # load-bearing for the Wi-Fi toggle). Regulatory country stays runtime in
-  # service.sh.
 }
 
-# ---------------------------------------------------------------------------
-# Per-device mixer tuning (OP12 / OP13) — the portable subset of the OP15 sound.
-#
-# OnePlus 15 ships a hand-tuned canoe mixer with ~44 control changes. Most are
-# canoe-codec-specific (HiFi Function, DS2 OnOff, Amp DSP Enable, Audiosphere,
-# Virtual Bass …) and DO NOT exist on OP13's WCD9395 / OP12's WCD9395 mixer, so
-# injecting them would be wrong or harmful. What IS shared across all three
-# codecs — verified against each device's own stock mixer — is the *character*
-# of the tune:
-#   * RX_RX0/1/2 Digital Volume 84 -> 88   (the +4-step louder playback)
-#   * IIR0 Enable Band1..5 -> 0            (flatten the stock EQ coloring)
-#   * HPHL/HPHR_RDAC Switch 0 -> 1         (Class-H headphone DAC always armed)
-# These edits use name-anchored sed so they only touch controls that already
-# exist; on a codec lacking a given control the edit is simply a no-op. Applied
-# to the device's freshly-cloned mixer files (every sku_* / cdp/mtp/qrd variant).
-# Gated by the audio category.
-# ---------------------------------------------------------------------------
 asb_patch_one_mixer() {
   _f="$1"; [ -f "$_f" ] || return 0
-  # Louder playback: raise Digital Volume to 88 on both the RX (headphone)
-  # and WSA (speaker amp) paths — matches what the OP15 mixer pass does, so
-  # the speaker gets the same boost as headphones. Covers stock 80-87.
   for _v in 80 81 82 83 84 85 86 87; do
     sedi "s/\\(name=\"RX_RX[012] Digital Volume\" value=\"\\)${_v}\"/\\188\"/g" "$_f"
     sedi "s/\\(name=\"WSA_RX[01] Digital Volume\" value=\"\\)${_v}\"/\\188\"/g" "$_f"
   done
-  # flat EQ: disable IIR0 bands that stock leaves engaged
   sedi 's/\(name="IIR0 Enable Band[1-5]" value="\)1"/\10"/g' "$_f"
-  # Class-H headphone DAC armed
   sedi 's/\(name="HPH[LR]_RDAC Switch" value="\)0"/\11"/g' "$_f"
-  # NOTE: the opt-in aggressive layer (compander off, HPH HIFI) is NOT applied
-  # here anymore — it is applied at boot by post-fs-data from the .asbbase
-  # baseline so the AUDIO_AGGRESSIVE toggle takes effect on a plain reboot.
 }
 
 asb_patch_audio_inplace_aggr_flag() {
-  # Read the AUDIO_AGGRESSIVE toggle from governor.conf so the mixer pass can
-  # honor the user's choice at install time. Default 0 (stock-safe).
   _ASB_AUDIO_AGGR="$(grep -E '^[[:space:]]*AUDIO_AGGRESSIVE=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   [ -n "$_ASB_AUDIO_AGGR" ] || _ASB_AUDIO_AGGR=0
 }
 
 asb_camera_aggr_flag() {
-  # Read the camera grade LEVEL (0..4) from governor.conf, with back-compat for
-  # the old CAMERA_AGGRESSIVE bool (=1 -> level 3). Default 0 (stock-safe).
   _ASB_CAMERA_LEVEL="$(grep -E '^[[:space:]]*CAMERA_LEVEL=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_ASB_CAMERA_LEVEL" in ''|*[!0-9]*) _ASB_CAMERA_LEVEL="" ;; esac
   _ASB_CAMERA_AGGR="$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
@@ -1252,9 +901,6 @@ asb_camera_aggr_flag() {
     [ "$_ASB_CAMERA_AGGR" = "1" ] && _ASB_CAMERA_LEVEL=3 || _ASB_CAMERA_LEVEL=0
   fi
   [ "$_ASB_CAMERA_LEVEL" -gt 0 ] 2>/dev/null && _ASB_CAMERA_AGGR=1 || _ASB_CAMERA_AGGR=0
-  # Separate, riskier opt-in: INJECT tone keys the device's stock conf_tuning
-  # doesn't ship (its camera HAL may not consume them). Sub-control of the
-  # camera toggle, a seg with values safe|aggressive (aggressive = inject).
   _inj_raw="$(grep -E '^[[:space:]]*CAMERA_AGGRESSIVE_INJECT=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_inj_raw" in
     aggressive|1) _ASB_CAMERA_INJECT=1 ;;
@@ -1263,17 +909,6 @@ asb_camera_aggr_flag() {
 }
 
 asb_guard_v4a_effects() {
-  # Decide whether V4A (ViPER4Android FX) is safe on THIS device, then keep or
-  # strip it from the module's audio_effects files accordingly.
-  #
-  # Detection: probe the live device's OWN stock audio_effects for a v4a
-  # reference. If the stock config already wires v4a, the platform ships
-  # libv4a_re.so (Android is loading it today) and V4A is safe to keep. If no
-  # stock config mentions v4a, the library is absent and referencing it would
-  # crash audioserver at boot -> BOOTLOOP, so we strip it. This stock-reference
-  # signal is far more reliable than probing soundfx lib paths directly (which
-  # can miss the lib due to SELinux or non-standard locations and false-strip a
-  # device that actually has V4A — that mistake removed OnePlus 15's V4A).
   _v4a_ok=0
   for _sd in /odm/etc /vendor/etc /vendor/odm/etc /system/vendor/etc \
              /system/vendor/odm/etc /system/etc; do
@@ -1284,7 +919,6 @@ asb_guard_v4a_effects() {
     done
     [ "$_v4a_ok" = "1" ] && break
   done
-  # Also scan the device's per-sku audio dirs (where OP12/OP13/OP15 keep them).
   if [ "$_v4a_ok" = "0" ]; then
     for _sf in $(find /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio \
                       -type f -name "audio_effects*.xml" 2>/dev/null); do
@@ -1300,8 +934,6 @@ asb_guard_v4a_effects() {
   _stripped=0
   for _ef in $(find "$MODPATH/system" -type f -name "audio_effects*.xml" 2>/dev/null); do
     if grep -q 'v4a_re' "$_ef" 2>/dev/null; then
-      # Inline removal — the v4a effect can share a line with a closing
-      # </effectProxy>, so whole-line deletion would corrupt the XML.
       sedi 's#<effect name="v4a_standard_re"[^/]*/>##g' "$_ef"
       sedi 's#<library name="v4a_re"[^/]*/>##g' "$_ef"
       _stripped=$((_stripped + 1))
@@ -1310,19 +942,9 @@ asb_guard_v4a_effects() {
   return 0
 }
 
-# ---------------------------------------------------------------------------
-# asb_audio_ensure_volume_libs — guarantee the stock playback-volume effect libs
-# are present in the device's cloned audio_effects files, reproducing the old
-# OP15 volume fix from the device's OWN file (no static shipped). Skips entirely
-# when ViPER4Android (libv4a_re.so) is present on the device, because the V4A
-# wiring intentionally replaces volume_listener with v4a_re — adding it back then
-# would double-wire the volume effect. Idempotent: only inserts a lib line that
-# isn't already there, and only into files that already have a <libraries> block.
-# ---------------------------------------------------------------------------
 asb_audio_ensure_volume_libs() {
   _aed="$1"
   [ -d "$_aed" ] || return 0
-  # If the device ships ViPER/V4A, leave the effects pipeline to the V4A path.
   for _vd in /vendor/lib64/soundfx /vendor/lib/soundfx \
              /odm/lib64/soundfx /odm/lib/soundfx \
              /system/lib64/soundfx /system/lib/soundfx \
@@ -1332,12 +954,10 @@ asb_audio_ensure_volume_libs() {
   _fixed=0
   for _ef in $(find "$_aed" -type f -name "audio_effects*.xml" 2>/dev/null); do
     grep -q "<libraries>" "$_ef" 2>/dev/null || continue
-    # add volume_listener lib if missing
     if ! grep -q 'name="volume_listener"' "$_ef" 2>/dev/null; then
       sedi '/<libraries>/ a\        <library name="volume_listener" path="libvolumelistener.so"/>' "$_ef"
       _fixed=1
     fi
-    # add audio_pre_processing lib if missing
     if ! grep -q 'name="audio_pre_processing"' "$_ef" 2>/dev/null; then
       sedi '/<libraries>/ a\        <library name="audio_pre_processing" path="libqcomvoiceprocessing.so"/>' "$_ef"
       _fixed=1
@@ -1348,7 +968,6 @@ asb_audio_ensure_volume_libs() {
 }
 
 asb_patch_audio_inplace() {
-  # $1 = human label
   [ "$ASB_AUDIO" = "true" ] || { ui_print "[*] Audio category off — skipping mixer tune"; return 0; }
   _adir="$MODPATH/system/vendor/etc/audio"
   [ -d "$_adir" ] || { ui_print "[*] No cloned audio dir — skipping mixer tune"; return 0; }
@@ -1364,18 +983,8 @@ asb_patch_audio_inplace() {
     _n=$((_n + 1))
   done
 
-  # Ensure the audio-effects volume pipeline is intact in the device's OWN cloned
-  # effects files. This reproduces the old OP15 "quiet until ViPER opened" fix
-  # WITHOUT shipping a static file: instead of assuming, we read the device's
-  # cloned audio_effects and, when ViPER/V4A is NOT being wired, guarantee the
-  # stock playback-volume effect libs (volume_listener / audio_pre_processing)
-  # are present — adding them only if the device's own file is missing them. On a
-  # device that already has them it's a no-op; on one that lacks them it restores
-  # normal loudness. Derives the device-specific value from the device itself.
   asb_audio_ensure_volume_libs "$_adir"
 
-  # Save baselines (base tweaks, no aggressive) to the external store and reflect
-  # the current toggle state immediately; boot keeps it in sync afterwards.
   if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
     . "$MODPATH/runtime/asb_tweaks.sh"
     asb_save_dynamic_baselines "$MODPATH"
@@ -1389,48 +998,21 @@ asb_patch_audio_inplace() {
   fi
 }
 
-# ---------------------------------------------------------------------------
-# asb_strip_shipped_static_vendor — remove ALL pre-baked per-model vendor files
-# the module may still ship (canoe/alor audio SKUs, canoe media_profiles, the
-# static camera tone, top-level mixer/policy/ftm copies). In the no-static
-# architecture every one of these is rebuilt live per-device by the clone+patch
-# pipeline, so shipping them is at best redundant and on a non-canoe device is
-# an actively wrong foreign overlay. Runs for EVERY device right before the
-# clone, and is a clean no-op once the source tree ships without these files.
-# It deliberately does NOT touch system.prop, the governor, webroot, runtime/
-# or tools/ — only the vendor *config* files that are now device-native.
-# ---------------------------------------------------------------------------
 asb_strip_shipped_static_vendor() {
-  # audio SKU dirs: these hold per-model mixer_paths the pipeline re-clones from
-  # the device and re-patches, so the shipped canoe/alor set is pure redundancy
-  # on OP15 and a wrong foreign overlay anywhere else. The device's own audio
-  # dir (cloned next) brings the correct mixers AND the stock audio_effects /
-  # audio_policy for THIS device.
   rm -rf "$MODPATH/system/vendor/etc/audio" \
          "$MODPATH/system/vendor/odm/etc/audio" \
          "$MODPATH/system/odm/etc/audio" 2>/dev/null || true
-  # top-level mixer / ftm / resourcemanager copies (canoe-shaped) — re-cloned.
   for _af in mixer_paths.xml ftm_mixer_paths.xml resourcemanager.xml \
              audio_module_config_primary.xml; do
     rm -f "$MODPATH/system/vendor/etc/$_af" \
           "$MODPATH/system/vendor/odm/etc/$_af" 2>/dev/null || true
   done
-  # NOTE: top-level audio_policy_configuration.xml / audio_effects_config.xml /
-  # virtual_audio_policy_configuration.xml are intentionally NOT stripped here.
-  # The OP15 volume fix lives in audio_effects (stock can lack volume_listener /
-  # audio_pre_processing), and the V4A effects-rewrite pass operates on these
-  # files. Cloning stock alone wouldn't re-add the missing libs, so we leave the
-  # existing per-device effects handling to manage them.
-  # media_profiles: every shipped variant (canoe_sku*, v1/v2, V1_0, plain) — the
-  # device's own is re-cloned and bitrate-lifted by asb_patch_media_profiles.
   rm -f "$MODPATH/system/vendor/etc/media_profiles"*.xml \
         "$MODPATH/system/vendor/odm/etc/media_profiles"*.xml \
         "$MODPATH/system/odm/etc/media_profiles"*.xml 2>/dev/null || true
-  # camera tone: shipped static set (re-cloned live, OP12-safe, by the pipeline)
   rm -rf "$MODPATH/system/vendor/odm/etc/camera" \
          "$MODPATH/system/odm/etc/camera" \
          "$MODPATH/system/vendor/etc/camera" 2>/dev/null || true
-  # gps/izat shipped statics (re-cloned live + key-patched)
   rm -f "$MODPATH/system/vendor/etc/gps.conf" \
         "$MODPATH/system/vendor/etc/izat.conf" \
         "$MODPATH/system/vendor/odm/etc/gps.conf" \
@@ -1439,33 +1021,6 @@ asb_strip_shipped_static_vendor() {
         "$MODPATH/system/odm/etc/izat.conf" 2>/dev/null || true
 }
 
-# ---------------------------------------------------------------------------
-# asb_apply_device_native_tuning — the SINGLE unified clone-and-patch pipeline.
-#
-# This is the heart of the "no static overlays" architecture. Instead of
-# shipping pre-baked vendor files per model, EVERY OnePlus (reference or not)
-# now builds its overlay live from its OWN stock files:
-#   audio  : clone the device's whole /vendor/etc/audio (carries its real SKU +
-#            codec-specific controls — HiFi/DS2/Audiosphere on canoe, etc.) then
-#            name-anchored sed for vol/EQ/DAC. Cloning is why the canoe-specific
-#            controls survive without being injected — they're already in the
-#            device's own file.
-#   camera : clone the device's own conf_tuning / video_beauty, key-patch tone.
-#   media  : clone the device's own media_profiles, lift video bitrate.
-#   gps    : clone the device's own gps/izat/xtwifi/lowi, key-patch protocol keys
-#            (CAPABILITIES/XTRA left native).
-#   perf   : clone the device's own perf store, key-patch thermal/boost.
-#   wifi   : clone the device's own WCNSS, key-patch driver .ini.
-#
-# Safe-by-construction: every file and path comes from the installing device, so
-# the overlay can never present a shape the device's HALs don't expect; a bad
-# key-patch is at worst a no-op. The whole result is covered by the 3-strike
-# bootloop self-recovery in post-fs-data (which strips the cloned camera/media/
-# gps + perf if the device fails to boot 3x). Each step is independently gated
-# on its ASB_* category toggle and self-skips when the device lacks that stock
-# dir. The one model-specific carve-out lives inside asb_clone_device_camera_tone
-# (OP12 gets no system/odm camera mirror, to avoid the multicamera SIGABRT).
-# ---------------------------------------------------------------------------
 asb_apply_device_native_tuning() {
   _label="$1"
   ui_print " "
@@ -1475,11 +1030,6 @@ asb_apply_device_native_tuning() {
   ui_print "[*] (audio / camera / media / GPS / perf / Wi-Fi — patched in place)"
   ui_print "${SEPARATOR}"
 
-  # STEP 0 — strip every shipped static vendor file FIRST. In the no-static
-  # architecture the module ships no per-model audio/camera/media/gps; each is
-  # rebuilt live below from the installing device's own stock. Stripping first
-  # guarantees a canoe/alor leftover can never shadow a non-canoe device's
-  # freshly-cloned file (and is a harmless no-op once the tree ships clean).
   asb_strip_shipped_static_vendor
 
   asb_clone_device_audio_wifi   "$_label"
@@ -1490,14 +1040,6 @@ asb_apply_device_native_tuning() {
   asb_patch_location_inplace    "$2"
   asb_patch_wifi_inplace        "$_label"
 
-  # NOTE on the camera recording profile: on OP15 the camera's own
-  # /odm/etc/camera/media_profiles.xml lives on a read-only opex/dynamic-odm
-  # partition (mounted via /mnt/opex/com.oplus.odmf, with /vendor/odm a symlink to
-  # /odm), which the module system cannot overlay — so there's no point shipping a
-  # system/odm copy (an earlier attempt did nothing). It doesn't matter: the media
-  # framework reads /vendor/etc/media_profiles*.xml for the recording bitrate, and
-  # those ARE overlaid and lifted to 40 Mbit by asb_patch_media_profiles_inplace
-  # above. Video capture gets the higher bitrate through that path.
   if [ "$ASB_AUDIO" = "true" ] || [ "$ASB_CAMERA" = "true" ]; then
     if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
       . "$MODPATH/runtime/asb_tweaks.sh"
@@ -1506,7 +1048,6 @@ asb_apply_device_native_tuning() {
     fi
   fi
 
-  # Record what was generated, for the field report + bootloop-recovery scope.
   _man="$MODPATH/generated_overlay_manifest.txt"
   {
     echo "# ASB device-native overlay — $(date '+%F %T')"
@@ -1518,7 +1059,6 @@ asb_apply_device_native_tuning() {
       | sed "s|$MODPATH/||"
   } > "$_man" 2>/dev/null
   cp -f "$_man" /data/adb/asb/generated_overlay_manifest.txt 2>/dev/null || true
-  # Arm the bootloop counter so the 3-strike auto-revert umbrella covers this.
   echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null || true
 }
 
@@ -1563,13 +1103,6 @@ asb_prune_non_op15_vendor_overlays() {
 }
 
 asb_reset_learning_on_upgrade_to_v56() {
-  # V56 changed the environment classifier (it used to mislabel active screen-on
-  # sessions as "hostile", poisoning the learned buckets) and extended the
-  # session-record schema. So on an upgrade FROM V55 or earlier we reset ONLY the
-  # learned state, letting Smart Mode re-learn cleanly under the fixed classifier.
-  # User settings (config snapshot, smart-mode on/off, night window, profile) and
-  # device detection are deliberately preserved — a learning reset, not a wipe.
-  # First install (no prior version) is left alone.
   _asb_dir="/data/adb/asb"
   _marker="$_asb_dir/v56_learning_reset_done"
   [ -f "$_marker" ] && return 0   # already done on this device
@@ -1588,7 +1121,6 @@ asb_reset_learning_on_upgrade_to_v56() {
   ui_print "     one). Your settings and device data are kept."
   ui_print "${SEPARATOR}"
 
-  # Learned state only — trained under the old classifier / old schema:
   rm -f "$_asb_dir/buckets.bin" "$_asb_dir/buckets.bin.bak" \
         "$_asb_dir/pstats_balanced.json" "$_asb_dir/pstats_battery.json" \
         "$_asb_dir/smart_appheat.bin" \
@@ -1596,17 +1128,6 @@ asb_reset_learning_on_upgrade_to_v56() {
         "$_asb_dir/session_history_migrated_v47" \
         "$_asb_dir/auto_battery_state" 2>/dev/null || true
 
-  # PRESERVED on purpose (NOT deleted): governor.conf.snapshot, user_config,
-  # smart_mode_enabled, night_window.conf, active_profile, smart_prev_profile,
-  # device_bounds.env, device_caps.env.
-
-  # The OLD governor daemon is still RUNNING during install and re-saves
-  # buckets.bin / pstats from memory every ~5 minutes — which resurrects the
-  # learned state right after the deletion above (seen in the field: 286
-  # pre-reset bucket sessions with last_seen older than the reset marker).
-  # Leave a pending marker that service.sh consumes at the NEXT BOOT, before
-  # the governor starts — deleting again when no old daemon is alive to
-  # resurrect anything makes the reset actually stick.
   : > "$_asb_dir/learning_reset_pending" 2>/dev/null || true
 
   mkdir -p "$_asb_dir" 2>/dev/null
@@ -1615,28 +1136,14 @@ asb_reset_learning_on_upgrade_to_v56() {
 }
 
 asb_preserve_user_config() {
-  # On REINSTALL/UPDATE, carry the user's WebUI choices over the freshly-shipped
-  # governor.conf. We look in TWO places for the old values, in priority order:
-  #   1. the previous install's config/governor.conf (live or update-staged), and
-  #   2. an external snapshot at /data/adb/asb/governor.conf.snapshot that we
-  #      write at the end of every install (below). The snapshot is the reliable
-  #      one: on a version jump or certain KSU/APatch update flows the old module
-  #      dir may already be swapped out when we run, which is why users saw their
-  #      V52 toggles reset on the V54 update. The snapshot lives outside the
-  #      module so it always survives.
   _new_conf="$MODPATH/config/governor.conf"
   _old_conf="$NVBASE/modules/$MODID/config/governor.conf"
   [ -f "$_old_conf" ] || _old_conf="$NVBASE/modules_update/$MODID/config/governor.conf"
   _snap_conf="/data/adb/asb/governor.conf.snapshot"
   [ -f "$_new_conf" ] || return 0
-  # One-time cleanup: device_bounds_override stopped being a user toggle and is
-  # now always-on. Scrub any stale line out of the previous config and the
-  # snapshot so a value saved back when the toggle still existed (possibly =0)
-  # can't leak forward. The freshly-shipped governor.conf already carries =1.
   for _stale_conf in "$_old_conf" "$_snap_conf"; do
     [ -f "$_stale_conf" ] && sed -i '/^[[:space:]]*device_bounds_override=/d' "$_stale_conf" 2>/dev/null || true
   done
-  # Pick the best available source of old values.
   _src=""
   [ -f "$_old_conf" ] && _src="$_old_conf"
   [ -z "$_src" ] && [ -f "$_snap_conf" ] && _src="$_snap_conf"
@@ -1649,15 +1156,9 @@ auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
 region_allow_locale"
-  # NOTE: device_bounds_override is deliberately NOT migrated. It's no longer a
-  # user toggle — the device-adaptive bounds are always-on — so the freshly
-  # shipped governor.conf value (=1) must always win, even if an older install or
-  # snapshot carried a stale =0 from when the toggle still existed.
 
   _migrated=0
   for _k in $_user_keys; do
-    # prefer the live old config, but fall back per-key to the snapshot so a
-    # value present in either source is preserved.
     _oldval="$(grep -E "^[[:space:]]*$_k=" "$_src" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
     if [ -z "$_oldval" ] && [ "$_src" != "$_snap_conf" ] && [ -f "$_snap_conf" ]; then
       _oldval="$(grep -E "^[[:space:]]*$_k=" "$_snap_conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
@@ -1674,8 +1175,6 @@ region_allow_locale"
   done
 }
 
-# Write an external snapshot of the user-settable keys so the NEXT install can
-# restore them even if the old module dir is gone (see asb_preserve_user_config).
 asb_snapshot_user_config() {
   _new_conf="$MODPATH/config/governor.conf"
   _snap_conf="/data/adb/asb/governor.conf.snapshot"
@@ -1741,13 +1240,6 @@ asb_prune_module() {
     rm -f "$MODPATH/system/vendor/odm/etc/media_profiles"*".xml" 2>/dev/null || true
     rm -rf "$MODPATH/system/vendor/odm/etc/camera" 2>/dev/null || true
   fi
-  # Always strip any system/odm/etc/camera mirror: we ship the camera overlay to
-  # system/vendor/odm ONLY (matching the known-good module). A system/odm camera
-  # copy is what made APatch stack a mount over the real /odm and crash the
-  # multicamera HAL, so we remove it unconditionally to clean up any stale mirror
-  # a previous (broken) build may have left. (OP15 re-places just the lifted
-  # media_profiles.xml here later, inside asb_apply_device_native_tuning, AFTER
-  # the media pass has produced it — see that function.)
   rm -rf "$MODPATH/system/odm/etc/camera" 2>/dev/null || true
   rm -f  "$MODPATH/system/odm/etc/media_profiles"*".xml" 2>/dev/null || true
 
@@ -1819,10 +1311,6 @@ ASB_BG_TRIM=false
 asb_install_prebuilt_governor
 asb_big_banner
 
-# Clean up the per-module work litter some root managers leave next to the
-# module dir (".AutoSystemBoost-files" marker + "CLEAR" dir). Do it at INSTALL
-# too, not just uninstall, so a reinstall over a previous version clears any
-# stale artifact immediately instead of waiting for a future removal.
 for _mroot in /data/adb/modules /data/adb/modules_update \
               /data/adb/ksu/modules /data/adb/ksu/modules_update \
               /data/adb/ap/modules /data/adb/ap/modules_update; do
@@ -1936,12 +1424,6 @@ if [ "$ASB_IS_OP15" = "true" ]; then
 fi
 asb_prune_module
 
-# Install-time stock-file inventory & analysis. Records THIS device's real
-# cluster topology, GPU back-end, audio SKU + mixer/effects files, camera/media
-# presence, Wi-Fi WCNSS/SKU, GPS and perf — so the per-device patching below is
-# informed and auditable rather than blind, and so a returned bundle shows
-# exactly what was patchable on the installing model. Pure observation: it
-# modifies no stock file. Runs on every device, every install.
 if [ -f "$MODPATH/tools/asb_install_probe.sh" ]; then
   sh "$MODPATH/tools/asb_install_probe.sh" "$MODPATH/install_probe.txt" >/dev/null 2>&1 || true
   cp -f "$MODPATH/install_probe.txt" /data/adb/asb/install_probe.txt 2>/dev/null || true
@@ -1955,18 +1437,10 @@ if [ -f "$MODPATH/tools/asb_install_probe.sh" ]; then
 fi
 
 if [ "$ASB_IS_OP15" = "true" ]; then
-  # OP15 (canoe): no longer ships static canoe/alor audio — the unified pipeline
-  # clones the device's OWN audio (which carries the canoe HiFi/DS2/Audiosphere
-  # controls) and patches it, so the result matches the old hand-tuned overlay
-  # without shipping it.
   asb_apply_device_native_tuning "OnePlus 15 (canoe)" "OnePlus15"
 elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_apply_device_native_tuning "OnePlus 13 (sun / tuna / kera)" "OnePlus13"
 elif [ "$ASB_IS_OP12" = "true" ]; then
-  # OP12 multicamera safety is handled inside asb_clone_device_camera_tone
-  # (no system/odm camera mirror). Also scrub any stale system/odm camera/media
-  # mirror left by an older regressed build so nothing re-mounts the OP15-shaped
-  # multicamera env into /odm on OP12.
   for _stale in \
       "$NVBASE/modules/$MODID/system/odm/etc/camera" \
       "$NVBASE/modules_update/$MODID/system/odm/etc/camera" \
@@ -2001,21 +1475,8 @@ else
   fi
 fi
 [ -f "$MODPATH/overlay_device_class" ] || echo reference > "$MODPATH/overlay_device_class" 2>/dev/null
-# Clean up any unused overlay staging dirs (kept for backward-compat with older
-# trees that still shipped them; harmless when absent).
 rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
 
-# --- Device-aware default for device_bounds_override (V56 regression fix) -----
-# V55 shipped this ON for everyone. On OP15 the synthesized bounds equal the
-# hand-validated shipped values (no behaviour change), but on other models the
-# synthesis scales OP15's THERMAL-derived ratios (e.g. BALANCED little ~72% of
-# hwmax) onto clusters with different roles: OP15's "little" is six performance
-# Oryon cores, while e.g. OP12's little is true efficiency cores — the same
-# ratio there cuts UI clocks hard and users reported V55 as laggy (rolled back
-# to V54). Default is now per-device: ON only on OP15, OFF elsewhere. We WRITE
-# the value in both cases because a config preserved from V55 carries the old
-# =1 default, which is not a deliberate user choice; the WebUI toggle remains
-# for opt-in.
 _gc="$MODPATH/config/governor.conf"
 if [ -f "$_gc" ]; then
   if [ "$ASB_IS_OP15" = "true" ]; then
@@ -2027,21 +1488,9 @@ if [ -f "$_gc" ]; then
   fi
 fi
 
-# ---------------------------------------------------------------------------
-# Regional localization: the shipped WiFi/GPS configs were authored with an
-# Italian regulatory domain (gCountryCode=IT, country=IT, it.pool.ntp.org).
-# WiFi country code is regulatory — a wrong one blocks channels or violates
-# local rules — so we detect the installing device's country and rewrite it.
-# Source of truth (no network needed): the SIM/network ISO country from the
-# modem. Falls back to leaving the value untouched if nothing is detectable.
-# ---------------------------------------------------------------------------
 asb_localize_region() {
   _cc=""
   _src="none"
-  # Trust only the modem's ISO country (SIM first, then network operator).
-  # locale is deliberately NOT used by default — locale != real location, and
-  # rewriting a Wi-Fi regulatory domain on a guess is risky. A user who wants
-  # locale as a last resort can set region_allow_locale=1 in the config.
   for _p in gsm.sim.operator.iso-country gsm.operator.iso-country; do
     _v="$(getprop "$_p" 2>/dev/null | tr '[:lower:]' '[:upper:]' | tr -d ' ')"
     case "$_v" in
@@ -2049,7 +1498,6 @@ asb_localize_region() {
     esac
   done
 
-  # Optional opt-in: locale region only as a last resort, only if asked.
   if [ -z "$_cc" ]; then
     _allow_locale="$(grep -E '^[[:space:]]*region_allow_locale=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
     if [ "$_allow_locale" = "1" ]; then
@@ -2063,7 +1511,6 @@ asb_localize_region() {
   ASB_REGION_SOURCE="$_src"
   ASB_REGION_APPLIED="unchanged"
 
-  # NTP -> global pool is region-neutral and always safe; do it regardless.
   for _gf in $(find "$MODPATH/system" -type f -iname "gps.conf" 2>/dev/null); do
     [ -f "$_gf" ] && sed -i "s|^NTP_SERVER=.*|NTP_SERVER=pool.ntp.org|g" "$_gf" 2>/dev/null
   done
@@ -2072,11 +1519,6 @@ asb_localize_region() {
     return 0
   fi
 
-  # Wi-Fi country: only REPLACE an existing country line — never insert one.
-  # If a device ships WCNSS/supplicant without an explicit gCountryCode (e.g.
-  # OP13), that's intentional: the modem drives the regulatory domain at
-  # runtime. Forcing a SIM-derived country there could set the wrong regdomain
-  # (travel, roaming), so we leave those files untouched.
   _wrote=0
   for _wf in $(find "$MODPATH/system" -type f \( -iname "WCNSS_qcom_cfg*.ini" \) 2>/dev/null); do
     [ -f "$_wf" ] || continue
@@ -2098,24 +1540,12 @@ asb_localize_region() {
 }
 asb_localize_region
 
-# ---------------------------------------------------------------------------
-# Bluetooth absolute-volume mode (bt_absvol_mode = auto|on|off).
-# Absolute volume delegates loudness to the BT sink. Disabling it can be
-# louder on some car head-units / speakers, but it can also change the volume
-# scale, step granularity and dual-control behavior — so it is NOT a safe
-# universal default. We honor an explicit config choice; auto = off for now.
-# ---------------------------------------------------------------------------
 asb_apply_bt_absvol() {
   _prop="$MODPATH/system.prop"
   [ -f "$_prop" ] || return 0
   _mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
   [ -n "$_mode" ] || _mode="auto"
   if [ "$_mode" = "auto" ]; then
-    # AUTO = hands-off. Strip our absolute-volume / AVRCP-override props from
-    # system.prop so we don't force values on every boot (which desyncs BT
-    # volume until an audio restart, e.g. opening ViPER). None of these exist
-    # in OP12 stock, and forcing newavrcp changes volume negotiation. The stock
-    # BT stack keeps its own behavior.
     sed -i '/^persist\.bluetooth\.disableabsvol=/d' "$_prop" 2>/dev/null
     sed -i '/^persist\.vendor\.bluetooth\.disableabsvol=/d' "$_prop" 2>/dev/null
     sed -i '/^persist\.bluetooth\.enablenewavrcp=/d' "$_prop" 2>/dev/null
@@ -2127,7 +1557,6 @@ asb_apply_bt_absvol() {
     off) _val="false" ;;
     *)   _val="false" ;;
   esac
-  # Only the BT block ships these props; rewrite both to the chosen value.
   sed -i "s/^persist.bluetooth.disableabsvol=.*/persist.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
   sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
   ASB_BT_ABSVOL_APPLIED="mode=$_mode disableabsvol=$_val"
@@ -2156,10 +1585,6 @@ BG_TRIM=$([ "$ASB_BG_TRIM" = "true" ] && echo 1 || echo 0)
 VENDOR_OVERLAY=1
 EOF
 
-# ---------------------------------------------------------------------------
-# Install summary — a single human-readable file capturing what was applied,
-# so post-install debugging doesn't require guessing. Lives next to the module.
-# ---------------------------------------------------------------------------
 {
   echo "ASB install summary"
   echo "date:            $(date 2>/dev/null || echo n/a)"
@@ -2180,20 +1605,10 @@ EOF
 } > "$MODPATH/install_summary.txt" 2>/dev/null
 cp -f "$MODPATH/install_summary.txt" /data/adb/asb/install_summary.txt 2>/dev/null || true
 
-# Device discovery (facts only — writes /data/adb/asb/device_caps.env, changes
-# no tunable). Captures the real CPU topology, GPU back-end, thermal zone count
-# and subsystem path presence so asbdiag can show them and future per-device
-# tuning has a stable, inspectable input. Safe to run at every install.
 if [ -f "$MODPATH/tools/asb_discover.sh" ]; then
   sh "$MODPATH/tools/asb_discover.sh" >/dev/null 2>&1 || true
 fi
 
-# Bounds synthesis (Phase 2): reads the just-written device_caps.env and scales
-# the OP15 reference ratios onto THIS device's real frequencies, writing
-# /data/adb/asb/device_bounds.env. The governor only consumes that file when
-# device_bounds_override=1 (off by default), and on OP15 the synthesised values
-# equal the shipped bounds — so this is safe to run at every install. On a
-# non-2-cluster SoC it writes a low-confidence marker and emits no overrides.
 if [ -f "$MODPATH/tools/asb_synthesize_bounds.sh" ]; then
   sh "$MODPATH/tools/asb_synthesize_bounds.sh" >/dev/null 2>&1 || true
 fi
@@ -2401,11 +1816,6 @@ fi
 	sedi "/^ *$/d" $ACONF
 	done
 
-  # V4A (ViPER4Android FX) wiring is only safe when libv4a_re.so actually
-  # exists on the device. OP15's OxygenOS ships it; some OP13/OP12 builds do
-  # not. Referencing a missing effect library makes audioserver fail to load
-  # audio_effects at boot -> audio HAL crash loop -> BOOTLOOP. Detect the
-  # library ONCE here, report status once, then apply across all effect files.
   _v4a_lib=""
   for _vd in /vendor/lib64/soundfx /vendor/lib/soundfx \
              /odm/lib64/soundfx /odm/lib/soundfx \
@@ -2413,7 +1823,6 @@ fi
              /system/vendor/lib64/soundfx /system/vendor/lib/soundfx; do
     if [ -f "$_vd/libv4a_re.so" ]; then _v4a_lib="$_vd/libv4a_re.so"; break; fi
   done
-  # V4A is wired only when the library exists; applied silently either way.
   for OAEFFECT in ${AEFFECT}; do
   	EFFECT=$MODPATH${OAEFFECT}
 	sedi '/"audiosphere"/d' $EFFECT
@@ -2951,7 +2360,6 @@ EOF
 	  chmod 0755 "$MODPATH/tools/asb_synthesize_bounds.sh"
 	fi
 
-	# Diagnostic launcher (short command: `su -c asbdiag`) + the script it runs.
 	if [ -f "$MODPATH/system/bin/asbdiag" ]; then
 	  chmod 0755 "$MODPATH/system/bin/asbdiag"
 	fi
@@ -2985,9 +2393,6 @@ EOF
 	  chmod 644 "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
 	fi
 
-	# Persist the (possibly just-restored) WebUI settings to an external snapshot
-	# so the NEXT update/reinstall can recover them even if the old module dir is
-	# gone — this is what stops toggles resetting across a version jump.
 	asb_snapshot_user_config
 
 	if [ -d "$MODPATH/config" ]; then
@@ -3018,18 +2423,8 @@ EOF
 }
 MANIFEST_EOF
 
-# BOOTLOOP GUARD (all devices, runs after ALL audio processing): module
-# audio_effects files may carry a V4A (ViPER4Android FX) library reference —
-# either shipped baked-in or re-added by the dynamic effect pass. If
-# libv4a_re.so is absent, audioserver fails to load effects at boot -> audio
-# HAL crash loop -> BOOTLOOP (this bricked OnePlus 12). Strip V4A unless the
-# library exists. OnePlus 15 (which ships the lib) keeps it.
 asb_guard_v4a_effects
 
-# P1 hygiene: some stock video_beauty_default_config files carry a // line
-# comment (e.g. "// Sort by English alphabet"). The file is otherwise JSON and
-# a strict parser can choke on it. Strip whole-line // comments from every copy
-# the module ships, on all devices and both odm paths.
 for _vb in $(find "$MODPATH/system" -type f -name "video_beauty_default_config" 2>/dev/null); do
   if grep -q '//' "$_vb" 2>/dev/null; then
     _vbt="${_vb}.asbc$$"
