@@ -705,7 +705,11 @@ asb_patch_media_profiles_inplace() {
     *canoe*|*sm8850*|*SM8850*) _ASB_MP_CANOE=1 ;;
   esac
   [ "$ASB_IS_OP15" = "true" ] && _ASB_MP_CANOE=1
-  for _mp_live in $(find /vendor /odm /system/vendor /system/odm /system_ext /product \
+  _mp_roots="/vendor /system/vendor /system_ext /product"
+  if [ "$ASB_IS_OP15" = "true" ] || [ "$ASB_IS_OP13" = "true" ]; then
+    _mp_roots="$_mp_roots /odm /system/odm"
+  fi
+  for _mp_live in $(find $_mp_roots \
                       -type f -name 'media_profiles*.xml' 2>/dev/null \
                       | grep -vE '/vintf/|/manifest' | sort -u); do
     _mp_rel="system${_mp_live}"
@@ -763,10 +767,10 @@ asb_clone_device_camera_tone() {
                     "/vendor/odm/etc/camera/$_ct_base" \
                     "/system/vendor/odm/etc/camera/$_ct_base"; do
       [ -f "$_ct_live" ] || continue
-      if [ "$ASB_IS_OP12" = "true" ]; then
-        _ct_dsts="system/vendor/odm/etc/camera/$_ct_base"
-      else
+      if [ "$ASB_IS_OP15" = "true" ] || [ "$ASB_IS_OP13" = "true" ]; then
         _ct_dsts="system/vendor/odm/etc/camera/$_ct_base system/odm/etc/camera/$_ct_base"
+      else
+        _ct_dsts="system/vendor/odm/etc/camera/$_ct_base"
       fi
       for _ct_dst in $_ct_dsts; do
         if [ ! -f "$MODPATH/$_ct_dst" ]; then
@@ -1456,6 +1460,11 @@ elif [ "$ASB_IS_OP12" = "true" ]; then
 else
   asb_prune_non_op15_vendor_overlays
   if [ "$ASB_IS_ONEPLUS" = "true" ]; then
+    if [ -f /data/adb/asb/vendor_overlay_blocked ] && [ ! -f /data/adb/asb/vendor_overlay_retry_done ]; then
+      rm -f /data/adb/asb/vendor_overlay_blocked 2>/dev/null
+      : > /data/adb/asb/vendor_overlay_retry_done 2>/dev/null
+      ui_print "[*] Non-reference OnePlus: retrying the device overlay once with the odm-safe generator"
+    fi
     if [ -f /data/adb/asb/vendor_overlay_blocked ]; then
       ui_print "[*] Non-reference OnePlus: a previous device overlay failed to boot here — staying governor-only"
       ui_print "    (delete /data/adb/asb/vendor_overlay_blocked to let the next install try again)"
@@ -1470,6 +1479,7 @@ else
     else
       echo generic > "$MODPATH/overlay_device_class" 2>/dev/null
       asb_apply_device_native_tuning "OnePlus (generic)" "OnePlus"
+      rm -rf "$MODPATH/system/odm" "$MODPATH/system/my_product" 2>/dev/null || true
       ui_print "[*] Non-reference OnePlus: device-native patched overlay, guarded by a 1-strike boot fuse"
     fi
   fi
@@ -1708,22 +1718,22 @@ ASB_xml() {
   ui_print " "
   ui_print " "
 
-MPATHS="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "*mixer_path*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-APINF="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "audio_platform_info*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-ACONFS="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "audio_configs*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-AEFFECT="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "audio_effects*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-ACCXML="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "audio_cloud_control*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-APCXML="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "audio_policy_configuration*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-A2DPXML="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "a2dp*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-VEHXML="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "vehicle*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-VIRTXML="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "virtual*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-USBXML="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "usb*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-BTQTIXML="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "bluetooth*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-APIOCXML="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "audio_output_policy.conf" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*" -o -iname "audio_io_policy.conf" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-BTCONF="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "bt_configstore*.conf" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-BTCONF2="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "bt_stack*.conf" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-MEDCA="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "media_codecs*audio.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
-SNDTRPL="$(find /system /vendor /system_ext /product /odm /my_product -depth -type f -iname "sound_trigger_platform_info*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*" -o -iname "resourcemanager*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+MPATHS="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "*mixer_path*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+APINF="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "audio_platform_info*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+ACONFS="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "audio_configs*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+AEFFECT="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "audio_effects*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+ACCXML="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "audio_cloud_control*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+APCXML="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "audio_policy_configuration*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+A2DPXML="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "a2dp*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+VEHXML="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "vehicle*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+VIRTXML="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "virtual*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+USBXML="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "usb*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+BTQTIXML="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "bluetooth*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+APIOCXML="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "audio_output_policy.conf" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*" -o -iname "audio_io_policy.conf" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+BTCONF="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "bt_configstore*.conf" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+BTCONF2="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "bt_stack*.conf" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+MEDCA="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "media_codecs*audio.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
+SNDTRPL="$(find /system /vendor /system_ext /product -depth -type f ! -path "/system/odm/*" ! -path "/system/my_product/*" -iname "sound_trigger_platform_info*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*" -o -iname "resourcemanager*.xml" ! -path "*/vintf/*" ! -path "*/selinux/*" ! -path "*/lib*/*" ! -path "*/media*/*")"
 if [ -f /data/adb/asb/vendor_overlay_blocked ]; then
   A2DPXML=""; ACCXML=""; ACONFS=""; AEFFECT=""; APCXML=""; APINF=""; APIOCXML=""; BTCONF=""; BTCONF2=""; BTQTIXML=""; MEDCA=""; MPATHS=""; SNDTRPL=""; USBXML=""; VEHXML=""; VIRTXML=""
 fi
