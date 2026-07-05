@@ -2440,7 +2440,25 @@ EOF
 # activated by service.sh only after sys.boot_completed confirms a clean boot,
 # so a bad clone can never brick the very first boot (field: Ace 6 bootloops
 # survived the 1-strike fuse because users recovery-flash before boot #2).
-if [ "$_asb_audio_ref" != "1" ] || [ "${_asb_sibling:-0}" = "1" ]; then
+_mo_src="$MODPATH/system/odm"; _mo_dst="$MODPATH/system/vendor/odm"
+if [ -d "$_mo_src" ]; then
+  ( cd "$_mo_src" && find . -type f 2>/dev/null ) | while IFS= read -r _mf; do
+    _mf="${_mf#./}"
+    [ -f "$_mo_dst/$_mf" ] && continue
+    mkdir -p "$_mo_dst/$(dirname "$_mf")" 2>/dev/null
+    cp -f "$_mo_src/$_mf" "$_mo_dst/$_mf" 2>/dev/null
+  done
+fi
+if [ -d "$_mo_dst" ]; then
+  ( cd "$_mo_dst" && find . -type f 2>/dev/null ) | while IFS= read -r _mf; do
+    _mf="${_mf#./}"
+    [ -f "$_mo_src/$_mf" ] && continue
+    mkdir -p "$_mo_src/$(dirname "$_mf")" 2>/dev/null
+    cp -f "$_mo_dst/$_mf" "$_mo_src/$_mf" 2>/dev/null
+  done
+fi
+
+if [ "$_asb_audio_ref" != "1" ]; then
   _defer=0
   for _dd in vendor odm; do
     if [ -d "$MODPATH/system/$_dd" ]; then
