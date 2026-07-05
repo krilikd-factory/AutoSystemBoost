@@ -257,6 +257,20 @@ asb_migrate_governor_conf
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
     echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
+    if [ -d "$MODDIR/deferred_overlay" ]; then
+      sleep 30
+      _act=0
+      for _dd in vendor odm; do
+        [ -d "$MODDIR/deferred_overlay/$_dd" ] || continue
+        if [ -d "$MODDIR/system/$_dd" ]; then
+          cp -a "$MODDIR/deferred_overlay/$_dd/." "$MODDIR/system/$_dd/" 2>/dev/null && rm -rf "$MODDIR/deferred_overlay/$_dd" && _act=1
+        else
+          mv "$MODDIR/deferred_overlay/$_dd" "$MODDIR/system/$_dd" 2>/dev/null && _act=1
+        fi
+      done
+      rmdir "$MODDIR/deferred_overlay" 2>/dev/null
+      [ "$_act" = "1" ] && echo "ts=$(date +%s) action=deferred_overlay_activated (mounts next boot)" >> /data/adb/asb/vendor_mounts.log
+    fi
   fi
 ) >/dev/null 2>&1 &
 

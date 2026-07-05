@@ -122,6 +122,8 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
     if [ "$_ovl_class" = "generic" ]; then
       echo "ts=$(date +%s) reason=boot_failed_${_cur_ctr}x class=generic" > /data/adb/asb/vendor_overlay_blocked
     fi
+    touch "$MODDIR/skip_mount" 2>/dev/null
+    rm -rf "$MODDIR/deferred_overlay" 2>/dev/null
     rm -f "$_bootflag" 2>/dev/null
     rm -f "$MODDIR"/system/vendor/etc/perf/* 2>/dev/null
     # The unified device-native pipeline clones THIS device's own audio, camera,
