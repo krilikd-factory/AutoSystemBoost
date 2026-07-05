@@ -198,11 +198,35 @@ lk_emit_phase_summary() {
         }
       }
     ' "$_led" | sort -k4 -rn
+    awk -F'\t' '
+      $1=="idle" && !/^#/ { d=$3-$2; if(d>DUR){DUR=d;SP=$4;EP=$5;CT=$6;SF=$7;P6=$8} }
+      END{ if(DUR>=10800) printf "%-15s %8.1f %7d %8.2f %8d %8d %9d %7s %9s\n", \
+        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, CT, SF, (P6/1000), "-", "-" }
+    ' "$_led"
     echo ""
     echo "Legend: d_pct=battery % consumed (negative=gained while charging),"
     echo "        pct/h=drain rate, cpuT/surfT=peak temps (°C), p6MHz=peak prime"
+    echo "        night(longest)=longest continuous screen-off block >=3h — the pure"
+    echo "        overnight rate; compare IT (not the mixed idle row) against 0.3-0.7 %/h."
     echo "        clock, gpu%=avg GPU busy, throttle=ticks the prime was capped."
   } > "$LK_OUT_DIR/phase_summary.txt"
+}
+
+lk_emit_screenoff_sleep() {
+  _bs=$(dumpsys batterystats 2>/dev/null | grep -m1 -iE "screen off:.*realtime.*uptime")
+  [ -z "$_bs" ] && { echo "  screen-off CPU sleep: n/a (batterystats line not found)"; return 0; }
+  echo "$_bs" | sed 's/.*[Ss]creen off: //; s/ realtime,/|/; s/ uptime.*//' | awk -F'|' '
+    function tosec(t,  n,a,i,v,u){ n=split(t,a," "); v=0
+      for(i=1;i<=n;i++){ u=a[i]
+        if(u ~ /ms$/) continue
+        if(u ~ /h$/){sub(/h/,"",u); v+=u*3600}
+        else if(u ~ /m$/){sub(/m/,"",u); v+=u*60}
+        else if(u ~ /s$/){sub(/s/,"",u); v+=u} }
+      return v }
+    { rt=$1; sub(/ \(.*\)/,"",rt); r=tosec(rt); u=tosec($2)
+      if(r>0){ aw=u*100.0/r
+        printf "  screen-off: %.1fh realtime, CPU awake %.0fm -> awake %.1f%% (deep sleep %.1f%%)\n", r/3600.0, u/60.0, aw, 100-aw
+        printf "  target: awake < 5%% on a healthy night; >15%% = something holds the CPU\n" } }'
 }
 
 lk_emit_full_day_report() {
@@ -213,6 +237,9 @@ lk_emit_full_day_report() {
     echo " ASB FULL-DAY REPORT — $(date '+%Y-%m-%d %H:%M:%S')"
     echo " capture: ${LK_HOURS}h target, $(( ($(date +%s) - LK_START_EPOCH) / 60 )) min elapsed"
     echo "==================================================================="
+    echo ""
+    echo "----- NIGHT / SCREEN-OFF CPU SLEEP -----"
+    lk_emit_screenoff_sleep
     echo ""
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
       cat "$LK_OUT_DIR/phase_summary.txt"
