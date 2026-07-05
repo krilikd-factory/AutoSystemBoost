@@ -1727,11 +1727,32 @@ SNDTRPL="$(find /system /vendor /system_ext /product /odm /my_product -depth -ty
 if [ -f /data/adb/asb/vendor_overlay_blocked ]; then
   A2DPXML=""; ACCXML=""; ACONFS=""; AEFFECT=""; APCXML=""; APINF=""; APIOCXML=""; BTCONF=""; BTCONF2=""; BTQTIXML=""; MEDCA=""; MPATHS=""; SNDTRPL=""; USBXML=""; VEHXML=""; VIRTXML=""
 fi
-# Structural audio/BT XML sed-tuning is verified only against OP15/OP13/OP12 stock;
-# on an unknown firmware it can corrupt vendor HAL configs (field bootloop: Ace 6).
-if [ "$ASB_IS_OP15" != "true" ] && [ "$ASB_IS_OP13" != "true" ] && [ "$ASB_IS_OP12" != "true" ]; then
+# Structural audio/BT XML sed-tuning is verified only against OP15/OP13/OP12 stock.
+# Detection alone is not enough: SoC siblings (e.g. Ace 6 on the OP15 platform,
+# matched via shared model codes) carry a DIFFERENT audio stock, and applying the
+# reference seds there corrupted vendor HAL configs (field bootloop). So the gate
+# requires the detected family's own audio fingerprint (its sku_* dirs) to be
+# physically present on the device before any structural list survives.
+_asb_audio_ref=0
+_asb_ref_skus=""
+[ "$ASB_IS_OP15" = "true" ] && _asb_ref_skus="sku_canoe sku_alor"
+[ "$ASB_IS_OP13" = "true" ] && _asb_ref_skus="sku_sun sku_kera sku_tuna"
+[ "$ASB_IS_OP12" = "true" ] && _asb_ref_skus="sku_pineapple sku_cliffs"
+if [ -n "$_asb_ref_skus" ]; then
+  for _ad in /vendor/etc/audio /system/vendor/etc/audio /odm/etc/audio; do
+    [ -d "$_ad" ] || continue
+    for _sk in $_asb_ref_skus; do
+      ls -d "$_ad/$_sk"* >/dev/null 2>&1 && _asb_audio_ref=1
+    done
+  done
+fi
+if [ "$_asb_audio_ref" != "1" ]; then
   A2DPXML=""; ACONFS=""; AEFFECT=""; APCXML=""; APINF=""; APIOCXML=""; BTCONF=""; BTCONF2=""; BTQTIXML=""; DAXXML=""; SNDTRPL=""; USBXML=""; VEHXML=""; VIRTXML=""
-  ui_print "[*] Non-reference OnePlus: structural audio/BT XML patches skipped; mixer/codec/GPS/Wi-Fi tuning stays on"
+  if [ -n "$_asb_ref_skus" ]; then
+    ui_print "[*] Reference match without native audio stock (platform sibling) - structural audio/BT XML patches skipped; mixer/codec/GPS/Wi-Fi tuning stays on"
+  else
+    ui_print "[*] Non-reference OnePlus: structural audio/BT XML patches skipped; mixer/codec/GPS/Wi-Fi tuning stays on"
+  fi
 fi
 
 mkdir -p $MODPATH/tools
