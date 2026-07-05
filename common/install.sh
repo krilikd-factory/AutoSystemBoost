@@ -619,7 +619,7 @@ asb_patch_wifi_inplace() {
   [ "$ASB_WIFI" = "true" ] || return 0
 
   _wifi_src=""
-  for _ws in /vendor/etc/wifi /odm/etc/wifi /system/vendor/etc/wifi; do
+  for _ws in /vendor/etc/wifi /odm/etc/wifi /odm/vendor/etc/wifi /vendor/odm/etc/wifi /system/vendor/etc/wifi; do
     [ -d "$_ws" ] && { _wifi_src="$_ws"; break; }
   done
   [ -n "$_wifi_src" ] || return 0
@@ -1748,6 +1748,7 @@ _asb_ref_skus=""
 [ "$ASB_IS_OP15" = "true" ] && _asb_ref_skus="sku_canoe sku_alor"
 [ "$ASB_IS_OP13" = "true" ] && _asb_ref_skus="sku_sun sku_kera sku_tuna"
 [ "$ASB_IS_OP12" = "true" ] && _asb_ref_skus="sku_pineapple sku_cliffs"
+_asb_sibling=0
 if [ -n "$_asb_ref_skus" ]; then
   for _ad in /vendor/etc/audio /system/vendor/etc/audio /odm/etc/audio; do
     [ -d "$_ad" ] || continue
@@ -1755,6 +1756,18 @@ if [ -n "$_asb_ref_skus" ]; then
       ls -d "$_ad/$_sk"* >/dev/null 2>&1 && _asb_audio_ref=1
     done
   done
+else
+  # Generic path: a platform sibling can carry a KNOWN reference audio stock
+  # (field: Ace 6 = ossi/SM8750 ships the OP13 sun/kera/tuna tree, verified
+  # byte-identical on the structural files). Grant it the full structural set;
+  # the deferred first-clean-boot staging stays on as the safety net.
+  for _ad in /vendor/etc/audio /system/vendor/etc/audio /odm/etc/audio; do
+    [ -d "$_ad" ] || continue
+    for _sk in sku_canoe sku_alor sku_sun sku_kera sku_tuna sku_pineapple sku_cliffs; do
+      ls -d "$_ad/$_sk"* >/dev/null 2>&1 && { _asb_audio_ref=1; _asb_sibling=1; _asb_sib_fam="$_sk"; }
+    done
+  done
+  [ "$_asb_sibling" = "1" ] && ui_print "[*] Known reference audio stock on sibling device (family: ${_asb_sib_fam#sku_}) - full structural tuning enabled, deferred-activation safety stays on"
 fi
 if [ "$_asb_audio_ref" != "1" ]; then
   A2DPXML=""; ACONFS=""; AEFFECT=""; APCXML=""; APINF=""; APIOCXML=""; BTCONF=""; BTCONF2=""; BTQTIXML=""; DAXXML=""; SNDTRPL=""; USBXML=""; VEHXML=""; VIRTXML=""
@@ -2427,7 +2440,7 @@ EOF
 # activated by service.sh only after sys.boot_completed confirms a clean boot,
 # so a bad clone can never brick the very first boot (field: Ace 6 bootloops
 # survived the 1-strike fuse because users recovery-flash before boot #2).
-if [ "$_asb_audio_ref" != "1" ]; then
+if [ "$_asb_audio_ref" != "1" ] || [ "${_asb_sibling:-0}" = "1" ]; then
   _defer=0
   for _dd in vendor odm; do
     if [ -d "$MODPATH/system/$_dd" ]; then
