@@ -496,6 +496,7 @@ apply_vm() {
   for _swp_p in sys.sysctl.swappiness sys.mem.swappiness_on_launcher sys.mem.swappiness_on_start; do
     [ -n "$(getprop $_swp_p 2>/dev/null)" ] && command -v resetprop >/dev/null 2>&1 && resetprop $_swp_p "$_P_SWAP" 2>/dev/null
   done
+  [ -e /proc/sys/vm/watermark_boost_factor ] && sysctlw vm.watermark_boost_factor 0
   if [ -e /proc/sys/vm/dirty_bytes ] && [ -e /proc/sys/vm/dirty_background_bytes ]; then
     sysctlw vm.dirty_ratio 0
     sysctlw vm.dirty_background_ratio 0
@@ -1350,6 +1351,10 @@ apply_kernel() {
   sysctlw vm.panic_on_oom 0
   [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
   writef_retry /proc/sys/kernel/printk_devkmsg off 1 0 || true
+  [ -e /sys/module/subsystem_restart/parameters/enable_ramdumps ] && writef_retry /sys/module/subsystem_restart/parameters/enable_ramdumps 0 1 0 || true
+  [ -e /sys/module/subsystem_restart/parameters/enable_mini_ramdumps ] && writef_retry /sys/module/subsystem_restart/parameters/enable_mini_ramdumps 0 1 0 || true
+  [ -e /proc/sys/fs/inotify/max_user_watches ] && sysctlw fs.inotify.max_user_watches 262144
+  [ -e /proc/sys/fs/inotify/max_user_instances ] && sysctlw fs.inotify.max_user_instances 512
   writef_retry /proc/sys/kernel/printk "3 4 1 7" 1 0 || true
   [ -e /proc/sys/kernel/printk_ratelimit ] && \
     sysctlw kernel.printk_ratelimit 1
@@ -1830,6 +1835,13 @@ apply_tracking_block() {
   _sp binder_calls_stats "sampling_interval=600000000,detailed_tracking=disable,enabled=false,upload_data=false"
 }
 asb_feature_enabled LOG && apply_tracking_block
+
+apply_panel_lpm() {
+  _old_lpm="$(settings get global display_panel_lpm 2>/dev/null)"
+  echo "display_panel_lpm|$_old_lpm" >> /data/adb/asb/tracking_restore.log 2>/dev/null
+  settings put global display_panel_lpm 1 >/dev/null 2>&1
+}
+asb_feature_enabled LPM && apply_panel_lpm
 
 apply_camera_experimental() {
   # The proven-working OP12 build ran this on pineapple too (it set MFNR/EIS/SAT/
