@@ -2412,6 +2412,22 @@ EOF
 	  cp -f "$_man" /data/adb/asb/generated_overlay_manifest.txt 2>/dev/null || true
 	fi
 
+# Deferred overlay: on firmware without the detected family's native audio stock
+# the generated file overlay is NOT mounted on the first boot. It is staged and
+# activated by service.sh only after sys.boot_completed confirms a clean boot,
+# so a bad clone can never brick the very first boot (field: Ace 6 bootloops
+# survived the 1-strike fuse because users recovery-flash before boot #2).
+if [ "$_asb_audio_ref" != "1" ]; then
+  _defer=0
+  for _dd in vendor odm; do
+    if [ -d "$MODPATH/system/$_dd" ]; then
+      mkdir -p "$MODPATH/deferred_overlay"
+      mv "$MODPATH/system/$_dd" "$MODPATH/deferred_overlay/$_dd" 2>/dev/null && _defer=1
+    fi
+  done
+  [ "$_defer" = "1" ] && ui_print "[*] File overlay staged - first boot stays fully stock; activates after one confirmed clean boot"
+fi
+
 	asb_reset_learning_on_upgrade_to_v56
 	asb_preserve_user_config
 
