@@ -435,8 +435,14 @@ else
   for VB in /odm/etc/camera/config/video_beauty_default_config /vendor/odm/etc/camera/config/video_beauty_default_config; do
     [ -f "$VB" ] || continue
     P "  file: $VB"
-    V "  retouch app count >= 7" "7" "$(grep -c packageName "$VB" 2>/dev/null)" ge
-    V "  Telegram present" "1" "$(grep -c org.telegram.messenger "$VB" 2>/dev/null)" ge
+    _ct_present="$(firstf '/odm/etc/camera/conf_tuning_params.json' '/vendor/odm/etc/camera/conf_tuning_params.json')"
+    if [ -n "$_ct_present" ]; then
+      V "  retouch app count >= 7" "7" "$(grep -c packageName "$VB" 2>/dev/null)" ge
+      V "  Telegram present" "1" "$(grep -c org.telegram.messenger "$VB" 2>/dev/null)" ge
+    else
+      NA=$((NA+2))
+      P "  [N/A ] retouch/Telegram content is OP15 camera-tone specific (no conf_tuning on this model)"
+    fi
     V "  strict JSON (no // comments)" "0" "$(grep -c '//' "$VB" 2>/dev/null)" eq
   done
   CT="$(firstf '/odm/etc/camera/conf_tuning_params.json' '/vendor/odm/etc/camera/conf_tuning_params.json')"
