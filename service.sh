@@ -1833,6 +1833,17 @@ apply_tracking_block() {
   _sp play_store_panel_logging_enabled 0
   _sp phenotype_flags "disable_log_upload=1,disable_log_for_missing_debug_id=1"
   _sp binder_calls_stats "sampling_interval=600000000,detailed_tracking=disable,enabled=false,upload_data=false"
+  if command -v cmd >/dev/null 2>&1; then
+    while IFS='|' read -r _dc_ns _dc_k _dc_v; do
+      [ -n "$_dc_ns" ] && cmd device_config put "$_dc_ns" "$_dc_k" "$_dc_v" >/dev/null 2>&1
+    done <<'ASBDCEOF'
+gms|AdvertisingId__enable_ad_id_reconciliation|false
+gms|AdsIdentity__enable_status_service|false
+gms|AdsIdentity__enable_mendel_property_update|false
+measurement|measurement.service.disable|true
+measurement|measurement.collection.enabled|false
+ASBDCEOF
+  fi
 }
 asb_feature_enabled LOG && apply_tracking_block
 

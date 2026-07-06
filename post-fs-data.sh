@@ -155,11 +155,18 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
             "$MODDIR/generated_overlay_manifest.reverted.txt" 2>/dev/null
     fi
     echo "ts=$(date +%s) action=revert_generated_overlay reason=bootloop_protection" >> "$_mounts_log"
+    rm -rf /data/adb/asb/odm_patched 2>/dev/null
+    rm -f /data/adb/asb/odm_bind_manifest.txt 2>/dev/null
   else
     _next_ctr=$((_cur_ctr + 1))
     echo "$_next_ctr" > "$_bootctr"
     echo "ts=$(date +%s) action=boot counter=$_next_ctr" > "$_mounts_log"
     echo 1 > "$_bootflag"
+    if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ]; then
+      while IFS='|' read -r _ob_t _ob_p; do
+        [ -f "$_ob_t" ] && [ -f "$_ob_p" ] && mount --bind "$_ob_p" "$_ob_t" 2>/dev/null
+      done < /data/adb/asb/odm_bind_manifest.txt
+    fi
     if command -v resetprop >/dev/null 2>&1; then
       resetprop -n ro.vendor.perf.qape.boost_duration 3 >/dev/null 2>&1 || true
       resetprop -n ro.vendor.perf.qape.max_boost_count 1 >/dev/null 2>&1 || true

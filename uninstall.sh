@@ -47,6 +47,16 @@ if [ -f "$_BL_TMP" ] || [ "$_CC_FORCED" = "1" ]; then
     if [ "$_CC_FORCED" = "1" ]; then
       cmd -w wifi force-country-code disabled >/dev/null 2>&1 || true
     fi
+    if command -v cmd >/dev/null 2>&1; then
+      for _dc_pair in \
+        "gms|AdvertisingId__enable_ad_id_reconciliation" \
+        "gms|AdsIdentity__enable_status_service" \
+        "gms|AdsIdentity__enable_mendel_property_update" \
+        "measurement|measurement.service.disable" \
+        "measurement|measurement.collection.enabled"; do
+        cmd device_config delete "${_dc_pair%%|*}" "${_dc_pair#*|}" >/dev/null 2>&1 || true
+      done
+    fi
   ) &
 fi
 
