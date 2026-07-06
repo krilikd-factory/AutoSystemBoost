@@ -67,8 +67,9 @@ asb_tw_aggr_audio() {
   _f="$1"; [ -f "$_f" ] || return 0
   # Headphone companders OFF: cleaner, more dynamic HPHL/HPHR signal.
   asb_tw_sedi 's/\(name="HPH[LR] Compander" value="\)1"/\10"/g' "$_f"
-  # Headphone DAC class CLS_H_ULP -> CLS_H_HIFI (higher fidelity, small power).
+  # Headphone DAC class CLS_H_ULP/LOHIFI -> CLS_H_HIFI (higher fidelity, small power).
   asb_tw_sedi 's/\(name="RX HPH Mode" value="\)CLS_H_ULP"/\1CLS_H_HIFI"/g' "$_f"
+  asb_tw_sedi 's/\(name="RX HPH Mode" value="\)CLS_H_LOHIFI"/\1CLS_H_HIFI"/g' "$_f"
 }
 
 # --- aggressive CAMERA tone layer (one conf_tuning_params.json) ---
