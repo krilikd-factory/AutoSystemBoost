@@ -2463,7 +2463,7 @@ if [ -d "$_mo_dst" ]; then
   done
 fi
 
-if [ "$_asb_audio_ref" != "1" ]; then
+if [ "$_asb_audio_ref" != "1" ] || [ "${_asb_sibling:-0}" = "1" ]; then
   _defer=0
   for _dd in vendor odm; do
     if [ -d "$MODPATH/system/$_dd" ]; then
