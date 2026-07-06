@@ -618,18 +618,18 @@ asb_patch_wifi_inplace() {
   _label="$1"
   [ "$ASB_WIFI" = "true" ] || return 0
 
-  _wifi_src=""
+  _wifi_hit=0
   for _ws in /vendor/etc/wifi /odm/etc/wifi /odm/vendor/etc/wifi /vendor/odm/etc/wifi /system/vendor/etc/wifi; do
-    [ -d "$_ws" ] && { _wifi_src="$_ws"; break; }
+    [ -d "$_ws" ] || continue
+    ls "$_ws"/WCNSS_qcom_cfg*.ini "$_ws"/*/WCNSS_qcom_cfg*.ini >/dev/null 2>&1 || continue
+    asb_clone_dir_from_live "$_ws" >/dev/null 2>&1 || continue
+    _wdir="$MODPATH/system${_ws#/system}"
+    for _wf in $(find "$_wdir" -type f -iname "WCNSS_qcom_cfg*.ini" 2>/dev/null); do
+      asb_patch_one_wcnss "$_wf"
+      _wifi_hit=1
+    done
   done
-  [ -n "$_wifi_src" ] || return 0
-
-  asb_clone_dir_from_live "$_wifi_src" >/dev/null 2>&1 || return 0
-
-  _wdir="$MODPATH/system${_wifi_src#/system}"
-  for _wf in $(find "$_wdir" -type f -iname "WCNSS_qcom_cfg*.ini" 2>/dev/null); do
-    asb_patch_one_wcnss "$_wf"
-  done
+  [ "$_wifi_hit" = "1" ] || return 0
 }
 
 asb_patch_perf_inplace() {
