@@ -1624,6 +1624,11 @@ if [ -f "$MODPATH/tools/asb_synthesize_bounds.sh" ]; then
 fi
 
 echo 0 > "/data/adb/asb/vendor_boot_counter" 2>/dev/null
+# A fresh install must start from a clean slate: drop any skip_mount left by a
+# previous build's fuse (it would suppress the whole module incl. asbdiag/webui/
+# governor on a device that now boots), and clear a stale generic block/flag.
+rm -f "$MODPATH/skip_mount" 2>/dev/null
+rm -f /data/adb/asb/vendor_overlay_blocked /data/adb/asb/vendor_overlay_active 2>/dev/null
 rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
 
   for module in $MODPATH/system
