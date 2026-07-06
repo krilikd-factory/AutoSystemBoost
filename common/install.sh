@@ -388,6 +388,8 @@ asb_detect_compat() {
     case "$ASB_PLATFORM_L" in
       *"sm8750"*|*"sun"*)
         case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L" in
+          *"ktm"*|*"plq110"*|*"op6113"*|*"ace 6"*|*"ace6"*)
+            ui_print "[*] OnePlus Ace 6 (ktm) on the shared SM8750/sun firmware — generic-safe tuning (no OP13 overlay; its live audio/media sit on /odm and are handled by runtime binds)" ;;
           *"sun"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"op5d55"*)
             echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_OP13=true ;;
           *)
@@ -621,7 +623,11 @@ asb_patch_wifi_inplace() {
   _wifi_hit=0
   for _ws in /vendor/etc/wifi /odm/etc/wifi /odm/vendor/etc/wifi /vendor/odm/etc/wifi /system/vendor/etc/wifi; do
     [ -d "$_ws" ] || continue
-    ls "$_ws"/WCNSS_qcom_cfg*.ini "$_ws"/*/WCNSS_qcom_cfg*.ini >/dev/null 2>&1 || continue
+    # Presence test via find, not `ls glob glob`: on nested-only Wi-Fi trees
+    # (Ace 6 = kiwi_v2/peach/peach_v2 with NO top-level WCNSS_qcom_cfg.ini) the
+    # top-level glob stays literal and `ls A B` returns non-zero even though the
+    # nested files exist — which silently skipped the whole dir and left Wi-Fi stock.
+    [ -n "$(find "$_ws" -type f -iname 'WCNSS_qcom_cfg*.ini' 2>/dev/null | head -1)" ] || continue
     asb_clone_dir_from_live "$_ws" >/dev/null 2>&1 || continue
     _wdir="$MODPATH/system${_ws#/system}"
     for _wf in $(find "$_wdir" -type f -iname "WCNSS_qcom_cfg*.ini" 2>/dev/null); do
@@ -697,26 +703,8 @@ asb_loc_patch_izat() {
   sedi 's/^\([[:space:]]*IZAT_DEBUG_LEVEL[[:space:]]*=[[:space:]]*\)[0-9][0-9]*/\10/'             "$_f"
 }
 
-asb_patch_media_profiles_inplace() {
-  [ "$ASB_CAMERA" = "true" ] || { ui_print "[*] Camera/media category off - skipping media_profiles lift"; return 0; }
-  _mpp_done=0
-  _ASB_MP_CANOE=0
-  case "$(getprop ro.board.platform 2>/dev/null)$(getprop ro.product.device 2>/dev/null)" in
-    *canoe*|*sm8850*|*SM8850*) _ASB_MP_CANOE=1 ;;
-  esac
-  [ "$ASB_IS_OP15" = "true" ] && _ASB_MP_CANOE=1
-  _mp_roots="/vendor /system/vendor /system_ext /product"
-  if [ "$ASB_IS_OP15" = "true" ] || [ "$ASB_IS_OP13" = "true" ]; then
-    _mp_roots="$_mp_roots /odm /system/odm"
-  fi
-  for _mp_live in $(find $_mp_roots \
-                      -type f -name 'media_profiles*.xml' 2>/dev/null \
-                      | grep -vE '/vintf/|/manifest' | sort -u); do
-    _mp_rel="system${_mp_live}"
-    mkdir -p "$MODPATH/$(dirname "$_mp_rel")" 2>/dev/null
-    cp -f "$_mp_live" "$MODPATH/$_mp_rel" 2>/dev/null || continue
-    chmod 0644 "$MODPATH/$_mp_rel" 2>/dev/null
-    awk -v is_canoe="$_ASB_MP_CANOE" '
+asb_media_lift_file() {
+  awk -v is_canoe="$2" '
     function lift_sized(b, w, h,   t) {
       t = b
       if (w == 1920 && h == 1080) t = (is_canoe ? 40000000 : 37300000)
@@ -752,8 +740,30 @@ asb_patch_media_profiles_inplace() {
         line = substr(line, RSTART+RLENGTH)
       }
       print out line
-    }' "$MODPATH/$_mp_rel" > "$MODPATH/$_mp_rel.asbtmp" 2>/dev/null \
-      && mv -f "$MODPATH/$_mp_rel.asbtmp" "$MODPATH/$_mp_rel" 2>/dev/null
+    }' "$1" > "$1.asbtmp" 2>/dev/null \
+      && mv -f "$1.asbtmp" "$1" 2>/dev/null
+}
+
+asb_patch_media_profiles_inplace() {
+  [ "$ASB_MEDIA" = "true" ] || { ui_print "[*] Media category off - skipping media_profiles lift"; return 0; }
+  _mpp_done=0
+  _ASB_MP_CANOE=0
+  case "$(getprop ro.board.platform 2>/dev/null)$(getprop ro.product.device 2>/dev/null)" in
+    *canoe*|*sm8850*|*SM8850*) _ASB_MP_CANOE=1 ;;
+  esac
+  [ "$ASB_IS_OP15" = "true" ] && _ASB_MP_CANOE=1
+  _mp_roots="/vendor /system/vendor /system_ext /product"
+  if [ "$ASB_IS_OP15" = "true" ] || [ "$ASB_IS_OP13" = "true" ]; then
+    _mp_roots="$_mp_roots /odm /system/odm"
+  fi
+  for _mp_live in $(find $_mp_roots \
+                      -type f -name 'media_profiles*.xml' 2>/dev/null \
+                      | grep -vE '/vintf/|/manifest' | sort -u); do
+    _mp_rel="system${_mp_live}"
+    mkdir -p "$MODPATH/$(dirname "$_mp_rel")" 2>/dev/null
+    cp -f "$_mp_live" "$MODPATH/$_mp_rel" 2>/dev/null || continue
+    chmod 0644 "$MODPATH/$_mp_rel" 2>/dev/null
+    asb_media_lift_file "$MODPATH/$_mp_rel" "$_ASB_MP_CANOE"
     _mpp_done=$((_mpp_done + 1))
   done
   [ "$_mpp_done" -gt 0 ] && ui_print "    + media_profiles: video bitrate lifted in $_mpp_done device-native file(s)"
@@ -889,6 +899,15 @@ asb_patch_one_mixer() {
   done
   sedi 's/\(name="IIR0 Enable Band[1-5]" value="\)1"/\10"/g' "$_f"
   sedi 's/\(name="HPH[LR]_RDAC Switch" value="\)0"/\11"/g' "$_f"
+  # Promote the Class-H headphone modes to HIFI. Only the CLS_H_* family is
+  # touched — CLS_AB is left alone on purpose: on this codec it is a dedicated
+  # <path name="hph-class-ab-mode"> the HAL selects deliberately, so forcing
+  # Class-H there would mislabel a genuine Class-AB output. Converting ULP/LOHIFI
+  # (the default + hph-highquality/lowpower paths) is enough to satisfy the
+  # "RX HPH Mode = CLS_H_HIFI (>=1)" check while staying faithful to the stock tree.
+  for _hphm in CLS_H_ULP CLS_H_LOHIFI CLS_H_LP CLS_H_NORMAL; do
+    sedi "s/\\(name=\"RX HPH Mode\" value=\"\\)${_hphm}\"/\\1CLS_H_HIFI\"/g" "$_f"
+  done
 }
 
 asb_patch_audio_inplace_aggr_flag() {
@@ -1104,6 +1123,67 @@ asb_prune_non_op15_vendor_overlays() {
   rm -rf "$MODPATH/system/vendor/odm/etc/gps" 2>/dev/null || true
 
   find "$MODPATH/system" -type d -empty -print -delete 2>/dev/null || true
+}
+
+asb_generate_odm_binds() {
+  _ob_root="/data/adb/asb/odm_patched"
+  _ob_man="/data/adb/asb/odm_bind_manifest.txt"
+  rm -rf "$_ob_root" 2>/dev/null
+  rm -f "$_ob_man" 2>/dev/null
+  [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
+  [ "$ASB_AUDIO" = "true" ] || [ "$ASB_MEDIA" = "true" ] || return 0
+  _ob_canoe=0
+  for _ob_t in \
+      /odm/etc/audio/audio_policy_configuration.xml \
+      /odm/etc/mixer_paths.xml \
+      /odm/etc/audio_effects_config.xml \
+      /odm/etc/media_profiles_V1_0.xml \
+      /odm/etc/camera/media_profiles.xml; do
+    [ -f "$_ob_t" ] || continue
+    _ob_p="$_ob_root$_ob_t"
+    mkdir -p "$(dirname "$_ob_p")" 2>/dev/null
+    cp -f "$_ob_t" "$_ob_p" 2>/dev/null || continue
+    case "$_ob_t" in
+      *audio_policy_configuration.xml)
+        [ "$ASB_AUDIO" = "true" ] || { rm -f "$_ob_p"; continue; }
+        sedi 's/samplingRates="32000,44100,48000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000,352800,384000"/g' "$_ob_p"
+        sedi 's/samplingRates="32000,44100,48000,64000,88200,96000,128000,176400,192000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000,352800,384000"/g' "$_ob_p"
+        sedi 's/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000,352800,384000"/g' "$_ob_p"
+        sedi 's/samplingRates="44100 48000 96000"/samplingRates="44100 48000 88200 96000 176400 192000 352800 384000"/g' "$_ob_p"
+        sedi 's/samplingRates="44100 48000 192000"/samplingRates="44100 48000 88200 96000 176400 192000 352800 384000"/g' "$_ob_p"
+        sedi 's/samplingRates="48000 96000 192000"/samplingRates="48000 88200 96000 176400 192000 352800 384000"/g' "$_ob_p"
+        ;;
+      *mixer_paths*.xml)
+        [ "$ASB_AUDIO" = "true" ] || { rm -f "$_ob_p"; continue; }
+        asb_patch_one_mixer "$_ob_p"
+        ;;
+      *media_profiles*.xml)
+        [ "$ASB_MEDIA" = "true" ] || { rm -f "$_ob_p"; continue; }
+        asb_media_lift_file "$_ob_p" "$_ob_canoe"
+        ;;
+    esac
+  done
+  [ "$ASB_AUDIO" = "true" ] && asb_audio_ensure_volume_libs "$_ob_root/odm/etc"
+  : > "$_ob_man"
+  for _ob_p in $(find "$_ob_root" -type f 2>/dev/null); do
+    _ob_t="${_ob_p#$_ob_root}"
+    if cmp -s "$_ob_p" "$_ob_t" 2>/dev/null; then
+      rm -f "$_ob_p" 2>/dev/null
+      continue
+    fi
+    chmod 0644 "$_ob_p" 2>/dev/null
+    _ob_ctx="$(ls -Zd "$_ob_t" 2>/dev/null | awk '{print $1}')"
+    case "$_ob_ctx" in
+      ?*:?*:?*:?*) chcon "$_ob_ctx" "$_ob_p" 2>/dev/null || true ;;
+    esac
+    echo "$_ob_t|$_ob_p" >> "$_ob_man"
+  done
+  if [ -s "$_ob_man" ]; then
+    ui_print "[*] odm-side audio/media: $(wc -l < "$_ob_man") file(s) patched for runtime bind (the /odm partition itself is never modified)"
+  else
+    rm -f "$_ob_man" 2>/dev/null
+    rm -rf "$_ob_root" 2>/dev/null
+  fi
 }
 
 asb_reset_learning_on_upgrade_to_v56() {
@@ -1480,6 +1560,7 @@ else
       echo generic > "$MODPATH/overlay_device_class" 2>/dev/null
       asb_apply_device_native_tuning "OnePlus (generic)" "OnePlus"
       rm -rf "$MODPATH/system/odm" "$MODPATH/system/my_product" 2>/dev/null || true
+      asb_generate_odm_binds
       ui_print "[*] Non-reference OnePlus: device-native patched overlay, guarded by a 1-strike boot fuse"
     fi
   fi
@@ -1628,7 +1709,7 @@ echo 0 > "/data/adb/asb/vendor_boot_counter" 2>/dev/null
 # previous build's fuse (it would suppress the whole module incl. asbdiag/webui/
 # governor on a device that now boots), and clear a stale generic block/flag.
 rm -f "$MODPATH/skip_mount" 2>/dev/null
-rm -f /data/adb/asb/vendor_overlay_blocked /data/adb/asb/vendor_overlay_active 2>/dev/null
+rm -f /data/adb/asb/vendor_overlay_blocked /data/adb/asb/vendor_overlay_active /data/adb/asb/vendor_overlay_retry_done 2>/dev/null
 rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
 
   for module in $MODPATH/system
