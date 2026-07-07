@@ -187,7 +187,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->reassert_gaming_s   = 6;
     c->msm_perf_boost_only = 1;
     c->thermal_overlay_pct   = 20;
-    c->thermal_throttle_temp = 65;
+    c->thermal_throttle_temp = 60;
     c->sustained_level       = 0.80f;
     c->gaming_gap_thresh        = 1500000;
     c->gaming_gap_ticks         = 4;
