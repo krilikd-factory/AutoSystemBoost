@@ -130,6 +130,21 @@ _snap() {
   echo "# confidence=$_conf  topology=$_topo (little+[mid]+big; 2/3/4 clusters supported)"
   echo "# little_policy=$_little_id hw_max=$_hw_little | mid_policy=${_mid_id:-none} hw_max=${_hw_mid:-n/a} | big_policy=$_big_id hw_max=$_hw_big"
   if [ "$_conf" = "high" ]; then
+    # --- multi-cluster (3/4-cluster, e.g. SM8650 1+3+2+1) lag-safety lean ---
+    # Under the raw OP15-derived ratios these SoCs pin their MAIN interactive
+    # cluster low in battery mode (mid ~41%, prime ~35%), which reads as UI
+    # stutter — the scheduler parks interactive work on the strongest middle
+    # cluster and it can't clock up. For >2-cluster devices ONLY, lean every
+    # interactive cluster's BATTERY/BALANCED ceiling UP toward a responsive floor
+    # (~62-64% battery, ~82-86% balanced). This is the lag-safe direction: a
+    # higher cap can only reduce stutter (cost is some battery, never smoothness).
+    # The field-proven 2-cluster (OP15/OP13) ratios below are left exactly as-is.
+    _r_bat_p="$R_BAT_MAX_B"; _r_bal_p="$R_BAL_MAX_B"; _r_prf_p="$R_PRF_MAX_B"
+    if [ -n "$_mid_id" ] && [ -n "$_hw_mid" ]; then
+      R_BAT_MAX_L=6000; R_BAL_MAX_L=7600
+      R_BAT_MAX_M=6400; R_BAL_MAX_M=8200
+      _r_bat_p=6200;    _r_bal_p=8600;    _r_prf_p=9200
+    fi
     # Only the MAX ceilings are synthesised. These are the heat/perf-relevant
     # peaks that genuinely scale with a cluster's hardware ceiling, and they
     # reproduce OP15's shipped values exactly under the ratio model. The CAP and
@@ -142,12 +157,11 @@ _snap() {
     echo "PERFORMANCE_CPU_MAX_LITTLE=$(_snap $R_PRF_MAX_L $_hw_little $_little_id)"
     if [ -n "$_mid_id" ] && [ -n "$_hw_mid" ]; then
       # 3/4-cluster: last cluster is PRIME (slot 2), strongest middle is MID
-      # (slot 1). This is OP12-shaped and currently UNVALIDATED on real hardware
-      # (no OP12 log yet) — the values are plausible, not field-proven.
-      echo "# topology=$_topo: big(prime) -> slot2, strongest middle -> slot1"
-      echo "BATTERY_CPU_MAX_PRIME=$(_snap $R_BAT_MAX_B $_hw_big $_big_id)"
-      echo "BALANCED_CPU_MAX_PRIME=$(_snap $R_BAL_MAX_B $_hw_big $_big_id)"
-      echo "PERFORMANCE_CPU_MAX_PRIME=$(_snap $R_PRF_MAX_B $_hw_big $_big_id)"
+      # (slot 1). Battery/balanced leaned up per the block above for smoothness.
+      echo "# topology=$_topo: big(prime) -> slot2, strongest middle -> slot1 (interactive caps leaned up)"
+      echo "BATTERY_CPU_MAX_PRIME=$(_snap $_r_bat_p $_hw_big $_big_id)"
+      echo "BALANCED_CPU_MAX_PRIME=$(_snap $_r_bal_p $_hw_big $_big_id)"
+      echo "PERFORMANCE_CPU_MAX_PRIME=$(_snap $_r_prf_p $_hw_big $_big_id)"
       echo "BATTERY_CPU_MAX_MID=$(_snap $R_BAT_MAX_M $_hw_mid $_mid_id)"
       echo "BALANCED_CPU_MAX_MID=$(_snap $R_BAL_MAX_M $_hw_mid $_mid_id)"
       echo "PERFORMANCE_CPU_MAX_MID=$(_snap $R_PRF_MAX_M $_hw_mid $_mid_id)"

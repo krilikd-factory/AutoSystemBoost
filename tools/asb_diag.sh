@@ -243,12 +243,12 @@ SEC "1. AUDIO  (mixer files + runtime props)"
 MIX="$(firstf '/vendor/etc/audio/sku_*/mixer_paths_*_cdp.xml' '/odm/etc/audio/sku_*/mixer_paths_*_cdp.xml' '/vendor/etc/audio/mixer_paths*.xml' '/odm/etc/audio/mixer_paths*.xml')"
 if [ -n "$MIX" ]; then
   P "  mixer file: $MIX"
-  _v88=$(grep -c '\(RX_RX[012]\|WSA_RX[01]\) Digital Volume" value="88"' "$MIX" 2>/dev/null)
-  _vlo=$(grep -c '\(RX_RX[012]\|WSA_RX[01]\) Digital Volume" value="8[0-7]"' "$MIX" 2>/dev/null)
+  _vpeak=$(grep -oE '(RX_RX[012]|WSA_RX[01]) Digital Volume" value="[0-9]+"' "$MIX" 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1)
+  _vclip=$(grep -c '\(RX_RX[012]\|WSA_RX[01]\) Digital Volume" value="\(9[0-9]\|1[0-9][0-9]\)"' "$MIX" 2>/dev/null)
   _iir=$(grep -c 'IIR0 Enable Band[1-5]" value="1"' "$MIX" 2>/dev/null)
   _rdac=$(grep -c 'HPH[LR]_RDAC Switch" value="1"' "$MIX" 2>/dev/null)
-  NOTE "Digital Volume entries ==88: ${_v88:-0}"
-  V "No stock 80-87 Digital Volume left (all raised)" "0" "$_vlo" eq
+  NOTE "RX/WSA Digital Volume peak: ${_vpeak:-n/a}  (84=0dB unity; SM8650/pineapple caps at 84, sun/canoe accept 88)"
+  V "No out-of-range Digital Volume (>88 would break the speaker path)" "0" "$_vclip" eq
   V "IIR0 EQ bands flattened (engaged=0)" "0" "$_iir" eq
   V "Class-H headphone DAC armed (RDAC=1 present)" "1" "$_rdac" ge
   # aggressive (toggle)
