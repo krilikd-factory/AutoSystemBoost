@@ -1138,7 +1138,9 @@ asb_generate_odm_binds() {
       /odm/etc/mixer_paths.xml \
       /odm/etc/audio_effects_config.xml \
       /odm/etc/media_profiles_V1_0.xml \
-      /odm/etc/camera/media_profiles.xml; do
+      /odm/etc/camera/media_profiles.xml \
+      /odm/etc/camera/config/video_beauty_default_config \
+      /vendor/odm/etc/camera/config/video_beauty_default_config; do
     [ -f "$_ob_t" ] || continue
     _ob_p="$_ob_root$_ob_t"
     mkdir -p "$(dirname "$_ob_p")" 2>/dev/null
@@ -1160,6 +1162,16 @@ asb_generate_odm_binds() {
       *media_profiles*.xml)
         [ "$ASB_MEDIA" = "true" ] || { rm -f "$_ob_p"; continue; }
         asb_media_lift_file "$_ob_p" "$_ob_canoe"
+        ;;
+      *video_beauty_default_config)
+        # Strict-JSON strip: the OnePlus HAL config carries JSON5-style // comments
+        # that the "strict JSON" check flags. On this device the camera tree lives on
+        # /odm (no magic-mount overlay for a generic sibling), so we patch a copy and
+        # bind it — same immediate path used for the /odm audio/media files above.
+        # Full-line // comments are dropped; trailing // comments are stripped only
+        # when preceded by whitespace, so "http://" and other :// tokens are safe.
+        [ "$ASB_CAMERA" = "true" ] || { rm -f "$_ob_p"; continue; }
+        sedi -e '/^[[:space:]]*\/\//d' -e 's#[[:space:]]//[^"]*$##' "$_ob_p"
         ;;
     esac
   done
@@ -2595,10 +2607,10 @@ MANIFEST_EOF
 
 asb_guard_v4a_effects
 
-for _vb in $(find "$MODPATH/system" -type f -name "video_beauty_default_config" 2>/dev/null); do
+for _vb in $(find "$MODPATH/system" "$MODPATH/deferred_overlay" -type f -name "video_beauty_default_config" 2>/dev/null); do
   if grep -q '//' "$_vb" 2>/dev/null; then
     _vbt="${_vb}.asbc$$"
-    if sed '/^[[:space:]]*\/\//d' "$_vb" > "$_vbt" 2>/dev/null; then
+    if sed -e '/^[[:space:]]*\/\//d' -e 's#[[:space:]]//[^"]*$##' "$_vb" > "$_vbt" 2>/dev/null; then
       chmod --reference="$_vb" "$_vbt" 2>/dev/null || chmod 0644 "$_vbt" 2>/dev/null
       _vbctx="$(ls -Z "$_vb" 2>/dev/null | awk '{print $1}')"
       case "$_vbctx" in u:object_r:*) chcon "$_vbctx" "$_vbt" 2>/dev/null ;; esac
