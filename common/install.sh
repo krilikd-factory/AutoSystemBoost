@@ -461,6 +461,13 @@ asb_detect_compat() {
   fi
   [ "$ASB_IS_OP15" = "true" ] && ASB_IS_OP13=false && ASB_IS_OP12=false
   [ "$ASB_IS_OP13" = "true" ] && ASB_IS_OP12=false
+  # Digital-gain ceiling for asb_patch_one_mixer. SM8650/pineapple (cliffs) WCD/WSA
+  # "Digital Volume" controls top out at 0 dB = 84; writing 88 clips and breaks the
+  # speaker volume path there. Every other SoC keeps the original +boost to 88.
+  _asb_dv_max=88
+  case "$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")" in
+    *"sm8650"*|*"pineapple"*) _asb_dv_max=84 ;;
+  esac
 }
 
 ASB_IS_APATCH=false
@@ -893,9 +900,17 @@ asb_clone_device_audio_wifi() {
 
 asb_patch_one_mixer() {
   _f="$1"; [ -f "$_f" ] || return 0
+  # Digital-gain ceiling is device-gated. On SM8650/pineapple (cliffs) the WCD/WSA
+  # "Digital Volume" controls top out at 84 (0 dB); writing 88 there put the WSA
+  # speaker path out of range so the framework slider stopped attenuating (speaker
+  # blasted, and the wedged HAL also killed BT volume). Other codecs (e.g. sun/
+  # canoe) accept 88, so they keep the original +boost. _asb_dv_max is set in
+  # device detection (default 88; 84 for pineapple).
+  _dvmax="${_asb_dv_max:-88}"
   for _v in 80 81 82 83 84 85 86 87; do
-    sedi "s/\\(name=\"RX_RX[012] Digital Volume\" value=\"\\)${_v}\"/\\188\"/g" "$_f"
-    sedi "s/\\(name=\"WSA_RX[01] Digital Volume\" value=\"\\)${_v}\"/\\188\"/g" "$_f"
+    [ "$_v" -ge "$_dvmax" ] 2>/dev/null && continue
+    sedi "s/\\(name=\"RX_RX[012] Digital Volume\" value=\"\\)${_v}\"/\\1${_dvmax}\"/g" "$_f"
+    sedi "s/\\(name=\"WSA_RX[01] Digital Volume\" value=\"\\)${_v}\"/\\1${_dvmax}\"/g" "$_f"
   done
   sedi 's/\(name="IIR0 Enable Band[1-5]" value="\)1"/\10"/g' "$_f"
   sedi 's/\(name="HPH[LR]_RDAC Switch" value="\)0"/\11"/g' "$_f"
@@ -1582,12 +1597,24 @@ rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
 
 _gc="$MODPATH/config/governor.conf"
 if [ -f "$_gc" ]; then
+  _asb_plat="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
   if [ "$ASB_IS_OP15" = "true" ]; then
     sed -i 's/^device_bounds_override=.*/device_bounds_override=1/' "$_gc" 2>/dev/null || true
     ui_print "[*] Device-adaptive bounds: ON (OP15 — values match shipped tuning)"
   else
-    sed -i 's/^device_bounds_override=.*/device_bounds_override=0/' "$_gc" 2>/dev/null || true
-    ui_print "[*] Device-adaptive bounds: OFF by default on this model (opt-in via WebUI)"
+    case "$_asb_plat" in
+      *"sm8650"*|*"pineapple"*)
+        # SM8650 1+3+2+1 (Ace5 / OP12 family): the global OP15-shaped rails pin the
+        # main interactive cluster low in battery/smart mode (~52%), which reads as
+        # UI lag. The per-device synthesis leans those interactive-cluster ceilings
+        # UP (lag-safe direction) and snaps them to THIS device's real freq steps,
+        # so turn the override on to actually apply them. OP15 unaffected.
+        sed -i 's/^device_bounds_override=.*/device_bounds_override=1/' "$_gc" 2>/dev/null || true
+        ui_print "[*] Device-adaptive bounds: ON (SM8650 — interactive-cluster caps leaned up to remove battery-mode lag)" ;;
+      *)
+        sed -i 's/^device_bounds_override=.*/device_bounds_override=0/' "$_gc" 2>/dev/null || true
+        ui_print "[*] Device-adaptive bounds: OFF by default on this model (opt-in via WebUI)" ;;
+    esac
   fi
 fi
 
