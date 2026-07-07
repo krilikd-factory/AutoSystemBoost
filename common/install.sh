@@ -630,15 +630,24 @@ asb_patch_wifi_inplace() {
   _wifi_hit=0
   for _ws in /vendor/etc/wifi /odm/etc/wifi /odm/vendor/etc/wifi /vendor/odm/etc/wifi /system/vendor/etc/wifi; do
     [ -d "$_ws" ] || continue
-    # Presence test via find, not `ls glob glob`: on nested-only Wi-Fi trees
-    # (Ace 6 = kiwi_v2/peach/peach_v2 with NO top-level WCNSS_qcom_cfg.ini) the
-    # top-level glob stays literal and `ls A B` returns non-zero even though the
-    # nested files exist — which silently skipped the whole dir and left Wi-Fi stock.
-    [ -n "$(find "$_ws" -type f -iname 'WCNSS_qcom_cfg*.ini' 2>/dev/null | head -1)" ] || continue
-    asb_clone_dir_from_live "$_ws" >/dev/null 2>&1 || continue
-    _wdir="$MODPATH/system${_ws#/system}"
-    for _wf in $(find "$_wdir" -type f -iname "WCNSS_qcom_cfg*.ini" 2>/dev/null); do
-      asb_patch_one_wcnss "$_wf"
+    # Enumerate the WCNSS config files with BOUNDED SHELL GLOBS — top-level plus up
+    # to two nested sku folders (e.g. kiwi_v2/, peach/, peach_v2/). Deliberately NO
+    # recursive `find` and NO whole-dir clone: on some devices (Ace 6) paths like
+    # /vendor/odm/etc/wifi are bind-mounts of /odm, and a recursive walk can loop
+    # through the bind-mount tree and stall the install for minutes. Globs only stat
+    # the paths they match — exactly the traversal the old `ls` guard did (which
+    # never hung) — while still catching the nested-only layouts the old guard
+    # skipped. Only the patched .ini files are cloned, so the overlay stays minimal.
+    _dst_root="$MODPATH/system${_ws#/system}"
+    for _wf in "$_ws"/WCNSS_qcom_cfg*.ini \
+               "$_ws"/*/WCNSS_qcom_cfg*.ini \
+               "$_ws"/*/*/WCNSS_qcom_cfg*.ini; do
+      [ -f "$_wf" ] || continue
+      _rel="${_wf#"$_ws"/}"
+      _dst="$_dst_root/$_rel"
+      mkdir -p "$(dirname "$_dst")" 2>/dev/null
+      cp -f "$_wf" "$_dst" 2>/dev/null || continue
+      asb_patch_one_wcnss "$_dst"
       _wifi_hit=1
     done
   done
