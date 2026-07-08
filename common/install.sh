@@ -2636,18 +2636,23 @@ if [ -d "$_mo_dst" ]; then
 fi
 
 if [ "$_asb_audio_ref" != "1" ] || [ "${_asb_sibling:-0}" = "1" ]; then
-  # First-boot activation. The file overlay stays in system/ so it mounts on the
-  # very next boot — no 2-boot "deferred" dance, which only produced stale-overlay
-  # confusion across reinstalls (an old build could stay mounted while the fresh
-  # one waited a boot to activate). Bootloop safety is still fully covered by the
-  # 1-strike boot fuse in post-fs-data.sh: if a boot fails to complete, it tears
-  # the overlay back out to stock on the next boot. Clear any stale deferred_overlay
-  # from older builds and reset the fuse counter / blocked flag so this fresh
-  # overlay starts from a clean slate.
-  rm -rf "$MODPATH/deferred_overlay" 2>/dev/null || true
-  echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null || true
+  # DO NOT mount the file overlay on the first boot. On non-reference firmware the
+  # overlay files magic-mount at post-fs-data (very early); if one breaks the boot,
+  # the device can hard-bootloop BEFORE the post-fs-data fuse gets a chance to run
+  # and tear it back out — an unrecoverable loop. So we stage the overlay in
+  # deferred_overlay: the first boot stays 100% stock (guaranteed to boot), and
+  # service.sh only activates it after one confirmed clean boot. This is the
+  # foundational safety rule from the Ace 6 bootloop investigation — keep it.
+  # (Clear a stale blocked flag so a fresh install re-attempts activation.)
   rm -f /data/adb/asb/vendor_overlay_blocked 2>/dev/null || true
-  ui_print "[*] File overlay active from the first boot (guarded by the 1-strike boot fuse)"
+  _defer=0
+  for _dd in vendor odm; do
+    if [ -d "$MODPATH/system/$_dd" ]; then
+      mkdir -p "$MODPATH/deferred_overlay"
+      mv "$MODPATH/system/$_dd" "$MODPATH/deferred_overlay/$_dd" 2>/dev/null && _defer=1
+    fi
+  done
+  [ "$_defer" = "1" ] && ui_print "[*] File overlay staged — first boot stays fully stock; it activates automatically after one clean reboot (bootloop-safe)"
 fi
 
 	asb_reset_learning_on_upgrade_to_v56
