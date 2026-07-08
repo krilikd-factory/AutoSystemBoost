@@ -1276,6 +1276,25 @@ asb_generate_odm_binds() {
         ;;
     esac
   done
+  # Camera video_beauty: reuse the copy already cloned by camera-tone into the
+  # module (that clone succeeded during install — no new LIVE /odm read here, which
+  # is what used to stall). Strip its // and stage the clean copy at both camera
+  # mirror paths; the manifest scan below then cmp's, contexts and binds them via
+  # the fuse-guarded runtime bind. video_beauty is read only at camera-open (never
+  # at boot) and the boot counter is synced before any bind, so this cannot loop.
+  # Clears the last two strict-JSON fails.
+  if [ "$ASB_CAMERA" = "true" ]; then
+    _vbsrc="$MODPATH/system/vendor/odm/etc/camera/config/video_beauty_default_config"
+    if [ -f "$_vbsrc" ] && grep -q '//' "$_vbsrc" 2>/dev/null; then
+      sedi -e '/^[[:space:]]*\/\//d' -e 's#[[:space:]]//[^"]*$##' "$_vbsrc"
+      for _vbtgt in /odm/etc/camera/config/video_beauty_default_config \
+                    /vendor/odm/etc/camera/config/video_beauty_default_config; do
+        _vbp="$_ob_root$_vbtgt"
+        mkdir -p "$(dirname "$_vbp")" 2>/dev/null
+        cp -f "$_vbsrc" "$_vbp" 2>/dev/null
+      done
+    fi
+  fi
   ui_print "    . odm-bind: volume libs"
   [ "$ASB_AUDIO" = "true" ] && asb_audio_ensure_volume_libs "$_ob_root/odm/etc"
   ui_print "    . odm-bind: building manifest"
