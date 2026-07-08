@@ -795,6 +795,34 @@ asb_media_lift_file() {
       && mv -f "$1.asbtmp" "$1" 2>/dev/null
 }
 
+# Format-agnostic hi-res sampling-rate lifter for audio_policy_configuration.xml.
+# For every samplingRates="..." list that already reaches 96000 but stops short of
+# 384000, it appends the missing hi-res steps (176400 192000 352800 384000) using
+# the SAME delimiter the list already uses — comma OR space. This replaces the old
+# pile of exact-string seds (which silently missed Ace 6's space-separated
+# "44100 48000 88200 96000" format) and covers OP15/OP13/OP12/Ace and anything
+# future. Idempotent: never appends a rate that is already present.
+asb_lift_hires_policy() {
+  [ -f "$1" ] || return 0
+  awk '
+  {
+    line=$0; out=""
+    while (match(line, /samplingRates="[^"]*"/)) {
+      pre=substr(line,1,RSTART-1); m=substr(line,RSTART,RLENGTH)
+      val=m; sub(/^samplingRates="/,"",val); sub(/"$/,"",val)
+      sep=(val ~ /,/)?",":" "
+      if (val ~ /(^|[, ])96000([, ]|$)/ && val !~ /(^|[, ])384000([, ]|$)/) {
+        nn=split("176400 192000 352800 384000",hr," ")
+        for(i=1;i<=nn;i++){ if(val !~ ("(^|[, ])" hr[i] "([, ]|$)")) val=val sep hr[i] }
+        m="samplingRates=\"" val "\""
+      }
+      out=out pre m; line=substr(line,RSTART+RLENGTH)
+    }
+    print out line
+  }' "$1" > "$1.hrtmp" 2>/dev/null \
+    && mv -f "$1.hrtmp" "$1" 2>/dev/null
+}
+
 asb_patch_media_profiles_inplace() {
   [ "$ASB_MEDIA" = "true" ] || { ui_print "[*] Media category off - skipping media_profiles lift"; return 0; }
   _mpp_done=0
@@ -1070,6 +1098,20 @@ asb_patch_audio_inplace() {
     _n=$((_n + 1))
   done
 
+  # Hi-res sampling rates for audio_policy_configuration.xml (what the diag reads
+  # for "384000 present"). Lift the audio_policy files already inside the cloned
+  # audio dir, PLUS the top-level /vendor/etc one the framework reads first — clone
+  # it into the overlay if the device keeps it there. Format-agnostic lifter, so
+  # Ace 6's space-separated lists are covered too.
+  for _apc in $(find "$_adir" -type f -name "audio_policy_configuration.xml" 2>/dev/null); do
+    asb_lift_hires_policy "$_apc"
+  done
+  if [ -f /vendor/etc/audio_policy_configuration.xml ]; then
+    _apd="$MODPATH/system/vendor/etc/audio_policy_configuration.xml"
+    [ -f "$_apd" ] || { mkdir -p "$MODPATH/system/vendor/etc" 2>/dev/null; cp -f /vendor/etc/audio_policy_configuration.xml "$_apd" 2>/dev/null; }
+    asb_lift_hires_policy "$_apd"
+  fi
+
   asb_audio_ensure_volume_libs "$_adir"
 
   if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
@@ -1222,12 +1264,7 @@ asb_generate_odm_binds() {
     case "$_ob_t" in
       *audio_policy_configuration.xml)
         [ "$ASB_AUDIO" = "true" ] || { rm -f "$_ob_p"; continue; }
-        sedi 's/samplingRates="32000,44100,48000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000,352800,384000"/g' "$_ob_p"
-        sedi 's/samplingRates="32000,44100,48000,64000,88200,96000,128000,176400,192000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000,352800,384000"/g' "$_ob_p"
-        sedi 's/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000"/samplingRates="8000,11025,12000,16000,22050,24000,32000,44100,48000,64000,88200,96000,128000,176400,192000,352800,384000"/g' "$_ob_p"
-        sedi 's/samplingRates="44100 48000 96000"/samplingRates="44100 48000 88200 96000 176400 192000 352800 384000"/g' "$_ob_p"
-        sedi 's/samplingRates="44100 48000 192000"/samplingRates="44100 48000 88200 96000 176400 192000 352800 384000"/g' "$_ob_p"
-        sedi 's/samplingRates="48000 96000 192000"/samplingRates="48000 88200 96000 176400 192000 352800 384000"/g' "$_ob_p"
+        asb_lift_hires_policy "$_ob_p"
         ;;
       *mixer_paths*.xml)
         [ "$ASB_AUDIO" = "true" ] || { rm -f "$_ob_p"; continue; }
@@ -2636,23 +2673,22 @@ if [ -d "$_mo_dst" ]; then
 fi
 
 if [ "$_asb_audio_ref" != "1" ] || [ "${_asb_sibling:-0}" = "1" ]; then
-  # DO NOT mount the file overlay on the first boot. On non-reference firmware the
-  # overlay files magic-mount at post-fs-data (very early); if one breaks the boot,
-  # the device can hard-bootloop BEFORE the post-fs-data fuse gets a chance to run
-  # and tear it back out — an unrecoverable loop. So we stage the overlay in
-  # deferred_overlay: the first boot stays 100% stock (guaranteed to boot), and
-  # service.sh only activates it after one confirmed clean boot. This is the
-  # foundational safety rule from the Ace 6 bootloop investigation — keep it.
-  # (Clear a stale blocked flag so a fresh install re-attempts activation.)
+  # ONE-reboot activation via the standard /vendor magic-mount overlay — exactly
+  # what the OP15 reference does. Everything the diag reads (mixer_paths_*_cdp.xml,
+  # media_profiles.xml, hi-res audio_policy_configuration.xml) lives under
+  # /vendor/etc and magic-mounts cleanly with the correct SELinux context on the
+  # first boot. The Ace 6 hard-bootloop came NOT from /vendor but from grafting
+  # /odm content into the magic-mount tree (/odm is a bind-mount of another
+  # partition on these devices and breaks early boot before the fuse can run). So
+  # we HARD-REMOVE every /odm graft — the /vendor overlay alone is safe like OP15.
+  # Real /odm audio is still delivered, via the fuse-guarded runtime binds in
+  # post-fs-data (counter synced to disk BEFORE any bind, so those can only ever
+  # cost one recoverable boot, never a loop). No deferred 2-boot dance.
+  rm -rf "$MODPATH/system/odm" "$MODPATH/system/vendor/odm" \
+         "$MODPATH/system/my_product" "$MODPATH/deferred_overlay" 2>/dev/null || true
+  echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null || true
   rm -f /data/adb/asb/vendor_overlay_blocked 2>/dev/null || true
-  _defer=0
-  for _dd in vendor odm; do
-    if [ -d "$MODPATH/system/$_dd" ]; then
-      mkdir -p "$MODPATH/deferred_overlay"
-      mv "$MODPATH/system/$_dd" "$MODPATH/deferred_overlay/$_dd" 2>/dev/null && _defer=1
-    fi
-  done
-  [ "$_defer" = "1" ] && ui_print "[*] File overlay staged — first boot stays fully stock; it activates automatically after one clean reboot (bootloop-safe)"
+  ui_print "[*] /vendor overlay active after ONE reboot (OP15-style); /odm audio via fuse-guarded runtime binds"
 fi
 
 	asb_reset_learning_on_upgrade_to_v56
