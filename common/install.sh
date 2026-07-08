@@ -874,7 +874,12 @@ asb_clone_dir_from_live() {
   _dest="$MODPATH/system${_canon}"
   rm -rf "$_dest" 2>/dev/null
   mkdir -p "$_dest" 2>/dev/null
-  ( cd "$_src" && find . -type f 2>/dev/null | while IFS= read -r _f; do
+  # -maxdepth 6 caps traversal: config trees are shallow (e.g. sku_x/mixer.xml),
+  # but a live path can be a bind-mount of another partition that loops back
+  # (/vendor/odm -> /odm -> /odm/vendor -> ...). An unbounded recursive walk there
+  # never terminates and stalls the whole install. Bounding depth keeps every real
+  # layout while making a loop impossible.
+  ( cd "$_src" && find . -maxdepth 6 -type f 2>/dev/null | while IFS= read -r _f; do
       _f="${_f#./}"
       mkdir -p "$_dest/$(dirname "$_f")" 2>/dev/null
       cp -f "$_src/$_f" "$_dest/$_f" 2>/dev/null || true
@@ -967,7 +972,7 @@ asb_guard_v4a_effects() {
     [ "$_v4a_ok" = "1" ] && break
   done
   if [ "$_v4a_ok" = "0" ]; then
-    for _sf in $(find /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio \
+    for _sf in $(find /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio -maxdepth 4 \
                       -type f -name "audio_effects*.xml" 2>/dev/null); do
       if grep -q 'v4a_re' "$_sf" 2>/dev/null; then _v4a_ok=1; break; fi
     done
@@ -1083,9 +1088,13 @@ asb_apply_device_native_tuning() {
   asb_clone_device_camera_tone
   asb_patch_media_profiles_inplace
   asb_patch_audio_inplace       "$_label"
+  ui_print "    . audio stage done"
   asb_patch_perf_inplace        "$_label"
+  ui_print "    . perf stage done"
   asb_patch_location_inplace    "$2"
+  ui_print "    . location stage done"
   asb_patch_wifi_inplace        "$_label"
+  ui_print "    . Wi-Fi stage done"
 
   if [ "$ASB_AUDIO" = "true" ] || [ "$ASB_CAMERA" = "true" ]; then
     if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
@@ -1107,6 +1116,7 @@ asb_apply_device_native_tuning() {
   } > "$_man" 2>/dev/null
   cp -f "$_man" /data/adb/asb/generated_overlay_manifest.txt 2>/dev/null || true
   echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null || true
+  ui_print "[*] device-native overlay built"
 }
 
 asb_prune_non_op15_vendor_overlays() {
@@ -1596,6 +1606,7 @@ else
       echo generic > "$MODPATH/overlay_device_class" 2>/dev/null
       asb_apply_device_native_tuning "OnePlus (generic)" "OnePlus"
       rm -rf "$MODPATH/system/odm" "$MODPATH/system/my_product" 2>/dev/null || true
+      ui_print "[*] preparing odm runtime binds"
       asb_generate_odm_binds
       ui_print "[*] Non-reference OnePlus: device-native patched overlay, guarded by a 1-strike boot fuse"
     fi
