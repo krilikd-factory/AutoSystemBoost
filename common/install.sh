@@ -1173,8 +1173,7 @@ asb_generate_odm_binds() {
       /odm/etc/audio_effects_config.xml \
       /odm/etc/media_profiles_V1_0.xml \
       /odm/etc/camera/media_profiles.xml \
-      /odm/etc/camera/config/video_beauty_default_config \
-      /vendor/odm/etc/camera/config/video_beauty_default_config; do
+      /odm/etc/camera/config/video_beauty_default_config; do
     [ -f "$_ob_t" ] || continue
     _ob_p="$_ob_root$_ob_t"
     mkdir -p "$(dirname "$_ob_p")" 2>/dev/null
