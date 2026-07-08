@@ -471,12 +471,16 @@ asb_detect_compat() {
   asb_identify_device
 }
 
+# Resolve a human-readable device name for the install log so users of OP13 / OP12 /
+# Ace 6 / Ace 5 / etc. no longer see "OnePlus (generic)" or bare "OP15" wording.
 asb_identify_device() {
+  # 1) OnePlus/OPPO expose the retail marketing name directly — no lookup needed.
   ASB_DEVICE_NAME="$(asb_prop_first \
       ro.vendor.oplus.market.enname ro.oplus.market.enname \
       ro.vendor.oplus.market.name ro.oplus.market.name \
       ro.config.marketing_name ro.product.marketname)"
   ASB_DEVICE_NAME="$(printf '%s' "$ASB_DEVICE_NAME" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  # 2) Known-model fallback keyed off model / device / project / fingerprint.
   if [ -z "$ASB_DEVICE_NAME" ]; then
     case " $ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L " in
       *" ktm "*|*plq110*|*op6113*|*24851*|*ossi*)   ASB_DEVICE_NAME="OnePlus Ace 6" ;;
@@ -488,6 +492,7 @@ asb_identify_device() {
       *cph2609*|*cph2611*|*cph2607*|*waffle*)        ASB_DEVICE_NAME="OnePlus 12R" ;;
     esac
   fi
+  # 3) Generic OnePlus by SoC family, then bare model code, then a safe default.
   if [ -z "$ASB_DEVICE_NAME" ]; then
     case "$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")" in
       *sm8850*|*canoe*)     ASB_DEVICE_NAME="OnePlus (SM8850)" ;;
@@ -790,6 +795,13 @@ asb_media_lift_file() {
       && mv -f "$1.asbtmp" "$1" 2>/dev/null
 }
 
+# Format-agnostic hi-res sampling-rate lifter for audio_policy_configuration.xml.
+# For every samplingRates="..." list that already reaches 96000 but stops short of
+# 384000, it appends the missing hi-res steps (176400 192000 352800 384000) using
+# the SAME delimiter the list already uses — comma OR space. This replaces the old
+# pile of exact-string seds (which silently missed Ace 6's space-separated
+# "44100 48000 88200 96000" format) and covers OP15/OP13/OP12/Ace and anything
+# future. Idempotent: never appends a rate that is already present.
 asb_lift_hires_policy() {
   [ -f "$1" ] || return 0
   awk '
@@ -1086,10 +1098,15 @@ asb_patch_audio_inplace() {
     _n=$((_n + 1))
   done
 
+  # Hi-res sampling rates for audio_policy_configuration.xml (what the diag reads
+  # for "384000 present"). Lift the audio_policy files already inside the cloned
+  # audio dir, PLUS the top-level /vendor/etc one the framework reads first — clone
+  # it into the overlay if the device keeps it there. Format-agnostic lifter, so
+  # Ace 6's space-separated lists are covered too.
   for _apc in $(find "$_adir" -type f -name "audio_policy_configuration.xml" 2>/dev/null); do
     asb_lift_hires_policy "$_apc"
   done
-  if [ "$(cat "$MODPATH/overlay_device_class" 2>/dev/null)" != "generic" ] && [ -f /vendor/etc/audio_policy_configuration.xml ]; then
+  if [ -f /vendor/etc/audio_policy_configuration.xml ]; then
     _apd="$MODPATH/system/vendor/etc/audio_policy_configuration.xml"
     [ -f "$_apd" ] || { mkdir -p "$MODPATH/system/vendor/etc" 2>/dev/null; cp -f /vendor/etc/audio_policy_configuration.xml "$_apd" 2>/dev/null; }
     asb_lift_hires_policy "$_apd"
@@ -1171,8 +1188,7 @@ asb_apply_device_native_tuning() {
     echo "# built by cloning + key-patching this device's own stock files"
     find "$MODPATH/system" -type f \( -path '*/etc/audio/*' -o -path '*/camera/*' \
       -o -name 'media_profiles*.xml' -o -name 'gps.conf' -o -name 'izat.conf' \
-      -o -path '*/etc/perf/*' -o -name 'WCNSS_qcom_cfg*.ini' \
-      -o -name 'audio_policy_configuration.xml' \) 2>/dev/null \
+      -o -path '*/etc/perf/*' -o -name 'WCNSS_qcom_cfg*.ini' \) 2>/dev/null \
       | sed "s|$MODPATH/||"
   } > "$_man" 2>/dev/null
   cp -f "$_man" /data/adb/asb/generated_overlay_manifest.txt 2>/dev/null || true
@@ -2657,17 +2673,22 @@ if [ -d "$_mo_dst" ]; then
 fi
 
 if [ "$_asb_audio_ref" != "1" ] || [ "${_asb_sibling:-0}" = "1" ]; then
-  rm -rf "$MODPATH/system/odm" "$MODPATH/system/vendor/odm" "$MODPATH/system/my_product" 2>/dev/null || true
-  _defer=0
-  for _dd in vendor odm; do
-    if [ -d "$MODPATH/system/$_dd" ]; then
-      mkdir -p "$MODPATH/deferred_overlay"
-      mv "$MODPATH/system/$_dd" "$MODPATH/deferred_overlay/$_dd" 2>/dev/null && _defer=1
-    fi
-  done
+  # ONE-reboot activation via the standard /vendor magic-mount overlay — exactly
+  # what the OP15 reference does. Everything the diag reads (mixer_paths_*_cdp.xml,
+  # media_profiles.xml, hi-res audio_policy_configuration.xml) lives under
+  # /vendor/etc and magic-mounts cleanly with the correct SELinux context on the
+  # first boot. The Ace 6 hard-bootloop came NOT from /vendor but from grafting
+  # /odm content into the magic-mount tree (/odm is a bind-mount of another
+  # partition on these devices and breaks early boot before the fuse can run). So
+  # we HARD-REMOVE every /odm graft — the /vendor overlay alone is safe like OP15.
+  # Real /odm audio is still delivered, via the fuse-guarded runtime binds in
+  # post-fs-data (counter synced to disk BEFORE any bind, so those can only ever
+  # cost one recoverable boot, never a loop). No deferred 2-boot dance.
+  rm -rf "$MODPATH/system/odm" "$MODPATH/system/vendor/odm" \
+         "$MODPATH/system/my_product" "$MODPATH/deferred_overlay" 2>/dev/null || true
   echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null || true
   rm -f /data/adb/asb/vendor_overlay_blocked 2>/dev/null || true
-  [ "$_defer" = "1" ] && ui_print "[*] File overlay staged - first boot stays fully stock; activates after one confirmed clean boot"
+  ui_print "[*] /vendor overlay active after ONE reboot (OP15-style); /odm audio via fuse-guarded runtime binds"
 fi
 
 	asb_reset_learning_on_upgrade_to_v56
