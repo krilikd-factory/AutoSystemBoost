@@ -160,6 +160,12 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
   else
     _next_ctr=$((_cur_ctr + 1))
     echo "$_next_ctr" > "$_bootctr"
+    # CRITICAL: flush the incremented counter to disk BEFORE applying any bind.
+    # The binds below can break early boot; if that happens, the next boot must see
+    # this higher counter so the fuse skips them. Without the sync the counter write
+    # could still be in cache and lost on a hard crash — turning a recoverable
+    # 1-strike into an unrecoverable loop.
+    sync 2>/dev/null || true
     echo "ts=$(date +%s) action=boot counter=$_next_ctr" > "$_mounts_log"
     echo 1 > "$_bootflag"
     if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ]; then
