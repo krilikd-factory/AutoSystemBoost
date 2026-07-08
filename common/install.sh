@@ -1167,6 +1167,12 @@ asb_generate_odm_binds() {
   [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
   [ "$ASB_AUDIO" = "true" ] || [ "$ASB_MEDIA" = "true" ] || return 0
   _ob_canoe=0
+  # Every access below touches LIVE /odm paths. On some devices those live under a
+  # mount that can stall a bare read/stat during the installer's mount namespace,
+  # which would hang the whole flash. Guard each live access with `timeout` when
+  # it's available so a stalled path is skipped instead of freezing the install.
+  _ob_to=""
+  command -v timeout >/dev/null 2>&1 && _ob_to="timeout 20"
   for _ob_t in \
       /odm/etc/audio/audio_policy_configuration.xml \
       /odm/etc/mixer_paths.xml \
@@ -1174,10 +1180,11 @@ asb_generate_odm_binds() {
       /odm/etc/media_profiles_V1_0.xml \
       /odm/etc/camera/media_profiles.xml \
       /odm/etc/camera/config/video_beauty_default_config; do
-    [ -f "$_ob_t" ] || continue
+    ui_print "    . odm-bind check: ${_ob_t}"
     _ob_p="$_ob_root$_ob_t"
     mkdir -p "$(dirname "$_ob_p")" 2>/dev/null
-    cp -f "$_ob_t" "$_ob_p" 2>/dev/null || continue
+    # guarded cp covers existence, read AND a stalled-mount timeout in one step
+    $_ob_to cp -f "$_ob_t" "$_ob_p" 2>/dev/null || continue
     case "$_ob_t" in
       *audio_policy_configuration.xml)
         [ "$ASB_AUDIO" = "true" ] || { rm -f "$_ob_p"; continue; }
@@ -1208,16 +1215,18 @@ asb_generate_odm_binds() {
         ;;
     esac
   done
+  ui_print "    . odm-bind: volume libs"
   [ "$ASB_AUDIO" = "true" ] && asb_audio_ensure_volume_libs "$_ob_root/odm/etc"
+  ui_print "    . odm-bind: building manifest"
   : > "$_ob_man"
   for _ob_p in $(find "$_ob_root" -type f 2>/dev/null); do
     _ob_t="${_ob_p#$_ob_root}"
-    if cmp -s "$_ob_p" "$_ob_t" 2>/dev/null; then
+    if $_ob_to cmp -s "$_ob_p" "$_ob_t" 2>/dev/null; then
       rm -f "$_ob_p" 2>/dev/null
       continue
     fi
     chmod 0644 "$_ob_p" 2>/dev/null
-    _ob_ctx="$(ls -Zd "$_ob_t" 2>/dev/null | awk '{print $1}')"
+    _ob_ctx="$($_ob_to ls -Zd "$_ob_t" 2>/dev/null | awk '{print $1}')"
     case "$_ob_ctx" in
       ?*:?*:?*:?*) chcon "$_ob_ctx" "$_ob_p" 2>/dev/null || true ;;
     esac
