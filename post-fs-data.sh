@@ -135,11 +135,6 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
     rm -rf "$MODDIR/system/vendor/etc/audio" \
            "$MODDIR/system/vendor/odm/etc/audio" \
            "$MODDIR/system/odm/etc/audio" 2>/dev/null
-    rm -f  "$MODDIR/system/vendor/etc/audio_policy_configuration.xml" \
-           "$MODDIR/system/vendor/odm/etc/audio_policy_configuration.xml" \
-           "$MODDIR/system/odm/etc/audio_policy_configuration.xml" \
-           "$MODDIR/deferred_overlay/vendor/etc/audio_policy_configuration.xml" \
-           "$MODDIR/deferred_overlay/odm/etc/audio_policy_configuration.xml" 2>/dev/null
     rm -rf "$MODDIR/system/vendor/odm/etc/camera" \
            "$MODDIR/system/odm/etc/camera" \
            "$MODDIR/system/vendor/etc/camera" 2>/dev/null
@@ -165,6 +160,11 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
   else
     _next_ctr=$((_cur_ctr + 1))
     echo "$_next_ctr" > "$_bootctr"
+    # CRITICAL: flush the incremented counter to disk BEFORE applying any bind.
+    # The binds below can break early boot; if that happens, the next boot must see
+    # this higher counter so the fuse skips them. Without the sync the counter write
+    # could still be in cache and lost on a hard crash — turning a recoverable
+    # 1-strike into an unrecoverable loop.
     sync 2>/dev/null || true
     echo "ts=$(date +%s) action=boot counter=$_next_ctr" > "$_mounts_log"
     echo 1 > "$_bootflag"
