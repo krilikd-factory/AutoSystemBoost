@@ -468,6 +468,41 @@ asb_detect_compat() {
   case "$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")" in
     *"sm8650"*|*"pineapple"*) _asb_dv_max=84 ;;
   esac
+  asb_identify_device
+}
+
+# Resolve a human-readable device name for the install log so users of OP13 / OP12 /
+# Ace 6 / Ace 5 / etc. no longer see "OnePlus (generic)" or bare "OP15" wording.
+asb_identify_device() {
+  # 1) OnePlus/OPPO expose the retail marketing name directly — no lookup needed.
+  ASB_DEVICE_NAME="$(asb_prop_first \
+      ro.vendor.oplus.market.enname ro.oplus.market.enname \
+      ro.vendor.oplus.market.name ro.oplus.market.name \
+      ro.config.marketing_name ro.product.marketname)"
+  ASB_DEVICE_NAME="$(printf '%s' "$ASB_DEVICE_NAME" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  # 2) Known-model fallback keyed off model / device / project / fingerprint.
+  if [ -z "$ASB_DEVICE_NAME" ]; then
+    case " $ASB_MODEL_L $ASB_DEVICE_L $ASB_PRJ_L $ASB_FP_L " in
+      *" ktm "*|*plq110*|*op6113*|*24851*|*ossi*)   ASB_DEVICE_NAME="OnePlus Ace 6" ;;
+      *cph2691*|*op5d3b*)                            ASB_DEVICE_NAME="OnePlus Ace 5" ;;
+      *canoe*|*pjz110*|*cph2747*|*cph2749*)          ASB_DEVICE_NAME="OnePlus 15" ;;
+      *cph2649*|*cph2653*|*cph2655*|*pjz120*|*sun*)  ASB_DEVICE_NAME="OnePlus 13" ;;
+      *cph2661*|*cph2663*|*aston*)                   ASB_DEVICE_NAME="OnePlus 13R" ;;
+      *cph2573*|*cph2583*|*cph2581*|*pjd110*)        ASB_DEVICE_NAME="OnePlus 12" ;;
+      *cph2609*|*cph2611*|*cph2607*|*waffle*)        ASB_DEVICE_NAME="OnePlus 12R" ;;
+    esac
+  fi
+  # 3) Generic OnePlus by SoC family, then bare model code, then a safe default.
+  if [ -z "$ASB_DEVICE_NAME" ]; then
+    case "$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")" in
+      *sm8850*|*canoe*)     ASB_DEVICE_NAME="OnePlus (SM8850)" ;;
+      *sm8750*|*sun*)       ASB_DEVICE_NAME="OnePlus (SM8750)" ;;
+      *sm8650*|*pineapple*) ASB_DEVICE_NAME="OnePlus (SM8650)" ;;
+    esac
+  fi
+  [ -z "$ASB_DEVICE_NAME" ] && [ -n "$ASB_MODEL_RAW" ] && ASB_DEVICE_NAME="$ASB_MANUFACTURER_RAW $ASB_MODEL_RAW"
+  [ -z "$ASB_DEVICE_NAME" ] && ASB_DEVICE_NAME="OnePlus device"
+  ui_print "[*] Device identified: ${ASB_DEVICE_NAME}"
 }
 
 ASB_IS_APATCH=false
@@ -1026,7 +1061,7 @@ asb_patch_audio_inplace() {
 
   ui_print " "
   ui_print "${SEPARATOR}"
-  ui_print "[*] Mixer tune for $1 (portable OP15 sound)"
+  ui_print "[*] Mixer tune for $1 (OP15-derived sound profile)"
   ui_print "${SEPARATOR}"
 
   _n=0
@@ -1123,8 +1158,8 @@ asb_prune_non_op15_vendor_overlays() {
   ui_print " "
   ui_print "${SEPARATOR}"
   ui_print "[*] Compatibility mode enabled"
-  ui_print "[*] Non-OP15 device detected"
-  ui_print "[*] Keeping script/prop tweaks, pruning risky OP15 vendor overlays"
+  ui_print "[*] ${ASB_DEVICE_NAME} — not the OP15 reference model"
+  ui_print "[*] Keeping script/prop tweaks, pruning reference (OP15) vendor overlays that do not fit this model"
   ui_print "${SEPARATOR}"
 
   rm -f "$MODPATH/system/etc/permissions/Bluetooth.xml" 2>/dev/null || true
@@ -1601,7 +1636,7 @@ else
       done
     else
       echo generic > "$MODPATH/overlay_device_class" 2>/dev/null
-      asb_apply_device_native_tuning "OnePlus (generic)" "OnePlus"
+      asb_apply_device_native_tuning "$ASB_DEVICE_NAME" "OnePlus"
       rm -rf "$MODPATH/system/odm" "$MODPATH/system/my_product" 2>/dev/null || true
       ui_print "[*] preparing odm runtime binds"
       asb_generate_odm_binds
@@ -2601,14 +2636,18 @@ if [ -d "$_mo_dst" ]; then
 fi
 
 if [ "$_asb_audio_ref" != "1" ] || [ "${_asb_sibling:-0}" = "1" ]; then
-  _defer=0
-  for _dd in vendor odm; do
-    if [ -d "$MODPATH/system/$_dd" ]; then
-      mkdir -p "$MODPATH/deferred_overlay"
-      mv "$MODPATH/system/$_dd" "$MODPATH/deferred_overlay/$_dd" 2>/dev/null && _defer=1
-    fi
-  done
-  [ "$_defer" = "1" ] && ui_print "[*] File overlay staged - first boot stays fully stock; activates after one confirmed clean boot"
+  # First-boot activation. The file overlay stays in system/ so it mounts on the
+  # very next boot — no 2-boot "deferred" dance, which only produced stale-overlay
+  # confusion across reinstalls (an old build could stay mounted while the fresh
+  # one waited a boot to activate). Bootloop safety is still fully covered by the
+  # 1-strike boot fuse in post-fs-data.sh: if a boot fails to complete, it tears
+  # the overlay back out to stock on the next boot. Clear any stale deferred_overlay
+  # from older builds and reset the fuse counter / blocked flag so this fresh
+  # overlay starts from a clean slate.
+  rm -rf "$MODPATH/deferred_overlay" 2>/dev/null || true
+  echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null || true
+  rm -f /data/adb/asb/vendor_overlay_blocked 2>/dev/null || true
+  ui_print "[*] File overlay active from the first boot (guarded by the 1-strike boot fuse)"
 fi
 
 	asb_reset_learning_on_upgrade_to_v56
