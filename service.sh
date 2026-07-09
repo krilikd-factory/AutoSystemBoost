@@ -1013,6 +1013,7 @@ com.aliexpress.buyer
 com.heytap.htms
 com.heytap.pictorial
 com.heytap.market
+com.oplus.oidt
 "
 
 _BG_TRIM_DISABLE="
