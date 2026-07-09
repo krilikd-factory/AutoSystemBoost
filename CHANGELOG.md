@@ -10,16 +10,17 @@
   <img src="https://img.shields.io/badge/OnePlus%2015-canoe-ef4444?style=flat-square" alt="OP15">
   <img src="https://img.shields.io/badge/OnePlus%2013-sun-f59e0b?style=flat-square" alt="OP13">
   <img src="https://img.shields.io/badge/OnePlus%2012-pineapple-eab308?style=flat-square" alt="OP12">
-  <img src="https://img.shields.io/badge/Ace%206-ktm%20·%20boots%20✓-22c55e?style=flat-square" alt="Ace 6">
-  <img src="https://img.shields.io/badge/Ace%205-boots%20✓-22c55e?style=flat-square" alt="Ace 5">
+  <img src="https://img.shields.io/badge/Ace%206-ktm%20·%20fully%20supported-22c55e?style=flat-square" alt="Ace 6">
+  <img src="https://img.shields.io/badge/Ace%205-fully%20supported-22c55e?style=flat-square" alt="Ace 5">
   <img src="https://img.shields.io/badge/+%20any%20OnePlus-device--native-8b5cf6?style=flat-square" alt="any OnePlus">
 </p>
 
 ---
 
-## V58 — *the one that boots everywhere*
+## V58 — *full support for the Ace family*
 
-The headline is simple: **Ace 6 and Ace 5 install, boot, and pass `asbdiag`.**
+The headline is simple: **Ace 6 and Ace 5 are now fully supported — the same
+tuning pipeline as the OnePlus 13 and 12, `asbdiag` PASS, first-boot clean.**
 
 Getting there meant fixing the detection bug at its root instead of guarding
 against its symptoms, and rebuilding how non-reference devices receive their
@@ -69,7 +70,13 @@ misidentified every single install. V58 fixes the identification itself.
   and any staged `deferred_overlay`.
 
 **Result:** Ace 6 and Ace 5 boot on the first try, with `asbdiag` reporting PASS
-on the audio and media checks.
+on the audio and media checks. They are no longer "compatibility mode" devices:
+both run the **same `asb_apply_device_native_tuning` pipeline** as the OnePlus 13
+and 12 — identical audio, camera, media, GPS, perf and Wi-Fi stages, built from
+their own stock files. Ace 5 additionally gets device-adaptive CPU bounds enabled
+by default (the SM8650 interactive-cluster lean); on Ace 6 they stay opt-in via
+the WebUI. The only structural differences left are *how* `/odm` is delivered
+(runtime binds instead of a magic-mount overlay) and the stricter 1-strike fuse.
 
 > **Scope, stated plainly.** Reference devices (OP15 / OP13 / OP12, matched by
 > confirmed codename) keep the proven clone-and-patch pipeline and their

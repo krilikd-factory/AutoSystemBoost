@@ -9,15 +9,15 @@
 </p>
 
 <p align="center"><b>Adaptive Runtime Engine for OnePlus — Snapdragon 8 Elite / Gen 3</b></p>
-<p align="center"><i>Reference-tuned on 15 · 13 · 12 — device-native on every other OnePlus</i></p>
+<p align="center"><i>Full tuning on 15 · 13 · 12 · Ace 6 · Ace 5 — device-native on every other OnePlus</i></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/OnePlus_15-SM8850-dc2626?style=for-the-badge" alt="OP15">
   <img src="https://img.shields.io/badge/OnePlus_13-SM8750-ea580c?style=for-the-badge" alt="OP13">
   <img src="https://img.shields.io/badge/OnePlus_12-SM8650-f59e0b?style=for-the-badge" alt="OP12">
   <br>
-  <img src="https://img.shields.io/badge/Ace_6-ktm_·_boots_✓-22c55e?style=flat-square" alt="Ace 6">
-  <img src="https://img.shields.io/badge/Ace_5-boots_✓-22c55e?style=flat-square" alt="Ace 5">
+  <img src="https://img.shields.io/badge/Ace_6-ktm_·_fully_supported-22c55e?style=flat-square" alt="Ace 6">
+  <img src="https://img.shields.io/badge/Ace_5-fully_supported-22c55e?style=flat-square" alt="Ace 5">
   <img src="https://img.shields.io/badge/any_OnePlus-device--native-8b5cf6?style=flat-square" alt="any OnePlus">
   <br>
   <img src="https://img.shields.io/badge/Root-KSU_%7C_KSUN_%7C_APATCH_%7C_RESUKISU_%7C_MAGISK-16a34a?style=for-the-badge" alt="Root">
@@ -78,16 +78,31 @@ your device.
 | 🥇 **Reference — hand-validated** | OnePlus 15 (CPH2745 / CPH2747) | Snapdragon 8 Elite Gen 5 (SM8850) | `canoe` |
 | 🥇 **Reference — hand-validated** | OnePlus 13 (CPH2649 / 2653 / 2655) | Snapdragon 8 Elite (SM8750) | `sun` · `tuna` · `kera` |
 | 🥇 **Reference — hand-validated** | OnePlus 12 (CPH2581 / 2583 / 2573) | Snapdragon 8 Gen 3 (SM8650) | `pineapple` |
-| ✅ **Device-native — boot verified** | OnePlus Ace 6 (PLQ110 / OP6113) | SM8750 — *shared `sun` firmware* | `ktm` |
-| ✅ **Device-native — boot verified** | OnePlus Ace 5 (CPH2691) | Snapdragon 8-series | — |
+| 🥇 **Fully supported — field-verified** | OnePlus Ace 6 (PLQ110 / OP6113) | SM8750 — *shared `sun` firmware* | `ktm` |
+| 🥇 **Fully supported — field-verified** | OnePlus Ace 5 (CPH2691) | Snapdragon 8 Gen 3 (SM8650) | — |
 | ✅ **Device-native** | OnePlus 15R, 13R / 13s / 13T, 12R, 11 / 11R, Open, Ace 6T, Ace / Nord / Pad | various | — |
+
+### Ace 6 and Ace 5 are first-class devices
+
+They run the **exact same tuning pipeline** as the OnePlus 13 and 12 — the
+identical clone-and-patch stages for audio, camera, media, GPS, perf and Wi-Fi,
+built from their own stock files. `asbdiag` reports PASS on the audio and media
+checks, and both boot on the first try. This is not a reduced "compatibility
+mode": nothing is skipped.
+
+Three implementation details still differ, and none of them cost you tuning:
+
+| | Reference (15 / 13 / 12) | Ace 6 / Ace 5 |
+|:--|:--|:--|
+| `/odm` audio & media | magic-mount overlay | **runtime `mount --bind`** — same end result, `/odm` partition never touched |
+| Boot guard | 3-strike | **1-strike fuse** (stricter, self-healing) |
+| Device-adaptive CPU bounds | ON (OP15), ON (OP12/SM8650) | **ON** on Ace 5 (SM8650 lean) · opt-in via WebUI on Ace 6 |
 
 ### Two paths, one philosophy
 
-**Reference devices** (matched by confirmed codename) get the full clone-and-patch
-pipeline — their own CPU/GPU topology mapping, audio SKU, camera/media overlays
-and thermal profile, validated on real hardware rather than simulated — behind a
-**3-strike boot guard**.
+**Reference devices** (matched by confirmed codename) get their own CPU/GPU
+topology mapping, audio SKU, camera/media overlays and thermal profile, validated
+on real hardware rather than simulated — behind a **3-strike boot guard**.
 
 **Every other OnePlus** gets the same device-native `/vendor` overlay, plus its
 `/odm` audio and media delivered as **runtime `mount --bind`s** (cloned to
