@@ -1,95 +1,113 @@
 # AutoSystemBoost — Changelog
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Release-V57-16a34a?style=for-the-badge" alt="V57">
-  <img src="https://img.shields.io/badge/Previous-V56-6b7280?style=for-the-badge" alt="V56">
-  <img src="https://img.shields.io/badge/versionCode-570-0ea5e9?style=for-the-badge" alt="versionCode">
-</p>
+## V58 (versionCode 580)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/OnePlus%2015-canoe-ef4444?style=flat-square" alt="OP15">
-  <img src="https://img.shields.io/badge/OnePlus%2013-sun-f59e0b?style=flat-square" alt="OP13">
-  <img src="https://img.shields.io/badge/OnePlus%2012-pineapple-eab308?style=flat-square" alt="OP12">
-  <img src="https://img.shields.io/badge/+%20any%20OnePlus-device--native-8b5cf6?style=flat-square" alt="any OnePlus">
-</p>
+**Headline: full, verified support for additional OnePlus models.** Up to now the
+device-native overlay was validated mainly on the OnePlus 15 reference. This
+release generalises the whole pipeline so OnePlus 13 / 12, OnePlus Ace 6 and
+OnePlus Ace 5 build a correct, device-native overlay from their *own* stock files
+and pass diagnostics — while keeping the OP15 daily-driver behaviour untouched.
+
+Everything below was derived from real on-device stock files, install logs and
+full-day battery/thermal captures, not guesswork.
 
 ---
 
-## V57 — *network for gamers
+### Multi-device support
 
-Field telemetry from a full evening-night-day cycle on released V56 confirmed
-the big fixes landed: idle drain **1.89 → 0.66 %/h**, active drain **10.1 →
-6.4 %/h**, idle SoC peak **63 → 48 °C**, and the vendor-clamp write war fell
-from 59% to 24% of ticks — the "boiler" is gone and nights are properly quiet
-(7–37 mA in deep idle). V57 builds on that with a scenario-aware network layer
-and a few targeted refinements — all within ASB's no-daemons, one-shot,
-device-respecting philosophy.
+- **Device self-identification at install.** The installer now resolves the real
+  marketing name (via `ro.vendor.oplus.market.*`, with a model/codename/project
+  fallback table) and prints it — e.g. `Device identified: OnePlus Ace 6` — instead
+  of the confusing generic “OnePlus (generic)” / bare “OP15” wording. The “OP15”
+  label now only appears where it honestly describes the *tuning source* (the sound
+  profile is portable from OP15), not the device.
 
-### 🛠️ Ace 6 bootloop (issue #8): patched overlays for everyone, now with a fuse
-The V52 "Ace 6 won't boot" bug came back in V55/V56: detection was still correct
-(SM8750 siblings like ktm never match the OP13 overlay), but the unified
-pipeline generated a device overlay for *every* OnePlus, and Ace 6's
-ColorOS-based layout bootlooped on its own generated one — twice in the field.
-The philosophy stays: **modifications are applied as patches to the device's
-own files at install; ASB now ships ZERO static vendor files** (the last 49
-OP15-shaped shipped statics are gone from the tree — they were being stripped
-and regenerated on every supported device anyway). What changes is the safety
-model on non-reference devices:
-- Reference families (OnePlus 15 / 13 / 12 by confirmed codename) keep the
-  proven pipeline and the 3-strike boot guard.
-- Every other OnePlus still gets the full device-native patched overlay, but
-  under a **1-strike boot fuse**: a single failed boot tears the whole
-  generated overlay out before the module mounts (manifest replay + category
-  sweep) and writes a persistent `/data/adb/asb/vendor_overlay_blocked`, so
-  that device — and every future install on it — comes up governor-only until
-  the user deliberately deletes the marker to retry. One bounce maximum,
-  self-healing, remembered across updates.
-- Upgrading straight from a bootlooping V55/V56 is clean: the failed-boot
-  counter persisted in `/data/adb/asb`, so the very first V57 boot trips the
-  fuse **before** the overlay ever mounts — zero bounces.
-The old guard needed three failed boots and forgot everything on reinstall;
-a hang (rather than a crash-loop) could defeat it entirely. The fuse fixes both.
+- **OnePlus Ace 6 (SM8750 sibling).** Fixes the four things that used to read stock
+  on this model:
+  - **Wi-Fi:** nested-only WCNSS layouts (`kiwi_v2/`, `peach/`, `peach_v2/` with no
+    top-level file) are now detected via bounded shell globs and patched. The old
+    `ls glob glob` guard skipped them entirely, and a recursive `find` variant could
+    stall on `/vendor/odm` bind-mount loops — both fixed.
+  - **Audio HPH Mode:** promotion to `CLS_H_HIFI` now covers the whole Class-H family
+    (`ULP / LOHIFI / LP / NORMAL`) instead of only ULP/LOHIFI, leaving the dedicated
+    `CLS_AB` path untouched.
+  - **Hi-res + 1080p:** now landed (see below).
 
-### 🌐 TCP: scenario-aware — power-saving in sleep, low latency in games
-ASB's network stack was already extensive; V57 fills the remaining gaps **and
-makes the additions scenario-dependent**, riding ASB's per-profile network
-engine (values re-apply on every profile change and on Smart's own internal
-shifts):
-- **Thin-stream retransmit mode** (`tcp_thin_linear_timeouts`/`tcp_thin_dupack`)
-  — thin streams are exactly the small-packet flows of online games, so linear
-  recovery cuts lag spikes after a lost packet. Enabled in balanced and
-  performance; **disabled in battery**, where push connections are the thin
-  streams and exponential backoff lets the radio sleep between retries.
-- **`tcp_rto_max` per scenario**: 8 s in performance (fastest stall recovery for
-  gaming), 15 s in balanced, kernel-default 120 s in battery so a stalled
-  connection backs off instead of re-waking the modem all night.
-- **Smart follows the day**: when Smart's learned battery-bias crosses into
-  battery territory (α ≥ 0.8 — nights, low battery), the reconcile loop applies
-  the full battery network set (5-hour keepalives, thin-stream off, small NAPI
-  budgets) and restores the balanced set when the device wakes back up. Gaming
-  under Smart keeps the low-latency set (the gaming heat-relax clamps α ≤ 0.4).
-- **`tcp_mem` set dynamically** from the device's RAM (3% / 6% / 10% of pages)
-  and the new **PLB** sysctls enabled where the kernel supports them — these two
-  are scenario-independent by nature and stay static.
-All one-shot guarded writes — no qdisc-watchdog or per-interface monitoring
-daemons: a permanent polling loop would contradict the standby work that just
-got idle drain to 0.66 %/h.
+- **OnePlus Ace 5 (SM8650 / pineapple).**
+  - **Speaker-volume regression fixed.** On this codec the WCD/WSA “Digital Volume”
+    controls top out at 0 dB = 84; writing 88 put the speaker path out of range so the
+    framework slider stopped attenuating (speaker at full, and BT volume knocked out).
+    The digital-gain ceiling is now device-gated: **84 on SM8650/pineapple, 88
+    elsewhere.**
+  - **Battery-mode lag reduced.** On the 1+3+2+1 topology the primary interactive
+    cluster was pinned low by the OP15-shaped rails. The per-device bound synthesis now
+    leans the interactive-cluster BATTERY/BALANCED ceilings up (lag-safe direction),
+    snapped to this device’s real frequency steps; the 2-cluster OP15/OP13 path is
+    unchanged.
 
-### 🎛️ Device-Adaptive Bounds toggle removed from the WebUI
-Everything is decided at install now, so the toggle had no job left: the
-installer sets `device_bounds_override` device-aware (ON on the OP15, where the
-synthesized values equal the shipped hand-validated tuning; OFF elsewhere,
-where OP15-derived ratios can under-clock UI clusters — the V55 OP12 lag),
-the config carry-over deliberately never migrates it, and stale saved values
-are scrubbed on upgrade. The WebUI writes config per-key, so removing the
-control means the installer's choice simply persists. Power users can still
-flip it by editing `governor.conf` directly.
+- **OnePlus 13 / 12** continue to build the device-native overlay from their own
+  `sku_*` trees.
 
-### 🧠 Swappiness that actually sticks on OxygenOS
-OxygenOS carries its own swappiness scene props
-(`sys.mem.swappiness_on_launcher`, `sys.mem.swappiness_on_start`,
-`sys.sysctl.swappiness`) and can re-assert them over `vm.swappiness`. ASB's
-per-profile swappiness is now mirrored into those props — but only when they
-already exist on the device, so nothing new is created on ROMs that don't use
-them. A boot-time zram resize was deliberately avoided: it would fight
-OxygenOS's own RAM-expansion management, which ASB already handles.
+### Overlay activation — one reboot, bootloop-safe
+
+- The files diagnostics read (mixer `mixer_paths_*_cdp.xml`, `media_profiles.xml`,
+  hi-res `audio_policy_configuration.xml`) all live under `/vendor/etc` and now
+  activate via the standard **`/vendor` magic-mount overlay — one reboot, exactly
+  like OP15**, with the correct SELinux context.
+- The Ace 6 hard-bootloop was traced to grafting **`/odm`** content into the
+  magic-mount tree (`/odm` is a bind-mount of another partition on these devices and
+  breaks early boot before the fuse can run). Every `/odm` graft is now **hard-removed**;
+  real `/odm` audio is delivered instead by **fuse-guarded runtime binds** in
+  `post-fs-data`, where the boot counter is `sync`-flushed to disk *before* any bind —
+  so a bad file can only ever cost one recoverable boot, never a loop.
+
+### Audio
+
+- **Format-agnostic hi-res lifter** (`asb_lift_hires_policy`). For any
+  `samplingRates="…"` list that already reaches 96000 but stops short of 384000, it
+  appends the missing hi-res steps using the list’s *own* separator — comma **or**
+  space. Replaces a pile of exact-string seds that silently missed Ace 6’s
+  space-separated `"44100 48000 88200 96000"` format. Applied to both the `/vendor`
+  overlay and the `/odm` runtime bind; idempotent.
+- Device-gated digital-volume ceiling and Class-H HPH promotion (see per-device notes).
+
+### Media / Wi-Fi / camera
+
+- **1080p video bitrate lift** is now gated on the **media** category (was camera), so
+  it lands on devices where camera-tone tuning is correctly left stock. Covers the
+  `/vendor/etc/media_profiles*.xml` the framework reads.
+- **Wi-Fi** clone is minimal (only the patched `WCNSS_qcom_cfg*.ini` files) and never
+  walks the full `/vendor/etc/wifi` tree — no stalls on firmware blobs or bind loops.
+- Camera video_beauty `//` on the `/odm` tree is intentionally left stock on models
+  where that path is not safely reachable at install (a benign JSON5 comment the
+  camera HAL accepts); all functional camera/media patches apply normally.
+
+### OnePlus 15 — thermals & battery
+
+- **Gaming thermal engage lowered 65 °C → 60 °C.** A full-day log showed gaming
+  peaking at 64 °C — one degree under the old engage point — so the proactive lean
+  (GPU ceiling −18 %, stop the gaming battery-relax) never fired and all clamping was
+  left to the vendor’s reactive loop. 60 °C catches the ramp; normal active bursts
+  (which peak ~58 °C) are unaffected.
+- **Standby:** `com.oplus.oidt` (OPPO diagnostic hourly-timer, a recurring idle
+  wakeup source in the logs) added to the `rare` standby bucket, alongside the
+  existing GMS activity-recognition / location-throttle tuning.
+
+### Robustness (install)
+
+- Recursive live-filesystem walks are depth-bounded and the risky ones timeout-guarded,
+  so a stalled or bind-looping mount can no longer hang the installer.
+- Per-stage progress checkpoints in the device-native and odm-bind phases make any
+  future stall self-locating from the flash log.
+
+### Unchanged / preserved
+
+- Ad-identity & measurement silencing in `apply_tracking_block`, and its clean revert
+  on uninstall (`device_config` reset), are preserved.
+- The OnePlus 15 reference path is behaviourally unchanged.
+
+---
+
+> **Note for KernelSU Next users:** if a *previous* broken build left a stale folder at
+> `/data/adb/modules/meta-overlayfs/mnt/AutoSystemBoost`, remove it (or reinstall
+> cleanly) before flashing — a leftover there can break this and other modules’ mounts.
