@@ -8,12 +8,17 @@
   <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="Banner" width="80%">
 </p>
 
-<p align="center"><b>Adaptive Runtime Engine for OnePlus 15 · 13 · 12 — Snapdragon 8 Elite / Gen 3</b></p>
+<p align="center"><b>Adaptive Runtime Engine for OnePlus — Snapdragon 8 Elite / Gen 3</b></p>
+<p align="center"><i>Reference-tuned on 15 · 13 · 12 — device-native on every other OnePlus</i></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/OnePlus_15-SM8850-dc2626?style=for-the-badge" alt="OP15">
   <img src="https://img.shields.io/badge/OnePlus_13-SM8750-ea580c?style=for-the-badge" alt="OP13">
   <img src="https://img.shields.io/badge/OnePlus_12-SM8650-f59e0b?style=for-the-badge" alt="OP12">
+  <br>
+  <img src="https://img.shields.io/badge/Ace_6-ktm_·_boots_✓-22c55e?style=flat-square" alt="Ace 6">
+  <img src="https://img.shields.io/badge/Ace_5-boots_✓-22c55e?style=flat-square" alt="Ace 5">
+  <img src="https://img.shields.io/badge/any_OnePlus-device--native-8b5cf6?style=flat-square" alt="any OnePlus">
   <br>
   <img src="https://img.shields.io/badge/Root-KSU_%7C_KSUN_%7C_APATCH_%7C_RESUKISU_%7C_MAGISK-16a34a?style=for-the-badge" alt="Root">
   <img src="https://img.shields.io/badge/Governor-Native_C-0ea5e9?style=for-the-badge" alt="C">
@@ -63,14 +68,40 @@
 
 ## 📱 Device Support
 
+Every OnePlus gets a **device-native** install: ASB ships **zero static vendor
+files**. It clones the phone's *own* stock files at install time, patches those
+copies, and mounts them back. Nothing from another model is ever grafted onto
+your device.
+
 | Tier | Devices | SoC | Codename |
 |:-----|:--------|:----|:---------|
-| ✅ **Primary — fully tuned** | OnePlus 15 (CPH2745 / CPH2747) | Snapdragon 8 Elite Gen 5 (SM8850) | `canoe` |
-| ✅ **Primary — fully tuned** | OnePlus 13 (CPH2649) | Snapdragon 8 Elite (SM8750) | `sun` |
-| ✅ **Primary — fully tuned** | OnePlus 12 (CPH2581) | Snapdragon 8 Gen 3 (SM8650) | `pineapple` |
-| ✅ Supported | OnePlus 13R/13s/13T, 12R, 11/11R, Open, Ace/Nord/Pad | various | — |
+| 🥇 **Reference — hand-validated** | OnePlus 15 (CPH2745 / CPH2747) | Snapdragon 8 Elite Gen 5 (SM8850) | `canoe` |
+| 🥇 **Reference — hand-validated** | OnePlus 13 (CPH2649 / 2653 / 2655) | Snapdragon 8 Elite (SM8750) | `sun` · `tuna` · `kera` |
+| 🥇 **Reference — hand-validated** | OnePlus 12 (CPH2581 / 2583 / 2573) | Snapdragon 8 Gen 3 (SM8650) | `pineapple` |
+| ✅ **Device-native — boot verified** | OnePlus Ace 6 (PLQ110 / OP6113) | SM8750 — *shared `sun` firmware* | `ktm` |
+| ✅ **Device-native — boot verified** | OnePlus Ace 5 (CPH2691) | Snapdragon 8-series | — |
+| ✅ **Device-native** | OnePlus 15R, 13R / 13s / 13T, 12R, 11 / 11R, Open, Ace 6T, Ace / Nord / Pad | various | — |
 
-Each primary device gets its own CPU/GPU topology mapping, audio SKU, camera/media overlays and thermal profile — validated on real hardware, not simulated. Other OnePlus models run on the generic tuning path (governor + sed patches, vendor overlay pruned).
+### Two paths, one philosophy
+
+**Reference devices** (matched by confirmed codename) get the full clone-and-patch
+pipeline — their own CPU/GPU topology mapping, audio SKU, camera/media overlays
+and thermal profile, validated on real hardware rather than simulated — behind a
+**3-strike boot guard**.
+
+**Every other OnePlus** gets the same device-native `/vendor` overlay, plus its
+`/odm` audio and media delivered as **runtime `mount --bind`s** (cloned to
+`/data/adb/asb/odm_patched/`, patched, SELinux context copied from the live
+target, applied in `post-fs-data` before zygote). The `/odm` partition itself is
+never modified, and no directory is ever grafted over it. All of it sits behind a
+**1-strike boot fuse**: a single failed boot tears the generated overlay out
+*before* the module mounts and the device comes up governor-only.
+
+> **Sibling firmware is handled explicitly.** The Ace 6 (`ktm`) rides the *same*
+> SM8750 `sun` firmware as the OnePlus 13 — its fingerprint literally says `sun`.
+> ASB matches `ktm` / `plq110` / `op6113` **before** the `sun` test, so it can
+> never be mistaken for an OP13. The same guard keeps `macan` / `fairlady` /
+> `15R` / `Ace 6T` out of the OP15 branch.
 
 ---
 

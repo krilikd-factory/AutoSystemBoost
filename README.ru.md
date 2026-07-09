@@ -8,12 +8,17 @@
   <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="Banner" width="80%">
 </p>
 
-<p align="center"><b>Адаптивный runtime-движок для OnePlus 15 · 13 · 12 — Snapdragon 8 Elite / Gen 3</b></p>
+<p align="center"><b>Адаптивный runtime-движок для OnePlus — Snapdragon 8 Elite / Gen 3</b></p>
+<p align="center"><i>Reference-тюнинг на 15 · 13 · 12 — device-native на любом другом OnePlus</i></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/OnePlus_15-SM8850-dc2626?style=for-the-badge" alt="OP15">
   <img src="https://img.shields.io/badge/OnePlus_13-SM8750-ea580c?style=for-the-badge" alt="OP13">
   <img src="https://img.shields.io/badge/OnePlus_12-SM8650-f59e0b?style=for-the-badge" alt="OP12">
+  <br>
+  <img src="https://img.shields.io/badge/Ace_6-ktm_·_boots_✓-22c55e?style=flat-square" alt="Ace 6">
+  <img src="https://img.shields.io/badge/Ace_5-boots_✓-22c55e?style=flat-square" alt="Ace 5">
+  <img src="https://img.shields.io/badge/any_OnePlus-device--native-8b5cf6?style=flat-square" alt="any OnePlus">
   <br>
   <img src="https://img.shields.io/badge/Root-KSU_%7C_KSUN_%7C_APATCH_%7C_RESUKISU_%7C_MAGISK-16a34a?style=for-the-badge" alt="Root">
   <img src="https://img.shields.io/badge/Governor-Native_C-0ea5e9?style=for-the-badge" alt="C">
@@ -63,14 +68,40 @@
 
 ## 📱 Поддержка устройств
 
+Любой OnePlus получает **device-native** установку: ASB не поставляет **ни одного
+статического vendor-файла**. При установке он клонирует **собственные** стоковые
+файлы устройства, патчит копии и монтирует их обратно. Файлы чужой модели никогда
+не попадают на ваш телефон.
+
 | Уровень | Устройства | SoC | Кодовое имя |
 |:--------|:-----------|:----|:------------|
-| ✅ **Основное — полная настройка** | OnePlus 15 (CPH2745 / CPH2747) | Snapdragon 8 Elite Gen 5 (SM8850) | `canoe` |
-| ✅ **Основное — полная настройка** | OnePlus 13 (CPH2649) | Snapdragon 8 Elite (SM8750) | `sun` |
-| ✅ **Основное — полная настройка** | OnePlus 12 (CPH2581) | Snapdragon 8 Gen 3 (SM8650) | `pineapple` |
-| ✅ Поддержка | OnePlus 13R/13s/13T, 12R, 11/11R, Open, Ace/Nord/Pad | разные | — |
+| 🥇 **Reference — выверено вручную** | OnePlus 15 (CPH2745 / CPH2747) | Snapdragon 8 Elite Gen 5 (SM8850) | `canoe` |
+| 🥇 **Reference — выверено вручную** | OnePlus 13 (CPH2649 / 2653 / 2655) | Snapdragon 8 Elite (SM8750) | `sun` · `tuna` · `kera` |
+| 🥇 **Reference — выверено вручную** | OnePlus 12 (CPH2581 / 2583 / 2573) | Snapdragon 8 Gen 3 (SM8650) | `pineapple` |
+| ✅ **Device-native — загрузка проверена** | OnePlus Ace 6 (PLQ110 / OP6113) | SM8750 — *общая прошивка `sun`* | `ktm` |
+| ✅ **Device-native — загрузка проверена** | OnePlus Ace 5 (CPH2691) | Snapdragon 8-серии | — |
+| ✅ **Device-native** | OnePlus 15R, 13R / 13s / 13T, 12R, 11 / 11R, Open, Ace 6T, Ace / Nord / Pad | разные | — |
 
-Каждое основное устройство получает собственное сопоставление топологии CPU/GPU, аудио-SKU, оверлеи камеры/медиа и термопрофиль — проверено на реальном железе, не в симуляции. Остальные модели OnePlus работают на общем пути настройки (governor + sed-патчи, vendor-оверлей вырезается).
+### Два пути, одна философия
+
+**Reference-устройства** (определяются по подтверждённому кодовому имени) получают
+полный clone-and-patch пайплайн — собственное сопоставление топологии CPU/GPU,
+аудио-SKU, оверлеи камеры/медиа и термопрофиль, проверенные на реальном железе, а
+не в симуляции — под защитой **3-strike boot guard**.
+
+**Все остальные OnePlus** получают тот же device-native `/vendor`-оверлей, а их
+`/odm` аудио и медиа доставляются через **runtime `mount --bind`** (клон в
+`/data/adb/asb/odm_patched/`, патч, SELinux-контекст снимается с живой цели,
+применение в `post-fs-data` до зигота). Сам раздел `/odm` никогда не изменяется, и
+поверх него никогда не графтится каталог. Всё это работает под **1-strike boot
+fuse**: одна неудачная загрузка вырезает сгенерированный оверлей *до* монтирования
+модуля, и устройство поднимается в режиме governor-only.
+
+> **Родственные прошивки обрабатываются явно.** Ace 6 (`ktm`) работает на **той же**
+> SM8750-прошивке `sun`, что и OnePlus 13 — в его fingerprint буквально написано
+> `sun`. ASB проверяет `ktm` / `plq110` / `op6113` **до** проверки на `sun`, поэтому
+> перепутать его с OP13 невозможно. Тот же предохранитель не пускает
+> `macan` / `fairlady` / `15R` / `Ace 6T` в ветку OP15.
 
 ---
 
