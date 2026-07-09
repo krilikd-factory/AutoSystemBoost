@@ -79,24 +79,8 @@ your device.
 | 🥇 **Reference — hand-validated** | OnePlus 13 (CPH2649 / 2653 / 2655) | Snapdragon 8 Elite (SM8750) | `sun` · `tuna` · `kera` |
 | 🥇 **Reference — hand-validated** | OnePlus 12 (CPH2581 / 2583 / 2573) | Snapdragon 8 Gen 3 (SM8650) | `pineapple` |
 | 🥇 **Fully supported — field-verified** | OnePlus Ace 6 (PLQ110 / OP6113) | SM8750 — *shared `sun` firmware* | `ktm` |
-| 🥇 **Fully supported — field-verified** | OnePlus Ace 5 (CPH2691) | Snapdragon 8 Gen 3 (SM8650) | — |
-| ✅ **Device-native** | OnePlus 15R, 13R / 13s / 13T, 12R, 11 / 11R, Open, Ace 6T, Ace / Nord / Pad | various | — |
-
-### Ace 6 and Ace 5 are first-class devices
-
-They run the **exact same tuning pipeline** as the OnePlus 13 and 12 — the
-identical clone-and-patch stages for audio, camera, media, GPS, perf and Wi-Fi,
-built from their own stock files. `asbdiag` reports PASS on the audio and media
-checks, and both boot on the first try. This is not a reduced "compatibility
-mode": nothing is skipped.
-
-Three implementation details still differ, and none of them cost you tuning:
-
-| | Reference (15 / 13 / 12) | Ace 6 / Ace 5 |
-|:--|:--|:--|
-| `/odm` audio & media | magic-mount overlay | **runtime `mount --bind`** — same end result, `/odm` partition never touched |
-| Boot guard | 3-strike | **1-strike fuse** (stricter, self-healing) |
-| Device-adaptive CPU bounds | ON (OP15), ON (OP12/SM8650) | **ON** on Ace 5 (SM8650 lean) · opt-in via WebUI on Ace 6 |
+| 🥇 **Fully supported — field-verified** | OnePlus Ace 5 · 13R (PKG110 / CPH2691) | Snapdragon 8 Gen 3 (SM8650) | `giuliac` · `giulia` |
+| ✅ **Device-native** | OnePlus 15R, 13s / 13T, 12R, 11 / 11R, Open, Ace 6T, Ace / Nord / Pad | various | — |
 
 ### Two paths, one philosophy
 
@@ -104,13 +88,20 @@ Three implementation details still differ, and none of them cost you tuning:
 topology mapping, audio SKU, camera/media overlays and thermal profile, validated
 on real hardware rather than simulated — behind a **3-strike boot guard**.
 
-**Every other OnePlus** gets the same device-native `/vendor` overlay, plus its
-`/odm` audio and media delivered as **runtime `mount --bind`s** (cloned to
-`/data/adb/asb/odm_patched/`, patched, SELinux context copied from the live
-target, applied in `post-fs-data` before zygote). The `/odm` partition itself is
-never modified, and no directory is ever grafted over it. All of it sits behind a
-**1-strike boot fuse**: a single failed boot tears the generated overlay out
-*before* the module mounts and the device comes up governor-only.
+**Ace 6 and Ace 5 run the identical pipeline** — the same clone-and-patch stages
+for audio, camera, media, GPS, perf and Wi-Fi, `asbdiag` PASS, first boot clean.
+Nothing is skipped; this is not a reduced compatibility mode. Only the delivery
+differs: their `/odm` audio and media arrive as **runtime `mount --bind`s**
+(cloned to `/data/adb/asb/odm_patched/`, patched, SELinux context copied from the
+live target, applied in `post-fs-data` before zygote), they sit behind a stricter
+**1-strike boot fuse** instead of the 3-strike guard, and device-adaptive CPU
+bounds are ON by default on Ace 5 (SM8650 lean) while staying opt-in via the
+WebUI on Ace 6.
+
+**Every other OnePlus** gets the same device-native `/vendor` overlay under that
+same 1-strike fuse: a single failed boot tears the generated overlay out *before*
+the module mounts and the device comes up governor-only. The `/odm` partition
+itself is never modified, and no directory is ever grafted over it.
 
 > **Sibling firmware is handled explicitly.** The Ace 6 (`ktm`) rides the *same*
 > SM8750 `sun` firmware as the OnePlus 13 — its fingerprint literally says `sun`.
