@@ -170,16 +170,24 @@ lk_uptime_s() {
   awk '{printf "%d", $1}' /proc/uptime 2>/dev/null || echo 0
 }
 
+lk_mono_s() {
+  _m=$(awk '/now at/{printf "%d", $3/1000000000; exit}' /proc/timer_list 2>/dev/null)
+  [ -n "$_m" ] && echo "$_m" || echo -1
+}
+
 lk_phase_ledger_row() {
   [ -z "$LK_CUR_PHASE" ] && return 1
   _endpct=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   _end=$(date +%s)
   _upend=$(lk_uptime_s)
+  _monoend=$(lk_mono_s)
   _gavg=0; [ "$LK_PH_GPUCNT" -gt 0 ] && _gavg=$(( LK_PH_GPUSUM / LK_PH_GPUCNT ))
-  _wall=$(( _end - LK_PH_START ))
+  _elapsed=$(( _upend - LK_PH_START_UP ))
   _awake=-1
-  if [ "$_wall" -gt 0 ] && [ "$LK_PH_START_UP" -gt 0 ] && [ "$_upend" -ge "$LK_PH_START_UP" ] 2>/dev/null; then
-    _awake=$(( (_upend - LK_PH_START_UP) * 100 / _wall ))
+  if [ "$_elapsed" -gt 0 ] && [ "$LK_PH_START_MONO" -ge 0 ] 2>/dev/null && [ "$_monoend" -ge 0 ] 2>/dev/null; then
+    _mono=$(( _monoend - LK_PH_START_MONO ))
+    [ "$_mono" -lt 0 ] && _mono=0
+    _awake=$(( _mono * 100 / _elapsed ))
     [ "$_awake" -gt 100 ] && _awake=100
   fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
@@ -202,6 +210,7 @@ lk_phase_ledger_open() {
   LK_CUR_PHASE="$1"
   LK_PH_START=$(date +%s)
   LK_PH_START_UP=$(lk_uptime_s)
+  LK_PH_START_MONO=$(lk_mono_s)
   LK_PH_START_PCT=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   LK_PH_MAXCPU=0; LK_PH_MAXSURF=0; LK_PH_MAXP6=0
   LK_PH_GPUSUM=0; LK_PH_GPUCNT=0; LK_PH_THROTTLE=0; LK_PH_WAKEPEAK=0
@@ -270,8 +279,9 @@ lk_emit_phase_summary() {
     echo "Legend: d_pct=battery % consumed (negative=gained while charging),"
     echo "        pct/h=drain rate, cpuT/surfT=peak temps (°C), p6MHz=peak prime"
     echo "        clock, gpu%=avg GPU busy, throttle=ticks the prime was capped."
-    echo "        awake%=CPU awake share from /proc/uptime vs wall clock (suspend-aware);"
-    echo "        on sleep/idle blocks target <5%, >15% = something holds the CPU."
+    echo "        awake%=awake share = CLOCK_MONOTONIC delta / boottime delta"
+    echo "        (Android uptimeMillis/elapsedRealtime); excludes suspend."
+    echo "        On sleep/idle blocks target <5%, >15% = something holds the CPU."
     echo "        night(longest)=longest continuous screen-off block >=3h — the pure"
     echo "        overnight rate; compare IT (not the mixed idle row) against 0.3-0.7 %/h."
     echo "        The currently-open phase is included, so interim reports are complete."
