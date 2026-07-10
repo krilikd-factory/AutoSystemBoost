@@ -1677,14 +1677,15 @@ static void asb_smart_apply_refresh_rate(asb_smart_runtime_t *rt) {
  * Respect the user's intent without giving up battery during cool gaming
  * sessions. If device is hot, thermal_veto already locked us → no-op.
  *
- * Triggers: app_hint == GAMING + cpu_max_c < 60 °C + no thermal_veto.
+ * Triggers: app_hint == GAMING + cpu_max_c < ASB_SMART_GAMING_RELAX_TEMP_C
+ * + no thermal_veto.
  * Effect:   clamp alpha to ≤ 400 (balanced-leaning) for this tick. */
 static void asb_smart_apply_gaming_relax(int app_hint, int cpu_max_c,
                                           asb_smart_runtime_t *rt) {
     if (!rt) return;
     if (rt->night_safe_override || rt->thermal_veto) return;
     if (app_hint < ASB_APP_GAMING) return;
-    if (cpu_max_c >= 60) return;   /* device warm — do not relax */
+    if (cpu_max_c >= ASB_SMART_GAMING_RELAX_TEMP_C) return;
     if (rt->alpha_battery_x1000 > 400) {
         rt->alpha_battery_x1000 = 400;
     }
