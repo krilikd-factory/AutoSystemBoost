@@ -21,6 +21,8 @@ LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"
 LK_HOURS="${1:-24}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
 LK_SNAPSHOT_S=3600          # full state snapshot + interim report every hour
+LK_BSTATS_WINDOW_MIN=$(( LK_SNAPSHOT_S / 60 ))
+export LK_BSTATS_WINDOW_MIN
 
 # Phase-adaptive poll cadence (seconds)
 LK_POLL_FAST=15             # gaming / charging — catch transients
@@ -47,6 +49,21 @@ lk_wl_release() {
 LK_SCREEN_OFF_SINCE=0
 LK_LAST_SCREEN="unknown"
 LK_WOKE_AT=0
+LK_PHASE_OUT=""
+LK_GPU_HI=60
+LK_GPU_LO=35
+LK_GPU_ENTER=2
+LK_GPU_EXIT=3
+LK_GPU_HI_STREAK=0
+LK_GPU_LO_STREAK=0
+LK_IN_GAMING=0
+LK_GPU_NOW=0
+
+lk_sample_gpu_busy() {
+  LK_GPU_NOW=$(cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null | tr -dc '0-9')
+  [ -z "$LK_GPU_NOW" ] && LK_GPU_NOW=0
+  export LK_GPU_NOW
+}
 
 lk_detect_phase() {
   _now="$1"
@@ -69,7 +86,7 @@ lk_detect_phase() {
   [ "$LK_SCREEN_OFF_SINCE" != "0" ] && _off_for=$(( _now - LK_SCREEN_OFF_SINCE ))
 
   # GPU busy + top-app cpu for gaming detection
-  _gb=$(cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null | tr -dc '0-9')
+  _gb="$LK_GPU_NOW"
   [ -z "$_gb" ] && _gb=0
   read -r _l1 _rest < /proc/loadavg
   _l1i=$(echo "$_l1" | tr -dc '0-9')      # e.g. 3.42 -> 342, compared *100
@@ -77,21 +94,36 @@ lk_detect_phase() {
   # charging branches
   case "$_cs" in
     Charging|Full)
-      if [ "$_scr" = "Awake" ]; then echo "charging_active"; else echo "charging_idle"; fi
-      return ;;
+      LK_IN_GAMING=0; LK_GPU_HI_STREAK=0; LK_GPU_LO_STREAK=0
+      if [ "$_scr" = "Awake" ]; then LK_PHASE_OUT="charging_active"; else LK_PHASE_OUT="charging_idle"; fi
+      return 0 ;;
   esac
   # screen off → sleep vs idle (sleep = off > 20 min)
   if [ "$_scr" = "Asleep" ] || [ "$_scr" = "Dozing" ]; then
-    if [ "$_off_for" -ge 1200 ]; then echo "sleep"; else echo "idle"; fi
-    return
+    LK_IN_GAMING=0; LK_GPU_HI_STREAK=0; LK_GPU_LO_STREAK=0
+    if [ "$_off_for" -ge 1200 ]; then LK_PHASE_OUT="sleep"; else LK_PHASE_OUT="idle"; fi
+    return 0
   fi
-  # screen on: gaming if GPU sustained high
-  if [ "$_gb" -ge 60 ]; then echo "gaming"; return; fi
+  # screen on: gaming if GPU sustained high (hysteresis, not a single sample)
+  if [ "$_gb" -ge "$LK_GPU_HI" ]; then
+    LK_GPU_HI_STREAK=$(( LK_GPU_HI_STREAK + 1 )); LK_GPU_LO_STREAK=0
+  elif [ "$_gb" -lt "$LK_GPU_LO" ]; then
+    LK_GPU_LO_STREAK=$(( LK_GPU_LO_STREAK + 1 )); LK_GPU_HI_STREAK=0
+  else
+    LK_GPU_HI_STREAK=0; LK_GPU_LO_STREAK=0
+  fi
+  if [ "$LK_IN_GAMING" = "1" ]; then
+    [ "$LK_GPU_LO_STREAK" -ge "$LK_GPU_EXIT" ] && LK_IN_GAMING=0
+  else
+    [ "$LK_GPU_HI_STREAK" -ge "$LK_GPU_ENTER" ] && LK_IN_GAMING=1
+  fi
+  if [ "$LK_IN_GAMING" = "1" ]; then LK_PHASE_OUT="gaming"; return 0; fi
   # within 5 min of waking → post_wake (ASB ramp window of interest)
   if [ "$LK_WOKE_AT" != "0" ] && [ $(( _now - LK_WOKE_AT )) -le 300 ]; then
-    echo "post_wake"; return
+    LK_PHASE_OUT="post_wake"; return 0
   fi
-  echo "active"
+  LK_PHASE_OUT="active"
+  return 0
 }
 
 # Poll cadence per phase
@@ -132,21 +164,44 @@ LK_PH_GPUSUM=0
 LK_PH_GPUCNT=0
 LK_PH_THROTTLE=0
 LK_PH_WAKEPEAK=0
+LK_PH_START_UP=0
 
-lk_phase_ledger_flush() {
+lk_uptime_s() {
+  awk '{printf "%d", $1}' /proc/uptime 2>/dev/null || echo 0
+}
+
+lk_phase_ledger_row() {
+  [ -z "$LK_CUR_PHASE" ] && return 1
   _endpct=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   _end=$(date +%s)
-  [ -z "$LK_CUR_PHASE" ] && return 0
+  _upend=$(lk_uptime_s)
   _gavg=0; [ "$LK_PH_GPUCNT" -gt 0 ] && _gavg=$(( LK_PH_GPUSUM / LK_PH_GPUCNT ))
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  _wall=$(( _end - LK_PH_START ))
+  _awake=-1
+  if [ "$_wall" -gt 0 ] && [ "$LK_PH_START_UP" -gt 0 ] && [ "$_upend" -ge "$LK_PH_START_UP" ] 2>/dev/null; then
+    _awake=$(( (_upend - LK_PH_START_UP) * 100 / _wall ))
+    [ "$_awake" -gt 100 ] && _awake=100
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$LK_CUR_PHASE" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
     "$LK_PH_MAXCPU" "$LK_PH_MAXSURF" "$LK_PH_MAXP6" "$_gavg" \
-    "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" >> "$LK_OUT_DIR/phase_ledger.tsv"
+    "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake"
+  return 0
+}
+
+lk_phase_ledger_flush() {
+  lk_phase_ledger_row >> "$LK_OUT_DIR/phase_ledger.tsv" 2>/dev/null || return 0
+}
+
+lk_phase_ledger_snapshot_open() {
+  : > "$LK_OUT_DIR/.phase_open.tsv"
+  lk_phase_ledger_row >> "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null || true
 }
 
 lk_phase_ledger_open() {
   LK_CUR_PHASE="$1"
   LK_PH_START=$(date +%s)
+  LK_PH_START_UP=$(lk_uptime_s)
   LK_PH_START_PCT=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   LK_PH_MAXCPU=0; LK_PH_MAXSURF=0; LK_PH_MAXP6=0
   LK_PH_GPUSUM=0; LK_PH_GPUCNT=0; LK_PH_THROTTLE=0; LK_PH_WAKEPEAK=0
@@ -157,7 +212,7 @@ lk_phase_ledger_accumulate() {
   _temp=$(echo "$_j" | awk -F'"temp":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
   _surf=$(echo "$_j" | awk -F'"surface_hotspot":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
   _p6=$(cat /sys/devices/system/cpu/cpufreq/policy6/scaling_cur_freq 2>/dev/null)
-  _gb=$(cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null | tr -dc '0-9')
+  _gb="$LK_GPU_NOW"
   [ -n "$_temp" ] && [ "$_temp" -gt "$LK_PH_MAXCPU" ] 2>/dev/null && LK_PH_MAXCPU=$_temp
   [ -n "$_surf" ] && [ "$_surf" -gt "$LK_PH_MAXSURF" ] 2>/dev/null && LK_PH_MAXSURF=$_surf
   [ -n "$_p6" ] && [ "$_p6" -gt "$LK_PH_MAXP6" ] 2>/dev/null && LK_PH_MAXP6=$_p6
@@ -175,11 +230,15 @@ lk_phase_ledger_accumulate() {
 lk_emit_phase_summary() {
   _led="$LK_OUT_DIR/phase_ledger.tsv"
   [ -r "$_led" ] || return 0
+  lk_phase_ledger_snapshot_open
+  _all="$LK_OUT_DIR/.phase_all.tsv"
+  cat "$_led" > "$_all" 2>/dev/null
+  [ -s "$LK_OUT_DIR/.phase_open.tsv" ] && cat "$LK_OUT_DIR/.phase_open.tsv" >> "$_all"
   {
     echo "===== PER-PHASE SUMMARY ====="
     echo ""
-    printf "%-15s %8s %7s %8s %8s %8s %9s %7s %9s\n" \
-      "phase" "dur_min" "d_pct" "pct/h" "cpuT" "surfT" "p6MHz" "gpu%" "throttle"
+    printf "%-15s %8s %7s %8s %8s %8s %9s %7s %9s %8s\n" \
+      "phase" "dur_min" "d_pct" "pct/h" "cpuT" "surfT" "p6MHz" "gpu%" "throttle" "awake%"
     awk -F'\t' '
       /^#/{next}
       {
@@ -187,29 +246,37 @@ lk_emit_phase_summary() {
         D[ph]+=dur; DP[ph]+=dpct; N[ph]++;
         if($6>CT[ph])CT[ph]=$6; if($7>SF[ph])SF[ph]=$7;
         if($8>P6[ph])P6[ph]=$8; G[ph]+=$9; TH[ph]+=$10;
+        if($12>=0){ AW[ph]+=$12*dur; AWD[ph]+=dur }
       }
       END{
         for(p in D){
           durm=D[p]/60.0;
           rate=(D[p]>0)?(DP[p]*3600.0/D[p]):0;
           gavg=(N[p]>0)?(G[p]/N[p]):0;
-          printf "%-15s %8.1f %7d %8.2f %8d %8d %9d %7d %9d\n", \
-            p, durm, DP[p], rate, CT[p], SF[p], (P6[p]/1000), gavg, TH[p];
+          aw=(AWD[p]>0)?(AW[p]/AWD[p]):-1;
+          aws=(aw>=0)?sprintf("%.1f",aw):"-";
+          printf "%-15s %8.1f %7d %8.2f %8d %8d %9d %7d %9d %8s\n", \
+            p, durm, DP[p], rate, CT[p], SF[p], (P6[p]/1000), gavg, TH[p], aws;
         }
       }
-    ' "$_led" | sort -k4 -rn
+    ' "$_all" | sort -k4 -rn
     awk -F'\t' '
-      $1=="idle" && !/^#/ { d=$3-$2; if(d>DUR){DUR=d;SP=$4;EP=$5;CT=$6;SF=$7;P6=$8} }
-      END{ if(DUR>=10800) printf "%-15s %8.1f %7d %8.2f %8d %8d %9d %7s %9s\n", \
-        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, CT, SF, (P6/1000), "-", "-" }
-    ' "$_led"
+      !/^#/ && ($1=="idle" || $1=="sleep") { d=$3-$2; if(d>DUR){DUR=d;SP=$4;EP=$5;CT=$6;SF=$7;P6=$8;AW=$12} }
+      END{ if(DUR>=10800){ aws=(AW>=0)?sprintf("%.1f",AW):"-";
+        printf "%-15s %8.1f %7d %8.2f %8d %8d %9d %7s %9s %8s\n", \
+        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, CT, SF, (P6/1000), "-", "-", aws } }
+    ' "$_all"
     echo ""
     echo "Legend: d_pct=battery % consumed (negative=gained while charging),"
     echo "        pct/h=drain rate, cpuT/surfT=peak temps (°C), p6MHz=peak prime"
+    echo "        clock, gpu%=avg GPU busy, throttle=ticks the prime was capped."
+    echo "        awake%=CPU awake share from /proc/uptime vs wall clock (suspend-aware);"
+    echo "        on sleep/idle blocks target <5%, >15% = something holds the CPU."
     echo "        night(longest)=longest continuous screen-off block >=3h — the pure"
     echo "        overnight rate; compare IT (not the mixed idle row) against 0.3-0.7 %/h."
-    echo "        clock, gpu%=avg GPU busy, throttle=ticks the prime was capped."
+    echo "        The currently-open phase is included, so interim reports are complete."
   } > "$LK_OUT_DIR/phase_summary.txt"
+  rm -f "$_all" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null
 }
 
 lk_emit_screenoff_sleep() {
@@ -226,7 +293,9 @@ lk_emit_screenoff_sleep() {
     { rt=$1; sub(/ \(.*\)/,"",rt); r=tosec(rt); u=tosec($2)
       if(r>0){ aw=u*100.0/r
         printf "  screen-off: %.1fh realtime, CPU awake %.0fm -> awake %.1f%% (deep sleep %.1f%%)\n", r/3600.0, u/60.0, aw, 100-aw
-        printf "  target: awake < 5%% on a healthy night; >15%% = something holds the CPU\n" } }'
+        printf "  NOTE: batterystats is reset every %s min, so this covers only the last\n", ENVIRON["LK_BSTATS_WINDOW_MIN"]
+        printf "        window, NOT the whole night. For the overnight number read the\n"
+        printf "        awake%% column of night(longest) in the per-phase summary.\n" } }'
 }
 
 lk_emit_full_day_report() {
@@ -299,7 +368,7 @@ lk_perf_trace_header
 lk_battery_trace_header
 { echo "# phase timeline — epoch | iso | phase | trigger"; } > "$LK_OUT_DIR/phase_timeline.txt"
 { echo "# throttle trace — epoch | phase | p0 | p6 | temps | cap_owner"; } > "$LK_OUT_DIR/throttle_trace.txt"
-printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\n' > "$LK_OUT_DIR/phase_ledger.tsv"
+printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\tawakePct\n' > "$LK_OUT_DIR/phase_ledger.tsv"
 
 # wakelock baseline + reset
 lk_wakelock_kernel_baseline
@@ -312,7 +381,8 @@ echo "[$(date '+%H:%M:%S')] FULL-DAY capture running up to ${LK_HOURS}h. Use the
 
 _last_snapshot=$(date +%s)
 _last_wakesnap=$(date +%s)
-_phase="$(lk_detect_phase "$(date +%s)")"
+lk_sample_gpu_busy
+lk_detect_phase "$(date +%s)"; _phase="$LK_PHASE_OUT"
 lk_phase_ledger_open "$_phase"
 echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|capture_start" >> "$LK_OUT_DIR/phase_timeline.txt"
 
@@ -322,9 +392,10 @@ while : ; do
   [ "$_elapsed" -ge "$LK_MAX_SEC" ] && break
 
   lk_wl_acquire
+  lk_sample_gpu_busy
 
   # detect phase; on change, flush the ledger and re-open
-  _new_phase="$(lk_detect_phase "$_now")"
+  lk_detect_phase "$_now"; _new_phase="$LK_PHASE_OUT"
   if [ "$_new_phase" != "$_phase" ]; then
     lk_phase_ledger_accumulate
     lk_phase_ledger_flush

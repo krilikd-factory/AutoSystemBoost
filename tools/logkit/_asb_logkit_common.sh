@@ -608,7 +608,7 @@ lk_capture_perf_trace_row() {
   _p0max=$(_f /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq)
   _p6cur=$(_f /sys/devices/system/cpu/cpufreq/policy6/scaling_cur_freq)
   _p6max=$(_f /sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq)
-  _gb=$(_f /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage)
+  _gb="$LK_GPU_NOW"
   _gclk=$(_f /sys/class/kgsl/kgsl-3d0/gpuclk)
   _gmax=$(_f /sys/class/kgsl/kgsl-3d0/max_gpuclk)
   _gmin=$(_f /sys/class/kgsl/kgsl-3d0/min_gpuclk)
