@@ -1138,6 +1138,8 @@ static void asb_smart_apply_low_battery_override(
 
 static void asb_smart_apply_thermal_veto(
         int cpu_max_c,
+        int skin_temp_c,
+        const asb_runtime_config_t *cfg,
         int vendor_clamp_1h,
         int recovery_active,
         asb_smart_runtime_t *rt)
@@ -1145,8 +1147,26 @@ static void asb_smart_apply_thermal_veto(
     if (!rt) return;
     rt->thermal_veto = 0;
 
+    /* Decision sensor: prefer user-facing skin (shell) heat. The cpu_max junction
+     * sensor sits at 85-95 C under any real load, so gating the veto on it alone
+     * false-fires during normal bursts — forcing battery-lean and defeating
+     * race-to-idle (worse heat AND drain). asb_therm_skin_engage returns
+     * 1/0/-1 (-1 = no usable skin sensor -> keep the original junction gate). */
+    int se = asb_therm_skin_engage(cfg, cpu_max_c, skin_temp_c);
+    int dtemp, dlo, dhi;
+    if (se >= 0) {                          /* skin sensor usable */
+        dtemp = skin_temp_c;
+        dhi   = cfg->thermal_skin_c;
+        dlo   = cfg->thermal_skin_c - 8;    /* soft pre-lean band ~8 C below veto */
+    } else {                                /* no skin sensor -> original behaviour */
+        dtemp = cpu_max_c;
+        dhi   = ASB_SMART_VETO_CPU_TEMP_C;
+        dlo   = 50;
+    }
+
     int veto = 0;
-    if (cpu_max_c >= ASB_SMART_VETO_CPU_TEMP_C) veto = 1;
+    if (se == 1) veto = 1;                          /* skin hot OR junction hard-limit */
+    else if (se < 0 && dtemp >= dhi) veto = 1;      /* junction fallback (original) */
     if (vendor_clamp_1h >= ASB_SMART_VETO_VENDOR_CLAMP_1H) veto = 1;
     if (recovery_active) veto = 1;
 
@@ -1163,11 +1183,13 @@ static void asb_smart_apply_thermal_veto(
         return;
     }
 
-    int soft_lo = 50;
-    int soft_hi = ASB_SMART_VETO_CPU_TEMP_C;
-    if (cpu_max_c > soft_lo && soft_hi > soft_lo) {
+    /* Soft pre-lean band — on the SAME sensor the veto used, so it never leans on
+     * a junction reading the veto itself would ignore. */
+    int soft_lo = dlo;
+    int soft_hi = dhi;
+    if (dtemp > soft_lo && soft_hi > soft_lo) {
         int span = soft_hi - soft_lo;
-        int over = cpu_max_c - soft_lo;
+        int over = dtemp - soft_lo;
         if (over > span) over = span;
         int bump = (150 * over) / span;
         int target = rt->alpha_battery_x1000 + bump;

@@ -936,6 +936,17 @@ int spike_detected = 0;
         t->skin_temp_c = thermal_raw_to_c(sv);
     }
 
+    /* Re-decide throttling on the skin-anchored gate now that the shell sensor has
+     * been read this tick. The junction (cpu_max) throttle above fires at 85-95 C
+     * under any load; when a real skin sensor is present we instead throttle on
+     * user-facing heat (skin >= thermal_skin_c) or a junction hard-limit. With no
+     * skin sensor asb_therm_skin_engage returns -1 and the junction decision from
+     * above stands (fully backward-compatible). */
+    {
+        int _se = asb_therm_skin_engage(&g_asb_cfg, t->cpu_max_c, t->skin_temp_c);
+        if (_se >= 0) t->throttling = _se;
+    }
+
     /* surface_hotspot = max(sys-therm-6, board_temp).
      * sys-therm-6 on OP15 reads nearly static 40C even under load.
      * board_temp actually rises (up to 47-50C in heavy gaming) and better

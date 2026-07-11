@@ -39,6 +39,9 @@ typedef struct {
     int   msm_perf_boost_only;
     int   thermal_overlay_pct;
     int   thermal_throttle_temp;
+    int   thermal_skin_gate;       /* 1=base throttle/veto on skin(shell) temp when present */
+    int   thermal_skin_c;          /* skin temp (C) that engages the comfort throttle/veto */
+    int   thermal_junction_hard_c; /* junction hard-limit (C) that always throttles (silicon guard) */
     int   gaming_gap_thresh;
     int   gaming_gap_ticks;
     int   gaming_retry_cooldown_s;
@@ -149,6 +152,22 @@ typedef struct {
     int   smart_debug_log;            /* extra logging for alpha, default 0 */
 } asb_runtime_config_t;
 
+/* Skin-anchored thermal decision. The cpu_max (junction) sensor sits at 85-95 C
+ * under any real load, so gating throttle/veto on it alone false-fires during
+ * normal bursty use and defeats race-to-idle (worse heat AND drain, not better).
+ * When a shell/skin sensor is present we decide on user-facing heat
+ * (skin >= thermal_skin_c) OR a junction hard-limit (silicon guard). Returns:
+ *   1  = engage thermal lean,
+ *   0  = do not,
+ *  -1  = no usable skin sensor OR gate off -> caller keeps its own junction gate
+ *        (original behaviour, fully backward-compatible). */
+static inline int asb_therm_skin_engage(const asb_runtime_config_t *cfg,
+                                        int junction_c, int skin_c) {
+    if (!cfg || !cfg->thermal_skin_gate || skin_c <= 20 || skin_c >= 70) return -1;
+    return (skin_c >= cfg->thermal_skin_c ||
+            junction_c >= cfg->thermal_junction_hard_c) ? 1 : 0;
+}
+
 static inline void asb_config_defaults(asb_runtime_config_t *c) {
     memset(c, 0, sizeof(*c));
     c->heavy_gpu_enter     = 35;
@@ -188,6 +207,9 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->msm_perf_boost_only = 1;
     c->thermal_overlay_pct   = 20;
     c->thermal_throttle_temp = 60;
+    c->thermal_skin_gate = 1;
+    c->thermal_skin_c = 47;
+    c->thermal_junction_hard_c = 95;
     c->sustained_level       = 0.80f;
     c->gaming_gap_thresh        = 1500000;
     c->gaming_gap_ticks         = 4;
@@ -299,6 +321,9 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "msm_perf_boost_only")) c->msm_perf_boost_only = atoi(v);
     else if (!strcmp(k, "thermal_overlay_pct")) c->thermal_overlay_pct = atoi(v);
     else if (!strcmp(k, "thermal_throttle_temp")) c->thermal_throttle_temp = atoi(v);
+    else if (!strcmp(k, "thermal_skin_gate")) c->thermal_skin_gate = atoi(v);
+    else if (!strcmp(k, "thermal_skin_c")) c->thermal_skin_c = atoi(v);
+    else if (!strcmp(k, "thermal_junction_hard_c")) c->thermal_junction_hard_c = atoi(v);
     else if (!strcmp(k, "gaming_gap_thresh"))    c->gaming_gap_thresh = atoi(v);
     else if (!strcmp(k, "gaming_gap_ticks"))     c->gaming_gap_ticks  = atoi(v);
     else if (!strcmp(k, "gaming_retry_cooldown_s")) c->gaming_retry_cooldown_s = atoi(v);

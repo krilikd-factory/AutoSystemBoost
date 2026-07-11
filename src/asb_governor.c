@@ -3015,6 +3015,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int screen_on = m->misc.screen_on;
     int battery_pct = m->bat.capacity_pct;
     int cpu_max_c = m->therm.cpu_max_c;
+    int skin_temp_c = m->therm.skin_temp_c;
 
     /* Daypart transition detection (for smoothing) */
     if (g_smart_rt.prev_daypart >= 0 &&
@@ -3323,7 +3324,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
 
     int vendor_clamp_1h = (int)v44_clamp_1h_now();
     int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
-    asb_smart_apply_thermal_veto(cpu_max_c, vendor_clamp_1h, recovery_active, &g_smart_rt);
+    asb_smart_apply_thermal_veto(cpu_max_c, skin_temp_c, &g_asb_cfg, vendor_clamp_1h, recovery_active, &g_smart_rt);
     {
         /* Cool-gaming engage level fed to the thermal lean:
            0 = none, 1 = game active (engage from 40 C / 2 C/min),
