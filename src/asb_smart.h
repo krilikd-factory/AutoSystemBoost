@@ -1,6 +1,8 @@
 #ifndef ASB_SMART_H
 #define ASB_SMART_H
 
+#include "asb_config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
