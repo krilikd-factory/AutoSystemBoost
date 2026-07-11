@@ -1801,6 +1801,7 @@ WIFI=$([ "$ASB_WIFI" = "true" ] && echo 1 || echo 0)
 GPS=$([ "$ASB_GPS" = "true" ] && echo 1 || echo 0)
 KERNEL=$([ "$ASB_KERNEL" = "true" ] && echo 1 || echo 0)
 LOG=$([ "$ASB_LOG" = "true" ] && echo 1 || echo 0)
+LPM=1
 RADIO_IMS=$([ "$ASB_RADIO_IMS" = "true" ] && echo 1 || echo 0)
 DISPLAY=$([ "$ASB_DISPLAY" = "true" ] && echo 1 || echo 0)
 FPS=$([ "$ASB_FPS" = "true" ] && echo 1 || echo 0)
