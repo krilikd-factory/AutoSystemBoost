@@ -313,13 +313,15 @@ static void test_night_override(void) {
 
 static void test_thermal_veto(void) {
     printf("test_thermal_veto\n");
+    asb_runtime_config_t cfg;
+    asb_config_defaults(&cfg);
     asb_smart_runtime_t rt = {0};
     rt.alpha_battery_x1000 = 300;
     rt.conf_x1000 = 800;
     rt.interactive_bonus_x1000 = 100;
 
-    /* CPU hot triggers veto */
-    asb_smart_apply_thermal_veto(70, 100, 0, &rt);
+    /* CPU hot triggers veto (junction fallback: no usable skin reading) */
+    asb_smart_apply_thermal_veto(70, 0, &cfg, 100, 0, &rt);
     EXPECT(rt.thermal_veto == 1, "CPU 70°C → veto");
     EXPECT(rt.alpha_battery_x1000 >= 700, "veto raises alpha to ≥ 700");
     EXPECT(rt.conf_x1000 < 800, "veto downscales confidence");
@@ -328,21 +330,33 @@ static void test_thermal_veto(void) {
     /* Vendor clamping triggers veto */
     asb_smart_runtime_t rt2 = {0};
     rt2.alpha_battery_x1000 = 300;
-    asb_smart_apply_thermal_veto(40, 400, 0, &rt2);
+    asb_smart_apply_thermal_veto(40, 0, &cfg, 400, 0, &rt2);
     EXPECT(rt2.thermal_veto == 1, "vendor_clamp_1h=400 → veto");
 
     /* Recovery active triggers veto */
     asb_smart_runtime_t rt3 = {0};
     rt3.alpha_battery_x1000 = 300;
-    asb_smart_apply_thermal_veto(40, 50, 1, &rt3);
+    asb_smart_apply_thermal_veto(40, 0, &cfg, 50, 1, &rt3);
     EXPECT(rt3.thermal_veto == 1, "recovery → veto");
 
     /* Cool, no clamping, no recovery → no veto */
     asb_smart_runtime_t rt4 = {0};
     rt4.alpha_battery_x1000 = 300;
-    asb_smart_apply_thermal_veto(45, 100, 0, &rt4);
+    asb_smart_apply_thermal_veto(45, 0, &cfg, 100, 0, &rt4);
     EXPECT(rt4.thermal_veto == 0, "cool device → no veto");
     EXPECT(rt4.alpha_battery_x1000 == 300, "alpha untouched without veto");
+
+    /* Skin-primary path: hot junction but cool skin must NOT veto */
+    asb_smart_runtime_t rt5 = {0};
+    rt5.alpha_battery_x1000 = 300;
+    asb_smart_apply_thermal_veto(70, 40, &cfg, 0, 0, &rt5);
+    EXPECT(rt5.thermal_veto == 0, "junction 70°C but skin 40°C → no veto (skin-primary)");
+
+    /* Skin-primary path: hot skin vetoes even with cool junction */
+    asb_smart_runtime_t rt6 = {0};
+    rt6.alpha_battery_x1000 = 300;
+    asb_smart_apply_thermal_veto(40, 50, &cfg, 0, 0, &rt6);
+    EXPECT(rt6.thermal_veto == 1, "skin 50°C ≥ 47 → veto (cool junction)");
 }
 
 static void test_thermal_trend_calc(void) {
