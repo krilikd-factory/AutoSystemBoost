@@ -152,13 +152,12 @@
           esac
         fi
       fi
-      # Smart effective-battery transition: network_stats_poll follows whether the
       if [ $_need -eq 0 ] && [ "$_now" = "smart" ] && asb_feature_enabled VM && asb_feature_enabled LOG; then
         _cur_eff=0
         _ralpha="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | sed 's/^smart_alpha_battery=//')"
         case "$_ralpha" in
           ''|*[!0-9]*) : ;;
-          *) [ "$_ralpha" -ge 800 ] 2>/dev/null && _cur_eff=1 ;;
+          *) if [ "$_ralpha" -ge 800 ] 2>/dev/null && ! asb_screen_on; then _cur_eff=1; fi ;;
         esac
         if [ "$_cur_eff" != "$_last_eff_batt" ]; then
           _last_eff_batt="$_cur_eff"
