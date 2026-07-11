@@ -1350,7 +1350,7 @@ asb_preserve_user_config() {
 
   _user_keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
-bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
+BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
@@ -1380,7 +1380,7 @@ asb_snapshot_user_config() {
   [ -f "$_new_conf" ] || return 0
   mkdir -p "$(dirname "$_snap_conf")" 2>/dev/null || true
   _keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
-smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
+smart_battery_bias BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
 region_allow_locale"
@@ -1765,10 +1765,10 @@ asb_apply_bt_absvol() {
   _mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
   [ -n "$_mode" ] || _mode="auto"
   if [ "$_mode" = "auto" ]; then
-    sed -i '/^persist\.bluetooth\.disableabsvol=/d' "$_prop" 2>/dev/null
-    sed -i '/^persist\.vendor\.bluetooth\.disableabsvol=/d' "$_prop" 2>/dev/null
+    sed -i "s/^persist.bluetooth.disableabsvol=.*/persist.bluetooth.disableabsvol=false/" "$_prop" 2>/dev/null
+    sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=false/" "$_prop" 2>/dev/null
     sed -i '/^persist\.bluetooth\.enablenewavrcp=/d' "$_prop" 2>/dev/null
-    ASB_BT_ABSVOL_APPLIED="mode=auto (absolute-volume + avrcp left stock)"
+    ASB_BT_ABSVOL_APPLIED="mode=auto (absolute-volume kept ON — stock, loud, synced)"
     return 0
   fi
   case "$_mode" in
@@ -1780,6 +1780,11 @@ asb_apply_bt_absvol() {
   sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
   ASB_BT_ABSVOL_APPLIED="mode=$_mode disableabsvol=$_val"
   ui_print "[*] BT volume mode: $_mode"
+  if [ "$_mode" = "on" ]; then
+    ui_print "    ! disables BT absolute volume; on modern headsets this can start"
+    ui_print "      quiet after each reboot until an audio app re-inits the output."
+    ui_print "      Use OFF/AUTO if BT audio is quiet after boot."
+  fi
 }
 [ "$ASB_BT" = "true" ] && asb_apply_bt_absvol
 
