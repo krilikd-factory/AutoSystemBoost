@@ -1346,11 +1346,11 @@ asb_preserve_user_config() {
   _src=""
   [ -f "$_old_conf" ] && _src="$_old_conf"
   [ -z "$_src" ] && [ -f "$_snap_conf" ] && _src="$_snap_conf"
-  if [ -z "$_src" ]; then ui_print "[*] Fresh install - using default config"; return 0; fi
+  if [ -z "$_src" ]; then ui_print "[*] Fresh install - using default config"; : > /data/adb/asb/bt_absvol_v59_reset 2>/dev/null || true; return 0; fi
 
   _user_keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
-BG_TRIM_LEVEL cool_gaming \
+bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
@@ -1372,6 +1372,13 @@ region_allow_locale"
       _migrated=$((_migrated + 1))
     fi
   done
+  if [ ! -f /data/adb/asb/bt_absvol_v59_reset ]; then
+    if grep -qE '^[[:space:]]*bt_absvol_mode=on[[:space:]]*$' "$_new_conf" 2>/dev/null; then
+      sed -i 's|^\([[:space:]]*bt_absvol_mode=\).*|\1auto|' "$_new_conf" 2>/dev/null
+      ui_print "[*] BT volume mode reset once: on -> auto (on could cause quiet BT after reboot; re-select it in WebUI if you need it)"
+    fi
+    : > /data/adb/asb/bt_absvol_v59_reset 2>/dev/null || true
+  fi
 }
 
 asb_snapshot_user_config() {
@@ -1380,7 +1387,7 @@ asb_snapshot_user_config() {
   [ -f "$_new_conf" ] || return 0
   mkdir -p "$(dirname "$_snap_conf")" 2>/dev/null || true
   _keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
-smart_battery_bias BG_TRIM_LEVEL cool_gaming \
+smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
 region_allow_locale"
