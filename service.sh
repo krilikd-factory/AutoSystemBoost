@@ -1745,9 +1745,10 @@ apply_bt_volume_behavior() {
   # Respect the user's bt_absvol_mode (auto|on|off) from governor.conf — the
   _bt_mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
   [ -n "$_bt_mode" ] || _bt_mode="auto"
-  # AUTO = truly hands-off: do NOT touch absolute-volume at all, so the stock
+  # AUTO keeps absolute volume ON via system.prop (disableabsvol=false is set at
+  # boot), so there is nothing to override at runtime. ON/OFF re-assert below.
   if [ "$_bt_mode" = "auto" ]; then
-    asb_log "bt absvol: mode=auto -> leaving stock absolute-volume untouched"
+    asb_log "bt absvol: mode=auto -> absolute-volume kept ON (system.prop default)"
     return 0
   fi
   case "$_bt_mode" in
@@ -1934,15 +1935,11 @@ svc_stop() {
   return 0
 }
 svc_stop_guarded() {
-  s="$1"
-  for i in 1 2 3; do
-    svc_stop "$s"
-    svc_running "$s" || return 0
-    sleep 2
-  done
+  svc_exists "$1" || return 0
+  stop "$1" 2>/dev/null || true
   return 0
 }
-for s in \
+( for s in \
   qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd \
   minidump minidump32 minidump64 bootstat poweroff_charger_log \
   ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start \
@@ -1958,7 +1955,7 @@ for s in \
   oplusd mlipay \
 ; do
   svc_stop_guarded "$s"
-done
+done ) >/dev/null 2>&1 &
 apply_zram() {
   [ -e /sys/block/zram0 ] || return 0
   CPU_CORES=$(nproc 2>/dev/null || echo 8)
@@ -1998,7 +1995,7 @@ apply_walt_boost() {
   writef_retry /proc/sys/kernel/sched_energy_aware 1 3 0.25 || true
 }
 ( sleep 5; asb_load_profile; apply_walt_boost; apply_walt_live ) >/dev/null 2>&1 &
-asb_feature_enabled VM && apply_zram
+asb_feature_enabled VM && ( apply_zram ) >/dev/null 2>&1 &
 apply_doze() {
   has settings || return 0
   case "$ASB_PROFILE" in
@@ -2011,7 +2008,6 @@ apply_doze() {
   esac
   asb_settings_put global device_idle_constants "$_DIC"
 }
-asb_feature_enabled VM && apply_doze
 # network_stats_poll_interval: how often the framework polls per-app network
 apply_network_stats_poll() {
   has settings || return 0
@@ -2032,7 +2028,6 @@ apply_network_stats_poll() {
     asb_settings_put global network_stats_poll_interval 1800000
   fi
 }
-asb_feature_enabled VM && apply_network_stats_poll
 apply_extra_settings() {
   has settings || return 0
   asb_settings_put global audio_safe_volume_state 0
@@ -2061,7 +2056,16 @@ apply_extra_settings() {
   asb_settings_put global captive_portal_fallback_url "http://connectivitycheck.gstatic.com/generate_204"
   asb_settings_put global captive_portal_other_fallback_url "https://www.google.com/generate_204"
 }
-apply_extra_settings
+(
+  _bt=0
+  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_bt" -lt 180 ]; do
+    sleep 2; _bt=$((_bt + 2))
+  done
+  asb_load_profile
+  asb_feature_enabled VM && apply_doze
+  asb_feature_enabled VM && apply_network_stats_poll
+  apply_extra_settings
+) >/dev/null 2>&1 &
 asb_load_profile
 [ "$(type -t asb_apply_ux 2>/dev/null)" = "function" ] && asb_apply_ux >/dev/null 2>&1
 (
