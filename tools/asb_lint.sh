@@ -243,7 +243,7 @@ done
 echo
 echo "🔧 Features"
 FEAT="$MODDIR/features.conf"
-KNOWN_FEATURES="AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR"
+KNOWN_FEATURES="AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG LPM RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR"
 # features explicitly declared as RESERVED (no runtime path yet)
 RESERVED_FEATURES="RADIO_IMS DISPLAY FPS SECURITY"
 if [ -f "$FEAT" ]; then
@@ -628,6 +628,28 @@ if [ -f "$_gconf" ]; then
   else
     warn "smart_mode_enabled=$_sm_en in shipped config (should be 0; flag governs runtime)"
   fi
+fi
+
+echo
+echo "──  Smart Mode unit tests ──"
+_lc=""
+command -v gcc >/dev/null 2>&1 && _lc=gcc
+[ -z "$_lc" ] && { command -v cc >/dev/null 2>&1 && _lc=cc; }
+[ -n "${CC:-}" ] && _lc="$CC"
+if [ -z "$_lc" ]; then
+  echo "  (no C compiler on this host — test build skipped; runs in CI/dev)"
+elif [ ! -f "$MODDIR/tests/test_smart_session3.c" ]; then
+  echo "  (tests/ not present — skipped)"
+else
+  for _t in test_smart_session2 test_smart_session3; do
+    if "$_lc" -I"$MODDIR/src" -D_GNU_SOURCE -Wno-unused-parameter -Wno-sign-compare \
+        -Wno-unused-function "$MODDIR/tests/$_t.c" -o "/tmp/asb_lint_$_t" 2>/dev/null; then
+      ok "$_t compiles"
+    else
+      err "$_t does NOT compile — Smart Mode test barrier is broken"
+    fi
+    rm -f "/tmp/asb_lint_$_t"
+  done
 fi
 
 echo
