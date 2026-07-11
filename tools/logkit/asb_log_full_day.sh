@@ -387,6 +387,22 @@ lk_wakelock_batterystats_reset
 lk_oem_ram_expand_probe "start"
 lk_oem_toggle_row
 
+lk_finalize() {
+  [ "${LK_FINALIZED:-0}" = "1" ] && return 0
+  LK_FINALIZED=1
+  lk_wl_release
+  lk_phase_ledger_accumulate
+  lk_phase_ledger_flush
+  lk_wakelock_kernel_snapshot "end"
+  lk_wakelock_kernel_delta
+  lk_wakelock_batterystats_dump
+  lk_oem_ram_expand_probe "end"
+  lk_emit_phase_summary
+  lk_emit_full_day_report
+  lk_snapshot_state "after"
+}
+trap 'lk_finalize; exit 0' TERM INT HUP
+
 echo "[$(date '+%H:%M:%S')] FULL-DAY capture running up to ${LK_HOURS}h. Use the phone normally."
 
 _last_snapshot=$(date +%s)
@@ -451,15 +467,7 @@ while : ; do
 done
 
 # finalize
-lk_phase_ledger_accumulate
-lk_phase_ledger_flush
-lk_wakelock_kernel_snapshot "end"
-lk_wakelock_kernel_delta
-lk_wakelock_batterystats_dump
-lk_oem_ram_expand_probe "end"
-lk_emit_phase_summary
-lk_emit_full_day_report
-lk_snapshot_state "after"
+lk_finalize
 lk_wl_release
 lk_finalize
 echo "[$(date '+%H:%M:%S')] FULL-DAY capture complete. Output: $LK_OUT_DIR"
