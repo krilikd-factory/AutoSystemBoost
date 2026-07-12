@@ -1991,8 +1991,11 @@ apply_zram() {
     swapon /dev/block/zram0 >/dev/null 2>&1 || true
 }
 apply_walt_boost() {
-  for _pol in 0 4 7; do
-    _wp="/sys/devices/system/cpu/cpufreq/policy${_pol}/walt"
+  # Iterate the device's ACTUAL cpufreq policies instead of a hard-coded 0 4 7
+  # (that was the old SM8550 layout; OP15=0,6 and SM8650=0,2,5,7 don't match it,
+  # so mid/prime clusters were silently skipped). The glob + -d guard covers any
+  # topology.
+  for _wp in /sys/devices/system/cpu/cpufreq/policy*/walt; do
     [ -d "$_wp" ] || continue
     writef_retry "$_wp/input_boost_freq" 0  3 0.25 || true
     writef_retry "$_wp/input_boost_ms"   25 3 0.25 || true
