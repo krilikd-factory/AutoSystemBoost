@@ -1469,6 +1469,15 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
     int hw_ceil_p1 = sysfs_read_int(cpu_policy_path(1, "cpuinfo_max_freq"), 0);
     int profile_cap_p0 = asb_profile_bounds_for(fsm->profile_idx)->ceil.cpu_max[0];
     int profile_cap_p6 = asb_profile_bounds_for(fsm->profile_idx)->ceil.cpu_max[1];
+    int headroom_real_pct = -1;
+    if (hw_ceil_p0 > 0 && real_max_p0 > 0) {
+        headroom_real_pct = (int)((long)real_max_p0 * 100 / hw_ceil_p0);
+    }
+    if (hw_ceil_p1 > 0 && real_max_p1 > 0) {
+        int _hr1 = (int)((long)real_max_p1 * 100 / hw_ceil_p1);
+        if (headroom_real_pct < 0 || _hr1 < headroom_real_pct) headroom_real_pct = _hr1;
+    }
+    if (headroom_real_pct > 100) headroom_real_pct = 100;
     /* classifier gets runtime_declared from msm_performance read (m->therm.perf_cap_*),
      * not from fsm->current_caps. current_caps is what FSM *wants* to write; perf_cap_* is what
      * actually registered with the kernel via msm_performance. When perf_cap_*==0, shell branch
@@ -1498,7 +1507,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "\"thermal_cpu_zone\":%d,\"thermal_cpu_type\":\"%s\","
         "\"thermal_skin_zone\":%d,\"thermal_surface_zone\":%d,"
         "\"soft_clamp\":%d,\"hard_clamp\":%d,"
-        "\"headroom_pct\":%d,\"headroom_valid\":%d,\"headroom_invalid_reason\":\"%s\","
+        "\"headroom_pct\":%d,\"headroom_valid\":%d,\"headroom_invalid_reason\":\"%s\",\"headroom_real_pct\":%d,"
         "\"perf_cap_p0\":%d,\"perf_cap_p6\":%d,"
         "\"cap_source_p0\":\"%s\",\"cap_source_p6\":\"%s\","
         "\"thermal_cpu_fallback_type\":\"%s\","
@@ -1533,6 +1542,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         m->therm.headroom_pct,
         m->therm.headroom_valid,
         m->therm.headroom_invalid_reason[0] ? m->therm.headroom_invalid_reason : "ok",
+        headroom_real_pct,
         m->therm.perf_cap_p0,
         m->therm.perf_cap_p6,
         cap_src_p0, cap_src_p6,
