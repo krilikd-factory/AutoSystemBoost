@@ -1197,8 +1197,15 @@ asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
 
 # ASB:BG_TRIM:END
 apply_bt_runtime() {
-  asb_persist_safe persist.bluetooth.a2dp_offload.disabled false
-  asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled false
+  _bto="$(grep -E '^[[:space:]]*bt_a2dp_offload=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
+  [ -n "$_bto" ] || _bto="on"
+  if [ "$_bto" = "off" ]; then
+    asb_persist_safe persist.bluetooth.a2dp_offload.disabled true
+    asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled true
+  elif [ "$_bto" != "auto" ]; then
+    asb_persist_safe persist.bluetooth.a2dp_offload.disabled false
+    asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled false
+  fi
   asb_persist_safe persist.bluetooth.a2dp.optional_codecs_enabled 1
   asb_persist_safe persist.vendor.bt.enable.swb true
   asb_persist_safe persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true

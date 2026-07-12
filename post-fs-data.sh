@@ -80,7 +80,13 @@ if command -v resetprop >/dev/null 2>&1; then
   resetprop --delete media.resolution.limit.24bit >/dev/null 2>&1 || true
   resetprop --delete media.resolution.limit.32bit >/dev/null 2>&1 || true
   resetprop --delete media.resolution.limit.64bit >/dev/null 2>&1 || true
-  resetprop --delete persist.bluetooth.a2dp_offload.disabled >/dev/null 2>&1 || true
+  _bto="$(grep -E '^[[:space:]]*bt_a2dp_offload=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
+  if [ "$_bto" = "off" ]; then
+    resetprop persist.bluetooth.a2dp_offload.disabled true >/dev/null 2>&1 || true
+    resetprop persist.vendor.bluetooth.a2dp_offload.disabled true >/dev/null 2>&1 || true
+  elif [ "$_bto" != "auto" ]; then
+    resetprop --delete persist.bluetooth.a2dp_offload.disabled >/dev/null 2>&1 || true
+  fi
   fi
   # ASB:BT:END
   # ASB:NET:BEGIN
