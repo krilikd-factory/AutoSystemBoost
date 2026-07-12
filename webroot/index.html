@@ -2398,22 +2398,18 @@ async function pollLive(visible) {
     }
     const hrEl = _el('liveHeadroom');
     if (hrEl) {
+      const hrReal = (st && typeof st.headroom_real_pct === 'number') ? st.headroom_real_pct : null;
       const hrValid = (st && st.headroom_valid) || 0;
       const hr = (st && typeof st.headroom_pct === 'number') ? st.headroom_pct : null;
-      if (hr === null || hrValid !== 1) {
-        hrEl.textContent = 'n/a';
-        const reason = (st && st.headroom_invalid_reason) || '';
-        const HR_HINT = {
-          stuck_100: 'msm_performance reports max freq on this SoC (SM8850) — no reliable cap readback, so headroom is hidden rather than shown as a false 100%. Same root as Cap Src = Shell.',
-          dead_iface: 'msm_performance cap readback is unreliable on this SoC; headroom hidden until a genuinely clamped value appears.',
-          implausible_hot: 'cap readback claims 100% while the CPU is hot — ignored as physically impossible.',
-          no_iface: 'no msm_performance cap interface on this device.',
-          read_fail: 'cap interface read failed this tick.'
-        };
-        hrEl.title = reason ? (HR_HINT[reason] || ('headroom unavailable: ' + reason)) : 'headroom source unavailable';
-      } else {
+      if (hrReal !== null && hrReal >= 0) {
+        hrEl.textContent = hrReal + '%';
+        hrEl.title = 'Real cap headroom: current scaling_max_freq vs hardware ceiling (most-capped cluster). Reliable even when Cap Src = Shell — unlike the msm_performance readback that returns max on this SoC.';
+      } else if (hr !== null && hrValid === 1) {
         hrEl.textContent = hr + '%';
         hrEl.title = '';
+      } else {
+        hrEl.textContent = 'n/a';
+        hrEl.title = 'headroom source unavailable';
       }
     }
 
