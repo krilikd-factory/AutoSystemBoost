@@ -1748,31 +1748,49 @@ apply_bt_codec_policy() {
   fi
 }
 asb_feature_enabled BT && apply_bt_codec_policy
+asb_bt_audio_reinit() {
+  # Kick the audio stack ONCE (all bt_absvol modes) so the absolute-volume state is
+  # applied to live output immediately, instead of the output staying quiet until an
+  # EQ/ViPER app re-attaches its effect. Waits for the audio HAL to come up, then
+  # restarts audioserver via init (re-reads absolute-volume + re-attaches effects).
+  # apply_bt_volume_behavior runs once per boot, so there is no active playback to
+  # disrupt. Backgrounded so it never blocks boot.
+  has setprop || return 0
+  ( _n=0
+    while [ "$_n" -lt 40 ]; do
+      [ "$(getprop init.svc.audioserver 2>/dev/null)" = "running" ] && break
+      sleep 1; _n=$((_n + 1))
+    done
+    sleep 2
+    setprop ctl.restart audioserver 2>/dev/null || true
+    asb_log "bt absvol: audioserver re-init kicked (mode=$1)"
+  ) &
+}
+
 apply_bt_volume_behavior() {
-  # Respect the user's bt_absvol_mode (auto|on|off) from governor.conf — the
+  # Respect the user's bt_absvol_mode (auto|on|off) from governor.conf.
   _bt_mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
   [ -n "$_bt_mode" ] || _bt_mode="auto"
-  # AUTO keeps absolute volume ON via system.prop (disableabsvol=false is set at
-  # boot), so there is nothing to override at runtime. ON/OFF re-assert below.
-  if [ "$_bt_mode" = "auto" ]; then
-    asb_log "bt absvol: mode=auto -> absolute-volume kept ON (system.prop default)"
-    return 0
-  fi
   case "$_bt_mode" in
     on)  _bt_dav=1; _bt_prop="true"  ;;   # disable absolute volume
-    off) _bt_dav=0; _bt_prop="false" ;;
-    *)   _bt_dav=0; _bt_prop="false" ;;
+    *)   _bt_dav=0; _bt_prop="false" ;;   # auto/off -> absolute volume ON
   esac
-  if has settings; then
-    asb_settings_put global bluetooth_disable_absolute_volume "$_bt_dav"
-    asb_settings_put secure bluetooth_disable_absolute_volume "$_bt_dav"
+  # auto keeps absolute volume ON via the system.prop default (disableabsvol=false);
+  # on/off (re)assert the setting/prop explicitly at runtime.
+  if [ "$_bt_mode" != "auto" ]; then
+    if has settings; then
+      asb_settings_put global bluetooth_disable_absolute_volume "$_bt_dav"
+      asb_settings_put secure bluetooth_disable_absolute_volume "$_bt_dav"
+    fi
+    if has resetprop; then
+      resetprop -n persist.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
+      resetprop -n persist.vendor.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
+      resetprop -p --delete persist.asb.force_disableabsvol >/dev/null 2>&1 || true
+      resetprop -p --delete persist.asb.force_enableabsvol >/dev/null 2>&1 || true
+    fi
   fi
-  if has resetprop; then
-    resetprop -n persist.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
-    resetprop -n persist.vendor.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
-    resetprop -p --delete persist.asb.force_disableabsvol >/dev/null 2>&1 || true
-    resetprop -p --delete persist.asb.force_enableabsvol >/dev/null 2>&1 || true
-  fi
+  # All modes: re-init audio so the state is live immediately (no quiet-until-ViPER).
+  asb_bt_audio_reinit "$_bt_mode"
 }
 asb_feature_enabled BT && apply_bt_volume_behavior
 apply_bt_audio_hygiene() {
