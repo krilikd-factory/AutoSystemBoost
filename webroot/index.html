@@ -1098,6 +1098,12 @@ body.config-active #livePage.open {
   font-size: 11px;
 }
 .cfg-seg.small.disabled { pointer-events: none; }
+.cfg-sub-seg-row {
+  margin-top: 11px;
+  display: flex;
+  justify-content: flex-end;
+}
+.cfg-sub-seg-row.disabled { opacity: 0.45; pointer-events: none; }
 .cfg-row-top {
   display: flex;
   align-items: center;
@@ -1152,12 +1158,40 @@ body.config-active #livePage.open {
   color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.06);
 }
+.cfg-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.36s cubic-bezier(0.33, 1, 0.68, 1);
+}
+.cfg-row.desc-open .cfg-collapse {
+  grid-template-rows: 1fr;
+}
+.cfg-collapse-inner {
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.cfg-row.desc-open .cfg-collapse-inner {
+  opacity: 1;
+}
 .cfg-desc {
-  margin-top: 9px;
+  padding-top: 9px;
   font-size: 11px;
   line-height: 1.5;
   opacity: 0.5;
   text-align: left;
+}
+.cfg-row-top { cursor: pointer; }
+.cfg-caret {
+  display: inline-block;
+  margin-left: 7px;
+  font-size: 9px;
+  opacity: 0.3;
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+.cfg-row.desc-open .cfg-caret {
+  transform: rotate(180deg);
+  opacity: 0.55;
 }
 .cfg-switch {
   position: relative;
@@ -1255,18 +1289,6 @@ body.config-active #livePage.open {
   font-variant-numeric: tabular-nums;
   text-align: right;
   color: var(--accent, #00e1c8);
-}
-.cfg-note {
-  width: 100%;
-  margin: 4px 0 12px;
-  padding: 10px 14px;
-  box-sizing: border-box;
-  border-radius: 12px;
-  border: 1px solid rgba(255,196,0,0.25);
-  background: rgba(255,196,0,0.07);
-  font-size: 11px;
-  line-height: 1.45;
-  text-align: left;
 }
 .cfg-reboot {
   width: 100%;
@@ -1560,8 +1582,6 @@ body.config-active #livePage.open {
     <div class="sec-line"></div>
   </div>
 
-  <div class="cfg-note" data-i18n="cfg_note" data-i18n-html="1">These settings are saved to <b>governor.conf</b> and take effect after a device reboot.</div>
-
   <div class="cfg-list" id="cfgList"></div>
 
   <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
@@ -1614,15 +1634,12 @@ const I18N = {
     lv_est_idle: 'Прогноз (покой)', lv_capsrc: 'Источник кэпа',
     lv_learner: 'Обучение', lv_gpuload: 'Нагрузка GPU', lv_headroom: 'Запас',
     // config page
-    cfg_note: 'Эти настройки сохраняются в <b>governor.conf</b> и применяются после перезагрузки устройства.',
     cfg_reboot: '↻ Перезагрузить устройство',
     // device line
     device_line: 'Устройство OnePlus · Qualcomm Snapdragon',
     // toasts
     t_profile_err: '✗ Ошибка применения профиля',
     t_cfg_saved: ' · перезагрузите для применения',
-    cfg_camera_mode_label: 'Режим ключей',
-    cfg_camera_mode_hint: 'Расширенный добавляет недостающие ключи (риск)',
     cfg_camera_key_std: 'Стандарт',
     cfg_camera_key_ext: 'Расширенный',
     t_cfg_err: '✗ Не удалось записать конфигурацию',
@@ -1894,6 +1911,8 @@ const CFG_ITEMS = [
     desc:'Photo + video colour and contrast strength: 0 = stock, higher = richer and punchier. Max can band in deep shadows. Reboot to apply.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
     desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
+  { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
+    desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
   // --- Gaming & thermals ---
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
     desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
@@ -1908,8 +1927,6 @@ const CFG_ITEMS = [
   { key:'night_quiet_auto', type:'bool', def:'1', name:'Learn My Sleep Schedule',
     desc:'Learns your real sleep/wake times from screen activity, replacing the fixed 23:00\u201306:00 window.' },
   // --- Memory & UX ---
-  { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
-    desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'UX_MANAGE_ANIM_SCALE', type:'bool', def:'0', name:'Manage Animation Scales',
@@ -1993,6 +2010,10 @@ function cfgRender() {
     const nm = document.createElement('div');
     nm.className = 'cfg-name';
     nm.textContent = Tcfg(it.key, "name", it.name);
+    const caret = document.createElement('span');
+    caret.className = 'cfg-caret';
+    caret.textContent = '\u25BE';
+    nm.appendChild(caret);
     main.appendChild(nm);
     const st = cfgStatus(it, cur);
     const badge = document.createElement('div');
@@ -2006,13 +2027,14 @@ function cfgRender() {
       sw.className = 'cfg-switch' + (cur === '1' ? ' on' : '');
       sw.setAttribute('role', 'switch');
       sw.setAttribute('aria-checked', cur === '1' ? 'true' : 'false');
-      sw.onclick = () => cfgSet(it.key, (cur === '1') ? '0' : '1', sw);
+      sw.onclick = (e) => { e.stopPropagation(); cfgSet(it.key, (cur === '1') ? '0' : '1', sw); };
       top.appendChild(sw);
     } else if (it.type === 'range') {
       // Slider control. Live value shows next to the handle; commit on release
       // (change) so we don't spam config writes while dragging.
       const wrap = document.createElement('div');
       wrap.className = 'cfg-range';
+      wrap.onclick = (e) => e.stopPropagation();
       const rng = document.createElement('input');
       rng.type = 'range';
       rng.min = it.min; rng.max = it.max; rng.step = it.step;
@@ -2032,45 +2054,43 @@ function cfgRender() {
         const b = document.createElement('button');
         b.textContent = Topt(o);
         if (o === cur) b.classList.add('on');
-        b.onclick = () => cfgSet(it.key, o, seg);
+        b.onclick = (e) => { e.stopPropagation(); cfgSet(it.key, o, seg); };
         seg.appendChild(b);
       });
       top.appendChild(seg);
     }
+    top.onclick = () => row.classList.toggle('desc-open');
     row.appendChild(top);
-    const d = document.createElement('div');
-    d.className = 'cfg-desc';
-    d.textContent = Tcfg(it.key, "desc", it.desc);
-    row.appendChild(d);
 
-    // Compact nested sub-control for the camera card: key-compatibility mode.
-    // This is NOT a second strength level — it controls whether ASB injects tone
-    // keys the device's stock config lacks. Labelled "Standard / Extended" so it
-    // doesn't read as another safe/aggressive strength next to the slider.
     if (it.key === 'CAMERA_LEVEL') {
       const lvlOn = (parseInt(cur, 10) || 0) > 0;
       const injCur = (_cfgVals['CAMERA_AGGRESSIVE_INJECT'] !== undefined) ? _cfgVals['CAMERA_AGGRESSIVE_INJECT'] : 'safe';
-      const sub = document.createElement('div');
-      sub.className = 'cfg-sub' + (lvlOn ? '' : ' disabled');
-      const subLabel = document.createElement('div');
-      subLabel.className = 'cfg-sub-label';
-      subLabel.innerHTML = T('cfg_camera_mode_label', 'Key mode') +
-        '<span class="cfg-sub-hint">' + T('cfg_camera_mode_hint', 'Extended injects keys your model lacks (risky)') + '</span>';
-      sub.appendChild(subLabel);
+      const segRow = document.createElement('div');
+      segRow.className = 'cfg-sub-seg-row' + (lvlOn ? '' : ' disabled');
       const subSeg = document.createElement('div');
-      subSeg.className = 'cfg-seg small' + (lvlOn ? '' : ' disabled');
+      subSeg.className = 'cfg-seg small';
       [['safe','cfg_camera_key_std'],['aggressive','cfg_camera_key_ext']].forEach(pair => {
         const o = pair[0];
         const b = document.createElement('button');
         b.textContent = T(pair[1], o === 'safe' ? 'Standard' : 'Extended');
         if (o === injCur) b.classList.add('on');
-        b.onclick = () => { if (lvlOn) cfgSet('CAMERA_AGGRESSIVE_INJECT', o, subSeg); };
+        b.onclick = (e) => { e.stopPropagation(); if (lvlOn) cfgSet('CAMERA_AGGRESSIVE_INJECT', o, subSeg); };
         subSeg.appendChild(b);
       });
-      sub.appendChild(subSeg);
-      row.appendChild(sub);
+      segRow.appendChild(subSeg);
+      row.appendChild(segRow);
     }
 
+    const collapse = document.createElement('div');
+    collapse.className = 'cfg-collapse';
+    const inner = document.createElement('div');
+    inner.className = 'cfg-collapse-inner';
+    const d = document.createElement('div');
+    d.className = 'cfg-desc';
+    d.textContent = Tcfg(it.key, "desc", it.desc);
+    inner.appendChild(d);
+    collapse.appendChild(inner);
+    row.appendChild(collapse);
     list.appendChild(row);
   });
 }
