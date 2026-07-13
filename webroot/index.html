@@ -1665,20 +1665,16 @@ const I18N = {
         desc: 'На зарядке: больше производительности пока батарея холодная, отступает при нагреве.' },
       auto_battery_enable: { name: 'Авто-профиль батареи',
         desc: 'Переключает на Экономию при низком заряде, восстанавливает профиль после зарядки.' },
-      night_quiet_enable: { name: 'Тихий ночной режим',
-        desc: 'В ночном окне минимизирует чтения сенсоров и фоновую активность. Окно 23:00–06:00, если обучение ВЫКЛ.' },
-      night_quiet_auto: { name: 'Изучать моё расписание сна',
-        desc: 'Изучает реальное время сна/пробуждения по экрану, заменяя фиксированное окно 23:00–06:00.' },
       BG_TRIM_LEVEL: { name: 'Уровень очистки фона',
         desc: 'Насколько агрессивно чистится кэш фона. Агрессивный освобождает больше ОЗУ, но чаще перезапускает приложения.' },
-      UX_MANAGE_ANIM_SCALE: { name: 'Управление масштабом анимаций',
-        desc: 'Производительность укорачивает анимации (~0.8x) для отзывчивости; Экономия — стоково. ВЫКЛ = не трогать.' },
-      UX_MANAGE_TIMEOUTS: { name: 'Управление таймаутами касаний',
-        desc: 'Производительность укорачивает окна долгого нажатия/мульти-тапа для скорости. ВЫКЛ, если удержания срабатывают случайно.' },
+      UX_MANAGE_TIMEOUTS: { name: 'Управление скоростью UI (анимации + касания)',
+        desc: 'Производительность укорачивает анимации (~0.8x) и окна долгого нажатия/мульти-тапа для отзывчивости; Экономия — стоково. ВЫКЛ = не трогать.' },
       UX_MANAGE_OEM_TOGGLES: { name: 'Управление системными тумблерами (ОЗУ/батарея/нагрев)',
         desc: 'Управление тумблерами OxygenOS (Расширение ОЗУ, Адаптивная батарея, Низкий нагрев). ВЫКЛ = не трогать (OOS может включать Расширение ОЗУ после ребута). ВКЛ = держит Расширение ОЗУ ВЫКЛ при каждой загрузке.' },
       UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
-        desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление масштабом анимаций ВКЛ.' }
+        desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление скоростью UI ВКЛ.' },
+      disable_blur: { name: 'Отключить эффекты блюра',
+        desc: 'Отключает блюр фона / панелей / громкости / лаунчера / гаусса / материала и опускает уровень анимаций OPPO до 0. Экономит GPU/CPU (лучше автономность и плавность) ценой визуальных эффектов. Применяется после перезагрузки.' }
     },
     // segmented option labels
     opt: { auto: 'авто', on: 'вкл', off: 'выкл', safe: 'безопасно', aggressive: 'агрессивно' }
@@ -1896,9 +1892,9 @@ const CFG_FILE = MD + '/config/governor.conf';
 // the _user_keys / snapshot list in common/install.sh.
 const SNAP_KEYS = ['AUDIO_AGGRESSIVE','AUDIO_EQ_COMPAT','CAMERA_LEVEL','CAMERA_AGGRESSIVE',
   'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
-  'auto_battery_enable','charge_aware_enable','night_quiet_enable','night_quiet_auto',
-  'UX_ANIM_FORCE_RESTART','UX_MANAGE_ANIM_SCALE','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
-  'region_allow_locale'];
+  'auto_battery_enable','charge_aware_enable',
+  'UX_ANIM_FORCE_RESTART','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
+  'region_allow_locale','disable_blur'];
 const CFG_ITEMS = [
   // --- Audio ---
   { key:'AUDIO_EQ_COMPAT', type:'bool', def:'1', name:'Audio EQ Compatibility',
@@ -1921,20 +1917,16 @@ const CFG_ITEMS = [
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
-  // --- Sleep ---
-  { key:'night_quiet_enable', type:'bool', def:'1', name:'Night Quiet Mode',
-    desc:'During the night window, minimizes governor sensor reads and background activity. Uses 23:00\u201306:00 if learning is OFF.' },
-  { key:'night_quiet_auto', type:'bool', def:'1', name:'Learn My Sleep Schedule',
-    desc:'Learns your real sleep/wake times from screen activity, replacing the fixed 23:00\u201306:00 window.' },
   // --- Memory & UX ---
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
-  { key:'UX_MANAGE_ANIM_SCALE', type:'bool', def:'0', name:'Manage Animation Scales',
-    desc:'Performance shortens animations (~0.8x) for a snappier UI; Battery keeps stock. OFF = untouched.' },
-  { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage Touch Timeouts',
-    desc:'Performance shortens long-press/multi-tap windows for faster response. OFF if holds misfire.' },
+  { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
+    desc:'Performance shortens animations (~0.8x) and long-press/multi-tap windows for a snappier, more responsive UI; Battery keeps stock. OFF = untouched.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
-    desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage Animation Scales is ON.' }
+    desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage UI Speed is ON.' },
+  // --- Display ---
+  { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur Effects',
+    desc:'Turns off background / panel / volume / launcher / gaussian / material blur and drops the OPPO animation level to 0. Saves GPU/CPU for better battery and smoothness, at the cost of visual polish. Reboot to apply.' }
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -1962,12 +1954,10 @@ const CFG_ICONS = {
   cool_gaming:'\uD83C\uDFAE',                 // gamepad
   charge_aware_enable:'\u26A1',                // high voltage (charging)
   auto_battery_enable:'\uD83E\uDEAB',         // low battery
-  night_quiet_enable:'\uD83C\uDF19',          // crescent moon
-  night_quiet_auto:'\u23F0',                   // alarm clock (sleep learning)
   BG_TRIM_LEVEL:'\uD83E\uDDF9',               // broom (RAM trim)
-  UX_MANAGE_ANIM_SCALE:'\u2728',               // sparkles (animation)
   UX_MANAGE_TIMEOUTS:'\uD83D\uDC46',          // pointing finger (touch)
   UX_MANAGE_OEM_TOGGLES:'\uD83E\uDDE9',         // puzzle piece (OEM toggles)
+  disable_blur:'\uD83C\uDF2B',                  // fog (blur off)
   UX_ANIM_FORCE_RESTART:'\uD83D\uDD04',       // restart arrows
   region_allow_locale:'\uD83C\uDF0D'          // globe
 };
