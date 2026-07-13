@@ -184,7 +184,7 @@ echo "    💤 screen off : ~${_toff_h}h ${_toff_m}m"
 echo ""
 echo "  Opening Telegram channel..."
 
-am start -a android.intent.action.VIEW -d "tg://resolve?domain=oneplusmod" >/dev/null 2>&1 \
-  || am start -a android.intent.action.VIEW -d "https://t.me/oneplusmod" >/dev/null 2>&1
+am start -a android.intent.action.VIEW -d "tg://resolve?domain=AutoSystemBoost" >/dev/null 2>&1 \
+  || am start -a android.intent.action.VIEW -d "https://t.me/AutoSystemBoost" >/dev/null 2>&1
 
 exit 0
