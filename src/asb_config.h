@@ -42,6 +42,7 @@ typedef struct {
     int   thermal_skin_gate;       /* 1=base throttle/veto on skin(shell) temp when present */
     int   thermal_skin_c;          /* skin temp (C) that engages the comfort throttle/veto */
     int   thermal_junction_hard_c; /* junction hard-limit (C) that always throttles (silicon guard) */
+    int   gaming_cpu_max_ceiling_khz; /* cap declared scaling_max in GAMING (vendor clamps anyway); 0=off */
     int   gaming_gap_thresh;
     int   gaming_gap_ticks;
     int   gaming_retry_cooldown_s;
@@ -210,6 +211,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->thermal_skin_gate = 1;
     c->thermal_skin_c = 47;
     c->thermal_junction_hard_c = 95;
+    c->gaming_cpu_max_ceiling_khz = 2400000;
     c->sustained_level       = 0.80f;
     c->gaming_gap_thresh        = 1500000;
     c->gaming_gap_ticks         = 4;
@@ -324,6 +326,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "thermal_skin_gate")) c->thermal_skin_gate = atoi(v);
     else if (!strcmp(k, "thermal_skin_c")) c->thermal_skin_c = atoi(v);
     else if (!strcmp(k, "thermal_junction_hard_c")) c->thermal_junction_hard_c = atoi(v);
+    else if (!strcmp(k, "gaming_cpu_max_ceiling_khz")) c->gaming_cpu_max_ceiling_khz = atoi(v);
     else if (!strcmp(k, "gaming_gap_thresh"))    c->gaming_gap_thresh = atoi(v);
     else if (!strcmp(k, "gaming_gap_ticks"))     c->gaming_gap_ticks  = atoi(v);
     else if (!strcmp(k, "gaming_retry_cooldown_s")) c->gaming_retry_cooldown_s = atoi(v);

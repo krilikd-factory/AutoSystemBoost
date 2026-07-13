@@ -497,13 +497,27 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
     }
 
     {
+        /* Gaming cool-clamp: the smart curve can declare up to ~3 GHz during the
+         * GAMING state, but the vendor PowerHAL clamps the actual clock to ~2.2 GHz
+         * regardless — so the higher request buys no FPS and only drives brief
+         * high-OPP voltage excursions (extra heat + drain). Cap the declared
+         * scaling_max at a sane gaming ceiling so we never ask higher than the
+         * vendor will honour. gaming_cpu_max_ceiling_khz=0 disables it. */
+        int cmax[3];
+        for (int _k = 0; _k < 3; _k++) {
+            cmax[_k] = caps->cpu_max[_k];
+            if (state == ASB_STATE_GAMING && g_asb_cfg.gaming_cpu_max_ceiling_khz > 0
+                && cmax[_k] > g_asb_cfg.gaming_cpu_max_ceiling_khz) {
+                cmax[_k] = g_asb_cfg.gaming_cpu_max_ceiling_khz;
+            }
+        }
         int c0_target = -1, c1_target = -1;
         int c0_changed = 0, c1_changed = 0;
-        if (g_cpu_max_paths[0][0] && (force || caps->cpu_max[0] != g_wcache.cpu_max[0])) {
-            c0_target = caps->cpu_max[0]; c0_changed = 1;
+        if (g_cpu_max_paths[0][0] && (force || cmax[0] != g_wcache.cpu_max[0])) {
+            c0_target = cmax[0]; c0_changed = 1;
         }
-        if (g_cpu_max_paths[1][0] && (force || caps->cpu_max[1] != g_wcache.cpu_max[1])) {
-            c1_target = caps->cpu_max[1]; c1_changed = 1;
+        if (g_cpu_max_paths[1][0] && (force || cmax[1] != g_wcache.cpu_max[1])) {
+            c1_target = cmax[1]; c1_changed = 1;
         }
         if (c0_changed || c1_changed) {
             int use_msm = msm_perf_check() &&
@@ -517,20 +531,20 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
         }
         for (int i = 0; i < 3; i++) {
             if (!g_cpu_max_paths[i][0]) continue;
-            if (force || caps->cpu_max[i] != g_wcache.cpu_max[i]) {
-                if (caps->cpu_max[i] <= 0) continue;
-                if (sysfs_write_int(g_cpu_max_paths[i], caps->cpu_max[i]) == 0) {
-                    g_wcache.cpu_max[i] = caps->cpu_max[i];
+            if (force || cmax[i] != g_wcache.cpu_max[i]) {
+                if (cmax[i] <= 0) continue;
+                if (sysfs_write_int(g_cpu_max_paths[i], cmax[i]) == 0) {
+                    g_wcache.cpu_max[i] = cmax[i];
                     writes++;
                 } else {
                     FILE *ef = fopen("/dev/.asb/write_errors", "a");
                     if (ef) {
                         fprintf(ef, "FAIL cpu_max[%d]=%s val=%d\n",
-                                i, g_cpu_max_paths[i], caps->cpu_max[i]);
+                                i, g_cpu_max_paths[i], cmax[i]);
                         fclose(ef);
                     }
-                    if (c0_changed && i == 0) g_wcache.cpu_max[0] = caps->cpu_max[0];
-                    if (c1_changed && i == 1) g_wcache.cpu_max[1] = caps->cpu_max[1];
+                    if (c0_changed && i == 0) g_wcache.cpu_max[0] = cmax[0];
+                    if (c1_changed && i == 1) g_wcache.cpu_max[1] = cmax[1];
                 }
             }
         }
@@ -549,6 +563,11 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
         if (g_cpu_max_paths[slot][0] &&
             strcmp(g_cpu_all_max_paths[j], g_cpu_max_paths[slot]) == 0) continue;
         int target = caps->cpu_max[slot];
+        /* same gaming cool-clamp as the representative paths above */
+        if (state == ASB_STATE_GAMING && g_asb_cfg.gaming_cpu_max_ceiling_khz > 0
+            && target > g_asb_cfg.gaming_cpu_max_ceiling_khz) {
+            target = g_asb_cfg.gaming_cpu_max_ceiling_khz;
+        }
         if (target <= 0) continue;
         int cur = sysfs_read_int(g_cpu_all_max_paths[j], 0);
         if (force || cur != target) {
