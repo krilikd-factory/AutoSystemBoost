@@ -65,6 +65,15 @@ lk_sample_gpu_busy() {
   export LK_GPU_NOW
 }
 
+lk_audio_phase_name() {
+  case "$LK_AUDIO_ROUTE" in
+    bt|bt_le) echo "audio_bt" ;;
+    speaker) echo "audio_spk" ;;
+    wired|usb) echo "audio_wired" ;;
+    *) echo "audio" ;;
+  esac
+}
+
 lk_detect_phase() {
   _now="$1"
   # charging?
@@ -101,6 +110,7 @@ lk_detect_phase() {
   # screen off → sleep vs idle (sleep = off > 20 min)
   if [ "$_scr" = "Asleep" ] || [ "$_scr" = "Dozing" ]; then
     LK_IN_GAMING=0; LK_GPU_HI_STREAK=0; LK_GPU_LO_STREAK=0
+    if [ "$LK_AUDIO_PLAY" = "1" ]; then LK_PHASE_OUT="$(lk_audio_phase_name)"; return 0; fi
     if [ "$_off_for" -ge 1200 ]; then LK_PHASE_OUT="sleep"; else LK_PHASE_OUT="idle"; fi
     return 0
   fi
@@ -118,6 +128,7 @@ lk_detect_phase() {
     [ "$LK_GPU_HI_STREAK" -ge "$LK_GPU_ENTER" ] && LK_IN_GAMING=1
   fi
   if [ "$LK_IN_GAMING" = "1" ]; then LK_PHASE_OUT="gaming"; return 0; fi
+  if [ "$LK_AUDIO_PLAY" = "1" ]; then LK_PHASE_OUT="$(lk_audio_phase_name)"; return 0; fi
   # within 5 min of waking → post_wake (ASB ramp window of interest)
   if [ "$LK_WOKE_AT" != "0" ] && [ $(( _now - LK_WOKE_AT )) -le 300 ]; then
     LK_PHASE_OUT="post_wake"; return 0
@@ -365,6 +376,12 @@ lk_emit_full_day_report() {
     echo "  not heat — there may be headroom to let clocks run higher."
     echo "* If a kernel wake source dominates the DELTA and isn't essential,"
     echo "  that's a concrete ASB target (prop/standby tuning)."
+    echo "* 'audio_bt' / 'audio_spk' / 'audio_wired' = media was playing on that"
+    echo "  route. Compare pct/h and cpuT between BT and speaker playback, and"
+    echo "  read audio_trace.txt for codec / offload / effect state per route."
+    echo "* kernel_params.txt captures governors, sched, io, walt and vm tunables"
+    echo "  (stock vs custom kernel); network_trace.txt captures the data path,"
+    echo "  signal, tcp tunables and rmnet/wlan counters."
     echo ""
     echo "Send the whole output folder back for a targeted ASB tuning pass."
   } > "$_out"
@@ -407,7 +424,11 @@ echo "[$(date '+%H:%M:%S')] FULL-DAY capture running up to ${LK_HOURS}h. Use the
 
 _last_snapshot=$(date +%s)
 _last_wakesnap=$(date +%s)
+lk_snapshot_kernel "before"
+lk_snapshot_network "before"
 lk_sample_gpu_busy
+lk_sample_audio
+lk_snapshot_audio "before"
 lk_detect_phase "$(date +%s)"; _phase="$LK_PHASE_OUT"
 lk_phase_ledger_open "$_phase"
 echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|capture_start" >> "$LK_OUT_DIR/phase_timeline.txt"
@@ -419,6 +440,7 @@ while : ; do
 
   lk_wl_acquire
   lk_sample_gpu_busy
+  lk_sample_audio
 
   # detect phase; on change, flush the ledger and re-open
   lk_detect_phase "$_now"; _new_phase="$LK_PHASE_OUT"
@@ -428,6 +450,7 @@ while : ; do
     echo "${_now}|$(date '+%Y-%m-%d %H:%M:%S')|${_new_phase}|from:${_phase}" >> "$LK_OUT_DIR/phase_timeline.txt"
     # at every phase boundary, grab a wake snapshot (cheap kernel side)
     lk_wakelock_kernel_snapshot "phase:${_new_phase}"
+    case "$_new_phase" in audio*) lk_snapshot_audio "enter:${_new_phase}" ;; esac
     lk_phase_ledger_open "$_new_phase"
     _phase="$_new_phase"
     LK_POLL_S="$(lk_poll_for_phase "$_phase")"
@@ -451,6 +474,9 @@ while : ; do
   # hourly: full state snapshot + interim reports
   if [ $(( _now - _last_snapshot )) -ge "$LK_SNAPSHOT_S" ]; then
     lk_snapshot_state "snapshot_${_now}"
+    lk_snapshot_kernel "hourly"
+    lk_snapshot_network "hourly"
+    lk_snapshot_audio "hourly"
     lk_verify_caps
     lk_emit_phase_summary 2>/dev/null || true
     lk_emit_full_day_report 2>/dev/null || true

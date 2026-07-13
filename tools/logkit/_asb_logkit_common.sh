@@ -1393,6 +1393,141 @@ lk_emit_smart_summary() {
 
 # ===== end Smart Mode helpers ===================================================
 
+LK_AUDIO_PLAY=0
+LK_AUDIO_ROUTE="none"
+lk_sample_audio() {
+  LK_AUDIO_PLAY=0
+  LK_AUDIO_ROUTE="none"
+  _ad=$(dumpsys audio 2>/dev/null)
+  if [ -z "$_ad" ]; then export LK_AUDIO_PLAY LK_AUDIO_ROUTE; return 0; fi
+  case "$_ad" in
+    *state:started*) LK_AUDIO_PLAY=1 ;;
+  esac
+  _rl=$(printf '%s\n' "$_ad" | grep -iE 'Devices for media|Device for stream|media device|Selected device|Communication device|routed|Sink:' | head -4)
+  [ -z "$_rl" ] && _rl="$_ad"
+  case "$_rl" in
+    *BLE_HEADSET*|*BLE_SPEAKER*|*BLE_BROADCAST*|*LE_AUDIO*) LK_AUDIO_ROUTE="bt_le" ;;
+    *BLUETOOTH_A2DP*|*BLUETOOTH_SCO*|*-A2DP*|*a2dp*) LK_AUDIO_ROUTE="bt" ;;
+    *USB_HEADSET*|*USB_DEVICE*) LK_AUDIO_ROUTE="usb" ;;
+    *WIRED_HEADSET*|*WIRED_HEADPHONE*) LK_AUDIO_ROUTE="wired" ;;
+    *SPEAKER*|*EARPIECE*) LK_AUDIO_ROUTE="speaker" ;;
+  esac
+  export LK_AUDIO_PLAY LK_AUDIO_ROUTE
+}
+
+lk_snapshot_audio() {
+  _tag="$1"
+  _af="$LK_OUT_DIR/audio_trace.txt"
+  {
+    echo "===== AUDIO [$_tag] $(date -u '+%Y-%m-%dT%H:%M:%SZ') play=$LK_AUDIO_PLAY route=$LK_AUDIO_ROUTE ====="
+    echo "# codec / offload props"
+    for p in persist.bluetooth.a2dp_offload.disabled persist.vendor.bluetooth.a2dp_offload.disabled \
+             persist.bluetooth.a2dp.optional_codecs_enabled persist.bluetooth.disableabsvol \
+             persist.vendor.bluetooth.3rd.lhdcv5.support persist.bluetooth.aptxadaptive_offload.enabled \
+             persist.vendor.audio.a2dp.hal.implementation persist.vendor.audio.ull.enabled; do
+      echo "  $p = $(lk_get_prop "$p")"
+    done
+    echo "# active players"
+    dumpsys audio 2>/dev/null | grep -iE 'state:started|usage=|content Type|piid:|AudioPlaybackConfiguration' | head -20
+    echo "# routing / devices"
+    dumpsys audio 2>/dev/null | grep -iE 'Devices for|Device for|Sink:|Communication device|mConnectedDevices|routed|BLE_|A2DP|SPEAKER|WIRED' | head -20
+    echo "# stream volumes"
+    dumpsys audio 2>/dev/null | grep -iE 'STREAM_MUSIC|Current:|Muted:|- STREAM_' | head -14
+    echo "# bt codec"
+    dumpsys bluetooth_manager 2>/dev/null | grep -iE 'codec|sample_?rate|bits_?per|channel|LHDC|LDAC|aptX|SBC|AAC|state: connected' | head -20
+    echo "# audioflinger effects/output"
+    dumpsys media.audio_flinger 2>/dev/null | grep -iE 'Effect|session|viper|Output thread|sampleRate|format|Latency|Frame' | head -25
+    echo "# alsa pcm status"
+    for c in /proc/asound/card*/pcm*/sub*/status; do
+      [ -r "$c" ] || continue
+      echo "  $c:"; sed 's/^/    /' "$c" 2>/dev/null
+    done | head -30
+    echo ""
+  } >> "$_af" 2>/dev/null || true
+}
+
+lk_snapshot_kernel() {
+  _tag="$1"
+  _kf="$LK_OUT_DIR/kernel_params.txt"
+  {
+    echo "===== KERNEL [$_tag] $(date -u '+%Y-%m-%dT%H:%M:%SZ') ====="
+    echo "# identity"
+    echo "  uname_r: $(uname -r)"
+    echo "  version: $(cat /proc/version 2>/dev/null)"
+    echo "  cmdline: $(cat /proc/cmdline 2>/dev/null | cut -c1-400)"
+    echo "  ksu: $(lk_have ksud && echo yes || echo no)"
+    echo "# cpufreq per policy"
+    for pol in /sys/devices/system/cpu/cpufreq/policy*; do
+      [ -d "$pol" ] || continue
+      echo "  $(basename "$pol"): gov=$(cat "$pol/scaling_governor" 2>/dev/null) cur=$(cat "$pol/scaling_cur_freq" 2>/dev/null) min=$(cat "$pol/scaling_min_freq" 2>/dev/null) max=$(cat "$pol/scaling_max_freq" 2>/dev/null) hwmax=$(cat "$pol/cpuinfo_max_freq" 2>/dev/null)"
+      echo "    avail_gov: $(cat "$pol/scaling_available_governors" 2>/dev/null)"
+      _sg="$pol/schedutil/rate_limit_us"
+      [ -r "$_sg" ] && echo "    schedutil.rate_limit_us: $(cat "$_sg" 2>/dev/null)"
+      _up="$pol/schedutil/up_rate_limit_us"
+      [ -r "$_up" ] && echo "    schedutil.up/down: $(cat "$_up" 2>/dev/null)/$(cat "$pol/schedutil/down_rate_limit_us" 2>/dev/null)"
+    done
+    echo "# kernel.sched"
+    for k in sched_latency_ns sched_min_granularity_ns sched_wakeup_granularity_ns \
+             sched_migration_cost_ns sched_util_clamp_min sched_util_clamp_max \
+             sched_energy_aware sched_schedstats; do
+      _v=$(cat "/proc/sys/kernel/$k" 2>/dev/null); [ -n "$_v" ] && echo "  kernel.$k = $_v"
+    done
+    echo "# cpu boost / walt (custom-kernel markers)"
+    for w in /sys/module/cpu_boost/parameters /proc/sys/walt /sys/walt /sys/devices/system/cpu/walt; do
+      [ -d "$w" ] || continue
+      echo "  $w:"
+      for f in "$w"/*; do [ -f "$f" ] && [ -r "$f" ] && echo "    $(basename "$f")=$(cat "$f" 2>/dev/null | tr '\n' ' ' | cut -c1-90)"; done
+    done
+    echo "# io scheduler"
+    for b in /sys/block/sda /sys/block/mmcblk0 /sys/block/dm-0; do
+      [ -r "$b/queue/scheduler" ] && echo "  $(basename "$b"): $(cat "$b/queue/scheduler" 2>/dev/null) read_ahead_kb=$(cat "$b/queue/read_ahead_kb" 2>/dev/null) nr_requests=$(cat "$b/queue/nr_requests" 2>/dev/null)"
+    done
+    echo "# thermal"
+    echo "  zone0.policy: $(cat /sys/class/thermal/thermal_zone0/policy 2>/dev/null)"
+    echo "  core_ctl present: $([ -d /sys/devices/system/cpu/cpu0/core_ctl ] && echo yes || echo no)"
+    echo "# vm"
+    for k in swappiness dirty_ratio dirty_background_ratio vfs_cache_pressure \
+             watermark_boost_factor watermark_scale_factor min_free_kbytes page-cluster; do
+      _v=$(cat "/proc/sys/vm/$k" 2>/dev/null); [ -n "$_v" ] && echo "  vm.$k = $_v"
+    done
+    echo "# zram / swap"
+    echo "  swaps: $(cat /proc/swaps 2>/dev/null | tail -n +2 | tr '\n' ';')"
+    echo ""
+  } >> "$_kf" 2>/dev/null || true
+}
+
+lk_snapshot_network() {
+  _tag="$1"
+  _nf="$LK_OUT_DIR/network_trace.txt"
+  {
+    echo "===== NETWORK [$_tag] $(date -u '+%Y-%m-%dT%H:%M:%SZ') ====="
+    echo "# data path"
+    echo "  default_route: $(ip route get 1.1.1.1 2>/dev/null | head -1)"
+    echo "  up_ifaces: $(ip -o link show up 2>/dev/null | awk -F': ' '{print $2}' | tr '\n' ' ')"
+    echo "# carrier / radio"
+    echo "  operator: $(lk_get_prop gsm.operator.alpha) numeric: $(lk_get_prop gsm.operator.numeric) roaming: $(lk_get_prop gsm.operator.isroaming)"
+    echo "  voice_type: $(lk_get_prop gsm.network.type) data_type: $(lk_get_prop gsm.data.network.type)"
+    dumpsys telephony.registry 2>/dev/null | grep -iE 'mSignalStrength|mDataConnectionState=|mDataNetworkType=|mVoiceNetworkType=|rsrp|rssnr|level=' | head -10
+    echo "# wifi link"
+    dumpsys wifi 2>/dev/null | grep -iE 'SSID:|Supplicant state|RSSI:|Link speed|Tx Link speed|Rx Link speed|Frequency|score' | head -12
+    echo "# tcp params (current, ASB may have tuned)"
+    echo "  congestion: $(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
+    echo "  tcp_rmem: $(cat /proc/sys/net/ipv4/tcp_rmem 2>/dev/null)"
+    echo "  tcp_wmem: $(cat /proc/sys/net/ipv4/tcp_wmem 2>/dev/null)"
+    echo "  rmem_max: $(cat /proc/sys/net/core/rmem_max 2>/dev/null) wmem_max: $(cat /proc/sys/net/core/wmem_max 2>/dev/null)"
+    echo "  netdev_budget: $(cat /proc/sys/net/core/netdev_budget 2>/dev/null) backlog: $(cat /proc/sys/net/core/netdev_max_backlog 2>/dev/null)"
+    echo "  mtu_probing: $(cat /proc/sys/net/ipv4/tcp_mtu_probing 2>/dev/null) default_qdisc: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
+    echo "  tcp_notsent_lowat: $(cat /proc/sys/net/ipv4/tcp_notsent_lowat 2>/dev/null) fastopen: $(cat /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null)"
+    echo "# rmnet / wlan counters"
+    for r in rmnet_data0 rmnet_data1 rmnet_ipa0 wlan0; do
+      _d="/sys/class/net/$r"
+      [ -d "$_d" ] && echo "  $r: oper=$(cat "$_d/operstate" 2>/dev/null) mtu=$(cat "$_d/mtu" 2>/dev/null) rx=$(cat "$_d/statistics/rx_bytes" 2>/dev/null) tx=$(cat "$_d/statistics/tx_bytes" 2>/dev/null)"
+    done
+    echo ""
+  } >> "$_nf" 2>/dev/null || true
+}
+
+
 lk_init() {
   MODDIR="$(lk_resolve_moddir)"
   LK_GOV_LOG="$(lk_resolve_gov_log)"
