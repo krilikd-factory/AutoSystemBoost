@@ -159,16 +159,13 @@ mount_mirrors() {
 }
 
 ui_print " "
-ui_print "***************************************************"
-ui_print "***************************************************"
-ui_print "*                AutoSystemBoost                  *"
-ui_print "*              Special Version For                *"
-ui_print "*                   ONEPLUS                       *"
-ui_print "***************************************************"
-ui_print "***************************************************"
-ui_print "*             Module by Dima_Krylov               *"
-ui_print "***************************************************"
-ui_print "***************************************************"
+ui_print "  ════════════════════════════════════════════"
+ui_print "         A U T O S Y S T E M   B O O S T"
+ui_print "     Adaptive Runtime Engine for OnePlus"
+ui_print "     15 · 13 · 12 · Ace 6 · Ace 5"
+ui_print "     by Dima_Krylov"
+ui_print "  ════════════════════════════════════════════"
+ui_print " "
 
 [ -z $MINAPI ] || { [ $API -lt $MINAPI ] && abort "! Your system API of $API is less than the minimum api of $MINAPI! Aborting!"; }
 [ -z $MAXAPI ] || { [ $API -gt $MAXAPI ] && abort "! Your system API of $API is greater than the maximum api of $MAXAPI! Aborting!"; }

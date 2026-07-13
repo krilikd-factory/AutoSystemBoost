@@ -91,15 +91,11 @@ asb_end_banner() {
   [ -f "$NVBASE/modules/.$MODID-files" ] && [ ! -s "$NVBASE/modules/.$MODID-files" ] \
     && rm -f "$NVBASE/modules/.$MODID-files" 2>/dev/null || true
 
-  local i=0
-  while [ $i -lt 2 ]; do
-    ui_print " "
-    i=$((i+1))
-  done
-
+  ui_print " "
+  ui_print " "
   ui_print "${SEPARATOR}"
-  ui_print "${ASB_DONE_TITLE:-ASB}"
-  ui_print "${ASB_DONE_MSG:-Module installed. Reboot.}"
+  ui_print "  ${ASB_DONE_TITLE:-✓ AutoSystemBoost installed}"
+  ui_print "  ${ASB_DONE_MSG:-Reboot to activate.}"
   ui_print "${SEPARATOR}"
   ui_print " "
   ui_print "      #####      "
@@ -164,7 +160,7 @@ sedi() {
 set +x
 set +v
 
-SEPARATOR="____________________________________________"
+SEPARATOR="────────────────────────────────────────────"
 
 LANG="$(settings get system system_locales 2>/dev/null)"
 [ -z "$LANG" -o "$LANG" = "null" ] && LANG="$(getprop persist.sys.locale)"
