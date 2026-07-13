@@ -1403,14 +1403,14 @@ lk_sample_audio() {
   case "$_ad" in
     *state:started*) LK_AUDIO_PLAY=1 ;;
   esac
-  _rl=$(printf '%s\n' "$_ad" | grep -iE 'Devices for media|Device for stream|media device|Selected device|Communication device|routed|Sink:' | head -4)
-  [ -z "$_rl" ] && _rl="$_ad"
+  _rl=$(printf '%s\n' "$_ad" | grep -iE '^[[:space:]]*Devices:' | tr 'A-Z' 'a-z')
+  [ -z "$_rl" ] && _rl=$(printf '%s\n' "$_ad" | tr 'A-Z' 'a-z')
   case "$_rl" in
-    *BLE_HEADSET*|*BLE_SPEAKER*|*BLE_BROADCAST*|*LE_AUDIO*) LK_AUDIO_ROUTE="bt_le" ;;
-    *BLUETOOTH_A2DP*|*BLUETOOTH_SCO*|*-A2DP*|*a2dp*) LK_AUDIO_ROUTE="bt" ;;
-    *USB_HEADSET*|*USB_DEVICE*) LK_AUDIO_ROUTE="usb" ;;
-    *WIRED_HEADSET*|*WIRED_HEADPHONE*) LK_AUDIO_ROUTE="wired" ;;
-    *SPEAKER*|*EARPIECE*) LK_AUDIO_ROUTE="speaker" ;;
+    *ble_headset*|*ble_speaker*|*ble_broadcast*|*le_audio*) LK_AUDIO_ROUTE="bt_le" ;;
+    *bt_a2dp*|*bluetooth_a2dp*) LK_AUDIO_ROUTE="bt" ;;
+    *usb_headset*|*usb_device*) LK_AUDIO_ROUTE="usb" ;;
+    *headset*|*headphone*|*wired*) LK_AUDIO_ROUTE="wired" ;;
+    *speaker*|*earpiece*) LK_AUDIO_ROUTE="speaker" ;;
   esac
   export LK_AUDIO_PLAY LK_AUDIO_ROUTE
 }
