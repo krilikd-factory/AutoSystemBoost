@@ -296,7 +296,7 @@ asb_apply_ux() {
   fi
 
   # ANIMATION SCALES — manage OR restore.
-  if [ -n "$UX_ANIM_SCALE" ] && [ "${UX_MANAGE_ANIM_SCALE:-0}" = "1" ]; then
+  if [ -n "$UX_ANIM_SCALE" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
     # Save the user's stock scales ONCE, before we ever override them, so we can
     # put them back when the toggle is turned off.
     if [ ! -f "$_ux_base" ]; then
