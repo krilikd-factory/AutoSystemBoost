@@ -139,9 +139,9 @@ _we_name=""
 
 echo ""
 if [ "$_smart_enabled" = "1" ]; then
-  echo "  ASB V59 · 🤖 Smart Mode"
+  echo "  ASB V60 · 🤖 Smart Mode"
 else
-  echo "  ASB V59 · ${PROFILE}"
+  echo "  ASB V60 · ${PROFILE}"
 fi
 if [ "$_rec_disabled" = "1" ]; then
   echo "  ⚠️  SAFE MODE  : governor disabled (${_rec_reason:-recovery})"
