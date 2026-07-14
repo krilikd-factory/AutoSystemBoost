@@ -65,6 +65,7 @@ fi
 sleep 2
 ab_capture "BEFORE (quiet — before ViperFX)" "$OUT_DIR/before.txt"
 echo "  captured BEFORE baseline (this should be the QUIET state)."
+logcat -c >/dev/null 2>&1 || true
 echo "[2/3] NOW open ViPER4Android so the volume jumps. Capturing ${DUR}s..."
 
 printf 'elapsed\tplaying\troute\tfx\toffload_hits\tsusp_fx\n' > "$OUT_DIR/audio_ab_timeline.tsv"
@@ -83,6 +84,7 @@ ab_capture "AFTER (loud — after ViperFX)" "$OUT_DIR/after.txt"
 echo "  captured AFTER state (this should be the LOUD state)."
 
 echo "[3/3] Building report..."
+logcat -d -v time 2>/dev/null | grep -iE 'avrcp|a2dp|absolute.?vol|setStreamVolume|setDeviceVolume|VolumeManage|AudioManager|AudioFlinger|AudioPolicy|EffectHandle|EffectModule|viper|v4a|offload|Vol=|gain' > "$OUT_DIR/audio_ab_logcat.txt" 2>/dev/null || true
 {
   echo "================ ASB AUDIO A/B REPORT ================"
   echo "Fill this in: did the volume get LOUD when you opened ViperFX? (expected yes)"
@@ -97,7 +99,18 @@ echo "[3/3] Building report..."
     echo "(no diff tool — compare before.txt and after.txt manually)"
   fi
   echo ""
-  echo "Full per-tick captures are in $OUT_DIR/tick_*.txt ; before.txt / after.txt hold the two ends."
+  echo "---- BT ABSOLUTE VOLUME over time (dumpsys audio bt_a2dp index) ----"
+  for _tf in "$OUT_DIR"/tick_*.txt; do
+    [ -r "$_tf" ] || continue
+    _hd=$(grep -m1 'TICK' "$_tf")
+    _bv=$(grep -m1 'bt_a2dp):' "$_tf" | grep -oE 'bt_a2dp\): *[0-9]+' | head -1)
+    echo "  $_hd  $_bv"
+  done
+  echo ""
+  echo "---- AUDIO/BT/AVRCP LOGCAT around opening ViperFX (the real trigger) ----"
+  head -80 "$OUT_DIR/audio_ab_logcat.txt" 2>/dev/null
+  echo ""
+  echo "Full per-tick captures are in $OUT_DIR/tick_*.txt ; before.txt / after.txt hold the two ends; audio_ab_logcat.txt has the event log."
 } > "$OUT_DIR/audio_ab_report.txt" 2>/dev/null
 
 echo ""
