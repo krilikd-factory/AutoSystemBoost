@@ -36,9 +36,9 @@ ab_capture() {
     echo "## dumpsys audio — routing + music volume"
     dumpsys audio 2>/dev/null | grep -iE '^[[:space:]]*Devices:|- STREAM_MUSIC:|Current:|Muted:|state:started|usage=' | head -18
     echo "## audio_flinger — output threads (standby / flags / format)"
-    dumpsys media.audio_flinger 2>/dev/null | grep -iE 'Output thread|I/O handle|Standby|Flags|Format|sample rate|Channel|Latency|Frame|Output devices|Track Name|State:' | head -60
+    dumpsys media.audio_flinger 2>/dev/null | grep -iE 'Output thread|I/O handle|Standby|Flags|Format|sample rate|Channel|Latency|Frame|Output devices|Track Name|State:|Suspended|Enabled|Effect Chains' | head -220
     echo "## audio_flinger — effects / sessions"
-    dumpsys media.audio_flinger 2>/dev/null | grep -iE 'Effect|session|viper|v4a' | head -30
+    dumpsys media.audio_flinger 2>/dev/null | grep -iE 'Effect|session|viper|v4a|Suspended|Enabled|Chains' | head -80
     echo "## bt codec"
     dumpsys bluetooth_manager 2>/dev/null | grep -iE 'current codec|sample_?rate|bits_?per|LHDC|LDAC|aptX|SBC|AAC' | head -12
     echo ""
@@ -51,7 +51,8 @@ ab_indicators() {
   _route=$(ab_route)
   _fx=$(printf '%s\n' "$_af" | grep -ciE 'viper|v4a|Effect [0-9a-fx]|session [0-9]')
   _offload=$(printf '%s\n' "$_af" | grep -iE 'Output thread|Standby|Flags' | grep -ciE 'offload|direct_pcm|compress')
-  printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$_play" "$_route" "$_fx" "$_offload"
+  _susp=$(printf '%s\n' "$_af" | grep -c 'Enabled Suspended')
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$_play" "$_route" "$_fx" "$_offload" "$_susp"
 }
 
 echo "[ASB audio A/B] output -> $OUT_DIR"
@@ -66,7 +67,7 @@ ab_capture "BEFORE (quiet — before ViperFX)" "$OUT_DIR/before.txt"
 echo "  captured BEFORE baseline (this should be the QUIET state)."
 echo "[2/3] NOW open ViPER4Android so the volume jumps. Capturing ${DUR}s..."
 
-printf 'elapsed\tplaying\troute\tfx\toffload_hits\n' > "$OUT_DIR/audio_ab_timeline.tsv"
+printf 'elapsed\tplaying\troute\tfx\toffload_hits\tsusp_fx\n' > "$OUT_DIR/audio_ab_timeline.tsv"
 _t=0; _n=0
 while [ "$_t" -lt "$DUR" ]; do
   _n=$((_n+1))
