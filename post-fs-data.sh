@@ -106,6 +106,20 @@ if command -v resetprop >/dev/null 2>&1; then
   resetprop --delete persist.sys.power.fuel.gauge >/dev/null 2>&1 || true
   fi
   # ASB:KERNEL:END
+  # ASB DSP: publish gain BEFORE audioserver starts, so the effect picks it up on
+  # its very first create/enable. The library reads these at INIT/ENABLE only -- never
+  # inside process() -- so this is the whole control surface.
+  _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
+  case "$_dspg" in
+    3|6|9)
+      resetprop persist.asb.dsp.enable 1 >/dev/null 2>&1 || true
+      resetprop persist.asb.dsp.gain_mb "$((_dspg * 100))" >/dev/null 2>&1 || true
+      resetprop persist.asb.dsp.ceiling_mb -100 >/dev/null 2>&1 || true
+      ;;
+    *)
+      resetprop persist.asb.dsp.enable 0 >/dev/null 2>&1 || true
+      ;;
+  esac
   _blur="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
   if [ "$_blur" = "1" ]; then
     resetprop ro.surface_flinger.supports_background_blur 0 >/dev/null 2>&1 || true
