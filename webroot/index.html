@@ -1584,6 +1584,7 @@ body.config-active #livePage.open {
 
   <div class="cfg-list" id="cfgList"></div>
 
+  <button class="cfg-reboot" onclick="cfgApplyAudio()" data-i18n="cfg_apply_audio">♫ Apply audio now</button>
   <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
 
   </div>
@@ -1634,6 +1635,10 @@ const I18N = {
     lv_est_idle: 'Прогноз (покой)', lv_capsrc: 'Источник кэпа',
     lv_learner: 'Обучение', lv_gpuload: 'Нагрузка GPU', lv_headroom: 'Запас',
     // config page
+    cfg_apply_audio: '\u266b Применить аудио сейчас',
+    t_applying_audio: 'Применяю аудио\u2026',
+    t_applied_audio: 'Аудио применено (audioserver перезапущен)',
+    t_apply_audio_fail: 'Не удалось применить',
     cfg_reboot: '↻ Перезагрузить устройство',
     // device line
     device_line: 'Устройство OnePlus · Qualcomm Snapdragon',
@@ -1647,10 +1652,10 @@ const I18N = {
     t_rebooting: 'Перезагрузка…',
     // config items: name + desc keyed by config key
     cfg: {
-      AUDIO_EQ_COMPAT: { name: 'Совместимость аудио-эквалайзера',
-        desc: 'Совместимость аудио с системными эквалайзерами (Flow Equalizer и др). ВКЛ, если пользуетесь.' },
-      AUDIO_AGGRESSIVE: { name: 'Агрессивные аудио-твики',
-        desc: 'Аудиофильская цепь: компандеры выкл + Class-H HIFI ЦАП (чище звук, малый расход). Может конфликтовать с BT/DSP. Применяется после перезагрузки. ВЫКЛ, если не нужно.' },
+      audio_profile: { name: 'Аудио-профиль',
+        desc: 'Кто обрабатывает звук. ПОД ЭКВАЛАЙЗЕР \u2014 UHQA выкл, ресемплер 0: сигнал уходит внешнему EQ/ViPER нетронутым (навязывать под ним максимальный ресемплинг \u2014 как раз то, что его ломает). БАЗОВЫЙ \u2014 только базовые твики, без предпочтений. HI-FI \u2014 UHQA вкл, hi-fi проперти, ресемплер 255: лучший вариант, когда внешнего эквалайзера НЕТ. Заменяет прежние «Совместимость эквалайзера» + проп-часть «Агрессивных твиков»: они были противоположностями и, из-за бага, не работали вообще. Применяется без перезагрузки.' },
+      audio_dac_hifi: { name: 'Hi-Fi ЦАП (микшер)',
+        desc: 'Настройка кодека, а не софта: компандеры наушников выкл, RX HPH Mode \u2192 CLS_H_HIFI в микшер-файлах устройства. Это отдельная ось от аудио-профиля \u2014 безопасно сочетается с «под эквалайзер» (не мешает внешнему EQ, а даёт ему более чистый ЦАП). Прежде была микшер-половиной «Агрессивных твиков». Нужна перезагрузка.' },
       CAMERA_LEVEL: { name: 'Степень обработки камеры',
         desc: 'Сила цвета и контраста для фото и видео: 0 = сток, выше = насыщеннее и контрастнее. На максимуме возможен бандинг в тенях. После перезагрузки.' },
       smart_battery_bias: { name: 'Уклон Smart в автономность',
@@ -1681,7 +1686,23 @@ const I18N = {
         desc: 'Отключает блюр фона / панелей / громкости / лаунчера / гаусса / материала и опускает уровень анимаций OPPO до 0. Экономит GPU/CPU (лучше автономность и плавность) ценой визуальных эффектов. Применяется после перезагрузки.' }
     },
     // segmented option labels
-    opt: { auto: 'авто', on: 'вкл', off: 'выкл', safe: 'безопасно', aggressive: 'агрессивно', stock: 'стоково', disabled: 'откл', steps30: '30', steps50: '50' }
+    opt: {
+      auto: 'авто', on: 'вкл', off: 'выкл',
+      safe: 'безопасно', aggressive: 'агрессивно',
+      stock: 'как в стоке', disabled: 'отключить',
+      mild: 'умеренно', strong: 'сильно',
+      eq_compat: 'под эквалайзер', hifi: 'hi-fi',
+      '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
+    }
+  },
+  en: {
+    // Only segment labels: everything else already reads naturally in English.
+    opt: {
+      eq_compat: 'EQ-friendly', hifi: 'Hi-Fi', stock: 'Stock',
+      mild: 'Mild', strong: 'Strong', disabled: 'Disable',
+      off: 'Off', safe: 'Safe', aggressive: 'Aggressive',
+      '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
+    }
   }
 };
 
@@ -1695,7 +1716,9 @@ function Tcfg(cfgKey, field, fallback) {
   return fallback;
 }
 function Topt(o) {
-  if (ASB_LANG === 'ru' && I18N.ru.opt[o] != null) return I18N.ru.opt[o];
+  var L = I18N[ASB_LANG];
+  if (L && L.opt && L.opt[o] != null) return L.opt[o];
+  if (I18N.ru.opt[o] != null && ASB_LANG === 'ru') return I18N.ru.opt[o];
   return o;
 }
 function applyStaticI18n() {
@@ -1894,17 +1917,17 @@ const CFG_FILE = MD + '/config/governor.conf';
 // Keys that are mirrored into the external user snapshot on every change so a
 // reinstall / root-manager re-trigger can restore them. Must stay in sync with
 // the _user_keys / snapshot list in common/install.sh.
-const SNAP_KEYS = ['AUDIO_AGGRESSIVE','AUDIO_EQ_COMPAT','CAMERA_LEVEL','CAMERA_AGGRESSIVE',
+const SNAP_KEYS = ['audio_profile','audio_dac_hifi','CAMERA_LEVEL','CAMERA_AGGRESSIVE',
   'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','media_loudness','dsp_loudness','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
   'auto_battery_enable','charge_aware_enable',
   'UX_ANIM_FORCE_RESTART','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
   'region_allow_locale','disable_blur'];
 const CFG_ITEMS = [
   // --- Audio ---
-  { key:'AUDIO_EQ_COMPAT', type:'bool', def:'1', name:'Audio EQ Compatibility',
-    desc:'Keeps audio compatible with system EQ apps (Flow Equalizer etc). ON if you use one.' },
-  { key:'AUDIO_AGGRESSIVE', type:'bool', def:'0', name:'Aggressive Audio Tweaks',
-    desc:'Audiophile chain: companders off + Class-H HIFI DAC (cleaner headphones, small power cost). May clash with BT/DSP. Reboot to apply. OFF if unsure.' },
+  { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
+    desc:'Who processes the sound. EQ-FRIENDLY \u2014 UHQA off, resampler 0: the signal reaches an external EQ/ViPER untouched (forcing max resampling underneath one is exactly what breaks it). BASELINE \u2014 base tweaks only, no opinion. HI-FI \u2014 UHQA on, hi-fi props, resampler 255: best when you are NOT running an external EQ. Replaces the old EQ Compatibility + the property half of Aggressive Audio Tweaks, which were opposites and, due to a bug, never ran at all. Applies without a reboot.' },
+  { key:'audio_dac_hifi', type:'bool', def:'0', name:'Hi-Fi DAC (mixer)',
+    desc:'Codec configuration, not software: headphone companders off and RX HPH Mode \u2192 CLS_H_HIFI in the device\u2019s own mixer files. A separate axis from Audio Profile \u2014 safe to combine with EQ-friendly (it does not fight an external EQ, it gives it a cleaner DAC). Was the mixer half of Aggressive Audio Tweaks. Reboot to apply.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong'], name:'Media Loudness',
     desc:'Reshapes the volume curves so EVERY slider position is genuinely louder. Stock attenuates hard \u2014 \u221240 dB at 20%, \u221217 dB at 60%. Mild \u2248 +3.4 dB at 60%, Strong \u2248 +6 dB at 60% (and +8/+14 dB at 20%). Only the MUSIC curves change (speaker + headset/BT). Alarms, ringtones and notifications stay stock. The 100% point is never raised above 0 dB, so nothing clips. Note: the quietest steps get louder too, so Strong gives up some fine control at the bottom. Reboot to apply.' },
   { key:'dsp_loudness', type:'seg', def:'off', opts:['off','3','6','9'], name:'DSP Loudness (ASB)',
@@ -1953,8 +1976,8 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_ICONS = {
-  AUDIO_EQ_COMPAT:'\uD83C\uDF9A\uFE0F',       // studio mic / EQ
-  AUDIO_AGGRESSIVE:'\uD83C\uDFA7',             // headphones
+  audio_profile:'\uD83C\uDF9A\uFE0F',            // studio mic (who processes the sound)
+  audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
   CAMERA_LEVEL:'\uD83D\uDCF7',                // camera
   smart_battery_bias:'\uD83D\uDD0B',           // battery
   CAMERA_AGGRESSIVE_INJECT:'\uD83C\uDF9B\uFE0F',  // slider/mode
@@ -2126,6 +2149,18 @@ async function cfgSet(key, val, ctl) {
 }
 
 let _cfgRebootArmed = 0;
+async function cfgApplyAudio() {
+  // Only the tweaks that can genuinely land live: audio_profile, bt_absvol_mode and
+  // the DSP gain. media_loudness (volume curves) and audio_dac_hifi (mixer) live in
+  // the overlay and are parsed at boot, so they still need a reboot - the script says
+  // so rather than pretending.
+  toast(T('t_applying_audio', 'Applying audio\u2026'), 'perf');
+  const r = await run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh 2>&1');
+  const out = (r && r.stdout) ? r.stdout : '';
+  if (out.indexOf('applied:') >= 0) toast(T('t_applied_audio', 'Audio applied (audioserver restarted)'), 'ok');
+  else toast(T('t_apply_audio_fail', 'Could not apply'), 'warn');
+}
+
 async function cfgReboot() {
   const now = Date.now();
   if (now - _cfgRebootArmed > 4000) {
