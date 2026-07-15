@@ -1299,7 +1299,12 @@ asb_generate_odm_binds() {
 
 asb_reset_learning_on_upgrade_to_v56() {
   _asb_dir="/data/adb/asb"
-  _marker="$_asb_dir/v56_learning_reset_done"
+  _marker="$_asb_dir/learning_reset_done"
+  _marker_legacy="$_asb_dir/v56_learning_reset_done"
+  if [ -f "$_marker_legacy" ]; then
+    [ -f "$_marker" ] || mv -f "$_marker_legacy" "$_marker" 2>/dev/null
+    rm -f "$_marker_legacy" 2>/dev/null
+  fi
   [ -f "$_marker" ] && return 0   # already done on this device
 
   _old_prop="$NVBASE/modules/$MODID/module.prop"
