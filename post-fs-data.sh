@@ -32,12 +32,6 @@ done
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
 command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
 
-# Apply / revert the opt-in aggressive audio + camera layers from their saved
-if [ -r "$MODDIR/runtime/asb_tweaks.sh" ]; then
-  . "$MODDIR/runtime/asb_tweaks.sh"
-  asb_apply_dynamic_tweaks "$MODDIR"
-fi
-
 asb_feature_enabled() {
   _key="$1"
   [ -r "$MODDIR/features.conf" ] || return 0
@@ -45,6 +39,19 @@ asb_feature_enabled() {
   [ -z "$_line" ] && return 0
   [ "${_line#*=}" = "1" ]
 }
+
+# Apply / revert the opt-in aggressive audio + camera layers from their saved baselines.
+#
+# This used to run unconditionally, and it was defined BEFORE asb_feature_enabled even
+# existed, so it could not have been gated at all: it re-patched whatever mixer and
+# camera files it found in the overlay every boot, regardless of the categories the user
+# picked at install. Now both categories gate it, and the whole thing is skipped when
+# the user opted out of both - matching what the installer promised them.
+if [ -r "$MODDIR/runtime/asb_tweaks.sh" ] \
+   && { asb_feature_enabled AUDIO || asb_feature_enabled CAMERA; }; then
+  . "$MODDIR/runtime/asb_tweaks.sh"
+  asb_apply_dynamic_tweaks "$MODDIR"
+fi
 # ASB:LOG:BEGIN
 if asb_feature_enabled LOG; then
 asb_persist_safe persist.vendor.radio.adb_log_on 0
