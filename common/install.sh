@@ -999,7 +999,9 @@ asb_patch_one_mixer() {
 }
 
 asb_patch_audio_inplace_aggr_flag() {
-  _ASB_AUDIO_AGGR="$(grep -E '^[[:space:]]*AUDIO_AGGRESSIVE=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  _ASB_AUDIO_AGGR="$(grep -E '^[[:space:]]*audio_dac_hifi=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  # legacy fallback: AUDIO_AGGRESSIVE was the old name of the mixer/DAC half
+  [ -n "$_ASB_AUDIO_AGGR" ] || _ASB_AUDIO_AGGR="$(grep -E '^[[:space:]]*AUDIO_AGGRESSIVE=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   [ -n "$_ASB_AUDIO_AGGR" ] || _ASB_AUDIO_AGGR=0
 }
 
@@ -1493,7 +1495,29 @@ asb_preserve_user_config() {
   [ -z "$_src" ] && [ -f "$_snap_conf" ] && _src="$_snap_conf"
   if [ -z "$_src" ]; then ui_print "[*] Fresh install - using default config"; return 0; fi
 
-  _user_keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+  # Migrate the retired audio switches. AUDIO_EQ_COMPAT + AUDIO_AGGRESSIVE became
+  # audio_profile (software processing) + audio_dac_hifi (codec/mixer).
+  # Mapping rationale: the PROPERTY halves of both old switches were unreachable code
+  # (service.sh tested them as shell variables it never assigned), so every user was
+  # really running the plain baseline == "stock". We therefore only promote to "hifi"
+  # when the user had deliberately turned EQ-compat OFF and aggressive ON; the shipped
+  # EQ_COMPAT=1 default maps to "stock" so nobody's sound changes silently on update.
+  # The mixer half DID work, so audio_dac_hifi carries AUDIO_AGGRESSIVE across exactly.
+  if ! grep -qE '^[[:space:]]*audio_profile=' "$_src" 2>/dev/null; then
+    _oldeq="$(grep -E '^[[:space:]]*AUDIO_EQ_COMPAT=' "$_src" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    _oldag="$(grep -E '^[[:space:]]*AUDIO_AGGRESSIVE=' "$_src" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    if [ -n "$_oldeq$_oldag" ]; then
+      if [ "$_oldeq" != "1" ] && [ "$_oldag" = "1" ]; then _newp="hifi"; else _newp="stock"; fi
+      sed -i "s|^\([[:space:]]*audio_profile=\).*|\1$_newp|" "$MODPATH/config/governor.conf" 2>/dev/null
+      if [ "$_oldag" = "1" ]; then
+        sed -i "s|^\([[:space:]]*audio_dac_hifi=\).*|\11|" "$MODPATH/config/governor.conf" 2>/dev/null
+      fi
+      ui_print "[*] Audio settings migrated -> profile=${_newp}, DAC hi-fi=${_oldag:-0}"
+      ui_print "    (the old EQ/aggressive property switches never actually ran; they do now)"
+    fi
+  fi
+
+  _user_keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
 bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
@@ -1524,7 +1548,7 @@ asb_snapshot_user_config() {
   _snap_conf="/data/adb/asb/governor.conf.snapshot"
   [ -f "$_new_conf" ] || return 0
   mkdir -p "$(dirname "$_snap_conf")" 2>/dev/null || true
-  _keys="AUDIO_AGGRESSIVE AUDIO_EQ_COMPAT CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+  _keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
