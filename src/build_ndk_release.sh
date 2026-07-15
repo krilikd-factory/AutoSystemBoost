@@ -53,15 +53,22 @@ ls -lh "$OUT_DIR/$ASB_BIN_NAME"
 # the PIE flags used for the governor binary. Built only for the release name;
 # the debug build reuses the same .so.
 # ---------------------------------------------------------------------------
-DSP_SRC="$SCRIPT_DIR/dsp/asb_dsp.c"
-if [ -f "$DSP_SRC" ]; then
+# Accept either src/dsp or src/DSP: Linux CI is case-sensitive and the directory has
+# lived under both spellings, which silently skipped the DSP build (no .so, no effect).
+DSP_SRC=""; DSP_INC=""
+for _d in dsp DSP; do
+  if [ -f "$SCRIPT_DIR/$_d/asb_dsp.c" ]; then
+    DSP_SRC="$SCRIPT_DIR/$_d/asb_dsp.c"; DSP_INC="$SCRIPT_DIR/$_d"; break
+  fi
+done
+if [ -n "$DSP_SRC" ]; then
   DSP_CFLAGS=(
     -O2 -fPIC -shared
     -fstack-protector-strong
     -D_FORTIFY_SOURCE=2
     -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
     -fvisibility=hidden
-    -I"$SCRIPT_DIR/dsp"
+    -I"$DSP_INC"
   )
   "$CC" "${DSP_CFLAGS[@]}" "$DSP_SRC" -lm -llog -o "$OUT_DIR/libasbdsp.so"
   "$STRIP" "$OUT_DIR/libasbdsp.so" || true
@@ -73,5 +80,5 @@ if [ -f "$DSP_SRC" ]; then
   fi
   ls -lh "$OUT_DIR/libasbdsp.so"
 else
-  echo "[ASB] note: $DSP_SRC not found - skipping DSP build"
+  echo "[ASB] note: asb_dsp.c not found under src/dsp or src/DSP - skipping DSP build"
 fi
