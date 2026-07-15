@@ -65,13 +65,24 @@ lk_sample_gpu_busy() {
   export LK_GPU_NOW
 }
 
+# $1 = "scr" when the display is on.
+#
+# The screen state HAS to be part of the phase name. Measured over a full day, the
+# display costs ~368 mA on this device (480 mA average with it on vs 112 mA off), which
+# is several times what playback itself draws. Folding both into one "audio_spk" bucket
+# meant its %/h figure mostly reported whether the screen happened to be on -- useless
+# for judging what audio actually costs, which is the whole point of these phases.
+# Screen-off audio is the clean signal; screen-on audio is kept separately rather than
+# thrown away, because it is what the user actually experiences.
 lk_audio_phase_name() {
   case "$LK_AUDIO_ROUTE" in
-    bt|bt_le) echo "audio_bt" ;;
-    speaker) echo "audio_spk" ;;
-    wired|usb) echo "audio_wired" ;;
-    *) echo "audio" ;;
+    bt|bt_le) _apn="audio_bt" ;;
+    speaker)  _apn="audio_spk" ;;
+    wired|usb) _apn="audio_wired" ;;
+    *) _apn="audio" ;;
   esac
+  [ "$1" = "scr" ] && _apn="${_apn}_scr"
+  echo "$_apn"
 }
 
 lk_detect_phase() {
@@ -128,7 +139,7 @@ lk_detect_phase() {
     [ "$LK_GPU_HI_STREAK" -ge "$LK_GPU_ENTER" ] && LK_IN_GAMING=1
   fi
   if [ "$LK_IN_GAMING" = "1" ]; then LK_PHASE_OUT="gaming"; return 0; fi
-  if [ "$LK_AUDIO_PLAY" = "1" ]; then LK_PHASE_OUT="$(lk_audio_phase_name)"; return 0; fi
+  if [ "$LK_AUDIO_PLAY" = "1" ]; then LK_PHASE_OUT="$(lk_audio_phase_name scr)"; return 0; fi
   # within 5 min of waking → post_wake (ASB ramp window of interest)
   if [ "$LK_WOKE_AT" != "0" ] && [ $(( _now - LK_WOKE_AT )) -le 300 ]; then
     LK_PHASE_OUT="post_wake"; return 0

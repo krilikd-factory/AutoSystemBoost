@@ -585,7 +585,12 @@ EOF
 }
 
 lk_battery_trace_header() {
+  # The header used to be an empty heredoc, so battery_trace.txt shipped with no column
+  # names at all - every reader had to count pipes against the printf in
+  # lk_capture_battery_trace_row to work out which field was which. Keep this in sync
+  # with that printf if a column is ever added.
   cat <<'EOF' > "$LK_OUT_DIR/battery_trace.txt"
+epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA|bat_uV|bat_dC|cpu_max_c|skin_c|surface_c|brightness|env_iq|bat_drain|bat_level|reserved|bat_wake|heap_pct|heap_val|hires|cpu_zone|fb_zone|wifi_rx|wifi_tx|rmnet_rx|rmnet_tx|load1|dw|mem_free|swap_free|zram_used|wakelocks
 EOF
 }
 
