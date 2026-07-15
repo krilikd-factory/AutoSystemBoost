@@ -63,6 +63,18 @@ asb_tw_camera_level() {
 }
 
 # --- aggressive AUDIO layer (one mixer file) ---
+# features.conf reader, local to this file: asb_tweaks.sh is sourced from several
+# places (post-fs-data.sh, install.sh) that do not all define asb_feature_enabled.
+asb_tw_feature_on() {
+  _ftf="${MODDIR:-${MODPATH:-/data/adb/modules/AutoSystemBoost}}/features.conf"
+  [ -r "$_ftf" ] || return 0
+  _ftl="$(grep -E "^$1=" "$_ftf" 2>/dev/null | tail -n 1)"
+  [ -z "$_ftl" ] && return 0
+  _ftv="${_ftl#*=}"
+  _ftv="${_ftv%%[!01]*}"
+  [ "$_ftv" = "1" ]
+}
+
 asb_tw_aggr_audio() {
   _f="$1"; [ -f "$_f" ] || return 0
   # Headphone companders OFF: cleaner, more dynamic HPHL/HPHR signal.
@@ -192,6 +204,11 @@ asb_apply_dynamic_tweaks() {
   _cam_level="$(asb_tw_camera_level "$_conf")"
 
   # --- AUDIO mixer files ---
+  # Respect the installer categories individually. The caller only checks
+  # "AUDIO or CAMERA", so without this a user who kept CAMERA but dropped AUDIO would
+  # still get their mixer files rewritten every boot - which is exactly the kind of
+  # "I skipped it but something still applies" breakage that fights external DSPs.
+  if asb_tw_feature_on AUDIO; then
   for _mx in $(find "$_md/system/vendor/etc/audio" "$_md/system/vendor/odm/etc/audio" \
                     -type f -name "mixer_paths*.xml" 2>/dev/null); do
     # Capture a baseline of the current (pre-aggressive) file if we have none
@@ -201,8 +218,10 @@ asb_apply_dynamic_tweaks() {
       asb_tw_aggr_audio "$_mx"
     fi
   done
+  fi
 
   # --- CAMERA conf_tuning --- patch BOTH the /vendor/odm and the direct /odm
+  asb_tw_feature_on CAMERA || _skip_cam=true
   if [ "$_skip_cam" != "true" ]; then
   for _cf in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
              "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
