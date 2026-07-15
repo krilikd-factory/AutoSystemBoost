@@ -1116,6 +1116,51 @@ asb_volume_table_src() {
   printf '%s' "$_vt_stash"
 }
 
+# --- ASB DSP effect -----------------------------------------------------------
+# Installs libasbdsp.so into the /vendor overlay and registers it in the device's
+# audio_effects_config.xml. Registration matters as much as the library: an effect
+# nobody attaches is dead weight. We hook it into <postprocess><stream type="music">
+# so audioserver attaches it to EVERY music stream automatically -- no companion app,
+# and therefore none of the "silent until you open the EQ app" behaviour that the
+# session-attached effects suffer from.
+ASB_DSP_UUID="a5b10001-7e55-4c60-9f21-415342445350"
+
+asb_install_dsp_lib() {
+  _dsp_src="$MODPATH/bin/libasbdsp.so"
+  [ -f "$_dsp_src" ] || return 1
+  _dsp_dir="$MODPATH/system/vendor/lib64/soundfx"
+  mkdir -p "$_dsp_dir" 2>/dev/null || return 1
+  cp -f "$_dsp_src" "$_dsp_dir/libasbdsp.so" 2>/dev/null || return 1
+  chmod 0644 "$_dsp_dir/libasbdsp.so" 2>/dev/null
+  # Borrow the SELinux label from a real library in the live soundfx dir. Without a
+  # vendor_file-ish context audioserver is not allowed to dlopen it and the effect
+  # silently never loads.
+  _dsp_ref=""
+  for _c in /vendor/lib64/soundfx/*.so; do [ -f "$_c" ] && { _dsp_ref="$_c"; break; }; done
+  if [ -n "$_dsp_ref" ]; then
+    _dsp_ctx="$(ls -Zd "$_dsp_ref" 2>/dev/null | awk '{print $1}')"
+    case "$_dsp_ctx" in
+      ?*:?*:?*:?*) chcon "$_dsp_ctx" "$_dsp_dir/libasbdsp.so" 2>/dev/null || true ;;
+    esac
+  fi
+  return 0
+}
+
+asb_register_dsp_effect() {
+  [ -f "$1" ] || return 0
+  grep -q 'asb_loudness' "$1" 2>/dev/null && return 0
+  [ -f "$MODPATH/system/vendor/lib64/soundfx/libasbdsp.so" ] || return 0
+  grep -q '<libraries>' "$1" 2>/dev/null || return 0
+  grep -q '<effects>' "$1" 2>/dev/null || return 0
+  sedi "s#<libraries>#<libraries>\n        <library name=\"asbdsp\" path=\"libasbdsp.so\"/>#" "$1"
+  sedi "s#<effects>#<effects>\n        <effect name=\"asb_loudness\" library=\"asbdsp\" uuid=\"${ASB_DSP_UUID}\"/>#" "$1"
+  if grep -q '<postprocess>' "$1" 2>/dev/null; then
+    sedi "s#<postprocess>#<postprocess>\n        <stream type=\"music\">\n            <apply effect=\"asb_loudness\"/>\n        </stream>#" "$1"
+  else
+    sedi "s#</effects>#</effects>\n\n    <postprocess>\n        <stream type=\"music\">\n            <apply effect=\"asb_loudness\"/>\n        </stream>\n    </postprocess>#" "$1"
+  fi
+}
+
 asb_audio_ensure_volume_libs() {
   _aed="$1"
   [ -d "$_aed" ] || return 0
@@ -1170,6 +1215,18 @@ asb_patch_audio_inplace() {
     [ -f "$_apd" ] || { mkdir -p "$MODPATH/system/vendor/etc" 2>/dev/null; cp -f /vendor/etc/audio_policy_configuration.xml "$_apd" 2>/dev/null; }
     asb_lift_hires_policy "$_apd"
   fi
+
+  # ASB DSP effect: install the library first; the odm-bind stage registers it.
+  _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
+  case "$_dspg" in
+    3|6|9)
+      if asb_install_dsp_lib; then
+        ui_print "    + ASB DSP: libasbdsp.so installed (+${_dspg} dB, limiter on)"
+      else
+        ui_print "    ! ASB DSP: libasbdsp.so missing from build - skipped"
+      fi
+      ;;
+  esac
 
   # Media loudness: reshape the MUSIC volume curves from a pristine stock copy.
   _ml="$(grep -E '^[[:space:]]*media_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
@@ -1353,6 +1410,10 @@ asb_generate_odm_binds() {
         [ "$ASB_MEDIA" = "true" ] || { rm -f "$_ob_p"; continue; }
         asb_media_lift_file "$_ob_p" "$_ob_canoe"
         ;;
+      *audio_effects_config.xml)
+        [ "$ASB_AUDIO" = "true" ] || { rm -f "$_ob_p"; continue; }
+        asb_register_dsp_effect "$_ob_p"
+        ;;
     esac
   done
   ui_print "    . odm-bind: volume libs"
@@ -1438,7 +1499,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur media_loudness"
+region_allow_locale disable_blur media_loudness dsp_loudness"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -1467,7 +1528,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur media_loudness"
+region_allow_locale disable_blur media_loudness dsp_loudness"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
