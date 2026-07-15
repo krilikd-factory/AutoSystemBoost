@@ -1780,28 +1780,31 @@ asb_bt_audio_reinit() {
 }
 
 apply_bt_volume_behavior() {
-  # Respect the user's bt_absvol_mode (auto|on|off) from governor.conf.
+  # Respect the user's bt_absvol_mode (stock|disabled) from governor.conf.
+  # Legacy values are migrated in place: auto/off -> stock, on -> disabled.
   _bt_mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
-  [ -n "$_bt_mode" ] || _bt_mode="auto"
   case "$_bt_mode" in
-    on)  _bt_dav=1; _bt_prop="true"  ;;   # disable absolute volume
-    *)   _bt_dav=0; _bt_prop="false" ;;   # auto/off -> absolute volume ON
+    on)            _bt_mode="disabled" ;;
+    disabled)      _bt_mode="disabled" ;;
+    auto|off|''|*) _bt_mode="stock" ;;
   esac
-  # auto keeps absolute volume ON via the system.prop default (disableabsvol=false);
-  # on/off (re)assert the setting/prop explicitly at runtime.
-  if [ "$_bt_mode" != "auto" ]; then
-    if has settings; then
-      asb_settings_put global bluetooth_disable_absolute_volume "$_bt_dav"
-      asb_settings_put secure bluetooth_disable_absolute_volume "$_bt_dav"
-    fi
-    if has resetprop; then
-      resetprop -n persist.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
-      resetprop -n persist.vendor.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
-      resetprop -p --delete persist.asb.force_disableabsvol >/dev/null 2>&1 || true
-      resetprop -p --delete persist.asb.force_enableabsvol >/dev/null 2>&1 || true
-    fi
+  case "$_bt_mode" in
+    disabled) _bt_dav=1; _bt_prop="true"  ;;
+    *)        _bt_dav=0; _bt_prop="false" ;;
+  esac
+  # Both modes assert explicitly: a passive mode could not undo a previous
+  # 'disabled' (the settings row would stay at 1 and BT would remain quiet).
+  if has settings; then
+    asb_settings_put global bluetooth_disable_absolute_volume "$_bt_dav"
+    asb_settings_put secure bluetooth_disable_absolute_volume "$_bt_dav"
   fi
-  # All modes: re-init audio so the state is live immediately (no quiet-until-ViPER).
+  if has resetprop; then
+    resetprop -n persist.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
+    resetprop -n persist.vendor.bluetooth.disableabsvol "$_bt_prop" >/dev/null 2>&1 || true
+    resetprop -p --delete persist.asb.force_disableabsvol >/dev/null 2>&1 || true
+    resetprop -p --delete persist.asb.force_enableabsvol >/dev/null 2>&1 || true
+  fi
+  # Re-init audio so the state is live immediately.
   asb_bt_audio_reinit "$_bt_mode"
 }
 asb_feature_enabled BT && apply_bt_volume_behavior

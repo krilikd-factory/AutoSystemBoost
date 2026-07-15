@@ -106,6 +106,24 @@ if command -v resetprop >/dev/null 2>&1; then
   resetprop --delete persist.sys.power.fuel.gauge >/dev/null 2>&1 || true
   fi
   # ASB:KERNEL:END
+  _blur="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
+  if [ "$_blur" = "1" ]; then
+    resetprop ro.surface_flinger.supports_background_blur 0 >/dev/null 2>&1 || true
+    resetprop ro.surface_flinger.media_panel_bg_blur 0 >/dev/null 2>&1 || true
+    resetprop ro.oplus.display.disable.volume_blur 1 >/dev/null 2>&1 || true
+    resetprop persist.sys.oplus.anim_level 0 >/dev/null 2>&1 || true
+    resetprop ro.oplus.gaussianlevel 0 >/dev/null 2>&1 || true
+    resetprop ro.launcher.blur.appLaunch 0 >/dev/null 2>&1 || true
+    resetprop persist.sys.oplus.material_blur_switch false >/dev/null 2>&1 || true
+  else
+    resetprop ro.surface_flinger.supports_background_blur 1 >/dev/null 2>&1 || true
+    resetprop ro.surface_flinger.media_panel_bg_blur 1 >/dev/null 2>&1 || true
+    resetprop ro.oplus.display.disable.volume_blur 0 >/dev/null 2>&1 || true
+    resetprop persist.sys.oplus.anim_level 1 >/dev/null 2>&1 || true
+    resetprop ro.oplus.gaussianlevel 3 >/dev/null 2>&1 || true
+    resetprop ro.launcher.blur.appLaunch 1 >/dev/null 2>&1 || true
+    resetprop persist.sys.oplus.material_blur_switch true >/dev/null 2>&1 || true
+  fi
 fi
 # ASB:WIFI:BEGIN
 asb_feature_enabled WIFI && asb_persist_safe persist.vendor.wlan.scan_throttle 1
