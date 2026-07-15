@@ -1659,6 +1659,8 @@ const I18N = {
         desc: 'БЕЗОПАСНЫЙ — только имеющиеся tone-ключи. АГРЕССИВНЫЙ инжектирует недостающие (OnePlus 13/12) — рискованно, верните БЕЗОПАСНЫЙ при сбоях. После перезагрузки.' },
       media_loudness: { name: 'Громкость медиа',
         desc: 'Переформовывает кривые громкости так, что КАЖДАЯ позиция ползунка становится реально громче. Сток глушит сильно: на 20% это \u221240 dB, на 60% \u221217 dB. Умеренно \u2248 +3.4 dB на 60%, Сильно \u2248 +6 dB на 60% (и +8/+14 dB на 20%). Меняются только кривые МУЗЫКИ (динамик + наушники/BT). Будильник, звонок и уведомления остаются стоковыми. Максимум (100%) не поднимается выше 0 dB \u2014 клиппинга нет. Учти: тихие шаги тоже станут громче, поэтому на «Сильно» теряется точность у самого низа. Применяется после перезагрузки.' },
+      dsp_loudness: { name: 'DSP-усиление (ASB)',
+        desc: 'Собственный DSP-движок ASB: реальное усиление ВЫШЕ 0 dB \u2014 то, чего кривые дать не могут (на 100% они упираются в unity). Работает пиковый лимитер (мгновенная атака, спад ~120 мс, потолок \u22121 dBFS), поэтому клиппинга нет. Цепляется ко всем музыкальным потокам автоматически \u2014 приложение не нужно, тихого старта не будет. ВЫКЛ = библиотека вообще не ставится. Начни с 3 dB; 9 dB на и без того громких мастерах заставит лимитер работать жёстко и звук может «сплющить». Применяется после перезагрузки.' },
       bt_absvol_mode: { name: 'Абсолютная громкость Bluetooth',
         desc: 'Стоково = absolute volume ВКЛ: наушники сами делают финальное ослабление и синхронны с ползунком телефона (громко, синхронно). Отключено = телефон сам управляет усилением, а наушники держат свой уровень — для автомагнитол, которые слишком громкие на 1-м шаге, или для DSP. На современных наушниках «Отключено» часто даёт тихий старт после перезагрузки.' },
       cool_gaming: { name: 'Холодные игры',
@@ -1893,7 +1895,7 @@ const CFG_FILE = MD + '/config/governor.conf';
 // reinstall / root-manager re-trigger can restore them. Must stay in sync with
 // the _user_keys / snapshot list in common/install.sh.
 const SNAP_KEYS = ['AUDIO_AGGRESSIVE','AUDIO_EQ_COMPAT','CAMERA_LEVEL','CAMERA_AGGRESSIVE',
-  'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','media_loudness','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
+  'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','media_loudness','dsp_loudness','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
   'auto_battery_enable','charge_aware_enable',
   'UX_ANIM_FORCE_RESTART','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
   'region_allow_locale','disable_blur'];
@@ -1905,6 +1907,8 @@ const CFG_ITEMS = [
     desc:'Audiophile chain: companders off + Class-H HIFI DAC (cleaner headphones, small power cost). May clash with BT/DSP. Reboot to apply. OFF if unsure.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong'], name:'Media Loudness',
     desc:'Reshapes the volume curves so EVERY slider position is genuinely louder. Stock attenuates hard \u2014 \u221240 dB at 20%, \u221217 dB at 60%. Mild \u2248 +3.4 dB at 60%, Strong \u2248 +6 dB at 60% (and +8/+14 dB at 20%). Only the MUSIC curves change (speaker + headset/BT). Alarms, ringtones and notifications stay stock. The 100% point is never raised above 0 dB, so nothing clips. Note: the quietest steps get louder too, so Strong gives up some fine control at the bottom. Reboot to apply.' },
+  { key:'dsp_loudness', type:'seg', def:'off', opts:['off','3','6','9'], name:'DSP Loudness (ASB)',
+    desc:'ASB\u2019s own DSP engine: real gain ABOVE 0 dB \u2014 what the volume curves cannot do (they stop at unity at 100%). A peak limiter (instant attack, ~120 ms release, \u22121 dBFS ceiling) means it cannot clip. Attached to every music stream automatically \u2014 no companion app, no quiet start. Off = the library is not installed at all. Start at 3 dB; 9 dB on already-loud masters makes the limiter work hard and can sound squashed. Reboot to apply.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Absolute Volume',
     desc:'Stock = absolute volume ON: the headset does the final attenuation and stays in sync with the phone slider (loud, synced). Disabled = the phone drives its own software gain and the headset keeps its own level \u2014 for car stereos that are too loud at step 1, or DSP setups. On modern headsets Disabled often starts quiet after a reboot.' },
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:4, step:1, name:'Camera Grade',
@@ -1954,6 +1958,7 @@ const CFG_ICONS = {
   CAMERA_LEVEL:'\uD83D\uDCF7',                // camera
   smart_battery_bias:'\uD83D\uDD0B',           // battery
   CAMERA_AGGRESSIVE_INJECT:'\uD83C\uDF9B\uFE0F',  // slider/mode
+  dsp_loudness:'\uD83C\uDF9B',                // control knobs (DSP gain)
   media_loudness:'\uD83D\uDCE2',            // loudspeaker (media loudness)
   bt_absvol_mode:'\uD83D\uDD0A',              // loud speaker (BT volume)
   cool_gaming:'\uD83C\uDFAE',                 // gamepad
