@@ -931,21 +931,47 @@ apply_gps_hygiene() {
 asb_feature_enabled GPS && apply_gps_hygiene
 # ASB:GPS:END
 # ASB:AUDIO:BEGIN
+# Read one key out of governor.conf. service.sh does NOT source the config, so every
+# runtime toggle has to be read explicitly like this.
+asb_cfg_val() {
+  grep -E "^[[:space:]]*$1=" "$MODDIR/config/governor.conf" 2>/dev/null \
+    | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]'
+}
+
 apply_audio_runtime() {
-  if [ "${AUDIO_EQ_COMPAT:-0}" = "1" ]; then
-    setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
+  # audio_profile picks WHO does the software processing: eq_compat | stock | hifi.
+  #
+  # This used to be two switches ($AUDIO_EQ_COMPAT and the property half of
+  # $AUDIO_AGGRESSIVE) that were direct opposites -- resampler.quality 0 vs 255. Worse,
+  # they were read as shell variables while service.sh never sources governor.conf and
+  # nothing ever assigned them, so both expanded to their ":-0" default and BOTH
+  # branches were unreachable: only the middle baseline ever ran, no matter what the
+  # WebUI showed. Now it is one axis, read from the config for real.
+  _ap="$(asb_cfg_val audio_profile)"
+  case "$_ap" in
+    eq_compat|stock|hifi) : ;;
+    *) _ap="stock" ;;
+  esac
+  ASB_AUDIO_PROFILE_ACTIVE="$_ap"
+
+  setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
+
+  if [ "$_ap" = "eq_compat" ]; then
+    # Hand the signal to the external EQ/ViPER untouched. Deliberately does NOT set the
+    # hi-fi baseline: the point of this mode is to stop the framework having opinions.
     asb_persist_safe persist.audio.uhqa 0
     asb_persist_safe persist.vendor.audio.uhqa false
     setprop af.resampler.quality 0 2>/dev/null || true
     return
   fi
+
+  # Baseline for stock + hifi.
   asb_persist_safe persist.audio.hifi.int_codec true
   asb_persist_safe persist.vendor.audio.hifi.int_codec true
-  setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
   asb_persist_safe persist.vendor.audio.aec_ref.enable false
   setprop vendor.audio.feature.aec_ref.enable false 2>/dev/null || true
 
-  if [ "${AUDIO_AGGRESSIVE:-0}" = "1" ]; then
+  if [ "$_ap" = "hifi" ]; then
     setprop ro.audio.hifi true 2>/dev/null || true
     setprop ro.vendor.audio.hifi true 2>/dev/null || true
     asb_persist_safe persist.audio.hifi true
