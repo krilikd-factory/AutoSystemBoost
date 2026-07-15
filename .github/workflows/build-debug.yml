@@ -26,6 +26,8 @@ jobs:
             src/asb_smart.h \
             src/asb_smart_defs.h \
             src/build_ndk_release.sh \
+            src/DSP/asb_dsp.c \
+            src/DSP/asb_effect_abi.h \
             module.prop \
             customize.sh \
             service.sh; do
@@ -91,12 +93,23 @@ jobs:
           fi
           cat module.prop
 
+      - name: Normalize DSP source path for Linux CI
+        run: |
+          if [ -d src/DSP ] && [ ! -e src/dsp ]; then
+            ln -s DSP src/dsp
+          fi
+          test -f src/dsp/asb_dsp.c || { echo "ERROR: src/dsp/asb_dsp.c not found after normalization"; exit 1; }
+          test -f src/dsp/asb_effect_abi.h || { echo "ERROR: src/dsp/asb_effect_abi.h not found after normalization"; exit 1; }
+          ls -la src/dsp
+
       - name: Build DEBUG binary (full diagnostics)
         run: ASB_BUILD_MODE=debug bash src/build_ndk_release.sh
 
-      - name: Verify debug binary
+      - name: Verify debug binary and DSP library
         run: |
           B="bin/arm64-v8a/asb-debug"
+          SO="bin/arm64-v8a/libasbdsp.so"
+
           test -f "$B" || { echo "ERROR: $B not found"; exit 1; }
           test -x "$B" || { echo "ERROR: $B not executable"; exit 1; }
           FILE_OUT="$(file "$B")"
@@ -108,6 +121,16 @@ jobs:
           echo "Binary size: $SIZE bytes"
           [ "$SIZE" -gt 10000 ]   || { echo "ERROR: too small"; exit 1; }
           [ "$SIZE" -lt 2000000 ] || { echo "ERROR: too large"; exit 1; }
+
+          test -f "$SO" || { echo "ERROR: $SO not found"; exit 1; }
+          FILE_SO="$(file "$SO")"
+          echo "$SO file: $FILE_SO"
+          echo "$FILE_SO" | grep -q "aarch64" || { echo "ERROR: DSP .so is not aarch64!"; exit 1; }
+          echo "$FILE_SO" | grep -q "ELF"     || { echo "ERROR: DSP .so is not ELF!"; exit 1; }
+          echo "$FILE_SO" | grep -q "shared object" || { echo "ERROR: DSP artifact is not a shared object!"; exit 1; }
+          SO_SIZE=$(wc -c < "$SO")
+          echo "DSP size: $SO_SIZE bytes"
+          [ "$SO_SIZE" -gt 1000 ] || { echo "ERROR: DSP .so too small"; exit 1; }
 
       - name: Package DEBUG zip
         run: |
@@ -140,6 +163,7 @@ jobs:
 
           mkdir -p "$PKG_DBG/bin"
           install -m 0755 bin/arm64-v8a/asb-debug "$PKG_DBG/bin/asb"
+          install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_DBG/bin/libasbdsp.so"
           find "$PKG_DBG" -name "*.log" -delete
 
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
@@ -157,6 +181,7 @@ jobs:
 
           for required in \
             "bin/asb" \
+            "bin/libasbdsp.so" \
             "service.sh" \
             "module.prop" \
             "post-fs-data.sh" \
@@ -180,6 +205,7 @@ jobs:
             "tools/asb_field_report.py" \
             "tools/asb_field_report.sh" \
             "tools/logkit/_asb_logkit_common.sh" \
+            "tools/logkit/asb_audio_ab.sh" \
             "tools/logkit/asb_log_battery_mixed.sh" \
             "tools/logkit/asb_log_battery_sleep.sh" \
             "tools/logkit/asb_log_perf.sh" \
@@ -235,6 +261,8 @@ jobs:
           if [ -f "${ZIP_DBG:-}" ]; then
             echo "  ZIP     : $ZIP_DBG ($(du -sh $ZIP_DBG | cut -f1))"
             BINSZ=$(unzip -p "$ZIP_DBG" bin/asb 2>/dev/null | wc -c)
+            SOSZ=$(unzip -p "$ZIP_DBG" bin/libasbdsp.so 2>/dev/null | wc -c)
             echo "  Binary  : ${BINSZ} bytes (with debug logs)"
+            echo "  DSP .so : ${SOSZ} bytes"
           fi
           echo "========================================"
