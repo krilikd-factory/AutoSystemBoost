@@ -48,6 +48,17 @@ done
 #      sessions, last_seen older than the reset marker). Learner state only —
 #      the append-only session_history.jsonl survived the race cleanly and is
 #      genuinely fresh, so it is kept.
+for _mv_pair in \
+    "v56_learning_reset_done:learning_reset_done" \
+    "v56_resurrect_sweep_done:learner_resurrect_sweep_done"; do
+  _mv_old="/data/adb/asb/${_mv_pair%%:*}"
+  _mv_new="/data/adb/asb/${_mv_pair##*:}"
+  if [ -f "$_mv_old" ]; then
+    [ -f "$_mv_new" ] || mv -f "$_mv_old" "$_mv_new" 2>/dev/null
+    rm -f "$_mv_old" 2>/dev/null
+  fi
+done
+
 if [ -f /data/adb/asb/learning_reset_pending ]; then
   rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak \
         /data/adb/asb/pstats_balanced.json /data/adb/asb/pstats_battery.json \
@@ -55,12 +66,12 @@ if [ -f /data/adb/asb/learning_reset_pending ]; then
         /data/adb/asb/session_history.jsonl \
         /data/adb/asb/session_history_migrated_v47 2>/dev/null
   rm -f /data/adb/asb/learning_reset_pending 2>/dev/null
-  : > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
-elif [ -f /data/adb/asb/v56_learning_reset_done ] && [ ! -f /data/adb/asb/v56_resurrect_sweep_done ]; then
+  : > /data/adb/asb/learner_resurrect_sweep_done 2>/dev/null
+elif [ -f /data/adb/asb/learning_reset_done ] && [ ! -f /data/adb/asb/learner_resurrect_sweep_done ]; then
   rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak \
         /data/adb/asb/pstats_balanced.json /data/adb/asb/pstats_battery.json \
         /data/adb/asb/smart_appheat.bin /data/adb/asb/auto_battery_state 2>/dev/null
-  : > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
+  : > /data/adb/asb/learner_resurrect_sweep_done 2>/dev/null
 fi
 
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
@@ -108,7 +119,8 @@ fi
 
 asb_load_profile
 
-rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done /data/adb/asb/session_history_migrated_v47 2>/dev/null
+rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done \
+      /data/adb/asb/session_history_migrated_v47 /data/adb/asb/bt_absvol_v59_reset 2>/dev/null
 
 if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
   for _stale_p in \
