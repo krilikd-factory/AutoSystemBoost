@@ -2011,13 +2011,23 @@ function cfgStatus(it, cur) {
   }
   return { cls: (cur === it.def ? 'neutral' : 'warn'), text: String(cur).toUpperCase() };
 }
+// A card counts as "active" whenever it is not sitting on the shipped default -- not
+// just when a switch is on. A segment parked on "hifi" or a slider at 4 is every bit as
+// non-stock as a toggle, and the user should be able to spot all of them at a glance.
+function cfgIsActive(it, cur) {
+  if (cur === undefined || cur === null) return false;
+  if (it.type === 'bool') return String(cur) === '1';
+  if (it.type === 'range') return (parseInt(cur, 10) || 0) !== (parseInt(it.def, 10) || 0);
+  return String(cur) !== String(it.def);
+}
+
 function cfgRender() {
   const list = _el('cfgList');
   if (!list) return;
   list.innerHTML = '';
   CFG_ITEMS.forEach(it => {
     const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
-    const isOn = (it.type === 'bool' && cur === '1');
+    const isOn = cfgIsActive(it, cur);
     const row = document.createElement('div');
     row.className = 'cfg-row' + (isOn ? ' is-on' : '');
     const top = document.createElement('div');
@@ -2128,6 +2138,16 @@ async function cfgSet(key, val, ctl) {
   if (ctl) ctl.classList.remove('busy');
   if (r.errno === 0) {
     _cfgVals[key] = val;
+    // Sync the card highlight straight away. A full cfgRender() would work too but it
+    // would collapse whatever description the user currently has expanded.
+    try {
+      const _it = CFG.filter(function(x) { return x.key === key; })[0];
+      const _row = (ctl && ctl.closest) ? ctl.closest('.cfg-row') : null;
+      if (_it && _row) {
+        if (cfgIsActive(_it, val)) _row.classList.add('is-on');
+        else _row.classList.remove('is-on');
+      }
+    } catch (e) {}
     // Mirror this change into the external user snapshot so a reinstall /
     // root-manager re-trigger restores it (fixes toggles reverting to defaults).
     if ((typeof SNAP_KEYS !== 'undefined') && SNAP_KEYS.indexOf(key) >= 0) {
