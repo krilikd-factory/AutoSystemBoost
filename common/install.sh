@@ -1053,6 +1053,69 @@ asb_guard_v4a_effects() {
   return 0
 }
 
+# Media loudness: reshape the audio-policy volume CURVES (index -> attenuation in
+# millibels). Stock OxygenOS attenuates brutally across the usable range — media
+# sits at -40 dB at 20% and -17 dB at 60% — which is why "one step too quiet, one
+# step too loud" happens and why the phone feels short of volume. Scaling those
+# attenuations toward 0 makes every slider position genuinely louder.
+#
+# ONLY two curves are touched, chosen from the real stream->curve map:
+#   DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE  -> MUSIC + ASSISTANT on speaker
+#   DEFAULT_MEDIA_VOLUME_CURVE                    -> MUSIC on headset / BT / earpiece
+# Deliberately NOT touched: NON_MUTABLE_* (alarms), HEADSET/EXT_MEDIA curves
+# (ringtone + notifications), SILENT/FULL_SCALE. Alarms and ringtones keep stock
+# loudness. Side effect worth knowing: MEDIA is also referenced by VOICE_CALL and
+# BLUETOOTH_SCO on EXT_MEDIA, so BT call audio gets the same lift.
+#
+# The 100%/0 dB point is never raised above unity, so nothing can clip.
+# $1 = file to patch, $2 = scale percent (100 = stock/no-op, 80 = mild, 65 = strong)
+asb_reshape_volume_curves() {
+  [ -f "$1" ] || return 0
+  case "$2" in ''|100) return 0 ;; esac
+  grep -q 'ASB:VOLCURVE' "$1" 2>/dev/null && return 0
+  awk -v pct="$2" -v targets='|DEFAULT_MEDIA_VOLUME_CURVE|DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE|' '
+  BEGIN { cur = 0 }
+  {
+    line = $0
+    if (match(line, /<reference[ \t]+name="[^"]+"/)) {
+      seg = substr(line, RSTART, RLENGTH)
+      match(seg, /name="[^"]+"/)
+      nm = substr(seg, RSTART + 6, RLENGTH - 7)
+      cur = (index(targets, "|" nm "|") > 0) ? 1 : 0
+    } else if (line ~ /<\/reference>/) {
+      cur = 0
+    } else if (cur && match(line, /<point>[0-9]+,-[0-9]+<\/point>/)) {
+      p = substr(line, RSTART, RLENGTH)
+      match(p, />[0-9]+,/);  idx = substr(p, RSTART + 1, RLENGTH - 2)
+      match(p, /,-[0-9]+</); mb  = substr(p, RSTART + 1, RLENGTH - 2)
+      nv = int((mb + 0) * pct / 100)
+      sub(/<point>[0-9]+,-[0-9]+<\/point>/, "<point>" idx "," nv "</point>", line)
+    }
+    print line
+  }
+  END { }
+  ' "$1" > "$1.vctmp" 2>/dev/null || { rm -f "$1.vctmp"; return 0; }
+  [ -s "$1.vctmp" ] || { rm -f "$1.vctmp"; return 0; }
+  printf '<!-- ASB:VOLCURVE:%s -->\n' "$2" >> "$1.vctmp"
+  mv -f "$1.vctmp" "$1" 2>/dev/null
+}
+
+# Media loudness needs to be patched from a PRISTINE stock copy, because scaling is
+# not idempotent and the previous install's overlay may already be shadowing
+# /vendor/etc. Stash the untouched stock table on first sight and always rebuild
+# from that, so changing the setting (or reverting to stock) is exact.
+asb_volume_table_src() {
+  _vt_live="/vendor/etc/default_volume_tables.xml"
+  [ -f "$_vt_live" ] || return 1
+  _vt_stash="/data/adb/asb/stock/default_volume_tables.xml"
+  if [ ! -f "$_vt_stash" ]; then
+    grep -q 'ASB:VOLCURVE' "$_vt_live" 2>/dev/null && return 1
+    mkdir -p /data/adb/asb/stock 2>/dev/null
+    cp -f "$_vt_live" "$_vt_stash" 2>/dev/null || return 1
+  fi
+  printf '%s' "$_vt_stash"
+}
+
 asb_audio_ensure_volume_libs() {
   _aed="$1"
   [ -d "$_aed" ] || return 0
@@ -1106,6 +1169,26 @@ asb_patch_audio_inplace() {
     _apd="$MODPATH/system/vendor/etc/audio_policy_configuration.xml"
     [ -f "$_apd" ] || { mkdir -p "$MODPATH/system/vendor/etc" 2>/dev/null; cp -f /vendor/etc/audio_policy_configuration.xml "$_apd" 2>/dev/null; }
     asb_lift_hires_policy "$_apd"
+  fi
+
+  # Media loudness: reshape the MUSIC volume curves from a pristine stock copy.
+  _ml="$(grep -E '^[[:space:]]*media_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
+  case "$_ml" in
+    mild)   _mlpct=80 ;;
+    strong) _mlpct=65 ;;
+    *)      _mlpct=100 ;;
+  esac
+  if [ "$_mlpct" != "100" ]; then
+    _vtsrc="$(asb_volume_table_src)"
+    if [ -n "$_vtsrc" ] && [ -f "$_vtsrc" ]; then
+      _vtd="$MODPATH/system/vendor/etc/default_volume_tables.xml"
+      mkdir -p "$MODPATH/system/vendor/etc" 2>/dev/null
+      cp -f "$_vtsrc" "$_vtd" 2>/dev/null
+      asb_reshape_volume_curves "$_vtd" "$_mlpct"
+      ui_print "    + media loudness: ${_ml} (music curves only; alarms/ringtones stock)"
+    else
+      ui_print "    ! media loudness: stock volume table unavailable - skipped"
+    fi
   fi
 
   asb_audio_ensure_volume_libs "$_adir"
@@ -1355,7 +1438,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur"
+region_allow_locale disable_blur media_loudness"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -1384,7 +1467,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur"
+region_allow_locale disable_blur media_loudness"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -1764,28 +1847,24 @@ asb_apply_bt_absvol() {
   _prop="$MODPATH/system.prop"
   [ -f "$_prop" ] || return 0
   _mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
-  [ -n "$_mode" ] || _mode="auto"
-  if [ "$_mode" = "auto" ]; then
-    sed -i "s/^persist.bluetooth.disableabsvol=.*/persist.bluetooth.disableabsvol=false/" "$_prop" 2>/dev/null
-    sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=false/" "$_prop" 2>/dev/null
-    sed -i '/^persist\.bluetooth\.enablenewavrcp=/d' "$_prop" 2>/dev/null
-    ASB_BT_ABSVOL_APPLIED="mode=auto (absolute-volume kept ON — stock, loud, synced)"
-    return 0
-  fi
   case "$_mode" in
-    on)  _val="true" ;;
-    off) _val="false" ;;
-    *)   _val="false" ;;
+    on)            _mode="disabled" ;;
+    disabled)      _mode="disabled" ;;
+    auto|off|''|*) _mode="stock" ;;
   esac
+  if [ "$_mode" = "disabled" ]; then _val="true"; else _val="false"; fi
   sed -i "s/^persist.bluetooth.disableabsvol=.*/persist.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
   sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
-  ASB_BT_ABSVOL_APPLIED="mode=$_mode disableabsvol=$_val"
-  ui_print "[*] BT volume mode: $_mode"
-  if [ "$_mode" = "on" ]; then
-    ui_print "    ! disables BT absolute volume; on modern headsets this can start"
-    ui_print "      quiet after each reboot until an audio app re-inits the output."
-    ui_print "      Use OFF/AUTO if BT audio is quiet after boot."
+  if [ "$_mode" = "stock" ]; then
+    sed -i '/^persist\.bluetooth\.enablenewavrcp=/d' "$_prop" 2>/dev/null
+    ASB_BT_ABSVOL_APPLIED="mode=stock (absolute volume ON — loud, synced)"
+    return 0
   fi
+  ASB_BT_ABSVOL_APPLIED="mode=disabled (absolute volume OFF — phone-side gain)"
+  ui_print "[*] BT absolute volume: disabled"
+  ui_print "    ! the headset keeps its own level and the phone drives the gain."
+  ui_print "      On modern headsets this can start quiet after each reboot until"
+  ui_print "      an audio app re-inits the output. Use 'stock' if BT is quiet."
 }
 [ "$ASB_BT" = "true" ] && asb_apply_bt_absvol
 
