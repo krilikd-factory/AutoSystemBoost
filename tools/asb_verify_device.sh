@@ -171,8 +171,9 @@ else
   fi
 
   # aggressive (only meaningful if toggle ON)
-  AGGR=$(grep -E '^[[:space:]]*AUDIO_AGGRESSIVE=' $ASB_MODDIR/config/governor.conf 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')
-  emit "  (AUDIO_AGGRESSIVE toggle = ${AGGR:-0})"
+  AGGR=$(grep -E '^[[:space:]]*audio_dac_hifi=' $ASB_MODDIR/config/governor.conf 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')
+  [ -n "$AGGR" ] || AGGR=$(grep -E '^[[:space:]]*AUDIO_AGGRESSIVE=' $ASB_MODDIR/config/governor.conf 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')
+  emit "  (audio_dac_hifi toggle = ${AGGR:-0})"
   if [ "${AGGR:-0}" = "1" ]; then
     if [ "$COMP_FILES" -gt 0 ]; then
       check "Aggressive: HPH companders OFF (engaged count, expect 0)" "0" "$COMP_ON" eq

@@ -252,8 +252,9 @@ if [ -n "$MIX" ]; then
   V "IIR0 EQ bands flattened (engaged=0)" "0" "$_iir" eq
   V "Class-H headphone DAC armed (RDAC=1 present)" "1" "$_rdac" ge
   # aggressive (toggle)
-  _aud_aggr="$(cfg AUDIO_AGGRESSIVE)"
-  NOTE "AUDIO_AGGRESSIVE toggle = ${_aud_aggr:-0}"
+  _aud_aggr="$(cfg audio_dac_hifi)"
+  [ -n "$_aud_aggr" ] || _aud_aggr="$(cfg AUDIO_AGGRESSIVE)"
+  NOTE "audio_dac_hifi toggle = ${_aud_aggr:-0}"
   if [ "${_aud_aggr:-0}" = "1" ]; then
     _comp=$(grep -c 'HPH[LR] Compander" value="1"' "$MIX" 2>/dev/null)
     _hifi=$(grep -c 'RX HPH Mode" value="CLS_H_HIFI"' "$MIX" 2>/dev/null)
@@ -276,8 +277,8 @@ for _p in persist.audio.hifi persist.audio.uhqa vendor.audio.hifi.dac \
           persist.vendor.audio.ull.period.size; do
   P "    $_p = $(gp $_p)"
 done
-# AUDIO_EQ_COMPAT toggle state
-NOTE "AUDIO_EQ_COMPAT = $(cfg AUDIO_EQ_COMPAT)"
+# audio_profile (replaced AUDIO_EQ_COMPAT + the property half of AUDIO_AGGRESSIVE)
+NOTE "audio_profile = $(cfg audio_profile)"
 
 # =====================================================================
 SEC "2. BLUETOOTH"
