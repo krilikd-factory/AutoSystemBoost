@@ -1507,9 +1507,18 @@ lk_snapshot_network() {
     echo "# carrier / radio"
     echo "  operator: $(lk_get_prop gsm.operator.alpha) numeric: $(lk_get_prop gsm.operator.numeric) roaming: $(lk_get_prop gsm.operator.isroaming)"
     echo "  voice_type: $(lk_get_prop gsm.network.type) data_type: $(lk_get_prop gsm.data.network.type)"
-    dumpsys telephony.registry 2>/dev/null | grep -iE 'mSignalStrength|mDataConnectionState=|mDataNetworkType=|mVoiceNetworkType=|rsrp|rssnr|level=' | head -10
+    _tr=$(dumpsys telephony.registry 2>/dev/null)
+    printf '%s\n' "$_tr" | grep -oE 'getRilVoiceRadioTechnology=[0-9]+\([A-Za-z]+\)' | head -1 | sed 's/^/  /'
+    printf '%s\n' "$_tr" | grep -oE 'getRilDataRadioTechnology=[0-9]+\([A-Za-z]+\)' | head -1 | sed 's/^/  /'
+    printf '%s\n' "$_tr" | grep -oE 'mDataConnectionState=-?[0-9]+' | head -1 | sed 's/^/  /'
+    printf '%s\n' "$_tr" | grep -oE 'rssi=-?[0-9]+ rsrp=-?[0-9]+ rsrq=-?[0-9]+ rssnr=-?[0-9]+' | head -1 | sed 's/^/  lte: /'
+    printf '%s\n' "$_tr" | grep -oE 'mBands=\[[0-9,]*\]|mEarfcn=[0-9]+|mBandwidth=[0-9]+' | head -3 | tr '\n' ' ' | sed 's/^/  cell: /'
+    echo ""
     echo "# wifi link"
-    dumpsys wifi 2>/dev/null | grep -iE 'SSID:|Supplicant state|RSSI:|Link speed|Tx Link speed|Rx Link speed|Frequency|score' | head -12
+    _wl=$(dumpsys wifi 2>/dev/null)
+    printf '%s\n' "$_wl" | grep -m1 -oE 'SSID: [^,]*, BSSID: [^,]*, .*RSSI: -?[0-9]+.*Link speed: [0-9]+.*' | cut -c1-200 | sed 's/^/  /'
+    printf '%s\n' "$_wl" | grep -m1 -oE 'Wi-Fi is [A-Za-z]+' | sed 's/^/  /'
+    printf '%s\n' "$_wl" | grep -m1 -oE 'mFrequency=[0-9]+|Frequency: [0-9]+' | sed 's/^/  /'
     echo "# tcp params (current, ASB may have tuned)"
     echo "  congestion: $(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
     echo "  tcp_rmem: $(cat /proc/sys/net/ipv4/tcp_rmem 2>/dev/null)"
