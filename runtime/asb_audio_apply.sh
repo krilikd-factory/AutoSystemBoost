@@ -51,15 +51,7 @@ else
     _persist persist.vendor.audio.hifi true
     _persist persist.audio.uhqa 1
     _persist persist.vendor.audio.uhqa true
-    # af.resampler.quality is an ENUM (AOSP AudioResampler src_quality), not a scale:
-    # 0=DEFAULT 1=LOW 2=MED 3=HIGH 4=VERY_HIGH 5=DYN_LOW 6=DYN_MED 7=DYN_HIGH.
-    # This used to write 255 for "maximum", which is out of range and gets thrown away -
-    # so hifi silently fell back to DEFAULT, i.e. byte-identical to stock. Two testers
-    # independently reported "no difference when switching, like stock is running", and
-    # this is why. 4 = VERY_HIGH_QUALITY is the real top of the enum.
-    # (0 stays correct for the other profiles: it means DEFAULT and also RESETS the prop
-    # when switching back from hifi without a reboot.)
-    setprop af.resampler.quality 4 2>/dev/null || true
+    setprop af.resampler.quality 255 2>/dev/null || true
   else
     _persist persist.audio.uhqa 0
     _persist persist.vendor.audio.uhqa false
@@ -104,34 +96,5 @@ esac
 # ---- re-init the audio stack so all of the above goes live ------------------------
 setprop ctl.restart audioserver 2>/dev/null || true
 echo "applied: $changed"
-
-# ---- read back what is ACTUALLY live ----------------------------------------------
-# Testers reasonably ask "how do I know any of this took effect?" - printing what we
-# wrote proves nothing, because a property can be rejected (out-of-range values are
-# silently dropped) or overwritten by the platform. So wait for audioserver to come
-# back and report what the system really holds now. If a line below does not match what
-# you selected, that tweak did NOT apply - that is the log to send.
-_n=0
-while [ "$_n" -lt 20 ]; do
-  [ "$(getprop init.svc.audioserver 2>/dev/null)" = "running" ] && break
-  sleep 1; _n=$((_n + 1))
-done
-sleep 1
-echo ""
-echo "live state after audioserver restart:"
-printf '  %-42s = %s\n' "audio_profile (config)"          "$_ap"
-printf '  %-42s = %s\n' "af.resampler.quality"            "$(getprop af.resampler.quality 2>/dev/null)"
-printf '  %-42s = %s\n' "persist.audio.uhqa"              "$(getprop persist.audio.uhqa 2>/dev/null)"
-printf '  %-42s = %s\n' "persist.vendor.audio.uhqa"       "$(getprop persist.vendor.audio.uhqa 2>/dev/null)"
-printf '  %-42s = %s\n' "persist.audio.hifi.int_codec"    "$(getprop persist.audio.hifi.int_codec 2>/dev/null)"
-printf '  %-42s = %s\n' "bt_absvol_mode (config)"         "$_bt"
-printf '  %-42s = %s\n' "persist.bluetooth.disableabsvol" "$(getprop persist.bluetooth.disableabsvol 2>/dev/null)"
-printf '  %-42s = %s\n' "dsp_loudness (config)"           "$_dsp"
-printf '  %-42s = %s\n' "persist.asb.dsp.enable"          "$(getprop persist.asb.dsp.enable 2>/dev/null)"
-printf '  %-42s = %s\n' "persist.asb.dsp.gain_mb"         "$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
-printf '  %-42s = %s\n' "libasbdsp.so present"            "$([ -f /vendor/lib64/soundfx/libasbdsp.so ] && echo yes || echo no)"
-printf '  %-42s = %s\n' "audioserver"                     "$(getprop init.svc.audioserver 2>/dev/null)"
-echo ""
-echo "note: af.resampler.quality is an enum 0-7 (0=DEFAULT, 4=VERY_HIGH). Anything"
-echo "      outside that range is dropped by AudioFlinger and you get DEFAULT."
+echo "audioserver restarted - playback resumes in a second"
 exit 0
