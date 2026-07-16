@@ -59,6 +59,24 @@ jobs:
           fi
           MODDIR="$(pwd)" bash tools/asb_lint.sh
 
+      - name: Run unit tests (smart learner)
+        run: |
+          # 332 host-side unit tests covering the smart learner: weights, decay,
+          # confidence, blend math, night override, thermal veto, bucket learning,
+          # slot gating and the persistence round-trip. They were sitting in the repo
+          # green but unwired, so nothing actually guarded that math on a release.
+          # They need no NDK and no device - plain gcc against src/.
+          _rc=0
+          for _t in tests/test_smart_session2.sh tests/test_smart_session3.sh; do
+            [ -f "$_t" ] || { echo "WARNING: $_t missing - skipping"; continue; }
+            echo "== $_t =="
+            bash "$_t" || _rc=1
+          done
+          if [ "$_rc" != "0" ]; then
+            echo "::error::smart learner unit tests FAILED - refusing to build a release"
+            exit 1
+          fi
+
       - name: Install tools
         run: |
           sudo apt-get update -qq
