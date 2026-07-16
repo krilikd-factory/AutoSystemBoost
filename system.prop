@@ -83,16 +83,8 @@ persist.vendor.bluetooth.a2dp.lhdc.version=5
 persist.bluetooth.sbc_hd_higher_bitrate=1
 persist.vendor.bt.a2dp.hw_cdc=true
 persist.vendor.bt.aac_vbr_frm_ctl.enabled=true
-# ABR (adaptive bit rate) must stay ON for SBC and AAC. It was disabled here to pin the
-# encoder at max bitrate, but combined with sbc_hd_higher_bitrate=1 above that forces a
-# high rate with no way to back off: on a weak link the receiver cannot keep up and the
-# stream stutters and collapses to mono. A field tester hit exactly this on a cheap car
-# BT adapter while good headphones were fine - and cheap receivers are SBC-only, i.e.
-# precisely the codec whose safety net was switched off (LDAC/LHDC kept theirs below).
-# ABR costs nothing on a good link: it stays at the top rate and only drops when the
-# link genuinely cannot carry it.
-persist.bluetooth.a2dp_sbc_abr.enable=true
-persist.bluetooth.a2dp_aac_abr.enable=true
+persist.bluetooth.a2dp_sbc_abr.enable=false
+persist.bluetooth.a2dp_aac_abr.enable=false
 persist.bluetooth.a2dp_ldac_abr.enable=true
 persist.bluetooth.a2dp_lhdc_abr.enable=true
 persist.bluetooth.a2dp_offload.disabled=false
