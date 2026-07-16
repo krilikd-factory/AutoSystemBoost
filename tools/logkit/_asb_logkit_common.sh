@@ -653,13 +653,16 @@ lk_capture_battery_trace_row() {
   # it likes (rmnet_data2 in the field logs) - so the counters tracked an idle interface
   # and reported a few KB of "daily traffic" while the real link was never sampled.
   # Resolved once per run and cached; falls back to the old names if `ip` is missing.
-  if [ -z "$LK_NET_RMNET_IF" ]; then
+  # NOTE: every logkit entry script runs `set -u`, so these MUST use ${VAR:-} - a bare
+  # $VAR on the not-yet-set cache is a fatal "parameter not set" that aborts this whole
+  # function before it ever appends a row.
+  if [ -z "${LK_NET_RMNET_IF:-}" ]; then
     LK_NET_RMNET_IF="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
     case "$LK_NET_RMNET_IF" in
       rmnet*|ccmni*) : ;;
       *) LK_NET_RMNET_IF="" ;;
     esac
-    if [ -z "$LK_NET_RMNET_IF" ]; then
+    if [ -z "${LK_NET_RMNET_IF:-}" ]; then
       _cbest=0
       for _c in /sys/class/net/rmnet_data*; do
         [ -d "$_c" ] || continue
@@ -669,14 +672,14 @@ lk_capture_battery_trace_row() {
         [ "${_cb:-0}" -gt "${_cbest:-0}" ] 2>/dev/null && { _cbest="$_cb"; LK_NET_RMNET_IF="$_cn"; }
       done
     fi
-    [ -n "$LK_NET_RMNET_IF" ] || LK_NET_RMNET_IF="rmnet_data0"
+    [ -n "${LK_NET_RMNET_IF:-}" ] || LK_NET_RMNET_IF="rmnet_data0"
     export LK_NET_RMNET_IF
   fi
-  if [ -z "$LK_NET_WLAN_IF" ]; then
+  if [ -z "${LK_NET_WLAN_IF:-}" ]; then
     for _c in /sys/class/net/wlan*; do
       [ -d "$_c" ] && { LK_NET_WLAN_IF="$(basename "$_c")"; break; }
     done
-    [ -n "$LK_NET_WLAN_IF" ] || LK_NET_WLAN_IF="wlan0"
+    [ -n "${LK_NET_WLAN_IF:-}" ] || LK_NET_WLAN_IF="wlan0"
     export LK_NET_WLAN_IF
   fi
   _wrx=$(cat "/sys/class/net/$LK_NET_WLAN_IF/statistics/rx_bytes" 2>/dev/null)

@@ -81,7 +81,7 @@ lk_audio_phase_name() {
     wired|usb) _apn="audio_wired" ;;
     *) _apn="audio" ;;
   esac
-  [ "$1" = "scr" ] && _apn="${_apn}_scr"
+  [ "${1:-}" = "scr" ] && _apn="${_apn}_scr"
   echo "$_apn"
 }
 
