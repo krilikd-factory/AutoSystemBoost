@@ -648,10 +648,41 @@ lk_capture_battery_trace_row() {
   _bma=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null)
   _bv=$(cat /sys/class/power_supply/battery/voltage_now 2>/dev/null)
   _btmp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null)
-  _wrx=$(cat /sys/class/net/wlan0/statistics/rx_bytes 2>/dev/null)
-  _wtx=$(cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null)
-  _rrx=$(cat /sys/class/net/rmnet_data0/statistics/rx_bytes 2>/dev/null)
-  _rtx=$(cat /sys/class/net/rmnet_data0/statistics/tx_bytes 2>/dev/null)
+  # Follow the interface that actually carries traffic. These used to be hard-coded to
+  # rmnet_data0 / wlan0, but the modem hands the default route to whichever rmnet_dataN
+  # it likes (rmnet_data2 in the field logs) - so the counters tracked an idle interface
+  # and reported a few KB of "daily traffic" while the real link was never sampled.
+  # Resolved once per run and cached; falls back to the old names if `ip` is missing.
+  if [ -z "$LK_NET_RMNET_IF" ]; then
+    LK_NET_RMNET_IF="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
+    case "$LK_NET_RMNET_IF" in
+      rmnet*|ccmni*) : ;;
+      *) LK_NET_RMNET_IF="" ;;
+    esac
+    if [ -z "$LK_NET_RMNET_IF" ]; then
+      _cbest=0
+      for _c in /sys/class/net/rmnet_data*; do
+        [ -d "$_c" ] || continue
+        _cn="$(basename "$_c")"
+        _cb="$(cat "$_c/statistics/rx_bytes" 2>/dev/null)"
+        [ -n "$_cb" ] || continue
+        [ "${_cb:-0}" -gt "${_cbest:-0}" ] 2>/dev/null && { _cbest="$_cb"; LK_NET_RMNET_IF="$_cn"; }
+      done
+    fi
+    [ -n "$LK_NET_RMNET_IF" ] || LK_NET_RMNET_IF="rmnet_data0"
+    export LK_NET_RMNET_IF
+  fi
+  if [ -z "$LK_NET_WLAN_IF" ]; then
+    for _c in /sys/class/net/wlan*; do
+      [ -d "$_c" ] && { LK_NET_WLAN_IF="$(basename "$_c")"; break; }
+    done
+    [ -n "$LK_NET_WLAN_IF" ] || LK_NET_WLAN_IF="wlan0"
+    export LK_NET_WLAN_IF
+  fi
+  _wrx=$(cat "/sys/class/net/$LK_NET_WLAN_IF/statistics/rx_bytes" 2>/dev/null)
+  _wtx=$(cat "/sys/class/net/$LK_NET_WLAN_IF/statistics/tx_bytes" 2>/dev/null)
+  _rrx=$(cat "/sys/class/net/$LK_NET_RMNET_IF/statistics/rx_bytes" 2>/dev/null)
+  _rtx=$(cat "/sys/class/net/$LK_NET_RMNET_IF/statistics/tx_bytes" 2>/dev/null)
   read -r _l1 _rest < /proc/loadavg
   _mfree=$(awk '/^MemAvailable:/{print $2; exit}' /proc/meminfo 2>/dev/null)
   _swfree=$(awk '/^SwapFree:/{print $2; exit}' /proc/meminfo 2>/dev/null)
@@ -1533,7 +1564,11 @@ lk_snapshot_network() {
     echo "  mtu_probing: $(cat /proc/sys/net/ipv4/tcp_mtu_probing 2>/dev/null) default_qdisc: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
     echo "  tcp_notsent_lowat: $(cat /proc/sys/net/ipv4/tcp_notsent_lowat 2>/dev/null) fastopen: $(cat /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null)"
     echo "# rmnet / wlan counters"
-    for r in rmnet_data0 rmnet_data1 rmnet_ipa0 wlan0; do
+    # Enumerate whatever the device actually has. The old fixed list stopped at
+    # rmnet_data1 and silently omitted rmnet_data2 - which is exactly where the default
+    # route lives on this modem, so the busiest interface never appeared in the log.
+    for r in $(for _n in /sys/class/net/rmnet_data* /sys/class/net/rmnet_ipa* /sys/class/net/wlan*; do
+                 [ -d "$_n" ] && basename "$_n"; done); do
       _d="/sys/class/net/$r"
       [ -d "$_d" ] && echo "  $r: oper=$(cat "$_d/operstate" 2>/dev/null) mtu=$(cat "$_d/mtu" 2>/dev/null) rx=$(cat "$_d/statistics/rx_bytes" 2>/dev/null) tx=$(cat "$_d/statistics/tx_bytes" 2>/dev/null)"
     done
