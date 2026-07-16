@@ -979,7 +979,15 @@ apply_audio_runtime() {
     asb_persist_safe persist.audio.uhqa 1
     asb_persist_safe persist.vendor.audio.uhqa true
     asb_persist_safe persist.vendor.audio.power.save.setting 1
-    setprop af.resampler.quality 255 2>/dev/null || true
+    # af.resampler.quality is an ENUM (AOSP AudioResampler src_quality), not a scale:
+    # 0=DEFAULT 1=LOW 2=MED 3=HIGH 4=VERY_HIGH 5=DYN_LOW 6=DYN_MED 7=DYN_HIGH.
+    # This used to write 255 for "maximum", which is out of range and gets thrown away -
+    # so hifi silently fell back to DEFAULT, i.e. byte-identical to stock. Two testers
+    # independently reported "no difference when switching, like stock is running", and
+    # this is why. 4 = VERY_HIGH_QUALITY is the real top of the enum.
+    # (0 stays correct for the other profiles: it means DEFAULT and also RESETS the prop
+    # when switching back from hifi without a reboot.)
+    setprop af.resampler.quality 4 2>/dev/null || true
     setprop audio.offload.min.duration.secs 20 2>/dev/null || true
     setprop vendor.audio.offload.min.duration.secs 20 2>/dev/null || true
     setprop audio.offload.buffer.size.kb 256 2>/dev/null || true
