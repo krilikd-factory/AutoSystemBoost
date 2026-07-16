@@ -613,6 +613,7 @@ asb_apply_device_overlay() {
   fi
 
   rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
+asb_prune_identical_overlay
   ui_print "[*] Overlay applied. Audio EQ/volume/hi-res + codecs are"
   ui_print "    patched in-place during the audio/media pass."
 }
@@ -1850,6 +1851,42 @@ else
     fi
   fi
 fi
+# Drop overlay files that ended up byte-identical to the live stock file.
+#
+# The odm-bind path already does this (see the cmp -s further down); the /vendor clone
+# never did, so every file cloned for inspection stayed in the overlay even when nothing
+# was patched into it - e.g. with CAMERA_LEVEL=0 the whole camera clone is stock.
+# Mounting stock over stock changes nothing by definition, so dropping it is a no-op
+# for behaviour. It is NOT a no-op for the root manager: field diags show one OP15
+# creating 4576 per-file bind mounts for this module (an older KernelSU that binds each
+# file individually) while another creates none at all. Every pointless bind mount is
+# another chance for a kernel/root-manager combination we have never tested to hand an
+# app a bad read - corrupt photos, media that will not decode, apps with no audio.
+# Files with no live counterpart (libasbdsp.so and friends) are additions, so they stay.
+asb_prune_identical_overlay() {
+  [ -d "$MODPATH/system" ] || return 0
+  _pr_dropped=0
+  ( cd "$MODPATH/system" 2>/dev/null && find . -type f 2>/dev/null ) | while IFS= read -r _pf; do
+    _pf="${_pf#./}"
+    [ -n "$_pf" ] || continue
+    _plive="/system/$_pf"
+    case "$_pf" in
+      vendor/*|odm/*|product/*|system_ext/*|my_product/*) _plive="/$_pf" ;;
+    esac
+    [ -f "$_plive" ] || continue
+    if cmp -s "$MODPATH/system/$_pf" "$_plive" 2>/dev/null; then
+      rm -f "$MODPATH/system/$_pf" 2>/dev/null && echo x
+    fi
+  done > "$MODPATH/.prune_count" 2>/dev/null
+  _pr_dropped="$(wc -c < "$MODPATH/.prune_count" 2>/dev/null | tr -d ' ')"
+  rm -f "$MODPATH/.prune_count" 2>/dev/null
+  # clean up directories the prune emptied
+  find "$MODPATH/system" -type d -empty -delete 2>/dev/null || true
+  [ "${_pr_dropped:-0}" -gt 0 ] 2>/dev/null \
+    && ui_print "[*] overlay pruned: ${_pr_dropped} file(s) identical to stock dropped"
+  return 0
+}
+
 [ -f "$MODPATH/overlay_device_class" ] || echo reference > "$MODPATH/overlay_device_class" 2>/dev/null
 rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
 
