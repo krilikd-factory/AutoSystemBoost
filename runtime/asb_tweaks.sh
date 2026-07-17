@@ -126,6 +126,88 @@ asb_tw_aggr_camera() {
 }
 
 # --- inject the aggressive tone keys a trimmed stock conf_tuning lacks ---
+# Add apps to the OS "Retouch appearance during video calls" list.
+#
+# Stock ships only four entries (Discord, Teams, WeChat, WhatsApp), so every other
+# video-call app is simply absent from that Settings screen. Older ASB releases shipped
+# a STATIC video_beauty_default_config with a longer list; when static overlays were
+# dropped in favour of clone-from-stock, nothing replaced the injection - the longer
+# list only survived because each install cloned the previous install's still-mounted
+# file. That chain is invisible and breaks the moment anyone reinstalls from clean, so
+# the list is built explicitly here instead.
+#
+# isOpen stays 0 to match stock: this only makes the app APPEAR in Settings so the user
+# can turn retouch on themselves. It never enables beautification behind their back.
+asb_tw_vb_add_apps() {
+  _f="$1"; [ -f "$_f" ] || return 0
+  grep -q '"appConfigList"' "$_f" 2>/dev/null || return 0
+  _vb_add=""
+  for _vb_e in \
+    "Telegram|org.telegram.messenger|telegram" \
+    "Telegram X|org.thunderdog.challegram|telegram" \
+    "AyuGram|com.radolyn.ayugram|telegram" \
+    "Signal|org.thoughtcrime.securesms|signal" \
+    "Viber|com.viber.voip|viber" \
+    "Zoom|us.zoom.videomeetings|zoom" \
+    "Meet|com.google.android.apps.meetings|meet" \
+    "Google Duo|com.google.android.apps.tachyon|duo" \
+    "Instagram|com.instagram.android|instagram" \
+    "VK|com.vkontakte.android|vk" \
+    "Messenger|com.facebook.orca|messenger" \
+    "Skype|com.skype.raider|skype" \
+    "Snapchat|com.snapchat.android|snapchat" \
+    "Line|jp.naver.line.android|line" \
+    "KakaoTalk|com.kakao.talk|kakao"; do
+    _vb_pkg="${_vb_e#*|}"; _vb_pkg="${_vb_pkg%%|*}"
+    grep -q "\"$_vb_pkg\"" "$_f" 2>/dev/null && continue
+    _vb_add="${_vb_add}${_vb_e}
+"
+  done
+  [ -n "$_vb_add" ] || return 0
+  _vb_t="${_f}.asbvb$$"
+  printf '%s' "$_vb_add" | awk -v src="$_f" '
+    BEGIN { n = 0 }
+    { entries[++n] = $0 }
+    END {
+      done = 0
+      while ((getline line < src) > 0) {
+        print line
+        if (!done && line ~ /"appConfigList"[ \t]*:[ \t]*\[/) {
+          for (i = 1; i <= n; i++) {
+            split(entries[i], P, "|")
+            printf("        {\n")
+            printf("            \"appName\":\"%s\",\n", P[1])
+            printf("            \"packageName\":\"%s\",\n", P[2])
+            printf("            \"videoBeautyParam\":\n")
+            printf("               {\n")
+            printf("                   \"isOpen\": 0,\n")
+            printf("                   \"fbParam\": \"0,0,0,0,0,0,0,0,0,0,0\",\n")
+            printf("                   \"activityName\": \"%s\"\n", P[3])
+            printf("               }\n")
+            printf("        },\n\n")
+          }
+          done = 1
+        }
+      }
+      close(src)
+    }
+  ' > "$_vb_t" 2>/dev/null || { rm -f "$_vb_t"; return 0; }
+  [ -s "$_vb_t" ] || { rm -f "$_vb_t"; return 0; }
+  # Structural safety net: the camera HAL will reject a malformed config and the camera
+  # then fails to open at all, so refuse to install anything with unbalanced braces.
+  _vb_ob="$(tr -cd '{' < "$_vb_t" 2>/dev/null | wc -c)"
+  _vb_cb="$(tr -cd '}' < "$_vb_t" 2>/dev/null | wc -c)"
+  if [ "$_vb_ob" != "$_vb_cb" ] || [ "${_vb_ob:-0}" = "0" ]; then
+    rm -f "$_vb_t" 2>/dev/null; return 0
+  fi
+  chmod --reference="$_f" "$_vb_t" 2>/dev/null || chmod 0644 "$_vb_t" 2>/dev/null
+  chown --reference="$_f" "$_vb_t" 2>/dev/null
+  _vb_ctx="$(ls -Z "$_f" 2>/dev/null | awk '{print $1}')"
+  case "$_vb_ctx" in u:object_r:*) chcon "$_vb_ctx" "$_vb_t" 2>/dev/null ;; esac
+  mv -f "$_vb_t" "$_f" 2>/dev/null || { cat "$_vb_t" > "$_f" 2>/dev/null; rm -f "$_vb_t"; }
+  return 0
+}
+
 asb_tw_inject_camera() {
   _f="$1"; [ -f "$_f" ] || return 0
   grep -q '"sunsetBrightScale"' "$_f" || return 0
@@ -218,6 +300,17 @@ asb_apply_dynamic_tweaks() {
       asb_tw_aggr_audio "$_mx"
     fi
   done
+  fi
+
+  # --- CAMERA video_beauty app list ---
+  # Gated on CAMERA like the rest, but deliberately NOT on _cam_level: the level scales
+  # the tone grading, whereas this only makes apps visible in the Settings screen.
+  if asb_tw_feature_on CAMERA; then
+    for _vbf in "$_md/system/vendor/odm/etc/camera/config/video_beauty_default_config" \
+                "$_md/system/odm/etc/camera/config/video_beauty_default_config"; do
+      [ -f "$_vbf" ] || continue
+      asb_tw_vb_add_apps "$_vbf"
+    done
   fi
 
   # --- CAMERA conf_tuning --- patch BOTH the /vendor/odm and the direct /odm
