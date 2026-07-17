@@ -142,14 +142,18 @@ _we_name=""
 # one character), which is why the old ╭──╮ frame came out ragged. Structure comes from
 # blank lines and indentation instead - those survive any font.
 echo ""
+echo "  🚀  AutoSystemBoost V60"
 if [ "$_smart_enabled" = "1" ]; then
   _conf_pct=$((_smart_conf / 10))
-  echo "  🚀  AutoSystemBoost V60"
   echo "  🤖  Smart · bucket ${_smart_bucket} · ${_daypart_name}${_we_name} · conf ${_conf_pct}%"
+  # The profile still matters under Smart: it is the rail the learner moves within, so
+  # "Smart" alone does not tell you what the caps are anchored to.
+  echo "  🎚  Profile: ${PROFILE} (Smart picks caps within it)"
 else
-  echo "  🚀  AutoSystemBoost V60"
-  echo "  🎚  Profile: ${PROFILE}"
+  echo "  🎚  Profile: ${PROFILE} (manual — Smart off)"
 fi
+_bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
+[ -n "$_bias" ] && [ "$_bias" != "0" ] && echo "  ⚖️  Battery lean: $((_bias / 10))%"
 if [ "$_rec_disabled" = "1" ]; then
   echo "  ⚠️  SAFE MODE  : governor disabled (${_rec_reason:-recovery})"
 elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
@@ -289,12 +293,60 @@ fi
 echo ""
 echo "  📷  CAMERA"
 _vb_n="$(grep -c '"packageName"' /odm/etc/camera/config/video_beauty_default_config 2>/dev/null)"
-_cam_l="       processing level ${_c_lvl}"
-[ "${_vb_n:-0}" -gt 0 ] 2>/dev/null && _cam_l="${_cam_l}  ·  ${_vb_n} retouch apps"
-echo "$_cam_l"
+_cam_l="processing level ${_c_lvl}"
+[ "${_vb_n:-0}" -gt 0 ] 2>/dev/null && _cam_l="$(_join "$_cam_l" "${_vb_n} retouch apps")"
+echo "       ${_cam_l}"
+_cam_ag="$(_cfg CAMERA_AGGRESSIVE)"
+_cam_in="$(_cfg CAMERA_AGGRESSIVE_INJECT)"
+_cam_l=""
+[ "$_cam_ag" = "1" ] && _cam_l="$(_join "$_cam_l" "aggressive tone")"
+case "$_cam_in" in
+  full) _cam_l="$(_join "$_cam_l" "inject: full")" ;;
+  ''|standard) : ;;
+  *) _cam_l="$(_join "$_cam_l" "inject: ${_cam_in}")" ;;
+esac
+[ -n "$_cam_l" ] && echo "       ${_cam_l}"
+
 
 echo ""
-echo "  ⚙️  SYSTEM"
+echo "  🧠  MEMORY"
+_bgl="$(_cfg BG_TRIM_LEVEL)"
+_ml=""
+[ -n "$_bgl" ] && _ml="$(_join "$_ml" "bg trim: level ${_bgl}")"
+_swp="$(cat /proc/sys/vm/swappiness 2>/dev/null)"
+[ -n "$_swp" ] && _ml="$(_join "$_ml" "swappiness ${_swp}")"
+[ -n "$_ml" ] && echo "       ${_ml}"
+_mfree="$(grep -m1 MemAvailable /proc/meminfo 2>/dev/null | awk '{print int($2/1024)}')"
+_zram="$(awk '/SwapTotal/{t=$2} /SwapFree/{f=$2} END{if(t>0) print int((t-f)/1024)}' /proc/meminfo 2>/dev/null)"
+_ml=""
+[ -n "$_mfree" ] && _ml="$(_join "$_ml" "${_mfree} MB free")"
+[ -n "$_zram" ] && _ml="$(_join "$_ml" "zram ${_zram} MB used")"
+[ -n "$_ml" ] && echo "       ${_ml}"
+
+if [ "$(_feat NET)" = "1" ]; then
+  echo ""
+  echo "  🌐  NETWORK"
+  _nl=""
+  _cc="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
+  [ -n "$_cc" ] && _nl="$(_join "$_nl" "$_cc")"
+  _qd="$(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
+  [ -n "$_qd" ] && _nl="$(_join "$_nl" "$_qd")"
+  _nb="$(cat /proc/sys/net/core/netdev_budget 2>/dev/null)"
+  [ -n "$_nb" ] && _nl="$(_join "$_nl" "budget ${_nb}")"
+  [ -n "$_nl" ] && echo "       TCP: ${_nl}"
+  # Which interface is actually carrying traffic - not always rmnet_data0.
+  _if="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
+  if [ -n "$_if" ]; then
+    _rx="$(cat "/sys/class/net/$_if/statistics/rx_bytes" 2>/dev/null)"
+    _nl="route via ${_if}"
+    [ -n "$_rx" ] && _nl="${_nl}  ·  $((_rx / 1048576)) MB rx"
+    echo "       ${_nl}"
+  fi
+fi
+
+if [ "$(_feat WIFI)" = "1" ]; then
+  echo ""
+  echo "  📶  WI-FI"
 # Read what the DRIVER actually ended up with, not `settings get global
 # wifi_country_code`. That settings key is telephony-derived and the framework keeps
 # rewriting it from the SIM, so it reported the SIM's country (IT) while the module's
@@ -310,22 +362,52 @@ _cc_forced=0
 [ -f /data/adb/asb/wifi_cc_forced ] && _cc_forced=1
 
 if [ -n "$_cc_drv" ]; then
-  _wl="       Wi-Fi region: ${_cc_drv}"
+  _wl="       region: ${_cc_drv}"
   [ "$_cc_forced" = "1" ] && _wl="${_wl} (forced)"
   [ -n "$_cc_tel" ] && [ "$_cc_tel" != "$_cc_drv" ] && _wl="${_wl}  ·  SIM says ${_cc_tel}"
   echo "$_wl"
 elif [ "$_cc_forced" = "1" ]; then
-  echo "       Wi-Fi region: forced${_cc_ovr:+ ${_cc_ovr}} (radio off?)"
+  echo "       region: forced${_cc_ovr:+ ${_cc_ovr}} (radio off?)"
 fi
+  _txq="$(cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
+  _lnk="$(echo "$_wifi_dump" | grep -m1 -iE 'mWifiInfo|SSID' | grep -oE '[0-9]+Mbps' | head -1)"
+  _wl2=""
+  [ -n "$_txq" ] && _wl2="$(_join "$_wl2" "txqueue ${_txq}")"
+  [ -n "$_lnk" ] && _wl2="$(_join "$_wl2" "link ${_lnk}")"
+  [ -n "$_wl2" ] && echo "       ${_wl2}"
+fi
+
+if [ "$(_feat GPS)" = "1" ]; then
+  echo ""
+  echo "  🛰  GPS"
+  _agps="$(settings get global assisted_gps_enabled 2>/dev/null)"
+  _gl=""
+  case "$_agps" in 1) _gl="$(_join "$_gl" "A-GPS on")" ;; 0) _gl="$(_join "$_gl" "A-GPS off")" ;; esac
+  _xtra="$(settings get global gps_xtra_server 2>/dev/null)"
+  case "$_xtra" in *gpsonextra*) _gl="$(_join "$_gl" "XTRA servers set")" ;; esac
+  [ -n "$_gl" ] && echo "       ${_gl}"
+fi
+
+echo ""
+echo "  ⚙️  SYSTEM"
 _sys_l="       blur: $([ "$_blur" = "1" ] && echo off || echo stock)"
 _sys_l="${_sys_l}  ·  cool games: $([ "$_cool" = "1" ] && echo on || echo off)"
 echo "$_sys_l"
 
-_cats=""
-for _c in CPU AUDIO CAMERA NET WIFI MEDIA; do
-  [ "$(_feat "$_c")" = "1" ] && _cats="${_cats}${_cats:+ · }${_c}"
+# Every category, not the six that happened to be hard-coded here. Wrapped by hand
+# because a single 20-item line is unreadable on a phone.
+_cats=""; _catn=0; _catline=""
+for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
+          RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR; do
+  [ "$(_feat "$_c")" = "1" ] || continue
+  _catline="$(_join "$_catline" "$_c")"
+  _catn=$((_catn + 1))
+  if [ "$_catn" -ge 5 ]; then
+    echo "       ${_catline}"
+    _catline=""; _catn=0
+  fi
 done
-[ -n "$_cats" ] && echo "       modules: ${_cats}"
+[ -n "$_catline" ] && echo "       ${_catline}"
 _mnt="$(grep -c 'AutoSystemBoost' /proc/mounts 2>/dev/null)"
 _krn="$(uname -r 2>/dev/null | cut -d- -f1)"
 _sysl="       overlay: ${_mnt:-0} mount$([ "${_mnt:-0}" = "1" ] || echo s)"
@@ -335,13 +417,7 @@ if [ -n "$_up" ]; then
   _sysl="${_sysl}  ·  up $((_up / 3600))h $(((_up % 3600) / 60))m"
 fi
 echo "$_sysl"
-_mfree="$(grep -m1 MemAvailable /proc/meminfo 2>/dev/null | awk '{print int($2/1024)}')"
-_zram="$(awk '/SwapTotal/{t=$2} /SwapFree/{f=$2} END{if(t>0) print int((t-f)/1024)}' /proc/meminfo 2>/dev/null)"
-if [ -n "$_mfree" ]; then
-  _ml="       RAM: ${_mfree} MB free"
-  [ -n "$_zram" ] && _ml="${_ml}  ·  zram ${_zram} MB used"
-  echo "$_ml"
-fi
+
 
 # ── Anything that is set but not actually working ───────────────────────────────
 # This is the part worth having on screen: a setting that silently does nothing is
