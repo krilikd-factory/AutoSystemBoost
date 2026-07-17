@@ -136,7 +136,7 @@ printf '  %-42s = %s\n' "persist.asb.dsp.enable"          "$(getprop persist.asb
 printf '  %-42s = %s\n' "persist.asb.dsp.gain_mb"         "$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
 printf '  %-42s = %s\n' "persist.asb.dsp.comp"            "$(getprop persist.asb.dsp.comp 2>/dev/null)"
 printf '  %-42s = %s\n' "persist.asb.dsp.comp_ratio_x10"  "$(getprop persist.asb.dsp.comp_ratio_x10 2>/dev/null)"
-printf '  %-42s = %s\n' "libasbdsp.so present"            "$([ -f /vendor/lib64/soundfx/libasbdsp.so ] && echo yes || echo no)"
+printf '  %-42s = %s\n' "libasbdsp.so present"            "$({ [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; } && echo yes || echo no)"
 printf '  %-42s = %s\n' "audioserver"                     "$(getprop init.svc.audioserver 2>/dev/null)"
 echo ""
 echo "note: af.resampler.quality must read 0 (DEFAULT). ASB deliberately does not raise"
