@@ -188,7 +188,12 @@ jobs:
 
           mkdir -p "$PKG_REL/bin"
           install -m 0755 bin/arm64-v8a/asb "$PKG_REL/bin/asb"
+          # Both ABIs: /vendor/lib64/soundfx and /vendor/lib/soundfx both exist on the
+          # target and each needs a library of its own bitness.
           install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_REL/bin/libasbdsp.so"
+          if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
+            install -m 0644 bin/armeabi-v7a/libasbdsp.so "$PKG_REL/bin/libasbdsp_32.so"
+          fi
           find "$PKG_REL" -name "*.log" -delete
 
           # V48: ship the Smart Mode user-facing CLI tool (rest of tools/ is dev-only)
@@ -224,6 +229,7 @@ jobs:
           for required in \
             "bin/asb" \
             "bin/libasbdsp.so" \
+            "bin/libasbdsp_32.so" \
             "service.sh" \
             "module.prop" \
             "post-fs-data.sh" \
