@@ -210,6 +210,51 @@ _cool="$(_cfg cool_gaming)"
 _dsp_so=0
 { [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; } && _dsp_so=1
 
+_st() { grep -m1 "^$1=" /dev/.asb/state 2>/dev/null | cut -d= -f2; }
+
+_g_state="$(_st state)"
+_g_owner="$(_st cap_owner)"
+_g_cpumax="$(_st cpu_max)"
+_g_dwell="$(_st dwell_sec)"
+_g_iq="$(_st iq)"
+_g_thermal="$(_st thermal)"
+_g_head="$(_st headroom_pct)"
+if [ -n "$_g_state" ]; then
+  echo ""
+  echo "  ⚡  GOVERNOR"
+  _gl="       ${_g_state}"
+  [ -n "$_g_owner" ] && _gl="${_gl}  ·  caps by ${_g_owner}"
+  echo "$_gl"
+  _gl="      "
+  [ -n "$_g_cpumax" ] && [ "$_g_cpumax" -gt 0 ] 2>/dev/null && _gl="${_gl} CPU max ${_g_cpumax} MHz"
+  [ -n "$_g_dwell" ] && _gl="${_gl}  ·  dwell ${_g_dwell}s"
+  [ "$_gl" != "      " ] && echo "$_gl"
+  _gl="      "
+  [ -n "$_g_iq" ] && _gl="${_gl} environment iq ${_g_iq}"
+  [ -n "$_g_head" ] && _gl="${_gl}  ·  headroom ${_g_head}%"
+  [ "${_g_thermal:-0}" != "0" ] && _gl="${_gl}  ·  🔥 thermal ${_g_thermal}"
+  [ "$_gl" != "      " ] && echo "$_gl"
+fi
+
+# What the learner has actually accumulated. Worth surfacing: "conf 100%" means little
+# on its own - it is the session count behind it that says whether to trust the number.
+_l_sess="$(_st hist_sessions)"
+_l_q="$(_st smart_quality_last)"
+_l_pkg="$(_st smart_pkg)"
+_l_drain="$(_st smart_drain_ewma_x10)"
+if [ "$_smart_enabled" = "1" ] && [ -n "${_l_sess}${_l_pkg}" ]; then
+  echo ""
+  echo "  🧠  LEARNING"
+  _ll="      "
+  [ -n "$_l_sess" ] && _ll="${_ll} ${_l_sess} sessions learned"
+  [ -n "$_l_q" ] && [ "$_l_q" -gt 0 ] 2>/dev/null && _ll="${_ll}  ·  last quality ${_l_q}"
+  [ "$_ll" != "      " ] && echo "$_ll"
+  if [ -n "$_l_drain" ] && [ "$_l_drain" -gt 0 ] 2>/dev/null; then
+    echo "       drain now: $((_l_drain / 10)).$((_l_drain % 10))%/h"
+  fi
+  [ -n "$_l_pkg" ] && echo "       foreground: ${_l_pkg}"
+fi
+
 echo ""
 echo "  🎵  AUDIO"
 _audio_l="       ${_a_prof} profile"
@@ -219,6 +264,12 @@ _loud_l="       loudness: ${_a_loud}"
 [ "$_a_dsp" != "off" ] && _loud_l="${_loud_l}  ·  DSP +${_a_dsp} dB"
 echo "$_loud_l"
 [ "$_a_bt" = "disabled" ] && echo "       BT absolute volume: off (phone drives gain)"
+if [ "$_a_dsp" != "off" ]; then
+  _l64="✗"; _l32="✗"
+  [ -f /vendor/lib64/soundfx/libasbdsp.so ] && _l64="✓"
+  [ -f /vendor/lib/soundfx/libasbdsp.so ] && _l32="✓"
+  echo "       libasbdsp: 64-bit ${_l64}  ·  32-bit ${_l32}"
+fi
 
 echo ""
 echo "  📷  CAMERA"
@@ -229,9 +280,28 @@ echo "$_cam_l"
 
 echo ""
 echo "  ⚙️  SYSTEM"
-_wifi_cc="$(settings get global wifi_country_code 2>/dev/null)"
-case "$_wifi_cc" in null|"") _wifi_cc="—" ;; esac
-echo "       Wi-Fi region: ${_wifi_cc}"
+# Read what the DRIVER actually ended up with, not `settings get global
+# wifi_country_code`. That settings key is telephony-derived and the framework keeps
+# rewriting it from the SIM, so it reported the SIM's country (IT) while the module's
+# override was live - which looked exactly like the tweak had failed.
+# The override lives in WifiService (force-country-code), and WifiCountryCode's dump is
+# where you can see both it and what the driver took.
+_wifi_dump="$(dumpsys wifi 2>/dev/null)"
+_cc_drv="$(echo "$_wifi_dump" | grep -iE 'mDriverCountryCode' | head -1 | grep -oE '[A-Z]{2}[[:space:]]*$' | tr -d ' ')"
+_cc_ovr="$(echo "$_wifi_dump" | grep -iE 'mOverrideCountryCode' | head -1 | grep -oE '[A-Z]{2}[[:space:]]*$' | tr -d ' ')"
+_cc_tel="$(echo "$_wifi_dump" | grep -iE 'mTelephonyCountryCode' | head -1 | grep -oE '[A-Z]{2}[[:space:]]*$' | tr -d ' ')"
+[ -n "$_cc_drv" ] || _cc_drv="$(cmd -w wifi get-country-code 2>/dev/null | grep -oE '[A-Z]{2}' | head -1)"
+_cc_forced=0
+[ -f /data/adb/asb/wifi_cc_forced ] && _cc_forced=1
+
+if [ -n "$_cc_drv" ]; then
+  _wl="       Wi-Fi region: ${_cc_drv}"
+  [ "$_cc_forced" = "1" ] && _wl="${_wl} (forced)"
+  [ -n "$_cc_tel" ] && [ "$_cc_tel" != "$_cc_drv" ] && _wl="${_wl}  ·  SIM says ${_cc_tel}"
+  echo "$_wl"
+elif [ "$_cc_forced" = "1" ]; then
+  echo "       Wi-Fi region: forced${_cc_ovr:+ ${_cc_ovr}} (radio off?)"
+fi
 _sys_l="       blur: $([ "$_blur" = "1" ] && echo off || echo stock)"
 _sys_l="${_sys_l}  ·  cool games: $([ "$_cool" = "1" ] && echo on || echo off)"
 echo "$_sys_l"
@@ -241,6 +311,22 @@ for _c in CPU AUDIO CAMERA NET WIFI MEDIA; do
   [ "$(_feat "$_c")" = "1" ] && _cats="${_cats}${_cats:+ · }${_c}"
 done
 [ -n "$_cats" ] && echo "       modules: ${_cats}"
+_mnt="$(grep -c 'AutoSystemBoost' /proc/mounts 2>/dev/null)"
+_krn="$(uname -r 2>/dev/null | cut -d- -f1)"
+_sysl="       overlay: ${_mnt:-0} mount$([ "${_mnt:-0}" = "1" ] || echo s)"
+[ -n "$_krn" ] && _sysl="${_sysl}  ·  kernel ${_krn}"
+_up="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+if [ -n "$_up" ]; then
+  _sysl="${_sysl}  ·  up $((_up / 3600))h $(((_up % 3600) / 60))m"
+fi
+echo "$_sysl"
+_mfree="$(grep -m1 MemAvailable /proc/meminfo 2>/dev/null | awk '{print int($2/1024)}')"
+_zram="$(awk '/SwapTotal/{t=$2} /SwapFree/{f=$2} END{if(t>0) print int((t-f)/1024)}' /proc/meminfo 2>/dev/null)"
+if [ -n "$_mfree" ]; then
+  _ml="       RAM: ${_mfree} MB free"
+  [ -n "$_zram" ] && _ml="${_ml}  ·  zram ${_zram} MB used"
+  echo "$_ml"
+fi
 
 # ── Anything that is set but not actually working ───────────────────────────────
 # This is the part worth having on screen: a setting that silently does nothing is
