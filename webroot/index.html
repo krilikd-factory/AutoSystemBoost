@@ -169,31 +169,51 @@ body::before, body::after {
   to { transform: rotate(360deg); }
 }
 
-/* Polished-metal wordmark, kept inside the brand palette.
-   Two things make text read as metal rather than as "text with a gradient":
-   a SHARP value flip near the middle (the horizon line a curved surface shows), and
-   light coming from a single direction. Hence 180deg and the hard step at 46-51%.
-   The stops are accent-family on purpose - a neutral grey chrome sits next to that
-   vivid conic ring on pure black and just looks dead and unrelated. */
+/* Energised wordmark: an accent-family base with a specular sweep travelling across it.
+   The previous attempt used a hard light band at a fixed 46-51% to fake a curved metal
+   surface. At 26px that band is ~1.3px tall, so it did not read as a highlight - it
+   read as a white line struck through the letters. A highlight only reads as light if
+   it is soft-edged AND moving; a static hairline is just a line.
+   The sweep is wide (a ~16% ramp over a 300%-wide layer) and rests off-screen between
+   passes, so it reads as a reflection catching the surface rather than as a loop. */
 .app-name {
   font-size: 26px;
   font-weight: 800;
-  letter-spacing: 0.2px;
-  background: linear-gradient(180deg,
-    #ffffff 0%,
-    #d9fff6 20%,
-    #74c9b2 46%,
-    #f2fffb 51%,
-    #35ab97 59%,
-    #0d6a62 84%,
-    #86eed6 100%);
+  letter-spacing: 0.3px;
+  background:
+    linear-gradient(105deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0.92) 50%,
+      rgba(255, 255, 255, 0) 60%,
+      transparent 100%),
+    linear-gradient(180deg,
+      #eafff9 0%,
+      #7ce0c4 34%,
+      #23b49f 62%,
+      #0e8f88 82%,
+      #17d8d0 100%);
+  background-size: 300% 100%, 100% 100%;
+  background-position: 170% 0, 0 0;
+  background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   filter:
-    drop-shadow(0 1px 0 rgba(0, 0, 0, 0.85))
-    drop-shadow(0 0 20px var(--accent-glow));
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 0 22px var(--accent-glow));
+  animation: asbSweep 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   margin-bottom: 6px;
+}
+
+@keyframes asbSweep {
+  0%        { background-position: 170% 0, 0 0; }  /* band parked off-LEFT */
+  45%, 100% { background-position: -70% 0, 0 0; }  /* ...crosses, rests off-RIGHT */
+}
+
+/* The sweep is decoration; the wordmark has to hold up without it. */
+@media (prefers-reduced-motion: reduce) {
+  .app-name { animation: none; background-position: -70% 0, 0 0; }
 }
 
 .device-line {
@@ -2037,8 +2057,6 @@ function cfgIsActive(it, cur) {
   return String(cur) !== String(it.def);
 }
 
-let _pendingSegRow = null;
-
 function cfgRender() {
   const list = _el('cfgList');
   if (!list) return;
@@ -2100,12 +2118,13 @@ function cfgRender() {
       top.appendChild(wrap);
     } else {
       const seg = document.createElement('div');
-      // Four options do not fit next to the title on a phone - the buttons end up
-      // touching the name. The project already solves this for CAMERA_LEVEL with a
-      // sub-row, so reuse it rather than inventing a second layout: 3 or fewer stay
-      // inline where they read best, 4+ drop to their own line under the title.
-      const wide = it.opts.length >= 4;
-      seg.className = wide ? 'cfg-seg small' : 'cfg-seg';
+      // 4+ options get the compact button size. That is enough on its own: measured
+      // against the labels actually in use, a 4-option seg at this size is narrower
+      // than audio_profile's 3-option seg at full size, and that one has always sat on
+      // the title line fine (the title just wraps). An earlier revision moved these to
+      // their own row to stop the buttons touching the name - that was before the
+      // labels were shortened, and the row cost ~22px of height per card for nothing.
+      seg.className = (it.opts.length >= 4) ? 'cfg-seg small' : 'cfg-seg';
       it.opts.forEach(o => {
         const b = document.createElement('button');
         b.textContent = Topt(o);
@@ -2113,22 +2132,10 @@ function cfgRender() {
         b.onclick = (e) => { e.stopPropagation(); cfgSet(it.key, o, seg); };
         seg.appendChild(b);
       });
-      if (wide) {
-        _pendingSegRow = seg;
-      } else {
-        top.appendChild(seg);
-      }
+      top.appendChild(seg);
     }
     top.onclick = () => row.classList.toggle('desc-open');
     row.appendChild(top);
-
-    if (_pendingSegRow) {
-      const segRow = document.createElement('div');
-      segRow.className = 'cfg-sub-seg-row';
-      segRow.appendChild(_pendingSegRow);
-      row.appendChild(segRow);
-      _pendingSegRow = null;
-    }
 
     if (it.key === 'CAMERA_LEVEL') {
       const lvlOn = (parseInt(cur, 10) || 0) > 0;
