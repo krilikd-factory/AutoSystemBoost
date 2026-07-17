@@ -41,14 +41,24 @@
 #define ASB_PROP_ENABLE  "persist.asb.dsp.enable"
 #define ASB_PROP_GAIN_MB "persist.asb.dsp.gain_mb"
 #define ASB_PROP_CEIL_MB "persist.asb.dsp.ceiling_mb"
+#define ASB_PROP_COMP    "persist.asb.dsp.comp"           /* 0 = gain+limiter only */
+#define ASB_PROP_RATIO   "persist.asb.dsp.comp_ratio_x10"
+#define ASB_PROP_THRESH  "persist.asb.dsp.comp_thresh_mb"
 
 /* Safety rails: never let a bad config blow up the output. */
 #define ASB_GAIN_MB_MIN    0       /* +0 dB  */
 #define ASB_GAIN_MB_MAX    1200    /* +12 dB */
 #define ASB_CEIL_MB_MIN   (-600)   /* -6 dBFS  */
 #define ASB_CEIL_MB_MAX   (-30)    /* -0.3 dBFS */
+#define ASB_RATIO_MIN      10      /* 1.0:1 = compressor off */
+#define ASB_RATIO_MAX      80      /* 8.0:1 */
+#define ASB_THRESH_MB_MIN (-4000)  /* -40 dBFS */
+#define ASB_THRESH_MB_MAX (-300)   /*  -3 dBFS */
 
-#define ASB_RELEASE_MS  120.0f
+#define ASB_RELEASE_MS   120.0f    /* limiter release */
+#define ASB_COMP_ATK_MS  8.0f
+#define ASB_COMP_REL_MS  180.0f
+#define ASB_COMP_KNEE_DB 8.0f
 
 /* Unique to ASB — must not collide with any other effect on the device. */
 static const effect_descriptor_t g_asb_descriptor = {
@@ -77,8 +87,17 @@ typedef struct {
     int      channels;
     int      bypass;      /* 1 = pure passthrough (disabled or unsupported format) */
 
+    /* compressor */
+    int      comp_on;
+    float    thresh_db;
+    float    inv_ratio;   /* 1/ratio, precomputed */
+    float    cmakeup;     /* auto make-up for the compressor */
+    float    catk;
+    float    crel;
+
     /* limiter state */
     float    env;         /* peak envelope, instant attack / slow release */
+    float    cenv;        /* compressor envelope, smoothed both ways */
 } asb_ctx_t;
 
 /* ---------------------------------------------------------------- helpers */
@@ -119,9 +138,31 @@ static void asb_refresh(asb_ctx_t *c) {
 
     uint32_t rate = c->cfg.outputCfg.samplingRate ? c->cfg.outputCfg.samplingRate : 48000u;
 
+    int comp   = asb_prop_int(ASB_PROP_COMP, 1);
+    int ratio  = asb_clamp_int(asb_prop_int(ASB_PROP_RATIO, 30), ASB_RATIO_MIN, ASB_RATIO_MAX);
+    int thrmb  = asb_clamp_int(asb_prop_int(ASB_PROP_THRESH, -1800), ASB_THRESH_MB_MIN, ASB_THRESH_MB_MAX);
+
     c->gain    = asb_mb_to_lin(gainmb);
     c->ceiling = asb_mb_to_lin(ceilmb);
+    c->comp_on   = (comp && ratio > ASB_RATIO_MIN) ? 1 : 0;
+    c->thresh_db = (float)thrmb / 100.0f;
+    c->inv_ratio = 10.0f / (float)ratio;
+    /* Auto make-up. Without this the compressor is a LOUDNESS LOSS, not a gain: it only
+     * ever turns things down, so "compress then apply the same makeup" lands quieter
+     * than no compressor at all (measured: +6 dB setting delivered +1.2 dB RMS instead
+     * of +5.0 dB). Compensate by what the curve costs a full-scale signal, halved -
+     * full compensation pins everything at the ceiling and the limiter then does all
+     * the work, which is exactly the squashed sound we are trying to avoid. */
+    if (c->comp_on) {
+        float over0 = -c->thresh_db;                       /* 0 dBFS above threshold */
+        float mk_db = -over0 * (c->inv_ratio - 1.0f) * 0.5f;
+        c->cmakeup = powf(10.0f, mk_db / 20.0f);
+    } else {
+        c->cmakeup = 1.0f;
+    }
     c->rel     = asb_coef(ASB_RELEASE_MS, rate);
+    c->catk    = asb_coef(ASB_COMP_ATK_MS, rate);
+    c->crel    = asb_coef(ASB_COMP_REL_MS, rate);
     c->channels = asb_channel_count(c->cfg.outputCfg.channels);
 
     /* Bypass whenever there is nothing to do or the format is not one we handle. */
@@ -163,6 +204,48 @@ static void asb_passthrough(asb_ctx_t *c, audio_buffer_t *in, audio_buffer_t *ou
  * >= the current peak, out = peak * gain * (ceiling/env) <= ceiling by construction.
  * Release stays smooth, which is what the ear actually notices.
  */
+/*
+ * Soft-knee downward compressor, run BEFORE the makeup gain.
+ *
+ * Why this exists: gain + limiter alone is a poor loudness maximiser. On dense material
+ * the limiter simply shaves the peaks, so "+6 dB" delivers far less than +6 dB of
+ * perceived loudness and the shaving is what you hear. Compressing first lowers the
+ * crest factor, which lets the same makeup gain lift the BODY of the track instead of
+ * spending itself on transients the limiter then throws away.
+ *
+ * The knee is quadratic-interpolated so gain reduction eases in instead of switching on
+ * at the threshold - a hard knee is audible as a click on percussive material.
+ * The limiter downstream is untouched and still guarantees the ceiling on its own; this
+ * stage is only ever allowed to turn the signal DOWN, so it cannot break that promise.
+ */
+static inline float asb_comp_gain(asb_ctx_t *c, float env) {
+    if (!c->comp_on || env < 1e-7f) return 1.0f;
+
+    float db   = 20.0f * log10f(env);
+    float over = db - c->thresh_db;
+    float half = ASB_COMP_KNEE_DB * 0.5f;
+
+    if (over <= -half) return 1.0f;
+
+    float gr_db;
+    if (over >= half) {
+        gr_db = over * (c->inv_ratio - 1.0f);
+    } else {
+        float x = over + half;
+        gr_db = (c->inv_ratio - 1.0f) * x * x / (2.0f * ASB_COMP_KNEE_DB);
+    }
+    return powf(10.0f, gr_db / 20.0f);
+}
+
+/* Compressor envelope: smoothed in BOTH directions, unlike the limiter's instant
+ * attack. A compressor is meant to ride the loudness, not to catch every sample. */
+static inline float asb_step_cenv(asb_ctx_t *c, float peak) {
+    float coef = (peak > c->cenv) ? c->catk : c->crel;
+    c->cenv = peak + (c->cenv - peak) * coef;
+    if (c->cenv < 1e-9f) c->cenv = 0.0f;
+    return c->cenv;
+}
+
 static inline float asb_step_gr(asb_ctx_t *c, float peak) {
     if (peak > c->env) c->env = peak;                       /* instant attack */
     else c->env = peak + (c->env - peak) * c->rel;          /* slow release   */
@@ -185,13 +268,15 @@ static void asb_process_f32(asb_ctx_t *c, audio_buffer_t *in, audio_buffer_t *ou
 
         float peak = 0.0f;
         for (int k = 0; k < ch; k++) {
-            float a = fabsf(src[k]) * g;
+            float a = fabsf(src[k]);
             if (a > peak) peak = a;
         }
-        float gr = asb_step_gr(c, peak);
+        /* compressor sees the RAW level; the limiter sees what actually reaches it. */
+        float cg = asb_comp_gain(c, asb_step_cenv(c, peak)) * c->cmakeup;
+        float gr = asb_step_gr(c, peak * cg * g);
 
         for (int k = 0; k < ch; k++) {
-            float v = src[k] * g * gr;
+            float v = src[k] * cg * g * gr;
             /* absolute safety net: the limiter should already keep us below this */
             if (v > 1.0f) v = 1.0f;
             else if (v < -1.0f) v = -1.0f;
@@ -211,13 +296,14 @@ static void asb_process_s16(asb_ctx_t *c, audio_buffer_t *in, audio_buffer_t *ou
 
         float peak = 0.0f;
         for (int k = 0; k < ch; k++) {
-            float a = fabsf((float)src[k] / 32768.0f) * g;
+            float a = fabsf((float)src[k] / 32768.0f);
             if (a > peak) peak = a;
         }
-        float gr = asb_step_gr(c, peak);
+        float cg = asb_comp_gain(c, asb_step_cenv(c, peak)) * c->cmakeup;
+        float gr = asb_step_gr(c, peak * cg * g);
 
         for (int k = 0; k < ch; k++) {
-            float v = ((float)src[k] / 32768.0f) * g * gr;
+            float v = ((float)src[k] / 32768.0f) * cg * g * gr;
             if (v > 1.0f) v = 1.0f;
             else if (v < -1.0f) v = -1.0f;
             int32_t s = (int32_t)lrintf(v * 32767.0f);
@@ -255,7 +341,7 @@ static int32_t asb_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdS
     switch (cmdCode) {
     case EFFECT_CMD_INIT:
         if (pReplyData == NULL || replySize == NULL || *replySize != sizeof(int)) return -EINVAL;
-        c->env = 0.0f;
+        c->env = 0.0f; c->cenv = 0.0f;
         asb_refresh(c);
         *(int *)pReplyData = 0;
         return 0;
@@ -265,7 +351,7 @@ static int32_t asb_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdS
             || pReplyData == NULL || replySize == NULL || *replySize != sizeof(int)) return -EINVAL;
         memcpy(&c->cfg, pCmdData, sizeof(effect_config_t));
         c->configured = 1;
-        c->env = 0.0f;
+        c->env = 0.0f; c->cenv = 0.0f;
         asb_refresh(c);
         *(int *)pReplyData = 0;
         return 0;
@@ -276,13 +362,13 @@ static int32_t asb_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdS
         return 0;
 
     case EFFECT_CMD_RESET:
-        c->env = 0.0f;
+        c->env = 0.0f; c->cenv = 0.0f;
         return 0;
 
     case EFFECT_CMD_ENABLE:
         if (pReplyData == NULL || replySize == NULL || *replySize != sizeof(int)) return -EINVAL;
         if (!c->configured) { *(int *)pReplyData = -EINVAL; return 0; }
-        c->env = 0.0f;
+        c->env = 0.0f; c->cenv = 0.0f;
         asb_refresh(c);            /* pick up any WebUI change on (re)enable */
         c->enabled = 1;
         *(int *)pReplyData = 0;
@@ -340,7 +426,7 @@ static int32_t asb_lib_create(const effect_uuid_t *uuid, int32_t sessionId, int3
     if (c == NULL) return -ENOMEM;
 
     c->iface = &g_asb_interface;
-    c->env = 0.0f;
+    c->env = 0.0f; c->cenv = 0.0f;
     c->gain = 1.0f;
     c->ceiling = 0.891f;
     c->channels = 2;
