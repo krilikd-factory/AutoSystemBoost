@@ -90,6 +90,9 @@ case "$_dsp" in
       _persist persist.asb.dsp.enable 1
       _persist persist.asb.dsp.gain_mb "$((_dsp * 100))"
       _persist persist.asb.dsp.ceiling_mb -100
+      _persist persist.asb.dsp.comp 1
+      _persist persist.asb.dsp.comp_ratio_x10 30
+      _persist persist.asb.dsp.comp_thresh_mb -1800
       changed="${changed}dsp=+${_dsp}dB "
     else
       # The library is only mounted after the overlay comes up.
@@ -131,6 +134,8 @@ printf '  %-42s = %s\n' "persist.bluetooth.disableabsvol" "$(getprop persist.blu
 printf '  %-42s = %s\n' "dsp_loudness (config)"           "$_dsp"
 printf '  %-42s = %s\n' "persist.asb.dsp.enable"          "$(getprop persist.asb.dsp.enable 2>/dev/null)"
 printf '  %-42s = %s\n' "persist.asb.dsp.gain_mb"         "$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
+printf '  %-42s = %s\n' "persist.asb.dsp.comp"            "$(getprop persist.asb.dsp.comp 2>/dev/null)"
+printf '  %-42s = %s\n' "persist.asb.dsp.comp_ratio_x10"  "$(getprop persist.asb.dsp.comp_ratio_x10 2>/dev/null)"
 printf '  %-42s = %s\n' "libasbdsp.so present"            "$([ -f /vendor/lib64/soundfx/libasbdsp.so ] && echo yes || echo no)"
 printf '  %-42s = %s\n' "audioserver"                     "$(getprop init.svc.audioserver 2>/dev/null)"
 echo ""
