@@ -1091,7 +1091,18 @@ asb_reshape_volume_curves() {
       p = substr(line, RSTART, RLENGTH)
       match(p, />[0-9]+,/);  idx = substr(p, RSTART + 1, RLENGTH - 2)
       match(p, /,-[0-9]+</); mb  = substr(p, RSTART + 1, RLENGTH - 2)
-      nv = int((mb + 0) * pct / 100)
+      # Position-weighted, not flat. Scaling every point by the same factor lifts the
+      # BOTTOM of the curve hardest in dB terms: at "strong" the 1% step went from
+      # -58 dB to -37.7 dB, i.e. +20 dB on the quietest setting the slider has. That
+      # ruins quiet listening and buys nothing - nobody is short of volume at 1%. The
+      # weight ramps in over the first 40% of travel, so the full boost lands across
+      # the range people actually listen at (roughly 40-80%) while the bottom of the
+      # slider stays where stock put it. 100%/0 dB is untouched either way: that is
+      # unity, and raising it would just clip. Gain above unity is what dsp_loudness is for.
+      w = (idx + 0) / 40.0
+      if (w > 1) w = 1
+      f = 1 - ((100 - pct) / 100.0) * w
+      nv = int((mb + 0) * f)
       sub(/<point>[0-9]+,-[0-9]+<\/point>/, "<point>" idx "," nv "</point>", line)
     }
     print line
@@ -1236,6 +1247,7 @@ asb_patch_audio_inplace() {
   case "$_ml" in
     mild)   _mlpct=80 ;;
     strong) _mlpct=65 ;;
+    max)    _mlpct=40 ;;
     *)      _mlpct=100 ;;
   esac
   if [ "$_mlpct" != "100" ]; then
