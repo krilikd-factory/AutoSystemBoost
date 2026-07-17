@@ -137,11 +137,18 @@ esac
 _we_name=""
 [ "$_smart_we" = "1" ] && _we_name=" (weekend)" || _we_name=" (weekday)"
 
+# Everything below is rendered in a PROPORTIONAL font dialog, not a terminal. Box
+# frames and space-padded columns cannot line up there (an emoji is two cells wide but
+# one character), which is why the old ╭──╮ frame came out ragged. Structure comes from
+# blank lines and indentation instead - those survive any font.
 echo ""
 if [ "$_smart_enabled" = "1" ]; then
-  echo "  ASB V60 · 🤖 Smart Mode"
+  _conf_pct=$((_smart_conf / 10))
+  echo "  🚀  AutoSystemBoost V60"
+  echo "  🤖  Smart · bucket ${_smart_bucket} · ${_daypart_name}${_we_name} · conf ${_conf_pct}%"
 else
-  echo "  ASB V60 · ${PROFILE}"
+  echo "  🚀  AutoSystemBoost V60"
+  echo "  🎚  Profile: ${PROFILE}"
 fi
 if [ "$_rec_disabled" = "1" ]; then
   echo "  ⚠️  SAFE MODE  : governor disabled (${_rec_reason:-recovery})"
@@ -149,21 +156,22 @@ elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
   echo "  ⚠️  Recovery  : ${_rec_count} restart(s) — ${_rec_reason:-unknown}"
 fi
 echo ""
-echo "  🌡  CPU      : ${_cputemp}°C"
+_cpu_note=""
+[ "${_cputemp:-0}" -ge 80 ] 2>/dev/null && _cpu_note="  🔥 hot"
 if [ "$_btempC" -gt 0 ]; then
-  echo "  🔋 Battery  : ${_btempC}.${_btempCx}°C   ${_lvl:-?}%"
+  echo "  🌡  ${_cputemp}°C CPU  ·  ${_btempC}.${_btempCx}°C battery${_cpu_note}"
 else
-  echo "  🔋 Battery  : ${_lvl:-?}%"
+  echo "  🌡  ${_cputemp}°C CPU${_cpu_note}"
 fi
+echo "  🔋  ${_lvl:-?}%"
 [ "$_auto_bat" = "1" ] && echo "  🔻 Auto-battery active"
 [ "$_qn_active" = "1" ] && echo "  🌙 Night-quiet active"
 
 if [ "$_smart_enabled" = "1" ]; then
-  echo ""
-  _conf_pct=$((_smart_conf / 10))
   _alpha_pct=$((_smart_alpha / 10))
-  echo "  🤖 Smart : bucket=${_smart_bucket} ${_daypart_name}${_we_name}"
-  echo "             conf=${_conf_pct}%  alpha_battery=${_alpha_pct}%"
+  # bucket/daypart/confidence are already on the header line - only print the things
+  # that are NOT always true, so the screen stays short and every line carries news.
+  [ "$_alpha_pct" != "100" ] && echo "  ⚖️  Battery bias: ${_alpha_pct}%"
   if [ "$_smart_fb" != "0" ]; then
     _fb_name=""
     case "$_smart_fb" in
@@ -172,19 +180,17 @@ if [ "$_smart_enabled" = "1" ]; then
       3) _fb_name="global fallback" ;;
       4) _fb_name="cold start (safe default)" ;;
     esac
-    echo "             [${_fb_name}]"
+    echo "  ↩️  Learning: ${_fb_name}"
   fi
-  [ "$_smart_sleep" = "1" ] && echo "             🌙 night-safe override active"
-  [ "$_smart_veto" = "1" ] && echo "             🔥 thermal veto active"
+  [ "$_smart_sleep" = "1" ] && echo "  🌙  Night-safe override active"
+  [ "$_smart_veto" = "1" ] && echo "  🔥  Thermal veto active"
 fi
 echo ""
-echo "  Estimated time to 0%  $_eta_note:"
-echo "    📱 screen on  : ~${_ton_h}h ${_ton_m}m"
-echo "    💤 screen off : ~${_toff_h}h ${_toff_m}m"
+echo "  ⏳  Time to 0% ${_eta_note}"
+echo "       ~${_ton_h}h ${_ton_m}m screen on  ·  ~${_toff_h}h ${_toff_m}m idle"
 
-# ── What is actually switched on right now ──────────────────────────────────────
-# Read straight from the config the daemon reads, so this reports the live state
-# rather than what the WebUI last drew.
+# ── Live state ──────────────────────────────────────────────────────────────────
+# Read from the config the daemon reads, not from whatever the WebUI last drew.
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$MODDIR/config/governor.conf" 2>/dev/null \
     | head -1 | sed 's/.*=//' | tr -d ' \r'
@@ -192,56 +198,70 @@ _cfg() {
 _feat() {
   grep -E "^$1=" "$MODDIR/features.conf" 2>/dev/null | tail -1 | sed 's/.*=//' | tr -d ' \r'
 }
-_onoff() { [ "$1" = "1" ] && echo "✅ on" || echo "⬜ off"; }
 
-_a_prof="$(_cfg audio_profile)";   [ -n "$_a_prof" ] || _a_prof="stock"
-_a_dac="$(_cfg audio_dac_hifi)";   [ -n "$_a_dac" ]  || _a_dac="0"
-_a_loud="$(_cfg media_loudness)";  [ -n "$_a_loud" ] || _a_loud="stock"
-_a_dsp="$(_cfg dsp_loudness)";     [ -n "$_a_dsp" ]  || _a_dsp="off"
-_a_bt="$(_cfg bt_absvol_mode)";    [ -n "$_a_bt" ]   || _a_bt="stock"
-_c_lvl="$(_cfg CAMERA_LEVEL)";     [ -n "$_c_lvl" ]  || _c_lvl="0"
+_a_prof="$(_cfg audio_profile)";  [ -n "$_a_prof" ] || _a_prof="stock"
+_a_dac="$(_cfg audio_dac_hifi)"
+_a_loud="$(_cfg media_loudness)"; [ -n "$_a_loud" ] || _a_loud="stock"
+_a_dsp="$(_cfg dsp_loudness)";    [ -n "$_a_dsp" ]  || _a_dsp="off"
+_a_bt="$(_cfg bt_absvol_mode)";   [ -n "$_a_bt" ]   || _a_bt="stock"
+_c_lvl="$(_cfg CAMERA_LEVEL)";    [ -n "$_c_lvl" ]  || _c_lvl="0"
 _blur="$(_cfg disable_blur)"
 _cool="$(_cfg cool_gaming)"
+_dsp_so=0
+{ [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; } && _dsp_so=1
 
 echo ""
-echo "  ╭─────────────────────────────────────────╮"
-echo "  │  🎛  ACTIVE TWEAKS                       │"
-echo "  ╰─────────────────────────────────────────╯"
-echo ""
-echo "  🎵 Audio"
-echo "     profile    : ${_a_prof}"
-echo "     hi-fi DAC  : $(_onoff "$_a_dac")"
-echo "     loudness   : ${_a_loud}"
-if [ "$_a_dsp" = "off" ]; then
-  echo "     ASB DSP    : ⬜ off"
-else
-  echo "     ASB DSP    : ✅ +${_a_dsp} dB (limiter on)"
-fi
-echo "     BT absvol  : ${_a_bt}"
+echo "  🎵  AUDIO"
+_audio_l="       ${_a_prof} profile"
+[ "$_a_dac" = "1" ] && _audio_l="${_audio_l}  ·  hi-fi DAC"
+echo "$_audio_l"
+_loud_l="       loudness: ${_a_loud}"
+[ "$_a_dsp" != "off" ] && _loud_l="${_loud_l}  ·  DSP +${_a_dsp} dB"
+echo "$_loud_l"
+[ "$_a_bt" = "disabled" ] && echo "       BT absolute volume: off (phone drives gain)"
 
+echo ""
+echo "  📷  CAMERA"
 _vb_n="$(grep -c '"packageName"' /odm/etc/camera/config/video_beauty_default_config 2>/dev/null)"
+_cam_l="       processing level ${_c_lvl}"
+[ "${_vb_n:-0}" -gt 0 ] 2>/dev/null && _cam_l="${_cam_l}  ·  ${_vb_n} retouch apps"
+echo "$_cam_l"
+
 echo ""
-echo "  📷 Camera    : level ${_c_lvl}${_vb_n:+  ·  retouch apps: ${_vb_n}}"
-echo "  🖼  Blur      : $([ "$_blur" = "1" ] && echo "⬜ disabled" || echo "✅ stock")"
-echo "  🎮 Cool games: $(_onoff "$_cool")"
-_wifi_cc="$(getprop persist.asb.wifi.cc 2>/dev/null)"
-[ -n "$_wifi_cc" ] || _wifi_cc="$(settings get global wifi_country_code 2>/dev/null)"
+echo "  ⚙️  SYSTEM"
+_wifi_cc="$(settings get global wifi_country_code 2>/dev/null)"
 case "$_wifi_cc" in null|"") _wifi_cc="—" ;; esac
-echo "  📡 Wi-Fi     : region ${_wifi_cc}"
+echo "       Wi-Fi region: ${_wifi_cc}"
+_sys_l="       blur: $([ "$_blur" = "1" ] && echo off || echo stock)"
+_sys_l="${_sys_l}  ·  cool games: $([ "$_cool" = "1" ] && echo on || echo off)"
+echo "$_sys_l"
+
+_cats=""
+for _c in CPU AUDIO CAMERA NET WIFI MEDIA; do
+  [ "$(_feat "$_c")" = "1" ] && _cats="${_cats}${_cats:+ · }${_c}"
+done
+[ -n "$_cats" ] && echo "       modules: ${_cats}"
+
+# ── Anything that is set but not actually working ───────────────────────────────
+# This is the part worth having on screen: a setting that silently does nothing is
+# invisible everywhere else, and "DSP +9 dB" next to a missing library is exactly the
+# kind of thing a user reports as "the module does nothing".
+_warn=0
+if [ "$_a_dsp" != "off" ] && [ "$_dsp_so" = "0" ]; then
+  [ "$_warn" = "0" ] && echo ""
+  _warn=1
+  echo "  ⚠️  DSP is set to +${_a_dsp} dB but libasbdsp.so is not installed."
+  echo "       Reinstall the module to activate it."
+fi
+if [ "$_a_dsp" = "off" ] && [ "$_a_loud" = "stock" ] && [ "$_a_prof" = "stock" ]; then
+  [ "$_warn" = "0" ] && echo ""
+  _warn=1
+  echo "  💡  All audio tweaks are at stock — nothing is being changed."
+fi
 
 echo ""
-echo "  📦 Categories: CPU $(_onoff "$(_feat CPU)")  ·  AUDIO $(_onoff "$(_feat AUDIO)")  ·  CAMERA $(_onoff "$(_feat CAMERA)")"
-echo "                 NET $(_onoff "$(_feat NET)")  ·  WIFI $(_onoff "$(_feat WIFI)")  ·  MEDIA $(_onoff "$(_feat MEDIA)")"
-
-_mnt="$(grep -c 'AutoSystemBoost' /proc/mounts 2>/dev/null)"
-_dsp_so="$([ -f /vendor/lib64/soundfx/libasbdsp.so ] && echo "✅ loaded" || echo "⬜ absent")"
-echo ""
-echo "  🧩 Overlay   : ${_mnt:-0} mount entr$([ "${_mnt:-0}" = "1" ] && echo "y" || echo "ies")"
-echo "  🔊 libasbdsp : ${_dsp_so}"
-
-echo ""
-echo "  ─────────────────────────────────────────"
-echo "  💬 Opening Telegram channel…"
+echo "  ─────────────────────────────"
+echo "  💬  Opening Telegram…"
 echo ""
 
 am start -a android.intent.action.VIEW -d "tg://resolve?domain=AutoSystemBoost" >/dev/null 2>&1 \
