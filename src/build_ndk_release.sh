@@ -62,23 +62,39 @@ for _d in dsp DSP; do
   fi
 done
 if [ -n "$DSP_SRC" ]; then
-  DSP_CFLAGS=(
-    -O2 -fPIC -shared
-    -fstack-protector-strong
-    -D_FORTIFY_SOURCE=2
-    -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
-    -fvisibility=hidden
-    -I"$DSP_INC"
-  )
-  "$CC" "${DSP_CFLAGS[@]}" "$DSP_SRC" -lm -llog -o "$OUT_DIR/libasbdsp.so"
-  "$STRIP" "$OUT_DIR/libasbdsp.so" || true
-  chmod 0644 "$OUT_DIR/libasbdsp.so"
-  # The AELI symbol MUST be exported or audioserver cannot load the effect.
-  if command -v "$TOOLCHAIN/llvm-nm" >/dev/null 2>&1; then
-    "$TOOLCHAIN/llvm-nm" -D --defined-only "$OUT_DIR/libasbdsp.so" | grep -q " AELI$" \
-      || { echo "[ASB] ERROR: AELI symbol not exported from libasbdsp.so" >&2; exit 1; }
-  fi
-  ls -lh "$OUT_DIR/libasbdsp.so"
+  # Build BOTH ABIs. /vendor/lib/soundfx and /vendor/lib64/soundfx both exist on the
+  # target, and an effect library has to match the bitness of the process that dlopens
+  # it - a 64-bit .so dropped into lib/soundfx simply fails to load. This is why
+  # ViperFX and every other effect ships a pair.
+  for _abi in arm64-v8a armeabi-v7a; do
+    case "$_abi" in
+      arm64-v8a)   _dcc="$TOOLCHAIN/aarch64-linux-android${API}-clang" ;;
+      armeabi-v7a) _dcc="$TOOLCHAIN/armv7a-linux-androideabi${API}-clang" ;;
+    esac
+    if [ ! -x "$_dcc" ]; then
+      echo "[ASB] note: no compiler for $_abi ($_dcc) - skipping that ABI"
+      continue
+    fi
+    _dout="$ROOT_DIR/bin/$_abi"
+    mkdir -p "$_dout"
+    DSP_CFLAGS=(
+      -O2 -fPIC -shared
+      -fstack-protector-strong
+      -D_FORTIFY_SOURCE=2
+      -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
+      -fvisibility=hidden
+      -I"$DSP_INC"
+    )
+    "$_dcc" "${DSP_CFLAGS[@]}" "$DSP_SRC" -lm -llog -o "$_dout/libasbdsp.so"
+    "$STRIP" "$_dout/libasbdsp.so" || true
+    chmod 0644 "$_dout/libasbdsp.so"
+    # The AELI symbol MUST be exported or audioserver cannot load the effect.
+    if command -v "$TOOLCHAIN/llvm-nm" >/dev/null 2>&1; then
+      "$TOOLCHAIN/llvm-nm" -D --defined-only "$_dout/libasbdsp.so" | grep -q " AELI$" \
+        || { echo "[ASB] ERROR: AELI symbol not exported from $_abi/libasbdsp.so" >&2; exit 1; }
+    fi
+    ls -lh "$_dout/libasbdsp.so"
+  done
 else
   echo "[ASB] note: asb_dsp.c not found under src/dsp or src/DSP - skipping DSP build"
 fi
