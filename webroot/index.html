@@ -169,15 +169,47 @@ body::before, body::after {
   to { transform: rotate(360deg); }
 }
 
+/* Brushed-metal wordmark. The bands are what sell it: a flat two-stop gradient reads
+   as "coloured text", whereas alternating light/dark stops at uneven offsets read as
+   milled steel catching light. background-size is over-wide so the sheen keyframe can
+   drag the highlight across the letters instead of just fading them. */
 .app-name {
   font-size: 26px;
   font-weight: 800;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #fff 30%, var(--accent));
+  letter-spacing: 0.4px;
+  background: linear-gradient(100deg,
+    #6f7d8b 0%,
+    #c2d0de 10%,
+    #f4f9ff 17%,
+    #8d9bab 25%,
+    #55626f 38%,
+    #a9b8c8 50%,
+    #eef5fc 57%,
+    #7f8d9d 66%,
+    #5b6875 78%,
+    #b6c5d4 90%,
+    #8fa3b8 100%);
+  background-size: 240% 100%;
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.10))
+    drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 14px color-mix(in srgb, var(--accent) 30%, transparent));
+  animation: metalSheen 7s ease-in-out infinite;
   margin-bottom: 6px;
+}
+
+@keyframes metalSheen {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+/* Some people get motion sick from a constantly moving highlight, and it is pure
+   decoration - park it on a nice frame instead of removing the metal look. */
+@media (prefers-reduced-motion: reduce) {
+  .app-name { animation: none; background-position: 30% 50%; }
 }
 
 .device-line {
@@ -1653,9 +1685,9 @@ const I18N = {
     // config items: name + desc keyed by config key
     cfg: {
       audio_profile: { name: 'Аудио-профиль',
-        desc: 'Кто обрабатывает звук. ПОД ЭКВАЛАЙЗЕР \u2014 UHQA выкл, ресемплер 0: сигнал уходит внешнему EQ/ViPER нетронутым (навязывать под ним максимальный ресемплинг \u2014 как раз то, что его ломает). БАЗОВЫЙ \u2014 только базовые твики, без предпочтений. HI-FI \u2014 UHQA вкл, hi-fi проперти, ресемплер 255: лучший вариант, когда внешнего эквалайзера НЕТ. Заменяет прежние «Совместимость эквалайзера» + проп-часть «Агрессивных твиков»: они были противоположностями и, из-за бага, не работали вообще. Применяется без перезагрузки.' },
+        desc: 'Кто обрабатывает звук. «Под эквалайзер» \u2014 отдаёт сигнал внешнему EQ/ViPER нетронутым. «Hi-fi» \u2014 UHQA включён, когда эквалайзера нет. «Как в стоке» \u2014 только базовые твики. Применяется без перезагрузки.' },
       audio_dac_hifi: { name: 'Hi-Fi ЦАП (микшер)',
-        desc: 'Настройка кодека, а не софта: компандеры наушников выкл, RX HPH Mode \u2192 CLS_H_HIFI в микшер-файлах устройства. Это отдельная ось от аудио-профиля \u2014 безопасно сочетается с «под эквалайзер» (не мешает внешнему EQ, а даёт ему более чистый ЦАП). Прежде была микшер-половиной «Агрессивных твиков». Нужна перезагрузка.' },
+        desc: 'Настройка кодека, а не софта: компандеры наушников выкл, HPH Mode \u2192 CLS_H_HIFI. Внешнему эквалайзеру не мешает \u2014 даёт ему более чистый ЦАП. Нужна перезагрузка.' },
       CAMERA_LEVEL: { name: 'Степень обработки камеры',
         desc: 'Сила цвета и контраста для фото и видео: 0 = сток, выше = насыщеннее и контрастнее. На максимуме возможен бандинг в тенях. После перезагрузки.' },
       smart_battery_bias: { name: 'Уклон Smart в автономность',
@@ -1663,11 +1695,11 @@ const I18N = {
       CAMERA_AGGRESSIVE_INJECT: { name: 'Режим ключей камеры',
         desc: 'БЕЗОПАСНЫЙ — только имеющиеся tone-ключи. АГРЕССИВНЫЙ инжектирует недостающие (OnePlus 13/12) — рискованно, верните БЕЗОПАСНЫЙ при сбоях. После перезагрузки.' },
       media_loudness: { name: 'Громкость медиа',
-        desc: 'Реально поднимает громкость на рабочих позициях ползунка. Сток глушит зверски: на 60% это \u221217 dB. Умеренно \u2248 +3.4 dB, Сильно \u2248 +6 dB, МАКСИМУМ \u2248 +10 dB (всё на 60%). Клиппинг невозможен арифметически: все точки кривой остаются отрицательными, то есть сигнал только ослабляется относительно источника, а 100% = 0 dB не поднимается никогда. Буст нарастает к середине хода \u2014 самые тихие шаги стоковые, ночью тихо остаётся тихим. Цена «максимума» \u2014 не искажения, а ход: от 60% до 100% остаётся ~7 dB, верх ползунка грубеет. Меняются только кривые МУЗЫКИ; будильник, звонок, уведомления \u2014 стоковые. Если и на 100% мало \u2014 кривая исчерпана (0 dB = сам источник), дальше только DSP-усиление. Нужна перезагрузка.' },
+        desc: 'Громче на рабочих позициях ползунка: умеренно \u2248+3 dB, сильно \u2248+6, максимум \u2248+10. Тихие шаги, будильник и звонок не трогает, клиппинга нет. На «максимуме» верх ползунка грубеет. Нужна перезагрузка.' },
       dsp_loudness: { name: 'DSP-усиление (ASB)',
-        desc: 'Собственный DSP-движок ASB: реальное усиление ВЫШЕ 0 dB \u2014 то, чего кривые дать не могут (на 100% они упираются в unity). Работает пиковый лимитер (мгновенная атака, спад ~120 мс, потолок \u22121 dBFS), поэтому клиппинга нет. Цепляется ко всем музыкальным потокам автоматически \u2014 приложение не нужно, тихого старта не будет. ВЫКЛ = библиотека вообще не ставится. Начни с 3 dB; 9 dB на и без того громких мастерах заставит лимитер работать жёстко и звук может «сплющить». Применяется после перезагрузки.' },
+        desc: 'Свой DSP-движок ASB: усиление выше системного максимума, с лимитером \u2014 клиппинга нет. Цепляется к музыке сам, приложение не нужно. Начни с +3; +9 может сплющить громкие записи. Первое включение \u2014 после перезагрузки.' },
       bt_absvol_mode: { name: 'Абсолютная громкость Bluetooth',
-        desc: 'Стоково = absolute volume ВКЛ: наушники сами делают финальное ослабление и синхронны с ползунком телефона (громко, синхронно). Отключено = телефон сам управляет усилением, а наушники держат свой уровень — для автомагнитол, которые слишком громкие на 1-м шаге, или для DSP. На современных наушниках «Отключено» часто даёт тихий старт после перезагрузки.' },
+        desc: '«Отключить» \u2014 громкостью рулит телефон, а не гарнитура (нужно для ViPER/EQ). «Как в стоке» \u2014 громко и синхронно с наушниками. Применяется без перезагрузки.' },
       cool_gaming: { name: 'Холодные игры',
         desc: 'Охлаждает игры, включая термо-уклон раньше (~40°C), без заметной потери fps. ВЫКЛ для безграничного пикового fps.' },
       charge_aware_enable: { name: 'Учёт зарядки',
@@ -1925,15 +1957,15 @@ const SNAP_KEYS = ['audio_profile','audio_dac_hifi','CAMERA_LEVEL','CAMERA_AGGRE
 const CFG_ITEMS = [
   // --- Audio ---
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
-    desc:'Who processes the sound. EQ-FRIENDLY \u2014 UHQA off, resampler 0: the signal reaches an external EQ/ViPER untouched (forcing max resampling underneath one is exactly what breaks it). BASELINE \u2014 base tweaks only, no opinion. HI-FI \u2014 UHQA on, hi-fi props, resampler 255: best when you are NOT running an external EQ. Replaces the old EQ Compatibility + the property half of Aggressive Audio Tweaks, which were opposites and, due to a bug, never ran at all. Applies without a reboot.' },
+    desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
   { key:'audio_dac_hifi', type:'bool', def:'0', name:'Hi-Fi DAC (mixer)',
-    desc:'Codec configuration, not software: headphone companders off and RX HPH Mode \u2192 CLS_H_HIFI in the device\u2019s own mixer files. A separate axis from Audio Profile \u2014 safe to combine with EQ-friendly (it does not fight an external EQ, it gives it a cleaner DAC). Was the mixer half of Aggressive Audio Tweaks. Reboot to apply.' },
+    desc:'Codec configuration, not software: headphone companders off, HPH Mode \u2192 CLS_H_HIFI. Does not fight an external EQ \u2014 it gives it a cleaner DAC. Reboot to apply.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
-    desc:'Genuinely raises loudness at the slider positions you actually use. Stock attenuates brutally \u2014 \u221217 dB at 60%. Mild \u2248 +3.4 dB, Strong \u2248 +6 dB, MAX \u2248 +10 dB (all at 60%). Clipping is arithmetically impossible: every curve point stays negative, i.e. the signal is only ever turned down from source, and 100% = 0 dB is never raised. The boost ramps in across the travel, so the quietest steps stay at stock and quiet listening still works. The cost of Max is range, not distortion: only ~7 dB of travel remains between 60% and 100%, so the top of the slider gets coarse. Only the MUSIC curves change; alarms, ringtones and notifications stay stock. If 100% is still not enough, the curve is out of road (0 dB = the source itself) \u2014 use DSP Loudness. Reboot to apply.' },
+    desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
   { key:'dsp_loudness', type:'seg', def:'off', opts:['off','3','6','9'], name:'DSP Loudness (ASB)',
-    desc:'ASB\u2019s own DSP engine: real gain ABOVE 0 dB \u2014 what the volume curves cannot do (they stop at unity at 100%). A peak limiter (instant attack, ~120 ms release, \u22121 dBFS ceiling) means it cannot clip. Attached to every music stream automatically \u2014 no companion app, no quiet start. Off = the library is not installed at all. Start at 3 dB; 9 dB on already-loud masters makes the limiter work hard and can sound squashed. Reboot to apply.' },
+    desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, with a limiter \u2014 it cannot clip. Attaches to music by itself, no companion app. Start at +3; +9 can squash loud masters. First enable needs a reboot.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Absolute Volume',
-    desc:'Stock = absolute volume ON: the headset does the final attenuation and stays in sync with the phone slider (loud, synced). Disabled = the phone drives its own software gain and the headset keeps its own level \u2014 for car stereos that are too loud at step 1, or DSP setups. On modern headsets Disabled often starts quiet after a reboot.' },
+    desc:'Disable = the phone drives the gain instead of the headset (what ViPER/EQ need). Stock = loud and synced with the headset. Applies without a reboot.' },
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:4, step:1, name:'Camera Grade',
     desc:'Photo + video colour and contrast strength: 0 = stock, higher = richer and punchier. Max can band in deep shadows. Reboot to apply.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
