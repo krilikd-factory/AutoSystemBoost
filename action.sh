@@ -212,6 +212,12 @@ _dsp_so=0
 
 _st() { grep -m1 "^$1=" /dev/.asb/state 2>/dev/null | cut -d= -f2; }
 
+# Append "$2" to the accumulator "$1", inserting the separator only between real items.
+_join() {
+  [ -n "$2" ] || { printf '%s' "$1"; return; }
+  if [ -n "$1" ]; then printf '%s  ·  %s' "$1" "$2"; else printf '%s' "$2"; fi
+}
+
 _g_state="$(_st state)"
 _g_owner="$(_st cap_owner)"
 _g_cpumax="$(_st cpu_max)"
@@ -222,18 +228,22 @@ _g_head="$(_st headroom_pct)"
 if [ -n "$_g_state" ]; then
   echo ""
   echo "  ⚡  GOVERNOR"
-  _gl="       ${_g_state}"
-  [ -n "$_g_owner" ] && _gl="${_gl}  ·  caps by ${_g_owner}"
-  echo "$_gl"
-  _gl="      "
-  [ -n "$_g_cpumax" ] && [ "$_g_cpumax" -gt 0 ] 2>/dev/null && _gl="${_gl} CPU max ${_g_cpumax} MHz"
-  [ -n "$_g_dwell" ] && _gl="${_gl}  ·  dwell ${_g_dwell}s"
-  [ "$_gl" != "      " ] && echo "$_gl"
-  _gl="      "
-  [ -n "$_g_iq" ] && _gl="${_gl} environment iq ${_g_iq}"
-  [ -n "$_g_head" ] && _gl="${_gl}  ·  headroom ${_g_head}%"
-  [ "${_g_thermal:-0}" != "0" ] && _gl="${_gl}  ·  🔥 thermal ${_g_thermal}"
-  [ "$_gl" != "      " ] && echo "$_gl"
+  # cap_owner is empty until the governor has taken ownership; saying "unknown" is
+  # noise, so just omit it and let the state speak.
+  _gl="$_g_state"
+  case "$_g_owner" in ''|unknown|none) : ;; *) _gl="$(_join "$_gl" "caps by ${_g_owner}")" ;; esac
+  echo "       ${_gl}"
+
+  _gl=""
+  [ "${_g_cpumax:-0}" -gt 0 ] 2>/dev/null && _gl="$(_join "$_gl" "CPU max ${_g_cpumax} MHz")"
+  [ -n "$_g_dwell" ] && _gl="$(_join "$_gl" "dwell ${_g_dwell}s")"
+  [ -n "$_gl" ] && echo "       ${_gl}"
+
+  _gl=""
+  [ -n "$_g_iq" ] && _gl="$(_join "$_gl" "environment iq ${_g_iq}")"
+  [ -n "$_g_head" ] && _gl="$(_join "$_gl" "headroom ${_g_head}%")"
+  [ "${_g_thermal:-0}" != "0" ] && _gl="$(_join "$_gl" "🔥 thermal ${_g_thermal}")"
+  [ -n "$_gl" ] && echo "       ${_gl}"
 fi
 
 # What the learner has actually accumulated. Worth surfacing: "conf 100%" means little
@@ -245,10 +255,15 @@ _l_drain="$(_st smart_drain_ewma_x10)"
 if [ "$_smart_enabled" = "1" ] && [ -n "${_l_sess}${_l_pkg}" ]; then
   echo ""
   echo "  🧠  LEARNING"
-  _ll="      "
-  [ -n "$_l_sess" ] && _ll="${_ll} ${_l_sess} sessions learned"
-  [ -n "$_l_q" ] && [ "$_l_q" -gt 0 ] 2>/dev/null && _ll="${_ll}  ·  last quality ${_l_q}"
-  [ "$_ll" != "      " ] && echo "$_ll"
+  _ll=""
+  if [ -n "$_l_sess" ]; then
+    # "1 sessions" reads like a bug report. It also matters: one session is not a
+    # learned profile, so say so instead of implying confidence.
+    [ "$_l_sess" = "1" ] && _ll="1 session learned (still cold)" \
+                         || _ll="${_l_sess} sessions learned"
+  fi
+  [ "${_l_q:-0}" -gt 0 ] 2>/dev/null && _ll="$(_join "$_ll" "last quality ${_l_q}")"
+  [ -n "$_ll" ] && echo "       ${_ll}"
   if [ -n "$_l_drain" ] && [ "$_l_drain" -gt 0 ] 2>/dev/null; then
     echo "       drain now: $((_l_drain / 10)).$((_l_drain % 10))%/h"
   fi
