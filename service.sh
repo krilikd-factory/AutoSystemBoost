@@ -979,7 +979,17 @@ apply_audio_runtime() {
     asb_persist_safe persist.audio.uhqa 1
     asb_persist_safe persist.vendor.audio.uhqa true
     asb_persist_safe persist.vendor.audio.power.save.setting 1
-    setprop af.resampler.quality 255 2>/dev/null || true
+    # DO NOT set af.resampler.quality here. History, so nobody re-adds it:
+    # it is an enum (0=DEFAULT 1=LOW .. 4=VERY_HIGH .. 7=DYN_HIGH), and this line used to
+    # write 255 - out of range, silently dropped, so hifi always ran at DEFAULT. That is
+    # why testers reported "no difference, like stock". Setting the real enum top (4 =
+    # VERY_HIGH_QUALITY) made it engage for the first time and BROKE PLAYBACK: a huge FIR
+    # per buffer starves the audio thread, so Signal calls went silent both ways, Poweramp
+    # glitched out, and YouTube dropped the moment anything else touched the CPU. The
+    # feature never worked, and when made to work it was harmful - so it stays off.
+    # 0 = DEFAULT is written below for every profile, which also RESETS the property if an
+    # earlier build left 4 or 255 in the property store without a reboot.
+    setprop af.resampler.quality 0 2>/dev/null || true
     setprop audio.offload.min.duration.secs 20 2>/dev/null || true
     setprop vendor.audio.offload.min.duration.secs 20 2>/dev/null || true
     setprop audio.offload.buffer.size.kb 256 2>/dev/null || true
