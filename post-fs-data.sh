@@ -122,6 +122,12 @@ if command -v resetprop >/dev/null 2>&1; then
       resetprop persist.asb.dsp.enable 1 >/dev/null 2>&1 || true
       resetprop persist.asb.dsp.gain_mb "$((_dspg * 100))" >/dev/null 2>&1 || true
       resetprop persist.asb.dsp.ceiling_mb -100 >/dev/null 2>&1 || true
+      # Compressor ahead of the makeup gain. Without it the limiter just shaves peaks
+      # and a "+6 dB" setting lands around +5 dB RMS; with it the body of the track
+      # comes up instead. Defaults: 3:1 above -18 dBFS, 8 dB soft knee.
+      resetprop persist.asb.dsp.comp 1 >/dev/null 2>&1 || true
+      resetprop persist.asb.dsp.comp_ratio_x10 30 >/dev/null 2>&1 || true
+      resetprop persist.asb.dsp.comp_thresh_mb -1800 >/dev/null 2>&1 || true
       ;;
     *)
       resetprop persist.asb.dsp.enable 0 >/dev/null 2>&1 || true
