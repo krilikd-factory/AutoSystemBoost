@@ -168,6 +168,7 @@ jobs:
             --exclude '*.pyc'                         \
             --exclude 'src'                           \
             --exclude 'bin/arm64-v8a'                 \
+            --exclude 'bin/armeabi-v7a'               \
             --exclude 'banner.png'                    \
             --exclude 'banner2.png'                   \
             --exclude 'CHANGELOG.md'                  \
@@ -181,7 +182,15 @@ jobs:
 
           mkdir -p "$PKG_DBG/bin"
           install -m 0755 bin/arm64-v8a/asb-debug "$PKG_DBG/bin/asb"
+          # Both ABIs: /vendor/lib64/soundfx and /vendor/lib/soundfx both exist on the
+          # target and each needs a library of its own bitness. This step used to ship
+          # only the 64-bit one, so debug builds silently had no 32-bit effect at all.
           install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_DBG/bin/libasbdsp.so"
+          if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
+            install -m 0644 bin/armeabi-v7a/libasbdsp.so "$PKG_DBG/bin/libasbdsp_32.so"
+          else
+            echo "::warning::armeabi-v7a libasbdsp.so not built - /vendor/lib/soundfx will be empty"
+          fi
           find "$PKG_DBG" -name "*.log" -delete
 
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)

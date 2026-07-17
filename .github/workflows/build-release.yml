@@ -146,6 +146,15 @@ jobs:
           [ "$SIZE" -lt 2000000 ] || { echo "ERROR: too large"; exit 1; }
 
           test -f "$SO" || { echo "ERROR: $SO not found"; exit 1; }
+          SO32="bin/armeabi-v7a/libasbdsp.so"
+          if [ -f "$SO32" ]; then
+            F32="$(file "$SO32")"; echo "$SO32 file: $F32"
+            echo "$F32" | grep -q "ARM"  || { echo "ERROR: $SO32 is not 32-bit ARM!"; exit 1; }
+            echo "$F32" | grep -q "ELF"  || { echo "ERROR: $SO32 not ELF!"; exit 1; }
+          else
+            echo "::error::$SO32 missing - the armeabi-v7a build did not run"
+            exit 1
+          fi
           FILE_SO="$(file "$SO")"
           echo "$SO file: $FILE_SO"
           echo "$FILE_SO" | grep -q "aarch64" || { echo "ERROR: DSP .so is not aarch64!"; exit 1; }
@@ -173,6 +182,7 @@ jobs:
             --exclude '*.pyc'                         \
             --exclude 'src'                           \
             --exclude 'bin/arm64-v8a'                 \
+            --exclude 'bin/armeabi-v7a'               \
             --exclude 'banner.png'                    \
             --exclude 'banner2.png'                   \
             --exclude 'CHANGELOG.md'                  \
@@ -193,6 +203,12 @@ jobs:
           install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_REL/bin/libasbdsp.so"
           if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
             install -m 0644 bin/armeabi-v7a/libasbdsp.so "$PKG_REL/bin/libasbdsp_32.so"
+            echo "DSP: both ABIs packaged"
+          else
+            # Loud, because the only symptom on-device is /vendor/lib/soundfx quietly
+            # never appearing - which is exactly how this shipped broken once already.
+            echo "::error::armeabi-v7a libasbdsp.so was NOT built - check the DSP build step above"
+            exit 1
           fi
           find "$PKG_REL" -name "*.log" -delete
 
