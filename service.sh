@@ -727,50 +727,80 @@ apply_wifi_settings() {
   asb_settings_put global wifi_verbose_logging_enabled 0
 }
 asb_feature_enabled WIFI && apply_wifi_settings
-# Wi-Fi regulatory domain: force CR (Costa Rica) whenever the WIFI tweaks are on.
+# Force the Wi-Fi regulatory domain to CR when the WIFI tweaks are on.
 #
-# CR's regulatory domain exposes a wider channel set and higher permitted TX power than
-# most European domains, which is the whole point of the tweak. The old SIM-derived
-# code is gone: it just reproduced whatever the modem already reported, so it could
-# never widen anything.
+# CR's domain exposes a wider channel set and higher permitted TX power than most
+# European domains - that is the entire point of the tweak. The old SIM-derived code is
+# gone: it only ever echoed back whatever the modem already reported, so it could never
+# widen anything.
 #
-# The heal that used to run here (undoing an older release's `force-country-code
-# enabled IT`) is also gone - it existed to switch forcing OFF, and would now fight the
-# line below on every boot. The /data/adb/asb/wifi_cc_forced marker stays, because
-# uninstall.sh reads it to put the domain back.
+# Two things this has to get right, both learned the hard way:
 #
-# NOTE for anyone reading this: this deliberately declares a regulatory domain that is
-# probably not the one you are standing in. Channels and TX power legal in CR may not be
-# legal where the phone actually is. That is a conscious choice of this module, not an
-# accident.
+#  1. TIMING. This used to run inline at the top of service.sh, i.e. long before
+#     sys.boot_completed. WifiService is not up yet at that point, so `cmd -w wifi`
+#     failed outright - and even when it did not, the Wi-Fi stack re-derives the country
+#     from telephony during its own init and overwrote us. Hence: run detached, after
+#     boot has completed, and retry.
+#
+#  2. VERIFICATION. Do not trust the command's exit status; read the domain back out of
+#     WifiCountryCode and only claim success (and drop the rollback marker that
+#     uninstall.sh reads) once the override is actually visible.
+#
+# NOTE: this deliberately declares a regulatory domain that is probably not the one the
+# phone is standing in. Channels and TX power legal in CR may not be legal where you
+# are. That is a conscious choice of this module, not an accident.
+asb_wifi_cc_readback() {
+  _d="$(dumpsys wifi 2>/dev/null)"
+  _r="$(echo "$_d" | grep -iE 'mOverrideCountryCode' | head -1 | grep -oE '[A-Z]{2}[[:space:]]*$' | tr -d ' ')"
+  [ -n "$_r" ] || _r="$(echo "$_d" | grep -iE 'mDriverCountryCode' | head -1 | grep -oE '[A-Z]{2}[[:space:]]*$' | tr -d ' ')"
+  echo "$_r"
+}
+
 apply_wifi_country() {
   has cmd || return 0
 
-  # Toggling the radio is required: the framework only re-reads the country code when
-  # the interface comes up, so forcing it on a live interface is silently ignored.
-  # Only toggle if Wi-Fi was actually on, otherwise we would switch it on for the user.
-  _wifi_dump="$(cmd -w wifi status 2>/dev/null; dumpsys wifi 2>/dev/null | head -40)"
-  _was_enabled=0
-  if echo "$_wifi_dump" | grep -q "Wifi is enabled"; then
-    _was_enabled=1
-  elif echo "$_wifi_dump" | grep -q "Wifi Client state is: true"; then
-    _was_enabled=1
-  elif echo "$_wifi_dump" | grep -q "WifiState 1"; then
-    _was_enabled=1
-  fi
+  # Wait for the framework. Without this the whole thing is a no-op on every boot.
+  _t=0
+  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 180 ]; do
+    sleep 5; _t=$((_t + 5))
+  done
+  [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || return 0
+  # WifiService settles a little after boot_completed; give it room before poking it.
+  sleep 20
 
-  [ "$_was_enabled" -eq 1 ] && cmd -w wifi set-wifi-enabled disabled >/dev/null 2>&1
+  _try=0
+  while [ "$_try" -lt 5 ]; do
+    _try=$((_try + 1))
 
-  if cmd -w wifi force-country-code enabled CR >/dev/null 2>&1; then
-    mkdir -p /data/adb/asb 2>/dev/null
-    : > /data/adb/asb/wifi_cc_forced 2>/dev/null
-    has settings && asb_settings_put global wifi_country_code CR
-  fi
+    # The country is only re-read when the interface comes up, so a live interface has
+    # to be bounced. Only bounce it if it was already on - never switch the user's radio
+    # on for them.
+    _dump="$(cmd -w wifi status 2>/dev/null; dumpsys wifi 2>/dev/null | head -40)"
+    _was_enabled=0
+    if echo "$_dump" | grep -q "Wifi is enabled"; then
+      _was_enabled=1
+    elif echo "$_dump" | grep -q "Wifi Client state is: true"; then
+      _was_enabled=1
+    elif echo "$_dump" | grep -q "WifiState 1"; then
+      _was_enabled=1
+    fi
 
-  [ "$_was_enabled" -eq 1 ] && cmd -w wifi set-wifi-enabled enabled >/dev/null 2>&1
+    [ "$_was_enabled" -eq 1 ] && { cmd -w wifi set-wifi-enabled disabled >/dev/null 2>&1; sleep 2; }
+    cmd -w wifi force-country-code enabled CR >/dev/null 2>&1
+    [ "$_was_enabled" -eq 1 ] && { cmd -w wifi set-wifi-enabled enabled >/dev/null 2>&1; sleep 3; }
+
+    if [ "$(asb_wifi_cc_readback)" = "CR" ]; then
+      mkdir -p /data/adb/asb 2>/dev/null
+      : > /data/adb/asb/wifi_cc_forced 2>/dev/null
+      return 0
+    fi
+    sleep 10
+  done
+  # Leave no marker: uninstall must not try to undo something that never took.
   return 0
 }
-asb_feature_enabled WIFI && apply_wifi_country
+# Detached: the waits above are minutes long and service.sh must not stall on them.
+asb_feature_enabled WIFI && (apply_wifi_country &) 
 apply_wlan0_txqlen() {
   [ -e /sys/class/net/wlan0/tx_queue_len ] || return 0
   _want="${_P_WLAN_TXQLEN:-768}"
