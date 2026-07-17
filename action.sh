@@ -181,8 +181,68 @@ echo ""
 echo "  Estimated time to 0%  $_eta_note:"
 echo "    📱 screen on  : ~${_ton_h}h ${_ton_m}m"
 echo "    💤 screen off : ~${_toff_h}h ${_toff_m}m"
+
+# ── What is actually switched on right now ──────────────────────────────────────
+# Read straight from the config the daemon reads, so this reports the live state
+# rather than what the WebUI last drew.
+_cfg() {
+  grep -E "^[[:space:]]*$1=" "$MODDIR/config/governor.conf" 2>/dev/null \
+    | head -1 | sed 's/.*=//' | tr -d ' \r'
+}
+_feat() {
+  grep -E "^$1=" "$MODDIR/features.conf" 2>/dev/null | tail -1 | sed 's/.*=//' | tr -d ' \r'
+}
+_onoff() { [ "$1" = "1" ] && echo "✅ on" || echo "⬜ off"; }
+
+_a_prof="$(_cfg audio_profile)";   [ -n "$_a_prof" ] || _a_prof="stock"
+_a_dac="$(_cfg audio_dac_hifi)";   [ -n "$_a_dac" ]  || _a_dac="0"
+_a_loud="$(_cfg media_loudness)";  [ -n "$_a_loud" ] || _a_loud="stock"
+_a_dsp="$(_cfg dsp_loudness)";     [ -n "$_a_dsp" ]  || _a_dsp="off"
+_a_bt="$(_cfg bt_absvol_mode)";    [ -n "$_a_bt" ]   || _a_bt="stock"
+_c_lvl="$(_cfg CAMERA_LEVEL)";     [ -n "$_c_lvl" ]  || _c_lvl="0"
+_blur="$(_cfg disable_blur)"
+_cool="$(_cfg cool_gaming)"
+
 echo ""
-echo "  Opening Telegram channel..."
+echo "  ╭─────────────────────────────────────────╮"
+echo "  │  🎛  ACTIVE TWEAKS                       │"
+echo "  ╰─────────────────────────────────────────╯"
+echo ""
+echo "  🎵 Audio"
+echo "     profile    : ${_a_prof}"
+echo "     hi-fi DAC  : $(_onoff "$_a_dac")"
+echo "     loudness   : ${_a_loud}"
+if [ "$_a_dsp" = "off" ]; then
+  echo "     ASB DSP    : ⬜ off"
+else
+  echo "     ASB DSP    : ✅ +${_a_dsp} dB (limiter on)"
+fi
+echo "     BT absvol  : ${_a_bt}"
+
+_vb_n="$(grep -c '"packageName"' /odm/etc/camera/config/video_beauty_default_config 2>/dev/null)"
+echo ""
+echo "  📷 Camera    : level ${_c_lvl}${_vb_n:+  ·  retouch apps: ${_vb_n}}"
+echo "  🖼  Blur      : $([ "$_blur" = "1" ] && echo "⬜ disabled" || echo "✅ stock")"
+echo "  🎮 Cool games: $(_onoff "$_cool")"
+_wifi_cc="$(getprop persist.asb.wifi.cc 2>/dev/null)"
+[ -n "$_wifi_cc" ] || _wifi_cc="$(settings get global wifi_country_code 2>/dev/null)"
+case "$_wifi_cc" in null|"") _wifi_cc="—" ;; esac
+echo "  📡 Wi-Fi     : region ${_wifi_cc}"
+
+echo ""
+echo "  📦 Categories: CPU $(_onoff "$(_feat CPU)")  ·  AUDIO $(_onoff "$(_feat AUDIO)")  ·  CAMERA $(_onoff "$(_feat CAMERA)")"
+echo "                 NET $(_onoff "$(_feat NET)")  ·  WIFI $(_onoff "$(_feat WIFI)")  ·  MEDIA $(_onoff "$(_feat MEDIA)")"
+
+_mnt="$(grep -c 'AutoSystemBoost' /proc/mounts 2>/dev/null)"
+_dsp_so="$([ -f /vendor/lib64/soundfx/libasbdsp.so ] && echo "✅ loaded" || echo "⬜ absent")"
+echo ""
+echo "  🧩 Overlay   : ${_mnt:-0} mount entr$([ "${_mnt:-0}" = "1" ] && echo "y" || echo "ies")"
+echo "  🔊 libasbdsp : ${_dsp_so}"
+
+echo ""
+echo "  ─────────────────────────────────────────"
+echo "  💬 Opening Telegram channel…"
+echo ""
 
 am start -a android.intent.action.VIEW -d "tg://resolve?domain=AutoSystemBoost" >/dev/null 2>&1 \
   || am start -a android.intent.action.VIEW -d "https://t.me/AutoSystemBoost" >/dev/null 2>&1

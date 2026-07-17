@@ -128,6 +128,35 @@ if command -v resetprop >/dev/null 2>&1; then
       ;;
   esac
   _blur="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
+
+  # These land in system.prop, not just resetprop. system.prop is loaded by the root
+  # manager itself right after this script runs, which is the idiomatic place for
+  # ro.* properties and does not depend on our script surviving to the end. The block
+  # is rewritten from the config on every boot, so the WebUI toggle still drives it -
+  # a plain static system.prop entry could not do that.
+  # resetprop below stays as a belt-and-braces for the same values.
+  _sp="$MODDIR/system.prop"
+  if [ -f "$_sp" ] && [ -w "$_sp" ]; then
+    _spt="$_sp.asb$$"
+    sed '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' "$_sp" > "$_spt" 2>/dev/null && {
+      {
+        echo "# ASB:BLUR:BEGIN"
+        if [ "$_blur" = "1" ]; then
+          echo "ro.surface_flinger.supports_background_blur=0"
+          echo "ro.surface_flinger.media_panel_bg_blur=0"
+          echo "ro.oplus.display.disable.volume_blur=1"
+          echo "ro.oplus.gaussianlevel=0"
+          echo "ro.launcher.blur.appLaunch=0"
+          echo "persist.sys.oplus.anim_level=0"
+          echo "persist.sys.oplus.material_blur_switch=false"
+        fi
+        echo "# ASB:BLUR:END"
+      } >> "$_spt"
+      mv -f "$_spt" "$_sp" 2>/dev/null || rm -f "$_spt" 2>/dev/null
+    }
+    rm -f "$_spt" 2>/dev/null
+  fi
+
   if [ "$_blur" = "1" ]; then
     resetprop ro.surface_flinger.supports_background_blur 0 >/dev/null 2>&1 || true
     resetprop ro.surface_flinger.media_panel_bg_blur 0 >/dev/null 2>&1 || true

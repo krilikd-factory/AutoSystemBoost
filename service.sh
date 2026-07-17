@@ -727,28 +727,48 @@ apply_wifi_settings() {
   asb_settings_put global wifi_verbose_logging_enabled 0
 }
 asb_feature_enabled WIFI && apply_wifi_settings
-asb_wifi_cc_heal() {
-  # One-time heal: older versions ran `force-country-code enabled IT`, which
-  if [ -f /data/adb/asb/wifi_cc_forced ]; then
-    has cmd && cmd -w wifi force-country-code disabled >/dev/null 2>&1 || true
-    rm -f /data/adb/asb/wifi_cc_forced 2>/dev/null || true
-  fi
-}
-asb_wifi_cc_heal
-
+# Wi-Fi regulatory domain: force CR (Costa Rica) whenever the WIFI tweaks are on.
+#
+# CR's regulatory domain exposes a wider channel set and higher permitted TX power than
+# most European domains, which is the whole point of the tweak. The old SIM-derived
+# code is gone: it just reproduced whatever the modem already reported, so it could
+# never widen anything.
+#
+# The heal that used to run here (undoing an older release's `force-country-code
+# enabled IT`) is also gone - it existed to switch forcing OFF, and would now fight the
+# line below on every boot. The /data/adb/asb/wifi_cc_forced marker stays, because
+# uninstall.sh reads it to put the domain back.
+#
+# NOTE for anyone reading this: this deliberately declares a regulatory domain that is
+# probably not the one you are standing in. Channels and TX power legal in CR may not be
+# legal where the phone actually is. That is a conscious choice of this module, not an
+# accident.
 apply_wifi_country() {
-  # Country from SIM then operator; only a confident 2-letter ISO code. We set
-  _cc=""
-  for _p in gsm.sim.operator.iso-country gsm.operator.iso-country; do
-    _v="$(getprop "$_p" 2>/dev/null | tr '[:lower:]' '[:upper:]' | tr -d ' ')"
-    case "$_v" in [A-Z][A-Z]) _cc="$_v"; break ;; esac
-  done
-  [ -n "$WIFI_COUNTRY" ] && _cc="$WIFI_COUNTRY"   # explicit user override
-  [ -n "$_cc" ] || return 0                        # none -> leave it to the modem
+  has cmd || return 0
 
-  has settings && {
-    asb_settings_put global wifi_country_code "$_cc"
-  }
+  # Toggling the radio is required: the framework only re-reads the country code when
+  # the interface comes up, so forcing it on a live interface is silently ignored.
+  # Only toggle if Wi-Fi was actually on, otherwise we would switch it on for the user.
+  _wifi_dump="$(cmd -w wifi status 2>/dev/null; dumpsys wifi 2>/dev/null | head -40)"
+  _was_enabled=0
+  if echo "$_wifi_dump" | grep -q "Wifi is enabled"; then
+    _was_enabled=1
+  elif echo "$_wifi_dump" | grep -q "Wifi Client state is: true"; then
+    _was_enabled=1
+  elif echo "$_wifi_dump" | grep -q "WifiState 1"; then
+    _was_enabled=1
+  fi
+
+  [ "$_was_enabled" -eq 1 ] && cmd -w wifi set-wifi-enabled disabled >/dev/null 2>&1
+
+  if cmd -w wifi force-country-code enabled CR >/dev/null 2>&1; then
+    mkdir -p /data/adb/asb 2>/dev/null
+    : > /data/adb/asb/wifi_cc_forced 2>/dev/null
+    has settings && asb_settings_put global wifi_country_code CR
+  fi
+
+  [ "$_was_enabled" -eq 1 ] && cmd -w wifi set-wifi-enabled enabled >/dev/null 2>&1
+  return 0
 }
 asb_feature_enabled WIFI && apply_wifi_country
 apply_wlan0_txqlen() {
