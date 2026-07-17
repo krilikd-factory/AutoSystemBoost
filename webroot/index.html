@@ -1663,7 +1663,7 @@ const I18N = {
       CAMERA_AGGRESSIVE_INJECT: { name: 'Режим ключей камеры',
         desc: 'БЕЗОПАСНЫЙ — только имеющиеся tone-ключи. АГРЕССИВНЫЙ инжектирует недостающие (OnePlus 13/12) — рискованно, верните БЕЗОПАСНЫЙ при сбоях. После перезагрузки.' },
       media_loudness: { name: 'Громкость медиа',
-        desc: 'Переформовывает кривые громкости так, что КАЖДАЯ позиция ползунка становится реально громче. Сток глушит сильно: на 20% это \u221240 dB, на 60% \u221217 dB. Умеренно \u2248 +3.4 dB на 60%, Сильно \u2248 +6 dB на 60% (и +8/+14 dB на 20%). Меняются только кривые МУЗЫКИ (динамик + наушники/BT). Будильник, звонок и уведомления остаются стоковыми. Максимум (100%) не поднимается выше 0 dB \u2014 клиппинга нет. Учти: тихие шаги тоже станут громче, поэтому на «Сильно» теряется точность у самого низа. Применяется после перезагрузки.' },
+        desc: 'Реально поднимает громкость на рабочих позициях ползунка. Сток глушит зверски: на 60% это \u221217 dB. Умеренно \u2248 +3.4 dB, Сильно \u2248 +6 dB, МАКСИМУМ \u2248 +10 dB (всё на 60%). Клиппинг невозможен арифметически: все точки кривой остаются отрицательными, то есть сигнал только ослабляется относительно источника, а 100% = 0 dB не поднимается никогда. Буст нарастает к середине хода \u2014 самые тихие шаги стоковые, ночью тихо остаётся тихим. Цена «максимума» \u2014 не искажения, а ход: от 60% до 100% остаётся ~7 dB, верх ползунка грубеет. Меняются только кривые МУЗЫКИ; будильник, звонок, уведомления \u2014 стоковые. Если и на 100% мало \u2014 кривая исчерпана (0 dB = сам источник), дальше только DSP-усиление. Нужна перезагрузка.' },
       dsp_loudness: { name: 'DSP-усиление (ASB)',
         desc: 'Собственный DSP-движок ASB: реальное усиление ВЫШЕ 0 dB \u2014 то, чего кривые дать не могут (на 100% они упираются в unity). Работает пиковый лимитер (мгновенная атака, спад ~120 мс, потолок \u22121 dBFS), поэтому клиппинга нет. Цепляется ко всем музыкальным потокам автоматически \u2014 приложение не нужно, тихого старта не будет. ВЫКЛ = библиотека вообще не ставится. Начни с 3 dB; 9 dB на и без того громких мастерах заставит лимитер работать жёстко и звук может «сплющить». Применяется после перезагрузки.' },
       bt_absvol_mode: { name: 'Абсолютная громкость Bluetooth',
@@ -1690,7 +1690,7 @@ const I18N = {
       auto: 'авто', on: 'вкл', off: 'выкл',
       safe: 'безопасно', aggressive: 'агрессивно',
       stock: 'как в стоке', disabled: 'отключить',
-      mild: 'умеренно', strong: 'сильно',
+      mild: 'умеренно', strong: 'сильно', max: 'максимум',
       eq_compat: 'под эквалайзер', hifi: 'hi-fi',
       '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
     }
@@ -1699,7 +1699,7 @@ const I18N = {
     // Only segment labels: everything else already reads naturally in English.
     opt: {
       eq_compat: 'EQ-friendly', hifi: 'Hi-Fi', stock: 'Stock',
-      mild: 'Mild', strong: 'Strong', disabled: 'Disable',
+      mild: 'Mild', strong: 'Strong', max: 'Max', disabled: 'Disable',
       off: 'Off', safe: 'Safe', aggressive: 'Aggressive',
       '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
     }
@@ -1928,8 +1928,8 @@ const CFG_ITEMS = [
     desc:'Who processes the sound. EQ-FRIENDLY \u2014 UHQA off, resampler 0: the signal reaches an external EQ/ViPER untouched (forcing max resampling underneath one is exactly what breaks it). BASELINE \u2014 base tweaks only, no opinion. HI-FI \u2014 UHQA on, hi-fi props, resampler 255: best when you are NOT running an external EQ. Replaces the old EQ Compatibility + the property half of Aggressive Audio Tweaks, which were opposites and, due to a bug, never ran at all. Applies without a reboot.' },
   { key:'audio_dac_hifi', type:'bool', def:'0', name:'Hi-Fi DAC (mixer)',
     desc:'Codec configuration, not software: headphone companders off and RX HPH Mode \u2192 CLS_H_HIFI in the device\u2019s own mixer files. A separate axis from Audio Profile \u2014 safe to combine with EQ-friendly (it does not fight an external EQ, it gives it a cleaner DAC). Was the mixer half of Aggressive Audio Tweaks. Reboot to apply.' },
-  { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong'], name:'Media Loudness',
-    desc:'Reshapes the volume curves so EVERY slider position is genuinely louder. Stock attenuates hard \u2014 \u221240 dB at 20%, \u221217 dB at 60%. Mild \u2248 +3.4 dB at 60%, Strong \u2248 +6 dB at 60% (and +8/+14 dB at 20%). Only the MUSIC curves change (speaker + headset/BT). Alarms, ringtones and notifications stay stock. The 100% point is never raised above 0 dB, so nothing clips. Note: the quietest steps get louder too, so Strong gives up some fine control at the bottom. Reboot to apply.' },
+  { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
+    desc:'Genuinely raises loudness at the slider positions you actually use. Stock attenuates brutally \u2014 \u221217 dB at 60%. Mild \u2248 +3.4 dB, Strong \u2248 +6 dB, MAX \u2248 +10 dB (all at 60%). Clipping is arithmetically impossible: every curve point stays negative, i.e. the signal is only ever turned down from source, and 100% = 0 dB is never raised. The boost ramps in across the travel, so the quietest steps stay at stock and quiet listening still works. The cost of Max is range, not distortion: only ~7 dB of travel remains between 60% and 100%, so the top of the slider gets coarse. Only the MUSIC curves change; alarms, ringtones and notifications stay stock. If 100% is still not enough, the curve is out of road (0 dB = the source itself) \u2014 use DSP Loudness. Reboot to apply.' },
   { key:'dsp_loudness', type:'seg', def:'off', opts:['off','3','6','9'], name:'DSP Loudness (ASB)',
     desc:'ASB\u2019s own DSP engine: real gain ABOVE 0 dB \u2014 what the volume curves cannot do (they stop at unity at 100%). A peak limiter (instant attack, ~120 ms release, \u22121 dBFS ceiling) means it cannot clip. Attached to every music stream automatically \u2014 no companion app, no quiet start. Off = the library is not installed at all. Start at 3 dB; 9 dB on already-loud masters makes the limiter work hard and can sound squashed. Reboot to apply.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Absolute Volume',
