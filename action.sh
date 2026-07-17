@@ -213,6 +213,10 @@ _blur="$(_cfg disable_blur)"
 _cool="$(_cfg cool_gaming)"
 _dsp_so=0
 { [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; } && _dsp_so=1
+# Assigned inside the WIFI / CAMERA gates further down; seed them here so the
+# verification block at the end cannot read them unset.
+_cc_drv=""
+_vb_n=0
 
 _st() { grep -m1 "^$1=" /dev/.asb/state 2>/dev/null | cut -d= -f2; }
 
@@ -419,21 +423,66 @@ fi
 echo "$_sysl"
 
 
-# ── Anything that is set but not actually working ───────────────────────────────
-# This is the part worth having on screen: a setting that silently does nothing is
-# invisible everywhere else, and "DSP +9 dB" next to a missing library is exactly the
-# kind of thing a user reports as "the module does nothing".
-_warn=0
-if [ "$_a_dsp" != "off" ] && [ "$_dsp_so" = "0" ]; then
-  [ "$_warn" = "0" ] && echo ""
-  _warn=1
-  echo "  ⚠️  DSP is set to +${_a_dsp} dB but libasbdsp.so is not installed."
-  echo "       Reinstall the module to activate it."
+# ── Configured vs actually applied ──────────────────────────────────────────────
+# The sections above report what the config ASKS for. This one checks the system for
+# evidence that each thing actually landed, and lists only what did not. A setting that
+# silently does nothing is invisible everywhere else - that is precisely how "DSP +9 dB"
+# shipped for weeks next to a library that was never installed.
+# Only claims that can be checked cheaply and unambiguously are made here; anything we
+# cannot verify is simply not asserted, rather than guessed at.
+_bad=""
+_add_bad() { _bad="${_bad}${_bad:+
+}       $1"; }
+
+# governor process
+pgrep -f 'asb_governor|/asb$' >/dev/null 2>&1 || _add_bad "governor is not running"
+
+# audio profile -> UHQA property
+if [ "$_a_prof" = "hifi" ] && [ "$(getprop persist.audio.uhqa 2>/dev/null)" != "1" ]; then
+  _add_bad "hi-fi profile — persist.audio.uhqa is not 1 (restart audioserver?)"
 fi
-if [ "$_a_dsp" = "off" ] && [ "$_a_loud" = "stock" ] && [ "$_a_prof" = "stock" ]; then
-  [ "$_warn" = "0" ] && echo ""
-  _warn=1
-  echo "  💡  All audio tweaks are at stock — nothing is being changed."
+
+# media loudness -> the reshape leaves a marker in the table it rewrote
+if [ "$_a_loud" != "stock" ]; then
+  grep -q 'ASB:VOLCURVE' /vendor/etc/default_volume_tables.xml 2>/dev/null \
+    || _add_bad "loudness ${_a_loud} — volume table not reshaped (reboot needed?)"
+fi
+
+# DSP -> library staged AND registered; either half missing means silence
+if [ "$_a_dsp" != "off" ]; then
+  [ "$_dsp_so" = "1" ] || _add_bad "DSP +${_a_dsp} dB — libasbdsp.so not installed (reinstall)"
+  _reg=0
+  for _ec in /odm/etc/audio_effects_config.xml /vendor/etc/audio_effects_config.xml \
+             /vendor/etc/audio_effects.xml; do
+    grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg=1; break; }
+  done
+  [ "$_reg" = "1" ] || _add_bad "DSP +${_a_dsp} dB — effect not registered in audio_effects_config"
+  [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] \
+    || _add_bad "DSP +${_a_dsp} dB — persist.asb.dsp.enable is not 1"
+fi
+
+# blur -> SurfaceFlinger property
+if [ "$_blur" = "1" ] && [ "$(getprop ro.surface_flinger.supports_background_blur 2>/dev/null)" = "1" ]; then
+  _add_bad "blur off — SurfaceFlinger still reports blur supported (reboot needed?)"
+fi
+
+# wi-fi -> driver domain
+if [ "$(_feat WIFI)" = "1" ] && [ -n "$_cc_drv" ] && [ "$_cc_drv" != "CR" ]; then
+  _add_bad "Wi-Fi CR — driver is on ${_cc_drv} (force did not take)"
+fi
+
+# camera -> the retouch list is the visible half of the camera patch
+if [ "$(_feat CAMERA)" = "1" ] && [ "${_c_lvl:-0}" -gt 0 ] 2>/dev/null; then
+  [ "${_vb_n:-0}" -ge 7 ] 2>/dev/null \
+    || _add_bad "camera — retouch app list not injected (${_vb_n:-0} apps)"
+fi
+
+echo ""
+if [ -n "$_bad" ]; then
+  echo "  ⚠️  NOT APPLIED"
+  echo "$_bad"
+else
+  echo "  ✅  All configured tweaks verified applied"
 fi
 
 echo ""
