@@ -1138,31 +1138,63 @@ asb_volume_table_src() {
 # session-attached effects suffer from.
 ASB_DSP_UUID="a5b10001-7e55-4c60-9f21-415342445350"
 
+# Stage the effect library into the overlay UNCONDITIONALLY, the way ViperFX and
+# friends ship theirs. It used to be installed only when dsp_loudness was already 3/6/9
+# at install time - but the audio stage runs long before the user's config is carried
+# over from the previous install, so it always read the shipped default (off) and the
+# library was never staged. Users who set +9 in the WebUI got "libasbdsp absent" and a
+# DSP that silently did nothing.
+#
+# Shipping it always costs nothing: an effect that is not listed in
+# audio_effects_config.xml is never dlopen'd, so an unregistered .so is inert bytes on
+# disk (~20 KB). Registration is what dsp_loudness actually gates, and that decision is
+# made after the config carry-over where it can see the real value.
+#
+# 64-bit only on purpose: this platform has no /vendor/lib at all (no 32-bit audio
+# processes), and the CI builds arm64-v8a only - an arm64 .so in a 32-bit soundfx dir
+# would just fail to load.
 asb_install_dsp_lib() {
-  _dsp_src="$MODPATH/bin/libasbdsp.so"
-  [ -f "$_dsp_src" ] || return 1
-  _dsp_dir="$MODPATH/system/vendor/lib64/soundfx"
-  mkdir -p "$_dsp_dir" 2>/dev/null || return 1
-  cp -f "$_dsp_src" "$_dsp_dir/libasbdsp.so" 2>/dev/null || return 1
-  chmod 0644 "$_dsp_dir/libasbdsp.so" 2>/dev/null
-  # Borrow the SELinux label from a real library in the live soundfx dir. Without a
-  # vendor_file-ish context audioserver is not allowed to dlopen it and the effect
-  # silently never loads.
-  _dsp_ref=""
-  for _c in /vendor/lib64/soundfx/*.so; do [ -f "$_c" ] && { _dsp_ref="$_c"; break; }; done
-  if [ -n "$_dsp_ref" ]; then
-    _dsp_ctx="$(ls -Zd "$_dsp_ref" 2>/dev/null | awk '{print $1}')"
-    case "$_dsp_ctx" in
-      ?*:?*:?*:?*) chcon "$_dsp_ctx" "$_dsp_dir/libasbdsp.so" 2>/dev/null || true ;;
-    esac
-  fi
+  _dsp_any=0
+  # 64-bit and 32-bit soundfx dirs both exist on the target, and an effect library has
+  # to match the bitness of the process that dlopens it - so each gets the .so built
+  # for its own ABI. Shipping only lib64 leaves any 32-bit audio path without the
+  # effect; shipping the arm64 .so into lib/ would just fail to load.
+  for _dsp_pair in \
+    "$MODPATH/bin/libasbdsp.so|$MODPATH/system/vendor/lib64/soundfx|/vendor/lib64/soundfx" \
+    "$MODPATH/bin/libasbdsp_32.so|$MODPATH/system/vendor/lib/soundfx|/vendor/lib/soundfx"; do
+    _dsp_src="${_dsp_pair%%|*}"
+    _dsp_rest="${_dsp_pair#*|}"
+    _dsp_dir="${_dsp_rest%%|*}"
+    _dsp_live="${_dsp_rest##*|}"
+    [ -f "$_dsp_src" ] || continue
+    mkdir -p "$_dsp_dir" 2>/dev/null || continue
+    cp -f "$_dsp_src" "$_dsp_dir/libasbdsp.so" 2>/dev/null || continue
+    chmod 0644 "$_dsp_dir/libasbdsp.so" 2>/dev/null
+    # Borrow the SELinux label from a real library in the matching live soundfx dir.
+    # Without a vendor_file-ish context audioserver is not allowed to dlopen it and the
+    # effect silently never loads.
+    _dsp_ref=""
+    for _c in "$_dsp_live"/*.so; do [ -f "$_c" ] && { _dsp_ref="$_c"; break; }; done
+    if [ -n "$_dsp_ref" ]; then
+      _dsp_ctx="$(ls -Zd "$_dsp_ref" 2>/dev/null | awk '{print $1}')"
+      case "$_dsp_ctx" in
+        ?*:?*:?*:?*) chcon "$_dsp_ctx" "$_dsp_dir/libasbdsp.so" 2>/dev/null || true ;;
+      esac
+    fi
+    _dsp_any=1
+  done
+  [ "$_dsp_any" = "1" ] || return 1
   return 0
 }
 
 asb_register_dsp_effect() {
   [ -f "$1" ] || return 0
   grep -q 'asb_loudness' "$1" 2>/dev/null && return 0
-  [ -f "$MODPATH/system/vendor/lib64/soundfx/libasbdsp.so" ] || return 0
+  # Either ABI is enough to justify registering the effect: audio_effects_config.xml
+  # names the library by filename, and each process picks the soundfx dir matching its
+  # own bitness.
+  [ -f "$MODPATH/system/vendor/lib64/soundfx/libasbdsp.so" ] \
+    || [ -f "$MODPATH/system/vendor/lib/soundfx/libasbdsp.so" ] || return 0
   grep -q '<libraries>' "$1" 2>/dev/null || return 0
   grep -q '<effects>' "$1" 2>/dev/null || return 0
   sedi "s#<libraries>#<libraries>\n        <library name=\"asbdsp\" path=\"libasbdsp.so\"/>#" "$1"
@@ -1230,16 +1262,16 @@ asb_patch_audio_inplace() {
   fi
 
   # ASB DSP effect: install the library first; the odm-bind stage registers it.
-  _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
-  case "$_dspg" in
-    3|6|9)
-      if asb_install_dsp_lib; then
-        ui_print "    + ASB DSP: libasbdsp.so installed (+${_dspg} dB, limiter on)"
-      else
-        ui_print "    ! ASB DSP: libasbdsp.so missing from build - skipped"
-      fi
-      ;;
-  esac
+  # Always stage the library; only the registration below is gated on the setting.
+  if asb_install_dsp_lib; then
+    _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
+    case "$_dspg" in
+      3|6|9) ui_print "    + ASB DSP: libasbdsp.so staged, effect ON (+${_dspg} dB, limiter on)" ;;
+      *)     ui_print "    + ASB DSP: libasbdsp.so staged, effect off (not registered)" ;;
+    esac
+  else
+    ui_print "    ! ASB DSP: libasbdsp.so missing from build - skipped"
+  fi
 
   # Media loudness: reshape the MUSIC volume curves from a pristine stock copy.
   _ml="$(grep -E '^[[:space:]]*media_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
@@ -1793,6 +1825,11 @@ if [ "$ASB_CFG_USED_SAVED" -ne 1 ]; then
 fi
 
 asb_save_user_config
+
+# MUST come before any stage that reads governor.conf (audio: DSP registration and
+# volume curves; camera: level). See asb_preserve_user_config for why.
+asb_reset_learning_on_upgrade_to_v56
+asb_preserve_user_config
 
 asb_detect_compat
 asb_detect_manager
@@ -2873,9 +2910,6 @@ if [ "$_asb_audio_ref" != "1" ] || [ "${_asb_sibling:-0}" = "1" ]; then
   rm -f /data/adb/asb/vendor_overlay_blocked 2>/dev/null || true
   ui_print "[*] /vendor overlay active after ONE reboot (OP15-style); /odm audio via fuse-guarded runtime binds"
 fi
-
-	asb_reset_learning_on_upgrade_to_v56
-	asb_preserve_user_config
 
 	if [ -f "$MODPATH/config/governor.conf" ]; then
 	  cp -f "$MODPATH/config/governor.conf" "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
