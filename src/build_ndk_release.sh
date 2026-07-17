@@ -67,14 +67,30 @@ if [ -n "$DSP_SRC" ]; then
   # it - a 64-bit .so dropped into lib/soundfx simply fails to load. This is why
   # ViperFX and every other effect ships a pair.
   for _abi in arm64-v8a armeabi-v7a; do
+    # Do not hard-code the API in the wrapper name. The NDK ships one clang wrapper per
+    # (triple, API) pair and which APIs exist moves between NDK releases - a missing
+    # armv7a-linux-androideabi24-clang silently dropped the whole 32-bit build and the
+    # only symptom was /system/vendor/lib/soundfx never appearing in the module.
+    # Prefer the requested API, otherwise take the lowest one the NDK actually has.
     case "$_abi" in
-      arm64-v8a)   _dcc="$TOOLCHAIN/aarch64-linux-android${API}-clang" ;;
-      armeabi-v7a) _dcc="$TOOLCHAIN/armv7a-linux-androideabi${API}-clang" ;;
+      arm64-v8a)   _dtriple="aarch64-linux-android" ;;
+      armeabi-v7a) _dtriple="armv7a-linux-androideabi" ;;
     esac
+    _dcc="$TOOLCHAIN/${_dtriple}${API}-clang"
     if [ ! -x "$_dcc" ]; then
-      echo "[ASB] note: no compiler for $_abi ($_dcc) - skipping that ABI"
+      _dcc="$(ls "$TOOLCHAIN/${_dtriple}"[0-9]*-clang 2>/dev/null \
+               | sed "s|.*/${_dtriple}||; s|-clang$||" | sort -n | head -1 \
+               | sed "s|^|$TOOLCHAIN/${_dtriple}|; s|$|-clang|")"
+    fi
+    if [ -z "$_dcc" ] || [ ! -x "$_dcc" ]; then
+      echo "[ASB] WARNING: no clang for $_abi (triple ${_dtriple}) in $TOOLCHAIN"
+      echo "[ASB]          available wrappers for this triple:"
+      ls "$TOOLCHAIN/${_dtriple}"*-clang 2>/dev/null | sed 's|^|[ASB]            |' \
+        || echo "[ASB]            (none - this NDK has no $_abi support)"
+      echo "[ASB]          -> /vendor/lib/soundfx will NOT get the effect"
       continue
     fi
+    echo "[ASB] $_abi: using $(basename "$_dcc")"
     _dout="$ROOT_DIR/bin/$_abi"
     mkdir -p "$_dout"
     DSP_CFLAGS=(
