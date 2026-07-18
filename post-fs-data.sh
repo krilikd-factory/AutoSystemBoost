@@ -117,22 +117,26 @@ if command -v resetprop >/dev/null 2>&1; then
   # its very first create/enable. The library reads these at INIT/ENABLE only -- never
   # inside process() -- so this is the whole control surface.
   _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
+  # Slider gives every integer 0..18 now, not just the old 3/6/9/12/15/18 steps, so gate
+  # on "is it a number 1..18" instead of an exact-value list. 0 or off disables.
   case "$_dspg" in
-    3|6|9|12)
-      resetprop persist.asb.dsp.enable 1 >/dev/null 2>&1 || true
-      resetprop persist.asb.dsp.gain_mb "$((_dspg * 100))" >/dev/null 2>&1 || true
-      resetprop persist.asb.dsp.ceiling_mb -15 >/dev/null 2>&1 || true
-      # Compressor ahead of the makeup gain. Without it the limiter just shaves peaks
-      # and a "+6 dB" setting lands around +5 dB RMS; with it the body of the track
-      # comes up instead. Defaults: 3:1 above -18 dBFS, 8 dB soft knee.
-      resetprop persist.asb.dsp.comp 1 >/dev/null 2>&1 || true
-      resetprop persist.asb.dsp.comp_ratio_x10 60 >/dev/null 2>&1 || true
-      resetprop persist.asb.dsp.comp_thresh_mb -2400 >/dev/null 2>&1 || true
-      ;;
-    *)
-      resetprop persist.asb.dsp.enable 0 >/dev/null 2>&1 || true
-      ;;
+    ''|off|0) _dspg_on=0 ;;
+    *[!0-9]*) _dspg_on=0 ;;                       # non-numeric -> off
+    *) [ "$_dspg" -ge 1 ] 2>/dev/null && [ "$_dspg" -le 18 ] 2>/dev/null && _dspg_on=1 || _dspg_on=0 ;;
   esac
+  if [ "$_dspg_on" = "1" ]; then
+    resetprop persist.asb.dsp.enable 1 >/dev/null 2>&1 || true
+    resetprop persist.asb.dsp.gain_mb "$((_dspg * 100))" >/dev/null 2>&1 || true
+    resetprop persist.asb.dsp.ceiling_mb -15 >/dev/null 2>&1 || true
+    # Compressor ahead of the makeup gain. Without it the limiter just shaves peaks
+    # and a "+6 dB" setting lands around +5 dB RMS; with it the body of the track
+    # comes up instead. Defaults: 6:1 above -24 dBFS.
+    resetprop persist.asb.dsp.comp 1 >/dev/null 2>&1 || true
+    resetprop persist.asb.dsp.comp_ratio_x10 60 >/dev/null 2>&1 || true
+    resetprop persist.asb.dsp.comp_thresh_mb -2400 >/dev/null 2>&1 || true
+  else
+    resetprop persist.asb.dsp.enable 0 >/dev/null 2>&1 || true
+  fi
   _blur="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
 
   # NOTE: the system.prop blur block is written at INSTALL time (asb_apply_blur_prop in
