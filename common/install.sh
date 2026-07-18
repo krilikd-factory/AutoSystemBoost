@@ -2044,8 +2044,21 @@ asb_apply_blur_prop() {
   [ -f "$_prop" ] || : > "$_prop"
   _db="$(grep -E '^[[:space:]]*disable_blur=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   # Rewrite the managed block from scratch every install so the WebUI toggle drives it.
+  # Also strip any BARE (unmarked) copies of these props first: an earlier build wrote
+  # them straight into system.prop without markers, and without this cleanup a fresh
+  # install would leave both the old bare lines and the new managed block, i.e. the
+  # property twice. resetprop/property_service take the last one, but duplicates are
+  # confusing and the stale copy could win depending on order.
   _pt="${_prop}.asbblur$$"
-  sed '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' "$_prop" > "$_pt" 2>/dev/null || cp -f "$_prop" "$_pt"
+  sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
+      -e '/^ro\.surface_flinger\.supports_background_blur=/d' \
+      -e '/^ro\.surface_flinger\.media_panel_bg_blur=/d' \
+      -e '/^ro\.oplus\.display\.disable\.volume_blur=/d' \
+      -e '/^ro\.oplus\.gaussianlevel=/d' \
+      -e '/^ro\.launcher\.blur\.appLaunch=/d' \
+      -e '/^persist\.sys\.oplus\.anim_level=/d' \
+      -e '/^persist\.sys\.oplus\.material_blur_switch=/d' \
+      "$_prop" > "$_pt" 2>/dev/null || cp -f "$_prop" "$_pt"
   {
     echo "# ASB:BLUR:BEGIN"
     if [ "$_db" = "1" ]; then
