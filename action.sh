@@ -269,7 +269,8 @@ fi
 # showed "337 ses / strong 100%". Use the cumulative total + confidence tier instead.
 _l_sess="$(_st smart_sessions_total)"
 [ -n "$_l_sess" ] || _l_sess="$(_st hist_sessions)"   # fall back on older governors
-_l_conf="$(_st smart_confidence)"
+_l_conf="$(_st smart_last_confidence)"
+[ -n "$_l_conf" ] || _l_conf="$(_st smart_confidence)"   # fall back on older governors
 _l_pkg="$(_st smart_pkg)"
 _l_drain="$(_st smart_drain_ewma_x10)"
 if [ "$_smart_enabled" = "1" ] && [ -n "${_l_sess}${_l_pkg}" ]; then
