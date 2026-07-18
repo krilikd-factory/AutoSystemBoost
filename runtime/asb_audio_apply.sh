@@ -83,28 +83,35 @@ _persist persist.vendor.bluetooth.disableabsvol "$_dp"
 changed="${changed}bt_absvol=${_bt} "
 
 # ---- dsp_loudness (gain only) ----------------------------------------------------
+# Slider gives any integer 0..18 now (not just 3/6/9), so accept the whole range. The
+# DSP effect re-reads persist.asb.dsp.* on ENABLE, and the audioserver restart below
+# triggers that ENABLE - which is why gain changes here apply live, no reboot. Values
+# mirror post-fs-data exactly (ceiling -15, comp 6:1 @ -24 dBFS) so live and boot agree.
 _dsp="$(_cfg dsp_loudness)"
+_dsp_ok=0
 case "$_dsp" in
-  3|6|9)
-    if [ -f /vendor/lib64/soundfx/libasbdsp.so ]; then
+  ''|off|0) _dsp_ok=0 ;;
+  *[!0-9]*) _dsp_ok=0 ;;
+  *) [ "$_dsp" -ge 1 ] 2>/dev/null && [ "$_dsp" -le 18 ] 2>/dev/null && _dsp_ok=1 ;;
+esac
+if [ "$_dsp_ok" = "1" ]; then
+    if [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; then
       _persist persist.asb.dsp.enable 1
       _persist persist.asb.dsp.gain_mb "$((_dsp * 100))"
-      _persist persist.asb.dsp.ceiling_mb -100
+      _persist persist.asb.dsp.ceiling_mb -15
       _persist persist.asb.dsp.comp 1
-      _persist persist.asb.dsp.comp_ratio_x10 30
-      _persist persist.asb.dsp.comp_thresh_mb -1800
+      _persist persist.asb.dsp.comp_ratio_x10 60
+      _persist persist.asb.dsp.comp_thresh_mb -2400
       changed="${changed}dsp=+${_dsp}dB "
     else
       # The library is only mounted after the overlay comes up.
       _persist persist.asb.dsp.enable 0
       changed="${changed}dsp=needs-reboot "
     fi
-    ;;
-  *)
+else
     _persist persist.asb.dsp.enable 0
     changed="${changed}dsp=off "
-    ;;
-esac
+fi
 
 # ---- re-init the audio stack so all of the above goes live ------------------------
 setprop ctl.restart audioserver 2>/dev/null || true
