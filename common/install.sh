@@ -1201,6 +1201,7 @@ asb_volume_table_src() {
 # and therefore none of the "silent until you open the EQ app" behaviour that the
 # session-attached effects suffer from.
 ASB_DSP_UUID="a5b10001-7e55-4c60-9f21-415342445350"
+ASB_DSP_TYPE="a5b10000-7e55-4c60-9f21-415342545950"
 
 # Stage the effect library into the overlay UNCONDITIONALLY, the way ViperFX and
 # friends ship theirs. It used to be installed only when dsp_loudness was already 3/6/9
@@ -1262,7 +1263,7 @@ asb_register_dsp_effect() {
   grep -q '<libraries>' "$1" 2>/dev/null || return 0
   grep -q '<effects>' "$1" 2>/dev/null || return 0
   sedi "s#<libraries>#<libraries>\n        <library name=\"asbdsp\" path=\"libasbdsp.so\"/>#" "$1"
-  sedi "s#<effects>#<effects>\n        <effect name=\"asb_loudness\" library=\"asbdsp\" uuid=\"${ASB_DSP_UUID}\"/>#" "$1"
+  sedi "s#<effects>#<effects>\n        <effect name=\"asb_loudness\" library=\"asbdsp\" uuid=\"${ASB_DSP_UUID}\" type=\"${ASB_DSP_TYPE}\"/>#" "$1"
   if grep -q '<postprocess>' "$1" 2>/dev/null; then
     sedi "s#<postprocess>#<postprocess>\n        <stream type=\"music\">\n            <apply effect=\"asb_loudness\"/>\n        </stream>#" "$1"
   else
