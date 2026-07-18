@@ -1,0 +1,153 @@
+name: Build DSP AIDL (.so)
+
+# Builds libasbdsp_aidl.so (arm64-v8a + armeabi-v7a) from src/DSP_AIDL/Android.bp in a
+# minimal AOSP/soong tree, then uploads the .so files as artifacts.
+#
+# HONEST EXPECTATIONS:
+#  - GitHub-hosted runners do NOT ship an AOSP/soong environment; this workflow builds
+#    one from scratch by syncing a minimal set of AOSP projects (see
+#    src/DSP_AIDL/manifest/asb_aidl_min.xml). First runs commonly fail on a missing soong
+#    module - add the project that provides it to that manifest and re-run. Budget a few
+#    iterations; this is normal for a from-scratch soong bring-up.
+#  - Disk is the tightest constraint. The free ubuntu runner has ~14 GB free by default;
+#    the cleanup step below reclaims ~25-30 GB more. A minimal audio-effect-AIDL tree plus
+#    the clang toolchain and out/ is on the edge of fitting. If you hit "no space left on
+#    device", switch `runs-on` to a larger runner (e.g. ubuntu-latg / a 2x-large runner in
+#    your plan) or a self-hosted runner with 120 GB+ free.
+#  - Runtime: a cold sync + soong bootstrap + build is typically 40-90 min.
+#
+# Trigger manually (workflow_dispatch) so it never runs on every push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      aosp_tag:
+        description: "AOSP branch/tag (must match the manifest revision)"
+        default: "android16-release"
+        required: true
+      lunch_target:
+        description: "lunch combo (arm64 primary; compile_multilib both gives arm too)"
+        default: "aosp_cf_arm64_only_phone-trunk_staging-userdebug"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout module sources (shallow)
+        uses: actions/checkout@v4
+        with:
+          path: asb-src
+
+      - name: Reclaim disk space
+        run: |
+          echo "Before:"; df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" \
+                      /usr/local/lib/node_modules /usr/share/swift 2>/dev/null || true
+          sudo apt-get -y purge '^dotnet-.*' '^llvm-.*' 'php.*' azure-cli \
+                      google-chrome-stable firefox powershell mono-devel 2>/dev/null || true
+          sudo apt-get -y autoremove --purge 2>/dev/null || true
+          sudo apt-get clean
+          docker rmi $(docker images -q) 2>/dev/null || true
+          echo "After:"; df -h /
+
+      - name: Install AOSP build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git-core gnupg flex bison build-essential zip curl zlib1g-dev \
+            libc6-dev-i386 libncurses5 x11proto-core-dev libx11-dev \
+            lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig \
+            python3 python3-pip ccache rsync
+          mkdir -p ~/.bin
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+          chmod a+x ~/.bin/repo
+          echo "$HOME/.bin" >> "$GITHUB_PATH"
+          git config --global user.name  "asb-ci"
+          git config --global user.email "asb-ci@users.noreply.github.com"
+          git config --global color.ui false
+
+      - name: Init minimal AOSP tree
+        run: |
+          mkdir -p aosp && cd aosp
+          # Init against the platform manifest but immediately override it with our tiny
+          # local manifest so repo only knows about the projects we actually need.
+          repo init -u https://android.googlesource.com/platform/manifest \
+                    -b "${{ github.event.inputs.aosp_tag }}" \
+                    --depth=1 --partial-clone --clone-filter=blob:limit=10M
+          mkdir -p .repo/local_manifests
+          # Blank out the default project set, keep only ours.
+          cp "$GITHUB_WORKSPACE/asb-src/src/DSP_AIDL/manifest/asb_aidl_min.xml" \
+             .repo/local_manifests/asb_aidl_min.xml
+          # Remove the default manifest's projects so only the local manifest's remain.
+          printf '<?xml version="1.0" encoding="UTF-8"?>\n<manifest></manifest>\n' \
+             > .repo/manifests/default.xml || true
+
+      - name: Sync minimal tree
+        working-directory: aosp
+        run: |
+          # -c: current branch only, --no-tags/--no-clone-bundle: less data, -j4: modest
+          # parallelism to stay under the runner's memory + disk pressure.
+          repo sync -c --no-tags --no-clone-bundle --optimized-fetch \
+                    --fail-fast -j4 || repo sync -c --no-tags --no-clone-bundle -j2
+          echo "Tree size:"; du -sh . 2>/dev/null || true
+          df -h /
+
+      - name: Stage the ASB module into the tree
+        working-directory: aosp
+        run: |
+          mkdir -p vendor/asb/libasbdsp_aidl
+          cp -a "$GITHUB_WORKSPACE"/asb-src/src/DSP_AIDL/*.cpp \
+                "$GITHUB_WORKSPACE"/asb-src/src/DSP_AIDL/*.h \
+                "$GITHUB_WORKSPACE"/asb-src/src/DSP_AIDL/Android.bp \
+                vendor/asb/libasbdsp_aidl/
+          ls -la vendor/asb/libasbdsp_aidl/
+
+      - name: Build libasbdsp_aidl (arm64 + arm)
+        working-directory: aosp
+        run: |
+          set -e
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export BUILD_BROKEN_DISABLE_BAZEL=true
+          source build/envsetup.sh
+          lunch "${{ github.event.inputs.lunch_target }}"
+          # arm64 (primary). Building the module target builds the 64-bit variant.
+          m libasbdsp_aidl
+          # arm (secondary ABI) if the lunch target has a 2nd arch; ignore if it doesn't.
+          m libasbdsp_aidl.vendor 2>/dev/null || true
+          echo "=== produced .so files ==="
+          find out -name 'libasbdsp_aidl.so' -exec ls -la {} \;
+
+      - name: Collect artifacts into prebuilt layout
+        working-directory: aosp
+        run: |
+          OUT64="$(find out -path '*arm64*' -name libasbdsp_aidl.so | head -1)"
+          OUT32="$(find out -path '*/arm/*' -name libasbdsp_aidl.so | grep -v arm64 | head -1)"
+          DEST="$GITHUB_WORKSPACE/prebuilt"
+          mkdir -p "$DEST/arm64-v8a" "$DEST/armeabi-v7a"
+          if [ -n "$OUT64" ]; then cp -f "$OUT64" "$DEST/arm64-v8a/libasbdsp_aidl.so"; fi
+          if [ -n "$OUT32" ]; then cp -f "$OUT32" "$DEST/armeabi-v7a/libasbdsp_aidl.so"; fi
+          echo "=== staged ==="; find "$DEST" -name '*.so' -exec ls -la {} \;
+          # Verify the AIDL factory symbol is exported (the whole reason this port exists).
+          for so in "$DEST"/*/libasbdsp_aidl.so; do
+            [ -f "$so" ] || continue
+            echo "--- $so ---"
+            if command -v llvm-nm >/dev/null 2>&1; then NM=llvm-nm; else NM=nm; fi
+            "$NM" -D "$so" 2>/dev/null | grep -E ' createEffect| queryEffect| destroyEffect' \
+              && echo "  AIDL factory symbols present" \
+              || echo "  WARNING: factory symbols not found (check build)"
+          done
+
+      - name: Upload .so artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libasbdsp_aidl-prebuilt
+          path: prebuilt/**/libasbdsp_aidl.so
+          if-no-files-found: error
+          retention-days: 30
