@@ -1107,6 +1107,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.low_battery_override ? 1 : 0,
             g_smart_rt.thermal_trend_bump,
             g_smart_trend_slope_mc_min);
+    /* Cumulative Smart session total, same number the WebUI shows from
+     * learner_state.json (smart_sessions.total). The action screen previously read
+     * hist_sessions, which is the per-tier count and resets on tier changes, so it
+     * showed e.g. "2" while the WebUI showed "337". Export the real total so the two
+     * agree. */
+    fprintf(f, "smart_sessions_total=%d\n", g_smart_sessions_total);
     {
         long live_x10 = 0;
         if (g_smart_drain_on_sec >= 300 && g_smart_drain_drop_x100 > 0) {
