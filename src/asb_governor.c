@@ -1111,8 +1111,11 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * learner_state.json (smart_sessions.total). The action screen previously read
      * hist_sessions, which is the per-tier count and resets on tier changes, so it
      * showed e.g. "2" while the WebUI showed "337". Export the real total so the two
-     * agree. */
-    fprintf(f, "smart_sessions_total=%d\n", g_smart_sessions_total);
+     * agree. Also export last_confidence (the bucket-commit snapshot the WebUI shows as
+     * "strong 100%") so action does not show the live smart_confidence (a different,
+     * per-tick value) next to it - that mismatch read as "74% vs 100%". */
+    fprintf(f, "smart_sessions_total=%d\nsmart_last_confidence=%d\n",
+            g_smart_sessions_total, g_smart_last_confidence);
     {
         long live_x10 = 0;
         if (g_smart_drain_on_sec >= 300 && g_smart_drain_drop_x100 > 0) {
