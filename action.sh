@@ -458,7 +458,9 @@ if [ "$_a_dsp" != "off" ]; then
   # install never ran the registration. Report which one it is.
   _reg_live=0; _reg_stage=0
   for _ec in /odm/etc/audio_effects_config.xml /vendor/etc/audio_effects_config.xml \
-             /vendor/etc/audio_effects.xml; do
+             /vendor/etc/audio_effects.xml \
+             /vendor/etc/audio/sku_*/audio_effects_config.xml \
+             /odm/etc/audio/sku_*/audio_effects_config.xml; do
     grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg_live=1; break; }
   done
   for _ec in /data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml \
@@ -478,9 +480,39 @@ if [ "$_a_dsp" != "off" ]; then
     || _add_bad "DSP +${_a_dsp} dB — persist.asb.dsp.enable is not 1"
 fi
 
-# blur -> SurfaceFlinger property
-if [ "$_blur" = "1" ] && [ "$(getprop ro.surface_flinger.supports_background_blur 2>/dev/null)" = "1" ]; then
-  _add_bad "blur off — SurfaceFlinger still reports blur supported (reboot needed?)"
+# blur -> report WHICH properties took, not just that something did not.
+# ro.* and persist.* fail for different reasons: persist.* go through property_service
+# normally, while ro.* are read-only and need resetprop to write the property area
+# directly. If the persist ones land and the ro ones do not, the root manager's
+# resetprop cannot touch read-only properties on this setup - which is a completely
+# different problem from "the tweak did not run".
+if [ "$_blur" = "1" ]; then
+  _b_ro_bad=0; _b_ro_n=0
+  for _bp in ro.surface_flinger.supports_background_blur:0 \
+             ro.surface_flinger.media_panel_bg_blur:0 \
+             ro.oplus.display.disable.volume_blur:1 \
+             ro.oplus.gaussianlevel:0 \
+             ro.launcher.blur.appLaunch:0; do
+    _bn="${_bp%:*}"; _bw="${_bp##*:}"
+    _bv="$(getprop "$_bn" 2>/dev/null)"
+    [ -n "$_bv" ] || continue          # not present on this firmware - not our problem
+    _b_ro_n=$((_b_ro_n + 1))
+    [ "$_bv" = "$_bw" ] || _b_ro_bad=$((_b_ro_bad + 1))
+  done
+  _b_ps_bad=0
+  [ "$(getprop persist.sys.oplus.anim_level 2>/dev/null)" = "0" ] || _b_ps_bad=$((_b_ps_bad + 1))
+  [ "$(getprop persist.sys.oplus.material_blur_switch 2>/dev/null)" = "false" ] || _b_ps_bad=$((_b_ps_bad + 1))
+
+  if [ "$_b_ro_bad" -gt 0 ] 2>/dev/null; then
+    if [ "$_b_ps_bad" = "0" ]; then
+      _add_bad "blur — ${_b_ro_bad}/${_b_ro_n} ro.* props rejected (persist.* took OK)"
+      _add_bad "  root manager's resetprop cannot write read-only props; reboot once more"
+    else
+      _add_bad "blur — ${_b_ro_bad}/${_b_ro_n} ro.* and ${_b_ps_bad}/2 persist.* props not applied"
+    fi
+  elif [ "$_b_ps_bad" -gt 0 ] 2>/dev/null; then
+    _add_bad "blur — ${_b_ps_bad}/2 persist.* props not applied"
+  fi
 fi
 
 # wi-fi -> driver domain
