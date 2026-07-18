@@ -145,6 +145,8 @@ if command -v resetprop >/dev/null 2>&1; then
   # reading process started, so system.prop is what actually carries them - this is just
   # belt-and-braces for anything restarted later in boot.
   if [ "$_blur" = "1" ]; then
+    # The real switch (read at late_start, after SF early boot) - persist, no -n.
+    resetprop persist.sys.sf.disable_blurs 1 >/dev/null 2>&1 || true
     resetprop -n ro.surface_flinger.supports_background_blur 0 >/dev/null 2>&1 || true
     resetprop -n ro.surface_flinger.media_panel_bg_blur 0 >/dev/null 2>&1 || true
     resetprop -n ro.oplus.display.disable.volume_blur 1 >/dev/null 2>&1 || true
@@ -153,6 +155,7 @@ if command -v resetprop >/dev/null 2>&1; then
     resetprop -n ro.launcher.blur.appLaunch 0 >/dev/null 2>&1 || true
     resetprop persist.sys.oplus.material_blur_switch false >/dev/null 2>&1 || true
   else
+    resetprop persist.sys.sf.disable_blurs 0 >/dev/null 2>&1 || true
     resetprop -n ro.surface_flinger.supports_background_blur 1 >/dev/null 2>&1 || true
     resetprop -n ro.surface_flinger.media_panel_bg_blur 1 >/dev/null 2>&1 || true
     resetprop -n ro.oplus.display.disable.volume_blur 0 >/dev/null 2>&1 || true

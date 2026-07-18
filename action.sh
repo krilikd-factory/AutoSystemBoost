@@ -494,6 +494,9 @@ fi
 # resetprop cannot touch read-only properties on this setup - which is a completely
 # different problem from "the tweak did not run".
 if [ "$_blur" = "1" ]; then
+  # The real switch first. If persist.sys.sf.disable_blurs is 1, SurfaceFlinger has blur
+  # off regardless of the capability/oplus keys, so that alone means applied.
+  _b_sf="$(getprop persist.sys.sf.disable_blurs 2>/dev/null)"
   _b_ro_bad=0; _b_ro_n=0
   for _bp in ro.surface_flinger.supports_background_blur:0 \
              ro.surface_flinger.media_panel_bg_blur:0 \
@@ -502,7 +505,7 @@ if [ "$_blur" = "1" ]; then
              ro.launcher.blur.appLaunch:0; do
     _bn="${_bp%:*}"; _bw="${_bp##*:}"
     _bv="$(getprop "$_bn" 2>/dev/null)"
-    [ -n "$_bv" ] || continue          # not present on this firmware - not our problem
+    [ -n "$_bv" ] || continue
     _b_ro_n=$((_b_ro_n + 1))
     [ "$_bv" = "$_bw" ] || _b_ro_bad=$((_b_ro_bad + 1))
   done
@@ -510,24 +513,19 @@ if [ "$_blur" = "1" ]; then
   [ "$(getprop persist.sys.oplus.anim_level 2>/dev/null)" = "0" ] || _b_ps_bad=$((_b_ps_bad + 1))
   [ "$(getprop persist.sys.oplus.material_blur_switch 2>/dev/null)" = "false" ] || _b_ps_bad=$((_b_ps_bad + 1))
 
-  if [ "$_b_ro_bad" -gt 0 ] 2>/dev/null || [ "$_b_ps_bad" -gt 0 ] 2>/dev/null; then
-    # Before crying failure, check whether the values are already sitting in system.prop.
-    # If they are, the tweak IS applied on disk and just needs one reboot: the root
-    # manager reads system.prop at module MOUNT, and right after an install the module is
-    # already mounted, so the fresh props only take on the next boot. That is a pending
-    # state, not a failure - say so instead of alarming the user.
+  # persist.sys.sf.disable_blurs is authoritative: if it is 1, blur is off at the
+  # SurfaceFlinger level and we are done, whatever the capability keys say.
+  if [ "$_b_sf" = "1" ]; then
+    :   # applied
+  else
     _sp_has=0
-    for _spf in /data/adb/modules/AutoSystemBoost/system.prop \
-                "$MODDIR/system.prop"; do
-      grep -q '^ro.surface_flinger.supports_background_blur=0' "$_spf" 2>/dev/null && { _sp_has=1; break; }
+    for _spf in /data/adb/modules/AutoSystemBoost/system.prop "$MODDIR/system.prop"; do
+      grep -q '^persist.sys.sf.disable_blurs=1' "$_spf" 2>/dev/null && { _sp_has=1; break; }
     done
     if [ "$_sp_has" = "1" ]; then
-      _add_bad "blur — set in system.prop, applies after a reboot (props are read at boot)"
-    elif [ "$_b_ro_bad" -gt 0 ] && [ "$_b_ps_bad" = "0" ]; then
-      _add_bad "blur — ${_b_ro_bad}/${_b_ro_n} ro.* props rejected (persist.* took OK)"
-      _add_bad "  root manager's resetprop cannot write read-only props; reboot once more"
+      _add_bad "blur — set in system.prop (persist.sys.sf.disable_blurs), applies after a reboot"
     else
-      _add_bad "blur — ${_b_ro_bad}/${_b_ro_n} ro.* and ${_b_ps_bad}/2 persist.* not applied (reboot?)"
+      _add_bad "blur — persist.sys.sf.disable_blurs not set (${_b_ro_bad}/${_b_ro_n} legacy keys also off)"
     fi
   fi
 fi
