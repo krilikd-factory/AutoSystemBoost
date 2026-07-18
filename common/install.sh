@@ -1325,16 +1325,19 @@ asb_patch_audio_inplace() {
   if asb_install_dsp_lib; then
     _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
     case "$_dspg" in
-      3|6|9|12)
+      ''|off|0|*[!0-9]*) _dspg_ok=0 ;;
+      *) [ "$_dspg" -ge 1 ] 2>/dev/null && [ "$_dspg" -le 18 ] 2>/dev/null && _dspg_ok=1 || _dspg_ok=0 ;;
+    esac
+    if [ "$_dspg_ok" = "1" ]; then
         ui_print "      + ASB ${ASB_D_DSP_ENGINE:-DSP engine}: +${_dspg} dB ${ASB_D_DSP_GAIN:-gain}"
         ui_print "        ${ASB_D_DSP_CHAIN:-soft-knee compressor -> makeup gain -> peak limiter (no clip)}"
         _dsp_abis=""
         [ -f "$MODPATH/system/vendor/lib64/soundfx/libasbdsp.so" ] && _dsp_abis="64-bit"
         [ -f "$MODPATH/system/vendor/lib/soundfx/libasbdsp.so" ] && _dsp_abis="${_dsp_abis:+$_dsp_abis + }32-bit"
         ui_print "        ${ASB_D_DSP_STAGED:-library staged for}: ${_dsp_abis:-none}"
-        ;;
-      *)     ui_print "      + ASB DSP: ${ASB_D_DSP_OFF:-library staged, effect off} (dsp_loudness=off)" ;;
-    esac
+    else
+        ui_print "      + ASB DSP: ${ASB_D_DSP_OFF:-library staged, effect off} (dsp_loudness=off)"
+    fi
   else
     ui_print "    ! ASB DSP: libasbdsp.so missing from build - skipped"
   fi
