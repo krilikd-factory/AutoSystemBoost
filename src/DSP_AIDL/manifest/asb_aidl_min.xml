@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Minimal AOSP project set to build ONE vendor cc_library_shared that links the
+  audio-effect AIDL contract (libasbdsp_aidl). A full `repo sync` of AOSP is ~200 GB and
+  will not fit on a GitHub-hosted runner; this manifest pulls only the projects soong
+  needs for this module and its transitive link deps.
+
+  IMPORTANT — this is a STARTING POINT, not a guaranteed-complete list. soong resolves
+  dependencies at build time; if `m libasbdsp_aidl` reports a missing module, add the
+  project that provides it here and re-run. The build log names the missing module, and
+  https://cs.android.com tells you which git project it lives in. Expect 1-3 iterations.
+
+  Pinned to Android 16 (branch android16-release) because the target is OnePlus on
+  Android 16 (OxygenOS 16). The Android.bp links the AIDL interfaces via version-
+  independent "latest_*" soong defaults, so it picks up this branch's frozen versions
+  (audio.effect-V3, audio.common-V3, audio.common.types-V4) automatically - no per-version
+  edits needed. If you build for a different platform, change the revision below AND the
+  workflow's aosp_tag input together.
+-->
+<manifest>
+  <remote name="aosp"
+          fetch="https://android.googlesource.com/"
+          review="https://android-review.googlesource.com/" />
+  <default remote="aosp" revision="refs/heads/android16-release" sync-j="4" />
+
+  <!-- Build system: soong, make glue, blueprint, bazel bootstrap. -->
+  <project path="build/soong" name="platform/build/soong" groups="pdk,tradefed" />
+  <project path="build/make" name="platform/build" groups="pdk" >
+    <linkfile src="core/root.mk" dest="Makefile" />
+  </project>
+  <project path="build/blueprint" name="platform/build/blueprint" groups="pdk,tradefed" />
+  <project path="build/bazel" name="platform/build/bazel" groups="pdk" />
+  <project path="prebuilts/build-tools" name="platform/prebuilts/build-tools"
+           clone-depth="1" groups="pdk" />
+  <project path="prebuilts/clang/host/linux-x86" name="platform/prebuilts/clang/host/linux-x86"
+           clone-depth="1" groups="pdk" />
+  <project path="prebuilts/go/linux-x86" name="platform/prebuilts/go/linux-x86"
+           clone-depth="1" groups="pdk" />
+  <project path="prebuilts/jdk/jdk21" name="platform/prebuilts/jdk/jdk21"
+           clone-depth="1" groups="pdk" />
+  <project path="prebuilts/remoteexecution-client" name="platform/prebuilts/remoteexecution-client"
+           clone-depth="1" groups="pdk" />
+
+  <!-- The audio effect AIDL contract + common + fmq (this is the whole point). -->
+  <project path="hardware/interfaces" name="platform/hardware/interfaces" groups="pdk" />
+  <project path="hardware/libhardware" name="platform/hardware/libhardware" groups="pdk" />
+  <project path="hardware/libhardware_legacy" name="platform/hardware/libhardware_legacy" groups="pdk" />
+
+  <!-- libaudioaidlcommon / libaudioaidltypeconverter / libaudioaidl_headers. -->
+  <project path="frameworks/av" name="platform/frameworks/av" groups="pdk" />
+  <project path="frameworks/native" name="platform/frameworks/native" groups="pdk" />
+
+  <!-- Core libs: libbase, liblog, libcutils, libutils, libbinder_ndk, libfmq. -->
+  <project path="system/core" name="platform/system/core" groups="pdk" />
+  <project path="system/logging" name="platform/system/logging" groups="pdk" />
+  <project path="system/libbase" name="platform/system/libbase" groups="pdk" />
+  <project path="system/libfmq" name="platform/system/libfmq" groups="pdk" />
+  <project path="system/tools/aidl" name="platform/system/tools/aidl" groups="pdk" />
+  <project path="system/tools/hidl" name="platform/system/tools/hidl" groups="pdk" />
+  <project path="system/media" name="platform/system/media" groups="pdk" />
+  <project path="system/unwinding" name="platform/system/unwinding" groups="pdk" />
+
+  <!-- Common external deps pulled in transitively by the above. -->
+  <project path="external/fmtlib" name="platform/external/fmtlib" groups="pdk" />
+  <project path="external/googletest" name="platform/external/googletest" groups="pdk" />
+  <project path="external/libcxx" name="platform/external/libcxx" groups="pdk" />
+  <project path="external/libcxxabi" name="platform/external/libcxxabi" groups="pdk" />
+  <project path="external/clang" name="platform/external/clang" groups="pdk" clone-depth="1" />
+  <project path="external/compiler-rt" name="platform/external/compiler-rt" groups="pdk" clone-depth="1" />
+  <project path="external/jsoncpp" name="platform/external/jsoncpp" groups="pdk" />
+  <project path="external/boringssl" name="platform/external/boringssl" groups="pdk" />
+  <project path="external/zlib" name="platform/external/zlib" groups="pdk" />
+  <project path="external/tinyxml2" name="platform/external/tinyxml2" groups="pdk" />
+  <project path="external/expat" name="platform/external/expat" groups="pdk" />
+  <project path="external/libcap" name="platform/external/libcap" groups="pdk" />
+  <project path="external/pcre" name="platform/external/pcre" groups="pdk" />
+  <project path="external/selinux" name="platform/external/selinux" groups="pdk" />
+  <project path="external/python" name="platform/external/python/cpython3" groups="pdk" clone-depth="1" />
+</manifest>
