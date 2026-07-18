@@ -1,3 +1,2 @@
 # Placeholder so this directory exists in git.
-# Drop the soong-built libasbdsp_aidl.so for arm64-v8a here, then build with ASB_DSP_AIDL=1.
-
+# Drop the soong-built libasbdsp_aidl.so for armeabi-v7a here, then build with ASB_DSP_AIDL=1.
