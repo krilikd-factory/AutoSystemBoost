@@ -500,11 +500,21 @@ if [ -f "$_mp" ] && [ -f "$_uj" ]; then
   fi
   if [ -n "$_mp_ver" ] && [ -n "$_uj_ver" ] && [ "$_mp_ver" = "$_uj_ver" ]; then
     ok "module.prop:version == update.json:version ($_mp_ver)"
+  elif [ -n "$_mp_code" ] && [ -n "$_uj_code" ] && [ "$_uj_code" -lt "$_mp_code" ] 2>/dev/null; then
+    # update.json deliberately BEHIND module.prop: the module is a newer build that is
+    # still being tested, and the OTA manifest is intentionally left pointing at the last
+    # public release so testers' root managers do not offer this build to everyone. That
+    # is a valid state during testing, so warn rather than fail the build. The reverse -
+    # update.json AHEAD of the module - is still an error below, because that WOULD push
+    # a version users cannot actually get.
+    warn "update.json is behind module.prop ($_uj_ver < $_mp_ver) — OK while testing, sync before public release"
   else
     err "version mismatch: module.prop=$_mp_ver update.json=$_uj_ver"
   fi
   if [ -n "$_mp_code" ] && [ -n "$_uj_code" ] && [ "$_mp_code" = "$_uj_code" ]; then
     ok "module.prop:versionCode == update.json:versionCode ($_mp_code)"
+  elif [ -n "$_mp_code" ] && [ -n "$_uj_code" ] && [ "$_uj_code" -lt "$_mp_code" ] 2>/dev/null; then
+    : # covered by the behind-is-a-warning case above; do not double-report
   else
     err "versionCode mismatch: module.prop=$_mp_code update.json=$_uj_code"
   fi
