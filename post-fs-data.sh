@@ -118,16 +118,16 @@ if command -v resetprop >/dev/null 2>&1; then
   # inside process() -- so this is the whole control surface.
   _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
   case "$_dspg" in
-    3|6|9)
+    3|6|9|12)
       resetprop persist.asb.dsp.enable 1 >/dev/null 2>&1 || true
       resetprop persist.asb.dsp.gain_mb "$((_dspg * 100))" >/dev/null 2>&1 || true
-      resetprop persist.asb.dsp.ceiling_mb -30 >/dev/null 2>&1 || true
+      resetprop persist.asb.dsp.ceiling_mb -15 >/dev/null 2>&1 || true
       # Compressor ahead of the makeup gain. Without it the limiter just shaves peaks
       # and a "+6 dB" setting lands around +5 dB RMS; with it the body of the track
       # comes up instead. Defaults: 3:1 above -18 dBFS, 8 dB soft knee.
       resetprop persist.asb.dsp.comp 1 >/dev/null 2>&1 || true
-      resetprop persist.asb.dsp.comp_ratio_x10 40 >/dev/null 2>&1 || true
-      resetprop persist.asb.dsp.comp_thresh_mb -2000 >/dev/null 2>&1 || true
+      resetprop persist.asb.dsp.comp_ratio_x10 60 >/dev/null 2>&1 || true
+      resetprop persist.asb.dsp.comp_thresh_mb -2400 >/dev/null 2>&1 || true
       ;;
     *)
       resetprop persist.asb.dsp.enable 0 >/dev/null 2>&1 || true
