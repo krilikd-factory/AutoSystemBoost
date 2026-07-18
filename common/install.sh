@@ -2058,10 +2058,19 @@ asb_apply_blur_prop() {
       -e '/^ro\.launcher\.blur\.appLaunch=/d' \
       -e '/^persist\.sys\.oplus\.anim_level=/d' \
       -e '/^persist\.sys\.oplus\.material_blur_switch=/d' \
+      -e '/^persist\.sys\.sf\.disable_blurs=/d' \
       "$_prop" > "$_pt" 2>/dev/null || cp -f "$_prop" "$_pt"
   {
     echo "# ASB:BLUR:BEGIN"
     if [ "$_db" = "1" ]; then
+      # THE switch: persist.sys.sf.disable_blurs is what SurfaceFlinger actually reads to
+      # turn blur off, and it is read at the late_start service stage (not at SF's early
+      # boot), so a persist.* value set in post-fs-data reaches it in time. The
+      # ro.surface_flinger.* keys are capability flags ("hardware can blur"), not
+      # switches - forcing them to 0 on a device that already supports blur does nothing,
+      # which is why every previous attempt failed. The oplus.* keys are kept as
+      # belt-and-braces for ColorOS-specific surfaces.
+      echo "persist.sys.sf.disable_blurs=1"
       echo "ro.surface_flinger.supports_background_blur=0"
       echo "ro.surface_flinger.media_panel_bg_blur=0"
       echo "ro.oplus.display.disable.volume_blur=1"
