@@ -2029,6 +2029,46 @@ asb_apply_bt_absvol() {
 }
 [ "$ASB_BT" = "true" ] && asb_apply_bt_absvol
 
+# Build the blur block into system.prop at INSTALL time, not in post-fs-data.
+#
+# Why install time is the only correct place: the root manager (KernelSU here, Magisk
+# too) reads $MODPATH/system.prop when it MOUNTS the module, which happens BEFORE
+# post-fs-data.sh runs. The previous approach rewrote system.prop from inside
+# post-fs-data - i.e. after the manager had already read it - so the fresh block only
+# ever took effect a boot later, and since it was rewritten every boot it never caught
+# up. ro.* props are read once at process start and cannot be changed afterwards, which
+# is why the runtime resetprop calls were rejected too (5/5 ro.* not applied). Writing
+# the block here means it is on disk before the very first mount reads it.
+asb_apply_blur_prop() {
+  _prop="$MODPATH/system.prop"
+  [ -f "$_prop" ] || : > "$_prop"
+  _db="$(grep -E '^[[:space:]]*disable_blur=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  # Rewrite the managed block from scratch every install so the WebUI toggle drives it.
+  _pt="${_prop}.asbblur$$"
+  sed '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' "$_prop" > "$_pt" 2>/dev/null || cp -f "$_prop" "$_pt"
+  {
+    echo "# ASB:BLUR:BEGIN"
+    if [ "$_db" = "1" ]; then
+      echo "ro.surface_flinger.supports_background_blur=0"
+      echo "ro.surface_flinger.media_panel_bg_blur=0"
+      echo "ro.oplus.display.disable.volume_blur=1"
+      echo "ro.oplus.gaussianlevel=0"
+      echo "ro.launcher.blur.appLaunch=0"
+      echo "persist.sys.oplus.anim_level=0"
+      echo "persist.sys.oplus.material_blur_switch=false"
+    fi
+    echo "# ASB:BLUR:END"
+  } >> "$_pt"
+  mv -f "$_pt" "$_prop" 2>/dev/null || { cat "$_pt" > "$_prop"; rm -f "$_pt"; }
+  if [ "$_db" = "1" ]; then
+    ui_print "[*] Blur disabled via system.prop (applied at next boot's mount)"
+    ASB_BLUR_APPLIED="disabled"
+  else
+    ASB_BLUR_APPLIED="stock"
+  fi
+}
+asb_apply_blur_prop
+
 cat > "$MODPATH/features.conf" <<EOF
 AUDIO=$([ "$ASB_AUDIO" = "true" ] && echo 1 || echo 0)
 BT=$([ "$ASB_BT" = "true" ] && echo 1 || echo 0)
