@@ -2179,7 +2179,7 @@ function cfgRender() {
       const segRow = document.createElement('div');
       segRow.className = 'cfg-sub-seg-row' + (lvlOn ? '' : ' disabled');
       const subSeg = document.createElement('div');
-      subSeg.className = 'cfg-seg small' + (it.opts.length >= 6 ? ' dense' : '');
+      subSeg.className = 'cfg-seg small';
       [['safe','cfg_camera_key_std'],['aggressive','cfg_camera_key_ext']].forEach(pair => {
         const o = pair[0];
         const b = document.createElement('button');
@@ -2219,7 +2219,7 @@ async function cfgSet(key, val, ctl) {
     // Sync the card highlight straight away. A full cfgRender() would work too but it
     // would collapse whatever description the user currently has expanded.
     try {
-      const _it = CFG.filter(function(x) { return x.key === key; })[0];
+      const _it = CFG_ITEMS.filter(function(x) { return x.key === key; })[0];
       const _row = (ctl && ctl.closest) ? ctl.closest('.cfg-row') : null;
       if (_it && _row) {
         if (cfgIsActive(_it, val)) _row.classList.add('is-on');
