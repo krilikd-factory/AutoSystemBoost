@@ -995,11 +995,27 @@ asb_clone_device_audio_wifi() {
       rm -f "$MODPATH/system/vendor/odm/etc/$_af" 2>/dev/null || true
     done
     _audio_done=0
+    # Merge ALL audio dirs, do not stop at the first that exists. On newer OP15 revisions
+    # (e.g. PLK110) /vendor/etc/audio exists but holds only SKU resourcemanager files,
+    # while the real mixer_paths lives in /odm/etc/audio. Breaking after the first dir
+    # copied /vendor but never reached /odm, so mixer_paths was never cloned and the whole
+    # aggressive/EQ/Class-H mixer tune silently did nothing (device diag: 46% pass).
     for _asrc in /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio; do
       if [ -d "$_asrc" ]; then
-        asb_clone_dir_from_live "$_asrc" && { _audio_done=1; break; }
+        asb_clone_dir_from_live "$_asrc" && _audio_done=1
       fi
     done
+    # If we still have no mixer_paths anywhere, look wider: some revisions keep it under
+    # sku_* subdirs the loop above already covers, but a few stage it beside the codecs.
+    if [ -z "$(find "$MODPATH/system/vendor/etc/audio" "$MODPATH/system/odm/etc/audio" \
+                    -name 'mixer_paths*.xml' 2>/dev/null | head -1)" ]; then
+      for _mxsrc in $(find /vendor /odm /system/vendor -maxdepth 4 -name 'mixer_paths*.xml' 2>/dev/null | head -8); do
+        _mxrel="system${_mxsrc#/system}"
+        case "$_mxsrc" in /system/*) _mxrel="system${_mxsrc#/system}" ;; *) _mxrel="system${_mxsrc}" ;; esac
+        mkdir -p "$MODPATH/$(dirname "$_mxrel")" 2>/dev/null
+        cp -f "$_mxsrc" "$MODPATH/$_mxrel" 2>/dev/null && { _audio_done=1; ui_print "      + recovered mixer: ${_mxsrc}"; }
+      done
+    fi
     [ "$_audio_done" = "1" ] || ui_print "      - no device audio dir found"
   fi
 
@@ -1295,7 +1311,7 @@ asb_patch_audio_inplace() {
   if asb_install_dsp_lib; then
     _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
     case "$_dspg" in
-      3|6|9)
+      3|6|9|12)
         ui_print "      + ASB ${ASB_D_DSP_ENGINE:-DSP engine}: +${_dspg} dB ${ASB_D_DSP_GAIN:-gain}"
         ui_print "        ${ASB_D_DSP_CHAIN:-soft-knee compressor -> makeup gain -> peak limiter (no clip)}"
         _dsp_abis=""
