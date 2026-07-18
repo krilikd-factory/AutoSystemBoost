@@ -177,7 +177,15 @@ jobs:
             --exclude 'update.json'                   \
             --exclude 'RELEASE_CHECKLIST.md'          \
             --exclude 'docs'                          \
+            --exclude 'tests'                         \
             --exclude 'tools/gen_bounds.sh'           \
+            --exclude 'tools/asb_lint.sh'             \
+            --exclude 'tools/asb_analyze.py'          \
+            --exclude 'tools/asb_compare_sessions.py' \
+            --exclude 'tools/asb_session_report.py'   \
+            --exclude 'tools/asb_drain_analyzer.sh'   \
+            --exclude 'tools/asb_state_sampler.sh'    \
+            --exclude 'tools/logkit'                  \
             --exclude 'config/profile_bounds.conf'
 
           mkdir -p "$PKG_DBG/bin"
