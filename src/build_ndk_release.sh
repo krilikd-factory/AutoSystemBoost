@@ -101,6 +101,26 @@ if [ -n "$DSP_SRC" ]; then
       -fvisibility=hidden
       -I"$DSP_INC"
     )
+    if [ "${ASB_DSP_AIDL:-0}" = "1" ]; then
+      # AIDL build path. The AIDL effect (src/DSP_AIDL) needs AOSP effect-AIDL + FMQ
+      # headers that plain NDK clang does not ship, so it is built by soong, not here.
+      # This branch VERIFIES a pre-built libasbdsp_aidl.so has been dropped in and
+      # copies it to the on-disk name the installer registers (libasbdsp.so).
+      _aidl_so="${ASB_DSP_AIDL_DIR:-$SCRIPT_DIR/DSP_AIDL/prebuilt}/$_abi/libasbdsp_aidl.so"
+      if [ ! -f "$_aidl_so" ]; then
+        echo "[ASB] ERROR: ASB_DSP_AIDL=1 but $_aidl_so not found (build it with soong: mm libasbdsp_aidl)" >&2
+        exit 1
+      fi
+      cp -f "$_aidl_so" "$_dout/libasbdsp.so"
+      "$STRIP" "$_dout/libasbdsp.so" || true
+      chmod 0644 "$_dout/libasbdsp.so"
+      if command -v "$TOOLCHAIN/llvm-nm" >/dev/null 2>&1; then
+        "$TOOLCHAIN/llvm-nm" -D --defined-only "$_dout/libasbdsp.so" | grep -q " createEffect$" \
+          || { echo "[ASB] ERROR: createEffect (AIDL) symbol not exported from $_abi/libasbdsp.so" >&2; exit 1; }
+      fi
+      ls -lh "$_dout/libasbdsp.so"
+      continue
+    fi
     "$_dcc" "${DSP_CFLAGS[@]}" "$DSP_SRC" -lm -llog -o "$_dout/libasbdsp.so"
     "$STRIP" "$_dout/libasbdsp.so" || true
     chmod 0644 "$_dout/libasbdsp.so"
