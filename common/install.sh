@@ -85,6 +85,28 @@ asb_normalize_module_layout() {
 }
 
 asb_end_banner() {
+  # A one-glance summary of what ended up enabled - the sections above show the work,
+  # this shows the final category picture so the install closes like the action screen.
+  _en=""; _en_n=0; _en_line=""
+  for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
+            RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY; do
+    eval "_cv=\"\$ASB_${_c}\""
+    [ "$_cv" = "true" ] || continue
+    _en_line="${_en_line}${_en_line:+ · }${_c}"
+    _en_n=$((_en_n + 1))
+    if [ "$_en_n" -ge 5 ]; then
+      _en="${_en}${_en:+
+}      ${_en_line}"; _en_line=""; _en_n=0
+    fi
+  done
+  [ -n "$_en_line" ] && _en="${_en}${_en:+
+}      ${_en_line}"
+  if [ -n "$_en" ]; then
+    ui_print " "
+    ui_print "  📋  ${ASB_SEC_CATEGORIES:-ENABLED CATEGORIES}"
+    printf '%s\n' "$_en" | while IFS= read -r _l; do ui_print "$_l"; done
+  fi
+
   if [ -n "$INFO" ] && [ -f "$INFO" ] && [ ! -s "$INFO" ]; then
     rm -f "$INFO" 2>/dev/null || true
   fi
@@ -140,7 +162,7 @@ asb_install_prebuilt_governor() {
   if [ -f "$src" ]; then
     cp -f "$src" "$dst" 2>/dev/null || cat "$src" > "$dst"
     chmod 0755 "$dst" 2>/dev/null || true
-    ui_print "- Prebuilt governor installed: $abi"
+    ASB_GOV_ABI="$abi"
     return 0
   fi
   return 1
@@ -520,8 +542,6 @@ asb_apply_device_overlay() {
   ui_print " "
   ui_print "${SEPARATOR}"
   ui_print "[*] $_label detected"
-  ui_print "[*] Applying device-tuned overlay (GPS, camera, media)"
-  ui_print "[*] Audio/volume/codecs apply via device-agnostic patches"
   ui_print "${SEPARATOR}"
 
   rm -rf "$MODPATH/system/vendor/etc/audio" 2>/dev/null || true
@@ -559,7 +579,7 @@ asb_apply_device_overlay() {
           for _dst in $(_odm_dups "$_f"); do
             mkdir -p "$MODPATH/$(dirname "$_dst")" 2>/dev/null
             cp -f "$MODPATH/$_ov/$_f" "$MODPATH/$_dst" 2>/dev/null \
-              && ui_print "    + GPS: $_dst"
+              && ui_print "      + GPS: $_dst"
           done
         fi
       done
@@ -574,7 +594,7 @@ asb_apply_device_overlay() {
           if [ -f "$_live" ] && [ ! -f "$MODPATH/$_ov/$_cf_rel" ]; then
             mkdir -p "$MODPATH/$_ov/$(dirname "$_cf_rel")" 2>/dev/null
             cp -f "$_live" "$MODPATH/$_ov/$_cf_rel" 2>/dev/null \
-              && ui_print "    + Camera tone: cloned device-stock $_cf_base"
+              && ui_print "      + Camera tone: cloned device-stock $_cf_base"
             break
           fi
         done
@@ -587,7 +607,7 @@ asb_apply_device_overlay() {
           for _dst in $(_odm_dups "$_f"); do
             mkdir -p "$MODPATH/$(dirname "$_dst")" 2>/dev/null
             cp -f "$MODPATH/$_ov/$_f" "$MODPATH/$_dst" 2>/dev/null \
-              && ui_print "    + Camera/media: $_dst"
+              && ui_print "      + Camera/media: $_dst"
           done
         fi
       done
@@ -601,20 +621,19 @@ asb_apply_device_overlay() {
         asb_camera_aggr_flag
         if [ "$_ASB_CAMERA_AGGR" = "1" ] && [ -f "$_ctf" ]; then
           if [ "$_ASB_CAMERA_INJECT" = "1" ]; then
-            ui_print "    + Camera aggressive tone applied (incl. injected keys)"
+            ui_print "      + ${ASB_D_CAM_AGGR_INJ:-Camera aggressive tone applied (incl. injected keys)}"
           else
-            ui_print "    + Camera aggressive tone applied (existing keys only)"
+            ui_print "      + ${ASB_D_CAM_AGGR_EXIST:-Camera aggressive tone applied (existing keys only)}"
           fi
         fi
       elif [ "$_skip_cam_engine" = "true" ]; then
-        ui_print "    + OP12/APatch: camera kept stock (tweak engine skipped)"
+        ui_print "      + OP12/APatch: ${ASB_D_CAM_STOCK:-camera kept stock (tweak engine skipped)}"
       fi
     fi
   fi
 
   rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
-  ui_print "[*] Overlay applied. Audio EQ/volume/hi-res + codecs are"
-  ui_print "    patched in-place during the audio/media pass."
+  ui_print "      + ${ASB_D_OVERLAY:-overlay patched in place (EQ / volume / hi-res / codecs)}"
 }
 
 asb_perf_patch_configstore() {
@@ -682,7 +701,8 @@ asb_patch_wifi_inplace() {
       _wifi_hit=1
     done
   done
-  [ "$_wifi_hit" = "1" ] || return 0
+  [ "$_wifi_hit" = "1" ] || { ui_print "      + ${ASB_D_WIFI_NONE:-no device WCNSS config found — Wi-Fi left stock}"; return 0; }
+  ui_print "      + ${ASB_D_WIFI_OK:-WCNSS Wi-Fi config patched (device-native)}"
 }
 
 asb_patch_perf_inplace() {
@@ -718,6 +738,8 @@ asb_patch_perf_inplace() {
   if [ -f "$_dst/perfboostsconfig.xml" ]; then
     sedi 's/\(Id="0x000010A7"[^>]*Timeout="\)2000"/\11600"/g' "$_dst/perfboostsconfig.xml"
   fi
+  _pf_n="$(find "$_dst" -type f 2>/dev/null | wc -l)"
+  [ "${_pf_n:-0}" -gt 0 ] && ui_print "      + ${ASB_D_PERF:-perf configs tuned} (${_pf_n} file(s): ${ASB_D_PERF_TAIL:-boost timeouts, game config})"
 }
 
 asb_loc_patch_xtwifi() {
@@ -841,7 +863,7 @@ asb_patch_media_profiles_inplace() {
     asb_media_lift_file "$MODPATH/$_mp_rel" "$_ASB_MP_CANOE"
     _mpp_done=$((_mpp_done + 1))
   done
-  [ "$_mpp_done" -gt 0 ] && ui_print "    + media_profiles: video bitrate lifted in $_mpp_done device-native file(s)"
+  [ "$_mpp_done" -gt 0 ] && ui_print "      + media_profiles: ${ASB_D_MEDIA_LIFT:-video bitrate lifted in} $_mpp_done ${ASB_D_MEDIA_TAIL:-device-native file(s)}"
   return 0
 }
 
@@ -864,7 +886,7 @@ asb_clone_device_camera_tone() {
             && chmod 0644 "$MODPATH/$_ct_dst" 2>/dev/null
         fi
       done
-      ui_print "    + Camera tone: cloned device-stock $_ct_base"
+      ui_print "      + Camera tone: cloned device-stock $_ct_base"
       break
     done
   done
@@ -911,6 +933,7 @@ asb_patch_location_inplace() {
       }
     fi
   done
+  _loc_izat=0
   for _src in /vendor/etc/izat.conf /odm/etc/izat.conf /vendor/odm/etc/izat.conf; do
     if [ -f "$_src" ]; then
       _rel="system${_src}"
@@ -918,9 +941,11 @@ asb_patch_location_inplace() {
       cp -f "$_src" "$MODPATH/$_rel" 2>/dev/null && {
         chmod 0644 "$MODPATH/$_rel" 2>/dev/null
         asb_loc_patch_izat "$MODPATH/$_rel"
+        _loc_izat=1
       }
     fi
   done
+  ui_print "      + GPS/A-GPS tuned (gps.conf$([ "$_loc_izat" = "1" ] && echo " + izat.conf"))"
 }
 
 asb_clone_dir_from_live() {
@@ -943,7 +968,7 @@ asb_clone_dir_from_live() {
       mkdir -p "$_dest/$(dirname "$_f")" 2>/dev/null
       cp -f "$_src/$_f" "$_dest/$_f" 2>/dev/null || true
     done )
-  ui_print "    + ${_src} -> system${_canon}"
+  ui_print "      + ${_src} -> system${_canon}"
   return 0
 }
 
@@ -951,10 +976,6 @@ asb_clone_device_audio_wifi() {
   _label="$1"
 
   if [ "$ASB_AUDIO" = "true" ]; then
-    ui_print " "
-    ui_print "${SEPARATOR}"
-    ui_print "[*] Device audio configs for $_label"
-    ui_print "${SEPARATOR}"
     for _af in mixer_paths.xml ftm_mixer_paths.xml resourcemanager.xml \
                audio_module_config_primary.xml; do
       rm -f "$MODPATH/system/vendor/etc/$_af" 2>/dev/null || true
@@ -966,7 +987,7 @@ asb_clone_device_audio_wifi() {
         asb_clone_dir_from_live "$_asrc" && { _audio_done=1; break; }
       fi
     done
-    [ "$_audio_done" = "1" ] || ui_print "    - no device audio dir found"
+    [ "$_audio_done" = "1" ] || ui_print "      - no device audio dir found"
   fi
 
 }
@@ -1227,7 +1248,7 @@ asb_audio_ensure_volume_libs() {
       _fixed=1
     fi
   done
-  [ "$_fixed" = "1" ] && ui_print "    + audio_effects: ensured stock volume libs present (device-native)"
+  [ "$_fixed" = "1" ] && ui_print "      + audio_effects: ensured stock volume libs present (device-native)"
   return 0
 }
 
@@ -1235,11 +1256,6 @@ asb_patch_audio_inplace() {
   [ "$ASB_AUDIO" = "true" ] || { ui_print "[*] Audio category off — skipping mixer tune"; return 0; }
   _adir="$MODPATH/system/vendor/etc/audio"
   [ -d "$_adir" ] || { ui_print "[*] No cloned audio dir — skipping mixer tune"; return 0; }
-
-  ui_print " "
-  ui_print "${SEPARATOR}"
-  ui_print "[*] Mixer tune for $1 (OP15-derived sound profile)"
-  ui_print "${SEPARATOR}"
 
   _n=0
   for _mx in $(find "$_adir" -type f -name "mixer_paths*.xml" 2>/dev/null); do
@@ -1266,8 +1282,15 @@ asb_patch_audio_inplace() {
   if asb_install_dsp_lib; then
     _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
     case "$_dspg" in
-      3|6|9) ui_print "    + ASB DSP: libasbdsp.so staged, effect ON (+${_dspg} dB, limiter on)" ;;
-      *)     ui_print "    + ASB DSP: libasbdsp.so staged, effect off (not registered)" ;;
+      3|6|9)
+        ui_print "      + ASB ${ASB_D_DSP_ENGINE:-DSP engine}: +${_dspg} dB ${ASB_D_DSP_GAIN:-gain}"
+        ui_print "        ${ASB_D_DSP_CHAIN:-soft-knee compressor -> makeup gain -> peak limiter (no clip)}"
+        _dsp_abis=""
+        [ -f "$MODPATH/system/vendor/lib64/soundfx/libasbdsp.so" ] && _dsp_abis="64-bit"
+        [ -f "$MODPATH/system/vendor/lib/soundfx/libasbdsp.so" ] && _dsp_abis="${_dsp_abis:+$_dsp_abis + }32-bit"
+        ui_print "        ${ASB_D_DSP_STAGED:-library staged for}: ${_dsp_abis:-none}"
+        ;;
+      *)     ui_print "      + ASB DSP: ${ASB_D_DSP_OFF:-library staged, effect off} (dsp_loudness=off)" ;;
     esac
   else
     ui_print "    ! ASB DSP: libasbdsp.so missing from build - skipped"
@@ -1288,7 +1311,12 @@ asb_patch_audio_inplace() {
       mkdir -p "$MODPATH/system/vendor/etc" 2>/dev/null
       cp -f "$_vtsrc" "$_vtd" 2>/dev/null
       asb_reshape_volume_curves "$_vtd" "$_mlpct"
-      ui_print "    + media loudness: ${_ml} (music curves only; alarms/ringtones stock)"
+      case "$_ml" in
+        mild)   ui_print "      + ${ASB_D_LOUD:-media loudness}: mild (~+3 dB ${ASB_D_LOUD_AT:-at mid volume})" ;;
+        strong) ui_print "      + ${ASB_D_LOUD:-media loudness}: strong (~+6 dB ${ASB_D_LOUD_AT:-at mid volume})" ;;
+        max)    ui_print "      + ${ASB_D_LOUD:-media loudness}: max (~+10 dB ${ASB_D_LOUD_AT:-at mid volume})" ;;
+      esac
+      ui_print "        ${ASB_D_LOUD_NOTE:-music curves only; alarms/ringtones untouched; 100% never raised}"
     else
       ui_print "    ! media loudness: stock volume table unavailable - skipped"
     fi
@@ -1303,9 +1331,11 @@ asb_patch_audio_inplace() {
   fi
   asb_patch_audio_inplace_aggr_flag
   if [ "$_ASB_AUDIO_AGGR" = "1" ]; then
-    ui_print "    + tuned $_n mixer file(s): vol->88, flat EQ, Class-H DAC, +aggressive (compander off, HPH HIFI)"
+    ui_print "      + ${ASB_D_MIXER:-mixer}: $_n ${ASB_D_MIXER_TAIL:-file(s) tuned — digital vol 84->88}, flat EQ"
+    ui_print "        ${ASB_D_MIXER_AGGR:-Class-H DAC, HPH HIFI mode, compander off (aggressive)}"
   else
-    ui_print "    + tuned $_n mixer file(s): vol->88 (RX+speaker), flat EQ, Class-H DAC"
+    ui_print "      + ${ASB_D_MIXER:-mixer}: $_n ${ASB_D_MIXER_TAIL:-file(s) tuned — digital vol 84->88} (RX+speaker)"
+    ui_print "        ${ASB_D_MIXER_STD:-flat EQ, Class-H DAC}"
   fi
 }
 
@@ -1335,25 +1365,40 @@ asb_strip_shipped_static_vendor() {
 asb_apply_device_native_tuning() {
   _label="$1"
   ui_print " "
-  ui_print "${SEPARATOR}"
-  ui_print "[*] $_label"
-  ui_print "[*] Building device-native overlay from THIS device's own stock files"
-  ui_print "[*] (audio / camera / media / GPS / perf / Wi-Fi — patched in place)"
-  ui_print "${SEPARATOR}"
+  ui_print "  🚀  AutoSystemBoost — ${ASB_SEC_INSTALLING:-installing for} ${_label}"
+  ui_print "      ${ASB_SEC_BUILDING:-building a device-native overlay from this phone's own stock files}"
+  ui_print " "
 
   asb_strip_shipped_static_vendor
 
+  # Each stage prints ONE section with an emoji header and a few "+" detail lines, the
+  # same shape as the action screen. The stages themselves emit the "+" lines; the
+  # orchestrator just prints the header so audio no longer dominates and camera / perf /
+  # wifi / gps get equal billing instead of a terse ". stage done".
+  ui_print "  🎵  ${ASB_SEC_AUDIO:-AUDIO}"
   asb_clone_device_audio_wifi   "$_label"
-  asb_clone_device_camera_tone
-  asb_patch_media_profiles_inplace
   asb_patch_audio_inplace       "$_label"
-  ui_print "    . audio stage done"
+
+  ui_print " "
+  ui_print "  📷  ${ASB_SEC_CAMERA:-CAMERA}"
+  asb_clone_device_camera_tone
+
+  ui_print " "
+  ui_print "  🎬  ${ASB_SEC_MEDIA:-MEDIA}"
+  asb_patch_media_profiles_inplace
+
+  ui_print " "
+  ui_print "  ⚡  ${ASB_SEC_PERF:-PERFORMANCE}"
   asb_patch_perf_inplace        "$_label"
-  ui_print "    . perf stage done"
+
+  ui_print " "
+  ui_print "  🛰  ${ASB_SEC_LOCATION:-LOCATION}"
   asb_patch_location_inplace    "$2"
-  ui_print "    . location stage done"
+
+  ui_print " "
+  ui_print "  📶  ${ASB_SEC_WIFI:-WI-FI}"
   asb_patch_wifi_inplace        "$_label"
-  ui_print "    . Wi-Fi stage done"
+  ui_print " "
 
   if [ "$ASB_AUDIO" = "true" ] || [ "$ASB_CAMERA" = "true" ]; then
     if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
@@ -1375,7 +1420,8 @@ asb_apply_device_native_tuning() {
   } > "$_man" 2>/dev/null
   cp -f "$_man" /data/adb/asb/generated_overlay_manifest.txt 2>/dev/null || true
   echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null || true
-  ui_print "[*] device-native overlay built"
+  ui_print " "
+  ui_print "  ⚙️  ${ASB_SEC_SYSTEM:-SYSTEM}"
 }
 
 asb_prune_non_op15_vendor_overlays() {
@@ -1522,7 +1568,7 @@ asb_reset_learning_on_upgrade_to_v56() {
 
   mkdir -p "$_asb_dir" 2>/dev/null
   : > "$_marker" 2>/dev/null
-  ui_print "    + learning reset; settings and device data preserved"
+  ui_print "      + learning reset; settings and device data preserved"
 }
 
 asb_preserve_user_config() {
@@ -1537,7 +1583,7 @@ asb_preserve_user_config() {
   _src=""
   [ -f "$_old_conf" ] && _src="$_old_conf"
   [ -z "$_src" ] && [ -f "$_snap_conf" ] && _src="$_snap_conf"
-  if [ -z "$_src" ]; then ui_print "[*] Fresh install - using default config"; return 0; fi
+  if [ -z "$_src" ]; then ui_print "      + ${ASB_D_FRESH:-fresh install — shipped defaults}"; return 0; fi
 
   # Migrate the retired audio switches. AUDIO_EQ_COMPAT + AUDIO_AGGRESSIVE became
   # audio_profile (software processing) + audio_dac_hifi (codec/mixer).
@@ -1556,8 +1602,7 @@ asb_preserve_user_config() {
       if [ "$_oldag" = "1" ]; then
         sed -i "s|^\([[:space:]]*audio_dac_hifi=\).*|\11|" "$MODPATH/config/governor.conf" 2>/dev/null
       fi
-      ui_print "[*] Audio settings migrated -> profile=${_newp}, DAC hi-fi=${_oldag:-0}"
-      ui_print "    (the old EQ/aggressive property switches never actually ran; they do now)"
+      ui_print "      + ${ASB_D_MIGRATED:-audio settings migrated} (profile=${_newp}, hi-fi DAC=${_oldag:-0})"
     fi
   fi
 
@@ -1828,16 +1873,31 @@ asb_save_user_config
 
 # MUST come before any stage that reads governor.conf (audio: DSP registration and
 # volume curves; camera: level). See asb_preserve_user_config for why.
+ui_print " "
+ui_print "  💾  ${ASB_SEC_CONFIG:-CONFIG}"
 asb_reset_learning_on_upgrade_to_v56
 asb_preserve_user_config
 
+if [ -n "${ASB_GOV_ABI:-}" ]; then
+  ui_print " "
+  ui_print "  🧠  ${ASB_SEC_GOVERNOR:-GOVERNOR}"
+  ui_print "      + ${ASB_D_GOV:-native C governor daemon} (${ASB_GOV_ABI})"
+fi
+
 asb_detect_compat
 asb_detect_manager
+ui_print " "
+ui_print "  🔍  ${ASB_SEC_DEVICE:-DEVICE}"
+ui_print "      + ${ASB_D_IDENTIFIED:-identified}: ${ASB_DEVICE_NAME:-unknown}"
+_soc="$(asb_prop_first ro.soc.model ro.board.platform 2>/dev/null)"
+[ -n "$_soc" ] && ui_print "      + ${ASB_D_SOC:-SoC}: ${_soc}"
+if [ "${ASB_IS_APATCH:-false}" = "true" ]; then _mgr="APatch"
+elif [ -n "${KSU:-}" ] || [ -d /data/adb/ksu ]; then _mgr="KernelSU"
+elif [ -d /data/adb/magisk ] || [ -n "${MAGISK_VER:-}" ]; then _mgr="Magisk"
+else _mgr=""; fi
+[ -n "$_mgr" ] && ui_print "      + ${ASB_D_MANAGER:-root manager}: ${_mgr}"
 if [ "$ASB_IS_OP15" = "true" ]; then
-  ui_print " "
-  ui_print "${SEPARATOR}"
-  ui_print "[*] Full OnePlus 15 package will be installed"
-  ui_print "${SEPARATOR}"
+  ui_print "      + ${ASB_D_FULL_PKG:-full OnePlus 15 device-native package}"
 fi
 asb_prune_module
 
@@ -1845,11 +1905,10 @@ if [ -f "$MODPATH/tools/asb_install_probe.sh" ]; then
   sh "$MODPATH/tools/asb_install_probe.sh" "$MODPATH/install_probe.txt" >/dev/null 2>&1 || true
   cp -f "$MODPATH/install_probe.txt" /data/adb/asb/install_probe.txt 2>/dev/null || true
   if [ -f "$MODPATH/install_probe.txt" ]; then
-    ui_print " "
-    ui_print "[*] Device stock-file analysis:"
+    ui_print "      + ${ASB_D_STOCK_ANALYSIS:-stock-file analysis:}"
     sed -n '/SUMMARY (what ASB can tune/,/Inventory only/p' "$MODPATH/install_probe.txt" 2>/dev/null \
       | grep -E '^[[:space:]]+(audio|wifi|perf|gps|camera|cpu)[[:space:]]+:' \
-      | while IFS= read -r _line; do ui_print "   $_line"; done
+      | while IFS= read -r _line; do ui_print "        $_line"; done
   fi
 fi
 
@@ -1877,7 +1936,7 @@ if [ "$ASB_IS_OP15" = "true" ]; then
       grep -q 'asb_loudness' "$_ec" 2>/dev/null && _op15_reg=$((_op15_reg + 1))
     done
     if [ "$_op15_reg" -gt 0 ]; then
-      ui_print "    + ASB DSP: effect registered in ${_op15_reg} audio_effects_config file(s)"
+      ui_print "      + ASB DSP ${ASB_D_DSP_REG:-effect registered in} ${_op15_reg} ${ASB_D_DSP_REG_TAIL:-audio_effects_config file(s)}"
     else
       ui_print "    ! ASB DSP: no audio_effects_config in overlay to register into"
     fi
@@ -1934,7 +1993,7 @@ if [ -f "$_gc" ]; then
   _asb_plat="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
   if [ "$ASB_IS_OP15" = "true" ]; then
     sed -i 's/^device_bounds_override=.*/device_bounds_override=1/' "$_gc" 2>/dev/null || true
-    ui_print "[*] Device-adaptive bounds: ON (OP15 — values match shipped tuning)"
+    ui_print "      + ${ASB_D_BOUNDS:-device-adaptive bounds: ON (OP15 — matches shipped tuning)}"
   else
     case "$_asb_plat" in
       *"sm8650"*|*"pineapple"*)
@@ -2022,10 +2081,8 @@ asb_apply_bt_absvol() {
     return 0
   fi
   ASB_BT_ABSVOL_APPLIED="mode=disabled (absolute volume OFF — phone-side gain)"
-  ui_print "[*] BT absolute volume: disabled"
-  ui_print "    ! the headset keeps its own level and the phone drives the gain."
-  ui_print "      On modern headsets this can start quiet after each reboot until"
-  ui_print "      an audio app re-inits the output. Use 'stock' if BT is quiet."
+  ui_print "      + ${ASB_D_BT:-BT absolute volume: disabled (phone drives gain)}"
+  ui_print "        ${ASB_D_BT_NOTE:-(headset drives its own level; use 'stock' if BT starts quiet)}"
 }
 [ "$ASB_BT" = "true" ] && asb_apply_bt_absvol
 
@@ -2083,7 +2140,7 @@ asb_apply_blur_prop() {
   } >> "$_pt"
   mv -f "$_pt" "$_prop" 2>/dev/null || { cat "$_pt" > "$_prop"; rm -f "$_pt"; }
   if [ "$_db" = "1" ]; then
-    ui_print "[*] Blur disabled via system.prop (applied at next boot's mount)"
+    ui_print "      + ${ASB_D_BLUR:-blur disabled via system.prop (applies after reboot)}"
     ASB_BLUR_APPLIED="disabled"
   else
     ASB_BLUR_APPLIED="stock"
