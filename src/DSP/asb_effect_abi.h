@@ -35,7 +35,16 @@
 /* --- descriptor flags (bitfield layout defined by AOSP) --- */
 #define EFFECT_FLAG_TYPE_SHIFT     0
 #define EFFECT_FLAG_TYPE_SIZE      3
+#define EFFECT_FLAG_TYPE_MASK      (((1 << EFFECT_FLAG_TYPE_SIZE) - 1) << EFFECT_FLAG_TYPE_SHIFT)
 #define EFFECT_FLAG_TYPE_INSERT    (0 << EFFECT_FLAG_TYPE_SHIFT)
+/* Type values from the Android audio_effect ABI. A device audio_effects_config.xml that
+ * hooks the effect into <postprocess><stream type="music"> REQUIRES the effect to be of
+ * type POST_PROC; an INSERT-typed effect is not attached to a stream's post-processing
+ * chain by audiopolicy, which is exactly why the gain did nothing regardless of value. */
+#define EFFECT_FLAG_TYPE_AUXILIARY (1 << EFFECT_FLAG_TYPE_SHIFT)
+#define EFFECT_FLAG_TYPE_REPLACE   (2 << EFFECT_FLAG_TYPE_SHIFT)
+#define EFFECT_FLAG_TYPE_PRE_PROC  (3 << EFFECT_FLAG_TYPE_SHIFT)
+#define EFFECT_FLAG_TYPE_POST_PROC (4 << EFFECT_FLAG_TYPE_SHIFT)
 
 #define EFFECT_FLAG_INSERT_SHIFT   (EFFECT_FLAG_TYPE_SHIFT + EFFECT_FLAG_TYPE_SIZE)
 #define EFFECT_FLAG_INSERT_SIZE    3
@@ -55,6 +64,25 @@
 #define EFFECT_FLAG_OUTPUT_SHIFT   (EFFECT_FLAG_INPUT_SHIFT + EFFECT_FLAG_INPUT_SIZE)
 #define EFFECT_FLAG_OUTPUT_SIZE    2
 #define EFFECT_FLAG_OUTPUT_DIRECT  (1 << EFFECT_FLAG_OUTPUT_SHIFT)
+
+/* Remaining bitfields up to OFFLOAD, so we can advertise offload support. Without
+ * EFFECT_FLAG_OFFLOAD_SUPPORTED the framework will not attach the effect to a
+ * compress-offloaded music stream (common on Snapdragon), and if the effect is
+ * mandatory it forces the stream off offload entirely; either way the pretty gain
+ * value never touches the audio. Advertising offload lets it ride the offload path. */
+#define EFFECT_FLAG_HW_ACC_SHIFT   (EFFECT_FLAG_OUTPUT_SHIFT + EFFECT_FLAG_OUTPUT_SIZE)
+#define EFFECT_FLAG_HW_ACC_SIZE    2
+#define EFFECT_FLAG_HW_ACC_TUNNEL  (1 << EFFECT_FLAG_HW_ACC_SHIFT)
+
+#define EFFECT_FLAG_AUDIO_MODE_SHIFT (EFFECT_FLAG_HW_ACC_SHIFT + EFFECT_FLAG_HW_ACC_SIZE)
+#define EFFECT_FLAG_AUDIO_MODE_SIZE  2
+
+#define EFFECT_FLAG_AUDIO_SOURCE_SHIFT (EFFECT_FLAG_AUDIO_MODE_SHIFT + EFFECT_FLAG_AUDIO_MODE_SIZE)
+#define EFFECT_FLAG_AUDIO_SOURCE_SIZE  2
+
+#define EFFECT_FLAG_OFFLOAD_SHIFT     (EFFECT_FLAG_AUDIO_SOURCE_SHIFT + EFFECT_FLAG_AUDIO_SOURCE_SIZE)
+#define EFFECT_FLAG_OFFLOAD_SIZE      1
+#define EFFECT_FLAG_OFFLOAD_SUPPORTED (1 << EFFECT_FLAG_OFFLOAD_SHIFT)
 
 /* --- audio formats (subset of audio_format_t) --- */
 #define AUDIO_FORMAT_PCM_16_BIT 0x1u

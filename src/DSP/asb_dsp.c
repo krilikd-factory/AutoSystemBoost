@@ -65,7 +65,13 @@ static const effect_descriptor_t g_asb_descriptor = {
     .type = EFFECT_UUID_INITIALIZER,   /* no standard OpenSL type: proprietary insert */
     .uuid = { 0xa5b10001, 0x7e55, 0x4c60, 0x9f21, { 0x41, 0x53, 0x42, 0x44, 0x53, 0x50 } },
     .apiVersion = EFFECT_CONTROL_API_VERSION,
-    .flags = EFFECT_FLAG_TYPE_INSERT | EFFECT_FLAG_INSERT_LAST
+    /* POST_PROC (not INSERT): required for an effect hooked into
+     * <postprocess><stream type="music"> in audio_effects_config.xml. With INSERT the
+     * audiopolicy manager never attached us to the stream, so the gain did nothing at
+     * any value - the bug the user saw. OFFLOAD_SUPPORTED lets us ride compress-offloaded
+     * music (common on Snapdragon) instead of being bypassed by it. */
+    .flags = EFFECT_FLAG_TYPE_POST_PROC | EFFECT_FLAG_INSERT_LAST
+             | EFFECT_FLAG_OFFLOAD_SUPPORTED
              | EFFECT_FLAG_OUTPUT_DIRECT | EFFECT_FLAG_INPUT_DIRECT,
     .cpuLoad = 3,        /* 0.1 MIPS units on ARM9E — gain+limiter is very cheap */
     .memoryUsage = 1,    /* KB, dynamically allocated */
@@ -394,6 +400,13 @@ static int32_t asb_command(effect_handle_t self, uint32_t cmdCode, uint32_t cmdS
     case EFFECT_CMD_SET_CONFIG_REVERSE:
     case EFFECT_CMD_SET_INPUT_DEVICE:
     case EFFECT_CMD_OFFLOAD:
+        /* Accept the offload-mode handoff. AudioFlinger sends this when the effect is on
+         * an offloaded output; it expects a status int written back. Returning success
+         * (0) with no reply made some frameworks treat the effect as offload-incapable
+         * and drop it, so write the status when a reply buffer is provided. */
+        if (pReplyData != NULL && replySize != NULL && *replySize >= (int)sizeof(int)) {
+            *(int *)pReplyData = 0;
+        }
         return 0;
 
     default:
