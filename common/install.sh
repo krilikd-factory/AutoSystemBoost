@@ -782,10 +782,35 @@ asb_media_lift_file() {
       if (t < b) t = b
       return t
     }
+    # Buffer a whole <Video ...> element (its attributes are split across lines in the
+    # stock media_profiles), then lift bitRate by the width/height found ANYWHERE in that
+    # element. The old per-line matcher required width, height and bitRate on the same
+    # line, which never happens in the OP15 stock format - so 1080p fell through to the
+    # unsized bracket bump and landed at 37.3M instead of 40M (a diag FAIL).
     {
       line = $0
-      # Sized video line: lift by resolution.
-      if (match(line, /width="[0-9]+"/) && match(line, /height="[0-9]+"/)) {
+      if (in_video) {
+        vbuf = vbuf "\n" line
+        if (line ~ /\/>/ || line ~ /<\/Video>/) {
+          # element complete - lift it
+          w = vbuf; h = vbuf
+          if (match(vbuf, /width="[0-9]+"/))  { w = substr(vbuf, RSTART, RLENGTH); gsub(/[^0-9]/, "", w); w = w + 0 } else w = 0
+          if (match(vbuf, /height="[0-9]+"/)) { h = substr(vbuf, RSTART, RLENGTH); gsub(/[^0-9]/, "", h); h = h + 0 } else h = 0
+          if (w > 0 && h > 0 && match(vbuf, /bitRate="[0-9]+"/)) {
+            b = substr(vbuf, RSTART, RLENGTH); gsub(/[^0-9]/, "", b); b = b + 0
+            nb = lift_sized(b, w, h)
+            sub(/bitRate="[0-9]+"/, "bitRate=\"" nb "\"", vbuf)
+          }
+          printf "%s\n", vbuf
+          in_video = 0; vbuf = ""
+        }
+        next
+      }
+      if (line ~ /<Video([ \t]|$)/ && line !~ /\/>/) {
+        in_video = 1; vbuf = line; next
+      }
+      # single-line <Video .../> (rare) - handle inline
+      if (line ~ /<Video/ && match(line, /width="[0-9]+"/) && match(line, /height="[0-9]+"/)) {
         w = line; sub(/.*width="/, "", w); sub(/".*/, "", w); w = w + 0
         h = line; sub(/.*height="/, "", h); sub(/".*/, "", h); h = h + 0
         if (match(line, /bitRate="[0-9]+"/)) {
@@ -795,21 +820,9 @@ asb_media_lift_file() {
         }
         print line; next
       }
-      # Unsized line: keep the conservative bracket bump (back-compat).
-      out = ""
-      while (match(line, /bitRate="[0-9]+"/)) {
-        pre = substr(line, 1, RSTART-1)
-        m = substr(line, RSTART, RLENGTH)
-        num = m; gsub(/[^0-9]/, "", num); num = num + 0
-        if (num >= 10000000 && num < 15000000) newn = int(num * 1.27)
-        else if (num >= 15000000 && num < 30000000) newn = 37300000
-        else newn = num
-        if (newn < num) newn = num
-        out = out pre "bitRate=\"" newn "\""
-        line = substr(line, RSTART+RLENGTH)
-      }
-      print out line
-    }' "$1" > "$1.asbtmp" 2>/dev/null \
+      print line
+    }
+    END { if (in_video && vbuf != "") printf "%s\n", vbuf }' "$1" > "$1.asbtmp" 2>/dev/null \
       && mv -f "$1.asbtmp" "$1" 2>/dev/null
 }
 
