@@ -1133,6 +1133,10 @@ body.config-active #livePage.open {
   padding: 5px 10px;
   font-size: 11px;
 }
+.cfg-seg.small.dense button {
+  padding: 5px 7px;
+  font-size: 10px;
+}
 .cfg-seg.small.disabled { pointer-events: none; }
 .cfg-sub-seg-row {
   margin-top: 11px;
@@ -1976,8 +1980,8 @@ const CFG_ITEMS = [
     desc:'Codec configuration, not software: headphone companders off, HPH Mode \u2192 CLS_H_HIFI. Does not fight an external EQ \u2014 it gives it a cleaner DAC. Reboot to apply.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
-  { key:'dsp_loudness', type:'seg', def:'off', opts:['off','3','6','9','12'], name:'DSP Loudness',
-    desc:'ASB\u2019s own DSP engine: gain beyond the system maximum. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip. Attaches to music by itself, no companion app. Start at +3; +9 can squash loud masters. First enable needs a reboot.' },
+  { key:'dsp_loudness', type:'range', def:'0', min:0, max:18, step:1, name:'DSP Loudness',
+    desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, now up to +18 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Absolute Volume',
     desc:'Disable = the phone drives the gain instead of the headset (what ViPER/EQ need). Stock = loud and synced with the headset. Applies without a reboot.' },
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:4, step:1, name:'Camera Grade',
@@ -2136,8 +2140,14 @@ function cfgRender() {
       rng.value = (cur === '' || isNaN(parseInt(cur, 10))) ? it.def : cur;
       const val = document.createElement('span');
       val.className = 'cfg-range-val';
-      val.textContent = (parseInt(rng.value, 10) === 0) ? Topt('off') : rng.value;
-      rng.oninput = () => { val.textContent = (parseInt(rng.value, 10) === 0) ? Topt('off') : rng.value; };
+      var _rngLabel = function(v){
+        v = parseInt(v, 10);
+        if (v === 0) return Topt('off');
+        // DSP loudness is a dB gain; label it as such. Other ranges stay plain numbers.
+        return (it.key === 'dsp_loudness') ? ('+' + v + ' dB') : String(v);
+      };
+      val.textContent = _rngLabel(rng.value);
+      rng.oninput = () => { val.textContent = _rngLabel(rng.value); };
       rng.onchange = () => cfgSet(it.key, rng.value, wrap);
       wrap.appendChild(rng);
       wrap.appendChild(val);
@@ -2150,7 +2160,7 @@ function cfgRender() {
       // the title line fine (the title just wraps). An earlier revision moved these to
       // their own row to stop the buttons touching the name - that was before the
       // labels were shortened, and the row cost ~22px of height per card for nothing.
-      seg.className = (it.opts.length >= 4) ? 'cfg-seg small' : 'cfg-seg';
+      seg.className = (it.opts.length >= 4) ? ('cfg-seg small' + (it.opts.length >= 6 ? ' dense' : '')) : 'cfg-seg';
       it.opts.forEach(o => {
         const b = document.createElement('button');
         b.textContent = Topt(o);
@@ -2169,7 +2179,7 @@ function cfgRender() {
       const segRow = document.createElement('div');
       segRow.className = 'cfg-sub-seg-row' + (lvlOn ? '' : ' disabled');
       const subSeg = document.createElement('div');
-      subSeg.className = 'cfg-seg small';
+      subSeg.className = 'cfg-seg small' + (it.opts.length >= 6 ? ' dense' : '');
       [['safe','cfg_camera_key_std'],['aggressive','cfg_camera_key_ext']].forEach(pair => {
         const o = pair[0];
         const b = document.createElement('button');
