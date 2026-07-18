@@ -153,7 +153,14 @@ else
   echo "  🎚  Profile: ${PROFILE} (manual — Smart off)"
 fi
 _bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
-[ -n "$_bias" ] && [ "$_bias" != "0" ] && echo "  ⚖️  Battery lean: $((_bias / 10))%"
+# Show the LIVE learning weight, the same number the WebUI shows as "battery-lean", so
+# the two screens agree. smart_battery_bias is a different thing - it is the user's
+# configured tilt, not the current runtime weight - so it was showing 60% while the
+# WebUI showed the live 100%, and they looked like a bug. Report the live alpha here and
+# label the configured tilt separately below.
+_alpha_live="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+[ -n "$_alpha_live" ] && echo "  ⚖️  Battery lean: $((_alpha_live / 10))% (live)"
+[ -n "$_bias" ] && [ "$_bias" != "0" ] && echo "  🎚  Battery tilt set to: $((_bias / 10))%"
 if [ "$_rec_disabled" = "1" ]; then
   echo "  ⚠️  SAFE MODE  : governor disabled (${_rec_reason:-recovery})"
 elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
@@ -503,15 +510,25 @@ if [ "$_blur" = "1" ]; then
   [ "$(getprop persist.sys.oplus.anim_level 2>/dev/null)" = "0" ] || _b_ps_bad=$((_b_ps_bad + 1))
   [ "$(getprop persist.sys.oplus.material_blur_switch 2>/dev/null)" = "false" ] || _b_ps_bad=$((_b_ps_bad + 1))
 
-  if [ "$_b_ro_bad" -gt 0 ] 2>/dev/null; then
-    if [ "$_b_ps_bad" = "0" ]; then
+  if [ "$_b_ro_bad" -gt 0 ] 2>/dev/null || [ "$_b_ps_bad" -gt 0 ] 2>/dev/null; then
+    # Before crying failure, check whether the values are already sitting in system.prop.
+    # If they are, the tweak IS applied on disk and just needs one reboot: the root
+    # manager reads system.prop at module MOUNT, and right after an install the module is
+    # already mounted, so the fresh props only take on the next boot. That is a pending
+    # state, not a failure - say so instead of alarming the user.
+    _sp_has=0
+    for _spf in /data/adb/modules/AutoSystemBoost/system.prop \
+                "$MODDIR/system.prop"; do
+      grep -q '^ro.surface_flinger.supports_background_blur=0' "$_spf" 2>/dev/null && { _sp_has=1; break; }
+    done
+    if [ "$_sp_has" = "1" ]; then
+      _add_bad "blur — set in system.prop, applies after a reboot (props are read at boot)"
+    elif [ "$_b_ro_bad" -gt 0 ] && [ "$_b_ps_bad" = "0" ]; then
       _add_bad "blur — ${_b_ro_bad}/${_b_ro_n} ro.* props rejected (persist.* took OK)"
       _add_bad "  root manager's resetprop cannot write read-only props; reboot once more"
     else
-      _add_bad "blur — ${_b_ro_bad}/${_b_ro_n} ro.* and ${_b_ps_bad}/2 persist.* props not applied"
+      _add_bad "blur — ${_b_ro_bad}/${_b_ro_n} ro.* and ${_b_ps_bad}/2 persist.* not applied (reboot?)"
     fi
-  elif [ "$_b_ps_bad" -gt 0 ] 2>/dev/null; then
-    _add_bad "blur — ${_b_ps_bad}/2 persist.* props not applied"
   fi
 fi
 
