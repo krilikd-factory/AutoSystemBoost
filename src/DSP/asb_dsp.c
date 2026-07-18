@@ -47,7 +47,7 @@
 
 /* Safety rails: never let a bad config blow up the output. */
 #define ASB_GAIN_MB_MIN    0       /* +0 dB  */
-#define ASB_GAIN_MB_MAX    1200    /* +12 dB */
+#define ASB_GAIN_MB_MAX    1800    /* +18 dB (limiter still holds the ceiling) */
 #define ASB_CEIL_MB_MIN   (-600)   /* -6 dBFS  */
 #define ASB_CEIL_MB_MAX   (-30)    /* -0.3 dBFS */
 #define ASB_RATIO_MIN      10      /* 1.0:1 = compressor off */
