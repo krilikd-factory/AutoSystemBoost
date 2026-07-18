@@ -546,6 +546,13 @@ asb_apply_device_overlay() {
 
   rm -rf "$MODPATH/system/vendor/etc/audio" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/etc/audio" 2>/dev/null || true
+  rm -rf "$MODPATH/system/odm/etc/audio" 2>/dev/null || true
+  # Safety sweep: a previous build (before the configs-only clone) could have staged
+  # multi-MB ML models and calibration blobs into the audio tree, ballooning the module
+  # to ~32MB. Delete any such binaries anywhere under the module so an upgrade shrinks
+  # back down instead of inheriting the bloat.
+  find "$MODPATH/system" -type f \( -name '*.mnn' -o -name '*.onnx' -o -name '*.bin' \
+       -o -name '*.dlc' -o -name '*.tflite' \) -delete 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/etc/wifi" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/vendor/etc/wifi" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/etc/camera" 2>/dev/null || true
@@ -971,17 +978,24 @@ asb_clone_dir_from_live() {
   _dest="$MODPATH/system${_canon}"
   rm -rf "$_dest" 2>/dev/null
   mkdir -p "$_dest" 2>/dev/null
-  # -maxdepth 6 caps traversal: config trees are shallow (e.g. sku_x/mixer.xml),
-  # but a live path can be a bind-mount of another partition that loops back
-  # (/vendor/odm -> /odm -> /odm/vendor -> ...). An unbounded recursive walk there
-  # never terminates and stalls the whole install. Bounding depth keeps every real
-  # layout while making a loop impossible.
-  ( cd "$_src" && find . -maxdepth 6 -type f 2>/dev/null | while IFS= read -r _f; do
+  # Copy ONLY the text config files ASB actually patches. The audio dir also holds huge
+  # binary blobs - noise-suppression ML models (dcunet_nbf.onnx.mnn ~3.5M, oprec_nn_ve.mnn
+  # ~1.5M) and mic/camera calibration (.bin, several MB each) - which ASB never touches.
+  # Cloning the whole tree pulled ~29MB of that dead weight into the module (3.6MB -> 32MB).
+  # Whitelisting extensions keeps the layout ASB needs while dropping the blobs. -maxdepth 6
+  # still caps traversal against bind-mount loops (/vendor/odm -> /odm -> ...).
+  _clone_n=0
+  ( cd "$_src" && find . -maxdepth 6 -type f \
+        \( -name '*.xml' -o -name '*.conf' -o -name '*.json' -o -name '*.txt' \
+           -o -name '*.ini' -o -name '*.cfg' -o -name 'video_beauty_default_config' \) 2>/dev/null | while IFS= read -r _f; do
       _f="${_f#./}"
       mkdir -p "$_dest/$(dirname "$_f")" 2>/dev/null
       cp -f "$_src/$_f" "$_dest/$_f" 2>/dev/null || true
     done )
-  ui_print "      + ${_src} -> system${_canon}"
+  # Prune any now-empty dirs the find above created nothing in.
+  find "$_dest" -type d -empty -delete 2>/dev/null || true
+  [ -d "$_dest" ] || return 1
+  ui_print "      + ${_src} -> system${_canon} (configs only)"
   return 0
 }
 
