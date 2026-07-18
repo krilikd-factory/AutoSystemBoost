@@ -126,6 +126,11 @@ jobs:
           ls -la src/dsp
 
       - name: Build RELEASE binary (no debug logs)
+        # The AIDL effect prebuilt (src/DSP_AIDL/prebuilt/<abi>/libasbdsp_aidl.so) is used
+        # automatically when present - build_ndk_release.sh detects the file and prefers it
+        # over the legacy .so, verifying the createEffect symbol. We do NOT force
+        # ASB_DSP_AIDL=1 here so the release is not blocked before the prebuilt exists; the
+        # verify step below reports which effect variant actually shipped.
         run: ASB_BUILD_MODE=release bash src/build_ndk_release.sh
 
       - name: Verify release binary and DSP library
@@ -163,6 +168,23 @@ jobs:
           SO_SIZE=$(wc -c < "$SO")
           echo "DSP size: $SO_SIZE bytes"
           [ "$SO_SIZE" -gt 1000 ] || { echo "ERROR: DSP .so too small"; exit 1; }
+
+          # Report which effect ABI actually shipped. On Android 13+/16 audioserver loads
+          # effects through the AIDL factory (createEffect); a legacy AELI-only .so is
+          # never bound to the stream, so surface a clear warning if that is what shipped.
+          if command -v llvm-nm >/dev/null 2>&1; then NM=llvm-nm; else NM="$(ls "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin/llvm-nm 2>/dev/null | head -1)"; fi
+          [ -n "$NM" ] && [ -x "$NM" ] || NM=nm
+          for so in "$SO" "$SO32"; do
+            [ -f "$so" ] || continue
+            SYMS="$("$NM" -D --defined-only "$so" 2>/dev/null || true)"
+            if echo "$SYMS" | grep -q " createEffect$"; then
+              echo "::notice::$so is the AIDL effect (createEffect present) - loads on Android 13+/16"
+            elif echo "$SYMS" | grep -q "AUDIO_EFFECT_LIBRARY_INFO_SYM"; then
+              echo "::warning::$so is the LEGACY effect (AELI only). Android 13+/16 will NOT bind it to the music stream. Build src/DSP_AIDL via the 'Build DSP AIDL' workflow and commit the prebuilt so the AIDL variant ships."
+            else
+              echo "::warning::$so exports neither createEffect nor AELI - effect will not load"
+            fi
+          done
 
       - name: Package RELEASE zip
         run: |
