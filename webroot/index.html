@@ -1162,6 +1162,15 @@ body.config-active #livePage.open {
   background: rgba(0,225,200,0.12);
   border-color: rgba(0,225,200,0.30);
 }
+/* Per-category icon tint (active tweaks). The card itself stays green via .is-on; only
+   the icon square carries the category colour so categories are scannable. */
+.cfg-row.is-on .cfg-icon.cat-audio   { background: rgba(0,240,180,0.16);  border-color: rgba(0,240,180,0.45); }
+.cfg-row.is-on .cfg-icon.cat-camera  { background: rgba(167,139,250,0.16); border-color: rgba(167,139,250,0.45); }
+.cfg-row.is-on .cfg-icon.cat-perf    { background: rgba(255,26,26,0.16);   border-color: rgba(255,26,26,0.45); }
+.cfg-row.is-on .cfg-icon.cat-battery { background: rgba(46,213,115,0.16);  border-color: rgba(46,213,115,0.45); }
+.cfg-row.is-on .cfg-icon.cat-memory  { background: rgba(90,170,255,0.16);  border-color: rgba(90,170,255,0.45); }
+.cfg-row.is-on .cfg-icon.cat-display { background: rgba(255,165,2,0.16);   border-color: rgba(255,165,2,0.45); }
+.cfg-row.is-on .cfg-icon.cat-system  { background: rgba(180,180,190,0.16); border-color: rgba(180,180,190,0.45); }
 .cfg-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -1620,7 +1629,6 @@ body.config-active #livePage.open {
 
   <div class="cfg-list" id="cfgList"></div>
 
-  <button class="cfg-reboot" onclick="cfgApplyAudio()" data-i18n="cfg_apply_audio">♫ Apply audio now</button>
   <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
 
   </div>
@@ -1672,6 +1680,8 @@ const I18N = {
     lv_learner: 'Обучение', lv_gpuload: 'Нагрузка GPU', lv_headroom: 'Запас',
     // config page
     cfg_apply_audio: '\u266b Применить аудио сейчас',
+    t_cfg_audio_live: ' \u00b7 применяю\u2026',
+    t_cfg_audio_reboot: ' \u00b7 нужна перезагрузка',
     t_applying_audio: 'Применяю аудио\u2026',
     t_applied_audio: 'Аудио применено (audioserver перезапущен)',
     t_apply_audio_fail: 'Не удалось применить',
@@ -2011,6 +2021,22 @@ async function cfgLoad() {
 }
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
+// Icon-square colour category per tweak key. The card highlight stays green; this only
+// tints the icon square so the config list is scannable by category. Comment groups in
+// CFG were not accurate (camera/battery keys sit under the Audio comment), so map keys
+// explicitly.
+const CFG_CAT = {
+  audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
+  dsp_loudness:'audio', bt_absvol_mode:'audio',
+  CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
+  cool_gaming:'perf',
+  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
+  BG_TRIM_LEVEL:'memory', UX_MANAGE_OEM_TOGGLES:'memory', UX_MANAGE_TIMEOUTS:'memory',
+  UX_ANIM_FORCE_RESTART:'memory',
+  disable_blur:'display'
+};
+function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-system'; }
+
 const CFG_ICONS = {
   audio_profile:'\uD83C\uDF9A\uFE0F',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
@@ -2070,7 +2096,7 @@ function cfgRender() {
     top.className = 'cfg-row-top';
 
     const ic = document.createElement('div');
-    ic.className = 'cfg-icon';
+    ic.className = 'cfg-icon ' + cfgCatClass(it.key);
     ic.textContent = CFG_ICONS[it.key] || '\u2699\uFE0F';
     top.appendChild(ic);
 
@@ -2203,7 +2229,24 @@ async function cfgSet(key, val, ctl) {
     }
     haptic();
     try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
-    toast('\u2713 ' + key + ' = ' + val + T('t_cfg_saved', ' \u00b7 reboot to apply'), 'balanced');
+    // Audio settings apply live (ViperFX-style): changing an audio card fires the same
+    // apply script the old "Apply audio now" button used, so there is no separate button
+    // and no reboot for these. audioserver restarts briefly (a short audio gap), which is
+    // why it runs in the background and the toast says "applying" rather than "reboot".
+    // Live keys: a background audioserver restart re-reads these, so they apply now.
+    var AUDIO_LIVE_KEYS = ['audio_profile','dsp_loudness','bt_absvol_mode'];
+    // Overlay keys: media_loudness (volume curves) and audio_dac_hifi (mixer) are baked
+    // into the mounted overlay and only read at boot - a restart cannot pick them up, so
+    // be honest and say reboot.
+    var AUDIO_OVERLAY_KEYS = ['media_loudness','audio_dac_hifi'];
+    if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
+      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), 'perf');
+      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh >/dev/null 2>&1 &'); } catch(e) {}
+    } else if (AUDIO_OVERLAY_KEYS.indexOf(key) >= 0) {
+      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_reboot', ' \u00b7 reboot to apply'), 'balanced');
+    } else {
+      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_saved', ' \u00b7 reboot to apply'), 'balanced');
+    }
   } else {
     toast(T('t_cfg_err', '\u2717 Failed to write config'), 'err');
   }
@@ -2211,18 +2254,6 @@ async function cfgSet(key, val, ctl) {
 }
 
 let _cfgRebootArmed = 0;
-async function cfgApplyAudio() {
-  // Only the tweaks that can genuinely land live: audio_profile, bt_absvol_mode and
-  // the DSP gain. media_loudness (volume curves) and audio_dac_hifi (mixer) live in
-  // the overlay and are parsed at boot, so they still need a reboot - the script says
-  // so rather than pretending.
-  toast(T('t_applying_audio', 'Applying audio\u2026'), 'perf');
-  const r = await run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh 2>&1');
-  const out = (r && r.stdout) ? r.stdout : '';
-  if (out.indexOf('applied:') >= 0) toast(T('t_applied_audio', 'Audio applied (audioserver restarted)'), 'ok');
-  else toast(T('t_apply_audio_fail', 'Could not apply'), 'warn');
-}
-
 async function cfgReboot() {
   const now = Date.now();
   if (now - _cfgRebootArmed > 4000) {
