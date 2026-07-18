@@ -134,13 +134,13 @@ static float asb_coef(float ms, uint32_t rate) {
 static void asb_refresh(asb_ctx_t *c) {
     int on     = asb_prop_int(ASB_PROP_ENABLE, 0);
     int gainmb = asb_clamp_int(asb_prop_int(ASB_PROP_GAIN_MB, 0), ASB_GAIN_MB_MIN, ASB_GAIN_MB_MAX);
-    int ceilmb = asb_clamp_int(asb_prop_int(ASB_PROP_CEIL_MB, -100), ASB_CEIL_MB_MIN, ASB_CEIL_MB_MAX);
+    int ceilmb = asb_clamp_int(asb_prop_int(ASB_PROP_CEIL_MB, -30), ASB_CEIL_MB_MIN, ASB_CEIL_MB_MAX);
 
     uint32_t rate = c->cfg.outputCfg.samplingRate ? c->cfg.outputCfg.samplingRate : 48000u;
 
     int comp   = asb_prop_int(ASB_PROP_COMP, 1);
-    int ratio  = asb_clamp_int(asb_prop_int(ASB_PROP_RATIO, 30), ASB_RATIO_MIN, ASB_RATIO_MAX);
-    int thrmb  = asb_clamp_int(asb_prop_int(ASB_PROP_THRESH, -1800), ASB_THRESH_MB_MIN, ASB_THRESH_MB_MAX);
+    int ratio  = asb_clamp_int(asb_prop_int(ASB_PROP_RATIO, 40), ASB_RATIO_MIN, ASB_RATIO_MAX);
+    int thrmb  = asb_clamp_int(asb_prop_int(ASB_PROP_THRESH, -2000), ASB_THRESH_MB_MIN, ASB_THRESH_MB_MAX);
 
     c->gain    = asb_mb_to_lin(gainmb);
     c->ceiling = asb_mb_to_lin(ceilmb);
