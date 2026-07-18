@@ -69,9 +69,16 @@ class AsbEffect : public BnEffect {
     ScopedAStatus getDescriptor(Descriptor* desc) override {
         desc->common.id.type = kAsbTypeUuid;
         desc->common.id.uuid = kAsbImplUuid;
-        desc->common.flags.type = Flags::Type::INSERT;
+        // POST_PROC (not INSERT): the AIDL factory attaches an effect to a stream's
+        // post-processing chain only when its type is POST_PROC. With INSERT the effect
+        // is registered but never bound to <postprocess><stream type="music">, so the
+        // gain does nothing - the exact bug seen on the legacy path. offloadIndication
+        // lets it ride compress-offloaded music (common on Snapdragon) instead of being
+        // bypassed by it.
+        desc->common.flags.type = Flags::Type::POST_PROC;
         desc->common.flags.insert = Flags::Insert::LAST;
         desc->common.flags.volume = Flags::Volume::CTRL;
+        desc->common.flags.offloadIndication = true;
         desc->common.name = "ASB Loudness";
         desc->common.implementor = "AutoSystemBoost";
         return ScopedAStatus::ok();
@@ -217,9 +224,14 @@ extern "C" binder_exception_t queryEffect(const AudioUuid* uuid, Descriptor* des
     if (uuid == nullptr || *uuid != kAsbImplUuid) return EX_ILLEGAL_ARGUMENT;
     desc->common.id.type = kAsbTypeUuid;
     desc->common.id.uuid = kAsbImplUuid;
-    desc->common.flags.type = Flags::Type::INSERT;
+    // Must match getDescriptor(): the factory reads THIS descriptor at match time (before
+    // an instance exists) to decide whether to attach us to a stream. If this said INSERT
+    // while getDescriptor said POST_PROC, the effect would still be skipped. Keep both
+    // POST_PROC + offloadIndication.
+    desc->common.flags.type = Flags::Type::POST_PROC;
     desc->common.flags.insert = Flags::Insert::LAST;
     desc->common.flags.volume = Flags::Volume::CTRL;
+    desc->common.flags.offloadIndication = true;
     desc->common.name = "ASB Loudness";
     desc->common.implementor = "AutoSystemBoost";
     return EX_NONE;

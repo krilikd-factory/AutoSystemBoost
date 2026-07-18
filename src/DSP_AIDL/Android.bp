@@ -11,8 +11,23 @@
 cc_library_shared {
     name: "libasbdsp_aidl",
     vendor: true,
+    // Build both ABIs in one pass so a single `m libasbdsp_aidl` yields the arm64 and arm
+    // .so the module ships (lib64/soundfx and lib/soundfx). Without this soong builds only
+    // the target's primary arch.
+    compile_multilib: "both",
     srcs: ["asb_effect_aidl.cpp"],
     local_include_dirs: ["."],
+    // Link the AIDL interfaces via AOSP's version-independent "latest" defaults instead
+    // of hardcoded -V2/-V3 suffixes. Hardcoding ties the module to one Android release:
+    // Android 15 shipped effect-V2 / common-V2 / types-V3, but Android 16 bumped these to
+    // effect-V3 / common-V3 / types-V4, so a -V2 link would either fail to build against
+    // an android16 tree or load-mismatch at runtime. These defaults resolve to whatever
+    // the branch you build on froze, so the same Android.bp works on 15, 16 and 17.
+    defaults: [
+        "latest_android_hardware_audio_effect_ndk_shared",
+        "latest_android_hardware_audio_common_ndk_shared",
+        "latest_android_media_audio_common_types_ndk_shared",
+    ],
     shared_libs: [
         "libaudioaidlcommon",
         "libbase",
@@ -20,10 +35,7 @@ cc_library_shared {
         "libcutils",
         "liblog",
         "libutils",
-        "android.hardware.audio.effect-V2-ndk",
-        "android.hardware.common-V2-ndk",
         "android.hardware.common.fmq-V1-ndk",
-        "android.media.audio.common.types-V3-ndk",
     ],
     static_libs: [
         "libaudioaidltypeconverter",
