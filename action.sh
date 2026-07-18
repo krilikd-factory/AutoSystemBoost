@@ -261,10 +261,15 @@ if [ -n "$_g_state" ]; then
   [ -n "$_gl" ] && echo "       ${_gl}"
 fi
 
-# What the learner has actually accumulated. Worth surfacing: "conf 100%" means little
-# on its own - it is the session count behind it that says whether to trust the number.
-_l_sess="$(_st hist_sessions)"
-_l_q="$(_st smart_quality_last)"
+# Show the SAME learner numbers the WebUI shows, so the two screens agree.
+# WebUI reads learner_state.json smart_sessions.total + last_confidence; the governor now
+# also writes those to the flat state as smart_sessions_total / smart_confidence. The old
+# hist_sessions was the per-tier count (resets on tier change) and smart_quality_last was
+# a different metric, so action showed "2 sessions / last quality 36" while the WebUI
+# showed "337 ses / strong 100%". Use the cumulative total + confidence tier instead.
+_l_sess="$(_st smart_sessions_total)"
+[ -n "$_l_sess" ] || _l_sess="$(_st hist_sessions)"   # fall back on older governors
+_l_conf="$(_st smart_confidence)"
 _l_pkg="$(_st smart_pkg)"
 _l_drain="$(_st smart_drain_ewma_x10)"
 if [ "$_smart_enabled" = "1" ] && [ -n "${_l_sess}${_l_pkg}" ]; then
@@ -272,12 +277,16 @@ if [ "$_smart_enabled" = "1" ] && [ -n "${_l_sess}${_l_pkg}" ]; then
   echo "  🧠  LEARNING"
   _ll=""
   if [ -n "$_l_sess" ]; then
-    # "1 sessions" reads like a bug report. It also matters: one session is not a
-    # learned profile, so say so instead of implying confidence.
     [ "$_l_sess" = "1" ] && _ll="1 session learned (still cold)" \
                          || _ll="${_l_sess} sessions learned"
   fi
-  [ "${_l_q:-0}" -gt 0 ] 2>/dev/null && _ll="$(_join "$_ll" "last quality ${_l_q}")"
+  # Confidence tier, worded the same way the WebUI tiers it.
+  if [ -n "$_l_conf" ] && [ "$_l_conf" -gt 0 ] 2>/dev/null; then
+    if   [ "$_l_conf" -ge 650 ]; then _tier="strong"
+    elif [ "$_l_conf" -ge 350 ]; then _tier="active"
+    else _tier="learning"; fi
+    _ll="$(_join "$_ll" "${_tier} $((_l_conf / 10))%")"
+  fi
   [ -n "$_ll" ] && echo "       ${_ll}"
   if [ -n "$_l_drain" ] && [ "$_l_drain" -gt 0 ] 2>/dev/null; then
     echo "       drain now: $((_l_drain / 10)).$((_l_drain % 10))%/h"
