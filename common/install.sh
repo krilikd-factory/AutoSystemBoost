@@ -1855,6 +1855,33 @@ fi
 
 if [ "$ASB_IS_OP15" = "true" ]; then
   asb_apply_device_native_tuning "OnePlus 15 (canoe)" "OnePlus15"
+  # Register the ASB DSP effect on OP15.
+  #
+  # OP15 delivers audio config through per-SKU overlay files
+  # (system/vendor/etc/audio/sku_*/audio_effects_config.xml), NOT through the /odm
+  # runtime binds that asb_generate_odm_binds builds - and asb_generate_odm_binds is
+  # the ONLY caller of asb_register_dsp_effect. So on OP15 the library was staged and
+  # the properties published, but the effect was never listed in any
+  # audio_effects_config.xml, which means audioserver never loaded it. DSP silently did
+  # nothing on the one device it was tuned for. Patch every effects config the overlay
+  # actually ships so the effect is registered next to the stock ones.
+  if [ "$ASB_AUDIO" = "true" ]; then
+    _op15_reg=0
+    for _ec in \
+        "$MODPATH"/system/vendor/etc/audio/sku_*/audio_effects_config.xml \
+        "$MODPATH"/system/vendor/odm/etc/audio_effects_config.xml \
+        "$MODPATH"/system/odm/etc/audio_effects_config.xml; do
+      [ -f "$_ec" ] || continue
+      case "$_ec" in *_stub.xml) continue ;; esac
+      asb_register_dsp_effect "$_ec"
+      grep -q 'asb_loudness' "$_ec" 2>/dev/null && _op15_reg=$((_op15_reg + 1))
+    done
+    if [ "$_op15_reg" -gt 0 ]; then
+      ui_print "    + ASB DSP: effect registered in ${_op15_reg} audio_effects_config file(s)"
+    else
+      ui_print "    ! ASB DSP: no audio_effects_config in overlay to register into"
+    fi
+  fi
 elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_apply_device_native_tuning "OnePlus 13 (sun / tuna / kera)" "OnePlus13"
 elif [ "$ASB_IS_OP12" = "true" ]; then
