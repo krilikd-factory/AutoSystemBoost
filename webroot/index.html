@@ -1976,7 +1976,7 @@ const CFG_ITEMS = [
     desc:'Codec configuration, not software: headphone companders off, HPH Mode \u2192 CLS_H_HIFI. Does not fight an external EQ \u2014 it gives it a cleaner DAC. Reboot to apply.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
-  { key:'dsp_loudness', type:'seg', def:'off', opts:['off','3','6','9'], name:'DSP Loudness',
+  { key:'dsp_loudness', type:'seg', def:'off', opts:['off','3','6','9','12'], name:'DSP Loudness',
     desc:'ASB\u2019s own DSP engine: gain beyond the system maximum. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip. Attaches to music by itself, no companion app. Start at +3; +9 can squash loud masters. First enable needs a reboot.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Absolute Volume',
     desc:'Disable = the phone drives the gain instead of the headset (what ViPER/EQ need). Stock = loud and synced with the headset. Applies without a reboot.' },
