@@ -1,0 +1,43 @@
+// Build recipe for the ASB AIDL loudness effect.
+//
+// Produces libasbdsp_aidl.so — the AIDL replacement for the legacy libasbdsp.so.
+// Build it in an AOSP/soong tree (the effect AIDL + FMQ headers are not in the
+// plain NDK). Point your CI's soong at this module, or drop it under
+// hardware/ and run `mm libasbdsp_aidl`.
+//
+// The shared static/headers below are exactly what AOSP's own default effects
+// (e.g. hardware/interfaces/audio/aidl/default) link against.
+
+cc_library_shared {
+    name: "libasbdsp_aidl",
+    vendor: true,
+    srcs: ["asb_effect_aidl.cpp"],
+    local_include_dirs: ["."],
+    shared_libs: [
+        "libaudioaidlcommon",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "liblog",
+        "libutils",
+        "android.hardware.audio.effect-V2-ndk",
+        "android.hardware.common-V2-ndk",
+        "android.hardware.common.fmq-V1-ndk",
+        "android.media.audio.common.types-V3-ndk",
+    ],
+    static_libs: [
+        "libaudioaidltypeconverter",
+    ],
+    header_libs: [
+        "libaudioaidl_headers",
+        "libsystem_headers",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-O2",
+        "-ffast-math",
+    ],
+}
