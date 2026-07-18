@@ -133,40 +133,18 @@ if command -v resetprop >/dev/null 2>&1; then
       resetprop persist.asb.dsp.enable 0 >/dev/null 2>&1 || true
       ;;
   esac
-  _blur="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
+  _blur="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
 
-  # These land in system.prop, not just resetprop. system.prop is loaded by the root
-  # manager itself right after this script runs, which is the idiomatic place for
-  # ro.* properties and does not depend on our script surviving to the end. The block
-  # is rewritten from the config on every boot, so the WebUI toggle still drives it -
-  # a plain static system.prop entry could not do that.
-  # resetprop below stays as a belt-and-braces for the same values.
-  _sp="$MODDIR/system.prop"
-  if [ -f "$_sp" ] && [ -w "$_sp" ]; then
-    _spt="$_sp.asb$$"
-    sed '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' "$_sp" > "$_spt" 2>/dev/null && {
-      {
-        echo "# ASB:BLUR:BEGIN"
-        if [ "$_blur" = "1" ]; then
-          echo "ro.surface_flinger.supports_background_blur=0"
-          echo "ro.surface_flinger.media_panel_bg_blur=0"
-          echo "ro.oplus.display.disable.volume_blur=1"
-          echo "ro.oplus.gaussianlevel=0"
-          echo "ro.launcher.blur.appLaunch=0"
-          echo "persist.sys.oplus.anim_level=0"
-          echo "persist.sys.oplus.material_blur_switch=false"
-        fi
-        echo "# ASB:BLUR:END"
-      } >> "$_spt"
-      mv -f "$_spt" "$_sp" 2>/dev/null || rm -f "$_spt" 2>/dev/null
-    }
-    rm -f "$_spt" 2>/dev/null
-  fi
-
+  # NOTE: the system.prop blur block is written at INSTALL time (asb_apply_blur_prop in
+  # install.sh), NOT here. The root manager reads system.prop when it mounts the module,
+  # which is BEFORE this script runs - rewriting it here only ever took effect a boot
+  # late. Do not re-introduce a system.prop rewrite in post-fs-data.
+  #
+  # The resetprop calls below are a live nudge for the persist.* values (which CAN change
+  # after boot). ro.* are attempted with -n too, but they are only honoured before the
+  # reading process started, so system.prop is what actually carries them - this is just
+  # belt-and-braces for anything restarted later in boot.
   if [ "$_blur" = "1" ]; then
-    # -n is REQUIRED for ro.* : property_service rejects writes to read-only
-    # properties, so without it these are silently dropped and the blur tweak does
-    # nothing at all. persist.* below does not need it.
     resetprop -n ro.surface_flinger.supports_background_blur 0 >/dev/null 2>&1 || true
     resetprop -n ro.surface_flinger.media_panel_bg_blur 0 >/dev/null 2>&1 || true
     resetprop -n ro.oplus.display.disable.volume_blur 1 >/dev/null 2>&1 || true
