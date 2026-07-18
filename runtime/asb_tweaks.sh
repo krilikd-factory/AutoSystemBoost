@@ -205,6 +205,12 @@ asb_tw_vb_add_apps() {
   _vb_ctx="$(ls -Z "$_f" 2>/dev/null | awk '{print $1}')"
   case "$_vb_ctx" in u:object_r:*) chcon "$_vb_ctx" "$_vb_t" 2>/dev/null ;; esac
   mv -f "$_vb_t" "$_f" 2>/dev/null || { cat "$_vb_t" > "$_f" 2>/dev/null; rm -f "$_vb_t"; }
+  # Report the before/after count if ui_print is available (it is during install).
+  if command -v ui_print >/dev/null 2>&1; then
+    _vb_after="$(grep -c '"packageName"' "$_f" 2>/dev/null)"
+    _vb_before=$((_vb_after - $(printf '%s' "$_vb_add" | grep -c '|')))
+    [ "${_vb_after:-0}" -gt 0 ] && ui_print "      + ${ASB_D_RETOUCH:-retouch apps}: ${_vb_before} -> ${_vb_after}"
+  fi
   return 0
 }
 
