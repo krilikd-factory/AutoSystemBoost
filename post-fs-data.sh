@@ -164,20 +164,23 @@ if command -v resetprop >/dev/null 2>&1; then
   fi
 
   if [ "$_blur" = "1" ]; then
-    resetprop ro.surface_flinger.supports_background_blur 0 >/dev/null 2>&1 || true
-    resetprop ro.surface_flinger.media_panel_bg_blur 0 >/dev/null 2>&1 || true
-    resetprop ro.oplus.display.disable.volume_blur 1 >/dev/null 2>&1 || true
+    # -n is REQUIRED for ro.* : property_service rejects writes to read-only
+    # properties, so without it these are silently dropped and the blur tweak does
+    # nothing at all. persist.* below does not need it.
+    resetprop -n ro.surface_flinger.supports_background_blur 0 >/dev/null 2>&1 || true
+    resetprop -n ro.surface_flinger.media_panel_bg_blur 0 >/dev/null 2>&1 || true
+    resetprop -n ro.oplus.display.disable.volume_blur 1 >/dev/null 2>&1 || true
     resetprop persist.sys.oplus.anim_level 0 >/dev/null 2>&1 || true
-    resetprop ro.oplus.gaussianlevel 0 >/dev/null 2>&1 || true
-    resetprop ro.launcher.blur.appLaunch 0 >/dev/null 2>&1 || true
+    resetprop -n ro.oplus.gaussianlevel 0 >/dev/null 2>&1 || true
+    resetprop -n ro.launcher.blur.appLaunch 0 >/dev/null 2>&1 || true
     resetprop persist.sys.oplus.material_blur_switch false >/dev/null 2>&1 || true
   else
-    resetprop ro.surface_flinger.supports_background_blur 1 >/dev/null 2>&1 || true
-    resetprop ro.surface_flinger.media_panel_bg_blur 1 >/dev/null 2>&1 || true
-    resetprop ro.oplus.display.disable.volume_blur 0 >/dev/null 2>&1 || true
+    resetprop -n ro.surface_flinger.supports_background_blur 1 >/dev/null 2>&1 || true
+    resetprop -n ro.surface_flinger.media_panel_bg_blur 1 >/dev/null 2>&1 || true
+    resetprop -n ro.oplus.display.disable.volume_blur 0 >/dev/null 2>&1 || true
     resetprop persist.sys.oplus.anim_level 1 >/dev/null 2>&1 || true
-    resetprop ro.oplus.gaussianlevel 3 >/dev/null 2>&1 || true
-    resetprop ro.launcher.blur.appLaunch 1 >/dev/null 2>&1 || true
+    resetprop -n ro.oplus.gaussianlevel 3 >/dev/null 2>&1 || true
+    resetprop -n ro.launcher.blur.appLaunch 1 >/dev/null 2>&1 || true
     resetprop persist.sys.oplus.material_blur_switch true >/dev/null 2>&1 || true
   fi
 fi

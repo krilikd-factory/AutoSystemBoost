@@ -451,12 +451,29 @@ fi
 # DSP -> library staged AND registered; either half missing means silence
 if [ "$_a_dsp" != "off" ]; then
   [ "$_dsp_so" = "1" ] || _add_bad "DSP +${_a_dsp} dB — libasbdsp.so not installed (reinstall)"
-  _reg=0
+  # Two different failures hide behind "not registered", and they need different fixes:
+  # the staged copy under /data/adb/asb/odm_patched is what install.sh patches, and a
+  # bind mount is what makes it the live file. Patched-but-not-bound means the mount
+  # was skipped (bootloop fuse, or the boot counter tripped); not-patched-at-all means
+  # install never ran the registration. Report which one it is.
+  _reg_live=0; _reg_stage=0
   for _ec in /odm/etc/audio_effects_config.xml /vendor/etc/audio_effects_config.xml \
              /vendor/etc/audio_effects.xml; do
-    grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg=1; break; }
+    grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg_live=1; break; }
   done
-  [ "$_reg" = "1" ] || _add_bad "DSP +${_a_dsp} dB — effect not registered in audio_effects_config"
+  for _ec in /data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml \
+             /data/adb/asb/odm_patched/vendor/etc/audio_effects_config.xml; do
+    grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg_stage=1; break; }
+  done
+  if [ "$_reg_live" != "1" ]; then
+    if [ "$_reg_stage" = "1" ]; then
+      _add_bad "DSP +${_a_dsp} dB — effect registered but the odm bind is not mounted"
+      [ -f /data/adb/asb/vendor_overlay_blocked ] \
+        && _add_bad "  (overlay is blocked by the bootloop fuse — see uninstall/reinstall)"
+    else
+      _add_bad "DSP +${_a_dsp} dB — effect not registered by install (reinstall)"
+    fi
+  fi
   [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] \
     || _add_bad "DSP +${_a_dsp} dB — persist.asb.dsp.enable is not 1"
 fi
