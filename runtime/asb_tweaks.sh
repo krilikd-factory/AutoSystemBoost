@@ -112,6 +112,13 @@ asb_tw_aggr_camera() {
   # --- tone / colour (affects photo + video) ---
   asb_tw_sedi "s/\\(\"sunsetSatScale\": *\\)1\\.6/\\1${_SSS}/g"            "$_f"
   asb_tw_sedi "s/\\(\"sunsetSatScale\": *\\)1\\.7/\\1${_SSS}/g"            "$_f"
+  # sunsetBrightScale -> 0.9: slightly pulls down sunset highlight brightness so the
+  # boosted saturation does not clip warm skies to white. The diag checks this as the
+  # tone-fix marker; it was never actually being written, hence the FAIL. Match any
+  # stock value (1.0 / 1 / 0.95) down to 0.9.
+  asb_tw_sedi "s/\\(\"sunsetBrightScale\": *\\)1\\.0\\([,}]\\)/\\10.9\\2/g"  "$_f"
+  asb_tw_sedi "s/\\(\"sunsetBrightScale\": *\\)1\\([,}]\\)/\\10.9\\2/g"      "$_f"
+  asb_tw_sedi "s/\\(\"sunsetBrightScale\": *\\)0\\.95/\\10.9/g"             "$_f"
   asb_tw_sedi "s/\\(\"blueSatParam\": *\\)0\\.95/\\1${_BSAT}/g"            "$_f"
   asb_tw_sedi "s/\\(\"nightDownGainParam\": *\\)0\\.3/\\1${_NDG}/g"        "$_f"
   asb_tw_sedi "s/\\(\"nightDownGainParamHizoom\": *\\)0\\.3/\\1${_NDG}/g"  "$_f"
