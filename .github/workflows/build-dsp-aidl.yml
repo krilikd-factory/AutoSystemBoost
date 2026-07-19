@@ -47,11 +47,17 @@ jobs:
       - name: Reclaim disk space
         run: |
           echo "Before:"; df -h /
+          # The full (shallow) AOSP manifest is larger than the old minimal set, so reclaim
+          # aggressively up front. These preinstalled toolchains are ~30 GB combined and are
+          # not needed for a soong build.
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
                       /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" \
-                      /usr/local/lib/node_modules /usr/share/swift 2>/dev/null || true
+                      /usr/local/lib/node_modules /usr/share/swift \
+                      /opt/hostedtoolcache /usr/local/graalvm /usr/local/.ghcup \
+                      /usr/lib/jvm /usr/local/share/powershell 2>/dev/null || true
           sudo apt-get -y purge '^dotnet-.*' '^llvm-.*' 'php.*' azure-cli \
-                      google-chrome-stable firefox powershell mono-devel 2>/dev/null || true
+                      google-chrome-stable firefox powershell mono-devel \
+                      '^mysql-.*' '^postgresql-.*' 2>/dev/null || true
           sudo apt-get -y autoremove --purge 2>/dev/null || true
           sudo apt-get clean
           docker rmi $(docker images -q) 2>/dev/null || true
@@ -81,41 +87,34 @@ jobs:
           git config --global user.email "asb-ci@users.noreply.github.com"
           git config --global color.ui false
 
-      - name: Init minimal AOSP tree
+      - name: Init AOSP tree (standard manifest, filtered)
         run: |
           mkdir -p aosp && cd aosp
-          # Init the manifest repo, then point repo at OUR minimal manifest with `repo init
-          # -m`. Earlier this blanked out default.xml instead, which also removed the real
-          # build/make project and its `build/envsetup.sh` linkfile - so envsetup.sh was
-          # missing. Using -m keeps repo's normal handling of our (self-contained) manifest.
+          # Use the STANDARD AOSP manifest (not a hand-picked project list). Earlier attempts
+          # with a minimal manifest failed one missing soong dep at a time
+          # (golang-protobuf, then the next, ...) because soong pulls dozens of transitive
+          # projects that are impossible to enumerate by hand. The runner has ~90 GB free and
+          # the tree is far smaller than that, so the reliable move is to sync the real
+          # manifest and just let repo/soong resolve everything. --depth=1 + partial clone
+          # keep it lean; we skip nothing soong needs.
           repo init -u https://android.googlesource.com/platform/manifest \
                     -b "${{ github.event.inputs.aosp_tag }}" \
                     --depth=1 --partial-clone --clone-filter=blob:limit=10M
-          # Drop our manifest INTO the manifests repo and select it by name.
-          cp "$GITHUB_WORKSPACE/asb-src/src/DSP_AIDL/manifest/asb_aidl_min.xml" \
-             .repo/manifests/asb_aidl_min.xml
-          repo init -m asb_aidl_min.xml
-          echo "=== active manifest ==="
-          repo manifest | head -40
+          echo "=== manifest ready ==="
 
-      - name: Sync minimal tree
+      - name: Sync AOSP tree
         working-directory: aosp
         run: |
-          # -c: current branch only, --no-tags/--no-clone-bundle: less data, -j4: modest
-          # parallelism to stay under the runner's memory + disk pressure.
-          repo sync -c --no-tags --no-clone-bundle --optimized-fetch \
-                    --fail-fast -j4 || repo sync -c --no-tags --no-clone-bundle -j2
+          # Sync the whole (shallow, partial) manifest. This is bigger than the minimal set
+          # but it is the only reliable way to get every soong bootstrap dependency without
+          # playing whack-a-mole. Retry once with lower parallelism on transient failures.
+          repo sync -c --no-tags --no-clone-bundle --optimized-fetch --fail-fast -j"$(nproc)" \
+            || repo sync -c --no-tags --no-clone-bundle -j4 \
+            || repo sync -c --no-tags --no-clone-bundle -j2
           echo "Tree size:"; du -sh . 2>/dev/null || true
           df -h /
-          # Fail early with a clear message if the essential build projects are missing,
-          # instead of a confusing "envsetup.sh not found" three steps later.
-          echo "=== key projects present? ==="
-          for p in build/make build/soong build/blueprint prebuilts/clang/host/linux-x86 \
-                   hardware/interfaces frameworks/av system/libfmq; do
-            if [ -d "$p" ]; then echo "  OK   $p"; else echo "  MISS $p"; fi
-          done
           test -f build/make/envsetup.sh \
-            || { echo "::error::build/make did not sync (no envsetup.sh). Check the manifest project list."; exit 1; }
+            || { echo "::error::build/make missing after full sync"; exit 1; }
 
       - name: Stage the ASB module into the tree
         working-directory: aosp
