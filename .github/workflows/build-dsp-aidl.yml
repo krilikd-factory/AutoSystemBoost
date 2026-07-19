@@ -101,6 +101,19 @@ jobs:
                     -b "${{ github.event.inputs.aosp_tag }}" \
                     --depth=1 --partial-clone --clone-filter=blob:limit=10M \
                     --groups=default,-cts,-vts,-vts10,-darwin,-mips
+          # Force-include the build projects that define the release configs. build/release
+          # holds build/release/aconfig/*, where trunk_stable/trunk_staging live; if the
+          # groups filter or manifest omits it, lunch panics with "Missing config
+          # trunk_stable" (which is exactly what happened). A local manifest guarantees
+          # these are synced regardless of group tags.
+          mkdir -p .repo/local_manifests
+          {
+            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
+            printf '%s\n' '<manifest>'
+            printf '%s\n' '  <project path="build/release" name="platform/build/release" groups="pdk" />'
+            printf '%s\n' '</manifest>'
+          } > .repo/local_manifests/asb_build_force.xml
+          echo "=== forced build/release into sync set ==="
           echo "=== manifest ready ==="
 
       - name: Sync AOSP tree
@@ -125,6 +138,14 @@ jobs:
             prebuilts/misc/darwin-x86 prebuilts/misc/windows-x86 2>/dev/null || true
           echo "Tree size after prune:"; du -sh . 2>/dev/null || true
           df -h /
+          # Confirm the release configs are present; list them so the build step (and we)
+          # can see which release names actually exist on this branch.
+          if [ -d build/release/aconfig ]; then
+            echo "=== available release configs ==="
+            ls build/release/aconfig 2>/dev/null | head -20 || true
+          else
+            echo "::warning::build/release/aconfig not found - lunch may fail on release config"
+          fi
 
       - name: Stage the ASB module into the tree
         working-directory: aosp
@@ -152,20 +173,26 @@ jobs:
           else
             echo "::error::envsetup.sh not found - build/make did not sync"; exit 1
           fi
-          # Try the requested lunch combo, then fall back to known-good ones for a release
-          # branch. trunk_staging exists only on main/trunk; release branches use
-          # trunk_stable, and the plain aosp_arm64 combo works too. Stopping at the first
-          # that succeeds avoids another 30-minute round trip over a combo-name mismatch.
+          # Pick a release config that actually exists on this branch instead of guessing.
+          # build/release/aconfig/<name>/ dirs ARE the valid release names (trunk_staging,
+          # trunk_stable, ap*, etc). Prefer trunk_staging (most permissive for a from-source
+          # build), then trunk_stable, then whatever is first.
+          RELEASES="$(ls build/release/aconfig 2>/dev/null || true)"
+          echo "release configs found: ${RELEASES:-<none>}"
+          REL=""
+          for cand in trunk_staging trunk_stable next; do
+            echo "$RELEASES" | grep -qx "$cand" && { REL="$cand"; break; }
+          done
+          [ -n "$REL" ] || REL="$(echo "$RELEASES" | grep -E '^(trunk|ap|next)' | head -1)"
+          [ -n "$REL" ] || REL="$(echo "$RELEASES" | head -1)"
+          echo "using release: ${REL:-<unknown>}"
           _lunched=0
-          for combo in \
-              "${{ github.event.inputs.lunch_target }}" \
-              "aosp_cf_arm64_only_phone-trunk_stable-userdebug" \
-              "aosp_arm64-trunk_stable-userdebug" \
-              "aosp_arm64-userdebug"; do
+          for prod in aosp_cf_arm64_only_phone aosp_arm64 aosp_cf_arm64_phone; do
+            combo="${prod}-${REL}-userdebug"
             echo "--- trying lunch $combo ---"
             if lunch "$combo"; then _lunched=1; echo "lunch OK: $combo"; break; fi
           done
-          [ "$_lunched" = "1" ] || { echo "::error::no lunch combo worked on this tree"; exit 1; }
+          [ "$_lunched" = "1" ] || { echo "::error::no lunch combo worked (release=$REL)"; exit 1; }
           # arm64 (primary). Building the module target builds the 64-bit variant.
           m libasbdsp_aidl
           # arm (secondary ABI) if the lunch target has a 2nd arch; ignore if it doesn't.
