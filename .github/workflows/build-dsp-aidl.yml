@@ -304,13 +304,36 @@ jobs:
             rc=${PIPESTATUS[0]}
             set -e
             if [ "$rc" = "0" ]; then build_ok=1; break; fi
-            # Pull the offending Android.bp path from the error line, e.g.
+
+            # Case A: error names an Android.bp path directly, e.g.
             #   error: path/to/Android.bp:NN:1: module "..." ...
             badbp="$(grep -oE '[A-Za-z0-9_./-]+/Android\.bp:[0-9]+' /tmp/asb_build.log \
                        | head -1 | sed 's/:.*//')"
-            if [ -n "$badbp" ] && [ -f "$badbp" ] && [ "${badbp#*/Android.bp}" != "$badbp" ]; then
+
+            # Case B: a GenerateBuildActions panic that names only the MODULE, no path, e.g.
+            #   internal error: panic in GenerateBuildActions for module "microdroid_kernel_16k_signed"
+            # Find the Android.bp that DEFINES that module and neutralize it. This is the
+            # case the previous run could not heal (microdroid_kernel_16k_signed).
+            if [ -z "$badbp" ]; then
+              badmod="$(grep -oE 'GenerateBuildActions for module "[^"]+"' /tmp/asb_build.log \
+                         | head -1 | sed 's/.*"\(.*\)"/\1/')"
+              if [ -n "$badmod" ]; then
+                echo "auto-heal: panic names module '$badmod' (no path) - locating its Android.bp"
+                badbp="$(grep -rlE "name:[[:space:]]*\"${badmod}\"" \
+                           --include='Android.bp' . 2>/dev/null \
+                           | grep -v '^\./\.repo/' | head -1)"
+                # Fallback: some modules are defined via a macro/loop, so the literal
+                # name: "X" is not present. Grep the name as a plain substring instead.
+                if [ -z "$badbp" ]; then
+                  badbp="$(grep -rl "$badmod" --include='Android.bp' . 2>/dev/null \
+                             | grep -v '^\./\.repo/' | head -1)"
+                fi
+              fi
+            fi
+
+            if [ -n "$badbp" ] && [ -f "$badbp" ] && [ "${badbp#*Android.bp}" != "$badbp" ]; then
               case "$badbp" in
-                */DSP_AIDL/*|vendor/asb/*)
+                */DSP_AIDL/*|*vendor/asb/*)
                   echo "::error::the failing Android.bp is OUR module ($badbp) - real error, stopping"
                   break ;;
               esac
@@ -319,6 +342,8 @@ jobs:
               continue
             fi
             echo "::error::build failed and no unrelated Android.bp could be auto-neutralized"
+            echo "--- last 40 lines of build log for diagnosis ---"
+            tail -40 /tmp/asb_build.log || true
             break
           done
           [ "$build_ok" = "1" ] || { echo "::error::build did not succeed after auto-heal attempts"; exit 1; }
