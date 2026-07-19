@@ -103,16 +103,16 @@ jobs:
           # like kernel-config-soong-rules (in kernel/configs), so an over-filtered tree
           # breaks bootstrap on "undefined module". Keeping the filter narrow keeps those
           # referenced projects present.
-          # Groups: repo --groups=X syncs only projects tagged X (or untagged). Excluding
-          # broadly drops projects the soong bootstrap references (kernel/configs ->
-          # kernel-config-soong-rules), so instead of a deny-list we INCLUDE the groups that
-          # carry build-relevant projects and only subtract the huge standalone test suites.
-          # If a referenced project is still missing, add its group here (the bootstrap
-          # error names the module; cs.android.com maps it to a project + group).
+          # NOTE: no --clone-filter=blob:limit here. With the blob limit, some referenced
+          # projects (e.g. kernel/configs) synced as trees WITHOUT their Android.bp/blobs,
+          # so the soong bootstrap still saw "undefined module kernel-config-soong-rules"
+          # even under --groups=all. Fetching full blobs (still --depth=1, shallow history)
+          # guarantees every Android.bp is present. The tree grows some but disk had ~32 GB
+          # free, and the prune step below reclaims more.
           repo init -u https://android.googlesource.com/platform/manifest \
                     -b "${{ github.event.inputs.aosp_tag }}" \
-                    --depth=1 --partial-clone --clone-filter=blob:limit=10M \
-                    --groups=all,-cts,-vts,-vts10,-darwin,-device,-pdk-fs
+                    --depth=1 \
+                    --groups=all,-cts,-vts,-vts10,-darwin
           echo "=== manifest ready ==="
 
       - name: Sync AOSP tree
@@ -125,16 +125,29 @@ jobs:
           df -h /
           test -f build/make/envsetup.sh \
             || { echo "::error::build/make missing after sync"; exit 1; }
-          # Light prune of other-OS host toolchains only (darwin/windows) - never needed on
-          # a Linux runner. The groups filter already kept the tree small (~18 GB, 100+ GB
-          # free), so we do NOT touch target dirs here: an over-aggressive prune last time
-          # risked removing things soong needs. Keep it minimal and safe.
           echo "=== pruning other-OS toolchains ==="
           sudo rm -rf \
             prebuilts/clang/host/darwin-x86 prebuilts/clang/host/windows-x86 \
             prebuilts/build-tools/darwin-x86 prebuilts/go/darwin-x86 \
             prebuilts/jdk/jdk*/darwin-x86 prebuilts/jdk/jdk*/windows-x86 \
             prebuilts/misc/darwin-x86 prebuilts/misc/windows-x86 2>/dev/null || true
+          # Reclaim big space by dropping git history/objects: the working tree is checked
+          # out, and a one-shot build never needs .git. On a full-blob shallow sync this
+          # frees tens of GB, which keeps out/ from running out of space.
+          echo "=== stripping .git to reclaim space ==="
+          du -sh .repo/project-objects .repo/projects 2>/dev/null | head -3 || true
+          find . -path ./.repo -prune -o -type d -name '.git' -print 2>/dev/null | while read -r g; do
+            rm -rf "$g" 2>/dev/null || true
+          done
+          # .repo holds the real git objects for a repo checkout; after sync we can drop the
+          # large pack objects too (we will not sync again in this job).
+          rm -rf .repo/project-objects .repo/projects .repo/repo .repo/manifests.git 2>/dev/null || true
+          # Verify the previously-missing module's project actually has its Android.bp now.
+          if grep -rql "kernel-config-soong-rules" kernel/configs 2>/dev/null; then
+            echo "OK: kernel-config-soong-rules definition present"
+          else
+            echo "::warning::kernel-config-soong-rules still not found in kernel/configs"
+          fi
           echo "Tree size after prune:"; du -sh . 2>/dev/null || true
           df -h /
           # Confirm the release configs are present; list them so the build step (and we)
