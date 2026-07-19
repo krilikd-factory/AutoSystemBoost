@@ -97,14 +97,28 @@ jobs:
           # pdk silently drops the build system (the "build/make missing" failure). The
           # previous full sync was 120 GB; dropping just cts/vts brought it to ~18 GB with
           # 108 GB free, so disk is no longer the constraint and we keep build/make.
+          # Groups filter: only exclude the big STANDALONE test suites (cts/vts) and
+          # other-OS host tools (darwin/mips). Do NOT exclude broadly - the soong bootstrap
+          # parses every Android.bp in the tree, and hardware/interfaces references modules
+          # like kernel-config-soong-rules (in kernel/configs), so an over-filtered tree
+          # breaks bootstrap on "undefined module". Keeping the filter narrow keeps those
+          # referenced projects present.
           repo init -u https://android.googlesource.com/platform/manifest \
                     -b "${{ github.event.inputs.aosp_tag }}" \
                     --depth=1 --partial-clone --clone-filter=blob:limit=10M \
-                    --groups=default,-cts,-vts,-vts10,-darwin,-mips
-          # NOTE: do NOT force build/release via a local manifest - it is already in the
-          # default manifest, and adding it again makes repo fail with "duplicate path
-          # build/release". The lunch step below auto-detects the actual release config name
-          # from build/release/aconfig/, which is the real fix for the trunk_stable panic.
+                    --groups=default,-cts,-vts,-vts10,-darwin
+          # kernel/configs provides kernel-config-soong-rules, which
+          # hardware/interfaces/compatibility_matrices references during soong bootstrap.
+          # It is not in the filtered default set, so add it explicitly. (Only projects the
+          # filter dropped go here - build/release is already present, so it is NOT listed,
+          # to avoid the duplicate-path error.)
+          mkdir -p .repo/local_manifests
+          {
+            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
+            printf '%s\n' '<manifest>'
+            printf '%s\n' '  <project path="kernel/configs" name="kernel/configs" groups="pdk" revision="refs/heads/android16-release" />'
+            printf '%s\n' '</manifest>'
+          } > .repo/local_manifests/asb_extra.xml
           echo "=== manifest ready ==="
 
       - name: Sync AOSP tree
