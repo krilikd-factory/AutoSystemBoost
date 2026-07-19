@@ -101,19 +101,10 @@ jobs:
                     -b "${{ github.event.inputs.aosp_tag }}" \
                     --depth=1 --partial-clone --clone-filter=blob:limit=10M \
                     --groups=default,-cts,-vts,-vts10,-darwin,-mips
-          # Force-include the build projects that define the release configs. build/release
-          # holds build/release/aconfig/*, where trunk_stable/trunk_staging live; if the
-          # groups filter or manifest omits it, lunch panics with "Missing config
-          # trunk_stable" (which is exactly what happened). A local manifest guarantees
-          # these are synced regardless of group tags.
-          mkdir -p .repo/local_manifests
-          {
-            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
-            printf '%s\n' '<manifest>'
-            printf '%s\n' '  <project path="build/release" name="platform/build/release" groups="pdk" />'
-            printf '%s\n' '</manifest>'
-          } > .repo/local_manifests/asb_build_force.xml
-          echo "=== forced build/release into sync set ==="
+          # NOTE: do NOT force build/release via a local manifest - it is already in the
+          # default manifest, and adding it again makes repo fail with "duplicate path
+          # build/release". The lunch step below auto-detects the actual release config name
+          # from build/release/aconfig/, which is the real fix for the trunk_stable panic.
           echo "=== manifest ready ==="
 
       - name: Sync AOSP tree
@@ -178,6 +169,14 @@ jobs:
           # trunk_stable, ap*, etc). Prefer trunk_staging (most permissive for a from-source
           # build), then trunk_stable, then whatever is first.
           RELEASES="$(ls build/release/aconfig 2>/dev/null || true)"
+          if [ -z "$RELEASES" ]; then
+            # The blob:limit partial-clone filter can leave build/release without its
+            # aconfig files. Force a full fetch of just that project, then re-list.
+            echo "release configs empty - refetching build/release in full"
+            ( cd build/release && git fetch --refetch --filter=blob:none origin 2>/dev/null \
+                && git checkout -f HEAD 2>/dev/null ) || true
+            RELEASES="$(ls build/release/aconfig 2>/dev/null || true)"
+          fi
           echo "release configs found: ${RELEASES:-<none>}"
           REL=""
           for cand in trunk_staging trunk_stable next; do
