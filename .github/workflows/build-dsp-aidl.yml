@@ -193,6 +193,17 @@ jobs:
           # product_packages.mk, so deleting it broke product config. The groups filter at
           # init already keeps trusty/apps/etc out at the source; nothing to prune here.
           echo "=== (no subtree deletion - groups filter handles exclusions) ==="
+          # A couple of trusty test-VM modules (trusty_test_vm_signed_bin,
+          # trusty_test_vm_os_signed_bin) survive the -trusty group filter (they live outside
+          # the trusty group) and panic during GenerateBuildActions ("rule_builder paths
+          # cannot be nil") because a dep they need was filtered out. They are test VMs,
+          # irrelevant to a vendor audio lib, so empty whatever Android.bp defines them.
+          grep -rl "trusty_test_vm_signed_bin\|trusty_test_vm_os_signed_bin\|trusty_test_vm" \
+            --include='Android.bp' . 2>/dev/null | while read -r f; do
+            case "$f" in ./.repo/*) continue ;; esac
+            echo "emptying trusty-test-vm bp: $f"
+            printf '// emptied by ASB CI: unrelated trusty test VM\n' > "$f"
+          done
           # Confirm the release configs are present; list them so the build step (and we)
           # can see which release names actually exist on this branch.
           if [ -d build/release/aconfig ]; then
