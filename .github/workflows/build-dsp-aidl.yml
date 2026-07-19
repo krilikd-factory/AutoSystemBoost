@@ -187,19 +187,12 @@ jobs:
             [ -f "$bp" ] && grep -q "kernel-config" "$bp" 2>/dev/null \
               && printf '// emptied by ASB CI\n' > "$bp" || true
           done
-          # Remove whole subtrees that are irrelevant to a vendor audio library but whose
-          # Android.bp files carry unmet deps that block ninja generation (e.g. trusty TEE
-          # -> trusty_dirgroup_external_python_six). Deleting the dir removes its .bp from
-          # the parse set entirely. Our module depends on none of these. Add a dir here if a
-          # later "missing dependency"/"undefined module" names something under it.
-          for junk in \
-              trusty \
-              external/rust \
-              packages/modules/Virtualization \
-              vendor/google/tools \
-              tools/security ; do
-            if [ -d "$junk" ]; then echo "removing unrelated subtree: $junk"; rm -rf "$junk"; fi
-          done
+          # Do NOT delete subtrees here. An earlier version removed
+          # packages/modules/Virtualization and external/rust, but the cuttlefish product
+          # (device/google/cuttlefish/.../aosp_cf.mk) *includes* Virtualization's
+          # product_packages.mk, so deleting it broke product config. The groups filter at
+          # init already keeps trusty/apps/etc out at the source; nothing to prune here.
+          echo "=== (no subtree deletion - groups filter handles exclusions) ==="
           # Confirm the release configs are present; list them so the build step (and we)
           # can see which release names actually exist on this branch.
           if [ -d build/release/aconfig ]; then
@@ -257,7 +250,13 @@ jobs:
           [ -n "$REL" ] || REL="$(echo "$RELEASES" | head -1)"
           echo "using release: ${REL:-<unknown>}"
           _lunched=0
-          for prod in aosp_cf_arm64_only_phone aosp_arm64 aosp_cf_arm64_phone; do
+          # Prefer the BARE aosp_arm64 product first. It is defined in
+          # build/make/target/product and pulls far fewer deps than the cuttlefish (aosp_cf_*)
+          # products, which reference device/google/cuttlefish + packages/modules/Virtualization
+          # and a long device dependency chain. For building one vendor cc_library we do not
+          # need a full device product, so the leaner product is both faster and less likely
+          # to trip over an unmet product-config include.
+          for prod in aosp_arm64 aosp_cf_arm64_only_phone aosp_cf_arm64_phone; do
             combo="${prod}-${REL}-userdebug"
             echo "--- trying lunch $combo ---"
             if lunch "$combo"; then _lunched=1; echo "lunch OK: $combo"; break; fi
