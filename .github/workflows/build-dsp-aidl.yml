@@ -103,16 +103,18 @@ jobs:
           # like kernel-config-soong-rules (in kernel/configs), so an over-filtered tree
           # breaks bootstrap on "undefined module". Keeping the filter narrow keeps those
           # referenced projects present.
-          # NOTE: no --clone-filter=blob:limit here. With the blob limit, some referenced
-          # projects (e.g. kernel/configs) synced as trees WITHOUT their Android.bp/blobs,
-          # so the soong bootstrap still saw "undefined module kernel-config-soong-rules"
-          # even under --groups=all. Fetching full blobs (still --depth=1, shallow history)
-          # guarantees every Android.bp is present. The tree grows some but disk had ~32 GB
-          # free, and the prune step below reclaims more.
+          # No --clone-filter=blob:limit: with it, referenced projects (kernel/configs)
+          # synced without their Android.bp, so soong still saw "undefined module". Full
+          # blobs (still --depth=1) guarantee every Android.bp is present.
+          # Groups: --groups=all pulled EVERY subtree (trusty, apps, wear, rust...), and each
+          # one whose Android.bp had an unmet dep failed ninja generation one at a time. So
+          # exclude the big unrelated subtrees at the source. Keep kernel (for
+          # kernel-config-soong-rules) and device (cuttlefish product). If a later "missing
+          # dependency" still names a subtree, add -<group> here or rm -rf it in prune.
           repo init -u https://android.googlesource.com/platform/manifest \
                     -b "${{ github.event.inputs.aosp_tag }}" \
                     --depth=1 \
-                    --groups=all,-cts,-vts,-vts10,-darwin
+                    --groups=default,kernel,device,-cts,-vts,-vts10,-darwin,-apps,-trusty
           echo "=== manifest ready ==="
 
       - name: Sync AOSP tree
@@ -184,6 +186,19 @@ jobs:
           for bp in hardware/interfaces/compatibility_matrices/build/Android.bp; do
             [ -f "$bp" ] && grep -q "kernel-config" "$bp" 2>/dev/null \
               && printf '// emptied by ASB CI\n' > "$bp" || true
+          done
+          # Remove whole subtrees that are irrelevant to a vendor audio library but whose
+          # Android.bp files carry unmet deps that block ninja generation (e.g. trusty TEE
+          # -> trusty_dirgroup_external_python_six). Deleting the dir removes its .bp from
+          # the parse set entirely. Our module depends on none of these. Add a dir here if a
+          # later "missing dependency"/"undefined module" names something under it.
+          for junk in \
+              trusty \
+              external/rust \
+              packages/modules/Virtualization \
+              vendor/google/tools \
+              tools/security ; do
+            if [ -d "$junk" ]; then echo "removing unrelated subtree: $junk"; rm -rf "$junk"; fi
           done
           # Confirm the release configs are present; list them so the build step (and we)
           # can see which release names actually exist on this branch.
