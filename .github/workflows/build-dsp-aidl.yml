@@ -212,12 +212,32 @@ jobs:
                 vendor/asb/libasbdsp_aidl/
           ls -la vendor/asb/libasbdsp_aidl/
 
+      - name: Add swap (avoid OOM during ninja generation)
+        run: |
+          # The soong "generating ninja" phase was OOM-killed ("signal: killed") on the
+          # 16 GB runner. Add a big swapfile so peak memory spills to disk (which we have
+          # plenty of) instead of the kernel killing soong. Slower than RAM, but it finishes.
+          sudo swapoff -a || true
+          sudo fallocate -l 24G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=24576
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          sudo sysctl vm.swappiness=100 || true
+          echo "=== memory + swap ==="; free -h
+
       - name: Build libasbdsp_aidl (arm64 + arm)
         working-directory: aosp
         run: |
           set -e
           export ALLOW_MISSING_DEPENDENCIES=true
           export BUILD_BROKEN_DISABLE_BAZEL=true
+          # Cap parallelism to reduce peak memory. The ninja-generation OOM is driven by how
+          # many soong/ninja workers run at once; fewer workers = lower peak RAM. Combined
+          # with the swapfile this keeps the analyze phase under the limit. 2 is safe on a
+          # 4-core/16GB runner; the build of a single lib is not parallelism-bound anyway.
+          export SOONG_NINJA_ARGS="-j2"
+          export NINJA_ARGS="-j2"
+          export SOONG_UI_NINJA_ARGS="-j2"
           # envsetup.sh physically lives in build/make/; AOSP's default.xml normally creates
           # a build/envsetup.sh linkfile to it. Source whichever path exists so a missing
           # linkfile does not break the build.
