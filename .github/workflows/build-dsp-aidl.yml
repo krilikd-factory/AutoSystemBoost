@@ -150,6 +150,29 @@ jobs:
           fi
           echo "Tree size after prune:"; du -sh . 2>/dev/null || true
           df -h /
+          # The soong bootstrap parses EVERY Android.bp and fails if any references an
+          # undefined module - even one irrelevant to our vendor lib. On this branch
+          # hardware/interfaces/compatibility_matrices/build/Android.bp references
+          # kernel-config-soong-rules, which is not present, and that one file blocks the
+          # whole bootstrap. It builds VINTF compatibility matrices, which a single
+          # cc_library_shared does not need, so neutralize just that file (and the kernel
+          # config rules include) so the tree parses. This is surgical: we remove build
+          # rules we do not use, not anything our module depends on.
+          for bp in \
+            hardware/interfaces/compatibility_matrices/build/Android.bp \
+            hardware/interfaces/compatibility_matrices/Android.bp \
+            hardware/interfaces/compatibility_matrices/Android.mk ; do
+            if [ -f "$bp" ]; then
+              echo "neutralizing $bp"
+              printf '// emptied by ASB CI: unrelated VINTF matrix rules blocked bootstrap\n' > "$bp"
+            fi
+          done
+          # Also drop any Android.bp that defines vintf matrices referencing kernel configs.
+          grep -rl "kernel-config-soong-rules\|kernel_config_data" \
+            hardware/interfaces 2>/dev/null | while read -r f; do
+            echo "emptying $f (references kernel-config rules)"
+            printf '// emptied by ASB CI\n' > "$f"
+          done
           # Confirm the release configs are present; list them so the build step (and we)
           # can see which release names actually exist on this branch.
           if [ -d build/release/aconfig ]; then
