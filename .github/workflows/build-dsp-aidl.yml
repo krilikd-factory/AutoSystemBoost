@@ -84,18 +84,19 @@ jobs:
       - name: Init minimal AOSP tree
         run: |
           mkdir -p aosp && cd aosp
-          # Init against the platform manifest but immediately override it with our tiny
-          # local manifest so repo only knows about the projects we actually need.
+          # Init the manifest repo, then point repo at OUR minimal manifest with `repo init
+          # -m`. Earlier this blanked out default.xml instead, which also removed the real
+          # build/make project and its `build/envsetup.sh` linkfile - so envsetup.sh was
+          # missing. Using -m keeps repo's normal handling of our (self-contained) manifest.
           repo init -u https://android.googlesource.com/platform/manifest \
                     -b "${{ github.event.inputs.aosp_tag }}" \
                     --depth=1 --partial-clone --clone-filter=blob:limit=10M
-          mkdir -p .repo/local_manifests
-          # Blank out the default project set, keep only ours.
+          # Drop our manifest INTO the manifests repo and select it by name.
           cp "$GITHUB_WORKSPACE/asb-src/src/DSP_AIDL/manifest/asb_aidl_min.xml" \
-             .repo/local_manifests/asb_aidl_min.xml
-          # Remove the default manifest's projects so only the local manifest's remain.
-          printf '<?xml version="1.0" encoding="UTF-8"?>\n<manifest></manifest>\n' \
-             > .repo/manifests/default.xml || true
+             .repo/manifests/asb_aidl_min.xml
+          repo init -m asb_aidl_min.xml
+          echo "=== active manifest ==="
+          repo manifest | head -40
 
       - name: Sync minimal tree
         working-directory: aosp
@@ -106,6 +107,15 @@ jobs:
                     --fail-fast -j4 || repo sync -c --no-tags --no-clone-bundle -j2
           echo "Tree size:"; du -sh . 2>/dev/null || true
           df -h /
+          # Fail early with a clear message if the essential build projects are missing,
+          # instead of a confusing "envsetup.sh not found" three steps later.
+          echo "=== key projects present? ==="
+          for p in build/make build/soong build/blueprint prebuilts/clang/host/linux-x86 \
+                   hardware/interfaces frameworks/av system/libfmq; do
+            if [ -d "$p" ]; then echo "  OK   $p"; else echo "  MISS $p"; fi
+          done
+          test -f build/make/envsetup.sh \
+            || { echo "::error::build/make did not sync (no envsetup.sh). Check the manifest project list."; exit 1; }
 
       - name: Stage the ASB module into the tree
         working-directory: aosp
@@ -123,7 +133,16 @@ jobs:
           set -e
           export ALLOW_MISSING_DEPENDENCIES=true
           export BUILD_BROKEN_DISABLE_BAZEL=true
-          source build/envsetup.sh
+          # envsetup.sh physically lives in build/make/; AOSP's default.xml normally creates
+          # a build/envsetup.sh linkfile to it. Source whichever path exists so a missing
+          # linkfile does not break the build.
+          if [ -f build/envsetup.sh ]; then
+            source build/envsetup.sh
+          elif [ -f build/make/envsetup.sh ]; then
+            source build/make/envsetup.sh
+          else
+            echo "::error::envsetup.sh not found - build/make did not sync"; exit 1
+          fi
           lunch "${{ github.event.inputs.lunch_target }}"
           # arm64 (primary). Building the module target builds the 64-bit variant.
           m libasbdsp_aidl
