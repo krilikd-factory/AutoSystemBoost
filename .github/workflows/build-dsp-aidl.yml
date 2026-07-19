@@ -193,16 +193,35 @@ jobs:
           # product_packages.mk, so deleting it broke product config. The groups filter at
           # init already keeps trusty/apps/etc out at the source; nothing to prune here.
           echo "=== (no subtree deletion - groups filter handles exclusions) ==="
-          # A couple of trusty test-VM modules (trusty_test_vm_signed_bin,
-          # trusty_test_vm_os_signed_bin) survive the -trusty group filter (they live outside
-          # the trusty group) and panic during GenerateBuildActions ("rule_builder paths
-          # cannot be nil") because a dep they need was filtered out. They are test VMs,
-          # irrelevant to a vendor audio lib, so empty whatever Android.bp defines them.
-          grep -rl "trusty_test_vm_signed_bin\|trusty_test_vm_os_signed_bin\|trusty_test_vm" \
-            --include='Android.bp' . 2>/dev/null | while read -r f; do
-            case "$f" in ./.repo/*) continue ;; esac
-            echo "emptying trusty-test-vm bp: $f"
-            printf '// emptied by ASB CI: unrelated trusty test VM\n' > "$f"
+          # Pre-emptively neutralize EVERY module we already know blocks soong analysis, so
+          # the first `m` pass gets through instead of the auto-heal loop re-bootstrapping
+          # soong (~12 min each) attempt after attempt. That loop worked but was so expensive
+          # that after several attempts + swap the runner was starved for CPU/memory and
+          # GitHub killed it ("hosted runner lost communication") at ~2h. Emptying these up
+          # front collapses the whole class into a single analysis pass.
+          #  - trusty test VMs (rule_builder paths cannot be nil)
+          #  - CrashRecovery APEX prebuilt (PRODUCT_APEX_SYSTEM_SERVER_JARS)
+          #  - microdroid / Virtualization signed bins (avbAddHashFooter nil path)
+          neutralize_bp_for() {
+            # $1 = grep pattern for module names; empty each matching Android.bp (not .repo, not ours)
+            grep -rlE "$1" --include='Android.bp' . 2>/dev/null | while read -r f; do
+              case "$f" in ./.repo/*|*/DSP_AIDL/*|*vendor/asb/*) continue ;; esac
+              echo "pre-neutralizing: $f"
+              printf '// emptied by ASB CI (pre-emptive): unrelated module blocks analysis\n' > "$f"
+            done
+          }
+          neutralize_bp_for 'trusty_test_vm_signed_bin|trusty_test_vm_os_signed_bin|trusty_test_vm'
+          neutralize_bp_for 'microdroid_kernel_16k_signed|microdroid_kernel|microdroid.*_signed_bin'
+          # CrashRecovery: the offending file is a prebuilt module_sdk Android.bp; empty it.
+          for f in prebuilts/module_sdk/CrashRecovery/current/Android.bp \
+                   prebuilts/module_sdk/CrashRecovery/*/Android.bp; do
+            [ -f "$f" ] && { echo "pre-neutralizing CrashRecovery: $f"; printf '// emptied by ASB CI\n' > "$f"; }
+          done
+          # Whole Virtualization build dir defines many signed-bin VM modules that panic with
+          # filtered deps and are irrelevant to a vendor audio lib; empty its build .bp files.
+          for f in packages/modules/Virtualization/build/microdroid/Android.bp \
+                   packages/modules/Virtualization/*/Android.bp; do
+            [ -f "$f" ] && { echo "pre-neutralizing Virtualization: $f"; printf '// emptied by ASB CI\n' > "$f"; }
           done
           # Confirm the release configs are present; list them so the build step (and we)
           # can see which release names actually exist on this branch.
@@ -297,7 +316,12 @@ jobs:
           # Android.bp path out of soong's error and neutralize it, then retry - all within
           # this single run. Capped so a genuine error in OUR module still fails fast.
           build_ok=0
-          for attempt in $(seq 1 15); do
+          # 6 attempts, not 15: each failed attempt re-bootstraps soong (~12 min), and the
+          # pre-emptive neutralization above already removed the known blockers, so few (ideally
+          # zero) heals should be needed. Capping at 6 keeps total time well under the runner's
+          # endurance - 15 attempts is what let a prior run reach 2h+ and get killed for
+          # starving the runner.
+          for attempt in $(seq 1 6); do
             echo "=== build attempt $attempt ==="
             set +e
             m -j"$MJOBS" libasbdsp_aidl 2>&1 | tee /tmp/asb_build.log
