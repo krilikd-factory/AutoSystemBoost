@@ -167,11 +167,23 @@ jobs:
               printf '// emptied by ASB CI: unrelated VINTF matrix rules blocked bootstrap\n' > "$bp"
             fi
           done
-          # Also drop any Android.bp that defines vintf matrices referencing kernel configs.
-          grep -rl "kernel-config-soong-rules\|kernel_config_data" \
-            hardware/interfaces 2>/dev/null | while read -r f; do
-            echo "emptying $f (references kernel-config rules)"
-            printf '// emptied by ASB CI\n' > "$f"
+          # Neutralize EVERY Android.bp that references the missing kernel-config rules,
+          # tree-wide (not just hardware/interfaces) so the bootstrap parses in one pass
+          # instead of failing on them one at a time. These build VINTF compatibility
+          # matrices, which a single vendor cc_library does not need. Limiting to compatibility
+          # matrix / vintf dirs keeps the surgery targeted.
+          for d in hardware/interfaces/compatibility_matrices \
+                   hardware/interfaces/vintf* system/libvintf kernel/configs; do
+            [ -d "$d" ] || continue
+            grep -rl "kernel-config-soong-rules\|kernel_config_data\|kernel-config-data" \
+              "$d" 2>/dev/null | while read -r f; do
+              case "$f" in *.bp|*.mk) echo "emptying $f"; printf '// emptied by ASB CI\n' > "$f" ;; esac
+            done
+          done
+          # If the matrix build file itself still references it, empty it outright.
+          for bp in hardware/interfaces/compatibility_matrices/build/Android.bp; do
+            [ -f "$bp" ] && grep -q "kernel-config" "$bp" 2>/dev/null \
+              && printf '// emptied by ASB CI\n' > "$bp" || true
           done
           # Confirm the release configs are present; list them so the build step (and we)
           # can see which release names actually exist on this branch.
