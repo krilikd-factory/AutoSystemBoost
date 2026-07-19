@@ -23,6 +23,21 @@
           review="https://android-review.googlesource.com/" />
   <default remote="aosp" revision="refs/heads/android16-release" sync-j="4" />
 
+  <!-- Go sources soong_ui itself is built from. Missing golang-protobuf breaks the very
+       first soong bootstrap step ("Failed to find deps of android/soong/cmd/soong_ui").
+       These are the standard Go deps soong links against. -->
+  <project path="external/golang-protobuf" name="platform/external/golang-protobuf" groups="pdk" />
+  <project path="external/go-cmp" name="platform/external/go-cmp" groups="pdk" />
+  <project path="external/starlark-go" name="platform/external/starlark-go" groups="pdk" />
+  <project path="prebuilts/bazel/linux-x86_64" name="platform/prebuilts/bazel/linux-x86_64"
+           clone-depth="1" groups="pdk" />
+  <project path="prebuilts/rust" name="platform/prebuilts/rust" clone-depth="1" groups="pdk" />
+  <project path="prebuilts/ninja/linux-x86" name="platform/prebuilts/ninja/linux-x86"
+           clone-depth="1" groups="pdk" />
+  <project path="prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8"
+           name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8"
+           clone-depth="1" groups="pdk" />
+
   <!-- Build system: soong, make glue, blueprint, bazel bootstrap. -->
   <project path="build/soong" name="platform/build/soong" groups="pdk,tradefed" />
   <project path="build/make" name="platform/build" groups="pdk" >
