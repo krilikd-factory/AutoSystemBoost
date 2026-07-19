@@ -103,22 +103,16 @@ jobs:
           # like kernel-config-soong-rules (in kernel/configs), so an over-filtered tree
           # breaks bootstrap on "undefined module". Keeping the filter narrow keeps those
           # referenced projects present.
+          # Groups: repo --groups=X syncs only projects tagged X (or untagged). Excluding
+          # broadly drops projects the soong bootstrap references (kernel/configs ->
+          # kernel-config-soong-rules), so instead of a deny-list we INCLUDE the groups that
+          # carry build-relevant projects and only subtract the huge standalone test suites.
+          # If a referenced project is still missing, add its group here (the bootstrap
+          # error names the module; cs.android.com maps it to a project + group).
           repo init -u https://android.googlesource.com/platform/manifest \
                     -b "${{ github.event.inputs.aosp_tag }}" \
                     --depth=1 --partial-clone --clone-filter=blob:limit=10M \
-                    --groups=default,-cts,-vts,-vts10,-darwin
-          # kernel/configs provides kernel-config-soong-rules, which
-          # hardware/interfaces/compatibility_matrices references during soong bootstrap.
-          # It is not in the filtered default set, so add it explicitly. (Only projects the
-          # filter dropped go here - build/release is already present, so it is NOT listed,
-          # to avoid the duplicate-path error.)
-          mkdir -p .repo/local_manifests
-          {
-            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
-            printf '%s\n' '<manifest>'
-            printf '%s\n' '  <project path="kernel/configs" name="kernel/configs" groups="pdk" revision="refs/heads/android16-release" />'
-            printf '%s\n' '</manifest>'
-          } > .repo/local_manifests/asb_extra.xml
+                    --groups=all,-cts,-vts,-vts10,-darwin,-device,-pdk-fs
           echo "=== manifest ready ==="
 
       - name: Sync AOSP tree
