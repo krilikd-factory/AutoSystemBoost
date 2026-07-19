@@ -27,7 +27,7 @@ on:
         required: true
       lunch_target:
         description: "lunch combo (arm64 primary; compile_multilib both gives arm too)"
-        default: "aosp_cf_arm64_only_phone-trunk_staging-userdebug"
+        default: "aosp_cf_arm64_only_phone-trunk_stable-userdebug"
         required: true
 
 permissions:
@@ -90,31 +90,42 @@ jobs:
       - name: Init AOSP tree (standard manifest, filtered)
         run: |
           mkdir -p aosp && cd aosp
-          # Use the STANDARD AOSP manifest (not a hand-picked project list). Earlier attempts
-          # with a minimal manifest failed one missing soong dep at a time
-          # (golang-protobuf, then the next, ...) because soong pulls dozens of transitive
-          # projects that are impossible to enumerate by hand. The runner has ~90 GB free and
-          # the tree is far smaller than that, so the reliable move is to sync the real
-          # manifest and just let repo/soong resolve everything. --depth=1 + partial clone
-          # keep it lean; we skip nothing soong needs.
+          # Standard manifest so soong resolves its own deps, but with a groups filter to
+          # drop what a single vendor-lib build never needs (CTS, VTS, device trees, docs,
+          # darwin/windows tools). A previous FULL sync hit 120 GB and left only 5.6 GB for
+          # out/ - not enough. The filter keeps every build/soong dependency while cutting
+          # the large unrelated trees.
           repo init -u https://android.googlesource.com/platform/manifest \
                     -b "${{ github.event.inputs.aosp_tag }}" \
-                    --depth=1 --partial-clone --clone-filter=blob:limit=10M
+                    --depth=1 --partial-clone --clone-filter=blob:limit=10M \
+                    --groups=default,-cts,-vts,-vts10,-tradefed,-pdk,-darwin,-mips,-notdefault
           echo "=== manifest ready ==="
 
       - name: Sync AOSP tree
         working-directory: aosp
         run: |
-          # Sync the whole (shallow, partial) manifest. This is bigger than the minimal set
-          # but it is the only reliable way to get every soong bootstrap dependency without
-          # playing whack-a-mole. Retry once with lower parallelism on transient failures.
           repo sync -c --no-tags --no-clone-bundle --optimized-fetch --fail-fast -j"$(nproc)" \
             || repo sync -c --no-tags --no-clone-bundle -j4 \
             || repo sync -c --no-tags --no-clone-bundle -j2
-          echo "Tree size:"; du -sh . 2>/dev/null || true
+          echo "Tree size after sync:"; du -sh . 2>/dev/null || true
           df -h /
           test -f build/make/envsetup.sh \
-            || { echo "::error::build/make missing after full sync"; exit 1; }
+            || { echo "::error::build/make missing after sync"; exit 1; }
+          # Reclaim more space before building: drop toolchains for host OSes we are not on,
+          # and the extra target-arch prebuilts this arm64 build does not use. These are the
+          # heaviest dirs and none are needed to build one arm/arm64 vendor library.
+          echo "=== pruning unused prebuilts ==="
+          sudo rm -rf \
+            prebuilts/clang/host/darwin-x86 prebuilts/clang/host/windows-x86 \
+            prebuilts/gcc/darwin prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32* \
+            prebuilts/go/darwin-x86 prebuilts/build-tools/darwin-x86 \
+            prebuilts/build-tools/darwin* prebuilts/jdk/jdk*/darwin* \
+            prebuilts/jdk/jdk*/windows* prebuilts/misc/darwin-x86 prebuilts/misc/windows-x86 \
+            prebuilts/vndk cts test vendor/google* developers device 2>/dev/null || true
+          # Drop the .git blobs we no longer need (source is checked out; history is not).
+          find . -type d -name '.git' -prune -exec du -sh {} + 2>/dev/null | sort -rh | head -5 || true
+          echo "Tree size after prune:"; du -sh . 2>/dev/null || true
+          df -h /
 
       - name: Stage the ASB module into the tree
         working-directory: aosp
@@ -142,7 +153,20 @@ jobs:
           else
             echo "::error::envsetup.sh not found - build/make did not sync"; exit 1
           fi
-          lunch "${{ github.event.inputs.lunch_target }}"
+          # Try the requested lunch combo, then fall back to known-good ones for a release
+          # branch. trunk_staging exists only on main/trunk; release branches use
+          # trunk_stable, and the plain aosp_arm64 combo works too. Stopping at the first
+          # that succeeds avoids another 30-minute round trip over a combo-name mismatch.
+          _lunched=0
+          for combo in \
+              "${{ github.event.inputs.lunch_target }}" \
+              "aosp_cf_arm64_only_phone-trunk_stable-userdebug" \
+              "aosp_arm64-trunk_stable-userdebug" \
+              "aosp_arm64-userdebug"; do
+            echo "--- trying lunch $combo ---"
+            if lunch "$combo"; then _lunched=1; echo "lunch OK: $combo"; break; fi
+          done
+          [ "$_lunched" = "1" ] || { echo "::error::no lunch combo worked on this tree"; exit 1; }
           # arm64 (primary). Building the module target builds the 64-bit variant.
           m libasbdsp_aidl
           # arm (secondary ABI) if the lunch target has a 2nd arch; ignore if it doesn't.
