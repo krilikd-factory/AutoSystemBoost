@@ -293,8 +293,38 @@ jobs:
             if lunch "$combo"; then _lunched=1; echo "lunch OK: $combo"; break; fi
           done
           [ "$_lunched" = "1" ] || { echo "::error::no lunch combo worked (release=$REL)"; exit 1; }
-          # arm64 (primary). Building the module target builds the 64-bit variant.
-          m libasbdsp_aidl
+          # Build with an auto-heal loop. soong analyzes the WHOLE tree before building our
+          # module, and unrelated modules (trusty test VMs, CrashRecovery APEX prebuilts,
+          # etc.) can fail analysis with product-config errors that have nothing to do with a
+          # vendor audio lib. Rather than fix them one-per-CI-run, parse the failing
+          # Android.bp path out of soong's error and neutralize it, then retry - all within
+          # this single run. Capped so a genuine error in OUR module still fails fast.
+          build_ok=0
+          for attempt in $(seq 1 15); do
+            echo "=== build attempt $attempt ==="
+            set +e
+            m libasbdsp_aidl 2>&1 | tee /tmp/asb_build.log
+            rc=${PIPESTATUS[0]}
+            set -e
+            if [ "$rc" = "0" ]; then build_ok=1; break; fi
+            # Pull the offending Android.bp path from the error line, e.g.
+            #   error: path/to/Android.bp:NN:1: module "..." ...
+            badbp="$(grep -oE '[A-Za-z0-9_./-]+/Android\.bp:[0-9]+' /tmp/asb_build.log \
+                       | head -1 | sed 's/:.*//')"
+            if [ -n "$badbp" ] && [ -f "$badbp" ] && [ "${badbp#*/Android.bp}" != "$badbp" ]; then
+              case "$badbp" in
+                */DSP_AIDL/*|vendor/asb/*)
+                  echo "::error::the failing Android.bp is OUR module ($badbp) - real error, stopping"
+                  break ;;
+              esac
+              echo "auto-heal: neutralizing unrelated $badbp"
+              printf '// emptied by ASB CI auto-heal: unrelated module blocked analysis\n' > "$badbp"
+              continue
+            fi
+            echo "::error::build failed and no unrelated Android.bp could be auto-neutralized"
+            break
+          done
+          [ "$build_ok" = "1" ] || { echo "::error::build did not succeed after auto-heal attempts"; exit 1; }
           # arm (secondary ABI) if the lunch target has a 2nd arch; ignore if it doesn't.
           m libasbdsp_aidl.vendor 2>/dev/null || true
           echo "=== produced .so files ==="
