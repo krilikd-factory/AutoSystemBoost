@@ -90,15 +90,17 @@ jobs:
       - name: Init AOSP tree (standard manifest, filtered)
         run: |
           mkdir -p aosp && cd aosp
-          # Standard manifest so soong resolves its own deps, but with a groups filter to
-          # drop what a single vendor-lib build never needs (CTS, VTS, device trees, docs,
-          # darwin/windows tools). A previous FULL sync hit 120 GB and left only 5.6 GB for
-          # out/ - not enough. The filter keeps every build/soong dependency while cutting
-          # the large unrelated trees.
+          # Standard manifest so soong resolves its own deps, with a CONSERVATIVE groups
+          # filter. Only drop things a single vendor-lib build never needs: the big test
+          # suites (cts/vts) and other-OS host tools (darwin/mips). Do NOT exclude -pdk or
+          # -notdefault: build/make itself is tagged groups="pdk,sysui-studio", so excluding
+          # pdk silently drops the build system (the "build/make missing" failure). The
+          # previous full sync was 120 GB; dropping just cts/vts brought it to ~18 GB with
+          # 108 GB free, so disk is no longer the constraint and we keep build/make.
           repo init -u https://android.googlesource.com/platform/manifest \
                     -b "${{ github.event.inputs.aosp_tag }}" \
                     --depth=1 --partial-clone --clone-filter=blob:limit=10M \
-                    --groups=default,-cts,-vts,-vts10,-tradefed,-pdk,-darwin,-mips,-notdefault
+                    --groups=default,-cts,-vts,-vts10,-darwin,-mips
           echo "=== manifest ready ==="
 
       - name: Sync AOSP tree
@@ -111,19 +113,16 @@ jobs:
           df -h /
           test -f build/make/envsetup.sh \
             || { echo "::error::build/make missing after sync"; exit 1; }
-          # Reclaim more space before building: drop toolchains for host OSes we are not on,
-          # and the extra target-arch prebuilts this arm64 build does not use. These are the
-          # heaviest dirs and none are needed to build one arm/arm64 vendor library.
-          echo "=== pruning unused prebuilts ==="
+          # Light prune of other-OS host toolchains only (darwin/windows) - never needed on
+          # a Linux runner. The groups filter already kept the tree small (~18 GB, 100+ GB
+          # free), so we do NOT touch target dirs here: an over-aggressive prune last time
+          # risked removing things soong needs. Keep it minimal and safe.
+          echo "=== pruning other-OS toolchains ==="
           sudo rm -rf \
             prebuilts/clang/host/darwin-x86 prebuilts/clang/host/windows-x86 \
-            prebuilts/gcc/darwin prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32* \
-            prebuilts/go/darwin-x86 prebuilts/build-tools/darwin-x86 \
-            prebuilts/build-tools/darwin* prebuilts/jdk/jdk*/darwin* \
-            prebuilts/jdk/jdk*/windows* prebuilts/misc/darwin-x86 prebuilts/misc/windows-x86 \
-            prebuilts/vndk cts test vendor/google* developers device 2>/dev/null || true
-          # Drop the .git blobs we no longer need (source is checked out; history is not).
-          find . -type d -name '.git' -prune -exec du -sh {} + 2>/dev/null | sort -rh | head -5 || true
+            prebuilts/build-tools/darwin-x86 prebuilts/go/darwin-x86 \
+            prebuilts/jdk/jdk*/darwin-x86 prebuilts/jdk/jdk*/windows-x86 \
+            prebuilts/misc/darwin-x86 prebuilts/misc/windows-x86 2>/dev/null || true
           echo "Tree size after prune:"; du -sh . 2>/dev/null || true
           df -h /
 
