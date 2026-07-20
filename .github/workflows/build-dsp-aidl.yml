@@ -321,71 +321,77 @@ jobs:
           # Android.bp path out of soong's error and neutralize it, then retry - all within
           # this single run. Capped so a genuine error in OUR module still fails fast.
           build_ok=0
-          # 6 attempts, not 15: each failed attempt re-bootstraps soong (~12 min), and the
-          # pre-emptive neutralization above already removed the known blockers, so few (ideally
-          # zero) heals should be needed. Capping at 6 keeps total time well under the runner's
-          # endurance - 15 attempts is what let a prior run reach 2h+ and get killed for
-          # starving the runner.
+          # We build via soong's ninja graph directly, NOT `m`. `m libasbdsp_aidl` runs the
+          # full kati/make product graph, which pulls in hundreds of unrelated modules (NFC,
+          # CTS, priv-app...) whose make-phase conflicts ("overriding commands", "cannot copy
+          # target") are endless and not tied to a single Android.bp we can neutralize. Soong
+          # emits out/soong/build.<product>.ninja describing our lib + its REAL deps; building
+          # that target with ninja skips the make graph entirely. We still keep an auto-heal
+          # loop for the soong-analysis phase (Android.bp panics), which runs before ninja.
           for attempt in $(seq 1 6); do
             echo "=== build attempt $attempt ==="
             set +e
-            m -j"$MJOBS" libasbdsp_aidl 2>&1 | tee /tmp/asb_build.log
+            # Phase 1: soong analysis only (generate ninja, skip kati make graph).
+            # --skip-config keeps product config we already have; --soong-only stops before
+            # kati so the NFC/CTS/priv-app make modules are never evaluated.
+            SOONG_ONLY=true m -j"$MJOBS" nothing 2>&1 | tee /tmp/asb_build.log
             rc=${PIPESTATUS[0]}
             set -e
-            if [ "$rc" = "0" ]; then build_ok=1; break; fi
-
-            # Case A: error names an Android.bp path directly, e.g.
-            #   error: path/to/Android.bp:NN:1: module "..." ...
-            badbp="$(grep -oE '[A-Za-z0-9_./-]+/Android\.bp:[0-9]+' /tmp/asb_build.log \
-                       | head -1 | sed 's/:.*//')"
-
-            # Case B: a GenerateBuildActions panic that names only the MODULE, no path, e.g.
-            #   internal error: panic in GenerateBuildActions for module "microdroid_kernel_16k_signed"
-            # Find the Android.bp that DEFINES that module and neutralize it. This is the
-            # case the previous run could not heal (microdroid_kernel_16k_signed).
-            if [ -z "$badbp" ]; then
-              badmod="$(grep -oE 'GenerateBuildActions for module "[^"]+"' /tmp/asb_build.log \
-                         | head -1 | sed 's/.*"\(.*\)"/\1/')"
-              # Case C: a kati make-phase error, e.g.
-              #   main.mk:1749: error: cannot copy target from multiple modules: ...
-              #     .../CtsBionicRootTestCases_intermediates/... and ..._32.meta_lic
-              # Extract the module name from the intermediates path.
-              if [ -z "$badmod" ]; then
-                badmod="$(grep -oE '[A-Za-z0-9_]+_intermediates' /tmp/asb_build.log \
+            if [ "$rc" != "0" ]; then
+              # soong-analysis failure: try to auto-heal an unrelated Android.bp (cases A/B/C).
+              badbp="$(grep -oE '[A-Za-z0-9_./-]+/Android\.bp:[0-9]+' /tmp/asb_build.log \
+                         | head -1 | sed 's/:.*//')"
+              if [ -z "$badbp" ]; then
+                badmod="$(grep -oE 'GenerateBuildActions for module "[^"]+"' /tmp/asb_build.log \
+                           | head -1 | sed 's/.*"\(.*\)"/\1/')"
+                [ -z "$badmod" ] && badmod="$(grep -oE '[A-Za-z0-9_]+_intermediates' /tmp/asb_build.log \
                            | head -1 | sed 's/_intermediates//')"
-              fi
-              if [ -n "$badmod" ]; then
-                echo "auto-heal: error names module '$badmod' (no path) - locating its Android.bp"
-                badbp="$(grep -rlE "name:[[:space:]]*\"${badmod}\"" \
-                           --include='Android.bp' . 2>/dev/null \
-                           | grep -v '^\./\.repo/' | head -1)"
-                # Fallback: some modules are defined via a macro/loop, so the literal
-                # name: "X" is not present. Grep the name as a plain substring instead.
-                if [ -z "$badbp" ]; then
-                  badbp="$(grep -rl "$badmod" --include='Android.bp' . 2>/dev/null \
+                if [ -n "$badmod" ]; then
+                  echo "auto-heal: error names module '$badmod' - locating its Android.bp"
+                  badbp="$(grep -rlE "name:[[:space:]]*\"${badmod}\"" --include='Android.bp' . 2>/dev/null \
+                             | grep -v '^\./\.repo/' | head -1)"
+                  [ -z "$badbp" ] && badbp="$(grep -rl "$badmod" --include='Android.bp' . 2>/dev/null \
                              | grep -v '^\./\.repo/' | head -1)"
                 fi
               fi
+              if [ -n "$badbp" ] && [ -f "$badbp" ] && [ "${badbp#*Android.bp}" != "$badbp" ]; then
+                case "$badbp" in
+                  */DSP_AIDL/*|*vendor/asb/*)
+                    echo "::error::failing Android.bp is OUR module ($badbp) - real error"; break ;;
+                esac
+                echo "auto-heal: neutralizing unrelated $badbp"
+                printf '// emptied by ASB CI auto-heal\n' > "$badbp"
+                continue
+              fi
+              echo "::error::soong analysis failed and nothing could be auto-neutralized"
+              tail -40 /tmp/asb_build.log || true
+              break
             fi
-
-            if [ -n "$badbp" ] && [ -f "$badbp" ] && [ "${badbp#*Android.bp}" != "$badbp" ]; then
-              case "$badbp" in
-                */DSP_AIDL/*|*vendor/asb/*)
-                  echo "::error::the failing Android.bp is OUR module ($badbp) - real error, stopping"
-                  break ;;
-              esac
-              echo "auto-heal: neutralizing unrelated $badbp"
-              printf '// emptied by ASB CI auto-heal: unrelated module blocked analysis\n' > "$badbp"
-              continue
+            # Phase 2: build ONLY our lib via ninja against the soong graph, bypassing kati.
+            NINJA="prebuilts/build-tools/linux-x86/bin/ninja"
+            NFILE="$(ls out/soong/build.*.ninja 2>/dev/null | head -1)"
+            echo "ninja file: ${NFILE:-<none>}"
+            if [ -z "$NFILE" ]; then echo "::error::no soong ninja file produced"; break; fi
+            # Find our module's .so target(s) in the ninja graph and build them directly.
+            SO_TARGETS="$("$NINJA" -f "$NFILE" -t targets all 2>/dev/null \
+                          | grep -oE '[^ ]*libasbdsp_aidl[^ :]*\.so' | sort -u)"
+            echo "targets: ${SO_TARGETS:-<none>}"
+            if [ -z "$SO_TARGETS" ]; then
+              echo "::error::libasbdsp_aidl not found in soong ninja graph - check Android.bp staged under vendor/asb"
+              grep -n "libasbdsp_aidl" "$NFILE" | head || true
+              break
             fi
-            echo "::error::build failed and no unrelated Android.bp could be auto-neutralized"
-            echo "--- last 40 lines of build log for diagnosis ---"
-            tail -40 /tmp/asb_build.log || true
+            set +e
+            # shellcheck disable=SC2086
+            "$NINJA" -j"$MJOBS" -f "$NFILE" $SO_TARGETS 2>&1 | tee /tmp/asb_ninja.log
+            nrc=${PIPESTATUS[0]}
+            set -e
+            if [ "$nrc" = "0" ]; then build_ok=1; break; fi
+            echo "::error::ninja build of our target failed (likely a real code error)"
+            tail -60 /tmp/asb_ninja.log || true
             break
           done
-          [ "$build_ok" = "1" ] || { echo "::error::build did not succeed after auto-heal attempts"; exit 1; }
-          # arm (secondary ABI) if the lunch target has a 2nd arch; ignore if it doesn't.
-          m -j"$MJOBS" libasbdsp_aidl.vendor 2>/dev/null || true
+          [ "$build_ok" = "1" ] || { echo "::error::build did not succeed"; exit 1; }
           echo "=== produced .so files ==="
           find out -name 'libasbdsp_aidl.so' -exec ls -la {} \;
 
