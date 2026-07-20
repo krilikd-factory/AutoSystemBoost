@@ -223,6 +223,11 @@ jobs:
                    packages/modules/Virtualization/*/Android.bp; do
             [ -f "$f" ] && { echo "pre-neutralizing Virtualization: $f"; printf '// emptied by ASB CI\n' > "$f"; }
           done
+          # CtsBionicRootTestCases (and siblings) hit a kati-phase error: "cannot copy target
+          # from multiple modules" because both the 64- and 32-bit variants emit the same
+          # meta_lic path. These CTS tests are irrelevant to a vendor audio lib but get pulled
+          # into the make graph. Empty their defining Android.bp so they drop out.
+          neutralize_bp_for 'CtsBionicRootTestCases|CtsBionic.*TestCases'
           # Confirm the release configs are present; list them so the build step (and we)
           # can see which release names actually exist on this branch.
           if [ -d build/release/aconfig ]; then
@@ -341,8 +346,16 @@ jobs:
             if [ -z "$badbp" ]; then
               badmod="$(grep -oE 'GenerateBuildActions for module "[^"]+"' /tmp/asb_build.log \
                          | head -1 | sed 's/.*"\(.*\)"/\1/')"
+              # Case C: a kati make-phase error, e.g.
+              #   main.mk:1749: error: cannot copy target from multiple modules: ...
+              #     .../CtsBionicRootTestCases_intermediates/... and ..._32.meta_lic
+              # Extract the module name from the intermediates path.
+              if [ -z "$badmod" ]; then
+                badmod="$(grep -oE '[A-Za-z0-9_]+_intermediates' /tmp/asb_build.log \
+                           | head -1 | sed 's/_intermediates//')"
+              fi
               if [ -n "$badmod" ]; then
-                echo "auto-heal: panic names module '$badmod' (no path) - locating its Android.bp"
+                echo "auto-heal: error names module '$badmod' (no path) - locating its Android.bp"
                 badbp="$(grep -rlE "name:[[:space:]]*\"${badmod}\"" \
                            --include='Android.bp' . 2>/dev/null \
                            | grep -v '^\./\.repo/' | head -1)"
