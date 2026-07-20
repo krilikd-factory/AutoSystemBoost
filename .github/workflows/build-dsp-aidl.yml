@@ -41,7 +41,13 @@ jobs:
     # the larger runner you create in org settings (Settings -> Actions -> Runners -> New
     # GitHub-hosted runner, 8-core Ubuntu). Override via an ASB_RUNNER_LABEL repo/org variable
     # if you name it differently.
-    runs-on: ${{ vars.ASB_RUNNER_LABEL || 'ubuntu-latest-8-cores' }}
+    # Larger runner via GitHub's BUILT-IN automatic larger-runner label, not a manually
+    # created runner. A hand-created runner ("ubuntu-latest-8-cores") sat Queued 20+ min and
+    # never picked up the job - a known larger-runner provisioning issue. GitHub auto-creates
+    # a "Default Larger Runners" group; jobs routed to the built-in ubuntu-22.04-8core label
+    # (8 vCPU / 32 GB RAM) are provisioned automatically without a UI-created runner. Override
+    # with an ASB_RUNNER_LABEL repo/org variable if your org uses a different label.
+    runs-on: ${{ vars.ASB_RUNNER_LABEL || 'ubuntu-22.04-8core' }}
     timeout-minutes: 180
 
     steps:
