@@ -253,7 +253,20 @@ jobs:
           # 16 GB runner. Add a big swapfile so peak memory spills to disk (which we have
           # plenty of) instead of the kernel killing soong. Slower than RAM, but it finishes.
           sudo swapoff -a || true
-          sudo fallocate -l 40G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=40960
+          # Size the swapfile to what actually fits: 40G did NOT fit (the AOSP tree already
+          # uses most of the disk) and filled it to 0 MB, failing the step before the build.
+          # 24G fit fine on earlier runs and was enough; the real OOM fix was collapsing the
+          # duplicate soong invocation, not a bigger swap. Cap at 24G but back off further if
+          # free space is tight, leaving headroom for out/.
+          AVAIL_GB=$(df --output=avail -BG / 2>/dev/null | tail -1 | tr -dc '0-9')
+          [ -z "$AVAIL_GB" ] && AVAIL_GB=0
+          SWAP_GB=24
+          # keep at least 15G free for out/ after the swapfile
+          if [ "$AVAIL_GB" -lt 40 ]; then SWAP_GB=$(( AVAIL_GB > 30 ? AVAIL_GB - 15 : 12 )); fi
+          [ "$SWAP_GB" -lt 8 ] && SWAP_GB=8
+          echo "avail=${AVAIL_GB}G -> swap=${SWAP_GB}G"
+          sudo fallocate -l "${SWAP_GB}G" /mnt/swapfile \
+            || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=$(( SWAP_GB * 1024 ))
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
           sudo swapon /mnt/swapfile
