@@ -35,7 +35,13 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Larger runner: the soong "generating ninja" phase loads the whole Android 16 blueprint
+    # graph into RAM and does not fit in the 16 GB standard runner (OOM-killed every run). An
+    # 8-core larger runner has 32 GB RAM, which clears that phase. The label below must match
+    # the larger runner you create in org settings (Settings -> Actions -> Runners -> New
+    # GitHub-hosted runner, 8-core Ubuntu). Override via an ASB_RUNNER_LABEL repo/org variable
+    # if you name it differently.
+    runs-on: ${{ vars.ASB_RUNNER_LABEL || 'ubuntu-latest-8-cores' }}
     timeout-minutes: 180
 
     steps:
@@ -247,23 +253,17 @@ jobs:
                 vendor/asb/libasbdsp_aidl/
           ls -la vendor/asb/libasbdsp_aidl/
 
-      - name: Add swap (avoid OOM during ninja generation)
+      - name: Add swap (small safety margin)
         run: |
-          # The soong "generating ninja" phase was OOM-killed ("signal: killed") on the
-          # 16 GB runner. Add a big swapfile so peak memory spills to disk (which we have
-          # plenty of) instead of the kernel killing soong. Slower than RAM, but it finishes.
+          # With 32 GB RAM the ninja-generation phase fits in memory, so the large swapfile
+          # (needed on the old 16 GB runner) is no longer required - a big disk-backed swap
+          # only slows things down when real RAM is available. Keep a small 8 GB margin in
+          # case a peak slightly exceeds RAM, sized to available disk so it never fills it.
           sudo swapoff -a || true
-          # Size the swapfile to what actually fits: 40G did NOT fit (the AOSP tree already
-          # uses most of the disk) and filled it to 0 MB, failing the step before the build.
-          # 24G fit fine on earlier runs and was enough; the real OOM fix was collapsing the
-          # duplicate soong invocation, not a bigger swap. Cap at 24G but back off further if
-          # free space is tight, leaving headroom for out/.
           AVAIL_GB=$(df --output=avail -BG / 2>/dev/null | tail -1 | tr -dc '0-9')
           [ -z "$AVAIL_GB" ] && AVAIL_GB=0
-          SWAP_GB=24
-          # keep at least 15G free for out/ after the swapfile
-          if [ "$AVAIL_GB" -lt 40 ]; then SWAP_GB=$(( AVAIL_GB > 30 ? AVAIL_GB - 15 : 12 )); fi
-          [ "$SWAP_GB" -lt 8 ] && SWAP_GB=8
+          SWAP_GB=8
+          [ "$AVAIL_GB" -lt 25 ] && SWAP_GB=4
           echo "avail=${AVAIL_GB}G -> swap=${SWAP_GB}G"
           sudo fallocate -l "${SWAP_GB}G" /mnt/swapfile \
             || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=$(( SWAP_GB * 1024 ))
@@ -279,10 +279,10 @@ jobs:
           set -e
           export ALLOW_MISSING_DEPENDENCIES=true
           export BUILD_BROKEN_DISABLE_BAZEL=true
-          # Limit parallelism to cut peak memory. Pass -j directly to `m` rather than via
-          # SOONG_UI_NINJA_ARGS: soong warns that args in SOONG_UI_NINJA_ARGS can make
-          # soong_build FAIL or INCORRECT, so we do NOT set that. `m -jN` is the safe knob.
-          MJOBS=2
+          # Use all cores: the 32 GB larger runner has the memory headroom that the old 16 GB
+          # runner lacked, so the -j2 cap (a memory workaround) is no longer needed and just
+          # wasted 6 idle cores. Full parallelism makes soong analysis + our build much faster.
+          MJOBS="$(nproc)"
           # envsetup.sh physically lives in build/make/; AOSP's default.xml normally creates
           # a build/envsetup.sh linkfile to it. Source whichever path exists so a missing
           # linkfile does not break the build.
