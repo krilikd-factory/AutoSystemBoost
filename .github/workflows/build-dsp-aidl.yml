@@ -51,6 +51,20 @@ jobs:
     timeout-minutes: 180
 
     steps:
+      - name: Runner check (cores / RAM / label)
+        run: |
+          # If this prints, the larger runner actually provisioned and picked up the job -
+          # so any hang is later, not provisioning. If the job stays Queued and this never
+          # prints, the runner never started (GitHub provisioning stall), and the workflow
+          # itself is fine. Also confirms we really got 8 cores / ~32 GB, not a fallback.
+          echo "=== runner is up ==="
+          echo "hostname: $(hostname)"
+          echo "cores (nproc): $(nproc)"
+          echo "runner label requested: ${{ vars.ASB_RUNNER_LABEL || 'ubuntu-22.04-8core' }}"
+          free -h || true
+          echo "disk:"; df -h / || true
+          echo "=== expecting ~8 cores and ~32 GB RAM for the DSP build ==="
+
       - name: Checkout module sources (shallow)
         uses: actions/checkout@v4
         with:
