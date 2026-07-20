@@ -37,9 +37,10 @@ cc_library_shared {
         "libutils",
         "android.hardware.common.fmq-V1-ndk",
     ],
-    static_libs: [
-        "libaudioaidltypeconverter",
-    ],
+    // Note: libaudioaidltypeconverter was previously listed in static_libs but the code
+    // makes no aidl<->legacy conversion calls, and it is not present in the filtered CI
+    // tree, which produced "module libasbdsp_aidl missing dependencies:
+    // libaudioaidltypeconverter". Dropped since it is genuinely unused.
     header_libs: [
         "libaudioaidl_headers",
         "libsystem_headers",
