@@ -253,7 +253,7 @@ jobs:
           # 16 GB runner. Add a big swapfile so peak memory spills to disk (which we have
           # plenty of) instead of the kernel killing soong. Slower than RAM, but it finishes.
           sudo swapoff -a || true
-          sudo fallocate -l 24G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=24576
+          sudo fallocate -l 40G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=40960
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
           sudo swapon /mnt/swapfile
@@ -331,73 +331,59 @@ jobs:
           for attempt in $(seq 1 6); do
             echo "=== build attempt $attempt ==="
             set +e
-            # Phase 1: soong analysis only (generate ninja, skip kati make graph).
-            # --skip-config keeps product config we already have; --soong-only stops before
-            # kati so the NFC/CTS/priv-app make modules are never evaluated.
-            SOONG_ONLY=true m -j"$MJOBS" nothing 2>&1 | tee /tmp/asb_build.log
+            # ONE soong-only invocation does analysis AND builds our module. Do NOT run a
+            # separate `m nothing` first: that ran the memory-heavy ninja-generation phase a
+            # SECOND time, and on a 16GB runner the duplicate analysis hung ~30 min and got
+            # the runner killed (exit 143). SOONG_ONLY=true keeps the kati product graph
+            # (NFC/CTS/priv-app) out, so only our lib + real deps are evaluated.
+            SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl 2>&1 | tee /tmp/asb_build.log
             rc=${PIPESTATUS[0]}
             set -e
-            if [ "$rc" != "0" ]; then
-              # soong-analysis failure: try to auto-heal an unrelated Android.bp (cases A/B/C).
-              badbp="$(grep -oE '[A-Za-z0-9_./-]+/Android\.bp:[0-9]+' /tmp/asb_build.log \
-                         | head -1 | sed 's/:.*//')"
-              if [ -z "$badbp" ]; then
-                badmod="$(grep -oE 'GenerateBuildActions for module "[^"]+"' /tmp/asb_build.log \
-                           | head -1 | sed 's/.*"\(.*\)"/\1/')"
-                [ -z "$badmod" ] && badmod="$(grep -oE '[A-Za-z0-9_]+_intermediates' /tmp/asb_build.log \
-                           | head -1 | sed 's/_intermediates//')"
-                if [ -n "$badmod" ]; then
-                  echo "auto-heal: error names module '$badmod' - locating its Android.bp"
-                  badbp="$(grep -rlE "name:[[:space:]]*\"${badmod}\"" --include='Android.bp' . 2>/dev/null \
-                             | grep -v '^\./\.repo/' | head -1)"
-                  [ -z "$badbp" ] && badbp="$(grep -rl "$badmod" --include='Android.bp' . 2>/dev/null \
-                             | grep -v '^\./\.repo/' | head -1)"
-                fi
-              fi
-              if [ -n "$badbp" ] && [ -f "$badbp" ] && [ "${badbp#*Android.bp}" != "$badbp" ]; then
-                case "$badbp" in
-                  */DSP_AIDL/*|*vendor/asb/*)
-                    echo "::error::failing Android.bp is OUR module ($badbp) - real error"; break ;;
-                esac
-                echo "auto-heal: neutralizing unrelated $badbp"
-                printf '// emptied by ASB CI auto-heal\n' > "$badbp"
-                continue
-              fi
-              echo "::error::soong analysis failed and nothing could be auto-neutralized"
-              tail -40 /tmp/asb_build.log || true
-              break
-            fi
-            # Phase 2: build ONLY our lib. Primary method: ask soong to build the module by
-            # NAME in soong-only mode. With SOONG_ONLY=true, `m libasbdsp_aidl` routes the
-            # single soong module through ninja WITHOUT evaluating the kati product graph, so
-            # the NFC/CTS/priv-app make conflicts never occur. This is more reliable than
-            # hunting the output path in the ninja text.
-            set +e
-            SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl 2>&1 | tee /tmp/asb_ninja.log
-            nrc=${PIPESTATUS[0]}
-            set -e
-            if [ "$nrc" = "0" ] && find out -name 'libasbdsp_aidl.so' | grep -q .; then
+            if [ "$rc" = "0" ] && find out -name 'libasbdsp_aidl.so' | grep -q .; then
               build_ok=1; break
             fi
-            # If the compile succeeded but a later action failed, an unstripped .so already
-            # exists and is functionally identical (just retains debug symbols). Recover it.
+            # Recover an already-compiled unstripped .so if only a late action (strip) failed.
             UNSTRIPPED="$(find out/soong/.intermediates -path '*libasbdsp_aidl*/unstripped/libasbdsp_aidl.so' 2>/dev/null | head -5)"
             if [ -n "$UNSTRIPPED" ]; then
-              echo "strip/late action failed but the compiled .so exists; recovering unstripped copies"
+              echo "late action failed but the compiled .so exists; recovering unstripped copies"
               echo "$UNSTRIPPED" | while read -r u; do
-                stripped="${u%/unstripped/libasbdsp_aidl.so}/libasbdsp_aidl.so"
-                cp -f "$u" "$stripped" 2>/dev/null || true
+                cp -f "$u" "${u%/unstripped/libasbdsp_aidl.so}/libasbdsp_aidl.so" 2>/dev/null || true
               done
               find out -name 'libasbdsp_aidl.so' | grep -q . && { build_ok=1; break; }
             fi
-            # Otherwise this is a real dependency/compile error in our module - surface it.
-            if grep -qE "missing dependencies|error:|undefined reference|fatal error" /tmp/asb_ninja.log; then
-              echo "::error::libasbdsp_aidl failed to build - real code/deps error below"
-              grep -E "missing dependencies|error:|undefined reference|fatal error" /tmp/asb_ninja.log | head -20
+            # If our own module has a real error, surface it and stop (do not auto-heal ours).
+            if grep -qE "vendor/asb/libasbdsp_aidl.*missing dependencies|DSP_AIDL.*error:|libasbdsp_aidl.*undefined reference" /tmp/asb_build.log; then
+              echo "::error::libasbdsp_aidl real code/deps error:"
+              grep -E "missing dependencies|error:|undefined reference|fatal error" /tmp/asb_build.log | head -20
               break
             fi
-            echo "::error::libasbdsp_aidl did not build and no unstripped copy was found"
-            tail -60 /tmp/asb_ninja.log || true
+            # Otherwise auto-heal an unrelated Android.bp that blocked soong analysis (A/B/C).
+            badbp="$(grep -oE '[A-Za-z0-9_./-]+/Android\.bp:[0-9]+' /tmp/asb_build.log \
+                       | head -1 | sed 's/:.*//')"
+            if [ -z "$badbp" ]; then
+              badmod="$(grep -oE 'GenerateBuildActions for module "[^"]+"' /tmp/asb_build.log \
+                         | head -1 | sed 's/.*"\(.*\)"/\1/')"
+              [ -z "$badmod" ] && badmod="$(grep -oE '[A-Za-z0-9_]+_intermediates' /tmp/asb_build.log \
+                         | head -1 | sed 's/_intermediates//')"
+              if [ -n "$badmod" ]; then
+                echo "auto-heal: error names module '$badmod' - locating its Android.bp"
+                badbp="$(grep -rlE "name:[[:space:]]*\"${badmod}\"" --include='Android.bp' . 2>/dev/null \
+                           | grep -v '^\./\.repo/' | head -1)"
+                [ -z "$badbp" ] && badbp="$(grep -rl "$badmod" --include='Android.bp' . 2>/dev/null \
+                           | grep -v '^\./\.repo/' | head -1)"
+              fi
+            fi
+            if [ -n "$badbp" ] && [ -f "$badbp" ] && [ "${badbp#*Android.bp}" != "$badbp" ]; then
+              case "$badbp" in
+                */DSP_AIDL/*|*vendor/asb/*)
+                  echo "::error::failing Android.bp is OUR module ($badbp) - real error"; break ;;
+              esac
+              echo "auto-heal: neutralizing unrelated $badbp"
+              printf '// emptied by ASB CI auto-heal\n' > "$badbp"
+              continue
+            fi
+            echo "::error::build failed and nothing could be auto-neutralized"
+            tail -40 /tmp/asb_build.log || true
             break
           done
           [ "$build_ok" = "1" ] || { echo "::error::build did not succeed"; exit 1; }
