@@ -17,6 +17,9 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #include <aidl/android/hardware/audio/effect/BnEffect.h>
 #include <aidl/android/hardware/audio/effect/BnFactory.h>
@@ -45,13 +48,13 @@ namespace {
 // UUID must match the <effect ... uuid> the module registers in
 // audio_effects_config.xml (a5b10001-7e55-4c60-9f21-415342445350).
 static const AudioUuid kAsbImplUuid = {
-        0xa5b10001, 0x7e55, 0x4c60, 0x9f21, {0x41, 0x53, 0x42, 0x44, 0x53, 0x50}};
+        static_cast<int32_t>(0xa5b10001), 0x7e55, 0x4c60, 0x9f21, {0x41, 0x53, 0x42, 0x44, 0x53, 0x50}};
 
 // Proprietary post-processing type. The <effect type=...> attribute must equal
 // this so the AIDL factory attaches us to the stream (a missing type is the second
 // reason the legacy registration went silent).
 static const AudioUuid kAsbTypeUuid = {
-        0xa5b10000, 0x7e55, 0x4c60, 0x9f21, {0x41, 0x53, 0x42, 0x54, 0x59, 0x50}};
+        static_cast<int32_t>(0xa5b10000), 0x7e55, 0x4c60, 0x9f21, {0x41, 0x53, 0x42, 0x54, 0x59, 0x50}};
 
 static int prop_int(const char* key, int def) {
     char buf[PROP_VALUE_MAX];
