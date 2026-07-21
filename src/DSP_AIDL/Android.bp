@@ -35,6 +35,7 @@ cc_library_shared {
         "libcutils",
         "liblog",
         "libutils",
+        "libfmq",
         "android.hardware.common.fmq-V1-ndk",
     ],
     // Note: libaudioaidltypeconverter was previously listed in static_libs but the code
