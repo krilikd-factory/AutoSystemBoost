@@ -111,6 +111,21 @@ class AsbEffect : public BnEffect {
         return ScopedAStatus::ok();
     }
 
+    // reopen() is new in audio.effect-V3 (Android 16). It re-hands the current FMQ
+    // descriptors back to the client without a full close/open cycle (e.g. after the
+    // client loses its copies). The V2 port lacked it, which made AsbEffect abstract.
+    // We return the existing queues' descriptors if we are open; otherwise a benign OK.
+    ScopedAStatus reopen(IEffect::OpenEffectReturn* ret) override {
+        if (state_ == State::INIT || !inMQ_ || !outMQ_ || !statusMQ_)
+            return ScopedAStatus::ok();
+        if (!inMQ_->isValid() || !outMQ_->isValid() || !statusMQ_->isValid())
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+        ret->statusMQ = statusMQ_->dupeDesc();
+        ret->inputDataMQ = inMQ_->dupeDesc();
+        ret->outputDataMQ = outMQ_->dupeDesc();
+        return ScopedAStatus::ok();
+    }
+
     ScopedAStatus close() override {
         {
             std::lock_guard<std::mutex> l(mtx_);
