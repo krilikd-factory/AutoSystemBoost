@@ -45,6 +45,7 @@ cc_library_shared {
     header_libs: [
         "libaudioaidl_headers",
         "libsystem_headers",
+        "libaudio_system_headers",
     ],
     cflags: [
         "-Wall",
