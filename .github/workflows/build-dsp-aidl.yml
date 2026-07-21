@@ -146,9 +146,27 @@ jobs:
       - name: Sync AOSP tree
         working-directory: aosp
         run: |
-          repo sync -c --no-tags --no-clone-bundle --optimized-fetch --fail-fast -j"$(nproc)" \
-            || repo sync -c --no-tags --no-clone-bundle -j4 \
-            || repo sync -c --no-tags --no-clone-bundle -j2
+          # googlesource returned HTTP 429 (Too Many Requests): 8 parallel fetches after many
+          # repeated syncs over these days tripped its rate limiter. Fix: fewer parallel
+          # connections, retries with growing backoff, and NO --fail-fast so one throttled
+          # project does not abort everything. repo sync resumes already-fetched projects, so
+          # each retry only pulls what is still missing - cheap and self-healing.
+          sync_once() {
+            repo sync -c --no-tags --no-clone-bundle --optimized-fetch --force-sync -j"$1"
+          }
+          ok=0
+          # Start gentle (fewer connections = less likely to be throttled), and back off on
+          # failure. Pause between attempts so the rate-limit window resets.
+          for attempt in 1 2 3 4 5; do
+            case $attempt in
+              1) J=4 ;; 2) J=3 ;; 3) J=2 ;; *) J=1 ;;
+            esac
+            echo "=== sync attempt $attempt (-j$J) ==="
+            if sync_once "$J"; then ok=1; break; fi
+            echo "sync attempt $attempt failed (likely HTTP 429 rate-limit); backing off..."
+            sleep $(( attempt * 60 ))
+          done
+          [ "$ok" = "1" ] || { echo "::error::repo sync failed after retries (rate-limited?)"; exit 1; }
           echo "Tree size after sync:"; du -sh . 2>/dev/null || true
           df -h /
           test -f build/make/envsetup.sh \
