@@ -291,24 +291,31 @@ jobs:
                 vendor/asb/libasbdsp_aidl/
           ls -la vendor/asb/libasbdsp_aidl/
 
-      - name: Add swap (small safety margin)
+      - name: Add swap (cover ninja-generation peak)
         run: |
-          # With 32 GB RAM the ninja-generation phase fits in memory, so the large swapfile
-          # (needed on the old 16 GB runner) is no longer required - a big disk-backed swap
-          # only slows things down when real RAM is available. Keep a small 8 GB margin in
-          # case a peak slightly exceeds RAM, sized to available disk so it never fills it.
+          # The soong "generating ninja" phase was SIGTERM-killed (exit 143) on the 32 GB
+          # runner: soong_build finished (130/131) then the analyze phase peaked and the
+          # process was killed. 32 GB is right at the edge for this phase, and a trimmed 4-8 GB
+          # swap did not cover the spike (a prior run passed only by luck). The larger runner
+          # has a 300 GB SSD, so a big swapfile is free insurance against the peak. Keep
+          # swappiness modest so it only spills at the peak instead of thrashing throughout.
           sudo swapoff -a || true
           AVAIL_GB=$(df --output=avail -BG / 2>/dev/null | tail -1 | tr -dc '0-9')
           [ -z "$AVAIL_GB" ] && AVAIL_GB=0
-          SWAP_GB=8
-          [ "$AVAIL_GB" -lt 25 ] && SWAP_GB=4
+          # Aim for 32 GB swap (so RAM+swap ~= 64 GB, comfortably above the peak), but never
+          # take more than half the free disk so out/ still has room.
+          SWAP_GB=32
+          HALF=$(( AVAIL_GB / 2 ))
+          [ "$SWAP_GB" -gt "$HALF" ] && SWAP_GB="$HALF"
+          [ "$SWAP_GB" -lt 8 ] && SWAP_GB=8
           echo "avail=${AVAIL_GB}G -> swap=${SWAP_GB}G"
           sudo fallocate -l "${SWAP_GB}G" /mnt/swapfile \
             || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=$(( SWAP_GB * 1024 ))
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
           sudo swapon /mnt/swapfile
-          sudo sysctl vm.swappiness=100 || true
+          # Modest swappiness: use swap for the peak, not for everything (keeps it fast).
+          sudo sysctl vm.swappiness=30 || true
           echo "=== memory + swap ==="; free -h
 
       - name: Build libasbdsp_aidl (arm64 + arm)
