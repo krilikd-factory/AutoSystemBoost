@@ -210,7 +210,6 @@ extern "C" binder_exception_t queryEffect(const AudioUuid* uuid, Descriptor* des
     return effect->getDescriptor(desc).isOk() ? EX_NONE : EX_ILLEGAL_STATE;
 }
 
-extern "C" binder_exception_t destroyEffect(const std::shared_ptr<IEffect>& instance) {
-    if (!instance) return EX_ILLEGAL_ARGUMENT;
-    return EX_NONE;
-}
+// destroyEffect is intentionally NOT defined here: AOSP's EffectImpl.cpp (linked in
+// via :effectCommonFile) already provides the shared destroyEffect factory function.
+// Defining our own caused: ld.lld: error: duplicate symbol: destroyEffect.
