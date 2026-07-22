@@ -1264,7 +1264,26 @@ asb_register_dsp_effect() {
   grep -q '<effects>' "$1" 2>/dev/null || return 0
   sedi "s#<libraries>#<libraries>\n        <library name=\"asbdsp\" path=\"libasbdsp.so\"/>#" "$1"
   sedi "s#<effects>#<effects>\n        <effect name=\"asb_loudness\" library=\"asbdsp\" uuid=\"${ASB_DSP_UUID}\" type=\"${ASB_DSP_TYPE}\"/>#" "$1"
-  if grep -q '<postprocess>' "$1" 2>/dev/null; then
+  # Attach to the music stream. IMPORTANT: if a <stream type="music"> block already exists,
+  # add our <apply> INSIDE it. Creating a second <stream type="music"> block looks valid but
+  # is not: the parser keys post-processing by stream type, so the later block replaces the
+  # earlier one. On OP15 our block was inserted before the stock music_helper block and was
+  # silently dropped - the effect loaded into the factory (9 effects) yet audiopolicy logged
+  # "addOutputSessionEffects(): no output processing needed for this stream".
+  if grep -q '<stream type="music">' "$1" 2>/dev/null; then
+    # Insert right after the FIRST music stream opening tag only (awk, so we control it).
+    _tmp_ae="${1}.asbtmp"
+    awk '
+      !done && /<stream[ \t]+type="music">/ {
+        print
+        print "            <apply effect=\"asb_loudness\"/>"
+        done = 1
+        next
+      }
+      { print }
+    ' "$1" > "$_tmp_ae" 2>/dev/null && [ -s "$_tmp_ae" ] && cat "$_tmp_ae" > "$1"
+    rm -f "$_tmp_ae" 2>/dev/null
+  elif grep -q '<postprocess>' "$1" 2>/dev/null; then
     sedi "s#<postprocess>#<postprocess>\n        <stream type=\"music\">\n            <apply effect=\"asb_loudness\"/>\n        </stream>#" "$1"
   else
     sedi "s#</effects>#</effects>\n\n    <postprocess>\n        <stream type=\"music\">\n            <apply effect=\"asb_loudness\"/>\n        </stream>\n    </postprocess>#" "$1"
