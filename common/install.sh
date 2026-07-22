@@ -1201,7 +1201,7 @@ asb_volume_table_src() {
 # and therefore none of the "silent until you open the EQ app" behaviour that the
 # session-attached effects suffer from.
 ASB_DSP_UUID="a5b10001-7e55-4c60-9f21-415342445350"
-ASB_DSP_TYPE="a5b10000-7e55-4c60-9f21-415342545950"
+ASB_DSP_TYPE="fe3199be-aed0-413f-87bb-11260eb63cf1"
 
 # Stage the effect library into the overlay UNCONDITIONALLY, the way ViperFX and
 # friends ship theirs. It used to be installed only when dsp_loudness was already 3/6/9
