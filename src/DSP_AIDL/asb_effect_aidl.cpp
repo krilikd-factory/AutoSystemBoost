@@ -147,8 +147,6 @@ class AsbLoudnessEffect final : public EffectImpl {
         return mContext;
     }
 
-    std::shared_ptr<EffectContext> getContext() override { return mContext; }
-
     RetCode releaseContext() override {
         if (mContext) mContext.reset();
         return RetCode::SUCCESS;
