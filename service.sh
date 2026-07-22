@@ -303,6 +303,19 @@ asb_migrate_governor_conf
         setprop ctl.restart audioserver 2>/dev/null || true
       fi
     fi
+    # Start the attacher daemon. This is what actually makes the DSP audible on OxygenOS:
+    # the framework never applies the config's <postprocess> section here (AudioPolicyEffects
+    # logs "no output processing needed" even for the stock music_helper), so effects have to
+    # be created programmatically - which is exactly how ViperFX and OPlus' own effect do it.
+    # The daemon creates our effect on session 0 (the global mix) and re-attaches whenever
+    # audioserver restarts.
+    if [ -x "$MODDIR/bin/asb_dsp_attach" ]; then
+      pkill -f "$MODDIR/bin/asb_dsp_attach" 2>/dev/null
+      sleep 1
+      mkdir -p /data/adb/asb 2>/dev/null
+      nohup "$MODDIR/bin/asb_dsp_attach" >> /data/adb/asb/dsp_attach.log 2>&1 &
+      echo "ts=$(date +%s) action=dsp_attach_started" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
+    fi
     if [ -d "$MODDIR/deferred_overlay" ]; then
       sleep 30
       _act=0
