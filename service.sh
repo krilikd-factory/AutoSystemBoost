@@ -269,6 +269,30 @@ asb_migrate_governor_conf
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
     echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
+    # Re-apply the /odm runtime binds. post-fs-data already tries this, but KernelSU
+    # mounts its own module overlay on /odm AFTER post-fs-data runs, so that early bind
+    # gets shadowed and the framework still reads the stock config (observed: the boot log
+    # said action=boot, yet grep asb /odm/etc/audio_effects_config.xml stayed 0 until a
+    # manual mount --bind). Binding again here - after the overlay is in place - sticks.
+    # Only then restart audioserver, so the effect factory re-reads the patched config and
+    # actually picks the effect up.
+    if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ]; then
+      _rb_any=0
+      while IFS='|' read -r _rb_t _rb_p; do
+        case "$_rb_t" in ''|'#'*) continue ;; esac
+        [ -f "$_rb_t" ] && [ -f "$_rb_p" ] || continue
+        # Skip if this exact bind already took effect (avoid stacking mounts on reboots).
+        if cmp -s "$_rb_t" "$_rb_p" 2>/dev/null; then continue; fi
+        mount --bind "$_rb_p" "$_rb_t" 2>/dev/null && _rb_any=1
+      done < /data/adb/asb/odm_bind_manifest.txt
+      if [ "$_rb_any" = "1" ]; then
+        echo "ts=$(date +%s) action=odm_bind_late result=applied" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
+        # The audio HAL caches the effects list from its own start, so a plain
+        # audioserver restart is not enough on its own - but it is what makes the
+        # framework re-query the factory, and the HAL re-reads the config it sees now.
+        setprop ctl.restart audioserver 2>/dev/null || true
+      fi
+    fi
     if [ -d "$MODDIR/deferred_overlay" ]; then
       sleep 30
       _act=0
