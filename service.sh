@@ -283,7 +283,17 @@ asb_migrate_governor_conf
         [ -f "$_rb_t" ] && [ -f "$_rb_p" ] || continue
         # Skip if this exact bind already took effect (avoid stacking mounts on reboots).
         if cmp -s "$_rb_t" "$_rb_p" 2>/dev/null; then continue; fi
-        mount --bind "$_rb_p" "$_rb_t" 2>/dev/null && _rb_any=1
+        # Bind inside init's mount namespace (PID 1). A plain `mount --bind` from a module
+        # script can land in that script's OWN namespace: the shell then sees the patched
+        # file (grep returns 3) while audioserver - started by init in the root namespace -
+        # still reads the stock one, which is exactly the observed symptom (audiopolicy
+        # logged "no output processing needed" despite the config looking correct).
+        if command -v nsenter >/dev/null 2>&1 \
+           && nsenter -t 1 -m -- mount --bind "$_rb_p" "$_rb_t" 2>/dev/null; then
+          _rb_any=1
+        elif mount --bind "$_rb_p" "$_rb_t" 2>/dev/null; then
+          _rb_any=1
+        fi
       done < /data/adb/asb/odm_bind_manifest.txt
       if [ "$_rb_any" = "1" ]; then
         echo "ts=$(date +%s) action=odm_bind_late result=applied" >> /data/adb/asb/vendor_mounts.log 2>/dev/null

@@ -238,7 +238,15 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
     echo 1 > "$_bootflag"
     if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ]; then
       while IFS='|' read -r _ob_t _ob_p; do
-        [ -f "$_ob_t" ] && [ -f "$_ob_p" ] && mount --bind "$_ob_p" "$_ob_t" 2>/dev/null
+        [ -f "$_ob_t" ] && [ -f "$_ob_p" ] || continue
+        # Bind in init's namespace (PID 1) so audioserver, which init starts, actually sees
+        # the patched file; a plain bind here can stay confined to this script's namespace.
+        if command -v nsenter >/dev/null 2>&1; then
+          nsenter -t 1 -m -- mount --bind "$_ob_p" "$_ob_t" 2>/dev/null \
+            || mount --bind "$_ob_p" "$_ob_t" 2>/dev/null
+        else
+          mount --bind "$_ob_p" "$_ob_t" 2>/dev/null
+        fi
       done < /data/adb/asb/odm_bind_manifest.txt
     fi
     if command -v resetprop >/dev/null 2>&1; then
