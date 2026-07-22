@@ -114,6 +114,12 @@ if [ -n "$DSP_SRC" ]; then
         exit 1
       fi
       cp -f "$_aidl_pre" "$_dout/libasbdsp.so"
+      if [ "$SCRIPT_DIR/DSP_AIDL/asb_effect_aidl.cpp" -nt "$_aidl_pre" ] || \
+         [ "$SCRIPT_DIR/DSP_AIDL/asb_dsp_core.h" -nt "$_aidl_pre" ]; then
+        echo "[ASB] WARNING: $_abi prebuilt libasbdsp_aidl.so is OLDER than the effect"
+        echo "[ASB]   source - it may be a stale build. Rebuild it with soong from the"
+        echo "[ASB]   current src/DSP_AIDL (mm libasbdsp_aidl) before shipping." >&2
+      fi
       "$STRIP" "$_dout/libasbdsp.so" || true
       chmod 0644 "$_dout/libasbdsp.so"
       if command -v "$TOOLCHAIN/llvm-nm" >/dev/null 2>&1; then
