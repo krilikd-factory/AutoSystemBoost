@@ -53,8 +53,17 @@ static const AudioUuid kAsbImplUuid = {
 // Proprietary post-processing type. The <effect type=...> attribute must equal
 // this so the AIDL factory attaches us to the stream (a missing type is the second
 // reason the legacy registration went silent).
+// Effect TYPE must be one the vendor factory recognises. QTI's AIDL factory looks the
+// type UUID up in its own table and silently skips anything unknown - the log shows
+// exactly that for another effect: "can not find type UUID for effect audiosphere
+// skipping!". Our previous custom type (a5b10000-...ASBTYP) was skipped the same way,
+// so the library loaded but the effect never appeared in the factory list. Use the
+// standard Loudness Enhancer type, which is semantically what this effect does and is
+// present in every factory table. The IMPLEMENTATION uuid below stays ours, so we are
+// still a distinct effect - only the category is standard.
 static const AudioUuid kAsbTypeUuid = {
-        static_cast<int32_t>(0xa5b10000), 0x7e55, 0x4c60, 0x9f21, {0x41, 0x53, 0x42, 0x54, 0x59, 0x50}};
+        static_cast<int32_t>(0xfe3199be), static_cast<int16_t>(0xaed0), 0x413f,
+        static_cast<int16_t>(0x87bb), {0x11, 0x26, 0x0e, 0xb6, 0x3c, 0xf1}};
 
 static int prop_int(const char* key, int def) {
     char buf[PROP_VALUE_MAX];
