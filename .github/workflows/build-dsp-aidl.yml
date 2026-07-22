@@ -451,8 +451,17 @@ jobs:
       - name: Collect artifacts into prebuilt layout
         working-directory: aosp
         run: |
-          OUT64="$(find out -path '*arm64*' -name libasbdsp_aidl.so | head -1)"
-          OUT32="$(find out -path '*/arm/*' -name libasbdsp_aidl.so | grep -v arm64 | head -1)"
+          # soong writes variant dirs like android_vendor_arm64_armv8-a_shared and
+          # android_vendor_arm_armv8-a_shared. The old 32-bit pattern '*/arm/*' required a
+          # path component exactly "arm" and therefore never matched, so the arm .so was
+          # built but silently not collected. Match the variant dir names instead.
+          OUT64="$(find out -path '*android_vendor_arm64_*' -name libasbdsp_aidl.so \
+                     ! -path '*/unstripped/*' | head -1)"
+          [ -n "$OUT64" ] || OUT64="$(find out -path '*arm64*' -name libasbdsp_aidl.so | head -1)"
+          OUT32="$(find out -path '*android_vendor_arm_*' -name libasbdsp_aidl.so \
+                     ! -path '*/unstripped/*' | head -1)"
+          [ -n "$OUT32" ] || OUT32="$(find out -name libasbdsp_aidl.so | grep -E '_arm_' | head -1)"
+          echo "arm64: ${OUT64:-<none>}"; echo "arm:   ${OUT32:-<none>}"
           DEST="$GITHUB_WORKSPACE/prebuilt"
           mkdir -p "$DEST/arm64-v8a" "$DEST/armeabi-v7a"
           if [ -n "$OUT64" ]; then cp -f "$OUT64" "$DEST/arm64-v8a/libasbdsp_aidl.so"; fi

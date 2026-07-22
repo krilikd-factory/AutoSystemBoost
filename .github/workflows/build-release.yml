@@ -125,6 +125,22 @@ jobs:
           test -f src/dsp/asb_effect_abi.h || { echo "ERROR: src/dsp/asb_effect_abi.h not found after normalization"; exit 1; }
           ls -la src/dsp
 
+      - name: Check AIDL prebuilt presence
+        run: |
+          # Make it obvious in the log whether the soong-built AIDL effect is present.
+          # If it is missing, build_ndk_release.sh silently falls back to the LEGACY
+          # effect, which Android 13+/16 never loads - that is easy to miss otherwise.
+          echo "=== src/DSP_AIDL/prebuilt ==="
+          ls -laR src/DSP_AIDL/prebuilt 2>/dev/null || echo "  (prebuilt dir missing)"
+          for a in arm64-v8a armeabi-v7a; do
+            p="src/DSP_AIDL/prebuilt/$a/libasbdsp_aidl.so"
+            if [ -f "$p" ]; then
+              echo "  FOUND $p ($(wc -c < "$p") bytes)"
+            else
+              echo "  ::warning::MISSING $p - $a will fall back to the LEGACY effect"
+            fi
+          done
+
       - name: Build RELEASE binary (no debug logs)
         # The AIDL effect prebuilt (src/DSP_AIDL/prebuilt/<abi>/libasbdsp_aidl.so) is used
         # automatically when present - build_ndk_release.sh detects the file and prefers it
