@@ -1254,7 +1254,36 @@ asb_install_dsp_lib() {
 
 asb_register_dsp_effect() {
   [ -f "$1" ] || return 0
-  grep -q 'asb_loudness' "$1" 2>/dev/null && return 0
+  # Strip any earlier ASB registration first. On reinstall the device-native clone copies
+  # the LIVE config files, which already contain the module's previous overlay - so simply
+  # bailing out when asb_loudness is present would freeze whatever an older build wrote,
+  # including the broken duplicate <stream type="music"> block that stopped audiopolicy
+  # from attaching the effect. Removing our lines and any block left empty by that removal
+  # makes this idempotent and self-healing across upgrades.
+  if grep -q 'asb_loudness\|asbdsp' "$1" 2>/dev/null; then
+    _clean_ae="${1}.asbclean"
+    awk '
+      /<library[^>]*name="asbdsp"/            { next }
+      /<effect[^>]*name="asb_loudness"/       { next }
+      /<apply[^>]*effect="asb_loudness"/      { next }
+      { print }
+    ' "$1" > "$_clean_ae" 2>/dev/null || { rm -f "$_clean_ae" 2>/dev/null; }
+    if [ -s "$_clean_ae" ]; then
+      # Drop a <stream type="..."> block that our removal left with no <apply> inside.
+      awk '
+        /<stream[ \t]+type=/ { buf = $0; hold = 1; has = 0; next }
+        hold && /<\/stream>/ {
+          if (has) { print buf; print body; print }
+          hold = 0; body = ""; next
+        }
+        hold { if ($0 ~ /<apply/) has = 1; body = (body == "" ? $0 : body "\n" $0); next }
+        { print }
+      ' "$_clean_ae" > "${_clean_ae}2" 2>/dev/null
+      [ -s "${_clean_ae}2" ] && cat "${_clean_ae}2" > "$1"
+      rm -f "${_clean_ae}2" 2>/dev/null
+    fi
+    rm -f "$_clean_ae" 2>/dev/null
+  fi
   # Either ABI is enough to justify registering the effect: audio_effects_config.xml
   # names the library by filename, and each process picks the soundfx dir matching its
   # own bitness.
