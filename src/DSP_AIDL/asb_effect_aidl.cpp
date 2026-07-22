@@ -181,10 +181,13 @@ class AsbEffect : public BnEffect {
     void refresh() {
         int rate = common_.input.base.sampleRate > 0 ? common_.input.base.sampleRate : 48000;
         int ch = channelCount(common_.input.base.channelMask);
-        // softclip defaults to 1 (saturation). On loud modern masters the brick-wall
-        // limiter measured +4.1 dB RMS while tanh saturation measured +9.7 dB with no
-        // hard clamping, which is the difference the user hears vs ViperFX. Set
-        // persist.asb.dsp.softclip=0 to return to the old limiter without rebuilding.
+        // softclip defaults to 1 (saturation) with drive x3. Measured on a loud master:
+        // brick-wall limiter +4.1 dB, saturation x1.15 +9.7 dB, x3 +11.5 dB (87% of the
+        // theoretical maximum for a bounded signal). tanh cannot hard-clip at any drive.
+        // Runtime knobs, no rebuild needed:
+        //   persist.asb.dsp.softclip=0        -> back to the old limiter
+        //   persist.asb.dsp.postgain_x100=115 -> gentler (cleaner, ~1.8 dB quieter)
+        //   persist.asb.dsp.postgain_x100=700 -> even louder, more squared-up
         asb_core_configure_ex(&core_,
                            prop_int("persist.asb.dsp.enable", 0),
                            prop_int("persist.asb.dsp.gain_mb", 0),
@@ -194,7 +197,7 @@ class AsbEffect : public BnEffect {
                            prop_int("persist.asb.dsp.comp_thresh_mb", -2400),
                            ch, (uint32_t)rate, /*fmt_ok=*/1,
                            prop_int("persist.asb.dsp.softclip", 1),
-                           prop_int("persist.asb.dsp.postgain_x100", 115));
+                           prop_int("persist.asb.dsp.postgain_x100", 300));
     }
 
     void loop() {

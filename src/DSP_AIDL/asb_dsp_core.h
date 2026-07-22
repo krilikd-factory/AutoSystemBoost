@@ -100,9 +100,17 @@ static inline void asb_core_configure_ex(asb_core_t *c, int enabled, int gain_mb
      * clamped 42% of samples, which is audible grit. Clamp the configurable value to that
      * safe window. */
     {
-        int p = post_x100 > 0 ? post_x100 : 115;
+        /* Drive into the saturator. Measured on a loud master (input RMS 0.229, the
+         * theoretical maximum for any bounded signal is a 1.0 square wave):
+         *   x1.15 -> RMS 0.699 (71% of max, +9.7 dB)
+         *   x3.0  -> RMS 0.860 (87% of max, +11.5 dB)
+         *   x10   -> RMS 0.935 (95% of max, +12.2 dB)
+         * Returns flatten hard past x3 while the waveform keeps squaring up, so x3 is the
+         * sweet spot for "as loud as it goes without turning into a buzz". tanh stays
+         * bounded, so even x10 cannot hard-clip - only the harmonics grow. */
+        int p = post_x100 > 0 ? post_x100 : 300;
         if (p < 100) p = 100;
-        if (p > 130) p = 130;
+        if (p > 1000) p = 1000;
         c->postgain = (float)p / 100.0f;
     }
 }
