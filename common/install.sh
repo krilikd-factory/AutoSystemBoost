@@ -1987,6 +1987,37 @@ if [ "$ASB_IS_OP15" = "true" ]; then
     else
       ui_print "    ! ASB DSP: no audio_effects_config in overlay to register into"
     fi
+
+    # The /vendor sku_* configs above are NOT what the framework reads on this device.
+    # AOSP resolves audio_effects_config.xml as /odm/etc -> /vendor/etc -> /system/etc,
+    # and OP15 ships a real /odm/etc/audio_effects_config.xml, so it wins. The OP15 branch
+    # never called asb_generate_odm_binds, so that file was untouched: the library was
+    # installed and the properties set, but audioserver never listed the effect (verified
+    # on device: grep asb /odm/etc/... = 0 while the sku file had 3). Deliver a patched
+    # copy through the SAME fuse-guarded runtime bind other devices use - we never graft
+    # /odm into the magic-mount tree, which is what bootlooped the Ace 6.
+    if [ -f /odm/etc/audio_effects_config.xml ]; then
+      _oecs="/data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml"
+      _oecm="/data/adb/asb/odm_bind_manifest.txt"
+      mkdir -p "$(dirname "$_oecs")" 2>/dev/null
+      if cp -f /odm/etc/audio_effects_config.xml "$_oecs" 2>/dev/null; then
+        asb_register_dsp_effect "$_oecs"
+        if grep -q 'asb_loudness' "$_oecs" 2>/dev/null; then
+          chmod 0644 "$_oecs" 2>/dev/null
+          _oec_ctx="$(ls -Zd /odm/etc/audio_effects_config.xml 2>/dev/null | awk '{print $1}')"
+          case "$_oec_ctx" in
+            ?*:?*:?*:?*) chcon "$_oec_ctx" "$_oecs" 2>/dev/null || true ;;
+          esac
+          touch "$_oecm" 2>/dev/null
+          grep -q "^/odm/etc/audio_effects_config.xml|" "$_oecm" 2>/dev/null \
+            || echo "/odm/etc/audio_effects_config.xml|$_oecs" >> "$_oecm"
+          ui_print "      + ASB DSP registered in /odm/etc/audio_effects_config.xml (runtime bind - the one the framework reads)"
+        else
+          rm -f "$_oecs" 2>/dev/null
+          ui_print "    ! ASB DSP: could not patch the odm effects config"
+        fi
+      fi
+    fi
   fi
 elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_apply_device_native_tuning "OnePlus 13 (sun / tuna / kera)" "OnePlus13"
