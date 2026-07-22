@@ -1260,7 +1260,10 @@ asb_register_dsp_effect() {
   # including the broken duplicate <stream type="music"> block that stopped audiopolicy
   # from attaching the effect. Removing our lines and any block left empty by that removal
   # makes this idempotent and self-healing across upgrades.
-  if grep -q 'asb_loudness\|asbdsp' "$1" 2>/dev/null; then
+  # NOTE: grep -q 'a\|b' does NOT work here - Android's grep is toybox and \| is a GNU
+  # BRE extension it does not implement, so the pattern was matched literally, the whole
+  # cleanup was skipped and the insert below happily added a SECOND <apply>. Use -E.
+  if grep -qE 'asb_loudness|asbdsp' "$1" 2>/dev/null; then
     _clean_ae="${1}.asbclean"
     awk '
       /<library[^>]*name="asbdsp"/            { next }
@@ -1271,7 +1274,7 @@ asb_register_dsp_effect() {
     if [ -s "$_clean_ae" ]; then
       # Drop a <stream type="..."> block that our removal left with no <apply> inside.
       awk '
-        /<stream[ \t]+type=/ { buf = $0; hold = 1; has = 0; next }
+        /<stream[[:space:]]+type=/ { buf = $0; hold = 1; has = 0; next }
         hold && /<\/stream>/ {
           if (has) { print buf; print body; print }
           hold = 0; body = ""; next
@@ -1303,7 +1306,7 @@ asb_register_dsp_effect() {
     # Insert right after the FIRST music stream opening tag only (awk, so we control it).
     _tmp_ae="${1}.asbtmp"
     awk '
-      !done && /<stream[ \t]+type="music">/ {
+      !done && /<stream[[:space:]]+type="music">/ {
         print
         print "            <apply effect=\"asb_loudness\"/>"
         done = 1
