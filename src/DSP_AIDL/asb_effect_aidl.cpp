@@ -181,14 +181,20 @@ class AsbEffect : public BnEffect {
     void refresh() {
         int rate = common_.input.base.sampleRate > 0 ? common_.input.base.sampleRate : 48000;
         int ch = channelCount(common_.input.base.channelMask);
-        asb_core_configure(&core_,
+        // softclip defaults to 1 (saturation). On loud modern masters the brick-wall
+        // limiter measured +4.1 dB RMS while tanh saturation measured +9.7 dB with no
+        // hard clamping, which is the difference the user hears vs ViperFX. Set
+        // persist.asb.dsp.softclip=0 to return to the old limiter without rebuilding.
+        asb_core_configure_ex(&core_,
                            prop_int("persist.asb.dsp.enable", 0),
                            prop_int("persist.asb.dsp.gain_mb", 0),
                            prop_int("persist.asb.dsp.ceiling_mb", -15),
                            prop_int("persist.asb.dsp.comp", 1),
                            prop_int("persist.asb.dsp.comp_ratio_x10", 60),
                            prop_int("persist.asb.dsp.comp_thresh_mb", -2400),
-                           ch, (uint32_t)rate, /*fmt_ok=*/1);
+                           ch, (uint32_t)rate, /*fmt_ok=*/1,
+                           prop_int("persist.asb.dsp.softclip", 1),
+                           prop_int("persist.asb.dsp.postgain_x100", 115));
     }
 
     void loop() {
