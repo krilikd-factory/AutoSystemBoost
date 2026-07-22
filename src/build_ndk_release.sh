@@ -147,6 +147,20 @@ if [ -n "$DSP_SRC" ]; then
     echo "[ASB] ============================================================"
     ls -lh "$_dout/libasbdsp.so"
   done
+  # Stage the attacher daemon (arm64 only - the effect runs in the 64-bit audioserver).
+  # OxygenOS never applies the config's <postprocess>, so this binary is what actually
+  # creates the effect on session 0; without it the library loads and the factory lists it
+  # but nothing ever instantiates it.
+  _att_pre="${ASB_DSP_AIDL_DIR:-$SCRIPT_DIR/DSP_AIDL/prebuilt}/arm64-v8a/asb_dsp_attach"
+  if [ -f "$_att_pre" ]; then
+    mkdir -p "$SCRIPT_DIR/../bin/arm64-v8a" 2>/dev/null
+    install -m 0755 "$_att_pre" "$SCRIPT_DIR/../bin/arm64-v8a/asb_dsp_attach" 2>/dev/null \
+      && echo "[ASB] DSP: attacher daemon staged ($(wc -c < "$_att_pre") bytes)"
+  else
+    echo "[ASB] WARNING: no asb_dsp_attach prebuilt - the effect will register but never attach."
+    echo "[ASB]   Build it with the 'Build DSP AIDL' workflow and commit"
+    echo "[ASB]   src/DSP_AIDL/prebuilt/arm64-v8a/asb_dsp_attach"
+  fi
 else
   echo "[ASB] note: asb_dsp.c not found under src/dsp or src/DSP - skipping DSP build"
 fi
