@@ -20,9 +20,11 @@
 // one on slider changes) drop all effects, so the daemon re-attaches instead of dying.
 
 #include <unistd.h>
+#include <sys/system_properties.h>
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 
@@ -75,8 +77,37 @@ int main(int /*argc*/, char** /*argv*/) {
 
     sp<android::AudioEffect> fx;
     int attached = 0;
+    int was_on = -1;
 
     for (;;) {
+        // Battery: only hold the effect while the DSP is actually on. An attached effect
+        // processes every frame during playback AND can push the stream off the hardware
+        // compress-offload path onto software decoding, which costs real power. With the
+        // slider at 0 there is nothing to process, so we release it completely and the audio
+        // path goes back to exactly what it was without the module.
+        char pv[PROP_VALUE_MAX] = {0};
+        __system_property_get("persist.asb.dsp.enable", pv);
+        int want_on = (pv[0] == '1');
+        int gain = 0;
+        char gv[PROP_VALUE_MAX] = {0};
+        __system_property_get("persist.asb.dsp.gain_mb", gv);
+        gain = atoi(gv);
+        if (gain <= 0) want_on = 0;
+
+        if (want_on != was_on) {
+            logline("dsp %s (gain_mb=%d)", want_on ? "enabled" : "disabled", gain);
+            was_on = want_on;
+        }
+
+        if (!want_on) {
+            if (fx != nullptr) { logline("releasing effect (dsp off)"); fx.clear(); attached = 0; }
+            // Nothing to maintain - poll lazily. nanosleep uses CLOCK_MONOTONIC, which does
+            // not advance while the device is suspended, so this never wakes the SoC by
+            // itself; it simply resumes when the device is already awake.
+            sleep(60);
+            continue;
+        }
+
         // Re-attach whenever the effect is gone: audioserver restarts (including the ones
         // asb_audio_apply.sh fires when the slider moves) tear every effect down.
         bool alive = (fx != nullptr && fx->initCheck() == OK);
@@ -110,7 +141,10 @@ int main(int /*argc*/, char** /*argv*/) {
                 logline("create failed: set=%d initCheck=%d", (int)st, (int)ic);
             }
         }
-        sleep(5);
+        // 30 s instead of 5 s: re-attaching a few seconds later after an audioserver restart
+        // is inaudible, and this cuts idle wakeups by 6x. The check itself is a local field
+        // read plus two property reads - no IPC, microseconds of CPU.
+        sleep(30);
     }
 
     android::IPCThreadState::self()->joinThreadPool();
