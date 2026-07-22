@@ -44,3 +44,24 @@ cc_library_shared {
         "-ffast-math",
     ],
 }
+
+// Attacher daemon. NOT vendor: it links libaudioclient, which is a system library and is
+// not available to vendor modules. It is installed under the module's own directory and
+// launched from service.sh, so it never needs to live in /vendor.
+cc_binary {
+    name: "asb_dsp_attach",
+    srcs: ["asb_dsp_attach.cpp"],
+    compile_multilib: "64",
+    shared_libs: [
+        "libaudioclient",
+        "libaudiofoundation",
+        "libbinder",
+        "libutils",
+        "liblog",
+        "libcutils",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wno-unused-parameter",
+    ],
+}
