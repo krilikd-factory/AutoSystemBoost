@@ -1,52 +1,40 @@
-// Build recipe for the ASB AIDL loudness effect.
+// Build recipe for the ASB AIDL loudness effect -> libasbdsp_aidl.so.
 //
-// Produces libasbdsp_aidl.so — the AIDL replacement for the legacy libasbdsp.so.
-// Build it in an AOSP/soong tree (the effect AIDL + FMQ headers are not in the
-// plain NDK). Point your CI's soong at this module, or drop it under
-// hardware/ and run `mm libasbdsp_aidl`.
-//
-// The shared static/headers below are exactly what AOSP's own default effects
-// (e.g. hardware/interfaces/audio/aidl/default) link against.
+// Modelled on AOSP's own effects (hardware/interfaces/audio/aidl/default). Since
+// asb_effect_aidl.cpp now subclasses EffectImpl, the build must ALSO compile the
+// EffectImpl/EffectThread/EffectContext sources and see their headers. AOSP exposes
+// both through:
+//   * defaults: "aidlaudioeffectservice_defaults"  -> effect-impl headers + all the
+//     AIDL/binder/fmq deps, resolved version-independently for the branch you build on.
+//   * srcs: ":effectCommonFile"                     -> EffectImpl.cpp, EffectThread.cpp,
+//     EffectContext.cpp (the base-class implementation each effect links in).
+//   * static_libs: "libaudioaidlranges"             -> the MAKE_RANGE() helper used to
+//     declare the capability ranges.
+// These three are exactly what e.g. libloudnessenhanceraidl uses. If your (possibly
+// filtered) tree lacks the "aidlaudioeffectservice_defaults" default or the
+// ":effectCommonFile" filegroup, copy them from
+// hardware/interfaces/audio/aidl/default/Android.bp into your tree, or add that
+// directory to your checkout — they are not part of the plain NDK.
 
 cc_library_shared {
     name: "libasbdsp_aidl",
     vendor: true,
-    // Build both ABIs in one pass so a single `m libasbdsp_aidl` yields the arm64 and arm
-    // .so the module ships (lib64/soundfx and lib/soundfx). Without this soong builds only
-    // the target's primary arch.
+    // One pass emits both arm64 and arm so the module ships lib64/soundfx and
+    // lib/soundfx. Without this soong builds only the target's primary arch.
     compile_multilib: "both",
-    srcs: ["asb_effect_aidl.cpp"],
-    local_include_dirs: ["."],
-    // Link the AIDL interfaces via AOSP's version-independent "latest" defaults instead
-    // of hardcoded -V2/-V3 suffixes. Hardcoding ties the module to one Android release:
-    // Android 15 shipped effect-V2 / common-V2 / types-V3, but Android 16 bumped these to
-    // effect-V3 / common-V3 / types-V4, so a -V2 link would either fail to build against
-    // an android16 tree or load-mismatch at runtime. These defaults resolve to whatever
-    // the branch you build on froze, so the same Android.bp works on 15, 16 and 17.
+    srcs: [
+        "asb_effect_aidl.cpp",
+        ":effectCommonFile",
+    ],
     defaults: [
-        "latest_android_hardware_audio_effect_ndk_shared",
-        "latest_android_hardware_audio_common_ndk_shared",
-        "latest_android_media_audio_common_types_ndk_shared",
+        "aidlaudioeffectservice_defaults",
     ],
-    shared_libs: [
-        "libaudioaidlcommon",
-        "libbase",
-        "libbinder_ndk",
-        "libcutils",
-        "liblog",
-        "libutils",
-        "libfmq",
-        "android.hardware.common.fmq-V1-ndk",
+    local_include_dirs: ["."],
+    static_libs: [
+        "libaudioaidlranges",
     ],
-    // Note: libaudioaidltypeconverter was previously listed in static_libs but the code
-    // makes no aidl<->legacy conversion calls, and it is not present in the filtered CI
-    // tree, which produced "module libasbdsp_aidl missing dependencies:
-    // libaudioaidltypeconverter". Dropped since it is genuinely unused.
-    header_libs: [
-        "libaudioaidl_headers",
-        "libsystem_headers",
-        "libaudio_system_headers",
-    ],
+    relative_install_path: "soundfx",
+    visibility: ["//visibility:public"],
     cflags: [
         "-Wall",
         "-Werror",
