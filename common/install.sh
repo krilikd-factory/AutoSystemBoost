@@ -1375,6 +1375,16 @@ asb_patch_audio_inplace() {
   # ASB DSP effect: install the library first; the odm-bind stage registers it.
   # Always stage the library; only the registration below is gated on the setting.
   if asb_install_dsp_lib; then
+    # The attacher daemon lives in the module dir, not /vendor: it links libaudioclient,
+    # which is a system library and not available to vendor processes. service.sh launches
+    # it after boot. Without it the effect is registered and loaded by the factory but never
+    # instantiated, because OxygenOS does not apply the config's <postprocess> section.
+    if [ -f "$MODPATH/bin/asb_dsp_attach" ]; then
+      chmod 0755 "$MODPATH/bin/asb_dsp_attach" 2>/dev/null
+      ui_print "      + ASB DSP attacher staged (creates the effect on the global mix)"
+    else
+      ui_print "    ! ASB DSP attacher missing - effect will register but not attach"
+    fi
     _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
     case "$_dspg" in
       ''|off|0|*[!0-9]*) _dspg_ok=0 ;;
