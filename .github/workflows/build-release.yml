@@ -239,6 +239,13 @@ jobs:
           # Both ABIs: /vendor/lib64/soundfx and /vendor/lib/soundfx both exist on the
           # target and each needs a library of its own bitness.
           install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_REL/bin/libasbdsp.so"
+          # Attacher daemon: creates the effect on session 0. OxygenOS ignores the
+          # config <postprocess>, so without this the effect never gets instantiated.
+          if [ -f bin/arm64-v8a/asb_dsp_attach ]; then
+            install -m 0755 bin/arm64-v8a/asb_dsp_attach "${PKG_REL}/bin/asb_dsp_attach"
+          else
+            echo "::warning::asb_dsp_attach missing - DSP will register but not attach"
+          fi
           if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
             install -m 0644 bin/armeabi-v7a/libasbdsp.so "$PKG_REL/bin/libasbdsp_32.so"
             echo "DSP: both ABIs packaged"

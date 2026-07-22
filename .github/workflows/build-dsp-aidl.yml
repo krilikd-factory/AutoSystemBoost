@@ -394,7 +394,7 @@ jobs:
             # SECOND time, and on a 16GB runner the duplicate analysis hung ~30 min and got
             # the runner killed (exit 143). SOONG_ONLY=true keeps the kati product graph
             # (NFC/CTS/priv-app) out, so only our lib + real deps are evaluated.
-            SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl 2>&1 | tee /tmp/asb_build.log
+            SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl asb_dsp_attach 2>&1 | tee /tmp/asb_build.log
             rc=${PIPESTATUS[0]}
             set -e
             if [ "$rc" = "0" ] && find out -name 'libasbdsp_aidl.so' | grep -q .; then
@@ -455,6 +455,20 @@ jobs:
           # android_vendor_arm_armv8-a_shared. The old 32-bit pattern '*/arm/*' required a
           # path component exactly "arm" and therefore never matched, so the arm .so was
           # built but silently not collected. Match the variant dir names instead.
+          # The attacher daemon: a system (non-vendor) binary, so its variant dir has no
+          # "vendor" in the path. It is what actually creates the effect on session 0 -
+          # OxygenOS never applies the config's <postprocess>, so without this nothing asks
+          # the framework to instantiate our effect.
+          ATT64="$(find out -path '*asb_dsp_attach*' -name asb_dsp_attach -type f \
+                     ! -path '*/unstripped/*' | head -1)"
+          echo "attach: ${ATT64:-<none>}"
+          if [ -n "$ATT64" ]; then
+            mkdir -p "$GITHUB_WORKSPACE/prebuilt/arm64-v8a"
+            cp -f "$ATT64" "$GITHUB_WORKSPACE/prebuilt/arm64-v8a/asb_dsp_attach"
+            chmod 0755 "$GITHUB_WORKSPACE/prebuilt/arm64-v8a/asb_dsp_attach"
+          else
+            echo "::warning::asb_dsp_attach not found - the effect will register but never attach"
+          fi
           OUT64="$(find out -path '*android_vendor_arm64_*' -name libasbdsp_aidl.so \
                      ! -path '*/unstripped/*' | head -1)"
           [ -n "$OUT64" ] || OUT64="$(find out -path '*arm64*' -name libasbdsp_aidl.so | head -1)"
@@ -481,6 +495,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: libasbdsp_aidl-prebuilt
-          path: prebuilt/**/libasbdsp_aidl.so
+          path: |
+            prebuilt/**/libasbdsp_aidl.so
+            prebuilt/**/asb_dsp_attach
           if-no-files-found: error
           retention-days: 30
