@@ -61,6 +61,27 @@ static int asb_prop_int(const char* key, int def) {
     return end == buf ? def : (int)v;
 }
 
+// Read one DSP tunable, preferring the vendor-namespace copy.
+//
+// The effect lives in the vendor HAL process, while the module writes persist.asb.dsp.*
+// with resetprop - those land in the default_prop SELinux context, which a vendor domain
+// generally cannot read (confirmed on device: getprop -Z reported default_prop). Properties
+// under the vendor namespace are the ones vendor code is meant to read, so the module now
+// writes both names and this prefers the readable one, falling back to the legacy name so
+// an older install keeps working.
+static int asb_dsp_prop(const char* leaf, int def) {
+    char key[128];
+    snprintf(key, sizeof(key), "persist.vendor.asb.dsp.%s", leaf);
+    char buf[PROP_VALUE_MAX];
+    if (__system_property_get(key, buf) > 0) {
+        char* end = nullptr;
+        long v = strtol(buf, &end, 10);
+        if (end != buf) return (int)v;
+    }
+    snprintf(key, sizeof(key), "persist.asb.dsp.%s", leaf);
+    return asb_prop_int(key, def);
+}
+
 // ---- Context: holds the realtime DSP state ---------------------------------
 class AsbLoudnessContext final : public EffectContext {
   public:
@@ -72,21 +93,45 @@ class AsbLoudnessContext final : public EffectContext {
 
     // (Re)load tunables from the persist.asb.dsp.* props the WebUI writes.
     void reload(const Parameter::Common& common) {
-        int rate = common.input.base.sampleRate > 0 ? common.input.base.sampleRate : 48000;
-        int ch = ::aidl::android::hardware::audio::common::getChannelCount(
-                common.input.base.channelMask);
-        if (ch <= 0) ch = 2;
-        asb_core_configure(&mCore,
-                           asb_prop_int("persist.asb.dsp.enable", 0),
-                           asb_prop_int("persist.asb.dsp.gain_mb", 0),
-                           asb_prop_int("persist.asb.dsp.ceiling_mb", -15),
-                           asb_prop_int("persist.asb.dsp.comp", 1),
-                           asb_prop_int("persist.asb.dsp.comp_ratio_x10", 60),
-                           asb_prop_int("persist.asb.dsp.comp_thresh_mb", -2400),
-                           ch, (uint32_t)rate, /*fmt_ok=*/1);
+        mCommon = common;
+        applyTunables(/*gainOverrideMb=*/-1);
     }
 
-    RetCode setGainMb(int gainMb) { mGainMb = gainMb; return RetCode::SUCCESS; }
+    // gainOverrideMb >= 0 means "use this gain instead of the property" - that is the path
+    // taken when the attach daemon pushes the gain over binder. It matters because the
+    // effect runs inside the vendor HAL process (audiohalservice.qti) while the
+    // persist.asb.dsp.* properties are written by the module with resetprop, i.e. they land
+    // in the default_prop context. A vendor domain that cannot read that context gets the
+    // defaults instead - enable=0, gain=0 - which configures the core as bypass and makes a
+    // fully attached, ACTIVE, non-suspended effect pass audio through untouched.
+    void applyTunables(int gainOverrideMb) {
+        int rate = mCommon.input.base.sampleRate > 0 ? mCommon.input.base.sampleRate : 48000;
+        int ch = ::aidl::android::hardware::audio::common::getChannelCount(
+                mCommon.input.base.channelMask);
+        if (ch <= 0) ch = 2;
+        int enable = asb_dsp_prop("enable", 0);
+        int gain   = asb_dsp_prop("gain_mb", 0);
+        int ceil   = asb_dsp_prop("ceiling_mb", -15);
+        int comp   = asb_dsp_prop("comp", 1);
+        int ratio  = asb_dsp_prop("comp_ratio_x10", 60);
+        int thresh = asb_dsp_prop("comp_thresh_mb", -2400);
+        int soft   = asb_dsp_prop("softclip", 0);
+        int post   = asb_dsp_prop("postgain_x100", 300);
+        if (gainOverrideMb >= 0) {
+            gain = gainOverrideMb;
+            if (gain > 0) enable = 1;
+        }
+        LOG(WARNING) << "ASB configure: enable=" << enable << " gain_mb=" << gain
+                     << " ceiling_mb=" << ceil << " comp=" << comp << " ratio=" << ratio
+                     << " thresh_mb=" << thresh << " softclip=" << soft
+                     << " postgain_x100=" << post << " rate=" << rate << " ch=" << ch
+                     << (gainOverrideMb >= 0 ? " (gain from parameter)" : " (gain from property)");
+        asb_core_configure_ex(&mCore, enable, gain, ceil, comp, ratio, thresh, ch,
+                              (uint32_t)rate, /*fmt_ok=*/1, soft, post);
+        mGainMb = gain;
+    }
+
+    RetCode setGainMb(int gainMb) { applyTunables(gainMb); return RetCode::SUCCESS; }
     int getGainMb() const { return mGainMb; }
 
     IEffect::Status process(float* in, float* out, int samples) {
@@ -94,10 +139,29 @@ class AsbLoudnessContext final : public EffectContext {
         if (in == nullptr || out == nullptr || samples <= 0) return s;
         int ch = mCore.channels > 0 ? mCore.channels : 2;
         size_t frames = (size_t)samples / (size_t)ch;
+        // Rate-limited proof of life. Attaching an effect and processing audio through it
+        // are different things: without this trace there is no way to tell whether the
+        // framework routes any audio to us at all (no lines = never called, e.g. the stream
+        // is compress-offloaded or the session-0 chain is suspended), whether we are called
+        // but bypassed (bypass=1, props not visible in the HAL process), or whether we do
+        // amplify and the gain is undone further down the chain (outPeak > inPeak yet no
+        // audible change). Every 500th buffer keeps this to a few lines per second.
+        const bool trace = ((mCalls++ % 500) == 0);
+        float inPeak = 0.0f;
+        if (trace) {
+            for (int i = 0; i < samples; i++) { float a = fabsf(in[i]); if (a > inPeak) inPeak = a; }
+        }
         if (mCore.bypass) {
             if (in != out) memcpy(out, in, sizeof(float) * (size_t)samples);
         } else {
             asb_core_process_f32(&mCore, in, out, frames, /*accumulate=*/0);
+        }
+        if (trace) {
+            float outPeak = 0.0f;
+            for (int i = 0; i < samples; i++) { float a = fabsf(out[i]); if (a > outPeak) outPeak = a; }
+            LOG(WARNING) << "ASB process: n=" << mCalls << " samples=" << samples << " ch=" << ch
+                         << " bypass=" << mCore.bypass << " gain=" << mCore.gain
+                         << " inPeak=" << inPeak << " outPeak=" << outPeak;
         }
         s.status = STATUS_OK;
         s.fmqConsumed = samples;
@@ -107,7 +171,9 @@ class AsbLoudnessContext final : public EffectContext {
 
   private:
     asb_core_t mCore{};
+    Parameter::Common mCommon{};
     int mGainMb = 0;
+    unsigned long mCalls = 0;
 };
 
 // ---- Effect: thin EffectImpl subclass --------------------------------------

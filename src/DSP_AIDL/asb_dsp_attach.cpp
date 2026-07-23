@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <sys/system_properties.h>
 
+#include <csignal>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -32,6 +33,7 @@
 #include <binder/IServiceManager.h>
 #include <binder/ProcessState.h>
 #include <media/AudioEffect.h>
+#include <system/audio_effects/effect_loudnessenhancer.h>
 #include <utils/Log.h>
 #include <utils/RefBase.h>
 #include <android/content/AttributionSourceState.h>
@@ -66,8 +68,39 @@ static void logline(const char* fmt, ...) {
     va_end(ap);
 }
 
+// Push the gain into the effect as a standard LoudnessEnhancer parameter.
+//
+// Why this exists: the effect runs inside the vendor HAL process, while the module writes
+// its settings to persist.asb.dsp.* with resetprop. Those land in the default_prop SELinux
+// context (confirmed on device with `getprop -Z`), which a vendor domain generally cannot
+// read - so the effect saw none of them, configured itself with the built-in defaults
+// (enable=0, gain=0) and passed audio through untouched while looking perfectly healthy in
+// dumpsys: registered, ACTIVE, enabled, not suspended.
+//
+// The daemon has no such problem: it runs in the system context and reads the properties
+// fine. libaudiohal converts this legacy parameter into the AIDL
+// Parameter::Specific::loudnessEnhancer the effect implements, so the value arrives over
+// binder and bypasses property visibility entirely.
+static status_t push_gain(const sp<android::AudioEffect>& fx, int gain_mb) {
+    if (fx == nullptr) return android::NO_INIT;
+    uint8_t buf[sizeof(effect_param_t) + 2 * sizeof(int32_t)] = {0};
+    effect_param_t* p = reinterpret_cast<effect_param_t*>(buf);
+    p->psize = sizeof(int32_t);
+    p->vsize = sizeof(int32_t);
+    int32_t param = LOUDNESS_ENHANCER_PARAM_TARGET_GAIN_MB;
+    int32_t value = gain_mb;
+    memcpy(p->data, &param, sizeof(param));
+    memcpy(p->data + sizeof(param), &value, sizeof(value));
+    return fx->setParameter(p);
+}
+
+// SIGUSR1 only exists to interrupt the poll sleep so a settings change applies at once.
+// A handler must be installed: the default action for SIGUSR1 is to terminate.
+static void on_wake(int) {}
+
 int main(int /*argc*/, char** /*argv*/) {
     android::ProcessState::self()->startThreadPool();
+    signal(SIGUSR1, on_wake);
 
     android::content::AttributionSourceState attributionSource;
     attributionSource.packageName = "asb_dsp";
@@ -79,6 +112,7 @@ int main(int /*argc*/, char** /*argv*/) {
     int attached = 0;
     int was_on = -1;
     int fails = 0;   // consecutive failures, used to back off
+    int pushed_gain = -1;   // gain last handed to the effect over binder
 
     for (;;) {
         // Battery: only hold the effect while the DSP is actually on. An attached effect
@@ -101,7 +135,7 @@ int main(int /*argc*/, char** /*argv*/) {
         }
 
         if (!want_on) {
-            if (fx != nullptr) { logline("releasing effect (dsp off)"); fx.clear(); attached = 0; }
+            if (fx != nullptr) { logline("releasing effect (dsp off)"); fx.clear(); attached = 0; pushed_gain = -1; }
             // Nothing to maintain - poll lazily. nanosleep uses CLOCK_MONOTONIC, which does
             // not advance while the device is suspended, so this never wakes the SoC by
             // itself; it simply resumes when the device is already awake.
@@ -136,6 +170,9 @@ int main(int /*argc*/, char** /*argv*/) {
                     if (!attached) logline("attached to session 0 and enabled");
                     attached = 1;
                     fails = 0;
+                    status_t pg = push_gain(fx, gain);
+                    logline("pushed gain_mb=%d -> %d", gain, (int)pg);
+                    pushed_gain = (pg == OK) ? gain : -1;
                 } else {
                     logline("setEnabled failed: %d", (int)en);
                 }
@@ -151,6 +188,14 @@ int main(int /*argc*/, char** /*argv*/) {
                     continue;
                 }
             }
+        }
+        // Slider moved while the effect is up: hand the new gain straight over. Previously
+        // the only way a changed gain reached the DSP was an audioserver restart rebuilding
+        // the effect, which costs a short audible gap.
+        if (fx != nullptr && gain != pushed_gain) {
+            status_t pg = push_gain(fx, gain);
+            logline("gain change -> %d (status %d)", gain, (int)pg);
+            if (pg == OK) pushed_gain = gain;
         }
         // 30 s instead of 5 s: re-attaching a few seconds later after an audioserver restart
         // is inaudible, and this cuts idle wakeups by 6x. The check itself is a local field
