@@ -257,6 +257,56 @@ asb_migrate_governor_conf
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
     echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
+    # Re-apply the /odm runtime binds. post-fs-data already tries this, but KernelSU mounts
+    # its own module overlay on /odm AFTER post-fs-data runs, so that early bind gets
+    # shadowed and the framework still reads the stock config (observed: the boot log said
+    # action=boot, yet grep asb /odm/etc/audio_effects_config.xml stayed 0 until a manual
+    # mount --bind). Binding again here - after the overlay is in place - sticks.
+    if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ]; then
+      _rb_any=0
+      while IFS='|' read -r _rb_t _rb_p; do
+        case "$_rb_t" in ''|'#'*) continue ;; esac
+        [ -f "$_rb_t" ] && [ -f "$_rb_p" ] || continue
+        cmp -s "$_rb_t" "$_rb_p" 2>/dev/null && continue
+        if command -v nsenter >/dev/null 2>&1 \
+           && nsenter -t 1 -m -- mount --bind "$_rb_p" "$_rb_t" 2>/dev/null; then
+          _rb_any=1
+        elif mount --bind "$_rb_p" "$_rb_t" 2>/dev/null; then
+          _rb_any=1
+        fi
+      done < /data/adb/asb/odm_bind_manifest.txt
+      if [ "$_rb_any" = "1" ]; then
+        echo "ts=$(date +%s) action=odm_bind_late result=applied" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
+        setprop ctl.restart audioserver 2>/dev/null || true
+      fi
+    fi
+    # Launch the attacher daemon from OUR data dir (post-fs-data staged it there and made it
+    # executable; the copy inside the module dir stays 0644 because the root manager resets
+    # module file permissions after installation). This is what actually makes the DSP
+    # audible on OxygenOS: the framework never applies the config's <postprocess> section
+    # here - AudioPolicyEffects logs "no output processing needed" even for the stock
+    # music_helper - so effects have to be created programmatically, exactly like ViperFX
+    # and OPlus' own effect do.
+    _att_bin="/data/adb/asb/asb_dsp_attach"
+    if [ ! -f "$_att_bin" ] && [ -f "$MODDIR/bin/asb_dsp_attach" ]; then
+      mkdir -p /data/adb/asb 2>/dev/null
+      cp -f "$MODDIR/bin/asb_dsp_attach" "$_att_bin" 2>/dev/null
+    fi
+    if [ -f "$_att_bin" ]; then
+      chmod 0755 "$_att_bin" 2>/dev/null
+      pkill -f asb_dsp_attach 2>/dev/null
+      sleep 1
+      if [ -x "$_att_bin" ]; then
+        nohup "$_att_bin" >> /data/adb/asb/dsp_attach.log 2>&1 &
+        _att_how="direct"
+      else
+        # Last resort: hand the binary to the dynamic linker. That runs it without needing
+        # the exec bit, covering a noexec mount or an SELinux label that forbids exec.
+        nohup /system/bin/linker64 "$_att_bin" >> /data/adb/asb/dsp_attach.log 2>&1 &
+        _att_how="linker64"
+      fi
+      echo "ts=$(date +%s) action=dsp_attach_started via=$_att_how" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
+    fi
   fi
 ) >/dev/null 2>&1 &
 

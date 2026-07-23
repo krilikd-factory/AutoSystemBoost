@@ -2,6 +2,16 @@
 MODID="AutoSystemBoost"
 MODDIR="${0%/*}"
 [ -z "$MODDIR" ] || [ "$MODDIR" = "$0" ] && MODDIR="/data/adb/modules/$MODID"
+# Stage the attacher daemon into our OWN data dir and make it executable there. Setting the
+# exec bit inside the module dir does not stick: the root manager re-applies its permissions
+# to module files after installation, so the binary stays 0644 and cannot be exec'd
+# (observed on device: "can't execute: Permission denied", no daemon, no log).
+# /data/adb/asb is ours, so the mode set here survives.
+if [ -f "$MODDIR/bin/asb_dsp_attach" ]; then
+  mkdir -p /data/adb/asb 2>/dev/null
+  cp -f "$MODDIR/bin/asb_dsp_attach" /data/adb/asb/asb_dsp_attach 2>/dev/null
+  chmod 0755 /data/adb/asb/asb_dsp_attach 2>/dev/null
+fi
 
 chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 
