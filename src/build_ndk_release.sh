@@ -114,6 +114,25 @@ if [ -n "$DSP_SRC" ]; then
         exit 1
       fi
       cp -f "$_aidl_pre" "$_dout/libasbdsp.so"
+      # Freshness gate. Every distinctive log literal that exists in the source must also
+      # exist in the binary; if one is missing, the prebuilt is from an older build than
+      # the sources next to it. This is fatal, not a warning: shipping a stale library
+      # here put a version on the device that answered the effect factory with an error
+      # and left the phone with zero audio effects at all, while every symptom pointed at
+      # the code rather than at packaging.
+      _src_fx="$SCRIPT_DIR/DSP_AIDL/asb_effect_aidl.cpp"
+      _missing=""
+      for _lit in "ASB queryEffect" "ASB createEffect" "ASB configure" "ASB process"; do
+        grep -q "$_lit" "$_src_fx" 2>/dev/null || continue
+        grep -aq "$_lit" "$_dout/libasbdsp.so" 2>/dev/null || _missing="$_missing \"$_lit\""
+      done
+      if [ -n "$_missing" ]; then
+        echo "[ASB] ERROR: $_abi prebuilt libasbdsp_aidl.so is STALE." >&2
+        echo "[ASB]   The source contains these markers, the binary does not:$_missing" >&2
+        echo "[ASB]   Rebuild with soong (mm libasbdsp_aidl) from the CURRENT src/DSP_AIDL" >&2
+        echo "[ASB]   and copy the output into src/DSP_AIDL/prebuilt/$_abi/." >&2
+        exit 1
+      fi
       if [ "$SCRIPT_DIR/DSP_AIDL/asb_effect_aidl.cpp" -nt "$_aidl_pre" ] || \
          [ "$SCRIPT_DIR/DSP_AIDL/asb_dsp_core.h" -nt "$_aidl_pre" ]; then
         echo "[ASB] WARNING: $_abi prebuilt libasbdsp_aidl.so is OLDER than the effect"
@@ -153,6 +172,22 @@ if [ -n "$DSP_SRC" ]; then
   # but nothing ever instantiates it.
   _att_pre="${ASB_DSP_AIDL_DIR:-$SCRIPT_DIR/DSP_AIDL/prebuilt}/arm64-v8a/asb_dsp_attach"
   if [ -f "$_att_pre" ]; then
+    # Same freshness gate as the library: a stale daemon silently drops whatever the
+    # current source added (the binder gain push, the wake signal) and the effect then
+    # behaves like the code was never changed.
+    _src_att="$SCRIPT_DIR/DSP_AIDL/asb_dsp_attach.cpp"
+    _att_missing=""
+    for _lit in "pushed gain_mb" "gain change" "attached to session"; do
+      grep -q "$_lit" "$_src_att" 2>/dev/null || continue
+      grep -aq "$_lit" "$_att_pre" 2>/dev/null || _att_missing="$_att_missing \"$_lit\""
+    done
+    if [ -n "$_att_missing" ]; then
+      echo "[ASB] ERROR: prebuilt asb_dsp_attach is STALE." >&2
+      echo "[ASB]   The source contains these markers, the binary does not:$_att_missing" >&2
+      echo "[ASB]   Rebuild it (mm asb_dsp_attach) and copy the output into" >&2
+      echo "[ASB]   src/DSP_AIDL/prebuilt/arm64-v8a/." >&2
+      exit 1
+    fi
     mkdir -p "$SCRIPT_DIR/../bin/arm64-v8a" 2>/dev/null
     install -m 0755 "$_att_pre" "$SCRIPT_DIR/../bin/arm64-v8a/asb_dsp_attach" 2>/dev/null \
       && echo "[ASB] DSP: attacher daemon staged ($(wc -c < "$_att_pre") bytes)"
