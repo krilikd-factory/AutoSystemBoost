@@ -2031,18 +2031,46 @@ if [ "$ASB_IS_OP15" = "true" ]; then
   # nothing on the one device it was tuned for. Patch every effects config the overlay
   # actually ships so the effect is registered next to the stock ones.
   if [ "$ASB_AUDIO" = "true" ]; then
+    # Drop leftovers from manual diagnostics before touching anything. A stray
+    # *.asbbak sitting next to a config inside the overlay gets magic-mounted into
+    # /vendor/etc/audio/... as junk, and nothing should ever patch or read a stale copy.
+    # Registration below is idempotent (it strips its own lines first, then re-adds them),
+    # so with the leftovers gone every install restores it on its own - no manual step.
+    for _d in "$MODPATH" /data/adb/modules/AutoSystemBoost; do
+      [ -d "$_d" ] || continue
+      rm -f "$_d"/system/vendor/etc/audio/sku_*/audio_effects_config.xml.asbbak \
+            "$_d"/system/vendor/odm/etc/audio_effects_config.xml.asbbak \
+            "$_d"/system/odm/etc/audio_effects_config.xml.asbbak 2>/dev/null
+    done
     _op15_reg=0
+    _op15_seen=0
     for _ec in \
         "$MODPATH"/system/vendor/etc/audio/sku_*/audio_effects_config.xml \
         "$MODPATH"/system/vendor/odm/etc/audio_effects_config.xml \
         "$MODPATH"/system/odm/etc/audio_effects_config.xml; do
       [ -f "$_ec" ] || continue
       case "$_ec" in *_stub.xml) continue ;; esac
+      _op15_seen=$((_op15_seen + 1))
       asb_register_dsp_effect "$_ec"
-      grep -q 'asb_loudness' "$_ec" 2>/dev/null && _op15_reg=$((_op15_reg + 1))
+      if grep -q 'asb_loudness' "$_ec" 2>/dev/null; then
+        _op15_reg=$((_op15_reg + 1))
+      else
+        # Say WHY. A registration that quietly does nothing is the failure that cost the
+        # most time to find on device, so it must never be silent at install time again.
+        if [ ! -f "$MODPATH/system/vendor/lib64/soundfx/libasbdsp.so" ] \
+           && [ ! -f "$MODPATH/system/vendor/lib/soundfx/libasbdsp.so" ]; then
+          ui_print "    ! ASB DSP: library not staged - cannot register in $(basename "$(dirname "$_ec")")"
+        elif ! grep -q '<libraries>' "$_ec" 2>/dev/null || ! grep -q '<effects>' "$_ec" 2>/dev/null; then
+          ui_print "    ! ASB DSP: $(basename "$(dirname "$_ec")") has no <libraries>/<effects> section"
+        else
+          ui_print "    ! ASB DSP: registration did not land in $(basename "$(dirname "$_ec")")"
+        fi
+      fi
     done
     if [ "$_op15_reg" -gt 0 ]; then
       ui_print "      + ASB DSP ${ASB_D_DSP_REG:-effect registered in} ${_op15_reg} ${ASB_D_DSP_REG_TAIL:-audio_effects_config file(s)}"
+    elif [ "$_op15_seen" -gt 0 ]; then
+      ui_print "    ! ASB DSP: $_op15_seen config(s) present but none registered - DSP will be silent"
     else
       ui_print "    ! ASB DSP: no audio_effects_config in overlay to register into"
     fi
@@ -2057,9 +2085,20 @@ if [ "$ASB_IS_OP15" = "true" ]; then
     # /odm into the magic-mount tree, which is what bootlooped the Ace 6.
     if [ -f /odm/etc/audio_effects_config.xml ]; then
       _oecs="/data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml"
+      _oecs_src="/data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml.stock"
       _oecm="/data/adb/asb/odm_bind_manifest.txt"
       mkdir -p "$(dirname "$_oecs")" 2>/dev/null
-      if cp -f /odm/etc/audio_effects_config.xml "$_oecs" 2>/dev/null; then
+      # Never copy /odm/etc/audio_effects_config.xml onto our own patched copy. Once the
+      # runtime bind from an earlier install is live, that path IS "$_oecs" - the copy then
+      # truncates the file and the registration can never be refreshed, which is exactly how
+      # the device ended up with a bound config carrying zero ASB lines while every
+      # reinstall reported success. Keep a pristine snapshot the first time and always
+      # patch from it (asb_register_dsp_effect strips its own lines first, so this stays
+      # idempotent even if the snapshot was taken from an already-patched file).
+      if [ ! -s "$_oecs_src" ]; then
+        cp -f /odm/etc/audio_effects_config.xml "$_oecs_src" 2>/dev/null
+      fi
+      if cp -f "$_oecs_src" "$_oecs" 2>/dev/null; then
         asb_register_dsp_effect "$_oecs"
         if grep -q 'asb_loudness' "$_oecs" 2>/dev/null; then
           chmod 0644 "$_oecs" 2>/dev/null
