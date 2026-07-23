@@ -1,0 +1,477 @@
+name: Build DSP attacher only
+
+# Builds libasbdsp_aidl.so (arm64-v8a + armeabi-v7a) from src/DSP_AIDL/Android.bp in a
+# minimal AOSP/soong tree, then uploads the .so files as artifacts.
+#
+# HONEST EXPECTATIONS:
+#  - GitHub-hosted runners do NOT ship an AOSP/soong environment; this workflow builds
+#    one from scratch by syncing a minimal set of AOSP projects (see
+#    src/DSP_AIDL/manifest/asb_aidl_min.xml). First runs commonly fail on a missing soong
+#    module - add the project that provides it to that manifest and re-run. Budget a few
+#    iterations; this is normal for a from-scratch soong bring-up.
+#  - Disk is the tightest constraint. The free ubuntu runner has ~14 GB free by default;
+#    the cleanup step below reclaims ~25-30 GB more. A minimal audio-effect-AIDL tree plus
+#    the clang toolchain and out/ is on the edge of fitting. If you hit "no space left on
+#    device", switch `runs-on` to a larger runner (e.g. ubuntu-latg / a 2x-large runner in
+#    your plan) or a self-hosted runner with 120 GB+ free.
+#  - Runtime: a cold sync + soong bootstrap + build is typically 40-90 min.
+#
+# Trigger manually (workflow_dispatch) so it never runs on every push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      aosp_tag:
+        description: "AOSP branch/tag (must match the manifest revision)"
+        default: "android16-release"
+        required: true
+      lunch_target:
+        description: "lunch combo (arm64 primary; compile_multilib both gives arm too)"
+        default: "aosp_cf_arm64_only_phone-trunk_stable-userdebug"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Larger runner: the soong "generating ninja" phase loads the whole Android 16 blueprint
+    # graph into RAM and does not fit in the 16 GB standard runner (OOM-killed every run). An
+    # 8-core larger runner has 32 GB RAM, which clears that phase. The label below must match
+    # the larger runner you create in org settings (Settings -> Actions -> Runners -> New
+    # GitHub-hosted runner, 8-core Ubuntu). Override via an ASB_RUNNER_LABEL repo/org variable
+    # if you name it differently.
+    # Larger runner via GitHub's BUILT-IN automatic larger-runner label, not a manually
+    # created runner. A hand-created runner ("ubuntu-latest-8-cores") sat Queued 20+ min and
+    # never picked up the job - a known larger-runner provisioning issue. GitHub auto-creates
+    # a "Default Larger Runners" group; jobs routed to the built-in ubuntu-22.04-8core label
+    # (8 vCPU / 32 GB RAM) are provisioned automatically without a UI-created runner. Override
+    # with an ASB_RUNNER_LABEL repo/org variable if your org uses a different label.
+    runs-on: ${{ vars.ASB_RUNNER_LABEL || 'ubuntu-22.04-8core' }}
+    timeout-minutes: 180
+
+    steps:
+      - name: Runner check (cores / RAM / label)
+        run: |
+          # If this prints, the larger runner actually provisioned and picked up the job -
+          # so any hang is later, not provisioning. If the job stays Queued and this never
+          # prints, the runner never started (GitHub provisioning stall), and the workflow
+          # itself is fine. Also confirms we really got 8 cores / ~32 GB, not a fallback.
+          echo "=== runner is up ==="
+          echo "hostname: $(hostname)"
+          echo "cores (nproc): $(nproc)"
+          echo "runner label requested: ${{ vars.ASB_RUNNER_LABEL || 'ubuntu-22.04-8core' }}"
+          free -h || true
+          echo "disk:"; df -h / || true
+          echo "=== expecting ~8 cores and ~32 GB RAM for the DSP build ==="
+
+      - name: Checkout module sources (shallow)
+        uses: actions/checkout@v4
+        with:
+          path: asb-src
+
+      - name: Reclaim disk space
+        run: |
+          echo "Before:"; df -h /
+          # The full (shallow) AOSP manifest is larger than the old minimal set, so reclaim
+          # aggressively up front. These preinstalled toolchains are ~30 GB combined and are
+          # not needed for a soong build.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" \
+                      /usr/local/lib/node_modules /usr/share/swift \
+                      /opt/hostedtoolcache /usr/local/graalvm /usr/local/.ghcup \
+                      /usr/lib/jvm /usr/local/share/powershell 2>/dev/null || true
+          sudo apt-get -y purge '^dotnet-.*' '^llvm-.*' 'php.*' azure-cli \
+                      google-chrome-stable firefox powershell mono-devel \
+                      '^mysql-.*' '^postgresql-.*' 2>/dev/null || true
+          sudo apt-get -y autoremove --purge 2>/dev/null || true
+          sudo apt-get clean
+          docker rmi $(docker images -q) 2>/dev/null || true
+          echo "After:"; df -h /
+
+      - name: Install AOSP build dependencies
+        run: |
+          sudo apt-get update
+          # Core deps that exist on every Ubuntu. Note: libncurses5 was RENAMED on Ubuntu
+          # 24.04 (noble) - the runner's default image - so requesting it aborts apt with
+          # "Unable to locate package". Use the current names (libncurses6 / libncurses-dev)
+          # here, and try the legacy libncurses5/libtinfo5 separately WITHOUT failing the
+          # step, since only some AOSP prebuilt host tools need the old soname.
+          sudo apt-get install -y --no-install-recommends \
+            git-core gnupg flex bison build-essential zip curl zlib1g-dev \
+            libc6-dev-i386 libncurses6 libncurses-dev x11proto-core-dev libx11-dev \
+            lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig \
+            python3 python3-pip ccache rsync
+          # Legacy ncurses5 soname for older prebuilt tools; ignore if unavailable on noble.
+          sudo apt-get install -y --no-install-recommends libncurses5 libtinfo5 2>/dev/null \
+            || echo "libncurses5/libtinfo5 not available on this release - continuing (usually fine)"
+          mkdir -p ~/.bin
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+          chmod a+x ~/.bin/repo
+          echo "$HOME/.bin" >> "$GITHUB_PATH"
+          git config --global user.name  "asb-ci"
+          git config --global user.email "asb-ci@users.noreply.github.com"
+          git config --global color.ui false
+
+      - name: Init AOSP tree (standard manifest, filtered)
+        run: |
+          mkdir -p aosp && cd aosp
+          # Standard manifest so soong resolves its own deps, with a CONSERVATIVE groups
+          # filter. Only drop things a single vendor-lib build never needs: the big test
+          # suites (cts/vts) and other-OS host tools (darwin/mips). Do NOT exclude -pdk or
+          # -notdefault: build/make itself is tagged groups="pdk,sysui-studio", so excluding
+          # pdk silently drops the build system (the "build/make missing" failure). The
+          # previous full sync was 120 GB; dropping just cts/vts brought it to ~18 GB with
+          # 108 GB free, so disk is no longer the constraint and we keep build/make.
+          # Groups filter: only exclude the big STANDALONE test suites (cts/vts) and
+          # other-OS host tools (darwin/mips). Do NOT exclude broadly - the soong bootstrap
+          # parses every Android.bp in the tree, and hardware/interfaces references modules
+          # like kernel-config-soong-rules (in kernel/configs), so an over-filtered tree
+          # breaks bootstrap on "undefined module". Keeping the filter narrow keeps those
+          # referenced projects present.
+          # No --clone-filter=blob:limit: with it, referenced projects (kernel/configs)
+          # synced without their Android.bp, so soong still saw "undefined module". Full
+          # blobs (still --depth=1) guarantee every Android.bp is present.
+          # Groups: --groups=all pulled EVERY subtree (trusty, apps, wear, rust...), and each
+          # one whose Android.bp had an unmet dep failed ninja generation one at a time. So
+          # exclude the big unrelated subtrees at the source. Keep kernel (for
+          # kernel-config-soong-rules) and device (cuttlefish product). If a later "missing
+          # dependency" still names a subtree, add -<group> here or rm -rf it in prune.
+          repo init -u https://android.googlesource.com/platform/manifest \
+                    -b "${{ github.event.inputs.aosp_tag }}" \
+                    --depth=1 \
+                    --groups=default,kernel,device,-cts,-vts,-vts10,-darwin,-apps,-trusty
+          echo "=== manifest ready ==="
+
+      - name: Sync AOSP tree
+        working-directory: aosp
+        run: |
+          # googlesource returned HTTP 429 (Too Many Requests): 8 parallel fetches after many
+          # repeated syncs over these days tripped its rate limiter. Fix: fewer parallel
+          # connections, retries with growing backoff, and NO --fail-fast so one throttled
+          # project does not abort everything. repo sync resumes already-fetched projects, so
+          # each retry only pulls what is still missing - cheap and self-healing.
+          sync_once() {
+            repo sync -c --no-tags --no-clone-bundle --optimized-fetch --force-sync -j"$1"
+          }
+          ok=0
+          # Start gentle (fewer connections = less likely to be throttled), and back off on
+          # failure. Pause between attempts so the rate-limit window resets.
+          for attempt in 1 2 3 4 5; do
+            case $attempt in
+              1) J=4 ;; 2) J=3 ;; 3) J=2 ;; *) J=1 ;;
+            esac
+            echo "=== sync attempt $attempt (-j$J) ==="
+            if sync_once "$J"; then ok=1; break; fi
+            echo "sync attempt $attempt failed (likely HTTP 429 rate-limit); backing off..."
+            sleep $(( attempt * 60 ))
+          done
+          [ "$ok" = "1" ] || { echo "::error::repo sync failed after retries (rate-limited?)"; exit 1; }
+          echo "Tree size after sync:"; du -sh . 2>/dev/null || true
+          df -h /
+          test -f build/make/envsetup.sh \
+            || { echo "::error::build/make missing after sync"; exit 1; }
+          echo "=== pruning other-OS toolchains ==="
+          sudo rm -rf \
+            prebuilts/clang/host/darwin-x86 prebuilts/clang/host/windows-x86 \
+            prebuilts/build-tools/darwin-x86 prebuilts/go/darwin-x86 \
+            prebuilts/jdk/jdk*/darwin-x86 prebuilts/jdk/jdk*/windows-x86 \
+            prebuilts/misc/darwin-x86 prebuilts/misc/windows-x86 2>/dev/null || true
+          # Reclaim big space by dropping git history/objects: the working tree is checked
+          # out, and a one-shot build never needs .git. On a full-blob shallow sync this
+          # frees tens of GB, which keeps out/ from running out of space.
+          echo "=== stripping .git to reclaim space ==="
+          du -sh .repo/project-objects .repo/projects 2>/dev/null | head -3 || true
+          find . -path ./.repo -prune -o -type d -name '.git' -print 2>/dev/null | while read -r g; do
+            rm -rf "$g" 2>/dev/null || true
+          done
+          # .repo holds the real git objects for a repo checkout; after sync we can drop the
+          # large pack objects too (we will not sync again in this job).
+          rm -rf .repo/project-objects .repo/projects .repo/repo .repo/manifests.git 2>/dev/null || true
+          # Verify the previously-missing module's project actually has its Android.bp now.
+          if grep -rql "kernel-config-soong-rules" kernel/configs 2>/dev/null; then
+            echo "OK: kernel-config-soong-rules definition present"
+          else
+            echo "::warning::kernel-config-soong-rules still not found in kernel/configs"
+          fi
+          echo "Tree size after prune:"; du -sh . 2>/dev/null || true
+          df -h /
+          # The soong bootstrap parses EVERY Android.bp and fails if any references an
+          # undefined module - even one irrelevant to our vendor lib. On this branch
+          # hardware/interfaces/compatibility_matrices/build/Android.bp references
+          # kernel-config-soong-rules, which is not present, and that one file blocks the
+          # whole bootstrap. It builds VINTF compatibility matrices, which a single
+          # cc_library_shared does not need, so neutralize just that file (and the kernel
+          # config rules include) so the tree parses. This is surgical: we remove build
+          # rules we do not use, not anything our module depends on.
+          for bp in \
+            hardware/interfaces/compatibility_matrices/build/Android.bp \
+            hardware/interfaces/compatibility_matrices/Android.bp \
+            hardware/interfaces/compatibility_matrices/Android.mk ; do
+            if [ -f "$bp" ]; then
+              echo "neutralizing $bp"
+              printf '// emptied by ASB CI: unrelated VINTF matrix rules blocked bootstrap\n' > "$bp"
+            fi
+          done
+          # Neutralize EVERY Android.bp that references the missing kernel-config rules,
+          # tree-wide (not just hardware/interfaces) so the bootstrap parses in one pass
+          # instead of failing on them one at a time. These build VINTF compatibility
+          # matrices, which a single vendor cc_library does not need. Limiting to compatibility
+          # matrix / vintf dirs keeps the surgery targeted.
+          for d in hardware/interfaces/compatibility_matrices \
+                   hardware/interfaces/vintf* system/libvintf kernel/configs; do
+            [ -d "$d" ] || continue
+            grep -rl "kernel-config-soong-rules\|kernel_config_data\|kernel-config-data" \
+              "$d" 2>/dev/null | while read -r f; do
+              case "$f" in *.bp|*.mk) echo "emptying $f"; printf '// emptied by ASB CI\n' > "$f" ;; esac
+            done
+          done
+          # If the matrix build file itself still references it, empty it outright.
+          for bp in hardware/interfaces/compatibility_matrices/build/Android.bp; do
+            [ -f "$bp" ] && grep -q "kernel-config" "$bp" 2>/dev/null \
+              && printf '// emptied by ASB CI\n' > "$bp" || true
+          done
+          # Do NOT delete subtrees here. An earlier version removed
+          # packages/modules/Virtualization and external/rust, but the cuttlefish product
+          # (device/google/cuttlefish/.../aosp_cf.mk) *includes* Virtualization's
+          # product_packages.mk, so deleting it broke product config. The groups filter at
+          # init already keeps trusty/apps/etc out at the source; nothing to prune here.
+          echo "=== (no subtree deletion - groups filter handles exclusions) ==="
+          # Pre-emptively neutralize EVERY module we already know blocks soong analysis, so
+          # the first `m` pass gets through instead of the auto-heal loop re-bootstrapping
+          # soong (~12 min each) attempt after attempt. That loop worked but was so expensive
+          # that after several attempts + swap the runner was starved for CPU/memory and
+          # GitHub killed it ("hosted runner lost communication") at ~2h. Emptying these up
+          # front collapses the whole class into a single analysis pass.
+          #  - trusty test VMs (rule_builder paths cannot be nil)
+          #  - CrashRecovery APEX prebuilt (PRODUCT_APEX_SYSTEM_SERVER_JARS)
+          #  - microdroid / Virtualization signed bins (avbAddHashFooter nil path)
+          neutralize_bp_for() {
+            # $1 = grep pattern for module names; empty each matching Android.bp (not .repo, not ours)
+            grep -rlE "$1" --include='Android.bp' . 2>/dev/null | while read -r f; do
+              case "$f" in ./.repo/*|*/DSP_AIDL/*|*vendor/asb/*) continue ;; esac
+              echo "pre-neutralizing: $f"
+              printf '// emptied by ASB CI (pre-emptive): unrelated module blocks analysis\n' > "$f"
+            done
+          }
+          neutralize_bp_for 'trusty_test_vm_signed_bin|trusty_test_vm_os_signed_bin|trusty_test_vm'
+          neutralize_bp_for 'microdroid_kernel_16k_signed|microdroid_kernel|microdroid.*_signed_bin'
+          # CrashRecovery: the offending file is a prebuilt module_sdk Android.bp; empty it.
+          for f in prebuilts/module_sdk/CrashRecovery/current/Android.bp \
+                   prebuilts/module_sdk/CrashRecovery/*/Android.bp; do
+            [ -f "$f" ] && { echo "pre-neutralizing CrashRecovery: $f"; printf '// emptied by ASB CI\n' > "$f"; }
+          done
+          # Whole Virtualization build dir defines many signed-bin VM modules that panic with
+          # filtered deps and are irrelevant to a vendor audio lib; empty its build .bp files.
+          for f in packages/modules/Virtualization/build/microdroid/Android.bp \
+                   packages/modules/Virtualization/*/Android.bp; do
+            [ -f "$f" ] && { echo "pre-neutralizing Virtualization: $f"; printf '// emptied by ASB CI\n' > "$f"; }
+          done
+          # CtsBionicRootTestCases (and siblings) hit a kati-phase error: "cannot copy target
+          # from multiple modules" because both the 64- and 32-bit variants emit the same
+          # meta_lic path. These CTS tests are irrelevant to a vendor audio lib but get pulled
+          # into the make graph. Empty their defining Android.bp so they drop out.
+          neutralize_bp_for 'CtsBionicRootTestCases|CtsBionic.*TestCases'
+          # Confirm the release configs are present; list them so the build step (and we)
+          # can see which release names actually exist on this branch.
+          if [ -d build/release/aconfig ]; then
+            echo "=== available release configs ==="
+            ls build/release/aconfig 2>/dev/null | head -20 || true
+          else
+            echo "::warning::build/release/aconfig not found - lunch may fail on release config"
+          fi
+
+      - name: Stage the ASB module into the tree
+        working-directory: aosp
+        run: |
+          # Same staging dir as the .so build: Android.bp there declares BOTH targets,
+          # we just ask soong for the attacher only.
+          mkdir -p vendor/asb/libasbdsp_aidl
+          cp -a "$GITHUB_WORKSPACE"/asb-src/src/DSP_AIDL/*.cpp \
+                "$GITHUB_WORKSPACE"/asb-src/src/DSP_AIDL/*.h \
+                "$GITHUB_WORKSPACE"/asb-src/src/DSP_AIDL/Android.bp \
+                vendor/asb/libasbdsp_aidl/
+          ls -la vendor/asb/libasbdsp_aidl/
+
+      - name: Add swap (cover ninja-generation peak)
+        run: |
+          # The soong "generating ninja" phase was SIGTERM-killed (exit 143) on the 32 GB
+          # runner: soong_build finished (130/131) then the analyze phase peaked and the
+          # process was killed. 32 GB is right at the edge for this phase, and a trimmed 4-8 GB
+          # swap did not cover the spike (a prior run passed only by luck). The larger runner
+          # has a 300 GB SSD, so a big swapfile is free insurance against the peak. Keep
+          # swappiness modest so it only spills at the peak instead of thrashing throughout.
+          sudo swapoff -a || true
+          AVAIL_GB=$(df --output=avail -BG / 2>/dev/null | tail -1 | tr -dc '0-9')
+          [ -z "$AVAIL_GB" ] && AVAIL_GB=0
+          # Aim for 32 GB swap (so RAM+swap ~= 64 GB, comfortably above the peak), but never
+          # take more than half the free disk so out/ still has room.
+          SWAP_GB=32
+          HALF=$(( AVAIL_GB / 2 ))
+          [ "$SWAP_GB" -gt "$HALF" ] && SWAP_GB="$HALF"
+          [ "$SWAP_GB" -lt 8 ] && SWAP_GB=8
+          echo "avail=${AVAIL_GB}G -> swap=${SWAP_GB}G"
+          sudo fallocate -l "${SWAP_GB}G" /mnt/swapfile \
+            || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=$(( SWAP_GB * 1024 ))
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          # Modest swappiness: use swap for the peak, not for everything (keeps it fast).
+          sudo sysctl vm.swappiness=30 || true
+          echo "=== memory + swap ==="; free -h
+
+      - name: Build asb_dsp_attach (arm64)
+        working-directory: aosp
+        run: |
+          set -e
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export BUILD_BROKEN_DISABLE_BAZEL=true
+          # Use all cores: the 32 GB larger runner has the memory headroom that the old 16 GB
+          # runner lacked, so the -j2 cap (a memory workaround) is no longer needed and just
+          # wasted 6 idle cores. Full parallelism makes soong analysis + our build much faster.
+          MJOBS="$(nproc)"
+          # envsetup.sh physically lives in build/make/; AOSP's default.xml normally creates
+          # a build/envsetup.sh linkfile to it. Source whichever path exists so a missing
+          # linkfile does not break the build.
+          if [ -f build/envsetup.sh ]; then
+            source build/envsetup.sh
+          elif [ -f build/make/envsetup.sh ]; then
+            source build/make/envsetup.sh
+          else
+            echo "::error::envsetup.sh not found - build/make did not sync"; exit 1
+          fi
+          # Pick a release config that actually exists on this branch instead of guessing.
+          # build/release/aconfig/<name>/ dirs ARE the valid release names (trunk_staging,
+          # trunk_stable, ap*, etc). Prefer trunk_staging (most permissive for a from-source
+          # build), then trunk_stable, then whatever is first.
+          RELEASES="$(ls build/release/aconfig 2>/dev/null || true)"
+          if [ -z "$RELEASES" ]; then
+            # The blob:limit partial-clone filter can leave build/release without its
+            # aconfig files. Force a full fetch of just that project, then re-list.
+            echo "release configs empty - refetching build/release in full"
+            ( cd build/release && git fetch --refetch --filter=blob:none origin 2>/dev/null \
+                && git checkout -f HEAD 2>/dev/null ) || true
+            RELEASES="$(ls build/release/aconfig 2>/dev/null || true)"
+          fi
+          echo "release configs found: ${RELEASES:-<none>}"
+          REL=""
+          for cand in trunk_staging trunk_stable next; do
+            echo "$RELEASES" | grep -qx "$cand" && { REL="$cand"; break; }
+          done
+          [ -n "$REL" ] || REL="$(echo "$RELEASES" | grep -E '^(trunk|ap|next)' | head -1)"
+          [ -n "$REL" ] || REL="$(echo "$RELEASES" | head -1)"
+          echo "using release: ${REL:-<unknown>}"
+          _lunched=0
+          # Prefer the BARE aosp_arm64 product first. It is defined in
+          # build/make/target/product and pulls far fewer deps than the cuttlefish (aosp_cf_*)
+          # products, which reference device/google/cuttlefish + packages/modules/Virtualization
+          # and a long device dependency chain. For building one vendor cc_library we do not
+          # need a full device product, so the leaner product is both faster and less likely
+          # to trip over an unmet product-config include.
+          for prod in aosp_arm64 aosp_cf_arm64_only_phone aosp_cf_arm64_phone; do
+            combo="${prod}-${REL}-userdebug"
+            echo "--- trying lunch $combo ---"
+            if lunch "$combo"; then _lunched=1; echo "lunch OK: $combo"; break; fi
+          done
+          [ "$_lunched" = "1" ] || { echo "::error::no lunch combo worked (release=$REL)"; exit 1; }
+          # Build with an auto-heal loop. soong analyzes the WHOLE tree before building our
+          # module, and unrelated modules (trusty test VMs, CrashRecovery APEX prebuilts,
+          # etc.) can fail analysis with product-config errors that have nothing to do with a
+          # vendor audio lib. Rather than fix them one-per-CI-run, parse the failing
+          # Android.bp path out of soong's error and neutralize it, then retry - all within
+          # this single run. Capped so a genuine error in OUR module still fails fast.
+          build_ok=0
+          # We build via soong's ninja graph directly, NOT `m`. `m libasbdsp_aidl` runs the
+          # full kati/make product graph, which pulls in hundreds of unrelated modules (NFC,
+          # CTS, priv-app...) whose make-phase conflicts ("overriding commands", "cannot copy
+          # target") are endless and not tied to a single Android.bp we can neutralize. Soong
+          # emits out/soong/build.<product>.ninja describing our lib + its REAL deps; building
+          # that target with ninja skips the make graph entirely. We still keep an auto-heal
+          # loop for the soong-analysis phase (Android.bp panics), which runs before ninja.
+          for attempt in $(seq 1 6); do
+            echo "=== build attempt $attempt ==="
+            set +e
+            # ONE soong-only invocation does analysis AND builds our module. Do NOT run a
+            # separate `m nothing` first: that ran the memory-heavy ninja-generation phase a
+            # SECOND time, and on a 16GB runner the duplicate analysis hung ~30 min and got
+            # the runner killed (exit 143). SOONG_ONLY=true keeps the kati product graph
+            # (NFC/CTS/priv-app) out, so only our lib + real deps are evaluated.
+            SOONG_ONLY=true m -j"$MJOBS" asb_dsp_attach 2>&1 | tee /tmp/asb_build.log
+            rc=${PIPESTATUS[0]}
+            set -e
+            if [ "$rc" = "0" ] && find out -name 'asb_dsp_attach' -type f | grep -q .; then
+              build_ok=1; break
+            fi
+            # Recover an already-compiled unstripped .so if only a late action (strip) failed.
+            UNSTRIPPED="$(find out/soong/.intermediates -path '*asb_dsp_attach*/unstripped/asb_dsp_attach' 2>/dev/null | head -5)"
+            if [ -n "$UNSTRIPPED" ]; then
+              echo "late action failed but the compiled .so exists; recovering unstripped copies"
+              echo "$UNSTRIPPED" | while read -r u; do
+                cp -f "$u" "${u%/unstripped/asb_dsp_attach}/asb_dsp_attach" 2>/dev/null || true
+              done
+              find out -name 'asb_dsp_attach' -type f | grep -q . && { build_ok=1; break; }
+            fi
+            # If our own module has a real error, surface it and stop (do not auto-heal ours).
+            if grep -qE "asb_dsp_attach.*missing dependencies|asb_dsp_attach\.cpp.*error:|asb_dsp_attach.*undefined" /tmp/asb_build.log; then
+              echo "::error::asb_dsp_attach real code/deps error:"
+              grep -E "missing dependencies|error:|undefined reference|fatal error" /tmp/asb_build.log | head -20
+              break
+            fi
+            # Otherwise auto-heal an unrelated Android.bp that blocked soong analysis (A/B/C).
+            badbp="$(grep -oE '[A-Za-z0-9_./-]+/Android\.bp:[0-9]+' /tmp/asb_build.log \
+                       | head -1 | sed 's/:.*//')"
+            if [ -z "$badbp" ]; then
+              badmod="$(grep -oE 'GenerateBuildActions for module "[^"]+"' /tmp/asb_build.log \
+                         | head -1 | sed 's/.*"\(.*\)"/\1/')"
+              [ -z "$badmod" ] && badmod="$(grep -oE '[A-Za-z0-9_]+_intermediates' /tmp/asb_build.log \
+                         | head -1 | sed 's/_intermediates//')"
+              if [ -n "$badmod" ]; then
+                echo "auto-heal: error names module '$badmod' - locating its Android.bp"
+                badbp="$(grep -rlE "name:[[:space:]]*\"${badmod}\"" --include='Android.bp' . 2>/dev/null \
+                           | grep -v '^\./\.repo/' | head -1)"
+                [ -z "$badbp" ] && badbp="$(grep -rl "$badmod" --include='Android.bp' . 2>/dev/null \
+                           | grep -v '^\./\.repo/' | head -1)"
+              fi
+            fi
+            if [ -n "$badbp" ] && [ -f "$badbp" ] && [ "${badbp#*Android.bp}" != "$badbp" ]; then
+              case "$badbp" in
+                */DSP_AIDL/*|*vendor/asb/*)
+                  echo "::error::failing Android.bp is OUR module ($badbp) - real error"; break ;;
+              esac
+              echo "auto-heal: neutralizing unrelated $badbp"
+              printf '// emptied by ASB CI auto-heal\n' > "$badbp"
+              continue
+            fi
+            echo "::error::build failed and nothing could be auto-neutralized"
+            tail -40 /tmp/asb_build.log || true
+            break
+          done
+          [ "$build_ok" = "1" ] || { echo "::error::build did not succeed"; exit 1; }
+          echo "=== produced binaries ==="
+          find out -name 'asb_dsp_attach' -type f -exec ls -la {} \;
+
+      - name: Collect the attacher binary
+        working-directory: aosp
+        run: |
+          # asb_dsp_attach is a system (non-vendor) binary, so its soong variant dir has no
+          # "vendor" in the path. Exclude the unstripped copy - we want the stripped one.
+          ATT="$(find out -path '*asb_dsp_attach*' -name asb_dsp_attach -type f \
+                   ! -path '*/unstripped/*' | head -1)"
+          [ -n "$ATT" ] || ATT="$(find out -name asb_dsp_attach -type f | head -1)"
+          echo "attacher: ${ATT:-<none>}"
+          if [ -z "$ATT" ]; then
+            echo "::error::asb_dsp_attach was not produced"; exit 1
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/prebuilt/arm64-v8a"
+          cp -f "$ATT" "$GITHUB_WORKSPACE/prebuilt/arm64-v8a/asb_dsp_attach"
+          chmod 0755 "$GITHUB_WORKSPACE/prebuilt/arm64-v8a/asb_dsp_attach"
+          ls -la "$GITHUB_WORKSPACE/prebuilt/arm64-v8a/asb_dsp_attach"
+          file "$GITHUB_WORKSPACE/prebuilt/arm64-v8a/asb_dsp_attach" 2>/dev/null || true
+
+      - name: Upload attacher artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: asb_dsp_attach-prebuilt
+          path: prebuilt/arm64-v8a/asb_dsp_attach
+          if-no-files-found: error
+          retention-days: 30
