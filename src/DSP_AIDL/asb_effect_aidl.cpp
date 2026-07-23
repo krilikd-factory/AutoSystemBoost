@@ -193,6 +193,7 @@ using ::aidl::android::hardware::audio::effect::AsbLoudnessEffect;
 using ::aidl::android::hardware::audio::effect::Descriptor;
 using ::aidl::android::hardware::audio::effect::IEffect;
 using ::aidl::android::hardware::audio::effect::kAsbImplUuid;
+using ::aidl::android::hardware::audio::effect::kAsbTypeUuid;
 using ::aidl::android::media::audio::common::AudioUuid;
 
 extern "C" binder_exception_t createEffect(const AudioUuid* uuid,
