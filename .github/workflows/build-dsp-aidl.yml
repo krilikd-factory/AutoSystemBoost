@@ -291,6 +291,36 @@ jobs:
                 vendor/asb/libasbdsp_aidl/
           ls -la vendor/asb/libasbdsp_aidl/
 
+      - name: Assert the checked-out sources are current
+        working-directory: aosp
+        run: |
+          set -e
+          S=vendor/asb/libasbdsp_aidl
+          fail=0
+          need() { # $1=file $2=literal $3=what it provides
+            if grep -q "$2" "$1" 2>/dev/null; then
+              echo "  ok   $(basename "$1"): $3"
+            else
+              echo "::error::$(basename "$1") is an OLD revision - missing $3 (\"$2\")"
+              fail=1
+            fi
+          }
+          # These are the fixes without which the effect is known to break the device:
+          # a queryEffect that can refuse zeroes the whole audio effect factory, and the
+          # vendor-namespace read is the only way the effect ever sees its settings.
+          need "$S/asb_effect_aidl.cpp" "answering with our descriptor anyway" "non-refusing queryEffect"
+          need "$S/asb_effect_aidl.cpp" "ASB configure"                        "settings trace"
+          need "$S/asb_effect_aidl.cpp" "persist.vendor.asb.dsp"               "vendor-namespace properties"
+          need "$S/asb_effect_aidl.cpp" "asb_core_configure_ex"                "postgain/softclip support"
+          need "$S/asb_dsp_attach.cpp"  "pushed gain_mb"                       "binder gain push"
+          need "$S/asb_dsp_attach.cpp"  "SIGUSR1"                              "instant apply signal"
+          if grep -q "static_cast<int16_t>" "$S/asb_effect_aidl.cpp" 2>/dev/null; then
+            echo "::error::asb_effect_aidl.cpp still sign-extends the UUID fields (static_cast<int16_t>)"
+            fail=1
+          fi
+          [ "$fail" = "0" ] || { echo "::error::the repository holds an older DSP source - push the current one before building"; exit 1; }
+          echo "sources are current"
+
       - name: Add swap (cover ninja-generation peak)
         run: |
           # The soong "generating ninja" phase was SIGTERM-killed (exit 143) on the 32 GB
