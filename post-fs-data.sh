@@ -32,6 +32,12 @@ done
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
 command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
 
+# Apply / revert the opt-in aggressive audio + camera layers from their saved
+if [ -r "$MODDIR/runtime/asb_tweaks.sh" ]; then
+  . "$MODDIR/runtime/asb_tweaks.sh"
+  asb_apply_dynamic_tweaks "$MODDIR"
+fi
+
 asb_feature_enabled() {
   _key="$1"
   [ -r "$MODDIR/features.conf" ] || return 0
@@ -39,19 +45,6 @@ asb_feature_enabled() {
   [ -z "$_line" ] && return 0
   [ "${_line#*=}" = "1" ]
 }
-
-# Apply / revert the opt-in aggressive audio + camera layers from their saved baselines.
-#
-# This used to run unconditionally, and it was defined BEFORE asb_feature_enabled even
-# existed, so it could not have been gated at all: it re-patched whatever mixer and
-# camera files it found in the overlay every boot, regardless of the categories the user
-# picked at install. Now both categories gate it, and the whole thing is skipped when
-# the user opted out of both - matching what the installer promised them.
-if [ -r "$MODDIR/runtime/asb_tweaks.sh" ] \
-   && { asb_feature_enabled AUDIO || asb_feature_enabled CAMERA; }; then
-  . "$MODDIR/runtime/asb_tweaks.sh"
-  asb_apply_dynamic_tweaks "$MODDIR"
-fi
 # ASB:LOG:BEGIN
 if asb_feature_enabled LOG; then
 asb_persist_safe persist.vendor.radio.adb_log_on 0
@@ -87,13 +80,7 @@ if command -v resetprop >/dev/null 2>&1; then
   resetprop --delete media.resolution.limit.24bit >/dev/null 2>&1 || true
   resetprop --delete media.resolution.limit.32bit >/dev/null 2>&1 || true
   resetprop --delete media.resolution.limit.64bit >/dev/null 2>&1 || true
-  _bto="$(grep -E '^[[:space:]]*bt_a2dp_offload=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
-  if [ "$_bto" = "off" ]; then
-    resetprop persist.bluetooth.a2dp_offload.disabled true >/dev/null 2>&1 || true
-    resetprop persist.vendor.bluetooth.a2dp_offload.disabled true >/dev/null 2>&1 || true
-  elif [ "$_bto" != "auto" ]; then
-    resetprop --delete persist.bluetooth.a2dp_offload.disabled >/dev/null 2>&1 || true
-  fi
+  resetprop --delete persist.bluetooth.a2dp_offload.disabled >/dev/null 2>&1 || true
   fi
   # ASB:BT:END
   # ASB:NET:BEGIN
@@ -113,61 +100,6 @@ if command -v resetprop >/dev/null 2>&1; then
   resetprop --delete persist.sys.power.fuel.gauge >/dev/null 2>&1 || true
   fi
   # ASB:KERNEL:END
-  # ASB DSP: publish gain BEFORE audioserver starts, so the effect picks it up on
-  # its very first create/enable. The library reads these at INIT/ENABLE only -- never
-  # inside process() -- so this is the whole control surface.
-  _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
-  # Slider gives every integer 0..18 now, not just the old 3/6/9/12/15/18 steps, so gate
-  # on "is it a number 1..18" instead of an exact-value list. 0 or off disables.
-  case "$_dspg" in
-    ''|off|0) _dspg_on=0 ;;
-    *[!0-9]*) _dspg_on=0 ;;                       # non-numeric -> off
-    *) [ "$_dspg" -ge 1 ] 2>/dev/null && [ "$_dspg" -le 18 ] 2>/dev/null && _dspg_on=1 || _dspg_on=0 ;;
-  esac
-  if [ "$_dspg_on" = "1" ]; then
-    resetprop persist.asb.dsp.enable 1 >/dev/null 2>&1 || true
-    resetprop persist.asb.dsp.gain_mb "$((_dspg * 100))" >/dev/null 2>&1 || true
-    resetprop persist.asb.dsp.ceiling_mb -15 >/dev/null 2>&1 || true
-    # Compressor ahead of the makeup gain. Without it the limiter just shaves peaks
-    # and a "+6 dB" setting lands around +5 dB RMS; with it the body of the track
-    # comes up instead. Defaults: 6:1 above -24 dBFS.
-    resetprop persist.asb.dsp.comp 1 >/dev/null 2>&1 || true
-    resetprop persist.asb.dsp.comp_ratio_x10 60 >/dev/null 2>&1 || true
-    resetprop persist.asb.dsp.comp_thresh_mb -2400 >/dev/null 2>&1 || true
-  else
-    resetprop persist.asb.dsp.enable 0 >/dev/null 2>&1 || true
-  fi
-  _blur="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
-
-  # NOTE: the system.prop blur block is written at INSTALL time (asb_apply_blur_prop in
-  # install.sh), NOT here. The root manager reads system.prop when it mounts the module,
-  # which is BEFORE this script runs - rewriting it here only ever took effect a boot
-  # late. Do not re-introduce a system.prop rewrite in post-fs-data.
-  #
-  # The resetprop calls below are a live nudge for the persist.* values (which CAN change
-  # after boot). ro.* are attempted with -n too, but they are only honoured before the
-  # reading process started, so system.prop is what actually carries them - this is just
-  # belt-and-braces for anything restarted later in boot.
-  if [ "$_blur" = "1" ]; then
-    # The real switch (read at late_start, after SF early boot) - persist, no -n.
-    resetprop persist.sys.sf.disable_blurs 1 >/dev/null 2>&1 || true
-    resetprop -n ro.surface_flinger.supports_background_blur 0 >/dev/null 2>&1 || true
-    resetprop -n ro.surface_flinger.media_panel_bg_blur 0 >/dev/null 2>&1 || true
-    resetprop -n ro.oplus.display.disable.volume_blur 1 >/dev/null 2>&1 || true
-    resetprop persist.sys.oplus.anim_level 0 >/dev/null 2>&1 || true
-    resetprop -n ro.oplus.gaussianlevel 0 >/dev/null 2>&1 || true
-    resetprop -n ro.launcher.blur.appLaunch 0 >/dev/null 2>&1 || true
-    resetprop persist.sys.oplus.material_blur_switch false >/dev/null 2>&1 || true
-  else
-    resetprop persist.sys.sf.disable_blurs 0 >/dev/null 2>&1 || true
-    resetprop -n ro.surface_flinger.supports_background_blur 1 >/dev/null 2>&1 || true
-    resetprop -n ro.surface_flinger.media_panel_bg_blur 1 >/dev/null 2>&1 || true
-    resetprop -n ro.oplus.display.disable.volume_blur 0 >/dev/null 2>&1 || true
-    resetprop persist.sys.oplus.anim_level 1 >/dev/null 2>&1 || true
-    resetprop -n ro.oplus.gaussianlevel 3 >/dev/null 2>&1 || true
-    resetprop -n ro.launcher.blur.appLaunch 1 >/dev/null 2>&1 || true
-    resetprop persist.sys.oplus.material_blur_switch true >/dev/null 2>&1 || true
-  fi
 fi
 # ASB:WIFI:BEGIN
 asb_feature_enabled WIFI && asb_persist_safe persist.vendor.wlan.scan_throttle 1
@@ -180,17 +112,10 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
   _mounts_log="/data/adb/asb/vendor_mounts.log"
   _bootflag="/data/adb/asb/vendor_overlay_active"
   _bootctr="/data/adb/asb/vendor_boot_counter"
-  _ovl_class="$(cat "$MODDIR/overlay_device_class" 2>/dev/null)"
-  _strike_max=3
-  [ "$_ovl_class" = "generic" ] && _strike_max=1
   _cur_ctr=$(cat "$_bootctr" 2>/dev/null || echo 0)
   case "$_cur_ctr" in ''|*[!0-9]*) _cur_ctr=0 ;; esac
-  if [ "$_cur_ctr" -ge "$_strike_max" ]; then
-    echo "ts=$(date +%s) action=skip reason=bootloop_protection counter=$_cur_ctr class=$_ovl_class" > "$_mounts_log"
-    if [ "$_ovl_class" = "generic" ]; then
-      echo "ts=$(date +%s) reason=boot_failed_${_cur_ctr}x class=generic" > /data/adb/asb/vendor_overlay_blocked
-    fi
-    rm -rf "$MODDIR/deferred_overlay" 2>/dev/null
+  if [ "$_cur_ctr" -ge 3 ]; then
+    echo "ts=$(date +%s) action=skip reason=bootloop_protection counter=$_cur_ctr" > "$_mounts_log"
     rm -f "$_bootflag" 2>/dev/null
     rm -f "$MODDIR"/system/vendor/etc/perf/* 2>/dev/null
     # The unified device-native pipeline clones THIS device's own audio, camera,
@@ -223,32 +148,11 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
             "$MODDIR/generated_overlay_manifest.reverted.txt" 2>/dev/null
     fi
     echo "ts=$(date +%s) action=revert_generated_overlay reason=bootloop_protection" >> "$_mounts_log"
-    rm -rf /data/adb/asb/odm_patched 2>/dev/null
-    rm -f /data/adb/asb/odm_bind_manifest.txt 2>/dev/null
   else
     _next_ctr=$((_cur_ctr + 1))
     echo "$_next_ctr" > "$_bootctr"
-    # CRITICAL: flush the incremented counter to disk BEFORE applying any bind.
-    # The binds below can break early boot; if that happens, the next boot must see
-    # this higher counter so the fuse skips them. Without the sync the counter write
-    # could still be in cache and lost on a hard crash — turning a recoverable
-    # 1-strike into an unrecoverable loop.
-    sync 2>/dev/null || true
     echo "ts=$(date +%s) action=boot counter=$_next_ctr" > "$_mounts_log"
     echo 1 > "$_bootflag"
-    if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ]; then
-      while IFS='|' read -r _ob_t _ob_p; do
-        [ -f "$_ob_t" ] && [ -f "$_ob_p" ] || continue
-        # Bind in init's namespace (PID 1) so audioserver, which init starts, actually sees
-        # the patched file; a plain bind here can stay confined to this script's namespace.
-        if command -v nsenter >/dev/null 2>&1; then
-          nsenter -t 1 -m -- mount --bind "$_ob_p" "$_ob_t" 2>/dev/null \
-            || mount --bind "$_ob_p" "$_ob_t" 2>/dev/null
-        else
-          mount --bind "$_ob_p" "$_ob_t" 2>/dev/null
-        fi
-      done < /data/adb/asb/odm_bind_manifest.txt
-    fi
     if command -v resetprop >/dev/null 2>&1; then
       resetprop -n ro.vendor.perf.qape.boost_duration 3 >/dev/null 2>&1 || true
       resetprop -n ro.vendor.perf.qape.max_boost_count 1 >/dev/null 2>&1 || true

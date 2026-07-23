@@ -48,17 +48,6 @@ done
 #      sessions, last_seen older than the reset marker). Learner state only —
 #      the append-only session_history.jsonl survived the race cleanly and is
 #      genuinely fresh, so it is kept.
-for _mv_pair in \
-    "v56_learning_reset_done:learning_reset_done" \
-    "v56_resurrect_sweep_done:learner_resurrect_sweep_done"; do
-  _mv_old="/data/adb/asb/${_mv_pair%%:*}"
-  _mv_new="/data/adb/asb/${_mv_pair##*:}"
-  if [ -f "$_mv_old" ]; then
-    [ -f "$_mv_new" ] || mv -f "$_mv_old" "$_mv_new" 2>/dev/null
-    rm -f "$_mv_old" 2>/dev/null
-  fi
-done
-
 if [ -f /data/adb/asb/learning_reset_pending ]; then
   rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak \
         /data/adb/asb/pstats_balanced.json /data/adb/asb/pstats_battery.json \
@@ -66,12 +55,12 @@ if [ -f /data/adb/asb/learning_reset_pending ]; then
         /data/adb/asb/session_history.jsonl \
         /data/adb/asb/session_history_migrated_v47 2>/dev/null
   rm -f /data/adb/asb/learning_reset_pending 2>/dev/null
-  : > /data/adb/asb/learner_resurrect_sweep_done 2>/dev/null
-elif [ -f /data/adb/asb/learning_reset_done ] && [ ! -f /data/adb/asb/learner_resurrect_sweep_done ]; then
+  : > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
+elif [ -f /data/adb/asb/v56_learning_reset_done ] && [ ! -f /data/adb/asb/v56_resurrect_sweep_done ]; then
   rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak \
         /data/adb/asb/pstats_balanced.json /data/adb/asb/pstats_battery.json \
         /data/adb/asb/smart_appheat.bin /data/adb/asb/auto_battery_state 2>/dev/null
-  : > /data/adb/asb/learner_resurrect_sweep_done 2>/dev/null
+  : > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
 fi
 
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
@@ -119,8 +108,7 @@ fi
 
 asb_load_profile
 
-rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done \
-      /data/adb/asb/session_history_migrated_v47 /data/adb/asb/bt_absvol_v59_reset 2>/dev/null
+rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done /data/adb/asb/session_history_migrated_v47 2>/dev/null
 
 if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
   for _stale_p in \
@@ -269,67 +257,6 @@ asb_migrate_governor_conf
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
     echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
-    # Re-apply the /odm runtime binds. post-fs-data already tries this, but KernelSU
-    # mounts its own module overlay on /odm AFTER post-fs-data runs, so that early bind
-    # gets shadowed and the framework still reads the stock config (observed: the boot log
-    # said action=boot, yet grep asb /odm/etc/audio_effects_config.xml stayed 0 until a
-    # manual mount --bind). Binding again here - after the overlay is in place - sticks.
-    # Only then restart audioserver, so the effect factory re-reads the patched config and
-    # actually picks the effect up.
-    if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ]; then
-      _rb_any=0
-      while IFS='|' read -r _rb_t _rb_p; do
-        case "$_rb_t" in ''|'#'*) continue ;; esac
-        [ -f "$_rb_t" ] && [ -f "$_rb_p" ] || continue
-        # Skip if this exact bind already took effect (avoid stacking mounts on reboots).
-        if cmp -s "$_rb_t" "$_rb_p" 2>/dev/null; then continue; fi
-        # Bind inside init's mount namespace (PID 1). A plain `mount --bind` from a module
-        # script can land in that script's OWN namespace: the shell then sees the patched
-        # file (grep returns 3) while audioserver - started by init in the root namespace -
-        # still reads the stock one, which is exactly the observed symptom (audiopolicy
-        # logged "no output processing needed" despite the config looking correct).
-        if command -v nsenter >/dev/null 2>&1 \
-           && nsenter -t 1 -m -- mount --bind "$_rb_p" "$_rb_t" 2>/dev/null; then
-          _rb_any=1
-        elif mount --bind "$_rb_p" "$_rb_t" 2>/dev/null; then
-          _rb_any=1
-        fi
-      done < /data/adb/asb/odm_bind_manifest.txt
-      if [ "$_rb_any" = "1" ]; then
-        echo "ts=$(date +%s) action=odm_bind_late result=applied" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
-        # The audio HAL caches the effects list from its own start, so a plain
-        # audioserver restart is not enough on its own - but it is what makes the
-        # framework re-query the factory, and the HAL re-reads the config it sees now.
-        setprop ctl.restart audioserver 2>/dev/null || true
-      fi
-    fi
-    # Start the attacher daemon. This is what actually makes the DSP audible on OxygenOS:
-    # the framework never applies the config's <postprocess> section here (AudioPolicyEffects
-    # logs "no output processing needed" even for the stock music_helper), so effects have to
-    # be created programmatically - which is exactly how ViperFX and OPlus' own effect do it.
-    # The daemon creates our effect on session 0 (the global mix) and re-attaches whenever
-    # audioserver restarts.
-    if [ -x "$MODDIR/bin/asb_dsp_attach" ]; then
-      pkill -f "$MODDIR/bin/asb_dsp_attach" 2>/dev/null
-      sleep 1
-      mkdir -p /data/adb/asb 2>/dev/null
-      nohup "$MODDIR/bin/asb_dsp_attach" >> /data/adb/asb/dsp_attach.log 2>&1 &
-      echo "ts=$(date +%s) action=dsp_attach_started" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
-    fi
-    if [ -d "$MODDIR/deferred_overlay" ]; then
-      sleep 30
-      _act=0
-      for _dd in vendor odm; do
-        [ -d "$MODDIR/deferred_overlay/$_dd" ] || continue
-        if [ -d "$MODDIR/system/$_dd" ]; then
-          cp -a "$MODDIR/deferred_overlay/$_dd/." "$MODDIR/system/$_dd/" 2>/dev/null && rm -rf "$MODDIR/deferred_overlay/$_dd" && _act=1
-        else
-          mv "$MODDIR/deferred_overlay/$_dd" "$MODDIR/system/$_dd" 2>/dev/null && _act=1
-        fi
-      done
-      rmdir "$MODDIR/deferred_overlay" 2>/dev/null
-      [ "$_act" = "1" ] && echo "ts=$(date +%s) action=deferred_overlay_activated (mounts next boot)" >> /data/adb/asb/vendor_mounts.log
-    fi
   fi
 ) >/dev/null 2>&1 &
 
@@ -552,10 +479,6 @@ fi
 # ASB:VM:BEGIN
 apply_vm() {
   sysctlw vm.swappiness $_P_SWAP
-  for _swp_p in sys.sysctl.swappiness sys.mem.swappiness_on_launcher sys.mem.swappiness_on_start; do
-    [ -n "$(getprop $_swp_p 2>/dev/null)" ] && command -v resetprop >/dev/null 2>&1 && resetprop $_swp_p "$_P_SWAP" 2>/dev/null
-  done
-  [ -e /proc/sys/vm/watermark_boost_factor ] && sysctlw vm.watermark_boost_factor 0
   if [ -e /proc/sys/vm/dirty_bytes ] && [ -e /proc/sys/vm/dirty_background_bytes ]; then
     sysctlw vm.dirty_ratio 0
     sysctlw vm.dirty_background_ratio 0
@@ -689,20 +612,6 @@ apply_net() {
   sysctlw net.ipv4.tcp_fin_timeout          $_P_TCP_FIN
   sysctlw net.ipv4.tcp_no_metrics_save 1
   sysctlw net.core.somaxconn 512
-  _tcp_mem_kb=$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null)
-  if [ -n "$_tcp_mem_kb" ] && [ "$_tcp_mem_kb" -gt 0 ] 2>/dev/null; then
-    _tm_pg=$((_tcp_mem_kb / 4))
-    _tm_low=$((_tm_pg * 3 / 100))
-    _tm_pressure=$((_tm_pg * 6 / 100))
-    _tm_high=$((_tm_pg / 10))
-    [ -e /proc/sys/net/ipv4/tcp_mem ] && sysctlw net.ipv4.tcp_mem "$_tm_low $_tm_pressure $_tm_high"
-  fi
-  [ -e /proc/sys/net/ipv4/tcp_thin_linear_timeouts ] && sysctlw net.ipv4.tcp_thin_linear_timeouts "${_P_TCP_THIN:-1}"
-  [ -e /proc/sys/net/ipv4/tcp_thin_dupack ] && sysctlw net.ipv4.tcp_thin_dupack "${_P_TCP_THIN:-1}"
-  [ -e /proc/sys/net/ipv4/tcp_plb_enabled ] && sysctlw net.ipv4.tcp_plb_enabled 1
-  [ -e /proc/sys/net/ipv4/tcp_plb_idle_retransmit_rounds ] && sysctlw net.ipv4.tcp_plb_idle_retransmit_rounds 2
-  [ -e /proc/sys/net/ipv4/tcp_plb_retransmit_threshold ] && sysctlw net.ipv4.tcp_plb_retransmit_threshold 3
-  [ -e /proc/sys/net/ipv4/tcp_rto_max ] && sysctlw net.ipv4.tcp_rto_max "${_P_TCP_RTO_MAX:-15000}"
   sysctlw net.ipv4.tcp_max_syn_backlog 2048
   sysctlw net.core.netdev_max_backlog $_P_NET_BACKLOG
   sysctlw net.core.netdev_budget $_P_NET_BUDGET
@@ -774,80 +683,30 @@ apply_wifi_settings() {
   asb_settings_put global wifi_verbose_logging_enabled 0
 }
 asb_feature_enabled WIFI && apply_wifi_settings
-# Force the Wi-Fi regulatory domain to CR when the WIFI tweaks are on.
-#
-# CR's domain exposes a wider channel set and higher permitted TX power than most
-# European domains - that is the entire point of the tweak. The old SIM-derived code is
-# gone: it only ever echoed back whatever the modem already reported, so it could never
-# widen anything.
-#
-# Two things this has to get right, both learned the hard way:
-#
-#  1. TIMING. This used to run inline at the top of service.sh, i.e. long before
-#     sys.boot_completed. WifiService is not up yet at that point, so `cmd -w wifi`
-#     failed outright - and even when it did not, the Wi-Fi stack re-derives the country
-#     from telephony during its own init and overwrote us. Hence: run detached, after
-#     boot has completed, and retry.
-#
-#  2. VERIFICATION. Do not trust the command's exit status; read the domain back out of
-#     WifiCountryCode and only claim success (and drop the rollback marker that
-#     uninstall.sh reads) once the override is actually visible.
-#
-# NOTE: this deliberately declares a regulatory domain that is probably not the one the
-# phone is standing in. Channels and TX power legal in CR may not be legal where you
-# are. That is a conscious choice of this module, not an accident.
-asb_wifi_cc_readback() {
-  _d="$(dumpsys wifi 2>/dev/null)"
-  _r="$(echo "$_d" | grep -iE 'mOverrideCountryCode' | head -1 | grep -oE '[A-Z]{2}[[:space:]]*$' | tr -d ' ')"
-  [ -n "$_r" ] || _r="$(echo "$_d" | grep -iE 'mDriverCountryCode' | head -1 | grep -oE '[A-Z]{2}[[:space:]]*$' | tr -d ' ')"
-  echo "$_r"
+asb_wifi_cc_heal() {
+  # One-time heal: older versions ran `force-country-code enabled IT`, which
+  if [ -f /data/adb/asb/wifi_cc_forced ]; then
+    has cmd && cmd -w wifi force-country-code disabled >/dev/null 2>&1 || true
+    rm -f /data/adb/asb/wifi_cc_forced 2>/dev/null || true
+  fi
 }
+asb_wifi_cc_heal
 
 apply_wifi_country() {
-  has cmd || return 0
-
-  # Wait for the framework. Without this the whole thing is a no-op on every boot.
-  _t=0
-  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 180 ]; do
-    sleep 5; _t=$((_t + 5))
+  # Country from SIM then operator; only a confident 2-letter ISO code. We set
+  _cc=""
+  for _p in gsm.sim.operator.iso-country gsm.operator.iso-country; do
+    _v="$(getprop "$_p" 2>/dev/null | tr '[:lower:]' '[:upper:]' | tr -d ' ')"
+    case "$_v" in [A-Z][A-Z]) _cc="$_v"; break ;; esac
   done
-  [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || return 0
-  # WifiService settles a little after boot_completed; give it room before poking it.
-  sleep 20
+  [ -n "$WIFI_COUNTRY" ] && _cc="$WIFI_COUNTRY"   # explicit user override
+  [ -n "$_cc" ] || return 0                        # none -> leave it to the modem
 
-  _try=0
-  while [ "$_try" -lt 5 ]; do
-    _try=$((_try + 1))
-
-    # The country is only re-read when the interface comes up, so a live interface has
-    # to be bounced. Only bounce it if it was already on - never switch the user's radio
-    # on for them.
-    _dump="$(cmd -w wifi status 2>/dev/null; dumpsys wifi 2>/dev/null | head -40)"
-    _was_enabled=0
-    if echo "$_dump" | grep -q "Wifi is enabled"; then
-      _was_enabled=1
-    elif echo "$_dump" | grep -q "Wifi Client state is: true"; then
-      _was_enabled=1
-    elif echo "$_dump" | grep -q "WifiState 1"; then
-      _was_enabled=1
-    fi
-
-    [ "$_was_enabled" -eq 1 ] && { cmd -w wifi set-wifi-enabled disabled >/dev/null 2>&1; sleep 2; }
-    cmd -w wifi force-country-code enabled CR >/dev/null 2>&1
-    [ "$_was_enabled" -eq 1 ] && { cmd -w wifi set-wifi-enabled enabled >/dev/null 2>&1; sleep 3; }
-
-    if [ "$(asb_wifi_cc_readback)" = "CR" ]; then
-      mkdir -p /data/adb/asb 2>/dev/null
-      : > /data/adb/asb/wifi_cc_forced 2>/dev/null
-      return 0
-    fi
-    sleep 10
-  done
-  # Leave no marker: uninstall must not try to undo something that never took.
-  return 0
+  has settings && {
+    asb_settings_put global wifi_country_code "$_cc"
+  }
 }
-# Detached: the waits above are minutes long and service.sh must not stall on them.
-asb_feature_enabled WIFI && (apply_wifi_country &) 
+asb_feature_enabled WIFI && apply_wifi_country
 apply_wlan0_txqlen() {
   [ -e /sys/class/net/wlan0/tx_queue_len ] || return 0
   _want="${_P_WLAN_TXQLEN:-768}"
@@ -1028,47 +887,21 @@ apply_gps_hygiene() {
 asb_feature_enabled GPS && apply_gps_hygiene
 # ASB:GPS:END
 # ASB:AUDIO:BEGIN
-# Read one key out of governor.conf. service.sh does NOT source the config, so every
-# runtime toggle has to be read explicitly like this.
-asb_cfg_val() {
-  grep -E "^[[:space:]]*$1=" "$MODDIR/config/governor.conf" 2>/dev/null \
-    | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]'
-}
-
 apply_audio_runtime() {
-  # audio_profile picks WHO does the software processing: eq_compat | stock | hifi.
-  #
-  # This used to be two switches ($AUDIO_EQ_COMPAT and the property half of
-  # $AUDIO_AGGRESSIVE) that were direct opposites -- resampler.quality 0 vs 255. Worse,
-  # they were read as shell variables while service.sh never sources governor.conf and
-  # nothing ever assigned them, so both expanded to their ":-0" default and BOTH
-  # branches were unreachable: only the middle baseline ever ran, no matter what the
-  # WebUI showed. Now it is one axis, read from the config for real.
-  _ap="$(asb_cfg_val audio_profile)"
-  case "$_ap" in
-    eq_compat|stock|hifi) : ;;
-    *) _ap="stock" ;;
-  esac
-  ASB_AUDIO_PROFILE_ACTIVE="$_ap"
-
-  setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
-
-  if [ "$_ap" = "eq_compat" ]; then
-    # Hand the signal to the external EQ/ViPER untouched. Deliberately does NOT set the
-    # hi-fi baseline: the point of this mode is to stop the framework having opinions.
+  if [ "${AUDIO_EQ_COMPAT:-0}" = "1" ]; then
+    setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
     asb_persist_safe persist.audio.uhqa 0
     asb_persist_safe persist.vendor.audio.uhqa false
     setprop af.resampler.quality 0 2>/dev/null || true
     return
   fi
-
-  # Baseline for stock + hifi.
   asb_persist_safe persist.audio.hifi.int_codec true
   asb_persist_safe persist.vendor.audio.hifi.int_codec true
+  setprop ro.audio.bt.connect.disable.mute true 2>/dev/null || true
   asb_persist_safe persist.vendor.audio.aec_ref.enable false
   setprop vendor.audio.feature.aec_ref.enable false 2>/dev/null || true
 
-  if [ "$_ap" = "hifi" ]; then
+  if [ "${AUDIO_AGGRESSIVE:-0}" = "1" ]; then
     setprop ro.audio.hifi true 2>/dev/null || true
     setprop ro.vendor.audio.hifi true 2>/dev/null || true
     asb_persist_safe persist.audio.hifi true
@@ -1076,17 +909,7 @@ apply_audio_runtime() {
     asb_persist_safe persist.audio.uhqa 1
     asb_persist_safe persist.vendor.audio.uhqa true
     asb_persist_safe persist.vendor.audio.power.save.setting 1
-    # DO NOT set af.resampler.quality here. History, so nobody re-adds it:
-    # it is an enum (0=DEFAULT 1=LOW .. 4=VERY_HIGH .. 7=DYN_HIGH), and this line used to
-    # write 255 - out of range, silently dropped, so hifi always ran at DEFAULT. That is
-    # why testers reported "no difference, like stock". Setting the real enum top (4 =
-    # VERY_HIGH_QUALITY) made it engage for the first time and BROKE PLAYBACK: a huge FIR
-    # per buffer starves the audio thread, so Signal calls went silent both ways, Poweramp
-    # glitched out, and YouTube dropped the moment anything else touched the CPU. The
-    # feature never worked, and when made to work it was harmful - so it stays off.
-    # 0 = DEFAULT is written below for every profile, which also RESETS the property if an
-    # earlier build left 4 or 255 in the property store without a reboot.
-    setprop af.resampler.quality 0 2>/dev/null || true
+    setprop af.resampler.quality 255 2>/dev/null || true
     setprop audio.offload.min.duration.secs 20 2>/dev/null || true
     setprop vendor.audio.offload.min.duration.secs 20 2>/dev/null || true
     setprop audio.offload.buffer.size.kb 256 2>/dev/null || true
@@ -1158,7 +981,6 @@ com.aliexpress.buyer
 com.heytap.htms
 com.heytap.pictorial
 com.heytap.market
-com.oplus.oidt
 "
 
 _BG_TRIM_DISABLE="
@@ -1342,15 +1164,8 @@ asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
 
 # ASB:BG_TRIM:END
 apply_bt_runtime() {
-  _bto="$(grep -E '^[[:space:]]*bt_a2dp_offload=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
-  [ -n "$_bto" ] || _bto="on"
-  if [ "$_bto" = "off" ]; then
-    asb_persist_safe persist.bluetooth.a2dp_offload.disabled true
-    asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled true
-  elif [ "$_bto" != "auto" ]; then
-    asb_persist_safe persist.bluetooth.a2dp_offload.disabled false
-    asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled false
-  fi
+  asb_persist_safe persist.bluetooth.a2dp_offload.disabled false
+  asb_persist_safe persist.vendor.bluetooth.a2dp_offload.disabled false
   asb_persist_safe persist.bluetooth.a2dp.optional_codecs_enabled 1
   asb_persist_safe persist.vendor.bt.enable.swb true
   asb_persist_safe persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true
@@ -1504,10 +1319,6 @@ apply_kernel() {
   sysctlw vm.panic_on_oom 0
   [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
   writef_retry /proc/sys/kernel/printk_devkmsg off 1 0 || true
-  [ -e /sys/module/subsystem_restart/parameters/enable_ramdumps ] && writef_retry /sys/module/subsystem_restart/parameters/enable_ramdumps 0 1 0 || true
-  [ -e /sys/module/subsystem_restart/parameters/enable_mini_ramdumps ] && writef_retry /sys/module/subsystem_restart/parameters/enable_mini_ramdumps 0 1 0 || true
-  [ -e /proc/sys/fs/inotify/max_user_watches ] && sysctlw fs.inotify.max_user_watches 262144
-  [ -e /proc/sys/fs/inotify/max_user_instances ] && sysctlw fs.inotify.max_user_instances 512
   writef_retry /proc/sys/kernel/printk "3 4 1 7" 1 0 || true
   [ -e /proc/sys/kernel/printk_ratelimit ] && \
     sysctlw kernel.printk_ratelimit 1
@@ -1893,40 +1704,20 @@ apply_bt_codec_policy() {
   fi
 }
 asb_feature_enabled BT && apply_bt_codec_policy
-asb_bt_audio_reinit() {
-  # Kick the audio stack ONCE (all bt_absvol modes) so the absolute-volume state is
-  # applied to live output immediately, instead of the output staying quiet until an
-  # EQ/ViPER app re-attaches its effect. Waits for the audio HAL to come up, then
-  # restarts audioserver via init (re-reads absolute-volume + re-attaches effects).
-  # apply_bt_volume_behavior runs once per boot, so there is no active playback to
-  # disrupt. Backgrounded so it never blocks boot.
-  has setprop || return 0
-  ( _n=0
-    while [ "$_n" -lt 40 ]; do
-      [ "$(getprop init.svc.audioserver 2>/dev/null)" = "running" ] && break
-      sleep 1; _n=$((_n + 1))
-    done
-    sleep 2
-    setprop ctl.restart audioserver 2>/dev/null || true
-    asb_log "bt absvol: audioserver re-init kicked (mode=$1)"
-  ) &
-}
-
 apply_bt_volume_behavior() {
-  # Respect the user's bt_absvol_mode (stock|disabled) from governor.conf.
-  # Legacy values are migrated in place: auto/off -> stock, on -> disabled.
+  # Respect the user's bt_absvol_mode (auto|on|off) from governor.conf — the
   _bt_mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
+  [ -n "$_bt_mode" ] || _bt_mode="auto"
+  # AUTO = truly hands-off: do NOT touch absolute-volume at all, so the stock
+  if [ "$_bt_mode" = "auto" ]; then
+    asb_log "bt absvol: mode=auto -> leaving stock absolute-volume untouched"
+    return 0
+  fi
   case "$_bt_mode" in
-    on)            _bt_mode="disabled" ;;
-    disabled)      _bt_mode="disabled" ;;
-    auto|off|''|*) _bt_mode="stock" ;;
+    on)  _bt_dav=1; _bt_prop="true"  ;;   # disable absolute volume
+    off) _bt_dav=0; _bt_prop="false" ;;
+    *)   _bt_dav=0; _bt_prop="false" ;;
   esac
-  case "$_bt_mode" in
-    disabled) _bt_dav=1; _bt_prop="true"  ;;
-    *)        _bt_dav=0; _bt_prop="false" ;;
-  esac
-  # Both modes assert explicitly: a passive mode could not undo a previous
-  # 'disabled' (the settings row would stay at 1 and BT would remain quiet).
   if has settings; then
     asb_settings_put global bluetooth_disable_absolute_volume "$_bt_dav"
     asb_settings_put secure bluetooth_disable_absolute_volume "$_bt_dav"
@@ -1937,8 +1728,6 @@ apply_bt_volume_behavior() {
     resetprop -p --delete persist.asb.force_disableabsvol >/dev/null 2>&1 || true
     resetprop -p --delete persist.asb.force_enableabsvol >/dev/null 2>&1 || true
   fi
-  # Re-init audio so the state is live immediately.
-  asb_bt_audio_reinit "$_bt_mode"
 }
 asb_feature_enabled BT && apply_bt_volume_behavior
 apply_bt_audio_hygiene() {
@@ -2008,26 +1797,8 @@ apply_tracking_block() {
   _sp play_store_panel_logging_enabled 0
   _sp phenotype_flags "disable_log_upload=1,disable_log_for_missing_debug_id=1"
   _sp binder_calls_stats "sampling_interval=600000000,detailed_tracking=disable,enabled=false,upload_data=false"
-  if command -v cmd >/dev/null 2>&1; then
-    while IFS='|' read -r _dc_ns _dc_k _dc_v; do
-      [ -n "$_dc_ns" ] && cmd device_config put "$_dc_ns" "$_dc_k" "$_dc_v" >/dev/null 2>&1
-    done <<'ASBDCEOF'
-gms|AdvertisingId__enable_ad_id_reconciliation|false
-gms|AdsIdentity__enable_status_service|false
-gms|AdsIdentity__enable_mendel_property_update|false
-measurement|measurement.service.disable|true
-measurement|measurement.collection.enabled|false
-ASBDCEOF
-  fi
 }
 asb_feature_enabled LOG && apply_tracking_block
-
-apply_panel_lpm() {
-  _old_lpm="$(settings get global display_panel_lpm 2>/dev/null)"
-  echo "display_panel_lpm|$_old_lpm" >> /data/adb/asb/tracking_restore.log 2>/dev/null
-  settings put global display_panel_lpm 1 >/dev/null 2>&1
-}
-asb_feature_enabled LPM && apply_panel_lpm
 
 apply_camera_experimental() {
   # The proven-working OP12 build ran this on pineapple too (it set MFNR/EIS/SAT/
@@ -2108,11 +1879,15 @@ svc_stop() {
   return 0
 }
 svc_stop_guarded() {
-  svc_exists "$1" || return 0
-  stop "$1" 2>/dev/null || true
+  s="$1"
+  for i in 1 2 3; do
+    svc_stop "$s"
+    svc_running "$s" || return 0
+    sleep 2
+  done
   return 0
 }
-( for s in \
+for s in \
   qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd \
   minidump minidump32 minidump64 bootstat poweroff_charger_log \
   ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start \
@@ -2128,7 +1903,7 @@ svc_stop_guarded() {
   oplusd mlipay \
 ; do
   svc_stop_guarded "$s"
-done ) >/dev/null 2>&1 &
+done
 apply_zram() {
   [ -e /sys/block/zram0 ] || return 0
   CPU_CORES=$(nproc 2>/dev/null || echo 8)
@@ -2157,11 +1932,8 @@ apply_zram() {
     swapon /dev/block/zram0 >/dev/null 2>&1 || true
 }
 apply_walt_boost() {
-  # Iterate the device's ACTUAL cpufreq policies instead of a hard-coded 0 4 7
-  # (that was the old SM8550 layout; OP15=0,6 and SM8650=0,2,5,7 don't match it,
-  # so mid/prime clusters were silently skipped). The glob + -d guard covers any
-  # topology.
-  for _wp in /sys/devices/system/cpu/cpufreq/policy*/walt; do
+  for _pol in 0 4 7; do
+    _wp="/sys/devices/system/cpu/cpufreq/policy${_pol}/walt"
     [ -d "$_wp" ] || continue
     writef_retry "$_wp/input_boost_freq" 0  3 0.25 || true
     writef_retry "$_wp/input_boost_ms"   25 3 0.25 || true
@@ -2171,7 +1943,7 @@ apply_walt_boost() {
   writef_retry /proc/sys/kernel/sched_energy_aware 1 3 0.25 || true
 }
 ( sleep 5; asb_load_profile; apply_walt_boost; apply_walt_live ) >/dev/null 2>&1 &
-asb_feature_enabled VM && ( apply_zram ) >/dev/null 2>&1 &
+asb_feature_enabled VM && apply_zram
 apply_doze() {
   has settings || return 0
   case "$ASB_PROFILE" in
@@ -2184,6 +1956,7 @@ apply_doze() {
   esac
   asb_settings_put global device_idle_constants "$_DIC"
 }
+asb_feature_enabled VM && apply_doze
 # network_stats_poll_interval: how often the framework polls per-app network
 apply_network_stats_poll() {
   has settings || return 0
@@ -2204,6 +1977,7 @@ apply_network_stats_poll() {
     asb_settings_put global network_stats_poll_interval 1800000
   fi
 }
+asb_feature_enabled VM && apply_network_stats_poll
 apply_extra_settings() {
   has settings || return 0
   asb_settings_put global audio_safe_volume_state 0
@@ -2232,16 +2006,7 @@ apply_extra_settings() {
   asb_settings_put global captive_portal_fallback_url "http://connectivitycheck.gstatic.com/generate_204"
   asb_settings_put global captive_portal_other_fallback_url "https://www.google.com/generate_204"
 }
-(
-  _bt=0
-  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_bt" -lt 180 ]; do
-    sleep 2; _bt=$((_bt + 2))
-  done
-  asb_load_profile
-  asb_feature_enabled VM && apply_doze
-  asb_feature_enabled VM && apply_network_stats_poll
-  apply_extra_settings
-) >/dev/null 2>&1 &
+apply_extra_settings
 asb_load_profile
 [ "$(type -t asb_apply_ux 2>/dev/null)" = "function" ] && asb_apply_ux >/dev/null 2>&1
 (
