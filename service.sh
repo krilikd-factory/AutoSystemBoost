@@ -288,8 +288,11 @@ asb_migrate_governor_conf
     # music_helper - so effects have to be created programmatically, exactly like ViperFX
     # and OPlus' own effect do.
     _att_bin="/data/adb/asb/asb_dsp_attach"
-    if [ ! -f "$_att_bin" ] && [ -f "$MODDIR/bin/asb_dsp_attach" ]; then
+    if [ -f "$MODDIR/bin/asb_dsp_attach" ]; then
       mkdir -p /data/adb/asb 2>/dev/null
+      # Refresh unconditionally. Copying only when the file was missing meant a rebuilt
+      # daemon shipped in a module update never took effect - the stale binary from the
+      # previous install stayed in /data/adb/asb and kept being launched.
       cp -f "$MODDIR/bin/asb_dsp_attach" "$_att_bin" 2>/dev/null
     fi
     if [ -f "$_att_bin" ]; then
@@ -306,6 +309,12 @@ asb_migrate_governor_conf
         _att_how="linker64"
       fi
       echo "ts=$(date +%s) action=dsp_attach_started via=$_att_how" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
+      # Publish the DSP tunables once at boot, in dsp mode so nothing restarts the audio
+      # stack. This is what creates the persist.vendor.asb.dsp.* copies the effect reads;
+      # without it they would only appear after the user moved a slider, and until then the
+      # effect would fall back to the legacy names it is not allowed to read.
+      [ -f "$MODDIR/runtime/asb_audio_apply.sh" ] && \
+        sh "$MODDIR/runtime/asb_audio_apply.sh" dsp >/dev/null 2>&1
     fi
   fi
 ) >/dev/null 2>&1 &
