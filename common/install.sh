@@ -1302,24 +1302,22 @@ asb_register_dsp_effect() {
   # earlier one. On OP15 our block was inserted before the stock music_helper block and was
   # silently dropped - the effect loaded into the factory (9 effects) yet audiopolicy logged
   # "addOutputSessionEffects(): no output processing needed for this stream".
-  if grep -q '<stream type="music">' "$1" 2>/dev/null; then
-    # Insert right after the FIRST music stream opening tag only (awk, so we control it).
-    _tmp_ae="${1}.asbtmp"
-    awk '
-      !done && /<stream[[:space:]]+type="music">/ {
-        print
-        print "            <apply effect=\"asb_loudness\"/>"
-        done = 1
-        next
-      }
-      { print }
-    ' "$1" > "$_tmp_ae" 2>/dev/null && [ -s "$_tmp_ae" ] && cat "$_tmp_ae" > "$1"
-    rm -f "$_tmp_ae" 2>/dev/null
-  elif grep -q '<postprocess>' "$1" 2>/dev/null; then
-    sedi "s#<postprocess>#<postprocess>\n        <stream type=\"music\">\n            <apply effect=\"asb_loudness\"/>\n        </stream>#" "$1"
-  else
-    sedi "s#</effects>#</effects>\n\n    <postprocess>\n        <stream type=\"music\">\n            <apply effect=\"asb_loudness\"/>\n        </stream>\n    </postprocess>#" "$1"
-  fi
+  # DO NOT add an <apply> / <postprocess> entry.
+  #
+  # Registering the effect in a stream's post-processing chain CRASHES audioserver on this
+  # platform. Once the effect is present in the factory, AudioPolicyEffects tries to build
+  # the chain and dereferences a null pointer:
+  #   audioserver: SIGSEGV, fault addr 0x20, null pointer dereference
+  #   #00 libaudiopolicyservice.so AudioPolicyEffects::loadAudioEffectConfig_ll(...)
+  # init then restarts audioserver, it crashes again, and the device loses ALL audio in a
+  # permanent crash loop (observed: 8+ tombstones, YouTube hanging on the splash).
+  #
+  # The entry is not needed anyway. OxygenOS never applies config-declared post-processing -
+  # AudioPolicyEffects logs "no output processing needed for this stream" even for the stock
+  # music_helper - so effects here are attached programmatically instead. ViperFX proves the
+  # pattern: its config has ONLY <library> + <effect> and no <apply> anywhere, and it works.
+  # Our asb_dsp_attach daemon does the same thing: it creates the effect on session 0 via the
+  # AudioEffect API after boot. Library + effect declarations above are all the config needs.
 }
 
 asb_audio_ensure_volume_libs() {
