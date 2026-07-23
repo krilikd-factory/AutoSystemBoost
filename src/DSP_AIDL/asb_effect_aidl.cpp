@@ -46,12 +46,11 @@ using ::aidl::android::media::audio::common::AudioUuid;
 // ---- UUIDs -----------------------------------------------------------------
 // Impl UUID: unique to ASB. Must equal <effect uuid=...> in audio_effects_config.xml.
 static const AudioUuid kAsbImplUuid = {static_cast<int32_t>(0xa5b10001),
-                                       0x7e55, 0x4c60, static_cast<int16_t>(0x9f21),
+                                       0x7e55, 0x4c60, 0x9f21,
                                        {0x41, 0x53, 0x42, 0x44, 0x53, 0x50}};
 // Type UUID: the standard Loudness Enhancer type (matches <effect type=...>).
 static const AudioUuid kAsbTypeUuid = {static_cast<int32_t>(0xfe3199be),
-                                       static_cast<int16_t>(0xaed0), 0x413f,
-                                       static_cast<int16_t>(0x87bb),
+                                       0xaed0, 0x413f, 0x87bb,
                                        {0x11, 0x26, 0x0e, 0xb6, 0x3c, 0xf1}};
 
 static int asb_prop_int(const char* key, int def) {
@@ -200,13 +199,20 @@ using ::aidl::android::media::audio::common::AudioUuid;
 
 // Render a uuid for the log so we can see exactly what the vendor factory probes with.
 static std::string asbUuidStr(const AudioUuid& u) {
-    char b[16];
+    char b[64];
     std::string s;
     snprintf(b, sizeof(b), "%08x-", (unsigned)u.timeLow);          s += b;
     snprintf(b, sizeof(b), "%04x-", (unsigned)(u.timeMid & 0xffff));        s += b;
     snprintf(b, sizeof(b), "%04x-", (unsigned)(u.timeHiAndVersion & 0xffff)); s += b;
     snprintf(b, sizeof(b), "%04x-", (unsigned)(u.clockSeq & 0xffff));      s += b;
     for (auto n : u.node) { snprintf(b, sizeof(b), "%02x", (unsigned)(n & 0xff)); s += b; }
+    // Also dump the raw 32-bit fields. The canonical form masks to 16 bits, so a
+    // sign-extended constant (e.g. clockSeq 0xFFFF9F21 instead of 0x00009F21) prints
+    // identically to a correct one while comparing unequal - that is precisely how the
+    // uuid mismatch stayed invisible in the first round of this diagnostic.
+    snprintf(b, sizeof(b), " [raw %08x %08x %08x %08x]", (unsigned)u.timeLow,
+             (unsigned)u.timeMid, (unsigned)u.timeHiAndVersion, (unsigned)u.clockSeq);
+    s += b;
     return s;
 }
 
