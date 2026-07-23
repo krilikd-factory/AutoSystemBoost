@@ -30,6 +30,10 @@ cc_library_shared {
         "aidlaudioeffectservice_defaults",
     ],
     local_include_dirs: ["."],
+    shared_libs: [
+        "libbase",
+        "liblog",
+    ],
     static_libs: [
         "libaudioaidlranges",
     ],

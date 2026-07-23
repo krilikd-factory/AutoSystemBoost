@@ -23,11 +23,13 @@
 // the compiler flags one, check it against the loudnessEnhancer effect in *your* AOSP
 // tree — this file mirrors that structure.
 
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include <android-base/logging.h>
 #include <system/audio_effects/effect_uuid.h>
 #include <sys/system_properties.h>
 
@@ -196,33 +198,59 @@ using ::aidl::android::hardware::audio::effect::kAsbImplUuid;
 using ::aidl::android::hardware::audio::effect::kAsbTypeUuid;
 using ::aidl::android::media::audio::common::AudioUuid;
 
+// Render a uuid for the log so we can see exactly what the vendor factory probes with.
+static std::string asbUuidStr(const AudioUuid& u) {
+    char b[16];
+    std::string s;
+    snprintf(b, sizeof(b), "%08x-", (unsigned)u.timeLow);          s += b;
+    snprintf(b, sizeof(b), "%04x-", (unsigned)(u.timeMid & 0xffff));        s += b;
+    snprintf(b, sizeof(b), "%04x-", (unsigned)(u.timeHiAndVersion & 0xffff)); s += b;
+    snprintf(b, sizeof(b), "%04x-", (unsigned)(u.clockSeq & 0xffff));      s += b;
+    for (auto n : u.node) { snprintf(b, sizeof(b), "%02x", (unsigned)(n & 0xff)); s += b; }
+    return s;
+}
+
 extern "C" binder_exception_t createEffect(const AudioUuid* uuid,
                                            std::shared_ptr<IEffect>* instance) {
-    // Same leniency as queryEffect: accept the implementation uuid, the type uuid, or none.
-    // Rejecting the factory's probe is what emptied the entire effect list.
-    if (instance == nullptr) return EX_NULL_POINTER;
-    if (uuid != nullptr && *uuid != kAsbImplUuid && *uuid != kAsbTypeUuid)
-        return EX_ILLEGAL_ARGUMENT;
+    if (instance == nullptr) {
+        LOG(ERROR) << "ASB createEffect: null instance out-param";
+        return EX_NULL_POINTER;
+    }
+    if (uuid == nullptr) {
+        LOG(WARNING) << "ASB createEffect: null uuid, creating anyway";
+    } else if (*uuid != kAsbImplUuid && *uuid != kAsbTypeUuid) {
+        LOG(WARNING) << "ASB createEffect: unexpected uuid " << asbUuidStr(*uuid)
+                     << ", creating anyway";
+    }
     *instance = ndk::SharedRefBase::make<AsbLoudnessEffect>();
     return EX_NONE;
 }
 
 extern "C" binder_exception_t queryEffect(const AudioUuid* uuid, Descriptor* desc) {
-    // Accept the implementation uuid, the type uuid, or no uuid at all.
-    //
-    // This library implements exactly one effect, so being strict here buys nothing and
-    // costs everything: the QTI factory probes the library with a uuid of its choosing, our
-    // old check rejected it with EX_ILLEGAL_ARGUMENT, and that failure ABORTED the factory's
-    // whole enumeration - the log showed
-    //   queryEffectFunc failed with error -3 ... getDescriptorFailed
-    //   EffectsFactoryHalAidl with 0 nonProxyEffects and 0 proxyEffects
-    // i.e. every effect on the device disappeared, ours and the vendor's alike, which is why
-    // AudioFlinger then answered -2 (NAME_NOT_FOUND) for OplusAudioX too.
-    if (desc == nullptr) return EX_ILLEGAL_ARGUMENT;
-    if (uuid != nullptr && *uuid != kAsbImplUuid && *uuid != kAsbTypeUuid)
+    // NEVER answer with a failure here unless there is literally nowhere to write the
+    // descriptor. AHAL_EffectFactoryQti aborts its ENTIRE enumeration when one library
+    // returns an error, and the device is then left with
+    //     EffectsFactoryHalAidl with 0 nonProxyEffects and 0 proxyEffects
+    // i.e. every effect vanishes - ours and the vendor's alike - after which every
+    // AudioEffect::set() fails with -19 (NO_INIT), including the attach daemon's.
+    // This library implements exactly one effect, so answering with our own descriptor
+    // whatever uuid we are probed with is both harmless and the only safe behaviour.
+    if (desc == nullptr) {
+        LOG(ERROR) << "ASB queryEffect: null descriptor";
         return EX_ILLEGAL_ARGUMENT;
+    }
+    if (uuid == nullptr) {
+        LOG(WARNING) << "ASB queryEffect: probed with null uuid, answering anyway";
+    } else if (*uuid != kAsbImplUuid && *uuid != kAsbTypeUuid) {
+        LOG(WARNING) << "ASB queryEffect: probed with uuid " << asbUuidStr(*uuid)
+                     << ", answering with our descriptor anyway";
+    }
     auto effect = ndk::SharedRefBase::make<AsbLoudnessEffect>();
-    return effect->getDescriptor(desc).isOk() ? EX_NONE : EX_ILLEGAL_STATE;
+    if (!effect->getDescriptor(desc).isOk()) {
+        LOG(ERROR) << "ASB queryEffect: getDescriptor failed";
+        return EX_ILLEGAL_STATE;
+    }
+    return EX_NONE;
 }
 
 // destroyEffect is intentionally NOT defined here: AOSP's EffectImpl.cpp (linked in
