@@ -78,6 +78,7 @@ int main(int /*argc*/, char** /*argv*/) {
     sp<android::AudioEffect> fx;
     int attached = 0;
     int was_on = -1;
+    int fails = 0;   // consecutive failures, used to back off
 
     for (;;) {
         // Battery: only hold the effect while the DSP is actually on. An attached effect
@@ -134,11 +135,21 @@ int main(int /*argc*/, char** /*argv*/) {
                     fx = next;
                     if (!attached) logline("attached to session 0 and enabled");
                     attached = 1;
+                    fails = 0;
                 } else {
                     logline("setEnabled failed: %d", (int)en);
                 }
             } else {
-                logline("create failed: set=%d initCheck=%d", (int)st, (int)ic);
+                if (++fails <= 3 || (fails % 20) == 0)
+                    logline("create failed: set=%d initCheck=%d (attempt %d)", (int)st, (int)ic, fails);
+                // Back off after repeated failures instead of hammering the audio stack every
+                // 30 s forever. If the effect cannot be created, retrying harder does not help
+                // and only adds load (and log spam) while something else is wrong.
+                if (fails >= 10) {
+                    if (fails == 10) logline("too many failures - backing off to 5 min");
+                    sleep(300);
+                    continue;
+                }
             }
         }
         // 30 s instead of 5 s: re-attaching a few seconds later after an audioserver restart
