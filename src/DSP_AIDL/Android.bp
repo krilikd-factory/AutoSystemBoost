@@ -59,6 +59,10 @@ cc_binary {
         "libutils",
         "liblog",
         "libcutils",
+        // AttributionSourceState (the AudioEffect ctor argument) is generated into
+        // libpermission; without it the link fails with
+        // "undefined symbol: _ZTVN7android7content22AttributionSourceStateE".
+        "libpermission",
     ],
     cflags: [
         "-Wall",
