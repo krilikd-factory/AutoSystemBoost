@@ -197,15 +197,29 @@ using ::aidl::android::media::audio::common::AudioUuid;
 
 extern "C" binder_exception_t createEffect(const AudioUuid* uuid,
                                            std::shared_ptr<IEffect>* instance) {
-    if (uuid == nullptr || *uuid != kAsbImplUuid) return EX_ILLEGAL_ARGUMENT;
+    // Same leniency as queryEffect: accept the implementation uuid, the type uuid, or none.
+    // Rejecting the factory's probe is what emptied the entire effect list.
     if (instance == nullptr) return EX_NULL_POINTER;
+    if (uuid != nullptr && *uuid != kAsbImplUuid && *uuid != kAsbTypeUuid)
+        return EX_ILLEGAL_ARGUMENT;
     *instance = ndk::SharedRefBase::make<AsbLoudnessEffect>();
     return EX_NONE;
 }
 
 extern "C" binder_exception_t queryEffect(const AudioUuid* uuid, Descriptor* desc) {
-    if (uuid == nullptr || *uuid != kAsbImplUuid) return EX_ILLEGAL_ARGUMENT;
-    if (desc == nullptr) return EX_NULL_POINTER;
+    // Accept the implementation uuid, the type uuid, or no uuid at all.
+    //
+    // This library implements exactly one effect, so being strict here buys nothing and
+    // costs everything: the QTI factory probes the library with a uuid of its choosing, our
+    // old check rejected it with EX_ILLEGAL_ARGUMENT, and that failure ABORTED the factory's
+    // whole enumeration - the log showed
+    //   queryEffectFunc failed with error -3 ... getDescriptorFailed
+    //   EffectsFactoryHalAidl with 0 nonProxyEffects and 0 proxyEffects
+    // i.e. every effect on the device disappeared, ours and the vendor's alike, which is why
+    // AudioFlinger then answered -2 (NAME_NOT_FOUND) for OplusAudioX too.
+    if (desc == nullptr) return EX_ILLEGAL_ARGUMENT;
+    if (uuid != nullptr && *uuid != kAsbImplUuid && *uuid != kAsbTypeUuid)
+        return EX_ILLEGAL_ARGUMENT;
     auto effect = ndk::SharedRefBase::make<AsbLoudnessEffect>();
     return effect->getDescriptor(desc).isOk() ? EX_NONE : EX_ILLEGAL_STATE;
 }
