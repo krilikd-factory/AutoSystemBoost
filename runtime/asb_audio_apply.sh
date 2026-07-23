@@ -29,6 +29,27 @@ _cfg() {
 _has() { command -v "$1" >/dev/null 2>&1; }
 _persist() { _has resetprop && resetprop -n "$1" "$2" >/dev/null 2>&1 || setprop "$1" "$2" 2>/dev/null; }
 
+# The vendor-namespace copy is created through property_service rather than with
+# resetprop -n, so it picks up its SELinux context from property_contexts. Verified on
+# device: persist.vendor.* lands in vendor_default_prop, the context a vendor process is
+# allowed to read, while persist.asb.* lands in default_prop, which it is not.
+_persist_ctx() {
+  _has resetprop && resetprop "$1" "$2" >/dev/null 2>&1 && return 0
+  setprop "$1" "$2" 2>/dev/null
+}
+
+# Every DSP tunable is written twice, under the legacy name and under the vendor
+# namespace. The effect runs inside the vendor HAL process, and persist.asb.* lands in the
+# default_prop SELinux context which a vendor domain generally cannot read - the vendor
+# namespace is the one vendor code is meant to read. Writing both keeps older installs and
+# the diagnostics in action.sh working unchanged.
+_dspp() { _persist "persist.asb.dsp.$1" "$2"; _persist_ctx "persist.vendor.asb.dsp.$1" "$2"; }
+
+# "dsp" restricts this run to the DSP values and skips the audioserver restart: the attach
+# daemon hands the new gain to the live effect over binder, so there is no need to tear the
+# audio stack down and no momentary drop-out when the slider moves.
+_mode="${1:-all}"
+
 changed=""
 
 # ---- audio_profile ---------------------------------------------------------------
@@ -96,24 +117,51 @@ case "$_dsp" in
 esac
 if [ "$_dsp_ok" = "1" ]; then
     if [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; then
-      _persist persist.asb.dsp.enable 1
-      _persist persist.asb.dsp.gain_mb "$((_dsp * 100))"
-      _persist persist.asb.dsp.ceiling_mb -15
-      _persist persist.asb.dsp.comp 1
-      _persist persist.asb.dsp.comp_ratio_x10 60
-      _persist persist.asb.dsp.comp_thresh_mb -2400
+      _dspp enable 1
+      _dspp gain_mb "$((_dsp * 100))"
+      _dspp ceiling_mb -15
+      _dspp comp 1
+      _dspp comp_ratio_x10 60
+      _dspp comp_thresh_mb -2400
       changed="${changed}dsp=+${_dsp}dB "
     else
       # The library is only mounted after the overlay comes up.
-      _persist persist.asb.dsp.enable 0
+      _dspp enable 0
       changed="${changed}dsp=needs-reboot "
     fi
 else
-    _persist persist.asb.dsp.enable 0
+    _dspp enable 0
     changed="${changed}dsp=off "
 fi
 
-# ---- re-init the audio stack so all of the above goes live ------------------------
+# ---- dsp_postgain (saturation drive) ----------------------------------------------
+# off keeps the brick-wall limiter. 1..10 switches the chain to the bounded tanh
+# saturator with that drive, which fits more average level into the same headroom at the
+# cost of colouring the waveform on purpose.
+_pg="$(_cfg dsp_postgain)"
+case "$_pg" in
+  ''|off|0)  _soft=0; _pgx=300 ;;
+  *[!0-9]*)  _soft=0; _pgx=300 ;;
+  *) if [ "$_pg" -ge 1 ] 2>/dev/null && [ "$_pg" -le 10 ] 2>/dev/null; then
+       _soft=1; _pgx=$((_pg * 100))
+     else
+       _soft=0; _pgx=300
+     fi ;;
+esac
+_dspp softclip "$_soft"
+_dspp postgain_x100 "$_pgx"
+[ "$_soft" = "1" ] && changed="${changed}postgain=x${_pg} " || changed="${changed}postgain=off "
+
+# ---- go live ----------------------------------------------------------------------
+if [ "$_mode" = "dsp" ]; then
+  # No audioserver restart: the attach daemon hands the new gain to the already-running
+  # effect over binder, so the change is immediate and the audio never drops out. The
+  # signal only cuts the daemon's poll sleep short so it does not wait up to 30 s.
+  pkill -USR1 -f asb_dsp_attach 2>/dev/null \
+    || killall -USR1 asb_dsp_attach 2>/dev/null || true
+  echo "applied: $changed (live - no audioserver restart)"
+  exit 0
+fi
 setprop ctl.restart audioserver 2>/dev/null || true
 echo "applied: $changed"
 
