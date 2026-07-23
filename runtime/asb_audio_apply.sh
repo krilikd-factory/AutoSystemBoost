@@ -50,6 +50,20 @@ _dspp() { _persist "persist.asb.dsp.$1" "$2"; _persist_ctx "persist.vendor.asb.d
 # audio stack down and no momentary drop-out when the slider moves.
 _mode="${1:-all}"
 
+# "mirror" republishes whatever the DSP properties currently hold under the vendor
+# namespace and does nothing else. It deliberately recomputes NOTHING from the config:
+# at boot the overlay that carries libasbdsp.so is not mounted yet, and the normal path
+# reads a missing library as "needs-reboot" and writes enable=0 - which would switch the
+# DSP off on every single boot.
+if [ "$_mode" = "mirror" ]; then
+  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100; do
+    _v="$(getprop "persist.asb.dsp.$_k" 2>/dev/null)"
+    [ -n "$_v" ] && _persist_ctx "persist.vendor.asb.dsp.$_k" "$_v"
+  done
+  echo "mirrored dsp props into the vendor namespace"
+  exit 0
+fi
+
 changed=""
 
 # ---- audio_profile ---------------------------------------------------------------
