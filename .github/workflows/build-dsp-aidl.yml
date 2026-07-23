@@ -401,7 +401,16 @@ jobs:
               build_ok=1; break
             fi
             # Recover an already-compiled unstripped .so if only a late action (strip) failed.
-            UNSTRIPPED="$(find out/soong/.intermediates -path '*libasbdsp_aidl*/unstripped/libasbdsp_aidl.so' 2>/dev/null | head -5)"
+            # Guard: never take this path when the compile itself reported an error in OUR
+            # module. Without the guard a real compile failure still counted as success as
+            # long as some libasbdsp_aidl.so existed, and the job happily uploaded a binary
+            # that did not contain the sources it was supposed to be built from.
+            UNSTRIPPED=""
+            if ! grep -qE "vendor/asb/libasbdsp_aidl.*error:|asb_effect_aidl\.cpp.*error:|asb_dsp_attach\.cpp.*error:|asb_dsp_core\.h.*error:" /tmp/asb_build.log; then
+              UNSTRIPPED="$(find out/soong/.intermediates -path '*libasbdsp_aidl*/unstripped/libasbdsp_aidl.so' 2>/dev/null | head -5)"
+            else
+              echo "::error::our own sources failed to compile - not recovering any earlier .so"
+            fi
             if [ -n "$UNSTRIPPED" ]; then
               echo "late action failed but the compiled .so exists; recovering unstripped copies"
               echo "$UNSTRIPPED" | while read -r u; do
@@ -490,6 +499,39 @@ jobs:
               && echo "  AIDL factory symbols present" \
               || echo "  WARNING: factory symbols not found (check build)"
           done
+
+      - name: Verify the artifacts were built from THESE sources
+        run: |
+          set -e
+          SRC="$GITHUB_WORKSPACE/asb-src/src/DSP_AIDL"
+          DEST="$GITHUB_WORKSPACE/prebuilt"
+          fail=0
+          # Each distinctive log literal that exists in a source file must also exist in the
+          # binary produced from it. If one is missing, the artifact came from older code -
+          # which is exactly how a build that "succeeded" kept shipping a library whose
+          # queryEffect answered with an error and left the device with zero audio effects.
+          check() { # $1=binary $2=source $3..=literals
+            bin="$1"; src="$2"; shift 2
+            [ -f "$bin" ] || { echo "::error::missing artifact $bin"; fail=1; return; }
+            for lit in "$@"; do
+              grep -q "$lit" "$src" 2>/dev/null || continue
+              if grep -aq "$lit" "$bin" 2>/dev/null; then
+                echo "  ok   $(basename "$bin"): $lit"
+              else
+                echo "::error::$(basename "$bin") is STALE - source has \"$lit\", binary does not"
+                fail=1
+              fi
+            done
+          }
+          for abi in arm64-v8a armeabi-v7a; do
+            [ -f "$DEST/$abi/libasbdsp_aidl.so" ] || continue
+            check "$DEST/$abi/libasbdsp_aidl.so" "$SRC/asb_effect_aidl.cpp" \
+                  "ASB queryEffect" "ASB configure" "ASB process"
+          done
+          check "$DEST/arm64-v8a/asb_dsp_attach" "$SRC/asb_dsp_attach.cpp" \
+                "pushed gain_mb" "gain change"
+          [ "$fail" = "0" ] || { echo "::error::artifacts do not match the sources - refusing to upload"; exit 1; }
+          echo "artifacts match the sources"
 
       - name: Upload .so artifacts
         uses: actions/upload-artifact@v4
