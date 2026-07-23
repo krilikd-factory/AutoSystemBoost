@@ -309,12 +309,12 @@ asb_migrate_governor_conf
         _att_how="linker64"
       fi
       echo "ts=$(date +%s) action=dsp_attach_started via=$_att_how" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
-      # Publish the DSP tunables once at boot, in dsp mode so nothing restarts the audio
-      # stack. This is what creates the persist.vendor.asb.dsp.* copies the effect reads;
-      # without it they would only appear after the user moved a slider, and until then the
-      # effect would fall back to the legacy names it is not allowed to read.
+      # Publish the vendor-namespace copies of the DSP properties the effect reads. This
+      # uses "mirror", not "dsp": at this point in boot the overlay carrying libasbdsp.so
+      # is not mounted yet, and the normal path would read that as "library missing" and
+      # write enable=0, turning the DSP off on every boot.
       [ -f "$MODDIR/runtime/asb_audio_apply.sh" ] && \
-        sh "$MODDIR/runtime/asb_audio_apply.sh" dsp >/dev/null 2>&1
+        sh "$MODDIR/runtime/asb_audio_apply.sh" mirror >/dev/null 2>&1
     fi
   fi
 ) >/dev/null 2>&1 &
