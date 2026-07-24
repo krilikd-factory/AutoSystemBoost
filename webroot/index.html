@@ -1719,6 +1719,8 @@ const I18N = {
         desc: 'Свой DSP-движок: усиление выше системного максимума. Компрессор с мягким коленом поднимает тело трека, а пиковый лимитер держит потолок \u2014 клиппинга нет. Цепляется к музыке сам, приложение не нужно. Начни с +3; +9 может сплющить громкие записи. Первое включение \u2014 после перезагрузки.' },
       dsp_postgain: { name: 'DSP пост-усиление (сатурация)',
         desc: 'Работает вместе с DSP-усилением. ВЫКЛ \u2014 обычный пиковый лимитер: пики придавливаются, форма волны сохраняется. 1\u201310 переключает цепь на ограниченный tanh-сатуратор с этой степенью прокачки: пики скругляются, а не срезаются, поэтому в тот же запас по уровню влезает заметно больше средней громкости, и жёсткого клиппинга быть не может. x3 \u2014 золотая середина; выше x3 отдача падает, а окраска растёт. Это осознанный размен точности на громкость.' },
+      dsp_bass: { name: 'DSP усиление баса',
+        desc: 'Работает вместе с DSP-усилением. Низкочастотная полка на 90 Гц: полный подъём приходится на низ, на угловой частоте \u2014 половина, выше примерно 1 кГц эффекта нет, середина и вокал не затронуты. Стоит в начале цепи, поэтому добавленный бас ограничивается наравне со всем остальным и сам по себе клиппинга не даёт. Плата \u2014 запас по уровню: каждый децибел баса заставляет лимитер срабатывать раньше, так что большой подъём поверх высокого усиления снижает общую громкость. Для большинства наушников достаточно 3\u20136.' },
       bt_absvol_mode: { name: 'Абсолютная громкость Bluetooth',
         desc: '«Отключить» \u2014 громкостью рулит телефон, а не гарнитура (нужно для ViPER/EQ). «Как в стоке» \u2014 громко и синхронно с наушниками. Применяется без перезагрузки.' },
       cool_gaming: { name: 'Холодные игры',
@@ -1971,7 +1973,7 @@ const CFG_FILE = MD + '/config/governor.conf';
 // reinstall / root-manager re-trigger can restore them. Must stay in sync with
 // the _user_keys / snapshot list in common/install.sh.
 const SNAP_KEYS = ['audio_profile','audio_dac_hifi','CAMERA_LEVEL','CAMERA_AGGRESSIVE',
-  'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','media_loudness','dsp_loudness','dsp_postgain','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
+  'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','media_loudness','dsp_loudness','dsp_postgain','dsp_bass','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
   'auto_battery_enable','charge_aware_enable',
   'UX_ANIM_FORCE_RESTART','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
   'region_allow_locale','disable_blur'];
@@ -1987,6 +1989,8 @@ const CFG_ITEMS = [
     desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, now up to +18 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot.' },
   { key:'dsp_postgain', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Post-gain (saturation)',
     desc:'Needs DSP Loudness above. Off keeps the brick-wall limiter: peaks are pulled down, the waveform keeps its shape. 1\u201310 switches to a bounded tanh saturator with that drive \u2014 it rounds peaks instead of slicing them, fitting far more average level into the same headroom, and cannot hard-clip. x3 is the sweet spot; past x3 returns flatten while the sound colours up. This trades accuracy for loudness on purpose.' },
+  { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
+    desc:'Needs DSP Loudness above. A low shelf at 90 Hz: the full lift lands on the low end, half of it at the corner, nothing above about 1 kHz \u2014 mids and vocals stay untouched. It runs at the head of the chain, so the added bass is limited like everything else and cannot clip on its own. The trade is headroom: every dB of bass makes the limiter engage sooner, so a big boost on top of a high gain costs overall loudness. 3\u20136 suits most headphones.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Absolute Volume',
     desc:'Disable = the phone drives the gain instead of the headset (what ViPER/EQ need). Stock = loud and synced with the headset. Applies without a reboot.' },
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:4, step:1, name:'Camera Grade',
@@ -2036,7 +2040,7 @@ async function cfgLoad() {
 // explicitly.
 const CFG_CAT = {
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_postgain:'audio', bt_absvol_mode:'audio',
+  dsp_loudness:'audio', dsp_postgain:'audio', dsp_bass:'audio', bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
@@ -2054,6 +2058,7 @@ const CFG_ICONS = {
   CAMERA_AGGRESSIVE_INJECT:'\uD83C\uDF9B\uFE0F',  // slider/mode
   dsp_loudness:'\uD83C\uDF9B',                // control knobs (DSP gain)
   dsp_postgain:'\uD83C\uDF0A',                // wave (saturation drive)
+  dsp_bass:'\uD83E\uDD41',                    // drum (bass shelf)
   media_loudness:'\uD83D\uDCE2',            // loudspeaker (media loudness)
   bt_absvol_mode:'\uD83D\uDD0A',              // loud speaker (BT volume)
   cool_gaming:'\uD83C\uDFAE',                 // gamepad
@@ -2152,6 +2157,7 @@ function cfgRender() {
         // DSP loudness is a dB gain; label it as such. Other ranges stay plain numbers.
         if (it.key === 'dsp_loudness') return '+' + v + ' dB';
         if (it.key === 'dsp_postgain') return '\u00d7' + v;
+        if (it.key === 'dsp_bass') return '+' + v + ' dB';
         return String(v);
       };
       val.textContent = _rngLabel(rng.value);
@@ -2252,10 +2258,10 @@ async function cfgSet(key, val, ctl) {
     // and no reboot for these. audioserver restarts briefly (a short audio gap), which is
     // why it runs in the background and the toast says "applying" rather than "reboot".
     // Live keys: a background audioserver restart re-reads these, so they apply now.
-    var AUDIO_LIVE_KEYS = ['audio_profile','dsp_loudness','dsp_postgain','bt_absvol_mode'];
+    var AUDIO_LIVE_KEYS = ['audio_profile','dsp_loudness','dsp_postgain','dsp_bass','bt_absvol_mode'];
     // DSP-only changes go through the daemon, which hands the value to the live effect -
     // no audioserver restart, so the audio never drops out while the slider moves.
-    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_postgain'];
+    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_postgain','dsp_bass'];
     // Overlay keys: media_loudness (volume curves) and audio_dac_hifi (mixer) are baked
     // into the mounted overlay and only read at boot - a restart cannot pick them up, so
     // be honest and say reboot.
