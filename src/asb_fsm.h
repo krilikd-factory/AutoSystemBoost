@@ -203,13 +203,23 @@ static int asb_device_bounds_apply_kv(const char *key, long val) {
         { "BALANCED_CPU_MAX_LITTLE",    PROFILE_BALANCED,    1, 0, 0 },
         { "BALANCED_CPU_MAX_BIG",       PROFILE_BALANCED,    1, 0, 1 },
         { "BALANCED_CPU_MAX_MID",       PROFILE_BALANCED,    1, 0, 1 },
-        { "BALANCED_CPU_MAX_PRIME",     PROFILE_BALANCED,    1, 0, 2 },
+        /* BALANCED_CPU_MAX_PRIME and PERFORMANCE_CPU_MAX_PRIME are deliberately absent.
+         * Slot 2 only exists on 3/4-cluster SoCs, and there it is the single strongest
+         * core. Leaving it unmanaged in the interactive profiles is what shipped before
+         * the bounds synthesis existed; capping it made that core the most restricted one
+         * on those devices - measured on one device, same profile and screen state, the
+         * prime fell from 100% of its hardware ceiling to 48%, which felt slow and saved
+         * no battery, because the little/mid clusters just spent longer at their own caps.
+         * Filtering here rather than only in the synthesiser matters: device_bounds.env
+         * lives in /data/adb/asb and outlives module updates, and the synthesiser itself
+         * is not shipped in release builds - so a file written once by a debug build would
+         * otherwise keep capping the prime forever, with nothing able to rewrite it.
+         * BATTERY_CPU_MAX_PRIME stays: that profile exists to trade speed away. */
         { "BALANCED_CPU_CAP_LITTLE",    PROFILE_BALANCED,    0, 0, 0 },
         { "BALANCED_CPU_CAP_BIG",       PROFILE_BALANCED,    0, 0, 1 },
         { "PERFORMANCE_CPU_MAX_LITTLE", PROFILE_PERFORMANCE, 1, 0, 0 },
         { "PERFORMANCE_CPU_MAX_BIG",    PROFILE_PERFORMANCE, 1, 0, 1 },
         { "PERFORMANCE_CPU_MAX_MID",    PROFILE_PERFORMANCE, 1, 0, 1 },
-        { "PERFORMANCE_CPU_MAX_PRIME",  PROFILE_PERFORMANCE, 1, 0, 2 },
     };
     for (unsigned i = 0; i < sizeof(map)/sizeof(map[0]); i++) {
         if (strcmp(key, map[i].name) != 0) continue;
