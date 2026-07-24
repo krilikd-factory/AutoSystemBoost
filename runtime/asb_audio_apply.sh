@@ -56,7 +56,7 @@ _mode="${1:-all}"
 # reads a missing library as "needs-reboot" and writes enable=0 - which would switch the
 # DSP off on every single boot.
 if [ "$_mode" = "mirror" ]; then
-  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100; do
+  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db; do
     _v="$(getprop "persist.asb.dsp.$_k" 2>/dev/null)"
     [ -n "$_v" ] && _persist_ctx "persist.vendor.asb.dsp.$_k" "$_v"
   done
@@ -164,6 +164,19 @@ case "$_pg" in
 esac
 _dspp softclip "$_soft"
 _dspp postgain_x100 "$_pgx"
+
+# ---- dsp_bass (low-shelf boost) ---------------------------------------------------
+# A shelf at 90 Hz: full lift at DC, half of it at the corner, nothing above ~1 kHz. It
+# runs at the head of the chain so the compressor and limiter see the boosted low end -
+# which also means the extra bass eats headroom and the limiter engages sooner.
+_bs="$(_cfg dsp_bass)"
+case "$_bs" in
+  ''|off|0)  _bsx=0 ;;
+  *[!0-9]*)  _bsx=0 ;;
+  *) if [ "$_bs" -ge 1 ] 2>/dev/null && [ "$_bs" -le 10 ] 2>/dev/null; then _bsx="$_bs"; else _bsx=0; fi ;;
+esac
+_dspp bass_db "$_bsx"
+[ "$_bsx" = "0" ] && changed="${changed}bass=off " || changed="${changed}bass=+${_bsx}dB "
 [ "$_soft" = "1" ] && changed="${changed}postgain=x${_pg} " || changed="${changed}postgain=off "
 
 # ---- go live ----------------------------------------------------------------------
