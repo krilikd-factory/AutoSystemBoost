@@ -16,7 +16,7 @@
 #include <stdint.h>
 
 #define ASB_GAIN_MB_MIN    0
-#define ASB_GAIN_MB_MAX    1800
+#define ASB_GAIN_MB_MAX    2000
 #define ASB_CEIL_MB_MIN   (-600)
 #define ASB_CEIL_MB_MAX   (-30)
 #define ASB_RATIO_MIN      10

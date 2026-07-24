@@ -96,7 +96,27 @@ static status_t push_gain(const sp<android::AudioEffect>& fx, int gain_mb) {
 
 // SIGUSR1 only exists to interrupt the poll sleep so a settings change applies at once.
 // A handler must be installed: the default action for SIGUSR1 is to terminate.
-static void on_wake(int) {}
+// SIGUSR1 interrupts the poll sleep so a settings change applies at once. A handler must
+// be installed: the default action for SIGUSR1 is to terminate. The flag also forces a
+// push, because the settings that changed may not be the gain.
+static volatile sig_atomic_t g_wake = 0;
+static void on_wake(int) { g_wake = 1; }
+
+// Signature of every tunable the effect reads besides the gain. The effect re-reads all of
+// them whenever a gain parameter arrives, so any change here has to trigger a push too -
+// otherwise a postgain or compressor edit is written to the properties and never applied,
+// which is exactly what made the saturation slider look dead while the gain slider worked.
+static void asb_tunables_sig(char *out, size_t n) {
+    char a[PROP_VALUE_MAX] = {0}, b[PROP_VALUE_MAX] = {0}, c[PROP_VALUE_MAX] = {0};
+    char d[PROP_VALUE_MAX] = {0}, e[PROP_VALUE_MAX] = {0}, f[PROP_VALUE_MAX] = {0};
+    __system_property_get("persist.asb.dsp.ceiling_mb", a);
+    __system_property_get("persist.asb.dsp.comp", b);
+    __system_property_get("persist.asb.dsp.comp_ratio_x10", c);
+    __system_property_get("persist.asb.dsp.comp_thresh_mb", d);
+    __system_property_get("persist.asb.dsp.softclip", e);
+    __system_property_get("persist.asb.dsp.postgain_x100", f);
+    snprintf(out, n, "%s|%s|%s|%s|%s|%s", a, b, c, d, e, f);
+}
 
 int main(int /*argc*/, char** /*argv*/) {
     android::ProcessState::self()->startThreadPool();
@@ -113,6 +133,7 @@ int main(int /*argc*/, char** /*argv*/) {
     int was_on = -1;
     int fails = 0;   // consecutive failures, used to back off
     int pushed_gain = -1;   // gain last handed to the effect over binder
+    char pushed_sig[192] = "";  // tunables last handed over, so any edit triggers a push
 
     for (;;) {
         // Battery: only hold the effect while the DSP is actually on. An attached effect
@@ -135,7 +156,7 @@ int main(int /*argc*/, char** /*argv*/) {
         }
 
         if (!want_on) {
-            if (fx != nullptr) { logline("releasing effect (dsp off)"); fx.clear(); attached = 0; pushed_gain = -1; }
+            if (fx != nullptr) { logline("releasing effect (dsp off)"); fx.clear(); attached = 0; pushed_gain = -1; pushed_sig[0] = 0; }
             // Nothing to maintain - poll lazily. nanosleep uses CLOCK_MONOTONIC, which does
             // not advance while the device is suspended, so this never wakes the SoC by
             // itself; it simply resumes when the device is already awake.
@@ -173,6 +194,8 @@ int main(int /*argc*/, char** /*argv*/) {
                     status_t pg = push_gain(fx, gain);
                     logline("pushed gain_mb=%d -> %d", gain, (int)pg);
                     pushed_gain = (pg == OK) ? gain : -1;
+                    if (pg == OK) asb_tunables_sig(pushed_sig, sizeof(pushed_sig));
+                    else pushed_sig[0] = 0;
                 } else {
                     logline("setEnabled failed: %d", (int)en);
                 }
@@ -189,13 +212,22 @@ int main(int /*argc*/, char** /*argv*/) {
                 }
             }
         }
-        // Slider moved while the effect is up: hand the new gain straight over. Previously
-        // the only way a changed gain reached the DSP was an audioserver restart rebuilding
-        // the effect, which costs a short audible gap.
-        if (fx != nullptr && gain != pushed_gain) {
+        // A settings change reached us: hand the values to the live effect. The effect
+        // re-reads every tunable when a gain parameter arrives, so one push carries the
+        // postgain and compressor edits too. Previously this only fired when the gain
+        // itself differed, so the saturation slider changed the properties and nothing
+        // else - the effect kept running with whatever it had read at creation.
+        char _sig[192];
+        asb_tunables_sig(_sig, sizeof(_sig));
+        int _forced = g_wake;
+        g_wake = 0;
+        if (fx != nullptr && (_forced || gain != pushed_gain || strcmp(_sig, pushed_sig) != 0)) {
             status_t pg = push_gain(fx, gain);
-            logline("gain change -> %d (status %d)", gain, (int)pg);
-            if (pg == OK) pushed_gain = gain;
+            logline("settings change -> gain=%d [%s] (status %d)", gain, _sig, (int)pg);
+            if (pg == OK) {
+                pushed_gain = gain;
+                snprintf(pushed_sig, sizeof(pushed_sig), "%s", _sig);
+            }
         }
         // 30 s instead of 5 s: re-attaching a few seconds later after an audioserver restart
         // is inaudible, and this cuts idle wakeups by 6x. The check itself is a local field
