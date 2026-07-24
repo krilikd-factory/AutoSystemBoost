@@ -17,6 +17,10 @@
 
 #define ASB_GAIN_MB_MIN    0
 #define ASB_GAIN_MB_MAX    2000
+#define ASB_MAX_CH         8
+#define ASB_BASS_DB_MAX    10
+#define ASB_BASS_FREQ_HZ   90.0f   /* shelf corner: body of the bass, not sub rumble */
+#define ASB_BASS_SLOPE     0.9f    /* gentle slope; 1.0 is the steepest without a bump */
 #define ASB_CEIL_MB_MIN   (-600)
 #define ASB_CEIL_MB_MAX   (-30)
 #define ASB_RATIO_MIN      10
@@ -51,6 +55,13 @@ typedef struct {
      * and measured +9.7 dB on the same material with zero hard clamping. */
     int      softclip;      /* 1 = tanh saturation instead of the brick-wall limiter */
     float    postgain;      /* makeup after tanh so the peak reaches the ceiling */
+    /* Low-shelf bass stage (RBJ cookbook), applied at the INPUT of the chain so the
+     * compressor and the limiter both see the boosted low end. Placing it after them
+     * would let the added energy escape every safeguard and clip on the way out. */
+    int      bass_on;
+    float    bb0, bb1, bb2, ba1, ba2;              /* coefficients, a0-normalised */
+    float    bx1[ASB_MAX_CH], bx2[ASB_MAX_CH];     /* per-channel input history */
+    float    by1[ASB_MAX_CH], by2[ASB_MAX_CH];     /* per-channel output history */
 } asb_core_t;
 
 static inline int  asb_core_clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -125,6 +136,48 @@ static inline void asb_core_configure(asb_core_t *c, int enabled, int gain_mb,
                           channels, rate, fmt_ok, 0, 115);
 }
 
+/*
+ * Low-shelf bass boost (RBJ audio-EQ cookbook). bass_db is the lift at DC relative to the
+ * band above the corner; 0 disables the stage entirely and the samples pass untouched.
+ *
+ * Called separately from asb_core_configure*() so the existing callers keep their
+ * signature. Coefficients are computed here, never in the realtime path.
+ */
+static inline void asb_core_set_bass(asb_core_t *c, int bass_db, uint32_t rate) {
+    for (int k = 0; k < ASB_MAX_CH; k++) { c->bx1[k] = c->bx2[k] = c->by1[k] = c->by2[k] = 0.0f; }
+    if (bass_db < 0) bass_db = 0;
+    if (bass_db > ASB_BASS_DB_MAX) bass_db = ASB_BASS_DB_MAX;
+    if (bass_db == 0 || rate == 0 || c->channels > ASB_MAX_CH) { c->bass_on = 0; return; }
+
+    float A     = powf(10.0f, (float)bass_db / 40.0f);
+    float w0    = 2.0f * 3.14159265358979f * ASB_BASS_FREQ_HZ / (float)rate;
+    float cosw  = cosf(w0);
+    float sinw  = sinf(w0);
+    float alpha = sinw / 2.0f * sqrtf((A + 1.0f / A) * (1.0f / ASB_BASS_SLOPE - 1.0f) + 2.0f);
+    float twoSqrtAalpha = 2.0f * sqrtf(A) * alpha;
+
+    float b0 =        A * ((A + 1.0f) - (A - 1.0f) * cosw + twoSqrtAalpha);
+    float b1 = 2.0f * A * ((A - 1.0f) - (A + 1.0f) * cosw);
+    float b2 =        A * ((A + 1.0f) - (A - 1.0f) * cosw - twoSqrtAalpha);
+    float a0 =            (A + 1.0f) + (A - 1.0f) * cosw + twoSqrtAalpha;
+    float a1 =    -2.0f * ((A - 1.0f) + (A + 1.0f) * cosw);
+    float a2 =            (A + 1.0f) + (A - 1.0f) * cosw - twoSqrtAalpha;
+
+    if (a0 == 0.0f) { c->bass_on = 0; return; }
+    c->bb0 = b0 / a0; c->bb1 = b1 / a0; c->bb2 = b2 / a0;
+    c->ba1 = a1 / a0; c->ba2 = a2 / a0;
+    c->bass_on = 1;
+}
+
+/* One biquad step for channel k. Realtime-safe: five multiplies, no branches. */
+static inline float asb_core_bass_step(asb_core_t *c, int k, float x) {
+    float y = c->bb0 * x + c->bb1 * c->bx1[k] + c->bb2 * c->bx2[k]
+              - c->ba1 * c->by1[k] - c->ba2 * c->by2[k];
+    c->bx2[k] = c->bx1[k]; c->bx1[k] = x;
+    c->by2[k] = c->by1[k]; c->by1[k] = y;
+    return y;
+}
+
 static inline void asb_core_reset(asb_core_t *c) { c->env = 0.0f; c->cenv = 0.0f; }
 
 static inline float asb_core_comp_gain(asb_core_t *c, float env) {
@@ -174,6 +227,13 @@ static inline void asb_core_process_f32(asb_core_t *c, const float *in, float *o
     for (size_t f = 0; f < frames; f++) {
         const float *src = in + f * ch;
         float *dst = out + f * ch;
+        /* Bass first: the detector below must measure the boosted signal, otherwise the
+         * extra low end bypasses the compressor and the limiter and clips on output. */
+        float bs[ASB_MAX_CH];
+        if (c->bass_on) {
+            for (int k = 0; k < ch; k++) bs[k] = asb_core_bass_step(c, k, src[k]);
+            src = bs;
+        }
         float peak = 0.0f;
         for (int k = 0; k < ch; k++) { float a = fabsf(src[k]); if (a > peak) peak = a; }
         float cg = asb_core_comp_gain(c, asb_core_step_cenv(c, peak)) * c->cmakeup;
@@ -205,12 +265,19 @@ static inline void asb_core_process_s16(asb_core_t *c, const int16_t *in, int16_
     for (size_t f = 0; f < frames; f++) {
         const int16_t *src = in + f * ch;
         int16_t *dst = out + f * ch;
+        /* Normalise once, and run the bass shelf before the detector for the same reason
+         * as the float path: the boosted low end has to be visible to the limiter. */
+        float bs[ASB_MAX_CH];
+        for (int k = 0; k < ch; k++) {
+            float x = (float)src[k] / 32768.0f;
+            bs[k] = c->bass_on ? asb_core_bass_step(c, k, x) : x;
+        }
         float peak = 0.0f;
-        for (int k = 0; k < ch; k++) { float a = fabsf((float)src[k] / 32768.0f); if (a > peak) peak = a; }
+        for (int k = 0; k < ch; k++) { float a = fabsf(bs[k]); if (a > peak) peak = a; }
         float cg = asb_core_comp_gain(c, asb_core_step_cenv(c, peak)) * c->cmakeup;
         if (c->softclip) {
             for (int k = 0; k < ch; k++) {
-                float v = tanhf(((float)src[k] / 32768.0f) * cg * g * c->postgain) * c->ceiling;
+                float v = tanhf(bs[k] * cg * g * c->postgain) * c->ceiling;
                 if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;
                 dst[k] = (int16_t)lrintf(v * 32767.0f);
             }
@@ -218,7 +285,7 @@ static inline void asb_core_process_s16(asb_core_t *c, const int16_t *in, int16_
         }
         float gr = asb_core_step_gr(c, peak * cg * g);
         for (int k = 0; k < ch; k++) {
-            float v = ((float)src[k] / 32768.0f) * cg * g * gr;
+            float v = bs[k] * cg * g * gr;
             if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;
             int32_t s = (int32_t)lrintf(v * 32767.0f);
             if (accumulate) s += (int32_t)dst[k];

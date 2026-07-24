@@ -109,13 +109,15 @@ static void on_wake(int) { g_wake = 1; }
 static void asb_tunables_sig(char *out, size_t n) {
     char a[PROP_VALUE_MAX] = {0}, b[PROP_VALUE_MAX] = {0}, c[PROP_VALUE_MAX] = {0};
     char d[PROP_VALUE_MAX] = {0}, e[PROP_VALUE_MAX] = {0}, f[PROP_VALUE_MAX] = {0};
+    char g[PROP_VALUE_MAX] = {0};
     __system_property_get("persist.asb.dsp.ceiling_mb", a);
     __system_property_get("persist.asb.dsp.comp", b);
     __system_property_get("persist.asb.dsp.comp_ratio_x10", c);
     __system_property_get("persist.asb.dsp.comp_thresh_mb", d);
     __system_property_get("persist.asb.dsp.softclip", e);
     __system_property_get("persist.asb.dsp.postgain_x100", f);
-    snprintf(out, n, "%s|%s|%s|%s|%s|%s", a, b, c, d, e, f);
+    __system_property_get("persist.asb.dsp.bass_db", g);
+    snprintf(out, n, "%s|%s|%s|%s|%s|%s|%s", a, b, c, d, e, f, g);
 }
 
 int main(int /*argc*/, char** /*argv*/) {
