@@ -1168,12 +1168,13 @@ body.config-active #livePage.open {
 }
 /* Per-category icon tint (active tweaks). The card itself stays green via .is-on; only
    the icon square carries the category colour so categories are scannable. */
-.cfg-row.is-on .cfg-icon.cat-audio   { background: rgba(0,240,180,0.16);  border-color: rgba(0,240,180,0.45); }
-.cfg-row.is-on .cfg-icon.cat-camera  { background: rgba(167,139,250,0.16); border-color: rgba(167,139,250,0.45); }
-.cfg-row.is-on .cfg-icon.cat-perf    { background: rgba(255,26,26,0.16);   border-color: rgba(255,26,26,0.45); }
-.cfg-row.is-on .cfg-icon.cat-battery { background: rgba(46,213,115,0.16);  border-color: rgba(46,213,115,0.45); }
-.cfg-row.is-on .cfg-icon.cat-memory  { background: rgba(90,170,255,0.16);  border-color: rgba(90,170,255,0.45); }
-.cfg-row.is-on .cfg-icon.cat-display { background: rgba(255,165,2,0.16);   border-color: rgba(255,165,2,0.45); }
+.cfg-row.is-on .cfg-icon.cat-audio   { background: rgba(255,59,59,0.16);   border-color: rgba(255,59,59,0.50); }
+.cfg-row.is-on .cfg-icon.cat-camera  { background: rgba(58,141,255,0.16);  border-color: rgba(58,141,255,0.50); }
+.cfg-row.is-on .cfg-icon.cat-battery { background: rgba(46,213,115,0.16);  border-color: rgba(46,213,115,0.50); }
+.cfg-row.is-on .cfg-icon.cat-perf    { background: rgba(167,105,250,0.18); border-color: rgba(167,105,250,0.52); }
+.cfg-row.is-on .cfg-icon.cat-ux      { background: rgba(255,159,28,0.18);  border-color: rgba(255,159,28,0.52); }
+.cfg-row.is-on .cfg-icon.cat-display { background: rgba(206,210,216,0.18); border-color: rgba(206,210,216,0.50); }
+.cfg-row.is-on .cfg-icon.cat-memory  { background: rgba(0,214,198,0.16);   border-color: rgba(0,214,198,0.45); }
 .cfg-row.is-on .cfg-icon.cat-system  { background: rgba(180,180,190,0.16); border-color: rgba(180,180,190,0.45); }
 .cfg-main {
   flex: 1 1 auto;
@@ -1982,7 +1983,7 @@ const CFG_ITEMS = [
     desc:'Codec configuration, not software: headphone companders off, HPH Mode \u2192 CLS_H_HIFI. Does not fight an external EQ \u2014 it gives it a cleaner DAC. Reboot to apply.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
-  { key:'dsp_loudness', type:'range', def:'0', min:0, max:18, step:1, name:'DSP Loudness',
+  { key:'dsp_loudness', type:'range', def:'0', min:0, max:20, step:1, name:'DSP Loudness',
     desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, now up to +18 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot.' },
   { key:'dsp_postgain', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Post-gain (saturation)',
     desc:'Needs DSP Loudness above. Off keeps the brick-wall limiter: peaks are pulled down, the waveform keeps its shape. 1\u201310 switches to a bounded tanh saturator with that drive \u2014 it rounds peaks instead of slicing them, fitting far more average level into the same headroom, and cannot hard-clip. x3 is the sweet spot; past x3 returns flatten while the sound colours up. This trades accuracy for loudness on purpose.' },
@@ -2039,8 +2040,8 @@ const CFG_CAT = {
   CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
-  BG_TRIM_LEVEL:'memory', UX_MANAGE_OEM_TOGGLES:'memory', UX_MANAGE_TIMEOUTS:'memory',
-  UX_ANIM_FORCE_RESTART:'memory',
+  BG_TRIM_LEVEL:'memory',
+  UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
   disable_blur:'display'
 };
 function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-system'; }
