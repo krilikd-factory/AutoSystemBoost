@@ -159,9 +159,17 @@ _snap() {
       # 3/4-cluster: last cluster is PRIME (slot 2), strongest middle is MID
       # (slot 1). Battery/balanced leaned up per the block above for smoothness.
       echo "# topology=$_topo: big(prime) -> slot2, strongest middle -> slot1 (interactive caps leaned up)"
+      # Only BATTERY caps the prime on these topologies. Before this synthesis existed the
+      # prime slot stayed unmanaged here (compiled 0), which is what V52 shipped and what
+      # users of 4-cluster devices were happy with. Adding a balanced ceiling made the
+      # strongest core the most restricted one on those SoCs: measured side by side on one
+      # device, same profile, same screen state, the prime went from 100% of its hardware
+      # ceiling to 48% - felt sluggish, and the battery drain did not improve, because the
+      # little/mid clusters simply spent longer at their own caps. Balanced and performance
+      # therefore leave the prime alone again; battery still caps it, since that profile
+      # exists precisely to trade speed away.
       echo "BATTERY_CPU_MAX_PRIME=$(_snap $_r_bat_p $_hw_big $_big_id)"
-      echo "BALANCED_CPU_MAX_PRIME=$(_snap $_r_bal_p $_hw_big $_big_id)"
-      echo "PERFORMANCE_CPU_MAX_PRIME=$(_snap $_r_prf_p $_hw_big $_big_id)"
+      echo "# BALANCED/PERFORMANCE prime intentionally not emitted (slot2 stays unmanaged)"
       echo "BATTERY_CPU_MAX_MID=$(_snap $R_BAT_MAX_M $_hw_mid $_mid_id)"
       echo "BALANCED_CPU_MAX_MID=$(_snap $R_BAL_MAX_M $_hw_mid $_mid_id)"
       echo "PERFORMANCE_CPU_MAX_MID=$(_snap $R_PRF_MAX_M $_hw_mid $_mid_id)"
