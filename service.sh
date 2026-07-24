@@ -213,6 +213,16 @@ asb_migrate_governor_conf
 (
   [ -f "$MODDIR/tools/asb_discover.sh" ] && sh "$MODDIR/tools/asb_discover.sh" >/dev/null 2>&1
   [ -f "$MODDIR/tools/asb_synthesize_bounds.sh" ] && sh "$MODDIR/tools/asb_synthesize_bounds.sh" >/dev/null 2>&1
+  # Retire the interactive prime ceilings from any bounds file written by an earlier
+  # build. The governor already refuses them, but this file lives in /data/adb/asb and
+  # outlives module updates, and the diagnostics print it verbatim - left in place the
+  # report would keep showing a prime cap that is not applied any more.
+  if [ -f /data/adb/asb/device_bounds.env ] && \
+     grep -qE '^(BALANCED|PERFORMANCE)_CPU_MAX_PRIME=' /data/adb/asb/device_bounds.env 2>/dev/null; then
+    sed -i '/^BALANCED_CPU_MAX_PRIME=/d; /^PERFORMANCE_CPU_MAX_PRIME=/d' \
+      /data/adb/asb/device_bounds.env 2>/dev/null
+    asb_log "device_bounds: dropped retired interactive prime ceilings"
+  fi
 ) &
 
 (
