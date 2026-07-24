@@ -129,6 +129,16 @@ case "$_dsp" in
   *[!0-9]*) _dsp_ok=0 ;;
   *) [ "$_dsp" -ge 1 ] 2>/dev/null && [ "$_dsp" -le 20 ] 2>/dev/null && _dsp_ok=1 ;;
 esac
+# The eq_compat profile exists to hand the stream to an external engine (ViPER and
+# friends). Our own effect sits on the same output and the external driver then does not
+# see the stream at all, so the two cannot share it: eq_compat wins and the DSP is turned
+# off outright. enable=0 makes the attach daemon release the effect completely, so the
+# audio path goes back to what it would be without the module - not merely bypassed.
+_dsp_eq_off=0
+if [ "$_ap" = "eq_compat" ] && [ "$_dsp_ok" = "1" ]; then
+  _dsp_ok=0
+  _dsp_eq_off=1
+fi
 if [ "$_dsp_ok" = "1" ]; then
     if [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; then
       _dspp enable 1
@@ -143,27 +153,22 @@ if [ "$_dsp_ok" = "1" ]; then
       _dspp enable 0
       changed="${changed}dsp=needs-reboot "
     fi
+elif [ "$_dsp_eq_off" = "1" ]; then
+    _dspp enable 0
+    changed="${changed}dsp=off(eq_compat) "
 else
     _dspp enable 0
     changed="${changed}dsp=off "
 fi
 
-# ---- dsp_postgain (saturation drive) ----------------------------------------------
-# off keeps the brick-wall limiter. 1..10 switches the chain to the bounded tanh
-# saturator with that drive, which fits more average level into the same headroom at the
-# cost of colouring the waveform on purpose.
-_pg="$(_cfg dsp_postgain)"
-case "$_pg" in
-  ''|off|0)  _soft=0; _pgx=300 ;;
-  *[!0-9]*)  _soft=0; _pgx=300 ;;
-  *) if [ "$_pg" -ge 1 ] 2>/dev/null && [ "$_pg" -le 10 ] 2>/dev/null; then
-       _soft=1; _pgx=$((_pg * 100))
-     else
-       _soft=0; _pgx=300
-     fi ;;
-esac
-_dspp softclip "$_soft"
-_dspp postgain_x100 "$_pgx"
+# ---- saturation: permanently off --------------------------------------------------
+# The tanh saturator is gone from the UI: at every drive it audibly buzzed on real
+# material, which is not a trade worth offering. These two lines are not dead code -
+# both properties persist across reboots, so an install that inherits softclip=1 from an
+# earlier version would keep distorting until something clears it. Writing the neutral
+# values on every run is that reset.
+_dspp softclip 0
+_dspp postgain_x100 300
 
 # ---- dsp_bass (low-shelf boost) ---------------------------------------------------
 # A shelf at 90 Hz: full lift at DC, half of it at the corner, nothing above ~1 kHz. It
