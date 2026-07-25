@@ -225,6 +225,22 @@ _dsp_so=0
 _cc_drv=""
 _vb_n=0
 
+# Every place an effects config can live on any of these devices, in one list so
+# the AUDIO section and the NOT APPLIED check below can never disagree about where
+# to look. Both names matter: the SKU dirs on SM8650 carry audio_effects.xml, NOT
+# audio_effects_config.xml - the installer registered into exactly those two files
+# and the checker, which globbed only the *_config name under sku_*, reported the
+# effect as missing on a device where it was live.
+_asb_effect_files() {
+  for _d in /odm/etc /vendor/etc /vendor/odm/etc /system/etc \
+            /vendor/etc/audio/sku_* /odm/etc/audio/sku_* \
+            /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio; do
+    for _n in audio_effects_config.xml audio_effects.xml; do
+      [ -f "$_d/$_n" ] && echo "$_d/$_n"
+    done
+  done
+}
+
 _st() { grep -m1 "^$1=" /dev/.asb/state 2>/dev/null | cut -d= -f2; }
 
 # Append "$2" to the accumulator "$1", inserting the separator only between real items.
@@ -309,12 +325,7 @@ if [ "$_a_dsp" != "off" ]; then
   [ -f /vendor/lib64/soundfx/libasbdsp.so ] && _l64="✓"
   [ -f /vendor/lib/soundfx/libasbdsp.so ] && _l32="✓"
   echo "       libasbdsp: 64-bit ${_l64}  ·  32-bit ${_l32}"
-  for _ecs in /odm/etc/audio_effects_config.xml /odm/etc/audio_effects.xml \
-              /vendor/etc/audio_effects_config.xml /vendor/etc/audio_effects.xml \
-              /vendor/odm/etc/audio_effects_config.xml \
-              /system/etc/audio_effects_config.xml \
-              /vendor/etc/audio/sku_*/audio_effects_config.xml \
-              /odm/etc/audio/sku_*/audio_effects_config.xml; do
+  for _ecs in $(_asb_effect_files); do
     if grep -q 'asb_loudness' "$_ecs" 2>/dev/null; then
       echo "       effect registered in: ${_ecs}"
       break
@@ -514,17 +525,8 @@ if [ "$_a_dsp" != "off" ]; then
   # bind mount is what makes it the live file. Patched-but-not-bound means the mount
   # was skipped (bootloop fuse, or the boot counter tripped); not-patched-at-all means
   # install never ran the registration. Report which one it is.
-  # Search order mirrors where the installer can put the registration, plus the two
-  # locations that were missing here and produced a "not registered" verdict on a
-  # device where it simply looked in the wrong places: /system/etc (AOSP's last
-  # resort) and /vendor/odm/etc (read by some models instead of /odm).
   _reg_live=0; _reg_stage=0
-  for _ec in /odm/etc/audio_effects_config.xml /odm/etc/audio_effects.xml \
-             /vendor/etc/audio_effects_config.xml /vendor/etc/audio_effects.xml \
-             /vendor/odm/etc/audio_effects_config.xml \
-             /system/etc/audio_effects_config.xml \
-             /vendor/etc/audio/sku_*/audio_effects_config.xml \
-             /odm/etc/audio/sku_*/audio_effects_config.xml; do
+  for _ec in $(_asb_effect_files); do
     grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg_live=1; break; }
   done
   # Search the whole staged tree AND the module overlay. The old two-path probe
@@ -534,7 +536,7 @@ if [ "$_a_dsp" != "off" ]; then
   # for the user to be told to apply.
   for _ec in $(find /data/adb/asb/odm_patched \
                     /data/adb/modules/AutoSystemBoost/system \
-                    -type f -name 'audio_effects_config.xml' 2>/dev/null); do
+                    -type f -name 'audio_effects*.xml' 2>/dev/null); do
     grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg_stage=1; break; }
   done
   if [ "$_reg_live" != "1" ]; then
