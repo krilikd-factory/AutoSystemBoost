@@ -263,6 +263,42 @@ asb_apply_net() {
   fi
 }
 
+# OEM-owned settings need a baseline that is captured ONCE, before ASB has ever
+# touched them, and never re-captured. Recording "the current value" on every boot
+# looks the same on boot 1 and quietly records ASB's own value from boot 2 onwards -
+# at which point uninstall restores what ASB wrote instead of what the user had.
+asb_oem_baseline_save() {
+  _ob_log="/data/adb/asb/oem_restore.log"
+  mkdir -p /data/adb/asb 2>/dev/null || true
+  [ -f "$_ob_log" ] || : > "$_ob_log" 2>/dev/null
+  grep -q "^$1|" "$_ob_log" 2>/dev/null && return 0
+  echo "$1|$(settings get global "$1" 2>/dev/null)" >> "$_ob_log" 2>/dev/null || true
+}
+
+# Turn RAM expansion off the way OxygenOS itself records it.
+#
+# OOS tracks this toggle in THREE keys, not two: ram_expand_size, ram_expand_size_list
+# and ram_expand_switch_state. ASB only ever zeroed the first two, so while the module
+# was installed it re-zeroed them at every boot and the slider looked off - but OOS
+# still had switch_state=1 on record. Remove the module and nothing re-zeroes anything;
+# OOS repairs the inconsistency from its own switch record, RAM expansion comes back on,
+# swap-on-UFS resumes and the phone runs hot. Reported from the field on a OnePlus 13:
+# "after every uninstall the RAM expansion slider turns itself on and the phone heats up".
+asb_ram_expand_apply() {
+  has settings || return 0
+  for _rk in ram_expand_size ram_expand_size_list ram_expand_switch_state; do
+    asb_oem_baseline_save "$_rk"
+  done
+  if [ "$1" = "0" ]; then
+    asb_settings_put global ram_expand_size 0
+    asb_settings_put global ram_expand_size_list 0
+    asb_settings_put global ram_expand_switch_state 0
+  else
+    asb_settings_put global ram_expand_switch_state 1
+    asb_settings_put global ram_expand_size "$1"
+  fi
+}
+
 asb_apply_ux() {
   asb_feature_enabled FPS || asb_feature_enabled VM || return 0
   has settings || return 0
@@ -373,13 +409,7 @@ asb_apply_ux() {
         mkdir -p /data/adb/asb 2>/dev/null || true
         echo "$(date '+%F %T') apply ram_expand: before=${_re_before} want=${UX_RAM_EXPAND}" >> /data/adb/asb/ram_expand.log 2>/dev/null || true
       fi
-      # Disable = ram_expand_size 0 (+ list 0). Confirmed on the OP13 OxygenOS
-      if [ "$UX_RAM_EXPAND" = "0" ]; then
-        asb_settings_put global ram_expand_size 0
-        asb_settings_put global ram_expand_size_list 0
-      else
-        asb_settings_put global ram_expand_size "$UX_RAM_EXPAND"
-      fi
+      asb_ram_expand_apply "$UX_RAM_EXPAND"
     fi
     [ -n "$UX_LOW_HEAT" ] && asb_settings_put global sem_low_heat_mode "$UX_LOW_HEAT"
   fi
