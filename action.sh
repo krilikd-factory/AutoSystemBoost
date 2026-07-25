@@ -324,7 +324,15 @@ if [ "$_a_dsp" != "off" ]; then
   _l64="✗"; _l32="✗"
   [ -f /vendor/lib64/soundfx/libasbdsp.so ] && _l64="✓"
   [ -f /vendor/lib/soundfx/libasbdsp.so ] && _l32="✓"
-  echo "       libasbdsp: 64-bit ${_l64}  ·  32-bit ${_l32}"
+  _dsp_abi="?"
+  if [ -f /vendor/lib64/soundfx/libasbdsp.so ]; then
+    if grep -aq 'ASB createEffect' /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null; then
+      _dsp_abi="AIDL"
+    elif grep -aq 'AELI\|ASB_DSP' /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null; then
+      _dsp_abi="legacy"
+    fi
+  fi
+  echo "       libasbdsp: 64-bit ${_l64}  ·  32-bit ${_l32}  ·  ABI ${_dsp_abi}"
   for _ecs in $(_asb_effect_files); do
     if grep -q 'asb_loudness' "$_ecs" 2>/dev/null; then
       echo "       effect registered in: ${_ecs}"
