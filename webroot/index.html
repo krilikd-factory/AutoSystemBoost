@@ -1427,7 +1427,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V60</div>
+      <div class="badge" id="verBadge">V61</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1527,7 +1527,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
-      <div class="badge" id="liveVerBadge">V60</div>
+      <div class="badge" id="liveVerBadge">V61</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1669,7 +1669,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="cfgSocBadge">DEVICE</div>
-      <div class="badge" id="cfgVerBadge">V60</div>
+      <div class="badge" id="cfgVerBadge">V61</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -2053,18 +2053,17 @@ const CFG_ITEMS = [
     desc:'Disable = the phone drives the gain instead of the headset (what ViPER/EQ need). Stock = loud and synced with the headset. Applies without a reboot.' },
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:4, step:1, name:'Camera Grade',
     desc:'Photo + video colour and contrast strength: 0 = stock, higher = richer and punchier. Max can band in deep shadows. Reboot to apply.' },
-  { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
-    desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
-  // --- Gaming & thermals ---
-  { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
-    desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
+  { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
+    desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
   // --- Power & battery ---
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
+  { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
+    desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
   // --- Memory & UX ---
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
@@ -2330,10 +2329,17 @@ async function cfgSet(key, val, ctl) {
     // Saying "reboot to apply" while nothing rebuilt the table is how a device ended up
     // reporting "volume table not reshaped" after two reboots.
     var AUDIO_REBUILD_KEYS = ['media_loudness'];
+    // disable_blur is the same shape: the system.prop block was only ever written by the
+    // installer, so the toggle promised a reboot and rebuilt nothing. The script below
+    // also writes the WindowManager global, which needs no reboot at all.
+    var BLUR_KEYS = ['disable_blur'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
       var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0) ? ' dsp' : '';
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh' + _m + ' >/dev/null 2>&1 &'); } catch(e) {}
+    } else if (BLUR_KEYS.indexOf(key) >= 0) {
+      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_blur_apply.sh >/dev/null 2>&1 &'); } catch(e) {}
+      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_blur', ' \u00b7 shade now, rest after reboot'), cfgToastType(key));
     } else if (AUDIO_OVERLAY_KEYS.indexOf(key) >= 0) {
       if (AUDIO_REBUILD_KEYS.indexOf(key) >= 0) {
         try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_media_apply.sh >/dev/null 2>&1 &'); } catch(e) {}
