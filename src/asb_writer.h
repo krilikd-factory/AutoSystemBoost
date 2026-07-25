@@ -357,6 +357,15 @@ static int  g_cam_saved_uc_fg  = -1;
 static int  g_cam_saved_uc_bg  = -1;
 static int  g_cam_saved_swappiness = -1;
 
+/* The guard raises ceilings and then owns the job of putting them back. If the
+ * governor exits while a camera session is open - and it restarts on every
+ * profile change - nothing would ever lower them again, so the phone would sit
+ * at uclamp 100 and swappiness 10 until the next camera session happened to end
+ * cleanly. The saved values are therefore written where a restarted governor can
+ * find them. /dev is tmpfs on purpose: this must survive a governor restart and
+ * must NOT survive a reboot, where service.sh sets every one of these itself. */
+#define CAM_GUARD_STATE "/dev/.asb/camera_guard"
+
 typedef struct {
     int cpu_max[3];
     int cpu_min[3];
@@ -734,6 +743,42 @@ skip_cpu_caps: ;
  * device's own state rather than an assumption about it -- including the case
  * where a vendor service, not ASB, wrote the value in the first place.
  * ------------------------------------------------------------------------ */
+static void writer_camera_guard_save(void) {
+    FILE *f = fopen(CAM_GUARD_STATE, "w");
+    if (!f) return;
+    fprintf(f, "fg_cpus=%s\ntop_cpus=%s\nuc_top=%d\nuc_fg=%d\nuc_bg=%d\nswap=%d\n",
+            g_cam_saved_fg_cpus[0]  ? g_cam_saved_fg_cpus  : "-",
+            g_cam_saved_top_cpus[0] ? g_cam_saved_top_cpus : "-",
+            g_cam_saved_uc_top, g_cam_saved_uc_fg,
+            g_cam_saved_uc_bg, g_cam_saved_swappiness);
+    fclose(f);
+}
+
+static void writer_camera_guard_recover(void) {
+    FILE *f = fopen(CAM_GUARD_STATE, "r");
+    if (!f) return;
+    char line[128];
+    char fg[64] = {0}, top[64] = {0};
+    int uc_top = -1, uc_fg = -1, uc_bg = -1, swap = -1;
+    while (fgets(line, sizeof(line), f)) {
+        if      (!strncmp(line, "fg_cpus=", 8))  sscanf(line + 8,  "%63s", fg);
+        else if (!strncmp(line, "top_cpus=", 9)) sscanf(line + 9,  "%63s", top);
+        else if (!strncmp(line, "uc_top=", 7))   uc_top = atoi(line + 7);
+        else if (!strncmp(line, "uc_fg=", 6))    uc_fg  = atoi(line + 6);
+        else if (!strncmp(line, "uc_bg=", 6))    uc_bg  = atoi(line + 6);
+        else if (!strncmp(line, "swap=", 5))     swap   = atoi(line + 5);
+    }
+    fclose(f);
+    if (fg[0]  && strcmp(fg,  "-")) sysfs_write_str(CPUSET_FG_CPUS,  fg);
+    if (top[0] && strcmp(top, "-")) sysfs_write_str(CPUSET_TOP_CPUS, top);
+    if (uc_top >= 0) sysfs_write_int(UCLAMP_TOP_MAX, uc_top);
+    if (uc_fg  >= 0) sysfs_write_int(UCLAMP_FG_MAX,  uc_fg);
+    if (uc_bg  >= 0) { sysfs_write_int(UCLAMP_BG_MAX,   uc_bg);
+                       sysfs_write_int(UCLAMP_SYBG_MAX, uc_bg); }
+    if (swap   >= 0) sysfs_write_int(PATH_VM_SWAPPINESS, swap);
+    unlink(CAM_GUARD_STATE);
+}
+
 static void writer_camera_guard(int active) {
     if (active && !g_cam_guard_on) {
         char present[64] = {0};
@@ -760,6 +805,7 @@ static void writer_camera_guard(int active) {
         g_wcache.uclamp_top_max = 100;
         g_wcache.uclamp_bg_max  = 100;
         g_cam_guard_on = 1;
+        writer_camera_guard_save();
         return;
     }
     if (!active && g_cam_guard_on) {
@@ -778,12 +824,16 @@ static void writer_camera_guard(int active) {
         }
         if (g_cam_saved_swappiness >= 0)
             sysfs_write_int(PATH_VM_SWAPPINESS, g_cam_saved_swappiness);
+        unlink(CAM_GUARD_STATE);
         g_cam_guard_on = 0;
     }
 }
 
 static void writer_init_cache(void) {
     writer_init_paths();
+    /* A leftover state file means the previous governor died mid-session: undo
+     * what it raised before doing anything else. */
+    writer_camera_guard_recover();
     for (int i = 0; i < 3; i++) {
         if (!g_cpu_max_paths[i][0]) { g_wcache.cpu_max[i] = 0; continue; }
         g_wcache.cpu_max[i] = sysfs_read_int(g_cpu_max_paths[i], 0);
