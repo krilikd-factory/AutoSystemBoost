@@ -244,8 +244,22 @@ echo
 echo "🔧 Features"
 FEAT="$MODDIR/features.conf"
 KNOWN_FEATURES="AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG LPM RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR"
-# features explicitly declared as RESERVED (no runtime path yet)
-RESERVED_FEATURES="RADIO_IMS DISPLAY FPS SECURITY"
+# Which features are actually wired is DERIVED, not hardcoded. The old fixed list
+# claimed RADIO_IMS, DISPLAY, FPS and SECURITY had no runtime path - every one of them
+# is in asb_prune_module's category loop, so its system.prop block is conditionally
+# shipped, and FPS additionally gates asb_apply_ux. So the lint warned four times on
+# every run about features that work, and stayed silent about LPM, which really does
+# have no gate, no property block and no prune entry: it is offered at install and
+# printed on the action screen while doing nothing at all. Crying wolf four times a run
+# is how a real finding gets scrolled past.
+asb_feature_is_wired() {
+  _fw="$1"
+  grep -rqE "asb_feature_enabled[[:space:]]+${_fw}\b|_feat[[:space:]]+${_fw}\b" \
+       "$MODDIR"/*.sh "$MODDIR"/runtime/*.sh "$MODDIR"/common/*.sh 2>/dev/null && return 0
+  grep -qE "^# *ASB:${_fw}:BEGIN" "$MODDIR/system.prop" "$MODDIR/service.sh" \
+       "$MODDIR/post-fs-data.sh" 2>/dev/null && return 0
+  return 1
+}
 if [ -f "$FEAT" ]; then
   F_DUPES="$(awk -F= '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {k=$1; gsub(/[[:space:]]+$/, "", k); print k}' "$FEAT" | sort | uniq -d)"
   [ -n "$F_DUPES" ] && warn "duplicate feature keys: $F_DUPES" || ok "no duplicate feature keys"
@@ -261,12 +275,17 @@ if [ -f "$FEAT" ]; then
     esac
     case "$val" in 0|1) : ;; *) warn "features.conf: $key=$val (expected 0 or 1)" ;; esac
   done < "$FEAT"
-  # check RESERVED features and warn (not err) if declared
-  for _rf in $RESERVED_FEATURES; do
-    if grep -qE "^${_rf}=" "$FEAT" 2>/dev/null; then
-      warn "feature $_rf is RESERVED (declared but no runtime code yet)"
-    fi
+  # Warn only about features that are genuinely inert.
+  _feat_dead=""
+  for _rf in $KNOWN_FEATURES; do
+    grep -qE "^${_rf}=" "$FEAT" 2>/dev/null || continue
+    asb_feature_is_wired "$_rf" || _feat_dead="${_feat_dead} ${_rf}"
   done
+  if [ -n "$_feat_dead" ]; then
+    warn "feature(s) declared but inert (no gate, no system.prop block):${_feat_dead}"
+  else
+    ok "every declared feature has a runtime path"
+  fi
   ok "features.conf parsed"
 else
   err "features.conf missing"
