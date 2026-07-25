@@ -142,7 +142,7 @@ _we_name=""
 # one character), which is why the old ╭──╮ frame came out ragged. Structure comes from
 # blank lines and indentation instead - those survive any font.
 echo ""
-echo "  🚀  AutoSystemBoost V60"
+echo "  🚀  AutoSystemBoost V61"
 if [ "$_smart_enabled" = "1" ]; then
   _conf_pct=$((_smart_conf / 10))
   echo "  🤖  Smart · bucket ${_smart_bucket} · ${_daypart_name}${_we_name} · conf ${_conf_pct}%"

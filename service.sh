@@ -2109,7 +2109,32 @@ apply_extra_settings() {
 }
 apply_extra_settings
 asb_load_profile
-[ "$(type -t asb_apply_ux 2>/dev/null)" = "function" ] && asb_apply_ux >/dev/null 2>&1
+# POSIX check, not "type -t". Android's /system/bin/sh is mksh and mksh's type builtin
+# has no -t flag: it treats -t as a name to look up, prints "-t: not found" plus
+# "asb_apply_ux is a shell function", and the string compare against "function" can
+# never match. So this line silently skipped asb_apply_ux on EVERY boot, which is why
+# "Manage UI speed" and "Force animation restart" appeared to do nothing - the animation
+# scales and touch timeouts were only ever written when the user switched profiles by
+# hand, and never at boot. command -v resolves shell functions in every POSIX shell.
+command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
+
+# Keep the blur block in system.prop honest. The WebUI writes governor.conf; if the
+# block on disk does not agree with it, the toggle was flipped since the last install
+# and nothing rebuilt it. Rebuilding here makes the NEXT boot correct and, more
+# usefully, re-asserts the WindowManager global right now.
+_asb_blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null \
+                  | head -1 | sed 's/.*=//' | tr -d ' \r')"
+case "$_asb_blur_want" in 1|on|true) _asb_blur_want=1 ;; *) _asb_blur_want=0 ;; esac
+_asb_blur_have=0
+grep -q '^persist\.sys\.sf\.disable_blurs=1' "$MODDIR/system.prop" 2>/dev/null && _asb_blur_have=1
+if [ -f "$MODDIR/runtime/asb_blur_apply.sh" ]; then
+  if [ "$_asb_blur_want" != "$_asb_blur_have" ]; then
+    sh "$MODDIR/runtime/asb_blur_apply.sh" >/dev/null 2>&1
+    asb_log "disable_blur=$_asb_blur_want: system.prop block rebuilt, compositor half active next boot"
+  elif [ "$_asb_blur_want" = "1" ]; then
+    settings put global disable_window_blurs 1 >/dev/null 2>&1
+  fi
+fi
 (
   sleep 30
   _fg="$(getprop persist.sys.power.fuel.gauge 2>/dev/null)"
