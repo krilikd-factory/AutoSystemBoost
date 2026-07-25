@@ -272,7 +272,11 @@ asb_apply_ux() {
   # Load the WebUI-controlled UX_MANAGE_* flags from governor.conf. These are
   _ux_conf="$MODDIR/config/governor.conf"
   if [ -r "$_ux_conf" ]; then
-    for _uxk in UX_MANAGE_ANIM_SCALE UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
+    # UX_MANAGE_ANIM_SCALE was dropped here in V60: its WebUI card was removed and the
+    # animation block below is gated on UX_MANAGE_TIMEOUTS, which owns both the scales
+    # and the touch timeouts. Loading it kept a config key alive that a hand-editor
+    # could set to 1 and get nothing for.
+    for _uxk in UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
                 UX_ANIM_FORCE_RESTART; do
       _uxv="$(grep -E "^[[:space:]]*${_uxk}=" "$_ux_conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
       case "$_uxv" in
