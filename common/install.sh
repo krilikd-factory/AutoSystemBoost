@@ -1386,7 +1386,7 @@ asb_patch_audio_inplace() {
     _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
     case "$_dspg" in
       ''|off|0|*[!0-9]*) _dspg_ok=0 ;;
-      *) [ "$_dspg" -ge 1 ] 2>/dev/null && [ "$_dspg" -le 18 ] 2>/dev/null && _dspg_ok=1 || _dspg_ok=0 ;;
+      *) [ "$_dspg" -ge 1 ] 2>/dev/null && [ "$_dspg" -le 20 ] 2>/dev/null && _dspg_ok=1 || _dspg_ok=0 ;;
     esac
     if [ "$_dspg_ok" = "1" ]; then
         ui_print "      + ASB ${ASB_D_DSP_ENGINE:-DSP engine}: +${_dspg} dB ${ASB_D_DSP_GAIN:-gain}"
@@ -1636,6 +1636,98 @@ asb_generate_odm_binds() {
   else
     rm -f "$_ob_man" 2>/dev/null
     rm -rf "$_ob_root" 2>/dev/null
+  fi
+}
+
+# Register the ASB DSP effect on ANY device, not just the reference model.
+#
+# The registration used to live in two places and neither covered the whole
+# fleet: the OP15 branch patched its own sku_* configs plus the /odm runtime
+# bind, and asb_generate_odm_binds patched /odm/etc/audio_effects_config.xml -
+# and that generator is only ever called on non-reference OnePlus models. The
+# OP12 and OP13 branches called neither. On those devices the library was
+# staged and the properties were published, so everything reported success,
+# while no audio_effects_config.xml anywhere listed the effect: audioserver
+# never dlopen'd it, the attach daemon had nothing to attach, and the action
+# screen showed "effect not registered by install" next to a DSP that had been
+# switched on for weeks. Confirmed in the field on a CPH2691 (Ace 5, pineapple),
+# which the detector classifies as OP12.
+#
+# There is nothing device-specific about registering an effect, so this is one
+# function that every branch calls. It patches every effects config the module
+# overlay carries - at any depth, which is what picks up the per-SKU layout
+# (sku_cliffs, sku_pineapple, ...) that newer devices use - and then delivers a
+# patched /odm/etc/audio_effects_config.xml through the same fuse-guarded
+# runtime bind, because AOSP resolves /odm before /vendor and /system, so on a
+# device that ships one, that file is the only one the framework actually reads.
+#
+# asb_register_dsp_effect strips its own lines before re-adding them, so every
+# path here is idempotent across reinstalls and upgrades.
+asb_register_dsp_all_configs() {
+  [ "$ASB_AUDIO" = "true" ] || return 0
+
+  for _d in "$MODPATH" /data/adb/modules/AutoSystemBoost; do
+    [ -d "$_d" ] || continue
+    find "$_d/system" -name 'audio_effects_config.xml.asbbak' -type f -delete 2>/dev/null || true
+    rm -f "$_d"/system/vendor/odm/etc/audio_effects_config.xml.asbbak \
+          "$_d"/system/odm/etc/audio_effects_config.xml.asbbak 2>/dev/null
+  done
+
+  if [ ! -f "$MODPATH/system/vendor/lib64/soundfx/libasbdsp.so" ] \
+     && [ ! -f "$MODPATH/system/vendor/lib/soundfx/libasbdsp.so" ]; then
+    ui_print "    ! ASB DSP: library not staged - nothing to register"
+    return 0
+  fi
+
+  _dsp_reg=0
+  _dsp_seen=0
+  for _ec in $(find "$MODPATH/system" -type f -name 'audio_effects_config.xml' 2>/dev/null); do
+    case "$_ec" in *_stub.xml) continue ;; esac
+    _dsp_seen=$((_dsp_seen + 1))
+    asb_register_dsp_effect "$_ec"
+    if grep -q 'asb_loudness' "$_ec" 2>/dev/null; then
+      _dsp_reg=$((_dsp_reg + 1))
+    elif ! grep -q '<libraries>' "$_ec" 2>/dev/null || ! grep -q '<effects>' "$_ec" 2>/dev/null; then
+      ui_print "    ! ASB DSP: $(basename "$(dirname "$_ec")") has no <libraries>/<effects> section"
+    else
+      ui_print "    ! ASB DSP: registration did not land in $(basename "$(dirname "$_ec")")"
+    fi
+  done
+  if [ "$_dsp_reg" -gt 0 ]; then
+    ui_print "      + ASB DSP ${ASB_D_DSP_REG:-effect registered in} ${_dsp_reg} ${ASB_D_DSP_REG_TAIL:-audio_effects_config file(s)}"
+  elif [ "$_dsp_seen" -gt 0 ]; then
+    ui_print "    ! ASB DSP: $_dsp_seen config(s) present but none registered"
+  fi
+
+  [ -f /odm/etc/audio_effects_config.xml ] || return 0
+  [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
+
+  _oecs="/data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml"
+  _oecs_src="/data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml.stock"
+  _oecm="/data/adb/asb/odm_bind_manifest.txt"
+  mkdir -p "$(dirname "$_oecs")" 2>/dev/null
+  # Never snapshot from the live path once an earlier bind is mounted: at that
+  # point /odm/etc/audio_effects_config.xml IS "$_oecs", and copying it onto
+  # itself truncates the file, which is how a device ended up with a bound
+  # config carrying zero ASB lines while every reinstall reported success.
+  if [ ! -s "$_oecs_src" ]; then
+    cp -f /odm/etc/audio_effects_config.xml "$_oecs_src" 2>/dev/null
+  fi
+  cp -f "$_oecs_src" "$_oecs" 2>/dev/null || return 0
+  asb_register_dsp_effect "$_oecs"
+  if grep -q 'asb_loudness' "$_oecs" 2>/dev/null; then
+    chmod 0644 "$_oecs" 2>/dev/null
+    _oec_ctx="$(ls -Zd /odm/etc/audio_effects_config.xml 2>/dev/null | awk '{print $1}')"
+    case "$_oec_ctx" in
+      ?*:?*:?*:?*) chcon "$_oec_ctx" "$_oecs" 2>/dev/null || true ;;
+    esac
+    touch "$_oecm" 2>/dev/null
+    grep -q "^/odm/etc/audio_effects_config.xml|" "$_oecm" 2>/dev/null \
+      || echo "/odm/etc/audio_effects_config.xml|$_oecs" >> "$_oecm"
+    ui_print "      + ASB DSP registered in /odm/etc/audio_effects_config.xml (runtime bind - the one the framework reads)"
+  else
+    rm -f "$_oecs" 2>/dev/null
+    ui_print "    ! ASB DSP: could not patch the odm effects config"
   fi
 }
 
@@ -2020,103 +2112,7 @@ fi
 
 if [ "$ASB_IS_OP15" = "true" ]; then
   asb_apply_device_native_tuning "OnePlus 15 (canoe)" "OnePlus15"
-  # Register the ASB DSP effect on OP15.
-  #
-  # OP15 delivers audio config through per-SKU overlay files
-  # (system/vendor/etc/audio/sku_*/audio_effects_config.xml), NOT through the /odm
-  # runtime binds that asb_generate_odm_binds builds - and asb_generate_odm_binds is
-  # the ONLY caller of asb_register_dsp_effect. So on OP15 the library was staged and
-  # the properties published, but the effect was never listed in any
-  # audio_effects_config.xml, which means audioserver never loaded it. DSP silently did
-  # nothing on the one device it was tuned for. Patch every effects config the overlay
-  # actually ships so the effect is registered next to the stock ones.
-  if [ "$ASB_AUDIO" = "true" ]; then
-    # Drop leftovers from manual diagnostics before touching anything. A stray
-    # *.asbbak sitting next to a config inside the overlay gets magic-mounted into
-    # /vendor/etc/audio/... as junk, and nothing should ever patch or read a stale copy.
-    # Registration below is idempotent (it strips its own lines first, then re-adds them),
-    # so with the leftovers gone every install restores it on its own - no manual step.
-    for _d in "$MODPATH" /data/adb/modules/AutoSystemBoost; do
-      [ -d "$_d" ] || continue
-      rm -f "$_d"/system/vendor/etc/audio/sku_*/audio_effects_config.xml.asbbak \
-            "$_d"/system/vendor/odm/etc/audio_effects_config.xml.asbbak \
-            "$_d"/system/odm/etc/audio_effects_config.xml.asbbak 2>/dev/null
-    done
-    _op15_reg=0
-    _op15_seen=0
-    for _ec in \
-        "$MODPATH"/system/vendor/etc/audio/sku_*/audio_effects_config.xml \
-        "$MODPATH"/system/vendor/odm/etc/audio_effects_config.xml \
-        "$MODPATH"/system/odm/etc/audio_effects_config.xml; do
-      [ -f "$_ec" ] || continue
-      case "$_ec" in *_stub.xml) continue ;; esac
-      _op15_seen=$((_op15_seen + 1))
-      asb_register_dsp_effect "$_ec"
-      if grep -q 'asb_loudness' "$_ec" 2>/dev/null; then
-        _op15_reg=$((_op15_reg + 1))
-      else
-        # Say WHY. A registration that quietly does nothing is the failure that cost the
-        # most time to find on device, so it must never be silent at install time again.
-        if [ ! -f "$MODPATH/system/vendor/lib64/soundfx/libasbdsp.so" ] \
-           && [ ! -f "$MODPATH/system/vendor/lib/soundfx/libasbdsp.so" ]; then
-          ui_print "    ! ASB DSP: library not staged - cannot register in $(basename "$(dirname "$_ec")")"
-        elif ! grep -q '<libraries>' "$_ec" 2>/dev/null || ! grep -q '<effects>' "$_ec" 2>/dev/null; then
-          ui_print "    ! ASB DSP: $(basename "$(dirname "$_ec")") has no <libraries>/<effects> section"
-        else
-          ui_print "    ! ASB DSP: registration did not land in $(basename "$(dirname "$_ec")")"
-        fi
-      fi
-    done
-    if [ "$_op15_reg" -gt 0 ]; then
-      ui_print "      + ASB DSP ${ASB_D_DSP_REG:-effect registered in} ${_op15_reg} ${ASB_D_DSP_REG_TAIL:-audio_effects_config file(s)}"
-    elif [ "$_op15_seen" -gt 0 ]; then
-      ui_print "    ! ASB DSP: $_op15_seen config(s) present but none registered - DSP will be silent"
-    else
-      ui_print "    ! ASB DSP: no audio_effects_config in overlay to register into"
-    fi
 
-    # The /vendor sku_* configs above are NOT what the framework reads on this device.
-    # AOSP resolves audio_effects_config.xml as /odm/etc -> /vendor/etc -> /system/etc,
-    # and OP15 ships a real /odm/etc/audio_effects_config.xml, so it wins. The OP15 branch
-    # never called asb_generate_odm_binds, so that file was untouched: the library was
-    # installed and the properties set, but audioserver never listed the effect (verified
-    # on device: grep asb /odm/etc/... = 0 while the sku file had 3). Deliver a patched
-    # copy through the SAME fuse-guarded runtime bind other devices use - we never graft
-    # /odm into the magic-mount tree, which is what bootlooped the Ace 6.
-    if [ -f /odm/etc/audio_effects_config.xml ]; then
-      _oecs="/data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml"
-      _oecs_src="/data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml.stock"
-      _oecm="/data/adb/asb/odm_bind_manifest.txt"
-      mkdir -p "$(dirname "$_oecs")" 2>/dev/null
-      # Never copy /odm/etc/audio_effects_config.xml onto our own patched copy. Once the
-      # runtime bind from an earlier install is live, that path IS "$_oecs" - the copy then
-      # truncates the file and the registration can never be refreshed, which is exactly how
-      # the device ended up with a bound config carrying zero ASB lines while every
-      # reinstall reported success. Keep a pristine snapshot the first time and always
-      # patch from it (asb_register_dsp_effect strips its own lines first, so this stays
-      # idempotent even if the snapshot was taken from an already-patched file).
-      if [ ! -s "$_oecs_src" ]; then
-        cp -f /odm/etc/audio_effects_config.xml "$_oecs_src" 2>/dev/null
-      fi
-      if cp -f "$_oecs_src" "$_oecs" 2>/dev/null; then
-        asb_register_dsp_effect "$_oecs"
-        if grep -q 'asb_loudness' "$_oecs" 2>/dev/null; then
-          chmod 0644 "$_oecs" 2>/dev/null
-          _oec_ctx="$(ls -Zd /odm/etc/audio_effects_config.xml 2>/dev/null | awk '{print $1}')"
-          case "$_oec_ctx" in
-            ?*:?*:?*:?*) chcon "$_oec_ctx" "$_oecs" 2>/dev/null || true ;;
-          esac
-          touch "$_oecm" 2>/dev/null
-          grep -q "^/odm/etc/audio_effects_config.xml|" "$_oecm" 2>/dev/null \
-            || echo "/odm/etc/audio_effects_config.xml|$_oecs" >> "$_oecm"
-          ui_print "      + ASB DSP registered in /odm/etc/audio_effects_config.xml (runtime bind - the one the framework reads)"
-        else
-          rm -f "$_oecs" 2>/dev/null
-          ui_print "    ! ASB DSP: could not patch the odm effects config"
-        fi
-      fi
-    fi
-  fi
 elif [ "$ASB_IS_OP13" = "true" ]; then
   asb_apply_device_native_tuning "OnePlus 13 (sun / tuna / kera)" "OnePlus13"
 elif [ "$ASB_IS_OP12" = "true" ]; then
@@ -2161,6 +2157,8 @@ else
     fi
   fi
 fi
+asb_register_dsp_all_configs
+
 [ -f "$MODPATH/overlay_device_class" ] || echo reference > "$MODPATH/overlay_device_class" 2>/dev/null
 rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
 
