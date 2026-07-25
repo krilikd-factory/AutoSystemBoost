@@ -743,6 +743,60 @@ body::before, body::after {
   box-shadow: 0 0 20px rgba(255,26,26,0.1); 
 }
 
+/* Per-category toast skins. The confirmation that slides up from the bottom used
+   to be hardcoded to the profile palette (perf red / balanced amber) no matter
+   which card was toggled, so the popup and the tile that fired it disagreed on
+   colour. These reuse the exact category hues from .cfg-icon.cat-* above, so the
+   toast reads as an echo of the card the user just touched. */
+.toast.t-cat-audio {
+  background: rgba(38,10,10,0.95);
+  color: #ff7a7a;
+  border-color: rgba(255,59,59,0.42);
+  box-shadow: 0 0 25px rgba(255,59,59,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-camera {
+  background: rgba(8,20,40,0.95);
+  color: #7cb8ff;
+  border-color: rgba(58,141,255,0.42);
+  box-shadow: 0 0 25px rgba(58,141,255,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-battery {
+  background: rgba(10,30,15,0.95);
+  color: #7bed9f;
+  border-color: rgba(46,213,115,0.42);
+  box-shadow: 0 0 25px rgba(46,213,115,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-perf {
+  background: rgba(24,14,40,0.95);
+  color: #c4a2ff;
+  border-color: rgba(167,105,250,0.45);
+  box-shadow: 0 0 25px rgba(167,105,250,0.16), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-ux {
+  background: rgba(38,24,6,0.95);
+  color: #ffbe6b;
+  border-color: rgba(255,159,28,0.45);
+  box-shadow: 0 0 25px rgba(255,159,28,0.16), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-display {
+  background: rgba(26,27,30,0.95);
+  color: #e2e6ec;
+  border-color: rgba(206,210,216,0.42);
+  box-shadow: 0 0 25px rgba(206,210,216,0.12), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-memory {
+  background: rgba(4,30,28,0.95);
+  color: #5ee7dc;
+  border-color: rgba(0,214,198,0.40);
+  box-shadow: 0 0 25px rgba(0,214,198,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-system {
+  background: rgba(24,24,27,0.95);
+  color: #d2d2da;
+  border-color: rgba(180,180,190,0.40);
+  box-shadow: 0 0 25px rgba(180,180,190,0.12), 0 8px 32px rgba(0,0,0,0.4);
+}
+
 /* Content stagger (children fade up on first paint). Restrict it to the Main
    page only: live-page / config-page already animate via the horizontal slide,
    and running this stagger on their children at the same time was a second,
@@ -2053,6 +2107,8 @@ const CFG_CAT = {
   disable_blur:'display'
 };
 function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-system'; }
+// Toast skin for a config key: same category, same colour as its card icon.
+function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
   audio_profile:'\uD83C\uDF9A\uFE0F',            // studio mic (who processes the sound)
@@ -2271,13 +2327,13 @@ async function cfgSet(key, val, ctl) {
     // be honest and say reboot.
     var AUDIO_OVERLAY_KEYS = ['media_loudness','audio_dac_hifi'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
-      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), 'perf');
+      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
       var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0) ? ' dsp' : '';
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh' + _m + ' >/dev/null 2>&1 &'); } catch(e) {}
     } else if (AUDIO_OVERLAY_KEYS.indexOf(key) >= 0) {
-      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_reboot', ' \u00b7 reboot to apply'), 'balanced');
+      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_reboot', ' \u00b7 reboot to apply'), cfgToastType(key));
     } else {
-      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_saved', ' \u00b7 reboot to apply'), 'balanced');
+      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_saved', ' \u00b7 reboot to apply'), cfgToastType(key));
     }
   } else {
     toast(T('t_cfg_err', '\u2717 Failed to write config'), 'err');
