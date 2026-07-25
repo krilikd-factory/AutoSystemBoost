@@ -302,6 +302,7 @@ jobs:
             "runtime/asb_media_apply.sh" \
             "runtime/asb_blur_apply.sh" \
             "runtime/asb_lpm.sh" \
+            "runtime/asb_dsp_abi_apply.sh" \
             "profiles/battery.sh" \
             "profiles/balanced.sh" \
             "profiles/performance.sh" \
