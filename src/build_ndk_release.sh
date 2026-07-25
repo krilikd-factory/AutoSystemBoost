@@ -147,6 +147,28 @@ if [ -n "$DSP_SRC" ]; then
       fi
       echo "[ASB] DSP: AIDL effect for $_abi (createEffect verified)"
       ls -lh "$_dout/libasbdsp.so"
+
+      # Build the LEGACY effect as well, instead of "continue"-ing past it.
+      #
+      # Which one a device can actually load is not a function of the Android version,
+      # it is a function of whether that OEM's audioserver still binds effects through
+      # the HIDL factory. A OnePlus 13 reported dsp_loudness doing nothing, with the
+      # attach daemon logging set=-19 initCheck=-19 on every attempt - NO_INIT, i.e. the
+      # factory could not create the effect - while the same build worked on a OnePlus
+      # 15. The XML registration was fine and the library was present; it simply
+      # exported createEffect and not AELI, and that device's factory wanted AELI.
+      #
+      # Shipping only one variant makes that a coin flip decided at build time. Ship
+      # both, and let the installer stage whichever matches the device.
+      "$_dcc" "${DSP_CFLAGS[@]}" "$DSP_SRC" -lm -llog -o "$_dout/libasbdsp_legacy.so"
+      "$STRIP" "$_dout/libasbdsp_legacy.so" || true
+      chmod 0644 "$_dout/libasbdsp_legacy.so"
+      if command -v "$TOOLCHAIN/llvm-nm" >/dev/null 2>&1; then
+        "$TOOLCHAIN/llvm-nm" -D --defined-only "$_dout/libasbdsp_legacy.so" | grep -q " AELI$" \
+          || { echo "[ASB] ERROR: AELI symbol not exported from $_abi/libasbdsp_legacy.so" >&2; exit 1; }
+      fi
+      echo "[ASB] DSP: legacy effect for $_abi also built (AELI verified) - installer picks one"
+      ls -lh "$_dout/libasbdsp_legacy.so"
       continue
     fi
     "$_dcc" "${DSP_CFLAGS[@]}" "$DSP_SRC" -lm -llog -o "$_dout/libasbdsp.so"
