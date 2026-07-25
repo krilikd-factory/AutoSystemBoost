@@ -380,61 +380,61 @@ body::before, body::after {
 .pbtn[data-p="performance"] { --c: var(--perf); --cg: rgba(255,26,26,0.12); --cg-strong: var(--perf-glow); }
 .pbtn[data-p="balanced"]    { --c: var(--bal);  --cg: rgba(255,165,2,0.12);  --cg-strong: var(--bal-glow); }
 .pbtn[data-p="battery"]     { --c: var(--bat);  --cg: rgba(46,213,115,0.12); --cg-strong: var(--bat-glow); }
-.pbtn[data-p="smart"]       { --c: #c9a7f5; --cg: rgba(201,167,245,0.14); --cg-strong: rgba(201,167,245,0.35); }
+.pbtn[data-p="smart"]       { --c: #00e1c8; --cg: rgba(0,225,200,0.14); --cg-strong: rgba(0,225,200,0.35); }
 
 /* Smart Mode: AI-style primary button with animated gradient + glow */
 .pbtn-smart {
   background: linear-gradient(135deg,
-    rgba(201,167,245,0.10) 0%,
-    rgba(99,179,237,0.06) 50%,
+    rgba(0,225,200,0.10) 0%,
+    rgba(0,200,235,0.06) 50%,
     rgba(20,20,20,0.90) 100%) !important;
-  border-color: rgba(201,167,245,0.30) !important;
+  border-color: rgba(0,225,200,0.30) !important;
   position: relative;
 }
 .pbtn-smart::before {
   background: linear-gradient(120deg,
-    rgba(201,167,245,0.18) 0%,
-    rgba(99,179,237,0.10) 40%,
+    rgba(0,225,200,0.18) 0%,
+    rgba(0,200,235,0.10) 40%,
     transparent 70%) !important;
   opacity: 1 !important;
 }
 .pbtn-smart.on {
-  border-color: #c9a7f5 !important;
+  border-color: #00e1c8 !important;
   background: linear-gradient(135deg,
-    rgba(201,167,245,0.22) 0%,
-    rgba(99,179,237,0.12) 50%,
+    rgba(0,225,200,0.22) 0%,
+    rgba(0,200,235,0.12) 50%,
     rgba(30,20,50,0.90) 100%) !important;
   box-shadow:
-    0 0 0 1px #c9a7f5,
-    0 0 30px rgba(201,167,245,0.30),
+    0 0 0 1px #00e1c8,
+    0 0 30px rgba(0,225,200,0.30),
     inset 0 1px 1px rgba(255,255,255,0.10);
 }
 .pbtn-smart.on::before {
-  background: radial-gradient(circle at 80% 50%, rgba(201,167,245,0.45), transparent 70%) !important;
+  background: radial-gradient(circle at 80% 50%, rgba(0,225,200,0.45), transparent 70%) !important;
 }
 
 /* Smart icon: animated ring around emoji */
 .pico-smart {
-  background: radial-gradient(circle at 30% 30%, rgba(201,167,245,0.22), rgba(99,179,237,0.06) 70%) !important;
-  border-color: rgba(201,167,245,0.35) !important;
+  background: radial-gradient(circle at 30% 30%, rgba(0,225,200,0.22), rgba(0,200,235,0.06) 70%) !important;
+  border-color: rgba(0,225,200,0.35) !important;
   position: relative;
   overflow: hidden;
 }
 .pbtn-smart.on .pico-smart {
-  background: radial-gradient(circle at 30% 30%, rgba(201,167,245,0.45), rgba(99,179,237,0.18) 70%) !important;
-  border-color: #c9a7f5 !important;
-  box-shadow: 0 0 20px rgba(201,167,245,0.55);
+  background: radial-gradient(circle at 30% 30%, rgba(0,225,200,0.45), rgba(0,200,235,0.18) 70%) !important;
+  border-color: #00e1c8 !important;
+  box-shadow: 0 0 20px rgba(0,225,200,0.55);
 }
 .pico-smart .ai-glow {
   position: absolute;
   inset: -2px;
   border-radius: 14px;
   background: conic-gradient(from 0deg,
-    rgba(201,167,245,0.0),
-    rgba(201,167,245,0.6),
-    rgba(99,179,237,0.6),
-    rgba(201,167,245,0.6),
-    rgba(201,167,245,0.0));
+    rgba(0,225,200,0.0),
+    rgba(0,225,200,0.6),
+    rgba(0,200,235,0.6),
+    rgba(0,225,200,0.6),
+    rgba(0,225,200,0.0));
   filter: blur(4px);
   opacity: 0;
   animation: ai-spin 4s linear infinite;
@@ -462,11 +462,11 @@ body::before, body::after {
   padding: 1px 5px;
   margin-left: 6px;
   border-radius: 4px;
-  background: linear-gradient(90deg, rgba(201,167,245,0.30), rgba(99,179,237,0.25));
-  color: #c4b5fd;
+  background: linear-gradient(90deg, rgba(0,225,200,0.30), rgba(0,200,235,0.25));
+  color: #7fead9;
   text-transform: uppercase;
   vertical-align: middle;
-  border: 1px solid rgba(201,167,245,0.35);
+  border: 1px solid rgba(0,225,200,0.35);
 }
 
 .pbtn-smart .pinfo {
@@ -1006,9 +1006,9 @@ body.config-active #livePage.open {
   margin-bottom: 24px;
   padding: 12px 14px;
   background: linear-gradient(135deg,
-    rgba(201,167,245,0.10) 0%,
-    rgba(99,179,237,0.05) 100%);
-  border: 1px solid rgba(201,167,245,0.20);
+    rgba(0,225,200,0.10) 0%,
+    rgba(0,200,235,0.05) 100%);
+  border: 1px solid rgba(0,225,200,0.20);
   border-radius: 14px;
   display: flex;
   flex-direction: column;
@@ -1043,7 +1043,7 @@ body.config-active #livePage.open {
 }
 .smart-banner-value {
   font: 600 12px/1.1 var(--sans);
-  color: #ddc9fb;
+  color: #9ef2e4;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
@@ -1055,9 +1055,9 @@ body.config-active #livePage.open {
   font: 600 9px/1 var(--mono);
   padding: 3px 6px;
   border-radius: 6px;
-  background: rgba(201,167,245,0.18);
-  border: 1px solid rgba(201,167,245,0.30);
-  color: #ddc9fb;
+  background: rgba(0,225,200,0.18);
+  border: 1px solid rgba(0,225,200,0.30);
+  color: #9ef2e4;
   letter-spacing: 0.05em;
   white-space: nowrap;
 }
