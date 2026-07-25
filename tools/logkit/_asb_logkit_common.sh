@@ -1434,6 +1434,154 @@ lk_emit_smart_summary() {
 
 LK_AUDIO_PLAY=0
 LK_AUDIO_ROUTE="none"
+# ── config change watcher ──────────────────────────────────────────────────
+# What the user toggled, and when.
+#
+# Every trace here recorded what the DEVICE did; nothing recorded what the USER did to
+# it. So a capture would show battery drain doubling at 14:07 with no way to tell that
+# the profile was switched at 14:06, and reading a full-day trace meant asking the tester
+# to remember which switches they touched. This watches governor.conf, features.conf and
+# the active profile, and writes one line per changed key with old and new values, on the
+# same epoch clock as every other trace so the two can be lined up directly.
+lk_config_watch_init() {
+  LK_CFG_SNAP="$LK_OUT_DIR/.cfg_snapshot"
+  mkdir -p "$LK_CFG_SNAP" 2>/dev/null || true
+  : > "$LK_OUT_DIR/config_changes.txt" 2>/dev/null
+  echo "epoch|datetime|source|key|old|new" >> "$LK_OUT_DIR/config_changes.txt"
+  LK_CFG_MOD="${LK_MODDIR:-$(lk_resolve_moddir)}"
+  for _cw in "$LK_CFG_MOD/config/governor.conf:governor" \
+             "$LK_CFG_MOD/features.conf:features"; do
+    _cwf="${_cw%%:*}"; _cwn="${_cw##*:}"
+    [ -f "$_cwf" ] && cp -f "$_cwf" "$LK_CFG_SNAP/$_cwn" 2>/dev/null
+  done
+  LK_CFG_PROFILE_PREV="$(cat "$LK_CFG_MOD/current_profile" 2>/dev/null)"
+}
+
+lk_config_watch_row() {
+  [ -n "$LK_CFG_SNAP" ] || return 0
+  _cwe=$(date +%s); _cwd=$(date '+%Y-%m-%d %H:%M:%S')
+
+  for _cw in "$LK_CFG_MOD/config/governor.conf:governor" \
+             "$LK_CFG_MOD/features.conf:features"; do
+    _cwf="${_cw%%:*}"; _cwn="${_cw##*:}"
+    [ -f "$_cwf" ] || continue
+    _cwp="$LK_CFG_SNAP/$_cwn"
+    if [ ! -f "$_cwp" ]; then cp -f "$_cwf" "$_cwp" 2>/dev/null; continue; fi
+    cmp -s "$_cwf" "$_cwp" 2>/dev/null && continue
+    # Key-level diff, so the line says what changed rather than that something did.
+    awk -F= -v E="$_cwe" -v D="$_cwd" -v SRC="$_cwn" '
+      NR==FNR {
+        if ($0 ~ /^[[:space:]]*[A-Za-z_]+=/) { k=$1; sub(/^[[:space:]]+/,"",k); old[k]=$2 }
+        next
+      }
+      $0 ~ /^[[:space:]]*[A-Za-z_]+=/ {
+        k=$1; sub(/^[[:space:]]+/,"",k)
+        if (!(k in old))      printf "%s|%s|%s|%s|(absent)|%s\n", E, D, SRC, k, $2
+        else if (old[k]!=$2)  printf "%s|%s|%s|%s|%s|%s\n",       E, D, SRC, k, old[k], $2
+        seen[k]=1
+      }
+      END { for (k in old) if (!(k in seen)) printf "%s|%s|%s|%s|%s|(removed)\n", E, D, SRC, k, old[k] }
+    ' "$_cwp" "$_cwf" >> "$LK_OUT_DIR/config_changes.txt" 2>/dev/null
+    cp -f "$_cwf" "$_cwp" 2>/dev/null
+  done
+
+  _cwpr="$(cat "$LK_CFG_MOD/current_profile" 2>/dev/null)"
+  if [ "$_cwpr" != "$LK_CFG_PROFILE_PREV" ]; then
+    echo "${_cwe}|${_cwd}|profile|current_profile|${LK_CFG_PROFILE_PREV:-?}|${_cwpr:-?}" \
+      >> "$LK_OUT_DIR/config_changes.txt" 2>/dev/null
+    LK_CFG_PROFILE_PREV="$_cwpr"
+  fi
+}
+
+# ── charging detail ────────────────────────────────────────────────────────
+# The battery trace carries current and temperature, which is enough to see THAT a
+# charge happened and not much about HOW. This adds what the charger itself is doing:
+# the negotiated type, the input and constant-current limits (these are what the OEM
+# thermal engine actually pulls back when the phone warms up), charge_counter for a
+# real mAh delta, and the health/cycle fields. Only sampled while plugged in, so it
+# costs nothing for the rest of the day.
+lk_charge_trace_header() {
+  echo "epoch|datetime|status|charge_type|usb_type|online_usb|online_wl|bat_pct|bat_mA|bat_uV|bat_dC|chg_counter_uAh|chg_full_uAh|icl_uA|ccc_max_uA|vbus_uV|health|cycles|skin_c|fsm_state|profile" \
+    > "$LK_OUT_DIR/charge_trace.txt" 2>/dev/null
+}
+
+lk_charge_trace_row() {
+  _cg() { cat "$1" 2>/dev/null; }
+  _cst="$(_cg /sys/class/power_supply/battery/status)"
+  case "$_cst" in
+    Charging|Full) : ;;
+    *) return 0 ;;
+  esac
+  _ce=$(date +%s); _cd=$(date '+%Y-%m-%d %H:%M:%S')
+  _ctype="$(_cg /sys/class/power_supply/battery/charge_type)"
+  _cusb=""
+  for _u in /sys/class/power_supply/usb/usb_type /sys/class/power_supply/usb/real_type; do
+    [ -f "$_u" ] && { _cusb="$(_cg "$_u")"; break; }
+  done
+  _conu="$(_cg /sys/class/power_supply/usb/online)"
+  _conw="$(_cg /sys/class/power_supply/wireless/online)"
+  _cicl=""
+  for _i in /sys/class/power_supply/usb/input_current_limit \
+            /sys/class/power_supply/main/input_current_limit; do
+    [ -f "$_i" ] && { _cicl="$(_cg "$_i")"; break; }
+  done
+  _cccc=""
+  for _i in /sys/class/power_supply/battery/constant_charge_current_max \
+            /sys/class/power_supply/main/constant_charge_current_max; do
+    [ -f "$_i" ] && { _cccc="$(_cg "$_i")"; break; }
+  done
+  _cvbus="$(_cg /sys/class/power_supply/usb/voltage_now)"
+  _cj=$(lk_status_json)
+  _cskin="$(echo "$_cj" | awk -F'"skin_c":' '{print $2}' | awk -F, '{print $1}')"
+  _cfs=$(echo "$_cj" | awk -F'"state":"'   '{print $2}' | awk -F'"' '{print $1}')
+  _cpf=$(echo "$_cj" | awk -F'"profile":"' '{print $2}' | awk -F'"' '{print $1}')
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+    "$_ce" "$_cd" "${_cst:-?}" "${_ctype:-?}" "${_cusb:-?}" "${_conu:-?}" "${_conw:-?}" \
+    "$(_cg /sys/class/power_supply/battery/capacity)" \
+    "$(_cg /sys/class/power_supply/battery/current_now)" \
+    "$(_cg /sys/class/power_supply/battery/voltage_now)" \
+    "$(_cg /sys/class/power_supply/battery/temp)" \
+    "$(_cg /sys/class/power_supply/battery/charge_counter)" \
+    "$(_cg /sys/class/power_supply/battery/charge_full)" \
+    "${_cicl:-?}" "${_cccc:-?}" "${_cvbus:-?}" \
+    "$(_cg /sys/class/power_supply/battery/health)" \
+    "$(_cg /sys/class/power_supply/battery/cycle_count)" \
+    "${_cskin:-?}" "${_cfs:-?}" "${_cpf:-?}" \
+    >> "$LK_OUT_DIR/charge_trace.txt" 2>/dev/null
+}
+
+# ── ASB runtime features ───────────────────────────────────────────────────
+# Camera hold, modem LPM and the DSP were all added without anything recording them, so
+# a trace could show a thermal excursion during a recording with no indication the camera
+# guard was even engaged. These are one read each from tmpfs or a property.
+lk_asb_feature_header() {
+  echo "epoch|datetime|camera_hold|lpm_mode|dsp_enable|dsp_gain_mb|dsp_abi|thermal_veto|battery_lean|swappiness|uclamp_fg_max|fg_cpus" \
+    > "$LK_OUT_DIR/asb_features.txt" 2>/dev/null
+}
+
+lk_asb_feature_row() {
+  _fe=$(date +%s); _fd=$(date '+%Y-%m-%d %H:%M:%S')
+  _fst() { grep -m1 "^$1=" /dev/.asb/state 2>/dev/null | cut -d= -f2; }
+  _fabi="?"
+  if [ -f /vendor/lib64/soundfx/libasbdsp.so ]; then
+    if grep -aq 'ASB createEffect' /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null; then _fabi="aidl"
+    else _fabi="legacy"; fi
+  fi
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+    "$_fe" "$_fd" \
+    "$(_fst camera_hold)" \
+    "$(cat /dev/.asb/lpm_mode 2>/dev/null)" \
+    "$(getprop persist.asb.dsp.enable 2>/dev/null)" \
+    "$(getprop persist.asb.dsp.gain_mb 2>/dev/null)" \
+    "$_fabi" \
+    "$(_fst thermal_veto)" \
+    "$(_fst smart_battery_lean)" \
+    "$(cat /proc/sys/vm/swappiness 2>/dev/null)" \
+    "$(cat /dev/cpuctl/foreground/cpu.uclamp.max 2>/dev/null)" \
+    "$(cat /dev/cpuset/foreground/cpus 2>/dev/null)" \
+    >> "$LK_OUT_DIR/asb_features.txt" 2>/dev/null
+}
+
 lk_sample_audio() {
   LK_AUDIO_PLAY=0
   LK_AUDIO_ROUTE="none"

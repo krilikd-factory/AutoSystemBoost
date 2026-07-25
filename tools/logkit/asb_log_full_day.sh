@@ -393,6 +393,77 @@ lk_emit_full_day_report() {
     echo "* kernel_params.txt captures governors, sched, io, walt and vm tunables"
     echo "  (stock vs custom kernel); network_trace.txt captures the data path,"
     echo "  signal, tcp tunables and rmnet/wlan counters."
+    # ── what the user changed during the capture ─────────────────────────
+    # This section exists so a reader never has to guess whether an effect had a
+    # cause. Every other trace answers "what happened"; only this one answers
+    # "because someone changed X at 14:06".
+    if [ -s "$LK_OUT_DIR/config_changes.txt" ] \
+       && [ "$(wc -l < "$LK_OUT_DIR/config_changes.txt" 2>/dev/null)" -gt 1 ]; then
+      echo ""
+      echo "── SETTINGS CHANGED DURING CAPTURE ────────────────────────────"
+      echo "  time                 source    key                     old -> new"
+      awk -F'|' 'NR>1 && NF>=6 {printf "  %-20s %-9s %-23s %s -> %s\n", $2, $3, $4, $5, $6}' \
+        "$LK_OUT_DIR/config_changes.txt" 2>/dev/null | head -60
+      echo ""
+      echo "  Cross-reference these timestamps against battery_trace.txt and"
+      echo "  phase_timeline.txt before blaming any single tunable."
+    fi
+
+    # ── charging ─────────────────────────────────────────────────────────
+    if [ -s "$LK_OUT_DIR/charge_trace.txt" ] \
+       && [ "$(wc -l < "$LK_OUT_DIR/charge_trace.txt" 2>/dev/null)" -gt 1 ]; then
+      echo ""
+      echo "── CHARGING ───────────────────────────────────────────────────"
+      awk -F'|' '
+        NR<=1 { next }
+        {
+          n++
+          if (first=="") { first=$2; fpct=$8; fcc=$12 }
+          last=$2; lpct=$8; lcc=$12
+          mA=$9/1000; if (mA<0) mA=-mA
+          if (mA>peak) peak=mA
+          sum+=mA
+          t=$11/10; if (t>tmax) tmax=t
+          if ($4!="" && $4!="?") type[$4]++
+          if ($14!="" && $14!="?") { icl=$14/1000; if (iclmin==0 || icl<iclmin) iclmin=icl; if (icl>iclmax) iclmax=icl }
+        }
+        END {
+          if (n==0) exit
+          printf "  samples while plugged in : %d\n", n
+          printf "  battery                  : %s%% -> %s%%\n", fpct, lpct
+          if (fcc+0>0 && lcc+0>0) printf "  charge counter delta     : %.0f mAh\n", (lcc-fcc)/1000
+          printf "  charge current  avg/peak : %.0f / %.0f mA\n", sum/n, peak
+          if (iclmax>0) printf "  input current limit rng  : %.0f - %.0f mA  (OEM thermal pulls this back)\n", iclmin, iclmax
+          printf "  peak battery temperature : %.1f C\n", tmax
+          printf "  charge types seen        : "
+          for (k in type) printf "%s(%d) ", k, type[k]
+          printf "\n"
+        }' "$LK_OUT_DIR/charge_trace.txt" 2>/dev/null
+      echo ""
+      echo "  A falling input-current limit with a rising temperature is the OEM"
+      echo "  charger backing off, not ASB - ASB does not touch charge current."
+    fi
+
+    # ── ASB feature engagement ───────────────────────────────────────────
+    if [ -s "$LK_OUT_DIR/asb_features.txt" ] \
+       && [ "$(wc -l < "$LK_OUT_DIR/asb_features.txt" 2>/dev/null)" -gt 1 ]; then
+      echo ""
+      echo "── ASB FEATURE ENGAGEMENT ─────────────────────────────────────"
+      awk -F'|' '
+        NR<=1 { next }
+        { n++; if ($3==1) cam++; lpm[$4]++; if ($5==1) dsp++; if ($8==1) veto++; abi=$7 }
+        END {
+          if (n==0) exit
+          printf "  samples                  : %d\n", n
+          printf "  camera hold active       : %d (%.1f%%)\n", cam+0, (cam*100.0)/n
+          printf "  thermal veto active      : %d (%.1f%%)\n", veto+0, (veto*100.0)/n
+          printf "  DSP enabled              : %d (%.1f%%)  abi=%s\n", dsp+0, (dsp*100.0)/n, abi
+          printf "  modem LPM mode           : "
+          for (k in lpm) if (k!="") printf "%s(%d) ", k, lpm[k]
+          printf "\n"
+        }' "$LK_OUT_DIR/asb_features.txt" 2>/dev/null
+    fi
+
     echo ""
     echo "Send the whole output folder back for a targeted ASB tuning pass."
   } > "$_out"
@@ -404,6 +475,9 @@ lk_init
 # trace headers
 lk_perf_trace_header
 lk_battery_trace_header
+lk_charge_trace_header
+lk_asb_feature_header
+lk_config_watch_init
 { echo "# phase timeline — epoch | iso | phase | trigger"; } > "$LK_OUT_DIR/phase_timeline.txt"
 { echo "# throttle trace — epoch | phase | p0 | p6 | temps | cap_owner"; } > "$LK_OUT_DIR/throttle_trace.txt"
 printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\tawakePct\n' > "$LK_OUT_DIR/phase_ledger.tsv"
@@ -473,6 +547,12 @@ while : ; do
   lk_wakelock_live_row
   lk_oem_toggle_row
   lk_throttle_row "$_phase"
+  # What the user changed, what the charger is doing, and which ASB features are
+  # engaged. The first is the one that was missing most: without it a trace shows an
+  # effect with no visible cause, because the cause was someone tapping a switch.
+  lk_config_watch_row
+  lk_charge_trace_row
+  lk_asb_feature_row
   lk_phase_ledger_accumulate
   LK_TICK_COUNT=$((LK_TICK_COUNT + 1))
 
