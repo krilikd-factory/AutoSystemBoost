@@ -182,7 +182,6 @@ case "$_bs" in
 esac
 _dspp bass_db "$_bsx"
 [ "$_bsx" = "0" ] && changed="${changed}bass=off " || changed="${changed}bass=+${_bsx}dB "
-[ "$_soft" = "1" ] && changed="${changed}postgain=x${_pg} " || changed="${changed}postgain=off "
 
 # ---- go live ----------------------------------------------------------------------
 if [ "$_mode" = "dsp" ]; then
