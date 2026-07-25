@@ -3511,8 +3511,18 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         int sig = (g_smart_rt.app_hint << 4) | (therm_bucket << 2) | screen_on_v;
         if (sig != g_smart_last_tune_sig && (now - g_smart_last_tune_ts) >= 30) {
             char cmd[256];
+            /* Run it THROUGH sh. The Magisk/KernelSU template does
+             * set_perm_recursive 0644 on every module file, so nothing under
+             * runtime/ is executable unless install.sh chmods it by name - and
+             * this one was never on that list. Exec'ing the path directly
+             * therefore failed with EACCES on every device, and because the
+             * command is backgrounded into /dev/null with its return value
+             * discarded, it failed in complete silence: the Smart dynamic tuner
+             * has never actually run. Confirmed against a real install, where
+             * neither the tuner nor the LPM script had left any trace at all
+             * while both were supposedly firing on every transition. */
             snprintf(cmd, sizeof(cmd),
-                     "/data/adb/modules/AutoSystemBoost/runtime/smart_dynamic_tune.sh "
+                     "sh /data/adb/modules/AutoSystemBoost/runtime/smart_dynamic_tune.sh "
                      "%d %d %d >/dev/null 2>&1 &",
                      g_smart_rt.app_hint, therm_bucket, screen_on_v);
             int _rc = system(cmd);
@@ -5039,7 +5049,7 @@ int main(int argc, char **argv) {
                 if (lpm_mode != g_lpm_last && (lpm_now - g_lpm_last_ts) >= 15) {
                     char lcmd[192];
                     snprintf(lcmd, sizeof(lcmd),
-                             "/data/adb/modules/AutoSystemBoost/runtime/asb_lpm.sh %s"
+                             "sh /data/adb/modules/AutoSystemBoost/runtime/asb_lpm.sh %s"
                              " >/dev/null 2>&1 &", lpm_mode);
                     int _lrc = system(lcmd);
                     (void)_lrc;
