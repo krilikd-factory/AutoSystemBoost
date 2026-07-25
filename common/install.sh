@@ -1173,15 +1173,76 @@ ASB_DSP_TYPE="fe3199be-aed0-413f-87bb-11260eb63cf1"
 # 64-bit only on purpose: this platform has no /vendor/lib at all (no 32-bit audio
 # processes), and the CI builds arm64-v8a only - an arm64 .so in a 32-bit soundfx dir
 # would just fail to load.
+# Which effect ABI can this device's audioserver actually load?
+#
+# The module ships both. Whether a device binds effects through the AIDL factory
+# (createEffect) or the legacy HIDL one (AUDIO_EFFECT_LIBRARY_INFO_SYM) is not a
+# function of the Android version - it is whatever that OEM's audioserver was built
+# against. A OnePlus 13 reported dsp_loudness silent with the attach daemon logging
+# set=-19 initCheck=-19 on every attempt: NO_INIT, the factory refusing to create the
+# effect, because the AIDL-only library exported no AELI symbol for a factory that
+# wanted one. The identical build worked on a OnePlus 15. Registration and staging were
+# both correct; only the ABI was wrong.
+#
+# VINTF is the authority: the device manifest declares the effect HAL and its format.
+# dsp_effect_abi=aidl|legacy in governor.conf overrides the probe, so a tester can
+# settle the question on a device without waiting for a new build.
+asb_pick_dsp_abi() {
+  _abi_force="$(grep -E '^[[:space:]]*dsp_effect_abi=' "$MODPATH/config/governor.conf" 2>/dev/null \
+                | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
+  case "$_abi_force" in
+    aidl|legacy) printf '%s' "$_abi_force"; return 0 ;;
+  esac
+
+  _vintf_hit=""
+  for _vd in /vendor/etc/vintf /odm/etc/vintf /system/etc/vintf; do
+    [ -d "$_vd" ] || continue
+    for _vf in "$_vd"/manifest.xml "$_vd"/manifest/*.xml "$_vd"/manifest_*.xml; do
+      [ -f "$_vf" ] || continue
+      grep -q 'android\.hardware\.audio\.effect' "$_vf" 2>/dev/null || continue
+      _vintf_hit="$_vf"
+      # An aidl-format entry anywhere for this HAL means the AIDL factory is live.
+      if tr -d '\n' < "$_vf" 2>/dev/null \
+         | grep -qE 'format="aidl"[^>]*>[^<]*<name>android\.hardware\.audio\.effect|android\.hardware\.audio\.effect[^<]*</name>[^<]*<fqname'; then
+        printf 'aidl'; return 0
+      fi
+    done
+  done
+
+  # The HAL is declared but not as AIDL -> HIDL factory.
+  [ -n "$_vintf_hit" ] && { printf 'legacy'; return 0; }
+
+  # Nothing declared it at all. Fall back on the API level, where AIDL effects are the
+  # norm from 35 up, and say so in the log rather than guessing quietly.
+  _abi_sdk="$(getprop ro.build.version.sdk 2>/dev/null)"
+  case "$_abi_sdk" in
+    ''|*[!0-9]*) printf 'aidl'; return 0 ;;
+  esac
+  [ "$_abi_sdk" -ge 35 ] && printf 'aidl' || printf 'legacy'
+  return 0
+}
+
 asb_install_dsp_lib() {
   _dsp_any=0
   # 64-bit and 32-bit soundfx dirs both exist on the target, and an effect library has
   # to match the bitness of the process that dlopens it - so each gets the .so built
   # for its own ABI. Shipping only lib64 leaves any 32-bit audio path without the
   # effect; shipping the arm64 .so into lib/ would just fail to load.
+  ASB_DSP_ABI="$(asb_pick_dsp_abi)"
+  if [ "$ASB_DSP_ABI" = "legacy" ] \
+     && [ -f "$MODPATH/bin/libasbdsp_legacy.so" ]; then
+    _dsp_s64="$MODPATH/bin/libasbdsp_legacy.so"
+    _dsp_s32="$MODPATH/bin/libasbdsp_legacy_32.so"
+  else
+    ASB_DSP_ABI="aidl"
+    _dsp_s64="$MODPATH/bin/libasbdsp.so"
+    _dsp_s32="$MODPATH/bin/libasbdsp_32.so"
+  fi
+  ui_print "      + ASB DSP: ${ASB_DSP_ABI} effect selected for this device"
+
   for _dsp_pair in \
-    "$MODPATH/bin/libasbdsp.so|$MODPATH/system/vendor/lib64/soundfx|/vendor/lib64/soundfx" \
-    "$MODPATH/bin/libasbdsp_32.so|$MODPATH/system/vendor/lib/soundfx|/vendor/lib/soundfx"; do
+    "$_dsp_s64|$MODPATH/system/vendor/lib64/soundfx|/vendor/lib64/soundfx" \
+    "$_dsp_s32|$MODPATH/system/vendor/lib/soundfx|/vendor/lib/soundfx"; do
     _dsp_src="${_dsp_pair%%|*}"
     _dsp_rest="${_dsp_pair#*|}"
     _dsp_dir="${_dsp_rest%%|*}"
@@ -1887,7 +1948,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass"
+region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass dsp_effect_abi"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -1916,7 +1977,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass"
+region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass dsp_effect_abi"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
