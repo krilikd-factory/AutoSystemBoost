@@ -2392,9 +2392,15 @@ asb_apply_blur_prop() {
   } >> "$_pt"
   mv -f "$_pt" "$_prop" 2>/dev/null || { cat "$_pt" > "$_prop"; rm -f "$_pt"; }
   if [ "$_db" = "1" ]; then
+    # WindowManager watches this global live and it is what actually removes the blur
+    # from the shade, launcher, recents and lock screen. The system.prop half only
+    # covers SurfaceFlinger. Missing this was why the toggle looked inert next to
+    # modules that set it.
+    settings put global disable_window_blurs 1 >/dev/null 2>&1 || true
     ui_print "      + ${ASB_D_BLUR:-blur disabled via system.prop (applies after reboot)}"
     ASB_BLUR_APPLIED="disabled"
   else
+    settings put global disable_window_blurs 0 >/dev/null 2>&1 || true
     ASB_BLUR_APPLIED="stock"
   fi
 }
@@ -3230,7 +3236,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
