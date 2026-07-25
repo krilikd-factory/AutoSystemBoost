@@ -1188,8 +1188,20 @@ ASB_DSP_TYPE="fe3199be-aed0-413f-87bb-11260eb63cf1"
 # dsp_effect_abi=aidl|legacy in governor.conf overrides the probe, so a tester can
 # settle the question on a device without waiting for a new build.
 asb_pick_dsp_abi() {
-  _abi_force="$(grep -E '^[[:space:]]*dsp_effect_abi=' "$MODPATH/config/governor.conf" 2>/dev/null \
-                | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
+  # Read the LIVE config first, then the one in the zip. The carry-over that copies user
+  # keys into $MODPATH runs ~560 lines after the DSP library is staged, so at this point
+  # $MODPATH/config/governor.conf is still the pristine shipped file - a user override
+  # would have been read as "auto" and silently ignored, which makes "just set it and
+  # reinstall" advice that cannot work.
+  _abi_force=""
+  for _abi_cf in /data/adb/modules/AutoSystemBoost/config/governor.conf \
+                 /data/adb/asb/governor.conf.snapshot \
+                 "$MODPATH/config/governor.conf"; do
+    [ -f "$_abi_cf" ] || continue
+    _abi_force="$(grep -E '^[[:space:]]*dsp_effect_abi=' "$_abi_cf" 2>/dev/null \
+                  | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
+    case "$_abi_force" in aidl|legacy) break ;; *) _abi_force="" ;; esac
+  done
   case "$_abi_force" in
     aidl|legacy) printf '%s' "$_abi_force"; return 0 ;;
   esac
@@ -3297,7 +3309,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
