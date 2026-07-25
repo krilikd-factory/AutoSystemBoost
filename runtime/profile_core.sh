@@ -381,11 +381,30 @@ asb_apply_ux() {
   fi
   asb_settings_put global google_core_control 0
 
+  # Blur is a UX setting like the rest, and the one part of it that does NOT need a
+  # reboot: WindowManager watches this global live, so the shade and the launcher drop
+  # their blur the moment it is written. The system.prop half (SurfaceFlinger) still
+  # needs the reboot, and asb_blur_apply.sh writes that.
+  _blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$_ux_conf" 2>/dev/null \
+                | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_blur_want" in
+    1) asb_settings_put global disable_window_blurs 1
+       wm disable-blur true >/dev/null 2>&1 || true ;;
+    0) asb_settings_put global disable_window_blurs 0
+       wm disable-blur false >/dev/null 2>&1 || true ;;
+  esac
+
   if [ "$_anim_changed" = "1" ]; then
-    if [ "${UX_ANIM_FORCE_RESTART:-0}" = "1" ]; then
-      pkill -f com.android.systemui >/dev/null 2>&1 || true
-    fi
     am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
+  fi
+  # SystemUI caches the animation scales at process start, so a restart is only
+  # meaningful when a scale was actually rewritten this run - restarting it on every
+  # boot regardless would be a visible hitch for nothing. The reason this looked dead
+  # before is not the gate: asb_apply_ux was never reached at boot at all (see the
+  # command -v fix in service.sh), so no scale was ever written and the gate never
+  # opened.
+  if [ "${UX_ANIM_FORCE_RESTART:-0}" = "1" ] && [ "$_anim_changed" = "1" ]; then
+    pkill -f com.android.systemui >/dev/null 2>&1 || true
   fi
 }
 
