@@ -249,6 +249,18 @@ jobs:
           # Both ABIs: /vendor/lib64/soundfx and /vendor/lib/soundfx both exist on the
           # target and each needs a library of its own bitness.
           install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_REL/bin/libasbdsp.so"
+          # Both effect ABIs travel in the zip; common/install.sh stages whichever one
+          # this device's effect factory can actually load. Shipping a single variant
+          # made that a build-time coin flip - see the OP13 NO_INIT report.
+          for _v in "arm64-v8a:libasbdsp_legacy.so" "armeabi-v7a:libasbdsp_legacy_32.so"; do
+            _va="${_v%%:*}"; _vn="${_v#*:}"
+            if [ -f "bin/$_va/libasbdsp_legacy.so" ]; then
+              install -m 0644 "bin/$_va/libasbdsp_legacy.so" "$PKG_REL/bin/$_vn"
+              echo "  + bin/$_vn"
+            else
+              echo "::warning::bin/$_va/libasbdsp_legacy.so missing - that ABI has no legacy fallback"
+            fi
+          done
           # Attacher daemon: creates the effect on session 0. OxygenOS ignores the
           # config <postprocess>, so without this the effect never gets instantiated.
           if [ -f bin/arm64-v8a/asb_dsp_attach ]; then
@@ -301,6 +313,8 @@ jobs:
             "bin/asb" \
             "bin/libasbdsp.so" \
             "bin/libasbdsp_32.so" \
+            "bin/libasbdsp_legacy.so" \
+            "bin/libasbdsp_legacy_32.so" \
             "service.sh" \
             "module.prop" \
             "post-fs-data.sh" \
