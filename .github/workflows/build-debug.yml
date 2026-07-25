@@ -157,6 +157,18 @@ jobs:
           [ "$SIZE" -lt 2000000 ] || { echo "ERROR: too large"; exit 1; }
 
           test -f "$SO" || { echo "ERROR: $SO not found"; exit 1; }
+          # Debug builds are what testers flash to diagnose problems, so they need the
+          # SAME verification as release - this step used to check only the 64-bit
+          # library, which is how a build with no 32-bit effect at all could pass CI.
+          SO32="bin/armeabi-v7a/libasbdsp.so"
+          if [ -f "$SO32" ]; then
+            F32="$(file "$SO32")"; echo "$SO32 file: $F32"
+            echo "$F32" | grep -q "ARM"  || { echo "ERROR: $SO32 is not 32-bit ARM!"; exit 1; }
+            echo "$F32" | grep -q "ELF"  || { echo "ERROR: $SO32 not ELF!"; exit 1; }
+          else
+            echo "::error::$SO32 missing - the armeabi-v7a build did not run"
+            exit 1
+          fi
           FILE_SO="$(file "$SO")"
           echo "$SO file: $FILE_SO"
           echo "$FILE_SO" | grep -q "aarch64" || { echo "ERROR: DSP .so is not aarch64!"; exit 1; }
@@ -165,6 +177,24 @@ jobs:
           SO_SIZE=$(wc -c < "$SO")
           echo "DSP size: $SO_SIZE bytes"
           [ "$SO_SIZE" -gt 1000 ] || { echo "ERROR: DSP .so too small"; exit 1; }
+
+          # Report which effect ABI actually shipped. On Android 13+/16 audioserver loads
+          # effects through the AIDL factory (createEffect); a legacy AELI-only .so is
+          # never bound to the stream. A debug build that cannot bind its own effect is
+          # the worst possible one to hand a tester chasing an audio bug.
+          if command -v llvm-nm >/dev/null 2>&1; then NM=llvm-nm; else NM="$(ls "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin/llvm-nm 2>/dev/null | head -1)"; fi
+          [ -n "$NM" ] && [ -x "$NM" ] || NM=nm
+          for so in "$SO" "$SO32"; do
+            [ -f "$so" ] || continue
+            SYMS="$("$NM" -D --defined-only "$so" 2>/dev/null || true)"
+            if echo "$SYMS" | grep -q " createEffect$"; then
+              echo "::notice::$so is the AIDL effect (createEffect present) - loads on Android 13+/16"
+            elif echo "$SYMS" | grep -q "AUDIO_EFFECT_LIBRARY_INFO_SYM"; then
+              echo "::warning::$so is the LEGACY effect (AELI only). Android 13+/16 will NOT bind it to the music stream."
+            else
+              echo "::warning::$so exports neither createEffect nor AELI - effect will not load"
+            fi
+          done
 
       - name: Package DEBUG zip
         run: |
@@ -213,7 +243,11 @@ jobs:
           if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
             install -m 0644 bin/armeabi-v7a/libasbdsp.so "$PKG_DBG/bin/libasbdsp_32.so"
           else
-            echo "::warning::armeabi-v7a libasbdsp.so not built - /vendor/lib/soundfx will be empty"
+            # Hard failure, exactly as in the release workflow. The only on-device
+            # symptom is /vendor/lib/soundfx quietly never appearing, which is precisely
+            # how this shipped broken once already - a warning nobody reads is not a gate.
+            echo "::error::armeabi-v7a libasbdsp.so was NOT built - check the DSP build step above"
+            exit 1
           fi
           find "$PKG_DBG" -name "*.log" -delete
 
@@ -255,6 +289,7 @@ jobs:
             "profiles/performance.sh" \
             "config/profile_bounds.generated.sh" \
             "config/governor.conf.shipped" \
+            "bin/libasbdsp_32.so" \
             "webroot/index.html" \
             "tools/asb_lint.sh" \
             "tools/asb_field_report.py" \
@@ -273,6 +308,8 @@ jobs:
             "tools/asb_drain_analyzer.sh" \
             "tools/asb_session_report.py" \
             "tools/asb_smart_mode.sh" \
+            "tools/asb_discover.sh" \
+            "tools/asb_synthesize_bounds.sh" \
             "tools/asb_vendor_thermal_probe.sh" \
             "tools/asb_diag.sh" \
             "tools/asb_install_probe.sh" \
