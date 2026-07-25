@@ -483,9 +483,23 @@ LITTLE_POLICY="/sys/devices/system/cpu/cpufreq/policy0"
 BIG_POLICY="/sys/devices/system/cpu/cpufreq/policy${_big_start}"
 [ -d "$BIG_POLICY" ] || BIG_POLICY="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n | tail -1)"
 [ -d "$BIG_POLICY" ] || BIG_POLICY="$LITTLE_POLICY"
+# The camera guard (governor, src/asb_writer.h) raises the foreground/top-app cpuset,
+# the uclamp.max ceilings and swappiness for as long as a capture is streaming, and it
+# restores exactly what it found when the camera closes. Every runtime re-apply below
+# has to stay off those knobs while it holds them - otherwise a profile switch mid
+# recording writes the ceilings straight back down (apply_runtime_profile_now runs on
+# EVERY switch, and again 10 s later in a background subshell), and worse, the guard
+# then restores its pre-switch snapshot over the new profile's values and leaves the
+# device on stale caps until the next switch. The field logs show profile changes four
+# times in an hour, so this collision was routine rather than exotic.
+asb_cam_guard_active() { [ -f /dev/.asb/camera_guard ]; }
+
 apply_cpuset_groups() {
   writef_retry /dev/cpuset/background/cpus        "0-${little_end}" 3 0.25 || true
   writef_retry /dev/cpuset/system-background/cpus "0-${little_end}" 3 0.25 || true
+  if asb_cam_guard_active; then
+    return 0
+  fi
   if [ "$ASB_PROFILE" = "battery" ]; then
     writef_retry /dev/cpuset/foreground/cpus      "0-${little_end}" 3 0.25 || true
     writef_retry /dev/cpuset/top-app/cpus         "0-${little_end}" 3 0.25 || true
@@ -518,6 +532,9 @@ apply_uclamp() {
   writef_retry /dev/cpuctl/system-background/cpu.uclamp.min $_P_UCL_BG  5 0.3 || true
   writef_retry /dev/cpuctl/foreground/cpu.uclamp.min        $_P_UCL_FG 5 0.3 || true
   writef_retry /dev/cpuctl/top-app/cpu.uclamp.min           $_P_UCL_TOP 5 0.3 || true
+  # uclamp.MIN above is a floor and never fights the guard, so it always applies.
+  # The MAX ceilings below are exactly what the guard lifts - leave them alone.
+  asb_cam_guard_active && return 0
   _ucl_bg_max="${UCL_BG_MAX:-40}"
   _ucl_fg_max="${UCL_FG_MAX:-70}"
   _ucl_top_max="${UCL_TOP_MAX:-85}"
@@ -579,7 +596,7 @@ if has pm; then
 fi
 # ASB:VM:BEGIN
 apply_vm() {
-  sysctlw vm.swappiness $_P_SWAP
+  asb_cam_guard_active || sysctlw vm.swappiness $_P_SWAP
   if [ -e /proc/sys/vm/dirty_bytes ] && [ -e /proc/sys/vm/dirty_background_bytes ]; then
     sysctlw vm.dirty_ratio 0
     sysctlw vm.dirty_background_ratio 0
