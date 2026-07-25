@@ -406,8 +406,13 @@ asb_apply_ux() {
       # Record what OOS currently has BEFORE we touch it, so a field report can
       if has settings; then
         _re_before=$(settings get global ram_expand_size 2>/dev/null)
-        mkdir -p /data/adb/asb 2>/dev/null || true
-        echo "$(date '+%F %T') apply ram_expand: before=${_re_before} want=${UX_RAM_EXPAND}" >> /data/adb/asb/ram_expand.log 2>/dev/null || true
+        # Only log a real change. This fired on every profile apply and every boot,
+        # writing "before=0 want=0" - a no-op - over and over: 147 lines on a device
+        # that had been up for a few hours, none of which said anything.
+        if [ "$_re_before" != "$UX_RAM_EXPAND" ]; then
+          mkdir -p /data/adb/asb 2>/dev/null || true
+          echo "$(date '+%F %T') apply ram_expand: before=${_re_before} want=${UX_RAM_EXPAND}" >> /data/adb/asb/ram_expand.log 2>/dev/null || true
+        fi
       fi
       asb_ram_expand_apply "$UX_RAM_EXPAND"
     fi
