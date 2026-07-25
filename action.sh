@@ -381,6 +381,12 @@ _cc_tel="$(echo "$_wifi_dump" | grep -iE 'mTelephonyCountryCode' | head -1 | gre
 [ -n "$_cc_drv" ] || _cc_drv="$(cmd -w wifi get-country-code 2>/dev/null | grep -oE '[A-Z]{2}' | head -1)"
 _cc_forced=0
 [ -f /data/adb/asb/wifi_cc_forced ] && _cc_forced=1
+_cc_want=""
+for _pf in /data/adb/modules/AutoSystemBoost/profiles/*.sh; do
+  [ -f "$_pf" ] || continue
+  case "$_pf" in *"/$(cat /data/adb/modules/AutoSystemBoost/current_profile 2>/dev/null).sh") ;; *) continue ;; esac
+  _cc_want="$(grep -E '^[[:space:]]*WIFI_COUNTRY=' "$_pf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r"' | tr '[:lower:]' '[:upper:]')"
+done
 
 if [ -n "$_cc_drv" ]; then
   _wl="       region: ${_cc_drv}"
@@ -440,6 +446,13 @@ fi
 echo "$_sysl"
 
 
+_cam_hold="$(_st camera_hold)"
+if [ "$_cam_hold" = "1" ]; then
+  echo ""
+  echo "  📷  CAMERA HOLD ACTIVE"
+  echo "       interactive caps held · cpuset + uclamp lifted"
+fi
+
 # ── Configured vs actually applied ──────────────────────────────────────────────
 # The sections above report what the config ASKS for. This one checks the system for
 # evidence that each thing actually landed, and lists only what did not. A setting that
@@ -480,8 +493,14 @@ if [ "$_a_dsp" != "off" ]; then
              /odm/etc/audio/sku_*/audio_effects_config.xml; do
     grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg_live=1; break; }
   done
-  for _ec in /data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml \
-             /data/adb/asb/odm_patched/vendor/etc/audio_effects_config.xml; do
+  # Search the whole staged tree AND the module overlay. The old two-path probe
+  # missed every device whose effects config lives under a per-SKU directory
+  # (sku_cliffs, sku_pineapple, ...), so a registration that had actually landed
+  # was still reported as "install never ran the registration" - the wrong fix
+  # for the user to be told to apply.
+  for _ec in $(find /data/adb/asb/odm_patched \
+                    /data/adb/modules/AutoSystemBoost/system \
+                    -type f -name 'audio_effects_config.xml' 2>/dev/null); do
     grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg_stage=1; break; }
   done
   if [ "$_reg_live" != "1" ]; then
@@ -540,9 +559,17 @@ if [ "$_blur" = "1" ]; then
   fi
 fi
 
-# wi-fi -> driver domain
-if [ "$(_feat WIFI)" = "1" ] && [ -n "$_cc_drv" ] && [ "$_cc_drv" != "CR" ]; then
-  _add_bad "Wi-Fi CR — driver is on ${_cc_drv} (force did not take)"
+# wi-fi -> driver domain.
+# ASB does not force a regulatory domain any more: asb_wifi_cc_heal actively
+# UNDOES the old force-country-code, and apply_wifi_country derives the code
+# from the SIM. The check below used to assert a hardcoded "CR", so on every
+# device that has ever had a SIM in it this line was guaranteed to fire - a
+# permanent false alarm sitting in NOT APPLIED next to two real findings.
+# Assert what the module actually asked for instead: a manual WIFI_COUNTRY
+# override. With no override there is nothing to verify, so nothing is claimed.
+if [ "$(_feat WIFI)" = "1" ] && [ -n "$_cc_drv" ] && [ -n "$_cc_want" ] \
+   && [ "$_cc_drv" != "$_cc_want" ]; then
+  _add_bad "Wi-Fi ${_cc_want} — driver is on ${_cc_drv} (override did not take)"
 fi
 
 # camera -> the retouch list is the visible half of the camera patch
