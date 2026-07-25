@@ -43,6 +43,9 @@ typedef struct {
     int   thermal_skin_c;          /* skin temp (C) that engages the comfort throttle/veto */
     int   thermal_junction_hard_c; /* junction hard-limit (C) that always throttles (silicon guard) */
     int   gaming_cpu_max_ceiling_khz; /* cap declared scaling_max in GAMING (vendor clamps anyway); 0=off */
+    int   camera_hold_enable;      /* 1=hold interactive caps while the camera streams */
+    int   camera_busy_pct;         /* camera HAL CPU%% of one core that counts as streaming */
+    int   camera_hold_grace_s;     /* keep the hold this long after the pipeline goes quiet */
     int   gaming_gap_thresh;
     int   gaming_gap_ticks;
     int   gaming_retry_cooldown_s;
@@ -212,6 +215,9 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->thermal_skin_c = 47;
     c->thermal_junction_hard_c = 95;
     c->gaming_cpu_max_ceiling_khz = 2400000;
+    c->camera_hold_enable   = 1;
+    c->camera_busy_pct      = 15;
+    c->camera_hold_grace_s  = 20;
     c->sustained_level       = 0.80f;
     c->gaming_gap_thresh        = 1500000;
     c->gaming_gap_ticks         = 4;
@@ -327,6 +333,9 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "thermal_skin_c")) c->thermal_skin_c = atoi(v);
     else if (!strcmp(k, "thermal_junction_hard_c")) c->thermal_junction_hard_c = atoi(v);
     else if (!strcmp(k, "gaming_cpu_max_ceiling_khz")) c->gaming_cpu_max_ceiling_khz = atoi(v);
+    else if (!strcmp(k, "camera_hold_enable"))   c->camera_hold_enable   = atoi(v);
+    else if (!strcmp(k, "camera_busy_pct"))      c->camera_busy_pct      = atoi(v);
+    else if (!strcmp(k, "camera_hold_grace_s"))  c->camera_hold_grace_s  = atoi(v);
     else if (!strcmp(k, "gaming_gap_thresh"))    c->gaming_gap_thresh = atoi(v);
     else if (!strcmp(k, "gaming_gap_ticks"))     c->gaming_gap_ticks  = atoi(v);
     else if (!strcmp(k, "gaming_retry_cooldown_s")) c->gaming_retry_cooldown_s = atoi(v);

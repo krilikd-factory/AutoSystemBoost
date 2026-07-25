@@ -30,6 +30,14 @@ static inline int sysfs_write_long(const char *path, long val) {
     return (r == len) ? 0 : -1;
 }
 
+static inline int sysfs_write_str(const char *path, const char *val) {
+    int fd = open(path, O_WRONLY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    ssize_t w = write(fd, val, strlen(val));
+    close(fd);
+    return (w > 0) ? 0 : -1;
+}
+
 static char g_cpu_max_paths[3][128];
 static char g_cpu_min_paths[3][128];
 /* Per-physical-cluster paths (OP12 = 4). Each entry knows which slot's cap to
@@ -331,6 +339,23 @@ static int gpu_hz_to_pwrlevel_min(long target_hz) {
 #define UCLAMP_TOP_MAX  "/dev/cpuctl/top-app/cpu.uclamp.max"
 #define UCLAMP_BG_MAX   "/dev/cpuctl/background/cpu.uclamp.max"
 #define UCLAMP_SYBG_MAX "/dev/cpuctl/system-background/cpu.uclamp.max"
+/* foreground was never managed here, and that is exactly where the camera HAL
+ * and the media codec threads live -- neither is top-app. With the profile
+ * scripts leaving cpu.uclamp.max at 55-70 there, the scheduler could not ask
+ * for the frequency the pipeline needed no matter how high the caps went. */
+#define UCLAMP_FG_MAX   "/dev/cpuctl/foreground/cpu.uclamp.max"
+#define CPUSET_FG_CPUS  "/dev/cpuset/foreground/cpus"
+#define CPUSET_TOP_CPUS "/dev/cpuset/top-app/cpus"
+#define PATH_CPU_PRESENT   "/sys/devices/system/cpu/present"
+#define PATH_VM_SWAPPINESS "/proc/sys/vm/swappiness"
+
+static int  g_cam_guard_on = 0;
+static char g_cam_saved_fg_cpus[64]  = {0};
+static char g_cam_saved_top_cpus[64] = {0};
+static int  g_cam_saved_uc_top = -1;
+static int  g_cam_saved_uc_fg  = -1;
+static int  g_cam_saved_uc_bg  = -1;
+static int  g_cam_saved_swappiness = -1;
 
 typedef struct {
     int cpu_max[3];
@@ -670,19 +695,91 @@ skip_cpu_caps: ;
         writes++;
     }
 
-    if (force || caps->uclamp_top_max != g_wcache.uclamp_top_max) {
-        sysfs_write_int(UCLAMP_TOP_MAX, caps->uclamp_top_max);
-        g_wcache.uclamp_top_max = caps->uclamp_top_max;
-        writes++;
-    }
-    if (force || caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
-        sysfs_write_int(UCLAMP_BG_MAX,   caps->uclamp_bg_max);
-        sysfs_write_int(UCLAMP_SYBG_MAX, caps->uclamp_bg_max);
-        g_wcache.uclamp_bg_max = caps->uclamp_bg_max;
-        writes++;
+    /* While the camera guard holds these open, a cap change must not write them
+     * back down -- otherwise the very next tick undoes the guard. */
+    if (!g_cam_guard_on) {
+        if (force || caps->uclamp_top_max != g_wcache.uclamp_top_max) {
+            sysfs_write_int(UCLAMP_TOP_MAX, caps->uclamp_top_max);
+            g_wcache.uclamp_top_max = caps->uclamp_top_max;
+            writes++;
+        }
+        if (force || caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
+            sysfs_write_int(UCLAMP_BG_MAX,   caps->uclamp_bg_max);
+            sysfs_write_int(UCLAMP_SYBG_MAX, caps->uclamp_bg_max);
+            g_wcache.uclamp_bg_max = caps->uclamp_bg_max;
+            writes++;
+        }
     }
 
     return writes;
+}
+
+/* ---------------------------------------------------------------------------
+ * Camera guard.
+ *
+ * Three separate mechanisms were starving the camera pipeline, and the caps
+ * are only one of them. This restores the other two for as long as the camera
+ * streams, and puts back exactly what it found when the camera closes:
+ *
+ *   cpuset  - the battery profile pins foreground AND top-app to the little
+ *             cluster. A 4K60 encode cannot meet its deadline on two little
+ *             cores, whatever frequency they run at.
+ *   uclamp  - the max ceilings on foreground/background cap the utilisation
+ *             signal itself, so the scheduler never even requests the clock.
+ *   swappiness - a 4K60 buffer queue is hundreds of MB; with zram half full,
+ *             an aggressive swappiness turns every new buffer into reclaim
+ *             work on the capture path.
+ *
+ * Every value is read back before it is changed, so the restore is the
+ * device's own state rather than an assumption about it -- including the case
+ * where a vendor service, not ASB, wrote the value in the first place.
+ * ------------------------------------------------------------------------ */
+static void writer_camera_guard(int active) {
+    if (active && !g_cam_guard_on) {
+        char present[64] = {0};
+        if (sysfs_read_str(PATH_CPU_PRESENT, present, (int)sizeof(present)) > 0 && present[0]) {
+            if (sysfs_read_str(CPUSET_FG_CPUS, g_cam_saved_fg_cpus,
+                               (int)sizeof(g_cam_saved_fg_cpus)) <= 0)
+                g_cam_saved_fg_cpus[0] = '\0';
+            if (sysfs_read_str(CPUSET_TOP_CPUS, g_cam_saved_top_cpus,
+                               (int)sizeof(g_cam_saved_top_cpus)) <= 0)
+                g_cam_saved_top_cpus[0] = '\0';
+            sysfs_write_str(CPUSET_FG_CPUS,  present);
+            sysfs_write_str(CPUSET_TOP_CPUS, present);
+        }
+        g_cam_saved_uc_top = sysfs_read_int(UCLAMP_TOP_MAX, -1);
+        g_cam_saved_uc_fg  = sysfs_read_int(UCLAMP_FG_MAX,  -1);
+        g_cam_saved_uc_bg  = sysfs_read_int(UCLAMP_BG_MAX,  -1);
+        sysfs_write_int(UCLAMP_TOP_MAX,  100);
+        sysfs_write_int(UCLAMP_FG_MAX,   100);
+        sysfs_write_int(UCLAMP_BG_MAX,   100);
+        sysfs_write_int(UCLAMP_SYBG_MAX, 100);
+        g_cam_saved_swappiness = sysfs_read_int(PATH_VM_SWAPPINESS, -1);
+        if (g_cam_saved_swappiness > 10)
+            sysfs_write_int(PATH_VM_SWAPPINESS, 10);
+        g_wcache.uclamp_top_max = 100;
+        g_wcache.uclamp_bg_max  = 100;
+        g_cam_guard_on = 1;
+        return;
+    }
+    if (!active && g_cam_guard_on) {
+        if (g_cam_saved_fg_cpus[0])  sysfs_write_str(CPUSET_FG_CPUS,  g_cam_saved_fg_cpus);
+        if (g_cam_saved_top_cpus[0]) sysfs_write_str(CPUSET_TOP_CPUS, g_cam_saved_top_cpus);
+        if (g_cam_saved_uc_top >= 0) {
+            sysfs_write_int(UCLAMP_TOP_MAX, g_cam_saved_uc_top);
+            g_wcache.uclamp_top_max = g_cam_saved_uc_top;
+        }
+        if (g_cam_saved_uc_fg >= 0)
+            sysfs_write_int(UCLAMP_FG_MAX, g_cam_saved_uc_fg);
+        if (g_cam_saved_uc_bg >= 0) {
+            sysfs_write_int(UCLAMP_BG_MAX,   g_cam_saved_uc_bg);
+            sysfs_write_int(UCLAMP_SYBG_MAX, g_cam_saved_uc_bg);
+            g_wcache.uclamp_bg_max = g_cam_saved_uc_bg;
+        }
+        if (g_cam_saved_swappiness >= 0)
+            sysfs_write_int(PATH_VM_SWAPPINESS, g_cam_saved_swappiness);
+        g_cam_guard_on = 0;
+    }
 }
 
 static void writer_init_cache(void) {

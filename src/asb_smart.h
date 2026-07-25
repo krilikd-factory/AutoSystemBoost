@@ -1715,6 +1715,29 @@ static void asb_smart_apply_gaming_relax(int app_hint, int cpu_max_c,
     }
 }
 
+/* - Camera relax.
+ * Smart mode's battery lean is the second half of the 4K60 stutter: the FSM
+ * can be held at HEAVY and still be handed battery-shaped rails, because the
+ * blend between the battery and balanced bounds is driven by alpha. While the
+ * camera streams, alpha is pulled to the balanced end and the interactive
+ * bonus is given a floor.
+ *
+ * This deliberately overrides the SOFT thermal lean (rt->thermal_veto only
+ * moves alpha). The hard limits are untouched: the junction guard and the
+ * writer's thermal cap still throttle exactly as before, so a genuinely hot
+ * SoC is still protected -- what changes is that a merely warm one no longer
+ * costs the user their recording. Night-safe still wins outright. */
+static void asb_smart_apply_camera_relax(int camera_active,
+                                         asb_smart_runtime_t *rt) {
+    if (!rt) return;
+    if (!camera_active) return;
+    if (rt->night_safe_override) return;
+    if (rt->alpha_battery_x1000 > 200)
+        rt->alpha_battery_x1000 = 200;
+    if (rt->interactive_bonus_x1000 < 200)
+        rt->interactive_bonus_x1000 = 200;
+}
+
 /* ============================================================
  * modifiers: combined apply. Call after night_override+thermal_veto. */
 static void asb_smart_apply_v48_modifiers(

@@ -670,7 +670,7 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
 
 static int g_gaming_confirm_streak = 0;
 
-static asb_state_t fsm_desired(const asb_metrics_t *m) {
+static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     if (!m->misc.screen_on) return ASB_STATE_DEEP_IDLE;
 
     int ma_valid = (m->bat.current_ma > 0 && !m->bat.charging);
@@ -735,6 +735,21 @@ static asb_state_t fsm_desired(const asb_metrics_t *m) {
         return ASB_STATE_MODERATE;
 
     return ASB_STATE_LIGHT_IDLE;
+}
+
+/* Camera floor. The classifier above reads GPU busy and loadavg, and a camera
+ * pipeline lights up neither strongly enough to leave MODERATE -- the ISP and
+ * the hardware encoder carry the work, while the HAL threads that DO need the
+ * CPU need it on a 16.6 ms deadline at 60 fps. Holding at HEAVY for as long as
+ * the pipeline streams is the difference between a smooth 4K60 capture and a
+ * dropped-frame one; it never lowers a state, so GAMING and SUSTAINED are
+ * untouched, and the thermal guards downstream still apply normally. */
+static asb_state_t fsm_desired(const asb_metrics_t *m) {
+    asb_state_t s = fsm_desired_base(m);
+    if (g_asb_cfg.camera_hold_enable && m->misc.camera_active &&
+        m->misc.screen_on && s < ASB_STATE_HEAVY)
+        s = ASB_STATE_HEAVY;
+    return s;
 }
 
 static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {

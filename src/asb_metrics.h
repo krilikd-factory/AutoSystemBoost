@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <time.h>
 #include <math.h>
+#include <dirent.h>
+#include <sys/types.h>
 #include "asb_config.h"
 extern asb_runtime_config_t g_asb_cfg;
 
@@ -115,6 +117,10 @@ typedef struct {
     /* radio-aware -- mobile data activity */
     long    rmnet_tx_bps;
     long    rmnet_rx_bps;
+    /* 1 = the camera pipeline is streaming (preview, capture or video).
+     * Derived from the camera HAL provider's own CPU time, so it covers every
+     * camera app rather than a package list, and it needs no permissions. */
+    int     camera_active;
 } asb_misc_t;
 
 typedef struct {
@@ -1135,6 +1141,139 @@ static void metrics_read_network(asb_misc_t *m, const struct timespec *now) {
     g_wlan_ts_prev = *now;
 }
 
+/* ---------------------------------------------------------------------------
+ * Camera activity.
+ *
+ * The FSM classifies load from GPU busy + 1-minute loadavg. A 4K60 capture
+ * lights up neither: the ISP and the hardware encoder do the work, and the
+ * handful of camera HAL threads that DO run on the CPU barely move a
+ * 8-core loadavg. So the FSM sat in MODERATE while the pipeline was missing
+ * its 16.6 ms deadline against battery-shaped caps -- reported from the field
+ * as stuttering 4K60 recording and playback that cleared the moment the CPU
+ * tweaks were removed.
+ *
+ * The signal used here is the camera provider process's own CPU time. It is
+ * one long-lived process started at boot, so the /proc scan that finds it runs
+ * once; from then on this is a single open+read per tick. Busy provider =
+ * camera streaming, and that is true for the OEM camera app, third-party apps
+ * and any HAL client alike.
+ * ------------------------------------------------------------------------ */
+#define ASB_CAM_RESCAN_COOLDOWN_S 30
+
+static pid_t             g_cam_pid = 0;
+static time_t            g_cam_scan_ts = 0;
+static unsigned long long g_cam_jif_prev = 0;
+static struct timespec   g_cam_ts_prev = {0};
+static time_t            g_cam_hold_until = 0;
+
+static int cam_cmdline_matches(pid_t pid) {
+    char path[64], buf[288];
+    snprintf(path, sizeof(path), "/proc/%d/cmdline", (int)pid);
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return 0;
+    int n = (int)read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) return 0;
+    for (int i = 0; i < n; i++) if (buf[i] == '\0') buf[i] = ' ';
+    buf[n] = '\0';
+    if (strstr(buf, "camera.provider"))  return 1;
+    if (strstr(buf, "camerahalserver"))  return 1;
+    if (strstr(buf, "camerahalservice")) return 1;
+    if (strstr(buf, "camerahalext"))     return 1;
+    if (strstr(buf, "/cameraserver"))    return 1;
+    return 0;
+}
+
+static pid_t cam_find_pid(void) {
+    DIR *d = opendir("/proc");
+    if (!d) return 0;
+    struct dirent *e;
+    pid_t found = 0;
+    while ((e = readdir(d)) != NULL) {
+        const char *nm = e->d_name;
+        if (nm[0] < '1' || nm[0] > '9') continue;
+        int numeric = 1;
+        for (const char *q = nm; *q; q++) {
+            if (*q < '0' || *q > '9') { numeric = 0; break; }
+        }
+        if (!numeric) continue;
+        pid_t pid = (pid_t)atoi(nm);
+        if (cam_cmdline_matches(pid)) { found = pid; break; }
+    }
+    closedir(d);
+    return found;
+}
+
+static unsigned long long cam_read_jiffies(pid_t pid) {
+    char path[64], buf[640];
+    snprintf(path, sizeof(path), "/proc/%d/stat", (int)pid);
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return 0ULL;
+    int n = (int)read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) return 0ULL;
+    buf[n] = '\0';
+    /* comm can itself contain spaces and parentheses -- start after the LAST
+     * ')' so the field walk below can never be thrown off by the process name. */
+    char *rest = strrchr(buf, ')');
+    if (!rest) return 0ULL;
+    rest++;
+    unsigned long long ut = 0ULL, st = 0ULL;
+    int field = 2;
+    char *save = NULL;
+    for (char *tok = strtok_r(rest, " ", &save); tok; tok = strtok_r(NULL, " ", &save)) {
+        field++;
+        if (field == 14) ut = strtoull(tok, NULL, 10);
+        else if (field == 15) { st = strtoull(tok, NULL, 10); break; }
+    }
+    return ut + st;
+}
+
+static int metrics_camera_active(const struct timespec *now) {
+    if (!g_asb_cfg.camera_hold_enable) {
+        g_cam_hold_until = 0;
+        return 0;
+    }
+    time_t wall = time(NULL);
+    if (g_cam_pid <= 0) {
+        if (wall - g_cam_scan_ts < ASB_CAM_RESCAN_COOLDOWN_S)
+            return (wall < g_cam_hold_until) ? 1 : 0;
+        g_cam_scan_ts  = wall;
+        g_cam_pid      = cam_find_pid();
+        g_cam_jif_prev = 0ULL;
+    }
+    if (g_cam_pid <= 0) return 0;
+
+    unsigned long long jif = cam_read_jiffies(g_cam_pid);
+    if (jif == 0ULL) {
+        g_cam_pid      = 0;
+        g_cam_jif_prev = 0ULL;
+        return (wall < g_cam_hold_until) ? 1 : 0;
+    }
+
+    int busy = 0;
+    if (g_cam_jif_prev > 0ULL && g_cam_ts_prev.tv_sec > 0 && jif >= g_cam_jif_prev) {
+        double dt = (now->tv_sec - g_cam_ts_prev.tv_sec) +
+                    (now->tv_nsec - g_cam_ts_prev.tv_nsec) * 1e-9;
+        if (dt > 0.2) {
+            long hz = sysconf(_SC_CLK_TCK);
+            if (hz <= 0) hz = 100;
+            double pct = ((double)(jif - g_cam_jif_prev) / (double)hz) / dt * 100.0;
+            if (pct >= (double)g_asb_cfg.camera_busy_pct) busy = 1;
+        }
+    }
+    g_cam_jif_prev = jif;
+    g_cam_ts_prev  = *now;
+
+    if (busy) {
+        int grace = g_asb_cfg.camera_hold_grace_s;
+        if (grace < 0) grace = 0;
+        g_cam_hold_until = wall + grace;
+        return 1;
+    }
+    return (wall < g_cam_hold_until) ? 1 : 0;
+}
+
 static void metrics_read_all(asb_metrics_t *m, int need_headroom, int need_thermal) {
     clock_gettime(CLOCK_MONOTONIC, &m->ts);
     metrics_read_battery(&m->bat);
@@ -1143,5 +1282,6 @@ static void metrics_read_all(asb_metrics_t *m, int need_headroom, int need_therm
     if (need_thermal)
         metrics_read_thermal(&m->therm, need_headroom);
     m->misc.screen_on = metrics_screen_on();
+    m->misc.camera_active = metrics_camera_active(&m->ts);
     metrics_read_network(&m->misc, &m->ts);
 }

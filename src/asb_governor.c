@@ -1103,6 +1103,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.thermal_veto ? 1 : 0,
             g_smart_rt.app_hint,
             g_smart_rt.fallback_level);
+    fprintf(f, "camera_hold=%d\n", g_cam_guard_on ? 1 : 0);
     fprintf(f, "smart_lowbat_override=%d\nsmart_thermal_trend=%d\nsmart_trend_slope=%d\n",
             g_smart_rt.low_battery_override ? 1 : 0,
             g_smart_rt.thermal_trend_bump,
@@ -3391,6 +3392,10 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
      * and all skip when night_override or thermal_veto fired (those keep priority). */
     asb_smart_apply_v48_modifiers(g_smart_rt.app_hint, cpu_max_c, &g_smart_rt);
 
+    /* camera relax runs last: it is the only modifier allowed to override the
+     * soft thermal lean, and it must not be undone by one that runs after it. */
+    asb_smart_apply_camera_relax(m->misc.camera_active, &g_smart_rt);
+
     /* 5. Slot-update gating: should we rebuild g_smart_bounds? */
     int do_update = asb_smart_should_update_slot(&g_smart_rt, now, charging, g_smart_rt.app_hint);
     if (!do_update) return 0;
@@ -5014,6 +5019,8 @@ int main(int argc, char **argv) {
                                               asb_state_names[fsm.state]);
                 }
             }
+
+            writer_camera_guard(metrics.misc.camera_active);
 
             int changed = fsm_update(&fsm, &metrics);
 
