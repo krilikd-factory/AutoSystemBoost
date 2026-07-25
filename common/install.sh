@@ -2157,7 +2157,12 @@ asb_save_user_config() {
     echo "# Used on next install/update to skip the 15 category prompts"
     echo "saved_at=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo unknown)"
     echo "saved_from_version=$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
-    for c in AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG RADIO_IMS DISPLAY FPS SECURITY BG_TRIM; do
+    # Must list every category the installer PROMPTS for. LPM and VENDOR_OVERLAY were
+    # missing, so those two answers were thrown away on every update and silently reset
+    # to the shipped default - visible on a real install as a user_config with 17 keys
+    # next to a 19-entry prompt list.
+    for c in AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG LPM \
+             RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY; do
       eval "_v=\$ASB_${c}"
       case "$_v" in
         true) printf '%s=1\n' "$c" ;;
@@ -2309,6 +2314,16 @@ else
 fi
 asb_register_dsp_all_configs
 asb_generate_odm_camera_binds
+
+# A real install came back with a zero-byte regular file named "vendor" sitting in the
+# module root. Nothing in the tree should ever put a plain file there - the root manager
+# only looks at system/ - and a bare "vendor" entry is exactly the sort of thing a future
+# mount helper would try to interpret. Its origin is not established, so this removes the
+# artefact rather than pretending to fix a cause: a directory is left alone, only an empty
+# regular file is cleared.
+if [ -f "$MODPATH/vendor" ] && [ ! -s "$MODPATH/vendor" ]; then
+  rm -f "$MODPATH/vendor" 2>/dev/null
+fi
 
 [ -f "$MODPATH/overlay_device_class" ] || echo reference > "$MODPATH/overlay_device_class" 2>/dev/null
 rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
@@ -3309,7 +3324,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
