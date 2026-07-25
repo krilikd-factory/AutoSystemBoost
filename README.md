@@ -8,21 +8,14 @@
   <img src="https://github.com/krilikd/AutoSystemBoost/blob/main/banner.png" alt="Banner" width="80%">
 </p>
 
-<p align="center"><b>Adaptive Runtime Engine for OnePlus — Snapdragon 8 Elite / Gen 3</b></p>
-<p align="center"><i>Full tuning on 15 · 13 · 12 · Ace 6 · Ace 5 — device-native on every other OnePlus</i></p>
+<p align="center"><b>Adaptive runtime engine for OnePlus — Snapdragon 8 Elite / Gen 3</b></p>
+<p align="center"><i>A native C daemon that reads the device every 2 seconds and decides — it does not just write values once at boot.</i></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/OnePlus_15-SM8850-dc2626?style=for-the-badge" alt="OP15">
-  <img src="https://img.shields.io/badge/OnePlus_13-SM8750-ea580c?style=for-the-badge" alt="OP13">
-  <img src="https://img.shields.io/badge/OnePlus_12-SM8650-f59e0b?style=for-the-badge" alt="OP12">
-  <br>
-  <img src="https://img.shields.io/badge/Ace_6-ktm_·_fully_supported-22c55e?style=flat-square" alt="Ace 6">
-  <img src="https://img.shields.io/badge/Ace_5-fully_supported-22c55e?style=flat-square" alt="Ace 5">
-  <img src="https://img.shields.io/badge/any_OnePlus-device--native-8b5cf6?style=flat-square" alt="any OnePlus">
-  <br>
-  <img src="https://img.shields.io/badge/Root-KSU_%7C_KSUN_%7C_APATCH_%7C_RESUKISU_%7C_MAGISK-16a34a?style=for-the-badge" alt="Root">
   <img src="https://img.shields.io/badge/Governor-Native_C-0ea5e9?style=for-the-badge" alt="C">
+  <img src="https://img.shields.io/badge/Audio-Own_DSP_engine-dc2626?style=for-the-badge" alt="DSP">
   <img src="https://img.shields.io/badge/WebUI-Built--in-f59e0b?style=for-the-badge" alt="WebUI">
+  <img src="https://img.shields.io/badge/Root-KSU_%7C_KSUN_%7C_APATCH_%7C_MAGISK-16a34a?style=for-the-badge" alt="Root">
 </p>
 
 <p align="center">
@@ -33,638 +26,234 @@
 
 ---
 
-<h2 align="center">✨ Not a Tweak Collection — a Runtime System</h2>
+## ⚡ What it actually is
 
-<p align="center"><i>A native C daemon that reads the device every 2 seconds<br>and makes real-time decisions about CPU, GPU, thermals, and scheduler.</i></p>
+Most modules are a list of values written once at boot. ASB is a **daemon**: it samples
+CPU, GPU, thermals, battery and load every 2 seconds, moves through a 6-state machine,
+and re-derives the caps each time. Plus an **audio DSP engine written from scratch**, a
+learning profile that adapts to your day, and a WebUI to drive all of it.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/5600+_lines-Native_C-0ea5e9?style=flat-square" alt="C">
-  <img src="https://img.shields.io/badge/6_states-FSM-7c3aed?style=flat-square" alt="FSM">
-  <img src="https://img.shields.io/badge/4_profiles-Adaptive-16a34a?style=flat-square" alt="Profiles">
-  <img src="https://img.shields.io/badge/Smart_Mode-Self--checking-a78bfa?style=flat-square" alt="Smart Mode">
-  <img src="https://img.shields.io/badge/12_fields-Session_Plan-e85d04?style=flat-square" alt="Plan">
-  <img src="https://img.shields.io/badge/0%25_CPU-DEEP__IDLE-1f2937?style=flat-square" alt="Idle">
-</p>
-
-<table align="center">
-<tr><td>
-
-| | Layer | Component | Details |
-|:---:|:-----:|:----------|:--------|
-| 🖥️ | **UI** | WebUI | Profile switch, live status, device info |
-| ⚡ | **API** | Socket | `action.sh` → Unix socket → governor commands |
-| 🔧 | **Shell** | Orchestrator | `service.sh` — boot config, reconcile, watchdog |
-| 🧠 | **Core** | C Daemon | `bin/asb` — FSM, Session Plan, Anti-Clamp, Storm Shield |
+| | Layer | Component | What it does |
+|:---:|:---|:---|:---|
+| 🧠 | **Core** | `bin/asb` | FSM · Session Plan · Anti-Clamp · Storm Shield · Camera Hold |
+| 🎚 | **Audio** | `libasbdsp` | Own effect: loudness · compressor · limiter · bass shelf |
+| 🔧 | **Shell** | `service.sh` | Boot config, reconcile, watchdog |
+| 🖥 | **UI** | WebUI + Action | Profiles, live status, honest "not applied" report |
 | 📡 | **HW** | Kernel | sysfs · procfs · cpufreq · WALT · KGSL |
 
-</td></tr>
-</table>
-
-<p align="center">
-  <code>FSM</code> · <code>Smart Mode</code> · <code>Session Plan</code> · <code>Anti-Clamp</code> · <code>Storm Shield</code> · <code>Clamp Hold</code> · <code>BG_TRIM</code> · <code>Memcg v2</code>
-</p>
-
 ---
 
-## 📱 Device Support
+## 📱 Device support
 
-Every OnePlus gets a **device-native** install: ASB ships **zero static vendor
-files**. It clones the phone's *own* stock files at install time, patches those
-copies, and mounts them back. Nothing from another model is ever grafted onto
+**Zero static vendor files.** ASB clones your phone's *own* stock files at install,
+patches those copies, and mounts them back. Nothing from another model ever touches
 your device.
 
-| Tier | Devices | SoC | Codename |
-|:-----|:--------|:----|:---------|
-| 🥇 **Reference — hand-validated** | OnePlus 15 (CPH2745 / CPH2747) | Snapdragon 8 Elite Gen 5 (SM8850) | `canoe` |
-| 🥇 **Reference — hand-validated** | OnePlus 13 (CPH2649 / 2653 / 2655) | Snapdragon 8 Elite (SM8750) | `sun` · `tuna` · `kera` |
-| 🥇 **Reference — hand-validated** | OnePlus 12 (CPH2581 / 2583 / 2573) | Snapdragon 8 Gen 3 (SM8650) | `pineapple` |
-| 🥇 **Fully supported — field-verified** | OnePlus Ace 6 (PLQ110 / OP6113) | SM8750 — *shared `sun` firmware* | `ktm` |
-| 🥇 **Fully supported — field-verified** | OnePlus Ace 5 · 13R (PKG110 / CPH2691) | Snapdragon 8 Gen 3 (SM8650) | `giuliac` · `giulia` |
-| ✅ **Device-native** | OnePlus 15R, 13s / 13T, 12R, 11 / 11R, Open, Ace 6T, Ace / Nord / Pad | various | — |
+| Tier | Devices | SoC |
+|:---|:---|:---|
+| 🥇 **Reference** — hand-validated | OnePlus 15 · 13 · 12 | SM8850 · SM8750 · SM8650 |
+| 🥇 **Fully supported** — field-verified | Ace 6 · Ace 5 · 13R | SM8750 · SM8650 |
+| ✅ **Device-native** | every other OnePlus — 15R, 13s/13T, 12R, 11/11R, Open, Ace 6T, Nord, Pad | various |
 
-### Two paths, one philosophy
+Reference devices get their own topology map, audio SKU and thermal profile behind a
+**3-strike boot guard**. Everyone else runs the *identical* pipeline behind a stricter
+**1-strike fuse** — one failed boot and the generated overlay is torn out before the
+module mounts. Nothing is skipped, it is not a reduced mode; only the delivery differs.
 
-**Reference devices** (matched by confirmed codename) get their own CPU/GPU
-topology mapping, audio SKU, camera/media overlays and thermal profile, validated
-on real hardware rather than simulated — behind a **3-strike boot guard**.
-
-**Ace 6 and Ace 5 run the identical pipeline** — the same clone-and-patch stages
-for audio, camera, media, GPS, perf and Wi-Fi, `asbdiag` PASS, first boot clean.
-Nothing is skipped; this is not a reduced compatibility mode. Only the delivery
-differs: their `/odm` audio and media arrive as **runtime `mount --bind`s**
-(cloned to `/data/adb/asb/odm_patched/`, patched, SELinux context copied from the
-live target, applied in `post-fs-data` before zygote), they sit behind a stricter
-**1-strike boot fuse** instead of the 3-strike guard, and device-adaptive CPU
-bounds are ON by default on Ace 5 (SM8650 lean) while staying opt-in via the
-WebUI on Ace 6.
-
-**Every other OnePlus** gets the same device-native `/vendor` overlay under that
-same 1-strike fuse: a single failed boot tears the generated overlay out *before*
-the module mounts and the device comes up governor-only. The `/odm` partition
-itself is never modified, and no directory is ever grafted over it.
-
-> **Sibling firmware is handled explicitly.** The Ace 6 (`ktm`) rides the *same*
-> SM8750 `sun` firmware as the OnePlus 13 — its fingerprint literally says `sun`.
-> ASB matches `ktm` / `plq110` / `op6113` **before** the `sun` test, so it can
-> never be mistaken for an OP13. The same guard keeps `macan` / `fairlady` /
-> `15R` / `Ace 6T` out of the OP15 branch.
+> Sibling firmware is handled explicitly: the Ace 6 rides the same `sun` firmware as the
+> OnePlus 13 and its fingerprint literally says `sun`. ASB matches `ktm` **before** the
+> `sun` test, so it can never be mistaken for an OP13.
 
 ---
 
-## 📦 Installation
+## 📦 Install
 
 1. Flash in **KSU / KSUN / APatch / ReSuKiSu / Magisk**
-2. Select features at install — **15 categories** (saved between updates):
-   - **Always on by default**: AUDIO, BT, CAMERA, CPU, VM, NET, WIFI, GPS, KERNEL, LOG, RADIO/IMS, DISPLAY, FPS, SECURITY
-   - **Opt-in**: BG_TRIM (Smart Reclaim + OPPO telemetry trim)
-3. Reboot → governor starts automatically
-4. Open **WebUI** → choose profile, or tap **Action** in module list for live status
+2. Pick your feature categories at install — your choices are carried over on every update
+3. Reboot → the governor starts on its own
+4. Open the **WebUI** for profiles and settings, or tap **Action** for live status
 
-   <p align="center">
+<p align="center">
   <a href="https://github.com/krilikd/AutoSystemBoost/releases/latest">
-    <img src="https://img.shields.io/badge/⬇️_Download_Latest_Release-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Download Latest Release">
+    <img src="https://img.shields.io/badge/⬇️_Download_Latest_Release-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Download">
   </a>
 </p>
 
 ---
 
-## 🧠 FSM — 6-State Machine
+## 🎚 ASB DSP — our own audio engine
 
-| State | Entry Condition | CPU Caps (Balanced) | GPU | Polling |
-|:------|:----------------|:-------------------:|:---:|:-------:|
-| 🌙 `DEEP_IDLE` | Screen OFF | floor only | 0% | 10s |
-| 💤 `LIGHT_IDLE` | Screen ON, low activity | 1.19 / 1.88 GHz | 15% | 2s |
-| 📱 `MODERATE` | load ≥ 1.5 | dynamic | 40% | 2s |
-| ⚡ `HEAVY` | GPU ≥ 35% or load ≥ 2.0 | 2.4 / 3.3 GHz | 65% | 2s |
-| 🎮 `GAMING` | GPU ≥ 65% | 3.3 / 4.0 GHz | 100% | 2s |
-| 🛡️ `SUSTAINED` | temp ≥ 59°C (perf) or caps unreachable | 70% range | 80% | 2s |
+Volume curves can only redistribute the gain the device already gives you. To go
+**above unity** you need real processing — so ASB ships its own effect, built from
+scratch, in the module.
 
-**Transitions:** ⬆️ Up: 2 ticks (4s) · ⬇️ Down: 5 ticks (10s) · 📴 Screen OFF → `DEEP_IDLE`: instant
+```
+input → bass shelf (90 Hz) → soft-knee compressor → auto make-up → true-peak limiter → out
+```
 
-**`SUSTAINED` escape paths:**
-- 🌡️ Temp drops below exit threshold (56°C for perf, 49°C for balanced) → normal exit
-- ⏱️ **Time-based escape**: After ≥ 180s in SUSTAINED with temp ≤ `enter − 3` and flat/falling trend → forced exit
+| | |
+|:---|:---|
+| 🔊 **`dsp_loudness`** | **+1 … +20 dB** of real gain above unity |
+| 🥁 **`dsp_bass`** | **+1 … +10 dB** low shelf at 90 Hz — body, not sub rumble |
+| 🛡 **No clipping** | Soft-knee compression and a true-peak limiter sit after the boost |
+| ⚡ **Live** | Moving a slider goes to the running effect over binder — no `audioserver` restart, no drop-out |
+| 🎧 **Everything** | Attached to the **global mix**: music, video, games, calls, any app |
 
-**`DEEP_IDLE` power:** epoll blocks = **0% CPU**, ~50 KB RSS.
+**Why it needed building twice.** Android 13+ binds effects through the
+`android.hardware.audio.effect` **AIDL** contract — a legacy `.so` is never attached to
+the stream at all. ASB ships both from one shared core, so the sound is identical either
+way. And because OxygenOS never applies config-declared post-processing, a companion
+daemon creates the effect **programmatically on the global mix** — otherwise it would
+stay silent until you happened to open an EQ app.
 
----
-
-## 🧊 Thermal Engineering Highlights
-
-<table align="center">
-<tr>
-  <td align="center">🌡️<br><b>Binding-Layer<br>Correctness</b></td>
-  <td>CPU thermal source is <b>validated once and preserved</b> across rescans. If the primary sensor goes bad at runtime, the governor <b>permanently rebinds</b> to the fallback — not a per-tick workaround. No more stuck-on-dead-sensor sessions.</td>
-</tr>
-<tr>
-  <td align="center">⚡<br><b>Cross-Validated<br>Spike Guard</b></td>
-  <td>Single-tick sensor jumps of +25 °C are cross-checked against the fallback sensor. Physically impossible spikes (93 °C while neighbors sit at 54 °C) are <b>rejected</b>; legitimate fast heating passes because both sensors rise together.</td>
-</tr>
-<tr>
-  <td align="center">⏱️<br><b>Time-Based<br>SUSTAINED Escape</b></td>
-  <td>If device has been in <code>SUSTAINED</code> for ≥ 180 s with temp below <code>enter−3 °C</code> and trend flat/falling, FSM <b>breaks the lock</b> and allows caps to return to normal. Prevents 15-minute stuck states observed on steady-state gaming sessions.</td>
-</tr>
-<tr>
-  <td align="center">🔌<br><b>Cap Desync<br>Protection</b></td>
-  <td>Shell-layer screen-aware cap reconcile <b>honors the profile</b> — no more silent hardcoded overrides of the governor's thermal decisions. Verified every run via <code>cap_verify.txt</code> in the logkit.</td>
-</tr>
-<tr>
-  <td align="center">📦<br><b>Scenario-Scoped<br>Logkit</b></td>
-  <td>Three built-in collection scripts for sleep / mixed / gaming scenarios. Pre-extracts events that matter (SUSTAINED transitions, thermal source changes, TRUST gates, cap verification) so post-mortem analysis is one <code>grep</code> away.</td>
-</tr>
-</table>
+> The bass shelf sits at the **head** of the chain on purpose. Placed after the
+> compressor and limiter, the added low-end energy would escape every safeguard and
+> clip on the way out.
 
 ---
 
-## 🎯 Profile Comparison — Real Numbers
+## 🎵 Audio — three switches, not a pile of flags
+
+| Setting | Options | What it does |
+|:---|:---|:---|
+| **`audio_profile`** | `stock` · `hifi` · `eq_compat` | `hifi` = 32-bit float, 192 kHz, DRC off. `eq_compat` hands the stream to ViPER/JamesDSP — ASB steps aside instead of fighting for the output |
+| **`audio_dac_hifi`** | on / off | The mixer half on its own switch: Class-H DAC, flat EQ, companders off |
+| **`media_loudness`** | `stock` · mild · strong · max | Reshapes the volume curves themselves — position-weighted, so the boost lands at 40–80 % of slider travel where people actually listen |
+
+Plus, versus stock: headphone path at **32-bit float** instead of 16/24-bit, **192 kHz**
+max rate, DRC compressor **off**, codec complexity **10/10**, BT A2DP up to **192 kHz**,
+LHDC v5 at best quality, full offload for AAC/ALAC/FLAC/Opus/WMA, and adaptive bitrate
+on SBC/AAC for steadier Bluetooth on a weak link.
+
+> 100 % volume is **never** raised. That is unity — past it you are only clipping.
+
+---
+
+## 🧠 The governor
+
+**6 states.** `DEEP_IDLE` → `LIGHT_IDLE` → `MODERATE` → `HEAVY` → `SUSTAINED` → `GAMING`.
+Each has its own caps, dwell times and entry/exit hysteresis. DEEP_IDLE costs **0 % CPU** —
+the daemon genuinely stops working when the screen is off.
+
+**Smart Mode** is a 4th, adaptive profile — and not a new set of caps. It *blends*
+between the battery and balanced envelopes based on what it has learned about your day:
+12 time-of-day buckets, weekday/weekend split, session history, a battery-budget model.
+It never exceeds the balanced envelope and never drops below the battery floor. Habit
+suggests; a confidence gate decides. Safety overlays — thermal veto, low battery,
+night-safe — always win over habit.
+
+**📷 Camera Hold.** A 4K60 capture lights up neither GPU busy nor the one-minute
+loadavg — the ISP and the hardware encoder carry the work, while the HAL threads that do
+need the CPU need it on a 16.6 ms deadline. ASB detects the streaming pipeline and holds
+interactive caps, restores the cpuset to every core and lifts the `uclamp` ceilings the
+camera HAL sits under — then puts every value back exactly as it found it.
+
+**Anti-Clamp · Storm Shield · Session Plan.** The vendor thermal HAL clamps back; ASB
+detects a stable clamp and stops fighting it, probes for recovery, and pre-computes the
+whole session policy up front instead of recalculating every tick.
+
+---
+
+## 🎯 Profiles — real numbers
 
 | Parameter | 🔥 Performance | ⚖️ Balanced | 🔋 Battery |
-|:----------|:--------------:|:-----------:|:----------:|
-| CPU min LITTLE | **1190 MHz** | 787 MHz | **307 MHz** |
-| CPU min BIG | **1114 MHz** | 883 MHz | **614 MHz** |
-| CPU max LITTLE | **2957 MHz** | 3302 MHz | **1805 MHz** |
-| CPU max BIG | **3302 MHz** | 3974 MHz | **2208 MHz** |
-| CPU cap LITTLE | **2304 MHz** | 1190 MHz | **922 MHz** |
-| CPU cap BIG | **2611 MHz** | 1882 MHz | **922 MHz** |
-| GPU cap | **70%** | 85% | **50%** |
-| GPU min floor | **8%** | 0% | **0%** |
-| RAVG window | **2** (8 ms) | 3 (12 ms) | **8** (32 ms) |
-| UCL_TOP max | **90%** | 85% | **50%** |
-| UCL_BG max | **60%** | 35% | **40%** |
-| Swappiness | **12** | 35 | **100** |
-| Dirty writeback | **0.8 s** | 4 s | **240 s** |
-| VFS cache pressure | **30** | 80 | **400** |
-| Stat interval | **8 s** | 30 s | **240 s** |
-| Min free KB | **32768** | 32768 | **114688** |
-| Compaction proactive | **0** | 10 | **20** |
-| WiFi power-save | **OFF** | auto | **ON** |
-| GAMING state | ✅ allowed | ✅ allowed | **🚫 blocked** |
-| SUSTAINED enter / exit | **59 / 56 °C** | 57 / 49 °C | — |
-| Time-based escape | **≥ 180 s** | — | — |
-| Fast deep idle | — | — | **8 seconds** |
+|:---|:---:|:---:|:---:|
+| CPU min LITTLE / BIG | 1190 / 922 MHz | 787 / 883 MHz | 307 / 614 MHz |
+| CPU cap LITTLE / BIG | 2400 / 2746 MHz | 1190 / 1882 MHz | 922 / 922 MHz |
+| GPU min floor | 8 % | 0 % | 0 % |
+| `uclamp` top / bg | 90 / 50 | 85 / 35 | 50 / 40 |
+| RAVG window | 2 (8 ms) | 3 (12 ms) | 8 (32 ms) |
+| Swappiness | 12 | 35 | 80 |
+| VFS cache pressure | 30 | 80 | 120 |
+| Dirty writeback | 10 s | 60 s | 600 s |
+| Wi-Fi power save | off | auto | on |
+| GAMING state | ✅ | ✅ | 🚫 blocked |
+| SUSTAINED enter / exit | 59 / 56 °C | 57 / 49 °C | — |
 
-> **Smart** profile (4th, adaptive) — see section below. It does not appear in this static table because its caps are not fixed: they are blended at runtime between **battery** and **balanced** envelopes based on time-of-day learning. It never exceeds the **balanced** sustained envelope and never drops below the **battery** safety floor.
+> **Smart** is not in this table on purpose — its caps are not fixed. They are blended
+> at runtime between the battery and balanced envelopes.
 
 ---
 
-## 🧠 Smart Mode — Adaptive Fourth Profile
+## 📊 Stock vs ASB
 
-Smart Mode is **not a new set of frequency caps**. It is a *blend layer* on top of the existing **battery** and **balanced** envelopes that picks how much of each to apply based on the current context. The FSM is unchanged — Smart Mode swaps the bounds the FSM reads from.
-
-### 12 time-of-day buckets
-
-```
-            Weekday   Weekend
-SLEEP  (00-06)   #0       #1
-WAKE   (06-09)   #2       #3
-MORN   (09-12)   #4       #5
-DAY    (12-17)   #6       #7
-EVE    (17-21)   #8       #9
-LATE   (21-24)   #10      #11
-```
-
-Each bucket stores **blend weights, not raw frequencies**:
-
-| Weight | Range | What it does |
-|:-------|:-----:|:-------------|
-| `alpha_battery` | 0.00–1.00 | 0 = pure balanced, 1 = pure battery |
-| `interactive_bonus` | 0.00–0.15 | Slight UI snappiness boost when context allows |
-| `idle_bias` | -0.20–+0.20 | Pull idle thresholds tighter or looser |
-| `sleep_bias` | 0.00–1.00 | Prefer deep-idle behavior in this bucket |
-| `net_conservative_bias` | 0.00–1.00 | Be more conservative with network during this bucket |
-
-Cold-start seeds match baseline behavior so Smart Mode **does not feel sluggish on day one** — it acts like **balanced** during the day and like **battery** at night, before any learning has happened.
-
-### What Smart Mode learns from each session
-
-Every finalized session updates the active bucket. Direction is chosen by session outcome:
-
-| Session outcome | Effect on bucket |
-|:----------------|:-----------------|
-| Hot, drainy, or long sustained load | `alpha_battery` ↑ (toward battery) |
-| Cool, clean, screen-on, interactive | `alpha_battery` ↓ (toward balanced) |
-| Night screen-off with low wake count | `sleep_bias` ↑ and `net_conservative_bias` ↑ |
-| Hot session with thermal vetoes | `interactive_bonus` ↓ |
-
-The learning rate is **fixed at 5 % per session**, weighted by `duration × trust`:
-
-| Session | duration weight | trust weight | actual step |
-|:--------|:---------------:|:------------:|:-----------:|
-| Long CLEAN (≥ 30 min) | 1.00 | 1.00 | **5.00 %** |
-| Medium CLEAN | 0.50 | 1.00 | 2.50 % |
-| Long PARTIAL | 1.00 | 0.40 | 2.00 % |
-| Long NOISY | 1.00 | 0.15 | 0.75 % |
-| Any DIRTY | any | **0.00** | **0 %** (ignored) |
-
-No single observation can swing a bucket more than 5 %.
-
-### Self-checking
-
-Smart Mode doesn't just predict — it verifies and corrects itself:
-
-| Capability | What it does |
-|:-----------|:-------------|
-| **Budget accuracy loop** | Grades its own battery forecast against actual drain (`budget_accuracy_score` 0–100), and when it misses the same way for 3 windows running, nudges the drain rate by a bounded ±12 % — pausing entirely overnight where the comparison is meaningless |
-| **Night-learner hygiene** | Rejects wake samples that land outside a plausible window, so one odd night (nap, travel) can't drag your learned schedule off |
-| **Honest quality verdict** | Vendor-clamp pressure is named the primary failure only when it clearly dominates — a hot game thermal-clamping is no longer mislabeled a "vendor war" |
-| **Cool Gaming** *(opt-in)* | Engages the predictive thermal lean earlier in games for a cooler profile, trading a little peak fps — off by default |
-
-### Confidence gate — habit suggests, math decides
-
-A bucket's influence depends on its **effective observations** and how recently it was seen:
-
-| Confidence | Effect |
-|:----------:|:-------|
-| < 0.35 | bucket ignored, baseline 50/50 blend |
-| 0.35 – 0.65 | soft blend (up to 40 % of bucket strength) |
-| ≥ 0.65 | bucket leads, but **never above balanced envelope** |
-
-Old data decays: full strength for 7 days, linear floor down to 30 % at 36 days, zero from day 37 onward. A bucket you stopped using will be politely forgotten rather than freezing your phone in a stale pattern.
-
-### Hierarchical fallback — never punished for missing data
-
-If your "Sunday evening" bucket has no data:
-
-1. exact `(EVE, weekend)` lookup
-2. fall back to `(EVE, *)` — try the weekday version
-3. fall back to **class** (evening-class buckets, averaged)
-4. fall back to **global** average across all populated buckets
-5. fall back to **safe default** (baseline behavior)
-
-Cold-start always lands somewhere reasonable.
-
-### Safety overlays — always above habit
-
-Two hard overrides that no learning can bypass:
-
-| Override | When it triggers | What it forces |
-|:---------|:-----------------|:---------------|
-| 🌙 **Night-safe override** | screen off + late hours + not charging + battery ≤ 60 % | `alpha_battery ≥ 0.70`, zero out `interactive_bonus`, raise `idle_bias` |
-| 🌡 **Thermal veto** | CPU ≥ 65 °C OR high vendor clamp activity OR recovery active | scale bucket confidence × 0.3, force `alpha_battery ≥ 0.70`, zero out `interactive_bonus` |
-
-**Habit may suggest. Thermal reality decides.**
-
-### Reversibility
-
-Smart Mode is fully reversible — turn it off and your previous manual profile is restored from `/data/adb/asb/smart_prev_profile`. Bucket learning data lives in `/data/adb/asb/buckets.bin` (+ `.bak` automatic backup) and survives module reinstall. Wipe it via the `reset` command if you want a clean start.
-
-```bash
-su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh status'
-su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh enable'
-su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh disable'
-su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh reset'
-```
-
-The WebUI exposes a Smart Mode button next to the three classic profiles with a live readout of the current bucket, daypart, confidence percentage, current `alpha_battery`, and whether any safety overlay is active.
-
----
-
-## 📊 Measured Performance
-
-<p align="center"><i>Every number below was measured on real hardware — primarily OnePlus 15, with OnePlus 13 and 12 in the test fleet — across multi-hour COD 144 fps sessions, overnight sleep, and typical mixed daytime use. No simulations, no bench-only data.</i></p>
-
-<table align="center">
-<tr><th colspan="2">🎮 Heavy Gaming (COD 144 fps, sustained load)</th></tr>
-<tr><td><b>Time spent in SUSTAINED</b></td><td align="center"><b>🟢 8.9 %</b> of session</td></tr>
-<tr><td><b>Longest SUSTAINED lock</b></td><td align="center"><b>🟢 &lt; 2 min</b> (FSM self-escapes)</td></tr>
-<tr><td><b>CPU temp — average under load</b></td><td align="center"><b>🟢 43.7 °C</b></td></tr>
-<tr><td><b>CPU temp — max observed</b></td><td align="center"><b>🟢 76 °C</b></td></tr>
-<tr><td><b>Surface hotspot — max</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
-<tr><td><b>Board temp — max</b></td><td align="center"><b>🟢 49 °C</b></td></tr>
-<tr><td><b>Thermal sensor binding drift</b></td><td align="center"><b>🟢 0 events</b></td></tr>
-<tr><td><b>Invalid/spike sensor reads</b></td><td align="center"><b>🟢 0 ticks</b> (cross-validated guard)</td></tr>
-</table>
-
-<table align="center">
-<tr><th colspan="2">🌙 Overnight Battery Sleep</th></tr>
-<tr><td><b>Outcome classification</b></td><td align="center"><b>🟢 clean_night</b></td></tr>
-<tr><td><b>Idle quality score</b></td><td align="center"><b>🟢 98 / 100</b></td></tr>
-<tr><td><b>Spurious wake events</b></td><td align="center"><b>🟢 0</b></td></tr>
-<tr><td><b>Bat trust level</b></td><td align="center"><b>🟢 CLEAN</b></td></tr>
-<tr><td><b>Drain over 7.5 h</b></td><td align="center"><b>🟢 &lt; 4 %</b></td></tr>
-</table>
-
----
-
-## 🏗️ Session Plan — Pre-Computed Policy
-
-Every event (screen toggle, profile change, band cross) builds a **12-field plan**. Hot path reads the answer instead of re-evaluating.
-
-| Field | Purpose |
-|:------|:--------|
-| `sensor_tier` | FULL / REDUCED / SPARSE polling |
-| `thermal_div` | Thermal read frequency |
-| `ac_eligible` | Anti-clamp on/off |
-| `ac_budget` | Max anti-clamp windows per session |
-| `deep_sleep` | Extended tick interval |
-| `plan_class` | Session type (7 classes) |
-
-**7 Plan Classes:** `IDLE_CLEAN` · `IDLE_NOISY` · `DAILY_ACTIVE` · `PERF_ACTIVE` · `PERF_CLAMPED` · `BENCHMARK` · `QUARANTINE`
-
----
-
-## ⚔️ Anti-Clamp System
-
-On Snapdragon 8 Elite Gen 5, the vendor thermal stack often clamps frequencies below requested caps. ASB fights back — with a budget.
-
-| Stage | Behavior | Duration |
-|:------|:---------|:---------|
-| 🔍 Detection | Dual-cluster gap monitoring | Continuous |
-| 💥 BURST | 3 aggressive dual-writes @ 2s | ~6s |
-| ⏸️ HOLD | Verify if writes stuck | 4s |
-| 🔙 BACKOFF | Wait, observe | 30s |
-| 🛑 FUTILITY | 2+ backoffs → stop fighting | Session-long |
-
-### Clamp-Stable Hold
-
-After futility: `clamp_hold = 1` → gap-triggered SUSTAINED **blocked** → FSM stops jittering.
-
-| Metric | Before | After |
-|:-------|:------:|:-----:|
-| FSM transitions/min | ~20 | **~0** |
-| Useless sysfs writes | hundreds/session | **near zero** |
-| Thermal safety | ✅ | ✅ (thermal entry preserved) |
-
-### Recovery Probe
-
-- **Dual-cluster**: reads policy0 AND policy6
-- **Debounced**: 2 consecutive good probes required
-- **Economy**: after 10min hold, probe every ~10min instead of ~5min
-- **Negative gap protection**: transient overshoot → clamped to 0
-
----
-
-## 🌪️ Storm Shield — Battery Ultra-Light
-
-When battery screen-off session is noisy (wake_cycles ≥ 5):
-
-| Normal | Storm Shield |
-|:------:|:------------:|
-| Thermal every tick | Every 5th tick (~50s) |
-| Headroom ON | **OFF** |
-| Anti-clamp per profile | **OFF** |
-| Self-tune active | **SKIP** |
-| 5s ticks | **10s** (deep sleep) |
-
-**Smart exit:** if noise calms for ~10min → shield auto-exits.
-**Re-arm hysteresis:** re-arm requires 3 new wakes + 2min cooldown.
-
----
-
-## 🧠 BG_TRIM — Smart Reclaim Engine (opt-in)
-
-When enabled at install, BG_TRIM runs in the background to reduce memory pressure **without killing apps**. Selective, app-aware, and respects foreground state.
-
-### Standby Bucket Strategy
-
-| App Group | Bucket | Trim Level | Memcg |
-|:----------|:------:|:----------:|:-----:|
-| Launcher, keyboard, dialer, camera, maps, SystemUI | (system) | **never** | `memory.low` (protect) |
-| Messengers (WhatsApp, Telegram, Signal, Viber, Messenger, Discord, Teams, WeChat) | **active** | **never** | `memory.low` (protect) |
-| Gallery, photo editors, music players | **working_set** | HIDDEN (screen-off only) | — |
-| Heavy social/media (Facebook, Instagram, Snapchat, TikTok, Netflix) | **rare** | BACKGROUND | `memory.high` (soft throttle) |
-
-### What BG_TRIM Does Not Do
-
-- ❌ Never trim foreground app (`dumpsys activity` top-app check)
-- ❌ Never set `persist.sys.oplus.high_performance=1` (contradicts the goal)
-- ❌ Never touch `memory.max` (kills apps)
-- ❌ Never throttle GMS / Play Store / Quick Search (handles its own scheduling)
-- ❌ No aggressive `device_idle_constants` (delays notifications)
-- ❌ No wildcard package matching (explicit lists only)
-
-### OxygenOS Athena Tuning
-
-- `persist.sys.oplus.athena.reclaim_enable=1` — allow reclaim
-- `persist.sys.oplus.athena.force_kill=0` — forbid outright kills
-- `persist.sys.oplus.athena.limit_count=120`
-- DeepThinker kept enabled (needed for AI Suggestions widget, 3D wallpaper)
-
-### Telemetry-Only Disable
-
-Only **4 pure analytics uploaders** are disabled: `com.oplus.midas`, `com.oplus.olc`, `com.oplus.crashbox`, `com.oplus.logkit`. Two telemetry HAL services stopped: `cammidasservice-V1`, `olc2-V3`. **No** ContentProviders, **no** IPC framework, **no** customization.
-
----
-
-## 🔑 Tencent Soter Auto-Fix
-
-WeChat, Alipay, and several Chinese banks use the Tencent Soter biometric protocol. On OnePlus global ROMs, the `vendor.soter` daemon often misbehaves after boot — losing fingerprint auth in those apps.
-
-ASB runs an automatic repair in the background after `sys.boot_completed=1`:
-
-```
-stop vendor.soter
-pm clear com.tencent.soter.soterserver
-start vendor.soter
-```
-
-Repeated for 5 minutes. Users without Tencent apps are unaffected — the loop is a no-op on devices without those packages.
-
----
-
-## 📊 Stock vs ASB — Verified Measurements
-
-> From real sysfs/procfs dumps on OnePlus 15 / 13 / 12
+Measured from real sysfs/procfs dumps on OnePlus 15 / 13 / 12.
 
 ### ⚡ Scheduler & CPU
 
-| Metric | Stock OxygenOS | ASB Balanced | Change |
-|:-------|:--------------:|:------------:|:------:|
-| `sched_util_clamp_min` | **1024** (all max) | **0** (real util) | −100% |
-| CPU idle freq capture | **2362 MHz** | **998 MHz** | **−58%** |
-| `dirty_expire` | 2s | 4s | **2× less I/O** |
-| `swappiness` | 100 | 20 | **5× less swap** |
-| `stat_interval` | 1s | 15s | **15× fewer wakeups** |
-| Debug services | 35 running | **35 stopped** | −100% |
+| Metric | Stock OxygenOS | ASB Balanced | |
+|:---|:---:|:---:|:---:|
+| `sched_util_clamp_min` | 1024 (pinned max) | 0 (real util) | **−100 %** |
+| CPU freq captured at idle | 2362 MHz | 998 MHz | **−58 %** |
+| `stat_interval` | 1 s | 15 s | **15× fewer wakeups** |
+| Debug services running | 35 | 0 | **−100 %** |
 
-### 🔋 Battery Impact
+### 🔋 Battery
 
 | Scenario | Stock | ASB Balanced | ASB Battery |
-|:---------|:-----:|:------------:|:-----------:|
-| Idle drain | ~55 mAh/h | ~32 mAh/h (**−40%**) | ~20 mAh/h (**−64%**) |
-| Night 8h | ~5–6% | ~3% (**−45%**) | ~1.5% (**−70%**) |
-| Light SOT | baseline | **+15–20%** | **+30–40%** |
+|:---|:---:|:---:|:---:|
+| Idle drain | ~55 mAh/h | ~32 mAh/h **−40 %** | ~20 mAh/h **−64 %** |
+| Overnight, 8 h | ~5–6 % | ~3 % **−45 %** | ~1.5 % **−70 %** |
+| Light screen-on time | baseline | **+15–20 %** | **+30–40 %** |
 
 ### 🌐 Network
 
 | Parameter | Stock | ASB |
-|:----------|:-----:|:---:|
-| TCP congestion | cubic | **BBR** |
-| TCP fastopen | 1 | **3** (client+server) |
-| `tcp_fin_timeout` | 60s | **20s** (3× faster) |
-| `tcp_slow_start_after_idle` | 1 (reset) | **0** (keep cwnd) |
+|:---|:---:|:---:|
+| TCP congestion | cubic | **BBR** where the kernel offers it, cubic otherwise |
+| TCP fastopen | 1 | **3** (client + server) |
+| `tcp_fin_timeout` | 60 s | **20 s** |
+| `tcp_slow_start_after_idle` | 1 (resets cwnd) | **0** (keeps it) |
 
----
-
-## 🎵 Audio Tweaks
-
-| Area | Stock | ASB |
-|:-----|:-----:|:---:|
-| Headphone bit depth | 16/24-bit | **32-bit** |
-| Processing | PCM 32-bit | **PCM Float** |
-| Max sample rate | 48 kHz | **192 kHz** |
-| Digital volume | 80–87/128 | **88/128** (+1–2 dB) |
-| DRC compressor | ON | **OFF** (cleaner) |
-| Codec complexity | 7–9/10 | **10/10** |
-| BT A2DP max | 96 kHz | **192 kHz** |
-| LHDC quality | default | **best** |
-| LHDC version | default | **5** |
-| Audio offload | partial | **full** (AAC/ALAC/FLAC/Opus/WMA) |
-| Absolute volume | per-device | **forced enable** |
-
----
-
-## 📷 Camera Tweaks
+### 📷 Camera
 
 | Feature | Stock | ASB |
-|:--------|:-----:|:---:|
-| MFNR (multi-frame noise reduction) | limited | **enabled** |
-| EIS (stabilization) | default | **enabled** |
-| SAT fallback distance | stock | **2.0m** |
-| HFR capture | default | **enabled** |
-| Fast AF | default | **enabled** |
+|:---|:---:|:---:|
+| MFNR multi-frame NR | limited | **enabled** |
+| EIS stabilization | default | **enabled** |
+| HFR capture · fast AF | default | **enabled** |
+| SAT fallback distance | stock | **2.0 m** |
+| Tone / retouch tuning | stock | **device-native, patched from your own files** |
 
 ---
 
-## 🔧 Kernel & System Tweaks
+## 🛡 Safety
 
-### Scheduler (WALT)
-
-| Parameter | What it does | ASB value |
-|:----------|:-------------|:----------|
-| `sched_ravg_window` | CPU utilization window | Profile-dependent (8–32ms) |
-| `sched_util_clamp_min` | Minimum task boosting | **0** (remove forced boosting) |
-| `sched_idle_enough` | Idle detection threshold | **45%** (+50% vs stock) |
-| `sched_busy_hyst_ns` | Busy hysteresis | **0** (re-applied every cycle) |
-| `sched_schedstats` | Scheduler statistics overhead | **OFF** |
-
-### VM & Memory
-
-| Parameter | Balanced | Battery | Performance |
-|:----------|:--------:|:-------:|:-----------:|
-| `swappiness` | 35 | 100 | 12 |
-| `dirty_expire_centisecs` | 6000 | 240000 | 1000 |
-| `dirty_writeback_centisecs` | 4000 | 240000 | 800 |
-| `vfs_cache_pressure` | 80 | 400 | 30 |
-| `page-cluster` | 1 | 3 | 0 |
-| `stat_interval` | 30 | 240 | 8 |
-| `min_free_kbytes` | 32768 | 114688 | 32768 |
-| `compaction_proactiveness` | 10 | 20 | 0 |
-| `lru_gen` (if writable) | 7 | 7 | 7 |
-
-### I/O
-
-| Parameter | ASB |
-|:----------|:----|
-| Scheduler | `none` (direct dispatch) |
-| `read_ahead_kb` | 128 |
-| `iostats` | **OFF** |
-| `add_random` | **OFF** |
-| `rq_affinity` | 2 (strict CPU) |
-| `nr_requests` | 64 |
-
-### Network
-
-| Parameter | ASB |
-|:----------|:----|
-| TCP congestion | **BBR** |
-| Queue discipline | **fq_codel** |
-| TCP fastopen | **3** (full) |
-| `tcp_fin_timeout` | 20s |
-| `tcp_notsent_lowat` | 128KB |
-| `rmem_max` / `wmem_max` | 16MB |
+- Every tweak is **reversible** — uninstall restores stock, nothing is written to a real partition
+- **Boot guard**: 1 or 3 strikes depending on tier — a failed boot removes the overlay *before* the module mounts
+- **Thermal protection is never overridden**: the junction hard-limit and the writer's thermal cap always apply, even when a feature relaxes the soft battery lean
+- **Config survives updates**: your WebUI settings, active profile and everything Smart Mode has learned live outside the module directory and are carried over key by key
 
 ---
 
-## 📝 Log Reduction
+## 🩺 Diagnostics & commands
 
-ASB stops **35+ debug/diagnostic services** at boot:
-
-| Category | Services stopped |
-|:---------|:----------------|
-| Crash dumps | `debuggerd`, `tombstoned`, `minidump`, `minidump32`, `minidump64` |
-| Vendor diag | `cnss_diag`, `qseelogd`, `tcpdump`, `charge_logger` |
-| Telemetry | `midasd`, `mqsasd`, `ostatsd`, `bootstat` |
-| IMS debug | All IMS debug/log props disabled |
-| Radio logs | `radio.adb_log_on=0`, `log_loc=0` |
-| Kernel | `printk` set to `0 0 0 0` |
-
-**Result:** less CPU wakeups, less I/O, less battery drain from background logging.
-
----
-
-## 🩺 Diagnostics
-
-| Tool | Purpose |
-|:-----|:--------|
-| `asb_doctor.sh` | Health check: HEALTHY / DEGRADED / UNHEALTHY / SOURCE_TREE |
-| `session_history.jsonl` | Full session history (last 10, 30+ fields each) |
-| `pstats_*.json` | Persistent memory per profile |
-| `asb_session_report.py` | Detailed markdown report with trends |
-| `asb_compare_sessions.py` | Side-by-side session comparison |
-| `asb_analyze.py` | Governor log analysis |
-
----
-
-## 🔧 Commands
-
-Run as root (`su -c` from any terminal — Termux, ADB shell, root file manager terminal):
+Tap **Action** in the module list for live status: governor state, battery lean,
+learning confidence, temperatures, time-to-empty, audio, camera, memory, network — and a
+**NOT APPLIED** section that checks the system for evidence each setting actually landed
+and lists only what did not.
 
 ```bash
-su -c 'asb status'                          # JSON status
-su -c 'asb profile:performance'             # switch profile live
-su -c 'asb start-session:performance:auto'  # profile + session mode + reset
-su -c 'asb reload'                          # re-read config
-su -c 'cat /dev/.asb/state'                 # state snapshot
-su -c 'tail -f /dev/.asb/governor.log'      # live log
+su -c 'asb status'                # JSON status
+su -c 'asb profile:performance'   # switch profile live
+su -c 'asb reload'                # re-read config
+su -c 'asbdiag'                   # full system report → /sdcard/asb_diag_report.txt
+su -c 'tail -f /dev/.asb/governor.log'
 ```
 
-The `asb` binary is exposed through `/system/bin/asb` (a small wrapper that forwards to the module's binary at `/data/adb/modules/AutoSystemBoost/bin/asb`). The governor needs root to run, so all `asb` commands must be invoked via `su`. The wrapper is created automatically by the module — no PATH setup needed.
+| Tool | Purpose |
+|:---|:---|
+| `asbdiag` | Full PASS/FAIL report of what is actually live |
+| `asb_doctor.sh` | Health check: HEALTHY / DEGRADED / UNHEALTHY |
+| `session_history.jsonl` | Last 10 sessions, 30+ fields each |
+| `asb_session_report.py` | Markdown report with trends |
 
 ---
 
-## 💾 Config Persistence
+## ⭐ Support
 
-Your settings survive reinstalls and updates — nothing resets when you flash a new version.
-
-- **WebUI toggles & sliders** (aggressive audio/camera, Cool Gaming, Smart Battery Bias, background trim, UX management, …) live in `config/governor.conf`. On every reinstall the installer carries your saved values over the freshly-shipped defaults, key by key — your choices win, brand-new keys for the version are introduced cleanly.
-- **Active profile** (`performance` / `balanced` / `battery` / `smart`) is mirrored to `/data/adb/asb/active_profile`, **outside** the module directory, and restored at boot.
-- **Smart mode state and everything it has learned** — your time-of-day buckets, session history, battery-budget model — live under `/data/adb/asb/`, also outside the module, so an update never makes Smart re-learn from scratch.
-
-Flash an update straight over the top and reboot; every setting and all learned data come back.
-
----
-
-## 🎯 Action Button — Live Status
-
-Tap **Action** in the module list (Magisk/KSU) for an instant readout:
-
-```
-  ASB · battery
-
-  🌡  CPU      : 39°C
-  🔋 Battery  : 31.5°C   78%
-
-  Estimated time to 0%:
-    📱 screen on  : ~9h 22m
-    💤 screen off : ~75h 0m
-
-  Opening Telegram channel...
-```
-
-CPU temp, battery temp + level, time-to-empty estimates (screen on / screen off, calibrated per profile). Then automatically opens the support channel.
-
----
-
-## ⭐ Support the Project
-
-- ⭐ Star the repository
+- ⭐ Star the repository · 🐛 report issues on GitHub
 - 💬 [Telegram](https://t.me/DKomsomol)
-- 🐛 Report issues on GitHub
-
-### 💖 Donate
-
-If ASB makes your device better, consider supporting development:
 
 <p align="center">
   <a href="https://paypal.me/lugaru46">
@@ -676,7 +265,8 @@ If ASB makes your device better, consider supporting development:
 
 ## ⚠️ Disclaimer
 
-This module modifies system behavior. Use at your own risk. All tweaks are **safe and reversible** — uninstalling restores stock.
+This module modifies system behaviour. Use at your own risk. All tweaks are safe and
+reversible — uninstalling restores stock.
 
 ---
 
