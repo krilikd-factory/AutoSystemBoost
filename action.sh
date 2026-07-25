@@ -485,6 +485,17 @@ fi
 echo "$_sysl"
 
 
+_lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null)"
+if [ -n "$_lpm" ] && [ "$(_feat LPM)" = "1" ]; then
+  echo ""
+  echo "  📶  MODEM LPM"
+  case "$_lpm" in
+    fast) echo "       fast — data call held up (low latency)" ;;
+    save) echo "       save — radio idling, keepalives stretched" ;;
+    *)    echo "       normal — profile defaults" ;;
+  esac
+fi
+
 _cam_hold="$(_st camera_hold)"
 if [ "$_cam_hold" = "1" ]; then
   echo ""
