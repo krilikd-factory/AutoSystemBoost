@@ -3,6 +3,11 @@ name: ASB · Build Debug
 on:
   workflow_dispatch:
 
+# Debug only ever uploads an artifact, so read is all it needs - declared explicitly so
+# the job does not silently inherit whatever the repository default happens to be.
+permissions:
+  contents: read
+
 jobs:
   build-debug:
     runs-on: ubuntu-latest
@@ -198,7 +203,7 @@ jobs:
 
       - name: Package DEBUG zip
         run: |
-          PKG_DBG="$PWD/.pkg-debug"
+          PKG_DBG="$PWD/pkg-debug"
           rm -rf "$PKG_DBG"
           mkdir -p "$PKG_DBG"
 
@@ -206,7 +211,7 @@ jobs:
             --exclude '.git'                          \
             --exclude '.github'                       \
             --exclude 'android-ndk*'                  \
-            --exclude '.pkg-*'                        \
+            --exclude 'pkg-*'                        \
             --exclude '*.zip'                         \
             --exclude '__MACOSX'                      \
             --exclude '*.DS_Store'                    \
@@ -334,11 +339,13 @@ jobs:
           done
           echo "DEBUG zip validation passed"
 
-      - name: Upload debug artifact
+      # Directory, not zip - see the matching note in build-release.yml. A tester chasing
+      # a bug should be able to flash the download, not unpack it first.
+      - name: Upload debug artifact (flashable, not double-zipped)
         uses: actions/upload-artifact@v4
         with:
           name: ASB-${{ env.ASB_VER }}-debug
-          path: ${{ env.ZIP_DBG }}
+          path: pkg-debug/
           retention-days: 30
 
       - name: Build summary

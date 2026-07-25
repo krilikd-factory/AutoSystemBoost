@@ -8,6 +8,16 @@ on:
   release:
     types: [published]
 
+# Without this the job inherits the repository default, which on most repos is a
+# READ-ONLY GITHUB_TOKEN. The build then succeeds all the way through - zip built,
+# validated, artifact uploaded - and only the final "Attach to GitHub release" step
+# fails with "Resource not accessible by integration", marking the whole run red for a
+# release that was in fact built correctly. That is exactly what happened on the V60
+# run: the log shows "Found release ASB-V60" (read OK) followed by a 403 on the update.
+# contents: write is the least privilege that lets the step attach an asset.
+permissions:
+  contents: write
+
 jobs:
   build-release:
     runs-on: ubuntu-latest
@@ -204,7 +214,7 @@ jobs:
 
       - name: Package RELEASE zip
         run: |
-          PKG_REL="$PWD/.pkg-release"
+          PKG_REL="$PWD/pkg-release"
           rm -rf "$PKG_REL"
           mkdir -p "$PKG_REL"
 
@@ -212,7 +222,7 @@ jobs:
             --exclude '.git'                          \
             --exclude '.github'                       \
             --exclude 'android-ndk*'                  \
-            --exclude '.pkg-*'                        \
+            --exclude 'pkg-*'                        \
             --exclude '*.zip'                         \
             --exclude '__MACOSX'                      \
             --exclude '*.DS_Store'                    \
@@ -341,11 +351,23 @@ jobs:
           done
           echo "RELEASE zip validation passed"
 
-      - name: Upload release artifact
+      # Upload the package CONTENTS, not the packaged zip. actions/upload-artifact always
+      # wraps what it is given in an artifact zip of its own, so passing ASB-V61.zip gave
+      # you ASB-V61.zip containing ASB-V61.zip - every download needed unpacking by hand
+      # before it could be flashed. Pointing at the directory makes the artifact root the
+      # module root, so the file GitHub hands back IS the flashable module. The staging
+      # directory is deliberately NOT dot-prefixed any more: upload-artifact@v4 drops
+      # hidden files unless include-hidden-files is set, and a hidden root is exactly the
+      # kind of thing that silently ships an empty artifact.
+      #
+      # Artifact zips do not carry the executable bit, which is fine here: customize.sh
+      # and common/install.sh set every mode they need (bin/asb, bin/asb_dsp_attach,
+      # system/bin/*, runtime/*.sh, tools/*.sh) during installation.
+      - name: Upload release artifact (flashable, not double-zipped)
         uses: actions/upload-artifact@v4
         with:
           name: ASB-${{ env.ASB_VER }}
-          path: ${{ env.ZIP_REL }}
+          path: pkg-release/
           retention-days: 30
 
       - name: Attach to GitHub release
