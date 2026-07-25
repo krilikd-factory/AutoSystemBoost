@@ -142,7 +142,11 @@ asb_update_desc() {
   rm -f "$MODDIR/module.prop.tmp"
 }
 sysctlw() {
-  k="$1"; v="$2"
+  # local, not globals. This function is shadowed by profile_core.sh's version today
+  # purely because service.sh sources that one second - flip the sourcing order and
+  # this one starts clobbering any caller variable named k, v or p, which is a very
+  # quiet way to break a loop.
+  local k="$1" v="$2" p
   if has sysctl; then
     sysctl -w "$k=$v" >/dev/null 2>&1 && return 0
   fi

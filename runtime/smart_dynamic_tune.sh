@@ -39,30 +39,93 @@ if [ -w /sys/kernel/mm/lru_gen/enabled ]; then
   esac
 fi
 
-# VM dirty ratios — favour aggressive flushing on screen-off + cool device
-# so writeback completes during idle and doesn't bite during the next session.
-if [ "$SCREEN" = "0" ]; then
-  writef /proc/sys/vm/dirty_ratio 40
-  writef /proc/sys/vm/dirty_background_ratio 10
-  writef /proc/sys/vm/laptop_mode 1
-else
-  writef /proc/sys/vm/laptop_mode 0
-  case "$HINT" in
-    4|3)
-      writef /proc/sys/vm/dirty_ratio 5
-      writef /proc/sys/vm/dirty_background_ratio 2 ;;
-    *)
-      writef /proc/sys/vm/dirty_ratio 20
-      writef /proc/sys/vm/dirty_background_ratio 5 ;;
-  esac
+# The camera guard owns the VM knobs while a capture is streaming: it lowers
+# swappiness for the duration and restores exactly what it found. Writing here at the
+# same time both defeats the guard AND leaves the guard restoring a stale value over
+# whatever this script set. The hold forces the FSM to HEAVY, which changes app_hint,
+# which is precisely what triggers this script - so the collision was the common case,
+# not the rare one. Leave the VM section alone until the guard releases.
+_cam_guard=0
+[ -f /dev/.asb/camera_guard ] && _cam_guard=1
+
+# VM dirty limits — favour aggressive flushing on screen-off + cool device so writeback
+# completes during idle and doesn't bite during the next session.
+#
+# dirty_ratio and dirty_bytes are MUTUALLY EXCLUSIVE in the kernel: writing one zeroes
+# the other (mm/page-writeback.c). service.sh's apply_vm deliberately picks the BYTES
+# family where the device offers it - it even zeroes the ratios on purpose to switch
+# modes - so writing ratios here silently destroyed the profile's byte limits on the
+# first tuner run and reverted the device to the percentage model. Whichever family is
+# actually in force is now the one this script writes.
+_dirty_mode="ratio"
+if [ -r /proc/sys/vm/dirty_bytes ]; then
+  _db_cur="$(cat /proc/sys/vm/dirty_bytes 2>/dev/null)"
+  case "$_db_cur" in ''|0) : ;; *) _dirty_mode="bytes" ;; esac
 fi
 
-# Swappiness — light apps tolerate compressed pages; gaming wants files in RAM.
-case "$HINT" in
-  4) writef /proc/sys/vm/swappiness 60  ;;
-  3) writef /proc/sys/vm/swappiness 80  ;;
-  *) writef /proc/sys/vm/swappiness 90  ;;
-esac
+if [ "$_cam_guard" = "0" ]; then
+  if [ "$SCREEN" = "0" ]; then
+    if [ "$_dirty_mode" = "bytes" ]; then
+      writef /proc/sys/vm/dirty_bytes 268435456
+      writef /proc/sys/vm/dirty_background_bytes 67108864
+    else
+      writef /proc/sys/vm/dirty_ratio 40
+      writef /proc/sys/vm/dirty_background_ratio 10
+    fi
+    writef /proc/sys/vm/laptop_mode 1
+  else
+    writef /proc/sys/vm/laptop_mode 0
+    case "$HINT" in
+      4|3) _dr=5;  _dbr=2  ; _dby=33554432;  _dbby=8388608  ;;
+      *)   _dr=20; _dbr=5  ; _dby=134217728; _dbby=33554432 ;;
+    esac
+    if [ "$_dirty_mode" = "bytes" ]; then
+      writef /proc/sys/vm/dirty_bytes "$_dby"
+      writef /proc/sys/vm/dirty_background_bytes "$_dbby"
+    else
+      writef /proc/sys/vm/dirty_ratio "$_dr"
+      writef /proc/sys/vm/dirty_background_ratio "$_dbr"
+    fi
+  fi
+fi
+
+# Swappiness — NUDGE the profile's value, never replace it.
+#
+# This used to write a flat 60/80/90 for every scenario, which overrode the profile
+# outright: performance asks for 12 and got 60, balanced asks for 35 and got 90. The
+# user's memory setting was meaningless in Smart Mode and the action screen reported a
+# live value nobody had chosen - which is exactly what the field reports showed. The
+# old comment ("gaming wants files in RAM") also argued for the opposite of what the
+# numbers did: a LOWER swappiness reclaims file cache first, so 60 for gaming evicted
+# more cache than 90 did for idle.
+#
+# The profile owns the baseline. Screen-off and idle can afford to lean harder on zram
+# because nothing is waiting on a page; gaming and heavy pull the other way so a fault
+# on the hot path is less likely. The nudge is bounded and clamped to 0..100.
+if [ "$_cam_guard" = "0" ]; then
+  _prof="$(cat /data/adb/asb/active_profile 2>/dev/null)"
+  [ -n "$_prof" ] || _prof="$(cat /data/adb/modules/AutoSystemBoost/current_profile 2>/dev/null)"
+  case "$_prof" in
+    performance|battery) : ;;
+    *) _prof="balanced" ;;   # smart blends battery<->balanced; balanced is its baseline
+  esac
+  _base="$(grep -E '^VM_SWAPPINESS=' "/data/adb/modules/AutoSystemBoost/profiles/${_prof}.sh" \
+           2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_base" in ''|*[!0-9]*) _base=35 ;; esac
+
+  if [ "$SCREEN" = "0" ]; then
+    _swp=$((_base + 20))
+  else
+    case "$HINT" in
+      4|3) _swp=$((_base - 10)) ;;
+      1|0) _swp=$((_base + 10)) ;;
+      *)   _swp=$_base ;;
+    esac
+  fi
+  [ "$_swp" -lt 0 ]   && _swp=0
+  [ "$_swp" -gt 100 ] && _swp=100
+  writef /proc/sys/vm/swappiness "$_swp"
+fi
 
 # Thermal back-off: when bucket=2 (hot), force shorter readahead and shallower
 if [ "$THERM" = "2" ]; then
