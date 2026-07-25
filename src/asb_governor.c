@@ -5022,6 +5022,32 @@ int main(int argc, char **argv) {
 
             writer_camera_guard(metrics.misc.camera_active);
 
+            /* Modem LPM. The policy is about what the device is DOING, not which
+             * profile is selected, so it lives here rather than in the Smart tick:
+             * an online match wants the data call hot because coming back from an
+             * idle radio state is the latency spike that costs the round, and a
+             * sleeping phone wants the opposite. Rate-limited and only on a real
+             * change of mode; the script itself checks the LPM feature flag and
+             * no-ops (restoring its baseline) when the user turned it off. */
+            {
+                const char *lpm_mode =
+                    !metrics.misc.screen_on                 ? "save" :
+                    (fsm.state >= ASB_STATE_HEAVY)          ? "fast" : "normal";
+                static const char *g_lpm_last = NULL;
+                static time_t g_lpm_last_ts = 0;
+                time_t lpm_now = time(NULL);
+                if (lpm_mode != g_lpm_last && (lpm_now - g_lpm_last_ts) >= 15) {
+                    char lcmd[192];
+                    snprintf(lcmd, sizeof(lcmd),
+                             "/data/adb/modules/AutoSystemBoost/runtime/asb_lpm.sh %s"
+                             " >/dev/null 2>&1 &", lpm_mode);
+                    int _lrc = system(lcmd);
+                    (void)_lrc;
+                    g_lpm_last    = lpm_mode;
+                    g_lpm_last_ts = lpm_now;
+                }
+            }
+
             int changed = fsm_update(&fsm, &metrics);
 
             /* rebuild plan on state band cross (idle<->active<->heavy) */
