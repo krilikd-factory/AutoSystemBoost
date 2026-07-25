@@ -319,12 +319,44 @@ asb_migrate_governor_conf
         _att_how="linker64"
       fi
       echo "ts=$(date +%s) action=dsp_attach_started via=$_att_how" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
-      # Publish the vendor-namespace copies of the DSP properties the effect reads. This
-      # uses "mirror", not "dsp": at this point in boot the overlay carrying libasbdsp.so
-      # is not mounted yet, and the normal path would read that as "library missing" and
-      # write enable=0, turning the DSP off on every boot.
-      [ -f "$MODDIR/runtime/asb_audio_apply.sh" ] && \
-        sh "$MODDIR/runtime/asb_audio_apply.sh" mirror >/dev/null 2>&1
+      # Publish the DSP properties the effect reads.
+      #
+      # "mirror" only republishes what the property store already holds, and that is the
+      # right thing while the overlay is still coming up - computing from config there
+      # would read the missing library as "needs reboot" and write enable=0 on every
+      # boot. But mirror can only mirror something: after a FIRST install nothing has
+      # ever written persist.asb.dsp.enable, because the compute path lives in the
+      # on-demand WebUI script. So a fresh device with dsp_loudness set at install time
+      # came up with the effect registered, the library live, and enable never set -
+      # reported from the field as "persist.asb.dsp.enable is not 1" on a working DSP.
+      #
+      # By this point boot is complete and the overlay is up, so if the library is
+      # actually visible we can compute for real. "dsp" mode hands the value to the
+      # attach daemon over binder, so there is no audioserver restart and no drop-out.
+      # Self-heal the volume table. If media_loudness asks for a reshape and the
+      # overlay copy does not carry our marker, the file was never built for the
+      # current setting - rebuild it now so the NEXT boot is correct instead of
+      # waiting for a reinstall nobody knows to perform.
+      _vt_want="$(grep -E '^[[:space:]]*media_loudness=' "$MODDIR/config/governor.conf" 2>/dev/null \
+                  | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
+      case "$_vt_want" in
+        mild|strong|max)
+          if ! grep -q 'ASB:VOLCURVE' "$MODDIR/system/vendor/etc/default_volume_tables.xml" 2>/dev/null; then
+            [ -f "$MODDIR/runtime/asb_media_apply.sh" ] && \
+              sh "$MODDIR/runtime/asb_media_apply.sh" >/dev/null 2>&1
+            asb_log "media_loudness=$_vt_want: overlay volume table rebuilt, active next boot"
+          fi
+          ;;
+      esac
+
+      if [ -f "$MODDIR/runtime/asb_audio_apply.sh" ]; then
+        if { [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; } \
+           && [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" != "1" ]; then
+          sh "$MODDIR/runtime/asb_audio_apply.sh" dsp >/dev/null 2>&1
+        else
+          sh "$MODDIR/runtime/asb_audio_apply.sh" mirror >/dev/null 2>&1
+        fi
+      fi
     fi
   fi
 ) >/dev/null 2>&1 &

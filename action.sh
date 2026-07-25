@@ -309,6 +309,17 @@ if [ "$_a_dsp" != "off" ]; then
   [ -f /vendor/lib64/soundfx/libasbdsp.so ] && _l64="✓"
   [ -f /vendor/lib/soundfx/libasbdsp.so ] && _l32="✓"
   echo "       libasbdsp: 64-bit ${_l64}  ·  32-bit ${_l32}"
+  for _ecs in /odm/etc/audio_effects_config.xml /odm/etc/audio_effects.xml \
+              /vendor/etc/audio_effects_config.xml /vendor/etc/audio_effects.xml \
+              /vendor/odm/etc/audio_effects_config.xml \
+              /system/etc/audio_effects_config.xml \
+              /vendor/etc/audio/sku_*/audio_effects_config.xml \
+              /odm/etc/audio/sku_*/audio_effects_config.xml; do
+    if grep -q 'asb_loudness' "$_ecs" 2>/dev/null; then
+      echo "       effect registered in: ${_ecs}"
+      break
+    fi
+  done
 fi
 
 echo ""
@@ -435,9 +446,26 @@ for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
   fi
 done
 [ -n "$_catline" ] && echo "       ${_catline}"
+# Magisk does its magic mounts in a private namespace, so /proc/mounts read from
+# here shows zero entries for the module even when the overlay is perfectly live -
+# on KernelSU the same grep finds them. Printing a bare "0 mounts" therefore looked
+# like a broken install on every Magisk device. Probe a file the overlay actually
+# delivers and report what that says instead; fall back to the count where the
+# namespace does expose it.
 _mnt="$(grep -c 'AutoSystemBoost' /proc/mounts 2>/dev/null)"
+case "$_mnt" in ''|*[!0-9]*) _mnt=0 ;; esac
+_ovl_live=0
+for _op in /vendor/lib64/soundfx/libasbdsp.so /vendor/lib/soundfx/libasbdsp.so; do
+  [ -f "$_op" ] && { _ovl_live=1; break; }
+done
 _krn="$(uname -r 2>/dev/null | cut -d- -f1)"
-_sysl="       overlay: ${_mnt:-0} mount$([ "${_mnt:-0}" = "1" ] || echo s)"
+if [ "$_mnt" -gt 0 ] 2>/dev/null; then
+  _sysl="       overlay: ${_mnt} mount$([ "$_mnt" = "1" ] || echo s)"
+elif [ "$_ovl_live" = "1" ]; then
+  _sysl="       overlay: live (private namespace)"
+else
+  _sysl="       overlay: not detected"
+fi
 [ -n "$_krn" ] && _sysl="${_sysl}  ·  kernel ${_krn}"
 _up="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
 if [ -n "$_up" ]; then
@@ -486,9 +514,15 @@ if [ "$_a_dsp" != "off" ]; then
   # bind mount is what makes it the live file. Patched-but-not-bound means the mount
   # was skipped (bootloop fuse, or the boot counter tripped); not-patched-at-all means
   # install never ran the registration. Report which one it is.
+  # Search order mirrors where the installer can put the registration, plus the two
+  # locations that were missing here and produced a "not registered" verdict on a
+  # device where it simply looked in the wrong places: /system/etc (AOSP's last
+  # resort) and /vendor/odm/etc (read by some models instead of /odm).
   _reg_live=0; _reg_stage=0
-  for _ec in /odm/etc/audio_effects_config.xml /vendor/etc/audio_effects_config.xml \
-             /vendor/etc/audio_effects.xml \
+  for _ec in /odm/etc/audio_effects_config.xml /odm/etc/audio_effects.xml \
+             /vendor/etc/audio_effects_config.xml /vendor/etc/audio_effects.xml \
+             /vendor/odm/etc/audio_effects_config.xml \
+             /system/etc/audio_effects_config.xml \
              /vendor/etc/audio/sku_*/audio_effects_config.xml \
              /odm/etc/audio/sku_*/audio_effects_config.xml; do
     grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg_live=1; break; }
@@ -514,6 +548,7 @@ if [ "$_a_dsp" != "off" ]; then
   fi
   [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] \
     || _add_bad "DSP +${_a_dsp} dB — persist.asb.dsp.enable is not 1"
+
 fi
 
 # blur -> report WHICH properties took, not just that something did not.
