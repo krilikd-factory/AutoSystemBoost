@@ -246,6 +246,10 @@ jobs:
             "runtime/profile_core.sh" \
             "runtime/asb_baseline.sh" \
             "runtime/asb_utils.sh" \
+            "runtime/asb_audio_apply.sh" \
+            "runtime/asb_volume_curves.sh" \
+            "runtime/asb_media_apply.sh" \
+            "runtime/asb_blur_apply.sh" \
             "profiles/battery.sh" \
             "profiles/balanced.sh" \
             "profiles/performance.sh" \
