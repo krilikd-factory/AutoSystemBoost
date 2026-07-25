@@ -1135,63 +1135,18 @@ asb_guard_v4a_effects() {
 #
 # The 100%/0 dB point is never raised above unity, so nothing can clip.
 # $1 = file to patch, $2 = scale percent (100 = stock/no-op, 80 = mild, 65 = strong)
-asb_reshape_volume_curves() {
-  [ -f "$1" ] || return 0
-  case "$2" in ''|100) return 0 ;; esac
-  grep -q 'ASB:VOLCURVE' "$1" 2>/dev/null && return 0
-  awk -v pct="$2" -v targets='|DEFAULT_MEDIA_VOLUME_CURVE|DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE|' '
-  BEGIN { cur = 0 }
-  {
-    line = $0
-    if (match(line, /<reference[ \t]+name="[^"]+"/)) {
-      seg = substr(line, RSTART, RLENGTH)
-      match(seg, /name="[^"]+"/)
-      nm = substr(seg, RSTART + 6, RLENGTH - 7)
-      cur = (index(targets, "|" nm "|") > 0) ? 1 : 0
-    } else if (line ~ /<\/reference>/) {
-      cur = 0
-    } else if (cur && match(line, /<point>[0-9]+,-[0-9]+<\/point>/)) {
-      p = substr(line, RSTART, RLENGTH)
-      match(p, />[0-9]+,/);  idx = substr(p, RSTART + 1, RLENGTH - 2)
-      match(p, /,-[0-9]+</); mb  = substr(p, RSTART + 1, RLENGTH - 2)
-      # Position-weighted, not flat. Scaling every point by the same factor lifts the
-      # BOTTOM of the curve hardest in dB terms: at "strong" the 1% step went from
-      # -58 dB to -37.7 dB, i.e. +20 dB on the quietest setting the slider has. That
-      # ruins quiet listening and buys nothing - nobody is short of volume at 1%. The
-      # weight ramps in over the first 40% of travel, so the full boost lands across
-      # the range people actually listen at (roughly 40-80%) while the bottom of the
-      # slider stays where stock put it. 100%/0 dB is untouched either way: that is
-      # unity, and raising it would just clip. Gain above unity is what dsp_loudness is for.
-      w = (idx + 0) / 40.0
-      if (w > 1) w = 1
-      f = 1 - ((100 - pct) / 100.0) * w
-      nv = int((mb + 0) * f)
-      sub(/<point>[0-9]+,-[0-9]+<\/point>/, "<point>" idx "," nv "</point>", line)
-    }
-    print line
-  }
-  END { }
-  ' "$1" > "$1.vctmp" 2>/dev/null || { rm -f "$1.vctmp"; return 0; }
-  [ -s "$1.vctmp" ] || { rm -f "$1.vctmp"; return 0; }
-  printf '<!-- ASB:VOLCURVE:%s -->\n' "$2" >> "$1.vctmp"
-  mv -f "$1.vctmp" "$1" 2>/dev/null
-}
+# The reshape itself and the pristine-stock lookup live in runtime/asb_volume_curves.sh
+# so the installer and the runtime path (WebUI -> asb_media_apply.sh) share ONE
+# implementation. They used to exist only here, which is why changing media_loudness
+# after install did nothing no matter how many times the phone was rebooted.
+if [ -r "$MODPATH/runtime/asb_volume_curves.sh" ]; then
+  . "$MODPATH/runtime/asb_volume_curves.sh"
+fi
 
 # Media loudness needs to be patched from a PRISTINE stock copy, because scaling is
 # not idempotent and the previous install's overlay may already be shadowing
 # /vendor/etc. Stash the untouched stock table on first sight and always rebuild
 # from that, so changing the setting (or reverting to stock) is exact.
-asb_volume_table_src() {
-  _vt_live="/vendor/etc/default_volume_tables.xml"
-  [ -f "$_vt_live" ] || return 1
-  _vt_stash="/data/adb/asb/stock/default_volume_tables.xml"
-  if [ ! -f "$_vt_stash" ]; then
-    grep -q 'ASB:VOLCURVE' "$_vt_live" 2>/dev/null && return 1
-    mkdir -p /data/adb/asb/stock 2>/dev/null
-    cp -f "$_vt_live" "$_vt_stash" 2>/dev/null || return 1
-  fi
-  printf '%s' "$_vt_stash"
-}
 
 # --- ASB DSP effect -----------------------------------------------------------
 # Installs libasbdsp.so into the /vendor overlay and registers it in the device's
@@ -1411,12 +1366,7 @@ asb_patch_audio_inplace() {
     *)      _mlpct=100 ;;
   esac
   if [ "$_mlpct" != "100" ]; then
-    _vtsrc="$(asb_volume_table_src)"
-    if [ -n "$_vtsrc" ] && [ -f "$_vtsrc" ]; then
-      _vtd="$MODPATH/system/vendor/etc/default_volume_tables.xml"
-      mkdir -p "$MODPATH/system/vendor/etc" 2>/dev/null
-      cp -f "$_vtsrc" "$_vtd" 2>/dev/null
-      asb_reshape_volume_curves "$_vtd" "$_mlpct"
+    if asb_volume_curves_build "$MODPATH" "$_mlpct"; then
       case "$_ml" in
         mild)   ui_print "      + ${ASB_D_LOUD:-media loudness}: mild (~+3 dB ${ASB_D_LOUD_AT:-at mid volume})" ;;
         strong) ui_print "      + ${ASB_D_LOUD:-media loudness}: strong (~+6 dB ${ASB_D_LOUD_AT:-at mid volume})" ;;
@@ -1663,6 +1613,53 @@ asb_generate_odm_binds() {
 #
 # asb_register_dsp_effect strips its own lines before re-adding them, so every
 # path here is idempotent across reinstalls and upgrades.
+# Deliver the patched camera configs through the /odm runtime bind.
+#
+# The camera tone and the retouch app list are staged into the module overlay at
+# BOTH system/vendor/odm/etc/camera and system/odm/etc/camera, and the second of
+# those only ever becomes live if the root manager happens to magic-mount the odm
+# tree. Under Magisk on a device with a real /odm partition it does not, so the
+# camera kept reading its stock files: reported from the field on a CPH2745 with
+# every camera check failing at once - retouch list still 4 apps, the tone keys
+# still at their stock values, and the config still carrying the // comments our
+# patcher strips. The audio side of exactly this problem was already solved with
+# the fuse-guarded runtime bind; the camera files were simply never added to it.
+#
+# Only files the module actually changed are bound, the manifest entry is
+# deduplicated, and the whole thing is skipped when the bootloop fuse is set - so
+# this cannot make a device that already refuses the overlay any worse.
+asb_generate_odm_camera_binds() {
+  [ "$ASB_CAMERA" = "true" ] || return 0
+  [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
+
+  _obc_man="/data/adb/asb/odm_bind_manifest.txt"
+  _obc_any=0
+  for _obc_rel in conf_tuning_params.json config/video_beauty_default_config; do
+    _obc_live="/odm/etc/camera/$_obc_rel"
+    [ -f "$_obc_live" ] || continue
+    _obc_src="$MODPATH/system/odm/etc/camera/$_obc_rel"
+    [ -f "$_obc_src" ] || _obc_src="$MODPATH/system/vendor/odm/etc/camera/$_obc_rel"
+    [ -f "$_obc_src" ] || continue
+    cmp -s "$_obc_src" "$_obc_live" 2>/dev/null && continue
+
+    _obc_dst="/data/adb/asb/odm_patched$_obc_live"
+    mkdir -p "$(dirname "$_obc_dst")" 2>/dev/null
+    cp -f "$_obc_src" "$_obc_dst" 2>/dev/null || continue
+    chmod 0644 "$_obc_dst" 2>/dev/null
+    _obc_ctx="$(ls -Zd "$_obc_live" 2>/dev/null | awk '{print $1}')"
+    case "$_obc_ctx" in
+      ?*:?*:?*:?*) chcon "$_obc_ctx" "$_obc_dst" 2>/dev/null || true ;;
+    esac
+    touch "$_obc_man" 2>/dev/null
+    grep -q "^${_obc_live}|" "$_obc_man" 2>/dev/null \
+      || echo "${_obc_live}|${_obc_dst}" >> "$_obc_man"
+    _obc_any=$((_obc_any + 1))
+  done
+  [ "$_obc_any" -gt 0 ] && \
+    ui_print "      + Camera: ${_obc_any} odm config(s) queued for the runtime bind"
+  return 0
+}
+
 asb_register_dsp_all_configs() {
   [ "$ASB_AUDIO" = "true" ] || return 0
 
@@ -1679,14 +1676,54 @@ asb_register_dsp_all_configs() {
     return 0
   fi
 
+  # Materialise the effects config the framework will actually read.
+  #
+  # The overlay only ever contains what asb_clone_device_audio_wifi cloned, and that
+  # clones the audio DIRECTORIES (/vendor/etc/audio, /odm/etc/audio). A device that
+  # keeps its effects config one level up - /vendor/etc/audio_effects_config.xml -
+  # therefore had nothing in the overlay to register into, so the search below found
+  # zero files and the effect stayed unregistered while everything else reported
+  # success. Seen in the field on a CPH2691 after the registration was already made
+  # device-agnostic: the function ran, found nothing, and there was nothing to find.
+  #
+  # AOSP resolves this file as /odm/etc -> /vendor/etc -> /system/etc and the first
+  # hit wins, so patching a lower-priority copy is wasted work. Only /vendor and
+  # /system are cloned into the overlay here. Anything under an odm path goes through
+  # the runtime bind below instead - not just because grafting /odm into the
+  # magic-mount tree is what bootlooped the Ace 6, but because a later install stage
+  # hard-removes every odm graft from the module tree, so a clone placed there would
+  # be deleted before it ever reached a boot.
+  _dsp_cloned=""
+  for _ecl in /vendor/etc/audio_effects_config.xml \
+              /vendor/etc/audio_effects.xml \
+              /system/etc/audio_effects_config.xml; do
+    [ -f "$_ecl" ] || continue
+    case "$_ecl" in
+      /system/*) _ecd="$MODPATH/system${_ecl#/system}" ;;
+      *)         _ecd="$MODPATH/system${_ecl}" ;;
+    esac
+    [ -f "$_ecd" ] && continue
+    mkdir -p "$(dirname "$_ecd")" 2>/dev/null || continue
+    cp -f "$_ecl" "$_ecd" 2>/dev/null || continue
+    chmod 0644 "$_ecd" 2>/dev/null
+    _ecc="$(ls -Zd "$_ecl" 2>/dev/null | awk '{print $1}')"
+    case "$_ecc" in
+      ?*:?*:?*:?*) chcon "$_ecc" "$_ecd" 2>/dev/null || true ;;
+    esac
+    _dsp_cloned="${_dsp_cloned} ${_ecd}"
+    ui_print "      + ASB DSP: cloned ${_ecl} into the overlay to register into"
+  done
+
   _dsp_reg=0
   _dsp_seen=0
-  for _ec in $(find "$MODPATH/system" -type f -name 'audio_effects_config.xml' 2>/dev/null); do
+  for _ec in $(find "$MODPATH/system" -type f -name 'audio_effects_config.xml' -o \
+                    -type f -name 'audio_effects.xml' 2>/dev/null); do
     case "$_ec" in *_stub.xml) continue ;; esac
     _dsp_seen=$((_dsp_seen + 1))
     asb_register_dsp_effect "$_ec"
     if grep -q 'asb_loudness' "$_ec" 2>/dev/null; then
       _dsp_reg=$((_dsp_reg + 1))
+      ui_print "        . registered in ${_ec#$MODPATH/system}"
     elif ! grep -q '<libraries>' "$_ec" 2>/dev/null || ! grep -q '<effects>' "$_ec" 2>/dev/null; then
       ui_print "    ! ASB DSP: $(basename "$(dirname "$_ec")") has no <libraries>/<effects> section"
     else
@@ -1699,11 +1736,50 @@ asb_register_dsp_all_configs() {
     ui_print "    ! ASB DSP: $_dsp_seen config(s) present but none registered"
   fi
 
-  [ -f /odm/etc/audio_effects_config.xml ] || return 0
+  for _ecx in $_dsp_cloned; do
+    [ -f "$_ecx" ] || continue
+    grep -q 'asb_loudness' "$_ecx" 2>/dev/null && continue
+    rm -f "$_ecx" 2>/dev/null
+    ui_print "        . removed unused clone $(basename "$_ecx") (registration did not land)"
+  done
+  find "$MODPATH/system" -type d -empty -delete 2>/dev/null || true
+
   [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
 
-  _oecs="/data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml"
-  _oecs_src="/data/adb/asb/odm_patched/odm/etc/audio_effects_config.xml.stock"
+  _dsp_bind_reg=0
+  for _oecl in /odm/etc/audio_effects_config.xml \
+               /vendor/odm/etc/audio_effects_config.xml; do
+    [ -f "$_oecl" ] || continue
+    asb_bind_register_odm_effects "$_oecl" && _dsp_bind_reg=$((_dsp_bind_reg + 1))
+  done
+
+  # Say it plainly when the effect landed nowhere at all, and list what the device
+  # actually has. A silent no-op here is what cost two field rounds; the next report
+  # should answer "which file should we have patched" without another diagnostic run.
+  if [ "$_dsp_reg" = "0" ] && [ "$_dsp_bind_reg" = "0" ]; then
+    ui_print "    ! ASB DSP: the effect was registered nowhere - please report this"
+    _dsp_found=0
+    for _ecp in /odm/etc /vendor/etc /vendor/odm/etc /system/etc; do
+      for _ecf in "$_ecp"/audio_effects_config.xml "$_ecp"/audio_effects.xml; do
+        [ -f "$_ecf" ] && { ui_print "        . live copy exists: $_ecf"; _dsp_found=1; }
+      done
+    done
+    for _ecf in $(find /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio -maxdepth 4 \
+                       -type f -name 'audio_effects*.xml' 2>/dev/null); do
+      ui_print "        . live copy exists: $_ecf"
+      _dsp_found=1
+    done
+    [ "$_dsp_found" = "0" ] && \
+      ui_print "        . this device ships no audio_effects config in any standard location"
+  fi
+  return 0
+}
+
+# One odm effects config, delivered through the fuse-guarded runtime bind.
+asb_bind_register_odm_effects() {
+  _oecl="$1"
+  _oecs="/data/adb/asb/odm_patched${_oecl}"
+  _oecs_src="${_oecs}.stock"
   _oecm="/data/adb/asb/odm_bind_manifest.txt"
   mkdir -p "$(dirname "$_oecs")" 2>/dev/null
   # Never snapshot from the live path once an earlier bind is mounted: at that
@@ -1711,24 +1787,25 @@ asb_register_dsp_all_configs() {
   # itself truncates the file, which is how a device ended up with a bound
   # config carrying zero ASB lines while every reinstall reported success.
   if [ ! -s "$_oecs_src" ]; then
-    cp -f /odm/etc/audio_effects_config.xml "$_oecs_src" 2>/dev/null
+    cp -f "$_oecl" "$_oecs_src" 2>/dev/null
   fi
-  cp -f "$_oecs_src" "$_oecs" 2>/dev/null || return 0
+  cp -f "$_oecs_src" "$_oecs" 2>/dev/null || return 1
   asb_register_dsp_effect "$_oecs"
   if grep -q 'asb_loudness' "$_oecs" 2>/dev/null; then
     chmod 0644 "$_oecs" 2>/dev/null
-    _oec_ctx="$(ls -Zd /odm/etc/audio_effects_config.xml 2>/dev/null | awk '{print $1}')"
+    _oec_ctx="$(ls -Zd "$_oecl" 2>/dev/null | awk '{print $1}')"
     case "$_oec_ctx" in
       ?*:?*:?*:?*) chcon "$_oec_ctx" "$_oecs" 2>/dev/null || true ;;
     esac
     touch "$_oecm" 2>/dev/null
-    grep -q "^/odm/etc/audio_effects_config.xml|" "$_oecm" 2>/dev/null \
-      || echo "/odm/etc/audio_effects_config.xml|$_oecs" >> "$_oecm"
-    ui_print "      + ASB DSP registered in /odm/etc/audio_effects_config.xml (runtime bind - the one the framework reads)"
-  else
-    rm -f "$_oecs" 2>/dev/null
-    ui_print "    ! ASB DSP: could not patch the odm effects config"
+    grep -q "^${_oecl}|" "$_oecm" 2>/dev/null \
+      || echo "${_oecl}|$_oecs" >> "$_oecm"
+    ui_print "      + ASB DSP registered in ${_oecl} (runtime bind - the one the framework reads)"
+    return 0
   fi
+  rm -f "$_oecs" 2>/dev/null
+  ui_print "    ! ASB DSP: could not patch ${_oecl}"
+  return 1
 }
 
 asb_reset_learning_on_upgrade_to_v56() {
@@ -2158,6 +2235,7 @@ else
   fi
 fi
 asb_register_dsp_all_configs
+asb_generate_odm_camera_binds
 
 [ -f "$MODPATH/overlay_device_class" ] || echo reference > "$MODPATH/overlay_device_class" 2>/dev/null
 rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
@@ -3151,6 +3229,10 @@ EOF
 	if [ -f "$MODPATH/runtime/profile_core.sh" ]; then
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
+
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh; do
+		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
+	done
 
 	if [ -f "$MODPATH/system/bin/asb" ]; then
 	  chmod 0755 "$MODPATH/system/bin/asb"
