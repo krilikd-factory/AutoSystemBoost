@@ -1935,11 +1935,16 @@ asb_feature_enabled LOG && apply_logd_props
 # Runtime GMS/analytics tracking suppression via the settings DB. Props can't
 apply_tracking_block() {
   _trk_log="/data/adb/asb/tracking_restore.log"
-  : > "$_trk_log" 2>/dev/null
+  # NOT truncated per boot any more. Re-capturing "the current value" on every boot is
+  # only correct on the first one: from boot 2 the current value IS what ASB wrote, so
+  # the file recorded ASB's own settings and uninstall dutifully restored those instead
+  # of the user's originals. Same defect the RAM-expansion path had. Capture once.
+  [ -f "$_trk_log" ] || : > "$_trk_log" 2>/dev/null
   _sp() {
-    # _sp <key> <value> — save the old value, then set the new one.
-    _old="$(settings get global "$1" 2>/dev/null)"
-    echo "$1|$_old" >> "$_trk_log" 2>/dev/null
+    # _sp <key> <value> — save the old value the FIRST time only, then set the new one.
+    if ! grep -q "^$1|" "$_trk_log" 2>/dev/null; then
+      echo "$1|$(settings get global "$1" 2>/dev/null)" >> "$_trk_log" 2>/dev/null
+    fi
     settings put global "$1" "$2" >/dev/null 2>&1
   }
   _sp clearcut_enabled 0
@@ -2223,15 +2228,7 @@ fi
     if [ "$_oem" = "1" ] || [ "$_oem" = "on" ]; then
       _rex="$(grep -E '^[[:space:]]*UX_RAM_EXPAND=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
       case "$_rex" in ''|*[!0-9]*) _rex=0 ;; esac
-      if has settings; then
-        # Match profile_core: confirmed off = 0/0 on OP13. Just the two real keys.
-        if [ "$_rex" = "0" ]; then
-          asb_settings_put global ram_expand_size 0
-          asb_settings_put global ram_expand_size_list 0
-        else
-          asb_settings_put global ram_expand_size "$_rex"
-        fi
-      fi
+      command -v asb_ram_expand_apply >/dev/null 2>&1 && asb_ram_expand_apply "$_rex"
     fi
   fi
   sleep 240

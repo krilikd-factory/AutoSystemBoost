@@ -100,9 +100,33 @@ done
 # removed below, so this is just belt-and-braces if that dir moved).
 rm -f /data/adb/asb/governor.conf.snapshot 2>/dev/null
 
+# Stop our own daemons FIRST.
+#
+# Uninstall removed every file and restored every setting, and then left the governor
+# and the DSP attach daemon running - they were started at boot from directories this
+# script is deleting, and a running process outlives the unlink of its binary. So until
+# the next reboot the phone still had a poller writing CPU caps every two seconds from a
+# module that no longer exists, with its config gone and nothing able to reconfigure or
+# stop it. Whatever the user uninstalled to get back to, they did not get it until they
+# rebooted.
+for _p in asb_dsp_attach asb_governor; do
+  pkill -f "$_p" >/dev/null 2>&1 || true
+done
+# The governor's own binary is plain "asb"; match the full path so this cannot hit an
+# unrelated process that merely has those three letters in its command line.
+pkill -f '/data/adb/modules/AutoSystemBoost/bin/asb' >/dev/null 2>&1 || true
+pkill -f '/data/adb/asb/asb_dsp_attach' >/dev/null 2>&1 || true
+rm -rf /dev/.asb /dev/.asb_profile_state 2>/dev/null
+
 # Restore any runtime tracking settings we changed (settings DB), then remove
 # the data dir. Reading the log before deleting it is intentional.
-if [ -f /data/adb/asb/tracking_restore.log ]; then
+# Both files use the same key|value format: tracking_restore.log for the analytics
+# settings, oem_restore.log for OEM-owned toggles (RAM expansion and friends). The
+# second one matters more than it looks: leaving RAM expansion in the half-off state
+# ASB used to write is what had OxygenOS repairing it back to ON after every uninstall,
+# with swap-on-UFS and the heat that comes with it.
+for _rf in /data/adb/asb/tracking_restore.log /data/adb/asb/oem_restore.log; do
+  [ -f "$_rf" ] || continue
   while IFS='|' read -r _k _v; do
     [ -n "$_k" ] || continue
     if [ -z "$_v" ] || [ "$_v" = "null" ]; then
@@ -110,8 +134,8 @@ if [ -f /data/adb/asb/tracking_restore.log ]; then
     else
       settings put global "$_k" "$_v" >/dev/null 2>&1 || true
     fi
-  done < /data/adb/asb/tracking_restore.log
-fi
+  done < "$_rf"
+done
 
 rm -rf /data/adb/asb 2>/dev/null
 
