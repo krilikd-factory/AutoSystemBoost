@@ -69,6 +69,24 @@ fi
 ASB_STATE_LOG="/dev/.asb_profile_state/runtime_apply.log"
 asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$ASB_STATE_LOG" 2>/dev/null || true; }
 
+# Keep an append-only log from growing for the life of the install. The governor's own
+# persist log already rotates in C; the shell-side ones never did, and profile_switches
+# alone gets a line per switch - field logs show four an hour, which is tens of thousands
+# of lines a year that nobody will ever read past the last few dozen.
+# Keeps the tail, which is the only part that has ever been useful in a report.
+asb_trim_log() {
+  _tl_f="$1"; _tl_max="${2:-65536}"
+  [ -f "$_tl_f" ] || return 0
+  _tl_sz="$(wc -c < "$_tl_f" 2>/dev/null)"
+  case "$_tl_sz" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_tl_sz" -le "$_tl_max" ] && return 0
+  tail -n 200 "$_tl_f" > "${_tl_f}.trim" 2>/dev/null &&     mv -f "${_tl_f}.trim" "$_tl_f" 2>/dev/null
+  rm -f "${_tl_f}.trim" 2>/dev/null
+}
+for _tl in vendor_mounts.log ram_expand.log profile_switches.log; do
+  asb_trim_log "/data/adb/asb/$_tl"
+done
+
 if [ -r /data/adb/asb/active_profile ]; then
   _saved_profile="$(cat /data/adb/asb/active_profile 2>/dev/null)"
   case "$_saved_profile" in
@@ -305,17 +323,41 @@ asb_migrate_governor_conf
       # previous install stayed in /data/adb/asb and kept being launched.
       cp -f "$MODDIR/bin/asb_dsp_attach" "$_att_bin" 2>/dev/null
     fi
+    # Where the daemon's stdout goes.
+    #
+    # It used to be an unconditional ">>" onto /data/adb/asb/dsp_attach.log, which is
+    # append with no truncation and no rotation - so the file only ever grew, for the
+    # life of the install. In steady state the daemon is quiet, but it logs three lines
+    # for every audioserver restart (camera, calls, BT connect - dozens a day), one per
+    # settings change, and, worst of all, it keeps logging create failures roughly every
+    # five minutes forever on a device where the effect never registered. That is exactly
+    # the state the Ace 5 sat in for weeks: a log growing round the clock describing a
+    # failure nobody was reading.
+    #
+    # Normal installs now discard it entirely - the daemon's state is visible on the
+    # action screen and in asbdiag, so a permanent on-device log buys nothing. It is kept
+    # only when debug is on, and even then truncated per boot rather than appended, so it
+    # is bounded by one session instead of by the lifetime of the install.
+    _att_log="/dev/null"
+    if [ -f /data/adb/asb/debug ] || [ "$(getprop persist.asb.debug 2>/dev/null)" = "1" ]; then
+      _att_log="/data/adb/asb/dsp_attach.log"
+      : > "$_att_log" 2>/dev/null
+    else
+      # Reclaim whatever an earlier build left behind, on the first boot after updating.
+      rm -f /data/adb/asb/dsp_attach.log 2>/dev/null
+    fi
+
     if [ -f "$_att_bin" ]; then
       chmod 0755 "$_att_bin" 2>/dev/null
       pkill -f asb_dsp_attach 2>/dev/null
       sleep 1
       if [ -x "$_att_bin" ]; then
-        nohup "$_att_bin" >> /data/adb/asb/dsp_attach.log 2>&1 &
+        nohup "$_att_bin" >> "$_att_log" 2>&1 &
         _att_how="direct"
       else
         # Last resort: hand the binary to the dynamic linker. That runs it without needing
         # the exec bit, covering a noexec mount or an SELinux label that forbids exec.
-        nohup /system/bin/linker64 "$_att_bin" >> /data/adb/asb/dsp_attach.log 2>&1 &
+        nohup /system/bin/linker64 "$_att_bin" >> "$_att_log" 2>&1 &
         _att_how="linker64"
       fi
       echo "ts=$(date +%s) action=dsp_attach_started via=$_att_how" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
