@@ -1795,7 +1795,7 @@ const I18N = {
       dsp_bass: { name: 'DSP\nУсиление баса',
         desc: 'Работает вместе с DSP-усилением. Низкочастотная полка на 90 Гц: полный подъём приходится на низ, на угловой частоте \u2014 половина, выше примерно 1 кГц эффекта нет, середина и вокал не затронуты. Стоит в начале цепи, поэтому добавленный бас ограничивается наравне со всем остальным и сам по себе клиппинга не даёт. Плата \u2014 запас по уровню: каждый децибел баса заставляет лимитер срабатывать раньше, так что большой подъём поверх высокого усиления снижает общую громкость. Для большинства наушников достаточно 3\u20136.' },
       dsp_effect_abi: { name: 'DSP\nИнтерфейс эффекта',
-        desc: '«auto» \u2014 модуль сам определяет по VINTF-манифесту, какой интерфейс эффектов использует ваша прошивка. Ставьте «legacy», если DSP не даёт вообще никакого эффекта: часть прошивок подключает эффекты через старую HIDL-фабрику, и AIDL-библиотека там не загружается. «aidl» \u2014 принудительно новый интерфейс. Обе библиотеки уже лежат в модуле, переустановка не нужна \u2014 достаточно перезагрузки.' },
+        desc: '«auto» \u2014 модуль читает VINTF-манифест прошивки, включая ВЕРСИЮ AIDL-интерфейса. Библиотека, собранная под v3, не грузится фабрикой v2 \u2014 именно так на одной модели DSP молчал при полностью корректных конфигах. «aidl_v2» \u2014 сборка под вторую версию интерфейса, «legacy» \u2014 старая HIDL-фабрика. Переустановка не нужна, достаточно перезагрузки.' },
       bt_absvol_mode: { name: 'Абсолютная громкость Bluetooth',
         desc: '«Отключить» \u2014 громкостью рулит телефон, а не гарнитура (нужно для ViPER/EQ). «Как в стоке» \u2014 громко и синхронно с наушниками. Применяется без перезагрузки.' },
       cool_gaming: { name: 'Холодные игры',
@@ -2062,6 +2062,8 @@ const CFG_ITEMS = [
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:20, step:1, name:'DSP Loudness',
     desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, now up to +18 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream.' },
+  { key:'dsp_effect_abi', type:'seg', def:'auto', opts:['auto','aidl','aidl_v2','legacy'], name:'DSP Effect ABI',
+    desc:'Which effect interface to install. auto reads the device VINTF manifest, including the AIDL interface VERSION - a library built for v3 cannot be loaded by a v2 factory, which is exactly how one model had a silent DSP with every config correct. Reboot to apply.' },
   { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
     desc:'Needs DSP Loudness above. A low shelf at 90 Hz: the full lift lands on the low end, half of it at the corner, nothing above about 1 kHz \u2014 mids and vocals stay untouched. It runs at the head of the chain, so the added bass is limited like everything else and cannot clip on its own. The trade is headroom: every dB of bass makes the limiter engage sooner, so a big boost on top of a high gain costs overall loudness. 3\u20136 suits most headphones.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Absolute Volume',
@@ -2112,7 +2114,7 @@ async function cfgLoad() {
 // explicitly.
 const CFG_CAT = {
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', bt_absvol_mode:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_effect_abi:'audio', bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
@@ -2348,10 +2350,16 @@ async function cfgSet(key, val, ctl) {
     // installer, so the toggle promised a reboot and rebuilt nothing. The script below
     // also writes the WindowManager global, which needs no reboot at all.
     var BLUR_KEYS = ['disable_blur'];
+    // Both effect libraries ship inside the module, so switching ABI is a file copy plus
+    // a reboot - no reinstall. A reinstall would only re-run the same probe anyway.
+    var DSP_ABI_KEYS = ['dsp_effect_abi'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
       var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0) ? ' dsp' : '';
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh' + _m + ' >/dev/null 2>&1 &'); } catch(e) {}
+    } else if (DSP_ABI_KEYS.indexOf(key) >= 0) {
+      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_dsp_abi_apply.sh ' + val + ' >/dev/null 2>&1 &'); } catch(e) {}
+      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_abi', ' \u00b7 reboot to apply'), cfgToastType(key));
     } else if (BLUR_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_blur_apply.sh >/dev/null 2>&1 &'); } catch(e) {}
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_blur', ' \u00b7 shade now, rest after reboot'), cfgToastType(key));
