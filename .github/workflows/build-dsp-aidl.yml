@@ -715,18 +715,28 @@ jobs:
           #
           # The V3 target keeps using the tree's own filegroup untouched; only this copy is
           # rewritten, so nothing about the V3 build changes.
+          # Patch the effect-impl sources IN PLACE rather than copying them.
+          #
+          # The copy approach worked for the substitution and broke on include paths: these
+          # files include their own headers as "include/effect-impl/EffectTypes.h", relative
+          # to the directory they normally live in, so a copy under a different directory
+          # cannot resolve them without extra search roots. Editing them where they are
+          # keeps every path exactly as AOSP wrote it - there is nothing left to get wrong.
+          #
+          # V3 has already been built and its objects are on disk by this point, so it is
+          # unaffected by an edit made now. The tree is a throwaway CI checkout; nothing
+          # here is committed anywhere.
           _EI="hardware/interfaces/audio/aidl/default"
-          _DST="vendor/asb/libasbdsp_aidl/effect_common_v2"
-          mkdir -p "$_DST"
-          _copied=0
+          _patched=0
           for _f in EffectImpl.cpp EffectThread.cpp EffectContext.cpp; do
-            if [ -f "$_EI/$_f" ]; then
-              sed 's/State::DRAINING/State::IDLE/g' "$_EI/$_f" > "$_DST/$_f"
-              _copied=$((_copied + 1))
+            [ -f "$_EI/$_f" ] || continue
+            if grep -q 'State::DRAINING' "$_EI/$_f" 2>/dev/null; then
+              sed -i 's/State::DRAINING/State::IDLE/g' "$_EI/$_f"
+              _patched=$((_patched + 1))
             fi
           done
-          echo "V2 effect-impl copy: $_copied file(s), DRAINING -> IDLE"
-          grep -c 'State::IDLE' "$_DST/EffectImpl.cpp" 2>/dev/null || true
+          echo "V2 effect-impl: patched $_patched file(s) in place, DRAINING -> IDLE"
+          grep -rc 'State::DRAINING' "$_EI"/EffectImpl.cpp 2>/dev/null || true
 
           echo "=== building the V2 variant (best effort) ==="
           set +e
