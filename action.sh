@@ -332,6 +332,10 @@ if [ "$_a_dsp" != "off" ]; then
       _dsp_abi="legacy"
     fi
   fi
+  if [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] \
+     && [ "$(getprop persist.asb.dsp.comp 2>/dev/null)" = "0" ]; then
+    echo "       compressor: off (limiter only)"
+  fi
   echo "       libasbdsp: 64-bit ${_l64}  ·  32-bit ${_l32}  ·  ABI ${_dsp_abi}"
   for _ecs in $(_asb_effect_files); do
     if grep -q 'asb_loudness' "$_ecs" 2>/dev/null; then
@@ -492,6 +496,13 @@ if [ -n "$_up" ]; then
 fi
 echo "$_sysl"
 
+
+_abo="$(cat /data/adb/asb/auto_battery_origin 2>/dev/null)"
+if [ -n "$_abo" ]; then
+  echo ""
+  echo "  🔋  AUTO BATTERY"
+  echo "       switched here automatically · returns to ${_abo} when charged"
+fi
 
 _lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null)"
 if [ -n "$_lpm" ] && [ "$(_feat LPM)" = "1" ]; then

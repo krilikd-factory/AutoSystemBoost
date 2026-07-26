@@ -117,6 +117,7 @@ done
 pkill -f '/data/adb/modules/AutoSystemBoost/bin/asb' >/dev/null 2>&1 || true
 pkill -f '/data/adb/asb/asb_dsp_attach' >/dev/null 2>&1 || true
 rm -rf /dev/.asb /dev/.asb_profile_state 2>/dev/null
+rm -f /data/adb/asb/auto_battery_origin 2>/dev/null
 
 # Restore any runtime tracking settings we changed (settings DB), then remove
 # the data dir. Reading the log before deleting it is intentional.
