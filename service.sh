@@ -1855,12 +1855,10 @@ apply_bt_codec_policy() {
   if has resetprop; then
     resetprop -n persist.vendor.qcom.bluetooth.aac_frm_ctl.enabled true >/dev/null 2>&1 || true
     resetprop -n persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true >/dev/null 2>&1 || true
-    resetprop -n persist.bluetooth.a2dp.lhdc.quality best >/dev/null 2>&1 || true
-    resetprop -n persist.vendor.bluetooth.a2dp.lhdc.quality best >/dev/null 2>&1 || true
-    resetprop -n persist.bluetooth.a2dp.lhdc.channelmode stereo >/dev/null 2>&1 || true
-    resetprop -n persist.vendor.bluetooth.a2dp.lhdc.channelmode stereo >/dev/null 2>&1 || true
-    resetprop -n persist.bluetooth.a2dp.lhdc.version 5 >/dev/null 2>&1 || true
-    resetprop -n persist.vendor.bluetooth.a2dp.lhdc.version 5 >/dev/null 2>&1 || true
+    # LHDC quality/channelmode/version live in apply_bt_audio_hygiene, which sets the
+    # whole codec picture together with samplerate and bitdepth. Setting half of it here
+    # as well meant two owners for the same six properties and no way to tell which one
+    # a future change should follow.
   fi
 }
 asb_feature_enabled BT && apply_bt_codec_policy
@@ -1873,10 +1871,17 @@ apply_bt_volume_behavior() {
     asb_log "bt absvol: mode=auto -> leaving stock absolute-volume untouched"
     return 0
   fi
+  # Same vocabulary the WebUI writes and asb_audio_apply.sh reads.
+  #
+  # The card offers stock|disabled; this only knew auto|on|off, so "disabled" fell through
+  # to the catch-all and boot re-enabled absolute volume. The setting worked the moment it
+  # was tapped - asb_audio_apply.sh gets it right - and silently reverted on the next
+  # reboot, which is the worst shape a bug can take: it looks like it works.
+  # on/off are the older spellings and stay accepted so an upgraded config keeps working.
   case "$_bt_mode" in
-    on)  _bt_dav=1; _bt_prop="true"  ;;   # disable absolute volume
-    off) _bt_dav=0; _bt_prop="false" ;;
-    *)   _bt_dav=0; _bt_prop="false" ;;
+    disabled|on)  _bt_dav=1; _bt_prop="true"  ;;   # phone drives the gain
+    stock|off)    _bt_dav=0; _bt_prop="false" ;;   # one shared scale with the headset
+    *)            _bt_dav=0; _bt_prop="false" ;;
   esac
   if has settings; then
     asb_settings_put global bluetooth_disable_absolute_volume "$_bt_dav"
