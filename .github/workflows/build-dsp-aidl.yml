@@ -487,6 +487,30 @@ jobs:
           echo "=== produced .so files ==="
           find out -name 'libasbdsp_aidl.so' -exec ls -la {} \;
 
+      # Which AIDL interface version did THIS tree freeze? Read it from the interface's
+      # own api dumps rather than inferring it from the branch name - the highest frozen
+      # directory is the version a device built from this tree declares in VINTF.
+      #
+      # This exists because two runs of this workflow used to produce byte-different
+      # libraries under identical names, so the only way to tell an Android 15 build from
+      # an Android 16 one was to remember which you ran. A OnePlus 13 declaring effect
+      # v2 could not load a v3-built library, and nothing in the artifact said which it
+      # was.
+      - name: Detect AIDL effect interface version
+        run: |
+          set -eu
+          API_DIR="hardware/interfaces/audio/aidl/aidl_api/android.hardware.audio.effect"
+          V=""
+          if [ -d "$API_DIR" ]; then
+            V="$(ls "$API_DIR" 2>/dev/null | grep -E '^[0-9]+$' | sort -n | tail -1)"
+          fi
+          if [ -z "$V" ]; then
+            echo "::warning::could not read a frozen version from $API_DIR - naming the output 'vX'"
+            V="X"
+          fi
+          echo "ASB_EFFECT_V=$V" >> "$GITHUB_ENV"
+          echo "android.hardware.audio.effect frozen version on this tree: $V"
+
       - name: Collect artifacts into prebuilt layout
         working-directory: aosp
         run: |
@@ -517,8 +541,14 @@ jobs:
           echo "arm64: ${OUT64:-<none>}"; echo "arm:   ${OUT32:-<none>}"
           DEST="$GITHUB_WORKSPACE/prebuilt"
           mkdir -p "$DEST/arm64-v8a" "$DEST/armeabi-v7a"
-          if [ -n "$OUT64" ]; then cp -f "$OUT64" "$DEST/arm64-v8a/libasbdsp_aidl.so"; fi
-          if [ -n "$OUT32" ]; then cp -f "$OUT32" "$DEST/armeabi-v7a/libasbdsp_aidl.so"; fi
+          if [ -n "$OUT64" ]; then
+            cp -f "$OUT64" "$DEST/arm64-v8a/libasbdsp_aidl.so"
+            cp -f "$OUT64" "$DEST/arm64-v8a/libasbdsp_v${ASB_EFFECT_V}.so"
+          fi
+          if [ -n "$OUT32" ]; then
+            cp -f "$OUT32" "$DEST/armeabi-v7a/libasbdsp_aidl.so"
+            cp -f "$OUT32" "$DEST/armeabi-v7a/libasbdsp_v${ASB_EFFECT_V}.so"
+          fi
           echo "=== staged ==="; find "$DEST" -name '*.so' -exec ls -la {} \;
           # Verify the AIDL factory symbol is exported (the whole reason this port exists).
           for so in "$DEST"/*/libasbdsp_aidl.so; do
@@ -566,9 +596,10 @@ jobs:
       - name: Upload .so artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: libasbdsp_aidl-prebuilt
+          name: libasbdsp-aidl-v${{ env.ASB_EFFECT_V }}-prebuilt
           path: |
             prebuilt/**/libasbdsp_aidl.so
+            prebuilt/**/libasbdsp_v*.so
             prebuilt/**/asb_dsp_attach
           if-no-files-found: error
           retention-days: 30

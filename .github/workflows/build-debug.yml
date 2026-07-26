@@ -238,6 +238,20 @@ jobs:
           # target and each needs a library of its own bitness. This step used to ship
           # only the 64-bit one, so debug builds silently had no 32-bit effect at all.
           install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_DBG/bin/libasbdsp.so"
+          # Versioned AIDL builds, when the repo carries them. The installer reads the
+          # effect interface version out of VINTF and asks for the matching one; a device
+          # on v2 cannot load a v3 library, so shipping only one is a coin flip.
+          for _vs in src/DSP_AIDL/prebuilt/arm64-v8a/libasbdsp_v*.so; do
+            [ -f "$_vs" ] || continue
+            install -m 0644 "$_vs" "$PKG_DBG/bin/$(basename "$_vs")"
+            echo "  + bin/$(basename "$_vs")"
+          done
+          for _vs in src/DSP_AIDL/prebuilt/armeabi-v7a/libasbdsp_v*.so; do
+            [ -f "$_vs" ] || continue
+            _vn="$(basename "$_vs" .so)_32.so"
+            install -m 0644 "$_vs" "$PKG_DBG/bin/$_vn"
+            echo "  + bin/$_vn"
+          done
           # Both effect ABIs travel in the zip; common/install.sh stages whichever one
           # this device's effect factory can actually load. Shipping a single variant
           # made that a build-time coin flip - see the OP13 NO_INIT report.
