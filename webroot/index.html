@@ -1170,6 +1170,72 @@ body.config-active #livePage.open {
   box-sizing: border-box;
   transition: border-color 0.2s ease, background 0.2s ease;
 }
+/* ── Category hub ───────────────────────────────────────────────────────────
+   Four tiles, one row of two on any phone width. They are deliberately large:
+   this is the first thing Config shows now, and a tap target that size is hard
+   to hit by accident while scrolling - which matters when what is behind it
+   changes how the device sounds or how long the battery lasts. */
+.cfg-hub {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+  margin-top: 2px;
+}
+.cfg-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 20px 14px;
+  min-height: 138px;
+  border-radius: 18px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: linear-gradient(160deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.13s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.cfg-tile:active { transform: scale(0.975); }
+.cfg-tile-ico {
+  font-size: 26px;
+  line-height: 1;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+}
+.cfg-tile-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.cfg-tile-count {
+  font: 500 11px/1 var(--mono);
+  color: rgba(255,255,255,0.38);
+  letter-spacing: 0.04em;
+}
+.cfg-tile-count.has-on { color: rgba(255,255,255,0.72); }
+
+/* Each tile borrows its category's hue, so the hub, the card icons behind it and
+   the toast that confirms a change all agree on what colour "audio" is. */
+.cfg-tile.cat-audio   { border-color: rgba(255,59,59,0.24); }
+.cfg-tile.cat-audio   .cfg-tile-ico { background: rgba(255,59,59,0.13);  border-color: rgba(255,59,59,0.35); }
+.cfg-tile.cat-camera  { border-color: rgba(58,141,255,0.24); }
+.cfg-tile.cat-camera  .cfg-tile-ico { background: rgba(58,141,255,0.13); border-color: rgba(58,141,255,0.35); }
+.cfg-tile.cat-battery { border-color: rgba(46,213,115,0.24); }
+.cfg-tile.cat-battery .cfg-tile-ico { background: rgba(46,213,115,0.13); border-color: rgba(46,213,115,0.35); }
+.cfg-tile.cat-ux      { border-color: rgba(255,159,28,0.24); }
+.cfg-tile.cat-ux      .cfg-tile-ico { background: rgba(255,159,28,0.13); border-color: rgba(255,159,28,0.35); }
+
 .cfg-row.is-on {
   border-color: rgba(0,225,200,0.28);
   background: linear-gradient(160deg, rgba(0,225,200,0.06), rgba(255,255,255,0.015));
@@ -1688,7 +1754,7 @@ body.config-active #livePage.open {
       <div class="dot"></div>
       <span class="status-label">Profile:&nbsp;</span>
       <span class="status-val" id="cfgCurProfile">balanced</span>
-      <button class="live-chip" id="cfgBackChip" onclick="closeConfigPage(true)" aria-label="Back to main">
+      <button class="live-chip" id="cfgBackChip" onclick="cfgBack()" aria-label="Back to main">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6"></path>
         </svg>
@@ -2126,6 +2192,37 @@ const CFG_CAT = {
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
   disable_blur:'display'
 };
+// Four groups, one screen each.
+//
+// Every tunable lived on one scrolling page, and the page kept growing: eighteen cards by
+// V61, with the DSP block alone at eight. Finding "auto battery profile" meant scrolling
+// past every audio setting, and a screenful of unrelated switches is how people flip the
+// wrong one. These are the four things a user actually comes here to change; the internal
+// CFG_CAT stays as it is because it drives the per-card colours and the toast tint, which
+// are finer-grained than the navigation should be.
+const CFG_GROUPS = [
+  { id:'audio',   ico:'\uD83C\uDFB5', name:'Audio',   ru:'\u0410\u0443\u0434\u0438\u043E' },
+  { id:'camera',  ico:'\uD83D\uDCF7', name:'Camera',  ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
+  { id:'battery', ico:'\uD83D\uDD0B', name:'Battery', ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
+  { id:'ui',      ico:'\u2728',        name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' }
+];
+// Where each tunable lives. BG_TRIM and cool_gaming sit under Battery rather than their
+// own colour category: both are battery-vs-something trades, and that is what someone is
+// deciding when they open that screen.
+const CFG_GROUP_OF = {
+  audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio',
+  dsp_effect_abi:'audio', bt_absvol_mode:'audio',
+  CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
+  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
+  BG_TRIM_LEVEL:'battery', cool_gaming:'battery',
+  UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'ui', UX_ANIM_FORCE_RESTART:'ui',
+  disable_blur:'ui'
+};
+function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
+// null = the hub is showing; a group id = that group's screen is.
+var _cfgGroup = null;
+
 function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-system'; }
 // Toast skin for a config key: same category, same colour as its card icon.
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
@@ -2177,11 +2274,51 @@ function cfgIsActive(it, cur) {
   return String(cur) !== String(it.def);
 }
 
+// The hub: one tile per group, with how many settings are inside and how many of those
+// are currently active. The count matters - it is the difference between "I have not set
+// anything up in here" and "something in here is on and I forgot about it".
+function cfgRenderHub(list) {
+  const hub = document.createElement('div');
+  hub.className = 'cfg-hub';
+  CFG_GROUPS.forEach(g => {
+    const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === g.id);
+    if (!items.length) return;
+    let on = 0;
+    items.forEach(it => {
+      const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
+      if (cfgIsActive(it, cur)) on++;
+    });
+    const tile = document.createElement('button');
+    tile.className = 'cfg-tile cat-' + (g.id === 'ui' ? 'ux' : g.id);
+    tile.onclick = () => { _cfgGroup = g.id; cfgRender(); };
+
+    const ic = document.createElement('div');
+    ic.className = 'cfg-tile-ico';
+    ic.textContent = g.ico;
+    tile.appendChild(ic);
+
+    const nm = document.createElement('div');
+    nm.className = 'cfg-tile-name';
+    nm.textContent = (ASB_LANG === 'ru') ? g.ru : g.name;
+    tile.appendChild(nm);
+
+    const cnt = document.createElement('div');
+    cnt.className = 'cfg-tile-count' + (on ? ' has-on' : '');
+    cnt.textContent = on ? (on + ' / ' + items.length) : String(items.length);
+    tile.appendChild(cnt);
+
+    hub.appendChild(tile);
+  });
+  list.appendChild(hub);
+}
+
 function cfgRender() {
   const list = _el('cfgList');
   if (!list) return;
   list.innerHTML = '';
-  CFG_ITEMS.forEach(it => {
+  cfgSyncChrome();
+  if (!_cfgGroup) { cfgRenderHub(list); return; }
+  CFG_ITEMS.filter(it => cfgGroupOf(it.key) === _cfgGroup).forEach(it => {
     const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
     const isOn = cfgIsActive(it, cur);
     const row = document.createElement('div');
@@ -2397,6 +2534,7 @@ async function cfgReboot() {
 function openConfigPage() {
   const p = _el('configPage');
   if (!p) return;
+  _cfgGroup = null;   // always open on the hub, never mid-drill from last time
   try {
     _el('cfgDeviceLine').textContent = _el('deviceLine').textContent;
     _el('cfgSocBadge').textContent   = _el('socBadge').textContent;
@@ -2410,6 +2548,26 @@ function openConfigPage() {
   p.scrollTop = 0;
   _cfgOpen = true;
   cfgLoad();
+}
+
+// The section label and the back chip are the only chrome that has to know which screen
+// is showing. Back from a group returns to the hub, not out of Config entirely - leaving
+// Config from three taps deep was the thing that made the old single page feel safer.
+function cfgSyncChrome() {
+  const lbl = document.querySelector('#configPage .sec-label');
+  if (lbl) {
+    if (_cfgGroup) {
+      const g = CFG_GROUPS.filter(x => x.id === _cfgGroup)[0];
+      lbl.textContent = g ? ((ASB_LANG === 'ru') ? g.ru : g.name) : '';
+    } else {
+      lbl.textContent = (ASB_LANG === 'ru') ? '\u041A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044F' : 'Configuration';
+    }
+  }
+}
+
+function cfgBack() {
+  if (_cfgGroup) { _cfgGroup = null; cfgRender(); return; }
+  closeConfigPage(true);
 }
 
 function closeConfigPage(toMain) {
