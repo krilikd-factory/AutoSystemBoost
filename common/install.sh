@@ -2053,7 +2053,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass dsp_effect_abi"
+region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -2082,7 +2082,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass dsp_effect_abi"
+region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
