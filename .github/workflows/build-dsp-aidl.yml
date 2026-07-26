@@ -416,7 +416,7 @@ jobs:
           # emits out/soong/build.<product>.ninja describing our lib + its REAL deps; building
           # that target with ninja skips the make graph entirely. We still keep an auto-heal
           # loop for the soong-analysis phase (Android.bp panics), which runs before ninja.
-          for attempt in $(seq 1 6); do
+          for attempt in $(seq 1 10); do
             echo "=== build attempt $attempt ==="
             set +e
             # ONE soong-only invocation does analysis AND builds our module. Do NOT run a
@@ -454,9 +454,35 @@ jobs:
               grep -E "missing dependencies|error:|undefined reference|fatal error" /tmp/asb_build.log | head -20
               break
             fi
-            # Otherwise auto-heal an unrelated Android.bp that blocked soong analysis (A/B/C).
-            badbp="$(grep -oE '[A-Za-z0-9_./-]+/Android\.bp:[0-9]+' /tmp/asb_build.log \
-                       | head -1 | sed 's/:.*//')"
+            # Otherwise auto-heal the unrelated Android.bp files that blocked soong analysis.
+            #
+            # ALL of them, in one pass. This used to take the first path in the error output
+            # and neutralize exactly that, then re-bootstrap: one file per attempt, against a
+            # six-attempt budget. On a branch whose filtered sync leaves a dozen dangling
+            # license modules and an unknown vintf_compatibility_matrix type, that is not a
+            # loop that converges - the android15-release run burned all six attempts on
+            # redbull, redfin, redfin/vf, gpt-utils and two prebuilts/misc files while five
+            # more were still listed in the same error block. Soong reports every offending
+            # file it found; there is no reason to fix them one bootstrap at a time.
+            _healed=0
+            for _bp in $(grep -oE '[A-Za-z0-9_./-]+/Android\.bp:[0-9]+' /tmp/asb_build.log \
+                           | sed 's/:.*//' | sort -u); do
+              [ -f "$_bp" ] || continue
+              case "$_bp" in
+                */DSP_AIDL/*|*vendor/asb/*)
+                  echo "::error::failing Android.bp is OUR module ($_bp) - real error"
+                  _healed=-1; break ;;
+              esac
+              echo "auto-heal: neutralizing unrelated $_bp"
+              printf '// emptied by ASB CI auto-heal\n' > "$_bp"
+              _healed=$((_healed + 1))
+            done
+            if [ "$_healed" -lt 0 ]; then break; fi
+            if [ "$_healed" -gt 0 ]; then
+              echo "auto-heal: neutralized $_healed file(s) this pass"
+              continue
+            fi
+            badbp=""
             if [ -z "$badbp" ]; then
               badmod="$(grep -oE 'GenerateBuildActions for module "[^"]+"' /tmp/asb_build.log \
                          | head -1 | sed 's/.*"\(.*\)"/\1/')"
