@@ -1200,10 +1200,10 @@ asb_pick_dsp_abi() {
     [ -f "$_abi_cf" ] || continue
     _abi_force="$(grep -E '^[[:space:]]*dsp_effect_abi=' "$_abi_cf" 2>/dev/null \
                   | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
-    case "$_abi_force" in aidl|legacy) break ;; *) _abi_force="" ;; esac
+    case "$_abi_force" in aidl|legacy|aidl_v[0-9]*) break ;; *) _abi_force="" ;; esac
   done
   case "$_abi_force" in
-    aidl|legacy) printf '%s' "$_abi_force"; return 0 ;;
+    aidl|legacy|aidl_v[0-9]*) printf '%s' "$_abi_force"; return 0 ;;
   esac
 
   _vintf_hit=""
@@ -1216,7 +1216,26 @@ asb_pick_dsp_abi() {
       # An aidl-format entry anywhere for this HAL means the AIDL factory is live.
       if tr -d '\n' < "$_vf" 2>/dev/null \
          | grep -qE 'format="aidl"[^>]*>[^<]*<name>android\.hardware\.audio\.effect|android\.hardware\.audio\.effect[^<]*</name>[^<]*<fqname'; then
-        printf 'aidl'; return 0
+        # ...and the INTERFACE VERSION decides which build of it can load.
+        #
+        # A OnePlus 13 and a OnePlus 15 running the same module, byte-identical library
+        # (362392 bytes on both), with the effects config patched and visible to
+        # audiohalservice.qti in its own mount namespace on both - and the library in
+        # the service's memory on only one of them. The one documented difference was
+        # here: the OP13 declares <version>2</version>, the OP15 <version>3</version>.
+        # The Descriptor struct that queryEffect() fills differs between those, so a
+        # library built against V3 is not something a V2 factory can use, and it never
+        # gets as far as dlopen. Nothing in the config or the filesystem could have
+        # shown that - it took comparing a working device against a broken one.
+        _av="$(tr -d '\n' < "$_vf" 2>/dev/null \
+               | sed 's/.*android\.hardware\.audio\.effect<\/name>//' \
+               | sed 's/.*<version>\([0-9]*\)<\/version>.*/\1/' \
+               | head -c 4 | tr -d ' ')"
+        case "$_av" in
+          [0-9]*) printf 'aidl_v%s' "$_av" ;;
+          *)      printf 'aidl' ;;
+        esac
+        return 0
       fi
     done
   done
@@ -1241,15 +1260,36 @@ asb_install_dsp_lib() {
   # for its own ABI. Shipping only lib64 leaves any 32-bit audio path without the
   # effect; shipping the arm64 .so into lib/ would just fail to load.
   ASB_DSP_ABI="$(asb_pick_dsp_abi)"
-  if [ "$ASB_DSP_ABI" = "legacy" ] \
-     && [ -f "$MODPATH/bin/libasbdsp_legacy.so" ]; then
-    _dsp_s64="$MODPATH/bin/libasbdsp_legacy.so"
-    _dsp_s32="$MODPATH/bin/libasbdsp_legacy_32.so"
-  else
-    ASB_DSP_ABI="aidl"
-    _dsp_s64="$MODPATH/bin/libasbdsp.so"
-    _dsp_s32="$MODPATH/bin/libasbdsp_32.so"
-  fi
+  case "$ASB_DSP_ABI" in
+    legacy)
+      if [ -f "$MODPATH/bin/libasbdsp_legacy.so" ]; then
+        _dsp_s64="$MODPATH/bin/libasbdsp_legacy.so"
+        _dsp_s32="$MODPATH/bin/libasbdsp_legacy_32.so"
+      else
+        ASB_DSP_ABI="aidl"
+      fi
+      ;;
+    aidl_v*)
+      # A version-specific build if we ship one, otherwise the generic AIDL library.
+      # Saying which happened matters: falling back silently is how a device ends up
+      # with an effect its factory cannot load and no clue why.
+      _dsp_v="${ASB_DSP_ABI#aidl_}"
+      if [ -f "$MODPATH/bin/libasbdsp_${_dsp_v}.so" ]; then
+        _dsp_s64="$MODPATH/bin/libasbdsp_${_dsp_v}.so"
+        _dsp_s32="$MODPATH/bin/libasbdsp_${_dsp_v}_32.so"
+      else
+        ui_print "    ! ASB DSP: device declares AIDL effect ${_dsp_v}, no matching build shipped"
+        ui_print "      using the generic AIDL library - if the DSP stays silent, this is why"
+        ASB_DSP_ABI="aidl"
+      fi
+      ;;
+  esac
+  case "$ASB_DSP_ABI" in
+    legacy|aidl_v*) : ;;
+    *) ASB_DSP_ABI="aidl"
+       _dsp_s64="$MODPATH/bin/libasbdsp.so"
+       _dsp_s32="$MODPATH/bin/libasbdsp_32.so" ;;
+  esac
   ui_print "      + ASB DSP: ${ASB_DSP_ABI} effect selected for this device"
 
   for _dsp_pair in \
