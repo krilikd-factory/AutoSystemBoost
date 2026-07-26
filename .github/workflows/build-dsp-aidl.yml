@@ -348,6 +348,54 @@ jobs:
           sudo sysctl vm.swappiness=30 || true
           echo "=== memory + swap ==="; free -h
 
+      # Which AIDL interface version did THIS tree freeze? Read it from the interface's
+      # own api dumps rather than inferring it from the branch name - the highest frozen
+      # directory is the version a device built from this tree declares in VINTF.
+      #
+      # This exists because two runs of this workflow used to produce byte-different
+      # libraries under identical names, so the only way to tell an Android 15 build from
+      # an Android 16 one was to remember which you ran. A OnePlus 13 declaring effect
+      # v2 could not load a v3-built library, and nothing in the artifact said which it
+      # was.
+      - name: Detect AIDL effect interface version
+        # Paths below are relative to the AOSP tree. Without this the step ran in the repo
+        # root, found no aidl_api directory and reported "could not read a frozen version" -
+        # which is what it would have done in its old position after the build too.
+        working-directory: aosp
+        run: |
+          set -eu
+          API_DIR="hardware/interfaces/audio/aidl/aidl_api/android.hardware.audio.effect"
+          V=""
+          if [ -d "$API_DIR" ]; then
+            V="$(ls "$API_DIR" 2>/dev/null | grep -E '^[0-9]+$' | sort -n | tail -1)"
+          fi
+          if [ -z "$V" ]; then
+            echo "::warning::could not read a frozen version from $API_DIR - naming the output 'vX'"
+            V="X"
+          fi
+          # Every FROZEN version lives in this one tree - stable AIDL keeps them all, and
+          # soong exposes each as android.hardware.audio.effect-V<N>-ndk. So a build for an
+          # older vendor interface does not need an older AOSP branch at all: the OP13 runs
+          # Android 16 but its vendor partition is frozen at the Android 15 HAL set, which
+          # is a Treble/GRF property of the DEVICE, not of the system image. Print what is
+          # actually available here, and what the defaults pin to, so the second variant can
+          # be wired up from evidence instead of from assumption.
+          echo "--- frozen versions available in this tree ---"
+          ls "$API_DIR" 2>/dev/null | sort -V | tr '\n' ' '; echo
+          echo "--- aidlaudioeffectservice_defaults ---"
+          _dbp="hardware/interfaces/audio/aidl/default/Android.bp"
+          if [ -f "$_dbp" ]; then
+            awk '/cc_defaults[[:space:]]*\{/,/^\}/' "$_dbp" \
+              | grep -A25 'aidlaudioeffectservice_defaults' | head -30
+          else
+            echo "(not synced: $_dbp)"
+          fi
+          echo "--- ndk targets matching the effect interface ---"
+          grep -rhoE 'android\.hardware\.audio\.effect-V[0-9]+-ndk' \
+            hardware/interfaces/audio/aidl 2>/dev/null | sort -u | tr '\n' ' '; echo
+          echo "ASB_EFFECT_V=$V" >> "$GITHUB_ENV"
+          echo "android.hardware.audio.effect frozen version on this tree: $V"
+
       - name: Build libasbdsp_aidl (arm64 + arm)
         working-directory: aosp
         run: |
@@ -438,12 +486,18 @@ jobs:
           # anchored pattern emptied 7 files and still left the one declaring ravenwood-utils,
           # which panicked soong on the very next pass. Also catch the name directly, since a
           # surviving libgroup is not something the build can report as an ordinary error.
-          for _rb in $(grep -rlE 'android_ravenwood_(test|libgroup)|"ravenwood-utils"|"ravenwood-runtime"' \
+          # Robolectric is the same failure as ravenwood with a different plugin: its
+          # GenerateAndroidBuildActions dereferences a dependency that a filtered tree does
+          # not have, so a missing module becomes a Go panic rather than a reported error -
+          # NativeGraphicsTests took the last run down at java/robolectric.go. Both are test
+          # frameworks; neither can be an input to one vendor shared library. Prune the whole
+          # class at once instead of discovering the next member of it one CI run at a time.
+          for _rb in $(grep -rlE 'android_ravenwood_(test|libgroup)|android_robolectric_test|"ravenwood-utils"|"ravenwood-runtime"|"Robolectric_all-target"' \
                          --include=Android.bp . 2>/dev/null | grep -v '^\./\.repo/'); do
             printf '// emptied by ASB CI pre-prune (ravenwood)\n' > "$_rb"
             _rw=$((_rw + 1))
           done
-          echo "pre-prune: emptied $_rw ravenwood Android.bp file(s)"
+          echo "pre-prune: emptied $_rw ravenwood/robolectric Android.bp file(s)"
           echo "pre-prune: emptied $_pruned Android.bp file(s) in trees irrelevant to this build"
 
           # Build with an auto-heal loop. soong analyzes the WHOLE tree before building our
@@ -574,50 +628,6 @@ jobs:
           [ "$build_ok" = "1" ] || { echo "::error::build did not succeed"; exit 1; }
           echo "=== produced .so files ==="
           find out -name 'libasbdsp_aidl.so' -exec ls -la {} \;
-
-      # Which AIDL interface version did THIS tree freeze? Read it from the interface's
-      # own api dumps rather than inferring it from the branch name - the highest frozen
-      # directory is the version a device built from this tree declares in VINTF.
-      #
-      # This exists because two runs of this workflow used to produce byte-different
-      # libraries under identical names, so the only way to tell an Android 15 build from
-      # an Android 16 one was to remember which you ran. A OnePlus 13 declaring effect
-      # v2 could not load a v3-built library, and nothing in the artifact said which it
-      # was.
-      - name: Detect AIDL effect interface version
-        run: |
-          set -eu
-          API_DIR="hardware/interfaces/audio/aidl/aidl_api/android.hardware.audio.effect"
-          V=""
-          if [ -d "$API_DIR" ]; then
-            V="$(ls "$API_DIR" 2>/dev/null | grep -E '^[0-9]+$' | sort -n | tail -1)"
-          fi
-          if [ -z "$V" ]; then
-            echo "::warning::could not read a frozen version from $API_DIR - naming the output 'vX'"
-            V="X"
-          fi
-          # Every FROZEN version lives in this one tree - stable AIDL keeps them all, and
-          # soong exposes each as android.hardware.audio.effect-V<N>-ndk. So a build for an
-          # older vendor interface does not need an older AOSP branch at all: the OP13 runs
-          # Android 16 but its vendor partition is frozen at the Android 15 HAL set, which
-          # is a Treble/GRF property of the DEVICE, not of the system image. Print what is
-          # actually available here, and what the defaults pin to, so the second variant can
-          # be wired up from evidence instead of from assumption.
-          echo "--- frozen versions available in this tree ---"
-          ls "$API_DIR" 2>/dev/null | sort -V | tr '\n' ' '; echo
-          echo "--- aidlaudioeffectservice_defaults ---"
-          _dbp="hardware/interfaces/audio/aidl/default/Android.bp"
-          if [ -f "$_dbp" ]; then
-            awk '/cc_defaults[[:space:]]*\{/,/^\}/' "$_dbp" \
-              | grep -A25 'aidlaudioeffectservice_defaults' | head -30
-          else
-            echo "(not synced: $_dbp)"
-          fi
-          echo "--- ndk targets matching the effect interface ---"
-          grep -rhoE 'android\.hardware\.audio\.effect-V[0-9]+-ndk' \
-            hardware/interfaces/audio/aidl 2>/dev/null | sort -u | tr '\n' ' '; echo
-          echo "ASB_EFFECT_V=$V" >> "$GITHUB_ENV"
-          echo "android.hardware.audio.effect frozen version on this tree: $V"
 
       - name: Collect artifacts into prebuilt layout
         working-directory: aosp
