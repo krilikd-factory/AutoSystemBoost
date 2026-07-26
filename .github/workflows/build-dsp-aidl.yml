@@ -713,6 +713,12 @@ jobs:
             echo "V2 variant built"
           else
             echo "::warning::the V2 variant did not build - v3 devices are unaffected"
+            # The "|| echo (none)" idiom does not work through a pipe - the || binds to
+            # head, which succeeds on empty input - so every category printed as blank and
+            # an empty section was indistinguishable from a missing one. Report the real
+            # blocker instead: the FIRST fatal error, whatever it is.
+            echo "--- first fatal error ---"
+            grep -m1 -B2 'fatal error:' /tmp/asb_build_v2.log || echo "  (none)"
             echo "--- version conflicts (a dependency pinned to the wrong interface) ---"
             grep -E 'depends on multiple versions|aidl_interface' /tmp/asb_build_v2.log \
               | head -5 || echo "  (none)"
