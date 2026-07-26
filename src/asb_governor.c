@@ -4417,6 +4417,7 @@ int main(int argc, char **argv) {
                             fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
                             fsm.auto_battery_since = time(NULL);
                             fsm_auto_battery_persist(&fsm);
+                            remove("/data/adb/asb/auto_battery_origin");
                         }
 
                         fsm.profile_idx = new_idx;
@@ -4777,6 +4778,20 @@ int main(int argc, char **argv) {
                     fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
                     fsm.auto_battery_since = time(NULL);
                     fsm_auto_battery_persist(&fsm);
+                    /* Durable record of where we came from, by name and independent of the
+                     * in-memory flag. auto_battery_state stores active and restore_idx
+                     * together, so the moment "active" is lost the restore target is lost
+                     * with it - and then nothing knows whether this device is in battery
+                     * because the module put it there or because the user chose it. That
+                     * ambiguity is what left a balanced user stuck through every charge
+                     * cycle. This file answers it, and only a real manual switch removes it. */
+                    {
+                        FILE *_of = fopen("/data/adb/asb/auto_battery_origin", "w");
+                        if (_of) {
+                            fprintf(_of, "%s\n", asb_profile_name(fsm.auto_battery_restore_idx));
+                            fclose(_of);
+                        }
+                    }
                     asb_log("auto_battery: trigger bat=%d%% (low=%d) saving=%d -> spawning apply_profile.sh battery auto",
                             metrics.bat.capacity_pct,
                             g_asb_cfg.auto_battery_low_pct,
@@ -4797,6 +4812,7 @@ int main(int argc, char **argv) {
                     fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
                     fsm.auto_battery_since = time(NULL);
                     fsm_auto_battery_persist(&fsm);
+                    remove("/data/adb/asb/auto_battery_origin");
                     asb_log("auto_battery: restore bat=%d%% (high=%d) -> spawning apply_profile.sh %s auto",
                             metrics.bat.capacity_pct,
                             g_asb_cfg.auto_battery_high_pct, _pname);
@@ -4809,18 +4825,59 @@ int main(int argc, char **argv) {
                 } else if (!fsm.auto_battery_active &&
                            fsm.profile_idx == PROFILE_BATTERY &&
                            metrics.bat.capacity_pct >= g_asb_cfg.auto_battery_high_pct &&
-                           _can_act &&
-                           asb_smart_flag_read() == 1) {
-                    fsm.auto_battery_last_action = _now_t;
-                    strncpy(fsm.auto_battery_reason, "smart_recovery", sizeof(fsm.auto_battery_reason) - 1);
-                    fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
-                    fsm.auto_battery_since = time(NULL);
-                    fsm_auto_battery_persist(&fsm);
-                    asb_log("auto_battery: smart recovery restore bat=%d%% (high=%d) -> spawning apply_profile.sh smart auto",
-                            metrics.bat.capacity_pct,
-                            g_asb_cfg.auto_battery_high_pct);
-                    int _rc2 = system("sh /data/adb/modules/AutoSystemBoost/apply_profile.sh smart auto >/dev/null 2>&1 &");
-                    (void)_rc2;
+                           _can_act) {
+                    /* Recovery when the in-memory flag was lost.
+                     *
+                     * This branch used to require asb_smart_flag_read()==1, so it rescued
+                     * Smart users and nobody else: a balanced user whose flag went missing
+                     * stayed in battery through every charge cycle with no way back except
+                     * tapping the profile by hand. Reported from the field exactly that way -
+                     * "does not return to balanced, but does return to smart" - and the
+                     * asymmetry was the whole bug, not a symptom of it.
+                     *
+                     * The profile to return to comes from the persisted state file, which
+                     * survives a governor restart and is cleared on a genuine manual switch.
+                     * That distinction matters: someone who CHOSE battery must not be pulled
+                     * out of it, which is why a bare "in battery and charged" test is not
+                     * enough on its own. Smart stays as the last-resort answer when no
+                     * restore target was recorded at all. */
+                    int _rec_idx = -1;
+                    {
+                        FILE *_rf = fopen("/data/adb/asb/auto_battery_origin", "r");
+                        if (_rf) {
+                            char _rn[24] = {0};
+                            if (fgets(_rn, sizeof(_rn), _rf)) {
+                                size_t _rl = strlen(_rn);
+                                while (_rl > 0 && (_rn[_rl-1] == '\n' || _rn[_rl-1] == '\r' ||
+                                                   _rn[_rl-1] == ' ')) _rn[--_rl] = '\0';
+                                if      (!strcmp(_rn, "balanced"))    _rec_idx = PROFILE_BALANCED;
+                                else if (!strcmp(_rn, "performance")) _rec_idx = PROFILE_PERFORMANCE;
+                                else if (!strcmp(_rn, "smart"))       _rec_idx = PROFILE_SMART;
+                            }
+                            fclose(_rf);
+                        }
+                    }
+                    if (_rec_idx < 0 && asb_smart_flag_read() == 1) _rec_idx = PROFILE_SMART;
+
+                    if (_rec_idx >= 0) {
+                        const char *_rname = asb_profile_name(_rec_idx);
+                        fsm.auto_battery_last_action = _now_t;
+                        fsm.auto_battery_restore_idx = -1;
+                        strncpy(fsm.auto_battery_reason, "recovery_restore", sizeof(fsm.auto_battery_reason) - 1);
+                        fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
+                        fsm.auto_battery_since = time(NULL);
+                        fsm_auto_battery_persist(&fsm);
+                        remove("/data/adb/asb/auto_battery_origin");
+                        asb_log("auto_battery: recovery restore bat=%d%% (high=%d) -> spawning apply_profile.sh %s auto",
+                                metrics.bat.capacity_pct,
+                                g_asb_cfg.auto_battery_high_pct, _rname);
+                        char _rcmd[160];
+                        snprintf(_rcmd, sizeof(_rcmd),
+                                 "sh /data/adb/modules/AutoSystemBoost/apply_profile.sh %s auto >/dev/null 2>&1 &",
+                                 _rname);
+                        int _rc2 = system(_rcmd);
+                        (void)_rc2;
+                    }
                 }
             }
 
