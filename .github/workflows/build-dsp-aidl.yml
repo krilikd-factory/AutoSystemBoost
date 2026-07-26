@@ -704,6 +704,30 @@ jobs:
           # Its failure is reported in full and does NOT fail the run: devices whose vendor
           # partition is frozen at effect v2 (a OnePlus 13 on Android 16, for instance) need
           # this library, but the ones on v3 should not lose their build while we get there.
+          # Local copy of the effect-impl sources for the V2 build, with the one V3-only
+          # state removed.
+          #
+          # EffectImpl.cpp on an Android 16 tree uses State::DRAINING, which V3 added and
+          # V2 does not have - the drain-on-stop path. On V2 a stop goes straight to IDLE,
+          # so substituting IDLE is not a workaround, it is what the state machine did
+          # before DRAINING existed: "RETURN_OK_IF(mState == IDLE || mState == IDLE)" is a
+          # harmless duplicate, and "mState = IDLE" is the V2 behaviour.
+          #
+          # The V3 target keeps using the tree's own filegroup untouched; only this copy is
+          # rewritten, so nothing about the V3 build changes.
+          _EI="hardware/interfaces/audio/aidl/default"
+          _DST="vendor/asb/libasbdsp_aidl/effect_common_v2"
+          mkdir -p "$_DST"
+          _copied=0
+          for _f in EffectImpl.cpp EffectThread.cpp EffectContext.cpp; do
+            if [ -f "$_EI/$_f" ]; then
+              sed 's/State::DRAINING/State::IDLE/g' "$_EI/$_f" > "$_DST/$_f"
+              _copied=$((_copied + 1))
+            fi
+          done
+          echo "V2 effect-impl copy: $_copied file(s), DRAINING -> IDLE"
+          grep -c 'State::IDLE' "$_DST/EffectImpl.cpp" 2>/dev/null || true
+
           echo "=== building the V2 variant (best effort) ==="
           set +e
           SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl_v2 2>&1 | tee /tmp/asb_build_v2.log
@@ -719,6 +743,16 @@ jobs:
             # blocker instead: the FIRST fatal error, whatever it is.
             echo "--- first fatal error ---"
             grep -m1 -B2 'fatal error:' /tmp/asb_build_v2.log || echo "  (none)"
+            # Print the SOURCE around each error. A message names a symbol; the lines
+            # around it say what the code was doing with it, which is what decides whether
+            # a substitution is safe. Not having this cost a round trip on DRAINING.
+            echo "--- source context for each error ---"
+            grep -oE '[A-Za-z0-9_./-]+\.(cpp|h):[0-9]+:[0-9]+: error' /tmp/asb_build_v2.log \
+              | sed 's/:[0-9]*: error//' | sort -u | head -5 | while IFS=: read -r _sf _sl; do
+              [ -f "$_sf" ] || continue
+              echo "  --- $_sf:$_sl"
+              sed -n "$((_sl>4?_sl-4:1)),$((_sl+4))p" "$_sf" | sed 's/^/      /'
+            done
             echo "--- version conflicts (a dependency pinned to the wrong interface) ---"
             grep -E 'depends on multiple versions|aidl_interface' /tmp/asb_build_v2.log \
               | head -5 || echo "  (none)"
