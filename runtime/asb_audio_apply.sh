@@ -144,7 +144,23 @@ if [ "$_dsp_ok" = "1" ]; then
       _dspp enable 1
       _dspp gain_mb "$((_dsp * 100))"
       _dspp ceiling_mb -15
-      _dspp comp 1
+      # Compressor, on unless the user asked for it off.
+      #
+      # It exists so that large gain does not simply slam into the limiter: 6:1 above
+      # -24 dBFS holds the body of the track down while the peaks stay clean. That is the
+      # right trade at +10 dB and above. At +2..+4 dB it is the wrong one - peaks barely
+      # reach the ceiling anyway, so all the compressor does is squash dynamics that never
+      # needed squashing, which is exactly what someone listening to a mastered recording
+      # hears as "processed".
+      #
+      # Turning it off does NOT remove the limiter: true peaks are still caught at the
+      # ceiling, so this cannot clip. What it can do at high gain is make the limiter work
+      # continuously instead of occasionally, which sounds worse than the compressor did.
+      _dsp_comp="$(_cfg dsp_compressor)"
+      case "$_dsp_comp" in
+        off|0|false) _dspp comp 0; changed="${changed}comp=off " ;;
+        *)           _dspp comp 1 ;;
+      esac
       _dspp comp_ratio_x10 60
       _dspp comp_thresh_mb -2400
       changed="${changed}dsp=+${_dsp}dB "
