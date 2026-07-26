@@ -1,0 +1,4 @@
+# CI-generated: a V2-patched copy of AOSP's effect-impl sources, written into the
+# staged tree by build-dsp-aidl.yml. Not source we maintain - it is regenerated from
+# whatever AOSP tree the run syncs, so committing it would pin a stale copy.
+src/DSP_AIDL/effect_common_v2/
