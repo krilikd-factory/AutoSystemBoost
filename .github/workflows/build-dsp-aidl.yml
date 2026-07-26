@@ -286,8 +286,32 @@ jobs:
           # java/robolectric.go instead of a reportable error. Nothing can auto-heal a
           # crash - there is no error line naming a file - so they have to go before the
           # first bootstrap. Neither is an input to a vendor cc_library_shared.
-          neutralize_bp_for 'android_ravenwood_test|android_ravenwood_libgroup|"ravenwood-utils"|"ravenwood-runtime"'
-          neutralize_bp_for 'android_robolectric_test|"Robolectric_all-target"'
+          # Same trap as robolectric: "ravenwood-utils" and "ravenwood-runtime" are module
+          # NAMES, and the file that declares them is frameworks/base/ravenwood/Android.bp -
+          # which the directory list above already covers. Matching names here would empty
+          # whatever else happens to mention them, so match the TYPE and leave the defining
+          # tree to the explicit path list.
+          for _rb in $(grep -rlE 'android_ravenwood_(test|libgroup)' --include=Android.bp . 2>/dev/null \
+                         | grep -v '^\./\.repo/'); do
+            case "$_rb" in */DSP_AIDL/*|*vendor/asb/*) continue ;; esac
+            echo "pre-neutralizing ravenwood: $_rb"
+            printf '// emptied by ASB CI (pre-emptive): ravenwood test blocks analysis\n' > "$_rb"
+          done
+          # Module TYPE only, and never robolectric's own tree.
+          #
+          # Matching the module NAME "Robolectric_all-target" emptied
+          # external/robolectric/Android.bp - the file that DEFINES robolectric and, with
+          # it, external_robolectric_license, which all ten of its subdirectories reference.
+          # That is the SystemUI cascade again, from the same mistake: emptying a directory's
+          # Android.bp destroys the license module its siblings depend on. What panics soong
+          # is a CONSUMER declaring android_robolectric_test with its dependency missing;
+          # robolectric itself is innocent.
+          for _rb in $(grep -rlE 'android_robolectric_test' --include=Android.bp . 2>/dev/null \
+                         | grep -v '^\./\.repo/' | grep -v '^\./external/robolectric/'); do
+            case "$_rb" in */DSP_AIDL/*|*vendor/asb/*) continue ;; esac
+            echo "pre-neutralizing robolectric consumer: $_rb"
+            printf '// emptied by ASB CI (pre-emptive): robolectric test blocks analysis\n' > "$_rb"
+          done
           # vintf_compatibility_matrix is registered by a soong plugin the filtered sync does
           # not always bring in; the files that USE it then fail with "unrecognized module
           # type". compatibility_matrices was already being healed by hand on the good run -
@@ -619,9 +643,15 @@ jobs:
             _lic="$(grep -oE 'undefined module "[A-Za-z0-9_.-]+_license"' /tmp/asb_build.log \
                       | sed 's/.*"\(.*\)"/\1/' | sort -u)"
             if [ -n "$_lic" ]; then
+              # ACCUMULATE. Truncating this file each pass meant every round of healing
+              # erased the stubs the previous round had added, so the build oscillated:
+              # synthesize the SystemUI license, lose the robolectric one, synthesize that,
+              # lose SystemUI again. The log shows "synthesized 1 missing license module(s)"
+              # twice in a row for that reason, each time undoing the last.
               mkdir -p asb_license_stubs
-              : > asb_license_stubs/Android.bp
+              [ -f asb_license_stubs/Android.bp ] || : > asb_license_stubs/Android.bp
               for _ln in $_lic; do
+                grep -q "\"$_ln\"" asb_license_stubs/Android.bp 2>/dev/null && continue
                 printf 'license {\n    name: "%s",\n' "$_ln" >> asb_license_stubs/Android.bp
                 printf '    visibility: ["//visibility:public"],\n' >> asb_license_stubs/Android.bp
                 printf '    license_kinds: ["SPDX-license-identifier-Apache-2.0"],\n}\n' >> asb_license_stubs/Android.bp
