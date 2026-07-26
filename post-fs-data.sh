@@ -188,6 +188,14 @@ _abi_conf="$MODDIR/config/governor.conf"
 if [ -f "$_abi_conf" ] && [ -f "$MODDIR/runtime/asb_dsp_abi_apply.sh" ]; then
   _abi_want="$(grep -E '^[[:space:]]*dsp_effect_abi=' "$_abi_conf" 2>/dev/null \
                | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
+  # "auto" is not a no-op: it means "whatever the installer's probe chose", which is
+  # recorded in dsp_abi_installed. Skipping it made the switch one-way - trying legacy
+  # once and setting the card back to auto left the legacy library staged, so the config
+  # said auto while /vendor/lib64/soundfx/libasbdsp.so was still the 9488-byte legacy
+  # build. On an AIDL-only device that is a silently dead DSP in every mode.
+  if [ "$_abi_want" = "auto" ] || [ -z "$_abi_want" ]; then
+    _abi_want="$(cat "$MODDIR/dsp_abi_installed" 2>/dev/null)"
+  fi
   case "$_abi_want" in
     legacy|aidl|aidl_v[0-9]*)
       _abi_src="$MODDIR/bin/libasbdsp.so"
