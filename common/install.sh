@@ -1337,6 +1337,11 @@ asb_install_dsp_lib() {
        _dsp_s64="$MODPATH/bin/libasbdsp.so"
        _dsp_s32="$MODPATH/bin/libasbdsp_32.so" ;;
   esac
+  # Record what the probe chose. "auto" has to mean something concrete at boot: without
+  # this, post-fs-data has no target to restore and a user who tries legacy once is stuck
+  # with it forever - the switch was one-way, and setting the card back to auto left the
+  # legacy library staged while the config claimed otherwise.
+  echo "$ASB_DSP_ABI" > "$MODPATH/dsp_abi_installed" 2>/dev/null
   ui_print "      + ASB DSP: ${ASB_DSP_ABI} effect selected for this device"
 
   [ -n "$_dsp_s64" ] || return 1
