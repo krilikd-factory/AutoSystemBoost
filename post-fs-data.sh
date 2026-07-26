@@ -171,4 +171,36 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
 fi
 # ASB:VENDOR_OVERLAY:END
 
+# Make the staged DSP library match dsp_effect_abi, HERE, before the overlay mounts.
+#
+# post-fs-data runs before the root manager mounts the module, so a swap done at this
+# point is live on THIS boot. Doing it later - from service.sh or the WebUI - only takes
+# effect on the NEXT one, which fails the one rule that matters: install, reboot once,
+# it works.
+#
+# It is also the only thing that actually enforces the setting. The WebUI hook backgrounds
+# the switcher with "&" inside ksu.exec, and that child does not survive the exec call
+# returning; media_loudness and disable_blur looked like they worked only because both
+# have a boot-time self-heal of their own. dsp_effect_abi had none, so on a OnePlus 15 the
+# config read "legacy" while /vendor/lib64/soundfx/libasbdsp.so was still the 378760-byte
+# AIDL build, and nothing anywhere was going to change that.
+_abi_conf="$MODDIR/config/governor.conf"
+if [ -f "$_abi_conf" ] && [ -f "$MODDIR/runtime/asb_dsp_abi_apply.sh" ]; then
+  _abi_want="$(grep -E '^[[:space:]]*dsp_effect_abi=' "$_abi_conf" 2>/dev/null \
+               | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
+  case "$_abi_want" in
+    legacy|aidl|aidl_v[0-9]*)
+      _abi_src="$MODDIR/bin/libasbdsp.so"
+      case "$_abi_want" in
+        legacy)   _abi_src="$MODDIR/bin/libasbdsp_legacy.so" ;;
+        aidl_v*)  _abi_src="$MODDIR/bin/libasbdsp_${_abi_want#aidl_}.so" ;;
+      esac
+      _abi_dst="$MODDIR/system/vendor/lib64/soundfx/libasbdsp.so"
+      if [ -f "$_abi_src" ] && [ -f "$_abi_dst" ] && ! cmp -s "$_abi_src" "$_abi_dst"; then
+        sh "$MODDIR/runtime/asb_dsp_abi_apply.sh" "$_abi_want" >/dev/null 2>&1
+      fi
+      ;;
+  esac
+fi
+
 exit 0
