@@ -104,6 +104,17 @@ cc_defaults {
         "libaudio_system_headers",
         "libsystem_headers",
     ],
+    // Utils.h, as a raw include path rather than a dependency.
+    //
+    // EffectContext.h does #include <Utils.h>, which lives in the audio aidl common
+    // directory and normally arrives with libaudioaidlcommon. That module was dropped
+    // from this variant because it is built against the tree's latest interface and would
+    // drag common.types-V4 back in, which is the conflict this whole defaults block exists
+    // to avoid. An include_dirs entry gives the compiler the header and creates no
+    // dependency edge at all, so there is nothing for soong to version-resolve.
+    include_dirs: [
+        "hardware/interfaces/audio/aidl/common/include",
+    ],
 }
 
 cc_library_shared {
