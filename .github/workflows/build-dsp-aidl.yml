@@ -596,6 +596,26 @@ jobs:
             echo "::warning::could not read a frozen version from $API_DIR - naming the output 'vX'"
             V="X"
           fi
+          # Every FROZEN version lives in this one tree - stable AIDL keeps them all, and
+          # soong exposes each as android.hardware.audio.effect-V<N>-ndk. So a build for an
+          # older vendor interface does not need an older AOSP branch at all: the OP13 runs
+          # Android 16 but its vendor partition is frozen at the Android 15 HAL set, which
+          # is a Treble/GRF property of the DEVICE, not of the system image. Print what is
+          # actually available here, and what the defaults pin to, so the second variant can
+          # be wired up from evidence instead of from assumption.
+          echo "--- frozen versions available in this tree ---"
+          ls "$API_DIR" 2>/dev/null | sort -V | tr '\n' ' '; echo
+          echo "--- aidlaudioeffectservice_defaults ---"
+          _dbp="hardware/interfaces/audio/aidl/default/Android.bp"
+          if [ -f "$_dbp" ]; then
+            awk '/cc_defaults[[:space:]]*\{/,/^\}/' "$_dbp" \
+              | grep -A25 'aidlaudioeffectservice_defaults' | head -30
+          else
+            echo "(not synced: $_dbp)"
+          fi
+          echo "--- ndk targets matching the effect interface ---"
+          grep -rhoE 'android\.hardware\.audio\.effect-V[0-9]+-ndk' \
+            hardware/interfaces/audio/aidl 2>/dev/null | sort -u | tr '\n' ' '; echo
           echo "ASB_EFFECT_V=$V" >> "$GITHUB_ENV"
           echo "android.hardware.audio.effect frozen version on this tree: $V"
 
