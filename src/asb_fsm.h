@@ -572,6 +572,25 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
                 if (_act == 1 && _ridx >= 0 && _ridx < ASB_PROFILE_COUNT && _ridx != PROFILE_BATTERY) {
                     fsm->auto_battery_active = 1;
                     fsm->auto_battery_restore_idx = _ridx;
+                } else if (_act == 1) {
+                    /* Active, but the target did not survive. Recover it by name from
+                     * auto_battery_origin rather than starting with -1 and letting the
+                     * restore path fall back to BALANCED - which is how a Smart user came
+                     * back from a charge cycle on the wrong profile. */
+                    fsm->auto_battery_active = 1;
+                    FILE *_orf = fopen("/data/adb/asb/auto_battery_origin", "r");
+                    if (_orf) {
+                        char _on[24] = {0};
+                        if (fgets(_on, sizeof(_on), _orf)) {
+                            size_t _ol = strlen(_on);
+                            while (_ol > 0 && (_on[_ol-1] == '\n' || _on[_ol-1] == '\r' ||
+                                               _on[_ol-1] == ' ')) _on[--_ol] = '\0';
+                            if      (!strcmp(_on, "balanced"))    fsm->auto_battery_restore_idx = PROFILE_BALANCED;
+                            else if (!strcmp(_on, "performance")) fsm->auto_battery_restore_idx = PROFILE_PERFORMANCE;
+                            else if (!strcmp(_on, "smart"))       fsm->auto_battery_restore_idx = PROFILE_SMART;
+                        }
+                        fclose(_orf);
+                    }
                 }
             }
             fclose(_abf);

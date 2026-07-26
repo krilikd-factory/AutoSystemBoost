@@ -4802,7 +4802,39 @@ int main(int argc, char **argv) {
                            metrics.bat.capacity_pct >= g_asb_cfg.auto_battery_high_pct &&
                            _can_act) {
                     int _restore = fsm.auto_battery_restore_idx;
-                    if (_restore < 0 || _restore >= ASB_PROFILE_COUNT) _restore = PROFILE_BALANCED;
+                    /* Consult the durable record before falling back.
+                     *
+                     * restore_idx lives in memory and in auto_battery_state, and the
+                     * governor restarts on every profile change - so by the time the
+                     * battery is charged again it is frequently -1. The old code then
+                     * silently chose BALANCED, which is why a Smart user who discharged to
+                     * 15% and charged back to 40% came back to Balanced: nothing was
+                     * broken about the trigger or the flag, the restore target had simply
+                     * been forgotten and the fallback guessed.
+                     *
+                     * auto_battery_origin is written by name when the switch happens and
+                     * removed only on a real manual change or a completed restore, so it
+                     * still says "smart" here. BALANCED stays as the last resort for a
+                     * device that has neither. */
+                    if (_restore < 0 || _restore >= ASB_PROFILE_COUNT) {
+                        FILE *_orf = fopen("/data/adb/asb/auto_battery_origin", "r");
+                        if (_orf) {
+                            char _on[24] = {0};
+                            if (fgets(_on, sizeof(_on), _orf)) {
+                                size_t _ol = strlen(_on);
+                                while (_ol > 0 && (_on[_ol-1] == '\n' || _on[_ol-1] == '\r' ||
+                                                   _on[_ol-1] == ' ')) _on[--_ol] = '\0';
+                                if      (!strcmp(_on, "balanced"))    _restore = PROFILE_BALANCED;
+                                else if (!strcmp(_on, "performance")) _restore = PROFILE_PERFORMANCE;
+                                else if (!strcmp(_on, "smart"))       _restore = PROFILE_SMART;
+                            }
+                            fclose(_orf);
+                        }
+                    }
+                    if (_restore < 0 || _restore >= ASB_PROFILE_COUNT) {
+                        if (asb_smart_flag_read() == 1) _restore = PROFILE_SMART;
+                        else                            _restore = PROFILE_BALANCED;
+                    }
                     const char *_pname = asb_profile_name(_restore);
                     fsm.auto_battery_active = 0;
                     fsm.auto_battery_restore_idx = -1;
