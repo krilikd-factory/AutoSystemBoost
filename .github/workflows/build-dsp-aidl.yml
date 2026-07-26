@@ -424,6 +424,22 @@ jobs:
               _pruned=$((_pruned + 1))
             done
           done
+          # Ravenwood test modules crash soong outright in a filtered tree, wherever they
+          # live. SOONG_ALLOW_MISSING_DEPENDENCIES does not save us: the ravenwood plugin
+          # dereferences its runtime dependency without a nil check, so a missing
+          # ravenwood-utils is a Go panic at java/ravenwood.go:190 rather than a reported
+          # error. That is unrecoverable by definition - there is no error line naming a
+          # file to neutralize, which is exactly why the previous run ended in a stack
+          # trace. Prune them by MODULE TYPE rather than by directory, since they are
+          # scattered well outside the test trees above, and none of them can matter for
+          # building one vendor shared library.
+          _rw=0
+          for _rb in $(grep -rlE '^[[:space:]]*android_ravenwood_(test|libgroup)[[:space:]]*\{' \
+                         --include=Android.bp . 2>/dev/null | grep -v '^\./\.repo/'); do
+            printf '// emptied by ASB CI pre-prune (ravenwood)\n' > "$_rb"
+            _rw=$((_rw + 1))
+          done
+          echo "pre-prune: emptied $_rw ravenwood Android.bp file(s)"
           echo "pre-prune: emptied $_pruned Android.bp file(s) in trees irrelevant to this build"
 
           # Build with an auto-heal loop. soong analyzes the WHOLE tree before building our
