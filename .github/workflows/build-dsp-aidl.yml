@@ -25,6 +25,9 @@ on:
         description: "AOSP branch/tag (must match the manifest revision)"
         default: "android16-release"
         required: true
+      pre_prune:
+        description: "empty Android.bp in irrelevant trees before building (off = known-good path)"
+        default: "false"
       lunch_target:
         description: "lunch combo (arm64 primary; compile_multilib both gives arm too)"
         default: "aosp_cf_arm64_only_phone-trunk_stable-userdebug"
@@ -455,6 +458,22 @@ jobs:
             if lunch "$combo"; then _lunched=1; echo "lunch OK: $combo"; break; fi
           done
           [ "$_lunched" = "1" ] || { echo "::error::no lunch combo worked (release=$REL)"; exit 1; }
+          # OFF BY DEFAULT, and that is deliberate.
+          #
+          # This workflow built the shipped OP15 library on this same branch before any of
+          # this existed. Emptying 550-850 Android.bp files is by far the largest change
+          # since, and it is demonstrably capable of breaking a tree that was fine: the
+          # ravenwood prune took out the file defining frameworks_base_packages_SystemUI_license
+          # and cost 19 sibling directories, which then had to be "healed" in turn. Fixing
+          # the cascade was treating a symptom of this step existing at all.
+          #
+          # So the default path is now the one that is known to have worked, and the prune
+          # is something to switch on deliberately if a build genuinely needs it. Removing
+          # code is not a safe default when the thing being removed is someone else's build
+          # graph.
+          if [ "${{ github.event.inputs.pre_prune }}" != "true" ]; then
+            echo "pre-prune: disabled (known-good path) - set pre_prune=true to enable"
+          else
           # Pre-emptively empty the Android.bp files of trees that cannot possibly matter
           # for one vendor shared library. Neutralizing these after a failed bootstrap
           # costs a full minute of soong analysis per pass, and the android15-release sync
@@ -499,6 +518,7 @@ jobs:
           done
           echo "pre-prune: emptied $_rw ravenwood/robolectric Android.bp file(s)"
           echo "pre-prune: emptied $_pruned Android.bp file(s) in trees irrelevant to this build"
+          fi
 
           # Build with an auto-heal loop. soong analyzes the WHOLE tree before building our
           # module, and unrelated modules (trusty test VMs, CrashRecovery APEX prebuilts,
