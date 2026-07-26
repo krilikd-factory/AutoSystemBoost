@@ -773,6 +773,13 @@ jobs:
               | head -10 || echo "  (none)"
             echo "--- undefined symbols (something we dropped WAS needed) ---"
             grep -E 'undefined (symbol|reference)' /tmp/asb_build_v2.log | head -10 || echo "  (none)"
+            # Catch-all. The categories above are guesses at what MIGHT go wrong; this is
+            # simply the first error, whatever it is. Two rounds were spent on errors that
+            # matched no category and therefore printed nothing at all - a V3-only member
+            # in a header we did not even use, and before that a missing include path.
+            echo "--- every compile error, uncategorised ---"
+            grep -E '\.(cpp|h):[0-9]+:[0-9]+: (error|fatal error):' /tmp/asb_build_v2.log \
+              | sort -u | head -10 || echo "  (none)"
           fi
           echo "=== produced .so files ==="
           find out -name 'libasbdsp_aidl.so' -exec ls -la {} \;
