@@ -1240,7 +1240,7 @@ asb_pick_dsp_abi() {
     done
   done
 
-  # The HAL is declared but not as AIDL -> HIDL factory.
+  # The HAL is declared but not as AIDL -> HIDL factory, so legacy is genuinely usable.
   [ -n "$_vintf_hit" ] && { printf 'legacy'; return 0; }
 
   # Nothing declared it at all. Fall back on the API level, where AIDL effects are the
@@ -1260,6 +1260,12 @@ asb_install_dsp_lib() {
   # for its own ABI. Shipping only lib64 leaves any 32-bit audio path without the
   # effect; shipping the arm64 .so into lib/ would just fail to load.
   ASB_DSP_ABI="$(asb_pick_dsp_abi)"
+  # Whether a HIDL factory exists at all decides if legacy is a real option or only a
+  # library that will sit in memory doing nothing.
+  case "$ASB_DSP_ABI" in
+    aidl*) _vintf_aidl_only=1 ;;
+    *)     _vintf_aidl_only=0 ;;
+  esac
   case "$ASB_DSP_ABI" in
     legacy)
       if [ -f "$MODPATH/bin/libasbdsp_legacy.so" ]; then
@@ -1277,6 +1283,27 @@ asb_install_dsp_lib() {
       if [ -f "$MODPATH/bin/libasbdsp_${_dsp_v}.so" ]; then
         _dsp_s64="$MODPATH/bin/libasbdsp_${_dsp_v}.so"
         _dsp_s32="$MODPATH/bin/libasbdsp_${_dsp_v}_32.so"
+      elif [ "$_vintf_aidl_only" = "1" ]; then
+        # Do NOT quietly stage the legacy library here.
+        #
+        # Tested on a OnePlus 15 forced to legacy: the library loads - four mappings in
+        # audiohalservice.qti - and no effect is ever created. dumpsys media.audio_flinger
+        # shows nothing, where the AIDL build shows "ASB Loudness / 1 Clients". The client
+        # path goes through the AIDL factory, which dlopens whatever the config names and
+        # then looks for createEffect; the legacy library exports only AELI, so the effect
+        # is never instantiated. QTI's own legacy libraries are mapped in too, but through
+        # an internal path that is not exposed to clients - their presence in maps was what
+        # made this look workable, and maps only proves a dlopen, not a registration.
+        #
+        # So on an AIDL-only device a missing version means the DSP genuinely cannot run.
+        # Say that, rather than installing something that will fail silently.
+        ui_print "    ! ASB DSP: this device needs the AIDL effect ${_dsp_v}, which is not"
+        ui_print "      in this build. The legacy effect cannot substitute: its client-facing"
+        ui_print "      factory is AIDL-only, so a legacy library loads but never registers."
+        ui_print "      DSP will stay off until a matching build ships."
+        ASB_DSP_ABI="none"
+        _dsp_s64=""
+        _dsp_s32=""
       elif [ -f "$MODPATH/bin/libasbdsp_legacy.so" ]; then
         # Fall back to LEGACY, not to the generic AIDL library.
         #
@@ -1312,6 +1339,7 @@ asb_install_dsp_lib() {
   esac
   ui_print "      + ASB DSP: ${ASB_DSP_ABI} effect selected for this device"
 
+  [ -n "$_dsp_s64" ] || return 1
   for _dsp_pair in \
     "$_dsp_s64|$MODPATH/system/vendor/lib64/soundfx|/vendor/lib64/soundfx" \
     "$_dsp_s32|$MODPATH/system/vendor/lib/soundfx|/vendor/lib/soundfx"; do
