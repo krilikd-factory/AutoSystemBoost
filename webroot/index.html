@@ -1794,6 +1794,8 @@ const I18N = {
         desc: 'Свой DSP-движок: усиление выше системного максимума. Компрессор с мягким коленом поднимает тело трека, а пиковый лимитер держит потолок \u2014 клиппинга нет. Цепляется к музыке сам, приложение не нужно. Начни с +3; +9 может сплющить громкие записи. Первое включение \u2014 после перезагрузки. Полностью отключается, когда аудио-профиль стоит в режиме «под эквалайзер»: этот профиль отдаёт поток внешнему движку, и наш эффект на том же выходе не дал бы ему увидеть поток.' },
       dsp_bass: { name: 'DSP\nУсиление баса',
         desc: 'Работает вместе с DSP-усилением. Низкочастотная полка на 90 Гц: полный подъём приходится на низ, на угловой частоте \u2014 половина, выше примерно 1 кГц эффекта нет, середина и вокал не затронуты. Стоит в начале цепи, поэтому добавленный бас ограничивается наравне со всем остальным и сам по себе клиппинга не даёт. Плата \u2014 запас по уровню: каждый децибел баса заставляет лимитер срабатывать раньше, так что большой подъём поверх высокого усиления снижает общую громкость. Для большинства наушников достаточно 3\u20136.' },
+      dsp_compressor: { name: 'DSP\nКомпрессор',
+        desc: 'Нужен при большом усилении: держит тело трека, чтобы пики оставались чистыми. При небольшом усилении (+2..+4 дБ) он только сдавливает динамику, которой сжатие не требовалось \u2014 именно это слышно как «обработанный» звук. Пиковый лимитер остаётся включённым в любом случае, поэтому «выкл» не даёт клиппинга. Но при большом усилении лимитер начнёт работать непрерывно, и это звучит хуже компрессора. При выключенном DSP-усилении настройка ни на что не влияет.' },
       dsp_effect_abi: { name: 'DSP\nИнтерфейс эффекта',
         desc: '«auto» \u2014 модуль читает VINTF-манифест прошивки, включая ВЕРСИЮ AIDL-интерфейса. Библиотека, собранная под v3, не грузится фабрикой v2 \u2014 именно так на одной модели DSP молчал при полностью корректных конфигах. «aidl_v2» \u2014 сборка под вторую версию интерфейса, «legacy» \u2014 старая HIDL-фабрика. Переустановка не нужна, достаточно перезагрузки.' },
       bt_absvol_mode: { name: 'Абсолютная громкость Bluetooth',
@@ -2062,6 +2064,8 @@ const CFG_ITEMS = [
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:20, step:1, name:'DSP Loudness',
     desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, now up to +18 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream.' },
+  { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
+    desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   { key:'dsp_effect_abi', type:'seg', def:'auto', opts:['auto','aidl','aidl_v2','legacy'], name:'DSP Effect ABI',
     desc:'Which effect interface to install. auto reads the device VINTF manifest, including the AIDL interface VERSION - a library built for v3 cannot be loaded by a v2 factory, which is exactly how one model had a silent DSP with every config correct. Reboot to apply.' },
   { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
@@ -2114,7 +2118,7 @@ async function cfgLoad() {
 // explicitly.
 const CFG_CAT = {
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_effect_abi:'audio', bt_absvol_mode:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_effect_abi:'audio', bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
@@ -2334,10 +2338,10 @@ async function cfgSet(key, val, ctl) {
     // and no reboot for these. audioserver restarts briefly (a short audio gap), which is
     // why it runs in the background and the toast says "applying" rather than "reboot".
     // Live keys: a background audioserver restart re-reads these, so they apply now.
-    var AUDIO_LIVE_KEYS = ['audio_profile','dsp_loudness','dsp_bass','bt_absvol_mode'];
+    var AUDIO_LIVE_KEYS = ['audio_profile','dsp_loudness','dsp_bass','dsp_compressor','bt_absvol_mode'];
     // DSP-only changes go through the daemon, which hands the value to the live effect -
     // no audioserver restart, so the audio never drops out while the slider moves.
-    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass'];
+    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_compressor'];
     // Overlay keys: media_loudness (volume curves) and audio_dac_hifi (mixer) are baked
     // into the mounted overlay and only read at boot - a restart cannot pick them up, so
     // be honest and say reboot.
