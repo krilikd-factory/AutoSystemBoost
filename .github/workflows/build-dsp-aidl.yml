@@ -549,11 +549,12 @@ jobs:
             # SECOND time, and on a 16GB runner the duplicate analysis hung ~30 min and got
             # the runner killed (exit 143). SOONG_ONLY=true keeps the kati product graph
             # (NFC/CTS/priv-app) out, so only our lib + real deps are evaluated.
-            # Both interface versions in one pass. They share every source and every
-            # dependency except the AIDL library itself, so the second target costs almost
-            # nothing next to the tree analysis that dominates this step - and one run
-            # producing both is what makes a per-device choice possible at install time.
-            SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl libasbdsp_aidl_v2 asb_dsp_attach 2>&1 | tee /tmp/asb_build.log
+            # V3 and the daemon FIRST, on their own. Building both variants in one
+            # invocation means a V2 analysis error takes the whole ninja graph down with it
+            # and the run ends with nothing - which is what happened on the last three
+            # attempts, each costing half an hour to produce zero artifacts. V3 is the
+            # variant most devices need; it should never be hostage to the experimental one.
+            SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl asb_dsp_attach 2>&1 | tee /tmp/asb_build.log
             rc=${PIPESTATUS[0]}
             set -e
             # V3 is the gate. If only the V2 target failed we still want the run's output;
@@ -667,6 +668,32 @@ jobs:
             break
           done
           [ "$build_ok" = "1" ] || { echo "::error::build did not succeed"; exit 1; }
+
+          # V2, separately and best-effort. The tree is already analyzed and V3's objects
+          # are on disk, so this is a short incremental pass rather than another half hour.
+          # Its failure is reported in full and does NOT fail the run: devices whose vendor
+          # partition is frozen at effect v2 (a OnePlus 13 on Android 16, for instance) need
+          # this library, but the ones on v3 should not lose their build while we get there.
+          echo "=== building the V2 variant (best effort) ==="
+          set +e
+          SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl_v2 2>&1 | tee /tmp/asb_build_v2.log
+          v2rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$v2rc" = "0" ] && find out -name 'libasbdsp_aidl_v2.so' | grep -q .; then
+            echo "V2 variant built"
+          else
+            echo "::warning::the V2 variant did not build - v3 devices are unaffected"
+            echo "--- version conflicts (a dependency pinned to the wrong interface) ---"
+            grep -E 'depends on multiple versions|aidl_interface' /tmp/asb_build_v2.log \
+              | head -5 || echo "  (none)"
+            echo "--- compile errors in OUR source ---"
+            grep -E 'asb_effect_aidl\.cpp.*error:' /tmp/asb_build_v2.log | head -10 || echo "  (none)"
+            echo "--- compile errors in the AOSP effect-impl sources (V3-only APIs?) ---"
+            grep -E '(EffectImpl|EffectThread|EffectContext)\.cpp.*error:' /tmp/asb_build_v2.log \
+              | head -10 || echo "  (none)"
+            echo "--- undefined symbols (something we dropped WAS needed) ---"
+            grep -E 'undefined (symbol|reference)' /tmp/asb_build_v2.log | head -10 || echo "  (none)"
+          fi
           echo "=== produced .so files ==="
           find out -name 'libasbdsp_aidl.so' -exec ls -la {} \;
 
