@@ -218,7 +218,18 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->camera_hold_enable   = 1;
     c->camera_busy_pct      = 15;
     c->camera_hold_grace_s  = 20;
-    c->sustained_level       = 0.80f;
+    /* Below HEAVY (0.72), not above it. SUSTAINED is entered on TEMPERATURE - the state
+     * file records last_sustained_reason=thermal - so placing it at 0.80 meant getting
+     * hot raised the cap ceiling relative to HEAVY: hot -> allow more -> hotter. A
+     * full-day capture measured exactly that. With the screen on, SUSTAINED drew 739 mA
+     * at 63 C average against HEAVY's 331 mA at 44 C, on effectively identical load
+     * (loadavg 10.6 vs 9.2) - more current than GAMING (712 mA), which is the state that
+     * is supposed to be the expensive one. The device sat there for 24% of all screen-on
+     * time and the vendor thermal HAL never clamped once, so nothing external was
+     * correcting it. 0.62 is not a guess: it is what perf_sustained_level already used
+     * for the performance profile, where someone had clearly noticed the same thing and
+     * fixed it for that profile only. */
+    c->sustained_level       = 0.62f;
     c->gaming_gap_thresh        = 1500000;
     c->gaming_gap_ticks         = 4;
     c->gaming_retry_cooldown_s  = 20;
