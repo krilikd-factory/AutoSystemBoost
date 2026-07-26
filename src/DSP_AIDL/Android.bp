@@ -67,14 +67,28 @@ cc_library_shared {
 // verbatim from it, so the two builds differ in exactly one dependency.
 cc_defaults {
     name: "asb_aidleffect_v2_defaults",
-    defaults: [
-        "latest_android_media_audio_common_types_ndk_shared",
-    ],
+    // Every dependency that CARRIES a version is pinned explicitly. The "latest_*"
+    // defaults resolve to whatever this tree froze last (V4 here), and soong refuses a
+    // module that reaches two versions of one aidl_interface by any path. Each such
+    // dependency had to be found from a build log, one per run, so they are all listed
+    // here rather than inherited:
+    //   effect            V2  - the interface we are building for
+    //   common.types      V3  - what effect-V2 itself pulls; latest_* gave V4
+    //   libaudioaidlranges    - dropped entirely, it hard-links effect-V3 (see below)
+    //   conversion_common     - dropped, it is built against latest and nothing in
+    //                           asb_effect_aidl.cpp or the effect-impl sources converts
+    //                           between HIDL and AIDL audio types
+    defaults: [],
     vendor: true,
     shared_libs: [
         "android.hardware.audio.effect-V2-ndk",
-        "libaudio_aidl_conversion_common_ndk",
-        "libaudioaidlcommon",
+        "android.media.audio.common.types-V3-ndk",
+        // libaudioaidlcommon is NOT here either. AOSP lists it under shared_libs, not
+        // header_libs, so it is a real library built against the tree's latest interface
+        // and would drag common.types-V4 back in - the exact conflict this whole defaults
+        // block exists to avoid. Dropping it is weakly better than testing it: if the
+        // effect-impl sources genuinely need a symbol from it, the build says which one,
+        // and keeping it guarantees the version clash instead.
         "libaudioutils",
         "libbase",
         "libbinder_ndk",
