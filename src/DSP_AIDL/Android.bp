@@ -49,6 +49,75 @@ cc_library_shared {
     ],
 }
 
+// ---------------------------------------------------------------------------
+// Second build, against the V2 interface.
+//
+// A device's effect HAL version is a property of its VENDOR partition, frozen at its
+// launch year under Treble/GRF - not of the system image. A OnePlus 13 running Android
+// 16 still declares <version>2</version> because its vendor is an Android 15 vintage,
+// while a OnePlus 15 declares 3. queryEffect() fills a Descriptor through a plain C ABI
+// call, so the struct layout has to match exactly: a v3-built library is not something a
+// v2 factory can load, and it never gets as far as dlopen. That is why the OP13 saw
+// set=-19 initCheck=-19 (NO_INIT) with the config patched and the library in place.
+//
+// Both versions are frozen in one tree - the CI log lists "1 2 3 current" under
+// aidl_api/android.hardware.audio.effect - so this needs no second AOSP branch. The only
+// thing aidlaudioeffectservice_defaults does that we cannot reuse is pin the interface
+// via "latest_android_hardware_audio_effect_ndk_shared"; everything else below is copied
+// verbatim from it, so the two builds differ in exactly one dependency.
+cc_defaults {
+    name: "asb_aidleffect_v2_defaults",
+    defaults: [
+        "latest_android_media_audio_common_types_ndk_shared",
+    ],
+    vendor: true,
+    shared_libs: [
+        "android.hardware.audio.effect-V2-ndk",
+        "libaudio_aidl_conversion_common_ndk",
+        "libaudioaidlcommon",
+        "libaudioutils",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "libfmq",
+        "liblog",
+        "libutils",
+        "android.hardware.common-V2-ndk",
+        "android.hardware.common.fmq-V1-ndk",
+    ],
+    header_libs: [
+        "libaudioaidl_headers",
+        "libaudio_system_headers",
+        "libsystem_headers",
+    ],
+}
+
+cc_library_shared {
+    name: "libasbdsp_aidl_v2",
+    compile_multilib: "both",
+    srcs: [
+        "asb_effect_aidl.cpp",
+        ":effectCommonFile",
+    ],
+    defaults: [
+        "asb_aidleffect_v2_defaults",
+    ],
+    local_include_dirs: ["."],
+    static_libs: [
+        "libaudioaidlranges",
+    ],
+    relative_install_path: "soundfx",
+    visibility: ["//visibility:public"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-O2",
+        "-ffast-math",
+    ],
+}
+
 // Attacher daemon. NOT vendor: it links libaudioclient, which is a system library and is
 // not available to vendor modules. It is installed under the module's own directory and
 // launched from service.sh, so it never needs to live in /vendor.
