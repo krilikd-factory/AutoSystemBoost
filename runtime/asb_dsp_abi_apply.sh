@@ -26,7 +26,7 @@ if [ -z "$_want" ]; then
            | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
 fi
 case "$_want" in
-  aidl|legacy) : ;;
+  aidl|legacy|aidl_v[0-9]*) : ;;
   auto|'')
     echo "dsp_effect_abi=auto - the installer's probe decides; nothing to switch here."
     echo "Set aidl or legacy to override it."
@@ -34,13 +34,18 @@ case "$_want" in
   *) echo "unknown value: $_want (expected auto, aidl or legacy)"; exit 1 ;;
 esac
 
-if [ "$_want" = "legacy" ]; then
-  _s64="$MODDIR/bin/libasbdsp_legacy.so"
-  _s32="$MODDIR/bin/libasbdsp_legacy_32.so"
-else
-  _s64="$MODDIR/bin/libasbdsp.so"
-  _s32="$MODDIR/bin/libasbdsp_32.so"
-fi
+case "$_want" in
+  legacy)
+    _s64="$MODDIR/bin/libasbdsp_legacy.so"
+    _s32="$MODDIR/bin/libasbdsp_legacy_32.so" ;;
+  aidl_v*)
+    _wv="${_want#aidl_}"
+    _s64="$MODDIR/bin/libasbdsp_${_wv}.so"
+    _s32="$MODDIR/bin/libasbdsp_${_wv}_32.so" ;;
+  *)
+    _s64="$MODDIR/bin/libasbdsp.so"
+    _s32="$MODDIR/bin/libasbdsp_32.so" ;;
+esac
 if [ ! -f "$_s64" ]; then
   echo "the $_want library is not in this build ($_s64 missing) - reinstall a build that ships both"
   exit 1
