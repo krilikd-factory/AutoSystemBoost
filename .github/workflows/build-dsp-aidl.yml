@@ -549,9 +549,15 @@ jobs:
             # SECOND time, and on a 16GB runner the duplicate analysis hung ~30 min and got
             # the runner killed (exit 143). SOONG_ONLY=true keeps the kati product graph
             # (NFC/CTS/priv-app) out, so only our lib + real deps are evaluated.
-            SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl asb_dsp_attach 2>&1 | tee /tmp/asb_build.log
+            # Both interface versions in one pass. They share every source and every
+            # dependency except the AIDL library itself, so the second target costs almost
+            # nothing next to the tree analysis that dominates this step - and one run
+            # producing both is what makes a per-device choice possible at install time.
+            SOONG_ONLY=true m -j"$MJOBS" libasbdsp_aidl libasbdsp_aidl_v2 asb_dsp_attach 2>&1 | tee /tmp/asb_build.log
             rc=${PIPESTATUS[0]}
             set -e
+            # V3 is the gate. If only the V2 target failed we still want the run's output;
+            # the collect step warns and the installer falls back with an explicit message.
             if [ "$rc" = "0" ] && find out -name 'libasbdsp_aidl.so' | grep -q .; then
               build_ok=1; break
             fi
@@ -693,6 +699,23 @@ jobs:
           if [ -n "$OUT32" ]; then
             cp -f "$OUT32" "$DEST/armeabi-v7a/libasbdsp_aidl.so"
             cp -f "$OUT32" "$DEST/armeabi-v7a/libasbdsp_v${ASB_EFFECT_V}.so"
+          fi
+
+          # The V2 variant carries its version in the module name, so it is named from that
+          # and not from whatever this tree happens to freeze last.
+          V2OUT64="$(find out -path '*android_vendor_arm64_*' -name libasbdsp_aidl_v2.so 2>/dev/null | head -1)"
+          [ -n "$V2OUT64" ] || V2OUT64="$(find out -path '*arm64*' -name libasbdsp_aidl_v2.so 2>/dev/null | head -1)"
+          V2OUT32="$(find out -path '*android_vendor_arm_*' -name libasbdsp_aidl_v2.so 2>/dev/null | head -1)"
+          [ -n "$V2OUT32" ] || V2OUT32="$(find out -name libasbdsp_aidl_v2.so 2>/dev/null | grep -E '_arm_' | head -1)"
+          if [ -n "$V2OUT64" ]; then
+            cp -f "$V2OUT64" "$DEST/arm64-v8a/libasbdsp_v2.so"
+            echo "collected V2 arm64: $V2OUT64"
+          else
+            echo "::warning::libasbdsp_aidl_v2 (arm64) not produced - devices on effect v2 will fall back"
+          fi
+          if [ -n "$V2OUT32" ]; then
+            cp -f "$V2OUT32" "$DEST/armeabi-v7a/libasbdsp_v2.so"
+            echo "collected V2 arm: $V2OUT32"
           fi
           echo "=== staged ==="; find "$DEST" -name '*.so' -exec ls -la {} \;
           # Verify the AIDL factory symbol is exported (the whole reason this port exists).
