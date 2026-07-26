@@ -1277,9 +1277,29 @@ asb_install_dsp_lib() {
       if [ -f "$MODPATH/bin/libasbdsp_${_dsp_v}.so" ]; then
         _dsp_s64="$MODPATH/bin/libasbdsp_${_dsp_v}.so"
         _dsp_s32="$MODPATH/bin/libasbdsp_${_dsp_v}_32.so"
+      elif [ -f "$MODPATH/bin/libasbdsp_legacy.so" ]; then
+        # Fall back to LEGACY, not to the generic AIDL library.
+        #
+        # The generic build is compiled against whichever interface version the build tree
+        # froze last. Handing it to a factory expecting a different one is a guaranteed
+        # NO_INIT: queryEffect fills a Descriptor through a plain C ABI call, so the struct
+        # layout has to match exactly. Falling back to it was falling back to something
+        # known not to work.
+        #
+        # The legacy effect ABI (audio_effect_library_t / AUDIO_EFFECT_LIBRARY_INFO_SYM) is
+        # NOT versioned - it has been frozen for years, which is how ViPER ships one library
+        # for every device and Android release. And it is live here: on a OnePlus 13 whose
+        # vendor declares AIDL effect v2 only, audiohalservice.qti has libqcompostprocbundle,
+        # libqcomvisualizer and libqcomvoiceprocessing mapped in alongside the AIDL ones.
+        # QTI's service loads both ABIs, with libeffectproxy bridging them.
+        _dsp_s64="$MODPATH/bin/libasbdsp_legacy.so"
+        _dsp_s32="$MODPATH/bin/libasbdsp_legacy_32.so"
+        ASB_DSP_ABI="legacy"
+        ui_print "      + ASB DSP: device wants AIDL effect ${_dsp_v}, which is not shipped"
+        ui_print "        using the legacy effect instead - that ABI is not versioned"
       else
         ui_print "    ! ASB DSP: device declares AIDL effect ${_dsp_v}, no matching build shipped"
-        ui_print "      using the generic AIDL library - if the DSP stays silent, this is why"
+        ui_print "      and no legacy library either - the DSP will not load"
         ASB_DSP_ABI="aidl"
       fi
       ;;
