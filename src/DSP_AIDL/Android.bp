@@ -103,9 +103,21 @@ cc_library_shared {
         "asb_aidleffect_v2_defaults",
     ],
     local_include_dirs: ["."],
-    static_libs: [
-        "libaudioaidlranges",
-    ],
+    // NO libaudioaidlranges here, unlike the V3 module above.
+    //
+    // That static library is built against the tree's LATEST interface, so it drags in
+    // android.hardware.audio.effect-V3-ndk, which in turn pulls audio.common-V4 while our
+    // effect-V2-ndk pulls audio.common-V3. Soong refuses the module outright: "depends on
+    // multiple versions of the same aidl_interface". The dependency path in the build log
+    // is unambiguous - libaudioaidlranges -> effect-V3-ndk -> audio.common-V4-ndk.
+    //
+    // We do not actually need what it compiles. MAKE_RANGE is a macro from the effect-impl
+    // headers, which arrive through libaudioaidl_headers in the defaults above, and the
+    // ranges themselves are declared in asb_effect_aidl.cpp. The static library carries the
+    // range TABLES for AOSP's own effects, and none of ours come from there.
+    //
+    // If this turns out to export a symbol we do link, the build will name it, and the
+    // answer is to copy that one definition in rather than take the whole library back.
     relative_install_path: "soundfx",
     visibility: ["//visibility:public"],
     cflags: [
