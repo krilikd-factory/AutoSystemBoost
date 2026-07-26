@@ -353,6 +353,11 @@ jobs:
         run: |
           set -e
           export ALLOW_MISSING_DEPENDENCIES=true
+          # Soong reads its own variable, and it was never set: the make-level flag alone
+          # leaves blueprint erroring out at analysis time on every dangling reference a
+          # filtered sync leaves behind. With this, missing modules become a problem only
+          # if something we actually build needs them.
+          export SOONG_ALLOW_MISSING_DEPENDENCIES=true
           export BUILD_BROKEN_DISABLE_BAZEL=true
           # Use all cores: the 32 GB larger runner has the memory headroom that the old 16 GB
           # runner lacked, so the -j2 cap (a memory workaround) is no longer needed and just
@@ -402,6 +407,25 @@ jobs:
             if lunch "$combo"; then _lunched=1; echo "lunch OK: $combo"; break; fi
           done
           [ "$_lunched" = "1" ] || { echo "::error::no lunch combo worked (release=$REL)"; exit 1; }
+          # Pre-emptively empty the Android.bp files of trees that cannot possibly matter
+          # for one vendor shared library. Neutralizing these after a failed bootstrap
+          # costs a full minute of soong analysis per pass, and the android15-release sync
+          # leaves eleven of them - four wasted rebuild cycles to discover what we already
+          # know: reference device configs, host-test prebuilts and framework test suites
+          # are not inputs to libasbdsp_aidl. Doing it up front turns a whack-a-mole loop
+          # into a single pass.
+          _pruned=0
+          for _pd in device/google prebuilts/misc frameworks/base/ravenwood \
+                     frameworks/base/services/tests frameworks/base/tests \
+                     platform_testing cts; do
+            [ -d "$_pd" ] || continue
+            for _pb in $(find "$_pd" -name Android.bp -type f 2>/dev/null); do
+              printf '// emptied by ASB CI pre-prune\n' > "$_pb"
+              _pruned=$((_pruned + 1))
+            done
+          done
+          echo "pre-prune: emptied $_pruned Android.bp file(s) in trees irrelevant to this build"
+
           # Build with an auto-heal loop. soong analyzes the WHOLE tree before building our
           # module, and unrelated modules (trusty test VMs, CrashRecovery APEX prebuilts,
           # etc.) can fail analysis with product-config errors that have nothing to do with a
@@ -454,6 +478,17 @@ jobs:
               grep -E "missing dependencies|error:|undefined reference|fatal error" /tmp/asb_build.log | head -20
               break
             fi
+            # A blueprint panic is not an ordinary analysis error and must not be guessed
+            # at. Last run, the module-name fallback below reacted to one by emptying
+            # frameworks/base/services/tests/.../Android.bp - a file that merely REFERENCES
+            # the missing module rather than defining it - and the next pass came back with
+            # a Go stack trace instead of an error list. Stop and report.
+            if grep -qE '^panic:|^goroutine [0-9]+ \[' /tmp/asb_build.log 2>/dev/null; then
+              echo "::error::soong/blueprint crashed - not auto-healing a crash"
+              grep -E '^panic:|unrecognized module type|undefined module' /tmp/asb_build.log | head -10
+              break
+            fi
+
             # Otherwise auto-heal the unrelated Android.bp files that blocked soong analysis.
             #
             # ALL of them, in one pass. This used to take the first path in the error output
@@ -482,30 +517,12 @@ jobs:
               echo "auto-heal: neutralized $_healed file(s) this pass"
               continue
             fi
-            badbp=""
-            if [ -z "$badbp" ]; then
-              badmod="$(grep -oE 'GenerateBuildActions for module "[^"]+"' /tmp/asb_build.log \
-                         | head -1 | sed 's/.*"\(.*\)"/\1/')"
-              [ -z "$badmod" ] && badmod="$(grep -oE '[A-Za-z0-9_]+_intermediates' /tmp/asb_build.log \
-                         | head -1 | sed 's/_intermediates//')"
-              if [ -n "$badmod" ]; then
-                echo "auto-heal: error names module '$badmod' - locating its Android.bp"
-                badbp="$(grep -rlE "name:[[:space:]]*\"${badmod}\"" --include='Android.bp' . 2>/dev/null \
-                           | grep -v '^\./\.repo/' | head -1)"
-                [ -z "$badbp" ] && badbp="$(grep -rl "$badmod" --include='Android.bp' . 2>/dev/null \
-                           | grep -v '^\./\.repo/' | head -1)"
-              fi
-            fi
-            if [ -n "$badbp" ] && [ -f "$badbp" ] && [ "${badbp#*Android.bp}" != "$badbp" ]; then
-              case "$badbp" in
-                */DSP_AIDL/*|*vendor/asb/*)
-                  echo "::error::failing Android.bp is OUR module ($badbp) - real error"; break ;;
-              esac
-              echo "auto-heal: neutralizing unrelated $badbp"
-              printf '// emptied by ASB CI auto-heal\n' > "$badbp"
-              continue
-            fi
-            echo "::error::build failed and nothing could be auto-neutralized"
+            # No file named by soong means nothing safe is left to do. The old fallback
+            # here grepped the whole tree for a module NAME and emptied the first file that
+            # mentioned it - a consumer far more often than a definer, so it removed working
+            # code, left the dangling reference in place and took soong down with it on the
+            # next pass. If soong did not name a file, we do not guess.
+            echo "::error::build failed and no Android.bp was named - not guessing"
             tail -40 /tmp/asb_build.log || true
             break
           done
