@@ -122,7 +122,14 @@ cc_library_shared {
     compile_multilib: "both",
     srcs: [
         "asb_effect_aidl.cpp",
-        ":effectCommonFile",
+        // NOT ":effectCommonFile" - a local copy the CI writes, with the one V3-only
+        // state substituted. The tree's EffectImpl.cpp uses State::DRAINING, added in V3
+        // for drain-on-stop; V2 has no such state and stops straight to IDLE, which is
+        // exactly what the substitution restores. The V3 target above keeps using the
+        // filegroup untouched, so nothing about that build changes.
+        // The glob is intentional: if the copy step did not run, this module fails to
+        // build rather than silently picking up V3 sources.
+        "effect_common_v2/*.cpp",
     ],
     defaults: [
         "asb_aidleffect_v2_defaults",
