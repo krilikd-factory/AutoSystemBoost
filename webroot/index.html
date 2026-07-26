@@ -2358,14 +2358,14 @@ async function cfgSet(key, val, ctl) {
       var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0) ? ' dsp' : '';
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh' + _m + ' >/dev/null 2>&1 &'); } catch(e) {}
     } else if (DSP_ABI_KEYS.indexOf(key) >= 0) {
-      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_dsp_abi_apply.sh ' + val + ' >/dev/null 2>&1 &'); } catch(e) {}
+      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_dsp_abi_apply.sh ' + val + ' >/dev/null 2>&1'); } catch(e) {}
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_abi', ' \u00b7 reboot to apply'), cfgToastType(key));
     } else if (BLUR_KEYS.indexOf(key) >= 0) {
-      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_blur_apply.sh >/dev/null 2>&1 &'); } catch(e) {}
+      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_blur_apply.sh >/dev/null 2>&1'); } catch(e) {}
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_blur', ' \u00b7 shade now, rest after reboot'), cfgToastType(key));
     } else if (AUDIO_OVERLAY_KEYS.indexOf(key) >= 0) {
       if (AUDIO_REBUILD_KEYS.indexOf(key) >= 0) {
-        try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_media_apply.sh >/dev/null 2>&1 &'); } catch(e) {}
+        try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_media_apply.sh >/dev/null 2>&1'); } catch(e) {}
       }
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_reboot', ' \u00b7 reboot to apply'), cfgToastType(key));
     } else {
