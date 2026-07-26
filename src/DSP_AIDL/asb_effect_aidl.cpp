@@ -30,7 +30,16 @@
 #include <vector>
 
 #include <android-base/logging.h>
-#include <system/audio_effects/effect_uuid.h>
+// NOT <system/audio_effects/effect_uuid.h>.
+//
+// That header is a lookup table of the UUIDs of AOSP's OWN effects, and it names every
+// one the current tree knows about - including EFFECT_TYPE_UUID_ERASER, added in effect
+// interface V3. Including it against V2 fails to compile on a member we never touch: our
+// type and implementation UUIDs are declared right here in this file, as kAsbTypeUuid and
+// kAsbImplUuid, and nothing in this translation unit referenced the header at all.
+//
+// Dropping it is not a V2 workaround - it removes a dependency that was never used, so
+// the V3 build is byte-identical either way.
 #include <sys/system_properties.h>
 
 #include "effect-impl/EffectImpl.h"
