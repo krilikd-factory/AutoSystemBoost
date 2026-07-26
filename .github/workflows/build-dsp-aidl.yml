@@ -275,6 +275,24 @@ jobs:
           # meta_lic path. These CTS tests are irrelevant to a vendor audio lib but get pulled
           # into the make graph. Empty their defining Android.bp so they drop out.
           neutralize_bp_for 'CtsBionicRootTestCases|CtsBionic.*TestCases'
+          # Everything below was learned from the runs that failed after the last good one.
+          # This curated list is the mechanism that PRODUCED the working OP15 library - it
+          # empties about fifteen files by module name. The blanket directory sweep that
+          # replaced it emptied 553-858 and broke a tree that had been fine, so the lesson
+          # is to extend the surgical list rather than swing wider.
+          #
+          # Ravenwood and Robolectric: their soong plugins dereference a missing dependency
+          # without a nil check, so an absent module is a Go panic at java/ravenwood.go or
+          # java/robolectric.go instead of a reportable error. Nothing can auto-heal a
+          # crash - there is no error line naming a file - so they have to go before the
+          # first bootstrap. Neither is an input to a vendor cc_library_shared.
+          neutralize_bp_for 'android_ravenwood_test|android_ravenwood_libgroup|"ravenwood-utils"|"ravenwood-runtime"'
+          neutralize_bp_for 'android_robolectric_test|"Robolectric_all-target"'
+          # vintf_compatibility_matrix is registered by a soong plugin the filtered sync does
+          # not always bring in; the files that USE it then fail with "unrecognized module
+          # type". compatibility_matrices was already being healed by hand on the good run -
+          # the reference-device ones simply were not present in that sync.
+          neutralize_bp_for 'vintf_compatibility_matrix'
           # Confirm the release configs are present; list them so the build step (and we)
           # can see which release names actually exist on this branch.
           if [ -d build/release/aconfig ]; then
@@ -472,7 +490,9 @@ jobs:
           # code is not a safe default when the thing being removed is someone else's build
           # graph.
           if [ "${{ github.event.inputs.pre_prune }}" != "true" ]; then
-            echo "pre-prune: disabled (known-good path) - set pre_prune=true to enable"
+            echo "pre-prune: disabled - the curated neutralize_bp_for list above is the"
+            echo "            mechanism that built the shipped library; this blanket sweep"
+            echo "            is a last resort, not a default"
           else
           # Pre-emptively empty the Android.bp files of trees that cannot possibly matter
           # for one vendor shared library. Neutralizing these after a failed bootstrap
@@ -500,23 +520,10 @@ jobs:
           # trace. Prune them by MODULE TYPE rather than by directory, since they are
           # scattered well outside the test trees above, and none of them can matter for
           # building one vendor shared library.
-          _rw=0
           # Match the module type anywhere on the line, not just at its start: the previous
           # anchored pattern emptied 7 files and still left the one declaring ravenwood-utils,
           # which panicked soong on the very next pass. Also catch the name directly, since a
           # surviving libgroup is not something the build can report as an ordinary error.
-          # Robolectric is the same failure as ravenwood with a different plugin: its
-          # GenerateAndroidBuildActions dereferences a dependency that a filtered tree does
-          # not have, so a missing module becomes a Go panic rather than a reported error -
-          # NativeGraphicsTests took the last run down at java/robolectric.go. Both are test
-          # frameworks; neither can be an input to one vendor shared library. Prune the whole
-          # class at once instead of discovering the next member of it one CI run at a time.
-          for _rb in $(grep -rlE 'android_ravenwood_(test|libgroup)|android_robolectric_test|"ravenwood-utils"|"ravenwood-runtime"|"Robolectric_all-target"' \
-                         --include=Android.bp . 2>/dev/null | grep -v '^\./\.repo/'); do
-            printf '// emptied by ASB CI pre-prune (ravenwood)\n' > "$_rb"
-            _rw=$((_rw + 1))
-          done
-          echo "pre-prune: emptied $_rw ravenwood/robolectric Android.bp file(s)"
           echo "pre-prune: emptied $_pruned Android.bp file(s) in trees irrelevant to this build"
           fi
 
