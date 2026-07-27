@@ -52,7 +52,22 @@ _lvl="$(_cfg haptic_strength)"
 # 2400 is the ceiling because that is the highest value the OEM slider was seen to
 # produce. Going above an untested value on a linear actuator is not a knob worth
 # turning blind, so the top of our range is the top of theirs.
-ASB_HAP_MAX=2400
+# Ceiling of the stepless scale.
+#
+# Every observed value divides cleanly by 10 - 900, 1400, 2000, 2300, 2400 - and Android's
+# VibrationEffect amplitude runs 1..255. 255 x 10 = 2550, which makes the OEM value look
+# like amplitude in tenths and puts full scale at 2550 rather than the 2400 the slider
+# happened to stop at. So the top step is 2550: the strongest the actuator is driven at
+# all, not the strongest the OEM UI offers.
+#
+# Above that the value is almost certainly clamped rather than louder - amplitude has
+# nowhere left to go. haptic_stepless_max in governor.conf overrides this for anyone who
+# wants to find out on their own device; the default stays at the value the arithmetic
+# supports rather than a guess.
+ASB_HAP_MAX="$(_cfg haptic_stepless_max)"
+case "$ASB_HAP_MAX" in ''|*[!0-9]*) ASB_HAP_MAX=2550 ;; esac
+[ "$ASB_HAP_MAX" -lt 500 ] 2>/dev/null && ASB_HAP_MAX=500
+[ "$ASB_HAP_MAX" -gt 5000 ] 2>/dev/null && ASB_HAP_MAX=5000
 _coarse="haptic_feedback_intensity notification_vibration_intensity ring_vibration_intensity alarm_vibration_intensity media_vibration_intensity"
 _stepless="notification_stepless_vibration_intensity ring_stepless_vibration_intensity touch_stepless_vibration_intensity"
 _keys="$_coarse $_stepless"
