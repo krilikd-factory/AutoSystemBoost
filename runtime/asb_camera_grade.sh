@@ -30,8 +30,18 @@
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
 
-_lvl="$(grep -E '^[[:space:]]*CAMERA_LEVEL=' "$CONF" 2>/dev/null \
-        | head -1 | sed 's/.*=//' | tr -d ' \r')"
+# Level from the environment first, config second.
+#
+# At install time $MODDIR/config/governor.conf is still the pristine shipped file - the
+# carry-over that copies the user's answers into it runs about 1300 lines after the camera
+# overlay is built. Reading the config here therefore always saw CAMERA_LEVEL=0 and graded
+# nothing, no matter what the slider said. The exact same mistake cost dsp_effect_abi a
+# release; the installer already has the resolved value in hand, so it passes it in.
+_lvl="${ASB_CAMERA_LEVEL_IN:-}"
+if [ -z "$_lvl" ]; then
+  _lvl="$(grep -E '^[[:space:]]*CAMERA_LEVEL=' "$CONF" 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')"
+fi
 case "$_lvl" in ''|*[!0-9]*) _lvl=0 ;; esac
 [ "$_lvl" -gt 4 ] 2>/dev/null && _lvl=4
 
