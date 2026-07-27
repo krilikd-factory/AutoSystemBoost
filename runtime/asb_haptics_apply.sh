@@ -37,6 +37,7 @@ _cfg() {
 }
 
 _lvl="$(_cfg haptic_strength)"
+_lvl_touch="$(_cfg haptic_touch_strength)"
 
 # OnePlus keeps the real control in its OWN settings, not Android's.
 #
@@ -71,8 +72,25 @@ case "$ASB_HAP_MAX" in ''|*[!0-9]*) ASB_HAP_MAX=2400 ;; esac
 # silent phone. Anyone raising this is testing whether their device takes more, and the
 # cap keeps that from turning into "haptics broke and I do not know why".
 [ "$ASB_HAP_MAX" -gt 2400 ] 2>/dev/null && ASB_HAP_MAX=2400
-_coarse="haptic_feedback_intensity notification_vibration_intensity ring_vibration_intensity alarm_vibration_intensity media_vibration_intensity"
-_stepless="notification_stepless_vibration_intensity ring_stepless_vibration_intensity touch_stepless_vibration_intensity"
+# Two groups, because the OEM treats them as two and so does the user.
+#
+# There is no duration control to expose - a full dump of system, global and secure while
+# moving the OEM slider shows only these three keys change, and nothing anywhere carries a
+# duration, length or time. Android has no system-wide duration multiplier either: it
+# comes from each VibrationEffect's own waveform. So a second slider for duration would be
+# a control with nothing behind it.
+#
+# What the dump DOES show is that the OEM sets the three independently - 1500 for
+# notifications, 1600 for ring and touch - while we were writing one value to all three.
+# That is the real second axis, and it maps onto what people actually want differently
+# from each other: alerts strong enough to feel through a pocket, and typing feedback that
+# is not punishing to hold in the hand.
+_coarse_alert="notification_vibration_intensity ring_vibration_intensity alarm_vibration_intensity media_vibration_intensity"
+_coarse_touch="haptic_feedback_intensity"
+_stepless_alert="notification_stepless_vibration_intensity ring_stepless_vibration_intensity"
+_stepless_touch="touch_stepless_vibration_intensity"
+_coarse="$_coarse_alert $_coarse_touch"
+_stepless="$_stepless_alert $_stepless_touch"
 _keys="$_coarse $_stepless"
 
 case "$_lvl" in
@@ -115,15 +133,26 @@ if [ "$_want" = "0" ]; then
   exit 0
 fi
 
+# Touch level: follows the alert level unless it has one of its own.
+case "$_lvl_touch" in
+  0|1|2|3|4|5|6|7|8|9|10) _want_t="$_lvl_touch" ;;
+  *)                      _want_t="$_want" ;;
+esac
+
 # Coarse keys open the gate; the stepless value is what is actually felt.
-for _k in $_coarse; do settings put system "$_k" 3 >/dev/null 2>&1 || true; done
+for _k in $_coarse_alert; do settings put system "$_k" 3 >/dev/null 2>&1 || true; done
+[ "$_want_t" = "0" ] \
+  && settings put system haptic_feedback_intensity 0 >/dev/null 2>&1 \
+  || settings put system haptic_feedback_intensity 3 >/dev/null 2>&1
 _amp=$(( ASB_HAP_MAX * _want / 10 ))
+_amp_t=$(( ASB_HAP_MAX * _want_t / 10 ))
 # Write, then read back. The vendor service silently refuses a value it does not like -
 # the setting keeps its old contents and the phone just stops buzzing, with nothing
 # anywhere reporting a problem. Stepping down until one sticks turns that into a slightly
 # weaker buzz instead of no buzz, which is the failure mode worth having.
 for _k in $_stepless; do
-  _try="$_amp"
+  case " $_stepless_touch " in *" $_k "*) _try="$_amp_t" ;; *) _try="$_amp" ;; esac
+  [ "$_try" = "0" ] && { settings put system "$_k" 0 >/dev/null 2>&1; continue; }
   while [ "$_try" -ge 200 ]; do
     settings put system "$_k" "$_try" >/dev/null 2>&1 || true
     [ "$(settings get system "$_k" 2>/dev/null)" = "$_try" ] && break
@@ -136,5 +165,5 @@ done
 [ "$(settings get system haptic_feedback_enabled 2>/dev/null)" = "0" ] && \
   settings put system haptic_feedback_enabled 1 >/dev/null 2>&1
 
-echo "haptics: level $_want/10 (stepless $_amp)"
+echo "haptics: alerts $_want/10 ($_amp) - touch $_want_t/10 ($_amp_t)"
 exit 0
