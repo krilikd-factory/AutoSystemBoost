@@ -85,18 +85,28 @@ sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
     "$PROP" > "$_pt" 2>/dev/null || cp -f "$PROP" "$_pt"
 {
   echo "# ASB:BLUR:BEGIN"
-  # The compositor half goes for BOTH off and light - it is the expensive one, and light
-  # is defined as "keep the readable blur, drop the costly one".
-  if [ "$_db" = "1" ] || [ "$_db" = "2" ]; then
+  # OFF only. These are global kill switches, not per-surface ones.
+  #
+  # supports_background_blur=0 and disable_blurs=1 tell SurfaceFlinger that background
+  # blur does not exist at all - and every blurred surface goes through SurfaceFlinger,
+  # including the backdrop behind a notification and the volume panel. Setting them for
+  # "light" made light and off identical, which is exactly what was reported: "кажется
+  # режим light и выкл делают одно и то же". They were.
+  if [ "$_db" = "1" ]; then
     echo "persist.sys.sf.disable_blurs=1"
     echo "ro.surface_flinger.supports_background_blur=0"
     echo "ro.surface_flinger.media_panel_bg_blur=0"
+    echo "persist.sys.oplus.material_blur_switch=false"
+  fi
+  # LIGHT and OFF share only the targeted ones: the volume panel's own blur, the
+  # launcher's app-launch blur, and the OEM gaussian level. Each names a specific
+  # surface, so dropping them leaves the notification backdrop alone - which is the
+  # whole point of light. The launcher blur in particular is full-screen on every app
+  # open, so this is where most of the GPU saving actually is.
+  if [ "$_db" = "1" ] || [ "$_db" = "2" ]; then
     echo "ro.oplus.display.disable.volume_blur=1"
     echo "ro.oplus.gaussianlevel=0"
     echo "ro.launcher.blur.appLaunch=0"
-    # material_blur_switch stays with blur: it IS a blur switch, whatever the value
-    # spelling suggests.
-    echo "persist.sys.oplus.material_blur_switch=false"
   fi
   echo "# ASB:BLUR:END"
   echo "# ASB:UIFX:BEGIN"
