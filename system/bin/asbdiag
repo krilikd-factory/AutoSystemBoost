@@ -363,6 +363,26 @@ for _p in net.dns1 net.dns2 persist.sys.use_dingtalk_dns ro.ril.disable.power.co
 done
 
 # =====================================================================
+SEC "5b. HAPTICS"
+_h_lvl="$(cfg haptic_strength)"
+case "$_h_lvl" in
+  ''|-1|auto|stock) NOTE "haptic_strength = stock (not managed by ASB)" ;;
+  *)
+    NOTE "haptic_strength = ${_h_lvl}/10, touch = $(cfg haptic_touch_strength)"
+    # The coarse Android keys are a gate, not a level: they were already at 3 on the
+    # devices this was built for, which is why setting them alone did nothing. What is
+    # felt is the OEM stepless value, so that is what gets verified.
+    _h_want=$(( ${_h_lvl:-0} * 2400 / 10 ))
+    V "  notification stepless amplitude" "$_h_want" \
+      "$(settings get system notification_stepless_vibration_intensity 2>/dev/null)" eq
+    V "  ring stepless amplitude" "$_h_want" \
+      "$(settings get system ring_stepless_vibration_intensity 2>/dev/null)" eq
+    V "  coarse gate open (notification_vibration_intensity)" "3" \
+      "$(settings get system notification_vibration_intensity 2>/dev/null)" eq
+    NOTE "a live value BELOW the wanted one means the vibrator service rejected it and the script stepped down"
+    ;;
+esac
+
 SEC "6. CAMERA"
 _cam_plat="$(gp ro.board.platform)"
 [ -z "$_cam_plat" ] && _cam_plat="$(gp ro.hardware.chipname)"
@@ -464,15 +484,26 @@ else
     if [ "${_clvl:-0}" -ge 1 ] 2>/dev/null; then
       _cam_soc="$(getprop ro.board.platform 2>/dev/null)"
       [ -z "$_cam_soc" ] && _cam_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
+      # Grading is a RATIO now, so there is no single expected number to compare against
+      # - the result depends on what the device shipped. Checking "does it differ from
+      # the stock file" is the honest test, and it is also the one that would have caught
+      # the two ways this silently did nothing: rules that matched no value, and a hook
+      # that graded a file something else overwrote.
+      _cam_stock_bw="0.35, 0.5, 0.7"
+      _cam_live_bw="$(grep -m1 -o '"BlendWeight"[^]]*]' "$CT" 2>/dev/null | sed 's/.*\[//;s/\]//')"
+      V "  grade(lvl$_clvl) live file differs from stock" "not [$_cam_stock_bw]" \
+        "$(if [ "$_cam_live_bw" = "$_cam_stock_bw" ]; then printf '[%s]' "$_cam_live_bw"; \
+           else printf 'not [%s]' "$_cam_stock_bw"; fi)" eq
+      NOTE "grain=$(cfg CAMERA_GRAIN) contrast=$(cfg CAMERA_CONTRAST) portrait=$(cfg CAMERA_PORTRAIT) lowlight=$(cfg CAMERA_LOWLIGHT)  (3/3/0/0 = stock)"
+      # Portrait weights ship at zero and cannot be scaled, so they are set absolutely -
+      # worth checking separately because a zero here means the setting did nothing.
+      if [ "$(cfg CAMERA_PORTRAIT)" != "0" ] && [ -n "$(cfg CAMERA_PORTRAIT)" ]; then
+        _cam_skin="$(grep -o '"SkinBlendWeight"[^]]*]' "$CT" 2>/dev/null | sed 's/.*\[//;s/\]//' | grep -v '^0.0, 0.0, 0.0$' | head -1)"
+        V "  portrait AI weights are non-zero" "present" "$_cam_skin" present
+      fi
       _row="$_clvl"
       case "$_cam_soc" in sun|sm8750*) _row=$((_clvl - 1)); [ "$_row" -lt 1 ] && _row=1 ;; esac
-      case "$_row" in
-        1) _exp_sss="1.45"; _exp_bsat="0.99" ;;
-        2) _exp_sss="1.40"; _exp_bsat="1.02" ;;
-        3) _exp_sss="1.30"; _exp_bsat="1.05" ;;
-        4) _exp_sss="1.20"; _exp_bsat="1.10" ;;
-        *) _exp_sss=""; _exp_bsat="" ;;
-      esac
+      _exp_sss=""; _exp_bsat=""
       if [ -n "$_exp_sss" ]; then
         V "  grade(lvl$_clvl) sunsetSatScale=$_exp_sss" "$_exp_sss" "$(grep -o '"sunsetSatScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
         _inj="$(cfg CAMERA_AGGRESSIVE_INJECT)"; NOTE "inject mode = ${_inj:-safe}"
