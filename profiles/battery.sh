@@ -37,7 +37,10 @@ SCHED_DOWN_RATE=24000
 SCHED_HISPEED_LOAD=99
 SCHED_HISPEED_FREQ=
 UCL_BG_MIN=0
-UCL_BG_MAX=40
+# Background uclamp ceiling. Battery should cap background work HARDEST of the three,
+# and it was the most permissive: 40 against balanced's 35. 30 puts it at the bottom
+# of the ladder where it belongs.
+UCL_BG_MAX=30
 UCL_FG_MIN=0
 UCL_FG_MAX=55
 UCL_TOP_MIN=10

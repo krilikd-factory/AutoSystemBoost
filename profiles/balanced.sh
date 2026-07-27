@@ -7,7 +7,11 @@ WALT_CLUSTER_CLUST="45 45"
 WALT_COLOC=40
 WALT_PIPE=20
 WALT_PIPE_NONSP=20
-WALT_PIPE_SP=0
+# Special-task pipeline threshold. LOWER means more tasks qualify, so 0 means every
+# task does - more aggressive than performance's 1. The other two WALT_PIPE knobs run
+# 90/20/1 across the profiles; this one read 80/0/1, with balanced off the end of its
+# own ladder. 30 restores the ordering.
+WALT_PIPE_SP=30
 WALT_BUSY_HYST=0
 WALT_ED_BOOST=10
 WALT_TOPAPP_WEIGHT=110
@@ -43,7 +47,11 @@ UCL_FG_MAX=70
 UCL_TOP_MIN=50
 UCL_TOP_MAX=85
 LATENCY_SENSITIVE=1
-GPU_IDLE_TIMER=64
+# GPU idle timeout, ms. Higher keeps the GPU powered between frames: smoother, more
+# drain. balanced sat at 64 while performance used 48 - balanced held the GPU up
+# LONGER than the profile whose whole job is holding it up. 40 puts it between
+# battery's 12 and performance's 48, which is what the ladder implies.
+GPU_IDLE_TIMER=40
 GPU_FORCE_NO_NAP=0
 GPU_MIN_PCT=0
 GPU_MAX_PCT="${BALANCED_GPU_MAX_PCT:-85}"
@@ -57,7 +65,10 @@ VM_DIRTY_EXPIRE=6000
 VM_DIRTY_WRITEBACK=4000
 VM_VFS=80
 VM_STAT_INTERVAL=30
-VM_PAGE_CLUSTER=1
+# Swap readahead exponent. Swap here is zram, where readahead costs a decompression
+# for pages that are usually not wanted - 0 is the standard setting for compressed
+# swap and is what the other two profiles use. balanced was the only one at 1.
+VM_PAGE_CLUSTER=0
 VM_WMARK=60
 VM_MINFREE=32768
 NET_TCP_RMEM="4096 262144 16777216"
@@ -67,10 +78,18 @@ NET_WMEM_MAX=16777216
 NET_OPTMEM_MAX=1048576
 NET_BACKLOG=2000
 NET_BUDGET=180
-NET_BUDGET_USECS=5000
+# NAPI poll budget, microseconds. balanced held 5000 against performance's 1200 and
+# battery's 1500 - the longest softirq slice of the three, on the profile that is
+# meant to sit between them. 2500 is between.
+# Between battery's 1500 and performance's 1200. A longer slice means fewer softirq
+# wakeups and better battery; a shorter one yields sooner and cuts latency. So the
+# ladder runs battery-high to performance-low, and balanced belongs between them.
+NET_BUDGET_USECS=1350
 NET_DEV_WEIGHT=64
 NET_TCP_FASTOPEN=3
-NET_TCP_NOTSENT=32768
+# Unsent-bytes limit. balanced held the highest value of the three, above the profile
+# on either side of it; 20480 sits between battery's 16384 and performance's 24576.
+NET_TCP_NOTSENT=20480
 NET_TCP_KEEPIDLE=3600
 NET_TCP_FIN=20
 NET_QDISC=fq_codel
