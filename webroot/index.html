@@ -1880,8 +1880,8 @@ const I18N = {
         desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление скоростью UI ВКЛ.' },
       disable_blur: { name: 'Отключить эффекты блюра',
         desc: 'Выключает размытие везде \u2014 шторка, уведомления, панель громкости, переходы. Меньше нагрузки на GPU, шторка становится непрозрачной вместо матовой. Учтите: у всплывающего уведомления тоже не останется размытой подложки, и текст ляжет на то, что под ним. Промежуточного режима нет \u2014 обе ручки, которые эта платформа даёт, глобальные. Оконная часть применяется сразу, часть композитора \u2014 после перезагрузки.' },
-      ui_effects_level: { name: 'Визуальные эффекты OxygenOS',
-        desc: '«Сток» \u2014 не трогаем уровень эффектов прошивки. «Плоско» \u2014 понижаем его: «Недавние» превращаются из карточек с превью в простой список, часть переходов упрощается. Меньше нагрузки на GPU, но выглядит проще. Вынесено отдельно от блюра намеренно: раньше это было в одном тумблере, и отключение блюра молча делало «Недавние» плоскими. Применяется после перезагрузки.' },
+      ui_effects_level: { name: 'Анимации системы',
+        desc: '«Упрощённые» \u2014 убирают объём из анимаций OxygenOS: «Недавние» становятся простым списком вместо карточек с превью, переходы теряют многослойные эффекты. Легче для видеочипа, но выглядит скромнее. «Авто» \u2014 следует за настройкой блюра: до недавнего времени это была одна общая настройка, поэтому «авто» сохраняет привычное поведение. Применяется после перезагрузки.' },
       haptic_strength: { name: 'Сила вибрации',
         desc: 'Масштабирует всю тактильную отдачу \u2014 уведомления, звонок, будильники, отклик на касания. При перетаскивании телефон вибрирует на выбранном уровне, чтобы разницу было слышно сразу, не выходя со страницы. Четыре шага \u2014 это не упрощение: настройка силы вибрации в Android принимает ровно 0\u20133, и более дробный ползунок просто округлял бы значение втихую. 2 \u2014 системное значение по умолчанию, а на этом устройстве большинство таких настроек вообще не выставлено, поэтому у 3 есть реальный запас. Продолжительность не регулируется \u2014 она задаётся формой волны каждого эффекта. Применяется сразу.' },
     },
@@ -1891,9 +1891,13 @@ const I18N = {
       safe: 'безопасно', aggressive: 'агрессивно',
       stock: 'сток', disabled: 'откл',
       mild: 'умеренно', strong: 'сильно', max: 'макс',
-      light: 'слабо', medium: 'средне',
+      light: 'слабо', medium: 'средне', flat: 'плоско', auto: 'авто',
       eq_compat: 'под эквалайзер', hifi: 'hi-fi',
       '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
+    },
+    // Per-card labels. These win over the shared ones above.
+    optFor: {
+      ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' }
     }
   },
   en: {
@@ -1901,9 +1905,12 @@ const I18N = {
     opt: {
       eq_compat: 'EQ-friendly', hifi: 'Hi-Fi', stock: 'Stock',
       mild: 'Mild', strong: 'Strong', max: 'Max', disabled: 'Disable',
-      light: 'Light', medium: 'Medium',
+      light: 'Light', medium: 'Medium', flat: 'Flat',
       off: 'Off', safe: 'Safe', aggressive: 'Aggressive',
       '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
+    },
+    optFor: {
+      ui_effects_level: { auto: 'Auto', stock: 'Normal', flat: 'Simplified' }
     }
   }
 };
@@ -1917,8 +1924,14 @@ function Tcfg(cfgKey, field, fallback) {
     return I18N.ru.cfg[cfgKey][field];
   return fallback;
 }
-function Topt(o) {
+function Topt(o, key) {
   var L = I18N[ASB_LANG];
+  // A card can override a shared label. "stock" reads fine on an audio profile and badly
+  // on an animation setting, where the honest words are "normal" and "simplified" - and
+  // a value the user has to ask about ("what does flat do?") is a label that failed.
+  if (key && L && L.optFor && L.optFor[key] && L.optFor[key][o] != null) return L.optFor[key][o];
+  if (key && I18N.ru.optFor && I18N.ru.optFor[key] && I18N.ru.optFor[key][o] != null
+      && ASB_LANG === 'ru') return I18N.ru.optFor[key][o];
   if (L && L.opt && L.opt[o] != null) return L.opt[o];
   if (I18N.ru.opt[o] != null && ASB_LANG === 'ru') return I18N.ru.opt[o];
   return o;
@@ -2163,8 +2176,8 @@ const CFG_ITEMS = [
   // --- Display ---
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
-  { key:'ui_effects_level', type:'seg', def:'stock', opts:['stock','flat'], name:'OxygenOS Visual Effects',
-    desc:'stock leaves the OEM effects level alone. flat drops it, which turns Recents from card previews into a plain list and simplifies some transitions - lighter on the GPU, plainer to look at. This is separate from blur on purpose: it used to be bundled in, so turning blur off silently flattened Recents. Applies after a reboot.' },
+  { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
+    desc:'Simplified strips the depth out of OxygenOS animations: Recents becomes a plain list instead of card previews, and transitions lose their layered effects. Lighter on the GPU, plainer to look at. Auto follows the blur setting - these two were one control until recently, so auto keeps the behaviour you already had. Applies after a reboot.' },
   { key:'haptic_strength', type:'range', def:'2', min:0, max:3, step:1, name:'Vibration Strength',
     desc:'Scales every haptic - notifications, ringtone, alarms, touch feedback. Drag it and the phone buzzes at the level you land on, so you can feel the difference without leaving the page. Four steps is not a simplification: Android\u2019s vibration intensity setting accepts exactly 0-3, and anything finer would be a slider that rounds behind your back. 2 is the system default, and most of these settings are unset on this device, so 3 has real headroom. Duration is not adjustable - it comes from each effect\u2019s own waveform. Applies immediately.' },
 ];
@@ -2428,7 +2441,7 @@ function cfgRender() {
       seg.className = (it.opts.length >= 4) ? ('cfg-seg small' + (it.opts.length >= 6 ? ' dense' : '')) : 'cfg-seg';
       it.opts.forEach(o => {
         const b = document.createElement('button');
-        b.textContent = Topt(o);
+        b.textContent = Topt(o, it.key);
         if (o === cur) b.classList.add('on');
         b.onclick = (e) => { e.stopPropagation(); cfgSet(it.key, o, seg); };
         seg.appendChild(b);
