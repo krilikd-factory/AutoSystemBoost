@@ -635,7 +635,8 @@ asb_apply_device_overlay() {
         # Scaling what is there works regardless of what is there.
         if [ "$_ASB_CAMERA_LEVEL" -gt 0 ] 2>/dev/null \
            && [ -f "$MODPATH/runtime/asb_camera_grade.sh" ] && [ -f "$_ctf" ]; then
-          MODDIR="$MODPATH" sh "$MODPATH/runtime/asb_camera_grade.sh" "$_ctf" "$_ctf.graded" >/dev/null 2>&1
+          MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
+            sh "$MODPATH/runtime/asb_camera_grade.sh" "$_ctf" "$_ctf.graded" >/dev/null 2>&1
           if [ -s "$_ctf.graded" ]; then
             mv -f "$_ctf.graded" "$_ctf" 2>/dev/null
             ui_print "      + camera grade: level ${_ASB_CAMERA_LEVEL} applied as a ratio (saturation / AI detail / sharpening)"
