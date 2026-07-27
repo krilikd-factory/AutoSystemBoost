@@ -371,6 +371,8 @@ jobs:
             "runtime/asb_dsp_abi_apply.sh" \
             "runtime/asb_haptics_apply.sh" \
             "runtime/asb_camera_grade.sh" \
+            "runtime/asb_tweaks.sh" \
+            "runtime/smart_dynamic_tune.sh" \
             "profiles/battery.sh" \
             "profiles/balanced.sh" \
             "profiles/performance.sh" \
