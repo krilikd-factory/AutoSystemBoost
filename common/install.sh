@@ -2594,8 +2594,13 @@ asb_apply_blur_prop() {
     echo "# ASB:UIFX:BEGIN"
     _ue="$(grep -E '^[[:space:]]*ui_effects_level=' "$MODPATH/config/governor.conf" 2>/dev/null \
            | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    # Same rule as runtime/asb_blur_apply.sh: an absent or unrecognised value follows
+    # blur, so an existing install that only ever set disable_blur keeps the behaviour it
+    # had. An explicit stock or flat is honoured.
     case "$_ue" in
-      flat|0) echo "persist.sys.oplus.anim_level=0" ;;
+      flat|0)  echo "persist.sys.oplus.anim_level=0" ;;
+      stock|1) : ;;
+      *)       [ "$_db" = "1" ] && echo "persist.sys.oplus.anim_level=0" ;;
     esac
     echo "# ASB:UIFX:END"
   } >> "$_pt"
