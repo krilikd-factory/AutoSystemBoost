@@ -107,6 +107,64 @@ asb_end_banner() {
     printf '%s\n' "$_en" | while IFS= read -r _l; do ui_print "$_l"; done
   fi
 
+  # What the user will actually notice, in their words.
+  #
+  # The category list above answers "which parts of the module are on". It does not
+  # answer "what did this do to my phone", which is the question someone installing a
+  # module is actually asking. These lines read the settings that are in force and say
+  # what each one means, skipping anything left at stock - a summary that lists defaults
+  # is a summary nobody finishes reading.
+  _sg() {
+    grep -E "^[[:space:]]*$1=" "$MODPATH/config/governor.conf" 2>/dev/null \
+      | head -1 | sed 's/.*=//' | tr -d ' \r'
+  }
+  _tw=""
+  _add_tw() { _tw="${_tw}${_tw:+
+}      · $1"; }
+
+  case "$(_sg audio_profile)" in
+    hifi)      _add_tw "${ASB_L_TW_HIFI:-Audio: hi-fi chain - vendor compression off, flat EQ}" ;;
+    eq_compat) _add_tw "${ASB_L_TW_EQC:-Audio: tuned for external equalizers (ViPER and friends)}" ;;
+  esac
+  case "$(_sg media_loudness)" in
+    ''|stock) : ;;
+    *) _add_tw "${ASB_L_TW_LOUD:-Volume: comfortable level now reached lower on the slider}" ;;
+  esac
+  case "$(_sg dsp_loudness)" in
+    ''|off|0) : ;;
+    *) _add_tw "$(printf "${ASB_L_TW_DSP:-DSP: +%s dB real gain, with a peak limiter}" "$(_sg dsp_loudness)")" ;;
+  esac
+  case "$(_sg CAMERA_LEVEL)" in
+    ''|0) : ;;
+    *) _add_tw "$(printf "${ASB_L_TW_CAM:-Camera: grade level %s - colour, AI detail and sharpening scaled up}" "$(_sg CAMERA_LEVEL)")" ;;
+  esac
+  case "$(_sg CAMERA_PORTRAIT)" in
+    ''|0) : ;;
+    *) _add_tw "${ASB_L_TW_PORTRAIT:-Camera: portrait AI on (ships disabled) - more detail in faces}" ;;
+  esac
+  case "$(_sg haptic_strength)" in
+    ''|-1|auto|stock) : ;;
+    0) _add_tw "${ASB_L_TW_VIB_OFF:-Vibration: off}" ;;
+    *) _add_tw "$(printf "${ASB_L_TW_VIB:-Vibration: level %s/10 on the OEM scale}" "$(_sg haptic_strength)")" ;;
+  esac
+  case "$(_sg disable_blur)" in
+    1|on|true) _add_tw "${ASB_L_TW_BLUR:-Display: blur off - lighter on the GPU, solid backdrops}" ;;
+  esac
+  case "$(_sg auto_battery_enable)" in
+    1) _add_tw "${ASB_L_TW_AUTOBAT:-Battery: switches to the Battery profile when low, and back when charged}" ;;
+  esac
+  case "$(_sg cool_gaming)" in
+    1) _add_tw "${ASB_L_TW_COOL:-Games: thermal lean starts earlier to keep the phone cooler}" ;;
+  esac
+  if [ -n "$_tw" ]; then
+    ui_print " "
+    ui_print "  ✨  ${ASB_SEC_NOTICE:-WHAT YOU WILL NOTICE}"
+    printf '%s\n' "$_tw" | while IFS= read -r _l; do ui_print "$_l"; done
+    ui_print " "
+    ui_print "      ${ASB_L_NOTICE_FOOT1:-Everything above is adjustable in the WebUI, and a reboot}"
+    ui_print "      ${ASB_L_NOTICE_FOOT2:-applies the parts that need one.}"
+  fi
+
   if [ -n "$INFO" ] && [ -f "$INFO" ] && [ ! -s "$INFO" ]; then
     rm -f "$INFO" 2>/dev/null || true
   fi
@@ -601,7 +659,7 @@ asb_apply_device_overlay() {
           if [ -f "$_live" ] && [ ! -f "$MODPATH/$_ov/$_cf_rel" ]; then
             mkdir -p "$MODPATH/$_ov/$(dirname "$_cf_rel")" 2>/dev/null
             cp -f "$_live" "$MODPATH/$_ov/$_cf_rel" 2>/dev/null \
-              && ui_print "      + Camera tone: cloned device-stock $_cf_base"
+              && ui_print "      + $(printf "${ASB_L_CAM_PREPARED:-Camera: %s prepared from device stock}" "$_cf_base")"
             break
           fi
         done
@@ -924,7 +982,24 @@ asb_clone_device_camera_tone() {
           _ct_done=0
           for _ct_dst in $_ct_dsts; do
             [ -f "$MODPATH/$_ct_dst" ] || continue
+            # The four extra knobs come from the live config, which by this point holds
+            # the user's carried-over answers - unlike CAMERA_LEVEL, which the installer
+            # resolves earlier and hands over directly.
+            _cam_get() {
+              for _cg in /data/adb/modules/AutoSystemBoost/config/governor.conf \
+                         "$MODPATH/config/governor.conf"; do
+                [ -f "$_cg" ] || continue
+                _cv="$(grep -E "^[[:space:]]*$1=" "$_cg" 2>/dev/null | head -1 \
+                       | sed 's/.*=//' | tr -d ' \r')"
+                case "$_cv" in ''|*[!0-9]*) : ;; *) echo "$_cv"; return 0 ;; esac
+              done
+              echo ""
+            }
             MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
+              ASB_CAM_GRAIN_IN="$(_cam_get CAMERA_GRAIN)" \
+              ASB_CAM_CONTRAST_IN="$(_cam_get CAMERA_CONTRAST)" \
+              ASB_CAM_PORTRAIT_IN="$(_cam_get CAMERA_PORTRAIT)" \
+              ASB_CAM_LOWLIGHT_IN="$(_cam_get CAMERA_LOWLIGHT)" \
               sh "$MODPATH/runtime/asb_camera_grade.sh" \
                  "$MODPATH/$_ct_dst" "$MODPATH/$_ct_dst.graded" >/dev/null 2>&1
             if [ -s "$MODPATH/$_ct_dst.graded" ]; then
@@ -935,10 +1010,17 @@ asb_clone_device_camera_tone() {
               rm -f "$MODPATH/$_ct_dst.graded" 2>/dev/null
             fi
           done
-          [ "$_ct_done" -gt 0 ] && ui_print "      + Camera grade: level $_ASB_CAMERA_LEVEL applied to $_ct_done file(s) - saturation / AI detail / sharpening"
+          [ "$_ct_done" -gt 0 ] && ui_print "      + $(printf "${ASB_L_CAM_GRADED:-Camera grade: level %s applied to %s file(s) - saturation / AI detail / sharpening}" "$_ASB_CAMERA_LEVEL" "$_ct_done")"
         fi
       fi
-      ui_print "      + Camera tone: cloned device-stock $_ct_base"
+      case "$_ct_base" in
+        conf_tuning_params.json)
+          ui_print "      + ${ASB_L_CAM_TUNING:-Camera: image tuning ready (colour, detail, sharpening)}" ;;
+        *video_beauty*)
+          ui_print "      + ${ASB_L_CAM_BEAUTY:-Camera: retouch profile ready (per-app beauty settings)}" ;;
+        *)
+          ui_print "      + $(printf "${ASB_L_CAM_OTHER:-Camera: %s ready}" "$_ct_base")" ;;
+      esac
       break
     done
   done
@@ -1027,7 +1109,22 @@ asb_clone_dir_from_live() {
   # Prune any now-empty dirs the find above created nothing in.
   find "$_dest" -type d -empty -delete 2>/dev/null || true
   [ -d "$_dest" ] || return 1
-  ui_print "      + ${_src} -> system${_canon} (configs only)"
+  # Say what was mirrored, not where it came from.
+  #
+  # "vendor/etc/audio -> system/vendor/etc/audio (configs only)" is a line for whoever
+  # wrote the installer. A user reads three of them in a row and learns nothing except
+  # that something happened somewhere. Count the files and name the area instead; the
+  # paths are still in the log for anyone debugging, one line above.
+  _clone_cnt="$(find "$_dest" -type f 2>/dev/null | wc -l | tr -d ' ')"
+  # Localised: the module ships English and Russian text files and the user picked one
+  # at the top of the install. Hardcoding English here would have made this the only
+  # untranslated part of the output.
+  case "$_canon" in
+    */audio*)  _clone_fmt="${ASB_L_MIRROR_AUDIO:-mirrored %s audio settings file(s) so ASB can edit them safely}" ;;
+    */camera*) _clone_fmt="${ASB_L_MIRROR_CAMERA:-mirrored %s camera settings file(s) so ASB can edit them safely}" ;;
+    *)         _clone_fmt="${ASB_L_MIRROR_SYSTEM:-mirrored %s system settings file(s) so ASB can edit them safely}" ;;
+  esac
+  ui_print "      + $(printf "$_clone_fmt" "$_clone_cnt")"
   return 0
 }
 
@@ -2099,13 +2196,13 @@ asb_preserve_user_config() {
     fi
   fi
 
-  _user_keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+  _user_keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
 bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
+region_allow_locale disable_blur ui_effects_level haptic_strength haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -2130,11 +2227,11 @@ asb_snapshot_user_config() {
   _snap_conf="/data/adb/asb/governor.conf.snapshot"
   [ -f "$_new_conf" ] || return 0
   mkdir -p "$(dirname "$_snap_conf")" 2>/dev/null || true
-  _keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
+  _keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
+region_allow_locale disable_blur ui_effects_level haptic_strength haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
