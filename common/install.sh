@@ -2053,7 +2053,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
+region_allow_locale disable_blur ui_effects_level haptic_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -2082,7 +2082,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
+region_allow_locale disable_blur ui_effects_level haptic_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -2538,9 +2538,8 @@ asb_apply_blur_prop() {
   # asb_blur_apply.sh owns. install-time and runtime must agree on the vocabulary or the
   # setting reverts on the next boot.
   case "$_db" in
-    1|on|true|off)  _db=1 ;;
-    light|partial)  _db=2 ;;
-    *)              _db=0 ;;
+    1|on|true|off|light|partial) _db=1 ;;
+    *)                           _db=0 ;;
   esac
   # Rewrite the managed block from scratch every install so the WebUI toggle drives it.
   # Also strip any BARE (unmarked) copies of these props first: an earlier build wrote
@@ -2578,7 +2577,7 @@ asb_apply_blur_prop() {
     # OFF and LIGHT: targeted keys, each naming one surface. Dropping these leaves the
     # notification backdrop readable, which is what light is for. anim_level is NOT here -
     # it is the OEM effects level, not blur, and it lives in ui_effects_level now.
-    if [ "$_db" = "1" ] || [ "$_db" = "2" ]; then
+    if [ "$_db" = "1" ]; then
       echo "ro.oplus.display.disable.volume_blur=1"
       echo "ro.oplus.gaussianlevel=0"
       echo "ro.launcher.blur.appLaunch=0"
@@ -2592,10 +2591,6 @@ asb_apply_blur_prop() {
     settings put global disable_window_blurs 1 >/dev/null 2>&1 || true
     ui_print "      + ${ASB_D_BLUR:-blur disabled via system.prop (applies after reboot)}"
     ASB_BLUR_APPLIED="disabled"
-  elif [ "$_db" = "2" ]; then
-    settings put global disable_window_blurs 0 >/dev/null 2>&1 || true
-    ui_print "      + blur: light (shade and notifications keep their blur)"
-    ASB_BLUR_APPLIED="light"
   else
     settings put global disable_window_blurs 0 >/dev/null 2>&1 || true
     ASB_BLUR_APPLIED="stock"
@@ -3433,7 +3428,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
