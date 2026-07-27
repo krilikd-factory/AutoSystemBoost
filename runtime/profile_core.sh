@@ -442,7 +442,26 @@ asb_apply_ux() {
   # before is not the gate: asb_apply_ux was never reached at boot at all (see the
   # command -v fix in service.sh), so no scale was ever written and the gate never
   # opened.
-  if [ "${UX_ANIM_FORCE_RESTART:-0}" = "1" ] && [ "$_anim_changed" = "1" ]; then
+  # Never on an AUTOMATIC profile change.
+  #
+  # Killing SystemUI blanks the screen for a couple of seconds, drops the user at the
+  # lock screen and tears down every overlay another module has drawn into the status
+  # bar. That is an acceptable price for a change the user just asked for; it is not
+  # acceptable for one they did not.
+  #
+  # Auto-battery switches profiles at 20% on its own, and the profiles carry different
+  # animation scales (balanced 0.9, battery 1.0), so _anim_changed was set and the kill
+  # fired. Reported from the field as "at 19% the screen goes black for a moment, comes
+  # back on the lock screen, and my status-bar icon module resets" - which reads exactly
+  # like a SystemUI crash and is in fact us.
+  #
+  # The scales are written either way; SystemUI simply picks them up when it is next
+  # restarted for its own reasons. A slightly stale animation duration is not worth
+  # interrupting someone whose phone is already low on battery.
+  _ux_manual=1
+  case "${PROFILE_FLAG:-}" in auto) _ux_manual=0 ;; esac
+  if [ "${UX_ANIM_FORCE_RESTART:-0}" = "1" ] && [ "$_anim_changed" = "1" ] \
+     && [ "$_ux_manual" = "1" ]; then
     pkill -f com.android.systemui >/dev/null 2>&1 || true
   fi
 }
