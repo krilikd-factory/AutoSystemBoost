@@ -1883,7 +1883,7 @@ const I18N = {
       ui_effects_level: { name: 'Визуальные эффекты OxygenOS',
         desc: '«Сток» \u2014 не трогаем уровень эффектов прошивки. «Плоско» \u2014 понижаем его: «Недавние» превращаются из карточек с превью в простой список, часть переходов упрощается. Меньше нагрузки на GPU, но выглядит проще. Вынесено отдельно от блюра намеренно: раньше это было в одном тумблере, и отключение блюра молча делало «Недавние» плоскими. Применяется после перезагрузки.' },
       haptic_strength: { name: 'Сила вибрации',
-        desc: 'Масштабирует всю тактильную отдачу \u2014 уведомления, звонок, будильники, отклик на касания. «Средне» \u2014 это штатное значение Android, а на вашем устройстве большинство этих настроек вообще не выставлено, поэтому у «сильно» есть реальный запас. Продолжительность изменить нельзя: она задаётся формой волны каждого эффекта, общесистемного множителя для неё не существует. Драйвер вибромотора намеренно не трогаем: его калибровочные значения \u2014 это измеренный резонанс конкретного экземпляра, и их подмена заставляет мотор гудеть вне резонанса, а не бить сильнее. Применяется сразу.' },
+        desc: 'Масштабирует всю тактильную отдачу \u2014 уведомления, звонок, будильники, отклик на касания. При перетаскивании телефон вибрирует на выбранном уровне, чтобы разницу было слышно сразу, не выходя со страницы. Четыре шага \u2014 это не упрощение: настройка силы вибрации в Android принимает ровно 0\u20133, и более дробный ползунок просто округлял бы значение втихую. 2 \u2014 системное значение по умолчанию, а на этом устройстве большинство таких настроек вообще не выставлено, поэтому у 3 есть реальный запас. Продолжительность не регулируется \u2014 она задаётся формой волны каждого эффекта. Применяется сразу.' },
     },
     // segmented option labels
     opt: {
@@ -1891,6 +1891,7 @@ const I18N = {
       safe: 'безопасно', aggressive: 'агрессивно',
       stock: 'сток', disabled: 'откл',
       mild: 'умеренно', strong: 'сильно', max: 'макс',
+      light: 'слабо', medium: 'средне',
       eq_compat: 'под эквалайзер', hifi: 'hi-fi',
       '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
     }
@@ -1900,6 +1901,7 @@ const I18N = {
     opt: {
       eq_compat: 'EQ-friendly', hifi: 'Hi-Fi', stock: 'Stock',
       mild: 'Mild', strong: 'Strong', max: 'Max', disabled: 'Disable',
+      light: 'Light', medium: 'Medium',
       off: 'Off', safe: 'Safe', aggressive: 'Aggressive',
       '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
     }
@@ -2163,8 +2165,8 @@ const CFG_ITEMS = [
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'stock', opts:['stock','flat'], name:'OxygenOS Visual Effects',
     desc:'stock leaves the OEM effects level alone. flat drops it, which turns Recents from card previews into a plain list and simplifies some transitions - lighter on the GPU, plainer to look at. This is separate from blur on purpose: it used to be bundled in, so turning blur off silently flattened Recents. Applies after a reboot.' },
-  { key:'haptic_strength', type:'seg', def:'stock', opts:['stock','off','light','medium','strong'], name:'Vibration Strength',
-    desc:'Scales every haptic - notifications, ringtone, alarms, touch feedback. medium is Android\u2019s own default and most of these are unset on this device, so strong genuinely has headroom above it. Duration cannot be changed: it comes from each effect\u2019s waveform and there is no system-wide multiplier. The vibrator driver is left alone on purpose - its calibration values are per-unit resonance data, and overriding them makes the motor buzz off-resonance rather than harder. Applies immediately.' },
+  { key:'haptic_strength', type:'range', def:'2', min:0, max:3, step:1, name:'Vibration Strength',
+    desc:'Scales every haptic - notifications, ringtone, alarms, touch feedback. Drag it and the phone buzzes at the level you land on, so you can feel the difference without leaving the page. Four steps is not a simplification: Android\u2019s vibration intensity setting accepts exactly 0-3, and anything finer would be a slider that rounds behind your back. 2 is the system default, and most of these settings are unset on this device, so 3 has real headroom. Duration is not adjustable - it comes from each effect\u2019s own waveform. Applies immediately.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -2251,6 +2253,8 @@ const CFG_ICONS = {
   UX_MANAGE_TIMEOUTS:'\uD83D\uDC46',          // pointing finger (touch)
   UX_MANAGE_OEM_TOGGLES:'\uD83E\uDDE9',         // puzzle piece (OEM toggles)
   disable_blur:'\uD83C\uDF2B',                  // fog (blur off)
+  ui_effects_level:'\uD83C\uDFA8',              // artist palette (visual style)
+  haptic_strength:'\uD83D\uDCF3',               // vibration mode
   UX_ANIM_FORCE_RESTART:'\uD83D\uDD04',       // restart arrows
   region_allow_locale:'\uD83C\uDF0D'          // globe
 };
@@ -2363,6 +2367,7 @@ function cfgRender() {
       sw.onclick = (e) => { e.stopPropagation(); cfgSet(it.key, (cur === '1') ? '0' : '1', sw); };
       top.appendChild(sw);
     } else if (it.type === 'range') {
+      var _hapticLast = -1;
       // Slider control. Live value shows next to the handle; commit on release
       // (change) so we don't spam config writes while dragging.
       const wrap = document.createElement('div');
@@ -2380,10 +2385,34 @@ function cfgRender() {
         // DSP loudness is a dB gain; label it as such. Other ranges stay plain numbers.
         if (it.key === 'dsp_loudness') return '+' + v + ' dB';
         if (it.key === 'dsp_bass') return '+' + v + ' dB';
+        if (it.key === 'haptic_strength') {
+          return [Topt('off'), Topt('light'), Topt('medium'), Topt('strong')][v] || String(v);
+        }
         return String(v);
       };
       val.textContent = _rngLabel(rng.value);
-      rng.oninput = () => { val.textContent = _rngLabel(rng.value); };
+      rng.oninput = () => {
+        val.textContent = _rngLabel(rng.value);
+        // Buzz at the level under the finger. A vibration strength setting you cannot
+        // feel until you leave the screen is a setting you have to guess at, and the
+        // whole reason someone opens this page is that they cannot feel their phone.
+        // Throttled to one pulse per step so a drag across the track does not turn into
+        // a burst; navigator.vibrate is fire-and-forget and costs nothing when absent.
+        if (it.key === 'haptic_strength') {
+          var _hv = parseInt(rng.value, 10);
+          if (_hv !== _hapticLast) {
+            _hapticLast = _hv;
+            try {
+              if (navigator.vibrate) {
+                // Scale the preview with the setting: silence at 0, then a pulse whose
+                // length tracks the step, since the web API has no intensity control.
+                navigator.vibrate(0);
+                if (_hv > 0) navigator.vibrate([0, 18 + _hv * 22]);
+              }
+            } catch (e) {}
+          }
+        }
+      };
       rng.onchange = () => cfgSet(it.key, rng.value, wrap);
       wrap.appendChild(rng);
       wrap.appendChild(val);
