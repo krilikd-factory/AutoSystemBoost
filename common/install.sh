@@ -626,24 +626,9 @@ asb_apply_device_overlay() {
         asb_tw_save_base "$_ctf" force
         asb_apply_dynamic_tweaks "$MODPATH"
         asb_camera_aggr_flag
-        # Ratio grading, after the literal-value tweaks have had their turn.
-        #
-        # Those tweaks match known numbers and simply miss on a device that ships
-        # different ones - which is every OnePlus 15, whose tuning file already sits at or
-        # above what the old "level 4" was reaching for. Users set the slider to 4, turned
-        # on Extended, and reported no difference; they were right, nothing had changed.
-        # Scaling what is there works regardless of what is there.
-        if [ "$_ASB_CAMERA_LEVEL" -gt 0 ] 2>/dev/null \
-           && [ -f "$MODPATH/runtime/asb_camera_grade.sh" ] && [ -f "$_ctf" ]; then
-          MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
-            sh "$MODPATH/runtime/asb_camera_grade.sh" "$_ctf" "$_ctf.graded" >/dev/null 2>&1
-          if [ -s "$_ctf.graded" ]; then
-            mv -f "$_ctf.graded" "$_ctf" 2>/dev/null
-            ui_print "      + camera grade: level ${_ASB_CAMERA_LEVEL} applied as a ratio (saturation / AI detail / sharpening)"
-          else
-            rm -f "$_ctf.graded" 2>/dev/null
-          fi
-        fi
+        # Grading is NOT done here any more. asb_clone_device_camera_tone owns these
+        # files: it clones them from the live partition into both destinations and runs
+        # after this branch, so anything graded here was overwritten a moment later.
         if [ "$_ASB_CAMERA_AGGR" = "1" ] && [ -f "$_ctf" ]; then
           if [ "$_ASB_CAMERA_INJECT" = "1" ]; then
             ui_print "      + ${ASB_D_CAM_AGGR_INJ:-Camera aggressive tone applied (incl. injected keys)}"
@@ -924,6 +909,35 @@ asb_clone_device_camera_tone() {
             && chmod 0644 "$MODPATH/$_ct_dst" 2>/dev/null
         fi
       done
+      # Grade here, on every copy that was just made.
+      #
+      # This is where the camera files actually come from on an OP13/OP15 - cloned from
+      # the live partition into TWO destinations, system/vendor/odm and system/odm. The
+      # grading hook sat in a different branch that builds only the first of those and
+      # runs earlier, so it graded a file this function then overwrote, and the install
+      # log showed the clone with no grade line after it. Doing it at the point of
+      # creation means there is one place that owns these files instead of two.
+      if [ "$_ct_base" = "conf_tuning_params.json" ] \
+         && [ -f "$MODPATH/runtime/asb_camera_grade.sh" ]; then
+        asb_camera_aggr_flag
+        if [ "${_ASB_CAMERA_LEVEL:-0}" -gt 0 ] 2>/dev/null; then
+          _ct_done=0
+          for _ct_dst in $_ct_dsts; do
+            [ -f "$MODPATH/$_ct_dst" ] || continue
+            MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
+              sh "$MODPATH/runtime/asb_camera_grade.sh" \
+                 "$MODPATH/$_ct_dst" "$MODPATH/$_ct_dst.graded" >/dev/null 2>&1
+            if [ -s "$MODPATH/$_ct_dst.graded" ]; then
+              mv -f "$MODPATH/$_ct_dst.graded" "$MODPATH/$_ct_dst" 2>/dev/null
+              chmod 0644 "$MODPATH/$_ct_dst" 2>/dev/null
+              _ct_done=$((_ct_done + 1))
+            else
+              rm -f "$MODPATH/$_ct_dst.graded" 2>/dev/null
+            fi
+          done
+          [ "$_ct_done" -gt 0 ] && ui_print "      + Camera grade: level $_ASB_CAMERA_LEVEL applied to $_ct_done file(s) - saturation / AI detail / sharpening"
+        fi
+      fi
       ui_print "      + Camera tone: cloned device-stock $_ct_base"
       break
     done
