@@ -2161,6 +2161,10 @@ const CFG_ITEMS = [
   // --- Display ---
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
+  { key:'ui_effects_level', type:'seg', def:'stock', opts:['stock','flat'], name:'OxygenOS Visual Effects',
+    desc:'stock leaves the OEM effects level alone. flat drops it, which turns Recents from card previews into a plain list and simplifies some transitions - lighter on the GPU, plainer to look at. This is separate from blur on purpose: it used to be bundled in, so turning blur off silently flattened Recents. Applies after a reboot.' },
+  { key:'haptic_strength', type:'seg', def:'stock', opts:['stock','off','light','medium','strong'], name:'Vibration Strength',
+    desc:'Scales every haptic - notifications, ringtone, alarms, touch feedback. medium is Android\u2019s own default and most of these are unset on this device, so strong genuinely has headroom above it. Duration cannot be changed: it comes from each effect\u2019s waveform and there is no system-wide multiplier. The vibrator driver is left alone on purpose - its calibration values are per-unit resonance data, and overriding them makes the motor buzz off-resonance rather than harder. Applies immediately.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -2202,10 +2206,6 @@ const CFG_CAT = {
 // are finer-grained than the navigation should be.
 const CFG_GROUPS = [
   { id:'audio',   ico:'\uD83C\uDFB5', name:'Audio',   ru:'\u0410\u0443\u0434\u0438\u043E' },
-  { key:'ui_effects_level', type:'seg', def:'stock', opts:['stock','flat'], name:'OxygenOS Visual Effects',
-    desc:'stock leaves the OEM effects level alone. flat drops it, which turns Recents from card previews into a plain list and simplifies some transitions - lighter on the GPU, plainer to look at. This is separate from blur on purpose: it used to be bundled in, so turning blur off silently flattened Recents. Applies after a reboot.' },
-  { key:'haptic_strength', type:'seg', def:'stock', opts:['stock','off','light','medium','strong'], name:'Vibration Strength',
-    desc:'Scales every haptic - notifications, ringtone, alarms, touch feedback. medium is Android\u2019s own default and most of these are unset on this device, so strong genuinely has headroom above it. Duration cannot be changed: it comes from each effect\u2019s waveform and there is no system-wide multiplier. The vibrator driver is left alone on purpose - its calibration values are per-unit resonance data, and overriding them makes the motor buzz off-resonance rather than harder. Applies immediately.' },
   { id:'camera',  ico:'\uD83D\uDCF7', name:'Camera',  ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
   { id:'battery', ico:'\uD83D\uDD0B', name:'Battery', ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
   // "System", not "Interface": blur and the OEM effects level are about appearance, but
