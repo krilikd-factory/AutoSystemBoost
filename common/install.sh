@@ -1334,8 +1334,21 @@ asb_install_dsp_lib() {
   case "$ASB_DSP_ABI" in
     legacy|aidl_v*) : ;;
     *) ASB_DSP_ABI="aidl"
+       # Prefer the newest VERSIONED build over the generic name.
+       #
+       # bin/libasbdsp.so is a third copy that predates the versioned ones and is not the
+       # same bytes as either - 362392 against v3's 378760 - so on a device whose version
+       # the probe could not read, the generic slot was handing out an older build than
+       # the module already carries. Newest-first is the better guess, and the generic
+       # file stays only as a last resort for a build that ships nothing else.
        _dsp_s64="$MODPATH/bin/libasbdsp.so"
-       _dsp_s32="$MODPATH/bin/libasbdsp_32.so" ;;
+       _dsp_s32="$MODPATH/bin/libasbdsp_32.so"
+       for _vg in "$MODPATH"/bin/libasbdsp_v*.so; do
+         case "$_vg" in *_32.so) continue ;; esac
+         [ -f "$_vg" ] || continue
+         _dsp_s64="$_vg"
+         _dsp_s32="${_vg%.so}_32.so"
+       done ;;
   esac
   # Record what the probe chose. "auto" has to mean something concrete at boot: without
   # this, post-fs-data has no target to restore and a user who tries legacy once is stuck
@@ -2557,6 +2570,7 @@ asb_apply_blur_prop() {
       -e '/^persist\.sys\.oplus\.anim_level=/d' \
       -e '/^persist\.sys\.oplus\.material_blur_switch=/d' \
       -e '/^persist\.sys\.sf\.disable_blurs=/d' \
+      -e '/^vendor\.display\.supports_background_blur=/d' \
       -e '/^persist\.sys\.oplus\.anim_level=/d' \
       -e '/^# ASB:UIFX:BEGIN$/,/^# ASB:UIFX:END$/d' \
       "$_prop" > "$_pt" 2>/dev/null || cp -f "$_prop" "$_pt"
@@ -2574,6 +2588,7 @@ asb_apply_blur_prop() {
       echo "ro.surface_flinger.supports_background_blur=0"
       echo "ro.surface_flinger.media_panel_bg_blur=0"
       echo "persist.sys.oplus.material_blur_switch=false"
+      echo "vendor.display.supports_background_blur=0"
     fi
     # OFF and LIGHT: targeted keys, each naming one surface. Dropping these leaves the
     # notification backdrop readable, which is what light is for. anim_level is NOT here -
