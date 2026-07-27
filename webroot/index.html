@@ -1883,7 +1883,7 @@ const I18N = {
       ui_effects_level: { name: 'Анимации системы',
         desc: '«Упрощённые» \u2014 убирают объём из анимаций OxygenOS: «Недавние» становятся простым списком вместо карточек с превью, переходы теряют многослойные эффекты. Легче для видеочипа, но выглядит скромнее. «Авто» \u2014 следует за настройкой блюра: до недавнего времени это была одна общая настройка, поэтому «авто» сохраняет привычное поведение. Применяется после перезагрузки.' },
       haptic_strength: { name: 'Сила вибрации',
-        desc: 'Масштабирует всю тактильную отдачу \u2014 уведомления, звонок, будильники, отклик на касания. При перетаскивании телефон вибрирует на выбранном уровне, чтобы разницу было слышно сразу, не выходя со страницы. Четыре шага \u2014 это не упрощение: настройка силы вибрации в Android принимает ровно 0\u20133, и более дробный ползунок просто округлял бы значение втихую. 2 \u2014 системное значение по умолчанию, а на этом устройстве большинство таких настроек вообще не выставлено, поэтому у 3 есть реальный запас. Продолжительность не регулируется \u2014 она задаётся формой волны каждого эффекта. Применяется сразу.' },
+        desc: 'Десять ступеней: OnePlus держит настоящую регулировку на своей, более дробной шкале, а не на стандартной 0\u20133 \u2014 та здесь и так стояла на максимуме, поэтому её подъём ничего не давал. Здесь пишется та же безступенчатая амплитуда, которую использует фирменный ползунок. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона; выходить за проверенное значение на линейном моторе не стоит из-за износа. Применяется сразу.' },
     },
     // segmented option labels
     opt: {
@@ -2138,21 +2138,21 @@ const SNAP_KEYS = ['audio_profile','audio_dac_hifi','CAMERA_LEVEL','CAMERA_AGGRE
   'UX_ANIM_FORCE_RESTART','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
   'region_allow_locale','disable_blur'];
 const CFG_ITEMS = [
-  // --- Audio ---
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
   { key:'audio_dac_hifi', type:'bool', def:'0', name:'Hi-Fi DAC (mixer)',
     desc:'Codec configuration, not software: headphone companders off, HPH Mode \u2192 CLS_H_HIFI. Does not fight an external EQ \u2014 it gives it a cleaner DAC. Reboot to apply.' },
+  { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Volume Control',
+    desc:'Stock = one shared scale: the phone slider moves the headset volume directly. Disabled = the two are independent, so the phone applies its own gain on top of whatever the headset is set to - usually louder, and what ViPER/EQ need. The trade is that the two scales no longer line up, which on some headsets makes the lowest steps too quiet. Applies without a reboot.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:20, step:1, name:'DSP Loudness',
     desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, now up to +18 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream.' },
-  { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
-    desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
     desc:'Needs DSP Loudness above. A low shelf at 90 Hz: the full lift lands on the low end, half of it at the corner, nothing above about 1 kHz \u2014 mids and vocals stay untouched. It runs at the head of the chain, so the added bass is limited like everything else and cannot clip on its own. The trade is headroom: every dB of bass makes the limiter engage sooner, so a big boost on top of a high gain costs overall loudness. 3\u20136 suits most headphones.' },
-  { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Volume Control',
-    desc:'Stock = one shared scale: the phone slider moves the headset volume directly. Disabled = the two are independent, so the phone applies its own gain on top of whatever the headset is set to - usually louder, and what ViPER/EQ need. The trade is that the two scales no longer line up, which on some headsets makes the lowest steps too quiet. Applies without a reboot.' },
+  { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
+    desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
+  // --- Audio ---
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:4, step:1, name:'Camera Grade',
     desc:'Photo + video colour and contrast strength: 0 = stock, higher = richer and punchier. Max can band in deep shadows. Reboot to apply.' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
@@ -2178,8 +2178,8 @@ const CFG_ITEMS = [
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
     desc:'Simplified strips the depth out of OxygenOS animations: Recents becomes a plain list instead of card previews, and transitions lose their layered effects. Lighter on the GPU, plainer to look at. Auto follows the blur setting - these two were one control until recently, so auto keeps the behaviour you already had. Applies after a reboot.' },
-  { key:'haptic_strength', type:'range', def:'2', min:0, max:3, step:1, name:'Vibration Strength',
-    desc:'Scales every haptic - notifications, ringtone, alarms, touch feedback. Drag it and the phone buzzes at the level you land on, so you can feel the difference without leaving the page. Four steps is not a simplification: Android\u2019s vibration intensity setting accepts exactly 0-3, and anything finer would be a slider that rounds behind your back. 2 is the system default, and most of these settings are unset on this device, so 3 has real headroom. Duration is not adjustable - it comes from each effect\u2019s own waveform. Applies immediately.' },
+  { key:'haptic_strength', type:'range', def:'6', min:0, max:10, step:1, name:'Vibration Strength',
+    desc:'Ten steps, because OnePlus keeps the real control on its own finer scale rather than Android\u2019s 0-3 one - which was already at maximum here, so raising it changed nothing. This writes the stepless amplitude the OEM slider itself uses. Drag it and the phone buzzes at the level you land on. 10 matches the top of the OEM\u2019s own range; going above an untested value on a linear motor is not worth the wear. Applies immediately.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -2398,9 +2398,7 @@ function cfgRender() {
         // DSP loudness is a dB gain; label it as such. Other ranges stay plain numbers.
         if (it.key === 'dsp_loudness') return '+' + v + ' dB';
         if (it.key === 'dsp_bass') return '+' + v + ' dB';
-        if (it.key === 'haptic_strength') {
-          return [Topt('off'), Topt('light'), Topt('medium'), Topt('strong')][v] || String(v);
-        }
+        if (it.key === 'haptic_strength') return (v === 0) ? Topt('off') : (v + '/10');
         return String(v);
       };
       val.textContent = _rngLabel(rng.value);
@@ -2415,12 +2413,21 @@ function cfgRender() {
           var _hv = parseInt(rng.value, 10);
           if (_hv !== _hapticLast) {
             _hapticLast = _hv;
+            // Through the shell, not navigator.vibrate.
+            //
+            // The WebUI runs in the root manager's WebView, which holds no VIBRATE
+            // permission - navigator.vibrate is present as a function and silently does
+            // nothing, so the preview looked implemented and was not. Reported as "при
+            // переключении ползунка не отдаёт вибро откликом", and that is exactly right.
+            //
+            // We have root, so `cmd vibrator` does the job properly: it also takes an
+            // amplitude, which the web API does not, so the preview can actually scale
+            // with the setting instead of only changing duration.
             try {
-              if (navigator.vibrate) {
-                // Scale the preview with the setting: silence at 0, then a pulse whose
-                // length tracks the step, since the web API has no intensity control.
-                navigator.vibrate(0);
-                if (_hv > 0) navigator.vibrate([0, 18 + _hv * 22]);
+              if (_hv > 0) {
+                var _amp = Math.round(25 + (_hv / 10) * 230);
+                run('cmd vibrator vibrate -f 120 -a ' + _amp +
+                    ' 2>/dev/null || cmd vibrator vibrate 120 2>/dev/null');
               }
             } catch (e) {}
           }
@@ -2798,7 +2805,16 @@ async function pollLive(visible) {
 
     if (!visible) return;
 
-    const profile = (st && st.profile) || kv.profile || '—';
+    // During warm-up the state file still carries the governor's initialised default -
+    // "balanced" - while the main page reads current_profile off disk and is already
+    // right. Prefer the page that knows, so Monitor does not briefly contradict the
+    // screen the user just came from.
+    const _mainProf = _el('curProfile');
+    const _warmup = (kv.state_warmup === '1');
+    const profile = (_warmup && _mainProf && _mainProf.textContent
+                      && _mainProf.textContent !== '—')
+                    ? _mainProf.textContent.toLowerCase()
+                    : ((st && st.profile) || kv.profile || '—');
     const state = (st && st.state) || kv.state || '—';
 
     const mainDevLine = _el('deviceLine'); const liveDevLine = _el('liveDeviceLine');
@@ -2969,10 +2985,16 @@ async function pollLive(visible) {
           const fbNames = ['exact','daypart','class','global','cold start'];
           const appNames = ['idle','light','medium','heavy','gaming'];
 
+          // Warm-up: the governor publishes state from its first tick, before it has
+          // sampled a package or resolved the profile, so those values are initialised
+          // defaults rather than observations. Showing them produces "gaming" on an idle
+          // phone and "balanced" under an active Smart profile, both correcting themselves
+          // seconds later - which reads as a bug because it is one.
+          const warm = (kv.state_warmup === '1');
           _el('bnBucket').textContent = '#' + bid + ' ' + (dpNames[dp] || '?') + (we ? '·we' : '·wd');
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
           _el('bnAlpha').textContent = Math.round(alpha / 10) + '% bat';
-          _el('bnApp').textContent = appNames[appH] || '?';
+          _el('bnApp').textContent = warm ? '\u2026' : (appNames[appH] || '?');
 
           // Tag row: fallback + overrides
           const tagRow = _el('bnTagRow');
