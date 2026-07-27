@@ -1341,8 +1341,15 @@ asb_install_dsp_lib() {
        # the probe could not read, the generic slot was handing out an older build than
        # the module already carries. Newest-first is the better guess, and the generic
        # file stays only as a last resort for a build that ships nothing else.
-       _dsp_s64="$MODPATH/bin/libasbdsp.so"
-       _dsp_s32="$MODPATH/bin/libasbdsp_32.so"
+       # The generic pair may not be in the package at all now: the workflow skips it
+       # when versioned builds cover the same ground. Start empty and let the loop below
+       # fill it, so a missing generic is a normal state rather than a broken install.
+       _dsp_s64=""
+       _dsp_s32=""
+       if [ -f "$MODPATH/bin/libasbdsp.so" ]; then
+         _dsp_s64="$MODPATH/bin/libasbdsp.so"
+         _dsp_s32="$MODPATH/bin/libasbdsp_32.so"
+       fi
        for _vg in "$MODPATH"/bin/libasbdsp_v*.so; do
          case "$_vg" in *_32.so) continue ;; esac
          [ -f "$_vg" ] || continue
