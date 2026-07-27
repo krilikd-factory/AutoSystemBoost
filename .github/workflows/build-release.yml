@@ -370,6 +370,7 @@ jobs:
             "runtime/asb_lpm.sh" \
             "runtime/asb_dsp_abi_apply.sh" \
             "runtime/asb_haptics_apply.sh" \
+            "runtime/asb_camera_grade.sh" \
             "profiles/battery.sh" \
             "profiles/balanced.sh" \
             "profiles/performance.sh" \
