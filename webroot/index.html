@@ -1879,7 +1879,7 @@ const I18N = {
       UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
         desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление скоростью UI ВКЛ.' },
       disable_blur: { name: 'Эффекты размытия',
-        desc: '«Откл» \u2014 убирает размытие везде: дешевле всего, но у всплывающего уведомления не остаётся подложки, и текст SMS ложится прямо на лаунчер \u2014 читать тяжело. «Слегка» \u2014 оставляет размытие под шторкой и уведомлениями, убирая только полноэкранное размытие композитора: это как раз дорогая часть, так что экономия почти та же, а читаемость не страдает. «Сток» \u2014 не трогаем. Оконная часть применяется сразу, часть композитора \u2014 после перезагрузки.' },
+        desc: '«Слегка» \u2014 убирает самое дорогое: размытие при запуске приложений, панель громкости, гауссов уровень прошивки, а размытие под шторкой и всплывающими уведомлениями остаётся, поэтому текст читается. «Откл» \u2014 добавляет к этому глобальные выключатели SurfaceFlinger и WindowManager: пропадает вообще любая подложка, включая ту, что под уведомлением. «Сток» \u2014 не трогаем. Оконная часть применяется сразу, часть композитора \u2014 после перезагрузки.' },
       ui_effects_level: { name: 'Визуальные эффекты OxygenOS',
         desc: '«Сток» \u2014 не трогаем уровень эффектов прошивки. «Плоско» \u2014 понижаем его: «Недавние» превращаются из карточек с превью в простой список, часть переходов упрощается. Меньше нагрузки на GPU, но выглядит проще. Вынесено отдельно от блюра намеренно: раньше это было в одном тумблере, и отключение блюра молча делало «Недавние» плоскими. Применяется после перезагрузки.' },
     },
@@ -2158,7 +2158,7 @@ const CFG_ITEMS = [
     desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage UI Speed is ON.' },
   // --- Display ---
   { key:'disable_blur', type:'seg', def:'stock', opts:['stock','light','off'], name:'Blur',
-    desc:'off removes blur everywhere - cheapest, but a heads-up notification then has no backdrop and its text sits straight on the launcher, which is hard to read. light keeps the blur behind the shade and notifications and drops only the compositor\u2019s full-screen blur, which is the expensive one: most of the saving, none of the readability problem. The window half applies at once, the compositor half after a reboot.' },
+    desc:'light drops the blur that costs the most - app-launch, volume panel, the OEM gaussian level - and keeps the blur behind the shade and notification popups, so text stays readable. off adds the global SurfaceFlinger and WindowManager switches on top, which removes every backdrop including the one behind a heads-up notification. The window half applies at once, the compositor half after a reboot.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
