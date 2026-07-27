@@ -1909,7 +1909,7 @@ const I18N = {
       ui_effects_level: { name: 'Анимации системы',
         desc: '«Упрощённые» \u2014 убирают объём из анимаций OxygenOS: «Недавние» становятся простым списком вместо карточек с превью, переходы теряют многослойные эффекты. Легче для видеочипа, но выглядит скромнее. «Авто» \u2014 следует за настройкой блюра: до недавнего времени это была одна общая настройка, поэтому «авто» сохраняет привычное поведение. Применяется после перезагрузки.' },
       haptic_strength: { name: 'Вибрация',
-        desc: 'Десять ступеней: OnePlus держит настоящую регулировку на своей, более дробной шкале, а не на стандартной 0\u20133 \u2014 та здесь и так стояла на максимуме, поэтому её подъём ничего не давал. Здесь пишется та же безступенчатая амплитуда, которую использует фирменный ползунок. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона: выше него служба вибрации не ослабляет сигнал, а отвергает значение целиком, и вибрация пропадает совсем. Применяется сразу.' },
+        desc: 'Десять ступеней на фирменной, более дробной шкале \u2014 стандартная настройка Android 0\u20133 здесь и так стоит на максимуме, поэтому её подъём ничего не давал. «Авто» \u2014 оставить как было на устройстве: это не то же самое, что любое число, а решение не вмешиваться. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона: выше служба вибрации отвергает значение целиком, и телефон замолкает вместо того, чтобы бить сильнее. Применяется сразу.' },
       haptic_touch_strength: { name: 'Отклик касаний',
         desc: 'Отдача при наборе текста и нажатиях \u2014 на своей шкале. Прошивка задаёт её отдельно от уведомлений: фирменный ползунок пишет 1500 для уведомлений и 1600 для касаний. И задачи разные: уведомление должно чувствоваться через карман, а отклик клавиатуры не должен утомлять руку. «Авто» \u2014 следует за силой выше. Регулировки длительности нет: в системе её попросту не существует, Android берёт длительность из формы волны каждого эффекта.' },
     },
@@ -2183,6 +2183,14 @@ const CFG_ITEMS = [
   // --- Audio ---
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:4, step:1, name:'Camera Grade',
     desc:'Photo + video colour and contrast strength: 0 = stock, higher = richer and punchier. Max can band in deep shadows. Reboot to apply.' },
+  { key:'CAMERA_GRAIN', type:'range', def:'3', min:0, max:6, step:1, name:'Film Grain',
+    desc:'The camera adds grain back after denoising, because a perfectly smooth image reads as plastic. 3 is stock: lower for a cleaner look, higher for more texture, 0 removes it entirely. Applies to photos after a reboot.' },
+  { key:'CAMERA_CONTRAST', type:'range', def:'3', min:0, max:6, step:1, name:'Contrast & Colour Depth',
+    desc:'The tone curve\u2019s contrast and saturation scales. This is a different axis from the grade above: that one widens the colour matrix, this one shapes the curve - deeper shadows and richer colour rather than a wider gamut. 3 is stock. Applies after a reboot.' },
+  { key:'CAMERA_PORTRAIT', type:'range', def:'0', min:0, max:4, step:1, name:'Portrait AI',
+    desc:'Neural processing on faces and skin, which ships switched off - the weights are all zero. Raising it recovers detail in faces that the denoiser flattens. Too high looks synthetic, so start at 1-2. Portrait modes only. Applies after a reboot.' },
+  { key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:4, step:1, name:'Macro & Low-light Sharpening',
+    desc:'Macro and low-light have their own sharpening scales, and these are the modes where over-sharpening shows worst - close subjects and high ISO both amplify halos. 0 follows the main grade; raise it only if those modes look soft next to normal shots. Applies after a reboot.' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
@@ -2206,8 +2214,8 @@ const CFG_ITEMS = [
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
     desc:'Simplified strips the depth out of OxygenOS animations: Recents becomes a plain list instead of card previews, and transitions lose their layered effects. Lighter on the GPU, plainer to look at. Auto follows the blur setting - these two were one control until recently, so auto keeps the behaviour you already had. Applies after a reboot.' },
-  { key:'haptic_strength', type:'range', def:'6', min:0, max:10, step:1, name:'Vibration',
-    desc:'Ten steps, because OnePlus keeps the real control on its own finer scale rather than Android\u2019s 0-3 one - which was already at maximum here, so raising it changed nothing. This writes the stepless amplitude the OEM slider itself uses. Drag it and the phone buzzes at the level you land on. 10 matches the top of the OEM\u2019s own range; going above an untested value on a linear motor is not worth the wear. Applies immediately.' },
+  { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
+    desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder. Applies immediately.' },
   { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
     desc:'Typing and tap feedback, on its own scale. The OEM sets these separately from alerts - its slider writes 1500 for notifications and 1600 for touch - and the two wants are different: an alert should be felt through a pocket, keypress feedback should not be punishing to hold. auto follows the strength above. There is no duration control to offer: nothing in the system exposes one, and Android takes duration from each effect\u2019s own waveform.' },
 ];
@@ -2234,7 +2242,7 @@ async function cfgLoad() {
 const CFG_CAT = {
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', bt_absvol_mode:'audio',
-  CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
+  CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'memory',
@@ -2265,7 +2273,8 @@ const CFG_GROUP_OF = {
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio',
   bt_absvol_mode:'audio',
-  CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
+  CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
+  CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'ui', UX_ANIM_FORCE_RESTART:'ui',
@@ -2280,12 +2289,17 @@ function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  audio_profile:'\uD83C\uDF9A\uFE0F',            // studio mic (who processes the sound)
+  audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
+  dsp_compressor:'\uD83E\uDDF0',                // toolbox - dynamics processing
+  CAMERA_GRAIN:'\uD83C\uDF11',                 // new moon - grain/noise texture
+  CAMERA_CONTRAST:'\uD83C\uDF13',              // waxing moon - light and shade
+  CAMERA_PORTRAIT:'\uD83D\uDC64',              // bust - portrait AI
+  CAMERA_LOWLIGHT:'\uD83D\uDD26',              // torch - macro and low light
   CAMERA_LEVEL:'\uD83D\uDCF7',                // camera
   smart_battery_bias:'\uD83D\uDD0B',           // battery
   CAMERA_AGGRESSIVE_INJECT:'\uD83C\uDF9B\uFE0F',  // slider/mode
-  dsp_loudness:'\uD83C\uDF9B',                // control knobs (DSP gain)
+  dsp_loudness:'\uD83C\uDF9A\uFE0F',                // control knobs (DSP gain)
   dsp_bass:'\uD83E\uDD41',                    // drum (bass shelf)
   media_loudness:'\uD83D\uDCE2',            // loudspeaker (media loudness)
   bt_absvol_mode:'\uD83D\uDD0A',              // loud speaker (BT volume)
@@ -2431,7 +2445,10 @@ function cfgRender() {
         // DSP loudness is a dB gain; label it as such. Other ranges stay plain numbers.
         if (it.key === 'dsp_loudness') return '+' + v + ' dB';
         if (it.key === 'dsp_bass') return '+' + v + ' dB';
-        if (it.key === 'haptic_strength') return (v === 0) ? Topt('off') : (v + '/10');
+        if (it.key === 'haptic_strength') {
+          if (v < 0) return Topt('auto');
+          return (v === 0) ? Topt('off') : (v + '/10');
+        }
         if (it.key === 'haptic_touch_strength') {
           if (v < 0) return Topt('auto');
           return (v === 0) ? Topt('off') : (v + '/10');
