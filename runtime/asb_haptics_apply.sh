@@ -52,22 +52,25 @@ _lvl="$(_cfg haptic_strength)"
 # 2400 is the ceiling because that is the highest value the OEM slider was seen to
 # produce. Going above an untested value on a linear actuator is not a knob worth
 # turning blind, so the top of our range is the top of theirs.
-# Ceiling of the stepless scale.
+# Ceiling of the stepless scale: 2400, which is what the OEM slider produces at its top.
 #
-# Every observed value divides cleanly by 10 - 900, 1400, 2000, 2300, 2400 - and Android's
-# VibrationEffect amplitude runs 1..255. 255 x 10 = 2550, which makes the OEM value look
-# like amplitude in tenths and puts full scale at 2550 rather than the 2400 the slider
-# happened to stop at. So the top step is 2550: the strongest the actuator is driven at
-# all, not the strongest the OEM UI offers.
+# An earlier version used 2550, reasoned from the values all dividing by 10 and Android's
+# amplitude running 1..255 - so 255 x 10 looked like full scale. Tested on the device, it
+# is not: at 2550 the vibration disappears entirely while 2295 (level 9) works. The value
+# is REJECTED above the real maximum, not clamped to it, so overshooting does not cost a
+# little headroom - it costs the vibration.
 #
-# Above that the value is almost certainly clamped rather than louder - amplitude has
-# nowhere left to go. haptic_stepless_max in governor.conf overrides this for anyone who
-# wants to find out on their own device; the default stays at the value the arithmetic
-# supports rather than a guess.
+# The arithmetic was a hypothesis and the device disagreed. 2400 is not a guess: it is a
+# value observed coming out of the OEM's own slider, which makes it a value the vendor
+# service is known to accept.
 ASB_HAP_MAX="$(_cfg haptic_stepless_max)"
-case "$ASB_HAP_MAX" in ''|*[!0-9]*) ASB_HAP_MAX=2550 ;; esac
+case "$ASB_HAP_MAX" in ''|*[!0-9]*) ASB_HAP_MAX=2400 ;; esac
 [ "$ASB_HAP_MAX" -lt 500 ] 2>/dev/null && ASB_HAP_MAX=500
-[ "$ASB_HAP_MAX" -gt 5000 ] 2>/dev/null && ASB_HAP_MAX=5000
+# Hard ceiling. Above the value the vendor service accepts, vibration stops rather than
+# saturating, so an over-large override is not an experiment with a dull result - it is a
+# silent phone. Anyone raising this is testing whether their device takes more, and the
+# cap keeps that from turning into "haptics broke and I do not know why".
+[ "$ASB_HAP_MAX" -gt 2400 ] 2>/dev/null && ASB_HAP_MAX=2400
 _coarse="haptic_feedback_intensity notification_vibration_intensity ring_vibration_intensity alarm_vibration_intensity media_vibration_intensity"
 _stepless="notification_stepless_vibration_intensity ring_stepless_vibration_intensity touch_stepless_vibration_intensity"
 _keys="$_coarse $_stepless"
@@ -115,7 +118,18 @@ fi
 # Coarse keys open the gate; the stepless value is what is actually felt.
 for _k in $_coarse; do settings put system "$_k" 3 >/dev/null 2>&1 || true; done
 _amp=$(( ASB_HAP_MAX * _want / 10 ))
-for _k in $_stepless; do settings put system "$_k" "$_amp" >/dev/null 2>&1 || true; done
+# Write, then read back. The vendor service silently refuses a value it does not like -
+# the setting keeps its old contents and the phone just stops buzzing, with nothing
+# anywhere reporting a problem. Stepping down until one sticks turns that into a slightly
+# weaker buzz instead of no buzz, which is the failure mode worth having.
+for _k in $_stepless; do
+  _try="$_amp"
+  while [ "$_try" -ge 200 ]; do
+    settings put system "$_k" "$_try" >/dev/null 2>&1 || true
+    [ "$(settings get system "$_k" 2>/dev/null)" = "$_try" ] && break
+    _try=$(( _try - 150 ))
+  done
+done
 
 # Touch feedback has its own on/off switch; an intensity set while it is off does
 # nothing. Only ever turn it ON.
