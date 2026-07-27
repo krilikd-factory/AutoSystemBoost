@@ -319,7 +319,17 @@ echo "$_audio_l"
 _loud_l="       loudness: ${_a_loud}"
 [ "$_a_dsp" != "off" ] && _loud_l="${_loud_l}  ·  DSP +${_a_dsp} dB"
 echo "$_loud_l"
-[ "$_a_bt" = "disabled" ] && echo "       BT absolute volume: off (phone drives gain)"
+[ "$_a_bt" = "disabled" ] && echo "       BT volume: phone drives gain (independent scales)"
+# The compressor only exists while the DSP is on - saying "compressor: on" next to a
+# disabled DSP describes a setting, not the device.
+if [ "$_a_dsp" != "off" ]; then
+  case "$(_cfg dsp_compressor)" in
+    off|0|false) echo "       compressor: off  ·  limiter only" ;;
+    *)           echo "       compressor: on  ·  6:1 above -24 dBFS" ;;
+  esac
+fi
+_a_bass="$(_cfg dsp_bass)"
+case "$_a_bass" in ''|off|0) : ;; *) echo "       bass shelf: +${_a_bass} dB @ 90 Hz" ;; esac
 if [ "$_a_dsp" != "off" ]; then
   _l64="✗"; _l32="✗"
   [ -f /vendor/lib64/soundfx/libasbdsp.so ] && _l64="✓"
@@ -361,6 +371,27 @@ case "$_cam_in" in
   *) _cam_l="$(_join "$_cam_l" "inject: ${_cam_in}")" ;;
 esac
 [ -n "$_cam_l" ] && echo "       ${_cam_l}"
+# The grade is a ratio applied to the device's own tuning file, so report what it
+# multiplied rather than a bare level number - the level alone says nothing about what
+# changed. Only lines that differ from stock are printed.
+_c_grain="$(_cfg CAMERA_GRAIN)";    case "$_c_grain" in ''|3) _c_grain="" ;; esac
+_c_contr="$(_cfg CAMERA_CONTRAST)"; case "$_c_contr" in ''|3) _c_contr="" ;; esac
+_c_port="$(_cfg CAMERA_PORTRAIT)";  case "$_c_port"  in ''|0) _c_port=""  ;; esac
+_c_low="$(_cfg CAMERA_LOWLIGHT)";   case "$_c_low"   in ''|0) _c_low=""   ;; esac
+[ -n "$_c_grain" ] && echo "       film grain: ${_c_grain}/8 (3 = stock)"
+[ -n "$_c_contr" ] && echo "       contrast & colour depth: ${_c_contr}/8 (3 = stock)"
+[ -n "$_c_port" ]  && echo "       portrait AI: ${_c_port}/6 (ships off)"
+[ -n "$_c_low" ]   && echo "       macro / low-light sharpening: ${_c_low}/8"
+# Whether the grade actually landed on the live partition, which is the only claim
+# worth making - the config saying 4 proved nothing until this was checked.
+_c_live="/odm/etc/camera/conf_tuning_params.json"
+if [ "${_c_lvl:-0}" -gt 0 ] 2>/dev/null && [ -r "$_c_live" ]; then
+  _c_bw="$(grep -m1 -o '"BlendWeight"[^]]*]' "$_c_live" 2>/dev/null | sed 's/.*\[//;s/\]//')"
+  case "$_c_bw" in
+    *0.35,*0.5,*0.7*) echo "       ⚠️  grade NOT on the live file (still stock values)" ;;
+    ?*)               echo "       ✅ live file graded: BlendWeight [${_c_bw}]" ;;
+  esac
+fi
 
 
 echo ""
@@ -454,6 +485,34 @@ echo "  ⚙️  SYSTEM"
 _sys_l="       blur: $([ "$_blur" = "1" ] && echo off || echo stock)"
 _sys_l="${_sys_l}  ·  cool games: $([ "$_cool" = "1" ] && echo on || echo off)"
 echo "$_sys_l"
+# Animations: auto follows blur, so resolve it rather than printing "auto" and leaving
+# the reader to work out what that means on this device.
+_ui_fx="$(_cfg ui_effects_level)"
+case "$_ui_fx" in
+  flat|0)  echo "       animations: simplified" ;;
+  stock|1) echo "       animations: normal" ;;
+  *)       [ "$_blur" = "1" ] \
+             && echo "       animations: simplified (auto, follows blur)" \
+             || echo "       animations: normal (auto, follows blur)" ;;
+esac
+# Haptics. The numbers that matter are the OEM stepless values actually in force, not
+# the level we asked for - a rejected write would leave the two disagreeing.
+_hap="$(_cfg haptic_strength)"
+_hap_t="$(_cfg haptic_touch_strength)"
+case "$_hap" in
+  ''|-1|auto|stock) echo "       vibration: stock (not managed)" ;;
+  0|off)            echo "       vibration: off" ;;
+  *)
+    _hap_live="$(settings get system notification_stepless_vibration_intensity 2>/dev/null)"
+    _hap_l="       vibration: ${_hap}/10"
+    case "$_hap_live" in ''|null) : ;; *) _hap_l="${_hap_l}  ·  live ${_hap_live}" ;; esac
+    case "$_hap_t" in
+      ''|-1|auto) _hap_l="${_hap_l}  ·  touch: follows" ;;
+      0)          _hap_l="${_hap_l}  ·  touch: off" ;;
+      *)          _hap_l="${_hap_l}  ·  touch: ${_hap_t}/10" ;;
+    esac
+    echo "$_hap_l" ;;
+esac
 
 # Every category, not the six that happened to be hard-coded here. Wrapped by hand
 # because a single 20-item line is unreadable on a phone.

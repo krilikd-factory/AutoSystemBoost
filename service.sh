@@ -2225,8 +2225,18 @@ if [ -f "$MODDIR/runtime/asb_blur_apply.sh" ]; then
   if [ "$_asb_blur_want" != "$_asb_blur_have" ]; then
     sh "$MODDIR/runtime/asb_blur_apply.sh" >/dev/null 2>&1
     asb_log "disable_blur=$_asb_blur_want: system.prop block rebuilt, compositor half active next boot"
-  elif [ "$_asb_blur_want" = "1" ]; then
-    settings put global disable_window_blurs 1 >/dev/null 2>&1
+  else
+    # Re-assert BOTH directions, not just "off".
+    #
+    # This branch runs when system.prop already matches, i.e. the common case - and it
+    # only ever wrote 1. So a user who turned blur off and then back on kept the
+    # WindowManager global at 1 across every subsequent boot: the compositor half was
+    # restored, the window half was not, and the shade stayed unblurred with the setting
+    # showing stock. OOS also rewrites this table on its own, which is exactly why the
+    # re-assert exists in the first place.
+    [ "$_asb_blur_want" = "1" ] \
+      && settings put global disable_window_blurs 1 >/dev/null 2>&1 \
+      || settings put global disable_window_blurs 0 >/dev/null 2>&1
   fi
 fi
 (
