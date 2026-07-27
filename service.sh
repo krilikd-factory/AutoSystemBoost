@@ -2187,6 +2187,20 @@ asb_load_profile
 # hand, and never at boot. command -v resolves shell functions in every POSIX shell.
 command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
 
+# Re-assert haptic strength. These are system settings, and OOS is known to rewrite that
+# table on its own - the RAM-expansion and analytics paths both needed the same treatment.
+# The script is a no-op when the config says stock, so this costs nothing by default.
+if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then
+  _asb_hap="$(grep -E '^[[:space:]]*haptic_strength=' "$MODDIR/config/governor.conf" 2>/dev/null \
+              | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_asb_hap" in
+    off|light|medium|strong)
+      sh "$MODDIR/runtime/asb_haptics_apply.sh" >/dev/null 2>&1
+      asb_log "haptic_strength=$_asb_hap re-asserted"
+      ;;
+  esac
+fi
+
 # Keep the blur block in system.prop honest. The WebUI writes governor.conf; if the
 # block on disk does not agree with it, the toggle was flipped since the last install
 # and nothing rebuilt it. Rebuilding here makes the NEXT boot correct and, more
@@ -2202,16 +2216,11 @@ _asb_blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.
 # kills blur globally including the notification backdrop. gaussianlevel is what both
 # off and light write, so its presence WITHOUT disable_blurs means light.
 case "$_asb_blur_want" in
-  1|on|true|off)  _asb_blur_want=1 ;;
-  light|partial)  _asb_blur_want=2 ;;
-  *)              _asb_blur_want=0 ;;
+  1|on|true|off|light|partial) _asb_blur_want=1 ;;
+  *)                           _asb_blur_want=0 ;;
 esac
 _asb_blur_have=0
-if grep -q '^persist\.sys\.sf\.disable_blurs=1' "$MODDIR/system.prop" 2>/dev/null; then
-  _asb_blur_have=1
-elif grep -q '^ro\.oplus\.gaussianlevel=0' "$MODDIR/system.prop" 2>/dev/null; then
-  _asb_blur_have=2
-fi
+grep -q '^persist\.sys\.sf\.disable_blurs=1' "$MODDIR/system.prop" 2>/dev/null && _asb_blur_have=1
 if [ -f "$MODDIR/runtime/asb_blur_apply.sh" ]; then
   if [ "$_asb_blur_want" != "$_asb_blur_have" ]; then
     sh "$MODDIR/runtime/asb_blur_apply.sh" >/dev/null 2>&1
