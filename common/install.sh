@@ -107,63 +107,56 @@ asb_end_banner() {
     printf '%s\n' "$_en" | while IFS= read -r _l; do ui_print "$_l"; done
   fi
 
-  # What the user will actually notice, in their words.
-  #
-  # The category list above answers "which parts of the module are on". It does not
-  # answer "what did this do to my phone", which is the question someone installing a
-  # module is actually asking. These lines read the settings that are in force and say
-  # what each one means, skipping anything left at stock - a summary that lists defaults
-  # is a summary nobody finishes reading.
+  # Sections that had no output at all, because nothing on their path prints during
+  # install - vibration and background trimming are applied by the runtime scripts, and
+  # auto-battery by the governor. A user who enabled them saw no confirmation anywhere,
+  # which reads as "it did not install" rather than "it applies later".
   _sg() {
     grep -E "^[[:space:]]*$1=" "$MODPATH/config/governor.conf" 2>/dev/null \
       | head -1 | sed 's/.*=//' | tr -d ' \r'
   }
-  _tw=""
-  _add_tw() { _tw="${_tw}${_tw:+
-}      · $1"; }
-
-  case "$(_sg audio_profile)" in
-    hifi)      _add_tw "${ASB_L_TW_HIFI:-Audio: hi-fi chain - vendor compression off, flat EQ}" ;;
-    eq_compat) _add_tw "${ASB_L_TW_EQC:-Audio: tuned for external equalizers (ViPER and friends)}" ;;
-  esac
-  case "$(_sg media_loudness)" in
-    ''|stock) : ;;
-    *) _add_tw "${ASB_L_TW_LOUD:-Volume: comfortable level now reached lower on the slider}" ;;
-  esac
-  case "$(_sg dsp_loudness)" in
-    ''|off|0) : ;;
-    *) _add_tw "$(printf "${ASB_L_TW_DSP:-DSP: +%s dB real gain, with a peak limiter}" "$(_sg dsp_loudness)")" ;;
-  esac
-  case "$(_sg CAMERA_LEVEL)" in
-    ''|0) : ;;
-    *) _add_tw "$(printf "${ASB_L_TW_CAM:-Camera: grade level %s - colour, AI detail and sharpening scaled up}" "$(_sg CAMERA_LEVEL)")" ;;
-  esac
-  case "$(_sg CAMERA_PORTRAIT)" in
-    ''|0) : ;;
-    *) _add_tw "${ASB_L_TW_PORTRAIT:-Camera: portrait AI on (ships disabled) - more detail in faces}" ;;
-  esac
-  case "$(_sg haptic_strength)" in
+  _hap_l="$(_sg haptic_strength)"
+  case "$_hap_l" in
     ''|-1|auto|stock) : ;;
-    0) _add_tw "${ASB_L_TW_VIB_OFF:-Vibration: off}" ;;
-    *) _add_tw "$(printf "${ASB_L_TW_VIB:-Vibration: level %s/10 on the OEM scale}" "$(_sg haptic_strength)")" ;;
+    *)
+      ui_print " "
+      ui_print "  📳  ${ASB_SEC_HAPTICS:-VIBRATION}"
+      if [ "$_hap_l" = "0" ]; then
+        ui_print "      + ${ASB_L_TW_VIB_OFF:-Vibration: off}"
+      else
+        ui_print "      + $(printf "${ASB_L_VIB_SET:-strength %s/10 on the OEM scale, applied immediately}" "$_hap_l")"
+      fi
+      case "$(_sg haptic_touch_strength)" in
+        ''|-1|auto) : ;;
+        *) ui_print "      + $(printf "${ASB_L_VIB_TOUCH:-touch feedback %s/10, set separately}" "$(_sg haptic_touch_strength)")" ;;
+      esac ;;
   esac
-  case "$(_sg disable_blur)" in
-    1|on|true) _add_tw "${ASB_L_TW_BLUR:-Display: blur off - lighter on the GPU, solid backdrops}" ;;
-  esac
-  case "$(_sg auto_battery_enable)" in
-    1) _add_tw "${ASB_L_TW_AUTOBAT:-Battery: switches to the Battery profile when low, and back when charged}" ;;
-  esac
-  case "$(_sg cool_gaming)" in
-    1) _add_tw "${ASB_L_TW_COOL:-Games: thermal lean starts earlier to keep the phone cooler}" ;;
-  esac
-  if [ -n "$_tw" ]; then
+
+  _bat_any=0
+  case "$(_sg auto_battery_enable)" in 1) _bat_any=1 ;; esac
+  case "$(_sg charge_aware_enable)" in 1) _bat_any=1 ;; esac
+  case "$(_sg cool_gaming)" in 1) _bat_any=1 ;; esac
+  if [ "$_bat_any" = "1" ]; then
     ui_print " "
-    ui_print "  ✨  ${ASB_SEC_NOTICE:-WHAT YOU WILL NOTICE}"
-    printf '%s\n' "$_tw" | while IFS= read -r _l; do ui_print "$_l"; done
-    ui_print " "
-    ui_print "      ${ASB_L_NOTICE_FOOT1:-Everything above is adjustable in the WebUI, and a reboot}"
-    ui_print "      ${ASB_L_NOTICE_FOOT2:-applies the parts that need one.}"
+    ui_print "  🔋  ${ASB_SEC_BATTERY:-BATTERY}"
+    case "$(_sg auto_battery_enable)" in
+      1) ui_print "      + ${ASB_L_BAT_AUTO:-switches to Battery when low, and back when charged}" ;;
+    esac
+    case "$(_sg charge_aware_enable)" in
+      1) ui_print "      + ${ASB_L_BAT_CHARGE:-more headroom while charging and cool, less as it warms}" ;;
+    esac
+    case "$(_sg cool_gaming)" in
+      1) ui_print "      + ${ASB_L_BAT_COOL:-games lean thermal earlier, for a cooler phone}" ;;
+    esac
   fi
+
+  case "$(_sg BG_TRIM_LEVEL)" in
+    ''|off) : ;;
+    *)
+      ui_print " "
+      ui_print "  🧠  ${ASB_SEC_MEMORY:-MEMORY}"
+      ui_print "      + $(printf "${ASB_L_MEM_TRIM:-background trimming: %s}" "$(_sg BG_TRIM_LEVEL)")" ;;
+  esac
 
   if [ -n "$INFO" ] && [ -f "$INFO" ] && [ ! -s "$INFO" ]; then
     rm -f "$INFO" 2>/dev/null || true
@@ -1971,7 +1964,7 @@ asb_generate_odm_camera_binds() {
     _obc_any=$((_obc_any + 1))
   done
   [ "$_obc_any" -gt 0 ] && \
-    ui_print "      + Camera: ${_obc_any} odm config(s) queued for the runtime bind"
+    ui_print "      + $(printf "${ASB_L_CAM_QUEUED:-Camera: %s config(s) will be linked in at boot}" "$_obc_any")"
   return 0
 }
 
@@ -2038,7 +2031,9 @@ asb_register_dsp_all_configs() {
     asb_register_dsp_effect "$_ec"
     if grep -q 'asb_loudness' "$_ec" 2>/dev/null; then
       _dsp_reg=$((_dsp_reg + 1))
-      ui_print "        . registered in ${_ec#$MODPATH/system}"
+      # Paths were printed one per file - four lines of /vendor/etc/audio/sku_*/... that
+      # tell a user nothing. The count on the next line already says how many landed.
+      :
     elif ! grep -q '<libraries>' "$_ec" 2>/dev/null || ! grep -q '<effects>' "$_ec" 2>/dev/null; then
       ui_print "    ! ASB DSP: $(basename "$(dirname "$_ec")") has no <libraries>/<effects> section"
     else
@@ -2046,7 +2041,9 @@ asb_register_dsp_all_configs() {
     fi
   done
   if [ "$_dsp_reg" -gt 0 ]; then
-    ui_print "      + ASB DSP ${ASB_D_DSP_REG:-effect registered in} ${_dsp_reg} ${ASB_D_DSP_REG_TAIL:-audio_effects_config file(s)}"
+    ui_print " "
+    ui_print "  🎚  ${ASB_SEC_DSP:-DSP ENGINE}"
+    ui_print "      + $(printf "${ASB_L_DSP_REG_N:-registered in %s audio config file(s)}" "$_dsp_reg")"
   elif [ "$_dsp_seen" -gt 0 ]; then
     ui_print "    ! ASB DSP: $_dsp_seen config(s) present but none registered"
   fi
@@ -2115,7 +2112,7 @@ asb_bind_register_odm_effects() {
     touch "$_oecm" 2>/dev/null
     grep -q "^${_oecl}|" "$_oecm" 2>/dev/null \
       || echo "${_oecl}|$_oecs" >> "$_oecm"
-    ui_print "      + ASB DSP registered in ${_oecl} (runtime bind - the one the framework reads)"
+    ui_print "      + ${ASB_L_DSP_ODM:-DSP effect registered in the config Android actually reads}"
     return 0
   fi
   rm -f "$_oecs" 2>/dev/null
@@ -2760,6 +2757,8 @@ asb_apply_blur_prop() {
     # WindowManager watches this global live. It is a global switch too, so light must
     # NOT set it: that is the one that takes the backdrop out from behind notifications.
     settings put global disable_window_blurs 1 >/dev/null 2>&1 || true
+    ui_print " "
+    ui_print "  🖥  ${ASB_SEC_DISPLAY:-DISPLAY}"
     ui_print "      + ${ASB_D_BLUR:-blur disabled via system.prop (applies after reboot)}"
     ASB_BLUR_APPLIED="disabled"
   else
