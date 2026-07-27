@@ -2193,9 +2193,25 @@ command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
 # usefully, re-asserts the WindowManager global right now.
 _asb_blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null \
                   | head -1 | sed 's/.*=//' | tr -d ' \r')"
-case "$_asb_blur_want" in 1|on|true) _asb_blur_want=1 ;; *) _asb_blur_want=0 ;; esac
+# Same three-value vocabulary the card writes and asb_blur_apply.sh reads. Both "off"
+# and "light" set the compositor half, which is what disable_blurs=1 in system.prop
+# represents - so both compare equal to _asb_blur_have=1 and neither triggers a pointless
+# rebuild. Getting this wrong is how bt_absvol_mode used to revert on every boot.
+# Three states, and the probe has to tell them apart the same way the writer does.
+# disable_blurs=1 is the OFF marker only - light does not set it, because that property
+# kills blur globally including the notification backdrop. gaussianlevel is what both
+# off and light write, so its presence WITHOUT disable_blurs means light.
+case "$_asb_blur_want" in
+  1|on|true|off)  _asb_blur_want=1 ;;
+  light|partial)  _asb_blur_want=2 ;;
+  *)              _asb_blur_want=0 ;;
+esac
 _asb_blur_have=0
-grep -q '^persist\.sys\.sf\.disable_blurs=1' "$MODDIR/system.prop" 2>/dev/null && _asb_blur_have=1
+if grep -q '^persist\.sys\.sf\.disable_blurs=1' "$MODDIR/system.prop" 2>/dev/null; then
+  _asb_blur_have=1
+elif grep -q '^ro\.oplus\.gaussianlevel=0' "$MODDIR/system.prop" 2>/dev/null; then
+  _asb_blur_have=2
+fi
 if [ -f "$MODDIR/runtime/asb_blur_apply.sh" ]; then
   if [ "$_asb_blur_want" != "$_asb_blur_have" ]; then
     sh "$MODDIR/runtime/asb_blur_apply.sh" >/dev/null 2>&1
