@@ -38,10 +38,23 @@ _db="$(grep -E '^[[:space:]]*disable_blur=' "$CONF" 2>/dev/null | head -1 | sed 
 # expensive one - full-screen, every frame of a transition - and that is where the GPU
 # saving actually comes from. Keeping the first while dropping the second gives readable
 # notifications at most of the saving.
+# stock | off. There is no middle setting, and the attempt to build one is worth
+# recording so it is not tried again.
+#
+# Exactly two controls on this platform actually do anything:
+#   settings global disable_window_blurs   - WindowManager, live
+#   persist.sys.sf.disable_blurs           - SurfaceFlinger, read at service start
+# Both are GLOBAL. Neither can spare one surface.
+#
+# The ro.oplus.* and ro.launcher.* keys look per-surface and are not usable: they are
+# read-only properties consumed by processes that start before the module mounts, so a
+# module-supplied value arrives too late. A "light" mode built from those alone was
+# indistinguishable from stock - reported as "включил режим лайт, всё как в стоке" - and
+# before that, a version that also set the global ones was indistinguishable from off.
+# Those two reports bracket the problem: there is nothing in between to expose.
 case "$_db" in
-  1|on|true|off)  _db=1 ;;   # 1/on/true kept for configs written by older versions
-  light|partial)  _db=2 ;;
-  *)              _db=0 ;;
+  1|on|true|off|light|partial) _db=1 ;;   # light folded into off; old configs keep working
+  *)                           _db=0 ;;
 esac
 
 # ui_effects_level is SEPARATE from blur, and it has to be.
@@ -103,7 +116,9 @@ sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
   # surface, so dropping them leaves the notification backdrop alone - which is the
   # whole point of light. The launcher blur in particular is full-screen on every app
   # open, so this is where most of the GPU saving actually is.
-  if [ "$_db" = "1" ] || [ "$_db" = "2" ]; then
+  if [ "$_db" = "1" ]; then
+    # Kept as belt-and-braces for ColorOS builds that read them late enough to matter.
+    # They are not load-bearing: the two globals above are what actually turns blur off.
     echo "ro.oplus.display.disable.volume_blur=1"
     echo "ro.oplus.gaussianlevel=0"
     echo "ro.launcher.blur.appLaunch=0"
@@ -119,7 +134,6 @@ mv -f "$_pt" "$PROP" 2>/dev/null || { cat "$_pt" > "$PROP"; rm -f "$_pt"; }
 
 case "$_db" in
   1) echo "blur off - window blur is off now, compositor blur after a reboot" ;;
-  2) echo "blur light - notification/shade blur kept, compositor blur off after a reboot" ;;
   *) echo "blur stock - window blur is back now, compositor blur after a reboot" ;;
 esac
 [ "$_ue" = "flat" ] && echo "ui effects: flat (Recents becomes a plain list) - after a reboot"
