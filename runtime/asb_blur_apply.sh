@@ -91,7 +91,7 @@ sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
     -e '/^ro\.oplus\.display\.disable\.volume_blur=/d' \
     -e '/^ro\.oplus\.gaussianlevel=/d' \
     -e '/^ro\.launcher\.blur\.appLaunch=/d' \
-    -e '/^ASB:UIFX:BEGIN$/,/^ASB:UIFX:END$/d' \
+    -e '/^# ASB:UIFX:BEGIN$/,/^# ASB:UIFX:END$/d' \
     -e '/^persist\.sys\.oplus\.anim_level=/d' \
     -e '/^persist\.sys\.oplus\.material_blur_switch=/d' \
     -e '/^persist\.sys\.sf\.disable_blurs=/d' \

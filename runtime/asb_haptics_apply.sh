@@ -37,13 +37,17 @@ _cfg() {
 }
 
 _lvl="$(_cfg haptic_strength)"
+# The card is a slider now, so the config carries 0-3. The words are still accepted:
+# they are what earlier builds wrote, and a config that survives an update should not
+# quietly lose its setting. "stock" means restore the baseline, which is not the same as
+# 2 - 2 is an explicit choice to sit at the Android default, while stock puts back
+# whatever the device had, including "never set".
 case "$_lvl" in
-  off)    _want=0 ;;
-  light)  _want=1 ;;
-  strong) _want=3 ;;
-  medium) _want=2 ;;
-  stock|'') _want="" ;;
-  *)      _want="" ;;
+  0|off)      _want=0 ;;
+  1|light)    _want=1 ;;
+  2|medium)   _want=2 ;;
+  3|strong)   _want=3 ;;
+  *)          _want="" ;;
 esac
 
 # Baseline, captured once before anything is changed - the same rule the OEM-toggle and
