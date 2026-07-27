@@ -70,7 +70,24 @@ esac
 # expressible. stock = do not touch it at all, which is also the default: a setting that
 # reshapes the launcher should be something you asked for.
 _ue="$(grep -E '^[[:space:]]*ui_effects_level=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
-case "$_ue" in flat|0) _ue="flat" ;; *) _ue="stock" ;; esac
+case "$_ue" in
+  flat|0)  _ue="flat" ;;
+  stock|1) _ue="stock" ;;
+  # Unset, or anything unrecognised: FOLLOW BLUR.
+  #
+  # anim_level used to be part of disable_blur, and it is the half people actually see -
+  # flat Recents, simpler transitions. Splitting it out was correct (blur off with cards
+  # intact is a reasonable thing to want) but defaulting the new key to "stock" silently
+  # took that half away from everyone who already had blur off: same switch, visibly less
+  # effect, reported as "отключение блюра не работает". They were right - what they were
+  # judging by had stopped happening.
+  #
+  # So an absent key means "whatever blur is doing", which reproduces the old behaviour
+  # exactly. Setting the card to stock or flat is an explicit choice and is honoured as
+  # such; only silence defers.
+  # auto, unset, or anything unrecognised: follow blur.
+  *)       [ "$_db" = "1" ] && _ue="flat" || _ue="stock" ;;
+esac
 
 # --- live half: WindowManager, takes effect immediately -----------------------
 if [ "$_db" = "1" ]; then
