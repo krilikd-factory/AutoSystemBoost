@@ -142,6 +142,10 @@ run_worker() {
   fi
 
   PROFILE="$PROFILE"
+  # profile_core reads PROFILE_FLAG to tell an automatic switch from one the user asked
+  # for - it must not restart SystemUI behind their back. Export it so the value is
+  # visible to everything sourced below rather than only to this shell.
+  export PROFILE_FLAG
   . "$PROFILE_CORE" || {
     asb_log "worker failed: source profile_core"
     exit 1
