@@ -1862,8 +1862,6 @@ const I18N = {
         desc: 'Работает вместе с DSP-усилением. Низкочастотная полка на 90 Гц: полный подъём приходится на низ, на угловой частоте \u2014 половина, выше примерно 1 кГц эффекта нет, середина и вокал не затронуты. Стоит в начале цепи, поэтому добавленный бас ограничивается наравне со всем остальным и сам по себе клиппинга не даёт. Плата \u2014 запас по уровню: каждый децибел баса заставляет лимитер срабатывать раньше, так что большой подъём поверх высокого усиления снижает общую громкость. Для большинства наушников достаточно 3\u20136.' },
       dsp_compressor: { name: 'DSP\nКомпрессор',
         desc: 'Нужен при большом усилении: держит тело трека, чтобы пики оставались чистыми. При небольшом усилении (+2..+4 дБ) он только сдавливает динамику, которой сжатие не требовалось \u2014 именно это слышно как «обработанный» звук. Пиковый лимитер остаётся включённым в любом случае, поэтому «выкл» не даёт клиппинга. Но при большом усилении лимитер начнёт работать непрерывно, и это звучит хуже компрессора. При выключенном DSP-усилении настройка ни на что не влияет.' },
-      dsp_effect_abi: { name: 'DSP\nИнтерфейс эффекта',
-        desc: '«auto» \u2014 модуль читает VINTF-манифест прошивки, включая ВЕРСИЮ AIDL-интерфейса. Библиотека, собранная под v3, не грузится фабрикой v2 \u2014 именно так на одной модели DSP молчал при полностью корректных конфигах. «aidl_v2» \u2014 сборка под вторую версию интерфейса, «legacy» \u2014 старая HIDL-фабрика. Переустановка не нужна, достаточно перезагрузки.' },
       bt_absvol_mode: { name: 'Управление громкостью Bluetooth',
         desc: '«Сток» \u2014 одна общая шкала: ползунок телефона напрямую двигает громкость наушников. «Откл» \u2014 шкалы независимы, телефон накладывает своё усиление поверх того, что стоит на гарнитуре: получается громче, и это нужно для ViPER/эквалайзеров. Плата \u2014 шкалы перестают совпадать, и на части наушников нижние деления становятся слишком тихими. Применяется без перезагрузки. Это не про уровень громкости, а про то, кто ею управляет \u2014 отдельного «включить» нет, потому что «сток» и есть включено.' },
       cool_gaming: { name: 'Холодные игры',
@@ -1880,8 +1878,10 @@ const I18N = {
         desc: 'Управление тумблерами OxygenOS (Расширение ОЗУ, Адаптивная батарея, Низкий нагрев). ВЫКЛ = не трогать (OOS может включать Расширение ОЗУ после ребута). ВКЛ = держит Расширение ОЗУ ВЫКЛ при каждой загрузке.' },
       UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
         desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление скоростью UI ВКЛ.' },
-      disable_blur: { name: 'Отключить эффекты блюра',
-        desc: 'Отключает блюр фона / панелей / громкости / лаунчера / гаусса / материала и опускает уровень анимаций OPPO до 0. Экономит GPU/CPU (лучше автономность и плавность) ценой визуальных эффектов. Применяется после перезагрузки.' }
+      disable_blur: { name: 'Эффекты размытия',
+        desc: '«Откл» \u2014 убирает размытие везде: дешевле всего, но у всплывающего уведомления не остаётся подложки, и текст SMS ложится прямо на лаунчер \u2014 читать тяжело. «Слегка» \u2014 оставляет размытие под шторкой и уведомлениями, убирая только полноэкранное размытие композитора: это как раз дорогая часть, так что экономия почти та же, а читаемость не страдает. «Сток» \u2014 не трогаем. Оконная часть применяется сразу, часть композитора \u2014 после перезагрузки.' },
+      ui_effects_level: { name: 'Визуальные эффекты OxygenOS',
+        desc: '«Сток» \u2014 не трогаем уровень эффектов прошивки. «Плоско» \u2014 понижаем его: «Недавние» превращаются из карточек с превью в простой список, часть переходов упрощается. Меньше нагрузки на GPU, но выглядит проще. Вынесено отдельно от блюра намеренно: раньше это было в одном тумблере, и отключение блюра молча делало «Недавние» плоскими. Применяется после перезагрузки.' },
     },
     // segmented option labels
     opt: {
@@ -2132,8 +2132,6 @@ const CFG_ITEMS = [
     desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, now up to +18 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream.' },
   { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
     desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
-  { key:'dsp_effect_abi', type:'seg', def:'auto', opts:['auto','aidl','aidl_v2','legacy'], name:'DSP Effect ABI',
-    desc:'Which effect interface to install. auto reads the device VINTF manifest, including the AIDL interface VERSION - a library built for v3 cannot be loaded by a v2 factory, which is exactly how one model had a silent DSP with every config correct. Reboot to apply.' },
   { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
     desc:'Needs DSP Loudness above. A low shelf at 90 Hz: the full lift lands on the low end, half of it at the corner, nothing above about 1 kHz \u2014 mids and vocals stay untouched. It runs at the head of the chain, so the added bass is limited like everything else and cannot clip on its own. The trade is headroom: every dB of bass makes the limiter engage sooner, so a big boost on top of a high gain costs overall loudness. 3\u20136 suits most headphones.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Volume Control',
@@ -2159,8 +2157,8 @@ const CFG_ITEMS = [
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage UI Speed is ON.' },
   // --- Display ---
-  { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur Effects',
-    desc:'Turns off background / panel / volume / launcher / gaussian / material blur and drops the OPPO animation level to 0. Saves GPU/CPU for better battery and smoothness, at the cost of visual polish. Reboot to apply.' }
+  { key:'disable_blur', type:'seg', def:'stock', opts:['stock','light','off'], name:'Blur',
+    desc:'off removes blur everywhere - cheapest, but a heads-up notification then has no backdrop and its text sits straight on the launcher, which is hard to read. light keeps the blur behind the shade and notifications and drops only the compositor\u2019s full-screen blur, which is the expensive one: most of the saving, none of the readability problem. The window half applies at once, the compositor half after a reboot.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -2184,13 +2182,13 @@ async function cfgLoad() {
 // explicitly.
 const CFG_CAT = {
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_effect_abi:'audio', bt_absvol_mode:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
-  disable_blur:'display'
+  disable_blur:'display', ui_effects_level:'display'
 };
 // Four groups, one screen each.
 //
@@ -2202,6 +2200,8 @@ const CFG_CAT = {
 // are finer-grained than the navigation should be.
 const CFG_GROUPS = [
   { id:'audio',   ico:'\uD83C\uDFB5', name:'Audio',   ru:'\u0410\u0443\u0434\u0438\u043E' },
+  { key:'ui_effects_level', type:'seg', def:'stock', opts:['stock','flat'], name:'OxygenOS Visual Effects',
+    desc:'stock leaves the OEM effects level alone. flat drops it, which turns Recents from card previews into a plain list and simplifies some transitions - lighter on the GPU, plainer to look at. This is separate from blur on purpose: it used to be bundled in, so turning blur off silently flattened Recents. Applies after a reboot.' },
   { id:'camera',  ico:'\uD83D\uDCF7', name:'Camera',  ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
   { id:'battery', ico:'\uD83D\uDD0B', name:'Battery', ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
   { id:'ui',      ico:'\u2728',        name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' }
@@ -2212,12 +2212,12 @@ const CFG_GROUPS = [
 const CFG_GROUP_OF = {
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio',
-  dsp_effect_abi:'audio', bt_absvol_mode:'audio',
+  bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'ui', UX_ANIM_FORCE_RESTART:'ui',
-  disable_blur:'ui'
+  disable_blur:'ui', ui_effects_level:'ui'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
 // null = the hub is showing; a group id = that group's screen is.
@@ -2490,17 +2490,12 @@ async function cfgSet(key, val, ctl) {
     // disable_blur is the same shape: the system.prop block was only ever written by the
     // installer, so the toggle promised a reboot and rebuilt nothing. The script below
     // also writes the WindowManager global, which needs no reboot at all.
-    var BLUR_KEYS = ['disable_blur'];
-    // Both effect libraries ship inside the module, so switching ABI is a file copy plus
-    // a reboot - no reinstall. A reinstall would only re-run the same probe anyway.
-    var DSP_ABI_KEYS = ['dsp_effect_abi'];
+    // Both are written by asb_blur_apply.sh - one script, two independent blocks.
+    var BLUR_KEYS = ['disable_blur','ui_effects_level'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
       var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0) ? ' dsp' : '';
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh' + _m + ' >/dev/null 2>&1 &'); } catch(e) {}
-    } else if (DSP_ABI_KEYS.indexOf(key) >= 0) {
-      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_dsp_abi_apply.sh ' + val + ' >/dev/null 2>&1'); } catch(e) {}
-      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_abi', ' \u00b7 reboot to apply'), cfgToastType(key));
     } else if (BLUR_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_blur_apply.sh >/dev/null 2>&1'); } catch(e) {}
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_blur', ' \u00b7 shade now, rest after reboot'), cfgToastType(key));
