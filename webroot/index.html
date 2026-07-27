@@ -1908,8 +1908,10 @@ const I18N = {
         desc: 'Выключает размытие везде \u2014 шторка, уведомления, панель громкости, переходы. Меньше нагрузки на GPU, шторка становится непрозрачной вместо матовой. Учтите: у всплывающего уведомления тоже не останется размытой подложки, и текст ляжет на то, что под ним. Промежуточного режима нет \u2014 обе ручки, которые эта платформа даёт, глобальные. Оконная часть применяется сразу, часть композитора \u2014 после перезагрузки.' },
       ui_effects_level: { name: 'Анимации системы',
         desc: '«Упрощённые» \u2014 убирают объём из анимаций OxygenOS: «Недавние» становятся простым списком вместо карточек с превью, переходы теряют многослойные эффекты. Легче для видеочипа, но выглядит скромнее. «Авто» \u2014 следует за настройкой блюра: до недавнего времени это была одна общая настройка, поэтому «авто» сохраняет привычное поведение. Применяется после перезагрузки.' },
-      haptic_strength: { name: 'Сила вибрации',
+      haptic_strength: { name: 'Вибрация',
         desc: 'Десять ступеней: OnePlus держит настоящую регулировку на своей, более дробной шкале, а не на стандартной 0\u20133 \u2014 та здесь и так стояла на максимуме, поэтому её подъём ничего не давал. Здесь пишется та же безступенчатая амплитуда, которую использует фирменный ползунок. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона: выше него служба вибрации не ослабляет сигнал, а отвергает значение целиком, и вибрация пропадает совсем. Применяется сразу.' },
+      haptic_touch_strength: { name: 'Отклик касаний',
+        desc: 'Отдача при наборе текста и нажатиях \u2014 на своей шкале. Прошивка задаёт её отдельно от уведомлений: фирменный ползунок пишет 1500 для уведомлений и 1600 для касаний. И задачи разные: уведомление должно чувствоваться через карман, а отклик клавиатуры не должен утомлять руку. «Авто» \u2014 следует за силой выше. Регулировки длительности нет: в системе её попросту не существует, Android берёт длительность из формы волны каждого эффекта.' },
     },
     // segmented option labels
     opt: {
@@ -2204,8 +2206,10 @@ const CFG_ITEMS = [
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
     desc:'Simplified strips the depth out of OxygenOS animations: Recents becomes a plain list instead of card previews, and transitions lose their layered effects. Lighter on the GPU, plainer to look at. Auto follows the blur setting - these two were one control until recently, so auto keeps the behaviour you already had. Applies after a reboot.' },
-  { key:'haptic_strength', type:'range', def:'6', min:0, max:10, step:1, name:'Vibration Strength',
+  { key:'haptic_strength', type:'range', def:'6', min:0, max:10, step:1, name:'Vibration',
     desc:'Ten steps, because OnePlus keeps the real control on its own finer scale rather than Android\u2019s 0-3 one - which was already at maximum here, so raising it changed nothing. This writes the stepless amplitude the OEM slider itself uses. Drag it and the phone buzzes at the level you land on. 10 matches the top of the OEM\u2019s own range; going above an untested value on a linear motor is not worth the wear. Applies immediately.' },
+  { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
+    desc:'Typing and tap feedback, on its own scale. The OEM sets these separately from alerts - its slider writes 1500 for notifications and 1600 for touch - and the two wants are different: an alert should be felt through a pocket, keypress feedback should not be punishing to hold. auto follows the strength above. There is no duration control to offer: nothing in the system exposes one, and Android takes duration from each effect\u2019s own waveform.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -2235,7 +2239,7 @@ const CFG_CAT = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
-  disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic'
+  disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
 };
 // Four groups, one screen each.
 //
@@ -2265,7 +2269,7 @@ const CFG_GROUP_OF = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'ui', UX_ANIM_FORCE_RESTART:'ui',
-  disable_blur:'ui', ui_effects_level:'ui', haptic_strength:'ui'
+  disable_blur:'ui', ui_effects_level:'ui', haptic_strength:'ui', haptic_touch_strength:'ui'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
 // null = the hub is showing; a group id = that group's screen is.
@@ -2294,6 +2298,7 @@ const CFG_ICONS = {
   disable_blur:'\uD83C\uDF2B',                  // fog (blur off)
   ui_effects_level:'\uD83C\uDFA8',              // artist palette (visual style)
   haptic_strength:'\uD83D\uDCF3',               // vibration mode
+  haptic_touch_strength:'\uD83D\uDC46',         // pointing hand (touch feedback)
   UX_ANIM_FORCE_RESTART:'\uD83D\uDD04',       // restart arrows
   region_allow_locale:'\uD83C\uDF0D'          // globe
 };
@@ -2425,6 +2430,10 @@ function cfgRender() {
         if (it.key === 'dsp_loudness') return '+' + v + ' dB';
         if (it.key === 'dsp_bass') return '+' + v + ' dB';
         if (it.key === 'haptic_strength') return (v === 0) ? Topt('off') : (v + '/10');
+        if (it.key === 'haptic_touch_strength') {
+          if (v < 0) return Topt('auto');
+          return (v === 0) ? Topt('off') : (v + '/10');
+        }
         return String(v);
       };
       val.textContent = _rngLabel(rng.value);
@@ -2435,7 +2444,7 @@ function cfgRender() {
         // whole reason someone opens this page is that they cannot feel their phone.
         // Throttled to one pulse per step so a drag across the track does not turn into
         // a burst; navigator.vibrate is fire-and-forget and costs nothing when absent.
-        if (it.key === 'haptic_strength') {
+        if (it.key === 'haptic_strength' || it.key === 'haptic_touch_strength') {
           var _hv = parseInt(rng.value, 10);
           if (_hv !== _hapticLast) {
             _hapticLast = _hv;
@@ -2452,8 +2461,14 @@ function cfgRender() {
             try {
               if (_hv > 0) {
                 var _amp = Math.round(25 + (_hv / 10) * 230);
-                run('cmd vibrator vibrate -f 120 -a ' + _amp +
-                    ' 2>/dev/null || cmd vibrator vibrate 120 2>/dev/null');
+                // The service is registered as vibrator_manager here, not vibrator -
+                // `cmd vibrator` answers "Can't find service", so the preview I added was
+                // silently doing nothing. Try the manager first and fall back, since the
+                // name differs across versions and neither costs anything when absent.
+                run('cmd vibrator_manager synced oneshot 120 ' + _amp + ' 2>/dev/null' +
+                    ' || cmd vibrator_manager vibrate 120 2>/dev/null' +
+                    ' || cmd vibrator vibrate -f 120 -a ' + _amp + ' 2>/dev/null' +
+                    ' || cmd vibrator vibrate 120 2>/dev/null');
               }
             } catch (e) {}
           }
@@ -2574,7 +2589,7 @@ async function cfgSet(key, val, ctl) {
     // also writes the WindowManager global, which needs no reboot at all.
     // Both are written by asb_blur_apply.sh - one script, two independent blocks.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
-    var HAPTIC_KEYS = ['haptic_strength'];
+    var HAPTIC_KEYS = ['haptic_strength','haptic_touch_strength'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
       var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0) ? ' dsp' : '';
