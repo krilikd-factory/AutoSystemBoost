@@ -101,7 +101,21 @@ if [ -n "$DSP_SRC" ]; then
       -fvisibility=hidden
       -I"$DSP_INC"
     )
-    _aidl_pre="${ASB_DSP_AIDL_DIR:-$SCRIPT_DIR/DSP_AIDL/prebuilt}/$_abi/libasbdsp_aidl.so"
+    # Prefer a VERSIONED prebuilt over the generic name.
+    #
+    # libasbdsp_aidl.so and libasbdsp_v3.so are the same bytes - the DSP workflow writes
+    # both, one under the historical name this script has always looked for and one named
+    # by the interface version it was built against. Keeping only the versioned files is
+    # the tidier repo, so accept those first and fall back to the old name. Highest
+    # version wins: a tree that ships v2 and v3 should hand the generic slot the newer
+    # one, since that slot is what a device gets when the probe finds no exact match.
+    _aidl_dir="${ASB_DSP_AIDL_DIR:-$SCRIPT_DIR/DSP_AIDL/prebuilt}/$_abi"
+    _aidl_pre=""
+    for _vc in $(ls "$_aidl_dir"/libasbdsp_v*.so 2>/dev/null | sort -rV); do
+      case "$_vc" in *_legacy*) continue ;; esac
+      _aidl_pre="$_vc"; break
+    done
+    [ -n "$_aidl_pre" ] || _aidl_pre="$_aidl_dir/libasbdsp_aidl.so"
     if [ "${ASB_DSP_AIDL:-0}" = "1" ] || [ -f "$_aidl_pre" ]; then
       # AIDL build path. The AIDL effect (src/DSP_AIDL) needs AOSP effect-AIDL + FMQ
       # headers that plain NDK clang does not ship, so it is built by soong, not here.
