@@ -37,23 +37,36 @@ _cfg() {
 }
 
 _lvl="$(_cfg haptic_strength)"
-# The card is a slider now, so the config carries 0-3. The words are still accepted:
-# they are what earlier builds wrote, and a config that survives an update should not
-# quietly lose its setting. "stock" means restore the baseline, which is not the same as
-# 2 - 2 is an explicit choice to sit at the Android default, while stock puts back
-# whatever the device had, including "never set".
+
+# OnePlus keeps the real control in its OWN settings, not Android's.
+#
+# The standard *_vibration_intensity keys accept 0-3 and were ALREADY at 3 on this
+# device - which is why setting them to 3 changed nothing at all, and why "поставил 3,
+# разницы не чувствую" was an accurate report rather than a perception problem.
+#
+# Watching what the OEM's own slider writes settles it: moving it rewrites
+# *_stepless_vibration_intensity, a much finer scale - observed 900, 1400, 2000, 2300,
+# 2400 - while the coarse key stays at 3. So the coarse key is a gate and the stepless
+# one is the actual amplitude. We set both: the gate open, the amplitude from the slider.
+#
+# 2400 is the ceiling because that is the highest value the OEM slider was seen to
+# produce. Going above an untested value on a linear actuator is not a knob worth
+# turning blind, so the top of our range is the top of theirs.
+ASB_HAP_MAX=2400
+_coarse="haptic_feedback_intensity notification_vibration_intensity ring_vibration_intensity alarm_vibration_intensity media_vibration_intensity"
+_stepless="notification_stepless_vibration_intensity ring_stepless_vibration_intensity touch_stepless_vibration_intensity"
+_keys="$_coarse $_stepless"
+
 case "$_lvl" in
-  0|off)      _want=0 ;;
-  1|light)    _want=1 ;;
-  2|medium)   _want=2 ;;
-  3|strong)   _want=3 ;;
-  *)          _want="" ;;
+  0|off)                    _want=0 ;;
+  1|2|3|4|5|6|7|8|9|10)     _want="$_lvl" ;;
+  light)                    _want=3 ;;
+  medium)                   _want=6 ;;
+  strong)                   _want=10 ;;
+  *)                        _want="" ;;
 esac
 
-# Baseline, captured once before anything is changed - the same rule the OEM-toggle and
-# tracking paths follow. Re-reading it later would record our own value and make the
-# restore meaningless.
-_keys="haptic_feedback_intensity notification_vibration_intensity ring_vibration_intensity alarm_vibration_intensity media_vibration_intensity"
+# Baseline, captured once before anything is changed.
 if [ ! -f "$BASE" ]; then
   mkdir -p /data/adb/asb 2>/dev/null
   : > "$BASE" 2>/dev/null
@@ -63,7 +76,6 @@ if [ ! -f "$BASE" ]; then
 fi
 
 if [ -z "$_want" ]; then
-  # stock: put back exactly what was there, including "null" for keys that were never set.
   if [ -f "$BASE" ]; then
     while IFS='|' read -r _k _v; do
       [ -n "$_k" ] || continue
@@ -78,21 +90,22 @@ if [ -z "$_want" ]; then
   exit 0
 fi
 
-for _k in $_keys; do
-  settings put system "$_k" "$_want" >/dev/null 2>&1 || true
-done
-# Touch feedback has its own on/off switch, and setting an intensity while it is off
-# does nothing. Only ever turn it ON - a user who deliberately disabled touch feedback
-# and then asked for stronger haptics is telling us about notifications, not keypresses,
-# so "off" is left alone.
-[ "$_want" -gt 0 ] 2>/dev/null && \
-  [ "$(settings get system haptic_feedback_enabled 2>/dev/null)" = "0" ] && \
+if [ "$_want" = "0" ]; then
+  for _k in $_coarse;   do settings put system "$_k" 0 >/dev/null 2>&1 || true; done
+  for _k in $_stepless; do settings put system "$_k" 0 >/dev/null 2>&1 || true; done
+  echo "haptics: off"
+  exit 0
+fi
+
+# Coarse keys open the gate; the stepless value is what is actually felt.
+for _k in $_coarse; do settings put system "$_k" 3 >/dev/null 2>&1 || true; done
+_amp=$(( ASB_HAP_MAX * _want / 10 ))
+for _k in $_stepless; do settings put system "$_k" "$_amp" >/dev/null 2>&1 || true; done
+
+# Touch feedback has its own on/off switch; an intensity set while it is off does
+# nothing. Only ever turn it ON.
+[ "$(settings get system haptic_feedback_enabled 2>/dev/null)" = "0" ] && \
   settings put system haptic_feedback_enabled 1 >/dev/null 2>&1
 
-case "$_want" in
-  0) echo "haptics: off" ;;
-  1) echo "haptics: light" ;;
-  2) echo "haptics: medium (Android default)" ;;
-  3) echo "haptics: strong" ;;
-esac
+echo "haptics: level $_want/10 (stepless $_amp)"
 exit 0

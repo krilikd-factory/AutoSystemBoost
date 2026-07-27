@@ -112,6 +112,7 @@ sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
     -e '/^persist\.sys\.oplus\.anim_level=/d' \
     -e '/^persist\.sys\.oplus\.material_blur_switch=/d' \
     -e '/^persist\.sys\.sf\.disable_blurs=/d' \
+    -e '/^vendor\.display\.supports_background_blur=/d' \
     "$PROP" > "$_pt" 2>/dev/null || cp -f "$PROP" "$_pt"
 {
   echo "# ASB:BLUR:BEGIN"
@@ -127,6 +128,12 @@ sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
     echo "ro.surface_flinger.supports_background_blur=0"
     echo "ro.surface_flinger.media_panel_bg_blur=0"
     echo "persist.sys.oplus.material_blur_switch=false"
+    # The VENDOR display stack has its own capability flag, and it is the one that was
+    # still on. On a OnePlus 13 every key above applied cleanly and SurfaceFlinger
+    # reported backgroundBlurRadius=0 on every layer - blur was off at the AOSP layer and
+    # the user still saw it, because OPLUS composes its own blur through the display HAL
+    # and vendor.display.supports_background_blur=1 kept that path alive.
+    echo "vendor.display.supports_background_blur=0"
   fi
   # LIGHT and OFF share only the targeted ones: the volume panel's own blur, the
   # launcher's app-launch blur, and the OEM gaussian level. Each names a specific
