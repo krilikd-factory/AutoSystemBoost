@@ -1086,6 +1086,22 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "quarantine=%d\nuser_id=%d\nquarantine_left=%ld\n",
                 fsm->plan.quarantine, g_last_user_id, qleft);
     }
+    /* Warm-up flag.
+     *
+     * The state file is written from the very first tick, before the governor has
+     * detected a foreground package or settled its profile - so those first writes carry
+     * initialised defaults, not observations. A UI reading them shows nonsense that
+     * corrects itself a moment later: app hint "gaming" on a device that has not opened a
+     * game, profile "balanced" while Smart is active. Reported exactly that way.
+     *
+     * Rather than guess at plausible defaults, say plainly that there is nothing to read
+     * yet and let the UI show a placeholder. Two ticks is enough: by then a package has
+     * been sampled and the profile has been resolved from disk. */
+    {
+        static int _warm_ticks = 0;
+        if (_warm_ticks < 3) _warm_ticks++;
+        fprintf(f, "state_warmup=%d\n", (_warm_ticks < 3) ? 1 : 0);
+    }
     /* Smart Mode state fields */
     fprintf(f,
             "smart_mode=%d\nsmart_bucket_id=%d\nsmart_daypart=%d\nsmart_is_weekend=%d\n"
