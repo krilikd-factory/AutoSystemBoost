@@ -2194,7 +2194,7 @@ if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then
   _asb_hap="$(grep -E '^[[:space:]]*haptic_strength=' "$MODDIR/config/governor.conf" 2>/dev/null \
               | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_asb_hap" in
-    0|1|2|3|off|light|medium|strong)
+    [0-9]|10|off|light|medium|strong)
       sh "$MODDIR/runtime/asb_haptics_apply.sh" >/dev/null 2>&1
       asb_log "haptic_strength=$_asb_hap re-asserted"
       ;;

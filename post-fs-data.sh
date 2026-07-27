@@ -184,6 +184,36 @@ fi
 # have a boot-time self-heal of their own. dsp_effect_abi had none, so on a OnePlus 15 the
 # config read "legacy" while /vendor/lib64/soundfx/libasbdsp.so was still the 378760-byte
 # AIDL build, and nothing anywhere was going to change that.
+# Force the read-only blur keys with resetprop.
+#
+# system.prop is enough on some devices and not on others: on a OnePlus 13 every ro.*
+# key below took effect from system.prop alone, while on a OnePlus 15 the same file left
+# them at their original values - supports_background_blur still 1, gaussianlevel still
+# 3 - and only the persist.* one applied. Same module, same file, different result,
+# which is why "blur does not turn off" was reported from one device and not the other.
+#
+# resetprop rewrites the property area directly and does not care that a key is ro.*,
+# so it works in both cases. post-fs-data runs before the UI stack starts, which is
+# early enough for these to be read.
+if command -v resetprop >/dev/null 2>&1 && [ -f "$MODDIR/config/governor.conf" ]; then
+  _blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null \
+                | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_blur_want" in
+    1|on|true|off|light|partial)
+      for _bp in "ro.surface_flinger.supports_background_blur 0" \
+                 "ro.surface_flinger.media_panel_bg_blur 0" \
+                 "vendor.display.supports_background_blur 0" \
+                 "ro.oplus.display.disable.volume_blur 1" \
+                 "ro.oplus.gaussianlevel 0" \
+                 "ro.launcher.blur.appLaunch 0" \
+                 "persist.sys.sf.disable_blurs 1" \
+                 "persist.sys.oplus.material_blur_switch false"; do
+        resetprop -n ${_bp} >/dev/null 2>&1 || true
+      done
+      ;;
+  esac
+fi
+
 _abi_conf="$MODDIR/config/governor.conf"
 if [ -f "$_abi_conf" ] && [ -f "$MODDIR/runtime/asb_dsp_abi_apply.sh" ]; then
   _abi_want="$(grep -E '^[[:space:]]*dsp_effect_abi=' "$_abi_conf" 2>/dev/null \
