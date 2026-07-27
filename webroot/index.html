@@ -803,6 +803,24 @@ body::before, body::after {
   border-color: rgba(0,214,198,0.40);
   box-shadow: 0 0 25px rgba(0,214,198,0.15), 0 8px 32px rgba(0,0,0,0.4);
 }
+.toast.t-cat-blur {
+  background: rgba(24,16,40,0.95);
+  color: #c9b6ff;
+  border-color: rgba(167,139,250,0.45);
+  box-shadow: 0 0 25px rgba(167,139,250,0.16), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-motion {
+  background: rgba(40,12,26,0.95);
+  color: #ffa8ca;
+  border-color: rgba(255,95,162,0.45);
+  box-shadow: 0 0 25px rgba(255,95,162,0.16), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-haptic {
+  background: rgba(40,26,8,0.95);
+  color: #ffd08a;
+  border-color: rgba(255,179,64,0.45);
+  box-shadow: 0 0 25px rgba(255,179,64,0.16), 0 8px 32px rgba(0,0,0,0.4);
+}
 .toast.t-cat-system {
   background: rgba(24,24,27,0.95);
   color: #d2d2da;
@@ -1309,6 +1327,14 @@ body.config-active #livePage.open {
 .cfg-row.is-on .cfg-icon.cat-display { background: rgba(206,210,216,0.18); border-color: rgba(206,210,216,0.50); }
 .cfg-row.is-on .cfg-icon.cat-memory  { background: rgba(0,214,198,0.16);   border-color: rgba(0,214,198,0.45); }
 .cfg-row.is-on .cfg-icon.cat-system  { background: rgba(180,180,190,0.16); border-color: rgba(180,180,190,0.45); }
+/* Three settings shared the two grey categories - display and system - and grey is what
+   a category looks like when nobody chose a colour for it. On a screen where every other
+   card carries a hue that means something, three grey ones read as unfinished rather than
+   as neutral. Each gets a colour matched to what it does: lavender for the glass-like
+   blur, magenta for motion, amber for the physical buzz. */
+.cfg-row.is-on .cfg-icon.cat-blur    { background: rgba(167,139,250,0.18); border-color: rgba(167,139,250,0.52); }
+.cfg-row.is-on .cfg-icon.cat-motion  { background: rgba(255,95,162,0.18);  border-color: rgba(255,95,162,0.52); }
+.cfg-row.is-on .cfg-icon.cat-haptic  { background: rgba(255,179,64,0.18);  border-color: rgba(255,179,64,0.52); }
 .cfg-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -2209,7 +2235,7 @@ const CFG_CAT = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
-  disable_blur:'display', ui_effects_level:'display', haptic_strength:'system'
+  disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic'
 };
 // Four groups, one screen each.
 //
