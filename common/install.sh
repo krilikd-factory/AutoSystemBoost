@@ -2053,7 +2053,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
+region_allow_locale disable_blur ui_effects_level media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -2082,7 +2082,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
+region_allow_locale disable_blur ui_effects_level media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -2533,6 +2533,14 @@ asb_apply_blur_prop() {
   _prop="$MODPATH/system.prop"
   [ -f "$_prop" ] || : > "$_prop"
   _db="$(grep -E '^[[:space:]]*disable_blur=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  # stock | light | off, with 0/1 still meaning stock/off. The compositor block below is
+  # written for both off and light - they differ only in the WindowManager global, which
+  # asb_blur_apply.sh owns. install-time and runtime must agree on the vocabulary or the
+  # setting reverts on the next boot.
+  case "$_db" in
+    1|on|true|off|light|partial) _db=1 ;;
+    *)                           _db=0 ;;
+  esac
   # Rewrite the managed block from scratch every install so the WebUI toggle drives it.
   # Also strip any BARE (unmarked) copies of these props first: an earlier build wrote
   # them straight into system.prop without markers, and without this cleanup a fresh
