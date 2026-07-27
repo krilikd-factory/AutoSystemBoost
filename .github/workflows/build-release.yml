@@ -256,7 +256,18 @@ jobs:
           install -m 0755 bin/arm64-v8a/asb "$PKG_REL/bin/asb"
           # Both ABIs: /vendor/lib64/soundfx and /vendor/lib/soundfx both exist on the
           # target and each needs a library of its own bitness.
-          install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_REL/bin/libasbdsp.so"
+          # The generic slot, ONLY when there is no versioned build to stand in for it.
+          #
+          # build_ndk_release.sh now resolves bin/arm64-v8a/libasbdsp.so from the newest
+          # versioned prebuilt, so shipping both means shipping the same bytes twice under
+          # two names - 664 KB of duplicate in a 2 MB module. The installer's fallback
+          # already walks libasbdsp_v*.so and takes the newest, so the generic name is only
+          # needed by a build that ships no versioned libraries at all.
+          if ls src/DSP_AIDL/prebuilt/arm64-v8a/libasbdsp_v*.so >/dev/null 2>&1; then
+            echo "  = skipping generic bin/libasbdsp.so (versioned builds cover it)"
+          else
+            install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_REL/bin/libasbdsp.so"
+          fi
           # Versioned AIDL builds, when the repo carries them. The installer reads the
           # effect interface version out of VINTF and asks for the matching one; a device
           # on v2 cannot load a v3 library, so shipping only one is a coin flip.
@@ -291,7 +302,11 @@ jobs:
             echo "::warning::asb_dsp_attach missing - DSP will register but not attach"
           fi
           if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
-            install -m 0644 bin/armeabi-v7a/libasbdsp.so "$PKG_REL/bin/libasbdsp_32.so"
+            if ls src/DSP_AIDL/prebuilt/armeabi-v7a/libasbdsp_v*.so >/dev/null 2>&1; then
+              echo "  = skipping generic bin/libasbdsp_32.so (versioned builds cover it)"
+            else
+              install -m 0644 bin/armeabi-v7a/libasbdsp.so "$PKG_REL/bin/libasbdsp_32.so"
+            fi
             echo "DSP: both ABIs packaged"
           else
             # Loud, because the only symptom on-device is /vendor/lib/soundfx quietly
@@ -333,8 +348,6 @@ jobs:
 
           for required in \
             "bin/asb" \
-            "bin/libasbdsp.so" \
-            "bin/libasbdsp_32.so" \
             "bin/libasbdsp_legacy.so" \
             "bin/libasbdsp_legacy_32.so" \
             "service.sh" \
@@ -368,6 +381,17 @@ jobs:
             "webroot/index.html"; do
             unzip -l "$ZIP_REL" | grep -q "$required" \
               || { echo "ERROR: $ZIP_REL missing $required"; exit 1; }
+          done
+
+          # An AIDL library of each bitness has to be in there under SOME name. Listing
+          # bin/libasbdsp.so by name stopped working once the generic copy was dropped in
+          # favour of the versioned ones - and a required-file list that names a file the
+          # packaging step deliberately skips fails every build for no reason.
+          for _bits in "" "_32"; do
+            if ! unzip -l "$ZIP_REL" 2>/dev/null | grep -qE "bin/libasbdsp(_v[0-9]+)?${_bits}\.so"; then
+              echo "::error::no AIDL effect library for ${_bits:-64-bit} in the package"
+              exit 1
+            fi
           done
 
           for forbidden in \
