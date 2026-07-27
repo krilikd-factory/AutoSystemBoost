@@ -224,7 +224,14 @@ asb_apply_gpu() {
 
 asb_apply_vm() {
   asb_feature_enabled VM || return 0
-  sysctlw vm.swappiness "$VM_SWAPPINESS" || true
+  # Camera guard owns swappiness while a recording is in flight.
+  #
+  # service.sh already checks this and smart_dynamic_tune.sh does too, but the profile
+  # path did not - so switching profile mid-recording wrote the profile's swappiness
+  # straight over the guard's 10, and on release the guard restored a value that was
+  # captured before the switch. Same bug the tuner had; this was the last writer still
+  # missing the check.
+  [ -r /dev/.asb/camera_guard ] || sysctlw vm.swappiness "$VM_SWAPPINESS" || true
   sysctlw vm.dirty_expire_centisecs "$VM_DIRTY_EXPIRE" || true
   sysctlw vm.dirty_writeback_centisecs "$VM_DIRTY_WRITEBACK" || true
   sysctlw vm.vfs_cache_pressure "$VM_VFS" || true

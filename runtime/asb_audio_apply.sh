@@ -106,6 +106,32 @@ fi
 changed="${changed}profile=${_ap} "
 
 # ---- bt_absvol_mode --------------------------------------------------------------
+# A2DP offload. system.prop pins the four offload properties to "enabled" at boot, which
+# is right for on|auto but silently ignores off - the key documented three values and
+# honoured one. Nothing read it at all, so the setting was decoration.
+#
+# Offload hands A2DP encoding to the DSP: better battery, but effect engines (ViPER, and
+# our own DSP) never see the stream, because it bypasses the framework mixer. That is
+# exactly why someone would want it off, and it has to be a live settings write rather
+# than a system.prop line, since system.prop cannot express "leave it alone".
+_a2dp="$(_cfg bt_a2dp_offload)"
+case "$_a2dp" in
+  off|0|false)
+    settings put global bluetooth_a2dp_offload_enabled 0 >/dev/null 2>&1 || true
+    if _has resetprop; then
+      resetprop -n persist.bluetooth.a2dp_offload.disabled true >/dev/null 2>&1 || true
+      resetprop -n persist.vendor.bluetooth.a2dp_offload.disabled true >/dev/null 2>&1 || true
+    fi
+    changed="${changed}a2dp_offload=off " ;;
+  on|1|true)
+    settings put global bluetooth_a2dp_offload_enabled 1 >/dev/null 2>&1 || true
+    if _has resetprop; then
+      resetprop -n persist.bluetooth.a2dp_offload.disabled false >/dev/null 2>&1 || true
+      resetprop -n persist.vendor.bluetooth.a2dp_offload.disabled false >/dev/null 2>&1 || true
+    fi ;;
+  *) : ;;   # auto: leave whatever the ROM and other modules decided
+esac
+
 _bt="$(_cfg bt_absvol_mode)"
 case "$_bt" in on|disabled) _bt="disabled" ;; *) _bt="stock" ;; esac
 if [ "$_bt" = "disabled" ]; then _dav=1; _dp="true"; else _dav=0; _dp="false"; fi
