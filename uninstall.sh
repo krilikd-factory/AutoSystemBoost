@@ -126,7 +126,9 @@ rm -f /data/adb/asb/auto_battery_origin 2>/dev/null
 # second one matters more than it looks: leaving RAM expansion in the half-off state
 # ASB used to write is what had OxygenOS repairing it back to ON after every uninstall,
 # with swap-on-UFS and the heat that comes with it.
-for _rf in /data/adb/asb/tracking_restore.log /data/adb/asb/oem_restore.log; do
+# Haptics uses the same key|value baseline format, captured before the first change.
+for _rf in /data/adb/asb/tracking_restore.log /data/adb/asb/oem_restore.log \
+           /data/adb/asb/haptics_baseline.conf; do
   [ -f "$_rf" ] || continue
   while IFS='|' read -r _k _v; do
     [ -n "$_k" ] || continue
