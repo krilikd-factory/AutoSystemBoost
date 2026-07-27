@@ -2538,8 +2538,9 @@ asb_apply_blur_prop() {
   # asb_blur_apply.sh owns. install-time and runtime must agree on the vocabulary or the
   # setting reverts on the next boot.
   case "$_db" in
-    1|on|true|off|light|partial) _db=1 ;;
-    *)                           _db=0 ;;
+    1|on|true|off)  _db=1 ;;
+    light|partial)  _db=2 ;;
+    *)              _db=0 ;;
   esac
   # Rewrite the managed block from scratch every install so the WebUI toggle drives it.
   # Also strip any BARE (unmarked) copies of these props first: an earlier build wrote
@@ -2557,37 +2558,44 @@ asb_apply_blur_prop() {
       -e '/^persist\.sys\.oplus\.anim_level=/d' \
       -e '/^persist\.sys\.oplus\.material_blur_switch=/d' \
       -e '/^persist\.sys\.sf\.disable_blurs=/d' \
+      -e '/^persist\.sys\.oplus\.anim_level=/d' \
       "$_prop" > "$_pt" 2>/dev/null || cp -f "$_prop" "$_pt"
   {
     echo "# ASB:BLUR:BEGIN"
+    # Must match runtime/asb_blur_apply.sh exactly - this is the same block written by a
+    # second implementation, and the two drifting apart is how a setting ends up behaving
+    # differently after an install than after a WebUI change.
+    #
+    # OFF only: these are global kill switches. persist.sys.sf.disable_blurs is what
+    # SurfaceFlinger reads to turn blur off entirely, and every blurred surface goes
+    # through SurfaceFlinger - including the backdrop behind a notification.
     if [ "$_db" = "1" ]; then
-      # THE switch: persist.sys.sf.disable_blurs is what SurfaceFlinger actually reads to
-      # turn blur off, and it is read at the late_start service stage (not at SF's early
-      # boot), so a persist.* value set in post-fs-data reaches it in time. The
-      # ro.surface_flinger.* keys are capability flags ("hardware can blur"), not
-      # switches - forcing them to 0 on a device that already supports blur does nothing,
-      # which is why every previous attempt failed. The oplus.* keys are kept as
-      # belt-and-braces for ColorOS-specific surfaces.
       echo "persist.sys.sf.disable_blurs=1"
       echo "ro.surface_flinger.supports_background_blur=0"
       echo "ro.surface_flinger.media_panel_bg_blur=0"
+      echo "persist.sys.oplus.material_blur_switch=false"
+    fi
+    # OFF and LIGHT: targeted keys, each naming one surface. Dropping these leaves the
+    # notification backdrop readable, which is what light is for. anim_level is NOT here -
+    # it is the OEM effects level, not blur, and it lives in ui_effects_level now.
+    if [ "$_db" = "1" ] || [ "$_db" = "2" ]; then
       echo "ro.oplus.display.disable.volume_blur=1"
       echo "ro.oplus.gaussianlevel=0"
       echo "ro.launcher.blur.appLaunch=0"
-      echo "persist.sys.oplus.anim_level=0"
-      echo "persist.sys.oplus.material_blur_switch=false"
     fi
     echo "# ASB:BLUR:END"
   } >> "$_pt"
   mv -f "$_pt" "$_prop" 2>/dev/null || { cat "$_pt" > "$_prop"; rm -f "$_pt"; }
   if [ "$_db" = "1" ]; then
-    # WindowManager watches this global live and it is what actually removes the blur
-    # from the shade, launcher, recents and lock screen. The system.prop half only
-    # covers SurfaceFlinger. Missing this was why the toggle looked inert next to
-    # modules that set it.
+    # WindowManager watches this global live. It is a global switch too, so light must
+    # NOT set it: that is the one that takes the backdrop out from behind notifications.
     settings put global disable_window_blurs 1 >/dev/null 2>&1 || true
     ui_print "      + ${ASB_D_BLUR:-blur disabled via system.prop (applies after reboot)}"
     ASB_BLUR_APPLIED="disabled"
+  elif [ "$_db" = "2" ]; then
+    settings put global disable_window_blurs 0 >/dev/null 2>&1 || true
+    ui_print "      + blur: light (shade and notifications keep their blur)"
+    ASB_BLUR_APPLIED="light"
   else
     settings put global disable_window_blurs 0 >/dev/null 2>&1 || true
     ASB_BLUR_APPLIED="stock"
