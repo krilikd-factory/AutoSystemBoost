@@ -626,6 +626,23 @@ asb_apply_device_overlay() {
         asb_tw_save_base "$_ctf" force
         asb_apply_dynamic_tweaks "$MODPATH"
         asb_camera_aggr_flag
+        # Ratio grading, after the literal-value tweaks have had their turn.
+        #
+        # Those tweaks match known numbers and simply miss on a device that ships
+        # different ones - which is every OnePlus 15, whose tuning file already sits at or
+        # above what the old "level 4" was reaching for. Users set the slider to 4, turned
+        # on Extended, and reported no difference; they were right, nothing had changed.
+        # Scaling what is there works regardless of what is there.
+        if [ "$_ASB_CAMERA_LEVEL" -gt 0 ] 2>/dev/null \
+           && [ -f "$MODPATH/runtime/asb_camera_grade.sh" ] && [ -f "$_ctf" ]; then
+          MODDIR="$MODPATH" sh "$MODPATH/runtime/asb_camera_grade.sh" "$_ctf" "$_ctf.graded" >/dev/null 2>&1
+          if [ -s "$_ctf.graded" ]; then
+            mv -f "$_ctf.graded" "$_ctf" 2>/dev/null
+            ui_print "      + camera grade: level ${_ASB_CAMERA_LEVEL} applied as a ratio (saturation / AI detail / sharpening)"
+          else
+            rm -f "$_ctf.graded" 2>/dev/null
+          fi
+        fi
         if [ "$_ASB_CAMERA_AGGR" = "1" ] && [ -f "$_ctf" ]; then
           if [ "$_ASB_CAMERA_INJECT" = "1" ]; then
             ui_print "      + ${ASB_D_CAM_AGGR_INJ:-Camera aggressive tone applied (incl. injected keys)}"
@@ -3470,7 +3487,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
