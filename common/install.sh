@@ -2558,6 +2558,7 @@ asb_apply_blur_prop() {
       -e '/^persist\.sys\.oplus\.material_blur_switch=/d' \
       -e '/^persist\.sys\.sf\.disable_blurs=/d' \
       -e '/^persist\.sys\.oplus\.anim_level=/d' \
+      -e '/^# ASB:UIFX:BEGIN$/,/^# ASB:UIFX:END$/d' \
       "$_prop" > "$_pt" 2>/dev/null || cp -f "$_prop" "$_pt"
   {
     echo "# ASB:BLUR:BEGIN"
@@ -2583,6 +2584,20 @@ asb_apply_blur_prop() {
       echo "ro.launcher.blur.appLaunch=0"
     fi
     echo "# ASB:BLUR:END"
+    # ui_effects_level, in its own block - the installer has to write this as well.
+    #
+    # asb_blur_apply.sh owns it at runtime, but a reinstall rebuilds system.prop from
+    # scratch here, and a block this file never writes is a block that disappears. The
+    # setting would survive in governor.conf and silently stop being applied, which is
+    # the same shape as the media_loudness bug: config says one thing, system does
+    # another, and nothing reports a problem.
+    echo "# ASB:UIFX:BEGIN"
+    _ue="$(grep -E '^[[:space:]]*ui_effects_level=' "$MODPATH/config/governor.conf" 2>/dev/null \
+           | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    case "$_ue" in
+      flat|0) echo "persist.sys.oplus.anim_level=0" ;;
+    esac
+    echo "# ASB:UIFX:END"
   } >> "$_pt"
   mv -f "$_pt" "$_prop" 2>/dev/null || { cat "$_pt" > "$_prop"; rm -f "$_pt"; }
   if [ "$_db" = "1" ]; then
