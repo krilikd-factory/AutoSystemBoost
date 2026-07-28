@@ -481,6 +481,20 @@ if [ "$(_feat GPS)" = "1" ]; then
 fi
 
 echo ""
+# If the fail-safe fired, say so first - a user whose blur setting silently stopped
+# working deserves to know the module turned it off rather than that it broke.
+if [ -f /data/adb/asb/prop_blocks_disabled ]; then
+  echo ""
+  echo "  ⚠️  BOOT SAFETY"
+  echo "       ASB removed its display properties after two failed boots."
+  echo "       Re-enable blur and animations one at a time to find the culprit."
+fi
+_pbn="$(cat /data/adb/asb/prop_boot_counter 2>/dev/null)"
+case "$_pbn" in
+  ''|0) : ;;
+  *) echo "       (boot-safety counter at ${_pbn}/2 - last boot did not report completion)" ;;
+esac
+
 echo "  ⚙️  SYSTEM"
 _sys_l="       blur: $([ "$_blur" = "1" ] && echo off || echo stock)"
 _sys_l="${_sys_l}  ·  cool games: $([ "$_cool" = "1" ] && echo on || echo off)"
