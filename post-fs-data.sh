@@ -158,6 +158,24 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
             "$MODDIR/generated_overlay_manifest.reverted.txt" 2>/dev/null
     fi
     echo "ts=$(date +%s) action=revert_generated_overlay reason=bootloop_protection" >> "$_mounts_log"
+
+    # Disable the /odm runtime binds too, and record why.
+    #
+    # Two separate mechanisms put files in front of the system here: the magic-mount
+    # overlay under $MODDIR/system, torn out above, and the bind mounts listed in
+    # odm_bind_manifest.txt whose payload lives in /data/adb/asb/odm_patched. The
+    # protection only ever undid the first. A device stopped by a bad BOUND file - a
+    # mixer, an effects config, a volume table - kept getting that same file bound on
+    # every boot, and the counter just ran past 3 with nothing actually changing.
+    #
+    # vendor_overlay_blocked is the flag every producer of these files already checks
+    # before regenerating, and install.sh even tells the user to delete it to try
+    # again. Nothing in the module ever created it: six places read it, none wrote it,
+    # so the safety valve had never once been opened. This is where it belongs.
+    : > /data/adb/asb/vendor_overlay_blocked 2>/dev/null
+    rm -f /data/adb/asb/odm_bind_manifest.txt 2>/dev/null
+    rm -rf /data/adb/asb/odm_patched 2>/dev/null
+    echo "ts=$(date +%s) action=block_odm_binds reason=bootloop_protection" >> "$_mounts_log"
   else
     _next_ctr=$((_cur_ctr + 1))
     echo "$_next_ctr" > "$_bootctr"
@@ -195,83 +213,14 @@ fi
 # resetprop rewrites the property area directly and does not care that a key is ro.*,
 # so it works in both cases. post-fs-data runs before the UI stack starts, which is
 # early enough for these to be read.
-# Forcing these is guarded by the same boot counter the vendor overlay uses.
-#
-# vendor.display.supports_background_blur is gone from the list entirely: it is a display
-# HAL CAPABILITY flag, not a switch, and telling the composer that the hardware cannot
-# blur is not the same as asking it not to. It sat harmlessly in system.prop for months
-# because on this platform system.prop never actually overrode ro.* - adding resetprop
-# made it take effect for the first time, and the display stack stopped coming up.
-# Reported as: first boot fine, enable everything, reboot, bootloop.
-#
-# The rest still need resetprop to work at all, so they stay - but behind the counter, so
-# a device that fails to boot with them stops trying rather than looping. Three strikes
-# matches the vendor-overlay logic above.
-# Scrub the bootlooping property out of system.prop, wherever it came from.
-#
-# Removing it from the code that writes it is not enough: system.prop is a file that
-# lives on the device and survives an update, so a phone that took the bad line once
-# keeps it forever. It is read at boot before anything here can react, so this has to
-# happen in post-fs-data and before the module mounts - and it has to run unconditionally,
-# not behind the blur setting, because the line is already there regardless of what the
-# config now says.
-#
-# Also resetprop it back to 1: the property is set at this point in the boot from the
-# system.prop of the PREVIOUS boot's mount, and removing the line only helps next time.
-if [ -f "$MODDIR/system.prop" ] \
-   && grep -q '^vendor\.display\.supports_background_blur=' "$MODDIR/system.prop" 2>/dev/null; then
-  sed -i '/^vendor\.display\.supports_background_blur=/d' "$MODDIR/system.prop" 2>/dev/null
-  command -v resetprop >/dev/null 2>&1 \
-    && resetprop -n vendor.display.supports_background_blur 1 >/dev/null 2>&1
-fi
-
-# Staged fail-safe for everything this module puts in system.prop.
-#
-# The blur counter below only guards the resetprop calls. The same properties also live
-# in system.prop, which is applied by the root manager before any of our code runs - so a
-# property that stops the device booting is beyond the reach of a guard that executes
-# after it. The only thing that can help is removing the block on the NEXT boot, which is
-# what this does.
-#
-# Two failed boots, then the whole ASB block comes out of system.prop and a marker is
-# left behind naming what was dropped. Two rather than three: a bootloop is expensive to
-# sit through, and the properties in question are cosmetic.
-_pb_ctr="/data/adb/asb/prop_boot_counter"
-_pb_n="$(cat "$_pb_ctr" 2>/dev/null || echo 0)"
-case "$_pb_n" in ''|*[!0-9]*) _pb_n=0 ;; esac
-if [ "$_pb_n" -ge 2 ] 2>/dev/null && [ -f "$MODDIR/system.prop" ]; then
-  sed -i -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
-         -e '/^# ASB:UIFX:BEGIN$/,/^# ASB:UIFX:END$/d' \
-         "$MODDIR/system.prop" 2>/dev/null
-  mkdir -p /data/adb/asb 2>/dev/null
-  {
-    echo "ts=$(date +%s 2>/dev/null)"
-    echo "reason=two consecutive boots did not complete"
-    echo "action=removed the ASB blur and animation blocks from system.prop"
-    echo "note=re-enable them one at a time in the WebUI to find the culprit"
-  } > /data/adb/asb/prop_blocks_disabled 2>/dev/null
-  echo 0 > "$_pb_ctr" 2>/dev/null
-else
-  mkdir -p /data/adb/asb 2>/dev/null
-  echo $(( _pb_n + 1 )) > "$_pb_ctr" 2>/dev/null
-fi
-
-_blur_ctr="/data/adb/asb/blur_boot_counter"
-_blur_flag="/data/adb/asb/blur_prop_active"
-_blur_strikes="$(cat "$_blur_ctr" 2>/dev/null || echo 0)"
-case "$_blur_strikes" in ''|*[!0-9]*) _blur_strikes=0 ;; esac
-if [ -f "$_blur_flag" ] && [ "$_blur_strikes" -ge 3 ] 2>/dev/null; then
-  _blur_force=0
-else
-  _blur_force=1
-fi
-if [ "$_blur_force" = "1" ] && command -v resetprop >/dev/null 2>&1 && [ -f "$MODDIR/config/governor.conf" ]; then
+if command -v resetprop >/dev/null 2>&1 && [ -f "$MODDIR/config/governor.conf" ]; then
   _blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null \
                 | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_blur_want" in
     1|on|true|off|light|partial)
       for _bp in "ro.surface_flinger.supports_background_blur 0" \
                  "ro.surface_flinger.media_panel_bg_blur 0" \
+                 "vendor.display.supports_background_blur 0" \
                  "ro.oplus.display.disable.volume_blur 1" \
                  "ro.oplus.gaussianlevel 0" \
                  "ro.launcher.blur.appLaunch 0" \
@@ -279,9 +228,6 @@ if [ "$_blur_force" = "1" ] && command -v resetprop >/dev/null 2>&1 && [ -f "$MO
                  "persist.sys.oplus.material_blur_switch false"; do
         resetprop -n ${_bp} >/dev/null 2>&1 || true
       done
-      mkdir -p /data/adb/asb 2>/dev/null
-      echo $(( _blur_strikes + 1 )) > "$_blur_ctr" 2>/dev/null
-      : > "$_blur_flag" 2>/dev/null
       ;;
   esac
 fi
