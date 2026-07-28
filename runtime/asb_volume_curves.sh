@@ -63,24 +63,28 @@ asb_reshape_volume_curves() {
 # exactly how a boost can be applied, verified present in the overlay, and still not
 # be audible. The module already clones the ODM copies into its own overlay; now the
 # reshaper covers them too.
-# Volume tables this module reshapes, delivered through the OVERLAY.
+# The ONE volume table this module reshapes.
 #
-# Both of these are already part of the module's overlay: the device-native clone
-# pipeline copies the whole of /odm/etc/audio in (six files - audio_policy_configuration,
-# audio_policy_volumes, default_volume_tables and friends) and the device boots with them
-# perfectly well. An earlier build concluded that /odm "must never be overlaid" and moved
-# the table to a runtime bind instead; that was the wrong lesson. The bootloop it was
-# reacting to came from a path bug (system/system/...), not from /odm.
+# /vendor/etc only. This is what the module did for months without a single report, and
+# the detour away from it cost two bootloops and a round of broken audio. The reasoning,
+# so it does not get "improved" again:
 #
-# Worse, the bind then fought the overlay for the same path. The overlay carries the
-# clone - stock, unmodified - and is mounted by the manager at post-fs-data; the bind
-# carried the reshaped copy and was applied only after sys.boot_completed. audioserver
-# read one file at boot and had a different one swapped underneath it mid-session, which
-# is why the device booted fine and then lost media playback and turned flaky.
+#   * The ODM table cannot be delivered by the overlay. Proven on a OnePlus 15: the
+#     module contained system/odm/etc/audio/default_volume_tables.xml carrying the
+#     ASB:VOLCURVE marker, while the live /odm/etc/audio/default_volume_tables.xml had
+#     no marker at all. $MODPATH/system/odm does not reach /odm here - which is the whole
+#     reason this module has an odm-bind mechanism and states that "the /odm partition
+#     itself is never modified".
 #
-# One mechanism, one file. Reshape the copy already sitting in the overlay.
-ASB_VT_PATHS="/odm/etc/audio/default_volume_tables.xml
-/vendor/etc/default_volume_tables.xml"
+#   * Delivering it by that bind DOES reach /odm, and broke media playback: the music
+#     player and YouTube went silent after a reboot and the system turned flaky. The file
+#     was valid XML with all 18 curves monotonic, so the cause is something about this
+#     platform's audio policy that is not visible from the file alone. Until that is
+#     understood, reshaping it is not a safe thing to do.
+#
+# So: touch the file that can be touched safely, and leave the one that cannot alone.
+# An honest smaller effect beats a larger one that silently breaks playback.
+ASB_VT_PATHS="/vendor/etc/default_volume_tables.xml"
 
 asb_volume_stash_for() {
   _vs_live="$1"
@@ -167,6 +171,17 @@ asb_volume_curves_pct() {
 # leaving either in place keeps the bind landing on top of the overlay on every boot -
 # the exact conflict that broke media playback. Nothing here ever creates a bind.
 asb_volume_odm_bind_cleanup() {
+  # Also drop the ODM overlay copy an earlier build produced. It never reached /odm, so
+  # it did nothing but sit there - and on a non-reference device it creates a
+  # system/odm directory that the installer then has to prune, which is a risk with no
+  # upside. $MODDIR is not always set when this runs, so cover both module roots.
+  for _vc_mroot in "${MODDIR:-/data/adb/modules/AutoSystemBoost}" \
+                   /data/adb/modules/AutoSystemBoost \
+                   /data/adb/modules_update/AutoSystemBoost; do
+    [ -d "$_vc_mroot" ] || continue
+    rm -f "$_vc_mroot/system/odm/etc/audio/default_volume_tables.xml" \
+          "$_vc_mroot/system/vendor/odm/etc/audio/default_volume_tables.xml" 2>/dev/null
+  done
   _vc_root="/data/adb/asb/odm_patched"
   _vc_man="/data/adb/asb/odm_bind_manifest.txt"
   for _vc_old in /odm/etc/audio/default_volume_tables.xml \
