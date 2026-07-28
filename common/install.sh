@@ -75,6 +75,22 @@ asb_normalize_module_layout() {
     [ -d "$_mroot/system/system" ] && rm -rf "$_mroot/system/system" 2>/dev/null
   done
 
+  # Remove ODM-side volume tables placed as overlays by the build that bootlooped.
+  #
+  # media_loudness briefly wrote default_volume_tables.xml into system/odm/etc/audio and
+  # system/vendor/odm/etc/audio as magic-mount overlays. Every other /odm audio file in
+  # this module goes through the runtime bind precisely because /odm must not be overlaid
+  # here, and these two did not - the device stopped booting the moment the tweak was set
+  # to anything but stock. They are delivered through the bind now, so any copy still
+  # sitting in the overlay is from the broken build and has to go: a device in a bootloop
+  # gets its module disabled in recovery and the fix installed over the top, and the fix
+  # has to clean up what the previous version left behind.
+  for _mroot in "$MODPATH" /data/adb/modules/AutoSystemBoost /data/adb/modules_update/AutoSystemBoost; do
+    [ -d "$_mroot" ] || continue
+    rm -f "$_mroot/system/odm/etc/audio/default_volume_tables.xml" \
+          "$_mroot/system/vendor/odm/etc/audio/default_volume_tables.xml" 2>/dev/null
+  done
+
   for _part in vendor odm product system_ext my_product mi_ext; do
     _root="$MODPATH/$_part"
     [ -e "$_root" ] || continue
@@ -970,7 +986,14 @@ asb_patch_media_profiles_inplace() {
   for _mp_live in $(find $_mp_roots \
                       -type f -name 'media_profiles*.xml' 2>/dev/null \
                       | grep -vE '/vintf/|/manifest' | sort -u); do
-    _mp_rel="system${_mp_live}"
+    # Strip a leading /system before prefixing, or the two stack into
+    # $MODPATH/system/system/... - the mount layer then aims at /system/system, which
+    # does not exist, and the device bootloops. _mp_roots contains BOTH /system/vendor
+    # and /system/odm, so this is reachable the moment either is a real directory
+    # rather than a symlink. It has not bitten here only because on this device they
+    # are symlinks and find(1) does not descend into them; on a device where they are
+    # real, MEDIA alone would be enough to stop it booting.
+    _mp_rel="system${_mp_live#/system}"
     mkdir -p "$MODPATH/$(dirname "$_mp_rel")" 2>/dev/null
     cp -f "$_mp_live" "$MODPATH/$_mp_rel" 2>/dev/null || continue
     chmod 0644 "$MODPATH/$_mp_rel" 2>/dev/null
@@ -1806,6 +1829,7 @@ asb_patch_audio_inplace() {
     *)      _mlpct=100 ;;
   esac
   if [ "$_mlpct" != "100" ]; then
+    asb_volume_odm_bind_build "$_mlpct" >/dev/null 2>&1
     if asb_volume_curves_build "$MODPATH" "$_mlpct"; then
       case "$_ml" in
         mild)   ui_print "      + ${ASB_D_LOUD:-media loudness}: mild (~+3 dB ${ASB_D_LOUD_AT:-at mid volume})" ;;
@@ -2877,6 +2901,7 @@ asb_apply_blur_prop() {
       echo "ro.surface_flinger.supports_background_blur=0"
       echo "ro.surface_flinger.media_panel_bg_blur=0"
       echo "persist.sys.oplus.material_blur_switch=false"
+      echo "vendor.display.supports_background_blur=0"
     fi
     # OFF and LIGHT: targeted keys, each naming one surface. Dropping these leaves the
     # notification backdrop readable, which is what light is for. anim_level is NOT here -
@@ -2978,7 +3003,16 @@ echo 0 > "/data/adb/asb/vendor_boot_counter" 2>/dev/null
 # previous build's fuse (it would suppress the whole module incl. asbdiag/webui/
 # governor on a device that now boots), and clear a stale generic block/flag.
 rm -f "$MODPATH/skip_mount" 2>/dev/null
-rm -f /data/adb/asb/vendor_overlay_blocked /data/adb/asb/vendor_overlay_active /data/adb/asb/vendor_overlay_retry_done 2>/dev/null
+# vendor_overlay_retry_done is deliberately NOT cleared here.
+#
+# It is the memory behind the one-retry rule earlier in this file: the first time the
+# overlay is found blocked, unblock it and try once more; if it fails again, stay
+# governor-only. Wiping it on every install meant that memory never reached the next
+# one, so "! -f retry_done" was true every time and the retry fired again and again -
+# the "staying governor-only" branch it is supposed to escalate to was unreachable in
+# practice, and a device that cannot boot with the overlay kept being handed it.
+# Clearing the block itself is fine and intended: a fresh install may try again.
+rm -f /data/adb/asb/vendor_overlay_blocked /data/adb/asb/vendor_overlay_active 2>/dev/null
 rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
 
   for module in $MODPATH/system
