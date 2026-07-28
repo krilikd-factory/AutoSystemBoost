@@ -1829,7 +1829,7 @@ asb_patch_audio_inplace() {
     *)      _mlpct=100 ;;
   esac
   if [ "$_mlpct" != "100" ]; then
-    asb_volume_odm_bind_build "$_mlpct" >/dev/null 2>&1
+    asb_volume_odm_bind_cleanup >/dev/null 2>&1
     if asb_volume_curves_build "$MODPATH" "$_mlpct"; then
       case "$_ml" in
         mild)   ui_print "      + ${ASB_D_LOUD:-media loudness}: mild (~+3 dB ${ASB_D_LOUD_AT:-at mid volume})" ;;
@@ -1898,6 +1898,24 @@ asb_apply_device_native_tuning() {
   ui_print "  🎵  ${ASB_SEC_AUDIO:-AUDIO}"
   asb_clone_device_audio_wifi   "$_label"
   asb_patch_audio_inplace       "$_label"
+
+  # Re-run the volume reshape AFTER the clone.
+  #
+  # The reshape earlier in the install writes into $MODPATH/system/odm/etc/audio, and
+  # asb_clone_device_audio_wifi -> asb_clone_dir_from_live does `rm -rf` on that very
+  # directory before repopulating it from the live partition. Whatever the reshape had
+  # produced was therefore deleted moments after it was written, which is why the ODM
+  # table kept coming out stock. Reshaping again here, once the clone has finished, is
+  # the only ordering in which both survive.
+  if command -v asb_volume_curves_build >/dev/null 2>&1; then
+    _ml_after="$(grep -E '^[[:space:]]*media_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null \
+                 | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
+    case "$_ml_after" in mild|strong|max) : ;; *) _ml_after="stock" ;; esac
+    _ml_after_pct="$(asb_volume_curves_pct "$_ml_after")"
+    if [ "$_ml_after_pct" != "100" ]; then
+      asb_volume_curves_build "$MODPATH" "$_ml_after_pct" >/dev/null 2>&1
+    fi
+  fi
 
   ui_print " "
   ui_print "  📷  ${ASB_SEC_CAMERA:-CAMERA}"
