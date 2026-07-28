@@ -12,21 +12,39 @@
 # logs will be quiet and logcat will name the killer.
 #
 # Usage:
-#   su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_sysui_watch.sh'          # 10 min
-#   su -c 'sh .../asb_sysui_watch.sh 1200'                                          # 20 min
-#   su -c 'sh .../asb_sysui_watch.sh 600 /sdcard/sysui.txt'                         # to a file
+#   su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_sysui_watch.sh'      # 10 min
+#   su -c 'sh .../asb_sysui_watch.sh 1200'                                      # 20 min
+#   su -c 'sh .../asb_sysui_watch.sh 600 /sdcard/my.txt'                        # custom path
 #
-# Start it right after a reboot and leave it running. Ctrl-C stops it early.
+# Start it right after a reboot. Press Ctrl-C to stop early - in Termux, Ctrl lives in
+# the key row above the keyboard, or use volume-down + C. It also stops on its own when
+# the time is up.
+#
+# It ALWAYS writes a file, and prints the same thing to the terminal. The first version
+# only wrote a file when given a second argument, so the obvious way to run it left the
+# output in a scrollback the user then had to hunt through - and a diagnostic whose
+# results are easy to lose is not much of a diagnostic.
 
 DUR="${1:-600}"
 OUT="${2:-}"
 case "$DUR" in ''|*[!0-9]*) DUR=600 ;; esac
 
-_say() {
-  if [ -n "$OUT" ]; then printf '%s\n' "$1" >> "$OUT"; else printf '%s\n' "$1"; fi
-}
+if [ -z "$OUT" ]; then
+  for _d in /sdcard /storage/emulated/0 /data/local/tmp; do
+    if [ -d "$_d" ] && [ -w "$_d" ]; then OUT="$_d/asb_sysui_watch.txt"; break; fi
+  done
+  [ -n "$OUT" ] || OUT="/data/adb/asb/asb_sysui_watch.txt"
+fi
+mkdir -p "$(dirname "$OUT")" 2>/dev/null
+: > "$OUT" 2>/dev/null || OUT=""
 
-[ -n "$OUT" ] && : > "$OUT" 2>/dev/null
+# Print to the terminal AND to the file, so a session that gets closed still leaves the
+# evidence behind.
+_say() {
+  printf '%s\n' "$1"
+  [ -n "$OUT" ] && printf '%s\n' "$1" >> "$OUT" 2>/dev/null
+  return 0
+}
 
 _uptime() { cut -d' ' -f1 /proc/uptime 2>/dev/null | cut -d. -f1; }
 _pid()    { pidof com.android.systemui 2>/dev/null | awk '{print $1}'; }
@@ -34,7 +52,8 @@ _pid()    { pidof com.android.systemui 2>/dev/null | awk '{print $1}'; }
 _say "=== ASB SystemUI watch ==="
 _say "started at:      $(date '+%Y-%m-%d %H:%M:%S')"
 _say "seconds up:      $(_uptime)"
-_say "watching for:    ${DUR}s"
+_say "watching for:    ${DUR}s   (Ctrl-C stops it early)"
+_say "writing to:      ${OUT:-<terminal only - no writable path found>}"
 _say ""
 
 # --- the settings that decide whether ASB may restart SystemUI at all ---------------
@@ -79,12 +98,10 @@ while [ "$_n" -lt "$DUR" ]; do
 
   # Did ASB log anything in the same window? This is the deciding evidence.
   _say "  --- ASB log, last 25 lines ---"
-  tail -25 /data/adb/asb/asb.log 2>/dev/null | sed 's/^/    /' >> "${OUT:-/dev/stdout}" 2>/dev/null \
-    || tail -25 /data/adb/asb/asb.log 2>/dev/null | sed 's/^/    /'
+  tail -25 /data/adb/asb/asb.log 2>/dev/null | while IFS= read -r _l; do _say "    $_l"; done
   _say ""
   _say "  --- profile apply log ---"
-  tail -15 /dev/.asb_profile_state/runtime_apply.log 2>/dev/null | sed 's/^/    /' >> "${OUT:-/dev/stdout}" 2>/dev/null \
-    || tail -15 /dev/.asb_profile_state/runtime_apply.log 2>/dev/null | sed 's/^/    /'
+  tail -15 /dev/.asb_profile_state/runtime_apply.log 2>/dev/null | while IFS= read -r _l; do _say "    $_l"; done
   _say ""
   _say "  --- animation scales after the restart ---"
   for _k in window_animation_scale transition_animation_scale animator_duration_scale; do
@@ -94,15 +111,14 @@ while [ "$_n" -lt "$DUR" ]; do
   _say "  --- system log around the restart ---"
   logcat -b all -d -t 200 2>/dev/null \
     | grep -iE "systemui|am_kill|am_proc_died|am_crash|lowmemorykiller|ActivityManager.*died" \
-    | tail -30 | sed 's/^/    /' >> "${OUT:-/dev/stdout}" 2>/dev/null \
-    || logcat -b all -d -t 200 2>/dev/null \
-       | grep -iE "systemui|am_kill|am_proc_died|am_crash" | tail -30 | sed 's/^/    /'
+    | tail -30 | while IFS= read -r _l; do _say "    $_l"; done
   _say "================================================================"
   _say ""
   _prev="$_cur"
 done
 
 _say "watch finished after ${DUR}s. SystemUI pid now: $(_pid)"
+_say "saved to: ${OUT:-<terminal only>}"
 _say ""
 _say "How to read this:"
 _say "  * An ASB log line at the same second as the restart means ASB did it."
