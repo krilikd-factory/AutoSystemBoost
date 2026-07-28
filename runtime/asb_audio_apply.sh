@@ -56,6 +56,49 @@ _mode="${1:-all}"
 # reads a missing library as "needs-reboot" and writes enable=0 - which would switch the
 # DSP off on every single boot.
 if [ "$_mode" = "mirror" ]; then
+  # Reconcile the VALUE properties against the config before republishing.
+  #
+  # Mirror deliberately does not touch `enable` - see above. But it used to republish
+  # every property verbatim, including gain, and that left the gain frozen forever:
+  # the boot path only calls the full "dsp" mode when persist.asb.dsp.enable is not 1,
+  # and `enable` is a PERSIST property, so once the DSP has been on once, boot goes to
+  # mirror every time from then on and nothing ever re-derives gain from the config.
+  #
+  # Observed on a real device: governor.conf said dsp_loudness=1 (+1 dB) while the
+  # daemon attached at gain_mb=1800 (+18 dB) - a stale value from an earlier setting,
+  # surviving a fresh reinstall because the config is restored but the property is not
+  # recomputed. Seventeen decibels of difference between what the UI showed and what
+  # the ear got, with the compressor left on its high-gain settings to match.
+  #
+  # Recomputing just the scalar gain here is safe: it needs no library present, it
+  # cannot switch the DSP off, and it makes the property track the config the way the
+  # user already believes it does.
+  _mdsp="$(_cfg dsp_loudness)"
+  case "$_mdsp" in
+    ''|off|0|*[!0-9]*) : ;;
+    *)
+      if [ "$_mdsp" -ge 1 ] 2>/dev/null && [ "$_mdsp" -le 20 ] 2>/dev/null; then
+        _mwant="$(( _mdsp * 100 ))"
+        _mhave="$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
+        if [ "$_mhave" != "$_mwant" ]; then
+          _persist persist.asb.dsp.gain_mb "$_mwant"
+          echo "dsp gain reconciled from config: ${_mhave:-unset} -> $_mwant mB"
+        fi
+      fi
+      ;;
+  esac
+  # Same story for bass: it is a plain scalar read from the config, and leaving it
+  # stale produces the same silent divergence.
+  _mbass="$(_cfg dsp_bass)"
+  case "$_mbass" in
+    ''|off|*[!0-9]*) : ;;
+    *)
+      if [ "$_mbass" -ge 0 ] 2>/dev/null && [ "$_mbass" -le 12 ] 2>/dev/null; then
+        _mbhave="$(getprop persist.asb.dsp.bass_db 2>/dev/null)"
+        [ "$_mbhave" != "$_mbass" ] && _persist persist.asb.dsp.bass_db "$_mbass"
+      fi
+      ;;
+  esac
   for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db; do
     _v="$(getprop "persist.asb.dsp.$_k" 2>/dev/null)"
     [ -n "$_v" ] && _persist_ctx "persist.vendor.asb.dsp.$_k" "$_v"
