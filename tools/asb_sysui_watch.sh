@@ -103,15 +103,26 @@ while [ "$_n" -lt "$DUR" ]; do
   _say "  --- profile apply log ---"
   tail -15 /dev/.asb_profile_state/runtime_apply.log 2>/dev/null | while IFS= read -r _l; do _say "    $_l"; done
   _say ""
+  # The late /odm bind re-run lives here, and it ends with "setprop ctl.restart
+  # audioserver". An audioserver restart can take SystemUI down with it, so a line here
+  # timed with the restart is a much stronger lead than anything in the ASB log.
+  _say "  --- vendor mounts log (late odm binds / audioserver restart) ---"
+  tail -12 /data/adb/asb/vendor_mounts.log 2>/dev/null | while IFS= read -r _l; do _say "    $_l"; done
+  _say ""
+  _say "  --- audioserver pid now: $(pidof audioserver 2>/dev/null | awk '{print $1}') ---"
+  _say ""
   _say "  --- animation scales after the restart ---"
   for _k in window_animation_scale transition_animation_scale animator_duration_scale; do
     _say "    $_k = $(settings get global $_k 2>/dev/null)"
   done
   _say ""
+  # The old capture only looked at logcat AFTER the restart, which shows the new
+  # SystemUI starting up and never the thing that ended the old one. Widen it and keep
+  # the kill-side events.
   _say "  --- system log around the restart ---"
-  logcat -b all -d -t 200 2>/dev/null \
-    | grep -iE "systemui|am_kill|am_proc_died|am_crash|lowmemorykiller|ActivityManager.*died" \
-    | tail -30 | while IFS= read -r _l; do _say "    $_l"; done
+  logcat -b all -d -t 800 2>/dev/null \
+    | grep -iE "am_kill|am_proc_died|am_crash|lowmemorykiller|Killing .*systemui|ctl\.restart|audioserver.*(died|restart)|Watchdog|ANR in" \
+    | tail -40 | while IFS= read -r _l; do _say "    $_l"; done
   _say "================================================================"
   _say ""
   _prev="$_cur"
