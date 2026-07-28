@@ -207,6 +207,55 @@ fi
 # The rest still need resetprop to work at all, so they stay - but behind the counter, so
 # a device that fails to boot with them stops trying rather than looping. Three strikes
 # matches the vendor-overlay logic above.
+# Scrub the bootlooping property out of system.prop, wherever it came from.
+#
+# Removing it from the code that writes it is not enough: system.prop is a file that
+# lives on the device and survives an update, so a phone that took the bad line once
+# keeps it forever. It is read at boot before anything here can react, so this has to
+# happen in post-fs-data and before the module mounts - and it has to run unconditionally,
+# not behind the blur setting, because the line is already there regardless of what the
+# config now says.
+#
+# Also resetprop it back to 1: the property is set at this point in the boot from the
+# system.prop of the PREVIOUS boot's mount, and removing the line only helps next time.
+if [ -f "$MODDIR/system.prop" ] \
+   && grep -q '^vendor\.display\.supports_background_blur=' "$MODDIR/system.prop" 2>/dev/null; then
+  sed -i '/^vendor\.display\.supports_background_blur=/d' "$MODDIR/system.prop" 2>/dev/null
+  command -v resetprop >/dev/null 2>&1 \
+    && resetprop -n vendor.display.supports_background_blur 1 >/dev/null 2>&1
+fi
+
+# Staged fail-safe for everything this module puts in system.prop.
+#
+# The blur counter below only guards the resetprop calls. The same properties also live
+# in system.prop, which is applied by the root manager before any of our code runs - so a
+# property that stops the device booting is beyond the reach of a guard that executes
+# after it. The only thing that can help is removing the block on the NEXT boot, which is
+# what this does.
+#
+# Two failed boots, then the whole ASB block comes out of system.prop and a marker is
+# left behind naming what was dropped. Two rather than three: a bootloop is expensive to
+# sit through, and the properties in question are cosmetic.
+_pb_ctr="/data/adb/asb/prop_boot_counter"
+_pb_n="$(cat "$_pb_ctr" 2>/dev/null || echo 0)"
+case "$_pb_n" in ''|*[!0-9]*) _pb_n=0 ;; esac
+if [ "$_pb_n" -ge 2 ] 2>/dev/null && [ -f "$MODDIR/system.prop" ]; then
+  sed -i -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
+         -e '/^# ASB:UIFX:BEGIN$/,/^# ASB:UIFX:END$/d' \
+         "$MODDIR/system.prop" 2>/dev/null
+  mkdir -p /data/adb/asb 2>/dev/null
+  {
+    echo "ts=$(date +%s 2>/dev/null)"
+    echo "reason=two consecutive boots did not complete"
+    echo "action=removed the ASB blur and animation blocks from system.prop"
+    echo "note=re-enable them one at a time in the WebUI to find the culprit"
+  } > /data/adb/asb/prop_blocks_disabled 2>/dev/null
+  echo 0 > "$_pb_ctr" 2>/dev/null
+else
+  mkdir -p /data/adb/asb 2>/dev/null
+  echo $(( _pb_n + 1 )) > "$_pb_ctr" 2>/dev/null
+fi
+
 _blur_ctr="/data/adb/asb/blur_boot_counter"
 _blur_flag="/data/adb/asb/blur_prop_active"
 _blur_strikes="$(cat "$_blur_ctr" 2>/dev/null || echo 0)"

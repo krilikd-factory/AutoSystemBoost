@@ -285,6 +285,10 @@ asb_migrate_governor_conf
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
     echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
+    # Same for the blur props. The counter only means anything if a successful boot
+    # clears it - otherwise three ordinary reboots would disable a working setting.
+    echo 0 > /data/adb/asb/blur_boot_counter 2>/dev/null
+    echo 0 > /data/adb/asb/prop_boot_counter 2>/dev/null
     # Re-apply the /odm runtime binds. post-fs-data already tries this, but KernelSU mounts
     # its own module overlay on /odm AFTER post-fs-data runs, so that early bind gets
     # shadowed and the framework still reads the stock config (observed: the boot log said
