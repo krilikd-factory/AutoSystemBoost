@@ -465,8 +465,22 @@ asb_apply_ux() {
   # The scales are written either way; SystemUI simply picks them up when it is next
   # restarted for its own reasons. A slightly stale animation duration is not worth
   # interrupting someone whose phone is already low on battery.
-  _ux_manual=1
-  case "${PROFILE_FLAG:-}" in auto) _ux_manual=0 ;; esac
+  # Restart SystemUI ONLY when the user personally asked for this profile change.
+  #
+  # PROFILE_FLAG is "user" for a tap in the WebUI, "auto" for an automatic switch, and
+  # UNSET when service.sh re-applies the profile at boot. It used to be empty in the
+  # user case too, so "unset" and "the user asked" were the same value - and the boot
+  # path, which sets nothing, was read as a user request. The result: roughly a minute
+  # into startup the reinforce pass found the animation scales still at their pre-boot
+  # values, set _anim_changed, and killed SystemUI. Screen blinks, lock screen returns,
+  # and every overlay another module has drawn into the status bar is torn down. Nobody
+  # asked for any of it.
+  #
+  # Requiring the word "user" makes both silent cases - boot and auto-switch - fall
+  # through. The scales are still written; SystemUI picks them up the next time it
+  # restarts for its own reasons, which is a fair trade for never interrupting a boot.
+  _ux_manual=0
+  case "${PROFILE_FLAG:-}" in user) _ux_manual=1 ;; esac
   if [ "${UX_ANIM_FORCE_RESTART:-0}" = "1" ] && [ "$_anim_changed" = "1" ] \
      && [ "$_ux_manual" = "1" ]; then
     pkill -f com.android.systemui >/dev/null 2>&1 || true
