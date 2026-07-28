@@ -63,45 +63,31 @@ asb_reshape_volume_curves() {
 # exactly how a boost can be applied, verified present in the overlay, and still not
 # be audible. The module already clones the ODM copies into its own overlay; now the
 # reshaper covers them too.
-# Volume tables this module may place as a MAGIC-MOUNT OVERLAY.
+# Volume tables this module reshapes, delivered through the OVERLAY.
 #
-# Only /vendor/etc. Everything under /odm - including /vendor/odm - is deliberately
-# excluded and handled by the runtime bind instead (asb_bind_odm_volume_tables below),
-# because on this platform the /odm partition is never modified through the overlay.
-# That is not a style preference: audio_policy_configuration.xml, mixer_paths.xml,
-# audio_effects_config.xml and media_profiles all already go through the bind, and the
-# installer says so in as many words - "the /odm partition itself is never modified".
+# Both of these are already part of the module's overlay: the device-native clone
+# pipeline copies the whole of /odm/etc/audio in (six files - audio_policy_configuration,
+# audio_policy_volumes, default_volume_tables and friends) and the device boots with them
+# perfectly well. An earlier build concluded that /odm "must never be overlaid" and moved
+# the table to a runtime bind instead; that was the wrong lesson. The bootloop it was
+# reacting to came from a path bug (system/system/...), not from /odm.
 #
-# A build that added /odm/etc/audio/default_volume_tables.xml and
-# /vendor/odm/etc/audio/default_volume_tables.xml to this list BOOTLOOPED the device as
-# soon as media_loudness was set to anything but stock, while every other audio tweak -
-# DSP included - kept working, because every other one was already using the bind.
-ASB_VT_PATHS="/vendor/etc/default_volume_tables.xml"
+# Worse, the bind then fought the overlay for the same path. The overlay carries the
+# clone - stock, unmodified - and is mounted by the manager at post-fs-data; the bind
+# carried the reshaped copy and was applied only after sys.boot_completed. audioserver
+# read one file at boot and had a different one swapped underneath it mid-session, which
+# is why the device booted fine and then lost media playback and turned flaky.
+#
+# One mechanism, one file. Reshape the copy already sitting in the overlay.
+ASB_VT_PATHS="/odm/etc/audio/default_volume_tables.xml
+/vendor/etc/default_volume_tables.xml"
 
-# The ODM-side table, reshaped into /data/adb/asb/odm_patched and bind-mounted at boot.
-#
-# ONE path, deliberately. /vendor/odm and /system/vendor/odm are symlinks to /odm on this
-# platform - all three resolve to the same inode, confirmed by identical md5 across the
-# three stock stashes the earlier build captured. Listing more than one meant bind-mounting
-# the same file two and three times over, stacked, on top of a file audioserver already
-# has open. The device booted, and then media playback stopped working: the music player
-# and YouTube went silent and the system turned flaky, which is what a confused mount
-# stack under audioserver looks like.
-#
-# Every other bind in this module targets /odm and only /odm - the mixer, the effects
-# config, the audio policy, media_profiles, and the camera clone all do the same. This is
-# now consistent with them.
-ASB_VT_ODM_PATHS="/odm/etc/audio/default_volume_tables.xml"
-
-# Stash name for one live path: the stock copy is per-file, because these files are
-# genuinely different from each other.
 asb_volume_stash_for() {
   _vs_live="$1"
   _vs_name="$(printf '%s' "${_vs_live#/}" | tr '/' '_')"
   printf '/data/adb/asb/stock/%s' "$_vs_name"
 }
 
-# Pristine source for one live path, stashing it on first sight.
 asb_volume_table_src() {
   _vt_live="$1"
   [ -n "$_vt_live" ] || _vt_live="/vendor/etc/default_volume_tables.xml"
@@ -123,8 +109,6 @@ asb_volume_table_src() {
   printf '%s' "$_vt_stash"
 }
 
-# Rebuild every overlay volume table for the given percentage, from the pristine
-# stock stashes. Returns 0 when at least one table now matches the request.
 asb_volume_curves_build() {
   _vc_mod="$1"
   _vc_pct="$2"
@@ -133,20 +117,11 @@ asb_volume_curves_build() {
 
   for _vc_live in $ASB_VT_PATHS; do
     [ -f "$_vc_live" ] || continue
-    # Overlay destinations live under $MODPATH/system, and a live path that already
-    # starts with /system must have it stripped or the two prefixes stack up into
-    # $MODPATH/system/system/... - a path the mount layer then tries to place at
-    # /system/system, which does not exist. That BOOTLOOPS the device.
-    #
-    # It happened: /system/vendor/... was in the path list above (it is a symlink to
-    # /vendor, so it resolved to a real file and looked legitimate), and the resulting
-    # system/system/vendor/odm/etc/audio/default_volume_tables.xml in the overlay was
-    # the ONLY difference between a module that booted and one that did not. It is gone
-    # from the list now - /vendor/odm/... is the same file - and the strip below makes
-    # the class of mistake impossible rather than merely absent. It matches what the
-    # rest of the installer already does (see install.sh: "${_ecl#/system}").
-    _vc_rel="${_vc_live#/system}"
-    _vc_dst="$_vc_mod/system${_vc_rel}"
+    # Strip a leading /system before prefixing: the two would otherwise stack into
+    # $MODPATH/system/system/..., which the mount layer aims at /system/system - a path
+    # that does not exist, and the device bootloops. Same convention the rest of the
+    # installer uses ("${_ecl#/system}").
+    _vc_dst="$_vc_mod/system${_vc_live#/system}"
 
     if [ "$_vc_pct" = "100" ]; then
       rm -f "$_vc_dst" 2>/dev/null
@@ -185,83 +160,27 @@ asb_volume_curves_pct() {
   esac
 }
 
-# Reshape the ODM-side volume tables into the runtime bind staging area.
+# Tear out the runtime-bind delivery an earlier build used for the volume table.
 #
-# Same job as asb_volume_curves_build, different delivery: these paths live on /odm and
-# must never be overlaid, so the patched copy goes to /data/adb/asb/odm_patched and
-# service.sh bind-mounts it over the live file at boot. That is the mechanism every
-# other /odm audio file in this module already uses.
-#
-# pct 100 (stock) removes the staged copies and their manifest lines, so turning the
-# tweak off actually turns it off rather than leaving the last boost bound in place.
-asb_volume_odm_bind_build() {
-  _vo_pct="$1"
-  _vo_root="/data/adb/asb/odm_patched"
-  _vo_man="/data/adb/asb/odm_bind_manifest.txt"
-  [ -f /data/adb/asb/vendor_overlay_blocked ] && return 1
-  _vo_any=0
-
-  # Drop duplicate binds of the same file left by the build that listed the symlinked
-  # aliases too. Leaving them registered keeps the stacked mounts alive on every boot,
-  # so the fix has to un-register them, not merely stop adding them. Their stock stashes
-  # go as well: they are byte-identical copies of the /odm one and only invite the same
-  # mistake again.
-  for _vo_dup in /vendor/odm/etc/audio/default_volume_tables.xml \
+# Kept as a cleanup-only step, not a builder: devices updated from that build still have
+# the reshaped copy staged in odm_patched and registered in odm_bind_manifest.txt, and
+# leaving either in place keeps the bind landing on top of the overlay on every boot -
+# the exact conflict that broke media playback. Nothing here ever creates a bind.
+asb_volume_odm_bind_cleanup() {
+  _vc_root="/data/adb/asb/odm_patched"
+  _vc_man="/data/adb/asb/odm_bind_manifest.txt"
+  for _vc_old in /odm/etc/audio/default_volume_tables.xml \
+                 /vendor/odm/etc/audio/default_volume_tables.xml \
                  /system/vendor/odm/etc/audio/default_volume_tables.xml; do
-    rm -f "$_vo_root$_vo_dup" 2>/dev/null
-    rm -f "$(asb_volume_stash_for "$_vo_dup")" 2>/dev/null
-    if [ -f "$_vo_man" ] && grep -q "^${_vo_dup}|" "$_vo_man" 2>/dev/null; then
-      grep -v "^${_vo_dup}|" "$_vo_man" > "$_vo_man.tmp" 2>/dev/null
-      if [ -f "$_vo_man.tmp" ]; then
-        mv -f "$_vo_man.tmp" "$_vo_man" 2>/dev/null || rm -f "$_vo_man.tmp" 2>/dev/null
-      fi
+    rm -f "$_vc_root$_vc_old" 2>/dev/null
+    [ -f "$_vc_man" ] || continue
+    grep -q "^${_vc_old}|" "$_vc_man" 2>/dev/null || continue
+    # Never gate the mv on grep's exit status: it returns 1 on empty output, i.e.
+    # exactly when the line removed was the last one.
+    grep -v "^${_vc_old}|" "$_vc_man" > "$_vc_man.tmp" 2>/dev/null
+    if [ -f "$_vc_man.tmp" ]; then
+      mv -f "$_vc_man.tmp" "$_vc_man" 2>/dev/null || rm -f "$_vc_man.tmp" 2>/dev/null
     fi
   done
-
-  for _vo_live in $ASB_VT_ODM_PATHS; do
-    [ -f "$_vo_live" ] || continue
-    _vo_dst="$_vo_root$_vo_live"
-
-    if [ "$_vo_pct" = "100" ]; then
-      if [ -f "$_vo_dst" ]; then
-        rm -f "$_vo_dst" 2>/dev/null
-        if [ -f "$_vo_man" ] && grep -q "^${_vo_live}|" "$_vo_man" 2>/dev/null; then
-          # Do NOT gate the mv on grep's exit status. grep -v returns 1 when its output
-          # is empty, which is exactly what happens when the line being dropped is the
-          # last one - so the mv would be skipped and the entry would survive the very
-          # case it most needs to be removed in. Test for the temp file instead.
-          grep -v "^${_vo_live}|" "$_vo_man" > "$_vo_man.tmp" 2>/dev/null
-          if [ -f "$_vo_man.tmp" ]; then
-            mv -f "$_vo_man.tmp" "$_vo_man" 2>/dev/null || rm -f "$_vo_man.tmp" 2>/dev/null
-          fi
-        fi
-      fi
-      _vo_any=1
-      continue
-    fi
-
-    _vo_src="$(asb_volume_table_src "$_vo_live")"
-    [ -n "$_vo_src" ] && [ -f "$_vo_src" ] || continue
-
-    mkdir -p "$(dirname "$_vo_dst")" 2>/dev/null || continue
-    cp -f "$_vo_src" "$_vo_dst" 2>/dev/null || continue
-    chmod 0644 "$_vo_dst" 2>/dev/null
-    asb_reshape_volume_curves "$_vo_dst" "$_vo_pct"
-    if ! grep -q 'ASB:VOLCURVE' "$_vo_dst" 2>/dev/null; then
-      rm -f "$_vo_dst" 2>/dev/null
-      continue
-    fi
-    # Match the live file's SELinux context, exactly as the other odm binds do.
-    _vo_ctx="$(ls -Zd "$_vo_live" 2>/dev/null | awk '{print $1}')"
-    case "$_vo_ctx" in
-      ?*:?*:?*:?*) chcon "$_vo_ctx" "$_vo_dst" 2>/dev/null || true ;;
-    esac
-    touch "$_vo_man" 2>/dev/null
-    grep -q "^${_vo_live}|" "$_vo_man" 2>/dev/null \
-      || echo "${_vo_live}|${_vo_dst}" >> "$_vo_man"
-    _vo_any=1
-  done
-
-  [ "$_vo_any" = "1" ] && return 0
-  return 1
+  return 0
 }
