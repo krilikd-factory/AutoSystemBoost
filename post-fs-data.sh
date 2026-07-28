@@ -195,14 +195,34 @@ fi
 # resetprop rewrites the property area directly and does not care that a key is ro.*,
 # so it works in both cases. post-fs-data runs before the UI stack starts, which is
 # early enough for these to be read.
-if command -v resetprop >/dev/null 2>&1 && [ -f "$MODDIR/config/governor.conf" ]; then
+# Forcing these is guarded by the same boot counter the vendor overlay uses.
+#
+# vendor.display.supports_background_blur is gone from the list entirely: it is a display
+# HAL CAPABILITY flag, not a switch, and telling the composer that the hardware cannot
+# blur is not the same as asking it not to. It sat harmlessly in system.prop for months
+# because on this platform system.prop never actually overrode ro.* - adding resetprop
+# made it take effect for the first time, and the display stack stopped coming up.
+# Reported as: first boot fine, enable everything, reboot, bootloop.
+#
+# The rest still need resetprop to work at all, so they stay - but behind the counter, so
+# a device that fails to boot with them stops trying rather than looping. Three strikes
+# matches the vendor-overlay logic above.
+_blur_ctr="/data/adb/asb/blur_boot_counter"
+_blur_flag="/data/adb/asb/blur_prop_active"
+_blur_strikes="$(cat "$_blur_ctr" 2>/dev/null || echo 0)"
+case "$_blur_strikes" in ''|*[!0-9]*) _blur_strikes=0 ;; esac
+if [ -f "$_blur_flag" ] && [ "$_blur_strikes" -ge 3 ] 2>/dev/null; then
+  _blur_force=0
+else
+  _blur_force=1
+fi
+if [ "$_blur_force" = "1" ] && command -v resetprop >/dev/null 2>&1 && [ -f "$MODDIR/config/governor.conf" ]; then
   _blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null \
                 | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_blur_want" in
     1|on|true|off|light|partial)
       for _bp in "ro.surface_flinger.supports_background_blur 0" \
                  "ro.surface_flinger.media_panel_bg_blur 0" \
-                 "vendor.display.supports_background_blur 0" \
                  "ro.oplus.display.disable.volume_blur 1" \
                  "ro.oplus.gaussianlevel 0" \
                  "ro.launcher.blur.appLaunch 0" \
@@ -210,6 +230,9 @@ if command -v resetprop >/dev/null 2>&1 && [ -f "$MODDIR/config/governor.conf" ]
                  "persist.sys.oplus.material_blur_switch false"; do
         resetprop -n ${_bp} >/dev/null 2>&1 || true
       done
+      mkdir -p /data/adb/asb 2>/dev/null
+      echo $(( _blur_strikes + 1 )) > "$_blur_ctr" 2>/dev/null
+      : > "$_blur_flag" 2>/dev/null
       ;;
   esac
 fi
