@@ -508,7 +508,7 @@ asb_trim_logs() {
     [ -f "$_tlf" ] || continue
     _tln="$(wc -l < "$_tlf" 2>/dev/null)"
     case "$_tln" in ''|*[!0-9]*) continue ;; esac
-    [ "$_tln" -gt 800 ] || continue
+    [ "$_tln" -ge 800 ] || continue
     if tail -n 400 "$_tlf" > "$_tlf.trim" 2>/dev/null && [ -s "$_tlf.trim" ]; then
       mv -f "$_tlf.trim" "$_tlf" 2>/dev/null || rm -f "$_tlf.trim" 2>/dev/null
     else
