@@ -941,6 +941,16 @@ asb_patch_media_profiles_inplace() {
   return 0
 }
 
+# Does this conf_tuning_params.json still carry the untouched BT.601 chroma matrix?
+# Echoes non-empty when it looks like stock, empty when it has been graded.
+# Stock is -0.168736 on every device; the grader multiplies it, so any grade moves it
+# out of the -0.1687xxx band. Only meaningful for conf_tuning_params.json.
+asb_cam_chroma_ok() {
+  [ -f "$1" ] || return 0
+  grep -m1 -o '"Main1x_Rgb2YuvParams"[^]]*]' "$1" 2>/dev/null \
+    | grep -o -- '-0\.1687[0-9]*'
+}
+
 asb_clone_device_camera_tone() {
   [ "$ASB_CAMERA" = "true" ] || return 0
   # Needed here for asb_tw_base_path / asb_tw_save_base: this function is the first
@@ -978,7 +988,15 @@ asb_clone_device_camera_tone() {
           # genuinely first install, when no baseline exists yet, is the live path the
           # stock file - and that is exactly when it is safe to copy.
           _ct_src="$_ct_live"
-          if command -v asb_tw_base_path >/dev/null 2>&1; then
+          # The chroma test below only means anything for conf_tuning_params.json:
+          # it looks for the BT.601 matrix, which video_beauty_default_config simply
+          # does not contain. Running it there made the grep come back empty, which the
+          # code reads as "graded" - so a perfectly good video_beauty baseline would be
+          # deleted and the user shown a corruption warning about a file that was never
+          # graded in the first place. Gate on the filename.
+          _ct_checkable=0
+          [ "$_ct_base" = "conf_tuning_params.json" ] && _ct_checkable=1
+          if [ "$_ct_checkable" = "1" ] && command -v asb_tw_base_path >/dev/null 2>&1; then
             _ct_bp="$(asb_tw_base_path "$MODPATH/$_ct_dst" 2>/dev/null)"
             if [ -n "$_ct_bp" ] && [ -f "$_ct_bp" ]; then
               # Trust the baseline only if it still looks like stock.
@@ -988,19 +1006,33 @@ asb_clone_device_camera_tone() {
               # made the damage permanent across reinstalls. The RGB->YUV chroma rows are
               # the reliable tell: stock is the standard BT.601 matrix, identical on every
               # device, and grading multiplies it. -0.168736 either matches or it does not.
-              #
-              # A corrupted baseline is deleted rather than used. On the next boot with no
-              # ASB overlay mounted the live file is genuinely stock again, and the
-              # baseline is recaptured from it - so the repair completes without the user
-              # editing anything, it just needs the reboot they were doing anyway.
-              _ct_chroma="$(grep -m1 -o '"Main1x_Rgb2YuvParams"[^]]*]' "$_ct_bp" 2>/dev/null \
-                            | grep -o -- '-0\.1687[0-9]*')"
-              if [ -n "$_ct_chroma" ]; then
+              if [ -n "$(asb_cam_chroma_ok "$_ct_bp")" ]; then
                 _ct_src="$_ct_bp"
               else
                 rm -f "$_ct_bp" 2>/dev/null
                 ASB_CAM_BASE_REPAIRED=1
               fi
+            fi
+          fi
+          # The live path needs the same test, and this is the case that actually bit.
+          #
+          # Discarding a bad baseline falls back to "$_ct_live" on the assumption that a
+          # missing baseline means a first install, where the live file really is stock.
+          # That assumption breaks on an update installed over a RUNNING module: /odm/etc
+          # is still the old module's overlay at that moment, so the fallback copied the
+          # previous install's graded output - the exact file we had just refused to
+          # trust. Measured on a real device: the repair ran, the warning printed, and
+          # saturation still went 1.93x -> 2.47x because the "stock" it recovered to was
+          # not stock. The partition only becomes genuinely stock after a reboot with no
+          # ASB overlay mounted, which no installer can do for itself.
+          #
+          # So: if the live file fails the same test, do not clone anything. Leaving the
+          # destination absent means the boot pass has no file to grade and the next
+          # install - after the reboot the user is about to do anyway - finds real stock.
+          if [ "$_ct_checkable" = "1" ] && [ "$_ct_src" = "$_ct_live" ]; then
+            if [ -z "$(asb_cam_chroma_ok "$_ct_live")" ]; then
+              ASB_CAM_LIVE_DIRTY=1
+              continue
             fi
           fi
           cp -f "$_ct_src" "$MODPATH/$_ct_dst" 2>/dev/null \
@@ -1010,7 +1042,12 @@ asb_clone_device_camera_tone() {
             asb_tw_save_base "$MODPATH/$_ct_dst" force
         fi
       done
-      if [ "${ASB_CAM_BASE_REPAIRED:-0}" = "1" ] && [ "${_ASB_CAM_WARNED:-0}" != "1" ]; then
+      if [ "${ASB_CAM_LIVE_DIRTY:-0}" = "1" ] && [ "${_ASB_CAM_WARNED:-0}" != "1" ]; then
+        # This one needs the user to act, so say so plainly rather than reassuring them.
+        _ASB_CAM_WARNED=1
+        ui_print "      ! ${ASB_L_CAM_LIVE_DIRTY1:-camera tuning on this device is still graded from an older build}"
+        ui_print "        ${ASB_L_CAM_LIVE_DIRTY2:-camera left untouched. To restore it: remove ASB, reboot, install again}"
+      elif [ "${ASB_CAM_BASE_REPAIRED:-0}" = "1" ] && [ "${_ASB_CAM_WARNED:-0}" != "1" ]; then
         _ASB_CAM_WARNED=1
         ui_print "      ! ${ASB_L_CAM_BASE_FIX1:-camera baseline from an older build was already graded - discarded}"
         ui_print "        ${ASB_L_CAM_BASE_FIX2:-it will be re-captured from stock after this reboot}"
