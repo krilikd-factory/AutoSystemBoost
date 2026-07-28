@@ -56,9 +56,18 @@ case "$PROFILE" in
     PROFILE="balanced"
     ;;
 esac
+# Normalise to one of exactly two words, and never to the empty string.
+#
+# "" used to mean "the user asked for this", because only apply_profile.sh ever set the
+# variable. But service.sh re-applies the profile at boot without going through here, so
+# an unset PROFILE_FLAG ALSO means "boot", and downstream code could not tell the two
+# apart. profile_core reads it to decide whether it may restart SystemUI - so at boot it
+# saw an empty flag, concluded the user had just asked for a profile change, and killed
+# SystemUI a minute into startup. Naming the user case explicitly makes "unset" mean
+# only what it actually is: nobody asked.
 case "$PROFILE_FLAG" in
   auto) : ;;
-  *) PROFILE_FLAG="" ;;
+  *)    PROFILE_FLAG="user" ;;
 esac
 
 if [ "$PROFILE" != "smart" ] && [ "$PROFILE_FLAG" != "auto" ]; then
