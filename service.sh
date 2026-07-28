@@ -408,9 +408,14 @@ asb_device_guard() {
   _soc="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_soc" ] && _soc="$(getprop ro.hardware.chipname 2>/dev/null)"
   case "$_soc" in
-    sun|sm8850*|pineapple) ASB_DEVICE_TIER="flagship" ;;
-    taro|sm8550*|sm8650*|kalama|crow) ASB_DEVICE_TIER="high" ;;
-    *) ASB_DEVICE_TIER="generic" ;;
+    # ro.board.platform reports the PLATFORM CODENAME, not the SoC model: a OnePlus 15
+    # returns "canoe", never "sm8850", so the flagship it is was classified generic and
+    # the log claimed "conservative limits apply" while nothing of the sort happened.
+    # Both spellings are matched now because different OEM builds populate different
+    # props, and device_caps.env carries the model separately.
+    sun|canoe|ossi|sm8850*|sm8750*|pineapple) ASB_DEVICE_TIER="flagship" ;;
+    taro|sm8550*|sm8650*|kalama|crow)         ASB_DEVICE_TIER="high" ;;
+    *)                                        ASB_DEVICE_TIER="generic" ;;
   esac
   asb_log "device_guard: soc=$_soc tier=$ASB_DEVICE_TIER"
   [ "$ASB_DEVICE_TIER" = "generic" ] && \
@@ -490,6 +495,28 @@ asb_drift_check() {
 }
 
 asb_device_guard
+# Keep the unrotated logs bounded.
+#
+# session_history.jsonl has proper stream rotation in the governor (500 entries plus a
+# byte cap) and is fine. These three had none and grew forever: measured over 43 days on
+# a real device, governor_persist.log reached 42 KB (~1 KB/day), ram_expand.log 7.9 KB
+# and profile_switches.log 4.5 KB - about half a megabyte a year that nothing cleans.
+# Trimming to the last 400 lines keeps each one useful for diagnosis while capping it.
+asb_trim_logs() {
+  for _tl in governor_persist.log ram_expand.log profile_switches.log; do
+    _tlf="/data/adb/asb/$_tl"
+    [ -f "$_tlf" ] || continue
+    _tln="$(wc -l < "$_tlf" 2>/dev/null)"
+    case "$_tln" in ''|*[!0-9]*) continue ;; esac
+    [ "$_tln" -gt 800 ] || continue
+    if tail -n 400 "$_tlf" > "$_tlf.trim" 2>/dev/null && [ -s "$_tlf.trim" ]; then
+      mv -f "$_tlf.trim" "$_tlf" 2>/dev/null || rm -f "$_tlf.trim" 2>/dev/null
+    else
+      rm -f "$_tlf.trim" 2>/dev/null
+    fi
+  done
+}
+asb_trim_logs
 asb_probe_paths
 asb_conflict_scan
 
@@ -2191,14 +2218,25 @@ command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
 # table on its own - the RAM-expansion and analytics paths both needed the same treatment.
 # The script is a no-op when the config says stock, so this costs nothing by default.
 if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then
-  _asb_hap="$(grep -E '^[[:space:]]*haptic_strength=' "$MODDIR/config/governor.conf" 2>/dev/null \
+  _asb_hap_conf="$MODDIR/config/governor.conf"
+  _asb_hap_run=0
+  _asb_hap="$(grep -E '^[[:space:]]*haptic_strength=' "$_asb_hap_conf" 2>/dev/null \
               | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_asb_hap" in
-    [0-9]|10|off|light|medium|strong)
-      sh "$MODDIR/runtime/asb_haptics_apply.sh" >/dev/null 2>&1
-      asb_log "haptic_strength=$_asb_hap re-asserted"
-      ;;
+    [0-9]|10|off|light|medium|strong) _asb_hap_run=1 ;;
   esac
+  # Touch has its own level and its own right to be re-asserted. Checking only
+  # haptic_strength meant a "master stock + touch 8" config never ran at boot, so the
+  # one setting the user had actually changed was the one OOS was free to overwrite.
+  _asb_hap_t="$(grep -E '^[[:space:]]*haptic_touch_strength=' "$_asb_hap_conf" 2>/dev/null \
+                | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_asb_hap_t" in
+    [0-9]|10) _asb_hap_run=1 ;;
+  esac
+  if [ "$_asb_hap_run" = "1" ]; then
+    sh "$MODDIR/runtime/asb_haptics_apply.sh" >/dev/null 2>&1
+    asb_log "haptics re-asserted (alerts=$_asb_hap touch=$_asb_hap_t)"
+  fi
 fi
 
 # Keep the blur block in system.prop honest. The WebUI writes governor.conf; if the

@@ -118,6 +118,14 @@ pkill -f '/data/adb/modules/AutoSystemBoost/bin/asb' >/dev/null 2>&1 || true
 pkill -f '/data/adb/asb/asb_dsp_attach' >/dev/null 2>&1 || true
 rm -rf /dev/.asb /dev/.asb_profile_state 2>/dev/null
 rm -f /data/adb/asb/auto_battery_origin 2>/dev/null
+# Camera tuning baselines.
+#
+# These outlived the module, and that is what made the compounding bug unrecoverable
+# without hand-editing: remove ASB, reinstall it, and the "pristine stock" it copied from
+# was the previous install's graded output, still sitting in tweak_base. Clearing them on
+# uninstall means the live partition is genuinely stock by the time anything reads it, so
+# remove-then-install repairs a device instead of preserving the damage.
+rm -rf /data/adb/asb/tweak_base 2>/dev/null
 
 # Restore any runtime tracking settings we changed (settings DB), then remove
 # the data dir. Reading the log before deleting it is intentional.
