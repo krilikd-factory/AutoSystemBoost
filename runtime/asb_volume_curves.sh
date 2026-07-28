@@ -78,9 +78,20 @@ asb_reshape_volume_curves() {
 # DSP included - kept working, because every other one was already using the bind.
 ASB_VT_PATHS="/vendor/etc/default_volume_tables.xml"
 
-# The ODM-side tables, reshaped into /data/adb/asb/odm_patched and bind-mounted at boot.
-ASB_VT_ODM_PATHS="/odm/etc/audio/default_volume_tables.xml
-/vendor/odm/etc/audio/default_volume_tables.xml"
+# The ODM-side table, reshaped into /data/adb/asb/odm_patched and bind-mounted at boot.
+#
+# ONE path, deliberately. /vendor/odm and /system/vendor/odm are symlinks to /odm on this
+# platform - all three resolve to the same inode, confirmed by identical md5 across the
+# three stock stashes the earlier build captured. Listing more than one meant bind-mounting
+# the same file two and three times over, stacked, on top of a file audioserver already
+# has open. The device booted, and then media playback stopped working: the music player
+# and YouTube went silent and the system turned flaky, which is what a confused mount
+# stack under audioserver looks like.
+#
+# Every other bind in this module targets /odm and only /odm - the mixer, the effects
+# config, the audio policy, media_profiles, and the camera clone all do the same. This is
+# now consistent with them.
+ASB_VT_ODM_PATHS="/odm/etc/audio/default_volume_tables.xml"
 
 # Stash name for one live path: the stock copy is per-file, because these files are
 # genuinely different from each other.
@@ -189,6 +200,23 @@ asb_volume_odm_bind_build() {
   _vo_man="/data/adb/asb/odm_bind_manifest.txt"
   [ -f /data/adb/asb/vendor_overlay_blocked ] && return 1
   _vo_any=0
+
+  # Drop duplicate binds of the same file left by the build that listed the symlinked
+  # aliases too. Leaving them registered keeps the stacked mounts alive on every boot,
+  # so the fix has to un-register them, not merely stop adding them. Their stock stashes
+  # go as well: they are byte-identical copies of the /odm one and only invite the same
+  # mistake again.
+  for _vo_dup in /vendor/odm/etc/audio/default_volume_tables.xml \
+                 /system/vendor/odm/etc/audio/default_volume_tables.xml; do
+    rm -f "$_vo_root$_vo_dup" 2>/dev/null
+    rm -f "$(asb_volume_stash_for "$_vo_dup")" 2>/dev/null
+    if [ -f "$_vo_man" ] && grep -q "^${_vo_dup}|" "$_vo_man" 2>/dev/null; then
+      grep -v "^${_vo_dup}|" "$_vo_man" > "$_vo_man.tmp" 2>/dev/null
+      if [ -f "$_vo_man.tmp" ]; then
+        mv -f "$_vo_man.tmp" "$_vo_man" 2>/dev/null || rm -f "$_vo_man.tmp" 2>/dev/null
+      fi
+    fi
+  done
 
   for _vo_live in $ASB_VT_ODM_PATHS; do
     [ -f "$_vo_live" ] || continue
