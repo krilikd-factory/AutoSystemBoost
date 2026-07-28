@@ -3719,6 +3719,12 @@ AutoSystemBoost' $APIOCXM
 	fi
 	
 	if [ -d "$MODPATH/tools" ]; then
+	  # Whitelist prune: everything at the top of tools/ that is not named here is
+	  # deleted at install time. Two user-facing tools were shipped by CI, verified
+	  # present in the package, and then removed right here - so asb_camera_repair.sh
+	  # never existed on any device that was told to run it, and asb_sysui_watch.sh came
+	  # back "No such file or directory". If a tool is meant to be run by hand on the
+	  # device, its name has to be in this list; being in the zip is not enough.
 	  find "$MODPATH/tools" -maxdepth 1 -type f \
 	    ! -name "asb_state_sampler.sh" \
 	    ! -name "asb_drain_analyzer.sh" \
@@ -3727,7 +3733,11 @@ AutoSystemBoost' $APIOCXM
 	    ! -name "asb_session_report.py" \
 	    ! -name "asb_compare_sessions.py" \
 	    ! -name "asb_analyze.py" \
+	    ! -name "asb_camera_repair.sh" \
+	    ! -name "asb_sysui_watch.sh" \
 	    -delete 2>/dev/null
+	  chmod 0755 "$MODPATH/tools/asb_camera_repair.sh" 2>/dev/null || true
+	  chmod 0755 "$MODPATH/tools/asb_sysui_watch.sh" 2>/dev/null || true
 	fi
 
 	if [ "${ASB_LOG}" = "true" ]; then
