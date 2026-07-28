@@ -63,9 +63,24 @@ asb_reshape_volume_curves() {
 # exactly how a boost can be applied, verified present in the overlay, and still not
 # be audible. The module already clones the ODM copies into its own overlay; now the
 # reshaper covers them too.
-ASB_VT_PATHS="/odm/etc/audio/default_volume_tables.xml
-/vendor/odm/etc/audio/default_volume_tables.xml
-/vendor/etc/default_volume_tables.xml"
+# Volume tables this module may place as a MAGIC-MOUNT OVERLAY.
+#
+# Only /vendor/etc. Everything under /odm - including /vendor/odm - is deliberately
+# excluded and handled by the runtime bind instead (asb_bind_odm_volume_tables below),
+# because on this platform the /odm partition is never modified through the overlay.
+# That is not a style preference: audio_policy_configuration.xml, mixer_paths.xml,
+# audio_effects_config.xml and media_profiles all already go through the bind, and the
+# installer says so in as many words - "the /odm partition itself is never modified".
+#
+# A build that added /odm/etc/audio/default_volume_tables.xml and
+# /vendor/odm/etc/audio/default_volume_tables.xml to this list BOOTLOOPED the device as
+# soon as media_loudness was set to anything but stock, while every other audio tweak -
+# DSP included - kept working, because every other one was already using the bind.
+ASB_VT_PATHS="/vendor/etc/default_volume_tables.xml"
+
+# The ODM-side tables, reshaped into /data/adb/asb/odm_patched and bind-mounted at boot.
+ASB_VT_ODM_PATHS="/odm/etc/audio/default_volume_tables.xml
+/vendor/odm/etc/audio/default_volume_tables.xml"
 
 # Stash name for one live path: the stock copy is per-file, because these files are
 # genuinely different from each other.
@@ -157,4 +172,68 @@ asb_volume_curves_pct() {
     max)    echo 40 ;;
     *)      echo 100 ;;
   esac
+}
+
+# Reshape the ODM-side volume tables into the runtime bind staging area.
+#
+# Same job as asb_volume_curves_build, different delivery: these paths live on /odm and
+# must never be overlaid, so the patched copy goes to /data/adb/asb/odm_patched and
+# service.sh bind-mounts it over the live file at boot. That is the mechanism every
+# other /odm audio file in this module already uses.
+#
+# pct 100 (stock) removes the staged copies and their manifest lines, so turning the
+# tweak off actually turns it off rather than leaving the last boost bound in place.
+asb_volume_odm_bind_build() {
+  _vo_pct="$1"
+  _vo_root="/data/adb/asb/odm_patched"
+  _vo_man="/data/adb/asb/odm_bind_manifest.txt"
+  [ -f /data/adb/asb/vendor_overlay_blocked ] && return 1
+  _vo_any=0
+
+  for _vo_live in $ASB_VT_ODM_PATHS; do
+    [ -f "$_vo_live" ] || continue
+    _vo_dst="$_vo_root$_vo_live"
+
+    if [ "$_vo_pct" = "100" ]; then
+      if [ -f "$_vo_dst" ]; then
+        rm -f "$_vo_dst" 2>/dev/null
+        if [ -f "$_vo_man" ] && grep -q "^${_vo_live}|" "$_vo_man" 2>/dev/null; then
+          # Do NOT gate the mv on grep's exit status. grep -v returns 1 when its output
+          # is empty, which is exactly what happens when the line being dropped is the
+          # last one - so the mv would be skipped and the entry would survive the very
+          # case it most needs to be removed in. Test for the temp file instead.
+          grep -v "^${_vo_live}|" "$_vo_man" > "$_vo_man.tmp" 2>/dev/null
+          if [ -f "$_vo_man.tmp" ]; then
+            mv -f "$_vo_man.tmp" "$_vo_man" 2>/dev/null || rm -f "$_vo_man.tmp" 2>/dev/null
+          fi
+        fi
+      fi
+      _vo_any=1
+      continue
+    fi
+
+    _vo_src="$(asb_volume_table_src "$_vo_live")"
+    [ -n "$_vo_src" ] && [ -f "$_vo_src" ] || continue
+
+    mkdir -p "$(dirname "$_vo_dst")" 2>/dev/null || continue
+    cp -f "$_vo_src" "$_vo_dst" 2>/dev/null || continue
+    chmod 0644 "$_vo_dst" 2>/dev/null
+    asb_reshape_volume_curves "$_vo_dst" "$_vo_pct"
+    if ! grep -q 'ASB:VOLCURVE' "$_vo_dst" 2>/dev/null; then
+      rm -f "$_vo_dst" 2>/dev/null
+      continue
+    fi
+    # Match the live file's SELinux context, exactly as the other odm binds do.
+    _vo_ctx="$(ls -Zd "$_vo_live" 2>/dev/null | awk '{print $1}')"
+    case "$_vo_ctx" in
+      ?*:?*:?*:?*) chcon "$_vo_ctx" "$_vo_dst" 2>/dev/null || true ;;
+    esac
+    touch "$_vo_man" 2>/dev/null
+    grep -q "^${_vo_live}|" "$_vo_man" 2>/dev/null \
+      || echo "${_vo_live}|${_vo_dst}" >> "$_vo_man"
+    _vo_any=1
+  done
+
+  [ "$_vo_any" = "1" ] && return 0
+  return 1
 }

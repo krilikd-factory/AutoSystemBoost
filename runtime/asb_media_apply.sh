@@ -31,11 +31,14 @@ _pct="$(asb_volume_curves_pct "$_ml")"
 
 if [ "$_pct" = "100" ]; then
   asb_volume_curves_build "$MODDIR" 100
+  # /odm-side copies live in the runtime bind staging area, not the overlay.
+  asb_volume_odm_bind_build 100 >/dev/null 2>&1
   echo "media_loudness=stock - volume table reverted to the device's own curves"
   echo "reboot to apply"
   exit 0
 fi
 
+asb_volume_odm_bind_build "$_pct" >/dev/null 2>&1
 if asb_volume_curves_build "$MODDIR" "$_pct"; then
   echo "media_loudness=${_ml} - volume table rebuilt from the pristine stock copy"
   echo "reboot to apply"

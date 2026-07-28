@@ -132,8 +132,8 @@ sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
     # still on. On a OnePlus 13 every key above applied cleanly and SurfaceFlinger
     # reported backgroundBlurRadius=0 on every layer - blur was off at the AOSP layer and
     # the user still saw it, because OPLUS composes its own blur through the display HAL
-    # NOT vendor.display.supports_background_blur: that one is a display HAL capability
-    # flag, and forcing it to 0 stopped the display stack from coming up at all.
+    # and vendor.display.supports_background_blur=1 kept that path alive.
+    echo "vendor.display.supports_background_blur=0"
   fi
   # LIGHT and OFF share only the targeted ones: the volume panel's own blur, the
   # launcher's app-launch blur, and the OEM gaussian level. Each names a specific
