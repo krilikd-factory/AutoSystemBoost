@@ -2101,6 +2101,17 @@ async function go(p) {
     try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
     ui(p);
     toast('\u2713 ' + (ASB_LANG==='ru' ? T('prof_'+p, p) : (p.charAt(0).toUpperCase()+p.slice(1))) + (ASB_LANG==='ru' ? ' \u2014 \u043f\u0440\u0438\u043c\u0435\u043d\u0451\u043d' : ' applied'), p);
+    /* Refresh the Smart sub-line here rather than waiting for the live poll.
+     *
+     * apply_profile.sh writes /data/adb/asb/smart_mode_enabled immediately, but the
+     * smart_mode field the label reads lives in /dev/.asb/state and is written by the
+     * native governor on its next tick - up to a few seconds later. One immediate read
+     * shows the pending state, and a couple of spaced retries pick up the real one, so
+     * the label settles on its own instead of needing a trip to another screen. */
+    refreshSmartSubLine();
+    [1200, 3000, 6000].forEach(function(ms) {
+      setTimeout(function() { refreshSmartSubLine(); }, ms);
+    });
   } else {
     toast(T('t_profile_err', '\u2717 Error applying profile'), 'err');
   }
@@ -2117,6 +2128,10 @@ function openTelegram(e) {
   const r = await run('cat ' + MD + '/current_profile 2>/dev/null || echo balanced');
   const p = (r.stdout || 'balanced').trim();
   ui(['performance','balanced','battery','smart'].includes(p) ? p : 'balanced');
+  /* The markup ships "adaptive · learning" as a placeholder, which is a claim about
+   * state rather than a neutral label. Resolve it from the device on first paint so the
+   * home screen never shows something it has not actually checked. */
+  refreshSmartSubLine();
 })();
 
 function fmtTempC(deci) {
@@ -2780,6 +2795,63 @@ function closeConfigPage(toMain) {
 
 let _batCapFullMah = 0;
 
+/* Smart Mode sub-line.
+ *
+ * Split out of pollLive so the profile buttons can refresh it too. It used to be
+ * rendered ONLY inside the live poll, so tapping SMART on the home screen left the
+ * label reading "disabled · tap to enable" until the user opened Monitor or Settings
+ * and came back - the poll ran there, and only then did the text catch up.
+ */
+function renderSmartSubLine(kv) {
+  try {
+    const smartSub = _el('smartSubLine');
+    if (!smartSub) return;
+    const enabled = parseInt((kv && kv.smart_mode) || '0', 10);
+    if (enabled === 1) {
+      const dp    = parseInt(kv.smart_daypart        || '0',   10);
+      const alpha = parseInt(kv.smart_alpha_battery  || '500', 10);
+      const fb    = parseInt(kv.smart_fallback_level || '0',   10);
+      const night = parseInt(kv.smart_sleep_override || '0',   10);
+      const veto  = parseInt(kv.smart_thermal_veto   || '0',   10);
+      const dpNames = ['sleep','wake','morn','day','evening','late'];
+      const dpName = (dp >= 0 && dp < dpNames.length) ? dpNames[dp] : '?';
+      let sub = dpName + ' · ' + Math.round(alpha/10) + '% battery-lean';
+      if (night)         sub = '🌙 night-safe override';
+      else if (veto)     sub = '🔥 thermal veto active';
+      else if (fb === 4) sub = 'cold start · learning';
+      smartSub.textContent = sub;
+    } else if (kv && kv._smartPending === 1) {
+      /* apply_profile.sh has written smart_mode_enabled, but /dev/.asb/state is
+       * produced by the native governor and only catches up on its next tick.
+       * Saying "disabled" in that window is simply wrong. */
+      smartSub.textContent = 'starting…';
+    } else {
+      smartSub.textContent = 'disabled · tap to enable';
+    }
+  } catch(e) {}
+}
+
+/* Read the state directly and re-render the sub-line. Used after a profile switch,
+ * where waiting for the next live poll is what caused the stale label. */
+async function refreshSmartSubLine() {
+  try {
+    const kv = {};
+    const r = await run('cat /dev/.asb/state 2>/dev/null');
+    if (r && r.stdout) {
+      r.stdout.split(/\r?\n/).forEach(line => {
+        const eq = line.indexOf('=');
+        if (eq > 0 && line[0] !== '{') kv[line.slice(0, eq)] = line.slice(eq + 1);
+      });
+    }
+    if (parseInt(kv.smart_mode || '0', 10) !== 1) {
+      const f = await run('cat /data/adb/asb/smart_mode_enabled 2>/dev/null');
+      if (f && f.stdout && f.stdout.trim() === '1') kv._smartPending = 1;
+    }
+    renderSmartSubLine(kv);
+    return parseInt(kv.smart_mode || '0', 10) === 1;
+  } catch(e) { return false; }
+}
+
 async function pollLive(visible) {
   try {
     const r = await run('cat /dev/.asb/state 2>/dev/null');
@@ -2813,28 +2885,7 @@ async function pollLive(visible) {
     });
 
     /* Smart Mode: update Smart button sub-line with live state */
-    try {
-      const smartSub = _el('smartSubLine');
-      if (smartSub) {
-        const enabled = parseInt(kv.smart_mode || '0', 10);
-        if (enabled === 1) {
-          const dp  = parseInt(kv.smart_daypart   || '0', 10);
-          const alpha=parseInt(kv.smart_alpha_battery|| '500', 10);
-          const fb  = parseInt(kv.smart_fallback_level || '0', 10);
-          const night = parseInt(kv.smart_sleep_override || '0', 10);
-          const veto  = parseInt(kv.smart_thermal_veto   || '0', 10);
-          const dpNames = ['sleep','wake','morn','day','evening','late'];
-          const dpName = (dp >= 0 && dp < dpNames.length) ? dpNames[dp] : '?';
-          let sub = dpName + ' · ' + Math.round(alpha/10) + '% battery-lean';
-          if (night)      sub = '🌙 night-safe override';
-          else if (veto)  sub = '🔥 thermal veto active';
-          else if (fb === 4) sub = 'cold start · learning';
-          smartSub.textContent = sub;
-        } else {
-          smartSub.textContent = 'disabled · tap to enable';
-        }
-      }
-    } catch(e) {}
+    renderSmartSubLine(kv);
 
     let learner = null;
     if (visible) {
