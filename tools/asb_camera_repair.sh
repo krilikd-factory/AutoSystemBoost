@@ -94,9 +94,12 @@ if [ -f "$ASB/odm_patched/odm/etc/camera/conf_tuning_params.json" ]; then
 fi
 if [ -f "$MAN" ]; then
   if grep -q "camera/conf_tuning_params.json" "$MAN" 2>/dev/null; then
-    if grep -v "camera/conf_tuning_params.json" "$MAN" > "$MAN.tmp" 2>/dev/null; then
+    # grep -v exits 1 on empty output, i.e. when the camera line was the only one -
+    # gating the mv on it would leave that line in place precisely when the manifest
+    # consists of nothing else. Test for the file, not the exit status.
+    grep -v "camera/conf_tuning_params.json" "$MAN" > "$MAN.tmp" 2>/dev/null
+    if [ -f "$MAN.tmp" ]; then
       mv -f "$MAN.tmp" "$MAN" 2>/dev/null && echo "    dropped camera line from bind manifest"
-    else
       rm -f "$MAN.tmp" 2>/dev/null
     fi
   fi
