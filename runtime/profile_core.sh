@@ -373,6 +373,22 @@ asb_apply_ux() {
       case "$BASE_WIN_ANIM" in ''|null) BASE_WIN_ANIM=1 ;; esac
       case "$BASE_TRANS_ANIM" in ''|null) BASE_TRANS_ANIM=1 ;; esac
       case "$BASE_DUR_ANIM" in ''|null) BASE_DUR_ANIM=1 ;; esac
+      # Refuse a baseline that is obviously our own output rather than the user's.
+      #
+      # The capture happens before the first override, but only on the run that does the
+      # overriding. If an earlier build had already written 0.9 and a later install then
+      # captured a "baseline" while that value was live, the file records ASB's setting as
+      # if it were stock - and from then on, with the toggle OFF, the restore path writes
+      # 0.9 back over the user's 1.0 on every profile pass. Seen exactly that: the toggle
+      # off, and the scales moving 1.0 -> 0.9 a minute into boot.
+      #
+      # 0.8 and 0.9 are the performance and balanced profile scales; Android's own default
+      # is 1.0 and no OEM ships 0.9 here. Treating them as suspect costs a user who
+      # genuinely chose 0.9 by hand a reset to 1.0, and saves everyone else from ASB
+      # quietly overriding a setting it was told not to manage.
+      case "$BASE_WIN_ANIM" in
+        0.8|0.80|0.9|0.90) BASE_WIN_ANIM=1.0; BASE_TRANS_ANIM=1.0; BASE_DUR_ANIM=1.0 ;;
+      esac
       if [ "$_cur_anim" != "$BASE_WIN_ANIM" ]; then
         asb_settings_put global animator_duration_scale "$BASE_DUR_ANIM"
         asb_settings_put global transition_animation_scale "$BASE_TRANS_ANIM"
