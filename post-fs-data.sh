@@ -124,8 +124,25 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
   _bootctr="/data/adb/asb/vendor_boot_counter"
   _cur_ctr=$(cat "$_bootctr" 2>/dev/null || echo 0)
   case "$_cur_ctr" in ''|*[!0-9]*) _cur_ctr=0 ;; esac
-  if [ "$_cur_ctr" -ge 3 ]; then
-    echo "ts=$(date +%s) action=skip reason=bootloop_protection counter=$_cur_ctr" > "$_mounts_log"
+
+  # How many bad boots before the overlay is torn out.
+  #
+  # The installer tells non-reference OnePlus owners their overlay is "guarded by a
+  # 1-strike boot fuse". It was not: the threshold was 3 for every device, so what the
+  # promise described as one recoverable boot was in practice three failed ones - which
+  # is precisely what a user experiences as "it bootloops" rather than "it came back by
+  # itself". A device on the generic path is running an overlay this module knows it has
+  # not validated for that model, so one strike is the honest number there.
+  #
+  # Reference devices keep 3. On those the overlay IS validated, so an isolated failed
+  # boot is more likely to be something else entirely, and tearing the overlay out on
+  # the first hiccup would trade a real feature for a phantom.
+  _fuse_max=3
+  if [ "$(cat "$MODDIR/overlay_device_class" 2>/dev/null)" = "generic" ]; then
+    _fuse_max=1
+  fi
+  if [ "$_cur_ctr" -ge "$_fuse_max" ]; then
+    echo "ts=$(date +%s) action=skip reason=bootloop_protection counter=$_cur_ctr fuse_max=$_fuse_max" > "$_mounts_log"
     rm -f "$_bootflag" 2>/dev/null
     rm -f "$MODDIR"/system/vendor/etc/perf/* 2>/dev/null
     # The unified device-native pipeline clones THIS device's own audio, camera,
