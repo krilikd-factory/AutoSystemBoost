@@ -129,3 +129,4 @@ ASB_L_CAM_BASE_FIX1="camera baseline from an older build was already graded - di
 ASB_L_CAM_BASE_FIX2="it will be re-captured from stock after this reboot"
 ASB_L_CAM_LIVE_DIRTY1="camera tuning on this device is still graded from an older build"
 ASB_L_CAM_LIVE_DIRTY2="camera left untouched. To restore it: remove ASB, reboot, install again"
+ASB_L_FIX_SYSSYS="removed a stray system/system overlay path from an earlier build"

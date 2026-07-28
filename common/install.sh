@@ -55,6 +55,26 @@ asb_big_banner() {
 }
 
 asb_normalize_module_layout() {
+  # Kill a stray $MODPATH/system/system before anything else.
+  #
+  # A build of the volume-curve code prefixed "system" onto a live path that already
+  # began with /system, producing system/system/vendor/odm/etc/audio/... in the overlay.
+  # The mount layer then tries to place that at /system/system, which does not exist,
+  # and the device bootloops. It was the single difference between a module that booted
+  # and one that did not.
+  #
+  # The source of it is fixed, but a device already carrying one cannot boot to install
+  # the fix - the user disables the module in recovery, boots, and installs over it. So
+  # the update has to clean up after the version that broke them, not just avoid
+  # repeating it. Nothing legitimate is ever placed at system/system.
+  if [ -d "$MODPATH/system/system" ]; then
+    rm -rf "$MODPATH/system/system" 2>/dev/null
+    ui_print "      ! ${ASB_L_FIX_SYSSYS:-removed a stray system/system overlay path from an earlier build}"
+  fi
+  for _mroot in /data/adb/modules/AutoSystemBoost /data/adb/modules_update/AutoSystemBoost; do
+    [ -d "$_mroot/system/system" ] && rm -rf "$_mroot/system/system" 2>/dev/null
+  done
+
   for _part in vendor odm product system_ext my_product mi_ext; do
     _root="$MODPATH/$_part"
     [ -e "$_root" ] || continue
