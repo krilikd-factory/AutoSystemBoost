@@ -53,11 +53,44 @@ asb_reshape_volume_curves() {
   mv -f "$1.vctmp" "$1" 2>/dev/null
 }
 
+# Every volume table this device actually ships.
+#
+# The reshaper used to know exactly one path, /vendor/etc/default_volume_tables.xml,
+# and that is the GENERIC AOSP copy. On OxygenOS the tuned tables live under the ODM
+# paths - on a OnePlus 15 those are 9665-byte files full of OPLUS #ifdef blocks and
+# vendor engineers' comments, against 5156 bytes for the generic one. So "media
+# loudness = max" reshaped a table the audio policy very likely never reads, which is
+# exactly how a boost can be applied, verified present in the overlay, and still not
+# be audible. The module already clones the ODM copies into its own overlay; now the
+# reshaper covers them too.
+ASB_VT_PATHS="/odm/etc/audio/default_volume_tables.xml
+/vendor/odm/etc/audio/default_volume_tables.xml
+/system/vendor/odm/etc/audio/default_volume_tables.xml
+/vendor/etc/default_volume_tables.xml"
+
+# Stash name for one live path: the stock copy is per-file, because these files are
+# genuinely different from each other.
+asb_volume_stash_for() {
+  _vs_live="$1"
+  _vs_name="$(printf '%s' "${_vs_live#/}" | tr '/' '_')"
+  printf '/data/adb/asb/stock/%s' "$_vs_name"
+}
+
+# Pristine source for one live path, stashing it on first sight.
 asb_volume_table_src() {
-  _vt_live="/vendor/etc/default_volume_tables.xml"
+  _vt_live="$1"
+  [ -n "$_vt_live" ] || _vt_live="/vendor/etc/default_volume_tables.xml"
   [ -f "$_vt_live" ] || return 1
-  _vt_stash="/data/adb/asb/stock/default_volume_tables.xml"
+  _vt_stash="$(asb_volume_stash_for "$_vt_live")"
+  # Legacy stash from the single-path era - keep honouring it for /vendor/etc so an
+  # existing install does not lose its captured stock.
+  if [ "$_vt_live" = "/vendor/etc/default_volume_tables.xml" ] \
+     && [ ! -f "$_vt_stash" ] && [ -f /data/adb/asb/stock/default_volume_tables.xml ]; then
+    _vt_stash="/data/adb/asb/stock/default_volume_tables.xml"
+  fi
   if [ ! -f "$_vt_stash" ]; then
+    # Never stash something we already reshaped - that would freeze a boosted table
+    # as "stock" and compound the boost on the next rebuild.
     grep -q 'ASB:VOLCURVE' "$_vt_live" 2>/dev/null && return 1
     mkdir -p /data/adb/asb/stock 2>/dev/null
     cp -f "$_vt_live" "$_vt_stash" 2>/dev/null || return 1
@@ -65,32 +98,44 @@ asb_volume_table_src() {
   printf '%s' "$_vt_stash"
 }
 
-# Rebuild the overlay's volume table for the given percentage, from the pristine
-# stock stash. Returns 0 when the overlay file now matches the request.
+# Rebuild every overlay volume table for the given percentage, from the pristine
+# stock stashes. Returns 0 when at least one table now matches the request.
 asb_volume_curves_build() {
   _vc_mod="$1"
   _vc_pct="$2"
   [ -d "$_vc_mod" ] || return 1
-  _vc_dst="$_vc_mod/system/vendor/etc/default_volume_tables.xml"
+  _vc_any=0
 
-  if [ "$_vc_pct" = "100" ]; then
-    rm -f "$_vc_dst" 2>/dev/null
-    return 0
-  fi
+  for _vc_live in $ASB_VT_PATHS; do
+    [ -f "$_vc_live" ] || continue
+    _vc_dst="$_vc_mod/system${_vc_live}"
 
-  _vc_src="$(asb_volume_table_src)"
-  [ -n "$_vc_src" ] && [ -f "$_vc_src" ] || return 1
+    if [ "$_vc_pct" = "100" ]; then
+      rm -f "$_vc_dst" 2>/dev/null
+      _vc_any=1
+      continue
+    fi
 
-  mkdir -p "$(dirname "$_vc_dst")" 2>/dev/null || return 1
-  cp -f "$_vc_src" "$_vc_dst" 2>/dev/null || return 1
-  chmod 0644 "$_vc_dst" 2>/dev/null
-  asb_reshape_volume_curves "$_vc_dst" "$_vc_pct"
-  grep -q 'ASB:VOLCURVE' "$_vc_dst" 2>/dev/null || { rm -f "$_vc_dst" 2>/dev/null; return 1; }
-  _vc_ctx="$(ls -Zd /vendor/etc/default_volume_tables.xml 2>/dev/null | awk '{print $1}')"
-  case "$_vc_ctx" in
-    ?*:?*:?*:?*) chcon "$_vc_ctx" "$_vc_dst" 2>/dev/null || true ;;
-  esac
-  return 0
+    _vc_src="$(asb_volume_table_src "$_vc_live")"
+    [ -n "$_vc_src" ] && [ -f "$_vc_src" ] || continue
+
+    mkdir -p "$(dirname "$_vc_dst")" 2>/dev/null || continue
+    cp -f "$_vc_src" "$_vc_dst" 2>/dev/null || continue
+    chmod 0644 "$_vc_dst" 2>/dev/null
+    asb_reshape_volume_curves "$_vc_dst" "$_vc_pct"
+    if ! grep -q 'ASB:VOLCURVE' "$_vc_dst" 2>/dev/null; then
+      rm -f "$_vc_dst" 2>/dev/null
+      continue
+    fi
+    _vc_ctx="$(ls -Zd "$_vc_live" 2>/dev/null | awk '{print $1}')"
+    case "$_vc_ctx" in
+      ?*:?*:?*:?*) chcon "$_vc_ctx" "$_vc_dst" 2>/dev/null || true ;;
+    esac
+    _vc_any=1
+  done
+
+  [ "$_vc_any" = "1" ] && return 0
+  return 1
 }
 
 asb_volume_curves_pct() {

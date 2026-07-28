@@ -102,57 +102,101 @@ case "$_lvl" in
   *)                        _want="" ;;
 esac
 
-# Baseline, captured once before anything is changed.
-if [ ! -f "$BASE" ]; then
-  mkdir -p /data/adb/asb 2>/dev/null
-  : > "$BASE" 2>/dev/null
-  for _k in $_keys; do
-    echo "$_k|$(settings get system "$_k" 2>/dev/null)" >> "$BASE" 2>/dev/null
-  done
-fi
+# Baseline, captured before anything is changed - and TOP UP if keys are missing.
+#
+# The old code wrote the baseline once and never looked at it again ("if [ ! -f ]").
+# When the key list grew (the three *_stepless_* amplitudes are the ones that are
+# actually felt), devices that had already been installed kept a five-key baseline
+# from the older build. Restoring "stock" then put back only the coarse gates and left
+# the amplitude wherever ASB last wrote it - so turning the tweak OFF was impossible,
+# and the phone stayed on ASB's vibration forever while claiming to be stock.
+# Topping up per key is self-healing: a future key addition fixes itself the same way.
+mkdir -p /data/adb/asb 2>/dev/null
+[ -f "$BASE" ] || : > "$BASE" 2>/dev/null
+for _k in $_keys; do
+  grep -q "^$_k|" "$BASE" 2>/dev/null && continue
+  echo "$_k|$(settings get system "$_k" 2>/dev/null)" >> "$BASE" 2>/dev/null
+done
 
-if [ -z "$_want" ]; then
-  if [ -f "$BASE" ]; then
-    while IFS='|' read -r _k _v; do
-      [ -n "$_k" ] || continue
-      if [ -z "$_v" ] || [ "$_v" = "null" ]; then
-        settings delete system "$_k" >/dev/null 2>&1 || true
-      else
-        settings put system "$_k" "$_v" >/dev/null 2>&1 || true
-      fi
-    done < "$BASE"
+# Restore a single key from the baseline.
+_hap_restore_key() {
+  _rk="$1"
+  _rv="$(grep "^$_rk|" "$BASE" 2>/dev/null | head -1 | sed 's/^[^|]*|//')"
+  if [ -z "$_rv" ] || [ "$_rv" = "null" ]; then
+    settings delete system "$_rk" >/dev/null 2>&1 || true
+  else
+    settings put system "$_rk" "$_rv" >/dev/null 2>&1 || true
   fi
+}
+
+# Touch level: its own value if set, otherwise follow the alert level.
+case "$_lvl_touch" in
+  0|1|2|3|4|5|6|7|8|9|10) _want_t="$_lvl_touch" ;;
+  *)                      _want_t="$_want" ;;
+esac
+
+# Both on stock -> restore everything and leave.
+#
+# The early exit used to fire on "$_want" alone. haptic_strength ships as -1 (stock),
+# so on a default install this returned before haptic_touch_strength was ever looked
+# at: the touch slider wrote its value, the WebUI confirmed it, and nothing happened.
+# Now the exit needs BOTH to be stock.
+if [ -z "$_want" ] && [ -z "$_want_t" ]; then
+  for _k in $_keys; do _hap_restore_key "$_k"; done
   echo "haptics: stock (restored)"
   exit 0
 fi
 
-if [ "$_want" = "0" ]; then
+# Everything off.
+if [ "$_want" = "0" ] && [ "$_want_t" = "0" ]; then
   for _k in $_coarse;   do settings put system "$_k" 0 >/dev/null 2>&1 || true; done
   for _k in $_stepless; do settings put system "$_k" 0 >/dev/null 2>&1 || true; done
   echo "haptics: off"
   exit 0
 fi
 
-# Touch level: follows the alert level unless it has one of its own.
-case "$_lvl_touch" in
-  0|1|2|3|4|5|6|7|8|9|10) _want_t="$_lvl_touch" ;;
-  *)                      _want_t="$_want" ;;
-esac
+# --- alerts (notification / ring / alarm / media) ---
+if [ -z "$_want" ]; then
+  # Master on stock while touch is set: leave the alert side exactly as the device
+  # had it instead of dragging it along.
+  for _k in $_coarse_alert;   do _hap_restore_key "$_k"; done
+  for _k in $_stepless_alert; do _hap_restore_key "$_k"; done
+  _amp=""
+else
+  for _k in $_coarse_alert; do settings put system "$_k" 3 >/dev/null 2>&1 || true; done
+  _amp=$(( ASB_HAP_MAX * _want / 10 ))
+fi
 
-# Coarse keys open the gate; the stepless value is what is actually felt.
-for _k in $_coarse_alert; do settings put system "$_k" 3 >/dev/null 2>&1 || true; done
-[ "$_want_t" = "0" ] \
-  && settings put system haptic_feedback_intensity 0 >/dev/null 2>&1 \
-  || settings put system haptic_feedback_intensity 3 >/dev/null 2>&1
-_amp=$(( ASB_HAP_MAX * _want / 10 ))
-_amp_t=$(( ASB_HAP_MAX * _want_t / 10 ))
+# --- touch ---
+if [ -z "$_want_t" ]; then
+  _hap_restore_key haptic_feedback_intensity
+  _hap_restore_key touch_stepless_vibration_intensity
+  _amp_t=""
+else
+  # if/else, not "A && B || C": a failed `settings put` in the middle of that idiom
+  # falls through to the C branch and writes 3 where 0 was wanted.
+  if [ "$_want_t" = "0" ]; then
+    settings put system haptic_feedback_intensity 0 >/dev/null 2>&1 || true
+  else
+    settings put system haptic_feedback_intensity 3 >/dev/null 2>&1 || true
+  fi
+  _amp_t=$(( ASB_HAP_MAX * _want_t / 10 ))
+fi
+
 # Write, then read back. The vendor service silently refuses a value it does not like -
 # the setting keeps its old contents and the phone just stops buzzing, with nothing
 # anywhere reporting a problem. Stepping down until one sticks turns that into a slightly
 # weaker buzz instead of no buzz, which is the failure mode worth having.
 for _k in $_stepless; do
-  case " $_stepless_touch " in *" $_k "*) _try="$_amp_t" ;; *) _try="$_amp" ;; esac
-  [ "$_try" = "0" ] && { settings put system "$_k" 0 >/dev/null 2>&1; continue; }
+  case " $_stepless_touch " in
+    *" $_k "*) _try="$_amp_t" ;;
+    *)         _try="$_amp"   ;;
+  esac
+  [ -z "$_try" ] && continue                 # that side is on stock - already restored
+  if [ "$_try" = "0" ]; then
+    settings put system "$_k" 0 >/dev/null 2>&1 || true
+    continue
+  fi
   while [ "$_try" -ge 200 ]; do
     settings put system "$_k" "$_try" >/dev/null 2>&1 || true
     [ "$(settings get system "$_k" 2>/dev/null)" = "$_try" ] && break
@@ -161,9 +205,12 @@ for _k in $_stepless; do
 done
 
 # Touch feedback has its own on/off switch; an intensity set while it is off does
-# nothing. Only ever turn it ON.
-[ "$(settings get system haptic_feedback_enabled 2>/dev/null)" = "0" ] && \
-  settings put system haptic_feedback_enabled 1 >/dev/null 2>&1
+# nothing. Only ever turn it ON, and only when a touch level is actually active.
+if [ -n "$_want_t" ] && [ "$_want_t" != "0" ]; then
+  [ "$(settings get system haptic_feedback_enabled 2>/dev/null)" = "0" ] && \
+    settings put system haptic_feedback_enabled 1 >/dev/null 2>&1
+fi
 
-echo "haptics: alerts $_want/10 ($_amp) - touch $_want_t/10 ($_amp_t)"
+_hap_fmt() { [ -z "$1" ] && echo "stock" || { [ "$1" = "0" ] && echo "off" || echo "$1/10"; }; }
+echo "haptics: alerts $(_hap_fmt "$_want") ($_amp) - touch $(_hap_fmt "$_want_t") ($_amp_t)"
 exit 0

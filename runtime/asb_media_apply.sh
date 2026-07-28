@@ -44,7 +44,9 @@ fi
 
 # Be specific about which half failed: a missing stash and a failed write need
 # different answers, and "it didn't work" has cost enough field time already.
-if [ ! -f /data/adb/asb/stock/default_volume_tables.xml ]; then
+# Stashes are per-path now (one per volume table the device ships), so look for any.
+if [ -z "$(ls -1 /data/adb/asb/stock/ 2>/dev/null | grep -c 'default_volume_tables')" ] \
+   || [ "$(ls -1 /data/adb/asb/stock/ 2>/dev/null | grep -c 'default_volume_tables')" = "0" ]; then
   echo "no pristine stock volume table stashed - reinstall the module once so it can capture one"
 else
   echo "could not write the overlay copy - check that $MODDIR is writable"

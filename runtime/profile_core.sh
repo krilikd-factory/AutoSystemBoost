@@ -498,13 +498,33 @@ asb_load_profile() {
     *) PROFILE=balanced ;;
   esac
   _SHELL_BOOT_PROFILE="${_SHELL_BOOT_PROFILE:-$PROFILE}"
+  # Remember what was actually REQUESTED before sourcing a profile file, because
+  # every profiles/*.sh opens with PROFILE="<its own name>" and would otherwise
+  # rewrite it - on smart that turns the request into "balanced" before anyone can
+  # read it.
+  _ASB_REQUESTED="$PROFILE"
   if [ -f "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh" ]; then
     . "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh"
   else
     _SHELL_BOOT_PROFILE=balanced
     . "$MODDIR/profiles/balanced.sh"
   fi
+  PROFILE="$_ASB_REQUESTED"
   unset _SHELL_BOOT_PROFILE
+  # ASB_PROFILE is what service.sh branches on - 21 case/if sites covering doze
+  # constants, WiFi DTIM, sched_energy_aware, lpm_prediction, page-cluster and TCP
+  # pacing. This function overrides the one in asb_utils.sh (sourced first, so this
+  # one wins) and used to set only PROFILE, leaving ASB_PROFILE empty forever: every
+  # one of those 21 sites fell through to its "*)" balanced branch, so the Battery
+  # profile never applied its deepest power savings and Performance never applied its
+  # loosest ones. The empty "profile=" in runtime_apply.log's reinforce lines was this.
+  #
+  # It carries the REQUESTED profile, including "smart" - not _SHELL_BOOT_PROFILE.
+  # The shell layer loads balanced.sh for smart because the native governor owns the
+  # frequencies, but a branch asking "is this battery?" must not be told "balanced"
+  # when the user picked smart.
+  ASB_PROFILE="$_ASB_REQUESTED"
+  unset _ASB_REQUESTED
   # Populate the _P_* mapped variables that service.sh's apply_* helpers read.
   command -v asb_map_profile_vars >/dev/null 2>&1 && asb_map_profile_vars
 }

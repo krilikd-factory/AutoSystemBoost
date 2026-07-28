@@ -339,8 +339,35 @@ asb_apply_dynamic_tweaks() {
     _des="${_cf}.asbdes$$"
     cp -f "$_bp" "$_des" 2>/dev/null || { rm -f "$_des"; continue; }
     if [ "$_cam_level" -gt 0 ] 2>/dev/null; then
-      [ "$_cam_inject" = "1" ] && asb_tw_inject_camera "$_des"
-      asb_tw_aggr_camera "$_des" "$_cam_level"
+      # Grade with asb_camera_grade.sh - the SAME engine the installer uses.
+      #
+      # This used to call asb_tw_aggr_camera, a stack of sed rules keyed to literal
+      # stock values (find 0.35, write 0.55). OxygenOS 16 ships values at or above what
+      # those rules aimed for, so every rule missed and the boot pass changed nothing.
+      # Since the installer was the only place the real grader ran, changing the camera
+      # level in the WebUI wrote the config, promised a reboot, and then re-applied
+      # whatever level had been baked in at install time. One engine, both paths.
+      _cam_graded=0
+      if [ -r "$_md/runtime/asb_camera_grade.sh" ]; then
+        # "Extended" injects the tone keys a trimmed stock conf_tuning lacks (OP12/OP13);
+        # on a OnePlus 15 every key is already present so this is a no-op. It runs on the
+        # temp copy BEFORE grading, so injected keys get scaled like any other.
+        if [ "$_cam_inject" = "1" ]; then
+          cp -f "$_bp" "$_des" 2>/dev/null
+          asb_tw_inject_camera "$_des"
+          _cam_grade_src="$_des.inj"
+          mv -f "$_des" "$_cam_grade_src" 2>/dev/null
+        else
+          _cam_grade_src="$_bp"
+        fi
+        MODDIR="$_md" ASB_CAMERA_LEVEL_IN="$_cam_level" \
+          sh "$_md/runtime/asb_camera_grade.sh" "$_cam_grade_src" "$_des" >/dev/null 2>&1 \
+          && _cam_graded=1
+        [ "$_cam_grade_src" = "$_bp" ] || rm -f "$_cam_grade_src" 2>/dev/null
+      fi
+      # Belt and braces: if the grader could not run, leave the baseline in place
+      # rather than falling back to an engine that is known not to work here.
+      [ "$_cam_graded" = "1" ] || cp -f "$_bp" "$_des" 2>/dev/null
       # structural safety net: unbalanced braces -> fall back to the baseline.
       _ob="$(tr -cd '{' < "$_des" 2>/dev/null | wc -c)"
       _cb="$(tr -cd '}' < "$_des" 2>/dev/null | wc -c)"

@@ -93,8 +93,11 @@ _grain_pct=$(( _grain * 100 / 3 ))
 _contrast="$(_cfg_num CAMERA_CONTRAST "$ASB_CAM_CONTRAST_IN")"
 case "$_contrast" in ''|*[!0-9]*) _contrast=3 ;; esac
 [ "$_contrast" -gt 8 ] 2>/dev/null && _contrast=8
-# 3 = stock (100%). 0 flattens to 70%, 8 pushes to 190%.
-_contrast_pct=$(( 70 + _contrast * 15 ))
+# 3 = stock, exactly 100%. The old formula was 70 + n*15, which gives 115 at n=3 -
+# so the documented "neutral" setting quietly pushed contrast and saturation 15% every
+# install, and compounded on every reinstall. 3*10+70 = 100 makes neutral actually
+# neutral; 0 flattens to 70%, 6 (the UI maximum) reaches 130%.
+_contrast_pct=$(( 70 + _contrast * 10 ))
 
 # Portrait AI. PersonBlendWeight, SkinBlendWeight and FaceBlendWeight ship at 0.0 - the
 # neural pass is simply off for faces. A ratio cannot move zero, so this one writes
@@ -182,7 +185,12 @@ asb_camera_grade_file() {
     }
     # Replace a bracketed list with three fixed values. Needed where the stock value is
     # zero and no ratio can lift it.
-    function set_list3(line, key, a, b, c,    head, body, tail) {
+    # Raise a bracketed triple to at least (a,b,c). Needed where the stock value is
+    # zero and no ratio can lift it - but it must never pull a value DOWN. The old
+    # version wrote the targets unconditionally, so "Portrait AI = 1" turned a stock
+    # SnapPortrait PersonBlendWeight of [0.7,0.7,0.7] into [0.15,0.2,0.25]: a control
+    # advertised as adding AI was removing three quarters of it.
+    function set_list3(line, key, a, b, c,    head, body, tail, n, arr, i, out, v, t) {
       if (index(line, "\"" key "\"") == 0) return line
       head = substr(line, 1, index(line, "\"" key "\"") + length(key) + 1)
       body = substr(line, length(head) + 1)
@@ -191,7 +199,17 @@ asb_camera_grade_file() {
       body = substr(body, index(body, "[") + 1)
       if (index(body, "]") == 0) return line
       tail = substr(body, index(body, "]"))
-      return head a ", " b ", " c tail
+      body = substr(body, 1, index(body, "]") - 1)
+      n = split(body, arr, ",")
+      out = ""
+      for (i = 1; i <= n; i++) {
+        v = arr[i] + 0
+        t = (i == 1) ? a + 0 : ((i == 2) ? b + 0 : c + 0)
+        if (i <= 3 && t > v) v = t          # only ever upwards
+        if (v > 1.0) v = 1.0                # blend weight ceiling
+        out = out (i > 1 ? ", " : "") sprintf("%.6g", v)
+      }
+      return head out tail
     }
     # Which EnhanceNet sub-block are we inside? Portrait weights are only meaningful in
     # the portrait ones; setting them in the pet or concert blocks would be noise.
@@ -253,7 +271,7 @@ asb_camera_grade_file() {
         line = scale_num(line, "addNoiseWeightNightTele2",           GRAIN)
       }
       # Tone curve: contrast and colour depth.
-      if (line ~ /contrastScale|SatuColorScale|sunsetSatScale/) {
+      if (line ~ /[Cc]ontrastScale|SatuColorScale|sunsetSatScale/) {
         line = scale_num(line, "low20XcontrastScale",  CONTR)
         line = scale_num(line, "high20XcontrastScale", CONTR)
         line = scale_num(line, "faceBackContrastScale", CONTR)
