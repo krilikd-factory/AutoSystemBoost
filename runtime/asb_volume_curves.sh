@@ -65,7 +65,6 @@ asb_reshape_volume_curves() {
 # reshaper covers them too.
 ASB_VT_PATHS="/odm/etc/audio/default_volume_tables.xml
 /vendor/odm/etc/audio/default_volume_tables.xml
-/system/vendor/odm/etc/audio/default_volume_tables.xml
 /vendor/etc/default_volume_tables.xml"
 
 # Stash name for one live path: the stock copy is per-file, because these files are
@@ -108,7 +107,20 @@ asb_volume_curves_build() {
 
   for _vc_live in $ASB_VT_PATHS; do
     [ -f "$_vc_live" ] || continue
-    _vc_dst="$_vc_mod/system${_vc_live}"
+    # Overlay destinations live under $MODPATH/system, and a live path that already
+    # starts with /system must have it stripped or the two prefixes stack up into
+    # $MODPATH/system/system/... - a path the mount layer then tries to place at
+    # /system/system, which does not exist. That BOOTLOOPS the device.
+    #
+    # It happened: /system/vendor/... was in the path list above (it is a symlink to
+    # /vendor, so it resolved to a real file and looked legitimate), and the resulting
+    # system/system/vendor/odm/etc/audio/default_volume_tables.xml in the overlay was
+    # the ONLY difference between a module that booted and one that did not. It is gone
+    # from the list now - /vendor/odm/... is the same file - and the strip below makes
+    # the class of mistake impossible rather than merely absent. It matches what the
+    # rest of the installer already does (see install.sh: "${_ecl#/system}").
+    _vc_rel="${_vc_live#/system}"
+    _vc_dst="$_vc_mod/system${_vc_rel}"
 
     if [ "$_vc_pct" = "100" ]; then
       rm -f "$_vc_dst" 2>/dev/null
