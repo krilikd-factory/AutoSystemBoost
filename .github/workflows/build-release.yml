@@ -328,6 +328,12 @@ jobs:
             mkdir -p "$PKG_REL/tools"
             install -m 0755 tools/asb_camera_repair.sh "$PKG_REL/tools/asb_camera_repair.sh"
           fi
+          # Diagnostic for "SystemUI restarts a minute after boot" reports. Someone
+          # hitting that is on a release build, so it has to be there to be useful.
+          if [ -f "tools/asb_sysui_watch.sh" ]; then
+            mkdir -p "$PKG_REL/tools"
+            install -m 0755 tools/asb_sysui_watch.sh "$PKG_REL/tools/asb_sysui_watch.sh"
+          fi
 
           # Device-adaptive layer (must ship so install/boot can run them):
           #   asb_discover.sh        — writes device_caps.env (facts)
