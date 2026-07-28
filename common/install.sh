@@ -2877,7 +2877,6 @@ asb_apply_blur_prop() {
       echo "ro.surface_flinger.supports_background_blur=0"
       echo "ro.surface_flinger.media_panel_bg_blur=0"
       echo "persist.sys.oplus.material_blur_switch=false"
-      echo "vendor.display.supports_background_blur=0"
     fi
     # OFF and LIGHT: targeted keys, each naming one surface. Dropping these leaves the
     # notification backdrop readable, which is what light is for. anim_level is NOT here -
