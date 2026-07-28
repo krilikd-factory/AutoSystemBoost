@@ -183,7 +183,8 @@ lk_snapshot_state() {
       echo ""
     done
     echo "===== LAST 5 SESSIONS (session_history.jsonl tail) ====="
-    tail -5 "$MODDIR/runtime/session_history.jsonl" 2>/dev/null
+    # Lives in /data/adb/asb, not in the module: the governor writes it there.
+    tail -5 /data/adb/asb/session_history.jsonl 2>/dev/null
     echo ""
     echo "===== CPU SCALING MAX (all policies) ====="
     for pd in /sys/devices/system/cpu/cpufreq/policy*; do
@@ -308,7 +309,7 @@ lk_snapshot_state() {
 lk_copy_runtime_artifacts() {
   [ -f "$LK_GOV_LOG" ] && cp "$LK_GOV_LOG" "$LK_OUT_DIR/governor.log"
   for f in \
-    "$MODDIR/runtime/session_history.jsonl" \
+    /data/adb/asb/session_history.jsonl \
     "$MODDIR/runtime/last_sessions_v9.jsonl" \
     "$MODDIR/runtime/learn.bin" \
     "$MODDIR/runtime/session_stats.json" \
