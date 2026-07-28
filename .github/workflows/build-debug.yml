@@ -374,6 +374,8 @@ jobs:
             "tools/asb_diag.sh" \
             "tools/asb_install_probe.sh" \
             "tools/asb_doctor.sh" \
+            "tools/asb_camera_repair.sh" \
+            "tools/asb_sysui_watch.sh" \
             "tools/asb_audit_state.sh" \
             "tools/asb_verify_device.sh" \
             "tools/asb_compare_sessions.py" \
