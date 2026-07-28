@@ -3127,9 +3127,32 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
             if (g_smart_rt.app_hint < ASB_APP_GAMING &&
                 m->misc.screen_on && fsm) {
                 int fresh_pkg = (pst == ASB_PKG_OK);
+                /* Boot grace.
+                 *
+                 * The SUSTAINED branch below infers "this must be a game" from heat
+                 * plus GPU load, because an unrecognised game looks exactly like that.
+                 * So does the first couple of minutes after a reboot: zygote, dexopt,
+                 * the launcher and every app restoring its state at once drive the SoC
+                 * hot and the GPU busy with no game anywhere. Observed on a OnePlus 15
+                 * eight seconds after the governor started - SUSTAINED at 64 C - which
+                 * put "gaming" on the WebUI of a phone that had just been rebooted.
+                 *
+                 * That is worse than a wrong label. app_hint feeds app_hint_session_top,
+                 * and a session that peaked at GAMING increments sessions_gaming when it
+                 * closes - so every reboot would file itself as a gaming session in the
+                 * learner and skew what it believes about this device.
+                 *
+                 * 180 s covers the boot storm (the settling SUSTAINED entries here landed
+                 * at +8 s, +50 s and +145 s) without meaningfully delaying detection of a
+                 * real game: the FSM's own GAMING state is exempt, so a recognised game
+                 * still promotes instantly, and an unrecognised one is picked up as soon
+                 * as the window passes. */
+                int boot_grace = (g_gov_start_ts > 0 &&
+                                  (long)(now - g_gov_start_ts) < 180);
                 if (fsm->state == ASB_STATE_GAMING && fresh_pkg) {
                     g_smart_rt.app_hint = ASB_APP_GAMING;
-                } else if (fsm->state == ASB_STATE_SUSTAINED &&
+                } else if (!boot_grace &&
+                           fsm->state == ASB_STATE_SUSTAINED &&
                            cpu_max_c >= 60 && m->gpu.load_pct >= 30 &&
                            fresh_pkg) {
                     g_smart_rt.app_hint = ASB_APP_GAMING;
