@@ -321,6 +321,13 @@ jobs:
             mkdir -p "$PKG_REL/tools"
             install -m 0755 tools/asb_smart_mode.sh "$PKG_REL/tools/asb_smart_mode.sh"
           fi
+          # Ships in release even though the rest of tools/ does not: it repairs a
+          # camera grade compounded by older builds, and someone who needs it is on a
+          # release build by definition.
+          if [ -f "tools/asb_camera_repair.sh" ]; then
+            mkdir -p "$PKG_REL/tools"
+            install -m 0755 tools/asb_camera_repair.sh "$PKG_REL/tools/asb_camera_repair.sh"
+          fi
 
           # Device-adaptive layer (must ship so install/boot can run them):
           #   asb_discover.sh        — writes device_caps.env (facts)
