@@ -943,6 +943,12 @@ asb_patch_media_profiles_inplace() {
 
 asb_clone_device_camera_tone() {
   [ "$ASB_CAMERA" = "true" ] || return 0
+  # Needed here for asb_tw_base_path / asb_tw_save_base: this function is the first
+  # thing that touches the camera files, and it must know where their baselines live
+  # before it decides what to copy from. Sourcing is idempotent.
+  if ! command -v asb_tw_base_path >/dev/null 2>&1; then
+    [ -r "$MODPATH/runtime/asb_tweaks.sh" ] && . "$MODPATH/runtime/asb_tweaks.sh"
+  fi
   for _ct_base in conf_tuning_params.json config/video_beauty_default_config; do
     for _ct_live in "/odm/etc/camera/$_ct_base" \
                     "/vendor/odm/etc/camera/$_ct_base" \
@@ -956,10 +962,59 @@ asb_clone_device_camera_tone() {
       for _ct_dst in $_ct_dsts; do
         if [ ! -f "$MODPATH/$_ct_dst" ]; then
           mkdir -p "$MODPATH/$(dirname "$_ct_dst")" 2>/dev/null
-          cp -f "$_ct_live" "$MODPATH/$_ct_dst" 2>/dev/null \
+          # SOURCE OF TRUTH: the pristine baseline, not the live path.
+          #
+          # "$_ct_live" is a MOUNTED path. Once ASB has been installed once, /odm/etc/
+          # camera is this module's own overlay, so "cloning the stock file" actually
+          # cloned the PREVIOUS INSTALL'S GRADED OUTPUT - and the grade below then
+          # multiplied it again. Measured across three installs on a OnePlus 15 the
+          # saturation went 1.28x -> 1.51x -> 1.93x and the USM sharpening 1.5x -> 2.07x
+          # -> 3.1x of the manufacturer's value, with a third of the neural blend
+          # weights pinned at their 1.0 ceiling. Nothing in the code stopped it.
+          #
+          # asb_tw_base_path gives the .asbbase for this destination. When one exists it
+          # is by definition the ungraded original (see asb_save_dynamic_baselines,
+          # which now runs BEFORE any grading), so it is the only safe source. Only on a
+          # genuinely first install, when no baseline exists yet, is the live path the
+          # stock file - and that is exactly when it is safe to copy.
+          _ct_src="$_ct_live"
+          if command -v asb_tw_base_path >/dev/null 2>&1; then
+            _ct_bp="$(asb_tw_base_path "$MODPATH/$_ct_dst" 2>/dev/null)"
+            if [ -n "$_ct_bp" ] && [ -f "$_ct_bp" ]; then
+              # Trust the baseline only if it still looks like stock.
+              #
+              # Devices updated from a build with the compounding bug carry a baseline
+              # that is already graded, and using it as "the pristine original" is what
+              # made the damage permanent across reinstalls. The RGB->YUV chroma rows are
+              # the reliable tell: stock is the standard BT.601 matrix, identical on every
+              # device, and grading multiplies it. -0.168736 either matches or it does not.
+              #
+              # A corrupted baseline is deleted rather than used. On the next boot with no
+              # ASB overlay mounted the live file is genuinely stock again, and the
+              # baseline is recaptured from it - so the repair completes without the user
+              # editing anything, it just needs the reboot they were doing anyway.
+              _ct_chroma="$(grep -m1 -o '"Main1x_Rgb2YuvParams"[^]]*]' "$_ct_bp" 2>/dev/null \
+                            | grep -o -- '-0\.1687[0-9]*')"
+              if [ -n "$_ct_chroma" ]; then
+                _ct_src="$_ct_bp"
+              else
+                rm -f "$_ct_bp" 2>/dev/null
+                ASB_CAM_BASE_REPAIRED=1
+              fi
+            fi
+          fi
+          cp -f "$_ct_src" "$MODPATH/$_ct_dst" 2>/dev/null \
             && chmod 0644 "$MODPATH/$_ct_dst" 2>/dev/null
+          # Capture the baseline NOW, from the pristine copy, before anything grades it.
+          command -v asb_tw_save_base >/dev/null 2>&1 && \
+            asb_tw_save_base "$MODPATH/$_ct_dst" force
         fi
       done
+      if [ "${ASB_CAM_BASE_REPAIRED:-0}" = "1" ] && [ "${_ASB_CAM_WARNED:-0}" != "1" ]; then
+        _ASB_CAM_WARNED=1
+        ui_print "      ! ${ASB_L_CAM_BASE_FIX1:-camera baseline from an older build was already graded - discarded}"
+        ui_print "        ${ASB_L_CAM_BASE_FIX2:-it will be re-captured from stock after this reboot}"
+      fi
       # Grade here, on every copy that was just made.
       #
       # This is where the camera files actually come from on an OP13/OP15 - cloned from
@@ -2351,6 +2406,15 @@ ASB_DISPLAY=true
 ASB_FPS=true
 ASB_SECURITY=true
 ASB_BG_TRIM=false
+# These two had no variable at all: features.conf hardcoded LPM=1 / VENDOR_OVERLAY=1
+# while asb_save_user_config wrote LPM=0 / VENDOR_OVERLAY=0 - it evaluated a variable
+# that did not exist, so it recorded a phantom "the user declined" that no user ever
+# chose, and the end-of-install banner left both out of the enabled list while both
+# were in fact running. Three sources of truth, three different answers. Declaring
+# them here makes the value real; true preserves the behaviour every install has
+# actually had, so nothing changes for existing users.
+ASB_LPM=true
+ASB_VENDOR_OVERLAY=true
 
 asb_install_prebuilt_governor
 asb_big_banner
@@ -2373,11 +2437,23 @@ fi
 
 asb_apply_saved_config() {
   [ -f "$ASB_USER_CFG" ] || return 1
-  local _line _k _v
+  local _line _k _v _ucfg_schema
+  _ucfg_schema="$(grep '^cfg_schema=' "$ASB_USER_CFG" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')"
+  case "$_ucfg_schema" in ''|*[!0-9]*) _ucfg_schema=1 ;; esac
   while IFS='=' read -r _k _v; do
     case "$_k" in ''|\#*) continue ;; esac
+    # Must accept every key asb_save_user_config writes. It used to list 15 while the
+    # saver wrote 19, so NFC, MEDIA, LPM and VENDOR_OVERLAY were recorded on every
+    # install and silently dropped on the next one - the answers were kept and then
+    # ignored, which looks exactly like the config not being saved at all.
     case "$_k" in
-      AUDIO|BT|CAMERA|CPU|VM|NET|WIFI|GPS|KERNEL|LOG|RADIO_IMS|DISPLAY|FPS|SECURITY|BG_TRIM) : ;;
+      AUDIO|BT|NFC|CAMERA|MEDIA|CPU|VM|NET|WIFI|GPS|KERNEL|LOG|RADIO_IMS|DISPLAY|FPS|SECURITY|BG_TRIM) : ;;
+      LPM|VENDOR_OVERLAY)
+        # Only honour these from a schema-2 file. Older builds evaluated a variable
+        # that did not exist and wrote a phantom 0 for both, so restoring from such a
+        # file would switch off two subsystems the user never asked to lose.
+        [ "$_ucfg_schema" -ge 2 ] 2>/dev/null || continue
+        ;;
       *) continue ;;
     esac
     case "$_v" in
@@ -2396,6 +2472,9 @@ asb_save_user_config() {
     echo "# Used on next install/update to skip the 15 category prompts"
     echo "saved_at=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo unknown)"
     echo "saved_from_version=$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
+    # schema 2 = LPM and VENDOR_OVERLAY below are real answers, not the phantom zeros
+    # that schema-1 files carried from an era when their variables did not exist.
+    echo "cfg_schema=2"
     # Must list every category the installer PROMPTS for. LPM and VENDOR_OVERLAY were
     # missing, so those two answers were thrown away on every update and silently reset
     # to the shipped default - visible on a real install as a user_config with 17 keys
@@ -2781,13 +2860,13 @@ WIFI=$([ "$ASB_WIFI" = "true" ] && echo 1 || echo 0)
 GPS=$([ "$ASB_GPS" = "true" ] && echo 1 || echo 0)
 KERNEL=$([ "$ASB_KERNEL" = "true" ] && echo 1 || echo 0)
 LOG=$([ "$ASB_LOG" = "true" ] && echo 1 || echo 0)
-LPM=1
+LPM=$([ "$ASB_LPM" = "true" ] && echo 1 || echo 0)
 RADIO_IMS=$([ "$ASB_RADIO_IMS" = "true" ] && echo 1 || echo 0)
 DISPLAY=$([ "$ASB_DISPLAY" = "true" ] && echo 1 || echo 0)
 FPS=$([ "$ASB_FPS" = "true" ] && echo 1 || echo 0)
 SECURITY=$([ "$ASB_SECURITY" = "true" ] && echo 1 || echo 0)
 BG_TRIM=$([ "$ASB_BG_TRIM" = "true" ] && echo 1 || echo 0)
-VENDOR_OVERLAY=1
+VENDOR_OVERLAY=$([ "$ASB_VENDOR_OVERLAY" = "true" ] && echo 1 || echo 0)
 EOF
 
 {
@@ -3733,4 +3812,17 @@ for _vb in $(find "$MODPATH/system" "$MODPATH/deferred_overlay" -type f -name "v
 done
 
 asb_normalize_module_layout
+
+# Stray empty "vendor" in the module root.
+#
+# There is a guard for this earlier in the install, but the file was still present in a
+# freshly installed module on a real device - so whatever creates it runs AFTER that
+# guard. Repeating the check here, at the very end, catches it whenever it appears.
+# Deliberately narrow: only a REGULAR, EMPTY file. A symlink (vendor -> system/vendor)
+# is a legitimate layout on some setups and must survive, and [ -f ] follows symlinks,
+# so the -L test comes first.
+if [ ! -L "$MODPATH/vendor" ] && [ -f "$MODPATH/vendor" ] && [ ! -s "$MODPATH/vendor" ]; then
+  rm -f "$MODPATH/vendor" 2>/dev/null
+fi
+
 asb_end_banner
