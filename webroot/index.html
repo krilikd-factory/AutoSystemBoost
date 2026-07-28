@@ -1911,7 +1911,7 @@ const I18N = {
       UX_MANAGE_OEM_TOGGLES: { name: 'Управление системными тумблерами (ОЗУ/батарея/нагрев)',
         desc: 'Управление тумблерами OxygenOS (Расширение ОЗУ, Адаптивная батарея, Низкий нагрев). ВЫКЛ = не трогать (OOS может включать Расширение ОЗУ после ребута). ВКЛ = держит Расширение ОЗУ ВЫКЛ при каждой загрузке.' },
       UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
-        desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Только если Управление скоростью UI ВКЛ.' },
+        desc: 'Принудительно применяет масштаб анимаций на сборках OOS, игнорирующих его «на лету». Работает только если «Управление скоростью UI» ВКЛ. ВНИМАНИЕ: применение выполняется перезапуском SystemUI \u2014 экран на секунду гаснет, возвращается экран блокировки, и оверлеи других модулей (темы статус-бара и т.п.) сбрасываются. Срабатывает только когда вы сами переключаете профиль, не при загрузке и не при авто-переключении. Если оверлеи важнее \u2014 держите ВЫКЛ: масштабы всё равно запишутся и применятся при следующем перезапуске SystemUI.' },
       disable_blur: { name: 'Отключить эффекты блюра',
         desc: 'Выключает размытие везде \u2014 шторка, уведомления, панель громкости, переходы. Меньше нагрузки на GPU, шторка становится непрозрачной вместо матовой. Учтите: у всплывающего уведомления тоже не останется размытой подложки, и текст ляжет на то, что под ним. Промежуточного режима нет \u2014 обе ручки, которые эта платформа даёт, глобальные. Оконная часть применяется сразу, часть композитора \u2014 после перезагрузки.' },
       ui_effects_level: { name: 'Анимации системы',
@@ -2231,7 +2231,7 @@ const CFG_ITEMS = [
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
     desc:'Performance shortens animations (~0.8x) and long-press/multi-tap windows for a snappier, more responsive UI; Battery keeps stock. OFF = untouched.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
-    desc:'Forces animation-scale changes on OOS builds that ignore them live. Only if Manage UI Speed is ON.' },
+    desc:'Forces the animation scale to take on OOS builds that ignore it live. Needs UI Speed Management ON. WARNING: it applies by RESTARTING SystemUI - the screen blinks, the lock screen comes back, and overlays drawn by other modules (status-bar themes and the like) are torn down. Only fires when you switch profiles yourself, never at boot or on an automatic switch. If those overlays matter more, leave this OFF: the scales are written anyway and take effect the next time SystemUI restarts on its own.' },
   // --- Display ---
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
