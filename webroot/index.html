@@ -1976,7 +1976,7 @@ const I18N = {
     lv_est_idle: 'Прогноз (покой)', lv_capsrc: 'Источник кэпа',
     lv_learner: 'Обучение', lv_gpuload: 'Нагрузка GPU', lv_headroom: 'Запас',
     lv_lpm: 'Modem LPM',
-    lv_ses: 'Сессии', lv_drain: 'Расход', lv_trend: 'Тренд',
+    lv_ses: 'Сессии', lv_drain: 'Расход', lv_trend: 'Тренд', lv_measuring: 'измеряю…',
     lv_trend_up: 'нагрев', lv_trend_dn: 'остывает', lv_trend_fl: 'ровно',
     lv_lpm_normal: 'обычный', lv_lpm_normal_t: 'по умолчанию для профиля',
     lv_lpm_save: 'экономия', lv_lpm_save_t: 'радио простаивает, keepalive растянуты',
@@ -2008,13 +2008,16 @@ const I18N = {
     t_rebooting: 'Перезагрузка…',
     // config items: name + desc keyed by config key
     cfg: {
+      sustained_temp_enter: { name: 'Температура троттлинга',
+        desc: 'Температура, с которой ASB начинает сдерживать производительность, чтобы телефон был холоднее. Ниже \u2014 вмешивается раньше: прохладнее, но пиковая скорость уходит быстрее. Выше \u2014 дольше работает в полную силу и сильнее греется. 65 \u2014 значение по умолчанию. Это собственный порог ASB, а не вендорный: у прошивки свои жёсткие пределы ниже, и поднять их отсюда нельзя, поэтому высокое значение не делает телефон опасным \u2014 просто первым решение примет вендор.' },
+
       audio_profile: { name: 'Аудио-профиль',
         desc: 'Кто обрабатывает звук. «Под эквалайзер» \u2014 отдаёт сигнал внешнему EQ/ViPER нетронутым. «Hi-fi» \u2014 UHQA включён, когда эквалайзера нет. «Как в стоке» \u2014 только базовые твики. Применяется без перезагрузки.' },
       audio_dac_hifi: { name: 'Hi-Fi ЦАП (микшер)',
         desc: 'Настройка кодека, а не софта: компандеры наушников выкл, HPH Mode \u2192 CLS_H_HIFI. Внешнему эквалайзеру не мешает \u2014 даёт ему более чистый ЦАП. Нужна перезагрузка.' },
       CAMERA_LEVEL: { name: 'Степень обработки камеры',
         desc: 'Сила цвета, контраста и детализации для фото и видео: 0 = сток, выше = насыщеннее и контрастнее. Работает ОТНОСИТЕЛЬНО \u2014 умножает те значения, что реально стоят в вашей прошивке, поэтому не зависит от того, какие числа в ней записаны. На максимуме возможен бандинг в тенях. Применяется после перезагрузки, и теперь смена уровня действительно применяется при загрузке, а не только при переустановке.' },
-      CAMERA_GRAIN: { name: 'Зернистость', 
+  CAMERA_GRAIN: { name: 'Зернистость', 
         desc: 'После шумоподавления камера подмешивает зерно обратно \u2014 идеально гладкая картинка выглядит пластмассовой. 3 \u2014 сток: ниже для более чистого вида, выше для выраженной фактуры, 0 убирает зерно полностью. Влияет на фото, применяется после перезагрузки.' },
       CAMERA_CONTRAST: { name: 'Контраст и глубина цвета',
         desc: 'Контраст и насыщенность тональной кривой. 3 \u2014 ровно сток (100%), 0 \u2014 более плоско (70%), 6 \u2014 заметно контрастнее (130%). Отдельно от «Степени обработки», которая работает с цветовой матрицей. После перезагрузки.' },
@@ -2045,7 +2048,7 @@ const I18N = {
       BG_TRIM_LEVEL: { name: 'Уровень очистки фона',
         desc: 'Насколько агрессивно чистится кэш фона. Агрессивный освобождает больше ОЗУ, но чаще перезапускает приложения.' },
       UX_MANAGE_TIMEOUTS: { name: 'Управление скоростью UI (анимации + касания)',
-        desc: 'Производительность укорачивает анимации (~0.8x) и окна долгого нажатия/мульти-тапа для отзывчивости; Экономия — стоково. ВЫКЛ = не трогать.' },
+        desc: 'Производительность укорачивает анимации (~0.8x) и окна долгого нажатия/мульти-тапа для отзывчивости; Экономия — сток. ВЫКЛ = не трогать.' },
       UX_MANAGE_OEM_TOGGLES: { name: 'Управление системными тумблерами (ОЗУ/батарея/нагрев)',
         desc: 'Управление тумблерами OxygenOS (Расширение ОЗУ, Адаптивная батарея, Низкий нагрев). ВЫКЛ = не трогать (OOS может включать Расширение ОЗУ после ребута). ВКЛ = держит Расширение ОЗУ ВЫКЛ при каждой загрузке.' },
       UX_ANIM_FORCE_RESTART: { name: 'Принудительный перезапуск анимаций',
@@ -2054,24 +2057,24 @@ const I18N = {
         desc: 'Выключает размытие везде \u2014 шторка, уведомления, панель громкости, переходы. Меньше нагрузки на GPU, шторка становится непрозрачной вместо матовой. Учтите: у всплывающего уведомления тоже не останется размытой подложки, и текст ляжет на то, что под ним. Промежуточного режима нет \u2014 обе ручки, которые эта платформа даёт, глобальные. Оконная часть применяется сразу, часть композитора \u2014 после перезагрузки.' },
       ui_effects_level: { name: 'Анимации системы',
         desc: '«Упрощённые» \u2014 убирают объём из анимаций OxygenOS: «Недавние» становятся простым списком вместо карточек с превью, переходы теряют многослойные эффекты. Легче для видеочипа, но выглядит скромнее. «Авто» \u2014 следует за настройкой блюра: до недавнего времени это была одна общая настройка, поэтому «авто» сохраняет привычное поведение. Применяется после перезагрузки.' },
-      net_congestion: { name: 'Контроль перегрузки TCP',
-        desc: 'Как TCP решает, с какой скоростью слать. BBR подстраивается под измеренную полосу и на мобильной связи обычно лучше: там потери — это помехи радио, а не перегрузка, и Cubic зря сбрасывает скорость. «Авто» следует профилю питания, который и так выбирает BBR там, где ядро его предлагает. Применяется сразу; уже открытые соединения доживают на старом алгоритме.' },
-      net_qdisc: { name: 'Дисциплина очереди',
-        desc: 'Очередь, в которой пакеты ждут отправки. fq_codel держит низкую задержку под нагрузкой, fq выравнивает потоки и хорошо сочетается с BBR, cake самый тщательный и самый тяжёлый. «Авто» берёт то, что реально есть в ядре. Именно это лечит подвисания, когда закачка забивает канал. Применяется сразу.' },
-      net_congestion_wifi: { name: '\u00b7 Перегрузка: WiFi',
-        desc: 'Переопределяет алгоритм только для WiFi. «Авто» следует общей настройке. Применяется на уровне маршрута, поэтому мобильная сеть одновременно сохраняет свой выбор, а не чередуется с этим.' },
-      net_congestion_mobile: { name: '\u00b7 Перегрузка: мобильная',
-        desc: 'Переопределяет алгоритм только для мобильной сети. «Авто» следует общей настройке. Здесь BBR обычно и есть правильный ответ: на радиоканале потеря — это помеха, а Cubic читает её как перегрузку и зря сбрасывает скорость.' },
-      net_qdisc_wifi: { name: '\u00b7 Очередь: WiFi',
-        desc: 'Дисциплина очереди только для WiFi-интерфейсов. «Авто» следует общей настройке. Эта настройка в ядре и так поинтерфейсная, так что линки её никогда не делят.' },
-      net_qdisc_mobile: { name: '\u00b7 Очередь: мобильная',
-        desc: 'Дисциплина очереди только для мобильных интерфейсов. «Авто» следует общей настройке.' },
-      net_route_tune: { name: 'Начальное окно TCP',
-        desc: 'Сколько данных может уйти до первого подтверждения. «Авто» измеряет канал, который перед вами — согласованную скорость, MTU, тип радио — и подбирает размер: на слабом канале остаётся значение RFC (поднимать его там — прямой способ вызвать потери), выше только там, где канал показал, что переварит всплеск. Объявляемое окно считается из произведения полосы на задержку и ограничено размером приёмного буфера, а не плоским числом. «Консервативно» ставит значение RFC везде, «Агрессивно» сдвигает на класс выше, «Выкл» возвращает маршруты как были. Переприменяется при смене сети автоматически. Открытые соединения никогда не разрываются: эти значения читаются при создании соединения, так что уже открытые их всё равно не подхватили бы.' },
-      wifi_country: { name: 'Регион WiFi',
-        desc: 'Регуляторный домен драйвера WiFi. Он определяет, какие каналы и какая ширина канала разрешены, а значит — какую агрегацию может использовать радио. CR даёт самый широкий набор, поэтому его обычно и советуют. «Авто» оставляет домен, полученный от SIM. ВАЖНО: выбор домена, не соответствующего вашей стране, — под вашу ответственность: передача на нелицензированных каналах законна не везде. Применяется сразу, радио переподключается.' },
-      wifi_scan_throttle: { name: 'Частота сканирования WiFi',
-        desc: 'Android ограничивает фоновые сканирования до 4 на приложение за 2 минуты. «Чаще» снимает лимит — быстрее находит лучшую точку при перемещении, но тратит батарею; «Стоково» оставляет ограничение Android. «Авто» не трогает то, что выставила система. Применяется сразу.' },
+      net_congestion: { name: 'Разгон загрузок',
+        desc: 'Как телефон подбирает скорость отдачи данных. «Сток» \u2014 как было на устройстве до модуля. «bbr» \u2014 быстрее на нестабильной связи и в мобильном интернете, лучше держит скорость при потерях пакетов; доступен только на кастомных ядрах. «cubic» \u2014 классический вариант, стоит почти везде по умолчанию. Если bbr нет в ядре, выбор им ничего не даст и останется cubic.' },
+      net_qdisc: { name: 'Очередь пакетов',
+        desc: 'Как телефон выстраивает очередь исходящих данных. «Сток» \u2014 заводское значение. «fq_codel» \u2014 меньше задержек, когда что-то грузится в фоне: звонок или игра не начинают лагать из-за скачивания. «fq» \u2014 проще и чуть быстрее на очень быстрых каналах. «cake» \u2014 самый умный, но его нет на большинстве стоковых ядер.' },
+      net_congestion_wifi: { name: 'Разгон загрузок · Wi-Fi',
+        desc: 'То же самое, но только для Wi-Fi. «Авто» \u2014 брать значение из общей настройки выше. Полезно, если по Wi-Fi и по мобильному интернету хочется разного поведения.' },
+      net_congestion_mobile: { name: 'Разгон загрузок · мобильный',
+        desc: 'То же самое, но только для мобильного интернета. «Авто» \u2014 брать значение из общей настройки выше. Именно здесь bbr обычно и даёт выигрыш: на сотовой связи потери пакетов постоянны.' },
+      net_qdisc_wifi: { name: 'Очередь пакетов · Wi-Fi',
+        desc: 'Очередь только для Wi-Fi. «Авто» \u2014 брать значение из общей настройки выше.' },
+      net_qdisc_mobile: { name: 'Очередь пакетов · мобильный',
+        desc: 'Очередь только для мобильного интернета. «Авто» \u2014 брать значение из общей настройки выше.' },
+      net_route_tune: { name: 'Размер сетевых буферов',
+        desc: 'Сколько данных телефон держит «в пути» на каждое соединение. «Сток» \u2014 не трогаем. «Умеренно» \u2014 небольшой запас, скачивания чуть быстрее. «Агрессивно» \u2014 большой запас: заметно на быстром интернете, но на слабом сигнале может добавить задержки. «Выкл» \u2014 явно вернуть заводские значения.' },
+      wifi_country: { name: 'Регион Wi-Fi',
+        desc: 'Какие каналы и мощность разрешены радиомодулю. «Сток» \u2014 как определила прошивка по SIM-карте. Менять стоит только если знаете, что регион определён неверно: неправильный регион может закрыть часть каналов 5 ГГц или, наоборот, нарушить местные правила.' },
+      wifi_scan_throttle: { name: 'Ограничение поиска Wi-Fi',
+        desc: 'Android по умолчанию ограничивает частоту сканирования сетей, чтобы экономить батарею. «Сток» \u2014 оставить как есть. «Выкл ограничение» \u2014 сети находятся быстрее и переключение между точками резвее, но батарея садится чуть быстрее.' },
       haptic_strength: { name: 'Вибрация',
         desc: 'Десять ступеней на фирменной, более дробной шкале \u2014 стандартная настройка Android 0\u20133 здесь и так стоит на максимуме, поэтому её подъём ничего не давал. «Авто» \u2014 оставить как было на устройстве: это не то же самое, что любое число, а решение не вмешиваться. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона: выше служба вибрации отвергает значение целиком, и телефон замолкает вместо того, чтобы бить сильнее. Применяется сразу.' },
       haptic_touch_strength: { name: 'Отклик касаний',
@@ -2090,7 +2093,19 @@ const I18N = {
     // Per-card labels. These win over the shared ones above.
     optFor: {
       ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' },
-      wifi_scan_throttle: { auto: 'авто', '0': 'чаще', '1': 'стоково' }
+      // auto on the GLOBAL net keys resolves to the captured stock value, so it is
+      // labelled as such - calling it "авто" was the whole source of the confusion.
+      // On the per-interface keys auto means "inherit the global setting", which is a
+      // different thing and gets a different word.
+      net_congestion:        { auto: 'сток' },
+      net_qdisc:             { auto: 'сток' },
+      net_route_tune:        { auto: 'сток', off: 'вернуть сток', conservative: 'умеренно', aggressive: 'агрессивно' },
+      wifi_country:          { auto: 'сток' },
+      wifi_scan_throttle:    { auto: 'сток', '0': 'без ограничения', '1': 'ограничивать' },
+      net_congestion_wifi:   { auto: 'как общая' },
+      net_congestion_mobile: { auto: 'как общая' },
+      net_qdisc_wifi:        { auto: 'как общая' },
+      net_qdisc_mobile:      { auto: 'как общая' },
     }
   },
   en: {
@@ -2381,6 +2396,8 @@ const CFG_ITEMS = [
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
+  { key:'sustained_temp_enter', type:'range', def:'65', min:40, max:70, step:1, name:'Throttling Temperature',
+    desc:'The temperature at which ASB starts holding performance back to keep the phone cooler. Lower means it intervenes sooner - a cooler phone that gives up peak speed earlier; higher lets it run hard for longer and get warmer. 65 is the default. This is ASB\u2019s own threshold, not the vendor\u2019s: the firmware keeps its own hard limits underneath and those cannot be raised from here, so a high value does not make the phone unsafe, it just means the vendor decides first.' },
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
     desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
   // --- Memory & UX ---
@@ -2445,7 +2462,7 @@ const CFG_CAT = {
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
+  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
@@ -2463,19 +2480,10 @@ const CFG_CAT = {
 const CFG_GROUPS = [
   { id:'audio',   ico:'\uD83C\uDFB5', name:'Audio',   ru:'\u0410\u0443\u0434\u0438\u043E' },
   { id:'camera',  ico:'\uD83D\uDCF7', name:'Camera',  ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
-  { id:'battery', ico:'\uD83D\uDD0B', name:'Battery', ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
-  // "System", not "Interface": blur and the OEM effects level are about appearance, but
-  // the OEM toggles and the timeout management are about how the system behaves, and
-  // haptics will land here too. Interface described half the contents.
-  { id:'ui',      ico:'\u2699\uFE0F',    name:'System', ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' },
-  // Network was folded into per-profile defaults with nothing the user could see or
-  // change; congestion control, the queue discipline and the WiFi regulatory domain are
-  // all things people have opinions about, so they get their own screen.
+  { id:'iface',   ico:'\uD83C\uDFA8', name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
   { id:'net',     ico:'\uD83D\uDCF6', name:'Network',   ru:'\u0421\u0435\u0442\u044C' },
-  // Split out of System, which had grown into two unrelated halves: things you SEE and
-  // FEEL (blur, effects level, animation speed, vibration) next to things the system
-  // DOES (OEM toggles). Four visual settings moved here; System keeps the behaviour.
-  { id:'iface',   ico:'\uD83C\uDFA8', name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' }
+  { id:'battery', ico:'\uD83D\uDD0B', name:'Battery', ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
+  { id:'ui',      ico:'\u2699\uFE0F',    name:'System', ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
 ];
 // Where each tunable lives. BG_TRIM and cool_gaming sit under Battery rather than their
 // own colour category: both are battery-vs-something trades, and that is what someone is
@@ -2486,7 +2494,7 @@ const CFG_GROUP_OF = {
   bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
+  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
   BG_TRIM_LEVEL:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
@@ -2514,7 +2522,7 @@ function cfgToastText(key, val) {
   name = name.replace(/\s+/g, ' ').replace(/^[\u00b7\u2022]\s*/, '').trim();
   if (name.length > 24) name = name.slice(0, 23).replace(/[\s\u00b7-]+$/, '') + '\u2026';
   // Show the same word the segment shows. The card renders options through Topt, so a
-  // toast printing the raw stored value said "1" where the button said "стоково" - the
+  // toast printing the raw stored value said "1" where the button said "сток" - the
   // confirmation disagreed with the control that produced it.
   var v = Topt(String(val), key);
   if (v.length > 14) v = v.slice(0, 13) + '\u2026';
@@ -2524,8 +2532,8 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDEA6', net_route_tune:'\uD83D\uDCCF',
-  net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDCF6', net_qdisc_mobile:'\uD83D\uDCF1', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDCF6',
+  net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
+  net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDEA6', net_qdisc_mobile:'\uD83D\uDEA7', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDD0D',
   audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
   dsp_compressor:'\uD83E\uDDF0',                // toolbox - dynamics processing
@@ -2553,7 +2561,8 @@ const CFG_ICONS = {
                                                  // distinct from the pointing hand that
                                                  // UX_MANAGE_TIMEOUTS already uses
   UX_ANIM_FORCE_RESTART:'\uD83D\uDD04',       // restart arrows
-  region_allow_locale:'\uD83C\uDF0D'          // globe
+  region_allow_locale:'\uD83C\uDF0D',         // globe
+  sustained_temp_enter:'\uD83C\uDF21\uFE0F',
 };
 function cfgStatus(it, cur) {
   // returns {cls, text} — a short colored badge describing the active state
@@ -2570,7 +2579,16 @@ function cfgStatus(it, cur) {
     }
     return { cls:'good', text:String(n) };
   }
-  return { cls: (cur === it.def ? 'neutral' : 'warn'), text: String(cur).toUpperCase() };
+  // "auto" is not a change, so it is not highlighted.
+  //
+  // Highlighting tracked "differs from the shipped default", and for the network keys the
+  // default IS auto - so auto came out neutral and any explicit pick came out warn, which
+  // happened to look right. It stopped looking right once auto meant "restore the stock
+  // value": auto is now the least-modified state there is, and a card sitting on it has
+  // nothing to announce. Highlight means "ASB is overriding something here", which is the
+  // question a user scanning the page is actually asking.
+  const _isNeutral = (cur === it.def) || cur === 'auto' || cur === 'stock';
+  return { cls: (_isNeutral ? 'neutral' : 'warn'), text: String(cur).toUpperCase() };
 }
 // A card counts as "active" whenever it is not sitting on the shipped default -- not
 // just when a switch is on. A segment parked on "hifi" or a slider at 4 is every bit as
@@ -2660,6 +2678,10 @@ function cfgVerifyPaint(key, badge) {
       'The setting is saved but the device has not taken it. Reboot, then reinstall the module.');
   }
 }
+
+var _lastDrain = 0;
+var _lastProfSeen = null;
+var _profSwitchAt = 0;
 
 function cfgRender() {
   const list = _el('cfgList');
@@ -3478,11 +3500,38 @@ async function pollLive(visible) {
           // closes, and printing "0.0%/h" then would be a measurement we do not have -
           // a dash says "not yet" honestly.
           const dr = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
-          _el('bnDrain').textContent = (dr > 0) ? ((dr / 10).toFixed(1) + '%/h') : '\u2014';
+          // Keep the last real reading instead of blanking.
+          //
+          // Switching profile restarts the drain window, so this reads 0 for a few
+          // minutes afterwards - and 0 was drawn as an em dash, indistinguishable from
+          // "this metric does not work". Reported after an auto-switch to Battery, where
+          // it is exactly the wrong moment to lose the number. The stale value is marked
+          // with ~ so it is not mistaken for a live one. On charge there is no drain to
+          // report and the dash is the truthful answer.
+          if (dr > 0) {
+            _lastDrain = dr;
+            _el('bnDrain').textContent = (dr / 10).toFixed(1) + '%/h';
+          } else if (kv.charging === '1' || kv.plugged === '1') {
+            _el('bnDrain').textContent = '\u2014';
+          } else if (_lastDrain > 0) {
+            _el('bnDrain').textContent = '~' + (_lastDrain / 10).toFixed(1) + '%/h';
+          } else {
+            _el('bnDrain').textContent = T('lv_measuring', 'измеряю\u2026');
+          }
 
           // Thermal trend is what makes Smart back off, so it explains Alpha moving on
           // its own. The slope is milli-degrees per tick; only its sign is worth showing.
-          const slope = parseInt(kv.smart_trend_slope || '0', 10);
+          // Ignore the slope right after a profile change: it was measured under the
+          // previous caps, so a phone that has just switched to Battery reports the
+          // warming it was doing a minute ago. Reported as "trend says warming when it
+          // should be cooling", and the trend was simply stale rather than wrong.
+          let slope = parseInt(kv.smart_trend_slope || '0', 10);
+          const _profNow = String(kv.profile || '');
+          if (_lastProfSeen !== null && _lastProfSeen !== _profNow) {
+            _profSwitchAt = Date.now();
+          }
+          _lastProfSeen = _profNow;
+          if (_profSwitchAt && (Date.now() - _profSwitchAt) < 120000) slope = 0;
           const trEl = _el('bnTrend');
           if (trEl) {
             trEl.className = 'smart-banner-value';
