@@ -2070,8 +2070,8 @@ const I18N = {
         desc: 'Сколько данных может уйти до первого подтверждения. «Авто» измеряет канал, который перед вами — согласованную скорость, MTU, тип радио — и подбирает размер: на слабом канале остаётся значение RFC (поднимать его там — прямой способ вызвать потери), выше только там, где канал показал, что переварит всплеск. Объявляемое окно считается из произведения полосы на задержку и ограничено размером приёмного буфера, а не плоским числом. «Консервативно» ставит значение RFC везде, «Агрессивно» сдвигает на класс выше, «Выкл» возвращает маршруты как были. Переприменяется при смене сети автоматически. Открытые соединения никогда не разрываются: эти значения читаются при создании соединения, так что уже открытые их всё равно не подхватили бы.' },
       wifi_country: { name: 'Регион WiFi',
         desc: 'Регуляторный домен драйвера WiFi. Он определяет, какие каналы и какая ширина канала разрешены, а значит — какую агрегацию может использовать радио. CR даёт самый широкий набор, поэтому его обычно и советуют. «Авто» оставляет домен, полученный от SIM. ВАЖНО: выбор домена, не соответствующего вашей стране, — под вашу ответственность: передача на нелицензированных каналах законна не везде. Применяется сразу, радио переподключается.' },
-      wifi_scan_throttle: { name: 'Ограничение сканирования WiFi',
-        desc: 'Android ограничивает фоновые сканирования до 4 на приложение за 2 минуты. «0» сканирует чаще — быстрее находит лучшую точку при перемещении, но тратит батарею; «1» — стоковое поведение. «Авто» не трогает то, что выставила система. Применяется сразу.' },
+      wifi_scan_throttle: { name: 'Частота сканирования WiFi',
+        desc: 'Android ограничивает фоновые сканирования до 4 на приложение за 2 минуты. «Чаще» снимает лимит — быстрее находит лучшую точку при перемещении, но тратит батарею; «Стоково» оставляет ограничение Android. «Авто» не трогает то, что выставила система. Применяется сразу.' },
       haptic_strength: { name: 'Вибрация',
         desc: 'Десять ступеней на фирменной, более дробной шкале \u2014 стандартная настройка Android 0\u20133 здесь и так стоит на максимуме, поэтому её подъём ничего не давал. «Авто» \u2014 оставить как было на устройстве: это не то же самое, что любое число, а решение не вмешиваться. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона: выше служба вибрации отвергает значение целиком, и телефон замолкает вместо того, чтобы бить сильнее. Применяется сразу.' },
       haptic_touch_strength: { name: 'Отклик касаний',
@@ -2089,7 +2089,8 @@ const I18N = {
     },
     // Per-card labels. These win over the shared ones above.
     optFor: {
-      ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' }
+      ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' },
+      wifi_scan_throttle: { auto: 'авто', '0': 'чаще', '1': 'стоково' }
     }
   },
   en: {
@@ -2102,7 +2103,8 @@ const I18N = {
       '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
     },
     optFor: {
-      ui_effects_level: { auto: 'Auto', stock: 'Normal', flat: 'Simplified' }
+      ui_effects_level: { auto: 'Auto', stock: 'Normal', flat: 'Simplified'},
+      wifi_scan_throttle: { auto: 'Auto', '0': 'More often', '1': 'Stock' }
     }
   }
 };
@@ -2410,8 +2412,8 @@ const CFG_ITEMS = [
     desc:'How much data may be in flight before the first acknowledgement. Auto measures the link in front of you - negotiated rate, MTU, radio type - and sizes it accordingly: the RFC value on a weak link (raising it there is how you cause loss), higher only where the link has shown it can absorb the burst. The advertised window comes from the bandwidth-delay product and is bounded by the receive buffer, not by a flat number. Conservative pins the RFC value everywhere, aggressive shifts one class up, off puts the routes back. Re-applied automatically when the network changes. Never drops existing connections - these values are read when a connection is created, so open ones were never going to use them anyway.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
     desc:'The regulatory domain the WiFi driver applies. It decides which channels and which channel widths are legal, so it changes what aggregation the radio may use. CR permits the widest set here, which is why it is the usual recommendation. Auto leaves the SIM-driven domain alone. NOTE: choosing a domain that does not match where you actually are is your responsibility - transmitting on channels not licensed in your country is not legal everywhere. Applies immediately; the radio re-associates.' },
-  { key:'wifi_scan_throttle', type:'seg', def:'auto', opts:['auto','0','1'], name:'WiFi Scan Throttle',
-    desc:'Android limits background WiFi scans to 4 per app per 2 minutes. Off scans more often, which finds a better AP sooner while roaming and costs battery; on is the stock behaviour. Auto leaves whatever the system set. Applies immediately.' },
+  { key:'wifi_scan_throttle', type:'seg', def:'auto', opts:['auto','0','1'], name:'WiFi Scan Rate',
+    desc:'Android limits background WiFi scans to 4 per app per 2 minutes. \u201cMore often\u201d lifts the limit - it finds a better AP sooner while roaming and costs battery; \u201cStock\u201d keeps the Android cap. Auto leaves whatever the system set. Applies immediately.' },
 
   { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
     desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder. Applies immediately.' },
@@ -2511,7 +2513,10 @@ function cfgToastText(key, val) {
   // single-line confirmation.
   name = name.replace(/\s+/g, ' ').replace(/^[\u00b7\u2022]\s*/, '').trim();
   if (name.length > 24) name = name.slice(0, 23).replace(/[\s\u00b7-]+$/, '') + '\u2026';
-  var v = String(val);
+  // Show the same word the segment shows. The card renders options through Topt, so a
+  // toast printing the raw stored value said "1" where the button said "стоково" - the
+  // confirmation disagreed with the control that produced it.
+  var v = Topt(String(val), key);
   if (v.length > 14) v = v.slice(0, 13) + '\u2026';
   return '\u2713 ' + name + ': ' + v;
 }
@@ -2895,20 +2900,21 @@ async function cfgSet(key, val, ctl) {
     // also writes the WindowManager global, which needs no reboot at all.
     // Both are written by asb_blur_apply.sh - one script, two independent blocks.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
-    var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune','wifi_country','wifi_scan_throttle',
-  'net_congestion_wifi','net_congestion_mobile','net_qdisc_wifi','net_qdisc_mobile',
-      'net_congestion_wifi','net_congestion_mobile','net_qdisc_wifi','net_qdisc_mobile'];
-    if (NET_KEYS.indexOf(key) >= 0) {
-      // Applied live: none of this touches the overlay, it is all sysctl and `cmd wifi`.
-      try { run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1'); } catch (e) {}
-      toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
-      return;
-    }
+    var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune',
+      'net_congestion_wifi','net_congestion_mobile','net_qdisc_wifi','net_qdisc_mobile',
+      'wifi_country','wifi_scan_throttle'];
     var HAPTIC_KEYS = ['haptic_strength','haptic_touch_strength'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
       var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0) ? ' dsp' : '';
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh' + _m + ' >/dev/null 2>&1 &'); } catch(e) {}
+    } else if (NET_KEYS.indexOf(key) >= 0) {
+      // Handled INSIDE this chain instead of returning early above it: the tail of the
+      // chain calls cfgRender(), and skipping it left the segment showing its previous
+      // selection until the user navigated away and came back. Nothing here touches the
+      // overlay - it is sysctl and `cmd wifi` - so it applies live, like audio/haptics.
+      try { run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1 &'); } catch (e) {}
+      toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
     } else if (HAPTIC_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_haptics_apply.sh'); } catch(e) {}
       toast('\u2713 ' + key + ' = ' + val, cfgToastType(key));
