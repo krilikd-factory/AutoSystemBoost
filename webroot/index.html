@@ -1100,6 +1100,17 @@ body.config-active #livePage.open {
   text-overflow: ellipsis;
   max-width: 100%;
 }
+
+/* Modem LPM sits in this banner and carries meaning in its colour, the same way the
+   monitor cells do. The cap-* classes were written scoped to .live-cell-value, so they
+   did nothing here - these are the banner-scoped equivalents. */
+.smart-banner-value.cap-raised { color: var(--bat); }
+.smart-banner-value.cap-clamp  { color: var(--perf); }
+
+/* The banner row is a fixed 4-column grid, so a fifth item would land alone on a new
+   line with three empty columns beside it. Span it across instead: it reads as its own
+   line inside the same card, which is what the four-up items already do visually. */
+.smart-banner-item.full { grid-column: 1 / -1; }
 .smart-banner-tag {
   display: inline-block;
   font: 600 9px/1 var(--mono);
@@ -1685,6 +1696,10 @@ body.config-active #livePage.open {
         <span class="smart-banner-label" data-i18n="lv_app">App</span>
         <span class="smart-banner-value" id="bnApp">—</span>
       </div>
+      <div class="smart-banner-item full">
+        <span class="smart-banner-label" data-i18n="lv_lpm">Modem LPM</span>
+        <span class="smart-banner-value" id="bnLpm">—</span>
+      </div>
     </div>
     <div class="smart-banner-row tags" id="bnTagRow">
       <span class="smart-banner-tag" id="bnFb">cold start</span>
@@ -1762,13 +1777,6 @@ body.config-active #livePage.open {
       </div>
     </div>
 
-      <!-- Modem LPM: the same reading the action screen shows, but live -->
-      <div class="live-row">
-        <div class="live-cell live-cell-full">
-          <div class="live-cell-label" data-i18n="lv_lpm">Modem LPM</div>
-          <div class="live-cell-value" id="liveLpm">—</div>
-        </div>
-      </div>
 
   </div>
 
@@ -3123,19 +3131,19 @@ async function pollLive(visible) {
     // Modem LPM. Read straight from /dev/.asb/lpm_mode - the governor owns that file and
     // the action screen already reports it; this puts the same reading on the monitor so
     // it can be watched changing instead of re-opening the action sheet.
-    const lpmEl = _el('liveLpm');
+    const lpmEl = _el('bnLpm');
     if (lpmEl) {
       run('cat /dev/.asb/lpm_mode 2>/dev/null').then(function(r) {
         const m = ((r && r.stdout) || '').trim();
         if (!m) {
           lpmEl.textContent = 'n/a';
-          lpmEl.className = 'live-cell-value';
+          lpmEl.className = 'smart-banner-value';
           lpmEl.title = 'LPM feature off, or the governor has not written a mode yet';
           return;
         }
         // Colour carries the meaning: saving uses the battery accent, fast the
         // performance one, normal stays neutral so it does not read as an alarm.
-        let cls = 'live-cell-value';
+        let cls = 'smart-banner-value';
         let txt = T('lv_lpm_normal', 'normal');
         let tip = T('lv_lpm_normal_t', 'profile defaults');
         if (m === 'save') {
