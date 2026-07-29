@@ -59,7 +59,7 @@ _resolve_for() {
     mobile) _rk_v="$(_cfg "${_rk_base}_mobile")" ;;
   esac
   case "$_rk_v" in
-    ''|auto) _cfg "$_rk_base" ;;
+    ''|auto) _cfg "$_rk_base" ;;   # per-interface auto defers to the global key
     *)       printf '%s' "$_rk_v" ;;
   esac
 }
@@ -94,7 +94,15 @@ if [ "$_congctl_ok" = "1" ]; then
     _kind="$(_iface_kind "$_cif")"
     [ "$_kind" = "other" ] && continue
     _want="$(_resolve_for net_congestion "$_kind")"
-    case "$_want" in ''|auto) continue ;; esac
+    # auto resolves to the captured stock value rather than being skipped. Skipping meant
+    # whatever ASB set at boot stayed put and got reported as "auto", which is how a stock
+    # kernel with no bbr ended up showing bbr on the auto setting.
+    case "$_want" in
+      ''|auto)
+        _want="$(grep -E '^STOCK_TCP_CC=' /data/adb/asb/net_stock.env 2>/dev/null \
+                 | head -1 | sed 's/.*=//' | tr -d ' \r')"
+        [ -n "$_want" ] || continue ;;
+    esac
     case " $_avail " in
       *" $_want "*) : ;;
       *) _out="$_out cc[$_kind]=$_want-unavailable"; continue ;;

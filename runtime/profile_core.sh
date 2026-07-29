@@ -495,12 +495,19 @@ asb_apply_ux() {
   # Requiring the word "user" makes both silent cases - boot and auto-switch - fall
   # through. The scales are still written; SystemUI picks them up the next time it
   # restarts for its own reasons, which is a fair trade for never interrupting a boot.
-  _ux_manual=0
-  case "${PROFILE_FLAG:-}" in user) _ux_manual=1 ;; esac
-  if [ "${UX_ANIM_FORCE_RESTART:-0}" = "1" ] && [ "$_anim_changed" = "1" ] \
-     && [ "$_ux_manual" = "1" ]; then
-    pkill -f com.android.systemui >/dev/null 2>&1 || true
-  fi
+  # SystemUI is never restarted from a profile switch. Not even a manual one.
+  #
+  # The restart existed so a changed animation scale took effect at once. It does not need
+  # to: WindowManager re-reads those scales per animation, so the new value applies to the
+  # next transition regardless. What the restart DID do was blank the screen for a couple
+  # of seconds, drop the user at the lock screen, and tear down every overlay another
+  # module had drawn into the status bar - reported by two users, once as a suspected
+  # SystemUI crash.
+  #
+  # Gating it on "the user asked for this switch" was the previous compromise and it was
+  # still wrong: someone who taps Performance is asking for a power profile, not for their
+  # status bar to be rebuilt. The scales are written either way, which is the whole job.
+  :
 }
 
 asb_apply_wifi() {
