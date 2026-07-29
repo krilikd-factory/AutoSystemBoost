@@ -498,8 +498,25 @@ else
       # Portrait weights ship at zero and cannot be scaled, so they are set absolutely -
       # worth checking separately because a zero here means the setting did nothing.
       if [ "$(cfg CAMERA_PORTRAIT)" != "0" ] && [ -n "$(cfg CAMERA_PORTRAIT)" ]; then
-        _cam_skin="$(grep -o '"SkinBlendWeight"[^]]*]' "$CT" 2>/dev/null | sed 's/.*\[//;s/\]//' | grep -v '^0.0, 0.0, 0.0$' | head -1)"
-        V "  portrait AI weights are non-zero" "present" "$_cam_skin" present
+        # Read FaceBlendWeight from a PORTRAIT block, and test for zero numerically.
+        #
+        # Face, not Skin: Skin already ships non-zero in two of the three portrait blocks
+        # (0.15), so a check built on it passes on a completely untouched device and can
+        # never tell you the setting did nothing. Face is 0.0 everywhere at stock, so a
+        # non-zero Face is real evidence that portrait grading ran.
+        #
+        # It also used to grep the whole file and take the first weight it saw -
+        # which lives in a non-portrait block, where zero is correct and expected. The
+        # all-zero filter matched the literal text "0.0, 0.0, 0.0" only, so once the
+        # grader rewrote those zeros as "0, 0, 0" the filter stopped catching them, the
+        # zero row survived, and the check reported PASS while printing "0, 0, 0" as its
+        # own evidence. It was structurally unable to fail.
+        _cam_skin="$(sed -n '/EnhanceNet[A-Za-z]*PortraitParams/,/}/p' "$CT" 2>/dev/null \
+                     | grep -o '"FaceBlendWeight"[^]]*]' \
+                     | sed 's/.*\[//;s/\]//' \
+                     | awk -F, '{ for (i=1;i<=NF;i++) { gsub(/ /,"",$i); if ($i+0 != 0) { print; break } } }' \
+                     | head -1)"
+        V "  portrait AI weights are non-zero" "present" "${_cam_skin:-0, 0, 0}" present
       fi
       _row="$_clvl"
       case "$_cam_soc" in sun|sm8750*) _row=$((_clvl - 1)); [ "$_row" -lt 1 ] && _row=1 ;; esac
