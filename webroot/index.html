@@ -1086,12 +1086,20 @@ body.config-active #livePage.open {
   border-radius: 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* Slightly more than it was, so the "exact" chip does not end up closer to the metric
+     grid than the two metric rows are to each other - that ordering would read as the
+     chip belonging to the last row rather than to the card. */
+  gap: 10px;
 }
 .smart-banner-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 4px 8px;
+  /* Row gap has to clear a whole label+value stack, not just separate two lines.
+     Each item is an 8px label over a 12px value, about 22px tall, so the original 4px
+     put the second row's label almost against the first row's value and the two read as
+     one block instead of two rows. 12px is the smallest gap where the rows separate
+     without the card growing tall enough to push the monitor grid down the page. */
+  gap: 12px 10px;
   align-items: baseline;
   font: 11px/1.2 var(--sans);
 }
