@@ -4806,7 +4806,7 @@ int main(int argc, char **argv) {
                                (_now_t - fsm.auto_battery_last_action >= g_asb_cfg.auto_battery_min_gap_s);
 
                 if (!fsm.auto_battery_active &&
-                    metrics.bat.capacity_pct < g_asb_cfg.auto_battery_low_pct &&
+                    metrics.bat.capacity_pct <= g_asb_cfg.auto_battery_low_pct &&
                     fsm.profile_idx != PROFILE_BATTERY &&
                     _can_act) {
                     fsm.auto_battery_restore_idx = fsm.profile_idx;
@@ -4974,8 +4974,16 @@ int main(int argc, char **argv) {
                     _code = ASB_ANOM_VENDOR_WAR;
                 } else if (fsm.profile_idx == PROFILE_BATTERY &&
                            !metrics.bat.charging &&
-                           metrics.bat.capacity_pct >=
-                               g_asb_cfg.auto_battery_high_pct + 10 &&
+                           /* Absolute 40%, not high_pct + 10.
+                            *
+                            * This flags "sitting in Battery profile at a healthy charge
+                            * with Smart on" - a statement about the battery being high,
+                            * not about where the auto-switch hysteresis happens to sit.
+                            * Tying it to high_pct meant that narrowing that hysteresis
+                            * from 30 to 21 silently moved the anomaly from 40% to 31%,
+                            * and would have flagged anyone who simply picked Battery by
+                            * hand at a third of a charge. */
+                           metrics.bat.capacity_pct >= 40 &&
                            asb_smart_flag_read() == 1) {
                     _code = ASB_ANOM_STUCK_BATTERY;
                 } else if (g_anom_pkg_total >= 50 &&
