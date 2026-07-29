@@ -148,6 +148,13 @@ for _rf in /data/adb/asb/tracking_restore.log /data/adb/asb/oem_restore.log \
   done < "$_rf"
 done
 
+# Put the route windows back before the state directory goes, and stop the link watcher.
+# The originals were recorded the first time they were touched; without this the tuned
+# initcwnd/initrwnd would survive the module that set them.
+pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
+[ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
+  sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
+
 rm -rf /data/adb/asb 2>/dev/null
 
 for _legacy in asb_active_profile asb_baseline.txt asb_profile_switches.log \

@@ -2258,6 +2258,41 @@ command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
 # Re-assert haptic strength. These are system settings, and OOS is known to rewrite that
 # table on its own - the RAM-expansion and analytics paths both needed the same treatment.
 # The script is a no-op when the config says stock, so this costs nothing by default.
+# Network settings: re-assert at boot.
+#
+# sysctl values do not survive a reboot and the forced WiFi country code is released by
+# some ROMs on boot, so without this the settings would apply once from the WebUI and
+# quietly revert. The script itself is a no-op when everything is on auto.
+if [ -f "$MODDIR/runtime/asb_net_apply.sh" ]; then
+  _asb_net_any=0
+  for _nk in net_congestion net_qdisc wifi_country wifi_scan_throttle; do
+    _nv="$(grep -E "^[[:space:]]*$_nk=" "$MODDIR/config/governor.conf" 2>/dev/null \
+           | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    case "$_nv" in ''|auto) : ;; *) _asb_net_any=1 ;; esac
+  done
+  if [ "$_asb_net_any" = "1" ]; then
+    sh "$MODDIR/runtime/asb_net_apply.sh" >/dev/null 2>&1
+    asb_log "net settings re-asserted"
+  fi
+
+  # Route windows follow the link, so they have to be re-applied when the link changes -
+  # WiFi to mobile, one AP to another, a new IP. `ip monitor` blocks on a netlink socket
+  # and returns only when a route actually changes, so this costs one sleeping process
+  # and zero wakeups, instead of the sleep loop this kind of tuning usually ships with.
+  _asb_rt="$(grep -E '^[[:space:]]*net_route_tune=' "$MODDIR/config/governor.conf" 2>/dev/null \
+             | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_asb_rt" in
+    auto|conservative|aggressive)
+      if [ -f "$MODDIR/runtime/asb_net_routes.sh" ] && command -v ip >/dev/null 2>&1; then
+        if ! pgrep -f "asb_net_routes.sh watch" >/dev/null 2>&1; then
+          ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_routes.sh" watch >/dev/null 2>&1 & ) &
+          asb_log "net routes: link watcher started"
+        fi
+      fi
+      ;;
+  esac
+fi
+
 if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then
   _asb_hap_conf="$MODDIR/config/governor.conf"
   _asb_hap_run=0
