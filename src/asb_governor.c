@@ -5176,8 +5176,16 @@ int main(int argc, char **argv) {
              * change of mode; the script itself checks the LPM feature flag and
              * no-ops (restoring its baseline) when the user turned it off. */
             {
+                /* The Battery profile outranks the load state.
+                 *
+                 * This looked only at screen and load, so a phone that had just dropped
+                 * to 20% and switched itself to Battery still reported "fast" - the radio
+                 * held awake for latency, on the profile whose entire purpose is the
+                 * opposite. Reported as exactly that mismatch. Whatever the load is
+                 * doing, a user on Battery has asked for range over responsiveness. */
                 const char *lpm_mode =
                     !metrics.misc.screen_on                 ? "save" :
+                    (fsm.profile_idx == PROFILE_BATTERY)    ? "save" :
                     (fsm.state >= ASB_STATE_HEAVY)          ? "fast" : "normal";
                 static const char *g_lpm_last = NULL;
                 static time_t g_lpm_last_ts = 0;
