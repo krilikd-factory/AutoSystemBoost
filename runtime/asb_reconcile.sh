@@ -9,6 +9,10 @@
   _lease_remaining=0
   _lease_delays="2 4 14 40"
   _lease_last_reassert_ts=0
+  # --once mirrors asb_watchdog.sh: the governor schedules this now, so the resident
+  # loop is only needed when the governor is absent.
+  ASB_REC_ONCE=0
+  case "$1" in --once) ASB_REC_ONCE=1 ;; esac
   while true; do
     if [ "$_lease_remaining" -gt 0 ]; then
       _d=$(echo "$_lease_delays" | awk -v i="$_lease_remaining" '{print $(NF - i + 1)}')
@@ -23,6 +27,7 @@
         case "$_rspv" in 0|"") ;; *) _rec_scr=1 ;; esac
         break
       done
+      [ "$ASB_REC_ONCE" = "1" ] && break
       [ "$_rec_scr" -eq 1 ] && sleep 120 || {
         _rec_prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"
         if [ "$_rec_prof" = "battery" ]; then
@@ -218,7 +223,7 @@
       _last_profile="$_now"
       if [ "$_drift_streak" -ge 3 ]; then
         asb_log "reconcile: drift_streak=$_drift_streak, economy sleep 120s"
-        sleep 120
+        [ "$ASB_REC_ONCE" = "1" ] || sleep 120
       fi
     fi
   done

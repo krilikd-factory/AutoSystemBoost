@@ -120,8 +120,17 @@ if [ -f "$ASB_RECOVERY_DISABLED_MARKER" ]; then
   fi
 fi
 
+# --once: run a single pass and exit.
+#
+# The governor now drives the schedule from its own loop, so the resident process and its
+# sleep are redundant there - two permanent shell loops with independent timers were two
+# sets of wakeups the device did not need. The self-looping form is kept for the case
+# where the governor is not running, which is exactly when a watchdog matters most.
+ASB_WD_ONCE=0
+case "$1" in --once) ASB_WD_ONCE=1 ;; esac
+
 while true; do
-  sleep 300
+  [ "$ASB_WD_ONCE" = "1" ] || sleep 300
 
   if ! asb_governor_running; then
     asb_recovery_acquire_lock || {
@@ -191,4 +200,5 @@ while true; do
     asb_recovery_release_lock
   fi
   asb_drift_check "$ASB_PROFILE" 2>/dev/null
+  [ "$ASB_WD_ONCE" = "1" ] && break
 done

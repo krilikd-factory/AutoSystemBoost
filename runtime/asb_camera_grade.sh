@@ -129,9 +129,45 @@ else
   _low_pct="$_sharp"
 fi
 
+# Fingerprint: the structural guarantee that a file is never graded twice.
+#
+# The chroma check that guards the baseline is a heuristic - it works because stock
+# happens to be the exact BT.601 matrix, and it would stop working the day a device ships
+# something else. Compounding cost three rounds of debugging (x1.28 -> x1.51 -> x1.93 ->
+# x2.47 on one user's phone), so it is worth closing structurally rather than probably.
+#
+# The marker records the hash of the SOURCE plus the settings that produced the output. A
+# file carrying a marker is already a result, never an input; a file whose marker does not
+# match the current settings is a result of DIFFERENT settings, and regrading it from
+# there would compound just as badly. Either way the answer is to go back to the source,
+# which is what the baseline is for.
+ASB_GRADE_MARK="ASBGRADE"
+
+# The marker lives in a SIDECAR, never inside the file.
+#
+# The obvious place was a trailing comment - and a trailing "// ..." makes the file
+# invalid JSON, which the camera HAL parses at every open. Tested rather than assumed: a
+# marker line appended to the real tuning file fails json.load outright. A tuning file
+# the camera cannot read is a far worse outcome than the compounding this is meant to
+# prevent, so the marker goes beside the file instead of in it.
+ASB_GRADE_DIR="/data/adb/asb/grade_marks"
+
+asb_grade_mark_path() {
+  # One marker per destination, named after the path so two destinations cannot collide.
+  printf '%s/%s.mark' "$ASB_GRADE_DIR" \
+    "$(printf '%s' "$1" | sed 's|^/||; s|/|_|g')"
+}
+
 asb_camera_grade_file() {
   _src="$1"; _dst="$2"
   [ -f "$_src" ] || return 1
+
+  # Refuse a source that is itself a graded result.
+  if [ -f "$(asb_grade_mark_path "$_src")" ]; then
+    echo "camera grade: source is a previous result - refusing to compound"
+    return 2
+  fi
+
   [ "$_lvl" -gt 0 ] 2>/dev/null || { cp -f "$_src" "$_dst" 2>/dev/null; return 0; }
 
   awk -v SAT="$_sat" -v AI="$_ai" -v SHARP="$_sharp" \
@@ -295,7 +331,15 @@ asb_camera_grade_file() {
     _n_src=$(wc -l < "$_src" 2>/dev/null)
     _n_dst=$(wc -l < "$_dst.tmp" 2>/dev/null)
     if [ "$_n_src" = "$_n_dst" ] && grep -q 'EnhanceNetParamsSet' "$_dst.tmp" 2>/dev/null; then
+      # Stamp the result. The hash is of the SOURCE, so a later run can tell "this came
+      # from the file I am about to use" from "this came from something else".
       mv -f "$_dst.tmp" "$_dst" 2>/dev/null
+      _src_h="$(sha256sum "$_src" 2>/dev/null | cut -c1-16)"
+      [ -n "$_src_h" ] || _src_h="nohash"
+      mkdir -p "$ASB_GRADE_DIR" 2>/dev/null
+      printf '%s=%s:%s:%s:%s:%s:%s\n' "$ASB_GRADE_MARK" "$_src_h" \
+        "$_lvl" "$_grain" "$_contrast" "$_portrait" "$_lowlight" \
+        > "$(asb_grade_mark_path "$_dst")" 2>/dev/null
       return 0
     fi
   fi

@@ -329,6 +329,39 @@ asb_apply_dynamic_tweaks() {
   # --- CAMERA conf_tuning --- patch BOTH the /vendor/odm and the direct /odm
   asb_tw_feature_on CAMERA || _skip_cam=true
   if [ "$_skip_cam" != "true" ]; then
+
+  # Rescue a stock baseline when the installer had to skip the camera.
+  #
+  # The installer refuses to clone conf_tuning_params.json when the live file fails the
+  # BT.601 chroma test, because on an update installed over a RUNNING module that path is
+  # still the old module's graded overlay and copying it is what made the grade compound.
+  # Correct - but it leaves nothing behind: no overlay file, so no baseline, so the grade
+  # silently does nothing and asb_diag reports "grade(lvl4) live file differs from stock:
+  # FAIL" on a device where the setting is on. Only a second install fixes it, and nothing
+  # says so.
+  #
+  # By the time we run, that old overlay is gone: this boot mounted the NEW module, which
+  # has no camera file. So the live path is genuine stock right now, and this is the one
+  # moment it can be captured. Saving it here gives the next install a trustworthy source
+  # and turns a dead end into something that resolves itself.
+  if [ "$_cam_level" -gt 0 ] 2>/dev/null \
+     && [ ! -f "$_md/system/odm/etc/camera/conf_tuning_params.json" ] \
+     && [ ! -f "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" ]; then
+    for _cam_rescue in /odm/etc/camera/conf_tuning_params.json \
+                       /vendor/odm/etc/camera/conf_tuning_params.json; do
+      [ -f "$_cam_rescue" ] || continue
+      _cam_rb="$ASB_TWEAK_BASE_DIR/$(printf '%s' "${_cam_rescue#/}" | tr '/' '_').asbbase"
+      [ -f "$_cam_rb" ] && continue
+      # Only ever store something that still looks like the untouched matrix.
+      grep -m1 -o '"Main1x_Rgb2YuvParams"[^]]*]' "$_cam_rescue" 2>/dev/null \
+        | grep -q -- '-0\.1687[0-9]*' || continue
+      mkdir -p "$ASB_TWEAK_BASE_DIR" 2>/dev/null
+      cp -f "$_cam_rescue" "$_cam_rb" 2>/dev/null \
+        && asb_log "camera: captured stock baseline from $_cam_rescue (installer had skipped it)"
+      break
+    done
+  fi
+
   for _cf in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
              "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
     [ -f "$_cf" ] || continue
