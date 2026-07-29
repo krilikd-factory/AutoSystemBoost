@@ -16,7 +16,15 @@
 #include <stdint.h>
 
 #define ASB_GAIN_MB_MIN    0
-#define ASB_GAIN_MB_MAX    2000
+/* 2500 mB = +25 dB. Raised from 2000 on request.
+ *
+ * Safe to raise because the output stage is bounded by construction, not by this number:
+ * with softclip on, tanh saturation is mathematically limited to 1.0 and cannot clip
+ * however hard the input is driven; with it off, the brick-wall limiter holds the ceiling.
+ * More gain past this point therefore buys loudness through saturation and compression,
+ * never overflow - the extra 5 dB changes how hard the material is squashed, not whether
+ * it stays clean. */
+#define ASB_GAIN_MB_MAX    2500
 #define ASB_MAX_CH         8
 #define ASB_BASS_DB_MAX    10
 #define ASB_BASS_FREQ_HZ   90.0f   /* shelf corner: body of the bass, not sub rumble */
