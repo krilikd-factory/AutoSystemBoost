@@ -1852,6 +1852,8 @@ const I18N = {
     lv_learner: 'Обучение', lv_gpuload: 'Нагрузка GPU', lv_headroom: 'Запас',
     // config page
     cfg_apply_audio: '\u266b Применить аудио сейчас',
+    t_not_applied: 'не применено',
+    t_not_applied_hint: 'Настройка сохранена, но устройство её не приняло. Перезагрузитесь и установите модуль ещё раз.',
     t_cfg_audio_live: ' \u00b7 применяю\u2026',
     t_cfg_audio_reboot: ' \u00b7 нужна перезагрузка',
     t_applying_audio: 'Применяю аудио\u2026',
@@ -2406,6 +2408,39 @@ function cfgRenderHub(list) {
   list.appendChild(hub);
 }
 
+// Settings whose effect lands in a file, and can therefore be checked.
+const VERIFY_KEYS = ['CAMERA_LEVEL','CAMERA_GRAIN','CAMERA_CONTRAST','CAMERA_PORTRAIT','CAMERA_LOWLIGHT'];
+var _verifyCache = null;
+
+function cfgVerify(key, badge) {
+  // One shell call for the whole screen, cached: the answer is the same for every camera
+  // card, and firing five root calls to learn one fact would be its own bug.
+  if (_verifyCache === 'pending') return;
+  if (_verifyCache !== null) { cfgVerifyPaint(key, badge); return; }
+  _verifyCache = 'pending';
+  // run() returns a Promise here - it does not take a callback. Getting that wrong would
+  // have left the check permanently 'pending' and the badge never updated, which is the
+  // same silent-failure shape this feature exists to expose.
+  try {
+    run("[ -f /data/adb/asb/grade_marks/odm_etc_camera_conf_tuning_params.json.mark ] && echo yes || echo no")
+      .then(function(r) {
+        _verifyCache = (String((r && r.stdout) || '').indexOf('yes') >= 0) ? 'ok' : 'no';
+        cfgRender();
+      })
+      .catch(function() { _verifyCache = 'unknown'; });
+  } catch (e) { _verifyCache = 'unknown'; }
+}
+
+function cfgVerifyPaint(key, badge) {
+  if (_verifyCache === 'no') {
+    badge.classList.remove('good');
+    badge.classList.add('warn');
+    badge.textContent = badge.textContent + ' \u00b7 ' + T('t_not_applied', 'not applied');
+    badge.title = T('t_not_applied_hint',
+      'The setting is saved but the device has not taken it. Reboot, then reinstall the module.');
+  }
+}
+
 function cfgRender() {
   const list = _el('cfgList');
   if (!list) return;
@@ -2439,6 +2474,20 @@ function cfgRender() {
     const badge = document.createElement('div');
     badge.className = 'cfg-status ' + st.cls;
     badge.textContent = st.text;
+
+    // Verify against the DEVICE, not the config.
+    //
+    // A card reads "Max" because governor.conf says 4. Whether the device actually got
+    // that is a different question, and for a while the honest answer was no: the camera
+    // grade silently did nothing while the card looked fine, and the only way to find out
+    // was running asb_diag. A setting that lies about its own state is worse than one
+    // that is off, because nobody goes looking.
+    //
+    // Only for settings that write a file we can read back. Props and live settings apply
+    // synchronously and have nothing to verify.
+    if (VERIFY_KEYS.indexOf(it.key) >= 0 && st.cls !== 'neutral') {
+      cfgVerify(it.key, badge);
+    }
     main.appendChild(badge);
     top.appendChild(main);
 
