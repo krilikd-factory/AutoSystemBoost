@@ -2282,8 +2282,18 @@ fi
   _fg="$(getprop persist.sys.power.fuel.gauge 2>/dev/null)"
   [ "$_fg" != "0" ] && asb_persist_safe persist.sys.power.fuel.gauge 0
 ) >/dev/null 2>&1 &
+# Reconcile and the watchdog now run on the governor's clock.
+#
+# Starting them here as well would mean two schedulers for the same job, and the resident
+# shell loop is the more expensive of the two - it exists only to hold a sleep. Started
+# here only as a fallback, after giving the governor a chance to come up: if it did, it
+# owns the schedule; if it did not, these are exactly what is supposed to notice.
 (
-  [ -r "$MODDIR/runtime/asb_reconcile.sh" ] && . "$MODDIR/runtime/asb_reconcile.sh"
+  sleep 90
+  if ! pgrep -f '/bin/asb$' >/dev/null 2>&1; then
+    asb_log "governor not running after 90s - starting reconcile/watchdog loops as fallback"
+    [ -r "$MODDIR/runtime/asb_reconcile.sh" ] && . "$MODDIR/runtime/asb_reconcile.sh"
+  fi
 ) >/dev/null 2>&1 &
 (
   sleep 60
@@ -2327,7 +2337,10 @@ fi
   asb_feature_enabled VM && apply_doze
 ) >/dev/null 2>&1 &
 (
-  [ -r "$MODDIR/runtime/asb_watchdog.sh" ] && . "$MODDIR/runtime/asb_watchdog.sh"
+  sleep 95
+  if ! pgrep -f '/bin/asb$' >/dev/null 2>&1; then
+    [ -r "$MODDIR/runtime/asb_watchdog.sh" ] && . "$MODDIR/runtime/asb_watchdog.sh"
+  fi
 ) >/dev/null 2>&1 &
 
 exit 0
