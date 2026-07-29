@@ -156,10 +156,19 @@ esac
 # --- queue discipline -----------------------------------------------------------------
 # This one IS per-interface in the kernel, so WiFi and mobile get their own without any
 # tricks. default_qdisc still gets the global value for interfaces that come up later.
+# The global verdict is decided by what the INTERFACES did, not by whether the sysctl
+# swallowed the string.
+#
+# net.core.default_qdisc accepts any name - it is just stored for interfaces that come up
+# later - so writing "cake" on a kernel with no cake module succeeds and means nothing.
+# Reporting that as ok while every interface reported "not applied" is a contradiction the
+# user has to resolve themselves. Count the real applications below and let them decide.
 _qd="$(_cfg net_qdisc)"
+_qd_tried=0
+_qd_ok=0
 case "$_qd" in
   ''|auto) : ;;
-  *) _sysctl_w net.core.default_qdisc "$_qd" && _out="$_out qdisc=$_qd" ;;
+  *) _sysctl_w net.core.default_qdisc "$_qd" ;;
 esac
 
 if _has tc; then
@@ -180,13 +189,31 @@ if _has tc; then
     esac
     # Read back: tc accepts a qdisc the kernel has no module for and silently keeps the
     # old one, which is indistinguishable from success unless you look.
+    _qd_tried=$(( _qd_tried + 1 ))
     if tc qdisc show dev "$_if" 2>/dev/null | grep -q "$_want"; then
+      _qd_ok=$(( _qd_ok + 1 ))
       _out="$_out qdisc[$_kind:$_if]=$_want"
     else
       _out="$_out qdisc[$_kind:$_if]=$_want-not-applied"
     fi
   done
 fi
+
+# One verdict for the global key, derived from the interfaces.
+case "$_qd" in
+  ''|auto) : ;;
+  *)
+    if [ "$_qd_tried" = "0" ]; then
+      # Nothing to apply it to yet (no tc, or no link up). The value is stored and will be
+      # used by the next interface that appears - that is "pending", not "working".
+      _out="$_out qdisc=$_qd-pending"
+    elif [ "$_qd_ok" = "0" ]; then
+      _out="$_out qdisc=$_qd-not-applied"
+    else
+      _out="$_out qdisc=$_qd"
+    fi
+    ;;
+esac
 
 # --- WiFi regulatory domain ------------------------------------------------------------
 # `cmd wifi force-country-code` is the supported way in. It survives until explicitly
@@ -229,6 +256,39 @@ if [ -x "$MODDIR/runtime/asb_net_routes.sh" ] || [ -f "$MODDIR/runtime/asb_net_r
   _rt_out="$(sh "$MODDIR/runtime/asb_net_routes.sh" apply 2>/dev/null)"
   [ -n "$_rt_out" ] && printf '%s\n' "$_rt_out"
 fi
+
+# Machine-readable result for the WebUI.
+#
+# Without this the UI can only show what the user picked, not what the kernel accepted -
+# so asking for bbr on a stock kernel left the button lit as though it had worked. Each
+# line is "key=state", state being ok | unavailable | failed, and the card reads it to
+# label itself honestly.
+_res="/data/adb/asb/net_apply_result"
+mkdir -p /data/adb/asb 2>/dev/null
+{
+  for _tok in $_out; do
+    case "$_tok" in
+      congestion=*-unavailable*)    printf 'net_congestion=unavailable\n' ;;
+      congestion=FAILED)            printf 'net_congestion=failed\n' ;;
+      congestion=*)                 printf 'net_congestion=ok\n' ;;
+      cc\[wifi*-unavailable*)       printf 'net_congestion_wifi=unavailable\n' ;;
+      cc\[wifi*)                    printf 'net_congestion_wifi=ok\n' ;;
+      cc\[mobile*-unavailable*)     printf 'net_congestion_mobile=unavailable\n' ;;
+      cc\[mobile*)                  printf 'net_congestion_mobile=ok\n' ;;
+      qdisc=*-pending)              printf 'net_qdisc=pending\n' ;;
+      qdisc=*-not-applied)          printf 'net_qdisc=failed\n' ;;
+      qdisc=FAILED)                 printf 'net_qdisc=failed\n' ;;
+      qdisc=*)                      printf 'net_qdisc=ok\n' ;;
+      qdisc\[wifi*not-applied*)     printf 'net_qdisc_wifi=failed\n' ;;
+      qdisc\[wifi*)                 printf 'net_qdisc_wifi=ok\n' ;;
+      qdisc\[mobile*not-applied*)   printf 'net_qdisc_mobile=failed\n' ;;
+      qdisc\[mobile*)               printf 'net_qdisc_mobile=ok\n' ;;
+      wifi_country=FAILED)          printf 'wifi_country=failed\n' ;;
+      wifi_country=*)               printf 'wifi_country=ok\n' ;;
+      scan_throttle=*)              printf 'wifi_scan_throttle=ok\n' ;;
+    esac
+  done
+} > "$_res" 2>/dev/null
 
 [ -n "$_out" ] && echo "net:$_out" || echo "net: nothing to apply (all auto)"
 exit 0
