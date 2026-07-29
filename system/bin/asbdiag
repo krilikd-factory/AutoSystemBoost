@@ -469,7 +469,13 @@ else
   CT="$(firstf '/odm/etc/camera/conf_tuning_params.json' '/vendor/odm/etc/camera/conf_tuning_params.json')"
   if [ -n "$CT" ]; then
     P "  file: $CT"
-    V "  tone-fix sunsetBrightScale=0.9" "0.9" "$(grep -o '"sunsetBrightScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
+    # sunsetBrightScale is deliberately NOT written any more.
+    #
+    # The old sed grader pinned it to 0.9 so boosted warm skies would not clip. The
+    # current grader is purely relative - it multiplies what the firmware ships and
+    # writes no absolute tone values at all - so this check asserted behaviour that
+    # was removed on purpose, and reported FAIL on a device where nothing was wrong.
+    NOTE "sunsetBrightScale = $(grep -o '"sunsetBrightScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$') (informational: the relative grader does not set this)"
     # Camera grade is driven by CAMERA_LEVEL (0..4 slider). Legacy CAMERA_AGGRESSIVE=1
     # maps to level 3. Mirror the runtime value table (runtime/asb_tweaks.sh) so the
     # expected sunsetSatScale/blueSatParam match the user's actual level instead of
