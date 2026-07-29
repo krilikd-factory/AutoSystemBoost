@@ -1804,7 +1804,7 @@ asb_patch_audio_inplace() {
     _dspg="$(grep -E '^[[:space:]]*dsp_loudness=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
     case "$_dspg" in
       ''|off|0|*[!0-9]*) _dspg_ok=0 ;;
-      *) [ "$_dspg" -ge 1 ] 2>/dev/null && [ "$_dspg" -le 20 ] 2>/dev/null && _dspg_ok=1 || _dspg_ok=0 ;;
+      *) [ "$_dspg" -ge 1 ] 2>/dev/null && [ "$_dspg" -le 25 ] 2>/dev/null && _dspg_ok=1 || _dspg_ok=0 ;;
     esac
     if [ "$_dspg_ok" = "1" ]; then
         ui_print "      + ASB ${ASB_D_DSP_ENGINE:-DSP engine}: +${_dspg} dB ${ASB_D_DSP_GAIN:-gain}"
@@ -2366,7 +2366,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -2395,7 +2395,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
