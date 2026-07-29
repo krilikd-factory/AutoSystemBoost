@@ -1546,6 +1546,21 @@ body.config-active #livePage.open {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* Three reboot actions, ordered by how much they cost you and coloured to match.
+   Red = full reboot, orange = soft reboot (runtime only, seconds), yellow = SystemUI
+   alone. The gap is tighter than the first button's margin so they read as one group
+   rather than three unrelated buttons. */
+.cfg-reboot.soft {
+  margin-top: 8px;
+  border-color: rgba(255,149,0,0.35);
+  background: rgba(255,149,0,0.08);
+}
+.cfg-reboot.sysui {
+  margin-top: 8px;
+  border-color: rgba(255,214,10,0.35);
+  background: rgba(255,214,10,0.08);
+}
 </style>
 </head>
 <body>
@@ -1832,7 +1847,14 @@ body.config-active #livePage.open {
 
   <div class="cfg-list" id="cfgList"></div>
 
-  <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
+  <!-- Reboot actions. Wrapped so cfgSyncChrome can show them on the hub and hide them on
+       a category page: down there the screen is a list of settings, and a full reboot
+       button under it is easy to hit while still choosing. -->
+  <div id="cfgRebootWrap">
+    <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
+    <button class="cfg-reboot soft" onclick="cfgSoftReboot()" data-i18n="cfg_soft_reboot">⟳ Soft reboot</button>
+    <button class="cfg-reboot sysui" onclick="cfgRestartSysUI()" data-i18n="cfg_restart_sysui">▤ Restart SystemUI</button>
+  </div>
 
   </div>
 
@@ -1899,6 +1921,11 @@ const I18N = {
     t_applied_audio: 'Аудио применено (audioserver перезапущен)',
     t_apply_audio_fail: 'Не удалось применить',
     cfg_reboot: '↻ Перезагрузить устройство',
+    cfg_soft_reboot: '\u27f3 Быстрая перезагрузка',
+    cfg_restart_sysui: '\u25a4 Перезапустить SystemUI',
+    t_soft_confirm: 'Нажмите ещё раз для быстрой перезагрузки',
+    t_soft_going: 'Быстрая перезагрузка\u2026',
+    t_sysui_going: 'Перезапуск SystemUI\u2026',
     // device line
     device_line: 'Устройство OnePlus · Qualcomm Snapdragon',
     // toasts
@@ -2784,6 +2811,41 @@ async function cfgReboot() {
   await run('svc power reboot 2>/dev/null || reboot');
 }
 
+/* Soft reboot: restart the Android runtime without a full boot.
+ *
+ * Zygote comes back and every app process with it, so anything ASB wrote through
+ * settings or properties is picked up - but the kernel, the module mounts and the
+ * governor stay up, which makes it seconds instead of a minute. It does NOT re-run
+ * post-fs-data, so overlay and bind changes still need the real thing; that is why this
+ * sits under the full reboot instead of replacing it.
+ *
+ * Same two-tap arm as the full reboot: it blanks the screen for a while, and a stray tap
+ * should not be enough to trigger that.
+ */
+let _cfgSoftArmed = 0;
+async function cfgSoftReboot() {
+  const now = Date.now();
+  if (now - _cfgSoftArmed > 4000) {
+    _cfgSoftArmed = now;
+    toast(T('t_soft_confirm', 'Tap again for a soft reboot'), 'balanced');
+    return;
+  }
+  _cfgSoftArmed = 0;
+  toast(T('t_soft_going', 'Soft rebooting\u2026'), 'balanced');
+  await run('setprop ctl.restart zygote 2>/dev/null || killall zygote 2>/dev/null');
+}
+
+/* Restart SystemUI only. Status bar, quick settings and the launcher shell come back;
+ * apps keep running. Cheap enough not to need arming - the screen blinks and that is it.
+ *
+ * Worth knowing: this also tears down overlays other modules draw into the status bar,
+ * so those re-apply themselves afterwards.
+ */
+async function cfgRestartSysUI() {
+  toast(T('t_sysui_going', 'Restarting SystemUI\u2026'), 'balanced');
+  await run('pkill -f com.android.systemui 2>/dev/null || killall com.android.systemui 2>/dev/null');
+}
+
 function openConfigPage() {
   const p = _el('configPage');
   if (!p) return;
@@ -2816,6 +2878,12 @@ function cfgSyncChrome() {
       lbl.textContent = (ASB_LANG === 'ru') ? '\u041A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044F' : 'Configuration';
     }
   }
+  // Reboot actions belong to the hub only. On a category page you are mid-way through
+  // choosing settings, and a full-reboot button sitting right under the list is an easy
+  // mis-tap - the buttons are also redundant there, since you have to come back up to
+  // the hub anyway.
+  const rw = _el('cfgRebootWrap');
+  if (rw) rw.style.display = _cfgGroup ? 'none' : '';
 }
 
 function cfgBack() {
