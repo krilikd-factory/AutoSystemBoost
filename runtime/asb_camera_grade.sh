@@ -163,7 +163,7 @@ asb_camera_grade_file() {
   [ -f "$_src" ] || return 1
 
   # Refuse a source that is itself a graded result.
-  if [ -f "$(asb_grade_mark_path "$_src")" ]; then
+  if [ -f "$(asb_grade_mark_path "${_src%.graded}")" ]; then
     echo "camera grade: source is a previous result - refusing to compound"
     return 2
   fi
@@ -339,7 +339,7 @@ asb_camera_grade_file() {
       mkdir -p "$ASB_GRADE_DIR" 2>/dev/null
       printf '%s=%s:%s:%s:%s:%s:%s\n' "$ASB_GRADE_MARK" "$_src_h" \
         "$_lvl" "$_grain" "$_contrast" "$_portrait" "$_lowlight" \
-        > "$(asb_grade_mark_path "$_dst")" 2>/dev/null
+        > "$(asb_grade_mark_path "${_dst%.graded}")" 2>/dev/null
       return 0
     fi
   fi
