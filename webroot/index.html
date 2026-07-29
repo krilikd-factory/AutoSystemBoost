@@ -2058,6 +2058,8 @@ const I18N = {
         desc: 'Как TCP решает, с какой скоростью слать. BBR подстраивается под измеренную полосу и на мобильной связи обычно лучше: там потери — это помехи радио, а не перегрузка, и Cubic зря сбрасывает скорость. «Авто» следует профилю питания, который и так выбирает BBR там, где ядро его предлагает. Применяется сразу; уже открытые соединения доживают на старом алгоритме.' },
       net_qdisc: { name: 'Дисциплина очереди',
         desc: 'Очередь, в которой пакеты ждут отправки. fq_codel держит низкую задержку под нагрузкой, fq выравнивает потоки и хорошо сочетается с BBR, cake самый тщательный и самый тяжёлый. «Авто» берёт то, что реально есть в ядре. Именно это лечит подвисания, когда закачка забивает канал. Применяется сразу.' },
+      net_route_tune: { name: 'Начальное окно TCP',
+        desc: 'Сколько данных может уйти до первого подтверждения. «Авто» измеряет канал, который перед вами — согласованную скорость, MTU, тип радио — и подбирает размер: на слабом канале остаётся значение RFC (поднимать его там — прямой способ вызвать потери), выше только там, где канал показал, что переварит всплеск. Объявляемое окно считается из произведения полосы на задержку и ограничено размером приёмного буфера, а не плоским числом. «Консервативно» ставит значение RFC везде, «Агрессивно» сдвигает на класс выше, «Выкл» возвращает маршруты как были. Переприменяется при смене сети автоматически. Открытые соединения никогда не разрываются: эти значения читаются при создании соединения, так что уже открытые их всё равно не подхватили бы.' },
       wifi_country: { name: 'Регион WiFi',
         desc: 'Регуляторный домен драйвера WiFi. Он определяет, какие каналы и какая ширина канала разрешены, а значит — какую агрегацию может использовать радио. CR даёт самый широкий набор, поэтому его обычно и советуют. «Авто» оставляет домен, полученный от SIM. ВАЖНО: выбор домена, не соответствующего вашей стране, — под вашу ответственность: передача на нелицензированных каналах законна не везде. Применяется сразу, радио переподключается.' },
       wifi_scan_throttle: { name: 'Ограничение сканирования WiFi',
@@ -2388,6 +2390,8 @@ const CFG_ITEMS = [
     desc:'How TCP decides how fast to send. BBR paces to the measured bandwidth and is usually better on mobile links, where loss is radio interference rather than congestion and Cubic reacts by backing off for no reason. Auto follows the power profile, which already picks BBR where the kernel offers it. Applies immediately; existing connections keep their old algorithm until they are re-opened.' },
   { key:'net_qdisc', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Queue Discipline',
     desc:'The queue packets wait in before they leave. fq_codel keeps latency low under load, fq paces flows and pairs well with BBR, cake is the most thorough but the heaviest. Auto uses whichever of these the kernel actually has. This is what fixes the stall you get when an upload saturates the link. Applies immediately.' },
+  { key:'net_route_tune', type:'seg', def:'auto', opts:['auto','off','conservative','aggressive'], name:'Initial TCP Window',
+    desc:'How much data may be in flight before the first acknowledgement. Auto measures the link in front of you - negotiated rate, MTU, radio type - and sizes it accordingly: the RFC value on a weak link (raising it there is how you cause loss), higher only where the link has shown it can absorb the burst. The advertised window comes from the bandwidth-delay product and is bounded by the receive buffer, not by a flat number. Conservative pins the RFC value everywhere, aggressive shifts one class up, off puts the routes back. Re-applied automatically when the network changes. Never drops existing connections - these values are read when a connection is created, so open ones were never going to use them anyway.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
     desc:'The regulatory domain the WiFi driver applies. It decides which channels and which channel widths are legal, so it changes what aggregation the radio may use. CR permits the widest set here, which is why it is the usual recommendation. Auto leaves the SIM-driven domain alone. NOTE: choosing a domain that does not match where you actually are is your responsibility - transmitting on channels not licensed in your country is not legal everywhere. Applies immediately; the radio re-associates.' },
   { key:'wifi_scan_throttle', type:'seg', def:'auto', opts:['auto','0','1'], name:'WiFi Scan Throttle',
@@ -2426,7 +2430,7 @@ const CFG_CAT = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
-  net_congestion:'net', net_qdisc:'net', wifi_country:'net', wifi_scan_throttle:'net',
+  net_congestion:'net', net_qdisc:'net', net_route_tune:'net', wifi_country:'net', wifi_scan_throttle:'net',
   disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
 };
 // Four groups, one screen each.
@@ -2466,7 +2470,7 @@ const CFG_GROUP_OF = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', UX_ANIM_FORCE_RESTART:'iface',
-  net_congestion:'net', net_qdisc:'net', wifi_country:'net', wifi_scan_throttle:'net',
+  net_congestion:'net', net_qdisc:'net', net_route_tune:'net', wifi_country:'net', wifi_scan_throttle:'net',
   disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'ui', haptic_touch_strength:'ui'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
@@ -2497,7 +2501,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDEA6', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDCF6',
+  net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDEA6', net_route_tune:'\uD83D\uDCCF', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDCF6',
   audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
   dsp_compressor:'\uD83E\uDDF0',                // toolbox - dynamics processing
@@ -2872,7 +2876,7 @@ async function cfgSet(key, val, ctl) {
     // also writes the WindowManager global, which needs no reboot at all.
     // Both are written by asb_blur_apply.sh - one script, two independent blocks.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
-    var NET_KEYS = ['net_congestion','net_qdisc','wifi_country','wifi_scan_throttle'];
+    var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune','wifi_country','wifi_scan_throttle'];
     if (NET_KEYS.indexOf(key) >= 0) {
       // Applied live: none of this touches the overlay, it is all sysctl and `cmd wifi`.
       try { run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1'); } catch (e) {}
