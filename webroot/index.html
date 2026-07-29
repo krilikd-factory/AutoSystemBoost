@@ -1131,10 +1131,9 @@ body.config-active #livePage.open {
 .smart-banner-value.cap-raised { color: var(--bat); }
 .smart-banner-value.cap-clamp  { color: var(--perf); }
 
-/* The banner row is a fixed 4-column grid, so a fifth item would land alone on a new
-   line with three empty columns beside it. Span it across instead: it reads as its own
-   line inside the same card, which is what the four-up items already do visually. */
-.smart-banner-item.full { grid-column: 1 / -1; }
+/* Eight items on a fixed 4-column grid: two full rows, nothing hanging. An earlier
+   version put Modem LPM alone on a spanned second line, which sat right under Bucket and
+   read as clutter rather than structure. */
 .smart-banner-tag {
   display: inline-block;
   font: 600 9px/1 var(--mono);
@@ -1735,7 +1734,19 @@ body.config-active #livePage.open {
         <span class="smart-banner-label" data-i18n="lv_app">App</span>
         <span class="smart-banner-value" id="bnApp">—</span>
       </div>
-      <div class="smart-banner-item full">
+      <div class="smart-banner-item">
+        <span class="smart-banner-label" data-i18n="lv_ses">Sessions</span>
+        <span class="smart-banner-value" id="bnSes">—</span>
+      </div>
+      <div class="smart-banner-item">
+        <span class="smart-banner-label" data-i18n="lv_drain">Drain</span>
+        <span class="smart-banner-value" id="bnDrain">—</span>
+      </div>
+      <div class="smart-banner-item">
+        <span class="smart-banner-label" data-i18n="lv_trend">Trend</span>
+        <span class="smart-banner-value" id="bnTrend">—</span>
+      </div>
+      <div class="smart-banner-item">
         <span class="smart-banner-label" data-i18n="lv_lpm">Modem LPM</span>
         <span class="smart-banner-value" id="bnLpm">—</span>
       </div>
@@ -1932,6 +1943,8 @@ const I18N = {
     lv_est_idle: 'Прогноз (покой)', lv_capsrc: 'Источник кэпа',
     lv_learner: 'Обучение', lv_gpuload: 'Нагрузка GPU', lv_headroom: 'Запас',
     lv_lpm: 'Modem LPM',
+    lv_ses: 'Сессии', lv_drain: 'Расход', lv_trend: 'Тренд',
+    lv_trend_up: 'нагрев', lv_trend_dn: 'остывает', lv_trend_fl: 'ровно',
     lv_lpm_normal: 'обычный', lv_lpm_normal_t: 'по умолчанию для профиля',
     lv_lpm_save: 'экономия', lv_lpm_save_t: 'радио простаивает, keepalive растянуты',
     lv_lpm_fast: 'быстрый', lv_lpm_fast_t: 'дата-сессия удерживается (низкая задержка)',
@@ -3353,6 +3366,36 @@ async function pollLive(visible) {
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
           _el('bnAlpha').textContent = Math.round(alpha / 10) + '% bat';
           _el('bnApp').textContent = warm ? '\u2026' : (appNames[appH] || '?');
+
+          // Second row: four more Smart-owned readings, so the card is two full rows
+          // instead of one row plus an orphan hanging under Bucket.
+          //
+          // Sessions is what Conf is built from - a confidence figure means something
+          // very different at 1 session than at 200, so the two belong side by side.
+          _el('bnSes').textContent = parseInt(kv.smart_sessions_total || '0', 10);
+
+          // Drain in tenths of a percent per hour. It publishes 0 until the first window
+          // closes, and printing "0.0%/h" then would be a measurement we do not have -
+          // a dash says "not yet" honestly.
+          const dr = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
+          _el('bnDrain').textContent = (dr > 0) ? ((dr / 10).toFixed(1) + '%/h') : '\u2014';
+
+          // Thermal trend is what makes Smart back off, so it explains Alpha moving on
+          // its own. The slope is milli-degrees per tick; only its sign is worth showing.
+          const slope = parseInt(kv.smart_trend_slope || '0', 10);
+          const trEl = _el('bnTrend');
+          if (trEl) {
+            trEl.className = 'smart-banner-value';
+            if (slope > 300) {
+              trEl.textContent = '\u2191 ' + T('lv_trend_up', 'warming');
+              trEl.classList.add('cap-clamp');
+            } else if (slope < -300) {
+              trEl.textContent = '\u2193 ' + T('lv_trend_dn', 'cooling');
+              trEl.classList.add('cap-raised');
+            } else {
+              trEl.textContent = '\u2192 ' + T('lv_trend_fl', 'steady');
+            }
+          }
 
           // Tag row: fallback + overrides
           const tagRow = _el('bnTagRow');
