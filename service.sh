@@ -129,6 +129,19 @@ asb_load_profile
 rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done /data/adb/asb/session_history_migrated_v47 2>/dev/null
 
 if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
+  # Remove props an OLDER ASB set - and only those.
+  #
+  # This used to delete every listed prop that existed, without asking who put it there.
+  # On a device where the vendor sets persist.sys.oplus.athena.* natively that meant ASB
+  # quietly wiping OEM configuration for the background process manager, which is exactly
+  # the kind of thing that gets reported as "the module disables Athena". Nothing in the
+  # module needs those props gone; the cleanup only ever existed to undo V45/V46.
+  #
+  # baseline.txt records "prop|<name>|<original>" for everything ASB has ever set. An
+  # empty original means the prop did not exist before us, so deleting it restores the
+  # device. A non-empty one means the vendor had a value and we must put THAT back rather
+  # than delete. No record at all means we never touched it - leave it alone.
+  _asb_bl="/data/adb/asb/baseline.txt"
   for _stale_p in \
       persist.sys.oplus.athena.reclaim_enable \
       persist.sys.oplus.athena.force_kill \
@@ -136,11 +149,39 @@ if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
       persist.sys.oplus.deepthinker.reclaim_hint \
       ro.audio.audiozoom \
       persist.bluetooth.spatial_audio_support; do
-    if [ -n "$(getprop "$_stale_p" 2>/dev/null)" ]; then
+    [ -n "$(getprop "$_stale_p" 2>/dev/null)" ] || continue
+    _stale_rec="$(grep -m1 "^prop|${_stale_p}|" "$_asb_bl" 2>/dev/null)"
+    [ -n "$_stale_rec" ] || continue                 # not ours - do not touch
+    _stale_orig="${_stale_rec#prop|${_stale_p}|}"
+    if [ -n "$_stale_orig" ]; then
+      resetprop "$_stale_p" "$_stale_orig" >/dev/null 2>&1 || true
+    else
       resetprop --delete "$_stale_p" >/dev/null 2>&1 || true
     fi
   done
   touch /data/adb/asb/stale_props_cleaned 2>/dev/null
+fi
+
+# Athena: never disabled by this module, and say so when it is found disabled.
+#
+# A tester reported "61-debug-51 disables Athena" and had to re-enable it by hand. No
+# current code path touches com.oplus.athena - it is not in _BG_TRIM_DISABLE and there is
+# no pm record for it in baseline.txt - so a disabled Athena on a device running this
+# build is left over from an older version that did disable it and never recorded the
+# fact, which is why uninstall could not put it back either.
+#
+# Re-enabling it automatically would be the wrong call: the XDA thread that circulates
+# with this package recommends removing it, so some people disable it deliberately, and
+# silently undoing a user's own decision is worse than leaving it. Report it instead,
+# once, with the command to fix it.
+if [ ! -f /data/adb/asb/athena_state_checked ]; then
+  if pm list packages -d 2>/dev/null | grep -q '^package:com.oplus.athena$'; then
+    if ! grep -q "^pm|com.oplus.athena|" /data/adb/asb/baseline.txt 2>/dev/null; then
+      asb_log "athena: com.oplus.athena is DISABLED and ASB has no record of doing it (legacy build?)."
+      asb_log "athena: ASB never disables it. To restore: pm enable com.oplus.athena"
+    fi
+  fi
+  touch /data/adb/asb/athena_state_checked 2>/dev/null
 fi
 
 # Reset vm.oom_kill_allocating_task to kernel default (0) at every boot.
