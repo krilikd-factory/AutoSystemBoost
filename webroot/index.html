@@ -2422,7 +2422,15 @@ function cfgVerify(key, badge) {
   // have left the check permanently 'pending' and the badge never updated, which is the
   // same silent-failure shape this feature exists to expose.
   try {
-    run("[ -f /data/adb/asb/grade_marks/odm_etc_camera_conf_tuning_params.json.mark ] && echo yes || echo no")
+    // Read the LIVE file, the way asb_diag does, rather than looking for a marker.
+    //
+    // The first version checked for a marker file under a path built from the module's
+    // staging directory - a path that never existed, so every camera card claimed "not
+    // applied" while the action screen correctly reported the grade as live. Asking the
+    // partition that the camera actually reads has no such failure mode: stock ships
+    // BlendWeight [0.35, 0.5, 0.7], and anything else means the grade landed.
+    run("grep -m1 -o '\"BlendWeight\"[^]]*]' /odm/etc/camera/conf_tuning_params.json 2>/dev/null" +
+        " | grep -q '0.35, 0.5, 0.7' && echo no || echo yes")
       .then(function(r) {
         _verifyCache = (String((r && r.stdout) || '').indexOf('yes') >= 0) ? 'ok' : 'no';
         cfgRender();
