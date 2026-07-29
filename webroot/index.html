@@ -1453,6 +1453,14 @@ body.config-active #livePage.open {
   color: #e6b860;
   background: rgba(230,170,60,0.12);
 }
+/* "not applied" needs its own colour. It was reusing .warn, which is also what an
+   ordinary modified value uses - so a setting the kernel had REFUSED looked identical to
+   one that was working, which defeats the whole point of reporting it. */
+.cfg-status.bad {
+  background: rgba(255,59,59,0.14);
+  border-color: rgba(255,59,59,0.40);
+  color: #ff6b6b;
+}
 .cfg-status.neutral {
   color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.06);
@@ -1991,6 +1999,7 @@ const I18N = {
     t_applied_audio: 'Аудио применено (audioserver перезапущен)',
     t_apply_audio_fail: 'Не удалось применить',
     cfg_reboot: '↻ Перезагрузить устройство',
+    st_unavail: 'не поддерживается', st_failed: 'не применено', st_pending: 'ожидает сети',
     cfg_soft_reboot: '\u27f3 Быстрая перезагрузка',
     cfg_restart_sysui: '\u25a4 Перезапустить SystemUI',
     t_soft_confirm: 'Нажмите ещё раз для быстрой перезагрузки',
@@ -2058,23 +2067,23 @@ const I18N = {
       ui_effects_level: { name: 'Анимации системы',
         desc: '«Упрощённые» \u2014 убирают объём из анимаций OxygenOS: «Недавние» становятся простым списком вместо карточек с превью, переходы теряют многослойные эффекты. Легче для видеочипа, но выглядит скромнее. «Авто» \u2014 следует за настройкой блюра: до недавнего времени это была одна общая настройка, поэтому «авто» сохраняет привычное поведение. Применяется после перезагрузки.' },
       net_congestion: { name: 'Разгон загрузок',
-        desc: 'Как телефон подбирает скорость отдачи данных. «Сток» \u2014 как было на устройстве до модуля. «bbr» \u2014 быстрее на нестабильной связи и в мобильном интернете, лучше держит скорость при потерях пакетов; доступен только на кастомных ядрах. «cubic» \u2014 классический вариант, стоит почти везде по умолчанию. Если bbr нет в ядре, выбор им ничего не даст и останется cubic.' },
+        desc: 'Как телефон разгоняется при скачивании. «Сток» — как было на заводе. «bbr» обычно быстрее на мобильном интернете и Wi-Fi со слабым сигналом: он подстраивается под реальную скорость, а не сбрасывает её при каждой помехе. «cubic» — классика, надёжнее на стабильном проводном Wi-Fi. Если не уверены — попробуйте bbr, станет хуже — вернитесь на сток. На стоковом ядре bbr обычно недоступен, и карточка честно напишет «не поддерживается».' },
       net_qdisc: { name: 'Очередь пакетов',
-        desc: 'Как телефон выстраивает очередь исходящих данных. «Сток» \u2014 заводское значение. «fq_codel» \u2014 меньше задержек, когда что-то грузится в фоне: звонок или игра не начинают лагать из-за скачивания. «fq» \u2014 проще и чуть быстрее на очень быстрых каналах. «cake» \u2014 самый умный, но его нет на большинстве стоковых ядер.' },
+        desc: 'Как телефон распределяет интернет между приложениями. «Сток» — как было. «fq_codel» — лучший выбор для большинства: видео не подвисает, когда что-то качается в фоне. «fq» — похоже, хорошо работает в паре с bbr. «cake» — самый тщательный, но чуть тяжелее для процессора. Если не уверены — fq_codel.' },
       net_congestion_wifi: { name: 'Разгон загрузок · Wi-Fi',
-        desc: 'То же самое, но только для Wi-Fi. «Авто» \u2014 брать значение из общей настройки выше. Полезно, если по Wi-Fi и по мобильному интернету хочется разного поведения.' },
+        desc: 'То же, что «Разгон загрузок», но только для Wi-Fi. «Как общая» — использовать общую настройку выше. Отдельная настройка нужна, если на Wi-Fi вам лучше одно, а на мобильном другое: они работают одновременно и не мешают друг другу.' },
       net_congestion_mobile: { name: 'Разгон загрузок · мобильный',
-        desc: 'То же самое, но только для мобильного интернета. «Авто» \u2014 брать значение из общей настройки выше. Именно здесь bbr обычно и даёт выигрыш: на сотовой связи потери пакетов постоянны.' },
+        desc: 'То же, что «Разгон загрузок», но только для мобильного интернета. «Как общая» — использовать общую настройку выше. Здесь чаще всего выигрывает bbr: в мобильной сети потеря пакета обычно означает помеху, а не пробку, и cubic зря сбрасывает скорость.' },
       net_qdisc_wifi: { name: 'Очередь пакетов · Wi-Fi',
-        desc: 'Очередь только для Wi-Fi. «Авто» \u2014 брать значение из общей настройки выше.' },
+        desc: 'То же, что «Очередь пакетов», но только для Wi-Fi. «Как общая» — использовать общую настройку выше.' },
       net_qdisc_mobile: { name: 'Очередь пакетов · мобильный',
-        desc: 'Очередь только для мобильного интернета. «Авто» \u2014 брать значение из общей настройки выше.' },
-      net_route_tune: { name: 'Размер сетевых буферов',
-        desc: 'Сколько данных телефон держит «в пути» на каждое соединение. «Сток» \u2014 не трогаем. «Умеренно» \u2014 небольшой запас, скачивания чуть быстрее. «Агрессивно» \u2014 большой запас: заметно на быстром интернете, но на слабом сигнале может добавить задержки. «Выкл» \u2014 явно вернуть заводские значения.' },
+        desc: 'То же, что «Очередь пакетов», но только для мобильного интернета. «Как общая» — использовать общую настройку выше.' },
+      net_route_tune: { name: 'Сетевые буферы',
+        desc: 'Сколько данных телефон отправляет «одним рывком», не дожидаясь ответа. «Умное» — ASB сам смотрит на скорость вашего Wi-Fi или мобильной сети и подбирает размер: на быстром канале больше, на слабом оставляет заводское значение, потому что там большой рывок только вызывает потери. «Умеренно» — заводское значение везде. «Агрессивно» — на класс больше, если вы уверены в своём канале. «Сток» — вернуть как было. Начните с «умного».' },
       wifi_country: { name: 'Регион Wi-Fi',
-        desc: 'Какие каналы и мощность разрешены радиомодулю. «Сток» \u2014 как определила прошивка по SIM-карте. Менять стоит только если знаете, что регион определён неверно: неправильный регион может закрыть часть каналов 5 ГГц или, наоборот, нарушить местные правила.' },
-      wifi_scan_throttle: { name: 'Ограничение поиска Wi-Fi',
-        desc: 'Android по умолчанию ограничивает частоту сканирования сетей, чтобы экономить батарею. «Сток» \u2014 оставить как есть. «Выкл ограничение» \u2014 сети находятся быстрее и переключение между точками резвее, но батарея садится чуть быстрее.' },
+        desc: 'Регион определяет, какие каналы Wi-Fi разрешены вашему телефону, а от этого зависит максимальная скорость соединения. «CR» открывает самый широкий набор каналов — обычно самое быстрое Wi-Fi. «Сток» — регион, который телефон получает от SIM-карты. ВАЖНО: использование каналов, не разрешённых в вашей стране, — на ваше усмотрение и вашу ответственность.' },
+      wifi_scan_throttle: { name: 'Частота поиска Wi-Fi',
+        desc: 'Как часто телефон ищет сети Wi-Fi в фоне. «Чаще» — быстрее переключается на более сильную точку, когда вы ходите по дому или офису, но чуть больше расходует батарею. «Сток» — обычное ограничение Android (4 поиска за 2 минуты). Если Wi-Fi «залипает» на слабой точке — поставьте «чаще».' },
       haptic_strength: { name: 'Вибрация',
         desc: 'Десять ступеней на фирменной, более дробной шкале \u2014 стандартная настройка Android 0\u20133 здесь и так стоит на максимуме, поэтому её подъём ничего не давал. «Авто» \u2014 оставить как было на устройстве: это не то же самое, что любое число, а решение не вмешиваться. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона: выше служба вибрации отвергает значение целиком, и телефон замолкает вместо того, чтобы бить сильнее. Применяется сразу.' },
       haptic_touch_strength: { name: 'Отклик касаний',
@@ -2099,7 +2108,7 @@ const I18N = {
       // different thing and gets a different word.
       net_congestion:        { auto: 'сток' },
       net_qdisc:             { auto: 'сток' },
-      net_route_tune:        { auto: 'сток', off: 'вернуть сток', conservative: 'умеренно', aggressive: 'агрессивно' },
+      net_route_tune:        { auto: 'умное', off: 'сток', conservative: 'умеренно', aggressive: 'агрессивно' },
       wifi_country:          { auto: 'сток' },
       wifi_scan_throttle:    { auto: 'сток', '0': 'без ограничения', '1': 'ограничивать' },
       net_congestion_wifi:   { auto: 'как общая' },
@@ -2356,11 +2365,65 @@ const CFG_FILE = MD + '/config/governor.conf';
 // Keys that are mirrored into the external user snapshot on every change so a
 // reinstall / root-manager re-trigger can restore them. Must stay in sync with
 // the _user_keys / snapshot list in common/install.sh.
-const SNAP_KEYS = ['audio_profile','audio_dac_hifi','CAMERA_LEVEL','CAMERA_AGGRESSIVE',
-  'CAMERA_AGGRESSIVE_INJECT','smart_battery_bias','media_loudness','dsp_loudness','dsp_bass','bt_absvol_mode','BG_TRIM_LEVEL','cool_gaming',
-  'auto_battery_enable','charge_aware_enable',
-  'UX_ANIM_FORCE_RESTART','UX_MANAGE_TIMEOUTS','UX_MANAGE_OEM_TOGGLES',
-  'region_allow_locale','disable_blur'];
+/* Keys mirrored into the external snapshot when changed here.
+ *
+ * This list and the restore list in install.sh have to agree: a key mirrored but not
+ * restored is dead weight, and a key restored but not mirrored is a setting that quietly
+ * reverts on the next module update. They had drifted apart by 18 keys - every camera
+ * sub-control, both haptics levels, all nine network keys and the thermal threshold - so
+ * changing any of them in the WebUI and then updating the module lost the change.
+ *
+ * Generated from install.sh's list, so it stays in step. */
+/* Keys mirrored into the external snapshot when changed here.
+ *
+ * This list and the restore list in install.sh have to agree: a key mirrored but not
+ * restored is dead weight, and a key restored but not mirrored is a setting that quietly
+ * reverts on the next module update. They had drifted apart by 25 keys - every camera
+ * sub-control, both haptics levels, all nine network keys and the thermal threshold - so
+ * changing any of those here and then updating the module lost the change.
+ *
+ * Kept in step with install.sh's list by construction. */
+const SNAP_KEYS = [
+  'audio_profile',
+  'audio_dac_hifi',
+  'CAMERA_LEVEL',
+  'CAMERA_GRAIN',
+  'CAMERA_CONTRAST',
+  'CAMERA_PORTRAIT',
+  'CAMERA_LOWLIGHT',
+  'CAMERA_AGGRESSIVE',
+  'CAMERA_AGGRESSIVE_INJECT',
+  'smart_battery_bias',
+  'bt_absvol_mode',
+  'BG_TRIM_LEVEL',
+  'cool_gaming',
+  'auto_battery_enable',
+  'charge_aware_enable',
+  'night_quiet_enable',
+  'night_quiet_auto',
+  'UX_ANIM_FORCE_RESTART',
+  'UX_MANAGE_TIMEOUTS',
+  'UX_MANAGE_OEM_TOGGLES',
+  'region_allow_locale',
+  'disable_blur',
+  'ui_effects_level',
+  'haptic_strength',
+  'net_congestion',
+  'net_qdisc',
+  'net_route_tune',
+  'net_congestion_wifi',
+  'net_congestion_mobile',
+  'net_qdisc_wifi',
+  'net_qdisc_mobile',
+  'wifi_country',
+  'wifi_scan_throttle',
+  'haptic_touch_strength',
+  'media_loudness',
+  'dsp_loudness',
+  'dsp_bass',
+  'dsp_compressor',
+  'dsp_effect_abi',
+  'sustained_temp_enter'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -2414,23 +2477,23 @@ const CFG_ITEMS = [
     desc:'Simplified strips the depth out of OxygenOS animations: Recents becomes a plain list instead of card previews, and transitions lose their layered effects. Lighter on the GPU, plainer to look at. Auto follows the blur setting - these two were one control until recently, so auto keeps the behaviour you already had. Applies after a reboot.' },
   // ---- Network ----------------------------------------------------------------
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'TCP Congestion Control',
-    desc:'How TCP decides how fast to send. BBR paces to the measured bandwidth and is usually better on mobile links, where loss is radio interference rather than congestion and Cubic reacts by backing off for no reason. Auto follows the power profile, which already picks BBR where the kernel offers it. Applies immediately; existing connections keep their old algorithm until they are re-opened.' },
+    desc:'How the phone ramps up when downloading. Stock is what the device shipped with. bbr is usually faster on mobile data and on weak WiFi: it paces to the real measured speed instead of backing off every time the radio glitches. cubic is the classic, steadier on a solid wired-backed WiFi. Unsure? Try bbr, and go back to stock if anything gets worse. Stock kernels usually lack bbr, and the card will say \u201cnot supported\u201d rather than pretend.' },
   { key:'net_qdisc', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Queue Discipline',
-    desc:'The queue packets wait in before they leave. fq_codel keeps latency low under load, fq paces flows and pairs well with BBR, cake is the most thorough but the heaviest. Auto uses whichever of these the kernel actually has. This is what fixes the stall you get when an upload saturates the link. Applies immediately.' },
+    desc:'How the phone shares the connection between apps. Stock is what it was. fq_codel is the right answer for most people: video stops stuttering when something downloads in the background. fq is similar and pairs well with bbr. cake is the most thorough but slightly heavier on the CPU. Unsure? fq_codel.' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'\u00b7 Congestion: WiFi',
-    desc:'Overrides the algorithm for WiFi links only. Auto follows the global setting. Applied per route, so mobile keeps its own choice at the same time rather than the two taking turns.' },
+    desc:'Same as Download Ramp, for WiFi only. As global uses the setting above. A separate value is worth it when WiFi and mobile want different answers - they run at the same time and do not interfere.' },
   { key:'net_congestion_mobile', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'\u00b7 Congestion: mobile',
-    desc:'Overrides the algorithm for mobile data only. Auto follows the global setting. BBR is usually the right answer here: on a radio link loss means interference, and Cubic reads that as congestion and backs off for nothing.' },
+    desc:'Same as Download Ramp, for mobile data only. As global uses the setting above. bbr usually wins here: on a radio link a lost packet normally means interference rather than congestion, and cubic throws away speed for nothing.' },
   { key:'net_qdisc_wifi', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'\u00b7 Queue: WiFi',
-    desc:'Queue discipline for WiFi interfaces only. Auto follows the global setting. This one is genuinely per-interface in the kernel, so the two links never share it.' },
+    desc:'Same as Packet Queue, for WiFi only. As global uses the setting above.' },
   { key:'net_qdisc_mobile', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'\u00b7 Queue: mobile',
-    desc:'Queue discipline for mobile interfaces only. Auto follows the global setting.' },
-  { key:'net_route_tune', type:'seg', def:'auto', opts:['auto','off','conservative','aggressive'], name:'Initial TCP Window',
-    desc:'How much data may be in flight before the first acknowledgement. Auto measures the link in front of you - negotiated rate, MTU, radio type - and sizes it accordingly: the RFC value on a weak link (raising it there is how you cause loss), higher only where the link has shown it can absorb the burst. The advertised window comes from the bandwidth-delay product and is bounded by the receive buffer, not by a flat number. Conservative pins the RFC value everywhere, aggressive shifts one class up, off puts the routes back. Re-applied automatically when the network changes. Never drops existing connections - these values are read when a connection is created, so open ones were never going to use them anyway.' },
+    desc:'Same as Packet Queue, for mobile data only. As global uses the setting above.' },
+  { key:'net_route_tune', type:'seg', def:'auto', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
+    desc:'How much the phone sends in one burst before waiting for a reply. Smart lets ASB look at your actual WiFi or mobile speed and size it: bigger on a fast link, left at the factory value on a weak one, because a big burst there only causes losses. Moderate uses the factory value everywhere. Aggressive goes one class higher if you trust your link. Stock puts it back. Start with Smart.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
-    desc:'The regulatory domain the WiFi driver applies. It decides which channels and which channel widths are legal, so it changes what aggregation the radio may use. CR permits the widest set here, which is why it is the usual recommendation. Auto leaves the SIM-driven domain alone. NOTE: choosing a domain that does not match where you actually are is your responsibility - transmitting on channels not licensed in your country is not legal everywhere. Applies immediately; the radio re-associates.' },
+    desc:'The region decides which WiFi channels your phone may use, and that sets the ceiling on link speed. CR opens the widest set of channels - usually the fastest WiFi. Stock keeps the region the phone gets from the SIM. IMPORTANT: using channels not permitted where you are is your call and your responsibility.' },
   { key:'wifi_scan_throttle', type:'seg', def:'auto', opts:['auto','0','1'], name:'WiFi Scan Rate',
-    desc:'Android limits background WiFi scans to 4 per app per 2 minutes. \u201cMore often\u201d lifts the limit - it finds a better AP sooner while roaming and costs battery; \u201cStock\u201d keeps the Android cap. Auto leaves whatever the system set. Applies immediately.' },
+    desc:'How often the phone looks for WiFi networks in the background. More often switches to a stronger access point sooner as you move around a house or office, at a small battery cost. Stock is the normal Android limit of 4 scans per 2 minutes. If WiFi keeps clinging to a weak AP, pick More often.' },
 
   { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
     desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder. Applies immediately.' },
@@ -2564,8 +2627,34 @@ const CFG_ICONS = {
   region_allow_locale:'\uD83C\uDF0D',         // globe
   sustained_temp_enter:'\uD83C\uDF21\uFE0F',
 };
+// What the kernel actually did with the network keys, read from the file
+// asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
+// applied" instead of looking successful because the value got stored.
+let _netResult = {};
+async function loadNetResult() {
+  try {
+    const r = await run('cat /data/adb/asb/net_apply_result 2>/dev/null');
+    const out = {};
+    ((r && r.stdout) || '').split(/\r?\n/).forEach(function(l) {
+      const eq = l.indexOf('=');
+      if (eq > 0) out[l.slice(0, eq)] = l.slice(eq + 1).trim();
+    });
+    _netResult = out;
+  } catch (e) { _netResult = {}; }
+}
+
 function cfgStatus(it, cur) {
   // returns {cls, text} — a short colored badge describing the active state
+  //
+  // Kernel reality first. Asking for bbr where the kernel has no bbr, or a qdisc whose
+  // module is missing, used to leave the badge reading like a success because the VALUE
+  // was stored fine - the write is what failed. Say so instead.
+  const nr = _netResult[it.key];
+  if (nr === 'unavailable') return { cls:'bad', text:T('st_unavail', 'not supported') };
+  if (nr === 'failed')      return { cls:'bad', text:T('st_failed', 'not applied') };
+  // Stored but nothing to apply it to yet - no link up, or no tc. Neither a success nor a
+  // failure, and calling it either would be wrong: amber says "waiting", which is true.
+  if (nr === 'pending')     return { cls:'warn', text:T('st_pending', 'pending') };
   if (it.type === 'bool') {
     if (cur === '1') return { cls:'good', text:'Enabled' };
     return { cls:'neutral', text:'Disabled' };
@@ -2935,7 +3024,10 @@ async function cfgSet(key, val, ctl) {
       // chain calls cfgRender(), and skipping it left the segment showing its previous
       // selection until the user navigated away and came back. Nothing here touches the
       // overlay - it is sysctl and `cmd wifi` - so it applies live, like audio/haptics.
-      try { run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1 &'); } catch (e) {}
+      // Awaited, not backgrounded: the result file it writes is what the badge reads,
+      // and rendering before it exists would show the previous verdict.
+      try { await run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1'); } catch (e) {}
+      await loadNetResult();
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
     } else if (HAPTIC_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_haptics_apply.sh'); } catch(e) {}
@@ -3499,7 +3591,17 @@ async function pollLive(visible) {
           // Drain in tenths of a percent per hour. It publishes 0 until the first window
           // closes, and printing "0.0%/h" then would be a measurement we do not have -
           // a dash says "not yet" honestly.
-          const dr = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
+          // Prefer the smoothed rate over the single last session.
+          //
+          // drain_pctph_x10 is one session divided by its own length, so a short window
+          // reports a real but unrepresentative figure: 4% lost across five minutes of
+          // post-boot dexopt and app restore is arithmetically 48%/h, which is exactly what
+          // turned up after a reboot. The EWMA is averaged over sessions, so it settles
+          // instead of spiking - the right number for a dashboard. The per-session value
+          // stays as the fallback until an average exists.
+          const _drEwma = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
+          const _drLast = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
+          const dr = (_drEwma > 0) ? _drEwma : _drLast;
           // Keep the last real reading instead of blanking.
           //
           // Switching profile restarts the drain window, so this reads 0 for a few
