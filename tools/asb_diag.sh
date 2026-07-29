@@ -363,6 +363,21 @@ for _p in net.dns1 net.dns2 persist.sys.use_dingtalk_dns ro.ril.disable.power.co
 done
 
 # =====================================================================
+SEC "5a. THERMAL / NETWORK CHOICES"
+NOTE "sustained_temp_enter = $(cfg sustained_temp_enter)°C (ASB's own throttle point; vendor limits sit below and are not raised)"
+# auto now means "the value the device shipped with", so the captured stock is worth
+# printing - without it there is no way to tell an auto that resolved correctly from an
+# auto that silently fell through.
+if [ -f /data/adb/asb/net_stock.env ]; then
+  NOTE "captured stock: $(tr '\n' ' ' < /data/adb/asb/net_stock.env)"
+else
+  NOTE "net_stock.env missing - auto has no stock value to resolve to yet (captured on next boot)"
+fi
+V "  tcp congestion in force" "$(cfg net_congestion | sed 's/^auto$//')" \
+  "$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)" present
+NOTE "available congestion algorithms: $(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
+NOTE "qdisc in force: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
+
 SEC "5b. HAPTICS"
 _h_lvl="$(cfg haptic_strength)"
 case "$_h_lvl" in
