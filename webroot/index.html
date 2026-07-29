@@ -804,6 +804,18 @@ body::before, body::after {
    which card was toggled, so the popup and the tile that fired it disagreed on
    colour. These reuse the exact category hues from .cfg-icon.cat-* above, so the
    toast reads as an echo of the card the user just touched. */
+.toast.t-cat-net {
+  background: rgba(2,26,32,0.95);
+  color: #00b4d8;
+  border-color: rgba(0,180,216,0.35);
+  box-shadow: 0 0 25px rgba(0,180,216,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-iface {
+  background: rgba(24,10,36,0.95);
+  color: #ba68ff;
+  border-color: rgba(186,104,255,0.35);
+  box-shadow: 0 0 25px rgba(186,104,255,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
 .toast.t-cat-audio {
   background: rgba(38,10,10,0.95);
   color: #ff7a7a;
@@ -1256,8 +1268,13 @@ body.config-active #livePage.open {
    changes how the device sounds or how long the battery lasts. */
 .cfg-hub {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 11px;
+  /* Six categories in the footprint four used to take.
+     2x2 at 138px tall plus an 11px gap was 287px; 3x2 at 122px with a 9px gap is 253px,
+     so adding two categories actually costs less vertical space than before. Three
+     across is the most a phone takes before the names start wrapping - the longest here
+     is "Интерфейс" at nine characters, which fits a third of the width at 13px. */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
   margin-top: 2px;
 }
 .cfg-tile {
@@ -1266,10 +1283,10 @@ body.config-active #livePage.open {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  padding: 20px 14px;
-  min-height: 138px;
-  border-radius: 18px;
+  gap: 7px;
+  padding: 14px 8px;
+  min-height: 122px;
+  border-radius: 16px;
   text-align: center;
   border: 1px solid rgba(255,255,255,0.07);
   background: linear-gradient(160deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
@@ -1281,10 +1298,10 @@ body.config-active #livePage.open {
 }
 .cfg-tile:active { transform: scale(0.975); }
 .cfg-tile-ico {
-  font-size: 26px;
+  font-size: 22px;
   line-height: 1;
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1293,7 +1310,7 @@ body.config-active #livePage.open {
   background: rgba(255,255,255,0.04);
 }
 .cfg-tile-name {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
@@ -1314,6 +1331,12 @@ body.config-active #livePage.open {
 .cfg-tile.cat-battery .cfg-tile-ico { background: rgba(46,213,115,0.13); border-color: rgba(46,213,115,0.35); }
 .cfg-tile.cat-ux      { border-color: rgba(255,159,28,0.24); }
 .cfg-tile.cat-ux      .cfg-tile-ico { background: rgba(255,159,28,0.13); border-color: rgba(255,159,28,0.35); }
+/* Two new categories need their own hue or they render grey while the other four are
+   coloured - the tile, the icon behind each setting and its toast all key off this. */
+.cfg-tile.cat-net     { border-color: rgba(0,180,216,0.24); }
+.cfg-tile.cat-net     .cfg-tile-ico { background: rgba(0,180,216,0.13); border-color: rgba(0,180,216,0.35); }
+.cfg-tile.cat-iface   { border-color: rgba(186,104,255,0.24); }
+.cfg-tile.cat-iface   .cfg-tile-ico { background: rgba(186,104,255,0.13); border-color: rgba(186,104,255,0.35); }
 
 .cfg-row.is-on {
   border-color: rgba(0,225,200,0.28);
@@ -1388,6 +1411,8 @@ body.config-active #livePage.open {
 .cfg-row.is-on .cfg-icon.cat-display { background: rgba(206,210,216,0.18); border-color: rgba(206,210,216,0.50); }
 .cfg-row.is-on .cfg-icon.cat-memory  { background: rgba(0,214,198,0.16);   border-color: rgba(0,214,198,0.45); }
 .cfg-row.is-on .cfg-icon.cat-system  { background: rgba(180,180,190,0.16); border-color: rgba(180,180,190,0.45); }
+  .cfg-row.is-on .cfg-icon.cat-net     { background: rgba(0,180,216,0.16);   border-color: rgba(0,180,216,0.48); }
+  .cfg-row.is-on .cfg-icon.cat-iface   { background: rgba(186,104,255,0.16);  border-color: rgba(186,104,255,0.48); }
 /* Three settings shared the two grey categories - display and system - and grey is what
    a category looks like when nobody chose a colour for it. On a screen where every other
    card carries a hue that means something, three grey ones read as unfinished rather than
@@ -2029,6 +2054,14 @@ const I18N = {
         desc: 'Выключает размытие везде \u2014 шторка, уведомления, панель громкости, переходы. Меньше нагрузки на GPU, шторка становится непрозрачной вместо матовой. Учтите: у всплывающего уведомления тоже не останется размытой подложки, и текст ляжет на то, что под ним. Промежуточного режима нет \u2014 обе ручки, которые эта платформа даёт, глобальные. Оконная часть применяется сразу, часть композитора \u2014 после перезагрузки.' },
       ui_effects_level: { name: 'Анимации системы',
         desc: '«Упрощённые» \u2014 убирают объём из анимаций OxygenOS: «Недавние» становятся простым списком вместо карточек с превью, переходы теряют многослойные эффекты. Легче для видеочипа, но выглядит скромнее. «Авто» \u2014 следует за настройкой блюра: до недавнего времени это была одна общая настройка, поэтому «авто» сохраняет привычное поведение. Применяется после перезагрузки.' },
+      net_congestion: { name: 'Контроль перегрузки TCP',
+        desc: 'Как TCP решает, с какой скоростью слать. BBR подстраивается под измеренную полосу и на мобильной связи обычно лучше: там потери — это помехи радио, а не перегрузка, и Cubic зря сбрасывает скорость. «Авто» следует профилю питания, который и так выбирает BBR там, где ядро его предлагает. Применяется сразу; уже открытые соединения доживают на старом алгоритме.' },
+      net_qdisc: { name: 'Дисциплина очереди',
+        desc: 'Очередь, в которой пакеты ждут отправки. fq_codel держит низкую задержку под нагрузкой, fq выравнивает потоки и хорошо сочетается с BBR, cake самый тщательный и самый тяжёлый. «Авто» берёт то, что реально есть в ядре. Именно это лечит подвисания, когда закачка забивает канал. Применяется сразу.' },
+      wifi_country: { name: 'Регион WiFi',
+        desc: 'Регуляторный домен драйвера WiFi. Он определяет, какие каналы и какая ширина канала разрешены, а значит — какую агрегацию может использовать радио. CR даёт самый широкий набор, поэтому его обычно и советуют. «Авто» оставляет домен, полученный от SIM. ВАЖНО: выбор домена, не соответствующего вашей стране, — под вашу ответственность: передача на нелицензированных каналах законна не везде. Применяется сразу, радио переподключается.' },
+      wifi_scan_throttle: { name: 'Ограничение сканирования WiFi',
+        desc: 'Android ограничивает фоновые сканирования до 4 на приложение за 2 минуты. «0» сканирует чаще — быстрее находит лучшую точку при перемещении, но тратит батарею; «1» — стоковое поведение. «Авто» не трогает то, что выставила система. Применяется сразу.' },
       haptic_strength: { name: 'Вибрация',
         desc: 'Десять ступеней на фирменной, более дробной шкале \u2014 стандартная настройка Android 0\u20133 здесь и так стоит на максимуме, поэтому её подъём ничего не давал. «Авто» \u2014 оставить как было на устройстве: это не то же самое, что любое число, а решение не вмешиваться. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона: выше служба вибрации отвергает значение целиком, и телефон замолкает вместо того, чтобы бить сильнее. Применяется сразу.' },
       haptic_touch_strength: { name: 'Отклик касаний',
@@ -2310,8 +2343,8 @@ const CFG_ITEMS = [
     desc:'Stock = one shared scale: the phone slider moves the headset volume directly. Disabled = the two are independent, so the phone applies its own gain on top of whatever the headset is set to - usually louder, and what ViPER/EQ need. The trade is that the two scales no longer line up, which on some headsets makes the lowest steps too quiet. Applies without a reboot.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
-  { key:'dsp_loudness', type:'range', def:'0', min:0, max:20, step:1, name:'DSP Loudness',
-    desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, now up to +18 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream.' },
+  { key:'dsp_loudness', type:'range', def:'0', min:0, max:25, step:1, name:'DSP Loudness',
+    desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, up to +25 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream.' },
   { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
     desc:'Needs DSP Loudness above. A low shelf at 90 Hz: the full lift lands on the low end, half of it at the corner, nothing above about 1 kHz \u2014 mids and vocals stay untouched. It runs at the head of the chain, so the added bass is limited like everything else and cannot clip on its own. The trade is headroom: every dB of bass makes the limiter engage sooner, so a big boost on top of a high gain costs overall loudness. 3\u20136 suits most headphones.' },
   { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
@@ -2350,6 +2383,16 @@ const CFG_ITEMS = [
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
     desc:'Simplified strips the depth out of OxygenOS animations: Recents becomes a plain list instead of card previews, and transitions lose their layered effects. Lighter on the GPU, plainer to look at. Auto follows the blur setting - these two were one control until recently, so auto keeps the behaviour you already had. Applies after a reboot.' },
+  // ---- Network ----------------------------------------------------------------
+  { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'TCP Congestion Control',
+    desc:'How TCP decides how fast to send. BBR paces to the measured bandwidth and is usually better on mobile links, where loss is radio interference rather than congestion and Cubic reacts by backing off for no reason. Auto follows the power profile, which already picks BBR where the kernel offers it. Applies immediately; existing connections keep their old algorithm until they are re-opened.' },
+  { key:'net_qdisc', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Queue Discipline',
+    desc:'The queue packets wait in before they leave. fq_codel keeps latency low under load, fq paces flows and pairs well with BBR, cake is the most thorough but the heaviest. Auto uses whichever of these the kernel actually has. This is what fixes the stall you get when an upload saturates the link. Applies immediately.' },
+  { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
+    desc:'The regulatory domain the WiFi driver applies. It decides which channels and which channel widths are legal, so it changes what aggregation the radio may use. CR permits the widest set here, which is why it is the usual recommendation. Auto leaves the SIM-driven domain alone. NOTE: choosing a domain that does not match where you actually are is your responsibility - transmitting on channels not licensed in your country is not legal everywhere. Applies immediately; the radio re-associates.' },
+  { key:'wifi_scan_throttle', type:'seg', def:'auto', opts:['auto','0','1'], name:'WiFi Scan Throttle',
+    desc:'Android limits background WiFi scans to 4 per app per 2 minutes. Off scans more often, which finds a better AP sooner while roaming and costs battery; on is the stock behaviour. Auto leaves whatever the system set. Applies immediately.' },
+
   { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
     desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder. Applies immediately.' },
   { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
@@ -2383,6 +2426,7 @@ const CFG_CAT = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
+  net_congestion:'net', net_qdisc:'net', wifi_country:'net', wifi_scan_throttle:'net',
   disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
 };
 // Four groups, one screen each.
@@ -2400,7 +2444,15 @@ const CFG_GROUPS = [
   // "System", not "Interface": blur and the OEM effects level are about appearance, but
   // the OEM toggles and the timeout management are about how the system behaves, and
   // haptics will land here too. Interface described half the contents.
-  { id:'ui',      ico:'\u2699\uFE0F',    name:'System', ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
+  { id:'ui',      ico:'\u2699\uFE0F',    name:'System', ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' },
+  // Network was folded into per-profile defaults with nothing the user could see or
+  // change; congestion control, the queue discipline and the WiFi regulatory domain are
+  // all things people have opinions about, so they get their own screen.
+  { id:'net',     ico:'\uD83D\uDCF6', name:'Network',   ru:'\u0421\u0435\u0442\u044C' },
+  // Split out of System, which had grown into two unrelated halves: things you SEE and
+  // FEEL (blur, effects level, animation speed, vibration) next to things the system
+  // DOES (OEM toggles). Four visual settings moved here; System keeps the behaviour.
+  { id:'iface',   ico:'\uD83C\uDFA8', name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' }
 ];
 // Where each tunable lives. BG_TRIM and cool_gaming sit under Battery rather than their
 // own colour category: both are battery-vs-something trades, and that is what someone is
@@ -2413,8 +2465,9 @@ const CFG_GROUP_OF = {
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery',
   BG_TRIM_LEVEL:'battery', cool_gaming:'battery',
-  UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'ui', UX_ANIM_FORCE_RESTART:'ui',
-  disable_blur:'ui', ui_effects_level:'ui', haptic_strength:'ui', haptic_touch_strength:'ui'
+  UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', UX_ANIM_FORCE_RESTART:'iface',
+  net_congestion:'net', net_qdisc:'net', wifi_country:'net', wifi_scan_throttle:'net',
+  disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'ui', haptic_touch_strength:'ui'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
 // null = the hub is showing; a group id = that group's screen is.
@@ -2444,6 +2497,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
+  net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDEA6', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDCF6',
   audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
   dsp_compressor:'\uD83E\uDDF0',                // toolbox - dynamics processing
@@ -2818,6 +2872,13 @@ async function cfgSet(key, val, ctl) {
     // also writes the WindowManager global, which needs no reboot at all.
     // Both are written by asb_blur_apply.sh - one script, two independent blocks.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
+    var NET_KEYS = ['net_congestion','net_qdisc','wifi_country','wifi_scan_throttle'];
+    if (NET_KEYS.indexOf(key) >= 0) {
+      // Applied live: none of this touches the overlay, it is all sysctl and `cmd wifi`.
+      try { run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1'); } catch (e) {}
+      toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+      return;
+    }
     var HAPTIC_KEYS = ['haptic_strength','haptic_touch_strength'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
