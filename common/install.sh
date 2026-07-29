@@ -3915,7 +3915,15 @@ MANIFEST_EOF
 
 asb_guard_v4a_effects
 
-for _vb in $(find "$MODPATH/system" "$MODPATH/deferred_overlay" -type f -name "video_beauty_default_config" 2>/dev/null); do
+# Strip the // comments OxygenOS leaves in video_beauty_default_config.
+#
+# /data/adb/asb/odm_patched is in this list because on a device that delivers camera
+# configs by runtime bind, that copy IS the live file - and it is made from the overlay
+# BEFORE this loop runs, so stripping only the overlay left the bound copy exactly as it
+# was. asb_diag reported it honestly: "strict JSON (no // comments)  want 0  live 1" on
+# both /odm and /vendor/odm, while the module's own overlay copy was clean.
+for _vb in $(find "$MODPATH/system" "$MODPATH/deferred_overlay" /data/adb/asb/odm_patched \
+                  -type f -name "video_beauty_default_config" 2>/dev/null); do
   if grep -q '//' "$_vb" 2>/dev/null; then
     _vbt="${_vb}.asbc$$"
     if sed -e '/^[[:space:]]*\/\//d' -e 's#[[:space:]]//[^"]*$##' "$_vb" > "$_vbt" 2>/dev/null; then
