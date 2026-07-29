@@ -38,12 +38,98 @@ _sysctl_w() {
 
 _out=""
 
+# --- link type -------------------------------------------------------------------------
+# wifi | mobile | other. Names are the reliable signal here: Android is consistent about
+# wlan* for WiFi and rmnet*/ccmni*/wwan* for the modem across every OEM that matters.
+_iface_kind() {
+  case "$1" in
+    wlan*|p2p*|ap*)          echo wifi ;;
+    rmnet*|ccmni*|wwan*|ppp*) echo mobile ;;
+    *)                        echo other ;;
+  esac
+}
+
+# Resolve a per-link key against the global one: "auto" on the specific key means
+# "whatever the global says", the same way the touch haptics follow the master level.
+_resolve_for() {
+  _rk_base="$1"; _rk_kind="$2"
+  _rk_v=""
+  case "$_rk_kind" in
+    wifi)   _rk_v="$(_cfg "${_rk_base}_wifi")" ;;
+    mobile) _rk_v="$(_cfg "${_rk_base}_mobile")" ;;
+  esac
+  case "$_rk_v" in
+    ''|auto) _cfg "$_rk_base" ;;
+    *)       printf '%s' "$_rk_v" ;;
+  esac
+}
+
+# Does this kernel take a per-route congestion algorithm? Probe once against the real
+# default route: `ip route change ... congctl X` either works or errors out, and knowing
+# which decides between genuinely simultaneous per-link algorithms and the global switch.
+_congctl_ok=""
+_probe_congctl() {
+  [ -n "$_congctl_ok" ] && return 0
+  _congctl_ok=0
+  _pr="$(ip route show 2>/dev/null | grep -m1 '^default')"
+  [ -n "$_pr" ] || return 0
+  _pc="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
+  [ -n "$_pc" ] || return 0
+  _pclean="$(printf '%s' "$_pr" | sed -e 's/ congctl [a-z_]*//')"
+  ip route change $_pclean congctl "$_pc" >/dev/null 2>&1 && _congctl_ok=1
+  return 0
+}
+
 # --- congestion control --------------------------------------------------------------
+_cc_any=0
+_probe_congctl
+_avail="$(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
+
+if [ "$_congctl_ok" = "1" ]; then
+  # Per-route: WiFi and mobile each carry their own algorithm at the same time. No
+  # switching, so nothing has to notice when the active link changes.
+  for _cif in $(ls /sys/class/net 2>/dev/null); do
+    case "$_cif" in lo|dummy*|sit*|ip6tnl*) continue ;; esac
+    [ "$(cat "/sys/class/net/$_cif/operstate" 2>/dev/null)" = "up" ] || continue
+    _kind="$(_iface_kind "$_cif")"
+    [ "$_kind" = "other" ] && continue
+    _want="$(_resolve_for net_congestion "$_kind")"
+    case "$_want" in ''|auto) continue ;; esac
+    case " $_avail " in
+      *" $_want "*) : ;;
+      *) _out="$_out cc[$_kind]=$_want-unavailable"; continue ;;
+    esac
+    ip route show 2>/dev/null | grep "^default.* dev $_cif" | while IFS= read -r _crt; do
+      _cclean="$(printf '%s' "$_crt" | sed -e 's/ congctl [a-z_]*//')"
+      ip route change $_cclean congctl "$_want" >/dev/null 2>&1
+    done
+    _out="$_out cc[$_kind:$_cif]=$_want"
+    _cc_any=1
+  done
+fi
+
+# Global setting: the only option when the kernel has no congctl, and still the right
+# thing to write when the user set one value for everything.
 _cc="$(_cfg net_congestion)"
 case "$_cc" in
-  ''|auto) : ;;
+  ''|auto)
+    # No global choice, but a per-link one may still need the global switch as fallback.
+    if [ "$_congctl_ok" != "1" ]; then
+      _act="$(ip route show 2>/dev/null | grep -m1 '^default' | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
+      if [ -n "$_act" ]; then
+        _want="$(_resolve_for net_congestion "$(_iface_kind "$_act")")"
+        case "$_want" in
+          ''|auto) : ;;
+          *) case " $_avail " in
+               *" $_want "*)
+                 _sysctl_w net.ipv4.tcp_congestion_control "$_want" && \
+                   _out="$_out cc[active:$_act]=$_want(global-fallback)" ;;
+             esac ;;
+        esac
+      fi
+    fi
+    ;;
   *)
-    _avail="$(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
     case " $_avail " in
       *" $_cc "*)
         if _sysctl_w net.ipv4.tcp_congestion_control "$_cc"; then
@@ -54,41 +140,45 @@ case "$_cc" in
           _out="$_out congestion=FAILED"
         fi
         ;;
-      *)
-        # Say which ones exist rather than just failing: on a kernel without BBR this is
-        # the difference between "ASB is broken" and "this kernel does not have it".
-        _out="$_out congestion=$_cc-unavailable(have:${_avail:-none})"
-        ;;
+      *) _out="$_out congestion=$_cc-unavailable(have:${_avail:-none})" ;;
     esac
     ;;
 esac
 
 # --- queue discipline -----------------------------------------------------------------
-# default_qdisc only affects interfaces brought up AFTER it is set, so also push it onto
-# the live interfaces with tc when that is available. Without the second step the setting
-# appears to do nothing until the next time WiFi or data is toggled.
+# This one IS per-interface in the kernel, so WiFi and mobile get their own without any
+# tricks. default_qdisc still gets the global value for interfaces that come up later.
 _qd="$(_cfg net_qdisc)"
 case "$_qd" in
   ''|auto) : ;;
-  *)
-    if _sysctl_w net.core.default_qdisc "$_qd"; then
-      _out="$_out qdisc=$_qd"
-      if _has tc; then
-        for _if in $(ls /sys/class/net 2>/dev/null); do
-          case "$_if" in lo|dummy*|sit*|ip6tnl*) continue ;; esac
-          [ "$(cat "/sys/class/net/$_if/operstate" 2>/dev/null)" = "up" ] || continue
-          case "$_qd" in
-            fq)       tc qdisc replace dev "$_if" root fq pacing 2>/dev/null ;;
-            fq_codel) tc qdisc replace dev "$_if" root fq_codel target 5ms interval 100ms ecn 2>/dev/null ;;
-            cake)     tc qdisc replace dev "$_if" root cake besteffort triple-isolate 2>/dev/null ;;
-          esac
-        done
-      fi
-    else
-      _out="$_out qdisc=FAILED"
-    fi
-    ;;
+  *) _sysctl_w net.core.default_qdisc "$_qd" && _out="$_out qdisc=$_qd" ;;
 esac
+
+if _has tc; then
+  for _if in $(ls /sys/class/net 2>/dev/null); do
+    case "$_if" in lo|dummy*|sit*|ip6tnl*) continue ;; esac
+    [ "$(cat "/sys/class/net/$_if/operstate" 2>/dev/null)" = "up" ] || continue
+    _kind="$(_iface_kind "$_if")"
+    [ "$_kind" = "other" ] && continue
+    _want="$(_resolve_for net_qdisc "$_kind")"
+    case "$_want" in ''|auto) continue ;; esac
+    # Arguments matter as much as the name: fq_codel with default target is not the same
+    # tuning as fq_codel at 5 ms, and cake without an isolation mode is barely cake.
+    case "$_want" in
+      fq)       tc qdisc replace dev "$_if" root fq pacing >/dev/null 2>&1 ;;
+      fq_codel) tc qdisc replace dev "$_if" root fq_codel target 5ms interval 100ms ecn >/dev/null 2>&1 ;;
+      cake)     tc qdisc replace dev "$_if" root cake besteffort triple-isolate >/dev/null 2>&1 ;;
+      *)        continue ;;
+    esac
+    # Read back: tc accepts a qdisc the kernel has no module for and silently keeps the
+    # old one, which is indistinguishable from success unless you look.
+    if tc qdisc show dev "$_if" 2>/dev/null | grep -q "$_want"; then
+      _out="$_out qdisc[$_kind:$_if]=$_want"
+    else
+      _out="$_out qdisc[$_kind:$_if]=$_want-not-applied"
+    fi
+  done
+fi
 
 # --- WiFi regulatory domain ------------------------------------------------------------
 # `cmd wifi force-country-code` is the supported way in. It survives until explicitly
