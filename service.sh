@@ -781,22 +781,63 @@ sysctl_try() {
   return 0
 }
 # ASB:NET:BEGIN
+
+# Stock network values, captured once before anything is changed.
+#
+# "auto" used to mean "do not touch", and this function had already run by then - so auto
+# reported bbr and fq_codel, which is what ASB set, not what the phone shipped with. On a
+# stock kernel with no bbr the label was doubly wrong. auto has to mean the value the
+# device came with, and the only way to know that is to write it down before overwriting
+# it, once, and keep it.
+asb_net_stock_capture() {
+  _nsf="/data/adb/asb/net_stock.env"
+  [ -f "$_nsf" ] && return 0
+  mkdir -p /data/adb/asb 2>/dev/null
+  {
+    printf 'STOCK_TCP_CC=%s\n' "$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
+    printf 'STOCK_QDISC=%s\n'  "$(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
+  } > "$_nsf" 2>/dev/null
+}
+asb_net_stock_get() {
+  # $1 = STOCK_TCP_CC | STOCK_QDISC
+  grep -E "^$1=" /data/adb/asb/net_stock.env 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
+}
+
 apply_net() {
-  sysctl_try net.core.default_qdisc fq_codel fq pfifo_fast
-  if [ -r /proc/sys/net/ipv4/tcp_available_congestion_control ]; then
-    _cc_avail="$(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
-    if echo "$_cc_avail" | grep -qw bbr; then
-      sysctlw net.ipv4.tcp_congestion_control bbr
-      [ -e /proc/sys/net/ipv6/tcp_congestion_control ] && sysctlw net.ipv6.tcp_congestion_control bbr
-    elif echo "$_cc_avail" | grep -qw cubic; then
-      sysctlw net.ipv4.tcp_congestion_control cubic
-      [ -e /proc/sys/net/ipv6/tcp_congestion_control ] && sysctlw net.ipv6.tcp_congestion_control cubic
-    else
-      :
-    fi
+  asb_net_stock_capture
+
+  # An explicit user choice wins, and "auto" means the captured stock value - not this
+  # function's opinion. Only when neither exists does the old preference order apply.
+  _u_cc="$(grep -E '^[[:space:]]*net_congestion=' "$MODDIR/config/governor.conf" 2>/dev/null \
+           | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  _u_qd="$(grep -E '^[[:space:]]*net_qdisc=' "$MODDIR/config/governor.conf" 2>/dev/null \
+           | head -1 | sed 's/.*=//' | tr -d ' \r')"
+
+  case "$_u_qd" in
+    ''|auto) _qd_want="$(asb_net_stock_get STOCK_QDISC)" ;;
+    *)       _qd_want="$_u_qd" ;;
+  esac
+  if [ -n "$_qd_want" ]; then
+    sysctlw net.core.default_qdisc "$_qd_want" 2>/dev/null \
+      || sysctl_try net.core.default_qdisc fq_codel fq pfifo_fast
   else
-    sysctl_try net.ipv4.tcp_congestion_control bbr cubic reno
-    [ -e /proc/sys/net/ipv6/tcp_congestion_control ] && sysctl_try net.ipv6.tcp_congestion_control bbr cubic reno
+    sysctl_try net.core.default_qdisc fq_codel fq pfifo_fast
+  fi
+
+  _cc_avail="$(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
+  case "$_u_cc" in
+    ''|auto) _cc_want="$(asb_net_stock_get STOCK_TCP_CC)" ;;
+    *)       _cc_want="$_u_cc" ;;
+  esac
+  # Availability still decides: asking for bbr on a kernel without it would leave the
+  # sysctl at whatever it was, and silently. Fall back in the documented order instead.
+  if [ -n "$_cc_want" ] && { [ -z "$_cc_avail" ] || echo "$_cc_avail" | grep -qw "$_cc_want"; }; then
+    sysctlw net.ipv4.tcp_congestion_control "$_cc_want"
+    [ -e /proc/sys/net/ipv6/tcp_congestion_control ] \
+      && sysctlw net.ipv6.tcp_congestion_control "$_cc_want"
+  else
+    sysctl_try net.ipv4.tcp_congestion_control cubic reno
+    [ -e /proc/sys/net/ipv6/tcp_congestion_control ] && sysctl_try net.ipv6.tcp_congestion_control cubic reno
   fi
   case "$ASB_PROFILE" in
     performance) _pca=160; _pss=240 ;;

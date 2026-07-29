@@ -148,9 +148,9 @@ if [ "$_smart_enabled" = "1" ]; then
   echo "  🤖  Smart · bucket ${_smart_bucket} · ${_daypart_name}${_we_name} · conf ${_conf_pct}%"
   # The profile still matters under Smart: it is the rail the learner moves within, so
   # "Smart" alone does not tell you what the caps are anchored to.
-  echo "  🎚  Profile: ${PROFILE} (Smart picks caps within it)"
+  echo "  🎛  Profile: ${PROFILE} (Smart picks caps within it)"
 else
-  echo "  🎚  Profile: ${PROFILE} (manual — Smart off)"
+  echo "  🎛  Profile: ${PROFILE} (manual — Smart off)"
 fi
 _bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
 # Show the LIVE learning weight, the same number the WebUI shows as "battery-lean", so
@@ -160,7 +160,12 @@ _bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.con
 # label the configured tilt separately below.
 _alpha_live="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 [ -n "$_alpha_live" ] && echo "  ⚖️  Battery lean: $((_alpha_live / 10))% (live)"
-[ -n "$_bias" ] && [ "$_bias" != "0" ] && echo "  🎚  Battery tilt set to: $((_bias / 10))%"
+[ -n "$_bias" ] && [ "$_bias" != "0" ] && echo "  🔋  Battery tilt set to: $((_bias / 10))%"
+# The throttling threshold is now user-settable, so it belongs where the profile is -
+# reading a temperature elsewhere in the report and not knowing what it is compared
+# against was the gap.
+_ste="$(_cfg sustained_temp_enter)"
+[ -n "$_ste" ] && [ "$_ste" != "65" ] && echo "  🌡️  Throttling temperature: ${_ste}°C (default 65)"
 if [ "$_rec_disabled" = "1" ]; then
   echo "  ⚠️  SAFE MODE  : governor disabled (${_rec_reason:-recovery})"
 elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
@@ -288,8 +293,19 @@ _l_sess="$(_st smart_sessions_total)"
 _l_conf="$(_st smart_last_confidence)"
 [ -n "$_l_conf" ] || _l_conf="$(_st smart_confidence)"   # fall back on older governors
 _l_pkg="$(_st smart_pkg)"
-_l_drain="$(_st smart_drain_ewma_x10)"
-if [ "$_smart_enabled" = "1" ] && [ -n "${_l_sess}${_l_pkg}" ]; then
+# smart_drain_pctph_x10 first: the EWMA field reads 0 on this governor (confirmed on
+# device - pctph said 114 while ewma said 0), so preferring the EWMA meant the drain line
+# never printed at all. Keep the EWMA as a fallback for older governors that fill it.
+_l_drain="$(_st smart_drain_pctph_x10)"
+case "$_l_drain" in ''|0) _l_drain="$(_st smart_drain_ewma_x10)" ;; esac
+# Not gated on Smart being active.
+#
+# smart_mode_enabled goes to 0 when the profile leaves Smart, and that took the whole
+# LEARNING block with it - so a user who dropped to 20% and got auto-switched to Battery
+# saw "unknown, 0 sessions" on a governor that had ten sessions banked and knew it. The
+# sessions are history, not a live feature: they do not stop existing because the current
+# profile is not Smart, and they are what Smart will use again next time it runs.
+if [ -n "${_l_sess}${_l_pkg}" ]; then
   echo ""
   echo "  🧠  LEARNING"
   _ll=""
@@ -304,6 +320,7 @@ if [ "$_smart_enabled" = "1" ] && [ -n "${_l_sess}${_l_pkg}" ]; then
     else _tier="learning"; fi
     _ll="$(_join "$_ll" "${_tier} $((_l_conf / 10))%")"
   fi
+  [ "$_smart_enabled" != "1" ] && _ll="$(_join "$_ll" "banked - Smart not steering on this profile")"
   [ -n "$_ll" ] && echo "       ${_ll}"
   if [ -n "$_l_drain" ] && [ "$_l_drain" -gt 0 ] 2>/dev/null; then
     echo "       drain now: $((_l_drain / 10)).$((_l_drain % 10))%/h"
@@ -431,7 +448,18 @@ if [ "$(_feat NET)" = "1" ]; then
 fi
 
 if [ "$(_feat WIFI)" = "1" ]; then
-  echo ""
+    echo "  📡  MODEM LPM"
+  case "$_lpm" in
+    fast) echo "       fast — data call held up (low latency)" ;;
+    save) echo "       save — radio idling, keepalives stretched" ;;
+    *)    echo "       normal — profile defaults" ;;
+  esac
+fi
+
+_cam_hold="$(_st camera_hold)"
+if [ "$_cam_hold" = "1" ]; then
+
+echo ""
   echo "  📶  WI-FI"
 # Read what the DRIVER actually ended up with, not `settings get global
 # wifi_country_code`. That settings key is telephony-derived and the framework keeps
@@ -579,18 +607,7 @@ fi
 
 _lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null)"
 if [ -n "$_lpm" ] && [ "$(_feat LPM)" = "1" ]; then
-  echo ""
-  echo "  📶  MODEM LPM"
-  case "$_lpm" in
-    fast) echo "       fast — data call held up (low latency)" ;;
-    save) echo "       save — radio idling, keepalives stretched" ;;
-    *)    echo "       normal — profile defaults" ;;
-  esac
-fi
-
-_cam_hold="$(_st camera_hold)"
-if [ "$_cam_hold" = "1" ]; then
-  echo ""
+  echo ""echo ""
   echo "  📷  CAMERA HOLD ACTIVE"
   echo "       interactive caps held · cpuset + uclamp lifted"
 fi
