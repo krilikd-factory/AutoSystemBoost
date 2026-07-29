@@ -5186,6 +5186,38 @@ int main(int argc, char **argv) {
                 }
             }
 
+            /* Periodic maintenance, on this loop's clock rather than its own process.
+             *
+             * asb_reconcile and asb_watchdog each ran as a permanent shell loop with its
+             * own sleep - two resident processes, two independent timers, and every wake
+             * a separate wakeup for the CPU to come out of idle for. The governor is
+             * already awake here, and it already knows whether the screen is on, so it
+             * can spawn them on a counter instead. Same work, no resident processes, and
+             * the wakeups coalesce with one that was happening anyway.
+             *
+             * Time-based rather than tick-based because the tick interval itself varies
+             * with load - counting ticks would make the period drift with how busy the
+             * phone is, which is the opposite of what a watchdog wants. */
+            {
+                static time_t _rec_last = 0, _wd_last = 0;
+                time_t _mnow = time(NULL);
+                if (_rec_last == 0) { _rec_last = _mnow; _wd_last = _mnow; }
+                /* Reconcile leans on the screen state the same way its shell loop did. */
+                int _rec_period = metrics.misc.screen_on ? 120 : 300;
+                if ((_mnow - _rec_last) >= _rec_period) {
+                    _rec_last = _mnow;
+                    int _rr = system("sh /data/adb/modules/AutoSystemBoost/runtime/asb_reconcile.sh"
+                                     " --once >/dev/null 2>&1 &");
+                    (void)_rr;
+                }
+                if ((_mnow - _wd_last) >= 300) {
+                    _wd_last = _mnow;
+                    int _wr = system("sh /data/adb/modules/AutoSystemBoost/runtime/asb_watchdog.sh"
+                                     " --once >/dev/null 2>&1 &");
+                    (void)_wr;
+                }
+            }
+
             int changed = fsm_update(&fsm, &metrics);
 
             /* rebuild plan on state band cross (idle<->active<->heavy) */
