@@ -718,7 +718,15 @@ body::before, body::after {
   z-index: 1000; 
   pointer-events: none;
   border: 1px solid; 
-  white-space: nowrap; 
+  /* Wrap instead of running off the screen.
+     nowrap meant a long confirmation extended past both edges with the ends unreadable -
+     worst on config changes, where the message carried a raw key name. Capping the width
+     and letting it wrap keeps the whole text on screen on any phone. */
+  white-space: normal;
+  max-width: min(88vw, 420px);
+  text-align: center;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
   letter-spacing: 0.5px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
 }
@@ -747,6 +755,17 @@ body::before, body::after {
   color: #7bed9f; 
   border-color: rgba(46,213,115,0.35); 
   box-shadow: 0 0 25px rgba(46,213,115,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+
+/* Smart had no toast skin at all, so switching to it produced an unstyled,
+   see-through popup while every other profile got its colour. #00e1c8 is the exact
+   value .pbtn[data-p="smart"] uses, so the confirmation matches the card that
+   triggered it. */
+.toast.t-smart {
+  background: rgba(6,32,32,0.95);
+  color: #00e1c8;
+  border-color: rgba(0,225,200,0.35);
+  box-shadow: 0 0 25px rgba(0,225,200,0.15), 0 8px 32px rgba(0,0,0,0.4);
 }
 
 .toast.t-err { 
@@ -1743,6 +1762,14 @@ body.config-active #livePage.open {
       </div>
     </div>
 
+      <!-- Modem LPM: the same reading the action screen shows, but live -->
+      <div class="live-row">
+        <div class="live-cell live-cell-full">
+          <div class="live-cell-label" data-i18n="lv_lpm">Modem LPM</div>
+          <div class="live-cell-value" id="liveLpm">—</div>
+        </div>
+      </div>
+
   </div>
 
   </div>
@@ -1850,12 +1877,16 @@ const I18N = {
     lv_hotspot: 'Горяч. точка · внутр.', lv_est_on: 'Прогноз (экран)',
     lv_est_idle: 'Прогноз (покой)', lv_capsrc: 'Источник кэпа',
     lv_learner: 'Обучение', lv_gpuload: 'Нагрузка GPU', lv_headroom: 'Запас',
+    lv_lpm: 'Modem LPM',
+    lv_lpm_normal: 'обычный', lv_lpm_normal_t: 'по умолчанию для профиля',
+    lv_lpm_save: 'экономия', lv_lpm_save_t: 'радио простаивает, keepalive растянуты',
+    lv_lpm_fast: 'быстрый', lv_lpm_fast_t: 'дата-сессия удерживается (низкая задержка)',
     // config page
     cfg_apply_audio: '\u266b Применить аудио сейчас',
     t_not_applied: 'не применено',
     t_not_applied_hint: 'Настройка сохранена, но устройство её не приняло. Перезагрузитесь и установите модуль ещё раз.',
     t_cfg_audio_live: ' \u00b7 применяю\u2026',
-    t_cfg_audio_reboot: ' \u00b7 нужна перезагрузка',
+    t_cfg_audio_reboot: ' \u00b7 после перезагрузки',
     t_applying_audio: 'Применяю аудио\u2026',
     t_applied_audio: 'Аудио применено (audioserver перезапущен)',
     t_apply_audio_fail: 'Не удалось применить',
@@ -1864,7 +1895,7 @@ const I18N = {
     device_line: 'Устройство OnePlus · Qualcomm Snapdragon',
     // toasts
     t_profile_err: '✗ Ошибка применения профиля',
-    t_cfg_saved: ' · перезагрузите для применения',
+    t_cfg_saved: ' \u00b7 после перезагрузки',
     cfg_camera_key_std: 'Стандарт',
     cfg_camera_key_ext: 'Расширенный',
     t_cfg_err: '✗ Не удалось записать конфигурацию',
@@ -2311,6 +2342,25 @@ var _cfgGroup = null;
 
 function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-system'; }
 // Toast skin for a config key: same category, same colour as its card icon.
+/* Short, human toast text for a config change.
+ *
+ * It used to be built from the RAW key: "\u2713 CAMERA_AGGRESSIVE_INJECT = aggressive \u00b7
+ * \u043f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435..." runs to 65+ characters of mostly shouting, and with the old
+ * nowrap rule it ran off both edges of the phone. The card already carries a proper
+ * localized name, so use that and fall back to the key only when there is none. Long
+ * names are clipped rather than allowed to push the message onto a third line. */
+function cfgToastText(key, val) {
+  var name = Tcfg(key, 'name', '') || key;
+  // Names are display strings: some carry a newline (the DSP ones are two-line labels)
+  // and some have a leading bullet marking them as a sub-setting. Neither belongs in a
+  // single-line confirmation.
+  name = name.replace(/\s+/g, ' ').replace(/^[\u00b7\u2022]\s*/, '').trim();
+  if (name.length > 24) name = name.slice(0, 23).replace(/[\s\u00b7-]+$/, '') + '\u2026';
+  var v = String(val);
+  if (v.length > 14) v = v.slice(0, 13) + '\u2026';
+  return '\u2713 ' + name + ': ' + v;
+}
+
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
@@ -2703,9 +2753,9 @@ async function cfgSet(key, val, ctl) {
       if (AUDIO_REBUILD_KEYS.indexOf(key) >= 0) {
         try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_media_apply.sh >/dev/null 2>&1'); } catch(e) {}
       }
-      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_reboot', ' \u00b7 reboot to apply'), cfgToastType(key));
+      toast(cfgToastText(key, val) + T('t_cfg_audio_reboot', ' \u00b7 reboot to apply'), cfgToastType(key));
     } else {
-      toast('\u2713 ' + key + ' = ' + val + T('t_cfg_saved', ' \u00b7 reboot to apply'), cfgToastType(key));
+      toast(cfgToastText(key, val) + T('t_cfg_saved', ' \u00b7 reboot to apply'), cfgToastType(key));
     }
   } else {
     toast(T('t_cfg_err', '\u2717 Failed to write config'), 'err');
@@ -3069,6 +3119,38 @@ async function pollLive(visible) {
     if (gpuEl) {
       const gpu = (st && typeof st.gpu === 'number') ? st.gpu : null;
       gpuEl.textContent = (gpu === null) ? '—' : (gpu + '%');
+    }
+    // Modem LPM. Read straight from /dev/.asb/lpm_mode - the governor owns that file and
+    // the action screen already reports it; this puts the same reading on the monitor so
+    // it can be watched changing instead of re-opening the action sheet.
+    const lpmEl = _el('liveLpm');
+    if (lpmEl) {
+      run('cat /dev/.asb/lpm_mode 2>/dev/null').then(function(r) {
+        const m = ((r && r.stdout) || '').trim();
+        if (!m) {
+          lpmEl.textContent = 'n/a';
+          lpmEl.className = 'live-cell-value';
+          lpmEl.title = 'LPM feature off, or the governor has not written a mode yet';
+          return;
+        }
+        // Colour carries the meaning: saving uses the battery accent, fast the
+        // performance one, normal stays neutral so it does not read as an alarm.
+        let cls = 'live-cell-value';
+        let txt = T('lv_lpm_normal', 'normal');
+        let tip = T('lv_lpm_normal_t', 'profile defaults');
+        if (m === 'save') {
+          cls += ' cap-raised';
+          txt = T('lv_lpm_save', 'save');
+          tip = T('lv_lpm_save_t', 'radio idling, keepalives stretched');
+        } else if (m === 'fast') {
+          cls += ' cap-clamp';
+          txt = T('lv_lpm_fast', 'fast');
+          tip = T('lv_lpm_fast_t', 'data call held up (low latency)');
+        }
+        lpmEl.textContent = txt;
+        lpmEl.className = cls;
+        lpmEl.title = tip;
+      }).catch(function() { lpmEl.textContent = 'n/a'; });
     }
     const hrEl = _el('liveHeadroom');
     if (hrEl) {
