@@ -697,6 +697,19 @@ done
 _memcg="$(firstf '/dev/memcg' '/sys/fs/cgroup/memory')"
 [ -n "$_memcg" ] && NOTE "memcg present: $_memcg (BG_TRIM can act)" || NOTE "no memcg path (BG_TRIM limited)"
 _bgtrim="$(cfg BG_TRIM_LEVEL)"; NOTE "BG_TRIM_LEVEL = ${_bgtrim:-safe}"
+# Athena state. ASB never disables com.oplus.athena, but older builds did and did not
+# record it, so uninstall could not restore it either. Surfacing it here means a tester
+# who sees it disabled can tell at a glance whether the module is responsible.
+if pm list packages -d 2>/dev/null | grep -q '^package:com.oplus.athena$'; then
+  if grep -q "^pm|com.oplus.athena|" /data/adb/asb/baseline.txt 2>/dev/null; then
+    NOTE "com.oplus.athena DISABLED by ASB (recorded in baseline; uninstall will restore it)"
+  else
+    NOTE "com.oplus.athena DISABLED, but NOT by this build - no baseline record. Likely a"
+    NOTE "  leftover from an older ASB. Restore with: pm enable com.oplus.athena"
+  fi
+else
+  NOTE "com.oplus.athena enabled (ASB does not disable it)"
+fi
 
 # =====================================================================
 SEC "8. DISPLAY / UX"
