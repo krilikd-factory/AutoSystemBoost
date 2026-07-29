@@ -77,7 +77,7 @@ if [ "$_mode" = "mirror" ]; then
   case "$_mdsp" in
     ''|off|0|*[!0-9]*) : ;;
     *)
-      if [ "$_mdsp" -ge 1 ] 2>/dev/null && [ "$_mdsp" -le 20 ] 2>/dev/null; then
+      if [ "$_mdsp" -ge 1 ] 2>/dev/null && [ "$_mdsp" -le 25 ] 2>/dev/null; then
         _mwant="$(( _mdsp * 100 ))"
         _mhave="$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
         if [ "$_mhave" != "$_mwant" ]; then
@@ -187,7 +187,7 @@ _persist persist.vendor.bluetooth.disableabsvol "$_dp"
 changed="${changed}bt_absvol=${_bt} "
 
 # ---- dsp_loudness (gain only) ----------------------------------------------------
-# Slider gives any integer 0..20 now (not just 3/6/9), so accept the whole range. The
+# Slider gives any integer 0..25 now (not just 3/6/9), so accept the whole range. The
 # DSP effect re-reads persist.asb.dsp.* on ENABLE, and the audioserver restart below
 # triggers that ENABLE - which is why gain changes here apply live, no reboot. Values
 # mirror post-fs-data exactly (ceiling -15, comp 6:1 @ -24 dBFS) so live and boot agree.
@@ -196,7 +196,7 @@ _dsp_ok=0
 case "$_dsp" in
   ''|off|0) _dsp_ok=0 ;;
   *[!0-9]*) _dsp_ok=0 ;;
-  *) [ "$_dsp" -ge 1 ] 2>/dev/null && [ "$_dsp" -le 20 ] 2>/dev/null && _dsp_ok=1 ;;
+  *) [ "$_dsp" -ge 1 ] 2>/dev/null && [ "$_dsp" -le 25 ] 2>/dev/null && _dsp_ok=1 ;;
 esac
 # The eq_compat profile exists to hand the stream to an external engine (ViPER and
 # friends). Our own effect sits on the same output and the external driver then does not
