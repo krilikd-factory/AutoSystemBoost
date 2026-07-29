@@ -817,6 +817,24 @@ apply_net() {
     ''|auto) _qd_want="$(asb_net_stock_get STOCK_QDISC)" ;;
     *)       _qd_want="$_u_qd" ;;
   esac
+    # Same stand-down as congestion below: a per-link qdisc override is owned by
+    # asb_net_apply.sh, which sets it per interface with tc. This function only knows the
+    # global default_qdisc, and re-running it every reconcile would keep re-stating a value
+    # the user has deliberately overridden for one link type. The specific setting wins.
+    _pl_qd=0
+    for _plk in net_qdisc_wifi net_qdisc_mobile; do
+      _plv="$(grep -E "^[[:space:]]*$_plk=" "$MODDIR/config/governor.conf" 2>/dev/null \
+              | head -1 | sed 's/.*=//' | tr -d ' \r')"
+      case "$_plv" in ''|auto) : ;; *) _pl_qd=1 ;; esac
+    done
+    case "$_u_qd" in
+      ''|auto)
+        if [ "$_pl_qd" = "1" ]; then
+          _qd_want=""
+          asb_log "apply_net: per-link qdisc override present, global left alone"
+        fi
+        ;;
+    esac
   if [ -n "$_qd_want" ]; then
     sysctlw net.core.default_qdisc "$_qd_want" 2>/dev/null \
       || sysctl_try net.core.default_qdisc fq_codel fq pfifo_fast
@@ -828,6 +846,27 @@ apply_net() {
   case "$_u_cc" in
     ''|auto) _cc_want="$(asb_net_stock_get STOCK_TCP_CC)" ;;
     *)       _cc_want="$_u_cc" ;;
+  esac
+  # Stand down when a PER-LINK override exists.
+  #
+  # apply_net runs at boot and again on every reconcile, and it only knows the global key.
+  # asb_net_apply.sh owns the per-link ones. On a kernel with congctl the two do not
+  # collide - each route carries its own algorithm - but where congctl is missing the
+  # per-link choice IS the global sysctl, and this function would overwrite it every couple
+  # of minutes. The more specific user setting has to win, so leave the global alone.
+  _pl_set=0
+  for _plk in net_congestion_wifi net_congestion_mobile; do
+    _plv="$(grep -E "^[[:space:]]*$_plk=" "$MODDIR/config/governor.conf" 2>/dev/null \
+            | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    case "$_plv" in ''|auto) : ;; *) _pl_set=1 ;; esac
+  done
+  case "$_u_cc" in
+    ''|auto)
+      if [ "$_pl_set" = "1" ]; then
+        _cc_want=""
+        asb_log "apply_net: per-link congestion override present, global left alone"
+      fi
+      ;;
   esac
   # Availability still decides: asking for bbr on a kernel without it would leave the
   # sysctl at whatever it was, and silently. Fall back in the documented order instead.
