@@ -768,6 +768,30 @@ body::before, body::after {
   box-shadow: 0 0 25px rgba(0,225,200,0.15), 0 8px 32px rgba(0,0,0,0.4);
 }
 
+/* Toast skins for the three reboot actions, using the exact colours of the buttons that
+   raise them: red full reboot, orange soft reboot, yellow SystemUI.
+   The full-reboot toast passed type 'perf', and no .toast.t-perf rule ever existed - the
+   only match was .toast.t-cat-perf, which is a different selector - so the most
+   consequential confirmation in the UI came up unstyled and see-through. */
+.toast.t-perf {
+  background: rgba(40,10,10,0.95);
+  color: #ff4d4d;
+  border-color: rgba(255,26,26,0.35);
+  box-shadow: 0 0 25px rgba(255,26,26,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-soft {
+  background: rgba(38,24,4,0.95);
+  color: #ff9f0a;
+  border-color: rgba(255,149,0,0.35);
+  box-shadow: 0 0 25px rgba(255,149,0,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-sysui {
+  background: rgba(38,33,4,0.95);
+  color: #ffd60a;
+  border-color: rgba(255,214,10,0.35);
+  box-shadow: 0 0 25px rgba(255,214,10,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
+
 .toast.t-err { 
   background: rgba(40,10,10,0.95);  
   color: #ff4d4d;    
@@ -2827,11 +2851,11 @@ async function cfgSoftReboot() {
   const now = Date.now();
   if (now - _cfgSoftArmed > 4000) {
     _cfgSoftArmed = now;
-    toast(T('t_soft_confirm', 'Tap again for a soft reboot'), 'balanced');
+    toast(T('t_soft_confirm', 'Tap again for a soft reboot'), 'soft');
     return;
   }
   _cfgSoftArmed = 0;
-  toast(T('t_soft_going', 'Soft rebooting\u2026'), 'balanced');
+  toast(T('t_soft_going', 'Soft rebooting\u2026'), 'soft');
   await run('setprop ctl.restart zygote 2>/dev/null || killall zygote 2>/dev/null');
 }
 
@@ -2842,7 +2866,7 @@ async function cfgSoftReboot() {
  * so those re-apply themselves afterwards.
  */
 async function cfgRestartSysUI() {
-  toast(T('t_sysui_going', 'Restarting SystemUI\u2026'), 'balanced');
+  toast(T('t_sysui_going', 'Restarting SystemUI\u2026'), 'sysui');
   await run('pkill -f com.android.systemui 2>/dev/null || killall com.android.systemui 2>/dev/null');
 }
 
