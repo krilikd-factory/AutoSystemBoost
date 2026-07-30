@@ -827,6 +827,15 @@ body::before, body::after {
    which card was toggled, so the popup and the tile that fired it disagreed on
    colour. These reuse the exact category hues from .cfg-icon.cat-* above, so the
    toast reads as an echo of the card the user just touched. */
+/* The thermal category had no colours at all, so its cards rendered grey and its toasts
+   came up transparent - the same gap Smart and the reboot buttons had. Amber reads as
+   heat without borrowing the red that means "refused" elsewhere. */
+.toast.t-cat-thermal {
+  background: rgba(38,24,4,0.95);
+  color: #ffb340;
+  border-color: rgba(255,179,64,0.35);
+  box-shadow: 0 0 25px rgba(255,179,64,0.15), 0 8px 32px rgba(0,0,0,0.4);
+}
 .toast.t-cat-net {
   background: rgba(2,26,32,0.95);
   color: #00b4d8;
@@ -1459,7 +1468,8 @@ body.config-active #livePage.open {
 .cfg-row.is-on .cfg-icon.cat-display { background: rgba(206,210,216,0.18); border-color: rgba(206,210,216,0.50); }
 .cfg-row.is-on .cfg-icon.cat-memory  { background: rgba(0,214,198,0.16);   border-color: rgba(0,214,198,0.45); }
 .cfg-row.is-on .cfg-icon.cat-system  { background: rgba(180,180,190,0.16); border-color: rgba(180,180,190,0.45); }
-  .cfg-row.is-on .cfg-icon.cat-net     { background: rgba(0,180,216,0.16);   border-color: rgba(0,180,216,0.48); }
+  .cfg-row.is-on .cfg-icon.cat-thermal { background: rgba(255,179,64,0.16);  border-color: rgba(255,179,64,0.48); }
+.cfg-row.is-on .cfg-icon.cat-net     { background: rgba(0,180,216,0.16);   border-color: rgba(0,180,216,0.48); }
   .cfg-row.is-on .cfg-icon.cat-iface   { background: rgba(186,104,255,0.16);  border-color: rgba(186,104,255,0.48); }
 /* Three settings shared the two grey categories - display and system - and grey is what
    a category looks like when nobody chose a colour for it. On a screen where every other
@@ -2514,7 +2524,7 @@ const CFG_ITEMS = [
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
-  { key:'sustained_temp_mode', type:'seg', def:'smart', opts:['stock','smart','manual'], name:'Throttling Point',
+  { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
     desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
   { key:'sustained_temp_enter', type:'range', def:'65', min:40, max:70, step:1, name:'Throttling Temperature',
     desc:'The temperature at which ASB starts holding performance back to keep the phone cooler. Lower means it intervenes sooner - a cooler phone that gives up peak speed earlier; higher lets it run hard for longer and get warmer. 65 is the default. This is ASB\u2019s own threshold, not the vendor\u2019s: the firmware keeps its own hard limits underneath and those cannot be raised from here, so a high value does not make the phone unsafe, it just means the vendor decides first.' },
@@ -2587,8 +2597,8 @@ const CFG_CAT = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
-  sustained_temp_mode:'battery', lockscreen_skip_delayed:'iface',
-  sustained_temp_mode:'battery',
+  sustained_temp_mode:'thermal', lockscreen_skip_delayed:'iface',
+  sustained_temp_mode:'thermal',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
   disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
@@ -2613,6 +2623,7 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
+  sustained_temp_mode:'battery', lockscreen_skip_delayed:'iface',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio',
   bt_absvol_mode:'audio',
@@ -2656,7 +2667,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  sustained_temp_mode:'\uD83C\uDF21\uFE0F', lockscreen_skip_delayed:'\uD83D\uDD13', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
+  sustained_temp_mode:'\uD83C\uDF9B\uFE0F', lockscreen_skip_delayed:'\uD83D\uDD13', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
   net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDEA6', net_qdisc_mobile:'\uD83D\uDEA7', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDD0D',
   audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
