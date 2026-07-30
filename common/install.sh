@@ -57,16 +57,13 @@ asb_big_banner() {
 asb_normalize_module_layout() {
   # Kill a stray $MODPATH/system/system before anything else.
   #
-  # A build of the volume-curve code prefixed "system" onto a live path that already
-  # began with /system, producing system/system/vendor/odm/etc/audio/... in the overlay.
-  # The mount layer then tries to place that at /system/system, which does not exist,
-  # and the device bootloops. It was the single difference between a module that booted
-  # and one that did not.
+  # A build of the volume-curve code prefixed "system" onto a live path that already began with
+  # /system, producing system/system/vendor/odm/etc/audio/...
+  # The mount layer then tries to place that at /system/system, which does not exist, and the
+  # device bootloops.
   #
-  # The source of it is fixed, but a device already carrying one cannot boot to install
-  # the fix - the user disables the module in recovery, boots, and installs over it. So
-  # the update has to clean up after the version that broke them, not just avoid
-  # repeating it. Nothing legitimate is ever placed at system/system.
+  # The source of it is fixed, but a device already carrying one cannot boot to install the fix
+  # - the user disables the module in recovery, boots, and installs over it.
   if [ -d "$MODPATH/system/system" ]; then
     rm -rf "$MODPATH/system/system" 2>/dev/null
     ui_print "      ! ${ASB_L_FIX_SYSSYS:-removed a stray system/system overlay path from an earlier build}"
@@ -78,13 +75,10 @@ asb_normalize_module_layout() {
   # Remove ODM-side volume tables placed as overlays by the build that bootlooped.
   #
   # media_loudness briefly wrote default_volume_tables.xml into system/odm/etc/audio and
-  # system/vendor/odm/etc/audio as magic-mount overlays. Every other /odm audio file in
-  # this module goes through the runtime bind precisely because /odm must not be overlaid
-  # here, and these two did not - the device stopped booting the moment the tweak was set
-  # to anything but stock. They are delivered through the bind now, so any copy still
-  # sitting in the overlay is from the broken build and has to go: a device in a bootloop
-  # gets its module disabled in recovery and the fix installed over the top, and the fix
-  # has to clean up what the previous version left behind.
+  # system/vendor/odm/etc/audio as magic-mount overlays.
+  # Every other /odm audio file in this module goes through the runtime bind precisely because
+  # /odm must not be overlaid here, and these two did not - the device stopped booting the
+  # moment the tweak was set to anything but stock.
   for _mroot in "$MODPATH" /data/adb/modules/AutoSystemBoost /data/adb/modules_update/AutoSystemBoost; do
     [ -d "$_mroot" ] || continue
     rm -f "$_mroot/system/odm/etc/audio/default_volume_tables.xml" \
@@ -121,12 +115,11 @@ asb_normalize_module_layout() {
 }
 
 asb_end_banner() {
-  # A one-glance summary of what ended up enabled - the sections above show the work,
-  # this shows the final category picture so the install closes like the action screen.
-  # Sections that had no output at all, because nothing on their path prints during
-  # install - vibration and background trimming are applied by the runtime scripts, and
-  # auto-battery by the governor. A user who enabled them saw no confirmation anywhere,
-  # which reads as "it did not install" rather than "it applies later".
+  # A one-glance summary of what ended up enabled - the sections above show the work, this
+  # shows the final category picture so the install closes like the action screen.
+  # Sections that had no output at all, because nothing on their path prints during install -
+  # vibration and background trimming are applied by the runtime scripts, and auto-battery by
+  # the governor.
   _sg() {
     grep -E "^[[:space:]]*$1=" "$MODPATH/config/governor.conf" 2>/dev/null \
       | head -1 | sed 's/.*=//' | tr -d ' \r'
@@ -176,11 +169,9 @@ asb_end_banner() {
 
   # Breathing room before the closing summary.
   #
-  # These blank lines used to sit loose in the top-level install flow, so they landed
-  # wherever execution happened to reach them - which, once the sections below moved,
-  # meant a large gap opening up in the middle of the report rather than at its end.
-  # Keeping them here ties the spacing to the thing it is spacing: the per-topic
-  # sections finish, the page clears, and the category summary starts fresh.
+  # These blank lines used to sit loose in the top-level install flow, so they landed wherever
+  # execution happened to reach them - which, once the sections below moved, meant a large gap
+  # opening up in the middle of the report rather than at its end.
   _i=0
   while [ "$_i" -lt 13 ]; do
     ui_print " "
@@ -189,11 +180,9 @@ asb_end_banner() {
 
   # Categories last, not first.
   #
-  # The per-topic sections above (display, vibration, battery, memory) each describe
-  # something that was actually done, and they read as a continuation of the install log
-  # right above them. The category list is a different kind of thing - a summary of what
-  # was switched on - so putting it between the log and those sections split one train of
-  # thought in half. It closes the summary instead.
+  # The per-topic sections above (display, vibration, battery, memory) each describe something
+  # that was actually done, and they read as a continuation of the install log right above
+  # them.
   _en=""; _en_n=0; _en_line=""
   for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
             RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY; do
@@ -654,10 +643,8 @@ asb_apply_device_overlay() {
   rm -rf "$MODPATH/system/vendor/etc/audio" 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/odm/etc/audio" 2>/dev/null || true
   rm -rf "$MODPATH/system/odm/etc/audio" 2>/dev/null || true
-  # Safety sweep: a previous build (before the configs-only clone) could have staged
-  # multi-MB ML models and calibration blobs into the audio tree, ballooning the module
-  # to ~32MB. Delete any such binaries anywhere under the module so an upgrade shrinks
-  # back down instead of inheriting the bloat.
+  # Safety sweep: a previous build (before the configs-only clone) could have staged multi-MB
+  # ML models and calibration blobs into the audio tree, ballooning the module to ~32MB.
   find "$MODPATH/system" -type f \( -name '*.mnn' -o -name '*.onnx' -o -name '*.bin' \
        -o -name '*.dlc' -o -name '*.tflite' \) -delete 2>/dev/null || true
   rm -rf "$MODPATH/system/vendor/etc/wifi" 2>/dev/null || true
@@ -797,14 +784,10 @@ asb_patch_wifi_inplace() {
   _wifi_hit=0
   for _ws in /vendor/etc/wifi /odm/etc/wifi /odm/vendor/etc/wifi /vendor/odm/etc/wifi /system/vendor/etc/wifi; do
     [ -d "$_ws" ] || continue
-    # Enumerate the WCNSS config files with BOUNDED SHELL GLOBS — top-level plus up
-    # to two nested sku folders (e.g. kiwi_v2/, peach/, peach_v2/). Deliberately NO
-    # recursive `find` and NO whole-dir clone: on some devices (Ace 6) paths like
-    # /vendor/odm/etc/wifi are bind-mounts of /odm, and a recursive walk can loop
-    # through the bind-mount tree and stall the install for minutes. Globs only stat
-    # the paths they match — exactly the traversal the old `ls` guard did (which
-    # never hung) — while still catching the nested-only layouts the old guard
-    # skipped. Only the patched .ini files are cloned, so the overlay stays minimal.
+    # Enumerate the WCNSS config files with BOUNDED SHELL GLOBS — top-level plus up to two
+    # nested sku folders (e.g.
+    # Globs only stat the paths they match — exactly the traversal the old `ls` guard did
+    # (which never hung) — while still catching the nested-only layouts the old guard skipped.
     _dst_root="$MODPATH/system${_ws#/system}"
     for _wf in "$_ws"/WCNSS_qcom_cfg*.ini \
                "$_ws"/*/WCNSS_qcom_cfg*.ini \
@@ -899,11 +882,11 @@ asb_media_lift_file() {
       if (t < b) t = b
       return t
     }
-    # Buffer a whole <Video ...> element (its attributes are split across lines in the
-    # stock media_profiles), then lift bitRate by the width/height found ANYWHERE in that
-    # element. The old per-line matcher required width, height and bitRate on the same
-    # line, which never happens in the OP15 stock format - so 1080p fell through to the
-    # unsized bracket bump and landed at 37.3M instead of 40M (a diag FAIL).
+    # Buffer a whole <Video ...> element (its attributes are split across lines in the stock
+    # media_profiles), then lift bitRate by the width/height found ANYWHERE in that element.
+    # The old per-line matcher required width, height and bitRate on the same line, which never
+    # happens in the OP15 stock format - so 1080p fell through to the unsized bracket bump and
+    # landed at 37.3M instead of 40M (a diag FAIL).
     {
       line = $0
       if (in_video) {
@@ -944,12 +927,7 @@ asb_media_lift_file() {
 }
 
 # Format-agnostic hi-res sampling-rate lifter for audio_policy_configuration.xml.
-# For every samplingRates="..." list that already reaches 96000 but stops short of
-# 384000, it appends the missing hi-res steps (176400 192000 352800 384000) using
-# the SAME delimiter the list already uses — comma OR space. This replaces the old
-# pile of exact-string seds (which silently missed Ace 6's space-separated
-# "44100 48000 88200 96000" format) and covers OP15/OP13/OP12/Ace and anything
-# future. Idempotent: never appends a rate that is already present.
+# Idempotent: never appends a rate that is already present.
 asb_lift_hires_policy() {
   [ -f "$1" ] || return 0
   awk '
@@ -987,12 +965,9 @@ asb_patch_media_profiles_inplace() {
                       -type f -name 'media_profiles*.xml' 2>/dev/null \
                       | grep -vE '/vintf/|/manifest' | sort -u); do
     # Strip a leading /system before prefixing, or the two stack into
-    # $MODPATH/system/system/... - the mount layer then aims at /system/system, which
-    # does not exist, and the device bootloops. _mp_roots contains BOTH /system/vendor
-    # and /system/odm, so this is reachable the moment either is a real directory
-    # rather than a symlink. It has not bitten here only because on this device they
-    # are symlinks and find(1) does not descend into them; on a device where they are
-    # real, MEDIA alone would be enough to stop it booting.
+    # $MODPATH/system/system/...
+    # - the mount layer then aims at /system/system, which does not exist, and the device
+    # bootloops.
     _mp_rel="system${_mp_live#/system}"
     mkdir -p "$MODPATH/$(dirname "$_mp_rel")" 2>/dev/null
     cp -f "$_mp_live" "$MODPATH/$_mp_rel" 2>/dev/null || continue
@@ -1005,9 +980,6 @@ asb_patch_media_profiles_inplace() {
 }
 
 # Does this conf_tuning_params.json still carry the untouched BT.601 chroma matrix?
-# Echoes non-empty when it looks like stock, empty when it has been graded.
-# Stock is -0.168736 on every device; the grader multiplies it, so any grade moves it
-# out of the -0.1687xxx band. Only meaningful for conf_tuning_params.json.
 asb_cam_chroma_ok() {
   [ -f "$1" ] || return 0
   grep -m1 -o '"Main1x_Rgb2YuvParams"[^]]*]' "$1" 2>/dev/null \
@@ -1037,26 +1009,15 @@ asb_clone_device_camera_tone() {
           mkdir -p "$MODPATH/$(dirname "$_ct_dst")" 2>/dev/null
           # SOURCE OF TRUTH: the pristine baseline, not the live path.
           #
-          # "$_ct_live" is a MOUNTED path. Once ASB has been installed once, /odm/etc/
-          # camera is this module's own overlay, so "cloning the stock file" actually
-          # cloned the PREVIOUS INSTALL'S GRADED OUTPUT - and the grade below then
-          # multiplied it again. Measured across three installs on a OnePlus 15 the
-          # saturation went 1.28x -> 1.51x -> 1.93x and the USM sharpening 1.5x -> 2.07x
-          # -> 3.1x of the manufacturer's value, with a third of the neural blend
-          # weights pinned at their 1.0 ceiling. Nothing in the code stopped it.
+          # "$_ct_live" is a MOUNTED path.
           #
-          # asb_tw_base_path gives the .asbbase for this destination. When one exists it
-          # is by definition the ungraded original (see asb_save_dynamic_baselines,
-          # which now runs BEFORE any grading), so it is the only safe source. Only on a
-          # genuinely first install, when no baseline exists yet, is the live path the
-          # stock file - and that is exactly when it is safe to copy.
+          # asb_tw_base_path gives the .asbbase for this destination.
           _ct_src="$_ct_live"
-          # The chroma test below only means anything for conf_tuning_params.json:
-          # it looks for the BT.601 matrix, which video_beauty_default_config simply
-          # does not contain. Running it there made the grep come back empty, which the
-          # code reads as "graded" - so a perfectly good video_beauty baseline would be
-          # deleted and the user shown a corruption warning about a file that was never
-          # graded in the first place. Gate on the filename.
+          # The chroma test below only means anything for conf_tuning_params.json: it looks for
+          # the BT.601 matrix, which video_beauty_default_config simply does not contain.
+          # Running it there made the grep come back empty, which the code reads as "graded" -
+          # so a perfectly good video_beauty baseline would be deleted and the user shown a
+          # corruption warning about a file that was never graded in the first place.
           _ct_checkable=0
           [ "$_ct_base" = "conf_tuning_params.json" ] && _ct_checkable=1
           if [ "$_ct_checkable" = "1" ] && command -v asb_tw_base_path >/dev/null 2>&1; then
@@ -1064,11 +1025,9 @@ asb_clone_device_camera_tone() {
             if [ -n "$_ct_bp" ] && [ -f "$_ct_bp" ]; then
               # Trust the baseline only if it still looks like stock.
               #
-              # Devices updated from a build with the compounding bug carry a baseline
-              # that is already graded, and using it as "the pristine original" is what
-              # made the damage permanent across reinstalls. The RGB->YUV chroma rows are
-              # the reliable tell: stock is the standard BT.601 matrix, identical on every
-              # device, and grading multiplies it. -0.168736 either matches or it does not.
+              # Devices updated from a build with the compounding bug carry a baseline that is
+              # already graded, and using it as "the pristine original" is what made the damage
+              # permanent across reinstalls.
               if [ -n "$(asb_cam_chroma_ok "$_ct_bp")" ]; then
                 _ct_src="$_ct_bp"
               else
@@ -1081,13 +1040,9 @@ asb_clone_device_camera_tone() {
           #
           # Discarding a bad baseline falls back to "$_ct_live" on the assumption that a
           # missing baseline means a first install, where the live file really is stock.
-          # That assumption breaks on an update installed over a RUNNING module: /odm/etc
-          # is still the old module's overlay at that moment, so the fallback copied the
-          # previous install's graded output - the exact file we had just refused to
-          # trust. Measured on a real device: the repair ran, the warning printed, and
-          # saturation still went 1.93x -> 2.47x because the "stock" it recovered to was
-          # not stock. The partition only becomes genuinely stock after a reboot with no
-          # ASB overlay mounted, which no installer can do for itself.
+          # That assumption breaks on an update installed over a RUNNING module: /odm/etc is
+          # still the old module's overlay at that moment, so the fallback copied the previous
+          # install's graded output - the exact file we had just refused to trust.
           #
           # So: if the live file fails the same test, do not clone anything. Leaving the
           # destination absent means the boot pass has no file to grade and the next
@@ -1117,12 +1072,10 @@ asb_clone_device_camera_tone() {
       fi
       # Grade here, on every copy that was just made.
       #
-      # This is where the camera files actually come from on an OP13/OP15 - cloned from
-      # the live partition into TWO destinations, system/vendor/odm and system/odm. The
-      # grading hook sat in a different branch that builds only the first of those and
-      # runs earlier, so it graded a file this function then overwrote, and the install
-      # log showed the clone with no grade line after it. Doing it at the point of
-      # creation means there is one place that owns these files instead of two.
+      # This is where the camera files actually come from on an OP13/OP15 - cloned from the
+      # live partition into TWO destinations, system/vendor/odm and system/odm.
+      # Doing it at the point of creation means there is one place that owns these files
+      # instead of two.
       if [ "$_ct_base" = "conf_tuning_params.json" ] \
          && [ -f "$MODPATH/runtime/asb_camera_grade.sh" ]; then
         asb_camera_aggr_flag
@@ -1240,12 +1193,10 @@ asb_clone_dir_from_live() {
   _dest="$MODPATH/system${_canon}"
   rm -rf "$_dest" 2>/dev/null
   mkdir -p "$_dest" 2>/dev/null
-  # Copy ONLY the text config files ASB actually patches. The audio dir also holds huge
-  # binary blobs - noise-suppression ML models (dcunet_nbf.onnx.mnn ~3.5M, oprec_nn_ve.mnn
-  # ~1.5M) and mic/camera calibration (.bin, several MB each) - which ASB never touches.
-  # Cloning the whole tree pulled ~29MB of that dead weight into the module (3.6MB -> 32MB).
-  # Whitelisting extensions keeps the layout ASB needs while dropping the blobs. -maxdepth 6
-  # still caps traversal against bind-mount loops (/vendor/odm -> /odm -> ...).
+  # Copy ONLY the text config files ASB actually patches.
+  # The audio dir also holds huge binary blobs - noise-suppression ML models
+  # (dcunet_nbf.onnx.mnn ~3.5M, oprec_nn_ve.mnn ~1.5M) and mic/camera calibration (.bin,
+  # several MB each) - which ASB never touches.
   _clone_n=0
   ( cd "$_src" && find . -maxdepth 6 -type f \
         \( -name '*.xml' -o -name '*.conf' -o -name '*.json' -o -name '*.txt' \
@@ -1259,10 +1210,10 @@ asb_clone_dir_from_live() {
   [ -d "$_dest" ] || return 1
   # Say what was mirrored, not where it came from.
   #
-  # "vendor/etc/audio -> system/vendor/etc/audio (configs only)" is a line for whoever
-  # wrote the installer. A user reads three of them in a row and learns nothing except
-  # that something happened somewhere. Count the files and name the area instead; the
-  # paths are still in the log for anyone debugging, one line above.
+  # "vendor/etc/audio -> system/vendor/etc/audio (configs only)" is a line for whoever wrote
+  # the installer.
+  # Count the files and name the area instead; the paths are still in the log for anyone
+  # debugging, one line above.
   _clone_cnt="$(find "$_dest" -type f 2>/dev/null | wc -l | tr -d ' ')"
   # Localised: the module ships English and Russian text files and the user picked one
   # at the top of the install. Hardcoding English here would have made this the only
@@ -1286,11 +1237,10 @@ asb_clone_device_audio_wifi() {
       rm -f "$MODPATH/system/vendor/odm/etc/$_af" 2>/dev/null || true
     done
     _audio_done=0
-    # Merge ALL audio dirs, do not stop at the first that exists. On newer OP15 revisions
-    # (e.g. PLK110) /vendor/etc/audio exists but holds only SKU resourcemanager files,
-    # while the real mixer_paths lives in /odm/etc/audio. Breaking after the first dir
-    # copied /vendor but never reached /odm, so mixer_paths was never cloned and the whole
-    # aggressive/EQ/Class-H mixer tune silently did nothing (device diag: 46% pass).
+    # Merge ALL audio dirs, do not stop at the first that exists.
+    # Breaking after the first dir copied /vendor but never reached /odm, so mixer_paths was
+    # never cloned and the whole aggressive/EQ/Class-H mixer tune silently did nothing (device
+    # diag: 46% pass).
     for _asrc in /vendor/etc/audio /odm/etc/audio /system/vendor/etc/audio; do
       if [ -d "$_asrc" ]; then
         asb_clone_dir_from_live "$_asrc" && _audio_done=1
@@ -1314,12 +1264,7 @@ asb_clone_device_audio_wifi() {
 
 asb_patch_one_mixer() {
   _f="$1"; [ -f "$_f" ] || return 0
-  # Digital-gain ceiling is device-gated. On SM8650/pineapple (cliffs) the WCD/WSA
-  # "Digital Volume" controls top out at 84 (0 dB); writing 88 there put the WSA
-  # speaker path out of range so the framework slider stopped attenuating (speaker
-  # blasted, and the wedged HAL also killed BT volume). Other codecs (e.g. sun/
-  # canoe) accept 88, so they keep the original +boost. _asb_dv_max is set in
-  # device detection (default 88; 84 for pineapple).
+  # Digital-gain ceiling is device-gated.
   _dvmax="${_asb_dv_max:-88}"
   for _v in 80 81 82 83 84 85 86 87; do
     [ "$_v" -ge "$_dvmax" ] 2>/dev/null && continue
@@ -1328,12 +1273,7 @@ asb_patch_one_mixer() {
   done
   sedi 's/\(name="IIR0 Enable Band[1-5]" value="\)1"/\10"/g' "$_f"
   sedi 's/\(name="HPH[LR]_RDAC Switch" value="\)0"/\11"/g' "$_f"
-  # Promote the Class-H headphone modes to HIFI. Only the CLS_H_* family is
-  # touched — CLS_AB is left alone on purpose: on this codec it is a dedicated
-  # <path name="hph-class-ab-mode"> the HAL selects deliberately, so forcing
-  # Class-H there would mislabel a genuine Class-AB output. Converting ULP/LOHIFI
-  # (the default + hph-highquality/lowpower paths) is enough to satisfy the
-  # "RX HPH Mode = CLS_H_HIFI (>=1)" check while staying faithful to the stock tree.
+  # Promote the Class-H headphone modes to HIFI.
   for _hphm in CLS_H_ULP CLS_H_LOHIFI CLS_H_LP CLS_H_NORMAL; do
     sedi "s/\\(name=\"RX HPH Mode\" value=\"\\)${_hphm}\"/\\1CLS_H_HIFI\"/g" "$_f"
   done
@@ -1396,80 +1336,60 @@ asb_guard_v4a_effects() {
   return 0
 }
 
-# Media loudness: reshape the audio-policy volume CURVES (index -> attenuation in
-# millibels). Stock OxygenOS attenuates brutally across the usable range — media
-# sits at -40 dB at 20% and -17 dB at 60% — which is why "one step too quiet, one
-# step too loud" happens and why the phone feels short of volume. Scaling those
-# attenuations toward 0 makes every slider position genuinely louder.
+# Media loudness: reshape the audio-policy volume CURVES (index -> attenuation in millibels).
+# Stock OxygenOS attenuates brutally across the usable range — media sits at -40 dB at 20% and
+# -17 dB at 60% — which is why "one step too quiet, one step too loud" happens and why the
+# phone feels short of volume.
 #
 # ONLY two curves are touched, chosen from the real stream->curve map:
-#   DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE  -> MUSIC + ASSISTANT on speaker
-#   DEFAULT_MEDIA_VOLUME_CURVE                    -> MUSIC on headset / BT / earpiece
-# Deliberately NOT touched: NON_MUTABLE_* (alarms), HEADSET/EXT_MEDIA curves
-# (ringtone + notifications), SILENT/FULL_SCALE. Alarms and ringtones keep stock
-# loudness. Side effect worth knowing: MEDIA is also referenced by VOICE_CALL and
-# BLUETOOTH_SCO on EXT_MEDIA, so BT call audio gets the same lift.
+# DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE -> MUSIC + ASSISTANT on speaker
+# DEFAULT_MEDIA_VOLUME_CURVE -> MUSIC on headset / BT / earpiece Deliberately NOT touched:
+# NON_MUTABLE_* (alarms), HEADSET/EXT_MEDIA curves (ringtone + notifications),
+# SILENT/FULL_SCALE.
 #
 # The 100%/0 dB point is never raised above unity, so nothing can clip.
-# $1 = file to patch, $2 = scale percent (100 = stock/no-op, 80 = mild, 65 = strong)
-# The reshape itself and the pristine-stock lookup live in runtime/asb_volume_curves.sh
-# so the installer and the runtime path (WebUI -> asb_media_apply.sh) share ONE
-# implementation. They used to exist only here, which is why changing media_loudness
-# after install did nothing no matter how many times the phone was rebooted.
+# They used to exist only here, which is why changing media_loudness after install did nothing
+# no matter how many times the phone was rebooted.
 if [ -r "$MODPATH/runtime/asb_volume_curves.sh" ]; then
   . "$MODPATH/runtime/asb_volume_curves.sh"
 fi
 
-# Media loudness needs to be patched from a PRISTINE stock copy, because scaling is
-# not idempotent and the previous install's overlay may already be shadowing
-# /vendor/etc. Stash the untouched stock table on first sight and always rebuild
-# from that, so changing the setting (or reverting to stock) is exact.
+# Media loudness needs to be patched from a PRISTINE stock copy, because scaling is not
+# idempotent and the previous install's overlay may already be shadowing /vendor/etc.
 
-# --- ASB DSP effect -----------------------------------------------------------
-# Installs libasbdsp.so into the /vendor overlay and registers it in the device's
-# audio_effects_config.xml. Registration matters as much as the library: an effect
-# nobody attaches is dead weight. We hook it into <postprocess><stream type="music">
-# so audioserver attaches it to EVERY music stream automatically -- no companion app,
-# and therefore none of the "silent until you open the EQ app" behaviour that the
-# session-attached effects suffer from.
+# --- ASB DSP effect ----------------------------------------------------------- Installs
+# libasbdsp.so into the /vendor overlay and registers it in the device's
+# audio_effects_config.xml.
 ASB_DSP_UUID="a5b10001-7e55-4c60-9f21-415342445350"
 ASB_DSP_TYPE="fe3199be-aed0-413f-87bb-11260eb63cf1"
 
-# Stage the effect library into the overlay UNCONDITIONALLY, the way ViperFX and
-# friends ship theirs. It used to be installed only when dsp_loudness was already 3/6/9
-# at install time - but the audio stage runs long before the user's config is carried
-# over from the previous install, so it always read the shipped default (off) and the
-# library was never staged. Users who set +9 in the WebUI got "libasbdsp absent" and a
-# DSP that silently did nothing.
+# Stage the effect library into the overlay UNCONDITIONALLY, the way ViperFX and friends ship
+# theirs.
+# It used to be installed only when dsp_loudness was already 3/6/9 at install time - but the
+# audio stage runs long before the user's config is carried over from the previous install, so
+# it always read the shipped default (off) and the library was never staged.
 #
-# Shipping it always costs nothing: an effect that is not listed in
-# audio_effects_config.xml is never dlopen'd, so an unregistered .so is inert bytes on
-# disk (~20 KB). Registration is what dsp_loudness actually gates, and that decision is
-# made after the config carry-over where it can see the real value.
+# Shipping it always costs nothing: an effect that is not listed in audio_effects_config.xml is
+# never dlopen'd, so an unregistered .so is inert bytes on disk (~20 KB).
 #
-# 64-bit only on purpose: this platform has no /vendor/lib at all (no 32-bit audio
-# processes), and the CI builds arm64-v8a only - an arm64 .so in a 32-bit soundfx dir
-# would just fail to load.
-# Which effect ABI can this device's audioserver actually load?
+# 64-bit only on purpose: this platform has no /vendor/lib at all (no 32-bit audio processes),
+# and the CI builds arm64-v8a only - an arm64 .so in a 32-bit soundfx dir would just fail to
+# load.
 #
-# The module ships both. Whether a device binds effects through the AIDL factory
-# (createEffect) or the legacy HIDL one (AUDIO_EFFECT_LIBRARY_INFO_SYM) is not a
-# function of the Android version - it is whatever that OEM's audioserver was built
-# against. A OnePlus 13 reported dsp_loudness silent with the attach daemon logging
-# set=-19 initCheck=-19 on every attempt: NO_INIT, the factory refusing to create the
-# effect, because the AIDL-only library exported no AELI symbol for a factory that
-# wanted one. The identical build worked on a OnePlus 15. Registration and staging were
-# both correct; only the ABI was wrong.
+# The module ships both.
+# A OnePlus 13 reported dsp_loudness silent with the attach daemon logging set=-19
+# initCheck=-19 on every attempt: NO_INIT, the factory refusing to create the effect, because
+# the AIDL-only library exported no AELI symbol for a factory that wanted one.
 #
 # VINTF is the authority: the device manifest declares the effect HAL and its format.
 # dsp_effect_abi=aidl|legacy in governor.conf overrides the probe, so a tester can
 # settle the question on a device without waiting for a new build.
 asb_pick_dsp_abi() {
-  # Read the LIVE config first, then the one in the zip. The carry-over that copies user
-  # keys into $MODPATH runs ~560 lines after the DSP library is staged, so at this point
-  # $MODPATH/config/governor.conf is still the pristine shipped file - a user override
-  # would have been read as "auto" and silently ignored, which makes "just set it and
-  # reinstall" advice that cannot work.
+  # Read the LIVE config first, then the one in the zip.
+  # The carry-over that copies user keys into $MODPATH runs ~560 lines after the DSP library is
+  # staged, so at this point $MODPATH/config/governor.conf is still the pristine shipped file -
+  # a user override would have been read as "auto" and silently ignored, which makes "just set
+  # it and reinstall" advice that cannot work.
   _abi_force=""
   for _abi_cf in /data/adb/modules/AutoSystemBoost/config/governor.conf \
                  /data/adb/asb/governor.conf.snapshot \
@@ -1495,15 +1415,12 @@ asb_pick_dsp_abi() {
          | grep -qE 'format="aidl"[^>]*>[^<]*<name>android\.hardware\.audio\.effect|android\.hardware\.audio\.effect[^<]*</name>[^<]*<fqname'; then
         # ...and the INTERFACE VERSION decides which build of it can load.
         #
-        # A OnePlus 13 and a OnePlus 15 running the same module, byte-identical library
-        # (362392 bytes on both), with the effects config patched and visible to
-        # audiohalservice.qti in its own mount namespace on both - and the library in
-        # the service's memory on only one of them. The one documented difference was
-        # here: the OP13 declares <version>2</version>, the OP15 <version>3</version>.
-        # The Descriptor struct that queryEffect() fills differs between those, so a
-        # library built against V3 is not something a V2 factory can use, and it never
-        # gets as far as dlopen. Nothing in the config or the filesystem could have
-        # shown that - it took comparing a working device against a broken one.
+        # A OnePlus 13 and a OnePlus 15 running the same module, byte-identical library (362392
+        # bytes on both), with the effects config patched and visible to audiohalservice.qti in
+        # its own mount namespace on both - and the library in the service's memory on only one
+        # of them.
+        # Nothing in the config or the filesystem could have shown that - it took comparing a
+        # working device against a broken one.
         _av="$(tr -d '\n' < "$_vf" 2>/dev/null \
                | sed 's/.*android\.hardware\.audio\.effect<\/name>//' \
                | sed 's/.*<version>\([0-9]*\)<\/version>.*/\1/' \
@@ -1532,10 +1449,8 @@ asb_pick_dsp_abi() {
 
 asb_install_dsp_lib() {
   _dsp_any=0
-  # 64-bit and 32-bit soundfx dirs both exist on the target, and an effect library has
-  # to match the bitness of the process that dlopens it - so each gets the .so built
-  # for its own ABI. Shipping only lib64 leaves any 32-bit audio path without the
-  # effect; shipping the arm64 .so into lib/ would just fail to load.
+  # 64-bit and 32-bit soundfx dirs both exist on the target, and an effect library has to match
+  # the bitness of the process that dlopens it - so each gets the .so built for its own ABI.
   ASB_DSP_ABI="$(asb_pick_dsp_abi)"
   # Whether a HIDL factory exists at all decides if legacy is a real option or only a
   # library that will sit in memory doing nothing.
@@ -1564,13 +1479,10 @@ asb_install_dsp_lib() {
         # Do NOT quietly stage the legacy library here.
         #
         # Tested on a OnePlus 15 forced to legacy: the library loads - four mappings in
-        # audiohalservice.qti - and no effect is ever created. dumpsys media.audio_flinger
-        # shows nothing, where the AIDL build shows "ASB Loudness / 1 Clients". The client
-        # path goes through the AIDL factory, which dlopens whatever the config names and
-        # then looks for createEffect; the legacy library exports only AELI, so the effect
-        # is never instantiated. QTI's own legacy libraries are mapped in too, but through
-        # an internal path that is not exposed to clients - their presence in maps was what
-        # made this look workable, and maps only proves a dlopen, not a registration.
+        # audiohalservice.qti - and no effect is ever created.
+        # The client path goes through the AIDL factory, which dlopens whatever the config
+        # names and then looks for createEffect; the legacy library exports only AELI, so the
+        # effect is never instantiated.
         #
         # So on an AIDL-only device a missing version means the DSP genuinely cannot run.
         # Say that, rather than installing something that will fail silently.
@@ -1585,17 +1497,11 @@ asb_install_dsp_lib() {
         # Fall back to LEGACY, not to the generic AIDL library.
         #
         # The generic build is compiled against whichever interface version the build tree
-        # froze last. Handing it to a factory expecting a different one is a guaranteed
-        # NO_INIT: queryEffect fills a Descriptor through a plain C ABI call, so the struct
-        # layout has to match exactly. Falling back to it was falling back to something
-        # known not to work.
+        # froze last.
         #
-        # The legacy effect ABI (audio_effect_library_t / AUDIO_EFFECT_LIBRARY_INFO_SYM) is
-        # NOT versioned - it has been frozen for years, which is how ViPER ships one library
-        # for every device and Android release. And it is live here: on a OnePlus 13 whose
-        # vendor declares AIDL effect v2 only, audiohalservice.qti has libqcompostprocbundle,
-        # libqcomvisualizer and libqcomvoiceprocessing mapped in alongside the AIDL ones.
-        # QTI's service loads both ABIs, with libeffectproxy bridging them.
+        # The legacy effect ABI (audio_effect_library_t / AUDIO_EFFECT_LIBRARY_INFO_SYM) is NOT
+        # versioned - it has been frozen for years, which is how ViPER ships one library for
+        # every device and Android release.
         _dsp_s64="$MODPATH/bin/libasbdsp_legacy.so"
         _dsp_s32="$MODPATH/bin/libasbdsp_legacy_32.so"
         ASB_DSP_ABI="legacy"
@@ -1613,14 +1519,10 @@ asb_install_dsp_lib() {
     *) ASB_DSP_ABI="aidl"
        # Prefer the newest VERSIONED build over the generic name.
        #
-       # bin/libasbdsp.so is a third copy that predates the versioned ones and is not the
-       # same bytes as either - 362392 against v3's 378760 - so on a device whose version
-       # the probe could not read, the generic slot was handing out an older build than
-       # the module already carries. Newest-first is the better guess, and the generic
-       # file stays only as a last resort for a build that ships nothing else.
-       # The generic pair may not be in the package at all now: the workflow skips it
-       # when versioned builds cover the same ground. Start empty and let the loop below
-       # fill it, so a missing generic is a normal state rather than a broken install.
+       # bin/libasbdsp.so is a third copy that predates the versioned ones and is not the same
+       # bytes as either - 362392 against v3's 378760 - so on a device whose version the probe
+       # could not read, the generic slot was handing out an older build than the module
+       # already carries.
        _dsp_s64=""
        _dsp_s32=""
        if [ -f "$MODPATH/bin/libasbdsp.so" ]; then
@@ -1634,10 +1536,11 @@ asb_install_dsp_lib() {
          _dsp_s32="${_vg%.so}_32.so"
        done ;;
   esac
-  # Record what the probe chose. "auto" has to mean something concrete at boot: without
-  # this, post-fs-data has no target to restore and a user who tries legacy once is stuck
-  # with it forever - the switch was one-way, and setting the card back to auto left the
-  # legacy library staged while the config claimed otherwise.
+  # Record what the probe chose.
+  # "auto" has to mean something concrete at boot: without this, post-fs-data has no target to
+  # restore and a user who tries legacy once is stuck with it forever - the switch was one-way,
+  # and setting the card back to auto left the legacy library staged while the config claimed
+  # otherwise.
   echo "$ASB_DSP_ABI" > "$MODPATH/dsp_abi_installed" 2>/dev/null
   ui_print "      + ASB DSP: ${ASB_DSP_ABI} effect selected for this device"
 
@@ -1672,15 +1575,7 @@ asb_install_dsp_lib() {
 
 asb_register_dsp_effect() {
   [ -f "$1" ] || return 0
-  # Strip any earlier ASB registration first. On reinstall the device-native clone copies
-  # the LIVE config files, which already contain the module's previous overlay - so simply
-  # bailing out when asb_loudness is present would freeze whatever an older build wrote,
-  # including the broken duplicate <stream type="music"> block that stopped audiopolicy
-  # from attaching the effect. Removing our lines and any block left empty by that removal
-  # makes this idempotent and self-healing across upgrades.
-  # NOTE: grep -q 'a\|b' does NOT work here - Android's grep is toybox and \| is a GNU
-  # BRE extension it does not implement, so the pattern was matched literally, the whole
-  # cleanup was skipped and the insert below happily added a SECOND <apply>. Use -E.
+  # Strip any earlier ASB registration first.
   if grep -qE 'asb_loudness|asbdsp' "$1" 2>/dev/null; then
     _clean_ae="${1}.asbclean"
     awk '
@@ -1714,28 +1609,18 @@ asb_register_dsp_effect() {
   grep -q '<effects>' "$1" 2>/dev/null || return 0
   sedi "s#<libraries>#<libraries>\n        <library name=\"asbdsp\" path=\"libasbdsp.so\"/>#" "$1"
   sedi "s#<effects>#<effects>\n        <effect name=\"asb_loudness\" library=\"asbdsp\" uuid=\"${ASB_DSP_UUID}\" type=\"${ASB_DSP_TYPE}\"/>#" "$1"
-  # Attach to the music stream. IMPORTANT: if a <stream type="music"> block already exists,
-  # add our <apply> INSIDE it. Creating a second <stream type="music"> block looks valid but
-  # is not: the parser keys post-processing by stream type, so the later block replaces the
-  # earlier one. On OP15 our block was inserted before the stock music_helper block and was
-  # silently dropped - the effect loaded into the factory (9 effects) yet audiopolicy logged
+  # Attach to the music stream.
+  # On OP15 our block was inserted before the stock music_helper block and was silently dropped
+  # - the effect loaded into the factory (9 effects) yet audiopolicy logged
   # "addOutputSessionEffects(): no output processing needed for this stream".
-  # DO NOT add an <apply> / <postprocess> entry.
   #
   # Registering the effect in a stream's post-processing chain CRASHES audioserver on this
-  # platform. Once the effect is present in the factory, AudioPolicyEffects tries to build
-  # the chain and dereferences a null pointer:
-  #   audioserver: SIGSEGV, fault addr 0x20, null pointer dereference
-  #   #00 libaudiopolicyservice.so AudioPolicyEffects::loadAudioEffectConfig_ll(...)
-  # init then restarts audioserver, it crashes again, and the device loses ALL audio in a
-  # permanent crash loop (observed: 8+ tombstones, YouTube hanging on the splash).
+  # platform.
   #
-  # The entry is not needed anyway. OxygenOS never applies config-declared post-processing -
-  # AudioPolicyEffects logs "no output processing needed for this stream" even for the stock
-  # music_helper - so effects here are attached programmatically instead. ViperFX proves the
-  # pattern: its config has ONLY <library> + <effect> and no <apply> anywhere, and it works.
-  # Our asb_dsp_attach daemon does the same thing: it creates the effect on session 0 via the
-  # AudioEffect API after boot. Library + effect declarations above are all the config needs.
+  # The entry is not needed anyway.
+  # OxygenOS never applies config-declared post-processing - AudioPolicyEffects logs "no output
+  # processing needed for this stream" even for the stock music_helper - so effects here are
+  # attached programmatically instead.
 }
 
 asb_audio_ensure_volume_libs() {
@@ -1774,11 +1659,8 @@ asb_patch_audio_inplace() {
     _n=$((_n + 1))
   done
 
-  # Hi-res sampling rates for audio_policy_configuration.xml (what the diag reads
-  # for "384000 present"). Lift the audio_policy files already inside the cloned
-  # audio dir, PLUS the top-level /vendor/etc one the framework reads first — clone
-  # it into the overlay if the device keeps it there. Format-agnostic lifter, so
-  # Ace 6's space-separated lists are covered too.
+  # Hi-res sampling rates for audio_policy_configuration.xml (what the diag reads for "384000
+  # present").
   for _apc in $(find "$_adir" -type f -name "audio_policy_configuration.xml" 2>/dev/null); do
     asb_lift_hires_policy "$_apc"
   done
@@ -1791,10 +1673,10 @@ asb_patch_audio_inplace() {
   # ASB DSP effect: install the library first; the odm-bind stage registers it.
   # Always stage the library; only the registration below is gated on the setting.
   if asb_install_dsp_lib; then
-    # The attacher daemon lives in the module dir, not /vendor: it links libaudioclient,
-    # which is a system library and not available to vendor processes. service.sh launches
-    # it after boot. Without it the effect is registered and loaded by the factory but never
-    # instantiated, because OxygenOS does not apply the config's <postprocess> section.
+    # The attacher daemon lives in the module dir, not /vendor: it links libaudioclient, which
+    # is a system library and not available to vendor processes.
+    # Without it the effect is registered and loaded by the factory but never instantiated,
+    # because OxygenOS does not apply the config's <postprocess> section.
     if [ -f "$MODPATH/bin/asb_dsp_attach" ]; then
       chmod 0755 "$MODPATH/bin/asb_dsp_attach" 2>/dev/null
       ui_print "      + ASB DSP attacher staged (creates the effect on the global mix)"
@@ -1891,22 +1773,19 @@ asb_apply_device_native_tuning() {
 
   asb_strip_shipped_static_vendor
 
-  # Each stage prints ONE section with an emoji header and a few "+" detail lines, the
-  # same shape as the action screen. The stages themselves emit the "+" lines; the
-  # orchestrator just prints the header so audio no longer dominates and camera / perf /
-  # wifi / gps get equal billing instead of a terse ". stage done".
+  # Each stage prints ONE section with an emoji header and a few "+" detail lines, the same
+  # shape as the action screen.
   ui_print "  🎵  ${ASB_SEC_AUDIO:-AUDIO}"
   asb_clone_device_audio_wifi   "$_label"
   asb_patch_audio_inplace       "$_label"
 
   # Clear any ODM volume-table copy an earlier build left in the overlay.
   #
-  # It never reached /odm (proven: marker present in the module, absent on the live
-  # path), so it was inert - but on a non-reference device it creates a system/odm
-  # directory that then has to be pruned, and dead files in an overlay are exactly what
-  # turns into a mystery later. The post-clone re-reshape that used to sit here went
-  # with it: it existed only to survive the clone wiping system/odm/etc/audio, and
-  # nothing is written there any more.
+  # It never reached /odm (proven: marker present in the module, absent on the live path), so
+  # it was inert - but on a non-reference device it creates a system/odm directory that then
+  # has to be pruned, and dead files in an overlay are exactly what turns into a mystery later.
+  # The post-clone re-reshape that used to sit here went with it: it existed only to survive
+  # the clone wiping system/odm/etc/audio, and nothing is written there any more.
   rm -f "$MODPATH/system/odm/etc/audio/default_volume_tables.xml" \
         "$MODPATH/system/vendor/odm/etc/audio/default_volume_tables.xml" 2>/dev/null
 
@@ -2003,10 +1882,7 @@ asb_generate_odm_binds() {
   [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
   [ "$ASB_AUDIO" = "true" ] || [ "$ASB_MEDIA" = "true" ] || return 0
   _ob_canoe=0
-  # Every access below touches LIVE /odm paths. On some devices those live under a
-  # mount that can stall a bare read/stat during the installer's mount namespace,
-  # which would hang the whole flash. Guard each live access with `timeout` when
-  # it's available so a stalled path is skipped instead of freezing the install.
+  # Every access below touches LIVE /odm paths.
   _ob_to=""
   command -v timeout >/dev/null 2>&1 && _ob_to="timeout 20"
   for _ob_t in \
@@ -2066,39 +1942,32 @@ asb_generate_odm_binds() {
 
 # Register the ASB DSP effect on ANY device, not just the reference model.
 #
-# The registration used to live in two places and neither covered the whole
-# fleet: the OP15 branch patched its own sku_* configs plus the /odm runtime
-# bind, and asb_generate_odm_binds patched /odm/etc/audio_effects_config.xml -
-# and that generator is only ever called on non-reference OnePlus models. The
-# OP12 and OP13 branches called neither. On those devices the library was
-# staged and the properties were published, so everything reported success,
-# while no audio_effects_config.xml anywhere listed the effect: audioserver
-# never dlopen'd it, the attach daemon had nothing to attach, and the action
-# screen showed "effect not registered by install" next to a DSP that had been
-# switched on for weeks. Confirmed in the field on a CPH2691 (Ace 5, pineapple),
-# which the detector classifies as OP12.
+# The registration used to live in two places and neither covered the whole fleet: the OP15
+# branch patched its own sku_* configs plus the /odm runtime bind, and asb_generate_odm_binds
+# patched /odm/etc/audio_effects_config.xml - and that generator is only ever called on
+# non-reference OnePlus models.
+# On those devices the library was staged and the properties were published, so everything
+# reported success, while no audio_effects_config.xml anywhere listed the effect: audioserver
+# never dlopen'd it, the attach daemon had nothing to attach, and the action screen showed
+# "effect not registered by install" next to a DSP that had been switched on for weeks.
 #
-# There is nothing device-specific about registering an effect, so this is one
-# function that every branch calls. It patches every effects config the module
-# overlay carries - at any depth, which is what picks up the per-SKU layout
-# (sku_cliffs, sku_pineapple, ...) that newer devices use - and then delivers a
-# patched /odm/etc/audio_effects_config.xml through the same fuse-guarded
-# runtime bind, because AOSP resolves /odm before /vendor and /system, so on a
-# device that ships one, that file is the only one the framework actually reads.
+# There is nothing device-specific about registering an effect, so this is one function that
+# every branch calls.
+# It patches every effects config the module overlay carries - at any depth, which is what
+# picks up the per-SKU layout (sku_cliffs, sku_pineapple, ...) that newer devices use - and
+# then delivers a patched /odm/etc/audio_effects_config.xml through the same fuse-guarded
+# runtime bind, because AOSP resolves /odm before /vendor and /system, so on a device that
+# ships one, that file is the only one the framework actually reads.
 #
 # asb_register_dsp_effect strips its own lines before re-adding them, so every
 # path here is idempotent across reinstalls and upgrades.
 # Deliver the patched camera configs through the /odm runtime bind.
 #
-# The camera tone and the retouch app list are staged into the module overlay at
-# BOTH system/vendor/odm/etc/camera and system/odm/etc/camera, and the second of
-# those only ever becomes live if the root manager happens to magic-mount the odm
-# tree. Under Magisk on a device with a real /odm partition it does not, so the
-# camera kept reading its stock files: reported from the field on a CPH2745 with
-# every camera check failing at once - retouch list still 4 apps, the tone keys
-# still at their stock values, and the config still carrying the // comments our
-# patcher strips. The audio side of exactly this problem was already solved with
-# the fuse-guarded runtime bind; the camera files were simply never added to it.
+# The camera tone and the retouch app list are staged into the module overlay at BOTH
+# system/vendor/odm/etc/camera and system/odm/etc/camera, and the second of those only ever
+# becomes live if the root manager happens to magic-mount the odm tree.
+# The audio side of exactly this problem was already solved with the fuse-guarded runtime bind;
+# the camera files were simply never added to it.
 #
 # Only files the module actually changed are bound, the manifest entry is
 # deduplicated, and the whole thing is skipped when the bootloop fuse is set - so
@@ -2153,21 +2022,18 @@ asb_register_dsp_all_configs() {
 
   # Materialise the effects config the framework will actually read.
   #
-  # The overlay only ever contains what asb_clone_device_audio_wifi cloned, and that
-  # clones the audio DIRECTORIES (/vendor/etc/audio, /odm/etc/audio). A device that
-  # keeps its effects config one level up - /vendor/etc/audio_effects_config.xml -
-  # therefore had nothing in the overlay to register into, so the search below found
-  # zero files and the effect stayed unregistered while everything else reported
-  # success. Seen in the field on a CPH2691 after the registration was already made
-  # device-agnostic: the function ran, found nothing, and there was nothing to find.
+  # The overlay only ever contains what asb_clone_device_audio_wifi cloned, and that clones the
+  # audio DIRECTORIES (/vendor/etc/audio, /odm/etc/audio).
+  # A device that keeps its effects config one level up - /vendor/etc/audio_effects_config.xml
+  # - therefore had nothing in the overlay to register into, so the search below found zero
+  # files and the effect stayed unregistered while everything else reported success.
   #
-  # AOSP resolves this file as /odm/etc -> /vendor/etc -> /system/etc and the first
-  # hit wins, so patching a lower-priority copy is wasted work. Only /vendor and
-  # /system are cloned into the overlay here. Anything under an odm path goes through
-  # the runtime bind below instead - not just because grafting /odm into the
-  # magic-mount tree is what bootlooped the Ace 6, but because a later install stage
-  # hard-removes every odm graft from the module tree, so a clone placed there would
-  # be deleted before it ever reached a boot.
+  # AOSP resolves this file as /odm/etc -> /vendor/etc -> /system/etc and the first hit wins,
+  # so patching a lower-priority copy is wasted work.
+  # Anything under an odm path goes through the runtime bind below instead - not just because
+  # grafting /odm into the magic-mount tree is what bootlooped the Ace 6, but because a later
+  # install stage hard-removes every odm graft from the module tree, so a clone placed there
+  # would be deleted before it ever reached a boot.
   _dsp_cloned=""
   for _ecl in /vendor/etc/audio_effects_config.xml \
               /vendor/etc/audio_effects.xml \
@@ -2261,10 +2127,10 @@ asb_bind_register_odm_effects() {
   _oecs_src="${_oecs}.stock"
   _oecm="/data/adb/asb/odm_bind_manifest.txt"
   mkdir -p "$(dirname "$_oecs")" 2>/dev/null
-  # Never snapshot from the live path once an earlier bind is mounted: at that
-  # point /odm/etc/audio_effects_config.xml IS "$_oecs", and copying it onto
-  # itself truncates the file, which is how a device ended up with a bound
-  # config carrying zero ASB lines while every reinstall reported success.
+  # Never snapshot from the live path once an earlier bind is mounted: at that point
+  # /odm/etc/audio_effects_config.xml IS "$_oecs", and copying it onto itself truncates the
+  # file, which is how a device ended up with a bound config carrying zero ASB lines while
+  # every reinstall reported success.
   if [ ! -s "$_oecs_src" ]; then
     cp -f "$_oecl" "$_oecs_src" 2>/dev/null
   fi
@@ -2339,14 +2205,10 @@ asb_preserve_user_config() {
   [ -z "$_src" ] && [ -f "$_snap_conf" ] && _src="$_snap_conf"
   if [ -z "$_src" ]; then ui_print "      + ${ASB_D_FRESH:-fresh install — shipped defaults}"; return 0; fi
 
-  # Migrate the retired audio switches. AUDIO_EQ_COMPAT + AUDIO_AGGRESSIVE became
-  # audio_profile (software processing) + audio_dac_hifi (codec/mixer).
-  # Mapping rationale: the PROPERTY halves of both old switches were unreachable code
-  # (service.sh tested them as shell variables it never assigned), so every user was
-  # really running the plain baseline == "stock". We therefore only promote to "hifi"
-  # when the user had deliberately turned EQ-compat OFF and aggressive ON; the shipped
-  # EQ_COMPAT=1 default maps to "stock" so nobody's sound changes silently on update.
-  # The mixer half DID work, so audio_dac_hifi carries AUDIO_AGGRESSIVE across exactly.
+  # Migrate the retired audio switches.
+  # We therefore only promote to "hifi" when the user had deliberately turned EQ-compat OFF and
+  # aggressive ON; the shipped EQ_COMPAT=1 default maps to "stock" so nobody's sound changes
+  # silently on update.
   if ! grep -qE '^[[:space:]]*audio_profile=' "$_src" 2>/dev/null; then
     _oldeq="$(grep -E '^[[:space:]]*AUDIO_EQ_COMPAT=' "$_src" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
     _oldag="$(grep -E '^[[:space:]]*AUDIO_AGGRESSIVE=' "$_src" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
@@ -2366,7 +2228,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling lockscreen_skip_delayed"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling lockscreen_skip_delayed camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -2395,7 +2257,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling lockscreen_skip_delayed"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling lockscreen_skip_delayed camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -2518,13 +2380,10 @@ ASB_DISPLAY=true
 ASB_FPS=true
 ASB_SECURITY=true
 ASB_BG_TRIM=false
-# These two had no variable at all: features.conf hardcoded LPM=1 / VENDOR_OVERLAY=1
-# while asb_save_user_config wrote LPM=0 / VENDOR_OVERLAY=0 - it evaluated a variable
-# that did not exist, so it recorded a phantom "the user declined" that no user ever
-# chose, and the end-of-install banner left both out of the enabled list while both
-# were in fact running. Three sources of truth, three different answers. Declaring
-# them here makes the value real; true preserves the behaviour every install has
-# actually had, so nothing changes for existing users.
+# These two had no variable at all: features.conf hardcoded LPM=1 / VENDOR_OVERLAY=1 while
+# asb_save_user_config wrote LPM=0 / VENDOR_OVERLAY=0 - it evaluated a variable that did not
+# exist, so it recorded a phantom "the user declined" that no user ever chose, and the
+# end-of-install banner left both out of the enabled list while both were in fact running.
 ASB_LPM=true
 ASB_VENDOR_OVERLAY=true
 
@@ -2554,10 +2413,10 @@ asb_apply_saved_config() {
   case "$_ucfg_schema" in ''|*[!0-9]*) _ucfg_schema=1 ;; esac
   while IFS='=' read -r _k _v; do
     case "$_k" in ''|\#*) continue ;; esac
-    # Must accept every key asb_save_user_config writes. It used to list 15 while the
-    # saver wrote 19, so NFC, MEDIA, LPM and VENDOR_OVERLAY were recorded on every
-    # install and silently dropped on the next one - the answers were kept and then
-    # ignored, which looks exactly like the config not being saved at all.
+    # Must accept every key asb_save_user_config writes.
+    # It used to list 15 while the saver wrote 19, so NFC, MEDIA, LPM and VENDOR_OVERLAY were
+    # recorded on every install and silently dropped on the next one - the answers were kept
+    # and then ignored, which looks exactly like the config not being saved at all.
     case "$_k" in
       AUDIO|BT|NFC|CAMERA|MEDIA|CPU|VM|NET|WIFI|GPS|KERNEL|LOG|RADIO_IMS|DISPLAY|FPS|SECURITY|BG_TRIM) : ;;
       LPM|VENDOR_OVERLAY)
@@ -2587,10 +2446,10 @@ asb_save_user_config() {
     # schema 2 = LPM and VENDOR_OVERLAY below are real answers, not the phantom zeros
     # that schema-1 files carried from an era when their variables did not exist.
     echo "cfg_schema=2"
-    # Must list every category the installer PROMPTS for. LPM and VENDOR_OVERLAY were
-    # missing, so those two answers were thrown away on every update and silently reset
-    # to the shipped default - visible on a real install as a user_config with 17 keys
-    # next to a 19-entry prompt list.
+    # Must list every category the installer PROMPTS for.
+    # LPM and VENDOR_OVERLAY were missing, so those two answers were thrown away on every
+    # update and silently reset to the shipped default - visible on a real install as a
+    # user_config with 17 keys next to a 19-entry prompt list.
     for c in AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG LPM \
              RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY; do
       eval "_v=\$ASB_${c}"
@@ -2745,12 +2604,8 @@ fi
 asb_register_dsp_all_configs
 asb_generate_odm_camera_binds
 
-# A real install came back with a zero-byte regular file named "vendor" sitting in the
-# module root. Nothing in the tree should ever put a plain file there - the root manager
-# only looks at system/ - and a bare "vendor" entry is exactly the sort of thing a future
-# mount helper would try to interpret. Its origin is not established, so this removes the
-# artefact rather than pretending to fix a cause: a directory is left alone, only an empty
-# regular file is cleared.
+# A real install came back with a zero-byte regular file named "vendor" sitting in the module
+# root.
 if [ -f "$MODPATH/vendor" ] && [ ! -s "$MODPATH/vendor" ]; then
   rm -f "$MODPATH/vendor" 2>/dev/null
 fi
@@ -2767,11 +2622,8 @@ if [ -f "$_gc" ]; then
   else
     case "$_asb_plat" in
       *"sm8650"*|*"pineapple"*)
-        # SM8650 1+3+2+1 (Ace5 / OP12 family): the global OP15-shaped rails pin the
-        # main interactive cluster low in battery/smart mode (~52%), which reads as
-        # UI lag. The per-device synthesis leans those interactive-cluster ceilings
-        # UP (lag-safe direction) and snaps them to THIS device's real freq steps,
-        # so turn the override on to actually apply them. OP15 unaffected.
+        # SM8650 1+3+2+1 (Ace5 / OP12 family): the global OP15-shaped rails pin the main
+        # interactive cluster low in battery/smart mode (~52%), which reads as UI lag.
         sed -i 's/^device_bounds_override=.*/device_bounds_override=1/' "$_gc" 2>/dev/null || true
         ui_print "[*] Device-adaptive bounds: ON (SM8650 — interactive-cluster caps leaned up to remove battery-mode lag)" ;;
       *)
@@ -2858,32 +2710,26 @@ asb_apply_bt_absvol() {
 
 # Build the blur block into system.prop at INSTALL time, not in post-fs-data.
 #
-# Why install time is the only correct place: the root manager (KernelSU here, Magisk
-# too) reads $MODPATH/system.prop when it MOUNTS the module, which happens BEFORE
-# post-fs-data.sh runs. The previous approach rewrote system.prop from inside
-# post-fs-data - i.e. after the manager had already read it - so the fresh block only
-# ever took effect a boot later, and since it was rewritten every boot it never caught
-# up. ro.* props are read once at process start and cannot be changed afterwards, which
-# is why the runtime resetprop calls were rejected too (5/5 ro.* not applied). Writing
-# the block here means it is on disk before the very first mount reads it.
+# Why install time is the only correct place: the root manager (KernelSU here, Magisk too)
+# reads $MODPATH/system.prop when it MOUNTS the module, which happens BEFORE post-fs-data.sh
+# runs.
+# ro.* props are read once at process start and cannot be changed afterwards, which is why the
+# runtime resetprop calls were rejected too (5/5 ro.* not applied).
 asb_apply_blur_prop() {
   _prop="$MODPATH/system.prop"
   [ -f "$_prop" ] || : > "$_prop"
   _db="$(grep -E '^[[:space:]]*disable_blur=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
-  # stock | light | off, with 0/1 still meaning stock/off. The compositor block below is
-  # written for both off and light - they differ only in the WindowManager global, which
-  # asb_blur_apply.sh owns. install-time and runtime must agree on the vocabulary or the
-  # setting reverts on the next boot.
+  # stock | light | off, with 0/1 still meaning stock/off.
+  # install-time and runtime must agree on the vocabulary or the setting reverts on the next
+  # boot.
   case "$_db" in
     1|on|true|off|light|partial) _db=1 ;;
     *)                           _db=0 ;;
   esac
   # Rewrite the managed block from scratch every install so the WebUI toggle drives it.
-  # Also strip any BARE (unmarked) copies of these props first: an earlier build wrote
-  # them straight into system.prop without markers, and without this cleanup a fresh
-  # install would leave both the old bare lines and the new managed block, i.e. the
-  # property twice. resetprop/property_service take the last one, but duplicates are
-  # confusing and the stale copy could win depending on order.
+  # Also strip any BARE (unmarked) copies of these props first: an earlier build wrote them
+  # straight into system.prop without markers, and without this cleanup a fresh install would
+  # leave both the old bare lines and the new managed block, i.e.
   _pt="${_prop}.asbblur$$"
   sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
       -e '/^ro\.surface_flinger\.supports_background_blur=/d' \
@@ -2925,11 +2771,11 @@ asb_apply_blur_prop() {
     echo "# ASB:BLUR:END"
     # ui_effects_level, in its own block - the installer has to write this as well.
     #
-    # asb_blur_apply.sh owns it at runtime, but a reinstall rebuilds system.prop from
-    # scratch here, and a block this file never writes is a block that disappears. The
-    # setting would survive in governor.conf and silently stop being applied, which is
-    # the same shape as the media_loudness bug: config says one thing, system does
-    # another, and nothing reports a problem.
+    # asb_blur_apply.sh owns it at runtime, but a reinstall rebuilds system.prop from scratch
+    # here, and a block this file never writes is a block that disappears.
+    # The setting would survive in governor.conf and silently stop being applied, which is the
+    # same shape as the media_loudness bug: config says one thing, system does another, and
+    # nothing reports a problem.
     echo "# ASB:UIFX:BEGIN"
     _ue="$(grep -E '^[[:space:]]*ui_effects_level=' "$MODPATH/config/governor.conf" 2>/dev/null \
            | head -1 | sed 's/.*=//' | tr -d ' \r')"
@@ -2939,7 +2785,15 @@ asb_apply_blur_prop() {
     case "$_ue" in
       flat|0)  echo "persist.sys.oplus.anim_level=0" ;;
       stock|1) : ;;
-      *)       [ "$_db" = "1" ] && echo "persist.sys.oplus.anim_level=0" ;;
+      # Only an EXPLICIT flat writes anim_level.
+      #
+      # This used to follow blur when the value was absent - which is the default - so
+      # switching blur off also flattened Recents and removed the Cards/Simple selector from
+      # Recent Tasks Manager.
+      # A OnePlus 13 user lost that option without ever touching a Recents setting, and
+      # reinstalling never brought it back because this copy of the rule rewrote the property
+      # again on every install.
+      *)       : ;;
     esac
     echo "# ASB:UIFX:END"
   } >> "$_pt"
@@ -3016,13 +2870,9 @@ echo 0 > "/data/adb/asb/vendor_boot_counter" 2>/dev/null
 rm -f "$MODPATH/skip_mount" 2>/dev/null
 # vendor_overlay_retry_done is deliberately NOT cleared here.
 #
-# It is the memory behind the one-retry rule earlier in this file: the first time the
-# overlay is found blocked, unblock it and try once more; if it fails again, stay
-# governor-only. Wiping it on every install meant that memory never reached the next
-# one, so "! -f retry_done" was true every time and the retry fired again and again -
-# the "staying governor-only" branch it is supposed to escalate to was unreachable in
-# practice, and a device that cannot boot with the overlay kept being handed it.
-# Clearing the block itself is fine and intended: a fresh install may try again.
+# It is the memory behind the one-retry rule earlier in this file: the first time the overlay
+# is found blocked, unblock it and try once more; if it fails again, stay governor-only.
+# Wiping it on every install meant that memory never reached the next one, so "!
 rm -f /data/adb/asb/vendor_overlay_blocked /data/adb/asb/vendor_overlay_active 2>/dev/null
 rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
 
@@ -3125,11 +2975,8 @@ if [ -f /data/adb/asb/vendor_overlay_blocked ]; then
   A2DPXML=""; ACCXML=""; ACONFS=""; AEFFECT=""; APCXML=""; APINF=""; APIOCXML=""; BTCONF=""; BTCONF2=""; BTQTIXML=""; MEDCA=""; MPATHS=""; SNDTRPL=""; USBXML=""; VEHXML=""; VIRTXML=""
 fi
 # Structural audio/BT XML sed-tuning is verified only against OP15/OP13/OP12 stock.
-# Detection alone is not enough: SoC siblings (e.g. Ace 6 on the OP15 platform,
-# matched via shared model codes) carry a DIFFERENT audio stock, and applying the
-# reference seds there corrupted vendor HAL configs (field bootloop). So the gate
-# requires the detected family's own audio fingerprint (its sku_* dirs) to be
-# physically present on the device before any structural list survives.
+# Ace 6 on the OP15 platform, matched via shared model codes) carry a DIFFERENT audio stock,
+# and applying the reference seds there corrupted vendor HAL configs (field bootloop).
 _asb_audio_ref=0
 _asb_ref_skus=""
 [ "$ASB_IS_OP15" = "true" ] && _asb_ref_skus="sku_canoe sku_alor"
@@ -3144,10 +2991,9 @@ if [ -n "$_asb_ref_skus" ]; then
     done
   done
 else
-  # Generic path: a platform sibling can carry a KNOWN reference audio stock
-  # (field: Ace 6 = ossi/SM8750 ships the OP13 sun/kera/tuna tree, verified
-  # byte-identical on the structural files). Grant it the full structural set;
-  # the deferred first-clean-boot staging stays on as the safety net.
+  # Generic path: a platform sibling can carry a KNOWN reference audio stock (field: Ace 6 =
+  # ossi/SM8750 ships the OP13 sun/kera/tuna tree, verified byte-identical on the structural
+  # files).
   for _ad in /vendor/etc/audio /system/vendor/etc/audio /odm/etc/audio; do
     [ -d "$_ad" ] || continue
     for _sk in sku_canoe sku_alor sku_sun sku_kera sku_tuna sku_pineapple sku_cliffs; do
@@ -3719,12 +3565,11 @@ AutoSystemBoost' $APIOCXM
 	fi
 	
 	if [ -d "$MODPATH/tools" ]; then
-	  # Whitelist prune: everything at the top of tools/ that is not named here is
-	  # deleted at install time. Two user-facing tools were shipped by CI, verified
-	  # present in the package, and then removed right here - so asb_camera_repair.sh
-	  # never existed on any device that was told to run it, and asb_sysui_watch.sh came
-	  # back "No such file or directory". If a tool is meant to be run by hand on the
-	  # device, its name has to be in this list; being in the zip is not enough.
+	  # Whitelist prune: everything at the top of tools/ that is not named here is deleted at
+	  # install time.
+	  # Two user-facing tools were shipped by CI, verified present in the package, and then
+	  # removed right here - so asb_camera_repair.sh never existed on any device that was told to
+	  # run it, and asb_sysui_watch.sh came back "No such file or directory".
 	  find "$MODPATH/tools" -maxdepth 1 -type f \
 	    ! -name "asb_state_sampler.sh" \
 	    ! -name "asb_drain_analyzer.sh" \
@@ -3836,11 +3681,11 @@ EOF
 	  cp -f "$_man" /data/adb/asb/generated_overlay_manifest.txt 2>/dev/null || true
 	fi
 
-# Deferred overlay: on firmware without the detected family's native audio stock
-# the generated file overlay is NOT mounted on the first boot. It is staged and
-# activated by service.sh only after sys.boot_completed confirms a clean boot,
-# so a bad clone can never brick the very first boot (field: Ace 6 bootloops
-# survived the 1-strike fuse because users recovery-flash before boot #2).
+# Deferred overlay: on firmware without the detected family's native audio stock the generated
+# file overlay is NOT mounted on the first boot.
+# It is staged and activated by service.sh only after sys.boot_completed confirms a clean boot,
+# so a bad clone can never brick the very first boot (field: Ace 6 bootloops survived the
+# 1-strike fuse because users recovery-flash before boot #2).
 _mo_src="$MODPATH/system/odm"; _mo_dst="$MODPATH/system/vendor/odm"
 if [ -d "$_mo_src" ]; then
   ( cd "$_mo_src" && find . -type f 2>/dev/null ) | while IFS= read -r _mf; do
@@ -3860,17 +3705,11 @@ if [ -d "$_mo_dst" ]; then
 fi
 
 if [ "$_asb_audio_ref" != "1" ] || [ "${_asb_sibling:-0}" = "1" ]; then
-  # ONE-reboot activation via the standard /vendor magic-mount overlay — exactly
-  # what the OP15 reference does. Everything the diag reads (mixer_paths_*_cdp.xml,
-  # media_profiles.xml, hi-res audio_policy_configuration.xml) lives under
-  # /vendor/etc and magic-mounts cleanly with the correct SELinux context on the
-  # first boot. The Ace 6 hard-bootloop came NOT from /vendor but from grafting
-  # /odm content into the magic-mount tree (/odm is a bind-mount of another
-  # partition on these devices and breaks early boot before the fuse can run). So
-  # we HARD-REMOVE every /odm graft — the /vendor overlay alone is safe like OP15.
-  # Real /odm audio is still delivered, via the fuse-guarded runtime binds in
-  # post-fs-data (counter synced to disk BEFORE any bind, so those can only ever
-  # cost one recoverable boot, never a loop). No deferred 2-boot dance.
+  # ONE-reboot activation via the standard /vendor magic-mount overlay — exactly what the OP15
+  # reference does.
+  # The Ace 6 hard-bootloop came NOT from /vendor but from grafting /odm content into the
+  # magic-mount tree (/odm is a bind-mount of another partition on these devices and breaks
+  # early boot before the fuse can run).
   rm -rf "$MODPATH/system/odm" "$MODPATH/system/vendor/odm" \
          "$MODPATH/system/my_product" "$MODPATH/deferred_overlay" 2>/dev/null || true
   echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null || true
@@ -3917,11 +3756,11 @@ asb_guard_v4a_effects
 
 # Strip the // comments OxygenOS leaves in video_beauty_default_config.
 #
-# /data/adb/asb/odm_patched is in this list because on a device that delivers camera
-# configs by runtime bind, that copy IS the live file - and it is made from the overlay
-# BEFORE this loop runs, so stripping only the overlay left the bound copy exactly as it
-# was. asb_diag reported it honestly: "strict JSON (no // comments)  want 0  live 1" on
-# both /odm and /vendor/odm, while the module's own overlay copy was clean.
+# /data/adb/asb/odm_patched is in this list because on a device that delivers camera configs by
+# runtime bind, that copy IS the live file - and it is made from the overlay BEFORE this loop
+# runs, so stripping only the overlay left the bound copy exactly as it was.
+# asb_diag reported it honestly: "strict JSON (no // comments) want 0 live 1" on both /odm and
+# /vendor/odm, while the module's own overlay copy was clean.
 for _vb in $(find "$MODPATH/system" "$MODPATH/deferred_overlay" /data/adb/asb/odm_patched \
                   -type f -name "video_beauty_default_config" 2>/dev/null); do
   if grep -q '//' "$_vb" 2>/dev/null; then
@@ -3941,12 +3780,9 @@ asb_normalize_module_layout
 
 # Stray empty "vendor" in the module root.
 #
-# There is a guard for this earlier in the install, but the file was still present in a
-# freshly installed module on a real device - so whatever creates it runs AFTER that
-# guard. Repeating the check here, at the very end, catches it whenever it appears.
-# Deliberately narrow: only a REGULAR, EMPTY file. A symlink (vendor -> system/vendor)
-# is a legitimate layout on some setups and must survive, and [ -f ] follows symlinks,
-# so the -L test comes first.
+# There is a guard for this earlier in the install, but the file was still present in a freshly
+# installed module on a real device - so whatever creates it runs AFTER that guard.
+# Repeating the check here, at the very end, catches it whenever it appears.
 if [ ! -L "$MODPATH/vendor" ] && [ -f "$MODPATH/vendor" ] && [ ! -s "$MODPATH/vendor" ]; then
   rm -f "$MODPATH/vendor" 2>/dev/null
 fi
