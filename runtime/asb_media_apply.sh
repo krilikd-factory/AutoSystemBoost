@@ -1,13 +1,10 @@
 #!/system/bin/sh
 # asb_media_apply.sh - rebuild the overlay files that only the installer used to touch.
 #
-# media_loudness reshapes /vendor/etc/default_volume_tables.xml, which audiopolicy
-# parses once at boot. That much was always true, and the WebUI correctly said
-# "reboot to apply". What was NOT true is that a reboot would apply it: the reshape
-# ran inside common/install.sh and nowhere else, so changing the setting after the
-# module was installed wrote the config, promised a reboot, and then rebuilt nothing.
-# The action screen reported "loudness max - volume table not reshaped" on a device
-# that had been rebooted twice, which is exactly what the user was told to do.
+# media_loudness reshapes /vendor/etc/default_volume_tables.xml, which audiopolicy parses once
+# at boot.
+# The action screen reported "loudness max - volume table not reshaped" on a device that had
+# been rebooted twice, which is exactly what the user was told to do.
 #
 # The overlay lives under /data, so the file CAN be rebuilt at runtime - it is only
 # the parse that needs the reboot. This script does the rebuild; the reboot the WebUI

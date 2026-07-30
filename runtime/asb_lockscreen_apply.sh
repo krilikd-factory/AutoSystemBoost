@@ -4,20 +4,15 @@
 #
 # THE REQUEST
 #
-# Android's "Lock after screen timeout" keeps the device unlocked for a grace period after
-# the screen goes off. OxygenOS shows the lockscreen anyway and asks for a swipe, even
-# though nothing is actually locked. The ask was to skip that swipe for as long as the
-# grace period lasts, and to behave exactly as before once it expires.
+# Android's "Lock after screen timeout" keeps the device unlocked for a grace period after the
+# screen goes off.
 #
 # WHY THIS IS DONE THE CAREFUL WAY
 #
 # The obvious implementation - `locksettings set-disabled true`, or clearing
-# lockscreen.disabled - removes the lock outright. That is not what was asked for and it is
-# dangerous: a phone that never locks is a phone that is unlocked when it is lost. This
-# script never changes WHETHER the device locks or WHEN; Android's own timeout stays the
-# single authority. All it does is skip the swipe during a window Android has already
-# declared unlocked, which is why it refuses to run at all when there is no secure lock or
-# no grace period configured.
+# lockscreen.disabled - removes the lock outright.
+# This script never changes WHETHER the device locks or WHEN; Android's own timeout stays the
+# single authority.
 #
 #   lockscreen_skip_delayed = off | on
 #

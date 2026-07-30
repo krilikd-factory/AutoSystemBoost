@@ -1,16 +1,13 @@
 #!/system/bin/sh
 # asb_dsp_abi_apply.sh - switch the audio-effect ABI without reinstalling the module.
 #
-# Whether a device binds effects through the AIDL factory (createEffect) or the legacy
-# HIDL one (AUDIO_EFFECT_LIBRARY_INFO_SYM) depends on what that OEM's audioserver was
-# built against, not on the Android version. The installer probes VINTF and is usually
-# right, but when it is wrong the symptom is total silence from dsp_loudness with the
-# attach daemon reporting set=-19 initCheck=-19 (NO_INIT).
+# Whether a device binds effects through the AIDL factory (createEffect) or the legacy HIDL one
+# (AUDIO_EFFECT_LIBRARY_INFO_SYM) depends on what that OEM's audioserver was built against, not
+# on the Android version.
 #
-# Telling a user to "edit governor.conf and reinstall" is not a real answer: the file
-# lives inside the module directory, and a reinstall of the same zip would just re-run
-# the same probe. Both library variants are already in the module, so the switch is a
-# file copy plus a reboot - which is what this does, and what the WebUI card calls.
+# Telling a user to "edit governor.conf and reinstall" is not a real answer: the file lives
+# inside the module directory, and a reinstall of the same zip would just re-run the same
+# probe.
 #
 # The overlay lives on /data and is magic-mounted at boot, so the copy takes effect on
 # the next boot; the effect itself is loaded by audioserver at start and cannot be

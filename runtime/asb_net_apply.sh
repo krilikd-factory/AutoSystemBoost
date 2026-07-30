@@ -1,15 +1,13 @@
 #!/system/bin/sh
 # asb_net_apply.sh - user-facing network settings.
 #
-# ASB already tuned congestion control, the queue discipline and the TCP buffers, but
-# only as a side effect of the power profile: nothing was exposed and nothing could be
-# overridden. These four keys sit ON TOP of that - "auto" means "leave the profile's
-# choice alone", anything else pins a value the profile will not undo.
+# ASB already tuned congestion control, the queue discipline and the TCP buffers, but only as a
+# side effect of the power profile: nothing was exposed and nothing could be overridden.
+# These four keys sit ON TOP of that - "auto" means "leave the profile's choice alone",
+# anything else pins a value the profile will not undo.
 #
-#   net_congestion     auto | bbr | cubic
-#   net_qdisc          auto | fq | fq_codel | cake
-#   wifi_country       auto | CR | US | DE | JP ...
-#   wifi_scan_throttle auto | 0 | 1
+# net_congestion auto | bbr | cubic net_qdisc auto | fq | fq_codel | cake wifi_country auto |
+# CR | US | DE | JP ...
 #
 # Everything here is applied live and re-asserted at boot. Nothing needs a reboot,
 # because none of it goes through the overlay - it is all sysctl and `cmd wifi`.
@@ -153,16 +151,13 @@ case "$_cc" in
     ;;
 esac
 
-# --- queue discipline -----------------------------------------------------------------
-# This one IS per-interface in the kernel, so WiFi and mobile get their own without any
-# tricks. default_qdisc still gets the global value for interfaces that come up later.
-# The global verdict is decided by what the INTERFACES did, not by whether the sysctl
-# swallowed the string.
+# --- queue discipline ----------------------------------------------------------------- This
+# one IS per-interface in the kernel, so WiFi and mobile get their own without any tricks.
 #
-# net.core.default_qdisc accepts any name - it is just stored for interfaces that come up
-# later - so writing "cake" on a kernel with no cake module succeeds and means nothing.
-# Reporting that as ok while every interface reported "not applied" is a contradiction the
-# user has to resolve themselves. Count the real applications below and let them decide.
+# net.core.default_qdisc accepts any name - it is just stored for interfaces that come up later
+# - so writing "cake" on a kernel with no cake module succeeds and means nothing.
+# Reporting that as ok while every interface reported "not applied" is a contradiction the user
+# has to resolve themselves.
 _qd="$(_cfg net_qdisc)"
 _qd_tried=0
 _qd_ok=0
@@ -215,10 +210,8 @@ case "$_qd" in
     ;;
 esac
 
-# --- WiFi regulatory domain ------------------------------------------------------------
-# `cmd wifi force-country-code` is the supported way in. It survives until explicitly
-# disabled, so "auto" has to actively release it - simply not setting it would leave a
-# previous choice pinned and make the setting look one-way.
+# --- WiFi regulatory domain ------------------------------------------------------------ `cmd
+# wifi force-country-code` is the supported way in.
 _wc="$(_cfg wifi_country)"
 if _has cmd; then
   case "$_wc" in
@@ -259,10 +252,8 @@ fi
 
 # Machine-readable result for the WebUI.
 #
-# Without this the UI can only show what the user picked, not what the kernel accepted -
-# so asking for bbr on a stock kernel left the button lit as though it had worked. Each
-# line is "key=state", state being ok | unavailable | failed, and the card reads it to
-# label itself honestly.
+# Without this the UI can only show what the user picked, not what the kernel accepted - so
+# asking for bbr on a stock kernel left the button lit as though it had worked.
 _res="/data/adb/asb/net_apply_result"
 mkdir -p /data/adb/asb 2>/dev/null
 {

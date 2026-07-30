@@ -112,10 +112,10 @@ asb_tw_aggr_camera() {
   # --- tone / colour (affects photo + video) ---
   asb_tw_sedi "s/\\(\"sunsetSatScale\": *\\)1\\.6/\\1${_SSS}/g"            "$_f"
   asb_tw_sedi "s/\\(\"sunsetSatScale\": *\\)1\\.7/\\1${_SSS}/g"            "$_f"
-  # sunsetBrightScale -> 0.9: slightly pulls down sunset highlight brightness so the
-  # boosted saturation does not clip warm skies to white. The diag checks this as the
-  # tone-fix marker; it was never actually being written, hence the FAIL. Match any
-  # stock value (1.0 / 1 / 0.95) down to 0.9.
+  # sunsetBrightScale -> 0.9: slightly pulls down sunset highlight brightness so the boosted
+  # saturation does not clip warm skies to white.
+  # The diag checks this as the tone-fix marker; it was never actually being written, hence the
+  # FAIL.
   asb_tw_sedi "s/\\(\"sunsetBrightScale\": *\\)1\\.0\\([,}]\\)/\\10.9\\2/g"  "$_f"
   asb_tw_sedi "s/\\(\"sunsetBrightScale\": *\\)1\\([,}]\\)/\\10.9\\2/g"      "$_f"
   asb_tw_sedi "s/\\(\"sunsetBrightScale\": *\\)0\\.95/\\10.9/g"             "$_f"
@@ -135,13 +135,10 @@ asb_tw_aggr_camera() {
 # --- inject the aggressive tone keys a trimmed stock conf_tuning lacks ---
 # Add apps to the OS "Retouch appearance during video calls" list.
 #
-# Stock ships only four entries (Discord, Teams, WeChat, WhatsApp), so every other
-# video-call app is simply absent from that Settings screen. Older ASB releases shipped
-# a STATIC video_beauty_default_config with a longer list; when static overlays were
-# dropped in favour of clone-from-stock, nothing replaced the injection - the longer
-# list only survived because each install cloned the previous install's still-mounted
-# file. That chain is invisible and breaks the moment anyone reinstalls from clean, so
-# the list is built explicitly here instead.
+# Stock ships only four entries (Discord, Teams, WeChat, WhatsApp), so every other video-call
+# app is simply absent from that Settings screen.
+# That chain is invisible and breaks the moment anyone reinstalls from clean, so the list is
+# built explicitly here instead.
 #
 # isOpen stays 0 to match stock: this only makes the app APPEAR in Settings so the user
 # can turn retouch on themselves. It never enables beautification behind their back.
@@ -298,11 +295,10 @@ asb_apply_dynamic_tweaks() {
   _cam_inject="$(asb_tw_flag CAMERA_AGGRESSIVE_INJECT "$_conf")"
   _cam_level="$(asb_tw_camera_level "$_conf")"
 
-  # --- AUDIO mixer files ---
-  # Respect the installer categories individually. The caller only checks
-  # "AUDIO or CAMERA", so without this a user who kept CAMERA but dropped AUDIO would
-  # still get their mixer files rewritten every boot - which is exactly the kind of
-  # "I skipped it but something still applies" breakage that fights external DSPs.
+  # --- AUDIO mixer files --- Respect the installer categories individually.
+  # The caller only checks "AUDIO or CAMERA", so without this a user who kept CAMERA but
+  # dropped AUDIO would still get their mixer files rewritten every boot - which is exactly the
+  # kind of "I skipped it but something still applies" breakage that fights external DSPs.
   if asb_tw_feature_on AUDIO; then
   for _mx in $(find "$_md/system/vendor/etc/audio" "$_md/system/vendor/odm/etc/audio" \
                     -type f -name "mixer_paths*.xml" 2>/dev/null); do
@@ -332,18 +328,15 @@ asb_apply_dynamic_tweaks() {
 
   # Rescue a stock baseline when the installer had to skip the camera.
   #
-  # The installer refuses to clone conf_tuning_params.json when the live file fails the
-  # BT.601 chroma test, because on an update installed over a RUNNING module that path is
-  # still the old module's graded overlay and copying it is what made the grade compound.
+  # The installer refuses to clone conf_tuning_params.json when the live file fails the BT.601
+  # chroma test, because on an update installed over a RUNNING module that path is still the
+  # old module's graded overlay and copying it is what made the grade compound.
   # Correct - but it leaves nothing behind: no overlay file, so no baseline, so the grade
-  # silently does nothing and asb_diag reports "grade(lvl4) live file differs from stock:
-  # FAIL" on a device where the setting is on. Only a second install fixes it, and nothing
-  # says so.
+  # silently does nothing and asb_diag reports "grade(lvl4) live file differs from stock: FAIL"
+  # on a device where the setting is on.
   #
-  # By the time we run, that old overlay is gone: this boot mounted the NEW module, which
-  # has no camera file. So the live path is genuine stock right now, and this is the one
-  # moment it can be captured. Saving it here gives the next install a trustworthy source
-  # and turns a dead end into something that resolves itself.
+  # By the time we run, that old overlay is gone: this boot mounted the NEW module, which has
+  # no camera file.
   if [ "$_cam_level" -gt 0 ] 2>/dev/null \
      && [ ! -f "$_md/system/odm/etc/camera/conf_tuning_params.json" ] \
      && [ ! -f "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" ]; then
@@ -374,12 +367,8 @@ asb_apply_dynamic_tweaks() {
     if [ "$_cam_level" -gt 0 ] 2>/dev/null; then
       # Grade with asb_camera_grade.sh - the SAME engine the installer uses.
       #
-      # This used to call asb_tw_aggr_camera, a stack of sed rules keyed to literal
-      # stock values (find 0.35, write 0.55). OxygenOS 16 ships values at or above what
-      # those rules aimed for, so every rule missed and the boot pass changed nothing.
-      # Since the installer was the only place the real grader ran, changing the camera
-      # level in the WebUI wrote the config, promised a reboot, and then re-applied
-      # whatever level had been baked in at install time. One engine, both paths.
+      # This used to call asb_tw_aggr_camera, a stack of sed rules keyed to literal stock
+      # values (find 0.35, write 0.55).
       _cam_graded=0
       if [ -r "$_md/runtime/asb_camera_grade.sh" ]; then
         # "Extended" injects the tone keys a trimmed stock conf_tuning lacks (OP12/OP13);

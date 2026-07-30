@@ -7,25 +7,17 @@
 # route, re-runs itself from a `while true; sleep` loop, and drops every open TCP
 # connection when the congestion algorithm changes. Each of those three is a real problem:
 #
-#   * initcwnd 10 is RFC 6928's value for the general internet. It is not a tuning - it is
-#     the DEFAULT most Android kernels already use, so writing it changes nothing on a good
-#     link, and on a weak one (poor 4G, congested WiFi) ten segments in the first burst is
-#     exactly how you cause the loss that then collapses the window. One number cannot be
-#     right for both.
-#   * A polling loop costs wakeups forever to catch an event that happens a few times a day.
-#   * Killing connections to apply a setting is worse than the setting is worth - it drops
-#     downloads, calls and uploads to change something that only affects NEW connections
-#     anyway.
+# * initcwnd 10 is RFC 6928's value for the general internet.
+# One number cannot be right for both.
 #
 # So: the window is derived from the link actually in front of us, the re-apply is
 # event-driven with no loop, and nothing is ever disconnected.
 #
 #   net_route_tune   auto | off | conservative | aggressive
 #
-# auto         classify the link and pick (default)
-# conservative RFC value everywhere - the safe floor
-# aggressive   one class higher than measured, for people who know their link
-# off          restore what the routes had before ASB touched them
+# auto classify the link and pick (default) conservative RFC value everywhere - the safe floor
+# aggressive one class higher than measured, for people who know their link off restore what
+# the routes had before ASB touched them
 #
 # Usage: asb_net_routes.sh [apply|restore|watch]
 
@@ -93,10 +85,6 @@ _classify_link() {
 # --- window sizing ---------------------------------------------------------------------
 #
 # initcwnd: how many segments may go out before the first ACK.
-#   weak    10  - RFC 6928, the value the kernel already uses. Explicitly NOT raised:
-#                 on a lossy link a bigger burst is how you cause the loss.
-#   normal  16  - a modest lift; still inside what CDNs commonly serve.
-#   fast    24  - only where the link has demonstrated it can absorb the burst.
 #
 # initrwnd: how much the receiver advertises up front. Sized from the bandwidth-delay
 # product rather than a flat cap, because the flat cap is what makes the setting useless

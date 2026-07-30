@@ -1,12 +1,8 @@
 #!/system/bin/sh
 # asb_volume_curves.sh - the media_loudness volume-table reshape, as a library.
 #
-# This used to live only inside common/install.sh, which meant the curves were
-# rebuilt at FLASH time and nowhere else. Changing media_loudness in the WebUI
-# wrote the config, the UI said "reboot to apply", and the reboot could not
-# possibly apply it - nothing rebuilds the table outside the installer. Field
-# report: "loudness max - volume table not reshaped" on a device where the
-# setting had been changed after install and the phone rebooted twice.
+# This used to live only inside common/install.sh, which meant the curves were rebuilt at FLASH
+# time and nowhere else.
 #
 # Both callers source this file, so the installer and the runtime path share one
 # implementation and cannot drift apart.
@@ -30,14 +26,7 @@ asb_reshape_volume_curves() {
       p = substr(line, RSTART, RLENGTH)
       match(p, />[0-9]+,/);  idx = substr(p, RSTART + 1, RLENGTH - 2)
       match(p, /,-[0-9]+</); mb  = substr(p, RSTART + 1, RLENGTH - 2)
-      # Position-weighted, not flat. Scaling every point by the same factor lifts the
-      # BOTTOM of the curve hardest in dB terms: at "strong" the 1% step went from
-      # -58 dB to -37.7 dB, i.e. +20 dB on the quietest setting the slider has. That
-      # ruins quiet listening and buys nothing - nobody is short of volume at 1%. The
-      # weight ramps in over the first 40% of travel, so the full boost lands across
-      # the range people actually listen at (roughly 40-80%) while the bottom of the
-      # slider stays where stock put it. 100%/0 dB is untouched either way: that is
-      # unity, and raising it would just clip. Gain above unity is what dsp_loudness is for.
+      # Position-weighted, not flat.
       w = (idx + 0) / 40.0
       if (w > 1) w = 1
       f = 1 - ((100 - pct) / 100.0) * w
@@ -55,32 +44,22 @@ asb_reshape_volume_curves() {
 
 # Every volume table this device actually ships.
 #
-# The reshaper used to know exactly one path, /vendor/etc/default_volume_tables.xml,
-# and that is the GENERIC AOSP copy. On OxygenOS the tuned tables live under the ODM
-# paths - on a OnePlus 15 those are 9665-byte files full of OPLUS #ifdef blocks and
-# vendor engineers' comments, against 5156 bytes for the generic one. So "media
-# loudness = max" reshaped a table the audio policy very likely never reads, which is
-# exactly how a boost can be applied, verified present in the overlay, and still not
-# be audible. The module already clones the ODM copies into its own overlay; now the
-# reshaper covers them too.
-# The ONE volume table this module reshapes.
+# The reshaper used to know exactly one path, /vendor/etc/default_volume_tables.xml, and that
+# is the GENERIC AOSP copy.
+# So "media loudness = max" reshaped a table the audio policy very likely never reads, which is
+# exactly how a boost can be applied, verified present in the overlay, and still not be
+# audible.
 #
 # /vendor/etc only. This is what the module did for months without a single report, and
 # the detour away from it cost two bootloops and a round of broken audio. The reasoning,
 # so it does not get "improved" again:
 #
-#   * The ODM table cannot be delivered by the overlay. Proven on a OnePlus 15: the
-#     module contained system/odm/etc/audio/default_volume_tables.xml carrying the
-#     ASB:VOLCURVE marker, while the live /odm/etc/audio/default_volume_tables.xml had
-#     no marker at all. $MODPATH/system/odm does not reach /odm here - which is the whole
-#     reason this module has an odm-bind mechanism and states that "the /odm partition
-#     itself is never modified".
+# * The ODM table cannot be delivered by the overlay.
+# $MODPATH/system/odm does not reach /odm here - which is the whole reason this module has an
+# odm-bind mechanism and states that "the /odm partition itself is never modified".
 #
-#   * Delivering it by that bind DOES reach /odm, and broke media playback: the music
-#     player and YouTube went silent after a reboot and the system turned flaky. The file
-#     was valid XML with all 18 curves monotonic, so the cause is something about this
-#     platform's audio policy that is not visible from the file alone. Until that is
-#     understood, reshaping it is not a safe thing to do.
+# * Delivering it by that bind DOES reach /odm, and broke media playback: the music player and
+# YouTube went silent after a reboot and the system turned flaky.
 #
 # So: touch the file that can be touched safely, and leave the one that cannot alone.
 # An honest smaller effect beats a larger one that silently breaks playback.
@@ -122,9 +101,8 @@ asb_volume_curves_build() {
   for _vc_live in $ASB_VT_PATHS; do
     [ -f "$_vc_live" ] || continue
     # Strip a leading /system before prefixing: the two would otherwise stack into
-    # $MODPATH/system/system/..., which the mount layer aims at /system/system - a path
-    # that does not exist, and the device bootloops. Same convention the rest of the
-    # installer uses ("${_ecl#/system}").
+    # $MODPATH/system/system/..., which the mount layer aims at /system/system - a path that
+    # does not exist, and the device bootloops.
     _vc_dst="$_vc_mod/system${_vc_live#/system}"
 
     if [ "$_vc_pct" = "100" ]; then
@@ -166,15 +144,15 @@ asb_volume_curves_pct() {
 
 # Tear out the runtime-bind delivery an earlier build used for the volume table.
 #
-# Kept as a cleanup-only step, not a builder: devices updated from that build still have
-# the reshaped copy staged in odm_patched and registered in odm_bind_manifest.txt, and
-# leaving either in place keeps the bind landing on top of the overlay on every boot -
-# the exact conflict that broke media playback. Nothing here ever creates a bind.
+# Kept as a cleanup-only step, not a builder: devices updated from that build still have the
+# reshaped copy staged in odm_patched and registered in odm_bind_manifest.txt, and leaving
+# either in place keeps the bind landing on top of the overlay on every boot - the exact
+# conflict that broke media playback.
 asb_volume_odm_bind_cleanup() {
-  # Also drop the ODM overlay copy an earlier build produced. It never reached /odm, so
-  # it did nothing but sit there - and on a non-reference device it creates a
-  # system/odm directory that the installer then has to prune, which is a risk with no
-  # upside. $MODDIR is not always set when this runs, so cover both module roots.
+  # Also drop the ODM overlay copy an earlier build produced.
+  # It never reached /odm, so it did nothing but sit there - and on a non-reference device it
+  # creates a system/odm directory that the installer then has to prune, which is a risk with
+  # no upside.
   for _vc_mroot in "${MODDIR:-/data/adb/modules/AutoSystemBoost}" \
                    /data/adb/modules/AutoSystemBoost \
                    /data/adb/modules_update/AutoSystemBoost; do

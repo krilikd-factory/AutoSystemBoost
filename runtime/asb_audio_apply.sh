@@ -1,19 +1,13 @@
 #!/system/bin/sh
 # asb_audio_apply.sh — apply the audio tweaks that do NOT need a reboot.
 #
-# Which tweaks can land live, and why:
-#   audio_profile   - plain properties + an audioserver restart re-reads them.
-#   bt_absvol_mode  - settings rows + properties, same restart picks them up.
-#   dsp_loudness    - libasbdsp.so reads its gain from persist.asb.dsp.* at
-#                     INIT/ENABLE (never inside process()), so a restart re-creates
-#                     the effect with the new gain. NOTE: only the GAIN is live --
-#                     switching from "off" installs the .so into the overlay, and that
-#                     is a file mount, so the first enable still needs a reboot.
+# Which tweaks can land live, and why: audio_profile - plain properties + an audioserver
+# restart re-reads them.
+# dsp_loudness - libasbdsp.so reads its gain from persist.asb.dsp.* at INIT/ENABLE (never
+# inside process()), so a restart re-creates the effect with the new gain.
 #
-# Deliberately NOT here (a reboot is unavoidable, not laziness):
-#   media_loudness  - the volume curves live in an overlay XML that audiopolicy parses
-#                     once at boot.
-#   audio_dac_hifi  - patches mixer files in the overlay; same reason.
+# Deliberately NOT here (a reboot is unavoidable, not laziness): media_loudness - the volume
+# curves live in an overlay XML that audiopolicy parses once at boot.
 #
 # Restarting audioserver briefly cuts audio, so this is only ever run on demand from
 # the WebUI, never automatically.
@@ -29,20 +23,17 @@ _cfg() {
 _has() { command -v "$1" >/dev/null 2>&1; }
 _persist() { _has resetprop && resetprop -n "$1" "$2" >/dev/null 2>&1 || setprop "$1" "$2" 2>/dev/null; }
 
-# The vendor-namespace copy is created through property_service rather than with
-# resetprop -n, so it picks up its SELinux context from property_contexts. Verified on
-# device: persist.vendor.* lands in vendor_default_prop, the context a vendor process is
-# allowed to read, while persist.asb.* lands in default_prop, which it is not.
+# The vendor-namespace copy is created through property_service rather than with resetprop -n,
+# so it picks up its SELinux context from property_contexts.
 _persist_ctx() {
   _has resetprop && resetprop "$1" "$2" >/dev/null 2>&1 && return 0
   setprop "$1" "$2" 2>/dev/null
 }
 
-# Every DSP tunable is written twice, under the legacy name and under the vendor
-# namespace. The effect runs inside the vendor HAL process, and persist.asb.* lands in the
-# default_prop SELinux context which a vendor domain generally cannot read - the vendor
-# namespace is the one vendor code is meant to read. Writing both keeps older installs and
-# the diagnostics in action.sh working unchanged.
+# Every DSP tunable is written twice, under the legacy name and under the vendor namespace.
+# The effect runs inside the vendor HAL process, and persist.asb.* lands in the default_prop
+# SELinux context which a vendor domain generally cannot read - the vendor namespace is the one
+# vendor code is meant to read.
 _dspp() { _persist "persist.asb.dsp.$1" "$2"; _persist_ctx "persist.vendor.asb.dsp.$1" "$2"; }
 
 # "dsp" restricts this run to the DSP values and skips the audioserver restart: the attach
@@ -50,25 +41,20 @@ _dspp() { _persist "persist.asb.dsp.$1" "$2"; _persist_ctx "persist.vendor.asb.d
 # audio stack down and no momentary drop-out when the slider moves.
 _mode="${1:-all}"
 
-# "mirror" republishes whatever the DSP properties currently hold under the vendor
-# namespace and does nothing else. It deliberately recomputes NOTHING from the config:
-# at boot the overlay that carries libasbdsp.so is not mounted yet, and the normal path
-# reads a missing library as "needs-reboot" and writes enable=0 - which would switch the
-# DSP off on every single boot.
+# "mirror" republishes whatever the DSP properties currently hold under the vendor namespace
+# and does nothing else.
 if [ "$_mode" = "mirror" ]; then
   # Reconcile the VALUE properties against the config before republishing.
   #
-  # Mirror deliberately does not touch `enable` - see above. But it used to republish
-  # every property verbatim, including gain, and that left the gain frozen forever:
-  # the boot path only calls the full "dsp" mode when persist.asb.dsp.enable is not 1,
-  # and `enable` is a PERSIST property, so once the DSP has been on once, boot goes to
+  # Mirror deliberately does not touch `enable` - see above.
+  # But it used to republish every property verbatim, including gain, and that left the gain
+  # frozen forever: the boot path only calls the full "dsp" mode when persist.asb.dsp.enable is
+  # not 1, and `enable` is a PERSIST property, so once the DSP has been on once, boot goes to
   # mirror every time from then on and nothing ever re-derives gain from the config.
   #
-  # Observed on a real device: governor.conf said dsp_loudness=1 (+1 dB) while the
-  # daemon attached at gain_mb=1800 (+18 dB) - a stale value from an earlier setting,
-  # surviving a fresh reinstall because the config is restored but the property is not
-  # recomputed. Seventeen decibels of difference between what the UI showed and what
-  # the ear got, with the compressor left on its high-gain settings to match.
+  # Observed on a real device: governor.conf said dsp_loudness=1 (+1 dB) while the daemon
+  # attached at gain_mb=1800 (+18 dB) - a stale value from an earlier setting, surviving a
+  # fresh reinstall because the config is restored but the property is not recomputed.
   #
   # Recomputing just the scalar gain here is safe: it needs no library present, it
   # cannot switch the DSP off, and it makes the property track the config the way the
@@ -129,16 +115,9 @@ else
     _persist persist.vendor.audio.hifi true
     _persist persist.audio.uhqa 1
     _persist persist.vendor.audio.uhqa true
-    # DO NOT set af.resampler.quality here. History, so nobody re-adds it:
-    # it is an enum (0=DEFAULT 1=LOW .. 4=VERY_HIGH .. 7=DYN_HIGH), and this line used to
-    # write 255 - out of range, silently dropped, so hifi always ran at DEFAULT. That is
-    # why testers reported "no difference, like stock". Setting the real enum top (4 =
-    # VERY_HIGH_QUALITY) made it engage for the first time and BROKE PLAYBACK: a huge FIR
-    # per buffer starves the audio thread, so Signal calls went silent both ways, Poweramp
-    # glitched out, and YouTube dropped the moment anything else touched the CPU. The
-    # feature never worked, and when made to work it was harmful - so it stays off.
-    # 0 = DEFAULT is written below for every profile, which also RESETS the property if an
-    # earlier build left 4 or 255 in the property store without a reboot.
+    # DO NOT set af.resampler.quality here.
+    # 7=DYN_HIGH), and this line used to write 255 - out of range, silently dropped, so hifi
+    # always ran at DEFAULT.
     setprop af.resampler.quality 0 2>/dev/null || true
   else
     _persist persist.audio.uhqa 0
@@ -148,14 +127,14 @@ else
 fi
 changed="${changed}profile=${_ap} "
 
-# ---- bt_absvol_mode --------------------------------------------------------------
-# A2DP offload. system.prop pins the four offload properties to "enabled" at boot, which
-# is right for on|auto but silently ignores off - the key documented three values and
-# honoured one. Nothing read it at all, so the setting was decoration.
+# ---- bt_absvol_mode -------------------------------------------------------------- A2DP
+# offload.
+# system.prop pins the four offload properties to "enabled" at boot, which is right for on|auto
+# but silently ignores off - the key documented three values and honoured one.
 #
-# Offload hands A2DP encoding to the DSP: better battery, but effect engines (ViPER, and
-# our own DSP) never see the stream, because it bypasses the framework mixer. That is
-# exactly why someone would want it off, and it has to be a live settings write rather
+# Offload hands A2DP encoding to the DSP: better battery, but effect engines (ViPER, and our
+# own DSP) never see the stream, because it bypasses the framework mixer.
+# That is exactly why someone would want it off, and it has to be a live settings write rather
 # than a system.prop line, since system.prop cannot express "leave it alone".
 _a2dp="$(_cfg bt_a2dp_offload)"
 case "$_a2dp" in
@@ -186,11 +165,10 @@ _persist persist.bluetooth.disableabsvol "$_dp"
 _persist persist.vendor.bluetooth.disableabsvol "$_dp"
 changed="${changed}bt_absvol=${_bt} "
 
-# ---- dsp_loudness (gain only) ----------------------------------------------------
-# Slider gives any integer 0..25 now (not just 3/6/9), so accept the whole range. The
-# DSP effect re-reads persist.asb.dsp.* on ENABLE, and the audioserver restart below
-# triggers that ENABLE - which is why gain changes here apply live, no reboot. Values
-# mirror post-fs-data exactly (ceiling -15, comp 6:1 @ -24 dBFS) so live and boot agree.
+# ---- dsp_loudness (gain only) ---------------------------------------------------- Slider
+# gives any integer 0..25 now (not just 3/6/9), so accept the whole range.
+# The DSP effect re-reads persist.asb.dsp.* on ENABLE, and the audioserver restart below
+# triggers that ENABLE - which is why gain changes here apply live, no reboot.
 _dsp="$(_cfg dsp_loudness)"
 _dsp_ok=0
 case "$_dsp" in
@@ -198,11 +176,9 @@ case "$_dsp" in
   *[!0-9]*) _dsp_ok=0 ;;
   *) [ "$_dsp" -ge 1 ] 2>/dev/null && [ "$_dsp" -le 25 ] 2>/dev/null && _dsp_ok=1 ;;
 esac
-# The eq_compat profile exists to hand the stream to an external engine (ViPER and
-# friends). Our own effect sits on the same output and the external driver then does not
-# see the stream at all, so the two cannot share it: eq_compat wins and the DSP is turned
-# off outright. enable=0 makes the attach daemon release the effect completely, so the
-# audio path goes back to what it would be without the module - not merely bypassed.
+# The eq_compat profile exists to hand the stream to an external engine (ViPER and friends).
+# Our own effect sits on the same output and the external driver then does not see the stream
+# at all, so the two cannot share it: eq_compat wins and the DSP is turned off outright.
 _dsp_eq_off=0
 if [ "$_ap" = "eq_compat" ] && [ "$_dsp_ok" = "1" ]; then
   _dsp_ok=0
@@ -215,12 +191,11 @@ if [ "$_dsp_ok" = "1" ]; then
       _dspp ceiling_mb -15
       # Compressor, on unless the user asked for it off.
       #
-      # It exists so that large gain does not simply slam into the limiter: 6:1 above
-      # -24 dBFS holds the body of the track down while the peaks stay clean. That is the
-      # right trade at +10 dB and above. At +2..+4 dB it is the wrong one - peaks barely
-      # reach the ceiling anyway, so all the compressor does is squash dynamics that never
-      # needed squashing, which is exactly what someone listening to a mastered recording
-      # hears as "processed".
+      # It exists so that large gain does not simply slam into the limiter: 6:1 above -24 dBFS
+      # holds the body of the track down while the peaks stay clean.
+      # At +2..+4 dB it is the wrong one - peaks barely reach the ceiling anyway, so all the
+      # compressor does is squash dynamics that never needed squashing, which is exactly what
+      # someone listening to a mastered recording hears as "processed".
       #
       # Turning it off does NOT remove the limiter: true peaks are still caught at the
       # ceiling, so this cannot clip. What it can do at high gain is make the limiter work
@@ -246,18 +221,15 @@ else
     changed="${changed}dsp=off "
 fi
 
-# ---- saturation: permanently off --------------------------------------------------
-# The tanh saturator is gone from the UI: at every drive it audibly buzzed on real
-# material, which is not a trade worth offering. These two lines are not dead code -
-# both properties persist across reboots, so an install that inherits softclip=1 from an
-# earlier version would keep distorting until something clears it. Writing the neutral
-# values on every run is that reset.
+# ---- saturation: permanently off -------------------------------------------------- The tanh
+# saturator is gone from the UI: at every drive it audibly buzzed on real material, which is
+# not a trade worth offering.
 _dspp softclip 0
 _dspp postgain_x100 300
 
-# ---- dsp_bass (low-shelf boost) ---------------------------------------------------
-# A shelf at 90 Hz: full lift at DC, half of it at the corner, nothing above ~1 kHz. It
-# runs at the head of the chain so the compressor and limiter see the boosted low end -
+# ---- dsp_bass (low-shelf boost) --------------------------------------------------- A shelf
+# at 90 Hz: full lift at DC, half of it at the corner, nothing above ~1 kHz.
+# It runs at the head of the chain so the compressor and limiter see the boosted low end -
 # which also means the extra bass eats headroom and the limiter engages sooner.
 _bs="$(_cfg dsp_bass)"
 case "$_bs" in
@@ -281,12 +253,10 @@ fi
 setprop ctl.restart audioserver 2>/dev/null || true
 echo "applied: $changed"
 
-# ---- read back what is ACTUALLY live ----------------------------------------------
-# Testers reasonably ask "how do I know any of this took effect?" - printing what we
-# wrote proves nothing, because a property can be rejected (out-of-range values are
-# silently dropped) or overwritten by the platform. So wait for audioserver to come
-# back and report what the system really holds now. If a line below does not match what
-# you selected, that tweak did NOT apply - that is the log to send.
+# ---- read back what is ACTUALLY live ---------------------------------------------- Testers
+# reasonably ask "how do I know any of this took effect?" - printing what we wrote proves
+# nothing, because a property can be rejected (out-of-range values are silently dropped) or
+# overwritten by the platform.
 _n=0
 while [ "$_n" -lt 20 ]; do
   [ "$(getprop init.svc.audioserver 2>/dev/null)" = "running" ] && break

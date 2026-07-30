@@ -122,10 +122,11 @@ fi
 
 # --once: run a single pass and exit.
 #
-# The governor now drives the schedule from its own loop, so the resident process and its
-# sleep are redundant there - two permanent shell loops with independent timers were two
-# sets of wakeups the device did not need. The self-looping form is kept for the case
-# where the governor is not running, which is exactly when a watchdog matters most.
+# The governor now drives the schedule from its own loop, so the resident process and its sleep
+# are redundant there - two permanent shell loops with independent timers were two sets of
+# wakeups the device did not need.
+# The self-looping form is kept for the case where the governor is not running, which is
+# exactly when a watchdog matters most.
 ASB_WD_ONCE=0
 case "$1" in --once) ASB_WD_ONCE=1 ;; esac
 

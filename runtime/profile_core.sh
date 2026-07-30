@@ -226,11 +226,10 @@ asb_apply_vm() {
   asb_feature_enabled VM || return 0
   # Camera guard owns swappiness while a recording is in flight.
   #
-  # service.sh already checks this and smart_dynamic_tune.sh does too, but the profile
-  # path did not - so switching profile mid-recording wrote the profile's swappiness
-  # straight over the guard's 10, and on release the guard restored a value that was
-  # captured before the switch. Same bug the tuner had; this was the last writer still
-  # missing the check.
+  # service.sh already checks this and smart_dynamic_tune.sh does too, but the profile path did
+  # not - so switching profile mid-recording wrote the profile's swappiness straight over the
+  # guard's 10, and on release the guard restored a value that was captured before the switch.
+  # Same bug the tuner had; this was the last writer still missing the check.
   [ -r /dev/.asb/camera_guard ] || sysctlw vm.swappiness "$VM_SWAPPINESS" || true
   sysctlw vm.dirty_expire_centisecs "$VM_DIRTY_EXPIRE" || true
   sysctlw vm.dirty_writeback_centisecs "$VM_DIRTY_WRITEBACK" || true
@@ -270,10 +269,8 @@ asb_apply_net() {
   fi
 }
 
-# OEM-owned settings need a baseline that is captured ONCE, before ASB has ever
-# touched them, and never re-captured. Recording "the current value" on every boot
-# looks the same on boot 1 and quietly records ASB's own value from boot 2 onwards -
-# at which point uninstall restores what ASB wrote instead of what the user had.
+# OEM-owned settings need a baseline that is captured ONCE, before ASB has ever touched them,
+# and never re-captured.
 asb_oem_baseline_save() {
   _ob_log="/data/adb/asb/oem_restore.log"
   mkdir -p /data/adb/asb 2>/dev/null || true
@@ -284,13 +281,10 @@ asb_oem_baseline_save() {
 
 # Turn RAM expansion off the way OxygenOS itself records it.
 #
-# OOS tracks this toggle in THREE keys, not two: ram_expand_size, ram_expand_size_list
-# and ram_expand_switch_state. ASB only ever zeroed the first two, so while the module
-# was installed it re-zeroed them at every boot and the slider looked off - but OOS
-# still had switch_state=1 on record. Remove the module and nothing re-zeroes anything;
-# OOS repairs the inconsistency from its own switch record, RAM expansion comes back on,
-# swap-on-UFS resumes and the phone runs hot. Reported from the field on a OnePlus 13:
-# "after every uninstall the RAM expansion slider turns itself on and the phone heats up".
+# OOS tracks this toggle in THREE keys, not two: ram_expand_size, ram_expand_size_list and
+# ram_expand_switch_state.
+# Reported from the field on a OnePlus 13: "after every uninstall the RAM expansion slider
+# turns itself on and the phone heats up".
 asb_ram_expand_apply() {
   has settings || return 0
   for _rk in ram_expand_size ram_expand_size_list ram_expand_switch_state; do
@@ -316,9 +310,8 @@ asb_apply_ux() {
   _ux_conf="$MODDIR/config/governor.conf"
   if [ -r "$_ux_conf" ]; then
     # UX_MANAGE_ANIM_SCALE was dropped here in V60: its WebUI card was removed and the
-    # animation block below is gated on UX_MANAGE_TIMEOUTS, which owns both the scales
-    # and the touch timeouts. Loading it kept a config key alive that a hand-editor
-    # could set to 1 and get nothing for.
+    # animation block below is gated on UX_MANAGE_TIMEOUTS, which owns both the scales and the
+    # touch timeouts.
     for _uxk in UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
                 UX_ANIM_FORCE_RESTART; do
       _uxv="$(grep -E "^[[:space:]]*${_uxk}=" "$_ux_conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
@@ -376,16 +369,10 @@ asb_apply_ux() {
       # Refuse a baseline that is obviously our own output rather than the user's.
       #
       # The capture happens before the first override, but only on the run that does the
-      # overriding. If an earlier build had already written 0.9 and a later install then
-      # captured a "baseline" while that value was live, the file records ASB's setting as
-      # if it were stock - and from then on, with the toggle OFF, the restore path writes
-      # 0.9 back over the user's 1.0 on every profile pass. Seen exactly that: the toggle
-      # off, and the scales moving 1.0 -> 0.9 a minute into boot.
+      # overriding.
       #
-      # 0.8 and 0.9 are the performance and balanced profile scales; Android's own default
-      # is 1.0 and no OEM ships 0.9 here. Treating them as suspect costs a user who
-      # genuinely chose 0.9 by hand a reset to 1.0, and saves everyone else from ASB
-      # quietly overriding a setting it was told not to manage.
+      # 0.8 and 0.9 are the performance and balanced profile scales; Android's own default is
+      # 1.0 and no OEM ships 0.9 here.
       case "$BASE_WIN_ANIM" in
         0.8|0.80|0.9|0.90) BASE_WIN_ANIM=1.0; BASE_TRANS_ANIM=1.0; BASE_DUR_ANIM=1.0 ;;
       esac
@@ -443,10 +430,9 @@ asb_apply_ux() {
   fi
   asb_settings_put global google_core_control 0
 
-  # Blur is a UX setting like the rest, and the one part of it that does NOT need a
-  # reboot: WindowManager watches this global live, so the shade and the launcher drop
-  # their blur the moment it is written. The system.prop half (SurfaceFlinger) still
-  # needs the reboot, and asb_blur_apply.sh writes that.
+  # Blur is a UX setting like the rest, and the one part of it that does NOT need a reboot:
+  # WindowManager watches this global live, so the shade and the launcher drop their blur the
+  # moment it is written.
   _blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$_ux_conf" 2>/dev/null \
                 | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_blur_want" in
@@ -459,50 +445,35 @@ asb_apply_ux() {
   if [ "$_anim_changed" = "1" ]; then
     am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
   fi
-  # SystemUI caches the animation scales at process start, so a restart is only
-  # meaningful when a scale was actually rewritten this run - restarting it on every
-  # boot regardless would be a visible hitch for nothing. The reason this looked dead
-  # before is not the gate: asb_apply_ux was never reached at boot at all (see the
-  # command -v fix in service.sh), so no scale was ever written and the gate never
-  # opened.
+  # SystemUI caches the animation scales at process start, so a restart is only meaningful when
+  # a scale was actually rewritten this run - restarting it on every boot regardless would be a
+  # visible hitch for nothing.
   # Never on an AUTOMATIC profile change.
   #
-  # Killing SystemUI blanks the screen for a couple of seconds, drops the user at the
-  # lock screen and tears down every overlay another module has drawn into the status
-  # bar. That is an acceptable price for a change the user just asked for; it is not
-  # acceptable for one they did not.
+  # Killing SystemUI blanks the screen for a couple of seconds, drops the user at the lock
+  # screen and tears down every overlay another module has drawn into the status bar.
   #
   # Auto-battery switches profiles at 20% on its own, and the profiles carry different
-  # animation scales (balanced 0.9, battery 1.0), so _anim_changed was set and the kill
-  # fired. Reported from the field as "at 19% the screen goes black for a moment, comes
-  # back on the lock screen, and my status-bar icon module resets" - which reads exactly
-  # like a SystemUI crash and is in fact us.
+  # animation scales (balanced 0.9, battery 1.0), so _anim_changed was set and the kill fired.
+  # Reported from the field as "at 19% the screen goes black for a moment, comes back on the
+  # lock screen, and my status-bar icon module resets" - which reads exactly like a SystemUI
+  # crash and is in fact us.
   #
-  # The scales are written either way; SystemUI simply picks them up when it is next
-  # restarted for its own reasons. A slightly stale animation duration is not worth
-  # interrupting someone whose phone is already low on battery.
-  # Restart SystemUI ONLY when the user personally asked for this profile change.
+  # The scales are written either way; SystemUI simply picks them up when it is next restarted
+  # for its own reasons.
   #
-  # PROFILE_FLAG is "user" for a tap in the WebUI, "auto" for an automatic switch, and
-  # UNSET when service.sh re-applies the profile at boot. It used to be empty in the
-  # user case too, so "unset" and "the user asked" were the same value - and the boot
-  # path, which sets nothing, was read as a user request. The result: roughly a minute
-  # into startup the reinforce pass found the animation scales still at their pre-boot
-  # values, set _anim_changed, and killed SystemUI. Screen blinks, lock screen returns,
-  # and every overlay another module has drawn into the status bar is torn down. Nobody
-  # asked for any of it.
+  # PROFILE_FLAG is "user" for a tap in the WebUI, "auto" for an automatic switch, and UNSET
+  # when service.sh re-applies the profile at boot.
+  # The result: roughly a minute into startup the reinforce pass found the animation scales
+  # still at their pre-boot values, set _anim_changed, and killed SystemUI.
   #
-  # Requiring the word "user" makes both silent cases - boot and auto-switch - fall
-  # through. The scales are still written; SystemUI picks them up the next time it
-  # restarts for its own reasons, which is a fair trade for never interrupting a boot.
-  # SystemUI is never restarted from a profile switch. Not even a manual one.
+  # Requiring the word "user" makes both silent cases - boot and auto-switch - fall through.
+  # SystemUI is never restarted from a profile switch.
   #
-  # The restart existed so a changed animation scale took effect at once. It does not need
-  # to: WindowManager re-reads those scales per animation, so the new value applies to the
-  # next transition regardless. What the restart DID do was blank the screen for a couple
-  # of seconds, drop the user at the lock screen, and tear down every overlay another
-  # module had drawn into the status bar - reported by two users, once as a suspected
-  # SystemUI crash.
+  # The restart existed so a changed animation scale took effect at once.
+  # What the restart DID do was blank the screen for a couple of seconds, drop the user at the
+  # lock screen, and tear down every overlay another module had drawn into the status bar -
+  # reported by two users, once as a suspected SystemUI crash.
   #
   # Gating it on "the user asked for this switch" was the previous compromise and it was
   # still wrong: someone who taps Performance is asking for a power profile, not for their
@@ -535,10 +506,9 @@ asb_load_profile() {
     *) PROFILE=balanced ;;
   esac
   _SHELL_BOOT_PROFILE="${_SHELL_BOOT_PROFILE:-$PROFILE}"
-  # Remember what was actually REQUESTED before sourcing a profile file, because
-  # every profiles/*.sh opens with PROFILE="<its own name>" and would otherwise
-  # rewrite it - on smart that turns the request into "balanced" before anyone can
-  # read it.
+  # Remember what was actually REQUESTED before sourcing a profile file, because every
+  # profiles/*.sh opens with PROFILE="<its own name>" and would otherwise rewrite it - on smart
+  # that turns the request into "balanced" before anyone can read it.
   _ASB_REQUESTED="$PROFILE"
   if [ -f "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh" ]; then
     . "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh"
@@ -548,18 +518,17 @@ asb_load_profile() {
   fi
   PROFILE="$_ASB_REQUESTED"
   unset _SHELL_BOOT_PROFILE
-  # ASB_PROFILE is what service.sh branches on - 21 case/if sites covering doze
-  # constants, WiFi DTIM, sched_energy_aware, lpm_prediction, page-cluster and TCP
-  # pacing. This function overrides the one in asb_utils.sh (sourced first, so this
-  # one wins) and used to set only PROFILE, leaving ASB_PROFILE empty forever: every
-  # one of those 21 sites fell through to its "*)" balanced branch, so the Battery
-  # profile never applied its deepest power savings and Performance never applied its
-  # loosest ones. The empty "profile=" in runtime_apply.log's reinforce lines was this.
+  # ASB_PROFILE is what service.sh branches on - 21 case/if sites covering doze constants, WiFi
+  # DTIM, sched_energy_aware, lpm_prediction, page-cluster and TCP pacing.
+  # This function overrides the one in asb_utils.sh (sourced first, so this one wins) and used
+  # to set only PROFILE, leaving ASB_PROFILE empty forever: every one of those 21 sites fell
+  # through to its "*)" balanced branch, so the Battery profile never applied its deepest power
+  # savings and Performance never applied its loosest ones.
   #
   # It carries the REQUESTED profile, including "smart" - not _SHELL_BOOT_PROFILE.
   # The shell layer loads balanced.sh for smart because the native governor owns the
-  # frequencies, but a branch asking "is this battery?" must not be told "balanced"
-  # when the user picked smart.
+  # frequencies, but a branch asking "is this battery?" must not be told "balanced" when the
+  # user picked smart.
   ASB_PROFILE="$_ASB_REQUESTED"
   unset _ASB_REQUESTED
   # Populate the _P_* mapped variables that service.sh's apply_* helpers read.

@@ -23,10 +23,9 @@ asb_map_profile_vars() {
   _P_UCL_BG="$UCL_BG_MIN"
   _P_UCL_FG="$UCL_FG_MIN"
   _P_UCL_TOP="$UCL_TOP_MIN"
-  # CPU caps are NOT loaded here. _P_CPUCAP_L/_P_CPUCAP_B are PERCENTS set by
-  # service.sh apply_screen_aware_caps (per-device, screen-aware). Leaving the
-  # legacy absolute CPU_CAP_*/CPU_MAX_* in them caused apply_cpufreq_caps to
-  # misread an absolute kHz as a percent. Leave them empty here.
+  # CPU caps are NOT loaded here.
+  # Leaving the legacy absolute CPU_CAP_*/CPU_MAX_* in them caused apply_cpufreq_caps to
+  # misread an absolute kHz as a percent.
   _P_CPUCAP_L=""
   _P_CPUCAP_B=""
   _P_CPU_MAXL=""
@@ -142,10 +141,10 @@ asb_update_desc() {
   rm -f "$MODDIR/module.prop.tmp"
 }
 sysctlw() {
-  # local, not globals. This function is shadowed by profile_core.sh's version today
-  # purely because service.sh sources that one second - flip the sourcing order and
-  # this one starts clobbering any caller variable named k, v or p, which is a very
-  # quiet way to break a loop.
+  # local, not globals.
+  # This function is shadowed by profile_core.sh's version today purely because service.sh
+  # sources that one second - flip the sourcing order and this one starts clobbering any caller
+  # variable named k, v or p, which is a very quiet way to break a loop.
   local k="$1" v="$2" p
   if has sysctl; then
     sysctl -w "$k=$v" >/dev/null 2>&1 && return 0

@@ -3,11 +3,10 @@
 #
 # Why this exists, and why the previous approach could not work.
 #
-# The old grading was a stack of sed rules matching literal numbers: find 0.35, write
-# 0.55. That only fires on a device whose tuning file happens to contain 0.35. A OnePlus
-# 15 ships values already at or above what "level 4" was reaching for, so every rule
-# missed and the setting did nothing at all - users moved the slider to 4, enabled
-# Extended, and correctly reported no difference. There was none.
+# The old grading was a stack of sed rules matching literal numbers: find 0.35, write 0.55.
+# A OnePlus 15 ships values already at or above what "level 4" was reaching for, so every rule
+# missed and the setting did nothing at all - users moved the slider to 4, enabled Extended,
+# and correctly reported no difference.
 #
 # Scaling instead of substituting removes the dependency entirely: whatever the device
 # ships, level N multiplies it. A phone tuned conservatively gets a bigger absolute push
@@ -15,13 +14,9 @@
 #
 # Three parameters, chosen because they are the three a person actually sees:
 #
-#   saturation  Rgb2YuvParamsSet.*_Rgb2YuvParams - the RGB->YUV matrix. Elements 4..9 are
-#               the two chroma rows; scaling them scales colour saturation directly and
-#               leaves luma (elements 1..3) alone, so brightness does not shift.
-#   ai detail   EnhanceNetParamsSet.*.BlendWeight - how much of the neural detail pass is
-#               blended in. Clamped at 1.0: it is a blend weight, and above 1 the result
-#               is undefined rather than more detailed.
-#   sharpness   GanSRUsmSharpParamsSet.*.BnScale / QbcScale - unsharp mask strength.
+# saturation Rgb2YuvParamsSet.*_Rgb2YuvParams - the RGB->YUV matrix.
+# Clamped at 1.0: it is a blend weight, and above 1 the result is undefined rather than more
+# detailed.
 #
 # Everything else in the file is left alone on purpose. Noise, tone mapping and black
 # level interact with each other and with the sensor, and a ratio applied blind to those
@@ -34,9 +29,7 @@ CONF="$MODDIR/config/governor.conf"
 #
 # At install time $MODDIR/config/governor.conf is still the pristine shipped file - the
 # carry-over that copies the user's answers into it runs about 1300 lines after the camera
-# overlay is built. Reading the config here therefore always saw CAMERA_LEVEL=0 and graded
-# nothing, no matter what the slider said. The exact same mistake cost dsp_effect_abi a
-# release; the installer already has the resolved value in hand, so it passes it in.
+# overlay is built.
 _lvl="${ASB_CAMERA_LEVEL_IN:-}"
 if [ -z "$_lvl" ]; then
   _lvl="$(grep -E '^[[:space:]]*CAMERA_LEVEL=' "$CONF" 2>/dev/null \
@@ -47,16 +40,13 @@ case "$_lvl" in ''|*[!0-9]*) _lvl=0 ;; esac
 
 # Per-level ratios, in percent to keep the shell in integers.
 #
-# These are deliberately modest. A tuning file is a manufacturer's calibration, not a
-# starting point that happens to be too low - the aim is a visible nudge, not a different
-# camera. Saturation moves least because it is the one people notice going wrong.
-# Levels 1-4 stay conservative; 5-8 go past what a manufacturer would ship.
+# These are deliberately modest.
+# Saturation moves least because it is the one people notice going wrong.
 #
-# The top of the range is deliberately further than "tasteful". Someone asking for level
-# 8 is not being talked out of it by a cap, and the values below are still bounded by the
-# clamps in the awk - a blend weight cannot exceed 1.0, and nothing may exceed 64. What
-# 7-8 buy is a look, not an improvement: heavy saturation and sharpening produce halos
-# and posterised skies, which is a legitimate thing to want and a terrible default.
+# The top of the range is deliberately further than "tasteful".
+# Someone asking for level 8 is not being talked out of it by a cap, and the values below are
+# still bounded by the clamps in the awk - a blend weight cannot exceed 1.0, and nothing may
+# exceed 64.
 case "$_lvl" in
   1) _sat=104; _ai=112; _sharp=108 ;;
   2) _sat=110; _ai=126; _sharp=118 ;;
@@ -77,10 +67,9 @@ _cfg_num() {
   case "$_v" in ''|*[!0-9]*) echo "" ;; *) echo "$_v" ;; esac
 }
 
-# Grain. addNoiseWeight* is deliberately ADDED noise - the camera puts grain back after
-# denoising, because a perfectly smooth image reads as plastic. Scaling it down gives a
-# cleaner look, up gives more texture. 0 turns the grain off entirely, which is what
-# someone chasing maximum smoothness wants.
+# Grain.
+# addNoiseWeight* is deliberately ADDED noise - the camera puts grain back after denoising,
+# because a perfectly smooth image reads as plastic.
 _grain="$(_cfg_num CAMERA_GRAIN "$ASB_CAM_GRAIN_IN")"
 case "$_grain" in ''|*[!0-9]*) _grain=3 ;; esac
 [ "$_grain" -gt 8 ] 2>/dev/null && _grain=8
@@ -93,16 +82,11 @@ _grain_pct=$(( _grain * 100 / 3 ))
 _contrast="$(_cfg_num CAMERA_CONTRAST "$ASB_CAM_CONTRAST_IN")"
 case "$_contrast" in ''|*[!0-9]*) _contrast=3 ;; esac
 [ "$_contrast" -gt 8 ] 2>/dev/null && _contrast=8
-# 3 = stock, exactly 100%. The old formula was 70 + n*15, which gives 115 at n=3 -
-# so the documented "neutral" setting quietly pushed contrast and saturation 15% every
-# install, and compounded on every reinstall. 3*10+70 = 100 makes neutral actually
-# neutral; 0 flattens to 70%, 6 (the UI maximum) reaches 130%.
+# 3 = stock, exactly 100%.
 _contrast_pct=$(( 70 + _contrast * 10 ))
 
-# Portrait AI. PersonBlendWeight, SkinBlendWeight and FaceBlendWeight ship at 0.0 - the
-# neural pass is simply off for faces. A ratio cannot move zero, so this one writes
-# ABSOLUTE values. That is the whole reason it needs its own code path rather than
-# joining the AI detail scaling above.
+# Portrait AI.
+# A ratio cannot move zero, so this one writes ABSOLUTE values.
 _portrait="$(_cfg_num CAMERA_PORTRAIT "$ASB_CAM_PORTRAIT_IN")"
 case "$_portrait" in ''|*[!0-9]*) _portrait=0 ;; esac
 [ "$_portrait" -gt 6 ] 2>/dev/null && _portrait=6
@@ -116,10 +100,7 @@ case "$_portrait" in
   *) _p1=""; _p2=""; _p3="" ;;
 esac
 
-# Macro and low-light sharpening. MacroParams and LivehouseParams have their own
-# BnScale/QbcScale, and they are the modes where over-sharpening shows up worst - close
-# subjects and high ISO both amplify halos. Their own control, defaulting to following
-# the main sharpening rather than exceeding it.
+# Macro and low-light sharpening.
 _lowlight="$(_cfg_num CAMERA_LOWLIGHT "$ASB_CAM_LOWLIGHT_IN")"
 case "$_lowlight" in ''|*[!0-9]*) _lowlight=0 ;; esac
 [ "$_lowlight" -gt 8 ] 2>/dev/null && _lowlight=8
@@ -131,25 +112,23 @@ fi
 
 # Fingerprint: the structural guarantee that a file is never graded twice.
 #
-# The chroma check that guards the baseline is a heuristic - it works because stock
-# happens to be the exact BT.601 matrix, and it would stop working the day a device ships
-# something else. Compounding cost three rounds of debugging (x1.28 -> x1.51 -> x1.93 ->
-# x2.47 on one user's phone), so it is worth closing structurally rather than probably.
+# The chroma check that guards the baseline is a heuristic - it works because stock happens to
+# be the exact BT.601 matrix, and it would stop working the day a device ships something else.
+# Compounding cost three rounds of debugging (x1.28 -> x1.51 -> x1.93 -> x2.47 on one user's
+# phone), so it is worth closing structurally rather than probably.
 #
-# The marker records the hash of the SOURCE plus the settings that produced the output. A
-# file carrying a marker is already a result, never an input; a file whose marker does not
-# match the current settings is a result of DIFFERENT settings, and regrading it from
-# there would compound just as badly. Either way the answer is to go back to the source,
-# which is what the baseline is for.
+# The marker records the hash of the SOURCE plus the settings that produced the output.
+# A file carrying a marker is already a result, never an input; a file whose marker does not
+# match the current settings is a result of DIFFERENT settings, and regrading it from there
+# would compound just as badly.
 ASB_GRADE_MARK="ASBGRADE"
 
 # The marker lives in a SIDECAR, never inside the file.
 #
-# The obvious place was a trailing comment - and a trailing "// ..." makes the file
-# invalid JSON, which the camera HAL parses at every open. Tested rather than assumed: a
-# marker line appended to the real tuning file fails json.load outright. A tuning file
-# the camera cannot read is a far worse outcome than the compounding this is meant to
-# prevent, so the marker goes beside the file instead of in it.
+# The obvious place was a trailing comment - and a trailing "// ..." makes the file invalid
+# JSON, which the camera HAL parses at every open.
+# Tested rather than assumed: a marker line appended to the real tuning file fails json.load
+# outright.
 ASB_GRADE_DIR="/data/adb/asb/grade_marks"
 
 asb_grade_mark_path() {
@@ -219,13 +198,9 @@ asb_camera_grade_file() {
       if (v < 0) v = 0
       return head " " sprintf("%.6g", v) tail
     }
-    # Replace a bracketed list with three fixed values. Needed where the stock value is
-    # zero and no ratio can lift it.
-    # Raise a bracketed triple to at least (a,b,c). Needed where the stock value is
-    # zero and no ratio can lift it - but it must never pull a value DOWN. The old
-    # version wrote the targets unconditionally, so "Portrait AI = 1" turned a stock
-    # SnapPortrait PersonBlendWeight of [0.7,0.7,0.7] into [0.15,0.2,0.25]: a control
-    # advertised as adding AI was removing three quarters of it.
+    # Replace a bracketed list with three fixed values.
+    # Needed where the stock value is zero and no ratio can lift it - but it must never pull a
+    # value DOWN.
     function set_list3(line, key, a, b, c,    head, body, tail, n, arr, i, out, v, t) {
       if (index(line, "\"" key "\"") == 0) return line
       head = substr(line, 1, index(line, "\"" key "\"") + length(key) + 1)
@@ -266,10 +241,8 @@ asb_camera_grade_file() {
         if (line ~ /"UW_Rgb2YuvParams"/)     line = scale_list(line, "UW_Rgb2YuvParams",     SAT, 4, 9)
         if (line ~ /"Tele1_Rgb2YuvParams"/)  line = scale_list(line, "Tele1_Rgb2YuvParams",  SAT, 4, 9)
         if (line ~ /"Tele2_Rgb2YuvParams"/)  line = scale_list(line, "Tele2_Rgb2YuvParams",  SAT, 4, 9)
-        # No Front_Rgb2YuvParams exists - the colour matrix block covers the rear
-        # cameras only (Main1x, Main2x, UW, Tele1, Tele2). The front camera is tuned
-        # through the *Front keys in TMCParamsSet instead, which the contrast control
-        # below reaches.
+        # No Front_Rgb2YuvParams exists - the colour matrix block covers the rear cameras only
+        # (Main1x, Main2x, UW, Tele1, Tele2).
       }
       if (line ~ /BlendWeight/) {
         line = scale_list(line, "BlendWeight",       AI, 0, 0)

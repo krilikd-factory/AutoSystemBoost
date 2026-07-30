@@ -4,20 +4,17 @@
 # LPM was declared in features.conf, offered at install and printed on the action
 # screen, and had no code behind it at all. This is that code.
 #
-# The idea is that a modem power policy should not be one setting. During an online
-# match you want the data call hot and the radio in a connected state, because the cost
-# of coming back up from idle is exactly the latency spike that loses the round. While
-# the user is asleep you want the opposite: the radio idling, and as few wakeups from
-# app keepalives as possible - that traffic is the single biggest modem drain overnight.
+# The idea is that a modem power policy should not be one setting.
+# During an online match you want the data call hot and the radio in a connected state, because
+# the cost of coming back up from idle is exactly the latency spike that loses the round.
 #
 # What this deliberately does NOT touch: preferred_network_mode. Dropping someone from
 # 5G to LTE would save real power and is a favourite trick, but a restore that fails
 # once leaves the user stuck on a slower network with no idea why. Not worth it.
 #
-# Modes:
-#   fast    screen on, heavy/gaming    - keep the data call up, short keepalive
-#   normal  screen on, ordinary use    - the profile's own values
-#   save    screen off / idle          - let the radio idle, stretch keepalives
+# Modes: fast screen on, heavy/gaming - keep the data call up, short keepalive normal screen
+# on, ordinary use - the profile's own values save screen off / idle - let the radio idle,
+# stretch keepalives
 #
 # Everything is read once into a baseline before it is first changed, so turning the
 # LPM feature off or uninstalling puts back what the user had.
@@ -57,11 +54,9 @@ fi
 . "$BASE" 2>/dev/null
 case "${BASE_KEEPIDLE:-}" in ''|*[!0-9]*) BASE_KEEPIDLE=300 ;; esac
 
-# The profile owns the keepalive baseline; LPM scales it. Hardcoded seconds would be
-# meaningless here - the profiles run 600 s (performance) to 18000 s (battery), so any
-# fixed number is both too long for one and too short for another. A fixed "600 for
-# sleep" would have been SHORTER than balanced's own 3600 and caused more radio wakeups
-# overnight, not fewer, which is the exact opposite of what this mode is for.
+# The profile owns the keepalive baseline; LPM scales it.
+# A fixed "600 for sleep" would have been SHORTER than balanced's own 3600 and caused more
+# radio wakeups overnight, not fewer, which is the exact opposite of what this mode is for.
 _prof="$(cat /data/adb/asb/active_profile 2>/dev/null)"
 [ -n "$_prof" ] || _prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"
 case "$_prof" in performance|battery) : ;; *) _prof="balanced" ;; esac
@@ -74,10 +69,8 @@ case "$_ka" in ''|*[!0-9]*) _ka="$BASE_KEEPIDLE" ;; esac
 
 case "$MODE" in
   fast)
-    # Data call stays up: coming back from an idle RRC state is the latency spike that
-    # matters in an online match, and it costs far more than the power saved. A shorter
-    # keepalive holds NAT mappings open so sessions do not have to re-establish; the
-    # radio is already active with the screen on, so the wakeups are close to free.
+    # Data call stays up: coming back from an idle RRC state is the latency spike that matters
+    # in an online match, and it costs far more than the power saved.
     _sset mobile_data_always_on 1
     _kaf=$((_ka / 4)); [ "$_kaf" -lt 120 ] && _kaf=120
     _sysc net.ipv4.tcp_keepalive_time "$_kaf"

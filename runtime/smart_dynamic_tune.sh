@@ -39,24 +39,20 @@ if [ -w /sys/kernel/mm/lru_gen/enabled ]; then
   esac
 fi
 
-# The camera guard owns the VM knobs while a capture is streaming: it lowers
-# swappiness for the duration and restores exactly what it found. Writing here at the
-# same time both defeats the guard AND leaves the guard restoring a stale value over
-# whatever this script set. The hold forces the FSM to HEAVY, which changes app_hint,
-# which is precisely what triggers this script - so the collision was the common case,
-# not the rare one. Leave the VM section alone until the guard releases.
+# The camera guard owns the VM knobs while a capture is streaming: it lowers swappiness for the
+# duration and restores exactly what it found.
 _cam_guard=0
 [ -f /dev/.asb/camera_guard ] && _cam_guard=1
 
 # VM dirty limits — favour aggressive flushing on screen-off + cool device so writeback
 # completes during idle and doesn't bite during the next session.
 #
-# dirty_ratio and dirty_bytes are MUTUALLY EXCLUSIVE in the kernel: writing one zeroes
-# the other (mm/page-writeback.c). service.sh's apply_vm deliberately picks the BYTES
-# family where the device offers it - it even zeroes the ratios on purpose to switch
-# modes - so writing ratios here silently destroyed the profile's byte limits on the
-# first tuner run and reverted the device to the percentage model. Whichever family is
-# actually in force is now the one this script writes.
+# dirty_ratio and dirty_bytes are MUTUALLY EXCLUSIVE in the kernel: writing one zeroes the
+# other (mm/page-writeback.c).
+# service.sh's apply_vm deliberately picks the BYTES family where the device offers it - it
+# even zeroes the ratios on purpose to switch modes - so writing ratios here silently destroyed
+# the profile's byte limits on the first tuner run and reverted the device to the percentage
+# model.
 _dirty_mode="ratio"
 if [ -r /proc/sys/vm/dirty_bytes ]; then
   _db_cur="$(cat /proc/sys/vm/dirty_bytes 2>/dev/null)"
@@ -91,13 +87,10 @@ fi
 
 # Swappiness — NUDGE the profile's value, never replace it.
 #
-# This used to write a flat 60/80/90 for every scenario, which overrode the profile
-# outright: performance asks for 12 and got 60, balanced asks for 35 and got 90. The
-# user's memory setting was meaningless in Smart Mode and the action screen reported a
-# live value nobody had chosen - which is exactly what the field reports showed. The
-# old comment ("gaming wants files in RAM") also argued for the opposite of what the
-# numbers did: a LOWER swappiness reclaims file cache first, so 60 for gaming evicted
-# more cache than 90 did for idle.
+# This used to write a flat 60/80/90 for every scenario, which overrode the profile outright:
+# performance asks for 12 and got 60, balanced asks for 35 and got 90.
+# The user's memory setting was meaningless in Smart Mode and the action screen reported a live
+# value nobody had chosen - which is exactly what the field reports showed.
 #
 # The profile owns the baseline. Screen-off and idle can afford to lean harder on zram
 # because nothing is waiting on a page; gaming and heavy pull the other way so a fault
