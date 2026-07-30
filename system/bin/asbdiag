@@ -378,6 +378,64 @@ V "  tcp congestion in force" "$(cfg net_congestion | sed 's/^auto$//')" \
 NOTE "available congestion algorithms: $(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
 NOTE "qdisc in force: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
 
+# Requested vs accepted, per key.
+#
+# The live sysctl alone cannot separate "the kernel refused this" from "nobody asked" -
+# both look like the previous value. asb_net_apply.sh records a verdict per key, and
+# pairing the two is the whole point of a diagnostic: a report stating bbr is configured
+# while cubic runs, with no reason given, sends someone hunting a bug that is really a
+# missing kernel module.
+_nvf="/data/adb/asb/net_apply_result"
+if [ -f "$_nvf" ]; then
+  for _nk in net_congestion net_qdisc net_congestion_wifi net_congestion_mobile \
+             net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle; do
+    _nw="$(cfg "$_nk")"
+    case "$_nw" in ''|auto) continue ;; esac
+    _nv="$(grep -E "^$_nk=" "$_nvf" 2>/dev/null | head -1 | sed 's/.*=//')"
+    case "$_nv" in
+      ok)          V "  $_nk" "$_nw" "$_nw" eq ;;
+      unavailable) V "  $_nk (kernel lacks it)" "$_nw" "unavailable" eq ;;
+      failed)      V "  $_nk (write refused)"   "$_nw" "failed" eq ;;
+      pending)     NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
+      *)           NOTE "$_nk = $_nw - no verdict recorded yet (apply has not run)" ;;
+    esac
+  done
+else
+  NOTE "net_apply_result missing - no network key applied through the WebUI yet"
+fi
+
+# Per-interface reality. The global sysctls say nothing about what each link is doing, and
+# here they can legitimately differ: congestion is set per route, the queue per interface.
+if command -v ip >/dev/null 2>&1; then
+  ip route show 2>/dev/null | grep '^default' | while IFS= read -r _dr; do
+    _di="$(printf '%s' "$_dr" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
+    [ -n "$_di" ] || continue
+    _dcc="$(printf '%s' "$_dr" | grep -oE 'congctl [a-z_]+' | cut -d' ' -f2)"
+    _dw="$(printf '%s' "$_dr" | grep -oE 'initcwnd [0-9]+ initrwnd [0-9]+')"
+    _dq="$(tc qdisc show dev "$_di" 2>/dev/null | head -1 | awk '{print $2}')"
+    NOTE "link $_di: qdisc=${_dq:-?} congctl=${_dcc:-<global>} ${_dw:-no-window-tuning}"
+  done
+fi
+
+# Route-window support is a kernel capability, not a setting, and it decides whether the
+# per-link congestion choice is genuinely simultaneous or a global switch in disguise.
+if command -v ip >/dev/null 2>&1 && ip route show 2>/dev/null | grep -q 'congctl'; then
+  NOTE "per-route congctl: SUPPORTED (Wi-Fi and mobile can differ at the same time)"
+else
+  NOTE "per-route congctl: not in use (per-link choice falls back to the global switch)"
+fi
+
+# The link watcher re-applies route windows when the network changes. Without it the
+# tuning survives only until the next reconnect, and does so silently.
+if pgrep -f "asb_net_routes.sh watch" >/dev/null 2>&1; then
+  NOTE "route link watcher: running (re-applies on network change)"
+else
+  case "$(cfg net_route_tune)" in
+    ''|off) : ;;
+    *) NOTE "route link watcher: NOT running - windows will not survive a network change" ;;
+  esac
+fi
+
 SEC "5b. HAPTICS"
 _h_lvl="$(cfg haptic_strength)"
 case "$_h_lvl" in
