@@ -334,6 +334,18 @@ jobs:
             mkdir -p "$PKG_REL/tools"
             install -m 0755 tools/asb_sysui_watch.sh "$PKG_REL/tools/asb_sysui_watch.sh"
           fi
+          # The diagnostic itself, and the doctor, belong in release above all.
+          #
+          # tools/ is excluded wholesale and copied back by name, and asb_diag.sh was never
+          # on that list - so the one script users are asked to run when they report a
+          # problem existed only in debug builds. Every diagnostic we have received came
+          # from a tester on debug; a release user had no way to produce one at all.
+          for _t in asb_diag.sh asb_doctor.sh; do
+            if [ -f "tools/$_t" ]; then
+              mkdir -p "$PKG_REL/tools"
+              install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"
+            fi
+          done
 
           # Device-adaptive layer (must ship so install/boot can run them):
           #   asb_discover.sh        — writes device_caps.env (facts)
@@ -387,6 +399,8 @@ jobs:
             "runtime/asb_net_apply.sh" \
             "runtime/asb_net_routes.sh" \
             "runtime/asb_lockscreen_apply.sh" \
+            "tools/asb_diag.sh" \
+            "tools/asb_doctor.sh" \
             "runtime/profile_core.sh" \
             "runtime/smart_dynamic_tune.sh" \
             "runtime/asb_tweaks.sh" \
