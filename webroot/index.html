@@ -19,13 +19,12 @@
   --window-inset-top: env(safe-area-inset-top, 0px);
   --window-inset-bottom: env(safe-area-inset-bottom, 0px);
 
-  /* Unified page-transition motion. One duration + one easing for every
-     screen change so Main↔Live and Live↔Config feel identical. The curve is a
-     gentle easeInOutCubic (slow-in, slow-out) and the duration is a touch
-     longer than before, which is what removes the "jerky" feel. */
-  /* Unified page-transition motion. Same gentle easeInOutCubic curve (this is
-     what gives the smooth feel); duration trimmed from 0.42s to 0.32s so the
-     same motion just resolves quicker — snappier without losing smoothness. */
+  /*
+   * Unified page-transition motion.
+   */
+  /*
+   * Unified page-transition motion.
+   */
   --page-anim-dur: 0.32s;
   --page-anim-ease: cubic-bezier(0.45, 0, 0.25, 1);
 
@@ -169,13 +168,9 @@ body::before, body::after {
   to { transform: rotate(360deg); }
 }
 
-/* Energised wordmark: an accent-family base with a specular sweep travelling across it.
-   The previous attempt used a hard light band at a fixed 46-51% to fake a curved metal
-   surface. At 26px that band is ~1.3px tall, so it did not read as a highlight - it
-   read as a white line struck through the letters. A highlight only reads as light if
-   it is soft-edged AND moving; a static hairline is just a line.
-   The sweep is wide (a ~16% ramp over a 300%-wide layer) and rests off-screen between
-   passes, so it reads as a reflection catching the surface rather than as a loop. */
+/*
+ * Energised wordmark: an accent-family base with a specular sweep travelling across it.
+ */
 .app-name {
   font-size: 26px;
   font-weight: 800;
@@ -258,13 +253,10 @@ body::before, body::after {
   gap: 10px;
   padding: 8px 20px;
   border-radius: 100px;
-  /* Wrap instead of forcing the page to scroll sideways.
-   *
-   * "Profile: BALANCED" plus two chips is a fixed amount of text in a pill that cannot
-   * shrink. At a higher override density it is simply wider than the screen, and the page
-   * grows a horizontal scrollbar - reported on a OnePlus 13 at 480 dpi, where the pill ran
-   * past the right edge. Letting it wrap puts the chips on a second line on those devices
-   * and changes nothing where it already fitted. */
+  /*
+   * Wrap instead of forcing the page to scroll sideways.
+   * "Profile: BALANCED" plus two chips is a fixed amount of text in a pill that cannot shrink.
+   */
   flex-wrap: wrap;
   justify-content: center;
   row-gap: 8px;
@@ -352,12 +344,12 @@ body::before, body::after {
   position: relative;
   display: flex;
   align-items: center;
-  /* Tighter at high density so four profiles fit without scrolling.
-   *
-   * The padding and gap here are in CSS pixels, so on a device with a higher override
-   * density the same four cards take noticeably more of the screen and push the list past
-   * the fold - reported alongside the request to make them a little narrower. Trimming via
-   * a media query keeps the roomy version where there is room for it. */
+  /*
+   * Tighter at high density so four profiles fit without scrolling.
+   * The padding and gap here are in CSS pixels, so on a device with a higher override density
+   * the same four cards take noticeably more of the screen and push the list past the fold -
+   * reported alongside the request to make them a little narrower.
+   */
   gap: 16px;
   padding: 18px 20px;
   border-radius: 20px;
@@ -734,17 +726,17 @@ body::before, body::after {
   font-weight: 600;
   opacity: 0; 
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  /* Above every page (Main z1, Live z100, Config z120) so the confirmation
-     popup is never hidden underneath the screen that triggered it — the bug was
-     a config-value change on the Config page firing a toast at z100, below the
-     z120 page. A high value keeps it on top regardless of which page is open. */
+  /*
+   * Above every page (Main z1, Live z100, Config z120) so the confirmation popup is never
+   * hidden underneath the screen that triggered it — the bug was a config-value change on the
+   * Config page firing a toast at z100, below the z120 page.
+   */
   z-index: 1000; 
   pointer-events: none;
   border: 1px solid; 
-  /* Wrap instead of running off the screen.
-     nowrap meant a long confirmation extended past both edges with the ends unreadable -
-     worst on config changes, where the message carried a raw key name. Capping the width
-     and letting it wrap keeps the whole text on screen on any phone. */
+  /*
+   * Wrap instead of running off the screen.
+   */
   white-space: normal;
   max-width: min(88vw, 420px);
   text-align: center;
@@ -780,10 +772,10 @@ body::before, body::after {
   box-shadow: 0 0 25px rgba(46,213,115,0.15), 0 8px 32px rgba(0,0,0,0.4);
 }
 
-/* Smart had no toast skin at all, so switching to it produced an unstyled,
-   see-through popup while every other profile got its colour. #00e1c8 is the exact
-   value .pbtn[data-p="smart"] uses, so the confirmation matches the card that
-   triggered it. */
+/*
+ * Smart had no toast skin at all, so switching to it produced an unstyled, see-through popup
+ * while every other profile got its colour.
+ */
 .toast.t-smart {
   background: rgba(6,32,32,0.95);
   color: #00e1c8;
@@ -791,11 +783,10 @@ body::before, body::after {
   box-shadow: 0 0 25px rgba(0,225,200,0.15), 0 8px 32px rgba(0,0,0,0.4);
 }
 
-/* Toast skins for the three reboot actions, using the exact colours of the buttons that
-   raise them: red full reboot, orange soft reboot, yellow SystemUI.
-   The full-reboot toast passed type 'perf', and no .toast.t-perf rule ever existed - the
-   only match was .toast.t-cat-perf, which is a different selector - so the most
-   consequential confirmation in the UI came up unstyled and see-through. */
+/*
+ * Toast skins for the three reboot actions, using the exact colours of the buttons that raise
+ * them: red full reboot, orange soft reboot, yellow SystemUI.
+ */
 .toast.t-perf {
   background: rgba(40,10,10,0.95);
   color: #ff4d4d;
@@ -822,11 +813,12 @@ body::before, body::after {
   box-shadow: 0 0 20px rgba(255,26,26,0.1); 
 }
 
-/* Per-category toast skins. The confirmation that slides up from the bottom used
-   to be hardcoded to the profile palette (perf red / balanced amber) no matter
-   which card was toggled, so the popup and the tile that fired it disagreed on
-   colour. These reuse the exact category hues from .cfg-icon.cat-* above, so the
-   toast reads as an echo of the card the user just touched. */
+/*
+ * Per-category toast skins.
+ * The confirmation that slides up from the bottom used to be hardcoded to the profile palette
+ * (perf red / balanced amber) no matter which card was toggled, so the popup and the tile that
+ * fired it disagreed on colour.
+ */
 /* The thermal category had no colours at all, so its cards rendered grey and its toasts
    came up transparent - the same gap Smart and the reboot buttons had. Amber reads as
    heat without borrowing the red that means "refused" elsewhere. */
@@ -915,11 +907,9 @@ body::before, body::after {
   box-shadow: 0 0 25px rgba(180,180,190,0.12), 0 8px 32px rgba(0,0,0,0.4);
 }
 
-/* Content stagger (children fade up on first paint). Restrict it to the Main
-   page only: live-page / config-page already animate via the horizontal slide,
-   and running this stagger on their children at the same time was a second,
-   competing animation — a real source of the "jerky" feel. The :not() keeps it
-   off both overlay screens. */
+/*
+ * Content stagger (children fade up on first paint).
+ */
 .page:not(.live-page) > * {
   animation: fadeSlideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
@@ -1017,11 +1007,10 @@ body::before, body::after {
 body.live-active {
   overflow: hidden;
 }
-/* Main page fades and eases back slightly (no horizontal translate — it's a
-   position:relative page, so sliding it could shift layout) while a live-page
-   slides over it. Same duration/curve as every other transition so the whole
-   set feels uniform and smooth. Kept mounted (opacity, not visibility) so the
-   fade actually animates instead of snapping. */
+/*
+ * Main page fades and eases back slightly (no horizontal translate — it's a position:relative
+ * page, so sliding it could shift layout) while a live-page slides over it.
+ */
 body.live-active .page:not(.live-page) {
   opacity: 0;
   transform: scale(0.97);
@@ -1085,16 +1074,11 @@ body.live-active .page:not(.live-page) {
 /* Smart Mode section divider: compact on Live page */
 .live-page .sec { margin-top: 14px !important; margin-bottom: 6px !important; }
 .config-page .sec { margin-top: 0 !important; }
-/* Config sits one layer ABOVE Live so the Live↔Config transition is a clean
-   slide of Config over Live, instead of two same-z pages fighting (which made
-   that specific transition feel janky). Config keeps the same horizontal slide
-   timing as the Main↔Live transition the user likes.
-
-   Spatial model is  Main | Live | Config  (left→right). Moving Live→Config goes
-   RIGHTWARD: Config should enter from the right while Live slides out to the
-   LEFT — like advancing a page — instead of both sliding from the right at once
-   (which is what made it feel wrong). We drive Live's leftward exit off a body
-   flag set only while Config is open. */
+/*
+ * Config sits one layer ABOVE Live so the Live↔Config transition is a clean slide of Config
+ * over Live, instead of two same-z pages fighting (which made that specific transition feel
+ * janky).
+ */
 #configPage {
   z-index: 120;
 }
@@ -1104,11 +1088,10 @@ body.live-active .page:not(.live-page) {
 /* While Config is open *after coming from Live*, push the still-mounted Live
    page out to the left so the two move as a coherent left/right pair. Only set
    on the Live→Config path (not Main→Config, where Live was never open). */
-/* When Config opens over Live, Live fades and eases back underneath — exactly
-   the same motion Main uses under Live — so Live↔Config is identical to
-   Main↔Live. Config (z above Live) slides in from the right; Live fades. Only
-   applies when Live is actually open (.open), so Main→Config doesn't flash an
-   empty Live page. */
+/*
+ * When Config opens over Live, Live fades and eases back underneath — exactly the same motion
+ * Main uses under Live — so Live↔Config is identical to Main↔Live.
+ */
 body.config-active #livePage.open {
   opacity: 0;
   transform: translateX(-50%) scale(0.97);
@@ -1138,11 +1121,9 @@ body.config-active #livePage.open {
 .smart-banner-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  /* Row gap has to clear a whole label+value stack, not just separate two lines.
-     Each item is an 8px label over a 12px value, about 22px tall, so the original 4px
-     put the second row's label almost against the first row's value and the two read as
-     one block instead of two rows. 12px is the smallest gap where the rows separate
-     without the card growing tall enough to push the monitor grid down the page. */
+  /*
+   * Row gap has to clear a whole label+value stack, not just separate two lines.
+   */
   gap: 12px 10px;
   align-items: baseline;
   font: 11px/1.2 var(--sans);
@@ -1177,9 +1158,10 @@ body.config-active #livePage.open {
   max-width: 100%;
 }
 
-/* Modem LPM sits in this banner and carries meaning in its colour, the same way the
-   monitor cells do. The cap-* classes were written scoped to .live-cell-value, so they
-   did nothing here - these are the banner-scoped equivalents. */
+/*
+ * Modem LPM sits in this banner and carries meaning in its colour, the same way the monitor
+ * cells do.
+ */
 .smart-banner-value.cap-raised { color: var(--bat); }
 .smart-banner-value.cap-clamp  { color: var(--perf); }
 
@@ -1208,10 +1190,10 @@ body.config-active #livePage.open {
   color: #fca5a5;
 }
 
-/* tablet + large-screen adaptation
- * Default mobile-first layout uses max-width: 420px (set on .page, .live-page,
- * .header, .tg-link-wrap). On larger displays we relax to give better
- * proportions without stretching content edge-to-edge. */
+/*
+ * tablet + large-screen adaptation Default mobile-first layout uses max-width: 420px (set on
+ * .page, .live-page, .header, .tg-link-wrap).
+ */
 
 /* Small tablets and large phones in landscape (640-768 px) */
 @media (min-width: 640px) {
@@ -1293,18 +1275,15 @@ body.config-active #livePage.open {
   box-sizing: border-box;
   transition: border-color 0.2s ease, background 0.2s ease;
 }
-/* ── Category hub ───────────────────────────────────────────────────────────
-   Four tiles, one row of two on any phone width. They are deliberately large:
-   this is the first thing Config shows now, and a tap target that size is hard
-   to hit by accident while scrolling - which matters when what is behind it
-   changes how the device sounds or how long the battery lasts. */
+/*
+ * ── Category hub ─────────────────────────────────────────────────────────── Four tiles, one
+ * row of two on any phone width.
+ */
 .cfg-hub {
   display: grid;
-  /* Six categories in the footprint four used to take.
-     2x2 at 138px tall plus an 11px gap was 287px; 3x2 at 122px with a 9px gap is 253px,
-     so adding two categories actually costs less vertical space than before. Three
-     across is the most a phone takes before the names start wrapping - the longest here
-     is "Интерфейс" at nine characters, which fits a third of the width at 13px. */
+  /*
+   * Six categories in the footprint four used to take.
+   */
   grid-template-columns: repeat(3, 1fr);
   gap: 9px;
   margin-top: 2px;
@@ -1415,17 +1394,9 @@ body.config-active #livePage.open {
   display: flex;
   align-items: center;
   gap: 13px;
-  /* Let the controls drop to their own line when the title needs the width.
-   *
-   * The previous layout assumed a segment control would always fit beside the title, and
-   * it does - at the density this was designed on. On a device with a higher override
-   * density (a OnePlus 13 at 480 against 476 here, physical 640 against 560) the same
-   * labels are wider in CSS pixels, the title wraps to two lines, and the second line runs
-   * straight under the buttons: "Очередь: мобильная" reading through "авто fq fq_codel".
-   *
-   * Wrapping fixes it without guessing at any density. The title keeps a sensible minimum
-   * and the buttons move down only when they genuinely do not fit, so nothing changes on
-   * a phone where the old layout was already fine. */
+  /*
+   * Let the controls drop to their own line when the title needs the width.
+   */
   flex-wrap: wrap;
   row-gap: 9px;
 }
@@ -1458,8 +1429,9 @@ body.config-active #livePage.open {
   background: rgba(0,225,200,0.12);
   border-color: rgba(0,225,200,0.30);
 }
-/* Per-category icon tint (active tweaks). The card itself stays green via .is-on; only
-   the icon square carries the category colour so categories are scannable. */
+/*
+ * Per-category icon tint (active tweaks).
+ */
 .cfg-row.is-on .cfg-icon.cat-audio   { background: rgba(255,59,59,0.16);   border-color: rgba(255,59,59,0.50); }
 .cfg-row.is-on .cfg-icon.cat-camera  { background: rgba(58,141,255,0.16);  border-color: rgba(58,141,255,0.50); }
 .cfg-row.is-on .cfg-icon.cat-battery { background: rgba(46,213,115,0.16);  border-color: rgba(46,213,115,0.50); }
@@ -1471,11 +1443,12 @@ body.config-active #livePage.open {
   .cfg-row.is-on .cfg-icon.cat-thermal { background: rgba(255,179,64,0.16);  border-color: rgba(255,179,64,0.48); }
 .cfg-row.is-on .cfg-icon.cat-net     { background: rgba(0,180,216,0.16);   border-color: rgba(0,180,216,0.48); }
   .cfg-row.is-on .cfg-icon.cat-iface   { background: rgba(186,104,255,0.16);  border-color: rgba(186,104,255,0.48); }
-/* Three settings shared the two grey categories - display and system - and grey is what
-   a category looks like when nobody chose a colour for it. On a screen where every other
-   card carries a hue that means something, three grey ones read as unfinished rather than
-   as neutral. Each gets a colour matched to what it does: lavender for the glass-like
-   blur, magenta for motion, amber for the physical buzz. */
+/*
+ * Three settings shared the two grey categories - display and system - and grey is what a
+ * category looks like when nobody chose a colour for it.
+ * Each gets a colour matched to what it does: lavender for the glass-like blur, magenta for
+ * motion, amber for the physical buzz.
+ */
 .cfg-row.is-on .cfg-icon.cat-blur    { background: rgba(167,139,250,0.18); border-color: rgba(167,139,250,0.52); }
 .cfg-row.is-on .cfg-icon.cat-motion  { background: rgba(255,95,162,0.18);  border-color: rgba(255,95,162,0.52); }
 .cfg-row.is-on .cfg-icon.cat-haptic  { background: rgba(255,179,64,0.18);  border-color: rgba(255,179,64,0.52); }
@@ -1511,9 +1484,9 @@ body.config-active #livePage.open {
   color: #e6b860;
   background: rgba(230,170,60,0.12);
 }
-/* "not applied" needs its own colour. It was reusing .warn, which is also what an
-   ordinary modified value uses - so a setting the kernel had REFUSED looked identical to
-   one that was working, which defeats the whole point of reporting it. */
+/*
+ * "not applied" needs its own colour.
+ */
 .cfg-status.bad {
   background: rgba(255,59,59,0.14);
   border-color: rgba(255,59,59,0.40);
@@ -1669,10 +1642,9 @@ body.config-active #livePage.open {
   cursor: pointer;
 }
 
-/* Three reboot actions, ordered by how much they cost you and coloured to match.
-   Red = full reboot, orange = soft reboot (runtime only, seconds), yellow = SystemUI
-   alone. The gap is tighter than the first button's margin so they read as one group
-   rather than three unrelated buttons. */
+/*
+ * Three reboot actions, ordered by how much they cost you and coloured to match.
+ */
 .cfg-reboot.soft {
   margin-top: 8px;
   border-color: rgba(255,149,0,0.35);
@@ -2014,11 +1986,10 @@ const clickAudio = new Audio("switch.mp3"); clickAudio.preload = "auto"; try { c
 const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass'];
 const MD = '/data/adb/modules/AutoSystemBoost';
 
-/* ── i18n: Russian localization for ru-locale devices ──────────────────────
- * Activates automatically when the device/browser language is Russian. All
- * English UI strings stay as the in-markup default (fallback); the RU map
- * below overrides them. Static elements carry data-i18n keys; dynamic strings
- * (config items, toasts) are looked up via T(). */
+/*
+ * ── i18n: Russian localization for ru-locale devices ────────────────────── Activates
+ * automatically when the device/browser language is Russian.
+ */
 const ASB_LANG = (function() {
   try {
     var l = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
@@ -2077,6 +2048,16 @@ const I18N = {
     cfg: {
       lockscreen_skip_delayed: { name: 'Пропуск экрана блокировки',
         desc: 'В Android есть «Блокировать через N после отключения экрана» — телефон остаётся разблокированным какое-то время после гашения экрана. Но OxygenOS всё равно показывает экран блокировки и требует свайп. С этим твиком телефон в течение этого времени просыпается сразу туда, где вы были. Как только отсрочка истекла — или вы сами нажали кнопку питания, чтобы заблокировать — экран блокировки работает ровно как раньше. Телефон не остаётся разблокированным дольше, чем решил сам Android, и твик ничего не делает, если у вас нет блокировки экрана или отсрочка нулевая.' },
+      camera_hold_enable: { name: 'Держать производительность при камере',
+        desc: 'Пока камера снимает, governor перестаёт понижать частоты и удерживает уже занятые ядра. Именно это не даёт пропустить кадр в серии или в видео — ценой небольшого расхода батареи, пока приложение камеры открыто. «Вкл» — удерживать (обычное поведение модуля), «выкл» — позволить governor\u2019у сбрасывать частоты как у любого другого приложения.' },
+      bt_a2dp_offload: { name: 'Аппаратный кодек Bluetooth',
+        desc: 'Кто кодирует звук Bluetooth — отдельный аппаратный блок или процессор. «Вкл» — аппаратный: заметно меньше расход батареи, и так работает телефон из коробки. «Выкл» переносит кодирование на процессор, что нужно некоторым кодекам и приложениям-эквалайзерам, иначе они просто не работают. Если ваш Bluetooth-эквалайзер ничего не меняет — попробуйте «выкл». «Авто» оставляет то, что выбрало устройство.' },
+      night_quiet_enable: { name: 'Тихая ночь',
+        desc: 'Ночью, когда экран давно выключен, governor прекращает собственную периодическую работу и даёт устройству уйти в глубокий сон. Отсюда берётся бо\u0301льшая часть ночной экономии. «Выкл» оставляет обычный опрос круглосуточно — имеет смысл, только если подозреваете, что тихое окно задерживает что-то нужное вам ночью.' },
+      bat_suppress_gaming: { name: 'Без игрового режима в Экономии',
+        desc: 'В профиле «Экономия» игра считается обычной тяжёлой нагрузкой, а не поводом включить игровой режим. Игровой режим поднимает потолки частот — то есть делает ровно противоположное тому, ради чего выбирают «Экономию». «Выкл» разрешает играм полный игровой режим даже в «Экономии». Влияет только на этот профиль, остальные три не затрагиваются.' },
+      log_level: { name: 'Подробность логов',
+        desc: 'Сколько governor пишет в свой лог. «0» — обычный режим, только значимые события. «1» добавляет обновления обучения и переходы экрана — это то, что стоит включить перед отправкой лога по проблеме с батареей. «2» — подробный, лог заполняется быстро; включайте только пока воспроизводите конкретную проблему. Более высокие уровни немного увеличивают запись, так что в повседневности держите 0.' },
       sustained_temp_mode: { name: 'Точка троттлинга',
         desc: 'Когда ASB начинает придерживать производительность, чтобы телефон был холоднее. «Сток» — порог вашего устройства, считанный из тепловой зоны процессора при загрузке, а не число, придуманное для телефонов вообще. «Умное» — начинает с него же и поднимает на 2 градуса каждый раз, когда нагрузка доходит до устойчивой быстрее минуты: устройство, которое срабатывает слишком рано, само себя выравнивает. «Ручное» — ровно то значение, что стоит на ползунке ниже, и его ничто не сдвинет. Выбирайте «Ручное», если измеряли своё устройство и знаете, чего хотите.' },
       sustained_temp_enter: { name: 'Температура троттлинга',
@@ -2164,8 +2145,8 @@ const I18N = {
     // Per-card labels. These win over the shared ones above.
     optFor: {
       ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' },
-      // auto on the GLOBAL net keys resolves to the captured stock value, so it is
-      // labelled as such - calling it "авто" was the whole source of the confusion.
+      // auto on the GLOBAL net keys resolves to the captured stock value, so it is labelled as
+      // such - calling it "авто" was the whole source of the confusion.
       // On the per-interface keys auto means "inherit the global setting", which is a
       // different thing and gets a different word.
       net_congestion:        { auto: 'сток' },
@@ -2345,13 +2326,9 @@ async function go(p) {
     try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
     ui(p);
     toast('\u2713 ' + (ASB_LANG==='ru' ? T('prof_'+p, p) : (p.charAt(0).toUpperCase()+p.slice(1))) + (ASB_LANG==='ru' ? ' \u2014 \u043f\u0440\u0438\u043c\u0435\u043d\u0451\u043d' : ' applied'), p);
-    /* Refresh the Smart sub-line here rather than waiting for the live poll.
-     *
-     * apply_profile.sh writes /data/adb/asb/smart_mode_enabled immediately, but the
-     * smart_mode field the label reads lives in /dev/.asb/state and is written by the
-     * native governor on its next tick - up to a few seconds later. One immediate read
-     * shows the pending state, and a couple of spaced retries pick up the real one, so
-     * the label settles on its own instead of needing a trip to another screen. */
+    /*
+     * Refresh the Smart sub-line here rather than waiting for the live poll.
+     */
     refreshSmartSubLine();
     [1200, 3000, 6000].forEach(function(ms) {
       setTimeout(function() { refreshSmartSubLine(); }, ms);
@@ -2427,24 +2404,12 @@ const CFG_FILE = MD + '/config/governor.conf';
 // Keys that are mirrored into the external user snapshot on every change so a
 // reinstall / root-manager re-trigger can restore them. Must stay in sync with
 // the _user_keys / snapshot list in common/install.sh.
-/* Keys mirrored into the external snapshot when changed here.
- *
- * This list and the restore list in install.sh have to agree: a key mirrored but not
- * restored is dead weight, and a key restored but not mirrored is a setting that quietly
- * reverts on the next module update. They had drifted apart by 18 keys - every camera
- * sub-control, both haptics levels, all nine network keys and the thermal threshold - so
- * changing any of them in the WebUI and then updating the module lost the change.
- *
- * Generated from install.sh's list, so it stays in step. */
-/* Keys mirrored into the external snapshot when changed here.
- *
- * This list and the restore list in install.sh have to agree: a key mirrored but not
- * restored is dead weight, and a key restored but not mirrored is a setting that quietly
- * reverts on the next module update. They had drifted apart by 25 keys - every camera
- * sub-control, both haptics levels, all nine network keys and the thermal threshold - so
- * changing any of those here and then updating the module lost the change.
- *
- * Kept in step with install.sh's list by construction. */
+/*
+ * Keys mirrored into the external snapshot when changed here.
+ */
+/*
+ * Keys mirrored into the external snapshot when changed here.
+ */
 const SNAP_KEYS = [
   'audio_profile',
   'audio_dac_hifi',
@@ -2488,7 +2453,11 @@ const SNAP_KEYS = [
   'sustained_temp_enter',
   'sustained_temp_mode',
   'sustained_temp_ceiling',
-  'lockscreen_skip_delayed'];
+  'lockscreen_skip_delayed',
+  'camera_hold_enable',
+  'bt_a2dp_offload',
+  'bat_suppress_gaming',
+  'log_level'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -2505,15 +2474,15 @@ const CFG_ITEMS = [
   { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
     desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   // --- Audio ---
-  { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:4, step:1, name:'Camera Grade',
+  { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:8, step:1, name:'Camera Grade',
     desc:'Photo + video colour, contrast and detail: 0 = stock, higher = richer and punchier. Grades by RATIO - it multiplies whatever your firmware ships, so it works regardless of the values your build uses. Max can band in deep shadows. Applies after a reboot, and changing it here now re-grades at boot instead of waiting for a reinstall.' },
   { key:'CAMERA_GRAIN', type:'range', def:'3', min:0, max:6, step:1, name:'Film Grain',
     desc:'The camera adds grain back after denoising, because a perfectly smooth image reads as plastic. 3 is stock: lower for a cleaner look, higher for more texture, 0 removes it entirely. Applies to photos after a reboot.' },
   { key:'CAMERA_CONTRAST', type:'range', def:'3', min:0, max:6, step:1, name:'Contrast & Colour Depth',
     desc:'The tone curve\u2019s contrast and saturation scales. This is a different axis from the grade above: that one widens the colour matrix, this one shapes the curve - deeper shadows and richer colour rather than a wider gamut. 3 is stock. Applies after a reboot.' },
-  { key:'CAMERA_PORTRAIT', type:'range', def:'0', min:0, max:4, step:1, name:'Portrait AI',
+  { key:'CAMERA_PORTRAIT', type:'range', def:'0', min:0, max:6, step:1, name:'Portrait AI',
     desc:'Neural processing on faces and skin, which ships switched off - the weights are all zero. Raising it recovers detail in faces that the denoiser flattens. Too high looks synthetic, so start at 1-2. Portrait modes only. Applies after a reboot.' },
-  { key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:4, step:1, name:'Macro & Low-light Sharpening',
+  { key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:8, step:1, name:'Macro & Low-light Sharpening',
     desc:'Macro and low-light have their own sharpening scales, and these are the modes where over-sharpening shows worst - close subjects and high ISO both amplify halos. 0 follows the main grade; raise it only if those modes look soft next to normal shots. Applies after a reboot.' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
@@ -2524,6 +2493,16 @@ const CFG_ITEMS = [
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
+  { key:'camera_hold_enable', type:'bool', def:'1', name:'Hold Performance While Camera Runs',
+    desc:'While the camera is streaming, the governor stops lowering the CPU and keeps the cores it is already using. That is what prevents a dropped frame in the middle of a burst or a video, at the cost of a little battery for as long as the camera app is open. On means held (the stock module behaviour), off lets the governor throttle the camera like any other app.' },
+  { key:'bt_a2dp_offload', type:'seg', def:'on', opts:['on','off','auto'], name:'Bluetooth Audio Offload',
+    desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. On uses the hardware - far less battery, and what the phone ships with. Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
+  { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
+    desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
+  { key:'bat_suppress_gaming', type:'bool', def:'1', name:'No Game Mode on Battery Profile',
+    desc:'On the Battery profile, treat a game as ordinary heavy load rather than entering the gaming state. Gaming mode raises frequency ceilings, which is the opposite of what the Battery profile is for - so this keeps that profile honest. Off lets games get the full gaming treatment even on Battery. Affects the Battery profile only; the other three are untouched.' },
+  { key:'log_level', type:'seg', def:'0', opts:['0','1','2'], name:'Log Detail',
+    desc:'How much the governor writes to its log. 0 is normal - events that matter. 1 adds learner updates and screen transitions, which is what to turn on before sending a log for a battery problem. 2 is verbose and will fill the log quickly; use it only while reproducing something specific. Higher levels cost a little extra writing, so leave it at 0 day to day.' },
   { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
     desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
   { key:'sustained_temp_enter', type:'range', def:'65', min:40, max:70, step:1, name:'Throttling Temperature',
@@ -2585,10 +2564,6 @@ async function cfgLoad() {
 }
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
-// Icon-square colour category per tweak key. The card highlight stays green; this only
-// tints the icon square so the config list is scannable by category. Comment groups in
-// CFG were not accurate (camera/battery keys sit under the Audio comment), so map keys
-// explicitly.
 const CFG_CAT = {
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', bt_absvol_mode:'audio',
@@ -2597,20 +2572,18 @@ const CFG_CAT = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
-  sustained_temp_mode:'thermal', lockscreen_skip_delayed:'iface',
+  sustained_temp_mode:'thermal',
+  camera_hold_enable:'camera', bt_a2dp_offload:'audio',
+  night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'system', lockscreen_skip_delayed:'iface',
   sustained_temp_mode:'thermal',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
   disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
 };
 // Four groups, one screen each.
-//
-// Every tunable lived on one scrolling page, and the page kept growing: eighteen cards by
-// V61, with the DSP block alone at eight. Finding "auto battery profile" meant scrolling
-// past every audio setting, and a screenful of unrelated switches is how people flip the
-// wrong one. These are the four things a user actually comes here to change; the internal
-// CFG_CAT stays as it is because it drives the per-card colours and the toast tint, which
-// are finer-grained than the navigation should be.
+// These are the four things a user actually comes here to change; the internal CFG_CAT stays
+// as it is because it drives the per-card colours and the toast tint, which are finer-grained
+// than the navigation should be.
 const CFG_GROUPS = [
   { id:'audio',   ico:'\uD83C\uDFB5', name:'Audio',   ru:'\u0410\u0443\u0434\u0438\u043E' },
   { id:'camera',  ico:'\uD83D\uDCF7', name:'Camera',  ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
@@ -2624,6 +2597,8 @@ const CFG_GROUPS = [
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
   sustained_temp_mode:'battery', lockscreen_skip_delayed:'iface',
+  camera_hold_enable:'camera', bt_a2dp_offload:'audio',
+  night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio',
   bt_absvol_mode:'audio',
@@ -2642,13 +2617,13 @@ var _cfgGroup = null;
 
 function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-system'; }
 // Toast skin for a config key: same category, same colour as its card icon.
-/* Short, human toast text for a config change.
- *
+/*
+ * Short, human toast text for a config change.
  * It used to be built from the RAW key: "\u2713 CAMERA_AGGRESSIVE_INJECT = aggressive \u00b7
- * \u043f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435..." runs to 65+ characters of mostly shouting, and with the old
- * nowrap rule it ran off both edges of the phone. The card already carries a proper
- * localized name, so use that and fall back to the key only when there is none. Long
- * names are clipped rather than allowed to push the message onto a third line. */
+ * \u043f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435..." runs to
+ * 65+ characters of mostly shouting, and with the old nowrap rule it ran off both edges of the
+ * phone.
+ */
 function cfgToastText(key, val) {
   var name = Tcfg(key, 'name', '') || key;
   // Names are display strings: some carry a newline (the DSP ones are two-line labels)
@@ -2667,7 +2642,9 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  sustained_temp_mode:'\uD83C\uDF9B\uFE0F', lockscreen_skip_delayed:'\uD83D\uDD13', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
+  sustained_temp_mode:'\uD83C\uDF9B\uFE0F', camera_hold_enable:'\uD83D\uDCF8',
+  bt_a2dp_offload:'\uD83C\uDFA7', night_quiet_enable:'\uD83C\uDF19',
+  bat_suppress_gaming:'\uD83C\uDFAE', log_level:'\uD83D\uDCDD', lockscreen_skip_delayed:'\uD83D\uDD13', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
   net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDEA6', net_qdisc_mobile:'\uD83D\uDEA7', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDD0D',
   audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
@@ -2716,11 +2693,11 @@ async function loadNetResult() {
 }
 
 function cfgStatus(it, cur) {
-  // returns {cls, text} — a short colored badge describing the active state
-  //
-  // Kernel reality first. Asking for bbr where the kernel has no bbr, or a qdisc whose
-  // module is missing, used to leave the badge reading like a success because the VALUE
-  // was stored fine - the write is what failed. Say so instead.
+  // returns {cls, text} — a short colored badge describing the active state Kernel reality
+  // first.
+  // Asking for bbr where the kernel has no bbr, or a qdisc whose module is missing, used to
+  // leave the badge reading like a success because the VALUE was stored fine - the write is
+  // what failed.
   const nr = _netResult[it.key];
   if (nr === 'unavailable') return { cls:'bad', text:T('st_unavail', 'not supported') };
   if (nr === 'failed')      return { cls:'bad', text:T('st_failed', 'not applied') };
@@ -2735,19 +2712,14 @@ function cfgStatus(it, cur) {
     const n = parseInt(cur, 10);
     if (isNaN(n) || n === 0) return { cls:'neutral', text:'Off' };
     if (it.key === 'CAMERA_LEVEL') {
-      const names = ['Off','Safe','Moderate','Strong','Max'];
+      const names = ['Off','Safe','Moderate','Strong','Strong+','High','High+','Extreme','Extreme+'];
       return { cls:'good', text:(names[n] || String(n)) };
     }
     return { cls:'good', text:String(n) };
   }
   // "auto" is not a change, so it is not highlighted.
-  //
-  // Highlighting tracked "differs from the shipped default", and for the network keys the
-  // default IS auto - so auto came out neutral and any explicit pick came out warn, which
-  // happened to look right. It stopped looking right once auto meant "restore the stock
-  // value": auto is now the least-modified state there is, and a card sitting on it has
-  // nothing to announce. Highlight means "ASB is overriding something here", which is the
-  // question a user scanning the page is actually asking.
+  // Highlight means "ASB is overriding something here", which is the question a user scanning
+  // the page is actually asking.
   const _isNeutral = (cur === it.def) || cur === 'auto' || cur === 'stock';
   return { cls: (_isNeutral ? 'neutral' : 'warn'), text: String(cur).toUpperCase() };
 }
@@ -2756,11 +2728,7 @@ function cfgStatus(it, cur) {
 // non-stock as a toggle, and the user should be able to spot all of them at a glance.
 function cfgIsActive(it, cur) {
   // "Active" means "differs from the untouched device", which is not always the same as
-  // "differs from the default". For most keys the shipped default IS stock, so def works.
-  // Network Buffers is the exception: its default 'auto' is an ACTIVE tuning - ASB measures
-  // the link and sizes the windows - while 'off' is the value that restores the route. Left
-  // on def, the card sat unlit while tuning was running and lit up when it was switched
-  // back to stock, which is backwards. An item can now name its stock value explicitly.
+  // "differs from the default".
   const base = (it.stock !== undefined) ? it.stock : it.def;
   if (cur === undefined || cur === null) return false;
   if (it.type === 'bool') return String(cur) === '1';
@@ -2821,12 +2789,9 @@ function cfgVerify(key, badge) {
   // same silent-failure shape this feature exists to expose.
   try {
     // Read the LIVE file, the way asb_diag does, rather than looking for a marker.
-    //
-    // The first version checked for a marker file under a path built from the module's
-    // staging directory - a path that never existed, so every camera card claimed "not
-    // applied" while the action screen correctly reported the grade as live. Asking the
-    // partition that the camera actually reads has no such failure mode: stock ships
-    // BlendWeight [0.35, 0.5, 0.7], and anything else means the grade landed.
+    // The first version checked for a marker file under a path built from the module's staging
+    // directory - a path that never existed, so every camera card claimed "not applied" while
+    // the action screen correctly reported the grade as live.
     run("grep -m1 -o '\"BlendWeight\"[^]]*]' /odm/etc/camera/conf_tuning_params.json 2>/dev/null" +
         " | grep -q '0.35, 0.5, 0.7' && echo no || echo yes")
       .then(function(r) {
@@ -2886,15 +2851,7 @@ function cfgRender() {
     badge.textContent = st.text;
 
     // Verify against the DEVICE, not the config.
-    //
-    // A card reads "Max" because governor.conf says 4. Whether the device actually got
-    // that is a different question, and for a while the honest answer was no: the camera
-    // grade silently did nothing while the card looked fine, and the only way to find out
-    // was running asb_diag. A setting that lies about its own state is worse than one
-    // that is off, because nobody goes looking.
-    //
-    // Only for settings that write a file we can read back. Props and live settings apply
-    // synchronously and have nothing to verify.
+    // A card reads "Max" because governor.conf says 4.
     if (VERIFY_KEYS.indexOf(it.key) >= 0 && st.cls !== 'neutral') {
       cfgVerify(it.key, badge);
     }
@@ -2940,32 +2897,23 @@ function cfgRender() {
       val.textContent = _rngLabel(rng.value);
       rng.oninput = () => {
         val.textContent = _rngLabel(rng.value);
-        // Buzz at the level under the finger. A vibration strength setting you cannot
-        // feel until you leave the screen is a setting you have to guess at, and the
-        // whole reason someone opens this page is that they cannot feel their phone.
-        // Throttled to one pulse per step so a drag across the track does not turn into
-        // a burst; navigator.vibrate is fire-and-forget and costs nothing when absent.
+        // Buzz at the level under the finger.
+        // A vibration strength setting you cannot feel until you leave the screen is a setting
+        // you have to guess at, and the whole reason someone opens this page is that they
+        // cannot feel their phone.
         if (it.key === 'haptic_strength' || it.key === 'haptic_touch_strength') {
           var _hv = parseInt(rng.value, 10);
           if (_hv !== _hapticLast) {
             _hapticLast = _hv;
             // Through the shell, not navigator.vibrate.
-            //
-            // The WebUI runs in the root manager's WebView, which holds no VIBRATE
-            // permission - navigator.vibrate is present as a function and silently does
-            // nothing, so the preview looked implemented and was not. Reported as "при
-            // переключении ползунка не отдаёт вибро откликом", and that is exactly right.
-            //
-            // We have root, so `cmd vibrator` does the job properly: it also takes an
-            // amplitude, which the web API does not, so the preview can actually scale
-            // with the setting instead of only changing duration.
+            // Reported as "при переключении ползунка не отдаёт вибро откликом", and that is
+            // exactly right.
             try {
               if (_hv > 0) {
                 var _amp = Math.round(25 + (_hv / 10) * 230);
-                // The service is registered as vibrator_manager here, not vibrator -
-                // `cmd vibrator` answers "Can't find service", so the preview I added was
-                // silently doing nothing. Try the manager first and fall back, since the
-                // name differs across versions and neither costs anything when absent.
+                // The service is registered as vibrator_manager here, not vibrator - `cmd
+                // vibrator` answers "Can't find service", so the preview I added was silently
+                // doing nothing.
                 run('cmd vibrator_manager synced oneshot 120 ' + _amp + ' 2>/dev/null' +
                     ' || cmd vibrator_manager vibrate 120 2>/dev/null' +
                     ' || cmd vibrator vibrate -f 120 -a ' + _amp + ' 2>/dev/null' +
@@ -2981,12 +2929,7 @@ function cfgRender() {
       top.appendChild(wrap);
     } else {
       const seg = document.createElement('div');
-      // 4+ options get the compact button size. That is enough on its own: measured
-      // against the labels actually in use, a 4-option seg at this size is narrower
-      // than audio_profile's 3-option seg at full size, and that one has always sat on
-      // the title line fine (the title just wraps). An earlier revision moved these to
-      // their own row to stop the buttons touching the name - that was before the
-      // labels were shortened, and the row cost ~22px of height per card for nothing.
+      // 4+ options get the compact button size.
       seg.className = (it.opts.length >= 4) ? ('cfg-seg small' + (it.opts.length >= 6 ? ' dense' : '')) : 'cfg-seg';
       it.opts.forEach(o => {
         const b = document.createElement('button');
@@ -3068,11 +3011,11 @@ async function cfgSet(key, val, ctl) {
     if (CFG_SILENT_KEYS.indexOf(key) < 0) {
       try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
     }
-    // Audio settings apply live (ViperFX-style): changing an audio card fires the same
-    // apply script the old "Apply audio now" button used, so there is no separate button
-    // and no reboot for these. audioserver restarts briefly (a short audio gap), which is
-    // why it runs in the background and the toast says "applying" rather than "reboot".
-    // Live keys: a background audioserver restart re-reads these, so they apply now.
+    // Audio settings apply live (ViperFX-style): changing an audio card fires the same apply
+    // script the old "Apply audio now" button used, so there is no separate button and no
+    // reboot for these.
+    // audioserver restarts briefly (a short audio gap), which is why it runs in the background
+    // and the toast says "applying" rather than "reboot".
     var AUDIO_LIVE_KEYS = ['audio_profile','dsp_loudness','dsp_bass','dsp_compressor','bt_absvol_mode'];
     // DSP-only changes go through the daemon, which hands the value to the live effect -
     // no audioserver restart, so the audio never drops out while the slider moves.
@@ -3086,10 +3029,18 @@ async function cfgSet(key, val, ctl) {
     // reporting "volume table not reshaped" after two reboots.
     var AUDIO_REBUILD_KEYS = ['media_loudness'];
     // disable_blur is the same shape: the system.prop block was only ever written by the
-    // installer, so the toggle promised a reboot and rebuilt nothing. The script below
-    // also writes the WindowManager global, which needs no reboot at all.
-    // Both are written by asb_blur_apply.sh - one script, two independent blocks.
+    // installer, so the toggle promised a reboot and rebuilt nothing.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
+      if (key === 'sustained_temp_enter') {
+        // Moving this slider is an explicit choice, so switch the mode to manual with it.
+        // Setting both together means the slider says what it does.
+        try {
+          await run("sh -c 'C=" + MD + "/config/governor.conf; " +
+                    "grep -q \"^sustained_temp_mode=\" $C && " +
+                    "sed -i \"s|^sustained_temp_mode=.*|sustained_temp_mode=manual|\" $C || " +
+                    "echo sustained_temp_mode=manual >> $C'");
+        } catch (e) {}
+      }
       if (key === 'lockscreen_skip_delayed') {
         // Applied live and it can refuse: with no secure lock, or an immediate lock, the
         // script declines and says why rather than pretending it worked.
@@ -3104,12 +3055,11 @@ async function cfgSet(key, val, ctl) {
       var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0) ? ' dsp' : '';
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh' + _m + ' >/dev/null 2>&1 &'); } catch(e) {}
     } else if (NET_KEYS.indexOf(key) >= 0) {
-      // Handled INSIDE this chain instead of returning early above it: the tail of the
-      // chain calls cfgRender(), and skipping it left the segment showing its previous
-      // selection until the user navigated away and came back. Nothing here touches the
-      // overlay - it is sysctl and `cmd wifi` - so it applies live, like audio/haptics.
-      // Awaited, not backgrounded: the result file it writes is what the badge reads,
-      // and rendering before it exists would show the previous verdict.
+      // Handled INSIDE this chain instead of returning early above it: the tail of the chain
+      // calls cfgRender(), and skipping it left the segment showing its previous selection
+      // until the user navigated away and came back.
+      // Awaited, not backgrounded: the result file it writes is what the badge reads, and
+      // rendering before it exists would show the previous verdict.
       try { await run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1'); } catch (e) {}
       await loadNetResult();
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
@@ -3146,16 +3096,8 @@ async function cfgReboot() {
   await run('svc power reboot 2>/dev/null || reboot');
 }
 
-/* Soft reboot: restart the Android runtime without a full boot.
- *
- * Zygote comes back and every app process with it, so anything ASB wrote through
- * settings or properties is picked up - but the kernel, the module mounts and the
- * governor stay up, which makes it seconds instead of a minute. It does NOT re-run
- * post-fs-data, so overlay and bind changes still need the real thing; that is why this
- * sits under the full reboot instead of replacing it.
- *
- * Same two-tap arm as the full reboot: it blanks the screen for a while, and a stray tap
- * should not be enough to trigger that.
+/*
+ * Soft reboot: restart the Android runtime without a full boot.
  */
 let _cfgSoftArmed = 0;
 async function cfgSoftReboot() {
@@ -3170,11 +3112,8 @@ async function cfgSoftReboot() {
   await run('setprop ctl.restart zygote 2>/dev/null || killall zygote 2>/dev/null');
 }
 
-/* Restart SystemUI only. Status bar, quick settings and the launcher shell come back;
- * apps keep running. Cheap enough not to need arming - the screen blinks and that is it.
- *
- * Worth knowing: this also tears down overlays other modules draw into the status bar,
- * so those re-apply themselves afterwards.
+/*
+ * Restart SystemUI only.
  */
 async function cfgRestartSysUI() {
   toast(T('t_sysui_going', 'Restarting SystemUI\u2026'), 'sysui');
@@ -3213,10 +3152,7 @@ function cfgSyncChrome() {
       lbl.textContent = (ASB_LANG === 'ru') ? '\u041A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044F' : 'Configuration';
     }
   }
-  // Reboot actions belong to the hub only. On a category page you are mid-way through
-  // choosing settings, and a full-reboot button sitting right under the list is an easy
-  // mis-tap - the buttons are also redundant there, since you have to come back up to
-  // the hub anyway.
+  // Reboot actions belong to the hub only.
   const rw = _el('cfgRebootWrap');
   if (rw) rw.style.display = _cfgGroup ? 'none' : '';
 }
@@ -3231,12 +3167,8 @@ function closeConfigPage(toMain) {
   if (!p) return;
   p.classList.remove('open');
   document.body.classList.remove('config-active');
-  // Two exit paths:
-  //  - swipe-right from Config when Live is mounted underneath: just drop
-  //    config-active and Live fades straight back in (no tear-down → no double
-  //    animation). We keep live-active so Main stays faded behind Live.
-  //  - Back button / Escape (toMain=true), or no Live underneath: go all the
-  //    way to Main, tearing Live down and un-fading Main.
+  // Two exit paths: - swipe-right from Config when Live is mounted underneath: just drop
+  // config-active and Live fades straight back in (no tear-down → no double animation).
   if (toMain || !_liveOpen) {
     if (_liveOpen && typeof closeLivePage === 'function') closeLivePage();
     document.body.classList.remove('live-active');
@@ -3245,15 +3177,15 @@ function closeConfigPage(toMain) {
   _cfgOpen = false;
 }
 
-/* ---- Swipe navigation -------------------------------------------------
- * Three screens laid out left-to-right:
- *        Main (profiles)  |  Live (monitoring)  |  Config
- * Swiping left moves toward the RIGHT neighbour, swiping right toward the LEFT:
- *   - Main  : swipe left  -> Live          (swipe right: nothing, leftmost)
- *   - Live  : swipe left  -> Config ,  swipe right -> Main
- *   - Config: swipe right -> Live          (swipe left: nothing, rightmost)
- * A gesture only counts when it is clearly horizontal (dx dominates dy) and
- * long enough, so it never fights vertical scrolling inside a page. */
+/*
+ * ---- Swipe navigation ------------------------------------------------- Three screens laid
+ * out left-to-right: Main (profiles) | Live (monitoring) | Config Swiping left moves toward
+ * the RIGHT neighbour, swiping right toward the LEFT: - Main : swipe left -> Live (swipe
+ * right: nothing, leftmost) - Live : swipe left -> Config , swipe right -> Main - Config:
+ * swipe right -> Live (swipe left: nothing, rightmost) A gesture only counts when it is
+ * clearly horizontal (dx dominates dy) and long enough, so it never fights vertical scrolling
+ * inside a page.
+ */
 (function initSwipeNav() {
   var x0 = null, y0 = null, t0 = 0, tracking = false;
   var MIN_DX = 60;     // minimum horizontal travel (px)
@@ -3262,11 +3194,9 @@ function closeConfigPage(toMain) {
 
   function start(e) {
     if (e.touches && e.touches.length > 1) { tracking = false; return; }
-    // Ignore gestures that begin on an interactive control. Dragging a range
-    // slider moves the finger horizontally, which otherwise looked exactly like
-    // a page swipe and flipped the page mid-drag. Skip tracking when the touch
-    // starts on a slider/input/button (or inside the .cfg-range wrapper), so the
-    // control gets the drag and the page stays put.
+    // Ignore gestures that begin on an interactive control.
+    // Dragging a range slider moves the finger horizontally, which otherwise looked exactly
+    // like a page swipe and flipped the page mid-drag.
     var tgt = e.target;
     if (tgt && tgt.closest &&
         tgt.closest('input, select, textarea, button, .cfg-range, .cfg-seg, [type="range"]')) {
@@ -3313,12 +3243,11 @@ function closeConfigPage(toMain) {
 
 let _batCapFullMah = 0;
 
-/* Smart Mode sub-line.
- *
- * Split out of pollLive so the profile buttons can refresh it too. It used to be
- * rendered ONLY inside the live poll, so tapping SMART on the home screen left the
- * label reading "disabled · tap to enable" until the user opened Monitor or Settings
- * and came back - the poll ran there, and only then did the text catch up.
+/*
+ * Smart Mode sub-line.
+ * It used to be rendered ONLY inside the live poll, so tapping SMART on the home screen left
+ * the label reading "disabled · tap to enable" until the user opened Monitor or Settings and
+ * came back - the poll ran there, and only then did the text catch up.
  */
 function renderSmartSubLine(kv) {
   try {
@@ -3339,9 +3268,10 @@ function renderSmartSubLine(kv) {
       else if (fb === 4) sub = 'cold start · learning';
       smartSub.textContent = sub;
     } else if (kv && kv._smartPending === 1) {
-      /* apply_profile.sh has written smart_mode_enabled, but /dev/.asb/state is
-       * produced by the native governor and only catches up on its next tick.
-       * Saying "disabled" in that window is simply wrong. */
+      /*
+       * apply_profile.sh has written smart_mode_enabled, but /dev/.asb/state is produced by
+       * the native governor and only catches up on its next tick.
+       */
       smartSub.textContent = 'starting…';
     } else {
       smartSub.textContent = 'disabled · tap to enable';
@@ -3373,9 +3303,9 @@ async function refreshSmartSubLine() {
 async function pollLive(visible) {
   try {
     const r = await run('cat /dev/.asb/state 2>/dev/null');
-    /* keep Live chip always visible — Live page handles its own
-     * empty-state fallback. Hiding the chip on a momentarily empty
-     * /dev/.asb/state (race at WebUI load) made the chip seem to disappear. */
+    /*
+     * keep Live chip always visible — Live page handles its own empty-state fallback.
+     */
     const chip = _el('liveChip');
     if (chip) chip.style.display = '';
     if (!r || !r.stdout || !r.stdout.trim()) {
@@ -3443,9 +3373,7 @@ async function pollLive(visible) {
     if (!visible) return;
 
     // During warm-up the state file still carries the governor's initialised default -
-    // "balanced" - while the main page reads current_profile off disk and is already
-    // right. Prefer the page that knows, so Monitor does not briefly contradict the
-    // screen the user just came from.
+    // "balanced" - while the main page reads current_profile off disk and is already right.
     const _mainProf = _el('curProfile');
     const _warmup = (kv.state_warmup === '1');
     const profile = (_warmup && _mainProf && _mainProf.textContent
@@ -3486,10 +3414,11 @@ async function pollLive(visible) {
       else { on_ma = 500; }
       eta_note = ' (est.)';
     }
-    /* Idle draw: anchor to a realistic deep-idle floor (~55 mA on this class of
-       device) rather than a fixed fraction of the active draw, which made the
-       idle estimate swing wildly (to 80+ h) as the active EWMA moved. Clamp to
-       a sane band so the figure stays a stable ballpark, not a moving target. */
+    /*
+     * Idle draw: anchor to a realistic deep-idle floor (~55 mA on this class of device) rather
+     * than a fixed fraction of the active draw, which made the idle estimate swing wildly (to
+     * 80+ h) as the active EWMA moved.
+     */
     let off_ma = Math.round(on_ma / 10);
     if (off_ma < 40) off_ma = 40;
     if (off_ma > 90) off_ma = 90;
@@ -3654,46 +3583,31 @@ async function pollLive(visible) {
           const fbNames = ['exact','daypart','class','global','cold start'];
           const appNames = ['idle','light','medium','heavy','gaming'];
 
-          // Warm-up: the governor publishes state from its first tick, before it has
-          // sampled a package or resolved the profile, so those values are initialised
-          // defaults rather than observations. Showing them produces "gaming" on an idle
-          // phone and "balanced" under an active Smart profile, both correcting themselves
-          // seconds later - which reads as a bug because it is one.
+          // Warm-up: the governor publishes state from its first tick, before it has sampled a
+          // package or resolved the profile, so those values are initialised defaults rather
+          // than observations.
+          // Showing them produces "gaming" on an idle phone and "balanced" under an active
+          // Smart profile, both correcting themselves seconds later - which reads as a bug
+          // because it is one.
           const warm = (kv.state_warmup === '1');
           _el('bnBucket').textContent = '#' + bid + ' ' + (dpNames[dp] || '?') + (we ? '·we' : '·wd');
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
           _el('bnAlpha').textContent = Math.round(alpha / 10) + '% bat';
           _el('bnApp').textContent = warm ? '\u2026' : (appNames[appH] || '?');
 
-          // Second row: four more Smart-owned readings, so the card is two full rows
-          // instead of one row plus an orphan hanging under Bucket.
-          //
-          // Sessions is what Conf is built from - a confidence figure means something
-          // very different at 1 session than at 200, so the two belong side by side.
+          // Second row: four more Smart-owned readings, so the card is two full rows instead
+          // of one row plus an orphan hanging under Bucket.
+          // Sessions is what Conf is built from - a confidence figure means something very
+          // different at 1 session than at 200, so the two belong side by side.
           _el('bnSes').textContent = parseInt(kv.smart_sessions_total || '0', 10);
 
-          // Drain in tenths of a percent per hour. It publishes 0 until the first window
-          // closes, and printing "0.0%/h" then would be a measurement we do not have -
-          // a dash says "not yet" honestly.
-          // Prefer the smoothed rate over the single last session.
-          //
-          // drain_pctph_x10 is one session divided by its own length, so a short window
-          // reports a real but unrepresentative figure: 4% lost across five minutes of
-          // post-boot dexopt and app restore is arithmetically 48%/h, which is exactly what
-          // turned up after a reboot. The EWMA is averaged over sessions, so it settles
-          // instead of spiking - the right number for a dashboard. The per-session value
-          // stays as the fallback until an average exists.
+          // Drain in tenths of a percent per hour.
           const _drEwma = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
           const _drLast = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
           const dr = (_drEwma > 0) ? _drEwma : _drLast;
           // Keep the last real reading instead of blanking.
-          //
-          // Switching profile restarts the drain window, so this reads 0 for a few
-          // minutes afterwards - and 0 was drawn as an em dash, indistinguishable from
-          // "this metric does not work". Reported after an auto-switch to Battery, where
-          // it is exactly the wrong moment to lose the number. The stale value is marked
-          // with ~ so it is not mistaken for a live one. On charge there is no drain to
-          // report and the dash is the truthful answer.
+          // Reported after an auto-switch to Battery, where it is exactly the wrong moment to
+          // lose the number.
           if (dr > 0) {
             _lastDrain = dr;
             _el('bnDrain').textContent = (dr / 10).toFixed(1) + '%/h';
@@ -3705,12 +3619,10 @@ async function pollLive(visible) {
             _el('bnDrain').textContent = T('lv_measuring', 'измеряю\u2026');
           }
 
-          // Thermal trend is what makes Smart back off, so it explains Alpha moving on
-          // its own. The slope is milli-degrees per tick; only its sign is worth showing.
-          // Ignore the slope right after a profile change: it was measured under the
-          // previous caps, so a phone that has just switched to Battery reports the
-          // warming it was doing a minute ago. Reported as "trend says warming when it
-          // should be cooling", and the trend was simply stale rather than wrong.
+          // Thermal trend is what makes Smart back off, so it explains Alpha moving on its
+          // own.
+          // Reported as "trend says warming when it should be cooling", and the trend was
+          // simply stale rather than wrong.
           let slope = parseInt(kv.smart_trend_slope || '0', 10);
           const _profNow = String(kv.profile || '');
           if (_lastProfSeen !== null && _lastProfSeen !== _profNow) {
