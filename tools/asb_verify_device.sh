@@ -1,24 +1,18 @@
 #!/system/bin/sh
-# =====================================================================
-# ASB on-device verification (Termux / root shell)  —  rev2
-#   rev2: scans ALL sku_* mixers + detects active SKU (no more false PASS/FAIL
-#         from grabbing an inactive mixer); checks conf_tuning on every
-#         partition; more robust governor probe.
+# ===================================================================== ASB on-device
+# verification (Termux / root shell) — rev2 rev2: scans ALL sku_* mixers + detects active SKU
+# (no more false PASS/FAIL from grabbing an inactive mixer); checks conf_tuning on every
+# partition; more robust governor probe.
 #
-# Checks whether AutoSystemBoost's tweaks are ACTUALLY live in the system
-# by reading the real mounted files the OS sees (after KSU/Magisk magic-
-# mount), not the module staging copies. For each tweak it prints the
-# live value, the expected value, and PASS / FAIL / N/A.
+# Checks whether AutoSystemBoost's tweaks are ACTUALLY live in the system by reading the real
+# mounted files the OS sees (after KSU/Magisk magic- mount), not the module staging copies.
 #
 # Usage (as root):
 #   su -c 'sh /sdcard/asb_verify_device.sh'
 #     or from Termux:  su -c "sh $PWD/asb_verify_device.sh"
 #
-# Output is printed AND saved to /sdcard/asb_verify_report.txt
-# (that is the user-visible "root of storage"; the true filesystem root
-#  is read-only, so we cannot write to /). A copy is also attempted at
-#  /data/local/tmp/asb_verify_report.txt.
-# =====================================================================
+# Output is printed AND saved to /sdcard/asb_verify_report.txt (that is the user-visible "root
+# of storage"; the true filesystem root is read-only, so we cannot write to /).
 
 OUT_PRIMARY="/sdcard/asb_verify_report.txt"
 OUT_FALLBACK="/data/local/tmp/asb_verify_report.txt"
@@ -90,12 +84,9 @@ emit "================================================================"
 # ---------------------------------------------------------------------
 emit ""
 emit "### 1. AUDIO — louder playback + flat EQ"
-# The device loads ONE sku_* at runtime. The old check grabbed the first
-# sku_* alphabetically (often an INACTIVE one) which produced misleading
-# results. We now (a) detect the active SKU from system properties, and
-# (b) scan every sku_* mixer so a tweak is judged PASS if ANY mounted mixer
-# carries it, and we report which file. A control that simply doesn't exist
-# in a file is reported as such instead of silently counting as 0 (=PASS).
+# The device loads ONE sku_* at runtime.
+# A control that simply doesn't exist in a file is reported as such instead of silently
+# counting as 0 (=PASS).
 ACTIVE_SKU="$(getprop ro.vendor.audio.sku 2>/dev/null)"
 [ -z "$ACTIVE_SKU" ] && ACTIVE_SKU="$(getprop persist.vendor.audio.sku 2>/dev/null)"
 [ -z "$ACTIVE_SKU" ] && ACTIVE_SKU="$(getprop ro.boot.product.vendor.sku 2>/dev/null)"
@@ -154,11 +145,8 @@ else
 
   # base tweaks
   if [ "$VOL_FILES" -gt 0 ]; then
-    # Success signal is: no Digital Volume left at the stock 80-87 range (they
-    # were all raised to 88). Some SKUs expose the loud control under a
-    # different name or already sit at 88/other values, so a positive count of
-    # "==88" can legitimately be 0 while the patch still fully applied — hence
-    # we judge by "nothing left to patch", and only report the 88-count as info.
+    # Success signal is: no Digital Volume left at the stock 80-87 range (they were all raised
+    # to 88).
     emit "  (info) Digital Volume ==88 entries across mixers: $VOL88_TOTAL"
     check "No stock 80-87 Digital Volume left (all raised; expect 0)" "0" "$VOL_UNPATCHED" eq
   else

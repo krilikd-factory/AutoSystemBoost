@@ -15,23 +15,17 @@
 # could recover from is already graded, and the partition only reads back as genuine
 # stock once nothing of ours is mounted over it.
 #
-# The obvious fix - uninstall and reinstall - works, but uninstall.sh does
-# `rm -rf /data/adb/asb`, and that takes the Smart Mode learning with it: the bucket
-# model, the app-heat table, the learned sleep window, months of session history. On a
-# device with 500+ sessions that is a genuinely bad trade for a camera setting.
+# The obvious fix - uninstall and reinstall - works, but uninstall.sh does `rm -rf
+# /data/adb/asb`, and that takes the Smart Mode learning with it: the bucket model, the
+# app-heat table, the learned sleep window, months of session history.
 #
 # So this does the narrow thing instead. There are exactly three places a graded camera
 # file can hide, and this clears all three and nothing else:
 #
-#   1. the module overlay      /data/adb/modules/AutoSystemBoost/system/**/camera/...
-#   2. the bind-mount source   /data/adb/asb/odm_patched/odm/etc/camera/...
-#      (plus its line in odm_bind_manifest.txt)
-#   3. the tuning baseline     /data/adb/asb/tweak_base/*conf_tuning_params.json.asbbase
+# 1.
 #
 # Learning data is never touched: buckets.bin, smart_appheat.bin, night_window.conf,
-# session_history.jsonl, user_config and the rest of /data/adb/asb stay exactly as they
-# are. Run it, reboot, reinstall the module. The camera comes back stock and the learner
-# does not notice anything happened.
+# session_history.jsonl, user_config and the rest of /data/adb/asb stay exactly as they are.
 #
 # Usage:  su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_camera_repair.sh'
 #         su -c 'sh .../asb_camera_repair.sh --check'    (report only, change nothing)

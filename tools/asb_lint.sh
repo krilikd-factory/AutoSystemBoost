@@ -244,14 +244,7 @@ echo
 echo "🔧 Features"
 FEAT="$MODDIR/features.conf"
 KNOWN_FEATURES="AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG LPM RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR"
-# Which features are actually wired is DERIVED, not hardcoded. The old fixed list
-# claimed RADIO_IMS, DISPLAY, FPS and SECURITY had no runtime path - every one of them
-# is in asb_prune_module's category loop, so its system.prop block is conditionally
-# shipped, and FPS additionally gates asb_apply_ux. So the lint warned four times on
-# every run about features that work, and stayed silent about LPM, which really does
-# have no gate, no property block and no prune entry: it is offered at install and
-# printed on the action screen while doing nothing at all. Crying wolf four times a run
-# is how a real finding gets scrolled past.
+# Which features are actually wired is DERIVED, not hardcoded.
 asb_feature_is_wired() {
   _fw="$1"
   grep -rqE "asb_feature_enabled[[:space:]]+${_fw}\b|_feat[[:space:]]+${_fw}\b" \
@@ -381,10 +374,9 @@ if [ -f "$MODDIR/system.prop" ]; then
   fi
 fi
 
-#  check: vm.oom_kill_allocating_task=1 must not be written anywhere
-# in service.sh. This setting caused false-positive OOM kills of legitimately
-# allocating apps (App Market, WhatsApp) under battery profile
-# memory pressure (swappiness=200 + minfree=112MB).
+# check: vm.oom_kill_allocating_task=1 must not be written anywhere in service.sh.
+# This setting caused false-positive OOM kills of legitimately allocating apps (App Market,
+# WhatsApp) under battery profile memory pressure (swappiness=200 + minfree=112MB).
 if [ -f "$MODDIR/service.sh" ]; then
   _oom_writes="$(grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -cE "sysctlw[[:space:]]+vm\\.oom_kill_allocating_task[[:space:]]+1|echo[[:space:]]+1[[:space:]]*>.*oom_kill_allocating_task" 2>/dev/null)"
   if [ "$_oom_writes" -gt 0 ] 2>/dev/null; then
@@ -520,12 +512,11 @@ if [ -f "$_mp" ] && [ -f "$_uj" ]; then
   if [ -n "$_mp_ver" ] && [ -n "$_uj_ver" ] && [ "$_mp_ver" = "$_uj_ver" ]; then
     ok "module.prop:version == update.json:version ($_mp_ver)"
   elif [ -n "$_mp_code" ] && [ -n "$_uj_code" ] && [ "$_uj_code" -lt "$_mp_code" ] 2>/dev/null; then
-    # update.json deliberately BEHIND module.prop: the module is a newer build that is
-    # still being tested, and the OTA manifest is intentionally left pointing at the last
-    # public release so testers' root managers do not offer this build to everyone. That
-    # is a valid state during testing, so warn rather than fail the build. The reverse -
-    # update.json AHEAD of the module - is still an error below, because that WOULD push
-    # a version users cannot actually get.
+    # update.json deliberately BEHIND module.prop: the module is a newer build that is still
+    # being tested, and the OTA manifest is intentionally left pointing at the last public
+    # release so testers' root managers do not offer this build to everyone.
+    # The reverse - update.json AHEAD of the module - is still an error below, because that
+    # WOULD push a version users cannot actually get.
     warn "update.json is behind module.prop ($_uj_ver < $_mp_ver) — OK while testing, sync before public release"
   else
     err "version mismatch: module.prop=$_mp_ver update.json=$_uj_ver"

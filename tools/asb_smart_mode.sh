@@ -1,17 +1,15 @@
 #!/system/bin/sh
 # ASB  — Smart Mode toggle/reset/status command
 #
-# Usage (as root):
-#   sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh status
-#   sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh enable
-#   sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh disable
-#   sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh reset
+# Usage (as root): sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh status sh
+# /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh enable sh
+# /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh disable sh
+# /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh reset
 #
-# Commands:
-#   status   show current state (flag + bucket store info)
-#   enable   set smart_mode_enabled=1 (governor picks up on next read)
-#   disable  set smart_mode_enabled=0 + restore manual profile from smart_prev_profile
-#   reset    delete buckets.bin + buckets.bin.bak — all learning lost, defaults reseeded on next boot
+# Commands: status show current state (flag + bucket store info) enable set
+# smart_mode_enabled=1 (governor picks up on next read) disable set smart_mode_enabled=0 +
+# restore manual profile from smart_prev_profile reset delete buckets.bin + buckets.bin.bak —
+# all learning lost, defaults reseeded on next boot
 
 ASB_DIR="/data/adb/asb"
 MOD_DIR="/data/adb/modules/AutoSystemBoost"

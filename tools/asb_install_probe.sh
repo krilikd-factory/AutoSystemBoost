@@ -1,25 +1,19 @@
 #!/system/bin/sh
 # =============================================================================
 # asb_install_probe.sh - INSTALL-TIME STOCK-FILE INVENTORY & ANALYSIS
-# =============================================================================
-# Runs during install (after device detection, before/around the in-place
-# patches) to inventory the *specific* stock files this device actually ships -
-# audio SKU dirs, mixer/policy/effects, camera configs, media codecs/profiles,
-# Wi-Fi SKU + WCNSS, GPS, perf, Bluetooth/A2DP - and record the device's real
-# topology and SKU. The point: make the per-device patching INFORMED and
-# AUDITABLE instead of blind. The installer (and asbdiag, and a returned bundle)
-# can read this to see exactly what was found and therefore what is patchable on
-# THIS model.
+# ============================================================================= Runs during
+# install (after device detection, before/around the in-place patches) to inventory the
+# *specific* stock files this device actually ships - audio SKU dirs, mixer/policy/effects,
+# camera configs, media codecs/profiles, Wi-Fi SKU + WCNSS, GPS, perf, Bluetooth/A2DP - and
+# record the device's real topology and SKU.
 #
 # This is pure OBSERVATION - it reads, classifies, and writes a report. It does
 # NOT modify any stock file, does NOT touch sysfs, does NOT lay down overlays.
 # That keeps it safe to run at every install on any device.
 #
-# Output:
-#   $1 (or /data/adb/asb/install_probe.txt) - human-readable analysis report
-#   also emits a flat key=value facts block the installer can grep for the few
-#   decisions it needs (audio SKU, mixer count, whether camera/media exist).
-# =============================================================================
+# Output: $1 (or /data/adb/asb/install_probe.txt) - human-readable analysis report also emits a
+# flat key=value facts block the installer can grep for the few decisions it needs (audio SKU,
+# mixer count, whether camera/media exist).
 
 OUT="${1:-/data/adb/asb/install_probe.txt}"
 mkdir -p "$(dirname "$OUT")" 2>/dev/null
@@ -27,10 +21,9 @@ mkdir -p "$(dirname "$OUT")" 2>/dev/null
 _gp() { getprop "$1" 2>/dev/null; }
 _count_glob() {  # $1=dir $2=pattern  -> count of matching files (0 if none)
   _d="$1"; _pat="$2"; [ -d "$_d" ] || { echo 0; return; }
-  # grep -c already prints 0 on no match, but it EXITS non-zero then, so a
-  # "|| echo 0" would append a SECOND 0 and yield a two-line value that breaks
-  # the caller's $((...)) with "Illegal number". Count with wc -l instead (always
-  # one clean integer, exit 0) and strip whitespace.
+  # grep -c already prints 0 on no match, but it EXITS non-zero then, so a "|| echo 0" would
+  # append a SECOND 0 and yield a two-line value that breaks the caller's $((...)) with
+  # "Illegal number".
   find "$_d" -type f -name "$_pat" 2>/dev/null | wc -l | tr -d ' \n'
 }
 
@@ -86,10 +79,8 @@ _ROOTS="/vendor /system/vendor /odm /vendor/odm /system/vendor/odm /system/odm"
   fi
   echo ""
 
-  # ---- AUDIO: the SKU dir + the files the mixer pass targets -------------
-  # mixer_paths*.xml is what the volume/EQ/DAC sed patches edit; the SKU dir is
-  # what the HAL actually loads. Knowing which SKU + how many mixer files exist
-  # tells the installer the audio patch will land (and on what).
+  # ---- AUDIO: the SKU dir + the files the mixer pass targets ------------- mixer_paths*.xml
+  # is what the volume/EQ/DAC sed patches edit; the SKU dir is what the HAL actually loads.
   echo "----- AUDIO -----"
   _audio_sku="$(_gp persist.vendor.audio.sku)"
   [ -n "$_audio_sku" ] || _audio_sku="$(_gp ro.boot.product.hardware.sku)"
@@ -169,13 +160,8 @@ _ROOTS="/vendor /system/vendor /odm /vendor/odm /system/vendor/odm /system/odm"
   echo "  bluetooth_files=$_bt"
   echo ""
 
-  # ---- KEY-LEVEL TUNABILITY -------------------------------------------------
-  # The sections above count FILES. This one checks whether the device's own
-  # stock files actually contain the specific KEYS each ASB engine patches, so
-  # the report reflects what can really be tuned here — not just "a file exists".
-  # Every check is a read-only grep of the live stock; nothing is modified. The
-  # flat key=value lines let the installer/asbdiag show a precise per-device
-  # "ASB tuned: X" manifest instead of a blind attempt.
+  # ---- KEY-LEVEL TUNABILITY ------------------------------------------------- The sections
+  # above count FILES.
   echo "----- KEY-LEVEL TUNABILITY (what ASB can actually patch here) -----"
 
   # camera tone: conf_tuning_params.json with the tonemap keys the grade engine edits

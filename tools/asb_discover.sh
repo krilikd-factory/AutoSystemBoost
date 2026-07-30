@@ -1,19 +1,14 @@
 #!/system/bin/sh
-# =============================================================================
-# asb_discover.sh — DEVICE DISCOVERY (Phase 1: facts only, writes nothing else)
-# =============================================================================
-# Reads what the hardware actually exposes and records it as a flat key=value
-# facts file at /data/adb/asb/device_caps.env. This is pure OBSERVATION: it
-# does not change any tunable, does not write to sysfs, does not touch overlays.
-# It exists so that (a) asbdiag can show the real topology/back-ends, (b) future
-# per-device bound synthesis has a stable, inspectable input, and (c) when a log
-# arrives from a device we don't own, its capabilities are captured in the bundle.
+# ============================================================================= asb_discover.sh
+# — DEVICE DISCOVERY (Phase 1: facts only, writes nothing else)
+# ============================================================================= Reads what the
+# hardware actually exposes and records it as a flat key=value facts file at
+# /data/adb/asb/device_caps.env.
+# It exists so that (a) asbdiag can show the real topology/back-ends, (b) future per-device
+# bound synthesis has a stable, inspectable input, and (c) when a log arrives from a device we
+# don't own, its capabilities are captured in the bundle.
 #
 # Design rule (matches the agreed architecture): capture RAW capabilities here.
-# Classification ("which policy class", "which camera strategy") and synthesis
-# ("derived bounds") are SEPARATE later stages that READ this file — they are not
-# done here. Keeping discovery dumb and side-effect-free is what makes it safe.
-# =============================================================================
 
 ASB_DIR="/data/adb/asb"
 OUT="$ASB_DIR/device_caps.env"

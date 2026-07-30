@@ -5,25 +5,17 @@
 # screen comes back, and overlays drawn by other modules (status-bar theming and the
 # like) are torn down. That is SystemUI being restarted, and the question is by whom.
 #
-# The script watches SystemUI's PID. When it changes it prints the moment it happened,
-# the seconds since boot, and everything that was going on around it: ASB's own log, the
-# profile-apply log, and the kernel/system log lines just before the restart. If ASB did
-# it, that shows up as an ASB log line at the same second. If something else did, ASB's
-# logs will be quiet and logcat will name the killer.
+# The script watches SystemUI's PID.
 #
-# Usage:
-#   su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_sysui_watch.sh'      # 10 min
-#   su -c 'sh .../asb_sysui_watch.sh 1200'                                      # 20 min
-#   su -c 'sh .../asb_sysui_watch.sh 600 /sdcard/my.txt'                        # custom path
+# Usage: su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_sysui_watch.sh' # 10 min su -c
+# 'sh .../asb_sysui_watch.sh 1200' # 20 min su -c 'sh .../asb_sysui_watch.sh 600
+# /sdcard/my.txt' # custom path
 #
 # Start it right after a reboot. Press Ctrl-C to stop early - in Termux, Ctrl lives in
 # the key row above the keyboard, or use volume-down + C. It also stops on its own when
 # the time is up.
 #
-# It ALWAYS writes a file, and prints the same thing to the terminal. The first version
-# only wrote a file when given a second argument, so the obvious way to run it left the
-# output in a scrollback the user then had to hunt through - and a diagnostic whose
-# results are easy to lose is not much of a diagnostic.
+# It ALWAYS writes a file, and prints the same thing to the terminal.
 
 DUR="${1:-600}"
 OUT="${2:-}"

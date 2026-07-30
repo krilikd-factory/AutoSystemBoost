@@ -1,10 +1,9 @@
 #!/system/bin/sh
 # AutoSystemBoost — system state audit
 #
-# Dumps current state of everything ASB might have modified, so you can:
-# - Confirm settings were actually applied (cross-check with baseline)
-# - See what's still set after uninstall
-# - Compare two devices side-by-side
+# Dumps current state of everything ASB might have modified, so you can: - Confirm settings
+# were actually applied (cross-check with baseline) - See what's still set after uninstall -
+# Compare two devices side-by-side
 #
 # Usage: sh tools/asb_audit_state.sh [> /sdcard/asb_audit_$(date +%s).txt]
 
