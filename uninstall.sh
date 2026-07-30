@@ -155,6 +155,12 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
 
+# Put the lockscreen back before the state that records its previous value is deleted.
+[ -f /data/adb/modules/AutoSystemBoost/runtime/asb_lockscreen_apply.sh ] && \
+  sh -c 'sed -i "s|^lockscreen_skip_delayed=.*|lockscreen_skip_delayed=off|" \
+    /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null;
+    sh /data/adb/modules/AutoSystemBoost/runtime/asb_lockscreen_apply.sh' >/dev/null 2>&1 || true
+
 rm -rf /data/adb/asb 2>/dev/null
 
 for _legacy in asb_active_profile asb_baseline.txt asb_profile_switches.log \

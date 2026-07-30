@@ -164,6 +164,19 @@ _alpha_live="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | cu
 # The throttling threshold is now user-settable, so it belongs where the profile is -
 # reading a temperature elsewhere in the report and not knowing what it is compared
 # against was the gap.
+# Config/feature readers, defined BEFORE anything reads them.
+#
+# They used to sit further down, after the throttling line already called _cfg - so
+# the action screen printed "_cfg: not found" right under the battery tilt and the
+# throttling temperature came out blank. A helper has to exist before its first use.
+_cfg() {
+  grep -E "^[[:space:]]*$1=" "$MODDIR/config/governor.conf" 2>/dev/null \
+    | head -1 | sed 's/.*=//' | tr -d ' \r'
+}
+_feat() {
+  grep -E "^$1=" "$MODDIR/features.conf" 2>/dev/null | tail -1 | sed 's/.*=//' | tr -d ' \r'
+}
+
 _ste="$(_cfg sustained_temp_enter)"
 [ -n "$_ste" ] && [ "$_ste" != "65" ] && echo "  🌡️  Throttling temperature: ${_ste}°C (default 65)"
 if [ "$_rec_disabled" = "1" ]; then
@@ -207,13 +220,6 @@ echo "       ~${_ton_h}h ${_ton_m}m screen on  ·  ~${_toff_h}h ${_toff_m}m idle
 
 # ── Live state ──────────────────────────────────────────────────────────────────
 # Read from the config the daemon reads, not from whatever the WebUI last drew.
-_cfg() {
-  grep -E "^[[:space:]]*$1=" "$MODDIR/config/governor.conf" 2>/dev/null \
-    | head -1 | sed 's/.*=//' | tr -d ' \r'
-}
-_feat() {
-  grep -E "^$1=" "$MODDIR/features.conf" 2>/dev/null | tail -1 | sed 's/.*=//' | tr -d ' \r'
-}
 
 _a_prof="$(_cfg audio_profile)";  [ -n "$_a_prof" ] || _a_prof="stock"
 _a_dac="$(_cfg audio_dac_hifi)"

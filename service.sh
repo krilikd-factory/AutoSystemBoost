@@ -789,6 +789,79 @@ sysctl_try() {
 # stock kernel with no bbr the label was doubly wrong. auto has to mean the value the
 # device came with, and the only way to know that is to write it down before overwriting
 # it, once, and keep it.
+# The device's OWN throttle point, captured once.
+#
+# "Stock" for this setting cannot be a number baked into the module: every SoC and every
+# ROM trips at a different temperature, and 65 is only ASB's opening guess. Read the first
+# passive trip point of the CPU thermal zone - that is what the vendor actually uses - so
+# "сток" means this phone's value rather than a guess about phones in general.
+asb_thermal_stock_capture() {
+  _tsf="/data/adb/asb/thermal_stock"
+  [ -f "$_tsf" ] && return 0
+  mkdir -p /data/adb/asb 2>/dev/null
+  _ts_best=""
+  for _tz in /sys/class/thermal/thermal_zone*; do
+    [ -r "$_tz/type" ] || continue
+    case "$(cat "$_tz/type" 2>/dev/null)" in
+      *cpu*|*CPU*|*apc*|*silver*|*gold*) : ;;
+      *) continue ;;
+    esac
+    for _tp in "$_tz"/trip_point_*_temp; do
+      [ -r "$_tp" ] || continue
+      _tv="$(cat "$_tp" 2>/dev/null)"
+      case "$_tv" in ''|*[!0-9]*) continue ;; esac
+      # Zones report millidegrees on almost everything, plain degrees on a few.
+      [ "$_tv" -gt 1000 ] && _tv=$(( _tv / 1000 ))
+      [ "$_tv" -lt 35 ] && continue
+      [ "$_tv" -gt 110 ] && continue
+      if [ -z "$_ts_best" ] || [ "$_tv" -lt "$_ts_best" ]; then _ts_best="$_tv"; fi
+    done
+  done
+  # No usable zone: record the shipped default so the setting still has something honest
+  # to return to, and say which case it was.
+  if [ -n "$_ts_best" ]; then
+    printf 'STOCK_THERMAL=%s\nSOURCE=trip_point\n' "$_ts_best" > "$_tsf" 2>/dev/null
+    asb_log "thermal stock: ${_ts_best}C from CPU zone trip point"
+  else
+    printf 'STOCK_THERMAL=65\nSOURCE=fallback\n' > "$_tsf" 2>/dev/null
+    asb_log "thermal stock: no readable CPU trip point, using 65C"
+  fi
+}
+asb_thermal_stock_capture
+
+# Resolve the mode into the number the governor actually reads.
+#
+# The C side parses sustained_temp_enter as a temperature, so the mode cannot live in that
+# key as a word. Stock and Smart both start from the device's own trip point; Manual leaves
+# whatever the slider set. Writing it here, once per boot, means the governor never has to
+# know modes exist.
+asb_thermal_mode_apply() {
+  _tm="$(grep -E '^[[:space:]]*sustained_temp_mode=' "$MODDIR/config/governor.conf" 2>/dev/null \
+         | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_tm" in ''|manual) return 0 ;; esac
+  _tsv="$(grep -E '^STOCK_THERMAL=' /data/adb/asb/thermal_stock 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_tsv" in ''|*[!0-9]*) return 0 ;; esac
+  _cur="$(grep -E '^[[:space:]]*sustained_temp_enter=' "$MODDIR/config/governor.conf" 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  [ "$_cur" = "$_tsv" ] && return 0
+  sed -i "s|^[[:space:]]*sustained_temp_enter=.*|sustained_temp_enter=$_tsv|" \
+    "$MODDIR/config/governor.conf" 2>/dev/null
+  # Smart lets the governor walk the point up from there; stock pins it.
+  case "$_tm" in
+    smart) _tceil=68 ;;
+    *)     _tceil="$_tsv" ;;
+  esac
+  if grep -q '^[[:space:]]*sustained_temp_ceiling=' "$MODDIR/config/governor.conf" 2>/dev/null; then
+    sed -i "s|^[[:space:]]*sustained_temp_ceiling=.*|sustained_temp_ceiling=$_tceil|" \
+      "$MODDIR/config/governor.conf" 2>/dev/null
+  else
+    echo "sustained_temp_ceiling=$_tceil" >> "$MODDIR/config/governor.conf" 2>/dev/null
+  fi
+  asb_log "thermal mode=$_tm -> enter=$_tsv ceiling=$_tceil (device trip point)"
+}
+asb_thermal_mode_apply
+
 asb_net_stock_capture() {
   _nsf="/data/adb/asb/net_stock.env"
   [ -f "$_nsf" ] && return 0
@@ -2343,6 +2416,14 @@ command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
 # sysctl values do not survive a reboot and the forced WiFi country code is released by
 # some ROMs on boot, so without this the settings would apply once from the WebUI and
 # quietly revert. The script itself is a no-op when everything is on auto.
+# Lockscreen skip: re-assert at boot, since a secure setting can be reset by the ROM.
+if [ -f "$MODDIR/runtime/asb_lockscreen_apply.sh" ]; then
+  case "$(grep -E '^[[:space:]]*lockscreen_skip_delayed=' "$MODDIR/config/governor.conf" 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')" in
+    on) sh "$MODDIR/runtime/asb_lockscreen_apply.sh" >/dev/null 2>&1 ;;
+  esac
+fi
+
 if [ -f "$MODDIR/runtime/asb_net_apply.sh" ]; then
   _asb_net_any=0
   for _nk in net_congestion net_qdisc wifi_country wifi_scan_throttle; do
