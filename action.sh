@@ -398,6 +398,17 @@ _c_low="$(_cfg CAMERA_LOWLIGHT)";   case "$_c_low"   in ''|0) _c_low=""   ;; esa
 [ -n "$_c_grain" ] && echo "       film grain: ${_c_grain}/8 (3 = stock)"
 [ -n "$_c_contr" ] && echo "       contrast & colour depth: ${_c_contr}/8 (3 = stock)"
 [ -n "$_c_port" ]  && echo "       portrait AI: ${_c_port}/6 (ships off)"
+# Camera hold belongs here, not under SYSTEM.
+#
+# It reports that the governor is holding interactive caps BECAUSE the camera pipeline is
+# streaming - a camera fact that was printed three sections away from everything else about
+# the camera. The block that printed it also carried a mangled `echo ""echo ""`, emitting a
+# stray blank line, and it was gated on lpm_mode and the LPM category, which have nothing
+# to do with the camera: on a device with LPM switched off, camera hold was never reported
+# at all.
+if [ "$(_st camera_hold)" = "1" ]; then
+  echo "       hold ACTIVE · interactive caps held, cpuset + uclamp lifted"
+fi
 [ -n "$_c_low" ]   && echo "       macro / low-light sharpening: ${_c_low}/8"
 # Whether the grade actually landed on the live partition, which is the only claim
 # worth making - the config saying 4 proved nothing until this was checked.
@@ -437,6 +448,77 @@ if [ "$(_feat NET)" = "1" ]; then
   _nb="$(cat /proc/sys/net/core/netdev_budget 2>/dev/null)"
   [ -n "$_nb" ] && _nl="$(_join "$_nl" "budget ${_nb}")"
   [ -n "$_nl" ] && echo "       TCP: ${_nl}"
+
+# What the user ASKED for, alongside what the kernel is actually running.
+#
+# The lines above read the live sysctls - true, but not the whole story: a request the
+# kernel refused looks identical to one that was never made. Pairing the config with the
+# verdict asb_net_apply.sh writes closes that gap, so "bbr requested, cubic running, not
+# supported" reads as one thought instead of three separate mysteries.
+_nv="/data/adb/asb/net_apply_result"
+_nverd() { [ -f "$_nv" ] && grep -E "^$1=" "$_nv" 2>/dev/null | head -1 | sed 's/.*=//'; }
+_nfmt() {
+  _w="$(_cfg "$2")"
+  case "$_w" in ''|auto) return 0 ;; esac
+  _v="$(_nverd "$2")"
+  case "$_v" in
+    unavailable) echo "       $1: ${_w} requested · NOT SUPPORTED by this kernel" ;;
+    failed)      echo "       $1: ${_w} requested · NOT APPLIED" ;;
+    pending)     echo "       $1: ${_w} · waiting for a link" ;;
+    *)           if [ -n "$3" ] && [ "$3" != "$_w" ]; then
+                   echo "       $1: ${_w} requested · running ${3}"
+                 else
+                   echo "       $1: ${_w}"
+                 fi ;;
+  esac
+}
+_nfmt "congestion" net_congestion "$_cc"
+_nfmt "queue"      net_qdisc      "$_qd"
+
+# Per-link overrides print only when set, so the section stays short on a default install
+# and grows only for someone who has actually split Wi-Fi from mobile.
+for _pk in net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile; do
+  _pv="$(_cfg "$_pk")"
+  case "$_pv" in ''|auto) continue ;; esac
+  case "$_pk" in *_wifi) _plabel="Wi-Fi" ;; *) _plabel="mobile" ;; esac
+  case "$_pk" in net_congestion_*) _pwhat="congestion" ;; *) _pwhat="queue" ;; esac
+  case "$(_nverd "$_pk")" in
+    unavailable) echo "       ${_pwhat} · ${_plabel}: ${_pv} · NOT SUPPORTED" ;;
+    failed)      echo "       ${_pwhat} · ${_plabel}: ${_pv} · NOT APPLIED" ;;
+    *)           echo "       ${_pwhat} · ${_plabel}: ${_pv}" ;;
+  esac
+done
+
+# Initial windows: read the real route attributes, since that is the only proof the change
+# survived the connectivity stack replacing the route underneath us.
+_rt="$(_cfg net_route_tune)"
+case "$_rt" in
+  ''|off) : ;;
+  *)
+    _rtl="$(ip route show 2>/dev/null | grep -m1 -oE 'initcwnd [0-9]+ initrwnd [0-9]+')"
+    if [ -n "$_rtl" ]; then
+      echo "       buffers: ${_rt} · ${_rtl} on the default route"
+    else
+      echo "       buffers: ${_rt} · not on the route yet (pending or replaced)"
+    fi
+    ;;
+esac
+
+# Wi-Fi region and scan rate live here too - they are network settings, and putting them
+# under a separate WIFI heading split one topic across two sections.
+_wcc="$(_cfg wifi_country)"
+case "$_wcc" in
+  ''|auto) : ;;
+  *) case "$(_nverd wifi_country)" in
+       failed) echo "       Wi-Fi region: ${_wcc} · NOT APPLIED" ;;
+       *)      echo "       Wi-Fi region: ${_wcc}" ;;
+     esac ;;
+esac
+_wst="$(_cfg wifi_scan_throttle)"
+case "$_wst" in
+  0) echo "       Wi-Fi scan: unthrottled (roams sooner, costs battery)" ;;
+  1) echo "       Wi-Fi scan: stock limit (4 per 2 min)" ;;
+esac
   # Which interface is actually carrying traffic - not always rmnet_data0.
   _if="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
   if [ -n "$_if" ]; then
@@ -447,14 +529,22 @@ if [ "$(_feat NET)" = "1" ]; then
   fi
 fi
 
-if [ "$(_feat WIFI)" = "1" ]; then
-    echo "  📡  MODEM LPM"
-  case "$_lpm" in
-    fast) echo "       fast — data call held up (low latency)" ;;
-    save) echo "       save — radio idling, keepalives stretched" ;;
-    *)    echo "       normal — profile defaults" ;;
-  esac
-fi
+  # Modem LPM: a NETWORK line, gated on LPM, with its own wording.
+  #
+  # Three things were wrong. It had its own heading using the same 📡 as Wi-Fi, so two
+  # unrelated readings looked like one topic. It was gated on the WIFI category, which does
+  # not control it - with WIFI off the modem state simply vanished. And $_lpm was set three
+  # sections earlier by a block that has since moved, so it depended on an assignment no
+  # longer above it; read it here, where it is used.
+  if [ "$(_feat LPM)" = "1" ]; then
+    _lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null)"
+    case "$_lpm" in
+      fast) echo "       modem LPM: fast · data call held up (low latency)" ;;
+      save) echo "       modem LPM: save · radio idling, keepalives stretched" ;;
+      '')   : ;;
+      *)    echo "       modem LPM: normal · profile defaults" ;;
+    esac
+  fi
 
 _cam_hold="$(_st camera_hold)"
 if [ "$_cam_hold" = "1" ]; then
@@ -605,12 +695,6 @@ if [ -n "$_abo" ]; then
   echo "       switched here automatically · returns to ${_abo} when charged"
 fi
 
-_lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null)"
-if [ -n "$_lpm" ] && [ "$(_feat LPM)" = "1" ]; then
-  echo ""echo ""
-  echo "  📷  CAMERA HOLD ACTIVE"
-  echo "       interactive caps held · cpuset + uclamp lifted"
-fi
 
 # ── Configured vs actually applied ──────────────────────────────────────────────
 # The sections above report what the config ASKS for. This one checks the system for
