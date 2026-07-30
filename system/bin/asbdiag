@@ -1,26 +1,19 @@
 #!/system/bin/sh
-# =====================================================================
-#  ASB GLOBAL DIAGNOSTIC  —  AutoSystemBoost full system audit
-# =====================================================================
-#  Easiest way to run (module installs a launcher on PATH):
-#       su -c asbdiag
+# ===================================================================== ASB GLOBAL DIAGNOSTIC —
+# AutoSystemBoost full system audit
+# ===================================================================== Easiest way to run
+# (module installs a launcher on PATH): su -c asbdiag
 #
 #  Or run the script directly:
 #       su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_diag.sh'
 #
-#  It inspects the LIVE system — the real mounted files and the real
-#  runtime properties/settings the OS is using right now — across every
-#  area ASB touches: module status, mounts, audio, bluetooth, GPS,
-#  Wi-Fi, network/TCP, camera, performance, display, props and the
-#  WebUI config. For each item it prints what is LIVE vs what ASB
-#  intends, and a verdict.
+# It inspects the LIVE system — the real mounted files and the real runtime properties/settings
+# the OS is using right now — across every area ASB touches: module status, mounts, audio,
+# bluetooth, GPS, Wi-Fi, network/TCP, camera, performance, display, props and the WebUI config.
 #
-#  The full report is printed AND saved to:
-#       /sdcard/asb_diag_report.txt           (storage root)
-#       /data/local/tmp/asb_diag_report.txt   (fallback)
-#  The real filesystem root (/) is read-only, so "корень телефона"
-#  in practice means /sdcard — that's where the file lands.
-# =====================================================================
+# The full report is printed AND saved to: /sdcard/asb_diag_report.txt (storage root)
+# /data/local/tmp/asb_diag_report.txt (fallback) The real filesystem root (/) is read-only, so
+# "корень телефона" in practice means /sdcard — that's where the file lands.
 
 OUT1="/sdcard/asb_diag_report.txt"
 OUT2="/data/local/tmp/asb_diag_report.txt"
@@ -89,16 +82,8 @@ if [ -z "$MODDIR" ]; then
   P ""; exit 0
 fi
 
-# =====================================================================
-# EFFECTIVE STATE — the computed source-of-truth summary.
-# This block answers, in one place, the questions that are easy to get
-# wrong by reading raw files: is Smart actually on (and from where), who
-# owns the CPU caps right now, what the autonomy dial resolves to, and
-# which root manager the module is treating as canonical. Everything here
-# is DERIVED (read-only) so nobody has to infer it from governor.conf —
-# e.g. smart_mode_enabled in the config is only a shipped fallback; the
-# real switch is the file-flag, shown explicitly below.
-# =====================================================================
+# ===================================================================== EFFECTIVE STATE — the
+# computed source-of-truth summary.
 SEC "0. EFFECTIVE STATE  (computed source-of-truth — read this first)"
 # --- Smart enable: file-flag is truth, config is fallback ---
 _sm_flag="$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)"
@@ -308,10 +293,10 @@ for GP in /vendor/etc/gps.conf /odm/etc/gps.conf /vendor/odm/etc/gps.conf /syste
   _cap=$(grep -E '^CAPABILITIES=' "$GP" 2>/dev/null | head -1 | tr -d ' \r')
   _ntp=$(grep -E '^(NTP_SERVER|XTRA_SERVER_1)=' "$GP" 2>/dev/null | head -1 | tr -d ' \r')
   P "  file: $GP"
-  # CAPABILITIES is a hardware capability bitmask that legitimately differs per
-  # SoC (OP15 canoe=0x3F, OP12 pineapple=0x17). It must NOT be forced to a fixed
-  # value — doing so could advertise GNSS features the chip lacks. Report it as
-  # info, not a pass/fail against another device's mask.
+  # CAPABILITIES is a hardware capability bitmask that legitimately differs per SoC (OP15
+  # canoe=0x3F, OP12 pineapple=0x17).
+  # It must NOT be forced to a fixed value — doing so could advertise GNSS features the chip
+  # lacks.
   [ -n "$_cap" ] && NOTE "GNSS $_cap (device-native bitmask; not forced)"
   [ -n "$_ntp" ] && NOTE "NTP/XTRA: $_ntp"
 done
@@ -327,10 +312,8 @@ for WF in /vendor/etc/wifi/*/WCNSS_qcom_cfg.ini /vendor/etc/wifi/WCNSS_qcom_cfg.
   _pmd=$(grep -E '^gRuntimePMDelay=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
   _amc=$(grep -E '^gActiveMaxChannelTime=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
   _bbw=$(grep -E '^gBusBandwidthVeryHighThreshold=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
-  # Device-safe clamp semantics: the patch only LOWERS these toward a ceiling and
-  # never raises a device that already ships a better (lower) value. So a value
-  # at-or-below the ceiling is correct — checking '== ceiling' would wrongly FAIL
-  # OP12/OP13 (stock gRuntimePMDelay=500, which is better than the 2000 ceiling).
+  # Device-safe clamp semantics: the patch only LOWERS these toward a ceiling and never raises
+  # a device that already ships a better (lower) value.
   [ -n "$_pmd" ] && V "  gRuntimePMDelay<=2000 (lower=quicker idle)" "2000" "$_pmd" le
   [ -n "$_amc" ] && V "  gActiveMaxChannelTime<=40 (lower=shorter dwell)" "40" "$_amc" le
   [ -n "$_bbw" ] && V "  gBusBandwidthVeryHighThreshold<=12000" "12000" "$_bbw" le
@@ -380,11 +363,11 @@ NOTE "qdisc in force: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
 
 # Requested vs accepted, per key.
 #
-# The live sysctl alone cannot separate "the kernel refused this" from "nobody asked" -
-# both look like the previous value. asb_net_apply.sh records a verdict per key, and
-# pairing the two is the whole point of a diagnostic: a report stating bbr is configured
-# while cubic runs, with no reason given, sends someone hunting a bug that is really a
-# missing kernel module.
+# The live sysctl alone cannot separate "the kernel refused this" from "nobody asked" - both
+# look like the previous value.
+# asb_net_apply.sh records a verdict per key, and pairing the two is the whole point of a
+# diagnostic: a report stating bbr is configured while cubic runs, with no reason given, sends
+# someone hunting a bug that is really a missing kernel module.
 _nvf="/data/adb/asb/net_apply_result"
 if [ -f "$_nvf" ]; then
   for _nk in net_congestion net_qdisc net_congestion_wifi net_congestion_mobile \
@@ -485,9 +468,6 @@ P "  camera provider service: init.svc=$(gp init.svc.vendor.camera-provider) cam
 if [ "$_is_pineapple" = "1" ]; then
   NOTE "platform=$_cam_plat -> OP12: camera overlay should match the known-good module; /odm and /vendor/odm must agree"
   # CRITICAL: compare media_profiles on the real /odm partition vs /vendor/odm.
-  # The OP12 HAL reads /odm directly; if the module patched /vendor/odm but not
-  # /odm (or vice-versa), the two disagree and multicamera configure_streams can
-  # SIGABRT. This is the single most useful camera check on OP12/APatch.
   _mp_odm="/odm/etc/camera/media_profiles.xml"
   _mp_vodm="/vendor/odm/etc/camera/media_profiles.xml"
   _sz_odm="$( [ -f "$_mp_odm" ] && wc -c < "$_mp_odm" 2>/dev/null | tr -d ' ' )"
@@ -544,16 +524,15 @@ else
     P "  file: $CT"
     # sunsetBrightScale is deliberately NOT written any more.
     #
-    # The old sed grader pinned it to 0.9 so boosted warm skies would not clip. The
-    # current grader is purely relative - it multiplies what the firmware ships and
-    # writes no absolute tone values at all - so this check asserted behaviour that
-    # was removed on purpose, and reported FAIL on a device where nothing was wrong.
+    # The old sed grader pinned it to 0.9 so boosted warm skies would not clip.
+    # The current grader is purely relative - it multiplies what the firmware ships and writes
+    # no absolute tone values at all - so this check asserted behaviour that was removed on
+    # purpose, and reported FAIL on a device where nothing was wrong.
     NOTE "sunsetBrightScale = $(grep -o '"sunsetBrightScale": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$') (informational: the relative grader does not set this)"
-    # Camera grade is driven by CAMERA_LEVEL (0..4 slider). Legacy CAMERA_AGGRESSIVE=1
-    # maps to level 3. Mirror the runtime value table (runtime/asb_tweaks.sh) so the
-    # expected sunsetSatScale/blueSatParam match the user's actual level instead of
-    # false-FAILing against the old fixed aggressive numbers. The sun SoC bands one
-    # level softer, same as runtime.
+    # Camera grade is driven by CAMERA_LEVEL (0..4 slider).
+    # Mirror the runtime value table (runtime/asb_tweaks.sh) so the expected
+    # sunsetSatScale/blueSatParam match the user's actual level instead of false-FAILing
+    # against the old fixed aggressive numbers.
     _clvl="$(cfg CAMERA_LEVEL)"
     _caggr="$(cfg CAMERA_AGGRESSIVE)"
     if [ -z "$_clvl" ] || [ "$_clvl" = "0" ]; then
@@ -563,11 +542,11 @@ else
     if [ "${_clvl:-0}" -ge 1 ] 2>/dev/null; then
       _cam_soc="$(getprop ro.board.platform 2>/dev/null)"
       [ -z "$_cam_soc" ] && _cam_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
-      # Grading is a RATIO now, so there is no single expected number to compare against
-      # - the result depends on what the device shipped. Checking "does it differ from
-      # the stock file" is the honest test, and it is also the one that would have caught
-      # the two ways this silently did nothing: rules that matched no value, and a hook
-      # that graded a file something else overwrote.
+      # Grading is a RATIO now, so there is no single expected number to compare against - the
+      # result depends on what the device shipped.
+      # Checking "does it differ from the stock file" is the honest test, and it is also the
+      # one that would have caught the two ways this silently did nothing: rules that matched
+      # no value, and a hook that graded a file something else overwrote.
       _cam_stock_bw="0.35, 0.5, 0.7"
       _cam_live_bw="$(grep -m1 -o '"BlendWeight"[^]]*]' "$CT" 2>/dev/null | sed 's/.*\[//;s/\]//')"
       V "  grade(lvl$_clvl) live file differs from stock" "not [$_cam_stock_bw]" \
@@ -580,16 +559,14 @@ else
         # Read FaceBlendWeight from a PORTRAIT block, and test for zero numerically.
         #
         # Face, not Skin: Skin already ships non-zero in two of the three portrait blocks
-        # (0.15), so a check built on it passes on a completely untouched device and can
-        # never tell you the setting did nothing. Face is 0.0 everywhere at stock, so a
-        # non-zero Face is real evidence that portrait grading ran.
+        # (0.15), so a check built on it passes on a completely untouched device and can never
+        # tell you the setting did nothing.
         #
-        # It also used to grep the whole file and take the first weight it saw -
-        # which lives in a non-portrait block, where zero is correct and expected. The
-        # all-zero filter matched the literal text "0.0, 0.0, 0.0" only, so once the
-        # grader rewrote those zeros as "0, 0, 0" the filter stopped catching them, the
-        # zero row survived, and the check reported PASS while printing "0, 0, 0" as its
-        # own evidence. It was structurally unable to fail.
+        # It also used to grep the whole file and take the first weight it saw - which lives in
+        # a non-portrait block, where zero is correct and expected.
+        # The all-zero filter matched the literal text "0.0, 0.0, 0.0" only, so once the grader
+        # rewrote those zeros as "0, 0, 0" the filter stopped catching them, the zero row
+        # survived, and the check reported PASS while printing "0, 0, 0" as its own evidence.
         _cam_skin="$(sed -n '/EnhanceNet[A-Za-z]*PortraitParams/,/}/p' "$CT" 2>/dev/null \
                      | grep -o '"FaceBlendWeight"[^]]*]' \
                      | sed 's/.*\[//;s/\]//' \
@@ -611,12 +588,12 @@ else
   else
     NOTE "conf_tuning_params.json absent"
   fi
-  # Read the bitrate from the file the recording pipeline actually uses AND that
-  # the module can overlay. On OP15 the camera's own /odm/etc/camera/media_profiles
-  # sits on a read-only opex partition the module can't touch, so checking it
-  # reports stock and falsely fails — the media framework reads the bitrate from
-  # /vendor/etc/media_profiles*.xml, which ASB DOES overlay and lift. Prefer those;
-  # fall back to the camera-path copies only if the framework ones are absent.
+  # Read the bitrate from the file the recording pipeline actually uses AND that the module can
+  # overlay.
+  # On OP15 the camera's own /odm/etc/camera/media_profiles sits on a read-only opex partition
+  # the module can't touch, so checking it reports stock and falsely fails — the media
+  # framework reads the bitrate from /vendor/etc/media_profiles*.xml, which ASB DOES overlay
+  # and lift.
   CMP="$(firstf '/vendor/etc/media_profiles.xml' '/vendor/etc/media_profiles_V1_0.xml' '/odm/etc/camera/media_profiles.xml' '/vendor/odm/etc/camera/media_profiles.xml')"
   if [ -n "$CMP" ]; then
     _br=$(awk '/quality="1080p"/{f=1} f&&/bitRate=/{match($0,/bitRate="[0-9]+"/);print substr($0,RSTART+9,RLENGTH-10);exit}' "$CMP" 2>/dev/null)
@@ -667,13 +644,7 @@ fi
 NOTE "tier shows the governor's cluster role; %-of-hw shows the active cap. In"
 NOTE "performance every cluster should read ~100%; in battery the prime cluster"
 NOTE "is capped low while little/mid keep enough headroom to stay smooth."
-# Profile-aware sanity. IMPORTANT: scaling_max_freq is managed live by the OEM
-# scaling governor (walt/uag), which lowers it under light load even when ASB
-# set no cap. So a momentary readout below 90% on performance does NOT mean ASB
-# capped it — reading it as a hard FAIL was misleading. We report the live % as
-# info, and only flag a REAL problem: on performance, the ceiling shouldn't be
-# pinned far below the hardware in a way that persists (we use a generous bar and
-# treat it as a soft NOTE); on battery we confirm ASB's cap is taking effect.
+# Profile-aware sanity.
 _prof_now="$(cat "$MODDIR/current_profile" 2>/dev/null || gp persist.asb.profile)"
 _prime_smax=$(cat "$_last_pol/scaling_max_freq" 2>/dev/null)
 _prime_hmax=$(cat "$_last_pol/cpuinfo_max_freq" 2>/dev/null)
@@ -711,11 +682,9 @@ if [ -r /proc/meminfo ]; then
   _memtot=$(grep -m1 MemTotal /proc/meminfo | awk '{print $2}')
   _memfree=$(grep -m1 MemAvailable /proc/meminfo | awk '{print $2}')
   P "  RAM: total=$((${_memtot:-0}/1024))MB available=$((${_memfree:-0}/1024))MB"
-  # Detailed breakdown so we can see WHAT occupies RAM (the headline "available"
-  # number swings with whatever apps are open at snapshot time, which makes
-  # cross-profile comparisons misleading). Cached+Buffers+SReclaimable is
-  # reclaimable cache (counts as "used" in some UIs but is free on demand);
-  # Active(anon)/Inactive(anon) is real app memory; Shmem is shared/ashmem.
+  # Detailed breakdown so we can see WHAT occupies RAM (the headline "available" number swings
+  # with whatever apps are open at snapshot time, which makes cross-profile comparisons
+  # misleading).
   _mi() { grep -m1 "^$1:" /proc/meminfo 2>/dev/null | awk '{print $2}'; }
   _mb() { echo "$(( ${1:-0} / 1024 ))MB"; }
   _free=$(_mi MemFree); _cached=$(_mi Cached); _buffers=$(_mi Buffers)
@@ -748,10 +717,6 @@ done
 # LMKD tunables ASB may touch
 P "  LMKD / vmpressure props:"
 # OEM system toggles ASB can optionally manage (only when UX_MANAGE_OEM_TOGGLES=1).
-# Shown here so we can confirm whether RAM expansion is actually OFF and whether
-# the "off" value the OEM uses is really 0 (some builds use a byte/GB size). If
-# the user disabled RAM expansion but it reads non-zero after a reboot, OxygenOS
-# re-enabled it and they need to turn ON "Manage OEM Toggles" so ASB enforces it.
 P "  OEM toggles (managed only if UX_MANAGE_OEM_TOGGLES=1):"
 for _ot in ram_expand_size adaptive_battery_management_enabled sem_low_heat_mode; do
   P "    settings global $_ot = $(settings get global $_ot 2>/dev/null)"
@@ -906,11 +871,8 @@ if [ -d "$_kg" ]; then
   P "    default_pwr    = $(cat $_kg/default_pwrlevel 2>/dev/null)"
   P "    busy_pct       = $(cat $_kg/gpubusy 2>/dev/null)"
   P "    throttling     = $(cat $_kg/throttling 2>/dev/null)"
-  # GPU write-test: does ASB actually control the GPU ceiling, or does the vendor
-  # governor (msm-adreno-tz) override it like walt does for CPU? Mirrors the CPU
-  # write-test: pick a mid available freq, write devfreq/max_freq, read back,
-  # then restore. On devices where devfreq is empty (OP15 Adreno 840) we instead
-  # test max_pwrlevel.
+  # GPU write-test: does ASB actually control the GPU ceiling, or does the vendor governor
+  # (msm-adreno-tz) override it like walt does for CPU?
   _gdv="$_kg/devfreq"
   if [ -w "$_gdv/max_freq" ] && [ -s "$_gdv/available_frequencies" ]; then
     _g_orig="$(cat "$_gdv/max_freq" 2>/dev/null)"
@@ -975,10 +937,9 @@ fi
 P ""
 P "  ASB GOVERNOR live state:"
 # WRITE-TEST: prove whether ASB can actually set scaling_max_freq on this device.
-# We read the current max, write a known available frequency, read it back, then
-# restore the original. If readback != what we wrote, the OEM/kernel is rejecting
-# or overriding ASB's caps — which fully explains caps that never match ASB's
-# intended per-device percentages (and battery-mode jank if caps don't apply).
+# If readback != what we wrote, the OEM/kernel is rejecting or overriding ASB's caps — which
+# fully explains caps that never match ASB's intended per-device percentages (and battery-mode
+# jank if caps don't apply).
 _wt_pol="/sys/devices/system/cpu/cpufreq/policy0"
 if [ -w "$_wt_pol/scaling_max_freq" ]; then
   _wt_orig="$(cat "$_wt_pol/scaling_max_freq" 2>/dev/null)"
@@ -1002,10 +963,10 @@ else
   P "    [FAIL] scaling_max_freq is NOT writable on policy0 (ASB cannot cap CPU here!)"
 fi
 P "    current_profile = $(cat "$MODDIR/current_profile" 2>/dev/null || gp persist.asb.profile)"
-# smart_mode flag decides whether the governor owns caps (smart) or the shell
-# does (manual). If this is 1 while a manual profile is selected, the governor
-# may be fighting apply_screen_aware_caps for the cap — the #1 thing to check
-# when the live caps don't match the per-device percentages.
+# smart_mode flag decides whether the governor owns caps (smart) or the shell does (manual).
+# If this is 1 while a manual profile is selected, the governor may be fighting
+# apply_screen_aware_caps for the cap — the #1 thing to check when the live caps don't match
+# the per-device percentages.
 _smf="$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)"
 P "    smart_mode_enabled flag = ${_smf:-<absent>}"
 P "    smart_prev_profile = $(cat /data/adb/asb/smart_prev_profile 2>/dev/null || echo '<absent>')"
@@ -1032,10 +993,9 @@ done
 # --- 10h. profile_bounds the module shipped (compare vs hardware above) ---
 P ""
 P "  SHIPPED battery rails (compare against hw freqs above):"
-# The source profile_bounds.conf is intentionally NOT shipped in the installed
-# module (it's a dev/source artifact); what ships is the generated .sh (and the
-# values baked into the governor binary). Read whichever is present so this is
-# accurate on a real install, not just in the source tree.
+# The source profile_bounds.conf is intentionally NOT shipped in the installed module (it's a
+# dev/source artifact); what ships is the generated .sh (and the values baked into the governor
+# binary).
 _pb=""
 for _cand in "$MODDIR/config/profile_bounds.generated.sh" "$MODDIR/config/profile_bounds.conf"; do
   [ -f "$_cand" ] && { _pb="$_cand"; break; }
