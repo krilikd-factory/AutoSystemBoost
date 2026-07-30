@@ -86,7 +86,16 @@ case "$_ue" in
   # exactly. Setting the card to stock or flat is an explicit choice and is honoured as
   # such; only silence defers.
   # auto, unset, or anything unrecognised: follow blur.
-  *)       [ "$_db" = "1" ] && _ue="flat" || _ue="stock" ;;
+    # Unset or unrecognised: DO NOTHING. Never follow blur.
+    #
+    # This used to resolve to "flat" whenever blur was off, on the reasoning that the two
+    # were once one setting. The consequence was a side effect nobody asked for: switching
+    # blur off wrote persist.sys.oplus.anim_level=0, which flattens Recents AND removes the
+    # Cards/Simple selector from Recent Tasks Manager entirely - reported by a OnePlus 13
+    # user who never touched a Recents setting and got the option back only by uninstalling
+    # the module. Blur and Recents are different things; that is why this key has its own
+    # card. Leaving it alone means nothing changes unless someone asks for it.
+    *)       _ue="stock" ;;
 esac
 
 # --- live half: WindowManager, takes effect immediately -----------------------
