@@ -85,10 +85,8 @@ done
 rm -rf /dev/.asb 2>/dev/null
 rm -rf /dev/.asb_profile_state 2>/dev/null
 
-# Some root managers / mount helpers leave a per-module work artifact next to the
-# module dir (e.g. a hidden ".AutoSystemBoost-files" marker and a "CLEAR" dir)
-# that they do NOT remove when the module is deleted. They are harmless but look
-# like litter, so clean them from every modules root we know about.
+# Some root managers / mount helpers leave a per-module work artifact next to the module dir
+# (e.g.
 for _mroot in /data/adb/modules /data/adb/modules_update \
               /data/adb/ksu/modules /data/adb/ksu/modules_update \
               /data/adb/ap/modules /data/adb/ap/modules_update; do
@@ -102,13 +100,9 @@ rm -f /data/adb/asb/governor.conf.snapshot 2>/dev/null
 
 # Stop our own daemons FIRST.
 #
-# Uninstall removed every file and restored every setting, and then left the governor
-# and the DSP attach daemon running - they were started at boot from directories this
-# script is deleting, and a running process outlives the unlink of its binary. So until
-# the next reboot the phone still had a poller writing CPU caps every two seconds from a
-# module that no longer exists, with its config gone and nothing able to reconfigure or
-# stop it. Whatever the user uninstalled to get back to, they did not get it until they
-# rebooted.
+# Uninstall removed every file and restored every setting, and then left the governor and the
+# DSP attach daemon running - they were started at boot from directories this script is
+# deleting, and a running process outlives the unlink of its binary.
 for _p in asb_dsp_attach asb_governor; do
   pkill -f "$_p" >/dev/null 2>&1 || true
 done
@@ -120,21 +114,16 @@ rm -rf /dev/.asb /dev/.asb_profile_state 2>/dev/null
 rm -f /data/adb/asb/auto_battery_origin 2>/dev/null
 # Camera tuning baselines.
 #
-# These outlived the module, and that is what made the compounding bug unrecoverable
-# without hand-editing: remove ASB, reinstall it, and the "pristine stock" it copied from
-# was the previous install's graded output, still sitting in tweak_base. Clearing them on
-# uninstall means the live partition is genuinely stock by the time anything reads it, so
-# remove-then-install repairs a device instead of preserving the damage.
+# These outlived the module, and that is what made the compounding bug unrecoverable without
+# hand-editing: remove ASB, reinstall it, and the "pristine stock" it copied from was the
+# previous install's graded output, still sitting in tweak_base.
+# Clearing them on uninstall means the live partition is genuinely stock by the time anything
+# reads it, so remove-then-install repairs a device instead of preserving the damage.
 rm -rf /data/adb/asb/tweak_base 2>/dev/null
 
-# Restore any runtime tracking settings we changed (settings DB), then remove
-# the data dir. Reading the log before deleting it is intentional.
-# Both files use the same key|value format: tracking_restore.log for the analytics
-# settings, oem_restore.log for OEM-owned toggles (RAM expansion and friends). The
-# second one matters more than it looks: leaving RAM expansion in the half-off state
-# ASB used to write is what had OxygenOS repairing it back to ON after every uninstall,
-# with swap-on-UFS and the heat that comes with it.
-# Haptics uses the same key|value baseline format, captured before the first change.
+# Restore any runtime tracking settings we changed (settings DB), then remove the data dir.
+# Both files use the same key|value format: tracking_restore.log for the analytics settings,
+# oem_restore.log for OEM-owned toggles (RAM expansion and friends).
 for _rf in /data/adb/asb/tracking_restore.log /data/adb/asb/oem_restore.log \
            /data/adb/asb/haptics_baseline.conf; do
   [ -f "$_rf" ] || continue
