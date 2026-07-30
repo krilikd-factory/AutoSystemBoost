@@ -35,19 +35,8 @@ for _legacy_pair in \
   fi
 done
 
-# ── V56 learning-reset boot sweep ────────────────────────────────────────────
-# Must run BEFORE asb_utils.sh is sourced below (sourcing it auto-starts the
-# governor), i.e. at a point in a fresh boot where NO governor instance is
-# alive. Two jobs:
-#  (a) consume the install-time pending marker: install.sh deletes the learned
-#      state, but the OLD still-running governor re-saves buckets.bin/pstats
-#      from memory within ~5 minutes, resurrecting it before the reboot.
-#      Deleting again here — with no daemon alive — makes the reset stick.
-#  (b) one-shot repair for devices that upgraded before this fix existed and
-#      already got their store resurrected (field data: 286 pre-reset bucket
-#      sessions, last_seen older than the reset marker). Learner state only —
-#      the append-only session_history.jsonl survived the race cleanly and is
-#      genuinely fresh, so it is kept.
+# ── V56 learning-reset boot sweep ──────────────────────────────────────────── Must run BEFORE
+# asb_utils.sh is sourced below (sourcing it auto-starts the governor), i.e.
 if [ -f /data/adb/asb/learning_reset_pending ]; then
   rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak \
         /data/adb/asb/pstats_balanced.json /data/adb/asb/pstats_battery.json \
@@ -69,11 +58,10 @@ fi
 ASB_STATE_LOG="/dev/.asb_profile_state/runtime_apply.log"
 asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$ASB_STATE_LOG" 2>/dev/null || true; }
 
-# Keep an append-only log from growing for the life of the install. The governor's own
-# persist log already rotates in C; the shell-side ones never did, and profile_switches
-# alone gets a line per switch - field logs show four an hour, which is tens of thousands
-# of lines a year that nobody will ever read past the last few dozen.
-# Keeps the tail, which is the only part that has ever been useful in a report.
+# Keep an append-only log from growing for the life of the install.
+# The governor's own persist log already rotates in C; the shell-side ones never did, and
+# profile_switches alone gets a line per switch - field logs show four an hour, which is tens
+# of thousands of lines a year that nobody will ever read past the last few dozen.
 asb_trim_log() {
   _tl_f="$1"; _tl_max="${2:-65536}"
   [ -f "$_tl_f" ] || return 0
@@ -133,14 +121,11 @@ if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
   #
   # This used to delete every listed prop that existed, without asking who put it there.
   # On a device where the vendor sets persist.sys.oplus.athena.* natively that meant ASB
-  # quietly wiping OEM configuration for the background process manager, which is exactly
-  # the kind of thing that gets reported as "the module disables Athena". Nothing in the
-  # module needs those props gone; the cleanup only ever existed to undo V45/V46.
+  # quietly wiping OEM configuration for the background process manager, which is exactly the
+  # kind of thing that gets reported as "the module disables Athena".
   #
-  # baseline.txt records "prop|<name>|<original>" for everything ASB has ever set. An
-  # empty original means the prop did not exist before us, so deleting it restores the
-  # device. A non-empty one means the vendor had a value and we must put THAT back rather
-  # than delete. No record at all means we never touched it - leave it alone.
+  # baseline.txt records "prop|<name>|<original>" for everything ASB has ever set.
+  # No record at all means we never touched it - leave it alone.
   _asb_bl="/data/adb/asb/baseline.txt"
   for _stale_p in \
       persist.sys.oplus.athena.reclaim_enable \
@@ -164,16 +149,15 @@ fi
 
 # Athena: never disabled by this module, and say so when it is found disabled.
 #
-# A tester reported "61-debug-51 disables Athena" and had to re-enable it by hand. No
-# current code path touches com.oplus.athena - it is not in _BG_TRIM_DISABLE and there is
-# no pm record for it in baseline.txt - so a disabled Athena on a device running this
-# build is left over from an older version that did disable it and never recorded the
-# fact, which is why uninstall could not put it back either.
+# A tester reported "61-debug-51 disables Athena" and had to re-enable it by hand.
+# No current code path touches com.oplus.athena - it is not in _BG_TRIM_DISABLE and there is no
+# pm record for it in baseline.txt - so a disabled Athena on a device running this build is
+# left over from an older version that did disable it and never recorded the fact, which is why
+# uninstall could not put it back either.
 #
-# Re-enabling it automatically would be the wrong call: the XDA thread that circulates
-# with this package recommends removing it, so some people disable it deliberately, and
-# silently undoing a user's own decision is worse than leaving it. Report it instead,
-# once, with the command to fix it.
+# Re-enabling it automatically would be the wrong call: the XDA thread that circulates with
+# this package recommends removing it, so some people disable it deliberately, and silently
+# undoing a user's own decision is worse than leaving it.
 if [ ! -f /data/adb/asb/athena_state_checked ]; then
   if pm list packages -d 2>/dev/null | grep -q '^package:com.oplus.athena$'; then
     if ! grep -q "^pm|com.oplus.athena|" /data/adb/asb/baseline.txt 2>/dev/null; then
@@ -264,18 +248,12 @@ asb_migrate_governor_conf() {
 }
 asb_migrate_governor_conf
 
-# Refresh device facts at boot (read-only; rewrites /data/adb/asb/device_caps.env
-# so it tracks kernel/topology changes between installs). Then re-derive the
-# per-device bounds from those facts. Chained so synthesis sees the fresh caps;
-# both are read-only and the governor only consumes device_bounds.env when
-# device_bounds_override=1. Backgrounded so boot is not delayed.
+# Refresh device facts at boot (read-only; rewrites /data/adb/asb/device_caps.env so it tracks
+# kernel/topology changes between installs).
 (
   [ -f "$MODDIR/tools/asb_discover.sh" ] && sh "$MODDIR/tools/asb_discover.sh" >/dev/null 2>&1
   [ -f "$MODDIR/tools/asb_synthesize_bounds.sh" ] && sh "$MODDIR/tools/asb_synthesize_bounds.sh" >/dev/null 2>&1
-  # Retire the interactive prime ceilings from any bounds file written by an earlier
-  # build. The governor already refuses them, but this file lives in /data/adb/asb and
-  # outlives module updates, and the diagnostics print it verbatim - left in place the
-  # report would keep showing a prime cap that is not applied any more.
+  # Retire the interactive prime ceilings from any bounds file written by an earlier build.
   if [ -f /data/adb/asb/device_bounds.env ] && \
      grep -qE '^(BALANCED|PERFORMANCE)_CPU_MAX_PRIME=' /data/adb/asb/device_bounds.env 2>/dev/null; then
     sed -i '/^BALANCED_CPU_MAX_PRIME=/d; /^PERFORMANCE_CPU_MAX_PRIME=/d' \
@@ -326,11 +304,11 @@ asb_migrate_governor_conf
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
     echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
-    # Re-apply the /odm runtime binds. post-fs-data already tries this, but KernelSU mounts
-    # its own module overlay on /odm AFTER post-fs-data runs, so that early bind gets
-    # shadowed and the framework still reads the stock config (observed: the boot log said
-    # action=boot, yet grep asb /odm/etc/audio_effects_config.xml stayed 0 until a manual
-    # mount --bind). Binding again here - after the overlay is in place - sticks.
+    # Re-apply the /odm runtime binds.
+    # post-fs-data already tries this, but KernelSU mounts its own module overlay on /odm AFTER
+    # post-fs-data runs, so that early bind gets shadowed and the framework still reads the
+    # stock config (observed: the boot log said action=boot, yet grep asb
+    # /odm/etc/audio_effects_config.xml stayed 0 until a manual mount --bind).
     if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ]; then
       _rb_any=0
       while IFS='|' read -r _rb_t _rb_p; do
@@ -351,11 +329,11 @@ asb_migrate_governor_conf
     fi
     # Launch the attacher daemon from OUR data dir (post-fs-data staged it there and made it
     # executable; the copy inside the module dir stays 0644 because the root manager resets
-    # module file permissions after installation). This is what actually makes the DSP
-    # audible on OxygenOS: the framework never applies the config's <postprocess> section
-    # here - AudioPolicyEffects logs "no output processing needed" even for the stock
-    # music_helper - so effects have to be created programmatically, exactly like ViperFX
-    # and OPlus' own effect do.
+    # module file permissions after installation).
+    # This is what actually makes the DSP audible on OxygenOS: the framework never applies the
+    # config's <postprocess> section here - AudioPolicyEffects logs "no output processing
+    # needed" even for the stock music_helper - so effects have to be created programmatically,
+    # exactly like ViperFX and OPlus' own effect do.
     _att_bin="/data/adb/asb/asb_dsp_attach"
     if [ -f "$MODDIR/bin/asb_dsp_attach" ]; then
       mkdir -p /data/adb/asb 2>/dev/null
@@ -366,19 +344,18 @@ asb_migrate_governor_conf
     fi
     # Where the daemon's stdout goes.
     #
-    # It used to be an unconditional ">>" onto /data/adb/asb/dsp_attach.log, which is
-    # append with no truncation and no rotation - so the file only ever grew, for the
-    # life of the install. In steady state the daemon is quiet, but it logs three lines
-    # for every audioserver restart (camera, calls, BT connect - dozens a day), one per
-    # settings change, and, worst of all, it keeps logging create failures roughly every
-    # five minutes forever on a device where the effect never registered. That is exactly
-    # the state the Ace 5 sat in for weeks: a log growing round the clock describing a
-    # failure nobody was reading.
+    # It used to be an unconditional ">>" onto /data/adb/asb/dsp_attach.log, which is append
+    # with no truncation and no rotation - so the file only ever grew, for the life of the
+    # install.
+    # In steady state the daemon is quiet, but it logs three lines for every audioserver
+    # restart (camera, calls, BT connect - dozens a day), one per settings change, and, worst
+    # of all, it keeps logging create failures roughly every five minutes forever on a device
+    # where the effect never registered.
     #
-    # Normal installs now discard it entirely - the daemon's state is visible on the
-    # action screen and in asbdiag, so a permanent on-device log buys nothing. It is kept
-    # only when debug is on, and even then truncated per boot rather than appended, so it
-    # is bounded by one session instead of by the lifetime of the install.
+    # Normal installs now discard it entirely - the daemon's state is visible on the action
+    # screen and in asbdiag, so a permanent on-device log buys nothing.
+    # It is kept only when debug is on, and even then truncated per boot rather than appended,
+    # so it is bounded by one session instead of by the lifetime of the install.
     _att_log="/dev/null"
     if [ -f /data/adb/asb/debug ] || [ "$(getprop persist.asb.debug 2>/dev/null)" = "1" ]; then
       _att_log="/data/adb/asb/dsp_attach.log"
@@ -404,22 +381,18 @@ asb_migrate_governor_conf
       echo "ts=$(date +%s) action=dsp_attach_started via=$_att_how" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
       # Publish the DSP properties the effect reads.
       #
-      # "mirror" only republishes what the property store already holds, and that is the
-      # right thing while the overlay is still coming up - computing from config there
-      # would read the missing library as "needs reboot" and write enable=0 on every
-      # boot. But mirror can only mirror something: after a FIRST install nothing has
-      # ever written persist.asb.dsp.enable, because the compute path lives in the
-      # on-demand WebUI script. So a fresh device with dsp_loudness set at install time
-      # came up with the effect registered, the library live, and enable never set -
-      # reported from the field as "persist.asb.dsp.enable is not 1" on a working DSP.
+      # "mirror" only republishes what the property store already holds, and that is the right
+      # thing while the overlay is still coming up - computing from config there would read the
+      # missing library as "needs reboot" and write enable=0 on every boot.
+      # So a fresh device with dsp_loudness set at install time came up with the effect
+      # registered, the library live, and enable never set - reported from the field as
+      # "persist.asb.dsp.enable is not 1" on a working DSP.
       #
-      # By this point boot is complete and the overlay is up, so if the library is
-      # actually visible we can compute for real. "dsp" mode hands the value to the
-      # attach daemon over binder, so there is no audioserver restart and no drop-out.
-      # Self-heal the volume table. If media_loudness asks for a reshape and the
-      # overlay copy does not carry our marker, the file was never built for the
-      # current setting - rebuild it now so the NEXT boot is correct instead of
-      # waiting for a reinstall nobody knows to perform.
+      # By this point boot is complete and the overlay is up, so if the library is actually
+      # visible we can compute for real.
+      # If media_loudness asks for a reshape and the overlay copy does not carry our marker,
+      # the file was never built for the current setting - rebuild it now so the NEXT boot is
+      # correct instead of waiting for a reinstall nobody knows to perform.
       _vt_want="$(grep -E '^[[:space:]]*media_loudness=' "$MODDIR/config/governor.conf" 2>/dev/null \
                   | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
       case "$_vt_want" in
@@ -449,11 +422,11 @@ asb_device_guard() {
   _soc="$(getprop ro.board.platform 2>/dev/null)"
   [ -z "$_soc" ] && _soc="$(getprop ro.hardware.chipname 2>/dev/null)"
   case "$_soc" in
-    # ro.board.platform reports the PLATFORM CODENAME, not the SoC model: a OnePlus 15
-    # returns "canoe", never "sm8850", so the flagship it is was classified generic and
-    # the log claimed "conservative limits apply" while nothing of the sort happened.
-    # Both spellings are matched now because different OEM builds populate different
-    # props, and device_caps.env carries the model separately.
+    # ro.board.platform reports the PLATFORM CODENAME, not the SoC model: a OnePlus 15 returns
+    # "canoe", never "sm8850", so the flagship it is was classified generic and the log claimed
+    # "conservative limits apply" while nothing of the sort happened.
+    # Both spellings are matched now because different OEM builds populate different props, and
+    # device_caps.env carries the model separately.
     sun|canoe|ossi|sm8850*|sm8750*|pineapple) ASB_DEVICE_TIER="flagship" ;;
     taro|sm8550*|sm8650*|kalama|crow)         ASB_DEVICE_TIER="high" ;;
     *)                                        ASB_DEVICE_TIER="generic" ;;
@@ -538,11 +511,8 @@ asb_drift_check() {
 asb_device_guard
 # Keep the unrotated logs bounded.
 #
-# session_history.jsonl has proper stream rotation in the governor (500 entries plus a
-# byte cap) and is fine. These three had none and grew forever: measured over 43 days on
-# a real device, governor_persist.log reached 42 KB (~1 KB/day), ram_expand.log 7.9 KB
-# and profile_switches.log 4.5 KB - about half a megabyte a year that nothing cleans.
-# Trimming to the last 400 lines keeps each one useful for diagnosis while capping it.
+# session_history.jsonl has proper stream rotation in the governor (500 entries plus a byte
+# cap) and is fine.
 asb_trim_logs() {
   for _tl in governor_persist.log ram_expand.log profile_switches.log; do
     _tlf="/data/adb/asb/$_tl"
@@ -593,15 +563,14 @@ LITTLE_POLICY="/sys/devices/system/cpu/cpufreq/policy0"
 BIG_POLICY="/sys/devices/system/cpu/cpufreq/policy${_big_start}"
 [ -d "$BIG_POLICY" ] || BIG_POLICY="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n | tail -1)"
 [ -d "$BIG_POLICY" ] || BIG_POLICY="$LITTLE_POLICY"
-# The camera guard (governor, src/asb_writer.h) raises the foreground/top-app cpuset,
-# the uclamp.max ceilings and swappiness for as long as a capture is streaming, and it
-# restores exactly what it found when the camera closes. Every runtime re-apply below
-# has to stay off those knobs while it holds them - otherwise a profile switch mid
-# recording writes the ceilings straight back down (apply_runtime_profile_now runs on
-# EVERY switch, and again 10 s later in a background subshell), and worse, the guard
-# then restores its pre-switch snapshot over the new profile's values and leaves the
-# device on stale caps until the next switch. The field logs show profile changes four
-# times in an hour, so this collision was routine rather than exotic.
+# The camera guard (governor, src/asb_writer.h) raises the foreground/top-app cpuset, the
+# uclamp.max ceilings and swappiness for as long as a capture is streaming, and it restores
+# exactly what it found when the camera closes.
+# Every runtime re-apply below has to stay off those knobs while it holds them - otherwise a
+# profile switch mid recording writes the ceilings straight back down
+# (apply_runtime_profile_now runs on EVERY switch, and again 10 s later in a background
+# subshell), and worse, the guard then restores its pre-switch snapshot over the new profile's
+# values and leaves the device on stale caps until the next switch.
 asb_cam_guard_active() { [ -f /dev/.asb/camera_guard ]; }
 
 apply_cpuset_groups() {
@@ -785,16 +754,12 @@ sysctl_try() {
 # Stock network values, captured once before anything is changed.
 #
 # "auto" used to mean "do not touch", and this function had already run by then - so auto
-# reported bbr and fq_codel, which is what ASB set, not what the phone shipped with. On a
-# stock kernel with no bbr the label was doubly wrong. auto has to mean the value the
-# device came with, and the only way to know that is to write it down before overwriting
-# it, once, and keep it.
-# The device's OWN throttle point, captured once.
+# reported bbr and fq_codel, which is what ASB set, not what the phone shipped with.
 #
-# "Stock" for this setting cannot be a number baked into the module: every SoC and every
-# ROM trips at a different temperature, and 65 is only ASB's opening guess. Read the first
-# passive trip point of the CPU thermal zone - that is what the vendor actually uses - so
-# "сток" means this phone's value rather than a guess about phones in general.
+# "Stock" for this setting cannot be a number baked into the module: every SoC and every ROM
+# trips at a different temperature, and 65 is only ASB's opening guess.
+# Read the first passive trip point of the CPU thermal zone - that is what the vendor actually
+# uses - so "сток" means this phone's value rather than a guess about phones in general.
 asb_thermal_stock_capture() {
   _tsf="/data/adb/asb/thermal_stock"
   [ -f "$_tsf" ] && return 0
@@ -812,8 +777,12 @@ asb_thermal_stock_capture() {
       case "$_tv" in ''|*[!0-9]*) continue ;; esac
       # Zones report millidegrees on almost everything, plain degrees on a few.
       [ "$_tv" -gt 1000 ] && _tv=$(( _tv / 1000 ))
-      [ "$_tv" -lt 35 ] && continue
-      [ "$_tv" -gt 110 ] && continue
+      # Passive throttle points on these SoCs sit between roughly 45 and 80.
+      # Anything above that is the hot/critical trip that exists to shut the phone down, not to
+      # slow it - taking the lowest trip of ANY value picked 90 on a OnePlus 13 and wrote it in
+      # as "stock", which is a throttle point that would never fire.
+      [ "$_tv" -lt 45 ] && continue
+      [ "$_tv" -gt 80 ] && continue
       if [ -z "$_ts_best" ] || [ "$_tv" -lt "$_ts_best" ]; then _ts_best="$_tv"; fi
     done
   done
@@ -831,17 +800,40 @@ asb_thermal_stock_capture
 
 # Resolve the mode into the number the governor actually reads.
 #
-# The C side parses sustained_temp_enter as a temperature, so the mode cannot live in that
-# key as a word. Stock and Smart both start from the device's own trip point; Manual leaves
-# whatever the slider set. Writing it here, once per boot, means the governor never has to
-# know modes exist.
+# The C side parses sustained_temp_enter as a temperature, so the mode cannot live in that key
+# as a word.
+# Writing it here, once per boot, means the governor never has to know modes exist.
 asb_thermal_mode_apply() {
   _tm="$(grep -E '^[[:space:]]*sustained_temp_mode=' "$MODDIR/config/governor.conf" 2>/dev/null \
          | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  # Publish whether the slider outranks the per-profile presets.
+  #
+  # The C side reads sustained_temp_enter only for Battery unless this flag is set; on
+  # Performance, Balanced and Smart the shipped preset wins. Manual means someone chose a
+  # number on purpose, and that has to beat a default.
+  _tm_ovr=0
+  case "$_tm" in manual) _tm_ovr=1 ;; esac
+  if grep -q '^[[:space:]]*sustained_temp_user_override=' "$MODDIR/config/governor.conf" 2>/dev/null; then
+    sed -i "s|^[[:space:]]*sustained_temp_user_override=.*|sustained_temp_user_override=$_tm_ovr|" \
+      "$MODDIR/config/governor.conf" 2>/dev/null
+  else
+    echo "sustained_temp_user_override=$_tm_ovr" >> "$MODDIR/config/governor.conf" 2>/dev/null
+  fi
+
+  # manual: the slider is the authority, full stop.
+  #
+  # This used to be the only guard, and the default mode is "smart" - so on every boot the
+  # resolver rewrote sustained_temp_enter with the detected value and destroyed whatever the
+  # user had set.
+  # Reported exactly that way: "I set 55 and after a reboot it is 90 again".
   case "$_tm" in ''|manual) return 0 ;; esac
   _tsv="$(grep -E '^STOCK_THERMAL=' /data/adb/asb/thermal_stock 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_tsv" in ''|*[!0-9]*) return 0 ;; esac
+  # Keep the written value inside the range the slider can express, or the card shows a
+  # number its own control cannot reach - a slider capped at 70 displaying 90.
+  [ "$_tsv" -lt 40 ] 2>/dev/null && _tsv=40
+  [ "$_tsv" -gt 70 ] 2>/dev/null && _tsv=70
   _cur="$(grep -E '^[[:space:]]*sustained_temp_enter=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')"
   [ "$_cur" = "$_tsv" ] && return 0
@@ -891,9 +883,7 @@ apply_net() {
     *)       _qd_want="$_u_qd" ;;
   esac
     # Same stand-down as congestion below: a per-link qdisc override is owned by
-    # asb_net_apply.sh, which sets it per interface with tc. This function only knows the
-    # global default_qdisc, and re-running it every reconcile would keep re-stating a value
-    # the user has deliberately overridden for one link type. The specific setting wins.
+    # asb_net_apply.sh, which sets it per interface with tc.
     _pl_qd=0
     for _plk in net_qdisc_wifi net_qdisc_mobile; do
       _plv="$(grep -E "^[[:space:]]*$_plk=" "$MODDIR/config/governor.conf" 2>/dev/null \
@@ -923,10 +913,6 @@ apply_net() {
   # Stand down when a PER-LINK override exists.
   #
   # apply_net runs at boot and again on every reconcile, and it only knows the global key.
-  # asb_net_apply.sh owns the per-link ones. On a kernel with congctl the two do not
-  # collide - each route carries its own algorithm - but where congctl is missing the
-  # per-link choice IS the global sysctl, and this function would overwrite it every couple
-  # of minutes. The more specific user setting has to win, so leave the global alone.
   _pl_set=0
   for _plk in net_congestion_wifi net_congestion_mobile; do
     _plv="$(grep -E "^[[:space:]]*$_plk=" "$MODDIR/config/governor.conf" 2>/dev/null \
@@ -1459,11 +1445,8 @@ asb_bg_trim_gms_wakelock_throttle() {
   if command -v asb_settings_put >/dev/null 2>&1; then
     asb_settings_put global location_background_throttle_interval_ms 1800000
     asb_settings_put global location_background_throttle_proximity_alert_interval_ms 1800000
-    # Full-day OP15 logs showed GMS activity-recognition (the
-    # ALARM_WAKEUP_ACTIVITY_DETECTION alarm) as a top idle wakeup source —
-    # second only to AOD. Lengthen its sampling interval so it polls far less
-    # often in the background. This only relaxes how often activity is sampled,
-    # it does NOT disable location; foreground requests are unaffected.
+    # Full-day OP15 logs showed GMS activity-recognition (the ALARM_WAKEUP_ACTIVITY_DETECTION
+    # alarm) as a top idle wakeup source — second only to AOD.
     asb_settings_put global activity_recognition_mode 0
     asb_settings_put global gms_activity_recognition_interval_ms 1800000
   fi
@@ -1496,12 +1479,8 @@ apply_bg_trim_runtime() {
   stop vendor.oplus.hardware.cammidasservice-V1-service >/dev/null 2>&1 || true
   stop vendor.oplus.hardware.olc2-V3-service           >/dev/null 2>&1 || true
 
-  # Stop debug/crash-dump/telemetry daemons that run in the background but serve
-  # no purpose on a user's daily driver. These only collect logs/ramdumps for
-  # developers; stopping them frees a little CPU/RAM and removes some wakeups.
-  # All are safe to stop (they re-spawn on next boot if a stop didn't take, and
-  # none are required for normal operation). Kept conservative — no system_server
-  # or connectivity daemons here.
+  # Stop debug/crash-dump/telemetry daemons that run in the background but serve no purpose on
+  # a user's daily driver.
   for _svc in minidump minidump32 minidump64 qseelogd wlanramdumpcollector \
               mqsasd bootstat poweroff_charger_log mtdoopslog ostatsd \
               charge_logger cnss_diag tcpdump; do
@@ -1550,13 +1529,10 @@ apply_bt_runtime() {
   asb_persist_safe persist.bluetooth.a2dp.optional_codecs_enabled 1
   asb_persist_safe persist.vendor.bt.enable.swb true
   asb_persist_safe persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true
-  # LE Audio is deliberately NOT forced on here, to stay consistent with
-  # system.prop (which had the LE Audio / profile / class_of_device forces removed
-  # to fix classic-BLE watch pairing — Amazfit / T-Rex Ultra 2 via Zepp). In
-  # practice the system.prop change alone fixes pairing, because the offending
-  # keys are read early at BT-stack init; this late setprop ran after the stack
-  # was already up. It is dropped anyway so the module never re-forces LE Audio
-  # from any layer. A2DP codec quality for headphones is unaffected.
+  # LE Audio is deliberately NOT forced on here, to stay consistent with system.prop (which had
+  # the LE Audio / profile / class_of_device forces removed to fix classic-BLE watch pairing —
+  # Amazfit / T-Rex Ultra 2 via Zepp).
+  # It is dropped anyway so the module never re-forces LE Audio from any layer.
 }
 asb_feature_enabled BT && apply_bt_runtime
 apply_camera_props_static() {
@@ -2076,10 +2052,10 @@ apply_bt_codec_policy() {
   if has resetprop; then
     resetprop -n persist.vendor.qcom.bluetooth.aac_frm_ctl.enabled true >/dev/null 2>&1 || true
     resetprop -n persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled true >/dev/null 2>&1 || true
-    # LHDC quality/channelmode/version live in apply_bt_audio_hygiene, which sets the
-    # whole codec picture together with samplerate and bitdepth. Setting half of it here
-    # as well meant two owners for the same six properties and no way to tell which one
-    # a future change should follow.
+    # LHDC quality/channelmode/version live in apply_bt_audio_hygiene, which sets the whole
+    # codec picture together with samplerate and bitdepth.
+    # Setting half of it here as well meant two owners for the same six properties and no way
+    # to tell which one a future change should follow.
   fi
 }
 asb_feature_enabled BT && apply_bt_codec_policy
@@ -2094,11 +2070,11 @@ apply_bt_volume_behavior() {
   fi
   # Same vocabulary the WebUI writes and asb_audio_apply.sh reads.
   #
-  # The card offers stock|disabled; this only knew auto|on|off, so "disabled" fell through
-  # to the catch-all and boot re-enabled absolute volume. The setting worked the moment it
-  # was tapped - asb_audio_apply.sh gets it right - and silently reverted on the next
-  # reboot, which is the worst shape a bug can take: it looks like it works.
-  # on/off are the older spellings and stay accepted so an upgraded config keeps working.
+  # The card offers stock|disabled; this only knew auto|on|off, so "disabled" fell through to
+  # the catch-all and boot re-enabled absolute volume.
+  # The setting worked the moment it was tapped - asb_audio_apply.sh gets it right - and
+  # silently reverted on the next reboot, which is the worst shape a bug can take: it looks
+  # like it works.
   case "$_bt_mode" in
     disabled|on)  _bt_dav=1; _bt_prop="true"  ;;   # phone drives the gain
     stock|off)    _bt_dav=0; _bt_prop="false" ;;   # one shared scale with the headset
@@ -2161,10 +2137,7 @@ asb_feature_enabled LOG && apply_logd_props
 # Runtime GMS/analytics tracking suppression via the settings DB. Props can't
 apply_tracking_block() {
   _trk_log="/data/adb/asb/tracking_restore.log"
-  # NOT truncated per boot any more. Re-capturing "the current value" on every boot is
-  # only correct on the first one: from boot 2 the current value IS what ASB wrote, so
-  # the file recorded ASB's own settings and uninstall dutifully restored those instead
-  # of the user's originals. Same defect the RAM-expansion path had. Capture once.
+  # NOT truncated per boot any more.
   [ -f "$_trk_log" ] || : > "$_trk_log" 2>/dev/null
   _sp() {
     # _sp <key> <value> — save the old value the FIRST time only, then set the new one.
@@ -2383,12 +2356,8 @@ apply_extra_settings() {
   asb_settings_put global send_action_app_error 0
   asb_settings_put global enhanced_connectivity_enabled 0
   asb_settings_put global adaptive_connectivity_enabled 0
-  # Connectivity (captive-portal) check: point it at Cloudflare's generate_204
-  # endpoint with a gstatic fallback. The stock Google-only endpoint can be slow
-  # to answer (or blocked in some regions), which shows up as a laggy "no
-  # internet" state on a working connection or delayed connectivity after wake.
-  # Cloudflare's 204 is fast and globally anycast; the fallback keeps detection
-  # working if it's ever unreachable. Device-agnostic, no battery cost.
+  # Connectivity (captive-portal) check: point it at Cloudflare's generate_204 endpoint with a
+  # gstatic fallback.
   asb_settings_put global captive_portal_mode 1
   asb_settings_put global captive_portal_detection_enabled 1
   asb_settings_put global captive_portal_use_https 1
@@ -2399,24 +2368,17 @@ apply_extra_settings() {
 }
 apply_extra_settings
 asb_load_profile
-# POSIX check, not "type -t". Android's /system/bin/sh is mksh and mksh's type builtin
-# has no -t flag: it treats -t as a name to look up, prints "-t: not found" plus
-# "asb_apply_ux is a shell function", and the string compare against "function" can
-# never match. So this line silently skipped asb_apply_ux on EVERY boot, which is why
-# "Manage UI speed" and "Force animation restart" appeared to do nothing - the animation
-# scales and touch timeouts were only ever written when the user switched profiles by
-# hand, and never at boot. command -v resolves shell functions in every POSIX shell.
+# POSIX check, not "type -t".
+# So this line silently skipped asb_apply_ux on EVERY boot, which is why "Manage UI speed" and
+# "Force animation restart" appeared to do nothing - the animation scales and touch timeouts
+# were only ever written when the user switched profiles by hand, and never at boot.
 command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
 
-# Re-assert haptic strength. These are system settings, and OOS is known to rewrite that
-# table on its own - the RAM-expansion and analytics paths both needed the same treatment.
-# The script is a no-op when the config says stock, so this costs nothing by default.
-# Network settings: re-assert at boot.
+# Re-assert haptic strength.
 #
-# sysctl values do not survive a reboot and the forced WiFi country code is released by
-# some ROMs on boot, so without this the settings would apply once from the WebUI and
-# quietly revert. The script itself is a no-op when everything is on auto.
-# Lockscreen skip: re-assert at boot, since a secure setting can be reset by the ROM.
+# sysctl values do not survive a reboot and the forced WiFi country code is released by some
+# ROMs on boot, so without this the settings would apply once from the WebUI and quietly
+# revert.
 if [ -f "$MODDIR/runtime/asb_lockscreen_apply.sh" ]; then
   case "$(grep -E '^[[:space:]]*lockscreen_skip_delayed=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')" in
@@ -2436,10 +2398,8 @@ if [ -f "$MODDIR/runtime/asb_net_apply.sh" ]; then
     asb_log "net settings re-asserted"
   fi
 
-  # Route windows follow the link, so they have to be re-applied when the link changes -
-  # WiFi to mobile, one AP to another, a new IP. `ip monitor` blocks on a netlink socket
-  # and returns only when a route actually changes, so this costs one sleeping process
-  # and zero wakeups, instead of the sleep loop this kind of tuning usually ships with.
+  # Route windows follow the link, so they have to be re-applied when the link changes - WiFi
+  # to mobile, one AP to another, a new IP.
   _asb_rt="$(grep -E '^[[:space:]]*net_route_tune=' "$MODDIR/config/governor.conf" 2>/dev/null \
              | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_asb_rt" in
@@ -2476,20 +2436,11 @@ if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then
   fi
 fi
 
-# Keep the blur block in system.prop honest. The WebUI writes governor.conf; if the
-# block on disk does not agree with it, the toggle was flipped since the last install
-# and nothing rebuilt it. Rebuilding here makes the NEXT boot correct and, more
-# usefully, re-asserts the WindowManager global right now.
+# Keep the blur block in system.prop honest.
 _asb_blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null \
                   | head -1 | sed 's/.*=//' | tr -d ' \r')"
-# Same three-value vocabulary the card writes and asb_blur_apply.sh reads. Both "off"
-# and "light" set the compositor half, which is what disable_blurs=1 in system.prop
-# represents - so both compare equal to _asb_blur_have=1 and neither triggers a pointless
-# rebuild. Getting this wrong is how bt_absvol_mode used to revert on every boot.
-# Three states, and the probe has to tell them apart the same way the writer does.
-# disable_blurs=1 is the OFF marker only - light does not set it, because that property
-# kills blur globally including the notification backdrop. gaussianlevel is what both
-# off and light write, so its presence WITHOUT disable_blurs means light.
+# Same three-value vocabulary the card writes and asb_blur_apply.sh reads.
+# Getting this wrong is how bt_absvol_mode used to revert on every boot.
 case "$_asb_blur_want" in
   1|on|true|off|light|partial) _asb_blur_want=1 ;;
   *)                           _asb_blur_want=0 ;;
@@ -2503,12 +2454,7 @@ if [ -f "$MODDIR/runtime/asb_blur_apply.sh" ]; then
   else
     # Re-assert BOTH directions, not just "off".
     #
-    # This branch runs when system.prop already matches, i.e. the common case - and it
-    # only ever wrote 1. So a user who turned blur off and then back on kept the
-    # WindowManager global at 1 across every subsequent boot: the compositor half was
-    # restored, the window half was not, and the shade stayed unblurred with the setting
-    # showing stock. OOS also rewrites this table on its own, which is exactly why the
-    # re-assert exists in the first place.
+    # This branch runs when system.prop already matches, i.e.
     [ "$_asb_blur_want" = "1" ] \
       && settings put global disable_window_blurs 1 >/dev/null 2>&1 \
       || settings put global disable_window_blurs 0 >/dev/null 2>&1
@@ -2521,10 +2467,8 @@ fi
 ) >/dev/null 2>&1 &
 # Reconcile and the watchdog now run on the governor's clock.
 #
-# Starting them here as well would mean two schedulers for the same job, and the resident
-# shell loop is the more expensive of the two - it exists only to hold a sleep. Started
-# here only as a fallback, after giving the governor a chance to come up: if it did, it
-# owns the schedule; if it did not, these are exactly what is supposed to notice.
+# Starting them here as well would mean two schedulers for the same job, and the resident shell
+# loop is the more expensive of the two - it exists only to hold a sleep.
 (
   sleep 90
   if ! pgrep -f '/bin/asb$' >/dev/null 2>&1; then
