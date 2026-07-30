@@ -2128,7 +2128,7 @@ const I18N = {
     },
     optFor: {
       ui_effects_level: { auto: 'Auto', stock: 'Normal', flat: 'Simplified'},
-      wifi_scan_throttle: { auto: 'Auto', '0': 'More often', '1': 'Stock' }
+      wifi_scan_throttle: { auto: 'Stock', '0': 'More often', '1': 'Less often' }
     }
   }
 };
@@ -2488,7 +2488,7 @@ const CFG_ITEMS = [
     desc:'Same as Packet Queue, for WiFi only. As global uses the setting above.' },
   { key:'net_qdisc_mobile', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'\u00b7 Queue: mobile',
     desc:'Same as Packet Queue, for mobile data only. As global uses the setting above.' },
-  { key:'net_route_tune', type:'seg', def:'auto', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
+  { key:'net_route_tune', type:'seg', def:'auto', stock:'off', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
     desc:'How much the phone sends in one burst before waiting for a reply. Smart lets ASB look at your actual WiFi or mobile speed and size it: bigger on a fast link, left at the factory value on a weak one, because a big burst there only causes losses. Moderate uses the factory value everywhere. Aggressive goes one class higher if you trust your link. Stock puts it back. Start with Smart.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
     desc:'The region decides which WiFi channels your phone may use, and that sets the ceiling on link speed. CR opens the widest set of channels - usually the fastest WiFi. Stock keeps the region the phone gets from the SIM. IMPORTANT: using channels not permitted where you are is your call and your responsibility.' },
@@ -2683,10 +2683,17 @@ function cfgStatus(it, cur) {
 // just when a switch is on. A segment parked on "hifi" or a slider at 4 is every bit as
 // non-stock as a toggle, and the user should be able to spot all of them at a glance.
 function cfgIsActive(it, cur) {
+  // "Active" means "differs from the untouched device", which is not always the same as
+  // "differs from the default". For most keys the shipped default IS stock, so def works.
+  // Network Buffers is the exception: its default 'auto' is an ACTIVE tuning - ASB measures
+  // the link and sizes the windows - while 'off' is the value that restores the route. Left
+  // on def, the card sat unlit while tuning was running and lit up when it was switched
+  // back to stock, which is backwards. An item can now name its stock value explicitly.
+  const base = (it.stock !== undefined) ? it.stock : it.def;
   if (cur === undefined || cur === null) return false;
   if (it.type === 'bool') return String(cur) === '1';
-  if (it.type === 'range') return (parseInt(cur, 10) || 0) !== (parseInt(it.def, 10) || 0);
-  return String(cur) !== String(it.def);
+  if (it.type === 'range') return (parseInt(cur, 10) || 0) !== (parseInt(base, 10) || 0);
+  return String(cur) !== String(base);
 }
 
 // The hub: one tile per group, with how many settings are inside and how many of those
