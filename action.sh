@@ -472,8 +472,8 @@ _nfmt() {
                  fi ;;
   esac
 }
-_nfmt "congestion" net_congestion "$_cc"
-_nfmt "queue"      net_qdisc      "$_qd"
+_nfmt "ramp (other links)" net_congestion "$_cc"
+_nfmt "queue (other links)" net_qdisc "$_qd"
 
 # Per-link overrides print only when set, so the section stays short on a default install
 # and grows only for someone who has actually split Wi-Fi from mobile.
@@ -481,7 +481,7 @@ for _pk in net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mo
   _pv="$(_cfg "$_pk")"
   case "$_pv" in ''|auto) continue ;; esac
   case "$_pk" in *_wifi) _plabel="Wi-Fi" ;; *) _plabel="mobile" ;; esac
-  case "$_pk" in net_congestion_*) _pwhat="congestion" ;; *) _pwhat="queue" ;; esac
+  case "$_pk" in net_congestion_*) _pwhat="ramp" ;; *) _pwhat="queue" ;; esac
   case "$(_nverd "$_pk")" in
     unavailable) echo "       ${_pwhat} · ${_plabel}: ${_pv} · NOT SUPPORTED" ;;
     failed)      echo "       ${_pwhat} · ${_plabel}: ${_pv} · NOT APPLIED" ;;
