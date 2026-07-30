@@ -258,6 +258,17 @@ body::before, body::after {
   gap: 10px;
   padding: 8px 20px;
   border-radius: 100px;
+  /* Wrap instead of forcing the page to scroll sideways.
+   *
+   * "Profile: BALANCED" plus two chips is a fixed amount of text in a pill that cannot
+   * shrink. At a higher override density it is simply wider than the screen, and the page
+   * grows a horizontal scrollbar - reported on a OnePlus 13 at 480 dpi, where the pill ran
+   * past the right edge. Letting it wrap puts the chips on a second line on those devices
+   * and changes nothing where it already fitted. */
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 8px;
+  max-width: 100%;
   background: linear-gradient(135deg, rgba(0,240,180,0.08), rgba(0,212,255,0.05));
   border: 1px solid rgba(0,240,180,0.15);
 }
@@ -341,6 +352,12 @@ body::before, body::after {
   position: relative;
   display: flex;
   align-items: center;
+  /* Tighter at high density so four profiles fit without scrolling.
+   *
+   * The padding and gap here are in CSS pixels, so on a device with a higher override
+   * density the same four cards take noticeably more of the screen and push the list past
+   * the fold - reported alongside the request to make them a little narrower. Trimming via
+   * a media query keeps the roomy version where there is room for it. */
   gap: 16px;
   padding: 18px 20px;
   border-radius: 20px;
@@ -351,6 +368,12 @@ body::before, body::after {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
 }
+@media (max-height: 780px), (max-width: 400px) {
+  .pbtn { gap: 12px; padding: 13px 15px; border-radius: 17px; }
+  .pbtn .pico { width: 44px; height: 44px; font-size: 22px; }
+  .pbtn .pname { font-size: 15px; }
+}
+
 
 .pbtn::before {
   content: '';
@@ -1383,6 +1406,31 @@ body.config-active #livePage.open {
   display: flex;
   align-items: center;
   gap: 13px;
+  /* Let the controls drop to their own line when the title needs the width.
+   *
+   * The previous layout assumed a segment control would always fit beside the title, and
+   * it does - at the density this was designed on. On a device with a higher override
+   * density (a OnePlus 13 at 480 against 476 here, physical 640 against 560) the same
+   * labels are wider in CSS pixels, the title wraps to two lines, and the second line runs
+   * straight under the buttons: "Очередь: мобильная" reading through "авто fq fq_codel".
+   *
+   * Wrapping fixes it without guessing at any density. The title keeps a sensible minimum
+   * and the buttons move down only when they genuinely do not fit, so nothing changes on
+   * a phone where the old layout was already fine. */
+  flex-wrap: wrap;
+  row-gap: 9px;
+}
+/* Name takes the remaining width but never squeezes below something readable - that
+   minimum is what pushes the controls onto their own line instead of overlapping. */
+.cfg-row-top > .cfg-main { flex: 1 1 148px; min-width: 148px; }
+/* Controls: never shrink, and when they do wrap, line up under the text rather than
+   under the icon. */
+.cfg-row-top > .cfg-seg,
+.cfg-row-top > .cfg-range { flex: 0 0 auto; margin-left: auto; }
+@media (max-width: 400px) {
+  /* Narrow or dense screens: give the controls the full row from the start. */
+  .cfg-row-top > .cfg-seg,
+  .cfg-row-top > .cfg-range { flex: 1 1 100%; margin-left: 57px; }
 }
 .cfg-icon {
   flex: 0 0 auto;
@@ -2017,6 +2065,10 @@ const I18N = {
     t_rebooting: 'Перезагрузка…',
     // config items: name + desc keyed by config key
     cfg: {
+      lockscreen_skip_delayed: { name: 'Пропуск экрана блокировки',
+        desc: 'В Android есть «Блокировать через N после отключения экрана» — телефон остаётся разблокированным какое-то время после гашения экрана. Но OxygenOS всё равно показывает экран блокировки и требует свайп. С этим твиком телефон в течение этого времени просыпается сразу туда, где вы были. Как только отсрочка истекла — или вы сами нажали кнопку питания, чтобы заблокировать — экран блокировки работает ровно как раньше. Телефон не остаётся разблокированным дольше, чем решил сам Android, и твик ничего не делает, если у вас нет блокировки экрана или отсрочка нулевая.' },
+      sustained_temp_mode: { name: 'Точка троттлинга',
+        desc: 'Когда ASB начинает придерживать производительность, чтобы телефон был холоднее. «Сток» — порог вашего устройства, считанный из тепловой зоны процессора при загрузке, а не число, придуманное для телефонов вообще. «Умное» — начинает с него же и поднимает на 2 градуса каждый раз, когда нагрузка доходит до устойчивой быстрее минуты: устройство, которое срабатывает слишком рано, само себя выравнивает. «Ручное» — ровно то значение, что стоит на ползунке ниже, и его ничто не сдвинет. Выбирайте «Ручное», если измеряли своё устройство и знаете, чего хотите.' },
       sustained_temp_enter: { name: 'Температура троттлинга',
         desc: 'Температура, с которой ASB начинает сдерживать производительность, чтобы телефон был холоднее. Ниже \u2014 вмешивается раньше: прохладнее, но пиковая скорость уходит быстрее. Выше \u2014 дольше работает в полную силу и сильнее греется. 65 \u2014 значение по умолчанию. Это собственный порог ASB, а не вендорный: у прошивки свои жёсткие пределы ниже, и поднять их отсюда нельзя, поэтому высокое значение не делает телефон опасным \u2014 просто первым решение примет вендор.' },
 
@@ -2097,7 +2149,7 @@ const I18N = {
       mild: 'умеренно', strong: 'сильно', max: 'макс',
       light: 'слабо', medium: 'средне', flat: 'плоско', auto: 'авто',
       eq_compat: 'под эквалайзер', hifi: 'hi-fi',
-      '3': '+3 dB', '6': '+6 dB', '9': '+9 dB'
+      '3': '+3 dB', '6': '+6 dB', '9': '+9 dB', manual: 'ручное', smart: 'умное'
     },
     // Per-card labels. These win over the shared ones above.
     optFor: {
@@ -2423,7 +2475,10 @@ const SNAP_KEYS = [
   'dsp_bass',
   'dsp_compressor',
   'dsp_effect_abi',
-  'sustained_temp_enter'];
+  'sustained_temp_enter',
+  'sustained_temp_mode',
+  'sustained_temp_ceiling',
+  'lockscreen_skip_delayed'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -2459,6 +2514,8 @@ const CFG_ITEMS = [
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
+  { key:'sustained_temp_mode', type:'seg', def:'smart', opts:['stock','smart','manual'], name:'Throttling Point',
+    desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
   { key:'sustained_temp_enter', type:'range', def:'65', min:40, max:70, step:1, name:'Throttling Temperature',
     desc:'The temperature at which ASB starts holding performance back to keep the phone cooler. Lower means it intervenes sooner - a cooler phone that gives up peak speed earlier; higher lets it run hard for longer and get warmer. 65 is the default. This is ASB\u2019s own threshold, not the vendor\u2019s: the firmware keeps its own hard limits underneath and those cannot be raised from here, so a high value does not make the phone unsafe, it just means the vendor decides first.' },
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
@@ -2471,6 +2528,8 @@ const CFG_ITEMS = [
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Almost never needed. WindowManager reads the animation scales as soon as they are written, so a plain settings change is enough and UI Speed Management works without this. The switch exists only for builds that ignore a live change, and it applies by restarting SystemUI: the screen blinks, the lock screen returns, and overlays from other modules (status-bar themes) are torn down. Only fires on a profile switch you made yourself. Turn it on only if you have confirmed the scales do not apply otherwise.' },
   // --- Display ---
+  { key:'lockscreen_skip_delayed', type:'seg', def:'off', opts:['off','on'], name:'Skip Lockscreen While Unlocked',
+    desc:'Android\u2019s Lock After Screen Timeout keeps the device unlocked for a while after the screen goes off, but OxygenOS still shows the lockscreen and asks for a swipe when you wake it. With this on, the phone wakes straight to where you were for as long as that grace period lasts. The moment the timeout expires - or you press the power button to lock deliberately - the normal lockscreen comes back exactly as before. It never keeps the device unlocked for longer than Android already decided, and it does nothing at all if you have no screen lock or a zero timeout.' },
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
@@ -2528,6 +2587,8 @@ const CFG_CAT = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
+  sustained_temp_mode:'battery', lockscreen_skip_delayed:'iface',
+  sustained_temp_mode:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
   disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
@@ -2595,7 +2656,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
+  sustained_temp_mode:'\uD83C\uDF21\uFE0F', lockscreen_skip_delayed:'\uD83D\uDD13', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
   net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDEA6', net_qdisc_mobile:'\uD83D\uDEA7', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDD0D',
   audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
@@ -3018,6 +3079,11 @@ async function cfgSet(key, val, ctl) {
     // also writes the WindowManager global, which needs no reboot at all.
     // Both are written by asb_blur_apply.sh - one script, two independent blocks.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
+      if (key === 'lockscreen_skip_delayed') {
+        // Applied live and it can refuse: with no secure lock, or an immediate lock, the
+        // script declines and says why rather than pretending it worked.
+        try { await run('sh ' + MD + '/runtime/asb_lockscreen_apply.sh >/dev/null 2>&1'); } catch (e) {}
+      }
     var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune',
       'net_congestion_wifi','net_congestion_mobile','net_qdisc_wifi','net_qdisc_mobile',
       'wifi_country','wifi_scan_throttle'];
