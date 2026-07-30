@@ -137,10 +137,9 @@ esac
 _we_name=""
 [ "$_smart_we" = "1" ] && _we_name=" (weekend)" || _we_name=" (weekday)"
 
-# Everything below is rendered in a PROPORTIONAL font dialog, not a terminal. Box
-# frames and space-padded columns cannot line up there (an emoji is two cells wide but
-# one character), which is why the old ╭──╮ frame came out ragged. Structure comes from
-# blank lines and indentation instead - those survive any font.
+# Everything below is rendered in a PROPORTIONAL font dialog, not a terminal.
+# Box frames and space-padded columns cannot line up there (an emoji is two cells wide but one
+# character), which is why the old ╭──╮ frame came out ragged.
 echo ""
 echo "  🚀  AutoSystemBoost V61"
 if [ "$_smart_enabled" = "1" ]; then
@@ -153,18 +152,16 @@ else
   echo "  🎛  Profile: ${PROFILE} (manual — Smart off)"
 fi
 _bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
-# Show the LIVE learning weight, the same number the WebUI shows as "battery-lean", so
-# the two screens agree. smart_battery_bias is a different thing - it is the user's
-# configured tilt, not the current runtime weight - so it was showing 60% while the
-# WebUI showed the live 100%, and they looked like a bug. Report the live alpha here and
-# label the configured tilt separately below.
+# Show the LIVE learning weight, the same number the WebUI shows as "battery-lean", so the two
+# screens agree.
+# smart_battery_bias is a different thing - it is the user's configured tilt, not the current
+# runtime weight - so it was showing 60% while the WebUI showed the live 100%, and they looked
+# like a bug.
 _alpha_live="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 [ -n "$_alpha_live" ] && echo "  ⚖️  Battery lean: $((_alpha_live / 10))% (live)"
 [ -n "$_bias" ] && [ "$_bias" != "0" ] && echo "  🔋  Battery tilt set to: $((_bias / 10))%"
-# The throttling threshold is now user-settable, so it belongs where the profile is -
-# reading a temperature elsewhere in the report and not knowing what it is compared
-# against was the gap.
-# Config/feature readers, defined BEFORE anything reads them.
+# The throttling threshold is now user-settable, so it belongs where the profile is - reading a
+# temperature elsewhere in the report and not knowing what it is compared against was the gap.
 #
 # They used to sit further down, after the throttling line already called _cfg - so
 # the action screen printed "_cfg: not found" right under the battery tilt and the
@@ -236,12 +233,12 @@ _dsp_so=0
 _cc_drv=""
 _vb_n=0
 
-# Every place an effects config can live on any of these devices, in one list so
-# the AUDIO section and the NOT APPLIED check below can never disagree about where
-# to look. Both names matter: the SKU dirs on SM8650 carry audio_effects.xml, NOT
-# audio_effects_config.xml - the installer registered into exactly those two files
-# and the checker, which globbed only the *_config name under sku_*, reported the
-# effect as missing on a device where it was live.
+# Every place an effects config can live on any of these devices, in one list so the AUDIO
+# section and the NOT APPLIED check below can never disagree about where to look.
+# Both names matter: the SKU dirs on SM8650 carry audio_effects.xml, NOT
+# audio_effects_config.xml - the installer registered into exactly those two files and the
+# checker, which globbed only the *_config name under sku_*, reported the effect as missing on
+# a device where it was live.
 _asb_effect_files() {
   for _d in /odm/etc /vendor/etc /vendor/odm/etc /system/etc \
             /vendor/etc/audio/sku_* /odm/etc/audio/sku_* \
@@ -289,11 +286,6 @@ if [ -n "$_g_state" ]; then
 fi
 
 # Show the SAME learner numbers the WebUI shows, so the two screens agree.
-# WebUI reads learner_state.json smart_sessions.total + last_confidence; the governor now
-# also writes those to the flat state as smart_sessions_total / smart_confidence. The old
-# hist_sessions was the per-tier count (resets on tier change) and smart_quality_last was
-# a different metric, so action showed "2 sessions / last quality 36" while the WebUI
-# showed "337 ses / strong 100%". Use the cumulative total + confidence tier instead.
 _l_sess="$(_st smart_sessions_total)"
 [ -n "$_l_sess" ] || _l_sess="$(_st hist_sessions)"   # fall back on older governors
 _l_conf="$(_st smart_last_confidence)"
@@ -306,10 +298,10 @@ _l_drain="$(_st smart_drain_pctph_x10)"
 case "$_l_drain" in ''|0) _l_drain="$(_st smart_drain_ewma_x10)" ;; esac
 # Not gated on Smart being active.
 #
-# smart_mode_enabled goes to 0 when the profile leaves Smart, and that took the whole
-# LEARNING block with it - so a user who dropped to 20% and got auto-switched to Battery
-# saw "unknown, 0 sessions" on a governor that had ten sessions banked and knew it. The
-# sessions are history, not a live feature: they do not stop existing because the current
+# smart_mode_enabled goes to 0 when the profile leaves Smart, and that took the whole LEARNING
+# block with it - so a user who dropped to 20% and got auto-switched to Battery saw "unknown, 0
+# sessions" on a governor that had ten sessions banked and knew it.
+# The sessions are history, not a live feature: they do not stop existing because the current
 # profile is not Smart, and they are what Smart will use again next time it runs.
 if [ -n "${_l_sess}${_l_pkg}" ]; then
   echo ""
@@ -407,11 +399,11 @@ _c_low="$(_cfg CAMERA_LOWLIGHT)";   case "$_c_low"   in ''|0) _c_low=""   ;; esa
 # Camera hold belongs here, not under SYSTEM.
 #
 # It reports that the governor is holding interactive caps BECAUSE the camera pipeline is
-# streaming - a camera fact that was printed three sections away from everything else about
-# the camera. The block that printed it also carried a mangled `echo ""echo ""`, emitting a
-# stray blank line, and it was gated on lpm_mode and the LPM category, which have nothing
-# to do with the camera: on a device with LPM switched off, camera hold was never reported
-# at all.
+# streaming - a camera fact that was printed three sections away from everything else about the
+# camera.
+# The block that printed it also carried a mangled `echo ""echo ""`, emitting a stray blank
+# line, and it was gated on lpm_mode and the LPM category, which have nothing to do with the
+# camera: on a device with LPM switched off, camera hold was never reported at all.
 if [ "$(_st camera_hold)" = "1" ]; then
   echo "       hold ACTIVE · interactive caps held, cpuset + uclamp lifted"
 fi
@@ -457,10 +449,8 @@ if [ "$(_feat NET)" = "1" ]; then
 
 # What the user ASKED for, alongside what the kernel is actually running.
 #
-# The lines above read the live sysctls - true, but not the whole story: a request the
-# kernel refused looks identical to one that was never made. Pairing the config with the
-# verdict asb_net_apply.sh writes closes that gap, so "bbr requested, cubic running, not
-# supported" reads as one thought instead of three separate mysteries.
+# The lines above read the live sysctls - true, but not the whole story: a request the kernel
+# refused looks identical to one that was never made.
 _nv="/data/adb/asb/net_apply_result"
 _nverd() { [ -f "$_nv" ] && grep -E "^$1=" "$_nv" 2>/dev/null | head -1 | sed 's/.*=//'; }
 _nfmt() {
@@ -537,11 +527,7 @@ fi
 
   # Modem LPM: a NETWORK line, gated on LPM, with its own wording.
   #
-  # Three things were wrong. It had its own heading using the same 📡 as Wi-Fi, so two
-  # unrelated readings looked like one topic. It was gated on the WIFI category, which does
-  # not control it - with WIFI off the modem state simply vanished. And $_lpm was set three
-  # sections earlier by a block that has since moved, so it depended on an assignment no
-  # longer above it; read it here, where it is used.
+  # Three things were wrong.
   if [ "$(_feat LPM)" = "1" ]; then
     _lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null)"
     case "$_lpm" in
@@ -557,12 +543,10 @@ if [ "$_cam_hold" = "1" ]; then
 
 echo ""
   echo "  📶  WI-FI"
-# Read what the DRIVER actually ended up with, not `settings get global
-# wifi_country_code`. That settings key is telephony-derived and the framework keeps
-# rewriting it from the SIM, so it reported the SIM's country (IT) while the module's
-# override was live - which looked exactly like the tweak had failed.
-# The override lives in WifiService (force-country-code), and WifiCountryCode's dump is
-# where you can see both it and what the driver took.
+# Read what the DRIVER actually ended up with, not `settings get global wifi_country_code`.
+# That settings key is telephony-derived and the framework keeps rewriting it from the SIM, so
+# it reported the SIM's country (IT) while the module's override was live - which looked
+# exactly like the tweak had failed.
 _wifi_dump="$(dumpsys wifi 2>/dev/null)"
 _cc_drv="$(echo "$_wifi_dump" | grep -iE 'mDriverCountryCode' | head -1 | grep -oE '[A-Z]{2}[[:space:]]*$' | tr -d ' ')"
 _cc_ovr="$(echo "$_wifi_dump" | grep -iE 'mOverrideCountryCode' | head -1 | grep -oE '[A-Z]{2}[[:space:]]*$' | tr -d ' ')"
@@ -666,12 +650,9 @@ for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
   fi
 done
 [ -n "$_catline" ] && echo "       ${_catline}"
-# Magisk does its magic mounts in a private namespace, so /proc/mounts read from
-# here shows zero entries for the module even when the overlay is perfectly live -
-# on KernelSU the same grep finds them. Printing a bare "0 mounts" therefore looked
-# like a broken install on every Magisk device. Probe a file the overlay actually
-# delivers and report what that says instead; fall back to the count where the
-# namespace does expose it.
+# Magisk does its magic mounts in a private namespace, so /proc/mounts read from here shows
+# zero entries for the module even when the overlay is perfectly live - on KernelSU the same
+# grep finds them.
 _mnt="$(grep -c 'AutoSystemBoost' /proc/mounts 2>/dev/null)"
 case "$_mnt" in ''|*[!0-9]*) _mnt=0 ;; esac
 _ovl_live=0
@@ -702,13 +683,10 @@ if [ -n "$_abo" ]; then
 fi
 
 
-# ── Configured vs actually applied ──────────────────────────────────────────────
-# The sections above report what the config ASKS for. This one checks the system for
-# evidence that each thing actually landed, and lists only what did not. A setting that
-# silently does nothing is invisible everywhere else - that is precisely how "DSP +9 dB"
-# shipped for weeks next to a library that was never installed.
-# Only claims that can be checked cheaply and unambiguously are made here; anything we
-# cannot verify is simply not asserted, rather than guessed at.
+# ── Configured vs actually applied ────────────────────────────────────────────── The sections
+# above report what the config ASKS for.
+# A setting that silently does nothing is invisible everywhere else - that is precisely how
+# "DSP +9 dB" shipped for weeks next to a library that was never installed.
 _bad=""
 _add_bad() { _bad="${_bad}${_bad:+
 }       $1"; }
@@ -730,20 +708,20 @@ fi
 # DSP -> library staged AND registered; either half missing means silence
 if [ "$_a_dsp" != "off" ]; then
   [ "$_dsp_so" = "1" ] || _add_bad "DSP +${_a_dsp} dB — libasbdsp.so not installed (reinstall)"
-  # Two different failures hide behind "not registered", and they need different fixes:
-  # the staged copy under /data/adb/asb/odm_patched is what install.sh patches, and a
-  # bind mount is what makes it the live file. Patched-but-not-bound means the mount
-  # was skipped (bootloop fuse, or the boot counter tripped); not-patched-at-all means
-  # install never ran the registration. Report which one it is.
+  # Two different failures hide behind "not registered", and they need different fixes: the
+  # staged copy under /data/adb/asb/odm_patched is what install.sh patches, and a bind mount is
+  # what makes it the live file.
+  # Patched-but-not-bound means the mount was skipped (bootloop fuse, or the boot counter
+  # tripped); not-patched-at-all means install never ran the registration.
   _reg_live=0; _reg_stage=0
   for _ec in $(_asb_effect_files); do
     grep -q 'asb_loudness' "$_ec" 2>/dev/null && { _reg_live=1; break; }
   done
-  # Search the whole staged tree AND the module overlay. The old two-path probe
-  # missed every device whose effects config lives under a per-SKU directory
-  # (sku_cliffs, sku_pineapple, ...), so a registration that had actually landed
-  # was still reported as "install never ran the registration" - the wrong fix
-  # for the user to be told to apply.
+  # Search the whole staged tree AND the module overlay.
+  # The old two-path probe missed every device whose effects config lives under a per-SKU
+  # directory (sku_cliffs, sku_pineapple, ...), so a registration that had actually landed was
+  # still reported as "install never ran the registration" - the wrong fix for the user to be
+  # told to apply.
   for _ec in $(find /data/adb/asb/odm_patched \
                     /data/adb/modules/AutoSystemBoost/system \
                     -type f -name 'audio_effects*.xml' 2>/dev/null); do
@@ -764,11 +742,9 @@ if [ "$_a_dsp" != "off" ]; then
 fi
 
 # blur -> report WHICH properties took, not just that something did not.
-# ro.* and persist.* fail for different reasons: persist.* go through property_service
-# normally, while ro.* are read-only and need resetprop to write the property area
-# directly. If the persist ones land and the ro ones do not, the root manager's
-# resetprop cannot touch read-only properties on this setup - which is a completely
-# different problem from "the tweak did not run".
+# If the persist ones land and the ro ones do not, the root manager's resetprop cannot touch
+# read-only properties on this setup - which is a completely different problem from "the tweak
+# did not run".
 if [ "$_blur" = "1" ]; then
   # The real switch first. If persist.sys.sf.disable_blurs is 1, SurfaceFlinger has blur
   # off regardless of the capability/oplus keys, so that alone means applied.
@@ -807,13 +783,9 @@ if [ "$_blur" = "1" ]; then
 fi
 
 # wi-fi -> driver domain.
-# ASB does not force a regulatory domain any more: asb_wifi_cc_heal actively
-# UNDOES the old force-country-code, and apply_wifi_country derives the code
-# from the SIM. The check below used to assert a hardcoded "CR", so on every
-# device that has ever had a SIM in it this line was guaranteed to fire - a
-# permanent false alarm sitting in NOT APPLIED next to two real findings.
-# Assert what the module actually asked for instead: a manual WIFI_COUNTRY
-# override. With no override there is nothing to verify, so nothing is claimed.
+# The check below used to assert a hardcoded "CR", so on every device that has ever had a SIM
+# in it this line was guaranteed to fire - a permanent false alarm sitting in NOT APPLIED next
+# to two real findings.
 if [ "$(_feat WIFI)" = "1" ] && [ -n "$_cc_drv" ] && [ -n "$_cc_want" ] \
    && [ "$_cc_drv" != "$_cc_want" ]; then
   _add_bad "Wi-Fi ${_cc_want} — driver is on ${_cc_drv} (override did not take)"
