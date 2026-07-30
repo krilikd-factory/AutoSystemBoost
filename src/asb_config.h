@@ -24,7 +24,7 @@ typedef struct {
      * a user who deliberately chose a LOWER throttle point in the WebUI: they ask to
      * throttle at 50 and the module pushes it back to 52, 54, ... 68. The user's number is
      * a ceiling for self-tuning, not a starting suggestion. */
-    int   sustained_temp_enter_user;
+    int   sustained_temp_enter_user;   /* ceiling for self-tuning, see below */
     int   sustained_temp_exit;
     float sustained_level;
     int   perf_sustained_temp_enter;
@@ -334,8 +334,18 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "sustained_load_min")) c->sustained_load_min = (float)atof(v);
     else if (!strcmp(k, "sustained_temp_enter")) {
         c->sustained_temp_enter = atoi(v);
-        /* Remember what was asked for, so self_tune has a ceiling it cannot exceed. */
+        /* Default the ceiling to the value itself: with no explicit ceiling key, the
+         * configured number is exactly what the user wants and self_tune must not pass it.
+         * sustained_temp_ceiling below overrides this when the mode allows self-tuning. */
         c->sustained_temp_enter_user = c->sustained_temp_enter;
+    }
+    else if (!strcmp(k, "sustained_temp_ceiling")) {
+        /* How far self_tune may walk the throttle point up.
+         *
+         * Written by the shell from sustained_temp_mode: equal to the value itself for
+         * "stock" and "manual" (self-tuning off), higher for "smart" (self-tuning on).
+         * Keeping it a separate key means the C side never has to know modes exist. */
+        c->sustained_temp_enter_user = atoi(v);
     }
     else if (!strcmp(k, "sustained_temp_exit"))  c->sustained_temp_exit  = atoi(v);
     else if (!strcmp(k, "perf_sustained_temp_enter")) c->perf_sustained_temp_enter = atoi(v);
