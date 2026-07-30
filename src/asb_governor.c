@@ -54,11 +54,11 @@ static int g_last_reassert_ok = 0;
 static asb_smart_store_t   g_smart_store;
 static asb_smart_runtime_t g_smart_rt;
 
-/* V50: smart profile with a strong battery lean behaves like the battery
- * profile at night, but quiet-night ultra-economy and deep-idle sensor
- * economy were hard-gated on PROFILE_BATTERY — so on a full night in
- * smart the governor never reduced its own sensor cadence. Treat
- * battery-leaning smart as battery for those economies. */
+/*
+ * V50: smart profile with a strong battery lean behaves like the battery profile at night, but
+ * quiet-night ultra-economy and deep-idle sensor economy were hard-gated on PROFILE_BATTERY —
+ * so on a full night in smart the governor never reduced its own sensor cadence.
+ */
 static int asb_profile_battery_like(int profile_idx) {
     if (profile_idx == PROFILE_BATTERY) return 1;
     if (profile_idx == PROFILE_SMART &&
@@ -71,9 +71,11 @@ static time_t              g_smart_last_save_ts = 0;
 static time_t              g_smart_last_backup_ts = 0;
 static int                 g_smart_sessions_since_save = 0;
 
-/* — Foreground package detection observability.
- * These mirror the most recent detection outcome so write_state() can publish
- * them to /dev/.asb/state for logkit + WebUI. Updated each app_cache_refresh. */
+/*
+ * — Foreground package detection observability.
+ * These mirror the most recent detection outcome so write_state() can publish them to
+ * /dev/.asb/state for logkit + WebUI.
+ */
 static int g_pkg_detect_ok = 0;        /* 1 if last detection got a real pkg */
 static int g_pkg_detect_source = 0;    /* 1=cmd activity top, 2=resumed, 3=window focus */
 static int g_pkg_detect_status = 0;    /* asb_pkg_status_t code */
@@ -256,16 +258,15 @@ static void storm_shield_reset(void) {
 
 static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
     int p = fsm->profile_idx;
-    /* V56 HEAT FIX: SMART matched none of the branches below and fell through
-     * to the else = the PERFORMANCE plan — full sensor polling + headroom reads
-     * + the anti-clamp armed (ASB re-raising vendor thermal clamps up to 95°C)
-     * even with the screen OFF, and deep_sleep never enabled. Field logs showed
-     * exactly that: cap_owner=vendor on 59% of ticks (a write war with the
-     * vendor thermal engine), 96-235 mA and 40°C surface in DEEP_IDLE, and the
-     * user report "smart = boiler, balanced = fine". Smart is by design a blend
-     * of battery and balanced, so it plans as its battery self when idle /
-     * screen-off (it already tracks idle telemetry battery-style) and as
-     * balanced when active — never as performance. */
+    /*
+     * V56 HEAT FIX: SMART matched none of the branches below and fell through to the else =
+     * the PERFORMANCE plan — full sensor polling + headroom reads + the anti-clamp armed (ASB
+     * re-raising vendor thermal clamps up to 95°C) even with the screen OFF, and deep_sleep
+     * never enabled.
+     * Field logs showed exactly that: cap_owner=vendor on 59% of ticks (a write war with the
+     * vendor thermal engine), 96-235 mA and 40°C surface in DEEP_IDLE, and the user report
+     * "smart = boiler, balanced = fine".
+     */
     if (p == PROFILE_SMART)
         p = (!screen_on || fsm->state <= ASB_STATE_LIGHT_IDLE)
             ? PROFILE_BATTERY : PROFILE_BALANCED;
@@ -470,8 +471,10 @@ static const char *g_pstats_files[3] = {
     PERSISTENT_STATS_DIR "/pstats_balanced.json",
     PERSISTENT_STATS_DIR "/pstats_performance.json"
 };
-/* session_history.jsonl moved to persistent /data/adb/asb/ so learning
- * survives module reinstall/upgrade. Legacy path kept for one-time migration. */
+/*
+ * session_history.jsonl moved to persistent /data/adb/asb/ so learning survives module
+ * reinstall/upgrade.
+ */
 #define SESSION_HISTORY_FILE        "/data/adb/asb/session_history.jsonl"
 #define SESSION_HISTORY_FILE_LEGACY "/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl"
 #define SESSION_HISTORY_MAX   500
@@ -503,9 +506,11 @@ static inline const char *cap_source_classify(int profile_cap,
     if (actual_sysfs <= 0)  return "policy_unknown";
     if (hw_ceiling > 0 && actual_sysfs > hw_ceiling + 50000) return "policy_unknown";
 
-    /* Shell-only branch: runtime_declared==0 means governor didn't register
-     * caps via msm_performance (typical for battery profile where caps are
-     * applied via service.sh shell-layer only). Compare against profile directly. */
+    /*
+     * Shell-only branch: runtime_declared==0 means governor didn't register caps via
+     * msm_performance (typical for battery profile where caps are applied via service.sh
+     * shell-layer only).
+     */
     if (runtime_declared <= 0) {
         if (profile_cap <= 0) return "policy_unknown";
         if (actual_sysfs == profile_cap) return "shell_applied";
@@ -797,18 +802,13 @@ static int    g_budget_bias_streak = 0;
 static int asb_cap_writes_should_back_off(void);
 static const char *asb_cap_owner_name(int o);
 
-/* — V50 night window learner.
- * The static night_quiet_hour_start/end pair (23→6) assumed everyone
- * sleeps the same hours. The learner observes the user's real rhythm:
- *   sleep onset = an evening screen-off that survives ASB_NIGHT_ONSET_HOLD_S;
- *   wake       = the first sustained screen-on after ASB_NIGHT_MIN_SLEEP_S
- *                of cumulative darkness (brief mid-night checks are
- *                cancelled if the screen goes dark again within 10 min).
- * Both are EWMA'd as minutes-of-day with circular midnight wrap and
- * persisted, so after night_quiet_auto_min_samples nights the learned
- * window replaces the static hours for quiet-night acceleration and for
- * the Smart sleep override (which previously ended at the fixed 09:00
- * daypart boundary even when the user was still asleep). */
+/*
+ * — V50 night window learner.
+ * Both are EWMA'd as minutes-of-day with circular midnight wrap and persisted, so after
+ * night_quiet_auto_min_samples nights the learned window replaces the static hours for
+ * quiet-night acceleration and for the Smart sleep override (which previously ended at the
+ * fixed 09:00 daypart boundary even when the user was still asleep).
+ */
 #define NIGHT_WINDOW_FILE "/data/adb/asb/night_window.conf"
 static int    g_night_sleep_min = -1;
 static int    g_night_wake_min  = -1;
@@ -1086,17 +1086,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "quarantine=%d\nuser_id=%d\nquarantine_left=%ld\n",
                 fsm->plan.quarantine, g_last_user_id, qleft);
     }
-    /* Warm-up flag.
-     *
-     * The state file is written from the very first tick, before the governor has
-     * detected a foreground package or settled its profile - so those first writes carry
-     * initialised defaults, not observations. A UI reading them shows nonsense that
-     * corrects itself a moment later: app hint "gaming" on a device that has not opened a
-     * game, profile "balanced" while Smart is active. Reported exactly that way.
-     *
-     * Rather than guess at plausible defaults, say plainly that there is nothing to read
-     * yet and let the UI show a placeholder. Two ticks is enough: by then a package has
-     * been sampled and the profile has been resolved from disk. */
+    /*
+     * Warm-up flag.
+     * Reported exactly that way.
+     */
     {
         static int _warm_ticks = 0;
         if (_warm_ticks < 3) _warm_ticks++;
@@ -1124,13 +1117,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.low_battery_override ? 1 : 0,
             g_smart_rt.thermal_trend_bump,
             g_smart_trend_slope_mc_min);
-    /* Cumulative Smart session total, same number the WebUI shows from
-     * learner_state.json (smart_sessions.total). The action screen previously read
-     * hist_sessions, which is the per-tier count and resets on tier changes, so it
-     * showed e.g. "2" while the WebUI showed "337". Export the real total so the two
-     * agree. Also export last_confidence (the bucket-commit snapshot the WebUI shows as
-     * "strong 100%") so action does not show the live smart_confidence (a different,
-     * per-tick value) next to it - that mismatch read as "74% vs 100%". */
+    /*
+     * Cumulative Smart session total, same number the WebUI shows from learner_state.json
+     * (smart_sessions.total).
+     */
     fprintf(f, "smart_sessions_total=%d\nsmart_last_confidence=%d\n",
             g_smart_sessions_total, g_smart_last_confidence);
     {
@@ -1257,11 +1247,10 @@ static void v44_conflict_record(const char *cap_source) {
     g_v44_last_clamp_ts = now;
 }
 
-/* V50: the 1h window above only reset lazily when the NEXT vendor event
- * arrived. On a clean night after a noisy evening that next event never
- * came, so a stale count (e.g. 109) was reported all night, dragged
- * q_vendor to 0, flagged primary_failure=vendor_war for perfect sleep
- * sessions, and could have held the smart veto on. Expire on read. */
+/*
+ * V50: the 1h window above only reset lazily when the NEXT vendor event arrived.
+ * On a clean night after a noisy evening that next event never came, so a stale count (e.g.
+ */
 static unsigned long v44_clamp_1h_now(void) {
     if (g_v44_clamp_1h_start != 0 &&
         time(NULL) - g_v44_clamp_1h_start >= 3600) {
@@ -1271,13 +1260,9 @@ static unsigned long v44_clamp_1h_now(void) {
     return g_v44_clamp_1h;
 }
 
-/* — Cap ownership model.
- * Tracks who effectively controls cpufreq caps. ChatGPT review showed cap
- * desync was rampant: ASB declares X, shell raises to Y, vendor clamps to Z.
- * Reporting one owner field clarifies the picture and provides a hook for
- * anti-thrash: when vendor has been clamping ≥3 times in a short window,
- * mark vendor as owner and let asb_reconcile back off for hold-down period.
- * Globals declared earlier (before write_state); helpers defined here. */
+/*
+ * — Cap ownership model.
+ */
 typedef enum {
     ASB_CAP_OWNER_UNKNOWN = 0,
     ASB_CAP_OWNER_ASB     = 1,
@@ -1285,8 +1270,9 @@ typedef enum {
     ASB_CAP_OWNER_VENDOR  = 3,
 } asb_cap_owner_t;
 
-/* Compute effective owner from observed cap_source. Updates sticky state.
- * Returns the owner enum. Should be called after each cap_source observation. */
+/*
+ * Compute effective owner from observed cap_source.
+ */
 static int asb_cap_compute_owner(const char *cap_source) {
     time_t now = time(NULL);
     int owner;
@@ -1302,20 +1288,9 @@ static int asb_cap_compute_owner(const char *cap_source) {
     }
     else owner = ASB_CAP_OWNER_UNKNOWN;
 
-    /* Track recent vendor clamp pattern for anti-thrash.
-     *
-     * Two-mode detector:
-     *
-     *   Burst mode: 3+ clamps within a 60-second sliding window. Hold-down
-     *   for 15 seconds (was 30 — shorter so cap policy stays responsive).
-     *
-     *   Slow-thrash mode: 8+ clamps within a 5-minute sliding window. Same
-     *   hold-down, catches the case where vendor clamps every 30-40 seconds
-     *   without ever tripping the burst threshold.
-     *
-     * Both windows roll independently — whichever fires first wins. The
-     * 15-second hold-down is long enough to let vendor PowerHAL settle but
-     * short enough that we resume cap writes on the next reconcile pass. */
+    /*
+     * Track recent vendor clamp pattern for anti-thrash.
+     */
     if (owner == ASB_CAP_OWNER_VENDOR) {
         /* Burst window (60s) */
         if (g_cap_recent_window_start == 0 || (now - g_cap_recent_window_start) > 60) {
@@ -1504,18 +1479,19 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         if (headroom_real_pct < 0 || _hr1 < headroom_real_pct) headroom_real_pct = _hr1;
     }
     if (headroom_real_pct > 100) headroom_real_pct = 100;
-    /* classifier gets runtime_declared from msm_performance read (m->therm.perf_cap_*),
-     * not from fsm->current_caps. current_caps is what FSM *wants* to write; perf_cap_* is what
-     * actually registered with the kernel via msm_performance. When perf_cap_*==0, shell branch
-     * fires (shell_applied / shell_overridden_up / shell_overridden_down) instead of
-     * misreporting as vendor_clamp/vendor_raised. */
+    /*
+     * classifier gets runtime_declared from msm_performance read (m->therm.perf_cap_*), not
+     * from fsm->current_caps.
+     */
     const char *cap_src_p0 = cap_source_classify(profile_cap_p0,
                                                  m->therm.perf_cap_p0,
                                                  real_max_p0, hw_ceil_p0);
     const char *cap_src_p6 = cap_source_classify(profile_cap_p6,
                                                  m->therm.perf_cap_p6,
                                                  real_max_p1, hw_ceil_p1);
-    /* record conflicts to /dev/.asb/conflicts.json (written below). */
+    /*
+     * record conflicts to /dev/.asb/conflicts.json (written below).
+     */
     v44_conflict_record(cap_src_p0);
     v44_conflict_record(cap_src_p6);
     /* compute effective cap owner from observed source. The owner with
@@ -1768,9 +1744,9 @@ static int classify_environment(const asb_fsm_t *fsm);
 static int battery_fail_cause(const asb_fsm_t *fsm, int iq);
 
 static void persistent_stats_save(const asb_fsm_t *fsm) {
-    /* battery-aware save gate. Battery sessions rarely have sustained/heavy
-     * entries, but still have meaningful bat_total (deep+light+moderate).
-     * Universal gate stays for perf/balanced; battery gets its own path. */
+    /*
+     * battery-aware save gate.
+     */
     if (fsm->profile_idx == PROFILE_BATTERY) {
         long bat_total = fsm->bat_time_deep_idle_sec +
                          fsm->bat_time_light_idle_sec +
@@ -1833,8 +1809,9 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
         }
         if (trust == BAT_TRUST_DIRTY) {
             skip_per_profile = 1;
-            /* bootstrap pstats_battery.json on first meaningful session
-             * even if noisy. File exists = doctor happy. Learning = untouched. */
+            /*
+             * bootstrap pstats_battery.json on first meaningful session even if noisy.
+             */
             if (access(g_pstats_files[pidx], F_OK) != 0) {
                 pstats_save_one(g_pstats_files[pidx], ps);
                 asb_log("pstats: battery trust=%d, bootstrapped %s (no learning)",
@@ -2159,12 +2136,11 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     int sus_pct = (total_active > 0)
                   ? (int)(fsm->ses_time_sustained_sec * 100 / total_active) : 0;
 
-    /* session_history rotation — stream-based to avoid 1 MB stack allocation.
-     * Pass 1: count valid lines + total file size.
-     * Pass 2: stream-copy lines from offset that keeps the last SESSION_HISTORY_MAX,
-     *         then append new entry.
-     * If file exceeds SESSION_HISTORY_SIZE_CAP_BYTES, force tighter trim by skipping
-     * more lines until the resulting file fits. */
+    /*
+     * session_history rotation — stream-based to avoid 1 MB stack allocation.
+     * If file exceeds SESSION_HISTORY_SIZE_CAP_BYTES, force tighter trim by skipping more
+     * lines until the resulting file fits.
+     */
     int line_count = 0;
     long file_size = 0;
     {
@@ -2606,11 +2582,11 @@ static int battery_session_trust(const asb_fsm_t *fsm) {
     return BAT_TRUST_CLEAN;
 }
 
-/* V56: read /proc/pressure/memory 'some avg10' as an integer x100 (e.g. 5.23 ->
- * 523). Returns -1 if PSI is unavailable. Cheap single-line read; gives the
- * session record memory visibility. Note asb_smart.h has its own bucketed PSI
- * reader for the alpha-bias path; this one returns the raw scaled value for
- * telemetry, which is why it's separate. */
+/*
+ * V56: read /proc/pressure/memory 'some avg10' as an integer x100 (e.g.
+ * Note asb_smart.h has its own bucketed PSI reader for the alpha-bias path; this one returns
+ * the raw scaled value for telemetry, which is why it's separate.
+ */
 static int asb_read_mem_psi_x100(void) {
     FILE *f = fopen("/proc/pressure/memory", "r");
     if (!f) return -1;
@@ -2655,16 +2631,10 @@ static int classify_environment(const asb_fsm_t *fsm) {
                               (dur / (TIMER_IDLE_S > 0 ? TIMER_IDLE_S : 5)));
         if (radio_pct > 30) radio_noisy = 1;  /* >30% of ticks had active data */
     }
-    /* V56 FIX: the idle-quality (iq) branch below is only meaningful when the
-     * session is genuinely idle/screen-off dominant. During active screen-on use
-     * (gaming, browsing, mixed) deep-idle time is naturally ~0, which the old
-     * code read as iq=0 and flagged HOSTILE -- mislabelling ordinary usage and
-     * poisoning battery learning (telemetry: 66% of "hostile" sessions had <=3
-     * wakes, i.e. no radio storm at all, and hostile sessions settled 0% of the
-     * time vs 98% for quiet). So the iq-based hostile/noisy verdict is gated on
-     * the session actually being idle-dominant: at least half its tracked time in
-     * an idle state. Wake-rate and real radio activity still classify regardless,
-     * since those ARE valid hostility signals even in a short active session. */
+    /*
+     * V56 FIX: the idle-quality (iq) branch below is only meaningful when the session is
+     * genuinely idle/screen-off dominant.
+     */
     int idle_dominant = (bat_total > 0 &&
                          (fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec)
                              * 2 >= bat_total);
@@ -2741,13 +2711,12 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             tuned++;
         }
 
-        /* Never raise the throttle point above what the user configured.
-         *
+        /*
+         * Never raise the throttle point above what the user configured.
          * Hitting SUSTAINED inside a minute usually means the threshold is too low for this
          * device, and nudging it up is the right reflex - unless a person went into the WebUI
-         * and deliberately chose a LOWER one. Then this is not tuning, it is overruling: set
-         * 50 and the module walks it back to 52, 54, ... 68 with only a log line to show for
-         * it. The configured value is a ceiling, not an opening suggestion. */
+         * and deliberately chose a LOWER one.
+         */
         if (fsm->ses_time_to_first_sus > 0 &&
             fsm->ses_time_to_first_sus < 60 &&
             g_asb_cfg.sustained_temp_enter < 68 &&
@@ -3032,15 +3001,11 @@ static int parse_uevent_screen(int fd) {
     return is_power;
 }
 
-/* Smart Mode tick — compute effective runtime values and update
- * g_smart_bounds slot if a meaningful change occurred.
- * Called every metrics tick. No-op if smart_mode_enabled=0 AND profile != PROFILE_SMART.
- *
- * Inputs: current metrics + FSM state (to read profile_idx).
- * Side effect: updates g_smart_rt and (when slot-gate triggers) g_smart_bounds.
- *
- * Returns: 1 if g_smart_bounds was updated this tick (caller should refresh
- * FSM caps immediately so they reflect the new bounds), 0 otherwise.
+/*
+ * Smart Mode tick — compute effective runtime values and update g_smart_bounds slot if a
+ * meaningful change occurred.
+ * Returns: 1 if g_smart_bounds was updated this tick (caller should refresh FSM caps
+ * immediately so they reflect the new bounds), 0 otherwise.
  */
 static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     if (!m) return 0;
@@ -3075,16 +3040,8 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     g_smart_rt.is_weekend = is_weekend;
     g_smart_rt.bucket_id = bid;
 
-    /* app detection: cascading foreground package sources.
-     * Refresh every ASB_SMART_APP_CACHE_S (10s) — that's a typical user app
-     * switch interval and keeps popen cost low (~1-3 ms per detection).
-     * Falls back to load-based heuristic only when no source returned a pkg.
-     *
-     * On every refresh we set:
-     *   g_smart_rt.app_hint, app_hash       — from package or load fallback
-     *   g_pkg_detect_ok                     — 1 if we got a real pkg this cycle
-     *   g_pkg_detect_source                 — which source (1/2/3) succeeded
-     *   g_pkg_detect_status                 — OK/MISSING/STALE/SYS_UI enum
+    /*
+     * app detection: cascading foreground package sources.
      */
     if (now - g_smart_rt.app_cache_last_refresh >= ASB_SMART_APP_CACHE_S) {
         if (!screen_on) {
@@ -3114,11 +3071,10 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 if (fg_hint >= ASB_APP_HEAVY && m->cpu.load1 < 3.0f) {
                     g_smart_rt.app_hint = ASB_APP_LIGHT;
                 }
-                /* Game/heavy app is foreground but the FSM has settled into an
-                 * idle state with low GPU — the game is paused, in a menu, or
-                 * loading. Drop one level so we don't hold gaming frequencies
-                 * for a static screen. The FSM-state upgrade below re-promotes
-                 * the moment real render load returns. */
+                /*
+                 * Game/heavy app is foreground but the FSM has settled into an idle state with
+                 * low GPU — the game is paused, in a menu, or loading.
+                 */
                 else if (fg_hint >= ASB_APP_HEAVY && fsm &&
                          (fsm->state == ASB_STATE_DEEP_IDLE ||
                           fsm->state == ASB_STATE_LIGHT_IDLE) &&
@@ -3137,26 +3093,11 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
             if (g_smart_rt.app_hint < ASB_APP_GAMING &&
                 m->misc.screen_on && fsm) {
                 int fresh_pkg = (pst == ASB_PKG_OK);
-                /* Boot grace.
-                 *
-                 * The SUSTAINED branch below infers "this must be a game" from heat
-                 * plus GPU load, because an unrecognised game looks exactly like that.
-                 * So does the first couple of minutes after a reboot: zygote, dexopt,
-                 * the launcher and every app restoring its state at once drive the SoC
-                 * hot and the GPU busy with no game anywhere. Observed on a OnePlus 15
-                 * eight seconds after the governor started - SUSTAINED at 64 C - which
-                 * put "gaming" on the WebUI of a phone that had just been rebooted.
-                 *
-                 * That is worse than a wrong label. app_hint feeds app_hint_session_top,
-                 * and a session that peaked at GAMING increments sessions_gaming when it
-                 * closes - so every reboot would file itself as a gaming session in the
-                 * learner and skew what it believes about this device.
-                 *
-                 * 180 s covers the boot storm (the settling SUSTAINED entries here landed
-                 * at +8 s, +50 s and +145 s) without meaningfully delaying detection of a
-                 * real game: the FSM's own GAMING state is exempt, so a recognised game
-                 * still promotes instantly, and an unrecognised one is picked up as soon
-                 * as the window passes. */
+                /*
+                 * Boot grace.
+                 * The SUSTAINED branch below infers "this must be a game" from heat plus GPU
+                 * load, because an unrecognised game looks exactly like that.
+                 */
                 int boot_grace = (g_gov_start_ts > 0 &&
                                   (long)(now - g_gov_start_ts) < 180);
                 if (fsm->state == ASB_STATE_GAMING && fresh_pkg) {
@@ -3195,20 +3136,14 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int conf = asb_smart_confidence_x1000(b, now);
     asb_smart_compute_effective(b, conf, &g_smart_rt);
 
-    /* Optional user autonomy dial: smart_battery_bias (governor.conf, x1000,
-     * default 0 = unchanged) nudges the effective battery lean upward so Smart
-     * leans harder toward economy without touching the learner or the profiles.
-     * Applied here, before the safety overrides, so night/idle floors still take
-     * precedence. Bias is clamped to 0..600 and is confidence-scaled; the final
-     * alpha is still hard-capped at ASB_SMART_ALPHA_BATTERY_MAX_X1000 (1000), so
-     * it can never exceed pure-battery behaviour. The 600 ceiling (was 300)
-     * exists because full-day logs showed that at bias=300 / confidence=1000 an
-     * active-context base alpha (~410) only reached ~710 — short of the 800
-     * "behave like battery" threshold — so the old max couldn't push active use
-     * into the deeper economies even when the user asked for maximum lean. The
-     * learner still drives the shape; this only shifts how far the user can lean.
-     * Only meaningful when confidence is non-trivial (scaled by conf so a
-     * cold-start Smart isn't dragged battery-ward before it has learned). */
+    /*
+     * Optional user autonomy dial: smart_battery_bias (governor.conf, x1000, default 0 =
+     * unchanged) nudges the effective battery lean upward so Smart leans harder toward economy
+     * without touching the learner or the profiles.
+     * Bias is clamped to 0..600 and is confidence-scaled; the final alpha is still hard-capped
+     * at ASB_SMART_ALPHA_BATTERY_MAX_X1000 (1000), so it can never exceed pure-battery
+     * behaviour.
+     */
     if (g_asb_cfg.smart_battery_bias > 0) {
         int bbias = g_asb_cfg.smart_battery_bias;
         if (bbias > 600) bbias = 600;
@@ -3277,12 +3212,11 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 g_smart_budget_src = 1;
             }
         }
-        /* Self-correction: when the forecast has consistently missed in the same
-           direction across several windows, nudge the drain rate fed to the
-           budget by a small bounded factor (max +-12%). Under-prediction
-           (actual drain higher than forecast) raises the rate so the budget
-           leans a little sooner; over-prediction lowers it. The streak gate and
-           the cap keep this from oscillating or running away. */
+        /*
+         * Self-correction: when the forecast has consistently missed in the same direction
+         * across several windows, nudge the drain rate fed to the budget by a small bounded
+         * factor (max +-12%).
+         */
         if (g_budget_bias_streak >= ASB_BUDGET_ACC_BIAS_STREAK) {
             int _adj = g_budget_bias_streak - ASB_BUDGET_ACC_BIAS_STREAK + 1;
             if (_adj > 12) _adj = 12;
@@ -3292,15 +3226,13 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         g_drain_spike_bump = (g_drain_spike_until > now) ? 1 : 0;
         asb_smart_apply_energy_budget(battery_pct, charging,
                                       _budget_rate, now, &g_smart_rt);
-        /* Budget accuracy grading. Anchor a prediction while discharging, then
-           after a fixed window compare predicted depletion pace against the
-           actual battery delta. Charging or a missing reading resets the
-           anchor (a charge event invalidates the discharge forecast). The
-           anchor is also suspended while the night/sleep override is active:
-           deep-idle drain (often <0.3%/h) is a different regime from the active
-           EWMA the budget predicts with, so grading — and especially the
-           self-correction — must not learn from it, or it would drag the
-           daytime rate down and then under-predict once normal use resumes. */
+        /*
+         * Budget accuracy grading.
+         * The anchor is also suspended while the night/sleep override is active: deep-idle
+         * drain (often <0.3%/h) is a different regime from the active EWMA the budget predicts
+         * with, so grading — and especially the self-correction — must not learn from it, or
+         * it would drag the daytime rate down and then under-predict once normal use resumes.
+         */
         if (charging || battery_pct < 0 || g_smart_rt.night_safe_override) {
             g_budget_acc_anchor_ts = 0;
             g_budget_acc_anchor_pct = -1;
@@ -3395,12 +3327,12 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int recovery_active = 0;  /* recovery state; conservatively 0 in alpha */
     asb_smart_apply_thermal_veto(cpu_max_c, skin_temp_c, &g_asb_cfg, vendor_clamp_1h, recovery_active, &g_smart_rt);
     {
-        /* Cool-gaming engage level fed to the thermal lean:
-           0 = none, 1 = game active (engage from 40 C / 2 C/min),
-           2 = charge-aware: game active AND charging AND the battery is warm,
-               the worst thermal case (render heat stacked on charge heat) —
-               engage even earlier (38 C / 1.5 C/min). Boot settle maps to
-               level 1 (its original behavior). */
+        /*
+         * Cool-gaming engage level fed to the thermal lean: 0 = none, 1 = game active (engage
+         * from 40 C / 2 C/min), 2 = charge-aware: game active AND charging AND the battery is
+         * warm, the worst thermal case (render heat stacked on charge heat) — engage even
+         * earlier (38 C / 1.5 C/min).
+         */
         int _settle_lvl = (g_gov_start_ts > 0 &&
                            (long)(now - g_gov_start_ts) < 1200) ? 1 : 0;
         int _cool_lvl = 0;
@@ -3457,13 +3389,13 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
 
     int alpha = g_smart_rt.alpha_battery_x1000;
 
-    /* daypart smoothing: when we just crossed a daypart boundary
-     * and BOTH the previous bucket and the current bucket had decent
-     * confidence (≥ low threshold), linearly blend from prev_alpha to
-     * current_alpha over ASB_SMART_SMOOTH_S (5 min). Outside that window,
-     * or if either side is low-confidence, fall back to hard switch.
-     * Thermal veto and night override break smoothing — they're already
-     * applied above and force alpha to safety floor, which we must respect. */
+    /*
+     * daypart smoothing: when we just crossed a daypart boundary and BOTH the previous bucket
+     * and the current bucket had decent confidence (≥ low threshold), linearly blend from
+     * prev_alpha to current_alpha over ASB_SMART_SMOOTH_S (5 min).
+     * Thermal veto and night override break smoothing — they're already applied above and
+     * force alpha to safety floor, which we must respect.
+     */
     if (g_smart_rt.smoothing_active &&
         !g_smart_rt.night_safe_override &&
         !g_smart_rt.thermal_veto)
@@ -3560,16 +3492,13 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         int sig = (g_smart_rt.app_hint << 4) | (therm_bucket << 2) | screen_on_v;
         if (sig != g_smart_last_tune_sig && (now - g_smart_last_tune_ts) >= 30) {
             char cmd[256];
-            /* Run it THROUGH sh. The Magisk/KernelSU template does
-             * set_perm_recursive 0644 on every module file, so nothing under
-             * runtime/ is executable unless install.sh chmods it by name - and
-             * this one was never on that list. Exec'ing the path directly
-             * therefore failed with EACCES on every device, and because the
-             * command is backgrounded into /dev/null with its return value
-             * discarded, it failed in complete silence: the Smart dynamic tuner
-             * has never actually run. Confirmed against a real install, where
-             * neither the tuner nor the LPM script had left any trace at all
-             * while both were supposedly firing on every transition. */
+            /*
+             * Run it THROUGH sh.
+             * Exec'ing the path directly therefore failed with EACCES on every device, and
+             * because the command is backgrounded into /dev/null with its return value
+             * discarded, it failed in complete silence: the Smart dynamic tuner has never
+             * actually run.
+             */
             snprintf(cmd, sizeof(cmd),
                      "sh /data/adb/modules/AutoSystemBoost/runtime/smart_dynamic_tune.sh "
                      "%d %d %d >/dev/null 2>&1 &",
@@ -3592,8 +3521,9 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     return 1;
 }
 
-/* Smart Mode periodic persistence. Saves buckets.bin every ~5 minutes
- * (when changes occurred) and copies to .bak every week. */
+/*
+ * Smart Mode periodic persistence.
+ */
 static void asb_smart_persist_check(void) {
     if (!g_smart_rt.enabled || !g_smart_store_loaded) return;
     time_t now = time(NULL);
@@ -3622,11 +3552,10 @@ static void sig_handler(int sig) {
     g_running = 0;
 }
 
-/* Smart Mode init helpers.
- * Reads file flag /data/adb/asb/smart_mode_enabled (created by service.sh
- * migration). Loads buckets.bin with fallback to .bak and seed defaults.
- * Initialises g_smart_bounds to BALANCED so safe fallback exists immediately.
- * Returns 1 if Smart Mode enabled, 0 otherwise. */
+/*
+ * Smart Mode init helpers.
+ * Returns 1 if Smart Mode enabled, 0 otherwise.
+ */
 static int asb_smart_init(void) {
     /* Initialise g_smart_bounds to BALANCED defaults so any reads during
      * boot/uninit get a safe envelope */
@@ -3646,9 +3575,10 @@ static int asb_smart_init(void) {
     /* Read on/off flag */
     int flag = asb_smart_flag_read();
     if (flag < 0) {
-        /* No flag file yet — treat as disabled, but still load the store
-         * so a manual profile switch to 'smart' (e.g. via apply_profile.sh)
-         * can immediately get fresh bounds without waiting for a reboot. */
+        /*
+         * No flag file yet — treat as disabled, but still load the store so a manual profile
+         * switch to 'smart' (e.g.
+         */
         g_smart_rt.enabled = 0;
         g_asb_cfg.smart_mode_enabled = 0;
         flag = 0;
@@ -3664,24 +3594,20 @@ static int asb_smart_init(void) {
     asb_smart_appheat_load();
     g_smart_store_loaded = 1;
 
-    /* The runtime session counters reset on every daemon start, which made the
-       WebUI show "0 ses" after a reboot even though the learning itself (the
-       bucket observations) persisted fine. Seed the display total from the
-       persisted observation count so the learner's progress is continuous
-       across reboots. */
+    /*
+     * The runtime session counters reset on every daemon start, which made the WebUI show "0
+     * ses" after a reboot even though the learning itself (the bucket observations) persisted
+     * fine.
+     */
     {
         unsigned long _obs = 0;
         for (int _b = 0; _b < ASB_SMART_BUCKETS; _b++)
             _obs += g_smart_store.buckets[_b].observations_raw;
         g_smart_sessions_total = (int)_obs;
         g_smart_bucket_updates = (int)_obs;
-        /* Also seed the displayed confidence from the best persisted bucket.
-           g_smart_last_confidence is only written when a live session commits, so
-           after a reboot it sat at 0 and the WebUI showed "learning 0%" even
-           though 186 sessions and the buckets' confidence had persisted. Seed it
-           from the highest-confidence bucket (the same metric the live decision
-           uses) so the learner readout is continuous across reboots until the
-           next session updates it. */
+        /*
+         * Also seed the displayed confidence from the best persisted bucket.
+         */
         time_t _now_seed = time(NULL);
         int _best_conf = 0;
         for (int _b = 0; _b < ASB_SMART_BUCKETS; _b++) {
@@ -3710,12 +3636,11 @@ static int asb_smart_init(void) {
 
 int main(int argc, char **argv) {
     if (argc >= 2) {
-        /* expanded status JSON with 6 new thermal fields
-         * (skin_temp, surface_hotspot, thermal_cpu_zone/type, thermal_skin_zone,
-         * thermal_surface_zone, ses_max_surface_temp) pushed worst-case payload
-         * to ~1000 bytes. Old 512-byte client buffer truncated mid-field
-         * causing "line 2 column 1" JSON parse errors. Bump to 4096 for
-         * comfortable headroom. */
+        /*
+         * expanded status JSON with 6 new thermal fields (skin_temp, surface_hotspot,
+         * thermal_cpu_zone/type, thermal_skin_zone, thermal_surface_zone,
+         * ses_max_surface_temp) pushed worst-case payload to ~1000 bytes.
+         */
         char reply[4096] = {0};
         asb_sock_send_cmd(argv[1], reply, sizeof(reply));
         if (reply[0]) puts(reply);
@@ -3762,10 +3687,9 @@ int main(int argc, char **argv) {
     asb_config_defaults(&g_asb_cfg);
     asb_config_load_file(CONFIG_FILE, &g_asb_cfg);
     asb_config_apply_highload_mode(&g_asb_cfg);
-    /* Per-device bounds override (Phase 2, opt-in via device_bounds_override=1).
-     * Snapshot the compiled defaults first so a malformed override can revert a
-     * profile wholesale. No-op unless the flag is set AND device_bounds.env is
-     * present & valid; on OP15 the file equals the compiled values. */
+    /*
+     * Per-device bounds override (Phase 2, opt-in via device_bounds_override=1).
+     */
     {
         static asb_profile_bounds_t _bounds_defaults[3];
         memcpy(_bounds_defaults, g_profile_bounds, sizeof(_bounds_defaults));
@@ -4210,11 +4134,9 @@ int main(int argc, char **argv) {
         {
             time_t _now = time(NULL);
             if (_now - g_last_state_touch >= 60) {
-                /* profile drift safety net. apply_profile.sh
-                 * normally notifies via socket, but if that path failed (gov
-                 * not yet up at boot, socket EAGAIN, manual file edit, etc.),
-                 * fsm.profile_idx may be stale. Re-read current_profile and
-                 * resync. Cost: one open()+read() of small file every 60s. */
+                /*
+                 * profile drift safety net.
+                 */
                 if (_now - g_last_profile_sync >= 60) {
                     int _file_idx = read_profile_idx();
                     if (_file_idx != fsm.profile_idx) {
@@ -4277,7 +4199,9 @@ int main(int argc, char **argv) {
                     }
                 }
                 write_state(&fsm, &metrics, cur_pred);
-                /* also write conflicts.json and learner_state.json for WebUI. */
+                /*
+                 * also write conflicts.json and learner_state.json for WebUI.
+                 */
                 write_conflicts_json();
                 write_learner_state_json(&fsm);
                 g_last_state_touch = _now;
@@ -4307,8 +4231,9 @@ int main(int argc, char **argv) {
                         metrics.therm.soft_clamp,
                         metrics.therm.hard_clamp);
                 g_last_heartbeat = _now;
-                /* action waste decay -- env-aware.
-                 * Quiet env = faster recovery. Hostile/clamp = slower recovery. */
+                /*
+                 * action waste decay -- env-aware.
+                 */
                 if (g_action_waste > 0) {
                     int _hb_env_d = classify_environment(&fsm);
                     if (_hb_env_d == ENV_QUIET && !fsm.clamp_hold)
@@ -4637,12 +4562,9 @@ int main(int argc, char **argv) {
                 !metrics.misc.screen_on) {
                 g_quiet_night_ticks++;
                 g_quiet_noise_ticks = 0;  /* reset hysteresis -- we're quiet again */
-                /* night-window acceleration.
-                 * If current local hour is within [night_quiet_hour_start, night_quiet_hour_end)
-                 * (e.g. 23:00 - 06:00), use fast threshold regardless of clean_night reward.
-                 * Crossing midnight handled by start > end -> hour >= start OR hour < end.
-                 * Zero cost: one time() call + one localtime_r() + 2 integer comparisons,
-                 * only when already inside the quiet_night entry branch. */
+                /*
+                 * night-window acceleration.
+                 */
                 int _use_fast = g_last_bat_clean_night;
                 if (g_asb_cfg.night_quiet_enable && !_use_fast) {
                     time_t _t = time(NULL);
@@ -4675,9 +4597,9 @@ int main(int argc, char **argv) {
                             (_use_fast == 3) ? " learned_window=fast" : "");
                 }
             } else {
-                /* Quiet Lock Hysteresis -- don't exit quiet on single noise burst.
-                 * Require 3+ consecutive non-quiet ticks to truly exit.
-                 * One alarm/job waking briefly shouldn't kill the whole quiet lock. */
+                /*
+                 * Quiet Lock Hysteresis -- don't exit quiet on single noise burst.
+                 */
                 if (g_quiet_night_active) {
                     g_quiet_noise_ticks++;
                     if (g_quiet_noise_ticks >= g_asb_cfg.quiet_exit_grace || metrics.misc.screen_on) {
@@ -4718,19 +4640,19 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* Exit-from-Quiet Brain -- after quiet night ends,
-             * ramp up sensor reads gradually instead of full blast.
-             * Tick 1: battery only. Tick 2: +thermal. Tick 3: full reads. */
+            /*
+             * Exit-from-Quiet Brain -- after quiet night ends, ramp up sensor reads gradually
+             * instead of full blast.
+             */
             if (g_quiet_wake_ramp > 0) {
                 if (g_quiet_wake_ramp >= 3) { need_hr = 0; need_thermal = 0; }
                 else if (g_quiet_wake_ramp == 2) { need_hr = 0; }
                 g_quiet_wake_ramp--;
             }
 
-            /* Burst Probation Window -- detect early ceiling collapse.
-             * In perf sessions, if p6_max drops below 2GHz within first 60s
-             * while clamp_hold is already set, this is vendor preemptive throttle.
-             * Response: activate clamp_economy immediately + halve ac_budget. */
+            /*
+             * Burst Probation Window -- detect early ceiling collapse.
+             */
             if (fsm.profile_idx == PROFILE_PERFORMANCE && fsm.ses_start_ts > 0) {
                 long ses_age = time(NULL) - fsm.ses_start_ts;
                 if (ses_age <= 60 && !g_burst_early_collapse) {
@@ -4799,17 +4721,9 @@ int main(int argc, char **argv) {
             }
             metrics_read_all(&metrics, need_hr, need_thermal);
 
-            /* low-battery auto-switch.
-             *
-             * Trigger PROFILE_BATTERY automatically when capacity drops below
-             * auto_battery_low_pct; restore previous profile when capacity
-             * recovers to auto_battery_high_pct. Zero added cost: reads only
-             * already-collected metrics.bat.capacity_pct, all comparisons are
-             * integer, fork happens only on actual threshold crossing.
-             *
-             * Hysteresis (low_pct=20, high_pct=30) prevents flapping near
-             * threshold. min_gap_s rate-limit prevents repeated switches on
-             * fast charge cycles or noisy capacity readings. */
+            /*
+             * low-battery auto-switch.
+             */
             if (g_asb_cfg.auto_battery_enable && metrics.bat.capacity_pct > 0) {
                 time_t _now_t = time(NULL);
                 int _can_act = (fsm.auto_battery_last_action == 0) ||
@@ -4827,13 +4741,14 @@ int main(int argc, char **argv) {
                     fsm.auto_battery_reason[sizeof(fsm.auto_battery_reason) - 1] = '\0';
                     fsm.auto_battery_since = time(NULL);
                     fsm_auto_battery_persist(&fsm);
-                    /* Durable record of where we came from, by name and independent of the
-                     * in-memory flag. auto_battery_state stores active and restore_idx
-                     * together, so the moment "active" is lost the restore target is lost
-                     * with it - and then nothing knows whether this device is in battery
-                     * because the module put it there or because the user chose it. That
-                     * ambiguity is what left a balanced user stuck through every charge
-                     * cycle. This file answers it, and only a real manual switch removes it. */
+                    /*
+                     * Durable record of where we came from, by name and independent of the
+                     * in-memory flag.
+                     * auto_battery_state stores active and restore_idx together, so the moment
+                     * "active" is lost the restore target is lost with it - and then nothing
+                     * knows whether this device is in battery because the module put it there
+                     * or because the user chose it.
+                     */
                     {
                         FILE *_of = fopen("/data/adb/asb/auto_battery_origin", "w");
                         if (_of) {
@@ -4851,20 +4766,13 @@ int main(int argc, char **argv) {
                            metrics.bat.capacity_pct >= g_asb_cfg.auto_battery_high_pct &&
                            _can_act) {
                     int _restore = fsm.auto_battery_restore_idx;
-                    /* Consult the durable record before falling back.
-                     *
-                     * restore_idx lives in memory and in auto_battery_state, and the
-                     * governor restarts on every profile change - so by the time the
-                     * battery is charged again it is frequently -1. The old code then
-                     * silently chose BALANCED, which is why a Smart user who discharged to
-                     * 15% and charged back to 40% came back to Balanced: nothing was
-                     * broken about the trigger or the flag, the restore target had simply
+                    /*
+                     * Consult the durable record before falling back.
+                     * The old code then silently chose BALANCED, which is why a Smart user who
+                     * discharged to 15% and charged back to 40% came back to Balanced: nothing
+                     * was broken about the trigger or the flag, the restore target had simply
                      * been forgotten and the fallback guessed.
-                     *
-                     * auto_battery_origin is written by name when the switch happens and
-                     * removed only on a real manual change or a completed restore, so it
-                     * still says "smart" here. BALANCED stays as the last resort for a
-                     * device that has neither. */
+                     */
                     if (_restore < 0 || _restore >= ASB_PROFILE_COUNT) {
                         FILE *_orf = fopen("/data/adb/asb/auto_battery_origin", "r");
                         if (_orf) {
@@ -4907,21 +4815,12 @@ int main(int argc, char **argv) {
                            fsm.profile_idx == PROFILE_BATTERY &&
                            metrics.bat.capacity_pct >= g_asb_cfg.auto_battery_high_pct &&
                            _can_act) {
-                    /* Recovery when the in-memory flag was lost.
-                     *
-                     * This branch used to require asb_smart_flag_read()==1, so it rescued
-                     * Smart users and nobody else: a balanced user whose flag went missing
-                     * stayed in battery through every charge cycle with no way back except
-                     * tapping the profile by hand. Reported from the field exactly that way -
-                     * "does not return to balanced, but does return to smart" - and the
-                     * asymmetry was the whole bug, not a symptom of it.
-                     *
-                     * The profile to return to comes from the persisted state file, which
-                     * survives a governor restart and is cleared on a genuine manual switch.
+                    /*
+                     * Recovery when the in-memory flag was lost.
                      * That distinction matters: someone who CHOSE battery must not be pulled
                      * out of it, which is why a bare "in battery and charged" test is not
-                     * enough on its own. Smart stays as the last-resort answer when no
-                     * restore target was recorded at all. */
+                     * enough on its own.
+                     */
                     int _rec_idx = -1;
                     {
                         FILE *_rf = fopen("/data/adb/asb/auto_battery_origin", "r");
@@ -4984,15 +4883,13 @@ int main(int argc, char **argv) {
                     _code = ASB_ANOM_VENDOR_WAR;
                 } else if (fsm.profile_idx == PROFILE_BATTERY &&
                            !metrics.bat.charging &&
-                           /* Absolute 40%, not high_pct + 10.
-                            *
-                            * This flags "sitting in Battery profile at a healthy charge
-                            * with Smart on" - a statement about the battery being high,
-                            * not about where the auto-switch hysteresis happens to sit.
-                            * Tying it to high_pct meant that narrowing that hysteresis
-                            * from 30 to 21 silently moved the anomaly from 40% to 31%,
-                            * and would have flagged anyone who simply picked Battery by
-                            * hand at a third of a charge. */
+                           /*
+                            * Absolute 40%, not high_pct + 10.
+                            * Tying it to high_pct meant that narrowing that hysteresis from 30
+                            * to 21 silently moved the anomaly from 40% to 31%, and would have
+                            * flagged anyone who simply picked Battery by hand at a third of a
+                            * charge.
+                            */
                            metrics.bat.capacity_pct >= 40 &&
                            asb_smart_flag_read() == 1) {
                     _code = ASB_ANOM_STUCK_BATTERY;
@@ -5052,18 +4949,10 @@ int main(int argc, char **argv) {
             fsm.virtual_ceiling_p0 = g_virtual_ceiling_p0;
             fsm.virtual_ceiling_p1 = g_virtual_ceiling_p1;
 
-            /* thermal_pwrlevel monitoring (KGSL devices where msm_performance is
-             * dead). One pread() per read on a cached fd. A 2s minimum gate stops
-             * read amplification when many epoll events set need_metrics in one
-             * FSM tick (~3-4s).
-             *
-             * Gates (cheapest first):
-             *   1. Skip if monitoring disabled (div_idle == 0)
-             *   2. Skip if screen off (vendor thermal not relevant when GPU idle)
-             *   3. Skip in DEEP_IDLE state (no GPU work, no thermal change)
-             *   4. Skip if read happened within last 2 seconds
-             *   5. In LIGHT_IDLE/MODERATE: read every Nth qualified tick
-             *   6. In HEAVY/SUSTAINED/GAMING: read every qualified tick */
+            /*
+             * thermal_pwrlevel monitoring (KGSL devices where msm_performance is dead).
+             * Skip if screen off (vendor thermal not relevant when GPU idle) 3.
+             */
             {
                 int monitor_skipped = 1;
                 static time_t g_last_thermal_pl_read = 0;
@@ -5098,9 +4987,9 @@ int main(int argc, char **argv) {
                 }
                 if (monitor_skipped) gpu_thermal_pl_record_skip();
 
-                /* thread thermal_pwrlevel into thermal struct for FSM use.
-                 * If vendor is capping above our max_pwrlevel, mark soft_clamp.
-                 * This backstops the dead msm_performance signal on SM8850. */
+                /*
+                 * thread thermal_pwrlevel into thermal struct for FSM use.
+                 */
                 {
                     int tpl = gpu_thermal_pwrlevel_last();
                     metrics.therm.gpu_thermal_pwrlevel = tpl;
@@ -5178,21 +5067,18 @@ int main(int argc, char **argv) {
 
             writer_camera_guard(metrics.misc.camera_active);
 
-            /* Modem LPM. The policy is about what the device is DOING, not which
-             * profile is selected, so it lives here rather than in the Smart tick:
-             * an online match wants the data call hot because coming back from an
-             * idle radio state is the latency spike that costs the round, and a
-             * sleeping phone wants the opposite. Rate-limited and only on a real
-             * change of mode; the script itself checks the LPM feature flag and
-             * no-ops (restoring its baseline) when the user turned it off. */
+            /*
+             * Modem LPM.
+             * The policy is about what the device is DOING, not which profile is selected, so
+             * it lives here rather than in the Smart tick: an online match wants the data call
+             * hot because coming back from an idle radio state is the latency spike that costs
+             * the round, and a sleeping phone wants the opposite.
+             */
             {
-                /* The Battery profile outranks the load state.
-                 *
-                 * This looked only at screen and load, so a phone that had just dropped
-                 * to 20% and switched itself to Battery still reported "fast" - the radio
-                 * held awake for latency, on the profile whose entire purpose is the
-                 * opposite. Reported as exactly that mismatch. Whatever the load is
-                 * doing, a user on Battery has asked for range over responsiveness. */
+                /*
+                 * The Battery profile outranks the load state.
+                 * Reported as exactly that mismatch.
+                 */
                 const char *lpm_mode =
                     !metrics.misc.screen_on                 ? "save" :
                     (fsm.profile_idx == PROFILE_BATTERY)    ? "save" :
@@ -5212,18 +5098,12 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* Periodic maintenance, on this loop's clock rather than its own process.
-             *
-             * asb_reconcile and asb_watchdog each ran as a permanent shell loop with its
-             * own sleep - two resident processes, two independent timers, and every wake
-             * a separate wakeup for the CPU to come out of idle for. The governor is
-             * already awake here, and it already knows whether the screen is on, so it
-             * can spawn them on a counter instead. Same work, no resident processes, and
-             * the wakeups coalesce with one that was happening anyway.
-             *
-             * Time-based rather than tick-based because the tick interval itself varies
-             * with load - counting ticks would make the period drift with how busy the
-             * phone is, which is the opposite of what a watchdog wants. */
+            /*
+             * Periodic maintenance, on this loop's clock rather than its own process.
+             * asb_reconcile and asb_watchdog each ran as a permanent shell loop with its own
+             * sleep - two resident processes, two independent timers, and every wake a
+             * separate wakeup for the CPU to come out of idle for.
+             */
             {
                 static time_t _rec_last = 0, _wd_last = 0;
                 time_t _mnow = time(NULL);
@@ -5350,9 +5230,10 @@ int main(int argc, char **argv) {
 
                 }
             }
-            /* benchmark false-positive guard -- runs EVERY tick
-             * regardless of lock status. No real benchmark lasts 15min.
-             * Must be OUTSIDE !ses_intent_locked block to actually fire. */
+            /*
+             * benchmark false-positive guard -- runs EVERY tick regardless of lock status.
+             * Must be OUTSIDE !ses_intent_locked block to actually fire.
+             */
             if (fsm.ses_intent == INTENT_BENCHMARK &&
                 fsm.ses_intent_locked && fsm.ses_start_ts > 0) {
                 long _bfp_age = time(NULL) - fsm.ses_start_ts;
@@ -5380,16 +5261,10 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* Smart Mode periodic learning: keep learning even when the user
-             * never switches profiles. Two triggers fire here:
-             *  1. Daypart-bucket rollover: when the bucket_id changes (e.g. day
-             *     → eve), close out the previous bucket's session-window. Lets
-             *     learning advance across the day without needing a manual
-             *     profile change.
-             *  2. Smart-active timer: if smart_mode is on for ≥ 1200 seconds
-             *     with at least one heavy/gaming minute observed, fire a soft
-             *     session. Keeps confidence growing during continuous use.
-             * Both reset the FSM session_time counters and update g_smart_*. */
+            /*
+             * Smart Mode periodic learning: keep learning even when the user never switches
+             * profiles.
+             */
             if (fsm.profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
                 g_smart_store_loaded) {
                 long _ses_age = (fsm.ses_start_ts > 0)
@@ -5398,12 +5273,13 @@ int main(int argc, char **argv) {
                     (g_smart_last_seen_bucket >= 0 &&
                      g_smart_last_seen_bucket != (int)g_smart_rt.bucket_id &&
                      metrics.misc.screen_on);
-                /* Fire a soft session after the session has run long enough,
-                 * regardless of whether it was heavy. Light daily use (browsing,
-                 * messaging, idle) must advance the learner too — otherwise a
-                 * user who never switches profiles would never accumulate
-                 * confidence. A session counts as meaningful if it saw any
-                 * screen-on time or any active (non-deep-idle) time. */
+                /*
+                 * Fire a soft session after the session has run long enough, regardless of
+                 * whether it was heavy.
+                 * Light daily use (browsing, messaging, idle) must advance the learner too —
+                 * otherwise a user who never switches profiles would never accumulate
+                 * confidence.
+                 */
                 long _active_s = fsm.ses_time_heavy_sec
                                + fsm.ses_time_gaming_sec
                                + fsm.ses_time_sustained_sec;
@@ -5428,11 +5304,10 @@ int main(int argc, char **argv) {
                 }
                 g_smart_last_seen_bucket = (int)g_smart_rt.bucket_id;
             }
-            /* Smart Mode tick: refresh g_smart_bounds BEFORE writer_apply_caps.
-             * If bounds were updated AND current profile is SMART, recompute
-             * fsm.current_caps so the caps about to be written reflect the
-             * fresh blended values. Force a write so the change reaches sysfs
-             * immediately rather than waiting for the next state transition.
+            /*
+             * Smart Mode tick: refresh g_smart_bounds BEFORE writer_apply_caps.
+             * Force a write so the change reaches sysfs immediately rather than waiting for
+             * the next state transition.
              */
             int smart_updated = asb_smart_tick(&metrics, &fsm);
             asb_smart_persist_check();
@@ -5568,12 +5443,10 @@ int main(int argc, char **argv) {
                                         metrics.therm.perf_cap_p0,
                                         metrics.therm.perf_cap_p6);
                             } else {
-                                /* explicit reason for every enter_sustained instead of "unknown".
-                                 * The FSM can enter SUSTAINED via three non-headroom paths:
-                                 *   - perf_hot_guard: temp exceeded per-profile hot guard for N ticks
-                                 *   - thermal_trend: rising trend (>=6) + temp near sustained threshold
-                                 *   - thermal: temp crossed sustained_temp_enter threshold
-                                 * Logging each one explicitly makes the next tuning cycle much clearer. */
+                                /*
+                                 * explicit reason for every enter_sustained instead of
+                                 * "unknown".
+                                 */
                                 const char *_sus_reason =
                                     metrics.therm.throttling       ? "thermal" :
                                     metrics.therm.hard_clamp       ? "hard_clamp" :
@@ -5672,10 +5545,12 @@ int main(int argc, char **argv) {
                         if (max_gap > 500000 && metrics.therm.cpu_max_c < 95 && headroom_ok) {
                             vendor_clamping = 1;
                             if (g_ac_stage == AC_STAGE_IDLE) {
-                                /* budget counts anti-clamp WINDOWS, not individual writes.
-                                 * Each window = BURST(3 writes) + HOLD + BACKOFF cycle.
-                                 * budget=6 means 6 windows x ~3 writes = ~18 actual dual-writes max,
-                                 * spread across the full session instead of burning in 90 seconds. */
+                                /*
+                                 * budget counts anti-clamp WINDOWS, not individual writes.
+                                 * budget=6 means 6 windows x ~3 writes = ~18 actual
+                                 * dual-writes max, spread across the full session instead of
+                                 * burning in 90 seconds.
+                                 */
                                 fsm.plan.ac_used++;
                                 int is_last = (fsm.plan.ac_used >= fsm.plan.ac_budget);
 
@@ -5815,14 +5690,10 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* shell_overridden_up watchdog
-             * Anti-clamp above handles vendor DOWN-clamps (gap > 0). Battery profile
-             * actual > desired+100MHz for 2+ ticks. That role has moved to
-             * runtime/asb_reconcile.sh which uses fsm.current_caps via /dev/.asb/state
-             * and includes hard rate-limiting (5/min/cluster, 60s window). Having
-             * both C-side and shell-side write to the same sysfs node created
-             * thrash and double-counted in audit. Now this block is reporter-only:
-             * tracks streaks for diagnostic visibility, no writes. */
+            /*
+             * shell_overridden_up watchdog Anti-clamp above handles vendor DOWN-clamps (gap >
+             * 0).
+             */
             if (fsm.profile_idx != PROFILE_PERFORMANCE &&
                 (fsm.state == ASB_STATE_DEEP_IDLE || fsm.state == ASB_STATE_LIGHT_IDLE ||
                  fsm.state == ASB_STATE_MODERATE  || fsm.state == ASB_STATE_HEAVY)) {
@@ -5867,9 +5738,9 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* periodic user ID check (~every 30s when screen on).
-             * Catches user switch that happens without screen toggle
-             * (e.g. in-UI clone/guest switch while screen stays on). */
+            /*
+             * periodic user ID check (~every 30s when screen on).
+             */
             if (metrics.misc.screen_on && !g_user_quarantine_active) {
                 static int g_user_poll_skip = 0;
                 if (++g_user_poll_skip >= 6) {  /* ~30s at 5s ticks */
@@ -5888,16 +5759,9 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* storm shield -- activate for noisy battery screen-off.
-             * storm_shield firing at wakes=5..12 on normal daytime mixed use,
-             * which is too aggressive — that's just a daytime phone, not a
-             * sleep-hostile night. Split the thresholds:
-             *   - night (intent!=mixed, bat_deep dominates)  → old threshold ok
-             *   - daytime (intent==mixed, active use pattern) → require:
-             *     wph >= 12 AND wake_cycles >= 8 AND age >= 480s
-             *
-             * This keeps storm_shield sharp for actual noisy nights while
-             * leaving daytime battery sessions alone. */
+            /*
+             * storm shield -- activate for noisy battery screen-off.
+             */
             if (!g_storm_shield_active && fsm_profile_is_battery
                 && !metrics.misc.screen_on
                 && fsm.bat_wake_cycles >= 5) {
@@ -5954,10 +5818,10 @@ int main(int argc, char **argv) {
 
             /* adaptive tick reads from session plan */
 
-            /* clamp recovery probe -- periodically check if vendor clamp lifted.
+            /*
+             * clamp recovery probe -- periodically check if vendor clamp lifted.
              * Dual-cluster: both policy0 AND policy6 must be unclamped.
-             * Debounced: require 2+ consecutive good probes to lift hold.
-             * Economy: after 10min of confirmed hold, probe every ~10min instead of ~5min. */
+             */
             if (fsm.clamp_hold && metrics.misc.screen_on) {
                 int probe_interval = 60;  /* ~5min default */
                 if (g_clamp_hold_since > 0 &&

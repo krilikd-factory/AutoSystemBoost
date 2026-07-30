@@ -17,14 +17,15 @@ typedef struct {
     int   sustained_gpu_min;
     float sustained_load_min;
     int   sustained_temp_enter;
-    /* The value the CONFIG asked for, kept separate from the live one.
-     *
-     * self_tune raises sustained_temp_enter by 2 (up to 68) whenever a session hits
-     * SUSTAINED quickly - sensible when nobody has an opinion, but it silently walks over
-     * a user who deliberately chose a LOWER throttle point in the WebUI: they ask to
-     * throttle at 50 and the module pushes it back to 52, 54, ... 68. The user's number is
-     * a ceiling for self-tuning, not a starting suggestion. */
+    /*
+     * The value the CONFIG asked for, kept separate from the live one.
+     * self_tune raises sustained_temp_enter by 2 (up to 68) whenever a session hits SUSTAINED
+     * quickly - sensible when nobody has an opinion, but it silently walks over a user who
+     * deliberately chose a LOWER throttle point in the WebUI: they ask to throttle at 50 and
+     * the module pushes it back to 52, 54, ...
+     */
     int   sustained_temp_enter_user;   /* ceiling for self-tuning, see below */
+    int   sustained_temp_user_override;/* 1 = slider beats the per-profile presets */
     int   sustained_temp_exit;
     float sustained_level;
     int   perf_sustained_temp_enter;
@@ -71,13 +72,9 @@ typedef struct {
     float bat_moderate_load_enter;
     int   log_level;
 
-    /* thermal_pwrlevel monitoring rate control.
-     * thermal_pwrlevel_div_idle: in LIGHT_IDLE/MODERATE on battery, read
-     *   thermal_pwrlevel only every Nth tick. Default 3 = read every ~30-45s.
-     *   Set to 1 to read every tick (more responsive, slightly more energy).
-     *   Set to 0 to disable thermal_pwrlevel monitoring entirely.
-     * thermal_pwrlevel_audit_log_s: how often to write audit log line summarising
-     *   read counts and CPU time spent. Default 3600 = once per hour. */
+    /*
+     * thermal_pwrlevel monitoring rate control.
+     */
     int   thermal_pwrlevel_div_idle;
     int   thermal_pwrlevel_audit_log_s;
 
@@ -106,39 +103,37 @@ typedef struct {
     int   soft_clamp_headroom_pct;      /* advisory headroom threshold */
     int   hard_clamp_headroom_pct;      /* actionable headroom threshold */
 
-    /* low-battery auto-switch.
-     * When auto_battery_enable=1 and bat_pct drops below auto_battery_low_pct,
-     * profile auto-switches to battery (saving original profile for restore).
-     * Restore happens when bat_pct >= auto_battery_high_pct.
-     * Hysteresis (high > low) prevents flapping. */
+    /*
+     * low-battery auto-switch.
+     */
     int   auto_battery_enable;     /* 1=enable feature, 0=disable */
     int   auto_battery_low_pct;    /* trigger threshold (default 20) */
     int   auto_battery_high_pct;   /* restore threshold (default 30) */
     int   auto_battery_min_gap_s;  /* min seconds between auto-switches (default 300) */
 
-    /* night-window quiet_night acceleration.
-     * Between night_quiet_hour_start (default 23) and night_quiet_hour_end (default 6),
-     * quiet_night entry uses quiet_fast_ticks regardless of clean_night reward.
-     * Saves ~5min of background activity per night. */
+    /*
+     * night-window quiet_night acceleration.
+     */
     int   night_quiet_enable;      /* 1=enable feature, 0=disable */
     int   night_quiet_hour_start;  /* hour 0-23 when night-fast starts (default 23) */
     int   night_quiet_hour_end;    /* hour 0-23 when night-fast ends (default 6) */
 
-    /* V50: per-user night window learning.
-     * When night_quiet_auto=1 the governor observes when the screen goes
-     * off for the night and when the first sustained morning screen-on
-     * happens, EWMA-learns both as minutes-of-day with circular wrap, and
-     * (after night_quiet_auto_min_samples nights) replaces the static
-     * hour_start/hour_end pair with the learned window. The static hours
-     * stay as the seed/fallback until enough nights are observed. */
+    /*
+     * V50: per-user night window learning.
+     * When night_quiet_auto=1 the governor observes when the screen goes off for the night and
+     * when the first sustained morning screen-on happens, EWMA-learns both as minutes-of-day
+     * with circular wrap, and (after night_quiet_auto_min_samples nights) replaces the static
+     * hour_start/hour_end pair with the learned window.
+     */
     int   night_quiet_auto;             /* 1=learn window per user (default 1) */
     int   night_quiet_auto_min_samples; /* nights required before learned window is used (default 3) */
 
-    /* V50: charge-aware layer.
-     * While charging, Smart Mode may lean toward performance (screen on,
-     * battery cool) and must lean away from it the moment battery
-     * temperature says the charger is already heating the pack.
-     * Temperatures are in deci-degC to match power_supply battery/temp. */
+    /*
+     * V50: charge-aware layer.
+     * While charging, Smart Mode may lean toward performance (screen on, battery cool) and
+     * must lean away from it the moment battery temperature says the charger is already
+     * heating the pack.
+     */
     int   charge_aware_enable;       /* 1=enable feature (default 1) */
     int   cool_gaming;               /* 1=earlier/stronger thermal lean in games, default 1 */
     int   charge_assist_alpha_max;   /* alpha_battery ceiling while assisting, x1000 (default 450) */
@@ -164,15 +159,9 @@ typedef struct {
     int   smart_debug_log;            /* extra logging for alpha, default 0 */
 } asb_runtime_config_t;
 
-/* Skin-anchored thermal decision. The cpu_max (junction) sensor sits at 85-95 C
- * under any real load, so gating throttle/veto on it alone false-fires during
- * normal bursty use and defeats race-to-idle (worse heat AND drain, not better).
- * When a shell/skin sensor is present we decide on user-facing heat
- * (skin >= thermal_skin_c) OR a junction hard-limit (silicon guard). Returns:
- *   1  = engage thermal lean,
- *   0  = do not,
- *  -1  = no usable skin sensor OR gate off -> caller keeps its own junction gate
- *        (original behaviour, fully backward-compatible). */
+/*
+ * Skin-anchored thermal decision.
+ */
 static inline int asb_therm_skin_engage(const asb_runtime_config_t *cfg,
                                         int junction_c, int skin_c) {
     if (!cfg || !cfg->thermal_skin_gate || skin_c <= 20 || skin_c >= 70) return -1;
@@ -183,11 +172,9 @@ static inline int asb_therm_skin_engage(const asb_runtime_config_t *cfg,
 static inline void asb_config_defaults(asb_runtime_config_t *c) {
     memset(c, 0, sizeof(*c));
     c->heavy_gpu_enter     = 35;
-    /* HEAVY/MODERATE load thresholds raised for Snapdragon 8 Elite Gen 5.
-     * On 8-core Oryon with modern Android (VPN + GMS + LSPosed + background
-     * services), idle loadavg routinely sits at 6-12 even with minimal real
-     * CPU work. Lower thresholds would put FSM into permanent HEAVY at idle.
-     * Battery profile gets stricter still (defined separately below). */
+    /*
+     * HEAVY/MODERATE load thresholds raised for Snapdragon 8 Elite Gen 5.
+     */
     c->heavy_load_enter    = 20.0f;
     c->moderate_load_enter = 14.0f;
     c->gpu_idle_trim_pct = 8;
@@ -200,6 +187,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->sustained_load_min  = 4.0f;
     c->sustained_temp_enter= 65;
     c->sustained_temp_enter_user = 65;
+    c->sustained_temp_user_override = 0;
     c->sustained_temp_exit = 55;
     c->perf_sustained_temp_enter = 0;
     c->perf_sustained_temp_exit  = 0;
@@ -227,17 +215,11 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->camera_hold_enable   = 1;
     c->camera_busy_pct      = 15;
     c->camera_hold_grace_s  = 20;
-    /* Below HEAVY (0.72), not above it. SUSTAINED is entered on TEMPERATURE - the state
-     * file records last_sustained_reason=thermal - so placing it at 0.80 meant getting
-     * hot raised the cap ceiling relative to HEAVY: hot -> allow more -> hotter. A
-     * full-day capture measured exactly that. With the screen on, SUSTAINED drew 739 mA
-     * at 63 C average against HEAVY's 331 mA at 44 C, on effectively identical load
-     * (loadavg 10.6 vs 9.2) - more current than GAMING (712 mA), which is the state that
-     * is supposed to be the expensive one. The device sat there for 24% of all screen-on
-     * time and the vendor thermal HAL never clamped once, so nothing external was
-     * correcting it. 0.62 is not a guess: it is what perf_sustained_level already used
-     * for the performance profile, where someone had clearly noticed the same thing and
-     * fixed it for that profile only. */
+    /*
+     * Below HEAVY (0.72), not above it.
+     * The device sat there for 24% of all screen-on time and the vendor thermal HAL never
+     * clamped once, so nothing external was correcting it.
+     */
     c->sustained_level       = 0.62f;
     c->gaming_gap_thresh        = 1500000;
     c->gaming_gap_ticks         = 4;
@@ -339,12 +321,12 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
          * sustained_temp_ceiling below overrides this when the mode allows self-tuning. */
         c->sustained_temp_enter_user = c->sustained_temp_enter;
     }
+    else if (!strcmp(k, "sustained_temp_user_override")) c->sustained_temp_user_override = atoi(v);
     else if (!strcmp(k, "sustained_temp_ceiling")) {
-        /* How far self_tune may walk the throttle point up.
-         *
-         * Written by the shell from sustained_temp_mode: equal to the value itself for
-         * "stock" and "manual" (self-tuning off), higher for "smart" (self-tuning on).
-         * Keeping it a separate key means the C side never has to know modes exist. */
+        /*
+         * How far self_tune may walk the throttle point up.
+         * Keeping it a separate key means the C side never has to know modes exist.
+         */
         c->sustained_temp_enter_user = atoi(v);
     }
     else if (!strcmp(k, "sustained_temp_exit"))  c->sustained_temp_exit  = atoi(v);
@@ -526,6 +508,10 @@ static inline void asb_config_apply_stable_override(asb_runtime_config_t *c) {
 }
 
 static inline int asb_config_profile_sustained_temp_enter(const asb_runtime_config_t *c, int profile_idx) {
+    /*
+     * An explicit user setting outranks every profile preset.
+     */
+    if (c->sustained_temp_user_override) return c->sustained_temp_enter;
     if (profile_idx == 2 && c->perf_sustained_temp_enter > 0) return c->perf_sustained_temp_enter;
     if (profile_idx == 1 && c->balanced_sustained_temp_enter > 0) return c->balanced_sustained_temp_enter;
     /* PROFILE_SMART (3): use balanced thresholds — Smart must never run

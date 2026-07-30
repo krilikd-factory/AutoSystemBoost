@@ -65,8 +65,10 @@ static void writer_init_paths(void) {
             g_cpu_min_paths[i][0] = '\0';
         }
     }
-    /* Build the full per-cluster path list (falls back to the 3 slots if the
-     * discover step didn't populate the all-list, e.g. 1-cluster oddities). */
+    /*
+     * Build the full per-cluster path list (falls back to the 3 slots if the discover step
+     * didn't populate the all-list, e.g.
+     */
     g_cpu_all_paths_n = 0;
     if (g_cpu_all_count > 0) {
         for (int i = 0; i < g_cpu_all_count && g_cpu_all_paths_n < 16; i++) {
@@ -138,8 +140,10 @@ static void gpu_read_freq_table(void) {
     (void)_rd;
     close(fd);
 
-    /* Parse space-separated frequencies (Qualcomm format: descending order
-     * "1100000000 1000000000 900000000 ..."). Store in table. */
+    /*
+     * Parse space-separated frequencies (Qualcomm format: descending order "1100000000
+     * 1000000000 900000000 ...").
+     */
     char *p = abuf;
     int idx = 0;
     while (*p && idx < 32) {
@@ -234,10 +238,10 @@ static void writer_discover_gpu_paths(void) {
         }
     }
 
-    /* thermal_pwrlevel discovery — vendor thermal cap, read-only for us
-     * but kernel writes to it dynamically. Cache fd to avoid open/close per read.
-     * If the file doesn't exist, g_gpu_thermal_pwrlevel_fd stays -1 and reader
-     * functions short-circuit. */
+    /*
+     * thermal_pwrlevel discovery — vendor thermal cap, read-only for us but kernel writes to
+     * it dynamically.
+     */
     static const char *thermal_pl_candidates[] = {
         "/sys/class/kgsl/kgsl-3d0/thermal_pwrlevel",
         "/sys/class/devfreq/3d00000.qcom,kgsl-3d0/thermal_pwrlevel",
@@ -339,10 +343,12 @@ static int gpu_hz_to_pwrlevel_min(long target_hz) {
 #define UCLAMP_TOP_MAX  "/dev/cpuctl/top-app/cpu.uclamp.max"
 #define UCLAMP_BG_MAX   "/dev/cpuctl/background/cpu.uclamp.max"
 #define UCLAMP_SYBG_MAX "/dev/cpuctl/system-background/cpu.uclamp.max"
-/* foreground was never managed here, and that is exactly where the camera HAL
- * and the media codec threads live -- neither is top-app. With the profile
- * scripts leaving cpu.uclamp.max at 55-70 there, the scheduler could not ask
- * for the frequency the pipeline needed no matter how high the caps went. */
+/*
+ * foreground was never managed here, and that is exactly where the camera HAL and the media
+ * codec threads live -- neither is top-app.
+ * With the profile scripts leaving cpu.uclamp.max at 55-70 there, the scheduler could not ask
+ * for the frequency the pipeline needed no matter how high the caps went.
+ */
 #define UCLAMP_FG_MAX   "/dev/cpuctl/foreground/cpu.uclamp.max"
 #define CPUSET_FG_CPUS  "/dev/cpuset/foreground/cpus"
 #define CPUSET_TOP_CPUS "/dev/cpuset/top-app/cpus"
@@ -357,13 +363,11 @@ static int  g_cam_saved_uc_fg  = -1;
 static int  g_cam_saved_uc_bg  = -1;
 static int  g_cam_saved_swappiness = -1;
 
-/* The guard raises ceilings and then owns the job of putting them back. If the
- * governor exits while a camera session is open - and it restarts on every
- * profile change - nothing would ever lower them again, so the phone would sit
- * at uclamp 100 and swappiness 10 until the next camera session happened to end
- * cleanly. The saved values are therefore written where a restarted governor can
- * find them. /dev is tmpfs on purpose: this must survive a governor restart and
- * must NOT survive a reboot, where service.sh sets every one of these itself. */
+/*
+ * The guard raises ceilings and then owns the job of putting them back.
+ * /dev is tmpfs on purpose: this must survive a governor restart and must NOT survive a
+ * reboot, where service.sh sets every one of these itself.
+ */
 #define CAM_GUARD_STATE "/dev/.asb/camera_guard"
 
 typedef struct {
@@ -508,22 +512,18 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
     int writes = 0;
     writer_init_paths();
 
-    /* CAP OWNERSHIP: for MANUAL profiles (battery/balanced/performance) the
-     * shell layer (service.sh apply_screen_aware_caps) is the sole owner of
-     * scaling_max/min — it has the correct per-device, screen-aware, 4-cluster
-     * caps. The governor must NOT also push its bounds-derived ceiling there, or
-     * the two race and you get the contradictory diag values (performance prime
-     * stuck at 39-58%, OP12 battery prime > balanced). In manual mode the
-     * governor still acts ONLY as a thermal safety net: when thermal_cap is
-     * engaged it may pull frequencies DOWN, but it never raises/sets the normal
-     * profile ceiling. Smart mode is fully governor-owned and unaffected. */
-    /* manual_cap_skip: in MANUAL battery/balanced the shell owns caps, so the
-     * governor stays out (only thermal net pulls down). PERFORMANCE is special:
-     * OnePlus PowerHAL aggressively re-clamps the prime cluster back down (OP15
-     * prime seen pinned at 1.63 GHz despite the shell writing the 4.6 GHz
-     * ceiling once), so here we DO let the governor keep re-asserting the cap to
-     * defend the high ceiling against vendor clawback. Smart is fully governor-
-     * owned as before. */
+    /*
+     * CAP OWNERSHIP: for MANUAL profiles (battery/balanced/performance) the shell layer
+     * (service.sh apply_screen_aware_caps) is the sole owner of scaling_max/min — it has the
+     * correct per-device, screen-aware, 4-cluster caps.
+     * The governor must NOT also push its bounds-derived ceiling there, or the two race and
+     * you get the contradictory diag values (performance prime stuck at 39-58%, OP12 battery
+     * prime > balanced).
+     */
+    /*
+     * manual_cap_skip: in MANUAL battery/balanced the shell owns caps, so the governor stays
+     * out (only thermal net pulls down).
+     */
     int manual_cap_skip = (!fsm_profile_is_smart && !fsm_profile_is_performance && !thermal_cap);
     if (manual_cap_skip) {
         /* still let GPU / non-cap writes proceed below; just skip CPU caps */
@@ -531,12 +531,14 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
     }
 
     {
-        /* Gaming cool-clamp: the smart curve can declare up to ~3 GHz during the
-         * GAMING state, but the vendor PowerHAL clamps the actual clock to ~2.2 GHz
-         * regardless — so the higher request buys no FPS and only drives brief
-         * high-OPP voltage excursions (extra heat + drain). Cap the declared
-         * scaling_max at a sane gaming ceiling so we never ask higher than the
-         * vendor will honour. gaming_cpu_max_ceiling_khz=0 disables it. */
+        /*
+         * Gaming cool-clamp: the smart curve can declare up to ~3 GHz during the GAMING state,
+         * but the vendor PowerHAL clamps the actual clock to ~2.2 GHz regardless — so the
+         * higher request buys no FPS and only drives brief high-OPP voltage excursions (extra
+         * heat + drain).
+         * Cap the declared scaling_max at a sane gaming ceiling so we never ask higher than
+         * the vendor will honour.
+         */
         int cmax[3];
         for (int _k = 0; _k < 3; _k++) {
             cmax[_k] = caps->cpu_max[_k];
@@ -583,12 +585,13 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             }
         }
     }
-    /* EXTRA CLUSTERS: on SoCs with more physical clusters than logical slots
-     * (OP12 pineapple: 4 policies vs 3 slots), apply each slot's max-cap to
-     * every physical cluster that belongs to that slot but isn't one of the 3
-     * representative paths above. Without this, OP12's second big cluster
-     * (policy2 or policy5 — whichever wasn't picked as the slot-1 rep) keeps
-     * the stock/pinned max and the phone stays sluggish in battery mode. */
+    /*
+     * EXTRA CLUSTERS: on SoCs with more physical clusters than logical slots (OP12 pineapple:
+     * 4 policies vs 3 slots), apply each slot's max-cap to every physical cluster that belongs
+     * to that slot but isn't one of the 3 representative paths above.
+     * Without this, OP12's second big cluster (policy2 or policy5 — whichever wasn't picked as
+     * the slot-1 rep) keeps the stock/pinned max and the phone stays sluggish in battery mode.
+     */
     for (int j = 0; j < g_cpu_all_paths_n; j++) {
         if (!g_cpu_all_max_paths[j][0]) continue;
         int slot = g_cpu_all_paths_slot[j];
@@ -652,9 +655,9 @@ skip_cpu_caps: ;
         int gpu_ok = 0;
         if (g_gpu_max_path[0]) {
             if (g_gpu_uses_pwrlevel) {
-                /* Translate target Hz into pwrlevel index. max_pwrlevel is the
-                 * HIGHEST-frequency level we're allowed to use; larger index = lower freq.
-                 * So for a max Hz target, find the smallest index whose freq <= target. */
+                /*
+                 * Translate target Hz into pwrlevel index.
+                 */
                 int pl = gpu_hz_to_pwrlevel_max(gmax);
                 gpu_ok = (sysfs_write_int(g_gpu_max_path, pl) == 0);
                 if (gpu_ok) g_wcache.last_max_pwrlevel_written = pl;
@@ -723,26 +726,10 @@ skip_cpu_caps: ;
     return writes;
 }
 
-/* ---------------------------------------------------------------------------
- * Camera guard.
- *
- * Three separate mechanisms were starving the camera pipeline, and the caps
- * are only one of them. This restores the other two for as long as the camera
- * streams, and puts back exactly what it found when the camera closes:
- *
- *   cpuset  - the battery profile pins foreground AND top-app to the little
- *             cluster. A 4K60 encode cannot meet its deadline on two little
- *             cores, whatever frequency they run at.
- *   uclamp  - the max ceilings on foreground/background cap the utilisation
- *             signal itself, so the scheduler never even requests the clock.
- *   swappiness - a 4K60 buffer queue is hundreds of MB; with zram half full,
- *             an aggressive swappiness turns every new buffer into reclaim
- *             work on the capture path.
- *
- * Every value is read back before it is changed, so the restore is the
- * device's own state rather than an assumption about it -- including the case
- * where a vendor service, not ASB, wrote the value in the first place.
- * ------------------------------------------------------------------------ */
+/*
+ * --------------------------------------------------------------------------- Camera guard.
+ * A 4K60 encode cannot meet its deadline on two little cores, whatever frequency they run at.
+ */
 static void writer_camera_guard_save(void) {
     FILE *f = fopen(CAM_GUARD_STATE, "w");
     if (!f) return;

@@ -38,54 +38,30 @@ typedef struct {
     asb_profile_caps_t ceil;
 } asb_profile_bounds_t;
 
-/* Was `const`: now a mutable copy initialised from the compile-time values
- * below. The compiled values remain the authoritative DEFAULT/envelope — they
- * are what ships and what every device falls back to. asb_load_device_bounds_
- * override() (called once at startup, gated on a flag + a validated override
- * file) may scale specific CPU ceilings per-device from the discovered hardware,
- * using the OP15 reference ratios. If the override file is absent, malformed, or
- * the flag is off, these values stand unchanged — i.e. behaviour is byte-for-byte
- * identical to the const version. On OP15 itself the synthesised values equal
- * these, so even when enabled nothing changes for the reference device. */
+/*
+ * Was `const`: now a mutable copy initialised from the compile-time values below.
+ * If the override file is absent, malformed, or the flag is off, these values stand unchanged
+ * — i.e.
+ */
 static asb_profile_bounds_t g_profile_bounds[3] = {
-    /* ALL THREE profile bounds realigned with their .sh scripts.
-     *
-     * Background: termux probe on real device confirmed the FSM was using its
-     * own hardcoded g_profile_bounds table for state interpolation, completely
-     * independent of the *.sh profile files. Shell reconcile wrote profile.sh
-     * values, the C daemon overwrote them immediately on every tick. This
-     * affected all three profiles — battery worst (bounds ~2x above .sh),
-     * balanced broken (floor > CPU_CAP AND ceil < CPU_MAX, losing 17% perf),
-     * performance partial (BIG floor above cooling-trim CPU_CAP, GPU ceil
-     * at 100% bypassing the .sh GPU_MAX_PCT=84%).
-     *
-     * Uniform semantic applied here:
-     *   floor.cpu_max    = CPU_CAP   (state=DEEP_IDLE, t=0.0)
-     *   ceil.cpu_max     = CPU_MAX   (state=GAMING,    t=1.0)
-     *   floor.cpu_min    = CPU_MIN   (lowest min freq, in DEEP_IDLE)
-     *   ceil.cpu_min     = CPU_CAP   (higher min freq during GAMING, prevent drops)
-     *   ceil.gpu_max_pct = GPU_MAX_PCT from .sh (was bypassed in battery/perf)
-     *   floor.gpu_max_pct kept at ~half of ceil for idle headroom
-     *
-     * Profile-script values referenced at build time, not loaded at runtime.
-     * If user edits CPU_CAP/CPU_MAX/GPU_MAX in .sh, the FSM bounds still reflect
-     * the values below until the C binary is rebuilt. */
+    /*
+     * ALL THREE profile bounds realigned with their .sh scripts.
+     */
 
-    /* PROFILE_BATTERY:
-     * Caps tuned for Snapdragon 8 Elite Gen 5 (4.6GHz P-cluster, 1200MHz GPU).
-     * Numeric values come from asb_fsm_bounds.generated.h, generated from
-     * config/profile_bounds.conf via tools/gen_bounds.sh.
+    /*
+     * PROFILE_BATTERY: Caps tuned for Snapdragon 8 Elite Gen 5 (4.6GHz P-cluster, 1200MHz
+     * GPU).
      */
     {
         .floor = {
             .cpu_max    = { ASB_BATTERY_FLOOR_CPU_MAX_LITTLE, ASB_BATTERY_FLOOR_CPU_MAX_BIG, 0 },
             .cpu_min    = { ASB_BATTERY_FLOOR_CPU_MIN_LITTLE, ASB_BATTERY_FLOOR_CPU_MIN_BIG, 0 },
-            /* GPU floor raised to 45%: SM8850 vendor PowerHAL clamps GPU
-             * max_pwrlevel to 17 (160 MHz) when it sees low FSM cpu_max +
-             * LIGHT_IDLE. Raising GPU max floor to 45% (540 MHz target) breaks
-             * that heuristic and stops stutter during shelf/menu scrolling.
-             * gpu_min_pct stays 0 — vendor immediately overrides any
-             * min_pwrlevel write, so writing it is wasted. */
+            /*
+             * GPU floor raised to 45%: SM8850 vendor PowerHAL clamps GPU max_pwrlevel to 17
+             * (160 MHz) when it sees low FSM cpu_max + LIGHT_IDLE.
+             * Raising GPU max floor to 45% (540 MHz target) breaks that heuristic and stops
+             * stutter during shelf/menu scrolling.
+             */
             .gpu_max_pct = ASB_BATTERY_FLOOR_GPU_MAX_PCT, .gpu_min_pct = ASB_BATTERY_FLOOR_GPU_MIN_PCT,
             .ravg_ticks = ASB_BATTERY_FLOOR_RAVG_TICKS, .idle_enough = ASB_BATTERY_FLOOR_IDLE_ENOUGH,
             .uclamp_top_max = ASB_BATTERY_FLOOR_UCLAMP_TOP, .uclamp_bg_max = ASB_BATTERY_FLOOR_UCLAMP_BG
@@ -117,10 +93,9 @@ static asb_profile_bounds_t g_profile_bounds[3] = {
         }
     },
 
-    /* PROFILE_PERFORMANCE — sustained-optimized for COD Mobile and similar.
-     * Thermal envelope target: peak ≤ 58 °C, sustained ≤ 48 °C on both stock
-     * and custom kernels. Caps stay below vendor PowerHAL's reactive triggers
-     * to avoid mid-session clamps. */
+    /*
+     * PROFILE_PERFORMANCE — sustained-optimized for COD Mobile and similar.
+     */
     {
         .floor = {
             .cpu_max    = { ASB_PERFORMANCE_FLOOR_CPU_MAX_LITTLE, ASB_PERFORMANCE_FLOOR_CPU_MAX_BIG, 0 },
@@ -141,13 +116,13 @@ static asb_profile_bounds_t g_profile_bounds[3] = {
 
 #define PROFILE_BATTERY     0
 static int fsm_profile_is_battery = 0;
-/* V50: smart profile spends most of a night exactly like battery, but the
- * idle telemetry below only accumulated under PROFILE_BATTERY. With all
- * counters stuck at zero, idle_quality read 0, classify_environment()
- * reported hostile for flawless nights, clean-night reward was unreachable
- * and the next session was primed IDLE_NOISY. Track idle telemetry for
- * smart too; FSM *shaping* (entry thresholds, gaming suppression) stays
- * battery-only via fsm_profile_is_battery. */
+/*
+ * V50: smart profile spends most of a night exactly like battery, but the idle telemetry below
+ * only accumulated under PROFILE_BATTERY.
+ * With all counters stuck at zero, idle_quality read 0, classify_environment() reported
+ * hostile for flawless nights, clean-night reward was unreachable and the next session was
+ * primed IDLE_NOISY.
+ */
 static int fsm_profile_is_smart = 0;
 static int fsm_profile_is_performance = 0;
 #define fsm_profile_tracks_idle (fsm_profile_is_battery || fsm_profile_is_smart)
@@ -157,43 +132,27 @@ static int fsm_profile_is_balanced = 0;
 #define PROFILE_SMART       3
 #define ASB_PROFILE_COUNT   4
 
-/* ---------------------------------------------------------------------------
- * Per-device bounds override (Phase 2 of device-adaptive tuning).
- *
- * Reads /data/adb/asb/device_bounds.env — a flat KEY=value file written at
- * install time by tools/asb_synthesize_bounds.sh, which scales the OP15
- * reference ratios onto THIS device's real hardware and snaps to real freqs.
- * Only a small, explicit allow-list of CPU ceiling/cap fields can be overridden;
- * everything else (GPU, uclamp, ravg, mins) keeps the compiled value. Each value
- * is validated (positive, not absurd, not above a sane hardware ceiling) before
- * it is applied. Any parse/validation failure for a key simply leaves that key
- * at its compiled default — there is no partial-corruption path.
- *
- * SAFETY CONTRACT:
- *   - file absent            -> no change (compiled defaults stand)
- *   - flag device_bounds_override == 0 (default) -> not even read
- *   - any malformed value    -> that key skipped, others still validated
- *   - on OP15 the file equals the compiled values -> zero behavioural change
- * The caller passes the runtime flag; this keeps the published build identical
- * until a user/device explicitly opts in.
- * ------------------------------------------------------------------------- */
+/*
+ * --------------------------------------------------------------------------- Per-device
+ * bounds override (Phase 2 of device-adaptive tuning).
+ */
 #define ASB_DEVICE_BOUNDS_FILE "/data/adb/asb/device_bounds.env"
 
 /* Apply one KEY=val pair to g_profile_bounds if KEY is in the allow-list and
  * val passes range validation. Returns 1 if applied, 0 otherwise. */
 static int asb_device_bounds_apply_kv(const char *key, long val) {
-    /* Range guard: CPU freqs are in kHz. Reject <=0 or > 6.0 GHz (no current
-     * mobile cluster exceeds this; anything larger is a parse error). */
+    /*
+     * Range guard: CPU freqs are in kHz.
+     */
     if (val <= 0 || val > 6000000) return 0;
 
     struct { const char *name; int prof; int is_ceil; int field; int slot; } map[] = {
-        /* field: 0=cpu_max, 1=cpu_min ; slot: 0=little, 1=big/mid, 2=prime.
-         * On a 2-cluster SoC (OP15/OP13) the synthesis emits *_BIG -> slot 1
-         * (which is prime there). On a 3/4-cluster SoC (OP12) it emits *_MID ->
-         * slot 1 (the strongest middle, which the writer also mirrors onto the
-         * other middles) and *_PRIME -> slot 2 (the last/prime cluster, which is
-         * otherwise left at the compiled 0 = unmanaged). Only one of BIG/MID is
-         * ever emitted per device, so sharing slot 1 is unambiguous. */
+        /*
+         * field: 0=cpu_max, 1=cpu_min ; slot: 0=little, 1=big/mid, 2=prime.
+         * On a 3/4-cluster SoC (OP12) it emits *_MID -> slot 1 (the strongest middle, which
+         * the writer also mirrors onto the other middles) and *_PRIME -> slot 2 (the
+         * last/prime cluster, which is otherwise left at the compiled 0 = unmanaged).
+         */
         { "BATTERY_CPU_MAX_LITTLE",     PROFILE_BATTERY,     1, 0, 0 },
         { "BATTERY_CPU_MAX_BIG",        PROFILE_BATTERY,     1, 0, 1 },
         { "BATTERY_CPU_MAX_MID",        PROFILE_BATTERY,     1, 0, 1 },
@@ -203,18 +162,13 @@ static int asb_device_bounds_apply_kv(const char *key, long val) {
         { "BALANCED_CPU_MAX_LITTLE",    PROFILE_BALANCED,    1, 0, 0 },
         { "BALANCED_CPU_MAX_BIG",       PROFILE_BALANCED,    1, 0, 1 },
         { "BALANCED_CPU_MAX_MID",       PROFILE_BALANCED,    1, 0, 1 },
-        /* BALANCED_CPU_MAX_PRIME and PERFORMANCE_CPU_MAX_PRIME are deliberately absent.
-         * Slot 2 only exists on 3/4-cluster SoCs, and there it is the single strongest
-         * core. Leaving it unmanaged in the interactive profiles is what shipped before
-         * the bounds synthesis existed; capping it made that core the most restricted one
-         * on those devices - measured on one device, same profile and screen state, the
-         * prime fell from 100% of its hardware ceiling to 48%, which felt slow and saved
-         * no battery, because the little/mid clusters just spent longer at their own caps.
-         * Filtering here rather than only in the synthesiser matters: device_bounds.env
-         * lives in /data/adb/asb and outlives module updates, and the synthesiser itself
-         * is not shipped in release builds - so a file written once by a debug build would
-         * otherwise keep capping the prime forever, with nothing able to rewrite it.
-         * BATTERY_CPU_MAX_PRIME stays: that profile exists to trade speed away. */
+        /*
+         * BALANCED_CPU_MAX_PRIME and PERFORMANCE_CPU_MAX_PRIME are deliberately absent.
+         * Filtering here rather than only in the synthesiser matters: device_bounds.env lives
+         * in /data/adb/asb and outlives module updates, and the synthesiser itself is not
+         * shipped in release builds - so a file written once by a debug build would otherwise
+         * keep capping the prime forever, with nothing able to rewrite it.
+         */
         { "BALANCED_CPU_CAP_LITTLE",    PROFILE_BALANCED,    0, 0, 0 },
         { "BALANCED_CPU_CAP_BIG",       PROFILE_BALANCED,    0, 0, 1 },
         { "PERFORMANCE_CPU_MAX_LITTLE", PROFILE_PERFORMANCE, 1, 0, 0 },
@@ -232,10 +186,9 @@ static int asb_device_bounds_apply_kv(const char *key, long val) {
     return 0;
 }
 
-/* Load + apply the override file. Enforces per-profile invariant
- * floor.cpu_max <= ceil.cpu_max after applying; if an override would invert it,
- * the whole profile is reverted to compiled defaults (passed in via `defaults`).
- * Returns number of keys applied (0 if file missing / flag off). */
+/*
+ * Load + apply the override file.
+ */
 static int asb_load_device_bounds_override(int enabled,
                                            const asb_profile_bounds_t *defaults) {
     if (!enabled) return 0;
@@ -257,13 +210,12 @@ static int asb_load_device_bounds_override(int enabled,
         applied += asb_device_bounds_apply_kv(key, val);
     }
     fclose(f);
-    /* Post-validate the invariant floor.cpu_max <= ceil.cpu_max for every slot.
-     * A per-device override may legitimately push a ceiling BELOW the compiled
-     * floor (e.g. a smaller SoC's little ceiling lands under OP15's little
-     * floor). In that case we clamp the floor DOWN to the new ceiling rather
-     * than discarding the override — the override is the intent, the floor is
-     * just the DEEP_IDLE start and must not exceed it. Only if a ceiling itself
-     * became non-positive (a real corruption) do we revert that profile. */
+    /*
+     * Post-validate the invariant floor.cpu_max <= ceil.cpu_max for every slot.
+     * In that case we clamp the floor DOWN to the new ceiling rather than discarding the
+     * override — the override is the intent, the floor is just the DEEP_IDLE start and must
+     * not exceed it.
+     */
     for (int p = 0; p < 3; p++) {
         int corrupt = 0;
         for (int s = 0; s < 3; s++) {
@@ -278,22 +230,15 @@ static int asb_load_device_bounds_override(int enabled,
 }
 
 
-/* Smart Mode runtime bounds (mutable, written by smart blend math).
- * Initialized to BALANCED defaults at boot; smart logic blends battery↔balanced
- * into this slot when smart_mode_enabled=1 and FSM profile_idx==PROFILE_SMART.
- * When smart_mode_enabled=0, this slot is unused and FSM uses PROFILE_BATTERY/
- * BALANCED/PERFORMANCE from g_profile_bounds[].
- *
- * g_profile_bounds[] above is const and stays const — the envelope. Smart Mode
- * does NOT modify the profile bounds; it computes a blended struct in this
- * separate slot and reads from it instead.
+/*
+ * Smart Mode runtime bounds (mutable, written by smart blend math).
  */
 static asb_profile_bounds_t g_smart_bounds;
 static int g_smart_bounds_initialized = 0;
 
-/* Dispatch profile_idx to its bounds source. PROFILE_SMART reads from mutable
- * g_smart_bounds; other profiles read from compile-time const g_profile_bounds.
- * If smart bounds not yet initialized, falls back to BALANCED. */
+/*
+ * Dispatch profile_idx to its bounds source.
+ */
 static inline const asb_profile_bounds_t *asb_profile_bounds_for(int profile_idx) {
     if (profile_idx == PROFILE_SMART) {
         if (g_smart_bounds_initialized) return &g_smart_bounds;
@@ -422,10 +367,10 @@ typedef struct {
     int             bat_wake_bg;        /* background wakes (no screen) */
     /* radio-aware -- count ticks with heavy mobile data during battery screen-off */
     int             bat_radio_active_ticks;
-    /* V56: peak memory-pressure (PSI some avg10, x100) seen during the session,
-     * and count of ticks under meaningful pressure. Gives the module its first
-     * visibility into RAM/swap stress so memory can be tracked and, later,
-     * learned against -- previously nothing about memory was recorded. */
+    /*
+     * V56: peak memory-pressure (PSI some avg10, x100) seen during the session, and count of
+     * ticks under meaningful pressure.
+     */
     int             mem_psi_peak_x100;
     int             mem_pressure_ticks;
     int             bat_gaming_suppressed;
@@ -453,10 +398,9 @@ typedef struct {
     time_t          recovery_cautious_until; /* after clamp lift, stay cautious */
     int             perf_hot_guard_ticks;
     int             perf_hot_guard_active;
-    /* multi-sensor advisory (skin/surface/board contribute to soft
-     * hot-guard, NOT hard panic). Cold baseline = first 30s avg captured
-     * at governor start. Concern = current - baseline (delta-from-cold).
-     * Advisory active = weighted score > 50 for >=20 ticks. */
+    /*
+     * multi-sensor advisory (skin/surface/board contribute to soft hot-guard, NOT hard panic).
+     */
     int             cold_baseline_skin;
     int             cold_baseline_surface;
     int             cold_baseline_board;
@@ -497,10 +441,9 @@ typedef struct {
         uint8_t sensor_used;
     } plan;
 
-    /* low-battery auto-switch state.
-     * When battery drops below threshold, FSM auto-switches to PROFILE_BATTERY.
-     * Original profile is remembered so we can restore on recharge.
-     * Hysteresis prevents flapping near threshold. */
+    /*
+     * low-battery auto-switch state.
+     */
     int             auto_battery_active;       /* 1 if auto-switch triggered, 0 otherwise */
     int             auto_battery_restore_idx;  /* profile to restore (-1 if none) */
     time_t          auto_battery_last_action;  /* rate limit: min interval between switches */
@@ -735,34 +678,31 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
         return ASB_STATE_MODERATE;
     if (ma_valid && m->bat.current_ma >= 120)
         return ASB_STATE_MODERATE;
-    /* UI-burst escalation: GPU > 12% with screen on = active UI work
-     * (scrolling shelf, app menu, transitions). Skip LIGHT_IDLE so caps
-     * support smooth 144Hz UI. Below heavy_gpu_enter (35%) so this is
-     * specifically the "user touching screen" zone. */
+    /*
+     * UI-burst escalation: GPU > 12% with screen on = active UI work (scrolling shelf, app
+     * menu, transitions).
+     */
     if (m->misc.screen_on && m->gpu.load_pct >= 12)
         return ASB_STATE_MODERATE;
 
-    /* Battery profile + screen on: skip LIGHT_IDLE entirely. Deploy logs
-     * showed vendor PowerHAL clamps GPU max_pwrlevel to 17 (160MHz) ONLY
-     * when state=LIGHT_IDLE on battery — this caused unlock→shelf scroll
-     * stutter for the 1-2 seconds before UI-burst escalation kicked in.
-     * MODERATE caps are still conservative (cpu_max ~1.5GHz, gpu ~47%) so
-     * the drain trade-off is small; the smoothness gain is large. Other
-     * profiles (balanced, performance) keep LIGHT_IDLE — they don't
-     * trigger this vendor heuristic. */
+    /*
+     * Battery profile + screen on: skip LIGHT_IDLE entirely.
+     * Deploy logs showed vendor PowerHAL clamps GPU max_pwrlevel to 17 (160MHz) ONLY when
+     * state=LIGHT_IDLE on battery — this caused unlock→shelf scroll stutter for the 1-2
+     * seconds before UI-burst escalation kicked in.
+     */
     if (fsm_profile_is_battery && m->misc.screen_on)
         return ASB_STATE_MODERATE;
 
     return ASB_STATE_LIGHT_IDLE;
 }
 
-/* Camera floor. The classifier above reads GPU busy and loadavg, and a camera
- * pipeline lights up neither strongly enough to leave MODERATE -- the ISP and
- * the hardware encoder carry the work, while the HAL threads that DO need the
- * CPU need it on a 16.6 ms deadline at 60 fps. Holding at HEAVY for as long as
- * the pipeline streams is the difference between a smooth 4K60 capture and a
- * dropped-frame one; it never lowers a state, so GAMING and SUSTAINED are
- * untouched, and the thermal guards downstream still apply normally. */
+/*
+ * Camera floor.
+ * Holding at HEAVY for as long as the pipeline streams is the difference between a smooth 4K60
+ * capture and a dropped-frame one; it never lowers a state, so GAMING and SUSTAINED are
+ * untouched, and the thermal guards downstream still apply normally.
+ */
 static asb_state_t fsm_desired(const asb_metrics_t *m) {
     asb_state_t s = fsm_desired_base(m);
     if (g_asb_cfg.camera_hold_enable && m->misc.camera_active &&
@@ -792,15 +732,10 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
     else {
         asb_state_t desired = fsm_desired(m);
 
-        /* comfort-first battery brain -- when battery + screen on + device warm,
-         * prevent pushing into SUSTAINED/GAMING heat targets.
-         *
-         * Old behavior capped to MODERATE which crippled UI in mixed-use:
-         * any time CPU hit 42C (which on SD8 Elite Gen 5 happens routinely just from
-         * scrolling + VPN + bg services), FSM dropped from HEAVY caps to MODERATE caps.
-         * Each transition is a write storm + frequency dip + missed UI frames.
-         * Now caps to HEAVY (preserves UI burst frequencies) while still preventing
-         * the deeper SUSTAINED/GAMING entry that would actually heat the device. */
+        /*
+         * comfort-first battery brain -- when battery + screen on + device warm, prevent
+         * pushing into SUSTAINED/GAMING heat targets.
+         */
         if (fsm_profile_is_battery && m->misc.screen_on &&
             m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp && desired > ASB_STATE_HEAVY) {
             /* log first time this fires per minute for visibility */
@@ -994,10 +929,10 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                 fsm->would_bias_mode_a = 0;
             }
 
-            /* Mode B: "hot in hand without CPU panic" — skin and surface both warm
-             * but CPU is cool. Captures device-comfort issue from passive heat
-             * (charging, prolonged playback, warm pocket).
-             * cpu_max_c < 60 = CPU is genuinely cool (not just exited from hot state). */
+            /*
+             * Mode B: "hot in hand without CPU panic" — skin and surface both warm but CPU is
+             * cool.
+             */
             int prev_mode_b = fsm->would_bias_mode_b;
             if (vote_skin >= 75 && vote_surface >= 75 &&
                 m->therm.cpu_max_c > 0 && m->therm.cpu_max_c < 60) {
@@ -1065,8 +1000,10 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         if (!thermal_to_sustained && !gap_to_sustained &&
             desired == ASB_STATE_GAMING)
         {
-            /* ceiling_lock -- if virtual ceiling on big cluster
-             * is below 1.5GHz, GAMING is pointless. Demote to HEAVY. */
+            /*
+             * ceiling_lock -- if virtual ceiling on big cluster is below 1.5GHz, GAMING is
+             * pointless.
+             */
             if (fsm->virtual_ceiling_p1 > 0 && fsm->virtual_ceiling_p1 < 1500000) {
                 desired = ASB_STATE_HEAVY;
             }
@@ -1108,12 +1045,10 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                      ? fsm->up_window
                      : fsm->down_window;
         if (thermal_to_sustained) window = 1;
-        /* UI-burst fast escalation: when desired bumped up by gpu.load_pct≥12
-         * on screen-on, bypass the battery up_window×2 doubling. The 2× is
-         * anti-flap for normal load triggers, but on UI scrolling it adds
-         * 8-10 seconds of stutter before FSM gives MODERATE caps to GPU. With
-         * this bypass, scroll-triggered MODERATE happens at window=1
-         * (immediate next tick). */
+        /*
+         * UI-burst fast escalation: when desired bumped up by gpu.load_pct≥12 on screen-on,
+         * bypass the battery up_window×2 doubling.
+         */
         int ui_burst_path = (m->misc.screen_on && m->gpu.load_pct >= 12 &&
                              desired == ASB_STATE_MODERATE &&
                              fsm->state == ASB_STATE_LIGHT_IDLE);
@@ -1203,17 +1138,12 @@ if (!can_leave &&
         if (new_caps.gpu_max_pct > 90) new_caps.gpu_max_pct = 90;
     }
 
-    /* ── Video-aware GPU ceiling trim (battery/heat saver) ────────────────
-       A full-day capture showed the GPU is the dominant power/heat driver
-       (~728 mA at >40% busy vs ~231 mA near idle) and that high-GPU moments
-       split into two kinds: video playback (high GPU + LOW cpu load) and
-       gaming (high GPU + high cpu load / GAMING state). Cutting either hurts
-       (video stutter / fps loss). But outside both, the GPU ceiling sits well
-       above what light UI ever needs, letting brief spikes ramp the GPU higher
-       than necessary. We trim the ceiling a little ONLY when it's neither video
-       nor gaming, saving the wasteful ramp without touching the cases that need
-       it. Disabled in performance profile and gated off entirely when video is
-       detected. */
+    /*
+     * ── Video-aware GPU ceiling trim (battery/heat saver) ──────────────── A full-day capture
+     * showed the GPU is the dominant power/heat driver (~728 mA at >40% busy vs ~231 mA near
+     * idle) and that high-GPU moments split into two kinds: video playback (high GPU + LOW cpu
+     * load) and gaming (high GPU + high cpu load / GAMING state).
+     */
     {
         int vid_gpu = g_asb_cfg.gpu_video_busy_min > 0
                       ? g_asb_cfg.gpu_video_busy_min : 40;   /* GPU% that counts as "media-heavy" */

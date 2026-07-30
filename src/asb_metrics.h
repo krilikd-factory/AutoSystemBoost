@@ -103,9 +103,9 @@ typedef struct {
     char    headroom_invalid_reason[16];  /* "ok","stuck_100","read_fail","no_iface" */
     int     used_fallback;  /* 1 if this tick used fallback CPU zone instead of primary */
     int     fallback_just_flipped; /* 1 for one tick when used_fallback state flips */
-    /* GPU vendor thermal cap (KGSL pwrlevel). Larger value = lower freq.
-     * 0/-1 = unavailable. Used as backstop signal for soft_clamp when
-     * msm_performance is dead. */
+    /*
+     * GPU vendor thermal cap (KGSL pwrlevel).
+     */
     int     gpu_thermal_pwrlevel;
     int     gpu_thermal_pwrlevel_active;  /* 1 = vendor capping above our write */
 } asb_thermal_t;
@@ -281,23 +281,23 @@ static void metrics_read_gpu(asb_gpu_t *g) {
 }
 
 static int g_cpu_policy_ids[3]   = {0, 6, -1};
-/* Every physical cpufreq policy id discovered (OP12 has 4: 0,2,5,7), plus the
- * slot (0=little,1=big,2=prime) each one is governed by. Lets the writer apply
- * a slot's cap to ALL clusters that belong to it, not just the representative
- * one — without this, OP12's second big cluster (policy2 or policy5) stays
- * unmanaged and pinned low in battery mode. */
+/*
+ * Every physical cpufreq policy id discovered (OP12 has 4: 0,2,5,7), plus the slot
+ * (0=little,1=big,2=prime) each one is governed by.
+ * Lets the writer apply a slot's cap to ALL clusters that belong to it, not just the
+ * representative one — without this, OP12's second big cluster (policy2 or policy5) stays
+ * unmanaged and pinned low in battery mode.
+ */
 static int g_cpu_all_ids[16];
 static int g_cpu_all_slot[16];
 static int g_cpu_all_count = 0;
 static int g_cpu_policy_count    = 0;
-/* Real cpuinfo_max_freq (kHz) for each of the 3 logical slots, captured during
- * topology discovery. The FSM cap bounds in asb_fsm_bounds.generated.h are
- * absolute kHz authored against the SM8650 (OP12) reference (~2.0 GHz little /
- * ~3.3 GHz big). On OP13 (sun, big ~4.32 GHz) and OP15 (canoe, prime 4.6 GHz)
- * those raw numbers are far too low — e.g. the battery FLOOR of 921600 is 21%
- * of OP13's prime, so when smart mode or the thermal net pulls to the floor the
- * UI freezes. We scale every bound by real_hwmax/reference_hwmax per slot so the
- * same bounds table tracks each device's real silicon. */
+/*
+ * Real cpuinfo_max_freq (kHz) for each of the 3 logical slots, captured during topology
+ * discovery.
+ * the battery FLOOR of 921600 is 21% of OP13's prime, so when smart mode or the thermal net
+ * pulls to the floor the UI freezes.
+ */
 static int g_cpu_slot_hwmax[3] = {0, 0, 0};
 #define ASB_BOUNDS_REF_HWMAX_LITTLE 2035200  /* SM8650 policy0 reference */
 #define ASB_BOUNDS_REF_HWMAX_BIG    3302400  /* SM8650 policy7 reference */
@@ -306,17 +306,13 @@ static void cpu_capture_slot_hwmax(void);
 static void cpu_topology_discover(void) {
     if (g_cpu_policy_count > 0) return;
 
-    /* Dynamically enumerate the real cpufreq policies instead of assuming a
-     * fixed layout. SoCs differ: OP15 canoe / OP13 sun expose policy0+policy6
-     * (a 6+2), but OP12 pineapple (SM8650) exposes FOUR policies
-     * policy0/2/5/7 (1+3+2+1). The old code only knew policy6 (->{0,6}) or a
-     * {0,4,7} fallback — neither matches OP12, so its big clusters policy2 and
-     * policy5 were never managed and stayed pinned near their minimum in the
-     * battery profile, which is exactly the "phone is unusable in battery
-     * mode" sluggishness. We now scan policy0..policy15 and record up to 3
-     * representative slots: the first (little), the last (prime), and the
-     * widest-range middle cluster, so the governor's 2-3 slot model maps onto
-     * whatever the hardware actually has. */
+    /*
+     * Dynamically enumerate the real cpufreq policies instead of assuming a fixed layout.
+     * The old code only knew policy6 (->{0,6}) or a {0,4,7} fallback — neither matches OP12,
+     * so its big clusters policy2 and policy5 were never managed and stayed pinned near their
+     * minimum in the battery profile, which is exactly the "phone is unusable in battery mode"
+     * sluggishness.
+     */
     int found[16]; int nf = 0;
     for (int p = 0; p < 16 && nf < 16; p++) {
         char path[128];
@@ -354,11 +350,11 @@ static void cpu_topology_discover(void) {
         cpu_capture_slot_hwmax();
         return;
     }
-    /* 3+ clusters (OP12 has 4): map slot0=little(first), slot2=prime(last),
-     * slot1=the strongest middle cluster (highest cpuinfo_max_freq among the
-     * middles) so the "big" slot tracks the cluster that actually carries the
-     * interactive load. This keeps every physical cluster represented by one
-     * of the three managed slots. */
+    /*
+     * 3+ clusters (OP12 has 4): map slot0=little(first), slot2=prime(last), slot1=the
+     * strongest middle cluster (highest cpuinfo_max_freq among the middles) so the "big" slot
+     * tracks the cluster that actually carries the interactive load.
+     */
     int first = found[0];
     int last  = found[nf - 1];
     int mid   = found[1];
@@ -379,10 +375,10 @@ static void cpu_topology_discover(void) {
     g_cpu_policy_ids[2] = last;
     g_cpu_policy_count  = 3;
 
-    /* Record EVERY physical policy and which slot governs it, so the writer can
-     * mirror a slot's cap onto all clusters it represents. Assignment: the
-     * first policy -> little(0); the last -> prime(2); every middle policy ->
-     * big(1). On OP12 that puts BOTH policy2 and policy5 under the big slot. */
+    /*
+     * Record EVERY physical policy and which slot governs it, so the writer can mirror a
+     * slot's cap onto all clusters it represents.
+     */
     g_cpu_all_count = 0;
     for (int i = 0; i < nf && g_cpu_all_count < 16; i++) {
         int slot;
@@ -414,10 +410,10 @@ static void cpu_capture_slot_hwmax(void) {
     }
 }
 
-/* Scale an absolute bound (authored against the SM8650 reference) to this
- * device's real silicon for the given slot. slot 0 uses the little reference,
- * slots 1/2 use the big reference. Returns the input unchanged if we have no
- * hwmax (keeps old behaviour as a safe fallback). */
+/*
+ * Scale an absolute bound (authored against the SM8650 reference) to this device's real
+ * silicon for the given slot.
+ */
 static int asb_bounds_scale(int slot, int kHz) {
     if (kHz <= 0 || slot < 0 || slot > 2) return kHz;
     int hw = g_cpu_slot_hwmax[slot];
@@ -549,8 +545,9 @@ int cpu_prio = -1;
         }
 
         if (cpu_prio > 0 && cpu_prio <= best_cpu_prio) {
-            /* when same priority (e.g. two cpu-1-1-* sensors), pick the
-             * hotter reading for more stable/honest telemetry between boots. */
+            /*
+             * when same priority (e.g.
+             */
             int dominated = 0;
             if (cpu_prio == best_cpu_prio && g_thermal_cpu_zone >= 0) {
                 char cp1[128], cp2[128];
@@ -586,11 +583,9 @@ int cpu_prio = -1;
             } /* end if (!dominated) */
         }
 
-        /* skin_temp = LITERAL shell sensors only. If shell_front/frame/back
-         * all return 0 on this firmware, accept skin_temp = 0 and signal
-         * that via thermal_skin_zone = -1. Surface hotspot keeps its own
-         * channel. Falling back to sys-therm-6 collapses skin and surface
-         * into the same channel, which destroys the dual-channel taxonomy. */
+        /*
+         * skin_temp = LITERAL shell sensors only.
+         */
         int skin_prio = -1;
         if (strcmp(type, "shell_frame") == 0)
             skin_prio = 1;
@@ -610,13 +605,11 @@ int cpu_prio = -1;
             }
         }
 
-        /* SURFACE HOTSPOT priority (surface_hotspot_c channel).
-         * Ghost hotspot -- the hottest general body-adjacent zone, not a
-         * literal shell sensor. On OP15 this is sys-therm-6 (40.9C at idle),
-         * which is the best proxy for "where the hot spot on the back really
-         * is". Used for diagnostics and thermal diagnostics only -- does not
-         * drive FSM decisions. We EXCLUDE pmic/pmih010x and svooc zones
-         * because those reflect power draw / charging IC, not surface heat. */
+        /*
+         * SURFACE HOTSPOT priority (surface_hotspot_c channel).
+         * We EXCLUDE pmic/pmih010x and svooc zones because those reflect power draw / charging
+         * IC, not surface heat.
+         */
         int surface_prio = -1;
         if (strcmp(type, "sys-therm-6") == 0)
             surface_prio = 1;
@@ -637,20 +630,9 @@ int cpu_prio = -1;
         }
     }
 
-    /* two-pass socd cross-reference sanity check.
-     *
-     * First pass selected socd if it passed the >10C floor. But socd on some
-     * OP15 firmwares drifts — it reads plausibly at boot (e.g. 55C) and then
-     * reports 20-22C during runtime while cpu_prime / cpu_perf cores report
-     * 30-35C and sys-therm-6 is 40C. That's wrong, not cold.
-     *
-     * Second pass: if socd was selected, collect reference temps from peer
-     * CPU sensors (cpu-1-1-*, cpu-0-5-*, cpullc-0-*) and from sys-therm-6.
-     * If socd is more than 12C BELOW the hottest peer, reject it and
-     * fall back to the best available cpu-* sensor.
-     *
-     * Also: always record a fallback zone during the scan so read-time
-     * rejections can re-bind without losing the sensor entirely. */
+    /*
+     * two-pass socd cross-reference sanity check.
+     */
     {
         int ref_max_c = 0;
         char ref_max_type[64] = "";
@@ -745,10 +727,10 @@ static time_t g_last_thermal_rescan = 0;    /* periodic rescan if skin zone miss
 static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
     char path[128];
 
-    /* if any of the three thermal zones (cpu / skin / surface) wasn't
-     * found at startup (validate failed on a transient read), retry every 60
-     * seconds. Cheap — iterates 128 sysfs files. Only triggers while at
-     * least one zone is still -1. */
+    /*
+     * if any of the three thermal zones (cpu / skin / surface) wasn't found at startup
+     * (validate failed on a transient read), retry every 60 seconds.
+     */
     if (g_thermal_skin_zone < 0 || g_thermal_cpu_zone < 0 || g_thermal_surface_zone < 0) {
         time_t now = time(NULL);
         if (now - g_last_thermal_rescan >= 60) {
@@ -782,13 +764,9 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
         int v = sysfs_read_int(path, 0);
         if (v > 0) {
             int c_now = thermal_raw_to_c(v);
-            /* runtime socd drift detection.
-             * If the bound zone is socd AND a fallback zone was discovered
-             * AND the fallback reads significantly hotter than socd,
-             * trust the fallback instead (don't flap: just use it for THIS
-             * read, keep socd bound for next cycle — the next cycle will
-             * re-check). This prevents socd reporting "20C" during active
-             * use while cpu cores are at 33C from cascading into FSM. */
+            /*
+             * runtime socd drift detection.
+             */
             int used_fallback = 0;
             int fb_c = 0;
             if (strcmp(g_thermal_cpu_type, "socd") == 0 &&
@@ -823,20 +801,13 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
             static int raw_too_low_streak = 0;
             int rebound_this_tick = 0;
             if (c_now > 0 && c_now <= 10) {
-                /* RC9: runtime socd rebind.
-                 *
-                 * Previous behavior: every tick where socd reads <=10C we mark
-                 * temp_invalid_reason=raw_too_low and use last cached value.
-                 * But logs showed this lasting 442 consecutive ticks — socd
-                 * was just permanently broken during the session. The per-tick
-                 * workaround kept the governor on a dead sensor forever.
-                 *
-                 * New behavior: if primary is socd AND raw_too_low happens
-                 * for >= 5 consecutive ticks AND fallback is available AND
-                 * fallback reads a plausible temperature, permanently rebind
-                 * primary to fallback for the rest of this session. Real
-                 * re-binding via g_thermal_cpu_zone update, not a per-tick
-                 * workaround. */
+                /*
+                 * RC9: runtime socd rebind.
+                 * New behavior: if primary is socd AND raw_too_low happens for >= 5
+                 * consecutive ticks AND fallback is available AND fallback reads a plausible
+                 * temperature, permanently rebind primary to fallback for the rest of this
+                 * session.
+                 */
                 raw_too_low_streak++;
                 if (raw_too_low_streak >= 5 &&
                     strcmp(g_thermal_cpu_type, "socd") == 0 &&
@@ -942,22 +913,18 @@ int spike_detected = 0;
         t->skin_temp_c = thermal_raw_to_c(sv);
     }
 
-    /* Re-decide throttling on the skin-anchored gate now that the shell sensor has
-     * been read this tick. The junction (cpu_max) throttle above fires at 85-95 C
-     * under any load; when a real skin sensor is present we instead throttle on
-     * user-facing heat (skin >= thermal_skin_c) or a junction hard-limit. With no
-     * skin sensor asb_therm_skin_engage returns -1 and the junction decision from
-     * above stands (fully backward-compatible). */
+    /*
+     * Re-decide throttling on the skin-anchored gate now that the shell sensor has been read
+     * this tick.
+     */
     {
         int _se = asb_therm_skin_engage(&g_asb_cfg, t->cpu_max_c, t->skin_temp_c);
         if (_se >= 0) t->throttling = _se;
     }
 
-    /* surface_hotspot = max(sys-therm-6, board_temp).
-     * sys-therm-6 on OP15 reads nearly static 40C even under load.
-     * board_temp actually rises (up to 47-50C in heavy gaming) and better
-     * reflects heat accumulation across the PCB. Using max() of both gives
-     * a surface channel that's actually informative instead of flat 40/41. */
+    /*
+     * surface_hotspot = max(sys-therm-6, board_temp).
+     */
     if (g_thermal_surface_zone >= 0) {
         snprintf(path, sizeof(path),
             THERMAL_BASE "/thermal_zone%d/temp", g_thermal_surface_zone);
@@ -1011,31 +978,19 @@ int spike_detected = 0;
                     if (t->headroom_pct < hard_pct) t->hard_clamp = 1;
                     t->headroom_valid = 1;
                     snprintf(t->headroom_invalid_reason, sizeof(t->headroom_invalid_reason), "ok");
-                    /* detect "dead" headroom signal on SoCs like SM8850 where
-                     * msm_performance always reports max freq → headroom permanently 100%.
-                     * If headroom has been 100% for 10+ consecutive reads, downgrade
-                     * to headroom_valid=0 (advisory-only) so the FSM doesn't rely on
-                     * a perpetually optimistic signal for decision-making.
-                     *
-                     * track lifetime stuck count too — once we've seen
-                     * 60+ consecutive stuck_100 readings (10 minutes at default tick),
-                     * mark the source permanently unreliable for this boot session.
-                     * Stops costly read attempts and lets FSM avoid re-checking. */
+                    /*
+                     * detect "dead" headroom signal on SoCs like SM8850 where msm_performance
+                     * always reports max freq → headroom permanently 100%.
+                     */
                     {
                         static int headroom_100_streak = 0;
                         static int headroom_dead_session = 0;
                         static int implausible_hot_streak = 0;
                         static int headroom_recover_streak = 0;
                         if (headroom_dead_session) {
-                            /* Previously latched as a dead/stuck msm_performance
-                             * interface. But on SM8850 the signal is only dead
-                             * SOME of the time (it reports a real capped value once
-                             * the kernel actually clamps, e.g. 2227200 = 61%). If we
-                             * now see a plausible, non-100% reading for several reads
-                             * in a row, the interface is alive again — recover so the
-                             * WebUI "headroom" stops showing a permanent n/a. A
-                             * single good read isn't enough (avoids flapping); 5 in a
-                             * row clears the latch. */
+                            /*
+                             * Previously latched as a dead/stuck msm_performance interface.
+                             */
                             if (t->headroom_pct < 100 &&
                                 !(t->cpu_max_c >= 60 && t->headroom_pct >= 95)) {
                                 headroom_recover_streak++;
@@ -1060,11 +1015,10 @@ int spike_detected = 0;
                             }
                         } else if (t->headroom_pct >= 100) {
                             headroom_100_streak++;
-                            /* implausible_hot_100 detector — chatgpt review flagged
-                             * that headroom=100 while CPU=60-69°C is physically wrong.
-                             * On SM8850 msm_performance overestimates under real thermal
-                             * pressure. Track separate streak: 3+ ticks of headroom=100
-                             * with CPU>=60°C → downgrade trust immediately. */
+                            /*
+                             * implausible_hot_100 detector — chatgpt review flagged that
+                             * headroom=100 while CPU=60-69°C is physically wrong.
+                             */
                             if (t->cpu_max_c >= 60 && t->headroom_pct >= 95) {
                                 implausible_hot_streak++;
                                 if (implausible_hot_streak >= 3) {
@@ -1141,23 +1095,11 @@ static void metrics_read_network(asb_misc_t *m, const struct timespec *now) {
     g_wlan_ts_prev = *now;
 }
 
-/* ---------------------------------------------------------------------------
- * Camera activity.
- *
- * The FSM classifies load from GPU busy + 1-minute loadavg. A 4K60 capture
- * lights up neither: the ISP and the hardware encoder do the work, and the
- * handful of camera HAL threads that DO run on the CPU barely move a
- * 8-core loadavg. So the FSM sat in MODERATE while the pipeline was missing
- * its 16.6 ms deadline against battery-shaped caps -- reported from the field
- * as stuttering 4K60 recording and playback that cleared the moment the CPU
- * tweaks were removed.
- *
- * The signal used here is the camera provider process's own CPU time. It is
- * one long-lived process started at boot, so the /proc scan that finds it runs
- * once; from then on this is a single open+read per tick. Busy provider =
- * camera streaming, and that is true for the OEM camera app, third-party apps
+/*
+ * --------------------------------------------------------------------------- Camera activity.
+ * Busy provider = camera streaming, and that is true for the OEM camera app, third-party apps
  * and any HAL client alike.
- * ------------------------------------------------------------------------ */
+ */
 #define ASB_CAM_RESCAN_COOLDOWN_S 30
 
 static pid_t             g_cam_pid = 0;

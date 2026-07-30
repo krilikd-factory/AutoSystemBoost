@@ -300,7 +300,9 @@ static int asb_smart_is_system_ui(const char *pkg) {
     return 0;
 }
 
-/* Strip activity component suffix from "com.foo/.MainActivity" → "com.foo" */
+/*
+ * Strip activity component suffix from "com.foo/.MainActivity" → "com.foo"
+ */
 static void asb_smart_strip_activity(char *s) {
     if (!s) return;
     char *slash = strchr(s, '/');
@@ -312,10 +314,9 @@ static void asb_smart_strip_activity(char *s) {
     }
 }
 
-/* Source 1: cmd activity get-current-user-id (Android 10+).
- * Run: dumpsys activity top | grep -m1 ACTIVITY
- * The first ACTIVITY line is the top-most resumed.
- * Returns 1 on success (pkg filled). */
+/*
+ * Source 1: cmd activity get-current-user-id (Android 10+).
+ */
 static int asb_smart_pkg_via_activity_top(char *out_pkg, size_t outsz) {
     if (!out_pkg || outsz == 0) return 0;
     out_pkg[0] = '\0';
@@ -324,7 +325,9 @@ static int asb_smart_pkg_via_activity_top(char *out_pkg, size_t outsz) {
     char line[512];
     int got = 0;
     if (fgets(line, sizeof(line), p)) {
-        /* line: "  ACTIVITY com.activision.callofduty.shooter/.ui... u0 pid=..."  */
+        /*
+         * line: " ACTIVITY com.activision.callofduty.shooter/.ui...
+         */
         char *act = strstr(line, "ACTIVITY ");
         if (act) {
             act += 9;
@@ -351,7 +354,9 @@ static int asb_smart_pkg_via_resumed(char *out_pkg, size_t outsz) {
     char line[512];
     int got = 0;
     if (fgets(line, sizeof(line), p)) {
-        /* line: "  mResumedActivity: ActivityRecord{... u0 com.foo/.Bar t123}" */
+        /*
+         * line: " mResumedActivity: ActivityRecord{...
+         */
         char *u0 = strstr(line, " u0 ");
         if (!u0) u0 = strstr(line, " u10 ");
         if (u0) {
@@ -419,10 +424,9 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
 
     asb_pkg_status_t st;
     if (!pkg[0]) {
-        /* All sources failed. Check cache (20s window — long enough to ride
-         * out a transient SELinux deny, short enough that a closed game's
-         * hint doesn't linger). Decay gaming/heavy one level while stale so a
-         * backgrounded game stops reporting full gaming intent. */
+        /*
+         * All sources failed.
+         */
         if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < 20) {
             if (out_pkg && outsz > 0) {
                 strncpy(out_pkg, g_pkg_cache.pkg, outsz - 1);
@@ -706,8 +710,9 @@ static int asb_smart_app_hash_to_hex(uint64_t h, char *out, size_t outsz) {
  * Part 2: Math, blend, overrides, learning (Session 3)
  * ============================================================ */
 
-/* Map duration in seconds to weight × 100.
- * <10min=0.25, 10-30min=0.50, 30-90min=1.00, >90min=1.25 */
+/*
+ * Map duration in seconds to weight × 100.
+ */
 static uint16_t asb_smart_duration_weight_x100(int dur_s) {
     if (dur_s < 0) dur_s = 0;
     if (dur_s <  ASB_SMART_DUR_W_SHORT_MAX_S) return ASB_SMART_DUR_W_SHORT_X100;
@@ -736,8 +741,9 @@ static uint16_t asb_smart_eff_obs_add_x100(int dur_s, int trust) {
     return (uint16_t)prod;
 }
 
-/* Decay factor × 100 based on time since last_seen.
- * <7 days: 1.00 (100), 7-37 days linear to 0.30 (30), >37 days: 0 */
+/*
+ * Decay factor × 100 based on time since last_seen.
+ */
 static int asb_smart_decay_x100(uint32_t last_seen_ts, time_t now) {
     if (last_seen_ts == 0) return 100;
     if ((uint32_t)now <= last_seen_ts) return 100;
@@ -789,16 +795,9 @@ static int asb_smart_daypart_class(int daypart) {
     }
 }
 
-/* Lookup bucket with hierarchical fallback.
- * Returns bucket pointer + sets *fallback_level (0=exact, 4=safe default).
+/*
+ * Lookup bucket with hierarchical fallback.
  * Safe default bucket is a static synthesized fallback (never NULL).
- *
- * Hierarchy:
- *   0 EXACT: (daypart, is_weekend)
- *   1 DAYPART_ONLY: best of (daypart, weekday) or (daypart, weekend) by confidence
- *   2 CLASS: best of class-peer dayparts (e.g., SLEEP/LATE for night)
- *   3 GLOBAL: best bucket overall by confidence
- *   4 SAFE: synthesized conservative defaults
  */
 static asb_smart_bucket_t* asb_smart_lookup_bucket(
         asb_smart_store_t *st,
@@ -916,15 +915,11 @@ static void asb_smart_compute_effective(
     }
     rt->conf_x1000 = conf_x1000;
 
-    /* effective scale: NEVER zero out the seed/learned bias.
-     * Even at zero confidence we apply seed-encoded daypart priors at 25% influence.
+    /*
+     * effective scale: NEVER zero out the seed/learned bias.
      * Rationale: sleep daypart seeds alpha=950 for good reason (battery-lean at night);
      * dropping to neutral 500 means the user gets no benefit until weeks of learning.
-     *
-     * Tiers:
-     *   conf < low:    25%  influence (seed priors honored)
-     *   low → high:    25% → 60%
-     *   high → max:    60% → 100% */
+     */
     int eff_scale_x1000;
     if (conf_x1000 < ASB_SMART_CONF_LOW_X1000) {
         /* was 0. Now 250 — always honor seeded priors. */
@@ -997,13 +992,12 @@ static void asb_smart_apply_night_override(
     }
 }
 
-/* V50 charge-aware layer.
- * Runs after night/idle/lowbat overrides and before the thermal veto, so:
- *   - the assist (performance lean) is suppressed whenever a safety
- *     override already fired, and the veto can still undo it afterwards;
- *   - the cool-charge guard only raises floors, never lowers them.
- * Inputs: batt_temp_dC from power_supply (deci-degC), charge power class
- * precomputed by the caller from |current| × voltage. */
+/*
+ * V50 charge-aware layer.
+ * Runs after night/idle/lowbat overrides and before the thermal veto, so: - the assist
+ * (performance lean) is suppressed whenever a safety override already fired, and the veto can
+ * still undo it afterwards; - the cool-charge guard only raises floors, never lowers them.
+ */
 static void asb_smart_apply_charge_aware(
         int enable,
         int charging,
@@ -1073,12 +1067,12 @@ static void asb_smart_apply_idle_screen_override(
     if (app_hint >= ASB_APP_HEAVY) return;
     if (screen_off_seconds < 30) return;
 
-    /* Short screen-off (30-120s): the common "glance and put down" window. The
-     * data showed Smart sitting at its low learned daytime alpha (~400) through
-     * these gaps because the only floor kicked in at 120s — leaving easy economy
-     * on the table with zero UX cost (the screen is off). Apply a gentle lean
-     * here: enough to back the GPU/big cores off, but below the 700 floor of the
-     * sustained-off tier so a quick re-wake isn't sluggish. */
+    /*
+     * Short screen-off (30-120s): the common "glance and put down" window.
+     * The data showed Smart sitting at its low learned daytime alpha (~400) through these gaps
+     * because the only floor kicked in at 120s — leaving easy economy on the table with zero
+     * UX cost (the screen is off).
+     */
     if (screen_off_seconds < 120) {
         if (rt->alpha_battery_x1000 < 600) rt->alpha_battery_x1000 = 600;
         if (rt->sleep_bias_x1000 < 150)    rt->sleep_bias_x1000 = 150;
@@ -1149,11 +1143,9 @@ static void asb_smart_apply_thermal_veto(
     if (!rt) return;
     rt->thermal_veto = 0;
 
-    /* Decision sensor: prefer user-facing skin (shell) heat. The cpu_max junction
-     * sensor sits at 85-95 C under any real load, so gating the veto on it alone
-     * false-fires during normal bursts — forcing battery-lean and defeating
-     * race-to-idle (worse heat AND drain). asb_therm_skin_engage returns
-     * 1/0/-1 (-1 = no usable skin sensor -> keep the original junction gate). */
+    /*
+     * Decision sensor: prefer user-facing skin (shell) heat.
+     */
     int se = asb_therm_skin_engage(cfg, cpu_max_c, skin_temp_c);
     int dtemp, dlo, dhi;
     if (se >= 0) {                          /* skin sensor usable */
@@ -1482,12 +1474,10 @@ static int asb_smart_session_quality_ex(
         if (bat >= 0 && bat < worst)    { worst = bat;    code = ASB_QFAIL_BATTERY; }
         if (heat < worst)               { worst = heat;   code = ASB_QFAIL_HEAT; }
         if (stab < worst)               { worst = stab;   code = ASB_QFAIL_STABILITY; }
-        /* Vendor-war is named the primary failure only when it is the dominant
-           cause by a clear margin. Under heavy load (gaming) the vendor clamps
-           for legitimate thermal protection, which scores q_vendor low without
-           being the real problem — there, battery and heat are the honest
-           verdict. Requiring vendor to beat the next-worst component by 15
-           points stops it from hijacking the verdict on a hot, hungry session. */
+        /*
+         * Vendor-war is named the primary failure only when it is the dominant cause by a
+         * clear margin.
+         */
         if (vendor >= 0 && vendor < worst - 15) { worst = vendor; code = ASB_QFAIL_VENDOR_WAR; }
         out->primary_failure = (worst < 70) ? code : ASB_QFAIL_NONE;
     }
@@ -1559,16 +1549,9 @@ static void asb_smart_apply_thermal_trend(
     }
 }
 
-/* — Memory pressure adaptation.
- * Read /proc/pressure/memory (PSI). When the system is already memory-stressed
- * (heavy swapping, oom-prone), there's no real perf benefit to high CPU caps —
- * the bottleneck is RAM. Bias toward battery to stop burning power on stalls.
- *
- * PSI format:
- *   some avg10=0.00 avg60=0.00 avg300=0.00 total=...
- *   full avg10=0.00 ...
- *
- * Returns shift to add to alpha_battery_x1000 (0 if no pressure, +50/+100 if some). */
+/*
+ * — Memory pressure adaptation.
+ */
 static int asb_smart_memory_pressure_shift(void) {
     FILE *f = fopen("/proc/pressure/memory", "r");
     if (!f) return 0;
@@ -1605,14 +1588,9 @@ static void asb_smart_apply_memory_pressure(asb_smart_runtime_t *rt) {
     }
 }
 
-/* — Signal-aware net_conservative adjustment.
- * When cellular signal is weak, the modem burns disproportionate power scanning
- * and ramping PA to maintain link. Bumping net_conservative makes the governor
- * prefer holding existing connections rather than aggressively reconnecting.
- *
- * Signal quality estimate: scan /sys/class/net/rmnet[NUM]/operstate. If we see
- * mostly 'down' or 'dormant' on cellular interfaces, treat as weak signal.
- * Best-effort — different devices expose signal differently. */
+/*
+ * — Signal-aware net_conservative adjustment.
+ */
 static int asb_smart_radio_weak_signal(void) {
     DIR *d = opendir("/sys/class/net");
     if (!d) return 0;
@@ -1649,14 +1627,11 @@ static void asb_smart_apply_signal_aware(asb_smart_runtime_t *rt) {
     }
 }
 
-/* — Refresh-rate-aware interactive_bonus shift.
- * Lower panel refresh rate (60 Hz vs 144 Hz) inherently means less GPU/CPU
- * frame work per second. The interactive_bonus (peak headroom) can be
- * slightly reduced at low refresh rates with no UX impact.
- *
- * Read /sys/class/drm/sde-crtc-0/measured_fps if present (Qualcomm),
- * or /sys/class/graphics/fb0/measured_fps as fallback.
- * Returns 0 if unknown, else multiplier × 100 to apply to interactive_bonus. */
+/*
+ * — Refresh-rate-aware interactive_bonus shift.
+ * Lower panel refresh rate (60 Hz vs 144 Hz) inherently means less GPU/CPU frame work per
+ * second.
+ */
 static int asb_smart_refresh_rate_hz(void) {
     static const char *paths[] = {
         "/sys/class/drm/sde-crtc-0/measured_fps",
@@ -1683,8 +1658,9 @@ static void asb_smart_apply_refresh_rate(asb_smart_runtime_t *rt) {
     if (rt->night_safe_override || rt->thermal_veto) return;
     int hz = asb_smart_refresh_rate_hz();
     if (hz <= 0) return;
-    /* At 60 Hz, reduce interactive_bonus by ~30% (save more without UX hit).
-     * At 90 Hz reduce by ~15%. At 120+ Hz no change. */
+    /*
+     * At 60 Hz, reduce interactive_bonus by ~30% (save more without UX hit).
+     */
     int scale_x100;
     if (hz <= 65) scale_x100 = 70;          /* 60 Hz */
     else if (hz <= 95) scale_x100 = 85;     /* 90 Hz */
@@ -1695,15 +1671,9 @@ static void asb_smart_apply_refresh_rate(asb_smart_runtime_t *rt) {
     rt->interactive_bonus_x1000 = reduced;
 }
 
-/* — Gaming app cap relaxation.
- * When user explicitly chose a high-perf app (GAMING hint) AND device has
- * thermal headroom, soften the alpha so the app gets closer to balanced.
- * Respect the user's intent without giving up battery during cool gaming
- * sessions. If device is hot, thermal_veto already locked us → no-op.
- *
- * Triggers: app_hint == GAMING + cpu_max_c < ASB_SMART_GAMING_RELAX_TEMP_C
- * + no thermal_veto.
- * Effect:   clamp alpha to ≤ 400 (balanced-leaning) for this tick. */
+/*
+ * — Gaming app cap relaxation.
+ */
 static void asb_smart_apply_gaming_relax(int app_hint, int cpu_max_c,
                                           asb_smart_runtime_t *rt) {
     if (!rt) return;
@@ -1715,18 +1685,12 @@ static void asb_smart_apply_gaming_relax(int app_hint, int cpu_max_c,
     }
 }
 
-/* - Camera relax.
- * Smart mode's battery lean is the second half of the 4K60 stutter: the FSM
- * can be held at HEAVY and still be handed battery-shaped rails, because the
- * blend between the battery and balanced bounds is driven by alpha. While the
- * camera streams, alpha is pulled to the balanced end and the interactive
- * bonus is given a floor.
- *
- * This deliberately overrides the SOFT thermal lean (rt->thermal_veto only
- * moves alpha). The hard limits are untouched: the junction guard and the
- * writer's thermal cap still throttle exactly as before, so a genuinely hot
- * SoC is still protected -- what changes is that a merely warm one no longer
- * costs the user their recording. Night-safe still wins outright. */
+/*
+ * - Camera relax.
+ * Smart mode's battery lean is the second half of the 4K60 stutter: the FSM can be held at
+ * HEAVY and still be handed battery-shaped rails, because the blend between the battery and
+ * balanced bounds is driven by alpha.
+ */
 static void asb_smart_apply_camera_relax(int camera_active,
                                          asb_smart_runtime_t *rt) {
     if (!rt) return;
@@ -1752,14 +1716,10 @@ static void asb_smart_apply_v48_modifiers(
     asb_smart_apply_gaming_relax(app_hint, cpu_max_c, rt);
 }
 
-/* Blend two profile bounds structures using alpha_battery_x1000.
- * alpha=0 → all balanced, alpha=1000 → all battery.
+/*
+ * Blend two profile bounds structures using alpha_battery_x1000.
  * Output is clamped to never exceed balanced sustained envelope.
- *
- * This is a generic int-based blend; the actual asb_profile_bounds_t struct
- * lives in asb_fsm.h. We expose a simple field-by-field blender via two
- * arrays of values supplied by the caller. The caller (Session 4 integration)
- * unpacks the profile bounds struct into arrays, calls blend, and packs back. */
+ */
 static void asb_smart_blend_values_int(
         const int *battery_vals,
         const int *balanced_vals,
@@ -1799,10 +1759,9 @@ static int asb_smart_apply_interactive_bonus(
     return boosted;
 }
 
-/* Update bucket bias values from one session outcome.
- * Called on session finalize. Adjusts alpha_battery, interactive_bonus,
- * sleep_bias, net_conservative based on whether session was hot/drainy/clean.
- * Learning rate intentionally slow (ASB_SMART_LEARN_RATE_X1000 = 50 = 5%). */
+/*
+ * Update bucket bias values from one session outcome.
+ */
 typedef struct {
     int dur_s;
     int max_temp_c;
@@ -1944,9 +1903,10 @@ static void asb_smart_bucket_update_from_session(
     b->conf_x1000 = asb_smart_confidence_x1000(b, now);
 }
 
-/* Slot-update gating: returns 1 if PROFILE_SMART bounds should be recomputed
- * this tick, 0 if cached values are still valid.
- * Called from governor.c tick path. */
+/*
+ * Slot-update gating: returns 1 if PROFILE_SMART bounds should be recomputed this tick, 0 if
+ * cached values are still valid.
+ */
 static int asb_smart_should_update_slot(
         const asb_smart_runtime_t *rt,
         time_t now,
@@ -2000,11 +1960,10 @@ static void asb_smart_mark_slot_updated(
     rt->prev_daypart   = rt->daypart;
 }
 
-/* Daypart transition smoothing helper.
- * Returns blend factor × 100 (0..100) representing transition progress.
- * Smoothing active only if both prev_conf and cur_conf >= LOW threshold.
+/*
+ * Daypart transition smoothing helper.
  * Otherwise returns 100 (full new bucket, hard switch).
- * Thermal veto and night override caller-side break smoothing. */
+ */
 static int asb_smart_daypart_smoothing_factor_x100(
         time_t smoothing_start,
         time_t now,

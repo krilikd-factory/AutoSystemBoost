@@ -47,14 +47,10 @@ LDFLAGS=(-lm)
 chmod 0755 "$OUT_DIR/$ASB_BIN_NAME"
 ls -lh "$OUT_DIR/$ASB_BIN_NAME"
 
-# ---------------------------------------------------------------------------
-# ASB DSP audio effect (libasbdsp.so)
-# A shared library loaded by audioserver, so it needs -shared/-fPIC instead of
-# the PIE flags used for the governor binary. Built only for the release name;
-# the debug build reuses the same .so.
-# ---------------------------------------------------------------------------
-# Accept either src/dsp or src/DSP: Linux CI is case-sensitive and the directory has
-# lived under both spellings, which silently skipped the DSP build (no .so, no effect).
+# --------------------------------------------------------------------------- ASB DSP audio
+# effect (libasbdsp.so) A shared library loaded by audioserver, so it needs -shared/-fPIC
+# instead of the PIE flags used for the governor binary.
+# Built only for the release name; the debug build reuses the same .so.
 DSP_SRC=""; DSP_INC=""
 for _d in dsp DSP; do
   if [ -f "$SCRIPT_DIR/$_d/asb_dsp.c" ]; then
@@ -62,16 +58,16 @@ for _d in dsp DSP; do
   fi
 done
 if [ -n "$DSP_SRC" ]; then
-  # Build BOTH ABIs. /vendor/lib/soundfx and /vendor/lib64/soundfx both exist on the
-  # target, and an effect library has to match the bitness of the process that dlopens
-  # it - a 64-bit .so dropped into lib/soundfx simply fails to load. This is why
-  # ViperFX and every other effect ships a pair.
+  # Build BOTH ABIs.
+  # /vendor/lib/soundfx and /vendor/lib64/soundfx both exist on the target, and an effect
+  # library has to match the bitness of the process that dlopens it - a 64-bit .so dropped into
+  # lib/soundfx simply fails to load.
   for _abi in arm64-v8a armeabi-v7a; do
-    # Do not hard-code the API in the wrapper name. The NDK ships one clang wrapper per
-    # (triple, API) pair and which APIs exist moves between NDK releases - a missing
-    # armv7a-linux-androideabi24-clang silently dropped the whole 32-bit build and the
-    # only symptom was /system/vendor/lib/soundfx never appearing in the module.
-    # Prefer the requested API, otherwise take the lowest one the NDK actually has.
+    # Do not hard-code the API in the wrapper name.
+    # The NDK ships one clang wrapper per (triple, API) pair and which APIs exist moves between
+    # NDK releases - a missing armv7a-linux-androideabi24-clang silently dropped the whole
+    # 32-bit build and the only symptom was /system/vendor/lib/soundfx never appearing in the
+    # module.
     case "$_abi" in
       arm64-v8a)   _dtriple="aarch64-linux-android" ;;
       armeabi-v7a) _dtriple="armv7a-linux-androideabi" ;;
@@ -103,12 +99,9 @@ if [ -n "$DSP_SRC" ]; then
     )
     # Prefer a VERSIONED prebuilt over the generic name.
     #
-    # libasbdsp_aidl.so and libasbdsp_v3.so are the same bytes - the DSP workflow writes
-    # both, one under the historical name this script has always looked for and one named
-    # by the interface version it was built against. Keeping only the versioned files is
-    # the tidier repo, so accept those first and fall back to the old name. Highest
-    # version wins: a tree that ships v2 and v3 should hand the generic slot the newer
-    # one, since that slot is what a device gets when the probe finds no exact match.
+    # libasbdsp_aidl.so and libasbdsp_v3.so are the same bytes - the DSP workflow writes both,
+    # one under the historical name this script has always looked for and one named by the
+    # interface version it was built against.
     _aidl_dir="${ASB_DSP_AIDL_DIR:-$SCRIPT_DIR/DSP_AIDL/prebuilt}/$_abi"
     _aidl_pre=""
     for _vc in $(ls "$_aidl_dir"/libasbdsp_v*.so 2>/dev/null | sort -rV); do
@@ -117,23 +110,17 @@ if [ -n "$DSP_SRC" ]; then
     done
     [ -n "$_aidl_pre" ] || _aidl_pre="$_aidl_dir/libasbdsp_aidl.so"
     if [ "${ASB_DSP_AIDL:-0}" = "1" ] || [ -f "$_aidl_pre" ]; then
-      # AIDL build path. The AIDL effect (src/DSP_AIDL) needs AOSP effect-AIDL + FMQ
-      # headers that plain NDK clang does not ship, so it is built by soong, not here.
-      # This branch VERIFIES a pre-built libasbdsp_aidl.so has been dropped in and
-      # copies it to the on-disk name the installer registers (libasbdsp.so). It fires
-      # automatically when a prebuilt is present, so a missing flag can't silently ship
-      # the legacy effect that Android 13+ will not load.
+      # AIDL build path.
+      # It fires automatically when a prebuilt is present, so a missing flag can't silently
+      # ship the legacy effect that Android 13+ will not load.
       if [ ! -f "$_aidl_pre" ]; then
         echo "[ASB] ERROR: ASB_DSP_AIDL=1 but $_aidl_pre not found (build it with soong: mm libasbdsp_aidl)" >&2
         exit 1
       fi
       cp -f "$_aidl_pre" "$_dout/libasbdsp.so"
-      # Freshness gate. Every distinctive log literal that exists in the source must also
-      # exist in the binary; if one is missing, the prebuilt is from an older build than
-      # the sources next to it. This is fatal, not a warning: shipping a stale library
-      # here put a version on the device that answered the effect factory with an error
-      # and left the phone with zero audio effects at all, while every symptom pointed at
-      # the code rather than at packaging.
+      # Freshness gate.
+      # Every distinctive log literal that exists in the source must also exist in the binary;
+      # if one is missing, the prebuilt is from an older build than the sources next to it.
       _src_fx="$SCRIPT_DIR/DSP_AIDL/asb_effect_aidl.cpp"
       _missing=""
       for _lit in "ASB queryEffect" "ASB createEffect" "ASB configure" "ASB process"; do
@@ -164,13 +151,11 @@ if [ -n "$DSP_SRC" ]; then
 
       # Build the LEGACY effect as well, instead of "continue"-ing past it.
       #
-      # Which one a device can actually load is not a function of the Android version,
-      # it is a function of whether that OEM's audioserver still binds effects through
-      # the HIDL factory. A OnePlus 13 reported dsp_loudness doing nothing, with the
-      # attach daemon logging set=-19 initCheck=-19 on every attempt - NO_INIT, i.e. the
-      # factory could not create the effect - while the same build worked on a OnePlus
-      # 15. The XML registration was fine and the library was present; it simply
-      # exported createEffect and not AELI, and that device's factory wanted AELI.
+      # Which one a device can actually load is not a function of the Android version, it is a
+      # function of whether that OEM's audioserver still binds effects through the HIDL
+      # factory.
+      # A OnePlus 13 reported dsp_loudness doing nothing, with the attach daemon logging
+      # set=-19 initCheck=-19 on every attempt - NO_INIT, i.e.
       #
       # Shipping only one variant makes that a coin flip decided at build time. Ship
       # both, and let the installer stage whichever matches the device.
@@ -203,9 +188,9 @@ if [ -n "$DSP_SRC" ]; then
     ls -lh "$_dout/libasbdsp.so"
   done
   # Stage the attacher daemon (arm64 only - the effect runs in the 64-bit audioserver).
-  # OxygenOS never applies the config's <postprocess>, so this binary is what actually
-  # creates the effect on session 0; without it the library loads and the factory lists it
-  # but nothing ever instantiates it.
+  # OxygenOS never applies the config's <postprocess>, so this binary is what actually creates
+  # the effect on session 0; without it the library loads and the factory lists it but nothing
+  # ever instantiates it.
   _att_pre="${ASB_DSP_AIDL_DIR:-$SCRIPT_DIR/DSP_AIDL/prebuilt}/arm64-v8a/asb_dsp_attach"
   if [ -f "$_att_pre" ]; then
     # Same freshness gate as the library: a stale daemon silently drops whatever the
