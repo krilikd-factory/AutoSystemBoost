@@ -2741,13 +2741,23 @@ static void session_end_self_tune(const asb_fsm_t *fsm) {
             tuned++;
         }
 
+        /* Never raise the throttle point above what the user configured.
+         *
+         * Hitting SUSTAINED inside a minute usually means the threshold is too low for this
+         * device, and nudging it up is the right reflex - unless a person went into the WebUI
+         * and deliberately chose a LOWER one. Then this is not tuning, it is overruling: set
+         * 50 and the module walks it back to 52, 54, ... 68 with only a log line to show for
+         * it. The configured value is a ceiling, not an opening suggestion. */
         if (fsm->ses_time_to_first_sus > 0 &&
             fsm->ses_time_to_first_sus < 60 &&
-            g_asb_cfg.sustained_temp_enter < 68) {
+            g_asb_cfg.sustained_temp_enter < 68 &&
+            g_asb_cfg.sustained_temp_enter < g_asb_cfg.sustained_temp_enter_user) {
             int old = g_asb_cfg.sustained_temp_enter;
             g_asb_cfg.sustained_temp_enter += 2;
             if (g_asb_cfg.sustained_temp_enter > 68)
                 g_asb_cfg.sustained_temp_enter = 68;
+            if (g_asb_cfg.sustained_temp_enter > g_asb_cfg.sustained_temp_enter_user)
+                g_asb_cfg.sustained_temp_enter = g_asb_cfg.sustained_temp_enter_user;
             asb_log("self_tune: t2s=%lds <60s -> sustained_temp_enter %d->%d",
                     fsm->ses_time_to_first_sus, old, g_asb_cfg.sustained_temp_enter);
             tuned++;

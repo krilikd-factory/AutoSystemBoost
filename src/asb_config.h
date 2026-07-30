@@ -17,6 +17,14 @@ typedef struct {
     int   sustained_gpu_min;
     float sustained_load_min;
     int   sustained_temp_enter;
+    /* The value the CONFIG asked for, kept separate from the live one.
+     *
+     * self_tune raises sustained_temp_enter by 2 (up to 68) whenever a session hits
+     * SUSTAINED quickly - sensible when nobody has an opinion, but it silently walks over
+     * a user who deliberately chose a LOWER throttle point in the WebUI: they ask to
+     * throttle at 50 and the module pushes it back to 52, 54, ... 68. The user's number is
+     * a ceiling for self-tuning, not a starting suggestion. */
+    int   sustained_temp_enter_user;
     int   sustained_temp_exit;
     float sustained_level;
     int   perf_sustained_temp_enter;
@@ -191,6 +199,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->sustained_gpu_min   = 45;
     c->sustained_load_min  = 4.0f;
     c->sustained_temp_enter= 65;
+    c->sustained_temp_enter_user = 65;
     c->sustained_temp_exit = 55;
     c->perf_sustained_temp_enter = 0;
     c->perf_sustained_temp_exit  = 0;
@@ -323,7 +332,11 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "gaming_confirm_ticks")) c->gaming_confirm_ticks = atoi(v);
     else if (!strcmp(k, "sustained_gpu_min")) c->sustained_gpu_min = atoi(v);
     else if (!strcmp(k, "sustained_load_min")) c->sustained_load_min = (float)atof(v);
-    else if (!strcmp(k, "sustained_temp_enter")) c->sustained_temp_enter = atoi(v);
+    else if (!strcmp(k, "sustained_temp_enter")) {
+        c->sustained_temp_enter = atoi(v);
+        /* Remember what was asked for, so self_tune has a ceiling it cannot exceed. */
+        c->sustained_temp_enter_user = c->sustained_temp_enter;
+    }
     else if (!strcmp(k, "sustained_temp_exit"))  c->sustained_temp_exit  = atoi(v);
     else if (!strcmp(k, "perf_sustained_temp_enter")) c->perf_sustained_temp_enter = atoi(v);
     else if (!strcmp(k, "perf_sustained_temp_exit"))  c->perf_sustained_temp_exit  = atoi(v);
