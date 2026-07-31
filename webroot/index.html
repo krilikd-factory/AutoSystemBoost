@@ -2028,7 +2028,7 @@ const I18N = {
     t_applied_audio: 'Аудио применено (audioserver перезапущен)',
     t_apply_audio_fail: 'Не удалось применить',
     cfg_reboot: '↻ Перезагрузить устройство',
-    st_ls_nolock: 'нет блокировки', st_ls_nograce: 'блокировка мгновенная', st_ls_rej: 'ROM отклонил', st_ls_nosvc: 'настройки недоступны',
+    st_ls_nolock: 'нет блокировки', st_ls_nograce: 'блокировка мгновенная', st_ls_rej: 'ROM отклонил', st_ls_nosvc: 'настройки недоступны', st_ls_unsup: 'невозможно на этом Android',
     st_unavail: 'не поддерживается', st_failed: 'не применено', st_pending: 'ожидает сети',
     cfg_soft_reboot: '\u27f3 Быстрая перезагрузка',
     cfg_restart_sysui: '\u25a4 Перезапустить SystemUI',
@@ -2048,7 +2048,7 @@ const I18N = {
     // config items: name + desc keyed by config key
     cfg: {
       lockscreen_skip_delayed: { name: 'Пропуск экрана блокировки',
-        desc: 'В Android есть «Блокировать через N после отключения экрана» — телефон остаётся разблокированным какое-то время после гашения экрана. Но OxygenOS всё равно показывает экран блокировки и требует свайп. С этим твиком телефон в течение этого времени просыпается сразу туда, где вы были. Как только отсрочка истекла — или вы сами нажали кнопку питания, чтобы заблокировать — экран блокировки работает ровно как раньше. Телефон не остаётся разблокированным дольше, чем решил сам Android, и твик ничего не делает, если у вас нет блокировки экрана или отсрочка нулевая.' },
+        desc: 'Работает только на Android 10 и старше. На Android 11+ экран блокировки перестал слушать эту настройку: как только задан PIN, показывать ли его решает система, а не она. И «Отложенная блокировка» (Extend Unlock) устроена так же — она делает разблокировку свайпом без PIN, но сам экран не пропускает: это её задумка, а не недоработка. Если у вас Android 11 или новее, карточка честно напишет «невозможно на этом Android» и ничего не изменит.' },
       camera_hold_enable: { name: 'Держать производительность при камере',
         desc: 'Пока камера снимает, governor перестаёт понижать частоты и удерживает уже занятые ядра. Именно это не даёт пропустить кадр в серии или в видео — ценой небольшого расхода батареи, пока приложение камеры открыто. «Вкл» — удерживать (обычное поведение модуля), «выкл» — позволить governor\u2019у сбрасывать частоты как у любого другого приложения.' },
       bt_a2dp_offload: { name: 'Аппаратный кодек Bluetooth',
@@ -2519,7 +2519,7 @@ const CFG_ITEMS = [
     desc:'Almost never needed. WindowManager reads the animation scales as soon as they are written, so a plain settings change is enough and UI Speed Management works without this. The switch exists only for builds that ignore a live change, and it applies by restarting SystemUI: the screen blinks, the lock screen returns, and overlays from other modules (status-bar themes) are torn down. Only fires on a profile switch you made yourself. Turn it on only if you have confirmed the scales do not apply otherwise.' },
   // --- Display ---
   { key:'lockscreen_skip_delayed', type:'seg', def:'off', opts:['off','on'], name:'Skip Lockscreen While Unlocked',
-    desc:'Android\u2019s Lock After Screen Timeout keeps the device unlocked for a while after the screen goes off, but OxygenOS still shows the lockscreen and asks for a swipe when you wake it. With this on, the phone wakes straight to where you were for as long as that grace period lasts. The moment the timeout expires - or you press the power button to lock deliberately - the normal lockscreen comes back exactly as before. It never keeps the device unlocked for longer than Android already decided, and it does nothing at all if you have no screen lock or a zero timeout.' },
+    desc:'Works on Android 10 and older only. From Android 11 the keyguard stopped honouring this setting: once a PIN is enrolled the system decides whether to show it, not this key. Extend Unlock works the same way - it makes the lockscreen swipe-only rather than skipping it, which is the design rather than a shortcoming. On Android 11 or newer the card says \u201cnot possible on this Android\u201d and changes nothing.' },
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
@@ -2745,6 +2745,7 @@ function cfgStatus(it, cur) {
     if (_lockResult === 'nograce')  return { cls:'bad', text:T('st_ls_nograce', 'lock is instant') };
     if (_lockResult === 'rejected') return { cls:'bad', text:T('st_ls_rej', 'ROM refused') };
     if (_lockResult === 'noservice') return { cls:'bad', text:T('st_ls_nosvc', 'settings unreachable') };
+    if (_lockResult === 'unsupported') return { cls:'bad', text:T('st_ls_unsup', 'not possible on this Android') };
   }
   const nr = _netResult[it.key];
   if (nr === 'unavailable') return { cls:'bad', text:T('st_unavail', 'not supported') };
