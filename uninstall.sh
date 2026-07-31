@@ -1,5 +1,12 @@
 #!/system/bin/sh
 
+# Settings wrapper: falls back to the content provider where the `settings` command
+# cannot reach the service. On a OnePlus 15R every call returned "Failure calling
+# service settings" while exiting 0, so writes looked successful and reads returned the
+# error text as a value - this makes those calls work without changing any of them.
+[ -f /data/adb/modules/AutoSystemBoost/runtime/asb_settings.sh ] && \
+  . /data/adb/modules/AutoSystemBoost/runtime/asb_settings.sh
+
 MODDIR=${0%/*}
 
 _BL=/data/adb/asb/baseline.txt
