@@ -340,7 +340,7 @@ jobs:
           # on that list - so the one script users are asked to run when they report a
           # problem existed only in debug builds. Every diagnostic we have received came
           # from a tester on debug; a release user had no way to produce one at all.
-          for _t in asb_diag.sh asb_doctor.sh; do
+          for _t in asb_diag.sh asb_doctor.sh asb_recents_probe.sh; do
             if [ -f "tools/$_t" ]; then
               mkdir -p "$PKG_REL/tools"
               install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"

@@ -377,6 +377,7 @@ jobs:
             "tools/asb_synthesize_bounds.sh" \
             "tools/asb_vendor_thermal_probe.sh" \
             "tools/asb_diag.sh" \
+            "tools/asb_recents_probe.sh" \
             "tools/asb_install_probe.sh" \
             "tools/asb_doctor.sh" \
             "tools/asb_camera_repair.sh" \
