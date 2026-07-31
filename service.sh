@@ -124,6 +124,31 @@ rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done /data
 # has no Cards/Simple selector in Recent Tasks Manager - until they are actively cleared.
 # resetprop --delete puts the property back to whatever the ROM decides, which is what a
 # device without this module has.
+# Clear a persisted anim_level that earlier builds wrote.
+#
+# The rule that set persist.sys.oplus.anim_level=0 whenever blur was off is gone from both
+# the installer and the runtime script - but that only stops us WRITING it. The property
+# already lives in the device's own store on anyone who ran an earlier build, and it keeps
+# Recents flat there forever. Removing the line from system.prop cannot undo a value that
+# is no longer coming from system.prop.
+#
+# Only cleared when the user has NOT asked for flat effects: an explicit choice stays.
+if [ ! -f /data/adb/asb/animlevel_restored ]; then
+  _al_ue="$(grep -E '^[[:space:]]*ui_effects_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
+            | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_al_ue" in
+    flat|0) : ;;
+    *)
+      if [ "$(getprop persist.sys.oplus.anim_level 2>/dev/null)" = "0" ]; then
+        resetprop --delete persist.sys.oplus.anim_level >/dev/null 2>&1
+        asb_log "anim_level cleared - Recents card previews and the Cards/Simple selector return after a reboot"
+      fi
+      ;;
+  esac
+  mkdir -p /data/adb/asb 2>/dev/null
+  touch /data/adb/asb/animlevel_restored 2>/dev/null
+fi
+
 if [ ! -f /data/adb/asb/tasksnap_restored ]; then
   _ts_any=0
   for _tsp in persist.enable_task_snapshots \
