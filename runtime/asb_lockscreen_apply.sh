@@ -125,10 +125,34 @@ if [ "$_want" = "on" ]; then
   # Read it back. Some ROMs accept the write and drop the value, or guard the key entirely -
   # and a setting that reports success without checking is how "it does not work" reports
   # start. Say which of the two happened.
-  if [ "$(asb_set_get secure lockscreen.disabled)" = "1" ]; then
+  # Stored is not the same as effective.
+  #
+  # lockscreen.disabled is a legacy Settings.Secure key. On modern Android the keyguard asks
+  # LockPatternUtils, which decides from the enrolled credential and ignores this key
+  # entirely once a PIN or pattern is set - so the value stores perfectly and changes
+  # nothing. A OnePlus 15R on Android 15 reported exactly that: written, read back, still
+  # swiping. Storing it and calling that success is the wrong answer.
+  #
+  # There is no supported setting that dismisses the keyguard while a trust agent holds
+  # trust. Extend Unlock (Отложенная блокировка) grants trust, and AOSP responds by making
+  # the lockscreen swipe-only rather than skipping it - that is the design, not a bug. Doing
+  # better needs a framework hook, which is outside what a property-and-settings module can
+  # honestly claim to do.
+  _ls_sdk="$(getprop ro.build.version.sdk 2>/dev/null)"
+  case "$_ls_sdk" in ''|*[!0-9]*) _ls_sdk=0 ;; esac
+  if [ "$(asb_set_get secure lockscreen.disabled)" = "1" ] && [ "$_ls_sdk" -lt 30 ] 2>/dev/null; then
     _verdict ok
     echo "lockscreen: swipe skipped while the ${_grace}ms grace period is active"
     echo "            the lock still engages on its own when that expires"
+  elif [ "$_ls_sdk" -ge 30 ] 2>/dev/null; then
+    # Put it straight back: leaving a stored value that does nothing is worse than not
+    # writing it, because the next reader cannot tell it is inert.
+    asb_set_del secure lockscreen.disabled
+    _verdict unsupported
+    echo "lockscreen: not possible on Android $_ls_sdk"
+    echo "            the keyguard ignores this setting once a PIN is enrolled, and no"
+    echo "            supported setting dismisses it while Extend Unlock holds trust -"
+    echo "            trust makes the lockscreen swipe-only by design, not skipped"
   else
     _verdict rejected
     echo "lockscreen: this ROM refused the setting - the value did not stick"

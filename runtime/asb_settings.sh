@@ -36,10 +36,24 @@ _asb_set_clean() {
   return 0
 }
 
+# Strip the metadata newer Android appends to a value.
+#
+# On Android 15 `settings get` answers "1, is_preserved_in_restore=true" rather than "1".
+# Every comparison in this module is against a bare value, so each one silently failed:
+# the lock delay parsed as non-numeric and became 0 ("instant lock, refusing"), and the
+# read-back of a value that HAD been written compared unequal and reported "the ROM did
+# not keep the value". Both were false. Cut at the first comma-space.
+_asb_set_bare() {
+  case "$1" in
+    *", is_preserved_in_restore="*) printf '%s' "${1%%, is_preserved_in_restore=*}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
 asb_set_get() {   # $1=namespace $2=key
   _r="$(command settings get "$1" "$2" 2>/dev/null)"
   if _asb_set_clean "$_r" >/dev/null 2>&1; then
-    case "$_r" in null|'') printf '' ;; *) printf '%s' "$_r" ;; esac
+    case "$_r" in null|'') printf '' ;; *) printf '%s' "$(_asb_set_bare "$_r")" ;; esac
     return 0
   fi
   # Fallback: query the provider directly. Its output is "Row: 0 value=X", so pull the tail.
@@ -73,7 +87,7 @@ asb_set_del() {   # $1=namespace $2=key
 # failed" apart from "nothing on this device can be set", which need different messages.
 asb_set_ok() {
   _p="$(command settings get system screen_off_timeout 2>/dev/null)"
-  _asb_set_clean "$_p" >/dev/null 2>&1 && [ -n "$_p" ] && return 0
+  _asb_set_clean "$_p" >/dev/null 2>&1 && [ -n "$(_asb_set_bare "$_p")" ] && return 0
   _p="$(content query --uri content://settings/system --where "name='screen_off_timeout'" 2>/dev/null \
         | sed -n 's/.*value=\(.*\)$/\1/p' | head -1)"
   [ -n "$_p" ]
