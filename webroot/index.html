@@ -2051,7 +2051,7 @@ const I18N = {
       camera_hold_enable: { name: 'Держать производительность при камере',
         desc: 'Пока камера снимает, governor перестаёт понижать частоты и удерживает уже занятые ядра. Именно это не даёт пропустить кадр в серии или в видео — ценой небольшого расхода батареи, пока приложение камеры открыто. «Вкл» — удерживать (обычное поведение модуля), «выкл» — позволить governor\u2019у сбрасывать частоты как у любого другого приложения.' },
       bt_a2dp_offload: { name: 'Аппаратный кодек Bluetooth',
-        desc: 'Кто кодирует звук Bluetooth — отдельный аппаратный блок или процессор. «Вкл» — аппаратный: заметно меньше расход батареи, и так работает телефон из коробки. «Выкл» переносит кодирование на процессор, что нужно некоторым кодекам и приложениям-эквалайзерам, иначе они просто не работают. Если ваш Bluetooth-эквалайзер ничего не меняет — попробуйте «выкл». «Авто» оставляет то, что выбрало устройство.' },
+        desc: 'Кто кодирует звук Bluetooth — отдельный аппаратный блок или процессор. «Авто» — не вмешиваться: ASB ничего не пишет, остаётся то, что выбрала прошивка. «Вкл» — активно включить аппаратное кодирование (обычно совпадает с заводским, но ASB именно записывает его, а не оставляет как есть). «Выкл» переносит кодирование на процессор, что нужно некоторым кодекам и приложениям-эквалайзерам, иначе они просто не работают. Если ваш Bluetooth-эквалайзер ничего не меняет — попробуйте «выкл». «Авто» оставляет то, что выбрало устройство.' },
       night_quiet_enable: { name: 'Тихая ночь',
         desc: 'Ночью, когда экран давно выключен, governor прекращает собственную периодическую работу и даёт устройству уйти в глубокий сон. Отсюда берётся бо\u0301льшая часть ночной экономии. «Выкл» оставляет обычный опрос круглосуточно — имеет смысл, только если подозреваете, что тихое окно задерживает что-то нужное вам ночью.' },
       bat_suppress_gaming: { name: 'Без игрового режима в Экономии',
@@ -2466,7 +2466,7 @@ const CFG_ITEMS = [
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Volume Control',
     desc:'Stock = one shared scale: the phone slider moves the headset volume directly. Disabled = the two are independent, so the phone applies its own gain on top of whatever the headset is set to - usually louder, and what ViPER/EQ need. The trade is that the two scales no longer line up, which on some headsets makes the lowest steps too quiet. Applies without a reboot.' },
   { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
-    desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. On uses the hardware - far less battery, and what the phone ships with. Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
+    desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. Auto is the hands-off setting: ASB writes nothing and whatever the ROM chose stays. On actively writes hardware encoding (usually also what the phone ships with, but ASB sets it rather than leaving it). Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:25, step:1, name:'DSP Loudness',
@@ -2565,6 +2565,7 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
+  bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
