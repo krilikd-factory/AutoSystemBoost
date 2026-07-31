@@ -66,7 +66,23 @@ for _m in tasksnap_restored animlevel_restored; do
 done
 echo ""
 
+# Distinguish "you asked for this" from "an old build left it behind". Both look identical
+# in the property, and the advice is completely different - telling someone who chose flat
+# to install a newer build sends them chasing a bug that is really their own setting.
+_ue_now="$(grep -E '^[[:space:]]*ui_effects_level=' "$MODDIR/config/governor.conf" 2>/dev/null | sed 's/.*=//' | tr -d ' \r')"
 if [ "$_fault" = "1" ]; then
+  case "$_ue_now" in
+    flat|0)
+      echo ">>> Cards is off BECAUSE YOU ASKED FOR IT."
+      echo ">>> The setting \"System animations\" is set to \"simplified\", and simplified"
+      echo ">>> Recents is a plain list - so OxygenOS hides the Cards/Simple selector"
+      echo ">>> entirely. Nothing is broken."
+      echo ">>>"
+      echo ">>> To get the selector back: WebUI > Interface > System animations > normal,"
+      echo ">>> then reboot."
+      exit 0
+      ;;
+  esac
   echo ">>> Something is still blocking Cards."
   if [ "$_setting" = "1" ]; then
     echo ">>> This module build is writing it. Install the newer build."
