@@ -2057,7 +2057,7 @@ const I18N = {
       bat_suppress_gaming: { name: 'Без игрового режима в Экономии',
         desc: 'В профиле «Экономия» игра считается обычной тяжёлой нагрузкой, а не поводом включить игровой режим. Игровой режим поднимает потолки частот — то есть делает ровно противоположное тому, ради чего выбирают «Экономию». «Выкл» разрешает играм полный игровой режим даже в «Экономии». Влияет только на этот профиль, остальные три не затрагиваются.' },
       log_level: { name: 'Подробность логов',
-        desc: 'Сколько governor пишет в свой лог. «0» — обычный режим, только значимые события. «1» добавляет обновления обучения и переходы экрана — это то, что стоит включить перед отправкой лога по проблеме с батареей. «2» — подробный, лог заполняется быстро; включайте только пока воспроизводите конкретную проблему. Более высокие уровни немного увеличивают запись, так что в повседневности держите 0.' },
+        desc: 'Сколько модуль пишет в свой лог и насколько логирует само устройство. «Сток» — единственное значение, при котором логирование телефона не трогается вообще. «0» — экстремальное: обрезает логи и отладочный вывод устройства настолько, насколько это возможно; экономит записи на диск и пробуждения, но делает практически любой отчёт об ошибке с этого телефона бесполезным, включая наш. «1» — обычный режим, то, что модуль делал всегда. «2» добавляет обновления обучения и переходы экрана — включите перед тем, как присылать лог по расходу батареи. «3» — подробный, лог заполняется быстро; только пока воспроизводите проблему. Выход из экстремального режима возвращает ваше логирование как было.' },
       sustained_temp_mode: { name: 'Точка троттлинга',
         desc: 'Когда ASB начинает придерживать производительность, чтобы телефон был холоднее. «Сток» — порог вашего устройства, считанный из тепловой зоны процессора при загрузке, а не число, придуманное для телефонов вообще. «Умное» — начинает с него же и поднимает на 2 градуса каждый раз, когда нагрузка доходит до устойчивой быстрее минуты: устройство, которое срабатывает слишком рано, само себя выравнивает. «Ручное» — ровно то значение, что стоит на ползунке ниже, и его ничто не сдвинет. Выбирайте «Ручное», если измеряли своё устройство и знаете, чего хотите.' },
       sustained_temp_enter: { name: 'Температура троттлинга',
@@ -2144,6 +2144,7 @@ const I18N = {
     },
     // Per-card labels. These win over the shared ones above.
     optFor: {
+        log_level: { stock: 'сток', '0': 'экстрим', '1': 'обычный', '2': 'подробный', '3': 'отладка' },
       ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' },
       // auto on the GLOBAL net keys resolves to the captured stock value, so it is labelled as
       // such - calling it "авто" was the whole source of the confusion.
@@ -2457,7 +2458,8 @@ const SNAP_KEYS = [
   'camera_hold_enable',
   'bt_a2dp_offload',
   'bat_suppress_gaming',
-  'log_level'];
+  'log_level',
+  'log_verbosity'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -2545,8 +2547,8 @@ const CFG_ITEMS = [
     desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder. Applies immediately.' },
   { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
     desc:'Typing and tap feedback, on its own scale. The OEM sets these separately from alerts - its slider writes 1500 for notifications and 1600 for touch - and the two wants are different: an alert should be felt through a pocket, keypress feedback should not be punishing to hold. auto follows the strength above. There is no duration control to offer: nothing in the system exposes one, and Android takes duration from each effect\u2019s own waveform.' },
-  { key:'log_level', type:'seg', def:'0', opts:['0','1','2'], name:'Log Detail',
-    desc:'How much the governor writes to its log. 0 is normal - events that matter. 1 adds learner updates and screen transitions, which is what to turn on before sending a log for a battery problem. 2 is verbose and will fill the log quickly; use it only while reproducing something specific. Higher levels cost a little extra writing, so leave it at 0 day to day.' },
+    { key:'log_level', type:'seg', def:'1', stock:'stock', opts:['stock','0','1','2','3'], name:'Log Detail',
+    desc:'What the module writes to its log, and how much the DEVICE logs. Stock is the only value that leaves the phone\u2019s own logging untouched. 0 is extreme: it cuts device logging and debug output as far as it goes, which saves the writes and wakeups logging costs - and makes almost any bug report from this phone useless, including ours. 1 is normal, what the module has always done. 2 adds learner updates and screen transitions - switch this on before sending a log about battery behaviour. 3 is verbose and fills the log fast; use it only while reproducing something. Leaving extreme puts your logging back the way it was.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -3068,6 +3070,11 @@ async function cfgSet(key, val, ctl) {
     // disable_blur is the same shape: the system.prop block was only ever written by the
     // installer, so the toggle promised a reboot and rebuilt nothing.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
+      if (key === 'log_level') {
+        // Applied live: extreme mode changes device properties, and leaving it restores
+        // them - waiting for a reboot would leave the phone in whichever state it was.
+        try { await run('sh ' + MD + '/runtime/asb_log_apply.sh >/dev/null 2>&1'); } catch (e) {}
+      }
       if (key === 'sustained_temp_enter') {
         // Moving this slider is an explicit choice, so switch the mode to manual with it.
         // Setting both together means the slider says what it does.
