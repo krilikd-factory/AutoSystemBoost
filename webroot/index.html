@@ -2028,7 +2028,7 @@ const I18N = {
     t_applied_audio: 'Аудио применено (audioserver перезапущен)',
     t_apply_audio_fail: 'Не удалось применить',
     cfg_reboot: '↻ Перезагрузить устройство',
-    st_ls_nolock: 'нет блокировки', st_ls_nograce: 'блокировка мгновенная', st_ls_rej: 'ROM отклонил',
+    st_ls_nolock: 'нет блокировки', st_ls_nograce: 'блокировка мгновенная', st_ls_rej: 'ROM отклонил', st_ls_nosvc: 'настройки недоступны',
     st_unavail: 'не поддерживается', st_failed: 'не применено', st_pending: 'ожидает сети',
     cfg_soft_reboot: '\u27f3 Быстрая перезагрузка',
     cfg_restart_sysui: '\u25a4 Перезапустить SystemUI',
@@ -2744,6 +2744,7 @@ function cfgStatus(it, cur) {
     if (_lockResult === 'nolock')   return { cls:'bad', text:T('st_ls_nolock', 'no screen lock') };
     if (_lockResult === 'nograce')  return { cls:'bad', text:T('st_ls_nograce', 'lock is instant') };
     if (_lockResult === 'rejected') return { cls:'bad', text:T('st_ls_rej', 'ROM refused') };
+    if (_lockResult === 'noservice') return { cls:'bad', text:T('st_ls_nosvc', 'settings unreachable') };
   }
   const nr = _netResult[it.key];
   if (nr === 'unavailable') return { cls:'bad', text:T('st_unavail', 'not supported') };
