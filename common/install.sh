@@ -2616,7 +2616,23 @@ if [ -f "$MODPATH/vendor" ] && [ ! -s "$MODPATH/vendor" ]; then
   rm -f "$MODPATH/vendor" 2>/dev/null
 fi
 
-[ -f "$MODPATH/overlay_device_class" ] || echo reference > "$MODPATH/overlay_device_class" 2>/dev/null
+# Fall back to the DEVICE, not to "reference".
+#
+# The generic marker is written inside the OnePlus overlay branch, so several cases
+# never reached it and landed here instead: a non-OnePlus device, one whose overlay is
+# blocked by the boot fuse, and any path where that branch is skipped. All were then
+# labelled "reference" - the OP15 marker - and offered OP15-only options such as flat
+# effects, which on other models removes the Recents Cards/Simple selector.
+#
+# Only the OP15 is the reference model, so ask that directly. It matters now because
+# everyone upgrading from V60 has this file written for the first time.
+if [ ! -f "$MODPATH/overlay_device_class" ]; then
+  if [ "${ASB_IS_OP15:-false}" = "true" ]; then
+    echo reference > "$MODPATH/overlay_device_class" 2>/dev/null
+  else
+    echo generic > "$MODPATH/overlay_device_class" 2>/dev/null
+  fi
+fi
 rm -rf "$MODPATH/op12_overlay" "$MODPATH/op13_overlay" 2>/dev/null || true
 
 _gc="$MODPATH/config/governor.conf"
