@@ -15,6 +15,13 @@
 # /data/local/tmp/asb_diag_report.txt (fallback) The real filesystem root (/) is read-only, so
 # "корень телефона" in practice means /sdcard — that's where the file lands.
 
+# Read settings the way the module does.
+# Without this the report showed "Failure calling service settings" for every value on a
+# device where the module itself was already working through the content provider -
+# the diagnostic was describing its own broken reads, not the module.
+[ -f /data/adb/modules/AutoSystemBoost/runtime/asb_settings.sh ] && \
+  . /data/adb/modules/AutoSystemBoost/runtime/asb_settings.sh
+
 OUT1="/sdcard/asb_diag_report.txt"
 OUT2="/data/local/tmp/asb_diag_report.txt"
 : > "$OUT1" 2>/dev/null || OUT1=""
@@ -339,7 +346,7 @@ case "$_set_probe" in
                 | sed -n 's/.*value=\(.*\)$/\1/p' | head -1)"
     if [ -n "$_set_alt" ]; then
       V "  Settings service" "reachable" "settings-cmd-broken-provider-ok" eq
-      NOTE "the `settings` command fails on this device; ASB falls back to the content provider"
+      NOTE "the settings command fails on this device; ASB falls back to the content provider"
       NOTE "  any tweak that writes a setting works, but only through the fallback"
     else
       V "  Settings service" "reachable" "UNREACHABLE" eq
@@ -399,9 +406,19 @@ case "$_ls_want" in
     NOTE "lockscreen skip: requested"
     _ls_lock="$(locksettings get-disabled 2>/dev/null)"
     case "$_ls_lock" in
-      false) NOTE "  secure lock: present" ;;
+      false) NOTE "  secure lock: present (locksettings)" ;;
       true)  NOTE "  secure lock: NONE - nothing to skip, the setting cannot do anything" ;;
-      *)     NOTE "  secure lock: could not read (locksettings unavailable)" ;;
+      *)
+        # locksettings is missing on some devices, so fall through to the same two signals
+        # the applier uses rather than reporting "could not read" and stopping there.
+        if [ -n "$(asb_set_get secure lockscreen.password_type 2>/dev/null | grep -vE '^0$')" ]; then
+          NOTE "  secure lock: present (password_type)"
+        elif [ -s /data/system/gatekeeper.password.key ] || [ -s /data/system/gatekeeper.pattern.key ]; then
+          NOTE "  secure lock: present (gatekeeper credential file)"
+        else
+          NOTE "  secure lock: none detected by any of the three signals"
+        fi
+        ;;
     esac
     _ls_grace="$(settings get secure lock_screen_lock_after_timeout 2>/dev/null)"
     case "$_ls_grace" in
