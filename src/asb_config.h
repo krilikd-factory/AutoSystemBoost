@@ -371,7 +371,19 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "gpu_idle_trim_floor"))  c->gpu_idle_trim_floor = atoi(v);
     else if (!strcmp(k, "gpu_video_busy_min"))   c->gpu_video_busy_min = atoi(v);
     else if (!strcmp(k, "bat_moderate_load_enter")) c->bat_moderate_load_enter = (float)atof(v);
-    else if (!strcmp(k, "log_level"))            c->log_level = atoi(v);
+    else if (!strcmp(k, "log_level")) {
+        /* User-facing choice, kept readable: stock | 0 | 1 | 2 | 3.
+         *
+         * atoi() cannot express it - "stock" is not a number, and the digits were
+         * renumbered so that 1 is what used to be 0. The shell resolves the choice into
+         * log_verbosity below; this line only survives so an old config still parses. */
+        c->log_level = atoi(v);
+    }
+    else if (!strcmp(k, "log_verbosity")) {
+        /* What the governor actually uses, written by the shell from log_level. Comes
+         * after it in the file, so it wins. */
+        c->log_level = atoi(v);
+    }
     /* configurable thresholds */
     else if (!strcmp(k, "env_iq_quiet"))          c->env_iq_quiet = atoi(v);
     else if (!strcmp(k, "env_iq_hostile"))        c->env_iq_hostile = atoi(v);
