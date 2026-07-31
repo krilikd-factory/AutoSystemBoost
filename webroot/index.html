@@ -2028,7 +2028,6 @@ const I18N = {
     t_applied_audio: 'Аудио применено (audioserver перезапущен)',
     t_apply_audio_fail: 'Не удалось применить',
     cfg_reboot: '↻ Перезагрузить устройство',
-    st_ls_nolock: 'нет блокировки', st_ls_nograce: 'блокировка мгновенная', st_ls_rej: 'ROM отклонил', st_ls_nosvc: 'настройки недоступны', st_ls_unsup: 'невозможно на этом Android',
     st_unavail: 'не поддерживается', st_failed: 'не применено', st_pending: 'ожидает сети',
     cfg_soft_reboot: '\u27f3 Быстрая перезагрузка',
     cfg_restart_sysui: '\u25a4 Перезапустить SystemUI',
@@ -2047,8 +2046,6 @@ const I18N = {
     t_rebooting: 'Перезагрузка…',
     // config items: name + desc keyed by config key
     cfg: {
-      lockscreen_skip_delayed: { name: 'Пропуск экрана блокировки',
-        desc: 'Работает только на Android 10 и старше. На Android 11+ экран блокировки перестал слушать эту настройку: как только задан PIN, показывать ли его решает система, а не она. И «Отложенная блокировка» (Extend Unlock) устроена так же — она делает разблокировку свайпом без PIN, но сам экран не пропускает: это её задумка, а не недоработка. Если у вас Android 11 или новее, карточка честно напишет «невозможно на этом Android» и ничего не изменит.' },
       camera_hold_enable: { name: 'Держать производительность при камере',
         desc: 'Пока камера снимает, governor перестаёт понижать частоты и удерживает уже занятые ядра. Именно это не даёт пропустить кадр в серии или в видео — ценой небольшого расхода батареи, пока приложение камеры открыто. «Вкл» — удерживать (обычное поведение модуля), «выкл» — позволить governor\u2019у сбрасывать частоты как у любого другого приложения.' },
       bt_a2dp_offload: { name: 'Аппаратный кодек Bluetooth',
@@ -2057,6 +2054,8 @@ const I18N = {
         desc: 'Ночью, когда экран давно выключен, governor прекращает собственную периодическую работу и даёт устройству уйти в глубокий сон. Отсюда берётся бо\u0301льшая часть ночной экономии. «Выкл» оставляет обычный опрос круглосуточно — имеет смысл, только если подозреваете, что тихое окно задерживает что-то нужное вам ночью.' },
       bat_suppress_gaming: { name: 'Без игрового режима в Экономии',
         desc: 'В профиле «Экономия» игра считается обычной тяжёлой нагрузкой, а не поводом включить игровой режим. Игровой режим поднимает потолки частот — то есть делает ровно противоположное тому, ради чего выбирают «Экономию». «Выкл» разрешает играм полный игровой режим даже в «Экономии». Влияет только на этот профиль, остальные три не затрагиваются.' },
+      doze_level: { name: 'Глубокий сон',
+        desc: 'Как быстро Android уводит телефон в глубокий сон после выключения экрана. Сток ждёт 30 минут — а если телефон берут в руки каждые несколько минут, эти 30 минут просто никогда не наступают: суточный замер показал, что в простое процессор бодрствует 45% времени при цели 5%. «Умеренно» начинает простой через 5 минут, «агрессивно» — через 2. ЦЕНА: в глубоком сне система придерживает фоновую сеть до следующего окна обслуживания, поэтому приложение, которое опрашивает сервер само, может опоздать — приоритетные push проходят всегда. Если своевременность сообщений важнее расхода в простое, оставьте «сток». Пишет ровно одну настройку, «сток» её удаляет.' },
       log_level: { name: 'Подробность логов',
         desc: 'Сколько модуль пишет в свой лог и насколько логирует само устройство. «Сток» — единственное значение, при котором логирование телефона не трогается вообще. «0» — экстремальное: обрезает логи и отладочный вывод устройства настолько, насколько это возможно; экономит записи на диск и пробуждения, но делает практически любой отчёт об ошибке с этого телефона бесполезным, включая наш. «1» — обычный режим, то, что модуль делал всегда. «2» добавляет обновления обучения и переходы экрана — включите перед тем, как присылать лог по расходу батареи. «3» — подробный, лог заполняется быстро; только пока воспроизводите проблему. Выход из экстремального режима возвращает ваше логирование как было.' },
       sustained_temp_mode: { name: 'Точка троттлинга',
@@ -2455,12 +2454,12 @@ const SNAP_KEYS = [
   'sustained_temp_enter',
   'sustained_temp_mode',
   'sustained_temp_ceiling',
-  'lockscreen_skip_delayed',
   'camera_hold_enable',
   'bt_a2dp_offload',
   'bat_suppress_gaming',
   'log_level',
-  'log_verbosity'];
+  'log_verbosity',
+  'doze_level'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -2518,8 +2517,6 @@ const CFG_ITEMS = [
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Almost never needed. WindowManager reads the animation scales as soon as they are written, so a plain settings change is enough and UI Speed Management works without this. The switch exists only for builds that ignore a live change, and it applies by restarting SystemUI: the screen blinks, the lock screen returns, and overlays from other modules (status-bar themes) are torn down. Only fires on a profile switch you made yourself. Turn it on only if you have confirmed the scales do not apply otherwise.' },
   // --- Display ---
-  { key:'lockscreen_skip_delayed', type:'seg', def:'off', opts:['off','on'], name:'Skip Lockscreen While Unlocked',
-    desc:'Works on Android 10 and older only. From Android 11 the keyguard stopped honouring this setting: once a PIN is enrolled the system decides whether to show it, not this key. Extend Unlock works the same way - it makes the lockscreen swipe-only rather than skipping it, which is the design rather than a shortcoming. On Android 11 or newer the card says \u201cnot possible on this Android\u201d and changes nothing.' },
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
@@ -2548,7 +2545,9 @@ const CFG_ITEMS = [
     desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder. Applies immediately.' },
   { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
     desc:'Typing and tap feedback, on its own scale. The OEM sets these separately from alerts - its slider writes 1500 for notifications and 1600 for touch - and the two wants are different: an alert should be felt through a pocket, keypress feedback should not be punishing to hold. auto follows the strength above. There is no duration control to offer: nothing in the system exposes one, and Android takes duration from each effect\u2019s own waveform.' },
-    { key:'log_level', type:'seg', def:'1', stock:'stock', opts:['stock','0','1','2','3'], name:'Log Detail',
+    { key:'doze_level', type:'seg', def:'stock', stock:'stock', opts:['stock','moderate','aggressive'], name:'Deep Sleep',
+    desc:'How soon Android puts the phone into Doze once the screen is off. Stock waits 30 minutes, which on a phone picked up every few minutes is 30 minutes that never elapse - a full-day capture showed the idle phase awake 45% of the time against a 5% target. Moderate starts idle after 5 minutes, aggressive after 2. THE COST: in Doze the system holds background network until the next maintenance window, so an app that polls on its own can be late - high-priority push still breaks through. If messages arriving on time matter more than standby drain, leave this on stock. Only ever writes one setting, and stock deletes it.' },
+  { key:'log_level', type:'seg', def:'1', stock:'stock', opts:['stock','0','1','2','3'], name:'Log Detail',
     desc:'What the module writes to its log, and how much the DEVICE logs. Stock is the only value that leaves the phone\u2019s own logging untouched. 0 is extreme: it cuts device logging and debug output as far as it goes, which saves the writes and wakeups logging costs - and makes almost any bug report from this phone useless, including ours. 1 is normal, what the module has always done. 2 adds learner updates and screen transitions - switch this on before sending a log about battery behaviour. 3 is verbose and fills the log fast; use it only while reproducing something. Leaving extreme puts your logging back the way it was.' },
 ];
 let _cfgVals = {};
@@ -2577,8 +2576,8 @@ const CFG_CAT = {
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
   camera_hold_enable:'camera',
-  night_quiet_enable:'battery', log_level:'system', lockscreen_skip_delayed:'iface',
-  sustained_temp_mode:'thermal',
+  night_quiet_enable:'battery', log_level:'system',
+  sustained_temp_mode:'thermal', doze_level:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
   disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
@@ -2599,7 +2598,7 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
-  sustained_temp_mode:'battery', lockscreen_skip_delayed:'iface',
+  sustained_temp_mode:'battery', doze_level:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
@@ -2645,9 +2644,9 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  sustained_temp_mode:'\uD83D\uDD25', camera_hold_enable:'\uD83D\uDCF8',
+  sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
   bt_a2dp_offload:'\uD83D\uDCFB', night_quiet_enable:'\uD83C\uDF19',
-  bat_suppress_gaming:'\uD83D\uDEAB', log_level:'\uD83D\uDCDD', lockscreen_skip_delayed:'\uD83D\uDD13', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
+  bat_suppress_gaming:'\uD83D\uDEAB', log_level:'\uD83D\uDCDD', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
   net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDEA6', net_qdisc_mobile:'\uD83D\uDEA7', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDD0D',
   audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
@@ -2710,18 +2709,6 @@ async function loadDeviceClass() {
   } catch (e) { _isReference = false; }
 }
 
-// The lockscreen script can refuse for three device reasons, and every caller sends its
-// output to /dev/null - so the card looked enabled whatever happened. Read its verdict the
-// same way the network cards read theirs.
-let _lockResult = '';
-async function loadLockResult() {
-  try {
-    const r = await run('cat /data/adb/asb/lockscreen_result 2>/dev/null');
-    const t = ((r && r.stdout) || '').trim();
-    _lockResult = t.indexOf('=') > 0 ? t.slice(t.indexOf('=') + 1) : '';
-  } catch (e) { _lockResult = ''; }
-}
-
 async function loadNetResult() {
   try {
     const r = await run('cat /data/adb/asb/net_apply_result 2>/dev/null');
@@ -2740,13 +2727,6 @@ function cfgStatus(it, cur) {
   // Asking for bbr where the kernel has no bbr, or a qdisc whose module is missing, used to
   // leave the badge reading like a success because the VALUE was stored fine - the write is
   // what failed.
-  if (it.key === 'lockscreen_skip_delayed' && String(cur) === 'on') {
-    if (_lockResult === 'nolock')   return { cls:'bad', text:T('st_ls_nolock', 'no screen lock') };
-    if (_lockResult === 'nograce')  return { cls:'bad', text:T('st_ls_nograce', 'lock is instant') };
-    if (_lockResult === 'rejected') return { cls:'bad', text:T('st_ls_rej', 'ROM refused') };
-    if (_lockResult === 'noservice') return { cls:'bad', text:T('st_ls_nosvc', 'settings unreachable') };
-    if (_lockResult === 'unsupported') return { cls:'bad', text:T('st_ls_unsup', 'not possible on this Android') };
-  }
   const nr = _netResult[it.key];
   if (nr === 'unavailable') return { cls:'bad', text:T('st_unavail', 'not supported') };
   if (nr === 'failed')      return { cls:'bad', text:T('st_failed', 'not applied') };
@@ -3090,6 +3070,9 @@ async function cfgSet(key, val, ctl) {
     // disable_blur is the same shape: the system.prop block was only ever written by the
     // installer, so the toggle promised a reboot and rebuilt nothing.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
+      if (key === 'doze_level') {
+        try { await run('sh ' + MD + '/runtime/asb_doze_apply.sh >/dev/null 2>&1'); } catch (e) {}
+      }
       if (key === 'log_level') {
         // Applied live: extreme mode changes device properties, and leaving it restores
         // them - waiting for a reboot would leave the phone in whichever state it was.
@@ -3104,12 +3087,6 @@ async function cfgSet(key, val, ctl) {
                     "sed -i \"s|^sustained_temp_mode=.*|sustained_temp_mode=manual|\" $C || " +
                     "echo sustained_temp_mode=manual >> $C'");
         } catch (e) {}
-      }
-      if (key === 'lockscreen_skip_delayed') {
-        // Applied live and it can refuse: with no secure lock, or an immediate lock, the
-        // script declines and says why rather than pretending it worked.
-        try { await run('sh ' + MD + '/runtime/asb_lockscreen_apply.sh >/dev/null 2>&1'); } catch (e) {}
-        await loadLockResult();
       }
     var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune',
       'net_congestion_wifi','net_congestion_mobile','net_qdisc_wifi','net_qdisc_mobile',
@@ -3189,7 +3166,6 @@ function openConfigPage() {
   // Loaded before the first render, or a non-reference device would flash "simplified"
   // for a frame before it is filtered out.
   loadDeviceClass();
-  loadLockResult();
   const p = _el('configPage');
   if (!p) return;
   _cfgGroup = null;   // always open on the hub, never mid-drill from last time
