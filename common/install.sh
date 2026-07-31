@@ -1830,8 +1830,12 @@ asb_apply_device_native_tuning() {
   } > "$_man" 2>/dev/null
   cp -f "$_man" /data/adb/asb/generated_overlay_manifest.txt 2>/dev/null || true
   echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null || true
-  ui_print " "
-  ui_print "  ⚙️  ${ASB_SEC_SYSTEM:-SYSTEM}"
+    # The SYSTEM header is not printed here.
+    #
+    # It sat at the end of the manifest builder and nothing was ever printed under it, so
+    # the install report showed an empty heading - and because DSP ENGINE follows straight
+    # after, DSP looked like it belonged to SYSTEM. The sections that follow carry their
+    # own headings; this one headed nothing.
 }
 
 asb_prune_non_op15_vendor_overlays() {
@@ -2145,7 +2149,9 @@ asb_bind_register_odm_effects() {
     touch "$_oecm" 2>/dev/null
     grep -q "^${_oecl}|" "$_oecm" 2>/dev/null \
       || echo "${_oecl}|$_oecs" >> "$_oecm"
-    ui_print "      + ${ASB_L_DSP_ODM:-DSP effect registered in the config Android actually reads}"
+    # Printed once per patched config with identical wording, so a device with two of
+    # them showed the same sentence twice and no way to tell them apart. Name the file.
+    ui_print "      + ${ASB_L_DSP_ODM:-DSP effect registered in the config Android actually reads}: $(basename "$_oecl")"
     return 0
   fi
   rm -f "$_oecs" 2>/dev/null
@@ -2881,7 +2887,9 @@ rm -f "/data/adb/asb/vendor_overlay_active" 2>/dev/null
     for dir in 'my_product' 'vendor/odm'
     do
       if [[ -d $module/$dir ]]; then
-        echo ">> $module/$dir"
+        # Debug echo removed: it printed a raw module path straight into the user-facing
+        # install report, between DISPLAY and VIBRATION, where it means nothing to the
+        # reader. What it announced is already covered by the sections themselves.
         map_files "$module" "$dir"
       fi
     done
