@@ -2108,7 +2108,7 @@ const I18N = {
       disable_blur: { name: 'Отключить эффекты блюра',
         desc: 'Выключает размытие везде \u2014 шторка, уведомления, панель громкости, переходы. Меньше нагрузки на GPU, шторка становится непрозрачной вместо матовой. Учтите: у всплывающего уведомления тоже не останется размытой подложки, и текст ляжет на то, что под ним. Промежуточного режима нет \u2014 обе ручки, которые эта платформа даёт, глобальные. Оконная часть применяется сразу, часть композитора \u2014 после перезагрузки.' },
       ui_effects_level: { name: 'Анимации системы',
-        desc: 'Насколько богато система рисует переходы и «Недавние». «Обычные» — как на заводе. «Упрощённые» — меньше эффектов, чуть меньше нагрузка на GPU. ВАЖНО: при «упрощённых» «Недавние» становятся простым списком, и OxygenOS **убирает переключатель «Карточки/Простой»** из диспетчера недавних задач целиком — вернуть его можно, только вернув сюда «обычные» и перезагрузившись. Если вам нужны карточки предпросмотра — не включайте «упрощённые».' },
+        desc: 'Насколько богато система рисует переходы и «Недавние». «Обычные» — как на заводе. «Упрощённые» — меньше эффектов, чуть меньше нагрузка на GPU. ВАЖНО: при «упрощённых» «Недавние» становятся простым списком, и OxygenOS **убирает переключатель «Карточки/Простой»** из диспетчера недавних задач целиком — вернуть его можно, только вернув сюда «обычные» и перезагрузившись. Если вам нужны карточки предпросмотра — не включайте «упрощённые». Вариант «упрощённые» доступен только на OnePlus 15: на остальных моделях он убирает переключатель без возможности вернуть его чем-то, кроме этой же настройки, поэтому там не предлагается.' },
       net_congestion: { name: 'Разгон загрузок · прочие сети',
         desc: 'Как телефон разгоняется при скачивании — для сетей, которых нет в двух карточках ниже: USB-модем, VPN, Bluetooth-модем, Ethernet. Wi-Fi и мобильный берут свои настройки из карточек ниже. «Сток» — как было на заводе. «bbr» подстраивается под реальную скорость, «cubic» — классика. На стоковом ядре bbr обычно недоступен, и карточка честно напишет «не поддерживается».' },
       net_qdisc: { name: 'Очередь пакетов · прочие сети',
@@ -2520,7 +2520,7 @@ const CFG_ITEMS = [
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
-    desc:'How richly the system draws transitions and Recents. Normal is what the device ships with. Simplified uses fewer effects and a little less GPU. IMPORTANT: with simplified, Recents becomes a plain list and OxygenOS removes the Cards/Simple selector from Recent Tasks Manager altogether - the only way back is setting this to normal and rebooting. If you want the card previews, leave this alone.' },
+    desc:'How richly the system draws transitions and Recents. Normal is what the device ships with. Simplified uses fewer effects and a little less GPU. IMPORTANT: with simplified, Recents becomes a plain list and OxygenOS removes the Cards/Simple selector from Recent Tasks Manager altogether - the only way back is setting this to normal and rebooting. If you want the card previews, leave this alone. The simplified option is offered on the OnePlus 15 only: on other models it removes the selector with no way back except this same setting, so it is not shown there.' },
   // ---- Network ----------------------------------------------------------------
   { key:'net_route_tune', type:'seg', def:'auto', stock:'off', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
     desc:'How much the phone sends in one burst before waiting for a reply. Smart lets ASB look at your actual WiFi or mobile speed and size it: bigger on a fast link, left at the factory value on a weak one, because a big burst there only causes losses. Moderate uses the factory value everywhere. Aggressive goes one class higher if you trust your link. Stock puts it back. Start with Smart.' },
@@ -2680,6 +2680,33 @@ const CFG_ICONS = {
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
 // applied" instead of looking successful because the value got stored.
 let _netResult = {};
+// Is this the reference model the flat-effects option was validated on?
+//
+// "Simplified" writes persist.sys.oplus.anim_level=0. On the OP15 reference build the ROM
+// puts that back to 1, so the setting is cosmetic there. On other OnePlus builds it sticks,
+// and OxygenOS responds by removing the Cards/Simple selector from Recent Tasks Manager
+// entirely - a system feature lost for an effects preference. A OnePlus 13 user hit exactly
+// that and could not work out where the setting had gone.
+//
+// So the option is only offered where its consequence is known to be reversible.
+let _isReference = false;
+async function loadDeviceClass() {
+  try {
+    const r = await run('cat ' + MD + '/overlay_device_class 2>/dev/null');
+    const cls = ((r && r.stdout) || '').trim();
+    if (cls === 'reference' || cls === 'generic') {
+      _isReference = (cls === 'reference');
+      return;
+    }
+    // No marker: an install old enough to predate the file, or a read that failed. Ask the
+    // SoC instead of guessing "reference" - guessing wrong that way OFFERS an option that
+    // costs other models the Recents selector, while guessing wrong the other way only
+    // hides a cosmetic setting on an OP15 until the next install writes the marker.
+    const p = await run('getprop ro.board.platform 2>/dev/null');
+    _isReference = (((p && p.stdout) || '').trim() === 'canoe');
+  } catch (e) { _isReference = false; }
+}
+
 async function loadNetResult() {
   try {
     const r = await run('cat /data/adb/asb/net_apply_result 2>/dev/null');
@@ -2816,6 +2843,15 @@ var _lastDrain = 0;
 var _lastProfSeen = null;
 var _profSwitchAt = 0;
 
+// Drop options this device should not be offered. Done at render rather than in the item
+// list so the same build serves every model.
+function cfgOptsFor(it) {
+  if (it.key === 'ui_effects_level' && !_isReference) {
+    return it.opts.filter(function(o) { return o !== 'flat'; });
+  }
+  return it.opts;
+}
+
 function cfgRender() {
   const list = _el('cfgList');
   if (!list) return;
@@ -2929,9 +2965,10 @@ function cfgRender() {
       top.appendChild(wrap);
     } else {
       const seg = document.createElement('div');
+      const _opts = cfgOptsFor(it);
       // 4+ options get the compact button size.
-      seg.className = (it.opts.length >= 4) ? ('cfg-seg small' + (it.opts.length >= 6 ? ' dense' : '')) : 'cfg-seg';
-      it.opts.forEach(o => {
+      seg.className = (_opts.length >= 4) ? ('cfg-seg small' + (_opts.length >= 6 ? ' dense' : '')) : 'cfg-seg';
+      _opts.forEach(o => {
         const b = document.createElement('button');
         b.textContent = Topt(o, it.key);
         if (o === cur) b.classList.add('on');
@@ -3121,6 +3158,9 @@ async function cfgRestartSysUI() {
 }
 
 function openConfigPage() {
+  // Loaded before the first render, or a non-reference device would flash "simplified"
+  // for a frame before it is filtered out.
+  loadDeviceClass();
   const p = _el('configPage');
   if (!p) return;
   _cfgGroup = null;   // always open on the hub, never mid-drill from last time
