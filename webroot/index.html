@@ -2465,6 +2465,8 @@ const CFG_ITEMS = [
     desc:'Codec configuration, not software: headphone companders off, HPH Mode \u2192 CLS_H_HIFI. Does not fight an external EQ \u2014 it gives it a cleaner DAC. Reboot to apply.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Volume Control',
     desc:'Stock = one shared scale: the phone slider moves the headset volume directly. Disabled = the two are independent, so the phone applies its own gain on top of whatever the headset is set to - usually louder, and what ViPER/EQ need. The trade is that the two scales no longer line up, which on some headsets makes the lowest steps too quiet. Applies without a reboot.' },
+  { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
+    desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. On uses the hardware - far less battery, and what the phone ships with. Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
   { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:25, step:1, name:'DSP Loudness',
@@ -2495,21 +2497,17 @@ const CFG_ITEMS = [
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
   { key:'camera_hold_enable', type:'bool', def:'1', name:'Hold Performance While Camera Runs',
     desc:'While the camera is streaming, the governor stops lowering the CPU and keeps the cores it is already using. That is what prevents a dropped frame in the middle of a burst or a video, at the cost of a little battery for as long as the camera app is open. On means held (the stock module behaviour), off lets the governor throttle the camera like any other app.' },
-  { key:'bt_a2dp_offload', type:'seg', def:'on', opts:['on','off','auto'], name:'Bluetooth Audio Offload',
-    desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. On uses the hardware - far less battery, and what the phone ships with. Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
     desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
   { key:'bat_suppress_gaming', type:'bool', def:'1', name:'No Game Mode on Battery Profile',
     desc:'On the Battery profile, treat a game as ordinary heavy load rather than entering the gaming state. Gaming mode raises frequency ceilings, which is the opposite of what the Battery profile is for - so this keeps that profile honest. Off lets games get the full gaming treatment even on Battery. Affects the Battery profile only; the other three are untouched.' },
-  { key:'log_level', type:'seg', def:'0', opts:['0','1','2'], name:'Log Detail',
-    desc:'How much the governor writes to its log. 0 is normal - events that matter. 1 adds learner updates and screen transitions, which is what to turn on before sending a log for a battery problem. 2 is verbose and will fill the log quickly; use it only while reproducing something specific. Higher levels cost a little extra writing, so leave it at 0 day to day.' },
+  { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
+    desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
+  // --- Memory & UX ---
   { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
     desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
   { key:'sustained_temp_enter', type:'range', def:'65', min:40, max:70, step:1, name:'Throttling Temperature',
     desc:'The temperature at which ASB starts holding performance back to keep the phone cooler. Lower means it intervenes sooner - a cooler phone that gives up peak speed earlier; higher lets it run hard for longer and get warmer. 65 is the default. This is ASB\u2019s own threshold, not the vendor\u2019s: the firmware keeps its own hard limits underneath and those cannot be raised from here, so a high value does not make the phone unsafe, it just means the vendor decides first.' },
-  { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
-    desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
-  // --- Memory & UX ---
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
@@ -2547,6 +2545,8 @@ const CFG_ITEMS = [
     desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder. Applies immediately.' },
   { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
     desc:'Typing and tap feedback, on its own scale. The OEM sets these separately from alerts - its slider writes 1500 for notifications and 1600 for touch - and the two wants are different: an alert should be felt through a pocket, keypress feedback should not be punishing to hold. auto follows the strength above. There is no duration control to offer: nothing in the system exposes one, and Android takes duration from each effect\u2019s own waveform.' },
+  { key:'log_level', type:'seg', def:'0', opts:['0','1','2'], name:'Log Detail',
+    desc:'How much the governor writes to its log. 0 is normal - events that matter. 1 adds learner updates and screen transitions, which is what to turn on before sending a log for a battery problem. 2 is verbose and will fill the log quickly; use it only while reproducing something specific. Higher levels cost a little extra writing, so leave it at 0 day to day.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -2572,9 +2572,8 @@ const CFG_CAT = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
-  sustained_temp_mode:'thermal',
-  camera_hold_enable:'camera', bt_a2dp_offload:'audio',
-  night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'system', lockscreen_skip_delayed:'iface',
+  camera_hold_enable:'camera',
+  night_quiet_enable:'battery', log_level:'system', lockscreen_skip_delayed:'iface',
   sustained_temp_mode:'thermal',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
@@ -2642,9 +2641,9 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  sustained_temp_mode:'\uD83C\uDF9B\uFE0F', camera_hold_enable:'\uD83D\uDCF8',
-  bt_a2dp_offload:'\uD83C\uDFA7', night_quiet_enable:'\uD83C\uDF19',
-  bat_suppress_gaming:'\uD83C\uDFAE', log_level:'\uD83D\uDCDD', lockscreen_skip_delayed:'\uD83D\uDD13', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
+  sustained_temp_mode:'\uD83D\uDD25', camera_hold_enable:'\uD83D\uDCF8',
+  bt_a2dp_offload:'\uD83D\uDCFB', night_quiet_enable:'\uD83C\uDF19',
+  bat_suppress_gaming:'\uD83D\uDEAB', log_level:'\uD83D\uDCDD', lockscreen_skip_delayed:'\uD83D\uDD13', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
   net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDEA6', net_qdisc_mobile:'\uD83D\uDEA7', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDD0D',
   audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
