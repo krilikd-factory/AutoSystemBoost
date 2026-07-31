@@ -26,6 +26,15 @@ _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
 }
 
+# Verdict for the WebUI. Everything below prints a reason, and every caller sends that to
+# /dev/null - so a refusal was invisible and the card looked like it had worked. A OnePlus
+# 15R owner reported "it does not work" with no way to find out why, which was fair.
+RESULT="/data/adb/asb/lockscreen_result"
+_verdict() {
+  mkdir -p /data/adb/asb 2>/dev/null
+  printf 'lockscreen_skip_delayed=%s\n' "$1" > "$RESULT" 2>/dev/null
+}
+
 _want="$(_cfg lockscreen_skip_delayed)"
 case "$_want" in on) : ;; *) _want=off ;; esac
 
@@ -50,11 +59,13 @@ case "$_grace" in ''|null|*[!0-9]*) _grace=0 ;; esac
 if [ "$_want" = "on" ]; then
   if [ "$_has_lock" = "0" ]; then
     echo "lockscreen: no secure lock set - nothing to skip, leaving everything alone"
+    _verdict nolock
     exit 0
   fi
   if [ "$_grace" -le 0 ] 2>/dev/null; then
     echo "lockscreen: 'Lock after screen timeout' is immediate - refusing to skip an instant lock"
     echo "            set a delay in Settings > Security first, then enable this again"
+    _verdict nograce
     exit 0
   fi
 fi
@@ -74,8 +85,18 @@ if [ "$_want" = "on" ]; then
       > "$STATE" 2>/dev/null
   fi
   settings put secure lockscreen.disabled 1 >/dev/null 2>&1
-  echo "lockscreen: swipe skipped while the ${_grace}ms grace period is active"
-  echo "            the lock still engages on its own when that expires"
+  # Read it back. Some ROMs accept the write and drop the value, or guard the key entirely -
+  # and a setting that reports success without checking is how "it does not work" reports
+  # start. Say which of the two happened.
+  if [ "$(settings get secure lockscreen.disabled 2>/dev/null)" = "1" ]; then
+    _verdict ok
+    echo "lockscreen: swipe skipped while the ${_grace}ms grace period is active"
+    echo "            the lock still engages on its own when that expires"
+  else
+    _verdict rejected
+    echo "lockscreen: this ROM refused the setting - the value did not stick"
+    echo "            nothing was changed; your lock behaves exactly as before"
+  fi
 else
   if [ -f "$STATE" ]; then
     _prev="$(grep -E '^PREV_LS_DISABLED=' "$STATE" 2>/dev/null | head -1 | sed 's/.*=//')"
@@ -84,8 +105,10 @@ else
       *)       settings put secure lockscreen.disabled "$_prev" >/dev/null 2>&1 ;;
     esac
     rm -f "$STATE" 2>/dev/null
+    _verdict off
     echo "lockscreen: restored to the value the device had before"
   else
+    _verdict off
     echo "lockscreen: off (nothing had been changed)"
   fi
 fi
