@@ -146,5 +146,17 @@ case "$_db" in
   1) echo "blur off - window blur is off now, compositor blur after a reboot" ;;
   *) echo "blur stock - window blur is back now, compositor blur after a reboot" ;;
 esac
-[ "$_ue" = "flat" ] && echo "ui effects: flat (Recents becomes a plain list) - after a reboot"
+# Clear the persisted property when the user is no longer asking for flat.
+#
+# Removing the line from system.prop stops us setting it on the NEXT boot, but the value is
+# already in the device's property store and stays there. Without this, switching back to
+# normal left Recents flat - and the Cards/Simple selector missing - forever.
+if [ "$_ue" != "flat" ] && command -v resetprop >/dev/null 2>&1; then
+  if [ "$(getprop persist.sys.oplus.anim_level 2>/dev/null)" = "0" ]; then
+    resetprop --delete persist.sys.oplus.anim_level >/dev/null 2>&1
+    echo "ui effects: cleared the stored flat-Recents flag - reboot to get the Cards/Simple selector back"
+  fi
+fi
+
+[ "$_ue" = "flat" ] && echo "ui effects: flat (Recents becomes a plain list, and OxygenOS hides the Cards/Simple selector) - after a reboot"
 exit 0
