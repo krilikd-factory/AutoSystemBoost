@@ -116,6 +116,32 @@ asb_load_profile
 
 rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done /data/adb/asb/session_history_migrated_v47 2>/dev/null
 
+# Undo the task-snapshot properties earlier builds set.
+#
+# persist.* properties are written into the device's own property store, so simply
+# removing them from system.prop stops us SETTING them but leaves the value already on
+# disk. Anyone who ran an earlier build still has task snapshots off - and therefore still
+# has no Cards/Simple selector in Recent Tasks Manager - until they are actively cleared.
+# resetprop --delete puts the property back to whatever the ROM decides, which is what a
+# device without this module has.
+if [ ! -f /data/adb/asb/tasksnap_restored ]; then
+  _ts_any=0
+  for _tsp in persist.enable_task_snapshots \
+              persist.vendor.enable_task_snapshots \
+              persist.tasksnapshot.starting_window_enable \
+              persist.vendor.tasksnapshot.starting_window_enable; do
+    case "$(getprop "$_tsp" 2>/dev/null)" in
+      false|0)
+        resetprop --delete "$_tsp" >/dev/null 2>&1 && _ts_any=1
+        ;;
+    esac
+  done
+  mkdir -p /data/adb/asb 2>/dev/null
+  touch /data/adb/asb/tasksnap_restored 2>/dev/null
+  [ "$_ts_any" = "1" ] && \
+    asb_log "task snapshots restored - Recents card previews and the Cards/Simple selector come back after a reboot"
+fi
+
 if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
   # Remove props an OLDER ASB set - and only those.
   #

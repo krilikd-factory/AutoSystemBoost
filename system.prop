@@ -437,7 +437,21 @@ persist.delta_time.enable=false
 persist.device_config.aconfig_flags.nnapi_native.telemetry_enable=false
 persist.device_config.nnapi_native.telemetry_enable=false
 persist.device_config.runtime_native_boot.iorapd_readahead_enable=false
-persist.enable_task_snapshots=false
+# Task snapshots are deliberately NOT disabled here.
+#
+# These four used to be set to false:
+#   persist.enable_task_snapshots, persist.vendor.enable_task_snapshots,
+#   persist.tasksnapshot.starting_window_enable, persist.vendor.<same>
+#
+# A task snapshot is the thumbnail of an app's last frame - which is exactly what the
+# "Cards" style in Recent Tasks Manager draws. With snapshots off, Cards cannot be
+# rendered, so OxygenOS hides the Cards/Simple selector altogether. A OnePlus 13 user lost
+# that setting without enabling a single tweak, because system.prop is applied to every
+# install regardless of what was chosen, and got it back only by removing the module.
+#
+# They saved a little memory and cost a visible system feature nobody asked to lose. If
+# this is ever wanted again it belongs behind an explicit tweak, not in the unconditional
+# property list.
 persist.sample.eyetracking.log=0
 persist.service.crash.enable=0
 persist.service.logging.disable=1
@@ -538,7 +552,6 @@ persist.sys.testTrimMemActivityBg.wk.enable=false
 persist.sys.trim_rendernode.enable=false
 persist.sys.watchdog_enhanced=false
 persist.sys.whole_machine_d_status_enable=false
-persist.tasksnapshot.starting_window_enable=false
 persist.vendor.adapt.sampler=false
 persist.vendor.battery.erp=false
 persist.vendor.battery.health=true
@@ -551,7 +564,6 @@ persist.vendor.cp.log_level=0
 persist.vendor.delta_time.enable=false
 persist.vendor.domain.charge=3
 persist.vendor.dpm.loglevel=0
-persist.vendor.enable_task_snapshots=false
 persist.vendor.extreme.mode=false
 persist.vendor.extreme.mode.V2=false
 persist.vendor.high_temp_stop_charge=true
@@ -569,7 +581,6 @@ persist.vendor.sensors.diag_buffer_enable=false
 persist.vendor.sensors.enable.bypass_worker=false
 persist.vendor.service.bdroid.soc.alwayson=false
 persist.vendor.sys.modem.logging.enable=false
-persist.vendor.tasksnapshot.starting_window_enable=false
 persist.vendor.verbose_logging_enabled=false
 persist.vendor.vin.log_level=0
 persist.vendor.vt.supported=1
