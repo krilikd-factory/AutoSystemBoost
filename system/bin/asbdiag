@@ -325,6 +325,35 @@ SUP="$(firstf '/vendor/etc/wifi/wpa_supplicant_overlay.conf' '/odm/etc/wifi/wpa_
 P "  live wifi link: $(dumpsys wifi 2>/dev/null | grep -m1 -iE 'mWifiInfo|SSID' | sed 's/^[[:space:]]*//' | cut -c1-70)"
 
 # =====================================================================
+# Can Settings be reached at all? Ask once, loudly, before anything that depends on it.
+#
+# A OnePlus 15R report had ten separate lines reading "cmd: Failure calling service
+# settings" scattered through Bluetooth, RAM expand, adaptive battery and the lockscreen -
+# each looking like its own small problem. They were one problem: the settings command
+# cannot bind to the service on that device, and it exits 0 while failing, so every caller
+# believed it had worked. One line at the top is worth ten buried ones.
+_set_probe="$(settings get system screen_off_timeout 2>/dev/null)"
+case "$_set_probe" in
+  *'Failure calling service'*|*'Exception'*|'')
+    _set_alt="$(content query --uri content://settings/system --where "name='screen_off_timeout'" 2>/dev/null \
+                | sed -n 's/.*value=\(.*\)$/\1/p' | head -1)"
+    if [ -n "$_set_alt" ]; then
+      V "  Settings service" "reachable" "settings-cmd-broken-provider-ok" eq
+      NOTE "the `settings` command fails on this device; ASB falls back to the content provider"
+      NOTE "  any tweak that writes a setting works, but only through the fallback"
+    else
+      V "  Settings service" "reachable" "UNREACHABLE" eq
+      NOTE "NEITHER the settings command NOR the content provider answers."
+      NOTE "  Every setting-based tweak is inert on this device: Bluetooth absolute volume,"
+      NOTE "  scan rate, blur, haptics, lockscreen skip, the OEM toggles. This is a device"
+      NOTE "  or root-manager condition, not something ASB can work around."
+    fi
+    ;;
+  *)
+    NOTE "settings service: reachable (screen_off_timeout=$_set_probe)"
+    ;;
+esac
+
 SEC "5. NETWORK / TCP"
 P "  net.tcp buffer sizes (live props):"
 for _p in net.tcp.buffersize.wifi net.tcp.buffersize.lte net.tcp.buffersize.5g \
