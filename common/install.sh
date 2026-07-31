@@ -3589,6 +3589,7 @@ AutoSystemBoost' $APIOCXM
 	    ! -name "asb_camera_repair.sh" \
 	    ! -name "asb_sysui_watch.sh" \
 	    ! -name "asb_diag.sh" \
+	    ! -name "asb_recents_probe.sh" \
 	    -delete 2>/dev/null
 	  chmod 0755 "$MODPATH/tools/asb_camera_repair.sh" 2>/dev/null || true
 	  chmod 0755 "$MODPATH/tools/asb_sysui_watch.sh" 2>/dev/null || true
