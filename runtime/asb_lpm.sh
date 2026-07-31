@@ -19,6 +19,13 @@
 # Everything is read once into a baseline before it is first changed, so turning the
 # LPM feature off or uninstalling puts back what the user had.
 
+# Settings wrapper: falls back to the content provider where the `settings` command
+# cannot reach the service. On a OnePlus 15R every call returned "Failure calling
+# service settings" while exiting 0, so writes looked successful and reads returned the
+# error text as a value - this makes those calls work without changing any of them.
+[ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh" ] && \
+  . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh"
+
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 MODE="${1:-normal}"
 BASE="/data/adb/asb/lpm_baseline.conf"

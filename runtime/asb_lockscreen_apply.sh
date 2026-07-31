@@ -22,6 +22,12 @@ MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
 STATE="/data/adb/asb/lockscreen_prev"
 
+# Settings on some devices cannot be reached through the `settings` command at all - a
+# OnePlus 15R returned "Failure calling service settings" for every call while still
+# exiting 0, so writes looked successful and reads returned the error text as a value.
+# This helper falls back to the content provider and verifies what it wrote.
+[ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
+
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
 }
@@ -49,12 +55,20 @@ if command -v locksettings >/dev/null 2>&1; then
     false) _has_lock=1 ;;
   esac
 fi
-[ "$_has_lock" = "0" ] && [ -n "$(settings get secure lockscreen.password_type 2>/dev/null | grep -vE '^(null|0)$')" ] && _has_lock=1
+[ "$_has_lock" = "0" ] && [ -n "$(asb_set_get secure lockscreen.password_type | grep -vE '^0$')" ] && _has_lock=1
 
 # The grace period itself. Zero means "lock immediately", and skipping the lockscreen then
 # would mean skipping a lock the user asked to be instant - the exact thing to refuse.
-_grace="$(settings get secure lock_screen_lock_after_timeout 2>/dev/null)"
+_grace="$(asb_set_get secure lock_screen_lock_after_timeout)"
 case "$_grace" in ''|null|*[!0-9]*) _grace=0 ;; esac
+
+if [ "$_want" = "on" ] && command -v asb_set_ok >/dev/null 2>&1 && ! asb_set_ok; then
+  echo "lockscreen: Settings cannot be reached on this device at all - neither the"
+  echo "            settings command nor the content provider answered. This is not"
+  echo "            specific to this tweak; every setting-based feature is affected."
+  _verdict noservice
+  exit 0
+fi
 
 if [ "$_want" = "on" ]; then
   if [ "$_has_lock" = "0" ]; then
@@ -81,14 +95,14 @@ fi
 if [ "$_want" = "on" ]; then
   if [ ! -f "$STATE" ]; then
     mkdir -p /data/adb/asb 2>/dev/null
-    printf 'PREV_LS_DISABLED=%s\n' "$(settings get secure lockscreen.disabled 2>/dev/null)" \
+    printf 'PREV_LS_DISABLED=%s\n' "$(asb_set_get secure lockscreen.disabled)" \
       > "$STATE" 2>/dev/null
   fi
-  settings put secure lockscreen.disabled 1 >/dev/null 2>&1
+  asb_set_put secure lockscreen.disabled 1
   # Read it back. Some ROMs accept the write and drop the value, or guard the key entirely -
   # and a setting that reports success without checking is how "it does not work" reports
   # start. Say which of the two happened.
-  if [ "$(settings get secure lockscreen.disabled 2>/dev/null)" = "1" ]; then
+  if [ "$(asb_set_get secure lockscreen.disabled)" = "1" ]; then
     _verdict ok
     echo "lockscreen: swipe skipped while the ${_grace}ms grace period is active"
     echo "            the lock still engages on its own when that expires"
@@ -101,8 +115,8 @@ else
   if [ -f "$STATE" ]; then
     _prev="$(grep -E '^PREV_LS_DISABLED=' "$STATE" 2>/dev/null | head -1 | sed 's/.*=//')"
     case "$_prev" in
-      ''|null) settings delete secure lockscreen.disabled >/dev/null 2>&1 ;;
-      *)       settings put secure lockscreen.disabled "$_prev" >/dev/null 2>&1 ;;
+      ''|null) asb_set_del secure lockscreen.disabled ;;
+      *)       asb_set_put secure lockscreen.disabled "$_prev" ;;
     esac
     rm -f "$STATE" 2>/dev/null
     _verdict off

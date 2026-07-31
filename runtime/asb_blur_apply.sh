@@ -11,6 +11,13 @@
 # The WebUI toggle writes governor.conf at runtime, so flipping it and rebooting rebuilt
 # nothing - the same class of bug that made media_loudness unapplyable.
 
+# Settings wrapper: falls back to the content provider where the `settings` command
+# cannot reach the service. On a OnePlus 15R every call returned "Failure calling
+# service settings" while exiting 0, so writes looked successful and reads returned the
+# error text as a value - this makes those calls work without changing any of them.
+[ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh" ] && \
+  . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh"
+
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
 PROP="$MODDIR/system.prop"
