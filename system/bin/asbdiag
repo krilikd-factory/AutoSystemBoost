@@ -352,7 +352,7 @@ case "$_set_probe" in
       V "  Settings service" "reachable" "UNREACHABLE" eq
       NOTE "NEITHER the settings command NOR the content provider answers."
       NOTE "  Every setting-based tweak is inert on this device: Bluetooth absolute volume,"
-      NOTE "  scan rate, blur, haptics, lockscreen skip, the OEM toggles. This is a device"
+      NOTE "  scan rate, blur, haptics, the OEM toggles. This is a device"
       NOTE "  or root-manager condition, not something ASB can work around."
     fi
     ;;
@@ -397,49 +397,6 @@ V "  tcp congestion in force" "$(cfg net_congestion | sed 's/^auto$//')" \
 NOTE "available congestion algorithms: $(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
 NOTE "qdisc in force: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
 
-# Lockscreen skip: three device conditions decide whether it can work at all, and the
-# script that checks them sends its output to /dev/null from every caller. Print the facts
-# so "it does not work" comes with a reason attached.
-# Android version, printed before anything that depends on it.
-#
-# The report never carried it, so a question like "why does the lockscreen tweak refuse?"
-# could not be answered from the log alone - the answer is the API level, and reading it
-# off a screenshot instead led to a wrong version being quoted back at the user.
-NOTE "android: $(getprop ro.build.version.release 2>/dev/null) (API $(getprop ro.build.version.sdk 2>/dev/null))"
-
-_ls_want="$(cfg lockscreen_skip_delayed)"
-case "$_ls_want" in
-  on)
-    NOTE "lockscreen skip: requested"
-    _ls_lock="$(locksettings get-disabled 2>/dev/null)"
-    case "$_ls_lock" in
-      false) NOTE "  secure lock: present (locksettings)" ;;
-      true)  NOTE "  secure lock: NONE - nothing to skip, the setting cannot do anything" ;;
-      *)
-        # locksettings is missing on some devices, so fall through to the same two signals
-        # the applier uses rather than reporting "could not read" and stopping there.
-        if [ -n "$(asb_set_get secure lockscreen.password_type 2>/dev/null | grep -vE '^0$')" ]; then
-          NOTE "  secure lock: present (password_type)"
-        elif [ -s /data/system/gatekeeper.password.key ] || [ -s /data/system/gatekeeper.pattern.key ]; then
-          NOTE "  secure lock: present (gatekeeper credential file)"
-        else
-          NOTE "  secure lock: none detected by any of the three signals"
-        fi
-        ;;
-    esac
-    _ls_grace="$(settings get secure lock_screen_lock_after_timeout 2>/dev/null)"
-    case "$_ls_grace" in
-      ''|null|0) NOTE "  lock delay: immediate - refusing to skip an instant lock" ;;
-      *)         NOTE "  lock delay: ${_ls_grace}ms" ;;
-    esac
-    _ls_live="$(settings get secure lockscreen.disabled 2>/dev/null)"
-    case "$_ls_live" in
-      1) NOTE "  lockscreen.disabled: 1 (applied)" ;;
-      *) NOTE "  lockscreen.disabled: ${_ls_live:-<unset>} - the ROM did not keep the value" ;;
-    esac
-    NOTE "  verdict: $(grep -E '^lockscreen_skip_delayed=' /data/adb/asb/lockscreen_result 2>/dev/null | sed 's/.*=//')"
-    ;;
-esac
 
 # Requested vs accepted, per key.
 #
