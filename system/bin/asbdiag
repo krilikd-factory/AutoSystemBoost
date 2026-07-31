@@ -361,6 +361,33 @@ V "  tcp congestion in force" "$(cfg net_congestion | sed 's/^auto$//')" \
 NOTE "available congestion algorithms: $(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
 NOTE "qdisc in force: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
 
+# Lockscreen skip: three device conditions decide whether it can work at all, and the
+# script that checks them sends its output to /dev/null from every caller. Print the facts
+# so "it does not work" comes with a reason attached.
+_ls_want="$(cfg lockscreen_skip_delayed)"
+case "$_ls_want" in
+  on)
+    NOTE "lockscreen skip: requested"
+    _ls_lock="$(locksettings get-disabled 2>/dev/null)"
+    case "$_ls_lock" in
+      false) NOTE "  secure lock: present" ;;
+      true)  NOTE "  secure lock: NONE - nothing to skip, the setting cannot do anything" ;;
+      *)     NOTE "  secure lock: could not read (locksettings unavailable)" ;;
+    esac
+    _ls_grace="$(settings get secure lock_screen_lock_after_timeout 2>/dev/null)"
+    case "$_ls_grace" in
+      ''|null|0) NOTE "  lock delay: immediate - refusing to skip an instant lock" ;;
+      *)         NOTE "  lock delay: ${_ls_grace}ms" ;;
+    esac
+    _ls_live="$(settings get secure lockscreen.disabled 2>/dev/null)"
+    case "$_ls_live" in
+      1) NOTE "  lockscreen.disabled: 1 (applied)" ;;
+      *) NOTE "  lockscreen.disabled: ${_ls_live:-<unset>} - the ROM did not keep the value" ;;
+    esac
+    NOTE "  verdict: $(grep -E '^lockscreen_skip_delayed=' /data/adb/asb/lockscreen_result 2>/dev/null | sed 's/.*=//')"
+    ;;
+esac
+
 # Requested vs accepted, per key.
 #
 # The live sysctl alone cannot separate "the kernel refused this" from "nobody asked" - both
