@@ -118,7 +118,10 @@ done
 pkill -f '/data/adb/modules/AutoSystemBoost/bin/asb' >/dev/null 2>&1 || true
 pkill -f '/data/adb/asb/asb_dsp_attach' >/dev/null 2>&1 || true
 rm -rf /dev/.asb /dev/.asb_profile_state 2>/dev/null
-rm -f /data/adb/asb/auto_battery_origin 2>/dev/null
+# Doze back to Android's own timings before the module goes.
+settings delete global device_idle_constants >/dev/null 2>&1 || true
+
+rm -f /data/adb/asb/auto_battery_origin /data/adb/asb/lockscreen_prev /data/adb/asb/lockscreen_result 2>/dev/null
 # Camera tuning baselines.
 #
 # These outlived the module, and that is what made the compounding bug unrecoverable without
@@ -150,12 +153,6 @@ done
 pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
-
-# Put the lockscreen back before the state that records its previous value is deleted.
-[ -f /data/adb/modules/AutoSystemBoost/runtime/asb_lockscreen_apply.sh ] && \
-  sh -c 'sed -i "s|^lockscreen_skip_delayed=.*|lockscreen_skip_delayed=off|" \
-    /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null;
-    sh /data/adb/modules/AutoSystemBoost/runtime/asb_lockscreen_apply.sh' >/dev/null 2>&1 || true
 
 rm -rf /data/adb/asb 2>/dev/null
 

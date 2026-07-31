@@ -2463,15 +2463,33 @@ command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
 # ROMs on boot, so without this the settings would apply once from the WebUI and quietly
 # revert.
 # Log level: resolve into log_verbosity every boot, and re-assert extreme if chosen.
-if [ -f "$MODDIR/runtime/asb_log_apply.sh" ]; then
-  sh "$MODDIR/runtime/asb_log_apply.sh" >/dev/null 2>&1
+# Undo the removed lockscreen tweak, once.
+#
+# lockscreen_skip_delayed is gone: it could only ever work below Android 11, and above that
+# the keyguard ignores the key it wrote. Deleting the feature stops us SETTING the value,
+# but anyone who switched it on still has secure lockscreen.disabled sitting in their
+# settings - and with the script gone nothing would ever put it back. Restore the recorded
+# original, or clear the key, then drop the state.
+if [ -f /data/adb/asb/lockscreen_prev ]; then
+  _lsp="$(grep -E '^PREV_LS_DISABLED=' /data/adb/asb/lockscreen_prev 2>/dev/null | head -1 | sed 's/[^=]*=//')"
+  case "$_lsp" in
+    ''|null) settings delete secure lockscreen.disabled >/dev/null 2>&1 ;;
+    *)       settings put secure lockscreen.disabled "$_lsp" >/dev/null 2>&1 ;;
+  esac
+  rm -f /data/adb/asb/lockscreen_prev /data/adb/asb/lockscreen_result 2>/dev/null
+  asb_log "lockscreen tweak removed - the setting it wrote has been put back"
 fi
 
-if [ -f "$MODDIR/runtime/asb_lockscreen_apply.sh" ]; then
-  case "$(grep -E '^[[:space:]]*lockscreen_skip_delayed=' "$MODDIR/config/governor.conf" 2>/dev/null \
+# Doze timings: re-assert at boot, the key does not survive one.
+if [ -f "$MODDIR/runtime/asb_doze_apply.sh" ]; then
+  case "$(grep -E '^[[:space:]]*doze_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')" in
-    on) sh "$MODDIR/runtime/asb_lockscreen_apply.sh" >/dev/null 2>&1 ;;
+    moderate|aggressive) sh "$MODDIR/runtime/asb_doze_apply.sh" >/dev/null 2>&1 ;;
   esac
+fi
+
+if [ -f "$MODDIR/runtime/asb_log_apply.sh" ]; then
+  sh "$MODDIR/runtime/asb_log_apply.sh" >/dev/null 2>&1
 fi
 
 if [ -f "$MODDIR/runtime/asb_net_apply.sh" ]; then
