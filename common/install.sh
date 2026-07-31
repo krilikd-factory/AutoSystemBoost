@@ -1,3 +1,8 @@
+# Settings wrapper: falls back to the content provider where the `settings` command
+# cannot reach the service (a OnePlus 15R returned "Failure calling service settings"
+# for every call while exiting 0). Sourced here so installer-time writes get it too.
+[ -f "$MODPATH/runtime/asb_settings.sh" ] && . "$MODPATH/runtime/asb_settings.sh"
+
 set +x 2>/dev/null
 set +v 2>/dev/null
 
@@ -3666,7 +3671,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_lockscreen_apply.sh asb_log_apply.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_lockscreen_apply.sh asb_log_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
