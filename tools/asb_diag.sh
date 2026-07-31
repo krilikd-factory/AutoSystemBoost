@@ -400,6 +400,13 @@ NOTE "qdisc in force: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
 # Lockscreen skip: three device conditions decide whether it can work at all, and the
 # script that checks them sends its output to /dev/null from every caller. Print the facts
 # so "it does not work" comes with a reason attached.
+# Android version, printed before anything that depends on it.
+#
+# The report never carried it, so a question like "why does the lockscreen tweak refuse?"
+# could not be answered from the log alone - the answer is the API level, and reading it
+# off a screenshot instead led to a wrong version being quoted back at the user.
+NOTE "android: $(getprop ro.build.version.release 2>/dev/null) (API $(getprop ro.build.version.sdk 2>/dev/null))"
+
 _ls_want="$(cfg lockscreen_skip_delayed)"
 case "$_ls_want" in
   on)
