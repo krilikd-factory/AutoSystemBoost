@@ -133,21 +133,46 @@ rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done /data
 # is no longer coming from system.prop.
 #
 # Only cleared when the user has NOT asked for flat effects: an explicit choice stays.
-if [ ! -f /data/adb/asb/animlevel_restored ]; then
-  _al_ue="$(grep -E '^[[:space:]]*ui_effects_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
-            | head -1 | sed 's/.*=//' | tr -d ' \r')"
-  case "$_al_ue" in
-    flat|0) : ;;
-    *)
-      if [ "$(getprop persist.sys.oplus.anim_level 2>/dev/null)" = "0" ]; then
-        resetprop --delete persist.sys.oplus.anim_level >/dev/null 2>&1
-        asb_log "anim_level cleared - Recents card previews and the Cards/Simple selector return after a reboot"
-      fi
+# Checked EVERY boot, not once.
+#
+# This used to be guarded by a marker file that was written whether or not anything was
+# actually cleaned. Someone whose first boot had "flat" set got the marker and no cleanup -
+# correct at that moment - and then switching to normal later could never clear the
+# property, because the marker said the job was done. The condition it depends on is a
+# setting the user can change at any time, so the check has to run at any time too.
+#
+# It is cheap: one getprop, and it only acts when the value is actually 0 and the user has
+# not asked for flat.
+# Non-reference devices are moved off "flat" once.
+#
+# The option is no longer offered to them in the WebUI, because there the setting removes
+# the Cards/Simple selector from Recent Tasks Manager and only OP15 puts the property back
+# on its own. Hiding the button is not enough for someone who already chose it: the value
+# stays in the config, the card shows a state its own control can no longer reach, and the
+# selector stays gone. Migrate it, say so in the log, and let the cleanup below clear the
+# property on the same boot.
+if [ "$(cat "$MODDIR/overlay_device_class" 2>/dev/null)" = "generic" ]; then
+  case "$(grep -E '^[[:space:]]*ui_effects_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')" in
+    flat|0)
+      sed -i 's|^[[:space:]]*ui_effects_level=.*|ui_effects_level=stock|' \
+        "$MODDIR/config/governor.conf" 2>/dev/null
+      asb_log "ui_effects_level: flat is not offered on this model - moved to stock, Recents selector returns after a reboot"
       ;;
   esac
-  mkdir -p /data/adb/asb 2>/dev/null
-  touch /data/adb/asb/animlevel_restored 2>/dev/null
 fi
+
+_al_ue="$(grep -E '^[[:space:]]*ui_effects_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')"
+case "$_al_ue" in
+  flat|0) : ;;
+  *)
+    if [ "$(getprop persist.sys.oplus.anim_level 2>/dev/null)" = "0" ]; then
+      resetprop --delete persist.sys.oplus.anim_level >/dev/null 2>&1
+      asb_log "anim_level cleared - Recents cards and the Cards/Simple selector return after a reboot"
+    fi
+    ;;
+esac
 
 if [ ! -f /data/adb/asb/tasksnap_restored ]; then
   _ts_any=0
