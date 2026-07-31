@@ -398,9 +398,9 @@ jobs:
             "runtime/asb_camera_grade.sh" \
             "runtime/asb_net_apply.sh" \
             "runtime/asb_net_routes.sh" \
-            "runtime/asb_lockscreen_apply.sh" \
             "runtime/asb_log_apply.sh" \
             "runtime/asb_settings.sh" \
+            "runtime/asb_doze_apply.sh" \
             "tools/asb_diag.sh" \
             "tools/asb_doctor.sh" \
             "runtime/profile_core.sh" \
