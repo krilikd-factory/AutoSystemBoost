@@ -2455,6 +2455,11 @@ command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
 # sysctl values do not survive a reboot and the forced WiFi country code is released by some
 # ROMs on boot, so without this the settings would apply once from the WebUI and quietly
 # revert.
+# Log level: resolve into log_verbosity every boot, and re-assert extreme if chosen.
+if [ -f "$MODDIR/runtime/asb_log_apply.sh" ]; then
+  sh "$MODDIR/runtime/asb_log_apply.sh" >/dev/null 2>&1
+fi
+
 if [ -f "$MODDIR/runtime/asb_lockscreen_apply.sh" ]; then
   case "$(grep -E '^[[:space:]]*lockscreen_skip_delayed=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')" in
