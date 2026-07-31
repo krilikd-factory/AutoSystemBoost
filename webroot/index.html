@@ -1671,7 +1671,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V61</div>
+      <div class="badge" id="verBadge">V62</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1771,7 +1771,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
-      <div class="badge" id="liveVerBadge">V61</div>
+      <div class="badge" id="liveVerBadge">V62</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1930,7 +1930,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="cfgSocBadge">DEVICE</div>
-      <div class="badge" id="cfgVerBadge">V61</div>
+      <div class="badge" id="cfgVerBadge">V62</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -2028,6 +2028,7 @@ const I18N = {
     t_applied_audio: 'Аудио применено (audioserver перезапущен)',
     t_apply_audio_fail: 'Не удалось применить',
     cfg_reboot: '↻ Перезагрузить устройство',
+    st_ls_nolock: 'нет блокировки', st_ls_nograce: 'блокировка мгновенная', st_ls_rej: 'ROM отклонил',
     st_unavail: 'не поддерживается', st_failed: 'не применено', st_pending: 'ожидает сети',
     cfg_soft_reboot: '\u27f3 Быстрая перезагрузка',
     cfg_restart_sysui: '\u25a4 Перезапустить SystemUI',
@@ -2709,6 +2710,18 @@ async function loadDeviceClass() {
   } catch (e) { _isReference = false; }
 }
 
+// The lockscreen script can refuse for three device reasons, and every caller sends its
+// output to /dev/null - so the card looked enabled whatever happened. Read its verdict the
+// same way the network cards read theirs.
+let _lockResult = '';
+async function loadLockResult() {
+  try {
+    const r = await run('cat /data/adb/asb/lockscreen_result 2>/dev/null');
+    const t = ((r && r.stdout) || '').trim();
+    _lockResult = t.indexOf('=') > 0 ? t.slice(t.indexOf('=') + 1) : '';
+  } catch (e) { _lockResult = ''; }
+}
+
 async function loadNetResult() {
   try {
     const r = await run('cat /data/adb/asb/net_apply_result 2>/dev/null');
@@ -2727,6 +2740,11 @@ function cfgStatus(it, cur) {
   // Asking for bbr where the kernel has no bbr, or a qdisc whose module is missing, used to
   // leave the badge reading like a success because the VALUE was stored fine - the write is
   // what failed.
+  if (it.key === 'lockscreen_skip_delayed' && String(cur) === 'on') {
+    if (_lockResult === 'nolock')   return { cls:'bad', text:T('st_ls_nolock', 'no screen lock') };
+    if (_lockResult === 'nograce')  return { cls:'bad', text:T('st_ls_nograce', 'lock is instant') };
+    if (_lockResult === 'rejected') return { cls:'bad', text:T('st_ls_rej', 'ROM refused') };
+  }
   const nr = _netResult[it.key];
   if (nr === 'unavailable') return { cls:'bad', text:T('st_unavail', 'not supported') };
   if (nr === 'failed')      return { cls:'bad', text:T('st_failed', 'not applied') };
@@ -3089,6 +3107,7 @@ async function cfgSet(key, val, ctl) {
         // Applied live and it can refuse: with no secure lock, or an immediate lock, the
         // script declines and says why rather than pretending it worked.
         try { await run('sh ' + MD + '/runtime/asb_lockscreen_apply.sh >/dev/null 2>&1'); } catch (e) {}
+        await loadLockResult();
       }
     var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune',
       'net_congestion_wifi','net_congestion_mobile','net_qdisc_wifi','net_qdisc_mobile',
@@ -3168,6 +3187,7 @@ function openConfigPage() {
   // Loaded before the first render, or a non-reference device would flash "simplified"
   // for a frame before it is filtered out.
   loadDeviceClass();
+  loadLockResult();
   const p = _el('configPage');
   if (!p) return;
   _cfgGroup = null;   // always open on the hub, never mid-drill from last time
