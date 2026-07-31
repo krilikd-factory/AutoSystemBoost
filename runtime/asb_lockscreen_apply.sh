@@ -57,6 +57,29 @@ if command -v locksettings >/dev/null 2>&1; then
 fi
 [ "$_has_lock" = "0" ] && [ -n "$(asb_set_get secure lockscreen.password_type | grep -vE '^0$')" ] && _has_lock=1
 
+# Third signal: the credential files themselves.
+#
+# Needed because the first two can be unavailable at once - a OnePlus 15R has no
+# locksettings binary, and lockscreen.password_type is legacy and often unset on modern
+# Android even when a PIN is set. With only those two the script refuses with "no secure
+# lock" on a phone that plainly has one - a wrong answer dressed up as a safety check.
+# Gatekeeper writes these files when a credential is enrolled, and root can see them.
+if [ "$_has_lock" = "0" ]; then
+  for _gk in /data/system/gatekeeper.password.key \
+             /data/system/gatekeeper.pattern.key \
+             /data/system/locksettings.db; do
+    [ -s "$_gk" ] || continue
+    case "$_gk" in
+      *locksettings.db)
+        # This db exists on every device; only a credential row means a lock is set.
+        grep -aqE 'lockscreen.password_type|sp-handle' "$_gk" 2>/dev/null && _has_lock=1
+        ;;
+      *) _has_lock=1 ;;
+    esac
+    [ "$_has_lock" = "1" ] && break
+  done
+fi
+
 # The grace period itself. Zero means "lock immediately", and skipping the lockscreen then
 # would mean skipping a lock the user asked to be instant - the exact thing to refuse.
 _grace="$(asb_set_get secure lock_screen_lock_after_timeout)"
