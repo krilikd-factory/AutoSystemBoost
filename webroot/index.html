@@ -2144,6 +2144,7 @@ const I18N = {
     },
     // Per-card labels. These win over the shared ones above.
     optFor: {
+        doze_level: { stock: 'сток', moderate: 'умеренно', aggressive: 'агрессивно' },
         log_level: { stock: 'сток', '0': 'экстрим', '1': 'обычный', '2': 'подробный', '3': 'отладка' },
       ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' },
       // auto on the GLOBAL net keys resolves to the captured stock value, so it is labelled as
@@ -3070,9 +3071,6 @@ async function cfgSet(key, val, ctl) {
     // disable_blur is the same shape: the system.prop block was only ever written by the
     // installer, so the toggle promised a reboot and rebuilt nothing.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
-      if (key === 'doze_level') {
-        try { await run('sh ' + MD + '/runtime/asb_doze_apply.sh >/dev/null 2>&1'); } catch (e) {}
-      }
       if (key === 'log_level') {
         // Applied live: extreme mode changes device properties, and leaving it restores
         // them - waiting for a reboot would leave the phone in whichever state it was.
@@ -3104,6 +3102,15 @@ async function cfgSet(key, val, ctl) {
       // rendering before it exists would show the previous verdict.
       try { await run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1'); } catch (e) {}
       await loadNetResult();
+      toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+    } else if (key === 'doze_level') {
+      // Applied live: DeviceIdleController watches this key with a ContentObserver, so the
+      // new timings are in force from the next idle evaluation - no reboot.
+      //
+      // This started as a standalone `if` above the chain, which ran the script and then
+      // fell through to the generic "reboot to apply" toast. The setting was already
+      // active by then, so that message was simply wrong.
+      try { await run('sh ' + MD + '/runtime/asb_doze_apply.sh >/dev/null 2>&1'); } catch (e) {}
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
     } else if (HAPTIC_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_haptics_apply.sh'); } catch(e) {}
