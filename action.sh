@@ -318,6 +318,21 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     else _tier="learning"; fi
     _ll="$(_join "$_ll" "${_tier} $((_l_conf / 10))%")"
   fi
+  # What the current bucket has learned, and therefore why Smart is leaning the way it
+  # is. The alpha number alone told nobody anything.
+  _bt="$(_st smart_bucket_temp_x10)"; _bd="$(_st smart_bucket_drain_x10)"
+  if [ -n "$_bt" ] && [ "$_bt" -gt 0 ] 2>/dev/null; then
+    _bl="       this hour usually: $((_bt / 10)).$((_bt % 10))\u00b0C"
+    [ -n "$_bd" ] && [ "$_bd" -gt 0 ] 2>/dev/null \
+      && _bl="${_bl}  ·  $((_bd / 10)).$((_bd % 10))%/h"
+    printf '%b\n' "$_bl"
+    # Compare against this device's learned thresholds, not fixed degrees.
+    _tw="$(_st smart_therm_warm_x10)"; _tc="$(_st smart_therm_cool_x10)"
+    case "$_tw" in ''|*[!0-9]*) _tw=420 ;; esac
+    case "$_tc" in ''|*[!0-9]*) _tc=380 ;; esac
+    [ "$_bt" -gt "$_tw" ] 2>/dev/null && echo "       (warm for this phone - Smart leans to battery here)"
+    [ "$_bt" -lt "$_tc" ] 2>/dev/null && echo "       (cool for this phone - Smart allows a little more here)"
+  fi
   [ "$_smart_enabled" != "1" ] && _ll="$(_join "$_ll" "banked - Smart not steering on this profile")"
   [ -n "$_ll" ] && echo "       ${_ll}"
   if [ -n "$_l_drain" ] && [ "$_l_drain" -gt 0 ] 2>/dev/null; then
