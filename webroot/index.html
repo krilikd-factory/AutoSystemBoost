@@ -2087,7 +2087,7 @@ const I18N = {
     // config items: name + desc keyed by config key
     cfg: {
       dsp_outputs: { name: 'Выходы для DSP',
-        desc: 'На каких выходах DSP разрешено работать. Раньше он подключался ко всем сразу: усиление, задуманное для наушников, поднимало и внешний динамик \u2014 самый маленький излучатель в телефоне и наименее подходящий для добавочного усиления.\n\n«Динамик» \u2014 встроенный. «USB/джек» \u2014 проводные наушники и USB-ЦАПы. «Bluetooth» \u2014 беспроводные. Выходы, которых у телефона нет, просто не совпадут ни с чем.\n\nНастройка имеет смысл, только когда включено усиление громкости или баса \u2014 без них обрабатывать нечего.' },
+        desc: 'На каких выходах DSP разрешено работать. Раньше он подключался ко всем сразу: усиление, задуманное для наушников, поднимало и внешний динамик \u2014 самый маленький излучатель в телефоне и наименее подходящий для добавочного усиления.\n\n«Динамик» \u2014 встроенный. «USB» \u2014 проводные наушники и USB-ЦАПы. «Bluetooth» \u2014 беспроводные. Выходы, которых у телефона нет, просто не совпадут ни с чем.\n\nНастройка имеет смысл, только когда включено усиление громкости или баса \u2014 без них обрабатывать нечего.' },
       anim_speed: { name: 'Скорость анимаций',
         desc: 'Насколько быстро система рисует переходы. «По профилю» \u2014 как было раньше: скорость выбирал профиль питания (Производительность 0.8x, Экономия 1.0x), то есть отзывчивость интерфейса была побочным эффектом настройки батареи. Любое другое значение забирает это решение себе: меньше \u2014 быстрее, «выкл» убирает анимации совсем, «медленно» делает их плавнее. Действует со следующего перехода, перезагрузка не нужна.' },
       phantom_procs: { name: 'Лимит фоновых процессов',
@@ -2194,7 +2194,7 @@ const I18N = {
         log_level: { stock: 'сток', '0': 'экстрим', '1': 'обычный', '2': 'подробный', '3': 'отладка' },
       ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' },
       doze_level: { stock: 'сток', night: 'ночью', moderate: 'умеренно', aggressive: 'агрессивно' },
-      dsp_outputs: { all: 'все', speaker: 'динамик', wired: 'USB/джек', bt: 'Bluetooth', 'speaker+wired': 'динамик+USB', 'speaker+bt': 'динамик+BT', 'wired+bt': 'USB+BT' },
+      dsp_outputs: { all: 'все', speaker: 'динамик', wired: 'USB', bt: 'Bluetooth', 'speaker+wired': 'динамик+USB', 'speaker+bt': 'динамик+BT', 'wired+bt': 'USB+BT' },
       anim_speed: { profile: 'по профилю', off: 'выкл', fastest: 'максимум', faster: 'быстрее', fast: 'быстро', stock: 'сток', slow: 'медленно', slower: 'плавно' },
       phantom_procs: { stock: 'не трогать', relaxed: 'без лимита', strict: 'как в Android' },
       // auto on the GLOBAL net keys resolves to the captured stock value, so it is labelled as
@@ -2819,7 +2819,13 @@ function cfgStatus(it, cur) {
     if (!(g > 0) && !(b > 0)) {
       return { cls:'neutral', text:T('dsp_idle', 'DSP выкл') };
     }
-    return { cls: (cur === 'all' ? 'neutral' : 'good'), text: String(cur).toUpperCase() };
+    // Active whenever the DSP is processing, including on "all".
+    //
+    // The first version dimmed "all" too, on the general rule that a default value is not
+    // a change. That rule is wrong here: with gain or bass on, "all" means the effect IS
+    // routed - to every output - which is a live state and not an absence of one. The
+    // only thing this card should look inactive for is a DSP that is doing nothing.
+    return { cls:'good', text: String(cur).toUpperCase() };
   }
   if (it.key === 'sustained_temp_enter') {
     const t = parseInt(cur, 10);
