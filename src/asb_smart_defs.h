@@ -145,6 +145,12 @@ typedef enum {
 #define ASB_SMART_BUDGET_DWELL_S 120
 #define ASB_SMART_QUALITY_BAT_GOOD_X10 50
 #define ASB_SMART_QUALITY_BAT_BAD_X10 250
+/* Offsets from the learned device median, used instead of the absolutes below once the
+ * median exists. +1 C so a session at exactly the device's normal still scores full
+ * marks; the 30 C span matches what 45..75 gave, so behaviour on a phone whose median
+ * happens to be 44 is unchanged. */
+#define ASB_SMART_QUALITY_HEAT_GOOD_OFFSET_C  1
+#define ASB_SMART_QUALITY_HEAT_SPAN_C        30
 #define ASB_SMART_QUALITY_HEAT_GOOD_C 45
 #define ASB_SMART_QUALITY_HEAT_BAD_C 75
 #define ASB_ANOM_NONE 0
@@ -204,6 +210,42 @@ typedef enum {
 #define ASB_NIGHT_ONSET_WIN_TO     (5 * 60)
 #define ASB_NIGHT_WAKE_WIN_FROM    (4 * 60)
 #define ASB_NIGHT_WAKE_WIN_TO      (14 * 60)
+/* ---- learned-thermal tuning -------------------------------------------------------
+ * Thresholds are in tenths of a degree to match avg_max_temp_x10.
+ *
+ * 42.0 C as the warm mark and 38.0 as the cool one come from a full-day capture on a
+ * OnePlus 15: sleep and idle peak at 40-44, ordinary screen-on sits around 46, and a
+ * loaded session reaches 77. So 42 separates "this bucket does real work" from "this
+ * bucket is the phone sitting still", and 38 is below anything that capture ever saw -
+ * a bucket under it is genuinely cold, not merely quiet.
+ *
+ * The lean is asymmetric on purpose. Being wrong about a hot bucket costs a little
+ * speed; being wrong about a cool one costs heat, which is the thing this exists to
+ * avoid. Caps keep either direction from dominating the confidence-scaled value it is
+ * adjusting.
+ */
+#define ASB_SMART_THERM_MIN_OBS_X100    300   /* 3 effective observations before trusting */
+/* Fallback absolutes, used only until enough buckets have history to compute this
+ * device's own median. Measured on a OnePlus 15 - a reasonable starting point for that
+ * family, and replaced by the device's real numbers within a few days of use. */
+#define ASB_SMART_THERM_WARM_X10        420
+#define ASB_SMART_THERM_COOL_X10        380
+/* Offsets from the learned median. These ARE portable in a way absolute degrees are not:
+ * "4 degrees above this phone's own normal" means the same thing on every SoC, while
+ * "42 C" means a loaded chip on one device and an idle one on another. */
+#define ASB_SMART_THERM_WARM_OFFSET_X10  40
+#define ASB_SMART_THERM_COOL_OFFSET_X10  40
+#define ASB_SMART_THERM_MIN_BUCKETS       4   /* populated buckets before the median is trusted */
+#define ASB_SMART_THERM_LEAN_PER_DEG     12   /* alpha_x1000 per degree over warm */
+#define ASB_SMART_THERM_LEAN_MAX         90
+#define ASB_SMART_THERM_GAIN_PER_DEG      6   /* half the penalty rate */
+#define ASB_SMART_THERM_GAIN_MAX         40
+/* 8.0 %/h: above the 5-7 seen in ordinary screen-on use in the same capture, below the
+ * 13.5 of a genuinely heavy hour. */
+#define ASB_SMART_DRAIN_HEAVY_X10        80
+#define ASB_SMART_DRAIN_LEAN_PER_PCT      8
+#define ASB_SMART_DRAIN_LEAN_MAX         60
+
 #define ASB_NIGHT_MARGIN_PRE_MIN   15
 #define ASB_NIGHT_MARGIN_POST_MIN  20
 

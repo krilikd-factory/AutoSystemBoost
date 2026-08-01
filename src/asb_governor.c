@@ -1100,7 +1100,11 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             "smart_mode=%d\nsmart_bucket_id=%d\nsmart_daypart=%d\nsmart_is_weekend=%d\n"
             "smart_confidence=%d\nsmart_alpha_battery=%d\nsmart_interactive_bonus=%d\n"
             "smart_sleep_override=%d\nsmart_thermal_veto=%d\n"
-            "smart_app_hint=%d\nsmart_fallback_level=%d\n",
+            "smart_app_hint=%d\nsmart_fallback_level=%d\n"
+            /* Learned per-bucket history, exposed so the effect is observable. Without
+             * these two the thermal lean is invisible: alpha moves and nothing says why. */
+            "smart_bucket_temp_x10=%d\nsmart_bucket_drain_x10=%d\n"
+            "smart_therm_warm_x10=%d\nsmart_therm_cool_x10=%d\n",
             g_smart_rt.enabled,
             g_smart_rt.bucket_id,
             g_smart_rt.daypart,
@@ -1111,7 +1115,11 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.night_safe_override ? 1 : 0,
             g_smart_rt.thermal_veto ? 1 : 0,
             g_smart_rt.app_hint,
-            g_smart_rt.fallback_level);
+            g_smart_rt.fallback_level,
+            g_smart_rt.bucket_temp_x10,
+            g_smart_rt.bucket_drain_x10,
+            g_smart_rt.therm_warm_x10,
+            g_smart_rt.therm_cool_x10);
     fprintf(f, "camera_hold=%d\n", g_cam_guard_on ? 1 : 0);
     fprintf(f, "smart_lowbat_override=%d\nsmart_thermal_trend=%d\nsmart_trend_slope=%d\n",
             g_smart_rt.low_battery_override ? 1 : 0,
@@ -2495,7 +2503,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
                                                fsm->ses_max_temp,
                                                fsm->ses_thermal_entries,
                                                fsm->ses_recovery_count,
-                                               _vph, &_qb);
+                                               _vph,
+                                                  g_smart_rt.therm_warm_x10 > 0 ? (g_smart_rt.therm_warm_x10 - ASB_SMART_THERM_WARM_OFFSET_X10) / 10 : 0, &_qb);
             g_smart_last_quality = _q;
             g_smart_q_bat = _qb.q_battery;
             g_smart_q_heat = _qb.q_heat;
@@ -3134,7 +3143,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     }
 
     int conf = asb_smart_confidence_x1000(b, now);
-    asb_smart_compute_effective(b, conf, &g_smart_rt);
+    asb_smart_compute_effective(b, conf, &g_smart_store, &g_smart_rt);
 
     /*
      * Optional user autonomy dial: smart_battery_bias (governor.conf, x1000, default 0 =

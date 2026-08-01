@@ -78,6 +78,14 @@ typedef struct {
 
     int conf_x1000;
     int alpha_battery_x1000;
+    /* Echo of the learned history that shaped this decision. Not used for control - it
+     * exists so a report can say why alpha moved instead of only that it did. */
+    int bucket_temp_x10;
+    int bucket_drain_x10;
+    /* The thresholds actually in force - learned from this device, or the fallback while
+     * it is still gathering. Printing them is the only way to tell one from the other. */
+    int therm_warm_x10;
+    int therm_cool_x10;
     int interactive_bonus_x1000;
     int idle_bias_x1000;
     int sleep_bias_x1000;
@@ -898,15 +906,22 @@ static asb_smart_bucket_t* asb_smart_lookup_bucket(
 
 /* Compute effective runtime smart params from a chosen bucket + confidence.
  * Applies confidence gating per locked rules. */
+/* st is needed for the device-relative thermal median: the decision depends not only on
+ * this bucket but on how it compares to the rest of this phone's history. */
 static void asb_smart_compute_effective(
         const asb_smart_bucket_t *b,
         int conf_x1000,
+        const asb_smart_store_t *st,
         asb_smart_runtime_t *rt)
 {
     if (!rt) return;
     if (!b) {
         rt->conf_x1000 = 0;
         rt->alpha_battery_x1000 = 500;
+        rt->bucket_temp_x10 = 0;
+        rt->bucket_drain_x10 = 0;
+        rt->therm_warm_x10 = ASB_SMART_THERM_WARM_X10;
+        rt->therm_cool_x10 = ASB_SMART_THERM_COOL_X10;
         rt->interactive_bonus_x1000 = 0;
         rt->idle_bias_x1000 = 0;
         rt->sleep_bias_x1000 = 100;
@@ -941,6 +956,95 @@ static void asb_smart_compute_effective(
      * Neutral baseline for alpha_battery: 500 (mid between battery and balanced).
      * Effective = neutral + (bucket - neutral) × eff_scale */
     int alpha = 500 + ((b->alpha_battery_x1000 - 500) * eff_scale_x1000) / 1000;
+
+    /* Learned thermal history, finally used.
+     *
+     * avg_max_temp_x10 and avg_drain_pctph_x10 have been collected per bucket since the
+     * feature existed and were never read by anything - the learner was keeping a diary
+     * nobody opened. That is the whole gap in "Smart is not smart enough": it knew this
+     * time of day runs hot, or drains fast, and did nothing differently because of it.
+     *
+     * Both nudges are small and bounded. A bucket is an average over many sessions, so
+     * acting hard on it would fight the live thermal loop, which sees the actual sensor
+     * and is always right about NOW. This shifts the starting point; the live loop still
+     * has the final word.
+     */
+    /* Thresholds relative to THIS device, not to the one the numbers came from.
+     *
+     * The first version of this used 42.0/38.0 C, measured on a OnePlus 15. That is a
+     * fact about one phone: a 12 on SD8Gen3 idles and loads at different temperatures,
+     * and an older model with a smaller thermal envelope different again. Hardcoding
+     * either set makes the feature right for one device and wrong for the rest, which
+     * for a module aimed at OnePlus generally is the same as wrong.
+     *
+     * So the device tells us its own normal. The buckets already hold a temperature
+     * average per time-of-day slot; the median across the populated ones IS this phone's
+     * ordinary operating temperature, whatever silicon it has. Warm and cool are then
+     * offsets from that median rather than absolute degrees.
+     *
+     * Fallback to the measured OP15 numbers only while too few buckets have history -
+     * a defined starting point beats no lean at all, and it self-corrects within days.
+     */
+    int warm_x10 = ASB_SMART_THERM_WARM_X10;
+    int cool_x10 = ASB_SMART_THERM_COOL_X10;
+    {
+        int temps[ASB_SMART_BUCKETS];
+        int n = 0;
+        for (int i = 0; st && i < ASB_SMART_BUCKETS; i++) {
+            int t = (int)st->buckets[i].avg_max_temp_x10;
+            if (t > 0 && st->buckets[i].eff_obs_x100 >= ASB_SMART_THERM_MIN_OBS_X100)
+                temps[n++] = t;
+        }
+        if (st && n >= ASB_SMART_THERM_MIN_BUCKETS) {
+            /* Insertion sort: n <= 12, and a median needs the middle element only. */
+            for (int i = 1; i < n; i++) {
+                int v = temps[i], j = i - 1;
+                while (j >= 0 && temps[j] > v) { temps[j + 1] = temps[j]; j--; }
+                temps[j + 1] = v;
+            }
+            int median = temps[n / 2];
+            warm_x10 = median + ASB_SMART_THERM_WARM_OFFSET_X10;
+            cool_x10 = median - ASB_SMART_THERM_COOL_OFFSET_X10;
+        }
+    }
+
+    if (b->eff_obs_x100 >= ASB_SMART_THERM_MIN_OBS_X100) {
+        int t_c10 = (int)b->avg_max_temp_x10;
+        if (t_c10 > 0) {
+            /* Above the warm mark, lean toward battery in proportion to the overshoot,
+             * capped so a consistently hot bucket cannot pin alpha at the floor. */
+            if (t_c10 > warm_x10) {
+                int over = t_c10 - warm_x10;              /* tenths of a degree */
+                int lean = (over * ASB_SMART_THERM_LEAN_PER_DEG) / 10;
+                if (lean > ASB_SMART_THERM_LEAN_MAX) lean = ASB_SMART_THERM_LEAN_MAX;
+                alpha -= lean;
+            /* A bucket that has never run warm has headroom the generic tuning does not
+             * know about - give a little of it back rather than staying cautious out of
+             * habit. Deliberately smaller than the penalty: being wrong about cool costs
+             * heat, being wrong about hot costs a little speed. */
+            } else if (t_c10 < cool_x10) {
+                int under = cool_x10 - t_c10;
+                int gain  = (under * ASB_SMART_THERM_GAIN_PER_DEG) / 10;
+                if (gain > ASB_SMART_THERM_GAIN_MAX) gain = ASB_SMART_THERM_GAIN_MAX;
+                alpha += gain;
+            }
+        }
+        /* Drain history: a bucket that historically burns battery fast gets a nudge the
+         * same way. This is what makes "the phone learns your evening Netflix hour" mean
+         * something instead of being a slogan. */
+        int d_x10 = (int)b->avg_drain_pctph_x10;
+        if (d_x10 > ASB_SMART_DRAIN_HEAVY_X10) {
+            int over = d_x10 - ASB_SMART_DRAIN_HEAVY_X10;
+            int lean = (over * ASB_SMART_DRAIN_LEAN_PER_PCT) / 10;
+            if (lean > ASB_SMART_DRAIN_LEAN_MAX) lean = ASB_SMART_DRAIN_LEAN_MAX;
+            alpha -= lean;
+        }
+    }
+
+    rt->therm_warm_x10   = warm_x10;
+    rt->therm_cool_x10   = cool_x10;
+    rt->bucket_temp_x10  = (int)b->avg_max_temp_x10;
+    rt->bucket_drain_x10 = (int)b->avg_drain_pctph_x10;
     rt->alpha_battery_x1000 = asb_clamp_int(alpha,
         ASB_SMART_ALPHA_BATTERY_MIN_X1000, ASB_SMART_ALPHA_BATTERY_MAX_X1000);
 
@@ -1430,13 +1534,31 @@ static int asb_smart_session_quality_ex(
         int thermal_entries,
         int recovery_count,
         int vendor_clamps_per_h,
+        int device_median_c,   /* 0 = not learned yet, use the absolute fallbacks */
         asb_smart_quality_t *out)
 {
+    /* Heat scored against THIS device's own normal.
+     *
+     * The fixed 45/75 C pair scored a OnePlus 15 sitting idle at 100 and a device whose
+     * silicon simply runs warmer at 83 - for doing nothing. That is not a quality
+     * difference, it is a difference in thermal design being recorded as one, and every
+     * bucket on the warmer phone inherits the penalty permanently.
+     *
+     * Anchoring to the learned median fixes that: "good" is at or below your own normal,
+     * "bad" is 30 degrees above it, which is the same span the absolutes used. Devices
+     * with no learned median yet keep the old numbers.
+     */
+    int heat_good = ASB_SMART_QUALITY_HEAT_GOOD_C;
+    int heat_bad  = ASB_SMART_QUALITY_HEAT_BAD_C;
+    if (device_median_c > 0) {
+        heat_good = device_median_c + ASB_SMART_QUALITY_HEAT_GOOD_OFFSET_C;
+        heat_bad  = heat_good + ASB_SMART_QUALITY_HEAT_SPAN_C;
+    }
+
     int heat;
-    if (max_temp_c <= ASB_SMART_QUALITY_HEAT_GOOD_C) heat = 100;
-    else if (max_temp_c >= ASB_SMART_QUALITY_HEAT_BAD_C) heat = 0;
-    else heat = ((ASB_SMART_QUALITY_HEAT_BAD_C - max_temp_c) * 100) /
-                (ASB_SMART_QUALITY_HEAT_BAD_C - ASB_SMART_QUALITY_HEAT_GOOD_C);
+    if (max_temp_c <= heat_good) heat = 100;
+    else if (max_temp_c >= heat_bad) heat = 0;
+    else heat = ((heat_bad - max_temp_c) * 100) / (heat_bad - heat_good);
 
     int stab = 100 - 20 * thermal_entries - 10 * recovery_count;
     if (stab < 0) stab = 0;
@@ -1493,7 +1615,8 @@ static int __attribute__((unused)) asb_smart_session_quality(
 {
     return asb_smart_session_quality_ex(drain_pctph_x10, drain_valid,
                                         max_temp_c, thermal_entries,
-                                        recovery_count, -1, NULL);
+                                        recovery_count, -1, NULL,
+                                        0);
 }
 
 static void asb_smart_apply_thermal_trend(
