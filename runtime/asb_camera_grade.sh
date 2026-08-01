@@ -131,7 +131,25 @@ ASB_GRADE_MARK="ASBGRADE"
 # outright.
 ASB_GRADE_DIR="/data/adb/asb/grade_marks"
 
+# Normalise the path before it becomes a marker name.
+#
+# On a real device the markers accumulated: ten of them for two files, carrying suffixes
+# like .asbdes1856 and .graded from whatever temporary name the installer happened to use
+# that run. Each install left more behind, and a marker for a path that no longer exists
+# protects nothing - so the compounding guard was quietly getting weaker with every
+# update while the directory grew.
+#
+# Strip the temp suffixes and collapse the two module locations (modules/ and
+# modules_update/) to one, because they are the same file at different points in an
+# install. One marker per real destination, overwritten in place.
+asb_grade_mark_norm() {
+  printf '%s' "$1" \
+    | sed -e 's/\.asbdes[0-9]*$//' -e 's/\.graded$//' -e 's/\.tmp$//' \
+          -e 's|/data/adb/modules_update/|/data/adb/modules/|'
+}
+
 asb_grade_mark_path() {
+  set -- "$(asb_grade_mark_norm "$1")"
   # One marker per destination, named after the path so two destinations cannot collide.
   printf '%s/%s.mark' "$ASB_GRADE_DIR" \
     "$(printf '%s' "$1" | sed 's|^/||; s|/|_|g')"
