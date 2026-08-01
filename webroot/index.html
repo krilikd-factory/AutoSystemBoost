@@ -744,6 +744,15 @@ body::before, body::after {
   overflow-wrap: anywhere;
   letter-spacing: 0.5px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  /*
+   * Fallback background. Every colour here comes from a t-* class, and with none of them
+   * matching the toast rendered as text floating on the page with a border and no fill -
+   * reported on the network tweaks. A base fill means an unrecognised category degrades
+   * to a plain dark toast rather than a transparent one.
+   */
+  background: rgba(18,18,22,0.95);
+  color: var(--fg, #e8e8ea);
+  border-color: rgba(255,255,255,0.14);
 }
 
 .toast.show { 
@@ -1512,6 +1521,38 @@ body.config-active #livePage.open {
 .cfg-row.desc-open .cfg-collapse-inner {
   opacity: 1;
 }
+.cfg-pending {
+  margin: 0 0 12px;
+  padding: 11px 14px;
+  border-radius: 13px;
+  border: 1px solid rgba(251,191,36,0.42);
+  background: rgba(40,30,6,0.9);
+  color: #fbbf24;
+  font: 600 12px/1.4 var(--mono);
+  text-align: center;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+}
+.cfg-apply {
+  padding-top: 8px;
+  font: 600 10px/1.4 var(--mono);
+  letter-spacing: 0.04em;
+  text-align: left;
+}
+.cfg-apply-live   { color: #34d399; }
+.cfg-apply-next   { color: #7dd3fc; }
+.cfg-apply-reboot { color: #fbbf24; }
+/* Collapsed-row marker: a reboot is the only state worth interrupting the scan for, so
+   it is the only one that gets a dot. Marking all three would be noise on every card. */
+.cfg-reboot-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  margin-left: 7px;
+  border-radius: 50%;
+  background: #fbbf24;
+  vertical-align: middle;
+  opacity: 0.85;
+}
 .cfg-desc {
   padding-top: 9px;
   font-size: 11px;
@@ -1951,6 +1992,7 @@ body.config-active #livePage.open {
     <div class="sec-line"></div>
   </div>
 
+  <div class="cfg-pending" id="cfgPendingBar" style="display:none" onclick="cfgReboot()"></div>
   <div class="cfg-list" id="cfgList"></div>
 
   <!-- Reboot actions. Wrapped so cfgSyncChrome can show them on the hub and hide them on
@@ -2020,6 +2062,10 @@ const I18N = {
     lv_lpm_fast: 'быстрый', lv_lpm_fast_t: 'дата-сессия удерживается (низкая задержка)',
     // config page
     cfg_apply_audio: '\u266b Применить аудио сейчас',
+    t_pending_reboot: '\u21BB Изменения ждут перезагрузки \u2014 нажмите',
+    am_live: '\u26A1 применяется сразу',
+    am_next: '\u23ED сразу, но приложение нужно перезапустить',
+    am_reboot: '\u21BB нужна перезагрузка',
     t_not_applied: 'не применено',
     t_not_applied_hint: 'Настройка сохранена, но устройство её не приняло. Перезагрузитесь и установите модуль ещё раз.',
     t_cfg_audio_live: ' \u00b7 применяю\u2026',
@@ -2046,6 +2092,10 @@ const I18N = {
     t_rebooting: 'Перезагрузка…',
     // config items: name + desc keyed by config key
     cfg: {
+      phantom_procs: { name: 'Лимит фоновых процессов',
+        desc: 'Android убивает «фантомные» процессы \u2014 те, что приложение порождает вне обычного жизненного цикла \u2014 как только их становится больше 32. Из-за этого на Android 12+ обрываются долгие компиляции, эмуляторы и сессии в терминале. «Свободно» \u2014 отключить этот контроль; ASB и раньше делал так, но молча. «Строго» \u2014 вернуть поведение Android. «Сток» \u2014 не трогать.\n\nПочему нужен перезапуск приложения: Android читает этот лимит в момент запуска процесса. Уже открытые приложения продолжат работать по старому правилу, пока их не закрыть и не открыть снова. Перезагружать телефон не нужно.' },
+      lockscreen_shortcuts: { name: 'Ярлыки на экране блокировки',
+        desc: '«Убрать» \u2014 убирает ярлыки камеры и кошелька из углов экрана блокировки. Только внешний вид: камера продолжает работать, платёжные средства не отключаются, исчезает лишь ярлык.' },
       camera_hold_enable: { name: 'Держать производительность при камере',
         desc: 'Пока камера снимает, governor перестаёт понижать частоты и удерживает уже занятые ядра. Именно это не даёт пропустить кадр в серии или в видео — ценой небольшого расхода батареи, пока приложение камеры открыто. «Вкл» — удерживать (обычное поведение модуля), «выкл» — позволить governor\u2019у сбрасывать частоты как у любого другого приложения.' },
       bt_a2dp_offload: { name: 'Аппаратный кодек Bluetooth',
@@ -2055,13 +2105,13 @@ const I18N = {
       bat_suppress_gaming: { name: 'Без игрового режима в Экономии',
         desc: 'В профиле «Экономия» игра считается обычной тяжёлой нагрузкой, а не поводом включить игровой режим. Игровой режим поднимает потолки частот — то есть делает ровно противоположное тому, ради чего выбирают «Экономию». «Выкл» разрешает играм полный игровой режим даже в «Экономии». Влияет только на этот профиль, остальные три не затрагиваются.' },
       doze_level: { name: 'Глубокий сон',
-        desc: 'Как быстро Android уводит телефон в глубокий сон после выключения экрана. Сток ждёт 30 минут — а если телефон берут в руки каждые несколько минут, эти 30 минут просто никогда не наступают: суточный замер показал, что в простое процессор бодрствует 45% времени при цели 5%. «Умеренно» начинает простой через 5 минут, «агрессивно» — через 2. ЦЕНА: в глубоком сне система придерживает фоновую сеть до следующего окна обслуживания, поэтому приложение, которое опрашивает сервер само, может опоздать — приоритетные push проходят всегда. Если своевременность сообщений важнее расхода в простое, оставьте «сток». Пишет ровно одну настройку, «сток» её удаляет.' },
+        desc: '«Сток» \u2014 тайминги Android без вмешательства. «Ночью» \u2014 агрессивный сон только пока вы спите, днём всё как в стоке: ночью некому ждать уведомление, поэтому здесь это почти бесплатная экономия. Окно берётся из выученного расписания сна (твик «Изучать моё расписание сна»), а не из фиксированных часов \u2014 модуль смотрит, когда экран реально гаснет и когда вы просыпаетесь. Пока наблюдений мало, используются часы из настроек. В этом окне также приостанавливается Always-On Display: по логам это самый частый источник ночных пробуждений. Ваша настройка AOD запоминается и возвращается утром. «Умеренно» \u2014 сон через 5 минут вместо 30, круглосуточно. «Агрессивно» \u2014 через 2 минуты, фоновые сообщения могут задерживаться. Будильники не затрагиваются ни в одном режиме.' },
       log_level: { name: 'Подробность логов',
         desc: 'Сколько модуль пишет в свой лог и насколько логирует само устройство. «Сток» — единственное значение, при котором логирование телефона не трогается вообще. «0» — экстремальное: обрезает логи и отладочный вывод устройства настолько, насколько это возможно; экономит записи на диск и пробуждения, но делает практически любой отчёт об ошибке с этого телефона бесполезным, включая наш. «1» — обычный режим, то, что модуль делал всегда. «2» добавляет обновления обучения и переходы экрана — включите перед тем, как присылать лог по расходу батареи. «3» — подробный, лог заполняется быстро; только пока воспроизводите проблему. Выход из экстремального режима возвращает ваше логирование как было.' },
       sustained_temp_mode: { name: 'Точка троттлинга',
         desc: 'Когда ASB начинает придерживать производительность, чтобы телефон был холоднее. «Сток» — порог вашего устройства, считанный из тепловой зоны процессора при загрузке, а не число, придуманное для телефонов вообще. «Умное» — начинает с него же и поднимает на 2 градуса каждый раз, когда нагрузка доходит до устойчивой быстрее минуты: устройство, которое срабатывает слишком рано, само себя выравнивает. «Ручное» — ровно то значение, что стоит на ползунке ниже, и его ничто не сдвинет. Выбирайте «Ручное», если измеряли своё устройство и знаете, чего хотите.' },
       sustained_temp_enter: { name: 'Температура троттлинга',
-        desc: 'Температура, с которой ASB начинает сдерживать производительность, чтобы телефон был холоднее. Ниже \u2014 вмешивается раньше: прохладнее, но пиковая скорость уходит быстрее. Выше \u2014 дольше работает в полную силу и сильнее греется. 65 \u2014 значение по умолчанию. Это собственный порог ASB, а не вендорный: у прошивки свои жёсткие пределы ниже, и поднять их отсюда нельзя, поэтому высокое значение не делает телефон опасным \u2014 просто первым решение примет вендор.' },
+        desc: 'Температура, с которой ASB начинает сдерживать производительность. Ниже \u2014 вмешивается раньше: прохладнее, но пиковая скорость уходит быстрее. Выше \u2014 дольше работает в полную силу. 65 \u2014 значение по умолчанию.\n\nВАЖНО про низкие значения: телефон в простое уже держит около 40\u201344\u00a0\u00b0C, а под нагрузкой уходит за 70. Порог 40\u201345 означает, что ограничение будет активно почти всегда \u2014 это не поломка, а буквально то, о чём вы попросили. Если хочется просто «чуть прохладнее», начните с 55\u201360.\n\nЭто собственный порог ASB, а не вендорный: у прошивки свои жёсткие пределы ниже, и поднять их отсюда нельзя.' },
 
       audio_profile: { name: 'Аудио-профиль',
         desc: 'Кто обрабатывает звук. «Под эквалайзер» \u2014 отдаёт сигнал внешнему EQ/ViPER нетронутым. «Hi-fi» \u2014 UHQA включён, когда эквалайзера нет. «Как в стоке» \u2014 только базовые твики. Применяется без перезагрузки.' },
@@ -2069,18 +2119,18 @@ const I18N = {
         desc: 'Настройка кодека, а не софта: компандеры наушников выкл, HPH Mode \u2192 CLS_H_HIFI. Внешнему эквалайзеру не мешает \u2014 даёт ему более чистый ЦАП. Нужна перезагрузка.' },
       CAMERA_LEVEL: { name: 'Степень обработки камеры',
         desc: 'Сила цвета, контраста и детализации для фото и видео: 0 = сток, выше = насыщеннее и контрастнее. Работает ОТНОСИТЕЛЬНО \u2014 умножает те значения, что реально стоят в вашей прошивке, поэтому не зависит от того, какие числа в ней записаны. На максимуме возможен бандинг в тенях. Применяется после перезагрузки, и теперь смена уровня действительно применяется при загрузке, а не только при переустановке.' },
-  CAMERA_GRAIN: { name: 'Зернистость', 
+      CAMERA_GRAIN: { name: 'Зернистость', 
         desc: 'После шумоподавления камера подмешивает зерно обратно \u2014 идеально гладкая картинка выглядит пластмассовой. 3 \u2014 сток: ниже для более чистого вида, выше для выраженной фактуры, 0 убирает зерно полностью. Влияет на фото, применяется после перезагрузки.' },
       CAMERA_CONTRAST: { name: 'Контраст и глубина цвета',
-        desc: 'Контраст и насыщенность тональной кривой. 3 \u2014 ровно сток (100%), 0 \u2014 более плоско (70%), 6 \u2014 заметно контрастнее (130%). Отдельно от «Степени обработки», которая работает с цветовой матрицей. После перезагрузки.' },
+        desc: 'Контраст и насыщенность тональной кривой. 3 \u2014 ровно сток (100%), 0 \u2014 более плоско (70%), 6 \u2014 заметно контрастнее (130%). Отдельно от «Степени обработки», которая работает с цветовой матрицей.' },
       CAMERA_PORTRAIT: { name: 'ИИ для портретов',
-        desc: 'Нейросетевая обработка лиц: заводская прошивка держит её выключенной (веса 0.0), поэтому здесь пишутся абсолютные значения, а не множитель. Только поднимает: если в прошивке уже стоит больше, чем просит уровень, остаётся значение прошивки. После перезагрузки.' },
+        desc: 'Нейросетевая обработка лиц: заводская прошивка держит её выключенной (веса 0.0), поэтому здесь пишутся абсолютные значения, а не множитель. Только поднимает: если в прошивке уже стоит больше, чем просит уровень, остаётся значение прошивки.' },
       CAMERA_LOWLIGHT: { name: 'Резкость макро и при слабом свете',
-        desc: 'У макро и слабого света своя шкала резкости, и именно в этих режимах перешарп заметнее всего \u2014 близкие объекты и высокое ISO усиливают ореолы. 0 \u2014 следовать основной обработке; поднимайте, только если эти режимы выглядят мягче обычных снимков. После перезагрузки.' },
+        desc: 'У макро и слабого света своя шкала резкости, и именно в этих режимах перешарп заметнее всего \u2014 близкие объекты и высокое ISO усиливают ореолы. 0 \u2014 следовать основной обработке; поднимайте, только если эти режимы выглядят мягче обычных снимков.' },
       smart_battery_bias: { name: 'Уклон Smart в автономность',
         desc: 'Склоняет режим Smart к экономии (0 = выкл, выше = больше автономности, чуть менее отзывчиво). Влияет только на Smart.' },
       CAMERA_AGGRESSIVE_INJECT: { name: 'Режим ключей камеры',
-        desc: 'БЕЗОПАСНЫЙ — только имеющиеся tone-ключи. АГРЕССИВНЫЙ инжектирует недостающие (OnePlus 13/12) — рискованно, верните БЕЗОПАСНЫЙ при сбоях. После перезагрузки.' },
+        desc: 'БЕЗОПАСНЫЙ — только имеющиеся tone-ключи. АГРЕССИВНЫЙ инжектирует недостающие (OnePlus 13/12) — рискованно, верните БЕЗОПАСНЫЙ при сбоях.' },
       media_loudness: { name: 'Громкость медиа',
         desc: 'Громче на рабочих позициях ползунка: умеренно \u2248+3 dB, сильно \u2248+6, максимум \u2248+10. Тихие шаги, будильник и звонок не трогает, клиппинга нет. На «максимуме» верх ползунка грубеет. Нужна перезагрузка.' },
       dsp_loudness: { name: 'DSP\nУсиление громкости',
@@ -2128,7 +2178,7 @@ const I18N = {
       wifi_scan_throttle: { name: 'Частота поиска Wi-Fi',
         desc: 'Как часто телефон ищет сети Wi-Fi в фоне. «Чаще» — быстрее переключается на более сильную точку, когда вы ходите по дому или офису, но чуть больше расходует батарею. «Сток» — обычное ограничение Android (4 поиска за 2 минуты). Если Wi-Fi «залипает» на слабой точке — поставьте «чаще».' },
       haptic_strength: { name: 'Вибрация',
-        desc: 'Десять ступеней на фирменной, более дробной шкале \u2014 стандартная настройка Android 0\u20133 здесь и так стоит на максимуме, поэтому её подъём ничего не давал. «Авто» \u2014 оставить как было на устройстве: это не то же самое, что любое число, а решение не вмешиваться. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона: выше служба вибрации отвергает значение целиком, и телефон замолкает вместо того, чтобы бить сильнее. Применяется сразу.' },
+        desc: 'Десять ступеней на фирменной, более дробной шкале \u2014 стандартная настройка Android 0\u20133 здесь и так стоит на максимуме, поэтому её подъём ничего не давал. «Авто» \u2014 оставить как было на устройстве: это не то же самое, что любое число, а решение не вмешиваться. При перетаскивании телефон вибрирует на выбранном уровне. 10 \u2014 верх фирменного диапазона: выше служба вибрации отвергает значение целиком, и телефон замолкает вместо того, чтобы бить сильнее.' },
       haptic_touch_strength: { name: 'Отклик касаний',
         desc: 'Отдача при наборе текста и нажатиях \u2014 на своей шкале. Прошивка задаёт её отдельно от уведомлений: фирменный ползунок пишет 1500 для уведомлений и 1600 для касаний. И задачи разные: уведомление должно чувствоваться через карман, а отклик клавиатуры не должен утомлять руку. «Авто» \u2014 следует за силой выше. Регулировки длительности нет: в системе её попросту не существует, Android берёт длительность из формы волны каждого эффекта.' },
     },
@@ -2147,13 +2197,19 @@ const I18N = {
         doze_level: { stock: 'сток', moderate: 'умеренно', aggressive: 'агрессивно' },
         log_level: { stock: 'сток', '0': 'экстрим', '1': 'обычный', '2': 'подробный', '3': 'отладка' },
       ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' },
+      doze_level: { stock: 'сток', night: 'ночью', moderate: 'умеренно', aggressive: 'агрессивно' },
+      phantom_procs: { stock: 'сток', relaxed: 'свободно', strict: 'строго' },
+      lockscreen_shortcuts: { stock: 'сток', clean: 'убрать' },
       // auto on the GLOBAL net keys resolves to the captured stock value, so it is labelled as
       // such - calling it "авто" was the whole source of the confusion.
       // On the per-interface keys auto means "inherit the global setting", which is a
       // different thing and gets a different word.
       net_congestion:        { auto: 'сток' },
       net_qdisc:             { auto: 'сток' },
-      net_route_tune:        { auto: 'умное', off: 'сток', conservative: 'умеренно', aggressive: 'агрессивно' },
+      // auto is an ASB mode here - it picks a size per interface - so it is NOT the
+      // stock label. Having both "сток" and "вернуть сток" on one card was the confusion;
+      // there is exactly one stock option now and it is called that.
+      net_route_tune:        { auto: 'адаптивно', off: 'сток', conservative: 'умеренно', aggressive: 'агрессивно' },
       wifi_country:          { auto: 'сток' },
       wifi_scan_throttle:    { auto: 'сток', '0': 'без ограничения', '1': 'ограничивать' },
       net_congestion_wifi:   { auto: 'как общая' },
@@ -2466,88 +2522,91 @@ const CFG_ITEMS = [
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
   { key:'audio_dac_hifi', type:'bool', def:'0', name:'Hi-Fi DAC (mixer)',
     desc:'Codec configuration, not software: headphone companders off, HPH Mode \u2192 CLS_H_HIFI. Does not fight an external EQ \u2014 it gives it a cleaner DAC. Reboot to apply.' },
+  { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
+    desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Volume Control',
     desc:'Stock = one shared scale: the phone slider moves the headset volume directly. Disabled = the two are independent, so the phone applies its own gain on top of whatever the headset is set to - usually louder, and what ViPER/EQ need. The trade is that the two scales no longer line up, which on some headsets makes the lowest steps too quiet. Applies without a reboot.' },
   { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
     desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. Auto is the hands-off setting: ASB writes nothing and whatever the ROM chose stays. On actively writes hardware encoding (usually also what the phone ships with, but ASB sets it rather than leaving it). Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
-  { key:'media_loudness', type:'seg', def:'stock', opts:['stock','mild','strong','max'], name:'Media Loudness',
-    desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:25, step:1, name:'DSP Loudness',
     desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, up to +25 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream.' },
   { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
     desc:'Needs DSP Loudness above. A low shelf at 90 Hz: the full lift lands on the low end, half of it at the corner, nothing above about 1 kHz \u2014 mids and vocals stay untouched. It runs at the head of the chain, so the added bass is limited like everything else and cannot clip on its own. The trade is headroom: every dB of bass makes the limiter engage sooner, so a big boost on top of a high gain costs overall loudness. 3\u20136 suits most headphones.' },
   { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
     desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
-  // --- Audio ---
+  // --- Audio ---,
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:8, step:1, name:'Camera Grade',
     desc:'Photo + video colour, contrast and detail: 0 = stock, higher = richer and punchier. Grades by RATIO - it multiplies whatever your firmware ships, so it works regardless of the values your build uses. Max can band in deep shadows. Applies after a reboot, and changing it here now re-grades at boot instead of waiting for a reinstall.' },
-  { key:'CAMERA_GRAIN', type:'range', def:'3', min:0, max:6, step:1, name:'Film Grain',
-    desc:'The camera adds grain back after denoising, because a perfectly smooth image reads as plastic. 3 is stock: lower for a cleaner look, higher for more texture, 0 removes it entirely. Applies to photos after a reboot.' },
   { key:'CAMERA_CONTRAST', type:'range', def:'3', min:0, max:6, step:1, name:'Contrast & Colour Depth',
-    desc:'The tone curve\u2019s contrast and saturation scales. This is a different axis from the grade above: that one widens the colour matrix, this one shapes the curve - deeper shadows and richer colour rather than a wider gamut. 3 is stock. Applies after a reboot.' },
+    desc:'The tone curve\u2019s contrast and saturation scales. This is a different axis from the grade above: that one widens the colour matrix, this one shapes the curve - deeper shadows and richer colour rather than a wider gamut. 3 is stock.' },
+  { key:'CAMERA_GRAIN', type:'range', def:'3', min:0, max:6, step:1, name:'Film Grain',
+    desc:'The camera adds grain back after denoising, because a perfectly smooth image reads as plastic. 3 is stock: lower for a cleaner look, higher for more texture, 0 removes it entirely.' },
   { key:'CAMERA_PORTRAIT', type:'range', def:'0', min:0, max:6, step:1, name:'Portrait AI',
-    desc:'Neural processing on faces and skin, which ships switched off - the weights are all zero. Raising it recovers detail in faces that the denoiser flattens. Too high looks synthetic, so start at 1-2. Portrait modes only. Applies after a reboot.' },
+    desc:'Neural processing on faces and skin, which ships switched off - the weights are all zero. Raising it recovers detail in faces that the denoiser flattens. Too high looks synthetic, so start at 1-2. Portrait modes only.' },
   { key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:8, step:1, name:'Macro & Low-light Sharpening',
-    desc:'Macro and low-light have their own sharpening scales, and these are the modes where over-sharpening shows worst - close subjects and high ISO both amplify halos. 0 follows the main grade; raise it only if those modes look soft next to normal shots. Applies after a reboot.' },
-  { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
-    desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
-  { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
-    desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
-  // --- Power & battery ---
-  { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
-    desc:'While charging: more performance when cool, backs off when the battery heats up.' },
-  { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
-    desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
+    desc:'Macro and low-light have their own sharpening scales, and these are the modes where over-sharpening shows worst - close subjects and high ISO both amplify halos. 0 follows the main grade; raise it only if those modes look soft next to normal shots.' },
   { key:'camera_hold_enable', type:'bool', def:'1', name:'Hold Performance While Camera Runs',
     desc:'While the camera is streaming, the governor stops lowering the CPU and keeps the cores it is already using. That is what prevents a dropped frame in the middle of a burst or a video, at the cost of a little battery for as long as the camera app is open. On means held (the stock module behaviour), off lets the governor throttle the camera like any other app.' },
-  { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
-    desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
-  { key:'bat_suppress_gaming', type:'bool', def:'1', name:'No Game Mode on Battery Profile',
-    desc:'On the Battery profile, treat a game as ordinary heavy load rather than entering the gaming state. Gaming mode raises frequency ceilings, which is the opposite of what the Battery profile is for - so this keeps that profile honest. Off lets games get the full gaming treatment even on Battery. Affects the Battery profile only; the other three are untouched.' },
-  { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
-    desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
-  // --- Memory & UX ---
-  { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
-    desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
-  { key:'sustained_temp_enter', type:'range', def:'65', min:40, max:70, step:1, name:'Throttling Temperature',
-    desc:'The temperature at which ASB starts holding performance back to keep the phone cooler. Lower means it intervenes sooner - a cooler phone that gives up peak speed earlier; higher lets it run hard for longer and get warmer. 65 is the default. This is ASB\u2019s own threshold, not the vendor\u2019s: the firmware keeps its own hard limits underneath and those cannot be raised from here, so a high value does not make the phone unsafe, it just means the vendor decides first.' },
-  { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
-    desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
     desc:'Performance shortens animations (~0.8x) and long-press/multi-tap windows for a snappier, more responsive UI; Battery keeps stock. OFF = untouched.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Almost never needed. WindowManager reads the animation scales as soon as they are written, so a plain settings change is enough and UI Speed Management works without this. The switch exists only for builds that ignore a live change, and it applies by restarting SystemUI: the screen blinks, the lock screen returns, and overlays from other modules (status-bar themes) are torn down. Only fires on a profile switch you made yourself. Turn it on only if you have confirmed the scales do not apply otherwise.' },
-  // --- Display ---
+  // --- Display ---,
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
     desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
     desc:'How richly the system draws transitions and Recents. Normal is what the device ships with. Simplified uses fewer effects and a little less GPU. IMPORTANT: with simplified, Recents becomes a plain list and OxygenOS removes the Cards/Simple selector from Recent Tasks Manager altogether - the only way back is setting this to normal and rebooting. If you want the card previews, leave this alone. The simplified option is offered on the OnePlus 15 only: on other models it removes the selector with no way back except this same setting, so it is not shown there.' },
-  // ---- Network ----------------------------------------------------------------
-  { key:'net_route_tune', type:'seg', def:'auto', stock:'off', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
-    desc:'How much the phone sends in one burst before waiting for a reply. Smart lets ASB look at your actual WiFi or mobile speed and size it: bigger on a fast link, left at the factory value on a weak one, because a big burst there only causes losses. Moderate uses the factory value everywhere. Aggressive goes one class higher if you trust your link. Stock puts it back. Start with Smart.' },
-  { key:'net_qdisc', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 other links',
-    desc:'How the phone shares the connection between apps - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, an Ethernet adapter. WiFi and mobile take their own values from the cards below and ignore this one. Stock is what it was. fq_codel is the right answer for most people: video stops stuttering when something downloads in the background. fq is similar and pairs well with bbr. cake is the most thorough but slightly heavier on the CPU. Unsure? fq_codel.' },
-  { key:'net_qdisc_mobile', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 mobile',
-    desc:'Queue discipline for mobile data only. As global takes the value from the card above. Independent of WiFi - both links can differ at the same time.' },
-  { key:'net_qdisc_wifi', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 WiFi',
-    desc:'Queue discipline for WiFi only. As global takes the value from the card above. Independent of mobile data.' },
+  // ---- Network ----------------------------------------------------------------,
+  { key:'lockscreen_shortcuts', type:'seg', def:'stock', stock:'stock', opts:['stock','clean'], name:'Lock Screen Shortcuts',
+    desc:'clean removes the camera and wallet shortcuts from the lock screen corners. Cosmetic only - the camera still works and no payment method is disabled, just the shortcut is gone.' },
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 other links',
     desc:'How the phone ramps up when downloading - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, Ethernet. WiFi and mobile take their own values from the cards below. Stock is what the device shipped with. bbr paces to the real measured speed, cubic is the classic. Stock kernels usually lack bbr, and the card will say \u201cnot supported\u201d rather than pretend.' },
-  { key:'net_congestion_mobile', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 mobile',
-    desc:'Download ramp for mobile data only. As global takes the value from the card above. bbr usually wins here: on a radio link a lost packet normally means interference rather than congestion, and cubic throws away speed for nothing.' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 WiFi',
     desc:'Download ramp for WiFi only. As global takes the value from the card above. A separate value is worth it when WiFi and mobile want different answers - they run at the same time and do not interfere.' },
+  { key:'net_congestion_mobile', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 mobile',
+    desc:'Download ramp for mobile data only. As global takes the value from the card above. bbr usually wins here: on a radio link a lost packet normally means interference rather than congestion, and cubic throws away speed for nothing.' },
+  { key:'net_qdisc', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 other links',
+    desc:'How the phone shares the connection between apps - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, an Ethernet adapter. WiFi and mobile take their own values from the cards below and ignore this one. Stock is what it was. fq_codel is the right answer for most people: video stops stuttering when something downloads in the background. fq is similar and pairs well with bbr. cake is the most thorough but slightly heavier on the CPU. Unsure? fq_codel.' },
+  { key:'net_qdisc_wifi', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 WiFi',
+    desc:'Queue discipline for WiFi only. As global takes the value from the card above. Independent of mobile data.' },
+  { key:'net_qdisc_mobile', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 mobile',
+    desc:'Queue discipline for mobile data only. As global takes the value from the card above. Independent of WiFi - both links can differ at the same time.' },
+  { key:'net_route_tune', type:'seg', def:'auto', stock:'off', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
+    desc:'How much the phone sends in one burst before waiting for a reply. Smart lets ASB look at your actual WiFi or mobile speed and size it: bigger on a fast link, left at the factory value on a weak one, because a big burst there only causes losses. Moderate uses the factory value everywhere. Aggressive goes one class higher if you trust your link. Stock puts it back. Start with Smart.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
     desc:'The region decides which WiFi channels your phone may use, and that sets the ceiling on link speed. CR opens the widest set of channels - usually the fastest WiFi. Stock keeps the region the phone gets from the SIM. IMPORTANT: using channels not permitted where you are is your call and your responsibility.' },
   { key:'wifi_scan_throttle', type:'seg', def:'auto', opts:['auto','0','1'], name:'WiFi Scan Rate',
     desc:'How often the phone looks for WiFi networks in the background. More often switches to a stronger access point sooner as you move around a house or office, at a small battery cost. Stock is the normal Android limit of 4 scans per 2 minutes. If WiFi keeps clinging to a weak AP, pick More often.' },
-
+  { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
+    desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
+  { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
+    desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
+  // --- Power & battery ---,
+  { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
+    desc:'While charging: more performance when cool, backs off when the battery heats up.' },
+  { key:'doze_level', type:'seg', def:'stock', stock:'stock', opts:['stock','night','moderate','aggressive'], name:'Deep Sleep',
+    desc:'How soon Android puts the phone into Doze once the screen is off. Stock waits 30 minutes, which on a phone picked up every few minutes is 30 minutes that never elapse - a full-day capture showed the idle phase awake 45% of the time against a 5% target. Moderate starts idle after 5 minutes, aggressive after 2. THE COST: in Doze the system holds background network until the next maintenance window, so an app that polls on its own can be late - high-priority push still breaks through. If messages arriving on time matter more than standby drain, leave this on stock. Only ever writes one setting, and stock deletes it.' },
+  { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
+    desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
+  { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
+    desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
+  { key:'sustained_temp_enter', type:'range', def:'65', min:40, max:70, step:1, name:'Throttling Temperature',
+    desc:'The temperature at which ASB starts holding performance back to keep the phone cooler. Lower means it intervenes sooner - a cooler phone that gives up peak speed earlier; higher lets it run hard for longer and get warmer. 65 is the default. This is ASB\u2019s own threshold, not the vendor\u2019s: the firmware keeps its own hard limits underneath and those cannot be raised from here, so a high value does not make the phone unsafe, it just means the vendor decides first.' },
+  { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
+    desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
+  // --- Memory & UX ---,
+  { key:'bat_suppress_gaming', type:'bool', def:'1', name:'No Game Mode on Battery Profile',
+    desc:'On the Battery profile, treat a game as ordinary heavy load rather than entering the gaming state. Gaming mode raises frequency ceilings, which is the opposite of what the Battery profile is for - so this keeps that profile honest. Off lets games get the full gaming treatment even on Battery. Affects the Battery profile only; the other three are untouched.' },
+  { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
+    desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
+  { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
+    desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
+  { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
+    desc:'Android kills so-called phantom processes - the ones an app spawns outside the normal lifecycle - once there are more than 32. It is why long compiles, emulators and terminal sessions die halfway through on Android 12 and later. relaxed switches that monitor off, which is what ASB has always done silently; strict restores Android\u2019s own behaviour; stock leaves whatever is set. Applies to newly started processes, no reboot.' },
   { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
-    desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder. Applies immediately.' },
+    desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder.' },
   { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
     desc:'Typing and tap feedback, on its own scale. The OEM sets these separately from alerts - its slider writes 1500 for notifications and 1600 for touch - and the two wants are different: an alert should be felt through a pocket, keypress feedback should not be punishing to hold. auto follows the strength above. There is no duration control to offer: nothing in the system exposes one, and Android takes duration from each effect\u2019s own waveform.' },
-    { key:'doze_level', type:'seg', def:'stock', stock:'stock', opts:['stock','moderate','aggressive'], name:'Deep Sleep',
-    desc:'How soon Android puts the phone into Doze once the screen is off. Stock waits 30 minutes, which on a phone picked up every few minutes is 30 minutes that never elapse - a full-day capture showed the idle phase awake 45% of the time against a 5% target. Moderate starts idle after 5 minutes, aggressive after 2. THE COST: in Doze the system holds background network until the next maintenance window, so an app that polls on its own can be late - high-priority push still breaks through. If messages arriving on time matter more than standby drain, leave this on stock. Only ever writes one setting, and stock deletes it.' },
   { key:'log_level', type:'seg', def:'1', stock:'stock', opts:['stock','0','1','2','3'], name:'Log Detail',
     desc:'What the module writes to its log, and how much the DEVICE logs. Stock is the only value that leaves the phone\u2019s own logging untouched. 0 is extreme: it cuts device logging and debug output as far as it goes, which saves the writes and wakeups logging costs - and makes almost any bug report from this phone useless, including ours. 1 is normal, what the module has always done. 2 adds learner updates and screen transitions - switch this on before sending a log about battery behaviour. 3 is verbose and fills the log fast; use it only while reproducing something. Leaving extreme puts your logging back the way it was.' },
 ];
@@ -2577,7 +2636,7 @@ const CFG_CAT = {
   BG_TRIM_LEVEL:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
   camera_hold_enable:'camera',
-  night_quiet_enable:'battery', log_level:'system',
+  night_quiet_enable:'battery', log_level:'system', phantom_procs:'system', lockscreen_shortcuts:'system',
   sustained_temp_mode:'thermal', doze_level:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
@@ -2601,7 +2660,7 @@ const CFG_GROUPS = [
 const CFG_GROUP_OF = {
   sustained_temp_mode:'battery', doze_level:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
-  night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui',
+  night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui', lockscreen_shortcuts:'iface',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio',
   bt_absvol_mode:'audio',
@@ -2678,6 +2737,8 @@ const CFG_ICONS = {
   UX_ANIM_FORCE_RESTART:'\uD83D\uDD04',       // restart arrows
   region_allow_locale:'\uD83C\uDF0D',         // globe
   sustained_temp_enter:'\uD83C\uDF21\uFE0F',
+  phantom_procs:'\uD83D\uDC7B',
+  lockscreen_shortcuts:'\uD83D\uDD10',
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -2738,6 +2799,14 @@ function cfgStatus(it, cur) {
     if (cur === '1') return { cls:'good', text:'Enabled' };
     return { cls:'neutral', text:'Disabled' };
   }
+  if (it.key === 'sustained_temp_enter') {
+    const t = parseInt(cur, 10);
+    // Idle sits at 40-44 C on this class of device, so a threshold at or below that is
+    // permanently engaged. Saying so on the card is cheaper than the user discovering it
+    // from a clamp counter that never goes down.
+    if (t > 0 && t <= 45) return { cls:'warn', text:t + '\u00b0C \u00b7 ' + T('st_always_on', 'почти всегда активен') };
+    if (t > 0) return { cls:'good', text:t + '\u00b0C' };
+  }
   if (it.type === 'range') {
     const n = parseInt(cur, 10);
     if (isNaN(n) || n === 0) return { cls:'neutral', text:'Off' };
@@ -2750,7 +2819,10 @@ function cfgStatus(it, cur) {
   // "auto" is not a change, so it is not highlighted.
   // Highlight means "ASB is overriding something here", which is the question a user scanning
   // the page is actually asking.
-  const _isNeutral = (cur === it.def) || cur === 'auto' || cur === 'stock';
+  // A card can declare which value is stock. net_route_tune's auto is an ASB mode, so
+  // treating auto as neutral everywhere would have shown an active override as untouched.
+  const _stockVal = it.stock || 'auto';
+  const _isNeutral = (cur === _stockVal) || (!it.stock && (cur === 'auto' || cur === 'stock'));
   return { cls: (_isNeutral ? 'neutral' : 'warn'), text: String(cur).toUpperCase() };
 }
 // A card counts as "active" whenever it is not sitting on the shipped default -- not
@@ -2805,6 +2877,57 @@ function cfgRenderHub(list) {
 }
 
 // Settings whose effect lands in a file, and can therefore be checked.
+// How each setting takes effect, as a fact rather than a sentence.
+//
+// 27 of the 43 cards said nothing about this, and the rest buried it in the last clause
+// of a paragraph - so the honest answer to "did that do anything?" was "read all of it
+// and hope". The information was always available: it is determined by which apply path
+// the key goes through, which this file already knows.
+//
+// Three states only. Anything finer would be describing the implementation rather than
+// what the user needs to decide: do I reboot now, or not.
+const APPLY_LIVE   = 'live';    // takes effect as soon as you release the control
+const APPLY_REBOOT = 'reboot';  // needs a restart
+const APPLY_NEXT   = 'next';    // value is live; a process reads it when it starts, so
+                                // already-running apps keep the old behaviour until they
+                                // are restarted. No reboot involved - "next" is about the
+                                // app's lifecycle, not about installing anything.
+
+const APPLY_MODE = {
+  // Live: these have a runtime script that runs on save and is verified afterwards.
+  audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE,
+  dsp_compressor:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
+  haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
+  net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
+  net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
+  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE,
+  lockscreen_shortcuts:APPLY_LIVE, log_level:APPLY_LIVE,
+  smart_battery_bias:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
+  charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
+  night_quiet_enable:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
+  sustained_temp_enter:APPLY_LIVE, BG_TRIM_LEVEL:APPLY_LIVE, doze_level:APPLY_LIVE,
+  UX_MANAGE_OEM_TOGGLES:APPLY_LIVE, UX_MANAGE_TIMEOUTS:APPLY_LIVE,
+
+  // Reboot: written into system.prop or the overlay, both of which are read at boot.
+  disable_blur:APPLY_REBOOT, ui_effects_level:APPLY_REBOOT,
+  CAMERA_LEVEL:APPLY_REBOOT, CAMERA_CONTRAST:APPLY_REBOOT, CAMERA_GRAIN:APPLY_REBOOT,
+  CAMERA_PORTRAIT:APPLY_REBOOT, CAMERA_LOWLIGHT:APPLY_REBOOT, camera_hold_enable:APPLY_REBOOT,
+  audio_dac_hifi:APPLY_REBOOT, media_loudness:APPLY_REBOOT,
+  UX_ANIM_FORCE_RESTART:APPLY_REBOOT,
+
+  // Next: the value is live but only consulted when something new starts.
+  phantom_procs:APPLY_NEXT
+};
+
+function applyModeOf(key) { return APPLY_MODE[key] || APPLY_REBOOT; }
+function applyModeLabel(key) {
+  switch (applyModeOf(key)) {
+    case APPLY_LIVE:   return T('am_live',   '\u26A1 applies immediately');
+    case APPLY_NEXT:   return T('am_next',   '\u23ED live, but restart the app to see it');
+    default:           return T('am_reboot', '\u21BB needs a reboot');
+  }
+}
+
 const VERIFY_KEYS = ['CAMERA_LEVEL','CAMERA_GRAIN','CAMERA_CONTRAST','CAMERA_PORTRAIT','CAMERA_LOWLIGHT'];
 var _verifyCache = null;
 
@@ -2855,6 +2978,28 @@ function cfgOptsFor(it) {
   return it.opts;
 }
 
+// Pending-reboot bar.
+//
+// A toast says "needs a reboot" and vanishes in three seconds, so a user who changed four
+// camera settings over a minute has no way to know anything is still waiting. The bar
+// stays until the reboot happens, and names how many settings are behind it.
+var _pendingReboot = {};
+
+function cfgMarkPending(key) {
+  if (applyModeOf(key) !== APPLY_REBOOT) return;
+  _pendingReboot[key] = true;
+  cfgUpdatePendingBar();
+}
+
+function cfgUpdatePendingBar() {
+  var bar = _el('cfgPendingBar');
+  if (!bar) return;
+  var n = Object.keys(_pendingReboot).length;
+  if (!n) { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+  bar.textContent = T('t_pending_reboot', '\u21BB Изменения ждут перезагрузки') + ' \u00b7 ' + n;
+}
+
 function cfgRender() {
   const list = _el('cfgList');
   if (!list) return;
@@ -2879,6 +3024,16 @@ function cfgRender() {
     const nm = document.createElement('div');
     nm.className = 'cfg-name';
     nm.textContent = Tcfg(it.key, "name", it.name);
+    // Amber dot on cards that need a reboot, visible without opening anything. Only that
+    // one state is marked: a user scanning the page is looking for "what will cost me a
+    // restart", and marking the other two would put a symbol on every card and answer
+    // nothing.
+    if (applyModeOf(it.key) === APPLY_REBOOT) {
+      const dot = document.createElement('span');
+      dot.className = 'cfg-reboot-dot';
+      dot.title = T('am_reboot', '\u21BB needs a reboot');
+      nm.appendChild(dot);
+    }
     const caret = document.createElement('span');
     caret.className = 'cfg-caret';
     caret.textContent = '\u25BE';
@@ -3006,6 +3161,17 @@ function cfgRender() {
     collapse.className = 'cfg-collapse';
     const inner = document.createElement('div');
     inner.className = 'cfg-collapse-inner';
+    // Lead the description with the one fact people open it for.
+    //
+    // "Does this need a reboot" was the most common thing buried in these paragraphs, and
+    // burying it meant reading three sentences to find out. Putting it on its own line at
+    // the top means the answer is visible the moment the card opens, and the prose stays
+    // for whoever wants the reasoning.
+    const am = document.createElement('div');
+    am.className = 'cfg-apply cfg-apply-' + applyModeOf(it.key);
+    am.textContent = applyModeLabel(it.key);
+    inner.appendChild(am);
+
     const d = document.createElement('div');
     d.className = 'cfg-desc';
     d.textContent = Tcfg(it.key, "desc", it.desc);
@@ -3017,6 +3183,7 @@ function cfgRender() {
 }
 
 async function cfgSet(key, val, ctl) {
+  cfgMarkPending(key);
   if (ctl) ctl.classList.add('busy');
   const f = CFG_FILE;
   const cmd = "sh -c 'if grep -q \"^" + key + "=\" " + f + " 2>/dev/null; then " +
@@ -3456,7 +3623,18 @@ async function pollLive(visible) {
     const bma = bma_raw < 0 ? -bma_raw : bma_raw;
     const cap_full_mah = _batCapFullMah || 7300;
     let on_ma, eta_note;
-    const ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
+    // Prefer the field that actually carries a number.
+    //
+    // smart_drain_ewma_x10 reads 0 on this governor - the same field that made the drain
+    // line vanish - so this always fell through to the fixed per-profile estimate. The
+    // banner then showed a measured 14.9 %/h next to a 13 h forecast built from an assumed
+    // 500 mA: two numbers on one screen disagreeing by a factor of two, with only the
+    // small "(est.)" to explain why. Use the measured rate when there is one.
+    let ewma_x10 = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
+    if (ewma_x10 <= 0) ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
+    // Below the 10-minute window the rate is arithmetic noise, and a forecast built on it
+    // would be worse than the flat estimate it replaced.
+    if (parseInt(kv.smart_drain_window_s || '0', 10) < 600) ewma_x10 = 0;
     if (ewma_x10 > 0) {
       on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
       eta_note = ' (measured)';
@@ -3660,7 +3838,15 @@ async function pollLive(visible) {
           // Keep the last real reading instead of blanking.
           // Reported after an auto-switch to Battery, where it is exactly the wrong moment to
           // lose the number.
-          if (dr > 0) {
+          // Below ~10 minutes of screen-on the reading is arithmetic noise, not a rate.
+          //
+          // The window is short after a reboot and one step of the battery counter is a
+          // whole percent, so a single tick maps to tens of %/h - a phone five minutes off
+          // the charger showed 48 %/h, which is not wrong so much as meaningless. The
+          // governor already knows the window length; below the threshold say so instead
+          // of publishing a number nobody should act on.
+          const winS = parseInt(kv.smart_drain_window_s || '0', 10);
+          if (dr > 0 && winS >= 600) {
             _lastDrain = dr;
             _el('bnDrain').textContent = (dr / 10).toFixed(1) + '%/h';
           } else if (kv.charging === '1' || kv.plugged === '1') {
