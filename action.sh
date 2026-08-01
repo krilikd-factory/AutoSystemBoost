@@ -339,6 +339,105 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     echo "       drain now: $((_l_drain / 10)).$((_l_drain % 10))%/h"
   fi
   [ -n "$_l_pkg" ] && echo "       foreground: ${_l_pkg}"
+
+  # Full picture, only while Smart is the profile actually steering.
+  #
+  # Everything below already existed as a number in /dev/.asb/state and was readable by
+  # nobody: 46 smart_* fields, of which the report showed four. The learner is the part of
+  # this module people are most sceptical about, and "trust me, it is learning" is not an
+  # answer - so this says what it has measured, what it concluded, and what it is doing
+  # about it, in the order someone would ask.
+  if [ "$_smart_enabled" = "1" ]; then
+    echo ""
+    echo "  🎓  WHAT SMART HAS LEARNED"
+
+    # --- 1. when it thinks it is -----------------------------------------------------
+    _bid="$(_st smart_bucket_id)"; _dp="$(_st smart_daypart)"; _we="$(_st smart_is_weekend)"
+    case "$_dp" in
+      0) _dpn="night" ;; 1) _dpn="early morning" ;; 2) _dpn="morning" ;;
+      3) _dpn="midday" ;; 4) _dpn="afternoon" ;; 5) _dpn="evening" ;;
+      *) _dpn="?" ;;
+    esac
+    [ "$_we" = "1" ] && _dayk="weekend" || _dayk="weekday"
+    echo "       Time slot: ${_dpn} on a ${_dayk} (slot ${_bid} of 12)"
+    echo "         Your day is split into 12 slots. Each one is learned separately,"
+    echo "         because a weekday morning and a Sunday evening are not the same phone."
+
+    # --- 2. how sure it is -----------------------------------------------------------
+    _conf="$(_st smart_confidence)"; _ses="$(_st smart_sessions_total)"
+    if [ -n "$_conf" ] && [ "$_conf" -gt 0 ] 2>/dev/null; then
+      echo "       Confidence in this slot: $((_conf / 10))%  ·  ${_ses:-0} sessions banked overall"
+      [ "$_conf" -lt 350 ] 2>/dev/null \
+        && echo "         Still low - Smart is mostly using safe defaults here."
+      [ "$_conf" -ge 650 ] 2>/dev/null \
+        && echo "         High - decisions in this slot are driven by what it measured, not defaults."
+    fi
+
+    # --- 3. what it measured ---------------------------------------------------------
+    _bt2="$(_st smart_bucket_temp_x10)"; _bd2="$(_st smart_bucket_drain_x10)"
+    _tw2="$(_st smart_therm_warm_x10)"; _tc2="$(_st smart_therm_cool_x10)"
+    if [ -n "$_bt2" ] && [ "$_bt2" -gt 0 ] 2>/dev/null; then
+      echo "       Measured for this slot: $((_bt2 / 10)).$((_bt2 % 10))°C typical peak, $((_bd2 / 10)).$((_bd2 % 10))%/h drain"
+      if [ -n "$_tw2" ] && [ "$_tw2" -gt 0 ] 2>/dev/null; then
+        echo "       Your phone's normal: warm above $((_tw2 / 10))°C, cool below $((_tc2 / 10))°C"
+        echo "         These are not fixed numbers - they are the median of your own"
+        echo "         12 slots, so a phone that simply runs hotter is not punished for it."
+      fi
+    fi
+
+    # --- 4. what it decided ----------------------------------------------------------
+    _alpha="$(_st smart_alpha_battery)"; _ib="$(_st smart_interactive_bonus)"
+    if [ -n "$_alpha" ] && [ "$_alpha" -gt 0 ] 2>/dev/null; then
+      if   [ "$_alpha" -ge 650 ] 2>/dev/null; then _lean="leaning to battery"
+      elif [ "$_alpha" -le 350 ] 2>/dev/null; then _lean="leaning to performance"
+      else _lean="balanced"; fi
+      echo "       Right now: ${_lean} (${_alpha}/1000)"
+      [ -n "$_ib" ] && [ "$_ib" -gt 0 ] 2>/dev/null \
+        && echo "         plus a short boost when you touch the screen (+${_ib})"
+    fi
+
+    # --- 5. what it is watching in real time -----------------------------------------
+    _wl=""
+    _ah="$(_st smart_app_hint)"
+    case "$_ah" in
+      0) _ahn="idle" ;; 1) _ahn="light use" ;; 2) _ahn="normal use" ;;
+      3) _ahn="heavy use" ;; 4) _ahn="gaming" ;; *) _ahn="" ;;
+    esac
+    [ -n "$_ahn" ] && _wl="app: ${_ahn}"
+    _hot="$(_st smart_app_hot)"
+    [ "$_hot" = "1" ] && _wl="$(_join "$_wl" "this app runs hot")"
+    _veto="$(_st smart_thermal_veto)"
+    [ "$_veto" = "1" ] && _wl="$(_join "$_wl" "thermal veto ACTIVE - holding back for heat")"
+    _slp="$(_st smart_sleep_override)"
+    [ "$_slp" = "1" ] && _wl="$(_join "$_wl" "sleep window - minimal activity")"
+    _lowb="$(_st smart_lowbat_override)"
+    [ "$_lowb" = "1" ] && _wl="$(_join "$_wl" "low battery - saving")"
+    _chg="$(_st smart_charge_assist)"
+    [ "$_chg" = "1" ] && _wl="$(_join "$_wl" "charging - extra headroom while cool")"
+    [ -n "$_wl" ] && echo "       Watching now: ${_wl}"
+
+    _aph="$(_st smart_appheat_n)"
+    [ -n "$_aph" ] && [ "$_aph" -gt 0 ] 2>/dev/null \
+      && echo "       Remembers the heat behaviour of ${_aph} app(s) it has seen"
+
+    # --- 6. how long the battery is expected to last ---------------------------------
+    _bp="$(_st smart_budget_pred_h_x10)"
+    if [ -n "$_bp" ] && [ "$_bp" -gt 0 ] 2>/dev/null; then
+      echo "       Predicted screen time left: $((_bp / 10)).$((_bp % 10))h at the current rate"
+    fi
+
+    # --- 7. honest limits ------------------------------------------------------------
+    _fb="$(_st smart_fallback_level)"
+    case "$_fb" in
+      0) : ;;
+      1) echo "       Note: running on partial data for this slot" ;;
+      2) echo "       Note: falling back to a neighbouring slot" ;;
+      3) echo "       Note: no usable history yet - safe defaults in use" ;;
+    esac
+    _qf="$(_st smart_q_fail)"
+    [ -n "$_qf" ] && [ "$_qf" -gt 0 ] 2>/dev/null \
+      && echo "       ${_qf} session(s) were discarded as unreliable - they teach nothing"
+  fi
 fi
 
 echo ""
