@@ -1613,10 +1613,13 @@ static int __attribute__((unused)) asb_smart_session_quality(
         int thermal_entries,
         int recovery_count)
 {
+    /* device_median_c = 0: this thin wrapper has no access to the learned median, so it
+     * keeps the absolute fallback thresholds. The argument order matters - the median
+     * goes BEFORE out, and appending it blindly put it in out's place. */
     return asb_smart_session_quality_ex(drain_pctph_x10, drain_valid,
                                         max_temp_c, thermal_entries,
-                                        recovery_count, -1, NULL,
-                                        0);
+                                        recovery_count, -1,
+                                        0, NULL);
 }
 
 static void asb_smart_apply_thermal_trend(
