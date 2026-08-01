@@ -160,6 +160,22 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
 
+# Put the network sysctls back before the file that remembers them is deleted.
+#
+# These are not settings or properties, so they never entered baseline.txt - the generic
+# restore loop above cannot see them. They do reset themselves on the next boot, but
+# "uninstall the module and it is gone" should not require a reboot to be true, and a
+# user removing ASB because something felt wrong is exactly the person who will not
+# reboot before judging the result.
+if [ -f /data/adb/asb/net_stock.env ]; then
+  _ns_cc="$(grep -E '^STOCK_TCP_CC=' /data/adb/asb/net_stock.env 2>/dev/null | head -1 | sed 's/.*=//')"
+  _ns_qd="$(grep -E '^STOCK_QDISC='  /data/adb/asb/net_stock.env 2>/dev/null | head -1 | sed 's/.*=//')"
+  [ -n "$_ns_cc" ] && sysctl -w "net.ipv4.tcp_congestion_control=$_ns_cc" >/dev/null 2>&1
+  [ -n "$_ns_cc" ] && [ -e /proc/sys/net/ipv6/tcp_congestion_control ] \
+    && sysctl -w "net.ipv6.tcp_congestion_control=$_ns_cc" >/dev/null 2>&1
+  [ -n "$_ns_qd" ] && sysctl -w "net.core.default_qdisc=$_ns_qd" >/dev/null 2>&1
+fi
+
 rm -rf /data/adb/asb 2>/dev/null
 
 for _legacy in asb_active_profile asb_baseline.txt asb_profile_switches.log \
