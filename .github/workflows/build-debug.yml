@@ -341,6 +341,7 @@ jobs:
             "runtime/asb_dsp_abi_apply.sh" \
             "runtime/asb_haptics_apply.sh" \
             "runtime/asb_camera_grade.sh" \
+            "runtime/asb_system_tweaks.sh" \
             "runtime/asb_net_apply.sh" \
             "runtime/asb_net_routes.sh" \
             "runtime/asb_log_apply.sh" \
