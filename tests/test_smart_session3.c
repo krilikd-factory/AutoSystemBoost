@@ -231,7 +231,7 @@ static void test_compute_effective_no_conf(void) {
     b.idle_bias_x1000 = 100;
 
     asb_smart_runtime_t rt = {0};
-    asb_smart_compute_effective(&b, 100, &rt);  /* below low threshold */
+    asb_smart_compute_effective(&b, 100, NULL, &rt);  /* below low threshold */
     /* seed_baseline mode — 25% influence at zero conf instead of 0.
      * alpha = 500 + (900-500) * 0.25 = 500 + 100 = 600 */
     EXPECT_NEAR(rt.alpha_battery_x1000, 600, 5, "below low conf → seed_baseline 25% (600)");
@@ -249,7 +249,7 @@ static void test_compute_effective_mild(void) {
 
     asb_smart_runtime_t rt = {0};
     /* conf 500 → mid-mild tier */
-    asb_smart_compute_effective(&b, 500, &rt);
+    asb_smart_compute_effective(&b, 500, NULL, &rt);
     /* eff_scale: into=150, span=300, eff = 250 + (350*150)/300 = 425
      * alpha = 500 + (900-500) * 425/1000 = 500 + 170 = 670 */
     EXPECT_NEAR(rt.alpha_battery_x1000, 670, 5, "mild blend alpha~670");
@@ -265,7 +265,7 @@ static void test_compute_effective_strong(void) {
 
     asb_smart_runtime_t rt = {0};
     /* Full confidence */
-    asb_smart_compute_effective(&b, 1000, &rt);
+    asb_smart_compute_effective(&b, 1000, NULL, &rt);
     EXPECT(rt.alpha_battery_x1000 == 900, "full conf → full bucket alpha");
     EXPECT(rt.interactive_bonus_x1000 == 100, "full conf → full interactive");
 }
@@ -649,37 +649,37 @@ static void test_session_quality_ex(void) {
     printf("test_session_quality_ex\n");
     asb_smart_quality_t q;
 
-    int r = asb_smart_session_quality_ex(40, 1, 40, 0, 0, 3, &q);
+    int r = asb_smart_session_quality_ex(40, 1, 40, 0, 0, 3, 0, &q);
     EXPECT(r == 100, "all clean incl vendor \u2192 100");
     EXPECT(q.q_battery == 100 && q.q_heat == 100 && q.q_stability == 100 &&
            q.q_vendor == 100, "breakdown all 100");
     EXPECT(q.primary_failure == ASB_QFAIL_NONE, "no failure");
 
-    r = asb_smart_session_quality_ex(40, 1, 40, 0, 0, 60, &q);
+    r = asb_smart_session_quality_ex(40, 1, 40, 0, 0, 60, 0, &q);
     EXPECT(r == 85, "vendor war floor \u2192 85");
     EXPECT(q.q_vendor == 0, "60 clamps/h \u2192 vendor 0");
     EXPECT(q.primary_failure == ASB_QFAIL_VENDOR_WAR, "primary failure = vendor war");
 
-    r = asb_smart_session_quality_ex(40, 1, 40, 0, 0, 33, &q);
+    r = asb_smart_session_quality_ex(40, 1, 40, 0, 0, 33, 0, &q);
     EXPECT(q.q_vendor == 49, "33 clamps/h \u2192 vendor 49");
     EXPECT(r == 92, "mid vendor war \u2192 92");
 
-    r = asb_smart_session_quality_ex(0, 0, 60, 0, 0, 10, &q);
+    r = asb_smart_session_quality_ex(0, 0, 60, 0, 0, 10, 0, &q);
     EXPECT(r == 75, "no drain data + vendor \u2192 75");
     EXPECT(q.q_battery == -1, "no drain \u2192 bat -1");
     EXPECT(q.primary_failure == ASB_QFAIL_HEAT, "heat is worst \u2192 heat failure");
 
-    r = asb_smart_session_quality_ex(60, 1, 50, 0, 0, -1, &q);
+    r = asb_smart_session_quality_ex(60, 1, 50, 0, 0, -1, 0, &q);
     EXPECT(r == 92, "no vendor data \u2192 legacy weights");
     EXPECT(q.q_vendor == -1, "no vendor data \u2192 vendor -1");
     EXPECT(q.primary_failure == ASB_QFAIL_NONE, "all >=70 \u2192 no failure");
 
-    r = asb_smart_session_quality_ex(250, 1, 40, 0, 0, 3, &q);
+    r = asb_smart_session_quality_ex(250, 1, 40, 0, 0, 3, 0, &q);
     EXPECT(q.primary_failure == ASB_QFAIL_BATTERY, "drain worst \u2192 battery failure");
 
     /* Gaming: heavy drain + hot + moderate vendor clamps. Battery/heat are the
        honest failure; vendor's low score must not hijack primary_failure. */
-    r = asb_smart_session_quality_ex(240, 1, 60, 1, 0, 44, &q);
+    r = asb_smart_session_quality_ex(240, 1, 60, 1, 0, 44, 0, &q);
     EXPECT(q.q_vendor < 30, "44 clamps/h \u2192 low vendor score");
     EXPECT(q.primary_failure != ASB_QFAIL_VENDOR_WAR,
            "gaming: bat/heat dominate, vendor not primary failure");
