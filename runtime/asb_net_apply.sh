@@ -245,8 +245,18 @@ fi
 _wt="$(_cfg wifi_scan_throttle)"
 case "$_wt" in
   0|1)
-    settings put global wifi_scan_throttle_enabled "$_wt" >/dev/null 2>&1 \
-      && _out="$_out scan_throttle=$_wt"
+    # Report the failure too, not just the success.
+    #
+    # The && meant a rejected write produced no token at all, and no token reads as "this
+    # setting was never touched" - so the badge stayed green on a device where the write
+    # had been refused. Read back rather than trusting the exit code: `settings put`
+    # returns 0 on some ROMs even when the value does not stick.
+    settings put global wifi_scan_throttle_enabled "$_wt" >/dev/null 2>&1
+    if [ "$(settings get global wifi_scan_throttle_enabled 2>/dev/null)" = "$_wt" ]; then
+      _out="$_out scan_throttle=$_wt"
+    else
+      _out="$_out scan_throttle=FAILED"
+    fi
     ;;
 esac
 
@@ -283,7 +293,10 @@ mkdir -p /data/adb/asb 2>/dev/null
       qdisc\[mobile*)               printf 'net_qdisc_mobile=ok\n' ;;
       wifi_country=FAILED)          printf 'wifi_country=failed\n' ;;
       wifi_country=*)               printf 'wifi_country=ok\n' ;;
+      scan_throttle=FAILED)         printf 'wifi_scan_throttle=failed\n' ;;
       scan_throttle=*)              printf 'wifi_scan_throttle=ok\n' ;;
+      route_tune=FAILED)            printf 'net_route_tune=failed\n' ;;
+      route_tune=*)                 printf 'net_route_tune=ok\n' ;;
     esac
   done
 } > "$_res" 2>/dev/null

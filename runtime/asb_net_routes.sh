@@ -157,7 +157,11 @@ _apply() {
   _mode="$(_cfg net_route_tune)"
   case "$_mode" in
     ''|auto) _mode=auto ;;
-    off) _restore; return 0 ;;
+    off) _restore
+         # "off" is a successful application of the stock state, not an absence of one -
+         # the badge needs a token either way or it cannot tell "restored" from "never ran".
+         printf 'net_route_tune=ok\n' >> /data/adb/asb/net_apply_result 2>/dev/null
+         return 0 ;;
     conservative|aggressive) : ;;
     *) _mode=auto ;;
   esac
