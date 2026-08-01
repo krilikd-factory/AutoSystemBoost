@@ -1101,6 +1101,14 @@ asb_clone_device_camera_tone() {
               done
               echo ""
             }
+            # Sweep markers whose destination no longer exists. Before the names were
+            # normalised these piled up one per install; an old device carries a directory
+            # of them, and they are not worth keeping - a marker for a path that is gone
+            # guards nothing.
+            for _gm in /data/adb/asb/grade_marks/*.mark; do
+              [ -f "$_gm" ] || continue
+              case "$_gm" in *.asbdes*|*.graded.mark|*modules_update*) rm -f "$_gm" 2>/dev/null ;; esac
+            done
             MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
               ASB_CAM_GRAIN_IN="$(_cam_get CAMERA_GRAIN)" \
               ASB_CAM_CONTRAST_IN="$(_cam_get CAMERA_CONTRAST)" \
