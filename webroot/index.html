@@ -1542,17 +1542,6 @@ body.config-active #livePage.open {
 .cfg-apply-live   { color: #34d399; }
 .cfg-apply-next   { color: #7dd3fc; }
 .cfg-apply-reboot { color: #fbbf24; }
-/* Collapsed-row marker: a reboot is the only state worth interrupting the scan for, so
-   it is the only one that gets a dot. Marking all three would be noise on every card. */
-.cfg-reboot-dot {
-  display: inline-block;
-  width: 6px; height: 6px;
-  margin-left: 7px;
-  border-radius: 50%;
-  background: #fbbf24;
-  vertical-align: middle;
-  opacity: 0.85;
-}
 .cfg-desc {
   padding-top: 9px;
   font-size: 11px;
@@ -3045,16 +3034,6 @@ function cfgRender() {
     const nm = document.createElement('div');
     nm.className = 'cfg-name';
     nm.textContent = Tcfg(it.key, "name", it.name);
-    // Amber dot on cards that need a reboot, visible without opening anything. Only that
-    // one state is marked: a user scanning the page is looking for "what will cost me a
-    // restart", and marking the other two would put a symbol on every card and answer
-    // nothing.
-    if (applyModeOf(it.key) === APPLY_REBOOT) {
-      const dot = document.createElement('span');
-      dot.className = 'cfg-reboot-dot';
-      dot.title = T('am_reboot', '\u21BB needs a reboot');
-      nm.appendChild(dot);
-    }
     const caret = document.createElement('span');
     caret.className = 'cfg-caret';
     caret.textContent = '\u25BE';
