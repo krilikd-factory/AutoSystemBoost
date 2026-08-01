@@ -273,6 +273,47 @@ done
 NOTE "audio_profile = $(cfg audio_profile)"
 
 # =====================================================================
+# media_loudness rewrites the volume curves rather than any property, so the check is
+# whether the curve file carries our marker - a config value alone proves nothing here.
+NOTE "media_loudness = $(cfg media_loudness)"
+_vt="$(firstf '/vendor/etc/default_volume_tables.xml' '/odm/etc/default_volume_tables.xml')"
+if [ -n "$_vt" ]; then
+  V "  volume curves rebuilt by ASB" "present" "$(grep -m1 -o 'ASB:VOLCURVE' "$_vt" 2>/dev/null)" present
+fi
+NOTE "bt_a2dp_offload = $(cfg bt_a2dp_offload)  ·  live: $(settings get global bluetooth_a2dp_offload_enabled 2>/dev/null)"
+
+SEC "1b. DSP ENGINE  (what the effect is actually doing)"
+# The whole DSP block was missing from this report - six settings, none of them checked,
+# on the subsystem most likely to be silently doing nothing. Config against live property
+# is the only way to tell "configured" from "in force": the library reads the properties,
+# not governor.conf.
+_dsp_g="$(cfg dsp_loudness)"
+case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released from the audio path entirely" ;;
+  *)
+    V "  DSP gain live (persist.asb.dsp.gain_mb)" "$((_dsp_g * 100))" "$(gp persist.asb.dsp.gain_mb)" eq
+    V "  DSP enabled" "1" "$(gp persist.asb.dsp.enable)" eq
+    ;;
+esac
+NOTE "dsp_bass = $(cfg dsp_bass)  ·  live: $(gp persist.asb.dsp.bass_db)"
+NOTE "dsp_compressor = $(cfg dsp_compressor)  ·  live comp: $(gp persist.asb.dsp.comp)"
+# Output routing needs the rebuilt library to take effect; a config that says bt with a
+# library that predates the feature will process everything and look correct here.
+_dsp_o="$(cfg dsp_outputs)"
+V "  DSP outputs live (persist.asb.dsp.outputs)" "${_dsp_o:-all}" "$(gp persist.asb.dsp.outputs)" eq
+case "$(gp persist.asb.dsp.outputs)" in
+  '') NOTE "outputs property unset - library may predate per-output routing (rebuild libasbdsp)" ;;
+esac
+_sfx64="$(ls -l /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null | awk '{print $5}')"
+NOTE "installed library: ${_sfx64:-<absent>} bytes 64-bit  ·  ABI $(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null)"
+_dsp_pid="$(pidof audiohalservice.qti 2>/dev/null)"
+if [ -n "$_dsp_pid" ]; then
+  V "  library mapped into the audio HAL" "present" \
+    "$(grep -c asbdsp /proc/$_dsp_pid/maps 2>/dev/null | grep -v '^0$')" present
+fi
+V "  effect registered with audioflinger" "present" \
+  "$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -o 'ASB Loudness')" present
+
+# =====================================================================
 SEC "2. BLUETOOTH"
 _btmode="$(cfg bt_absvol_mode)"
 NOTE "bt_absvol_mode toggle = ${_btmode:-auto}"
@@ -482,6 +523,30 @@ case "${_sb_t:-0}" in
      fi ;;
 esac
 NOTE "sessions learned = $(grep -m1 '^smart_sessions_total=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+
+SEC "5a3. BATTERY BEHAVIOUR  (the governor-owned switches)"
+# These live in governor.conf and are read by the native governor, which reloads only on
+# command. A value here that the governor has not picked up looks applied and is not -
+# the single most common way a setting appears to do nothing.
+NOTE "auto_battery = $(cfg auto_battery_enable)  ·  charge_aware = $(cfg charge_aware_enable)"
+NOTE "cool_gaming = $(cfg cool_gaming)  ·  suppress_gaming_on_battery = $(cfg bat_suppress_gaming)"
+NOTE "night_quiet = $(cfg night_quiet_enable)  ·  bg_trim = $(cfg BG_TRIM_LEVEL)"
+NOTE "throttle mode = $(cfg sustained_temp_mode) at $(cfg sustained_temp_enter)°C"
+# The governor does not publish this key in its state file, so there is nothing to compare
+# against - checked rather than assumed. What CAN be verified is that the governor read
+# the config at all: it logs the reload, and a config newer than the last reload means the
+# value on screen is not the one in force.
+_conf_mtime="$(stat -c %Y /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null)"
+_gov_start="$(stat -c %Y /dev/.asb/governor.pid 2>/dev/null)"
+if [ -n "$_conf_mtime" ] && [ -n "$_gov_start" ]; then
+  if [ "$_conf_mtime" -gt "$_gov_start" ] 2>/dev/null; then
+    NOTE "governor.conf was edited AFTER the governor started - run 'asb reload' or reboot for governor-owned keys to take effect"
+  else
+    NOTE "governor started after the last config edit - its values are current"
+  fi
+fi
+[ -f /data/adb/asb/auto_battery_origin ] \
+  && NOTE "auto-battery is currently active - will return to $(cat /data/adb/asb/auto_battery_origin 2>/dev/null) when charged"
 
 SEC "5b. HAPTICS"
 _h_lvl="$(cfg haptic_strength)"
@@ -824,6 +889,17 @@ for _s in window_animation_scale transition_animation_scale animator_duration_sc
 done
 
 # =====================================================================
+NOTE "log_level = $(cfg log_level)  ·  camera_hold = $(cfg camera_hold_enable)"
+
+SEC "7c. UI SPEED / ANIMATION"
+# anim_speed overrides the profile's own scale. Both write the same three settings, so
+# the live value is the only way to tell which one won.
+NOTE "anim_speed = $(cfg anim_speed)  ·  UX_MANAGE_TIMEOUTS = $(cfg UX_MANAGE_TIMEOUTS)"
+for _as in window_animation_scale transition_animation_scale animator_duration_scale; do
+  P "    live $_as = $(settings get global $_as 2>/dev/null)"
+done
+NOTE "force animation restart = $(cfg UX_ANIM_FORCE_RESTART) (SystemUI is never restarted on a profile switch since V62)"
+
 SEC "8a. SLEEP / DOZE  (the subsystem nobody can observe directly)"
 _dz="$(cfg doze_level)"
 NOTE "doze_level = ${_dz:-stock}"
