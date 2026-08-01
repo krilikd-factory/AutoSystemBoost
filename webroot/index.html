@@ -2051,6 +2051,8 @@ const I18N = {
     lv_lpm_fast: 'быстрый', lv_lpm_fast_t: 'дата-сессия удерживается (низкая задержка)',
     // config page
     cfg_apply_audio: '\u266b Применить аудио сейчас',
+    st_mostly_on: 'почти всегда активен',
+    st_always_on: 'всегда активен',
     t_cfg_next: ' \u00b7 перезапустите приложение',
     t_pending_reboot: '\u21BB Изменения ждут перезагрузки \u2014 нажмите',
     am_live: '\u26A1 применяется сразу',
@@ -2082,10 +2084,12 @@ const I18N = {
     t_rebooting: 'Перезагрузка…',
     // config items: name + desc keyed by config key
     cfg: {
+      dsp_outputs: { name: 'Выходы для DSP',
+        desc: 'На каких выходах DSP разрешено работать. Раньше он подключался ко всем сразу: усиление, задуманное для Bluetooth-наушников, поднимало и внешний динамик \u2014 самый маленький излучатель в телефоне и наименее подходящий для добавочного усиления. Выберите только то, что действительно нужно обрабатывать: «динамик» \u2014 встроенный, «провод» \u2014 разъём и USB-ЦАПы, «BT» \u2014 Bluetooth. Выходы, которых у телефона нет, просто не совпадут ни с чем.' },
+      anim_speed: { name: 'Скорость анимаций',
+        desc: 'Насколько быстро система рисует переходы. «По профилю» \u2014 как было раньше: скорость выбирал профиль питания (Производительность 0.8x, Экономия 1.0x), то есть отзывчивость интерфейса была побочным эффектом настройки батареи. Любое другое значение забирает это решение себе: меньше \u2014 быстрее, «выкл» убирает анимации совсем, «медленно» делает их плавнее. Действует со следующего перехода, перезагрузка не нужна.' },
       phantom_procs: { name: 'Лимит фоновых процессов',
-        desc: 'Android убивает «фантомные» процессы \u2014 те, что приложение порождает вне обычного жизненного цикла \u2014 как только их становится больше 32. Из-за этого на Android 12+ обрываются долгие компиляции, эмуляторы и сессии в терминале. «Свободно» \u2014 отключить этот контроль; ASB и раньше делал так, но молча. «Строго» \u2014 вернуть поведение Android. «Сток» \u2014 не трогать.\n\nПочему нужен перезапуск приложения: Android читает этот лимит в момент запуска процесса. Уже открытые приложения продолжат работать по старому правилу, пока их не закрыть и не открыть снова. Перезагружать телефон не нужно.' },
-      lockscreen_shortcuts: { name: 'Ярлыки на экране блокировки',
-        desc: '«Убрать» \u2014 убирает ярлыки камеры и кошелька из углов экрана блокировки. Только внешний вид: камера продолжает работать, платёжные средства не отключаются, исчезает лишь ярлык.' },
+        desc: 'Android убивает «фантомные» процессы \u2014 те, что приложение порождает вне обычного жизненного цикла \u2014 когда их становится больше 32. Из-за этого на Android 12+ обрываются долгие компиляции, эмуляторы и сессии в терминале.\n\n«Без лимита» \u2014 контроль выключен, процессы не убиваются. «Как в Android» \u2014 лимит 32 включён.\n\nЧем отличается «не трогать»: это не то же самое, что «как в Android». «Не трогать» оставляет то значение, которое сейчас стоит на устройстве \u2014 а его мог изменить сам ASB в прошлых версиях или другой модуль. «Как в Android» задаёт значение явно, независимо от того, что было раньше.\n\nПочему нужен перезапуск приложения: Android читает лимит в момент запуска процесса. Уже открытые приложения продолжат работать по старому правилу.' },
       camera_hold_enable: { name: 'Держать производительность при камере',
         desc: 'Пока камера снимает, governor перестаёт понижать частоты и удерживает уже занятые ядра. Именно это не даёт пропустить кадр в серии или в видео — ценой небольшого расхода батареи, пока приложение камеры открыто. «Вкл» — удерживать (обычное поведение модуля), «выкл» — позволить governor\u2019у сбрасывать частоты как у любого другого приложения.' },
       bt_a2dp_offload: { name: 'Аппаратный кодек Bluetooth',
@@ -2101,7 +2105,7 @@ const I18N = {
       sustained_temp_mode: { name: 'Точка троттлинга',
         desc: 'Когда ASB начинает придерживать производительность, чтобы телефон был холоднее. «Сток» — порог вашего устройства, считанный из тепловой зоны процессора при загрузке, а не число, придуманное для телефонов вообще. «Умное» — начинает с него же и поднимает на 2 градуса каждый раз, когда нагрузка доходит до устойчивой быстрее минуты: устройство, которое срабатывает слишком рано, само себя выравнивает. «Ручное» — ровно то значение, что стоит на ползунке ниже, и его ничто не сдвинет. Выбирайте «Ручное», если измеряли своё устройство и знаете, чего хотите.' },
       sustained_temp_enter: { name: 'Температура троттлинга',
-        desc: 'Температура, с которой ASB начинает сдерживать производительность. Ниже \u2014 вмешивается раньше: прохладнее, но пиковая скорость уходит быстрее. Выше \u2014 дольше работает в полную силу. 65 \u2014 значение по умолчанию.\n\nВАЖНО про низкие значения: телефон в простое уже держит около 40\u201344\u00a0\u00b0C, а под нагрузкой уходит за 70. Порог 40\u201345 означает, что ограничение будет активно почти всегда \u2014 это не поломка, а буквально то, о чём вы попросили. Если хочется просто «чуть прохладнее», начните с 55\u201360.\n\nЭто собственный порог ASB, а не вендорный: у прошивки свои жёсткие пределы ниже, и поднять их отсюда нельзя.' },
+        desc: 'Температура, с которой ASB начинает сдерживать производительность. Ниже \u2014 вмешивается раньше: прохладнее, но пиковая скорость уходит быстрее. 65 \u2014 значение по умолчанию.\n\nЧто важно знать про низкие значения: этот телефон в простое держит 40\u201344\u00a0\u00b0C, а во сне не опускается ниже 40 \u2014 это измерено, а не предположено. Порог 36\u201341 означает, что ограничение будет активно ВСЕГДА, включая простой и сон. Телефон станет прохладнее, но и медленнее во всём, а не только под нагрузкой. Если нужно просто «чуть прохладнее» \u2014 начните с 55\u201360.\n\nЭто собственный порог ASB. У прошивки свои жёсткие пределы ниже, и поднять их отсюда нельзя.' },
 
       audio_profile: { name: 'Аудио-профиль',
         desc: 'Кто обрабатывает звук. «Под эквалайзер» \u2014 отдаёт сигнал внешнему EQ/ViPER нетронутым. «Hi-fi» \u2014 UHQA включён, когда эквалайзера нет. «Как в стоке» \u2014 только базовые твики. Применяется без перезагрузки.' },
@@ -2188,8 +2192,9 @@ const I18N = {
         log_level: { stock: 'сток', '0': 'экстрим', '1': 'обычный', '2': 'подробный', '3': 'отладка' },
       ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' },
       doze_level: { stock: 'сток', night: 'ночью', moderate: 'умеренно', aggressive: 'агрессивно' },
-      phantom_procs: { stock: 'сток', relaxed: 'свободно', strict: 'строго' },
-      lockscreen_shortcuts: { stock: 'сток', clean: 'убрать' },
+      dsp_outputs: { all: 'все', speaker: 'динамик', wired: 'провод', bt: 'BT', 'speaker+wired': 'динамик+провод', 'speaker+bt': 'динамик+BT', 'wired+bt': 'провод+BT' },
+      anim_speed: { profile: 'по профилю', off: 'выкл', fastest: 'максимум', faster: 'быстрее', fast: 'быстро', stock: 'сток', slow: 'медленно', slower: 'плавно' },
+      phantom_procs: { stock: 'не трогать', relaxed: 'без лимита', strict: 'как в Android' },
       // auto on the GLOBAL net keys resolves to the captured stock value, so it is labelled as
       // such - calling it "авто" was the whole source of the confusion.
       // On the per-interface keys auto means "inherit the global setting", which is a
@@ -2525,6 +2530,8 @@ const CFG_ITEMS = [
   { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
     desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   // --- Audio ---,
+  { key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'], name:'DSP Outputs',
+    desc:'Which outputs the DSP is allowed to work on. It used to attach to all of them at once, so a boost meant for Bluetooth headphones also lifted the loudspeaker - the smallest driver in the phone and the one least able to take extra gain. Pick only what you actually want processed: speaker is the built-in one, wired covers headphone jack and USB DACs, bt is Bluetooth. Outputs this phone does not have are simply never matched.' },
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:8, step:1, name:'Camera Grade',
     desc:'Photo + video colour, contrast and detail: 0 = stock, higher = richer and punchier. Grades by RATIO - it multiplies whatever your firmware ships, so it works regardless of the values your build uses. Max can band in deep shadows. Applies after a reboot, and changing it here now re-grades at boot instead of waiting for a reinstall.' },
   { key:'CAMERA_CONTRAST', type:'range', def:'3', min:0, max:6, step:1, name:'Contrast & Colour Depth',
@@ -2539,6 +2546,8 @@ const CFG_ITEMS = [
     desc:'While the camera is streaming, the governor stops lowering the CPU and keeps the cores it is already using. That is what prevents a dropped frame in the middle of a burst or a video, at the cost of a little battery for as long as the camera app is open. On means held (the stock module behaviour), off lets the governor throttle the camera like any other app.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
     desc:'Performance shortens animations (~0.8x) and long-press/multi-tap windows for a snappier, more responsive UI; Battery keeps stock. OFF = untouched.' },
+  { key:'anim_speed', type:'seg', def:'profile', stock:'profile', opts:['profile','off','fastest','faster','fast','stock','slow','slower'], name:'Animation Speed',
+    desc:'How fast the system animates. profile keeps the old behaviour, where the power profile decides - Performance was 0.8x, Battery 1.0x - so UI speed was a side effect of a battery setting. Any other value takes that decision back: smaller is faster, off removes animations entirely, slow and slower make them more deliberate. Takes effect on the next transition, no reboot.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Almost never needed. WindowManager reads the animation scales as soon as they are written, so a plain settings change is enough and UI Speed Management works without this. The switch exists only for builds that ignore a live change, and it applies by restarting SystemUI: the screen blinks, the lock screen returns, and overlays from other modules (status-bar themes) are torn down. Only fires on a profile switch you made yourself. Turn it on only if you have confirmed the scales do not apply otherwise.' },
   // --- Display ---,
@@ -2547,8 +2556,6 @@ const CFG_ITEMS = [
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
     desc:'How richly the system draws transitions and Recents. Normal is what the device ships with. Simplified uses fewer effects and a little less GPU. IMPORTANT: with simplified, Recents becomes a plain list and OxygenOS removes the Cards/Simple selector from Recent Tasks Manager altogether - the only way back is setting this to normal and rebooting. If you want the card previews, leave this alone. The simplified option is offered on the OnePlus 15 only: on other models it removes the selector with no way back except this same setting, so it is not shown there.' },
   // ---- Network ----------------------------------------------------------------,
-  { key:'lockscreen_shortcuts', type:'seg', def:'stock', stock:'stock', opts:['stock','clean'], name:'Lock Screen Shortcuts',
-    desc:'clean removes the camera and wallet shortcuts from the lock screen corners. Cosmetic only - the camera still works and no payment method is disabled, just the shortcut is gone.' },
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 other links',
     desc:'How the phone ramps up when downloading - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, Ethernet. WiFi and mobile take their own values from the cards below. Stock is what the device shipped with. bbr paces to the real measured speed, cubic is the classic. Stock kernels usually lack bbr, and the card will say \u201cnot supported\u201d rather than pretend.' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 WiFi',
@@ -2580,7 +2587,7 @@ const CFG_ITEMS = [
     desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
   { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
     desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
-  { key:'sustained_temp_enter', type:'range', def:'65', min:40, max:70, step:1, name:'Throttling Temperature',
+  { key:'sustained_temp_enter', type:'range', def:'65', min:36, max:70, step:1, name:'Throttling Temperature',
     desc:'The temperature at which ASB starts holding performance back to keep the phone cooler. Lower means it intervenes sooner - a cooler phone that gives up peak speed earlier; higher lets it run hard for longer and get warmer. 65 is the default. This is ASB\u2019s own threshold, not the vendor\u2019s: the firmware keeps its own hard limits underneath and those cannot be raised from here, so a high value does not make the phone unsafe, it just means the vendor decides first.' },
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
     desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
@@ -2592,7 +2599,7 @@ const CFG_ITEMS = [
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
-    desc:'Android kills so-called phantom processes - the ones an app spawns outside the normal lifecycle - once there are more than 32. It is why long compiles, emulators and terminal sessions die halfway through on Android 12 and later. relaxed switches that monitor off, which is what ASB has always done silently; strict restores Android\u2019s own behaviour; stock leaves whatever is set. Applies to newly started processes, no reboot.' },
+    desc:'Android kills so-called phantom processes - the ones an app spawns outside the normal lifecycle - once there are more than 32. It is why long compiles, emulators and terminal sessions die halfway through on Android 12 and later.\n\nno limit turns the monitor off. Android default puts the limit of 32 back.\n\nHow leave alone differs from Android default: leave alone keeps whatever value the device currently holds, which on a phone that has had ASB installed is not necessarily Android\u2019s own - past versions set it silently. Android default states the value explicitly regardless of history.\n\nWhy the app needs restarting: the limit is read when a process starts, so apps already running keep the old behaviour.' },
   { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
     desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder.' },
   { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
@@ -2630,14 +2637,14 @@ async function cfgLoad() {
 const CFG_CAT = {
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', bt_absvol_mode:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_outputs:'audio', bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
   BG_TRIM_LEVEL:'memory',
-  UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', UX_ANIM_FORCE_RESTART:'ux',
+  UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', anim_speed:'ux', UX_ANIM_FORCE_RESTART:'ux',
   camera_hold_enable:'camera',
-  night_quiet_enable:'battery', log_level:'system', phantom_procs:'system', lockscreen_shortcuts:'system',
+  night_quiet_enable:'battery', log_level:'system', phantom_procs:'system',
   sustained_temp_mode:'thermal', doze_level:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
@@ -2661,15 +2668,15 @@ const CFG_GROUPS = [
 const CFG_GROUP_OF = {
   sustained_temp_mode:'battery', doze_level:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
-  night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui', lockscreen_shortcuts:'iface',
+  night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_outputs:'audio',
   bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
   BG_TRIM_LEVEL:'battery', cool_gaming:'battery',
-  UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', UX_ANIM_FORCE_RESTART:'iface',
+  UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
   disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'ui', haptic_touch_strength:'ui'
@@ -2739,7 +2746,8 @@ const CFG_ICONS = {
   region_allow_locale:'\uD83C\uDF0D',         // globe
   sustained_temp_enter:'\uD83C\uDF21\uFE0F',
   phantom_procs:'\uD83D\uDC7B',
-  lockscreen_shortcuts:'\uD83D\uDD10',
+  anim_speed:'\uD83C\uDFAC',
+  dsp_outputs:'\uD83D\uDD00',
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -2805,7 +2813,10 @@ function cfgStatus(it, cur) {
     // Idle sits at 40-44 C on this class of device, so a threshold at or below that is
     // permanently engaged. Saying so on the card is cheaper than the user discovering it
     // from a clamp counter that never goes down.
-    if (t > 0 && t <= 45) return { cls:'warn', text:t + '\u00b0C \u00b7 ' + T('st_always_on', 'почти всегда активен') };
+    // Below idle temperature the cap is engaged permanently, including while asleep.
+    // Measured on this device: cpuT never goes below 40 even after 9 hours screen-off.
+    if (t > 0 && t <= 41) return { cls:'warn', text:t + '\u00b0C \u00b7 ' + T('st_always_on', 'всегда активен') };
+    if (t > 0 && t <= 45) return { cls:'warn', text:t + '\u00b0C \u00b7 ' + T('st_mostly_on', 'почти всегда активен') };
     if (t > 0) return { cls:'good', text:t + '\u00b0C' };
   }
   if (it.type === 'range') {
@@ -2901,8 +2912,7 @@ const APPLY_MODE = {
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
-  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE,
-  lockscreen_shortcuts:APPLY_LIVE, log_level:APPLY_LIVE,
+  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
@@ -2917,6 +2927,8 @@ const APPLY_MODE = {
   UX_ANIM_FORCE_RESTART:APPLY_REBOOT,
 
   // Next: the value is live but only consulted when something new starts.
+  anim_speed:APPLY_LIVE,
+  dsp_outputs:APPLY_LIVE,
   phantom_procs:APPLY_NEXT
 };
 
@@ -3223,7 +3235,7 @@ async function cfgSet(key, val, ctl) {
     // reboot for these.
     // audioserver restarts briefly (a short audio gap), which is why it runs in the background
     // and the toast says "applying" rather than "reboot".
-    var AUDIO_LIVE_KEYS = ['audio_profile','dsp_loudness','dsp_bass','dsp_compressor','bt_absvol_mode'];
+    var AUDIO_LIVE_KEYS = ['dsp_outputs','audio_profile','dsp_loudness','dsp_bass','dsp_compressor','bt_absvol_mode'];
     // DSP-only changes go through the daemon, which hands the value to the live effect -
     // no audioserver restart, so the audio never drops out while the slider moves.
     var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_compressor'];
@@ -3239,6 +3251,7 @@ async function cfgSet(key, val, ctl) {
     // installer, so the toggle promised a reboot and rebuilt nothing.
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
     // Read by the governor from governor.conf, so a reload is all they need.
+    var ANIM_KEYS = ['anim_speed'];
     var GOV_KEYS = ['auto_battery_enable','smart_battery_bias','charge_aware_enable',
                     'cool_gaming','bat_suppress_gaming','night_quiet_enable',
                     'sustained_temp_mode','BG_TRIM_LEVEL','UX_MANAGE_OEM_TOGGLES',
@@ -3264,6 +3277,13 @@ async function cfgSet(key, val, ctl) {
       // truth was reboot. The binary already accepts `asb reload`; using it makes the
       // promise true instead of downgrading the label.
       // bt_a2dp_offload is applied by the audio script, which was not being run for it.
+      if (ANIM_KEYS.indexOf(key) >= 0) {
+        try { await run('sh ' + MD + '/runtime/asb_anim_apply.sh >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
       if (key === 'bt_a2dp_offload') {
         try { await run('sh ' + MD + '/runtime/asb_audio_apply.sh >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
@@ -3273,11 +3293,10 @@ async function cfgSet(key, val, ctl) {
       }
       // The two system-tweak keys share one script; neither was calling it, so both sat
       // in the config until the next boot while claiming otherwise.
-      if (key === 'phantom_procs' || key === 'lockscreen_shortcuts') {
+      if (key === 'phantom_procs') {
         try { await run('sh ' + MD + '/runtime/asb_system_tweaks.sh >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) +
-              (key === 'phantom_procs' ? T('t_cfg_next', ' \u00b7 restart the app')
-                                       : T('t_cfg_live', ' \u00b7 applied')),
+              T('t_cfg_next', ' \u00b7 restart the app'),
               cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
