@@ -23,20 +23,19 @@ _put() {
 }
 
 _sp="$(_cfg anim_speed)"
+# Numeric positions from the slider, words from older configs. -1 is "let the profile
+# decide", which is the shipped default and the only value that changes nothing.
 case "$_sp" in
-  # Scale is a MULTIPLIER of duration, so smaller is faster. 0 disables animations
-  # entirely, which some people want and which Android supports natively.
-  off)      _v=0    ;;
-  fastest)  _v=0.5  ;;
-  faster)   _v=0.7  ;;
-  fast)     _v=0.85 ;;
-  stock)    _v=1    ;;
-  slow)     _v=1.25 ;;
-  slower)   _v=1.5  ;;
-  profile|'') _v=""  ;;   # let the profile decide, as before
-  *)        _v=""   ;;
+  -1|profile|'') _v="" ;;
+  0|off)         _v=0    ;;
+  1|fastest)     _v=0.5  ;;
+  2|faster)      _v=0.7  ;;
+  3|fast)        _v=0.85 ;;
+  4|stock)       _v=1    ;;
+  5|slow)        _v=1.25 ;;
+  6|slower)      _v=1.5  ;;
+  *)             _v="" ;;
 esac
-
 [ -z "$_v" ] && { echo "animations: following the profile"; exit 0; }
 
 for _k in window_animation_scale transition_animation_scale animator_duration_scale; do
