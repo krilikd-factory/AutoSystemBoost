@@ -456,6 +456,33 @@ else
   esac
 fi
 
+SEC "5a2. SMART LEARNING  (what the current bucket knows)"
+_sb_t="$(grep -m1 '^smart_bucket_temp_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_sb_d="$(grep -m1 '^smart_bucket_drain_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+NOTE "bucket avg temp = ${_sb_t:-0} (tenths C)  ·  avg drain = ${_sb_d:-0} (tenths %/h)"
+_tw="$(grep -m1 '^smart_therm_warm_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_tc="$(grep -m1 '^smart_therm_cool_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+# Learned from this device's own median, not hardcoded - a OnePlus 12 and a 15 idle at
+# different temperatures, so an absolute threshold would be right for one and wrong for
+# the other. 420/380 showing here means not enough buckets have history yet.
+NOTE "thresholds in force: warm above ${_tw:-?}, cool below ${_tc:-?} (tenths C, learned from this device)"
+case "${_tw:-0}" in
+  420) NOTE "still using fallback thresholds - fewer than 4 buckets have enough history" ;;
+esac
+# These two drive the thermal lean added in V62. A bucket with zero here has not reached
+# the observation floor yet, which is not a fault - it means the lean is not applied.
+case "${_sb_t:-0}" in
+  0) NOTE "no learned thermal history for this bucket yet - lean inactive" ;;
+  *) if [ "${_sb_t:-0}" -gt 420 ] 2>/dev/null; then
+       NOTE "-> leaning toward battery (this bucket historically runs warm)"
+     elif [ "${_sb_t:-0}" -lt 380 ] 2>/dev/null; then
+       NOTE "-> allowing more headroom (this bucket historically runs cool)"
+     else
+       NOTE "-> neutral (between the warm and cool marks)"
+     fi ;;
+esac
+NOTE "sessions learned = $(grep -m1 '^smart_sessions_total=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+
 SEC "5b. HAPTICS"
 _h_lvl="$(cfg haptic_strength)"
 case "$_h_lvl" in
