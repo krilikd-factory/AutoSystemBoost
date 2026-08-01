@@ -130,6 +130,12 @@ rm -f /data/adb/asb/auto_battery_origin /data/adb/asb/lockscreen_prev /data/adb/
 # Clearing them on uninstall means the live partition is genuinely stock by the time anything
 # reads it, so remove-then-install repairs a device instead of preserving the damage.
 rm -rf /data/adb/asb/tweak_base 2>/dev/null
+# AOD is borrowed for the night window, not turned off - restore it before the baseline
+# that records it disappears with the rest of the module state.
+if [ -f /data/adb/asb/aod_baseline ]; then
+  settings put secure doze_always_on "$(cat /data/adb/asb/aod_baseline 2>/dev/null || echo 1)" 2>/dev/null
+  rm -f /data/adb/asb/aod_baseline 2>/dev/null
+fi
 
 # Restore any runtime tracking settings we changed (settings DB), then remove the data dir.
 # Both files use the same key|value format: tracking_restore.log for the analytics settings,

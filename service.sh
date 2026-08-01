@@ -2435,7 +2435,9 @@ apply_extra_settings() {
   asb_settings_put global dropbox_max_files 5
   asb_settings_put global network_recommendations_enabled 0
   asb_settings_put global activity_starts_logging_enabled 0
-  asb_settings_put global settings_enable_monitor_phantom_procs false
+  # Moved to runtime/asb_system_tweaks.sh, driven by phantom_procs. Setting it here as
+  # well would mean the module overrides the user's choice on every boot - the exact
+  # behaviour a per-user setting is supposed to end.
   asb_settings_put global send_action_app_error 0
   asb_settings_put global enhanced_connectivity_enabled 0
   asb_settings_put global adaptive_connectivity_enabled 0
@@ -2481,10 +2483,14 @@ if [ -f /data/adb/asb/lockscreen_prev ]; then
 fi
 
 # Doze timings: re-assert at boot, the key does not survive one.
+if [ -f "$MODDIR/runtime/asb_system_tweaks.sh" ]; then
+  sh "$MODDIR/runtime/asb_system_tweaks.sh" >/dev/null 2>&1
+fi
+
 if [ -f "$MODDIR/runtime/asb_doze_apply.sh" ]; then
   case "$(grep -E '^[[:space:]]*doze_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')" in
-    moderate|aggressive) sh "$MODDIR/runtime/asb_doze_apply.sh" >/dev/null 2>&1 ;;
+    moderate|aggressive|night) sh "$MODDIR/runtime/asb_doze_apply.sh" >/dev/null 2>&1 ;;
   esac
 fi
 
