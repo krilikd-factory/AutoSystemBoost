@@ -5116,6 +5116,22 @@ int main(int argc, char **argv) {
                                      " --once >/dev/null 2>&1 &");
                     (void)_rr;
                 }
+                /* doze=night has to be re-evaluated when the window opens and closes,
+                 * and boot is the only time anything ran it. Hourly is plenty: the
+                 * window has hour granularity, and the script is a no-op unless the
+                 * side of the boundary changed. */
+                {
+                    static time_t _doze_last = 0;
+                    if (_doze_last == 0) _doze_last = _mnow;
+                    if ((_mnow - _doze_last) >= 600) {
+                        _doze_last = _mnow;
+                        int _dr = system("grep -q '^doze_level=night' "
+                                         "/data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null"
+                                         " && sh /data/adb/modules/AutoSystemBoost/runtime/asb_doze_apply.sh"
+                                         " >/dev/null 2>&1 &");
+                        (void)_dr;
+                    }
+                }
                 if ((_mnow - _wd_last) >= 300) {
                     _wd_last = _mnow;
                     int _wr = system("sh /data/adb/modules/AutoSystemBoost/runtime/asb_watchdog.sh"
