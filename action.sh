@@ -421,7 +421,7 @@ fi
 
 
 echo ""
-echo "  🧠  MEMORY"
+echo "  💾  MEMORY"
 _bgl="$(_cfg BG_TRIM_LEVEL)"
 _ml=""
 [ -n "$_bgl" ] && _ml="$(_join "$_ml" "bg trim: level ${_bgl}")"
@@ -603,10 +603,12 @@ case "$_pbn" in
   *) echo "       (boot-safety counter at ${_pbn}/2 - last boot did not report completion)" ;;
 esac
 
-echo "  ⚙️  SYSTEM"
-_sys_l="       blur: $([ "$_blur" = "1" ] && echo off || echo stock)"
-_sys_l="${_sys_l}  ·  cool games: $([ "$_cool" = "1" ] && echo on || echo off)"
-echo "$_sys_l"
+# Interface gets its own heading. Blur and animations were reported under SYSTEM next to
+# process limits and logging, which put four unrelated things under one word - and the
+# WebUI has had them as separate categories for a while now. The report should agree with
+# the screen the user just came from.
+echo "  🖥  INTERFACE"
+echo "       blur: $([ "$_blur" = "1" ] && echo off || echo stock)"
 # Animations: auto follows blur, so resolve it rather than printing "auto" and leaving
 # the reader to work out what that means on this device.
 _ui_fx="$(_cfg ui_effects_level)"
@@ -617,6 +619,56 @@ case "$_ui_fx" in
              && echo "       animations: simplified (auto, follows blur)" \
              || echo "       animations: normal (auto, follows blur)" ;;
 esac
+case "$(_cfg UX_MANAGE_TIMEOUTS)" in
+  1) echo "       UI speed: managed (animations and touch windows scaled per profile)" ;;
+esac
+case "$(_cfg lockscreen_shortcuts)" in
+  clean) echo "       lock screen: camera and wallet shortcuts hidden" ;;
+esac
+
+# Sleep. Nothing reported this at all, which is a gap on the one subsystem whose whole
+# purpose is what happens while nobody is looking - and the night window is learned, so
+# the user cannot know it without being told.
+echo ""
+echo "  🌙  SLEEP"
+_dz="$(_cfg doze_level)"
+case "$_dz" in
+  night)
+    _nw="/data/adb/asb/night_window.conf"
+    if [ -r "$_nw" ]; then
+      _nsm="$(grep -E '^sleep_min=' "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
+      _nwm="$(grep -E '^wake_min='  "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
+      _nns="$(grep -E '^samples='   "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
+    fi
+    case "$_nsm$_nwm" in
+      ''|*[!0-9]*) echo "       deep sleep: night mode, still learning your schedule" ;;
+      *)
+        # Report the window actually used, margins included - printing the raw learned
+        # times would not match when the phone changes behaviour.
+        _ws=$(( (_nsm + 15) % 1440 )); _we=$(( (_nwm - 20 + 1440) % 1440 ))
+        printf '       deep sleep: night mode · %02d:%02d-%02d:%02d (learned from %s nights)\n' \
+          $((_ws / 60)) $((_ws % 60)) $((_we / 60)) $((_we % 60)) "${_nns:-?}" ;;
+    esac
+    [ -f /data/adb/asb/aod_baseline ] && echo "       always-on display: paused for the night window"
+    ;;
+  moderate)   echo "       deep sleep: moderate (idle after 5 min instead of 30)" ;;
+  aggressive) echo "       deep sleep: aggressive (idle after 2 min; messages may lag)" ;;
+  *)          echo "       deep sleep: stock" ;;
+esac
+case "$(_cfg night_quiet_enable)" in
+  1) echo "       night quiet: sensor polling slowed inside the sleep window" ;;
+esac
+
+echo ""
+echo "  ⚙️  SYSTEM"
+case "$(_cfg phantom_procs)" in
+  relaxed) echo "       background processes: unlimited (phantom monitor off)" ;;
+  strict)  echo "       background processes: Android default (32 max)" ;;
+esac
+case "$(_cfg UX_MANAGE_OEM_TOGGLES)" in
+  1) echo "       OEM toggles: managed (RAM expansion, battery, heat)" ;;
+esac
+
 # Haptics. The numbers that matter are the OEM stepless values actually in force, not
 # the level we asked for - a rejected write would leave the two disagreeing.
 _hap="$(_cfg haptic_strength)"
