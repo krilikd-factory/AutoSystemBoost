@@ -322,7 +322,9 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
   # is. The alpha number alone told nobody anything.
   _bt="$(_st smart_bucket_temp_x10)"; _bd="$(_st smart_bucket_drain_x10)"
   if [ -n "$_bt" ] && [ "$_bt" -gt 0 ] 2>/dev/null; then
-    _bl="       this hour usually: $((_bt / 10)).$((_bt % 10))\u00b0C"
+    # A literal degree sign: printf %b expands \n and friends but not \uXXXX, so the
+    # escape came out as the four characters "u00b0" on screen.
+    _bl="       this hour usually: $((_bt / 10)).$((_bt % 10))°C"
     [ -n "$_bd" ] && [ "$_bd" -gt 0 ] 2>/dev/null \
       && _bl="${_bl}  ·  $((_bd / 10)).$((_bd % 10))%/h"
     printf '%b\n' "$_bl"
@@ -379,7 +381,11 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     if [ -n "$_bt2" ] && [ "$_bt2" -gt 0 ] 2>/dev/null; then
       echo "       Measured for this slot: $((_bt2 / 10)).$((_bt2 % 10))°C typical peak, $((_bd2 / 10)).$((_bd2 % 10))%/h drain"
       if [ -n "$_tw2" ] && [ "$_tw2" -gt 0 ] 2>/dev/null; then
-        echo "       Your phone's normal: warm above $((_tw2 / 10))°C, cool below $((_tc2 / 10))°C"
+        # Say the band, then the edges. "warm above 56, cool below 48" listed two
+        # thresholds and read as a single self-contradicting range - the normal zone
+        # between them was never stated, so the two numbers looked like nonsense.
+        echo "       Normal for your phone: $((_tc2 / 10))-$((_tw2 / 10))°C"
+        echo "         Above $((_tw2 / 10))°C Smart leans to battery, below $((_tc2 / 10))°C it allows a little more."
         echo "         These are not fixed numbers - they are the median of your own"
         echo "         12 slots, so a phone that simply runs hotter is not punished for it."
       fi
