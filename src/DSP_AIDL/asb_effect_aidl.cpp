@@ -121,6 +121,14 @@ class AsbLoudnessContext final : public EffectContext {
         int enable = asb_dsp_prop("enable", 0);
         int gain   = asb_dsp_prop("gain_mb", 0);
         int ceil   = asb_dsp_prop("ceiling_mb", -15);
+        /* Output routing: "all" (default) or a +-separated subset of speaker/wired/bt.
+         *
+         * The descriptor tells us which device this instance was created for, so the
+         * filter is a string match rather than a guess. An unrecognised value falls back
+         * to "all" - a routing typo must not silently disable the effect everywhere.
+         */
+        char outs[64] = {0};
+        if (__system_property_get("persist.asb.dsp.outputs", outs) <= 0) outs[0] = '\0';
         int comp   = asb_dsp_prop("comp", 1);
         int ratio  = asb_dsp_prop("comp_ratio_x10", 60);
         int thresh = asb_dsp_prop("comp_thresh_mb", -2400);
