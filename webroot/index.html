@@ -2053,6 +2053,8 @@ const I18N = {
     cfg_apply_audio: '\u266b Применить аудио сейчас',
     st_mostly_on: 'почти всегда активен',
     st_always_on: 'всегда активен',
+    dsp_idle: 'DSP выкл',
+    as_profile: 'по профилю', as_off: 'выкл', as_stock: 'сток 1x',
     t_cfg_next: ' \u00b7 перезапустите приложение',
     t_pending_reboot: '\u21BB Изменения ждут перезагрузки \u2014 нажмите',
     am_live: '\u26A1 применяется сразу',
@@ -2085,7 +2087,7 @@ const I18N = {
     // config items: name + desc keyed by config key
     cfg: {
       dsp_outputs: { name: 'Выходы для DSP',
-        desc: 'На каких выходах DSP разрешено работать. Раньше он подключался ко всем сразу: усиление, задуманное для Bluetooth-наушников, поднимало и внешний динамик \u2014 самый маленький излучатель в телефоне и наименее подходящий для добавочного усиления. Выберите только то, что действительно нужно обрабатывать: «динамик» \u2014 встроенный, «провод» \u2014 разъём и USB-ЦАПы, «BT» \u2014 Bluetooth. Выходы, которых у телефона нет, просто не совпадут ни с чем.' },
+        desc: 'На каких выходах DSP разрешено работать. Раньше он подключался ко всем сразу: усиление, задуманное для наушников, поднимало и внешний динамик \u2014 самый маленький излучатель в телефоне и наименее подходящий для добавочного усиления.\n\n«Динамик» \u2014 встроенный. «USB/джек» \u2014 проводные наушники и USB-ЦАПы. «Bluetooth» \u2014 беспроводные. Выходы, которых у телефона нет, просто не совпадут ни с чем.\n\nНастройка имеет смысл, только когда включено усиление громкости или баса \u2014 без них обрабатывать нечего.' },
       anim_speed: { name: 'Скорость анимаций',
         desc: 'Насколько быстро система рисует переходы. «По профилю» \u2014 как было раньше: скорость выбирал профиль питания (Производительность 0.8x, Экономия 1.0x), то есть отзывчивость интерфейса была побочным эффектом настройки батареи. Любое другое значение забирает это решение себе: меньше \u2014 быстрее, «выкл» убирает анимации совсем, «медленно» делает их плавнее. Действует со следующего перехода, перезагрузка не нужна.' },
       phantom_procs: { name: 'Лимит фоновых процессов',
@@ -2192,7 +2194,7 @@ const I18N = {
         log_level: { stock: 'сток', '0': 'экстрим', '1': 'обычный', '2': 'подробный', '3': 'отладка' },
       ui_effects_level: { auto: 'авто', stock: 'обычные', flat: 'упрощённые' },
       doze_level: { stock: 'сток', night: 'ночью', moderate: 'умеренно', aggressive: 'агрессивно' },
-      dsp_outputs: { all: 'все', speaker: 'динамик', wired: 'провод', bt: 'BT', 'speaker+wired': 'динамик+провод', 'speaker+bt': 'динамик+BT', 'wired+bt': 'провод+BT' },
+      dsp_outputs: { all: 'все', speaker: 'динамик', wired: 'USB/джек', bt: 'Bluetooth', 'speaker+wired': 'динамик+USB', 'speaker+bt': 'динамик+BT', 'wired+bt': 'USB+BT' },
       anim_speed: { profile: 'по профилю', off: 'выкл', fastest: 'максимум', faster: 'быстрее', fast: 'быстро', stock: 'сток', slow: 'медленно', slower: 'плавно' },
       phantom_procs: { stock: 'не трогать', relaxed: 'без лимита', strict: 'как в Android' },
       // auto on the GLOBAL net keys resolves to the captured stock value, so it is labelled as
@@ -2546,8 +2548,8 @@ const CFG_ITEMS = [
     desc:'While the camera is streaming, the governor stops lowering the CPU and keeps the cores it is already using. That is what prevents a dropped frame in the middle of a burst or a video, at the cost of a little battery for as long as the camera app is open. On means held (the stock module behaviour), off lets the governor throttle the camera like any other app.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
     desc:'Performance shortens animations (~0.8x) and long-press/multi-tap windows for a snappier, more responsive UI; Battery keeps stock. OFF = untouched.' },
-  { key:'anim_speed', type:'seg', def:'profile', stock:'profile', opts:['profile','off','fastest','faster','fast','stock','slow','slower'], name:'Animation Speed',
-    desc:'How fast the system animates. profile keeps the old behaviour, where the power profile decides - Performance was 0.8x, Battery 1.0x - so UI speed was a side effect of a battery setting. Any other value takes that decision back: smaller is faster, off removes animations entirely, slow and slower make them more deliberate. Takes effect on the next transition, no reboot.' },
+  { key:'anim_speed', type:'range', def:'0', min:-1, max:6, step:1, stock:'0', name:'Animation Speed',
+    desc:'How fast the system animates. -1 keeps the old behaviour, where the power profile decides - Performance was 0.8x, Battery 1.0x - so UI speed was a side effect of a battery setting. 0 is Android stock; negative of that is faster, positive is slower, and the far left removes animations entirely. Takes effect on the next transition.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Almost never needed. WindowManager reads the animation scales as soon as they are written, so a plain settings change is enough and UI Speed Management works without this. The switch exists only for builds that ignore a live change, and it applies by restarting SystemUI: the screen blinks, the lock screen returns, and overlays from other modules (status-bar themes) are torn down. Only fires on a profile switch you made yourself. Turn it on only if you have confirmed the scales do not apply otherwise.' },
   // --- Display ---,
@@ -2807,6 +2809,17 @@ function cfgStatus(it, cur) {
   if (it.type === 'bool') {
     if (cur === '1') return { cls:'good', text:'Enabled' };
     return { cls:'neutral', text:'Disabled' };
+  }
+  // dsp_outputs only means anything while the DSP is actually processing. Showing it in
+  // the same active state as a working setting invites the reading that routing is on
+  // when nothing is being routed.
+  if (it.key === 'dsp_outputs') {
+    const g = parseInt(_cfgVals['dsp_loudness'] || '0', 10);
+    const b = parseInt(_cfgVals['dsp_bass'] || '0', 10);
+    if (!(g > 0) && !(b > 0)) {
+      return { cls:'neutral', text:T('dsp_idle', 'DSP выкл') };
+    }
+    return { cls: (cur === 'all' ? 'neutral' : 'good'), text: String(cur).toUpperCase() };
   }
   if (it.key === 'sustained_temp_enter') {
     const t = parseInt(cur, 10);
@@ -3090,6 +3103,13 @@ function cfgRender() {
         // DSP loudness is a dB gain; label it as such. Other ranges stay plain numbers.
         if (it.key === 'dsp_loudness') return '+' + v + ' dB';
         if (it.key === 'dsp_bass') return '+' + v + ' dB';
+        if (it.key === 'anim_speed') {
+          // A number alone means nothing here - the scale is a duration multiplier, so
+          // "2" reads as "faster" to half the people and "slower" to the other half.
+          const names = [T('as_profile','по профилю'), T('as_off','выкл'), '0.5x', '0.7x',
+                         '0.85x', T('as_stock','сток 1x'), '1.25x', '1.5x'];
+          return names[v + 1] || String(v);
+        }
         if (it.key === 'haptic_strength') {
           if (v < 0) return Topt('auto');
           return (v === 0) ? Topt('off') : (v + '/10');
