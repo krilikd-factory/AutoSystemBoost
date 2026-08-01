@@ -493,6 +493,17 @@ else
 fi
 
 echo
+# asbdiag ships twice: tools/asb_diag.sh is the source, system/bin/asbdiag is what the
+# user runs. Nothing kept them in step, and they had drifted by 83 lines - so a report
+# from a user was describing an older build than the one they installed.
+if [ -f tools/asb_diag.sh ] && [ -f system/bin/asbdiag ]; then
+  if cmp -s tools/asb_diag.sh system/bin/asbdiag; then
+    ok "asbdiag copies are identical"
+  else
+    warn "system/bin/asbdiag differs from tools/asb_diag.sh - copy it before release"
+  fi
+fi
+
 echo "📋 Version Sync"
 _mp="$MODDIR/module.prop"
 _uj="$MODDIR/update.json"

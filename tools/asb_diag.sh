@@ -797,6 +797,49 @@ for _s in window_animation_scale transition_animation_scale animator_duration_sc
 done
 
 # =====================================================================
+SEC "8a. SLEEP / DOZE  (the subsystem nobody can observe directly)"
+_dz="$(cfg doze_level)"
+NOTE "doze_level = ${_dz:-stock}"
+V "  device_idle_constants in force" "present" \
+  "$(settings get global device_idle_constants 2>/dev/null)" present
+if [ -r /data/adb/asb/night_window.conf ]; then
+  _ns="$(grep -E '^sleep_min=' /data/adb/asb/night_window.conf | head -1 | sed 's/.*=//')"
+  _nw="$(grep -E '^wake_min='  /data/adb/asb/night_window.conf | head -1 | sed 's/.*=//')"
+  _nn="$(grep -E '^samples='   /data/adb/asb/night_window.conf | head -1 | sed 's/.*=//')"
+  # Printed as clock times: minutes-since-midnight is what the file stores and what
+  # nobody can read at a glance.
+  NOTE "learned sleep window: $(printf '%02d:%02d' $((_ns/60)) $((_ns%60)))-$(printf '%02d:%02d' $((_nw/60)) $((_nw%60))) from ${_nn} night(s)"
+  _minsmp="$(cfg night_quiet_auto_min_samples)"; : "${_minsmp:=3}"
+  if [ "${_nn:-0}" -lt "$_minsmp" ] 2>/dev/null; then
+    NOTE "below ${_minsmp} samples - the configured hours are still being used instead"
+  fi
+else
+  NOTE "no learned window yet (night_window.conf absent) - static hours in use"
+fi
+# AOD is borrowed, not disabled: the baseline file existing means it is currently paused,
+# and its absence means either the window is closed or the user never had AOD on.
+[ -f /data/adb/asb/aod_baseline ] \
+  && NOTE "AOD currently paused by ASB (original: $(cat /data/adb/asb/aod_baseline 2>/dev/null))" \
+  || NOTE "AOD not currently held by ASB (doze_always_on = $(settings get secure doze_always_on 2>/dev/null))"
+
+# =====================================================================
+SEC "8b. INTERFACE / SYSTEM TWEAKS"
+V "  window blur disabled" "$(cfg disable_blur)" \
+  "$(settings get global disable_window_blurs 2>/dev/null)" present
+NOTE "ui_effects_level = $(cfg ui_effects_level)  ·  anim_level prop = $(gp persist.sys.oplus.anim_level)"
+NOTE "phantom_procs = $(cfg phantom_procs)  ·  live: $(settings get global settings_enable_monitor_phantom_procs 2>/dev/null)"
+NOTE "lockscreen_shortcuts = $(cfg lockscreen_shortcuts)"
+# The property that caused a bootloop. Worth naming explicitly in every report: if it is
+# ever back in system.prop, that is the first thing to look at.
+_vdb="$(gp vendor.display.supports_background_blur)"
+case "$_vdb" in
+  0) BAD_NOTE="  vendor.display.supports_background_blur = 0 - this value bootloops the display stack"; P "$BAD_NOTE" ;;
+  *) NOTE "vendor.display.supports_background_blur = ${_vdb:-<unset>} (0 would be a problem)" ;;
+esac
+[ -f /data/adb/asb/prop_blocks_disabled ] \
+  && NOTE "BOOT SAFETY FIRED: $(cat /data/adb/asb/prop_blocks_disabled 2>/dev/null | tr '\n' ' ')"
+
+# =====================================================================
 SEC "9. WEBUI CONFIG  (governor.conf — what the user selected)"
 if [ -f "$CONF" ]; then
   P "  $CONF :"
