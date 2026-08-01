@@ -40,17 +40,10 @@ case "$(_cfg phantom_procs)" in
   *) : ;;   # stock: leave whatever is there
 esac
 
-# --- lock screen shortcuts -----------------------------------------------------------
-# Two keys because OEMs disagree on which one is authoritative, and writing the one that
-# does nothing is cheaper than probing which is which.
-case "$(_cfg lockscreen_shortcuts)" in
-  clean)
-    _put secure lockscreen_left_button_enabled 0
-    _put secure lockscreen_right_button_enabled 0
-    _changed="${_changed}lockscreen=clean "
-    ;;
-  *) : ;;
-esac
+# Lock screen shortcuts were here and are gone: the keys they wrote
+# (lockscreen_left_button_enabled / _right_button_enabled) are AOSP/Pixel settings that
+# OxygenOS does not read. Verified by screenshot - the tweak was on and both shortcuts
+# were still on the lock screen. A setting that cannot work is worse than a missing one.
 
 [ -n "$_changed" ] && echo "system tweaks: $_changed"
 exit 0

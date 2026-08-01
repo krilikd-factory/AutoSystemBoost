@@ -195,6 +195,16 @@ if [ "$_dsp_ok" = "1" ]; then
     if [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; then
       _dspp enable 1
       _dspp gain_mb "$((_dsp * 100))"
+      # Output routing. The library reads this and skips the effect on any sink whose
+      # name does not match - previously it attached to everything, so a Bluetooth-only
+      # boost also lifted the loudspeaker, which is the driver least able to take it.
+      _dsp_out="$(_cfg dsp_outputs)"
+      case "$_dsp_out" in
+        ''|all) _dsp_out="all" ;;
+        speaker|wired|bt|speaker+wired|speaker+bt|wired+bt) : ;;
+        *) _dsp_out="all" ;;
+      esac
+      _dspp outputs "$_dsp_out"
       _dspp ceiling_mb -15
       # Compressor, on unless the user asked for it off.
       #
