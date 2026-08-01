@@ -2860,6 +2860,18 @@ function cfgStatus(it, cur) {
 // just when a switch is on. A segment parked on "hifi" or a slider at 4 is every bit as
 // non-stock as a toggle, and the user should be able to spot all of them at a glance.
 function cfgIsActive(it, cur) {
+  // dsp_outputs is active whenever the DSP is processing, whatever it is routed to.
+  //
+  // The card brightness comes from here, not from the status badge - fixing the badge
+  // alone left the card dim with gain at +25, which is what got reported. "all" equals
+  // this card's stock value, so the generic rule below called it untouched; but with gain
+  // or bass on, "all" means the effect is routed to every output, which is the most
+  // active this setting gets rather than the least.
+  if (it.key === 'dsp_outputs') {
+    const g = parseInt(_cfgVals['dsp_loudness'] || '0', 10);
+    const b = parseInt(_cfgVals['dsp_bass'] || '0', 10);
+    return (g > 0) || (b > 0);
+  }
   // "Active" means "differs from the untouched device", which is not always the same as
   // "differs from the default".
   const base = (it.stock !== undefined) ? it.stock : it.def;
