@@ -1542,6 +1542,13 @@ body.config-active #livePage.open {
 .cfg-apply-live   { color: #34d399; }
 .cfg-apply-next   { color: #7dd3fc; }
 .cfg-apply-reboot { color: #fbbf24; }
+.cfg-willbreak {
+  padding-top: 7px;
+  font: 600 10px/1.45 var(--mono);
+  color: #fb923c;
+  letter-spacing: 0.03em;
+  text-align: left;
+}
 .cfg-desc {
   padding-top: 9px;
   font-size: 11px;
@@ -2021,10 +2028,18 @@ const MD = '/data/adb/modules/AutoSystemBoost';
  * ── i18n: Russian localization for ru-locale devices ────────────────────── Activates
  * automatically when the device/browser language is Russian.
  */
+// Languages the UI has strings for. Adding one means adding a block to I18N and its code
+// here - nothing else. The old form hardcoded "ru or en", so a third language could not
+// exist no matter how complete its translation was.
+const ASB_LANGS = ['ru', 'uk', 'de', 'es', 'pt', 'tr', 'id'];
+
 const ASB_LANG = (function() {
   try {
     var l = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
-    return l.indexOf('ru') === 0 ? 'ru' : 'en';
+    for (var i = 0; i < ASB_LANGS.length; i++) {
+      if (l.indexOf(ASB_LANGS[i]) === 0) return ASB_LANGS[i];
+    }
+    return 'en';
   } catch (e) { return 'en'; }
 })();
 
@@ -2044,7 +2059,7 @@ const I18N = {
     lv_est_idle: 'Прогноз (покой)', lv_capsrc: 'Источник кэпа',
     lv_learner: 'Обучение', lv_gpuload: 'Нагрузка GPU', lv_headroom: 'Запас',
     lv_lpm: 'Modem LPM',
-    lv_ses: 'Сессии', lv_drain: 'Расход', lv_trend: 'Тренд', lv_measuring: 'измеряю…',
+    lv_ses: 'Сессии', lv_drain: 'Расход экр.', lv_trend: 'Тренд', lv_measuring: 'измеряю…',
     lv_trend_up: 'нагрев', lv_trend_dn: 'остывает', lv_trend_fl: 'ровно',
     lv_lpm_normal: 'обычный', lv_lpm_normal_t: 'по умолчанию для профиля',
     lv_lpm_save: 'экономия', lv_lpm_save_t: 'радио простаивает, keepalive растянуты',
@@ -2053,6 +2068,16 @@ const I18N = {
     cfg_apply_audio: '\u266b Применить аудио сейчас',
     st_mostly_on: 'почти всегда активен',
     st_always_on: 'всегда активен',
+    wb_phantom: 'Без лимита фон живёт дольше — часть приложений будет расходовать заряд в фоне',
+    wb_doze: 'Уведомления от мессенджеров и почты могут приходить с задержкой',
+    wb_bgtrim: 'Приложения будут чаще перезапускаться при возврате к ним',
+    wb_blur: 'Шторка и меню станут непрозрачными — эффект стекла исчезнет',
+    wb_supgame: 'Игры на профиле Экономия будут идти медленнее',
+    wb_dsp: 'На высоком усилении возможны искажения на громкой музыке',
+    wb_loud: 'Максимальная громкость выше — риск для слуха и для динамика',
+    wb_therm: 'Низкий порог ограничивает скорость постоянно, а не только под нагрузкой',
+    wb_gms: 'На «строго» уведомления Google могут приходить с задержкой во время сна',
+    wb_scan: 'Wi-Fi ищет сети чаще — заряд расходуется быстрее',
     dsp_idle: 'DSP выкл',
     as_profile: 'по профилю', as_off: 'выкл', as_stock: 'сток 1x',
     t_cfg_next: ' \u00b7 перезапустите приложение',
@@ -2086,6 +2111,8 @@ const I18N = {
     t_rebooting: 'Перезагрузка…',
     // config items: name + desc keyed by config key
     cfg: {
+      gms_trim: { name: 'Ограничение сервисов Google',
+        desc: 'Сокращает фоновую работу сервисов Google Play. Это НЕ заморозка и не отключение GMS \u2014 push-уведомления, вход в аккаунт, платежи и Play Маркет продолжают работать, потому что модуль, который их ломает, врал бы о своём назначении.\\n\\n«Умеренно» останавливает передачу геоданных и фоновую работу поискового виджета; к доставке уведомлений ни то, ни другое отношения не имеет. «Строго» дополнительно убирает GMS из белого списка Doze \u2014 именно здесь основная экономия на телефонах, где сервисы Google и есть главный расход, и именно это может задерживать уведомления на минуты, пока телефон спит. Если опоздавшие сообщения вас раздражают \u2014 оставайтесь на «умеренно».\\n\\nПолностью обратимо: изменённые разрешения записываются и восстанавливаются при удалении ASB.' },
       dsp_outputs: { name: 'Выходы для DSP',
         desc: 'На каких выходах DSP разрешено работать. Раньше он подключался ко всем сразу: усиление, задуманное для наушников, поднимало и внешний динамик \u2014 самый маленький излучатель в телефоне и наименее подходящий для добавочного усиления.\n\n«Динамик» \u2014 встроенный. «USB» \u2014 проводные наушники и USB-ЦАПы. «Bluetooth» \u2014 беспроводные. Выходы, которых у телефона нет, просто не совпадут ни с чем.\n\nНастройка имеет смысл, только когда включено усиление громкости или баса \u2014 без них обрабатывать нечего.' },
       anim_speed: { name: 'Скорость анимаций',
@@ -2196,6 +2223,7 @@ const I18N = {
       doze_level: { stock: 'сток', night: 'ночью', moderate: 'умеренно', aggressive: 'агрессивно' },
       dsp_outputs: { all: 'все', speaker: 'динамик', wired: 'USB', bt: 'BT', 'speaker+wired': 'динамик+USB', 'speaker+bt': 'динамик+BT', 'wired+bt': 'USB+BT' },
       anim_speed: { profile: 'по профилю', off: 'выкл', fastest: 'максимум', faster: 'быстрее', fast: 'быстро', stock: 'сток', slow: 'медленно', slower: 'плавно' },
+      gms_trim: { stock: 'сток', lite: 'умеренно', strict: 'строго' },
       phantom_procs: { stock: 'не трогать', relaxed: 'без лимита', strict: 'как в Android' },
       // auto on the GLOBAL net keys resolves to the captured stock value, so it is labelled as
       // such - calling it "авто" was the whole source of the confusion.
@@ -2215,6 +2243,102 @@ const I18N = {
       net_qdisc_mobile:      { auto: 'как общая' },
     }
   },
+
+  // Interface strings only - card names and descriptions stay English in these locales
+  // until a native speaker writes them. Translating 44 technical descriptions by machine
+  // would produce text that reads fluently and misleads about what a setting does, which
+  // is worse than English a user can paste into a translator themselves.
+  uk: {
+    nav_main: 'Головна', nav_live: 'Монітор', nav_cfg: 'Налаштування',
+    lv_ses: 'Сесії', lv_drain: 'Витрата екр.', lv_trend: 'Тренд',
+    lv_trend_up: 'нагрів', lv_trend_dn: 'охолоджується', lv_trend_fl: 'рівно',
+    lv_measuring: 'вимірюю…', lv_est_on: 'Прогноз (екран)',
+    lv_hotspot: 'Гаряча точка · внутр.',
+    am_live: '\u26A1 застосовується одразу', am_reboot: '\u21BB потрібне перезавантаження',
+    am_next: '\u23ED одразу, але застосунок треба перезапустити',
+    t_pending_reboot: '\u21BB Зміни очікують перезавантаження \u2014 натисніть',
+    t_cfg_live: ' \u00b7 застосовано', t_cfg_saved: ' \u00b7 після перезавантаження',
+    t_cfg_next: ' \u00b7 перезапустіть застосунок',
+    t_not_applied: 'не застосовано', dsp_idle: 'DSP вимк',
+    grp_audio: 'Аудіо', grp_camera: 'Камера', grp_iface: 'Інтерфейс',
+    grp_net: 'Мережа', grp_battery: 'Батарея', grp_ui: 'Система'
+  },
+  de: {
+    nav_main: 'Start', nav_live: 'Monitor', nav_cfg: 'Einstellungen',
+    lv_ses: 'Sitzungen', lv_drain: 'Verbrauch', lv_trend: 'Trend',
+    lv_trend_up: 'wird wärmer', lv_trend_dn: 'kühlt ab', lv_trend_fl: 'stabil',
+    lv_measuring: 'messe…', lv_est_on: 'Prognose (Display)',
+    lv_hotspot: 'Hotspot · intern',
+    am_live: '\u26A1 sofort wirksam', am_reboot: '\u21BB Neustart nötig',
+    am_next: '\u23ED sofort, App neu starten',
+    t_pending_reboot: '\u21BB Änderungen warten auf Neustart \u2014 tippen',
+    t_cfg_live: ' \u00b7 angewendet', t_cfg_saved: ' \u00b7 nach Neustart',
+    t_cfg_next: ' \u00b7 App neu starten',
+    t_not_applied: 'nicht angewendet', dsp_idle: 'DSP aus',
+    grp_audio: 'Audio', grp_camera: 'Kamera', grp_iface: 'Oberfläche',
+    grp_net: 'Netzwerk', grp_battery: 'Akku', grp_ui: 'System'
+  },
+  es: {
+    nav_main: 'Inicio', nav_live: 'Monitor', nav_cfg: 'Ajustes',
+    lv_ses: 'Sesiones', lv_drain: 'Consumo', lv_trend: 'Tendencia',
+    lv_trend_up: 'calentando', lv_trend_dn: 'enfriando', lv_trend_fl: 'estable',
+    lv_measuring: 'midiendo…', lv_est_on: 'Estimado (pantalla)',
+    lv_hotspot: 'Punto caliente · interno',
+    am_live: '\u26A1 se aplica al instante', am_reboot: '\u21BB requiere reinicio',
+    am_next: '\u23ED al instante, reinicia la app',
+    t_pending_reboot: '\u21BB Cambios pendientes de reinicio \u2014 toca aquí',
+    t_cfg_live: ' \u00b7 aplicado', t_cfg_saved: ' \u00b7 tras reiniciar',
+    t_cfg_next: ' \u00b7 reinicia la app',
+    t_not_applied: 'no aplicado', dsp_idle: 'DSP apagado',
+    grp_audio: 'Audio', grp_camera: 'Cámara', grp_iface: 'Interfaz',
+    grp_net: 'Red', grp_battery: 'Batería', grp_ui: 'Sistema'
+  },
+  pt: {
+    nav_main: 'Início', nav_live: 'Monitor', nav_cfg: 'Ajustes',
+    lv_ses: 'Sessões', lv_drain: 'Consumo', lv_trend: 'Tendência',
+    lv_trend_up: 'aquecendo', lv_trend_dn: 'esfriando', lv_trend_fl: 'estável',
+    lv_measuring: 'medindo…', lv_est_on: 'Estimativa (tela)',
+    lv_hotspot: 'Ponto quente · interno',
+    am_live: '\u26A1 aplica imediatamente', am_reboot: '\u21BB requer reinício',
+    am_next: '\u23ED imediato, reinicie o app',
+    t_pending_reboot: '\u21BB Alterações aguardando reinício \u2014 toque',
+    t_cfg_live: ' \u00b7 aplicado', t_cfg_saved: ' \u00b7 após reiniciar',
+    t_cfg_next: ' \u00b7 reinicie o app',
+    t_not_applied: 'não aplicado', dsp_idle: 'DSP desligado',
+    grp_audio: 'Áudio', grp_camera: 'Câmera', grp_iface: 'Interface',
+    grp_net: 'Rede', grp_battery: 'Bateria', grp_ui: 'Sistema'
+  },
+  tr: {
+    nav_main: 'Ana', nav_live: 'İzleme', nav_cfg: 'Ayarlar',
+    lv_ses: 'Oturumlar', lv_drain: 'Tüketim', lv_trend: 'Eğilim',
+    lv_trend_up: 'ısınıyor', lv_trend_dn: 'soğuyor', lv_trend_fl: 'sabit',
+    lv_measuring: 'ölçülüyor…', lv_est_on: 'Tahmin (ekran)',
+    lv_hotspot: 'Sıcak nokta · iç',
+    am_live: '\u26A1 anında uygulanır', am_reboot: '\u21BB yeniden başlatma gerekir',
+    am_next: '\u23ED anında, uygulamayı yeniden başlatın',
+    t_pending_reboot: '\u21BB Değişiklikler yeniden başlatma bekliyor \u2014 dokunun',
+    t_cfg_live: ' \u00b7 uygulandı', t_cfg_saved: ' \u00b7 yeniden başlatınca',
+    t_cfg_next: ' \u00b7 uygulamayı yeniden başlatın',
+    t_not_applied: 'uygulanmadı', dsp_idle: 'DSP kapalı',
+    grp_audio: 'Ses', grp_camera: 'Kamera', grp_iface: 'Arayüz',
+    grp_net: 'Ağ', grp_battery: 'Pil', grp_ui: 'Sistem'
+  },
+  id: {
+    nav_main: 'Beranda', nav_live: 'Monitor', nav_cfg: 'Pengaturan',
+    lv_ses: 'Sesi', lv_drain: 'Konsumsi', lv_trend: 'Tren',
+    lv_trend_up: 'memanas', lv_trend_dn: 'mendingin', lv_trend_fl: 'stabil',
+    lv_measuring: 'mengukur…', lv_est_on: 'Perkiraan (layar)',
+    lv_hotspot: 'Titik panas · internal',
+    am_live: '\u26A1 langsung berlaku', am_reboot: '\u21BB perlu mulai ulang',
+    am_next: '\u23ED langsung, mulai ulang aplikasi',
+    t_pending_reboot: '\u21BB Perubahan menunggu mulai ulang \u2014 ketuk',
+    t_cfg_live: ' \u00b7 diterapkan', t_cfg_saved: ' \u00b7 setelah mulai ulang',
+    t_cfg_next: ' \u00b7 mulai ulang aplikasi',
+    t_not_applied: 'tidak diterapkan', dsp_idle: 'DSP mati',
+    grp_audio: 'Audio', grp_camera: 'Kamera', grp_iface: 'Antarmuka',
+    grp_net: 'Jaringan', grp_battery: 'Baterai', grp_ui: 'Sistem'
+  },
+
   en: {
     // Only segment labels: everything else already reads naturally in English.
     opt: {
@@ -2231,13 +2355,19 @@ const I18N = {
   }
 };
 
+// Any language, with English as the fallback for anything not yet translated.
+//
+// A partially translated language now degrades one string at a time instead of being
+// impossible: a locale with the card names done but not the descriptions shows translated
+// names and English descriptions, which is strictly better than all-English.
 function T(key, fallback) {
-  if (ASB_LANG === 'ru' && I18N.ru[key] != null) return I18N.ru[key];
+  var L = I18N[ASB_LANG];
+  if (L && L[key] != null) return L[key];
   return fallback != null ? fallback : key;
 }
 function Tcfg(cfgKey, field, fallback) {
-  if (ASB_LANG === 'ru' && I18N.ru.cfg[cfgKey] && I18N.ru.cfg[cfgKey][field] != null)
-    return I18N.ru.cfg[cfgKey][field];
+  var L = I18N[ASB_LANG];
+  if (L && L.cfg && L.cfg[cfgKey] && L.cfg[cfgKey][field] != null) return L.cfg[cfgKey][field];
   return fallback;
 }
 function Topt(o, key) {
@@ -2548,7 +2678,7 @@ const CFG_ITEMS = [
     desc:'While the camera is streaming, the governor stops lowering the CPU and keeps the cores it is already using. That is what prevents a dropped frame in the middle of a burst or a video, at the cost of a little battery for as long as the camera app is open. On means held (the stock module behaviour), off lets the governor throttle the camera like any other app.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
     desc:'Performance shortens animations (~0.8x) and long-press/multi-tap windows for a snappier, more responsive UI; Battery keeps stock. OFF = untouched.' },
-  { key:'anim_speed', type:'range', def:'0', min:-1, max:6, step:1, stock:'0', name:'Animation Speed',
+  { key:'anim_speed', type:'range', def:'0', min:-1, max:8, step:1, stock:'0', name:'Animation Speed',
     desc:'How fast the system animates. -1 keeps the old behaviour, where the power profile decides - Performance was 0.8x, Battery 1.0x - so UI speed was a side effect of a battery setting. 0 is Android stock; negative of that is faster, positive is slower, and the far left removes animations entirely. Takes effect on the next transition.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Almost never needed. WindowManager reads the animation scales as soon as they are written, so a plain settings change is enough and UI Speed Management works without this. The switch exists only for builds that ignore a live change, and it applies by restarting SystemUI: the screen blinks, the lock screen returns, and overlays from other modules (status-bar themes) are torn down. Only fires on a profile switch you made yourself. Turn it on only if you have confirmed the scales do not apply otherwise.' },
@@ -2598,6 +2728,8 @@ const CFG_ITEMS = [
     desc:'On the Battery profile, treat a game as ordinary heavy load rather than entering the gaming state. Gaming mode raises frequency ceilings, which is the opposite of what the Battery profile is for - so this keeps that profile honest. Off lets games get the full gaming treatment even on Battery. Affects the Battery profile only; the other three are untouched.' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['safe','aggressive'], name:'Background Trim Level',
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
+  { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
+    desc:'Reduces what Google Play services does in the background. This does NOT freeze or disable GMS - push notifications, sign-in, payments and the Play Store keep working, because a module that broke those would be lying about what it is for.\\n\\nlite stops location reporting and the search widget\u2019s background work; neither is involved in delivering a notification. strict additionally removes GMS from the Doze whitelist, which is where the real saving is on a phone where Google services are the main drain - and which can delay notifications by minutes while the phone is asleep. If messages arriving late would bother you, stay on lite.\\n\\nFully reversible: the permissions changed are recorded and restored when ASB is removed.' },
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
@@ -2643,7 +2775,7 @@ const CFG_CAT = {
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
-  BG_TRIM_LEVEL:'memory',
+  BG_TRIM_LEVEL:'memory', gms_trim:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', anim_speed:'ux', UX_ANIM_FORCE_RESTART:'ux',
   camera_hold_enable:'camera',
   night_quiet_enable:'battery', log_level:'system', phantom_procs:'system',
@@ -2677,7 +2809,7 @@ const CFG_GROUP_OF = {
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
-  BG_TRIM_LEVEL:'battery', cool_gaming:'battery',
+  BG_TRIM_LEVEL:'battery', gms_trim:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
@@ -2750,6 +2882,7 @@ const CFG_ICONS = {
   phantom_procs:'\uD83D\uDC7B',
   anim_speed:'\uD83C\uDFAC',
   dsp_outputs:'\uD83D\uDD00',
+  gms_trim:'\u2601\uFE0F',
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -2936,6 +3069,36 @@ const APPLY_NEXT   = 'next';    // value is live; a process reads it when it sta
                                 // are restarted. No reboot involved - "next" is about the
                                 // app's lifecycle, not about installing anything.
 
+// What a setting costs, for the ones that cost something.
+//
+// The report already has a NOT APPLIED section that tells you when something silently
+// failed; this is the symmetric half - telling you what will stop working when it
+// succeeds. Only aggressive options appear here: a warning on every card is a warning on
+// none, and most of these settings have no downside worth interrupting someone for.
+const WILL_BREAK = {
+  phantom_procs:      'wb_phantom',
+  doze_level:         'wb_doze',
+  BG_TRIM_LEVEL:      'wb_bgtrim',
+  disable_blur:       'wb_blur',
+  bat_suppress_gaming:'wb_supgame',
+  dsp_loudness:       'wb_dsp',
+  media_loudness:     'wb_loud',
+  sustained_temp_enter:'wb_therm',
+  wifi_scan_throttle: 'wb_scan',
+  gms_trim:           'wb_gms'
+};
+
+function willBreakOf(it, cur) {
+  const k = WILL_BREAK[it.key];
+  if (!k) return null;
+  // Only when the setting is actually away from stock - a card sitting at its shipped
+  // value is not costing anything and does not need a warning.
+  const base = (it.stock !== undefined) ? it.stock : it.def;
+  if (String(cur) === String(base)) return null;
+  if (it.type === 'range' && !(parseInt(cur, 10) > 0)) return null;
+  return T(k, '');
+}
+
 const APPLY_MODE = {
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE,
@@ -2959,6 +3122,7 @@ const APPLY_MODE = {
 
   // Next: the value is live but only consulted when something new starts.
   anim_speed:APPLY_LIVE,
+  gms_trim:APPLY_LIVE,
   dsp_outputs:APPLY_LIVE,
   phantom_procs:APPLY_NEXT
 };
@@ -3125,7 +3289,7 @@ function cfgRender() {
           // A number alone means nothing here - the scale is a duration multiplier, so
           // "2" reads as "faster" to half the people and "slower" to the other half.
           const names = [T('as_profile','по профилю'), T('as_off','выкл'), '0.5x', '0.7x',
-                         '0.85x', T('as_stock','сток 1x'), '1.25x', '1.5x'];
+                         '0.85x', '0.9x', '0.95x', T('as_stock','сток 1x'), '1.25x', '1.5x'];
           return names[v + 1] || String(v);
         }
         if (it.key === 'haptic_strength') {
@@ -3222,6 +3386,14 @@ function cfgRender() {
     am.textContent = applyModeLabel(it.key);
     inner.appendChild(am);
 
+    const wb = willBreakOf(it, cur);
+    if (wb) {
+      const w = document.createElement('div');
+      w.className = 'cfg-willbreak';
+      w.textContent = '\u26A0 ' + wb;
+      inner.appendChild(w);
+    }
+
     const d = document.createElement('div');
     d.className = 'cfg-desc';
     d.textContent = Tcfg(it.key, "desc", it.desc);
@@ -3290,6 +3462,7 @@ async function cfgSet(key, val, ctl) {
     var BLUR_KEYS = ['disable_blur','ui_effects_level'];
     // Read by the governor from governor.conf, so a reload is all they need.
     var ANIM_KEYS = ['anim_speed'];
+    var GMS_KEYS = ['gms_trim'];
     var GOV_KEYS = ['auto_battery_enable','smart_battery_bias','charge_aware_enable',
                     'cool_gaming','bat_suppress_gaming','night_quiet_enable',
                     'sustained_temp_mode','BG_TRIM_LEVEL','UX_MANAGE_OEM_TOGGLES',
@@ -3315,6 +3488,13 @@ async function cfgSet(key, val, ctl) {
       // truth was reboot. The binary already accepts `asb reload`; using it makes the
       // promise true instead of downgrading the label.
       // bt_a2dp_offload is applied by the audio script, which was not being run for it.
+      if (GMS_KEYS.indexOf(key) >= 0) {
+        try { await run('sh ' + MD + '/runtime/asb_gms_trim.sh >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
       if (ANIM_KEYS.indexOf(key) >= 0) {
         try { await run('sh ' + MD + '/runtime/asb_anim_apply.sh >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
@@ -3949,8 +4129,11 @@ async function pollLive(visible) {
           // the charger showed 48 %/h, which is not wrong so much as meaningless. The
           // governor already knows the window length; below the threshold say so instead
           // of publishing a number nobody should act on.
-          const winS = parseInt(kv.smart_drain_window_s || '0', 10);
-          if (dr > 0 && winS >= 600) {
+          // The governor now carries the last completed measurement across sessions and
+          // only publishes a rate it considers usable, so gating on window length here
+          // would hide exactly the value that fix produces - the banner would still read
+          // "measuring..." with a perfectly good number sitting in the state file.
+          if (dr > 0) {
             _lastDrain = dr;
             _el('bnDrain').textContent = (dr / 10).toFixed(1) + '%/h';
           } else if (kv.charging === '1' || kv.plugged === '1') {
