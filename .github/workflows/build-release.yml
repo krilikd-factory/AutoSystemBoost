@@ -31,6 +31,17 @@ jobs:
         run: |
           for f in \
             src/asb_governor.c \
+            common/englishtext.sh \
+            common/russiantext.sh \
+            common/ukrainiantext.sh \
+            common/germantext.sh \
+            common/spanishtext.sh \
+            common/portuguesetext.sh \
+            common/turkishtext.sh \
+            common/indonesiantext.sh \
+            common/italiantext.sh \
+            common/arabictext.sh \
+            common/chinesetext.sh \
             src/asb_metrics.h \
             src/asb_fsm.h \
             src/asb_learner.h \
