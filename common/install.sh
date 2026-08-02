@@ -290,11 +290,32 @@ LANG="$(settings get system system_locales 2>/dev/null)"
 [ -z "$LANG" -o "$LANG" = "null" ] && LANG="$(getprop ro.product.locale)"
 [ -z "$LANG" -o "$LANG" = "null" ] && LANG="$(getprop ro.product.locale.language)-$(getprop ro.product.locale.region)"
 
-if echo "$LANG" | grep -qiE '(^|[, ])ru-|ru_' ; then
-  . "$MODPATH/common/russiantext.sh"
-else
-  . "$MODPATH/common/englishtext.sh"
-fi
+# Pick the installer language from the device locale.
+#
+# The old form knew exactly one language plus English, so adding a third meant editing
+# this branch. Now it maps a locale prefix to a file and falls back to English when the
+# file is missing - which also means a half-finished translation can be dropped in and
+# tested without touching install logic.
+_asb_lang_file=""
+case "$(printf '%s' "$LANG" | tr '[:upper:]' '[:lower:]')" in
+  *ru-*|*ru_*|ru)  _asb_lang_file=russiantext.sh    ;;
+  *uk-*|*uk_*|uk)  _asb_lang_file=ukrainiantext.sh  ;;
+  *de-*|*de_*|de)  _asb_lang_file=germantext.sh     ;;
+  *es-*|*es_*|es)  _asb_lang_file=spanishtext.sh    ;;
+  *pt-*|*pt_*|pt)  _asb_lang_file=portuguesetext.sh ;;
+  *tr-*|*tr_*|tr)  _asb_lang_file=turkishtext.sh    ;;
+  *in-*|*id-*|*id_*|id) _asb_lang_file=indonesiantext.sh ;;
+  *it-*|*it_*|it)  _asb_lang_file=italiantext.sh   ;;
+  *ar-*|*ar_*|ar)  _asb_lang_file=arabictext.sh    ;;
+  # zh covers Simplified; zh-TW/zh-HK fall through to English rather than being shown
+  # Simplified text, which is a different language rather than a dialect of the same one.
+  zh-cn*|zh_cn*|*zh-hans*|zh) _asb_lang_file=chinesetext.sh ;;
+esac
+# English is loaded first in every case: a translation that covers only part of the keys
+# then overrides what it has, and anything it misses stays readable instead of blank.
+. "$MODPATH/common/englishtext.sh"
+[ -n "$_asb_lang_file" ] && [ -f "$MODPATH/common/$_asb_lang_file" ] \
+  && . "$MODPATH/common/$_asb_lang_file"
 
 ASB_SED_INPLACE_MODE=''
 _asb_sed_do() {
