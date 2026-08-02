@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Syntax-only check for the AIDL DSP effect.
+# Source checks for the AIDL DSP effect.
+#
+# Named dsp_stubs for historical reasons: this started as a full -fsyntax-only pass
+# against hand-written AIDL stubs. Those stubs are gone. Reproducing the effect framework
+# by hand needed five headers and was still growing, and a stub tree that drifts from AOSP
+# reports failures the real build does not have - which is worse than no check, because
+# people learn to ignore it. Nothing here includes or compiles anything now.
 #
 # The native governor is compiled on every push; libasbdsp_aidl.so is not, because it
 # needs an AOSP tree and a soong workflow that takes an hour. The gap is not theoretical:
@@ -8,9 +14,10 @@
 # were a struct, and an override whose signature did not match the base class. None of
 # them needed a device, an AOSP tree or a linker to find. They needed a parser.
 #
-# So: parse it, against stubs that declare just enough of the AIDL surface to make the
-# types real. This produces no library and proves nothing about behaviour. It catches
-# wrong type, wrong signature, missing namespace and typo'd member - in seconds.
+# What is left is a fixed list of mistakes that have actually reached main, each visible
+# in the text of the file. This is a smaller claim than "it compiles" and it will not
+# catch the next new class of error - the honest fix for that is running the soong
+# workflow on every PR, and until that happens the window stays open.
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC="$ROOT/src/DSP_AIDL/asb_effect_aidl.cpp"
