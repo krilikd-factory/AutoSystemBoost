@@ -129,6 +129,7 @@ class AsbLoudnessContext final : public EffectContext {
          */
         char outs[64] = {0};
         if (__system_property_get("persist.asb.dsp.outputs", outs) <= 0) outs[0] = '\0';
+        setOutputFilter(outs);
         int comp   = asb_dsp_prop("comp", 1);
         int ratio  = asb_dsp_prop("comp_ratio_x10", 60);
         int thresh = asb_dsp_prop("comp_thresh_mb", -2400);
@@ -172,7 +173,15 @@ class AsbLoudnessContext final : public EffectContext {
         if (trace) {
             for (int i = 0; i < samples; i++) { float a = fabsf(in[i]); if (a > inPeak) inPeak = a; }
         }
-        if (mCore.bypass) {
+        /* Not our output: copy through untouched.
+         *
+         * This is the line that was missing. Without it the filter was read, stored and
+         * ignored, so selecting "bt" still processed the speaker - the exact symptom
+         * reported. Treated the same as bypass rather than as an error: the stream must
+         * keep flowing, we simply have no business changing it. */
+        if (!mDeviceAllowed) {
+            if (in != out) memcpy(out, in, sizeof(float) * (size_t)samples);
+        } else if (mCore.bypass) {
             if (in != out) memcpy(out, in, sizeof(float) * (size_t)samples);
         } else {
             asb_core_process_f32(&mCore, in, out, frames, /*accumulate=*/0);
@@ -193,6 +202,72 @@ class AsbLoudnessContext final : public EffectContext {
   private:
     asb_core_t mCore{};
     Parameter::Common mCommon{};
+
+    /* Output routing state.
+     *
+     * Reading persist.asb.dsp.outputs was not enough on its own - the value was fetched
+     * and then never consulted, so "bt" and "speaker" produced identical loudness on the
+     * speaker. Reported from the device, and correct: nothing downstream looked at it.
+     *
+     * The device this instance drives arrives through Parameter::deviceDescription, which
+     * the framework sets when the effect is attached and again on every route change. It
+     * is not part of Parameter::Common, which is why the first attempt had nothing to
+     * match against.
+     */
+    char mOutFilter[64] = {0};
+    bool mDeviceAllowed = true;
+
+    /* Called whenever the framework re-routes this session. Devices is a list because a
+     * stream can be duplicated to several outputs; if any of them is allowed we process,
+     * since silently dropping the effect on a duplicated stream would look like the
+     * setting failing. */
+    void setDevices(const std::vector<::aidl::android::media::audio::common::AudioDeviceDescription>& devs) {
+        mIsBluetooth = false;
+        for (const auto& d : devs) {
+            mDeviceType = d.type.type;
+            const auto& c = d.type.connection;
+            if (c == "bt-a2dp" || c == "bt-le" || c == "bt-sco") { mIsBluetooth = true; break; }
+        }
+        evaluateDevice();
+    }
+
+    void setOutputFilter(const char *f) {
+        if (!f || !*f || !strcmp(f, "all")) { mOutFilter[0] = '\0'; mDeviceAllowed = true; return; }
+        strncpy(mOutFilter, f, sizeof(mOutFilter) - 1);
+        mOutFilter[sizeof(mOutFilter) - 1] = '\0';
+        evaluateDevice();
+    }
+
+    /* Map the current device to one of the three names the setting uses, then look for
+     * that name in the filter. Substring matching is safe here because the three tokens
+     * share no prefix: speaker, wired, bt. */
+    void evaluateDevice() {
+        if (!mOutFilter[0]) { mDeviceAllowed = true; return; }
+        const char *want = nullptr;
+        switch (mDeviceType) {
+            case AudioDeviceType::OUT_SPEAKER:
+            case AudioDeviceType::OUT_SPEAKER_EARPIECE:
+            case AudioDeviceType::OUT_SPEAKER_SAFE:
+                want = "speaker"; break;
+            case AudioDeviceType::OUT_HEADPHONE:
+            case AudioDeviceType::OUT_HEADSET:
+                /* USB DACs and the 3.5 mm jack both land here; the connection tells them
+                 * apart, but the setting treats them as one - a user picking "USB" means
+                 * "the thing I plugged in", not a bus. */
+                want = "wired"; break;
+            default:
+                /* Bluetooth arrives as headset/headphone with a BT connection, handled
+                 * above by connection; anything genuinely unknown is left processed
+                 * rather than silently skipped - failing open keeps audio working. */
+                want = nullptr; break;
+        }
+        if (mIsBluetooth) want = "bt";
+        if (!want) { mDeviceAllowed = true; return; }
+        mDeviceAllowed = (strstr(mOutFilter, want) != nullptr);
+    }
+
+    AudioDeviceType mDeviceType = AudioDeviceType::OUT_SPEAKER;
+    bool mIsBluetooth = false;
     int mGainMb = 0;
     unsigned long mCalls = 0;
 };
@@ -206,6 +281,23 @@ class AsbLoudnessEffect final : public EffectImpl {
     ndk::ScopedAStatus getDescriptor(Descriptor* _aidl_return) override {
         *_aidl_return = kDescriptor;
         return ndk::ScopedAStatus::ok();
+    }
+
+    /* The framework hands us the route here, at attach and on every device change.
+     * Without overriding this the effect never learns which output it is on, which is why
+     * the filter had nothing to compare against. */
+    ndk::ScopedAStatus setParameterCommon(const Parameter::Common& common) override {
+        auto st = EffectImpl::setParameterCommon(common);
+        if (mContext) mContext->reload(common);
+        return st;
+    }
+
+    ndk::ScopedAStatus setParameter(const Parameter& param) override {
+        auto st = EffectImpl::setParameter(param);
+        if (mContext && param.getTag() == Parameter::deviceDescription) {
+            mContext->setDevices(param.get<Parameter::deviceDescription>());
+        }
+        return st;
     }
 
     ndk::ScopedAStatus setParameterSpecific(const Parameter::Specific& specific) override {
