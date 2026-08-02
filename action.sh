@@ -2,6 +2,61 @@
 
 MODDIR="${MODDIR:-${0%/*}}"
 
+# Section headings in the device's language.
+#
+# This screen had no localisation at all - every heading was English regardless of the
+# phone's locale, while the installer and the WebUI were translated. Headings only: the
+# detail lines under them carry measured values and unit names, and translating those
+# badly would make a diagnostic report misleading rather than merely foreign.
+_asb_loc="$(settings get system system_locales 2>/dev/null)"
+[ -z "$_asb_loc" ] || [ "$_asb_loc" = "null" ] && _asb_loc="$(getprop persist.sys.locale 2>/dev/null)"
+case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
+  *ru-*|*ru_*|ru) H_AUDIO="АУДИО"; H_CAMERA="КАМЕРА"; H_MEMORY="ПАМЯТЬ"; H_NETWORK="СЕТЬ"
+                  H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="СИСТЕМА"; H_IFACE="ИНТЕРФЕЙС"
+                  H_SLEEP="СОН"; H_LEARN="ОБУЧЕНИЕ"; H_SMART="ЧТО ВЫУЧИЛ SMART"
+                  H_GOV="ГУБЕРНАТОР"; H_BATT="АВТО-БАТАРЕЯ"; H_LPM="МОДЕМ LPM" ;;
+  *uk-*|*uk_*|uk) H_AUDIO="АУДІО"; H_CAMERA="КАМЕРА"; H_MEMORY="ПАМʼЯТЬ"; H_NETWORK="МЕРЕЖА"
+                  H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="СИСТЕМА"; H_IFACE="ІНТЕРФЕЙС"
+                  H_SLEEP="СОН"; H_LEARN="НАВЧАННЯ"; H_SMART="ЩО ВИВЧИВ SMART"
+                  H_GOV="ГУБЕРНАТОР"; H_BATT="АВТО-БАТАРЕЯ"; H_LPM="МОДЕМ LPM" ;;
+  *de-*|*de_*|de) H_AUDIO="AUDIO"; H_CAMERA="KAMERA"; H_MEMORY="SPEICHER"; H_NETWORK="NETZWERK"
+                  H_WIFI="WLAN"; H_GPS="GPS"; H_SYSTEM="SYSTEM"; H_IFACE="OBERFLÄCHE"
+                  H_SLEEP="SCHLAF"; H_LEARN="LERNEN"; H_SMART="WAS SMART GELERNT HAT"
+                  H_GOV="GOVERNOR"; H_BATT="AUTO-AKKU"; H_LPM="MODEM LPM" ;;
+  *es-*|*es_*|es) H_AUDIO="AUDIO"; H_CAMERA="CÁMARA"; H_MEMORY="MEMORIA"; H_NETWORK="RED"
+                  H_WIFI="WIFI"; H_GPS="GPS"; H_SYSTEM="SISTEMA"; H_IFACE="INTERFAZ"
+                  H_SLEEP="SUEÑO"; H_LEARN="APRENDIZAJE"; H_SMART="LO QUE SMART HA APRENDIDO"
+                  H_GOV="GOBERNADOR"; H_BATT="BATERÍA AUTO"; H_LPM="MÓDEM LPM" ;;
+  *pt-*|*pt_*|pt) H_AUDIO="ÁUDIO"; H_CAMERA="CÂMERA"; H_MEMORY="MEMÓRIA"; H_NETWORK="REDE"
+                  H_WIFI="WIFI"; H_GPS="GPS"; H_SYSTEM="SISTEMA"; H_IFACE="INTERFACE"
+                  H_SLEEP="SONO"; H_LEARN="APRENDIZADO"; H_SMART="O QUE O SMART APRENDEU"
+                  H_GOV="GOVERNADOR"; H_BATT="BATERIA AUTO"; H_LPM="MODEM LPM" ;;
+  *tr-*|*tr_*|tr) H_AUDIO="SES"; H_CAMERA="KAMERA"; H_MEMORY="BELLEK"; H_NETWORK="AĞ"
+                  H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="SİSTEM"; H_IFACE="ARAYÜZ"
+                  H_SLEEP="UYKU"; H_LEARN="ÖĞRENME"; H_SMART="SMART NE ÖĞRENDİ"
+                  H_GOV="GOVERNOR"; H_BATT="OTO PİL"; H_LPM="MODEM LPM" ;;
+  *in-*|*id-*|*id_*|id) H_AUDIO="AUDIO"; H_CAMERA="KAMERA"; H_MEMORY="MEMORI"; H_NETWORK="JARINGAN"
+                  H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="SISTEM"; H_IFACE="ANTARMUKA"
+                  H_SLEEP="TIDUR"; H_LEARN="PEMBELAJARAN"; H_SMART="YANG DIPELAJARI SMART"
+                  H_GOV="GOVERNOR"; H_BATT="BATERAI OTOMATIS"; H_LPM="MODEM LPM" ;;
+  *it-*|*it_*|it) H_AUDIO="AUDIO"; H_CAMERA="FOTOCAMERA"; H_MEMORY="MEMORIA"; H_NETWORK="RETE"
+                  H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="SISTEMA"; H_IFACE="INTERFACCIA"
+                  H_SLEEP="SONNO"; H_LEARN="APPRENDIMENTO"; H_SMART="COSA HA IMPARATO SMART"
+                  H_GOV="GOVERNOR"; H_BATT="BATTERIA AUTO"; H_LPM="MODEM LPM" ;;
+  *ar-*|*ar_*|ar) H_AUDIO="الصوت"; H_CAMERA="الكاميرا"; H_MEMORY="الذاكرة"; H_NETWORK="الشبكة"
+                  H_WIFI="واي فاي"; H_GPS="GPS"; H_SYSTEM="النظام"; H_IFACE="الواجهة"
+                  H_SLEEP="النوم"; H_LEARN="التعلّم"; H_SMART="ما تعلّمه SMART"
+                  H_GOV="المنظّم"; H_BATT="البطارية التلقائية"; H_LPM="مودم LPM" ;;
+  zh-cn*|zh_cn*|*zh-hans*|zh) H_AUDIO="音频"; H_CAMERA="相机"; H_MEMORY="内存"; H_NETWORK="网络"
+                  H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="系统"; H_IFACE="界面"
+                  H_SLEEP="休眠"; H_LEARN="学习"; H_SMART="SMART 学到了什么"
+                  H_GOV="调度器"; H_BATT="自动电池"; H_LPM="调制解调器 LPM" ;;
+  *)              H_AUDIO="AUDIO"; H_CAMERA="CAMERA"; H_MEMORY="MEMORY"; H_NETWORK="NETWORK"
+                  H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="SYSTEM"; H_IFACE="INTERFACE"
+                  H_SLEEP="SLEEP"; H_LEARN="LEARNING"; H_SMART="WHAT SMART HAS LEARNED"
+                  H_GOV="GOVERNOR"; H_BATT="AUTO BATTERY"; H_LPM="MODEM LPM" ;;
+esac
+
 PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
 
 _lvl=$(dumpsys battery 2>/dev/null | grep -m1 ' level:' | awk '{print $2}')
@@ -266,7 +321,7 @@ _g_thermal="$(_st thermal)"
 _g_head="$(_st headroom_pct)"
 if [ -n "$_g_state" ]; then
   echo ""
-  echo "  ⚡  GOVERNOR"
+  echo "  ⚡  ${H_GOV}"
   # cap_owner is empty until the governor has taken ownership; saying "unknown" is
   # noise, so just omit it and let the state speak.
   _gl="$_g_state"
@@ -305,7 +360,7 @@ case "$_l_drain" in ''|0) _l_drain="$(_st smart_drain_ewma_x10)" ;; esac
 # profile is not Smart, and they are what Smart will use again next time it runs.
 if [ -n "${_l_sess}${_l_pkg}" ]; then
   echo ""
-  echo "  🧠  LEARNING"
+  echo "  🧠  ${H_LEARN}"
   _ll=""
   if [ -n "$_l_sess" ]; then
     [ "$_l_sess" = "1" ] && _ll="1 session learned (still cold)" \
@@ -351,7 +406,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
   # about it, in the order someone would ask.
   if [ "$_smart_enabled" = "1" ]; then
     echo ""
-    echo "  🎓  WHAT SMART HAS LEARNED"
+    echo "  🎓  ${H_SMART}"
 
     # --- 1. when it thinks it is -----------------------------------------------------
     _bid="$(_st smart_bucket_id)"; _dp="$(_st smart_daypart)"; _we="$(_st smart_is_weekend)"
@@ -447,7 +502,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
 fi
 
 echo ""
-echo "  🎵  AUDIO"
+echo "  🎵  ${H_AUDIO}"
 _audio_l="       ${_a_prof} profile"
 [ "$_a_dac" = "1" ] && _audio_l="${_audio_l}  ·  hi-fi DAC"
 echo "$_audio_l"
@@ -491,7 +546,7 @@ if [ "$_a_dsp" != "off" ]; then
 fi
 
 echo ""
-echo "  📷  CAMERA"
+echo "  📷  ${H_CAMERA}"
 _vb_n="$(grep -c '"packageName"' /odm/etc/camera/config/video_beauty_default_config 2>/dev/null)"
 _cam_l="processing level ${_c_lvl}"
 [ "${_vb_n:-0}" -gt 0 ] 2>/dev/null && _cam_l="$(_join "$_cam_l" "${_vb_n} retouch apps")"
@@ -541,7 +596,7 @@ fi
 
 
 echo ""
-echo "  💾  MEMORY"
+echo "  💾  ${H_MEMORY}"
 _bgl="$(_cfg BG_TRIM_LEVEL)"
 _ml=""
 [ -n "$_bgl" ] && _ml="$(_join "$_ml" "bg trim: level ${_bgl}")"
@@ -557,7 +612,7 @@ _ml=""
 
 if [ "$(_feat NET)" = "1" ]; then
   echo ""
-  echo "  🌐  NETWORK"
+  echo "  🌐  ${H_NETWORK}"
   _nl=""
   _cc="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
   [ -n "$_cc" ] && _nl="$(_join "$_nl" "$_cc")"
@@ -662,7 +717,7 @@ _cam_hold="$(_st camera_hold)"
 if [ "$_cam_hold" = "1" ]; then
 
 echo ""
-  echo "  📶  WI-FI"
+  echo "  📶  ${H_WIFI}"
 # Read what the DRIVER actually ended up with, not `settings get global wifi_country_code`.
 # That settings key is telephony-derived and the framework keeps rewriting it from the SIM, so
 # it reported the SIM's country (IT) while the module's override was live - which looked
@@ -699,7 +754,7 @@ fi
 
 if [ "$(_feat GPS)" = "1" ]; then
   echo ""
-  echo "  🛰  GPS"
+  echo "  🛰  ${H_GPS}"
   _agps="$(settings get global assisted_gps_enabled 2>/dev/null)"
   _gl=""
   case "$_agps" in 1) _gl="$(_join "$_gl" "A-GPS on")" ;; 0) _gl="$(_join "$_gl" "A-GPS off")" ;; esac
@@ -727,7 +782,7 @@ esac
 # process limits and logging, which put four unrelated things under one word - and the
 # WebUI has had them as separate categories for a while now. The report should agree with
 # the screen the user just came from.
-echo "  🖥  INTERFACE"
+echo "  🖥  ${H_IFACE}"
 echo "       blur: $([ "$_blur" = "1" ] && echo off || echo stock)"
 # Animations: auto follows blur, so resolve it rather than printing "auto" and leaving
 # the reader to work out what that means on this device.
@@ -750,7 +805,7 @@ esac
 # purpose is what happens while nobody is looking - and the night window is learned, so
 # the user cannot know it without being told.
 echo ""
-echo "  🌙  SLEEP"
+echo "  🌙  ${H_SLEEP}"
 _dz="$(_cfg doze_level)"
 case "$_dz" in
   night)
@@ -780,7 +835,7 @@ case "$(_cfg night_quiet_enable)" in
 esac
 
 echo ""
-echo "  ⚙️  SYSTEM"
+echo "  ⚙️  ${H_SYSTEM}"
 case "$(_cfg phantom_procs)" in
   relaxed) echo "       background processes: unlimited (phantom monitor off)" ;;
   strict)  echo "       background processes: Android default (32 max)" ;;
@@ -850,7 +905,7 @@ echo "$_sysl"
 _abo="$(cat /data/adb/asb/auto_battery_origin 2>/dev/null)"
 if [ -n "$_abo" ]; then
   echo ""
-  echo "  🔋  AUTO BATTERY"
+  echo "  🔋  ${H_BATT}"
   echo "       switched here automatically · returns to ${_abo} when charged"
 fi
 
