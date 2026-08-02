@@ -634,7 +634,13 @@ persist.sys.statsd.enable=0
 persist.vendor.statsd.enable=0
 persist.traced.enable=0
 persist.sys.traced.enable=0
-config.disable_rtt=true
+# config.disable_rtt was removed here.
+#
+# RTT is Real-Time Text: the mode that lets deaf and hard-of-hearing users read a voice
+# call as it is spoken. Disabling it saves nothing measurable - it is a call-time feature
+# that costs nothing when unused - and it removes an accessibility path that is a legal
+# requirement for carriers in several jurisdictions. Inherited from a build.prop list that
+# has circulated since the early 2010s, not from anything this module measured.
 ro.egl.destroy_after_detach=false
 logcast.live=disable
 live.logcat=disable
@@ -652,7 +658,10 @@ persist.oem.dump=0
 pm.sleep_mode=1
 persist.service.pcsync.enable=0
 persist.service.lgospd.enable=0
-ro.kernel.qemu.gles=0
+# ro.kernel.qemu.gles removed: it tells the Android emulator which GL path to use, and a
+# physical phone has no emulator. Harmless but meaningless - the only survivor of the
+# legacy build.prop families an external audit flagged (OpenCORE, Broadcom, LG, emulator);
+# the other 46 it counted are not in this file.
 log_frame_info=0
 log_mp4dectime=0
 log_posttime=0

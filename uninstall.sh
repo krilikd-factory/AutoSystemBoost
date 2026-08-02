@@ -160,6 +160,20 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
 
+# Give Google Play services its permissions back.
+#
+# The appops are recorded in baseline.txt and replayed by the loop above, but the doze
+# whitelist and the standby bucket are not settings - they need naming explicitly, and a
+# user who removes ASB and then misses a notification will not connect the two.
+if command -v cmd >/dev/null 2>&1; then
+  cmd appops set com.google.android.gms RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1
+  cmd appops set com.google.android.gms PSEUDO_LOCATION_REPORTING allow >/dev/null 2>&1
+  cmd appops set com.google.android.googlequicksearchbox RUN_IN_BACKGROUND allow >/dev/null 2>&1
+  am set-standby-bucket com.google.android.gms active >/dev/null 2>&1
+  am set-standby-bucket com.google.android.googlequicksearchbox active >/dev/null 2>&1
+  dumpsys deviceidle whitelist +com.google.android.gms >/dev/null 2>&1
+fi
+
 # Put the network sysctls back before the file that remembers them is deleted.
 #
 # These are not settings or properties, so they never entered baseline.txt - the generic
