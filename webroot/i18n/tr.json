@@ -1,0 +1,166 @@
+{
+  "cfg": {
+    "audio_profile": {
+      "name": "Ses profili"
+    },
+    "audio_dac_hifi": {
+      "name": "Hi-Fi DAC (mikser)"
+    },
+    "media_loudness": {
+      "name": "Medya ses düzeyi"
+    },
+    "bt_absvol_mode": {
+      "name": "Bluetooth ses denetimi"
+    },
+    "bt_a2dp_offload": {
+      "name": "Bluetooth ses boşaltma"
+    },
+    "dsp_loudness": {
+      "name": "DSP ses yükseltme"
+    },
+    "dsp_bass": {
+      "name": "DSP bas yükseltme"
+    },
+    "dsp_compressor": {
+      "name": "DSP kompresör"
+    },
+    "dsp_outputs": {
+      "name": "DSP çıkışları"
+    },
+    "CAMERA_LEVEL": {
+      "name": "Kamera işleme"
+    },
+    "CAMERA_CONTRAST": {
+      "name": "Kontrast ve renk derinliği"
+    },
+    "CAMERA_GRAIN": {
+      "name": "Film graini"
+    },
+    "CAMERA_PORTRAIT": {
+      "name": "Portre yapay zekâ"
+    },
+    "CAMERA_LOWLIGHT": {
+      "name": "Makro ve düşük ışık keskinliği"
+    },
+    "camera_hold_enable": {
+      "name": "Kamera açıkken performansı koru"
+    },
+    "UX_MANAGE_TIMEOUTS": {
+      "name": "Arayüz hızını yönet"
+    },
+    "anim_speed": {
+      "name": "Animasyon hızı"
+    },
+    "UX_ANIM_FORCE_RESTART": {
+      "name": "Animasyonları yeniden başlatmaya zorla"
+    },
+    "disable_blur": {
+      "name": "Bulanıklığı kapat"
+    },
+    "ui_effects_level": {
+      "name": "Sistem animasyonları"
+    },
+    "net_congestion": {
+      "name": "İndirme hızlanması · diğer"
+    },
+    "net_congestion_wifi": {
+      "name": "İndirme hızlanması · Wi-Fi"
+    },
+    "net_congestion_mobile": {
+      "name": "İndirme hızlanması · mobil"
+    },
+    "net_qdisc": {
+      "name": "Paket kuyruğu · diğer"
+    },
+    "net_qdisc_wifi": {
+      "name": "Paket kuyruğu · Wi-Fi"
+    },
+    "net_qdisc_mobile": {
+      "name": "Paket kuyruğu · mobil"
+    },
+    "net_route_tune": {
+      "name": "Ağ tamponları"
+    },
+    "wifi_country": {
+      "name": "Wi-Fi bölgesi"
+    },
+    "wifi_scan_throttle": {
+      "name": "Wi-Fi tarama sıklığı"
+    },
+    "auto_battery_enable": {
+      "name": "Otomatik pil profili"
+    },
+    "smart_battery_bias": {
+      "name": "Smart pil eğilimi"
+    },
+    "charge_aware_enable": {
+      "name": "Şarj farkında mod"
+    },
+    "doze_level": {
+      "name": "Derin uyku"
+    },
+    "night_quiet_enable": {
+      "name": "Sessiz gece"
+    },
+    "sustained_temp_mode": {
+      "name": "Kısıtlama noktası"
+    },
+    "sustained_temp_enter": {
+      "name": "Kısıtlama sıcaklığı"
+    },
+    "cool_gaming": {
+      "name": "Serin oyun"
+    },
+    "bat_suppress_gaming": {
+      "name": "Pil profilinde oyun modu yok"
+    },
+    "BG_TRIM_LEVEL": {
+      "name": "Arka plan temizleme"
+    },
+    "gms_trim": {
+      "name": "Google hizmetlerini kısıtla"
+    },
+    "UX_MANAGE_OEM_TOGGLES": {
+      "name": "Üretici ayarlarını yönet"
+    },
+    "phantom_procs": {
+      "name": "Arka plan işlem sınırı"
+    },
+    "haptic_strength": {
+      "name": "Titreşim"
+    },
+    "haptic_touch_strength": {
+      "name": "Dokunma geri bildirimi"
+    },
+    "log_level": {
+      "name": "Günlük ayrıntısı"
+    }
+  },
+  "nav_main": "Ana",
+  "nav_live": "İzleme",
+  "nav_cfg": "Ayarlar",
+  "lv_ses": "Oturumlar",
+  "lv_drain": "Tüketim",
+  "lv_trend": "Eğilim",
+  "lv_trend_up": "ısınıyor",
+  "lv_trend_dn": "soğuyor",
+  "lv_trend_fl": "sabit",
+  "lv_measuring": "ölçülüyor…",
+  "lv_est_on": "Tahmin (ekran)",
+  "lv_hotspot": "Sıcak nokta · iç",
+  "am_live": "⚡ anında uygulanır",
+  "am_reboot": "↻ yeniden başlatma gerekir",
+  "am_next": "⏭ anında, uygulamayı yeniden başlatın",
+  "t_pending_reboot": "↻ Değişiklikler yeniden başlatma bekliyor — dokunun",
+  "t_cfg_live": " · uygulandı",
+  "t_cfg_saved": " · yeniden başlatınca",
+  "t_cfg_next": " · uygulamayı yeniden başlatın",
+  "t_not_applied": "uygulanmadı",
+  "dsp_idle": "DSP kapalı",
+  "grp_audio": "Ses",
+  "grp_camera": "Kamera",
+  "grp_iface": "Arayüz",
+  "grp_net": "Ağ",
+  "grp_battery": "Pil",
+  "grp_ui": "Sistem"
+}
