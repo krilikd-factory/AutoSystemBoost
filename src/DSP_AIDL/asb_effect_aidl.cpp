@@ -199,6 +199,28 @@ class AsbLoudnessContext final : public EffectContext {
         return s;
     }
 
+  public:
+    /* Public because the effect object calls it from setParameter - it lived in the
+     * private block and the build said so. Grouped with process() rather than with the
+     * private helpers, since both are part of what the effect class drives. */
+    /* Called whenever the framework re-routes this session. Devices is a list because a
+     * stream can be duplicated to several outputs; if any of them is allowed we process,
+     * since silently dropping the effect on a duplicated stream would look like the
+     * setting failing. */
+    void setDevices(const std::vector<::aidl::android::media::audio::common::AudioDeviceDescription>& devs) {
+        mIsBluetooth = false;
+        for (const auto& d : devs) {
+            /* AudioDeviceDescription has .type (the enum) and .connection (a string).
+             * The first version wrote d.type.type, treating .type as a struct - it is the
+             * enum itself, which is why the compiler said "not a structure or union". */
+            mDeviceType = d.type;
+            const auto& c = d.connection;
+            if (c == "bt-a2dp" || c == "bt-le" || c == "bt-sco") { mIsBluetooth = true; break; }
+        }
+        evaluateDevice();
+    }
+
+
   private:
     asb_core_t mCore{};
     Parameter::Common mCommon{};
@@ -216,23 +238,6 @@ class AsbLoudnessContext final : public EffectContext {
      */
     char mOutFilter[64] = {0};
     bool mDeviceAllowed = true;
-
-    /* Called whenever the framework re-routes this session. Devices is a list because a
-     * stream can be duplicated to several outputs; if any of them is allowed we process,
-     * since silently dropping the effect on a duplicated stream would look like the
-     * setting failing. */
-    void setDevices(const std::vector<::aidl::android::media::audio::common::AudioDeviceDescription>& devs) {
-        mIsBluetooth = false;
-        for (const auto& d : devs) {
-            /* AudioDeviceDescription has .type (the enum) and .connection (a string).
-             * The first version wrote d.type.type, treating .type as a struct - it is the
-             * enum itself, which is why the compiler said "not a structure or union". */
-            mDeviceType = d.type;
-            const auto& c = d.connection;
-            if (c == "bt-a2dp" || c == "bt-le" || c == "bt-sco") { mIsBluetooth = true; break; }
-        }
-        evaluateDevice();
-    }
 
     void setOutputFilter(const char *f) {
         if (!f || !*f || !strcmp(f, "all")) { mOutFilter[0] = '\0'; mDeviceAllowed = true; return; }
