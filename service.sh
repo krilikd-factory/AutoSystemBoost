@@ -1519,6 +1519,20 @@ asb_bg_trim_oplus_tune() {
 
 asb_bg_trim_gms_wakelock_throttle() {
   has cmd || return 0
+  # Stand aside when the user owns this decision.
+  #
+  # This function and runtime/asb_gms_trim.sh write the same appops. Today the ordering
+  # saves us - the runtime script runs later in this file and wins - but that is a
+  # coincidence of line numbers, not a design: moving either call would silently undo the
+  # user's choice on every boot, and the symptom would be "strict works until I reboot".
+  # An explicit check costs one line and cannot be broken by reordering.
+  _gms_own="$(grep -E '^[[:space:]]*gms_trim=' "$MODDIR/config/governor.conf" 2>/dev/null \
+              | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_gms_own" in
+    lite|strict)
+      asb_log "bg_trim: gms_trim=${_gms_own} owns the GMS appops, skipping the profile defaults"
+      return 0 ;;
+  esac
   cmd appops set com.google.android.gms RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1 || true
   cmd appops set com.google.android.gms WAKE_LOCK allow             >/dev/null 2>&1 || true
   cmd appops set com.google.android.googlequicksearchbox RUN_IN_BACKGROUND ignore >/dev/null 2>&1 || true
@@ -2483,6 +2497,10 @@ if [ -f /data/adb/asb/lockscreen_prev ]; then
 fi
 
 # Doze timings: re-assert at boot, the key does not survive one.
+if [ -f "$MODDIR/runtime/asb_gms_trim.sh" ]; then
+  sh "$MODDIR/runtime/asb_gms_trim.sh" >/dev/null 2>&1
+fi
+
 if [ -f "$MODDIR/runtime/asb_system_tweaks.sh" ]; then
   sh "$MODDIR/runtime/asb_system_tweaks.sh" >/dev/null 2>&1
 fi
