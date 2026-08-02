@@ -532,14 +532,33 @@ if [ -z "$_schema_rec" ]; then
   warn "config shape fingerprint missing - add '# CONFIG_SHAPE=$_schema_now' to governor.conf"
 elif [ "$_schema_rec" != "$_schema_now" ]; then
   err "config shape changed ($_schema_rec -> $_schema_now) but nothing says the schema moved."
-  err "  If a stored value now means something different, bump the number written to"
-  err "  /data/adb/asb/config_schema (currently $_schema_ver) and add a migration."
-  err "  Only if no stored value changed meaning, update CONFIG_SHAPE in governor.conf -"
-  err "  and say in the commit which values you checked. That line is the cheapest way to"
-  err "  make this red go away, which is exactly why it must not be the reflex."
+  # Continuation lines use P, not err: one problem is one error. Counting the explanation
+  # as five more made a single finding read as six and would hide a second real one.
+  P "     If a stored value now means something different, bump the number written to"
+  P "     /data/adb/asb/config_schema (currently $_schema_ver) and add a migration."
+  P "     Only if no stored value changed meaning, update CONFIG_SHAPE in governor.conf -"
+  P "     and say in the commit which values you checked. That line is the cheapest way"
+  P "     to make this red go away, which is exactly why it must not be the reflex."
 else
   ok "config shape matches the recorded fingerprint (schema $_schema_ver)"
 fi
+
+# Translation files: present, parseable, and matching the language list.
+#
+# Moving these out of index.html removed 58 KB from a 4700-line file and made a translation
+# a self-contained contribution - but it also turned a missing language from a syntax error
+# into a silent fallback to English. That is the right runtime behaviour and the wrong
+# build behaviour: shipping without a language nobody notices until a user reports it.
+_i18n_langs="$(grep -oE "const ASB_LANGS = \[[^]]*\]" webroot/index.html \
+               | grep -oE "'[a-z]{2}'" | tr -d \' )"
+for _l in en $_i18n_langs; do
+  if [ ! -f "webroot/i18n/$_l.json" ]; then
+    err "webroot/i18n/$_l.json missing - ASB_LANGS offers '$_l' with no strings behind it"
+  elif ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "webroot/i18n/$_l.json" 2>/dev/null; then
+    err "webroot/i18n/$_l.json is not valid JSON - the UI would fall back to English silently"
+  fi
+done
+ok "translation files present and parseable"
 
 # Terms that must not be translated by their everyday sense.
 #
