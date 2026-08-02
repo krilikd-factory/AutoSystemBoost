@@ -2282,6 +2282,27 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
       _oldval="$(grep -E "^[[:space:]]*$_k=" "$_snap_conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
     fi
     [ -n "$_oldval" ] || continue
+
+    # anim_speed: one-time shift for configs written before the scale grew.
+    #
+    # V62 inserted 0.9x and 0.95x between 0.85x and stock, so every position from 4 up
+    # moved by two: 4 meant stock and now means 0.9x, 5 meant 1.25x and now means 0.95x,
+    # 6 meant 1.5x and now means stock. Carrying the raw number across an update would
+    # silently change the animation speed of anyone sitting on 4-6 - a regression that
+    # looks like the module randomly deciding to slow the phone down.
+    #
+    # Only 4, 5 and 6 need moving. 0-3 kept their meaning, and -1 (follow the profile) is
+    # not a position on the scale at all. Guarded by a marker so a value the user picks
+    # after the update is never shifted a second time.
+    if [ "$_k" = "anim_speed" ] && [ ! -f /data/adb/asb/anim_speed_migrated ]; then
+      case "$_oldval" in
+        4|5|6) _oldval=$(( _oldval + 2 ))
+               ui_print "      + animation speed remapped for the new scale (was ${_k}=$(( _oldval - 2 )))" ;;
+      esac
+      mkdir -p /data/adb/asb 2>/dev/null
+      : > /data/adb/asb/anim_speed_migrated 2>/dev/null
+    fi
+
     if grep -qE "^[[:space:]]*$_k=" "$_new_conf" 2>/dev/null; then
       _esc="$(printf '%s' "$_oldval" | sed 's/[&/\|]/\\&/g')"
       sed -i "s|^\\([[:space:]]*$_k=\\).*|\\1$_esc|" "$_new_conf" 2>/dev/null \
