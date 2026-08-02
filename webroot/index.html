@@ -3206,7 +3206,7 @@ const CFG_ITEMS = [
     desc:'While the camera is streaming, the governor stops lowering the CPU and keeps the cores it is already using. That is what prevents a dropped frame in the middle of a burst or a video, at the cost of a little battery for as long as the camera app is open. On means held (the stock module behaviour), off lets the governor throttle the camera like any other app.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
     desc:'Performance shortens animations (~0.8x) and long-press/multi-tap windows for a snappier, more responsive UI; Battery keeps stock. OFF = untouched.' },
-  { key:'anim_speed', type:'range', def:'0', min:-1, max:8, step:1, stock:'0', name:'Animation Speed',
+  { key:'anim_speed', type:'range', def:'-1', min:-1, max:8, step:1, stock:'-1', name:'Animation Speed',
     desc:'How fast the system animates. -1 keeps the old behaviour, where the power profile decides - Performance was 0.8x, Battery 1.0x - so UI speed was a side effect of a battery setting. 0 is Android stock; negative of that is faster, positive is slower, and the far left removes animations entirely. Takes effect on the next transition.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
     desc:'Almost never needed. WindowManager reads the animation scales as soon as they are written, so a plain settings change is enough and UI Speed Management works without this. The switch exists only for builds that ignore a live change, and it applies by restarting SystemUI: the screen blinks, the lock screen returns, and overlays from other modules (status-bar themes) are torn down. Only fires on a profile switch you made yourself. Turn it on only if you have confirmed the scales do not apply otherwise.' },
@@ -3528,6 +3528,15 @@ function cfgIsActive(it, cur) {
   // this card's stock value, so the generic rule below called it untouched; but with gain
   // or bass on, "all" means the effect is routed to every output, which is the most
   // active this setting gets rather than the least.
+  //
+  // anim_speed has TWO positions that are not an override: -1 follows the profile (the
+  // shipped default) and 6 is Android's own 1.0x. The generic rule below compares against
+  // a single stock value and so lit the card up at 6, announcing a change while setting
+  // animations to exactly what stock uses.
+  if (it.key === 'anim_speed') {
+    const n = parseInt(cur, 10);
+    return !(n === -1 || n === 6);
+  }
   if (it.key === 'dsp_outputs') {
     const g = parseInt(_cfgVals['dsp_loudness'] || '0', 10);
     const b = parseInt(_cfgVals['dsp_bass'] || '0', 10);
