@@ -1,0 +1,166 @@
+{
+  "nav_main": "主页",
+  "nav_live": "监控",
+  "nav_cfg": "设置",
+  "lv_ses": "会话",
+  "lv_drain": "耗电",
+  "lv_trend": "趋势",
+  "lv_trend_up": "升温",
+  "lv_trend_dn": "降温",
+  "lv_trend_fl": "平稳",
+  "lv_measuring": "测量中…",
+  "lv_est_on": "预计（亮屏）",
+  "lv_hotspot": "热点 · 内部",
+  "am_live": "⚡ 立即生效",
+  "am_reboot": "↻ 需要重启",
+  "am_next": "⏭ 立即生效，需重启应用",
+  "t_pending_reboot": "↻ 更改等待重启 — 点击",
+  "t_cfg_live": " · 已应用",
+  "t_cfg_saved": " · 重启后生效",
+  "t_cfg_next": " · 请重启应用",
+  "t_not_applied": "未应用",
+  "dsp_idle": "DSP 关闭",
+  "grp_audio": "音频",
+  "grp_camera": "相机",
+  "grp_iface": "界面",
+  "grp_net": "网络",
+  "grp_battery": "电池",
+  "grp_ui": "系统",
+  "cfg": {
+    "audio_profile": {
+      "name": "音频配置"
+    },
+    "audio_dac_hifi": {
+      "name": "Hi-Fi 解码器（混音器）"
+    },
+    "media_loudness": {
+      "name": "媒体音量"
+    },
+    "bt_absvol_mode": {
+      "name": "蓝牙音量控制"
+    },
+    "bt_a2dp_offload": {
+      "name": "蓝牙音频卸载"
+    },
+    "dsp_loudness": {
+      "name": "DSP 增益"
+    },
+    "dsp_bass": {
+      "name": "DSP 低音增强"
+    },
+    "dsp_compressor": {
+      "name": "DSP 压缩器"
+    },
+    "dsp_outputs": {
+      "name": "DSP 输出"
+    },
+    "CAMERA_LEVEL": {
+      "name": "相机处理强度"
+    },
+    "CAMERA_CONTRAST": {
+      "name": "对比度与色彩深度"
+    },
+    "CAMERA_GRAIN": {
+      "name": "胶片颗粒"
+    },
+    "CAMERA_PORTRAIT": {
+      "name": "人像 AI"
+    },
+    "CAMERA_LOWLIGHT": {
+      "name": "微距与弱光锐化"
+    },
+    "camera_hold_enable": {
+      "name": "相机运行时保持性能"
+    },
+    "UX_MANAGE_TIMEOUTS": {
+      "name": "管理界面速度"
+    },
+    "anim_speed": {
+      "name": "动画速度"
+    },
+    "UX_ANIM_FORCE_RESTART": {
+      "name": "强制重启动画"
+    },
+    "disable_blur": {
+      "name": "关闭模糊"
+    },
+    "ui_effects_level": {
+      "name": "系统动画"
+    },
+    "net_congestion": {
+      "name": "下载加速 · 其他"
+    },
+    "net_congestion_wifi": {
+      "name": "下载加速 · Wi-Fi"
+    },
+    "net_congestion_mobile": {
+      "name": "下载加速 · 移动网络"
+    },
+    "net_qdisc": {
+      "name": "数据包队列 · 其他"
+    },
+    "net_qdisc_wifi": {
+      "name": "数据包队列 · Wi-Fi"
+    },
+    "net_qdisc_mobile": {
+      "name": "数据包队列 · 移动网络"
+    },
+    "net_route_tune": {
+      "name": "网络缓冲区"
+    },
+    "wifi_country": {
+      "name": "Wi-Fi 区域"
+    },
+    "wifi_scan_throttle": {
+      "name": "Wi-Fi 扫描频率"
+    },
+    "auto_battery_enable": {
+      "name": "自动电池配置"
+    },
+    "smart_battery_bias": {
+      "name": "Smart 电池倾向"
+    },
+    "charge_aware_enable": {
+      "name": "充电感知模式"
+    },
+    "doze_level": {
+      "name": "深度休眠"
+    },
+    "night_quiet_enable": {
+      "name": "安静夜间"
+    },
+    "sustained_temp_mode": {
+      "name": "降频点"
+    },
+    "sustained_temp_enter": {
+      "name": "降频温度"
+    },
+    "cool_gaming": {
+      "name": "低温游戏"
+    },
+    "bat_suppress_gaming": {
+      "name": "省电配置下不启用游戏模式"
+    },
+    "BG_TRIM_LEVEL": {
+      "name": "后台清理"
+    },
+    "gms_trim": {
+      "name": "限制谷歌服务"
+    },
+    "UX_MANAGE_OEM_TOGGLES": {
+      "name": "管理厂商开关"
+    },
+    "phantom_procs": {
+      "name": "后台进程上限"
+    },
+    "haptic_strength": {
+      "name": "振动"
+    },
+    "haptic_touch_strength": {
+      "name": "触感反馈"
+    },
+    "log_level": {
+      "name": "日志详细度"
+    }
+  }
+}

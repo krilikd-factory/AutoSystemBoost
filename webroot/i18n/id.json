@@ -1,0 +1,166 @@
+{
+  "cfg": {
+    "audio_profile": {
+      "name": "Profil audio"
+    },
+    "audio_dac_hifi": {
+      "name": "DAC Hi-Fi (mixer)"
+    },
+    "media_loudness": {
+      "name": "Volume media"
+    },
+    "bt_absvol_mode": {
+      "name": "Kontrol volume Bluetooth"
+    },
+    "bt_a2dp_offload": {
+      "name": "Offload audio Bluetooth"
+    },
+    "dsp_loudness": {
+      "name": "Penguat volume DSP"
+    },
+    "dsp_bass": {
+      "name": "Penguat bass DSP"
+    },
+    "dsp_compressor": {
+      "name": "Kompresor DSP"
+    },
+    "dsp_outputs": {
+      "name": "Keluaran DSP"
+    },
+    "CAMERA_LEVEL": {
+      "name": "Tingkat pemrosesan kamera"
+    },
+    "CAMERA_CONTRAST": {
+      "name": "Kontras dan kedalaman warna"
+    },
+    "CAMERA_GRAIN": {
+      "name": "Grain film"
+    },
+    "CAMERA_PORTRAIT": {
+      "name": "AI potret"
+    },
+    "CAMERA_LOWLIGHT": {
+      "name": "Ketajaman makro dan cahaya redup"
+    },
+    "camera_hold_enable": {
+      "name": "Tahan performa saat kamera aktif"
+    },
+    "UX_MANAGE_TIMEOUTS": {
+      "name": "Kelola kecepatan antarmuka"
+    },
+    "anim_speed": {
+      "name": "Kecepatan animasi"
+    },
+    "UX_ANIM_FORCE_RESTART": {
+      "name": "Paksa mulai ulang animasi"
+    },
+    "disable_blur": {
+      "name": "Matikan blur"
+    },
+    "ui_effects_level": {
+      "name": "Animasi sistem"
+    },
+    "net_congestion": {
+      "name": "Percepatan unduhan · lainnya"
+    },
+    "net_congestion_wifi": {
+      "name": "Percepatan unduhan · Wi-Fi"
+    },
+    "net_congestion_mobile": {
+      "name": "Percepatan unduhan · seluler"
+    },
+    "net_qdisc": {
+      "name": "Antrean paket · lainnya"
+    },
+    "net_qdisc_wifi": {
+      "name": "Antrean paket · Wi-Fi"
+    },
+    "net_qdisc_mobile": {
+      "name": "Antrean paket · seluler"
+    },
+    "net_route_tune": {
+      "name": "Buffer jaringan"
+    },
+    "wifi_country": {
+      "name": "Wilayah Wi-Fi"
+    },
+    "wifi_scan_throttle": {
+      "name": "Frekuensi pemindaian Wi-Fi"
+    },
+    "auto_battery_enable": {
+      "name": "Profil baterai otomatis"
+    },
+    "smart_battery_bias": {
+      "name": "Bias baterai Smart"
+    },
+    "charge_aware_enable": {
+      "name": "Mode sadar pengisian"
+    },
+    "doze_level": {
+      "name": "Tidur dalam"
+    },
+    "night_quiet_enable": {
+      "name": "Malam tenang"
+    },
+    "sustained_temp_mode": {
+      "name": "Titik pembatasan"
+    },
+    "sustained_temp_enter": {
+      "name": "Suhu pembatasan"
+    },
+    "cool_gaming": {
+      "name": "Gaming sejuk"
+    },
+    "bat_suppress_gaming": {
+      "name": "Tanpa mode game di profil Baterai"
+    },
+    "BG_TRIM_LEVEL": {
+      "name": "Pembersihan latar belakang"
+    },
+    "gms_trim": {
+      "name": "Batasi layanan Google"
+    },
+    "UX_MANAGE_OEM_TOGGLES": {
+      "name": "Kelola sakelar OEM"
+    },
+    "phantom_procs": {
+      "name": "Batas proses latar belakang"
+    },
+    "haptic_strength": {
+      "name": "Getaran"
+    },
+    "haptic_touch_strength": {
+      "name": "Umpan balik sentuh"
+    },
+    "log_level": {
+      "name": "Detail log"
+    }
+  },
+  "nav_main": "Beranda",
+  "nav_live": "Monitor",
+  "nav_cfg": "Pengaturan",
+  "lv_ses": "Sesi",
+  "lv_drain": "Konsumsi",
+  "lv_trend": "Tren",
+  "lv_trend_up": "memanas",
+  "lv_trend_dn": "mendingin",
+  "lv_trend_fl": "stabil",
+  "lv_measuring": "mengukur…",
+  "lv_est_on": "Perkiraan (layar)",
+  "lv_hotspot": "Titik panas · internal",
+  "am_live": "⚡ langsung berlaku",
+  "am_reboot": "↻ perlu mulai ulang",
+  "am_next": "⏭ langsung, mulai ulang aplikasi",
+  "t_pending_reboot": "↻ Perubahan menunggu mulai ulang — ketuk",
+  "t_cfg_live": " · diterapkan",
+  "t_cfg_saved": " · setelah mulai ulang",
+  "t_cfg_next": " · mulai ulang aplikasi",
+  "t_not_applied": "tidak diterapkan",
+  "dsp_idle": "DSP mati",
+  "grp_audio": "Audio",
+  "grp_camera": "Kamera",
+  "grp_iface": "Antarmuka",
+  "grp_net": "Jaringan",
+  "grp_battery": "Baterai",
+  "grp_ui": "Sistem"
+}

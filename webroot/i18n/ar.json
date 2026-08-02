@@ -1,0 +1,166 @@
+{
+  "nav_main": "الرئيسية",
+  "nav_live": "المراقبة",
+  "nav_cfg": "الإعدادات",
+  "lv_ses": "الجلسات",
+  "lv_drain": "الاستهلاك",
+  "lv_trend": "الاتجاه",
+  "lv_trend_up": "يسخن",
+  "lv_trend_dn": "يبرد",
+  "lv_trend_fl": "مستقر",
+  "lv_measuring": "جارٍ القياس…",
+  "lv_est_on": "تقدير (الشاشة)",
+  "lv_hotspot": "نقطة ساخنة · داخلية",
+  "am_live": "⚡ يُطبَّق فورًا",
+  "am_reboot": "↻ يتطلب إعادة تشغيل",
+  "am_next": "⏭ فورًا، أعد تشغيل التطبيق",
+  "t_pending_reboot": "↻ تغييرات بانتظار إعادة التشغيل — اضغط",
+  "t_cfg_live": " · طُبِّق",
+  "t_cfg_saved": " · بعد إعادة التشغيل",
+  "t_cfg_next": " · أعد تشغيل التطبيق",
+  "t_not_applied": "لم يُطبَّق",
+  "dsp_idle": "DSP متوقف",
+  "grp_audio": "الصوت",
+  "grp_camera": "الكاميرا",
+  "grp_iface": "الواجهة",
+  "grp_net": "الشبكة",
+  "grp_battery": "البطارية",
+  "grp_ui": "النظام",
+  "cfg": {
+    "audio_profile": {
+      "name": "ملف الصوت"
+    },
+    "audio_dac_hifi": {
+      "name": "محول Hi-Fi (الخالط)"
+    },
+    "media_loudness": {
+      "name": "مستوى صوت الوسائط"
+    },
+    "bt_absvol_mode": {
+      "name": "التحكم بمستوى صوت البلوتوث"
+    },
+    "bt_a2dp_offload": {
+      "name": "تفريغ صوت البلوتوث"
+    },
+    "dsp_loudness": {
+      "name": "تضخيم الصوت DSP"
+    },
+    "dsp_bass": {
+      "name": "تعزيز الجهير DSP"
+    },
+    "dsp_compressor": {
+      "name": "ضاغط DSP"
+    },
+    "dsp_outputs": {
+      "name": "مخارج DSP"
+    },
+    "CAMERA_LEVEL": {
+      "name": "معالجة الكاميرا"
+    },
+    "CAMERA_CONTRAST": {
+      "name": "التباين وعمق اللون"
+    },
+    "CAMERA_GRAIN": {
+      "name": "حبيبات الفيلم"
+    },
+    "CAMERA_PORTRAIT": {
+      "name": "ذكاء البورتريه"
+    },
+    "CAMERA_LOWLIGHT": {
+      "name": "حدة الماكرو والإضاءة المنخفضة"
+    },
+    "camera_hold_enable": {
+      "name": "الحفاظ على الأداء أثناء تشغيل الكاميرا"
+    },
+    "UX_MANAGE_TIMEOUTS": {
+      "name": "إدارة سرعة الواجهة"
+    },
+    "anim_speed": {
+      "name": "سرعة الحركات"
+    },
+    "UX_ANIM_FORCE_RESTART": {
+      "name": "فرض إعادة تشغيل الحركات"
+    },
+    "disable_blur": {
+      "name": "إيقاف الضبابية"
+    },
+    "ui_effects_level": {
+      "name": "حركات النظام"
+    },
+    "net_congestion": {
+      "name": "تسريع التنزيل · أخرى"
+    },
+    "net_congestion_wifi": {
+      "name": "تسريع التنزيل · واي فاي"
+    },
+    "net_congestion_mobile": {
+      "name": "تسريع التنزيل · بيانات"
+    },
+    "net_qdisc": {
+      "name": "طابور الحزم · أخرى"
+    },
+    "net_qdisc_wifi": {
+      "name": "طابور الحزم · واي فاي"
+    },
+    "net_qdisc_mobile": {
+      "name": "طابور الحزم · بيانات"
+    },
+    "net_route_tune": {
+      "name": "مخازن الشبكة"
+    },
+    "wifi_country": {
+      "name": "منطقة واي فاي"
+    },
+    "wifi_scan_throttle": {
+      "name": "معدل بحث واي فاي"
+    },
+    "auto_battery_enable": {
+      "name": "ملف البطارية التلقائي"
+    },
+    "smart_battery_bias": {
+      "name": "ميل بطارية Smart"
+    },
+    "charge_aware_enable": {
+      "name": "وضع الشحن"
+    },
+    "doze_level": {
+      "name": "النوم العميق"
+    },
+    "night_quiet_enable": {
+      "name": "ليل هادئ"
+    },
+    "sustained_temp_mode": {
+      "name": "نقطة التقييد"
+    },
+    "sustained_temp_enter": {
+      "name": "حرارة التقييد"
+    },
+    "cool_gaming": {
+      "name": "ألعاب باردة"
+    },
+    "bat_suppress_gaming": {
+      "name": "بلا وضع ألعاب في ملف البطارية"
+    },
+    "BG_TRIM_LEVEL": {
+      "name": "تنظيف الخلفية"
+    },
+    "gms_trim": {
+      "name": "تقييد خدمات جوجل"
+    },
+    "UX_MANAGE_OEM_TOGGLES": {
+      "name": "إدارة مفاتيح الشركة المصنّعة"
+    },
+    "phantom_procs": {
+      "name": "حد عمليات الخلفية"
+    },
+    "haptic_strength": {
+      "name": "الاهتزاز"
+    },
+    "haptic_touch_strength": {
+      "name": "استجابة اللمس"
+    },
+    "log_level": {
+      "name": "تفاصيل السجل"
+    }
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "nav_main": "Home",
+  "nav_live": "Monitor",
+  "nav_cfg": "Impostazioni",
+  "lv_ses": "Sessioni",
+  "lv_drain": "Consumo",
+  "lv_trend": "Tendenza",
+  "lv_trend_up": "si scalda",
+  "lv_trend_dn": "si raffredda",
+  "lv_trend_fl": "stabile",
+  "lv_measuring": "misurazione…",
+  "lv_est_on": "Stima (schermo)",
+  "lv_hotspot": "Punto caldo · interno",
+  "am_live": "⚡ si applica subito",
+  "am_reboot": "↻ richiede riavvio",
+  "am_next": "⏭ subito, riavvia l’app",
+  "t_pending_reboot": "↻ Modifiche in attesa di riavvio — tocca",
+  "t_cfg_live": " · applicato",
+  "t_cfg_saved": " · dopo il riavvio",
+  "t_cfg_next": " · riavvia l’app",
+  "t_not_applied": "non applicato",
+  "dsp_idle": "DSP spento",
+  "grp_audio": "Audio",
+  "grp_camera": "Fotocamera",
+  "grp_iface": "Interfaccia",
+  "grp_net": "Rete",
+  "grp_battery": "Batteria",
+  "grp_ui": "Sistema",
+  "cfg": {
+    "audio_profile": {
+      "name": "Profilo audio"
+    },
+    "audio_dac_hifi": {
+      "name": "DAC Hi-Fi (mixer)"
+    },
+    "media_loudness": {
+      "name": "Volume multimediale"
+    },
+    "bt_absvol_mode": {
+      "name": "Controllo volume Bluetooth"
+    },
+    "bt_a2dp_offload": {
+      "name": "Offload audio Bluetooth"
+    },
+    "dsp_loudness": {
+      "name": "Volume DSP"
+    },
+    "dsp_bass": {
+      "name": "Enfasi bassi DSP"
+    },
+    "dsp_compressor": {
+      "name": "Compressore DSP"
+    },
+    "dsp_outputs": {
+      "name": "Uscite DSP"
+    },
+    "CAMERA_LEVEL": {
+      "name": "Elaborazione fotocamera"
+    },
+    "CAMERA_CONTRAST": {
+      "name": "Contrasto e profondità colore"
+    },
+    "CAMERA_GRAIN": {
+      "name": "Grana pellicola"
+    },
+    "CAMERA_PORTRAIT": {
+      "name": "IA ritratto"
+    },
+    "CAMERA_LOWLIGHT": {
+      "name": "Nitidezza macro e poca luce"
+    },
+    "camera_hold_enable": {
+      "name": "Mantieni prestazioni con fotocamera attiva"
+    },
+    "UX_MANAGE_TIMEOUTS": {
+      "name": "Gestisci velocità interfaccia"
+    },
+    "anim_speed": {
+      "name": "Velocità animazioni"
+    },
+    "UX_ANIM_FORCE_RESTART": {
+      "name": "Forza riavvio animazioni"
+    },
+    "disable_blur": {
+      "name": "Disattiva sfocatura"
+    },
+    "ui_effects_level": {
+      "name": "Animazioni di sistema"
+    },
+    "net_congestion": {
+      "name": "Avvio download · altri"
+    },
+    "net_congestion_wifi": {
+      "name": "Avvio download · Wi-Fi"
+    },
+    "net_congestion_mobile": {
+      "name": "Avvio download · mobile"
+    },
+    "net_qdisc": {
+      "name": "Coda pacchetti · altri"
+    },
+    "net_qdisc_wifi": {
+      "name": "Coda pacchetti · Wi-Fi"
+    },
+    "net_qdisc_mobile": {
+      "name": "Coda pacchetti · mobile"
+    },
+    "net_route_tune": {
+      "name": "Buffer di rete"
+    },
+    "wifi_country": {
+      "name": "Regione Wi-Fi"
+    },
+    "wifi_scan_throttle": {
+      "name": "Frequenza scansione Wi-Fi"
+    },
+    "auto_battery_enable": {
+      "name": "Profilo batteria automatico"
+    },
+    "smart_battery_bias": {
+      "name": "Inclinazione batteria Smart"
+    },
+    "charge_aware_enable": {
+      "name": "Modalità in carica"
+    },
+    "doze_level": {
+      "name": "Sonno profondo"
+    },
+    "night_quiet_enable": {
+      "name": "Notte silenziosa"
+    },
+    "sustained_temp_mode": {
+      "name": "Punto di limitazione"
+    },
+    "sustained_temp_enter": {
+      "name": "Temperatura di limitazione"
+    },
+    "cool_gaming": {
+      "name": "Gioco fresco"
+    },
+    "bat_suppress_gaming": {
+      "name": "Niente modalità gioco su profilo Batteria"
+    },
+    "BG_TRIM_LEVEL": {
+      "name": "Pulizia in background"
+    },
+    "gms_trim": {
+      "name": "Limita servizi Google"
+    },
+    "UX_MANAGE_OEM_TOGGLES": {
+      "name": "Gestisci interruttori OEM"
+    },
+    "phantom_procs": {
+      "name": "Limite processi in background"
+    },
+    "haptic_strength": {
+      "name": "Vibrazione"
+    },
+    "haptic_touch_strength": {
+      "name": "Feedback al tocco"
+    },
+    "log_level": {
+      "name": "Dettaglio log"
+    }
+  }
+}

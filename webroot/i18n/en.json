@@ -1,0 +1,32 @@
+{
+  "opt": {
+    "3": "+3 dB",
+    "6": "+6 dB",
+    "9": "+9 dB",
+    "eq_compat": "EQ-friendly",
+    "hifi": "Hi-Fi",
+    "stock": "Stock",
+    "mild": "Mild",
+    "strong": "Strong",
+    "max": "Max",
+    "disabled": "Disable",
+    "light": "Light",
+    "medium": "Medium",
+    "flat": "Flat",
+    "off": "Off",
+    "safe": "Safe",
+    "aggressive": "Aggressive"
+  },
+  "optFor": {
+    "ui_effects_level": {
+      "auto": "Auto",
+      "stock": "Normal",
+      "flat": "Simplified"
+    },
+    "wifi_scan_throttle": {
+      "0": "More often",
+      "1": "Less often",
+      "auto": "Stock"
+    }
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "cfg": {
+    "audio_profile": {
+      "name": "Audio-Profil"
+    },
+    "audio_dac_hifi": {
+      "name": "Hi-Fi-DAC (Mixer)"
+    },
+    "media_loudness": {
+      "name": "Medienlautstärke"
+    },
+    "bt_absvol_mode": {
+      "name": "Bluetooth-Lautstärkesteuerung"
+    },
+    "bt_a2dp_offload": {
+      "name": "Bluetooth-Audio-Offload"
+    },
+    "dsp_loudness": {
+      "name": "DSP-Lautstärke"
+    },
+    "dsp_bass": {
+      "name": "DSP-Bassanhebung"
+    },
+    "dsp_compressor": {
+      "name": "DSP-Kompressor"
+    },
+    "dsp_outputs": {
+      "name": "DSP-Ausgänge"
+    },
+    "CAMERA_LEVEL": {
+      "name": "Kamera-Bearbeitung"
+    },
+    "CAMERA_CONTRAST": {
+      "name": "Kontrast & Farbtiefe"
+    },
+    "CAMERA_GRAIN": {
+      "name": "Filmkorn"
+    },
+    "CAMERA_PORTRAIT": {
+      "name": "Porträt-KI"
+    },
+    "CAMERA_LOWLIGHT": {
+      "name": "Makro- & Nachtschärfe"
+    },
+    "camera_hold_enable": {
+      "name": "Leistung bei laufender Kamera halten"
+    },
+    "UX_MANAGE_TIMEOUTS": {
+      "name": "UI-Tempo verwalten"
+    },
+    "anim_speed": {
+      "name": "Animationsgeschwindigkeit"
+    },
+    "UX_ANIM_FORCE_RESTART": {
+      "name": "Animationsneustart erzwingen"
+    },
+    "disable_blur": {
+      "name": "Weichzeichner aus"
+    },
+    "ui_effects_level": {
+      "name": "Systemanimationen"
+    },
+    "net_congestion": {
+      "name": "Download-Anlauf · sonstige"
+    },
+    "net_congestion_wifi": {
+      "name": "Download-Anlauf · WLAN"
+    },
+    "net_congestion_mobile": {
+      "name": "Download-Anlauf · mobil"
+    },
+    "net_qdisc": {
+      "name": "Paketwarteschlange · sonstige"
+    },
+    "net_qdisc_wifi": {
+      "name": "Paketwarteschlange · WLAN"
+    },
+    "net_qdisc_mobile": {
+      "name": "Paketwarteschlange · mobil"
+    },
+    "net_route_tune": {
+      "name": "Netzwerkpuffer"
+    },
+    "wifi_country": {
+      "name": "WLAN-Region"
+    },
+    "wifi_scan_throttle": {
+      "name": "WLAN-Suchrate"
+    },
+    "auto_battery_enable": {
+      "name": "Auto-Akkuprofil"
+    },
+    "smart_battery_bias": {
+      "name": "Smart-Akkuneigung"
+    },
+    "charge_aware_enable": {
+      "name": "Lademodus"
+    },
+    "doze_level": {
+      "name": "Tiefschlaf"
+    },
+    "night_quiet_enable": {
+      "name": "Ruhige Nacht"
+    },
+    "sustained_temp_mode": {
+      "name": "Drosselpunkt"
+    },
+    "sustained_temp_enter": {
+      "name": "Drosseltemperatur"
+    },
+    "cool_gaming": {
+      "name": "Kühles Gaming"
+    },
+    "bat_suppress_gaming": {
+      "name": "Kein Spielmodus im Akkuprofil"
+    },
+    "BG_TRIM_LEVEL": {
+      "name": "Hintergrund-Bereinigung"
+    },
+    "gms_trim": {
+      "name": "Google-Dienste drosseln"
+    },
+    "UX_MANAGE_OEM_TOGGLES": {
+      "name": "OEM-Schalter verwalten"
+    },
+    "phantom_procs": {
+      "name": "Hintergrundprozess-Limit"
+    },
+    "haptic_strength": {
+      "name": "Vibration"
+    },
+    "haptic_touch_strength": {
+      "name": "Tipp-Feedback"
+    },
+    "log_level": {
+      "name": "Protokolldetails"
+    }
+  },
+  "nav_main": "Start",
+  "nav_live": "Monitor",
+  "nav_cfg": "Einstellungen",
+  "lv_ses": "Sitzungen",
+  "lv_drain": "Verbrauch",
+  "lv_trend": "Trend",
+  "lv_trend_up": "wird wärmer",
+  "lv_trend_dn": "kühlt ab",
+  "lv_trend_fl": "stabil",
+  "lv_measuring": "messe…",
+  "lv_est_on": "Prognose (Display)",
+  "lv_hotspot": "Hotspot · intern",
+  "am_live": "⚡ sofort wirksam",
+  "am_reboot": "↻ Neustart nötig",
+  "am_next": "⏭ sofort, App neu starten",
+  "t_pending_reboot": "↻ Änderungen warten auf Neustart — tippen",
+  "t_cfg_live": " · angewendet",
+  "t_cfg_saved": " · nach Neustart",
+  "t_cfg_next": " · App neu starten",
+  "t_not_applied": "nicht angewendet",
+  "dsp_idle": "DSP aus",
+  "grp_audio": "Audio",
+  "grp_camera": "Kamera",
+  "grp_iface": "Oberfläche",
+  "grp_net": "Netzwerk",
+  "grp_battery": "Akku",
+  "grp_ui": "System"
+}

@@ -1,0 +1,166 @@
+{
+  "cfg": {
+    "audio_profile": {
+      "name": "Аудіопрофіль"
+    },
+    "audio_dac_hifi": {
+      "name": "Hi-Fi ЦАП (мікшер)"
+    },
+    "media_loudness": {
+      "name": "Гучність медіа"
+    },
+    "bt_absvol_mode": {
+      "name": "Керування гучністю Bluetooth"
+    },
+    "bt_a2dp_offload": {
+      "name": "Апаратний кодек Bluetooth"
+    },
+    "dsp_loudness": {
+      "name": "Підсилення гучності DSP"
+    },
+    "dsp_bass": {
+      "name": "Підсилення басу DSP"
+    },
+    "dsp_compressor": {
+      "name": "Компресор DSP"
+    },
+    "dsp_outputs": {
+      "name": "Виходи для DSP"
+    },
+    "CAMERA_LEVEL": {
+      "name": "Ступінь обробки камери"
+    },
+    "CAMERA_CONTRAST": {
+      "name": "Контраст і глибина кольору"
+    },
+    "CAMERA_GRAIN": {
+      "name": "Зернистість"
+    },
+    "CAMERA_PORTRAIT": {
+      "name": "ШІ для портретів"
+    },
+    "CAMERA_LOWLIGHT": {
+      "name": "Різкість макро та за слабкого світла"
+    },
+    "camera_hold_enable": {
+      "name": "Тримати продуктивність під час камери"
+    },
+    "UX_MANAGE_TIMEOUTS": {
+      "name": "Керування швидкістю UI"
+    },
+    "anim_speed": {
+      "name": "Швидкість анімацій"
+    },
+    "UX_ANIM_FORCE_RESTART": {
+      "name": "Примусовий перезапуск анімацій"
+    },
+    "disable_blur": {
+      "name": "Вимкнути розмиття"
+    },
+    "ui_effects_level": {
+      "name": "Анімації системи"
+    },
+    "net_congestion": {
+      "name": "Розгін завантажень · інші"
+    },
+    "net_congestion_wifi": {
+      "name": "Розгін завантажень · Wi-Fi"
+    },
+    "net_congestion_mobile": {
+      "name": "Розгін завантажень · мобільний"
+    },
+    "net_qdisc": {
+      "name": "Черга пакетів · інші"
+    },
+    "net_qdisc_wifi": {
+      "name": "Черга пакетів · Wi-Fi"
+    },
+    "net_qdisc_mobile": {
+      "name": "Черга пакетів · мобільний"
+    },
+    "net_route_tune": {
+      "name": "Мережеві буфери"
+    },
+    "wifi_country": {
+      "name": "Регіон Wi-Fi"
+    },
+    "wifi_scan_throttle": {
+      "name": "Обмеження пошуку Wi-Fi"
+    },
+    "auto_battery_enable": {
+      "name": "Автопрофіль батареї"
+    },
+    "smart_battery_bias": {
+      "name": "Зміщення батареї Smart"
+    },
+    "charge_aware_enable": {
+      "name": "Режим зарядки"
+    },
+    "doze_level": {
+      "name": "Глибокий сон"
+    },
+    "night_quiet_enable": {
+      "name": "Тиха ніч"
+    },
+    "sustained_temp_mode": {
+      "name": "Точка тротлінгу"
+    },
+    "sustained_temp_enter": {
+      "name": "Температура тротлінгу"
+    },
+    "cool_gaming": {
+      "name": "Прохолодні ігри"
+    },
+    "bat_suppress_gaming": {
+      "name": "Без ігрового режиму на Економії"
+    },
+    "BG_TRIM_LEVEL": {
+      "name": "Очищення фону"
+    },
+    "gms_trim": {
+      "name": "Обмеження сервісів Google"
+    },
+    "UX_MANAGE_OEM_TOGGLES": {
+      "name": "Керування перемикачами OEM"
+    },
+    "phantom_procs": {
+      "name": "Ліміт фонових процесів"
+    },
+    "haptic_strength": {
+      "name": "Вібрація"
+    },
+    "haptic_touch_strength": {
+      "name": "Відгук дотиків"
+    },
+    "log_level": {
+      "name": "Детальність логів"
+    }
+  },
+  "nav_main": "Головна",
+  "nav_live": "Монітор",
+  "nav_cfg": "Налаштування",
+  "lv_ses": "Сесії",
+  "lv_drain": "Витрата екр.",
+  "lv_trend": "Тренд",
+  "lv_trend_up": "нагрів",
+  "lv_trend_dn": "охолоджується",
+  "lv_trend_fl": "рівно",
+  "lv_measuring": "вимірюю…",
+  "lv_est_on": "Прогноз (екран)",
+  "lv_hotspot": "Гаряча точка · внутр.",
+  "am_live": "⚡ застосовується одразу",
+  "am_reboot": "↻ потрібне перезавантаження",
+  "am_next": "⏭ одразу, але застосунок треба перезапустити",
+  "t_pending_reboot": "↻ Зміни очікують перезавантаження — натисніть",
+  "t_cfg_live": " · застосовано",
+  "t_cfg_saved": " · після перезавантаження",
+  "t_cfg_next": " · перезапустіть застосунок",
+  "t_not_applied": "не застосовано",
+  "dsp_idle": "DSP вимк",
+  "grp_audio": "Аудіо",
+  "grp_camera": "Камера",
+  "grp_iface": "Інтерфейс",
+  "grp_net": "Мережа",
+  "grp_battery": "Батарея",
+  "grp_ui": "Система"
+}

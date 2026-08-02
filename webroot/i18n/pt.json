@@ -1,0 +1,166 @@
+{
+  "cfg": {
+    "audio_profile": {
+      "name": "Perfil de áudio"
+    },
+    "audio_dac_hifi": {
+      "name": "DAC Hi-Fi (mixer)"
+    },
+    "media_loudness": {
+      "name": "Volume de mídia"
+    },
+    "bt_absvol_mode": {
+      "name": "Controle de volume Bluetooth"
+    },
+    "bt_a2dp_offload": {
+      "name": "Descarregamento de áudio Bluetooth"
+    },
+    "dsp_loudness": {
+      "name": "Volume do DSP"
+    },
+    "dsp_bass": {
+      "name": "Reforço de graves DSP"
+    },
+    "dsp_compressor": {
+      "name": "Compressor DSP"
+    },
+    "dsp_outputs": {
+      "name": "Saídas do DSP"
+    },
+    "CAMERA_LEVEL": {
+      "name": "Processamento da câmera"
+    },
+    "CAMERA_CONTRAST": {
+      "name": "Contraste e profundidade de cor"
+    },
+    "CAMERA_GRAIN": {
+      "name": "Granulação"
+    },
+    "CAMERA_PORTRAIT": {
+      "name": "IA de retrato"
+    },
+    "CAMERA_LOWLIGHT": {
+      "name": "Nitidez macro e pouca luz"
+    },
+    "camera_hold_enable": {
+      "name": "Manter desempenho com a câmera"
+    },
+    "UX_MANAGE_TIMEOUTS": {
+      "name": "Gerenciar velocidade da interface"
+    },
+    "anim_speed": {
+      "name": "Velocidade das animações"
+    },
+    "UX_ANIM_FORCE_RESTART": {
+      "name": "Forçar reinício das animações"
+    },
+    "disable_blur": {
+      "name": "Desativar desfoque"
+    },
+    "ui_effects_level": {
+      "name": "Animações do sistema"
+    },
+    "net_congestion": {
+      "name": "Arranque de downloads · outros"
+    },
+    "net_congestion_wifi": {
+      "name": "Arranque de downloads · WiFi"
+    },
+    "net_congestion_mobile": {
+      "name": "Arranque de downloads · móvel"
+    },
+    "net_qdisc": {
+      "name": "Fila de pacotes · outros"
+    },
+    "net_qdisc_wifi": {
+      "name": "Fila de pacotes · WiFi"
+    },
+    "net_qdisc_mobile": {
+      "name": "Fila de pacotes · móvel"
+    },
+    "net_route_tune": {
+      "name": "Buffers de rede"
+    },
+    "wifi_country": {
+      "name": "Região WiFi"
+    },
+    "wifi_scan_throttle": {
+      "name": "Frequência de busca WiFi"
+    },
+    "auto_battery_enable": {
+      "name": "Perfil de bateria automático"
+    },
+    "smart_battery_bias": {
+      "name": "Viés de bateria Smart"
+    },
+    "charge_aware_enable": {
+      "name": "Modo com carga"
+    },
+    "doze_level": {
+      "name": "Sono profundo"
+    },
+    "night_quiet_enable": {
+      "name": "Noite silenciosa"
+    },
+    "sustained_temp_mode": {
+      "name": "Ponto de limitação"
+    },
+    "sustained_temp_enter": {
+      "name": "Temperatura de limitação"
+    },
+    "cool_gaming": {
+      "name": "Jogo frio"
+    },
+    "bat_suppress_gaming": {
+      "name": "Sem modo jogo no perfil Bateria"
+    },
+    "BG_TRIM_LEVEL": {
+      "name": "Limpeza em segundo plano"
+    },
+    "gms_trim": {
+      "name": "Limitar serviços Google"
+    },
+    "UX_MANAGE_OEM_TOGGLES": {
+      "name": "Gerenciar ajustes do fabricante"
+    },
+    "phantom_procs": {
+      "name": "Limite de processos em segundo plano"
+    },
+    "haptic_strength": {
+      "name": "Vibração"
+    },
+    "haptic_touch_strength": {
+      "name": "Resposta ao toque"
+    },
+    "log_level": {
+      "name": "Detalhe do log"
+    }
+  },
+  "nav_main": "Início",
+  "nav_live": "Monitor",
+  "nav_cfg": "Ajustes",
+  "lv_ses": "Sessões",
+  "lv_drain": "Consumo",
+  "lv_trend": "Tendência",
+  "lv_trend_up": "aquecendo",
+  "lv_trend_dn": "esfriando",
+  "lv_trend_fl": "estável",
+  "lv_measuring": "medindo…",
+  "lv_est_on": "Estimativa (tela)",
+  "lv_hotspot": "Ponto quente · interno",
+  "am_live": "⚡ aplica imediatamente",
+  "am_reboot": "↻ requer reinício",
+  "am_next": "⏭ imediato, reinicie o app",
+  "t_pending_reboot": "↻ Alterações aguardando reinício — toque",
+  "t_cfg_live": " · aplicado",
+  "t_cfg_saved": " · após reiniciar",
+  "t_cfg_next": " · reinicie o app",
+  "t_not_applied": "não aplicado",
+  "dsp_idle": "DSP desligado",
+  "grp_audio": "Áudio",
+  "grp_camera": "Câmera",
+  "grp_iface": "Interface",
+  "grp_net": "Rede",
+  "grp_battery": "Bateria",
+  "grp_ui": "Sistema"
+}
