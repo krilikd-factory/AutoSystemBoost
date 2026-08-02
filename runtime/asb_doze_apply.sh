@@ -56,10 +56,30 @@ case "$_lvl" in stock|moderate|aggressive|night) : ;; *) _lvl=stock ;; esac
 # and these constants do not touch that path.
 case "$_lvl" in
   moderate)
+    # Light doze is tuned too, not just deep.
+    #
+    # Deep doze only starts once the device has been STILL for inactive_to - a phone in a
+    # pocket or on a moving desk never gets there, so on an ordinary day the only phase
+    # that actually runs is light. Tuning deep alone means tuning the phase that rarely
+    # happens, which is why the previous version of this had so little visible effect
+    # outside a night on the nightstand.
+    #
+    # Light phase: enter sooner (30s -> 15s), longer idle windows, and a shorter
+    # maintenance budget - maintenance is when apps are let out to run, and its length is
+    # what the battery actually pays for.
     _c="inactive_to=300000,idle_after_inactive_to=300000,motion_inactive_to=300000"
+    _c="${_c},light_after_inactive_to=15000,light_idle_to=20000,light_idle_factor=3.0"
+    _c="${_c},light_idle_maintenance_max_budget=10000"
     ;;
   aggressive)
     _c="inactive_to=120000,idle_after_inactive_to=120000,motion_inactive_to=120000,sensing_to=60000,locating_to=15000"
+    # Light phase pushed harder: in at 10s, 30s windows growing 4x, maintenance cut to
+    # 5s. max_idle_to is left alone deliberately - capping how long a light-idle window
+    # may grow is what keeps a long screen-off period from becoming one unbroken block
+    # where nothing gets a chance to sync at all.
+    _c="${_c},light_after_inactive_to=10000,light_idle_to=30000,light_idle_factor=4.0"
+    _c="${_c},light_idle_maintenance_min_budget=1000,light_idle_maintenance_max_budget=5000"
+    _c="${_c},light_pre_idle_to=2000"
     ;;
   night)
     # Prefer the LEARNED window over the fixed one.
@@ -111,6 +131,9 @@ case "$_lvl" in
     fi
     if [ "$_in_night" = "1" ]; then
       _c="inactive_to=120000,idle_after_inactive_to=120000,motion_inactive_to=120000,sensing_to=60000,locating_to=15000"
+      _c="${_c},light_after_inactive_to=10000,light_idle_to=30000,light_idle_factor=4.0"
+      _c="${_c},light_idle_maintenance_min_budget=1000,light_idle_maintenance_max_budget=5000"
+      _c="${_c},light_pre_idle_to=2000"
     else
       _c=""   # outside the window this behaves exactly like stock
     fi
@@ -143,15 +166,74 @@ esac
 
 # night outside its window is stock, and has to actually clear the constants rather than
 # leaving last night's aggressive values in place all day.
+# Whitelist trimming, aggressive and night only.
+#
+# Constants decide how soon Doze starts; the whitelist decides who ignores it. An app on
+# the exemption list keeps its alarms and network through every idle window, so a phone
+# can sit in deep doze all night while three exempted apps wake it anyway. This is the
+# part Frosty gets at by freezing packages outright - we do not freeze anything, but we
+# can stop apps that added THEMSELVES to the list from being exempt.
+#
+# System entries are never touched: the list also contains the dialer, the SMS app, the
+# alarm clock and the root manager, and dropping those is how a module ends up being
+# blamed for a missed alarm. Only user-installed packages, and only ones the user has not
+# separately marked as unrestricted in Android's own battery settings.
+asb_doze_trim_whitelist() {
+  command -v dumpsys >/dev/null 2>&1 || return 0
+  command -v pm >/dev/null 2>&1 || return 0
+  _wl_file="/data/adb/asb/doze_whitelist_removed"
+  mkdir -p /data/adb/asb 2>/dev/null
+  # Third-party packages only: pm list packages -3 is the definition Android itself uses.
+  _third="$(pm list packages -3 2>/dev/null | sed 's/^package://')"
+  [ -n "$_third" ] || return 0
+  for _p in $(dumpsys deviceidle whitelist 2>/dev/null \
+              | grep -E '^user,' | cut -d, -f2); do
+    case "$_third" in
+      *"$_p"*) : ;;
+      *) continue ;;   # not user-installed - leave it alone
+    esac
+    if dumpsys deviceidle whitelist "-$_p" >/dev/null 2>&1; then
+      grep -qxF "$_p" "$_wl_file" 2>/dev/null || echo "$_p" >> "$_wl_file"
+    fi
+  done
+  [ -s "$_wl_file" ] && echo "doze: $(wc -l < "$_wl_file") user app(s) removed from the exemption list"
+}
+
+# Put them all back. Called when the level returns to stock and from uninstall.sh - an
+# exemption the user granted deliberately must survive the module being removed.
+asb_doze_restore_whitelist() {
+  _wl_file="/data/adb/asb/doze_whitelist_removed"
+  [ -f "$_wl_file" ] || return 0
+  command -v dumpsys >/dev/null 2>&1 || return 0
+  while IFS= read -r _p; do
+    [ -n "$_p" ] && dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1
+  done < "$_wl_file"
+  rm -f "$_wl_file" 2>/dev/null
+  echo "doze: exemption list restored"
+}
+
 if [ "$_lvl" = "stock" ] || [ -z "$_c" ]; then
   if [ -n "$(asb_set_get global device_idle_constants)" ]; then
     asb_set_del global device_idle_constants
+    asb_doze_restore_whitelist
     echo "doze: stock - Android's own timings, nothing set by ASB"
   else
     echo "doze: stock (nothing had been set)"
   fi
   exit 0
 fi
+
+# Trimming the exemption list is its own opt-in: constants are timings and reversible on
+# the next boot, but removing an app's exemption changes when that app can reach the
+# network, and a user who put it there had a reason.
+case "$(_cfg doze_trim_whitelist)" in
+  1|on|true)
+    case "$_lvl" in
+      aggressive|night) asb_doze_trim_whitelist ;;
+      *)                asb_doze_restore_whitelist ;;
+    esac ;;
+  *) asb_doze_restore_whitelist ;;
+esac
 
 if asb_set_put global device_idle_constants "$_c"; then
   case "$_lvl" in
