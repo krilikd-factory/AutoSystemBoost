@@ -504,6 +504,34 @@ if [ -f tools/asb_diag.sh ] && [ -f system/bin/asbdiag ]; then
   fi
 fi
 
+# Config schema: does the stored number still match what the UI writes?
+#
+# Three regressions in a row came from the same place - a value whose meaning changed
+# while old configs kept the old number. anim_speed is the one that got caught; the next
+# one will not announce itself either. So: pin the schema to the shape of the settings it
+# describes, and fail when the shape moves without the number moving.
+#
+# The check is deliberately crude. It hashes the option lists and slider ranges of every
+# card, which is exactly the set of things whose meaning a stored value depends on, and
+# compares against a recorded fingerprint. A false alarm costs one line to clear; a missed
+# one costs a silent behaviour change on every device that updates.
+_schema_now="$(grep -oE "(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
+               | sort | md5sum | cut -c1-12)"
+_schema_rec="$(grep -m1 '^# CONFIG_SHAPE=' config/governor.conf 2>/dev/null | sed 's/.*=//')"
+_schema_ver="$(grep -m1 'echo [0-9]* > /data/adb/asb/config_schema' common/install.sh \
+               | grep -oE 'echo [0-9]+' | grep -oE '[0-9]+')"
+if [ -z "$_schema_rec" ]; then
+  warn "config shape fingerprint missing - add '# CONFIG_SHAPE=$_schema_now' to governor.conf"
+elif [ "$_schema_rec" != "$_schema_now" ]; then
+  err "config shape changed ($_schema_rec -> $_schema_now) but nothing says the schema moved."
+  err "  If a stored value now means something different, bump the number written to"
+  err "  /data/adb/asb/config_schema (currently $_schema_ver) and add a migration."
+  err "  If nothing changed meaning, just update CONFIG_SHAPE in config/governor.conf."
+else
+  ok "config shape matches the recorded fingerprint (schema $_schema_ver)"
+fi
+
+
 echo "📋 Version Sync"
 _mp="$MODDIR/module.prop"
 _uj="$MODDIR/update.json"
