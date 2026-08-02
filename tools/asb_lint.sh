@@ -551,7 +551,10 @@ fi
 # This is a blacklist of renderings known to be wrong, not a translation checker. It
 # cannot judge a translation it has not seen before; it can stop a known-bad one coming
 # back, which is the part that was purely manual until now.
-_bad_terms="ГУБЕРНАТОР GOBERNADOR GOVERNADOR 调度器"
+# المنظّم was named in the comment above and missing from the list - a regression guard
+# that covers four of the five cases it documents. Safe to add: the correct rendering is
+# منظّم التردد, which has no definite article, so the bare form cannot match it.
+_bad_terms="ГУБЕРНАТОР GOBERNADOR GOVERNADOR 调度器 المنظّم"
 for _bt in $_bad_terms; do
   if grep -q "$_bt" action.sh 2>/dev/null; then
     err "action.sh contains '$_bt' - 'governor' here is the CPU frequency governor,"
@@ -563,9 +566,24 @@ ok "no known term mistranslations in action.sh"
 # A schema number with no migration branch is worse than no schema at all: install.sh
 # would compare against a version nothing handles, and everyone on the previous one stops
 # being migrated silently. Check that the number written matches the highest one branched on.
-_mig_max="$(grep -oE '_asb_[a-z_]*schema[^0-9]*-lt ([0-9]+)' common/install.sh \
+# [^;]* and not [^0-9]*: the second migration branch is written as
+# "${_asb_anim_schema:-1}" -lt 2, and a class excluding digits cannot cross the :-1 in the
+# default. The old pattern found one branch of two. That was harmless while both were -lt
+# 2, but a branch written only in the default form would have emptied _mig_max - and the
+# guard below then skipped the whole check without printing anything. Silently doing
+# nothing is the failure mode this file exists to prevent.
+#
+# Verified on this file: the pattern finds both branches; on a file containing only the
+# default form it finds it too, where the previous two attempts returned nothing.
+_mig_max="$(grep -oE 'schema[^;]*-lt[[:space:]]+[0-9]+' common/install.sh \
             | grep -oE '[0-9]+$' | sort -n | tail -1)"
-if [ -n "$_schema_ver" ] && [ -n "$_mig_max" ]; then
+# An empty result is an error, not a reason to stay quiet: either the pattern broke or
+# there are no migrations at all, and both deserve red.
+if [ -z "$_mig_max" ]; then
+  err "no migration branch found in common/install.sh"
+  err "  Either the schema has no migrations, or this check's pattern stopped matching."
+  err "  Both are worth stopping for - a schema nobody migrates is a silent data change."
+elif [ -n "$_schema_ver" ]; then
   if [ "$_schema_ver" != "$_mig_max" ]; then
     err "schema $_schema_ver is written but migrations only branch up to $_mig_max"
     err "  Add the missing 'schema -lt $_schema_ver' branch, or nobody on $_mig_max gets migrated."
