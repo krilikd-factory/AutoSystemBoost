@@ -224,8 +224,11 @@ class AsbLoudnessContext final : public EffectContext {
     void setDevices(const std::vector<::aidl::android::media::audio::common::AudioDeviceDescription>& devs) {
         mIsBluetooth = false;
         for (const auto& d : devs) {
-            mDeviceType = d.type.type;
-            const auto& c = d.type.connection;
+            /* AudioDeviceDescription has .type (the enum) and .connection (a string).
+             * The first version wrote d.type.type, treating .type as a struct - it is the
+             * enum itself, which is why the compiler said "not a structure or union". */
+            mDeviceType = d.type;
+            const auto& c = d.connection;
             if (c == "bt-a2dp" || c == "bt-le" || c == "bt-sco") { mIsBluetooth = true; break; }
         }
         evaluateDevice();
@@ -245,12 +248,12 @@ class AsbLoudnessContext final : public EffectContext {
         if (!mOutFilter[0]) { mDeviceAllowed = true; return; }
         const char *want = nullptr;
         switch (mDeviceType) {
-            case AudioDeviceType::OUT_SPEAKER:
-            case AudioDeviceType::OUT_SPEAKER_EARPIECE:
-            case AudioDeviceType::OUT_SPEAKER_SAFE:
+            case ::aidl::android::media::audio::common::AudioDeviceType::OUT_SPEAKER:
+            case ::aidl::android::media::audio::common::AudioDeviceType::OUT_SPEAKER_EARPIECE:
+            case ::aidl::android::media::audio::common::AudioDeviceType::OUT_SPEAKER_SAFE:
                 want = "speaker"; break;
-            case AudioDeviceType::OUT_HEADPHONE:
-            case AudioDeviceType::OUT_HEADSET:
+            case ::aidl::android::media::audio::common::AudioDeviceType::OUT_HEADPHONE:
+            case ::aidl::android::media::audio::common::AudioDeviceType::OUT_HEADSET:
                 /* USB DACs and the 3.5 mm jack both land here; the connection tells them
                  * apart, but the setting treats them as one - a user picking "USB" means
                  * "the thing I plugged in", not a bus. */
@@ -266,7 +269,8 @@ class AsbLoudnessContext final : public EffectContext {
         mDeviceAllowed = (strstr(mOutFilter, want) != nullptr);
     }
 
-    AudioDeviceType mDeviceType = AudioDeviceType::OUT_SPEAKER;
+    ::aidl::android::media::audio::common::AudioDeviceType mDeviceType =
+        ::aidl::android::media::audio::common::AudioDeviceType::OUT_SPEAKER;
     bool mIsBluetooth = false;
     int mGainMb = 0;
     unsigned long mCalls = 0;
@@ -284,14 +288,12 @@ class AsbLoudnessEffect final : public EffectImpl {
     }
 
     /* The framework hands us the route here, at attach and on every device change.
-     * Without overriding this the effect never learns which output it is on, which is why
-     * the filter had nothing to compare against. */
-    ndk::ScopedAStatus setParameterCommon(const Parameter::Common& common) override {
-        auto st = EffectImpl::setParameterCommon(common);
-        if (mContext) mContext->reload(common);
-        return st;
-    }
-
+     *
+     * setParameter is the only hook needed: EffectImpl::setParameterCommon takes a
+     * `const Parameter&`, not a `Parameter::Common&`, so the override I first wrote had a
+     * different signature and merely hid the base method - the compiler caught it as
+     * "non-virtual member function marked override". Everything routing-related arrives
+     * through the deviceDescription tag below anyway. */
     ndk::ScopedAStatus setParameter(const Parameter& param) override {
         auto st = EffectImpl::setParameter(param);
         if (mContext && param.getTag() == Parameter::deviceDescription) {
