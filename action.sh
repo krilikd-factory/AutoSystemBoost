@@ -14,11 +14,11 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
   *ru-*|*ru_*|ru) H_AUDIO="АУДИО"; H_CAMERA="КАМЕРА"; H_MEMORY="ПАМЯТЬ"; H_NETWORK="СЕТЬ"
                   H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="СИСТЕМА"; H_IFACE="ИНТЕРФЕЙС"
                   H_SLEEP="СОН"; H_LEARN="ОБУЧЕНИЕ"; H_SMART="ЧТО ВЫУЧИЛ SMART"
-                  H_GOV="ГУБЕРНАТОР"; H_BATT="АВТО-БАТАРЕЯ"; H_LPM="МОДЕМ LPM" ;;
+                  H_GOV="РЕГУЛЯТОР ЧАСТОТ"; H_BATT="АВТО-БАТАРЕЯ"; H_LPM="МОДЕМ LPM" ;;
   *uk-*|*uk_*|uk) H_AUDIO="АУДІО"; H_CAMERA="КАМЕРА"; H_MEMORY="ПАМʼЯТЬ"; H_NETWORK="МЕРЕЖА"
                   H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="СИСТЕМА"; H_IFACE="ІНТЕРФЕЙС"
                   H_SLEEP="СОН"; H_LEARN="НАВЧАННЯ"; H_SMART="ЩО ВИВЧИВ SMART"
-                  H_GOV="ГУБЕРНАТОР"; H_BATT="АВТО-БАТАРЕЯ"; H_LPM="МОДЕМ LPM" ;;
+                  H_GOV="РЕГУЛЯТОР ЧАСТОТ"; H_BATT="АВТО-БАТАРЕЯ"; H_LPM="МОДЕМ LPM" ;;
   *de-*|*de_*|de) H_AUDIO="AUDIO"; H_CAMERA="KAMERA"; H_MEMORY="SPEICHER"; H_NETWORK="NETZWERK"
                   H_WIFI="WLAN"; H_GPS="GPS"; H_SYSTEM="SYSTEM"; H_IFACE="OBERFLÄCHE"
                   H_SLEEP="SCHLAF"; H_LEARN="LERNEN"; H_SMART="WAS SMART GELERNT HAT"
@@ -26,11 +26,11 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
   *es-*|*es_*|es) H_AUDIO="AUDIO"; H_CAMERA="CÁMARA"; H_MEMORY="MEMORIA"; H_NETWORK="RED"
                   H_WIFI="WIFI"; H_GPS="GPS"; H_SYSTEM="SISTEMA"; H_IFACE="INTERFAZ"
                   H_SLEEP="SUEÑO"; H_LEARN="APRENDIZAJE"; H_SMART="LO QUE SMART HA APRENDIDO"
-                  H_GOV="GOBERNADOR"; H_BATT="BATERÍA AUTO"; H_LPM="MÓDEM LPM" ;;
+                  H_GOV="REGULADOR DE FRECUENCIA"; H_BATT="BATERÍA AUTO"; H_LPM="MÓDEM LPM" ;;
   *pt-*|*pt_*|pt) H_AUDIO="ÁUDIO"; H_CAMERA="CÂMERA"; H_MEMORY="MEMÓRIA"; H_NETWORK="REDE"
                   H_WIFI="WIFI"; H_GPS="GPS"; H_SYSTEM="SISTEMA"; H_IFACE="INTERFACE"
                   H_SLEEP="SONO"; H_LEARN="APRENDIZADO"; H_SMART="O QUE O SMART APRENDEU"
-                  H_GOV="GOVERNADOR"; H_BATT="BATERIA AUTO"; H_LPM="MODEM LPM" ;;
+                  H_GOV="REGULADOR DE FREQUÊNCIA"; H_BATT="BATERIA AUTO"; H_LPM="MODEM LPM" ;;
   *tr-*|*tr_*|tr) H_AUDIO="SES"; H_CAMERA="KAMERA"; H_MEMORY="BELLEK"; H_NETWORK="AĞ"
                   H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="SİSTEM"; H_IFACE="ARAYÜZ"
                   H_SLEEP="UYKU"; H_LEARN="ÖĞRENME"; H_SMART="SMART NE ÖĞRENDİ"
@@ -46,11 +46,11 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
   *ar-*|*ar_*|ar) H_AUDIO="الصوت"; H_CAMERA="الكاميرا"; H_MEMORY="الذاكرة"; H_NETWORK="الشبكة"
                   H_WIFI="واي فاي"; H_GPS="GPS"; H_SYSTEM="النظام"; H_IFACE="الواجهة"
                   H_SLEEP="النوم"; H_LEARN="التعلّم"; H_SMART="ما تعلّمه SMART"
-                  H_GOV="المنظّم"; H_BATT="البطارية التلقائية"; H_LPM="مودم LPM" ;;
+                  H_GOV="منظّم التردد"; H_BATT="البطارية التلقائية"; H_LPM="مودم LPM" ;;
   zh-cn*|zh_cn*|*zh-hans*|zh) H_AUDIO="音频"; H_CAMERA="相机"; H_MEMORY="内存"; H_NETWORK="网络"
                   H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="系统"; H_IFACE="界面"
                   H_SLEEP="休眠"; H_LEARN="学习"; H_SMART="SMART 学到了什么"
-                  H_GOV="调度器"; H_BATT="自动电池"; H_LPM="调制解调器 LPM" ;;
+                  H_GOV="频率调节器"; H_BATT="自动电池"; H_LPM="调制解调器 LPM" ;;
   *)              H_AUDIO="AUDIO"; H_CAMERA="CAMERA"; H_MEMORY="MEMORY"; H_NETWORK="NETWORK"
                   H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="SYSTEM"; H_IFACE="INTERFACE"
                   H_SLEEP="SLEEP"; H_LEARN="LEARNING"; H_SMART="WHAT SMART HAS LEARNED"
