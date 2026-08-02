@@ -57,6 +57,75 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
                   H_GOV="GOVERNOR"; H_BATT="AUTO BATTERY"; H_LPM="MODEM LPM" ;;
 esac
 
+# Body strings, not just headings.
+#
+# The headings were translated and everything under them was not, which is arguably worse
+# than all-English: the screen looks finished until you read a line. These are the
+# sentences a user actually reads. Numbers, units and identifiers are left alone - a
+# mistranslated unit turns a diagnostic into a wrong reading.
+case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
+  *ru-*|*ru_*|ru)
+    M_SLOT="Слот времени"; M_SLOT_OF="из 12"
+    M_SLOT_H1="День разбит на 12 слотов, каждый учится отдельно:"
+    M_SLOT_H2="утро буднего дня и вечер воскресенья — это разные телефоны."
+    M_CONF="Уверенность в этом слоте"; M_SES_BANK="сессий накоплено всего"
+    M_MEASURED="Измерено для этого слота"; M_TYP_PEAK="типичный пик"; M_DRAIN="расход"
+    M_NORMAL="Норма для вашего телефона"
+    M_ABOVE="Выше"; M_LEANS="Smart склоняется к экономии, ниже"; M_ALLOWS="разрешает чуть больше."
+    M_NOTFIXED1="Это не фиксированные числа — это медиана ваших же"
+    M_NOTFIXED2="12 слотов, поэтому телефон, который просто горячее, не наказывается."
+    M_RIGHTNOW="Сейчас"; M_LEAN_BAT="склоняется к экономии"
+    M_LEAN_PERF="склоняется к производительности"; M_LEAN_BAL="сбалансировано"
+    M_TOUCH_BOOST="плюс короткий подъём при касании экрана"
+    M_WATCHING="Наблюдает сейчас"; M_APP="приложение"
+    M_IDLE="простой"; M_LIGHT="лёгкая нагрузка"; M_NORMAL_USE="обычная нагрузка"
+    M_HEAVY="высокая нагрузка"; M_GAMING="игра"
+    M_REMEMBERS="Помнит тепловое поведение приложений:"; M_APPS=""
+    M_PREDICT="Прогноз времени экрана"; M_AT_RATE="при текущем расходе"
+    M_NOTE_PARTIAL="Примечание: работает на неполных данных для этого слота"
+    M_NOTE_NEIGHBOUR="Примечание: используется соседний слот"
+    M_NOTE_NODATA="Примечание: истории пока нет — безопасные значения"
+    M_DISCARDED="сессий отброшено как ненадёжные"
+    M_THIS_HOUR="в этот час обычно"
+    M_WARM_HERE="тепло для этого телефона — Smart склоняется к экономии"
+    M_COOL_HERE="прохладно для этого телефона — Smart разрешает чуть больше"
+    M_SES_LEARNED="сессий изучено"; M_DRAIN_NOW="расход сейчас"
+    M_BANKED="накоплено — Smart не управляет на этом профиле"
+    M_DP0="ночь"; M_DP1="раннее утро"; M_DP2="утро"; M_DP3="день"; M_DP4="вечер"; M_DP5="поздний вечер"
+    M_WEEKEND="выходной"; M_WEEKDAY="будний день"
+    M_FOREGROUND="активное приложение" ;;
+  *)
+    M_SLOT="Time slot"; M_SLOT_OF="of 12"
+    M_SLOT_H1="Your day is split into 12 slots. Each one is learned separately,"
+    M_SLOT_H2="because a weekday morning and a Sunday evening are not the same phone."
+    M_CONF="Confidence in this slot"; M_SES_BANK="sessions banked overall"
+    M_MEASURED="Measured for this slot"; M_TYP_PEAK="typical peak"; M_DRAIN="drain"
+    M_NORMAL="Normal for your phone"
+    M_ABOVE="Above"; M_LEANS="Smart leans to battery, below"; M_ALLOWS="it allows a little more."
+    M_NOTFIXED1="These are not fixed numbers - they are the median of your own"
+    M_NOTFIXED2="12 slots, so a phone that simply runs hotter is not punished for it."
+    M_RIGHTNOW="Right now"; M_LEAN_BAT="leaning to battery"
+    M_LEAN_PERF="leaning to performance"; M_LEAN_BAL="balanced"
+    M_TOUCH_BOOST="plus a short boost when you touch the screen"
+    M_WATCHING="Watching now"; M_APP="app"
+    M_IDLE="idle"; M_LIGHT="light use"; M_NORMAL_USE="normal use"
+    M_HEAVY="heavy use"; M_GAMING="gaming"
+    M_REMEMBERS="Remembers the heat behaviour of"; M_APPS="app(s) it has seen"
+    M_PREDICT="Predicted screen time left"; M_AT_RATE="at the current rate"
+    M_NOTE_PARTIAL="Note: running on partial data for this slot"
+    M_NOTE_NEIGHBOUR="Note: falling back to a neighbouring slot"
+    M_NOTE_NODATA="Note: no usable history yet - safe defaults in use"
+    M_DISCARDED="session(s) were discarded as unreliable"
+    M_THIS_HOUR="this hour usually"
+    M_WARM_HERE="warm for this phone - Smart leans to battery here"
+    M_COOL_HERE="cool for this phone - Smart allows a little more here"
+    M_SES_LEARNED="sessions learned"; M_DRAIN_NOW="drain now"
+    M_BANKED="banked - Smart not steering on this profile"
+    M_DP0="night"; M_DP1="early morning"; M_DP2="morning"; M_DP3="midday"; M_DP4="afternoon"; M_DP5="evening"
+    M_WEEKEND="weekend"; M_WEEKDAY="weekday"
+    M_FOREGROUND="foreground" ;;
+esac
+
 PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
 
 _lvl=$(dumpsys battery 2>/dev/null | grep -m1 ' level:' | awk '{print $2}')
@@ -363,8 +432,8 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
   echo "  🧠  ${H_LEARN}"
   _ll=""
   if [ -n "$_l_sess" ]; then
-    [ "$_l_sess" = "1" ] && _ll="1 session learned (still cold)" \
-                         || _ll="${_l_sess} sessions learned"
+    [ "$_l_sess" = "1" ] && _ll="1 ${M_SES_LEARNED}" \
+                         || _ll="${_l_sess} ${M_SES_LEARNED}"
   fi
   # Confidence tier, worded the same way the WebUI tiers it.
   if [ -n "$_l_conf" ] && [ "$_l_conf" -gt 0 ] 2>/dev/null; then
@@ -379,7 +448,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
   if [ -n "$_bt" ] && [ "$_bt" -gt 0 ] 2>/dev/null; then
     # A literal degree sign: printf %b expands \n and friends but not \uXXXX, so the
     # escape came out as the four characters "u00b0" on screen.
-    _bl="       this hour usually: $((_bt / 10)).$((_bt % 10))°C"
+    _bl="       ${M_THIS_HOUR}: $((_bt / 10)).$((_bt % 10))°C"
     [ -n "$_bd" ] && [ "$_bd" -gt 0 ] 2>/dev/null \
       && _bl="${_bl}  ·  $((_bd / 10)).$((_bd % 10))%/h"
     printf '%b\n' "$_bl"
@@ -387,15 +456,15 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     _tw="$(_st smart_therm_warm_x10)"; _tc="$(_st smart_therm_cool_x10)"
     case "$_tw" in ''|*[!0-9]*) _tw=420 ;; esac
     case "$_tc" in ''|*[!0-9]*) _tc=380 ;; esac
-    [ "$_bt" -gt "$_tw" ] 2>/dev/null && echo "       (warm for this phone - Smart leans to battery here)"
-    [ "$_bt" -lt "$_tc" ] 2>/dev/null && echo "       (cool for this phone - Smart allows a little more here)"
+    [ "$_bt" -gt "$_tw" ] 2>/dev/null && echo "       (${M_WARM_HERE})"
+    [ "$_bt" -lt "$_tc" ] 2>/dev/null && echo "       (${M_COOL_HERE})"
   fi
-  [ "$_smart_enabled" != "1" ] && _ll="$(_join "$_ll" "banked - Smart not steering on this profile")"
+  [ "$_smart_enabled" != "1" ] && _ll="$(_join "$_ll" "$M_BANKED")"
   [ -n "$_ll" ] && echo "       ${_ll}"
   if [ -n "$_l_drain" ] && [ "$_l_drain" -gt 0 ] 2>/dev/null; then
-    echo "       drain now: $((_l_drain / 10)).$((_l_drain % 10))%/h"
+    echo "       ${M_DRAIN_NOW}: $((_l_drain / 10)).$((_l_drain % 10))%/h"
   fi
-  [ -n "$_l_pkg" ] && echo "       foreground: ${_l_pkg}"
+  [ -n "$_l_pkg" ] && echo "       ${M_FOREGROUND}: ${_l_pkg}"
 
   # Full picture, only while Smart is the profile actually steering.
   #
@@ -411,19 +480,19 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     # --- 1. when it thinks it is -----------------------------------------------------
     _bid="$(_st smart_bucket_id)"; _dp="$(_st smart_daypart)"; _we="$(_st smart_is_weekend)"
     case "$_dp" in
-      0) _dpn="night" ;; 1) _dpn="early morning" ;; 2) _dpn="morning" ;;
-      3) _dpn="midday" ;; 4) _dpn="afternoon" ;; 5) _dpn="evening" ;;
+      0) _dpn="$M_DP0" ;; 1) _dpn="$M_DP1" ;; 2) _dpn="$M_DP2" ;;
+      3) _dpn="$M_DP3" ;; 4) _dpn="$M_DP4" ;; 5) _dpn="$M_DP5" ;;
       *) _dpn="?" ;;
     esac
-    [ "$_we" = "1" ] && _dayk="weekend" || _dayk="weekday"
-    echo "       Time slot: ${_dpn} on a ${_dayk} (slot ${_bid} of 12)"
-    echo "         Your day is split into 12 slots. Each one is learned separately,"
-    echo "         because a weekday morning and a Sunday evening are not the same phone."
+    [ "$_we" = "1" ] && _dayk="$M_WEEKEND" || _dayk="$M_WEEKDAY"
+    echo "       ${M_SLOT}: ${_dpn} · ${_dayk} (${_bid} ${M_SLOT_OF})"
+    echo "         ${M_SLOT_H1}"
+    echo "         ${M_SLOT_H2}"
 
     # --- 2. how sure it is -----------------------------------------------------------
     _conf="$(_st smart_confidence)"; _ses="$(_st smart_sessions_total)"
     if [ -n "$_conf" ] && [ "$_conf" -gt 0 ] 2>/dev/null; then
-      echo "       Confidence in this slot: $((_conf / 10))%  ·  ${_ses:-0} sessions banked overall"
+      echo "       ${M_CONF}: $((_conf / 10))%  ·  ${_ses:-0} ${M_SES_BANK}"
       [ "$_conf" -lt 350 ] 2>/dev/null \
         && echo "         Still low - Smart is mostly using safe defaults here."
       [ "$_conf" -ge 650 ] 2>/dev/null \
@@ -434,37 +503,37 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     _bt2="$(_st smart_bucket_temp_x10)"; _bd2="$(_st smart_bucket_drain_x10)"
     _tw2="$(_st smart_therm_warm_x10)"; _tc2="$(_st smart_therm_cool_x10)"
     if [ -n "$_bt2" ] && [ "$_bt2" -gt 0 ] 2>/dev/null; then
-      echo "       Measured for this slot: $((_bt2 / 10)).$((_bt2 % 10))°C typical peak, $((_bd2 / 10)).$((_bd2 % 10))%/h drain"
+      echo "       ${M_MEASURED}: $((_bt2 / 10)).$((_bt2 % 10))°C ${M_TYP_PEAK}, $((_bd2 / 10)).$((_bd2 % 10))%/h ${M_DRAIN}"
       if [ -n "$_tw2" ] && [ "$_tw2" -gt 0 ] 2>/dev/null; then
         # Say the band, then the edges. "warm above 56, cool below 48" listed two
         # thresholds and read as a single self-contradicting range - the normal zone
         # between them was never stated, so the two numbers looked like nonsense.
-        echo "       Normal for your phone: $((_tc2 / 10))-$((_tw2 / 10))°C"
-        echo "         Above $((_tw2 / 10))°C Smart leans to battery, below $((_tc2 / 10))°C it allows a little more."
-        echo "         These are not fixed numbers - they are the median of your own"
-        echo "         12 slots, so a phone that simply runs hotter is not punished for it."
+        echo "       ${M_NORMAL}: $((_tc2 / 10))-$((_tw2 / 10))°C"
+        echo "         ${M_ABOVE} $((_tw2 / 10))°C ${M_LEANS} $((_tc2 / 10))°C ${M_ALLOWS}"
+        echo "         ${M_NOTFIXED1}"
+        echo "         ${M_NOTFIXED2}"
       fi
     fi
 
     # --- 4. what it decided ----------------------------------------------------------
     _alpha="$(_st smart_alpha_battery)"; _ib="$(_st smart_interactive_bonus)"
     if [ -n "$_alpha" ] && [ "$_alpha" -gt 0 ] 2>/dev/null; then
-      if   [ "$_alpha" -ge 650 ] 2>/dev/null; then _lean="leaning to battery"
-      elif [ "$_alpha" -le 350 ] 2>/dev/null; then _lean="leaning to performance"
-      else _lean="balanced"; fi
-      echo "       Right now: ${_lean} (${_alpha}/1000)"
+      if   [ "$_alpha" -ge 650 ] 2>/dev/null; then _lean="$M_LEAN_BAT"
+      elif [ "$_alpha" -le 350 ] 2>/dev/null; then _lean="$M_LEAN_PERF"
+      else _lean="$M_LEAN_BAL"; fi
+      echo "       ${M_RIGHTNOW}: ${_lean} (${_alpha}/1000)"
       [ -n "$_ib" ] && [ "$_ib" -gt 0 ] 2>/dev/null \
-        && echo "         plus a short boost when you touch the screen (+${_ib})"
+        && echo "         ${M_TOUCH_BOOST} (+${_ib})"
     fi
 
     # --- 5. what it is watching in real time -----------------------------------------
     _wl=""
     _ah="$(_st smart_app_hint)"
     case "$_ah" in
-      0) _ahn="idle" ;; 1) _ahn="light use" ;; 2) _ahn="normal use" ;;
-      3) _ahn="heavy use" ;; 4) _ahn="gaming" ;; *) _ahn="" ;;
+      0) _ahn="$M_IDLE" ;; 1) _ahn="$M_LIGHT" ;; 2) _ahn="$M_NORMAL_USE" ;;
+      3) _ahn="$M_HEAVY" ;; 4) _ahn="$M_GAMING" ;; *) _ahn="" ;;
     esac
-    [ -n "$_ahn" ] && _wl="app: ${_ahn}"
+    [ -n "$_ahn" ] && _wl="${M_APP}: ${_ahn}"
     _hot="$(_st smart_app_hot)"
     [ "$_hot" = "1" ] && _wl="$(_join "$_wl" "this app runs hot")"
     _veto="$(_st smart_thermal_veto)"
@@ -475,29 +544,29 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     [ "$_lowb" = "1" ] && _wl="$(_join "$_wl" "low battery - saving")"
     _chg="$(_st smart_charge_assist)"
     [ "$_chg" = "1" ] && _wl="$(_join "$_wl" "charging - extra headroom while cool")"
-    [ -n "$_wl" ] && echo "       Watching now: ${_wl}"
+    [ -n "$_wl" ] && echo "       ${M_WATCHING}: ${_wl}"
 
     _aph="$(_st smart_appheat_n)"
     [ -n "$_aph" ] && [ "$_aph" -gt 0 ] 2>/dev/null \
-      && echo "       Remembers the heat behaviour of ${_aph} app(s) it has seen"
+      && echo "       ${M_REMEMBERS} ${_aph} ${M_APPS}"
 
     # --- 6. how long the battery is expected to last ---------------------------------
     _bp="$(_st smart_budget_pred_h_x10)"
     if [ -n "$_bp" ] && [ "$_bp" -gt 0 ] 2>/dev/null; then
-      echo "       Predicted screen time left: $((_bp / 10)).$((_bp % 10))h at the current rate"
+      echo "       ${M_PREDICT}: $((_bp / 10)).$((_bp % 10))h ${M_AT_RATE}"
     fi
 
     # --- 7. honest limits ------------------------------------------------------------
     _fb="$(_st smart_fallback_level)"
     case "$_fb" in
       0) : ;;
-      1) echo "       Note: running on partial data for this slot" ;;
-      2) echo "       Note: falling back to a neighbouring slot" ;;
-      3) echo "       Note: no usable history yet - safe defaults in use" ;;
+      1) echo "       ${M_NOTE_PARTIAL}" ;;
+      2) echo "       ${M_NOTE_NEIGHBOUR}" ;;
+      3) echo "       ${M_NOTE_NODATA}" ;;
     esac
     _qf="$(_st smart_q_fail)"
     [ -n "$_qf" ] && [ "$_qf" -gt 0 ] 2>/dev/null \
-      && echo "       ${_qf} session(s) were discarded as unreliable - they teach nothing"
+      && echo "       ${_qf} ${M_DISCARDED}"
   fi
 fi
 
