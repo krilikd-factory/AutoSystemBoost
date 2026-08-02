@@ -31,9 +31,11 @@ case "$_sp" in
   1|fastest)     _v=0.5  ;;
   2|faster)      _v=0.7  ;;
   3|fast)        _v=0.85 ;;
-  4|stock)       _v=1    ;;
-  5|slow)        _v=1.25 ;;
-  6|slower)      _v=1.5  ;;
+  4)             _v=0.9  ;;
+  5)             _v=0.95 ;;
+  6|stock)       _v=1    ;;
+  7|slow)        _v=1.25 ;;
+  8|slower)      _v=1.5  ;;
   *)             _v="" ;;
 esac
 [ -z "$_v" ] && { echo "animations: following the profile"; exit 0; }
