@@ -66,6 +66,14 @@ jobs:
           fi
           echo "Generated bounds artefacts up-to-date."
 
+      - name: DSP source checks (catches the errors that reached main)
+        run: |
+          # The AIDL library is built by a separate soong workflow, so nothing on this
+          # path compiles it. A revision with three compile errors reached main because of
+          # that gap. This does not build the library - it checks the source for the
+          # specific mistakes that got through.
+          bash tools/dsp_stubs/asb_dsp_syntax_check.sh
+
       - name: Run asb_lint.sh
         run: |
           if [ ! -f tools/asb_lint.sh ]; then
