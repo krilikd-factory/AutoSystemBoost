@@ -2441,7 +2441,12 @@ apply_network_stats_poll() {
 asb_feature_enabled VM && apply_network_stats_poll
 apply_extra_settings() {
   has settings || return 0
-  asb_settings_put global audio_safe_volume_state 0
+  # Gated on audio_remove_volume_limit; see governor.conf. Re-asserting it every boot
+  # would quietly undo a user who turned the limiter back on in Android settings.
+  if [ "$(grep -E '^[[:space:]]*audio_remove_volume_limit=' "$MODDIR/config/governor.conf" 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')" = "1" ]; then
+    asb_settings_put global audio_safe_volume_state 0
+  fi
   settings delete global netstats_enabled >/dev/null 2>&1 || true
   settings delete global app_usage_enabled >/dev/null 2>&1 || true
   settings delete global package_usage_stats_enabled >/dev/null 2>&1 || true

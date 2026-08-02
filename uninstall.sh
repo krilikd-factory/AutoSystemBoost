@@ -160,6 +160,17 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
 
+# Restore Doze exemptions we removed.
+#
+# Recorded per package rather than replayed wholesale: an exemption the user granted
+# deliberately must come back, and one they never had must not appear.
+if [ -f /data/adb/asb/doze_whitelist_removed ] && command -v dumpsys >/dev/null 2>&1; then
+  while IFS= read -r _p; do
+    [ -n "$_p" ] && dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1
+  done < /data/adb/asb/doze_whitelist_removed
+  rm -f /data/adb/asb/doze_whitelist_removed 2>/dev/null
+fi
+
 # Give Google Play services its permissions back.
 #
 # The appops are recorded in baseline.txt and replayed by the loop above, but the doze
