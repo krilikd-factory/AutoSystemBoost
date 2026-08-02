@@ -1857,6 +1857,32 @@ asb_prune_non_op15_vendor_overlays() {
   ui_print "[*] Compatibility mode enabled"
   ui_print "[*] ${ASB_DEVICE_NAME} — not the OP15 reference model"
   ui_print "[*] Keeping script/prop tweaks, pruning reference (OP15) vendor overlays that do not fit this model"
+
+  # Start conservative on hardware nobody has measured.
+  #
+  # A field report from a OnePlus Ace 5 had 4K60 recording stuttering until the CPU,
+  # memory, scheduler and Doze tweaks were removed - and the Action screen on that phone
+  # showed three NOT APPLIED entries, so the device-native pipeline was not covering it
+  # either. The defaults are tuned against devices the author owns; on anything else they
+  # are an assumption, and the cost of a wrong assumption is a phone that behaves worse
+  # than stock while the user has no idea which of 44 settings did it.
+  #
+  # Only the aggressive ones are stood down, and only on a first install - a returning
+  # user keeps whatever they chose. Everything remains switchable in the WebUI; this
+  # changes where the phone starts, not what it can do.
+  if [ ! -f /data/adb/asb/nonref_defaults_applied ] \
+     && [ -f "$MODPATH/config/governor.conf" ]; then
+    for _nr in "BG_TRIM_LEVEL=off" "phantom_procs=stock" "doze_level=stock" \
+               "media_loudness=stock" "sustained_temp_mode=stock"; do
+      _nrk="${_nr%%=*}"; _nrv="${_nr#*=}"
+      if grep -qE "^[[:space:]]*${_nrk}=" "$MODPATH/config/governor.conf" 2>/dev/null; then
+        sed -i "s|^[[:space:]]*${_nrk}=.*|${_nrk}=${_nrv}|" "$MODPATH/config/governor.conf" 2>/dev/null
+      fi
+    done
+    mkdir -p /data/adb/asb 2>/dev/null
+    date +%s > /data/adb/asb/nonref_defaults_applied 2>/dev/null
+    ui_print "[*] Conservative defaults applied for this model - enable extras in the WebUI"
+  fi
   ui_print "${SEPARATOR}"
 
   rm -f "$MODPATH/system/etc/permissions/Bluetooth.xml" 2>/dev/null || true
@@ -2247,7 +2273,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim"
 
   _migrated=0
   for _k in $_user_keys; do
@@ -2276,7 +2302,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -3679,7 +3705,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_log_apply.sh asb_doze_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
