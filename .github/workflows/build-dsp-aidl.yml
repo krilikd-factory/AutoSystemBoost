@@ -19,6 +19,22 @@ name: Build DSP AIDL (.so)
 # Trigger manually (workflow_dispatch) so it never runs on every push.
 
 on:
+  # Run automatically when the DSP source changes.
+  #
+  # This was dispatch-only, so nothing compiled libasbdsp_aidl.so unless someone
+  # remembered to press the button - and three revisions with compile errors reached main
+  # because nobody did. The grep checks in tools/dsp_stubs catch mistakes that have
+  # already happened; only the real build catches the next kind.
+  #
+  # Narrow paths: the AOSP checkout is expensive, and nothing outside these directories
+  # can affect whether the library compiles.
+  push:
+    paths:
+      - 'src/DSP_AIDL/**'
+      - '.github/workflows/build-dsp-aidl.yml'
+  pull_request:
+    paths:
+      - 'src/DSP_AIDL/**'
   workflow_dispatch:
     inputs:
       aosp_tag:
