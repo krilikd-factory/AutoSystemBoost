@@ -659,9 +659,19 @@ pm.sleep_mode=1
 persist.service.pcsync.enable=0
 persist.service.lgospd.enable=0
 # ro.kernel.qemu.gles removed: it tells the Android emulator which GL path to use, and a
-# physical phone has no emulator. Harmless but meaningless - the only survivor of the
-# legacy build.prop families an external audit flagged (OpenCORE, Broadcom, LG, emulator);
-# the other 46 it counted are not in this file.
+# physical phone has no emulator.
+#
+# It is NOT the only legacy line here, and an earlier comment claiming so was wrong - the
+# pattern I searched with missed families that are plainly present: persist.brcm.*,
+# the OpenCORE log_* group, log.cffdump / log.pm4 / log.shaders, profiler.*, rw.logger,
+# ro.telephony.call_ring.multiple. Around 40 lines, inherited from a build.prop list that
+# has circulated since the early 2010s.
+#
+# They are left in place deliberately. Each is inert on modern hardware - a property no
+# service reads costs nothing at boot - and removing 40 lines from a file that also
+# carries 780 live ones is a change with real regression risk and no measurable benefit.
+# Cosmetic cleanup is not worth a bricked boot; if they go, they go one family at a time
+# with a build in between.
 log_frame_info=0
 log_mp4dectime=0
 log_posttime=0
@@ -773,7 +783,14 @@ ro.boot.ramdump=disable
 ro.dbg.coresight.stm_cfg_done=0
 ro.vendor.dbg.coresight.enable=0
 service.offlinelog.bootloader=false
-db.log.slow_query_threshold=0
+# 10000, not 0 and not -1.
+#
+# AOSP checks `threshold >= 0 && elapsed >= threshold`. At -1 the first half is false and
+# logging is off - which was correct. At 0 both halves are true for every query, so it
+# logs everything: the worst possible value, and the one this file briefly carried after
+# a well-meant edit. A large positive threshold is off under either implementation,
+# including the AOSP versions that lack the >= 0 guard.
+db.log.slow_query_threshold=10000
 debug.egl.profiler=0
 debug.hwc.otf=0
 debug.hwc_dump_en=0
