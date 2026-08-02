@@ -2282,10 +2282,21 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
   _asb_anim_schema="$(cat /data/adb/asb/config_schema 2>/dev/null)"
   case "$_asb_anim_schema" in ''|*[!0-9]*) _asb_anim_schema=1 ;; esac
   # A config that already carries the 8-stop scale is on schema 2 whether or not the file
-  # says so: V62-60 prereleases shipped the wider slider before schemas existed. Detect it
-  # from the shipped config rather than assuming, so those users are not shifted twice.
+  # says so: V62-60 shipped the wider slider before schemas existed.
+  #
+  # Discriminate on gms_trim, which landed in the same release as the wider scale. The
+  # first attempt looked for "0.95x" in a comment and for anim_speed=7|8 - neither works:
+  # the scale never appears in governor.conf at all (it lives in the WebUI's max: attribute),
+  # so that half matched nothing, and the numeric half only catches users who happened to
+  # pick position 7 or 8. Someone on V62-60 sitting at 4-6, which is the entire case this
+  # exists for, was still shifted. A key that either exists or does not is a fact; a string
+  # in a comment is a guess about a file I did not check.
+  #
+  # Read from $_src, not $_old_conf: when the module directory is gone but the snapshot
+  # survives, _src is the snapshot, and grepping the other one would silently skip the
+  # detection for exactly those users.
   if [ "$_asb_anim_schema" -lt 2 ] 2>/dev/null \
-     && grep -qE '^[[:space:]]*#.*0\.95x|^[[:space:]]*anim_speed=[78]' "$_old_conf" 2>/dev/null; then
+     && grep -qE '^[[:space:]]*gms_trim=' "$_src" 2>/dev/null; then
     _asb_anim_schema=2
   fi
 
