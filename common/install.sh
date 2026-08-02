@@ -2276,6 +2276,19 @@ UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
 region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim"
 
   _migrated=0
+  # Which numbering the stored values were written against. Absent means "before schemas
+  # existed", i.e. the 6-stop anim_speed scale. Written unconditionally after the loop, so
+  # it never depends on which keys happened to be in the old config.
+  _asb_anim_schema="$(cat /data/adb/asb/config_schema 2>/dev/null)"
+  case "$_asb_anim_schema" in ''|*[!0-9]*) _asb_anim_schema=1 ;; esac
+  # A config that already carries the 8-stop scale is on schema 2 whether or not the file
+  # says so: V62-60 prereleases shipped the wider slider before schemas existed. Detect it
+  # from the shipped config rather than assuming, so those users are not shifted twice.
+  if [ "$_asb_anim_schema" -lt 2 ] 2>/dev/null \
+     && grep -qE '^[[:space:]]*#.*0\.95x|^[[:space:]]*anim_speed=[78]' "$_old_conf" 2>/dev/null; then
+    _asb_anim_schema=2
+  fi
+
   for _k in $_user_keys; do
     _oldval="$(grep -E "^[[:space:]]*$_k=" "$_src" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
     if [ -z "$_oldval" ] && [ "$_src" != "$_snap_conf" ] && [ -f "$_snap_conf" ]; then
@@ -2283,24 +2296,27 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
     fi
     [ -n "$_oldval" ] || continue
 
-    # anim_speed: one-time shift for configs written before the scale grew.
+    # anim_speed: shift positions written against the 6-stop scale.
     #
-    # V62 inserted 0.9x and 0.95x between 0.85x and stock, so every position from 4 up
-    # moved by two: 4 meant stock and now means 0.9x, 5 meant 1.25x and now means 0.95x,
-    # 6 meant 1.5x and now means stock. Carrying the raw number across an update would
-    # silently change the animation speed of anyone sitting on 4-6 - a regression that
-    # looks like the module randomly deciding to slow the phone down.
+    # V62 inserted 0.9x and 0.95x between 0.85x and stock, so everything from 4 up moved
+    # by two: 4 meant stock and now means 0.9x, 5 meant 1.25x and now means 0.95x, 6 meant
+    # 1.5x and now means stock. Carrying the raw number across would silently change the
+    # animation speed of anyone sitting on 4-6.
     #
-    # Only 4, 5 and 6 need moving. 0-3 kept their meaning, and -1 (follow the profile) is
-    # not a position on the scale at all. Guarded by a marker so a value the user picks
-    # after the update is never shifted a second time.
-    if [ "$_k" = "anim_speed" ] && [ ! -f /data/adb/asb/anim_speed_migrated ]; then
+    # Keyed on a stored SCHEMA NUMBER, not on the existence of a marker file. Two reasons,
+    # both found the hard way:
+    #   - a marker written inside this loop only appears when the key was present in the
+    #     old config, so a user who had never touched the slider got no marker, and their
+    #     first deliberate 4 would be shifted to 6 by the NEXT update;
+    #   - a marker cannot tell "config from the old scale" from "config already on the new
+    #     scale but predating the marker" - V62-60 prereleases shipped the 8-stop scale
+    #     with no marker, and those users would be shifted wrongly.
+    # A number says which scale the stored value belongs to, which is the actual question.
+    if [ "$_k" = "anim_speed" ] && [ "${_asb_anim_schema:-1}" -lt 2 ] 2>/dev/null; then
       case "$_oldval" in
-        4|5|6) _oldval=$(( _oldval + 2 ))
-               ui_print "      + animation speed remapped for the new scale (was ${_k}=$(( _oldval - 2 )))" ;;
+        4|5|6) ui_print "      + animation speed remapped for the new scale (was ${_oldval})"
+               _oldval=$(( _oldval + 2 )) ;;
       esac
-      mkdir -p /data/adb/asb 2>/dev/null
-      : > /data/adb/asb/anim_speed_migrated 2>/dev/null
     fi
 
     if grep -qE "^[[:space:]]*$_k=" "$_new_conf" 2>/dev/null; then
@@ -2312,6 +2328,11 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
       _migrated=$((_migrated + 1))
     fi
   done
+
+  # Stamp the schema regardless of what was migrated. This is the line whose absence made
+  # the first attempt defer the bug by one update instead of fixing it.
+  mkdir -p /data/adb/asb 2>/dev/null
+  echo 2 > /data/adb/asb/config_schema 2>/dev/null
 }
 
 asb_snapshot_user_config() {
