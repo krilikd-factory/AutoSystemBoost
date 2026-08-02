@@ -511,11 +511,19 @@ fi
 # one will not announce itself either. So: pin the schema to the shape of the settings it
 # describes, and fail when the shape moves without the number moving.
 #
-# The check is deliberately crude. It hashes the option lists and slider ranges of every
-# card, which is exactly the set of things whose meaning a stored value depends on, and
-# compares against a recorded fingerprint. A false alarm costs one line to clear; a missed
-# one costs a silent behaviour change on every device that updates.
-_schema_now="$(grep -oE "(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
+# Each shape is bound to its key BEFORE sorting.
+#
+# The first version hashed the bare option lists and slider ranges, then sorted them -
+# which turns the input into a set and loses which card each shape belongs to. Swapping
+# the opts of two cards left the fingerprint identical, verified on this file: every
+# stored value for both settings then meant something else while the lint said "matches".
+# Tying key to shape first makes the sort safe, because each line now carries its own
+# identity and a swap changes two lines rather than reordering the same two.
+#
+# [a-zA-Z0-9_] and not [a-zA-Z_]: bt_a2dp_offload has a digit in its name, and the
+# narrower class silently dropped it - 33 matches instead of 34, with no error anywhere.
+_schema_now="$(grep -oE "key:'[a-zA-Z0-9_]+'[^}]*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)" webroot/index.html \
+               | sed -E "s/.*key:'([a-zA-Z0-9_]+)'.*(opts:\[[^]]*\]|min:-?[0-9]+, max:[0-9]+)/\1=\2/" \
                | sort | md5sum | cut -c1-12)"
 _schema_rec="$(grep -m1 '^# CONFIG_SHAPE=' config/governor.conf 2>/dev/null | sed 's/.*=//')"
 _schema_ver="$(grep -m1 'echo [0-9]* > /data/adb/asb/config_schema' common/install.sh \
@@ -526,9 +534,44 @@ elif [ "$_schema_rec" != "$_schema_now" ]; then
   err "config shape changed ($_schema_rec -> $_schema_now) but nothing says the schema moved."
   err "  If a stored value now means something different, bump the number written to"
   err "  /data/adb/asb/config_schema (currently $_schema_ver) and add a migration."
-  err "  If nothing changed meaning, just update CONFIG_SHAPE in config/governor.conf."
+  err "  Only if no stored value changed meaning, update CONFIG_SHAPE in governor.conf -"
+  err "  and say in the commit which values you checked. That line is the cheapest way to"
+  err "  make this red go away, which is exactly why it must not be the reflex."
 else
   ok "config shape matches the recorded fingerprint (schema $_schema_ver)"
+fi
+
+# Terms that must not be translated by their everyday sense.
+#
+# H_GOV shipped as ГУБЕРНАТОР, GOBERNADOR, GOVERNADOR, المنظّم and 调度器 - five languages
+# where "governor" was rendered as a public official or a task scheduler rather than the
+# CPU frequency governor. Caught by a reviewer, not by anything here, and the only reason
+# it was one term rather than several is luck.
+#
+# This is a blacklist of renderings known to be wrong, not a translation checker. It
+# cannot judge a translation it has not seen before; it can stop a known-bad one coming
+# back, which is the part that was purely manual until now.
+_bad_terms="ГУБЕРНАТОР GOBERNADOR GOVERNADOR 调度器"
+for _bt in $_bad_terms; do
+  if grep -q "$_bt" action.sh 2>/dev/null; then
+    err "action.sh contains '$_bt' - 'governor' here is the CPU frequency governor,"
+    err "  not a public official or a task scheduler. See H_GOV."
+  fi
+done
+ok "no known term mistranslations in action.sh"
+
+# A schema number with no migration branch is worse than no schema at all: install.sh
+# would compare against a version nothing handles, and everyone on the previous one stops
+# being migrated silently. Check that the number written matches the highest one branched on.
+_mig_max="$(grep -oE '_asb_[a-z_]*schema[^0-9]*-lt ([0-9]+)' common/install.sh \
+            | grep -oE '[0-9]+$' | sort -n | tail -1)"
+if [ -n "$_schema_ver" ] && [ -n "$_mig_max" ]; then
+  if [ "$_schema_ver" != "$_mig_max" ]; then
+    err "schema $_schema_ver is written but migrations only branch up to $_mig_max"
+    err "  Add the missing 'schema -lt $_schema_ver' branch, or nobody on $_mig_max gets migrated."
+  else
+    ok "schema $_schema_ver has a matching migration branch"
+  fi
 fi
 
 
