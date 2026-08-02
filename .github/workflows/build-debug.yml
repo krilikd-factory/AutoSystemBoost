@@ -22,6 +22,17 @@ jobs:
           for f in \
             src/asb_governor.c \
             common/englishtext.sh \
+            "webroot/i18n/en.json" \
+            "webroot/i18n/ru.json" \
+            "webroot/i18n/uk.json" \
+            "webroot/i18n/de.json" \
+            "webroot/i18n/es.json" \
+            "webroot/i18n/pt.json" \
+            "webroot/i18n/tr.json" \
+            "webroot/i18n/id.json" \
+            "webroot/i18n/it.json" \
+            "webroot/i18n/ar.json" \
+            "webroot/i18n/zh.json" \
             common/russiantext.sh \
             common/ukrainiantext.sh \
             common/germantext.sh \
