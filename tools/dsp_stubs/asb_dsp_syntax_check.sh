@@ -59,7 +59,28 @@ if grep -nE 'setParameterCommon\s*\(\s*const\s+Parameter::Common' "$SRC" | grep 
   fail=1
 fi
 
-# 4. Balanced braces: a truncated or badly merged file fails here before anything else.
+# 4. Everything the effect calls on the context must be public.
+#
+# setDevices was added inside the private block and the soong build was the first thing to
+# say so - another hour spent on a mistake visible in the text. Access control is exactly
+# the kind of thing a parser catches and a human reading a diff does not.
+_ctx_calls="$(grep -oE 'mContext->[A-Za-z_]+' "$SRC" | sed 's/mContext->//' | sort -u)"
+for _c in $_ctx_calls; do
+  # Walk the class, tracking the current access section, and record where the member is
+  # declared. Only the context class matters here, which is everything before the effect
+  # class starts.
+  _sec="$(awk -v want="$_c" '
+    /^  (public|private|protected):/ { sec = $1; sub(":", "", sec); next }
+    $0 ~ ("[ \t*&]" want "[ \t]*\\(") { if (!found) { print sec; found = 1 } }
+  ' "$SRC" | head -1)"
+  case "$_sec" in
+    public|'') : ;;
+    *) echo "::error::AsbLoudnessContext::${_c}() is ${_sec} but the effect class calls it"
+       fail=1 ;;
+  esac
+done
+
+# 5. Balanced braces: a truncated or badly merged file fails here before anything else.
 _open="$(tr -cd '{' < "$SRC" | wc -c)"
 _close="$(tr -cd '}' < "$SRC" | wc -c)"
 if [ "$_open" != "$_close" ]; then
