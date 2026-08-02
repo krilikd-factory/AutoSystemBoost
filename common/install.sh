@@ -2294,7 +2294,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist"
 
   _migrated=0
   # Which numbering the stored values were written against. Absent means "before schemas
@@ -2376,7 +2376,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -3698,7 +3698,14 @@ AutoSystemBoost' $APIOCXM
 	done
 
 	if [ "${ASB_KERNEL}" = "true" ]; then
-	  settings put global audio_safe_volume_state 0
+	  # Only when explicitly asked. See audio_remove_volume_limit in governor.conf - this
+	  # is a hearing-safety cap, and removing it silently is not a decision a performance
+	  # module gets to make for someone.
+	  if [ "$(grep -E '^[[:space:]]*audio_remove_volume_limit=' "$MODPATH/config/governor.conf" 2>/dev/null \
+	          | head -1 | sed 's/.*=//' | tr -d ' \r')" = "1" ]; then
+	    settings put global audio_safe_volume_state 0
+	    ui_print "      ! headphone volume limiter removed - protect your hearing"
+	  fi
 	fi
 	
 	if [ -d "$MODPATH/tools" ]; then
@@ -3724,34 +3731,52 @@ AutoSystemBoost' $APIOCXM
 	  chmod 0755 "$MODPATH/tools/asb_sysui_watch.sh" 2>/dev/null || true
 	fi
 
-	if [ "${ASB_LOG}" = "true" ]; then
-	  rm -rf /data/*bsplog*/*
-	  rm -rf /data/*/*bsplog*/*
-	  rm -rf /data/*/*/*bsplog*/*
-	  	  for _dbdir in /data/system/dropbox /data/vendor/dropbox; do
+	# Vendor log cleanup - explicit paths, and only when asked for.
+	#
+	# This was a series of unescaped globs three levels into /data - /data/*/*/*bsplog*/*
+	# and friends - running silently during install under a category that is on by default.
+	# The patterns are specific enough that in practice they hit vendor log directories, but
+	# "in practice" is not a property you want on a recursive delete: a glob three levels
+	# deep in /data will eventually match something nobody predicted, and the operation is
+	# not reversible.
+	#
+	# Two changes. The paths are now a literal list, so what gets deleted is readable rather
+	# than inferred. And it is gated on its own key rather than riding along with LOG, so
+	# nobody deletes files as a side effect of wanting quieter logging.
+	if [ "$(grep -E '^[[:space:]]*purge_vendor_logs=' "$MODPATH/config/governor.conf" 2>/dev/null \
+	        | head -1 | sed 's/.*=//' | tr -d ' \r')" = "1" ]; then
+	  for _lp in \
+	    /data/anr \
+	    /data/mlog \
+	    /data/klog \
+	    /data/ap-log \
+	    /data/cp-log \
+	    /data/last_alog \
+	    /data/last_kmsg \
+	    /data/dontpanic \
+	    /data/memorydump \
+	    /data/dumplog \
+	    /data/tombstones \
+	    /data/vendor/tombstones \
+	    /data/vendor/bsplog \
+	    /data/vendor/ramdump \
+	    /data/vendor/log \
+	  ; do
+	    [ -d "$_lp" ] || continue
+	    # -mindepth 1 deletes the contents and keeps the directory: several of these are
+	    # created by init with specific ownership, and removing the directory itself makes
+	    # the vendor daemon that owns it fail quietly on the next boot.
+	    find "$_lp" -mindepth 1 -delete 2>/dev/null || true
+	  done
+	  # Dropbox keeps the five newest entries - it is the one place where recent crash
+	  # reports are worth keeping for the user's own debugging.
+	  for _dbdir in /data/system/dropbox /data/vendor/dropbox; do
 	    [ -d "$_dbdir" ] || continue
 	    ls -t "$_dbdir" 2>/dev/null | tail -n +6 | while read -r _f; do
 	      rm -f "$_dbdir/$_f" 2>/dev/null || true
 	    done
 	  done
-	  rm -rf /data/*ramdump*/*
-	  rm -rf /data/*/*ramdump*/*
-	  rm -rf /data/*/*/*ramdump*/*
-	  rm -rf /data/*tombstones*/*
-	  rm -rf /data/*/*tombstones*/*
-	  rm -rf /data/*/*/*tombstones*/*
-	  rm -rf /data/anr/*
-	  rm -rf /data/system/package_cache/*/*
-	  rm -rf /data/local/*trace*/*
-	  rm -rf /data/mlog/*
-	  rm -rf /data/klog/*
-	  rm -rf /data/ap-log/*
-	  rm -rf /data/cp-log/*
-	  rm -rf /data/last_alog/*
-	  rm -rf /data/last_kmsg/*
-	  rm -rf /data/dontpanic/*
-	  rm -rf /data/memorydump/*
-	  rm -rf /data/dumplog/*
+	  ui_print "      + vendor log directories cleared (purge_vendor_logs=1)"
 	fi
 
 	ASB_WEB_MODEL_CODE="$(getprop ro.product.model 2>/dev/null)"
