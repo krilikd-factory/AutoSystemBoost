@@ -86,6 +86,11 @@ static time_t g_smart_drain_prev_ts  = 0;
 static int    g_smart_drain_prev_pct = -1;
 static long   g_smart_drain_on_sec   = 0;
 static long   g_smart_drain_drop_x100 = 0;
+/* Last completed screen-on drain measurement, kept across sessions so short bursts of use
+ * still produce a number. Zero until the first session long enough to measure. */
+#define ASB_DRAIN_STALE_SEC (6 * 3600)
+static long   g_smart_drain_last_x10 = 0;
+static time_t g_smart_drain_last_ts  = 0;
 static int    g_smart_drain_rate_ewma_x10 = 0;
 static int    g_smart_last_quality = -1;
 static int    g_smart_budget_src = 0;
@@ -1135,6 +1140,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         long live_x10 = 0;
         if (g_smart_drain_on_sec >= 300 && g_smart_drain_drop_x100 > 0) {
             live_x10 = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
+        } else if (g_smart_drain_last_x10 > 0 &&
+                   (time(NULL) - g_smart_drain_last_ts) < ASB_DRAIN_STALE_SEC) {
+            /* Nothing measurable in the current session yet - report the previous one
+             * rather than nothing. Expires after a few hours: a rate from this morning
+             * says little about this evening. */
+            live_x10 = g_smart_drain_last_x10;
         }
         int hot = (asb_smart_appheat_score(g_smart_rt.app_hash, time(NULL))
                    >= ASB_SMART_APPHEAT_HOT_SCORE);
@@ -2514,6 +2525,22 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             if (g_smart_quality_ewma < 0) g_smart_quality_ewma = _q;
             else g_smart_quality_ewma = (g_smart_quality_ewma * 3 + _q) / 4;
             g_smart_ses_clamp_start = g_v44_clamp_total;
+        }
+        /* Carry the last usable rate across the session boundary.
+         *
+         * The window resets at the end of every session, and a session ends whenever the
+         * screen goes off - so a phone used in short bursts almost never accumulated the
+         * 300 seconds of continuous screen-on the estimate needs, and the banner sat on
+         * "measuring..." for hours. Reported after three hours of ordinary use.
+         *
+         * The measurement itself must stay per-session: mixing a gaming session into a
+         * reading one produces a number describing neither. But the LAST completed
+         * measurement is still the best answer available until a new one exists, so it is
+         * kept and published as such rather than thrown away.
+         */
+        if (g_smart_drain_on_sec >= 300 && g_smart_drain_drop_x100 > 0) {
+            g_smart_drain_last_x10 = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
+            g_smart_drain_last_ts  = time(NULL);
         }
         g_smart_drain_on_sec = 0;
         g_smart_drain_drop_x100 = 0;
