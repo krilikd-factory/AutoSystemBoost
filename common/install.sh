@@ -2330,16 +2330,29 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
   # anything yet, so nothing should be chosen for them.
   if [ ! -f "$_old_conf" ] && [ ! -f "$_snap_conf" ] \
      && [ ! -f /data/adb/asb/config_schema ]; then
+    # Every card that ships away from stock, not a sample of them.
+    #
+    # The first version of this list held five keys and missed six more, because those
+    # six declare def:'1' in the WebUI - their default IS on, so a check comparing
+    # config against default found nothing wrong. A user counting switches on a fresh
+    # install found eleven. The list below is the answer to "what is on after install",
+    # which is a different question from "what differs from its default".
     for _neu in "bt_a2dp_offload=auto" "net_route_tune=off" "sustained_temp_mode=stock" \
-                "phantom_procs=stock" "log_level=stock"; do
+                "phantom_procs=stock" "log_level=stock" \
+                "camera_hold_enable=0" "auto_battery_enable=0" "charge_aware_enable=0" \
+                "night_quiet_enable=0" "cool_gaming=0" "bat_suppress_gaming=0"; do
       _nk="${_neu%%=*}"; _nv="${_neu#*=}"
       grep -qE "^[[:space:]]*${_nk}=" "$_new_conf" 2>/dev/null \
         && sed -i "s|^[[:space:]]*${_nk}=.*|${_nk}=${_nv}|" "$_new_conf" 2>/dev/null
     done
-    # The power profile too: smart is the one that observes before it acts, which is the
-    # honest default for a phone the module has never seen. The user picks another on the
-    # main screen whenever they want.
-    echo smart > "$MODPATH/current_profile" 2>/dev/null
+    # No power profile either.
+    #
+    # This shipped "balanced" and then wrote "smart", and both are the same mistake in
+    # different clothes: a module that has never seen the phone deciding how it should
+    # run. current_profile is removed instead, so nothing is applied until the user taps
+    # one of the four on the main screen. The governor treats an absent file as "no
+    # profile" and leaves the CPU alone.
+    rm -f "$MODPATH/current_profile" 2>/dev/null
     ui_print "      + first install: everything starts at stock, nothing applied yet"
     ui_print "        open the WebUI to turn on what you want"
   fi
