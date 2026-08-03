@@ -2276,6 +2276,32 @@ asb_reset_learning_on_upgrade_to_v56() {
   ui_print "      + learning reset; settings and device data preserved"
 }
 
+# Everything at stock, nothing applied - the state a module should be in before the user
+# has opened its UI.
+#
+# This lived inside asb_preserve_user_config, below its early return. That return fires
+# exactly when there is nothing to migrate - i.e. on a first install - so the block that
+# was supposed to run on a first install was the one piece of code a first install could
+# never reach. Reported twice: clean install, eleven switches on, Balanced active.
+asb_neutralise_fresh_install() {
+  _new_conf="$MODPATH/config/governor.conf"
+  [ -f "$_new_conf" ] || return 0
+  for _neu in "bt_a2dp_offload=auto" "net_route_tune=off" "sustained_temp_mode=stock" \
+              "phantom_procs=stock" "log_level=stock" \
+              "camera_hold_enable=0" "auto_battery_enable=0" "charge_aware_enable=0" \
+              "night_quiet_enable=0" "cool_gaming=0" "bat_suppress_gaming=0"; do
+    _nk="${_neu%%=*}"; _nv="${_neu#*=}"
+    grep -qE "^[[:space:]]*${_nk}=" "$_new_conf" 2>/dev/null \
+      && sed -i "s|^[[:space:]]*${_nk}=.*|${_nk}=${_nv}|" "$_new_conf" 2>/dev/null
+  done
+  # No power profile either: a module that has never seen the phone does not get to
+  # decide how it runs. profile_core.sh treats an absent file as "none" and applies
+  # nothing until the user taps one of the four.
+  rm -f "$MODPATH/current_profile" 2>/dev/null
+  ui_print "      + first install: everything starts at stock, nothing applied yet"
+  ui_print "        open the WebUI to turn on what you want"
+}
+
 asb_preserve_user_config() {
   _new_conf="$MODPATH/config/governor.conf"
   _old_conf="$NVBASE/modules/$MODID/config/governor.conf"
@@ -2287,8 +2313,28 @@ asb_preserve_user_config() {
   done
   _src=""
   [ -f "$_old_conf" ] && _src="$_old_conf"
-  [ -z "$_src" ] && [ -f "$_snap_conf" ] && _src="$_snap_conf"
-  if [ -z "$_src" ]; then ui_print "      + ${ASB_D_FRESH:-fresh install — shipped defaults}"; return 0; fi
+  # The snapshot only counts while the module is still installed.
+  #
+  # It lives in /data/adb/asb, which survives module removal - so uninstalling and
+  # reinstalling was read as an update and restored every setting the user had just
+  # thrown away. uninstall.sh does clear that directory, but it does not always run:
+  # removing through the manager and flashing again before a reboot skips it entirely.
+  #
+  # Its purpose is surviving an in-place update, and in that case the module directory
+  # is still there. Gone module directory means the user removed it on purpose, and
+  # honouring the leftover snapshot would be second-guessing that.
+  if [ -z "$_src" ] && [ -f "$_snap_conf" ] \
+     && [ -d "$NVBASE/modules/$MODID" ]; then
+    _src="$_snap_conf"
+  elif [ -z "$_src" ] && [ -f "$_snap_conf" ]; then
+    ui_print "      + previous install was removed - starting fresh, not from its snapshot"
+    rm -f "$_snap_conf" 2>/dev/null
+  fi
+  if [ -z "$_src" ]; then
+    # Nothing to migrate from: this is a first install, whatever else is on disk.
+    asb_neutralise_fresh_install
+    return 0
+  fi
 
   # Migrate the retired audio switches.
   # We therefore only promote to "hifi" when the user had deliberately turned EQ-compat OFF and
@@ -2316,66 +2362,6 @@ UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
 region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze"
 
   _migrated=0
-  # First install starts neutral. Upgrades keep what the user chose.
-  #
-  # Five settings shipped switched on - bt_a2dp_offload, net_route_tune,
-  # sustained_temp_mode, phantom_procs, log_level - plus the balanced power profile, all
-  # applied the moment the module installed. That is a module having opinions about
-  # someone's phone before they have opened its UI once, and it is the difference an
-  # external audit called out against Frosty, where all 38 switches ship off.
-  #
-  # The distinction that matters is first install vs upgrade, and there is already a
-  # reliable marker for it: a config snapshot or an old module directory exists only if
-  # ASB has run here before. No snapshot and no old config means nobody has chosen
-  # anything yet, so nothing should be chosen for them.
-  if [ ! -f "$_old_conf" ] && [ ! -f "$_snap_conf" ] \
-     && [ ! -f /data/adb/asb/config_schema ]; then
-    # Every card that ships away from stock, not a sample of them.
-    #
-    # The first version of this list held five keys and missed six more, because those
-    # six declare def:'1' in the WebUI - their default IS on, so a check comparing
-    # config against default found nothing wrong. A user counting switches on a fresh
-    # install found eleven. The list below is the answer to "what is on after install",
-    # which is a different question from "what differs from its default".
-    for _neu in "bt_a2dp_offload=auto" "net_route_tune=off" "sustained_temp_mode=stock" \
-                "phantom_procs=stock" "log_level=stock" \
-                "camera_hold_enable=0" "auto_battery_enable=0" "charge_aware_enable=0" \
-                "night_quiet_enable=0" "cool_gaming=0" "bat_suppress_gaming=0"; do
-      _nk="${_neu%%=*}"; _nv="${_neu#*=}"
-      grep -qE "^[[:space:]]*${_nk}=" "$_new_conf" 2>/dev/null \
-        && sed -i "s|^[[:space:]]*${_nk}=.*|${_nk}=${_nv}|" "$_new_conf" 2>/dev/null
-    done
-    # No power profile either.
-    #
-    # This shipped "balanced" and then wrote "smart", and both are the same mistake in
-    # different clothes: a module that has never seen the phone deciding how it should
-    # run. current_profile is removed instead, so nothing is applied until the user taps
-    # one of the four on the main screen. The governor treats an absent file as "no
-    # profile" and leaves the CPU alone.
-    rm -f "$MODPATH/current_profile" 2>/dev/null
-  else
-    # Upgrade: carry the profile across, because the zip ships one.
-    #
-    # current_profile is a plain file in the module directory, not a governor.conf key,
-    # so the config migration above never touched it - and an update installs into a
-    # fresh modules_update/ tree that has the shipped value in it. Every update therefore
-    # reset whoever had chosen Performance or Battery back to balanced, silently, and it
-    # would have kept doing that regardless of the fresh-install work above.
-    for _cp_old in /data/adb/modules/AutoSystemBoost/current_profile \
-                   /data/adb/asb/current_profile.bak; do
-      [ -f "$_cp_old" ] || continue
-      _cp_val="$(cat "$_cp_old" 2>/dev/null | tr -d " \r\n")"
-      case "$_cp_val" in
-        performance|battery|balanced|smart|none)
-          printf '%s\n' "$_cp_val" > "$MODPATH/current_profile" 2>/dev/null
-          ui_print "      + kept your power profile: $_cp_val"
-          break ;;
-      esac
-    done
-    ui_print "      + first install: everything starts at stock, nothing applied yet"
-    ui_print "        open the WebUI to turn on what you want"
-  fi
-
   # Which numbering the stored values were written against. Absent means "before schemas
   # existed", i.e. the 6-stop anim_speed scale. Written unconditionally after the loop, so
   # it never depends on which keys happened to be in the old config.
