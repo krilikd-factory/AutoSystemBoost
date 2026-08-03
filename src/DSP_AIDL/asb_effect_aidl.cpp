@@ -209,6 +209,7 @@ class AsbLoudnessContext final : public EffectContext {
      * setting failing. */
     void setDevices(const std::vector<::aidl::android::media::audio::common::AudioDeviceDescription>& devs) {
         mIsBluetooth = false;
+        mDeviceKnown = !devs.empty();
         for (const auto& d : devs) {
             /* AudioDeviceDescription has .type (the enum) and .connection (a string).
              * The first version wrote d.type.type, treating .type as a struct - it is the
@@ -238,6 +239,18 @@ class AsbLoudnessContext final : public EffectContext {
      */
     char mOutFilter[64] = {0};
     bool mDeviceAllowed = true;
+    /* Has the framework ever told us which output this instance drives?
+     *
+     * This is the difference between "the route is speaker" and "we have not been told
+     * the route". The first version could not tell them apart: mDeviceType started at
+     * OUT_SPEAKER and mDeviceAllowed at true, so an instance that never received a
+     * deviceDescription processed everything - which is exactly what "outputs=bt" looked
+     * like on the loudspeaker. Reported as: filter set to bt, speaker volume still moves
+     * with the gain slider.
+     *
+     * Not every framework path sends deviceDescription to an effect on the global mix,
+     * and assuming it does is what made the filter a no-op there. */
+    bool mDeviceKnown = false;
 
     void setOutputFilter(const char *f) {
         if (!f || !*f || !strcmp(f, "all")) { mOutFilter[0] = '\0'; mDeviceAllowed = true; return; }
@@ -251,6 +264,24 @@ class AsbLoudnessContext final : public EffectContext {
      * share no prefix: speaker, wired, bt. */
     void evaluateDevice() {
         if (!mOutFilter[0]) { mDeviceAllowed = true; return; }
+        /* Filter set but route unknown: fall back to the property the framework does
+         * expose. Doing nothing here is what let the effect process the speaker while
+         * set to bt - a filter that silently gives up is worse than no filter, because
+         * the UI keeps claiming it is in force. */
+        if (!mDeviceKnown) {
+            char live[64] = {0};
+            if (__system_property_get("persist.asb.dsp.route", live) > 0 && live[0]) {
+                mDeviceAllowed = (strstr(mOutFilter, live) != nullptr);
+            } else {
+                /* No route information at all. Process only when the filter names every
+                 * output we could plausibly be on - i.e. behave as though the user had
+                 * chosen "all" - rather than assuming permission. */
+                mDeviceAllowed = (strstr(mOutFilter, "speaker") != nullptr &&
+                                  strstr(mOutFilter, "wired")   != nullptr &&
+                                  strstr(mOutFilter, "bt")      != nullptr);
+            }
+            return;
+        }
         const char *want = nullptr;
         switch (mDeviceType) {
             case ::aidl::android::media::audio::common::AudioDeviceType::OUT_SPEAKER:
