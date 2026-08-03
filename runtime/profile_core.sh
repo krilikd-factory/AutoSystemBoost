@@ -517,6 +517,37 @@ asb_load_profile() {
   # profiles/*.sh opens with PROFILE="<its own name>" and would otherwise rewrite it - on smart
   # that turns the request into "balanced" before anyone can read it.
   _ASB_REQUESTED="$PROFILE"
+  # Per-device frequencies, before the profile reads its defaults.
+  #
+  # The profiles hold OnePlus 15 numbers - CPU_CAP_LITTLE=1190400 and friends - and every
+  # one of them is written as "${BALANCED_CPU_CAP_LITTLE:-1190400}", i.e. an environment
+  # override wins. asb_synthesize_bounds.sh already writes exactly those variable names to
+  # device_bounds.env, scaled to this device's real hardware and snapped to frequencies it
+  # actually has. Nothing was sourcing it: the governor read the file for its own internal
+  # bounds while the shell path, which is what writes scaling_max_freq, carried on with
+  # the reference numbers.
+  #
+  # That is why a OnePlus 13 asked its policy0 for 1190400 all day and sat at 2227200 -
+  # the cap was for a cluster layout the device does not have. On OP15 policy0 is the
+  # little cluster; on OP13 and Ace 5 it covers cpu0-5, so a cap that fails to hold costs
+  # six cores rather than two, which is the heat those users reported and the reason OP15
+  # and Ace 6 owners saw nothing wrong.
+  if [ "$(grep -E '^[[:space:]]*device_bounds_override=' "$MODDIR/config/governor.conf" 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')" = "1" ] \
+     && [ -r /data/adb/asb/device_bounds.env ]; then
+    # Only KEY=number lines: the file also carries comments, and sourcing it blindly would
+    # execute whatever ended up in there.
+    while IFS='=' read -r _bk _bv; do
+      case "$_bk" in
+        \#*|'') continue ;;
+        *_CPU_MAX_*|*_CPU_CAP_*|*_CPU_MIN_*|*_GPU_*) : ;;
+        *) continue ;;
+      esac
+      case "$_bv" in ''|*[!0-9]*) continue ;; esac
+      eval "$_bk=\$_bv"
+      export "$_bk"
+    done < /data/adb/asb/device_bounds.env
+  fi
   if [ -f "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh" ]; then
     . "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh"
   else
