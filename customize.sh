@@ -23,6 +23,14 @@ SKIPUNZIP=1
 unzip -qjo "$ZIPFILE" 'common/functions.sh' -d $TMPDIR >&2
 . $TMPDIR/functions.sh
 
+# Installer strings, extracted alongside functions.sh.
+#
+# install.sh sources englishtext.sh near the top to get its section headings, and with
+# SKIPUNZIP=1 nothing else has unpacked common/ by then. Leaving them out made the
+# install abort outright; extracting them here is what makes the translated output
+# actually appear rather than falling back to bare keys.
+unzip -qjo "$ZIPFILE" 'common/*text.sh' -d $TMPDIR >/dev/null 2>&1 || true
+
 # ── FINAL layout normalization ──────────────────────────────────────────────
 asb_fix_layout() {
   [ -n "$MODPATH" ] && [ -d "$MODPATH" ] || return 0
