@@ -313,9 +313,28 @@ case "$(printf '%s' "$LANG" | tr '[:upper:]' '[:lower:]')" in
 esac
 # English is loaded first in every case: a translation that covers only part of the keys
 # then overrides what it has, and anything it misses stays readable instead of blank.
-. "$MODPATH/common/englishtext.sh"
-[ -n "$_asb_lang_file" ] && [ -f "$MODPATH/common/$_asb_lang_file" ] \
-  && . "$MODPATH/common/$_asb_lang_file"
+#
+# Both sources are guarded, and English is no exception.
+#
+# This ran as an unconditional `. "$MODPATH/common/englishtext.sh"` and aborted the
+# whole install with "can't open ... No such file or directory" when the file was not
+# there yet. customize.sh sets SKIPUNZIP=1 and unpacks by hand, so at this point in the
+# script MODPATH/common may not be populated - the old code happened to work because
+# nothing was sourced this early. A missing translation must degrade to untranslated
+# text, never to a failed install: the strings are labels, and no label is worth
+# bricking an installation over.
+#
+# TMPDIR is checked first: customize.sh extracts there, and on the path where common/
+# has not reached MODPATH yet that is where the file actually is.
+for _asb_lang_dir in "$TMPDIR" "$MODPATH/common" "$TMPDIR/common"; do
+  [ -n "$_asb_lang_dir" ] || continue
+  if [ -f "$_asb_lang_dir/englishtext.sh" ]; then
+    . "$_asb_lang_dir/englishtext.sh"
+    [ -n "$_asb_lang_file" ] && [ -f "$_asb_lang_dir/$_asb_lang_file" ] \
+      && . "$_asb_lang_dir/$_asb_lang_file"
+    break
+  fi
+done
 
 ASB_SED_INPLACE_MODE=''
 _asb_sed_do() {
@@ -2790,8 +2809,22 @@ if [ -f "$_gc" ]; then
         sed -i 's/^device_bounds_override=.*/device_bounds_override=1/' "$_gc" 2>/dev/null || true
         ui_print "[*] Device-adaptive bounds: ON (SM8650 — interactive-cluster caps leaned up to remove battery-mode lag)" ;;
       *)
-        sed -i 's/^device_bounds_override=.*/device_bounds_override=0/' "$_gc" 2>/dev/null || true
-        ui_print "[*] Device-adaptive bounds: OFF by default on this model (opt-in via WebUI)" ;;
+        # On by default everywhere else too.
+        #
+        # This branch shipped 0, so every model that was not an OP15 or an SM8650 ran on
+        # the compiled OP15 rails. A OnePlus 13 field report showed what that costs: its
+        # policy0 covers cpu0-5 and its frequency table has no 1190400 at all, so the cap
+        # the profile asked for did not exist on the device and six cores ran unrestrained
+        # - heat and drain, on the one model that most needed the caps to fit.
+        #
+        # The synthesis is not a guess: asb_synthesize_bounds.sh scales the OP15 ratios to
+        # THIS device's hardware ceiling and then snaps every value to a frequency the
+        # table actually lists. Verified on that OP13: it produced 1555200 / 1401600 for
+        # battery, both real entries in its own table, and the caps then held.
+        #
+        # Off remains reachable through the WebUI for anyone who wants the reference rails.
+        sed -i 's/^device_bounds_override=.*/device_bounds_override=1/' "$_gc" 2>/dev/null || true
+        ui_print "[*] Device-adaptive bounds: ON (caps scaled to this device's own frequency table)" ;;
     esac
   fi
 fi
