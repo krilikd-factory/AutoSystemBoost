@@ -2353,6 +2353,25 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
     # one of the four on the main screen. The governor treats an absent file as "no
     # profile" and leaves the CPU alone.
     rm -f "$MODPATH/current_profile" 2>/dev/null
+  else
+    # Upgrade: carry the profile across, because the zip ships one.
+    #
+    # current_profile is a plain file in the module directory, not a governor.conf key,
+    # so the config migration above never touched it - and an update installs into a
+    # fresh modules_update/ tree that has the shipped value in it. Every update therefore
+    # reset whoever had chosen Performance or Battery back to balanced, silently, and it
+    # would have kept doing that regardless of the fresh-install work above.
+    for _cp_old in /data/adb/modules/AutoSystemBoost/current_profile \
+                   /data/adb/asb/current_profile.bak; do
+      [ -f "$_cp_old" ] || continue
+      _cp_val="$(cat "$_cp_old" 2>/dev/null | tr -d " \r\n")"
+      case "$_cp_val" in
+        performance|battery|balanced|smart|none)
+          printf '%s\n' "$_cp_val" > "$MODPATH/current_profile" 2>/dev/null
+          ui_print "      + kept your power profile: $_cp_val"
+          break ;;
+      esac
+    done
     ui_print "      + first install: everything starts at stock, nothing applied yet"
     ui_print "        open the WebUI to turn on what you want"
   fi
