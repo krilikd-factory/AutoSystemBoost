@@ -3427,6 +3427,17 @@ async function cfgSet(key, val, ctl) {
           // this marker the setting survived until the next restart and no further.
           await run("mkdir -p /data/adb/asb && : > /data/adb/asb/thermal_user_set");
         } catch (e) {}
+        // Apply it, then stop.
+        //
+        // This branch flipped the mode to manual and fell through, so the generic tail
+        // printed "reboot to apply" under a card that says "applies immediately". The
+        // governor owns this key and re-reads its config on command, so a reload makes
+        // the card honest instead of downgrading its promise.
+        try { await run(MD + '/bin/asb reload >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
       }
     var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune',
       'net_congestion_wifi','net_congestion_mobile','net_qdisc_wifi','net_qdisc_mobile',
@@ -3456,7 +3467,12 @@ async function cfgSet(key, val, ctl) {
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
     } else if (HAPTIC_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_haptics_apply.sh'); } catch(e) {}
-      toast('\u2713 ' + key + ' = ' + val, cfgToastType(key));
+      // Say that it applied, like every other live branch does.
+      //
+      // This one printed only "key = value" - no verdict at all - so the card promised
+      // immediate and the popup confirmed nothing. Not a contradiction, but the one
+      // place a user cannot tell a working setting from a silently ignored one.
+      toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
     } else if (BLUR_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_blur_apply.sh >/dev/null 2>&1'); } catch(e) {}
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_blur', ' \u00b7 shade now, rest after reboot'), cfgToastType(key));
