@@ -2563,6 +2563,8 @@ const CFG_ITEMS = [
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces what Google Play services does in the background. This does NOT freeze or disable GMS - push notifications, sign-in, payments and the Play Store keep working, because a module that broke those would be lying about what it is for.\n\nlite stops location reporting and the search widget\u2019s background work; neither is involved in delivering a notification. strict additionally removes GMS from the Doze whitelist, which is where the real saving is on a phone where Google services are the main drain - and which can delay notifications by minutes while the phone is asleep. If messages arriving late would bother you, stay on lite.\n\nFully reversible: the permissions changed are recorded and restored when ASB is removed.' },
+  { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more'], name:'Freeze Google Components',
+    desc:'Disables individual components inside Google Play services. This is not package freezing - GMS itself stays enabled, so push notifications, sign-in, payments and the Play Store keep working.\n\nsafe turns off telemetry, usage reporting, checkin and analytics. Nothing user-facing depends on them; the phone does not notice they are gone.\n\nmore adds ads personalisation and location history uploads. Ads still appear, they are just less targeted; Maps still works but Timeline stops recording where you have been.\n\nNever touched at any level: push delivery, module loading, account sign-in and payments - freezing those is how a battery module turns into a thread about missing notifications.\n\nEvery component\u2019s prior state is recorded. Setting this back to off, or uninstalling ASB, puts them back - except ones you had already disabled yourself, which stay that way.' },
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
@@ -2608,7 +2610,7 @@ const CFG_CAT = {
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
-  BG_TRIM_LEVEL:'memory', gms_trim:'memory',
+  BG_TRIM_LEVEL:'memory', gms_trim:'memory', gms_freeze:'memory',
   UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', anim_speed:'ux', UX_ANIM_FORCE_RESTART:'ux',
   camera_hold_enable:'camera',
   night_quiet_enable:'battery', log_level:'system', phantom_procs:'system',
@@ -2642,7 +2644,7 @@ const CFG_GROUP_OF = {
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
-  BG_TRIM_LEVEL:'battery', gms_trim:'battery', cool_gaming:'battery',
+  BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
@@ -2718,6 +2720,7 @@ const CFG_ICONS = {
   gms_trim:'\u2601\uFE0F',
   audio_remove_volume_limit:'\uD83D\uDC42',
   doze_trim_whitelist:'\uD83D\uDEAB',
+  gms_freeze:'\uD83E\uDDCA',
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -2930,6 +2933,7 @@ const WILL_BREAK = {
   sustained_temp_enter:'wb_therm',
   wifi_scan_throttle: 'wb_scan',
   gms_trim:           'wb_gms',
+  gms_freeze:         'wb_gmsfreeze',
   audio_remove_volume_limit: 'wb_vol',
   doze_trim_whitelist: 'wb_dozewl'
 };
@@ -2969,6 +2973,7 @@ const APPLY_MODE = {
   // Next: the value is live but only consulted when something new starts.
   anim_speed:APPLY_LIVE,
   gms_trim:APPLY_LIVE,
+  gms_freeze:APPLY_NEXT,
   audio_remove_volume_limit:APPLY_LIVE,
   doze_trim_whitelist:APPLY_LIVE,
   dsp_outputs:APPLY_LIVE,
