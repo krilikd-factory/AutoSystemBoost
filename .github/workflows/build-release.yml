@@ -280,7 +280,8 @@ jobs:
             --exclude 'tests'                         \
             --exclude 'tools'                         \
             --exclude 'config/profile_bounds.conf'    \
-            --exclude 'config/governor.conf'
+            --exclude 'config/governor.conf' \
+            --exclude '/install.sh'
 
           mkdir -p "$PKG_REL/bin"
           install -m 0755 bin/arm64-v8a/asb "$PKG_REL/bin/asb"

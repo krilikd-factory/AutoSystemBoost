@@ -268,7 +268,8 @@ jobs:
             --exclude 'docs'                          \
             --exclude 'tests'                         \
             --exclude 'tools/gen_bounds.sh'           \
-            --exclude 'config/profile_bounds.conf'
+            --exclude 'config/profile_bounds.conf' \
+            --exclude '/install.sh'
 
           mkdir -p "$PKG_DBG/bin"
           install -m 0755 bin/arm64-v8a/asb-debug "$PKG_DBG/bin/asb"
