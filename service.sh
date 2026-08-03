@@ -2502,6 +2502,38 @@ if [ -f /data/adb/asb/lockscreen_prev ]; then
 fi
 
 # Doze timings: re-assert at boot, the key does not survive one.
+# Keep persist.asb.dsp.route honest while the phone is running.
+#
+# The route is written when audio settings change, but it also changes on its own -
+# headphones in, Bluetooth connected, speaker again - and a stale value means the DSP
+# output filter is deciding against last hour's route. Cheap to watch: only when a filter
+# other than "all" is actually set, and only re-runs the applier when the route moved.
+(
+  _prev_route=""
+  while true; do
+    sleep 20
+    _f="$(grep -E '^[[:space:]]*dsp_outputs=' "$MODDIR/config/governor.conf" 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    case "$_f" in ''|all) continue ;; esac
+    # Nothing to route while the effect is off.
+    [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] || continue
+
+    _now=""
+    _d="$(dumpsys audio 2>/dev/null | grep -m1 -iE 'Device[s]?: *(speaker|bt|usb|wired|headset|headphone)')"
+    case "$_d" in
+      *bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*|*bt_sco*) _now="bt" ;;
+      *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*) _now="wired" ;;
+      *speaker*|*SPEAKER*) _now="speaker" ;;
+    esac
+    [ -n "$_now" ] || continue
+    [ "$_now" = "$_prev_route" ] && continue
+    _prev_route="$_now"
+    resetprop -n persist.asb.dsp.route "$_now" >/dev/null 2>&1 \
+      || setprop persist.asb.dsp.route "$_now" >/dev/null 2>&1
+    asb_log "dsp route changed to $_now (outputs filter=$_f)"
+  done
+) >/dev/null 2>&1 &
+
 if [ -f "$MODDIR/runtime/asb_gms_trim.sh" ]; then
   sh "$MODDIR/runtime/asb_gms_trim.sh" >/dev/null 2>&1
 fi
