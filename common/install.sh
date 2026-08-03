@@ -2294,9 +2294,37 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze"
 
   _migrated=0
+  # First install starts neutral. Upgrades keep what the user chose.
+  #
+  # Five settings shipped switched on - bt_a2dp_offload, net_route_tune,
+  # sustained_temp_mode, phantom_procs, log_level - plus the balanced power profile, all
+  # applied the moment the module installed. That is a module having opinions about
+  # someone's phone before they have opened its UI once, and it is the difference an
+  # external audit called out against Frosty, where all 38 switches ship off.
+  #
+  # The distinction that matters is first install vs upgrade, and there is already a
+  # reliable marker for it: a config snapshot or an old module directory exists only if
+  # ASB has run here before. No snapshot and no old config means nobody has chosen
+  # anything yet, so nothing should be chosen for them.
+  if [ ! -f "$_old_conf" ] && [ ! -f "$_snap_conf" ] \
+     && [ ! -f /data/adb/asb/config_schema ]; then
+    for _neu in "bt_a2dp_offload=auto" "net_route_tune=off" "sustained_temp_mode=stock" \
+                "phantom_procs=stock" "log_level=stock"; do
+      _nk="${_neu%%=*}"; _nv="${_neu#*=}"
+      grep -qE "^[[:space:]]*${_nk}=" "$_new_conf" 2>/dev/null \
+        && sed -i "s|^[[:space:]]*${_nk}=.*|${_nk}=${_nv}|" "$_new_conf" 2>/dev/null
+    done
+    # The power profile too: smart is the one that observes before it acts, which is the
+    # honest default for a phone the module has never seen. The user picks another on the
+    # main screen whenever they want.
+    echo smart > "$MODPATH/current_profile" 2>/dev/null
+    ui_print "      + first install: everything starts at stock, nothing applied yet"
+    ui_print "        open the WebUI to turn on what you want"
+  fi
+
   # Which numbering the stored values were written against. Absent means "before schemas
   # existed", i.e. the 6-stop anim_speed scale. Written unconditionally after the loop, so
   # it never depends on which keys happened to be in the old config.
@@ -2376,7 +2404,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -3804,7 +3832,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_log_apply.sh asb_doze_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
