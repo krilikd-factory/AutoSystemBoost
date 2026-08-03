@@ -914,6 +914,14 @@ asb_thermal_sanity() {
   done
   [ "$_ts_idle" -gt 0 ] || return 0
   _ts_min=$(( _ts_idle + 4 ))
+  # Never above what the slider can express.
+  #
+  # The raise had no ceiling, so on a device whose CPU idles hot it produced values
+  # outside the control's own range - a user set 55 and the card showed 109, which is
+  # not a number they could ever have chosen or can now undo from the UI. The slider
+  # tops out at 70; anything the sanity check wants above that is a sign the setting
+  # cannot help on this device, not licence to invent a value.
+  [ "$_ts_min" -gt 70 ] && _ts_min=70
   if [ "$_ts_set" -lt "$_ts_min" ]; then
     sed -i "s|^[[:space:]]*sustained_temp_enter=.*|sustained_temp_enter=$_ts_min|" \
       "$_ts_conf" 2>/dev/null
@@ -945,6 +953,17 @@ asb_thermal_mode_apply() {
   # user had set.
   # Reported exactly that way: "I set 55 and after a reboot it is 90 again".
   case "$_tm" in ''|manual) return 0 ;; esac
+  # Smart resolves the device trip point, but not over a number the user chose.
+  #
+  # Reported as: set 55, reboot, it is 70. Both halves of this file rewrite
+  # sustained_temp_enter on every boot - the sanity check raises it and this resolver
+  # replaces it - so a deliberate choice survived exactly until the next restart. The
+  # WebUI writes the slider and nothing recorded that it had been touched, so there
+  # was no way to tell a user value from a leftover default.
+  if [ -f /data/adb/asb/thermal_user_set ]; then
+    asb_log "thermal mode=$_tm: user set the point by hand, leaving it alone"
+    return 0
+  fi
   _tsv="$(grep -E '^STOCK_THERMAL=' /data/adb/asb/thermal_stock 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_tsv" in ''|*[!0-9]*) return 0 ;; esac
