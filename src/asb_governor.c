@@ -324,6 +324,43 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
         fsm->plan.ac_budget    = 0;
         fsm->plan.sensor_budget = 0;
         fsm->plan.plan_class   = PLAN_CLASS_IDLE_NOISY;
+    } else if (!screen_on && idle_band) {
+        /*
+         * ANY profile, screen off, idle -> the quiet plan. This branch did not exist.
+         *
+         * The V56 note above describes SMART falling through to the PERFORMANCE plan and
+         * being called "a boiler". SMART was remapped and fixed; BALANCED was not, and it
+         * has the same shape: the branch below matches BALANCED for every state that is
+         * not heavy, WITHOUT looking at the screen. So with the screen off and the phone
+         * doing nothing, BALANCED still ran sensor_tier 0 (full polling), ac_eligible 1
+         * (the anti-clamp armed, re-raising vendor thermal limits) and deep_sleep 0 - a
+         * 5-second tick that never stretched.
+         *
+         * Two field captures on BALANCED show the cost: idle 95 min at 83% awake and
+         * charging_idle 58 min at 100% awake against a <5% target, deep sleep 3.3%, and
+         * 416 throttle events of which 274 landed while charging - the anti-clamp and the
+         * vendor thermal engine writing over each other. On a OnePlus 13 that was enough
+         * for OxygenOS to disable its own display enhancement with "device overheated".
+         *
+         * Written as a rule about the STATE, not a list of profiles, because that is where
+         * the bug came from: the quiet plan was granted per profile, so each one had to be
+         * remembered separately. SMART was fixed in V56, BALANCED was missed until two
+         * field captures showed it, and PERFORMANCE would have been the next report -
+         * with the screen off it also polled fully with the anti-clamp armed, and there is
+         * no reading of "performance" under which that helps a phone in someone's pocket.
+         *
+         * Idle with the screen off is idle whatever the profile is called. Every profile
+         * keeps its full behaviour the moment the screen comes on or real load arrives -
+         * this branch cannot be reached in either case.
+         */
+        fsm->plan.sensor_tier  = 2;
+        fsm->plan.thermal_div  = 3;
+        fsm->plan.allow_hr     = 0;
+        fsm->plan.ac_eligible  = 0;
+        fsm->plan.deep_sleep   = 1;
+        fsm->plan.ac_budget    = 0;
+        fsm->plan.sensor_budget = 0;
+        fsm->plan.plan_class   = PLAN_CLASS_IDLE_CLEAN;
     } else if (p == PROFILE_BATTERY || (p == PROFILE_BALANCED && !heavy_band)) {
         fsm->plan.sensor_tier  = (p == PROFILE_BALANCED) ? 0 : 1;
         fsm->plan.thermal_div  = 1;

@@ -703,11 +703,54 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
  * capture and a dropped-frame one; it never lowers a state, so GAMING and SUSTAINED are
  * untouched, and the thermal guards downstream still apply normally.
  */
+/*
+ * Camera hold is BOUNDED - by time and by temperature.
+ *
+ * Forcing HEAVY while the camera streams stops a dropped frame in a burst or in 4K60
+ * recording. Those last seconds to a few minutes. A video call streams the camera exactly
+ * the same way for forty minutes, and the hold had no limit at all: it pinned interactive
+ * caps, full sensor polling and the anti-clamp for the whole call. A OnePlus 13 owner
+ * reported the phone getting hot on video calls, which is this and nothing else.
+ *
+ * Past a couple of minutes the situation is no longer a burst - it is a sustained session,
+ * and sustained sessions are what the thermal path exists to manage. Holding interactive
+ * caps through one does not prevent dropped frames either: the vendor thermal engine
+ * throttles anyway, and ASB re-raising its limits is the write war seen in the field logs.
+ *
+ * Two releases, whichever comes first:
+ *   - camera_hold_max_s of continuous streaming (0 = keep the old unbounded behaviour)
+ *   - the CPU reaching the profile's own throttle point, where holding is counter-productive
+ *
+ * Released only means "stop FORCING heavy". Real load still raises the state on its own,
+ * so a recording that genuinely needs the clocks keeps them.
+ */
+/* Separate flag rather than a 0 sentinel: 0 is a legitimate timestamp at boot, and using
+ * it to mean "not started" restarts the clock on the next tick instead - which quietly
+ * extends the hold past its limit. Caught by a unit test, not on a device. */
+static long cam_hold_start = 0;
+static int  cam_hold_running = 0;
+
 static asb_state_t fsm_desired(const asb_metrics_t *m) {
     asb_state_t s = fsm_desired_base(m);
     if (g_asb_cfg.camera_hold_enable && m->misc.camera_active &&
-        m->misc.screen_on && s < ASB_STATE_HEAVY)
-        s = ASB_STATE_HEAVY;
+        m->misc.screen_on && s < ASB_STATE_HEAVY) {
+
+        long now_s = (long)m->ts.tv_sec;
+        if (!cam_hold_running) { cam_hold_start = now_s; cam_hold_running = 1; }
+
+        int hold_ok = 1;
+        int max_s = g_asb_cfg.camera_hold_max_s;
+        if (max_s > 0 && (now_s - cam_hold_start) >= max_s)
+            hold_ok = 0;
+
+        int trip = asb_config_profile_sustained_temp_enter(&g_asb_cfg, 1);
+        if (trip > 0 && m->therm.cpu_max_c >= trip)
+            hold_ok = 0;
+
+        if (hold_ok) s = ASB_STATE_HEAVY;
+    } else {
+        cam_hold_running = 0;   /* not streaming: the next session starts its own clock */
+    }
     return s;
 }
 
@@ -1170,6 +1213,32 @@ if (!can_leave &&
             int trimmed = new_caps.gpu_max_pct - trim;
             if (trimmed < floor_gpu) trimmed = floor_gpu;    /* never below a usable floor */
             if (trimmed < new_caps.gpu_max_pct) new_caps.gpu_max_pct = trimmed;
+        }
+
+        /*
+         * Video playback gets its own, gentler GPU ceiling.
+         *
+         * The trim above is skipped while video is active, and that was the whole of the
+         * handling: the phase the comment itself calls the dominant power driver (~728 mA
+         * at >40% GPU busy) was the one phase left at the full ceiling. A field capture
+         * bears it out - playback with the screen on drained 25.4 %/h against 14.2 %/h for
+         * gaming on the same device, with the GPU at 55% and the CPU nearly idle.
+         *
+         * Skipping the idle trim was right: that trim is aimed at an idle GPU and would
+         * cut into a decoder mid-frame. But "do not trim aggressively" is not the same as
+         * "do not cap at all". Playback is steady-state and predictable - the decode block
+         * does the work and the GPU only composites - so a ceiling well above what
+         * compositing needs still saves the ramp to maximum that nothing was asking for.
+         *
+         * Deliberately conservative: only below the profile's own ceiling, never in
+         * PERFORMANCE, never on top of a thermal cap, and 0 disables it outright.
+         */
+        int vmax = g_asb_cfg.gpu_video_max_pct;
+        if (vmax > 0 && video_active &&
+            fsm->profile_idx != PROFILE_PERFORMANCE &&
+            !fsm->thermal_cap &&
+            new_caps.gpu_max_pct > vmax) {
+            new_caps.gpu_max_pct = vmax;
         }
     }
 

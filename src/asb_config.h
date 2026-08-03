@@ -12,6 +12,10 @@ typedef struct {
     int   device_bounds_override; /* 1 = apply per-device synthesised bounds from device_bounds.env (0=off, compiled defaults) */
     int   gpu_idle_trim_floor;  /* never trim GPU ceiling below this % (0=default 55) */
     int   gpu_video_busy_min;   /* GPU busy%% that counts as media-heavy/video (0=default 40) */
+    /* GPU ceiling (% of max) while video playback is detected. 0 = leave alone.
+     * Playback was the highest-drain phase in field captures - higher than gaming - and
+     * was the one high-GPU case with no ceiling of its own. */
+    int   gpu_video_max_pct;
     int   gaming_gpu_enter;
     int   gaming_confirm_ticks;
     int   sustained_gpu_min;
@@ -54,7 +58,11 @@ typedef struct {
     int   gaming_cpu_max_ceiling_khz; /* cap declared scaling_max in GAMING (vendor clamps anyway); 0=off */
     int   camera_hold_enable;      /* 1=hold interactive caps while the camera streams */
     int   camera_busy_pct;         /* camera HAL CPU%% of one core that counts as streaming */
-    int   camera_hold_grace_s;     /* keep the hold this long after the pipeline goes quiet */
+    int   camera_hold_grace_s;   /* keep the hold this long after the pipeline goes quiet */
+    /* Longest a camera stream may FORCE the heavy state. 0 = unbounded (old behaviour).
+     * A burst is seconds and 4K60 is minutes; a video call is tens of minutes and was
+     * pinning interactive caps for all of it. */
+    int   camera_hold_max_s;
     int   gaming_gap_thresh;
     int   gaming_gap_ticks;
     int   gaming_retry_cooldown_s;
@@ -181,6 +189,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->device_bounds_override = 0;
     c->gpu_idle_trim_floor = 55;
     c->gpu_video_busy_min = 40;
+    c->gpu_video_max_pct   = 70;
     c->gaming_gpu_enter    = 65;
     c->gaming_confirm_ticks = 6;
     c->sustained_gpu_min   = 45;
@@ -215,6 +224,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->camera_hold_enable   = 1;
     c->camera_busy_pct      = 15;
     c->camera_hold_grace_s  = 20;
+    c->camera_hold_max_s   = 180;
     /*
      * Below HEAVY (0.72), not above it.
      * The device sat there for 24% of all screen-on time and the vendor thermal HAL never
@@ -352,6 +362,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "camera_hold_enable"))   c->camera_hold_enable   = atoi(v);
     else if (!strcmp(k, "camera_busy_pct"))      c->camera_busy_pct      = atoi(v);
     else if (!strcmp(k, "camera_hold_grace_s"))  c->camera_hold_grace_s  = atoi(v);
+    else if (!strcmp(k, "camera_hold_max_s"))    c->camera_hold_max_s = atoi(v);
     else if (!strcmp(k, "gaming_gap_thresh"))    c->gaming_gap_thresh = atoi(v);
     else if (!strcmp(k, "gaming_gap_ticks"))     c->gaming_gap_ticks  = atoi(v);
     else if (!strcmp(k, "gaming_retry_cooldown_s")) c->gaming_retry_cooldown_s = atoi(v);
@@ -370,6 +381,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "device_bounds_override")) c->device_bounds_override = atoi(v);
     else if (!strcmp(k, "gpu_idle_trim_floor"))  c->gpu_idle_trim_floor = atoi(v);
     else if (!strcmp(k, "gpu_video_busy_min"))   c->gpu_video_busy_min = atoi(v);
+    else if (!strcmp(k, "gpu_video_max_pct"))    c->gpu_video_max_pct = atoi(v);
     else if (!strcmp(k, "bat_moderate_load_enter")) c->bat_moderate_load_enter = (float)atof(v);
     else if (!strcmp(k, "log_level")) {
         /* User-facing choice, kept readable: stock | 0 | 1 | 2 | 3.
