@@ -647,6 +647,22 @@ elif [ -n "$_schema_ver" ]; then
 fi
 
 
+echo "📁 Duplicate install.sh"
+# install.sh exists at the root AND in common/, and the root copy is what actually runs.
+#
+# They drifted: the root copy still had an unguarded `. "$MODPATH/common/englishtext.sh"`
+# that aborted the whole install with "No such file or directory", while common/install.sh
+# had the fix. Nothing compared them, so the fix looked applied and the install still
+# failed. If the two ever differ again, say so here rather than at install time.
+if [ -f install.sh ] && [ -f common/install.sh ]; then
+  if cmp -s install.sh common/install.sh; then
+    ok "install.sh matches common/install.sh"
+  else
+    err "install.sh and common/install.sh DIFFER - the root copy is the one that runs"
+  fi
+fi
+echo ""
+
 echo "📋 Version Sync"
 _mp="$MODDIR/module.prop"
 _uj="$MODDIR/update.json"
