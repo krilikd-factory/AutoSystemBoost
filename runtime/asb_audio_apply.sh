@@ -205,6 +205,34 @@ if [ "$_dsp_ok" = "1" ]; then
         *) _dsp_out="all" ;;
       esac
       _dspp outputs "$_dsp_out"
+      # Publish the CURRENT route as well.
+      #
+      # The library filters on the device the framework hands it, but on the global mix
+      # that information does not always arrive - and an effect that never learns its
+      # route was treating "bt" as permission to process the speaker. Reading the live
+      # route here and exposing it as a property gives the library something to check
+      # when the framework tells it nothing.
+      #
+      # dumpsys is the source of truth for what audio is coming out of right now; the
+      # order matters, because a phone with headphones connected AND a BT device paired
+      # routes to whichever was selected last, not to both.
+      _asb_route=""
+      if _has dumpsys; then
+        _rt_dump="$(dumpsys audio 2>/dev/null | grep -m1 -iE 'Device[s]?: *(speaker|bt|usb|wired|headset|headphone)')"
+        case "$_rt_dump" in
+          *bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*|*bt_sco*) _asb_route="bt" ;;
+          *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*) _asb_route="wired" ;;
+          *speaker*|*SPEAKER*) _asb_route="speaker" ;;
+        esac
+      fi
+      # Fall back to the A2DP connection state: if something is connected over A2DP and
+      # playing, the route is bt whatever the dump said.
+      if [ -z "$_asb_route" ] && _has dumpsys; then
+        dumpsys bluetooth_manager 2>/dev/null | grep -qiE 'A2DP.*(connected|playing)' \
+          && _asb_route="bt"
+      fi
+      [ -n "$_asb_route" ] || _asb_route="speaker"
+      _dspp route "$_asb_route"
       _dspp ceiling_mb -15
       # Compressor, on unless the user asked for it off.
       #
