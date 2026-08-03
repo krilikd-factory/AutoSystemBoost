@@ -525,6 +525,23 @@ esac
 NOTE "sessions learned = $(grep -m1 '^smart_sessions_total=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 
 SEC "5a3. BATTERY BEHAVIOUR  (the governor-owned switches)"
+# Is the governor actually quiet while the screen is off?
+#
+# The awake share is the number that matters and it is not visible anywhere else. Two field
+# captures on BALANCED showed idle at 83% awake and charging-idle at 100%, against a <5%
+# target - the profile ran full sensor polling with the anti-clamp armed because its plan
+# branch never looked at the screen. Print the plan so the next report answers this on its
+# own instead of needing a full-day capture.
+_pl_cls="$(grep -E '^plan_class=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
+_pl_deep="$(grep -E '^plan_deep_sleep=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
+_pl_ac="$(grep -E '^plan_ac_eligible=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
+_pl_scr="$(grep -E '^screen_on=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
+if [ -n "$_pl_cls" ]; then
+  NOTE "governor plan: class=$_pl_cls deep_sleep=${_pl_deep:-?} anti_clamp=${_pl_ac:-?} screen_on=${_pl_scr:-?}"
+  if [ "$_pl_scr" = "0" ] && [ "$_pl_deep" = "0" ]; then
+    NOTE "  screen is OFF but the plan is not the quiet one - expect a 5s tick and full polling"
+  fi
+fi
 # These live in governor.conf and are read by the native governor, which reloads only on
 # command. A value here that the governor has not picked up looks applied and is not -
 # the single most common way a setting appears to do nothing.
