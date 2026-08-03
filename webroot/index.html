@@ -1421,6 +1421,27 @@ body.config-active #livePage.open {
   .cfg-row-top > .cfg-seg,
   .cfg-row-top > .cfg-range { flex: 1 1 100%; margin-left: 57px; }
 }
+
+/*
+ * Four or more options always get their own row, at any screen width.
+ *
+ * The width media query alone was not enough: it triggers on CSS pixels, and a user who
+ * raises the system font size gets wider text on the same 392px viewport - so the query
+ * says "roomy" while the text no longer fits. The screenshots that prompted this were
+ * taken on a wide screen; the titles were still being cut.
+ *
+ * Number of options is the honest signal here. Three or fewer fit beside a title in every
+ * combination worth supporting; four or more do not, whatever the display density says.
+ */
+.cfg-row-top > .cfg-seg.small {
+  flex: 1 1 100%;
+  margin-left: 57px;
+}
+@media (max-width: 400px) {
+  /* The icon is narrower here, so the indent that lines the control up with the title
+     has to match. Hardcoding 57px in both places would misalign one of them. */
+  .cfg-row-top > .cfg-seg.small { margin-left: 0; }
+}
 .cfg-icon {
   flex: 0 0 auto;
   width: 44px;
@@ -1607,7 +1628,19 @@ body.config-active #livePage.open {
 .cfg-switch.busy { opacity: 0.45; pointer-events: none; }
 .cfg-seg {
   display: inline-flex;
-  flex: 0 0 auto;
+  /*
+   * The control may shrink and may take the whole row.
+   *
+   * flex: 0 0 auto refused both: a four-option segment kept its full width, the title
+   * next to it lost the difference and was cut with an ellipsis, and on narrow or
+   * large-font screens the last option still ran past the card edge. Neither part of the
+   * row was readable - the name was truncated to pay for a control that overflowed anyway.
+   *
+   * 1 1 auto lets it give way; max-width: 100% keeps it inside the card once it has
+   * wrapped onto its own line, which is what the row's flex-wrap already allows.
+   */
+  flex: 1 1 auto;
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: 11px;
   overflow: hidden;
@@ -1622,6 +1655,19 @@ body.config-active #livePage.open {
   padding: 6px 13px;
   cursor: pointer;
   opacity: 0.6;
+  /*
+   * Buttons share the width instead of each demanding its own.
+   *
+   * min-width: 0 is the part that matters: a flex item defaults to min-width: auto, which
+   * means "never smaller than my text", and that is why the segment could not shrink no
+   * matter what the container allowed. With it, four options divide the row evenly and a
+   * long label wraps inside its own button rather than pushing the others off the card.
+   */
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.25;
 }
 .cfg-seg button.on {
   background: linear-gradient(135deg, rgba(0,225,200,0.35), rgba(0,200,235,0.22));
