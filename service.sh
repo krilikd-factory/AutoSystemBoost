@@ -886,6 +886,41 @@ asb_thermal_stock_capture
 # The C side parses sustained_temp_enter as a temperature, so the mode cannot live in that key
 # as a word.
 # Writing it here, once per boot, means the governor never has to know modes exist.
+# Is the configured throttle point reachable on THIS device?
+#
+# A static slider floor is a guess about hardware we have not seen. The governor compares
+# the point against the hottest CPU zone, and those sit well above the shell: a OnePlus 15
+# at rest reads 48C on the CPU with a 38C shell. A point at or below that means SUSTAINED
+# is entered permanently - prime pinned around the clock, work stretched out, and the phone
+# ends up hotter than with no module at all. That is the opposite of the setting's purpose,
+# so it is worth measuring rather than assuming.
+#
+# Raised, not refused: the user asked for aggressive thermal behaviour and gets the most
+# aggressive one that is still a threshold rather than a permanent state.
+asb_thermal_sanity() {
+  _ts_conf="$MODDIR/config/governor.conf"
+  _ts_set="$(grep -E '^[[:space:]]*sustained_temp_enter=' "$_ts_conf" 2>/dev/null \
+             | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_ts_set" in ''|*[!0-9]*) return 0 ;; esac
+  _ts_idle=0
+  for _ts_z in /sys/class/thermal/thermal_zone*; do
+    case "$(cat "$_ts_z/type" 2>/dev/null)" in *cpu*|*CPU*) : ;; *) continue ;; esac
+    _ts_v="$(cat "$_ts_z/temp" 2>/dev/null)"
+    case "$_ts_v" in ''|*[!0-9]*) continue ;; esac
+    [ "$_ts_v" -gt 1000 ] && _ts_v=$(( _ts_v / 1000 ))
+    [ "$_ts_v" -lt 20 ] && continue
+    [ "$_ts_v" -gt 110 ] && continue
+    [ "$_ts_v" -gt "$_ts_idle" ] && _ts_idle="$_ts_v"
+  done
+  [ "$_ts_idle" -gt 0 ] || return 0
+  _ts_min=$(( _ts_idle + 4 ))
+  if [ "$_ts_set" -lt "$_ts_min" ]; then
+    sed -i "s|^[[:space:]]*sustained_temp_enter=.*|sustained_temp_enter=$_ts_min|" \
+      "$_ts_conf" 2>/dev/null
+    asb_log "thermal: point ${_ts_set}C is at or below this device's own CPU temperature (${_ts_idle}C) - raised to ${_ts_min}C, otherwise throttling would never switch off"
+  fi
+}
+
 asb_thermal_mode_apply() {
   _tm="$(grep -E '^[[:space:]]*sustained_temp_mode=' "$MODDIR/config/governor.conf" 2>/dev/null \
          | head -1 | sed 's/.*=//' | tr -d ' \r')"
@@ -936,6 +971,7 @@ asb_thermal_mode_apply() {
   asb_log "thermal mode=$_tm -> enter=$_tsv ceiling=$_tceil (device trip point)"
 }
 asb_thermal_mode_apply
+asb_thermal_sanity
 
 asb_net_stock_capture() {
   _nsf="/data/adb/asb/net_stock.env"
