@@ -137,6 +137,21 @@ writef_verify() {
   [ "$_cur" = "$_v" ] && return 0
   return 1
 }
+# Keep a copy of the chosen profile outside the module directory.
+#
+# The install-time carry-over reads /data/adb/modules/AutoSystemBoost/current_profile,
+# which is gone if the module was removed before reinstalling. /data/adb/asb survives
+# that, so a reinstall after a manual uninstall still remembers the choice - and if the
+# user genuinely wants a clean slate, uninstall.sh clears the whole directory.
+asb_backup_profile() {
+  _bp="$(cat "$MODDIR/current_profile" 2>/dev/null | tr -d " \r\n")"
+  case "$_bp" in
+    performance|battery|balanced|smart|none)
+      mkdir -p /data/adb/asb 2>/dev/null
+      printf '%s\n' "$_bp" > /data/adb/asb/current_profile.bak 2>/dev/null ;;
+  esac
+}
+
 asb_update_desc() {
   _p="$(cat "$MODDIR/current_profile" 2>/dev/null)"
   case "$_p" in
