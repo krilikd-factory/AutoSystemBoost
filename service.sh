@@ -1855,9 +1855,27 @@ asb_freq_pick_pct() {
   [ -n "$_max" ] || return 1
   _target=$(( _max * _pct / 100 ))
   _avail="$_dir/scaling_available_frequencies"
+    # NEAREST step, not the highest one at or below target.
+    #
+    # Taking only $1<=t lands the cap on whatever step sits below the target, and
+    # frequency tables have gaps. On a OnePlus 13 prime cluster a requested 45%
+    # (1944000) landed on 1689600 - 39%, a sixth harder than the number that was
+    # actually tuned. Those percentages came from field feedback ("raised: UI stayed
+    # janky at 50/44"), so shipping a harder cap than the tuned one is a different
+    # setting wearing its name.
+    #
+    # It feeds back into heat too: a prime pinned below what the work needs pushes
+    # that work onto the little cluster for longer, and a phone that stays busy
+    # longer stays awake longer. The closer of the two neighbours keeps the error
+    # symmetric and small instead of always undershooting.
   if [ -r "$_avail" ]; then
     _pick="$(tr ' ' '
-' < "$_avail" | grep -v '^$' | sort -n | awk -v t="$_target" '$1<=t{v=$1} END{print v}')"
+' < "$_avail" | grep -v '^$' | sort -n | awk -v t="$_target" '
+      $1<=t { lo=$1; next }
+      !hi   { hi=$1 }
+      END { if (lo=="") { print hi; exit }
+            if (hi=="") { print lo; exit }
+            print ((t-lo) <= (hi-t)) ? lo : hi }')"
     [ -n "$_pick" ] || _pick="$(tr ' ' '
 ' < "$_avail" | grep -v '^$' | sort -n | head -1)"
   else
@@ -1874,7 +1892,12 @@ asb_gpu_pick_pct() {
   _avail="$_base/available_frequencies"
   if [ -r "$_avail" ]; then
     _pick="$(tr ' ' '
-' < "$_avail" | grep -v '^$' | sort -n | awk -v t="$_target" '$1<=t{v=$1} END{print v}')"
+' < "$_avail" | grep -v '^$' | sort -n | awk -v t="$_target" '
+      $1<=t { lo=$1; next }
+      !hi   { hi=$1 }
+      END { if (lo=="") { print hi; exit }
+            if (hi=="") { print lo; exit }
+            print ((t-lo) <= (hi-t)) ? lo : hi }')"
     [ -n "$_pick" ] || _pick="$(tr ' ' '
 ' < "$_avail" | grep -v '^$' | sort -n | head -1)"
   else
