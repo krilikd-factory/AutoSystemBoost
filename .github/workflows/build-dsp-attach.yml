@@ -19,6 +19,19 @@ name: Build DSP attacher only
 # Trigger manually (workflow_dispatch) so it never runs on every push.
 
 on:
+  # The attacher has its own source and its own build, so it gets its own trigger.
+  # Cheap: no AOSP tree, unlike the AIDL library. Excluding prebuilt/ for the same
+  # reason as the other workflow - that directory is where the result lands, and a
+  # workflow that rebuilds on its own output loops.
+  push:
+    paths:
+      - 'src/DSP_AIDL/asb_dsp_attach.cpp'
+      - '.github/workflows/build-dsp-attach.yml'
+      - '!src/DSP_AIDL/prebuilt/**'
+  pull_request:
+    paths:
+      - 'src/DSP_AIDL/asb_dsp_attach.cpp'
+
   workflow_dispatch:
     inputs:
       aosp_tag:

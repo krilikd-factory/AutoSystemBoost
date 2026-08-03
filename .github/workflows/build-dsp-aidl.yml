@@ -28,13 +28,26 @@ on:
   #
   # Narrow paths: the AOSP checkout is expensive, and nothing outside these directories
   # can affect whether the library compiles.
+  # prebuilt/ is excluded because it holds the OUTPUT, not the input. It lives inside
+  # src/DSP_AIDL/, so the first version of this filter matched it - uploading a freshly
+  # built attacher binary started a full hour of AOSP checkout to rebuild a library that
+  # had not changed. Observed exactly that way: an "Add files via upload" commit kicked
+  # off Build DSP AIDL.
+  #
+  # asb_dsp_attach.cpp is excluded too - separate daemon, separate workflow, and nothing
+  # in it can affect whether libasbdsp compiles.
   push:
     paths:
       - 'src/DSP_AIDL/**'
       - '.github/workflows/build-dsp-aidl.yml'
+      - '!src/DSP_AIDL/prebuilt/**'
+      - '!src/DSP_AIDL/asb_dsp_attach.cpp'
+      - '!src/DSP_AIDL/build-dsp-attach.yml'
   pull_request:
     paths:
       - 'src/DSP_AIDL/**'
+      - '!src/DSP_AIDL/prebuilt/**'
+      - '!src/DSP_AIDL/asb_dsp_attach.cpp'
   workflow_dispatch:
     inputs:
       aosp_tag:
