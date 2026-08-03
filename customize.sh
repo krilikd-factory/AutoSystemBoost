@@ -20,7 +20,23 @@ set_permissions() {
 }
 
 SKIPUNZIP=1
-unzip -qjo "$ZIPFILE" 'common/functions.sh' -d $TMPDIR >&2
+# Extract by BASENAME, not by path.
+#
+# A module zip is supposed to have its files at the root, and these patterns assume that.
+# When the archive is built with a containing folder - which is what `zip -r x.zip
+# AutoSystemBoost-main` produces, and what GitHub's "Download ZIP" produces - every entry
+# is prefixed and 'common/functions.sh' matches nothing. unzip then extracts nothing,
+# install.sh finds no strings and aborts with "can't open .../common/englishtext.sh",
+# which points at the wrong place entirely: the file is in the zip, just not where the
+# pattern looked.
+#
+# '*/common/functions.sh' plus the bare form matches both layouts, and -j flattens either
+# way, so the rest of the script does not care which it was.
+unzip -qjo "$ZIPFILE" 'common/functions.sh' '*/common/functions.sh' -d $TMPDIR >/dev/null 2>&1
+if [ ! -f "$TMPDIR/functions.sh" ]; then
+  # Last resort: some builds keep it at the root already.
+  unzip -qjo "$ZIPFILE" 'functions.sh' '*/functions.sh' -d $TMPDIR >/dev/null 2>&1
+fi
 . $TMPDIR/functions.sh
 
 # Installer strings, extracted alongside functions.sh.
@@ -29,7 +45,7 @@ unzip -qjo "$ZIPFILE" 'common/functions.sh' -d $TMPDIR >&2
 # SKIPUNZIP=1 nothing else has unpacked common/ by then. Leaving them out made the
 # install abort outright; extracting them here is what makes the translated output
 # actually appear rather than falling back to bare keys.
-unzip -qjo "$ZIPFILE" 'common/*text.sh' -d $TMPDIR >/dev/null 2>&1 || true
+unzip -qjo "$ZIPFILE" 'common/*text.sh' '*/common/*text.sh' -d $TMPDIR >/dev/null 2>&1 || true
 
 # ── FINAL layout normalization ──────────────────────────────────────────────
 asb_fix_layout() {
