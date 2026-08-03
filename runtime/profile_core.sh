@@ -513,6 +513,17 @@ asb_load_profile() {
     *) PROFILE=balanced ;;
   esac
   _SHELL_BOOT_PROFILE="${_SHELL_BOOT_PROFILE:-$PROFILE}"
+  # No profile chosen: apply nothing and say so.
+  #
+  # A fresh install leaves current_profile absent on purpose. Falling through to a
+  # profile file here would write that profile's rails anyway, which is how "installed
+  # clean, Balanced was already active" happened - the label said one thing and the CPU
+  # caps said another.
+  case "$_SHELL_BOOT_PROFILE" in
+    ''|none)
+      asb_log "no profile selected - leaving CPU, GPU and VM at their stock values"
+      return 0 ;;
+  esac
   # Remember what was actually REQUESTED before sourcing a profile file, because every
   # profiles/*.sh opens with PROFILE="<its own name>" and would otherwise rewrite it - on smart
   # that turns the request into "balanced" before anyone can read it.

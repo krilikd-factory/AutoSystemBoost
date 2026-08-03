@@ -65,7 +65,16 @@ asb_load_profile() {
   ASB_PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null)"
   case "$ASB_PROFILE" in
     performance|battery|balanced) : ;;
-
+    # "none" is a real state, not a missing value.
+    #
+    # A fresh install now leaves current_profile absent so the module applies nothing
+    # until the user picks something. Every reader here defaulted to balanced, which
+    # meant deleting the file changed the label and nothing else - the CPU still got
+    # balanced's rails. Reported as: installed clean, Balanced was already on.
+    #
+    # Kept separate from smart: smart still steers, it just decides for itself. none
+    # means nobody is steering, which is what an untouched install should look like.
+    ''|none) ASB_PROFILE=none ;;
     *) ASB_PROFILE=balanced ;;
   esac
   PROFILE="$ASB_PROFILE"
@@ -134,6 +143,7 @@ asb_update_desc() {
     performance) _s="description=status: performance 🔥 | active ✅" ;;
     battery) _s="description=status: battery 🔋 | active ✅" ;;
     smart) _s="description=status: 🤖 Smart Mode (alpha) | active ✅" ;;
+    ''|none) _s="description=status: no profile selected — open the WebUI to choose one" ;;
     *) _s="description=status: balanced ⚖️ | active ✅" ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
