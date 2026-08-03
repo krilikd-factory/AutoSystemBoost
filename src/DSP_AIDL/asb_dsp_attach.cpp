@@ -81,6 +81,34 @@ static void logline(const char* fmt, ...) {
 // fine. libaudiohal converts this legacy parameter into the AIDL
 // Parameter::Specific::loudnessEnhancer the effect implements, so the value arrives over
 // binder and bypasses property visibility entirely.
+// Output routing, decided here rather than inside the effect.
+//
+// The effect runs in the vendor HAL process and cannot reliably read persist.asb.dsp.* -
+// the file says so twelve lines up, and it is why the gain travels over binder in the
+// first place. The output filter was written as a property read inside the effect, so it
+// got an empty string, treated that as "no filter" and processed everything. Rebuilding
+// the library did not help because the library was never the part that could not see the
+// setting. Reported twice: outputs=bt, speaker still boosted.
+//
+// This daemon CAN read the properties. So it resolves the filter against the live route
+// and pushes gain 0 when the current output is not selected - which the effect already
+// understands as "pass through untouched", no new plumbing and nothing to keep in sync.
+static int route_allows_dsp(void) {
+    char filter[64] = {0};
+    if (__system_property_get("persist.asb.dsp.outputs", filter) <= 0 || !filter[0])
+        return 1;                       // unset
+    if (strcmp(filter, "all") == 0) return 1;
+
+    char route[32] = {0};
+    if (__system_property_get("persist.asb.dsp.route", route) <= 0 || !route[0]) {
+        // Route unknown: process only if the filter names every output, i.e. behave as
+        // "all". Guessing the other way is what produced the reported bug.
+        return (strstr(filter, "speaker") && strstr(filter, "wired") && strstr(filter, "bt"))
+               ? 1 : 0;
+    }
+    return strstr(filter, route) != NULL ? 1 : 0;
+}
+
 static status_t push_gain(const sp<android::AudioEffect>& fx, int gain_mb) {
     if (fx == nullptr) return android::NO_INIT;
     uint8_t buf[sizeof(effect_param_t) + 2 * sizeof(int32_t)] = {0};
@@ -193,7 +221,8 @@ int main(int /*argc*/, char** /*argv*/) {
                     if (!attached) logline("attached to session 0 and enabled");
                     attached = 1;
                     fails = 0;
-                    status_t pg = push_gain(fx, gain);
+                    int _eff_gain = route_allows_dsp() ? gain : 0;
+                    status_t pg = push_gain(fx, _eff_gain);
                     logline("pushed gain_mb=%d -> %d", gain, (int)pg);
                     pushed_gain = (pg == OK) ? gain : -1;
                     if (pg == OK) asb_tunables_sig(pushed_sig, sizeof(pushed_sig));
@@ -223,11 +252,16 @@ int main(int /*argc*/, char** /*argv*/) {
         asb_tunables_sig(_sig, sizeof(_sig));
         int _forced = g_wake;
         g_wake = 0;
-        if (fx != nullptr && (_forced || gain != pushed_gain || strcmp(_sig, pushed_sig) != 0)) {
-            status_t pg = push_gain(fx, gain);
-            logline("settings change -> gain=%d [%s] (status %d)", gain, _sig, (int)pg);
+        // Route is part of the signature: a headphone unplug changes nothing in the
+        // settings but must still change what the effect does.
+        int _allowed = route_allows_dsp();
+        int _eff_gain = _allowed ? gain : 0;
+        if (fx != nullptr && (_forced || _eff_gain != pushed_gain || strcmp(_sig, pushed_sig) != 0)) {
+            status_t pg = push_gain(fx, _eff_gain);
+            logline("settings change -> gain=%d%s [%s] (status %d)", _eff_gain,
+                    _allowed ? "" : " (route not selected)", _sig, (int)pg);
             if (pg == OK) {
-                pushed_gain = gain;
+                pushed_gain = _eff_gain;
                 snprintf(pushed_sig, sizeof(pushed_sig), "%s", _sig);
             }
         }
