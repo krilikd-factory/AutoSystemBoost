@@ -374,6 +374,7 @@ jobs:
             "runtime/asb_system_tweaks.sh" \
             "runtime/asb_anim_apply.sh" \
             "runtime/asb_gms_trim.sh" \
+            "runtime/asb_gms_freeze.sh" \
             "runtime/asb_net_apply.sh" \
             "runtime/asb_net_routes.sh" \
             "runtime/asb_log_apply.sh" \
