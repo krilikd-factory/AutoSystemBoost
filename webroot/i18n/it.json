@@ -161,6 +161,22 @@
     },
     "log_level": {
       "name": "Dettaglio log"
+    },
+    "audio_remove_volume_limit": {
+      "name": "Limite volume cuffie"
+    },
+    "doze_trim_whitelist": {
+      "name": "Riduci esenzioni Doze"
+    },
+    "gms_freeze": {
+      "name": "Congela componenti Google"
+    }
+  },
+  "optFor": {
+    "gms_freeze": {
+      "off": "off",
+      "safe": "sicuro",
+      "more": "di più"
     }
   }
 }

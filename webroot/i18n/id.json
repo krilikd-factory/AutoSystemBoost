@@ -134,6 +134,15 @@
     },
     "log_level": {
       "name": "Detail log"
+    },
+    "audio_remove_volume_limit": {
+      "name": "Batas volume headphone"
+    },
+    "doze_trim_whitelist": {
+      "name": "Pangkas pengecualian Doze"
+    },
+    "gms_freeze": {
+      "name": "Bekukan komponen Google"
     }
   },
   "nav_main": "Beranda",
@@ -162,5 +171,12 @@
   "grp_iface": "Antarmuka",
   "grp_net": "Jaringan",
   "grp_battery": "Baterai",
-  "grp_ui": "Sistem"
+  "grp_ui": "Sistem",
+  "optFor": {
+    "gms_freeze": {
+      "off": "mati",
+      "safe": "aman",
+      "more": "lebih"
+    }
+  }
 }

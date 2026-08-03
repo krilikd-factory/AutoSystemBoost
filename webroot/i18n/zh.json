@@ -161,6 +161,22 @@
     },
     "log_level": {
       "name": "日志详细度"
+    },
+    "audio_remove_volume_limit": {
+      "name": "耳机音量上限"
+    },
+    "doze_trim_whitelist": {
+      "name": "精简休眠豁免"
+    },
+    "gms_freeze": {
+      "name": "冻结谷歌组件"
+    }
+  },
+  "optFor": {
+    "gms_freeze": {
+      "off": "关闭",
+      "safe": "安全",
+      "more": "更多"
     }
   }
 }

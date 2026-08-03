@@ -134,6 +134,15 @@
     },
     "log_level": {
       "name": "Детальність логів"
+    },
+    "audio_remove_volume_limit": {
+      "name": "Обмеження гучності навушників"
+    },
+    "doze_trim_whitelist": {
+      "name": "Підрізати винятки сну"
+    },
+    "gms_freeze": {
+      "name": "Заморозка компонентів Google"
     }
   },
   "nav_main": "Головна",
@@ -162,5 +171,12 @@
   "grp_iface": "Інтерфейс",
   "grp_net": "Мережа",
   "grp_battery": "Батарея",
-  "grp_ui": "Система"
+  "grp_ui": "Система",
+  "optFor": {
+    "gms_freeze": {
+      "off": "вимк",
+      "safe": "безпечно",
+      "more": "більше"
+    }
+  }
 }

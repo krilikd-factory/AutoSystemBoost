@@ -161,6 +161,22 @@
     },
     "log_level": {
       "name": "تفاصيل السجل"
+    },
+    "audio_remove_volume_limit": {
+      "name": "حد صوت السماعات"
+    },
+    "doze_trim_whitelist": {
+      "name": "تقليص استثناءات وضع السكون"
+    },
+    "gms_freeze": {
+      "name": "تجميد مكوّنات جوجل"
+    }
+  },
+  "optFor": {
+    "gms_freeze": {
+      "off": "إيقاف",
+      "safe": "آمن",
+      "more": "أكثر"
     }
   }
 }

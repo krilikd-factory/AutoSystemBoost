@@ -134,6 +134,15 @@
     },
     "log_level": {
       "name": "Protokolldetails"
+    },
+    "audio_remove_volume_limit": {
+      "name": "Kopfhörer-Lautstärkegrenze"
+    },
+    "doze_trim_whitelist": {
+      "name": "Doze-Ausnahmen kürzen"
+    },
+    "gms_freeze": {
+      "name": "Google-Komponenten einfrieren"
     }
   },
   "nav_main": "Start",
@@ -162,5 +171,12 @@
   "grp_iface": "Oberfläche",
   "grp_net": "Netzwerk",
   "grp_battery": "Akku",
-  "grp_ui": "System"
+  "grp_ui": "System",
+  "optFor": {
+    "gms_freeze": {
+      "off": "aus",
+      "safe": "sicher",
+      "more": "mehr"
+    }
+  }
 }

@@ -134,6 +134,15 @@
     },
     "log_level": {
       "name": "Günlük ayrıntısı"
+    },
+    "audio_remove_volume_limit": {
+      "name": "Kulaklık ses sınırı"
+    },
+    "doze_trim_whitelist": {
+      "name": "Doze muafiyetlerini kırp"
+    },
+    "gms_freeze": {
+      "name": "Google bileşenlerini dondur"
     }
   },
   "nav_main": "Ana",
@@ -162,5 +171,12 @@
   "grp_iface": "Arayüz",
   "grp_net": "Ağ",
   "grp_battery": "Pil",
-  "grp_ui": "Sistem"
+  "grp_ui": "Sistem",
+  "optFor": {
+    "gms_freeze": {
+      "off": "kapalı",
+      "safe": "güvenli",
+      "more": "daha fazla"
+    }
+  }
 }

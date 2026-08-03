@@ -134,6 +134,15 @@
     },
     "log_level": {
       "name": "Detalle del registro"
+    },
+    "audio_remove_volume_limit": {
+      "name": "Límite de volumen de auriculares"
+    },
+    "doze_trim_whitelist": {
+      "name": "Recortar exenciones de Doze"
+    },
+    "gms_freeze": {
+      "name": "Congelar componentes de Google"
     }
   },
   "nav_main": "Inicio",
@@ -162,5 +171,12 @@
   "grp_iface": "Interfaz",
   "grp_net": "Red",
   "grp_battery": "Batería",
-  "grp_ui": "Sistema"
+  "grp_ui": "Sistema",
+  "optFor": {
+    "gms_freeze": {
+      "off": "apagado",
+      "safe": "seguro",
+      "more": "más"
+    }
+  }
 }
