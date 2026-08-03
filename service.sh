@@ -2530,6 +2530,11 @@ fi
     _prev_route="$_now"
     resetprop -n persist.asb.dsp.route "$_now" >/dev/null 2>&1 \
       || setprop persist.asb.dsp.route "$_now" >/dev/null 2>&1
+    # Wake the attach daemon: it is what resolves the filter and pushes the gain, and its
+    # own poll is 30 s. Without this the effect keeps boosting the old output for up to
+    # half a minute after headphones come out, which is exactly when it is most audible.
+    pkill -USR1 -f asb_dsp_attach 2>/dev/null \
+      || killall -USR1 asb_dsp_attach 2>/dev/null || true
     asb_log "dsp route changed to $_now (outputs filter=$_f)"
   done
 ) >/dev/null 2>&1 &
