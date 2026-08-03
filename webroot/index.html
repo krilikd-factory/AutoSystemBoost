@@ -3336,6 +3336,29 @@ async function cfgSet(key, val, ctl) {
       // truth was reboot. The binary already accepts `asb reload`; using it makes the
       // promise true instead of downgrading the label.
       // bt_a2dp_offload is applied by the audio script, which was not being run for it.
+      // doze_trim_whitelist is applied by the doze script, which was not being run for it -
+      // so the card said "applies immediately" and the toast said "after a reboot", and the
+      // toast was the one telling the truth.
+      if (key === 'doze_trim_whitelist' || key === 'doze_level') {
+        try { await run('sh ' + MD + '/runtime/asb_doze_apply.sh >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      // Removing the headphone limiter is a single settings write - no script needed, but
+      // it does need doing here rather than waiting for the next boot.
+      if (key === 'audio_remove_volume_limit') {
+        if (String(val) === '1') {
+          try { await run('settings put global audio_safe_volume_state 0'); } catch (e) {}
+        } else {
+          try { await run('settings put global audio_safe_volume_state 3'); } catch (e) {}
+        }
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
       if (GMS_KEYS.indexOf(key) >= 0) {
         try { await run('sh ' + MD + '/runtime/asb_gms_trim.sh >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
