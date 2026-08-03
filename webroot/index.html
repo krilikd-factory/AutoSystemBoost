@@ -3421,6 +3421,11 @@ async function cfgSet(key, val, ctl) {
                     "grep -q \"^sustained_temp_mode=\" $C && " +
                     "sed -i \"s|^sustained_temp_mode=.*|sustained_temp_mode=manual|\" $C || " +
                     "echo sustained_temp_mode=manual >> $C'");
+          // Mark it as deliberately set. service.sh rewrites this value on every boot -
+          // a sanity raise and a smart resolver, both legitimate on a value nobody chose
+          // - and neither could tell a user's number from a leftover default. Without
+          // this marker the setting survived until the next restart and no further.
+          await run("mkdir -p /data/adb/asb && : > /data/adb/asb/thermal_user_set");
         } catch (e) {}
       }
     var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune',
