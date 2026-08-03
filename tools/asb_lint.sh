@@ -560,6 +560,41 @@ for _l in en $_i18n_langs; do
 done
 ok "translation files present and parseable"
 
+# Every card must have a name in every language.
+#
+# Adding a card means touching CFG_ITEMS, the icon map, the group map, the apply map and
+# eleven translation files. The first four are checked; the translations were not, and a
+# card added after the strings moved out of index.html shipped English-only in ten
+# languages without anything noticing. Caught by a user looking at the screen, which is
+# the wrong last line of defence.
+if command -v python3 >/dev/null 2>&1; then
+  _i18n_miss="$(python3 - <<'PYEOF_I18N'
+import json, re, glob, sys
+s = open('webroot/index.html', encoding='utf-8').read()
+i = s.index('const CFG_ITEMS = [');  j = s.index('\n];', i)
+keys = re.findall(r"\{ key:'([A-Za-z_][A-Za-z_0-9]*)'", s[i:j])
+out = []
+for f in sorted(glob.glob('webroot/i18n/*.json')):
+    # en.json holds interface strings only - card names live in CFG_ITEMS itself.
+    if f.endswith('en.json'):
+        continue
+    try:
+        d = json.load(open(f, encoding='utf-8'))
+    except Exception:
+        continue
+    miss = [k for k in keys if k not in d.get('cfg', {})]
+    if miss:
+        out.append('%s: %s' % (f.split('/')[-1], ', '.join(miss[:4])))
+print('; '.join(out))
+PYEOF_I18N
+)"
+  if [ -n "$_i18n_miss" ]; then
+    err "cards missing translations - $_i18n_miss"
+  else
+    ok "every card has a name in every language"
+  fi
+fi
+
 # Terms that must not be translated by their everyday sense.
 #
 # H_GOV shipped as ГУБЕРНАТОР, GOBERNADOR, GOVERNADOR, المنظّم and 调度器 - five languages
