@@ -3364,6 +3364,16 @@ async function cfgSet(key, val, ctl) {
         if (ctl) ctl.classList.remove('busy');
         return;
       }
+      // gms_freeze runs its own script and takes effect for the next launch of whatever
+      // was frozen - the card said so while the toast still said "after a reboot", because
+      // nothing here was calling the script. Same class of mismatch as the two before it.
+      if (key === 'gms_freeze') {
+        try { await run('sh ' + MD + '/runtime/asb_gms_freeze.sh >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_next', ' \u00b7 restart the app'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
       if (GMS_KEYS.indexOf(key) >= 0) {
         try { await run('sh ' + MD + '/runtime/asb_gms_trim.sh >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
