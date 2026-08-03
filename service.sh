@@ -2693,6 +2693,24 @@ fi
   asb_feature_enabled VM && apply_vm
   asb_feature_enabled VM && apply_doze
 ) >/dev/null 2>&1 &
+# Make the governor re-read the config once everything has settled.
+#
+# Boot order is: governor starts, then this script keeps editing governor.conf - device
+# bounds, first-install neutralisation, per-model branches. The governor loads the file at
+# startup and then only on command, so it spent the whole session running values that were
+# replaced seconds after it read them. A OP13 diagnostic said so in plain text: "governor.conf
+# was edited AFTER the governor started".
+#
+# One reload after the writes are done costs nothing and removes a whole class of "the
+# setting is in the file and the governor is ignoring it".
+(
+  sleep 100
+  if pgrep -f '/bin/asb$' >/dev/null 2>&1 && [ -x "$MODDIR/bin/asb" ]; then
+    "$MODDIR/bin/asb" reload >/dev/null 2>&1 \
+      && asb_log "governor reloaded after boot-time config writes"
+  fi
+) >/dev/null 2>&1 &
+
 (
   sleep 95
   if ! pgrep -f '/bin/asb$' >/dev/null 2>&1; then
