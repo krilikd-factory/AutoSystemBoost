@@ -265,6 +265,31 @@ body::before, body::after {
   border: 1px solid rgba(0,240,180,0.15);
 }
 
+/*
+ * Wrapping was the fallback, but it fired on the two longest profile names - so the pill
+ * showed as one lopsided line plus a stray NASTROIKI underneath on BALANCED and
+ * PERFORMANCE, and as a clean single line on BATTERY. Same screen, two different shapes,
+ * decided by how many letters the current profile happens to have.
+ *
+ * The content is ~460px at the default sizes inside a 380px column, so it could never fit;
+ * shrinking the chips on phone widths brings the worst case (PERFORMANCE + two chips) to
+ * ~340px. flex-wrap stays as the last resort for very long translated labels.
+ */
+.status-label, .status-val { white-space: nowrap; }
+.status-row .live-chip { margin-left: 0; flex: 0 0 auto; }
+
+@media (max-width: 480px) {
+  .status-row { gap: 6px; padding: 7px 12px; }
+  .status-row .live-chip {
+    padding: 5px 8px 5px 7px;
+    gap: 4px;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+  }
+  .status-val { font-size: 11px; letter-spacing: 0.5px; }
+  .status-label { font-size: 11px; }
+}
+
 .dot {
   width: 8px;
   height: 8px;
@@ -2165,19 +2190,33 @@ function Topt(o, key) {
   // A card can override a shared label. "stock" reads fine on an audio profile and badly
   // on an animation setting, where the honest words are "normal" and "simplified" - and
   // a value the user has to ask about ("what does flat do?") is a label that failed.
+  //
+  // The fallback chain used to end in I18N.ru.optFor / I18N.ru.opt. Only ONE locale file
+  // is ever loaded (loadI18N reads en + the device language), so on a German, Spanish,
+  // Turkish, Chinese ... device I18N.ru is undefined and every one of those lines threw
+  // a TypeError. Topt is called from cfgRender for each option button, so the whole
+  // Config screen died before it painted - for nine of the eleven shipped languages.
+  // English is the correct fallback here anyway: en.json is always loaded.
   if (key && L && L.optFor && L.optFor[key] && L.optFor[key][o] != null) return L.optFor[key][o];
-  if (key && I18N.ru.optFor && I18N.ru.optFor[key] && I18N.ru.optFor[key][o] != null
-      && ASB_LANG === 'ru') return I18N.ru.optFor[key][o];
   if (L && L.opt && L.opt[o] != null) return L.opt[o];
-  if (I18N.ru.opt[o] != null && ASB_LANG === 'ru') return I18N.ru.opt[o];
+  var E = I18N.en;
+  if (key && E && E.optFor && E.optFor[key] && E.optFor[key][o] != null) return E.optFor[key][o];
+  if (E && E.opt && E.opt[o] != null) return E.opt[o];
   return o;
 }
 function applyStaticI18n() {
   if (ASB_LANG === 'en') return;
+  // Was I18N.ru[k] for EVERY language. On a Russian device it worked by accident; on any
+  // other it threw on the first node (I18N.ru is not loaded there) and the throw was
+  // swallowed by the try/catch at the call site - so German, Italian, Chinese ... users
+  // saw a fully English UI while their own .json file sat on disk with 28 translated
+  // strings in it. Read the active locale, fall back to English per string (T does that).
+  var L = I18N[ASB_LANG];
+  if (!L) return;
   var nodes = document.querySelectorAll('[data-i18n]');
   for (var i = 0; i < nodes.length; i++) {
     var k = nodes[i].getAttribute('data-i18n');
-    var v = I18N.ru[k];
+    var v = L[k];
     if (v == null) continue;
     if (nodes[i].getAttribute('data-i18n-html') === '1') nodes[i].innerHTML = v;
     else nodes[i].textContent = v;
@@ -3728,14 +3767,38 @@ async function pollLive(visible) {
     // Below the 10-minute window the rate is arithmetic noise, and a forecast built on it
     // would be worse than the flat estimate it replaced.
     if (parseInt(kv.smart_drain_window_s || '0', 10) < 600) ewma_x10 = 0;
+    /*
+     * Two very different numbers used to arrive with almost the same suffix.
+     *
+     * When the drain window has not closed yet, on_ma is a CONSTANT picked by profile -
+     * 400 / 500 / 650 mA. Nothing about the running device enters the result: the whole
+     * forecast is battery percent x a table value. On a 7300 mAh device at 82 % that
+     * prints "14h 57m (est.)" on Battery and "12h 07m (est.)" on Balanced, and the figure
+     * changes the instant you tap a profile - which reads exactly like a measurement
+     * reacting to the switch, when in fact nothing has been measured at all.
+     *
+     * The number is still worth showing (it is a reasonable envelope), but it must not be
+     * dressed as an observation. "(est.)" in 11px did not carry that weight; a word plus a
+     * tooltip does, and the measuring state now says so out loud while the window fills.
+     */
+    const drain_win_s = parseInt(kv.smart_drain_window_s || '0', 10);
+    let eta_title;
     if (ewma_x10 > 0) {
       on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
-      eta_note = ' (measured)';
+      eta_note = ' · ' + T('eta_measured', 'measured');
+      eta_title = T('eta_measured_tip',
+        'Based on the measured drain rate over the last ' + Math.round(drain_win_s / 60) + ' min.');
     } else {
       if (profile === 'performance') { on_ma = 650; }
       else if (profile === 'battery') { on_ma = 400; }
       else { on_ma = 500; }
-      eta_note = ' (est.)';
+      eta_note = (drain_win_s > 0)
+        ? ' · ' + T('lv_measuring', 'measuring…')
+        : ' · ' + T('eta_modelled', 'model');
+      eta_title = T('eta_modelled_tip',
+        'Not a measurement. Derived from battery level and a fixed per-profile draw (' +
+        on_ma + ' mA); it changes when you switch profiles, not when the device does. ' +
+        'A measured rate replaces it once the drain window reaches 10 minutes.');
     }
     /*
      * Idle draw: anchor to a realistic deep-idle floor (~55 mA on this class of device) rather
@@ -3746,16 +3809,31 @@ async function pollLive(visible) {
     if (off_ma < 40) off_ma = 40;
     if (off_ma > 90) off_ma = 90;
     const remain_mah = bcap > 0 ? Math.floor(cap_full_mah * bcap / 100) : 0;
+    const _uH = T('unit_h', 'h');
+    const _uM = T('unit_m', 'm');
     const fmtHm = (mins) => {
       if (!mins || mins <= 0) return '—';
       const h = Math.floor(mins / 60);
       const m = mins % 60;
-      return h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
+      return h + _uH + ' ' + (m < 10 ? '0' : '') + m + _uM;
     };
+    /*
+     * Idle cap. off_ma bottoms out at 40 mA, so at a full-ish battery the idle line printed
+     * "149h 39m" - six days and five hours, stated to the minute. Past about three days the
+     * figure is arithmetic, not a forecast: no phone idles that long undisturbed, and the
+     * precision implies a confidence nothing here has. Show the ceiling instead.
+     */
+    const ETA_IDLE_CAP_MIN = 72 * 60;
     const ton_min = (remain_mah > 0 && on_ma > 0) ? Math.floor(remain_mah * 60 / on_ma) : 0;
     const toff_min = (remain_mah > 0 && off_ma > 0) ? Math.floor(remain_mah * 60 / off_ma) : 0;
-    _el('liveEtaOn').textContent = fmtHm(ton_min) + eta_note;
-    _el('liveEtaOff').textContent = fmtHm(toff_min) + eta_note;
+    const etaOnEl = _el('liveEtaOn');
+    const etaOffEl = _el('liveEtaOff');
+    etaOnEl.textContent = fmtHm(ton_min) + eta_note;
+    etaOnEl.title = eta_title;
+    etaOffEl.textContent = (toff_min > ETA_IDLE_CAP_MIN)
+      ? '> ' + fmtHm(ETA_IDLE_CAP_MIN) + eta_note
+      : fmtHm(toff_min) + eta_note;
+    etaOffEl.title = eta_title;
 
     const CAP_SRC_LABELS = {
       'asb': 'ASB',
@@ -3769,9 +3847,29 @@ async function pollLive(visible) {
       'policy_unknown': '—',
       'mismatch': '—'
     };
+    /*
+     * The cell printed one word and left the user to guess. On Battery it reads "Shell" in
+     * a different colour from the "ASB" shown on Balanced, which looks like a fault and is
+     * not one: the shell path applied the caps and the governor has not re-asserted them
+     * yet. Say which, in the user's language.
+     */
+    const CAP_SRC_TIPS = {
+      'asb': T('cap_tip_asb', 'The governor is holding the caps it computed.'),
+      'asb_dynamic': T('cap_tip_asb', 'The governor is holding the caps it computed.'),
+      'shell_applied': T('cap_tip_shell',
+        'Caps were written by the profile script and the governor has not re-asserted them yet. Normal right after a profile switch; it should return to ASB within a few ticks.'),
+      'shell_overridden_up': T('cap_tip_shell', 'Caps were written by the profile script.'),
+      'shell_overridden_down': T('cap_tip_shell', 'Caps were written by the profile script.'),
+      'vendor_clamp': T('cap_tip_clamp', 'The vendor thermal HAL is clamping below the requested cap.'),
+      'vendor_raised': T('cap_tip_raised', 'The vendor raised the cap above the requested value.'),
+      'thermal_overlay': T('cap_tip_thermal', 'A thermal overlay is in charge of the cap.'),
+      'policy_unknown': T('cap_tip_unknown', 'The cpufreq policy could not be read.'),
+      'mismatch': T('cap_tip_unknown', 'The cpufreq policy could not be read.')
+    };
     const capLabel = capSrc ? (CAP_SRC_LABELS[capSrc] || capSrc) : '—';
     const capEl = _el('liveCapSrc');
     capEl.textContent = capLabel;
+    capEl.title = CAP_SRC_TIPS[capSrc] || '';
     capEl.className = 'live-cell-value';
     if (capSrc === 'asb' || capSrc === 'asb_dynamic') capEl.classList.add('cap-asb');
     else if (capSrc === 'vendor_clamp') capEl.classList.add('cap-clamp');
@@ -3820,12 +3918,23 @@ async function pollLive(visible) {
       const hrReal = (st && typeof st.headroom_real_pct === 'number') ? st.headroom_real_pct : null;
       const hrValid = (st && st.headroom_valid) || 0;
       const hr = (st && typeof st.headroom_pct === 'number') ? st.headroom_pct : null;
+      /*
+       * Same value on two profiles whose CPU caps differ by 2x (Battery 922 MHz vs Balanced
+       * 1882 MHz on the big cluster both reported 35 %) is either a stale read or the wrong
+       * cluster. The cell gave no way to tell them apart, so both sources and the raw
+       * numbers now go in the tooltip - that is the difference between "looks wrong" and a
+       * bug report someone can act on.
+       */
       if (hrReal !== null && hrReal >= 0) {
         hrEl.textContent = hrReal + '%';
-        hrEl.title = 'Real cap headroom: current scaling_max_freq vs hardware ceiling (most-capped cluster). Reliable even when Cap Src = Shell — unlike the msm_performance readback that returns max on this SoC.';
+        hrEl.title = T('hr_tip_real',
+          'Real cap headroom: current scaling_max_freq vs hardware ceiling (most-capped cluster). Reliable even when Cap Src = Shell.')
+          + '\nsource=headroom_real_pct raw=' + hrReal
+          + (hr !== null ? ' | headroom_pct=' + hr + ' valid=' + hrValid : '');
       } else if (hr !== null && hrValid === 1) {
         hrEl.textContent = hr + '%';
-        hrEl.title = '';
+        hrEl.title = T('hr_tip_fallback', 'Fallback source (msm_performance readback).')
+          + '\nsource=headroom_pct raw=' + hr;
       } else {
         hrEl.textContent = 'n/a';
         hrEl.title = 'headroom source unavailable';
@@ -3841,24 +3950,40 @@ async function pollLive(visible) {
         ? 'Gov disabled · ' + (recReason || 'recovery')
         : recCount + ' restart(s) · ' + (recReason || 'unknown');
     } else if (learner) {
+      // Restoring the label after a recovery event hardcoded the English word, so the cell
+      // permanently lost its translation once it had been in Recovery even once.
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
-      if (learnerLabel) learnerLabel.textContent = 'Learner';
+      if (learnerLabel) learnerLabel.textContent = T('lv_learner', 'Learner');
       _el('liveLearner').className = 'live-cell-value';
       const sm = learner.smart_sessions;
+      const _ses = T('lv_sessions_short', 'ses');
       if (profile === 'smart' && sm && sm.total > 0) {
         const conf = sm.last_confidence || 0;
-        const stier = conf >= 650 ? 'strong' : (conf >= 350 ? 'active' : 'learning');
-        _el('liveLearner').textContent = stier + ' ' + Math.round(conf / 10) + '% · ' + sm.total + ' ses';
+        const stier = conf >= 650 ? T('learn_strong', 'strong')
+                    : (conf >= 350 ? T('learn_active', 'active') : T('learn_learning', 'learning'));
+        _el('liveLearner').textContent = stier + ' ' + Math.round(conf / 10) + '% · ' + sm.total + ' ' + _ses;
       } else {
-        const tier = learner.trust_tier || '—';
+        /*
+         * trust_tier is emitted as a bare English token ("unknown"), which then sat in a
+         * Russian UI next to a Smart card claiming "late · 76% battery-lean". Those come
+         * from two different subsystems - the old per-profile learner and the Smart
+         * blender - and the screen presented them as one thing. Translate the tier and
+         * say plainly that no session has been recorded yet.
+         */
+        const tierRaw = learner.trust_tier || '';
+        const tier = tierRaw ? T('learn_' + tierRaw, tierRaw) : '—';
         const sessions = (learner.sessions && learner.sessions.battery) || 0;
-        _el('liveLearner').textContent = tier + ' · ' + sessions + ' ses';
+        _el('liveLearner').textContent = tier + ' · ' + sessions + ' ' + _ses;
+        _el('liveLearner').title = (sessions === 0)
+          ? T('learn_tip_none',
+              'No completed session yet for this profile. The Smart card line above comes from the Smart blender, which is a separate subsystem and can already show a daypart.')
+          : '';
       }
     } else {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
-      if (learnerLabel) learnerLabel.textContent = 'Learner';
+      if (learnerLabel) learnerLabel.textContent = T('lv_learner', 'Learner');
       _el('liveLearner').className = 'live-cell-value';
-      _el('liveLearner').textContent = 'no data';
+      _el('liveLearner').textContent = T('learn_nodata', 'no data');
     }
 
     /* extended Live metrics */
