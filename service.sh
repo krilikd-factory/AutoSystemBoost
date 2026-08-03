@@ -257,6 +257,9 @@ if [ -w /proc/sys/vm/oom_kill_allocating_task ]; then
 fi
 
 command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
+# Snapshot the profile next to the description update: both run whenever the active
+# profile is settled, and the backup is what an install after a manual uninstall reads.
+command -v asb_backup_profile >/dev/null 2>&1 && asb_backup_profile 2>/dev/null
 
 asb_migrate_governor_conf() {
   local _expected_schema=17
