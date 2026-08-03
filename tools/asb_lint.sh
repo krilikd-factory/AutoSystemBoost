@@ -647,19 +647,23 @@ elif [ -n "$_schema_ver" ]; then
 fi
 
 
-echo "📁 Duplicate install.sh"
-# install.sh exists at the root AND in common/, and the root copy is what actually runs.
+echo "📁 Installer layout"
+# There must be exactly ONE install.sh, and it lives in common/.
 #
-# They drifted: the root copy still had an unguarded `. "$MODPATH/common/englishtext.sh"`
-# that aborted the whole install with "No such file or directory", while common/install.sh
-# had the fix. Nothing compared them, so the fix looked applied and the install still
-# failed. If the two ever differ again, say so here rather than at install time.
-if [ -f install.sh ] && [ -f common/install.sh ]; then
-  if cmp -s install.sh common/install.sh; then
-    ok "install.sh matches common/install.sh"
-  else
-    err "install.sh and common/install.sh DIFFER - the root copy is the one that runs"
-  fi
+# functions.sh sources $MODPATH/common/install.sh and nothing else - a copy at the root is
+# never executed by the installer, but rsync packaged it anyway and it overwrote the real
+# one inside the zip. The stale root copy still had an unguarded
+# `. "$MODPATH/common/englishtext.sh"`, so every CI build failed with
+# "can't open .../common/englishtext.sh" while the fixed copy sat right next to it.
+#
+# Note the line number in that error is misleading: functions.sh strips comments from every
+# .sh before running it, so reported lines do not match the file on disk.
+if [ ! -f common/install.sh ]; then
+  err "common/install.sh missing - this is the file functions.sh actually sources"
+elif [ -f install.sh ]; then
+  err "install.sh exists at the ROOT - delete it, only common/install.sh is executed"
+else
+  ok "single installer at common/install.sh"
 fi
 echo ""
 
