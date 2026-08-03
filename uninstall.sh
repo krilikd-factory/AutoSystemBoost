@@ -160,6 +160,20 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
 
+# Un-freeze GMS components.
+#
+# Recorded per component with the state it was found in: something the user had already
+# disabled stays disabled, because re-enabling it would be inventing a state that never
+# existed on this phone.
+if [ -f /data/adb/asb/gms_components_frozen ] && command -v pm >/dev/null 2>&1; then
+  while IFS='|' read -r _c _was; do
+    [ -n "$_c" ] || continue
+    [ "$_was" = "pkg-disabled" ] && continue
+    pm enable "$_c" >/dev/null 2>&1
+  done < /data/adb/asb/gms_components_frozen
+  rm -f /data/adb/asb/gms_components_frozen 2>/dev/null
+fi
+
 # Restore Doze exemptions we removed.
 #
 # Recorded per package rather than replayed wholesale: an exemption the user granted

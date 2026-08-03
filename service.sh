@@ -2534,6 +2534,10 @@ fi
   done
 ) >/dev/null 2>&1 &
 
+if [ -f "$MODDIR/runtime/asb_gms_freeze.sh" ]; then
+  sh "$MODDIR/runtime/asb_gms_freeze.sh" >/dev/null 2>&1
+fi
+
 if [ -f "$MODDIR/runtime/asb_gms_trim.sh" ]; then
   sh "$MODDIR/runtime/asb_gms_trim.sh" >/dev/null 2>&1
 fi
