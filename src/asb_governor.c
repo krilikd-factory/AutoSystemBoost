@@ -1300,6 +1300,26 @@ static int asb_cap_compute_owner(const char *cap_source) {
              strcmp(cap_source, "vendor_raised") == 0) {
         owner = ASB_CAP_OWNER_VENDOR;
     }
+    /*
+     * shell_overridden_up is somebody else raising our cap, not us owning it.
+     *
+     * Every shell_* source was counted as ASB's own, so the anti-thrash logic below never
+     * saw a conflict and never backed off. Field report from a OnePlus 13: cap_verify said
+     * DESYNC_shell_overridden_up in 5 samples out of 8 - the profile asked for 1190400 on
+     * policy0 and the device sat at 2227200 - while vendor_clamp_1h was 32 and
+     * cap_vendor_holddown_active stayed 0. ASB rewrote the cap, something rewrote it back,
+     * and the loop ran all day. Six cores fighting over their own ceiling is exactly the
+     * heat and drain those users reported, and it is the case the anti-clamp was built for.
+     *
+     * OnePlus 15 and Ace 6 do not show it because their policy0 is the little cluster
+     * alone; on OP13 and Ace 5 policy0 covers cpu0-5, so the same losing write costs six
+     * cores instead of two.
+     *
+     * "up" means our value did not hold. "down" is different - a value below ours is
+     * usually a legitimate vendor cooldown, and treating that as a fight would make ASB
+     * push back against thermal protection.
+     */
+    else if (strcmp(cap_source, "shell_overridden_up") == 0) owner = ASB_CAP_OWNER_VENDOR;
     else if (strncmp(cap_source, "shell_", 6) == 0) owner = ASB_CAP_OWNER_SHELL;
     else if (strcmp(cap_source, "asb") == 0 ||
              strncmp(cap_source, "asb_", 4) == 0) {
