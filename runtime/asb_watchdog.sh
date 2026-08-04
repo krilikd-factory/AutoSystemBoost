@@ -100,8 +100,15 @@ asb_recovery_level3_safe_mode() {
   # disagree with the WebUI, which is how this surfaced.
   if [ -s "$MODDIR/current_profile" ] \
      && [ "$(cat "$MODDIR/current_profile" 2>/dev/null)" != "none" ]; then
-    echo "balanced" > "$MODDIR/current_profile" 2>/dev/null
-    echo "balanced" > /data/adb/asb/active_profile 2>/dev/null
+    # Safe mode must not CHOOSE a profile for someone who never chose one.
+    #
+    # Dropping to balanced is right when a profile was running and misbehaving. On a fresh
+    # install nothing was running, and writing balanced here both changes behaviour and
+    # makes the module card contradict the WebUI. Respect the same marker service.sh uses.
+    if [ ! -f /data/adb/asb/no_profile_chosen ]; then
+      echo "balanced" > "$MODDIR/current_profile" 2>/dev/null
+      echo "balanced" > /data/adb/asb/active_profile 2>/dev/null
+    fi
   fi
   asb_load_profile
   asb_feature_enabled CPU && apply_runtime_profile_now 2>/dev/null

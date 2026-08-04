@@ -85,12 +85,26 @@ case "$_ue" in
 esac
 
 # --- live half: WindowManager, takes effect immediately -----------------------
-if [ "$_db" = "1" ]; then
-  settings put global disable_window_blurs 1 2>/dev/null
+# Write only when the live value actually differs.
+#
+# WindowManager watches this key and rebuilds its blur state on any change to it,
+# including a write of the value it already holds - the observer fires on the write,
+# not on the difference. Doing that during boot is why the launcher background showed
+# unblurred for about a second the first time the app drawer opened and then corrected
+# itself. The boot re-assert in service.sh was guarded for exactly this; this copy,
+# which runs on the same boot, was not.
+_blur_want=0
+[ "$_db" = "1" ] && _blur_want=1
+_blur_live="$(settings get global disable_window_blurs 2>/dev/null)"
+case "$_blur_live" in ''|null) _blur_live=0 ;; esac
+if [ "$_blur_live" != "$_blur_want" ]; then
+  settings put global disable_window_blurs "$_blur_want" 2>/dev/null
+fi
+# wm is idempotent for the compositor side and does not invalidate the observer, so it
+# stays unconditional - it is what makes the setting take on a cold boot.
+if [ "$_blur_want" = "1" ]; then
   wm disable-blur true >/dev/null 2>&1 || true
 else
-  # light and stock both keep window blur on - that is the whole point of light.
-  settings put global disable_window_blurs 0 2>/dev/null
   wm disable-blur false >/dev/null 2>&1 || true
 fi
 

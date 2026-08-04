@@ -68,10 +68,15 @@ asb_feature_enabled() {
 asb_update_desc() {
   local _s _p
   _p="$(cat "$MODDIR/current_profile" 2>/dev/null)"
+  # Second copy of this function - asb_utils.sh has the other. This one wins because
+  # profile_core is sourced later, and it was missing the ''|none arm: a fresh install
+  # with no profile fell through to *) so the module card said "Balanced" while the
+  # WebUI correctly said "not selected". Same shape as the duplicate install.sh.
   case "$_p" in
     performance) _s='description=status: Performance 🔥 | active ✅' ;;
     battery)     _s='description=status: Battery 🔋 | active ✅' ;;
     smart)       _s='description=status: Smart Mode 🤖 | active ✅' ;;
+    ''|none)     _s='description=status: no profile selected — open the WebUI to choose one' ;;
     *)           _s='description=status: Balanced ⚖️ | active ✅' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
