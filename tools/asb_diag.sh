@@ -533,11 +533,41 @@ SEC "5a3. BATTERY BEHAVIOUR  (the governor-owned switches)"
 # branch never looked at the screen. Print the plan so the next report answers this on its
 # own instead of needing a full-day capture.
 _pl_cls="$(grep -E '^plan_class=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
-_pl_deep="$(grep -E '^plan_deep_sleep=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
-_pl_ac="$(grep -E '^plan_ac_eligible=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
-_pl_scr="$(grep -E '^screen_on=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
+_pl_deep="$(grep -E '^plan_deep=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
+_pl_ac="$(grep -E '^plan_ac=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=//')"
+# screen_on is not in the state file; read the display the way metrics does.
+_pl_scr="$(cat /sys/kernel/oplus_display/panel_power_status 2>/dev/null | head -1)"
+case "$_pl_scr" in 1|2) _pl_scr=1 ;; 0) _pl_scr=0 ;; *) _pl_scr="" ;; esac
 if [ -n "$_pl_cls" ]; then
-  NOTE "governor plan: class=$_pl_cls deep_sleep=${_pl_deep:-?} anti_clamp=${_pl_ac:-?} screen_on=${_pl_scr:-?}"
+  # Is the throttle point below what this phone idles at?
+#
+# The slider used to allow 36C. A OnePlus 15 sitting still reads 47C on the CPU and 38C at
+# the shell, so a 36C point means SUSTAINED is entered permanently: prime pinned at 35% of
+# hardware around the clock. That is not a cooler phone, it is a slower one that stays busy
+# longer and therefore runs hotter - the opposite of the intent. The floor is 45C now, but
+# a value stored by an older build survives an update, so say it out loud.
+_tp_set="$(cfg sustained_temp_enter)"
+_tp_now=0
+for _tz in /sys/class/thermal/thermal_zone*; do
+  case "$(cat "$_tz/type" 2>/dev/null)" in *cpu*|*CPU*) : ;; *) continue ;; esac
+  _tv="$(cat "$_tz/temp" 2>/dev/null)"
+  case "$_tv" in ''|*[!0-9]*) continue ;; esac
+  [ "$_tv" -gt 1000 ] && _tv=$(( _tv / 1000 ))
+  [ "$_tv" -gt "$_tp_now" ] && _tp_now="$_tv"
+done
+case "$_tp_set" in
+  ''|*[!0-9]*) : ;;
+  *)
+    if [ "$_tp_now" -gt 0 ] && [ "$_tp_set" -le "$_tp_now" ]; then
+      V "  throttle point above idle temp" "> ${_tp_now}C" "${_tp_set}C" eq
+      NOTE "  the phone is ALREADY at or above its own throttle point while idle -"
+      NOTE "  clocks are pinned permanently. Raise it in WebUI > Battery > Throttling Temperature."
+    else
+      NOTE "throttle point ${_tp_set}C vs idle CPU ${_tp_now}C - headroom ok"
+    fi
+    ;;
+esac
+NOTE "governor plan: class=$_pl_cls deep_sleep=${_pl_deep:-?} anti_clamp=${_pl_ac:-?} screen_on=${_pl_scr:-?}"
   if [ "$_pl_scr" = "0" ] && [ "$_pl_deep" = "0" ]; then
     NOTE "  screen is OFF but the plan is not the quiet one - expect a 5s tick and full polling"
   fi
@@ -963,7 +993,7 @@ esac
 SEC "9. WEBUI CONFIG  (governor.conf — what the user selected)"
 if [ -f "$CONF" ]; then
   P "  $CONF :"
-  grep -vE '^\s*#|^\s*$' "$CONF" 2>/dev/null | while IFS= read -r _line; do P "    $_line"; done
+  grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$CONF" 2>/dev/null | while IFS= read -r _line; do P "    $_line"; done
 else
   P "  governor.conf not found"
 fi
