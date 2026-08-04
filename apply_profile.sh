@@ -2,6 +2,10 @@
 MODID="AutoSystemBoost"
 MODDIR="${0%/*}"
 STATE_DIR="/dev/.asb_profile_state"
+# The user has now chosen. Clear the "nothing selected" marker so the boot-time restore
+# from active_profile starts working again - it is a useful feature once there is a
+# choice to preserve, and only wrong before that.
+rm -f /data/adb/asb/no_profile_chosen 2>/dev/null
 PIDFILE="$STATE_DIR/worker.pid"
 LOGFILE="$STATE_DIR/apply_profile.log"
 mkdir -p "$STATE_DIR" >/dev/null 2>&1 || true

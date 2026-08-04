@@ -82,7 +82,11 @@ for _tl in vendor_mounts.log ram_expand.log profile_switches.log; do
   asb_trim_log "/data/adb/asb/$_tl"
 done
 
-if [ -r /data/adb/asb/active_profile ]; then
+# active_profile lives in /data/adb/asb, which survives module removal - so this restore
+# put a profile back on a phone where the user had just installed clean and chosen
+# nothing. It is meant to survive a REBOOT, not an uninstall, and the marker below tells
+# the two apart: install.sh writes it when it deliberately leaves no profile selected.
+if [ -r /data/adb/asb/active_profile ] && [ ! -f /data/adb/asb/no_profile_chosen ]; then
   _saved_profile="$(cat /data/adb/asb/active_profile 2>/dev/null)"
   case "$_saved_profile" in
     battery|balanced|performance|smart)
@@ -111,11 +115,13 @@ if [ ! -f /data/adb/asb/smart_mode_enabled ]; then
     echo "$_cur_prof" > /data/adb/asb/smart_prev_profile 2>/dev/null
     asb_log "smart_migration: existing user state detected, smart_mode=off, prev_profile=$_cur_prof"
   else
+    # Smart is available, not applied. Writing current_profile here was the last place
+    # that chose for the user - the WebUI said "not selected" while this had already
+    # picked smart and the module card showed a profile. The learner still starts, so
+    # tapping Smart later has history behind it.
     echo "1" > /data/adb/asb/smart_mode_enabled 2>/dev/null
     echo "balanced" > /data/adb/asb/smart_prev_profile 2>/dev/null
-    echo "smart" > "$MODDIR/current_profile" 2>/dev/null
-    echo "smart" > /data/adb/asb/active_profile 2>/dev/null
-    asb_log "smart_migration: fresh install, smart_mode=on, current_profile=smart"
+    asb_log "smart_migration: fresh install, smart_mode=on, no profile applied yet"
   fi
 fi
 
@@ -2628,6 +2634,34 @@ fi
   done
 ) >/dev/null 2>&1 &
 
+# Put the OEM toggles back the way they were before this module arrived.
+#
+# Runs once, late, and then deletes its own record. Installing ASB changes the memory
+# configuration enough that OxygenOS re-enables RAM expansion on the next boot; the
+# user who had it off gets it back off, and a user who turns it on afterwards is never
+# contradicted because the record is gone by then.
+#
+# Skipped entirely when the user asked ASB to manage these - then the profile owns them.
+(
+  sleep 120
+  [ -s /data/adb/asb/oem_preinstall ] || exit 0
+  _oemmg="$(grep -E '^[[:space:]]*UX_MANAGE_OEM_TOGGLES=' "$MODDIR/config/governor.conf" 2>/dev/null \
+            | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  if [ "$_oemmg" = "1" ]; then
+    rm -f /data/adb/asb/oem_preinstall 2>/dev/null
+    exit 0
+  fi
+  command -v settings >/dev/null 2>&1 || exit 0
+  while IFS="|" read -r _ok _ov; do
+    [ -n "$_ok" ] || continue
+    _now="$(settings get global "$_ok" 2>/dev/null)"
+    [ "$_now" = "$_ov" ] && continue
+    settings put global "$_ok" "$_ov" >/dev/null 2>&1 \
+      && asb_log "oem toggle $_ok was $_now, restored to $_ov (as found before install)"
+  done < /data/adb/asb/oem_preinstall
+  rm -f /data/adb/asb/oem_preinstall 2>/dev/null
+) >/dev/null 2>&1 &
+
 if [ -f "$MODDIR/runtime/asb_gms_freeze.sh" ]; then
   sh "$MODDIR/runtime/asb_gms_freeze.sh" >/dev/null 2>&1
 fi
@@ -2720,9 +2754,21 @@ if [ -f "$MODDIR/runtime/asb_blur_apply.sh" ]; then
     # Re-assert BOTH directions, not just "off".
     #
     # This branch runs when system.prop already matches, i.e.
-    [ "$_asb_blur_want" = "1" ] \
-      && settings put global disable_window_blurs 1 >/dev/null 2>&1 \
-      || settings put global disable_window_blurs 0 >/dev/null 2>&1
+    # Only write when the live value is actually wrong.
+    #
+    # WindowManager watches this key and rebuilds its blur state whenever it changes -
+    # and re-writing the same value still counts as a change to the observer. Doing that
+    # late in boot is why the launcher background lost its blur for about a second the
+    # first time the app drawer opened, then corrected itself: the drawer was drawn with
+    # blur state that had just been invalidated underneath it. Reported after V61.
+    _blur_now="$(settings get global disable_window_blurs 2>/dev/null)"
+    case "$_blur_now" in ""|null) _blur_now=0 ;; esac
+    _blur_want=0
+    [ "$_asb_blur_want" = "1" ] && _blur_want=1
+    if [ "$_blur_now" != "$_blur_want" ]; then
+      settings put global disable_window_blurs "$_blur_want" >/dev/null 2>&1
+      asb_log "blur: disable_window_blurs $_blur_now -> $_blur_want"
+    fi
   fi
 fi
 (
