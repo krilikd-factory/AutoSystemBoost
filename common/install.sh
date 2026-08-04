@@ -2283,6 +2283,33 @@ asb_reset_learning_on_upgrade_to_v56() {
 # exactly when there is nothing to migrate - i.e. on a first install - so the block that
 # was supposed to run on a first install was the one piece of code a first install could
 # never reach. Reported twice: clean install, eleven switches on, Balanced active.
+# Remember the OEM toggles exactly as we found them, before anything runs.
+#
+# Field report from a OnePlus 13: "every time I install the module, RAM expansion turns
+# itself back on; I always keep it off". ASB does not enable it - UX_MANAGE_OEM_TOGGLES
+# ships at 0 and every profile sets UX_RAM_EXPAND=0 - so something on the OxygenOS side
+# reconsiders the setting when the memory configuration changes underneath it, which is
+# exactly what installing this module does.
+#
+# Whatever the mechanism, the user's answer is knowable: it is whatever the toggle said
+# before we arrived. Recorded here and re-asserted once on the next boot, then the
+# record is dropped - enough to undo the side effect, not enough to keep fighting a
+# user who later turns it on themselves.
+asb_capture_oem_toggles() {
+  command -v settings >/dev/null 2>&1 || return 0
+  mkdir -p /data/adb/asb 2>/dev/null
+  : > /data/adb/asb/oem_preinstall 2>/dev/null
+  for _ok in ram_expand_size ram_expand_size_list ram_expand_switch_state; do
+    _ov="$(settings get global "$_ok" 2>/dev/null)"
+    case "$_ov" in
+      ''|null) continue ;;
+    esac
+    printf '%s|%s\n' "$_ok" "$_ov" >> /data/adb/asb/oem_preinstall 2>/dev/null
+  done
+  [ -s /data/adb/asb/oem_preinstall ] \
+    && ui_print "      + remembered your OEM toggles as they are now"
+}
+
 asb_neutralise_fresh_install() {
   _new_conf="$MODPATH/config/governor.conf"
   [ -f "$_new_conf" ] || return 0
@@ -2298,6 +2325,12 @@ asb_neutralise_fresh_install() {
   # decide how it runs. profile_core.sh treats an absent file as "none" and applies
   # nothing until the user taps one of the four.
   rm -f "$MODPATH/current_profile" 2>/dev/null
+  # Tell service.sh this absence is deliberate. Without it the boot-time restore from
+  # /data/adb/asb/active_profile - which outlives module removal - would put the old
+  # profile straight back and the module card would show it.
+  mkdir -p /data/adb/asb 2>/dev/null
+  : > /data/adb/asb/no_profile_chosen 2>/dev/null
+  rm -f /data/adb/asb/active_profile /data/adb/asb/current_profile.bak 2>/dev/null
   ui_print "      + first install: everything starts at stock, nothing applied yet"
   ui_print "        open the WebUI to turn on what you want"
 }
@@ -2734,6 +2767,7 @@ asb_save_user_config
 ui_print " "
 ui_print "  💾  ${ASB_SEC_CONFIG:-CONFIG}"
 asb_reset_learning_on_upgrade_to_v56
+asb_capture_oem_toggles
 asb_preserve_user_config
 
 if [ -n "${ASB_GOV_ABI:-}" ]; then
