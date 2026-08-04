@@ -926,9 +926,17 @@ asb_thermal_sanity() {
   # cannot help on this device, not licence to invent a value.
   [ "$_ts_min" -gt 70 ] && _ts_min=70
   if [ "$_ts_set" -lt "$_ts_min" ]; then
-    sed -i "s|^[[:space:]]*sustained_temp_enter=.*|sustained_temp_enter=$_ts_min|" \
-      "$_ts_conf" 2>/dev/null
-    asb_log "thermal: point ${_ts_set}C is at or below this device's own CPU temperature (${_ts_idle}C) - raised to ${_ts_min}C, otherwise throttling would never switch off"
+    # Published as a runtime floor, not written into governor.conf.
+    #
+    # Editing the config made the card show a number the user never chose - a clean
+    # install with the shipped 65 came back as 70 - and left no way to see that this
+    # was a correction rather than their own setting. The governor and the writer read
+    # this file and clamp against it; the config keeps saying what the user asked for.
+    mkdir -p /data/adb/asb 2>/dev/null
+    printf '%s\n' "$_ts_min" > /data/adb/asb/thermal_floor 2>/dev/null
+    asb_log "thermal: point ${_ts_set}C is at or below this device's own CPU temperature (${_ts_idle}C) - clamping to ${_ts_min}C at runtime, config left as chosen"
+  else
+    rm -f /data/adb/asb/thermal_floor 2>/dev/null
   fi
 }
 
