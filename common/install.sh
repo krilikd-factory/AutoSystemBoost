@@ -2301,8 +2301,15 @@ asb_capture_oem_toggles() {
   : > /data/adb/asb/oem_preinstall 2>/dev/null
   for _ok in ram_expand_size ram_expand_size_list ram_expand_switch_state; do
     _ov="$(settings get global "$_ok" 2>/dev/null)"
+    # Record "unset" too, as the literal word null.
+    #
+    # Skipping it lost exactly the case that matters. OxygenOS stores RAM expansion OFF by
+    # leaving these keys unset, so a user who had it off produced an EMPTY record - and the
+    # restore, which bails on an empty file, never ran. They watched it switch itself back
+    # on after every install and had to turn it off by hand. "Unset" is a state, not a
+    # missing reading, and the restore knows how to put it back.
     case "$_ov" in
-      ''|null) continue ;;
+      ''|null) _ov=null ;;
     esac
     printf '%s|%s\n' "$_ok" "$_ov" >> /data/adb/asb/oem_preinstall 2>/dev/null
   done
