@@ -174,6 +174,15 @@ if [ -f /data/adb/asb/gms_components_frozen ] && command -v pm >/dev/null 2>&1; 
   rm -f /data/adb/asb/gms_components_frozen 2>/dev/null
 fi
 
+# Put the global uclamp floor back.
+#
+# 1024 is the stock value on every device this runs on - it is the kernel default and
+# what OxygenOS ships - so restoring it flat is safe and does not need a recorded
+# baseline. It also resets itself on the next boot; this is for the user who removes
+# the module and does not reboot before judging the result.
+[ -w /proc/sys/kernel/sched_util_clamp_min ] \
+  && echo 1024 > /proc/sys/kernel/sched_util_clamp_min 2>/dev/null
+
 # Restore Doze exemptions we removed.
 #
 # Recorded per package rather than replayed wholesale: an exemption the user granted
