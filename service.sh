@@ -2655,9 +2655,18 @@ fi
   while IFS="|" read -r _ok _ov; do
     [ -n "$_ok" ] || continue
     _now="$(settings get global "$_ok" 2>/dev/null)"
+    case "$_now" in ''|null) _now=null ;; esac
     [ "$_now" = "$_ov" ] && continue
-    settings put global "$_ok" "$_ov" >/dev/null 2>&1 \
-      && asb_log "oem toggle $_ok was $_now, restored to $_ov (as found before install)"
+    if [ "$_ov" = "null" ]; then
+      # It was unset before we arrived, so unset is what "as found" means. Writing a 0
+      # is not the same: OxygenOS treats the key being absent as its own default and a
+      # stored 0 as a deliberate choice.
+      settings delete global "$_ok" >/dev/null 2>&1 \
+        && asb_log "oem toggle $_ok was $_now, cleared (unset before install)"
+    else
+      settings put global "$_ok" "$_ov" >/dev/null 2>&1 \
+        && asb_log "oem toggle $_ok was $_now, restored to $_ov (as found before install)"
+    fi
   done < /data/adb/asb/oem_preinstall
   rm -f /data/adb/asb/oem_preinstall 2>/dev/null
 ) >/dev/null 2>&1 &
