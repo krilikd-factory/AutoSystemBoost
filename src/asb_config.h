@@ -326,6 +326,22 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "sustained_load_min")) c->sustained_load_min = (float)atof(v);
     else if (!strcmp(k, "sustained_temp_enter")) {
         c->sustained_temp_enter = atoi(v);
+        /* Runtime floor from service.sh, if this device idles too hot for the chosen
+         * point. It used to rewrite governor.conf, which made the card display a number
+         * the user had not picked; the correction now lives in its own file so the
+         * config keeps saying what was asked for and only the behaviour is clamped. */
+        {
+            FILE *ff = fopen("/data/adb/asb/thermal_floor", "r");
+            if (ff) {
+                int floor_c = 0;
+                if (fscanf(ff, "%d", &floor_c) == 1 &&
+                    floor_c > 0 && floor_c <= 70 &&
+                    c->sustained_temp_enter < floor_c) {
+                    c->sustained_temp_enter = floor_c;
+                }
+                fclose(ff);
+            }
+        }
         /* Default the ceiling to the value itself: with no explicit ceiling key, the
          * configured number is exactly what the user wants and self_tune must not pass it.
          * sustained_temp_ceiling below overrides this when the mode allows self-tuning. */
