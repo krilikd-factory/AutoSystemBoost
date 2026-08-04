@@ -2323,7 +2323,11 @@ function ui(p) {
     b.classList.toggle('on', b.dataset.p === p);
     b.classList.remove('ld');
   });
-  document.getElementById('curProfile').textContent = p;
+  // 'none' is not a profile name to print - it is the absence of one, and printing it
+  // raw would read like a fifth mode. No button is highlighted either, because none of
+  // them is active.
+  document.getElementById('curProfile').textContent =
+    (p === 'none' || !p) ? T('prof_none', 'не выбран') : p;
 }
 
 let switching = false;
@@ -2360,9 +2364,14 @@ function openTelegram(e) {
 
 (async () => {
   requestAnimationFrame(() => setTimeout(loadDeviceInfo, 0));
-  const r = await run('cat ' + MD + '/current_profile 2>/dev/null || echo balanced');
-  const p = (r.stdout || 'balanced').trim();
-  ui(['performance','balanced','battery','smart'].includes(p) ? p : 'balanced');
+  // No file, or "none", means nobody has chosen yet - do not invent a choice.
+  //
+  // Three separate 'balanced' fallbacks lived on this line, so a fresh install showed
+  // BALANCED on the home screen no matter what the installer had done. The user then
+  // sees a profile they never picked and has no way to tell it is not applied.
+  const r = await run('cat ' + MD + '/current_profile 2>/dev/null || echo none');
+  const p = (r.stdout || 'none').trim();
+  ui(['performance','balanced','battery','smart'].includes(p) ? p : 'none');
   /* The markup ships "adaptive · learning" as a placeholder, which is a claim about
    * state rather than a neutral label. Resolve it from the device on first paint so the
    * home screen never shows something it has not actually checked. */
