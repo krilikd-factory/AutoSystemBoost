@@ -164,6 +164,37 @@ asb_apply_cpuset() {
 asb_apply_uclamp() {
   asb_feature_enabled CPU || return 0
   local _root _tier _min _max
+
+  # Lower the GLOBAL uclamp.min ceiling before touching the per-cgroup values.
+  #
+  # /proc/sys/kernel/sched_util_clamp_min is the maximum any task may REQUEST as its
+  # minimum utilisation. OxygenOS ships it at 1024, i.e. "anything may demand full
+  # capacity", and a vendor boost framework then does exactly that - so the scheduler
+  # holds frequencies up regardless of real load, and the per-cgroup UCL_TOP_MIN this
+  # function writes is quietly outranked. Measured 1024 on an OP13 that users reported
+  # as running hot; the README has claimed 0 since V57 and nothing implemented it.
+  #
+  # Not set to 0. Zero forbids any minimum at all, including the ones the system uses
+  # for touch response and audio, and the phone feels sluggish where it matters most.
+  # The cap is the profile's own top-app minimum instead: tasks may still ask for a
+  # floor, just not for one above what this profile considers reasonable.
+  #
+  # sched_util_clamp_max is left alone - it is the ceiling on maximum, and lowering it
+  # would cap peak performance rather than stop the needless boosting.
+  if [ -w /proc/sys/kernel/sched_util_clamp_min ]; then
+    _gmin="$(( ( ${UCL_TOP_MIN:-50} * 1024 ) / 100 ))"
+    # Never below 20%: some ROMs treat a very low global ceiling as "no boosting at
+    # all" and audio glitches under load.
+    [ "$_gmin" -lt 205 ] && _gmin=205
+    _gcur="$(cat /proc/sys/kernel/sched_util_clamp_min 2>/dev/null)"
+    case "$_gcur" in
+      ''|*[!0-9]*) _gcur=1024 ;;
+    esac
+    if [ "$_gcur" -ne "$_gmin" ]; then
+      writef_retry /proc/sys/kernel/sched_util_clamp_min "$_gmin" 6 0.15 || true
+      asb_log "uclamp: global min ceiling ${_gcur} -> ${_gmin} (profile top-app min ${UCL_TOP_MIN:-50}%)"
+    fi
+  fi
   for _root in /dev/cpuctl /sys/fs/cgroup /dev/cgroup; do
     [ -d "$_root" ] || continue
     for _tier in background system-background foreground top-app; do
