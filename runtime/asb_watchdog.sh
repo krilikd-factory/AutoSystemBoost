@@ -94,8 +94,15 @@ asb_recovery_level3_safe_mode() {
   echo "$_last_recovery_ts" > "$ASB_RECOVERY_DISABLED_MARKER" 2>/dev/null
   _gpid="$(cat /dev/.asb/governor.pid 2>/dev/null)"
   [ -n "$_gpid" ] && kill "$_gpid" 2>/dev/null
-  echo "balanced" > "$MODDIR/current_profile" 2>/dev/null
-  echo "balanced" > /data/adb/asb/active_profile 2>/dev/null
+  # Safe mode falls back to balanced only if a profile was actually running. On a phone
+  # where the user has not chosen one, writing balanced here would hand them a profile
+  # as the result of a recovery they never saw - and the module card would then
+  # disagree with the WebUI, which is how this surfaced.
+  if [ -s "$MODDIR/current_profile" ] \
+     && [ "$(cat "$MODDIR/current_profile" 2>/dev/null)" != "none" ]; then
+    echo "balanced" > "$MODDIR/current_profile" 2>/dev/null
+    echo "balanced" > /data/adb/asb/active_profile 2>/dev/null
+  fi
   asb_load_profile
   asb_feature_enabled CPU && apply_runtime_profile_now 2>/dev/null
   ASB_GOV_ENABLED=0
