@@ -2305,7 +2305,21 @@ asb_neutralise_fresh_install() {
 asb_preserve_user_config() {
   _new_conf="$MODPATH/config/governor.conf"
   _old_conf="$NVBASE/modules/$MODID/config/governor.conf"
-  [ -f "$_old_conf" ] || _old_conf="$NVBASE/modules_update/$MODID/config/governor.conf"
+  # The modules_update fallback must never point at the file being installed.
+  #
+  # MODPATH during an install IS $NVBASE/modules_update/$MODID, so on a clean install -
+  # where $NVBASE/modules/$MODID/config/governor.conf does not exist - this fallback
+  # resolved to the config that was just unpacked. _src then pointed at the shipped
+  # defaults, the run was treated as an upgrade, and the migration faithfully copied
+  # those defaults onto themselves. Every switch stayed exactly as shipped, which is
+  # what a clean install kept showing: Balanced active and eleven tweaks on.
+  #
+  # The fallback exists for a genuine case - an interrupted update leaves a previous
+  # modules_update tree behind - so it is kept, and only the self-reference removed.
+  if [ ! -f "$_old_conf" ]; then
+    _cand="$NVBASE/modules_update/$MODID/config/governor.conf"
+    [ "$_cand" = "$_new_conf" ] || _old_conf="$_cand"
+  fi
   _snap_conf="/data/adb/asb/governor.conf.snapshot"
   [ -f "$_new_conf" ] || return 0
   for _stale_conf in "$_old_conf" "$_snap_conf"; do
@@ -2335,6 +2349,24 @@ asb_preserve_user_config() {
     asb_neutralise_fresh_install
     return 0
   fi
+
+  # Upgrade: carry the power profile across.
+  #
+  # current_profile is a plain file, not a governor.conf key, so the migration below
+  # never touched it - and the zip now ships "none", so without this an update would
+  # quietly deselect whatever the user had running. It was lost when this block moved
+  # into its own function; restored here, on the upgrade path where it belongs.
+  for _cp_old in "$NVBASE/modules/$MODID/current_profile" \
+                 /data/adb/asb/current_profile.bak; do
+    [ -f "$_cp_old" ] || continue
+    _cp_val="$(cat "$_cp_old" 2>/dev/null | tr -d " \r\n")"
+    case "$_cp_val" in
+      performance|battery|balanced|smart|none)
+        printf '%s\n' "$_cp_val" > "$MODPATH/current_profile" 2>/dev/null
+        ui_print "      + kept your power profile: $_cp_val"
+        break ;;
+    esac
+  done
 
   # Migrate the retired audio switches.
   # We therefore only promote to "hifi" when the user had deliberately turned EQ-compat OFF and
