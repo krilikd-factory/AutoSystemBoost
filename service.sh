@@ -2691,6 +2691,11 @@ if [ -f "$MODDIR/runtime/asb_athena_apply.sh" ]; then
   esac
 fi
 
+# Network offload: RPS/RFS and queue depth do not survive a reboot or an interface reset.
+if [ -f "$MODDIR/runtime/asb_net_offload.sh" ]; then
+  sh "$MODDIR/runtime/asb_net_offload.sh" >/dev/null 2>&1
+fi
+
 if [ -f "$MODDIR/runtime/asb_doze_apply.sh" ]; then
   case "$(grep -E '^[[:space:]]*doze_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')" in
