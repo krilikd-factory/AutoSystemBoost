@@ -541,11 +541,18 @@ asb_load_profile() {
     _cp="$(cat "$MODDIR/current_profile" 2>/dev/null)"
     [ -n "$_cp" ] && PROFILE="$_cp"
   fi
+  # "not selected" has to be handled BEFORE the catch-all, or it never is.
+  #
+  # The *) arm rewrote PROFILE to balanced for anything unrecognised, and none/empty are
+  # unrecognised - so the none check further down could never fire and a fresh install
+  # applied the balanced rails anyway. Same shape as the module card saying "Balanced"
+  # while the app said "not selected": a catch-all swallowing a case that has meaning.
   case "$PROFILE" in
     battery|balanced|performance) : ;;
     smart)
       _SHELL_BOOT_PROFILE=balanced
       ;;
+    ''|none) PROFILE=none ;;
     *) PROFILE=balanced ;;
   esac
   _SHELL_BOOT_PROFILE="${_SHELL_BOOT_PROFILE:-$PROFILE}"
