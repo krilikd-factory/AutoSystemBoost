@@ -1299,7 +1299,14 @@ body.config-active #livePage.open {
    the bottom of the viewport the way it does on the main and monitor pages, where the
    content fits. Matching the spacing is what makes it look consistent; pinning it would
    put it in the middle of a scrolled page. */
-.config-page .tg-link-wrap { margin-top: 0; padding-top: 24px; }
+/* Same rule as the other pages: margin-top: auto.
+ *
+ * I had set this to 0 on the theory that a scrolling page cannot pin the link to the
+ * viewport bottom. True while the list is long - but a category with six cards is short,
+ * and there margin-top: 0 parks the link right under the last card while the main and
+ * monitor pages put it at the bottom. auto is correct in both cases: it pushes to the
+ * bottom when there is room and follows the content when there is not. */
+.config-page .tg-link-wrap { margin-top: auto; padding-top: 24px; }
 .cfg-list {
   width: 100%;
   display: flex;
@@ -1670,13 +1677,14 @@ body.config-active #livePage.open {
 /* Language and the two backup buttons share one row. As three stacked full-width blocks
    they took more vertical space than the settings they sit above, which inverts what the
    page is for. */
-#cfgToolsRow { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
+#cfgToolsRow { display: flex; gap: 8px; margin-top: 0; align-items: stretch; flex: 1 1 auto; min-width: 0; }
 #cfgLangWrap { flex: 0 0 auto; display: flex; }
 .cfg-lang-sel { min-width: 0; width: auto; padding: 9px 28px 9px 11px; font-size: 12px; }
 #cfgBackupWrap { display: flex; gap: 8px; flex: 1 1 auto; }
 .cfg-backup {
   flex: 1 1 0;
-  padding: 9px 6px;
+  min-width: 0;
+  padding: 9px 4px;
   border-radius: 12px;
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   background: rgba(255,255,255,0.04);
@@ -1720,10 +1728,11 @@ body.config-active #livePage.open {
 
 /* Compact by default. A full-width bar at the top of the page reads as the main thing on
    it, which search is not - the settings are. It grows on focus so typing still has room. */
-.cfg-search-wrap { margin: 0 0 10px; display: flex; }
+.cfg-search-wrap { margin: 0 0 10px; display: flex; gap: 8px; align-items: stretch; }
 .cfg-search {
-  width: 46%;
-  max-width: 210px;
+  width: 34%;
+  max-width: 150px;
+  flex: 0 0 auto;
   box-sizing: border-box;
   transition: width .18s ease, max-width .18s ease;
   -webkit-appearance: none;
@@ -2209,14 +2218,6 @@ body.config-active #livePage.open {
   <!-- Reboot actions. Wrapped so cfgSyncChrome can show them on the hub and hide them on
        a category page: down there the screen is a list of settings, and a full reboot
        button under it is easy to hit while still choosing. -->
-  <div id="cfgRebootWrap">
-    <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
-    <button class="cfg-reboot soft" onclick="cfgSoftReboot()" data-i18n="cfg_soft_reboot">⟳ Soft reboot</button>
-    <button class="cfg-reboot sysui" onclick="cfgRestartSysUI()" data-i18n="cfg_restart_sysui">▤ Restart SystemUI</button>
-  </div>
-
-  <!-- Backup and restore. Forty-nine settings is a long evening to redo after a wipe or on
-       a second phone, and the values already live in one file - there was simply no way to
        reach it without a terminal. -->
   <!-- Language. The device language is a good guess, not a decision: a German user asked
        for English and the only way to get it was to change the phone's system language. -->
@@ -2226,10 +2227,18 @@ body.config-active #livePage.open {
   </div>
 
   <div id="cfgBackupWrap">
-    <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">⭳ Export</button>
-    <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">⭱ Import</button>
+    <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">↓ Export</button>
+    <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">↑ Import</button>
   </div>
   </div>
+  <div id="cfgRebootWrap">
+    <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
+    <button class="cfg-reboot soft" onclick="cfgSoftReboot()" data-i18n="cfg_soft_reboot">⟳ Soft reboot</button>
+    <button class="cfg-reboot sysui" onclick="cfgRestartSysUI()" data-i18n="cfg_restart_sysui">▤ Restart SystemUI</button>
+  </div>
+
+  <!-- Backup and restore. Forty-nine settings is a long evening to redo after a wipe or on
+       a second phone, and the values already live in one file - there was simply no way to
 
   </div>
 
@@ -2514,7 +2523,7 @@ function ui(p) {
   // raw would read like a fifth mode. No button is highlighted either, because none of
   // them is active.
   document.getElementById('curProfile').textContent =
-    (p === 'none' || !p) ? T('prof_none', 'не выбран') : p;
+    (p === 'none' || !p) ? T('prof_none', 'not selected') : p;
 }
 
 let switching = false;
@@ -2530,7 +2539,14 @@ async function go(p) {
     haptic();
     try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
     ui(p);
-    toast('\u2713 ' + (ASB_LANG==='ru' ? T('prof_'+p, p) : (p.charAt(0).toUpperCase()+p.slice(1))) + (ASB_LANG==='ru' ? ' \u2014 \u043f\u0440\u0438\u043c\u0435\u043d\u0451\u043d' : ' applied'), p);
+    /* One code path for every language.
+     * This branched on ASB_LANG === 'ru': Russian got a translated profile name and
+     * "применён", everyone else got a capitalised key and "applied" - so nine languages
+     * saw English here no matter what their locale file contained. T() already falls
+     * back to English on its own; the special case only prevented the other nine from
+     * ever being used. */
+    toast('\u2713 ' + T('prof_' + p, p.charAt(0).toUpperCase() + p.slice(1)) +
+          T('t_prof_applied', ' applied'), p);
     /*
      * Refresh the Smart sub-line here rather than waiting for the live poll.
      */
@@ -2835,6 +2851,19 @@ const CFG_CAT = {
 // These are the four things a user actually comes here to change; the internal CFG_CAT stays
 // as it is because it drives the per-card colours and the toast tint, which are finer-grained
 // than the navigation should be.
+/* Category names for every language, not just Russian.
+ *
+ * They were `(ASB_LANG === 'ru') ? g.ru : g.name` in four places, so a Ukrainian or German
+ * user saw "Audio / Camera / Network" among otherwise translated text - which is exactly
+ * what the screenshots showed. The locale files can carry grp_<id>; .ru stays as the
+ * fallback so nothing regresses if a file lacks the key. */
+function grpName(g) {
+  if (!g) return '';
+  const t = T('grp_' + g.id, null);
+  if (t) return t;
+  return (ASB_LANG === 'ru' && g.ru) ? g.ru : g.name;
+}
+
 const CFG_GROUPS = [
   { id:'audio',   ico:'\uD83C\uDFB5', name:'Audio',   ru:'\u0410\u0443\u0434\u0438\u043E' },
   { id:'camera',  ico:'\uD83D\uDCF7', name:'Camera',  ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
@@ -3004,7 +3033,7 @@ function cfgStatus(it, cur) {
     const g = parseInt(_cfgVals['dsp_loudness'] || '0', 10);
     const b = parseInt(_cfgVals['dsp_bass'] || '0', 10);
     if (!(g > 0) && !(b > 0)) {
-      return { cls:'neutral', text:T('dsp_idle', 'DSP выкл') };
+      return { cls:'neutral', text:T('dsp_idle', 'DSP off') };
     }
     // Active whenever the DSP is processing, including on "all".
     //
@@ -3021,8 +3050,8 @@ function cfgStatus(it, cur) {
     // from a clamp counter that never goes down.
     // Below idle temperature the cap is engaged permanently, including while asleep.
     // Measured on this device: cpuT never goes below 40 even after 9 hours screen-off.
-    if (t > 0 && t <= 41) return { cls:'warn', text:t + '\u00b0C \u00b7 ' + T('st_always_on', 'всегда активен') };
-    if (t > 0 && t <= 45) return { cls:'warn', text:t + '\u00b0C \u00b7 ' + T('st_mostly_on', 'почти всегда активен') };
+    if (t > 0 && t <= 41) return { cls:'warn', text:t + '\u00b0C \u00b7 ' + T('st_always_on', 'always on') };
+    if (t > 0 && t <= 45) return { cls:'warn', text:t + '\u00b0C \u00b7 ' + T('st_mostly_on', 'mostly on') };
     if (t > 0) return { cls:'good', text:t + '\u00b0C' };
   }
   if (it.type === 'range') {
@@ -3102,7 +3131,7 @@ function cfgRenderHub(list) {
 
     const nm = document.createElement('div');
     nm.className = 'cfg-tile-name';
-    nm.textContent = (ASB_LANG === 'ru') ? g.ru : g.name;
+    nm.textContent = grpName(g);
     tile.appendChild(nm);
 
     const cnt = document.createElement('div');
@@ -3283,7 +3312,7 @@ function cfgUpdatePendingBar() {
   var n = Object.keys(_pendingReboot).length;
   if (!n) { bar.style.display = 'none'; return; }
   bar.style.display = '';
-  bar.textContent = T('t_pending_reboot', '\u21BB Изменения ждут перезагрузки') + ' \u00b7 ' + n;
+  bar.textContent = T('t_pending_reboot', '\u21BB Changes await a reboot') + ' \u00b7 ' + n;
 }
 
 function cfgRenderRow(list, it, showCat) {
@@ -3356,8 +3385,8 @@ function cfgRenderRow(list, it, showCat) {
         if (it.key === 'anim_speed') {
           // A number alone means nothing here - the scale is a duration multiplier, so
           // "2" reads as "faster" to half the people and "slower" to the other half.
-          const names = [T('as_profile','по профилю'), T('as_off','выкл'), '0.5x', '0.7x',
-                         '0.85x', '0.9x', '0.95x', T('as_stock','сток 1x'), '1.25x', '1.5x'];
+          const names = [T('as_profile','by profile'), T('as_off','off'), '0.5x', '0.7x',
+                         '0.85x', '0.9x', '0.95x', T('as_stock','stock 1x'), '1.25x', '1.5x'];
           return names[v + 1] || String(v);
         }
         if (it.key === 'haptic_strength') {
@@ -3535,7 +3564,7 @@ function cfgRenderRow(list, it, showCat) {
     const tag = document.createElement("div");
     tag.className = "cfg-row-cat";
     const g = CFG_GROUPS.filter(x => x.id === cfgGroupOf(it.key))[0];
-    tag.textContent = g ? ((ASB_LANG === 'ru' && g.ru) ? g.ru : g.name) : '';
+    tag.textContent = grpName(g);
     row.appendChild(tag);
   }
 }
@@ -3554,6 +3583,11 @@ function cfgSearchMatches() {
 function cfgRenderSearch(list) {
   const wrap = document.createElement('div');
   wrap.className = 'cfg-search-wrap';
+  /* The tools row is static markup and the search box is built here, so they cannot be
+     siblings in the HTML. Moving the row into this wrapper puts them on one line without
+     duplicating either. */
+  const tools = _el('cfgToolsRow');
+  if (tools && tools.parentNode !== wrap) wrap.appendChild(tools);
   const inp = document.createElement('input');
   inp.className = 'cfg-search';
   inp.type = 'search';
@@ -4076,9 +4110,9 @@ function cfgSyncChrome() {
   if (lbl) {
     if (_cfgGroup) {
       const g = CFG_GROUPS.filter(x => x.id === _cfgGroup)[0];
-      lbl.textContent = g ? ((ASB_LANG === 'ru') ? g.ru : g.name) : '';
+      lbl.textContent = grpName(g);
     } else {
-      lbl.textContent = (ASB_LANG === 'ru') ? '\u041A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044F' : 'Configuration';
+      lbl.textContent = T('sec_config', 'Configuration');
     }
   }
   // Reboot actions belong to the hub only.
@@ -4408,7 +4442,7 @@ async function pollLive(visible) {
       else if (profile === 'battery') { on_ma = 400; }
       else { on_ma = 500; }
       eta_note = (drain_win_s > 0)
-        ? ' · ' + T('lv_measuring', 'measuring…')
+        ? ' · ' + T('lv_measuring', 'measuring\u2026')
         : ' · ' + T('eta_modelled', 'model');
       eta_title = T('eta_modelled_tip',
         'Not a measurement. Derived from battery level and a fixed per-profile draw (' +
@@ -4700,7 +4734,7 @@ async function pollLive(visible) {
           } else if (_lastDrain > 0) {
             _el('bnDrain').textContent = '~' + (_lastDrain / 10).toFixed(1) + '%/h';
           } else {
-            _el('bnDrain').textContent = T('lv_measuring', 'измеряю\u2026');
+            _el('bnDrain').textContent = T('lv_measuring', 'measuring\u2026');
           }
 
           // Thermal trend is what makes Smart back off, so it explains Alpha moving on its
