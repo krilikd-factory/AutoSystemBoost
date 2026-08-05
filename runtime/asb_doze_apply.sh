@@ -192,6 +192,22 @@ asb_doze_trim_whitelist() {
       *"$_p"*) : ;;
       *) continue ;;   # not user-installed - leave it alone
     esac
+    # A package name is [A-Za-z0-9_.] and nothing else. It reaches a shell command, and the
+    # keep-list below is a user-editable file, so anything carrying a quote, a slash or a
+    # space is refused outright rather than escaped.
+    case "$_p" in
+      *[!A-Za-z0-9_.]*|'') continue ;;
+    esac
+    # Apps the user chose to keep exempt, one package per line.
+    #
+    # "Remove every user app" is the right default and the wrong rule for everyone: an
+    # alarm clock, a work chat or a health tracker are exactly the apps someone needs to
+    # reach them late, and the only way to express that was to switch the tweak off
+    # entirely. The editor in the WebUI writes this file.
+    if [ -f /data/adb/asb/doze_whitelist_keep ] && \
+       grep -qxF "$_p" /data/adb/asb/doze_whitelist_keep 2>/dev/null; then
+      continue
+    fi
     if dumpsys deviceidle whitelist "-$_p" >/dev/null 2>&1; then
       grep -qxF "$_p" "$_wl_file" 2>/dev/null || echo "$_p" >> "$_wl_file"
     fi
