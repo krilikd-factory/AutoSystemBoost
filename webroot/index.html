@@ -1294,6 +1294,12 @@ body.config-active #livePage.open {
 
 /* ── Config page (boot-level settings) ──────────────────────────── */
 .config-page { overflow-y: auto !important; }
+/* Same distance above the Telegram link as the other pages have.
+   The config page scrolls (overflow-y: auto), so margin-top: auto cannot pin the link to
+   the bottom of the viewport the way it does on the main and monitor pages, where the
+   content fits. Matching the spacing is what makes it look consistent; pinning it would
+   put it in the middle of a scrolled page. */
+.config-page .tg-link-wrap { margin-top: 0; padding-top: 24px; }
 .cfg-list {
   width: 100%;
   display: flex;
@@ -1661,17 +1667,24 @@ body.config-active #livePage.open {
 /* Dropdown used when a card has four or more choices. Styled to match the segment
    buttons rather than the platform default, which on a dark WebUI renders as a bright
    grey box and reads as a foreign control. */
-#cfgBackupWrap { display: flex; gap: 8px; margin-top: 10px; }
+/* Language and the two backup buttons share one row. As three stacked full-width blocks
+   they took more vertical space than the settings they sit above, which inverts what the
+   page is for. */
+#cfgToolsRow { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
+#cfgLangWrap { flex: 0 0 auto; display: flex; }
+.cfg-lang-sel { min-width: 0; width: auto; padding: 9px 28px 9px 11px; font-size: 12px; }
+#cfgBackupWrap { display: flex; gap: 8px; flex: 1 1 auto; }
 .cfg-backup {
   flex: 1 1 0;
-  padding: 11px 8px;
+  padding: 9px 6px;
   border-radius: 12px;
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   background: rgba(255,255,255,0.04);
   color: #e7eaee;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 .cfg-backup[data-armed="1"] {
   border-color: #f59e0b;
@@ -1681,6 +1694,17 @@ body.config-active #livePage.open {
 
 /* Option breakdown under a description. The current value is marked - "which of these am
    I on" is the second question after "what is the difference". */
+.doze-edit-btn {
+  margin-top: 10px; width: 100%; padding: 9px 10px;
+  border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: rgba(255,255,255,0.04); color: #e7eaee; font-size: 12.5px; font-weight: 600;
+}
+.doze-edit { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.doze-edit-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px;
+  color: rgba(231,234,238,0.8); padding: 5px 2px; }
+.doze-edit-row input { width: 16px; height: 16px; accent-color: var(--accent, #22d3ee); }
+.doze-edit-hint { font-size: 11.5px; color: rgba(231,234,238,0.45); margin-top: 4px; }
+
 .cfg-desc-opts { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
 .cfg-desc-opt {
   display: flex; gap: 9px; align-items: baseline;
@@ -1694,21 +1718,25 @@ body.config-active #livePage.open {
   .cfg-desc-opt-k { min-width: 0; }
 }
 
-.cfg-search-wrap { margin: 0 0 12px; }
+/* Compact by default. A full-width bar at the top of the page reads as the main thing on
+   it, which search is not - the settings are. It grows on focus so typing still has room. */
+.cfg-search-wrap { margin: 0 0 10px; display: flex; }
 .cfg-search {
-  width: 100%;
+  width: 46%;
+  max-width: 210px;
   box-sizing: border-box;
+  transition: width .18s ease, max-width .18s ease;
   -webkit-appearance: none;
   appearance: none;
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   border-radius: 12px;
   color: #e7eaee;
-  font-size: 13.5px;
-  padding: 11px 14px;
+  font-size: 13px;
+  padding: 9px 12px;
 }
 .cfg-search::placeholder { color: rgba(231,234,238,0.42); }
-.cfg-search:focus { outline: none; border-color: var(--accent, #22d3ee); }
+.cfg-search:focus { outline: none; border-color: var(--accent, #22d3ee); width: 100%; max-width: 100%; }
 .cfg-search-empty {
   text-align: center;
   padding: 26px 12px;
@@ -2192,14 +2220,15 @@ body.config-active #livePage.open {
        reach it without a terminal. -->
   <!-- Language. The device language is a good guess, not a decision: a German user asked
        for English and the only way to get it was to change the phone's system language. -->
+  <div id="cfgToolsRow">
   <div id="cfgLangWrap">
-    <label class="cfg-lang-label" data-i18n="cfg_language">Language</label>
-    <select class="cfg-select" id="cfgLangSel" onchange="cfgSetLang(this.value)"></select>
+    <select class="cfg-select cfg-lang-sel" id="cfgLangSel" onchange="cfgSetLang(this.value)"></select>
   </div>
 
   <div id="cfgBackupWrap">
-    <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">\u2B73 Export settings</button>
-    <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">\u2B71 Import settings</button>
+    <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">⭳ Export</button>
+    <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">⭱ Import</button>
+  </div>
   </div>
 
   </div>
@@ -2298,8 +2327,23 @@ var I18N = { en: {} };
   // missing or malformed file must degrade to English rather than to blank labels.
   var en = readLang('en');
   if (en) I18N.en = en;
+  /* Load the language that will actually be USED, not the device's.
+   *
+   * This picked navigator.language while ASB_LANG below picks the stored choice first, so
+   * the two disagreed the moment anyone used the picker: the file for the chosen language
+   * was never fetched, Tcfg fell back to English, and switching appeared to work "only
+   * sometimes" - it worked exactly when the choice happened to match the system language.
+   * One decision, made once, used by both. */
   var want = (function () {
     try {
+      var saved = null;
+      try { saved = localStorage.getItem('asb_lang'); } catch (e) {}
+      if (saved) {
+        if (saved === 'en') return 'en';
+        for (var j = 0; j < ASB_LANGS.length; j++) {
+          if (ASB_LANGS[j] === saved) return saved;
+        }
+      }
       var l = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
       for (var i = 0; i < ASB_LANGS.length; i++) {
         if (l.indexOf(ASB_LANGS[i]) === 0) return ASB_LANGS[i];
@@ -2692,6 +2736,10 @@ const CFG_ITEMS = [
     desc:'Queue discipline for WiFi only. As global takes the value from the card above. Independent of mobile data.' },
   { key:'net_qdisc_mobile', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 mobile',
     desc:'Queue discipline for mobile data only. As global takes the value from the card above. Independent of WiFi - both links can differ at the same time.' },
+  { key:'net_rps', type:'seg', def:'stock', stock:'stock', opts:['stock','little','all'], name:'Spread Network Load',
+    desc:'Which cores handle incoming network packets. Stock leaves every packet on the one core the interrupt landed on, which caps throughput on fast WiFi and pins that core high. Little spreads the work across the efficiency cluster; all uses every core. Costs a little CPU to wake a second core, so it earns its keep on a fast link and loses on a slow one.' },
+  { key:'net_txqueue', type:'seg', def:'stock', stock:'stock', opts:['stock','short','shorter'], name:'Transmit Queue',
+    desc:'How many packets may wait to be sent. The stock 1000 is a wired-Ethernet default from the 1990s that survived into wireless drivers; on a link as variable as WiFi a deep queue mostly adds latency under load rather than throughput. Short is 256, shorter is 128. If uploads feel slower, go back to stock.' },
   { key:'net_route_tune', type:'seg', def:'auto', stock:'off', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
     desc:'How much the phone sends in one burst before waiting for a reply. Smart lets ASB look at your actual WiFi or mobile speed and size it: bigger on a fast link, left at the factory value on a weak one, because a big burst there only causes losses. Moderate uses the factory value everywhere. Aggressive goes one class higher if you trust your link. Stock puts it back. Start with Smart.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
@@ -2766,6 +2814,7 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
+  net_rps:'net', net_txqueue:'net',
   athena_service:'system',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
@@ -2798,6 +2847,7 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
+  net_rps:'net', net_txqueue:'net',
   athena_service:'ui',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
@@ -2845,6 +2895,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
+  net_rps:'\uD83D\uDD00', net_txqueue:'\uD83D\uDCE4',
   athena_service:'\uD83D\uDEE1\uFE0F',
   sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
   bt_a2dp_offload:'\uD83D\uDCFB', night_quiet_enable:'\uD83C\uDF19',
@@ -3453,6 +3504,15 @@ function cfgRenderRow(list, it, showCat) {
      * from the locale file, so a translator can add the breakdown where it helps without
      * touching this code. */
     const dOpt = Tcfg(it.key, "descOpt", null);
+    if (it.key === 'doze_trim_whitelist') {
+      /* The switch alone cannot answer "which of my apps", so the card carries the
+         editor that can. */
+      const eb = document.createElement('button');
+      eb.className = 'doze-edit-btn';
+      eb.textContent = T('doze_edit', 'Choose apps to keep exempt');
+      eb.onclick = (e) => { e.stopPropagation(); dozeOpenEditor(inner); };
+      inner.appendChild(eb);
+    }
     if (dOpt && typeof dOpt === "object") {
       const ul = document.createElement("div");
       ul.className = "cfg-desc-opts";
@@ -3498,7 +3558,7 @@ function cfgRenderSearch(list) {
   inp.className = 'cfg-search';
   inp.type = 'search';
   inp.value = _cfgSearch;
-  inp.placeholder = T('cfg_search', 'Search settings');
+  inp.placeholder = '\uD83D\uDD0D  ' + T('cfg_search', 'Search');
   /* Re-render on every keystroke, but put focus and the caret back afterwards: the whole
      list is rebuilt, so the input the user is typing into is a different element by the
      time the next character arrives. Without this it loses focus after one letter. */
@@ -3831,6 +3891,78 @@ function cfgSetLang(l) {
   location.reload();
 }
 
+const DOZE_KEEP_PATH = '/data/adb/asb/doze_whitelist_keep';
+
+/* Editor for the Doze exemption list.
+ *
+ * The setting was a 0/1 switch and a user said plainly that it tells them nothing - fair,
+ * because the interesting question is not "trim the list" but "which of MY apps stays
+ * exempt". Alarm clocks, work chat and health trackers are exactly the ones people need to
+ * reach them late. This lists the user-installed apps currently exempt and lets each be
+ * kept, writing one package per line to a file the applier reads.
+ *
+ * Package names are validated here as well as in the shell: they end up in a command, and
+ * a name is [A-Za-z0-9_.] by Android's own rules, so anything else is a bug or an attack
+ * and is dropped rather than quoted around.
+ */
+function dozePkgOk(p) { return /^[A-Za-z0-9_.]+$/.test(p); }
+
+async function dozeOpenEditor(row) {
+  let box = row.querySelector('.doze-edit');
+  if (box) { box.remove(); return; }
+  box = document.createElement('div');
+  box.className = 'doze-edit';
+  box.textContent = T('doze_loading', 'Reading the exemption list...');
+  row.appendChild(box);
+  try {
+    const r = await run("sh -c 'dumpsys deviceidle whitelist 2>/dev/null | grep -E \"^user,\" | cut -d, -f2'");
+    const keepR = await run('cat ' + DOZE_KEEP_PATH + ' 2>/dev/null');
+    const keep = ((keepR && keepR.stdout) || '').split('\n').map(x => x.trim()).filter(Boolean);
+    const pkgs = ((r && r.stdout) || '').split('\n').map(x => x.trim()).filter(dozePkgOk);
+    box.textContent = '';
+    if (!pkgs.length) {
+      box.textContent = T('doze_empty', 'No user apps are exempt right now.');
+      return;
+    }
+    pkgs.forEach(function (pk) {
+      const line = document.createElement('label');
+      line.className = 'doze-edit-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = keep.indexOf(pk) >= 0;
+      cb.onchange = function () { dozeSaveKeep(box); };
+      const nm = document.createElement('span');
+      nm.textContent = pk;
+      line.appendChild(cb); line.appendChild(nm);
+      line.dataset.pkg = pk;
+      box.appendChild(line);
+    });
+    const hint = document.createElement('div');
+    hint.className = 'doze-edit-hint';
+    hint.textContent = T('doze_hint', 'Ticked apps stay exempt from Doze.');
+    box.appendChild(hint);
+  } catch (e) {
+    box.textContent = T('doze_err', 'Could not read the list');
+  }
+}
+
+async function dozeSaveKeep(box) {
+  const keep = [];
+  box.querySelectorAll('.doze-edit-row').forEach(function (l) {
+    const cb = l.querySelector('input');
+    if (cb && cb.checked && dozePkgOk(l.dataset.pkg)) keep.push(l.dataset.pkg);
+  });
+  try {
+    /* Written with printf and a single-quoted list: the names are already validated, and
+       building the file line by line with echo would break on the first odd one. */
+    const body = keep.join('\n');
+    await run("sh -c 'mkdir -p /data/adb/asb; printf \"%s\" \"" + body + "\" > " + DOZE_KEEP_PATH + "'");
+    toast(T('doze_saved', 'Kept ') + keep.length, 'ok');
+  } catch (e) {
+    toast(T('doze_err', 'Could not save'), 'err');
+  }
+}
+
 const CFG_BACKUP_PATH = '/sdcard/asb_settings_backup.conf';
 
 async function cfgExport() {
@@ -3952,10 +4084,8 @@ function cfgSyncChrome() {
   // Reboot actions belong to the hub only.
   const rw = _el('cfgRebootWrap');
   if (rw) rw.style.display = _cfgGroup ? 'none' : '';
-  const bw = _el('cfgBackupWrap');
-  if (bw) bw.style.display = _cfgGroup ? 'none' : '';
-  const lw = _el('cfgLangWrap');
-  if (lw) { lw.style.display = _cfgGroup ? 'none' : ''; cfgFillLangs(); }
+  const tr = _el('cfgToolsRow');
+  if (tr) { tr.style.display = _cfgGroup ? 'none' : 'flex'; cfgFillLangs(); }
 }
 
 function cfgBack() {
@@ -4050,6 +4180,18 @@ let _batCapFullMah = 0;
  * the label reading "disabled · tap to enable" until the user opened Monitor or Settings and
  * came back - the poll ran there, and only then did the text catch up.
  */
+function smartSesWord(n) {
+  /* Slavic plural agreement: 1 -> singular, 2-4 -> few, 0 and 5+ -> many, with the 11-14
+     exception. Languages that do not decline get one form and the rule collapses to it. */
+  const one  = T('smart_ses_1',  ' session');
+  const few  = T('smart_ses_2',  ' sessions');
+  const many = T('smart_ses_5',  ' sessions');
+  const n100 = n % 100, n10 = n % 10;
+  if (n10 === 1 && n100 !== 11) return one;
+  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
+  return many;
+}
+
 function renderSmartSubLine(kv) {
   try {
     const smartSub = _el('smartSubLine');
@@ -4066,14 +4208,37 @@ function renderSmartSubLine(kv) {
       let sub = dpName + ' · ' + Math.round(alpha/10) + '% battery-lean';
       if (night)         sub = '🌙 night-safe override';
       else if (veto)     sub = '🔥 thermal veto active';
-      else if (fb === 4) sub = 'cold start · learning';
+      else if (fb === 4) {
+        /* Cold start says the learner has no history for this bucket. Same reasoning as
+           the pending case: show the count, so "still nothing" and "nearly there" read
+           differently. */
+        const cs = parseInt(kv.smart_sessions_total || '0', 10);
+        sub = cs > 0 ? (T('smart_learning', 'learning \u00b7 ') + cs + smartSesWord(cs))
+                     : T('smart_waiting', 'starting \u00b7 needs a screen-on session');
+      }
       smartSub.textContent = sub;
     } else if (kv && kv._smartPending === 1) {
       /*
        * apply_profile.sh has written smart_mode_enabled, but /dev/.asb/state is produced by
        * the native governor and only catches up on its next tick.
        */
-      smartSub.textContent = 'starting…';
+      /* Say what it is waiting for, and how far along it is.
+       *
+       * This was a flat "starting..." that never changed. A user watched it for fifteen
+       * minutes and asked whether that was normal - a fair question, because the text gives
+       * no way to tell "any second now" from "this is stuck". Both look identical.
+       *
+       * Two states hide behind it. The governor may simply not have ticked yet, which
+       * resolves in seconds. Or it has, and Smart is waiting for sessions: a session is one
+       * screen-on to screen-off cycle, so a phone left charging with the screen off produces
+       * none at all and the wait is open-ended. That second case is the one worth naming,
+       * because the answer is "use the phone", not "wait longer". */
+      const ses = parseInt((kv && kv.smart_sessions_total) || '0', 10);
+      if (ses > 0) {
+        smartSub.textContent = T('smart_learning', 'learning \u00b7 ') + ses + smartSesWord(ses);
+      } else {
+        smartSub.textContent = T('smart_waiting', 'starting \u00b7 needs a screen-on session');
+      }
     } else {
       smartSub.textContent = 'disabled · tap to enable';
     }
