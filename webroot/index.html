@@ -2576,6 +2576,7 @@ const CFG_ITEMS = [
     desc:'Disables individual components inside Google Play services. This is not package freezing - GMS itself stays enabled, so push notifications, sign-in, payments and the Play Store keep working.\n\nsafe turns off telemetry, usage reporting, checkin and analytics. Nothing user-facing depends on them; the phone does not notice they are gone.\n\nmore adds ads personalisation and location history uploads. Ads still appear, they are just less targeted; Maps still works but Timeline stops recording where you have been.\n\nNever touched at any level: push delivery, module loading, account sign-in and payments - freezing those is how a battery module turns into a thread about missing notifications.\n\nEvery component\u2019s prior state is recorded. Setting this back to off, or uninstalling ASB, puts them back - except ones you had already disabled yourself, which stay that way.' },
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
+  { key:'athena_service', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
     desc:'Android kills so-called phantom processes - the ones an app spawns outside the normal lifecycle - once there are more than 32. It is why long compiles, emulators and terminal sessions die halfway through on Android 12 and later.\n\nno limit turns the monitor off. limit 32 switches Android\u2019s own ceiling back on explicitly.\n\nleave alone is not the same as limit 32: it keeps whatever the device currently holds, which past ASB versions or another module may have changed. Pick one of the first two if you want a predictable result.\n\nThe app needs restarting because Android reads the limit when a process starts - apps already running keep the old behaviour.' },
   { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
@@ -2613,6 +2614,7 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
+  athena_service:'system',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', bt_absvol_mode:'audio',
@@ -2644,6 +2646,7 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
+  athena_service:'system',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui',
@@ -2690,6 +2693,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
+  athena_service:'\\uD83D\\uDEE1\\uFE0F',
   sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
   bt_a2dp_offload:'\uD83D\uDCFB', night_quiet_enable:'\uD83C\uDF19',
   bat_suppress_gaming:'\uD83D\uDE34', log_level:'\uD83D\uDCDD', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
@@ -3464,6 +3468,9 @@ async function cfgSet(key, val, ctl) {
       // rendering before it exists would show the previous verdict.
       try { await run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1'); } catch (e) {}
       await loadNetResult();
+      toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+    } else if (key === 'athena_service') {
+      try { await run('sh ' + MD + '/runtime/asb_athena_apply.sh >/dev/null 2>&1'); } catch (e) {}
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
     } else if (key === 'doze_level') {
       // Applied live: DeviceIdleController watches this key with a ContentObserver, so the
