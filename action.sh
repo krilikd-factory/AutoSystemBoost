@@ -665,7 +665,7 @@ _we_name=""
 # Box frames and space-padded columns cannot line up there (an emoji is two cells wide but one
 # character), which is why the old ╭──╮ frame came out ragged.
 echo ""
-echo "  🚀  AutoSystemBoost V62"
+echo "  🚀  AutoSystemBoost V63"
 if [ "$_smart_enabled" = "1" ]; then
   _conf_pct=$((_smart_conf / 10))
   echo "  🤖  Smart · bucket ${_smart_bucket} · ${_daypart_name}${_we_name} · conf ${_conf_pct}%"
