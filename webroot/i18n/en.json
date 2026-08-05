@@ -40,13 +40,209 @@
     "athena_service": {
       "stock": "stock",
       "off": "off"
+    },
+    "anim_speed": {
+      "profile": "by profile",
+      "off": "off",
+      "fastest": "fastest",
+      "faster": "faster",
+      "fast": "fast",
+      "stock": "stock",
+      "slow": "slow",
+      "slower": "slowest"
+    },
+    "phantom_procs": {
+      "stock": "leave alone",
+      "relaxed": "no limit",
+      "strict": "limit 32"
+    },
+    "doze_level": {
+      "stock": "stock",
+      "night": "night only",
+      "moderate": "moderate",
+      "aggressive": "aggressive"
+    },
+    "gms_trim": {
+      "stock": "stock",
+      "lite": "light",
+      "strict": "strict"
+    },
+    "gms_freeze": {
+      "off": "off",
+      "safe": "safe",
+      "more": "more"
+    },
+    "log_level": {
+      "stock": "stock",
+      "0": "extreme",
+      "1": "normal",
+      "2": "detailed",
+      "3": "debug"
+    },
+    "doze_trim_whitelist": {
+      "0": "leave alone",
+      "1": "trim"
+    },
+    "audio_remove_volume_limit": {
+      "0": "keep limit",
+      "1": "remove limit"
+    },
+    "net_route_tune": {
+      "auto": "smart",
+      "off": "stock",
+      "conservative": "moderate",
+      "aggressive": "aggressive"
+    },
+    "net_congestion": {
+      "auto": "stock"
+    },
+    "net_qdisc": {
+      "auto": "stock"
+    },
+    "wifi_country": {
+      "auto": "stock"
+    },
+    "net_congestion_wifi": {
+      "auto": "as global"
+    },
+    "net_congestion_mobile": {
+      "auto": "as global"
+    },
+    "net_qdisc_wifi": {
+      "auto": "as global"
+    },
+    "net_qdisc_mobile": {
+      "auto": "as global"
+    },
+    "net_rps": {
+      "stock": "stock",
+      "little": "little",
+      "all": "all"
+    },
+    "net_txqueue": {
+      "stock": "stock",
+      "short": "short",
+      "shorter": "shorter"
     }
   },
   "prof_none": "not selected",
   "cfg": {
     "athena_service": {
       "name": "Athena Background Killer",
-      "desc": "OxygenOS has its own background app killer - com.oplus.athena - and AthenaService is the part that decides what to kill. It is why a messenger left in the background stops delivering notifications until you reopen it, which no amount of battery whitelisting fixes because it is not Android's Doze doing it. Off disables that one component; the rest of the package keeps running, so thermal reporting and the settings panels are unaffected. Fully reversible: the previous state is recorded before anything changes and put back when you set this to stock or remove the module. Expect more RAM in use and slightly more drain - that is what keeping apps alive costs."
+      "desc": "OxygenOS has its own background app killer - com.oplus.athena - and AthenaService is the part that decides what to kill. It is why a messenger left in the background stops delivering notifications until you reopen it, which no amount of battery whitelisting fixes because it is not Android's Doze doing it. Off disables that one component; the rest of the package keeps running, so thermal reporting and the settings panels are unaffected. Fully reversible: the previous state is recorded before anything changes and put back when you set this to stock or remove the module. Expect more RAM in use and slightly more drain - that is what keeping apps alive costs.",
+      "descOpt": {
+        "stock": "OxygenOS keeps killing background apps as it normally does.",
+        "off": "AthenaService is disabled, so apps stay alive and keep notifying. Expect more RAM used and slightly more drain."
+      }
+    },
+    "doze_level": {
+      "descOpt": {
+        "stock": "Android's own timing: idle begins 30 minutes after the screen goes off.",
+        "night": "Only during your learned sleep window. Daytime behaviour is untouched.",
+        "moderate": "Idle after 5 minutes. The change most people want.",
+        "aggressive": "Idle after 2 minutes, plus shorter sensing and locating windows. Apps that poll on their own can be late; high-priority push still arrives."
+      }
+    },
+    "gms_freeze": {
+      "descOpt": {
+        "off": "Nothing is frozen. Play services behave as shipped.",
+        "safe": "Telemetry and reporting components only. Push, sign-in and payments keep working.",
+        "more": "Adds ads and measurement components. Reversible, but check anything you depend on."
+      }
+    },
+    "gms_trim": {
+      "descOpt": {
+        "stock": "Play services schedule background work as they like.",
+        "lite": "Fewer background jobs, nothing disabled.",
+        "strict": "Noticeably fewer. Some sync may be delayed."
+      }
+    },
+    "phantom_procs": {
+      "descOpt": {
+        "stock": "Android's own limit applies - background child processes get killed.",
+        "relaxed": "No limit. Terminal sessions and background compiles survive.",
+        "strict": "Limit of 32. Fewer background processes than stock allows."
+      }
+    },
+    "log_level": {
+      "descOpt": {
+        "stock": "ASB does not touch the device's logging at all.",
+        "0": "Extreme: cuts device logging as far as it goes. Saves writes and wakeups, and makes almost any bug report from this phone useless.",
+        "1": "Normal. Significant events only - what the module has always done.",
+        "2": "Detailed: adds learner updates and screen transitions. Turn this on before sending a battery log.",
+        "3": "Verbose. Fills the log fast; only while reproducing something."
+      }
+    },
+    "sustained_temp_mode": {
+      "descOpt": {
+        "stock": "This device's own trip point, read from its CPU thermal zone at boot.",
+        "smart": "Starts from that point and nudges it up when sessions heat quickly.",
+        "manual": "Exactly the temperature on the slider below. Nothing moves it."
+      }
+    },
+    "ui_effects_level": {
+      "descOpt": {
+        "auto": "Leave the system's own effect level alone.",
+        "stock": "Normal effects, as the device shipped.",
+        "flat": "Simplified. Recents becomes a plain list and OxygenOS hides the Cards/Simple selector entirely. OnePlus 15 only."
+      }
+    },
+    "net_route_tune": {
+      "descOpt": {
+        "auto": "Smart: ASB measures the link and sizes the initial window for it.",
+        "off": "Stock. The route keeps the values Android set.",
+        "conservative": "Slightly larger window than stock.",
+        "aggressive": "Largest window. Best on a fast, stable link; can cost retransmits on a weak one."
+      }
+    },
+    "bt_a2dp_offload": {
+      "descOpt": {
+        "auto": "Hands off - whatever the ROM chose stays.",
+        "on": "Hardware encoding. Less battery, and usually what the phone ships with.",
+        "off": "CPU encoding. Needed for some equaliser apps to see the stream at all."
+      }
+    },
+    "net_rps": {
+      "name": "Spread Network Load",
+      "desc": "Which cores handle incoming network packets. Stock leaves every packet on the one core the interrupt landed on, which caps throughput on fast WiFi and pins that core high. Little spreads the work across the efficiency cluster; all uses every core. Waking a second core costs a little CPU, so this earns its keep on a fast link and loses on a slow one.",
+      "descOpt": {
+        "stock": "Every packet stays on the core its interrupt landed on - Android's own behaviour.",
+        "little": "Spread across the efficiency cluster. The safer of the two.",
+        "all": "Every core. Best throughput on fast WiFi, most CPU woken."
+      }
+    },
+    "net_txqueue": {
+      "name": "Transmit Queue",
+      "desc": "How many packets may wait to be sent. The stock 1000 is a wired-Ethernet default from the 1990s that survived into wireless drivers; on a link as variable as WiFi a deep queue mostly adds latency under load rather than throughput. If uploads feel slower, go back to stock.",
+      "descOpt": {
+        "stock": "1000 packets, as the driver ships.",
+        "short": "256. Less delay under load, same throughput on most links.",
+        "shorter": "128. Lowest latency; can cost throughput on a very fast link."
+      }
     }
-  }
+  },
+  "cfg_search": "Search",
+  "cfg_search_none": "Nothing matches that",
+  "cfg_export": "⭳ Export",
+  "cfg_import": "⭱ Import",
+  "cfg_import_confirm": "Tap again to restore",
+  "cfg_export_ok": "Saved to ",
+  "cfg_export_err": "Could not write the backup",
+  "cfg_import_none": "No backup found",
+  "cfg_import_ok": "Restored ",
+  "cfg_import_reboot": " - reboot to apply",
+  "cfg_import_err": "Could not read the backup",
+  "cfg_language": "Language",
+  "doze_edit": "Choose apps to keep exempt",
+  "doze_loading": "Reading the exemption list...",
+  "doze_empty": "No user apps are exempt right now.",
+  "doze_hint": "Ticked apps stay exempt from Doze.",
+  "doze_err": "Could not read the list",
+  "doze_saved": "Kept ",
+  "smart_learning": "learning · ",
+  "smart_sessions": " session(s)",
+  "smart_waiting": "starting · needs a screen-on session",
+  "smart_ses_1": " session",
+  "smart_ses_2": " sessions",
+  "smart_ses_5": " sessions"
 }

@@ -147,6 +147,24 @@
     "athena_service": {
       "name": "Athena Background Killer",
       "desc": "OxygenOS has its own background app killer - com.oplus.athena - and AthenaService is the part that decides what to kill. It is why a messenger left in the background stops delivering notifications until you reopen it, which no amount of battery whitelisting fixes because it is not Android's Doze doing it. Off disables that one component; the rest of the package keeps running, so thermal reporting and the settings panels are unaffected. Fully reversible: the previous state is recorded before anything changes and put back when you set this to stock or remove the module. Expect more RAM in use and slightly more drain - that is what keeping apps alive costs."
+    },
+    "net_rps": {
+      "name": "Spread Network Load",
+      "desc": "Which cores handle incoming network packets. Stock leaves every packet on the one core the interrupt landed on, which caps throughput on fast WiFi and pins that core high. Little spreads the work across the efficiency cluster; all uses every core. Waking a second core costs a little CPU, so this earns its keep on a fast link and loses on a slow one.",
+      "descOpt": {
+        "stock": "Every packet stays on the core its interrupt landed on - Android's own behaviour.",
+        "little": "Spread across the efficiency cluster. The safer of the two.",
+        "all": "Every core. Best throughput on fast WiFi, most CPU woken."
+      }
+    },
+    "net_txqueue": {
+      "name": "Transmit Queue",
+      "desc": "How many packets may wait to be sent. The stock 1000 is a wired-Ethernet default from the 1990s that survived into wireless drivers; on a link as variable as WiFi a deep queue mostly adds latency under load rather than throughput. If uploads feel slower, go back to stock.",
+      "descOpt": {
+        "stock": "1000 packets, as the driver ships.",
+        "short": "256. Less delay under load, same throughput on most links.",
+        "shorter": "128. Lowest latency; can cost throughput on a very fast link."
+      }
     }
   },
   "nav_main": "Inicio",
@@ -185,7 +203,51 @@
     "athena_service": {
       "stock": "stock",
       "off": "off"
+    },
+    "anim_speed": {
+      "profile": "según perfil",
+      "off": "apagado",
+      "fastest": "más rápida",
+      "faster": "más rápido",
+      "fast": "rápida",
+      "stock": "de fábrica",
+      "slow": "lenta",
+      "slower": "más lenta"
+    },
+    "net_rps": {
+      "stock": "stock",
+      "little": "little",
+      "all": "all"
+    },
+    "net_txqueue": {
+      "stock": "stock",
+      "short": "short",
+      "shorter": "shorter"
     }
   },
-  "prof_none": "sin elegir"
+  "prof_none": "sin elegir",
+  "cfg_search": "Buscar",
+  "cfg_search_none": "No hay resultados",
+  "cfg_export": "⭳ Exportar",
+  "cfg_import": "⭱ Importar",
+  "cfg_import_confirm": "Tap again to restore",
+  "cfg_export_ok": "Saved to ",
+  "cfg_export_err": "Could not write the backup",
+  "cfg_import_none": "No backup found",
+  "cfg_import_ok": "Restored ",
+  "cfg_import_reboot": " - reboot to apply",
+  "cfg_import_err": "Could not read the backup",
+  "cfg_language": "Idioma",
+  "doze_edit": "Choose apps to keep exempt",
+  "doze_loading": "Reading the exemption list...",
+  "doze_empty": "No user apps are exempt right now.",
+  "doze_hint": "Ticked apps stay exempt from Doze.",
+  "doze_err": "Could not read the list",
+  "doze_saved": "Kept ",
+  "smart_learning": "learning · ",
+  "smart_sessions": " session(s)",
+  "smart_waiting": "starting · needs a screen-on session",
+  "smart_ses_1": " sesión",
+  "smart_ses_2": " sesiones",
+  "smart_ses_5": " sesiones"
 }
