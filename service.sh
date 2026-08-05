@@ -2683,6 +2683,14 @@ if [ -f "$MODDIR/runtime/asb_system_tweaks.sh" ]; then
   sh "$MODDIR/runtime/asb_system_tweaks.sh" >/dev/null 2>&1
 fi
 
+# Athena: pm component state does not survive a reboot on every build, so re-assert it.
+if [ -f "$MODDIR/runtime/asb_athena_apply.sh" ]; then
+  case "$(grep -E '^[[:space:]]*athena_service=' "$MODDIR/config/governor.conf" 2>/dev/null \
+          | head -1 | sed 's/.*=//' | tr -d ' \r')" in
+    off) sh "$MODDIR/runtime/asb_athena_apply.sh" >/dev/null 2>&1 ;;
+  esac
+fi
+
 if [ -f "$MODDIR/runtime/asb_doze_apply.sh" ]; then
   case "$(grep -E '^[[:space:]]*doze_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')" in

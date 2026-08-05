@@ -119,6 +119,12 @@ pkill -f '/data/adb/modules/AutoSystemBoost/bin/asb' >/dev/null 2>&1 || true
 pkill -f '/data/adb/asb/asb_dsp_attach' >/dev/null 2>&1 || true
 rm -rf /dev/.asb /dev/.asb_profile_state 2>/dev/null
 # Doze back to Android's own timings before the module goes.
+# Put Athena's component back if we were the ones who disabled it.
+if [ -f /data/adb/asb/athena_prev ]; then
+  pm enable com.oplus.athena/com.oplus.athena.client.AthenaService >/dev/null 2>&1 || true
+  rm -f /data/adb/asb/athena_prev 2>/dev/null
+fi
+
 settings delete global device_idle_constants >/dev/null 2>&1 || true
 
 rm -f /data/adb/asb/auto_battery_origin /data/adb/asb/lockscreen_prev /data/adb/asb/lockscreen_result 2>/dev/null
