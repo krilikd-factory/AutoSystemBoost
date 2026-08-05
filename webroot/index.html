@@ -3584,13 +3584,19 @@ function cfgSearchMatches() {
 }
 
 function cfgRenderSearch(list) {
-  const wrap = document.createElement('div');
-  wrap.className = 'cfg-search-wrap';
-  /* The tools row is static markup and the search box is built here, so they cannot be
-     siblings in the HTML. Moving the row into this wrapper puts them on one line without
-     duplicating either. */
+  /* Render the search box INTO the static tools row, not the other way round.
+   *
+   * The first version moved #cfgToolsRow into a wrapper appended to #cfgList - and
+   * cfgRender starts with list.innerHTML = '', so the very next re-render deleted the row
+   * outright. Language, export and import vanished after one keystroke and never came
+   * back, because _el('cfgToolsRow') returned null from then on. Static markup must stay
+   * static; only the generated part goes into the list. */
   const tools = _el('cfgToolsRow');
-  if (tools && tools.parentNode !== wrap) wrap.appendChild(tools);
+  if (!tools) return;
+  let wrap = tools.querySelector('.cfg-search-wrap');
+  if (wrap) return;              // already there - it is markup, not list content
+  wrap = document.createElement('div');
+  wrap.className = 'cfg-search-wrap';
   const inp = document.createElement('input');
   inp.className = 'cfg-search';
   inp.type = 'search';
@@ -3607,7 +3613,7 @@ function cfgRenderSearch(list) {
     if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (e) {} }
   };
   wrap.appendChild(inp);
-  list.appendChild(wrap);
+  tools.insertBefore(wrap, tools.firstChild);
 }
 
 function cfgRenderMatches(list) {
