@@ -1936,8 +1936,8 @@ body.config-active #livePage.open {
     </div>
     <div class="status-row">
       <div class="dot"></div>
-      <span class="status-label" data-i18n="status_profile">Profile:&nbsp;</span>
-      <span class="status-val" id="curProfile" data-profile="none">—</span>
+      <span class="status-label">Profile:&nbsp;</span>
+      <span class="status-val" id="curProfile">balanced</span>
       <button class="live-chip" id="liveChip" onclick="openLivePage()" aria-label="Open Live Status page">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 12h3l3-9 4 18 3-9h5"></path>
@@ -1984,7 +1984,7 @@ body.config-active #livePage.open {
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
     </div>
 
-    <div class="pbtn" data-p="balanced" onclick="go('balanced')">
+    <div class="pbtn on" data-p="balanced" onclick="go('balanced')">
       <div class="pico">⚖️</div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_balanced">Balanced</div>
@@ -2036,8 +2036,8 @@ body.config-active #livePage.open {
     </div>
     <div class="status-row">
       <div class="dot"></div>
-      <span class="status-label" data-i18n="status_profile">Profile:&nbsp;</span>
-      <span class="status-val" id="liveCurProfile">—</span>
+      <span class="status-label">Profile:&nbsp;</span>
+      <span class="status-val" id="liveCurProfile">balanced</span>
       <button class="live-chip" id="liveBackChip" onclick="closeLivePage()" aria-label="Back to main">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6"></path>
@@ -2195,8 +2195,8 @@ body.config-active #livePage.open {
     </div>
     <div class="status-row">
       <div class="dot"></div>
-      <span class="status-label" data-i18n="status_profile">Profile:&nbsp;</span>
-      <span class="status-val" id="cfgCurProfile">—</span>
+      <span class="status-label">Profile:&nbsp;</span>
+      <span class="status-val" id="cfgCurProfile">balanced</span>
       <button class="live-chip" id="cfgBackChip" onclick="cfgBack()" aria-label="Back to main">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6"></path>
@@ -2293,62 +2293,22 @@ function asbApplyDirection(lang) {
  * Stored in localStorage rather than a file because the language has to be known before
  * the first paint, and reading a file needs run(), which is async - the page would render
  * in the wrong language and then swap, which is the flicker this avoids. */
-function asbDetectLang() {
+const ASB_LANG = (function() {
   try {
     var saved = null;
     try { saved = localStorage.getItem('asb_lang'); } catch (e) {}
-    if (saved === 'en') return 'en';
     if (saved) {
       for (var j = 0; j < ASB_LANGS.length; j++) {
         if (ASB_LANGS[j] === saved) return saved;
       }
     }
-
-    var candidates = [];
-    try {
-      if (navigator.languages && navigator.languages.length) {
-        for (var n = 0; n < navigator.languages.length; n++) {
-          if (navigator.languages[n]) candidates.push(String(navigator.languages[n]).toLowerCase());
-        }
-      }
-    } catch (e) {}
-    try {
-      if (navigator.language) candidates.push(String(navigator.language).toLowerCase());
-      if (navigator.userLanguage) candidates.push(String(navigator.userLanguage).toLowerCase());
-    } catch (e) {}
-    if (!candidates.length) candidates.push('en');
-
-    for (var c = 0; c < candidates.length; c++) {
-      var l = candidates[c];
-      if (l === 'en' || l.indexOf('en-') === 0) return 'en';
-      for (var i = 0; i < ASB_LANGS.length; i++) {
-        if (l.indexOf(ASB_LANGS[i]) === 0) return ASB_LANGS[i];
-      }
+    var l = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+    for (var i = 0; i < ASB_LANGS.length; i++) {
+      if (l.indexOf(ASB_LANGS[i]) === 0) return ASB_LANGS[i];
     }
     return 'en';
   } catch (e) { return 'en'; }
-}
-function asbHasSavedLang() {
-  try { return !!localStorage.getItem('asb_lang'); } catch (e) { return false; }
-}
-
-function asbMatchSupportedLang(raw) {
-  try {
-    var s = String(raw || '').toLowerCase().replace(/[\[\]"']/g, ' ');
-    var parts = s.split(/[\s,;]+/).filter(Boolean);
-    if (!parts.length) parts = [s];
-    for (var p = 0; p < parts.length; p++) {
-      var l = parts[p].replace(/_/g, '-');
-      if (l === 'en' || l.indexOf('en-') === 0) return 'en';
-      for (var i = 0; i < ASB_LANGS.length; i++) {
-        if (l === ASB_LANGS[i] || l.indexOf(ASB_LANGS[i] + '-') === 0) return ASB_LANGS[i];
-      }
-    }
-  } catch (e) {}
-  return null;
-}
-
-const ASB_LANG = asbDetectLang();
+})();
 asbApplyDirection(ASB_LANG);
 
 // Translations live in webroot/i18n/<lang>.json, one file per language.
@@ -2383,7 +2343,23 @@ var I18N = { en: {} };
    * was never fetched, Tcfg fell back to English, and switching appeared to work "only
    * sometimes" - it worked exactly when the choice happened to match the system language.
    * One decision, made once, used by both. */
-  var want = asbDetectLang();
+  var want = (function () {
+    try {
+      var saved = null;
+      try { saved = localStorage.getItem('asb_lang'); } catch (e) {}
+      if (saved) {
+        if (saved === 'en') return 'en';
+        for (var j = 0; j < ASB_LANGS.length; j++) {
+          if (ASB_LANGS[j] === saved) return saved;
+        }
+      }
+      var l = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+      for (var i = 0; i < ASB_LANGS.length; i++) {
+        if (l.indexOf(ASB_LANGS[i]) === 0) return ASB_LANGS[i];
+      }
+    } catch (e) {}
+    return 'en';
+  })();
   if (want !== 'en') {
     var d = readLang(want);
     if (d) I18N[want] = d;
@@ -2523,19 +2499,6 @@ function run(cmd) {
   });
 }
 
-async function asbSyncLangFromDevice() {
-  try {
-    if (asbHasSavedLang()) return;
-    if (ASB_LANG !== 'en') return;
-    const r = await run("sh -c 'settings get system system_locales 2>/dev/null; getprop persist.sys.locale 2>/dev/null; getprop ro.product.locale 2>/dev/null; printf \"%s-%s\\n\" \"$(getprop ro.product.locale.language 2>/dev/null)\" \"$(getprop ro.product.locale.region 2>/dev/null)\"'");
-    const want = asbMatchSupportedLang((r && r.stdout) || '');
-    if (want && want !== ASB_LANG) {
-      try { localStorage.setItem('asb_lang', want); } catch (e) {}
-      location.reload();
-    }
-  } catch (e) {}
-}
-
 function toast(msg, type) {
   const t = document.getElementById('toast');
   t.className = 'toast t-' + type;
@@ -2551,11 +2514,6 @@ async function haptic() {
   try { if (navigator.vibrate) navigator.vibrate(18); } catch(e) {}
 }
 
-function profileLabel(p) {
-  if (p === 'none' || !p) return T('prof_none', 'not selected');
-  return T('prof_' + p, p.charAt(0).toUpperCase() + p.slice(1));
-}
-
 function ui(p) {
   document.querySelectorAll('.pbtn').forEach(b => {
     b.classList.toggle('on', b.dataset.p === p);
@@ -2564,11 +2522,8 @@ function ui(p) {
   // 'none' is not a profile name to print - it is the absence of one, and printing it
   // raw would read like a fifth mode. No button is highlighted either, because none of
   // them is active.
-  const cur = document.getElementById('curProfile');
-  if (cur) {
-    cur.textContent = profileLabel(p);
-    cur.dataset.profile = (p === 'none' || !p) ? 'none' : p;
-  }
+  document.getElementById('curProfile').textContent =
+    (p === 'none' || !p) ? T('prof_none', 'not selected') : p;
 }
 
 let switching = false;
@@ -2612,7 +2567,6 @@ function openTelegram(e) {
 
 (async () => {
   requestAnimationFrame(() => setTimeout(loadDeviceInfo, 0));
-  asbSyncLangFromDevice();
   // No file, or "none", means nobody has chosen yet - do not invent a choice.
   //
   // Three separate 'balanced' fallbacks lived on this line, so a fresh install showed
@@ -4431,10 +4385,9 @@ async function pollLive(visible) {
     // "balanced" - while the main page reads current_profile off disk and is already right.
     const _mainProf = _el('curProfile');
     const _warmup = (kv.state_warmup === '1');
-    const _mainProfCanonical = (_mainProf && _mainProf.dataset)
-      ? (_mainProf.dataset.profile || '') : '';
-    const profile = (_warmup && _mainProfCanonical && _mainProfCanonical !== 'none')
-                    ? _mainProfCanonical
+    const profile = (_warmup && _mainProf && _mainProf.textContent
+                      && _mainProf.textContent !== '—')
+                    ? _mainProf.textContent.toLowerCase()
                     : ((st && st.profile) || kv.profile || '—');
     const state = (st && st.state) || kv.state || '—';
 
@@ -4445,7 +4398,7 @@ async function pollLive(visible) {
     const mainVerBadge = _el('verBadge'); const liveVerBadge = _el('liveVerBadge');
     if (mainVerBadge && liveVerBadge) liveVerBadge.textContent = mainVerBadge.textContent;
     const liveCurProfile = _el('liveCurProfile');
-    if (liveCurProfile) liveCurProfile.textContent = profileLabel(profile === '—' ? 'none' : profile);
+    if (liveCurProfile) liveCurProfile.textContent = profile;
 
     _el('liveState').textContent = state;
 
@@ -4851,32 +4804,17 @@ async function pollLive(visible) {
 
 _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
 
-function bindTopNavButtons() {
-  [
-    ['liveChip', function(){ openLivePage(); }],
-    ['configChip', function(){ openConfigPage(); }],
-    ['liveBackChip', function(){ closeLivePage(); }],
-    ['cfgBackChip', function(){ cfgBack(); }]
-  ].forEach(function(pair) {
-    var el = document.getElementById(pair[0]);
-    if (!el || el.dataset.boundClick === '1') return;
-    el.dataset.boundClick = '1';
-    el.addEventListener('click', function(ev) {
-      try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
-      pair[1]();
-    });
-  });
-}
-
+// ── apply Russian localization on load (no-op for en) ──
 (function() {
   try {
     applyStaticI18n();
-    var dl = T('device_line', 'OnePlus Device · Qualcomm Snapdragon');
-    ['deviceLine','liveDeviceLine','cfgDeviceLine'].forEach(function(id){
-      var el = document.getElementById(id);
-      if (el && /OnePlus Device|Qualcomm Snapdragon/.test(el.textContent)) el.textContent = dl;
-    });
-    bindTopNavButtons();
+    if (ASB_LANG === 'ru') {
+      var dl = I18N.ru.device_line;
+      ['deviceLine','liveDeviceLine','cfgDeviceLine'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el && /OnePlus Device/.test(el.textContent)) el.textContent = dl;
+      });
+    }
   } catch (e) {}
 })();
 setTimeout(() => pollLive(false), 1500);
