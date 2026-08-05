@@ -1479,6 +1479,13 @@ body.config-active #livePage.open {
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--border);
   transition: background 0.2s ease, border-color 0.2s ease;
+  /* An icon is one glyph. If a value ever arrives as something else - a literal
+     '\uD83D\uDEE1' string from a double-escaped entry, say - it must not push the card
+     apart: it spilled out of the 44px box, ran across the screen and shoved the title
+     into the status badge below it. Clipping keeps a bad value a small visual bug in one
+     card instead of a broken layout. */
+  overflow: hidden;
+  white-space: nowrap;
 }
 .cfg-row.is-on .cfg-icon {
   background: rgba(0,225,200,0.12);
@@ -2481,7 +2488,16 @@ const SNAP_KEYS = [
   'bat_suppress_gaming',
   'log_level',
   'log_verbosity',
-  'doze_level'];
+  'doze_level',
+  'phantom_procs',
+  'anim_speed',
+  'dsp_outputs',
+  'gms_trim',
+  'audio_remove_volume_limit',
+  'purge_vendor_logs',
+  'doze_trim_whitelist',
+  'gms_freeze',
+  'athena_service'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -2693,7 +2709,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  athena_service:'\\uD83D\\uDEE1\\uFE0F',
+  athena_service:'\uD83D\uDEE1\uFE0F',
   sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
   bt_a2dp_offload:'\uD83D\uDCFB', night_quiet_enable:'\uD83C\uDF19',
   bat_suppress_gaming:'\uD83D\uDE34', log_level:'\uD83D\uDCDD', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
