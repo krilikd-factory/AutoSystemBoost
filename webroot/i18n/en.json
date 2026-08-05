@@ -223,8 +223,8 @@
   },
   "cfg_search": "Search",
   "cfg_search_none": "Nothing matches that",
-  "cfg_export": "⭳ Export",
-  "cfg_import": "⭱ Import",
+  "cfg_export": "↓ Export",
+  "cfg_import": "↑ Import",
   "cfg_import_confirm": "Tap again to restore",
   "cfg_export_ok": "Saved to ",
   "cfg_export_err": "Could not write the backup",
@@ -244,5 +244,12 @@
   "smart_waiting": "starting · needs a screen-on session",
   "smart_ses_1": " session",
   "smart_ses_2": " sessions",
-  "smart_ses_5": " sessions"
+  "smart_ses_5": " sessions",
+  "t_prof_applied": " applied",
+  "grp_audio": "Audio",
+  "grp_camera": "Camera",
+  "grp_iface": "Interface",
+  "grp_net": "Network",
+  "grp_battery": "Battery",
+  "grp_ui": "System"
 }
