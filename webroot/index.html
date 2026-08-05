@@ -1658,6 +1658,110 @@ body.config-active #livePage.open {
   background: #fff;
 }
 .cfg-switch.busy { opacity: 0.45; pointer-events: none; }
+/* Dropdown used when a card has four or more choices. Styled to match the segment
+   buttons rather than the platform default, which on a dark WebUI renders as a bright
+   grey box and reads as a foreign control. */
+#cfgBackupWrap { display: flex; gap: 8px; margin-top: 10px; }
+.cfg-backup {
+  flex: 1 1 0;
+  padding: 11px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: rgba(255,255,255,0.04);
+  color: #e7eaee;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.cfg-backup[data-armed="1"] {
+  border-color: #f59e0b;
+  color: #f59e0b;
+  background: rgba(245,158,11,0.10);
+}
+
+/* Option breakdown under a description. The current value is marked - "which of these am
+   I on" is the second question after "what is the difference". */
+.cfg-desc-opts { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+.cfg-desc-opt {
+  display: flex; gap: 9px; align-items: baseline;
+  font-size: 12.5px; line-height: 1.45; color: rgba(231,234,238,0.66);
+}
+.cfg-desc-opt-k { flex: 0 0 auto; min-width: 78px; font-weight: 700; color: rgba(231,234,238,0.9); }
+.cfg-desc-opt.is-cur .cfg-desc-opt-k { color: var(--accent, #22d3ee); }
+.cfg-desc-opt.is-cur { color: rgba(231,234,238,0.82); }
+@media (max-width: 400px) {
+  .cfg-desc-opt { flex-direction: column; gap: 2px; }
+  .cfg-desc-opt-k { min-width: 0; }
+}
+
+.cfg-search-wrap { margin: 0 0 12px; }
+.cfg-search {
+  width: 100%;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 12px;
+  color: #e7eaee;
+  font-size: 13.5px;
+  padding: 11px 14px;
+}
+.cfg-search::placeholder { color: rgba(231,234,238,0.42); }
+.cfg-search:focus { outline: none; border-color: var(--accent, #22d3ee); }
+.cfg-search-empty {
+  text-align: center;
+  padding: 26px 12px;
+  font-size: 13px;
+  color: rgba(231,234,238,0.5);
+}
+/* Which category a result came from - the same word can appear in two, and knowing where
+   it lives is half of what the search was for. */
+.cfg-row-cat {
+  margin: 8px 0 0 57px;
+  font-size: 10.5px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(231,234,238,0.38);
+}
+
+.cfg-select-wrap {
+  flex: 0 0 auto;
+  margin-left: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.cfg-select-wrap::after {
+  content: '\25BE';
+  position: absolute;
+  right: 11px;
+  pointer-events: none;
+  font-size: 11px;
+  opacity: 0.75;
+  color: var(--accent, #22d3ee);
+}
+.cfg-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  color: #e7eaee;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding: 8px 30px 8px 13px;
+  border-radius: 10px;
+  min-width: 124px;
+  max-width: 62vw;
+  text-overflow: ellipsis;
+}
+.cfg-select:focus { outline: none; border-color: var(--accent, #22d3ee); }
+/* The options list is drawn by the system, so it needs colours of its own or it
+   inherits the page's transparent background and becomes unreadable. */
+.cfg-select option { background: #12161a; color: #e7eaee; }
+@media (max-width: 400px) { .cfg-select { min-width: 104px; font-size: 12px; } }
+
 .cfg-seg {
   display: inline-flex;
   /*
@@ -1791,7 +1895,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V62</div>
+      <div class="badge" id="verBadge">V63</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -1891,7 +1995,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
-      <div class="badge" id="liveVerBadge">V62</div>
+      <div class="badge" id="liveVerBadge">V63</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -2050,7 +2154,7 @@ body.config-active #livePage.open {
     <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="cfgSocBadge">DEVICE</div>
-      <div class="badge" id="cfgVerBadge">V62</div>
+      <div class="badge" id="cfgVerBadge">V63</div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -2081,6 +2185,21 @@ body.config-active #livePage.open {
     <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
     <button class="cfg-reboot soft" onclick="cfgSoftReboot()" data-i18n="cfg_soft_reboot">⟳ Soft reboot</button>
     <button class="cfg-reboot sysui" onclick="cfgRestartSysUI()" data-i18n="cfg_restart_sysui">▤ Restart SystemUI</button>
+  </div>
+
+  <!-- Backup and restore. Forty-nine settings is a long evening to redo after a wipe or on
+       a second phone, and the values already live in one file - there was simply no way to
+       reach it without a terminal. -->
+  <!-- Language. The device language is a good guess, not a decision: a German user asked
+       for English and the only way to get it was to change the phone's system language. -->
+  <div id="cfgLangWrap">
+    <label class="cfg-lang-label" data-i18n="cfg_language">Language</label>
+    <select class="cfg-select" id="cfgLangSel" onchange="cfgSetLang(this.value)"></select>
+  </div>
+
+  <div id="cfgBackupWrap">
+    <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">\u2B73 Export settings</button>
+    <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">\u2B71 Import settings</button>
   </div>
 
   </div>
@@ -2126,8 +2245,25 @@ function asbApplyDirection(lang) {
   } catch (e) {}
 }
 
+/* A stored choice wins over the device language.
+ *
+ * Guessing from navigator.language is the right default and the wrong final answer: a
+ * German user asked for English and had no way to say so, because the only input the
+ * chooser took was a system setting they did not want to change for one app. The device
+ * language stays the default for anyone who never opens the picker.
+ *
+ * Stored in localStorage rather than a file because the language has to be known before
+ * the first paint, and reading a file needs run(), which is async - the page would render
+ * in the wrong language and then swap, which is the flicker this avoids. */
 const ASB_LANG = (function() {
   try {
+    var saved = null;
+    try { saved = localStorage.getItem('asb_lang'); } catch (e) {}
+    if (saved) {
+      for (var j = 0; j < ASB_LANGS.length; j++) {
+        if (ASB_LANGS[j] === saved) return saved;
+      }
+    }
     var l = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
     for (var i = 0; i < ASB_LANGS.length; i++) {
       if (l.indexOf(ASB_LANGS[i]) === 0) return ASB_LANGS[i];
@@ -3099,13 +3235,12 @@ function cfgUpdatePendingBar() {
   bar.textContent = T('t_pending_reboot', '\u21BB Изменения ждут перезагрузки') + ' \u00b7 ' + n;
 }
 
-function cfgRender() {
-  const list = _el('cfgList');
-  if (!list) return;
-  list.innerHTML = '';
-  cfgSyncChrome();
-  if (!_cfgGroup) { cfgRenderHub(list); return; }
-  CFG_ITEMS.filter(it => cfgGroupOf(it.key) === _cfgGroup).forEach(it => {
+function cfgRenderRow(list, it, showCat) {
+  /* Extracted from cfgRender so search results can reuse it verbatim.
+   *
+   * Copying it would have been the third duplicate in this project after install.sh
+   * and asb_update_desc, and both of those cost a release: a fix landed in one copy
+   * and the other kept running. One body, two callers. */
     const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
     const isOn = cfgIsActive(it, cur);
     const row = document.createElement('div');
@@ -3218,18 +3353,44 @@ function cfgRender() {
       wrap.appendChild(val);
       top.appendChild(wrap);
     } else {
-      const seg = document.createElement('div');
-      const _opts = cfgOptsFor(it);
-      // 4+ options get the compact button size.
-      seg.className = (_opts.length >= 4) ? ('cfg-seg small' + (_opts.length >= 6 ? ' dense' : '')) : 'cfg-seg';
-      _opts.forEach(o => {
-        const b = document.createElement('button');
-        b.textContent = Topt(o, it.key);
-        if (o === cur) b.classList.add('on');
-        b.onclick = (e) => { e.stopPropagation(); cfgSet(it.key, o, seg); };
-        seg.appendChild(b);
-      });
-      top.appendChild(seg);
+        const _opts = cfgOptsFor(it);
+        if (_opts.length >= 4) {
+          /* Four or more choices become a menu instead of a row of buttons.
+           *
+           * A row works while the labels are short and few. DSP Outputs has seven, and
+           * "speaker+wired" does not survive a seventh of the width - on a denser screen the
+           * buttons ran into the card title. Shrinking the font only moves where it breaks.
+           *
+           * A menu shows the current value in full, costs one tap, and stops caring how many
+           * choices there are. Three or fewer stay buttons: they fit, and one tap beats two. */
+          const selWrap = document.createElement('div');
+          selWrap.className = 'cfg-select-wrap';
+          const sel = document.createElement('select');
+          sel.className = 'cfg-select';
+          _opts.forEach(o => {
+            const op = document.createElement('option');
+            op.value = o; op.textContent = Topt(o, it.key);
+            if (o === cur) op.selected = true;
+            sel.appendChild(op);
+          });
+          /* stopPropagation on the wrapper too: the row toggles its description on click and
+           * opening the menu would toggle it as well. */
+          selWrap.onclick = (e) => e.stopPropagation();
+          sel.onchange = (e) => { e.stopPropagation(); cfgSet(it.key, sel.value, selWrap); };
+          selWrap.appendChild(sel);
+          top.appendChild(selWrap);
+        } else {
+          const seg = document.createElement('div');
+          seg.className = 'cfg-seg';
+          _opts.forEach(o => {
+            const b = document.createElement('button');
+            b.textContent = Topt(o, it.key);
+            if (o === cur) b.classList.add('on');
+            b.onclick = (e) => { e.stopPropagation(); cfgSet(it.key, o, seg); };
+            seg.appendChild(b);
+          });
+          top.appendChild(seg);
+        }
     }
     top.onclick = () => row.classList.toggle('desc-open');
     row.appendChild(top);
@@ -3280,10 +3441,112 @@ function cfgRender() {
     d.className = 'cfg-desc';
     d.textContent = Tcfg(it.key, "desc", it.desc);
     inner.appendChild(d);
+    
+    /* Per-option lines, when the translation supplies them.
+     *
+     * A paragraph describing three options in prose makes the reader hold all three in
+     * their head and match each sentence to a button - and the question people actually
+     * have, "what is the difference between stock and this other thing", is the hardest
+     * one to answer that way. A user said so plainly and was right.
+     *
+     * Optional by design: two obvious options do not need a table, and descOpt is read
+     * from the locale file, so a translator can add the breakdown where it helps without
+     * touching this code. */
+    const dOpt = Tcfg(it.key, "descOpt", null);
+    if (dOpt && typeof dOpt === "object") {
+      const ul = document.createElement("div");
+      ul.className = "cfg-desc-opts";
+      (it.opts || Object.keys(dOpt)).forEach(function (o) {
+        if (dOpt[o] == null) return;
+        const li = document.createElement("div");
+        li.className = "cfg-desc-opt" + (String(o) === String(cur) ? " is-cur" : "");
+        const k = document.createElement("span");
+        k.className = "cfg-desc-opt-k"; k.textContent = Topt(o, it.key);
+        const v = document.createElement("span");
+        v.className = "cfg-desc-opt-v"; v.textContent = dOpt[o];
+        li.appendChild(k); li.appendChild(v); ul.appendChild(li);
+      });
+      if (ul.children.length) inner.appendChild(ul);
+    }
     collapse.appendChild(inner);
     row.appendChild(collapse);
     list.appendChild(row);
+  if (showCat) {
+    const tag = document.createElement("div");
+    tag.className = "cfg-row-cat";
+    const g = CFG_GROUPS.filter(x => x.id === cfgGroupOf(it.key))[0];
+    tag.textContent = g ? ((ASB_LANG === 'ru' && g.ru) ? g.ru : g.name) : '';
+    row.appendChild(tag);
+  }
+}
+
+let _cfgSearch = '';
+
+function cfgSearchMatches() {
+  const q = _cfgSearch.toLowerCase();
+  return CFG_ITEMS.filter(it => {
+    const n = String(Tcfg(it.key, "name", it.name) || '').toLowerCase();
+    const d = String(Tcfg(it.key, "desc", '') || '').toLowerCase();
+    return n.indexOf(q) >= 0 || d.indexOf(q) >= 0;
   });
+}
+
+function cfgRenderSearch(list) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cfg-search-wrap';
+  const inp = document.createElement('input');
+  inp.className = 'cfg-search';
+  inp.type = 'search';
+  inp.value = _cfgSearch;
+  inp.placeholder = T('cfg_search', 'Search settings');
+  /* Re-render on every keystroke, but put focus and the caret back afterwards: the whole
+     list is rebuilt, so the input the user is typing into is a different element by the
+     time the next character arrives. Without this it loses focus after one letter. */
+  inp.oninput = () => {
+    const pos = inp.selectionStart;
+    _cfgSearch = inp.value.trim();
+    cfgRender();
+    const again = document.querySelector('.cfg-search');
+    if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (e) {} }
+  };
+  wrap.appendChild(inp);
+  list.appendChild(wrap);
+}
+
+function cfgRenderMatches(list) {
+  const hits = cfgSearchMatches();
+  if (!hits.length) {
+    const empty = document.createElement('div');
+    empty.className = 'cfg-search-empty';
+    empty.textContent = T('cfg_search_none', 'Nothing matches that');
+    list.appendChild(empty);
+    return;
+  }
+  /* Results carry their category, because the same word can land in two of them and
+     "which section was this in" is half of what the user is trying to find out. */
+  hits.forEach(it => cfgRenderRow(list, it, true));
+}
+
+function cfgRender() {
+  const list = _el('cfgList');
+  if (!list) return;
+  list.innerHTML = '';
+  cfgSyncChrome();
+  /* Search across every setting, whichever category it lives in.
+   *
+   * Forty-nine settings in six categories means knowing which category a setting is in
+   * before you can reach it - and the honest answer for "background trim" or "throttling"
+   * is that a reasonable person could look in two of them. Typing beats guessing.
+   *
+   * The box is drawn on the hub AND inside a category, so it works whether the user
+   * arrived by browsing or came back to look for something specific. Matching runs over
+   * the translated name and description, not the key: nobody searches for
+   * "sustained_temp_mode". */
+  cfgRenderSearch(list);
+  if (_cfgSearch) { cfgRenderMatches(list); return; }
+  if (!_cfgGroup) { cfgRenderHub(list); return; }
+  CFG_ITEMS.filter(it => cfgGroupOf(it.key) === _cfgGroup)
+           .forEach(it => cfgRenderRow(list, it, false));
 }
 
 async function cfgSet(key, val, ctl) {
@@ -3539,6 +3802,98 @@ async function cfgReboot() {
  * Soft reboot: restart the Android runtime without a full boot.
  */
 let _cfgSoftArmed = 0;
+const ASB_LANG_NAMES = { en:'English', ru:'Русский', uk:'Українська', de:'Deutsch',
+  es:'Español', pt:'Português', it:'Italiano', tr:'Türkçe', id:'Indonesia',
+  ar:'العربية', zh:'中文' };
+
+function cfgFillLangs() {
+  const sel = _el('cfgLangSel');
+  if (!sel || sel.dataset.filled) return;
+  /* en first and separately: ASB_LANGS is the DETECTION list, and English is absent from it
+   * on purpose because it is the fallback when nothing matches. Reusing that list for the
+   * picker would have left English as the one language a user cannot pick - which is
+   * exactly what the German user was asking for. */
+  ['en'].concat(ASB_LANGS).forEach(function (l) {
+    const o = document.createElement('option');
+    o.value = l;
+    o.textContent = ASB_LANG_NAMES[l] || l;
+    if (l === ASB_LANG) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.dataset.filled = '1';
+}
+
+function cfgSetLang(l) {
+  /* Reload rather than re-render: the translation file is fetched once at startup, and
+     swapping it in place would leave anything already drawn in the old language. A reload
+     is one visible blink and no half-translated screen. */
+  try { localStorage.setItem('asb_lang', l); } catch (e) {}
+  location.reload();
+}
+
+const CFG_BACKUP_PATH = '/sdcard/asb_settings_backup.conf';
+
+async function cfgExport() {
+  /* Export the keys the WebUI owns, not the whole file.
+   *
+   * governor.conf also carries per-device bounds, learned values and internal thresholds.
+   * Restoring those onto a different model hands it another phone's frequency table, which
+   * is how a "restore my settings" button becomes a support thread. SNAP_KEYS is exactly
+   * the set the user chose, and it is already the list install.sh restores. */
+  try {
+    const cmd = "sh -c 'C=" + MD + "/config/governor.conf; O=" + CFG_BACKUP_PATH + "; " +
+      ": > $O; echo \"# AutoSystemBoost settings backup\" >> $O; " +
+      "echo \"# device: $(getprop ro.product.model) $(getprop ro.board.platform)\" >> $O; " +
+      "echo \"# date: $(date)\" >> $O; " +
+      "for k in " + SNAP_KEYS.join(' ') + "; do " +
+      "v=$(grep -E \"^[[:space:]]*${k}=\" $C 2>/dev/null | head -1 | sed \"s/.*=//\"); " +
+      "[ -n \"$v\" ] && echo \"${k}=${v}\" >> $O; done; " +
+      "grep -c \"=\" $O'";
+    const r = await run(cmd);
+    const n = parseInt(((r && r.stdout) || '0').trim(), 10) || 0;
+    toast(T('cfg_export_ok', 'Saved to ') + CFG_BACKUP_PATH + ' (' + n + ')', 'ok');
+  } catch (e) {
+    toast(T('cfg_export_err', 'Could not write the backup'), 'err');
+  }
+}
+
+async function cfgImport() {
+  /* Two taps: this overwrites choices, and a single tap next to Export is easy to hit. */
+  const btns = document.querySelectorAll('#cfgBackupWrap .cfg-backup');
+  const btn = btns && btns[1];
+  if (btn && btn.dataset.armed !== '1') {
+    btn.dataset.armed = '1';
+    btn.textContent = T('cfg_import_confirm', 'Tap again to restore');
+    setTimeout(function () {
+      if (btn) { btn.dataset.armed = ''; btn.textContent = T('cfg_import', 'Import settings'); }
+    }, 4000);
+    return;
+  }
+  if (btn) { btn.dataset.armed = ''; btn.textContent = T('cfg_import', 'Import settings'); }
+  try {
+    /* Only keys that already exist in governor.conf AND belong to the WebUI are written.
+       A backup from an older build naming a setting this one dropped is skipped rather
+       than appended as a dead line nothing reads. */
+    const cmd = "sh -c 'C=" + MD + "/config/governor.conf; I=" + CFG_BACKUP_PATH + "; " +
+      "[ -r $I ] || { echo NOFILE; exit 0; }; n=0; " +
+      "while IFS= read -r line; do " +
+      "case \"$line\" in \\#*|\"\") continue ;; esac; " +
+      "k=${line%%=*}; v=${line#*=}; " +
+      "case \" " + SNAP_KEYS.join(' ') + " \" in *\" $k \"*) : ;; *) continue ;; esac; " +
+      "grep -qE \"^[[:space:]]*${k}=\" $C || continue; " +
+      "sed -i \"s|^[[:space:]]*${k}=.*|${k}=${v}|\" $C && n=$((n+1)); " +
+      "done < $I; echo $n'";
+    const r = await run(cmd);
+    const out = ((r && r.stdout) || '').trim();
+    if (out === 'NOFILE') { toast(T('cfg_import_none', 'No backup found'), 'err'); return; }
+    await cfgLoad();
+    cfgRender();
+    toast(T('cfg_import_ok', 'Restored ') + out + T('cfg_import_reboot', ' - reboot to apply'), 'ok');
+  } catch (e) {
+    toast(T('cfg_import_err', 'Could not read the backup'), 'err');
+  }
+}
+
 async function cfgSoftReboot() {
   const now = Date.now();
   if (now - _cfgSoftArmed > 4000) {
@@ -3597,6 +3952,10 @@ function cfgSyncChrome() {
   // Reboot actions belong to the hub only.
   const rw = _el('cfgRebootWrap');
   if (rw) rw.style.display = _cfgGroup ? 'none' : '';
+  const bw = _el('cfgBackupWrap');
+  if (bw) bw.style.display = _cfgGroup ? 'none' : '';
+  const lw = _el('cfgLangWrap');
+  if (lw) { lw.style.display = _cfgGroup ? 'none' : ''; cfgFillLangs(); }
 }
 
 function cfgBack() {
