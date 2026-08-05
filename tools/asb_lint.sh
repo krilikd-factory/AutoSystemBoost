@@ -534,11 +534,11 @@ elif [ "$_schema_rec" != "$_schema_now" ]; then
   err "config shape changed ($_schema_rec -> $_schema_now) but nothing says the schema moved."
   # Continuation lines use P, not err: one problem is one error. Counting the explanation
   # as five more made a single finding read as six and would hide a second real one.
-  P "     If a stored value now means something different, bump the number written to"
-  P "     /data/adb/asb/config_schema (currently $_schema_ver) and add a migration."
-  P "     Only if no stored value changed meaning, update CONFIG_SHAPE in governor.conf -"
-  P "     and say in the commit which values you checked. That line is the cheapest way"
-  P "     to make this red go away, which is exactly why it must not be the reflex."
+  echo "     If a stored value now means something different, bump the number written to"
+  echo "     /data/adb/asb/config_schema (currently $_schema_ver) and add a migration."
+  echo "     Only if no stored value changed meaning, update CONFIG_SHAPE in governor.conf -"
+  echo "     and say in the commit which values you checked. That line is the cheapest way"
+  echo "     to make this red go away, which is exactly why it must not be the reflex."
 else
   ok "config shape matches the recorded fingerprint (schema $_schema_ver)"
 fi
