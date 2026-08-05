@@ -436,6 +436,7 @@ jobs:
             "runtime/asb_log_apply.sh" \
             "runtime/asb_settings.sh" \
             "runtime/asb_doze_apply.sh" \
+            "runtime/asb_net_offload.sh" \
             "runtime/asb_athena_apply.sh" \
             "tools/asb_diag.sh" \
             "tools/asb_doctor.sh" \
