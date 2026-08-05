@@ -381,6 +381,7 @@ jobs:
             "runtime/asb_log_apply.sh" \
             "runtime/asb_settings.sh" \
             "runtime/asb_doze_apply.sh" \
+            "runtime/asb_athena_apply.sh" \
             "runtime/profile_core.sh" \
             "runtime/smart_dynamic_tune.sh" \
             "runtime/asb_tweaks.sh" \
