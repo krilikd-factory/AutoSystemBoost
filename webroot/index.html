@@ -2924,7 +2924,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  net_rps:'\uD83D\uDD00', net_txqueue:'\uD83D\uDCE4',
+  net_rps:'\uD83E\uDDF5', net_txqueue:'\uD83D\uDCE4',
   athena_service:'\uD83D\uDEE1\uFE0F',
   sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
   bt_a2dp_offload:'\uD83D\uDCFB', night_quiet_enable:'\uD83C\uDF19',
@@ -3474,6 +3474,18 @@ function cfgRenderRow(list, it, showCat) {
     }
     top.onclick = () => row.classList.toggle('desc-open');
     row.appendChild(top);
+    if (it.key === 'doze_trim_whitelist') {
+      /* Outside the collapsible description on purpose.
+       *
+       * It started inside it, which meant the editor only existed after tapping the card
+       * open - and a user who was told the editor exists could not find it. A control
+       * belongs next to the switch it modifies, not in the footnote explaining it. */
+      const eb = document.createElement('button');
+      eb.className = 'doze-edit-btn';
+      eb.textContent = T('doze_edit', 'Choose apps to keep exempt');
+      eb.onclick = (e) => { e.stopPropagation(); dozeOpenEditor(row); };
+      row.appendChild(eb);
+    }
 
     if (it.key === 'CAMERA_LEVEL') {
       const lvlOn = (parseInt(cur, 10) || 0) > 0;
@@ -3533,15 +3545,6 @@ function cfgRenderRow(list, it, showCat) {
      * from the locale file, so a translator can add the breakdown where it helps without
      * touching this code. */
     const dOpt = Tcfg(it.key, "descOpt", null);
-    if (it.key === 'doze_trim_whitelist') {
-      /* The switch alone cannot answer "which of my apps", so the card carries the
-         editor that can. */
-      const eb = document.createElement('button');
-      eb.className = 'doze-edit-btn';
-      eb.textContent = T('doze_edit', 'Choose apps to keep exempt');
-      eb.onclick = (e) => { e.stopPropagation(); dozeOpenEditor(inner); };
-      inner.appendChild(eb);
-    }
     if (dOpt && typeof dOpt === "object") {
       const ul = document.createElement("div");
       ul.className = "cfg-desc-opts";
