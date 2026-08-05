@@ -27,7 +27,26 @@
       "0": "More often",
       "1": "Less often",
       "auto": "Stock"
+    },
+    "dsp_outputs": {
+      "all": "all",
+      "speaker": "speaker",
+      "wired": "USB",
+      "bt": "BT",
+      "speaker+wired": "speaker+USB",
+      "speaker+bt": "speaker+BT",
+      "wired+bt": "USB+BT"
+    },
+    "athena_service": {
+      "stock": "stock",
+      "off": "off"
     }
   },
-  "prof_none": "not selected"
+  "prof_none": "not selected",
+  "cfg": {
+    "athena_service": {
+      "name": "Athena Background Killer",
+      "desc": "OxygenOS has its own background app killer - com.oplus.athena - and AthenaService is the part that decides what to kill. It is why a messenger left in the background stops delivering notifications until you reopen it, which no amount of battery whitelisting fixes because it is not Android's Doze doing it. Off disables that one component; the rest of the package keeps running, so thermal reporting and the settings panels are unaffected. Fully reversible: the previous state is recorded before anything changes and put back when you set this to stock or remove the module. Expect more RAM in use and slightly more drain - that is what keeping apps alive costs."
+    }
+  }
 }
