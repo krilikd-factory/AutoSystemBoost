@@ -647,6 +647,30 @@ elif [ -n "$_schema_ver" ]; then
 fi
 
 
+echo "🌐 Card descriptions per language"
+# Names without descriptions is the failure mode users actually hit.
+#
+# A locale file with every NAME translated passes the old check and still shows English
+# paragraphs under Italian titles - which is what an Italian user reported. Descriptions
+# are the long texts, so they are the ones left behind when a language is added in a hurry.
+# Counting them here means the gap is visible before release rather than after.
+_desc_bad=0
+for _lf in webroot/i18n/*.json; do
+  _ln="$(basename "$_lf" .json)"
+  [ "$_ln" = "en" ] && continue
+  _miss="$(python3 - "$_lf" <<'PYEOF' 2>/dev/null
+import json,sys,re
+h=open('webroot/index.html').read()
+items=set(re.findall(r"\{ key:'([\w]+)'", h))
+c=json.load(open(sys.argv[1])).get('cfg',{})
+print(len([k for k in items if k in c and 'desc' not in c[k]]))
+PYEOF
+)"
+  case "$_miss" in ''|0) : ;; *) warn "$_ln.json: $_miss cards have a name but no description"; _desc_bad=1 ;; esac
+done
+[ "$_desc_bad" = "0" ] && ok "every language describes every card"
+echo ""
+
 echo "📁 Installer layout"
 # There must be exactly ONE install.sh, and it lives in common/.
 #
