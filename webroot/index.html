@@ -1707,7 +1707,7 @@ body.config-active #livePage.open {
 .cfg-lang-pop button.active { color: var(--accent, #22d3ee); font-weight: 700; }
 .cfg-lang-pop button.active::after { content: '\2713'; font-size: 12.5px; opacity: .9; }
 
-#cfgToolsRow { display: flex; gap: 8px; margin-top: 0; align-items: stretch; flex: 1 1 auto; min-width: 0; }
+#cfgToolsRow { display: flex; gap: 8px; margin: 0 0 16px; align-items: stretch; }
 #cfgLangWrap { flex: 0 0 auto; display: flex; }
 .cfg-lang-sel { min-width: 0; width: auto; padding: 9px 28px 9px 11px; font-size: 12px; }
 #cfgBackupWrap { display: flex; gap: 8px; flex: 1 1 auto; }
@@ -1715,6 +1715,8 @@ body.config-active #livePage.open {
   flex: 1 1 0;
   min-width: 0;
   padding: 9px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-radius: 12px;
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   background: rgba(255,255,255,0.04);
@@ -1741,6 +1743,16 @@ body.config-active #livePage.open {
 .doze-edit-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px;
   color: rgba(231,234,238,0.8); padding: 5px 2px; }
 .doze-edit-row input { width: 16px; height: 16px; accent-color: var(--accent, #22d3ee); }
+/* Envelope marking a messenger. Monochrome on purpose: it groups the rows that matter,
+   it is not decoration, and a colour emoji beside a package name looks like a sticker. */
+.doze-msg-ico { flex: 0 0 auto; font-size: 13px; opacity: .7; filter: grayscale(1); color: #e7eaee; }
+.doze-edit-row.is-msg .doze-pkg { color: rgba(231,234,238,0.95); }
+.doze-pkg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doze-not-exempt {
+  margin-left: auto; flex: 0 0 auto;
+  font-size: 10px; letter-spacing: .3px; text-transform: uppercase;
+  color: rgba(231,234,238,0.36);
+}
 .doze-edit-hint { font-size: 11.5px; color: rgba(231,234,238,0.45); margin-top: 4px; }
 
 .cfg-desc-opts { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
@@ -1762,6 +1774,12 @@ body.config-active #livePage.open {
    10px bottom margin from when it was the row, which pushed the search box out of line
    with the buttons beside it. */
 .cfg-search-wrap { margin: 0; display: flex; flex: 0 0 auto; align-items: stretch; }
+/* Breathing room under the tools row.
+ * The row sat flush against the first category card, so the toolbar read as part of the
+ * grid rather than as something above it. */
+#cfgToolsRow { margin-bottom: 16px; }
+#cfgRebootWrap { margin-top: 18px; }
+.cfg-hub { margin-top: 2px; }
 .cfg-search {
   width: 116px;
   flex: 0 0 auto;
@@ -2302,7 +2320,7 @@ const MD = '/data/adb/modules/AutoSystemBoost';
 // Languages the UI has strings for. Adding one means adding a block to I18N and its code
 // here - nothing else. The old form hardcoded "ru or en", so a third language could not
 // exist no matter how complete its translation was.
-const ASB_LANGS = ['ru', 'uk', 'de', 'es', 'pt', 'tr', 'id', 'it', 'ar', 'zh'];
+const ASB_LANGS = ['ru', 'uk', 'de', 'es', 'pt', 'tr', 'id', 'it', 'ar', 'zh', 'hy', 'fr'];
 
 // Arabic reads right to left, so the document has to say so - without this the layout
 // stays left-aligned and the punctuation lands on the wrong side of every line. Set once,
@@ -2724,7 +2742,9 @@ const SNAP_KEYS = [
   'purge_vendor_logs',
   'doze_trim_whitelist',
   'gms_freeze',
-  'athena_service'];
+  'athena_service',
+  'net_rps',
+  'net_txqueue'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -3953,7 +3973,7 @@ async function cfgReboot() {
 let _cfgSoftArmed = 0;
 const ASB_LANG_NAMES = { en:'English', ru:'Русский', uk:'Українська', de:'Deutsch',
   es:'Español', pt:'Português', it:'Italiano', tr:'Türkçe', id:'Indonesia',
-  ar:'العربية', zh:'中文' };
+  ar:'العربية', zh:'中文', hy:'Հայերեն', fr:'Français' };
 
 /* A globe and a popup list, instead of a native <select>.
  *
@@ -4016,6 +4036,38 @@ const DOZE_KEEP_PATH = '/data/adb/asb/doze_whitelist_keep';
  */
 function dozePkgOk(p) { return /^[A-Za-z0-9_.]+$/.test(p); }
 
+/* Messengers, marked and offered even when not currently exempt.
+ *
+ * The editor only listed apps ALREADY on the exemption list, which is the wrong list to
+ * choose from: the apps people actually want kept awake - the messengers - are usually the
+ * ones OxygenOS has already removed, so they never appeared. Offering every installed
+ * messenger lets someone tick Telegram before it goes quiet rather than after.
+ *
+ * The list is prefixes, not exact names: forks and regional builds append suffixes
+ * (org.telegram.plus, com.whatsapp.w4b), and matching the prefix catches them without
+ * naming every variant.
+ */
+const DOZE_MESSENGERS = [
+  'com.whatsapp', 'org.telegram', 'org.thunderdog', 'com.viber', 'org.thoughtcrime.securesms',
+  'com.facebook.orca', 'com.facebook.mlite', 'com.instagram.android', 'com.snapchat.android',
+  'com.discord', 'com.skype', 'com.microsoft.teams', 'com.slack', 'com.google.android.apps.messaging',
+  'com.google.android.talk', 'com.tencent.mm', 'jp.naver.line.android', 'com.kakao.talk',
+  'com.imo.android.imoim', 'com.zhiliaoapp.musically', 'ru.ok.messages', 'com.vkontakte.android',
+  'com.icq.mobile.client', 'im.vector.app', 'chat.rocket.android', 'com.wire',
+  'ch.threema.app', 'org.briarproject.briar.android', 'com.sgiggle.production',
+  'com.bbm', 'com.hike.chat.stickers', 'com.tencent.mobileqq', 'com.linkedin.android',
+  'com.twitter.android', 'com.reddit.frontpage', 'com.zoom.videomeetings',
+  'us.zoom.videomeetings', 'com.google.android.gm', 'com.microsoft.office.outlook',
+  'com.yandex.mail', 'ru.mail.mailapp', 'com.samsung.android.messaging'
+];
+
+function dozeIsMessenger(pkg) {
+  for (let i = 0; i < DOZE_MESSENGERS.length; i++) {
+    if (pkg === DOZE_MESSENGERS[i] || pkg.indexOf(DOZE_MESSENGERS[i] + '.') === 0) return true;
+  }
+  return false;
+}
+
 async function dozeOpenEditor(row) {
   let box = row.querySelector('.doze-edit');
   if (box) { box.remove(); return; }
@@ -4024,28 +4076,56 @@ async function dozeOpenEditor(row) {
   box.textContent = T('doze_loading', 'Reading the exemption list...');
   row.appendChild(box);
   try {
-    const r = await run("sh -c 'dumpsys deviceidle whitelist 2>/dev/null | grep -E \"^user,\" | cut -d, -f2'");
-    const keepR = await run('cat ' + DOZE_KEEP_PATH + ' 2>/dev/null');
-    const keep = ((keepR && keepR.stdout) || '').split('\n').map(x => x.trim()).filter(Boolean);
-    const pkgs = ((r && r.stdout) || '').split('\n').map(x => x.trim()).filter(dozePkgOk);
-    box.textContent = '';
-    if (!pkgs.length) {
-      box.textContent = T('doze_empty', 'No user apps are exempt right now.');
-      return;
-    }
-    pkgs.forEach(function (pk) {
-      const line = document.createElement('label');
-      line.className = 'doze-edit-row';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = keep.indexOf(pk) >= 0;
-      cb.onchange = function () { dozeSaveKeep(box); };
-      const nm = document.createElement('span');
-      nm.textContent = pk;
-      line.appendChild(cb); line.appendChild(nm);
-      line.dataset.pkg = pk;
-      box.appendChild(line);
-    });
+      const r = await run("sh -c 'dumpsys deviceidle whitelist 2>/dev/null | grep -E \"^user,\" | cut -d, -f2'");
+      const keepR = await run('cat ' + DOZE_KEEP_PATH + ' 2>/dev/null');
+      /* Installed third-party packages, so a messenger can be ticked BEFORE it is dropped
+         from the exemption list rather than after someone notices missed messages. */
+      const instR = await run("sh -c 'pm list packages -3 2>/dev/null | sed \"s/^package://\"'");
+      const keep = ((keepR && keepR.stdout) || '').split('\n').map(x => x.trim()).filter(Boolean);
+      const exempt = ((r && r.stdout) || '').split('\n').map(x => x.trim()).filter(dozePkgOk);
+      const installed = ((instR && instR.stdout) || '').split('\n').map(x => x.trim()).filter(dozePkgOk);
+      /* Messengers first: they are what this list is for, and burying them among forty
+         other packages is the same as not listing them. */
+      const seen = {}; const pkgs = [];
+      installed.filter(dozeIsMessenger).concat(exempt).forEach(function (pk) {
+        if (!seen[pk]) { seen[pk] = 1; pkgs.push(pk); }
+      });
+      box.textContent = '';
+      if (!pkgs.length) {
+        box.textContent = T('doze_empty', 'No user apps are exempt right now.');
+        return;
+      }
+      pkgs.forEach(function (pk) {
+        const line = document.createElement('label');
+        const isMsg = dozeIsMessenger(pk);
+        line.className = 'doze-edit-row' + (isMsg ? ' is-msg' : '');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = keep.indexOf(pk) >= 0;
+        cb.onchange = function () { dozeSaveKeep(box); };
+        line.appendChild(cb);
+        if (isMsg) {
+          /* Monochrome envelope: a coloured emoji next to a package name reads as
+             decoration, and this mark is there to group, not to shout. */
+          const ico = document.createElement('span');
+          ico.className = 'doze-msg-ico';
+          ico.textContent = '\u2709';
+          line.appendChild(ico);
+        }
+        const nm = document.createElement('span');
+        nm.className = 'doze-pkg';
+        nm.textContent = pk;
+        line.appendChild(nm);
+        if (exempt.indexOf(pk) < 0) {
+          /* Not currently exempt - say so, or ticking it looks like it did nothing. */
+          const tag = document.createElement('span');
+          tag.className = 'doze-not-exempt';
+          tag.textContent = T('doze_not_exempt', 'not exempt');
+          line.appendChild(tag);
+        }
+        line.dataset.pkg = pk;
+        box.appendChild(line);
+      });
     const hint = document.createElement('div');
     hint.className = 'doze-edit-hint';
     hint.textContent = T('doze_hint', 'Ticked apps stay exempt from Doze.');
@@ -4104,7 +4184,12 @@ async function cfgImport() {
   const btn = btns && btns[1];
   if (btn && btn.dataset.armed !== '1') {
     btn.dataset.armed = '1';
-    btn.textContent = T('cfg_import_confirm', 'Tap again to restore');
+    /* Short confirm text, not a sentence.
+     *
+     * "Tap again to restore" is longer than the button that holds it, so the armed state
+     * spilled past the orange border. The button is already orange and already says what
+     * it does - the confirm only has to say "again". */
+    btn.textContent = T('cfg_import_confirm', 'Again?');
     setTimeout(function () {
       if (btn) { btn.dataset.armed = ''; btn.textContent = T('cfg_import', 'Import settings'); }
     }, 4000);
