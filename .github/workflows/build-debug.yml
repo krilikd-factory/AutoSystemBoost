@@ -33,6 +33,8 @@ jobs:
             "webroot/i18n/it.json" \
             "webroot/i18n/ar.json" \
             "webroot/i18n/zh.json" \
+            "webroot/i18n/hy.json" \
+            "webroot/i18n/fr.json" \
             common/russiantext.sh \
             common/ukrainiantext.sh \
             common/germantext.sh \
