@@ -1677,6 +1677,36 @@ body.config-active #livePage.open {
 /* Language and the two backup buttons share one row. As three stacked full-width blocks
    they took more vertical space than the settings they sit above, which inverts what the
    page is for. */
+/* Language: a globe and a popup, following the pattern a sibling module uses. The list is
+   drawn by us so it matches the page, and the button costs 38px instead of a field. */
+#cfgLangWrap { position: relative; flex: 0 0 auto; }
+.cfg-lang-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  color: #e7eaee; font-size: 16px; line-height: 1; padding: 0;
+  -webkit-appearance: none;
+  transition: transform .15s, border-color .15s;
+}
+.cfg-lang-btn:active { transform: scale(.92); }
+.cfg-lang-pop {
+  position: absolute; top: 46px; left: 0; z-index: 40;
+  background: #12161a; border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 14px; padding: 6px 0; min-width: 168px;
+  max-height: 62vh; overflow: auto;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.55);
+  animation: cfgPopIn .18s cubic-bezier(.34,1.56,.64,1) both;
+  transform-origin: top left;
+}
+@keyframes cfgPopIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+.cfg-lang-pop button {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; text-align: left; background: transparent; border: 0;
+  color: #e7eaee; padding: 10px 15px; font-size: 13.5px; font-family: inherit;
+}
+.cfg-lang-pop button.active { color: var(--accent, #22d3ee); font-weight: 700; }
+.cfg-lang-pop button.active::after { content: '\2713'; font-size: 12.5px; opacity: .9; }
+
 #cfgToolsRow { display: flex; gap: 8px; margin-top: 0; align-items: stretch; flex: 1 1 auto; min-width: 0; }
 #cfgLangWrap { flex: 0 0 auto; display: flex; }
 .cfg-lang-sel { min-width: 0; width: auto; padding: 9px 28px 9px 11px; font-size: 12px; }
@@ -1728,10 +1758,12 @@ body.config-active #livePage.open {
 
 /* Compact by default. A full-width bar at the top of the page reads as the main thing on
    it, which search is not - the settings are. It grows on focus so typing still has room. */
-.cfg-search-wrap { margin: 0 0 10px; display: flex; gap: 8px; align-items: stretch; }
+/* The wrapper is now a flex ITEM inside #cfgToolsRow, not a row of its own. It kept a
+   10px bottom margin from when it was the row, which pushed the search box out of line
+   with the buttons beside it. */
+.cfg-search-wrap { margin: 0; display: flex; flex: 0 0 auto; align-items: stretch; }
 .cfg-search {
-  width: 34%;
-  max-width: 150px;
+  width: 116px;
   flex: 0 0 auto;
   box-sizing: border-box;
   transition: width .18s ease, max-width .18s ease;
@@ -1745,7 +1777,7 @@ body.config-active #livePage.open {
   padding: 9px 12px;
 }
 .cfg-search::placeholder { color: rgba(231,234,238,0.42); }
-.cfg-search:focus { outline: none; border-color: var(--accent, #22d3ee); width: 100%; max-width: 100%; }
+.cfg-search:focus { outline: none; border-color: var(--accent, #22d3ee); width: 190px; }
 .cfg-search-empty {
   text-align: center;
   padding: 26px 12px;
@@ -1762,42 +1794,40 @@ body.config-active #livePage.open {
   color: rgba(231,234,238,0.38);
 }
 
-.cfg-select-wrap {
-  flex: 0 0 auto;
-  margin-left: auto;
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.cfg-select-wrap::after {
-  content: '\25BE';
-  position: absolute;
-  right: 11px;
-  pointer-events: none;
-  font-size: 11px;
-  opacity: 0.75;
-  color: var(--accent, #22d3ee);
-}
-.cfg-select {
-  -webkit-appearance: none;
-  appearance: none;
+/* Tweak dropdown: our own button + popup, same pattern as the language picker. */
+.cfg-sel-wrap { flex: 0 0 auto; margin-left: auto; position: relative; }
+.cfg-sel-btn {
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--border, rgba(255,255,255,0.12));
-  color: #e7eaee;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  padding: 8px 30px 8px 13px;
-  border-radius: 10px;
-  min-width: 124px;
-  max-width: 62vw;
-  text-overflow: ellipsis;
+  color: #e7eaee; font-size: 12.5px; font-weight: 600; letter-spacing: 0.2px;
+  padding: 8px 26px 8px 13px; border-radius: 10px;
+  min-width: 118px; max-width: 58vw;
+  text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  position: relative;
 }
-.cfg-select:focus { outline: none; border-color: var(--accent, #22d3ee); }
-/* The options list is drawn by the system, so it needs colours of its own or it
-   inherits the page's transparent background and becomes unreadable. */
-.cfg-select option { background: #12161a; color: #e7eaee; }
-@media (max-width: 400px) { .cfg-select { min-width: 104px; font-size: 12px; } }
+.cfg-sel-btn::after {
+  content: '\25BE'; position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%); font-size: 10px; opacity: .75;
+  color: var(--accent, #22d3ee);
+}
+.cfg-sel-pop {
+  position: absolute; top: 42px; right: 0; z-index: 40;
+  background: #12161a; border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 13px; padding: 5px 0; min-width: 150px;
+  max-height: 54vh; overflow: auto;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+  animation: cfgPopIn .16s cubic-bezier(.34,1.56,.64,1) both;
+  transform-origin: top right;
+}
+.cfg-sel-pop button {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; text-align: left; background: transparent; border: 0;
+  color: #e7eaee; padding: 9px 14px; font-size: 12.5px; font-family: inherit;
+  white-space: nowrap;
+}
+.cfg-sel-pop button.active { color: var(--accent, #22d3ee); font-weight: 700; }
+.cfg-sel-pop button.active::after { content: '\2713'; font-size: 12px; opacity: .9; margin-left: 10px; }
+@media (max-width: 400px) { .cfg-sel-btn { min-width: 100px; font-size: 12px; } } }
 
 .cfg-seg {
   display: inline-flex;
@@ -2213,33 +2243,34 @@ body.config-active #livePage.open {
   </div>
 
   <div class="cfg-pending" id="cfgPendingBar" style="display:none" onclick="cfgReboot()"></div>
+
+  <!-- Tools: language, plus export/import of settings.
+       The search box is rendered into this row at runtime so all three sit on one line,
+       and the row lives ABOVE the list because search belongs at the top of what it
+       searches. It must stay OUTSIDE #cfgList: cfgRender clears that list on every
+       redraw, and an earlier version put this row inside it, which deleted the row after
+       the first keystroke. -->
+  <div id="cfgToolsRow">
+    <div id="cfgLangWrap">
+      <button class="cfg-lang-btn" id="cfgLangBtn" onclick="cfgToggleLangPop(event)" aria-label="Language">🌐</button>
+      <div class="cfg-lang-pop" id="cfgLangPop" hidden></div>
+    </div>
+    <div id="cfgBackupWrap">
+      <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">↓ Export</button>
+      <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">↑ Import</button>
+    </div>
+  </div>
+
   <div class="cfg-list" id="cfgList"></div>
 
-  <!-- Reboot actions. Wrapped so cfgSyncChrome can show them on the hub and hide them on
-       a category page: down there the screen is a list of settings, and a full reboot
-       button under it is easy to hit while still choosing. -->
-       reach it without a terminal. -->
-  <!-- Language. The device language is a good guess, not a decision: a German user asked
-       for English and the only way to get it was to change the phone's system language. -->
-  <div id="cfgToolsRow">
-  <div id="cfgLangWrap">
-    <select class="cfg-select cfg-lang-sel" id="cfgLangSel" onchange="cfgSetLang(this.value)"></select>
-  </div>
-
-  <div id="cfgBackupWrap">
-    <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">↓ Export</button>
-    <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">↑ Import</button>
-  </div>
-  </div>
+  <!-- Reboot actions. cfgSyncChrome shows them on the hub and hides them inside a
+       category, where a full reboot button under a list of settings is easy to hit by
+       accident while still choosing. -->
   <div id="cfgRebootWrap">
     <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
     <button class="cfg-reboot soft" onclick="cfgSoftReboot()" data-i18n="cfg_soft_reboot">⟳ Soft reboot</button>
     <button class="cfg-reboot sysui" onclick="cfgRestartSysUI()" data-i18n="cfg_restart_sysui">▤ Restart SystemUI</button>
   </div>
-
-  <!-- Backup and restore. Forty-nine settings is a long evening to redo after a wipe or on
-       a second phone, and the values already live in one file - there was simply no way to
-
   </div>
 
   <div class="tg-link-wrap">
@@ -3443,21 +3474,36 @@ function cfgRenderRow(list, it, showCat) {
            *
            * A menu shows the current value in full, costs one tap, and stops caring how many
            * choices there are. Three or fewer stay buttons: they fit, and one tap beats two. */
+          /* Our own popup, matching the language picker and the rest of the page.
+           *
+           * A native <select> draws its list with the OS: a light sheet over a dark UI,
+           * with none of the page's spacing or the tick marking the current value. Drawing
+           * it ourselves costs a few lines and makes a card with seven options look like
+           * the card next to it. */
           const selWrap = document.createElement('div');
-          selWrap.className = 'cfg-select-wrap';
-          const sel = document.createElement('select');
-          sel.className = 'cfg-select';
+          selWrap.className = 'cfg-sel-wrap';
+          const btn = document.createElement('button');
+          btn.className = 'cfg-sel-btn';
+          btn.textContent = Topt(cur, it.key);
+          const pop = document.createElement('div');
+          pop.className = 'cfg-sel-pop';
+          pop.hidden = true;
           _opts.forEach(o => {
-            const op = document.createElement('option');
-            op.value = o; op.textContent = Topt(o, it.key);
-            if (o === cur) op.selected = true;
-            sel.appendChild(op);
+            const ob = document.createElement('button');
+            ob.textContent = Topt(o, it.key);
+            if (o === cur) ob.className = 'active';
+            ob.onclick = (ev) => { ev.stopPropagation(); pop.hidden = true; cfgSet(it.key, o, selWrap); };
+            pop.appendChild(ob);
           });
-          /* stopPropagation on the wrapper too: the row toggles its description on click and
-           * opening the menu would toggle it as well. */
+          btn.onclick = (ev) => {
+            ev.stopPropagation();
+            /* Close any other open popup first, or two lists overlap. */
+            document.querySelectorAll('.cfg-sel-pop').forEach(x => { if (x !== pop) x.hidden = true; });
+            pop.hidden = !pop.hidden;
+          };
+          selWrap.appendChild(btn);
+          selWrap.appendChild(pop);
           selWrap.onclick = (e) => e.stopPropagation();
-          sel.onchange = (e) => { e.stopPropagation(); cfgSet(it.key, sel.value, selWrap); };
-          selWrap.appendChild(sel);
           top.appendChild(selWrap);
         } else {
           const seg = document.createElement('div');
@@ -3909,22 +3955,42 @@ const ASB_LANG_NAMES = { en:'English', ru:'Русский', uk:'Українсь
   es:'Español', pt:'Português', it:'Italiano', tr:'Türkçe', id:'Indonesia',
   ar:'العربية', zh:'中文' };
 
-function cfgFillLangs() {
-  const sel = _el('cfgLangSel');
-  if (!sel || sel.dataset.filled) return;
-  /* en first and separately: ASB_LANGS is the DETECTION list, and English is absent from it
-   * on purpose because it is the fallback when nothing matches. Reusing that list for the
-   * picker would have left English as the one language a user cannot pick - which is
-   * exactly what the German user was asking for. */
-  ['en'].concat(ASB_LANGS).forEach(function (l) {
-    const o = document.createElement('option');
-    o.value = l;
-    o.textContent = ASB_LANG_NAMES[l] || l;
-    if (l === ASB_LANG) o.selected = true;
-    sel.appendChild(o);
-  });
-  sel.dataset.filled = '1';
+/* A globe and a popup list, instead of a native <select>.
+ *
+ * The platform dropdown renders as a grey system box on a dark page and its own list is
+ * drawn by the OS, so it never matches anything around it. A button plus a list we draw
+ * ourselves also frees the width the select was taking in the tools row - the language is
+ * changed once and then never again, so it does not deserve a permanent field.
+ */
+function cfgToggleLangPop(e) {
+  if (e) e.stopPropagation();
+  const pop = _el('cfgLangPop');
+  if (pop) pop.hidden = !pop.hidden;
 }
+
+function cfgFillLangs() {
+  const pop = _el('cfgLangPop');
+  if (!pop || pop.dataset.filled) return;
+  ['en'].concat(ASB_LANGS).forEach(function (l) {
+    const b = document.createElement('button');
+    b.textContent = ASB_LANG_NAMES[l] || l;
+    if (l === ASB_LANG) b.className = 'active';
+    b.onclick = function (ev) { ev.stopPropagation(); cfgSetLang(l); };
+    pop.appendChild(b);
+  });
+  pop.dataset.filled = '1';
+  /* Close on any tap outside. Registered once, with the same guard the fill uses, so
+     repeated renders do not stack listeners. */
+  document.addEventListener('click', function (ev) {
+    const p = _el('cfgLangPop');
+    const btn = _el('cfgLangBtn');
+    if (!p || p.hidden) return;
+    if (p.contains && p.contains(ev.target)) return;
+    if (btn && btn.contains && btn.contains(ev.target)) return;
+    p.hidden = true;
+  });
+}
+
 
 function cfgSetLang(l) {
   /* Reload rather than re-render: the translation file is fetched once at startup, and
