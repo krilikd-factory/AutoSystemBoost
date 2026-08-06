@@ -230,7 +230,7 @@
   "cfg_search_none": "لا توجد نتائج",
   "cfg_export": "↓ تصدير",
   "cfg_import": "↑ استيراد",
-  "cfg_import_confirm": "Tap again to restore",
+  "cfg_import_confirm": "مرة أخرى؟",
   "cfg_export_ok": "Saved to ",
   "cfg_export_err": "Could not write the backup",
   "cfg_import_none": "No backup found",
@@ -320,5 +320,6 @@
   "lv_lpm_save": "توفير",
   "lv_lpm_save_t": "الراديو خامل، فترات الإبقاء ممتدة",
   "lv_sessions_short": "جلسة",
-  "t_prof_applied": " تم التطبيق"
+  "t_prof_applied": " تم التطبيق",
+  "doze_not_exempt": "غير مستثنى"
 }

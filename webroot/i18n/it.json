@@ -230,7 +230,7 @@
   "cfg_search_none": "Nessun risultato",
   "cfg_export": "↓ Esporta",
   "cfg_import": "↑ Importa",
-  "cfg_import_confirm": "Tap again to restore",
+  "cfg_import_confirm": "Di nuovo?",
   "cfg_export_ok": "Saved to ",
   "cfg_export_err": "Could not write the backup",
   "cfg_import_none": "No backup found",
@@ -320,5 +320,6 @@
   "lv_lpm_save": "risparmio",
   "lv_lpm_save_t": "radio inattiva, keepalive distanziati",
   "lv_sessions_short": "ses",
-  "t_prof_applied": " applicato"
+  "t_prof_applied": " applicato",
+  "doze_not_exempt": "non esente"
 }

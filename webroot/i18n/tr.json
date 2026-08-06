@@ -230,7 +230,7 @@
   "cfg_search_none": "Sonuç yok",
   "cfg_export": "↓ Dışa aktar",
   "cfg_import": "↑ İçe aktar",
-  "cfg_import_confirm": "Tap again to restore",
+  "cfg_import_confirm": "Tekrar?",
   "cfg_export_ok": "Saved to ",
   "cfg_export_err": "Could not write the backup",
   "cfg_import_none": "No backup found",
@@ -320,5 +320,6 @@
   "lv_lpm_save": "tasarruf",
   "lv_lpm_save_t": "radyo boşta, keepalive aralıkları uzun",
   "lv_sessions_short": "otr",
-  "t_prof_applied": " uygulandı"
+  "t_prof_applied": " uygulandı",
+  "doze_not_exempt": "muaf değil"
 }

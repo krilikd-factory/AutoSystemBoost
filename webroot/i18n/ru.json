@@ -493,7 +493,7 @@
   "cfg_search_none": "Ничего не найдено",
   "cfg_export": "↓ Экспорт",
   "cfg_import": "↑ Импорт",
-  "cfg_import_confirm": "Нажмите ещё раз",
+  "cfg_import_confirm": "Ещё раз?",
   "cfg_export_ok": "Сохранено в ",
   "cfg_export_err": "Не удалось записать",
   "cfg_import_none": "Резервной копии нет",
@@ -541,5 +541,6 @@
   "grp_iface": "Интерфейс",
   "grp_net": "Сеть",
   "grp_battery": "Батарея",
-  "grp_ui": "Система"
+  "grp_ui": "Система",
+  "doze_not_exempt": "нет в исключениях"
 }

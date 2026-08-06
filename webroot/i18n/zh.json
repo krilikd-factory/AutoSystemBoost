@@ -230,7 +230,7 @@
   "cfg_search_none": "没有匹配项",
   "cfg_export": "↓ 导出",
   "cfg_import": "↑ 导入",
-  "cfg_import_confirm": "Tap again to restore",
+  "cfg_import_confirm": "再次？",
   "cfg_export_ok": "Saved to ",
   "cfg_export_err": "Could not write the backup",
   "cfg_import_none": "No backup found",
@@ -320,5 +320,6 @@
   "lv_lpm_save": "省电",
   "lv_lpm_save_t": "射频空闲，保活间隔拉长",
   "lv_sessions_short": "次",
-  "t_prof_applied": " 已应用"
+  "t_prof_applied": " 已应用",
+  "doze_not_exempt": "未豁免"
 }
