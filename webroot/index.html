@@ -2320,7 +2320,7 @@ const MD = '/data/adb/modules/AutoSystemBoost';
 // Languages the UI has strings for. Adding one means adding a block to I18N and its code
 // here - nothing else. The old form hardcoded "ru or en", so a third language could not
 // exist no matter how complete its translation was.
-const ASB_LANGS = ['ru', 'uk', 'de', 'es', 'pt', 'tr', 'id', 'it', 'ar', 'zh', 'hy', 'fr'];
+const ASB_LANGS = ['ru', 'uk', 'de', 'es', 'pt', 'tr', 'id', 'it', 'fr', 'ar', 'zh', 'hy'];
 
 // Arabic reads right to left, so the document has to say so - without this the layout
 // stays left-aligned and the punctuation lands on the wrong side of every line. Set once,
@@ -3972,8 +3972,8 @@ async function cfgReboot() {
  */
 let _cfgSoftArmed = 0;
 const ASB_LANG_NAMES = { en:'English', ru:'Русский', uk:'Українська', de:'Deutsch',
-  es:'Español', pt:'Português', it:'Italiano', tr:'Türkçe', id:'Indonesia',
-  ar:'العربية', zh:'中文', hy:'Հայերեն', fr:'Français' };
+  es:'Español', pt:'Português', tr:'Türkçe', id:'Indonesia', it:'Italiano',
+  fr:'Français', ar:'العربية', zh:'中文', hy:'Հայերեն' };
 
 /* A globe and a popup list, instead of a native <select>.
  *
