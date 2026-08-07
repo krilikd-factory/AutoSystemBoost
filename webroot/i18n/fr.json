@@ -185,7 +185,9 @@
     "smart_battery_bias": {
       "desc": "À quel point Smart penche vers l’autonomie. Plus haut, il garde les fréquences basses plus longtemps ; plus bas, il les libère plus tôt. À partir de 400, Smart se comporte presque comme «Batterie» même en usage actif."
     },
-    "CAMERA_AGGRESSIVE_INJECT": {},
+    "CAMERA_AGGRESSIVE_INJECT": {
+      "desc": "SÛR : uniquement les clés de ton présentes. AGRESSIF injecte celles qui manquent (OnePlus 13/12) — risqué, revenez à SÛR en cas de problème."
+    },
     "media_loudness": {
       "desc": "Plus fort aux positions du curseur que vous utilisez vraiment : léger ≈+3 dB, fort ≈+6, maximum ≈+10. Ne touche ni les crans les plus bas, ni les alarmes, ni les sonneries, et ne peut pas saturer. Au maximum, le haut du curseur devient plus grossier. Redémarrage requis."
     },
