@@ -1,148 +1,196 @@
 {
   "cfg": {
     "audio_profile": {
-      "name": "Perfil de audio"
+      "name": "Perfil de audio",
+      "desc": "Quién procesa el sonido. «Compatible con EQ» entrega la señal intacta a un EQ/ViPER externo. «Hi-Fi» activa UHQA para cuando no usas ningún EQ. «De fábrica» deja solo los ajustes básicos. Se aplica sin reiniciar."
     },
     "audio_dac_hifi": {
-      "name": "DAC Hi-Fi (mezclador)"
+      "name": "DAC Hi-Fi (mezclador)",
+      "desc": "Configuración del códec, no software: compansores de auriculares desactivados, HPH Mode → CLS_H_HIFI. No estorba a un EQ externo: le entrega un DAC más limpio. Requiere reinicio."
     },
     "media_loudness": {
-      "name": "Volumen multimedia"
+      "name": "Volumen multimedia",
+      "desc": "Más volumen en las posiciones del control que realmente usas: suave ≈+3 dB, fuerte ≈+6, máximo ≈+10. No toca los pasos más bajos, las alarmas ni los tonos, y no puede saturar. En máximo la parte alta del control se vuelve más brusca. Requiere reinicio."
     },
     "bt_absvol_mode": {
-      "name": "Control de volumen Bluetooth"
+      "name": "Control de volumen Bluetooth",
+      "desc": "«De fábrica»: una sola escala, el control del teléfono mueve directamente el volumen de los auriculares. «Desactivar»: escalas independientes, el teléfono aplica su ganancia sobre la del auricular — suena más fuerte, y eso es lo que necesitan ViPER y los ecualizadores. El precio: las escalas dejan de coincidir y en algunos auriculares los pasos bajos se vuelven bruscos."
     },
     "bt_a2dp_offload": {
-      "name": "Descarga de audio Bluetooth"
+      "name": "Descarga de audio Bluetooth",
+      "desc": "Quién codifica el audio Bluetooth: el bloque de hardware dedicado o la CPU. «Auto» no interviene: queda lo que eligió la ROM. «Activado» fuerza la codificación por hardware (suele coincidir con el ajuste de fábrica, pero aquí lo escribe ASB). «Desactivado» lo pasa a la CPU, algo necesario para que ciertos códecs y ecualizadores funcionen."
     },
     "dsp_loudness": {
-      "name": "Volumen DSP"
+      "name": "Volumen DSP",
+      "desc": "Ganancia de volumen del motor de audio de ASB, por encima del máximo del sistema. El limitador suave evita la saturación: la salida está acotada por diseño, así que los decibelios extra cambian la densidad del sonido, no su limpieza."
     },
     "dsp_bass": {
-      "name": "Refuerzo de graves DSP"
+      "name": "Refuerzo de graves DSP",
+      "desc": "Ganancia de graves del mismo motor. Actúa sobre la salida elegida en «Salidas DSP»."
     },
     "dsp_compressor": {
-      "name": "Compresor DSP"
+      "name": "Compresor DSP",
+      "desc": "Comprime el rango dinámico: lo bajo se oye, lo alto deja de golpear. Útil en transporte y en la calle, innecesario para escuchar con atención en casa."
     },
     "dsp_outputs": {
-      "name": "Salidas del DSP"
+      "name": "Salidas del DSP",
+      "desc": "A qué salidas se aplica el efecto DSP. Antes se enganchaba a todas a la vez, así que una ganancia pensada para auriculares también subía el altavoz del teléfono, el menos preparado para soportarla."
     },
     "CAMERA_LEVEL": {
-      "name": "Procesado de cámara"
+      "name": "Procesado de cámara",
+      "desc": "Intensidad de color, contraste y detalle para fotos y vídeos: 0 = de fábrica, más alto = más saturado y contrastado. Funciona de forma RELATIVA: multiplica los valores que realmente hay en tu ROM, así que no depende de las cifras que eligiera el fabricante."
     },
     "CAMERA_CONTRAST": {
-      "name": "Contraste y profundidad de color"
+      "name": "Contraste y profundidad de color",
+      "desc": "Contraste y saturación de la curva tonal. 3 es exactamente de fábrica (100%), 0 es más plano (70%), 6 claramente más contrastado (130%). Independiente del «Nivel de procesado», que actúa sobre la matriz de color."
     },
     "CAMERA_GRAIN": {
-      "name": "Grano de película"
+      "name": "Grano de película",
+      "desc": "Tras la reducción de ruido la cámara vuelve a añadir grano: una imagen perfectamente lisa parece de plástico. 3 es de fábrica: más bajo para un aspecto limpio, más alto para textura marcada, 0 quita el grano por completo."
     },
     "CAMERA_PORTRAIT": {
-      "name": "IA de retrato"
+      "name": "IA de retrato",
+      "desc": "Procesado neuronal de rostros: la ROM de fábrica lo deja apagado (pesos 0.0), por eso aquí se escriben valores absolutos y no un multiplicador. Solo hacia arriba: si la ROM ya tiene más de lo que pide el nivel, se queda como está."
     },
     "CAMERA_LOWLIGHT": {
-      "name": "Nitidez macro y poca luz"
+      "name": "Nitidez macro y poca luz",
+      "desc": "Macro y poca luz tienen su propia escala de nitidez, y es ahí donde más se nota el exceso: los sujetos cercanos y el ISO alto acentúan los halos. 0 sigue el procesado principal; súbelo solo si esos modos se ven blandos."
     },
     "camera_hold_enable": {
-      "name": "Mantener rendimiento con la cámara"
+      "name": "Mantener rendimiento con la cámara",
+      "desc": "Mientras la cámara transmite, el governor deja de bajar frecuencias y mantiene los núcleos ya ocupados. Eso es lo que evita perder un fotograma en una ráfaga o en vídeo, a cambio de algo de batería mientras la app está abierta. «Desactivado» permite que el governor limite la cámara como a cualquier otra aplicación."
     },
     "UX_MANAGE_TIMEOUTS": {
-      "name": "Gestionar velocidad de interfaz"
+      "name": "Gestionar velocidad de interfaz",
+      "desc": "Rendimiento acorta las animaciones (~0,8x) y las ventanas de pulsación larga y toque múltiple para la respuesta; Batería se queda de fábrica. APAGADO = no tocar nada."
     },
     "anim_speed": {
-      "name": "Velocidad de animaciones"
+      "name": "Velocidad de animaciones",
+      "desc": "Con qué rapidez dibuja el sistema las transiciones. «Según perfil» es el comportamiento anterior: la velocidad la elegía el perfil de energía, así que la respuesta de la interfaz era un efecto secundario de un ajuste de batería. Ahora es una decisión aparte."
     },
     "UX_ANIM_FORCE_RESTART": {
-      "name": "Forzar reinicio de animaciones"
+      "name": "Forzar reinicio de animaciones",
+      "desc": "Casi nunca hace falta. WindowManager relee las escalas de animación justo después de escribirlas: basta con cambiar el ajuste. Este interruptor existe solo para recoger diagnósticos."
     },
     "disable_blur": {
-      "name": "Desactivar desenfoque"
+      "name": "Desactivar desenfoque",
+      "desc": "Desactiva el desenfoque en todas partes: cortina, notificaciones, panel de volumen, transiciones. Menos carga de GPU, la cortina se vuelve opaca en vez de esmerilada. Ojo: la notificación emergente también pierde su fondo desenfocado."
     },
     "ui_effects_level": {
-      "name": "Animaciones del sistema"
+      "name": "Animaciones del sistema",
+      "desc": "Con cuánto detalle dibuja el sistema las transiciones y Recientes. «Normales» es como sale de fábrica. «Simplificados» usa menos efectos y algo menos de GPU. IMPORTANTE: en simplificado Recientes pasa a ser una lista simple y OxygenOS ELIMINA por completo el selector Tarjetas/Simple. Solo disponible en el OnePlus 15."
     },
     "net_congestion": {
-      "name": "Arranque de descargas · otros"
+      "name": "Arranque de descargas · otros",
+      "desc": "Cómo acelera el teléfono al descargar, para las redes que no cubren las dos tarjetas de abajo: anclaje USB, VPN, anclaje Bluetooth, Ethernet. El Wi-Fi y los datos móviles toman sus valores de las tarjetas de abajo. «bbr» se adapta a la velocidad real, «cubic» es el clásico. En kernels de fábrica bbr suele faltar, y la tarjeta escribe honestamente «no compatible»."
     },
     "net_congestion_wifi": {
-      "name": "Arranque de descargas · WiFi"
+      "name": "Arranque de descargas · WiFi",
+      "desc": "Aceleración de descargas solo para Wi-Fi. «Como general» toma el valor de la tarjeta de arriba. Un valor propio sirve cuando Wi-Fi y móvil piden respuestas distintas: funcionan a la vez y no se estorban."
     },
     "net_congestion_mobile": {
-      "name": "Arranque de descargas · móvil"
+      "name": "Arranque de descargas · móvil",
+      "desc": "Aceleración de descargas solo para datos móviles. «Como general» toma el valor de la tarjeta de arriba. Aquí suele ganar bbr: en un enlace de radio un paquete perdido indica interferencia, no atasco, y cubic tira velocidad para nada."
     },
     "net_qdisc": {
-      "name": "Cola de paquetes · otros"
+      "name": "Cola de paquetes · otros",
+      "desc": "Cómo reparte el teléfono la conexión entre las aplicaciones, para las redes que no cubren las dos tarjetas de abajo: anclaje USB, VPN, anclaje Bluetooth, adaptador Ethernet. «fq_codel» le va bien a la mayoría: el vídeo deja de entrecortarse mientras algo descarga en segundo plano. «cake» es el más cuidadoso pero algo más pesado para la CPU."
     },
     "net_qdisc_wifi": {
-      "name": "Cola de paquetes · WiFi"
+      "name": "Cola de paquetes · WiFi",
+      "desc": "Cola de paquetes solo para Wi-Fi. «Como general» toma el valor de la tarjeta de arriba. Independiente de los datos móviles."
     },
     "net_qdisc_mobile": {
-      "name": "Cola de paquetes · móvil"
+      "name": "Cola de paquetes · móvil",
+      "desc": "Cola de paquetes solo para datos móviles. «Como general» toma el valor de la tarjeta de arriba. Independiente del Wi-Fi."
     },
     "net_route_tune": {
-      "name": "Búferes de red"
+      "name": "Búferes de red",
+      "desc": "Cuántos datos salen de una sola vez antes de la primera respuesta. El modo inteligente mide tu enlace — velocidad, MTU, tipo de radio — y elige el tamaño: mayor en un enlace rápido, valor de fábrica en uno débil, donde una ráfaga grande provoca justo las pérdidas que debía evitar."
     },
     "wifi_country": {
-      "name": "Región WiFi"
+      "name": "Región WiFi",
+      "desc": "Determina qué canales puede usar el teléfono, y de eso depende la velocidad máxima. «CR» abre el conjunto más amplio. Usar canales no permitidos en tu país queda a tu criterio."
     },
     "wifi_scan_throttle": {
-      "name": "Frecuencia de búsqueda WiFi"
+      "name": "Frecuencia de búsqueda WiFi",
+      "desc": "Con qué frecuencia busca el teléfono un punto Wi-Fi mejor. Quita el límite si el Wi-Fi se queda pegado a un punto débil mientras te mueves por casa. A cambio de algo de batería."
     },
     "auto_battery_enable": {
-      "name": "Perfil de batería automático"
+      "name": "Perfil de batería automático",
+      "desc": "Al 20% de carga el perfil cambia solo a «Batería» y vuelve al 21% tras cargar. La cifra del ajuste coincide con la del icono de batería."
     },
     "smart_battery_bias": {
-      "name": "Sesgo de batería Smart"
+      "name": "Sesgo de batería Smart",
+      "desc": "Cuánto se inclina Smart hacia la autonomía. Más alto mantiene las frecuencias bajas más tiempo; más bajo las suelta antes. A partir de 400 Smart se comporta casi como «Batería» incluso en uso activo."
     },
     "charge_aware_enable": {
-      "name": "Modo con carga"
+      "name": "Modo con carga",
+      "desc": "Cargando concede más margen; con calor, menos. Un teléfono enchufado no tiene motivo para ahorrar como si fuera con batería."
     },
     "doze_level": {
-      "name": "Sueño profundo"
+      "name": "Sueño profundo",
+      "desc": "Con qué rapidez lleva Android el teléfono al sueño profundo tras apagar la pantalla. De fábrica espera 30 minutos: en un teléfono que se coge cada pocos minutos, esos 30 minutos no llegan nunca. EL PRECIO: en sueño profundo el sistema retiene la red en segundo plano hasta la siguiente ventana de mantenimiento, así que una app que consulta el servidor por su cuenta puede llegar tarde — las notificaciones push prioritarias siempre pasan."
     },
     "night_quiet_enable": {
-      "name": "Noche tranquila"
+      "name": "Noche tranquila",
+      "desc": "De noche, con la pantalla apagada desde hace rato, el governor detiene su propio trabajo periódico y deja que el dispositivo duerma más profundo. De ahí viene la mayor parte del ahorro nocturno."
     },
     "sustained_temp_mode": {
-      "name": "Punto de limitación"
+      "name": "Punto de limitación",
+      "desc": "Cuándo empieza ASB a contener el rendimiento para que el teléfono esté más fresco. «De fábrica» usa el punto de disparo de tu dispositivo, leído al arrancar de la zona térmica de la CPU. «Inteligente» parte de ahí y lo sube 2 grados cuando una sesión alcanza la carga sostenida en menos de un minuto. «Manual» fija exactamente el valor del control de abajo."
     },
     "sustained_temp_enter": {
-      "name": "Temperatura de limitación"
+      "name": "Temperatura de limitación",
+      "desc": "La temperatura a la que ASB empieza a contener el rendimiento. Más baja significa intervenir antes: un teléfono más fresco que reduce antes. IMPORTANTE: un valor por debajo de la temperatura a la que el teléfono simplemente está en reposo (normalmente 38–48 °C) significa que la limitación está SIEMPRE activa — frecuencias contenidas de forma permanente, el trabajo dura más, y el teléfono acaba más caliente y más vacío, no más fresco. Por eso el mínimo es 52 °C."
     },
     "cool_gaming": {
-      "name": "Juego fresco"
+      "name": "Juego fresco",
+      "desc": "En los juegos el umbral térmico actúa antes, así el teléfono queda más fresco a costa de unos fotogramas. Útil en sesiones largas, innecesario en las cortas."
     },
     "bat_suppress_gaming": {
-      "name": "Sin modo juego en perfil Batería"
+      "name": "Sin modo juego en perfil Batería",
+      "desc": "En el perfil «Batería» un juego cuenta como carga pesada normal y no como motivo para entrar en modo juego. El modo juego sube los techos de frecuencia, es decir hace lo contrario de aquello por lo que se elige «Batería». Solo afecta a este perfil."
     },
     "BG_TRIM_LEVEL": {
-      "name": "Limpieza en segundo plano"
+      "name": "Limpieza en segundo plano",
+      "desc": "Con qué agresividad se descargan las apps en segundo plano. «Seguro» es prudente; «agresivo» libera más memoria a costa de que alguna app se reinicie al volver."
     },
     "gms_trim": {
-      "name": "Limitar servicios de Google"
+      "name": "Limitar servicios de Google",
+      "desc": "Reduce lo que los servicios de Google pueden hacer en segundo plano, sin desactivar nada. «Estricto» reduce bastante: alguna sincronización puede retrasarse."
     },
     "UX_MANAGE_OEM_TOGGLES": {
-      "name": "Gestionar ajustes del fabricante"
+      "name": "Gestionar ajustes del fabricante",
+      "desc": "Permite a ASB gestionar los interruptores del sistema de OxygenOS: ampliación de RAM, optimización de batería, control del calor. APAGADO = no tocarlos en absoluto, y tus ajustes siguen siendo tuyos."
     },
     "phantom_procs": {
-      "name": "Límite de procesos en segundo plano"
+      "name": "Límite de procesos en segundo plano",
+      "desc": "El límite de Android para procesos hijos en segundo plano: es lo que mata las sesiones de terminal y las compilaciones a medias. «Sin límite» lo quita del todo."
     },
     "haptic_strength": {
-      "name": "Vibración"
+      "name": "Vibración",
+      "desc": "Intensidad de la vibración para notificaciones y tonos, en la escala del fabricante. «−1» no toca nada: se queda lo configurado en el teléfono."
     },
     "haptic_touch_strength": {
-      "name": "Respuesta táctil"
+      "name": "Respuesta táctil",
+      "desc": "Intensidad de la vibración solo para la respuesta al tacto: escritura, interruptores, gestos. Se ajusta aparte de las notificaciones."
     },
     "log_level": {
-      "name": "Detalle del registro"
+      "name": "Detalle del registro",
+      "desc": "Cuánto escribe el módulo en su registro y cuánto registra el propio dispositivo. «De fábrica» es el único valor que no toca en absoluto el registro del teléfono. «0» es extremo: recorta registros y salida de depuración todo lo posible, ahorra escrituras y despertares, y deja casi inútil cualquier informe de fallo de este teléfono, incluido el nuestro."
     },
     "audio_remove_volume_limit": {
-      "name": "Límite de volumen de auriculares"
+      "name": "Límite de volumen de auriculares",
+      "desc": "Quita el límite de volumen de auriculares que exige la normativa de la UE. ATENCIÓN: escuchar mucho tiempo a volumen alto daña la audición. Desactivado por defecto justamente por eso."
     },
     "doze_trim_whitelist": {
-      "name": "Recortar exenciones de Doze"
+      "name": "Recortar exenciones de Doze",
+      "desc": "Quita tus aplicaciones de la lista de exenciones del sueño profundo; las del sistema (teléfono, SMS, reloj, gestor root) no se tocan. El botón de abajo muestra qué aplicaciones están exentas ahora y permite conservar las que necesitas."
     },
     "gms_freeze": {
-      "name": "Congelar componentes de Google"
+      "name": "Congelar componentes de Google",
+      "desc": "Desactiva los componentes de telemetría, informes y publicidad dentro de los servicios de Google. Los servicios siguen activos: las notificaciones push, el inicio de sesión y los pagos funcionan. Totalmente reversible, pero comprueba después de activarlo aquello de lo que dependes."
     },
     "athena_service": {
       "name": "Athena Background Killer",
@@ -150,7 +198,7 @@
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Which cores handle incoming network packets. Stock leaves every packet on the one core the interrupt landed on, which caps throughput on fast WiFi and pins that core high. Little spreads the work across the efficiency cluster; all uses every core. Waking a second core costs a little CPU, so this earns its keep on a fast link and loses on a slow one.",
+      "desc": "Qué núcleos atienden los paquetes de red entrantes. De fábrica cada paquete se queda en el núcleo donde llegó la interrupción, lo que limita la velocidad en Wi-Fi rápido y mantiene ese núcleo alto. «Pequeños» reparte en el clúster eficiente, «todos» usa cada núcleo. Despertar un segundo núcleo cuesta algo de CPU, así que compensa en un enlace rápido y no en uno lento.",
       "descOpt": {
         "stock": "Every packet stays on the core its interrupt landed on - Android's own behaviour.",
         "little": "Spread across the efficiency cluster. The safer of the two.",
@@ -159,7 +207,7 @@
     },
     "net_txqueue": {
       "name": "Transmit Queue",
-      "desc": "How many packets may wait to be sent. The stock 1000 is a wired-Ethernet default from the 1990s that survived into wireless drivers; on a link as variable as WiFi a deep queue mostly adds latency under load rather than throughput. If uploads feel slower, go back to stock.",
+      "desc": "Cuántos paquetes pueden esperar para enviarse. Los 1000 de fábrica son un valor por defecto del Ethernet por cable de los años 90 que sobrevivió en los controladores inalámbricos; en un enlace tan variable como el Wi-Fi una cola profunda añade más latencia que velocidad. Si las subidas parecen más lentas, vuelve a de fábrica.",
       "descOpt": {
         "stock": "1000 packets, as the driver ships.",
         "short": "256. Less delay under load, same throughput on most links.",
