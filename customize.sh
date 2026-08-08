@@ -100,6 +100,19 @@ asb_fix_layout() {
   # ensure SELinux context on the (now sole) system/vendor tree is correct
   if [ -d "$MODPATH/system/vendor/etc" ]; then
     set_perm_recursive "$MODPATH/system/vendor/etc" 0 2000 0755 0644 u:object_r:vendor_configs_file:s0 2>/dev/null || true
+
+  # WebUI assets, including the i18n/ subdirectory added in V63.
+  #
+  # The root manager's WebView fetches these over file:// as an unprivileged renderer, so a
+  # directory it cannot traverse or a file it cannot read simply returns nothing - and the
+  # synchronous load falls through to English with no error anywhere. Reported as: fresh
+  # install shows an English interface while the language picker correctly highlights
+  # Russian, because ASB_LANG was right and only the strings were missing.
+  #
+  # Directories need 0755 (traversable), files 0644 (readable). The template's default pass
+  # does not reach a subdirectory created after it runs.
+  [ -d "$MODPATH/webroot" ] \
+    && set_perm_recursive "$MODPATH/webroot" 0 0 0755 0644 2>/dev/null || true
   fi
 
   # FINAL cleanup — this is the very last thing the installer does. The Magisk
