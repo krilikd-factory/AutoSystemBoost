@@ -343,6 +343,12 @@ jobs:
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
           ZIP_DBG="ASB-${ASB_VER}-debug.zip"
           rm -f "$ZIP_DBG"
+          # WebUI assets readable by the root manager's WebView. The zip preserves modes,
+          # so getting them right here is what customize.sh then re-asserts on device -
+          # a webroot/i18n that is not world-readable loads no translations at all.
+          chmod 0755 "$PKG_REL/webroot" "$PKG_REL/webroot/i18n" 2>/dev/null || true
+          find "$PKG_REL/webroot" -type f -exec chmod 0644 {} + 2>/dev/null || true
+          find "$PKG_REL/webroot" -type d -exec chmod 0755 {} + 2>/dev/null || true
           ( cd "$PKG_DBG" && zip -rq "../$ZIP_DBG" . -x "*.DS_Store" )
           echo "ZIP_DBG=$ZIP_DBG" >> $GITHUB_ENV
           echo "ASB_VER=$ASB_VER" >> $GITHUB_ENV
