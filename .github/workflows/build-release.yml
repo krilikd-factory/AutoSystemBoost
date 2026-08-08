@@ -32,6 +32,8 @@ jobs:
           for f in \
             src/asb_governor.c \
             common/englishtext.sh \
+            common/frenchtext.sh \
+            common/armeniantext.sh \
             "webroot/i18n/en.json" \
             "webroot/i18n/ru.json" \
             "webroot/i18n/uk.json" \
@@ -41,10 +43,10 @@ jobs:
             "webroot/i18n/tr.json" \
             "webroot/i18n/id.json" \
             "webroot/i18n/it.json" \
+            "webroot/i18n/fr.json" \
             "webroot/i18n/ar.json" \
             "webroot/i18n/zh.json" \
             "webroot/i18n/hy.json" \
-            "webroot/i18n/fr.json" \
             common/russiantext.sh \
             common/ukrainiantext.sh \
             common/germantext.sh \
