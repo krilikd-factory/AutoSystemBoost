@@ -2423,11 +2423,24 @@ var I18N = { en: {} };
 function T(key, fallback) {
   var L = I18N[ASB_LANG];
   if (L && L[key] != null) return L[key];
-  return fallback != null ? fallback : key;
+  // English is the universal fallback: every other language is an overlay on it, so a
+  // key missing from a partial translation should read English rather than nothing.
+  if (I18N.en && I18N.en[key] != null) return I18N.en[key];
+  // An explicit null means "tell me you have nothing" - callers like grpName test the
+  // result and supply their own fallback. Returning the key there put grp_audio on the
+  // screen as if it were a label, which is what the English UI was showing: the caller
+  // saw a non-empty string and had no way to know it was the lookup key.
+  if (fallback === null) return null;
+  return fallback !== undefined ? fallback : key;
 }
 function Tcfg(cfgKey, field, fallback) {
   var L = I18N[ASB_LANG];
   if (L && L.cfg && L.cfg[cfgKey] && L.cfg[cfgKey][field] != null) return L.cfg[cfgKey][field];
+  // Same English overlay as T. The caller passes the string from CFG_ITEMS as fallback,
+  // which is already English - but a locale file may carry a better English wording for
+  // a card than the source literal, and this keeps the two paths consistent.
+  if (I18N.en && I18N.en.cfg && I18N.en.cfg[cfgKey] && I18N.en.cfg[cfgKey][field] != null)
+    return I18N.en.cfg[cfgKey][field];
   return fallback;
 }
 function Topt(o, key) {
