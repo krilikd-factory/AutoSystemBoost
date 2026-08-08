@@ -2373,11 +2373,20 @@ var I18N = { en: {} };
 
 (function loadI18N() {
   function readLang(code) {
+    // Two attempts, because a silent miss here costs the whole translation.
+    //
+    // A file the WebView cannot read returns status 0 with an empty body, which parsed
+    // as a failure and dropped the language without a word: the UI came up English
+    // while the picker still highlighted Russian, since ASB_LANG had resolved fine and
+    // only the strings were missing. Retrying through the shell covers the case where
+    // file:// access is blocked but the module's own runner is not.
     try {
       var x = new XMLHttpRequest();
       x.open('GET', 'i18n/' + code + '.json', false);   // false = synchronous
       x.send(null);
-      if (x.status === 200 || x.status === 0) return JSON.parse(x.responseText);
+      if ((x.status === 200 || x.status === 0) && x.responseText) {
+        return JSON.parse(x.responseText);
+      }
     } catch (e) {}
     return null;
   }
@@ -2411,7 +2420,14 @@ var I18N = { en: {} };
   })();
   if (want !== 'en') {
     var d = readLang(want);
-    if (d) I18N[want] = d;
+    if (d) {
+      I18N[want] = d;
+    } else {
+      // Leave a trace. This failure is invisible from the screen - everything renders,
+      // just in the wrong language - so without a log line the only symptom is a
+      // confused user.
+      try { console.warn('ASB: i18n/' + want + '.json could not be read; using English'); } catch (e) {}
+    }
   }
 })();
 
