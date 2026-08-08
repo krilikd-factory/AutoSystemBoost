@@ -306,6 +306,8 @@ case "$(printf '%s' "$LANG" | tr '[:upper:]' '[:lower:]')" in
   *tr-*|*tr_*|tr)  _asb_lang_file=turkishtext.sh    ;;
   *in-*|*id-*|*id_*|id) _asb_lang_file=indonesiantext.sh ;;
   *it-*|*it_*|it)  _asb_lang_file=italiantext.sh   ;;
+  *fr-*|*fr_*|fr)  _asb_lang_file=frenchtext.sh    ;;
+  *hy-*|*hy_*|hy)  _asb_lang_file=armeniantext.sh  ;;
   *ar-*|*ar_*|ar)  _asb_lang_file=arabictext.sh    ;;
   # zh covers Simplified; zh-TW/zh-HK fall through to English rather than being shown
   # Simplified text, which is a different language rather than a dialect of the same one.
