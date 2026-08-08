@@ -1707,14 +1707,34 @@ body.config-active #livePage.open {
 .cfg-lang-pop button.active { color: var(--accent, #22d3ee); font-weight: 700; }
 .cfg-lang-pop button.active::after { content: '\2713'; font-size: 12.5px; opacity: .9; }
 
-#cfgToolsRow { display: flex; gap: 8px; margin: 0 0 16px; align-items: stretch; }
+/* Wraps when the row runs out of width.
+ *
+ * Three controls share this row: the language button (min-width 118px) and two backup
+ * buttons. Now that the backup buttons size from their text, Turkish ("Dışa aktar") and
+ * Armenian ask for noticeably more than English - and without wrapping the three would
+ * squeeze each other back into the ellipsis this change was meant to remove.
+ *
+ * Wrapping costs one extra row on a narrow screen, which is better than three clipped
+ * labels on every screen. */
+#cfgToolsRow { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; align-items: stretch; }
+#cfgBackupWrap { min-width: 0; }
 #cfgLangWrap { flex: 0 0 auto; display: flex; }
 .cfg-lang-sel { min-width: 0; width: auto; padding: 9px 28px 9px 11px; font-size: 12px; }
 #cfgBackupWrap { display: flex; gap: 8px; flex: 1 1 auto; }
 .cfg-backup {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 9px 4px;
+  /* Size from the text, not from an equal share of the row.
+   *
+   * flex: 1 1 0 gives every button the same width regardless of what is written on it,
+   * and min-width: 0 lets that width fall below the label - so "\u2191 Import" clipped to
+   * "\u2191 Imp..." while the row still had space. flex-basis: auto starts from the
+   * content and only then shares what is left over.
+   *
+   * The ellipsis stays as the last resort for a language whose word is genuinely too
+   * long for a narrow screen - but it should not be reached by a seven-character
+   * English word on a phone that is 400px wide. */
+  flex: 1 1 auto;
+  min-width: fit-content;
+  padding: 9px 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   border-radius: 12px;
@@ -1845,7 +1865,11 @@ body.config-active #livePage.open {
 }
 .cfg-sel-pop button.active { color: var(--accent, #22d3ee); font-weight: 700; }
 .cfg-sel-pop button.active::after { content: '\2713'; font-size: 12px; opacity: .9; margin-left: 10px; }
-@media (max-width: 400px) { .cfg-sel-btn { min-width: 100px; font-size: 12px; } } }
+/* One closing brace too many used to end this line, which silently swallowed the rule
+ * that followed it - the browser treats the stray } as the end of the stylesheet block
+ * and resumes parsing mid-declaration. Present before this change; found by counting
+ * braces while checking something else. */
+@media (max-width: 400px) { .cfg-sel-btn { min-width: 100px; font-size: 12px; } }
 
 .cfg-seg {
   display: inline-flex;
@@ -2347,6 +2371,12 @@ const ASB_LANG = (function() {
     var saved = null;
     try { saved = localStorage.getItem('asb_lang'); } catch (e) {}
     if (saved) {
+      // 'en' is a valid choice and is NOT in ASB_LANGS - that list is the set of
+      // translations layered over English, so English itself is absent from it. A
+      // stored 'en' matched nothing here and fell through to the system locale, which
+      // is why picking English on a Russian phone came back Russian while picking
+      // Spanish worked. The loader below already had this guard; this copy did not.
+      if (saved === 'en') return 'en';
       for (var j = 0; j < ASB_LANGS.length; j++) {
         if (ASB_LANGS[j] === saved) return saved;
       }
