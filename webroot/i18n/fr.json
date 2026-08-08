@@ -87,10 +87,12 @@
   "t_rebooting": "Перезагрузка…",
   "cfg": {
     "doze_trim_whitelist": {
-      "desc": "Retire vos applications de la liste des exemptions de veille profonde ; les applications système (téléphone, SMS, horloge, gestionnaire root) ne sont pas touchées. Le bouton ci-dessous montre quelles applications sont exemptées et permet de conserver celles dont vous avez besoin."
+      "desc": "Retire vos applications de la liste des exemptions de veille profonde ; les applications système (téléphone, SMS, horloge, gestionnaire root) ne sont pas touchées. Le bouton ci-dessous montre quelles applications sont exemptées et permet de conserver celles dont vous avez besoin.",
+      "name": "Réduire les exemptions Doze"
     },
     "audio_remove_volume_limit": {
-      "desc": "Retire la limite de volume du casque imposée par la réglementation européenne. ATTENTION : une écoute prolongée à fort volume abîme l’audition. Désactivé par défaut pour cette raison."
+      "desc": "Retire la limite de volume du casque imposée par la réglementation européenne. ATTENTION : une écoute prolongée à fort volume abîme l’audition. Désactivé par défaut pour cette raison.",
+      "name": "Limite de volume du casque"
     },
     "gms_trim": {
       "descOpt": {
@@ -98,13 +100,16 @@
         "lite": "Fewer background jobs, nothing disabled.",
         "strict": "Noticeably fewer. Some sync may be delayed."
       },
-      "desc": "Restreint ce que les services Google peuvent faire en arrière-plan, sans rien désactiver. «Strict» réduit nettement : certaines synchronisations peuvent être retardées."
+      "desc": "Restreint ce que les services Google peuvent faire en arrière-plan, sans rien désactiver. «Strict» réduit nettement : certaines synchronisations peuvent être retardées.",
+      "name": "Limiter les services Google"
     },
     "dsp_outputs": {
-      "desc": "Les sorties auxquelles s’applique l’effet DSP. Auparavant il s’accrochait à tout à la fois, si bien qu’un gain destiné au casque montait aussi le haut-parleur du téléphone, le moins apte à l’encaisser."
+      "desc": "Les sorties auxquelles s’applique l’effet DSP. Auparavant il s’accrochait à tout à la fois, si bien qu’un gain destiné au casque montait aussi le haut-parleur du téléphone, le moins apte à l’encaisser.",
+      "name": "Sorties du DSP"
     },
     "anim_speed": {
-      "desc": "À quelle vitesse le système dessine les transitions. «Selon le profil» correspond à l’ancien comportement : la vitesse était choisie par le profil d’énergie, la réactivité de l’interface était donc un effet secondaire d’un réglage de batterie. C’est désormais un choix à part."
+      "desc": "À quelle vitesse le système dessine les transitions. «Selon le profil» correspond à l’ancien comportement : la vitesse était choisie par le profil d’énergie, la réactivité de l’interface était donc un effet secondaire d’un réglage de batterie. C’est désormais un choix à part.",
+      "name": "Vitesse des animations"
     },
     "phantom_procs": {
       "descOpt": {
@@ -112,10 +117,12 @@
         "relaxed": "No limit. Terminal sessions and background compiles survive.",
         "strict": "Limit of 32. Fewer background processes than stock allows."
       },
-      "desc": "La limite d’Android sur les processus enfants en arrière-plan — c’est elle qui tue les sessions de terminal et les compilations en cours de route. «Aucune limite» la retire entièrement."
+      "desc": "La limite d’Android sur les processus enfants en arrière-plan — c’est elle qui tue les sessions de terminal et les compilations en cours de route. «Aucune limite» la retire entièrement.",
+      "name": "Limite de processus en arrière-plan"
     },
     "camera_hold_enable": {
-      "desc": "Pendant que la caméra diffuse, le governor cesse de baisser les fréquences et conserve les cœurs déjà occupés. C’est ce qui évite une image perdue dans une rafale ou une vidéo, au prix d’un peu de batterie tant que l’application reste ouverte. «Désactivé» laisse le governor brider la caméra comme n’importe quelle autre application."
+      "desc": "Pendant que la caméra diffuse, le governor cesse de baisser les fréquences et conserve les cœurs déjà occupés. C’est ce qui évite une image perdue dans une rafale ou une vidéo, au prix d’un peu de batterie tant que l’application reste ouverte. «Désactivé» laisse le governor brider la caméra comme n’importe quelle autre application.",
+      "name": "Maintenir les performances avec l’appareil photo"
     },
     "bt_a2dp_offload": {
       "descOpt": {
@@ -123,13 +130,16 @@
         "on": "Hardware encoding. Less battery, and usually what the phone ships with.",
         "off": "CPU encoding. Needed for some equaliser apps to see the stream at all."
       },
-      "desc": "Qui encode l’audio Bluetooth : le bloc matériel dédié ou le processeur. «Auto» n’intervient pas : ce que la ROM a choisi reste en place. «Activé» force l’encodage matériel (souvent identique au réglage d’usine, mais écrit ici par ASB). «Désactivé» déplace le travail sur le processeur, ce dont certains codecs et égaliseurs ont besoin pour fonctionner du tout."
+      "desc": "Qui encode l’audio Bluetooth : le bloc matériel dédié ou le processeur. «Auto» n’intervient pas : ce que la ROM a choisi reste en place. «Activé» force l’encodage matériel (souvent identique au réglage d’usine, mais écrit ici par ASB). «Désactivé» déplace le travail sur le processeur, ce dont certains codecs et égaliseurs ont besoin pour fonctionner du tout.",
+      "name": "Déchargement audio Bluetooth"
     },
     "night_quiet_enable": {
-      "desc": "La nuit, quand l’écran est éteint depuis longtemps, le governor cesse son propre travail périodique et laisse l’appareil dormir plus profondément. C’est de là que vient l’essentiel de l’économie nocturne."
+      "desc": "La nuit, quand l’écran est éteint depuis longtemps, le governor cesse son propre travail périodique et laisse l’appareil dormir plus profondément. C’est de là que vient l’essentiel de l’économie nocturne.",
+      "name": "Nuit calme"
     },
     "bat_suppress_gaming": {
-      "desc": "Dans le profil «Batterie», un jeu compte comme une charge lourde ordinaire et non comme une raison d’entrer en mode jeu. Le mode jeu relève les plafonds de fréquence, c’est-à-dire l’inverse de ce pour quoi on choisit «Batterie». Ne concerne que ce profil."
+      "desc": "Dans le profil «Batterie», un jeu compte comme une charge lourde ordinaire et non comme une raison d’entrer en mode jeu. Le mode jeu relève les plafonds de fréquence, c’est-à-dire l’inverse de ce pour quoi on choisit «Batterie». Ne concerne que ce profil.",
+      "name": "Pas de mode jeu en profil Batterie"
     },
     "doze_level": {
       "descOpt": {
@@ -138,7 +148,8 @@
         "moderate": "Idle after 5 minutes. The change most people want.",
         "aggressive": "Idle after 2 minutes, plus shorter sensing and locating windows. Apps that poll on their own can be late; high-priority push still arrives."
       },
-      "desc": "À quelle vitesse Android place le téléphone en veille profonde après l’extinction de l’écran. L’origine attend 30 minutes — sur un téléphone repris en main toutes les quelques minutes, ces 30 minutes n’arrivent jamais. LE PRIX : en veille profonde, le système retient le réseau d’arrière-plan jusqu’à la prochaine fenêtre de maintenance ; une application qui interroge le serveur elle-même peut donc arriver en retard — les push prioritaires passent toujours."
+      "desc": "À quelle vitesse Android place le téléphone en veille profonde après l’extinction de l’écran. L’origine attend 30 minutes — sur un téléphone repris en main toutes les quelques minutes, ces 30 minutes n’arrivent jamais. LE PRIX : en veille profonde, le système retient le réseau d’arrière-plan jusqu’à la prochaine fenêtre de maintenance ; une application qui interroge le serveur elle-même peut donc arriver en retard — les push prioritaires passent toujours.",
+      "name": "Sommeil profond"
     },
     "log_level": {
       "descOpt": {
@@ -148,7 +159,8 @@
         "2": "Detailed: adds learner updates and screen transitions. Turn this on before sending a battery log.",
         "3": "Verbose. Fills the log fast; only while reproducing something."
       },
-      "desc": "Combien le module écrit dans son journal et combien l’appareil journalise lui-même. «D’origine» est la seule valeur qui ne touche pas du tout à la journalisation du téléphone. «0» est extrême : il coupe journaux et sorties de débogage autant que possible, économise des écritures et des réveils — et rend presque inutile tout rapport d’anomalie venant de ce téléphone, y compris le nôtre."
+      "desc": "Combien le module écrit dans son journal et combien l’appareil journalise lui-même. «D’origine» est la seule valeur qui ne touche pas du tout à la journalisation du téléphone. «0» est extrême : il coupe journaux et sorties de débogage autant que possible, économise des écritures et des réveils — et rend presque inutile tout rapport d’anomalie venant de ce téléphone, y compris le nôtre.",
+      "name": "Détail des journaux"
     },
     "sustained_temp_mode": {
       "descOpt": {
@@ -156,76 +168,99 @@
         "smart": "Starts from that point and nudges it up when sessions heat quickly.",
         "manual": "Exactly the temperature on the slider below. Nothing moves it."
       },
-      "desc": "Quand ASB commence à retenir les performances pour garder le téléphone plus frais. «D’origine» utilise le point de déclenchement de votre appareil, lu au démarrage dans la zone thermique du processeur. «Intelligent» part de là et le relève de 2 degrés quand une session atteint la charge soutenue en moins d’une minute. «Manuel» fixe exactement la valeur du curseur ci-dessous."
+      "desc": "Quand ASB commence à retenir les performances pour garder le téléphone plus frais. «D’origine» utilise le point de déclenchement de votre appareil, lu au démarrage dans la zone thermique du processeur. «Intelligent» part de là et le relève de 2 degrés quand une session atteint la charge soutenue en moins d’une minute. «Manuel» fixe exactement la valeur du curseur ci-dessous.",
+      "name": "Point de bridage"
     },
     "sustained_temp_enter": {
-      "desc": "La température à laquelle ASB commence à retenir les performances. Plus bas signifie intervenir plus tôt : un téléphone plus frais qui ralentit plus tôt. IMPORTANT : une valeur inférieure à la température à laquelle le téléphone est simplement posé (généralement 38–48 °C) signifie que le bridage est TOUJOURS actif — fréquences plafonnées en permanence, le travail dure plus longtemps, et le téléphone finit plus chaud et plus vide, pas plus frais. D’où le minimum de 52 °C."
+      "desc": "La température à laquelle ASB commence à retenir les performances. Plus bas signifie intervenir plus tôt : un téléphone plus frais qui ralentit plus tôt. IMPORTANT : une valeur inférieure à la température à laquelle le téléphone est simplement posé (généralement 38–48 °C) signifie que le bridage est TOUJOURS actif — fréquences plafonnées en permanence, le travail dure plus longtemps, et le téléphone finit plus chaud et plus vide, pas plus frais. D’où le minimum de 52 °C.",
+      "name": "Température de bridage"
     },
     "audio_profile": {
-      "desc": "Qui traite le son. «Compatible EQ» transmet le signal intact à un EQ/ViPER externe. «Hi-Fi» active UHQA quand aucun EQ n’est utilisé. «D’origine» ne garde que les réglages de base. S’applique sans redémarrage."
+      "desc": "Qui traite le son. «Compatible EQ» transmet le signal intact à un EQ/ViPER externe. «Hi-Fi» active UHQA quand aucun EQ n’est utilisé. «D’origine» ne garde que les réglages de base. S’applique sans redémarrage.",
+      "name": "Profil audio"
     },
     "audio_dac_hifi": {
-      "desc": "Configuration du codec, pas du logiciel : compandeurs du casque désactivés, HPH Mode → CLS_H_HIFI. N’entre pas en conflit avec un EQ externe : il lui offre un DAC plus propre. Redémarrage requis."
+      "desc": "Configuration du codec, pas du logiciel : compandeurs du casque désactivés, HPH Mode → CLS_H_HIFI. N’entre pas en conflit avec un EQ externe : il lui offre un DAC plus propre. Redémarrage requis.",
+      "name": "DAC Hi-Fi (mixeur)"
     },
     "CAMERA_LEVEL": {
-      "desc": "Intensité de couleur, contraste et détail pour les photos et vidéos : 0 = d’origine, plus haut = plus saturé et contrasté. Fonctionne de façon RELATIVE : multiplie les valeurs réellement présentes dans votre ROM, sans dépendre des chiffres choisis par le constructeur."
+      "desc": "Intensité de couleur, contraste et détail pour les photos et vidéos : 0 = d’origine, plus haut = plus saturé et contrasté. Fonctionne de façon RELATIVE : multiplie les valeurs réellement présentes dans votre ROM, sans dépendre des chiffres choisis par le constructeur.",
+      "name": "Traitement photo"
     },
     "CAMERA_GRAIN": {
-      "desc": "Après la réduction de bruit, l’appareil réintroduit du grain : une image parfaitement lisse paraît plastique. 3 est l’origine : plus bas pour un rendu net, plus haut pour une texture marquée, 0 supprime le grain entièrement."
+      "desc": "Après la réduction de bruit, l’appareil réintroduit du grain : une image parfaitement lisse paraît plastique. 3 est l’origine : plus bas pour un rendu net, plus haut pour une texture marquée, 0 supprime le grain entièrement.",
+      "name": "Grain argentique"
     },
     "CAMERA_CONTRAST": {
-      "desc": "Contraste et saturation de la courbe tonale. 3 correspond exactement à l’origine (100%), 0 est plus plat (70%), 6 nettement plus contrasté (130%). Indépendant du «Niveau de traitement», qui agit sur la matrice des couleurs."
+      "desc": "Contraste et saturation de la courbe tonale. 3 correspond exactement à l’origine (100%), 0 est plus plat (70%), 6 nettement plus contrasté (130%). Indépendant du «Niveau de traitement», qui agit sur la matrice des couleurs.",
+      "name": "Contraste et profondeur de couleur"
     },
     "CAMERA_PORTRAIT": {
-      "desc": "Traitement neuronal des visages : la ROM d’usine le laisse désactivé (poids 0.0), on écrit donc ici des valeurs absolues et non un multiplicateur. Uniquement à la hausse : si la ROM contient déjà plus que le niveau demandé, rien ne change."
+      "desc": "Traitement neuronal des visages : la ROM d’usine le laisse désactivé (poids 0.0), on écrit donc ici des valeurs absolues et non un multiplicateur. Uniquement à la hausse : si la ROM contient déjà plus que le niveau demandé, rien ne change.",
+      "name": "IA portrait"
     },
     "CAMERA_LOWLIGHT": {
-      "desc": "Le macro et la faible lumière ont leur propre échelle de netteté, et c’est là que l’excès se voit le plus : sujets proches et ISO élevés accentuent les halos. 0 suit le traitement principal ; ne montez que si ces modes paraissent mous."
+      "desc": "Le macro et la faible lumière ont leur propre échelle de netteté, et c’est là que l’excès se voit le plus : sujets proches et ISO élevés accentuent les halos. 0 suit le traitement principal ; ne montez que si ces modes paraissent mous.",
+      "name": "Netteté macro et faible lumière"
     },
     "smart_battery_bias": {
-      "desc": "À quel point Smart penche vers l’autonomie. Plus haut, il garde les fréquences basses plus longtemps ; plus bas, il les libère plus tôt. À partir de 400, Smart se comporte presque comme «Batterie» même en usage actif."
+      "desc": "À quel point Smart penche vers l’autonomie. Plus haut, il garde les fréquences basses plus longtemps ; plus bas, il les libère plus tôt. À partir de 400, Smart se comporte presque comme «Batterie» même en usage actif.",
+      "name": "Inclinaison batterie Smart"
     },
     "CAMERA_AGGRESSIVE_INJECT": {
       "desc": "SÛR : uniquement les clés de ton présentes. AGRESSIF injecte celles qui manquent (OnePlus 13/12) — risqué, revenez à SÛR en cas de problème."
     },
     "media_loudness": {
-      "desc": "Plus fort aux positions du curseur que vous utilisez vraiment : léger ≈+3 dB, fort ≈+6, maximum ≈+10. Ne touche ni les crans les plus bas, ni les alarmes, ni les sonneries, et ne peut pas saturer. Au maximum, le haut du curseur devient plus grossier. Redémarrage requis."
+      "desc": "Plus fort aux positions du curseur que vous utilisez vraiment : léger ≈+3 dB, fort ≈+6, maximum ≈+10. Ne touche ni les crans les plus bas, ni les alarmes, ni les sonneries, et ne peut pas saturer. Au maximum, le haut du curseur devient plus grossier. Redémarrage requis.",
+      "name": "Volume multimédia"
     },
     "dsp_loudness": {
-      "desc": "Gain de volume du moteur audio d’ASB, au-delà du maximum système. Le limiteur doux empêche la saturation : la sortie est bornée par construction, les décibels supplémentaires changent donc la densité du son, pas sa propreté."
+      "desc": "Gain de volume du moteur audio d’ASB, au-delà du maximum système. Le limiteur doux empêche la saturation : la sortie est bornée par construction, les décibels supplémentaires changent donc la densité du son, pas sa propreté.",
+      "name": "Gain DSP"
     },
     "dsp_bass": {
-      "desc": "Gain des basses fréquences par le même moteur. Agit sur la sortie choisie dans «Sorties DSP»."
+      "desc": "Gain des basses fréquences par le même moteur. Agit sur la sortie choisie dans «Sorties DSP».",
+      "name": "Renfort de basses DSP"
     },
     "dsp_compressor": {
-      "desc": "Comprime la dynamique : les sons faibles deviennent audibles, les forts cessent de frapper. Utile en déplacement et dans la rue, superflu pour une écoute attentive à la maison."
+      "desc": "Comprime la dynamique : les sons faibles deviennent audibles, les forts cessent de frapper. Utile en déplacement et dans la rue, superflu pour une écoute attentive à la maison.",
+      "name": "Compresseur DSP"
     },
     "bt_absvol_mode": {
-      "desc": "«D’origine» : une seule échelle, le curseur du téléphone déplace directement le volume du casque. «Désactiver» : échelles indépendantes, le téléphone applique son propre gain par-dessus celui du casque — c’est plus fort, et c’est ce dont ViPER et les égaliseurs ont besoin. Le prix : les échelles ne coïncident plus et sur certains casques les crans bas deviennent grossiers."
+      "desc": "«D’origine» : une seule échelle, le curseur du téléphone déplace directement le volume du casque. «Désactiver» : échelles indépendantes, le téléphone applique son propre gain par-dessus celui du casque — c’est plus fort, et c’est ce dont ViPER et les égaliseurs ont besoin. Le prix : les échelles ne coïncident plus et sur certains casques les crans bas deviennent grossiers.",
+      "name": "Contrôle du volume Bluetooth"
     },
     "cool_gaming": {
-      "desc": "Dans les jeux, le seuil thermique intervient plus tôt : le téléphone reste plus frais au prix de quelques images. Utile lors des longues sessions, superflu pour les courtes."
+      "desc": "Dans les jeux, le seuil thermique intervient plus tôt : le téléphone reste plus frais au prix de quelques images. Utile lors des longues sessions, superflu pour les courtes.",
+      "name": "Jeu au frais"
     },
     "charge_aware_enable": {
-      "desc": "En charge, il accorde plus de marge ; en cas de chaleur, moins. Un téléphone branché n’a aucune raison d’économiser comme sur batterie."
+      "desc": "En charge, il accorde plus de marge ; en cas de chaleur, moins. Un téléphone branché n’a aucune raison d’économiser comme sur batterie.",
+      "name": "Mode charge"
     },
     "auto_battery_enable": {
-      "desc": "À 20% de charge, le profil bascule seul sur «Batterie» et revient à 21% après la recharge. Le chiffre du réglage correspond à celui de l’icône de batterie."
+      "desc": "À 20% de charge, le profil bascule seul sur «Batterie» et revient à 21% après la recharge. Le chiffre du réglage correspond à celui de l’icône de batterie.",
+      "name": "Profil batterie automatique"
     },
     "BG_TRIM_LEVEL": {
-      "desc": "À quel point les applications en arrière-plan sont déchargées. «Sûr» reste prudent, «agressif» libère plus de mémoire au prix de quelques applications qui redémarrent au retour."
+      "desc": "À quel point les applications en arrière-plan sont déchargées. «Sûr» reste prudent, «agressif» libère plus de mémoire au prix de quelques applications qui redémarrent au retour.",
+      "name": "Nettoyage de l’arrière-plan"
     },
     "UX_MANAGE_TIMEOUTS": {
-      "desc": "Performance raccourcit les animations (~0,8x) ainsi que les fenêtres d’appui long et de multi-appui pour la réactivité ; Batterie reste d’origine. DÉSACTIVÉ = ne toucher à rien."
+      "desc": "Performance raccourcit les animations (~0,8x) ainsi que les fenêtres d’appui long et de multi-appui pour la réactivité ; Batterie reste d’origine. DÉSACTIVÉ = ne toucher à rien.",
+      "name": "Gérer la vitesse de l’interface"
     },
     "UX_MANAGE_OEM_TOGGLES": {
-      "desc": "Autorise ASB à gérer les interrupteurs système d’OxygenOS : extension de RAM, optimisation de la batterie, gestion de la chaleur. DÉSACTIVÉ = ne pas y toucher du tout, et vos réglages restent les vôtres."
+      "desc": "Autorise ASB à gérer les interrupteurs système d’OxygenOS : extension de RAM, optimisation de la batterie, gestion de la chaleur. DÉSACTIVÉ = ne pas y toucher du tout, et vos réglages restent les vôtres.",
+      "name": "Gérer les réglages du constructeur"
     },
     "UX_ANIM_FORCE_RESTART": {
-      "desc": "Presque jamais nécessaire. WindowManager relit les échelles d’animation juste après l’écriture : changer le réglage suffit. Cet interrupteur n’existe que pour recueillir des diagnostics."
+      "desc": "Presque jamais nécessaire. WindowManager relit les échelles d’animation juste après l’écriture : changer le réglage suffit. Cet interrupteur n’existe que pour recueillir des diagnostics.",
+      "name": "Forcer le redémarrage des animations"
     },
     "disable_blur": {
-      "desc": "Désactive le flou partout : volet, notifications, panneau de volume, transitions. Moins de charge GPU, le volet devient opaque au lieu de dépoli. À noter : la notification affichée perd aussi son fond flouté."
+      "desc": "Désactive le flou partout : volet, notifications, panneau de volume, transitions. Moins de charge GPU, le volet devient opaque au lieu de dépoli. À noter : la notification affichée perd aussi son fond flouté.",
+      "name": "Désactiver le flou"
     },
     "ui_effects_level": {
       "descOpt": {
@@ -233,25 +268,32 @@
         "stock": "Normal effects, as the device shipped.",
         "flat": "Simplified. Recents becomes a plain list and OxygenOS hides the Cards/Simple selector entirely. OnePlus 15 only."
       },
-      "desc": "À quel point le système dessine richement les transitions et les Récents. «Normaux» correspond à la sortie d’usine. «Simplifiés» utilise moins d’effets et un peu moins de GPU. IMPORTANT : en simplifié, les Récents deviennent une simple liste et OxygenOS SUPPRIME entièrement le sélecteur Cartes/Simple. Disponible uniquement sur le OnePlus 15."
+      "desc": "À quel point le système dessine richement les transitions et les Récents. «Normaux» correspond à la sortie d’usine. «Simplifiés» utilise moins d’effets et un peu moins de GPU. IMPORTANT : en simplifié, les Récents deviennent une simple liste et OxygenOS SUPPRIME entièrement le sélecteur Cartes/Simple. Disponible uniquement sur le OnePlus 15.",
+      "name": "Animations du système"
     },
     "net_congestion": {
-      "desc": "Comment le téléphone monte en débit lors d’un téléchargement — pour les réseaux que les deux cartes ci-dessous ne couvrent pas : partage USB, VPN, partage Bluetooth, Ethernet. Le Wi-Fi et le mobile prennent leurs valeurs dans les cartes ci-dessous. «bbr» s’adapte à la vitesse réelle, «cubic» est le classique. Sur un noyau d’origine bbr manque généralement, et la carte écrit honnêtement «non pris en charge»."
+      "desc": "Comment le téléphone monte en débit lors d’un téléchargement — pour les réseaux que les deux cartes ci-dessous ne couvrent pas : partage USB, VPN, partage Bluetooth, Ethernet. Le Wi-Fi et le mobile prennent leurs valeurs dans les cartes ci-dessous. «bbr» s’adapte à la vitesse réelle, «cubic» est le classique. Sur un noyau d’origine bbr manque généralement, et la carte écrit honnêtement «non pris en charge».",
+      "name": "Démarrage des téléchargements · autres"
     },
     "net_qdisc": {
-      "desc": "Comment le téléphone partage la connexion entre les applications — pour les réseaux que les deux cartes ci-dessous ne couvrent pas : partage USB, VPN, partage Bluetooth, adaptateur Ethernet. «fq_codel» convient à la plupart : la vidéo cesse de saccader quand quelque chose télécharge en arrière-plan. «cake» est le plus soigneux mais un peu plus lourd pour le processeur."
+      "desc": "Comment le téléphone partage la connexion entre les applications — pour les réseaux que les deux cartes ci-dessous ne couvrent pas : partage USB, VPN, partage Bluetooth, adaptateur Ethernet. «fq_codel» convient à la plupart : la vidéo cesse de saccader quand quelque chose télécharge en arrière-plan. «cake» est le plus soigneux mais un peu plus lourd pour le processeur.",
+      "name": "File de paquets · autres"
     },
     "net_congestion_wifi": {
-      "desc": "Accélération des téléchargements pour le Wi-Fi seulement. «Comme général» reprend la valeur de la carte au-dessus. Une valeur distincte sert quand Wi-Fi et mobile appellent des réponses différentes : ils fonctionnent en même temps sans se gêner."
+      "desc": "Accélération des téléchargements pour le Wi-Fi seulement. «Comme général» reprend la valeur de la carte au-dessus. Une valeur distincte sert quand Wi-Fi et mobile appellent des réponses différentes : ils fonctionnent en même temps sans se gêner.",
+      "name": "Démarrage des téléchargements · Wi-Fi"
     },
     "net_congestion_mobile": {
-      "desc": "Accélération des téléchargements pour le mobile seulement. «Comme général» reprend la valeur de la carte au-dessus. Ici bbr l’emporte le plus souvent : sur une liaison radio, un paquet perdu signale une interférence et non un embouteillage, et cubic sacrifie du débit pour rien."
+      "desc": "Accélération des téléchargements pour le mobile seulement. «Comme général» reprend la valeur de la carte au-dessus. Ici bbr l’emporte le plus souvent : sur une liaison radio, un paquet perdu signale une interférence et non un embouteillage, et cubic sacrifie du débit pour rien.",
+      "name": "Démarrage des téléchargements · mobile"
     },
     "net_qdisc_wifi": {
-      "desc": "File d’attente des paquets pour le Wi-Fi seulement. «Comme général» reprend la valeur de la carte au-dessus. Indépendant du réseau mobile."
+      "desc": "File d’attente des paquets pour le Wi-Fi seulement. «Comme général» reprend la valeur de la carte au-dessus. Indépendant du réseau mobile.",
+      "name": "File de paquets · Wi-Fi"
     },
     "net_qdisc_mobile": {
-      "desc": "File d’attente des paquets pour le mobile seulement. «Comme général» reprend la valeur de la carte au-dessus. Indépendant du Wi-Fi."
+      "desc": "File d’attente des paquets pour le mobile seulement. «Comme général» reprend la valeur de la carte au-dessus. Indépendant du Wi-Fi.",
+      "name": "File de paquets · mobile"
     },
     "net_route_tune": {
       "descOpt": {
@@ -260,19 +302,24 @@
         "conservative": "Slightly larger window than stock.",
         "aggressive": "Largest window. Best on a fast, stable link; can cost retransmits on a weak one."
       },
-      "desc": "Combien de données partent d’un seul coup avant la première réponse. Le mode intelligent mesure votre liaison — débit, MTU, type de radio — et dimensionne la fenêtre : plus grande sur un lien rapide, valeur d’usine sur un lien faible, où une grosse rafale provoque justement les pertes qu’elle devait éviter."
+      "desc": "Combien de données partent d’un seul coup avant la première réponse. Le mode intelligent mesure votre liaison — débit, MTU, type de radio — et dimensionne la fenêtre : plus grande sur un lien rapide, valeur d’usine sur un lien faible, où une grosse rafale provoque justement les pertes qu’elle devait éviter.",
+      "name": "Tampons réseau"
     },
     "wifi_country": {
-      "desc": "Détermine les canaux autorisés au téléphone, ce dont dépend la vitesse maximale. «CR» ouvre l’ensemble le plus large. L’usage de canaux non autorisés dans votre pays reste votre décision."
+      "desc": "Détermine les canaux autorisés au téléphone, ce dont dépend la vitesse maximale. «CR» ouvre l’ensemble le plus large. L’usage de canaux non autorisés dans votre pays reste votre décision.",
+      "name": "Région Wi-Fi"
     },
     "wifi_scan_throttle": {
-      "desc": "À quelle fréquence le téléphone cherche un meilleur point Wi-Fi. Retirez la limite si le Wi-Fi reste accroché à un point d’accès faible quand vous vous déplacez chez vous. Au prix d’un peu de batterie."
+      "desc": "À quelle fréquence le téléphone cherche un meilleur point Wi-Fi. Retirez la limite si le Wi-Fi reste accroché à un point d’accès faible quand vous vous déplacez chez vous. Au prix d’un peu de batterie.",
+      "name": "Fréquence de recherche Wi-Fi"
     },
     "haptic_strength": {
-      "desc": "Intensité de la vibration pour les notifications et les sonneries, sur l’échelle du constructeur. «−1» ne touche à rien : ce qui est réglé dans le téléphone reste en place."
+      "desc": "Intensité de la vibration pour les notifications et les sonneries, sur l’échelle du constructeur. «−1» ne touche à rien : ce qui est réglé dans le téléphone reste en place.",
+      "name": "Vibration"
     },
     "haptic_touch_strength": {
-      "desc": "Intensité de la vibration pour le retour au toucher seulement : frappe, interrupteurs, gestes. Se règle indépendamment des notifications."
+      "desc": "Intensité de la vibration pour le retour au toucher seulement : frappe, interrupteurs, gestes. Se règle indépendamment des notifications.",
+      "name": "Retour tactile"
     },
     "gms_freeze": {
       "descOpt": {
@@ -280,7 +327,8 @@
         "safe": "Telemetry and reporting components only. Push, sign-in and payments keep working.",
         "more": "Adds ads and measurement components. Reversible, but check anything you depend on."
       },
-      "desc": "Désactive les composants de télémétrie, de rapport et de publicité à l’intérieur des services Google. Les services eux-mêmes restent actifs : push, connexion et paiements continuent de fonctionner. Entièrement réversible, mais vérifiez après activation ce dont vous dépendez."
+      "desc": "Désactive les composants de télémétrie, de rapport et de publicité à l’intérieur des services Google. Les services eux-mêmes restent actifs : push, connexion et paiements continuent de fonctionner. Entièrement réversible, mais vérifiez après activation ce dont vous dépendez.",
+      "name": "Geler les composants Google"
     },
     "athena_service": {
       "name": "Athena Background Killer",
