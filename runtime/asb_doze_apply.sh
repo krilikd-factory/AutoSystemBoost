@@ -198,6 +198,29 @@ asb_doze_trim_whitelist() {
     case "$_p" in
       *[!A-Za-z0-9_.]*|'') continue ;;
     esac
+    # Never trim an authenticator, whatever the user has or has not configured.
+    #
+    # Reported by a user with Microsoft Authenticator: it is a third-party package, so it
+    # was trimmed like any other - and a 2FA push that arrives late is a login that fails.
+    # Unlike a chat message, there is no "read it in the morning" for a one-time code: the
+    # code expires, and the person is locked out of their own account at the moment they
+    # are trying to use it.
+    #
+    # The keep-list would cover this, but only for someone who already knew to add it -
+    # and by the time they find out, they have been locked out once. This is the class of
+    # app where the safe default has to be built in, like the dialer and the alarm clock.
+    #
+    # Matched on substring so vendor variants and regional builds are covered without
+    # maintaining an exhaustive list of package names.
+    case "$_p" in
+      *authenticator*|*.auth.*|*.otp.*|*twofactor*|*two_factor*|\
+      com.azure.authenticator|com.google.android.apps.authenticator*|\
+      com.duosecurity.duomobile|org.fedorahosted.freeotp|com.authy.authy|\
+      com.beemdevelopment.aegis|com.yubico.yubioath|com.symantec.mobile.idsafe|\
+      *.mfa.*|*passkey*)
+        continue ;;
+    esac
+
     # Apps the user chose to keep exempt, one package per line.
     #
     # "Remove every user app" is the right default and the wrong rule for everyone: an
