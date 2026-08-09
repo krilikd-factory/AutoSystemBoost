@@ -260,6 +260,19 @@ static inline const char *asb_profile_name(int profile_idx) {
     }
 }
 
+/* Minimum 1-minute load average before high GPU counts as gaming.
+ *
+ * 2.0 on an 8-core phone is roughly a quarter of the cores busy - well below what any
+ * real game produces, and well above a feed scrolling with hardware-decoded video, which
+ * typically sits under 1.0 because the decode never touches the CPU.
+ *
+ * Chosen to reject the reported false positive with room to spare rather than to sit
+ * tightly between the two: a game misclassified as HEAVY loses a little headroom, while a
+ * feed misclassified as GAMING runs the phone flat out for as long as the user scrolls.
+ * The costs are not symmetric, so the threshold does not sit in the middle.
+ */
+#define ASB_GAMING_MIN_LOAD1 2.0f
+
 static const float g_state_level[ASB_STATE_COUNT] = {
     [ASB_STATE_DEEP_IDLE]  = 0.0f,
     [ASB_STATE_LIGHT_IDLE] = 0.15f,
@@ -650,7 +663,23 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     if (m->gpu.load_pct >= g_asb_cfg.gaming_gpu_enter) {
         if (g_asb_cfg.bat_suppress_gaming && fsm_profile_is_battery)
             return ASB_STATE_HEAVY;
-        if (g_gaming_confirm_streak >= g_asb_cfg.gaming_confirm_ticks)
+        /* GPU load alone does not mean a game.
+         *
+         * Reported: FSM stuck in GAMING while scrolling Instagram, Facebook and Threads.
+         * Autoplaying video in a feed drives the GPU past this threshold easily -
+         * compositing plus scroll animation plus decode output - and the state that was
+         * meant for games unlocked full clocks for a social feed. That is heat and drain
+         * paid for nothing, and it fires on the most common thing anyone does with a phone.
+         *
+         * What separates them is the CPU. A game runs its own simulation, physics and draw
+         * calls on the CPU every frame; feed video is decoded by dedicated silicon and
+         * leaves the CPU nearly idle. So require both to be busy, not just the GPU.
+         *
+         * The threshold is deliberately low - this rejects "GPU busy, CPU idle", it does not
+         * try to grade how hard the game works. Anything genuinely interactive clears it.
+         */
+        int cpu_busy_enough = (m->cpu.load1 >= ASB_GAMING_MIN_LOAD1);
+        if (g_gaming_confirm_streak >= g_asb_cfg.gaming_confirm_ticks && cpu_busy_enough)
             return ASB_STATE_GAMING;
         return ASB_STATE_HEAVY;
     }
