@@ -132,6 +132,65 @@ static time_t g_smart_last_periodic_ts = 0;
 static time_t g_smart_screen_off_since = 0;
 static int    g_smart_last_screen_on = 1;
 
+/* Suspend tracking: is the phone actually sleeping while the screen is off?
+ *
+ * CLOCK_MONOTONIC stops during suspend; CLOCK_BOOTTIME does not. The ratio between
+ * them over a screen-off window is the share of that window the CPU stayed awake.
+ *
+ * Nothing measured this at runtime. An overnight capture showed 73% awake across 8.9
+ * hours of screen-off against a <5% target, and 1.58%/h drain against 0.3-0.7 - and the
+ * module had no idea, because the figure was only computed afterwards by the log tools.
+ * A governor that cannot see the phone failing to sleep cannot say so, let alone react.
+ *
+ * This only measures and publishes. Deciding what to do about a wakelock held by
+ * someone else is a separate question, and guessing at it is how a performance module
+ * starts breaking alarms. */
+static long   g_awake_win_mono_ms = 0;   /* monotonic ms accumulated this screen-off window */
+static long   g_awake_win_boot_ms = 0;   /* boottime ms over the same window */
+static long   g_awake_last_mono_ms = 0;
+static long   g_awake_last_boot_ms = 0;
+static int    g_awake_pct = -1;          /* -1 = not measured yet */
+
+static long asb_clock_ms(clockid_t which) {
+    struct timespec ts;
+    if (clock_gettime(which, &ts) != 0) return 0;
+    return (long)ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
+}
+
+/* Called once per tick. screen_on resets the window: the figure is only meaningful
+ * across a continuous screen-off stretch, and mixing screen-on time into it would
+ * dilute exactly the problem it exists to expose. */
+static void asb_awake_track(int screen_on) {
+    long mono = asb_clock_ms(CLOCK_MONOTONIC);
+    long boot = asb_clock_ms(CLOCK_BOOTTIME);
+    if (screen_on) {
+        g_awake_win_mono_ms = 0;
+        g_awake_win_boot_ms = 0;
+        g_awake_last_mono_ms = mono;
+        g_awake_last_boot_ms = boot;
+        g_awake_pct = -1;
+        return;
+    }
+    if (g_awake_last_boot_ms > 0) {
+        long d_mono = mono - g_awake_last_mono_ms;
+        long d_boot = boot - g_awake_last_boot_ms;
+        /* Guard against a clock that went backwards or a wildly long gap - both mean
+         * the sample is not comparable, not that the phone was busy. */
+        if (d_mono >= 0 && d_boot > 0 && d_boot < 6L * 3600L * 1000L) {
+            g_awake_win_mono_ms += d_mono;
+            g_awake_win_boot_ms += d_boot;
+        }
+    }
+    g_awake_last_mono_ms = mono;
+    g_awake_last_boot_ms = boot;
+    /* Ten minutes before the first verdict: a phone that just locked has not had the
+     * chance to suspend yet, and calling that "awake" would cry wolf every evening. */
+    if (g_awake_win_boot_ms >= 600000L) {
+        g_awake_pct = (int)((g_awake_win_mono_ms * 100L) / g_awake_win_boot_ms);
+        if (g_awake_pct > 100) g_awake_pct = 100;
+    }
+}
+
 static int    g_smart_last_tune_sig = -1;
 static time_t g_smart_last_tune_ts  = 0;
 
@@ -1171,6 +1230,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * Cumulative Smart session total, same number the WebUI shows from learner_state.json
      * (smart_sessions.total).
      */
+    /* Published so the report can say "the phone is not sleeping" instead of only
+     * showing a drain figure and leaving the user to guess why. */
+    fprintf(f, "awake_pct_screenoff=%d\nawake_window_min=%ld\n",
+            g_awake_pct, g_awake_win_boot_ms / 60000L);
     fprintf(f, "smart_sessions_total=%d\nsmart_last_confidence=%d\n",
             g_smart_sessions_total, g_smart_last_confidence);
     {
@@ -4040,6 +4103,9 @@ int main(int argc, char **argv) {
      * Without this, the first write uses BALANCED defaults until the next
      * tick refreshes — visible as a brief envelope flicker at boot. */
     {
+        /* Track suspend before anything else this tick: the numbers come from the
+         * clocks, not from the metrics, so they are valid even when a probe failed. */
+        asb_awake_track(metrics.misc.screen_on);
         int _smart_updated = asb_smart_tick(&metrics, &fsm);
         if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
             asb_profile_caps_t _new_caps;
