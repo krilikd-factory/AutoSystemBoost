@@ -3579,6 +3579,7 @@ function cfgRenderRow(list, it, showCat) {
             /* Close any other open popup first, or two lists overlap. */
             document.querySelectorAll('.cfg-sel-pop').forEach(x => { if (x !== pop) x.hidden = true; });
             pop.hidden = !pop.hidden;
+            cfgArmPopDismiss();
           };
           selWrap.appendChild(btn);
           selWrap.appendChild(pop);
@@ -4045,6 +4046,31 @@ function cfgToggleLangPop(e) {
   if (e) e.stopPropagation();
   const pop = _el('cfgLangPop');
   if (pop) pop.hidden = !pop.hidden;
+}
+
+/* Close an open dropdown when the next tap lands anywhere else.
+ *
+ * The lists stop propagation so a tap inside does not count as outside - but nothing was
+ * listening on the document, so the only way to dismiss one was to pick an option or open
+ * another list. Reported as: dropdowns should close when clicking outside of them.
+ *
+ * Registered once and left in place: adding a listener per open would stack them, and
+ * removing it on close would drop the very event that should have closed the list.
+ */
+var _cfgPopDismissArmed = false;
+function cfgArmPopDismiss() {
+  if (_cfgPopDismissArmed) return;
+  _cfgPopDismissArmed = true;
+  document.addEventListener('click', function () {
+    document.querySelectorAll('.cfg-sel-pop').forEach(function (x) { x.hidden = true; });
+  });
+  /* Escape closes it too - a keyboard is attached often enough on tablets and desktops
+   * for this to matter, and it costs one line. */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.cfg-sel-pop').forEach(function (x) { x.hidden = true; });
+    }
+  });
 }
 
 function cfgFillLangs() {
@@ -4608,7 +4634,20 @@ async function pollLive(visible) {
     const mainVerBadge = _el('verBadge'); const liveVerBadge = _el('liveVerBadge');
     if (mainVerBadge && liveVerBadge) liveVerBadge.textContent = mainVerBadge.textContent;
     const liveCurProfile = _el('liveCurProfile');
-    if (liveCurProfile) liveCurProfile.textContent = profile;
+    if (liveCurProfile) {
+      // Smart is not a set of rails of its own - it picks one of the other three and the
+      // governor reports that resolved one. Showing it alone made the Live page say
+      // "Balanced" while the user had chosen Smart and the main page agreed with them.
+      // Reported exactly that way, and it reads like a bug even though both numbers are
+      // correct: they answer different questions.
+      //
+      // "Smart -> Balanced" answers both: what you selected, and what it decided.
+      const _chosen = (_mainProf && _mainProf.textContent || '').trim().toLowerCase();
+      liveCurProfile.textContent =
+        (_chosen === 'smart' && profile && profile !== 'smart' && profile !== '—')
+          ? ('smart \u2192 ' + profile)
+          : profile;
+    }
 
     _el('liveState').textContent = state;
 
