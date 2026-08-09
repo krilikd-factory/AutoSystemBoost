@@ -73,6 +73,8 @@ esac
 # mistranslated unit turns a diagnostic into a wrong reading.
 case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
   *ru-*|*ru_*|ru)
+    M_AWAKE="бодрствование во сне"; M_MIN="мин"
+    M_AWAKE_BAD="!! телефон не засыпает — это дороже любой настройки здесь"
     M_SLOT="Слот времени"; M_SLOT_OF="из 12"
     M_SLOT_H1="День разбит на 12 слотов, каждый учится отдельно —"
     M_SLOT_H2="в будни утром и в воскресенье вечером телефон ведёт себя по-разному."
@@ -103,6 +105,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WEEKEND="выходной"; M_WEEKDAY="будний день"
     M_FOREGROUND="активное приложение" ;;
   *uk-*|*uk_*|uk)
+    M_AWAKE="неспання уві сні"; M_MIN="хв"
+    M_AWAKE_BAD="!! телефон не засинає — це дорожче за будь-яке налаштування тут"
     M_SLOT="Слот часу"
     M_SLOT_OF="із 12"
     M_SLOT_H1="День поділено на 12 слотів, кожен вчиться окремо —"
@@ -153,6 +157,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="пізній вечір"
     M_WEEKEND="вихідний"; M_WEEKDAY="будній день" ;;
   *de-*|*de_*|de)
+    M_AWAKE="wach im Standby"; M_MIN="Min"
+    M_AWAKE_BAD="!! das Gerät schläft nicht ein - teurer als jede Einstellung hier"
     M_SLOT="Zeitfenster"
     M_SLOT_OF="von 12"
     M_SLOT_H1="Ihr Tag ist in 12 Fenster geteilt, jedes wird separat gelernt -"
@@ -203,6 +209,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="Abend"
     M_WEEKEND="Wochenende"; M_WEEKDAY="Wochentag" ;;
   *es-*|*es_*|es)
+    M_AWAKE="despierto en reposo"; M_MIN="min"
+    M_AWAKE_BAD="!! el teléfono no entra en suspensión - cuesta más que cualquier ajuste de aquí"
     M_SLOT="Franja horaria"
     M_SLOT_OF="de 12"
     M_SLOT_H1="Tu día se divide en 12 franjas, cada una aprendida por separado:"
@@ -253,6 +261,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="noche"
     M_WEEKEND="fin de semana"; M_WEEKDAY="día laborable" ;;
   *pt-*|*pt_*|pt)
+    M_AWAKE="acordado em repouso"; M_MIN="min"
+    M_AWAKE_BAD="!! o telefone não suspende - custa mais que qualquer ajuste daqui"
     M_SLOT="Faixa horária"
     M_SLOT_OF="de 12"
     M_SLOT_H1="Seu dia é dividido em 12 faixas, cada uma aprendida separadamente:"
@@ -303,6 +313,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="noite"
     M_WEEKEND="fim de semana"; M_WEEKDAY="dia útil" ;;
   *tr-*|*tr_*|tr)
+    M_AWAKE="beklemede uyanık"; M_MIN="dk"
+    M_AWAKE_BAD="!! telefon uykuya geçmiyor - buradaki her ayardan pahalıya mal oluyor"
     M_SLOT="Zaman dilimi"
     M_SLOT_OF="/ 12"
     M_SLOT_H1="Gününüz 12 dilime bölünür, her biri ayrı öğrenilir -"
@@ -353,6 +365,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="akşam"
     M_WEEKEND="hafta sonu"; M_WEEKDAY="hafta içi" ;;
   *fr-*|*fr_*|fr)
+    M_AWAKE="éveillé en veille"; M_MIN="min"
+    M_AWAKE_BAD="!! le téléphone ne se met pas en veille - cela coûte plus que tout réglage ici"
     M_SLOT="Créneau horaire"
     M_SLOT_OF="sur 12"
     M_SLOT_H1="Votre journée est découpée en 12 créneaux, appris séparément —"
@@ -403,6 +417,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="soir"
     M_WEEKEND="week-end"; M_WEEKDAY="jour de semaine" ;;
   *hy-*|*hy_*|hy)
+    M_AWAKE="արթուն քնի ժամանակ"; M_MIN="րոպե"
+    M_AWAKE_BAD="!! հեռախոսը չի քնում — սա ավելի թանկ է, քան ցանկացած կարգավորում այստեղ"
     M_SLOT="Ժամային հատված"
     M_SLOT_OF="12-ից"
     M_SLOT_H1="Օրը բաժանված է 12 հատվածի, յուրաքանչյուրը սովորվում է առանձին —"
@@ -453,6 +469,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="երեկո"
     M_WEEKEND="հանգստյան օր"; M_WEEKDAY="աշխատանքային օր" ;;
   *it-*|*it_*|it)
+    M_AWAKE="sveglio in standby"; M_MIN="min"
+    M_AWAKE_BAD="!! il telefono non va in sospensione - costa più di qualsiasi impostazione qui"
     M_SLOT="Fascia oraria"
     M_SLOT_OF="di 12"
     M_SLOT_H1="La giornata è divisa in 12 fasce, ognuna appresa separatamente:"
@@ -503,6 +521,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="sera"
     M_WEEKEND="fine settimana"; M_WEEKDAY="giorno feriale" ;;
   *ar-*|*ar_*|ar)
+    M_AWAKE="مستيقظ أثناء النوم"; M_MIN="دقيقة"
+    M_AWAKE_BAD="!! الهاتف لا يدخل السبات — هذا أغلى من أي إعداد هنا"
     M_SLOT="الفترة الزمنية"
     M_SLOT_OF="من 12"
     M_SLOT_H1="يومك مقسّم إلى 12 فترة، كل واحدة تُتعلَّم على حدة —"
@@ -553,6 +573,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="مساء"
     M_WEEKEND="عطلة"; M_WEEKDAY="يوم عمل" ;;
   zh-cn*|zh_cn*|*zh-hans*|zh)
+    M_AWAKE="休眠时唤醒占比"; M_MIN="分钟"
+    M_AWAKE_BAD="!! 手机没有真正休眠 —— 这比这里任何设置都更耗电"
     M_SLOT="时段"
     M_SLOT_OF="/ 12"
     M_SLOT_H1="一天分为 12 个时段，每段单独学习 ——"
@@ -603,6 +625,8 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="晚上"
     M_WEEKEND="周末"; M_WEEKDAY="工作日" ;;
   *)
+    M_AWAKE="awake while asleep"; M_MIN="min"
+    M_AWAKE_BAD="!! the phone is not suspending - this costs more than any setting here"
     M_SLOT="Time slot"; M_SLOT_OF="of 12"
     M_SLOT_H1="Your day is split into 12 slots, each learned separately -"
     M_SLOT_H2="a phone behaves differently on a weekday morning than on a Sunday evening."
@@ -1383,6 +1407,12 @@ esac
 # the user cannot know it without being told.
 echo ""
 echo "  🌙  ${H_SLEEP}"
+  # The suspend figure first: when it is bad, nothing else in this section matters.
+  _aw="$(_st awake_pct_screenoff)"; _awm="$(_st awake_window_min)"
+  if [ -n "$_aw" ] && [ "$_aw" -ge 0 ] 2>/dev/null; then
+    echo "       ${M_AWAKE}: ${_aw}% (${_awm:-0} ${M_MIN})"
+    [ "$_aw" -gt 15 ] 2>/dev/null && echo "       ${M_AWAKE_BAD}"
+  fi
 _dz="$(_cfg doze_level)"
 case "$_dz" in
   night)
