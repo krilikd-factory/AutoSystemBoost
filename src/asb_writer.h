@@ -49,6 +49,75 @@ static int  g_cpu_all_paths_slot[16];
 static int  g_cpu_all_paths_n = 0;
 static int  g_writer_paths_ready = 0;
 
+/* Per-cluster frequency tables, and snapping to them.
+ *
+ * cpufreq accepts any number written to scaling_max_freq and then rounds it to whatever
+ * the OPP table actually has - upwards, in the kernels this runs on. So a cap computed by
+ * ratio lands higher than intended, and the amount is invisible: the module believes it
+ * asked for one thing while the silicon runs another.
+ *
+ * A field capture on a OnePlus 15 showed exactly that: asb_declared=3124881 on policy0 and
+ * 2232876 on policy6. Neither is a frequency any device has - both are ratio arithmetic
+ * written straight to sysfs. The shell path already snaps (asb_synthesize_bounds.sh does
+ * it when generating device_bounds.env); the governor computing its own caps at runtime
+ * did not, so on Smart - where caps are synthesised per tick from alpha - nothing was
+ * snapped at all.
+ *
+ * Snapping DOWN, not to the nearest. A cap is a ceiling: rounding it up hands back
+ * headroom the profile deliberately withheld, which is the wrong direction for the one
+ * setting whose entire job is restraint. */
+static long g_cpu_freq_tables[16][32];
+static int  g_cpu_freq_table_len[16];
+static int  g_cpu_freq_tables_ready = 0;
+
+static void cpu_read_freq_tables(void) {
+    if (g_cpu_freq_tables_ready) return;
+    for (int i = 0; i < g_cpu_all_paths_n && i < 16; i++) {
+        g_cpu_freq_table_len[i] = 0;
+        char path[256];
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpufreq/policy%d/scaling_available_frequencies",
+                 g_cpu_all_ids[i]);
+        int fd = open(path, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) continue;
+        char buf[1024] = {0};
+        ssize_t rd = read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        if (rd <= 0) continue;
+        char *q = buf;
+        int idx = 0;
+        while (*q && idx < 32) {
+            long v = strtol(q, &q, 10);
+            if (v > 0) g_cpu_freq_tables[i][idx++] = v;
+            while (*q == ' ' || *q == '\n' || *q == '\t' || *q == '\r') q++;
+        }
+        g_cpu_freq_table_len[i] = idx;
+    }
+    g_cpu_freq_tables_ready = 1;
+}
+
+/* Largest table entry <= want. Returns want unchanged when the table is unreadable -
+ * a device whose frequencies we cannot enumerate is no worse off than before. */
+static long cpu_snap_freq(int path_idx, long want) {
+    if (want <= 0) return want;
+    if (path_idx < 0 || path_idx >= 16) return want;
+    cpu_read_freq_tables();
+    int n = g_cpu_freq_table_len[path_idx];
+    if (n <= 0) return want;
+    long best = 0;
+    long lowest = 0;
+    for (int i = 0; i < n; i++) {
+        long v = g_cpu_freq_tables[path_idx][i];
+        if (v <= 0) continue;
+        if (lowest == 0 || v < lowest) lowest = v;
+        if (v <= want && v > best) best = v;
+    }
+    /* Below every step: the lowest one is the closest thing to the request that exists,
+     * and returning 0 would be read as "no cap". */
+    if (best == 0) return lowest > 0 ? lowest : want;
+    return best;
+}
+
 static void writer_init_paths(void) {
     if (g_writer_paths_ready) return;
     cpu_topology_discover();
@@ -567,6 +636,19 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
         }
         for (int i = 0; i < 3; i++) {
             if (!g_cpu_max_paths[i][0]) continue;
+            /* Snap to this cluster's own table before comparing against the cache: caching
+             * the unsnapped value would make every tick look like a change, and the log
+             * would show a write that the kernel then silently altered. */
+            if (cmax[i] > 0) {
+                int _snap_idx = -1;
+                for (int k = 0; k < g_cpu_all_paths_n && k < 16; k++) {
+                    if (g_cpu_all_max_paths[k][0] &&
+                        strcmp(g_cpu_all_max_paths[k], g_cpu_max_paths[i]) == 0) {
+                        _snap_idx = k; break;
+                    }
+                }
+                if (_snap_idx >= 0) cmax[i] = (int)cpu_snap_freq(_snap_idx, (long)cmax[i]);
+            }
             if (force || cmax[i] != g_wcache.cpu_max[i]) {
                 if (cmax[i] <= 0) continue;
                 if (sysfs_write_int(g_cpu_max_paths[i], cmax[i]) == 0) {
@@ -606,6 +688,9 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             target = g_asb_cfg.gaming_cpu_max_ceiling_khz;
         }
         if (target <= 0) continue;
+        /* Snap to a step this cluster actually has, downwards. Writing an arbitrary number
+         * lets the kernel round it up, which quietly loosens the cap. */
+        target = (int)cpu_snap_freq(j, (long)target);
         int cur = sysfs_read_int(g_cpu_all_max_paths[j], 0);
         if (force || cur != target) {
             if (sysfs_write_int(g_cpu_all_max_paths[j], target) == 0)

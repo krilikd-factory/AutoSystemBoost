@@ -394,6 +394,10 @@ typedef struct {
     int             had_clamp_hold;         /* session-latched -- was clamp_hold ever set? */
     int             had_futility;           /* session-latched -- was futility ever triggered? */
     int             throttle_cap_ticks;     /* consecutive ticks with thermal_cap=1 */
+    /* Consecutive ticks at or above OUR sustained_temp_enter while under real load.
+     * Separate from throttle_cap_ticks, which counts the vendor's signal - the two answer
+     * different questions and sharing a counter would let one reset the other. */
+    int             own_temp_ticks;
     int             gpu_video_ticks;        /* consecutive ticks of sustained-high GPU at low CPU load = likely video; gates GPU-ceiling trim */
     time_t          recovery_cautious_until; /* after clamp lift, stay cautious */
     int             perf_hot_guard_ticks;
@@ -820,6 +824,31 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
          * soft_clamp (headroom < 70%) is advisory only -- reduces aggression
          * but does NOT trigger sustained entry. */
         int throttle_signal = m->therm.throttling || m->therm.hard_clamp;
+
+        /* Our own threshold is a trigger, not just a filter.
+         *
+         * sustained_temp_enter was only ever consulted to qualify a signal the VENDOR
+         * raised - so if the vendor HAL stayed quiet, ASB never entered SUSTAINED no
+         * matter how hot the SoC got. A day capture with the slider at 60 C shows peaks of
+         * 69 C and throttle=0 in every phase: the setting the user reached for, named
+         * "Throttling Temperature", never once did what its name says.
+         *
+         * Vendor thresholds sit well above ours by design - they protect the silicon, not
+         * the person holding it. Waiting for them makes this control decorative.
+         *
+         * Debounced by two consecutive ticks: a single sample above the line is as likely
+         * to be one core spiking as the phone genuinely running hot, and entering
+         * SUSTAINED on noise costs performance for no thermal reason. Only for a state
+         * that would otherwise be HEAVY or above - throttling an idle phone because a
+         * sensor read high once helps nobody.
+         */
+        if (sustained_temp_enter > 0 && m->therm.cpu_max_c >= sustained_temp_enter
+            && desired >= ASB_STATE_HEAVY) {
+            fsm->own_temp_ticks++;
+            if (fsm->own_temp_ticks >= 2) throttle_signal = 1;
+        } else if (m->therm.cpu_max_c < sustained_temp_exit) {
+            fsm->own_temp_ticks = 0;
+        }
 
         /* track consecutive throttle ticks for debounce */
         if (throttle_signal) {
