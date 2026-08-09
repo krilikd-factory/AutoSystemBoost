@@ -85,7 +85,23 @@ body::-webkit-scrollbar,
   -ms-overflow-style: none;
 }
 
+/* No text selection on controls.
+ *
+ * A long press on a card title or a segment option popped up the selection handles and
+ * the copy toolbar - on a touch UI that is never what the gesture meant, and on a card
+ * whose whole row is tappable it fires constantly. Reported by a user.
+ *
+ * Applied to the app surface rather than per element, because the same problem exists on
+ * every label, badge and button and adding the rule one class at a time guarantees the
+ * next new control is forgotten.
+ *
+ * Deliberately NOT global: the description text under a card, the diagnostic output and
+ * anything inside an input are things people legitimately copy - those opt back in below.
+ */
 body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   padding-top: var(--window-inset-top);
   padding-bottom: var(--window-inset-bottom);
   display: flex;
@@ -1793,7 +1809,18 @@ body.config-active #livePage.open {
 /* The wrapper is now a flex ITEM inside #cfgToolsRow, not a row of its own. It kept a
    10px bottom margin from when it was the row, which pushed the search box out of line
    with the buttons beside it. */
-.cfg-search-wrap { margin: 0; display: flex; flex: 0 0 auto; align-items: stretch; }
+/* Grows into whatever the row has left when the field is focused.
+ *
+ * Both the wrapper and the input were flex: 0 0 auto with a hardcoded 190px focus
+ * width, so typing a query got the same narrow box on a 400px phone and on a tablet
+ * - the space to the right sat empty. :focus-within on the wrapper lets the whole
+ * group take the free space, and the input fills it.
+ *
+ * Unfocused it stays compact, because the tools row also holds the language and
+ * backup buttons and they need their width back when nobody is searching. */
+.cfg-search-wrap { margin: 0; display: flex; flex: 0 0 auto; align-items: stretch;
+  transition: flex-grow .18s ease; min-width: 0; }
+.cfg-search-wrap:focus-within { flex: 1 1 auto; }
 /* Breathing room under the tools row.
  * The row sat flush against the first category card, so the toolbar read as part of the
  * grid rather than as something above it. */
@@ -1814,8 +1841,22 @@ body.config-active #livePage.open {
   font-size: 13px;
   padding: 9px 12px;
 }
+/* Selectable again: text people actually copy.
+ *
+ * Descriptions get quoted in bug reports, and an input the user cannot select text in is
+ * broken rather than tidy - you could not correct a typo in the middle of a search query.
+ */
+.cfg-desc, .cfg-willbreak, input, textarea, .live-cell-value, .smart-banner-value {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 .cfg-search::placeholder { color: rgba(231,234,238,0.42); }
-.cfg-search:focus { outline: none; border-color: var(--accent, #22d3ee); width: 190px; }
+.cfg-search:focus { outline: none; border-color: var(--accent, #22d3ee); }
+/* width: 190px removed - a fixed number cannot fill a row whose width is unknown.
+   The input grows with its wrapper instead, with 190px as the floor so it never
+   ends up narrower than it was before. */
+.cfg-search-wrap:focus-within .cfg-search { flex: 1 1 auto; width: auto; min-width: 190px; }
 .cfg-search-empty {
   text-align: center;
   padding: 26px 12px;
