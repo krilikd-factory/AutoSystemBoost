@@ -273,6 +273,24 @@ static inline const char *asb_profile_name(int profile_idx) {
  */
 #define ASB_GAMING_MIN_LOAD1 2.0f
 
+/* Minimum load1 before a busy GPU alone may escalate to HEAVY.
+ *
+ * Lower than the gaming gate because HEAVY is a much smaller commitment than GAMING - it
+ * is the difference between "give this some headroom" and "hold nothing back". 1.2 on an
+ * eight-core phone is roughly one core saturated: enough to say the CPU is participating,
+ * low enough that anything genuinely interactive passes.
+ */
+#define ASB_HEAVY_GPU_MIN_LOAD1 1.2f
+
+/* How long after the screen lights up the battery profile skips LIGHT_IDLE.
+ * Covers the vendor GPU clamp that makes the first scroll stutter, without keeping the
+ * phone out of idle for the whole time the screen is on. */
+#define ASB_BAT_SCREENON_GRACE_S 4
+
+/* When the screen last came on. File-scope like g_gaming_confirm_streak, because the
+ * state classifier is a pure function of the metrics and does not receive the fsm. */
+static time_t g_screen_on_since = 0;
+
 static const float g_state_level[ASB_STATE_COUNT] = {
     [ASB_STATE_DEEP_IDLE]  = 0.0f,
     [ASB_STATE_LIGHT_IDLE] = 0.15f,
@@ -650,7 +668,8 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
 static int g_gaming_confirm_streak = 0;
 
 static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
-    if (!m->misc.screen_on) return ASB_STATE_DEEP_IDLE;
+    if (!m->misc.screen_on) { g_screen_on_since = 0; return ASB_STATE_DEEP_IDLE; }
+    if (g_screen_on_since == 0) g_screen_on_since = time(NULL);
 
     int ma_valid = (m->bat.current_ma > 0 && !m->bat.charging);
 
@@ -681,7 +700,14 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
         int cpu_busy_enough = (m->cpu.load1 >= ASB_GAMING_MIN_LOAD1);
         if (g_gaming_confirm_streak >= g_asb_cfg.gaming_confirm_ticks && cpu_busy_enough)
             return ASB_STATE_GAMING;
-        return ASB_STATE_HEAVY;
+        /* Above the gaming GPU threshold but the CPU is not participating: this fell
+         * through to HEAVY, which is the same mistake one step down. A feed of autoplaying
+         * video reaches 60% GPU with the CPU under 1.0, and HEAVY's clocks do nothing for
+         * it - the decode is already in hardware. Graded by what the CPU is doing, like
+         * every other branch here. */
+        if (m->cpu.load1 >= ASB_HEAVY_GPU_MIN_LOAD1)
+            return ASB_STATE_HEAVY;
+        return ASB_STATE_MODERATE;
     }
 
     /* 3-tier load thresholds: battery > balanced > global(performance)
@@ -701,11 +727,30 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     /* Safety: heavy must be above moderate */
     if (heavy_thr <= mod_thr) heavy_thr = mod_thr + 0.5f;
 
-    if (m->gpu.load_pct >= g_asb_cfg.heavy_gpu_enter ||
-        m->cpu.load1 >= heavy_thr) {
+    /* HEAVY needs more than a busy GPU - same reasoning as the gaming gate above.
+     *
+     * heavy_gpu_enter is 35%, which video playback clears without effort: the decoder is
+     * dedicated silicon and what shows up here is only the compositing of its output. So
+     * watching a clip, or scrolling a feed that autoplays them, was landing in HEAVY and
+     * being handed HEAVY's clocks - for work the CPU was not doing.
+     *
+     * MODERATE already carries enough GPU allowance for smooth video and scrolling. What
+     * HEAVY adds is CPU headroom, so it should be reached when the CPU is actually the
+     * thing under pressure.
+     *
+     * A busy CPU on its own still qualifies: compiling, unpacking or a heavy web page have
+     * no GPU signature at all, and refusing them HEAVY would be the mirror of this bug.
+     */
+    int gpu_says_heavy = (m->gpu.load_pct >= g_asb_cfg.heavy_gpu_enter);
+    int cpu_says_heavy = (m->cpu.load1 >= heavy_thr);
+    if (cpu_says_heavy ||
+        (gpu_says_heavy && m->cpu.load1 >= ASB_HEAVY_GPU_MIN_LOAD1)) {
         if (!ma_valid || m->bat.current_ma >= 150)
             return ASB_STATE_HEAVY;
     }
+    /* GPU busy but CPU quiet: video, or an animation. MODERATE, not HEAVY. */
+    if (gpu_says_heavy)
+        return ASB_STATE_MODERATE;
 
     if (m->cpu.load1 >= mod_thr)
         return ASB_STATE_MODERATE;
@@ -724,8 +769,24 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
      * state=LIGHT_IDLE on battery — this caused unlock→shelf scroll stutter for the 1-2
      * seconds before UI-burst escalation kicked in.
      */
-    if (fsm_profile_is_battery && m->misc.screen_on)
-        return ASB_STATE_MODERATE;
+    /* Time-bounded, not permanent.
+     *
+     * The stutter this fixes is real - the vendor PowerHAL drops GPU max_pwrlevel to
+     * 160 MHz in LIGHT_IDLE on battery, so the first scroll after unlock jerks. But the
+     * cure was "battery profile never idles while the screen is on", which means reading a
+     * static page, or a paused video, or a form you are thinking about, all sat at
+     * MODERATE for as long as the screen stayed lit. On the profile whose entire purpose
+     * is spending less.
+     *
+     * The problem lasts a second or two after the screen comes on; the fix now lasts the
+     * same. After that, a genuinely idle screen is allowed to be idle, and UI-burst above
+     * still catches any real scrolling within one tick.
+     */
+    if (fsm_profile_is_battery && m->misc.screen_on) {
+        if (g_screen_on_since > 0 &&
+            (time(NULL) - g_screen_on_since) <= ASB_BAT_SCREENON_GRACE_S)
+            return ASB_STATE_MODERATE;
+    }
 
     return ASB_STATE_LIGHT_IDLE;
 }
