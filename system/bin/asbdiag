@@ -595,6 +595,30 @@ fi
 [ -f /data/adb/asb/auto_battery_origin ] \
   && NOTE "auto-battery is currently active - will return to $(cat /data/adb/asb/auto_battery_origin 2>/dev/null) when charged"
 
+SEC "5a4. SUSPEND  (is the phone actually sleeping?)"
+# The single most useful overnight number, and the one nothing used to show.
+# CLOCK_MONOTONIC stops during suspend, CLOCK_BOOTTIME does not - their ratio over a
+# screen-off stretch is the share of it the CPU stayed awake. A capture showed 73% across
+# nine hours where the target is under 5%, with drain to match, and no part of the module
+# could say so.
+_awk_pct="$(grep -m1 '^awake_pct_screenoff=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_awk_win="$(grep -m1 '^awake_window_min=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+case "${_awk_pct:--1}" in
+  -1|'') NOTE "not measured yet - needs 10 minutes of continuous screen-off" ;;
+  *)
+    NOTE "awake ${_awk_pct}% of the last ${_awk_win:-0} min of screen-off  (target: under 5%)"
+    if [ "${_awk_pct:-0}" -gt 15 ] 2>/dev/null; then
+      NOTE "-> the phone is NOT suspending properly. This costs more than any tuning here can save."
+      NOTE "   Something holds a wakelock: check 'dumpsys batterystats' for the holder,"
+      NOTE "   or run tools/logkit/asb_log_full_day.sh for an attributed report."
+      NOTE "   Common causes: a connected Bluetooth device, a sync-heavy app, a bad alarm."
+    elif [ "${_awk_pct:-0}" -gt 5 ] 2>/dev/null; then
+      NOTE "-> higher than ideal but not alarming; one chatty app can account for this."
+    else
+      NOTE "-> suspending normally."
+    fi ;;
+esac
+
 SEC "5b. HAPTICS"
 _h_lvl="$(cfg haptic_strength)"
 case "$_h_lvl" in
