@@ -425,6 +425,22 @@ static int gpu_hz_to_pwrlevel_min(long target_hz) {
 #define PATH_VM_SWAPPINESS "/proc/sys/vm/swappiness"
 
 static int  g_cam_guard_on = 0;
+/* When the guard was raised, and whether it has already been stood down for this session.
+ *
+ * The guard lifts every uclamp ceiling to 100% and pins cpusets to all cores. That is the
+ * right answer for a 4K60 recording, which is what it was built for: the ISP and encoder
+ * do the work while HAL threads need the CPU on a 16.6 ms deadline, and the usual load
+ * signals stay low so nothing else would raise the clocks.
+ *
+ * It is the wrong answer for an hour-long video call, which presents identically - camera
+ * streaming, same HAL threads - but runs long enough that "hold nothing back" becomes the
+ * steady state. A user reported the phone getting hot on video calls; camera_hold_max_s
+ * existed in the config for exactly this and was never read by anything.
+ *
+ * After the limit the guard releases and normal state selection resumes. A call keeps
+ * working - it just stops being treated as a burst. */
+static time_t g_cam_guard_since = 0;
+static int    g_cam_guard_expired = 0;
 static char g_cam_saved_fg_cpus[64]  = {0};
 static char g_cam_saved_top_cpus[64] = {0};
 static int  g_cam_saved_uc_top = -1;
@@ -852,6 +868,22 @@ static void writer_camera_guard_recover(void) {
 }
 
 static void writer_camera_guard(int active) {
+    /* Time-limit an active guard. A burst is a burst; past camera_hold_max_s this is a
+     * session, and a session does not get to run with every ceiling removed. */
+    if (active && g_cam_guard_on && !g_cam_guard_expired &&
+        g_asb_cfg.camera_hold_max_s > 0 && g_cam_guard_since > 0 &&
+        (time(NULL) - g_cam_guard_since) >= g_asb_cfg.camera_hold_max_s) {
+        /* No asb_log here: this header is included before the logger is declared, and
+         * pulling the declaration forward for one line would tangle the include order.
+         * The state file already publishes camera_hold, so the transition is observable. */
+        g_cam_guard_expired = 1;
+        active = 0;   /* fall into the release branch below */
+    }
+    /* Stay released until the camera actually stops, or the next stream would immediately
+     * re-raise it and the limit would mean nothing. */
+    if (active && g_cam_guard_expired) return;
+    if (!active) g_cam_guard_expired = 0;
+
     if (active && !g_cam_guard_on) {
         char present[64] = {0};
         if (sysfs_read_str(PATH_CPU_PRESENT, present, (int)sizeof(present)) > 0 && present[0]) {
@@ -877,6 +909,8 @@ static void writer_camera_guard(int active) {
         g_wcache.uclamp_top_max = 100;
         g_wcache.uclamp_bg_max  = 100;
         g_cam_guard_on = 1;
+        g_cam_guard_since = time(NULL);
+        g_cam_guard_expired = 0;
         writer_camera_guard_save();
         return;
     }

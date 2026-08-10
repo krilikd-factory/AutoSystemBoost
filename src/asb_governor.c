@@ -6099,6 +6099,20 @@ int main(int argc, char **argv) {
     persistent_stats_save(&fsm);
     session_history_append_ex(&fsm, "shutdown");
     asb_night_window_save();
+    /* Flush what Smart learned before we go.
+     *
+     * The store is written on a 5-minute timer and nothing wrote it on shutdown, so every
+     * restart threw away up to five minutes of learning - and a phone rebooted often
+     * enough could stay near zero indefinitely. A user reported exactly that: "does smart
+     * mode lose its memory when I restart". Everything else in this block persists on the
+     * way out; the learner was the one thing that did not.
+     */
+    if (g_smart_store_loaded) {
+        g_smart_store.last_update_ts = (uint32_t)time(NULL);
+        if (asb_smart_store_save_atomic(&g_smart_store, ASB_SMART_STORE_FILE) == 0)
+            asb_log("smart store flushed on shutdown");
+        asb_smart_appheat_save();
+    }
     asb_log("persistent stats saved: sessions=%d degrade=%d", g_pstats.session_count, g_pstats.degrade_count);
     unlink(ASB_SOCK_PATH);
     unlink(PID_FILE);
