@@ -141,6 +141,30 @@
           _want_ucl="${UCL_TOP_MAX:-85}"
           case "$_want_ucl" in max) _want_ucl="100" ;; esac
           [ $_need -eq 0 ] && [ -n "$_cur_ucl" ] && [ "$_cur_ucl" != "$_want_ucl" ] && { _need=1; _reason="uclamp"; }
+          # foreground as well, not just top-app.
+          #
+          # Only top-app was checked, so a foreground ceiling put back to "max" by the ROM
+          # was never noticed and never restored. A capture on a OnePlus 12 found it sitting
+          # at max for 43% of the day - with the camera guard off, so this was not ASB's own
+          # doing - during which the profile's foreground limit meant nothing. That covers
+          # music playback, navigation and anything else that keeps working off-screen,
+          # which is exactly where the cap was supposed to earn its keep.
+          _cur_ucl_fg="$(cat /dev/cpuctl/foreground/cpu.uclamp.max 2>/dev/null | tr -d '\r')"
+          case "$_cur_ucl_fg" in max) _cur_ucl_fg="100" ;; esac
+          _want_ucl_fg="${UCL_FG_MAX:-70}"
+          case "$_want_ucl_fg" in max) _want_ucl_fg="100" ;; esac
+          [ $_need -eq 0 ] && [ -n "$_cur_ucl_fg" ] && [ "$_cur_ucl_fg" != "$_want_ucl_fg" ] \
+            && { _need=1; _reason="uclamp-fg"; }
+          # And background, which is the cheapest ceiling to lose track of and the most
+          # expensive to have lifted: it sits at 35% precisely so work nobody is looking at
+          # does not run at full speed. The profile writes all four tiers; only two were
+          # being watched, so two could drift back with nothing noticing.
+          _cur_ucl_bg="$(cat /dev/cpuctl/background/cpu.uclamp.max 2>/dev/null | tr -d '\r')"
+          case "$_cur_ucl_bg" in max) _cur_ucl_bg="100" ;; esac
+          _want_ucl_bg="${UCL_BG_MAX:-35}"
+          case "$_want_ucl_bg" in max) _want_ucl_bg="100" ;; esac
+          [ $_need -eq 0 ] && [ -n "$_cur_ucl_bg" ] && [ "$_cur_ucl_bg" != "$_want_ucl_bg" ] \
+            && { _need=1; _reason="uclamp-bg"; }
         fi
       fi
       if [ $_need -eq 0 ] && asb_feature_enabled WIFI; then
@@ -173,7 +197,7 @@
     fi
     if [ $_need -eq 1 ]; then
       case "$_reason" in
-        walt-topapp|walt-edboost|walt-ravg|uclamp)
+        walt-topapp|walt-edboost|walt-ravg|uclamp|uclamp-fg|uclamp-bg)
           _drift_streak=$((_drift_streak + 1)) ;;
         cap-drift-up-p0|cap-drift-up-p6)
           : ;;
