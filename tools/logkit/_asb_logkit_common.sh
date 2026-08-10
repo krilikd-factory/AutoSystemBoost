@@ -391,10 +391,20 @@ lk_verify_caps() {
         _asb_declared="$_asb_p6_cap"
         _gov_src="$_gov_src_p6"
       elif [ "${_rel:-0}" -ge 2 ] 2>/dev/null; then
-        _expect=""
-        _label="PERF"
-        _asb_declared=""
-        _gov_src="-"
+        # Middle clusters are governed, they just have no slot of their own.
+        #
+        # On a 4-cluster SoC - OP12 and friends, policy0/2/5/7 - the governor maps
+        # slot0=little, slot1=strongest middle, slot2=prime, and mirrors slot1's cap onto
+        # every other middle. This check reported them as "unset" with no declared value,
+        # which reads as "ASB is not managing six of the eight cores". It is: their
+        # actual_max moves with the profile, which is how the omission was spotted.
+        #
+        # Compared against the BIG rail because that is what slot1 carries - the middles
+        # are the interactive cluster on this layout, not a second little one.
+        _expect="$CPU_CAP_BIG"
+        _label="MID"
+        _asb_declared="$_asb_p6_cap"
+        _gov_src="$_gov_src_p6"
       else
         _expect="$CPU_CAP_LITTLE"
         _label="LITTLE"
@@ -612,8 +622,18 @@ lk_capture_perf_trace_row() {
   _btz=$(_tz "$TZ_BATTERY")
   _p0cur=$(_f /sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq)
   _p0max=$(_f /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq)
-  _p6cur=$(_f /sys/devices/system/cpu/cpufreq/policy6/scaling_cur_freq)
-  _p6max=$(_f /sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq)
+  # The prime cluster is the LAST policy, not always policy6.
+  #
+  # policy6 is right on a 6+2 layout (canoe, sun) and does not exist at all on a 4-cluster
+  # one (pineapple: policy0/2/5/7). On an OP12 capture every phase reported p6MHz=0, which
+  # reads as "the prime cluster never clocked up" when it simply was not being looked at.
+  _prime_pol=""
+  for _pp in /sys/devices/system/cpu/cpufreq/policy*; do
+    [ -d "$_pp" ] && _prime_pol="$_pp"
+  done
+  [ -n "$_prime_pol" ] || _prime_pol=/sys/devices/system/cpu/cpufreq/policy6
+  _p6cur=$(_f "$_prime_pol/scaling_cur_freq")
+  _p6max=$(_f "$_prime_pol/scaling_max_freq")
   _gb="$LK_GPU_NOW"
   _gclk=$(_f /sys/class/kgsl/kgsl-3d0/gpuclk)
   _gmax=$(_f /sys/class/kgsl/kgsl-3d0/max_gpuclk)
