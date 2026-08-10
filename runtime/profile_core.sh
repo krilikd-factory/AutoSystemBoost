@@ -202,12 +202,39 @@ asb_apply_uclamp() {
   fi
   for _root in /dev/cpuctl /sys/fs/cgroup /dev/cgroup; do
     [ -d "$_root" ] || continue
+    # Optional headroom trim, applied on top of whatever the profile decided.
+    #
+    # Asked for as "lower the ceiling 10-15% per device model". A per-model table would be
+    # the wrong shape: it needs a row for every phone the module is installed on, it goes
+    # stale the moment a new one appears, and it would disagree with the per-device bounds
+    # work that already scales these numbers to real hardware.
+    #
+    # Scaling the profile's own value composes with that instead of competing with it. The
+    # profile already knows what 70% means on this chip; this says "and take a bit less
+    # than that". One control, correct on hardware nobody has tested.
+    #
+    # 100 = no change, which is the default. Nothing moves for anyone who does not ask.
+    _pc="$(grep -E '^[[:space:]]*perf_ceiling_pct=' "$MODDIR/config/governor.conf" 2>/dev/null \
+           | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    case "$_pc" in ''|*[!0-9]*) _pc=100 ;; esac
+    [ "$_pc" -lt 60 ] 2>/dev/null && _pc=60
+    [ "$_pc" -gt 100 ] 2>/dev/null && _pc=100
+
     for _tier in background system-background foreground top-app; do
       case "$_tier" in
         background|system-background) _min="$UCL_BG_MIN"; _max="$UCL_BG_MAX" ;;
         foreground) _min="$UCL_FG_MIN"; _max="$UCL_FG_MAX" ;;
         *) _min="$UCL_TOP_MIN"; _max="$UCL_TOP_MAX" ;;
       esac
+      # Only the ceilings are scaled. The floors are what keep touch response and audio
+      # alive; trimming those would trade heat for jank, which is not the deal on offer.
+      if [ "$_pc" -lt 100 ] 2>/dev/null; then
+        case "$_max" in
+          ''|*[!0-9]*) : ;;
+          *) _max=$(( _max * _pc / 100 ))
+             [ "$_max" -lt 10 ] && _max=10 ;;
+        esac
+      fi
       [ -e "$_root/$_tier/cpu.uclamp.min" ] && writef_retry "$_root/$_tier/cpu.uclamp.min" "$_min" 8 0.18 || true
       [ -e "$_root/$_tier/cpu.uclamp.max" ] && writef_retry "$_root/$_tier/cpu.uclamp.max" "$_max" 8 0.18 || true
       [ -e "$_root/$_tier/uclamp.min" ] && writef_retry "$_root/$_tier/uclamp.min" "$_min" 8 0.18 || true
