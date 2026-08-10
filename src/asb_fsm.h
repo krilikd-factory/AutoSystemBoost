@@ -282,6 +282,15 @@ static inline const char *asb_profile_name(int profile_idx) {
  */
 #define ASB_HEAVY_GPU_MIN_LOAD1 1.2f
 
+/* Minimum load1 before battery current may corroborate an escalation.
+ *
+ * Low on purpose - 0.5 is a fraction of one core. This is not asking the CPU to be busy,
+ * only to be doing something, so that "current is high because the screen is on" no longer
+ * counts as a reason to raise clocks. Anything a person is actively interacting with
+ * clears it easily; a paused screen showing static content does not.
+ */
+#define ASB_CURRENT_MIN_LOAD1 0.5f
+
 /* How long after the screen lights up the battery profile skips LIGHT_IDLE.
  * Covers the vendor GPU clamp that makes the first scroll stutter, without keeping the
  * phone out of idle for the whole time the screen is on. */
@@ -754,7 +763,20 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
 
     if (m->cpu.load1 >= mod_thr)
         return ASB_STATE_MODERATE;
-    if (ma_valid && m->bat.current_ma >= 120)
+    /* Battery current is not a CPU-demand signal.
+     *
+     * The display dominates it: a screen at minimum brightness already draws 250-400 mA,
+     * against a 120 mA threshold. So this line read "screen is on" and answered "give the
+     * CPU more headroom", which are unrelated statements. Music with the screen on showed
+     * 19.9%/h at 63 C with the GPU at 7% - the phone held MODERATE clocks for an hour
+     * while the actual work was being done by the audio offload path.
+     *
+     * Current still tells us something real, just not on its own: high current WITH some
+     * CPU activity is a genuinely busy phone, while high current with an idle CPU is a lit
+     * screen. Keep it as corroboration, drop it as a trigger.
+     */
+    if (ma_valid && m->bat.current_ma >= 120 &&
+        m->cpu.load1 >= ASB_CURRENT_MIN_LOAD1)
         return ASB_STATE_MODERATE;
     /*
      * UI-burst escalation: GPU > 12% with screen on = active UI work (scrolling shelf, app

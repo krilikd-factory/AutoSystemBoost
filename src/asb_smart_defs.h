@@ -194,6 +194,13 @@ typedef enum {
 #define ASB_CHARGE_CLASS_SLOW        1
 #define ASB_CHARGE_CLASS_FAST        2
 #define ASB_CHARGE_CLASS_SUPER       3
+/* SoC temperature at which charge-assist stops raising clocks.
+ *
+ * 48 C is comfortably above idle on every device seen in the field captures (42-47 while
+ * charging) and below the point where the vendor starts its own throttling - so this steps
+ * back before the heat becomes something either side has to fight. */
+#define ASB_CHARGE_SOC_SKIP_C            48
+
 #define ASB_CHARGE_COOL_ALPHA_X1000      850
 #define ASB_CHARGE_HOT_ALPHA_X1000       800
 #define ASB_CHARGE_SUPER_WARN_BIAS_DC    10

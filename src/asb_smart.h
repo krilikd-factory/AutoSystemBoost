@@ -1109,6 +1109,7 @@ static void asb_smart_apply_charge_aware(
         int batt_temp_dC,
         int power_class,
         int assist_alpha_max_x1000,
+        int soc_temp_c,          /* CPU/SoC temperature, not the pack */
         int temp_warn_dC,
         int temp_hot_dC,
         asb_smart_runtime_t *rt)
@@ -1150,7 +1151,21 @@ static void asb_smart_apply_charge_aware(
         !rt->night_safe_override &&
         !rt->low_battery_override &&
         !rt->thermal_veto) {
-        if (rt->alpha_battery_x1000 > assist_alpha_max_x1000) {
+        /* The pack temperature is not the one that gets hot here.
+         *
+         * This branch checked batt_temp_dC only - the battery - and then pulled alpha down
+         * to 450, i.e. leaned toward performance, on the reasoning that drain does not
+         * matter while plugged in. True for the battery; not true for the SoC, which is
+         * being warmed by the charger and by the workload at the same time. A OP13 user
+         * reported the phone running hot specifically while charging, and this is the only
+         * place that deliberately raises clocks because a charger is attached.
+         *
+         * A hot chip means the extra speed is being spent on heat rather than on work, so
+         * skip the assist entirely and let the learner's own decision stand.
+         */
+        if (soc_temp_c > 0 && soc_temp_c >= ASB_CHARGE_SOC_SKIP_C) {
+            /* Leave alpha alone: whatever Smart concluded already accounts for the heat. */
+        } else if (rt->alpha_battery_x1000 > assist_alpha_max_x1000) {
             rt->alpha_battery_x1000 = assist_alpha_max_x1000;
             rt->charge_assist = 1;
         }

@@ -3353,6 +3353,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                                      charging, screen_on,
                                      m->bat.temp_dC, pclass,
                                      g_asb_cfg.charge_assist_alpha_max,
+                                     m->therm.cpu_max_c,
                                      g_asb_cfg.charge_temp_warn_dC,
                                      g_asb_cfg.charge_temp_hot_dC,
                                      &g_smart_rt);
