@@ -2671,6 +2671,16 @@ fi
   rm -f /data/adb/asb/oem_preinstall 2>/dev/null
 ) >/dev/null 2>&1 &
 
+# Watch what holds the phone awake. Runs on a slow loop - this is a night-scale problem,
+# and polling it often would be its own small version of the thing it measures.
+(
+  while true; do
+    sleep 900
+    [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ] || continue
+    sh "$MODDIR/runtime/asb_wakelock_watch.sh" >/dev/null 2>&1
+  done
+) >/dev/null 2>&1 &
+
 if [ -f "$MODDIR/runtime/asb_gms_freeze.sh" ]; then
   sh "$MODDIR/runtime/asb_gms_freeze.sh" >/dev/null 2>&1
 fi

@@ -166,6 +166,17 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
 
+# Let restricted apps out of the bucket we put them in.
+#
+# Only ones ASB moved, recorded as it went: a package the user restricted themselves stays
+# restricted, because undoing their choice would be the same overreach in reverse.
+if [ -f /data/adb/asb/wakelock_restricted ] && command -v am >/dev/null 2>&1; then
+  while IFS= read -r _wp; do
+    [ -n "$_wp" ] && am set-standby-bucket "$_wp" active >/dev/null 2>&1
+  done < /data/adb/asb/wakelock_restricted
+  rm -f /data/adb/asb/wakelock_restricted 2>/dev/null
+fi
+
 # Un-freeze GMS components.
 #
 # Recorded per component with the state it was found in: something the user had already
@@ -178,6 +189,19 @@ if [ -f /data/adb/asb/gms_components_frozen ] && command -v pm >/dev/null 2>&1; 
     pm enable "$_c" >/dev/null 2>&1
   done < /data/adb/asb/gms_components_frozen
   rm -f /data/adb/asb/gms_components_frozen 2>/dev/null
+fi
+
+# Restore the headphone volume limiter.
+#
+# ASB only ever removes this when explicitly asked, but "explicitly asked" does not survive
+# uninstalling the module - leaving a hearing-safety cap off after the software that
+# removed it is gone is not a state anyone chose. Every other setting here is restored;
+# this one was missed, and it is the one with a consequence that is not about battery.
+#
+# 3 is Android's default (SAFE_MEDIA_VOLUME_ENABLED). Written unconditionally: the value
+# is the same on every device, so there is no baseline to consult.
+if command -v settings >/dev/null 2>&1; then
+  settings put global audio_safe_volume_state 3 >/dev/null 2>&1
 fi
 
 # Put the global uclamp floor back.
