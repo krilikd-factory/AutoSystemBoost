@@ -2924,12 +2924,16 @@ const CFG_ITEMS = [
     desc:'How soon Android puts the phone into Doze once the screen is off. Stock waits 30 minutes, which on a phone picked up every few minutes is 30 minutes that never elapse - a full-day capture showed the idle phase awake 45% of the time against a 5% target. Moderate starts idle after 5 minutes, aggressive after 2. THE COST: in Doze the system holds background network until the next maintenance window, so an app that polls on its own can be late - high-priority push still breaks through. If messages arriving on time matter more than standby drain, leave this on stock. Only ever writes one setting, and stock deletes it.' },
   { key:'doze_trim_whitelist', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Doze Exemptions',
     desc:'Deep Sleep decides how soon Doze starts. This decides who ignores it.\n\nApps on Android\u2019s exemption list keep their alarms and network through every idle window, so a phone can sit in deep doze all night while three exempted apps wake it anyway - which is why tuning only the timings can look like it changed nothing.\n\nOnly user-installed apps are touched. The dialer, SMS app, clock and your root manager are never removed, because that is how a module ends up blamed for a missed alarm. Every removal is recorded and put back when you set this to 0 or uninstall ASB.\n\nApplies with Deep Sleep set to aggressive or night.' },
+  { key:'wakelock_action', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Act on Wakelocks',
+    desc:'A wakelock is an app telling Android \u201Cdo not sleep yet\u201D. One app holding one all night is the single most expensive thing that can happen to a battery - more than any setting here can save - and no amount of tuning helps, because the phone never reaches the states those settings govern.\n\nMeasuring is always on; this decides whether ASB acts. With it on, a user-installed app still holding a wakelock after 45+ minutes of screen-off, on a phone that is measurably staying awake, is moved to Android\u2019s restricted bucket.\n\nNever touched: kernel and system sources - modem, display, alarm timer, sensors - and authenticators, dialer, SMS, messaging and clock apps. Nothing is force-stopped; restricted is a state Android manages and can undo.\n\nLeave it off if you would rather see the name and decide yourself. The report names the holder either way.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
     desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
   { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
     desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
   { key:'sustained_temp_enter', type:'range', def:'65', min:52, max:70, step:1, name:'Throttling Temperature',
     desc:'The temperature at which ASB starts holding performance back to keep the phone cooler. Lower means it intervenes sooner - a cooler phone that gives up peak speed earlier; higher lets it run hard for longer and get warmer. 65 is the default. This is ASB\u2019s own threshold, not the vendor\u2019s: the firmware keeps its own hard limits underneath and those cannot be raised from here, so a high value does not make the phone unsafe, it just means the vendor decides first. IMPORTANT: a value below the temperature the phone simply idles at (typically 38-47C) means throttling is ALWAYS on - clocks pinned permanently, work takes longer, and the phone ends up hotter and flatter rather than cooler. Hence the 52C floor: the governor compares the point against the HOTTEST CPU zone, and on a OnePlus 15 that reads 48C at rest while the shell reads 38C - so even 48 would mean throttling all the time.' },
+  { key:'perf_ceiling_pct', type:'range', def:'100', min:60, max:100, step:5, stock:'100', name:'Performance Ceiling',
+    desc:'How much of the profile\u2019s own speed limit the phone is allowed to reach. 100% leaves the profile as it is.\n\nLower values trim every ceiling proportionally, so the same work is done at lower clocks: cooler, longer battery, and slower when you are actually waiting on it. 90% is barely noticeable; 75% is a real trade.\n\nScaled from the profile rather than set per phone model. The profile\u2019s numbers are already matched to your hardware, so a percentage of them stays correct on devices nobody has tested - which a fixed table of model names would not.\n\nOnly ceilings move. The floors that keep scrolling and audio smooth are left alone, so this makes the phone calmer rather than jerky.' },
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
     desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
   // --- Memory & UX ---,
@@ -3029,7 +3033,7 @@ const CFG_GROUPS = [
 const CFG_GROUP_OF = {
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui',
-  sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery',
+  sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
@@ -3037,7 +3041,7 @@ const CFG_GROUP_OF = {
   bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
+  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', perf_ceiling_pct:'battery',
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
@@ -3117,6 +3121,8 @@ const CFG_ICONS = {
   audio_remove_volume_limit:'\uD83D\uDC42',
   doze_trim_whitelist:'\uD83D\uDEAB',
   gms_freeze:'\uD83E\uDDCA',
+  perf_ceiling_pct:'\uD83D\uDCC9',
+  wakelock_action:'\uD83D\uDD14',
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -3330,6 +3336,8 @@ const WILL_BREAK = {
   wifi_scan_throttle: 'wb_scan',
   gms_trim:           'wb_gms',
   gms_freeze:         'wb_gmsfreeze',
+  wakelock_action:    'wb_wl',
+  perf_ceiling_pct:   'wb_ceiling',
   audio_remove_volume_limit: 'wb_vol',
   doze_trim_whitelist: 'wb_dozewl'
 };
@@ -3370,6 +3378,8 @@ const APPLY_MODE = {
   anim_speed:APPLY_LIVE,
   gms_trim:APPLY_LIVE,
   gms_freeze:APPLY_NEXT,
+  perf_ceiling_pct:APPLY_LIVE,
+  wakelock_action:APPLY_LIVE,
   /* These three shipped without an entry here, so the map fell through to the generic
    * tail and every save reported "reboot to apply" - while the scripts behind them
    * apply immediately. Three cards telling the user to restart for nothing. */
@@ -3956,6 +3966,21 @@ async function cfgSet(key, val, ctl) {
       if (key === 'athena_service') {
         try { await run('sh ' + MD + '/runtime/asb_athena_apply.sh >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_next', ' \u00b7 restart the app'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      // Re-applies the profile, which is what writes the uclamp tiers.
+      if (key === 'perf_ceiling_pct') {
+        try { await run('sh ' + MD + '/apply_profile.sh $(cat ' + MD + '/current_profile 2>/dev/null || echo balanced) >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      if (key === 'wakelock_action') {
+        try { await run('sh ' + MD + '/runtime/asb_wakelock_watch.sh >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
@@ -4557,8 +4582,20 @@ function renderSmartSubLine(kv) {
            the pending case: show the count, so "still nothing" and "nearly there" read
            differently. */
         const cs = parseInt(kv.smart_sessions_total || '0', 10);
-        sub = cs > 0 ? (T('smart_learning', 'learning \u00b7 ') + cs + smartSesWord(cs))
-                     : T('smart_waiting', 'starting \u00b7 needs a screen-on session');
+        /* fb=4 means "no history for THIS time-of-day bucket", not "no history at all".
+         *
+         * There are 12 buckets - time of day crossed with weekday/weekend - and a person
+         * fills the ones they actually use the phone in. So a user with sessions banked
+         * still sees a cold-start bucket whenever they open the UI at an hour they rarely
+         * use, and the old text said "needs a screen-on session" as though nothing had
+         * happened. Reported after 24 hours of use with sessions already recorded.
+         *
+         * The distinction the user needs is: is the learner working at all, and is THIS
+         * hour known yet. Two different sentences, because they have different answers.
+         */
+        sub = cs > 0
+          ? (T('smart_new_bucket', 'learning this hour \u00b7 ') + cs + smartSesWord(cs) + T('smart_new_bucket_tail', ' banked overall'))
+          : T('smart_waiting', 'starting \u00b7 needs a screen-on session');
       }
       smartSub.textContent = sub;
     } else if (kv && kv._smartPending === 1) {
