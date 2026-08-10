@@ -213,6 +213,14 @@
         "short": "256. Less delay under load, same throughput on most links.",
         "shorter": "128. Lowest latency; can cost throughput on a very fast link."
       }
+    },
+    "perf_ceiling_pct": {
+      "name": "Batas atas performa",
+      "desc": "Berapa banyak dari batas profil yang boleh dicapai ponsel. 100% membiarkan profil apa adanya.\n\nNilai lebih rendah memangkas semua batas atas secara proporsional: lebih sejuk, baterai lebih awet, dan lebih lambat di saat Anda benar-benar menunggu.\n\nDiskalakan dari profil, bukan ditetapkan per model: angka profil sudah disesuaikan dengan perangkat Anda.\n\nHanya batas atas yang berubah; batas bawah yang menjaga kelancaran gulir dan audio tidak disentuh."
+    },
+    "wakelock_action": {
+      "name": "Tindak lanjuti wakelock",
+      "desc": "Wakelock adalah aplikasi yang memberi tahu Android «jangan tidur dulu». Satu aplikasi yang melakukannya semalaman lebih mahal daripada penghematan pengaturan mana pun di sini.\n\nPengukuran selalu aktif; ini menentukan apakah ASB bertindak. Jika aktif, aplikasi yang Anda pasang dan masih memegang wakelock setelah 45+ menit layar mati dipindahkan ke bucket «restricted» Android.\n\nTidak pernah disentuh: sumber kernel dan sistem, serta aplikasi autentikator, telepon, SMS, pesan, dan jam."
     }
   },
   "nav_main": "Beranda",
@@ -369,5 +377,7 @@
   "lv_lpm_save_t": "radio diam, keepalive direnggangkan",
   "lv_sessions_short": "sesi",
   "t_prof_applied": " diterapkan",
-  "doze_not_exempt": "tidak dikecualikan"
+  "doze_not_exempt": "tidak dikecualikan",
+  "smart_new_bucket": "mempelajari jam ini · ",
+  "smart_new_bucket_tail": " total terkumpul"
 }

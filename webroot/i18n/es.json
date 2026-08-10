@@ -213,6 +213,14 @@
         "short": "256. Less delay under load, same throughput on most links.",
         "shorter": "128. Lowest latency; can cost throughput on a very fast link."
       }
+    },
+    "perf_ceiling_pct": {
+      "name": "Techo de rendimiento",
+      "desc": "Qué parte del propio límite del perfil puede alcanzar el teléfono. 100% deja el perfil como está.\n\nValores menores recortan todos los techos proporcionalmente: más fresco, más batería y más lento donde realmente esperas.\n\nSe escala desde el perfil en lugar de fijarse por modelo: sus números ya están ajustados a tu hardware.\n\nSolo se mueven los techos; los mínimos que mantienen fluidos el desplazamiento y el audio no se tocan."
+    },
+    "wakelock_action": {
+      "name": "Actuar sobre wakelocks",
+      "desc": "Un wakelock es una app diciéndole a Android «aún no duermas». Una sola app haciéndolo toda la noche cuesta más de lo que cualquier ajuste de aquí puede ahorrar.\n\nLa medición siempre está activa; esto decide si ASB actúa. Activado, una app instalada por ti que siga reteniendo un wakelock tras 45+ minutos de pantalla apagada pasa al bucket «restringido» de Android.\n\nNunca se tocan: fuentes del kernel y del sistema, ni apps de autenticación, teléfono, SMS, mensajería y reloj."
     }
   },
   "nav_main": "Inicio",
@@ -369,5 +377,7 @@
   "lv_lpm_save_t": "radio en reposo, keepalives espaciados",
   "lv_sessions_short": "ses",
   "t_prof_applied": " aplicado",
-  "doze_not_exempt": "no exento"
+  "doze_not_exempt": "no exento",
+  "smart_new_bucket": "aprendiendo esta hora · ",
+  "smart_new_bucket_tail": " acumuladas en total"
 }

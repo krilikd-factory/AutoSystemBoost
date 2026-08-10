@@ -213,6 +213,14 @@
         "short": "256. Less delay under load, same throughput on most links.",
         "shorter": "128. Lowest latency; can cost throughput on a very fast link."
       }
+    },
+    "perf_ceiling_pct": {
+      "name": "Performans tavanı",
+      "desc": "Telefonun profilin kendi sınırının ne kadarına ulaşabileceği. 100% profili olduğu gibi bırakır.\n\nDaha düşük değerler tüm tavanları orantılı olarak kırpar: daha serin, daha uzun pil ve gerçekten beklediğiniz yerde daha yavaş.\n\nModele göre değil, profilden ölçeklenir: profilin sayıları zaten donanımınıza göre ayarlı.\n\nSadece tavanlar hareket eder; kaydırma ve sesi akıcı tutan tabanlara dokunulmaz."
+    },
+    "wakelock_action": {
+      "name": "Wakelock'lara müdahale",
+      "desc": "Wakelock, bir uygulamanın Android'e «henüz uyuma» demesidir. Bunu bütün gece yapan tek bir uygulama, buradaki her ayarın kazandırabileceğinden pahalıya mal olur.\n\nÖlçüm her zaman açık; bu, ASB'nin müdahale edip etmeyeceğine karar verir. Açıkken, ekran kapandıktan 45+ dakika sonra hâlâ wakelock tutan, sizin yüklediğiniz bir uygulama Android'in «kısıtlı» kovasına taşınır.\n\nAsla dokunulmaz: çekirdek ve sistem kaynakları ile kimlik doğrulayıcı, telefon, SMS, mesajlaşma ve saat uygulamaları."
     }
   },
   "nav_main": "Ana",
@@ -369,5 +377,7 @@
   "lv_lpm_save_t": "radyo boşta, keepalive aralıkları uzun",
   "lv_sessions_short": "otr",
   "t_prof_applied": " uygulandı",
-  "doze_not_exempt": "muaf değil"
+  "doze_not_exempt": "muaf değil",
+  "smart_new_bucket": "bu saati öğreniyor · ",
+  "smart_new_bucket_tail": " toplam biriktirildi"
 }

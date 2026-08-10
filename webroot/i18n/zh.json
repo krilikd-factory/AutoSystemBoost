@@ -240,6 +240,14 @@
         "short": "256. Less delay under load, same throughput on most links.",
         "shorter": "128. Lowest latency; can cost throughput on a very fast link."
       }
+    },
+    "perf_ceiling_pct": {
+      "name": "性能上限",
+      "desc": "手机可以用到配置自身上限的多少。100% 保持配置不变。\n\n更低的数值按比例削减所有上限：更凉、续航更久，在你真正等待的时候也更慢。\n\n按配置比例缩放，而不是按机型固定：配置里的数值本就已经匹配你的硬件。\n\n只有上限会变；保证滚动和音频流畅的下限不受影响。"
+    },
+    "wakelock_action": {
+      "name": "处理唤醒锁",
+      "desc": "唤醒锁是应用在对 Android 说「先别休眠」。一个应用整夜这样做，代价超过这里任何设置能省下的电量。\n\n测量始终开启；此项决定 ASB 是否介入。开启后，你自己安装的应用若在息屏 45 分钟以上仍持有唤醒锁，会被移入 Android 的「受限」分组。\n\n从不触碰：内核和系统来源，以及身份验证器、电话、短信、即时通讯和时钟应用。"
     }
   },
   "optFor": {
@@ -369,5 +377,7 @@
   "lv_lpm_save_t": "射频空闲，保活间隔拉长",
   "lv_sessions_short": "次",
   "t_prof_applied": " 已应用",
-  "doze_not_exempt": "未豁免"
+  "doze_not_exempt": "未豁免",
+  "smart_new_bucket": "正在学习这个时段 · ",
+  "smart_new_bucket_tail": " 已累计"
 }

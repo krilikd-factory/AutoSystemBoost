@@ -213,6 +213,14 @@
         "short": "256. Less delay under load, same throughput on most links.",
         "shorter": "128. Lowest latency; can cost throughput on a very fast link."
       }
+    },
+    "perf_ceiling_pct": {
+      "name": "Leistungsobergrenze",
+      "desc": "Wie viel von der Obergrenze des Profils das Gerät ausschöpfen darf. 100% lässt das Profil unverändert.\n\nNiedrigere Werte kürzen alle Obergrenzen anteilig: kühler, längere Laufzeit, und langsamer dort, wo Sie tatsächlich warten.\n\nVom Profil skaliert statt pro Modell festgelegt - die Werte des Profils passen bereits zu Ihrer Hardware.\n\nNur Obergrenzen bewegen sich; die Untergrenzen für flüssiges Scrollen und Audio bleiben unberührt."
+    },
+    "wakelock_action": {
+      "name": "Auf Wakelocks reagieren",
+      "desc": "Ein Wakelock ist eine App, die Android sagt: noch nicht schlafen. Eine einzige App, die das die ganze Nacht tut, kostet mehr, als jede Einstellung hier einsparen kann.\n\nGemessen wird immer; dies entscheidet, ob ASB eingreift. Eingeschaltet wird eine selbst installierte App, die nach 45+ Minuten Bildschirm-aus noch einen Wakelock hält, in Androids Bucket \"restricted\" verschoben.\n\nNie betroffen: Kernel- und Systemquellen sowie Authenticator-, Telefon-, SMS-, Messenger- und Uhr-Apps."
     }
   },
   "nav_main": "Start",
@@ -369,5 +377,7 @@
   "lv_lpm_save_t": "Funk im Leerlauf, Keepalives gestreckt",
   "lv_sessions_short": "Sitz.",
   "t_prof_applied": " angewendet",
-  "doze_not_exempt": "nicht befreit"
+  "doze_not_exempt": "nicht befreit",
+  "smart_new_bucket": "lernt diese Stunde · ",
+  "smart_new_bucket_tail": " insgesamt gesammelt"
 }

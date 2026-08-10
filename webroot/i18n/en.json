@@ -312,5 +312,7 @@
   "eta_modelled_tip": "Modelled: not enough recent history to measure yet.",
   "hr_tip_real": "Real hardware reading, not an estimate.",
   "learn_tip_none": "No sessions banked yet - Smart is using safe defaults.",
-  "t_not_applied_hint": "The file exists but does not hold what ASB intended."
+  "t_not_applied_hint": "The file exists but does not hold what ASB intended.",
+  "smart_new_bucket": "learning this hour · ",
+  "smart_new_bucket_tail": " banked overall"
 }
