@@ -619,6 +619,25 @@ case "${_awk_pct:--1}" in
     fi ;;
 esac
 
+SEC "5a5. WAKELOCKS  (what is keeping the phone awake)"
+# The suspend figure above says the phone is not sleeping; this says who is doing it.
+# Without the name, "awake 73%" is a fact the user can do nothing with.
+if [ -s /data/adb/asb/wakelock_top ]; then
+  NOTE "top sources holding the CPU (name | ms held | times taken):"
+  while IFS='|' read -r _wn _wa _wc; do
+    [ -n "$_wn" ] || continue
+    P "    $_wn  ·  $(( ${_wa:-0} / 1000 ))s  ·  ${_wc:-0}x"
+  done < /data/adb/asb/wakelock_top
+  NOTE "kernel sources (qup_uart, alarmtimer, wlan) are the hardware asking, not an app"
+  NOTE "a package name here is an app you can restrict, uninstall or exempt yourself"
+else
+  NOTE "no snapshot yet - taken every 15 min, needs /sys/kernel/debug to be readable"
+fi
+NOTE "wakelock_action = $(cfg wakelock_action)  (0 = report only)"
+if [ -s /data/adb/asb/wakelock_restricted ]; then
+  NOTE "$(wc -l < /data/adb/asb/wakelock_restricted) app(s) moved to restricted by ASB - undone on uninstall"
+fi
+
 SEC "5b. HAPTICS"
 _h_lvl="$(cfg haptic_strength)"
 case "$_h_lvl" in
