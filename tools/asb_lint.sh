@@ -560,6 +560,29 @@ for _l in en $_i18n_langs; do
 done
 ok "translation files present and parseable"
 
+# Every runtime script must be in the workflow's required-files list.
+#
+# Adding a script means touching the script itself, install.sh for its chmod, service.sh to
+# call it - and the two workflows, which is the one nobody remembers because nothing breaks
+# locally when you forget. asb_wakelock_watch.sh shipped without it and was caught by a
+# reviewer asking, not by anything here.
+#
+# The list is what makes the build fail loudly if a file goes missing from the tree; a
+# script absent from it can vanish from a release with no warning at all.
+_wf=".github/workflows/build-release.yml"
+if [ -f "$_wf" ]; then
+  _missing_rt=""
+  for _rs in runtime/*.sh; do
+    [ -f "$_rs" ] || continue
+    grep -q "\"$_rs\"" "$_wf" 2>/dev/null || _missing_rt="$_missing_rt $(basename "$_rs")"
+  done
+  if [ -n "$_missing_rt" ]; then
+    err "runtime scripts missing from the workflow required-files list:$_missing_rt"
+  else
+    ok "every runtime script is listed in the release workflow"
+  fi
+fi
+
 # Every card must have a name in every language.
 #
 # Adding a card means touching CFG_ITEMS, the icon map, the group map, the apply map and
