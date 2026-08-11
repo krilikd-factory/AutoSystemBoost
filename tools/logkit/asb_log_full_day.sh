@@ -158,12 +158,23 @@ lk_poll_for_phase() {
 }
 
 # ── throttle detection ─────────────────────────────────────────────────────
+# Prime is the LAST policy, not always policy6.
+#
+# policy6 is right on a 6+2 layout and does not exist on a 4-cluster one (policy0/2/5/7).
+# The same assumption was fixed in the phase sampler earlier; this copy was missed, so on
+# those devices the throttle column compared against an empty hwmax and reported 0 for
+# every phase - "never throttled" on a phone that was throttling.
+LK_PRIME_POL=""
+for _pp in /sys/devices/system/cpu/cpufreq/policy*; do
+  [ -d "$_pp" ] && LK_PRIME_POL="$_pp"
+done
+[ -n "$LK_PRIME_POL" ] || LK_PRIME_POL=/sys/devices/system/cpu/cpufreq/policy6
 LK_P0_HWMAX=$(cat /sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq 2>/dev/null)
-LK_P6_HWMAX=$(cat /sys/devices/system/cpu/cpufreq/policy6/cpuinfo_max_freq 2>/dev/null)
+LK_P6_HWMAX=$(cat "$LK_PRIME_POL/cpuinfo_max_freq" 2>/dev/null)
 lk_throttle_row() {
   _ph="$1"; _e=$(date +%s)
   _p0=$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null)
-  _p6=$(cat /sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq 2>/dev/null)
+  _p6=$(cat "$LK_PRIME_POL/scaling_max_freq" 2>/dev/null)
   _capped=0
   [ -n "$_p0" ] && [ -n "$LK_P0_HWMAX" ] && [ "$_p0" -lt "$LK_P0_HWMAX" ] 2>/dev/null && _capped=1
   [ -n "$_p6" ] && [ -n "$LK_P6_HWMAX" ] && [ "$_p6" -lt "$LK_P6_HWMAX" ] 2>/dev/null && _capped=1

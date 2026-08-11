@@ -523,7 +523,7 @@ lk_emit_cap_source_summary() {
       print "===== cap_source summary (tick counts from status_watch) ====="
       printf "policy0 (LITTLE)  total_ticks=%d\n", tot0
       for (k in p0) printf "  %-16s %6d  (%5.1f%%)\n", k, p0[k], tot0>0?100*p0[k]/tot0:0
-      printf "policy6 (BIG)     total_ticks=%d\n", tot6
+      printf "prime (BIG)       total_ticks=%d\n", tot6
       for (k in p6) printf "  %-16s %6d  (%5.1f%%)\n", k, p6[k], tot6>0?100*p6[k]/tot6:0
     }
   ' "$_src" > "$LK_OUT_DIR/cap_source_summary.txt"
