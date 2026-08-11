@@ -2814,10 +2814,10 @@ if [ -f "$MODPATH/tools/asb_install_probe.sh" ]; then
 fi
 
 if [ "$ASB_IS_OP15" = "true" ]; then
-  asb_apply_device_native_tuning "OnePlus 15 (canoe)" "OnePlus15"
+  asb_apply_device_native_tuning "${ASB_DEVICE_NAME:-OnePlus} (canoe)" "OnePlus15"
 
 elif [ "$ASB_IS_OP13" = "true" ]; then
-  asb_apply_device_native_tuning "OnePlus 13 (sun / tuna / kera)" "OnePlus13"
+  asb_apply_device_native_tuning "${ASB_DEVICE_NAME:-OnePlus} (sun / tuna / kera)" "OnePlus13"
 elif [ "$ASB_IS_OP12" = "true" ]; then
   for _stale in \
       "$NVBASE/modules/$MODID/system/odm/etc/camera" \
@@ -2830,7 +2830,17 @@ elif [ "$ASB_IS_OP12" = "true" ]; then
       "$NVBASE/modules_update/$MODID/system/odm/etc/media_profiles"*.xml; do
     [ -e "$_stalemp" ] && rm -f "$_stalemp" 2>/dev/null || true
   done
-  asb_apply_device_native_tuning "OnePlus 12 (pineapple / cliffs)" "OnePlus12"
+  # Label from the device, not from the platform.
+  #
+  # This branch covers every SM8650 phone - pineapple and cliffs - and printed "OnePlus 12"
+  # for all of them. An Ace 5 owner saw their model detected correctly on one line and
+  # "installation for OnePlus 12" on the next, which reads like the module got confused
+  # about what it is running on. It did not: the tuning is per-platform and correct. Only
+  # the label was wrong, and a wrong label on an install screen costs trust that the rest
+  # of the output then has to earn back.
+  #
+  # ASB_DEVICE_NAME is already resolved above from the vendor's own marketing name.
+  asb_apply_device_native_tuning "${ASB_DEVICE_NAME:-OnePlus} (pineapple / cliffs)" "OnePlus12"
 else
   asb_prune_non_op15_vendor_overlays
   if [ "$ASB_IS_ONEPLUS" = "true" ]; then
