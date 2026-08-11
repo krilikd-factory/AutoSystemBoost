@@ -63,6 +63,12 @@ typedef struct {
      * A burst is seconds and 4K60 is minutes; a video call is tens of minutes and was
      * pinning interactive caps for all of it. */
     int   camera_hold_max_s;
+    /* Percentage of the profile's own ceilings the governor may use, 60..100.
+     * The shell path honours this when it writes the uclamp tiers; without it here the
+     * governor recomputed caps from the profile bounds every tick and put the full value
+     * straight back - so on Smart, where caps ARE recomputed every tick, the setting did
+     * nothing at all. Reported as: set to 75, no change in heat. */
+    int   perf_ceiling_pct;
     int   gaming_gap_thresh;
     int   gaming_gap_ticks;
     int   gaming_retry_cooldown_s;
@@ -225,6 +231,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->camera_busy_pct      = 15;
     c->camera_hold_grace_s  = 20;
     c->camera_hold_max_s   = 180;
+    c->perf_ceiling_pct    = 100;
     /*
      * Below HEAVY (0.72), not above it.
      * The device sat there for 24% of all screen-on time and the vendor thermal HAL never
@@ -379,6 +386,12 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "camera_busy_pct"))      c->camera_busy_pct      = atoi(v);
     else if (!strcmp(k, "camera_hold_grace_s"))  c->camera_hold_grace_s  = atoi(v);
     else if (!strcmp(k, "camera_hold_max_s"))    c->camera_hold_max_s = atoi(v);
+    else if (!strcmp(k, "perf_ceiling_pct")) {
+        int _pc = atoi(v);
+        if (_pc < 60)  _pc = 60;
+        if (_pc > 100) _pc = 100;
+        c->perf_ceiling_pct = _pc;
+    }
     else if (!strcmp(k, "gaming_gap_thresh"))    c->gaming_gap_thresh = atoi(v);
     else if (!strcmp(k, "gaming_gap_ticks"))     c->gaming_gap_ticks  = atoi(v);
     else if (!strcmp(k, "gaming_retry_cooldown_s")) c->gaming_retry_cooldown_s = atoi(v);

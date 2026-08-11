@@ -4117,6 +4117,54 @@ int main(int argc, char **argv) {
                 for (int i = 0; i < 3; i++)
                     _new_caps.cpu_max[i] = (int)(_new_caps.cpu_max[i] * keep);
             }
+            /* The user's ceiling trim, applied to what the governor just computed.
+             *
+             * The shell path already honoured perf_ceiling_pct when writing the uclamp
+             * tiers, but on Smart the CPU caps are recomputed here every tick from the
+             * profile bounds - so the full value went straight back and the setting did
+             * nothing. Reported as: set to 75, games still hot.
+             *
+             * Ceilings only, and floors are left alone, matching what the shell does.
+             */
+            /* Snap the caps here, where they are decided - not only in the writer.
+             *
+             * The writer already snapped before writing, so the hardware got a real
+             * frequency. But current_caps kept the raw ratio value, and the anti-clamp
+             * detector compares current_caps against what sysfs reads back. Part of the
+             * difference it saw was therefore its own rounding, reported as a vendor
+             * clamp: the log shows cpu_max=[3140760,2627631], numbers no device has.
+             *
+             * Snapping at the decision point makes the request, the write and the
+             * comparison all refer to the same number, which is the only way the detector
+             * can tell "somebody overrode us" from "we asked for something impossible".
+             */
+            for (int i = 0; i < 3; i++) {
+                if (_new_caps.cpu_max[i] <= 0) continue;
+                int _si = -1;
+                for (int k = 0; k < g_cpu_all_paths_n && k < 16; k++) {
+                    if (g_cpu_all_max_paths[k][0] && g_cpu_max_paths[i][0] &&
+                        strcmp(g_cpu_all_max_paths[k], g_cpu_max_paths[i]) == 0) { _si = k; break; }
+                }
+                if (_si >= 0)
+                    _new_caps.cpu_max[i] = (int)cpu_snap_freq(_si, (long)_new_caps.cpu_max[i]);
+            }
+            if (g_asb_cfg.perf_ceiling_pct > 0 && g_asb_cfg.perf_ceiling_pct < 100) {
+                for (int i = 0; i < 3; i++) {
+                    if (_new_caps.cpu_max[i] > 0)
+                        _new_caps.cpu_max[i] =
+                            (int)((long)_new_caps.cpu_max[i] * g_asb_cfg.perf_ceiling_pct / 100);
+                }
+                if (_new_caps.gpu_max_pct > 0)
+                    _new_caps.gpu_max_pct =
+                        _new_caps.gpu_max_pct * g_asb_cfg.perf_ceiling_pct / 100;
+                for (int i = 0; i < 3; i++) {
+                    /* Never leave a floor above the ceiling we just lowered - that is the
+                     * contradiction the writer had to clean up after. */
+                    if (_new_caps.cpu_min[i] > 0 && _new_caps.cpu_max[i] > 0 &&
+                        _new_caps.cpu_min[i] > _new_caps.cpu_max[i])
+                        _new_caps.cpu_min[i] = _new_caps.cpu_max[i];
+                }
+            }
             fsm.current_caps = _new_caps;
         }
     }

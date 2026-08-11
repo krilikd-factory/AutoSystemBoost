@@ -713,7 +713,21 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                 writes++;
         }
     }
-    if (!thermal_cap) {
+    /* The minimum is maintained even while a thermal cap is active.
+     *
+     * This whole block used to be skipped when thermal_cap was set, on the reasoning that
+     * the cap owns the frequencies. But skipping it leaves the PREVIOUS minimum in place -
+     * so when the cap drops the maximum, the module is left asking for a floor above its
+     * own ceiling. A field capture shows exactly that: min_written=17 against max_written=9
+     * throughout SUSTAINED, with min_overridden=1 on every sample and 66 recorded
+     * "vendor overrides" that were nothing of the kind - the kernel clamping an impossible
+     * request, and the module logging its own contradiction as somebody else's doing.
+     *
+     * Two costs. The audit becomes noise, hiding the real overrides among the phantom
+     * ones. And a floor left high during thermal throttling is a floor asking the phone to
+     * stay fast in the one state whose entire job is to cool it down.
+     */
+    {
         for (int i = 0; i < 3; i++) {
             if (!g_cpu_min_paths[i][0]) continue;
             int want_min = caps->cpu_min[i];
@@ -721,6 +735,16 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             int cur_max = sysfs_read_int(g_cpu_max_paths[i], 0);
             if (cur_max > 0 && want_min > cur_max)
                 want_min = cur_max;
+            /* Snap after clamping, so the floor is a step this cluster actually has -
+             * otherwise the kernel rounds it up and undoes the clamp we just applied. */
+            {
+                int _mi = -1;
+                for (int k = 0; k < g_cpu_all_paths_n && k < 16; k++) {
+                    if (g_cpu_all_max_paths[k][0] &&
+                        strcmp(g_cpu_all_max_paths[k], g_cpu_max_paths[i]) == 0) { _mi = k; break; }
+                }
+                if (_mi >= 0) want_min = (int)cpu_snap_freq(_mi, (long)want_min);
+            }
             if (force || want_min != g_wcache.cpu_min[i]) {
                 if (sysfs_write_int(g_cpu_min_paths[i], want_min) == 0) {
                     g_wcache.cpu_min[i] = want_min;
