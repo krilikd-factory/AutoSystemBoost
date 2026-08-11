@@ -732,9 +732,25 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             if (!g_cpu_min_paths[i][0]) continue;
             int want_min = caps->cpu_min[i];
             if (want_min <= 0) continue;
+            /* Clamp against what WE are asking for, and against what is actually there.
+             *
+             * Reading only the current sysfs value has two holes. If the min is written
+             * before the max in the same pass, the value read is last tick's. And if the
+             * vendor has just clamped the max down, the min gets pinned to the vendor's
+             * number rather than to ours - so the module ends up requesting a floor it
+             * never chose.
+             *
+             * A field capture after the first fix still shows min_written=17 against
+             * max_written=14: better than 66 phantom overrides, but the contradiction is
+             * still there. Taking the lower of the two removes it in both directions.
+             */
             int cur_max = sysfs_read_int(g_cpu_max_paths[i], 0);
-            if (cur_max > 0 && want_min > cur_max)
-                want_min = cur_max;
+            int own_max = caps->cpu_max[i];
+            int lim = 0;
+            if (own_max > 0) lim = own_max;
+            if (cur_max > 0 && (lim == 0 || cur_max < lim)) lim = cur_max;
+            if (lim > 0 && want_min > lim)
+                want_min = lim;
             /* Snap after clamping, so the floor is a step this cluster actually has -
              * otherwise the kernel rounds it up and undoes the clamp we just applied. */
             {
