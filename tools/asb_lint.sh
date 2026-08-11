@@ -583,6 +583,30 @@ if [ -f "$_wf" ]; then
   fi
 fi
 
+# Every card must be in SNAP_KEYS, or its value never leaves the phone.
+#
+# SNAP_KEYS is what export writes and what an upgrade restores. A card missing from it
+# looks fine in the UI and is silently absent from every backup - the user changes a
+# setting, exports, and the value is not in the file. Found that way for two cards added
+# in this release.
+if [ -f webroot/index.html ] && command -v python3 >/dev/null 2>&1; then
+  _snap_miss="$(python3 - <<'PYEOF_SNAP'
+import re
+s = open('webroot/index.html', encoding='utf-8').read()
+m = re.search(r"SNAP_KEYS\s*=\s*\[(.*?)\]", s, re.S)
+snap = set(re.findall(r"'([a-zA-Z_0-9]+)'", m.group(1))) if m else set()
+i = s.index('const CFG_ITEMS = [');  j = s.index('\n];', i)
+keys = re.findall(r"\{ key:'([A-Za-z_][A-Za-z_0-9]*)'", s[i:j])
+print(' '.join(k for k in keys if k not in snap))
+PYEOF_SNAP
+)"
+  if [ -n "$_snap_miss" ]; then
+    err "cards missing from SNAP_KEYS (never exported, never restored):$_snap_miss"
+  else
+    ok "every card is in SNAP_KEYS"
+  fi
+fi
+
 # Every card must have a name in every language.
 #
 # Adding a card means touching CFG_ITEMS, the icon map, the group map, the apply map and
