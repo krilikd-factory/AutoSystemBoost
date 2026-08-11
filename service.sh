@@ -907,11 +907,20 @@ asb_thermal_stock_capture
 # Raised, not refused: the user asked for aggressive thermal behaviour and gets the most
 # aggressive one that is still a threshold rather than a permanent state.
 asb_thermal_sanity() {
+  # Drop a floor written by an older build before recomputing.
+  #
+  # The previous version took the hottest CPU zone, which on a device with a few warm
+  # sensors produced a floor of 70 - the top of the slider. The governor then raised the
+  # user's chosen 60 to that, so the setting was overridden by its own safety check and
+  # games ran to 72 C with throttle never engaging. A stale file would keep doing that
+  # after the fix, because the floor is only rewritten when the new value is higher.
+  rm -f /data/adb/asb/thermal_floor 2>/dev/null
   _ts_conf="$MODDIR/config/governor.conf"
   _ts_set="$(grep -E '^[[:space:]]*sustained_temp_enter=' "$_ts_conf" 2>/dev/null \
              | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_ts_set" in ''|*[!0-9]*) return 0 ;; esac
   _ts_idle=0
+  _ts_list=""
   for _ts_z in /sys/class/thermal/thermal_zone*; do
     case "$(cat "$_ts_z/type" 2>/dev/null)" in *cpu*|*CPU*) : ;; *) continue ;; esac
     _ts_v="$(cat "$_ts_z/temp" 2>/dev/null)"
@@ -919,8 +928,18 @@ asb_thermal_sanity() {
     [ "$_ts_v" -gt 1000 ] && _ts_v=$(( _ts_v / 1000 ))
     [ "$_ts_v" -lt 20 ] && continue
     [ "$_ts_v" -gt 110 ] && continue
-    [ "$_ts_v" -gt "$_ts_idle" ] && _ts_idle="$_ts_v"
+    # Collect, do not maximise. Taking the hottest zone means one outlier - a package
+    # sensor, or a core that just finished something - sets the floor for the whole phone.
+    # On this device three zones read above 60 C while the rest sit at 43-44, and the max
+    # rule turned a chosen threshold of 60 into a floor of 70: the highest the slider can
+    # express, i.e. the setting was overridden completely by its own safety check.
+    _ts_list="$_ts_list $_ts_v"
   done
+  # Median, not maximum: it answers "what is this phone's normal temperature" rather than
+  # "what is the hottest thing on it right now", which is the question this check needs.
+  _ts_idle="$(printf '%s\n' $_ts_list | grep -E '^[0-9]+$' | sort -n \
+              | awk '{a[NR]=$1} END{ if(NR) print a[int((NR+1)/2)] }')"
+  case "$_ts_idle" in ''|*[!0-9]*) _ts_idle=0 ;; esac
   [ "$_ts_idle" -gt 0 ] || return 0
   _ts_min=$(( _ts_idle + 4 ))
   # Never above what the slider can express.

@@ -733,7 +733,24 @@ else
   _btempCx=0
 fi
 
-_ewma_x10=$(grep "^smart_drain_ewma_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+# Same source as the WebUI, in the same order of preference.
+#
+# This read smart_drain_ewma_x10 while the WebUI reads smart_drain_pctph_x10 and only falls
+# back to the ewma. Two different rates, both labelled "measured", both feeding the same
+# formula - so the two screens showed 6h13m and 10h21m six seconds apart. Neither was
+# wrong; they were answering with different inputs.
+#
+# pctph is the current session's rate, ewma is the smoothed one. The WebUI picks pctph
+# first, so this does too - agreeing on a number matters more here than which of the two
+# is the better estimate, because a user comparing screens cannot see the difference.
+_ewma_x10=$(grep "^smart_drain_pctph_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+case "$_ewma_x10" in ''|0|*[!0-9]*) _ewma_x10=""; esac
+[ -n "$_ewma_x10" ] || _ewma_x10=$(grep "^smart_drain_ewma_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+# The WebUI also discards the rate when the measurement window is short; matching that
+# keeps "(measured)" honest on both screens rather than only on one.
+_dwin=$(grep "^smart_drain_window_s=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+case "$_dwin" in ''|*[!0-9]*) _dwin=0 ;; esac
+[ "$_dwin" -lt 600 ] 2>/dev/null && _ewma_x10=0
 _on_ma=0
 if [ -n "$_ewma_x10" ] && [ "$_ewma_x10" -gt 0 ] 2>/dev/null && \
    [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null; then
