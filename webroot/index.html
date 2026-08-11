@@ -2844,7 +2844,11 @@ const SNAP_KEYS = [
   'gms_freeze',
   'athena_service',
   'net_rps',
-  'net_txqueue'];
+  'net_txqueue',
+  /* Added with the cards themselves. A key missing here silently drops out of every
+   * backup and every upgrade restore - the user changes a setting, exports, and the
+   * value is simply not in the file. Reported exactly that way for these two. */
+  'perf_ceiling_pct', 'wakelock_action'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
