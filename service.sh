@@ -922,12 +922,27 @@ asb_thermal_sanity() {
   _ts_idle=0
   _ts_list=""
   for _ts_z in /sys/class/thermal/thermal_zone*; do
-    case "$(cat "$_ts_z/type" 2>/dev/null)" in *cpu*|*CPU*) : ;; *) continue ;; esac
+    _ts_type="$(cat "$_ts_z/type" 2>/dev/null)"
+    case "$_ts_type" in *cpu*|*CPU*) : ;; *) continue ;; esac
+    # Trip points are not temperatures.
+    #
+    # cpu-hw-trip-0/1 match "*cpu*" and read a constant 95000 - they are the hardware
+    # shutdown thresholds, not sensors. Two of them among twenty real zones dragged the
+    # median up enough that the floor still came out at 70 after the median fix, which is
+    # why the chosen 60 was still being overridden. The max rule was one bug; including
+    # trip points was a second one underneath it.
+    case "$_ts_type" in
+      *trip*|*limit*|*shutdown*|*crit*|*alarm*) continue ;;
+    esac
     _ts_v="$(cat "$_ts_z/temp" 2>/dev/null)"
     case "$_ts_v" in ''|*[!0-9]*) continue ;; esac
     [ "$_ts_v" -gt 1000 ] && _ts_v=$(( _ts_v / 1000 ))
     [ "$_ts_v" -lt 20 ] && continue
     [ "$_ts_v" -gt 110 ] && continue
+    # A zone reading above 85 while the phone is booting is not idle temperature either -
+    # it is a constant, a fault, or a sensor for something that is not the CPU. Excluded
+    # rather than trusted: this figure only exists to answer "what is normal here".
+    [ "$_ts_v" -gt 85 ] && continue
     # Collect, do not maximise. Taking the hottest zone means one outlier - a package
     # sensor, or a core that just finished something - sets the floor for the whole phone.
     # On this device three zones read above 60 C while the rest sit at 43-44, and the max
@@ -939,6 +954,7 @@ asb_thermal_sanity() {
   # "what is the hottest thing on it right now", which is the question this check needs.
   _ts_idle="$(printf '%s\n' $_ts_list | grep -E '^[0-9]+$' | sort -n \
               | awk '{a[NR]=$1} END{ if(NR) print a[int((NR+1)/2)] }')"
+  _ts_n="$(printf '%s\n' $_ts_list | grep -cE '^[0-9]+$')"
   case "$_ts_idle" in ''|*[!0-9]*) _ts_idle=0 ;; esac
   [ "$_ts_idle" -gt 0 ] || return 0
   _ts_min=$(( _ts_idle + 4 ))
@@ -959,7 +975,14 @@ asb_thermal_sanity() {
     # this file and clamp against it; the config keeps saying what the user asked for.
     mkdir -p /data/adb/asb 2>/dev/null
     printf '%s\n' "$_ts_min" > /data/adb/asb/thermal_floor 2>/dev/null
-    asb_log "thermal: point ${_ts_set}C is at or below this device's own CPU temperature (${_ts_idle}C) - clamping to ${_ts_min}C at runtime, config left as chosen"
+    # Log the sample too, not just the verdict.
+    #
+    # The floor came out at 70 on a device whose visible zones sat at 40 C, and there was
+    # no way to tell from the outside whether the median was wrong or the reading was -
+    # this phone has 98 thermal zones and asbdiag prints a subset, so the numbers a human
+    # can see are not the numbers this computed from. Two diagnoses were possible and the
+    # log distinguished neither; now the sample size and the median are both recorded.
+    asb_log "thermal: point ${_ts_set}C is at or below this device's own CPU temperature (median ${_ts_idle}C over ${_ts_n} zone(s)) - clamping to ${_ts_min}C at runtime, config left as chosen"
   else
     rm -f /data/adb/asb/thermal_floor 2>/dev/null
   fi
