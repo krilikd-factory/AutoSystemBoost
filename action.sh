@@ -73,6 +73,9 @@ esac
 # mistranslated unit turns a diagnostic into a wrong reading.
 case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
   *ru-*|*ru_*|ru)
+    M_CONF_LOW="Пока низкая — Smart здесь в основном использует безопасные значения."
+    M_CONF_HIGH="Высокая — решения в этом слоте основаны на измерениях, а не на умолчаниях."
+    M_DRAIN_NOSAMPLE="расход не замерялся — экран здесь включают ненадолго"
     M_AWAKE="бодрствование во сне"; M_MIN="мин"
     M_AWAKE_BAD="!! телефон не засыпает — это дороже любой настройки здесь"
     M_SLOT="Слот времени"; M_SLOT_OF="из 12"
@@ -105,6 +108,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WEEKEND="выходной"; M_WEEKDAY="будний день"
     M_FOREGROUND="активное приложение" ;;
   *uk-*|*uk_*|uk)
+    M_CONF_LOW="Поки низька — Smart тут переважно використовує безпечні значення."
+    M_CONF_HIGH="Висока — рішення в цьому слоті базуються на вимірюваннях, а не на умовчаннях."
+    M_DRAIN_NOSAMPLE="витрата не вимірювалась — екран тут вмикають ненадовго"
     M_AWAKE="неспання уві сні"; M_MIN="хв"
     M_AWAKE_BAD="!! телефон не засинає — це дорожче за будь-яке налаштування тут"
     M_SLOT="Слот часу"
@@ -157,6 +163,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="пізній вечір"
     M_WEEKEND="вихідний"; M_WEEKDAY="будній день" ;;
   *de-*|*de_*|de)
+    M_CONF_LOW="Noch niedrig - Smart nutzt hier vorwiegend sichere Standardwerte."
+    M_CONF_HIGH="Hoch - Entscheidungen in diesem Fenster beruhen auf Messungen, nicht auf Standardwerten."
+    M_DRAIN_NOSAMPLE="Verbrauch nicht gemessen - der Bildschirm ist hier nur kurz an"
     M_AWAKE="wach im Standby"; M_MIN="Min"
     M_AWAKE_BAD="!! das Gerät schläft nicht ein - teurer als jede Einstellung hier"
     M_SLOT="Zeitfenster"
@@ -209,6 +218,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="Abend"
     M_WEEKEND="Wochenende"; M_WEEKDAY="Wochentag" ;;
   *es-*|*es_*|es)
+    M_CONF_LOW="Aún baja: Smart usa aquí sobre todo valores seguros."
+    M_CONF_HIGH="Alta: las decisiones en esta franja se basan en lo medido, no en valores por defecto."
+    M_DRAIN_NOSAMPLE="consumo no medido - aquí la pantalla se enciende poco tiempo"
     M_AWAKE="despierto en reposo"; M_MIN="min"
     M_AWAKE_BAD="!! el teléfono no entra en suspensión - cuesta más que cualquier ajuste de aquí"
     M_SLOT="Franja horaria"
@@ -261,6 +273,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="noche"
     M_WEEKEND="fin de semana"; M_WEEKDAY="día laborable" ;;
   *pt-*|*pt_*|pt)
+    M_CONF_LOW="Ainda baixa: o Smart usa aqui sobretudo valores seguros."
+    M_CONF_HIGH="Alta: as decisões nesta faixa baseiam-se no que foi medido, não em padrões."
+    M_DRAIN_NOSAMPLE="consumo não medido - aqui a tela fica ligada pouco tempo"
     M_AWAKE="acordado em repouso"; M_MIN="min"
     M_AWAKE_BAD="!! o telefone não suspende - custa mais que qualquer ajuste daqui"
     M_SLOT="Faixa horária"
@@ -313,6 +328,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="noite"
     M_WEEKEND="fim de semana"; M_WEEKDAY="dia útil" ;;
   *tr-*|*tr_*|tr)
+    M_CONF_LOW="Henüz düşük - Smart burada çoğunlukla güvenli varsayılanları kullanıyor."
+    M_CONF_HIGH="Yüksek - bu dilimdeki kararlar varsayılanlara değil ölçümlere dayanıyor."
+    M_DRAIN_NOSAMPLE="tüketim ölçülmedi - burada ekran kısa süre açık kalıyor"
     M_AWAKE="beklemede uyanık"; M_MIN="dk"
     M_AWAKE_BAD="!! telefon uykuya geçmiyor - buradaki her ayardan pahalıya mal oluyor"
     M_SLOT="Zaman dilimi"
@@ -365,6 +383,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="akşam"
     M_WEEKEND="hafta sonu"; M_WEEKDAY="hafta içi" ;;
   *fr-*|*fr_*|fr)
+    M_CONF_LOW="Encore faible : Smart utilise ici surtout des valeurs sûres."
+    M_CONF_HIGH="Élevée : les décisions dans ce créneau reposent sur les mesures, pas sur les valeurs par défaut."
+    M_DRAIN_NOSAMPLE="consommation non mesurée - l’écran reste peu allumé ici"
     M_AWAKE="éveillé en veille"; M_MIN="min"
     M_AWAKE_BAD="!! le téléphone ne se met pas en veille - cela coûte plus que tout réglage ici"
     M_SLOT="Créneau horaire"
@@ -417,6 +438,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="soir"
     M_WEEKEND="week-end"; M_WEEKDAY="jour de semaine" ;;
   *hy-*|*hy_*|hy)
+    M_CONF_LOW="Դեռ ցածր է — Smart-ն այստեղ հիմնականում օգտագործում է անվտանգ արժեքներ։"
+    M_CONF_HIGH="Բարձր է — այս հատվածի որոշումները հիմնված են չափումների, ոչ թե լռելյայն արժեքների վրա։"
+    M_DRAIN_NOSAMPLE="ծախսը չի չափվել — էկրանն այստեղ կարճ է միանում"
     M_AWAKE="արթուն քնի ժամանակ"; M_MIN="րոպե"
     M_AWAKE_BAD="!! հեռախոսը չի քնում — սա ավելի թանկ է, քան ցանկացած կարգավորում այստեղ"
     M_SLOT="Ժամային հատված"
@@ -469,6 +493,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="երեկո"
     M_WEEKEND="հանգստյան օր"; M_WEEKDAY="աշխատանքային օր" ;;
   *it-*|*it_*|it)
+    M_CONF_LOW="Ancora bassa: qui Smart usa soprattutto valori sicuri."
+    M_CONF_HIGH="Alta: le decisioni in questa fascia si basano su ciò che ha misurato, non sui valori predefiniti."
+    M_DRAIN_NOSAMPLE="consumo non misurato - qui lo schermo resta acceso poco"
     M_AWAKE="sveglio in standby"; M_MIN="min"
     M_AWAKE_BAD="!! il telefono non va in sospensione - costa più di qualsiasi impostazione qui"
     M_SLOT="Fascia oraria"
@@ -521,6 +548,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="sera"
     M_WEEKEND="fine settimana"; M_WEEKDAY="giorno feriale" ;;
   *ar-*|*ar_*|ar)
+    M_CONF_LOW="لا تزال منخفضة — يستخدم Smart هنا القيم الآمنة غالبًا."
+    M_CONF_HIGH="عالية — القرارات في هذه الفترة مبنية على ما قِيس، لا على القيم الافتراضية."
+    M_DRAIN_NOSAMPLE="الاستهلاك لم يُقَس — الشاشة هنا تعمل لفترات قصيرة"
     M_AWAKE="مستيقظ أثناء النوم"; M_MIN="دقيقة"
     M_AWAKE_BAD="!! الهاتف لا يدخل السبات — هذا أغلى من أي إعداد هنا"
     M_SLOT="الفترة الزمنية"
@@ -573,6 +603,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="مساء"
     M_WEEKEND="عطلة"; M_WEEKDAY="يوم عمل" ;;
   zh-cn*|zh_cn*|*zh-hans*|zh)
+    M_CONF_LOW="仍然较低 —— Smart 在这里主要使用安全默认值。"
+    M_CONF_HIGH="较高 —— 这个时段的决策依据实测数据，而非默认值。"
+    M_DRAIN_NOSAMPLE="未测量耗电 —— 这个时段屏幕只会短暂点亮"
     M_AWAKE="休眠时唤醒占比"; M_MIN="分钟"
     M_AWAKE_BAD="!! 手机没有真正休眠 —— 这比这里任何设置都更耗电"
     M_SLOT="时段"
@@ -625,6 +658,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_DP5="晚上"
     M_WEEKEND="周末"; M_WEEKDAY="工作日" ;;
   *)
+    M_CONF_LOW="Still low - Smart is mostly using safe defaults here."
+    M_CONF_HIGH="High - decisions here are driven by what it measured, not defaults."
+    M_DRAIN_NOSAMPLE="drain not measured - the screen is only on briefly here"
     M_AWAKE="awake while asleep"; M_MIN="min"
     M_AWAKE_BAD="!! the phone is not suspending - this costs more than any setting here"
     M_SLOT="Time slot"; M_SLOT_OF="of 12"
@@ -1017,7 +1053,10 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
       *) _dpn="?" ;;
     esac
     [ "$_we" = "1" ] && _dayk="$M_WEEKEND" || _dayk="$M_WEEKDAY"
-    echo "       ${M_SLOT}: ${_dpn} · ${_dayk} (${_bid} ${M_SLOT_OF})"
+    # Displayed 1-based. The internal id starts at 0, and "0 of 12" reads like a count
+    # that has not started rather than the first of twelve.
+    _bid_h=$(( ${_bid:-0} + 1 ))
+    echo "       ${M_SLOT}: ${_dpn} · ${_dayk} (${_bid_h} ${M_SLOT_OF})"
     echo "         ${M_SLOT_H1}"
     echo "         ${M_SLOT_H2}"
 
@@ -1025,17 +1064,26 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     _conf="$(_st smart_confidence)"; _ses="$(_st smart_sessions_total)"
     if [ -n "$_conf" ] && [ "$_conf" -gt 0 ] 2>/dev/null; then
       echo "       ${M_CONF}: $((_conf / 10))%  ·  ${_ses:-0} ${M_SES_BANK}"
-      [ "$_conf" -lt 350 ] 2>/dev/null \
-        && echo "         Still low - Smart is mostly using safe defaults here."
-      [ "$_conf" -ge 650 ] 2>/dev/null \
-        && echo "         High - decisions in this slot are driven by what it measured, not defaults."
+      # These two were left in English inside an otherwise translated block - visible on a
+      # Russian screenshot as one stray sentence among the rest.
+      [ "$_conf" -lt 350 ] 2>/dev/null && echo "         ${M_CONF_LOW}"
+      [ "$_conf" -ge 650 ] 2>/dev/null && echo "         ${M_CONF_HIGH}"
     fi
 
     # --- 3. what it measured ---------------------------------------------------------
     _bt2="$(_st smart_bucket_temp_x10)"; _bd2="$(_st smart_bucket_drain_x10)"
     _tw2="$(_st smart_therm_warm_x10)"; _tc2="$(_st smart_therm_cool_x10)"
     if [ -n "$_bt2" ] && [ "$_bt2" -gt 0 ] 2>/dev/null; then
-      echo "       ${M_MEASURED}: $((_bt2 / 10)).$((_bt2 % 10))°C ${M_TYP_PEAK}, $((_bd2 / 10)).$((_bd2 % 10))%/h ${M_DRAIN}"
+      # Drain is only recorded from screen-on stretches of 10 minutes or more, so a bucket
+      # a person only ever visits briefly - the night one, checking the time - learns a
+      # temperature but never a drain rate. Printing "0.0%/h" there states a measurement
+      # that was never taken, next to a temperature that was: the two numbers on that line
+      # had different standing and looked identical.
+      if [ "${_bd2:-0}" -gt 0 ] 2>/dev/null; then
+        echo "       ${M_MEASURED}: $((_bt2 / 10)).$((_bt2 % 10))°C ${M_TYP_PEAK}, $((_bd2 / 10)).$((_bd2 % 10))%/h ${M_DRAIN}"
+      else
+        echo "       ${M_MEASURED}: $((_bt2 / 10)).$((_bt2 % 10))°C ${M_TYP_PEAK} (${M_DRAIN_NOSAMPLE})"
+      fi
       if [ -n "$_tw2" ] && [ "$_tw2" -gt 0 ] 2>/dev/null; then
         # Say the band, then the edges. "warm above 56, cool below 48" listed two
         # thresholds and read as a single self-contradicting range - the normal zone

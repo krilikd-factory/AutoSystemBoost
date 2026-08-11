@@ -155,6 +155,22 @@ if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf"
     rm -rf "$MODDIR/system/vendor/etc/audio" \
            "$MODDIR/system/vendor/odm/etc/audio" \
            "$MODDIR/system/odm/etc/audio" 2>/dev/null
+    # The DSP effect too, not just the config files it reads.
+    #
+    # The effect attaches to AUDIO_SESSION_OUTPUT_MIX - every stream on the device passes
+    # through it. If it deadlocks, audioserver blocks and the UI goes with it: a OnePlus 12
+    # user reported a hard freeze on opening MX Player Pro, which is exactly the shape of
+    # an audio-path stall rather than a crash.
+    #
+    # Tearing out the mixer XML while leaving the effect library in place would have left
+    # the actual suspect running. Cleared here so a phone that has failed to boot three
+    # times comes back with the audio path fully stock.
+    rm -f "$MODDIR"/system/lib64/soundfx/libasbdsp*.so \
+          "$MODDIR"/system/lib/soundfx/libasbdsp*.so \
+          "$MODDIR"/system/vendor/lib64/soundfx/libasbdsp*.so \
+          "$MODDIR"/system/vendor/lib/soundfx/libasbdsp*.so 2>/dev/null
+    resetprop -n persist.asb.dsp.enable 0 >/dev/null 2>&1 \
+      || setprop persist.asb.dsp.enable 0 >/dev/null 2>&1
     rm -rf "$MODDIR/system/vendor/odm/etc/camera" \
            "$MODDIR/system/odm/etc/camera" \
            "$MODDIR/system/vendor/etc/camera" 2>/dev/null
