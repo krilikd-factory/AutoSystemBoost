@@ -539,7 +539,6 @@ asb_detect_compat() {
     *"oneplus 15"*|*"oneplus15"*|*"op15"*|*"cph274"*|*"cph275"*|*"op611fl1"*|*"plk110"*|*"pjz110"*|*"pkz110"*)
       ASB_IS_OP15=true ;;
   esac
-
   case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
     *"oneplus 13"*|*"oneplus13"*|*"op13"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"op5d55"*)
       ASB_IS_OP13=true ;;
