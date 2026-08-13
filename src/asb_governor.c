@@ -4381,6 +4381,17 @@ int main(int argc, char **argv) {
                     g_last_profile_sync = _now;
                 }
                 {
+                    /* Suspend tracking belongs in the loop, not only in the pre-loop
+                     * init block where it was.
+                     *
+                     * Called once at startup it can never accumulate a window, so
+                     * awake_pct_screenoff sat at -1 forever - the diagnostic said "not
+                     * measured yet" on a phone that had been running for a day, and
+                     * asb_wakelock_watch.sh, which gates on that figure, never took a
+                     * single snapshot. Two features silently inert because their input
+                     * was computed in the wrong place.
+                     */
+                    asb_awake_track(metrics.misc.screen_on);
                     int _smart_updated = asb_smart_tick(&metrics, &fsm);
                     if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
                         asb_profile_caps_t _new_caps;

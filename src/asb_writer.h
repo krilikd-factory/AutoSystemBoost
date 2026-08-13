@@ -460,6 +460,10 @@ typedef struct {
     int cpu_min[3];
     int gpu_max_pct;
     int gpu_min_pct;
+    /* The raw value last written to the GPU min path, or -1. Compared against sysfs to
+     * detect a vendor override; gpu_min_pct cannot do that job because it is our request,
+     * not what ended up on the device. */
+    int gpu_min_written;
     int ravg_ticks;
     int idle_enough;
     int uclamp_top_max;
@@ -471,11 +475,17 @@ typedef struct {
     int last_min_pwrlevel_written;
 } asb_writer_cache_t;
 
-static asb_writer_cache_t g_wcache = {0};
+/* gpu_min_written starts at -1, not 0: zero is a legitimate pwrlevel (the fastest step),
+ * so a zeroed cache would claim we had written it and mask a real vendor override on the
+ * very first comparison. */
+static asb_writer_cache_t g_wcache = { .gpu_min_written = -1 };
 
 static unsigned long g_vendor_override_max = 0;
 static unsigned long g_vendor_override_min = 0;
 static int g_last_observed_max_pwrlevel = -1;
+/* What we last wrote to the GPU min path, in the units that path uses. Needed to tell
+ * "the vendor moved it" from "we changed our mind" - gpu_min_pct alone cannot, because
+ * the same percentage maps to the same index and looks unchanged either way. */
 static int g_last_observed_min_pwrlevel = -1;
 
 static void gpu_check_vendor_override(int profile_idx, const char *state_name) {
@@ -761,7 +771,21 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                 }
                 if (_mi >= 0) want_min = (int)cpu_snap_freq(_mi, (long)want_min);
             }
-            if (force || want_min != g_wcache.cpu_min[i]) {
+            /* Compare against what is ON THE DEVICE, not against our own cache.
+             *
+             * The max path a few lines up reads sysfs and rewrites whenever reality has
+             * drifted. The min path only checked the cache: if our wanted value had not
+             * changed, no write happened - so a floor raised by the vendor stayed raised
+             * indefinitely, because from the cache's point of view nothing was wrong.
+             *
+             * A field capture shows policy0 at min=1785600 against a profile floor of
+             * 307200 and a governor ceiling of 1190400. Six cores pinned near 1.8 GHz with
+             * the screen off is not a cap failing to hold - it is a floor nobody put back,
+             * and it costs more than any ceiling can save.
+             */
+            int cur_min = sysfs_read_int(g_cpu_min_paths[i], 0);
+            if (force || want_min != g_wcache.cpu_min[i] ||
+                (cur_min > 0 && cur_min != want_min)) {
                 if (sysfs_write_int(g_cpu_min_paths[i], want_min) == 0) {
                     g_wcache.cpu_min[i] = want_min;
                     writes++;
@@ -820,13 +844,31 @@ skip_cpu_caps: ;
         g_wcache.gpu_max_pct = caps->gpu_max_pct;
         writes++;
     }
-    if (force || caps->gpu_min_pct != g_wcache.gpu_min_pct) {
+    /* Same fix as the CPU floor: check the device, not only the cache.
+     *
+     * On Adreno a HIGHER pwrlevel index is a LOWER frequency, so writing 17 asks for the
+     * slowest step. A capture shows min_written=17 with min_observed=9 in 43 of 60
+     * samples: the vendor raises the GPU floor and ASB never puts it back, because from
+     * the cache's point of view its own wanted value never changed.
+     *
+     * A GPU floor stuck three steps too high is a constant power draw for work nobody
+     * asked for - and unlike a ceiling it applies when the phone is doing nothing.
+     */
+    int _gpu_min_drifted = 0;
+    if (g_gpu_min_path[0]) {
+        int _cur_gmin = sysfs_read_int(g_gpu_min_path, -1);
+        if (_cur_gmin >= 0 && g_wcache.gpu_min_written >= 0 &&
+            _cur_gmin != g_wcache.gpu_min_written)
+            _gpu_min_drifted = 1;
+    }
+    if (force || caps->gpu_min_pct != g_wcache.gpu_min_pct || _gpu_min_drifted) {
         if (g_gpu_min_path[0]) {
             if (g_gpu_uses_pwrlevel) {
                 /* min_pwrlevel is the LOWEST-frequency level allowed; larger index = lower freq.
                  * For a min Hz target, find the largest index whose freq >= target. */
                 int pl = gpu_hz_to_pwrlevel_min(gmin);
                 if (sysfs_write_int(g_gpu_min_path, pl) == 0) {
+                    g_wcache.gpu_min_written = pl;
                     g_wcache.last_min_pwrlevel_written = pl;
                 }
             } else {

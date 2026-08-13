@@ -116,7 +116,21 @@ typedef enum {
 #define ASB_SMART_TREND_CHARGE_MIN_SLOPE_MC_MIN 1500
 /* Battery temp (deci-C) above which charge-aware cool gaming tightens. */
 #define ASB_SMART_CHARGE_WARM_BAT_DC 380
-#define ASB_SMART_DRAIN_MIN_ON_SEC 600
+/* Minimum screen-on seconds before a drain sample is trusted enough to bank.
+ *
+ * Was 600, while the governor publishes its own drain estimate at 300 - two thresholds
+ * for the same judgement, and the higher one meant sessions between five and ten minutes
+ * produced a usable number that was then thrown away. On a device where the screen is
+ * rarely on for ten unbroken minutes, that is every session: a capture shows
+ * bucket_drain_x10=0 across the board with 21 sessions banked, so the learner had
+ * temperature history and no drain history at all, and the battery-budget half of its
+ * decision ran on defaults forever.
+ *
+ * 300 matches what the governor already considers a valid measurement. Five minutes of
+ * continuous screen-on is a real usage window - short enough to actually occur, long
+ * enough that the level counter has moved by more than its own quantisation.
+ */
+#define ASB_SMART_DRAIN_MIN_ON_SEC 300
 #define ASB_SMART_DRAIN_HEAVY_PCTPH_X10 1500
 #define ASB_SMART_DRAIN_HI_NUM 5
 #define ASB_SMART_DRAIN_HI_DEN 4

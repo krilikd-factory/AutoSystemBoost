@@ -1203,7 +1203,23 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                            m->therm.cpu_max_c > temp_max &&
                            fsm->gaming_retry_until > 0);
             if (cooldown_active || too_hot) {
-                desired = ASB_STATE_HEAVY;
+                /* Too hot must not mean "allow more".
+                 *
+                 * This is the gaming-retry cooldown: after leaving GAMING it holds the
+                 * state down so the phone does not immediately climb back. HEAVY is the
+                 * right answer for the cooldown case - it is below GAMING.
+                 *
+                 * But SUSTAINED sits at 0.62 on the cap ladder, BELOW HEAVY at 0.72, and
+                 * this branch runs for too_hot as well. So a phone that had thermally
+                 * escalated into SUSTAINED was pushed back up to HEAVY precisely because
+                 * it was too hot: the hotter it got, the more it was allowed. A capture
+                 * shows 88 C during a game with 65 seconds of SUSTAINED in the whole
+                 * session, which is this loop letting go as soon as it engaged.
+                 *
+                 * Only lower, never raise. If the state is already at or below HEAVY,
+                 * leave it where the thermal logic put it.
+                 */
+                if (desired > ASB_STATE_HEAVY) desired = ASB_STATE_HEAVY;
             } else {
                 fsm->gaming_retry_until = 0;
             }
