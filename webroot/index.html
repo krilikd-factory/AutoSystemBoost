@@ -1322,7 +1322,12 @@ body.config-active #livePage.open {
  * and there margin-top: 0 parks the link right under the last card while the main and
  * monitor pages put it at the bottom. auto is correct in both cases: it pushes to the
  * bottom when there is room and follows the content when there is not. */
-.config-page .tg-link-wrap { margin-top: auto; padding-top: 24px; }
+/* No config-page override at all.
+ *
+ * The base rule and .live-page .tg-link-wrap already say margin-top: auto, and the config
+ * page carries both classes - so this rule only ever restated what it inherited while
+ * looking like a deliberate difference. Removing it makes all three pages provably share
+ * one rule instead of three that happen to agree. */
 .cfg-list {
   width: 100%;
   display: flex;
@@ -1697,7 +1702,7 @@ body.config-active #livePage.open {
    drawn by us so it matches the page, and the button costs 38px instead of a field. */
 #cfgLangWrap { position: relative; flex: 0 0 auto; }
 .cfg-lang-btn {
-  width: 38px; height: 38px; border-radius: 50%;
+  width: 36px; height: 36px; border-radius: 50%;
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   color: #e7eaee; font-size: 16px; line-height: 1; padding: 0;
@@ -1732,11 +1737,20 @@ body.config-active #livePage.open {
  *
  * Wrapping costs one extra row on a narrow screen, which is better than three clipped
  * labels on every screen. */
-#cfgToolsRow { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; align-items: stretch; }
-#cfgBackupWrap { min-width: 0; }
+/* One line, never two. flex-wrap was letting the row break as soon as the labels grew -
+   which in a language with longer words is always. Items shrink instead. */
+/* One row, and never wider than the page.
+   min-width:0 on the container plus overflow:hidden is the guard: without it a label that
+   refuses to shrink pushes the whole row off-screen instead of being clipped, which is what
+   happened when the reset button still said "Сбросить обучение". */
+#cfgToolsRow {
+  display: flex; flex-wrap: nowrap; gap: 6px; margin: 0 0 16px;
+  align-items: stretch; min-width: 0; max-width: 100%; overflow: hidden;
+}
+
 #cfgLangWrap { flex: 0 0 auto; display: flex; }
 .cfg-lang-sel { min-width: 0; width: auto; padding: 9px 28px 9px 11px; font-size: 12px; }
-#cfgBackupWrap { display: flex; gap: 8px; flex: 1 1 auto; }
+
 .cfg-backup {
   /* Size from the text, not from an equal share of the row.
    *
@@ -1748,9 +1762,13 @@ body.config-active #livePage.open {
    * The ellipsis stays as the last resort for a language whose word is genuinely too
    * long for a narrow screen - but it should not be reached by a seven-character
    * English word on a phone that is 400px wide. */
+  /* min-width: fit-content was the reason the row broke: it forbids a button from ever
+     being narrower than its label, so three labels plus the search box plus the globe
+     could not fit and the group wrapped. Ellipsis is the fallback the rule already had -
+     letting it apply is better than a second line. */
   flex: 1 1 auto;
-  min-width: fit-content;
-  padding: 9px 10px;
+  min-width: 0;
+  padding: 9px 7px;
   overflow: hidden;
   text-overflow: ellipsis;
   border-radius: 12px;
@@ -1818,8 +1836,9 @@ body.config-active #livePage.open {
  *
  * Unfocused it stays compact, because the tools row also holds the language and
  * backup buttons and they need their width back when nobody is searching. */
-.cfg-search-wrap { margin: 0; display: flex; flex: 0 0 auto; align-items: stretch;
-  transition: flex-grow .18s ease; min-width: 0; }
+/* Shrinkable like the buttons beside it: with five items on one row a fixed-size search
+   box is exactly what pushes the last button onto a second line. */
+.cfg-search-wrap { margin: 0; display: flex; flex: 1 1 80px; min-width: 54px; align-items: stretch; transition: flex-grow .18s ease; }
 .cfg-search-wrap:focus-within { flex: 1 1 auto; }
 /* Breathing room under the tools row.
  * The row sat flush against the first category card, so the toolbar read as part of the
@@ -1828,18 +1847,19 @@ body.config-active #livePage.open {
 #cfgRebootWrap { margin-top: 18px; }
 .cfg-hub { margin-top: 2px; }
 .cfg-search {
-  width: 116px;
-  flex: 0 0 auto;
+  /* Shrinkable: it is one of five items on a single row now, so a fixed width forces the
+     others out. Basis is a hint, min-width lets it give way when the labels are long. */
+  flex: 1 1 84px;
+  min-width: 56px;
   box-sizing: border-box;
-  transition: width .18s ease, max-width .18s ease;
   -webkit-appearance: none;
   appearance: none;
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   border-radius: 12px;
   color: #e7eaee;
-  font-size: 13px;
-  padding: 9px 12px;
+  font-size: 12.5px;
+  padding: 9px 10px;
 }
 /* Selectable again: text people actually copy.
  *
@@ -2338,11 +2358,13 @@ body.config-active #livePage.open {
       <button class="cfg-lang-btn" id="cfgLangBtn" onclick="cfgToggleLangPop(event)" aria-label="Language">🌐</button>
       <div class="cfg-lang-pop" id="cfgLangPop" hidden></div>
     </div>
-    <div id="cfgBackupWrap">
+      <!-- No inner wrapper: the three buttons are flex items of the tools row itself.
+           Boxed together they behaved as one wide item, so once search and the globe sat
+           beside them the box no longer fit and the whole group dropped to a second line.
+           As direct children they share the row and shrink individually. -->
       <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">↑ Export</button>
       <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">↓ Import</button>
-      <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset learning</button>
-    </div>
+      <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset</button>
   </div>
 
   <div class="cfg-list" id="cfgList"></div>
@@ -4382,7 +4404,7 @@ async function cfgExport() {
 
 async function cfgImport() {
   /* Two taps: this overwrites choices, and a single tap next to Export is easy to hit. */
-  const btns = document.querySelectorAll('#cfgBackupWrap .cfg-backup');
+  const btns = document.querySelectorAll('#cfgToolsRow .cfg-backup');
   const btn = btns && btns[1];
   if (btn && btn.dataset.armed !== '1') {
     btn.dataset.armed = '1';
