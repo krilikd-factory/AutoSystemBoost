@@ -626,7 +626,16 @@ if [ -s /data/adb/asb/wakelock_top ]; then
   NOTE "top sources holding the CPU (name | ms held | times taken):"
   while IFS='|' read -r _wn _wa _wc; do
     [ -n "$_wn" ] || continue
-    P "    $_wn  ·  $(( ${_wa:-0} / 1000 ))s  ·  ${_wc:-0}x"
+    # Arithmetic only on digits.
+    #
+    # The batterystats fallback writes human durations - "11m 2s 985ms" - while the
+    # debugfs path writes plain microseconds. $(( )) on the first form aborts the whole
+    # shell, which is why the report stopped dead at this section and nothing after it was
+    # produced. One unparsed field silently truncated the entire diagnostic.
+    case "${_wa:-}" in
+      ''|*[!0-9]*) P "    $_wn  ·  ${_wa:-?}  ·  ${_wc:-0}x" ;;
+      *)           P "    $_wn  ·  $(( _wa / 1000 ))s  ·  ${_wc:-0}x" ;;
+    esac
   done < /data/adb/asb/wakelock_top
   NOTE "kernel sources (qup_uart, alarmtimer, wlan) are the hardware asking, not an app"
   NOTE "a package name here is an app you can restrict, uninstall or exempt yourself"
