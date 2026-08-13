@@ -191,6 +191,46 @@ if [ -f /data/adb/asb/gms_components_frozen ] && command -v pm >/dev/null 2>&1; 
   rm -f /data/adb/asb/gms_components_frozen 2>/dev/null
 fi
 
+# Undo the network offload changes.
+#
+# asb_net_offload.sh already has a _restore that replays net_offload_prev, and it runs when
+# the tweak is set back to stock - but nothing called it on uninstall, so RPS masks and
+# queue lengths kept ASB's values until the next reboot. Invoking the script's own restore
+# is better than reimplementing it here: one copy of the logic, and it already knows the
+# file format.
+if [ -x "$MODDIR/runtime/asb_net_offload.sh" ] || [ -f "$MODDIR/runtime/asb_net_offload.sh" ]; then
+  ASB_FORCE_RESTORE=1 sh "$MODDIR/runtime/asb_net_offload.sh" restore >/dev/null 2>&1
+fi
+rm -f /data/adb/asb/net_offload_prev 2>/dev/null
+
+# Put the modem low-power settings back.
+#
+# asb_lpm.sh changes mobile_data_always_on and tcp_keepalive_time to let the modem idle
+# between packets, and records what they were in lpm_baseline.conf - but nothing read that
+# file back on removal. Both survive an uninstall: keepalive is a kernel sysctl that
+# persists until reboot, and mobile_data_always_on is a settings row that persists
+# indefinitely. So a user who removed ASB kept its network behaviour, which is the exact
+# thing an uninstall is supposed to undo.
+#
+# Values come from the file, not from a guess: mobile_data_always_on differs between
+# carriers and ROMs, and writing a fixed default would be inventing a state.
+if [ -f /data/adb/asb/lpm_baseline.conf ]; then
+  # Only KEY=value lines, and only the two keys we know - the file is ours, but sourcing
+  # it blindly would run whatever ended up in there.
+  _lpm_mdao="$(grep -E '^BASE_MDAO=' /data/adb/asb/lpm_baseline.conf 2>/dev/null | head -1 | sed 's/.*=//')"
+  _lpm_ka="$(grep -E '^BASE_KEEPIDLE=' /data/adb/asb/lpm_baseline.conf 2>/dev/null | head -1 | sed 's/.*=//')"
+  case "$_lpm_mdao" in
+    ''|null|*[!0-9]*) : ;;
+    *) command -v settings >/dev/null 2>&1 \
+         && settings put global mobile_data_always_on "$_lpm_mdao" >/dev/null 2>&1 ;;
+  esac
+  case "$_lpm_ka" in
+    ''|*[!0-9]*) : ;;
+    *) [ -w /proc/sys/net/ipv4/tcp_keepalive_time ] \
+         && echo "$_lpm_ka" > /proc/sys/net/ipv4/tcp_keepalive_time 2>/dev/null ;;
+  esac
+fi
+
 # Restore the headphone volume limiter.
 #
 # ASB only ever removes this when explicitly asked, but "explicitly asked" does not survive

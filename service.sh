@@ -957,6 +957,23 @@ asb_thermal_sanity() {
   _ts_n="$(printf '%s\n' $_ts_list | grep -cE '^[0-9]+$')"
   case "$_ts_idle" in ''|*[!0-9]*) _ts_idle=0 ;; esac
   [ "$_ts_idle" -gt 0 ] || return 0
+  # Only trust a genuinely cool reading.
+  #
+  # This runs at boot, and boot is not idle: the phone has just powered up every core,
+  # mounted partitions and started services. A capture taken after a reinstall shows a
+  # median of 57 C, which produced a floor of 61 - above the user's chosen 60, so the
+  # setting was overridden again, by a measurement of the wrong moment rather than the
+  # wrong zones this time.
+  #
+  # Above 50 C the sample says nothing about what this device idles at, so no floor is
+  # written at all. A missing floor means the user's threshold stands, which is the right
+  # default: this check exists to catch a threshold set below idle temperature, and it can
+  # only do that from an idle reading.
+  if [ "$_ts_idle" -gt 50 ] 2>/dev/null; then
+    rm -f /data/adb/asb/thermal_floor 2>/dev/null
+    asb_log "thermal: boot-time median ${_ts_idle}C over ${_ts_n} zone(s) is too warm to be idle - no floor applied, your threshold stands"
+    return 0
+  fi
   _ts_min=$(( _ts_idle + 4 ))
   # Never above what the slider can express.
   #
