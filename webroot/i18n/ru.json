@@ -553,7 +553,7 @@
   "doze_not_exempt": "нет в исключениях",
   "smart_new_bucket": "обучается для этого часа · ",
   "smart_new_bucket_tail": " накоплено всего",
-  "cfg_smart_reset": "↺ Сбросить обучение",
+  "cfg_smart_reset": "↺ Сброс",
   "t_smart_reset_confirm": "Нажмите ещё раз, чтобы стереть выученное",
   "t_smart_reset_done": "Обучение сброшено · Smart начнёт заново",
   "t_smart_reset_fail": "Не удалось сбросить обучение"

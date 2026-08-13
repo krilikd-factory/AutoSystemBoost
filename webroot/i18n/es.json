@@ -380,7 +380,7 @@
   "doze_not_exempt": "no exento",
   "smart_new_bucket": "aprendiendo esta hora · ",
   "smart_new_bucket_tail": " acumuladas en total",
-  "cfg_smart_reset": "↺ Reiniciar aprendizaje",
+  "cfg_smart_reset": "↺ Reiniciar",
   "t_smart_reset_confirm": "Toca otra vez para borrar lo aprendido",
   "t_smart_reset_done": "Aprendizaje reiniciado · Smart empieza de cero",
   "t_smart_reset_fail": "No se pudo reiniciar"

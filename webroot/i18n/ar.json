@@ -380,7 +380,7 @@
   "doze_not_exempt": "غير مستثنى",
   "smart_new_bucket": "يتعلّم هذه الساعة · ",
   "smart_new_bucket_tail": " مُجمَّعة إجمالاً",
-  "cfg_smart_reset": "↺ إعادة ضبط التعلّم",
+  "cfg_smart_reset": "↺ إعادة ضبط",
   "t_smart_reset_confirm": "اضغط مرة أخرى لمسح ما تعلّمه",
   "t_smart_reset_done": "أُعيد ضبط التعلّم · يبدأ Smart من جديد",
   "t_smart_reset_fail": "تعذّر إعادة الضبط"

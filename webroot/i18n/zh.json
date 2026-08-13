@@ -380,7 +380,7 @@
   "doze_not_exempt": "未豁免",
   "smart_new_bucket": "正在学习这个时段 · ",
   "smart_new_bucket_tail": " 已累计",
-  "cfg_smart_reset": "↺ 重置学习",
+  "cfg_smart_reset": "↺ 重置",
   "t_smart_reset_confirm": "再次点击以清除已学内容",
   "t_smart_reset_done": "学习已重置 · Smart 重新开始",
   "t_smart_reset_fail": "无法重置"

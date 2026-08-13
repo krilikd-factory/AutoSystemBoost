@@ -380,7 +380,7 @@
   "doze_not_exempt": "tidak dikecualikan",
   "smart_new_bucket": "mempelajari jam ini · ",
   "smart_new_bucket_tail": " total terkumpul",
-  "cfg_smart_reset": "↺ Atur ulang pembelajaran",
+  "cfg_smart_reset": "↺ Atur ulang",
   "t_smart_reset_confirm": "Ketuk lagi untuk menghapus yang dipelajari",
   "t_smart_reset_done": "Pembelajaran diatur ulang · Smart mulai baru",
   "t_smart_reset_fail": "Gagal mengatur ulang"
