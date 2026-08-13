@@ -2341,6 +2341,7 @@ body.config-active #livePage.open {
     <div id="cfgBackupWrap">
       <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">↑ Export</button>
       <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">↓ Import</button>
+      <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset learning</button>
     </div>
   </div>
 
@@ -4165,6 +4166,28 @@ function cfgArmPopDismiss() {
       document.querySelectorAll('.cfg-sel-pop').forEach(function (x) { x.hidden = true; });
     }
   });
+}
+
+/* Wipe the learner and let it start over.
+ *
+ * Two taps, like the reboot button: this throws away weeks of accumulated behaviour and a
+ * misfire would be invisible until the user noticed Smart acting like a fresh install.
+ */
+let _smartResetArmed = false;
+async function cfgSmartReset() {
+  if (!_smartResetArmed) {
+    _smartResetArmed = true;
+    toast(T('t_smart_reset_confirm', 'Tap again to erase what Smart has learned'), 'warn');
+    setTimeout(function () { _smartResetArmed = false; }, 4000);
+    return;
+  }
+  _smartResetArmed = false;
+  try {
+    await run('sh ' + MD + '/runtime/asb_smart_reset.sh');
+    toast(T('t_smart_reset_done', 'Learning reset \u00b7 Smart starts fresh'), 'good');
+  } catch (e) {
+    toast(T('t_smart_reset_fail', 'Could not reset learning'), 'bad');
+  }
 }
 
 function cfgFillLangs() {
