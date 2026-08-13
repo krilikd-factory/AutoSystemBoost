@@ -53,6 +53,30 @@ asb_wl_snapshot() {
 # Only ever partial wakelocks from third-party packages. Never a kernel source, never a
 # system one: those are the modem, the display, the alarm timer and the sensors, and a
 # module that releases them is breaking the phone rather than saving power.
+# WiFi multicast is its own problem, and a bigger one than any single app wakelock.
+#
+# A multicast lock tells the Wi-Fi chip to receive packets addressed to the whole network,
+# not just to this phone - so the radio cannot enter its low-power filter mode. On the
+# capture that prompted this it was held 11 minutes out of 60, more than five times the
+# next holder, by an app doing device discovery in the background.
+#
+# Casting, printer discovery and some smart-home apps genuinely need it WHILE IN USE. None
+# of them need it with the screen off for the better part of an hour, which is the only
+# case this touches.
+asb_wl_relax_multicast() {
+  _has dumpsys || return 0
+  _mc="$(dumpsys batterystats 2>/dev/null \
+         | sed -n 's/.*Total WiFi Multicast wakelock time: \(.*\)/\1/p' | head -1)"
+  [ -n "$_mc" ] || return 0
+  # Minutes only: anything under a minute is noise, and parsing "11m 2s 985ms" for
+  # precision we do not need would just be another thing to get wrong.
+  _mcm="$(printf '%s' "$_mc" | sed -n 's/^\([0-9]*\)m.*/\1/p')"
+  case "$_mcm" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_mcm" -ge 5 ] 2>/dev/null || return 0
+  echo "wakelock: WiFi multicast held ${_mcm} min in the last hour - the radio cannot idle while it is"
+  echo "          (a discovery/casting app is asking for it; check Settings > Apps if this is unexpected)"
+}
+
 asb_wl_relax() {
   _has dumpsys || return 0
   _has pm || return 0
@@ -80,7 +104,29 @@ asb_wl_relax() {
   done
 }
 
-asb_wl_snapshot || exit 0
+# Snapshot from batterystats when debugfs is unavailable.
+#
+# /sys/kernel/debug/wakeup_sources is not mounted on every ROM, and when it is missing the
+# whole feature went silent - no file, no names, nothing in the report. batterystats has
+# the same information in a different shape and needs no debugfs, so it is worth having as
+# the fallback rather than giving up.
+#
+# It also carries something wakeup_sources does not: WiFi Multicast, which on the capture
+# that prompted this was the single largest holder at 11 minutes out of 60.
+asb_wl_snapshot_bs() {
+  _has dumpsys || return 1
+  mkdir -p /data/adb/asb 2>/dev/null
+  dumpsys batterystats 2>/dev/null \
+    | sed -n 's/.*Kernel Wake lock \([^:]*\): \([0-9hms ]*\).*/\1|\2/p' \
+    | head -12 > "$STATE" 2>/dev/null
+  # Multicast is reported on its own line and is worth naming separately.
+  dumpsys batterystats 2>/dev/null \
+    | sed -n 's/.*Total WiFi Multicast wakelock time: \(.*\)/WiFi-Multicast|\1|0/p' \
+    | head -1 >> "$STATE" 2>/dev/null
+  [ -s "$STATE" ]
+}
+
+asb_wl_snapshot || asb_wl_snapshot_bs || exit 0
 
 case "$(_cfg wakelock_action)" in
   1|on|true) : ;;
@@ -91,9 +137,13 @@ esac
 # none of our business; the same lock two hours into the night is the reported problem.
 _awake="$(grep -m1 '^awake_pct_screenoff=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _win="$(grep -m1 '^awake_window_min=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+# The snapshot above already ran and is worth having on its own - the report names the
+# holder whether or not we act. Only the ACTION below needs the awake figure, so a missing
+# one stops the action, not the measurement.
 case "${_awake:--1}" in ''|-1) exit 0 ;; esac
 [ "${_win:-0}" -ge 45 ] 2>/dev/null || exit 0
 [ "${_awake:-0}" -ge 25 ] 2>/dev/null || exit 0
 
 asb_wl_relax
+asb_wl_relax_multicast
 exit 0

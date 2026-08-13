@@ -98,6 +98,14 @@ _restore() {
   rm -f "$STATE" 2>/dev/null
 }
 
+# Explicit restore, used by uninstall.sh. Reading the config there would be wrong: the
+# module is being removed, so what the user last chose is no longer the question.
+if [ "${1:-}" = "restore" ] || [ "${ASB_FORCE_RESTORE:-0}" = "1" ]; then
+  _restore
+  echo "net offload: restored to the values captured before ASB"
+  exit 0
+fi
+
 _rps="$(_cfg net_rps)";      case "$_rps" in little|all) : ;; *) _rps=stock ;; esac
 _txq="$(_cfg net_txqueue)";  case "$_txq" in short|shorter) : ;; *) _txq=stock ;; esac
 
