@@ -414,6 +414,20 @@ static void cpu_capture_slot_hwmax(void) {
  * Scale an absolute bound (authored against the SM8650 reference) to this device's real
  * silicon for the given slot.
  */
+/* Clamp a floor into what this cluster can actually do, without scaling it.
+ *
+ * Counterpart to asb_bounds_scale: ceilings scale with the hardware, floors do not. The
+ * only per-device adjustment a floor needs is "not below the lowest step that exists" -
+ * and cpufreq would round it up anyway, so stating it here keeps the request honest. */
+static int asb_bounds_clamp_floor(int slot, int kHz) {
+    if (kHz <= 0 || slot < 0 || slot > 2) return kHz;
+    int hw = g_cpu_slot_hwmax[slot];
+    /* Never above the cluster ceiling: a floor that exceeds hw_max is meaningless and the
+     * kernel would silently pin it there. */
+    if (hw > 0 && kHz > hw) kHz = hw;
+    return kHz;
+}
+
 static int asb_bounds_scale(int slot, int kHz) {
     if (kHz <= 0 || slot < 0 || slot > 2) return kHz;
     int hw = g_cpu_slot_hwmax[slot];

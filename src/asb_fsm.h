@@ -324,8 +324,59 @@ static void fsm_interpolate_caps(
     const asb_profile_caps_t *c = &bounds->ceil;
 
     for (int i = 0; i < 3; i++) {
-        out->cpu_max[i] = asb_bounds_scale(i, lerp_int(f->cpu_max[i], c->cpu_max[i], t));
-        out->cpu_min[i] = asb_bounds_scale(i, lerp_int(f->cpu_min[i], c->cpu_min[i], t));
+        /* Scale the ceiling in proportion to how much performance the state is asking
+         * for, not by the same factor everywhere.
+         *
+         * asb_bounds_scale exists so a faster chip may peak higher, which is right at the
+         * top of the ladder. Applied flat it also raises the IDLE ceiling: on an OP15 the
+         * LIGHT_IDLE cap of 1190400 became 2122505, so a phone doing nothing was permitted
+         * twice the clock it needed. That is heat and drain during ordinary use - the part
+         * users describe as "no improvement during the day", separate from the floor bug
+         * that dominated the night.
+         *
+         * t is already the state's position on the ladder: 0 at deep idle, 1 at gaming.
+         * Weighting the scale by t means idle keeps the reference numbers, peaks get the
+         * full hardware benefit, and everything between moves smoothly.
+         */
+        {
+            int _raw = lerp_int(f->cpu_max[i], c->cpu_max[i], t);
+            int _scaled = asb_bounds_scale(i, _raw);
+            /* Weight by the ladder position, except in SUSTAINED.
+             *
+             * SUSTAINED is the cooling state - it is entered because the phone is too hot.
+             * Its level sits at 0.62 (0.84 in the compiled table), above MODERATE's 0.45,
+             * because the ladder measures how much work is being asked of the phone rather
+             * than how much it should be allowed. That ordering is deliberate for the
+             * interpolation itself, but it must not also buy extra hardware scaling: a
+             * device that has thermally escalated would be handed a HIGHER ceiling than the
+             * same device running normally, which is the opposite of what the state exists
+             * to do.
+             *
+             * Capped at MODERATE's weight there: the scaling follows the reference numbers
+             * while the interpolation keeps its own shape.
+             */
+            float _w = t;
+            if (state == ASB_STATE_SUSTAINED && _w > 0.45f) _w = 0.45f;
+            out->cpu_max[i] = _raw + (int)((_scaled - _raw) * _w);
+        }
+        /* Floors are NOT scaled by the cluster ceiling.
+         *
+         * asb_bounds_scale multiplies a reference value by hw_max/ref, which is right for
+         * a ceiling: a chip that peaks higher should be allowed to peak higher. It is
+         * wrong for a floor, because idle frequency does not rise with peak frequency -
+         * SM8650's lowest step is ~300 MHz and SM8850's is ~364 MHz, near-identical, while
+         * their ceilings differ by 1.78x.
+         *
+         * So the scaling turned a 787200 floor into 1549800 on an OP15: six cores forbidden
+         * from ever dropping below 1.55 GHz, including with the screen off. Field logs from
+         * two different devices show it - min=1555200 on one, min=1747200 on another, both
+         * far above anything the profiles ask for. This is the single largest idle drain
+         * the module was causing, and it looked like a vendor override in every capture.
+         *
+         * The floor is clamped to the cluster's real minimum instead, so a device whose
+         * lowest step happens to be higher than the reference still gets a legal value.
+         */
+        out->cpu_min[i] = asb_bounds_clamp_floor(i, lerp_int(f->cpu_min[i], c->cpu_min[i], t));
     }
     out->gpu_max_pct    = lerp_int(f->gpu_max_pct,    c->gpu_max_pct,    t);
     out->gpu_min_pct    = lerp_int(f->gpu_min_pct,    c->gpu_min_pct,    t);
