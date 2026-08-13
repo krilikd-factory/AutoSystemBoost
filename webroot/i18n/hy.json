@@ -551,5 +551,9 @@
   "grp_ui": "Համակարգ",
   "doze_not_exempt": "բացառված չէ",
   "smart_new_bucket": "սովորում է այս ժամը · ",
-  "smart_new_bucket_tail": " ընդամենը կուտակված"
+  "smart_new_bucket_tail": " ընդամենը կուտակված",
+  "cfg_smart_reset": "↺ Զրոյացնել ուսուցումը",
+  "t_smart_reset_confirm": "Սեղմեք ևս մեկ անգամ՝ սովորածը ջնջելու համար",
+  "t_smart_reset_done": "Ուսուցումը զրոյացվեց · Smart-ը սկսում է նորից",
+  "t_smart_reset_fail": "Չհաջողվեց զրոյացնել"
 }

@@ -379,5 +379,9 @@
   "t_prof_applied": " aplicado",
   "doze_not_exempt": "não isento",
   "smart_new_bucket": "aprendendo esta hora · ",
-  "smart_new_bucket_tail": " acumuladas no total"
+  "smart_new_bucket_tail": " acumuladas no total",
+  "cfg_smart_reset": "↺ Redefinir aprendizado",
+  "t_smart_reset_confirm": "Toque novamente para apagar o aprendido",
+  "t_smart_reset_done": "Aprendizado redefinido · Smart recomeça",
+  "t_smart_reset_fail": "Não foi possível redefinir"
 }

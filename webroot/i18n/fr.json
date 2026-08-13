@@ -551,5 +551,9 @@
   "grp_ui": "Système",
   "doze_not_exempt": "non exempté",
   "smart_new_bucket": "apprend cette heure · ",
-  "smart_new_bucket_tail": " au total"
+  "smart_new_bucket_tail": " au total",
+  "cfg_smart_reset": "↺ Réinitialiser l'apprentissage",
+  "t_smart_reset_confirm": "Appuyez encore pour effacer l'appris",
+  "t_smart_reset_done": "Apprentissage réinitialisé · Smart repart",
+  "t_smart_reset_fail": "Échec de la réinitialisation"
 }

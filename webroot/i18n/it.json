@@ -379,5 +379,9 @@
   "t_prof_applied": " applicato",
   "doze_not_exempt": "non esente",
   "smart_new_bucket": "sta imparando quest'ora · ",
-  "smart_new_bucket_tail": " accumulate in totale"
+  "smart_new_bucket_tail": " accumulate in totale",
+  "cfg_smart_reset": "↺ Azzera apprendimento",
+  "t_smart_reset_confirm": "Tocca di nuovo per cancellare ciò che ha imparato",
+  "t_smart_reset_done": "Apprendimento azzerato · Smart riparte",
+  "t_smart_reset_fail": "Impossibile azzerare"
 }

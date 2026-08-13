@@ -379,5 +379,9 @@
   "t_prof_applied": " uygulandı",
   "doze_not_exempt": "muaf değil",
   "smart_new_bucket": "bu saati öğreniyor · ",
-  "smart_new_bucket_tail": " toplam biriktirildi"
+  "smart_new_bucket_tail": " toplam biriktirildi",
+  "cfg_smart_reset": "↺ Öğrenmeyi sıfırla",
+  "t_smart_reset_confirm": "Öğrenilenleri silmek için tekrar dokun",
+  "t_smart_reset_done": "Öğrenme sıfırlandı · Smart yeniden başlıyor",
+  "t_smart_reset_fail": "Sıfırlanamadı"
 }

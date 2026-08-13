@@ -314,5 +314,9 @@
   "learn_tip_none": "No sessions banked yet - Smart is using safe defaults.",
   "t_not_applied_hint": "The file exists but does not hold what ASB intended.",
   "smart_new_bucket": "learning this hour · ",
-  "smart_new_bucket_tail": " banked overall"
+  "smart_new_bucket_tail": " banked overall",
+  "cfg_smart_reset": "↺ Reset learning",
+  "t_smart_reset_confirm": "Tap again to erase what Smart has learned",
+  "t_smart_reset_done": "Learning reset · Smart starts fresh",
+  "t_smart_reset_fail": "Could not reset learning"
 }

@@ -379,5 +379,9 @@
   "t_prof_applied": " — застосовано",
   "doze_not_exempt": "немає у винятках",
   "smart_new_bucket": "навчається для цієї години · ",
-  "smart_new_bucket_tail": " накопичено загалом"
+  "smart_new_bucket_tail": " накопичено загалом",
+  "cfg_smart_reset": "↺ Скинути навчання",
+  "t_smart_reset_confirm": "Натисніть ще раз, щоб стерти вивчене",
+  "t_smart_reset_done": "Навчання скинуто · Smart почне заново",
+  "t_smart_reset_fail": "Не вдалося скинути навчання"
 }

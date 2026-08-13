@@ -379,5 +379,9 @@
   "t_prof_applied": " angewendet",
   "doze_not_exempt": "nicht befreit",
   "smart_new_bucket": "lernt diese Stunde · ",
-  "smart_new_bucket_tail": " insgesamt gesammelt"
+  "smart_new_bucket_tail": " insgesamt gesammelt",
+  "cfg_smart_reset": "↺ Lernen zurücksetzen",
+  "t_smart_reset_confirm": "Nochmal tippen, um Gelerntes zu löschen",
+  "t_smart_reset_done": "Lernen zurückgesetzt · Smart beginnt neu",
+  "t_smart_reset_fail": "Zurücksetzen fehlgeschlagen"
 }
