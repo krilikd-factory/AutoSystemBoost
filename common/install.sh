@@ -539,6 +539,27 @@ asb_detect_compat() {
     *"oneplus 15"*|*"oneplus15"*|*"op15"*|*"cph274"*|*"cph275"*|*"op611fl1"*|*"plk110"*|*"pjz110"*|*"pkz110"*)
       ASB_IS_OP15=true ;;
   esac
+  # Fall back to the platform when the model string is not on the list.
+  #
+  # SM8750 and SM8650 already have this; canoe did not, so a canoe device whose model code
+  # is not enumerated above got generic tuning. A field log from a CPH2769 on canoe/SM8845
+  # shows the cost: policy6 sitting at min=1651200 max=1651200 - floor pinned to ceiling,
+  # twelve frequency steps below it unusable, on a phone the module had no per-device
+  # bounds for.
+  #
+  # Model lists go stale with every launch; the platform does not. Matching on it means a
+  # new canoe sibling is handled on the day it ships rather than on the day someone
+  # reports that it is not.
+  if [ "$ASB_IS_OP15" != "true" ]; then
+    ASB_PLATFORM_L="$(asb_norm_l "$(asb_prop_first ro.board.platform ro.soc.model)")"
+    case "$ASB_PLATFORM_L" in
+      *"canoe"*|*"sm8850"*|*"sm8845"*)
+        echo "$ASB_MANUFACTURER_L" | grep -Eqi '(oneplus|oplus)' && {
+          ASB_IS_OP15=true
+          ui_print "[*] canoe-family device (${ASB_PLATFORM_L}) - using the OP15 tuning path"
+        } ;;
+    esac
+  fi
 
   case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
     *"oneplus 13"*|*"oneplus13"*|*"op13"*|*"cph2649"*|*"cph2653"*|*"cph2655"*|*"op5d55"*)
