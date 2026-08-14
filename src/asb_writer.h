@@ -642,6 +642,28 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                 cmax[_k] = g_asb_cfg.gaming_cpu_max_ceiling_khz;
             }
         }
+        /* Snap BEFORE anything is compared or written.
+         *
+         * The snap used to happen further down, inside the per-path loop, so the
+         * msm_performance path below wrote the raw computed value: a full day of logs shows
+         * every single cap landing off-table - 1925001, 2283401, 2128230. cpufreq rounds a
+         * request UP to the next real step, so each of those caps came out weaker than the
+         * one the governor decided on, by as much as 155 MHz. That is why the phone sat at
+         * 82 degC through a 297-minute session while the log insisted it was capping.
+         *
+         * Snapping here also makes the cache honest: it stores the value the kernel will
+         * actually hold, so the next tick compares like with like instead of seeing a
+         * change that never happened. */
+        for (int _s = 0; _s < 3; _s++) {
+            if (cmax[_s] <= 0 || !g_cpu_max_paths[_s][0]) continue;
+            int _si = -1;
+            for (int k = 0; k < g_cpu_all_paths_n && k < 16; k++) {
+                if (g_cpu_all_max_paths[k][0] &&
+                    strcmp(g_cpu_all_max_paths[k], g_cpu_max_paths[_s]) == 0) { _si = k; break; }
+            }
+            if (_si >= 0) cmax[_s] = (int)cpu_snap_freq(_si, (long)cmax[_s]);
+        }
+
         int c0_target = -1, c1_target = -1;
         int c0_changed = 0, c1_changed = 0;
         if (g_cpu_max_paths[0][0] && (force || cmax[0] != g_wcache.cpu_max[0])) {
