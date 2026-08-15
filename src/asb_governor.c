@@ -1115,8 +1115,22 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         m->bat.current_ma,
         m->gpu.load_pct,
         m->cpu.load1,
-        fsm->current_caps.cpu_max[0],
-        fsm->current_caps.cpu_max[1],
+        /* The caps the CPU is actually holding, not the ones that were requested.
+         *
+         * This published fsm->current_caps - the pre-snap numbers. Two diagnoses were built
+         * on that: a user's state file read cpu_max=[2309141,3126312] and this device read
+         * [1828387,1800060], values no chip can hold, while the report's own p6MHz column -
+         * which reads sysfs - showed proper steps like 1977600. The writer had been right all
+         * along; only the reporting lied, and it cost two rounds of chasing a fixed bug.
+         *
+         * Falls back to the requested value if the policy path cannot be read, so the field
+         * stays populated instead of showing a zero that looks like a missing cap. */
+        (sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0) > 0)
+            ? sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0)
+            : fsm->current_caps.cpu_max[0],
+        (sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0) > 0)
+            ? sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0)
+            : fsm->current_caps.cpu_max[1],
         fsm->current_caps.cpu_max[2],
         fsm->thermal_cap,
         m->therm.cpu_max_c,
@@ -1689,8 +1703,13 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         m->bat.capacity_pct, m->bat.temp_dC,
         m->gpu.load_pct,
         m->cpu.load1,
-        fsm->current_caps.cpu_max[0],
-        fsm->current_caps.cpu_max[1],
+        /* Same as the state file above: report the cap being held, not the one requested. */
+        (sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0) > 0)
+            ? sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0)
+            : fsm->current_caps.cpu_max[0],
+        (sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0) > 0)
+            ? sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0)
+            : fsm->current_caps.cpu_max[1],
         fsm->current_caps.cpu_max[2],
         fsm->thermal_cap,
         m->therm.cpu_max_c,
