@@ -85,6 +85,19 @@ static int g_pkg_detect_status = 0;    /* asb_pkg_status_t code */
 static time_t g_smart_drain_prev_ts  = 0;
 static int    g_smart_drain_prev_pct = -1;
 static long   g_smart_drain_on_sec   = 0;
+/* A rolling screen-on drain that does NOT reset when a session ends.
+ *
+ * The per-session measurement is right for the learner - mixing a gaming session into a
+ * reading one describes neither - but it is the wrong thing to show on screen. Sessions end
+ * on every state change, so the accumulator rarely reached the 300 s it needs and the
+ * banner kept publishing the last completed reading instead: a user watched it sit at
+ * 6.5 %/h all day while the phone was visibly draining faster. A state file captured
+ * mid-use shows the cause plainly - smart_drain_window_s=10.
+ *
+ * This pair accumulates across sessions and halves itself every two hours, so it forgets
+ * slowly instead of all at once and always has something current to report. */
+static long   g_drain_roll_sec    = 0;
+static long   g_drain_roll_x100   = 0;
 static long   g_smart_drain_drop_x100 = 0;
 /* Last completed screen-on drain measurement, kept across sessions so short bursts of use
  * still produce a number. Zero until the first session long enough to measure. */
@@ -1240,6 +1253,18 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         long live_x10 = 0;
         if (g_smart_drain_on_sec >= 300 && g_smart_drain_drop_x100 > 0) {
             live_x10 = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
+        } else if (g_drain_roll_sec >= 300 && g_drain_roll_x100 > 0) {
+            /* The rolling figure, when the current session is too young to have one of its
+             * own. This is the case almost all the time - sessions restart on every state
+             * change - and it is what stops the banner from freezing on a reading that may
+             * be hours old. */
+            live_x10 = (g_drain_roll_x100 * 360L) / g_drain_roll_sec;
+        }
+        /* Halve the rolling window every two hours: the number should follow how the phone
+         * is behaving now, not average the whole day into a figure that never moves. */
+        if (g_drain_roll_sec >= 7200) {
+            g_drain_roll_sec  /= 2;
+            g_drain_roll_x100 /= 2;
         } else if (g_smart_drain_last_x10 > 0 &&
                    (time(NULL) - g_smart_drain_last_ts) < ASB_DRAIN_STALE_SEC) {
             /* Nothing measurable in the current session yet - report the previous one
@@ -1252,9 +1277,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         int known = 0;
         for (int i = 0; i < ASB_SMART_APPHEAT_N; i++)
             if (g_smart_appheat.entries[i].hash != 0) known++;
+        long _pub_win = (g_smart_drain_on_sec >= 300) ? g_smart_drain_on_sec : g_drain_roll_sec;
         fprintf(f, "smart_drain_window_s=%ld\nsmart_drain_pctph_x10=%ld\n"
                    "smart_app_hot=%d\nsmart_appheat_n=%d\n",
-                g_smart_drain_on_sec, live_x10, hot, known);
+                _pub_win, live_x10, hot, known);
         fprintf(f, "smart_budget_sev=%d\nsmart_budget_pred_h_x10=%d\n"
                    "smart_drain_ewma_x10=%d\n"
                    "smart_quality_last=%d\nsmart_quality_avg=%d\n"
@@ -3463,9 +3489,11 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
             long ddt = (long)(now - g_smart_drain_prev_ts);
             if (ddt > 0 && ddt <= 30) {
                 g_smart_drain_on_sec += ddt;
+                g_drain_roll_sec += ddt;
                 int ddrop = g_smart_drain_prev_pct - battery_pct;
                 if (ddrop > 0 && ddrop <= 5) {
                     g_smart_drain_drop_x100 += (long)ddrop * 100L;
+                g_drain_roll_x100 += (long)ddrop * 100L;
                 }
             }
         }
@@ -5904,10 +5932,19 @@ int main(int argc, char **argv) {
                                     sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0),
                                     metrics.therm.headroom_pct, metrics.therm.cpu_max_c);
                         else
+                            /* Log what the CPU will actually hold, not what was asked for.
+                             *
+                             * This printed fsm.current_caps - the value before the writer
+                             * snaps it to a real frequency step. A whole day of logs read
+                             * "cpu_max=[2128230,1925001]", numbers no chip has, and I spent
+                             * a diagnosis concluding the caps were being written unsnapped
+                             * when in fact only the log was wrong. A log that reports an
+                             * intention while claiming to report an action is worse than no
+                             * log: it sends the next person looking in the wrong place. */
                             asb_log("reassert: %s cpu_max=[%d,%d] t=%ddegC",
                                     asb_state_names[fsm.state],
-                                    fsm.current_caps.cpu_max[0],
-                                    fsm.current_caps.cpu_max[1],
+                                    sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0),
+                                    sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0),
                                     metrics.therm.cpu_max_c);
                     }
                 }
