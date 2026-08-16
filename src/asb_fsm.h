@@ -1375,6 +1375,38 @@ if (!can_leave &&
     fsm_interpolate_caps(asb_profile_bounds_for(fsm->profile_idx),
                          fsm->profile_idx, fsm->state, &new_caps);
     
+    /* SUSTAINED gets a cap that deepens with temperature.
+     *
+     * The overlay below deliberately skipped SUSTAINED, on the reasoning that its rail is
+     * already the thermal answer. Measurement says otherwise: across a full day of logs the
+     * prime ceiling was 2064577 at 40-49 degC, 1875495 at 60-69 and 1866290 at 80-89 - i.e.
+     * once past the trip point, getting 20 degrees hotter bought no further clamping at
+     * all, which is exactly the "heats up and cools down slowly" the field reports describe.
+     *
+     * One step of the rail per 4 degC above the trip point, no more than four steps. Small
+     * on purpose: SUSTAINED is a state a phone can sit in for an hour of gaming, so the
+     * response has to be gradual enough that nobody notices a cliff, and bounded so it can
+     * never collapse the clock to something unusable. It also unwinds by itself - the cap
+     * follows the temperature back down as the phone cools.
+     */
+    if (fsm->thermal_cap && fsm->state == ASB_STATE_SUSTAINED) {
+        int trip = asb_config_profile_sustained_temp_enter(&g_asb_cfg, 1);
+        int over = (trip > 0) ? (m->therm.cpu_max_c - trip) : 0;
+        if (over > 0) {
+            int steps = over / 4;
+            if (steps > 4) steps = 4;
+            /* 6% per step: roughly one frequency step on the tables these chips ship,
+               applied as a ratio so it lands sanely whatever the rail happens to be. */
+            int keep_pct = 100 - steps * 6;
+            for (int i = 0; i < 3; i++)
+                new_caps.cpu_max[i] = (int)((long)new_caps.cpu_max[i] * keep_pct / 100);
+            if (new_caps.gpu_max_pct > 0) {
+                int g = new_caps.gpu_max_pct - steps * 5;
+                new_caps.gpu_max_pct = (g < 30) ? 30 : g;
+            }
+        }
+    }
+
     if (fsm->thermal_cap && fsm->state != ASB_STATE_SUSTAINED) {
         float keep = (100 - g_asb_cfg.thermal_overlay_pct) / 100.0f;
         for (int i = 0; i < 3; i++)
