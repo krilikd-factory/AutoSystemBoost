@@ -19,7 +19,25 @@ echo "[asb_state_sampler] sampling for ${DURATION}s -> $OUT" >&2
 
 GPU_BASE="/sys/class/kgsl/kgsl-3d0"
 P0_MAX="/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq"
-P6_MAX="/sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq"
+
+# Find the prime cluster instead of assuming policy6.
+#
+# policy6 is where the big cores live on a 6+2 chip, which covers canoe and sun - but not
+# pineapple, whose 1+3+2+2 layout numbers its clusters 0/2/5/7. On an SM8650 the report
+# therefore read a path that does not exist and printed p6MHz=0 for every phase, so a user
+# with a genuine overheating problem sent a log in which the prime clock column was blank.
+#
+# The prime cluster is simply the one with the highest cpuinfo_max_freq; pick it by
+# measurement, and every layout - present and future - reports correctly.
+_prime_dir=""; _prime_hz=0
+for _d in /sys/devices/system/cpu/cpufreq/policy*; do
+  [ -r "$_d/cpuinfo_max_freq" ] || continue
+  _hz=$(cat "$_d/cpuinfo_max_freq" 2>/dev/null)
+  case "$_hz" in ''|*[!0-9]*) continue ;; esac
+  if [ "$_hz" -gt "$_prime_hz" ]; then _prime_hz="$_hz"; _prime_dir="$_d"; fi
+done
+[ -n "$_prime_dir" ] || _prime_dir="/sys/devices/system/cpu/cpufreq/policy6"
+P6_MAX="$_prime_dir/scaling_max_freq"
 
 read_int() { cat "$1" 2>/dev/null || echo 0; }
 read_str() { cat "$1" 2>/dev/null || echo ""; }

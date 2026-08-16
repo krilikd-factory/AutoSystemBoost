@@ -196,7 +196,10 @@ if [ $IS_INSTALLED -eq 1 ]; then
   echo "🔌 sysfs Paths"
   for path in \
     /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq \
-    /sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq \
+    "$(for _d in /sys/devices/system/cpu/cpufreq/policy*; do
+         [ -r "$_d/cpuinfo_max_freq" ] || continue
+         printf '%s %s\n' "$(cat "$_d/cpuinfo_max_freq")" "$_d/scaling_max_freq"
+       done | sort -rn | head -1 | cut -d' ' -f2)" \
     /sys/class/kgsl/kgsl-3d0/devfreq/max_freq; do
     if [ -e "$path" ]; then
       [ -w "$path" ] && ok "$path writable" || warn "$path not writable"
