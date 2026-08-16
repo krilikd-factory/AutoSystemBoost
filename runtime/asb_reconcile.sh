@@ -92,7 +92,17 @@
       fi
       if [ $_need -eq 0 ] && asb_feature_enabled CPU; then
         _cur_p0_max=$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null)
-        _cur_p6_max=$(cat /sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq 2>/dev/null)
+        # Prime cluster by measurement, not by number: pineapple numbers its clusters
+        # 0/2/5/7, so policy6 is absent there and this read returned nothing at all.
+        _pd=""; _ph=0
+        for _d in /sys/devices/system/cpu/cpufreq/policy*; do
+          [ -r "$_d/cpuinfo_max_freq" ] || continue
+          _h=$(cat "$_d/cpuinfo_max_freq" 2>/dev/null)
+          case "$_h" in ''|*[!0-9]*) continue ;; esac
+          [ "$_h" -gt "$_ph" ] && { _ph="$_h"; _pd="$_d"; }
+        done
+        [ -n "$_pd" ] || _pd=/sys/devices/system/cpu/cpufreq/policy6
+        _cur_p6_max=$(cat "$_pd/scaling_max_freq" 2>/dev/null)
         _fsm_caps=$(grep "^cpu_max=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
         _want_p0_max=$(echo "$_fsm_caps" | cut -d, -f1)
         _want_p6_max=$(echo "$_fsm_caps" | cut -d, -f2)
