@@ -43,7 +43,18 @@ read_int() { cat "$1" 2>/dev/null || echo 0; }
 read_str() { cat "$1" 2>/dev/null || echo ""; }
 
 get_fsm_caps() {
-    local _line=$(grep "^cpu_max=" /dev/.asb/state 2>/dev/null | head -1)
+    # Prefer cpu_max_live: what the CPU is holding, which is what a report should show.
+    #
+    # cpu_max is the REQUESTED cap and exists for asb_reconcile.sh to enforce against - the
+    # two are deliberately separate fields. A report that prints the request instead of the
+    # result is how two rounds of diagnosis went to the wrong place: the state file said
+    # 1828387, a frequency no chip has, while sysfs held a proper 1747200.
+    local _line=$(grep "^cpu_max_live=" /dev/.asb/state 2>/dev/null | head -1)
+    if [ -n "$_line" ]; then
+        echo "${_line#cpu_max_live=}"
+        return
+    fi
+    _line=$(grep "^cpu_max=" /dev/.asb/state 2>/dev/null | head -1)
     echo "${_line#cpu_max=}"
 }
 get_state_field() {
