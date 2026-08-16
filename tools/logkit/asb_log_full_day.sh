@@ -122,7 +122,24 @@ lk_detect_phase() {
   if [ "$_scr" = "Asleep" ] || [ "$_scr" = "Dozing" ]; then
     LK_IN_GAMING=0; LK_GPU_HI_STREAK=0; LK_GPU_LO_STREAK=0
     if [ "$LK_AUDIO_PLAY" = "1" ]; then LK_PHASE_OUT="$(lk_audio_phase_name)"; return 0; fi
-    if [ "$_off_for" -ge 1200 ]; then LK_PHASE_OUT="sleep"; else LK_PHASE_OUT="idle"; fi
+    # Three bands, not two: a pause is not idle.
+    #
+    # Screen-off under 20 min was all called "idle", so the 40 seconds between putting the
+    # phone down and picking it up again landed in the same column as an hour on a desk.
+    # The CPU is still finishing what the last app started, so those samples carry
+    # screen-on cost into a screen-off average - which is why the idle figure swung from
+    # 0.90 %/h to 8.69 between two captures of the same phone, and why the wakelock list
+    # for "idle" was full of *launch*.
+    #
+    # Under two minutes is a gap and is reported as one: still visible, because a phone
+    # that never settles is worth seeing, just not averaged into the idle number.
+    if [ "$_off_for" -ge 1200 ]; then
+      LK_PHASE_OUT="sleep"
+    elif [ "$_off_for" -lt 120 ]; then
+      LK_PHASE_OUT="gap"
+    else
+      LK_PHASE_OUT="idle"
+    fi
     return 0
   fi
   # screen on: gaming if GPU sustained high (hysteresis, not a single sample)
