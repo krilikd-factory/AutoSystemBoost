@@ -1094,7 +1094,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f,
         "state=%s\nprofile=%s\n"
         "mA=%d\ngpu_pct=%d\nload1=%.2f\n"
-        "cpu_max=%d,%d,%d\n"
+        "cpu_max=%d,%d,%d\ncpu_max_live=%d,%d\n"
         "thermal=%d\ncap_temp=%d\n"
         "headroom_pct=%d\nheadroom_valid=%d\nperf_cap_p0=%d\nperf_cap_p6=%d\n"
         "predict=%s\n"
@@ -1115,23 +1115,23 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         m->bat.current_ma,
         m->gpu.load_pct,
         m->cpu.load1,
-        /* The caps the CPU is actually holding, not the ones that were requested.
+        /* cpu_max stays the REQUESTED cap - asb_reconcile.sh reads this field as its target.
          *
-         * This published fsm->current_caps - the pre-snap numbers. Two diagnoses were built
-         * on that: a user's state file read cpu_max=[2309141,3126312] and this device read
-         * [1828387,1800060], values no chip can hold, while the report's own p6MHz column -
-         * which reads sysfs - showed proper steps like 1977600. The writer had been right all
-         * along; only the reporting lied, and it cost two rounds of chasing a fixed bug.
+         * I briefly published the live sysfs value here instead, to stop the state file lying
+         * about unsnapped numbers. That turned the reconcile loop into a no-op that could not
+         * see drift, and worse: whatever the vendor had raised the cap to became the value the
+         * shell then reasserted. A two-hour capture shows the result - 15 of 16 idle samples
+         * owned by "shell", three parties writing, and 65 degC during light use.
          *
-         * Falls back to the requested value if the policy path cannot be read, so the field
-         * stays populated instead of showing a zero that looks like a missing cap. */
-        (sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0) > 0)
-            ? sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0)
-            : fsm->current_caps.cpu_max[0],
-        (sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0) > 0)
-            ? sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0)
-            : fsm->current_caps.cpu_max[1],
+         * The live value is published separately as cpu_max_live below, so reporting is honest
+         * without the enforcement loop losing its reference. */
+        fsm->current_caps.cpu_max[0],
+        fsm->current_caps.cpu_max[1],
         fsm->current_caps.cpu_max[2],
+        /* What the CPU actually holds, for diagnostics only - kept in its own field so
+           nothing that enforces caps can start following it by mistake. */
+        sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0),
+        sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0),
         fsm->thermal_cap,
         m->therm.cpu_max_c,
         m->therm.headroom_pct,
