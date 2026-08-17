@@ -5345,7 +5345,22 @@ int main(int argc, char **argv) {
                  * The Battery profile outranks the load state.
                  * Reported as exactly that mismatch.
                  */
+                /* A deeper step for the learned sleep window.
+                 *
+                 * "save" drops the always-on data call the moment the screen goes off, which is
+                 * right for a pocket: the phone may be picked up any second. Overnight it is too
+                 * timid. A five-hour sleep capture shows bluetooth 2.69 against cpu 3.96 in
+                 * batterystats and roughly a thousand kernel wakeups down the modem path -
+                 * rmnet_ipa 180, rmnet_ctl 300, IPA_LAN 318. The CPU slept 97% of the time and the
+                 * phone still drew 96 mA, because something kept knocking on the door.
+                 *
+                 * "night" stretches keepalives much further and lets the radio settle - affordable
+                 * at 3am, not at 3pm. It engages only inside a window the learner derived from this
+                 * user's own nights, so a shift worker gets theirs rather than someone's idea of
+                 * night. */
                 const char *lpm_mode =
+                    (!metrics.misc.screen_on &&
+                     asb_night_window_active(time(NULL)))   ? "night" :
                     !metrics.misc.screen_on                 ? "save" :
                     (fsm.profile_idx == PROFILE_BATTERY)    ? "save" :
                     (fsm.state >= ASB_STATE_HEAVY)          ? "fast" : "normal";
