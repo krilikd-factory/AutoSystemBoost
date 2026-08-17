@@ -56,10 +56,17 @@ if [ ! -f "$BASE" ]; then
   {
     echo "BASE_MDAO=$(settings get global mobile_data_always_on 2>/dev/null)"
     echo "BASE_KEEPIDLE=$(cat /proc/sys/net/ipv4/tcp_keepalive_time 2>/dev/null)"
+    # The probe pair too, because night mode changes it. Anything this script writes and
+    # never records is a setting the user cannot get back - these two would otherwise
+    # stay at their 3am values for the whole following day.
+    echo "BASE_KEEPINTVL=$(cat /proc/sys/net/ipv4/tcp_keepalive_intvl 2>/dev/null)"
+    echo "BASE_KEEPPROBES=$(cat /proc/sys/net/ipv4/tcp_keepalive_probes 2>/dev/null)"
   } > "$BASE" 2>/dev/null
 fi
 . "$BASE" 2>/dev/null
 case "${BASE_KEEPIDLE:-}" in ''|*[!0-9]*) BASE_KEEPIDLE=300 ;; esac
+case "${BASE_KEEPINTVL:-}" in ''|*[!0-9]*) BASE_KEEPINTVL=75 ;; esac
+case "${BASE_KEEPPROBES:-}" in ''|*[!0-9]*) BASE_KEEPPROBES=9 ;; esac
 
 # The profile owns the keepalive baseline; LPM scales it.
 # A fixed "600 for sleep" would have been SHORTER than balanced's own 3600 and caused more
@@ -79,14 +86,39 @@ case "$MODE" in
     # Data call stays up: coming back from an idle RRC state is the latency spike that matters
     # in an online match, and it costs far more than the power saved.
     _sset mobile_data_always_on 1
+    # Undo the night probe pair: leaving it set would carry a 3am setting into daytime.
+    _sysc net.ipv4.tcp_keepalive_intvl "$BASE_KEEPINTVL"
+    _sysc net.ipv4.tcp_keepalive_probes "$BASE_KEEPPROBES"
     _kaf=$((_ka / 4)); [ "$_kaf" -lt 120 ] && _kaf=120
     _sysc net.ipv4.tcp_keepalive_time "$_kaf"
+    ;;
+  night)
+    # Inside the learner's own sleep window: the same idea as "save", taken further.
+    #
+    # save halves the radio's reasons to wake; night removes most of them. Keepalives go
+    # to six times the profile value rather than two - at 3am a socket that checks in
+    # every twelve minutes instead of every two costs nothing anyone will notice, and one
+    # night capture showed the modem path waking the SoC about a thousand times.
+    #
+    # Deliberately NOT touched: airplane mode, the radio power state, or anything that
+    # could stop a call arriving. Every change here is timing - the phone still rings,
+    # high-priority push still lands, and the window came from the user's own nights.
+    _sset mobile_data_always_on 0
+    _kan=$((_ka * 6)); [ "$_kan" -gt 43200 ] && _kan=43200
+    _sysc net.ipv4.tcp_keepalive_time "$_kan"
+    # Fewer, later probes once a socket does go quiet: nine retries two seconds apart is
+    # a burst of wakeups for a connection that is already idle.
+    _sysc net.ipv4.tcp_keepalive_intvl 75
+    _sysc net.ipv4.tcp_keepalive_probes 5
     ;;
   save)
     # Screen off. Let the framework drop the always-on data call so the radio can sit
     # idle, and stretch keepalives so fewer sockets drag it back up - that traffic is
     # the biggest single modem drain overnight.
     _sset mobile_data_always_on 0
+    # Undo the night probe pair: leaving it set would carry a 3am setting into daytime.
+    _sysc net.ipv4.tcp_keepalive_intvl "$BASE_KEEPINTVL"
+    _sysc net.ipv4.tcp_keepalive_probes "$BASE_KEEPPROBES"
     _kas=$((_ka * 2)); [ "$_kas" -gt 43200 ] && _kas=43200
     _sysc net.ipv4.tcp_keepalive_time "$_kas"
     ;;
@@ -96,6 +128,8 @@ case "$MODE" in
     # Hand keepalive straight back to the PROFILE. Restoring the boot-time baseline
     # here would quietly override whatever the active profile asked for the moment the
     # screen came on - the same shape of conflict the Smart tuner had with swappiness.
+    _sysc net.ipv4.tcp_keepalive_intvl "$BASE_KEEPINTVL"
+    _sysc net.ipv4.tcp_keepalive_probes "$BASE_KEEPPROBES"
     _sysc net.ipv4.tcp_keepalive_time "$_ka"
     ;;
 esac
