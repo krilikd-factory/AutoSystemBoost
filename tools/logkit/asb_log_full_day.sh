@@ -533,7 +533,7 @@ lk_asb_feature_header
 lk_config_watch_init
 { echo "# phase timeline — epoch | iso | phase | trigger"; } > "$LK_OUT_DIR/phase_timeline.txt"
 { echo "# throttle trace — epoch | phase | p0 | p6 | temps | cap_owner"; } > "$LK_OUT_DIR/throttle_trace.txt"
-printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\tawakePct\n' > "$LK_OUT_DIR/phase_ledger.tsv"
+printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\tawakePct\tavgMA\n' > "$LK_OUT_DIR/phase_ledger.tsv"
 
 # wakelock baseline + reset
 lk_wakelock_kernel_baseline
