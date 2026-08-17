@@ -2737,6 +2737,10 @@ fi
     sleep 900
     [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ] || continue
     sh "$MODDIR/runtime/asb_wakelock_watch.sh" >/dev/null 2>&1
+    # Same cadence: both look for work that outlived the user's attention, and neither is
+    # urgent enough to poll more often than the thing it is trying to save.
+    [ -f "$MODDIR/runtime/asb_gnss_trim.sh" ] \
+      && sh "$MODDIR/runtime/asb_gnss_trim.sh" >/dev/null 2>&1
   done
 ) >/dev/null 2>&1 &
 

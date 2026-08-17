@@ -166,6 +166,17 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
 
+# Give location back to apps ASB limited.
+#
+# Recorded per package: an app the user restricted themselves in Android settings stays
+# restricted, because undoing their choice would be the same overreach in reverse.
+if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; then
+  while IFS= read -r _gp; do
+    [ -n "$_gp" ] && appops set "$_gp" COARSE_LOCATION allow >/dev/null 2>&1
+  done < /data/adb/asb/gnss_restricted
+  rm -f /data/adb/asb/gnss_restricted 2>/dev/null
+fi
+
 # Let restricted apps out of the bucket we put them in.
 #
 # Only ones ASB moved, recorded as it went: a package the user restricted themselves stays
