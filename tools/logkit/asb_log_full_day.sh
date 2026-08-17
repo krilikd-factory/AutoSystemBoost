@@ -208,6 +208,12 @@ LK_CUR_PHASE=""
 LK_PH_START=0
 LK_PH_START_PCT=0
 LK_PH_MAXCPU=0
+# Discharge current, summed per sample. The percent column is quantised to whole points
+# and lags, so on a short capture it can be out by a factor of two: a night trace with a
+# 96 mA median was reported as 0.73 %/h, which is the arithmetic of ~44 mA. Current has
+# no such step, so it is carried alongside and the two can be compared.
+LK_PH_MASUM=0
+LK_PH_MACNT=0
 LK_PH_MAXSURF=0
 LK_PH_MAXP6=0
 LK_PH_GPUSUM=0
@@ -240,10 +246,12 @@ lk_phase_ledger_row() {
     _awake=$(( _mono * 100 / _elapsed ))
     [ "$_awake" -gt 100 ] && _awake=100
   fi
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  _maavg=0
+  [ "$LK_PH_MACNT" -gt 0 ] 2>/dev/null && _maavg=$(( LK_PH_MASUM / LK_PH_MACNT ))
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$LK_CUR_PHASE" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
     "$LK_PH_MAXCPU" "$LK_PH_MAXSURF" "$LK_PH_MAXP6" "$_gavg" \
-    "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake"
+    "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake" "$_maavg"
   return 0
 }
 
@@ -263,6 +271,7 @@ lk_phase_ledger_open() {
   LK_PH_START_MONO=$(lk_mono_s)
   LK_PH_START_PCT=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   LK_PH_MAXCPU=0; LK_PH_MAXSURF=0; LK_PH_MAXP6=0
+  LK_PH_MASUM=0; LK_PH_MACNT=0
   LK_PH_GPUSUM=0; LK_PH_GPUCNT=0; LK_PH_THROTTLE=0; LK_PH_WAKEPEAK=0
 }
 
@@ -276,6 +285,17 @@ lk_phase_ledger_accumulate() {
   [ -n "$_surf" ] && [ "$_surf" -gt "$LK_PH_MAXSURF" ] 2>/dev/null && LK_PH_MAXSURF=$_surf
   [ -n "$_p6" ] && [ "$_p6" -gt "$LK_PH_MAXP6" ] 2>/dev/null && LK_PH_MAXP6=$_p6
   if [ -n "$_gb" ]; then LK_PH_GPUSUM=$(( LK_PH_GPUSUM + _gb )); LK_PH_GPUCNT=$(( LK_PH_GPUCNT + 1 )); fi
+  # Discharge current, only while discharging: a positive reading during charge is
+  # current flowing the other way and would cancel the thing being measured.
+  _ma=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null)
+  case "$_ma" in ''|*[!0-9-]*) _ma='' ;; esac
+  if [ -n "$_ma" ]; then
+    [ "$_ma" -lt 0 ] 2>/dev/null && _ma=$(( 0 - _ma ))
+    [ "$_ma" -gt 100000 ] 2>/dev/null && _ma=$(( _ma / 1000 ))
+    if [ "$_ma" -gt 0 ] && [ "$_ma" -lt 15000 ] 2>/dev/null; then
+      LK_PH_MASUM=$(( LK_PH_MASUM + _ma )); LK_PH_MACNT=$(( LK_PH_MACNT + 1 ))
+    fi
+  fi
   # wake active peak
   _ksrc=/sys/kernel/debug/wakeup_sources
   [ -r "$_ksrc" ] || _ksrc=/d/wakeup_sources
@@ -296,14 +316,19 @@ lk_emit_phase_summary() {
   {
     echo "===== PER-PHASE SUMMARY ====="
     echo ""
-    printf "%-15s %8s %7s %8s %8s %8s %9s %7s %9s %8s\n" \
-      "phase" "dur_min" "d_pct" "pct/h" "cpuT" "surfT" "p6MHz" "gpu%" "throttle" "awake%"
+    printf "%-15s %8s %7s %8s %6s %8s %8s %9s %7s %9s %8s\n" \
+      "phase" "dur_min" "d_pct" "pct/h" "mA" "cpuT" "surfT" "p6MHz" "gpu%" "throttle" "awake%"
     awk -F'\t' '
       /^#/{next}
       {
         ph=$1; dur=($3-$2); dpct=($4-$5);
         D[ph]+=dur; DP[ph]+=dpct; N[ph]++;
-        if($6>CT[ph])CT[ph]=$6; if($7>SF[ph])SF[ph]=$7;
+        # Temperature averaged over the phase, weighted by sample duration - the same
+        # basis as pct/h beside it. It was the peak, so one brief spike described a
+        # whole night: a capture read "sleep cpuT 67" while the trace behind it sat
+        # mostly at 38-44. Peaks keep their place in the hotspots section, where a
+        # single moment is exactly the point.
+        CT[ph]+=$6*dur; SF[ph]+=$7*dur; TD[ph]+=dur;
         if($8>P6[ph])P6[ph]=$8; G[ph]+=$9; TH[ph]+=$10;
         if($12>=0){ AW[ph]+=$12*dur; AWD[ph]+=dur }
       }
@@ -314,8 +339,8 @@ lk_emit_phase_summary() {
           gavg=(N[p]>0)?(G[p]/N[p]):0;
           aw=(AWD[p]>0)?(AW[p]/AWD[p]):-1;
           aws=(aw>=0)?sprintf("%.1f",aw):"-";
-          printf "%-15s %8.1f %7d %8.2f %8d %8d %9d %7d %9d %8s\n", \
-            p, durm, DP[p], rate, CT[p], SF[p], (P6[p]/1000), gavg, TH[p], aws;
+          printf "%-15s %8.1f %7d %8.2f %6d %8d %8d %9d %7d %9d %8s\n", \
+            p, durm, DP[p], rate, (MAD[p]>0?MA[p]/MAD[p]:0), (TD[p]>0?CT[p]/TD[p]:0), (TD[p]>0?SF[p]/TD[p]:0), (P6[p]/1000), gavg, TH[p], aws;
         }
       }
     ' "$_all" | sort -k4 -rn
@@ -327,7 +352,7 @@ lk_emit_phase_summary() {
     ' "$_all"
     echo ""
     echo "Legend: d_pct=battery % consumed (negative=gained while charging),"
-    echo "        pct/h=drain rate, cpuT/surfT=peak temps (°C), p6MHz=peak prime"
+    echo "        pct/h=drain rate (from %), mA=average discharge current, cpuT/surfT=average temps (°C), p6MHz=peak prime"
     echo "        clock, gpu%=avg GPU busy, throttle=ticks the prime was capped."
     echo "        awake%=awake share = CLOCK_MONOTONIC delta / boottime delta"
     echo "        (Android uptimeMillis/elapsedRealtime); excludes suspend."
