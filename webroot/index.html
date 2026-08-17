@@ -2947,13 +2947,12 @@ const SNAP_KEYS = [
   'purge_vendor_logs',
   'doze_trim_whitelist',
   'gms_freeze',
+  'wakelock_action',
+  'perf_ceiling_pct',
   'athena_service',
   'net_rps',
   'net_txqueue',
-  /* Added with the cards themselves. A key missing here silently drops out of every
-   * backup and every upgrade restore - the user changes a setting, exports, and the
-   * value is simply not in the file. Reported exactly that way for these two. */
-  'perf_ceiling_pct', 'wakelock_action'];
+  'night_modem_idle'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -3035,6 +3034,8 @@ const CFG_ITEMS = [
     desc:'Deep Sleep decides how soon Doze starts. This decides who ignores it.\n\nApps on Android\u2019s exemption list keep their alarms and network through every idle window, so a phone can sit in deep doze all night while three exempted apps wake it anyway - which is why tuning only the timings can look like it changed nothing.\n\nOnly user-installed apps are touched. The dialer, SMS app, clock and your root manager are never removed, because that is how a module ends up blamed for a missed alarm. Every removal is recorded and put back when you set this to 0 or uninstall ASB.\n\nApplies with Deep Sleep set to aggressive or night.' },
   { key:'wakelock_action', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Act on Wakelocks',
     desc:'A wakelock is an app telling Android \u201Cdo not sleep yet\u201D. One app holding one all night is the single most expensive thing that can happen to a battery - more than any setting here can save - and no amount of tuning helps, because the phone never reaches the states those settings govern.\n\nMeasuring is always on; this decides whether ASB acts. With it on, a user-installed app still holding a wakelock after 45+ minutes of screen-off, on a phone that is measurably staying awake, is moved to Android\u2019s restricted bucket.\n\nNever touched: kernel and system sources - modem, display, alarm timer, sensors - and authenticators, dialer, SMS, messaging and clock apps. Nothing is force-stopped; restricted is a state Android manages and can undo.\n\nLeave it off if you would rather see the name and decide yourself. The report names the holder either way.' },
+  { key:'night_modem_idle', type:'bool', def:'0', name:'Quiet Radio at Night',
+    desc:'Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times - rmnet_ipa 180, rmnet_ctl 300, IPA_LAN 318. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
     desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
   { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
@@ -3094,6 +3095,7 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
+  night_modem_idle:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'system',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
@@ -3140,6 +3142,7 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
+  night_modem_idle:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery',
@@ -3188,6 +3191,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
+  night_modem_idle:'\\uD83D\\uDCF4',
   net_rps:'\uD83E\uDDF5', net_txqueue:'\uD83D\uDCE4',
   athena_service:'\uD83D\uDEE1\uFE0F',
   sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
