@@ -140,6 +140,10 @@ typedef struct {
      * hour_start/hour_end pair with the learned window.
      */
     int   night_quiet_auto;             /* 1=learn window per user (default 1) */
+    /* Deep radio idling inside the learned sleep window. Separate from night_quiet so a
+     * user can keep the governor's night behaviour without the modem timing change - the
+     * two answer different questions and one of them can delay a poll-based app. */
+    int   night_modem_idle;
     int   night_quiet_auto_min_samples; /* nights required before learned window is used (default 3) */
 
     /*
@@ -292,6 +296,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->night_quiet_hour_start       = 23;
     c->night_quiet_hour_end         = 6;
     c->night_quiet_auto             = 1;
+    c->night_modem_idle    = 0;
     c->night_quiet_auto_min_samples = 3;
     c->charge_aware_enable          = 1;
     c->cool_gaming                  = 1;
@@ -455,6 +460,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "night_quiet_hour_start"))  c->night_quiet_hour_start  = atoi(v);
     else if (!strcmp(k, "night_quiet_hour_end"))    c->night_quiet_hour_end    = atoi(v);
     else if (!strcmp(k, "night_quiet_auto"))             c->night_quiet_auto             = atoi(v);
+    else if (!strcmp(k, "night_modem_idle"))     c->night_modem_idle = atoi(v);
     else if (!strcmp(k, "night_quiet_auto_min_samples")) c->night_quiet_auto_min_samples = atoi(v);
     else if (!strcmp(k, "charge_aware_enable"))     c->charge_aware_enable     = atoi(v);
     else if (!strcmp(k, "cool_gaming"))             c->cool_gaming             = atoi(v);

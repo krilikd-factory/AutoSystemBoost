@@ -5359,7 +5359,7 @@ int main(int argc, char **argv) {
                  * user's own nights, so a shift worker gets theirs rather than someone's idea of
                  * night. */
                 const char *lpm_mode =
-                    (!metrics.misc.screen_on &&
+                    (g_asb_cfg.night_modem_idle && !metrics.misc.screen_on &&
                      asb_night_window_active(time(NULL)))   ? "night" :
                     !metrics.misc.screen_on                 ? "save" :
                     (fsm.profile_idx == PROFILE_BATTERY)    ? "save" :
