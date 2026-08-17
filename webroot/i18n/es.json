@@ -221,6 +221,10 @@
     "wakelock_action": {
       "name": "Actuar sobre wakelocks",
       "desc": "Un wakelock es una app diciéndole a Android «aún no duermas». Una sola app haciéndolo toda la noche cuesta más de lo que cualquier ajuste de aquí puede ahorrar.\n\nLa medición siempre está activa; esto decide si ASB actúa. Activado, una app instalada por ti que siga reteniendo un wakelock tras 45+ minutos de pantalla apagada pasa al bucket «restringido» de Android.\n\nNunca se tocan: fuentes del kernel y del sistema, ni apps de autenticación, teléfono, SMS, mensajería y reloj."
+    },
+    "night_modem_idle": {
+      "name": "Quiet Radio at Night",
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
     }
   },
   "nav_main": "Inicio",

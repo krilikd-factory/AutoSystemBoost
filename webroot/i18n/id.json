@@ -221,6 +221,10 @@
     "wakelock_action": {
       "name": "Tindak lanjuti wakelock",
       "desc": "Wakelock adalah aplikasi yang memberi tahu Android «jangan tidur dulu». Satu aplikasi yang melakukannya semalaman lebih mahal daripada penghematan pengaturan mana pun di sini.\n\nPengukuran selalu aktif; ini menentukan apakah ASB bertindak. Jika aktif, aplikasi yang Anda pasang dan masih memegang wakelock setelah 45+ menit layar mati dipindahkan ke bucket «restricted» Android.\n\nTidak pernah disentuh: sumber kernel dan sistem, serta aplikasi autentikator, telepon, SMS, pesan, dan jam."
+    },
+    "night_modem_idle": {
+      "name": "Quiet Radio at Night",
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
     }
   },
   "nav_main": "Beranda",

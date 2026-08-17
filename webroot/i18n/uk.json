@@ -221,6 +221,10 @@
     "wakelock_action": {
       "name": "Діяти за wakelock",
       "desc": "Wakelock — це коли застосунок каже Android «ще не засинай». Один застосунок, що тримає його всю ніч, дорожчий за все, що можна заощадити налаштуваннями тут.\n\nВимірювання працює завжди; цей твік вирішує, чи втручатися. При увімкненні встановлений вами застосунок, який усе ще тримає wakelock через 45+ хвилин згаслого екрана, переводиться до «обмеженого» кошика Android.\n\nНіколи не чіпаються: ядерні та системні джерела, а також автентифікатори, дзвонилка, SMS, месенджери і годинник."
+    },
+    "night_modem_idle": {
+      "name": "Quiet Radio at Night",
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
     }
   },
   "nav_main": "Головна",
