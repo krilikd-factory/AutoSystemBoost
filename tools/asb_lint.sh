@@ -718,6 +718,30 @@ done
 [ "$_desc_bad" = "0" ] && ok "every language describes every card"
 echo ""
 
+echo "🖼  Card icons"
+# Icons must be a real escape, not the text of one.
+#
+# CFG_ICONS entries look like '\uD83D\uDCF4'. Written with a doubled backslash the browser
+# stops seeing an escape and renders twenty literal characters, which overflow the 44px
+# icon box and shove the card title across the screen. This has now happened three times -
+# Athena, net_rps and night_modem_idle - because nothing checked for it and the mistake
+# looks identical to the correct form at a glance.
+_ico_bad="$(python3 - <<'PYEOF' 2>/dev/null
+import re
+h=open('webroot/index.html').read()
+blk=re.search(r'const CFG_ICONS = \{(.*?)\};', h, re.S)
+if not blk: print(''); raise SystemExit
+bad=[k for k,v in re.findall(r"(\w+)\s*:\s*'([^']*)'", blk.group(1)) if v.startswith('\\\\')]
+print(' '.join(bad))
+PYEOF
+)"
+if [ -n "$_ico_bad" ]; then
+  err "icons written as literal text, not escapes: $_ico_bad"
+else
+  ok "every card icon is a real escape sequence"
+fi
+echo ""
+
 echo "📁 Installer layout"
 # There must be exactly ONE install.sh, and it lives in common/.
 #
