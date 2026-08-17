@@ -222,9 +222,9 @@
       "name": "Wakelock'lara müdahale",
       "desc": "Wakelock, bir uygulamanın Android'e «henüz uyuma» demesidir. Bunu bütün gece yapan tek bir uygulama, buradaki her ayarın kazandırabileceğinden pahalıya mal olur.\n\nÖlçüm her zaman açık; bu, ASB'nin müdahale edip etmeyeceğine karar verir. Açıkken, ekran kapandıktan 45+ dakika sonra hâlâ wakelock tutan, sizin yüklediğiniz bir uygulama Android'in «kısıtlı» kovasına taşınır.\n\nAsla dokunulmaz: çekirdek ve sistem kaynakları ile kimlik doğrulayıcı, telefon, SMS, mesajlaşma ve saat uygulamaları."
     },
-    "night_modem_idle": {
-      "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    "gnss_trim": {
+      "name": "Arka plan GPS'ini kırp",
+      "desc": "GPS bir telefonun yapabileceği en pahalı işlerden biri. Android bunun ne kadarının ÖNBELLEKTEKİ süreçlerden geldiğini ayrıca sayar: kapalı olan ve sizin istemediğiniz hiçbir şey yapmayan uygulamalar.\n\nBir günlükte bu, toplam GPS tüketiminin 56 mAh'ından 53'üydü.\n\nAçıkken, süreci önbellekteyken ve ekran kapalıyken konum tutan bir uygulama kaba doğrulukla sınırlanır. Tam doğruluk uygulamayı açar açmaz geri gelir.\n\nAsla dokunulmaz: haritalar ve navigasyon, fitness ve rota takibi, acil durum ve cihaz bulma uygulamaları."
     }
   },
   "nav_main": "Ana",
@@ -288,8 +288,8 @@
   "prof_none": "seçilmedi",
   "cfg_search": "Ara",
   "cfg_search_none": "Sonuç yok",
-  "cfg_export": "↑ Dışa",
-  "cfg_import": "↓ İçe",
+  "cfg_export": "↑ Dışa aktar",
+  "cfg_import": "↓ İçe aktar",
   "cfg_import_confirm": "Tekrar?",
   "cfg_export_ok": "Saved to ",
   "cfg_export_err": "Could not write the backup",
@@ -384,7 +384,7 @@
   "doze_not_exempt": "muaf değil",
   "smart_new_bucket": "bu saati öğreniyor · ",
   "smart_new_bucket_tail": " toplam biriktirildi",
-  "cfg_smart_reset": "↺ Sıfırla",
+  "cfg_smart_reset": "↺ Öğrenmeyi sıfırla",
   "t_smart_reset_confirm": "Öğrenilenleri silmek için tekrar dokun",
   "t_smart_reset_done": "Öğrenme sıfırlandı · Smart yeniden başlıyor",
   "t_smart_reset_fail": "Sıfırlanamadı"

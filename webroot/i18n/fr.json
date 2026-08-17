@@ -364,9 +364,9 @@
       "name": "Agir sur les wakelocks",
       "desc": "Un wakelock, c'est une appli qui dit à Android « ne dors pas encore ». Une seule appli qui le fait toute la nuit coûte plus que tout ce que les réglages d'ici peuvent économiser.\n\nLa mesure est toujours active ; ceci décide si ASB intervient. Activé, une appli que vous avez installée et qui tient encore un wakelock après 45+ minutes d'écran éteint passe dans le bucket « restricted » d'Android.\n\nJamais touchés : les sources noyau et système, ni les applis d'authentification, téléphone, SMS, messagerie et horloge."
     },
-    "night_modem_idle": {
-      "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    "gnss_trim": {
+      "name": "Réduire le GPS en arrière-plan",
+      "desc": "Le GPS est l'une des choses les plus coûteuses pour un téléphone. Android comptabilise séparément la part venant des processus EN CACHE : des applis fermées qui ne font rien de ce que vous avez demandé.\n\nDans un relevé, c'était 53 des 56 mAh de toute la consommation GPS.\n\nActivé, une appli qui retient la localisation pendant que son processus est en cache et l'écran éteint est limitée à une précision grossière. La précision complète revient dès que vous l'ouvrez.\n\nJamais touchées : cartes et navigation, fitness et suivi d'itinéraire, applis d'urgence et de localisation d'appareil."
     }
   },
   "opt": {
@@ -556,7 +556,7 @@
   "doze_not_exempt": "non exempté",
   "smart_new_bucket": "apprend cette heure · ",
   "smart_new_bucket_tail": " au total",
-  "cfg_smart_reset": "↺ Réinit.",
+  "cfg_smart_reset": "↺ Réinitialiser l'apprentissage",
   "t_smart_reset_confirm": "Appuyez encore pour effacer l'appris",
   "t_smart_reset_done": "Apprentissage réinitialisé · Smart repart",
   "t_smart_reset_fail": "Échec de la réinitialisation"

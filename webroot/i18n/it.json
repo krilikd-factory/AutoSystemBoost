@@ -249,9 +249,9 @@
       "name": "Agisci sui wakelock",
       "desc": "Un wakelock è un'app che dice ad Android «non dormire ancora». Una sola app che lo fa tutta la notte costa più di quanto qualsiasi impostazione qui possa far risparmiare.\n\nLa misurazione è sempre attiva; questo decide se ASB interviene. Attivo, un'app installata da te che tiene ancora un wakelock dopo 45+ minuti di schermo spento passa al bucket «restricted» di Android.\n\nMai toccati: sorgenti kernel e di sistema, né app di autenticazione, telefono, SMS, messaggistica e orologio."
     },
-    "night_modem_idle": {
-      "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    "gnss_trim": {
+      "name": "Riduci GPS in background",
+      "desc": "Il GPS è tra le cose più costose che un telefono possa fare. Android conta separatamente quanto proviene da processi IN CACHE: app chiuse che non fanno nulla di ciò che hai chiesto.\n\nIn un log erano 53 dei 56 mAh dell'intero consumo GPS.\n\nAttivo, un'app che trattiene la posizione mentre il suo processo è in cache e lo schermo è spento viene limitata alla precisione approssimativa. La precisione piena torna appena la apri.\n\nMai toccate: mappe e navigazione, fitness e tracciamento percorsi, app di emergenza e trova-dispositivo."
     }
   },
   "optFor": {
@@ -384,7 +384,7 @@
   "doze_not_exempt": "non esente",
   "smart_new_bucket": "sta imparando quest'ora · ",
   "smart_new_bucket_tail": " accumulate in totale",
-  "cfg_smart_reset": "↺ Azzera",
+  "cfg_smart_reset": "↺ Azzera apprendimento",
   "t_smart_reset_confirm": "Tocca di nuovo per cancellare ciò che ha imparato",
   "t_smart_reset_done": "Apprendimento azzerato · Smart riparte",
   "t_smart_reset_fail": "Impossibile azzerare"

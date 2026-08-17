@@ -222,9 +222,9 @@
       "name": "Діяти за wakelock",
       "desc": "Wakelock — це коли застосунок каже Android «ще не засинай». Один застосунок, що тримає його всю ніч, дорожчий за все, що можна заощадити налаштуваннями тут.\n\nВимірювання працює завжди; цей твік вирішує, чи втручатися. При увімкненні встановлений вами застосунок, який усе ще тримає wakelock через 45+ хвилин згаслого екрана, переводиться до «обмеженого» кошика Android.\n\nНіколи не чіпаються: ядерні та системні джерела, а також автентифікатори, дзвонилка, SMS, месенджери і годинник."
     },
-    "night_modem_idle": {
-      "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    "gnss_trim": {
+      "name": "Підрізати фоновий GPS",
+      "desc": "GPS — одна з найдорожчих дій для телефона. Android окремо рахує, скільки його припадає на процеси в КЕШІ: застосунки, які закриті й не роблять нічого з того, що ви просили.\n\nВ одному лозі це виявилося 53 з 56 мАг усієї витрати GPS.\n\nПри увімкненні застосунок, що тримає геолокацію, поки його процес у кеші та екран вимкнено, обмежується грубою точністю. Повна точність повертається щойно ви його відкриєте.\n\nНіколи не зачіпаються: карти й навігація, фітнес і трекінг, екстрені застосунки та пошук пристрою."
     }
   },
   "nav_main": "Головна",
@@ -384,7 +384,7 @@
   "doze_not_exempt": "немає у винятках",
   "smart_new_bucket": "навчається для цієї години · ",
   "smart_new_bucket_tail": " накопичено загалом",
-  "cfg_smart_reset": "↺ Скидання",
+  "cfg_smart_reset": "↺ Скинути навчання",
   "t_smart_reset_confirm": "Натисніть ще раз, щоб стерти вивчене",
   "t_smart_reset_done": "Навчання скинуто · Smart почне заново",
   "t_smart_reset_fail": "Не вдалося скинути навчання"

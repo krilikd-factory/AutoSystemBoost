@@ -222,9 +222,9 @@
       "name": "Auf Wakelocks reagieren",
       "desc": "Ein Wakelock ist eine App, die Android sagt: noch nicht schlafen. Eine einzige App, die das die ganze Nacht tut, kostet mehr, als jede Einstellung hier einsparen kann.\n\nGemessen wird immer; dies entscheidet, ob ASB eingreift. Eingeschaltet wird eine selbst installierte App, die nach 45+ Minuten Bildschirm-aus noch einen Wakelock hält, in Androids Bucket \"restricted\" verschoben.\n\nNie betroffen: Kernel- und Systemquellen sowie Authenticator-, Telefon-, SMS-, Messenger- und Uhr-Apps."
     },
-    "night_modem_idle": {
-      "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    "gnss_trim": {
+      "name": "Hintergrund-GPS kürzen",
+      "desc": "GPS gehört zum Teuersten, was ein Telefon tun kann. Android zählt separat, wie viel davon auf Prozesse im CACHE entfällt: Apps, die geschlossen sind und nichts tun, worum Sie gebeten haben.\n\nIn einem Log waren das 53 von 56 mAh des gesamten GPS-Verbrauchs.\n\nEingeschaltet wird eine App, die Standort hält während ihr Prozess im Cache ist und der Bildschirm aus, auf grobe Genauigkeit begrenzt. Volle Genauigkeit kehrt zurück, sobald Sie sie öffnen.\n\nNie betroffen: Karten und Navigation, Fitness und Routentracking, Notfall- und Geräte-Finder-Apps."
     }
   },
   "nav_main": "Start",
@@ -384,7 +384,7 @@
   "doze_not_exempt": "nicht befreit",
   "smart_new_bucket": "lernt diese Stunde · ",
   "smart_new_bucket_tail": " insgesamt gesammelt",
-  "cfg_smart_reset": "↺ Reset",
+  "cfg_smart_reset": "↺ Lernen zurücksetzen",
   "t_smart_reset_confirm": "Nochmal tippen, um Gelerntes zu löschen",
   "t_smart_reset_done": "Lernen zurückgesetzt · Smart beginnt neu",
   "t_smart_reset_fail": "Zurücksetzen fehlgeschlagen"

@@ -222,9 +222,9 @@
       "name": "Tindak lanjuti wakelock",
       "desc": "Wakelock adalah aplikasi yang memberi tahu Android «jangan tidur dulu». Satu aplikasi yang melakukannya semalaman lebih mahal daripada penghematan pengaturan mana pun di sini.\n\nPengukuran selalu aktif; ini menentukan apakah ASB bertindak. Jika aktif, aplikasi yang Anda pasang dan masih memegang wakelock setelah 45+ menit layar mati dipindahkan ke bucket «restricted» Android.\n\nTidak pernah disentuh: sumber kernel dan sistem, serta aplikasi autentikator, telepon, SMS, pesan, dan jam."
     },
-    "night_modem_idle": {
-      "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    "gnss_trim": {
+      "name": "Pangkas GPS latar belakang",
+      "desc": "GPS termasuk hal termahal yang bisa dilakukan ponsel. Android menghitung terpisah berapa yang berasal dari proses DI CACHE: aplikasi yang tertutup dan tidak melakukan apa pun yang Anda minta.\n\nDalam satu log itu 53 dari 56 mAh seluruh konsumsi GPS.\n\nSaat aktif, aplikasi yang menahan lokasi selagi prosesnya di cache dan layar mati dibatasi ke akurasi kasar. Akurasi penuh kembali begitu Anda membukanya.\n\nTidak pernah disentuh: peta dan navigasi, kebugaran dan pelacakan rute, aplikasi darurat dan pencari perangkat."
     }
   },
   "nav_main": "Beranda",
@@ -384,7 +384,7 @@
   "doze_not_exempt": "tidak dikecualikan",
   "smart_new_bucket": "mempelajari jam ini · ",
   "smart_new_bucket_tail": " total terkumpul",
-  "cfg_smart_reset": "↺ Atur ulang",
+  "cfg_smart_reset": "↺ Atur ulang pembelajaran",
   "t_smart_reset_confirm": "Ketuk lagi untuk menghapus yang dipelajari",
   "t_smart_reset_done": "Pembelajaran diatur ulang · Smart mulai baru",
   "t_smart_reset_fail": "Gagal mengatur ulang"

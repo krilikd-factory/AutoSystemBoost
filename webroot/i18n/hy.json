@@ -364,9 +364,9 @@
       "name": "Գործել wakelock-ների դեմ",
       "desc": "Wakelock-ը հավելվածն է, որ ասում է Android-ին՝ «դեռ մի քնիր»։ Մեկ հավելված, որ դա անում է ամբողջ գիշեր, ավելի թանկ է, քան այստեղի ցանկացած կարգավորում կարող է խնայել։\n\nՉափումը միշտ միացված է. սա որոշում է՝ միջամտի՞ ASB-ն։ Միացված վիճակում ձեր տեղադրած հավելվածը, որը 45+ րոպե անջատված էկրանից հետո դեռ պահում է wakelock, տեղափոխվում է Android-ի «սահմանափակված» զամբյուղ։\n\nԵրբեք չեն շոշափվում. միջուկի և համակարգի աղբյուրները, ինչպես նաև իսկորոշիչ, զանգերի, SMS, մեսենջեր և ժամացույց հավելվածները։"
     },
-    "night_modem_idle": {
-      "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    "gnss_trim": {
+      "name": "Կրճատել ֆոնային GPS-ը",
+      "desc": "GPS-ը հեռախոսի ամենաթանկ գործողություններից է։ Android-ն առանձին հաշվում է, թե որքանն է բաժին ընկնում ՔԵՇՈՒՄ գտնվող պրոցեսներին՝ փակված հավելվածներ, որոնք ոչինչ չեն անում ձեր խնդրածից։\n\nՄեկ մատյանում դա կազմել է GPS-ի ընդհանուր ծախսի 56 մԱժ-ից 53-ը։\n\nՄիացված վիճակում հավելվածը, որը պահում է դիրքը, մինչ իր պրոցեսը քեշում է և էկրանն անջատված, սահմանափակվում է կոպիտ ճշտությամբ։ Լրիվ ճշտությունը վերադառնում է հենց այն բացելիս։\n\nԵրբեք չեն շոշափվում՝ քարտեզներ և նավիգացիա, ֆիթնես և երթուղիների հետագծում, արտակարգ և սարք գտնելու հավելվածներ։"
     }
   },
   "opt": {
@@ -556,7 +556,7 @@
   "doze_not_exempt": "բացառված չէ",
   "smart_new_bucket": "սովորում է այս ժամը · ",
   "smart_new_bucket_tail": " ընդամենը կուտակված",
-  "cfg_smart_reset": "↺ Զրոյացնել",
+  "cfg_smart_reset": "↺ Զրոյացնել ուսուցումը",
   "t_smart_reset_confirm": "Սեղմեք ևս մեկ անգամ՝ սովորածը ջնջելու համար",
   "t_smart_reset_done": "Ուսուցումը զրոյացվեց · Smart-ը սկսում է նորից",
   "t_smart_reset_fail": "Չհաջողվեց զրոյացնել"
