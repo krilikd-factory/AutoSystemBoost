@@ -222,9 +222,13 @@
       "name": "Agir sobre wakelocks",
       "desc": "Um wakelock é um app dizendo ao Android «ainda não durma». Um único app fazendo isso a noite toda custa mais do que qualquer ajuste daqui pode economizar.\n\nA medição está sempre ligada; isto decide se o ASB age. Ligado, um app instalado por você que ainda segure um wakelock após 45+ minutos de tela apagada vai para o bucket «restrito» do Android.\n\nNunca tocados: fontes de kernel e sistema, nem apps de autenticação, telefone, SMS, mensagens e relógio."
     },
+    "night_modem_idle": {
+      "name": "Quiet Radio at Night",
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    },
     "gnss_trim": {
       "name": "Reduzir GPS em segundo plano",
-      "desc": "O GPS é das coisas mais caras que um telefone faz. O Android contabiliza separadamente quanto vem de processos EM CACHE: apps fechados que não fazem nada que você pediu.\n\nNum log foram 53 de 56 mAh de todo o consumo de GPS.\n\nLigado, um app que segura a localização enquanto seu processo está em cache e a tela desligada fica limitado à precisão aproximada. A precisão total volta assim que você o abre.\n\nNunca tocados: mapas e navegação, fitness e rastreamento de rotas, apps de emergência e de localizar dispositivo."
+      "desc": "O GPS é das coisas mais caras que um telefone faz. O Android contabiliza à parte quanto vem de processos EM CACHE: apps fechados que não fazem nada que você pediu.\n\nNum log foram 53 de 56 mAh de todo o consumo de GPS.\n\nLigado, um app que segura a localização enquanto seu processo está em cache e a tela desligada fica limitado à precisão aproximada. A precisão total volta assim que você o abre.\n\nNunca tocados: mapas e navegação, fitness e rastreamento de rotas, apps de emergência e de localizar dispositivo."
     }
   },
   "nav_main": "Início",
@@ -384,7 +388,7 @@
   "doze_not_exempt": "não isento",
   "smart_new_bucket": "aprendendo esta hora · ",
   "smart_new_bucket_tail": " acumuladas no total",
-  "cfg_smart_reset": "↺ Redefinir aprendizado",
+  "cfg_smart_reset": "↺ Redefinir",
   "t_smart_reset_confirm": "Toque novamente para apagar o aprendido",
   "t_smart_reset_done": "Aprendizado redefinido · Smart recomeça",
   "t_smart_reset_fail": "Não foi possível redefinir"

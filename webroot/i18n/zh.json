@@ -249,6 +249,10 @@
       "name": "处理唤醒锁",
       "desc": "唤醒锁是应用在对 Android 说「先别休眠」。一个应用整夜这样做，代价超过这里任何设置能省下的电量。\n\n测量始终开启；此项决定 ASB 是否介入。开启后，你自己安装的应用若在息屏 45 分钟以上仍持有唤醒锁，会被移入 Android 的「受限」分组。\n\n从不触碰：内核和系统来源，以及身份验证器、电话、短信、即时通讯和时钟应用。"
     },
+    "night_modem_idle": {
+      "name": "Quiet Radio at Night",
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    },
     "gnss_trim": {
       "name": "精简后台 GPS",
       "desc": "GPS 是手机最耗电的功能之一。Android 会单独统计其中有多少来自处于缓存中的进程：那些已经关闭、并没有在做你要求的任何事的应用。\n\n在一份日志里，这占了 GPS 总耗电 56 mAh 中的 53 mAh。\n\n开启后，进程处于缓存且屏幕熄灭时仍持有定位的应用会被限制为粗略精度。你一打开它，完整精度立即恢复。\n\n从不触碰：地图与导航、健身与轨迹记录、紧急和查找设备类应用。"
@@ -384,7 +388,7 @@
   "doze_not_exempt": "未豁免",
   "smart_new_bucket": "正在学习这个时段 · ",
   "smart_new_bucket_tail": " 已累计",
-  "cfg_smart_reset": "↺ 重置学习",
+  "cfg_smart_reset": "↺ 重置",
   "t_smart_reset_confirm": "再次点击以清除已学内容",
   "t_smart_reset_done": "学习已重置 · Smart 重新开始",
   "t_smart_reset_fail": "无法重置"

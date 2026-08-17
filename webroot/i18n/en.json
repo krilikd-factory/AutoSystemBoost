@@ -220,6 +220,10 @@
         "shorter": "128. Lowest latency; can cost throughput on a very fast link."
       }
     },
+    "night_modem_idle": {
+      "name": "Quiet Radio at Night",
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    },
     "gnss_trim": {
       "name": "Trim Background GPS",
       "desc": "GPS is one of the most expensive things a phone can do, and Android reports how much of it happens in CACHED processes - apps that are closed and doing nothing you asked for.\n\nIn one field capture that was 53 of 56 mAh of GPS drain.\n\nWhen on, a user-installed app still holding location while its process is cached and the screen is off is limited to coarse accuracy. It gets full precision back the moment you open it.\n\nNever touched: maps and navigation, fitness and route tracking, emergency and find-my apps, and anything in the foreground."
@@ -319,7 +323,7 @@
   "t_not_applied_hint": "The file exists but does not hold what ASB intended.",
   "smart_new_bucket": "learning this hour · ",
   "smart_new_bucket_tail": " banked overall",
-  "cfg_smart_reset": "↺ Reset learning",
+  "cfg_smart_reset": "↺ Reset",
   "t_smart_reset_confirm": "Tap again to erase what Smart has learned",
   "t_smart_reset_done": "Learning reset · Smart starts fresh",
   "t_smart_reset_fail": "Could not reset learning"

@@ -249,6 +249,10 @@
       "name": "التصرّف حيال أقفال اليقظة",
       "desc": "قفل اليقظة هو تطبيق يقول لأندرويد «لا تنم بعد». تطبيق واحد يفعل ذلك طوال الليل يكلّف أكثر مما يمكن لأي إعداد هنا أن يوفّره.\n\nالقياس يعمل دائمًا؛ هذا يقرّر ما إذا كان ASB سيتدخّل. عند التفعيل، التطبيق الذي ثبّته أنت ولا يزال ممسكًا بقفل بعد 45+ دقيقة من إطفاء الشاشة يُنقل إلى سلة «المقيّد» في أندرويد.\n\nلا تُمسّ أبدًا: مصادر النواة والنظام، ولا تطبيقات المصادقة والهاتف والرسائل والمراسلة والساعة."
     },
+    "night_modem_idle": {
+      "name": "Quiet Radio at Night",
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+    },
     "gnss_trim": {
       "name": "تقليص GPS في الخلفية",
       "desc": "يُعد GPS من أغلى ما يفعله الهاتف. ويحصي أندرويد على حدة كم منه يأتي من عمليات في الذاكرة المؤقتة: تطبيقات مغلقة لا تفعل شيئًا طلبته.\n\nفي أحد السجلات كان ذلك 53 من أصل 56 مللي أمبير ساعة من إجمالي استهلاك GPS.\n\nعند التفعيل، يُقيَّد التطبيق الذي يحتفظ بالموقع بينما عمليته مؤقتة والشاشة مطفأة إلى دقة تقريبية. وتعود الدقة الكاملة بمجرد فتحه.\n\nلا تُمسّ أبدًا: الخرائط والملاحة، واللياقة وتتبع المسارات، وتطبيقات الطوارئ والعثور على الجهاز."
@@ -384,7 +388,7 @@
   "doze_not_exempt": "غير مستثنى",
   "smart_new_bucket": "يتعلّم هذه الساعة · ",
   "smart_new_bucket_tail": " مُجمَّعة إجمالاً",
-  "cfg_smart_reset": "↺ إعادة ضبط التعلّم",
+  "cfg_smart_reset": "↺ إعادة ضبط",
   "t_smart_reset_confirm": "اضغط مرة أخرى لمسح ما تعلّمه",
   "t_smart_reset_done": "أُعيد ضبط التعلّم · يبدأ Smart من جديد",
   "t_smart_reset_fail": "تعذّر إعادة الضبط"
