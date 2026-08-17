@@ -285,13 +285,19 @@ lk_phase_ledger_accumulate() {
   [ -n "$_surf" ] && [ "$_surf" -gt "$LK_PH_MAXSURF" ] 2>/dev/null && LK_PH_MAXSURF=$_surf
   [ -n "$_p6" ] && [ "$_p6" -gt "$LK_PH_MAXP6" ] 2>/dev/null && LK_PH_MAXP6=$_p6
   if [ -n "$_gb" ]; then LK_PH_GPUSUM=$(( LK_PH_GPUSUM + _gb )); LK_PH_GPUCNT=$(( LK_PH_GPUCNT + 1 )); fi
-  # Discharge current, only while discharging: a positive reading during charge is
-  # current flowing the other way and would cancel the thing being measured.
+  # Discharge current only, and the sign convention decides which samples those are.
+  #
+  # I assumed negative meant discharge and took the absolute value, which folded charging
+  # into the same average: a capture that included a charge session reported 5409 mA for
+  # charging_idle and 1003 for idle, both meaningless. On this platform the sign is the
+  # other way round - discharge is positive, charge is negative - so charging samples are
+  # skipped outright rather than flipped. A phase that is entirely charging simply has no
+  # current figure, which is honest: there is no discharge to report.
   _ma=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null)
   case "$_ma" in ''|*[!0-9-]*) _ma='' ;; esac
   if [ -n "$_ma" ]; then
-    [ "$_ma" -lt 0 ] 2>/dev/null && _ma=$(( 0 - _ma ))
     [ "$_ma" -gt 100000 ] 2>/dev/null && _ma=$(( _ma / 1000 ))
+    [ "$_ma" -lt -100000 ] 2>/dev/null && _ma=$(( _ma / 1000 ))
     if [ "$_ma" -gt 0 ] && [ "$_ma" -lt 15000 ] 2>/dev/null; then
       LK_PH_MASUM=$(( LK_PH_MASUM + _ma )); LK_PH_MACNT=$(( LK_PH_MACNT + 1 ))
     fi
@@ -331,6 +337,10 @@ lk_emit_phase_summary() {
         CT[ph]+=$6*dur; SF[ph]+=$7*dur; TD[ph]+=dur;
         if($8>P6[ph])P6[ph]=$8; G[ph]+=$9; TH[ph]+=$10;
         if($12>=0){ AW[ph]+=$12*dur; AWD[ph]+=dur }
+        # Current, averaged on the same duration basis. The print line for this column was
+        # added without its accumulator, so MA[] stayed empty and every phase reported 0 mA
+        # even though the ledger held real values - 681 in the very first row.
+        if($13>0){ MA[ph]+=$13*dur; MAD[ph]+=dur }
       }
       END{
         for(p in D){
