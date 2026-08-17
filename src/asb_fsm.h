@@ -997,6 +997,29 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         int thermal_to_sustained = 0;
         int gap_to_sustained = 0;
         int sustained_temp_enter = asb_config_profile_sustained_temp_enter(&g_asb_cfg, fsm->profile_idx);
+
+        /* Anticipate a known-hot app instead of waiting for the heat.
+         *
+         * The module already records which apps make this phone hot - appheat has been
+         * feeding the learner's battery lean for releases. The thermal path never used it:
+         * SUSTAINED engaged strictly on temperature, so the governor always arrived after
+         * the phone was already at the trip point and then spent the session climbing back
+         * down. That is the whole shape of "heats up fast, cools down slowly".
+         *
+         * For an app this device has repeatedly run hot on, the trip point moves down by
+         * four degrees. Nothing else changes: same state, same rails, same exit condition -
+         * it simply starts sooner, while there is still thermal headroom to spend. An app
+         * with no history is untouched, so a phone that has learnt nothing behaves exactly
+         * as before.
+         *
+         * Four degrees is deliberately small. The point is to be early, not to be strict:
+         * a large shift would make a known-hot app feel slower than an unknown one, which
+         * users would notice long before they noticed the temperature.
+         */
+        if (g_asb_appheat_hot && sustained_temp_enter > 48) {
+            sustained_temp_enter -= 4;
+        }
+
         int sustained_temp_exit = asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx);
         int perf_hot_guard_temp = asb_config_profile_hot_guard_temp(&g_asb_cfg, fsm->profile_idx);
         int perf_hot_guard_tick_req = asb_config_profile_hot_guard_ticks(&g_asb_cfg, fsm->profile_idx);

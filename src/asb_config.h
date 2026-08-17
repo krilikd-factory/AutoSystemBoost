@@ -4,6 +4,17 @@
 #include <string.h>
 #include <ctype.h>
 
+/* Foreground app has a history of running this device hot.
+ *
+ * Written by the smart layer each tick, read by the FSM's thermal path. It lives here
+ * because asb_config.h is the one header both of them already include - asb_fsm.h is
+ * pulled in before asb_smart.h, so the FSM cannot call the scorer directly, and the unit
+ * tests compile asb_smart.h with no FSM at all. Zero when the learner has no opinion, so
+ * an unknown app and a freshly installed module both behave exactly as before.
+ */
+static int g_asb_appheat_hot = 0;
+
+
 typedef struct {
     int   heavy_gpu_enter;
     float heavy_load_enter;

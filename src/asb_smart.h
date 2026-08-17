@@ -1677,6 +1677,9 @@ static void asb_smart_apply_thermal_trend(
     if (rt->thermal_veto) return;
 
     int appheat_hot = (asb_smart_appheat_score(app_hash, now) >= ASB_SMART_APPHEAT_HOT_SCORE);
+    /* Publish it for the FSM's thermal path, which runs in a header included earlier and
+       so cannot ask the question itself. */
+    g_asb_appheat_hot = appheat_hot;
     /* early_engage carries the level: 0=none, 1=cool-gaming/known-hot,
        2=charge-aware cool gaming. A known-hot app maps to level 1. */
     int hot_app = early_engage;
