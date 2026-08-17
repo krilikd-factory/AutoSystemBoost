@@ -1322,11 +1322,7 @@ body.config-active #livePage.open {
  * and there margin-top: 0 parks the link right under the last card while the main and
  * monitor pages put it at the bottom. auto is correct in both cases: it pushes to the
  * bottom when there is room and follows the content when there is not. */
-/* The monitor page says only margin-top: auto and inherits its padding from the base rule.
-   This one restated the padding as well - the same 24px, so it looked harmless, but it
-   meant the two pages were following different rules that merely agreed. They now follow
-   the same one. */
-.config-page .tg-link-wrap { margin-top: auto; }
+.config-page .tg-link-wrap { margin-top: auto; padding-top: 24px; }
 .cfg-list {
   width: 100%;
   display: flex;
@@ -2033,100 +2029,6 @@ body.config-active #livePage.open {
   border-color: rgba(255,214,10,0.35);
   background: rgba(255,214,10,0.08);
 }
-
-/* --- layout of the two toolbar rows -------------------------------------------------
-   Appended rather than edited into the rules above: rewriting existing blocks with a
-   pattern is how the tile styling got mangled a moment ago. These override by coming
-   later, and every original rule stays untouched and readable. */
-/* width: 100% is the part that was missing.
-   .page centres its children, so a flex row without an explicit width shrinks to its
-   content: the row sat narrower than the tile grid below it and the labels clipped to
-   "Эксп..." while there was free space on both sides. */
-/* align-self: stretch as well as width: 100%.
-   The parent centres its children with align-items: center, and a centred flex item is
-   sized by its content - width: 100% on its own was not enough to make these rows as wide
-   as the tile grid, which is why the labels still clipped to "Эксп...". stretch overrides
-   the parent's centring for these two rows only. */
-#cfgToolsRow   { width: 100%; align-self: stretch; display: flex; gap: 8px; margin: 0 0 8px;  align-items: stretch; min-width: 0; }
-#cfgActionsRow { width: 100%; align-self: stretch; display: flex; gap: 8px; margin: 0 0 14px; align-items: stretch; min-width: 0; }
-#cfgActionsRow .cfg-backup { flex: 1 1 0; min-width: 0; white-space: nowrap; }
-
-/* --- vertical rhythm ------------------------------------------------------------------
-   The gap between the tiles and the reboot buttons was ~105px: #cfgRebootWrap adds 18px
-   and every .cfg-reboot adds another 14px of its own, which stack. That surplus is most
-   of why this page runs past the bottom of the screen while the other two do not, and
-   why its Telegram link sits lower than theirs. One value, applied once. */
-#cfgRebootWrap { width: 100%; align-self: stretch; margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
-/* Language popup: anchored to the RIGHT edge of the globe.
- *
- * The base rule says left: 0, which opens the list rightwards - and the globe is the last
- * item in the row, so the list ran straight off the screen and the names were cut in half.
- * right: 0 hangs it under the button instead, growing inward where there is room.
- *
- * position: relative had also been lost: a later #cfgLangWrap rule replaced it without it,
- * so the popup was positioning against the page rather than the button. */
-#cfgLangWrap { position: relative; flex: 0 0 auto; display: flex; }
-.cfg-lang-pop {
-  left: auto;
-  right: 0;
-  transform-origin: top right;
-  max-width: calc(100vw - 32px);
-  min-width: 150px;
-}
-
-#cfgRebootWrap {
-  /* Restored: this rule was lost in an earlier edit, leaving only the per-button one, so
-     the wrapper fell back to the 18px further up while every other gap on the page is 14.
-     width and align-self are what keep the buttons full width - the parent centres its
-     children, and without them the block shrinks to its content. */
-  width: 100%;
-  align-self: stretch;
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-#cfgRebootWrap .cfg-reboot { margin-top: 0; padding: 10px 0; }
-/* The gap above the tiles is owned by the actions row alone.
-   #cfgActionsRow already ends with 14px, and this added 14px of its own on top - the two
-   stacked into 28px, which is both wider than every other gap on the page and the last
-   ~14px keeping the Telegram link below where the other two pages put theirs. */
-.cfg-hub { margin-top: 0; }
-
-/* Tiles a little shorter: six of them are the tallest block on the page, and ~20px each
-   row is what the page still needs to lose. Only the height changes - colours, borders
-   and the icon tile are untouched. */
-.cfg-tile { min-height: 104px; padding: 11px 8px; }
-/* (an identical #cfgLangWrap rule stood here and only restated flex, while dropping the
-   position: relative the popup anchors against - removed) */
-.cfg-search-wrap { flex: 1 1 auto; min-width: 0; margin: 0; display: flex; }
-.cfg-search      { flex: 1 1 auto; min-width: 0; width: 100%; }
-#cfgActionsRow .cfg-backup { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-
-/* --- Telegram link at the same height on every page ---------------------------------
- *
- * The other two pages fit the screen, so margin-top:auto puts the link at the bottom of
- * the viewport. The config page does not fit - it has a toolbar, six tiles and three
- * reboot buttons - so the link ended up wherever the content happened to end, and every
- * attempt to fix that by shrinking cards was chasing a moving target: add one setting and
- * it drifts again.
- *
- * Sticky solves it by construction. The link stays at the bottom of the viewport no matter
- * how long the page grows, which is exactly where the other two put it. The background is
- * opaque because content now scrolls underneath it, and the reboot block gets bottom
- * padding so its last button is never left hidden behind the footer. */
-/* No page-specific rules for the link at all.
- *
- * Sticky and the extra padding-bottom were both mine, and both moved it: the padding
- * lifted it 6px above where the other pages put theirs, which is the offset that was still
- * visible. The page fits the screen now that the rows and gaps are fixed, so the base
- * margin-top: auto lands it in exactly the same place as the monitor page - the two share
- * the same fixed-height container, so identical rules give identical positions. */
-
-/* Marker so a screenshot can prove which build is installed: if the search row is still
-   narrow AND this rule is present, the cause is CSS; if the rule is absent, the phone is
-   running an older package. */
-#cfgVerBadge::after { content: ''; }   /* ASB_UI_BUILD=langpop-js-1 */
 </style>
 </head>
 <body>
@@ -2432,24 +2334,18 @@ body.config-active #livePage.open {
        redraw, and an earlier version put this row inside it, which deleted the row after
        the first keystroke. -->
   <div id="cfgToolsRow">
-      <!-- Row one: search plus the globe. Search takes whatever the globe does not, so
-           there is no dead space beside it. -->
-      <div id="cfgLangWrap">
-        <button class="cfg-lang-btn" id="cfgLangBtn" onclick="cfgToggleLangPop(event)" aria-label="Language">🌐</button>
-        <div class="cfg-lang-pop" id="cfgLangPop" hidden></div>
-      </div>
+    <div id="cfgLangWrap">
+      <button class="cfg-lang-btn" id="cfgLangBtn" onclick="cfgToggleLangPop(event)" aria-label="Language">🌐</button>
+      <div class="cfg-lang-pop" id="cfgLangPop" hidden></div>
     </div>
-
-    <!-- Row two: the three actions. Two rows rather than one because five items with real
-         labels do not fit a phone: forcing them onto one line either clipped the words or
-         pushed the row off-screen, and both were tried. -->
-    <div id="cfgActionsRow">
+    <div id="cfgBackupWrap">
       <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">↑ Export</button>
       <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">↓ Import</button>
-      <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset</button>
+      <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset learning</button>
     </div>
+  </div>
 
-    <div class="cfg-list" id="cfgList"></div>
+  <div class="cfg-list" id="cfgList"></div>
 
   <!-- Reboot actions. cfgSyncChrome shows them on the hub and hides them inside a
        category, where a full reboot button under a list of settings is easy to hit by
@@ -2947,12 +2843,13 @@ const SNAP_KEYS = [
   'purge_vendor_logs',
   'doze_trim_whitelist',
   'gms_freeze',
-  'wakelock_action',
-  'perf_ceiling_pct',
   'athena_service',
   'net_rps',
   'net_txqueue',
-  'night_modem_idle'];
+  /* Added with the cards themselves. A key missing here silently drops out of every
+   * backup and every upgrade restore - the user changes a setting, exports, and the
+   * value is simply not in the file. Reported exactly that way for these two. */
+  'perf_ceiling_pct', 'wakelock_action', 'gnss_trim'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -3034,8 +2931,8 @@ const CFG_ITEMS = [
     desc:'Deep Sleep decides how soon Doze starts. This decides who ignores it.\n\nApps on Android\u2019s exemption list keep their alarms and network through every idle window, so a phone can sit in deep doze all night while three exempted apps wake it anyway - which is why tuning only the timings can look like it changed nothing.\n\nOnly user-installed apps are touched. The dialer, SMS app, clock and your root manager are never removed, because that is how a module ends up blamed for a missed alarm. Every removal is recorded and put back when you set this to 0 or uninstall ASB.\n\nApplies with Deep Sleep set to aggressive or night.' },
   { key:'wakelock_action', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Act on Wakelocks',
     desc:'A wakelock is an app telling Android \u201Cdo not sleep yet\u201D. One app holding one all night is the single most expensive thing that can happen to a battery - more than any setting here can save - and no amount of tuning helps, because the phone never reaches the states those settings govern.\n\nMeasuring is always on; this decides whether ASB acts. With it on, a user-installed app still holding a wakelock after 45+ minutes of screen-off, on a phone that is measurably staying awake, is moved to Android\u2019s restricted bucket.\n\nNever touched: kernel and system sources - modem, display, alarm timer, sensors - and authenticators, dialer, SMS, messaging and clock apps. Nothing is force-stopped; restricted is a state Android manages and can undo.\n\nLeave it off if you would rather see the name and decide yourself. The report names the holder either way.' },
-  { key:'night_modem_idle', type:'bool', def:'0', name:'Quiet Radio at Night',
-    desc:'Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times - rmnet_ipa 180, rmnet_ctl 300, IPA_LAN 318. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.' },
+  { key:'gnss_trim', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Background GPS',
+    desc:'GPS is one of the most expensive things a phone can do, and Android reports how much of it happens in CACHED processes - apps that are closed and doing nothing you asked for.\n\nIn one field capture that was 53 of 56 mAh of GPS drain, from an app shut minutes earlier. Nobody chose it and nobody benefits from it.\n\nWhen on, a user-installed app still holding location while its process is cached and the screen is off is limited to coarse accuracy. It gets full precision back the moment you open it - Android restores it as soon as the process leaves the cache.\n\nNever touched: maps and navigation, fitness and route tracking, emergency and find-my apps, and anything in the foreground. Permissions are not revoked; every change is recorded and undone when you set this back to off or uninstall ASB.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
     desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
   { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
@@ -3095,8 +2992,6 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
-  perf_ceiling_pct:'battery', wakelock_action:'battery',
-  night_modem_idle:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'system',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
@@ -3143,10 +3038,9 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
-  night_modem_idle:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui',
-  sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery',
+  sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery', gnss_trim:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
@@ -3154,7 +3048,7 @@ const CFG_GROUP_OF = {
   bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
+  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', perf_ceiling_pct:'battery',
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
@@ -3192,7 +3086,6 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  night_modem_idle:'\uD83D\uDCF4',
   net_rps:'\uD83E\uDDF5', net_txqueue:'\uD83D\uDCE4',
   athena_service:'\uD83D\uDEE1\uFE0F',
   sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
@@ -3237,6 +3130,7 @@ const CFG_ICONS = {
   gms_freeze:'\uD83E\uDDCA',
   perf_ceiling_pct:'\uD83D\uDCC9',
   wakelock_action:'\uD83D\uDD14',
+  gnss_trim:'\uD83D\uDCCD',
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -3451,6 +3345,7 @@ const WILL_BREAK = {
   gms_trim:           'wb_gms',
   gms_freeze:         'wb_gmsfreeze',
   wakelock_action:    'wb_wl',
+  gnss_trim:          'wb_gnss',
   perf_ceiling_pct:   'wb_ceiling',
   audio_remove_volume_limit: 'wb_vol',
   doze_trim_whitelist: 'wb_dozewl'
@@ -3494,6 +3389,7 @@ const APPLY_MODE = {
   gms_freeze:APPLY_NEXT,
   perf_ceiling_pct:APPLY_LIVE,
   wakelock_action:APPLY_LIVE,
+  gnss_trim:APPLY_LIVE,
   /* These three shipped without an entry here, so the map fell through to the generic
    * tail and every save reported "reboot to apply" - while the scripts behind them
    * apply immediately. Three cards telling the user to restart for nothing. */
@@ -4092,6 +3988,13 @@ async function cfgSet(key, val, ctl) {
         if (ctl) ctl.classList.remove('busy');
         return;
       }
+      if (key === 'gnss_trim') {
+        try { await run('sh ' + MD + '/runtime/asb_gnss_trim.sh >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
       if (key === 'wakelock_action') {
         try { await run('sh ' + MD + '/runtime/asb_wakelock_watch.sh >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
@@ -4249,31 +4152,7 @@ const ASB_LANG_NAMES = { en:'English', ru:'Русский', uk:'Українсь
 function cfgToggleLangPop(e) {
   if (e) e.stopPropagation();
   const pop = _el('cfgLangPop');
-  if (!pop) return;
-  pop.hidden = !pop.hidden;
-  if (pop.hidden) return;
-
-  /* Place it from JS, measured, instead of trusting a CSS anchor.
-   *
-   * The stylesheet says right: 0 so the list should hang under the globe and grow inward.
-   * It kept opening rightwards off the screen anyway - the popup is absolute, so it
-   * depends on an ancestor being positioned, and this file has four #cfgLangWrap rules
-   * that have each overwritten that at some point. Rather than hunt the winning one,
-   * measure the button and the viewport and set the offset outright: fixed positioning
-   * answers to the screen and nothing else can quietly reset it.
-   */
-  const btn = _el('cfgLangBtn');
-  if (!btn || !btn.getBoundingClientRect) return;
-  const r = btn.getBoundingClientRect();
-  pop.style.position = 'fixed';
-  pop.style.left = 'auto';
-  pop.style.top = (r.bottom + 8) + 'px';
-  /* Distance from the RIGHT edge of the screen to the right edge of the button: the list
-     then ends where the button ends and extends leftwards, which is the only direction
-     with room when the button sits in the corner. */
-  const fromRight = Math.max(8, (window.innerWidth || 360) - r.right);
-  pop.style.right = fromRight + 'px';
-  pop.style.maxHeight = Math.max(160, (window.innerHeight || 640) - r.bottom - 24) + 'px';
+  if (pop) pop.hidden = !pop.hidden;
 }
 
 /* Close an open dropdown when the next tap lands anywhere else.
