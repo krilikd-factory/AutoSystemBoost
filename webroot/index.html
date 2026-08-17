@@ -3095,6 +3095,7 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
+  perf_ceiling_pct:'battery', wakelock_action:'battery',
   night_modem_idle:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'system',
@@ -3153,7 +3154,7 @@ const CFG_GROUP_OF = {
   bt_absvol_mode:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', perf_ceiling_pct:'battery',
+  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
@@ -3191,7 +3192,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  night_modem_idle:'\\uD83D\\uDCF4',
+  night_modem_idle:'\uD83D\uDCF4',
   net_rps:'\uD83E\uDDF5', net_txqueue:'\uD83D\uDCE4',
   athena_service:'\uD83D\uDEE1\uFE0F',
   sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
