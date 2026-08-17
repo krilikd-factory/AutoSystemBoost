@@ -926,7 +926,29 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
     fsm->caps_changed  = 0;
     fsm->prev_state    = fsm->state;
 
-    if (!m->misc.screen_on && fsm->state != ASB_STATE_DEEP_IDLE) {
+    /* Screen off is not the same as idle.
+     *
+     * This forced DEEP_IDLE the moment the screen went off, whatever the phone was doing.
+     * A capture of Bluetooth playback with the screen off shows the cost: the state reads
+     * DEEP_IDLE while load1 sits at 18.9, 13.9, 13.2 - real work, running on the deepest
+     * rails the module has. Capping work that has to happen anyway does not save energy,
+     * it stretches it: the phase drew 165 mA against 59 for actual sleep, and stayed awake
+     * 99.8% of its 35 minutes because the work never got to finish.
+     *
+     * With genuine load the state settles at LIGHT_IDLE instead - still far below anything
+     * screen-on, but high enough to let a decode finish and the core go quiet. An idle
+     * phone is unaffected: load below the threshold still goes straight to DEEP_IDLE.
+     */
+    int _off_busy = (m->cpu.load1 >= 8.0f);
+    if (!m->misc.screen_on && _off_busy && fsm->state != ASB_STATE_LIGHT_IDLE &&
+        fsm->state != ASB_STATE_MODERATE) {
+        fsm->state   = ASB_STATE_LIGHT_IDLE;
+        fsm->pending = ASB_STATE_LIGHT_IDLE;
+        fsm->pending_ticks = 0;
+        fsm->state_changed = 1;
+        g_gaming_confirm_streak = 0;
+    }
+    else if (!m->misc.screen_on && !_off_busy && fsm->state != ASB_STATE_DEEP_IDLE) {
         fsm->state   = ASB_STATE_DEEP_IDLE;
         fsm->pending = ASB_STATE_DEEP_IDLE;
         fsm->pending_ticks = 0;
@@ -1389,6 +1411,27 @@ if (!can_leave &&
      * never collapse the clock to something unusable. It also unwinds by itself - the cap
      * follows the temperature back down as the phone cools.
      */
+    /* While hot, the cap may fall but never rise.
+     *
+     * SUSTAINED sits below HEAVY on the ladder, but ABOVE MODERATE - so a phone that had
+     * settled at the MODERATE rail and then crossed the trip point was handed a HIGHER
+     * ceiling than it had a second earlier. The trace shows it plainly: the median prime
+     * cap is 1017600 at 50-54 degC, 1132800 at 55-59, and 1862400 at 60-64. Getting hotter
+     * bought more clock, which is the opposite of what entering a thermal state means, and
+     * it is why SUSTAINED drew 650 mA in this capture against 608 for GAMING.
+     *
+     * Remembering the last cap and refusing to exceed it makes the thermal path monotonic:
+     * once the phone is hot, the only direction is down until it cools and thermal_cap
+     * clears, which resets the memory. */
+    static int _hot_cap_p0 = 0, _hot_cap_p1 = 0;
+    if (!fsm->thermal_cap) { _hot_cap_p0 = 0; _hot_cap_p1 = 0; }
+    else {
+        if (_hot_cap_p0 > 0 && new_caps.cpu_max[0] > _hot_cap_p0)
+            new_caps.cpu_max[0] = _hot_cap_p0;
+        if (_hot_cap_p1 > 0 && new_caps.cpu_max[1] > _hot_cap_p1)
+            new_caps.cpu_max[1] = _hot_cap_p1;
+    }
+
     if (fsm->thermal_cap && fsm->state == ASB_STATE_SUSTAINED) {
         int trip = asb_config_profile_sustained_temp_enter(&g_asb_cfg, 1);
         int over = (trip > 0) ? (m->therm.cpu_max_c - trip) : 0;
@@ -1405,6 +1448,12 @@ if (!can_leave &&
                 new_caps.gpu_max_pct = (g < 30) ? 30 : g;
             }
         }
+    }
+    if (fsm->thermal_cap) {
+        /* Recorded after the proportional step, so the memory holds the value actually
+           applied rather than the rail it started from. */
+        _hot_cap_p0 = new_caps.cpu_max[0];
+        _hot_cap_p1 = new_caps.cpu_max[1];
     }
 
     if (fsm->thermal_cap && fsm->state != ASB_STATE_SUSTAINED) {
