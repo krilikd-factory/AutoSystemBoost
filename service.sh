@@ -847,10 +847,12 @@ apply_vm() {
   [ -w /sys/kernel/mm/lru_gen/enabled ] && echo 7 > /sys/kernel/mm/lru_gen/enabled 2>/dev/null
 
   [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval $_P_STATINT
-  case "$ASB_PROFILE" in
-    performance) writef_retry /proc/sys/vm/page-cluster 0 1 0 || true ;;
-    battery) writef_retry /proc/sys/vm/page-cluster 3 1 0 || true ;;
-    *) writef_retry /proc/sys/vm/page-cluster 1 1 0 || true ;;
+  # VM_PAGE_CLUSTER belongs to the selected profile. Hardcoding another value here
+  # silently overrode profile_core.sh (and made Battery apply 3 although its profile
+  # explicitly requests 0), so use one source of truth for every apply path.
+  case "${VM_PAGE_CLUSTER:-}" in
+    ''|*[!0-9]*) asb_log "vm: profile has no valid VM_PAGE_CLUSTER; leaving kernel value unchanged" ;;
+    *) writef_retry /proc/sys/vm/page-cluster "$VM_PAGE_CLUSTER" 1 0 || true ;;
   esac
   sysctlw vm.watermark_scale_factor $_P_WMARK
   sysctlw vm.min_free_kbytes $_P_MINFREE
@@ -897,9 +899,17 @@ sysctl_try() {
 # uses - so "сток" means this phone's value rather than a guess about phones in general.
 asb_thermal_stock_capture() {
   _tsf="/data/adb/asb/thermal_stock"
-  [ -f "$_tsf" ] && return 0
+  # V63 hotfix adds type/provenance. Retain an already verified snapshot, but
+  # replace legacy `SOURCE=trip_point` files that never proved the trip was passive.
+  if [ -f "$_tsf" ]; then
+    case "$(grep -E '^SOURCE=' "$_tsf" 2>/dev/null | head -1 | sed 's/.*=//')" in
+      passive_trip_point|active_fallback|none) return 0 ;;
+      *) rm -f "$_tsf" 2>/dev/null ;;
+    esac
+  fi
   mkdir -p /data/adb/asb 2>/dev/null
-  _ts_best=""
+  _ts_best=""; _ts_zone=""; _ts_idx=""; _ts_type=""; _ts_raw=""
+  _active_best=""; _active_zone=""; _active_idx=""; _active_raw=""
   for _tz in /sys/class/thermal/thermal_zone*; do
     [ -r "$_tz/type" ] || continue
     case "$(cat "$_tz/type" 2>/dev/null)" in
@@ -908,27 +918,47 @@ asb_thermal_stock_capture() {
     esac
     for _tp in "$_tz"/trip_point_*_temp; do
       [ -r "$_tp" ] || continue
-      _tv="$(cat "$_tp" 2>/dev/null)"
-      case "$_tv" in ''|*[!0-9]*) continue ;; esac
+      _base="${_tp%_temp}"
+      _typef="${_base}_type"
+      [ -r "$_typef" ] || continue
+      _tt="$(tr '[:upper:]' '[:lower:]' < "$_typef" 2>/dev/null | tr -d ' \r\n')"
+      _raw="$(cat "$_tp" 2>/dev/null)"
+      case "$_raw" in ''|*[!0-9]*) continue ;; esac
+      _tv="$_raw"
       # Zones report millidegrees on almost everything, plain degrees on a few.
       [ "$_tv" -gt 1000 ] && _tv=$(( _tv / 1000 ))
-      # Passive throttle points on these SoCs sit between roughly 45 and 80.
-      # Anything above that is the hot/critical trip that exists to shut the phone down, not to
-      # slow it - taking the lowest trip of ANY value picked 90 on a OnePlus 13 and wrote it in
-      # as "stock", which is a throttle point that would never fire.
       [ "$_tv" -lt 45 ] && continue
       [ "$_tv" -gt 80 ] && continue
-      if [ -z "$_ts_best" ] || [ "$_tv" -lt "$_ts_best" ]; then _ts_best="$_tv"; fi
+      _zone="${_tz##*/}"
+      _name="${_tp##*/}"; _idx="${_name#trip_point_}"; _idx="${_idx%_temp}"
+      case "$_tt" in
+        passive)
+          if [ -z "$_ts_best" ] || [ "$_tv" -lt "$_ts_best" ]; then
+            _ts_best="$_tv"; _ts_zone="$_zone"; _ts_idx="$_idx"; _ts_type="$_tt"; _ts_raw="$_raw"
+          fi ;;
+        active)
+          # Keep a diagnostic candidate, but never represent it as a stock throttle point.
+          if [ -z "$_active_best" ] || [ "$_tv" -lt "$_active_best" ]; then
+            _active_best="$_tv"; _active_zone="$_zone"; _active_idx="$_idx"; _active_raw="$_raw"
+          fi ;;
+      esac
     done
   done
-  # No usable zone: record the shipped default so the setting still has something honest
-  # to return to, and say which case it was.
   if [ -n "$_ts_best" ]; then
-    printf 'STOCK_THERMAL=%s\nSOURCE=trip_point\n' "$_ts_best" > "$_tsf" 2>/dev/null
-    asb_log "thermal stock: ${_ts_best}C from CPU zone trip point"
+    {
+      printf 'STOCK_THERMAL=%s\nSOURCE=passive_trip_point\nZONE=%s\nINDEX=%s\nTYPE=%s\nRAW=%s\nRESOLVED=%s\n' \
+        "$_ts_best" "$_ts_zone" "$_ts_idx" "$_ts_type" "$_ts_raw" "$_ts_best"
+    } > "$_tsf" 2>/dev/null
+    asb_log "thermal stock: ${_ts_best}C from passive ${_ts_zone}/trip_point_${_ts_idx}"
+  elif [ -n "$_active_best" ]; then
+    {
+      printf 'STOCK_THERMAL=%s\nSOURCE=active_fallback\nZONE=%s\nINDEX=%s\nTYPE=active\nRAW=%s\nRESOLVED=%s\n' \
+        "$_active_best" "$_active_zone" "$_active_idx" "$_active_raw" "$_active_best"
+    } > "$_tsf" 2>/dev/null
+    asb_log "thermal stock: passive trip unavailable; recorded active fallback for diagnostics only"
   else
-    printf 'STOCK_THERMAL=65\nSOURCE=fallback\n' > "$_tsf" 2>/dev/null
-    asb_log "thermal stock: no readable CPU trip point, using 65C"
+    printf 'STOCK_THERMAL=65\nSOURCE=none\nZONE=\nINDEX=\nTYPE=\nRAW=\nRESOLVED=65\n' > "$_tsf" 2>/dev/null
+    asb_log "thermal stock: no readable passive CPU trip point; leaving configured threshold unchanged"
   fi
 }
 asb_thermal_stock_capture
@@ -1079,6 +1109,12 @@ asb_thermal_mode_apply() {
   # was no way to tell a user value from a leftover default.
   if [ -f /data/adb/asb/thermal_user_set ]; then
     asb_log "thermal mode=$_tm: user set the point by hand, leaving it alone"
+    return 0
+  fi
+  _ts_source="$(grep -E '^SOURCE=' /data/adb/asb/thermal_stock 2>/dev/null \
+               | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  if [ "$_ts_source" != "passive_trip_point" ]; then
+    asb_log "thermal mode=$_tm: no passive stock trip (${_ts_source:-unknown}); leaving configured point unchanged"
     return 0
   fi
   _tsv="$(grep -E '^STOCK_THERMAL=' /data/adb/asb/thermal_stock 2>/dev/null \
