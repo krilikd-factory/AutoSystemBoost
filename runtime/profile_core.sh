@@ -32,6 +32,7 @@ asb_resolve_moddir() {
 }
 
 MODDIR="$(asb_resolve_moddir "$MODDIR")"
+[ -r "$MODDIR/runtime/asb_arbiter.sh" ] && . "$MODDIR/runtime/asb_arbiter.sh"
 
 has() { command -v "$1" >/dev/null 2>&1; }
 readf() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
@@ -152,23 +153,35 @@ asb_pick_gpu_pct() {
 
 asb_apply_cpuset() {
   asb_feature_enabled CPU || return 0
-  local _root _grp
+  local _root _grp _cam_guard
+  _cam_guard=0
+  [ -f /dev/.asb/camera_guard ] && _cam_guard=1
   for _root in /dev/cpuset /sys/fs/cgroup; do
     [ -d "$_root" ] || continue
     for _grp in background system-background; do
       [ -e "$_root/$_grp/cpus" ] && writef_retry "$_root/$_grp/cpus" "$BG_CPUS" 8 0.18 || true
       [ -e "$_root/$_grp/cpuset.cpus" ] && writef_retry "$_root/$_grp/cpuset.cpus" "$BG_CPUS" 8 0.18 || true
     done
+    # Camera owns foreground/top-app placement while a stream is active. A
+    # profile switch may update background groups, but must not pull the camera
+    # back to LITTLE cores or overwrite the guard snapshot. The generic lease
+    # also protects this path from a future higher-priority safety policy.
+    [ "$_cam_guard" = "1" ] && continue
+    command -v asb_arbiter_can_write >/dev/null 2>&1 && ! asb_arbiter_can_write cpuset_fg profile && continue
     for _grp in foreground top-app; do
       [ -e "$_root/$_grp/cpus" ] && writef_retry "$_root/$_grp/cpus" "$FG_CPUS" 8 0.18 || true
       [ -e "$_root/$_grp/cpuset.cpus" ] && writef_retry "$_root/$_grp/cpuset.cpus" "$FG_CPUS" 8 0.18 || true
     done
+    command -v asb_arbiter_claim >/dev/null 2>&1 && asb_arbiter_claim cpuset_fg profile 30 120 profile_apply || true
+    command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note cpuset_fg profile profile_apply "$FG_CPUS" "$FG_CPUS" applied || true
   done
 }
 
 asb_apply_uclamp() {
   asb_feature_enabled CPU || return 0
-  local _root _tier _min _max
+  local _root _tier _min _max _cam_guard
+  _cam_guard=0
+  [ -f /dev/.asb/camera_guard ] && _cam_guard=1
 
   # Lower the GLOBAL uclamp.min ceiling before touching the per-cgroup values.
   #
@@ -236,9 +249,16 @@ asb_apply_uclamp() {
         esac
       fi
       [ -e "$_root/$_tier/cpu.uclamp.min" ] && writef_retry "$_root/$_tier/cpu.uclamp.min" "$_min" 8 0.18 || true
-      [ -e "$_root/$_tier/cpu.uclamp.max" ] && writef_retry "$_root/$_tier/cpu.uclamp.max" "$_max" 8 0.18 || true
       [ -e "$_root/$_tier/uclamp.min" ] && writef_retry "$_root/$_tier/uclamp.min" "$_min" 8 0.18 || true
-      [ -e "$_root/$_tier/uclamp.max" ] && writef_retry "$_root/$_tier/uclamp.max" "$_max" 8 0.18 || true
+      # Camera guard deliberately lifts max ceilings for deadline-sensitive
+      # encode work. Keep writing minima, but defer every max write until it
+      # releases its lease.
+      if [ "$_cam_guard" != "1" ] && { ! command -v asb_arbiter_can_write >/dev/null 2>&1 || asb_arbiter_can_write uclamp_max profile; }; then
+        [ -e "$_root/$_tier/cpu.uclamp.max" ] && writef_retry "$_root/$_tier/cpu.uclamp.max" "$_max" 8 0.18 || true
+        [ -e "$_root/$_tier/uclamp.max" ] && writef_retry "$_root/$_tier/uclamp.max" "$_max" 8 0.18 || true
+        command -v asb_arbiter_claim >/dev/null 2>&1 && asb_arbiter_claim uclamp_max profile 30 120 profile_apply || true
+        command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note uclamp_max profile profile_apply "$_max" "$_max" applied || true
+      fi
     done
     [ -e "$_root/top-app/cpu.uclamp.latency_sensitive" ] && writef_retry "$_root/top-app/cpu.uclamp.latency_sensitive" "$LATENCY_SENSITIVE" 8 0.18 || true
     [ -e "$_root/top-app/uclamp.latency_sensitive" ] && writef_retry "$_root/top-app/uclamp.latency_sensitive" "$LATENCY_SENSITIVE" 8 0.18 || true
