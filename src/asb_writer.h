@@ -65,10 +65,12 @@ typedef struct {
     unsigned long attempts;
     unsigned long applied;
     unsigned long failures;
+    unsigned long consecutive_failures;
     unsigned long skipped_backoff;
     time_t retry_at;
     int requested;
     int observed;
+    char status[32];
     char path[96];
 } asb_write_health_t;
 
@@ -92,6 +94,10 @@ static void writer_write_failure_event(asb_write_node_t node, const char *path,
     fclose(ef);
 }
 
+static int writer_node_is_cpu(asb_write_node_t node) {
+    return node >= ASB_WRITE_CPU_MAX0 && node <= ASB_WRITE_CPU_MIN2;
+}
+
 static int writer_write_int_confirmed(asb_write_node_t node, const char *path, int requested) {
     if (!path || !*path || node < 0 || node >= ASB_WRITE_NODE_COUNT) return -1;
     asb_write_health_t *h = &g_write_health[node];
@@ -108,15 +114,36 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
     h->observed = observed;
     if (rc == 0 && observed == requested) {
         h->applied++;
+        h->consecutive_failures = 0;
         h->retry_at = 0;
+        snprintf(h->status, sizeof(h->status), "%s", "applied");
         return 0;
     }
     h->failures++;
-    /* 60, 120, 240, then cap at five minutes. A later policy transition may
-     * still retry sooner when force=1, but normal ticks stay quiet. */
+    h->consecutive_failures++;
+    /* A WALT readback of INT_MIN is the sysfs reader's invalid sentinel, not
+     * an applied tuning. Fail closed for this daemon lifetime rather than
+     * waking every few minutes to rewrite an unsupported node. */
+    if (node == ASB_WRITE_WALT_RAVG && observed == INT_MIN) {
+        h->retry_at = now + 86400;
+        snprintf(h->status, sizeof(h->status), "%s", "unsupported_readback");
+        writer_write_failure_event(node, path, requested, observed, h->retry_at);
+        return -1;
+    }
+    /* If CPU policy repeatedly disagrees after a successful write, a vendor
+     * PowerHAL/thermal owner is active. Back off for fifteen minutes instead
+     * of entering a reassert fight that costs energy and can worsen heat. */
+    if (writer_node_is_cpu(node) && rc == 0 && observed != INT_MIN && h->consecutive_failures >= 3) {
+        h->retry_at = now + 900;
+        snprintf(h->status, sizeof(h->status), "%s", "external_policy_holddown");
+        writer_write_failure_event(node, path, requested, observed, h->retry_at);
+        return -1;
+    }
+    /* 60, 120, 240, then cap at five minutes for ordinary transient errors. */
     unsigned long step = h->failures > 3 ? 300UL : (60UL << (h->failures - 1));
     if (step > 300UL) step = 300UL;
     h->retry_at = now + (time_t)step;
+    snprintf(h->status, sizeof(h->status), "%s", (rc == 0) ? "readback_mismatch" : "write_failed");
     writer_write_failure_event(node, path, requested, observed, h->retry_at);
     return -1;
 }
@@ -138,9 +165,10 @@ static void writer_write_health_dump(FILE *f) {
     for (int i = 0; i < ASB_WRITE_NODE_COUNT; i++) {
         asb_write_health_t *h = &g_write_health[i];
         if (!h->attempts && !h->failures && !h->skipped_backoff) continue;
-        fprintf(f, "writer_node_%s=requested:%d,observed:%d,attempts:%lu,applied:%lu,failures:%lu,retry_at:%ld\n",
+        fprintf(f, "writer_node_%s=requested:%d,observed:%d,attempts:%lu,applied:%lu,failures:%lu,consecutive_failures:%lu,retry_at:%ld,status:%s\n",
                 writer_write_node_name((asb_write_node_t)i), h->requested, h->observed,
-                h->attempts, h->applied, h->failures, (long)h->retry_at);
+                h->attempts, h->applied, h->failures, h->consecutive_failures, (long)h->retry_at,
+                h->status[0] ? h->status : "unknown");
     }
 }
 
