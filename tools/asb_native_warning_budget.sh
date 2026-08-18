@@ -4,7 +4,7 @@
 set -eu
 
 ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-BASELINE_FILE="${ASB_WARNING_BASELINE:-$ROOT/.ci/native_warning_budget.txt}"
+BASELINE_FILE="${ASB_WARNING_BASELINE:-$ROOT/tools/asb_native_warning_baseline.txt}"
 CC_BIN="${CC:-cc}"
 TMP=$(mktemp "${TMPDIR:-/tmp}/asb_warnings.XXXXXX")
 trap 'rm -f "$TMP"' EXIT HUP INT TERM
