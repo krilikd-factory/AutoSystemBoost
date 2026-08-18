@@ -2489,6 +2489,19 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
       esac
     fi
 
+    # Schema 3 narrows DSP Loudness to the compatible +18 dB maximum. Prior UI
+    # values 19..25 could not be honored by the legacy effect and were silently
+    # clamped; persist the same safe effective value explicitly on upgrade.
+    if [ "$_k" = "dsp_loudness" ] && [ "${_asb_anim_schema:-1}" -lt 3 ] 2>/dev/null; then
+      case "$_oldval" in
+        *[!0-9]*|'') : ;;
+        *) if [ "$_oldval" -gt 18 ] 2>/dev/null; then
+             ui_print "      + DSP loudness capped at +18 dB (legacy-compatible maximum)"
+             _oldval=18
+           fi ;;
+      esac
+    fi
+
     if grep -qE "^[[:space:]]*$_k=" "$_new_conf" 2>/dev/null; then
       _esc="$(printf '%s' "$_oldval" | sed 's/[&/\|]/\\&/g')"
       sed -i "s|^\\([[:space:]]*$_k=\\).*|\\1$_esc|" "$_new_conf" 2>/dev/null \
@@ -2502,7 +2515,7 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
   # Stamp the schema regardless of what was migrated. This is the line whose absence made
   # the first attempt defer the bug by one update instead of fixing it.
   mkdir -p /data/adb/asb 2>/dev/null
-  echo 2 > /data/adb/asb/config_schema 2>/dev/null
+  echo 3 > /data/adb/asb/config_schema 2>/dev/null
 }
 
 asb_snapshot_user_config() {
