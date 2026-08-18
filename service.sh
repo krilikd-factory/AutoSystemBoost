@@ -60,6 +60,7 @@ elif [ -f /data/adb/asb/v56_learning_reset_done ] && [ ! -f /data/adb/asb/v56_re
 fi
 
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
+[ -r "$MODDIR/runtime/asb_arbiter.sh" ] && . "$MODDIR/runtime/asb_arbiter.sh"
 [ -r "$MODDIR/runtime/profile_core.sh" ] && . "$MODDIR/runtime/profile_core.sh"
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
 [ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
@@ -730,6 +731,9 @@ apply_cpuset_groups_all() {
       [ -e "$_cg_root/$_grp/cpus" ] && writef_retry "$_cg_root/$_grp/cpus" "$_bg" 5 0.3 || true
       [ -e "$_cg_root/$_grp/cpuset.cpus" ] && writef_retry "$_cg_root/$_grp/cpuset.cpus" "$_bg" 5 0.3 || true
     done
+    # Native camera guard owns foreground/top-app placement until it restores
+    # its snapshot. Keep background economy, but do not overwrite the lease.
+    asb_cam_guard_active && continue
     for _grp in foreground top-app; do
       [ -e "$_cg_root/$_grp/cpus" ] && writef_retry "$_cg_root/$_grp/cpus" "$_fg" 5 0.3 || true
       [ -e "$_cg_root/$_grp/cpuset.cpus" ] && writef_retry "$_cg_root/$_grp/cpuset.cpus" "$_fg" 5 0.3 || true
@@ -2088,12 +2092,19 @@ asb_gpu_pick_pct() {
   [ -n "$_pick" ] && echo "$_pick"
 }
 apply_gpu_caps() {
+  # Manual profile caps are a lower-priority lease. Do not silently overwrite
+  # camera/safety/platform decisions, and keep desired/applied observable.
+  command -v asb_arbiter_can_write >/dev/null 2>&1 && ! asb_arbiter_can_write gpu_cap profile && return 0
+  command -v asb_arbiter_claim >/dev/null 2>&1 && asb_arbiter_claim gpu_cap profile 30 120 profile_apply || true
   _gbase="/sys/class/kgsl/kgsl-3d0/devfreq"
   # Primary path: devfreq frequency capping (OP13 Adreno 830 and any GPU that
   # populates devfreq/max_freq + available_frequencies).
   if [ -d "$_gbase" ] && [ -n "$(cat "$_gbase/max_freq" 2>/dev/null)" ] && [ -s "$_gbase/available_frequencies" ]; then
     _gmax="$(asb_gpu_pick_pct ${_P_GPU_MAX_PCT:-100})"
-    [ -n "$_gmax" ] && writef_retry "$_gbase/max_freq" "$_gmax" 3 0.25 || true
+    if [ -n "$_gmax" ] && writef_retry "$_gbase/max_freq" "$_gmax" 3 0.25; then
+      _gactual="$(cat "$_gbase/max_freq" 2>/dev/null)"
+      command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note gpu_cap profile profile_apply "$_gmax" "${_gactual:--}" applied || true
+    fi
     if [ "${_P_GPU_MIN_PCT:-0}" -gt 0 ] 2>/dev/null; then
       _gmin="$(asb_gpu_pick_pct ${_P_GPU_MIN_PCT})"
     else
@@ -2122,10 +2133,18 @@ apply_gpu_caps() {
     # Clamp into [vendor_floor .. slowest]: never faster than the vendor cap.
     [ "$_lvl" -lt "$_vfloor" ] 2>/dev/null && _lvl="$_vfloor"
     [ "$_lvl" -gt "$_last" ] 2>/dev/null && _lvl="$_last"
-    writef_retry "$_pmax_node" "$_lvl" 3 0.25 || true
+    if writef_retry "$_pmax_node" "$_lvl" 3 0.25; then
+      _gactual="$(cat "$_pmax_node" 2>/dev/null)"
+      command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note gpu_cap profile profile_apply "$_lvl" "${_gactual:--}" applied || true
+    fi
   fi
 }
 apply_cpufreq_caps() {
+  # Camera deadline and safety owners outrank a manual profile cap. Keep the
+  # previous envelope intact rather than lowering it mid-recording.
+  [ -f /dev/.asb/camera_guard ] && return 0
+  command -v asb_arbiter_can_write >/dev/null 2>&1 && ! asb_arbiter_can_write cpu_cap profile && return 0
+  command -v asb_arbiter_claim >/dev/null 2>&1 && asb_arbiter_claim cpu_cap profile 30 120 profile_apply || true
   # Topology-aware capping. 2-cluster SoCs (OP15 canoe, OP13 sun) map cleanly to
   _pol_list="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n)"
   _pol_count="$(echo "$_pol_list" | grep -c .)"
@@ -2164,7 +2183,10 @@ apply_cpufreq_caps() {
     else
       _want="$(asb_freq_pick_pct "$_pol_dir" "$_pct")"
     fi
-    if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 3 0.25; then :; fi
+    if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 3 0.25; then
+      _actual="$(cat "$_smax" 2>/dev/null)"
+      command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note cpu_cap profile profile_apply "$_want" "${_actual:--}" applied || true
+    fi
     # Per-cluster min-freq floor (single owner, 4-cluster aware). little cluster
     _smin="$_pol_dir/scaling_min_freq"
     if [ -w "$_smin" ]; then
