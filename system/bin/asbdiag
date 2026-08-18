@@ -7,6 +7,11 @@
 #  Or run the script directly:
 #       su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_diag.sh'
 #
+# Write probes are disabled by default. They temporarily change live CPU/GPU
+# limits and can collide with a game, camera, thermal mitigation or PowerHAL.
+# Run them only on an idle device with explicit consent:
+#       su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_diag.sh --write-test'
+#
 # It inspects the LIVE system — the real mounted files and the real runtime properties/settings
 # the OS is using right now — across every area ASB touches: module status, mounts, audio,
 # bluetooth, GPS, Wi-Fi, network/TCP, camera, performance, display, props and the WebUI config.
@@ -22,6 +27,8 @@
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_settings.sh ] && \
   . /data/adb/modules/AutoSystemBoost/runtime/asb_settings.sh
 
+WRITE_TEST=0
+[ "${1:-}" = "--write-test" ] && WRITE_TEST=1
 OUT1="/sdcard/asb_diag_report.txt"
 OUT2="/data/local/tmp/asb_diag_report.txt"
 : > "$OUT1" 2>/dev/null || OUT1=""
@@ -1156,7 +1163,9 @@ if [ -d "$_kg" ]; then
   # GPU write-test: does ASB actually control the GPU ceiling, or does the vendor governor
   # (msm-adreno-tz) override it like walt does for CPU?
   _gdv="$_kg/devfreq"
-  if [ -w "$_gdv/max_freq" ] && [ -s "$_gdv/available_frequencies" ]; then
+  if [ "$WRITE_TEST" != "1" ]; then
+    NOTE "GPU write-test skipped in safe read-only mode (rerun with --write-test while idle)"
+  elif [ -w "$_gdv/max_freq" ] && [ -s "$_gdv/available_frequencies" ]; then
     _g_orig="$(cat "$_gdv/max_freq" 2>/dev/null)"
     _g_try="$(tr ' ' '\n' < "$_gdv/available_frequencies" 2>/dev/null | grep -v '^$' | sort -n | awk 'NR==3{print}')"
     if [ -n "$_g_try" ] && [ "$_g_try" != "$_g_orig" ]; then
@@ -1223,7 +1232,9 @@ P "  ASB GOVERNOR live state:"
 # fully explains caps that never match ASB's intended per-device percentages (and battery-mode
 # jank if caps don't apply).
 _wt_pol="/sys/devices/system/cpu/cpufreq/policy0"
-if [ -w "$_wt_pol/scaling_max_freq" ]; then
+if [ "$WRITE_TEST" != "1" ]; then
+  NOTE "CPU scaling_max write-test skipped in safe read-only mode (rerun with --write-test while idle)"
+elif [ -w "$_wt_pol/scaling_max_freq" ]; then
   _wt_orig="$(cat "$_wt_pol/scaling_max_freq" 2>/dev/null)"
   # pick a mid available freq distinct from current
   _wt_try="$(tr ' ' '\n' < "$_wt_pol/scaling_available_frequencies" 2>/dev/null | grep -v '^$' | sort -n | awk 'NR==3{print}')"
