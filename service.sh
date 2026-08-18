@@ -429,9 +429,10 @@ asb_migrate_governor_conf
     _t=$((_t + 5))
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
-    # DSP attachment and audio-overlay recovery are never safe generic defaults.
-    # They need both an explicit AUDIO opt-in and a fingerprint-validated audio pack.
-    if asb_feature_enabled AUDIO && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
+    # The bundled DSP chain is selected by actual effect ABI and staged files. It must
+    # remain available to supported devices even when no optional fingerprint pack exists;
+    # otherwise overlay bind and attacher never run and the loudness slider has no effect.
+    if asb_feature_enabled AUDIO; then
     echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
     # Re-apply the /odm runtime binds.
     # post-fs-data already tries this, but KernelSU mounts its own module overlay on /odm AFTER
@@ -544,7 +545,7 @@ asb_migrate_governor_conf
       fi
     fi
     else
-      asb_log "audio_dsp: skipped (AUDIO disabled or unvalidated audio device pack)"
+      asb_log "audio_dsp: skipped (AUDIO disabled)"
     fi
   fi
 ) >/dev/null 2>&1 &

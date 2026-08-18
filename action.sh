@@ -1203,12 +1203,21 @@ if [ "$_a_dsp" != "off" ]; then
     echo "       compressor: off (limiter only)"
   fi
   echo "       libasbdsp: 64-bit ${_l64}  ·  32-bit ${_l32}  ·  ABI ${_dsp_abi}"
+  _dsp_registered=0
   for _ecs in $(_asb_effect_files); do
     if grep -q 'asb_loudness' "$_ecs" 2>/dev/null; then
+      _dsp_registered=1
       echo "       effect registered in: ${_ecs}"
       break
     fi
   done
+  _dsp_attacher="✗"
+  pgrep -f '/data/adb/asb/asb_dsp_attach' >/dev/null 2>&1 && _dsp_attacher="✓"
+  _dsp_live_mb="$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
+  case "$_dsp_live_mb" in ''|*[!0-9]*) _dsp_live="?" ;; *) _dsp_live="$(( _dsp_live_mb / 100 ))" ;; esac
+  _dsp_on="$(getprop persist.asb.dsp.enable 2>/dev/null)"
+  [ "$_dsp_registered" = "1" ] && _dsp_reg_mark="✓" || _dsp_reg_mark="✗"
+  echo "       DSP status: requested +${_a_dsp}dB · live +${_dsp_live}dB · enabled=${_dsp_on:-0} · attacher ${_dsp_attacher} · registered ${_dsp_reg_mark}"
 fi
 
 echo ""

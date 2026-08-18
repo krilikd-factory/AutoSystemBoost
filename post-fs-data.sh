@@ -278,7 +278,7 @@ if command -v resetprop >/dev/null 2>&1 && asb_feature_enabled DISPLAY \
 fi
 
 _abi_conf="$MODDIR/config/governor.conf"
-if asb_feature_enabled AUDIO && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio \
+if asb_feature_enabled AUDIO \
    && [ -f "$_abi_conf" ] && [ -f "$MODDIR/runtime/asb_dsp_abi_apply.sh" ]; then
   _abi_want="$(grep -E '^[[:space:]]*dsp_effect_abi=' "$_abi_conf" 2>/dev/null \
                | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
