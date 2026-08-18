@@ -41,6 +41,24 @@ fi
 need_line "$MOD/config/governor.conf" "thermal_overlay_pct=18"
 need_line "$MOD/config/governor.conf" "thermal_junction_hard_c=95"
 
+# ASB-04: the transaction boundary must reject malformed or out-of-range values
+# before they reach a persisted config, not only rely on WebUI slider constraints.
+for _pair in \
+  'heavy_load_enter nan' \
+  'gpu_idle_trim_pct -100' \
+  'gpu_video_max_pct 999' \
+  'gaming_confirm_ticks 0' \
+  'thermal_throttle_temp 0' \
+  'device_bounds_override 999'; do
+  set -- $_pair
+  if run_writer set "$1" "$2" >/dev/null 2>&1; then
+    fail "unsafe $1=$2 was accepted"
+  fi
+done
+need_line "$MOD/config/governor.conf" "heavy_load_enter=20.0"
+need_line "$MOD/config/governor.conf" "gpu_idle_trim_pct=12"
+need_line "$MOD/config/governor.conf" "gaming_confirm_ticks=6"
+
 # A linked slider update must commit both keys and its snapshot under one lock.
 run_writer set-many --snapshot "$SNAP" \
   sustained_temp_enter 60 sustained_temp_mode manual >/dev/null

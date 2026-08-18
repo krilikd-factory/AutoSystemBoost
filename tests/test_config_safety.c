@@ -57,13 +57,32 @@ int main(void) {
     if (load_text(path, "thermal_budget_dwell_s=0\n", &cfg) == 0) return 13;
     if (load_text(path, "shadow_mode=2\n", &cfg) == 0) return 14;
 
+    /* ASB-01: ceiling and enter must be independent of persisted key order. */
+    if (load_text(path, "sustained_temp_ceiling=68\nsustained_temp_enter=65\n", &cfg) != 0 ||
+        cfg.sustained_temp_enter != 65 || cfg.sustained_temp_enter_user != 68) return 15;
+    if (load_text(path, "sustained_temp_enter=65\nsustained_temp_ceiling=68\n", &cfg) != 0 ||
+        cfg.sustained_temp_enter != 65 || cfg.sustained_temp_enter_user != 68) return 16;
+    /* A stale/lower ceiling is normalized up to the active safety threshold. */
+    if (load_text(path, "sustained_temp_ceiling=62\nsustained_temp_enter=65\n", &cfg) != 0 ||
+        cfg.sustained_temp_enter_user != 65) return 17;
+
+    /* ASB-04: manual config/import data reaches native code; malformed values
+     * must not silently become zero or a non-finite FSM threshold. */
+    if (load_text(path, "heavy_load_enter=nan\n", &cfg) == 0) return 18;
+    if (load_text(path, "heavy_load_enter=inf\n", &cfg) == 0) return 19;
+    if (load_text(path, "gpu_idle_trim_pct=-100\n", &cfg) == 0) return 20;
+    if (load_text(path, "gpu_video_max_pct=999\n", &cfg) == 0) return 21;
+    if (load_text(path, "gaming_confirm_ticks=0\n", &cfg) == 0) return 22;
+    if (load_text(path, "thermal_throttle_temp=0\n", &cfg) == 0) return 23;
+    if (load_text(path, "device_bounds_override=999\n", &cfg) == 0) return 24;
+
     asb_config_defaults(&cfg);
     cfg.sustained_level = 0.62f;
     cfg.sustained_level_user_set = 1;
     asb_config_apply_burst_override(&cfg);
-    if (cfg.sustained_level != 0.62f) return 15;
+    if (cfg.sustained_level != 0.62f) return 25;
     asb_config_apply_stable_override(&cfg);
-    if (cfg.sustained_level != 0.62f) return 16;
+    if (cfg.sustained_level != 0.62f) return 26;
 
     remove(path);
     puts("PASS config safety");
