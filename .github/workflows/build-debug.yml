@@ -446,6 +446,7 @@ jobs:
             "runtime/asb_athena_apply.sh" \
             "runtime/asb_config_safe.sh" \
             "runtime/asb_device_tier.sh" \
+            "runtime/asb_device_pack_manifest.sh" \
             "runtime/profile_core.sh" \
             "runtime/smart_dynamic_tune.sh" \
             "runtime/asb_tweaks.sh" \

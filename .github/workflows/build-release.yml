@@ -584,6 +584,7 @@ jobs:
             "runtime/asb_arbiter.sh" \
             "runtime/asb_capabilities.sh" \
             "runtime/asb_apply_managed_props.sh" \
+            "runtime/asb_device_pack_manifest.sh" \
             "runtime/asb_device_tier.sh" \
             "tools/asb_diag.sh" \
             "tools/asb_effective_policy.sh" \
