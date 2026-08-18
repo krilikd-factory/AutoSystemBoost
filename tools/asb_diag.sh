@@ -581,31 +581,35 @@ _pl_ac="$(grep -E '^plan_ac=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=
 _pl_scr="$(cat /sys/kernel/oplus_display/panel_power_status 2>/dev/null | head -1)"
 case "$_pl_scr" in 1|2) _pl_scr=1 ;; 0) _pl_scr=0 ;; *) _pl_scr="" ;; esac
 if [ -n "$_pl_cls" ]; then
-  # Is the throttle point below what this phone idles at?
-#
-# The slider used to allow 36C. A OnePlus 15 sitting still reads 47C on the CPU and 38C at
-# the shell, so a 36C point means SUSTAINED is entered permanently: prime pinned at 35% of
-# hardware around the clock. That is not a cooler phone, it is a slower one that stays busy
-# longer and therefore runs hotter - the opposite of the intent. The floor is 45C now, but
-# a value stored by an older build survives an update, so say it out loud.
-_tp_set="$(cfg sustained_temp_enter)"
-_tp_now=0
-for _tz in /sys/class/thermal/thermal_zone*; do
-  case "$(cat "$_tz/type" 2>/dev/null)" in *cpu*|*CPU*) : ;; *) continue ;; esac
-  _tv="$(cat "$_tz/temp" 2>/dev/null)"
-  case "$_tv" in ''|*[!0-9]*) continue ;; esac
-  [ "$_tv" -gt 1000 ] && _tv=$(( _tv / 1000 ))
-  [ "$_tv" -gt "$_tp_now" ] && _tp_now="$_tv"
-done
+  # Compare the configured point with actual live CPU sensors, not with hardware
+  # trip/setpoint zones. On this OP15, `cpu-hw-trip-*` is a constant 95C shutdown
+  # threshold, not a measurement; treating it as idle temperature created a false FAIL.
+  _tp_set="$(cfg sustained_temp_enter)"
+  _tp_now=0
+  _tp_n=0
+  for _tz in /sys/class/thermal/thermal_zone*; do
+    _tt="$(cat "$_tz/type" 2>/dev/null)"
+    case "$_tt" in *cpu*|*CPU*) : ;; *) continue ;; esac
+    case "$_tt" in *trip*|*limit*|*shutdown*|*crit*|*alarm*) continue ;; esac
+    _tv="$(cat "$_tz/temp" 2>/dev/null)"
+    case "$_tv" in ''|*[!0-9]*) continue ;; esac
+    [ "$_tv" -gt 1000 ] && _tv=$(( _tv / 1000 ))
+    # Values outside plausible live CPU sensor range are setpoints/faults, not
+    # evidence that a 40..70C throttle slider is permanently active.
+    [ "$_tv" -lt 20 ] && continue
+    [ "$_tv" -gt 85 ] && continue
+    _tp_n=$((_tp_n + 1))
+    [ "$_tv" -gt "$_tp_now" ] && _tp_now="$_tv"
+  done
 case "$_tp_set" in
   ''|*[!0-9]*) : ;;
   *)
     if [ "$_tp_now" -gt 0 ] && [ "$_tp_set" -le "$_tp_now" ]; then
-      V "  throttle point above idle temp" "> ${_tp_now}C" "${_tp_set}C" eq
-      NOTE "  the phone is ALREADY at or above its own throttle point while idle -"
-      NOTE "  clocks are pinned permanently. Raise it in WebUI > Battery > Throttling Temperature."
+      V "  throttle point above live CPU sensor" "> ${_tp_now}C" "${_tp_set}C" eq
+      NOTE "  a real CPU sensor is already at or above the selected point; sustained policy may engage."
+      NOTE "  Check workload/cooling before raising the threshold."
     else
-      NOTE "throttle point ${_tp_set}C vs idle CPU ${_tp_now}C - headroom ok"
+      NOTE "throttle point ${_tp_set}C vs live CPU max ${_tp_now}C across ${_tp_n} sensor(s) - headroom ok"
     fi
     ;;
 esac
