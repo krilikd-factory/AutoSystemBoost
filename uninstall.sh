@@ -127,6 +127,21 @@ fi
 
 settings delete global device_idle_constants >/dev/null 2>&1 || true
 
+# Hand back location to every app the GNSS tweak restricted.
+#
+# asb_gnss_trim.sh records each package it touched and knows how to release them, but
+# nothing called it on removal - so uninstalling the module would have left those apps
+# without coarse location permanently, with no trace of who took it away. Read the record
+# directly rather than running the script: by this point the module tree may already be
+# gone, and the file lives outside it.
+if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; then
+  while IFS= read -r _gp; do
+    case "$_gp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+    appops set "$_gp" COARSE_LOCATION allow >/dev/null 2>&1
+  done < /data/adb/asb/gnss_restricted
+  rm -f /data/adb/asb/gnss_restricted 2>/dev/null
+fi
+
 rm -f /data/adb/asb/auto_battery_origin /data/adb/asb/lockscreen_prev /data/adb/asb/lockscreen_result 2>/dev/null
 # Camera tuning baselines.
 #
