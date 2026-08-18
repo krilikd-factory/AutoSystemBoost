@@ -8,10 +8,14 @@ for _d in "$MODDIR" /data/adb/modules/$MODID /data/adb/modules_update/$MODID; do
   [ -f "$_d/module.prop" ] && { MODDIR="$_d"; break; }
 done
 CONF="$MODDIR/config/governor.conf"
+# shellcheck disable=SC1091
 [ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
 
 _cfg() { grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
 _feat() { grep -E "^[[:space:]]*$1=" "$MODDIR/features.conf" 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
+_state() { grep -E "^[[:space:]]*$1=" /dev/.asb/state 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
+_cap() { grep -E "^[[:space:]]*$1=" /data/adb/asb/capabilities.env 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
+_lease() { grep -E "^[[:space:]]*$2=" "/dev/.asb/arbiter/$1.lease" 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
 _json() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
 [ -r "$CONF" ] || { echo '{"error":"governor.conf unavailable"}'; exit 1; }
@@ -20,7 +24,7 @@ if [ "$_dups" = "0" ]; then _cfg_health="valid"; else _cfg_health="duplicate_key
 _prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"; _prof="${_prof:-balanced}"
 _sm="$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)"; _sm="${_sm:-$(_cfg smart_mode_enabled)}"
 if [ "$_sm" = "1" ] || [ "$_prof" = "smart" ]; then _owner="governor_fsm"; else _owner="service_manual"; fi
-_floor="$(cat /data/adb/asb/thermal_floor 2>/dev/null | tr -d ' \r')"; _floor="${_floor:-none}"
+_floor="$(tr -d ' \r' < /data/adb/asb/thermal_floor 2>/dev/null)"; _floor="${_floor:-none}"
 _camera_tier="generic"; _audio_tier="generic"; _net_tier="generic"; _overlay_tier="generic"; _properties_tier="generic"
 command -v asb_device_tier_name >/dev/null 2>&1 && {
   _camera_tier="$(asb_device_tier_name camera)"; _audio_tier="$(asb_device_tier_name audio)";
@@ -43,6 +47,16 @@ printf '"features":{"camera":"%s","bt":"%s","net":"%s","kernel":"%s","log":"%s",
   "$(_json "$(_feat CAMERA)")" "$(_json "$(_feat BT)")" "$(_json "$(_feat NET)")" "$(_json "$(_feat KERNEL)")" "$(_json "$(_feat LOG)")" "$(_json "$(_feat VENDOR_OVERLAY)")"
 printf '"tiers":{"camera":"%s","audio":"%s","network":"%s","overlay":"%s","properties":"%s"},' \
   "$(_json "$_camera_tier")" "$(_json "$_audio_tier")" "$(_json "$_net_tier")" "$(_json "$_overlay_tier")" "$(_json "$_properties_tier")"
-printf '"managed_properties":{"status":"%s","reason":"%s","applied":"%s","skipped":"%s"}' \
+printf '"managed_properties":{"status":"%s","reason":"%s","applied":"%s","skipped":"%s"},' \
   "$(_json "$_mp_status")" "$(_json "$_mp_reason")" "$(_json "$_mp_applied")" "$(_json "$_mp_skipped")"
+printf '"arbitration":{"cpu_cap_owner":"%s","uclamp_owner":"%s","camera_active":"%s"},' \
+  "$(_json "$(_lease cpu_cap owner)")" "$(_json "$(_lease uclamp_max owner)")" "$(_json "$(grep -c . /dev/.asb/camera_guard 2>/dev/null || true)")"
+printf '"capabilities":{"cpu_policies":"%s","opp_complete":"%s","cgroup_v1":"%s","cgroup_v2":"%s","uclamp":"%s","thermal":"%s","battery_current":"%s","gpu_devfreq":"%s"},' \
+  "$(_json "$(_cap cpu_policy_count)")" "$(_json "$(_cap cpu_opp_complete)")" "$(_json "$(_cap cgroup_v1)")" "$(_json "$(_cap cgroup_v2)")" "$(_json "$(_cap uclamp)")" "$(_json "$(_cap thermal_sensors)")" "$(_json "$(_cap battery_current)")" "$(_json "$(_cap gpu_devfreq)")"
+printf '"writer_health":{"attempts":"%s","applied":"%s","failures":"%s","backoff_skips":"%s","next_retry":"%s"},' \
+  "$(_json "$(_state writer_attempts)")" "$(_json "$(_state writer_applied)")" "$(_json "$(_state writer_failures)")" "$(_json "$(_state writer_backoff_skips)")" "$(_json "$(_state writer_next_retry)")"
+printf '"energy_policy":{"shadow_mode":"%s","thermal_budget_enabled":"%s","thermal_budget_trim_pct":"%s","thermal_budget_reason":"%s","thermal_budget_dwell_s":"%s"},' \
+  "$(_json "$(_state shadow_mode)")" "$(_json "$(_state thermal_budget_enabled)")" "$(_json "$(_state thermal_budget_trim_pct)")" "$(_json "$(_state thermal_budget_reason)")" "$(_json "$(_state thermal_budget_dwell_s)")"
+printf '"asb_overhead":{"event_wakeups":"%s","timer_wakeups":"%s","cpu_ms":"%s"}' \
+  "$(_json "$(_state governor_event_wakeups)")" "$(_json "$(_state governor_timer_wakeups)")" "$(_json "$(_state governor_cpu_ms)")"
 printf '}\n'
