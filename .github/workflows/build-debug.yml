@@ -111,6 +111,21 @@ jobs:
             echo "== $_t =="
             bash "$_t" || _rc=1
           done
+          # Quiet Night skip flag: two tests, deliberately from different angles.
+          #
+          # The source test checks WHERE the reset lives - the original bug was that it
+          # sat inside the mode guard, so the flag stayed set after the mode ended and the
+          # daemon ran on hours-old battery readings. The behaviour test walks the actual
+          # transition, because a placement test would pass on a rewrite that moved the
+          # reset correctly and still got the sequence wrong.
+          if [ -f tests/test_quiet_night_skip.py ]; then
+            echo "== tests/test_quiet_night_skip.py =="
+            python3 tests/test_quiet_night_skip.py || _rc=1
+          fi
+          if [ -f tests/test_quiet_night_behaviour.c ]; then
+            echo "== tests/test_quiet_night_behaviour.c =="
+            gcc -O2 -o /tmp/tqn tests/test_quiet_night_behaviour.c && /tmp/tqn || _rc=1
+          fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"
             exit 1
