@@ -43,12 +43,13 @@ done
 [ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
 # Produce an explicit per-fingerprint device-pack state before any gated domain
 # is evaluated. This never authorizes broad vendor properties by model alone.
-[ -x "$MODDIR/runtime/asb_device_pack_manifest.sh" ] && \
-  "$MODDIR/runtime/asb_device_pack_manifest.sh" >/dev/null 2>&1 || true
+[ -r "$MODDIR/runtime/asb_device_pack_manifest.sh" ] && \
+  sh "$MODDIR/runtime/asb_device_pack_manifest.sh" >/dev/null 2>&1 || true
 # Hardware inventory is read-only and runs once per boot. The native governor
 # and diagnostics use this manifest to avoid treating absent vendor nodes as a
 # policy failure or retrying unsupported features every tick.
-[ -x "$MODDIR/runtime/asb_capabilities.sh" ] && "$MODDIR/runtime/asb_capabilities.sh" probe >/data/adb/asb/capabilities.last 2>&1 || true
+[ -r "$MODDIR/runtime/asb_capabilities.sh" ] && \
+  sh "$MODDIR/runtime/asb_capabilities.sh" probe >/data/adb/asb/capabilities.last 2>&1 || true
 command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
 
 asb_feature_enabled() {

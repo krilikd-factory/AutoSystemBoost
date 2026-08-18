@@ -87,7 +87,7 @@ done
 # Apply optional vendor/system properties only after the active feature set and
 # the exact build fingerprint have been validated. Module-level system.prop is
 # intentionally blank in this build, so no property can bypass this gate early.
-if [ -x "$MODDIR/runtime/asb_apply_managed_props.sh" ]; then
+if [ -r "$MODDIR/runtime/asb_apply_managed_props.sh" ]; then
   sh "$MODDIR/runtime/asb_apply_managed_props.sh" >/dev/null 2>&1 || \
     asb_log "managed_props: helper execution failed"
 fi
