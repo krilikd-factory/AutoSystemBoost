@@ -170,6 +170,13 @@ SEC "0b. RUNTIME ARBITRATION & WRITE HEALTH  (live owner / requested vs applied)
 _runtime_caps="/data/adb/asb/capabilities.env"
 _state="/dev/.asb/state"
 _rget() { grep -E "^$1=" "$2" 2>/dev/null | tail -1 | sed 's/^[^=]*=//'; }
+_stock_thermal="/data/adb/asb/thermal_stock"
+if [ -r "$_stock_thermal" ]; then
+  P "  stock thermal        : source=$(_rget SOURCE \"$_stock_thermal\") zone=$(_rget ZONE \"$_stock_thermal\") trip=$(_rget INDEX \"$_stock_thermal\") type=$(_rget TYPE \"$_stock_thermal\") raw=$(_rget RAW \"$_stock_thermal\") resolved=$(_rget RESOLVED \"$_stock_thermal\")C"
+  [ "$(_rget SOURCE \"$_stock_thermal\")" = "passive_trip_point" ] || NOTE "No passive CPU trip was confirmed: stock/smart mode keeps the configured threshold unchanged."
+else
+  P "  stock thermal        : unavailable (captured on next boot)"
+fi
 if [ -r "$_runtime_caps" ]; then
   P "  boot manifest         : policies=$(_rget cpu_policy_count "$_runtime_caps") opp_complete=$(_rget cpu_opp_complete "$_runtime_caps") cgroup_v1=$(_rget cgroup_v1 "$_runtime_caps") cgroup_v2=$(_rget cgroup_v2 "$_runtime_caps")"
   P "  optional signals      : uclamp=$(_rget uclamp "$_runtime_caps") thermal=$(_rget thermal_sensors "$_runtime_caps") battery_current=$(_rget battery_current "$_runtime_caps") gpu_devfreq=$(_rget gpu_devfreq "$_runtime_caps")"
