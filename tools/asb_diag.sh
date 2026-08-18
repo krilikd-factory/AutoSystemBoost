@@ -181,7 +181,19 @@ if [ -r "$_runtime_caps" ]; then
   P "  boot manifest         : policies=$(_rget cpu_policy_count "$_runtime_caps") opp_complete=$(_rget cpu_opp_complete "$_runtime_caps") cgroup_v1=$(_rget cgroup_v1 "$_runtime_caps") cgroup_v2=$(_rget cgroup_v2 "$_runtime_caps")"
   P "  optional signals      : uclamp=$(_rget uclamp "$_runtime_caps") thermal=$(_rget thermal_sensors "$_runtime_caps") battery_current=$(_rget battery_current "$_runtime_caps") gpu_devfreq=$(_rget gpu_devfreq "$_runtime_caps")"
 else
-  P "  (capabilities.env unavailable — it is generated once at boot by asb_capabilities.sh)"
+  P "  boot manifest         : unavailable (probe may not have completed)"
+fi
+_pack_state="/data/adb/asb/device_pack.state"
+_props_state="/data/adb/asb/managed_props.state"
+if [ -r "$_pack_state" ]; then
+  P "  device-pack state     : status=$(_rget status "$_pack_state") reason=$(_rget reason "$_pack_state")"
+else
+  P "  device-pack state     : unavailable"
+fi
+if [ -r "$_props_state" ]; then
+  P "  managed properties    : status=$(_rget status "$_props_state") reason=$(_rget reason "$_props_state") applied=$(_rget applied "$_props_state") skipped=$(_rget skipped "$_props_state")"
+else
+  P "  managed properties    : unavailable (applier has not run)"
 fi
 for _lease in /dev/.asb/arbiter/*.lease; do
   [ -r "$_lease" ] || continue
@@ -332,7 +344,12 @@ SEC "1b. DSP ENGINE  (what the effect is actually doing)"
 _dsp_g="$(cfg dsp_loudness)"
 case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released from the audio path entirely" ;;
   *)
-    V "  DSP gain live (persist.asb.dsp.gain_mb)" "$((_dsp_g * 100))" "$(gp persist.asb.dsp.gain_mb)" eq
+    _dsp_requested_mb=$((_dsp_g * 100))
+    _dsp_expected_mb="$_dsp_requested_mb"
+    [ "$_dsp_expected_mb" -gt 1800 ] && _dsp_expected_mb=1800
+    V "  DSP gain applied (persist.asb.dsp.gain_mb)" "$_dsp_expected_mb" "$(gp persist.asb.dsp.gain_mb)" eq
+    [ "$_dsp_requested_mb" -ne "$_dsp_expected_mb" ] && \
+      NOTE "  requested ${_dsp_requested_mb}mB is safely capped to ${_dsp_expected_mb}mB (+18 dB compatibility limit)"
     V "  DSP enabled" "1" "$(gp persist.asb.dsp.enable)" eq
     ;;
 esac
