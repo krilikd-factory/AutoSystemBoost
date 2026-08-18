@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+#include <math.h>
 
 /* Foreground app has a history of running this device hot.
  *
@@ -39,7 +42,8 @@ typedef struct {
      * deliberately chose a LOWER throttle point in the WebUI: they ask to throttle at 50 and
      * the module pushes it back to 52, 54, ...
      */
-    int   sustained_temp_enter_user;   /* ceiling for self-tuning, see below */
+    int   sustained_temp_enter_user;   /* normalized ceiling consumed by self-tuning */
+    int   sustained_temp_ceiling;      /* raw configured ceiling; independent of line order */
     int   sustained_temp_user_override;/* 1 = slider beats the per-profile presets */
     int   sustained_temp_exit;
     float sustained_level;
@@ -238,6 +242,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->sustained_load_min  = 4.0f;
     c->sustained_temp_enter= 65;
     c->sustained_temp_enter_user = 65;
+    c->sustained_temp_ceiling = 65;
     c->sustained_temp_user_override = 0;
     c->sustained_temp_exit = 55;
     c->perf_sustained_temp_enter = 0;
@@ -371,6 +376,49 @@ static inline char *asb_cfg_trim(char *s) {
     return s;
 }
 
+static inline int asb_cfg_parse_int_strict(const char *v, int *out) {
+    char *end = NULL;
+    long parsed;
+    if (!v || !*v || !out) return -1;
+    errno = 0;
+    parsed = strtol(v, &end, 10);
+    if (errno == ERANGE || end == v || *end != '\0' ||
+        parsed < INT_MIN || parsed > INT_MAX) return -1;
+    *out = (int)parsed;
+    return 0;
+}
+
+static inline int asb_cfg_parse_float_strict(const char *v, float *out) {
+    char *end = NULL;
+    float parsed;
+    if (!v || !*v || !out) return -1;
+    errno = 0;
+    parsed = strtof(v, &end);
+    if (errno == ERANGE || end == v || *end != '\0' || !isfinite(parsed)) return -1;
+    *out = parsed;
+    return 0;
+}
+
+/* Values that directly affect thermal/FSM safety must be syntactically valid before
+ * atoi/atof can turn malformed text into an accidental zero or NaN. */
+static inline int asb_cfg_validate_critical_syntax(const char *k, const char *v) {
+    int parsed_i;
+    float parsed_f;
+    if (!strcmp(k, "heavy_load_enter") || !strcmp(k, "sustained_load_min") ||
+        !strcmp(k, "bat_heavy_load_enter") || !strcmp(k, "moderate_load_enter") ||
+        !strcmp(k, "bat_moderate_load_enter") || !strcmp(k, "balanced_heavy_load_enter") ||
+        !strcmp(k, "balanced_moderate_load_enter")) {
+        return asb_cfg_parse_float_strict(v, &parsed_f);
+    }
+    if (!strcmp(k, "gaming_confirm_ticks") || !strcmp(k, "gpu_idle_trim_pct") ||
+        !strcmp(k, "gpu_video_max_pct") || !strcmp(k, "thermal_throttle_temp") ||
+        !strcmp(k, "device_bounds_override") || !strcmp(k, "sustained_temp_enter") ||
+        !strcmp(k, "sustained_temp_ceiling") || !strcmp(k, "sustained_temp_exit")) {
+        return asb_cfg_parse_int_strict(v, &parsed_i);
+    }
+    return 0;
+}
+
 static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, const char *v) {
     if (!strcmp(k, "heavy_gpu_enter")) c->heavy_gpu_enter = atoi(v);
     else if (!strcmp(k, "heavy_load_enter")) c->heavy_load_enter = (float)atof(v);
@@ -378,36 +426,12 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "gaming_confirm_ticks")) c->gaming_confirm_ticks = atoi(v);
     else if (!strcmp(k, "sustained_gpu_min")) c->sustained_gpu_min = atoi(v);
     else if (!strcmp(k, "sustained_load_min")) c->sustained_load_min = (float)atof(v);
-    else if (!strcmp(k, "sustained_temp_enter")) {
-        c->sustained_temp_enter = atoi(v);
-        /* Runtime floor from service.sh, if this device idles too hot for the chosen
-         * point. It used to rewrite governor.conf, which made the card display a number
-         * the user had not picked; the correction now lives in its own file so the
-         * config keeps saying what was asked for and only the behaviour is clamped. */
-        {
-            FILE *ff = fopen("/data/adb/asb/thermal_floor", "r");
-            if (ff) {
-                int floor_c = 0;
-                if (fscanf(ff, "%d", &floor_c) == 1 &&
-                    floor_c > 0 && floor_c <= 70 &&
-                    c->sustained_temp_enter < floor_c) {
-                    c->sustained_temp_enter = floor_c;
-                }
-                fclose(ff);
-            }
-        }
-        /* Default the ceiling to the value itself: with no explicit ceiling key, the
-         * configured number is exactly what the user wants and self_tune must not pass it.
-         * sustained_temp_ceiling below overrides this when the mode allows self-tuning. */
-        c->sustained_temp_enter_user = c->sustained_temp_enter;
-    }
+    else if (!strcmp(k, "sustained_temp_enter")) c->sustained_temp_enter = atoi(v);
     else if (!strcmp(k, "sustained_temp_user_override")) c->sustained_temp_user_override = atoi(v);
     else if (!strcmp(k, "sustained_temp_ceiling")) {
-        /*
-         * How far self_tune may walk the throttle point up.
-         * Keeping it a separate key means the C side never has to know modes exist.
-         */
-        c->sustained_temp_enter_user = atoi(v);
+        /* Keep the raw request independent of line order. It is normalized only after
+         * the complete file has been parsed, together with the runtime thermal floor. */
+        c->sustained_temp_ceiling = atoi(v);
     }
     else if (!strcmp(k, "sustained_temp_exit"))  c->sustained_temp_exit  = atoi(v);
     else if (!strcmp(k, "perf_sustained_temp_enter")) c->perf_sustained_temp_enter = atoi(v);
@@ -567,6 +591,8 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
 static inline int asb_config_validate(const asb_runtime_config_t *c) {
     if (!c) return -1;
     if (c->sustained_temp_enter < 40 || c->sustained_temp_enter > 70 ||
+        c->sustained_temp_ceiling < c->sustained_temp_enter ||
+        c->sustained_temp_ceiling > 70 ||
         c->sustained_temp_exit < 30 ||
         c->sustained_temp_exit >= c->sustained_temp_enter) return -2;
     if (c->perf_sustained_temp_enter > 0 &&
@@ -622,6 +648,13 @@ static inline int asb_config_validate(const asb_runtime_config_t *c) {
         c->smart_conf_high < 1 || c->smart_conf_high > 1000 ||
         c->smart_conf_low >= c->smart_conf_high ||
         c->smart_eff_obs_full < 1 || c->smart_eff_obs_full > 10000) return -14;
+    if (!isfinite(c->heavy_load_enter) || c->heavy_load_enter < 0.1f || c->heavy_load_enter > 1000.0f ||
+        !isfinite(c->sustained_load_min) || c->sustained_load_min < 0.1f || c->sustained_load_min > 1000.0f ||
+        c->gaming_confirm_ticks < 1 || c->gaming_confirm_ticks > 120 ||
+        c->gpu_idle_trim_pct < 0 || c->gpu_idle_trim_pct > 90 ||
+        c->gpu_video_max_pct < 0 || c->gpu_video_max_pct > 100 ||
+        c->thermal_throttle_temp < 30 || c->thermal_throttle_temp > 110 ||
+        (c->device_bounds_override != 0 && c->device_bounds_override != 1)) return -15;
     return 0;
 }
 
@@ -656,9 +689,26 @@ static inline int asb_config_load_file(const char *path, asb_runtime_config_t *c
         if (seen_n >= ASB_CFG_MAX_KEYS) { fclose(f); return -4; }
         snprintf(seen[seen_n], ASB_CFG_KEY_LEN, "%s", k);
         seen_n++;
+        if (asb_cfg_validate_critical_syntax(k, v) != 0) { fclose(f); return -5; }
         asb_cfg_apply_kv(c, k, v);
     }
     fclose(f);
+    /* Resolve the thermal contract after all keys are known. The floor is a runtime
+     * safety fact, not a mutation of governor.conf; its interaction with the ceiling
+     * must therefore be independent of key order in the persisted configuration. */
+    {
+        FILE *ff = fopen("/data/adb/asb/thermal_floor", "r");
+        if (ff) {
+            int floor_c = 0;
+            if (fscanf(ff, "%d", &floor_c) == 1 && floor_c > 0 && floor_c <= 70 &&
+                c->sustained_temp_enter < floor_c) c->sustained_temp_enter = floor_c;
+            fclose(ff);
+        }
+    }
+    if (c->sustained_temp_ceiling < 40 || c->sustained_temp_ceiling > 70) return -5;
+    if (c->sustained_temp_ceiling < c->sustained_temp_enter)
+        c->sustained_temp_ceiling = c->sustained_temp_enter;
+    c->sustained_temp_enter_user = c->sustained_temp_ceiling;
     return asb_config_validate(c);
 }
 

@@ -423,6 +423,40 @@ static void cpu_capture_slot_hwmax(void) {
     }
 }
 
+/* msm_performance reports caps by Linux CPU number, not logical ASB slot. Never
+ * divide a CPU-0 cap by slot-0 max until the discovered policy confirms that CPU 0
+ * actually belongs there; policy numbering is not a portable topology contract. */
+static int cpu_slot_contains_cpu(int slot, int cpu) {
+    if (slot < 0 || slot > 2 || cpu < 0 || g_cpu_policy_ids[slot] < 0) return 0;
+    char path[128], buf[128] = {0};
+    snprintf(path, sizeof(path),
+             "/sys/devices/system/cpu/cpufreq/policy%d/related_cpus",
+             g_cpu_policy_ids[slot]);
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return 0;
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) return 0;
+    char *p = buf;
+    while (*p) {
+        char *end = NULL;
+        long id = strtol(p, &end, 10);
+        if (end != p && id == cpu) return 1;
+        if (end == p) p++;
+        else p = end;
+    }
+    return 0;
+}
+
+static int metrics_headroom_pct_from_cap(int cap_khz, int hwmax_khz, int *out_pct) {
+    if (!out_pct || cap_khz <= 0 || hwmax_khz <= 0) return -1;
+    long pct = (long)cap_khz * 100L / hwmax_khz;
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    *out_pct = (int)pct;
+    return 0;
+}
+
 /*
  * Scale an absolute bound (authored against the SM8650 reference) to this device's real
  * silicon for the given slot.
@@ -989,11 +1023,9 @@ int spike_detected = 0;
                     while (*p && *p != ' ' && *p != '\n' && *p != '\t') p++;
                     while (*p == ' ' || *p == '\n' || *p == '\t' || *p == '\r') p++;
                 }
-                if (t->perf_cap_p0 > 0) {
-                    int hw_max_p0 = 3628800;  /* SM8850 policy0 max */
-                    t->headroom_pct = (int)((long)t->perf_cap_p0 * 100 / hw_max_p0);
-                    if (t->headroom_pct > 100) t->headroom_pct = 100;
-                    if (t->headroom_pct < 0)   t->headroom_pct = 0;
+                if (t->perf_cap_p0 > 0 && cpu_slot_contains_cpu(0, 0) &&
+                    metrics_headroom_pct_from_cap(t->perf_cap_p0, g_cpu_slot_hwmax[0],
+                                                  &t->headroom_pct) == 0) {
                     /* split into soft/hard clamp instead of blunt throttling.
                      * soft_clamp = advisory (reduce aggression, no SUSTAINED)
                      * hard_clamp = actionable (can lead to SUSTAINED if confirmed) */
@@ -1077,6 +1109,14 @@ int spike_detected = 0;
                         }
                     headroom_status_done: ;
                     }
+                } else if (t->perf_cap_p0 > 0) {
+                    t->headroom_valid = 0;
+                    if (g_cpu_slot_hwmax[0] <= 0)
+                        snprintf(t->headroom_invalid_reason, sizeof(t->headroom_invalid_reason), "topology_absent");
+                    else if (!cpu_slot_contains_cpu(0, 0))
+                        snprintf(t->headroom_invalid_reason, sizeof(t->headroom_invalid_reason), "cpu0_not_slot0");
+                    else
+                        snprintf(t->headroom_invalid_reason, sizeof(t->headroom_invalid_reason), "invalid_cap");
                 }
             }
         }
