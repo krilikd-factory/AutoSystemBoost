@@ -59,6 +59,7 @@ jobs:
             src/build_ndk_release.sh \
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
+            tests/test_dsp_reference_contract.sh \
             module.prop \
             customize.sh \
             service.sh; do
@@ -106,7 +107,7 @@ jobs:
           # green but unwired, so nothing actually guarded that math on a release.
           # They need no NDK and no device - plain gcc against src/.
           _rc=0
-          for _t in tests/test_smart_session2.sh tests/test_smart_session3.sh; do
+          for _t in tests/test_smart_session2.sh tests/test_smart_session3.sh tests/test_dsp_reference_contract.sh; do
             [ -f "$_t" ] || { echo "WARNING: $_t missing - skipping"; continue; }
             echo "== $_t =="
             bash "$_t" || _rc=1
@@ -137,17 +138,33 @@ jobs:
             exit 1
           fi
 
-      - name: Install tools
+      # Ubuntu GitHub-hosted runners already provide these utilities. Do not pay
+      # for apt-get update on every debug build; install only on a custom runner
+      # that genuinely lacks one of the required commands.
+      - name: Verify runner tools
+        shell: bash
         run: |
+          missing=()
+          for tool in zip unzip curl file rsync; do
+            command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then
+            printf 'Runner tools already available: %s\n' 'zip unzip curl file rsync'
+            exit 0
+          fi
+          echo "::warning::Installing missing runner tools: ${missing[*]}"
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends zip unzip curl file rsync
+          sudo apt-get install -y --no-install-recommends "${missing[@]}"
 
       - name: Cache Android NDK
         id: cache-ndk
         uses: actions/cache@v4
         with:
           path: android-ndk-r28c
-          key: android-ndk-r28c
+          key: ${{ runner.os }}-android-ndk-r28c-linux-v1
+          restore-keys: |
+            ${{ runner.os }}-android-ndk-r28c-linux-
+            android-ndk-r28c
 
       - name: Download Android NDK
         if: steps.cache-ndk.outputs.cache-hit != 'true'
@@ -367,9 +384,9 @@ jobs:
           # WebUI assets readable by the root manager's WebView. The zip preserves modes,
           # so getting them right here is what customize.sh then re-asserts on device -
           # a webroot/i18n that is not world-readable loads no translations at all.
-          chmod 0755 "$PKG_REL/webroot" "$PKG_REL/webroot/i18n" 2>/dev/null || true
-          find "$PKG_REL/webroot" -type f -exec chmod 0644 {} + 2>/dev/null || true
-          find "$PKG_REL/webroot" -type d -exec chmod 0755 {} + 2>/dev/null || true
+          chmod 0755 "$PKG_DBG/webroot" "$PKG_DBG/webroot/i18n" 2>/dev/null || true
+          find "$PKG_DBG/webroot" -type f -exec chmod 0644 {} + 2>/dev/null || true
+          find "$PKG_DBG/webroot" -type d -exec chmod 0755 {} + 2>/dev/null || true
           ( cd "$PKG_DBG" && zip -rq "../$ZIP_DBG" . -x "*.DS_Store" )
           echo "ZIP_DBG=$ZIP_DBG" >> $GITHUB_ENV
           echo "ASB_VER=$ASB_VER" >> $GITHUB_ENV

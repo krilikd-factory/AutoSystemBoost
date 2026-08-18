@@ -81,7 +81,9 @@ jobs:
             tools/asb_native_warning_budget.sh \
             .ci/native_warning_budget.txt \
             tests/test_arbiter.sh \
-            tests/test_intent_backup.sh; do
+            tests/test_intent_backup.sh \
+            tests/test_service_thermal_vm_contract.sh \
+            tests/test_dsp_reference_contract.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
@@ -192,22 +194,50 @@ jobs:
             echo "== tests/test_intent_backup.sh =="
             sh tests/test_intent_backup.sh || _rc=1
           fi
+          if [ -f tests/test_service_thermal_vm_contract.sh ]; then
+            echo "== tests/test_service_thermal_vm_contract.sh =="
+            sh tests/test_service_thermal_vm_contract.sh || _rc=1
+          fi
+          if [ -f tests/test_dsp_reference_contract.sh ]; then
+            echo "== tests/test_dsp_reference_contract.sh =="
+            sh tests/test_dsp_reference_contract.sh || _rc=1
+          fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"
             exit 1
           fi
 
-      - name: Install tools
+      # GitHub-hosted Ubuntu images already include these utilities. A mandatory
+      # apt-get update was the slowest part of a normal release run (8+ minutes
+      # in the reported CI log), while no package was actually needed. Verify
+      # first; retain a self-healing install only for a future/custom runner
+      # that genuinely lacks a required tool.
+      - name: Verify runner tools
+        shell: bash
         run: |
+          missing=()
+          for tool in zip unzip curl file rsync; do
+            command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then
+            printf 'Runner tools already available: %s\n' 'zip unzip curl file rsync'
+            exit 0
+          fi
+          echo "::warning::Installing missing runner tools: ${missing[*]}"
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends zip unzip curl file rsync
+          sudo apt-get install -y --no-install-recommends "${missing[@]}"
 
       - name: Cache Android NDK
         id: cache-ndk
         uses: actions/cache@v4
         with:
           path: android-ndk-r28c
-          key: android-ndk-r28c
+          # The exact key pins both runner platform and immutable NDK release.
+          # Legacy restore keeps the cache populated by prior V63 workflows usable.
+          key: ${{ runner.os }}-android-ndk-r28c-linux-v1
+          restore-keys: |
+            ${{ runner.os }}-android-ndk-r28c-linux-
+            android-ndk-r28c
 
       - name: Download Android NDK
         if: steps.cache-ndk.outputs.cache-hit != 'true'
