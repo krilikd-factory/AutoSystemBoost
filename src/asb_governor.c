@@ -3895,8 +3895,13 @@ int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
 
     asb_config_defaults(&g_asb_cfg);
-    asb_config_load_file(CONFIG_FILE, &g_asb_cfg);
-    asb_config_apply_highload_mode(&g_asb_cfg);
+    int initial_cfg_rc = asb_config_load_file(CONFIG_FILE, &g_asb_cfg);
+    if (initial_cfg_rc != 0) {
+        asb_log("config_reject: startup load failed rc=%d; using built-in safe defaults", initial_cfg_rc);
+        asb_config_defaults(&g_asb_cfg);
+    } else {
+        asb_config_apply_highload_mode(&g_asb_cfg);
+    }
     /*
      * Per-device bounds override (Phase 2, opt-in via device_bounds_override=1).
      */
@@ -4739,9 +4744,16 @@ int main(int argc, char **argv) {
                 }
                 else if (strcmp(cmd, "reload") == 0) {
                     int new_idx = read_profile_idx();
-                    asb_config_defaults(&g_asb_cfg);
-                    asb_config_load_file(CONFIG_FILE, &g_asb_cfg);
-                    asb_config_apply_highload_mode(&g_asb_cfg);
+                    asb_runtime_config_t candidate_cfg;
+                    asb_config_defaults(&candidate_cfg);
+                    int reload_cfg_rc = asb_config_load_file(CONFIG_FILE, &candidate_cfg);
+                    if (reload_cfg_rc != 0) {
+                        asb_log("config_reject: reload refused rc=%d; keeping last-known-good policy", reload_cfg_rc);
+                        asb_sock_reply(sockfd, &src, srclen, "err:invalid_config");
+                        continue;
+                    }
+                    asb_config_apply_highload_mode(&candidate_cfg);
+                    g_asb_cfg = candidate_cfg;
                     /* if profile is changing, preserve old session in history
                      * BEFORE resetting. Previously reload silently discarded
                      * running sessions, leaving history with stale attribution. */

@@ -528,7 +528,52 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "smart_debug_log"))         c->smart_debug_log = atoi(v);
 }
 
+/*
+ * Validate fields that can destabilize the FSM or turn timerfds into a silent
+ * no-op. The WebUI is not a trust boundary: imports, manual edits and an
+ * interrupted write can all create a configuration the UI would never emit.
+ */
+static inline int asb_config_validate(const asb_runtime_config_t *c) {
+    if (!c) return -1;
+    if (c->sustained_temp_enter < 40 || c->sustained_temp_enter > 70 ||
+        c->sustained_temp_exit < 30 ||
+        c->sustained_temp_exit >= c->sustained_temp_enter) return -2;
+    if (c->perf_sustained_temp_enter > 0 &&
+        (c->perf_sustained_temp_enter < 40 || c->perf_sustained_temp_enter > 75 ||
+         c->perf_sustained_temp_exit < 30 ||
+         c->perf_sustained_temp_exit >= c->perf_sustained_temp_enter)) return -3;
+    if (c->balanced_sustained_temp_enter > 0 &&
+        (c->balanced_sustained_temp_enter < 40 || c->balanced_sustained_temp_enter > 75 ||
+         c->balanced_sustained_temp_exit < 30 ||
+         c->balanced_sustained_temp_exit >= c->balanced_sustained_temp_enter)) return -4;
+    if (c->quiet_tick_s < 5 || c->quiet_tick_s > 3600 ||
+        c->quiet_entry_ticks < 1 || c->quiet_entry_ticks > 720 ||
+        c->quiet_exit_grace < 1 || c->quiet_exit_grace > 120) return -5;
+    if (c->night_quiet_hour_start < 0 || c->night_quiet_hour_start > 23 ||
+        c->night_quiet_hour_end < 0 || c->night_quiet_hour_end > 23) return -6;
+    if (c->heavy_min_dwell_s < 1 || c->heavy_min_dwell_s > 3600 ||
+        c->sustained_min_dwell_s < 1 || c->sustained_min_dwell_s > 3600 ||
+        c->gaming_min_dwell_s < 1 || c->gaming_min_dwell_s > 3600 ||
+        c->reassert_heavy_s < 1 || c->reassert_heavy_s > 3600 ||
+        c->reassert_gaming_s < 1 || c->reassert_gaming_s > 3600) return -7;
+    if (c->perf_hot_guard_ticks < 0 || c->perf_hot_guard_ticks > 120 ||
+        c->camera_hold_max_s < 0 || c->camera_hold_max_s > 7200) return -8;
+    if (c->auto_battery_low_pct < 1 || c->auto_battery_high_pct > 100 ||
+        c->auto_battery_low_pct >= c->auto_battery_high_pct ||
+        c->auto_battery_min_gap_s < 0 || c->auto_battery_min_gap_s > 86400) return -9;
+    return 0;
+}
+
+/*
+ * Every configuration key must appear once. Previously the native reader used
+ * the final duplicate while shell readers used `grep | head -1`; a single
+ * partially-written/imported file could therefore give the daemon and shell
+ * mutually incompatible thermal and performance policies.
+ */
 static inline int asb_config_load_file(const char *path, asb_runtime_config_t *c) {
+    enum { ASB_CFG_MAX_KEYS = 192, ASB_CFG_KEY_LEN = 64 };
+    char seen[ASB_CFG_MAX_KEYS][ASB_CFG_KEY_LEN];
+    int seen_n = 0;
     FILE *f = fopen(path, "r");
     if (!f) return -1;
     char line[256];
@@ -543,10 +588,17 @@ static inline int asb_config_load_file(const char *path, asb_runtime_config_t *c
         char *hash = strchr(v, '#');
         if (hash) *hash = '\0';
         v = asb_cfg_trim(v);
+        if (!*k) { fclose(f); return -2; }
+        for (int i = 0; i < seen_n; i++) {
+            if (!strcmp(seen[i], k)) { fclose(f); return -3; }
+        }
+        if (seen_n >= ASB_CFG_MAX_KEYS) { fclose(f); return -4; }
+        snprintf(seen[seen_n], ASB_CFG_KEY_LEN, "%s", k);
+        seen_n++;
         asb_cfg_apply_kv(c, k, v);
     }
     fclose(f);
-    return 0;
+    return asb_config_validate(c);
 }
 
 static inline void asb_config_apply_highload_mode(asb_runtime_config_t *c) {
@@ -575,7 +627,7 @@ static inline void asb_config_apply_burst_override(asb_runtime_config_t *c) {
     c->gaming_gap_ticks          = 3;
     c->gaming_retry_cooldown_s      = 20;
     c->gaming_retry_temp_max        = 47;
-    c->sustained_level              = 0.82f;
+    if (!c->sustained_level_user_set) c->sustained_level = 0.82f;
     c->sustained_reentry_cooldown_s = 20;
 }
 
@@ -584,7 +636,7 @@ static inline void asb_config_apply_stable_override(asb_runtime_config_t *c) {
     c->gaming_gap_ticks             = 4;
     c->gaming_retry_cooldown_s      = 35;
     c->gaming_retry_temp_max        = 45;
-    c->sustained_level              = 0.78f;
+    if (!c->sustained_level_user_set) c->sustained_level = 0.78f;
     c->sustained_reentry_cooldown_s = 25;
 }
 

@@ -482,6 +482,8 @@ static asb_writer_cache_t g_wcache = { .gpu_min_written = -1 };
 
 static unsigned long g_vendor_override_max = 0;
 static unsigned long g_vendor_override_min = 0;
+static unsigned long g_vendor_override_backoffs = 0;
+static time_t g_vendor_override_backoff_until = 0;
 static int g_last_observed_max_pwrlevel = -1;
 /* What we last wrote to the GPU min path, in the units that path uses. Needed to tell
  * "the vendor moved it" from "we changed our mind" - gpu_min_pct alone cannot, because
@@ -522,6 +524,17 @@ static void gpu_check_vendor_override(int profile_idx, const char *state_name) {
 
     if (max_overridden) g_vendor_override_max++;
     if (min_overridden) g_vendor_override_min++;
+    if (max_overridden || min_overridden) {
+        /* Vendor thermal/PowerHAL is authoritative for a short lease. Avoid
+         * immediately writing the previous ASB request back and creating a
+         * 2-second pwrlevel fight that adds sysfs churn, heat and log noise. */
+        time_t now = time(NULL);
+        time_t until = now + 15;
+        if (until > g_vendor_override_backoff_until) {
+            g_vendor_override_backoff_until = until;
+            g_vendor_override_backoffs++;
+        }
+    }
 
 #if ASB_DEBUG_BUILD
     if ((max_overridden && g_vendor_override_max <= 50) ||
@@ -544,12 +557,19 @@ static void gpu_check_vendor_override(int profile_idx, const char *state_name) {
     g_last_observed_min_pwrlevel = cur_min;
 }
 
+static int gpu_vendor_override_backoff_active(void) {
+    return time(NULL) < g_vendor_override_backoff_until;
+}
+
 static int gpu_vendor_override_audit_path(char *out, size_t outlen) {
+    time_t now = time(NULL);
+    long remaining = (g_vendor_override_backoff_until > now)
+                   ? (long)(g_vendor_override_backoff_until - now) : 0;
     return snprintf(out, outlen,
-        "{\"max_overrides\":%lu,\"min_overrides\":%lu,"
-        "\"last_max_written\":%d,\"last_max_observed\":%d,"
+        "{\"max_overrides\":%lu,\"min_overrides\":%lu,\"backoffs\":%lu,"
+        "\"backoff_remaining_s\":%ld,\"last_max_written\":%d,\"last_max_observed\":%d,"
         "\"last_min_written\":%d,\"last_min_observed\":%d}",
-        g_vendor_override_max, g_vendor_override_min,
+        g_vendor_override_max, g_vendor_override_min, g_vendor_override_backoffs, remaining,
         g_wcache.last_max_pwrlevel_written, g_last_observed_max_pwrlevel,
         g_wcache.last_min_pwrlevel_written, g_last_observed_min_pwrlevel);
 }
@@ -838,7 +858,8 @@ skip_cpu_caps: ;
     long gmax = hw_max * caps->gpu_max_pct / 100;
     long gmin = hw_max * caps->gpu_min_pct / 100;
 
-    if (force || caps->gpu_max_pct != g_wcache.gpu_max_pct) {
+    int gpu_vendor_backoff = gpu_vendor_override_backoff_active();
+    if (!gpu_vendor_backoff && (force || caps->gpu_max_pct != g_wcache.gpu_max_pct)) {
         int gpu_ok = 0;
         if (g_gpu_max_path[0]) {
             if (g_gpu_uses_pwrlevel) {
@@ -897,7 +918,7 @@ skip_cpu_caps: ;
             _cur_gmin != g_wcache.gpu_min_written)
             _gpu_min_drifted = 1;
     }
-    if (force || caps->gpu_min_pct != g_wcache.gpu_min_pct || _gpu_min_drifted) {
+    if (!gpu_vendor_backoff && (force || caps->gpu_min_pct != g_wcache.gpu_min_pct || _gpu_min_drifted)) {
         int _gmin_ok = 0;
         if (g_gpu_min_path[0]) {
             if (g_gpu_uses_pwrlevel) {
