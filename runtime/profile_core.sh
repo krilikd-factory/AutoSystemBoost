@@ -518,7 +518,8 @@ asb_apply_ux() {
     fi
     [ -n "$UX_LOW_HEAT" ] && asb_settings_put global sem_low_heat_mode "$UX_LOW_HEAT"
   fi
-  asb_settings_put global google_core_control 0
+  # Do not modify google_core_control here. Its meaning is ROM/OEM-specific and
+  # ASB has no explicit opt-in, baseline or restore contract for this setting.
 
   # Blur is a UX setting like the rest, and the one part of it that does NOT need a reboot:
   # WindowManager watches this global live, so the shade and the launcher drop their blur the
