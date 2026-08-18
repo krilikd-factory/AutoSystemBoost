@@ -7,6 +7,9 @@ STATE_DIR="/dev/.asb_profile_state"
 # choice to preserve, and only wrong before that.
 rm -f /data/adb/asb/no_profile_chosen 2>/dev/null
 PIDFILE="$STATE_DIR/worker.pid"
+EPOCH_FILE="$STATE_DIR/profile_epoch"
+EPOCH_LOCK="$STATE_DIR/profile_epoch.lock"
+WORKER_LOCK="$STATE_DIR/profile_worker.lock"
 LOGFILE="$STATE_DIR/apply_profile.log"
 mkdir -p "$STATE_DIR" >/dev/null 2>&1 || true
 
@@ -35,10 +38,12 @@ done
 MODE="direct"
 PROFILE="${1:-balanced}"
 PROFILE_FLAG=""
+WORKER_EPOCH=""
 if [ "$1" = "--worker" ]; then
   MODE="worker"
   PROFILE="${2:-balanced}"
   PROFILE_FLAG="${3:-}"
+  WORKER_EPOCH="${4:-}"
 else
   PROFILE_FLAG="${2:-}"
 fi
@@ -85,6 +90,46 @@ if [ "$PROFILE_FLAG" = "auto" ]; then
   echo "$PROFILE" > /data/adb/asb/auto_switch_marker 2>/dev/null || true
 fi
 
+profile_next_epoch() {
+  _tries=0
+  while ! mkdir "$EPOCH_LOCK" 2>/dev/null; do
+    _tries=$((_tries + 1))
+    [ "$_tries" -ge 5 ] && return 1
+    sleep 1
+  done
+  _old="$(cat "$EPOCH_FILE" 2>/dev/null)"
+  case "$_old" in ''|*[!0-9]*) _old=0 ;; esac
+  _next=$((_old + 1))
+  printf '%s\n' "$_next" > "$EPOCH_FILE.tmp.$$" 2>/dev/null && mv -f "$EPOCH_FILE.tmp.$$" "$EPOCH_FILE" 2>/dev/null
+  rmdir "$EPOCH_LOCK" 2>/dev/null || true
+  printf '%s\n' "$_next"
+}
+
+profile_epoch_current() {
+  _live="$(cat "$EPOCH_FILE" 2>/dev/null)"
+  [ -n "$WORKER_EPOCH" ] && [ "$WORKER_EPOCH" = "$_live" ]
+}
+
+profile_worker_lock() {
+  _tries=0
+  while ! mkdir "$WORKER_LOCK" 2>/dev/null; do
+    _owner="$(cat "$WORKER_LOCK/pid" 2>/dev/null)"
+    if [ -n "$_owner" ] && ! kill -0 "$_owner" >/dev/null 2>&1; then
+      rm -rf "$WORKER_LOCK" 2>/dev/null || true
+      continue
+    fi
+    _tries=$((_tries + 1))
+    [ "$_tries" -ge 10 ] && return 1
+    sleep 1
+  done
+  printf '%s\n' "$$" > "$WORKER_LOCK/pid" 2>/dev/null
+  return 0
+}
+
+profile_worker_unlock() {
+  rm -rf "$WORKER_LOCK" 2>/dev/null || true
+}
+
 kill_prev_worker() {
   [ -r "$PIDFILE" ] || return 0
   _oldpid="$(cat "$PIDFILE" 2>/dev/null)"
@@ -117,10 +162,14 @@ update_desc_now() {
 }
 
 spawn_worker() {
+  _epoch="$(profile_next_epoch)" || {
+    asb_log "profile transaction failed: epoch lock unavailable"
+    return 1
+  }
   kill_prev_worker
-  nohup /system/bin/sh "$MODDIR/apply_profile.sh" --worker "$PROFILE" "$PROFILE_FLAG" >/dev/null 2>&1 &
+  nohup /system/bin/sh "$MODDIR/apply_profile.sh" --worker "$PROFILE" "$PROFILE_FLAG" "$_epoch" >/dev/null 2>&1 &
   echo $! > "$PIDFILE" 2>/dev/null || true
-  asb_log "scheduled profile=$PROFILE flag=$PROFILE_FLAG moddir=$MODDIR"
+  asb_log "scheduled profile=$PROFILE flag=$PROFILE_FLAG epoch=$_epoch moddir=$MODDIR"
 }
 
 notify_governor() {
@@ -149,6 +198,20 @@ quick_return_or_spawn() {
 }
 
 run_worker() {
+  [ -n "$WORKER_EPOCH" ] || WORKER_EPOCH="$(cat "$EPOCH_FILE" 2>/dev/null)"
+  if ! profile_epoch_current; then
+    asb_log "worker superseded before start profile=$PROFILE epoch=$WORKER_EPOCH"
+    exit 0
+  fi
+  if ! profile_worker_lock; then
+    asb_log "worker deferred: apply lock busy profile=$PROFILE epoch=$WORKER_EPOCH"
+    exit 0
+  fi
+  trap 'profile_worker_unlock' EXIT HUP INT TERM
+  if ! profile_epoch_current; then
+    asb_log "worker superseded after lock profile=$PROFILE epoch=$WORKER_EPOCH"
+    exit 0
+  fi
   if [ ! -r "$PROFILE_CORE" ]; then
     asb_log "worker failed: missing profile_core.sh (checked runtime/ and common/)"
     exit 1
@@ -172,6 +235,10 @@ run_worker() {
   _rc=0
   _i=1
   while [ "$_i" -le 4 ]; do
+    if ! profile_epoch_current; then
+      asb_log "worker superseded profile=$PROFILE epoch=$WORKER_EPOCH pass=$_i"
+      exit 0
+    fi
     PROFILE="$PROFILE"
     asb_apply_profile_once || _rc=1
     sleep 2

@@ -41,6 +41,10 @@ done
 
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
 [ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
+# Produce an explicit per-fingerprint device-pack state before any gated domain
+# is evaluated. This never authorizes broad vendor properties by model alone.
+[ -x "$MODDIR/runtime/asb_device_pack_manifest.sh" ] && \
+  "$MODDIR/runtime/asb_device_pack_manifest.sh" >/dev/null 2>&1 || true
 # Hardware inventory is read-only and runs once per boot. The native governor
 # and diagnostics use this manifest to avoid treating absent vendor nodes as a
 # policy failure or retrying unsupported features every tick.
