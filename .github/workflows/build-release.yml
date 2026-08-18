@@ -83,7 +83,8 @@ jobs:
             tests/test_arbiter.sh \
             tests/test_intent_backup.sh \
             tests/test_service_thermal_vm_contract.sh \
-            tests/test_dsp_reference_contract.sh; do
+            tests/test_dsp_reference_contract.sh \
+            tests/test_device_safety_contract.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
@@ -201,6 +202,10 @@ jobs:
           if [ -f tests/test_dsp_reference_contract.sh ]; then
             echo "== tests/test_dsp_reference_contract.sh =="
             sh tests/test_dsp_reference_contract.sh || _rc=1
+          fi
+          if [ -f tests/test_device_safety_contract.sh ]; then
+            echo "== tests/test_device_safety_contract.sh =="
+            sh tests/test_device_safety_contract.sh || _rc=1
           fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"

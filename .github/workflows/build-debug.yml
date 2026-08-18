@@ -60,6 +60,7 @@ jobs:
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
             tests/test_dsp_reference_contract.sh \
+            tests/test_device_safety_contract.sh \
             module.prop \
             customize.sh \
             service.sh; do
@@ -107,7 +108,7 @@ jobs:
           # green but unwired, so nothing actually guarded that math on a release.
           # They need no NDK and no device - plain gcc against src/.
           _rc=0
-          for _t in tests/test_smart_session2.sh tests/test_smart_session3.sh tests/test_dsp_reference_contract.sh; do
+          for _t in tests/test_smart_session2.sh tests/test_smart_session3.sh tests/test_dsp_reference_contract.sh tests/test_device_safety_contract.sh; do
             [ -f "$_t" ] || { echo "WARNING: $_t missing - skipping"; continue; }
             echo "== $_t =="
             bash "$_t" || _rc=1
