@@ -73,8 +73,14 @@ _classify_link() {
     rmnet*|ccmni*|wwan*)
       _cl_rat="$(getprop gsm.network.type 2>/dev/null)"
       case "$_cl_rat" in
+        # Most specific first. *LTE_CA* after *LTE* was unreachable - carrier aggregation
+        # was being classed as plain LTE, which happened to give the same answer here but
+        # is the kind of dead branch that becomes a real bug the moment the two need to
+        # differ. CA aggregates carriers and behaves closer to 5G than to single-carrier
+        # LTE, so it gets the faster window.
         *NR*|*5G*)          echo fast;   return ;;
-        *LTE*|*LTE_CA*)     echo normal; return ;;
+        *LTE_CA*|*LTE-CA*)  echo fast;   return ;;
+        *LTE*)              echo normal; return ;;
         *)                  echo weak;   return ;;
       esac
       ;;
