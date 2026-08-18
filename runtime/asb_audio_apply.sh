@@ -22,13 +22,9 @@
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
 [ -f "$CONF" ] || { echo "config not found: $CONF"; exit 1; }
-# This helper is callable from WebUI, so it enforces the same policy as service.sh.
-# Audio/DSP writes are never allowed merely because a caller can execute this file.
-_audio_feature="$(grep -E '^[[:space:]]*AUDIO=' "$MODDIR/features.conf" 2>/dev/null | tail -1 | sed 's/^[^=]*=//; s/#.*//' | tr -d '[:space:]\r')"
-[ "$_audio_feature" = "1" ] || { echo "audio disabled by features.conf"; exit 0; }
-[ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
-command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio \
-  || { echo "audio device pack is not validated"; exit 0; }
+# DSP activation is controlled by the user's DSP settings and the installer's ABI
+# probe. Do not make an audio effect depend on a separate fingerprint marker: that
+# marker was absent on the working V63-315 path and silently prevented any attach.
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null \
