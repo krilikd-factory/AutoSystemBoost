@@ -78,11 +78,17 @@ if [ "$_mode" = "mirror" ]; then
     ''|off|0|*[!0-9]*) : ;;
     *)
       if [ "$_mdsp" -ge 1 ] 2>/dev/null && [ "$_mdsp" -le 25 ] 2>/dev/null; then
-        _mwant="$(( _mdsp * 100 ))"
+        _mrequested="$(( _mdsp * 100 ))"
+        _mapplied="$_mrequested"
+        # Legacy DSP is hard-limited to +18 dB. Use the same safe contract for every
+        # ABI so the UI/config never promise gain the active effect cannot deliver.
+        [ "$_mapplied" -gt 1800 ] && _mapplied=1800
+        _persist persist.asb.dsp.gain_requested_mb "$_mrequested"
+        _persist persist.asb.dsp.gain_applied_mb "$_mapplied"
         _mhave="$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
-        if [ "$_mhave" != "$_mwant" ]; then
-          _persist persist.asb.dsp.gain_mb "$_mwant"
-          echo "dsp gain reconciled from config: ${_mhave:-unset} -> $_mwant mB"
+        if [ "$_mhave" != "$_mapplied" ]; then
+          _persist persist.asb.dsp.gain_mb "$_mapplied"
+          echo "dsp gain reconciled from config: requested=${_mrequested}mB applied=${_mapplied}mB"
         fi
       fi
       ;;
@@ -181,7 +187,8 @@ _persist persist.vendor.bluetooth.disableabsvol "$_dp"
 changed="${changed}bt_absvol=${_bt} "
 
 # ---- dsp_loudness (gain only) ---------------------------------------------------- Slider
-# gives any integer 0..25 now (not just 3/6/9), so accept the whole range.
+# UI accepts 0..18 (not just 3/6/9). Older saved 19..25 values remain readable
+# and are clamped to +18 dB, the shared safe maximum for AIDL and legacy DSP.
 # The DSP effect re-reads persist.asb.dsp.* on ENABLE, and the audioserver restart below
 # triggers that ENABLE - which is why gain changes here apply live, no reboot.
 _dsp="$(_cfg dsp_loudness)"
@@ -201,8 +208,13 @@ if [ "$_ap" = "eq_compat" ] && [ "$_dsp_ok" = "1" ]; then
 fi
 if [ "$_dsp_ok" = "1" ]; then
     if [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; then
+      _dsp_requested_mb="$((_dsp * 100))"
+      _dsp_applied_mb="$_dsp_requested_mb"
+      [ "$_dsp_applied_mb" -gt 1800 ] && _dsp_applied_mb=1800
+      _persist persist.asb.dsp.gain_requested_mb "$_dsp_requested_mb"
+      _persist persist.asb.dsp.gain_applied_mb "$_dsp_applied_mb"
       _dspp enable 1
-      _dspp gain_mb "$((_dsp * 100))"
+      _dspp gain_mb "$_dsp_applied_mb"
       # Output routing. The library reads this and skips the effect on any sink whose
       # name does not match - previously it attached to everything, so a Bluetooth-only
       # boost also lifted the loudspeaker, which is the driver least able to take it.
@@ -260,7 +272,7 @@ if [ "$_dsp_ok" = "1" ]; then
       esac
       _dspp comp_ratio_x10 60
       _dspp comp_thresh_mb -2400
-      changed="${changed}dsp=+${_dsp}dB "
+      changed="${changed}dsp=requested+${_dsp}dB/applied+$(( _dsp_applied_mb / 100 ))dB "
     else
       # The library is only mounted after the overlay comes up.
       _dspp enable 0

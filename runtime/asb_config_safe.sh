@@ -62,7 +62,15 @@ _num() {
 }
 
 _between() { [ "$1" -ge "$2" ] 2>/dev/null && [ "$1" -le "$3" ] 2>/dev/null; }
+_float_between() { awk -v v="$1" -v lo="$2" -v hi="$3" 'BEGIN { exit !(v + 0 >= lo && v + 0 <= hi) }'; }
 _bool() { case "$1" in 0|1) return 0 ;; *) return 1 ;; esac; }
+
+_require_float() {
+  _rf="$(awk -F= -v k="$1" '$1 ~ "^[[:space:]]*" k "[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$2")"
+  case "$_rf" in ''|*[!0-9.+-]*) _die "missing or non-decimal $1" ;; esac
+  awk -v v="$_rf" 'BEGIN { exit !(v ~ /^[-+]?[0-9]+([.][0-9]+)?$/) }' || _die "invalid decimal $1"
+  printf '%s' "$_rf"
+}
 
 _require_num() {
   _rn="$(_num "$1" "$2")" || _die "missing or non-numeric $1"
@@ -105,6 +113,12 @@ _validate() {
   _conf_low="$(_require_num smart_conf_low "$_f")"
   _conf_high="$(_require_num smart_conf_high "$_f")"
   _eff_obs="$(_require_num smart_eff_obs_full "$_f")"
+  _heavy_load="$(_require_float heavy_load_enter "$_f")"
+  _game_confirm="$(_require_num gaming_confirm_ticks "$_f")"
+  _gpu_idle_trim="$(_require_num gpu_idle_trim_pct "$_f")"
+  _gpu_video_max="$(_require_num gpu_video_max_pct "$_f")"
+  _thermal_throttle="$(_require_num thermal_throttle_temp "$_f")"
+  _bounds_override="$(_require_num device_bounds_override "$_f")"
 
   if ! _between "$_enter" 40 70 || ! _between "$_exit" 30 69 || [ "$_exit" -ge "$_enter" ]; then _die "invalid sustained temperature hysteresis"; fi
   _between "$_ceiling" "$_enter" 70 || _die "sustained_temp_ceiling must be enter..70"
@@ -139,6 +153,12 @@ _validate() {
   _between "$_perf_ceiling" 60 100 || _die "perf_ceiling_pct must be 60..100"
   if ! _between "$_conf_low" 0 999 || ! _between "$_conf_high" 1 1000 || [ "$_conf_low" -ge "$_conf_high" ]; then _die "invalid Smart confidence bounds"; fi
   _between "$_eff_obs" 1 10000 || _die "smart_eff_obs_full must be 1..10000"
+  _float_between "$_heavy_load" 0.1 1000 || _die "heavy_load_enter must be 0.1..1000"
+  _between "$_game_confirm" 1 120 || _die "gaming_confirm_ticks must be 1..120"
+  _between "$_gpu_idle_trim" 0 90 || _die "gpu_idle_trim_pct must be 0..90"
+  _between "$_gpu_video_max" 0 100 || _die "gpu_video_max_pct must be 0..100"
+  _between "$_thermal_throttle" 30 110 || _die "thermal_throttle_temp must be 30..110"
+  _bool "$_bounds_override" || _die "device_bounds_override must be 0 or 1"
   return 0
 }
 
