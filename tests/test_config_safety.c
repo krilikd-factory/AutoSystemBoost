@@ -12,6 +12,12 @@ static int load_text(const char *path, const char *text, asb_runtime_config_t *c
 }
 
 int main(void) {
+    /* asb_config.h declares this static app-heat flag for the production
+     * governor. This standalone parser test does not otherwise consume it;
+     * mark it used so GCC -Wall -Wextra -Werror in CI checks the test logic,
+     * rather than rejecting an unrelated header-local symbol. */
+    (void)g_asb_appheat_hot;
+
     const char *path = "/tmp/asb_config_safety_test.conf";
     asb_runtime_config_t cfg;
 
