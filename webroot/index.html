@@ -3955,13 +3955,17 @@ function cfgRender() {
            .forEach(it => cfgRenderRow(list, it, false));
 }
 
+function shQuote(v) {
+  return "'" + String(v).replace(/'/g, "'\\''") + "'";
+}
+
 async function cfgSet(key, val, ctl) {
   cfgMarkPending(key, val);
   if (ctl) ctl.classList.add('busy');
-  const f = CFG_FILE;
-  const cmd = "sh -c 'if grep -q \"^" + key + "=\" " + f + " 2>/dev/null; then " +
-              "sed -i \"s|^" + key + "=.*|" + key + "=" + val + "|\" " + f + "; " +
-              "else echo " + key + "=" + val + " >> " + f + "; fi'";
+  const safeWriter = MD + '/runtime/asb_config_safe.sh';
+  const snap = '/data/adb/asb/governor.conf.snapshot';
+  const cmd = 'sh ' + shQuote(safeWriter) + ' set ' + shQuote(key) + ' ' +
+              shQuote(val) + ' ' + shQuote(snap);
   const r = await run(cmd);
   if (ctl) ctl.classList.remove('busy');
   if (r.errno === 0) {
@@ -3976,17 +3980,9 @@ async function cfgSet(key, val, ctl) {
         else _row.classList.remove('is-on');
       }
     } catch (e) {}
-    // Mirror this change into the external user snapshot so a reinstall /
-    // root-manager re-trigger restores it (fixes toggles reverting to defaults).
-    if ((typeof SNAP_KEYS !== 'undefined') && SNAP_KEYS.indexOf(key) >= 0) {
-      const snap = '/data/adb/asb/governor.conf.snapshot';
-      const scmd = "sh -c 'mkdir -p /data/adb/asb 2>/dev/null; touch " + snap +
-                   " 2>/dev/null; if grep -q \"^" + key + "=\" " + snap +
-                   " 2>/dev/null; then sed -i \"s|^" + key + "=.*|" + key + "=" +
-                   val + "|\" " + snap + "; else echo " + key + "=" + val +
-                   " >> " + snap + "; fi; chmod 644 " + snap + " 2>/dev/null'";
-      try { run(scmd); } catch(e) {}
-    }
+    // The safe writer atomically updates the module config and snapshot under
+    // one lock. Keeping the two writes in separate WebUI shell commands used
+    // to allow a reboot/import race to create split-brain configuration.
     haptic();
     if (CFG_SILENT_KEYS.indexOf(key) < 0) {
       try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
