@@ -79,7 +79,7 @@ jobs:
             tools/asb_intent.sh \
             tools/asb_config_backup.sh \
             tools/asb_native_warning_budget.sh \
-            .ci/native_warning_budget.txt \
+            tools/asb_native_warning_baseline.txt \
             tests/test_arbiter.sh \
             tests/test_intent_backup.sh \
             tests/test_service_thermal_vm_contract.sh \

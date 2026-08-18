@@ -59,6 +59,9 @@ jobs:
             src/build_ndk_release.sh \
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
+            tools/asb_schema_sync.sh \
+            tools/asb_native_warning_budget.sh \
+            tools/asb_native_warning_baseline.txt \
             tests/test_dsp_reference_contract.sh \
             tests/test_device_safety_contract.sh \
             module.prop \
@@ -83,6 +86,16 @@ jobs:
             exit 1
           fi
           echo "Generated bounds artefacts up-to-date."
+
+      - name: Validate generated governor schema baseline
+        run: |
+          chmod +x tools/asb_schema_sync.sh
+          tools/asb_schema_sync.sh check
+
+      - name: Enforce native strict-warning budget
+        run: |
+          chmod +x tools/asb_native_warning_budget.sh
+          CC=clang tools/asb_native_warning_budget.sh
 
       - name: DSP source checks (catches the errors that reached main)
         run: |
