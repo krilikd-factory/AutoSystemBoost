@@ -70,14 +70,38 @@ jobs:
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
             module.prop \
+            update.json \
             customize.sh \
-            service.sh; do
+            service.sh \
+            runtime/asb_arbiter.sh \
+            runtime/asb_capabilities.sh \
+            tools/asb_schema_sync.sh \
+            tools/asb_intent.sh \
+            tools/asb_config_backup.sh \
+            tools/asb_native_warning_budget.sh \
+            .ci/native_warning_budget.txt \
+            tests/test_arbiter.sh \
+            tests/test_intent_backup.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
             fi
             echo "  v $f"
           done
+
+      - name: Validate module update metadata
+        run: |
+          _module_ver="$(sed -n 's/^version=//p' module.prop | head -1)"
+          _module_code="$(sed -n 's/^versionCode=//p' module.prop | head -1)"
+          _update_ver="$(awk -F'"' '/"version"[[:space:]]*:/{print $4; exit}' update.json)"
+          _update_code="$(grep -m1 '"versionCode"' update.json | tr -cd '0-9')"
+          [ -n "$_module_ver" ] && [ -n "$_module_code" ] || { echo "ERROR: module.prop version missing"; exit 1; }
+          [ "$_module_ver" = "$_update_ver" ] || { echo "ERROR: update.json version $_update_ver != module.prop $_module_ver"; exit 1; }
+          [ "$_module_code" = "$_update_code" ] || { echo "ERROR: update.json versionCode $_update_code != module.prop $_module_code"; exit 1; }
+          _release_id="${_module_ver#V}"
+          _want_path="/releases/download/${_release_id}/ASB-${_module_ver}.zip"
+          grep -q "$_want_path" update.json || { echo "ERROR: update.json zipUrl does not target $_want_path"; exit 1; }
+          echo "Update metadata: $_module_ver / $_module_code"
 
       - name: Validate profile bounds source-of-truth
         run: |
@@ -92,6 +116,11 @@ jobs:
           fi
           echo "Generated bounds artefacts up-to-date."
 
+      - name: Validate generated governor schema baseline
+        run: |
+          chmod +x tools/asb_schema_sync.sh
+          tools/asb_schema_sync.sh check
+
       - name: DSP source checks (catches the errors that reached main)
         run: |
           # The AIDL library is built by a separate soong workflow, so nothing on this
@@ -99,6 +128,11 @@ jobs:
           # that gap. This does not build the library - it checks the source for the
           # specific mistakes that got through.
           bash tools/dsp_stubs/asb_dsp_syntax_check.sh
+
+      - name: Enforce native strict-warning budget
+        run: |
+          chmod +x tools/asb_native_warning_budget.sh
+          CC=clang tools/asb_native_warning_budget.sh
 
       - name: Run asb_lint.sh
         run: |
@@ -141,6 +175,22 @@ jobs:
           if [ -f tests/test_config_safety.c ]; then
             echo "== tests/test_config_safety.c =="
             gcc -O2 -Wall -Wextra -Werror -o /tmp/tcfg tests/test_config_safety.c && /tmp/tcfg || _rc=1
+          fi
+          # Transactional config writer: values that can invalidate thermal caps
+          # or a full daemon config must be rejected before they reach runtime.
+          if [ -f tests/test_config_writer.sh ]; then
+            echo "== tests/test_config_writer.sh =="
+            sh tests/test_config_writer.sh || _rc=1
+          fi
+          # Lease arbitration protects camera/profile writes and establishes the
+          # central priority contract before a release reaches a real device.
+          if [ -f tests/test_arbiter.sh ]; then
+            echo "== tests/test_arbiter.sh =="
+            sh tests/test_arbiter.sh || _rc=1
+          fi
+          if [ -f tests/test_intent_backup.sh ]; then
+            echo "== tests/test_intent_backup.sh =="
+            sh tests/test_intent_backup.sh || _rc=1
           fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"
@@ -396,7 +446,7 @@ jobs:
           # on that list - so the one script users are asked to run when they report a
           # problem existed only in debug builds. Every diagnostic we have received came
           # from a tester on debug; a release user had no way to produce one at all.
-          for _t in asb_diag.sh asb_doctor.sh asb_recents_probe.sh; do
+          for _t in asb_diag.sh asb_doctor.sh asb_recents_probe.sh asb_intent.sh asb_config_backup.sh; do
             if [ -f "tools/$_t" ]; then
               mkdir -p "$PKG_REL/tools"
               install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"
@@ -415,6 +465,20 @@ jobs:
           done
 
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
+          ASB_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
+          ASB_COMMIT=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+          ASB_BIN_SHA=$(sha256sum "$PKG_REL/bin/asb" | awk '{print $1}')
+          cat > "$PKG_REL/release-manifest.json" <<EOF
+          {
+            "schema": 1,
+            "distribution": "flashable-module",
+            "version": "${ASB_VER}",
+            "versionCode": ${ASB_CODE},
+            "source_commit": "${ASB_COMMIT}",
+            "required_artifacts": ["bin/asb", "service.sh", "runtime/asb_arbiter.sh", "runtime/asb_capabilities.sh"],
+            "artifacts": {"bin/asb": {"abi": "arm64-v8a", "sha256": "${ASB_BIN_SHA}"}}
+          }
+          EOF
           ZIP_REL="ASB-${ASB_VER}.zip"
           rm -f "$ZIP_REL"
           # WebUI assets readable by the root manager's WebView. The zip preserves modes,
@@ -473,9 +537,14 @@ jobs:
             "runtime/asb_net_offload.sh" \
             "runtime/asb_athena_apply.sh" \
             "runtime/asb_config_safe.sh" \
+            "runtime/asb_arbiter.sh" \
+            "runtime/asb_capabilities.sh" \
+            "runtime/asb_apply_managed_props.sh" \
             "runtime/asb_device_tier.sh" \
             "tools/asb_diag.sh" \
             "tools/asb_effective_policy.sh" \
+            "tools/asb_intent.sh" \
+            "tools/asb_config_backup.sh" \
             "tools/asb_doctor.sh" \
             "runtime/profile_core.sh" \
             "runtime/smart_dynamic_tune.sh" \
@@ -486,6 +555,7 @@ jobs:
             "profiles/performance.sh" \
             "config/profile_bounds.generated.sh" \
             "config/governor.conf.shipped" \
+            "release-manifest.json" \
             "tools/asb_smart_mode.sh" \
             "tools/asb_discover.sh" \
             "tools/asb_synthesize_bounds.sh" \
@@ -523,6 +593,8 @@ jobs:
               exit 1
             fi
           done
+          unzip -p "$ZIP_REL" release-manifest.json | grep -q '"distribution": "flashable-module"' || { echo "ERROR: release manifest missing/invalid"; exit 1; }
+          unzip -p "$ZIP_REL" release-manifest.json | grep -q '"abi": "arm64-v8a"' || { echo "ERROR: release manifest ABI missing"; exit 1; }
           echo "RELEASE zip validation passed"
 
       # Upload the package CONTENTS, not the packaged zip. actions/upload-artifact always
