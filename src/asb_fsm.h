@@ -1446,8 +1446,29 @@ if (!can_leave &&
      * Remembering the last cap and refusing to exceed it makes the thermal path monotonic:
      * once the phone is hot, the only direction is down until it cools and thermal_cap
      * clears, which resets the memory. */
+    /* Seeded from the cap that was in force BEFORE the phone went hot.
+     *
+     * The memory used to start empty, so the first tick inside the thermal state accepted
+     * whatever SUSTAINED's rail offered and only then began refusing rises. That left the
+     * entry itself free to raise the ceiling - which is precisely where the jump happens.
+     * A gaming capture on this build shows it with 35 samples: the median prime cap is
+     * 1017600 at 55-59 degC and 1862400 at 60-64, and SUSTAINED still drew 684 mA against
+     * 593 for GAMING.
+     *
+     * Remembering the cool cap on every tick and seeding from it closes that gap: crossing
+     * the trip point can now only lower the ceiling, never raise it. */
     static int _hot_cap_p0 = 0, _hot_cap_p1 = 0;
-    if (!fsm->thermal_cap) { _hot_cap_p0 = 0; _hot_cap_p1 = 0; }
+    static int _cool_cap_p0 = 0, _cool_cap_p1 = 0;
+    if (!fsm->thermal_cap) {
+        _hot_cap_p0 = 0; _hot_cap_p1 = 0;
+        if (new_caps.cpu_max[0] > 0) _cool_cap_p0 = new_caps.cpu_max[0];
+        if (new_caps.cpu_max[1] > 0) _cool_cap_p1 = new_caps.cpu_max[1];
+    }
+    else if (_hot_cap_p0 == 0 && _hot_cap_p1 == 0) {
+        /* First tick of a hot spell: inherit the cool ceiling rather than start blank. */
+        _hot_cap_p0 = _cool_cap_p0;
+        _hot_cap_p1 = _cool_cap_p1;
+    }
     else {
         if (_hot_cap_p0 > 0 && new_caps.cpu_max[0] > _hot_cap_p0)
             new_caps.cpu_max[0] = _hot_cap_p0;
