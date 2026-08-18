@@ -169,11 +169,20 @@ jobs:
       - name: Download Android NDK
         if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
-          curl -L --retry 3 --retry-delay 5 \
+          # A restore-key hit reports cache-hit=false but may already contain a
+          # complete r28c directory. Never unpack over it interactively: reuse a
+          # valid toolchain, or clean a partial directory before downloading.
+          if [ -x android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/bin/clang ]; then
+            echo "Restored Android NDK is usable; skipping download."
+            exit 0
+          fi
+          rm -rf android-ndk-r28c android-ndk.zip
+          curl --fail --location --retry 3 --retry-delay 5 --retry-all-errors \
             -o android-ndk.zip \
             https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
           unzip -q android-ndk.zip
           rm -f android-ndk.zip
+          test -x android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/bin/clang
 
       - name: Set NDK environment
         run: |
