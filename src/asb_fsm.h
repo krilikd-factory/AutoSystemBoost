@@ -1464,12 +1464,21 @@ if (!can_leave &&
         if (new_caps.cpu_max[0] > 0) _cool_cap_p0 = new_caps.cpu_max[0];
         if (new_caps.cpu_max[1] > 0) _cool_cap_p1 = new_caps.cpu_max[1];
     }
-    else if (_hot_cap_p0 == 0 && _hot_cap_p1 == 0) {
-        /* First tick of a hot spell: inherit the cool ceiling rather than start blank. */
-        _hot_cap_p0 = _cool_cap_p0;
-        _hot_cap_p1 = _cool_cap_p1;
-    }
     else {
+        /* Seed AND clamp on the same tick.
+         *
+         * The seed used to sit in an "else if", which by construction excluded the clamp
+         * below it: the first hot tick inherited the cool ceiling into memory and then let
+         * the SUSTAINED rail through unclamped, after which the proportional step
+         * overwrote the memory with that higher value. So the one tick the whole mechanism
+         * exists to catch was the one tick it skipped - an independent review caught this,
+         * and the field data agrees: median current in SUSTAINED rises from 538 mA below
+         * 55 degC to 723 mA at 60-64.
+         *
+         * Sequential, not alternative: fill the memory if it is empty, then apply it.
+         */
+        if (_hot_cap_p0 == 0) _hot_cap_p0 = _cool_cap_p0;
+        if (_hot_cap_p1 == 0) _hot_cap_p1 = _cool_cap_p1;
         if (_hot_cap_p0 > 0 && new_caps.cpu_max[0] > _hot_cap_p0)
             new_caps.cpu_max[0] = _hot_cap_p0;
         if (_hot_cap_p1 > 0 && new_caps.cpu_max[1] > _hot_cap_p1)
@@ -1494,10 +1503,17 @@ if (!can_leave &&
         }
     }
     if (fsm->thermal_cap) {
-        /* Recorded after the proportional step, so the memory holds the value actually
-           applied rather than the rail it started from. */
-        _hot_cap_p0 = new_caps.cpu_max[0];
-        _hot_cap_p1 = new_caps.cpu_max[1];
+        /* Recorded after the proportional step, and only ever downwards.
+         *
+         * An unconditional assignment here was the second half of the same defect: even
+         * with the clamp fixed above, any path that produced a higher number - the
+         * proportional step on a rising trip point, a rail change mid-spell - would have
+         * written it straight back into the memory and raised the ceiling for every tick
+         * that followed. The memory is a ratchet; it must only tighten. */
+        if (_hot_cap_p0 <= 0 || new_caps.cpu_max[0] < _hot_cap_p0)
+            _hot_cap_p0 = new_caps.cpu_max[0];
+        if (_hot_cap_p1 <= 0 || new_caps.cpu_max[1] < _hot_cap_p1)
+            _hot_cap_p1 = new_caps.cpu_max[1];
     }
 
     if (fsm->thermal_cap && fsm->state != ASB_STATE_SUSTAINED) {
