@@ -136,6 +136,12 @@ jobs:
             echo "== tests/test_quiet_night_behaviour.c =="
             gcc -O2 -o /tmp/tqn tests/test_quiet_night_behaviour.c && /tmp/tqn || _rc=1
           fi
+          # Config safety: duplicate keys and invalid thermal/idle values must be
+          # rejected before a daemon can apply a split-brain or unsafe policy.
+          if [ -f tests/test_config_safety.c ]; then
+            echo "== tests/test_config_safety.c =="
+            gcc -O2 -Wall -Wextra -Werror -o /tmp/tcfg tests/test_config_safety.c && /tmp/tcfg || _rc=1
+          fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"
             exit 1
@@ -466,7 +472,10 @@ jobs:
             "runtime/asb_doze_apply.sh" \
             "runtime/asb_net_offload.sh" \
             "runtime/asb_athena_apply.sh" \
+            "runtime/asb_config_safe.sh" \
+            "runtime/asb_device_tier.sh" \
             "tools/asb_diag.sh" \
+            "tools/asb_effective_policy.sh" \
             "tools/asb_doctor.sh" \
             "runtime/profile_core.sh" \
             "runtime/smart_dynamic_tune.sh" \
