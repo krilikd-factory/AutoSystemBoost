@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SRC="$SCRIPT_DIR/test_smart_session3.c"
 BIN="/tmp/asb_test_smart_session3"
 
-CC="${CC:-gcc}"
+CC="${CC:-cc}"
 CFLAGS="-Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-unused-function -I${ROOT_DIR}/src -D_GNU_SOURCE"
 
 echo "Building Session unit tests..."

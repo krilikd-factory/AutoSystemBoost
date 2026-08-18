@@ -45,14 +45,25 @@ int main(void) {
     if (load_text(path, "quiet_tick_s=0\n", &cfg) == 0) return 3;
     if (load_text(path, "sustained_temp_enter=40\nsustained_temp_exit=75\n", &cfg) == 0) return 4;
     if (load_text(path, "night_quiet_hour_start=99\n", &cfg) == 0) return 5;
+    /* The writer has matching shell validation, but the native parser remains
+     * the final trust boundary for manual edits and malformed imports. */
+    if (load_text(path, "thermal_overlay_pct=999\n", &cfg) == 0) return 6;
+    if (load_text(path, "thermal_junction_hard_c=0\n", &cfg) == 0) return 7;
+    if (load_text(path, "thermal_skin_c=66\n", &cfg) == 0) return 8;
+    if (load_text(path, "camera_busy_pct=0\n", &cfg) == 0) return 9;
+    if (load_text(path, "smart_conf_low=700\nsmart_conf_high=650\n", &cfg) == 0) return 10;
+    if (load_text(path, "thermal_budget_light_headroom_pct=40\nthermal_budget_moderate_headroom_pct=50\n", &cfg) == 0) return 11;
+    if (load_text(path, "thermal_budget_severe_trim_pct=99\n", &cfg) == 0) return 12;
+    if (load_text(path, "thermal_budget_dwell_s=0\n", &cfg) == 0) return 13;
+    if (load_text(path, "shadow_mode=2\n", &cfg) == 0) return 14;
 
     asb_config_defaults(&cfg);
     cfg.sustained_level = 0.62f;
     cfg.sustained_level_user_set = 1;
     asb_config_apply_burst_override(&cfg);
-    if (cfg.sustained_level != 0.62f) return 6;
+    if (cfg.sustained_level != 0.62f) return 15;
     asb_config_apply_stable_override(&cfg);
-    if (cfg.sustained_level != 0.62f) return 7;
+    if (cfg.sustained_level != 0.62f) return 16;
 
     remove(path);
     puts("PASS config safety");
