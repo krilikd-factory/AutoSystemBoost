@@ -62,6 +62,7 @@ fi
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
 [ -r "$MODDIR/runtime/profile_core.sh" ] && . "$MODDIR/runtime/profile_core.sh"
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
+[ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
 ASB_STATE_LOG="/dev/.asb_profile_state/runtime_apply.log"
 asb_log(){ echo "[$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo now)] $*" >> "$ASB_STATE_LOG" 2>/dev/null || true; }
 
@@ -268,7 +269,10 @@ command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
 command -v asb_backup_profile >/dev/null 2>&1 && asb_backup_profile 2>/dev/null
 
 asb_migrate_governor_conf() {
-  local _expected_schema=17
+  # Schema 18 makes the duplicate-key safety migration run once for existing
+  # installs. Historical shell readers used the first key, so migration keeps
+  # the first occurrence rather than silently changing the user's intent.
+  local _expected_schema=18
   local _conf_dir="$MODDIR/config"
   local _user_conf="$_conf_dir/governor.conf"
   local _shipped_conf="$_conf_dir/governor.conf.shipped"
@@ -303,6 +307,27 @@ asb_migrate_governor_conf() {
   if ! cp "$_user_conf" "$_backup" 2>/dev/null; then
     asb_log "config_migrate: WARN could not create backup at $_backup, aborting"
     return 1
+  fi
+
+  # Collapse historical duplicates before additive merge. The native daemon now
+  # rejects duplicates because they previously made shell/native policies diverge.
+  local _dedupe="$_user_conf.dedupe.$$"
+  if ! awk '
+    /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+    { p=index($0,"="); if (!p) next; k=substr($0,1,p-1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", k); if (++seen[k] > 1) bad=1 }
+    END { exit bad ? 1 : 0 }
+  ' "$_user_conf"; then
+    awk '
+      /^[[:space:]]*#/ || /^[[:space:]]*$/ { print; next }
+      { p=index($0,"="); if (!p) { print; next }; k=substr($0,1,p-1); probe=k; gsub(/^[[:space:]]+|[[:space:]]+$/, "", probe); if (!seen[probe]++) print }
+    ' "$_user_conf" > "$_dedupe" 2>/dev/null || { rm -f "$_dedupe"; return 1; }
+    if mv -f "$_dedupe" "$_user_conf" 2>/dev/null; then
+      asb_log "config_migrate: removed duplicate keys, preserved first historical values (backup: $_backup)"
+    else
+      rm -f "$_dedupe" 2>/dev/null
+      asb_log "config_migrate: WARN duplicate cleanup failed, original preserved"
+      return 1
+    fi
   fi
 
   local _added=0 _kept=0
@@ -1015,11 +1040,9 @@ asb_thermal_mode_apply() {
   # number on purpose, and that has to beat a default.
   _tm_ovr=0
   case "$_tm" in manual) _tm_ovr=1 ;; esac
-  if grep -q '^[[:space:]]*sustained_temp_user_override=' "$MODDIR/config/governor.conf" 2>/dev/null; then
-    sed -i "s|^[[:space:]]*sustained_temp_user_override=.*|sustained_temp_user_override=$_tm_ovr|" \
-      "$MODDIR/config/governor.conf" 2>/dev/null
-  else
-    echo "sustained_temp_user_override=$_tm_ovr" >> "$MODDIR/config/governor.conf" 2>/dev/null
+  if [ -x "$MODDIR/runtime/asb_config_safe.sh" ]; then
+    sh "$MODDIR/runtime/asb_config_safe.sh" set sustained_temp_user_override "$_tm_ovr" >/dev/null 2>&1 || \
+      asb_log "config: could not atomically publish sustained_temp_user_override"
   fi
 
   # manual: the slider is the authority, full stop.
@@ -1050,18 +1073,18 @@ asb_thermal_mode_apply() {
   _cur="$(grep -E '^[[:space:]]*sustained_temp_enter=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')"
   [ "$_cur" = "$_tsv" ] && return 0
-  sed -i "s|^[[:space:]]*sustained_temp_enter=.*|sustained_temp_enter=$_tsv|" \
-    "$MODDIR/config/governor.conf" 2>/dev/null
+  if [ -x "$MODDIR/runtime/asb_config_safe.sh" ]; then
+    sh "$MODDIR/runtime/asb_config_safe.sh" set sustained_temp_enter "$_tsv" >/dev/null 2>&1 || \
+      { asb_log "config: rejected resolved sustained_temp_enter=$_tsv"; return 0; }
+  fi
   # Smart lets the governor walk the point up from there; stock pins it.
   case "$_tm" in
     smart) _tceil=68 ;;
     *)     _tceil="$_tsv" ;;
   esac
-  if grep -q '^[[:space:]]*sustained_temp_ceiling=' "$MODDIR/config/governor.conf" 2>/dev/null; then
-    sed -i "s|^[[:space:]]*sustained_temp_ceiling=.*|sustained_temp_ceiling=$_tceil|" \
-      "$MODDIR/config/governor.conf" 2>/dev/null
-  else
-    echo "sustained_temp_ceiling=$_tceil" >> "$MODDIR/config/governor.conf" 2>/dev/null
+  if [ -x "$MODDIR/runtime/asb_config_safe.sh" ]; then
+    sh "$MODDIR/runtime/asb_config_safe.sh" set sustained_temp_ceiling "$_tceil" >/dev/null 2>&1 || \
+      asb_log "config: could not atomically publish sustained_temp_ceiling=$_tceil"
   fi
   asb_log "thermal mode=$_tm -> enter=$_tsv ceiling=$_tceil (device trip point)"
 }
@@ -1851,7 +1874,11 @@ apply_camera_props_static() {
   resetprop -n vendor.camera.picturesize.limit.enable false >/dev/null 2>&1 || true
   asb_log "camera props: applied static set (81 props)"
 }
-asb_feature_enabled CAMERA && apply_camera_props_static
+if asb_feature_enabled CAMERA && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows camera; then
+  apply_camera_props_static
+else
+  asb_log "camera static: skipped on generic/unvalidated device pack"
+fi
 
 apply_camera_runtime() {
   # Base camera props — safe on every device. The proven-working OP12 build set
@@ -1873,7 +1900,9 @@ apply_camera_runtime() {
       ;;
   esac
 }
-asb_feature_enabled CAMERA && apply_camera_runtime
+if asb_feature_enabled CAMERA && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows camera; then
+  apply_camera_runtime
+fi
 tune_io_queues() {
   for _b in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
     [ -d "$_b/queue" ] || continue
@@ -2442,17 +2471,21 @@ apply_camera_experimental() {
   resetprop -n persist.vendor.camera.fast.af 1 >/dev/null 2>&1 || true
   asb_log "camera experimental: applied (MFNR+EIS+SAT+HFR+FastAF)"
 }
-asb_feature_enabled CAMERA && apply_camera_experimental
+if asb_feature_enabled CAMERA; then
+  if command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows camera; then
+    apply_camera_experimental
+  else
+    asb_log "camera experimental: skipped on generic/unvalidated device pack"
+  fi
+fi
 
+# Do not change the scheduler class or nice of the whole audioserver process.
+# Process-level RR/52 can starve unrelated work and increase active drain even
+# when no audio is playing. Route/DSP changes remain explicit WebUI actions.
 apply_audio_boost() {
-  _as_pid="$(pidof audioserver 2>/dev/null | head -1)"
-  [ -z "$_as_pid" ] && return 0
-  has chrt || return 0
-  renice -10 "$_as_pid" >/dev/null 2>&1 || true
-  chrt -r -p 52 "$_as_pid" >/dev/null 2>&1 || true
-  asb_log "audio boost: audioserver pid=$_as_pid renice=-10 chrt=RR/52"
+  asb_log "audio boost: process-level RT priority intentionally disabled"
+  return 0
 }
-asb_feature_enabled BT && ( sleep 15 && apply_audio_boost ) >/dev/null 2>&1 &
 
 asb_check_perfhal_drift() {
   # DISABLED: caps are now a percent of each cluster's own max (see

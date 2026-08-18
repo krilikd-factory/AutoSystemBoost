@@ -40,6 +40,7 @@ for _legacy_pair in \
 done
 
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
+[ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
 command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
 
 # Apply / revert the opt-in aggressive audio + camera layers from their saved
@@ -71,8 +72,8 @@ asb_persist_safe persist.vendor.logkit.ctrl 0
 asb_persist_safe persist.vendor.logkit.logcat 0
 asb_persist_safe persist.vendor.qcomlog.enable 0
 asb_persist_safe persist.vendor.sys.log.collector 0
-asb_persist_safe persist.sys.perfetto.disable 1
-asb_persist_safe persist.vendor.perfetto.disable 1
+# Keep Perfetto available. Suppressing diagnostics makes it impossible to prove
+# an energy/thermal benefit or investigate a device-specific regression.
 asb_persist_safe persist.vendor.qti.telemetry.disable 1
 fi
 # ASB:LOG:END
@@ -85,7 +86,7 @@ if command -v resetprop >/dev/null 2>&1; then
   fi
   # ASB:LOG:END
   # ASB:BT:BEGIN
-  if asb_feature_enabled BT; then
+  if asb_feature_enabled BT && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
   resetprop --delete media.resolution.limit.16bit >/dev/null 2>&1 || true
   resetprop --delete media.resolution.limit.24bit >/dev/null 2>&1 || true
   resetprop --delete media.resolution.limit.32bit >/dev/null 2>&1 || true
@@ -94,7 +95,7 @@ if command -v resetprop >/dev/null 2>&1; then
   fi
   # ASB:BT:END
   # ASB:NET:BEGIN
-  if asb_feature_enabled NET; then
+  if asb_feature_enabled NET && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows network; then
   resetprop --delete ro.ril.gprs.mtu >/dev/null 2>&1 || true
   resetprop --delete persist.data.mtu.pref >/dev/null 2>&1 || true
   resetprop --delete persist.data.wda.mtu >/dev/null 2>&1 || true
@@ -106,7 +107,7 @@ if command -v resetprop >/dev/null 2>&1; then
   fi
   # ASB:NET:END
   # ASB:KERNEL:BEGIN
-  if asb_feature_enabled KERNEL; then
+  if asb_feature_enabled KERNEL && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows system; then
   resetprop --delete persist.sys.power.fuel.gauge >/dev/null 2>&1 || true
   fi
   # ASB:KERNEL:END
@@ -115,10 +116,12 @@ fi
 asb_feature_enabled WIFI && asb_persist_safe persist.vendor.wlan.scan_throttle 1
 # ASB:WIFI:END
 # ASB:BT:BEGIN
-asb_feature_enabled BT && asb_persist_safe persist.vendor.bluetooth.btsnoopenable false
+if asb_feature_enabled BT && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
+  asb_persist_safe persist.vendor.bluetooth.btsnoopenable false
+fi
 # ASB:BT:END
 # ASB:VENDOR_OVERLAY:BEGIN
-if asb_feature_enabled VENDOR_OVERLAY && { [ -d "$MODDIR/system/vendor/etc/perf" ] || [ -d "$MODDIR/system/vendor/odm/etc/camera" ] || [ -d "$MODDIR/system/odm/etc/camera" ] || [ -d "$MODDIR/system/vendor/etc/audio" ] || [ -f "$MODDIR/generated_overlay_manifest.txt" ]; }; then
+if asb_feature_enabled VENDOR_OVERLAY && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows overlay && { [ -d "$MODDIR/system/vendor/etc/perf" ] || [ -d "$MODDIR/system/vendor/odm/etc/camera" ] || [ -d "$MODDIR/system/odm/etc/camera" ] || [ -d "$MODDIR/system/vendor/etc/audio" ] || [ -f "$MODDIR/generated_overlay_manifest.txt" ]; }; then
   _mounts_log="/data/adb/asb/vendor_mounts.log"
   _bootflag="/data/adb/asb/vendor_overlay_active"
   _bootctr="/data/adb/asb/vendor_boot_counter"
