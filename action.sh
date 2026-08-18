@@ -1379,8 +1379,15 @@ fi
     esac
   fi
 
+# Wi-Fi status is not conditional on camera hold.
+#
+# This block opened with `if camera_hold = 1` and never printed anything about the camera -
+# it only wrapped the Wi-Fi section, so the report showed Wi-Fi exactly when the camera was
+# streaming and hid it the rest of the time. Both halves are wrong: the information is
+# absent when it is useful and present when it is irrelevant.
+#
+# camera_hold is still read - it is reported in its own line below, where it belongs.
 _cam_hold="$(_st camera_hold)"
-if [ "$_cam_hold" = "1" ]; then
 
 echo ""
   echo "  📶  ${H_WIFI}"
@@ -1416,7 +1423,8 @@ fi
   [ -n "$_txq" ] && _wl2="$(_join "$_wl2" "txqueue ${_txq}")"
   [ -n "$_lnk" ] && _wl2="$(_join "$_wl2" "link ${_lnk}")"
   [ -n "$_wl2" ] && echo "       ${_wl2}"
-fi
+# Camera hold, stated plainly instead of being used as an invisible gate.
+[ "$_cam_hold" = "1" ] && echo "       camera hold active - interactive caps held for the capture pipeline"
 
 if [ "$(_feat GPS)" = "1" ]; then
   echo ""
@@ -1704,12 +1712,15 @@ else
   echo "  ✅  All configured tweaks verified applied"
 fi
 
+# The link, not the launch.
+#
+# This used to open Telegram every time the report finished. A diagnostic command should
+# not take over the screen when someone is reading its output - and a person running it to
+# investigate a problem is the least likely to want an app switch at that moment. The
+# address is printed instead, and the WebUI already has a button for those who want it.
 echo ""
 echo "  ─────────────────────────────"
-echo "  💬  Opening Telegram…"
+echo "  💬  t.me/AutoSystemBoost"
 echo ""
-
-am start -a android.intent.action.VIEW -d "tg://resolve?domain=AutoSystemBoost" >/dev/null 2>&1 \
-  || am start -a android.intent.action.VIEW -d "https://t.me/AutoSystemBoost" >/dev/null 2>&1
 
 exit 0
