@@ -113,8 +113,9 @@ if [ "$_ap" = "eq_compat" ]; then
 else
   _persist persist.audio.hifi.int_codec true
   _persist persist.vendor.audio.hifi.int_codec true
-  _persist persist.vendor.audio.aec_ref.enable false
-  setprop vendor.audio.feature.aec_ref.enable false 2>/dev/null || true
+  # AEC belongs to the call path, not to a media profile. Do not change it
+  # from stock/HiFi: a device-specific call tweak must be a separate opt-in
+  # capability with its own baseline, call-state guard and rollback.
   if [ "$_ap" = "hifi" ]; then
     setprop ro.audio.hifi true 2>/dev/null || true
     setprop ro.vendor.audio.hifi true 2>/dev/null || true
