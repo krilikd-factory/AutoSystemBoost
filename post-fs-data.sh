@@ -43,12 +43,6 @@ done
 [ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
 command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
 
-# Apply / revert the opt-in aggressive audio + camera layers from their saved
-if [ -r "$MODDIR/runtime/asb_tweaks.sh" ]; then
-  . "$MODDIR/runtime/asb_tweaks.sh"
-  asb_apply_dynamic_tweaks "$MODDIR"
-fi
-
 asb_feature_enabled() {
   _key="$1"
   [ -r "$MODDIR/features.conf" ] || return 0
@@ -56,8 +50,15 @@ asb_feature_enabled() {
   [ -z "$_line" ] && return 0
   [ "${_line#*=}" = "1" ]
 }
+# Dynamic audio/camera overlay edits require the overlay feature and an exact
+# fingerprint-validated overlay pack; never mutate generic-device payloads.
+if asb_feature_enabled VENDOR_OVERLAY && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows overlay \
+   && [ -r "$MODDIR/runtime/asb_tweaks.sh" ]; then
+  . "$MODDIR/runtime/asb_tweaks.sh"
+  asb_apply_dynamic_tweaks "$MODDIR"
+fi
 # ASB:LOG:BEGIN
-if asb_feature_enabled LOG; then
+if asb_feature_enabled LOG && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
 asb_persist_safe persist.vendor.radio.adb_log_on 0
 asb_persist_safe persist.vendor.radio.log_loc 0
 asb_persist_safe persist.radio.low_priority_static_log 0
@@ -79,7 +80,7 @@ fi
 # ASB:LOG:END
 if command -v resetprop >/dev/null 2>&1; then
   # ASB:LOG:BEGIN
-  if asb_feature_enabled LOG; then
+  if asb_feature_enabled LOG && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
   resetprop -n tombstoned.max_tombstone_count 0 >/dev/null 2>&1 || true
   resetprop -n ro.lmk.log_stats false >/dev/null 2>&1 || true
   resetprop -n ro.lmk.debug false >/dev/null 2>&1 || true
@@ -113,7 +114,9 @@ if command -v resetprop >/dev/null 2>&1; then
   # ASB:KERNEL:END
 fi
 # ASB:WIFI:BEGIN
-asb_feature_enabled WIFI && asb_persist_safe persist.vendor.wlan.scan_throttle 1
+if asb_feature_enabled WIFI && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
+  asb_persist_safe persist.vendor.wlan.scan_throttle 1
+fi
 # ASB:WIFI:END
 # ASB:BT:BEGIN
 if asb_feature_enabled BT && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
@@ -249,7 +252,9 @@ fi
 # resetprop rewrites the property area directly and does not care that a key is ro.*,
 # so it works in both cases. post-fs-data runs before the UI stack starts, which is
 # early enough for these to be read.
-if command -v resetprop >/dev/null 2>&1 && [ -f "$MODDIR/config/governor.conf" ]; then
+if command -v resetprop >/dev/null 2>&1 && asb_feature_enabled DISPLAY \
+   && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties \
+   && [ -f "$MODDIR/config/governor.conf" ]; then
   _blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$MODDIR/config/governor.conf" 2>/dev/null \
                 | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_blur_want" in
@@ -269,7 +274,8 @@ if command -v resetprop >/dev/null 2>&1 && [ -f "$MODDIR/config/governor.conf" ]
 fi
 
 _abi_conf="$MODDIR/config/governor.conf"
-if [ -f "$_abi_conf" ] && [ -f "$MODDIR/runtime/asb_dsp_abi_apply.sh" ]; then
+if asb_feature_enabled AUDIO && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio \
+   && [ -f "$_abi_conf" ] && [ -f "$MODDIR/runtime/asb_dsp_abi_apply.sh" ]; then
   _abi_want="$(grep -E '^[[:space:]]*dsp_effect_abi=' "$_abi_conf" 2>/dev/null \
                | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]')"
   # "auto" is not a no-op: it means "whatever the installer's probe chose", which is

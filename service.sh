@@ -83,6 +83,14 @@ for _tl in vendor_mounts.log ram_expand.log profile_switches.log; do
   asb_trim_log "/data/adb/asb/$_tl"
 done
 
+# Apply optional vendor/system properties only after the active feature set and
+# the exact build fingerprint have been validated. Module-level system.prop is
+# intentionally blank in this build, so no property can bypass this gate early.
+if [ -x "$MODDIR/runtime/asb_apply_managed_props.sh" ]; then
+  sh "$MODDIR/runtime/asb_apply_managed_props.sh" >/dev/null 2>&1 || \
+    asb_log "managed_props: helper execution failed"
+fi
+
 # active_profile lives in /data/adb/asb, which survives module removal - so this restore
 # put a profile back on a phone where the user had just installed clean and chosen
 # nothing. It is meant to survive a REBOOT, not an uninstall, and the marker below tells
@@ -420,6 +428,9 @@ asb_migrate_governor_conf
     _t=$((_t + 5))
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
+    # DSP attachment and audio-overlay recovery are never safe generic defaults.
+    # They need both an explicit AUDIO opt-in and a fingerprint-validated audio pack.
+    if asb_feature_enabled AUDIO && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
     echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
     # Re-apply the /odm runtime binds.
     # post-fs-data already tries this, but KernelSU mounts its own module overlay on /odm AFTER
@@ -530,6 +541,9 @@ asb_migrate_governor_conf
           sh "$MODDIR/runtime/asb_audio_apply.sh" mirror >/dev/null 2>&1
         fi
       fi
+    fi
+    else
+      asb_log "audio_dsp: skipped (AUDIO disabled or unvalidated audio device pack)"
     fi
   fi
 ) >/dev/null 2>&1 &
@@ -1520,12 +1534,20 @@ apply_audio_runtime() {
     setprop vendor.audio.offload.buffer.size.kb 256 2>/dev/null || true
   fi
 }
-asb_feature_enabled AUDIO && apply_audio_runtime
+if asb_feature_enabled AUDIO && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
+  apply_audio_runtime
+elif asb_feature_enabled AUDIO; then
+  asb_log "audio runtime: skipped on generic/unvalidated audio device pack"
+fi
 # ASB:AUDIO:END
-resetprop -p --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
-resetprop -p --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
-resetprop --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
-resetprop --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
+# These legacy deletions alter audio HAL policy and therefore follow the same
+# explicit AUDIO/device-pack gate as the runtime audio configuration.
+if asb_feature_enabled AUDIO && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
+  resetprop -p --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
+  resetprop -p --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
+  resetprop --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
+  resetprop --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
+fi
 # ASB:BG_TRIM:BEGIN
 
 _BG_TRIM_NEVER="
