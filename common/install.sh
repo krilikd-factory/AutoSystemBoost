@@ -3967,7 +3967,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
@@ -3988,6 +3988,9 @@ EOF
 	fi
 	if [ -f "$MODPATH/tools/asb_diag.sh" ]; then
 	  chmod 0755 "$MODPATH/tools/asb_diag.sh"
+	fi
+	if [ -f "$MODPATH/tools/asb_effective_policy.sh" ]; then
+	  chmod 0755 "$MODPATH/tools/asb_effective_policy.sh"
 	fi
 	if [ -f "$MODPATH/tools/asb_verify_device.sh" ]; then
 	  chmod 0755 "$MODPATH/tools/asb_verify_device.sh"
@@ -4052,7 +4055,7 @@ fi
 	asb_snapshot_user_config
 
 	if [ -d "$MODPATH/config" ]; then
-	  echo 17 > "$MODPATH/config/.schema_version" 2>/dev/null || true
+	  echo 18 > "$MODPATH/config/.schema_version" 2>/dev/null || true
 	  chmod 644 "$MODPATH/config/.schema_version" 2>/dev/null || true
 	fi
 
@@ -4068,7 +4071,7 @@ fi
 {
   "asb_version": "$_asb_ver",
   "build_date": "$_asb_date",
-  "schema_version": 17,
+  "schema_version": 18,
   "hashes": {
     "governor": "$_gov_hash",
     "performance": "$_perf_hash",
