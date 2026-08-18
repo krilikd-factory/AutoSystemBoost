@@ -166,6 +166,34 @@ else
 fi
 
 # =====================================================================
+SEC "0b. RUNTIME ARBITRATION & WRITE HEALTH  (live owner / requested vs applied)"
+_runtime_caps="/data/adb/asb/capabilities.env"
+_state="/dev/.asb/state"
+_rget() { grep -E "^$1=" "$2" 2>/dev/null | tail -1 | sed 's/^[^=]*=//'; }
+if [ -r "$_runtime_caps" ]; then
+  P "  boot manifest         : policies=$(_rget cpu_policy_count "$_runtime_caps") opp_complete=$(_rget cpu_opp_complete "$_runtime_caps") cgroup_v1=$(_rget cgroup_v1 "$_runtime_caps") cgroup_v2=$(_rget cgroup_v2 "$_runtime_caps")"
+  P "  optional signals      : uclamp=$(_rget uclamp "$_runtime_caps") thermal=$(_rget thermal_sensors "$_runtime_caps") battery_current=$(_rget battery_current "$_runtime_caps") gpu_devfreq=$(_rget gpu_devfreq "$_runtime_caps")"
+else
+  P "  (capabilities.env unavailable — it is generated once at boot by asb_capabilities.sh)"
+fi
+for _lease in /dev/.asb/arbiter/*.lease; do
+  [ -r "$_lease" ] || continue
+  _lo="$(_rget owner "$_lease")"; _lp="$(_rget priority "$_lease")"; _lr="$(_rget reason "$_lease")"; _le="$(_rget expires "$_lease")"
+  _ld="$(_rget desired "$_lease")"; _la="$(_rget applied "$_lease")"; _lerr="$(_rget last_error "$_lease")"
+  P "  lease ${_lease##*/} : owner=${_lo:-?} priority=${_lp:-?} reason=${_lr:-?} desired=${_ld:--} applied=${_la:--} error=${_lerr:-none} expires=${_le:-?}"
+done
+[ -f /dev/.asb/camera_guard ] && P "  camera lease          : ACTIVE (foreground/top-app/uclamp remain camera-owned)" || P "  camera lease          : inactive"
+if [ -r "$_state" ]; then
+  _wattempts="$(_rget writer_attempts "$_state")"; _wapplied="$(_rget writer_applied "$_state")"; _wfail="$(_rget writer_failures "$_state")"; _wskip="$(_rget writer_backoff_skips "$_state")"
+  P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
+  P "  energy policy         : shadow=$(_rget shadow_mode "$_state") budget_enabled=$(_rget thermal_budget_enabled "$_state") trim=$(_rget thermal_budget_trim_pct "$_state")% reason=$(_rget thermal_budget_reason "$_state") dwell=$(_rget thermal_budget_dwell_s "$_state")s"
+  P "  ASB overhead          : events=$(_rget governor_event_wakeups "$_state") timer_wakeups=$(_rget governor_timer_wakeups "$_state") cpu_ms=$(_rget governor_cpu_ms "$_state")"
+  [ "${_wfail:-0}" = "0" ] && NOTE "All observed native writes have read back successfully." || NOTE "Writer failures are backoff-limited; inspect /dev/.asb/write_errors and the node-specific writer_node_* state fields."
+else
+  P "  (native state unavailable — start the governor before checking applied telemetry)"
+fi
+
+# =====================================================================
 SEC "0a1. STOCK-FILE INVENTORY  (what was patchable at install — install_probe.txt)"
 _probe="/data/adb/asb/install_probe.txt"
 if [ -f "$_probe" ]; then
