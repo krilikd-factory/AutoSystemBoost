@@ -863,8 +863,22 @@ skip_cpu_caps: ;
                 fclose(ef);
             }
         }
-        g_wcache.gpu_max_pct = caps->gpu_max_pct;
-        writes++;
+        /* Cache the value only when the write actually landed.
+         *
+         * This recorded the request unconditionally, so a failed write - stale sysfs path
+         * after a GPU driver reload, a permission change, a node that moved between ROM
+         * versions - was remembered as done. The next tick then compared equal and skipped
+         * the write, and the module never tried again: one line in write_errors and silence
+         * for the rest of the boot, with the GPU running uncapped while the state file
+         * cheerfully reported the cap.
+         *
+         * Same rule the CPU path already follows, and the same rule that cost us three
+         * rounds of diagnosis elsewhere: never record an intention as an outcome.
+         */
+        if (gpu_ok) {
+            g_wcache.gpu_max_pct = caps->gpu_max_pct;
+            writes++;
+        }
     }
     /* Same fix as the CPU floor: check the device, not only the cache.
      *
@@ -884,21 +898,27 @@ skip_cpu_caps: ;
             _gpu_min_drifted = 1;
     }
     if (force || caps->gpu_min_pct != g_wcache.gpu_min_pct || _gpu_min_drifted) {
+        int _gmin_ok = 0;
         if (g_gpu_min_path[0]) {
             if (g_gpu_uses_pwrlevel) {
                 /* min_pwrlevel is the LOWEST-frequency level allowed; larger index = lower freq.
                  * For a min Hz target, find the largest index whose freq >= target. */
                 int pl = gpu_hz_to_pwrlevel_min(gmin);
                 if (sysfs_write_int(g_gpu_min_path, pl) == 0) {
+                    _gmin_ok = 1;
                     g_wcache.gpu_min_written = pl;
                     g_wcache.last_min_pwrlevel_written = pl;
                 }
             } else {
-                sysfs_write_long(g_gpu_min_path, gmin);
+                _gmin_ok = (sysfs_write_long(g_gpu_min_path, gmin) == 0);
             }
         }
-        g_wcache.gpu_min_pct = caps->gpu_min_pct;
-        writes++;
+        /* Same rule as the maximum above: a request that did not land must not be
+           cached as done, or the comparison next tick skips the retry. */
+        if (_gmin_ok) {
+            g_wcache.gpu_min_pct = caps->gpu_min_pct;
+            writes++;
+        }
     }
 
     if (force || caps->ravg_ticks != g_wcache.ravg_ticks) {
