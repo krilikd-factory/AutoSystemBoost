@@ -24,6 +24,13 @@
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
 STATE="/data/adb/asb/log_extreme_prev"
+# This helper can be triggered directly by UI actions. Device-side log mutation
+# therefore requires both explicit LOG opt-in and a validated properties domain.
+_log_feature="$(grep -E '^[[:space:]]*LOG=' "$MODDIR/features.conf" 2>/dev/null | tail -1 | sed 's/^[^=]*=//; s/#.*//' | tr -d '[:space:]\r')"
+[ "$_log_feature" = "1" ] || { echo "log suppression disabled by features.conf"; exit 0; }
+[ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
+command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties \
+  || { echo "properties device pack is not validated"; exit 0; }
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'

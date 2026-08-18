@@ -20,7 +20,9 @@
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
-PROP="$MODDIR/system.prop"
+# Dynamic UI properties are kept in the managed payload; root system.prop stays
+# assignment-free so a WebUI action cannot bypass the runtime validation gate.
+PROP="$MODDIR/runtime/asb_managed.props"
 [ -f "$CONF" ] || { echo "config not found: $CONF"; exit 1; }
 
 _db="$(grep -E '^[[:space:]]*disable_blur=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
@@ -117,6 +119,7 @@ sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
     -e '/^ro\.oplus\.display\.disable\.volume_blur=/d' \
     -e '/^ro\.oplus\.gaussianlevel=/d' \
     -e '/^ro\.launcher\.blur\.appLaunch=/d' \
+    -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
     -e '/^# ASB:UIFX:BEGIN$/,/^# ASB:UIFX:END$/d' \
     -e '/^persist\.sys\.oplus\.anim_level=/d' \
     -e '/^persist\.sys\.oplus\.material_blur_switch=/d' \
@@ -173,7 +176,9 @@ esac
 # already in the device's property store and stays there. Without this, switching back to
 # normal left Recents flat - and the Cards/Simple selector missing - forever.
 if [ "$_ue" != "flat" ] && command -v resetprop >/dev/null 2>&1; then
-  if [ "$(getprop persist.sys.oplus.anim_level 2>/dev/null)" = "0" ]; then
+  [ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
+  if command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties \
+     && [ "$(getprop persist.sys.oplus.anim_level 2>/dev/null)" = "0" ]; then
     resetprop --delete persist.sys.oplus.anim_level >/dev/null 2>&1
     echo "ui effects: cleared the stored flat-Recents flag - reboot to get the Cards/Simple selector back"
   fi

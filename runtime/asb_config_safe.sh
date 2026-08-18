@@ -65,12 +65,16 @@ _validate() {
   _no_duplicates "$_f" || return 1
   _enter="$(_num sustained_temp_enter "$_f")" || return 1
   _exit="$(_num sustained_temp_exit "$_f")" || return 1
+  _ceiling="$(_num sustained_temp_ceiling "$_f")" || return 1
+  _override="$(_num sustained_temp_user_override "$_f")" || return 1
   _tick="$(_num quiet_tick_s "$_f")" || return 1
   _qs="$(_num night_quiet_hour_start "$_f")" || return 1
   _qe="$(_num night_quiet_hour_end "$_f")" || return 1
   _bl="$(_num auto_battery_low_pct "$_f")" || return 1
   _bh="$(_num auto_battery_high_pct "$_f")" || return 1
   _between "$_enter" 40 70 && _between "$_exit" 30 69 && [ "$_exit" -lt "$_enter" ] || _die "invalid sustained temperature hysteresis"
+  _between "$_ceiling" "$_enter" 70 || _die "sustained_temp_ceiling must be enter..70"
+  case "$_override" in 0|1) ;; *) _die "sustained_temp_user_override must be 0 or 1" ;; esac
   _between "$_tick" 5 3600 || _die "quiet_tick_s must be 5..3600"
   _between "$_qs" 0 23 && _between "$_qe" 0 23 || _die "night quiet hours must be 0..23"
   _between "$_bl" 1 99 && _between "$_bh" 2 100 && [ "$_bl" -lt "$_bh" ] || _die "invalid auto battery thresholds"
