@@ -43,6 +43,14 @@ typedef struct {
     int   sustained_temp_user_override;/* 1 = slider beats the per-profile presets */
     int   sustained_temp_exit;
     float sustained_level;
+    /* Set when governor.conf actually contained sustained_level.
+     *
+     * highload_mode is a preset: it exists to move several related knobs together for
+     * someone who has not tuned them. But it overwrote sustained_level unconditionally,
+     * so a user who typed 0.62 got 0.78 or 0.85 - in SUSTAINED, the cooling state, the
+     * controller then allowed more than the config promised and more than the user asked
+     * for. An explicit value must outrank a preset; that is what makes it explicit. */
+    int   sustained_level_user_set;
     int   perf_sustained_temp_enter;
     int   perf_sustained_temp_exit;
     float perf_sustained_level;
@@ -253,6 +261,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
      * clamped once, so nothing external was correcting it.
      */
     c->sustained_level       = 0.62f;
+    c->sustained_level_user_set = 0;
     c->gaming_gap_thresh        = 1500000;
     c->gaming_gap_ticks         = 4;
     c->gaming_retry_cooldown_s  = 20;
@@ -490,6 +499,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
         if (v_f < 0.50f) v_f = 0.50f;
         if (v_f > 0.95f) v_f = 0.95f;
         c->sustained_level = v_f;
+        c->sustained_level_user_set = 1;
     }
     else if (!strcmp(k, "perf_sustained_level")) {
         float v_f = (float)atof(v);
@@ -544,13 +554,14 @@ static inline void asb_config_apply_highload_mode(asb_runtime_config_t *c) {
         c->gaming_gap_ticks             = 3;
         c->gaming_retry_cooldown_s      = 20;
         c->gaming_retry_temp_max        = 50;
-        c->sustained_level              = 0.85f;
+        /* Preset value only when the user has not set one of their own. */
+        if (!c->sustained_level_user_set) c->sustained_level = 0.85f;
         c->sustained_reentry_cooldown_s = 10;
     } else if (c->highload_mode == 2) {
         c->gaming_gap_ticks             = 4;
         c->gaming_retry_cooldown_s      = 35;
         c->gaming_retry_temp_max        = 45;
-        c->sustained_level              = 0.78f;
+        if (!c->sustained_level_user_set) c->sustained_level = 0.78f;
         c->sustained_reentry_cooldown_s = 25;
     }
 }

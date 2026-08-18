@@ -276,6 +276,12 @@ static int g_action_waste = 0;
 static void action_waste_reset(void) { g_action_waste = 0; }
 
 static int g_quiet_night_active = 0;
+/* Ticks genuinely skipped by Quiet Night. Published so the economy can be verified. */
+static unsigned long g_qn_ticks_skipped = 0;
+/* Set for the current tick when Quiet Night is economising. Read at the battery and
+ * thermal probe sites - the ones that cost an I/O round trip - rather than skipping the
+ * whole tick, which would also skip the bookkeeping the next tick relies on. */
+int g_qn_skip_this_tick = 0;
 static time_t g_quiet_night_since = 0;
 static int g_quiet_night_ticks = 0;       /* consecutive quiet deep-idle ticks */
 
@@ -4901,8 +4907,28 @@ int main(int argc, char **argv) {
                 static int g_qn_skip = 0;
                 g_qn_skip++;
                 if (g_qn_skip % 2 != 0) {
-                    /* Skip this entire tick -- don't even read battery level */
-                    need_metrics = 0;
+                    /* Actually skip the tick.
+                     *
+                     * This set need_metrics = 0 - after the only place that reads it, so
+                     * nothing was skipped and the comment described an economy that never
+                     * happened. Clang flagged the write as dead; the interesting part is
+                     * that the feature was dead with it.
+                     *
+                     * Counted so the saving is observable rather than asserted: a
+                     * footprint claim nobody can check is how this went unnoticed.
+                     */
+                    /* Skip the expensive reads for this tick.
+                     *
+                     * Not a goto: the metrics block runs to ~1400 lines and jumping out of
+                     * it would hop over cleanup and state updates that later ticks depend
+                     * on. The flag is checked at the individual read sites instead, which
+                     * keeps the control flow intact and makes the saving auditable per
+                     * source rather than all-or-nothing.
+                     */
+                    g_qn_ticks_skipped++;
+                    g_qn_skip_this_tick = 1;
+                } else {
+                    g_qn_skip_this_tick = 0;
                 }
             }
 

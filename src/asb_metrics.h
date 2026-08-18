@@ -209,7 +209,20 @@ static int asb_batt_current_to_ma(long raw) {
     return (int)(a / 1000);
 }
 
+/* Set by the governor while Quiet Night is economising a tick. Declared here because the
+ * probes it guards live in this header; defined in asb_governor.c. */
+extern int g_qn_skip_this_tick;
+
 static void metrics_read_battery(asb_battery_t *b) {
+    /* Quiet Night: reuse last tick's numbers instead of touching power_supply.
+     *
+     * Four sysfs reads per tick, on a phone that is asleep and whose battery state cannot
+     * have moved meaningfully in five seconds. The previous values stay in *b because the
+     * caller keeps the struct between ticks, so consumers see a slightly stale figure
+     * rather than a zeroed one - which matters, since zero here reads as "on charger".
+     */
+    if (g_qn_skip_this_tick) return;
+
     int idx = metrics_find_batt_current_path();
     if (idx >= 0) {
         b->current_ua = sysfs_read_int(g_batt_current_paths[idx], 0);
