@@ -249,8 +249,8 @@ asb_feature_is_wired() {
   _fw="$1"
   grep -rqE "asb_feature_enabled[[:space:]]+${_fw}\b|_feat[[:space:]]+${_fw}\b" \
        "$MODDIR"/*.sh "$MODDIR"/runtime/*.sh "$MODDIR"/common/*.sh 2>/dev/null && return 0
-  grep -qE "^# *ASB:${_fw}:BEGIN" "$MODDIR/system.prop" "$MODDIR/service.sh" \
-       "$MODDIR/post-fs-data.sh" 2>/dev/null && return 0
+  grep -qE "^# *ASB:${_fw}:BEGIN" "$MODDIR/system.prop" "$MODDIR/runtime/asb_managed.props" \
+       "$MODDIR/service.sh" "$MODDIR/post-fs-data.sh" 2>/dev/null && return 0
   return 1
 }
 if [ -f "$FEAT" ]; then
@@ -275,7 +275,7 @@ if [ -f "$FEAT" ]; then
     asb_feature_is_wired "$_rf" || _feat_dead="${_feat_dead} ${_rf}"
   done
   if [ -n "$_feat_dead" ]; then
-    warn "feature(s) declared but inert (no gate, no system.prop block):${_feat_dead}"
+    warn "feature(s) declared but inert (no gate, no managed-property block):${_feat_dead}"
   else
     ok "every declared feature has a runtime path"
   fi
@@ -312,13 +312,15 @@ if [ -f "$MODDIR/config/governor.conf.shipped" ]; then
   esac
 fi
 
-# Check 4: KERNEL block must not contain audio props
-if [ -f "$MODDIR/system.prop" ]; then
-  _kern_audio="$(sed -n '/# ASB:KERNEL:BEGIN/,/# ASB:KERNEL:END/p' "$MODDIR/system.prop" | grep -cE "^(persist\.|ro\.|vendor\.).*audio|^(persist\.|ro\.|vendor\.).*dts|^(persist\.|ro\.|vendor\.).*dolby")"
+# Check 4: KERNEL block must not contain audio props in the managed payload.
+_PROP_PAYLOAD="$MODDIR/runtime/asb_managed.props"
+[ -f "$_PROP_PAYLOAD" ] || _PROP_PAYLOAD="$MODDIR/system.prop"
+if [ -f "$_PROP_PAYLOAD" ]; then
+  _kern_audio="$(sed -n '/# ASB:KERNEL:BEGIN/,/# ASB:KERNEL:END/p' "$_PROP_PAYLOAD" | grep -cE "^(persist\.|ro\.|vendor\.).*audio|^(persist\.|ro\.|vendor\.).*dts|^(persist\.|ro\.|vendor\.).*dolby")"
   if [ "$_kern_audio" -gt 0 ]; then
-    err "system.prop ASB:KERNEL block contains $_kern_audio audio props"
+    err "managed property KERNEL block contains $_kern_audio audio props"
   else
-    ok "system.prop KERNEL block free of audio overrides"
+    ok "managed property KERNEL block free of audio overrides"
   fi
 fi
 
@@ -355,7 +357,7 @@ if [ -f "$MODDIR/service.sh" ]; then
 fi
 
 #  check: matrix.limiter.enable=false and ro.audio.audiozoom=true must
-# not be in service.sh or system.prop non-comment lines.
+# not be in service.sh or the managed property payload non-comment lines.
 # Reason: both cause stereo widening / center channel weakness (user-reported).
 if [ -f "$MODDIR/service.sh" ]; then
   _widening_writes="$(grep -vE "^[[:space:]]*#" "$MODDIR/service.sh" | grep -cE "(matrix\\.limiter\\.enable[[:space:]]+false|audiozoom[[:space:]]+true)" 2>/dev/null)"
@@ -365,12 +367,14 @@ if [ -f "$MODDIR/service.sh" ]; then
     ok "Stereo-widening props not written"
   fi
 fi
-if [ -f "$MODDIR/system.prop" ]; then
-  _widening_sysprop="$(grep -vE "^[[:space:]]*#" "$MODDIR/system.prop" | grep -cE "^(audio\\.matrix\\.limiter\\.enable=false|vendor\\.audio\\.matrix\\.limiter\\.enable=false|ro\\.audio\\.audiozoom=true)" 2>/dev/null)"
+_PROP_PAYLOAD="$MODDIR/runtime/asb_managed.props"
+[ -f "$_PROP_PAYLOAD" ] || _PROP_PAYLOAD="$MODDIR/system.prop"
+if [ -f "$_PROP_PAYLOAD" ]; then
+  _widening_sysprop="$(grep -vE "^[[:space:]]*#" "$_PROP_PAYLOAD" | grep -cE "^(audio\\.matrix\\.limiter\\.enable=false|vendor\\.audio\\.matrix\\.limiter\\.enable=false|ro\\.audio\\.audiozoom=true)" 2>/dev/null)"
   if [ "$_widening_sysprop" -gt 0 ] 2>/dev/null; then
-    err "system.prop has $_widening_sysprop stereo-widening defaults"
+    err "managed property payload has $_widening_sysprop stereo-widening defaults"
   else
-    ok "system.prop free of stereo-widening defaults"
+    ok "managed property payload free of stereo-widening defaults"
   fi
 fi
 
