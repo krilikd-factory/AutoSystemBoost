@@ -4903,6 +4903,20 @@ int main(int argc, char **argv) {
 
             /* Quiet Night ultra-economy -- skip even battery current reads
              * on alternating ticks. Device is sleeping, minimal governor footprint. */
+            /* Clear first, unconditionally.
+             *
+             * The reset used to live in the else branch of the test below, so it only ran
+             * while Quiet Night was still active. If the mode ended on a skipping tick the
+             * flag stayed set for the rest of the session: metrics_read_battery() returned
+             * immediately on every subsequent tick and the daemon ran on the current,
+             * voltage, temperature and level it had read that morning.
+             *
+             * Everything downstream trusts those numbers - auto-battery switching, charge
+             * awareness, the drain the learner banks, the time-to-empty estimates - so a
+             * stuck flag is worse than the economy it was buying. Default is "read", and
+             * only an active skipping tick turns it off.
+             */
+            g_qn_skip_this_tick = 0;
             if (g_quiet_night_active) {
                 static int g_qn_skip = 0;
                 g_qn_skip++;
@@ -4927,8 +4941,6 @@ int main(int argc, char **argv) {
                      */
                     g_qn_ticks_skipped++;
                     g_qn_skip_this_tick = 1;
-                } else {
-                    g_qn_skip_this_tick = 0;
                 }
             }
 
