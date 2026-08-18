@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <limits.h>
 #include "asb_fsm.h"
 #include "asb_config.h"
 
@@ -36,6 +37,135 @@ static inline int sysfs_write_str(const char *path, const char *val) {
     ssize_t w = write(fd, val, strlen(val));
     close(fd);
     return (w > 0) ? 0 : -1;
+}
+
+/*
+ * Readback-aware write health. A node that rejects a request or reports a
+ * different applied value is not silently cached as success. It receives a
+ * short exponential capability backoff so an unsupported vendor node cannot
+ * generate a write/fork/log storm every governor tick. State is exported by
+ * writer_write_health_dump() for the existing diagnostics/logkit contract.
+ */
+typedef enum {
+    ASB_WRITE_CPU_MAX0 = 0,
+    ASB_WRITE_CPU_MAX1,
+    ASB_WRITE_CPU_MAX2,
+    ASB_WRITE_CPU_MIN0,
+    ASB_WRITE_CPU_MIN1,
+    ASB_WRITE_CPU_MIN2,
+    ASB_WRITE_WALT_RAVG,
+    ASB_WRITE_WALT_IDLE,
+    ASB_WRITE_UCL_TOP,
+    ASB_WRITE_UCL_BG,
+    ASB_WRITE_UCL_SYBG,
+    ASB_WRITE_NODE_COUNT
+} asb_write_node_t;
+
+typedef struct {
+    unsigned long attempts;
+    unsigned long applied;
+    unsigned long failures;
+    unsigned long skipped_backoff;
+    time_t retry_at;
+    int requested;
+    int observed;
+    char path[96];
+} asb_write_health_t;
+
+static asb_write_health_t g_write_health[ASB_WRITE_NODE_COUNT];
+
+static const char *writer_write_node_name(asb_write_node_t node) {
+    static const char *const names[ASB_WRITE_NODE_COUNT] = {
+        "cpu_max0", "cpu_max1", "cpu_max2", "cpu_min0", "cpu_min1", "cpu_min2",
+        "walt_ravg", "walt_idle", "uclamp_top", "uclamp_bg", "uclamp_sybg"
+    };
+    return (node >= 0 && node < ASB_WRITE_NODE_COUNT) ? names[node] : "unknown";
+}
+
+static void writer_write_failure_event(asb_write_node_t node, const char *path,
+                                       int requested, int observed, time_t retry_at) {
+    FILE *ef = fopen("/dev/.asb/write_errors", "a");
+    if (!ef) return;
+    fprintf(ef, "FAIL node=%s path=%s requested=%d observed=%d retry_at=%ld\n",
+            writer_write_node_name(node), path ? path : "(none)",
+            requested, observed, (long)retry_at);
+    fclose(ef);
+}
+
+static int writer_write_int_confirmed(asb_write_node_t node, const char *path, int requested) {
+    if (!path || !*path || node < 0 || node >= ASB_WRITE_NODE_COUNT) return -1;
+    asb_write_health_t *h = &g_write_health[node];
+    time_t now = time(NULL);
+    if (h->retry_at > now) {
+        h->skipped_backoff++;
+        return 1; /* deferred: not an applied write */
+    }
+    h->attempts++;
+    h->requested = requested;
+    snprintf(h->path, sizeof(h->path), "%s", path);
+    int rc = sysfs_write_int(path, requested);
+    int observed = (rc == 0) ? sysfs_read_int(path, INT_MIN) : INT_MIN;
+    h->observed = observed;
+    if (rc == 0 && observed == requested) {
+        h->applied++;
+        h->retry_at = 0;
+        return 0;
+    }
+    h->failures++;
+    /* 60, 120, 240, then cap at five minutes. A later policy transition may
+     * still retry sooner when force=1, but normal ticks stay quiet. */
+    unsigned long step = h->failures > 3 ? 300UL : (60UL << (h->failures - 1));
+    if (step > 300UL) step = 300UL;
+    h->retry_at = now + (time_t)step;
+    writer_write_failure_event(node, path, requested, observed, h->retry_at);
+    return -1;
+}
+
+static void writer_write_health_dump(FILE *f) {
+    if (!f) return;
+    unsigned long attempts = 0, applied = 0, failures = 0, skipped = 0;
+    time_t next_retry = 0;
+    for (int i = 0; i < ASB_WRITE_NODE_COUNT; i++) {
+        attempts += g_write_health[i].attempts;
+        applied += g_write_health[i].applied;
+        failures += g_write_health[i].failures;
+        skipped += g_write_health[i].skipped_backoff;
+        if (g_write_health[i].retry_at > next_retry) next_retry = g_write_health[i].retry_at;
+    }
+    fprintf(f, "writer_attempts=%lu\nwriter_applied=%lu\nwriter_failures=%lu\n"
+               "writer_backoff_skips=%lu\nwriter_next_retry=%ld\n",
+            attempts, applied, failures, skipped, (long)next_retry);
+    for (int i = 0; i < ASB_WRITE_NODE_COUNT; i++) {
+        asb_write_health_t *h = &g_write_health[i];
+        if (!h->attempts && !h->failures && !h->skipped_backoff) continue;
+        fprintf(f, "writer_node_%s=requested:%d,observed:%d,attempts:%lu,applied:%lu,failures:%lu,retry_at:%ld\n",
+                writer_write_node_name((asb_write_node_t)i), h->requested, h->observed,
+                h->attempts, h->applied, h->failures, (long)h->retry_at);
+    }
+}
+
+/* Shadow records are emitted only when desired caps change, so shadow mode does
+ * not turn an observation run into an I/O workload. It is intentionally a
+ * separate JSONL file: state stays the live applied contract. */
+static asb_profile_caps_t g_shadow_last_caps;
+static int g_shadow_last_valid = 0;
+
+static void writer_shadow_record(const asb_profile_caps_t *caps, asb_state_t state, int thermal_cap) {
+    if (!caps) return;
+    if (g_shadow_last_valid &&
+        !memcmp(&g_shadow_last_caps, caps, sizeof(*caps))) return;
+    g_shadow_last_caps = *caps;
+    g_shadow_last_valid = 1;
+    FILE *f = fopen("/data/adb/asb/shadow_policy.jsonl", "a");
+    if (!f) return;
+    fprintf(f, "{\"ts\":%ld,\"state\":\"%s\",\"thermal_cap\":%d,"
+               "\"cpu_max\":[%d,%d,%d],\"cpu_min\":[%d,%d,%d],"
+               "\"gpu_max_pct\":%d,\"gpu_min_pct\":%d}\n",
+            (long)time(NULL), asb_state_names[state], thermal_cap,
+            caps->cpu_max[0], caps->cpu_max[1], caps->cpu_max[2],
+            caps->cpu_min[0], caps->cpu_min[1], caps->cpu_min[2],
+            caps->gpu_max_pct, caps->gpu_min_pct);
+    fclose(f);
 }
 
 static char g_cpu_max_paths[3][128];
@@ -626,6 +756,10 @@ static const int g_cluster_n_cpus[3]   = {6, 2,  0};
 static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_state_t state, int thermal_cap) {
     int writes = 0;
     writer_init_paths();
+    if (g_asb_cfg.shadow_mode) {
+        writer_shadow_record(caps, state, thermal_cap);
+        return 0;
+    }
 
     /*
      * CAP OWNERSHIP: for MANUAL profiles (battery/balanced/performance) the shell layer
@@ -719,18 +853,10 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             }
             if (force || cmax[i] != g_wcache.cpu_max[i]) {
                 if (cmax[i] <= 0) continue;
-                if (sysfs_write_int(g_cpu_max_paths[i], cmax[i]) == 0) {
+                if (writer_write_int_confirmed((asb_write_node_t)(ASB_WRITE_CPU_MAX0 + i),
+                                               g_cpu_max_paths[i], cmax[i]) == 0) {
                     g_wcache.cpu_max[i] = cmax[i];
                     writes++;
-                } else {
-                    FILE *ef = fopen("/dev/.asb/write_errors", "a");
-                    if (ef) {
-                        fprintf(ef, "FAIL cpu_max[%d]=%s val=%d\n",
-                                i, g_cpu_max_paths[i], cmax[i]);
-                        fclose(ef);
-                    }
-                    if (c0_changed && i == 0) g_wcache.cpu_max[0] = cmax[0];
-                    if (c1_changed && i == 1) g_wcache.cpu_max[1] = cmax[1];
                 }
             }
         }
@@ -828,7 +954,8 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             int cur_min = sysfs_read_int(g_cpu_min_paths[i], 0);
             if (force || want_min != g_wcache.cpu_min[i] ||
                 (cur_min > 0 && cur_min != want_min)) {
-                if (sysfs_write_int(g_cpu_min_paths[i], want_min) == 0) {
+                if (writer_write_int_confirmed((asb_write_node_t)(ASB_WRITE_CPU_MIN0 + i),
+                                               g_cpu_min_paths[i], want_min) == 0) {
                     g_wcache.cpu_min[i] = want_min;
                     writes++;
                 }
@@ -943,29 +1070,39 @@ skip_cpu_caps: ;
     }
 
     if (force || caps->ravg_ticks != g_wcache.ravg_ticks) {
-        sysfs_write_int(WALT_RAVG_PATH, caps->ravg_ticks);
-        g_wcache.ravg_ticks = caps->ravg_ticks;
-        writes++;
+        if (writer_write_int_confirmed(ASB_WRITE_WALT_RAVG, WALT_RAVG_PATH,
+                                       caps->ravg_ticks) == 0) {
+            g_wcache.ravg_ticks = caps->ravg_ticks;
+            writes++;
+        }
     }
     if (force || caps->idle_enough != g_wcache.idle_enough) {
-        sysfs_write_int(WALT_IDLE_PATH, caps->idle_enough);
-        g_wcache.idle_enough = caps->idle_enough;
-        writes++;
+        if (writer_write_int_confirmed(ASB_WRITE_WALT_IDLE, WALT_IDLE_PATH,
+                                       caps->idle_enough) == 0) {
+            g_wcache.idle_enough = caps->idle_enough;
+            writes++;
+        }
     }
 
     /* While the camera guard holds these open, a cap change must not write them
      * back down -- otherwise the very next tick undoes the guard. */
     if (!g_cam_guard_on) {
         if (force || caps->uclamp_top_max != g_wcache.uclamp_top_max) {
-            sysfs_write_int(UCLAMP_TOP_MAX, caps->uclamp_top_max);
-            g_wcache.uclamp_top_max = caps->uclamp_top_max;
-            writes++;
+            if (writer_write_int_confirmed(ASB_WRITE_UCL_TOP, UCLAMP_TOP_MAX,
+                                           caps->uclamp_top_max) == 0) {
+                g_wcache.uclamp_top_max = caps->uclamp_top_max;
+                writes++;
+            }
         }
         if (force || caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
-            sysfs_write_int(UCLAMP_BG_MAX,   caps->uclamp_bg_max);
-            sysfs_write_int(UCLAMP_SYBG_MAX, caps->uclamp_bg_max);
-            g_wcache.uclamp_bg_max = caps->uclamp_bg_max;
-            writes++;
+            int bg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_BG, UCLAMP_BG_MAX,
+                                                    caps->uclamp_bg_max) == 0;
+            int sybg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_SYBG, UCLAMP_SYBG_MAX,
+                                                      caps->uclamp_bg_max) == 0;
+            if (bg_ok && sybg_ok) {
+                g_wcache.uclamp_bg_max = caps->uclamp_bg_max;
+                writes += 2;
+            }
         }
     }
 
@@ -985,6 +1122,23 @@ static void writer_camera_guard_save(void) {
             g_cam_saved_uc_top, g_cam_saved_uc_fg,
             g_cam_saved_uc_bg, g_cam_saved_swappiness);
     fclose(f);
+}
+
+/*
+ * The guard restores the values that were present when recording began. If the
+ * user selected another profile while recording, those saved values are stale.
+ * Re-apply the latest selected profile once after release instead of allowing
+ * any writer to fight the camera while it is active. apply_profile.sh is run
+ * asynchronously and only for a recognised profile token.
+ */
+static void writer_camera_guard_apply_current_profile(void) {
+    static const char *cmd =
+        "p=$(cat /data/adb/modules/AutoSystemBoost/current_profile 2>/dev/null); "
+        "case \"$p\" in battery|balanced|performance|smart) "
+        "sh /data/adb/modules/AutoSystemBoost/apply_profile.sh \"$p\" auto "
+        ">/dev/null 2>&1 & ;; esac";
+    int r = system(cmd);
+    (void)r;
 }
 
 static void writer_camera_guard_recover(void) {
@@ -1010,6 +1164,7 @@ static void writer_camera_guard_recover(void) {
                        sysfs_write_int(UCLAMP_SYBG_MAX, uc_bg); }
     if (swap   >= 0) sysfs_write_int(PATH_VM_SWAPPINESS, swap);
     unlink(CAM_GUARD_STATE);
+    writer_camera_guard_apply_current_profile();
 }
 
 static void writer_camera_guard(int active) {
@@ -1077,6 +1232,7 @@ static void writer_camera_guard(int active) {
             sysfs_write_int(PATH_VM_SWAPPINESS, g_cam_saved_swappiness);
         unlink(CAM_GUARD_STATE);
         g_cam_guard_on = 0;
+        writer_camera_guard_apply_current_profile();
     }
 }
 

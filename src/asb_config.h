@@ -74,6 +74,19 @@ typedef struct {
     int   thermal_skin_gate;       /* 1=base throttle/veto on skin(shell) temp when present */
     int   thermal_skin_c;          /* skin temp (C) that engages the comfort throttle/veto */
     int   thermal_junction_hard_c; /* junction hard-limit (C) that always throttles (silicon guard) */
+    /* Adaptive thermal budget: act before hard throttle when available thermal
+     * headroom is shrinking. It only trims ceilings; vendor Thermal HAL keeps
+     * precedence and hard guards remain non-optional. */
+    int   thermal_budget_enable;
+    int   thermal_budget_light_headroom_pct;
+    int   thermal_budget_moderate_headroom_pct;
+    int   thermal_budget_severe_headroom_pct;
+    int   thermal_budget_light_trim_pct;
+    int   thermal_budget_moderate_trim_pct;
+    int   thermal_budget_severe_trim_pct;
+    int   thermal_budget_dwell_s;
+    /* Shadow mode calculates/logs policy but never mutates hardware nodes. */
+    int   shadow_mode;
     int   gaming_cpu_max_ceiling_khz; /* cap declared scaling_max in GAMING (vendor clamps anyway); 0=off */
     int   camera_hold_enable;      /* 1=hold interactive caps while the camera streams */
     int   camera_busy_pct;         /* camera HAL CPU%% of one core that counts as streaming */
@@ -249,6 +262,15 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->thermal_skin_gate = 1;
     c->thermal_skin_c = 47;
     c->thermal_junction_hard_c = 95;
+    c->thermal_budget_enable = 1;
+    c->thermal_budget_light_headroom_pct = 70;
+    c->thermal_budget_moderate_headroom_pct = 45;
+    c->thermal_budget_severe_headroom_pct = 25;
+    c->thermal_budget_light_trim_pct = 8;
+    c->thermal_budget_moderate_trim_pct = 18;
+    c->thermal_budget_severe_trim_pct = 32;
+    c->thermal_budget_dwell_s = 30;
+    c->shadow_mode = 0;
     c->gaming_cpu_max_ceiling_khz = 2400000;
     c->camera_hold_enable   = 1;
     c->camera_busy_pct      = 15;
@@ -406,6 +428,15 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "thermal_skin_gate")) c->thermal_skin_gate = atoi(v);
     else if (!strcmp(k, "thermal_skin_c")) c->thermal_skin_c = atoi(v);
     else if (!strcmp(k, "thermal_junction_hard_c")) c->thermal_junction_hard_c = atoi(v);
+    else if (!strcmp(k, "thermal_budget_enable")) c->thermal_budget_enable = atoi(v);
+    else if (!strcmp(k, "thermal_budget_light_headroom_pct")) c->thermal_budget_light_headroom_pct = atoi(v);
+    else if (!strcmp(k, "thermal_budget_moderate_headroom_pct")) c->thermal_budget_moderate_headroom_pct = atoi(v);
+    else if (!strcmp(k, "thermal_budget_severe_headroom_pct")) c->thermal_budget_severe_headroom_pct = atoi(v);
+    else if (!strcmp(k, "thermal_budget_light_trim_pct")) c->thermal_budget_light_trim_pct = atoi(v);
+    else if (!strcmp(k, "thermal_budget_moderate_trim_pct")) c->thermal_budget_moderate_trim_pct = atoi(v);
+    else if (!strcmp(k, "thermal_budget_severe_trim_pct")) c->thermal_budget_severe_trim_pct = atoi(v);
+    else if (!strcmp(k, "thermal_budget_dwell_s")) c->thermal_budget_dwell_s = atoi(v);
+    else if (!strcmp(k, "shadow_mode")) c->shadow_mode = atoi(v);
     else if (!strcmp(k, "gaming_cpu_max_ceiling_khz")) c->gaming_cpu_max_ceiling_khz = atoi(v);
     else if (!strcmp(k, "camera_hold_enable"))   c->camera_hold_enable   = atoi(v);
     else if (!strcmp(k, "camera_busy_pct"))      c->camera_busy_pct      = atoi(v);
@@ -561,6 +592,36 @@ static inline int asb_config_validate(const asb_runtime_config_t *c) {
     if (c->auto_battery_low_pct < 1 || c->auto_battery_high_pct > 100 ||
         c->auto_battery_low_pct >= c->auto_battery_high_pct ||
         c->auto_battery_min_gap_s < 0 || c->auto_battery_min_gap_s > 86400) return -9;
+
+    /* These values directly feed thermal caps. Never accept a configuration
+     * that could turn a safety cap into zero/negative math or silently disable
+     * the emergency guard. The shell writer has the same contract, but manual
+     * edits and imports are not a trust boundary. */
+    if (c->thermal_overlay_pct < 0 || c->thermal_overlay_pct > 80 ||
+        (c->thermal_skin_gate != 0 && c->thermal_skin_gate != 1) ||
+        c->thermal_skin_c < 30 || c->thermal_skin_c > 65 ||
+        c->thermal_junction_hard_c < 70 || c->thermal_junction_hard_c > 110 ||
+        c->thermal_junction_hard_c <= c->thermal_skin_c) return -10;
+    if ((c->thermal_budget_enable != 0 && c->thermal_budget_enable != 1) ||
+        c->thermal_budget_light_headroom_pct < 30 || c->thermal_budget_light_headroom_pct > 95 ||
+        c->thermal_budget_moderate_headroom_pct < 20 || c->thermal_budget_moderate_headroom_pct >= c->thermal_budget_light_headroom_pct ||
+        c->thermal_budget_severe_headroom_pct < 10 || c->thermal_budget_severe_headroom_pct >= c->thermal_budget_moderate_headroom_pct ||
+        c->thermal_budget_light_trim_pct < 0 || c->thermal_budget_light_trim_pct > 30 ||
+        c->thermal_budget_moderate_trim_pct < c->thermal_budget_light_trim_pct || c->thermal_budget_moderate_trim_pct > 45 ||
+        c->thermal_budget_severe_trim_pct < c->thermal_budget_moderate_trim_pct || c->thermal_budget_severe_trim_pct > 60 ||
+        c->thermal_budget_dwell_s < 5 || c->thermal_budget_dwell_s > 600 ||
+        (c->shadow_mode != 0 && c->shadow_mode != 1)) return -11;
+    if (c->gaming_cpu_max_ceiling_khz < 0 ||
+        c->gaming_cpu_max_ceiling_khz > 5000000 ||
+        (c->camera_hold_enable != 0 && c->camera_hold_enable != 1) ||
+        c->camera_busy_pct < 1 || c->camera_busy_pct > 100 ||
+        c->camera_hold_grace_s < 0 || c->camera_hold_grace_s > 600) return -12;
+    if (c->sustained_temp_user_override != 0 &&
+        c->sustained_temp_user_override != 1) return -13;
+    if (c->smart_conf_low < 0 || c->smart_conf_low > 999 ||
+        c->smart_conf_high < 1 || c->smart_conf_high > 1000 ||
+        c->smart_conf_low >= c->smart_conf_high ||
+        c->smart_eff_obs_full < 1 || c->smart_eff_obs_full > 10000) return -14;
     return 0;
 }
 

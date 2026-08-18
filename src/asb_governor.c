@@ -1087,6 +1087,101 @@ static void asb_night_window_tick(int screen_on, time_t now) {
     }
 }
 
+/*
+ * Adaptive thermal budget. It is deliberately computed inside the native FSM
+ * instead of a second shell loop: no extra wakeups, one owner for state, and
+ * the policy sees the same headroom/thermal-cap data as the writer.
+ *
+ * Increasing restraint is immediate. Releasing restraint is dwell-limited so
+ * noisy headroom samples do not oscillate caps and create sysfs churn.
+ */
+static int g_budget_trim_pct = 0;
+static time_t g_budget_trim_changed_at = 0;
+static char g_budget_reason[32] = "disabled";
+/* Self-overhead counters: event-driven native loop only, no extra sampler. */
+static unsigned long g_governor_event_wakeups = 0;
+static unsigned long g_governor_timer_wakeups = 0;
+
+static void asb_budget_raise(int *candidate, const char **reason, int trim, const char *why) {
+    if (trim > *candidate) {
+        *candidate = trim;
+        *reason = why;
+    }
+}
+
+static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t *fsm) {
+    int candidate = 0;
+    const char *reason = "cool";
+    if (g_asb_cfg.thermal_budget_enable && !fsm->thermal_cap &&
+        fsm->state != ASB_STATE_SUSTAINED) {
+        if (m->therm.headroom_valid) {
+            int hr = m->therm.headroom_pct;
+            if (hr <= g_asb_cfg.thermal_budget_severe_headroom_pct)
+                asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "headroom_severe");
+            else if (hr <= g_asb_cfg.thermal_budget_moderate_headroom_pct)
+                asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_moderate_trim_pct, "headroom_moderate");
+            else if (hr <= g_asb_cfg.thermal_budget_light_headroom_pct)
+                asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_light_trim_pct, "headroom_light");
+        }
+        /* Skin is the user-facing safety signal. A fast trend anticipates heat
+         * before the emergency CPU junction guard is crossed. */
+        if (m->therm.temp_valid && m->therm.skin_temp_c > 0) {
+            if (m->therm.skin_temp_c >= g_asb_cfg.thermal_skin_c + 3)
+                asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "skin_severe");
+            else if (m->therm.skin_temp_c >= g_asb_cfg.thermal_skin_c)
+                asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_moderate_trim_pct, "skin_moderate");
+        }
+        if (fsm->thermal_trend >= 10)
+            asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "thermal_trend_fast");
+        else if (fsm->thermal_trend >= 6)
+            asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_moderate_trim_pct, "thermal_trend_rising");
+        /* Battery current is a tie-breaker only; it never escalates beyond a
+         * light trim and is ignored while charging because its semantics vary. */
+        if (!m->bat.charging && m->bat.current_ma >= 1800)
+            asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_light_trim_pct, "battery_current");
+        /* Camera deadlines are a QoS lease: do not introduce a light-only trim
+         * during capture. Real thermal stress still wins at moderate/severe. */
+        if (m->misc.camera_active && candidate <= g_asb_cfg.thermal_budget_light_trim_pct) {
+            candidate = 0;
+            reason = "camera_qos";
+        }
+    } else if (fsm->thermal_cap || fsm->state == ASB_STATE_SUSTAINED) {
+        reason = "platform_thermal";
+    }
+    time_t now = time(NULL);
+    if (candidate > g_budget_trim_pct ||
+        now - g_budget_trim_changed_at >= g_asb_cfg.thermal_budget_dwell_s) {
+        if (candidate != g_budget_trim_pct || strcmp(reason, g_budget_reason) != 0) {
+            g_budget_trim_pct = candidate;
+            g_budget_trim_changed_at = now;
+            snprintf(g_budget_reason, sizeof(g_budget_reason), "%s", reason);
+            asb_log("thermal_budget: trim=%d reason=%s headroom=%d skin=%d trend=%d ma=%d camera=%d state=%s",
+                    g_budget_trim_pct, g_budget_reason, m->therm.headroom_pct,
+                    m->therm.skin_temp_c, fsm->thermal_trend, m->bat.current_ma,
+                    m->misc.camera_active, asb_state_names[fsm->state]);
+        }
+    }
+    return g_budget_trim_pct;
+}
+
+static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
+                                           const asb_metrics_t *m,
+                                           const asb_fsm_t *fsm) {
+    int trim = asb_adaptive_budget_trim_pct(m, fsm);
+    if (trim <= 0 || trim >= 100) return;
+    int keep = 100 - trim;
+    for (int i = 0; i < 3; i++) {
+        if (caps->cpu_max[i] > 0) caps->cpu_max[i] = caps->cpu_max[i] * keep / 100;
+        if (caps->cpu_min[i] > 0 && caps->cpu_max[i] > 0 && caps->cpu_min[i] > caps->cpu_max[i])
+            caps->cpu_min[i] = caps->cpu_max[i];
+    }
+    if (caps->gpu_max_pct > 0) {
+        caps->gpu_max_pct = caps->gpu_max_pct * keep / 100;
+        if (caps->gpu_max_pct < 10) caps->gpu_max_pct = 10;
+        if (caps->gpu_min_pct > caps->gpu_max_pct) caps->gpu_min_pct = caps->gpu_max_pct;
+    }
+}
+
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                         asb_prediction_t pred)
 {
@@ -1179,6 +1274,16 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         g_pstats.avg_gap_p0,
         g_pstats.avg_efficiency,
         g_pstats.degrade_count);
+    /* requested/applied/failure/backoff counters from readback-aware native writers */
+    writer_write_health_dump(f);
+    fprintf(f, "shadow_mode=%d\nthermal_budget_enabled=%d\nthermal_budget_trim_pct=%d\n"
+               "thermal_budget_reason=%s\nthermal_budget_dwell_s=%d\n",
+            g_asb_cfg.shadow_mode, g_asb_cfg.thermal_budget_enable,
+            g_budget_trim_pct, g_budget_reason, g_asb_cfg.thermal_budget_dwell_s);
+    fprintf(f, "governor_event_wakeups=%lu\ngovernor_timer_wakeups=%lu\n"
+               "governor_cpu_ms=%ld\n",
+            g_governor_event_wakeups, g_governor_timer_wakeups,
+            (long)(clock() * 1000 / CLOCKS_PER_SEC));
     long _active = fsm->ses_time_heavy_sec + fsm->ses_time_gaming_sec + fsm->ses_time_sustained_sec;
     int _sus_pct = (_active > 0) ? (int)(fsm->ses_time_sustained_sec * 100 / _active) : 0;
     long _bat_tot = fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec + fsm->bat_time_moderate_sec;
@@ -4226,7 +4331,11 @@ int main(int argc, char **argv) {
             fsm.current_caps = _new_caps;
         }
     }
-    writer_apply_caps(&fsm.current_caps, 1, fsm.state, fsm.thermal_cap);
+    {
+        asb_profile_caps_t _effective_caps = fsm.current_caps;
+        asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);
+        writer_apply_caps(&_effective_caps, 1, fsm.state, fsm.thermal_cap);
+    }
     write_state(&fsm, &metrics, cur_pred);
     {
         int bidx = metrics_find_batt_current_path();
@@ -4390,6 +4499,7 @@ int main(int argc, char **argv) {
             break;
         }
 
+        g_governor_event_wakeups += (unsigned long)nev;
         int need_metrics = 0;
         int force_write  = 0;
         int profile_changed = 0;
@@ -4467,7 +4577,9 @@ int main(int argc, char **argv) {
                         }
                         if (_diff) {
                             fsm.current_caps = _new_caps;
-                            int _w = writer_apply_caps(&fsm.current_caps, 1, fsm.state, fsm.thermal_cap);
+                            asb_profile_caps_t _effective_caps = fsm.current_caps;
+                            asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);
+                            int _w = writer_apply_caps(&_effective_caps, 1, fsm.state, fsm.thermal_cap);
                             if (_w > 0) { g_total_writes += _w; g_last_write_ts = time(NULL); }
                             if (g_asb_cfg.smart_debug_log) {
                                 asb_log("smart_tick(heartbeat): forced caps refresh");
@@ -4528,14 +4640,17 @@ int main(int argc, char **argv) {
 
             if (fd == tfd_active) {
                 timerfd_drain(fd);
+                g_governor_timer_wakeups++;
                 need_metrics = 1;
             }
             else if (fd == tfd_idle) {
                 timerfd_drain(fd);
+                g_governor_timer_wakeups++;
                 need_metrics = 1;
             }
             else if (fd == tfd_hourly) {
                 timerfd_drain(fd);
+                g_governor_timer_wakeups++;
                 float avg_drain = 0, avg_screen = 0;
                 if (accum.drain_count > 0) {
                     avg_drain  = accum.drain_sum / accum.drain_count;
@@ -5734,7 +5849,9 @@ int main(int argc, char **argv) {
                 g_write_skipped_backoff++;
             } else if (changed || force_write) {
                 g_write_attempts++;
-                int writes = writer_apply_caps(&fsm.current_caps, force_write, fsm.state, fsm.thermal_cap);
+                asb_profile_caps_t _effective_caps = fsm.current_caps;
+                asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);
+                int writes = writer_apply_caps(&_effective_caps, force_write, fsm.state, fsm.thermal_cap);
                 if (writes > 0) {
                     g_total_writes += writes;
                     g_last_write_ts = time(NULL);
