@@ -1628,6 +1628,14 @@ lk_snapshot_audio() {
   _af="$LK_OUT_DIR/audio_trace.txt"
   {
     echo "===== AUDIO [$_tag] $(date -u '+%Y-%m-%dT%H:%M:%SZ') play=$LK_AUDIO_PLAY route=$LK_AUDIO_ROUTE ====="
+    echo "# ASB audio / offload provenance (requested versus published state)"
+    _acfg() { grep -E "^[[:space:]]*$1=" "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
+    echo "  asb.bt_a2dp_offload.requested = $(_acfg bt_a2dp_offload)"
+    echo "  asb.dsp.enable = $(lk_get_prop persist.asb.dsp.enable)"
+    echo "  asb.dsp.route_published = $(lk_get_prop persist.asb.dsp.route)"
+    echo "  asb.dsp.outputs = $(lk_get_prop persist.asb.dsp.outputs)"
+    echo "  asb.dsp.gain_requested_mb = $(lk_get_prop persist.asb.dsp.gain_requested_mb)"
+    echo "  asb.dsp.gain_applied_mb = $(lk_get_prop persist.asb.dsp.gain_applied_mb)"
     echo "# codec / offload props"
     for p in persist.bluetooth.a2dp_offload.disabled persist.vendor.bluetooth.a2dp_offload.disabled \
              persist.bluetooth.a2dp.optional_codecs_enabled persist.bluetooth.disableabsvol \
@@ -1700,6 +1708,15 @@ lk_snapshot_kernel() {
     done
     echo "# zram / swap"
     echo "  swaps: $(cat /proc/swaps 2>/dev/null | tail -n +2 | tr '\n' ';')"
+    for _zf in comp_algorithm disksize mem_limit max_comp_streams mm_stat io_stat; do
+      [ -r "/sys/block/zram0/$_zf" ] && echo "  zram.$_zf: $(cat "/sys/block/zram0/$_zf" 2>/dev/null | tr '\n' ' ')"
+    done
+    echo "# memory PSI (read-only; unavailable means the kernel does not export PSI)"
+    if [ -r /proc/pressure/memory ]; then
+      sed 's/^/  psi.memory: /' /proc/pressure/memory 2>/dev/null
+    else
+      echo "  psi.memory: unavailable"
+    fi
     echo ""
   } >> "$_kf" 2>/dev/null || true
 }
@@ -1735,6 +1752,13 @@ lk_snapshot_network() {
     echo "  netdev_budget: $(cat /proc/sys/net/core/netdev_budget 2>/dev/null) backlog: $(cat /proc/sys/net/core/netdev_max_backlog 2>/dev/null)"
     echo "  mtu_probing: $(cat /proc/sys/net/ipv4/tcp_mtu_probing 2>/dev/null) default_qdisc: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
     echo "  tcp_notsent_lowat: $(cat /proc/sys/net/ipv4/tcp_notsent_lowat 2>/dev/null) fastopen: $(cat /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null)"
+    echo "# ASB network provenance (requested / accepted / live)"
+    _ncfg() { grep -E "^[[:space:]]*$1=" "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
+    for _nk in net_congestion net_qdisc net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile; do
+      _nr="$(grep -E "^$_nk=" /data/adb/asb/net_apply_result 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r')"
+      echo "  $_nk: requested=$(_ncfg "$_nk") result=${_nr:-not_applied}"
+    done
+    [ -r /data/adb/asb/net_stock.env ] && echo "  stock: $(tr '\n' ' ' < /data/adb/asb/net_stock.env)"
     echo "# rmnet / wlan counters"
     # Enumerate whatever the device actually has. The old fixed list stopped at
     # rmnet_data1 and silently omitted rmnet_data2 - which is exactly where the default
