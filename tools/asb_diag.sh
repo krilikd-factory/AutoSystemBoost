@@ -373,26 +373,45 @@ _ev_set="$(settings get global bluetooth_a2dp_offload_enabled 2>/dev/null)"
 _ev_pdis="$(gp persist.bluetooth.a2dp_offload.disabled)"
 _ev_vdis="$(gp persist.vendor.bluetooth.a2dp_offload.disabled)"
 _ev_cap="$(gp persist.bluetooth.a2dp_offload.cap)"
-# AudioFlinger names an offloaded or compressed thread outright. That is live
-# pipeline evidence, but a thread can belong to another output or survive while
-# idle, so it still cannot prove that Bluetooth A2DP owns it.
+# AudioFlinger names an offloaded or compressed thread outright; that is the only line here
+# that describes the running pipeline rather than its configuration.
 _ev_af="$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -iE 'Offload|Compress' | sed 's/^[[:space:]]*//' | cut -c1-70)"
-_ev_play=0; echo "$_ap" | grep -qi 'state:started' && _ev_play=1
-_ev_route="unknown"
-echo "$_ap" | grep -qiE 'Devices?:.*(BT_A2DP|BLUETOOTH)' && _ev_route="bt"
 NOTE "a2dp evidence: requested=${_ev_req:-auto} setting=${_ev_set:-<none>} platform_disabled=${_ev_pdis:-<none>} vendor_disabled=${_ev_vdis:-<none>}"
 NOTE "a2dp codecs advertised: ${_ev_cap:-<none>}   (capability, not proof of live offload)"
-NOTE "audio route evidence: route=$_ev_route playing=$_ev_play"
 NOTE "audioflinger thread: ${_ev_af:-<no offload/compress thread reported>}"
-_ev_verdict="unknown"
-if [ -n "$_ev_af" ] && { [ "$_ev_pdis" = "true" ] || [ "$_ev_vdis" = "true" ]; }; then
+# An offload thread is not evidence unless it belongs to THIS route, right now.
+#
+# The first version called any AudioFlinger Offload/Compress thread proof of A2DP
+# offload. A review pointed out what that misses: the thread may serve a different
+# output, or linger after playback stopped. Either way it produces a confident answer
+# about Bluetooth from a signal that never mentioned Bluetooth - the same overreach
+# this block was rewritten to remove once already.
+#
+# Three things must agree before the verdict firms up: a thread exists, the active
+# route is Bluetooth, and something is actually playing. Short of that the honest
+# answer is what is printed - the evidence, and "unknown".
+_ev_route="$(echo "$_ap" | grep -m1 -icE 'Devices?:.*BLUETOOTH')"
+_ev_play="$(dumpsys audio 2>/dev/null | grep -m1 -icE 'state:started|player piid.*started')"
+# Conflict first, in the same order the shared logkit uses.
+#
+# The previous order set "off" from the properties and then let the thread branch
+# overwrite it, so a phone whose vendor property blocks offload while AudioFlinger shows
+# a thread on an active BT route was told "offload thread present" - a confident answer
+# assembled from two signals that contradict each other. The shared logkit already calls
+# that case "unknown (conflicting)", and two copies of one contract disagreeing is the
+# defect this whole block was rewritten twice to remove.
+_ev_blocked=0
+case "$_ev_pdis$_ev_vdis" in *true*) _ev_blocked=1 ;; esac
+if [ -n "$_ev_af" ] && [ "$_ev_blocked" = "1" ]; then
   _ev_verdict="unknown (conflicting AudioFlinger/property evidence)"
-elif [ -n "$_ev_af" ] && [ "$_ev_play" = "1" ] && [ "$_ev_route" = "bt" ]; then
+elif [ -n "$_ev_af" ] && [ "${_ev_route:-0}" -gt 0 ] && [ "${_ev_play:-0}" -gt 0 ]; then
   _ev_verdict="AudioFlinger offload/compress observed during BT playback (route association unverified)"
 elif [ -n "$_ev_af" ]; then
   _ev_verdict="AudioFlinger offload/compress thread present (not tied to active BT playback)"
-elif [ "$_ev_pdis" = "true" ] || [ "$_ev_vdis" = "true" ]; then
+elif [ "$_ev_blocked" = "1" ]; then
   _ev_verdict="A2DP offload blocked by platform/vendor property"
+else
+  _ev_verdict="unknown"
 fi
 NOTE "offload state: $_ev_verdict"
 NOTE "(read-only section: ASB changes nothing here, it only reports what the platform chose)"
@@ -419,7 +438,17 @@ NOTE "dsp_compressor = $(cfg dsp_compressor)  ·  live comp: $(gp persist.asb.ds
 # Output routing needs the rebuilt library to take effect; a config that says bt with a
 # library that predates the feature will process everything and look correct here.
 _dsp_o="$(cfg dsp_outputs)"
-V "  DSP outputs live (persist.asb.dsp.outputs)" "${_dsp_o:-all}" "$(gp persist.asb.dsp.outputs)" eq
+# Only meaningful while the engine is running.
+#
+# This reported FAIL on three of six devices in a cross-device sweep, every one of them
+# with dsp_loudness=off - the effect is released from the audio path entirely, so the
+# routing property is unset by design. Flagging that as a failure trains people to skim
+# past red lines, which costs more than the check is worth.
+if [ "$(cfg dsp_loudness)" = "off" ] || [ "$(gp persist.asb.dsp.enable)" != "1" ]; then
+  NOTE "  DSP outputs: not applicable - the engine is off, so routing is unset by design"
+else
+  V "  DSP outputs live (persist.asb.dsp.outputs)" "${_dsp_o:-all}" "$(gp persist.asb.dsp.outputs)" eq
+fi
 NOTE "  DSP requested/applied gain: requested=$(gp persist.asb.dsp.gain_requested_mb)mB  ·  applied=$(gp persist.asb.dsp.gain_applied_mb)mB  ·  published_route=$(gp persist.asb.dsp.route)"
 case "$(gp persist.asb.dsp.outputs)" in
   '') NOTE "outputs property unset - library may predate per-output routing (rebuild libasbdsp)" ;;
@@ -844,7 +873,13 @@ if [ "$_is_pineapple" = "1" ]; then
   for VB in /odm/etc/camera/config/video_beauty_default_config \
             /vendor/odm/etc/camera/config/video_beauty_default_config; do
     [ -f "$VB" ] || continue
-    _cm=$(grep -c '//' "$VB" 2>/dev/null)
+    # A comment starts a line. "//" anywhere else is data.
+    #
+    # grep -c '//' counted every double slash in the file, including the ones inside string
+    # values - a URL, a path, an escaped separator. That made this check fail on all six
+    # devices in a cross-device sweep, including ones whose file ASB never touched, and a
+    # red line that is always red tells you nothing.
+    _cm=$(grep -cE '^[[:space:]]*//' "$VB" 2>/dev/null)
     if [ "${_cm:-0}" = "0" ]; then
       P "  [PASS] $VB present, strict JSON (no // comments)"; PASS=$((PASS+1))
     else
@@ -870,7 +905,7 @@ else
       NA=$((NA+2))
       P "  [N/A ] retouch/Telegram content is OP15 camera-tone specific (no conf_tuning on this model)"
     fi
-    V "  strict JSON (no // comments)" "0" "$(grep -c '//' "$VB" 2>/dev/null)" eq
+    V "  strict JSON (no // comments)" "0" "$(grep -cE '^[[:space:]]*//' "$VB" 2>/dev/null)" eq
   done
   CT="$(firstf '/odm/etc/camera/conf_tuning_params.json' '/vendor/odm/etc/camera/conf_tuning_params.json')"
   if [ -n "$CT" ]; then
