@@ -338,6 +338,65 @@ _a2dp_req="$(cfg bt_a2dp_offload)"
 _a2dp_set="$(settings get global bluetooth_a2dp_offload_enabled 2>/dev/null)"
 NOTE "bt_a2dp_offload: requested=${_a2dp_req:-auto}  ·  setting=${_a2dp_set:-<unavailable>}  ·  platform_disabled=$(gp persist.bluetooth.a2dp_offload.disabled)  ·  vendor_disabled=$(gp persist.vendor.bluetooth.a2dp_offload.disabled)"
 
+SEC "1a2. AUDIO ROUTE  (what the pipeline is doing right now — read only)"
+# Measure the audio path instead of asserting properties at it.
+#
+# A comparative audit of two other Qualcomm modules concluded that their real value is not
+# the property packs they ship - those fight whoever else owns the same files - but the
+# fact that they force the question: which route is actually active, and is anything
+# offloaded? ASB has never been able to answer it, and audio is the most expensive screen-on
+# phase in every capture we have: 348 mA and 14.83 %/h for Bluetooth playback in the last
+# one, against 152 for the same audio with the screen off.
+#
+# Everything below is a read. Nothing here changes a route, a codec or a property - if a
+# node is absent the line says so and the report moves on.
+_ap="$(dumpsys audio 2>/dev/null)"
+if [ -n "$_ap" ]; then
+  NOTE "active devices: $(echo "$_ap" | grep -m1 -iE 'Devices?:.*(SPEAKER|BLUETOOTH|USB|HEADSET|HEADPHONE)' | sed 's/^[[:space:]]*//' | cut -c1-90)"
+  NOTE "audio mode: $(echo "$_ap" | grep -m1 -iE '^[[:space:]]*Mode:' | sed 's/^[[:space:]]*//' | cut -c1-60)"
+else
+  NOTE "dumpsys audio unavailable - route unknown"
+fi
+# Offload EVIDENCE, not an offload verdict.
+#
+# The first version of this block said hw_params and the PCM device count told us whether
+# the DSP or the CPU was decoding. They do not: hw_params describes a stream's format, the
+# device count is static platform topology, and a2dp_offload.cap is a capability list -
+# what the platform CAN do, not what it IS doing. A review caught the overreach, and it
+# mattered: the next step is an A/B experiment on A2DP offload, and starting that from a
+# guess dressed as a measurement is how you get a result that means nothing.
+#
+# So: gather the signals, print them, and say "unknown" when they do not agree. A blank is
+# more useful than a confident wrong answer.
+_ev_req="$(cfg bt_a2dp_offload)"
+_ev_set="$(settings get global bluetooth_a2dp_offload_enabled 2>/dev/null)"
+_ev_pdis="$(gp persist.bluetooth.a2dp_offload.disabled)"
+_ev_vdis="$(gp persist.vendor.bluetooth.a2dp_offload.disabled)"
+_ev_cap="$(gp persist.bluetooth.a2dp_offload.cap)"
+# AudioFlinger names an offloaded or compressed thread outright. That is live
+# pipeline evidence, but a thread can belong to another output or survive while
+# idle, so it still cannot prove that Bluetooth A2DP owns it.
+_ev_af="$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -iE 'Offload|Compress' | sed 's/^[[:space:]]*//' | cut -c1-70)"
+_ev_play=0; echo "$_ap" | grep -qi 'state:started' && _ev_play=1
+_ev_route="unknown"
+echo "$_ap" | grep -qiE 'Devices?:.*(BT_A2DP|BLUETOOTH)' && _ev_route="bt"
+NOTE "a2dp evidence: requested=${_ev_req:-auto} setting=${_ev_set:-<none>} platform_disabled=${_ev_pdis:-<none>} vendor_disabled=${_ev_vdis:-<none>}"
+NOTE "a2dp codecs advertised: ${_ev_cap:-<none>}   (capability, not proof of live offload)"
+NOTE "audio route evidence: route=$_ev_route playing=$_ev_play"
+NOTE "audioflinger thread: ${_ev_af:-<no offload/compress thread reported>}"
+_ev_verdict="unknown"
+if [ -n "$_ev_af" ] && { [ "$_ev_pdis" = "true" ] || [ "$_ev_vdis" = "true" ]; }; then
+  _ev_verdict="unknown (conflicting AudioFlinger/property evidence)"
+elif [ -n "$_ev_af" ] && [ "$_ev_play" = "1" ] && [ "$_ev_route" = "bt" ]; then
+  _ev_verdict="AudioFlinger offload/compress observed during BT playback (route association unverified)"
+elif [ -n "$_ev_af" ]; then
+  _ev_verdict="AudioFlinger offload/compress thread present (not tied to active BT playback)"
+elif [ "$_ev_pdis" = "true" ] || [ "$_ev_vdis" = "true" ]; then
+  _ev_verdict="A2DP offload blocked by platform/vendor property"
+fi
+NOTE "offload state: $_ev_verdict"
+NOTE "(read-only section: ASB changes nothing here, it only reports what the platform chose)"
+
 SEC "1b. DSP ENGINE  (what the effect is actually doing)"
 # The whole DSP block was missing from this report - six settings, none of them checked,
 # on the subsystem most likely to be silently doing nothing. Config against live property
