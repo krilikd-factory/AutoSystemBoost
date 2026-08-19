@@ -609,6 +609,12 @@ while : ; do
     echo "${_now}|$(date '+%Y-%m-%d %H:%M:%S')|${_new_phase}|from:${_phase}" >> "$LK_OUT_DIR/phase_timeline.txt"
     # at every phase boundary, grab a wake snapshot (cheap kernel side)
     lk_wakelock_kernel_snapshot "phase:${_new_phase}"
+    # Both snapshots gated on an audio phase, matching the deployed 507 build.
+    #
+    # My port put the reconnect snapshot after the case instead of inside it, so it fired on
+    # every phase transition rather than only audio ones. The recorder is opt-in, so no
+    # ordinary capture was affected - but a reconnect trace is about audio, and a snapshot
+    # taken entering "idle" spends a logcat read to record nothing.
     case "$_new_phase" in
       audio*)
         lk_snapshot_audio "enter:${_new_phase}"
