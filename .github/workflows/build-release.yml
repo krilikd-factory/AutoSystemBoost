@@ -207,6 +207,12 @@ jobs:
             echo "== tests/test_device_safety_contract.sh =="
             sh tests/test_device_safety_contract.sh || _rc=1
           fi
+          # Donor-inspired telemetry stays read-only: JSON structure, provenance fields
+          # and no-write guarantees are release gates, not optional diagnostics.
+          if [ -f tests/test_donor_telemetry_contract.sh ]; then
+            echo "== tests/test_donor_telemetry_contract.sh =="
+            sh tests/test_donor_telemetry_contract.sh || _rc=1
+          fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"
             exit 1
