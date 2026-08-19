@@ -355,10 +355,15 @@ lk_emit_phase_summary() {
       }
     ' "$_all" | sort -k4 -rn
     awk -F'\t' '
-      !/^#/ && ($1=="idle" || $1=="sleep") { d=$3-$2; if(d>DUR){DUR=d;SP=$4;EP=$5;CT=$6;SF=$7;P6=$8;AW=$12} }
+      # Carry current too, and print as many fields as the rows above.
+      # When mA was added this line stayed at ten fields while the header went to eleven,
+      # so everything after pct/h printed one column left: CPU temperature appeared under
+      # "mA" and surface under "cpuT". It reads as plausible numbers, which is exactly
+      # what makes it worth fixing rather than tolerating.
+      !/^#/ && ($1=="idle" || $1=="sleep") { d=$3-$2; if(d>DUR){DUR=d;SP=$4;EP=$5;CT=$6;SF=$7;P6=$8;AW=$12;MAV=$13} }
       END{ if(DUR>=10800){ aws=(AW>=0)?sprintf("%.1f",AW):"-";
-        printf "%-15s %8.1f %7d %8.2f %8d %8d %9d %7s %9s %8s\n", \
-        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, CT, SF, (P6/1000), "-", "-", aws } }
+        printf "%-15s %8.1f %7d %8.2f %6d %8d %8d %9d %7s %9s %8s\n", \
+        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, MAV, CT, SF, (P6/1000), "-", "-", aws } }
     ' "$_all"
     echo ""
     echo "Legend: d_pct=battery % consumed (negative=gained while charging),"
