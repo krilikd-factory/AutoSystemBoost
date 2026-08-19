@@ -334,7 +334,9 @@ _vt="$(firstf '/vendor/etc/default_volume_tables.xml' '/odm/etc/default_volume_t
 if [ -n "$_vt" ]; then
   V "  volume curves rebuilt by ASB" "present" "$(grep -m1 -o 'ASB:VOLCURVE' "$_vt" 2>/dev/null)" present
 fi
-NOTE "bt_a2dp_offload = $(cfg bt_a2dp_offload)  ·  live: $(settings get global bluetooth_a2dp_offload_enabled 2>/dev/null)"
+_a2dp_req="$(cfg bt_a2dp_offload)"
+_a2dp_set="$(settings get global bluetooth_a2dp_offload_enabled 2>/dev/null)"
+NOTE "bt_a2dp_offload: requested=${_a2dp_req:-auto}  ·  setting=${_a2dp_set:-<unavailable>}  ·  platform_disabled=$(gp persist.bluetooth.a2dp_offload.disabled)  ·  vendor_disabled=$(gp persist.vendor.bluetooth.a2dp_offload.disabled)"
 
 SEC "1b. DSP ENGINE  (what the effect is actually doing)"
 # The whole DSP block was missing from this report - six settings, none of them checked,
@@ -359,6 +361,7 @@ NOTE "dsp_compressor = $(cfg dsp_compressor)  ·  live comp: $(gp persist.asb.ds
 # library that predates the feature will process everything and look correct here.
 _dsp_o="$(cfg dsp_outputs)"
 V "  DSP outputs live (persist.asb.dsp.outputs)" "${_dsp_o:-all}" "$(gp persist.asb.dsp.outputs)" eq
+NOTE "  DSP requested/applied gain: requested=$(gp persist.asb.dsp.gain_requested_mb)mB  ·  applied=$(gp persist.asb.dsp.gain_applied_mb)mB  ·  published_route=$(gp persist.asb.dsp.route)"
 case "$(gp persist.asb.dsp.outputs)" in
   '') NOTE "outputs property unset - library may predate per-output routing (rebuild libasbdsp)" ;;
 esac
@@ -1002,9 +1005,15 @@ if [ -r /proc/swaps ]; then
     P "    $_sn ($_st) size=$((${_ssz:-0}/1024))MB used=$((${_su:-0}/1024))MB"
   done
 fi
-for _zr in /sys/block/zram0/comp_algorithm /sys/block/zram0/disksize; do
-  [ -r "$_zr" ] && P "    zram $(basename $_zr): $(cat $_zr 2>/dev/null)"
+for _zr in /sys/block/zram0/comp_algorithm /sys/block/zram0/disksize /sys/block/zram0/mem_limit /sys/block/zram0/mm_stat /sys/block/zram0/io_stat; do
+  [ -r "$_zr" ] && P "    zram $(basename $_zr): $(cat $_zr 2>/dev/null | tr '\n' ' ')"
 done
+if [ -r /proc/pressure/memory ]; then
+  P "  memory PSI (read-only):"
+  sed 's/^/    /' /proc/pressure/memory 2>/dev/null
+else
+  NOTE "memory PSI unavailable on this kernel (no policy is changed)"
+fi
 # LMKD tunables ASB may touch
 P "  LMKD / vmpressure props:"
 # OEM system toggles ASB can optionally manage (only when UX_MANAGE_OEM_TOGGLES=1).
