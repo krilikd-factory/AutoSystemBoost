@@ -20,31 +20,6 @@ This document describes every file the ASB governor and logkit produce, what fie
 | `<logkit_dir>/status_watch.txt` | concatenated state JSON | logkit shell | 5s sampling |
 | `<logkit_dir>/cap_verify.txt` | freeform text report | logkit shell | At capture finalize |
 | `<logkit_dir>/cap_source_summary.txt` | text histogram | logkit shell | At capture finalize |
-| `<logkit_dir>/audio_trace.txt` | timestamped text snapshots | logkit shell | Capture start, hourly, and audio-phase transition |
-| `<logkit_dir>/bt_reconnect_events.txt` | filtered epoch logcat | opt-in full-day recorder | Only with `ASB_BT_RECONNECT_TRACE=1` |
-| `<logkit_dir>/bt_reconnect_snapshots.txt` | timestamped Bluetooth/audio evidence | opt-in full-day recorder | Start, end, hourly, and BT-audio transitions |
-
----
-
-## `audio_trace.txt` — route and offload evidence
-
-`audio_trace.txt` is a sequence of snapshots, not a stable machine schema. It records route, active players, Bluetooth properties, codec information where Android exposes it, and `audioflinger.thread`.
-
-`offload.state` is deliberately conservative. `AudioFlinger offload/compress observed during BT playback` means that an offload/compress thread was seen while ASB's route detector observed active Bluetooth playback; it **does not prove** that this exact A2DP stream owns the thread. `unknown` is the required result when evidence is absent or conflicting. Properties ending in `.cap` describe capability only, never live offload.
-
----
-
-## Opt-in `bt_reconnect_*.txt` — Bluetooth reconnect evidence
-
-The recorder is enabled only for a manually started full-day capture:
-
-```sh
-ASB_BT_RECONNECT_TRACE=1 sh "$MODDIR/tools/logkit/asb_log_full_day.sh" 24
-```
-
-It never changes Bluetooth state, codec, A2DP offload, audio routing, radio power, or Android settings. It tails a narrow Android Bluetooth tag set and captures contextual `dumpsys bluetooth_manager` / audio snapshots at safe lifecycle points. Bluetooth MAC addresses are redacted as `<BT_ADDR>` before being written into the archive. Device names, application names, and log messages can still be personal data; share the resulting folder only after review.
-
-An event line is evidence, not a diagnosis. The follow-up analysis must correlate disconnect/connect lines with adapter state, A2DP/HFP/LE/GATT profile state, audio route, timestamp, and—where available—battery/thermal state. Absence of a line does not prove that no reconnect occurred, because vendor Bluetooth tags vary by OxygenOS release.
 
 ---
 
@@ -277,6 +252,28 @@ Most columns are reads of /dev/.asb/state with explicit type. `bat_temp_10x` is 
 These are human-readable snapshot streams, not positional CSV schemas. Each block begins with a UTC timestamp and a scenario tag. A missing property, route, sysfs node or PSI endpoint means **unavailable**, not a failed ASB write.
 
 `audio_trace.txt` records the observed playback state and route, then the ASB-requested `bt_a2dp_offload` value, published `persist.asb.dsp.*` state, platform/vendor A2DP-offload blocks, codec hints, active players and AudioFlinger effects. It is evidence for a future offload A/B experiment; it does not enable or disable offload itself.
+
+`offload.state` is deliberately conservative. It reports `offload thread present on an active BT route` only when three signals agree: AudioFlinger names an Offload or Compress thread, the active route is Bluetooth, and playback is running. A thread on its own is **not** treated as proof — it may serve a different output or outlive playback — so that case reports `unknown (thread seen, but route or playback did not corroborate)`. Where the platform or vendor property blocks offload outright the state is `off`. Anything else is `unknown`.
+
+### Bluetooth reconnect recorder (opt-in)
+
+Off unless a capture is started with `ASB_BT_RECONNECT_TRACE=1`. It writes an event file
+alongside the other artifacts and touches nothing: no Bluetooth setting, profile, codec,
+route or power state is changed by it.
+
+Addresses are redacted before anything reaches disk, and the logcat tag list is narrow on
+purpose — an all-day unfiltered dump would be both expensive and privacy-hostile, and the
+question it answers ("did the buds drop, and what happened around that moment") does not
+need one.
+
+Lifecycle: `lk_bt_reconnect_start` at capture start, `lk_bt_reconnect_snapshot` at `before`,
+at every phase change, hourly, and at `end`, then `lk_bt_reconnect_stop`. The code is the
+same in the source tree and in the deployed 507 build; `tests/test_donor_telemetry_contract.sh`
+asserts the functions and all six call sites are present, because this recorder was lost
+once already in a merge and nothing noticed until logs came back without it.
+
+
+The same rule runs in `tools/asb_diag.sh` and in `tools/logkit/_asb_logkit_common.sh`, and `tests/test_donor_telemetry_contract.sh` asserts both. The two copies once diverged — the manual report was tightened while every full-day archive kept the weaker single-signal logic — which is why the assertions test for the *shape* of the verdict rather than its wording.
 
 `network_trace.txt` records live route and TCP state followed by ASB network provenance. For every `net_congestion` and `net_qdisc` global/per-link key the snapshot reports the requested config and the last result from `net_apply_result` (`ok`, `pending`, `failed`, `unavailable` or `not_applied`). The current kernel qdisc/congestion values remain the live authority.
 
