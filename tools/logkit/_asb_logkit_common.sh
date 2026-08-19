@@ -1643,6 +1643,33 @@ lk_snapshot_audio() {
              persist.vendor.audio.a2dp.hal.implementation persist.vendor.audio.ull.enabled; do
       echo "  $p = $(lk_get_prop "$p")"
     done
+    # The one line here that describes the RUNNING pipeline, not its configuration.
+    #
+    # Everything above is requested state and capability - what the platform was asked to
+    # do and what it can do. Neither proves where a stream is decoded. An AudioFlinger
+    # offload/compress thread is useful live evidence, but its route association can remain
+    # unknown; the state emitted below preserves that distinction for a valid future A/B.
+    # It is written into every capture rather than a one-off asbdiag run because both sides
+    # of an A/B experiment need the same evidence fields.
+    _lk_af="$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -iE 'Offload|Compress' | sed 's/^[[:space:]]*//' | cut -c1-70)"
+    _lk_pdis="$(lk_get_prop persist.bluetooth.a2dp_offload.disabled)"
+    _lk_vdis="$(lk_get_prop persist.vendor.bluetooth.a2dp_offload.disabled)"
+    echo "  audioflinger.thread = ${_lk_af:-<no offload/compress thread reported>}"
+    # A thread name alone does not prove that *Bluetooth A2DP* owns it: it can
+    # belong to another output, and an idle thread can persist after playback.
+    # Preserve that uncertainty explicitly so an eventual A/B experiment has no
+    # false-positive baseline.
+    if [ -n "$_lk_af" ] && { [ "$_lk_pdis" = "true" ] || [ "$_lk_vdis" = "true" ]; }; then
+      echo "  offload.state = unknown (conflicting AudioFlinger/property evidence)"
+    elif [ -n "$_lk_af" ] && [ "$LK_AUDIO_PLAY" = "1" ] && [ "$LK_AUDIO_ROUTE" = "bt" ]; then
+      echo "  offload.state = AudioFlinger offload/compress observed during BT playback (route association unverified)"
+    elif [ -n "$_lk_af" ]; then
+      echo "  offload.state = AudioFlinger offload/compress thread present (not tied to active BT playback)"
+    elif [ "$_lk_pdis" = "true" ] || [ "$_lk_vdis" = "true" ]; then
+      echo "  offload.state = A2DP offload blocked by platform/vendor property"
+    else
+      echo "  offload.state = unknown"
+    fi
     echo "# active players"
     dumpsys audio 2>/dev/null | grep -iE 'state:started|usage=|content Type|piid:|AudioPlaybackConfiguration' | head -20
     echo "# routing / devices"
@@ -1772,6 +1799,74 @@ lk_snapshot_network() {
   } >> "$_nf" 2>/dev/null || true
 }
 
+
+# ── opt-in Bluetooth reconnect recorder ────────────────────────────────────
+# Disabled unless ASB_BT_RECONNECT_TRACE=1 is supplied to a full-day capture.
+# It is evidence-only: no Bluetooth setting, profile, codec, route or power state
+# is written. The tag list is deliberately narrow so an all-day capture does not
+# become an expensive or privacy-hostile unfiltered logcat dump.
+LK_BT_RECONNECT_ENABLED=0
+LK_BT_RECONNECT_PID=""
+LK_BT_RECONNECT_EVENTS=""
+LK_BT_RECONNECT_SNAPSHOTS=""
+
+lk_bt_redact_addr() {
+  # Device addresses are unnecessary for reconnect diagnosis and must not leave
+  # the device in a shareable capture archive.
+  sed -E 's/([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}/<BT_ADDR>/g'
+}
+
+lk_bt_reconnect_start() {
+  [ "${ASB_BT_RECONNECT_TRACE:-0}" = "1" ] || return 0
+  LK_BT_RECONNECT_ENABLED=1
+  LK_BT_RECONNECT_EVENTS="$LK_OUT_DIR/bt_reconnect_events.txt"
+  LK_BT_RECONNECT_SNAPSHOTS="$LK_OUT_DIR/bt_reconnect_snapshots.txt"
+  {
+    echo "# ASB Bluetooth reconnect recorder (opt-in, read-only)"
+    echo "# started_epoch=$(date +%s)"
+    echo "# scope=BluetoothManagerService, AdapterService, A2DP/HFP/GATT/AVRCP stack tags"
+    echo "# addresses are redacted; absence of an event does not prove absence of a reconnect"
+  } > "$LK_BT_RECONNECT_EVENTS"
+  # -T 1 starts at the live tail instead of dumping prior unrelated log history.
+  # A subshell owns the pipeline, so its PID is tracked and cleaned up by stop().
+  (
+    logcat -v epoch -T 1 -b main -b system -b radio \
+      -s BluetoothManagerService:V AdapterService:V A2dpService:V HeadsetService:V \
+         GattService:V BluetoothA2dp:V BluetoothHeadset:V bt_stack:V bt_btif:V \
+         bt_btm:V bt_av:V Avrcp:V *:S 2>/dev/null | lk_bt_redact_addr >> "$LK_BT_RECONNECT_EVENTS"
+  ) &
+  LK_BT_RECONNECT_PID=$!
+  echo "# recorder_pid=$LK_BT_RECONNECT_PID" >> "$LK_BT_RECONNECT_EVENTS"
+}
+
+lk_bt_reconnect_snapshot() {
+  [ "$LK_BT_RECONNECT_ENABLED" = "1" ] || return 0
+  _bt_tag="${1:-periodic}"
+  {
+    echo "===== BLUETOOTH [$_bt_tag] $(date -u '+%Y-%m-%dT%H:%M:%SZ') ====="
+    echo "adapter.service=$(lk_get_prop init.svc.bluetooth) bluetooth_on=$(settings get global bluetooth_on 2>/dev/null)"
+    echo "audio.playing=${LK_AUDIO_PLAY:-unknown} audio.route=${LK_AUDIO_ROUTE:-unknown} audio.mode=${LK_AUDIO_MODE:-unknown}"
+    echo "# connection/profile evidence (MAC addresses redacted)"
+    dumpsys bluetooth_manager 2>/dev/null \
+      | grep -iE 'adapter.*state|connection.*state|connected|connecting|disconnect|a2dp|headset|hfp|le_audio|gatt|avrcp|codec' \
+      | head -120 | lk_bt_redact_addr
+    echo "# active audio route evidence"
+    dumpsys audio 2>/dev/null \
+      | grep -iE 'Devices:|mConnectedDevices|state:started|A2DP|BLE_|HEADSET|SPEAKER|WIRED' \
+      | head -40 | lk_bt_redact_addr
+    echo ""
+  } >> "$LK_BT_RECONNECT_SNAPSHOTS" 2>/dev/null || true
+}
+
+lk_bt_reconnect_stop() {
+  [ "$LK_BT_RECONNECT_ENABLED" = "1" ] || return 0
+  if [ -n "$LK_BT_RECONNECT_PID" ]; then
+    kill "$LK_BT_RECONNECT_PID" 2>/dev/null || true
+    wait "$LK_BT_RECONNECT_PID" 2>/dev/null || true
+  fi
+  echo "# recorder_stopped_epoch=$(date +%s)" >> "$LK_BT_RECONNECT_EVENTS" 2>/dev/null || true
+  LK_BT_RECONNECT_PID=""
+}
 
 lk_init() {
   MODDIR="$(lk_resolve_moddir)"

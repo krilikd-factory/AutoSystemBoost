@@ -539,6 +539,9 @@ lk_emit_full_day_report() {
 
 # ── run ────────────────────────────────────────────────────────────────────
 lk_init
+# Optional event recorder for an unrelated Bluetooth reconnect issue. It is
+# disabled by default and does not alter Bluetooth or audio policy.
+lk_bt_reconnect_start
 
 # trace headers
 lk_perf_trace_header
@@ -561,6 +564,8 @@ lk_finalize() {
   [ "${LK_FINALIZED:-0}" = "1" ] && return 0
   LK_FINALIZED=1
   lk_wl_release
+  lk_bt_reconnect_snapshot "end"
+  lk_bt_reconnect_stop
   lk_phase_ledger_accumulate
   lk_phase_ledger_flush
   lk_wakelock_kernel_snapshot "end"
@@ -582,6 +587,7 @@ lk_snapshot_network "before"
 lk_sample_gpu_busy
 lk_sample_audio
 lk_snapshot_audio "before"
+lk_bt_reconnect_snapshot "before"
 lk_detect_phase "$(date +%s)"; _phase="$LK_PHASE_OUT"
 lk_phase_ledger_open "$_phase"
 echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|capture_start" >> "$LK_OUT_DIR/phase_timeline.txt"
@@ -603,7 +609,12 @@ while : ; do
     echo "${_now}|$(date '+%Y-%m-%d %H:%M:%S')|${_new_phase}|from:${_phase}" >> "$LK_OUT_DIR/phase_timeline.txt"
     # at every phase boundary, grab a wake snapshot (cheap kernel side)
     lk_wakelock_kernel_snapshot "phase:${_new_phase}"
-    case "$_new_phase" in audio*) lk_snapshot_audio "enter:${_new_phase}" ;; esac
+    case "$_new_phase" in
+      audio*)
+        lk_snapshot_audio "enter:${_new_phase}"
+        lk_bt_reconnect_snapshot "phase:${_new_phase}"
+        ;;
+    esac
     lk_phase_ledger_open "$_new_phase"
     _phase="$_new_phase"
     LK_POLL_S="$(lk_poll_for_phase "$_phase")"
@@ -636,6 +647,7 @@ while : ; do
     lk_snapshot_kernel "hourly"
     lk_snapshot_network "hourly"
     lk_snapshot_audio "hourly"
+    lk_bt_reconnect_snapshot "hourly"
     lk_verify_caps
     lk_emit_phase_summary 2>/dev/null || true
     lk_emit_full_day_report 2>/dev/null || true
