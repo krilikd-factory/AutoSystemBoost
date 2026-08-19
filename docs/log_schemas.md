@@ -247,6 +247,18 @@ Most columns are reads of /dev/.asb/state with explicit type. `bat_temp_10x` is 
 
 ---
 
+## `audio_trace.txt`, `network_trace.txt`, `kernel_params.txt` — provenance snapshots
+
+These are human-readable snapshot streams, not positional CSV schemas. Each block begins with a UTC timestamp and a scenario tag. A missing property, route, sysfs node or PSI endpoint means **unavailable**, not a failed ASB write.
+
+`audio_trace.txt` records the observed playback state and route, then the ASB-requested `bt_a2dp_offload` value, published `persist.asb.dsp.*` state, platform/vendor A2DP-offload blocks, codec hints, active players and AudioFlinger effects. It is evidence for a future offload A/B experiment; it does not enable or disable offload itself.
+
+`network_trace.txt` records live route and TCP state followed by ASB network provenance. For every `net_congestion` and `net_qdisc` global/per-link key the snapshot reports the requested config and the last result from `net_apply_result` (`ok`, `pending`, `failed`, `unavailable` or `not_applied`). The current kernel qdisc/congestion values remain the live authority.
+
+`kernel_params.txt` records ZRAM compression/size/stats where exported and `/proc/pressure/memory` lines. Memory PSI is read-only and must not be interpreted as a request to rebuild ZRAM or alter VM policy. This is specifically designed to distinguish a genuine memory-pressure hypothesis from an unrelated night-drain cause.
+
+---
+
 ## `cap_verify.txt` — finalize-time report
 
 Human-readable text report written by `lk_verify_caps()` at capture end. Per-policy line:
