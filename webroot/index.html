@@ -4214,7 +4214,21 @@ async function cfgSet(key, val, ctl) {
       toast(cfgToastText(key, val) + T('t_cfg_saved', ' \u00b7 reboot to apply'), cfgToastType(key));
     }
   } else {
-    toast(T('t_cfg_err', '\u2717 Failed to write config'), 'err');
+    /* Show the reason, not just the fact.
+     *
+     * asb_config_safe.sh already explains every refusal on stderr - "sustained_temp_ceiling
+     * must be enter..70", "invalid auto battery thresholds". This threw all of it away and
+     * printed one generic line, so an Ace5 user hit a red toast on the throttle slider with
+     * no way to learn the value conflicted with another key. A message that says only "it
+     * failed" turns a fixable config into a bug report. */
+    let _why = '';
+    try {
+      _why = String((r && (r.stderr || r.stdout)) || '')
+        .split('\n')
+        .filter(function (x) { return x.indexOf('asb_config_safe:') === 0; })[0] || '';
+      _why = _why.replace('asb_config_safe:', '').trim();
+    } catch (e) {}
+    toast(T('t_cfg_err', '\u2717 Failed to write config') + (_why ? ': ' + _why : ''), 'err');
   }
   cfgRender();
 }
