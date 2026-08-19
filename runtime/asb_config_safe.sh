@@ -49,7 +49,10 @@ _no_duplicates() {
     {
       p=index($0,"="); if (!p) next
       k=substr($0,1,p-1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
-      if (++seen[k] > 1) { print "duplicate key: " k > "/dev/stderr"; bad=1 }
+      # Same prefix every other refusal uses: the WebUI filters stderr on it to find the
+      # reason, so a message without it is invisible - and a stale config with a duplicate
+      # key is exactly the case where the user most needs to be told what is wrong.
+      if (++seen[k] > 1) { print "asb_config_safe: duplicate key in config: " k > "/dev/stderr"; bad=1 }
     }
     END { exit bad ? 1 : 0 }
   ' "$1"
