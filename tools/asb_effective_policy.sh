@@ -16,7 +16,14 @@ _feat() { grep -E "^[[:space:]]*$1=" "$MODDIR/features.conf" 2>/dev/null | tail 
 _state() { grep -E "^[[:space:]]*$1=" /dev/.asb/state 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
 _cap() { grep -E "^[[:space:]]*$1=" /data/adb/asb/capabilities.env 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
 _lease() { grep -E "^[[:space:]]*$2=" "/dev/.asb/arbiter/$1.lease" 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
-_json() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+_json() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n\r' ' '; }
+_read() { _rv="$(cat "$1" 2>/dev/null | tr '\n\r' ' ')"; [ -n "$_rv" ] && printf '%s' "$_rv" || printf '%s' 'unavailable'; }
+_prop() { _pv="$(getprop "$1" 2>/dev/null | tr -d '\r\n')"; [ -n "$_pv" ] && printf '%s' "$_pv" || printf '%s' 'unavailable'; }
+_net_result() { _nv="$(grep -E "^$1=" /data/adb/asb/net_apply_result 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r')"; [ -n "$_nv" ] && printf '%s' "$_nv" || printf '%s' 'not_applied'; }
+_psi_avg10() {
+  _pv="$(awk -v _kind="$1" '$1 == _kind { for (i = 1; i <= NF; i++) if ($i ~ /^avg10=/) { sub(/^avg10=/, "", $i); print $i; exit } }' /proc/pressure/memory 2>/dev/null)"
+  [ -n "$_pv" ] && printf '%s' "$_pv" || printf '%s' 'unavailable'
+}
 
 [ -r "$CONF" ] || { echo '{"error":"governor.conf unavailable"}'; exit 1; }
 _dups="$(awk '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {p=index($0,"="); if(!p)next; k=substr($0,1,p-1); gsub(/^[[:space:]]+|[[:space:]]+$/,"",k); if(++seen[k]>1)n++} END{print n+0}' "$CONF")"
@@ -24,12 +31,17 @@ if [ "$_dups" = "0" ]; then _cfg_health="valid"; else _cfg_health="duplicate_key
 _prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"; _prof="${_prof:-balanced}"
 _sm="$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)"; _sm="${_sm:-$(_cfg smart_mode_enabled)}"
 if [ "$_sm" = "1" ] || [ "$_prof" = "smart" ]; then _owner="governor_fsm"; else _owner="service_manual"; fi
-_floor="$(tr -d ' \r' < /data/adb/asb/thermal_floor 2>/dev/null)"; _floor="${_floor:-none}"
+if [ -r /data/adb/asb/thermal_floor ]; then
+  _floor="$(tr -d ' \r' < /data/adb/asb/thermal_floor)"
+else
+  _floor="none"
+fi
+_floor="${_floor:-none}"
 _camera_tier="generic"; _audio_tier="generic"; _net_tier="generic"; _overlay_tier="generic"; _properties_tier="generic"
 command -v asb_device_tier_name >/dev/null 2>&1 && {
-  _camera_tier="$(asb_device_tier_name camera)"; _audio_tier="$(asb_device_tier_name audio)";
-  _net_tier="$(asb_device_tier_name network)"; _overlay_tier="$(asb_device_tier_name overlay)";
-  _properties_tier="$(asb_device_tier_name properties)";
+  _camera_tier="$(asb_device_tier_name camera)"; _audio_tier="$(asb_device_tier_name audio)"
+  _net_tier="$(asb_device_tier_name network)"; _overlay_tier="$(asb_device_tier_name overlay)"
+  _properties_tier="$(asb_device_tier_name properties)"
 }
 _mp_state="/data/adb/asb/managed_props.state"
 _mp_status="not_run"; _mp_reason="state_unavailable"; _mp_applied="0"; _mp_skipped="0"
@@ -57,6 +69,14 @@ printf '"writer_health":{"attempts":"%s","applied":"%s","failures":"%s","backoff
   "$(_json "$(_state writer_attempts)")" "$(_json "$(_state writer_applied)")" "$(_json "$(_state writer_failures)")" "$(_json "$(_state writer_backoff_skips)")" "$(_json "$(_state writer_next_retry)")"
 printf '"energy_policy":{"shadow_mode":"%s","thermal_budget_enabled":"%s","thermal_budget_trim_pct":"%s","thermal_budget_reason":"%s","thermal_budget_dwell_s":"%s"},' \
   "$(_json "$(_state shadow_mode)")" "$(_json "$(_state thermal_budget_enabled)")" "$(_json "$(_state thermal_budget_trim_pct)")" "$(_json "$(_state thermal_budget_reason)")" "$(_json "$(_state thermal_budget_dwell_s)")"
+# These three blocks are intentionally observation-only. They expose whether a donor-inspired
+# hypothesis is true on this device before ASB changes a route, qdisc or memory policy.
+printf '"audio":{"dsp_enabled":"%s","dsp_route_published":"%s","dsp_outputs":"%s","a2dp_offload_requested":"%s","a2dp_platform_disabled":"%s","a2dp_vendor_disabled":"%s"},' \
+  "$(_json "$(_prop persist.asb.dsp.enable)")" "$(_json "$(_prop persist.asb.dsp.route)")" "$(_json "$(_prop persist.asb.dsp.outputs)")" "$(_json "$(_cfg bt_a2dp_offload)")" "$(_json "$(_prop persist.bluetooth.a2dp_offload.disabled)")" "$(_json "$(_prop persist.vendor.bluetooth.a2dp_offload.disabled)")"
+printf '"network":{"congestion_requested":"%s","congestion_result":"%s","congestion_live":"%s","qdisc_requested":"%s","qdisc_result":"%s","qdisc_live":"%s"},' \
+  "$(_json "$(_cfg net_congestion)")" "$(_json "$(_net_result net_congestion)")" "$(_json "$(_read /proc/sys/net/ipv4/tcp_congestion_control)")" "$(_json "$(_cfg net_qdisc)")" "$(_json "$(_net_result net_qdisc)")" "$(_json "$(_read /proc/sys/net/core/default_qdisc)")"
+printf '"memory":{"psi_some_avg10":"%s","psi_full_avg10":"%s","zram_algorithm":"%s","zram_disksize":"%s","zram_mm_stat":"%s"},' \
+  "$(_json "$(_psi_avg10 some)")" "$(_json "$(_psi_avg10 full)")" "$(_json "$(_read /sys/block/zram0/comp_algorithm)")" "$(_json "$(_read /sys/block/zram0/disksize)")" "$(_json "$(_read /sys/block/zram0/mm_stat)")"
 printf '"asb_overhead":{"event_wakeups":"%s","timer_wakeups":"%s","cpu_ms":"%s"}' \
   "$(_json "$(_state governor_event_wakeups)")" "$(_json "$(_state governor_timer_wakeups)")" "$(_json "$(_state governor_cpu_ms)")"
 printf '}\n'
