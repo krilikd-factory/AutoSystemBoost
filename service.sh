@@ -2851,6 +2851,11 @@ fi
     sleep 900
     [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ] || continue
     sh "$MODDIR/runtime/asb_wakelock_watch.sh" >/dev/null 2>&1
+    # Classify the screen-off stretch alongside the wakelock snapshot: both answer
+    # "what was actually happening", and running them together means the class and the
+    # holder come from the same moment rather than from two different ones.
+    [ -f "$MODDIR/runtime/asb_screenoff_class.sh" ] \
+      && sh "$MODDIR/runtime/asb_screenoff_class.sh" >/dev/null 2>&1
     # Same cadence: both look for work that outlived the user's attention, and neither is
     # urgent enough to poll more often than the thing it is trying to save.
     [ -f "$MODDIR/runtime/asb_gnss_trim.sh" ] \
