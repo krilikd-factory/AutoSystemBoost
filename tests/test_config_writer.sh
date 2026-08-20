@@ -30,6 +30,18 @@ run_writer() {
   MODDIR="$MOD" ASB_CONFIG_STATE="$STATE" sh "$WRITER" "$@"
 }
 
+# Upgrade compatibility: a retained active config can predate current V63 keys.
+# They remain closed to the shipped schema, but must be appendable by WebUI rather
+# than reported as "unknown key" and left visually disabled.
+sed -i '/^gnss_trim=/d; /^night_modem_idle=/d' "$MOD/config/governor.conf"
+run_writer set gnss_trim 1 >/dev/null
+run_writer set night_modem_idle 1 >/dev/null
+need_line "$MOD/config/governor.conf" "gnss_trim=1"
+need_line "$MOD/config/governor.conf" "night_modem_idle=1"
+if run_writer set ace5_unknown_toggle 1 >/dev/null 2>&1; then
+  fail "unknown key was accepted through shipped-schema fallback"
+fi
+
 # F-02: a thermal overlay above 100 used to become a negative multiplier and
 # make the writer silently skip the safety cap. Both values must be rejected.
 if run_writer set thermal_overlay_pct 999 >/dev/null 2>&1; then
@@ -67,12 +79,24 @@ need_line "$MOD/config/governor.conf" "sustained_temp_mode=manual"
 need_line "$SNAP" "sustained_temp_enter=60"
 need_line "$SNAP" "sustained_temp_mode=manual"
 
+# Ace 5 regression: moving the WebUI thermal slider above the previous smart
+# ceiling must stage the linked ceiling in the same transaction. In particular,
+# 70 is a valid inclusive upper bound, not a writer failure.
+run_writer set-many --snapshot "$SNAP" \
+  sustained_temp_enter 70 sustained_temp_ceiling 70 sustained_temp_mode manual >/dev/null
+need_line "$MOD/config/governor.conf" "sustained_temp_enter=70"
+need_line "$MOD/config/governor.conf" "sustained_temp_ceiling=70"
+need_line "$MOD/config/governor.conf" "sustained_temp_mode=manual"
+need_line "$SNAP" "sustained_temp_enter=70"
+need_line "$SNAP" "sustained_temp_ceiling=70"
+need_line "$SNAP" "sustained_temp_mode=manual"
+
 # F-03: malformed imports must leave the active configuration untouched.
 printf 'sustained_temp_enter=999\n' > "$BACKUP"
 if run_writer import "$BACKUP" "$SNAP" sustained_temp_enter sustained_temp_mode >/dev/null 2>&1; then
   fail "invalid import was accepted"
 fi
-need_line "$MOD/config/governor.conf" "sustained_temp_enter=60"
+need_line "$MOD/config/governor.conf" "sustained_temp_enter=70"
 
 # A valid import is applied as one validated transaction and updates the snapshot.
 printf 'sustained_temp_enter=62\nsustained_temp_mode=manual\n' > "$BACKUP"

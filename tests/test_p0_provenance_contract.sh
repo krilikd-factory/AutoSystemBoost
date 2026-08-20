@@ -10,6 +10,7 @@ STATE_SRC="$ROOT_DIR/src/asb_governor.c"
 METRICS_SRC="$ROOT_DIR/src/asb_metrics.h"
 SCREENOFF="$ROOT_DIR/runtime/asb_screenoff_class.sh"
 LOGKIT="$ROOT_DIR/tools/logkit/_asb_logkit_common.sh"
+WEBUI="$ROOT_DIR/webroot/index.html"
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/asb_p0_contract.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 
@@ -33,6 +34,11 @@ need_text "$METRICS_SRC" 'strcmp(g_thermal_cpu_type, "socd") == 0'
 if grep -nE '>[[:space:]]*/sys/|settings[[:space:]]+put|setprop[[:space:]]' "$SCREENOFF" >/dev/null; then
   fail "screen-off classifier contains a system-policy write"
 fi
+
+# Thermal slider transaction must keep its linked ceiling coherent when the user
+# selects 69–70°C above the previous Smart ceiling. The writer validates the staged
+# file as a whole, so WebUI must publish the matching value in the same set-many call.
+need_text "$WEBUI" "shQuote('sustained_temp_ceiling') + ' ' + shQuote(val)"
 
 # Transaction writer must use the injected state path, not a hard-coded production location.
 need_text "$WRITER" 'ASB_TXN="${ASB_CONFIG_TXN:-$STATE/config_last_txn}"'
