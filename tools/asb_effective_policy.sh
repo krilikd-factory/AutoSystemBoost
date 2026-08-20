@@ -8,12 +8,19 @@ for _d in "$MODDIR" /data/adb/modules/$MODID /data/adb/modules_update/$MODID; do
   [ -f "$_d/module.prop" ] && { MODDIR="$_d"; break; }
 done
 CONF="$MODDIR/config/governor.conf"
+# Overrideable only for staged installs and host contracts; production stays /data/adb/asb.
+STATE="${ASB_CONFIG_STATE:-/data/adb/asb}"
+RUNTIME_STATE="${ASB_RUNTIME_STATE:-/dev/.asb/state}"
 # shellcheck disable=SC1091
 [ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
 
 _cfg() { grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
 _feat() { grep -E "^[[:space:]]*$1=" "$MODDIR/features.conf" 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
-_state() { grep -E "^[[:space:]]*$1=" /dev/.asb/state 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
+_state() { grep -E "^[[:space:]]*$1=" "$RUNTIME_STATE" 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
+_state_text() { _state "$1" | tr -d '\"'; }
+_state_num() { _sn="$(_state "$1")"; printf '%s\n' "$_sn" | grep -Eq '^-?[0-9]+$' && printf '%s' "$_sn" || printf '%s' "${2:-0}"; }
+_txn() { grep -E "^[[:space:]]*$1=" "$STATE/config_last_txn" 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
+_txn_num() { _tn="$(_txn "$1")"; printf '%s\n' "$_tn" | grep -Eq '^-?[0-9]+$' && printf '%s' "$_tn" || printf '%s' "${2:-0}"; }
 _cap() { grep -E "^[[:space:]]*$1=" /data/adb/asb/capabilities.env 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
 _lease() { grep -E "^[[:space:]]*$2=" "/dev/.asb/arbiter/$1.lease" 2>/dev/null | tail -1 | sed 's/^[^=]*=//' | tr -d ' \r'; }
 _json() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n\r' ' '; }
@@ -69,6 +76,12 @@ printf '"writer_health":{"attempts":"%s","applied":"%s","failures":"%s","backoff
   "$(_json "$(_state writer_attempts)")" "$(_json "$(_state writer_applied)")" "$(_json "$(_state writer_failures)")" "$(_json "$(_state writer_backoff_skips)")" "$(_json "$(_state writer_next_retry)")"
 printf '"energy_policy":{"shadow_mode":"%s","thermal_budget_enabled":"%s","thermal_budget_trim_pct":"%s","thermal_budget_reason":"%s","thermal_budget_dwell_s":"%s"},' \
   "$(_json "$(_state shadow_mode)")" "$(_json "$(_state thermal_budget_enabled)")" "$(_json "$(_state thermal_budget_trim_pct)")" "$(_json "$(_state thermal_budget_reason)")" "$(_json "$(_state thermal_budget_dwell_s)")"
+printf '"thermal_provenance":{"control_source":"%s","control_zone":%s,"confidence":%s,"rejected_type":"%s","rejected_raw":%s,"startup_quarantined":%s},' \
+  "$(_json "$(_state_text thermal_control_source)")" "$(_state_num thermal_control_zone -1)" "$(_state_num thermal_source_confidence 0)" \
+  "$(_json "$(_state_text thermal_rejected_type)")" "$(_state_num thermal_rejected_raw 0)" "$(_state_num startup_quarantined 0)"
+printf '"config_last_txn":{"result_class":"%s","reason":"%s","key":"%s","pre_epoch":%s,"post_epoch":%s,"reload_accepted":"%s"},' \
+  "$(_json "$(_txn result_class)")" "$(_json "$(_txn reason)")" "$(_json "$(_txn key)")" \
+  "$(_txn_num pre_epoch 0)" "$(_txn_num post_epoch 0)" "$(_json "$(_txn reload_accepted)")"
 # These three blocks are intentionally observation-only. They expose whether a donor-inspired
 # hypothesis is true on this device before ASB changes a route, qdisc or memory policy.
 printf '"audio":{"dsp_enabled":"%s","dsp_route_published":"%s","dsp_outputs":"%s","a2dp_offload_requested":"%s","a2dp_platform_disabled":"%s","a2dp_vendor_disabled":"%s"},' \

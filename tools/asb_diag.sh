@@ -749,6 +749,32 @@ fi
 [ -f /data/adb/asb/auto_battery_origin ] \
   && NOTE "auto-battery is currently active - will return to $(cat /data/adb/asb/auto_battery_origin 2>/dev/null) when charged"
 
+SEC "5a3b. THERMAL SOURCE PROVENANCE  (which sensor controls the governor)"
+_tcs="$(_rget thermal_control_source /dev/.asb/state | tr -d '\"')"
+_tcz="$(_rget thermal_control_zone /dev/.asb/state)"
+_tconf="$(_rget thermal_source_confidence /dev/.asb/state)"
+_trej="$(_rget thermal_rejected_type /dev/.asb/state | tr -d '\"')"
+_traw="$(_rget thermal_rejected_raw /dev/.asb/state)"
+_sq="$(_rget startup_quarantined /dev/.asb/state)"
+NOTE "control source: ${_tcs:-unknown}  zone: ${_tcz:--1}  confidence: ${_tconf:-0}/2"
+case "${_tconf:-0}" in
+  2) NOTE "-> cross-checked against CPU peers" ;;
+  1) NOTE "-> LOW confidence: derived fallback or source not peer-validated" ;;
+  *) NOTE "-> uninitialized or unavailable" ;;
+esac
+if [ -n "$_trej" ]; then
+  NOTE "rejected source: $_trej (raw=${_traw:-?}; raw is not displayed as degrees because scale may differ)"
+fi
+if [ "${_sq:-0}" -gt 0 ] 2>/dev/null; then
+  NOTE "startup quarantine: $_sq sample(s) excluded from Smart learning during boot settle"
+fi
+_txn=/data/adb/asb/config_last_txn
+if [ -r "$_txn" ]; then
+  NOTE "last config transaction: class=$(_rget result_class "$_txn") key=$(_rget key "$_txn") pre_epoch=$(_rget pre_epoch "$_txn") post_epoch=$(_rget post_epoch "$_txn") reload=$(_rget reload_accepted "$_txn")"
+else
+  NOTE "last config transaction: none recorded yet"
+fi
+
 SEC "5a4. SUSPEND  (is the phone actually sleeping?)"
 # The single most useful overnight number, and the one nothing used to show.
 # CLOCK_MONOTONIC stops during suspend, CLOCK_BOOTTIME does not - their ratio over a
@@ -771,6 +797,35 @@ case "${_awk_pct:--1}" in
     else
       NOTE "-> suspending normally."
     fi ;;
+esac
+
+SEC "5a6. SCREEN-OFF CLASS  (what the last screen-off stretch actually was)"
+# Two identical-looking idle hours can be deep sleep or Bluetooth playback. Naming which
+# one it was is the difference between a usable night reference and a conclusion drawn
+# from a media session.
+if [ -r /dev/.asb/screenoff_class ]; then
+  _sc="$(grep -m1 '^class=' /dev/.asb/screenoff_class 2>/dev/null | cut -d= -f2)"
+  _sr="$(grep -m1 '^reason=' /dev/.asb/screenoff_class 2>/dev/null | cut -d= -f2-)"
+  NOTE "class: ${_sc:-unknown} - ${_sr:-no reason recorded}"
+  case "$_sc" in
+    quiet)    NOTE "-> usable as a night reference" ;;
+    media|network)
+              NOTE "-> current here reflects audio or the radio, not CPU policy" ;;
+    charging) NOTE "-> excluded from drain adaptation" ;;
+    noisy)    NOTE "-> unexplained wakefulness; see the wakelock section below" ;;
+  esac
+else
+  NOTE "not classified yet - runs on the screen-off sampling cycle"
+fi
+# Battery measurement confidence sits here too: a %/h figure is only as good as the
+# window behind it, and both are read together or not at all.
+_bwc="$(grep -m1 '^battery_window_confidence=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_bwr="$(grep -m1 '^battery_window_reason=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
+case "${_bwc:-}" in
+  3) NOTE "battery window: high confidence - ${_bwr}" ;;
+  2) NOTE "battery window: medium - ${_bwr}" ;;
+  1) NOTE "battery window: LOW - ${_bwr} (treat any %/h as an estimate)" ;;
+  0) NOTE "battery window: no valid window - ${_bwr}" ;;
 esac
 
 SEC "5a5. WAKELOCKS  (what is keeping the phone awake)"
