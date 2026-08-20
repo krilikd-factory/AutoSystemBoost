@@ -766,40 +766,19 @@ else
 fi
 echo ""
 
-echo "📋 Version Sync"
+echo "📋 Release identity"
+# update.json is an OTA manifest. Its future release asset cannot exist before this
+# workflow builds the first release ZIP, so the manifest is deliberately not a CI gate.
+# module.prop is the authoritative artifact identity.
 _mp="$MODDIR/module.prop"
-_uj="$MODDIR/update.json"
 _cl="$MODDIR/CHANGELOG.md"
-if [ -f "$_mp" ] && [ -f "$_uj" ]; then
+if [ -f "$_mp" ]; then
   _mp_ver="$(grep '^version=' "$_mp" | head -1 | cut -d= -f2)"
   _mp_code="$(grep '^versionCode=' "$_mp" | head -1 | cut -d= -f2)"
-  _uj_ver=""
-  _uj_code=""
-  if [ -n "$PYTHON_BIN" ]; then
-    _uj_ver="$("$PYTHON_BIN" -c "import json; print(json.load(open('$_uj'))['version'])" 2>/dev/null)"
-    _uj_code="$("$PYTHON_BIN" -c "import json; print(json.load(open('$_uj'))['versionCode'])" 2>/dev/null)"
+  if [ -n "$_mp_ver" ] && [ -n "$_mp_code" ]; then
+    ok "module identity present: version=$_mp_ver versionCode=$_mp_code"
   else
-    _uj_ver="$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' "$_uj" | head -1 | sed -E 's/.*"([^"]+)"$/\1/')"
-    _uj_code="$(grep -oE '"versionCode"[[:space:]]*:[[:space:]]*[0-9]+' "$_uj" | head -1 | grep -oE '[0-9]+')"
-  fi
-  if [ -n "$_mp_ver" ] && [ -n "$_uj_ver" ] && [ "$_mp_ver" = "$_uj_ver" ]; then
-    ok "module.prop:version == update.json:version ($_mp_ver)"
-  elif [ -n "$_mp_code" ] && [ -n "$_uj_code" ] && [ "$_uj_code" -lt "$_mp_code" ] 2>/dev/null; then
-    # update.json deliberately BEHIND module.prop: the module is a newer build that is still
-    # being tested, and the OTA manifest is intentionally left pointing at the last public
-    # release so testers' root managers do not offer this build to everyone.
-    # The reverse - update.json AHEAD of the module - is still an error below, because that
-    # WOULD push a version users cannot actually get.
-    warn "update.json is behind module.prop ($_uj_ver < $_mp_ver) — OK while testing, sync before public release"
-  else
-    err "version mismatch: module.prop=$_mp_ver update.json=$_uj_ver"
-  fi
-  if [ -n "$_mp_code" ] && [ -n "$_uj_code" ] && [ "$_mp_code" = "$_uj_code" ]; then
-    ok "module.prop:versionCode == update.json:versionCode ($_mp_code)"
-  elif [ -n "$_mp_code" ] && [ -n "$_uj_code" ] && [ "$_uj_code" -lt "$_mp_code" ] 2>/dev/null; then
-    : # covered by the behind-is-a-warning case above; do not double-report
-  else
-    err "versionCode mismatch: module.prop=$_mp_code update.json=$_uj_code"
+    err "module.prop missing version or versionCode"
   fi
   if [ -f "$_cl" ] && [ -n "$_mp_ver" ]; then
     if grep -qE "^# .*${_mp_ver}|^## .*${_mp_ver}" "$_cl" 2>/dev/null; then
@@ -825,7 +804,7 @@ if [ -f "$_mp" ] && [ -f "$_uj" ]; then
     fi
   fi
 else
-  warn "module.prop or update.json missing, skipped version sync check"
+  err "module.prop missing"
 fi
 
 _ss="$MODDIR/service.sh"
