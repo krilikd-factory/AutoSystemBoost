@@ -39,6 +39,7 @@ _txn() {
     echo "post_epoch=$(_config_epoch)"
     # The writer is intentionally atomic-only; daemon reload is owned by its runtime path.
     echo "reload_accepted=not_requested"
+    [ -n "${ASB_TXN_RECOVERY:-}" ] && echo "recovery=$ASB_TXN_RECOVERY"
     # Lock owner is evidence when the write was blocked, and noise otherwise.
     if [ "$1" = "lock_live" ] || [ "$1" = "lock_stale" ]; then
       _lo="$(cat "$STATE/lock/pid" 2>/dev/null | tr -dc '0-9')"
@@ -238,6 +239,36 @@ _update_one() {
   ' "$_src" > "$_dst"
 }
 
+# Older WebUI builds could persist sustained_temp_enter while leaving the former
+# Smart ceiling behind. That makes the whole config semantically invalid and then
+# blocks unrelated settings (for example GNSS/radio toggles) because every write
+# validates the staged file. Repair only this narrow legacy shape, only when the
+# transaction does not itself request either thermal key; an explicit user edit of
+# enter/ceiling must still be rejected if it violates the invariant.
+_recover_legacy_thermal_pair() {
+  _lt_f="$1"
+  case " ${_changed:-} " in
+    *" sustained_temp_enter "*|*" sustained_temp_ceiling "*) return 0 ;;
+  esac
+  _lt_enter="$(_num sustained_temp_enter "$_lt_f" 2>/dev/null || true)"
+  _lt_ceiling="$(_num sustained_temp_ceiling "$_lt_f" 2>/dev/null || true)"
+  _between "$_lt_enter" 40 70 || return 0
+  _between "$_lt_ceiling" 40 70 || return 0
+  [ "$_lt_ceiling" -lt "$_lt_enter" ] || return 0
+
+  _lt_next="$_lt_f.thermal_recovery.$$"
+  _update_one "$_lt_f" "$_lt_next" sustained_temp_ceiling "$_lt_enter" || {
+    rm -f "$_lt_next"
+    _die "cannot repair legacy sustained temperature pair"
+  }
+  mv -f "$_lt_next" "$_lt_f" || {
+    rm -f "$_lt_next"
+    _die "cannot stage legacy sustained temperature repair"
+  }
+  _changed="$_changed sustained_temp_ceiling"
+  _STAGED_TXN_RECOVERY="legacy_thermal_ceiling"
+}
+
 _check_pairs() {
   [ "$#" -gt 0 ] || _die "at least one KEY VALUE pair is required"
   [ $(( $# % 2 )) -eq 0 ] || _die "KEY VALUE pairs are incomplete"
@@ -266,6 +297,7 @@ _apply_pairs_locked() {
     _changed="$_changed $1"
     shift 2
   done
+  _recover_legacy_thermal_pair "$_tmp"
   _validate "$_tmp" || { rm -f "$_tmp"; exit 1; }
 
   _stmp=""
@@ -284,6 +316,9 @@ _apply_pairs_locked() {
 
   chmod 0644 "$_tmp" 2>/dev/null || true
   mv -f "$_tmp" "$CONF" || _die "atomic config replace failed"
+  # Publish recovery provenance only after the active config was atomically replaced.
+  # A later validation failure must not claim a repair that never reached $CONF.
+  [ -n "${_STAGED_TXN_RECOVERY:-}" ] && ASB_TXN_RECOVERY="$_STAGED_TXN_RECOVERY"
   if [ -n "$_stmp" ]; then
     chmod 0644 "$_stmp" 2>/dev/null || true
     mv -f "$_stmp" "$_snapshot" || _die "atomic snapshot replace failed"
