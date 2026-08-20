@@ -244,6 +244,9 @@ lk_snapshot_state() {
     echo "--- state (key=value) ---"
     cat /dev/.asb/state 2>/dev/null || echo "  (absent)"
     echo ""
+    echo "--- config_last_txn (writer provenance) ---"
+    cat /data/adb/asb/config_last_txn 2>/dev/null || echo "  (absent — no config writer transaction recorded)"
+    echo ""
     echo "--- recovery.json ---"
     cat /dev/.asb/recovery.json 2>/dev/null || echo "  (absent — no recovery events)"
     echo ""
@@ -329,6 +332,7 @@ lk_copy_runtime_artifacts() {
     "/dev/.asb/conflicts.json" \
     "/dev/.asb/recovery_history.log" \
     "/dev/.asb/state" \
+    "/data/adb/asb/config_last_txn" \
     "/data/adb/asb/governor_persist.log" \
     "/data/adb/asb/governor_persist.log.1"; do
     [ -f "$f" ] || continue
@@ -488,16 +492,21 @@ lk_emit_state_transitions() {
     /^===== / { ts=$0; next }
     /^\{/ {
       line=$0
+      st=tp=rs=ct=hv=fb=conf=rej=raw=""
       match(line, /"state":"[^"]*"/); st=substr(line, RSTART+9, RLENGTH-10)
       match(line, /"temp":[0-9-]+/); tp=substr(line, RSTART+7, RLENGTH-7)
       match(line, /"last_sustained_reason":"[^"]*"/); rs=substr(line, RSTART+24, RLENGTH-25)
       match(line, /"thermal_cpu_type":"[^"]*"/); ct=substr(line, RSTART+20, RLENGTH-21)
       match(line, /"headroom_valid":[0-9]+/); hv=substr(line, RSTART+17, RLENGTH-17)
       match(line, /"thermal_cpu_fallback_type":"[^"]*"/); fb=substr(line, RSTART+29, RLENGTH-30)
-      if (st != prev_st) {
-        printf "%s  %s->%s  temp=%s  reason=%s  cpu_src=%s  fb=%s  hr_valid=%s\n",
-               ts, (prev_st==""?"START":prev_st), st, tp, rs, ct, (fb==""?"-":fb), (hv==""?"-":hv)
-        prev_st = st
+      match(line, /"thermal_src_conf":[0-9]+/); conf=substr(line, RSTART, RLENGTH); sub(/^.*:/, "", conf)
+      match(line, /"thermal_rejected_type":"[^"]*"/); rej=substr(line, RSTART, RLENGTH); sub(/^"thermal_rejected_type":"/, "", rej); sub(/"$/, "", rej)
+      match(line, /"thermal_rejected_raw":[0-9-]+/); raw=substr(line, RSTART, RLENGTH); sub(/^.*:/, "", raw)
+      if (st != prev_st || ct != prev_ct || conf != prev_conf || rej != prev_rej || raw != prev_raw) {
+        printf "%s  %s->%s  temp=%s  reason=%s  cpu_src=%s  conf=%s  rejected=%s(raw=%s)  fb=%s  hr_valid=%s\n",
+               ts, (prev_st==""?"START":prev_st), st, tp, rs, ct, (conf==""?"-":conf),
+               (rej==""?"-":rej), (raw==""?"-":raw), (fb==""?"-":fb), (hv==""?"-":hv)
+        prev_st = st; prev_ct = ct; prev_conf = conf; prev_rej = rej; prev_raw = raw
       }
     }
   ' "$_src" > "$_dst"
