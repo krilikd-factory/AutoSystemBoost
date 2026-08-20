@@ -88,7 +88,8 @@ jobs:
             tests/test_device_safety_contract.sh \
             tests/test_thermal_socd_validation.c \
             tests/test_p0_provenance_contract.sh \
-            tests/test_v62_to_v63_migration.sh; do
+            tests/test_v62_to_v63_migration.sh \
+            tests/test_release_metadata_validator.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
@@ -195,6 +196,10 @@ jobs:
           if [ -f tests/test_v62_to_v63_migration.sh ]; then
             echo "== tests/test_v62_to_v63_migration.sh =="
             bash tests/test_v62_to_v63_migration.sh || _rc=1
+          fi
+          if [ -f tests/test_release_metadata_validator.sh ]; then
+            echo "== tests/test_release_metadata_validator.sh =="
+            sh tests/test_release_metadata_validator.sh || _rc=1
           fi
           # Lease arbitration protects camera/profile writes and establishes the
           # central priority contract before a release reaches a real device.

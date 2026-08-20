@@ -68,6 +68,7 @@ jobs:
             tests/test_thermal_socd_validation.c \
             tests/test_p0_provenance_contract.sh \
             tests/test_v62_to_v63_migration.sh \
+            tests/test_release_metadata_validator.sh \
             module.prop \
             customize.sh \
             service.sh; do
@@ -167,6 +168,10 @@ jobs:
           if [ -f tests/test_v62_to_v63_migration.sh ]; then
             echo "== tests/test_v62_to_v63_migration.sh =="
             bash tests/test_v62_to_v63_migration.sh || _rc=1
+          fi
+          if [ -f tests/test_release_metadata_validator.sh ]; then
+            echo "== tests/test_release_metadata_validator.sh =="
+            sh tests/test_release_metadata_validator.sh || _rc=1
           fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"
