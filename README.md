@@ -138,6 +138,34 @@ Audio behaviour is capability- and route-dependent. ASB preserves the output-saf
 100% volume is not raised past unity, and a conflicting external DSP is not silently
 fought by ASB.
 
+### Audio controls at a glance
+
+| WebUI control | Practical use and boundary |
+|:---|:---|
+| **Audio Profile** | Selects stock behaviour, a compatible Hi‑Fi path, or an external-EQ-friendly path. Use the external-EQ mode when ViPER/JamesDSP should own the stream. |
+| **Hi‑Fi DAC (mixer)** | Requests the compatible codec/mixer path for wired listening; it does not replace an external equalizer. |
+| **Media Loudness** | Reshapes media volume curves at useful slider positions. It leaves alarms/ringtones and the 100% unity ceiling alone. |
+| **Bluetooth Volume Control** | Keeps the shared phone/headset scale, or separates the two scales for an EQ-compatible gain path. Separated scales can make the lowest headset steps quieter. |
+| **Bluetooth Audio Offload** | `Auto` leaves the ROM decision untouched; `On` requests hardware encoding; `Off` can help codecs or Bluetooth EQs that need CPU encoding. |
+| **DSP Loudness / Bass / Compressor** | Controls the built-in effect. Start with modest gain; bass consumes headroom, and the compressor is most useful at higher loudness. |
+| **DSP Outputs** | Limits the DSP to speaker, wired, Bluetooth or selected combinations so a headphone boost does not unintentionally reach the speaker. |
+| **Headphone Volume Limit** | An explicit opt-in only. It removes a system safety cap; it does not create extra DSP gain, and sustained loud listening can damage hearing. |
+
+### Camera controls
+
+Camera tuning always starts from the phone's own stock files and uses ratios rather than
+another model's fixed values. The available controls are intentionally separated so one
+change does not silently alter an unrelated image axis.
+
+| WebUI control | What it adjusts |
+|:---|:---|
+| **Camera Grade** | Overall colour, contrast and detail character for photo/video; higher values are more pronounced and can reveal shadow banding. |
+| **Contrast & Colour Depth** | Tone-curve contrast and saturation independently of the main grade. |
+| **Film Grain** | The amount of texture restored after denoising; lower values look cleaner, higher values preserve more texture. |
+| **Portrait AI** | Face/skin processing in portrait modes. Begin with a low value to avoid an artificial look. |
+| **Macro & Low-light Sharpening** | Separate sharpening for close and high-ISO scenes, where aggressive sharpening creates halos most easily. |
+| **Hold Performance While Camera Runs** | Keeps camera-relevant CPU availability during an active stream to protect bursts and video, at a small temporary battery cost. |
+
 ---
 
 ## 🧠 The governor
@@ -171,6 +199,27 @@ limits and safety/platform thermal actions are coordinated through priorities ra
 blindly fighting over the same nodes. Camera activity receives a protected deadline; all
 changes remain bounded by platform thermal safety.
 
+### Power, sleep and background work
+
+These controls are optional policy tools, not universal switches. Start with the default,
+use `asbdiag` or a multi-hour log to identify the cause, then enable only the matching
+control.
+
+| WebUI control | What it does and when to use it |
+|:---|:---|
+| **Auto Battery Profile** | Switches to Battery at low charge and restores the previous profile after charging. |
+| **Smart Battery Bias** | Nudges Smart Mode toward lower energy use; it affects Smart only and can reduce responsiveness. |
+| **Charge-Aware Mode** | Allows more headroom while charging and cool, then backs off as battery heat rises. |
+| **Deep Sleep** | Chooses how quickly Android enters Doze after screen-off. Earlier Doze reduces standby work but can delay apps that poll instead of using priority push. |
+| **Trim Doze Exemptions** | Removes only eligible user apps from Android's Doze exemption list; protected calling, alarm, messaging and root-manager classes are excluded and changes are reversible. |
+| **Act on Wakelocks** | Always observes wakelocks; when enabled, long screen-off wakelocks from qualifying user apps can be moved to Android's restricted bucket. Nothing is force-stopped. |
+| **Trim Background GPS** | While screen-off, limits a qualifying cached user app to coarse location. Foreground navigation, fitness, emergency and protected classes are excluded. |
+| **Quiet Night** | Reduces ASB's own periodic work during a learned long screen-off window. |
+| **Quiet Radio at Night** | Relaxes keepalive/probe timing during the learned night window. Calls, SMS and priority push remain untouched; independently polling apps can be later. |
+| **Throttling Point / Temperature** | Keeps the stock device point, uses adaptive behaviour, or accepts a manual point. Lower values intervene sooner; values below normal idle temperature keep throttling active continuously. |
+| **Performance Ceiling** | Applies a 60–100% proportional ceiling to the current profile envelope. Floors are retained for basic smoothness; lower ceilings are an explicit speed/heat trade-off. |
+| **Cool Gaming / No Game Mode on Battery** | Biases gaming toward cooler sustained behaviour, or prevents the Battery profile from entering the higher gaming state. |
+
 ---
 
 ## 🎯 Profiles — real policy envelopes
@@ -192,6 +241,21 @@ changes remain bounded by platform thermal safety.
 > Ace device. **Smart** is not shown as a fixed row because it blends only inside the
 > Battery and Balanced envelopes at runtime.
 
+### Interface, memory and system controls
+
+| WebUI control | Practical use and boundary |
+|:---|:---|
+| **Manage UI Speed / Animation Speed** | Lets profiles manage UI timing, or lets you choose a fixed animation scale. Stock leaves the system setting unchanged. |
+| **Force Animation Restart** | Restarts SystemUI only for firmware that ignores a live animation-scale change. Expect a visible blink and lock-screen return; leave it off unless needed. |
+| **Disable Blur / System Animations** | Reduces compositor effects. Simplified system animations can change the Recents presentation on supported devices; return to normal to restore it. |
+| **Background Trim Level** | Chooses safe or more aggressive cached-app trimming. Aggressive frees more RAM but causes more cold app restarts. |
+| **Google Services Trim / Freeze Google Components** | Offers reversible reductions in eligible Play-services background work. Stronger modes can delay background work or stop history/telemetry functions; push, sign-in, payments and Play Store paths are excluded. |
+| **Manage OEM Toggles** | Lets ASB manage selected OxygenOS RAM/battery/heat toggles. Leave off if those settings should remain entirely under manual control. |
+| **Athena Background Killer** | Keeps the system behaviour or disables the compatible Athena killer path where supported. |
+| **Background Process Limit** | Chooses stock, relaxed or strict treatment of Android phantom processes. Relaxed helps long terminal/compile-style work; stricter behaviour can reclaim resources sooner. |
+| **Vibration / Touch Feedback** | Selects an OEM-scale intensity or leaves the existing value unchanged. |
+| **Log Detail** | Controls ASB/device logging. Normal is suitable for daily use; detailed modes are for reproducing an issue, while minimal logging reduces evidence available for diagnosis. |
+
 ---
 
 ## 📊 Stock vs ASB
@@ -199,6 +263,21 @@ changes remain bounded by platform thermal safety.
 ASB is designed to change decision quality, not to promise one battery percentage to every
 phone. Display time, signal strength, apps, Bluetooth route, ambient temperature, charging
 and the length of true screen-off periods all materially affect results.
+
+### Network and Wi‑Fi controls
+
+| WebUI control | Practical use and boundary |
+|:---|:---|
+| **Download Ramp** | Chooses TCP congestion control globally, for Wi‑Fi, or for mobile data. `Auto`/stock preserves the existing decision; BBR is offered only when the kernel supports it. |
+| **Packet Queue** | Chooses queue discipline globally, for Wi‑Fi, or for mobile data. `fq_codel` commonly reduces loaded-link latency; `cake` is more thorough but can cost more CPU. |
+| **Spread Network Load** | Moves receive-packet work to efficiency cores or all cores. Useful on fast Wi‑Fi; waking more cores can be wasteful on a slow link. |
+| **Transmit Queue** | Reduces pending transmit packets from the deep driver default to shorter queues. It can improve latency under load; return to stock if uploads suffer. |
+| **Network Buffers** | Sizes network buffers automatically from observed link conditions, or lets you choose conservative/aggressive behaviour. |
+| **Wi‑Fi Region** | Selects an allowed regulatory domain. Leave automatic unless you understand and comply with the local channel rules. |
+| **Wi‑Fi Scan Rate** | Changes background scan frequency. More frequent scans can roam faster to a better access point at a small battery cost. |
+
+All network writers check for real, writable interfaces and record the applied outcome rather
+than assuming a driver accepted the request.
 
 | Area | Stock-style approach | ASB approach |
 |:---|:---|:---|
