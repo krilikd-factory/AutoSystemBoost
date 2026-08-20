@@ -62,6 +62,7 @@ jobs:
             tools/asb_schema_sync.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
+            tools/asb_validate_release_metadata.sh \
             tests/test_dsp_reference_contract.sh \
             tests/test_device_safety_contract.sh \
             tests/test_thermal_socd_validation.c \
@@ -76,6 +77,10 @@ jobs:
             fi
             echo "  v $f"
           done
+
+      - name: Validate module update metadata
+        run: |
+          sh tools/asb_validate_release_metadata.sh
 
       - name: Validate profile bounds source-of-truth
         run: |

@@ -80,6 +80,7 @@ jobs:
             tools/asb_config_backup.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
+            tools/asb_validate_release_metadata.sh \
             tests/test_arbiter.sh \
             tests/test_intent_backup.sh \
             tests/test_service_thermal_vm_contract.sh \
@@ -97,17 +98,7 @@ jobs:
 
       - name: Validate module update metadata
         run: |
-          _module_ver="$(sed -n 's/^version=//p' module.prop | head -1)"
-          _module_code="$(sed -n 's/^versionCode=//p' module.prop | head -1)"
-          _update_ver="$(awk -F'"' '/"version"[[:space:]]*:/{print $4; exit}' update.json)"
-          _update_code="$(grep -m1 '"versionCode"' update.json | tr -cd '0-9')"
-          [ -n "$_module_ver" ] && [ -n "$_module_code" ] || { echo "ERROR: module.prop version missing"; exit 1; }
-          [ "$_module_ver" = "$_update_ver" ] || { echo "ERROR: update.json version $_update_ver != module.prop $_module_ver"; exit 1; }
-          [ "$_module_code" = "$_update_code" ] || { echo "ERROR: update.json versionCode $_update_code != module.prop $_module_code"; exit 1; }
-          _release_id="${_module_ver#V}"
-          _want_path="/releases/download/${_release_id}/ASB-${_module_ver}.zip"
-          grep -q "$_want_path" update.json || { echo "ERROR: update.json zipUrl does not target $_want_path"; exit 1; }
-          echo "Update metadata: $_module_ver / $_module_code"
+          sh tools/asb_validate_release_metadata.sh
 
       - name: Validate profile bounds source-of-truth
         run: |
