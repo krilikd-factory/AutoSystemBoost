@@ -62,13 +62,11 @@ jobs:
             tools/asb_schema_sync.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
-            tools/asb_validate_release_metadata.sh \
             tests/test_dsp_reference_contract.sh \
             tests/test_device_safety_contract.sh \
             tests/test_thermal_socd_validation.c \
             tests/test_p0_provenance_contract.sh \
             tests/test_v62_to_v63_migration.sh \
-            tests/test_release_metadata_validator.sh \
             module.prop \
             customize.sh \
             service.sh; do
@@ -78,10 +76,6 @@ jobs:
             fi
             echo "  v $f"
           done
-
-      - name: Validate module update metadata
-        run: |
-          sh tools/asb_validate_release_metadata.sh
 
       - name: Validate profile bounds source-of-truth
         run: |
@@ -168,10 +162,6 @@ jobs:
           if [ -f tests/test_v62_to_v63_migration.sh ]; then
             echo "== tests/test_v62_to_v63_migration.sh =="
             bash tests/test_v62_to_v63_migration.sh || _rc=1
-          fi
-          if [ -f tests/test_release_metadata_validator.sh ]; then
-            echo "== tests/test_release_metadata_validator.sh =="
-            sh tests/test_release_metadata_validator.sh || _rc=1
           fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"

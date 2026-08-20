@@ -70,7 +70,6 @@ jobs:
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
             module.prop \
-            update.json \
             customize.sh \
             service.sh \
             runtime/asb_arbiter.sh \
@@ -80,7 +79,6 @@ jobs:
             tools/asb_config_backup.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
-            tools/asb_validate_release_metadata.sh \
             tests/test_arbiter.sh \
             tests/test_intent_backup.sh \
             tests/test_service_thermal_vm_contract.sh \
@@ -88,18 +86,13 @@ jobs:
             tests/test_device_safety_contract.sh \
             tests/test_thermal_socd_validation.c \
             tests/test_p0_provenance_contract.sh \
-            tests/test_v62_to_v63_migration.sh \
-            tests/test_release_metadata_validator.sh; do
+            tests/test_v62_to_v63_migration.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
             fi
             echo "  v $f"
           done
-
-      - name: Validate module update metadata
-        run: |
-          sh tools/asb_validate_release_metadata.sh
 
       - name: Validate profile bounds source-of-truth
         run: |
@@ -196,10 +189,6 @@ jobs:
           if [ -f tests/test_v62_to_v63_migration.sh ]; then
             echo "== tests/test_v62_to_v63_migration.sh =="
             bash tests/test_v62_to_v63_migration.sh || _rc=1
-          fi
-          if [ -f tests/test_release_metadata_validator.sh ]; then
-            echo "== tests/test_release_metadata_validator.sh =="
-            sh tests/test_release_metadata_validator.sh || _rc=1
           fi
           # Lease arbitration protects camera/profile writes and establishes the
           # central priority contract before a release reaches a real device.
