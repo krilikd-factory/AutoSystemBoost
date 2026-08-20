@@ -12,7 +12,61 @@ SHIPPED="$MODDIR/config/governor.conf.shipped"
 STATE="${ASB_CONFIG_STATE:-/data/adb/asb}"
 LOCK="$STATE/config.lock"
 
-_die() { echo "asb_config_safe: $*" >&2; exit 1; }
+# P0-5: every outcome is recorded with a stable class, not just printed to stderr.
+#
+# A user on an Ace 5 saw "write failed" in a WebUI toast and there was no way - for them
+# or for support - to tell a live lock from a validation rejection from a permission
+# problem. The three need completely different answers, and stderr text is neither stable
+# enough to match on nor safe to show raw.
+#
+# The record is written before exiting so it survives the failure, and it holds a class
+# and a short reason only: never a config dump, never a raw path, never shell stderr.
+# Default follows ASB_CONFIG_STATE so host tests, staged installs and recovery paths remain isolated.
+# On device STATE defaults to /data/adb/asb, preserving the public transaction path.
+ASB_TXN="${ASB_CONFIG_TXN:-$STATE/config_last_txn}"
+_config_epoch() { stat -c %Y "$CONF" 2>/dev/null || echo 0; }
+ASB_TXN_PRE_EPOCH="$(_config_epoch)"
+
+_txn() {
+  # _txn <result_class> <reason> [key]
+  mkdir -p "$(dirname "$ASB_TXN")" 2>/dev/null
+  {
+    echo "timestamp=$(date +%s 2>/dev/null || echo 0)"
+    echo "result_class=$1"
+    echo "reason=$2"
+    [ -n "${3:-}" ] && echo "key=$3"
+    echo "pre_epoch=$ASB_TXN_PRE_EPOCH"
+    echo "post_epoch=$(_config_epoch)"
+    # The writer is intentionally atomic-only; daemon reload is owned by its runtime path.
+    echo "reload_accepted=not_requested"
+    # Lock owner is evidence when the write was blocked, and noise otherwise.
+    if [ "$1" = "lock_live" ] || [ "$1" = "lock_stale" ]; then
+      _lo="$(cat "$STATE/lock/pid" 2>/dev/null | tr -dc '0-9')"
+      [ -n "$_lo" ] && echo "lock_owner=$_lo"
+      if [ -d "$STATE/lock" ]; then
+        _la=$(( $(date +%s 2>/dev/null || echo 0) - $(stat -c %Y "$STATE/lock" 2>/dev/null || echo 0) ))
+        [ "$_la" -ge 0 ] 2>/dev/null && echo "lock_age=$_la"
+      fi
+    fi
+  } > "$ASB_TXN.tmp" 2>/dev/null && mv -f "$ASB_TXN.tmp" "$ASB_TXN" 2>/dev/null
+}
+
+# Map a failure to its class. Callers pass a reason; the class is derived from what the
+# reason is about, so a new _die site cannot silently become "unknown".
+_die() {
+  case "$*" in
+    *lock*timeout*)        _cls=lock_live ;;
+    *lock*)                _cls=lock_stale ;;
+    *permission*|*cannot\ create*|*read-only*) _cls=permission ;;
+    *duplicate*)           _cls=duplicate ;;
+    *snapshot*)            _cls=snapshot ;;
+    *reload*)              _cls=reload ;;
+    *)                     _cls=validation ;;
+  esac
+  _txn "$_cls" "$*" "${ASB_TXN_KEY:-}"
+  echo "asb_config_safe: $*" >&2
+  exit 1
+}
 
 _lock() {
   mkdir -p "$STATE" 2>/dev/null || _die "cannot create state directory"
@@ -293,6 +347,8 @@ case "$1" in
   set)
     [ "$#" -ge 3 ] || _die "set needs KEY and VALUE"
     _key="$2" _val="$3" _snapshot="${4:-}"
+    # Sanitised key only - the record must never contain a value or a config dump.
+    ASB_TXN_KEY="$(printf '%s' "$_key" | tr -dc 'A-Za-z0-9_')"
     if [ -n "$_snapshot" ]; then _set_many --snapshot "$_snapshot" "$_key" "$_val"; else _set_many "$_key" "$_val"; fi
     ;;
   set-many)
@@ -305,3 +361,8 @@ case "$1" in
     ;;
   *) _die "unknown command: $1" ;;
 esac
+
+# Reaching here means no _die fired: the transaction completed. Recorded with the same
+# shape as a failure so the WebUI reads one file either way, and support can tell
+# "succeeded" from "never ran" - which an absent record cannot express.
+_txn success "applied" "${ASB_TXN_KEY:-}"
