@@ -9,10 +9,9 @@
 </p>
 
 <p align="center"><b>Adaptive runtime engine for OnePlus — Snapdragon 8 Elite / Gen 3</b></p>
-<p align="center"><i>V63: a native C daemon that observes the device every two seconds, applies only justified policy, and records why a decision was made.</i></p>
+<p align="center"><i>A native C daemon that observes the device every two seconds, applies only justified policy, and records why a decision was made.</i></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-V63%20%2F%20630-16a34a?style=for-the-badge" alt="V63">
   <img src="https://img.shields.io/badge/Governor-Native_C-0ea5e9?style=for-the-badge" alt="C">
   <img src="https://img.shields.io/badge/Audio-Own_DSP_engine-dc2626?style=for-the-badge" alt="DSP">
   <img src="https://img.shields.io/badge/WebUI-Built--in-f59e0b?style=for-the-badge" alt="WebUI">
@@ -35,7 +34,7 @@ every two seconds, selects one of six activity states, and derives a policy agai
 current device state. It does not treat a node being present as proof that it is safe to
 write.
 
-V63 adds a capability manifest, writer leases, a tiered thermal budget, thermal-source
+ASB uses a capability manifest, writer leases, a tiered thermal budget, thermal-source
 validation and decision provenance. The practical goal is not a universal benchmark gain:
 it is to reduce unnecessary work and heat without hiding the reason when ASB deliberately
 backs off.
@@ -49,13 +48,11 @@ backs off.
 | 🖥 | **UI** | WebUI + Action | Profiles, user controls, live status and explicit “not applied” evidence |
 | 🩺 | **Diagnostics** | `asbdiag` + effective policy | Source confidence, applied policy, device capabilities and support evidence |
 
-Read the complete V62 → V63 inventory in [CHANGELOG.md](CHANGELOG.md).
-
 ---
 
 ## 📱 Device support
 
-ASB supports rooted OnePlus devices with a supported root manager. V63 is built around
+ASB supports rooted OnePlus devices with a supported root manager. It is built around
 **device-native discovery**, not copied frequency tables or a global vendor-property pack.
 At installation, ASB inventories the current device and works from its own exposed CPU,
 thermal, GPU and audio paths. Mutable vendor domains remain behind capability and exact
@@ -73,23 +70,23 @@ the generated overlay before the module mounts; unsupported or unreadable paths 
 skipped rather than guessed.
 
 > Similar firmware names are not treated as identical hardware. For example, the Ace 6
-> shares `sun` firmware ancestry with OnePlus 13, so V63 resolves its exact fingerprint
+> shares `sun` firmware ancestry with OnePlus 13, so ASB resolves its exact fingerprint
 > before the broader family match.
 
 ---
 
 ## 📦 Install
 
-1. Download **`ASB-V63.zip`** for normal use. `ASB-V63-debug.zip` contains extra analysis
+1. Download the **Release ZIP** for normal use. The **Debug ZIP** contains extra analysis
    and logkit tools and is intended for troubleshooting; do **not** install both builds at
    the same time.
 2. Flash the ZIP in **KSU / KSUN / APatch / ReSuKiSu / Magisk** and reboot.
 3. Open the module **WebUI** to select a profile and optional controls. Tap **Action** for
    live status and the “not applied” report.
-4. When updating from V62, keep the existing configuration: V63 migrates schema 17 to 18
+4. Keep the existing configuration when updating: ASB migrates compatible settings
    additively, creates a backup first, and retains the active profile and existing choices.
 
-> Battery, sleep and network controls added in V63 are conservative by default. The
+> Battery, sleep and network controls are conservative by default. The
 > performance ceiling starts at 100%; wakelock action, background GNSS trim and Quiet
 > Radio at Night start off; RPS and transmit queue start at stock.
 
@@ -116,10 +113,10 @@ input → bass shelf (90 Hz) → soft-knee compressor → auto make-up → true-
 | 🥁 **`dsp_bass`** | **+1 … +10 dB** low shelf at 90 Hz |
 | 🛡 **Output safety** | Compression and true-peak limiting protect the output after the boost |
 | ⚡ **Live control** | Sliders communicate with the running effect; no `audioserver` restart is required |
-| 🎧 **Route-aware evidence** | V63 records route and AudioFlinger evidence instead of claiming Bluetooth offload without proof |
+| 🎧 **Route-aware evidence** | Records route and AudioFlinger evidence instead of claiming Bluetooth offload without proof |
 
 Android 13+ effects use the AIDL effect contract, while older paths can require the legacy
-interface. V63 ships compatible DSP variants from one shared core and uses an attach
+interface. ASB ships compatible DSP variants from one shared core and uses an attach
 helper because OxygenOS does not reliably instantiate a declared post-process effect by
 itself. The available DSP path remains device and route dependent; diagnostics report the
 observed evidence instead of promising an effect was attached when it was not.
@@ -137,7 +134,7 @@ observed evidence instead of promising an effect was attached when it was not.
 | **`audio_dac_hifi`** | on / off | Separately controls the compatible mixer/DAC tuning path. |
 | **`media_loudness`** | `stock` · mild · strong · max | Adjusts volume curves; the added shaping targets the useful middle of slider travel rather than raising 100% volume. |
 
-Audio behaviour is capability- and route-dependent. V63 preserves the output-safety rule:
+Audio behaviour is capability- and route-dependent. ASB preserves the output-safety rule:
 100% volume is not raised past unity, and a conflicting external DSP is not silently
 fought by ASB.
 
@@ -147,16 +144,16 @@ fought by ASB.
 
 **Six states.** `DEEP_IDLE` → `LIGHT_IDLE` → `MODERATE` → `HEAVY` → `SUSTAINED` →
 `GAMING`. Each state has its own caps, dwell time and entry/exit hysteresis. During genuine
-screen-off idle, ASB avoids unnecessary governor work; V63 first classifies audio,
+screen-off idle, ASB avoids unnecessary governor work; the screen-off classifier first identifies audio,
 charging, VPN/tunnel, GNSS and other screen-off activity so it does not call every dark
 screen “sleep”.
 
-**Adaptive thermal budget.** Before a hard thermal cap is needed, V63 can make a light,
+**Adaptive thermal budget.** Before a hard thermal cap is needed, ASB can make a light,
 moderate or severe proportional trim based on available thermal headroom, temperature
 trend/rise and battery-current evidence. A 30-second dwell avoids rapid cap oscillation.
 Hard platform thermal protection always wins.
 
-**Thermal-source validation.** Some devices expose a misleading `socd` zone. V63 checks it
+**Thermal-source validation.** Some devices expose a misleading `socd` zone. ASB checks it
 against usable CPU peers, rejects implausible high or low readings, falls back to a real
 CPU thermal path when one exists, and periodically revalidates the primary source. The
 actual control source and confidence are visible in diagnostics.
@@ -191,7 +188,7 @@ changes remain bounded by platform thermal safety.
 | GAMING state | ✅ | ✅ | 🚫 blocked |
 
 > Exact available CPU/GPU frequencies come from the phone’s exposed policies and validated
-> bounds. V63 does not assume that an OP15 frequency table is valid on an OP13, OP12 or
+> bounds. ASB does not assume that an OP15 frequency table is valid on an OP13, OP12 or
 > Ace device. **Smart** is not shown as a fixed row because it blends only inside the
 > Battery and Balanced envelopes at runtime.
 
@@ -199,11 +196,11 @@ changes remain bounded by platform thermal safety.
 
 ## 📊 Stock vs ASB
 
-V63 is designed to change decision quality, not to promise one battery percentage to every
+ASB is designed to change decision quality, not to promise one battery percentage to every
 phone. Display time, signal strength, apps, Bluetooth route, ambient temperature, charging
 and the length of true screen-off periods all materially affect results.
 
-| Area | Stock-style approach | ASB V63 approach |
+| Area | Stock-style approach | ASB approach |
 |:---|:---|:---|
 | CPU/GPU policy | Static or vendor-driven limits | Six-state policy derived from current workload and profile |
 | Sustained heat | React mainly at a hard thermal point | Bounded adaptive budget before a hard cap, always under platform thermal protection |
@@ -212,7 +209,7 @@ and the length of true screen-off periods all materially affect results.
 | Device differences | Copying values can be tempting | Capability manifest, exact device domains and conservative fallback |
 | Support evidence | “Applied” can be an assumption | State provenance, effective policy, `asbdiag` and Action status show the evidence |
 
-The correct way to evaluate V63 is a comparable multi-hour use or overnight capture, then
+The correct way to evaluate ASB is a comparable multi-hour use or overnight capture, then
 inspect `asbdiag` and the relevant log evidence. A control that is not appropriate for a
 phone is reported or skipped; it is not presented as a universal gain.
 
@@ -228,8 +225,8 @@ phone is reported or skipped; it is not presented as a universal gain.
   untrusted thermal evidence is recorded, not rendered as a fake degree value.
 - **Atomic configuration:** `asb_config_safe.sh` validates a complete staged configuration,
   writes atomically and records the transaction result, epoch and reload status.
-- **Safe upgrades:** V62 → V63 migration is additive, backed up and idempotent; retained
-  user settings are not silently replaced by V63 defaults.
+- **Safe upgrades:** compatible configuration migration is additive, backed up and idempotent;
+  retained user settings are not silently replaced by new defaults.
 - **No competing ownership:** Leases coordinate baseline, profile, Smart, camera, user cap,
   safety and platform-thermal writers.
 
@@ -264,13 +261,13 @@ The **Debug ZIP** additionally carries logkit, field-report, state-sampling and 
 validation tools. Use it when collecting a reproducible support report; use the normal
 Release ZIP for ordinary daily use.
 
-### V63 release validation
+### Quality checks
 
-The final V63 source and workflows include host-side contracts for thermal-source fallback
-and recovery, atomic config writes, writer leases, device safety, DSP references, telemetry
-provenance, schema synchronisation, release-package contents and V62 schema-17 → V63
-schema-18 migration. Release and Debug artifacts are built from the same V63/630 identity;
-the final release package is checked for its required runtime files before publication.
+The source and workflows include host-side contracts for thermal-source fallback and
+recovery, atomic config writes, writer leases, device safety, DSP references, telemetry
+provenance, schema synchronisation, package contents and compatible configuration migration.
+Both distribution variants are checked for the runtime files they require before they are
+published.
 
 ---
 
