@@ -1,173 +1,279 @@
-# AutoSystemBoost — Changelog
+# AutoSystemBoost — V63 Release Notes
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Release-V62-16a34a?style=for-the-badge" alt="V62">
-  <img src="https://img.shields.io/badge/Previous-V61-6b7280?style=for-the-badge" alt="V61">
-  <img src="https://img.shields.io/badge/versionCode-620-0ea5e9?style=for-the-badge" alt="versionCode">
+  <img src="https://img.shields.io/badge/Release-V63-16a34a?style=for-the-badge" alt="Release V63">
+  <img src="https://img.shields.io/badge/Previous-V62-6b7280?style=for-the-badge" alt="Previous V62">
+  <img src="https://img.shields.io/badge/versionCode-630-0ea5e9?style=for-the-badge" alt="versionCode 630">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/OnePlus%2015-canoe-ef4444?style=flat-square" alt="OP15">
-  <img src="https://img.shields.io/badge/OnePlus%2013-sun-f59e0b?style=flat-square" alt="OP13">
-  <img src="https://img.shields.io/badge/OnePlus%2012-pineapple-eab308?style=flat-square" alt="OP12">
-  <br>
-  <img src="https://img.shields.io/badge/OnePlus%20Ace%206-SM8750-06b6d4?style=flat-square" alt="Ace 6">
-  <img src="https://img.shields.io/badge/OnePlus%20Ace%205-SM8650-14b8a6?style=flat-square" alt="Ace 5">
-  <img src="https://img.shields.io/badge/+%20any%20OnePlus-device--native-8b5cf6?style=flat-square" alt="any OnePlus">
+  <img src="https://img.shields.io/badge/OnePlus%2015-canoe-ef4444?style=flat-square" alt="OnePlus 15">
+  <img src="https://img.shields.io/badge/OnePlus%2013-sun-f59e0b?style=flat-square" alt="OnePlus 13">
+  <img src="https://img.shields.io/badge/OnePlus%2012-pineapple-eab308?style=flat-square" alt="OnePlus 12">
+  <img src="https://img.shields.io/badge/Ace%205%20%2F%20Ace%206-SM8650%20%2F%20SM8750-14b8a6?style=flat-square" alt="Ace 5 and Ace 6">
+  <img src="https://img.shields.io/badge/Policy-capability--gated-8b5cf6?style=flat-square" alt="Capability-gated policy">
 </p>
+
+> **V63 is the largest ASB refinement since V62.** It adds new user controls for sleep, GPS, wake-locks, networking and performance; a tiered thermal-budget engine; safer device-specific gating; and an evidence chain that explains every major decision. V63 is designed to reduce unnecessary heat and energy use **without replacing required performance with blind caps**.
+
+> Actual battery-life gains depend on display time, signal quality, applications, Bluetooth/audio route, ambient temperature and the length of true screen-off periods. V63 therefore reports its evidence instead of promising one fixed percentage for every device.
 
 ---
 
-## V62 — *nothing is on until you turn it on*
+## V62 → V63 at a glance
 
-Nine new settings, a per-device CPU rework, a scheduler that stops asking for maximum, and
-a first install that finally does nothing until you ask it to.
+| Area | V62 release baseline | V63 release improvement | Practical result |
+|---|---|---|---|
+| **Thermal control** | Device-aware limits, but no P0 validation of an implausible selected thermal source. | Validates `socd` against CPU peers, falls back to a real CPU zone, records confidence and revalidates the primary source. | A false vendor thermal report cannot become a fake 90–95°C governor input. |
+| **Performance tuning** | Per-device frequency scaling and profile limits. | Adds **Performance Ceiling** (60–100%), a tiered thermal budget and optional Observe / Shadow mode. | Users can trade peak headroom for cooler, calmer sustained use without fixed model tables. |
+| **Sleep-side power** | Quiet Night and V62 Doze controls. | Adds **Act on Wakelocks**, **Trim Background GPS**, **Quiet Radio at Night** and screen-off classification. | V63 can identify or selectively address the app/radio work that prevents real sleep. |
+| **Networking** | Network buffers, qdisc and restore-aware baseline. | Adds **Spread Network Load** (RPS) and **Transmit Queue** controls. | Fast Wi-Fi can distribute softirq work; loaded wireless links can reduce queueing latency. |
+| **Audio / DSP** | V62 repaired DSP routing and output safety. | Adds route-aware offload evidence, Bluetooth reconnect trace and conflict-first audio verdicts. | DSP remains usable while diagnosis stops making unproven offload claims. |
+| **Multi-device safety** | V62 removed fixed OP15 frequency assumptions. | Adds capability manifest, device tiers, exact-fingerprint property domains and lease arbitration. | Unknown devices degrade safely instead of receiving copied property packs. |
+| **Configuration writes** | Validated config updates. | Adds atomic linked thermal writes, config backup/preview, writer provenance and legacy-state recovery. | New controls and valid slider values work even after an older retained config. |
+| **Upgrade path** | Config schema 17. | Tested schema-17 → schema-18 additive migration with backup and idempotence. | A V62 update preserves existing choices and adds V63 controls safely. |
+| **Release build integrity** | A release-only pre-build check could require the next GitHub release asset before the first build produced it; selective packaging could also omit a tool that ZIP validation required. | `update.json` is strictly post-build OTA metadata, while the release package contract now proves that every required `tools/` runtime helper is copied back after the developer-tool exclusion. | The first V63 build has no dependency on a future asset or manifest contents, and required diagnostic/runtime tools cannot silently disappear from the flashable ZIP. |
 
-### Nothing is on until you turn it on
+---
 
-A clean install applies **no power profile at all** and leaves every switch at stock. Eleven
-settings used to ship enabled, so the module had opinions about your phone before you had
-opened its interface once. The home screen shows *not selected* until you choose.
+# New V63 tweaks and controls
 
-Upgrades are unaffected: your profile and every setting carry across, including through an
-uninstall-and-reinstall.
+## Battery, heat and performance
 
-### CPU limits that fit the device
+### Performance Ceiling
 
-The frequency caps were OnePlus 15 numbers applied to every model. On a OnePlus 13 — whose
-`policy0` covers six cores and whose frequency table contains no 1190400 at all — the cap
-could not hold, six cores ran unrestrained, and the phone ran hot. Owners of the 15 and Ace 6
-saw nothing wrong, which is why it took field reports to find.
+**New WebUI control:** `Performance Ceiling` (`perf_ceiling_pct`, 60–100%, default 100%).
 
-Caps are now scaled to each device's own frequency table and snapped to steps it really has.
-The half that writes them reads that file too, which it previously did not.
+This is a proportional ceiling over the profile’s own device-correct CPU/GPU limits. It does **not** substitute one fixed frequency table for all phones and it does not raise the profile floors that keep scrolling and audio responsive. For example, 90% is a mild everyday reduction; 75% is an explicit battery-first trade-off for travel or light use.[1]
 
-**And a cap of "45%" now means 45%.** Turning a percentage into a frequency picked the
-nearest step *below* the target, and frequency tables have gaps: on a OnePlus 13 prime
-cluster, 45% landed on 39%. Those percentages were tuned from field feedback, so a sixth
-harder than the tuned number is a different setting wearing its name — and a prime pinned
-below what the work needs pushes that work onto the little cluster for longer.
+| Setting | What V63 changes | Safety boundary |
+|---|---|---|
+| `100%` | Keeps the selected profile’s normal limits. | Default; no extra ceiling. |
+| `95–90%` | Applies a modest proportional cap. | Suitable for calmer everyday use when peak benchmark speed is not needed. |
+| `85–75%` | Applies a clearer sustained-performance trade-off. | Better suited to travel, charging or battery-first intent. |
+| `70–60%` | Strong conservative cap. | Available only as an intentional user choice; it is not selected silently. |
 
-Related: when something outside ASB raises a cap back up, that is now recognised as a
-conflict and backed off from, instead of being counted as ASB's own work and fought all day.
+### Adaptive Thermal Budget — enabled by default
 
-### Scheduler no longer pinned to maximum
+V63 adds a **tiered thermal-budget engine**, operating before the hard thermal cap is raised. It evaluates available thermal headroom, skin trend, temperature rise rate and battery-current evidence. Instead of jumping directly from unrestricted performance to a hard restriction, it can apply a light, moderate or severe trim and holds that choice for a dwell interval to avoid oscillation.[2]
 
-`sched_util_clamp_min` ships at 1024 on OxygenOS — every task may demand full capacity, and
-the vendor boost framework does. Frequencies stayed high regardless of real load. ASB now
-caps that ceiling at the running profile's own top-app minimum. Idle, reading and music are
-where you will notice; genuine load still gets what it needs.
+The shipped policy is deliberately bounded:
 
-### Heat and battery: three causes found in field captures
+| V63 thermal-budget control | Default | Purpose |
+|---|---:|---|
+| `thermal_budget_enable` | `1` | Enables adaptive pre-cap response. |
+| `thermal_budget_light_headroom_pct` / `thermal_budget_light_trim_pct` | `70%` / `8%` | First gentle response while headroom is narrowing. |
+| `thermal_budget_moderate_headroom_pct` / `thermal_budget_moderate_trim_pct` | `45%` / `18%` | More visible response for sustained pressure. |
+| `thermal_budget_severe_headroom_pct` / `thermal_budget_severe_trim_pct` | `25%` / `32%` | Conservative response before hard thermal protection dominates. |
+| `thermal_budget_dwell_s` | `30 s` | Prevents caps from rapidly moving up and down. |
 
-**With the screen off, the governor now goes quiet on every profile.** It used to do that
-only for Battery: on Balanced and Performance it kept polling sensors every five seconds
-with the anti-clamp armed, screen off or not. Two captures show the cost — idle at 83%
-CPU-awake and charging-idle at 100%, against a 5% target, with 274 of 416 throttle events
-landing while charging. That last part is the module and the vendor thermal engine writing
-over each other, and on a OnePlus 13 it was enough for OxygenOS to disable its own display
-enhancement with "device overheated".
+Camera activity receives special treatment: a light budget response is not allowed to undermine a protected camera deadline. Hard thermal safety and platform thermal limits always retain priority.
 
-**Camera hold is bounded now.** Holding the clocks up while the camera streams stops a
-dropped frame in a burst or in 4K60 — those last seconds to minutes. A video call streams
-the camera identically for forty minutes, and the hold had no limit at all. It releases
-after three minutes, or as soon as the CPU reaches the profile's own throttle point,
-whichever comes first. Real load still raises the clocks on its own, so a recording that
-needs them keeps them.
+### Observe / Shadow mode and intent presets
 
-**Video playback has its own GPU ceiling.** It was the single highest-drain phase in a
-capture — 25.4 %/h against 14.2 %/h for gaming on the same phone, with the CPU nearly idle
-and the GPU at 55%. It was also the one high-GPU case with no ceiling of its own. The
-decode block does the work and the GPU only composites, so a ceiling above what compositing
-needs still saves a ramp to maximum that nothing asked for.
+V63 introduces `shadow_mode`: ASB calculates and records its policy decision but avoids policy writes. It is intended for diagnosis and validation before a new policy is trusted on a device. This is available through the `observe` intent preset rather than as an aggressive default.[3]
 
-### New settings
+The new `asb_intent.sh` helper supplies safe-writer-backed presets for **daily**, **camera**, **game**, **travel**, **charging** and **observe**. Presets use already validated V63 knobs; they do not edit `governor.conf` directly or bypass its full semantic validation.[3]
 
-| | |
+---
+
+## New sleep, GPS and wake-lock controls
+
+### Act on Wakelocks
+
+**New WebUI control:** `Act on Wakelocks` (`wakelock_action`, default off).
+
+V63 always observes significant wake sources when the kernel exposes them. When this control is enabled, an application must satisfy multiple safeguards before V63 acts: it must be user-installed, hold a relevant partial wakelock through a long screen-off interval, and the device must demonstrably remain awake. The action is Android’s reversible **restricted** bucket; V63 does not force-stop the app and never targets kernel/system sources, the modem, display, alarms, sensors, authenticator, dialer, SMS, messaging or clock apps.[4]
+
+### Trim Background GPS
+
+**New WebUI control:** `Trim Background GPS` (`gnss_trim`, default off).
+
+V63 targets a narrow case: a third-party app that continues holding location while **cached** and screen-off. It limits that app to coarse location only while the condition persists. Foreground use, navigation, fitness/route tracking, emergency/finding functions and protected classes are excluded. Permissions are not revoked; full access returns when the app leaves the cached state, and all ASB restrictions are restored when the control is disabled or ASB is removed.[5]
+
+### Quiet Radio at Night
+
+**New WebUI control:** `Quiet Radio at Night` (`night_modem_idle`, default off).
+
+This control works inside the learned/configured night window and only while screen-off. It changes keepalive/probe timing so fewer background sockets wake the modem path. It does **not** power the radio off, and it does not suppress calls, SMS or high-priority push. The explicit trade-off is that a polling application can be later until morning; users who rely on polling instead of push should leave it disabled.[6]
+
+### Screen-off classifier
+
+V63 adds a read-only `asb_screenoff_class` observer. It distinguishes genuine sleep from screen-off audio, VPN/tunnel activity, GNSS-held work, charging and other confounders before anyone attributes drain to CPU policy. The classifier writes no system node and changes no user policy in this release cycle.[7]
+
+---
+
+## New network controls
+
+### Spread Network Load
+
+**New WebUI control:** `Spread Network Load` (`net_rps`, default `stock`).
+
+V63 can direct receive-packet work to the efficiency cluster (`little`) or all available cores (`all`) when the device exposes the relevant queue nodes. On high-throughput Wi-Fi, this can prevent one core from being pinned by softirq work. On a slow link, waking extra cores can cost more energy than it saves, which is why stock remains the default and “prime-only” steering is intentionally not offered.[8]
+
+### Transmit Queue
+
+**New WebUI control:** `Transmit Queue` (`net_txqueue`, default `stock`).
+
+The new choices are `short` (256) and `shorter` (128), alongside stock behaviour. They are aimed at reducing bufferbloat and loaded-link latency, not at claiming guaranteed higher throughput. V63 captures previous values before change and restores them when the control returns to stock.[8]
+
+### Network safety and diagnostics
+
+Network writers act only on real, active interfaces with writable queues. V63 records the applied result rather than assuming a driver accepted the request. Existing route/buffer/qdisc controls remain available and restore-aware; the new RPS and queue controls complement them instead of replacing them.
+
+---
+
+## Thermal-source safety and cross-device correctness
+
+### A bad `socd` sensor cannot become a false governor input
+
+Some devices expose a thermal zone named `socd` whose value may diverge sharply from actual CPU zones. V63 checks a selected `socd` against validated CPU peers. It rejects a source that is more than **25°C above** the peer median or **12°C or more below** it. When a valid peer exists, ASB uses that **real CPU sysfs zone** as the control path; it does not invent a median with no readable path.[9]
+
+A valid `socd` retains priority and receives peer-checked confidence. If no usable fallback exists, V63 stays conservative and reports low confidence rather than pretending the sensor is validated. V63 also revalidates a primary `socd` every 60 seconds, allowing recovery from transient vendor-reporting faults.[9]
+
+### Provenance everywhere it matters
+
+The following fields are now available through `/dev/.asb/state`, native status JSON, effective-policy JSON, `asbdiag` and full-day logkit:
+
+| V63 field | Meaning |
 |---|---|
-| **Freeze Google Components** | Disables telemetry, reporting and ads components inside Play services. GMS itself stays enabled — push, sign-in and payments keep working. Reversible per component. |
-| **Google Services Trim** | Narrows what Play services may do in the background, without freezing anything. |
-| **Deep Sleep** | Doze tuning that covers the light phase as well as deep — the phase that actually runs while a phone is in a pocket. |
-| **Trim Doze Exemptions** | Removes user-installed apps from the list that lets them ignore Doze. Never touches the dialer, SMS, clock or your root manager. |
-| **Animation Speed** | A real setting instead of a side effect of the power profile. |
-| **DSP Outputs** | Restricts the audio effect to chosen outputs, so headphone gain stops boosting the loudspeaker. |
-| **Headphone Volume Limit** | The EU volume cap is no longer removed silently. Off by default, with the hearing warning stated plainly. |
-| **Background Process Limit** | Android's phantom-process killer, controllable. |
-| **Athena Background Killer** | OxygenOS has its own background app killer, and it is why a messenger left in the background stops delivering notifications until you reopen it — no battery whitelist fixes that, because it is not Android's Doze. Disables the deciding component only; the rest of the package keeps running. Costs RAM and a little drain. |
+| `thermal_control_source`, `thermal_control_zone` | The actual sensor path controlling ASB thermal policy. |
+| `thermal_source_confidence` | Uninitialized, fallback/unvalidated or peer-checked source confidence. |
+| `thermal_rejected_type`, `thermal_rejected_raw` | Evidence for a rejected candidate; raw values are not rendered as degrees. |
+| `startup_quarantined` | Early boot samples excluded from Smart learning. |
+| `battery_window_confidence`, `battery_window_reason` | Explains whether a drain window is trustworthy; charging invalidates discharge confidence. |
 
-### Fixes
-
-- **Throttling temperature** stayed where you put it. Two separate boot paths rewrote it, so
-  a deliberate 55 came back as 70 — and on a hot-idling device the correction could produce
-  values outside the slider's own range. The slider also allowed points a phone can never be
-  below: a OnePlus 15 idles at 48 °C on the hottest CPU zone, so a 36 °C point meant
-  throttling was permanently on — which makes a phone hotter, not cooler. The floor is 52 °C,
-  and a value stored by an older build is raised to something this device can actually sit
-  below.
-- **DSP output routing** never worked: the effect runs inside the vendor audio HAL, which
-  cannot read the module's properties. The decision moved to the component that can.
-- **Camera grading** no longer compounds across installs.
-- **The module card** said "Balanced" while the app said "not selected". Two copies of the
-  function that writes the card exist, and the one that wins was missing the not-selected
-  case.
-- **Settings that could not be applied now say so.** On some devices the `settings` command
-  fails while still reporting success, so writes looked fine and read-backs returned the
-  error text as a value: Bluetooth volume, WiFi scan rate, blur, haptics and the OEM toggles
-  were all quietly doing nothing. The module falls back to the content provider and verifies
-  every write by reading it back.
-- **Values from Android 15 and newer parse correctly.** Settings started returning
-  `1, is_preserved_in_restore=true` instead of `1`, which silently broke every comparison in
-  the module.
-- **Skip lockscreen has been removed.** It could only ever work below Android 11 — above that
-  the keyguard ignores the setting it wrote, so it stored perfectly and did nothing. Anyone
-  who had it on gets their original setting back automatically.
-- **Installs from CI failed** with a missing-file error that pointed at the wrong file
-  entirely. There were two copies of the installer and the dead one was being packaged over
-  the live one.
-- **Blur** no longer flashes off for a moment the first time the app drawer opens.
-- **OEM toggles** are recorded before install and put back once afterwards, so RAM expansion
-  stops re-enabling itself on machines where the user keeps it off.
-- **Network `auto`** now means the value your phone shipped with, captured before ASB touches
-  anything, rather than a value ASB picked.
-- **Two failed boots** remove ASB's display properties automatically.
-- `config.disable_rtt` removed. It disabled Real-Time Text — an accessibility feature for
-  deaf and hard-of-hearing users — for no measurable saving. Inherited from a build.prop list
-  that has circulated since the early 2010s.
-- `db.log.slow_query_threshold` set to a large positive value. At `-1` logging was off by
-  accident of implementation; at `0` it logged every query.
-
-### Interface
-
-- **11 languages**, up from 2: English, Russian, Ukrainian, German, Spanish, Portuguese,
-  Turkish, Indonesian, Italian, Arabic, Chinese. Translations live in `webroot/i18n/*.json`,
-  so contributing one no longer means editing a 4700-line file.
-- Every card states when it takes effect, and the confirmation that appears agrees with it.
-- Aggressive settings say what will stop working, next to the switch rather than in a wiki.
-- **DSP Outputs** reads `USB` and `BT` in English instead of `wired` and `bt` — these phones
-  have no headphone jack, so "wired" meant the USB-C port all along.
-- The Smart panel is shown only while Smart is the running profile.
-
-### Under the hood
-
-- The learner reads the temperature and drain history it had been recording and ignoring, and
-  compares against **this device's** own median rather than absolute degrees.
-- `action` explains what Smart has learned, what it concluded and what it is watching.
-- `asbdiag` covers all 49 settings, including the DSP chain end to end. It also names the
-  Android version, prints what the governor is actually doing rather than what it was asked
-  to do, warns when the throttle point is one this phone can never sit below, and says once —
-  at the top — when settings cannot be written at all.
-- `asb_diag.sh` ships in release builds now. It never did: the one script users are asked to
-  run when reporting a problem existed only in debug versions.
-- The linter checks config-schema drift, migration coverage, translation completeness and the
-  DSP source; CI builds the DSP library and attacher on every relevant change.
+This is a major cross-device improvement: a field log can now distinguish a bad sensor, a platform clamp, a real ASB trim, audio work or a radio issue before anyone changes a policy.
 
 ---
 
-### Worth knowing
+## Capability-gated multi-device architecture
 
-- A first install does nothing until you open the app and choose — this is deliberate
-- **Freeze Google Components** is reversible, but check anything you depend on after enabling it
-- **Deep Sleep** on aggressive can delay notifications from apps that poll on their own;
-  high-priority push always gets through
-- **Headphone Volume Limit** is off by default for a reason — sustained high volume damages hearing
-- Camera changes show up after the camera app is restarted
+V63 does not copy a generic “tweak pack” to every Snapdragon phone. It introduces several layers that decide what can actually be justified on the current device:
+
+| V63 subsystem | Function | Why it matters |
+|---|---|---|
+| **Capability Manifest** | Read-only probe of CPU policies, OPP availability, cgroup/uclamp, thermal, GPU, camera and battery-current paths. | A node existing is not treated as proof it is safe to write. |
+| **Device Tier / Device Pack** | Unknown devices stay generic; mutable vendor domains require a validated exact build fingerprint. | An OTA or similar model name cannot silently authorize stale properties. |
+| **Managed Properties** | Optional property blocks are applied only after feature and device-domain validation. | Properties are no longer loaded blindly at boot through a global `system.prop` payload. |
+| **Lease Arbiter** | Coordinates baseline, Smart, profile, user cap, camera, safety and platform thermal priority. | Competing writers can back off instead of fighting the same node. |
+| **Effective Policy** | Read-only machine-readable view of applied config, capability/tier context, energy policy and transaction provenance. | Support can inspect what ASB can actually justify, not only selected UI values. |
+
+> **No AIST/SysTwks-style property bundle, global sysctl pack, `swapoff`, zram recreation or conflicting audio overlay was imported into V63.** Optional mechanisms are capability-gated, owned, recorded and reversible.
+
+---
+
+## Audio, DSP and Bluetooth diagnostics
+
+V63 keeps the working AIDL DSP path while making audio evidence substantially more reliable.
+
+The full-day recorder now captures route context, AudioFlinger evidence, relevant platform/vendor offload properties and Bluetooth reconnect evidence with MAC redaction. Its verdict is conservative by design: an offload/compress thread is not claimed to belong to active Bluetooth playback unless route evidence supports that conclusion. Conflicting property evidence wins over an optimistic observation.[10]
+
+DSP output restrictions continue to prevent headphone-oriented processing from unintentionally boosting speakers. DSP source checks remain part of both workflows.[11]
+
+---
+
+## Configuration reliability, backup and recovery
+
+### Atomic safe writer with transaction provenance
+
+`runtime/asb_config_safe.sh` is the only runtime writer for `governor.conf`. Every change is staged, validated as a complete config and atomically renamed. Transactions now record a stable result class, reason, key, pre/post epoch and honest reload status. The state path is injectable for staging/host tests while production remains at the normal device location.[12]
+
+### Three important WebUI/update fixes
+
+| Fixed case | V63 resolution |
+|---|---|
+| Valid 69–70°C throttle slider update could leave `ceiling < enter`. | Slider writes `enter`, matching `ceiling` and manual mode in one atomic transaction. |
+| A retained older config did not contain a newly added V63 key. | Writer accepts a key known to either the active config or the current shipped schema; arbitrary keys remain rejected. |
+| An old inverted thermal pair blocked every unrelated write. | A narrow, logged legacy recovery aligns an in-range ceiling to the existing `enter` value, then applies normal validation. Explicit invalid thermal edits still fail. |
+
+When the last recovery is used, `recovery=legacy_thermal_ceiling` appears in the transaction sidecar, effective policy and diagnostics. No hidden policy repair occurs without evidence.
+
+### Backup, import preview and Smart reset
+
+V63 adds a versioned config-backup tool with checksum and import preview. The preview uses the same config validation surface without changing the active config. V63 also adds **Smart Learning Reset**, which clears only learner-owned history, buckets and night-window data; it leaves configuration, baselines and uninstall/restore records intact.[13]
+
+---
+
+## Complete V63 configuration additions
+
+V63 adds **15 configuration keys** over the public V62 release. The visible controls are marked below; advanced keys are shipped with bounded defaults and validated by both shell and native config contracts.
+
+| Group | New V63 keys | Default / availability |
+|---|---|---|
+| **Performance** | `perf_ceiling_pct` | **WebUI:** 100%; 60–100% in 5% steps. |
+| **Sleep / app work** | `wakelock_action`, `gnss_trim`, `night_modem_idle` | **WebUI:** all default off; explicitly opt-in. |
+| **Networking** | `net_rps`, `net_txqueue` | **WebUI:** both stock by default. |
+| **Adaptive thermal budget** | `thermal_budget_enable`, `thermal_budget_dwell_s`, `thermal_budget_light_headroom_pct`, `thermal_budget_light_trim_pct`, `thermal_budget_moderate_headroom_pct`, `thermal_budget_moderate_trim_pct`, `thermal_budget_severe_headroom_pct`, `thermal_budget_severe_trim_pct` | Enabled with bounded 3-tier defaults and 30-second dwell. |
+| **Advanced diagnostics** | `shadow_mode` | Default off; used by the Observe intent for calculate-and-log behaviour. |
+
+---
+
+## Updating from V62
+
+Updating from V62 is supported and permanently tested. V62 uses config schema **17**; V63 uses schema **18**.
+
+| Upgrade step | V63 behaviour |
+|---|---|
+| Existing profile | Preserved for an in-place update. |
+| Existing `governor.conf` | Preserved as the user’s authoritative configuration. |
+| Backup | `governor.conf.bak.schema17.<timestamp>` is written before boot-time merge. |
+| Duplicate legacy records | The first historical value is retained; duplicates are removed so shell and native readers cannot diverge. |
+| New V63 values | The 15 missing V63-only keys are added from `governor.conf.shipped`. |
+| Existing V62 choices | Retained; V63 does not silently replace them with new defaults. |
+| Schema marker | Moves to 18 only after successful migration. |
+| Next boot | Migration is idempotent; schema 18 is a no-op. |
+
+The permanent V62→V63 contract tests backup creation, additive merge, absence of duplicate keys, idempotence and a post-migration safe-writer update. It is mandatory in both `build-release.yml` and `build-debug.yml`.[14]
+
+---
+
+## Release validation
+
+| Gate | V63 public release result |
+|---|---|
+| V62 schema-17 → V63 schema-18 migration contract | **PASS** |
+| Native thermal `socd` high/low/fallback/recovery fixtures | **PASS** |
+| Atomic config-writer, thermal-slider and legacy-recovery contracts | **PASS** |
+| P0 state / effective policy / logkit provenance contract | **PASS** |
+| DSP source contract | **PASS** |
+| Schema synchronisation and source lint | **0 errors** |
+| Native strict-warning budget | **79 / 79 baseline** |
+| `tools/asb_diag.sh` and `system/bin/asbdiag` | **Byte-identical** |
+| V62 migration test in debug and release workflows | **Mandatory** |
+| Shared `update.json` / `module.prop` metadata validator | **Mandatory in debug and release**; stale release metadata is rejected before compile. |
+
+---
+
+## What to expect after updating
+
+V63 should feel **more controlled and more explainable**, not artificially more aggressive. On a device with correct thermal reporting, behaviour remains close to V62 while diagnostics and adaptive policy improve. On a device with a bad `socd` report, V63 prevents false thermal restriction and uses a real CPU thermal path when one is available.
+
+The new sleep controls are intentionally opt-in. Quiet Radio, Background GPS Trim and Wakelock Action can be valuable when a full-day report shows the matching cause, but they are not marketed as universal magic switches. A proper overnight conclusion needs a continuous multi-hour screen-off capture with radio, audio and location context.
+
+---
+
+## V62 historical foundation
+
+V62 remains the foundation for V63. It introduced a clean-install-safe posture, device-native frequency cap scaling, profile-aware uclamp control, screen-off quieting, bounded camera hold, video-aware GPU limits, safer DSP routing, robust settings read-back, 11-language WebUI coverage and a complete `asbdiag` diagnostic path.
+
+V63 builds on that work with **new controls, adaptive thermal budgeting, evidence-first diagnostics, capability-gated multi-device safety, configuration recovery and a verified public upgrade path**.
+
+---
+
+## References
+
+[1]: ./runtime/profile_core.sh "Profile-scaled performance ceiling"
+[2]: ./src/asb_governor.c "Tiered thermal-budget policy"
+[3]: ./tools/asb_intent.sh "Validated V63 intent presets"
+[4]: ./runtime/asb_wakelock_watch.sh "Wakelock observation and safe action contract"
+[5]: ./runtime/asb_gnss_trim.sh "Background GNSS trim safety conditions"
+[6]: ./webroot/index.html "Quiet Radio at Night user contract"
+[7]: ./runtime/asb_screenoff_class.sh "Observe-only screen-off classifier"
+[8]: ./runtime/asb_net_offload.sh "RPS and transmit-queue controls"
+[9]: ./src/asb_metrics.h "Thermal-source validation and fallback"
+[10]: ./tools/logkit/_asb_logkit_common.sh "Audio/offload and Bluetooth provenance"
+[11]: ./tools/dsp_stubs/asb_dsp_syntax_check.sh "DSP source contract"
+[12]: ./runtime/asb_config_safe.sh "Atomic configuration writer"
+[13]: ./tools/asb_config_backup.sh "Backup and import preview" 
+[14]: ./tests/test_v62_to_v63_migration.sh "V62 to V63 migration regression contract"
