@@ -86,7 +86,8 @@ jobs:
             tests/test_device_safety_contract.sh \
             tests/test_thermal_socd_validation.c \
             tests/test_p0_provenance_contract.sh \
-            tests/test_v62_to_v63_migration.sh; do
+            tests/test_v62_to_v63_migration.sh \
+            tests/test_release_package_tool_contract.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
@@ -189,6 +190,12 @@ jobs:
           if [ -f tests/test_v62_to_v63_migration.sh ]; then
             echo "== tests/test_v62_to_v63_migration.sh =="
             bash tests/test_v62_to_v63_migration.sh || _rc=1
+          fi
+          # Release packaging excludes tools wholesale, then re-adds selected runtime
+          # helpers. Validate the required-tools/copy-back contract before NDK build.
+          if [ -f tests/test_release_package_tool_contract.sh ]; then
+            echo "== tests/test_release_package_tool_contract.sh =="
+            sh tests/test_release_package_tool_contract.sh || _rc=1
           fi
           # Lease arbitration protects camera/profile writes and establishes the
           # central priority contract before a release reaches a real device.
@@ -501,7 +508,7 @@ jobs:
           # on that list - so the one script users are asked to run when they report a
           # problem existed only in debug builds. Every diagnostic we have received came
           # from a tester on debug; a release user had no way to produce one at all.
-          for _t in asb_diag.sh asb_doctor.sh asb_recents_probe.sh asb_intent.sh asb_config_backup.sh; do
+          for _t in asb_diag.sh asb_doctor.sh asb_recents_probe.sh asb_effective_policy.sh asb_intent.sh asb_config_backup.sh; do
             if [ -f "tools/$_t" ]; then
               mkdir -p "$PKG_REL/tools"
               install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"
