@@ -770,7 +770,7 @@ if [ "${_sq:-0}" -gt 0 ] 2>/dev/null; then
 fi
 _txn=/data/adb/asb/config_last_txn
 if [ -r "$_txn" ]; then
-  NOTE "last config transaction: class=$(_rget result_class "$_txn") key=$(_rget key "$_txn") pre_epoch=$(_rget pre_epoch "$_txn") post_epoch=$(_rget post_epoch "$_txn") reload=$(_rget reload_accepted "$_txn")"
+  NOTE "last config transaction: class=$(_rget result_class "$_txn") key=$(_rget key "$_txn") pre_epoch=$(_rget pre_epoch "$_txn") post_epoch=$(_rget post_epoch "$_txn") reload=$(_rget reload_accepted "$_txn") recovery=$(_rget recovery "$_txn")"
 else
   NOTE "last config transaction: none recorded yet"
 fi
