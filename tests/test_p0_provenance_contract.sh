@@ -75,7 +75,7 @@ MODDIR="$MOD" ASB_CONFIG_STATE="$CFG_STATE" ASB_RUNTIME_STATE="$RUNTIME_STATE" \
 command -v jq >/dev/null 2>&1 || fail "jq is required for effective-policy JSON contract"
 jq -e '.thermal_provenance == {"control_source":"cpu-1-1-0","control_zone":7,"confidence":1,"rejected_type":"socd","rejected_raw":92000,"startup_quarantined":4}' "$TMP/effective_policy.json" >/dev/null \
   || fail "thermal provenance JSON object is invalid or incomplete"
-jq -e '.config_last_txn.result_class == "success" and .config_last_txn.reason == "applied" and .config_last_txn.reload_accepted == "not_requested"' "$TMP/effective_policy.json" >/dev/null \
+jq -e '.config_last_txn.result_class == "success" and .config_last_txn.reason == "applied" and .config_last_txn.reload_accepted == "not_requested" and .config_last_txn.recovery == ""' "$TMP/effective_policy.json" >/dev/null \
   || fail "config transaction JSON object is invalid or incomplete"
 
 # logkit must retain thermal confidence/rejection in its transition trace and snapshots.

@@ -42,6 +42,20 @@ if run_writer set ace5_unknown_toggle 1 >/dev/null 2>&1; then
   fail "unknown key was accepted through shipped-schema fallback"
 fi
 
+# Ace 5 legacy recovery: older WebUI could leave enter above its former Smart
+# ceiling. An unrelated setting must recover only that stale pair atomically,
+# record why it did so, and then preserve the normal refusal for an explicit
+# invalid thermal edit.
+sed -i 's/^sustained_temp_enter=.*/sustained_temp_enter=70/' "$MOD/config/governor.conf"
+run_writer set gnss_trim 1 >/dev/null
+need_line "$MOD/config/governor.conf" "sustained_temp_enter=70"
+need_line "$MOD/config/governor.conf" "sustained_temp_ceiling=70"
+need_line "$STATE/config_last_txn" "recovery=legacy_thermal_ceiling"
+if run_writer set sustained_temp_ceiling 68 >/dev/null 2>&1; then
+  fail "explicit invalid thermal ceiling was accepted"
+fi
+need_line "$MOD/config/governor.conf" "sustained_temp_ceiling=70"
+
 # F-02: a thermal overlay above 100 used to become a negative multiplier and
 # make the writer silently skip the safety cap. Both values must be rejected.
 if run_writer set thermal_overlay_pct 999 >/dev/null 2>&1; then
