@@ -37,7 +37,11 @@ extern asb_runtime_config_t g_asb_cfg;
 
 #define PATH_CPU_POLICIES_DEFAULT "0,6"
 
+/* Host fixtures may override only the base directory at compile time; device builds retain
+ * the Android thermal sysfs default unchanged. */
+#ifndef THERMAL_BASE
 #define THERMAL_BASE        "/sys/class/thermal"
+#endif
 #define THERMAL_MAX_ZONES   128
 
 #define PATH_WALT_RAVG      "/proc/sys/walt/sched_ravg_window_nr_ticks"
@@ -213,6 +217,9 @@ static int asb_batt_current_to_ma(long raw) {
  * probes it guards live in this header; defined in asb_governor.c. */
 extern int g_qn_skip_this_tick;
 
+/* Which power_supply node supplied the current reading this tick. */
+static char g_batt_current_source[24] = "unknown";
+
 static void metrics_read_battery(asb_battery_t *b) {
     /* Quiet Night: reuse last tick's numbers instead of touching power_supply.
      *
@@ -226,6 +233,16 @@ static void metrics_read_battery(asb_battery_t *b) {
     int idx = metrics_find_batt_current_path();
     if (idx >= 0) {
         b->current_ua = sysfs_read_int(g_batt_current_paths[idx], 0);
+        /* P0-4: remember WHICH source answered.
+         *
+         * The paths are tried in order and differ in meaning: current_now is instantaneous
+         * and noisy, current_avg is already smoothed by the gauge, and a vendor bms node
+         * may be either. A %/h figure derived from one is not the same claim as the same
+         * figure derived from another, and the report presented them identically. */
+        snprintf(g_batt_current_source, sizeof(g_batt_current_source), "%s",
+                 strstr(g_batt_current_paths[idx], "current_avg") ? "current_avg" :
+                 strstr(g_batt_current_paths[idx], "bms")         ? "vendor_bms"  :
+                                                                    "current_now");
     } else {
         b->current_ua = 0;
     }
@@ -523,6 +540,20 @@ static void metrics_read_cpu(asb_cpu_t *c) {
     }
 }
 
+/* How far above the per-core median socd may read before it is treated as a scale
+ * mismatch rather than a hotspot.
+ *
+ * A die sensor legitimately runs hotter than the cores around it - 10-15C under sustained
+ * load is normal, and rejecting that would throw away the earliest warning the phone has.
+ * 25C sits above any plausible hotspot delta and far below the 55C gap seen in the capture
+ * that prompted this, so a real hotspot is never mistaken for a broken sensor.
+ */
+#define ASB_SOCD_MAX_ABOVE_PEERS_C 25
+
+/* Confidence in the current thermal control source: 0 unknown, 1 low (derived or
+ * unvalidated), 2 cross-checked against peers. */
+static int g_thermal_source_confidence = 0;
+
 static int g_thermal_cpu_zone     = -1;
 static int g_thermal_skin_zone    = -1;  /* literal shell_front/frame/back only */
 static int g_thermal_surface_zone = -1;  /* hottest body-adjacent zone (sys-therm-6 etc) */
@@ -531,6 +562,19 @@ static int g_thermal_cpu_fallback_zone = -1;
 static char g_thermal_cpu_fallback_type[64] = "";
 static char g_thermal_cpu_type[64] = "";
 static char g_thermal_cpu_reason[256] = "uninitialized";
+
+/* P0-2 provenance: what was rejected, and what it actually read.
+ *
+ * The report used to show one temperature with no indication of where it came from or
+ * what was discarded to get it. When socd is thrown out for reading 92 against a 36C peer
+ * median, that 92 is still evidence - it says the sensor exists and is broken - but it
+ * must never appear next to a degree sign, because it is not degrees.
+ *
+ * Kept as a raw integer with a separate type field so every consumer has to decide how to
+ * present it, rather than inheriting a formatted string that looks like a temperature.
+ */
+static char g_thermal_rejected_type[64] = "";
+static int  g_thermal_rejected_raw = 0;      /* raw sysfs value, NOT degrees */
 
 static inline int thermal_raw_to_c(int raw) {
     if (raw <= 0) return 0;
@@ -640,6 +684,22 @@ int cpu_prio = -1;
                 best_cpu_prio = cpu_prio;
                 snprintf(g_thermal_cpu_type, sizeof(g_thermal_cpu_type), "%s", type);
                 snprintf(g_thermal_cpu_reason, sizeof(g_thermal_cpu_reason), "%s validated at zone%d", cpu_reason, z);
+            } else if (strcmp(type, "socd") == 0) {
+                /* A static extreme socd can fail basic validation before the post-scan
+                 * peer comparison runs. Preserve the same provenance contract for that
+                 * path so a real CPU fallback is never reported as an unexplained primary. */
+                char vp[128];
+                snprintf(vp, sizeof(vp), THERMAL_BASE "/thermal_zone%d/temp", z);
+                int raw_now = sysfs_read_int(vp, 0);
+                int c_now = thermal_raw_to_c(raw_now);
+                if (raw_now > 0) {
+                    snprintf(g_thermal_rejected_type, sizeof(g_thermal_rejected_type), "socd");
+                    g_thermal_rejected_raw = raw_now;
+                    g_thermal_source_confidence = 1;
+                    snprintf(g_thermal_cpu_reason, sizeof(g_thermal_cpu_reason),
+                             "socd rejected during basic validation (raw=%d, normalized=%dC)",
+                             raw_now, c_now);
+                }
             }
             } /* end if (!dominated) */
         }
@@ -692,54 +752,44 @@ int cpu_prio = -1;
     }
 
     /*
-     * two-pass socd cross-reference sanity check.
+     * Post-scan socd validation. This runs only after every zone is known, so the
+     * primary source is evaluated against a complete peer set rather than against
+     * whichever zone happened to be visited first. A rejected socd is rebound to a
+     * real validated CPU zone; it never becomes a synthetic "cpu-median" with no
+     * sysfs path behind it.
      */
     {
-        int ref_max_c = 0;
-        char ref_max_type[64] = "";
+        int peer_c[24], np = 0;
         int fallback_zone = -1;
         int fallback_prio = 99;
         char fallback_type[64] = "";
 
-        for (int z = 0; z < THERMAL_MAX_ZONES; z++) {
-            char tp[128], tt[64];
+        for (int z = 0; z < THERMAL_MAX_ZONES && np < 24; z++) {
+            char tp[128], tt[64], vp[128];
             snprintf(tp, sizeof(tp), THERMAL_BASE "/thermal_zone%d/type", z);
             if (sysfs_read_str(tp, tt, sizeof(tt)) < 0) continue;
             int tl = (int)strlen(tt);
-            while (tl > 0 && (tt[tl-1] == '\n' || tt[tl-1] == '\r' || tt[tl-1] == ' '))
+            while (tl > 0 && (tt[tl - 1] == '\n' || tt[tl - 1] == '\r' || tt[tl - 1] == ' '))
                 tt[--tl] = '\0';
 
-            /* Compute current reading for reference / fallback selection */
-            char vp[128];
+            int prio = -1;
+            if (strstr(tt, "cpu-1-1-")) prio = 2;
+            else if (strstr(tt, "cpu-0-5-")) prio = 3;
+            else if (strstr(tt, "cpuss-0")) prio = 4;
+            else if (strstr(tt, "cpullc-0")) prio = 5;
+            if (prio < 0) continue;
+
             snprintf(vp, sizeof(vp), THERMAL_BASE "/thermal_zone%d/temp", z);
-            int rv = sysfs_read_int(vp, 0);
-            int rc = thermal_raw_to_c(rv);
+            int raw = sysfs_read_int(vp, 0);
+            int c = thermal_raw_to_c(raw);
+            if (c <= 10 || c >= 120) continue;
 
-            /* Reference pool for socd cross-check: real per-core CPU sensors
-             * and sys-therm-6 which we already trust as a body-adjacent proxy.
-             * We only use VALID readings (>5C, <120C). */
-            int is_ref = 0;
-            if (strstr(tt, "cpu-1-1-")) is_ref = 1;
-            else if (strstr(tt, "cpu-0-5-")) is_ref = 1;
-            else if (strstr(tt, "cpullc-0")) is_ref = 1;
-            else if (strcmp(tt, "sys-therm-6") == 0) is_ref = 1;
-            if (is_ref && rc > 5 && rc < 120 && rc > ref_max_c) {
-                ref_max_c = rc;
-                snprintf(ref_max_type, sizeof(ref_max_type), "%s", tt);
-            }
-
-            /* Fallback zone selection: best non-socd CPU sensor with a
-             * plausible live reading (>15C) */
-            int fbp = -1;
-            if (strstr(tt, "cpu-1-1-")) fbp = 2;
-            else if (strstr(tt, "cpu-0-5-")) fbp = 3;
-            else if (strstr(tt, "cpullc-0")) fbp = 5;
-            if (fbp > 0 && fbp < fallback_prio && rc > 15 && rc < 120) {
-                if (thermal_sensor_validate(z)) {
-                    fallback_zone = z;
-                    fallback_prio = fbp;
-                    snprintf(fallback_type, sizeof(fallback_type), "%s", tt);
-                }
+            peer_c[np] = c;
+            np++;
+            if (prio < fallback_prio && thermal_sensor_validate(z)) {
+                fallback_zone = z;
+                fallback_prio = prio;
+                snprintf(fallback_type, sizeof(fallback_type), "%s", tt);
             }
         }
 
@@ -747,32 +797,75 @@ int cpu_prio = -1;
         snprintf(g_thermal_cpu_fallback_type, sizeof(g_thermal_cpu_fallback_type),
                  "%s", fallback_type);
 
-        /* Cross-check: if primary is socd and it's significantly colder than
-         * the hottest reference sensor, it's reporting garbage. Reject. */
-        if (g_thermal_cpu_zone >= 0 && strcmp(g_thermal_cpu_type, "socd") == 0 && ref_max_c > 0) {
-            char svp[128];
-            snprintf(svp, sizeof(svp), THERMAL_BASE "/thermal_zone%d/temp", g_thermal_cpu_zone);
-            int sraw = sysfs_read_int(svp, 0);
-            int sc = thermal_raw_to_c(sraw);
-            if (sc > 0 && ref_max_c - sc >= 12) {
-                /* socd is colder than peers by >= 12C — implausible */
-                if (g_thermal_cpu_fallback_zone >= 0) {
-                    int old_zone = g_thermal_cpu_zone;
-                    int old_c = sc;
-                    g_thermal_cpu_zone = g_thermal_cpu_fallback_zone;
-                    snprintf(g_thermal_cpu_type, sizeof(g_thermal_cpu_type),
-                             "%s", g_thermal_cpu_fallback_type);
-                    snprintf(g_thermal_cpu_reason, sizeof(g_thermal_cpu_reason),
-                             "socd rejected (z%d reads %dC vs peer %s=%dC, gap>=12C); fallback to %s at zone%d",
-                             old_zone, old_c, ref_max_type, ref_max_c,
-                             g_thermal_cpu_type, g_thermal_cpu_zone);
+        if (g_thermal_cpu_zone >= 0 && strcmp(g_thermal_cpu_type, "socd") == 0) {
+            char sp[128];
+            snprintf(sp, sizeof(sp), THERMAL_BASE "/thermal_zone%d/temp", g_thermal_cpu_zone);
+            int socd_raw = sysfs_read_int(sp, 0);
+            int socd_c = thermal_raw_to_c(socd_raw);
+
+            if (np < 3) {
+                g_thermal_source_confidence = 1;
+                snprintf(g_thermal_cpu_reason, sizeof(g_thermal_cpu_reason),
+                         "socd=%dC retained: only %d validated CPU peers for cross-check", socd_c, np);
+            } else {
+                int ordered[24];
+                for (int i = 0; i < np; i++) ordered[i] = peer_c[i];
+                for (int a = 0; a < np - 1; a++)
+                    for (int b = a + 1; b < np; b++)
+                        if (ordered[b] < ordered[a]) { int t = ordered[a]; ordered[a] = ordered[b]; ordered[b] = t; }
+                int median = ordered[np / 2];
+                int high_gap = socd_c - median;
+                int low_gap = median - socd_c;
+
+                if (high_gap > ASB_SOCD_MAX_ABOVE_PEERS_C || low_gap >= 12) {
+                    const char *kind = (high_gap > ASB_SOCD_MAX_ABOVE_PEERS_C) ? "high" : "low";
+                    int gap = (high_gap > ASB_SOCD_MAX_ABOVE_PEERS_C) ? high_gap : low_gap;
+                    /* Publish rejection even when no validated fallback exists: the
+                     * retained socd then has conservative semantics, not validation. */
+                    snprintf(g_thermal_rejected_type, sizeof(g_thermal_rejected_type), "socd");
+                    g_thermal_rejected_raw = socd_raw;
+                    if (fallback_zone >= 0) {
+                        int old_zone = g_thermal_cpu_zone;
+                        g_thermal_cpu_zone = fallback_zone;
+                        snprintf(g_thermal_cpu_type, sizeof(g_thermal_cpu_type), "%s", fallback_type);
+                        snprintf(g_thermal_cpu_reason, sizeof(g_thermal_cpu_reason),
+                                 "socd rejected (%s divergence: %dC vs CPU median %dC, gap=%dC); live fallback %s at zone%d",
+                                 kind, socd_c, median, gap, fallback_type, fallback_zone);
+                        g_thermal_source_confidence = 1;
+                        /* The selected zone is now the control source; do not retain a
+                         * self-fallback that would add needless reads or confuse spike logic. */
+                        g_thermal_cpu_fallback_zone = -1;
+                        g_thermal_cpu_fallback_type[0] = '\0';
+                        (void)old_zone;
+                    } else {
+                        g_thermal_source_confidence = 1;
+                        snprintf(g_thermal_cpu_reason, sizeof(g_thermal_cpu_reason),
+                                 "socd %s divergence (%dC vs CPU median %dC, gap=%dC) but no validated CPU fallback",
+                                 kind, socd_c, median, gap);
+                    }
                 } else {
-                    /* Keep socd but note the issue — no fallback available */
-                    snprintf(g_thermal_cpu_reason, sizeof(g_thermal_cpu_reason),
-                             "socd=%dC vs peer %s=%dC (gap>=12C) but no cpu-* fallback available",
-                             sc, ref_max_type, ref_max_c);
+                    /* A periodically revalidated socd can recover after a transient
+                     * firmware-scale fault. Do not keep stale rejected provenance once
+                     * the current source has passed the complete peer cross-check. */
+                    g_thermal_source_confidence = 2;
+                    g_thermal_rejected_type[0] = '\0';
+                    g_thermal_rejected_raw = 0;
                 }
             }
+        } else if (g_thermal_cpu_zone >= 0) {
+            /* A CPU peer selected after basic socd rejection is the control source;
+             * do not leave a self-fallback that runtime drift logic could misread. */
+            if (g_thermal_rejected_type[0]) {
+                g_thermal_cpu_fallback_zone = -1;
+                g_thermal_cpu_fallback_type[0] = '\0';
+            }
+            /* It is safe to use, but provenance remains low-confidence because socd
+             * was unusable during this discovery pass. */
+            g_thermal_source_confidence = g_thermal_rejected_type[0] ? 1 : 2;
+        } else if (g_thermal_rejected_type[0]) {
+            /* No fallback must never look like a validated source. The caller keeps
+             * thermal behaviour conservative until a later rescan finds a real zone. */
+            g_thermal_source_confidence = 1;
         }
     }
 
@@ -792,9 +885,14 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
      * if any of the three thermal zones (cpu / skin / surface) wasn't found at startup
      * (validate failed on a transient read), retry every 60 seconds.
      */
-    if (g_thermal_skin_zone < 0 || g_thermal_cpu_zone < 0 || g_thermal_surface_zone < 0) {
+    /* Revalidate tentative socd periodically even when all zones exist. A vendor
+     * source can become implausible after boot; actual fallback zones remain stable. */
+    {
         time_t now = time(NULL);
-        if (now - g_last_thermal_rescan >= 60) {
+        int need_rescan = (g_thermal_skin_zone < 0 || g_thermal_cpu_zone < 0 ||
+                           g_thermal_surface_zone < 0 ||
+                           strcmp(g_thermal_cpu_type, "socd") == 0);
+        if (need_rescan && now - g_last_thermal_rescan >= 60) {
             g_last_thermal_rescan = now;
             thermal_discover();
         }

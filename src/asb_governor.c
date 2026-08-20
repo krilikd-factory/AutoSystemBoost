@@ -109,6 +109,13 @@ static int    g_smart_last_quality = -1;
 static int    g_smart_budget_src = 0;
 static time_t g_gov_start_ts = 0;
 static int    g_smart_boot_settle = 0;
+/* Sessions kept as telemetry but withheld from learning because they landed inside the
+ * post-boot window. Counted so the quarantine is visible rather than silent. */
+static unsigned long g_startup_quarantined = 0;
+/* How long after governor start a session is considered untrusted for learning.
+ * Five minutes covers package rescan and restore on the slowest device seen in the
+ * captures, without swallowing a genuine early-morning usage session. */
+#define ASB_STARTUP_QUARANTINE_S 300
 static int    g_smart_cool_gaming_lvl = 0;
 /* Gaming-session peak tracking (reset when a game session is not active).
    Cheap running maxima surfaced in the report card so charge-aware cooling
@@ -1403,9 +1410,37 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         for (int i = 0; i < ASB_SMART_APPHEAT_N; i++)
             if (g_smart_appheat.entries[i].hash != 0) known++;
         long _pub_win = (g_smart_drain_on_sec >= 300) ? g_smart_drain_on_sec : g_drain_roll_sec;
+        /* P0-4: confidence travels with the measurement.
+         *
+         * A %/h number is only as good as the window it came from. A short window, a SOC
+         * that moved by a single integer step, or a charge transition mid-window all
+         * produce a figure that looks authoritative and is not - and the report was
+         * presenting "4% in 15 minutes" as a definitive ASB drain claim regardless.
+         *
+         * high   = long window, real SOC movement, no charge transition
+         * medium = usable but short, or derived from a smoothed gauge
+         * low    = single-step SOC or very short window; show as estimate
+         * none   = no valid window at all
+         */
+        int _bconf;
+        const char *_breason;
+        if (m->bat.charging) {
+            _bconf = 0; _breason = "charging sample excluded from drain estimate";
+        } else if (_pub_win < 300) {
+            _bconf = 0; _breason = "window under 5 min";
+        } else if (g_smart_drain_drop_x100 <= 100) {
+            _bconf = 1; _breason = "SOC moved one integer step or less";
+        } else if (_pub_win < 900) {
+            _bconf = 2; _breason = "short but usable window";
+        } else {
+            _bconf = 3; _breason = "settled window with real SOC movement";
+        }
         fprintf(f, "smart_drain_window_s=%ld\nsmart_drain_pctph_x10=%ld\n"
-                   "smart_app_hot=%d\nsmart_appheat_n=%d\n",
-                _pub_win, live_x10, hot, known);
+                   "smart_app_hot=%d\nsmart_appheat_n=%d\n"
+                   "battery_window_confidence=%d\nbattery_window_reason=\"%s\"\n"
+                   "battery_current_source=\"%s\"\n",
+                _pub_win, live_x10, hot, known,
+                _bconf, _breason, g_batt_current_source);
         fprintf(f, "smart_budget_sev=%d\nsmart_budget_pred_h_x10=%d\n"
                    "smart_drain_ewma_x10=%d\n"
                    "smart_quality_last=%d\nsmart_quality_avg=%d\n"
@@ -1420,7 +1455,13 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                    "smart_q_vendor=%d\nsmart_q_fail=%d\nsmart_budget_src=%d\n",
                 g_smart_q_bat, g_smart_q_heat, g_smart_q_stab,
                 g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
-        fprintf(f, "smart_boot_settle=%d\n", g_smart_boot_settle);
+        fprintf(f, "smart_boot_settle=%d\nstartup_quarantined=%lu\n"
+                   "thermal_control_source=\"%s\"\nthermal_control_zone=%d\n"
+                   "thermal_source_confidence=%d\nthermal_rejected_type=\"%s\"\n"
+                   "thermal_rejected_raw=%d\n",
+                g_smart_boot_settle, g_startup_quarantined,
+                g_thermal_cpu_type[0] ? g_thermal_cpu_type : "unknown", g_thermal_cpu_zone,
+                g_thermal_source_confidence, g_thermal_rejected_type, g_thermal_rejected_raw);
         fprintf(f, "cool_gaming=%d\n", g_asb_cfg.cool_gaming);
         fprintf(f, "cool_gaming_level=%d\n", g_smart_cool_gaming_lvl);
         fprintf(f, "game_charging=%d\ngame_bat_temp_peak_dc=%d\n"
@@ -1796,7 +1837,14 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "\"cpu_max\":[%d,%d,%d],"
         "\"thermal\":%d,\"temp\":%d,\"temp_valid\":%d,\"temp_age_s\":%d,\"temp_invalid_reason\":\"%s\","
         "\"skin_temp\":%d,\"surface_hotspot\":%d,\"board_temp\":%d,"
-        "\"thermal_cpu_zone\":%d,\"thermal_cpu_type\":\"%s\","
+        /* Confidence travels with the source. A temperature whose sensor could not be
+         * cross-checked, or that came from a peer median after socd was rejected, is
+         * not the same claim as one validated against twenty per-core zones - and the
+         * report should not present them identically. */
+        "\"thermal_cpu_zone\":%d,\"thermal_cpu_type\":\"%s\",\"thermal_src_conf\":%d,"
+        /* Rejected candidate travels separately and unformatted. A consumer that
+         * wants to show it must choose to, and cannot accidentally print it as C. */
+        "\"thermal_rejected_type\":\"%s\",\"thermal_rejected_raw\":%d,"
         "\"thermal_skin_zone\":%d,\"thermal_surface_zone\":%d,"
         "\"soft_clamp\":%d,\"hard_clamp\":%d,"
         "\"headroom_pct\":%d,\"headroom_valid\":%d,\"headroom_invalid_reason\":\"%s\",\"headroom_real_pct\":%d,"
@@ -1832,6 +1880,9 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         m->therm.board_temp_c,
         g_thermal_cpu_zone,
         g_thermal_cpu_type[0] ? g_thermal_cpu_type : "unknown",
+        g_thermal_source_confidence,
+        g_thermal_rejected_type,
+        g_thermal_rejected_raw,
         g_thermal_skin_zone,
         g_thermal_surface_zone,
         m->therm.soft_clamp,
@@ -2823,6 +2874,30 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         /* Estimate screen_on_pct from bat_wake counters (rough approximation) */
         if (fsm->bat_wake_cycles > 0 && dur > 0) {
             sin.screen_on_pct = (int)((fsm->bat_wake_screen * 100L) / fsm->bat_wake_cycles);
+        }
+
+        /* P0-3: startup quarantine.
+         *
+         * The first minutes after boot are package rescan, app restore, sync and whatever
+         * the user immediately opened - a burst that looks nothing like how the phone
+         * behaves settled. Banked as a normal session it teaches the learner that this
+         * bucket is expensive, and that conclusion outlives the boot by weeks.
+         *
+         * The samples are NOT discarded: the phase ledger and telemetry keep them, because
+         * they are real evidence of what the phone did. They are marked DIRTY, which the
+         * bucket updater already refuses - one mechanism, not a second policy.
+         *
+         * Thermal safety is untouched by this. Nothing here gates a temperature read or an
+         * emergency clamp; a phone that overheats two minutes after boot is still
+         * protected. Only the energy conclusions wait for a settled sample.
+         */
+        if (g_gov_start_ts > 0 &&
+            (long)(time(NULL) - g_gov_start_ts) < ASB_STARTUP_QUARANTINE_S) {
+            sin.trust = ASB_TRUST_DIRTY;
+            g_startup_quarantined++;
+            asb_log("smart: session inside startup window (%lds) - kept as telemetry, "
+                    "not banked into learning",
+                    (long)(time(NULL) - g_gov_start_ts));
         }
 
         /* Find current bucket and update */
