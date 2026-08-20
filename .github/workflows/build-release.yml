@@ -84,7 +84,9 @@ jobs:
             tests/test_intent_backup.sh \
             tests/test_service_thermal_vm_contract.sh \
             tests/test_dsp_reference_contract.sh \
-            tests/test_device_safety_contract.sh; do
+            tests/test_device_safety_contract.sh \
+            tests/test_thermal_socd_validation.c \
+            tests/test_p0_provenance_contract.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
@@ -184,6 +186,17 @@ jobs:
           if [ -f tests/test_config_writer.sh ]; then
             echo "== tests/test_config_writer.sh =="
             sh tests/test_config_writer.sh || _rc=1
+          fi
+          # P0 thermal selection is a native decision, so exercise the production selector
+          # against a synthetic thermal sysfs fixture rather than only grepping source text.
+          if [ -f tests/test_thermal_socd_validation.c ]; then
+            echo "== tests/test_thermal_socd_validation.c =="
+            gcc -D_GNU_SOURCE -std=c11 -O2 -Wno-unused-function -I src \
+              tests/test_thermal_socd_validation.c -lm -o /tmp/asb_thermal_p0 && /tmp/asb_thermal_p0 || _rc=1
+          fi
+          if [ -f tests/test_p0_provenance_contract.sh ]; then
+            echo "== tests/test_p0_provenance_contract.sh =="
+            sh tests/test_p0_provenance_contract.sh || _rc=1
           fi
           # Lease arbitration protects camera/profile writes and establishes the
           # central priority contract before a release reaches a real device.
@@ -577,6 +590,7 @@ jobs:
             "runtime/asb_gms_trim.sh" \
             "runtime/asb_gms_freeze.sh" \
             "runtime/asb_wakelock_watch.sh" \
+            "runtime/asb_screenoff_class.sh" \
             "runtime/asb_smart_reset.sh" \
             "runtime/asb_gnss_trim.sh" \
             "runtime/asb_net_apply.sh" \

@@ -64,6 +64,8 @@ jobs:
             tools/asb_native_warning_baseline.txt \
             tests/test_dsp_reference_contract.sh \
             tests/test_device_safety_contract.sh \
+            tests/test_thermal_socd_validation.c \
+            tests/test_p0_provenance_contract.sh \
             module.prop \
             customize.sh \
             service.sh; do
@@ -146,6 +148,15 @@ jobs:
           if [ -f tests/test_config_safety.c ]; then
             echo "== tests/test_config_safety.c =="
             gcc -O2 -Wall -Wextra -Werror -o /tmp/tcfg tests/test_config_safety.c && /tmp/tcfg || _rc=1
+          fi
+          if [ -f tests/test_thermal_socd_validation.c ]; then
+            echo "== tests/test_thermal_socd_validation.c =="
+            gcc -D_GNU_SOURCE -std=c11 -O2 -Wno-unused-function -I src \
+              tests/test_thermal_socd_validation.c -lm -o /tmp/asb_thermal_p0 && /tmp/asb_thermal_p0 || _rc=1
+          fi
+          if [ -f tests/test_p0_provenance_contract.sh ]; then
+            echo "== tests/test_p0_provenance_contract.sh =="
+            sh tests/test_p0_provenance_contract.sh || _rc=1
           fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"
@@ -448,6 +459,7 @@ jobs:
             "runtime/asb_gms_trim.sh" \
             "runtime/asb_gms_freeze.sh" \
             "runtime/asb_wakelock_watch.sh" \
+            "runtime/asb_screenoff_class.sh" \
             "runtime/asb_smart_reset.sh" \
             "runtime/asb_gnss_trim.sh" \
             "runtime/asb_net_apply.sh" \
