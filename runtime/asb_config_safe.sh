@@ -82,12 +82,14 @@ _lock() {
 _key_allowed() {
   _k="$1"
   case "$_k" in ''|*[!A-Za-z0-9_]*) return 1 ;; esac
-  # The active config is authoritative after installation. The shipped file is
-  # only a bootstrap fallback; preferring it caused newly introduced keys to be
-  # rejected when a source checkout had an older shipped baseline.
-  _schema="$CONF"
-  [ -r "$_schema" ] || _schema="$SHIPPED"
-  grep -qE "^[[:space:]]*${_k}=" "$_schema" 2>/dev/null
+  # An active config can survive a module update and therefore predate a newly
+  # introduced V63 key. Accept a key declared by either the active config or the
+  # current shipped schema: the latter lets the writer append a current, known
+  # key (for example gnss_trim/night_modem_idle) to an older saved config. This
+  # remains a closed schema check: arbitrary keys still fail, and every staged
+  # config still passes scalar and semantic validation before its atomic rename.
+  grep -qE "^[[:space:]]*${_k}=" "$CONF" 2>/dev/null || \
+    grep -qE "^[[:space:]]*${_k}=" "$SHIPPED" 2>/dev/null
 }
 
 _value_safe() {
