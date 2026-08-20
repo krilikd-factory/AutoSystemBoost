@@ -3964,12 +3964,16 @@ async function cfgSet(key, val, ctl) {
   if (ctl) ctl.classList.add('busy');
   const safeWriter = MD + '/runtime/asb_config_safe.sh';
   const snap = '/data/adb/asb/governor.conf.snapshot';
-  // Moving the sustained-temperature slider also makes its mode manual. Keep
-  // both keys in one writer transaction so import/reboot/profile work cannot
-  // observe half of that policy.
+  // Moving the sustained-temperature slider also makes its mode manual. The
+  // smart ceiling is a linked safety invariant (`ceiling >= enter`): when an
+  // Ace 5 user moved the slider from the shipped smart ceiling (68) to 70,
+  // writing only `enter` made the staged config invalid before manual mode
+  // could take effect. Publish enter, matching ceiling and mode together, so
+  // the writer validates one coherent policy and snapshots the same triple.
   const cmd = (key === 'sustained_temp_enter')
     ? ('sh ' + shQuote(safeWriter) + ' set-many --snapshot ' + shQuote(snap) + ' ' +
        shQuote(key) + ' ' + shQuote(val) + ' ' +
+       shQuote('sustained_temp_ceiling') + ' ' + shQuote(val) + ' ' +
        shQuote('sustained_temp_mode') + ' ' + shQuote('manual'))
     : ('sh ' + shQuote(safeWriter) + ' set ' + shQuote(key) + ' ' +
        shQuote(val) + ' ' + shQuote(snap));
