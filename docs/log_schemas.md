@@ -200,6 +200,7 @@ Plain `key=value` sidecar written atomically by `runtime/asb_config_safe.sh` aft
 | `key` | Optional config key for a single-key transaction. |
 | `pre_epoch`, `post_epoch` | `governor.conf` mtime epochs immediately before script startup and at record write; they show that a transaction crossed the expected file-change boundary, but are not a daemon reload acknowledgement. |
 | `reload_accepted` | `not_requested` for this writer. The writer is deliberately atomic-only; the governor runtime owns reload acknowledgement. |
+| `recovery` | Optional stable label. `legacy_thermal_ceiling` means an unrelated transaction found an inherited, in-range inversion where `sustained_temp_ceiling < sustained_temp_enter`; writer raised the ceiling exactly to the existing `enter` value before normal full validation. It is absent for ordinary transactions and never authorizes an explicit invalid thermal edit. |
 
 `tools/asb_effective_policy.sh`, `asbdiag`, and logkit snapshots expose this record read-only. Absence means no writer transaction was captured yet; it is not an error by itself.
 
