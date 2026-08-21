@@ -423,14 +423,5 @@
   "cfg_profile_load": "تحميل الملف الشخصي",
   "cfg_profile_save_short": "↑ حفظ",
   "cfg_profile_load_short": "↓ فتح",
-  "cfg_profile_storage_hint": "تُحفظ الملفات الشخصية بأمان داخل ASB؛ اختر اسماً لا مساراً.",
-  "cfg_uv_title": "Kernel خارجي / خفض الجهد",
-  "cfg_uv_surface": "تم رصد واجهة",
-  "cfg_uv_hint": "إشارة خارجية",
-  "cfg_uv_none": "لا دليل صريح",
-  "cfg_uv_none_detail": "لا يظهر دليل صريح على خفض الجهد. هذا لا يثبت جهد المصنع.",
-  "cfg_uv_detail_unavailable": "لم يعرض kernel تفاصيل قابلة للقراءة.",
-  "cfg_uv_evidence": "الدليل: ",
-  "cfg_uv_unavailable": "غير متاح",
-  "cfg_uv_owner": "لا يملك ASB سياسة الجهد الخارجية ولا يكتبها أو يتحقق منها أو يعطلها أو يعيدها."
+  "cfg_profile_storage_hint": "تُحفظ الملفات الشخصية بأمان داخل ASB؛ اختر اسماً لا مساراً."
 }

@@ -595,14 +595,5 @@
   "cfg_profile_load": "Charger le profil",
   "cfg_profile_save_short": "↑ Enregistrer",
   "cfg_profile_load_short": "↓ Ouvrir",
-  "cfg_profile_storage_hint": "Les profils sont enregistrés de façon sûre dans ASB ; choisissez un nom, pas un chemin.",
-  "cfg_uv_title": "Kernel externe / undervolt",
-  "cfg_uv_surface": "interface observée",
-  "cfg_uv_hint": "indice externe",
-  "cfg_uv_none": "aucune preuve explicite",
-  "cfg_uv_none_detail": "Aucune preuve explicite d’undervolt n’est visible. Cela ne prouve pas une tension d’origine.",
-  "cfg_uv_detail_unavailable": "Le kernel n’a exposé aucun détail lisible.",
-  "cfg_uv_evidence": "Preuve : ",
-  "cfg_uv_unavailable": "indisponible",
-  "cfg_uv_owner": "ASB ne possède pas, n’écrit pas, ne valide pas, ne désactive pas et ne restaure pas la politique de tension externe."
+  "cfg_profile_storage_hint": "Les profils sont enregistrés de façon sûre dans ASB ; choisissez un nom, pas un chemin."
 }

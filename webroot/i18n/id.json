@@ -423,14 +423,5 @@
   "cfg_profile_load": "Muat profil",
   "cfg_profile_save_short": "↑ Simpan",
   "cfg_profile_load_short": "↓ Buka",
-  "cfg_profile_storage_hint": "Profil disimpan aman di dalam ASB; pilih nama, bukan jalur.",
-  "cfg_uv_title": "Kernel eksternal / undervolt",
-  "cfg_uv_surface": "permukaan terdeteksi",
-  "cfg_uv_hint": "petunjuk eksternal",
-  "cfg_uv_none": "tidak ada bukti jelas",
-  "cfg_uv_none_detail": "Tidak terlihat bukti undervolt yang jelas. Ini tidak membuktikan voltase bawaan.",
-  "cfg_uv_detail_unavailable": "Kernel tidak menyediakan detail yang dapat dibaca.",
-  "cfg_uv_evidence": "Bukti: ",
-  "cfg_uv_unavailable": "tidak tersedia",
-  "cfg_uv_owner": "ASB tidak memiliki, menulis, memvalidasi, menonaktifkan, atau mengembalikan kebijakan voltase eksternal."
+  "cfg_profile_storage_hint": "Profil disimpan aman di dalam ASB; pilih nama, bukan jalur."
 }

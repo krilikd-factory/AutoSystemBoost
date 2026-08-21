@@ -423,14 +423,5 @@
   "cfg_profile_load": "加载配置",
   "cfg_profile_save_short": "↑ 保存",
   "cfg_profile_load_short": "↓ 打开",
-  "cfg_profile_storage_hint": "配置安全保存在 ASB 内部；请选择名称，而非路径。",
-  "cfg_uv_title": "外部内核 / 降压",
-  "cfg_uv_surface": "已发现接口",
-  "cfg_uv_hint": "外部线索",
-  "cfg_uv_none": "无明确证据",
-  "cfg_uv_none_detail": "未发现明确降压证据，这不代表电压一定为原厂值。",
-  "cfg_uv_detail_unavailable": "内核未提供可读取的详细信息。",
-  "cfg_uv_evidence": "证据：",
-  "cfg_uv_unavailable": "不可用",
-  "cfg_uv_owner": "ASB 不拥有、写入、验证、禁用或还原外部电压策略。"
+  "cfg_profile_storage_hint": "配置安全保存在 ASB 内部；请选择名称，而非路径。"
 }

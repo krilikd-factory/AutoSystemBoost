@@ -423,14 +423,5 @@
   "cfg_profile_load": "Profil laden",
   "cfg_profile_save_short": "↑ Speichern",
   "cfg_profile_load_short": "↓ Öffnen",
-  "cfg_profile_storage_hint": "Profile werden sicher in ASB gespeichert; wählen Sie einen Namen, keinen Pfad.",
-  "cfg_uv_title": "Externer Kernel / Undervolt",
-  "cfg_uv_surface": "Schnittstelle erkannt",
-  "cfg_uv_hint": "externer Hinweis",
-  "cfg_uv_none": "keine eindeutigen Hinweise",
-  "cfg_uv_none_detail": "Kein eindeutiger Undervolt-Hinweis sichtbar. Das beweist keine Stock-Spannung.",
-  "cfg_uv_detail_unavailable": "Der Kernel stellt keine lesbaren Details bereit.",
-  "cfg_uv_evidence": "Hinweise: ",
-  "cfg_uv_unavailable": "nicht verfügbar",
-  "cfg_uv_owner": "ASB besitzt, schreibt, prüft, deaktiviert oder setzt keine externe Spannungspolitik zurück."
+  "cfg_profile_storage_hint": "Profile werden sicher in ASB gespeichert; wählen Sie einen Namen, keinen Pfad."
 }
