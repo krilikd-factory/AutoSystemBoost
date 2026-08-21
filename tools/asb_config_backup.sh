@@ -1,13 +1,15 @@
 #!/system/bin/sh
 # asb_config_backup.sh — named, validated ASB settings profiles.
-# Profiles contain only explicit user keys supplied by the caller: never bounds, device
-# topology, learned state or thermal constants copied from one handset to another.
+# Profiles contain explicit user settings plus an optional, separately checksummed Smart-learning
+# payload. Device bounds, topology, runtime state and thermal constants are never copied.
 set -eu
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
 WRITER="$MODDIR/runtime/asb_config_safe.sh"
 STATE="${ASB_CONFIG_STATE:-/data/adb/asb}"
+# Tests may point learner state elsewhere; devices use the same durable ASB state directory.
+SMART_STATE="${ASB_SMART_STATE:-$STATE}"
 PROFILES="$STATE/config_profiles"
 SNAPSHOT="$STATE/governor.conf.snapshot"
 # External copies are a convenience for user backup/sharing, never an unvalidated path API.
@@ -26,6 +28,87 @@ _key_ok() { case "${1:-}" in ''|*[!A-Za-z0-9_]*) return 1 ;; esac; }
 _profile_file() { printf '%s/%s.conf' "$PROFILES" "$1"; }
 _profile_sha() { printf '%s/%s.conf.sha256' "$PROFILES" "$1"; }
 _prepare_dir() { mkdir -p "$PROFILES" 2>/dev/null || { echo 'cannot create profile store' >&2; exit 1; }; }
+_smart_dir() { printf '%s/%s.smart' "$PROFILES" "$1"; }
+_smart_sum() { printf '%s/%s.smart.sha256' "$PROFILES" "$1"; }
+_smart_file_ok() { case "${1:-}" in buckets.bin|smart_appheat.bin|night_window.conf) return 0 ;; *) return 1 ;; esac; }
+_smart_prop() { getprop "$1" 2>/dev/null | tr -d '\r\n'; }
+_smart_size() { wc -c < "$1" 2>/dev/null | tr -d ' '; }
+
+# The learner owns only these three durable artifacts. session history, previous profile and
+# daemon state are diagnostics/runtime details, not portable learning.
+smart_save() {
+  _name="$1"; _dir="$(_smart_dir "$_name")"; _sum="$(_smart_sum "$_name")"
+  rm -rf "$_dir"; rm -f "$_sum"
+  _tmp="$_dir.tmp.$$"; mkdir -p "$_tmp" 2>/dev/null || { echo 'smart_learning=unavailable'; return 0; }
+  _n=0
+  {
+    echo '# ASB_SMART_PROFILE_SCHEMA=1'
+    echo "# created_at=$(_now)"
+    echo "# board=$(_smart_prop ro.board.platform)"
+    echo "# device=$(_smart_prop ro.product.device)"
+    for _f in buckets.bin smart_appheat.bin night_window.conf; do
+      _src="$SMART_STATE/$_f"; [ -s "$_src" ] || continue
+      _bytes="$(_smart_size "$_src")"; case "$_bytes" in ''|*[!0-9]*) continue ;; esac
+      [ "$_bytes" -le 1048576 ] 2>/dev/null || continue
+      cp -f "$_src" "$_tmp/$_f" 2>/dev/null || continue
+      _hash="$(hash_file "$_tmp/$_f")"; [ -n "$_hash" ] && [ "$_hash" != unavailable ] || { rm -f "$_tmp/$_f"; continue; }
+      printf '%s|%s|%s\n' "$_f" "$_bytes" "$_hash"; _n=$((_n + 1))
+    done
+  } > "$_tmp/manifest"
+  if [ "$_n" -eq 0 ]; then rm -rf "$_tmp"; echo 'smart_learning=empty'; return 0; fi
+  hash_file "$_tmp/manifest" > "$_tmp/manifest.sha256" || { rm -rf "$_tmp"; echo 'smart_learning=unavailable'; return 0; }
+  mv -f "$_tmp" "$_dir" && hash_file "$_dir/manifest" > "$_sum.tmp.$$" && mv -f "$_sum.tmp.$$" "$_sum" || { rm -rf "$_dir"; echo 'smart_learning=unavailable'; return 0; }
+  echo "smart_learning=saved"
+}
+
+# Return saved, empty, invalid or incompatible. An invalid sidecar never invalidates the
+# settings profile: restore may still safely apply the separately checksummed settings.
+smart_status_dir() {
+  _dir="$1"; [ -d "$_dir" ] || { echo empty; return 0; }
+  _manifest="$_dir/manifest"; _msum="$_dir/manifest.sha256"
+  [ -r "$_manifest" ] && [ -r "$_msum" ] || { echo invalid; return 0; }
+  _expect="$(cat "$_msum" 2>/dev/null | tr -d ' \r\n')"; _actual="$(hash_file "$_manifest")"
+  [ -n "$_expect" ] && [ "$_expect" = "$_actual" ] || { echo invalid; return 0; }
+  grep -Fqx '# ASB_SMART_PROFILE_SCHEMA=1' "$_manifest" 2>/dev/null || { echo invalid; return 0; }
+  _board_saved="$(grep '^# board=' "$_manifest" 2>/dev/null | head -1 | cut -d= -f2-)"; _board_now="$(_smart_prop ro.board.platform)"
+  [ -z "$_board_saved" ] || [ -z "$_board_now" ] || [ "$_board_saved" = "$_board_now" ] || { echo incompatible; return 0; }
+  _seen=' '
+  while IFS='|' read -r _f _bytes _hash; do
+    case "$_f" in ''|'#'*) continue ;; esac
+    _smart_file_ok "$_f" || { echo invalid; return 0; }
+    case "$_seen" in
+      *" $_f "*) echo invalid; return 0 ;;
+      *) _seen="$_seen$_f " ;;
+    esac
+    case "$_bytes:$_hash" in *[!0-9a-fA-F:]*|:*|*::*) echo invalid; return 0 ;; esac
+    [ "$_bytes" -gt 0 ] 2>/dev/null && [ "$_bytes" -le 1048576 ] 2>/dev/null || { echo invalid; return 0; }
+    [ -r "$_dir/$_f" ] && [ "$(_smart_size "$_dir/$_f")" = "$_bytes" ] && [ "$(hash_file "$_dir/$_f")" = "$_hash" ] || { echo invalid; return 0; }
+  done < "$_manifest"
+  case "$_seen" in ' ') echo empty ;; *) echo saved ;; esac
+}
+smart_status() {
+  _name="$1"; _dir="$(_smart_dir "$_name")"; _sum="$(_smart_sum "$_name")"
+  [ -d "$_dir" ] || { echo empty; return 0; }
+  _expect="$(cat "$_sum" 2>/dev/null | tr -d ' \r\n')"; _actual="$(hash_file "$_dir/manifest")"
+  [ -n "$_expect" ] && [ "$_expect" = "$_actual" ] || { echo invalid; return 0; }
+  smart_status_dir "$_dir"
+}
+smart_restore() {
+  _name="$1"; _src="$(_smart_dir "$_name")"; _status="$(smart_status "$_name")"
+  case "$_status" in empty) echo 'smart_learning=none'; return 0 ;; incompatible) echo 'smart_learning=skipped_incompatible_device'; return 0 ;; invalid) echo 'smart_learning=skipped_invalid'; return 0 ;; esac
+  _was=0
+  if [ "${ASB_SMART_RESTORE_SKIP_DAEMON:-0}" != 1 ] && pgrep -f '/bin/asb$' >/dev/null 2>&1; then
+    _was=1; pkill -f '/bin/asb$' 2>/dev/null || true; sleep 1
+  fi
+  mkdir -p "$SMART_STATE" 2>/dev/null || { echo 'smart_learning=restore_failed'; return 1; }
+  while IFS='|' read -r _f _bytes _hash; do
+    case "$_f" in ''|'#'*) continue ;; esac
+    cp -f "$_src/$_f" "$SMART_STATE/$_f.restore.$$" 2>/dev/null && mv -f "$SMART_STATE/$_f.restore.$$" "$SMART_STATE/$_f" || { echo 'smart_learning=restore_failed'; return 1; }
+  done < "$_src/manifest"
+  rm -f "$SMART_STATE/buckets.bin.bak" "$SMART_STATE/smart_prev_profile" 2>/dev/null || true
+  if [ "$_was" = 1 ] && [ -x "$MODDIR/bin/asb" ]; then "$MODDIR/bin/asb" >/dev/null 2>&1 & fi
+  echo 'smart_learning=restored'
+}
 
 write_profile() {
   _name="$1" _replace="$2"; shift 2
@@ -51,9 +134,11 @@ write_profile() {
   [ "$_count" -gt 0 ] 2>/dev/null || { rm -f "$_tmp"; echo 'profile contains no current user settings' >&2; exit 1; }
   mv -f "$_tmp" "$_out"
   hash_file "$_out" > "$_sum.tmp.$$" && mv -f "$_sum.tmp.$$" "$_sum"
+  _smart="$(smart_save "$_name")"
   echo "profile=$_name"
   echo "keys=$_count"
   echo "checksum=$(cat "$_sum" 2>/dev/null || true)"
+  echo "$_smart"
 }
 
 verify_profile() {
@@ -100,19 +185,20 @@ list_profiles() {
     _count="$(grep -c '^[A-Za-z0-9_]*=' "$_f" 2>/dev/null || echo 0)"
     _expected="$(cat "$(_profile_sha "$_name")" 2>/dev/null | tr -d ' \r\n')"; _actual="$(hash_file "$_f")"
     _status=ok; [ -n "$_expected" ] && [ "$_expected" = "$_actual" ] || _status=checksum_bad
-    printf '%s|%s|%s|%s\n' "$_name" "${_created:-0}" "$_count" "$_status"; _found=1
+    _smart="$(smart_status "$_name")"
+    printf '%s|%s|%s|%s|%s\n' "$_name" "${_created:-0}" "$_count" "$_status" "$_smart"; _found=1
   done
   [ "$_found" = 1 ] || true
 }
 
 restore_profile() {
   _name="$1"; shift; [ "$#" -gt 0 ] || { echo 'restore needs allowed keys' >&2; exit 2; }
-  _in="$(verify_profile "$_name")"; sh "$WRITER" import "$_in" "$SNAPSHOT" "$@"; echo "restored=$_name"
+  _in="$(verify_profile "$_name")"; sh "$WRITER" import "$_in" "$SNAPSHOT" "$@"; echo "restored=$_name"; smart_restore "$_name"
 }
 delete_profile() {
   _name="$1"; _profile_ok "$_name" || { echo 'invalid profile name' >&2; exit 2; }
   _prepare_dir; _in="$(_profile_file "$_name")"; [ -f "$_in" ] || { echo 'profile not found' >&2; exit 1; }
-  rm -f "$_in" "$(_profile_sha "$_name")"; echo "deleted=$_name"
+  rm -f "$_in" "$(_profile_sha "$_name")" "$(_smart_sum "$_name")"; rm -rf "$(_smart_dir "$_name")"; echo "deleted=$_name"
 }
 
 _export_dir() {
@@ -129,8 +215,12 @@ export_profile() {
   cp -f "$_in" "$_dir/$_name.conf" && cp -f "$(_profile_sha "$_name")" "$_dir/$_name.conf.sha256" || {
     echo 'cannot export profile' >&2; exit 1;
   }
+  _smart="$(smart_status "$_name")"
+  rm -rf "$_dir/$_name.smart"
+  if [ "$_smart" = saved ]; then cp -R "$(_smart_dir "$_name")" "$_dir/$_name.smart" || { echo 'cannot export Smart learning' >&2; exit 1; }; fi
   chmod 0644 "$_dir/$_name.conf" "$_dir/$_name.conf.sha256" 2>/dev/null || true
   echo "exported=$_dir/$_name.conf"
+  echo "smart_learning=$_smart"
 }
 list_external_profiles() {
   _where="$1"; _dir="$(_export_dir "$_where")" || { echo 'invalid export location' >&2; exit 2; }
@@ -141,7 +231,8 @@ list_external_profiles() {
     _expected="$(cat "$_f.sha256" 2>/dev/null | tr -d ' \r\n')"; _actual="$(hash_file "$_f")"
     _status=ok; [ -n "$_expected" ] && [ "$_expected" = "$_actual" ] || _status=checksum_bad
     _count="$(grep -c '^[A-Za-z0-9_]*=' "$_f" 2>/dev/null || echo 0)"
-    printf '%s|%s|%s\n' "$_name" "$_count" "$_status"
+    _smart="$(smart_status_dir "$_dir/$_name.smart")"
+    printf '%s|%s|%s|%s\n' "$_name" "$_count" "$_status" "$_smart"
   done
 }
 import_external_profile() {
@@ -155,7 +246,11 @@ import_external_profile() {
   cp -f "$_in" "$(_profile_file "$_name")" && cp -f "$_sum" "$(_profile_sha "$_name")" || {
     echo 'cannot import exported profile' >&2; exit 1;
   }
+  rm -rf "$(_smart_dir "$_name")"; rm -f "$(_smart_sum "$_name")"
+  _smart="$(smart_status_dir "$_dir/$_name.smart")"
+  if [ "$_smart" = saved ]; then cp -R "$_dir/$_name.smart" "$(_smart_dir "$_name")" && hash_file "$(_smart_dir "$_name")/manifest" > "$(_smart_sum "$_name")" || { echo 'cannot import Smart learning' >&2; exit 1; }; fi
   echo "imported=$_name"
+  echo "smart_learning=$_smart"
 }
 
 # Kept for existing terminal workflows: a path argument preserves the original schema-2
@@ -195,7 +290,7 @@ case "${1:-}" in
   replace) [ "$#" -ge 3 ] || { echo "usage: $0 replace NAME ALLOWED_KEY..." >&2; exit 2; }; _n="$2"; shift 2; write_profile "$_n" 1 "$@" ;;
   preview)
     case "${2:-}" in */*) [ "$#" -eq 2 ] || { echo "usage: $0 preview BACKUP" >&2; exit 2; }; legacy_preview "$2" ;;
-      *) [ "$#" -ge 3 ] || { echo "usage: $0 preview NAME ALLOWED_KEY..." >&2; exit 2; }; _n="$2"; shift 2; _in="$(verify_profile "$_n")"; preview_file "$_in" "$@" ;;
+      *) [ "$#" -ge 3 ] || { echo "usage: $0 preview NAME ALLOWED_KEY..." >&2; exit 2; }; _n="$2"; shift 2; _in="$(verify_profile "$_n")"; preview_file "$_in" "$@"; echo '--- Smart learning ---'; echo "status=$(smart_status "$_n")" ;;
     esac ;;
   restore) [ "$#" -ge 3 ] || { echo "usage: $0 restore NAME ALLOWED_KEY..." >&2; exit 2; }; _n="$2"; shift 2; restore_profile "$_n" "$@" ;;
   delete) [ "$#" -eq 2 ] || { echo "usage: $0 delete NAME" >&2; exit 2; }; delete_profile "$2" ;;
