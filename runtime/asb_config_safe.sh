@@ -15,6 +15,7 @@ LOCK_WAIT_TICKS="${ASB_CONFIG_LOCK_WAIT_TICKS:-100}"       # 10 s at 100 ms
 LOCK_STALE_S="${ASB_CONFIG_LOCK_STALE_S:-30}"              # never reclaim a fresh lock
 _LOCK_HELD=0
 _LOCK_LAST_OWNER=""
+_LOCK_LAST_OWNER_STATE=""
 _LOCK_LAST_AGE=""
 _LOCK_RECOVERED=""
 
@@ -30,6 +31,14 @@ _now_s() { date +%s 2>/dev/null || echo 0; }
 ASB_TXN_PRE_EPOCH="$(_config_epoch)"
 
 _lock_owner() { cat "$LOCK/pid" 2>/dev/null | tr -dc '0-9'; }
+_lock_owner_state() {
+  # A V63 or interrupted pre-lease writer can leave config.lock without a usable pid.
+  # That metadata absence is never reclaimed while fresh (the post-mkdir window), but after
+  # LOCK_STALE_S it is an orphan: no live process identity exists to protect.
+  [ -e "$LOCK/pid" ] || { printf '%s' 'missing_metadata'; return; }
+  _raw="$(cat "$LOCK/pid" 2>/dev/null | tr -d '\r\n')"
+  case "$_raw" in ''|*[!0-9]*) printf '%s' 'invalid_metadata' ;; *) printf '%s' 'pid_present' ;; esac
+}
 _lock_age() {
   _now="$(_now_s)"; _then="$(stat -c %Y "$LOCK" 2>/dev/null || echo 0)"
   _age=$((_now - _then)); [ "$_age" -ge 0 ] 2>/dev/null || _age=0
@@ -50,14 +59,16 @@ _lock_reclaim_stale() {
   # post-mkdir window before owner metadata is written. Rename is the atomic claim; only one
   # waiter can move a stale directory, then it removes its private renamed copy.
   [ -d "$LOCK" ] || return 1
-  _owner="$(_lock_owner)"; _age="$(_lock_age)"
-  _LOCK_LAST_OWNER="$_owner"; _LOCK_LAST_AGE="$_age"
-  _lock_owner_alive "$_owner" && return 1
+  _owner="$(_lock_owner)"; _owner_state="$(_lock_owner_state)"; _age="$(_lock_age)"
+  _LOCK_LAST_OWNER="$_owner"; _LOCK_LAST_OWNER_STATE="$_owner_state"; _LOCK_LAST_AGE="$_age"
+  # pid_present is protected while alive. Missing/invalid metadata has no process identity
+  # to protect, but is still protected for the same conservative fresh-lease interval.
+  [ "$_owner_state" = 'pid_present' ] && _lock_owner_alive "$_owner" && return 1
   [ "$_age" -ge "$LOCK_STALE_S" ] 2>/dev/null || return 1
   _old="$STATE/config.lock.stale.$$"
   mv "$LOCK" "$_old" 2>/dev/null || return 1
   rm -rf "$_old" 2>/dev/null || true
-  _LOCK_RECOVERED="stale_owner=${_owner:-unknown},age=${_age}"
+  _LOCK_RECOVERED="stale_owner=${_owner:-missing},owner_state=${_owner_state},age=${_age}"
   return 0
 }
 
@@ -76,7 +87,8 @@ _txn() {
     [ -n "${ASB_TXN_RECOVERY:-}" ] && echo "recovery=$ASB_TXN_RECOVERY"
     [ -n "${_LOCK_RECOVERED:-}" ] && echo "lock_recovered=$_LOCK_RECOVERED"
     if [ "$1" = "lock_live" ] || [ "$1" = "lock_stale" ]; then
-      [ -n "${_LOCK_LAST_OWNER:-}" ] && echo "lock_owner=$_LOCK_LAST_OWNER"
+      echo "lock_owner=${_LOCK_LAST_OWNER:-missing}"
+      [ -n "${_LOCK_LAST_OWNER_STATE:-}" ] && echo "lock_owner_state=$_LOCK_LAST_OWNER_STATE"
       [ -n "${_LOCK_LAST_AGE:-}" ] && echo "lock_age=$_LOCK_LAST_AGE"
       [ -d "$LOCK" ] && echo "lock_path=config.lock"
     fi
