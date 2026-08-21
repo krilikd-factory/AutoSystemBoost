@@ -4854,8 +4854,8 @@ function cfgProfileSuggestedName() {
 function cfgProfileParse(raw, external) {
   return String(raw || '').split(/\r?\n/).filter(Boolean).map(function(line) {
     const p = line.split('|');
-    return external ? {name:p[0], keys:p[1], status:p[2], created:''} :
-      {name:p[0], created:p[1], keys:p[2], status:p[3]};
+    return external ? {name:p[0], keys:p[1], status:p[2], smart:p[3] || 'empty', created:''} :
+      {name:p[0], created:p[1], keys:p[2], status:p[3], smart:p[4] || 'empty'};
   }).filter(function(p) { return cfgProfileNameOK(p.name) && p.status === 'ok'; });
 }
 function cfgProfileButton(text, cls, click) {
@@ -4903,7 +4903,7 @@ function cfgProfilePaint() {
   body.textContent = '';
   const save = _cfgProfile.mode === 'save';
   const copy = document.createElement('div'); copy.className = 'cfg-profile-copy';
-  copy.textContent = save ? T('cfg_profile_save_copy','Save the current settings as a named configuration. You can also copy it to Downloads or Documents.') :
+  copy.textContent = save ? T('cfg_profile_save_copy','Save the current settings and, when available, Smart learning as a named configuration. You can also copy it to Downloads or Documents.') :
     T('cfg_profile_open_copy','Tap a saved configuration to preview and apply it. No profile name needs to be typed.');
   body.appendChild(copy);
   if (save) {
@@ -4927,7 +4927,11 @@ function cfgProfilePaint() {
   } else _cfgProfile.rows.forEach(function(p) {
     const row = cfgProfileButton('', 'cfg-profile-row' + (_cfgProfile.selected === p.name ? ' selected' : ''), function() { cfgProfileSelect(p.name); });
     const left = document.createElement('div'); const nm = document.createElement('div'); nm.className = 'cfg-profile-row-name'; nm.textContent = p.name;
-    const meta = document.createElement('div'); meta.className = 'cfg-profile-row-meta'; meta.textContent = p.keys + ' ' + T('cfg_profile_keys','settings');
+    const meta = document.createElement('div'); meta.className = 'cfg-profile-row-meta';
+    const smart = p.smart === 'saved' ? T('cfg_profile_smart_saved','Smart learning saved') :
+      (p.smart === 'incompatible' ? T('cfg_profile_smart_other_device','Smart learning: another device') :
+      (p.smart === 'invalid' ? T('cfg_profile_smart_invalid','Smart learning unavailable') : T('cfg_profile_smart_empty','No Smart learning yet')));
+    meta.textContent = p.keys + ' ' + T('cfg_profile_keys','settings') + ' · ' + smart;
     left.appendChild(nm); left.appendChild(meta); row.appendChild(left);
     const mark = document.createElement('span'); mark.textContent = _cfgProfile.selected === p.name ? '✓' : '›'; row.appendChild(mark); list.appendChild(row);
   });
@@ -4954,7 +4958,8 @@ async function cfgProfileSave() {
     const ex = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' export ' + shQuote(name) + ' ' + _cfgProfile.store);
     if (!ex || ex.errno !== 0) { toast(cfgResultText(ex) || T('cfg_profile_export_err','Saved in ASB, but could not copy to selected location'), 'warn'); return; }
   }
-  toast(T('cfg_profile_saved','Saved profile ') + name, 'ok'); cfgProfileClose();
+  const smartSaved = /(^|\n)smart_learning=saved(\n|$)/.test(String((r && r.stdout) || ''));
+  toast(T('cfg_profile_saved','Saved profile ') + name + (smartSaved ? T('cfg_profile_smart_saved_suffix',' · Smart learning included') : ''), 'ok'); cfgProfileClose();
 }
 async function cfgProfileEnsureInternal() {
   if (_cfgProfile.store === 'internal') return true;
@@ -4974,8 +4979,11 @@ async function cfgProfileApply() {
   if (_cfgProfile.ready !== _cfgProfile.selected) { await cfgProfilePreview(); return; }
   const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' restore ' + shQuote(_cfgProfile.selected) + ' ' + cfgProfileArgs());
   if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err','Could not restore profile'), 'err'); return; }
-  const name = _cfgProfile.selected; cfgProfileClose(); await cfgLoad(); cfgRender();
-  toast(T('cfg_profile_restored','Restored profile ') + name + T('cfg_import_reboot',' - reboot to apply'), 'ok');
+  const name = _cfgProfile.selected; const detail = String((r && r.stdout) || ''); cfgProfileClose(); await cfgLoad(); cfgRender();
+  const smartDetail = /(^|\n)smart_learning=restored(\n|$)/.test(detail) ? T('cfg_profile_smart_restored',' · Smart learning restored') :
+    (/smart_learning=skipped_incompatible_device/.test(detail) ? T('cfg_profile_smart_skipped_device',' · Smart learning was kept: another device') :
+    (/smart_learning=skipped_invalid/.test(detail) ? T('cfg_profile_smart_skipped_invalid',' · Smart learning backup was invalid') : ''));
+  toast(T('cfg_profile_restored','Restored profile ') + name + smartDetail + T('cfg_import_reboot',' - reboot to apply'), smartDetail.indexOf('invalid') >= 0 ? 'warn' : 'ok');
 }
 async function cfgProfileDelete() {
   if (!_cfgProfile.selected) return;
