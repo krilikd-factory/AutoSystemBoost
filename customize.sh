@@ -101,7 +101,7 @@ asb_fix_layout() {
   if [ -d "$MODPATH/system/vendor/etc" ]; then
     set_perm_recursive "$MODPATH/system/vendor/etc" 0 2000 0755 0644 u:object_r:vendor_configs_file:s0 2>/dev/null || true
 
-  # WebUI assets, including the i18n/ subdirectory added in V63.
+  # WebUI assets, including the i18n/ subdirectory available in the current tree.
   #
   # The root manager's WebView fetches these over file:// as an unprivileged renderer, so a
   # directory it cannot traverse or a file it cannot read simply returns nothing - and the

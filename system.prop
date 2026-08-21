@@ -1,4 +1,4 @@
-# ASB V63.416 managed-property build.
+# ASB managed-property build.
 #
 # This file is intentionally free of property assignments. Magisk loads module
 # system.prop before runtime feature checks; optional vendor properties are

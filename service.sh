@@ -900,7 +900,7 @@ sysctl_try() {
 # uses - so "сток" means this phone's value rather than a guess about phones in general.
 asb_thermal_stock_capture() {
   _tsf="/data/adb/asb/thermal_stock"
-  # V63 hotfix adds type/provenance. Retain an already verified snapshot, but
+  # current implementation adds type/provenance. Retain an already verified snapshot, but
   # replace legacy `SOURCE=trip_point` files that never proved the trip was passive.
   if [ -f "$_tsf" ]; then
     case "$(grep -E '^SOURCE=' "$_tsf" 2>/dev/null | head -1 | sed 's/.*=//')" in
@@ -2851,6 +2851,10 @@ fi
     sleep 900
     [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ] || continue
     sh "$MODDIR/runtime/asb_wakelock_watch.sh" >/dev/null 2>&1
+    # Trial expiry and rejected-write detection ride the same cycle: a probation that is
+    # only checked when the user opens the UI is not a probation.
+    [ -f "$MODDIR/runtime/asb_trial.sh" ] \
+      && sh "$MODDIR/runtime/asb_trial.sh" check >/dev/null 2>&1
     # Classify the screen-off stretch alongside the wakelock snapshot: both answer
     # "what was actually happening", and running them together means the class and the
     # holder come from the same moment rather than from two different ones.
