@@ -71,7 +71,7 @@ need "$UI" "MD + '/config/governor.conf.shipped'"
 need "$UI" "MD + '/runtime/asb_config_safe.sh'"
 need "$UI" "MD + '/runtime/asb_smart_reset.sh'"
 need "$UI" 'min-height: min(36vh, 500px); max-height: min(88vh, 780px);'
-need "$UI" 'border-radius: 30px; background: linear-gradient(160deg, #0c1415, #070a0b 72%) padding-box, linear-gradient(135deg, rgba(76,232,193,.78), rgba(44,214,173,.28) 44%, rgba(44,214,173,.62)) border-box;'
+need "$UI" 'border-radius: 30px; background: linear-gradient(160deg, #0c1415, #070a0b 72%) padding-box, linear-gradient(90deg, rgba(46,214,173,.92), rgba(105,244,207,.98) 50%, rgba(46,214,173,.92)) border-box; box-shadow: inset 0 -1px 0 rgba(105,244,207,.96), 0 -20px 60px rgba(0,0,0,.5);'
 need "$UI" 'function cfgProfileNameOK(name)'
 need "$UI" 'id="cfgProfileModal"'
 need "$UI" 'function cfgProfileOpen(mode)'
