@@ -2076,14 +2076,34 @@ body.config-active #livePage.open {
 #cfgProfileHint { width: 100%; align-self: stretch; margin: 0 0 12px; font-size: 11px; line-height: 1.35; color: rgba(231,234,238,.48); text-align: center; }
 #cfgResetRow { width: 100%; align-self: stretch; display: flex; margin: 0 0 14px; }
 #cfgResetRow .cfg-backup { flex: 1 1 auto; min-height: 39px; white-space: nowrap; }
-#cfgUvCard { width: 100%; align-self: stretch; box-sizing: border-box; margin: 0 0 14px; padding: 12px; border-radius: 14px; border: 1px solid rgba(148,163,184,.28); background: rgba(148,163,184,.06); }
-.cfg-uv-head { display: flex; gap: 9px; align-items: baseline; justify-content: space-between; font-size: 12px; font-weight: 700; letter-spacing: .15px; }
-.cfg-uv-status { flex: 0 0 auto; border-radius: 999px; padding: 3px 7px; font-size: 10px; letter-spacing: .25px; text-transform: uppercase; color: #94a3b8; background: rgba(148,163,184,.12); }
-.cfg-uv-status.hint { color: #fbbf24; background: rgba(251,191,36,.12); }
-.cfg-uv-status.surface { color: #fb923c; background: rgba(251,146,60,.12); }
-.cfg-uv-status.unavailable { color: #f87171; background: rgba(248,113,113,.12); }
-.cfg-uv-evidence { margin-top: 7px; color: rgba(231,234,238,.72); font-size: 11px; line-height: 1.38; overflow-wrap: anywhere; }
-.cfg-uv-owner { margin-top: 6px; color: rgba(231,234,238,.46); font-size: 10.5px; line-height: 1.35; }
+/* Named-profile manager: an in-page sheet avoids the opaque KernelSU browser prompt and lets
+ * saved configurations be selected by tapping a row rather than retyping an exact identifier. */
+.cfg-profile-modal[hidden] { display: none !important; }
+.cfg-profile-modal { position: fixed; z-index: 1400; inset: 0; display: flex; align-items: flex-end; background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
+.cfg-profile-sheet { width: 100%; max-height: min(82vh, 720px); overflow: auto; box-sizing: border-box; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border: 1px solid rgba(44,214,173,.34); border-radius: 23px 23px 0 0; background: linear-gradient(160deg, #0c1415, #070a0b 72%); box-shadow: 0 -20px 60px rgba(0,0,0,.5); }
+.cfg-profile-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:13px; }
+.cfg-profile-title { color:#f4f6f7; font-size:18px; font-weight:800; }
+.cfg-profile-close { flex:0 0 auto; width:34px; height:34px; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); font-size:20px; }
+.cfg-profile-copy { color:rgba(231,234,238,.62); font-size:12px; line-height:1.42; margin:0 0 13px; }
+.cfg-profile-name { display:block; width:100%; box-sizing:border-box; min-height:45px; padding:11px 12px; color:#f5f7f7; background:#080d0e; border:1px solid rgba(44,214,173,.28); border-radius:12px; outline:none; font:inherit; }
+.cfg-profile-name:focus { border-color:#2cd6ad; box-shadow:0 0 0 3px rgba(44,214,173,.12); }
+.cfg-profile-label { display:block; margin:13px 0 7px; color:rgba(231,234,238,.74); font-size:11px; font-weight:700; letter-spacing:.35px; text-transform:uppercase; }
+.cfg-profile-dest { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.cfg-profile-dest button { min-height:39px; padding:7px 5px; color:rgba(231,234,238,.72); border:1px solid rgba(255,255,255,.13); border-radius:10px; background:rgba(255,255,255,.035); font-size:11px; }
+.cfg-profile-dest button.active { color:#5ce7c3; border-color:rgba(44,214,173,.6); background:rgba(44,214,173,.12); }
+.cfg-profile-primary { width:100%; min-height:47px; margin-top:12px; color:#04120f; border:0; border-radius:12px; background:linear-gradient(135deg,#2cd6ad,#67e4c8); font-weight:800; font-size:14px; }
+.cfg-profile-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+.cfg-profile-row { width:100%; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; text-align:left; padding:11px 12px; color:#edf2f3; border:1px solid rgba(255,255,255,.11); border-radius:12px; background:rgba(255,255,255,.035); }
+.cfg-profile-row.selected { border-color:rgba(44,214,173,.72); background:rgba(44,214,173,.10); }
+.cfg-profile-row-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+.cfg-profile-row-meta { color:rgba(231,234,238,.52); font-size:11px; }
+.cfg-profile-empty { padding:16px 8px; color:rgba(231,234,238,.50); text-align:center; font-size:12px; }
+.cfg-profile-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:12px; }
+.cfg-profile-actions button { min-height:42px; border:1px solid rgba(255,255,255,.16); border-radius:11px; color:#eaf0f1; background:rgba(255,255,255,.06); font-weight:700; }
+.cfg-profile-actions button.warn { color:#ffd68a; border-color:rgba(251,191,36,.38); }
+.cfg-profile-actions button.danger { color:#ffaaa7; border-color:rgba(248,113,113,.38); }
+.cfg-profile-preview { max-height:160px; margin:12px 0 0; padding:10px; overflow:auto; white-space:pre-wrap; color:rgba(231,234,238,.78); background:#060a0b; border:1px solid rgba(255,255,255,.09); border-radius:10px; font:10px/1.35 monospace; }
+.cfg-profile-hint { margin-top:9px; color:rgba(231,234,238,.47); font-size:10.5px; line-height:1.35; }
 
 /* --- vertical rhythm ------------------------------------------------------------------
    The gap between the tiles and the reboot buttons was ~105px: #cfgRebootWrap adds 18px
@@ -2485,11 +2505,6 @@ body.config-active #livePage.open {
     <div id="cfgResetRow">
       <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset</button>
     </div>
-    <section id="cfgUvCard" class="cfg-uv-card" aria-live="polite" hidden>
-      <div class="cfg-uv-head"><span data-i18n="cfg_uv_title">External kernel / undervolt</span><span id="cfgUvStatus" class="cfg-uv-status">—</span></div>
-      <div id="cfgUvEvidence" class="cfg-uv-evidence"></div>
-      <div id="cfgUvOwner" class="cfg-uv-owner"></div>
-    </section>
 
     <div class="cfg-list" id="cfgList"></div>
 
@@ -2516,6 +2531,18 @@ body.config-active #livePage.open {
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- In-page profile manager. Unlike the former browser prompt, this lists actual saved
+     configs and never asks the user to retype an identifier copied from a toast. -->
+<div class="cfg-profile-modal" id="cfgProfileModal" hidden aria-hidden="true">
+  <div class="cfg-profile-sheet" role="dialog" aria-modal="true" aria-labelledby="cfgProfileTitle">
+    <div class="cfg-profile-head">
+      <div class="cfg-profile-title" id="cfgProfileTitle" data-i18n="cfg_profile_manager_title">Saved configurations</div>
+      <button class="cfg-profile-close" type="button" onclick="cfgProfileClose()" aria-label="Close">×</button>
+    </div>
+    <div id="cfgProfileBody"></div>
+  </div>
+</div>
 
 <script>
 const clickAudio = new Audio("switch.mp3"); clickAudio.preload = "auto"; try { clickAudio.load(); } catch(e) {}
@@ -3140,9 +3167,6 @@ async function cfgLoad() {
    * reads as a bug in the module rather than as a fact about the phone. */
   await cfgLoadV64State();
   cfgRender();
-  // Static hub card: read-only external kernel/UV evidence must not be hidden in asbdiag.
-  // It is deliberately best-effort; a missing helper never blocks configuration rendering.
-  void cfgLoadUvStatus();
 }
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
@@ -4750,106 +4774,155 @@ async function dozeSaveKeep(box) {
   }
 }
 
-/* Named profiles are intentionally stored in ASB-owned state rather than accepting an
- * arbitrary filesystem path from the WebUI. The helper permits only [A-Za-z0-9_-] names,
- * owns checksum/preview, and imports through the transactional config writer. */
+/* Saved configurations use one in-page manager instead of browser prompt()/confirm(). The
+ * canonical profile remains checksum-protected in ASB state; Downloads/Documents are bounded
+ * convenience copies, never arbitrary path entry points. */
 const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';
-const CFG_UV_HELPER = MD + '/tools/asb_kernel_uv_coexist.sh';
+const _cfgProfile = { mode:'', store:'internal', rows:[], selected:'', ready:'', replace:'', remove:'', draft:'', _preview:'' };
 function cfgProfileNameOK(name) { return /^[A-Za-z0-9_-]{1,32}$/.test(name || ''); }
 function cfgProfileArgs() { return SNAP_KEYS.map(shQuote).join(' '); }
 function cfgResultText(r) { return ((r && r.stdout) || (r && r.stderr) || '').trim(); }
-function cfgProfileDefaultName() {
-  const d = new Date();
-  return 'profile-' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') +
-    String(d.getMinutes()).padStart(2, '0');
+function cfgProfileSuggestedName() {
+  let p = '';
+  try { p = (_el('cfgCurProfile').textContent || '').toLowerCase(); } catch (e) {}
+  p = p.replace(/[^a-z0-9_-]/g, '');
+  return 'asb-' + (p || 'settings');
 }
-function cfgUvFields(raw) {
-  const out = {};
-  String(raw || '').split(/\r?\n/).forEach(function(line) {
-    const i = line.indexOf('=');
-    if (i > 0) out[line.slice(0, i)] = line.slice(i + 1);
+function cfgProfileParse(raw, external) {
+  return String(raw || '').split(/\r?\n/).filter(Boolean).map(function(line) {
+    const p = line.split('|');
+    return external ? {name:p[0], keys:p[1], status:p[2], created:''} :
+      {name:p[0], created:p[1], keys:p[2], status:p[3]};
+  }).filter(function(p) { return cfgProfileNameOK(p.name) && p.status === 'ok'; });
+}
+function cfgProfileButton(text, cls, click) {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = text;
+  if (cls) b.className = cls; b.onclick = click; return b;
+}
+function cfgProfileClose() {
+  const m = _el('cfgProfileModal'); if (!m) return;
+  m.hidden = true; m.setAttribute('aria-hidden', 'true'); _cfgProfile.mode = '';
+}
+async function cfgProfileOpen(mode) {
+  _cfgProfile.mode = mode; _cfgProfile.store = 'internal'; _cfgProfile.rows = [];
+  _cfgProfile.selected = ''; _cfgProfile.ready = ''; _cfgProfile.replace = ''; _cfgProfile.remove = ''; _cfgProfile.draft = ''; _cfgProfile._preview = '';
+  const m = _el('cfgProfileModal'); if (!m) return;
+  m.hidden = false; m.setAttribute('aria-hidden', 'false');
+  await cfgProfileRefresh();
+}
+async function cfgProfileRefresh() {
+  const external = _cfgProfile.store !== 'internal';
+  const cmd = external ? 'list-external ' + _cfgProfile.store : 'list';
+  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' ' + cmd);
+  _cfgProfile.rows = (r && r.errno === 0) ? cfgProfileParse(r.stdout, external) : [];
+  if (!_cfgProfile.rows.some(function(x) { return x.name === _cfgProfile.selected; })) _cfgProfile.selected = '';
+  cfgProfilePaint();
+}
+function cfgProfileSetStore(store) {
+  _cfgProfile.store = store; _cfgProfile.selected = ''; _cfgProfile.ready = ''; _cfgProfile.remove = ''; _cfgProfile._preview = '';
+  void cfgProfileRefresh();
+}
+function cfgProfileSelect(name) {
+  _cfgProfile.selected = name; _cfgProfile.ready = ''; _cfgProfile.remove = ''; _cfgProfile._preview = ''; cfgProfilePaint();
+}
+function cfgProfileDestination(box) {
+  const label = document.createElement('div'); label.className = 'cfg-profile-label';
+  label.textContent = T('cfg_profile_location', 'Storage location'); box.appendChild(label);
+  const dest = document.createElement('div'); dest.className = 'cfg-profile-dest';
+  [['internal',T('cfg_profile_store_asb','ASB')],['downloads',T('cfg_profile_store_downloads','Downloads')],['documents',T('cfg_profile_store_documents','Documents')]].forEach(function(x) {
+    const b = cfgProfileButton(x[1], _cfgProfile.store === x[0] ? 'active' : '', function() { cfgProfileSetStore(x[0]); });
+    dest.appendChild(b);
   });
-  return out;
+  box.appendChild(dest);
 }
-async function cfgLoadUvStatus() {
-  const card = _el('cfgUvCard');
-  const badge = _el('cfgUvStatus');
-  const evidence = _el('cfgUvEvidence');
-  const owner = _el('cfgUvOwner');
-  if (!card || !badge || !evidence || !owner) return;
-  card.hidden = false;
-  badge.className = 'cfg-uv-status';
-  try {
-    const r = await run('sh ' + shQuote(CFG_UV_HELPER) + ' 2>/dev/null');
-    const d = cfgUvFields((r && r.stdout) || '');
-    if (!r || r.errno !== 0 || !d.status) throw new Error('helper unavailable');
-    if (d.status === 'voltage_surface_observed') {
-      badge.classList.add('surface');
-      badge.textContent = T('cfg_uv_surface', 'surface observed');
-    } else if (d.status === 'external_uv_hint') {
-      badge.classList.add('hint');
-      badge.textContent = T('cfg_uv_hint', 'external hint');
-    } else {
-      badge.textContent = T('cfg_uv_none', 'no explicit evidence');
-    }
-    const detail = d.evidence || (d.status === 'not_observable'
-      ? T('cfg_uv_none_detail', 'No explicit UV evidence is visible. This is not proof of stock voltage.')
-      : T('cfg_uv_detail_unavailable', 'The kernel exposed no readable detail.'));
-    evidence.textContent = T('cfg_uv_evidence', 'Evidence: ') + detail;
-    owner.textContent = T('cfg_uv_owner', 'ASB does not own, write, validate, disable or revert external voltage policy.');
-  } catch (e) {
-    badge.classList.add('unavailable');
-    badge.textContent = T('cfg_uv_unavailable', 'unavailable');
-    evidence.textContent = T('cfg_uv_detail_unavailable', 'The UV diagnostic helper is unavailable in this installed module.');
-    owner.textContent = T('cfg_uv_owner', 'ASB does not own, write, validate, disable or revert external voltage policy.');
+function cfgProfilePaint() {
+  const body = _el('cfgProfileBody'); if (!body) return;
+  body.textContent = '';
+  const save = _cfgProfile.mode === 'save';
+  const copy = document.createElement('div'); copy.className = 'cfg-profile-copy';
+  copy.textContent = save ? T('cfg_profile_save_copy','Save the current settings as a named configuration. You can also copy it to Downloads or Documents.') :
+    T('cfg_profile_open_copy','Tap a saved configuration to preview and apply it. No profile name needs to be typed.');
+  body.appendChild(copy);
+  if (save) {
+    const lab = document.createElement('label'); lab.className = 'cfg-profile-label'; lab.textContent = T('cfg_profile_name','Profile name'); body.appendChild(lab);
+    const inp = document.createElement('input'); inp.className = 'cfg-profile-name'; inp.id = 'cfgProfileNameInput'; inp.maxLength = 32;
+    inp.value = _cfgProfile.draft || cfgProfileSuggestedName(); inp.autocomplete = 'off'; inp.spellcheck = false;
+    inp.oninput = function() { _cfgProfile.draft = inp.value.trim(); _cfgProfile.replace = ''; };
+    body.appendChild(inp);
+    cfgProfileDestination(body);
+    const primary = cfgProfileButton(_cfgProfile.replace ? T('cfg_profile_replace','Replace saved configuration') : T('cfg_profile_save_action','Save configuration'), 'cfg-profile-primary', cfgProfileSave);
+    body.appendChild(primary);
+    const hint = document.createElement('div'); hint.className = 'cfg-profile-hint';
+    hint.textContent = T('cfg_profile_name_hint','Use letters, digits, _ or -. Existing names require one extra Replace tap.'); body.appendChild(hint);
+    return;
   }
+  cfgProfileDestination(body);
+  const list = document.createElement('div'); list.className = 'cfg-profile-list';
+  if (!_cfgProfile.rows.length) {
+    const empty = document.createElement('div'); empty.className = 'cfg-profile-empty';
+    empty.textContent = T('cfg_profiles_none','No valid saved profiles'); list.appendChild(empty);
+  } else _cfgProfile.rows.forEach(function(p) {
+    const row = cfgProfileButton('', 'cfg-profile-row' + (_cfgProfile.selected === p.name ? ' selected' : ''), function() { cfgProfileSelect(p.name); });
+    const left = document.createElement('div'); const nm = document.createElement('div'); nm.className = 'cfg-profile-row-name'; nm.textContent = p.name;
+    const meta = document.createElement('div'); meta.className = 'cfg-profile-row-meta'; meta.textContent = p.keys + ' ' + T('cfg_profile_keys','settings');
+    left.appendChild(nm); left.appendChild(meta); row.appendChild(left);
+    const mark = document.createElement('span'); mark.textContent = _cfgProfile.selected === p.name ? '✓' : '›'; row.appendChild(mark); list.appendChild(row);
+  });
+  body.appendChild(list);
+  if (!_cfgProfile.selected) return;
+  const actions = document.createElement('div'); actions.className = 'cfg-profile-actions';
+  actions.appendChild(cfgProfileButton(T('cfg_profile_preview','Preview'), 'warn', cfgProfilePreview));
+  actions.appendChild(cfgProfileButton(_cfgProfile.ready === _cfgProfile.selected ? T('cfg_profile_apply','Apply configuration') : T('cfg_profile_prepare_apply','Prepare apply'), '', cfgProfileApply));
+  if (_cfgProfile.store === 'internal') actions.appendChild(cfgProfileButton(_cfgProfile.remove === _cfgProfile.selected ? T('cfg_profile_delete_confirm','Delete now') : T('cfg_profile_delete','Delete'), 'danger', cfgProfileDelete));
+  body.appendChild(actions);
+  if (_cfgProfile._preview) { const pre = document.createElement('pre'); pre.className = 'cfg-profile-preview'; pre.textContent = _cfgProfile._preview; body.appendChild(pre); }
+  const hint = document.createElement('div'); hint.className = 'cfg-profile-hint';
+  hint.textContent = T('cfg_profile_apply_hint','Preview first, then apply. Downloads/Documents copies are checksum-checked before they enter ASB.'); body.appendChild(hint);
 }
-async function cfgExport() {
-  /* Save only keys owned by WebUI. Bounds, learner state and per-device thermal constants
-   * are deliberately excluded, so a profile can never transplant another phone's policy. */
-  let name = prompt(T('cfg_profile_name', 'Profile name'), cfgProfileDefaultName());
-  if (name === null) return;
-  name = name.trim();
-  if (!cfgProfileNameOK(name)) {
-    toast(T('cfg_profile_invalid', 'Use 1–32 letters, digits, _ or -'), 'err'); return;
+async function cfgProfileSave() {
+  const inp = _el('cfgProfileNameInput'); const name = String(inp && inp.value || '').trim();
+  _cfgProfile.draft = name;
+  if (!cfgProfileNameOK(name)) { toast(T('cfg_profile_invalid','Use 1–32 letters, digits, _ or -'), 'err'); return; }
+  const verb = _cfgProfile.replace === name ? 'replace' : 'create';
+  let r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' ' + verb + ' ' + shQuote(name) + ' ' + cfgProfileArgs());
+  if (r && r.errno === 3) { _cfgProfile.replace = name; cfgProfilePaint(); toast(T('cfg_profile_replace_ready','Tap Replace to overwrite this saved configuration.'), 'warn'); return; }
+  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_export_err','Could not save profile'), 'err'); return; }
+  if (_cfgProfile.store !== 'internal') {
+    const ex = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' export ' + shQuote(name) + ' ' + _cfgProfile.store);
+    if (!ex || ex.errno !== 0) { toast(cfgResultText(ex) || T('cfg_profile_export_err','Saved in ASB, but could not copy to selected location'), 'warn'); return; }
   }
-  let r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' create ' + shQuote(name) + ' ' + cfgProfileArgs());
-  if (r && r.errno === 3) {
-    if (!confirm(T('cfg_profile_replace_q', 'This profile already exists. Replace it?'))) return;
-    r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' replace ' + shQuote(name) + ' ' + cfgProfileArgs());
-  }
-  if (!r || r.errno !== 0) {
-    toast(cfgResultText(r) || T('cfg_export_err', 'Could not save profile'), 'err'); return;
-  }
-  const keys = (cfgResultText(r).match(/^keys=(\d+)$/m) || [])[1] || '?';
-  toast(T('cfg_profile_saved', 'Saved profile ') + name + ' (' + keys + ')', 'ok');
+  toast(T('cfg_profile_saved','Saved profile ') + name, 'ok'); cfgProfileClose();
 }
-async function cfgImport() {
-  const listed = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' list');
-  if (!listed || listed.errno !== 0) { toast(T('cfg_import_err', 'Could not read profiles'), 'err'); return; }
-  const rows = ((listed.stdout || '').trim().split(/\r?\n/).filter(Boolean)).map(function (line) {
-    const p = line.split('|'); return { name:p[0], created:p[1], keys:p[2], status:p[3] };
-  }).filter(function (p) { return cfgProfileNameOK(p.name) && p.status === 'ok'; });
-  if (!rows.length) { toast(T('cfg_profiles_none', 'No valid saved profiles'), 'warn'); return; }
-  const menu = rows.map(function (p) { return p.name + ' (' + p.keys + ')'; }).join('\n');
-  let name = prompt(T('cfg_profiles_choose', 'Choose a profile:') + '\n' + menu, rows[0].name);
-  if (name === null) return;
-  name = name.trim();
-  if (!rows.some(function (p) { return p.name === name; })) {
-    toast(T('cfg_profile_invalid', 'Unknown profile'), 'err'); return;
-  }
-  const preview = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' preview ' + shQuote(name) + ' ' + cfgProfileArgs());
-  if (!preview || preview.errno !== 0) { toast(cfgResultText(preview) || T('cfg_import_err', 'Could not validate profile'), 'err'); return; }
-  const diff = cfgResultText(preview) || T('cfg_profile_no_diff', 'No settings would change.');
-  if (!confirm(T('cfg_profile_preview', 'Preview') + '\n\n' + diff.slice(0, 2600) + '\n\n' +
-      T('cfg_profile_restore_q', 'Restore this profile?'))) return;
-  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' restore ' + shQuote(name) + ' ' + cfgProfileArgs());
-  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err', 'Could not restore profile'), 'err'); return; }
-  await cfgLoad();
-  cfgRender();
-  toast(T('cfg_profile_restored', 'Restored profile ') + name + T('cfg_import_reboot', ' - reboot to apply'), 'ok');
+async function cfgProfileEnsureInternal() {
+  if (_cfgProfile.store === 'internal') return true;
+  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' import-external ' + _cfgProfile.store + ' ' + shQuote(_cfgProfile.selected));
+  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err','Could not import profile'), 'err'); return false; }
+  _cfgProfile.store = 'internal'; await cfgProfileRefresh(); _cfgProfile.selected = _cfgProfile.rows.some(function(x) { return x.name === _cfgProfile.selected; }) ? _cfgProfile.selected : '';
+  return !!_cfgProfile.selected;
 }
+async function cfgProfilePreview() {
+  if (!_cfgProfile.selected || !(await cfgProfileEnsureInternal())) return;
+  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' preview ' + shQuote(_cfgProfile.selected) + ' ' + cfgProfileArgs());
+  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err','Could not validate profile'), 'err'); return; }
+  _cfgProfile.ready = _cfgProfile.selected; _cfgProfile._preview = (cfgResultText(r) || T('cfg_profile_no_diff','No settings would change.')).slice(0, 2600); cfgProfilePaint();
+}
+async function cfgProfileApply() {
+  if (!_cfgProfile.selected) return;
+  if (_cfgProfile.ready !== _cfgProfile.selected) { await cfgProfilePreview(); return; }
+  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' restore ' + shQuote(_cfgProfile.selected) + ' ' + cfgProfileArgs());
+  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err','Could not restore profile'), 'err'); return; }
+  const name = _cfgProfile.selected; cfgProfileClose(); await cfgLoad(); cfgRender();
+  toast(T('cfg_profile_restored','Restored profile ') + name + T('cfg_import_reboot',' - reboot to apply'), 'ok');
+}
+async function cfgProfileDelete() {
+  if (!_cfgProfile.selected) return;
+  if (_cfgProfile.remove !== _cfgProfile.selected) { _cfgProfile.remove = _cfgProfile.selected; cfgProfilePaint(); return; }
+  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' delete ' + shQuote(_cfgProfile.selected));
+  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err','Could not delete profile'), 'err'); return; }
+  _cfgProfile.selected = ''; _cfgProfile.remove = ''; _cfgProfile.ready = ''; _cfgProfile._preview = ''; await cfgProfileRefresh();
+}
+function cfgExport() { void cfgProfileOpen('save'); }
+function cfgImport() { void cfgProfileOpen('open'); }
 
 async function cfgSoftReboot() {
   const now = Date.now();
@@ -4914,7 +4987,6 @@ function cfgSyncChrome() {
   const ar = _el('cfgActionsRow'); if (ar) ar.style.display = _cfgGroup ? 'none' : 'grid';
   const ph = _el('cfgProfileHint'); if (ph) ph.style.display = _cfgGroup ? 'none' : '';
   const rr = _el('cfgResetRow'); if (rr) rr.style.display = _cfgGroup ? 'none' : 'flex';
-  const uv = _el('cfgUvCard'); if (uv) uv.style.display = _cfgGroup ? 'none' : '';
 }
 
 function cfgBack() {
