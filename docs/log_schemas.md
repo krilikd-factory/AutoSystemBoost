@@ -153,7 +153,7 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
 - `plan_budget`, `plan_prearm`, `plan_used`, `plan_class` — AC budget tracking
 - `plan_sensor_budget`, `plan_sensor_used` — sensor-read budget
 
-**P0 control provenance (V63)**
+**P0 control provenance **
 - `thermal_control_source` — quoted resolved CPU thermal-zone type currently controlling the governor. It is a source label, not a temperature.
 - `thermal_control_zone` — selected CPU thermal-zone number; `-1` means no usable CPU zone has been selected yet.
 - `thermal_source_confidence` — integer `0..2`: `0` uninitialized/unavailable, `1` derived CPU fallback or otherwise unvalidated source, `2` primary source cross-checked against CPU peers.
@@ -163,7 +163,7 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
 
 The concurrent native status JSON uses the corresponding fields `thermal_cpu_type`, `thermal_cpu_zone`, `thermal_src_conf`, `thermal_rejected_type`, and `thermal_rejected_raw`. The shorter `thermal_src_conf` spelling is retained for status JSON compatibility; consumers must not assume that the two files share every key name.
 
-**Battery measurement confidence (V63)**
+**Battery measurement confidence **
 - `battery_window_confidence` — `0` no usable window, `1` one SOC step or less, `2` short but usable window, `3` settled window with material SOC movement.
 - `battery_window_reason` — human-readable reason for the current confidence. A live charging sample always has confidence `0` and is excluded from a discharge estimate.
 - `battery_current_source` — source name selected for the current/battery estimator.
@@ -188,7 +188,7 @@ The concurrent native status JSON uses the corresponding fields `thermal_cpu_typ
 
 ---
 
-## `/data/adb/asb/config_last_txn` — config writer provenance (V63)
+## `/data/adb/asb/config_last_txn` — config writer provenance 
 
 Plain `key=value` sidecar written atomically by `runtime/asb_config_safe.sh` after every attempted config transaction. Its default directory follows `ASB_CONFIG_STATE`; production resolves that variable to `/data/adb/asb`, while host/staged tests can isolate it. The record is intentionally compact and never contains a config dump, shell stderr or arbitrary path.
 
