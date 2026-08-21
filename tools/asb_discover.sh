@@ -48,13 +48,21 @@ _gp() { getprop "$1" 2>/dev/null; }
     _hwmax="$(_f "$_pol/cpuinfo_max_freq")"
     _hwmin="$(_f "$_pol/cpuinfo_min_freq")"
     _curgov="$(_f "$_pol/scaling_governor")"
-    # number of frequency steps available (a proxy for table richness)
+    # Record the actual lowest advertised OPP per physical policy. It is a fact for
+    # diagnostics and for the native DEEP_IDLE writer; no model name or literal kHz is guessed.
     _nfreq=0
+    _opp_low=""
     if [ -r "$_pol/scaling_available_frequencies" ]; then
-      _nfreq=$(wc -w < "$_pol/scaling_available_frequencies" 2>/dev/null | tr -d ' ')
+      _avail="$(tr ' ' '\n' < "$_pol/scaling_available_frequencies" 2>/dev/null | awk 'NF && $1 ~ /^[0-9]+$/ {print}' | sort -n)"
+      _nfreq="$(printf '%s\n' "$_avail" | awk 'NF{n++} END{print n+0}')"
+      _opp_low="$(printf '%s\n' "$_avail" | awk 'NF{print; exit}')"
     fi
+    _min_writable=0
+    [ -w "$_pol/scaling_min_freq" ] && _min_writable=1
     echo "cpu_policy${_pid}_hwmax=$_hwmax"
     echo "cpu_policy${_pid}_hwmin=$_hwmin"
+    echo "cpu_policy${_pid}_lowest_opp=$_opp_low"
+    echo "cpu_policy${_pid}_min_writable=$_min_writable"
     echo "cpu_policy${_pid}_governor=$_curgov"
     echo "cpu_policy${_pid}_nfreq=$_nfreq"
   done
