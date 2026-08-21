@@ -695,6 +695,34 @@ body::before, body::after {
   margin-bottom: 0;
 }
 
+.footer-support-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.debug-support-btn {
+  min-width: 0;
+  flex: 1 1 0;
+  max-width: 112px;
+  min-height: 38px;
+  padding: 8px 9px;
+  border-radius: 13px;
+  border: 1px solid rgba(0,240,180,0.15);
+  background: rgba(0,240,180,0.045);
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.debug-support-btn:active { transform: scale(0.96); }
+.debug-support-btn:not(:disabled):hover { border-color: rgba(0,240,180,0.35); background: rgba(0,240,180,0.09); color: var(--accent); }
+.debug-support-btn:disabled { opacity: 0.48; cursor: wait; }
 .tg-link {
   display: inline-flex;
   align-items: center;
@@ -734,6 +762,17 @@ body::before, body::after {
   filter: drop-shadow(0 0 8px rgba(0,240,180,0.3));
 }
 
+.footer-support-row .tg-link {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  padding: 10px 8px;
+}
+.footer-support-row .tg-link-main {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .tg-link-main {
   font-size: 13px;
   font-weight: 600;
@@ -2321,9 +2360,18 @@ body.config-active #livePage.open {
 
   </div>
 
-  <!-- TELEGRAM -->
+  <!-- DEBUG SUPPORT + TELEGRAM. The debug row starts hidden and is revealed only after
+       the installed module version is verified as V*-debugN. -->
   <div class="tg-link-wrap">
-    <a class="tg-link" href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
+    <div class="footer-support-row" data-debug-support-row hidden>
+      <button class="debug-support-btn" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">Diag</button>
+      <button class="debug-support-btn" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
+      <a class="tg-link" href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
+        <span class="tg-link-ico">✉️</span>
+        <span class="tg-link-main">@AutoSystemBoost</span>
+      </a>
+    </div>
+    <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico">✉️</span>
       <span class="tg-link-main">@AutoSystemBoost</span>
     </a>
@@ -2888,6 +2936,63 @@ function run(cmd) {
       else ok({errno:1, stdout:'', stderr:'no ksu'});
     } catch(x) { ok({errno:1, stdout:'', stderr:''+x}); }
   });
+}
+
+let _asbDebugBuild = false;
+let _asbDebugActionBusy = false;
+
+function debugSupportPaint() {
+  document.querySelectorAll('[data-debug-support-row]').forEach(row => { row.hidden = !_asbDebugBuild; });
+  document.querySelectorAll('[data-release-telegram]').forEach(link => { link.hidden = _asbDebugBuild; });
+}
+
+async function loadDebugSupport() {
+  try {
+    const r = await run('sed -n "s/^version=//p" ' + MD + '/module.prop 2>/dev/null | head -n 1');
+    const version = ((r && r.stdout) || '').trim();
+    _asbDebugBuild = /-debug[1-9][0-9]*$/i.test(version);
+  } catch (e) { _asbDebugBuild = false; }
+  debugSupportPaint();
+}
+
+function debugActionText(result) {
+  const raw = runText(result);
+  const map = {};
+  raw.split(/\n/).forEach(line => {
+    const p = line.indexOf('=');
+    if (p > 0) map[line.slice(0, p).trim()] = line.slice(p + 1).trim();
+  });
+  return map;
+}
+
+async function asbDebugAction(action) {
+  if (!_asbDebugBuild || _asbDebugActionBusy) { toast(T('dbg_only', 'Debug build only'), 'warn'); return; }
+  const allowed = action === 'diag' || action === 'full-day';
+  if (!allowed) return;
+  _asbDebugActionBusy = true;
+  const buttons = Array.from(document.querySelectorAll('.debug-support-btn'));
+  buttons.forEach(b => { b.disabled = true; });
+  try {
+    const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + action + ' 2>/dev/null');
+    const info = debugActionText(r);
+    if (!r || r.errno !== 0 || info.error) {
+      toast(T(action === 'diag' ? 'dbg_diag_failed' : 'dbg_log_failed', 'Debug action failed'), 'bad');
+      return;
+    }
+    if (action === 'diag') {
+      toast(T('dbg_diag_saved', 'asbdiag saved') + (info.path ? ': ' + info.path : ''), 'good');
+    } else if (info.status === 'already_running') {
+      toast(T('dbg_log_running', '24h log is already running') + (info.pid ? ' · PID ' + info.pid : ''), 'warn');
+    } else if (info.status === 'started') {
+      toast(T('dbg_log_started', '24h log started') + (info.pid ? ' · PID ' + info.pid : ''), 'good');
+    } else {
+      toast(T('dbg_log_failed', 'Could not start 24h log'), 'bad');
+    }
+  } catch (e) { toast(T(action === 'diag' ? 'dbg_diag_failed' : 'dbg_log_failed', 'Debug action failed'), 'bad'); }
+  finally {
+    _asbDebugActionBusy = false;
+    buttons.forEach(b => { b.disabled = false; });
+  }
 }
 
 function toast(msg, type) {
@@ -5862,6 +5967,7 @@ _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
 (function() {
   try {
     applyStaticI18n();
+    loadDebugSupport();
     if (ASB_LANG === 'ru') {
       var dl = I18N.ru.device_line;
       ['deviceLine','liveDeviceLine','cfgDeviceLine'].forEach(function(id){
