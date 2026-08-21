@@ -41,6 +41,7 @@
 #define PID_FILE        "/dev/.asb/governor.pid"
 #define PROFILE_FILE    "/data/adb/modules/AutoSystemBoost/current_profile"
 #define CONFIG_FILE     "/data/adb/modules/AutoSystemBoost/config/governor.conf"
+#define ACTIVE_EFFICIENCY_FILE "/data/adb/asb/active_efficiency.env"
 
 #define MAX_EVENTS      8
 
@@ -1105,6 +1106,127 @@ static void asb_night_window_tick(int screen_on, time_t now) {
 static int g_budget_trim_pct = 0;
 static time_t g_budget_trim_changed_at = 0;
 static char g_budget_reason[32] = "disabled";
+static int g_budget_base_trim_pct = 0;
+static int g_budget_stage = 0;
+static int g_budget_envelope_bonus_pct = 0;
+
+/*
+ * Device-specific active-use policy is a derived manifest, not an alternative
+ * thermal controller. The shell writes it from observed platform/topology/GPU
+ * facts before this daemon starts; the values are percentage/uclamp deltas only.
+ * A missing, malformed or unrecognised manifest is a deliberate no-op.
+ */
+typedef struct {
+    int active;
+    int light_bonus_pct;
+    int moderate_bonus_pct;
+    int severe_bonus_pct;
+    int gpu_idle_bonus_pct;
+    int bg_uclamp_moderate_delta;
+    int bg_uclamp_severe_delta;
+    char tier[16];
+    char reason[48];
+} asb_active_efficiency_t;
+
+static asb_active_efficiency_t g_active_efficiency;
+
+static void asb_active_efficiency_reset(const char *reason) {
+    memset(&g_active_efficiency, 0, sizeof(g_active_efficiency));
+    snprintf(g_active_efficiency.tier, sizeof(g_active_efficiency.tier), "generic");
+    snprintf(g_active_efficiency.reason, sizeof(g_active_efficiency.reason), "%s",
+             reason ? reason : "inactive");
+}
+
+static int asb_active_efficiency_int(const char *text, int low, int high, int *out) {
+    char *end = NULL;
+    long value;
+    if (!text || !*text || !out) return -1;
+    errno = 0;
+    value = strtol(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value < low || value > high) return -1;
+    *out = (int)value;
+    return 0;
+}
+
+static void asb_active_efficiency_load(void) {
+    FILE *f;
+    char line[128];
+    int schema = 0, active = 0, seen = 0, malformed = 0;
+
+    asb_active_efficiency_reset("manifest_missing");
+    f = fopen(ACTIVE_EFFICIENCY_FILE, "r");
+    if (!f) return;
+
+    while (fgets(line, sizeof(line), f)) {
+        char *key = line;
+        char *value = strchr(line, '=');
+        size_t len;
+        if (!value || key[0] == '#') continue;
+        *value++ = '\0';
+        len = strcspn(value, "\r\n");
+        value[len] = '\0';
+        if (!strcmp(key, "schema")) {
+            malformed |= asb_active_efficiency_int(value, 1, 1, &schema) != 0;
+        } else if (!strcmp(key, "status")) {
+            active = !strcmp(value, "active");
+        } else if (!strcmp(key, "tier")) {
+            snprintf(g_active_efficiency.tier, sizeof(g_active_efficiency.tier), "%s", value);
+            seen |= 1;
+        } else if (!strcmp(key, "reason")) {
+            snprintf(g_active_efficiency.reason, sizeof(g_active_efficiency.reason), "%s", value);
+        } else if (!strcmp(key, "budget_light_bonus_pct")) {
+            malformed |= asb_active_efficiency_int(value, 0, 8, &g_active_efficiency.light_bonus_pct) != 0;
+            seen |= 2;
+        } else if (!strcmp(key, "budget_moderate_bonus_pct")) {
+            malformed |= asb_active_efficiency_int(value, 0, 8, &g_active_efficiency.moderate_bonus_pct) != 0;
+            seen |= 4;
+        } else if (!strcmp(key, "budget_severe_bonus_pct")) {
+            malformed |= asb_active_efficiency_int(value, 0, 8, &g_active_efficiency.severe_bonus_pct) != 0;
+            seen |= 8;
+        } else if (!strcmp(key, "gpu_idle_trim_bonus_pct")) {
+            malformed |= asb_active_efficiency_int(value, 0, 8, &g_active_efficiency.gpu_idle_bonus_pct) != 0;
+            seen |= 16;
+        } else if (!strcmp(key, "bg_uclamp_moderate_delta")) {
+            malformed |= asb_active_efficiency_int(value, 0, 256,
+                                                   &g_active_efficiency.bg_uclamp_moderate_delta) != 0;
+            seen |= 32;
+        } else if (!strcmp(key, "bg_uclamp_severe_delta")) {
+            malformed |= asb_active_efficiency_int(value, 0, 320,
+                                                   &g_active_efficiency.bg_uclamp_severe_delta) != 0;
+            seen |= 64;
+        }
+    }
+    fclose(f);
+
+    if (schema != 1 || !active || malformed || seen != 127 ||
+        (strcmp(g_active_efficiency.tier, "sm8750") &&
+         strcmp(g_active_efficiency.tier, "sm8650") &&
+         strcmp(g_active_efficiency.tier, "sm8550"))) {
+        asb_active_efficiency_reset(malformed ? "manifest_invalid" : "manifest_inactive");
+        return;
+    }
+    if (g_active_efficiency.moderate_bonus_pct < g_active_efficiency.light_bonus_pct ||
+        g_active_efficiency.severe_bonus_pct < g_active_efficiency.moderate_bonus_pct ||
+        g_active_efficiency.bg_uclamp_severe_delta < g_active_efficiency.bg_uclamp_moderate_delta) {
+        asb_active_efficiency_reset("manifest_nonmonotonic");
+        return;
+    }
+    g_active_efficiency.active = 1;
+    asb_log("active_efficiency: tier=%s reason=%s bonus=%d/%d/%d gpu=%d bg=%d/%d",
+            g_active_efficiency.tier, g_active_efficiency.reason,
+            g_active_efficiency.light_bonus_pct, g_active_efficiency.moderate_bonus_pct,
+            g_active_efficiency.severe_bonus_pct, g_active_efficiency.gpu_idle_bonus_pct,
+            g_active_efficiency.bg_uclamp_moderate_delta,
+            g_active_efficiency.bg_uclamp_severe_delta);
+}
+
+static int asb_active_efficiency_bonus(int stage) {
+    if (!g_active_efficiency.active) return 0;
+    if (stage >= 3) return g_active_efficiency.severe_bonus_pct;
+    if (stage == 2) return g_active_efficiency.moderate_bonus_pct;
+    if (stage == 1) return g_active_efficiency.light_bonus_pct;
+    return 0;
+}
 /* Self-overhead counters: event-driven native loop only, no extra sampler. */
 static unsigned long g_governor_event_wakeups = 0;
 static unsigned long g_governor_timer_wakeups = 0;
@@ -1118,6 +1240,9 @@ static void asb_budget_raise(int *candidate, const char **reason, int trim, cons
 
 static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int candidate = 0;
+    int base_candidate = 0;
+    int stage = 0;
+    int envelope_bonus = 0;
     const char *reason = "cool";
     if (g_asb_cfg.thermal_budget_enable && !fsm->thermal_cap &&
         fsm->state != ASB_STATE_SUSTAINED) {
@@ -1155,15 +1280,28 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
     } else if (fsm->thermal_cap || fsm->state == ASB_STATE_SUSTAINED) {
         reason = "platform_thermal";
     }
+    base_candidate = candidate;
+    if (candidate > 0) {
+        if (candidate >= g_asb_cfg.thermal_budget_severe_trim_pct) stage = 3;
+        else if (candidate >= g_asb_cfg.thermal_budget_moderate_trim_pct) stage = 2;
+        else stage = 1;
+        envelope_bonus = asb_active_efficiency_bonus(stage);
+        candidate += envelope_bonus;
+        if (candidate > 60) candidate = 60;
+    }
     time_t now = time(NULL);
     if (candidate > g_budget_trim_pct ||
         now - g_budget_trim_changed_at >= g_asb_cfg.thermal_budget_dwell_s) {
         if (candidate != g_budget_trim_pct || strcmp(reason, g_budget_reason) != 0) {
             g_budget_trim_pct = candidate;
             g_budget_trim_changed_at = now;
+            g_budget_base_trim_pct = base_candidate;
+            g_budget_stage = stage;
+            g_budget_envelope_bonus_pct = envelope_bonus;
             snprintf(g_budget_reason, sizeof(g_budget_reason), "%s", reason);
-            asb_log("thermal_budget: trim=%d reason=%s headroom=%d skin=%d trend=%d ma=%d camera=%d state=%s",
-                    g_budget_trim_pct, g_budget_reason, m->therm.headroom_pct,
+            asb_log("thermal_budget: trim=%d base=%d bonus=%d stage=%d reason=%s headroom=%d skin=%d trend=%d ma=%d camera=%d state=%s",
+                    g_budget_trim_pct, g_budget_base_trim_pct, g_budget_envelope_bonus_pct,
+                    g_budget_stage, g_budget_reason, m->therm.headroom_pct,
                     m->therm.skin_temp_c, fsm->thermal_trend, m->bat.current_ma,
                     m->misc.camera_active, asb_state_names[fsm->state]);
         }
@@ -1171,22 +1309,56 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
     return g_budget_trim_pct;
 }
 
+static void asb_active_efficiency_apply_caps(asb_profile_caps_t *caps,
+                                              const asb_metrics_t *m,
+                                              const asb_fsm_t *fsm) {
+    int delta;
+    (void)m;
+    if (!g_asb_cfg.thermal_budget_enable || !g_active_efficiency.active ||
+        g_budget_stage <= 0 || fsm->thermal_cap ||
+        fsm->state == ASB_STATE_SUSTAINED) return;
+
+    /* Extend existing idle trim only outside PERFORMANCE, gaming/video and thermal-cap paths. */
+    if (g_active_efficiency.gpu_idle_bonus_pct > 0 &&
+        fsm->profile_idx != PROFILE_PERFORMANCE && fsm->gpu_video_ticks < 2 &&
+        (fsm->state == ASB_STATE_LIGHT_IDLE || fsm->state == ASB_STATE_MODERATE) &&
+        g_asb_cfg.gpu_idle_trim_pct > 0) {
+        int floor_gpu = g_asb_cfg.gpu_idle_trim_floor > 0
+                        ? g_asb_cfg.gpu_idle_trim_floor : 55;
+        int trimmed = caps->gpu_max_pct - g_active_efficiency.gpu_idle_bonus_pct;
+        if (trimmed < floor_gpu) trimmed = floor_gpu;
+        if (trimmed < caps->gpu_max_pct) caps->gpu_max_pct = trimmed;
+    }
+
+    /* Keep foreground/top-app caps intact: only background cgroups lean further. */
+    if (g_budget_stage < 2 || caps->uclamp_bg_max <= 0) return;
+    delta = g_budget_stage >= 3 ? g_active_efficiency.bg_uclamp_severe_delta
+                                : g_active_efficiency.bg_uclamp_moderate_delta;
+    if (delta > 0) {
+        int target = caps->uclamp_bg_max - delta;
+        if (target < 128) target = 128;
+        if (target < caps->uclamp_bg_max) caps->uclamp_bg_max = target;
+    }
+}
+
 static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
                                            const asb_metrics_t *m,
                                            const asb_fsm_t *fsm) {
     int trim = asb_adaptive_budget_trim_pct(m, fsm);
-    if (trim <= 0 || trim >= 100) return;
-    int keep = 100 - trim;
-    for (int i = 0; i < 3; i++) {
-        if (caps->cpu_max[i] > 0) caps->cpu_max[i] = caps->cpu_max[i] * keep / 100;
-        if (caps->cpu_min[i] > 0 && caps->cpu_max[i] > 0 && caps->cpu_min[i] > caps->cpu_max[i])
-            caps->cpu_min[i] = caps->cpu_max[i];
+    if (trim > 0 && trim < 100) {
+        int keep = 100 - trim;
+        for (int i = 0; i < 3; i++) {
+            if (caps->cpu_max[i] > 0) caps->cpu_max[i] = caps->cpu_max[i] * keep / 100;
+            if (caps->cpu_min[i] > 0 && caps->cpu_max[i] > 0 && caps->cpu_min[i] > caps->cpu_max[i])
+                caps->cpu_min[i] = caps->cpu_max[i];
+        }
+        if (caps->gpu_max_pct > 0) {
+            caps->gpu_max_pct = caps->gpu_max_pct * keep / 100;
+            if (caps->gpu_max_pct < 10) caps->gpu_max_pct = 10;
+            if (caps->gpu_min_pct > caps->gpu_max_pct) caps->gpu_min_pct = caps->gpu_max_pct;
+        }
     }
-    if (caps->gpu_max_pct > 0) {
-        caps->gpu_max_pct = caps->gpu_max_pct * keep / 100;
-        if (caps->gpu_max_pct < 10) caps->gpu_max_pct = 10;
-        if (caps->gpu_min_pct > caps->gpu_max_pct) caps->gpu_min_pct = caps->gpu_max_pct;
-    }
+    asb_active_efficiency_apply_caps(caps, m, fsm);
 }
 
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
@@ -1284,9 +1456,19 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     /* requested/applied/failure/backoff counters from readback-aware native writers */
     writer_write_health_dump(f);
     fprintf(f, "shadow_mode=%d\nthermal_budget_enabled=%d\nthermal_budget_trim_pct=%d\n"
-               "thermal_budget_reason=%s\nthermal_budget_dwell_s=%d\n",
+               "thermal_budget_base_trim_pct=%d\nthermal_budget_envelope_bonus_pct=%d\n"
+               "thermal_budget_stage=%d\nthermal_budget_reason=%s\nthermal_budget_dwell_s=%d\n"
+               "active_efficiency_active=%d\nactive_efficiency_tier=%s\n"
+               "active_efficiency_reason=%s\nactive_efficiency_gpu_idle_bonus_pct=%d\n"
+               "active_efficiency_bg_uclamp_moderate_delta=%d\n"
+               "active_efficiency_bg_uclamp_severe_delta=%d\n",
             g_asb_cfg.shadow_mode, g_asb_cfg.thermal_budget_enable,
-            g_budget_trim_pct, g_budget_reason, g_asb_cfg.thermal_budget_dwell_s);
+            g_budget_trim_pct, g_budget_base_trim_pct, g_budget_envelope_bonus_pct,
+            g_budget_stage, g_budget_reason, g_asb_cfg.thermal_budget_dwell_s,
+            g_active_efficiency.active, g_active_efficiency.tier,
+            g_active_efficiency.reason, g_active_efficiency.gpu_idle_bonus_pct,
+            g_active_efficiency.bg_uclamp_moderate_delta,
+            g_active_efficiency.bg_uclamp_severe_delta);
     fprintf(f, "governor_event_wakeups=%lu\ngovernor_timer_wakeups=%lu\n"
                "governor_cpu_ms=%ld\n",
             g_governor_event_wakeups, g_governor_timer_wakeups,
@@ -4102,6 +4284,7 @@ int main(int argc, char **argv) {
         if (_ovr > 0) asb_log("device_bounds: applied %d per-device override(s) from %s",
                               _ovr, ASB_DEVICE_BOUNDS_FILE);
     }
+    asb_active_efficiency_load();
     asb_night_window_load();
     {
         int stale_warnings = 0;
