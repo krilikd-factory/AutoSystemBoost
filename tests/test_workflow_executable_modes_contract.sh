@@ -10,7 +10,7 @@ need() { grep -Fqx "$2" "$1" >/dev/null || { echo "FAIL workflow executable mode
 for WF in "$ROOT/.github/workflows/build-debug.yml" "$ROOT/.github/workflows/build-release.yml"; do
   [ -f "$WF" ] || { echo "FAIL workflow executable modes: missing $WF" >&2; exit 1; }
   _norm=$(grep -n 'name: Normalize executable diagnostic script modes' "$WF" | head -1 | cut -d: -f1)
-  _tests=$(grep -n 'name: Run unit tests' "$WF" | head -1 | cut -d: -f1)
+  _tests=$(grep -n 'name: Run canonical host regression' "$WF" | head -1 | cut -d: -f1)
   case "$_norm:$_tests" in *[!0-9:]*|:) echo "FAIL workflow executable modes: expected steps missing in $WF" >&2; exit 1 ;; esac
   [ "$_norm" -lt "$_tests" ] || { echo "FAIL workflow executable modes: normalize step must precede tests in $WF" >&2; exit 1; }
   sed -n "${_norm},$(( _norm + 6 ))p" "$WF" | grep -Fq 'chmod 0755 runtime/asb_active_efficiency_envelope.sh tools/asb_kernel_uv_coexist.sh' || {
