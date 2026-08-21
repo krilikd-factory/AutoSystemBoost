@@ -76,6 +76,7 @@ jobs:
             tools/asb_schema_sync.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
+            tools/asb_full_regression.sh \
             tests/test_dsp_reference_contract.sh \
             tests/test_device_safety_contract.sh \
             tests/test_thermal_socd_validation.c \
@@ -143,73 +144,9 @@ jobs:
           fi
           MODDIR="$(pwd)" bash tools/asb_lint.sh
 
-      - name: Run unit tests (smart learner)
-        run: |
-          # 332 host-side unit tests covering the smart learner: weights, decay,
-          # confidence, blend math, night override, thermal veto, bucket learning,
-          # slot gating and the persistence round-trip. They were sitting in the repo
-          # green but unwired, so nothing actually guarded that math on a release.
-          # They need no NDK and no device - plain gcc against src/.
-          _rc=0
-          for _t in tests/test_smart_session2.sh tests/test_smart_session3.sh tests/test_dsp_reference_contract.sh tests/test_device_safety_contract.sh tests/test_donor_telemetry_contract.sh; do
-            [ -f "$_t" ] || { echo "WARNING: $_t missing - skipping"; continue; }
-            echo "== $_t =="
-            bash "$_t" || _rc=1
-          done
-          # Quiet Night skip flag: two tests, deliberately from different angles.
-          #
-          # The source test checks WHERE the reset lives - the original bug was that it
-          # sat inside the mode guard, so the flag stayed set after the mode ended and the
-          # daemon ran on hours-old battery readings. The behaviour test walks the actual
-          # transition, because a placement test would pass on a rewrite that moved the
-          # reset correctly and still got the sequence wrong.
-          if [ -f tests/test_quiet_night_skip.py ]; then
-            echo "== tests/test_quiet_night_skip.py =="
-            python3 tests/test_quiet_night_skip.py || _rc=1
-          fi
-          if [ -f tests/test_quiet_night_behaviour.c ]; then
-            echo "== tests/test_quiet_night_behaviour.c =="
-            gcc -O2 -o /tmp/tqn tests/test_quiet_night_behaviour.c && /tmp/tqn || _rc=1
-          fi
-          # Config safety prevents a debug build from carrying a parser that
-          # accepts duplicate keys or invalid thermal/idle policy values.
-          if [ -f tests/test_config_safety.c ]; then
-            echo "== tests/test_config_safety.c =="
-            gcc -O2 -Wall -Wextra -Werror -o /tmp/tcfg tests/test_config_safety.c && /tmp/tcfg || _rc=1
-          fi
-          if [ -f tests/test_thermal_socd_validation.c ]; then
-            echo "== tests/test_thermal_socd_validation.c =="
-            gcc -D_GNU_SOURCE -std=c11 -O2 -Wno-unused-function -I src \
-              tests/test_thermal_socd_validation.c -lm -o /tmp/asb_thermal_p0 && /tmp/asb_thermal_p0 || _rc=1
-          fi
-          if [ -f tests/test_p0_provenance_contract.sh ]; then
-            echo "== tests/test_p0_provenance_contract.sh =="
-            sh tests/test_p0_provenance_contract.sh || _rc=1
-          fi
-          if [ -f tests/test_v64_p0_contract.sh ]; then
-            echo "== tests/test_v64_p0_contract.sh =="
-            sh tests/test_v64_p0_contract.sh || _rc=1
-          fi
-          if [ -f tests/test_v64_webui_trial_ledger_contract.py ]; then
-            echo "== tests/test_v64_webui_trial_ledger_contract.py =="
-            python3 tests/test_v64_webui_trial_ledger_contract.py || _rc=1
-          fi
-          for _t in tests/test_config_lock_contract.sh tests/test_camera_grade_contract.sh tests/test_cpu_min_opp_contract.sh tests/test_named_config_profiles.sh tests/test_v64_hardening_contract.sh tests/test_active_efficiency_contract.sh tests/test_kernel_uv_coexist_contract.sh tests/test_bt_lifecycle_recorder_contract.sh tests/test_profile_uv_webui_package_contract.sh tests/test_workflow_executable_modes_contract.sh tests/test_workflow_required_files_shell.sh; do
-            echo "== $_t =="
-            sh "$_t" || _rc=1
-          done
-          if [ -f tests/test_v62_to_v64_migration.sh ]; then
-            echo "== tests/test_v62_to_v64_migration.sh =="
-            bash tests/test_v62_to_v64_migration.sh || _rc=1
-          fi
-          if [ "$_rc" != "0" ]; then
-            echo "::error::smart learner unit tests FAILED - refusing to build a release"
-            exit 1
-          fi
+      - name: Run canonical host regression
+        run: bash tools/asb_full_regression.sh
 
-      # Ubuntu GitHub-hosted runners already provide these utilities. Do not pay
-      # for apt-get update on every debug build; install only on a custom runner
-      # that genuinely lacks one of the required commands.
       - name: Verify runner tools
         shell: bash
         run: |

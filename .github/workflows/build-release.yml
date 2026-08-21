@@ -86,6 +86,7 @@ jobs:
             tools/asb_config_backup.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
+            tools/asb_full_regression.sh \
             tests/test_arbiter.sh \
             tests/test_intent_backup.sh \
             tests/test_service_thermal_vm_contract.sh \
@@ -155,123 +156,9 @@ jobs:
           fi
           MODDIR="$(pwd)" bash tools/asb_lint.sh
 
-      - name: Run unit tests (smart learner)
-        run: |
-          # 332 host-side unit tests covering the smart learner: weights, decay,
-          # confidence, blend math, night override, thermal veto, bucket learning,
-          # slot gating and the persistence round-trip. They were sitting in the repo
-          # green but unwired, so nothing actually guarded that math on a release.
-          # They need no NDK and no device - plain gcc against src/.
-          _rc=0
-          for _t in tests/test_smart_session2.sh tests/test_smart_session3.sh; do
-            [ -f "$_t" ] || { echo "WARNING: $_t missing - skipping"; continue; }
-            echo "== $_t =="
-            bash "$_t" || _rc=1
-          done
-          # Quiet Night skip flag: two tests, deliberately from different angles.
-          #
-          # The source test checks WHERE the reset lives - the original bug was that it
-          # sat inside the mode guard, so the flag stayed set after the mode ended and the
-          # daemon ran on hours-old battery readings. The behaviour test walks the actual
-          # transition, because a placement test would pass on a rewrite that moved the
-          # reset correctly and still got the sequence wrong.
-          if [ -f tests/test_quiet_night_skip.py ]; then
-            echo "== tests/test_quiet_night_skip.py =="
-            python3 tests/test_quiet_night_skip.py || _rc=1
-          fi
-          if [ -f tests/test_quiet_night_behaviour.c ]; then
-            echo "== tests/test_quiet_night_behaviour.c =="
-            gcc -O2 -o /tmp/tqn tests/test_quiet_night_behaviour.c && /tmp/tqn || _rc=1
-          fi
-          # Config safety: duplicate keys and invalid thermal/idle values must be
-          # rejected before a daemon can apply a split-brain or unsafe policy.
-          if [ -f tests/test_config_safety.c ]; then
-            echo "== tests/test_config_safety.c =="
-            gcc -O2 -Wall -Wextra -Werror -o /tmp/tcfg tests/test_config_safety.c && /tmp/tcfg || _rc=1
-          fi
-          # Transactional config writer: values that can invalidate thermal caps
-          # or a full daemon config must be rejected before they reach runtime.
-          if [ -f tests/test_config_writer.sh ]; then
-            echo "== tests/test_config_writer.sh =="
-            sh tests/test_config_writer.sh || _rc=1
-          fi
-          # P0 thermal selection is a native decision, so exercise the production selector
-          # against a synthetic thermal sysfs fixture rather than only grepping source text.
-          if [ -f tests/test_thermal_socd_validation.c ]; then
-            echo "== tests/test_thermal_socd_validation.c =="
-            gcc -D_GNU_SOURCE -std=c11 -O2 -Wno-unused-function -I src \
-              tests/test_thermal_socd_validation.c -lm -o /tmp/asb_thermal_p0 && /tmp/asb_thermal_p0 || _rc=1
-          fi
-          if [ -f tests/test_p0_provenance_contract.sh ]; then
-            echo "== tests/test_p0_provenance_contract.sh =="
-            sh tests/test_p0_provenance_contract.sh || _rc=1
-          fi
-          # V64 P0: state/diagnostic field names, non-CPU thermal evidence and
-          # Trial apply/rollback must remain production contracts, not source comments.
-          if [ -f tests/test_v64_p0_contract.sh ]; then
-            echo "== tests/test_v64_p0_contract.sh =="
-            sh tests/test_v64_p0_contract.sh || _rc=1
-          fi
-          # WebUI bridge resolves an object even on shell failure. Keep the user-facing
-          # Trial/Ledger surface aligned with runtime allowlists and all translations.
-          if [ -f tests/test_v64_webui_trial_ledger_contract.py ]; then
-            echo "== tests/test_v64_webui_trial_ledger_contract.py =="
-            python3 tests/test_v64_webui_trial_ledger_contract.py || _rc=1
-          fi
-          for _t in tests/test_config_lock_contract.sh tests/test_camera_grade_contract.sh tests/test_cpu_min_opp_contract.sh tests/test_named_config_profiles.sh tests/test_v64_hardening_contract.sh tests/test_active_efficiency_contract.sh tests/test_kernel_uv_coexist_contract.sh tests/test_bt_lifecycle_recorder_contract.sh tests/test_profile_uv_webui_package_contract.sh tests/test_workflow_executable_modes_contract.sh tests/test_workflow_required_files_shell.sh; do
-            echo "== $_t =="
-            sh "$_t" || _rc=1
-          done
-          # Public upgrades from V62 retain user config before service starts. Exercise the
-          # schema-17 additive migration, backup, idempotence and post-migration safe writer.
-          if [ -f tests/test_v62_to_v64_migration.sh ]; then
-            echo "== tests/test_v62_to_v64_migration.sh =="
-            bash tests/test_v62_to_v64_migration.sh || _rc=1
-          fi
-          # Release packaging excludes tools wholesale, then re-adds selected runtime
-          # helpers. Validate the required-tools/copy-back contract before NDK build.
-          if [ -f tests/test_release_package_tool_contract.sh ]; then
-            echo "== tests/test_release_package_tool_contract.sh =="
-            sh tests/test_release_package_tool_contract.sh || _rc=1
-          fi
-          # Lease arbitration protects camera/profile writes and establishes the
-          # central priority contract before a release reaches a real device.
-          if [ -f tests/test_arbiter.sh ]; then
-            echo "== tests/test_arbiter.sh =="
-            sh tests/test_arbiter.sh || _rc=1
-          fi
-          if [ -f tests/test_intent_backup.sh ]; then
-            echo "== tests/test_intent_backup.sh =="
-            sh tests/test_intent_backup.sh || _rc=1
-          fi
-          if [ -f tests/test_service_thermal_vm_contract.sh ]; then
-            echo "== tests/test_service_thermal_vm_contract.sh =="
-            sh tests/test_service_thermal_vm_contract.sh || _rc=1
-          fi
-          if [ -f tests/test_dsp_reference_contract.sh ]; then
-            echo "== tests/test_dsp_reference_contract.sh =="
-            sh tests/test_dsp_reference_contract.sh || _rc=1
-          fi
-          if [ -f tests/test_device_safety_contract.sh ]; then
-            echo "== tests/test_device_safety_contract.sh =="
-            sh tests/test_device_safety_contract.sh || _rc=1
-          fi
-          # Donor-inspired telemetry stays read-only: JSON structure, provenance fields
-          # and no-write guarantees are release gates, not optional diagnostics.
-          if [ -f tests/test_donor_telemetry_contract.sh ]; then
-            echo "== tests/test_donor_telemetry_contract.sh =="
-            sh tests/test_donor_telemetry_contract.sh || _rc=1
-          fi
-          if [ "$_rc" != "0" ]; then
-            echo "::error::smart learner unit tests FAILED - refusing to build a release"
-            exit 1
-          fi
+      - name: Run canonical host regression
+        run: bash tools/asb_full_regression.sh
 
-      # GitHub-hosted Ubuntu images already include these utilities. A mandatory
-      # apt-get update was the slowest part of a normal release run (8+ minutes
-      # in the reported CI log), while no package was actually needed. Verify
-      # first; retain a self-healing install only for a future/custom runner
-      # that genuinely lacks a required tool.
       - name: Verify runner tools
         shell: bash
         run: |
