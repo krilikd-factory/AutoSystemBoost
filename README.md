@@ -29,16 +29,11 @@
 
 ## ⚡ What it actually is
 
-Most root modules write a static list of values once at boot. ASB is a **runtime
-controller**. Its native daemon samples CPU, GPU, thermal, battery and workload evidence
-every two seconds, selects one of six activity states, and derives a policy again from the
-current device state. It does not treat a node being present as proof that it is safe to
-write.
+ASB helps the phone use less energy when maximum power is not needed, while keeping it responsive when it is. It reduces unnecessary CPU/GPU spikes during idle and light use, accounts for heat, and never replaces Android's own thermal protection.
 
-ASB uses a capability manifest, writer leases, a tiered thermal budget, thermal-source
-validation and decision provenance. The practical goal is not a universal benchmark gain:
-it is to reduce unnecessary work and heat without hiding the reason when ASB deliberately
-backs off.
+Unlike a static tweak pack, ASB does not write the same values to every phone at boot. While the phone is running, it considers workload, temperature, battery level and screen state, then selects a policy that fits that moment. If a feature is unsupported, the ROM returns a different value, or a path is unsafe to write, ASB leaves it alone and reports that fact in diagnostics.
+
+ASB does not promise a magic battery percentage or identical benchmark results on every device. Its job is to remove unnecessary work that consumes power and creates heat without hiding trade-offs or sacrificing stability for an attractive number.
 
 | | Layer | Component | What it does |
 |:---:|:---|:---|:---|
