@@ -20,6 +20,32 @@ LK_SCENARIO="full_day"
 LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"
 LK_HOURS="${1:-24}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
+
+# Debug WebUI starts this script behind an atomic lock directory. The recorder, not its
+# short-lived launcher, owns the lock: publish our own PID only after the helper-provided
+# token matches, and remove it only if the same PID still owns it. Direct terminal starts do
+# not set these variables and retain their original behaviour.
+LK_WEBUI_LOCKDIR="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"
+LK_WEBUI_LOCK_TOKEN="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
+lk_webui_guard_claim() {
+  [ -n "$LK_WEBUI_LOCKDIR" ] && [ -n "$LK_WEBUI_LOCK_TOKEN" ] || return 0
+  [ -d "$LK_WEBUI_LOCKDIR" ] || return 1
+  _lwg_token="$(cat "$LK_WEBUI_LOCKDIR/token" 2>/dev/null || true)"
+  [ "$_lwg_token" = "$LK_WEBUI_LOCK_TOKEN" ] || return 1
+  _lwg_tmp="$LK_WEBUI_LOCKDIR/pid.tmp.$$"
+  printf '%s\n' "$$" > "$_lwg_tmp" 2>/dev/null || return 1
+  mv -f "$_lwg_tmp" "$LK_WEBUI_LOCKDIR/pid" 2>/dev/null || { rm -f "$_lwg_tmp" 2>/dev/null || true; return 1; }
+  return 0
+}
+lk_webui_guard_release() {
+  [ -n "$LK_WEBUI_LOCKDIR" ] && [ -d "$LK_WEBUI_LOCKDIR" ] || return 0
+  _lwg_pid="$(tr -dc '0-9' < "$LK_WEBUI_LOCKDIR/pid" 2>/dev/null || true)"
+  [ "$_lwg_pid" = "$$" ] || return 0
+  rm -rf "$LK_WEBUI_LOCKDIR" 2>/dev/null || true
+}
+# Claim before creating capture artefacts, so any observer sees a recorder PID rather than
+# a transient launcher PID. A failed claim means a stale/mismatched caller and must exit.
+lk_webui_guard_claim || { echo '[debug-webui] guard claim failed'; exit 2; }
 LK_SNAPSHOT_S=3600          # full state snapshot + interim report every hour
 LK_BSTATS_WINDOW_MIN=$(( LK_SNAPSHOT_S / 60 ))
 export LK_BSTATS_WINDOW_MIN
@@ -696,7 +722,7 @@ lk_finalize() {
   lk_emit_full_day_report
   lk_snapshot_state "after"
 }
-trap 'lk_finalize; exit 0' TERM INT HUP
+trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP
 
 echo "[$(date '+%H:%M:%S')] FULL-DAY capture running up to ${LK_HOURS}h. Use the phone normally."
 
@@ -794,4 +820,5 @@ done
 lk_finalize
 lk_wl_release
 lk_finalize
+lk_webui_guard_release
 echo "[$(date '+%H:%M:%S')] FULL-DAY capture complete. Output: $LK_OUT_DIR"
