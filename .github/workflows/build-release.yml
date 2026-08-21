@@ -105,6 +105,7 @@ jobs:
             tests/test_kernel_uv_coexist_contract.sh \
             tests/test_bt_lifecycle_recorder_contract.sh \
             tests/test_profile_uv_webui_package_contract.sh \
+            tests/test_quick_restart_contract.sh \
             tests/test_workflow_executable_modes_contract.sh \
             tests/test_workflow_required_files_shell.sh \
             tests/test_v62_to_v64_migration.sh \
@@ -532,6 +533,7 @@ jobs:
             "runtime/asb_capabilities.sh" \
             "runtime/asb_active_efficiency_envelope.sh" \
             "runtime/asb_apply_managed_props.sh" \
+            "runtime/asb_quick_restart.sh" \
             "runtime/asb_device_pack_manifest.sh" \
             "runtime/asb_device_tier.sh" \
             "tools/asb_diag.sh" \
