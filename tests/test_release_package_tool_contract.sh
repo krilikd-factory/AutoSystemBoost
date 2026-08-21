@@ -28,10 +28,22 @@ REQUIRED_TOOLS="$(sed -n '/for required in \\/,/webroot\/index.html"; do/p' "$WF
 
 for path in $REQUIRED_TOOLS; do
   name="${path#tools/}"
-  if ! printf '%s\n' "$COPYBACK" | grep -Fq -- "$name"; then
-    echo "FAIL: release ZIP requires $path but Package RELEASE zip does not copy it back" >&2
-    exit 1
-  fi
+  case "$name" in
+    logkit/*)
+      base="${name#logkit/}"
+      if ! printf '%s\n' "$COPYBACK" | grep -Fq -- 'tools/logkit/$_t' \
+         || ! printf '%s\n' "$COPYBACK" | grep -Fq -- "$base"; then
+        echo "FAIL: release ZIP requires $path but Package RELEASE zip does not copy its logkit entry back" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      if ! printf '%s\n' "$COPYBACK" | grep -Fq -- "$name"; then
+        echo "FAIL: release ZIP requires $path but Package RELEASE zip does not copy it back" >&2
+        exit 1
+      fi
+      ;;
+  esac
   [ -f "$ROOT/$path" ] || {
     echo "FAIL: release ZIP requires missing source file: $path" >&2
     exit 1
