@@ -2068,8 +2068,22 @@ body.config-active #livePage.open {
    as the tile grid, which is why the labels still clipped to "Эксп...". stretch overrides
    the parent's centring for these two rows only. */
 #cfgToolsRow   { width: 100%; align-self: stretch; display: flex; gap: 8px; margin: 0 0 8px;  align-items: stretch; min-width: 0; }
-#cfgActionsRow { width: 100%; align-self: stretch; display: flex; gap: 8px; margin: 0 0 14px; align-items: stretch; min-width: 0; }
-#cfgActionsRow .cfg-backup { flex: 1 1 0; min-width: 0; white-space: nowrap; }
+#cfgActionsRow { width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 7px; align-items: stretch; min-width: 0; }
+/* Profile actions are the two primary user actions. They must stay readable on a phone:
+ * a shorter label plus a two-column grid is clearer than squeezing three unrelated buttons
+ * into one row and hiding the important word under an ellipsis. */
+#cfgActionsRow .cfg-backup { min-width: 0; min-height: 44px; padding: 10px 8px; white-space: normal; overflow: visible; text-overflow: clip; }
+#cfgProfileHint { width: 100%; align-self: stretch; margin: 0 0 12px; font-size: 11px; line-height: 1.35; color: rgba(231,234,238,.48); text-align: center; }
+#cfgResetRow { width: 100%; align-self: stretch; display: flex; margin: 0 0 14px; }
+#cfgResetRow .cfg-backup { flex: 1 1 auto; min-height: 39px; white-space: nowrap; }
+#cfgUvCard { width: 100%; align-self: stretch; box-sizing: border-box; margin: 0 0 14px; padding: 12px; border-radius: 14px; border: 1px solid rgba(148,163,184,.28); background: rgba(148,163,184,.06); }
+.cfg-uv-head { display: flex; gap: 9px; align-items: baseline; justify-content: space-between; font-size: 12px; font-weight: 700; letter-spacing: .15px; }
+.cfg-uv-status { flex: 0 0 auto; border-radius: 999px; padding: 3px 7px; font-size: 10px; letter-spacing: .25px; text-transform: uppercase; color: #94a3b8; background: rgba(148,163,184,.12); }
+.cfg-uv-status.hint { color: #fbbf24; background: rgba(251,191,36,.12); }
+.cfg-uv-status.surface { color: #fb923c; background: rgba(251,146,60,.12); }
+.cfg-uv-status.unavailable { color: #f87171; background: rgba(248,113,113,.12); }
+.cfg-uv-evidence { margin-top: 7px; color: rgba(231,234,238,.72); font-size: 11px; line-height: 1.38; overflow-wrap: anywhere; }
+.cfg-uv-owner { margin-top: 6px; color: rgba(231,234,238,.46); font-size: 10.5px; line-height: 1.35; }
 
 /* --- vertical rhythm ------------------------------------------------------------------
    The gap between the tiles and the reboot buttons was ~105px: #cfgRebootWrap adds 18px
@@ -2463,11 +2477,19 @@ body.config-active #livePage.open {
     <!-- Row two: the three actions. Two rows rather than one because five items with real
          labels do not fit a phone: forcing them onto one line either clipped the words or
          pushed the row off-screen, and both were tried. -->
-    <div id="cfgActionsRow">
-      <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_profile_save">↑ Save profile</button>
-      <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_profile_load">↓ Load profile</button>
+    <div id="cfgActionsRow" aria-label="Saved settings profiles">
+      <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_profile_save_short">↑ Save</button>
+      <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_profile_load_short">↓ Open</button>
+    </div>
+    <div id="cfgProfileHint" data-i18n="cfg_profile_storage_hint">Profiles are stored safely inside ASB; choose a name, not a path.</div>
+    <div id="cfgResetRow">
       <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset</button>
     </div>
+    <section id="cfgUvCard" class="cfg-uv-card" aria-live="polite" hidden>
+      <div class="cfg-uv-head"><span data-i18n="cfg_uv_title">External kernel / undervolt</span><span id="cfgUvStatus" class="cfg-uv-status">—</span></div>
+      <div id="cfgUvEvidence" class="cfg-uv-evidence"></div>
+      <div id="cfgUvOwner" class="cfg-uv-owner"></div>
+    </section>
 
     <div class="cfg-list" id="cfgList"></div>
 
@@ -3118,6 +3140,9 @@ async function cfgLoad() {
    * reads as a bug in the module rather than as a fact about the phone. */
   await cfgLoadV64State();
   cfgRender();
+  // Static hub card: read-only external kernel/UV evidence must not be hidden in asbdiag.
+  // It is deliberately best-effort; a missing helper never blocks configuration rendering.
+  void cfgLoadUvStatus();
 }
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
@@ -4729,6 +4754,7 @@ async function dozeSaveKeep(box) {
  * arbitrary filesystem path from the WebUI. The helper permits only [A-Za-z0-9_-] names,
  * owns checksum/preview, and imports through the transactional config writer. */
 const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';
+const CFG_UV_HELPER = MD + '/tools/asb_kernel_uv_coexist.sh';
 function cfgProfileNameOK(name) { return /^[A-Za-z0-9_-]{1,32}$/.test(name || ''); }
 function cfgProfileArgs() { return SNAP_KEYS.map(shQuote).join(' '); }
 function cfgResultText(r) { return ((r && r.stdout) || (r && r.stderr) || '').trim(); }
@@ -4737,6 +4763,47 @@ function cfgProfileDefaultName() {
   return 'profile-' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') +
     String(d.getMinutes()).padStart(2, '0');
+}
+function cfgUvFields(raw) {
+  const out = {};
+  String(raw || '').split(/\r?\n/).forEach(function(line) {
+    const i = line.indexOf('=');
+    if (i > 0) out[line.slice(0, i)] = line.slice(i + 1);
+  });
+  return out;
+}
+async function cfgLoadUvStatus() {
+  const card = _el('cfgUvCard');
+  const badge = _el('cfgUvStatus');
+  const evidence = _el('cfgUvEvidence');
+  const owner = _el('cfgUvOwner');
+  if (!card || !badge || !evidence || !owner) return;
+  card.hidden = false;
+  badge.className = 'cfg-uv-status';
+  try {
+    const r = await run('sh ' + shQuote(CFG_UV_HELPER) + ' 2>/dev/null');
+    const d = cfgUvFields((r && r.stdout) || '');
+    if (!r || r.errno !== 0 || !d.status) throw new Error('helper unavailable');
+    if (d.status === 'voltage_surface_observed') {
+      badge.classList.add('surface');
+      badge.textContent = T('cfg_uv_surface', 'surface observed');
+    } else if (d.status === 'external_uv_hint') {
+      badge.classList.add('hint');
+      badge.textContent = T('cfg_uv_hint', 'external hint');
+    } else {
+      badge.textContent = T('cfg_uv_none', 'no explicit evidence');
+    }
+    const detail = d.evidence || (d.status === 'not_observable'
+      ? T('cfg_uv_none_detail', 'No explicit UV evidence is visible. This is not proof of stock voltage.')
+      : T('cfg_uv_detail_unavailable', 'The kernel exposed no readable detail.'));
+    evidence.textContent = T('cfg_uv_evidence', 'Evidence: ') + detail;
+    owner.textContent = T('cfg_uv_owner', 'ASB does not own, write, validate, disable or revert external voltage policy.');
+  } catch (e) {
+    badge.classList.add('unavailable');
+    badge.textContent = T('cfg_uv_unavailable', 'unavailable');
+    evidence.textContent = T('cfg_uv_detail_unavailable', 'The UV diagnostic helper is unavailable in this installed module.');
+    owner.textContent = T('cfg_uv_owner', 'ASB does not own, write, validate, disable or revert external voltage policy.');
+  }
 }
 async function cfgExport() {
   /* Save only keys owned by WebUI. Bounds, learner state and per-device thermal constants
@@ -4844,6 +4911,10 @@ function cfgSyncChrome() {
   if (rw) rw.style.display = _cfgGroup ? 'none' : '';
   const tr = _el('cfgToolsRow');
   if (tr) { tr.style.display = _cfgGroup ? 'none' : 'flex'; cfgFillLangs(); }
+  const ar = _el('cfgActionsRow'); if (ar) ar.style.display = _cfgGroup ? 'none' : 'grid';
+  const ph = _el('cfgProfileHint'); if (ph) ph.style.display = _cfgGroup ? 'none' : '';
+  const rr = _el('cfgResetRow'); if (rr) rr.style.display = _cfgGroup ? 'none' : 'flex';
+  const uv = _el('cfgUvCard'); if (uv) uv.style.display = _cfgGroup ? 'none' : '';
 }
 
 function cfgBack() {
