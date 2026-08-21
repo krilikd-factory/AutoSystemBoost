@@ -179,7 +179,8 @@ if [ -f "$_caps" ]; then
   P "  cpu policies         : $(_cget cpu_policy_count) clusters [$(_cget cpu_policy_list)]"
   for _pid in $(_cget cpu_policy_list); do
     _hm="$(_cget cpu_policy${_pid}_hwmax)"; _nf="$(_cget cpu_policy${_pid}_nfreq)"
-    P "    - policy${_pid}: hw_max=${_hm} kHz, ${_nf} freq steps"
+    _lo="$(_cget cpu_policy${_pid}_lowest_opp)"; _mw="$(_cget cpu_policy${_pid}_min_writable)"
+    P "    - policy${_pid}: hw_max=${_hm} kHz, lowest_opp=${_lo:-unknown} kHz, min_write=${_mw:-unknown}, ${_nf} freq steps"
   done
   P "  gpu backend          : $(_cget gpu_backend)"
   P "  thermal zones        : $(_cget thermal_zone_count)"
@@ -1397,13 +1398,26 @@ for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
   _smax=$(cat "$_pol/scaling_max_freq" 2>/dev/null)
   _cur=$(cat "$_pol/scaling_cur_freq" 2>/dev/null)
   _gov=$(cat "$_pol/scaling_governor" 2>/dev/null)
-  # Writability of scaling_max_freq: if ASB can't write it, the per-device caps
-  # never take effect and the values above are whatever the kernel/OEM set. This
-  # is the decisive check when live caps don't match ASB's intended percentages.
+  # Writability of both cap nodes: a device can expose a frequency table while
+  # rejecting writes, in which case ASB must report an OEM/kernel owner rather than claim control.
   if [ -w "$_pol/scaling_max_freq" ]; then _wf="writable"; else _wf="NOT-writable"; fi
-  P "  [$_pn] cpus={$_cpus} gov=$_gov scaling_max=$_wf"
+  if [ -w "$_pol/scaling_min_freq" ]; then _minwf="writable"; else _minwf="NOT-writable"; fi
+  _lowest="$(tr ' ' '\n' < "$_pol/scaling_available_frequencies" 2>/dev/null | awk 'NF && $1 ~ /^[0-9]+$/ {print}' | sort -n | awk 'NF{print; exit}')"
+  _prof_live="$(cat "$MODDIR/current_profile" 2>/dev/null || gp persist.asb.profile)"
+  _state_live="$(grep '^state=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d ' \r')"
+  P "  [$_pn] cpus={$_cpus} gov=$_gov scaling_max=$_wf scaling_min=$_minwf"
   P "        hw_range : $_cmin .. $_cmax"
   P "        scaling  : min=$_smin max=$_smax cur=$_cur"
+  P "        lowest_opp: ${_lowest:-unknown}"
+  if [ "$_prof_live" = "smart" ] && [ "$_state_live" = "DEEP_IDLE" ] && [ -n "$_lowest" ]; then
+    if [ "$_smin" = "$_lowest" ]; then
+      P "        deep-idle minimum: [PASS] Smart requested hardware lowest OPP"
+    else
+      P "        deep-idle minimum: [WARN] want=$_lowest live=${_smin:-unknown} (vendor/kernel override or write failure)"
+    fi
+  else
+    P "        deep-idle minimum: not expected (profile=${_prof_live:-none} state=${_state_live:-unknown})"
+  fi
   P "        available: $(cat "$_pol/scaling_available_frequencies" 2>/dev/null)"
   # governor tunables that shape responsiveness (schedutil / walt)
   for _t in schedutil/rate_limit_us schedutil/up_rate_limit_us \
