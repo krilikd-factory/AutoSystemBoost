@@ -51,10 +51,12 @@ for test_file in \
   tests/test_active_efficiency_contract.sh \
   tests/test_kernel_uv_coexist_contract.sh \
   tests/test_bt_lifecycle_recorder_contract.sh \
+  tests/test_logkit_capture_quality_contract.sh \
   tests/test_profile_uv_webui_package_contract.sh \
   tests/test_workflow_executable_modes_contract.sh \
   tests/test_workflow_required_files_shell.sh \
   tests/test_release_package_tool_contract.sh \
+  tests/test_package_functional_parity_contract.sh \
   tests/test_arbiter.sh \
   tests/test_intent_backup.sh \
   tests/test_service_thermal_vm_contract.sh; do
