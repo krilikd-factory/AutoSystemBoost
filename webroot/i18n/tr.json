@@ -423,5 +423,11 @@
   "cfg_profile_load": "Profil yükle",
   "cfg_profile_save_short": "↑ Kaydet",
   "cfg_profile_load_short": "↓ Aç",
-  "cfg_profile_storage_hint": "Profiller ASB içinde güvenle saklanır; yol değil, ad seçin."
+  "cfg_profile_storage_hint": "Profiller ASB içinde güvenle saklanır; yol değil, ad seçin.",
+  "cfg_audio_section_playback": "Oynatma ve Bluetooth",
+  "cfg_audio_section_playback_hint": "Ses yolunu ve Bluetooth davranışını seçin.",
+  "cfg_audio_section_dsp": "ASB DSP Motoru",
+  "cfg_audio_section_dsp_hint": "Seçtiğiniz çıkışlarda isteğe bağlı kazanç, bas ve dinamik işleme.",
+  "cfg_audio_section_safety": "Dinleme güvenliği",
+  "cfg_audio_section_safety_hint": "Sistem işitme koruması sınırı siz açıkça değiştirmedikçe olduğu gibi kalır."
 }

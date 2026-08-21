@@ -423,5 +423,11 @@
   "cfg_profile_load": "加载配置",
   "cfg_profile_save_short": "↑ 保存",
   "cfg_profile_load_short": "↓ 打开",
-  "cfg_profile_storage_hint": "配置安全保存在 ASB 内部；请选择名称，而非路径。"
+  "cfg_profile_storage_hint": "配置安全保存在 ASB 内部；请选择名称，而非路径。",
+  "cfg_audio_section_playback": "播放与蓝牙",
+  "cfg_audio_section_playback_hint": "选择音频路径和蓝牙行为。",
+  "cfg_audio_section_dsp": "ASB DSP 引擎",
+  "cfg_audio_section_dsp_hint": "为所选输出提供可选的增益、低音和动态处理。",
+  "cfg_audio_section_safety": "聆听安全",
+  "cfg_audio_section_safety_hint": "除非你明确更改，否则系统的听力保护音量限制保持不变。"
 }

@@ -423,5 +423,11 @@
   "cfg_profile_load": "Завантажити профіль",
   "cfg_profile_save_short": "↑ Зберегти",
   "cfg_profile_load_short": "↓ Відкрити",
-  "cfg_profile_storage_hint": "Профілі безпечно зберігаються всередині ASB: виберіть назву, а не шлях."
+  "cfg_profile_storage_hint": "Профілі безпечно зберігаються всередині ASB: виберіть назву, а не шлях.",
+  "cfg_audio_section_playback": "Відтворення та Bluetooth",
+  "cfg_audio_section_playback_hint": "Оберіть аудіотракт і поведінку Bluetooth.",
+  "cfg_audio_section_dsp": "DSP-двигун ASB",
+  "cfg_audio_section_dsp_hint": "Необов’язкова обробка підсилення, басу й динаміки для вибраних виходів.",
+  "cfg_audio_section_safety": "Безпека слухання",
+  "cfg_audio_section_safety_hint": "Системне обмеження для захисту слуху не змінюється, доки ви не зміните його самі."
 }

@@ -423,5 +423,11 @@
   "cfg_profile_load": "تحميل الملف الشخصي",
   "cfg_profile_save_short": "↑ حفظ",
   "cfg_profile_load_short": "↓ فتح",
-  "cfg_profile_storage_hint": "تُحفظ الملفات الشخصية بأمان داخل ASB؛ اختر اسماً لا مساراً."
+  "cfg_profile_storage_hint": "تُحفظ الملفات الشخصية بأمان داخل ASB؛ اختر اسماً لا مساراً.",
+  "cfg_audio_section_playback": "التشغيل وBluetooth",
+  "cfg_audio_section_playback_hint": "اختر مسار الصوت وسلوك Bluetooth.",
+  "cfg_audio_section_dsp": "محرك DSP من ASB",
+  "cfg_audio_section_dsp_hint": "معالجة اختيارية للكسب والجهير والديناميكيات للمخارج التي تختارها.",
+  "cfg_audio_section_safety": "أمان الاستماع",
+  "cfg_audio_section_safety_hint": "يبقى حد حماية السمع في النظام كما هو ما لم تغيّره بنفسك."
 }

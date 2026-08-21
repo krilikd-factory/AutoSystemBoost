@@ -423,5 +423,11 @@
   "cfg_profile_load": "Profil laden",
   "cfg_profile_save_short": "↑ Speichern",
   "cfg_profile_load_short": "↓ Öffnen",
-  "cfg_profile_storage_hint": "Profile werden sicher in ASB gespeichert; wählen Sie einen Namen, keinen Pfad."
+  "cfg_profile_storage_hint": "Profile werden sicher in ASB gespeichert; wählen Sie einen Namen, keinen Pfad.",
+  "cfg_audio_section_playback": "Wiedergabe & Bluetooth",
+  "cfg_audio_section_playback_hint": "Wähle Audiopfad und Bluetooth-Verhalten.",
+  "cfg_audio_section_dsp": "ASB-DSP-Engine",
+  "cfg_audio_section_dsp_hint": "Optionale Verstärkungs-, Bass- und Dynamikverarbeitung für die gewählten Ausgänge.",
+  "cfg_audio_section_safety": "Hörschutz",
+  "cfg_audio_section_safety_hint": "Das systemweite Gehörschutzlimit bleibt unverändert, bis du es ausdrücklich änderst."
 }

@@ -595,5 +595,11 @@
   "cfg_profile_load": "Բեռնել պրոֆիլը",
   "cfg_profile_save_short": "↑ Պահել",
   "cfg_profile_load_short": "↓ Բացել",
-  "cfg_profile_storage_hint": "Պրոֆիլները անվտանգ պահվում են ASB-ի ներսում․ ընտրեք անուն, ոչ թե ուղի։"
+  "cfg_profile_storage_hint": "Պրոֆիլները անվտանգ պահվում են ASB-ի ներսում․ ընտրեք անուն, ոչ թե ուղի։",
+  "cfg_audio_section_playback": "Նվագարկում և Bluetooth",
+  "cfg_audio_section_playback_hint": "Ընտրեք ձայնային ուղին և Bluetooth-ի վարքը։",
+  "cfg_audio_section_dsp": "ASB-ի DSP շարժիչ",
+  "cfg_audio_section_dsp_hint": "Ընտրված ելքերի համար կամընտրական ուժեղացում, բաս և դինամիկ մշակում։",
+  "cfg_audio_section_safety": "Լսողության անվտանգություն",
+  "cfg_audio_section_safety_hint": "Համակարգի լսողության սահմանափակիչը չի փոխվում, քանի դեռ այն ինքներդ չեք փոխել։"
 }

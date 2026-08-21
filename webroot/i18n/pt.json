@@ -423,5 +423,11 @@
   "cfg_profile_load": "Carregar perfil",
   "cfg_profile_save_short": "↑ Salvar",
   "cfg_profile_load_short": "↓ Abrir",
-  "cfg_profile_storage_hint": "Os perfis são guardados com segurança no ASB; escolha um nome, não um caminho."
+  "cfg_profile_storage_hint": "Os perfis são guardados com segurança no ASB; escolha um nome, não um caminho.",
+  "cfg_audio_section_playback": "Reprodução e Bluetooth",
+  "cfg_audio_section_playback_hint": "Escolha o caminho de áudio e o comportamento do Bluetooth.",
+  "cfg_audio_section_dsp": "Motor DSP ASB",
+  "cfg_audio_section_dsp_hint": "Processamento opcional de ganho, graves e dinâmica nas saídas escolhidas.",
+  "cfg_audio_section_safety": "Segurança auditiva",
+  "cfg_audio_section_safety_hint": "O limite de proteção auditiva do sistema não é alterado sem uma mudança explícita sua."
 }

@@ -423,5 +423,11 @@
   "cfg_profile_load": "Muat profil",
   "cfg_profile_save_short": "↑ Simpan",
   "cfg_profile_load_short": "↓ Buka",
-  "cfg_profile_storage_hint": "Profil disimpan aman di dalam ASB; pilih nama, bukan jalur."
+  "cfg_profile_storage_hint": "Profil disimpan aman di dalam ASB; pilih nama, bukan jalur.",
+  "cfg_audio_section_playback": "Pemutaran & Bluetooth",
+  "cfg_audio_section_playback_hint": "Pilih jalur audio dan perilaku Bluetooth.",
+  "cfg_audio_section_dsp": "Mesin DSP ASB",
+  "cfg_audio_section_dsp_hint": "Pemrosesan gain, bass, dan dinamika opsional pada keluaran yang Anda pilih.",
+  "cfg_audio_section_safety": "Keamanan pendengaran",
+  "cfg_audio_section_safety_hint": "Batas perlindungan pendengaran sistem tidak diubah kecuali Anda mengubahnya sendiri."
 }

@@ -631,5 +631,11 @@
   "cfg_reset_smart_copy": "Сохраняет настройки категорий и очищает только данные обучения Smart.",
   "cfg_reset_confirm": "Нажмите ещё раз для подтверждения",
   "cfg_reset_all_done": "Настройки категорий сброшены к значениям ASB по умолчанию",
-  "cfg_reset_all_fail": "Не удалось сбросить настройки категорий"
+  "cfg_reset_all_fail": "Не удалось сбросить настройки категорий",
+  "cfg_audio_section_playback": "Воспроизведение и Bluetooth",
+  "cfg_audio_section_playback_hint": "Выберите аудиотракт и поведение Bluetooth.",
+  "cfg_audio_section_dsp": "DSP-движок ASB",
+  "cfg_audio_section_dsp_hint": "Необязательная обработка усиления, баса и динамики для выбранных выходов.",
+  "cfg_audio_section_safety": "Безопасность прослушивания",
+  "cfg_audio_section_safety_hint": "Системное ограничение для защиты слуха не меняется, пока вы не измените его сами."
 }
