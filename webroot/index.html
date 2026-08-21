@@ -2071,15 +2071,18 @@ body.config-active #livePage.open {
  * profile actions and reset row use one tight rhythm. Every control keeps a 40px-or-larger
  * touch target, while deleting the redundant storage sentence recovers a full text row. */
 #cfgToolsRow   { width: 100%; align-self: stretch; display: flex; gap: 7px; margin: 0 0 6px; align-items: stretch; min-width: 0; }
-#cfgActionsRow { width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 0 0 6px; align-items: stretch; min-width: 0; }
-#cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#cfgResetRow { width: 100%; align-self: stretch; display: flex; margin: 0 0 10px; }
-#cfgResetRow .cfg-backup { flex: 1 1 auto; min-height: 40px; padding: 8px 10px; white-space: nowrap; }
+/* All profile actions intentionally share one row. Their compact labels stay readable in
+ * Russian while releasing a complete row for the footer to align with the other pages. */
+#cfgActionsRow { width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 0 0 10px; align-items: stretch; min-width: 0; }
+#cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 5px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Named-profile manager: an in-page sheet avoids the opaque KernelSU browser prompt and lets
  * saved configurations be selected by tapping a row rather than retyping an exact identifier. */
 .cfg-profile-modal[hidden] { display: none !important; }
 .cfg-profile-modal { position: fixed; z-index: 1400; inset: 0; display: flex; align-items: flex-end; background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
-.cfg-profile-sheet { width: 100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow: auto; box-sizing: border-box; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border: 1px solid rgba(44,214,173,.34); border-radius: 23px 23px 0 0; background: linear-gradient(160deg, #0c1415, #070a0b 72%); box-shadow: 0 -20px 60px rgba(0,0,0,.5); }
+/* The sheet sits flush with the viewport, so its outline is a screen contour rather than
+ * a separate rectangular card: one uninterrupted teal frame with matching top and bottom
+ * device-like corners. The inner dark layer stops the gradient from tinting the content. */
+.cfg-profile-sheet { width: 100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow: auto; box-sizing: border-box; padding: 18px 16px calc(22px + env(safe-area-inset-bottom)); border: 1px solid transparent; border-radius: 30px; background: linear-gradient(160deg, #0c1415, #070a0b 72%) padding-box, linear-gradient(135deg, rgba(76,232,193,.78), rgba(44,214,173,.28) 44%, rgba(44,214,173,.62)) border-box; box-shadow: 0 -20px 60px rgba(0,0,0,.5); }
 .cfg-profile-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:13px; }
 .cfg-profile-title { color:#f4f6f7; font-size:18px; font-weight:800; }
 .cfg-profile-close { flex:0 0 auto; width:34px; height:34px; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); font-size:20px; }
@@ -2103,6 +2106,23 @@ body.config-active #livePage.open {
 .cfg-profile-actions button.danger { color:#ffaaa7; border-color:rgba(248,113,113,.38); }
 .cfg-profile-preview { max-height:160px; margin:12px 0 0; padding:10px; overflow:auto; white-space:pre-wrap; color:rgba(231,234,238,.78); background:#060a0b; border:1px solid rgba(255,255,255,.09); border-radius:10px; font:10px/1.35 monospace; }
 .cfg-profile-hint { margin-top:9px; color:rgba(231,234,238,.47); font-size:10.5px; line-height:1.35; }
+/* Reset is a consequential action, so it uses a centred decision dialog instead of a
+ * hidden immediate command. It shares the ASB dark/teal language but has neutral and
+ * amber choices that tell a configuration reset from a Smart-learning reset apart. */
+.cfg-reset-modal[hidden] { display:none !important; }
+.cfg-reset-modal { position:fixed; z-index:1410; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,.72); backdrop-filter:blur(6px); }
+.cfg-reset-dialog { width:min(100%, 372px); box-sizing:border-box; padding:19px 17px 18px; border:1px solid transparent; border-radius:26px; color:#edf5f3; background:linear-gradient(160deg,#0c1415,#070a0b 78%) padding-box, linear-gradient(135deg,rgba(76,232,193,.72),rgba(44,214,173,.22),rgba(76,232,193,.54)) border-box; box-shadow:0 20px 64px rgba(0,0,0,.62); }
+.cfg-reset-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:9px; }
+.cfg-reset-title { font-size:18px; font-weight:800; }
+.cfg-reset-close { flex:0 0 auto; width:34px; height:34px; padding:0; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); font-size:20px; }
+.cfg-reset-copy { margin:0 0 14px; color:rgba(231,234,238,.62); font-size:12px; line-height:1.42; }
+.cfg-reset-choice { width:100%; display:block; margin:0 0 9px; padding:13px 12px; text-align:left; border:1px solid rgba(255,255,255,.14); border-radius:14px; color:#eef5f3; background:rgba(255,255,255,.045); }
+.cfg-reset-choice:last-child { margin-bottom:0; }
+.cfg-reset-choice .cfg-reset-choice-title { display:block; font-size:13px; font-weight:800; }
+.cfg-reset-choice .cfg-reset-choice-copy { display:block; margin-top:4px; color:rgba(231,234,238,.57); font-size:11px; line-height:1.35; }
+.cfg-reset-choice.smart { border-color:rgba(251,191,36,.30); }
+.cfg-reset-choice.armed { color:#201300; border-color:rgba(255,190,54,.88); background:linear-gradient(135deg,#ffd166,#f6a623); }
+.cfg-reset-choice.armed .cfg-reset-choice-copy { color:rgba(32,19,0,.72); }
 
 /* --- vertical rhythm ------------------------------------------------------------------
    The gap between the tiles and the reboot buttons was ~105px: #cfgRebootWrap adds 18px
@@ -2493,15 +2513,12 @@ body.config-active #livePage.open {
       </div>
     </div>
 
-    <!-- Row two: the three actions. Two rows rather than one because five items with real
-         labels do not fit a phone: forcing them onto one line either clipped the words or
-         pushed the row off-screen, and both were tried. -->
+    <!-- Profile actions share one compact row so the config hub has the same footer level
+         as the other pages. The translated labels are deliberately short. -->
     <div id="cfgActionsRow" aria-label="Saved settings profiles">
       <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_profile_save_short">↑ Save</button>
       <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_profile_load_short">↓ Open</button>
-    </div>
-    <div id="cfgResetRow">
-      <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset</button>
+      <button class="cfg-backup" onclick="cfgResetDialogOpen()" data-i18n="cfg_smart_reset">↺ Reset</button>
     </div>
 
     <div class="cfg-list" id="cfgList"></div>
@@ -2539,6 +2556,26 @@ body.config-active #livePage.open {
       <button class="cfg-profile-close" type="button" onclick="cfgProfileClose()" aria-label="Close">×</button>
     </div>
     <div id="cfgProfileBody"></div>
+  </div>
+</div>
+
+<!-- Centred reset decision: settings defaults and Smart-learning data are deliberately
+     independent, so a user never erases either one by merely opening this dialog. -->
+<div class="cfg-reset-modal" id="cfgResetModal" hidden aria-hidden="true">
+  <div class="cfg-reset-dialog" role="dialog" aria-modal="true" aria-labelledby="cfgResetTitle">
+    <div class="cfg-reset-head">
+      <div class="cfg-reset-title" id="cfgResetTitle" data-i18n="cfg_reset_dialog_title">Reset</div>
+      <button class="cfg-reset-close" type="button" onclick="cfgResetDialogClose()" aria-label="Close">×</button>
+    </div>
+    <p class="cfg-reset-copy" data-i18n="cfg_reset_dialog_copy">Choose exactly what to reset. Nothing changes until you confirm an option.</p>
+    <button class="cfg-reset-choice" id="cfgResetAllBtn" type="button" onclick="cfgResetDialogRun('settings')">
+      <span class="cfg-reset-choice-title" data-i18n="cfg_reset_all_title">Reset all category settings</span>
+      <span class="cfg-reset-choice-copy" data-i18n="cfg_reset_all_copy">Returns Audio, Camera, Interface, Network, Battery and System options to ASB defaults.</span>
+    </button>
+    <button class="cfg-reset-choice smart" id="cfgResetSmartBtn" type="button" onclick="cfgResetDialogRun('smart')">
+      <span class="cfg-reset-choice-title" data-i18n="cfg_reset_smart_title">Reset Smart learning</span>
+      <span class="cfg-reset-choice-copy" data-i18n="cfg_reset_smart_copy">Keeps your category settings and clears only Smart’s learned behaviour.</span>
+    </button>
   </div>
 </div>
 
@@ -4586,26 +4623,54 @@ function cfgArmPopDismiss() {
   });
 }
 
-/* Wipe the learner and let it start over.
- *
- * Two taps, like the reboot button: this throws away weeks of accumulated behaviour and a
- * misfire would be invisible until the user noticed Smart acting like a fresh install.
- */
-let _smartResetArmed = false;
+/* Reset is explicit and scoped. The dialog supplies a visible second confirmation rather
+ * than a browser confirm(), and delegates both mutations to existing transactional helpers. */
+const _cfgReset = { armed:'', timer:0 };
+function cfgResetDialogOpen() {
+  const modal = _el('cfgResetModal'); if (!modal) return;
+  _cfgReset.armed = ''; clearTimeout(_cfgReset.timer); cfgResetDialogPaint();
+  modal.hidden = false; modal.setAttribute('aria-hidden', 'false');
+}
+function cfgResetDialogClose() {
+  const modal = _el('cfgResetModal'); if (!modal) return;
+  clearTimeout(_cfgReset.timer); _cfgReset.armed = ''; modal.hidden = true; modal.setAttribute('aria-hidden', 'true');
+}
+function cfgResetDialogPaint() {
+  [['settings','cfgResetAllBtn','cfg_reset_all_title','Reset all category settings'], ['smart','cfgResetSmartBtn','cfg_reset_smart_title','Reset Smart learning']].forEach(function(x) {
+    const b = _el(x[1]); if (!b) return;
+    const armed = _cfgReset.armed === x[0]; b.classList.toggle('armed', armed);
+    const title = b.querySelector('.cfg-reset-choice-title');
+    if (title) title.textContent = armed ? T('cfg_reset_confirm','Tap again to confirm') : T(x[2], x[3]);
+  });
+}
+function cfgResetDialogArm(kind) {
+  _cfgReset.armed = kind; clearTimeout(_cfgReset.timer); cfgResetDialogPaint();
+  _cfgReset.timer = setTimeout(function() { _cfgReset.armed = ''; cfgResetDialogPaint(); }, 4000);
+}
 async function cfgSmartReset() {
-  if (!_smartResetArmed) {
-    _smartResetArmed = true;
-    toast(T('t_smart_reset_confirm', 'Tap again to erase what Smart has learned'), 'warn');
-    setTimeout(function () { _smartResetArmed = false; }, 4000);
-    return;
-  }
-  _smartResetArmed = false;
   try {
-    await run('sh ' + MD + '/runtime/asb_smart_reset.sh');
-    toast(T('t_smart_reset_done', 'Learning reset \u00b7 Smart starts fresh'), 'good');
-  } catch (e) {
-    toast(T('t_smart_reset_fail', 'Could not reset learning'), 'bad');
-  }
+    const r = await run('sh ' + shQuote(MD + '/runtime/asb_smart_reset.sh'));
+    if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('t_smart_reset_fail', 'Could not reset learning'), 'bad'); return false; }
+    await refreshSmartSubLine();
+    toast(T('t_smart_reset_done', 'Learning reset \u00b7 Smart starts fresh'), 'good'); return true;
+  } catch (e) { toast(T('t_smart_reset_fail', 'Could not reset learning'), 'bad'); return false; }
+}
+async function cfgResetSettings() {
+  /* Importing the shipped config through the sole writer preserves locks, validation,
+   * atomic replacement and transaction diagnostics. SNAP_KEYS is the complete WebUI schema. */
+  const writer = MD + '/runtime/asb_config_safe.sh';
+  const shipped = MD + '/config/governor.conf.shipped';
+  const snapshot = '/data/adb/asb/governor.conf.snapshot';
+  const r = await run('sh ' + shQuote(writer) + ' import ' + shQuote(shipped) + ' ' + shQuote(snapshot) + ' ' + cfgProfileArgs());
+  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_reset_all_fail', 'Could not reset category settings'), 'bad'); return false; }
+  await cfgLoad(); cfgRender();
+  toast(T('cfg_reset_all_done', 'Category settings reset to ASB defaults'), 'good'); return true;
+}
+async function cfgResetDialogRun(kind) {
+  if (_cfgReset.armed !== kind) { cfgResetDialogArm(kind); return; }
+  clearTimeout(_cfgReset.timer); _cfgReset.armed = ''; cfgResetDialogPaint();
+  const ok = kind === 'settings' ? await cfgResetSettings() : await cfgSmartReset();
+  if (ok) cfgResetDialogClose();
 }
 
 function cfgFillLangs() {
@@ -4983,7 +5048,6 @@ function cfgSyncChrome() {
   const tr = _el('cfgToolsRow');
   if (tr) { tr.style.display = _cfgGroup ? 'none' : 'flex'; cfgFillLangs(); }
   const ar = _el('cfgActionsRow'); if (ar) ar.style.display = _cfgGroup ? 'none' : 'grid';
-  const rr = _el('cfgResetRow'); if (rr) rr.style.display = _cfgGroup ? 'none' : 'flex';
 }
 
 function cfgBack() {
