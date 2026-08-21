@@ -30,8 +30,9 @@ need "$BACKUP" 'list|create|replace|preview|restore|delete'
 
 # UI must use the helper and object result handling; the former one-file /sdcard flow is gone.
 need "$WEBUI" "const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';"
-need "$WEBUI" 'data-i18n="cfg_profile_save"'
-need "$WEBUI" 'data-i18n="cfg_profile_load"'
+need "$WEBUI" 'data-i18n="cfg_profile_save_short"'
+need "$WEBUI" 'data-i18n="cfg_profile_load_short"'
+need "$WEBUI" 'data-i18n="cfg_profile_storage_hint"'
 need "$WEBUI" 'function cfgProfileNameOK(name)'
 need "$WEBUI" ' cfgProfileArgs()'
 need "$WEBUI" "' preview '"
@@ -61,6 +62,9 @@ for f in "$ROOT_DIR"/webroot/i18n/*.json; do
   need "$f" '"cfg_profile_restored"'
   need "$f" '"cfg_profile_save"'
   need "$f" '"cfg_profile_load"'
+  need "$f" '"cfg_profile_save_short"'
+  need "$f" '"cfg_profile_load_short"'
+  need "$f" '"cfg_profile_storage_hint"'
 done
 cmp -s "$ROOT_DIR/tools/asb_diag.sh" "$ROOT_DIR/system/bin/asbdiag" || { echo 'FAIL: asbdiag copies differ' >&2; exit 1; }
 echo 'PASS V64 hardening contract'
