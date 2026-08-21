@@ -71,11 +71,23 @@ count_exact "$UI" '<a class="tg-link" data-release-telegram' 3
 count_exact "$UI" '<a class="tg-link" data-debug-telegram' 3
 count_exact "$UI" "asbDebugAction('diag')" 3
 count_exact "$UI" "asbDebugAction('full-day')" 3
+count_exact "$UI" '<span class="tg-link-ico">✉️</span>' 6
+need "$UI" '.footer-support-row .tg-link-ico { font-size: 14px; }'
+need "$UI" 'background: linear-gradient(135deg, rgba(0,240,180,0.08), rgba(0,212,255,0.05));'
+need "$UI" 'height: 40px;'
 need "$UI" 'flex-wrap: nowrap;'
 need "$UI" '[data-release-telegram][hidden] { display: none !important; }'
 need "$UI" 'runtime/asb_debug_support.sh'
 need "$UI" 'loadDebugSupport()'
 need "$UI" '/-debug[1-9][0-9]*$/i'
+awk '
+  /<div class="footer-support-row" data-debug-support-row hidden>/ { inrow=1; seq=""; next }
+  inrow && /asbDebugAction\('\''diag'\''\)/ { seq=seq "D" }
+  inrow && /data-debug-telegram/ { seq=seq "T" }
+  inrow && /asbDebugAction\('\''full-day'\''\)/ { seq=seq "L" }
+  inrow && /<\/div>/ { if (seq != "DTL") { printf "FAIL debug support: expected DTL rail order, got %s\\n", seq > "/dev/stderr"; exit 1 }; rails++; inrow=0 }
+  END { if (rails != 3) { printf "FAIL debug support: checked %d central rails\\n", rails > "/dev/stderr"; exit 1 } }
+' "$UI"
 for locale in "$ROOT"/webroot/i18n/*.json; do
   need "$locale" '"dbg_diag_btn": "asbdiag"'
   need "$locale" '"dbg_log_btn": "24h log"'
