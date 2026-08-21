@@ -13,8 +13,8 @@ This document describes every file the ASB governor and logkit produce, what fie
 | `/dev/.asb/state` | key=value text | C governor, every tick | Always while daemon running |
 | `/dev/.asb/governor.log` | freeform text, ringbuffered | C governor | On significant events |
 | `/dev/.asb/auto_battery_state` | `<active> <restore_idx>` | C governor | On auto-battery state change |
-| `/data/adb/modules/AutoSystemBoost/runtime/session_history.jsonl` | JSON Lines, one session per line | C governor | On session end / profile change |
-| `/data/adb/modules/AutoSystemBoost/runtime/persistent_stats.dat` | binary | C governor | Profile change, daemon shutdown |
+| `/data/adb/asb/session_history.jsonl` | JSON Lines, one session per line | C governor | On session end / profile change |
+| `/data/adb/modules/AutoSystemBoost/runtime/session_stats.json` and `pstats_*.json` | JSON aggregate outcomes | C governor | Profile change, daemon shutdown |
 | `<logkit_dir>/perf_trace.txt` | pipe-delimited CSV | logkit shell | 1s sampling during capture |
 | `<logkit_dir>/battery_trace.txt` | pipe-delimited CSV | logkit shell | 5s sampling during battery captures |
 | `<logkit_dir>/status_watch.txt` | concatenated state JSON | logkit shell | 5s sampling |
@@ -25,7 +25,9 @@ This document describes every file the ASB governor and logkit produce, what fie
 
 ## `session_history.jsonl` — current schema **v9**
 
-One JSON object per line, appended on every session end (profile change, daemon restart, or session-ended event). File is capped at `SESSION_HISTORY_MAX` lines (oldest dropped first).
+One JSON object per line, appended on every session end (profile change, daemon restart, or session-ended event). File is capped at `SESSION_HISTORY_MAX` lines (oldest dropped first) and a 5 MiB hard limit.
+
+It is not only an exported diagnostic: at governor startup, bounded battery-session history is read to derive conservative `bat_fast_idle_s` feedback. Schema-3 named profile backups therefore include it, together with `session_stats.json` and the per-profile `pstats_*.json` aggregate outcomes. Older schema-1/2 backups remain valid; they simply lack these optional files.
 
 The `v` field declares the schema version. **Any consumer must read `v` first and reject lines with unknown versions** rather than assume field set.
 
