@@ -13,7 +13,9 @@
 # learner owns.
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
-D=/data/adb/asb
+D="${ASB_SMART_STATE:-/data/adb/asb}"
+RUNTIME_STATE="${ASB_RUNTIME_STATE:-$MODDIR/runtime}"
+VOLATILE_STATE="${ASB_SMART_VOLATILE_STATE:-/dev/.asb/learner_state.json}"
 
 # Stop the governor first. It holds the store in memory and writes it out on a timer, so
 # resetting underneath a running process just gets the old data written back.
@@ -33,12 +35,18 @@ fi
 # per-device bounds all stay: none of them are learned, and losing them is what made the
 # manual folder deletion a bad trade.
 for _f in buckets.bin buckets.bin.bak smart_appheat.bin \
-          smart_prev_profile night_window.conf; do
+          smart_prev_profile night_window.conf session_history.jsonl; do
   rm -f "$D/$_f" 2>/dev/null
 done
-rm -f /dev/.asb/learner_state.json 2>/dev/null
+# Startup feedback also reads aggregate session outcomes. They live beside the daemon rather
+# than under /data/adb/asb, so clear them explicitly while leaving config/baselines untouched.
+for _f in session_stats.json pstats_battery.json pstats_balanced.json pstats_performance.json \
+          session_history.jsonl; do
+  rm -f "$RUNTIME_STATE/$_f" 2>/dev/null
+done
+rm -f "$VOLATILE_STATE" 2>/dev/null
 
-echo "smart: learning reset - buckets, app heat history and the sleep window are cleared"
+echo "smart: learning reset - buckets, app heat, session history and learned stats are cleared"
 echo "       config, baselines and uninstall records were left alone"
 
 # Bring it back. A fresh store is seeded on the next start, so nothing else is needed.
