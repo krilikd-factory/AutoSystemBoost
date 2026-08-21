@@ -32,7 +32,7 @@ need "$BACKUP" 'list|create|replace|preview|restore|delete'
 need "$WEBUI" "const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';"
 need "$WEBUI" 'data-i18n="cfg_profile_save_short"'
 need "$WEBUI" 'data-i18n="cfg_profile_load_short"'
-need "$WEBUI" 'data-i18n="cfg_profile_storage_hint"'
+absent "$WEBUI" 'data-i18n="cfg_profile_storage_hint"'
 need "$WEBUI" 'function cfgProfileNameOK(name)'
 need "$WEBUI" ' cfgProfileArgs()'
 need "$WEBUI" "' preview '"
@@ -64,7 +64,6 @@ for f in "$ROOT_DIR"/webroot/i18n/*.json; do
   need "$f" '"cfg_profile_load"'
   need "$f" '"cfg_profile_save_short"'
   need "$f" '"cfg_profile_load_short"'
-  need "$f" '"cfg_profile_storage_hint"'
 done
 cmp -s "$ROOT_DIR/tools/asb_diag.sh" "$ROOT_DIR/system/bin/asbdiag" || { echo 'FAIL: asbdiag copies differ' >&2; exit 1; }
 echo 'PASS V64 hardening contract'

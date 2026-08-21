@@ -58,9 +58,10 @@ done
 need "$UI" "const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';"
 need "$UI" 'data-i18n="cfg_profile_save_short"'
 need "$UI" 'data-i18n="cfg_profile_load_short"'
-need "$UI" 'data-i18n="cfg_profile_storage_hint"'
+absent "$UI" 'data-i18n="cfg_profile_storage_hint"'
 need "$UI" 'grid-template-columns: repeat(2, minmax(0, 1fr))'
-need "$UI" '#cfgActionsRow .cfg-backup { min-width: 0; min-height: 44px; padding: 10px 8px; white-space: normal; overflow: visible; text-overflow: clip; }'
+need "$UI" '#cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }'
+need "$UI" 'min-height: min(36vh, 500px); max-height: min(88vh, 780px);'
 need "$UI" 'function cfgProfileNameOK(name)'
 need "$UI" 'id="cfgProfileModal"'
 need "$UI" 'function cfgProfileOpen(mode)'
@@ -97,7 +98,7 @@ python3 - "$ROOT" <<'PY'
 import json, sys
 from pathlib import Path
 root = Path(sys.argv[1]) / 'webroot' / 'i18n'
-keys = {'cfg_profile_save_short','cfg_profile_load_short','cfg_profile_storage_hint'}
+keys = {'cfg_profile_save_short','cfg_profile_load_short'}
 manager_keys = {'cfg_profile_manager_title','cfg_profile_save_copy','cfg_profile_open_copy','cfg_profile_location','cfg_profile_store_asb','cfg_profile_store_downloads','cfg_profile_store_documents','cfg_profile_save_action','cfg_profile_replace','cfg_profile_name_hint','cfg_profile_replace_ready','cfg_profile_keys','cfg_profile_apply','cfg_profile_prepare_apply','cfg_profile_delete','cfg_profile_delete_confirm','cfg_profile_apply_hint','cfg_profile_export_err'}
 files = sorted(root.glob('*.json'))
 assert len(files) == 13, f'expected 13 locale files, got {len(files)}'
