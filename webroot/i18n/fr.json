@@ -601,5 +601,9 @@
   "cfg_audio_section_dsp": "Moteur DSP ASB",
   "cfg_audio_section_dsp_hint": "Traitement optionnel du gain, des basses et de la dynamique sur les sorties choisies.",
   "cfg_audio_section_safety": "Protection de l’audition",
-  "cfg_audio_section_safety_hint": "La limite de protection auditive du système reste inchangée, sauf modification explicite."
+  "cfg_audio_section_safety_hint": "La limite de protection auditive du système reste inchangée, sauf modification explicite.",
+  "t_quick_explain": "Le redémarrage rapide ne relance qu’Android ; les overlays exigent toujours un redémarrage complet.",
+  "t_quick_confirm": "Touchez à nouveau pour redémarrer Android rapidement",
+  "t_quick_going": "Redémarrage rapide d’Android…",
+  "t_quick_unavailable": "Le redémarrage rapide n’est pas disponible sur cette ROM ; utilisez le redémarrage complet."
 }

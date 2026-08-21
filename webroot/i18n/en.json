@@ -399,5 +399,9 @@
   "cfg_audio_section_dsp": "ASB DSP Engine",
   "cfg_audio_section_dsp_hint": "Optional gain, bass and dynamics processing on the outputs you select.",
   "cfg_audio_section_safety": "Listening Safety",
-  "cfg_audio_section_safety_hint": "The system hearing limit is left untouched unless you explicitly change it."
+  "cfg_audio_section_safety_hint": "The system hearing limit is left untouched unless you explicitly change it.",
+  "t_quick_explain": "Quick restart restarts Android only; overlays still need a full reboot.",
+  "t_quick_confirm": "Tap again for a quick Android restart",
+  "t_quick_going": "Quick restarting Android…",
+  "t_quick_unavailable": "Quick restart is not available on this ROM; use full reboot."
 }

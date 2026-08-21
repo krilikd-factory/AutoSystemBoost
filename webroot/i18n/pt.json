@@ -429,5 +429,9 @@
   "cfg_audio_section_dsp": "Motor DSP ASB",
   "cfg_audio_section_dsp_hint": "Processamento opcional de ganho, graves e dinâmica nas saídas escolhidas.",
   "cfg_audio_section_safety": "Segurança auditiva",
-  "cfg_audio_section_safety_hint": "O limite de proteção auditiva do sistema não é alterado sem uma mudança explícita sua."
+  "cfg_audio_section_safety_hint": "O limite de proteção auditiva do sistema não é alterado sem uma mudança explícita sua.",
+  "t_quick_explain": "A reinicialização rápida reinicia apenas o Android; os overlays ainda exigem reinicialização completa.",
+  "t_quick_confirm": "Toque novamente para reiniciar o Android rapidamente",
+  "t_quick_going": "Reiniciando o Android rapidamente…",
+  "t_quick_unavailable": "A reinicialização rápida não está disponível nesta ROM; use a reinicialização completa."
 }

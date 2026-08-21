@@ -429,5 +429,9 @@
   "cfg_audio_section_dsp": "Motore DSP ASB",
   "cfg_audio_section_dsp_hint": "Elaborazione opzionale di guadagno, bassi e dinamica sulle uscite selezionate.",
   "cfg_audio_section_safety": "Protezione dell’udito",
-  "cfg_audio_section_safety_hint": "Il limite di protezione dell’udito del sistema resta invariato finché non lo modifichi esplicitamente."
+  "cfg_audio_section_safety_hint": "Il limite di protezione dell’udito del sistema resta invariato finché non lo modifichi esplicitamente.",
+  "t_quick_explain": "Il riavvio rapido riavvia solo Android; gli overlay richiedono comunque un riavvio completo.",
+  "t_quick_confirm": "Tocca di nuovo per riavviare rapidamente Android",
+  "t_quick_going": "Riavvio rapido di Android…",
+  "t_quick_unavailable": "Il riavvio rapido non è disponibile su questa ROM; usa il riavvio completo."
 }

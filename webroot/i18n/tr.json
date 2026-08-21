@@ -429,5 +429,9 @@
   "cfg_audio_section_dsp": "ASB DSP Motoru",
   "cfg_audio_section_dsp_hint": "Seçtiğiniz çıkışlarda isteğe bağlı kazanç, bas ve dinamik işleme.",
   "cfg_audio_section_safety": "Dinleme güvenliği",
-  "cfg_audio_section_safety_hint": "Sistem işitme koruması sınırı siz açıkça değiştirmedikçe olduğu gibi kalır."
+  "cfg_audio_section_safety_hint": "Sistem işitme koruması sınırı siz açıkça değiştirmedikçe olduğu gibi kalır.",
+  "t_quick_explain": "Hızlı yeniden başlatma yalnızca Android’i yeniden başlatır; overlay’ler için tam yeniden başlatma gerekir.",
+  "t_quick_confirm": "Android’i hızlı yeniden başlatmak için tekrar dokunun",
+  "t_quick_going": "Android hızlı yeniden başlatılıyor…",
+  "t_quick_unavailable": "Hızlı yeniden başlatma bu ROM’da kullanılamıyor; tam yeniden başlatmayı kullanın."
 }

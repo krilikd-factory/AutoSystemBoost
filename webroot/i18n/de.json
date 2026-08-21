@@ -429,5 +429,9 @@
   "cfg_audio_section_dsp": "ASB-DSP-Engine",
   "cfg_audio_section_dsp_hint": "Optionale Verstärkungs-, Bass- und Dynamikverarbeitung für die gewählten Ausgänge.",
   "cfg_audio_section_safety": "Hörschutz",
-  "cfg_audio_section_safety_hint": "Das systemweite Gehörschutzlimit bleibt unverändert, bis du es ausdrücklich änderst."
+  "cfg_audio_section_safety_hint": "Das systemweite Gehörschutzlimit bleibt unverändert, bis du es ausdrücklich änderst.",
+  "t_quick_explain": "Der Schnellneustart startet nur Android neu; Overlays benötigen weiterhin einen vollständigen Neustart.",
+  "t_quick_confirm": "Nochmals tippen für einen schnellen Android-Neustart",
+  "t_quick_going": "Android wird schnell neu gestartet…",
+  "t_quick_unavailable": "Schnellneustart ist auf diesem ROM nicht verfügbar; nutze den vollständigen Neustart."
 }

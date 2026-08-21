@@ -429,5 +429,9 @@
   "cfg_audio_section_dsp": "Mesin DSP ASB",
   "cfg_audio_section_dsp_hint": "Pemrosesan gain, bass, dan dinamika opsional pada keluaran yang Anda pilih.",
   "cfg_audio_section_safety": "Keamanan pendengaran",
-  "cfg_audio_section_safety_hint": "Batas perlindungan pendengaran sistem tidak diubah kecuali Anda mengubahnya sendiri."
+  "cfg_audio_section_safety_hint": "Batas perlindungan pendengaran sistem tidak diubah kecuali Anda mengubahnya sendiri.",
+  "t_quick_explain": "Mulai ulang cepat hanya memulai ulang Android; overlay tetap memerlukan reboot penuh.",
+  "t_quick_confirm": "Ketuk lagi untuk memulai ulang Android dengan cepat",
+  "t_quick_going": "Memulai ulang Android dengan cepat…",
+  "t_quick_unavailable": "Mulai ulang cepat tidak tersedia pada ROM ini; gunakan reboot penuh."
 }

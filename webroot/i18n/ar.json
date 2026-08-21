@@ -429,5 +429,9 @@
   "cfg_audio_section_dsp": "محرك DSP من ASB",
   "cfg_audio_section_dsp_hint": "معالجة اختيارية للكسب والجهير والديناميكيات للمخارج التي تختارها.",
   "cfg_audio_section_safety": "أمان الاستماع",
-  "cfg_audio_section_safety_hint": "يبقى حد حماية السمع في النظام كما هو ما لم تغيّره بنفسك."
+  "cfg_audio_section_safety_hint": "يبقى حد حماية السمع في النظام كما هو ما لم تغيّره بنفسك.",
+  "t_quick_explain": "إعادة التشغيل السريعة تعيد تشغيل Android فقط؛ وتحتاج overlays إلى إعادة تشغيل كاملة.",
+  "t_quick_confirm": "اضغط مرة أخرى لإعادة تشغيل Android سريعاً",
+  "t_quick_going": "جارٍ إعادة تشغيل Android سريعاً…",
+  "t_quick_unavailable": "إعادة التشغيل السريعة غير متاحة في هذا النظام؛ استخدم إعادة تشغيل كاملة."
 }

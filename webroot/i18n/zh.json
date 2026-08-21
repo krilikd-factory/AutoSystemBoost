@@ -429,5 +429,9 @@
   "cfg_audio_section_dsp": "ASB DSP 引擎",
   "cfg_audio_section_dsp_hint": "为所选输出提供可选的增益、低音和动态处理。",
   "cfg_audio_section_safety": "聆听安全",
-  "cfg_audio_section_safety_hint": "除非你明确更改，否则系统的听力保护音量限制保持不变。"
+  "cfg_audio_section_safety_hint": "除非你明确更改，否则系统的听力保护音量限制保持不变。",
+  "t_quick_explain": "快速重启仅重启 Android；overlay 仍需要完整重启。",
+  "t_quick_confirm": "再次点击以快速重启 Android",
+  "t_quick_going": "正在快速重启 Android…",
+  "t_quick_unavailable": "此 ROM 不支持快速重启；请使用完整重启。"
 }
