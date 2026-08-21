@@ -828,6 +828,73 @@ case "${_bwc:-}" in
   0) NOTE "battery window: no valid window - ${_bwr}" ;;
 esac
 
+SEC "5a9. THERMAL CONSENSUS  (is the control sensor believable?)"
+# One temperature with no provenance is a claim, not a measurement. This shows what it was
+# cross-checked against and whether the sources agreed.
+_tct="$(grep -m1 '^thermal_control_source=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -d '\"')"
+_tsc="$(grep -m1 '^thermal_source_confidence=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_tph="$(grep -m1 '^thermal_peer_hi=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_tpl="$(grep -m1 '^thermal_peer_lo=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_tpn="$(grep -m1 '^thermal_peer_n=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_tcn="$(grep -m1 '^thermal_consensus=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '\"')"
+_trt="$(grep -m1 '^thermal_rejected_type=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -d '\"')"
+NOTE "control source: ${_tct:-unknown}"
+case "${_tsc:-0}" in
+  3) NOTE "confidence: HIGH - cross-checked and agrees with independent sensors" ;;
+  2) NOTE "confidence: good - validated against peer CPU zones" ;;
+  1) NOTE "confidence: LOW - derived or disputed; see the note below" ;;
+  *) NOTE "confidence: not established yet" ;;
+esac
+[ -n "$_tpn" ] && [ "${_tpn:-0}" -gt 0 ] 2>/dev/null && \
+  NOTE "checked against ${_tpn} non-CPU peer sensor(s), range ${_tpl:-?}..${_tph:-?}C"
+[ -n "$_tcn" ] && NOTE "consensus: ${_tcn}"
+if [ -n "$_trt" ]; then
+  # Raw, never with a degree sign: the whole point is that it is not degrees.
+  _trr="$(grep -m1 '^thermal_rejected_raw=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  NOTE "rejected candidate: ${_trt} (raw ${_trr}, not a temperature)"
+fi
+
+SEC "5a8. TRIALS  (settings on probation)"
+# A risky tweak that is being evaluated rather than trusted. Shown separately because
+# "active" and "on trial until tonight" are different states and the user chose one.
+_trd="${ASB_CONFIG_STATE:-/data/adb/asb}/trial"
+if [ -d "$_trd" ] && ls "$_trd"/*.trial >/dev/null 2>&1; then
+  for _t in "$_trd"/*.trial; do
+    _tk="$(grep -m1 '^key=' "$_t" 2>/dev/null | cut -d= -f2)"
+    _tv="$(grep -m1 '^trial_value=' "$_t" 2>/dev/null | cut -d= -f2)"
+    _tp="$(grep -m1 '^previous_value=' "$_t" 2>/dev/null | cut -d= -f2)"
+    _te="$(grep -m1 '^expires=' "$_t" 2>/dev/null | cut -d= -f2)"
+    _left=$(( ${_te:-0} - $(date +%s 2>/dev/null || echo 0) ))
+    [ "$_left" -lt 0 ] 2>/dev/null && _left=0
+    NOTE "${_tk} = ${_tv} (was ${_tp:-stock}) - reverts in $(( _left / 3600 ))h unless confirmed"
+  done
+else
+  NOTE "no settings on trial"
+fi
+if [ -d "$_trd" ] && ls "$_trd"/*.kept >/dev/null 2>&1; then
+  NOTE "confirmed after trial: $(ls "$_trd"/*.kept 2>/dev/null | sed 's|.*/||;s|\.kept$||' | tr '\n' ' ')"
+fi
+
+SEC "5a7. APPLY LEDGER  (what the device actually accepted)"
+# "Enabled" in the UI and "the ROM took it" are different claims. Every writer records a
+# read-back result here, so a tweak that reads back wrong is visible instead of silently
+# looking fine.
+_led="${ASB_CONFIG_STATE:-/data/adb/asb}/apply_ledger"
+if [ -s "$_led" ]; then
+  NOTE "last 8 write results:"
+  tail -8 "$_led" 2>/dev/null | while IFS='|' read -r _t _dom _k _req _prev _now _res _why _ttl; do
+    P "    ${_dom}/${_k}: ${_res}${_why:+  (${_why})}"
+  done
+  # A count by class is what tells you whether this device is fighting the module.
+  NOTE "totals: $(awk -F'|' '{c[$7]++} END{for(k in c) printf "%s=%d ", k, c[k]}' "$_led" 2>/dev/null)"
+  _bad="$(awk -F'|' '$7=="readback_mismatch"||$7=="not_writable"{n++} END{print n+0}' "$_led" 2>/dev/null)"
+  if [ "${_bad:-0}" -gt 0 ] 2>/dev/null; then
+    NOTE "-> ${_bad} write(s) the device did not accept - those tweaks are not in effect"
+  fi
+else
+  NOTE "no writes recorded yet"
+fi
+
 SEC "5a5. WAKELOCKS  (what is keeping the phone awake)"
 # The suspend figure above says the phone is not sleeping; this says who is doing it.
 # Without the name, "awake 73%" is a fact the user can do nothing with.

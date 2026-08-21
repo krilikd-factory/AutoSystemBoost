@@ -1,0 +1,5 @@
+#!/system/bin/sh
+# asbtrial - explicit user entrypoint for ASB Trial mode.
+# Kept separate from asbdiag: diagnostics must never mutate policy by accident.
+MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+exec sh "$MODDIR/runtime/asb_trial.sh" "$@"
