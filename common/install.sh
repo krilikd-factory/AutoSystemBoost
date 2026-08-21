@@ -1125,23 +1125,29 @@ asb_clone_device_camera_tone() {
       if [ "$_ct_base" = "conf_tuning_params.json" ] \
          && [ -f "$MODPATH/runtime/asb_camera_grade.sh" ]; then
         asb_camera_aggr_flag
-        if [ "${_ASB_CAMERA_LEVEL:-0}" -gt 0 ] 2>/dev/null; then
+        # Independent sliders used to be inside the CAMERA_LEVEL > 0 gate, so a user could
+        # save max Contrast/Grain/Portrait/Low-light values and still receive a stock file.
+        # Resolve each once and build a grade whenever any one differs from its stock value.
+        _cam_get() {
+          for _cg in /data/adb/modules/AutoSystemBoost/config/governor.conf \
+                     "$MODPATH/config/governor.conf"; do
+            [ -f "$_cg" ] || continue
+            _cv="$(grep -E "^[[:space:]]*$1=" "$_cg" 2>/dev/null | head -1 \
+                   | sed 's/.*=//' | tr -d ' \r')"
+            case "$_cv" in ''|*[!0-9]*) : ;; *) echo "$_cv"; return 0 ;; esac
+          done
+          echo ""
+        }
+        _asb_cam_grain="$(_cam_get CAMERA_GRAIN)";    [ -n "$_asb_cam_grain" ] || _asb_cam_grain=3
+        _asb_cam_contrast="$(_cam_get CAMERA_CONTRAST)"; [ -n "$_asb_cam_contrast" ] || _asb_cam_contrast=3
+        _asb_cam_portrait="$(_cam_get CAMERA_PORTRAIT)"; [ -n "$_asb_cam_portrait" ] || _asb_cam_portrait=0
+        _asb_cam_lowlight="$(_cam_get CAMERA_LOWLIGHT)"; [ -n "$_asb_cam_lowlight" ] || _asb_cam_lowlight=0
+        if [ "${_ASB_CAMERA_LEVEL:-0}" -gt 0 ] 2>/dev/null \
+           || [ "$_asb_cam_grain" != 3 ] || [ "$_asb_cam_contrast" != 3 ] \
+           || [ "$_asb_cam_portrait" != 0 ] || [ "$_asb_cam_lowlight" != 0 ]; then
           _ct_done=0
           for _ct_dst in $_ct_dsts; do
             [ -f "$MODPATH/$_ct_dst" ] || continue
-            # The four extra knobs come from the live config, which by this point holds
-            # the user's carried-over answers - unlike CAMERA_LEVEL, which the installer
-            # resolves earlier and hands over directly.
-            _cam_get() {
-              for _cg in /data/adb/modules/AutoSystemBoost/config/governor.conf \
-                         "$MODPATH/config/governor.conf"; do
-                [ -f "$_cg" ] || continue
-                _cv="$(grep -E "^[[:space:]]*$1=" "$_cg" 2>/dev/null | head -1 \
-                       | sed 's/.*=//' | tr -d ' \r')"
-                case "$_cv" in ''|*[!0-9]*) : ;; *) echo "$_cv"; return 0 ;; esac
-              done
-              echo ""
-            }
             # Sweep markers whose destination no longer exists. Before the names were
             # normalised these piled up one per install; an old device carries a directory
             # of them, and they are not worth keeping - a marker for a path that is gone
@@ -1151,10 +1157,10 @@ asb_clone_device_camera_tone() {
               case "$_gm" in *.asbdes*|*.graded.mark|*modules_update*) rm -f "$_gm" 2>/dev/null ;; esac
             done
             MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
-              ASB_CAM_GRAIN_IN="$(_cam_get CAMERA_GRAIN)" \
-              ASB_CAM_CONTRAST_IN="$(_cam_get CAMERA_CONTRAST)" \
-              ASB_CAM_PORTRAIT_IN="$(_cam_get CAMERA_PORTRAIT)" \
-              ASB_CAM_LOWLIGHT_IN="$(_cam_get CAMERA_LOWLIGHT)" \
+              ASB_CAM_GRAIN_IN="$_asb_cam_grain" \
+              ASB_CAM_CONTRAST_IN="$_asb_cam_contrast" \
+              ASB_CAM_PORTRAIT_IN="$_asb_cam_portrait" \
+              ASB_CAM_LOWLIGHT_IN="$_asb_cam_lowlight" \
               sh "$MODPATH/runtime/asb_camera_grade.sh" \
                  "$MODPATH/$_ct_dst" "$MODPATH/$_ct_dst.graded" >/dev/null 2>&1
             if [ -s "$MODPATH/$_ct_dst.graded" ]; then
@@ -1165,7 +1171,7 @@ asb_clone_device_camera_tone() {
               rm -f "$MODPATH/$_ct_dst.graded" 2>/dev/null
             fi
           done
-          [ "$_ct_done" -gt 0 ] && ui_print "      + $(printf "${ASB_L_CAM_GRADED:-Camera grade: level %s applied to %s file(s) - saturation / AI detail / sharpening}" "$_ASB_CAMERA_LEVEL" "$_ct_done")"
+          [ "$_ct_done" -gt 0 ] && ui_print "      + Camera tuning: level ${_ASB_CAMERA_LEVEL:-0} / independent controls applied to ${_ct_done} file(s)"
         fi
       fi
       case "$_ct_base" in
