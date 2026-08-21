@@ -12,7 +12,12 @@ for wf in "$REL" "$DBG"; do
   [ -f "$wf" ] || { echo "FAIL package parity: missing workflow $wf" >&2; exit 1; }
   need "$wf" 'bin/asb_dsp_attach'
   need "$wf" 'system/bin/asbdiag'
+  need "$wf" 'runtime/asb_debug_support.sh'
 done
+
+# The helper is physically present in both packages because runtime/ is a module runtime
+# dependency; its own installed module.prop check denies every release action.
+need "$ROOT/runtime/asb_debug_support.sh" 'debug_only'
 
 # Release must retain every normal on-device capture and support script. They are POSIX shell,
 # are used by users to collect support evidence, and must not become debug-only.

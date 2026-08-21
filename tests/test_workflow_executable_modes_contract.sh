@@ -13,22 +13,23 @@ for WF in "$ROOT/.github/workflows/build-debug.yml" "$ROOT/.github/workflows/bui
   _tests=$(grep -n 'name: Run canonical host regression' "$WF" | head -1 | cut -d: -f1)
   case "$_norm:$_tests" in *[!0-9:]*|:) echo "FAIL workflow executable modes: expected steps missing in $WF" >&2; exit 1 ;; esac
   [ "$_norm" -lt "$_tests" ] || { echo "FAIL workflow executable modes: normalize step must precede tests in $WF" >&2; exit 1; }
-  sed -n "${_norm},$(( _norm + 6 ))p" "$WF" | grep -Fq 'chmod 0755 runtime/asb_active_efficiency_envelope.sh tools/asb_kernel_uv_coexist.sh' || {
+  sed -n "${_norm},$(( _norm + 6 ))p" "$WF" | grep -Fq 'chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_debug_support.sh tools/asb_kernel_uv_coexist.sh' || {
     echo "FAIL workflow executable modes: required chmod command missing in $WF" >&2; exit 1;
   }
 done
 
-# Simulate browser/ZIP mode loss. The exact chmod used in CI must restore both helpers.
-for p in runtime/asb_active_efficiency_envelope.sh tools/asb_kernel_uv_coexist.sh; do
+# Simulate browser/ZIP mode loss. The exact chmod used in CI must restore every helper.
+for p in runtime/asb_active_efficiency_envelope.sh runtime/asb_debug_support.sh tools/asb_kernel_uv_coexist.sh; do
   mkdir -p "$TMP/$(dirname "$p")"
   cp "$ROOT/$p" "$TMP/$p"
   chmod 0644 "$TMP/$p"
 done
 (
   cd "$TMP"
-  chmod 0755 runtime/asb_active_efficiency_envelope.sh tools/asb_kernel_uv_coexist.sh
+  chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_debug_support.sh tools/asb_kernel_uv_coexist.sh
 )
 [ -x "$TMP/runtime/asb_active_efficiency_envelope.sh" ] || { echo 'FAIL workflow executable modes: generator mode not restored' >&2; exit 1; }
+[ -x "$TMP/runtime/asb_debug_support.sh" ] || { echo 'FAIL workflow executable modes: debug support mode not restored' >&2; exit 1; }
 [ -x "$TMP/tools/asb_kernel_uv_coexist.sh" ] || { echo 'FAIL workflow executable modes: probe mode not restored' >&2; exit 1; }
 
 echo 'PASS workflow executable-mode contract'
