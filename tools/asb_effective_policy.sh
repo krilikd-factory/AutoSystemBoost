@@ -81,9 +81,10 @@ printf '"active_efficiency":{"active":"%s","tier":"%s","reason":"%s","gpu_idle_b
 printf '"thermal_provenance":{"control_source":"%s","control_zone":%s,"confidence":%s,"rejected_type":"%s","rejected_raw":%s,"startup_quarantined":%s},' \
   "$(_json "$(_state_text thermal_control_source)")" "$(_state_num thermal_control_zone -1)" "$(_state_num thermal_source_confidence 0)" \
   "$(_json "$(_state_text thermal_rejected_type)")" "$(_state_num thermal_rejected_raw 0)" "$(_state_num startup_quarantined 0)"
-printf '"config_last_txn":{"result_class":"%s","reason":"%s","key":"%s","pre_epoch":%s,"post_epoch":%s,"reload_accepted":"%s","recovery":"%s"},' \
+printf '"config_last_txn":{"result_class":"%s","reason":"%s","key":"%s","pre_epoch":%s,"post_epoch":%s,"reload_accepted":"%s","recovery":"%s","lock_owner":"%s","lock_owner_state":"%s","lock_age":%s,"lock_recovered":"%s"},' \
   "$(_json "$(_txn result_class)")" "$(_json "$(_txn reason)")" "$(_json "$(_txn key)")" \
-  "$(_txn_num pre_epoch 0)" "$(_txn_num post_epoch 0)" "$(_json "$(_txn reload_accepted)")" "$(_json "$(_txn recovery)")"
+  "$(_txn_num pre_epoch 0)" "$(_txn_num post_epoch 0)" "$(_json "$(_txn reload_accepted)")" "$(_json "$(_txn recovery)")" \
+  "$(_json "$(_txn lock_owner)")" "$(_json "$(_txn lock_owner_state)")" "$(_txn_num lock_age 0)" "$(_json "$(_txn lock_recovered)")"
 # These three blocks are intentionally observation-only. They expose whether a donor-inspired
 # hypothesis is true on this device before ASB changes a route, qdisc or memory policy.
 printf '"audio":{"dsp_enabled":"%s","dsp_route_published":"%s","dsp_outputs":"%s","a2dp_offload_requested":"%s","a2dp_platform_disabled":"%s","a2dp_vendor_disabled":"%s"},' \

@@ -803,7 +803,7 @@ if [ "${_sq:-0}" -gt 0 ] 2>/dev/null; then
 fi
 _txn=/data/adb/asb/config_last_txn
 if [ -r "$_txn" ]; then
-  NOTE "last config transaction: class=$(_rget result_class "$_txn") key=$(_rget key "$_txn") pre_epoch=$(_rget pre_epoch "$_txn") post_epoch=$(_rget post_epoch "$_txn") reload=$(_rget reload_accepted "$_txn") recovery=$(_rget recovery "$_txn") lock_owner=$(_rget lock_owner "$_txn") lock_age=$(_rget lock_age "$_txn") lock_recovered=$(_rget lock_recovered "$_txn")"
+  NOTE "last config transaction: class=$(_rget result_class "$_txn") key=$(_rget key "$_txn") pre_epoch=$(_rget pre_epoch "$_txn") post_epoch=$(_rget post_epoch "$_txn") reload=$(_rget reload_accepted "$_txn") recovery=$(_rget recovery "$_txn") lock_owner=$(_rget lock_owner "$_txn") lock_owner_state=$(_rget lock_owner_state "$_txn") lock_age=$(_rget lock_age "$_txn") lock_recovered=$(_rget lock_recovered "$_txn")"
 else
   NOTE "last config transaction: none recorded yet"
 fi
