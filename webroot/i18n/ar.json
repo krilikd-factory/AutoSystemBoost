@@ -391,5 +391,21 @@
   "cfg_smart_reset": "↺ إعادة ضبط",
   "t_smart_reset_confirm": "اضغط مرة أخرى لمسح ما تعلّمه",
   "t_smart_reset_done": "أُعيد ضبط التعلّم · يبدأ Smart من جديد",
-  "t_smart_reset_fail": "تعذّر إعادة الضبط"
+  "t_smart_reset_fail": "تعذّر إعادة الضبط",
+  "st_on_trial": "قيد التجربة",
+  "st_not_accepted": "الجهاز لم يقبلها",
+  "st_readback": "تُقرأ بقيمة مختلفة",
+  "trial_active": "قيد التجربة",
+  "trial_stock": "الافتراضي",
+  "trial_reverts_in": "تُلغى خلال",
+  "trial_keep": "إبقاء",
+  "trial_revert": "تراجع",
+  "trial_try": "جرّب 12 ساعة",
+  "trial_started": "بدأت التجربة",
+  "trial_failed": "تعذّر بدء التجربة",
+  "trial_action_failed": "فشل الإجراء",
+  "trial_no_preview": "لا توجد معاينة لهذا الإعداد.",
+  "trial_confirm_q": "بدء تجربة 12 ساعة؟ ستُلغى تلقائيًا ما لم تؤكّدها.",
+  "ledger_asked": "المطلوب",
+  "ledger_device_has": "لدى الجهاز"
 }

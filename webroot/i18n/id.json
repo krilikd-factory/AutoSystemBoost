@@ -391,5 +391,21 @@
   "cfg_smart_reset": "↺ Atur ulang",
   "t_smart_reset_confirm": "Ketuk lagi untuk menghapus yang dipelajari",
   "t_smart_reset_done": "Pembelajaran diatur ulang · Smart mulai baru",
-  "t_smart_reset_fail": "Gagal mengatur ulang"
+  "t_smart_reset_fail": "Gagal mengatur ulang",
+  "st_on_trial": "dalam uji",
+  "st_not_accepted": "perangkat menolak",
+  "st_readback": "terbaca berbeda",
+  "trial_active": "Dalam uji",
+  "trial_stock": "bawaan",
+  "trial_reverts_in": "dikembalikan dalam",
+  "trial_keep": "Simpan",
+  "trial_revert": "Kembalikan",
+  "trial_try": "Coba 12 jam",
+  "trial_started": "Uji dimulai",
+  "trial_failed": "Gagal memulai uji",
+  "trial_action_failed": "Aksi gagal",
+  "trial_no_preview": "Tidak ada pratinjau untuk pengaturan ini.",
+  "trial_confirm_q": "Mulai uji 12 jam? Akan dikembalikan sendiri bila tidak dikonfirmasi.",
+  "ledger_asked": "diminta",
+  "ledger_device_has": "perangkat punya"
 }

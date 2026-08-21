@@ -391,5 +391,21 @@
   "cfg_smart_reset": "↺ Reset",
   "t_smart_reset_confirm": "Nochmal tippen, um Gelerntes zu löschen",
   "t_smart_reset_done": "Lernen zurückgesetzt · Smart beginnt neu",
-  "t_smart_reset_fail": "Zurücksetzen fehlgeschlagen"
+  "t_smart_reset_fail": "Zurücksetzen fehlgeschlagen",
+  "st_on_trial": "im Test",
+  "st_not_accepted": "Gerät hat es abgelehnt",
+  "st_readback": "liest anders zurück",
+  "trial_active": "Im Test",
+  "trial_stock": "Standard",
+  "trial_reverts_in": "Rückkehr in",
+  "trial_keep": "Behalten",
+  "trial_revert": "Zurücksetzen",
+  "trial_try": "12 Std testen",
+  "trial_started": "Test gestartet",
+  "trial_failed": "Test konnte nicht starten",
+  "trial_action_failed": "Aktion fehlgeschlagen",
+  "trial_no_preview": "Keine Vorschau für diese Einstellung.",
+  "trial_confirm_q": "12-Stunden-Test starten? Er wird ohne Bestätigung zurückgesetzt.",
+  "ledger_asked": "angefordert",
+  "ledger_device_has": "Gerät hat"
 }

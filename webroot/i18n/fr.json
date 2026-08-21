@@ -563,5 +563,21 @@
   "cfg_smart_reset": "↺ Réinit.",
   "t_smart_reset_confirm": "Appuyez encore pour effacer l'appris",
   "t_smart_reset_done": "Apprentissage réinitialisé · Smart repart",
-  "t_smart_reset_fail": "Échec de la réinitialisation"
+  "t_smart_reset_fail": "Échec de la réinitialisation",
+  "st_on_trial": "à l'essai",
+  "st_not_accepted": "l'appareil ne l'a pas accepté",
+  "st_readback": "se relit différemment",
+  "trial_active": "À l'essai",
+  "trial_stock": "d'origine",
+  "trial_reverts_in": "retour dans",
+  "trial_keep": "Garder",
+  "trial_revert": "Annuler",
+  "trial_try": "Essayer 12 h",
+  "trial_started": "Essai lancé",
+  "trial_failed": "Impossible de lancer l'essai",
+  "trial_action_failed": "Action échouée",
+  "trial_no_preview": "Pas d'aperçu pour ce réglage.",
+  "trial_confirm_q": "Lancer un essai de 12 heures ? Il s'annule seul sans confirmation.",
+  "ledger_asked": "demandé",
+  "ledger_device_has": "l'appareil a"
 }

@@ -391,5 +391,21 @@
   "cfg_smart_reset": "↺ Reiniciar",
   "t_smart_reset_confirm": "Toca otra vez para borrar lo aprendido",
   "t_smart_reset_done": "Aprendizaje reiniciado · Smart empieza de cero",
-  "t_smart_reset_fail": "No se pudo reiniciar"
+  "t_smart_reset_fail": "No se pudo reiniciar",
+  "st_on_trial": "en prueba",
+  "st_not_accepted": "el dispositivo no lo aceptó",
+  "st_readback": "se lee distinto",
+  "trial_active": "En prueba",
+  "trial_stock": "de fábrica",
+  "trial_reverts_in": "revierte en",
+  "trial_keep": "Mantener",
+  "trial_revert": "Revertir",
+  "trial_try": "Probar 12 h",
+  "trial_started": "Prueba iniciada",
+  "trial_failed": "No se pudo iniciar la prueba",
+  "trial_action_failed": "Acción fallida",
+  "trial_no_preview": "No hay vista previa para este ajuste.",
+  "trial_confirm_q": "¿Iniciar una prueba de 12 horas? Se revierte sola si no la confirmas.",
+  "ledger_asked": "solicitado",
+  "ledger_device_has": "el dispositivo tiene"
 }

@@ -391,5 +391,21 @@
   "cfg_smart_reset": "↺ Скидання",
   "t_smart_reset_confirm": "Натисніть ще раз, щоб стерти вивчене",
   "t_smart_reset_done": "Навчання скинуто · Smart почне заново",
-  "t_smart_reset_fail": "Не вдалося скинути навчання"
+  "t_smart_reset_fail": "Не вдалося скинути навчання",
+  "st_on_trial": "на пробі",
+  "st_not_accepted": "пристрій не прийняв",
+  "st_readback": "читається інакше",
+  "trial_active": "На пробі",
+  "trial_stock": "сток",
+  "trial_reverts_in": "відкат через",
+  "trial_keep": "Залишити",
+  "trial_revert": "Відкотити",
+  "trial_try": "Спробувати 12 год",
+  "trial_started": "Пробу почато",
+  "trial_failed": "Не вдалося почати пробу",
+  "trial_action_failed": "Дію не виконано",
+  "trial_no_preview": "Попередній перегляд недоступний.",
+  "trial_confirm_q": "Почати 12-годинну пробу? Вона відкотиться сама, якщо не підтвердити.",
+  "ledger_asked": "запитано",
+  "ledger_device_has": "на пристрої"
 }

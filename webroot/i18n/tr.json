@@ -391,5 +391,21 @@
   "cfg_smart_reset": "↺ Sıfırla",
   "t_smart_reset_confirm": "Öğrenilenleri silmek için tekrar dokun",
   "t_smart_reset_done": "Öğrenme sıfırlandı · Smart yeniden başlıyor",
-  "t_smart_reset_fail": "Sıfırlanamadı"
+  "t_smart_reset_fail": "Sıfırlanamadı",
+  "st_on_trial": "denemede",
+  "st_not_accepted": "cihaz kabul etmedi",
+  "st_readback": "farklı okunuyor",
+  "trial_active": "Denemede",
+  "trial_stock": "varsayılan",
+  "trial_reverts_in": "geri alınacak",
+  "trial_keep": "Koru",
+  "trial_revert": "Geri al",
+  "trial_try": "12 sa dene",
+  "trial_started": "Deneme başladı",
+  "trial_failed": "Deneme başlatılamadı",
+  "trial_action_failed": "İşlem başarısız",
+  "trial_no_preview": "Bu ayar için önizleme yok.",
+  "trial_confirm_q": "12 saatlik deneme başlatılsın mı? Onaylamazsanız kendiliğinden geri alınır.",
+  "ledger_asked": "istenen",
+  "ledger_device_has": "cihazdaki"
 }

@@ -391,5 +391,21 @@
   "cfg_smart_reset": "↺ 重置",
   "t_smart_reset_confirm": "再次点击以清除已学内容",
   "t_smart_reset_done": "学习已重置 · Smart 重新开始",
-  "t_smart_reset_fail": "无法重置"
+  "t_smart_reset_fail": "无法重置",
+  "st_on_trial": "试用中",
+  "st_not_accepted": "设备未接受",
+  "st_readback": "读回值不同",
+  "trial_active": "试用中",
+  "trial_stock": "默认",
+  "trial_reverts_in": "回退于",
+  "trial_keep": "保留",
+  "trial_revert": "立即回退",
+  "trial_try": "试用 12 小时",
+  "trial_started": "试用已开始",
+  "trial_failed": "无法开始试用",
+  "trial_action_failed": "操作失败",
+  "trial_no_preview": "此设置没有预览。",
+  "trial_confirm_q": "开始 12 小时试用？未确认将自动回退。",
+  "ledger_asked": "请求值",
+  "ledger_device_has": "设备值"
 }

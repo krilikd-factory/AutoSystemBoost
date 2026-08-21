@@ -564,5 +564,21 @@
   "cfg_smart_reset": "↺ Сброс",
   "t_smart_reset_confirm": "Нажмите ещё раз, чтобы стереть выученное",
   "t_smart_reset_done": "Обучение сброшено · Smart начнёт заново",
-  "t_smart_reset_fail": "Не удалось сбросить обучение"
+  "t_smart_reset_fail": "Не удалось сбросить обучение",
+  "st_on_trial": "на пробе",
+  "st_not_accepted": "устройство не приняло",
+  "st_readback": "читается иначе",
+  "trial_active": "На пробе",
+  "trial_stock": "сток",
+  "trial_reverts_in": "откат через",
+  "trial_keep": "Оставить",
+  "trial_revert": "Откатить",
+  "trial_try": "Попробовать 12 ч",
+  "trial_started": "Проба началась",
+  "trial_failed": "Не удалось начать пробу",
+  "trial_action_failed": "Действие не выполнено",
+  "trial_no_preview": "Предпросмотр для этой настройки недоступен.",
+  "trial_confirm_q": "Начать 12-часовую пробу? Она откатится сама, если не подтвердить.",
+  "ledger_asked": "запрошено",
+  "ledger_device_has": "на устройстве"
 }

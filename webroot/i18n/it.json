@@ -391,5 +391,21 @@
   "cfg_smart_reset": "↺ Azzera",
   "t_smart_reset_confirm": "Tocca di nuovo per cancellare ciò che ha imparato",
   "t_smart_reset_done": "Apprendimento azzerato · Smart riparte",
-  "t_smart_reset_fail": "Impossibile azzerare"
+  "t_smart_reset_fail": "Impossibile azzerare",
+  "st_on_trial": "in prova",
+  "st_not_accepted": "il dispositivo non l'ha accettato",
+  "st_readback": "si rilegge diverso",
+  "trial_active": "In prova",
+  "trial_stock": "di fabbrica",
+  "trial_reverts_in": "ripristino tra",
+  "trial_keep": "Mantieni",
+  "trial_revert": "Ripristina",
+  "trial_try": "Prova per 12 h",
+  "trial_started": "Prova avviata",
+  "trial_failed": "Impossibile avviare la prova",
+  "trial_action_failed": "Azione non riuscita",
+  "trial_no_preview": "Nessuna anteprima per questa impostazione.",
+  "trial_confirm_q": "Avviare una prova di 12 ore? Si ripristina da sola se non la confermi.",
+  "ledger_asked": "richiesto",
+  "ledger_device_has": "il dispositivo ha"
 }

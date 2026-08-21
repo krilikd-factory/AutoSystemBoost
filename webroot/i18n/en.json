@@ -326,5 +326,21 @@
   "cfg_smart_reset": "↺ Reset",
   "t_smart_reset_confirm": "Tap again to erase what Smart has learned",
   "t_smart_reset_done": "Learning reset · Smart starts fresh",
-  "t_smart_reset_fail": "Could not reset learning"
+  "t_smart_reset_fail": "Could not reset learning",
+  "st_on_trial": "on trial",
+  "st_not_accepted": "device did not accept it",
+  "st_readback": "reads back different",
+  "trial_active": "On trial",
+  "trial_stock": "stock",
+  "trial_reverts_in": "reverts in",
+  "trial_keep": "Keep",
+  "trial_revert": "Revert now",
+  "trial_try": "Try for 12h",
+  "trial_started": "Trial started",
+  "trial_failed": "Could not start the trial",
+  "trial_action_failed": "Action failed",
+  "trial_no_preview": "No preview available for this setting.",
+  "trial_confirm_q": "Start a 12-hour trial? It reverts on its own unless you confirm it.",
+  "ledger_asked": "asked for",
+  "ledger_device_has": "device has"
 }

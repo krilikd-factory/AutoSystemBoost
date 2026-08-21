@@ -391,5 +391,21 @@
   "cfg_smart_reset": "↺ Redefinir",
   "t_smart_reset_confirm": "Toque novamente para apagar o aprendido",
   "t_smart_reset_done": "Aprendizado redefinido · Smart recomeça",
-  "t_smart_reset_fail": "Não foi possível redefinir"
+  "t_smart_reset_fail": "Não foi possível redefinir",
+  "st_on_trial": "em teste",
+  "st_not_accepted": "o dispositivo não aceitou",
+  "st_readback": "lê diferente",
+  "trial_active": "Em teste",
+  "trial_stock": "padrão",
+  "trial_reverts_in": "reverte em",
+  "trial_keep": "Manter",
+  "trial_revert": "Reverter",
+  "trial_try": "Testar 12 h",
+  "trial_started": "Teste iniciado",
+  "trial_failed": "Não foi possível iniciar",
+  "trial_action_failed": "Ação falhou",
+  "trial_no_preview": "Sem prévia para esta configuração.",
+  "trial_confirm_q": "Iniciar um teste de 12 horas? Ele reverte sozinho se não for confirmado.",
+  "ledger_asked": "solicitado",
+  "ledger_device_has": "o dispositivo tem"
 }
