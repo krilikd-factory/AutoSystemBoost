@@ -55,7 +55,6 @@ asb_big_banner() {
   ui_print " ##              ## "
   ui_print " #########  "
   ui_print " "
-  ui_print "  ${ASB_INSTALL_WEBUI_FIRST:-All components are prepared. Optional tweaks stay stock until you choose them in WebUI.}"
   ui_print "${SEPARATOR}"
 }
 
@@ -1279,7 +1278,17 @@ asb_clone_dir_from_live() {
   # at the top of the install. Hardcoding English here would have made this the only
   # untranslated part of the output.
   case "$_canon" in
-    */audio*)  _clone_fmt="${ASB_L_MIRROR_AUDIO:-mirrored %s audio settings file(s) so ASB can edit them safely}" ;;
+    */audio*)
+      # Audio is assembled from several valid vendor/ODM/system paths on modern OnePlus ROMs.
+      # Report their combined result once from the Audio stage; three indistinguishable counters
+      # made a successful merge look like an accidental repeated copy in the install log.
+      if [ "${ASB_AUDIO_CLONE_DEFER:-0}" = "1" ]; then
+        ASB_AUDIO_CLONE_TOTAL=$(( ${ASB_AUDIO_CLONE_TOTAL:-0} + _clone_cnt ))
+        ASB_AUDIO_CLONE_PATHS=$(( ${ASB_AUDIO_CLONE_PATHS:-0} + 1 ))
+        return 0
+      fi
+      _clone_fmt="${ASB_L_MIRROR_AUDIO:-mirrored %s audio settings file(s) so ASB can edit them safely}"
+      ;;
     */camera*) _clone_fmt="${ASB_L_MIRROR_CAMERA:-mirrored %s camera settings file(s) so ASB can edit them safely}" ;;
     *)         _clone_fmt="${ASB_L_MIRROR_SYSTEM:-mirrored %s system settings file(s) so ASB can edit them safely}" ;;
   esac
@@ -1291,6 +1300,9 @@ asb_clone_device_audio_wifi() {
   _label="$1"
 
   if [ "$ASB_AUDIO" = "true" ]; then
+    ASB_AUDIO_CLONE_DEFER=1
+    ASB_AUDIO_CLONE_TOTAL=0
+    ASB_AUDIO_CLONE_PATHS=0
     for _af in mixer_paths.xml ftm_mixer_paths.xml resourcemanager.xml \
                audio_module_config_primary.xml; do
       rm -f "$MODPATH/system/vendor/etc/$_af" 2>/dev/null || true
@@ -1306,6 +1318,11 @@ asb_clone_device_audio_wifi() {
         asb_clone_dir_from_live "$_asrc" && _audio_done=1
       fi
     done
+    if [ "${ASB_AUDIO_CLONE_TOTAL:-0}" -gt 0 ] 2>/dev/null; then
+      ui_print "      + $(printf "${ASB_L_MIRROR_AUDIO_TOTAL:-mirrored %s audio settings file(s) from %s device path(s) so ASB can edit them safely}" "${ASB_AUDIO_CLONE_TOTAL}" "${ASB_AUDIO_CLONE_PATHS}")"
+    fi
+    unset ASB_AUDIO_CLONE_DEFER ASB_AUDIO_CLONE_TOTAL ASB_AUDIO_CLONE_PATHS
+
     # If we still have no mixer_paths anywhere, look wider: some revisions keep it under
     # sku_* subdirs the loop above already covers, but a few stage it beside the codecs.
     if [ -z "$(find "$MODPATH/system/vendor/etc/audio" "$MODPATH/system/odm/etc/audio" \
@@ -1828,7 +1845,7 @@ asb_apply_device_native_tuning() {
   _label="$1"
   ui_print " "
   ui_print "  🚀  AutoSystemBoost — ${ASB_SEC_INSTALLING:-installing for} ${_label}"
-  ui_print "      ${ASB_SEC_BUILDING:-building a device-native overlay from this phone's own stock files}"
+  ui_print "      ${ASB_SEC_BUILDING:-building a device-native overlay from this phone stock files}"
   ui_print " "
 
   asb_strip_shipped_static_vendor
@@ -1838,6 +1855,10 @@ asb_apply_device_native_tuning() {
   ui_print "  🎵  ${ASB_SEC_AUDIO:-AUDIO}"
   asb_clone_device_audio_wifi   "$_label"
   asb_patch_audio_inplace       "$_label"
+  # DSP belongs to Audio in both the WebUI and the installer report. Register it here,
+  # after the audio overlay exists but before the next category headline, so users do not
+  # read a second unrelated DSP section later in the log.
+  asb_register_dsp_all_configs
 
   # Clear any ODM volume-table copy an earlier build left in the overlay.
   #
@@ -1879,10 +1900,11 @@ asb_apply_device_native_tuning() {
   fi
 
   _man="$MODPATH/generated_overlay_manifest.txt"
+  _asb_overlay_built_at="$(date +'%F %T' 2>/dev/null || printf unknown)"
   {
-    echo "# ASB device-native overlay — $(date '+%F %T')"
-    echo "# device: $_label"
-    echo "# built by cloning + key-patching this device's own stock files"
+    printf '%s\n' "# ASB device-native overlay — $_asb_overlay_built_at"
+    printf '%s\n' "# device: $_label"
+    printf '%s\n' '# built by cloning + key-patching device stock files'
     find "$MODPATH/system" -type f \( -path '*/etc/audio/*' -o -path '*/camera/*' \
       -o -name 'media_profiles*.xml' -o -name 'gps.conf' -o -name 'izat.conf' \
       -o -path '*/etc/perf/*' -o -name 'WCNSS_qcom_cfg*.ini' \) 2>/dev/null \
@@ -2095,6 +2117,10 @@ asb_generate_odm_camera_binds() {
 }
 
 asb_register_dsp_all_configs() {
+  # Device-native paths call this from their Audio stage. The later fallback call remains
+  # for compatibility paths that do not build an overlay, so it must be idempotent.
+  [ "${ASB_DSP_REGISTRATION_DONE:-0}" = "1" ] && return 0
+  ASB_DSP_REGISTRATION_DONE=1
   [ "$ASB_AUDIO" = "true" ] || return 0
 
   for _d in "$MODPATH" /data/adb/modules/AutoSystemBoost; do
@@ -2164,9 +2190,7 @@ asb_register_dsp_all_configs() {
     fi
   done
   if [ "$_dsp_reg" -gt 0 ]; then
-    ui_print " "
-    ui_print "  🎚  ${ASB_SEC_DSP:-DSP ENGINE}"
-    ui_print "      + $(printf "${ASB_L_DSP_REG_N:-registered in %s audio config file(s)}" "$_dsp_reg")"
+    ui_print "      + ${ASB_SEC_AUDIO:-AUDIO} · ${ASB_SEC_DSP:-DSP ENGINE}: $(printf "${ASB_L_DSP_REG_N:-registered in %s audio config file(s)}" "$_dsp_reg")"
   elif [ "$_dsp_seen" -gt 0 ]; then
     ui_print "    ! ASB DSP: $_dsp_seen config(s) present but none registered"
   fi
@@ -2237,7 +2261,7 @@ asb_bind_register_odm_effects() {
       || echo "${_oecl}|$_oecs" >> "$_oecm"
     # Printed once per patched config with identical wording, so a device with two of
     # them showed the same sentence twice and no way to tell them apart. Name the file.
-    ui_print "      + ${ASB_L_DSP_ODM:-DSP effect registered in the config Android actually reads}: $(basename "$_oecl")"
+    ui_print "      + ${ASB_SEC_AUDIO:-AUDIO} · ${ASB_SEC_DSP:-DSP ENGINE}: ${ASB_L_DSP_ODM:-registered in the config Android actually reads}: $_oecl"
     return 0
   fi
   rm -f "$_oecs" 2>/dev/null

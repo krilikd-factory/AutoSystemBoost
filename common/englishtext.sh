@@ -41,7 +41,7 @@ ASB_SEC_PERF="PERFORMANCE"
 ASB_SEC_LOCATION="LOCATION"
 ASB_SEC_WIFI="WI-FI"
 ASB_SEC_SYSTEM="SYSTEM"
-ASB_SEC_CATEGORIES="ENABLED CATEGORIES"
+ASB_SEC_CATEGORIES="PREPARED COMPONENTS"
 ASB_SEC_INSTALLING="installing for"
 ASB_SEC_BUILDING="building a device-native overlay from this phone's own stock files"
 
@@ -89,6 +89,7 @@ ASB_D_BOUNDS="device-adaptive bounds: ON (OP15 — matches shipped tuning)"
 
 # ── V61: plain-language install output ────────────────────────────────────────
 ASB_L_MIRROR_AUDIO="mirrored %s audio settings file(s) so ASB can edit them safely"
+ASB_L_MIRROR_AUDIO_TOTAL="mirrored %s audio settings file(s) from %s device path(s) so ASB can edit them safely"
 ASB_L_MIRROR_CAMERA="mirrored %s camera settings file(s) so ASB can edit them safely"
 ASB_L_MIRROR_SYSTEM="mirrored %s system settings file(s) so ASB can edit them safely"
 ASB_L_CAM_TUNING="Camera: image tuning ready (colour, detail, sharpening)"
