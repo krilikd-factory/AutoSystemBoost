@@ -2343,6 +2343,12 @@ asb_neutralise_fresh_install() {
   ui_print "        open the WebUI to turn on what you want"
 }
 
+# Published after installation so diagnostics can distinguish a clean first install from
+# a preserved upgrade. Defaults are intentionally explicit: no absent/ambiguous state.
+ASB_CONFIG_MIGRATION_MODE=unknown
+ASB_CONFIG_MIGRATION_SOURCE=none
+ASB_CONFIG_MIGRATED_COUNT=0
+
 asb_preserve_user_config() {
   _new_conf="$MODPATH/config/governor.conf"
   _old_conf="$NVBASE/modules/$MODID/config/governor.conf"
@@ -2387,9 +2393,14 @@ asb_preserve_user_config() {
   fi
   if [ -z "$_src" ]; then
     # Nothing to migrate from: this is a first install, whatever else is on disk.
+    ASB_CONFIG_MIGRATION_MODE=fresh
+    ASB_CONFIG_MIGRATION_SOURCE=none
     asb_neutralise_fresh_install
     return 0
   fi
+
+  ASB_CONFIG_MIGRATION_MODE=preserved
+  if [ "$_src" = "$_snap_conf" ]; then ASB_CONFIG_MIGRATION_SOURCE=snapshot; else ASB_CONFIG_MIGRATION_SOURCE=module; fi
 
   # Upgrade: carry the power profile across.
   #
@@ -2512,6 +2523,7 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
     fi
   done
 
+  ASB_CONFIG_MIGRATED_COUNT=$_migrated
   # Stamp the schema regardless of what was migrated. This is the line whose absence made
   # the first attempt defer the bug by one update instead of fixing it.
   mkdir -p /data/adb/asb 2>/dev/null
@@ -4068,9 +4080,21 @@ fi
 	  chmod 644 "$MODPATH/config/governor.conf.shipped" 2>/dev/null || true
 	fi
 
-	asb_snapshot_user_config
+		asb_snapshot_user_config
 
-	if [ -d "$MODPATH/config" ]; then
+		# Keep a tiny installer result record for asbdiag/support. This is evidence only;
+		# governor.conf and the user snapshot remain the actual policy sources.
+		mkdir -p /data/adb/asb 2>/dev/null || true
+		_asb_install_state="/data/adb/asb/last_install_state"
+		{
+		  echo "timestamp=$(date +%s 2>/dev/null || echo 0)"
+		  echo "module_version=$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
+		  echo "config_mode=${ASB_CONFIG_MIGRATION_MODE:-unknown}"
+		  echo "config_source=${ASB_CONFIG_MIGRATION_SOURCE:-none}"
+		  echo "config_keys=${ASB_CONFIG_MIGRATED_COUNT:-0}"
+		} > "$_asb_install_state.tmp.$$" 2>/dev/null && mv -f "$_asb_install_state.tmp.$$" "$_asb_install_state" 2>/dev/null || true
+
+		if [ -d "$MODPATH/config" ]; then
 	  echo 18 > "$MODPATH/config/.schema_version" 2>/dev/null || true
 	  chmod 644 "$MODPATH/config/.schema_version" 2>/dev/null || true
 	fi
