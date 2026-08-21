@@ -84,7 +84,7 @@ _key_allowed() {
   _k="$1"
   case "$_k" in ''|*[!A-Za-z0-9_]*) return 1 ;; esac
   # An active config can survive a module update and therefore predate a newly
-  # introduced V63 key. Accept a key declared by either the active config or the
+  # new schema key. Accept a key declared by either the active config or the
   # current shipped schema: the latter lets the writer append a current, known
   # key (for example gnss_trim/night_modem_idle) to an older saved config. This
   # remains a closed schema check: arbitrary keys still fail, and every staged

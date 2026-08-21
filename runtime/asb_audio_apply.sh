@@ -24,7 +24,7 @@ CONF="$MODDIR/config/governor.conf"
 [ -f "$CONF" ] || { echo "config not found: $CONF"; exit 1; }
 # DSP activation is controlled by the user's DSP settings and the installer's ABI
 # probe. Do not make an audio effect depend on a separate fingerprint marker: that
-# marker was absent on the working V63-315 path and silently prevented any attach.
+# marker was absent on the known working device path and silently prevented any attach.
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null \

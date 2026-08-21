@@ -15,6 +15,15 @@ asb_baseline_init() {
   chmod 0644 "$ASB_BASELINE" 2>/dev/null || true
 }
 
+# Load the apply ledger if it is present. Sourced rather than required: a stripped build
+# or an old install must keep working, just without the extra record.
+if ! command -v asb_ledger_settings >/dev/null 2>&1; then
+  for _lgp in "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_apply_ledger.sh" \
+              "$(dirname "$0")/asb_apply_ledger.sh"; do
+    [ -f "$_lgp" ] && . "$_lgp" && break
+  done
+fi
+
 asb_settings_put() {
   local _ns="$1" _key="$2" _val="$3"
   [ -z "$_ns" ] || [ -z "$_key" ] && return 1
@@ -25,7 +34,17 @@ asb_settings_put() {
     [ "$_orig" = "null" ] && _orig=""
     printf 'settings|%s|%s|%s\n' "$_ns" "$_key" "$_orig" >> "$ASB_BASELINE" 2>/dev/null
   fi
-  settings put "$_ns" "$_key" "$_val" >/dev/null 2>&1 || true
+  # Record what the device actually did with it.
+  #
+  # The `|| true` below is deliberate and stays: one rejected key must not abort a profile
+  # apply. But swallowing the result also meant a write the ROM ignored looked identical
+  # to one that took effect, and the WebUI would report "on" either way. The ledger is
+  # where that difference now lives; the control flow is unchanged.
+  if command -v asb_ledger_settings >/dev/null 2>&1; then
+    asb_ledger_settings "$_ns" "$_key" "$_val" "" || true
+  else
+    settings put "$_ns" "$_key" "$_val" >/dev/null 2>&1 || true
+  fi
 }
 
 asb_persist_safe() {
