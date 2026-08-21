@@ -1628,6 +1628,26 @@ body.config-active #livePage.open {
 .cfg-apply-live   { color: #34d399; }
 .cfg-apply-next   { color: #7dd3fc; }
 .cfg-apply-reboot { color: #fbbf24; }
+/* Trial row: visually secondary to the control above it. A probation offer that looks as
+ * prominent as Apply would push people into it, and the whole point is that they choose. */
+.cfg-trial {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.cfg-trial-info { font-size: 12px; color: rgba(231,234,238,0.72); flex: 1 1 auto; min-width: 0; }
+.cfg-trial-btn {
+  flex: 0 0 auto; padding: 6px 12px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.04);
+  color: #e7eaee; font-size: 12px; font-weight: 600; font-family: inherit;
+}
+.cfg-trial-btn.keep { border-color: rgba(52,199,89,0.35); background: rgba(52,199,89,0.10); }
+/* The ledger warning is red because it contradicts what the control says about itself -
+ * that is the one case where the card is actively misleading without it. */
+.cfg-ledger-warn {
+  margin-top: 8px; font-size: 12px; line-height: 1.45;
+  color: #ff9f9f;
+}
 .cfg-willbreak {
   padding-top: 7px;
   font: 600 10px/1.45 var(--mono);
@@ -3093,6 +3113,10 @@ async function cfgLoad() {
     });
     _rebootBaselineReady = true;
   }
+  /* Load the V64 evidence before the first paint, so a card never renders as plain
+   * "Enabled" and then flips to "device did not accept it" a moment later - that flicker
+   * reads as a bug in the module rather than as a fact about the phone. */
+  await cfgLoadV64State();
   cfgRender();
 }
 
@@ -3285,12 +3309,108 @@ async function loadNetResult() {
   } catch (e) { _netResult = {}; }
 }
 
+/* V64 user surface: ledger, trial and preview.
+ *
+ * These three shipped as runtime scripts with no way for a person to reach them - CI could
+ * prove they worked, the user could not. That is the wrong order: a mechanism whose whole
+ * purpose is honest evidence about THIS device is worthless if only a maintainer can run
+ * it.
+ */
+const TRIAL_KEYS = ['doze_level','doze_trim_whitelist','wakelock_action','night_modem_idle',
+                    'gnss_trim','gms_trim','gms_freeze','wifi_country',
+                    'audio_remove_volume_limit','UX_MANAGE_OEM_TOGGLES','perf_ceiling_pct'];
+
+let _ledger = {};   /* key -> {result, reason, req, now} - last write outcome per key */
+let _trials = {};   /* key -> {value, prev, expires} - active trials */
+
+/* Read both records in one pass. Cheap enough to do on every render, and reading them
+ * separately would let the badge and the trial chip disagree by a tick. */
+async function cfgLoadV64State() {
+  _ledger = {}; _trials = {};
+  try {
+    const raw = await run("tail -120 /data/adb/asb/apply_ledger 2>/dev/null");
+    (raw || '').split('\n').forEach(function (ln) {
+      const f = ln.split('|');
+      if (f.length < 7) return;
+      /* Last entry wins: an earlier failure that was later fixed must not keep warning. */
+      _ledger[f[2]] = { result: f[6], reason: f[7] || '', req: f[3], now: f[5] };
+    });
+  } catch (e) {}
+  try {
+    const raw = await run("for f in /data/adb/asb/trial/*.trial; do [ -f \"$f\" ] && cat \"$f\" && echo '---'; done 2>/dev/null");
+    (raw || '').split('---').forEach(function (blk) {
+      const g = function (k) {
+        const m = blk.match(new RegExp('^' + k + '=(.*)$', 'm'));
+        return m ? m[1].trim() : '';
+      };
+      const k = g('key');
+      if (k) _trials[k] = { value: g('trial_value'), prev: g('previous_value'), expires: parseInt(g('expires') || '0', 10) };
+    });
+  } catch (e) {}
+}
+
+function trialHoursLeft(k) {
+  const t = _trials[k];
+  if (!t || !t.expires) return 0;
+  const left = t.expires - Math.floor(Date.now() / 1000);
+  return left > 0 ? Math.ceil(left / 3600) : 0;
+}
+
+/* Start a trial. The preview runs first and the user confirms against it - starting a
+ * probation from a button press alone would reproduce the problem trials exist to solve:
+ * a change applied without the person knowing what it does here. */
+async function cfgTrialStart(key, val) {
+  let pv = '';
+  try { pv = await run("sh " + MD + "/runtime/asb_policy_preview.sh " + key + " " + val + " 2>/dev/null"); } catch (e) {}
+  const body = (pv || '').trim() || T('trial_no_preview', 'No preview available for this setting.');
+  if (!confirm(body + '\n\n' + T('trial_confirm_q', 'Start a 12-hour trial? It reverts on its own unless you confirm it.'))) return;
+  try {
+    const out = await run("sh " + MD + "/runtime/asb_trial.sh start " + key + " " + val + " 12 2>&1");
+    toast((out || '').trim().split('\n')[0] || T('trial_started', 'Trial started'), 'good');
+  } catch (e) {
+    toast(T('trial_failed', 'Could not start the trial'), 'bad');
+  }
+  await cfgLoadV64State();
+  cfgRender();
+}
+
+async function cfgTrialAction(key, act) {
+  try {
+    const out = await run("sh " + MD + "/runtime/asb_trial.sh " + act + " " + key + " 2>&1");
+    toast((out || '').trim().split('\n')[0] || act, act === 'confirm' ? 'good' : 'warn');
+  } catch (e) {
+    toast(T('trial_action_failed', 'Action failed'), 'bad');
+  }
+  await cfgLoadV64State();
+  cfgRender();
+}
+
+/* What the device did with the last write of this key, if anything. Absence of evidence is
+ * not evidence of failure: a key never written has no ledger row and must show nothing. */
+function ledgerBadge(key) {
+  const l = _ledger[key];
+  if (!l) return null;
+  if (l.result === 'not_writable' || l.result === 'unsupported')
+    return { cls: 'bad', text: T('st_not_accepted', 'device did not accept it'), detail: l };
+  if (l.result === 'readback_mismatch')
+    return { cls: 'bad', text: T('st_readback', 'reads back different'), detail: l };
+  return null;
+}
+
 function cfgStatus(it, cur) {
   // returns {cls, text} — a short colored badge describing the active state Kernel reality
   // first.
   // Asking for bbr where the kernel has no bbr, or a qdisc whose module is missing, used to
   // leave the badge reading like a success because the VALUE was stored fine - the write is
   // what failed.
+  /* Trial and ledger outrank the stored value: both describe what the DEVICE is doing,
+   * while the value only describes what was asked for. A card reading "Enabled" over a
+   * write the ROM rejected is the exact dishonesty the ledger was built to end. */
+  const _tl = trialHoursLeft(it.key);
+  if (_tl > 0) return { cls:'warn', text: T('st_on_trial', 'on trial') + ' \u00b7 ' + _tl + 'h' };
+  const _lb = ledgerBadge(it.key);
+  if (_lb) return { cls: _lb.cls, text: _lb.text };
+
   const nr = _netResult[it.key];
   if (nr === 'unavailable') return { cls:'bad', text:T('st_unavail', 'not supported') };
   if (nr === 'failed')      return { cls:'bad', text:T('st_failed', 'not applied') };
@@ -3830,6 +3950,66 @@ function cfgRenderRow(list, it, showCat) {
       w.className = 'cfg-willbreak';
       w.textContent = '\u26A0 ' + wb;
       inner.appendChild(w);
+    }
+
+    /* Trial row. Secondary and explicit, never a replacement for Apply: the ordinary
+     * toggle stays the ordinary toggle, and this is an extra, clearly-labelled path for
+     * the settings whose harm shows up hours later. */
+    if (TRIAL_KEYS.indexOf(it.key) >= 0) {
+      const tr = document.createElement('div');
+      tr.className = 'cfg-trial';
+      const left = trialHoursLeft(it.key);
+      if (left > 0) {
+        const t = _trials[it.key];
+        const info = document.createElement('span');
+        info.className = 'cfg-trial-info';
+        info.textContent = T('trial_active', 'On trial') + ': ' + t.value +
+          ' \u2190 ' + (t.prev || T('trial_stock', 'stock')) +
+          ' \u00b7 ' + T('trial_reverts_in', 'reverts in') + ' ' + left + 'h';
+        tr.appendChild(info);
+        const keep = document.createElement('button');
+        keep.className = 'cfg-trial-btn keep';
+        keep.textContent = T('trial_keep', 'Keep');
+        keep.onclick = function (e) { e.stopPropagation(); cfgTrialAction(it.key, 'confirm'); };
+        tr.appendChild(keep);
+        const rev = document.createElement('button');
+        rev.className = 'cfg-trial-btn';
+        rev.textContent = T('trial_revert', 'Revert now');
+        rev.onclick = function (e) { e.stopPropagation(); cfgTrialAction(it.key, 'revert'); };
+        tr.appendChild(rev);
+      } else {
+        const b = document.createElement('button');
+        b.className = 'cfg-trial-btn';
+        b.textContent = T('trial_try', 'Try for 12h');
+        b.onclick = function (e) {
+          e.stopPropagation();
+          /* The value a trial would apply is the one that is NOT current - for a toggle
+           * that is unambiguous; for a list it is the next option, which is what the user
+           * would have picked by tapping anyway. */
+          let want;
+          if (it.type === 'bool') want = (cur === '1') ? '0' : '1';
+          else if (it.opts && it.opts.length) {
+            const i = it.opts.indexOf(cur);
+            want = it.opts[(i + 1) % it.opts.length];
+          } else want = cur;
+          cfgTrialStart(it.key, want);
+        };
+        tr.appendChild(b);
+      }
+      inner.appendChild(tr);
+    }
+
+    /* Why the device refused, shown on the card that claims to be on. One line, with the
+     * numbers, because "did not apply" without the observed value sends the user to a
+     * support thread instead of to an answer. */
+    const _lbd = ledgerBadge(it.key);
+    if (_lbd) {
+      const lw = document.createElement('div');
+      lw.className = 'cfg-ledger-warn';
+      lw.textContent = '\u26A0 ' + T('ledger_asked', 'asked for') + ' ' + (_lbd.detail.req || '?') +
+        ', ' + T('ledger_device_has', 'device has') + ' ' + (_lbd.detail.now || '?') +
+        (_lbd.detail.reason ? ' \u00b7 ' + _lbd.detail.reason : '');
+      inner.appendChild(lw);
     }
 
     const d = document.createElement('div');
