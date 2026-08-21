@@ -86,7 +86,8 @@ jobs:
             tests/test_device_safety_contract.sh \
             tests/test_thermal_socd_validation.c \
             tests/test_p0_provenance_contract.sh \
-            tests/test_v62_to_v63_migration.sh \
+            tests/test_v64_p0_contract.sh \
+            tests/test_v62_to_v64_migration.sh \
             tests/test_release_package_tool_contract.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
@@ -185,11 +186,17 @@ jobs:
             echo "== tests/test_p0_provenance_contract.sh =="
             sh tests/test_p0_provenance_contract.sh || _rc=1
           fi
+          # V64 P0: state/diagnostic field names, non-CPU thermal evidence and
+          # Trial apply/rollback must remain production contracts, not source comments.
+          if [ -f tests/test_v64_p0_contract.sh ]; then
+            echo "== tests/test_v64_p0_contract.sh =="
+            sh tests/test_v64_p0_contract.sh || _rc=1
+          fi
           # Public upgrades from V62 retain user config before service starts. Exercise the
           # schema-17 additive migration, backup, idempotence and post-migration safe writer.
-          if [ -f tests/test_v62_to_v63_migration.sh ]; then
-            echo "== tests/test_v62_to_v63_migration.sh =="
-            bash tests/test_v62_to_v63_migration.sh || _rc=1
+          if [ -f tests/test_v62_to_v64_migration.sh ]; then
+            echo "== tests/test_v62_to_v64_migration.sh =="
+            bash tests/test_v62_to_v64_migration.sh || _rc=1
           fi
           # Release packaging excludes tools wholesale, then re-adds selected runtime
           # helpers. Validate the required-tools/copy-back contract before NDK build.
@@ -256,7 +263,7 @@ jobs:
         with:
           path: android-ndk-r28c
           # The exact key pins both runner platform and immutable NDK release.
-          # Legacy restore keeps the cache populated by prior V63 workflows usable.
+          # Legacy restore keeps the cache populated by prior V64 workflows usable.
           key: ${{ runner.os }}-android-ndk-r28c-linux-v1
           restore-keys: |
             ${{ runner.os }}-android-ndk-r28c-linux-
@@ -563,6 +570,7 @@ jobs:
             "bin/asb" \
             "bin/libasbdsp_legacy.so" \
             "bin/libasbdsp_legacy_32.so" \
+            "system/bin/asbtrial" \
             "service.sh" \
             "module.prop" \
             "post-fs-data.sh" \
@@ -572,6 +580,9 @@ jobs:
             "customize.sh" \
             "features.conf" \
             "runtime/asb_watchdog.sh" \
+            "runtime/asb_apply_ledger.sh" \
+            "runtime/asb_trial.sh" \
+            "runtime/asb_policy_preview.sh" \
             "runtime/asb_reconcile.sh" \
             "runtime/profile_core.sh" \
             "runtime/asb_baseline.sh" \

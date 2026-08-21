@@ -66,7 +66,8 @@ jobs:
             tests/test_device_safety_contract.sh \
             tests/test_thermal_socd_validation.c \
             tests/test_p0_provenance_contract.sh \
-            tests/test_v62_to_v63_migration.sh \
+            tests/test_v64_p0_contract.sh \
+            tests/test_v62_to_v64_migration.sh \
             module.prop \
             customize.sh \
             service.sh; do
@@ -159,9 +160,13 @@ jobs:
             echo "== tests/test_p0_provenance_contract.sh =="
             sh tests/test_p0_provenance_contract.sh || _rc=1
           fi
-          if [ -f tests/test_v62_to_v63_migration.sh ]; then
-            echo "== tests/test_v62_to_v63_migration.sh =="
-            bash tests/test_v62_to_v63_migration.sh || _rc=1
+          if [ -f tests/test_v64_p0_contract.sh ]; then
+            echo "== tests/test_v64_p0_contract.sh =="
+            sh tests/test_v64_p0_contract.sh || _rc=1
+          fi
+          if [ -f tests/test_v62_to_v64_migration.sh ]; then
+            echo "== tests/test_v62_to_v64_migration.sh =="
+            bash tests/test_v62_to_v64_migration.sh || _rc=1
           fi
           if [ "$_rc" != "0" ]; then
             echo "::error::smart learner unit tests FAILED - refusing to build a release"
@@ -447,6 +452,9 @@ jobs:
             "customize.sh" \
             "features.conf" \
             "runtime/asb_watchdog.sh" \
+            "runtime/asb_apply_ledger.sh" \
+            "runtime/asb_trial.sh" \
+            "runtime/asb_policy_preview.sh" \
             "runtime/asb_reconcile.sh" \
             "runtime/profile_core.sh" \
             "runtime/asb_baseline.sh" \
