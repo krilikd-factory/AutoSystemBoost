@@ -10,6 +10,10 @@ WRITER="$MODDIR/runtime/asb_config_safe.sh"
 STATE="${ASB_CONFIG_STATE:-/data/adb/asb}"
 PROFILES="$STATE/config_profiles"
 SNAPSHOT="$STATE/governor.conf.snapshot"
+# External copies are a convenience for user backup/sharing, never an unvalidated path API.
+# The WebUI can choose only these two common Android locations; the canonical restore source
+# remains the checksum-protected ASB profile store above.
+EXPORT_ROOT="${ASB_PROFILE_EXPORT_ROOT:-/sdcard}"
 
 hash_file() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'; return; fi
@@ -111,6 +115,49 @@ delete_profile() {
   rm -f "$_in" "$(_profile_sha "$_name")"; echo "deleted=$_name"
 }
 
+_export_dir() {
+  case "${1:-}" in
+    downloads) printf '%s/Download/ASB-Profiles' "$EXPORT_ROOT" ;;
+    documents) printf '%s/Documents/ASB-Profiles' "$EXPORT_ROOT" ;;
+    *) return 1 ;;
+  esac
+}
+export_profile() {
+  _name="$1" _where="$2"; _profile_ok "$_name" || { echo 'invalid profile name' >&2; exit 2; }
+  _in="$(verify_profile "$_name")"; _dir="$(_export_dir "$_where")" || { echo 'invalid export location' >&2; exit 2; }
+  mkdir -p "$_dir" 2>/dev/null || { echo 'cannot create export directory' >&2; exit 1; }
+  cp -f "$_in" "$_dir/$_name.conf" && cp -f "$(_profile_sha "$_name")" "$_dir/$_name.conf.sha256" || {
+    echo 'cannot export profile' >&2; exit 1;
+  }
+  chmod 0644 "$_dir/$_name.conf" "$_dir/$_name.conf.sha256" 2>/dev/null || true
+  echo "exported=$_dir/$_name.conf"
+}
+list_external_profiles() {
+  _where="$1"; _dir="$(_export_dir "$_where")" || { echo 'invalid export location' >&2; exit 2; }
+  [ -d "$_dir" ] || exit 0
+  for _f in "$_dir"/*.conf; do
+    [ -f "$_f" ] || continue
+    _name="${_f##*/}"; _name="${_name%.conf}"; _profile_ok "$_name" || continue
+    _expected="$(cat "$_f.sha256" 2>/dev/null | tr -d ' \r\n')"; _actual="$(hash_file "$_f")"
+    _status=ok; [ -n "$_expected" ] && [ "$_expected" = "$_actual" ] || _status=checksum_bad
+    _count="$(grep -c '^[A-Za-z0-9_]*=' "$_f" 2>/dev/null || echo 0)"
+    printf '%s|%s|%s\n' "$_name" "$_count" "$_status"
+  done
+}
+import_external_profile() {
+  _where="$1" _name="$2"; _profile_ok "$_name" || { echo 'invalid profile name' >&2; exit 2; }
+  _dir="$(_export_dir "$_where")" || { echo 'invalid import location' >&2; exit 2; }
+  _in="$_dir/$_name.conf" _sum="$_dir/$_name.conf.sha256"
+  [ -r "$_in" ] && [ -r "$_sum" ] || { echo 'exported profile not found' >&2; exit 1; }
+  _expected="$(cat "$_sum" 2>/dev/null | tr -d ' \r\n')"; _actual="$(hash_file "$_in")"
+  [ -n "$_expected" ] && [ "$_expected" = "$_actual" ] || { echo 'exported profile checksum mismatch' >&2; exit 1; }
+  _prepare_dir
+  cp -f "$_in" "$(_profile_file "$_name")" && cp -f "$_sum" "$(_profile_sha "$_name")" || {
+    echo 'cannot import exported profile' >&2; exit 1;
+  }
+  echo "imported=$_name"
+}
+
 # Kept for existing terminal workflows: a path argument preserves the original schema-2
 # whole-config backup/preview interface. New WebUI profiles never use this path.
 legacy_create() {
@@ -152,5 +199,8 @@ case "${1:-}" in
     esac ;;
   restore) [ "$#" -ge 3 ] || { echo "usage: $0 restore NAME ALLOWED_KEY..." >&2; exit 2; }; _n="$2"; shift 2; restore_profile "$_n" "$@" ;;
   delete) [ "$#" -eq 2 ] || { echo "usage: $0 delete NAME" >&2; exit 2; }; delete_profile "$2" ;;
-  *) echo "usage: $0 {list|create|replace|preview|restore|delete} NAME [ALLOWED_KEY...]" >&2; exit 2 ;;
+  export) [ "$#" -eq 3 ] || { echo "usage: $0 export NAME {downloads|documents}" >&2; exit 2; }; export_profile "$2" "$3" ;;
+  list-external) [ "$#" -eq 2 ] || { echo "usage: $0 list-external {downloads|documents}" >&2; exit 2; }; list_external_profiles "$2" ;;
+  import-external) [ "$#" -eq 3 ] || { echo "usage: $0 import-external {downloads|documents} NAME" >&2; exit 2; }; import_external_profile "$2" "$3" ;;
+  *) echo "usage: $0 {list|create|replace|preview|restore|delete|export|list-external|import-external} ..." >&2; exit 2 ;;
 esac
