@@ -2464,8 +2464,8 @@ body.config-active #livePage.open {
          labels do not fit a phone: forcing them onto one line either clipped the words or
          pushed the row off-screen, and both were tried. -->
     <div id="cfgActionsRow">
-      <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_export">↑ Export</button>
-      <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_import">↓ Import</button>
+      <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_profile_save">↑ Save profile</button>
+      <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_profile_load">↓ Load profile</button>
       <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset</button>
     </div>
 
@@ -3316,20 +3316,33 @@ async function loadNetResult() {
  * purpose is honest evidence about THIS device is worthless if only a maintainer can run
  * it.
  */
+/* This list intentionally mirrors runtime/asb_trial.sh. Add a key only with a
+ * matching backend semantic validator, rollback/effect contract and source test. */
 const TRIAL_KEYS = ['doze_level','doze_trim_whitelist','wakelock_action','night_modem_idle',
                     'gnss_trim','gms_trim','gms_freeze','wifi_country',
-                    'audio_remove_volume_limit','UX_MANAGE_OEM_TOGGLES','perf_ceiling_pct'];
+                    'audio_remove_volume_limit','UX_MANAGE_OEM_TOGGLES'];
 
 let _ledger = {};   /* key -> {result, reason, req, now} - last write outcome per key */
 let _trials = {};   /* key -> {value, prev, expires} - active trials */
 
 /* Read both records in one pass. Cheap enough to do on every render, and reading them
  * separately would let the badge and the trial chip disagree by a tick. */
+/* `run()` always resolves a bridge result object, even when the shell command fails.
+ * New safety UI must therefore inspect errno and read stdout/stderr explicitly; treating
+ * the result as a string silently hides a device rejection. */
+function runText(result) {
+  return ((result && result.stdout) || (result && result.stderr) || '').trim();
+}
+function runOk(result) {
+  return !!result && result.errno === 0;
+}
+
 async function cfgLoadV64State() {
   _ledger = {}; _trials = {};
   try {
-    const raw = await run("tail -120 /data/adb/asb/apply_ledger 2>/dev/null");
-    (raw || '').split('\n').forEach(function (ln) {
+    const result = await run("tail -120 /data/adb/asb/apply_ledger 2>/dev/null");
+    const raw = (result && result.stdout) || '';
+    raw.split('\n').forEach(function (ln) {
       const f = ln.split('|');
       if (f.length < 7) return;
       /* Last entry wins: an earlier failure that was later fixed must not keep warning. */
@@ -3337,8 +3350,9 @@ async function cfgLoadV64State() {
     });
   } catch (e) {}
   try {
-    const raw = await run("for f in /data/adb/asb/trial/*.trial; do [ -f \"$f\" ] && cat \"$f\" && echo '---'; done 2>/dev/null");
-    (raw || '').split('---').forEach(function (blk) {
+    const result = await run("for f in /data/adb/asb/trial/*.trial; do [ -f \"$f\" ] && cat \"$f\" && echo '---'; done 2>/dev/null");
+    const raw = (result && result.stdout) || '';
+    raw.split('---').forEach(function (blk) {
       const g = function (k) {
         const m = blk.match(new RegExp('^' + k + '=(.*)$', 'm'));
         return m ? m[1].trim() : '';
@@ -3355,31 +3369,43 @@ function trialHoursLeft(k) {
   const left = t.expires - Math.floor(Date.now() / 1000);
   return left > 0 ? Math.ceil(left / 3600) : 0;
 }
+function trialExpired(k) {
+  const t = _trials[k];
+  return !!t && (!t.expires || t.expires <= Math.floor(Date.now() / 1000));
+}
 
 /* Start a trial. The preview runs first and the user confirms against it - starting a
  * probation from a button press alone would reproduce the problem trials exist to solve:
  * a change applied without the person knowing what it does here. */
 async function cfgTrialStart(key, val) {
-  let pv = '';
-  try { pv = await run("sh " + MD + "/runtime/asb_policy_preview.sh " + key + " " + val + " 2>/dev/null"); } catch (e) {}
-  const body = (pv || '').trim() || T('trial_no_preview', 'No preview available for this setting.');
+  let pv = null;
+  try { pv = await run("sh " + MD + "/runtime/asb_policy_preview.sh " + key + " " + val); } catch (e) {}
+  if (!runOk(pv)) {
+    toast(runText(pv) || T('trial_no_preview', 'No preview available for this setting.'), 'bad');
+    return;
+  }
+  const body = runText(pv) || T('trial_no_preview', 'No preview available for this setting.');
   if (!confirm(body + '\n\n' + T('trial_confirm_q', 'Start a 12-hour trial? It reverts on its own unless you confirm it.'))) return;
-  try {
-    const out = await run("sh " + MD + "/runtime/asb_trial.sh start " + key + " " + val + " 12 2>&1");
-    toast((out || '').trim().split('\n')[0] || T('trial_started', 'Trial started'), 'good');
-  } catch (e) {
-    toast(T('trial_failed', 'Could not start the trial'), 'bad');
+  let out = null;
+  try { out = await run("sh " + MD + "/runtime/asb_trial.sh start " + key + " " + val + " 12"); } catch (e) {}
+  const text = runText(out);
+  if (!runOk(out)) {
+    toast(text || T('trial_failed', 'Could not start the trial'), 'bad');
+  } else {
+    toast(text.split('\n')[0] || T('trial_started', 'Trial started'), 'good');
   }
   await cfgLoadV64State();
   cfgRender();
 }
 
 async function cfgTrialAction(key, act) {
-  try {
-    const out = await run("sh " + MD + "/runtime/asb_trial.sh " + act + " " + key + " 2>&1");
-    toast((out || '').trim().split('\n')[0] || act, act === 'confirm' ? 'good' : 'warn');
-  } catch (e) {
-    toast(T('trial_action_failed', 'Action failed'), 'bad');
+  let out = null;
+  try { out = await run("sh " + MD + "/runtime/asb_trial.sh " + act + " " + key); } catch (e) {}
+  const text = runText(out);
+  if (!runOk(out)) {
+    toast(text || T('trial_action_failed', 'Action failed'), 'bad');
+  } else {
+    toast(text.split('\n')[0] || act, act === 'confirm' ? 'good' : 'warn');
   }
   await cfgLoadV64State();
   cfgRender();
@@ -3406,10 +3432,11 @@ function cfgStatus(it, cur) {
   /* Trial and ledger outrank the stored value: both describe what the DEVICE is doing,
    * while the value only describes what was asked for. A card reading "Enabled" over a
    * write the ROM rejected is the exact dishonesty the ledger was built to end. */
-  const _tl = trialHoursLeft(it.key);
-  if (_tl > 0) return { cls:'warn', text: T('st_on_trial', 'on trial') + ' \u00b7 ' + _tl + 'h' };
   const _lb = ledgerBadge(it.key);
   if (_lb) return { cls: _lb.cls, text: _lb.text };
+  const _tl = trialHoursLeft(it.key);
+  if (_tl > 0) return { cls:'warn', text: T('st_on_trial', 'on trial') + ' · ' + _tl + 'h' };
+  if (trialExpired(it.key)) return { cls:'warn', text: T('trial_expired_wait', 'trial expired — restoring') };
 
   const nr = _netResult[it.key];
   if (nr === 'unavailable') return { cls:'bad', text:T('st_unavail', 'not supported') };
@@ -3972,6 +3999,18 @@ function cfgRenderRow(list, it, showCat) {
         keep.textContent = T('trial_keep', 'Keep');
         keep.onclick = function (e) { e.stopPropagation(); cfgTrialAction(it.key, 'confirm'); };
         tr.appendChild(keep);
+        const rev = document.createElement('button');
+        rev.className = 'cfg-trial-btn';
+        rev.textContent = T('trial_revert', 'Revert now');
+        rev.onclick = function (e) { e.stopPropagation(); cfgTrialAction(it.key, 'revert'); };
+        tr.appendChild(rev);
+      } else if (trialExpired(it.key)) {
+        /* The service owns expiry rollback. Do not offer a second start while the old
+         * record still exists: backend correctly rejects concurrent trials for one key. */
+        const info = document.createElement('span');
+        info.className = 'cfg-trial-info';
+        info.textContent = T('trial_expired_wait', 'Trial expired — restoring previous value');
+        tr.appendChild(info);
         const rev = document.createElement('button');
         rev.className = 'cfg-trial-btn';
         rev.textContent = T('trial_revert', 'Revert now');
@@ -4686,70 +4725,63 @@ async function dozeSaveKeep(box) {
   }
 }
 
-const CFG_BACKUP_PATH = '/sdcard/asb_settings_backup.conf';
-
-async function cfgExport() {
-  /* Export the keys the WebUI owns, not the whole file.
-   *
-   * governor.conf also carries per-device bounds, learned values and internal thresholds.
-   * Restoring those onto a different model hands it another phone's frequency table, which
-   * is how a "restore my settings" button becomes a support thread. SNAP_KEYS is exactly
-   * the set the user chose, and it is already the list install.sh restores. */
-  try {
-    const cmd = "sh -c 'C=" + MD + "/config/governor.conf; O=" + CFG_BACKUP_PATH + "; " +
-      ": > $O; echo \"# AutoSystemBoost settings backup\" >> $O; " +
-      "echo \"# device: $(getprop ro.product.model) $(getprop ro.board.platform)\" >> $O; " +
-      "echo \"# date: $(date)\" >> $O; " +
-      "for k in " + SNAP_KEYS.join(' ') + "; do " +
-      "v=$(grep -E \"^[[:space:]]*${k}=\" $C 2>/dev/null | head -1 | sed \"s/.*=//\"); " +
-      "[ -n \"$v\" ] && echo \"${k}=${v}\" >> $O; done; " +
-      "grep -c \"=\" $O'";
-    const r = await run(cmd);
-    const n = parseInt(((r && r.stdout) || '0').trim(), 10) || 0;
-    toast(T('cfg_export_ok', 'Saved to ') + CFG_BACKUP_PATH + ' (' + n + ')', 'ok');
-  } catch (e) {
-    toast(T('cfg_export_err', 'Could not write the backup'), 'err');
-  }
+/* Named profiles are intentionally stored in ASB-owned state rather than accepting an
+ * arbitrary filesystem path from the WebUI. The helper permits only [A-Za-z0-9_-] names,
+ * owns checksum/preview, and imports through the transactional config writer. */
+const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';
+function cfgProfileNameOK(name) { return /^[A-Za-z0-9_-]{1,32}$/.test(name || ''); }
+function cfgProfileArgs() { return SNAP_KEYS.map(shQuote).join(' '); }
+function cfgResultText(r) { return ((r && r.stdout) || (r && r.stderr) || '').trim(); }
+function cfgProfileDefaultName() {
+  const d = new Date();
+  return 'profile-' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') +
+    String(d.getMinutes()).padStart(2, '0');
 }
-
+async function cfgExport() {
+  /* Save only keys owned by WebUI. Bounds, learner state and per-device thermal constants
+   * are deliberately excluded, so a profile can never transplant another phone's policy. */
+  let name = prompt(T('cfg_profile_name', 'Profile name'), cfgProfileDefaultName());
+  if (name === null) return;
+  name = name.trim();
+  if (!cfgProfileNameOK(name)) {
+    toast(T('cfg_profile_invalid', 'Use 1–32 letters, digits, _ or -'), 'err'); return;
+  }
+  let r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' create ' + shQuote(name) + ' ' + cfgProfileArgs());
+  if (r && r.errno === 3) {
+    if (!confirm(T('cfg_profile_replace_q', 'This profile already exists. Replace it?'))) return;
+    r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' replace ' + shQuote(name) + ' ' + cfgProfileArgs());
+  }
+  if (!r || r.errno !== 0) {
+    toast(cfgResultText(r) || T('cfg_export_err', 'Could not save profile'), 'err'); return;
+  }
+  const keys = (cfgResultText(r).match(/^keys=(\d+)$/m) || [])[1] || '?';
+  toast(T('cfg_profile_saved', 'Saved profile ') + name + ' (' + keys + ')', 'ok');
+}
 async function cfgImport() {
-  /* Two taps: this overwrites choices, and a single tap next to Export is easy to hit. */
-  const btns = document.querySelectorAll('#cfgBackupWrap .cfg-backup');
-  const btn = btns && btns[1];
-  if (btn && btn.dataset.armed !== '1') {
-    btn.dataset.armed = '1';
-    /* Short confirm text, not a sentence.
-     *
-     * "Tap again to restore" is longer than the button that holds it, so the armed state
-     * spilled past the orange border. The button is already orange and already says what
-     * it does - the confirm only has to say "again". */
-    btn.textContent = T('cfg_import_confirm', 'Again?');
-    setTimeout(function () {
-      if (btn) { btn.dataset.armed = ''; btn.textContent = T('cfg_import', 'Import settings'); }
-    }, 4000);
-    return;
+  const listed = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' list');
+  if (!listed || listed.errno !== 0) { toast(T('cfg_import_err', 'Could not read profiles'), 'err'); return; }
+  const rows = ((listed.stdout || '').trim().split(/\r?\n/).filter(Boolean)).map(function (line) {
+    const p = line.split('|'); return { name:p[0], created:p[1], keys:p[2], status:p[3] };
+  }).filter(function (p) { return cfgProfileNameOK(p.name) && p.status === 'ok'; });
+  if (!rows.length) { toast(T('cfg_profiles_none', 'No valid saved profiles'), 'warn'); return; }
+  const menu = rows.map(function (p) { return p.name + ' (' + p.keys + ')'; }).join('\n');
+  let name = prompt(T('cfg_profiles_choose', 'Choose a profile:') + '\n' + menu, rows[0].name);
+  if (name === null) return;
+  name = name.trim();
+  if (!rows.some(function (p) { return p.name === name; })) {
+    toast(T('cfg_profile_invalid', 'Unknown profile'), 'err'); return;
   }
-  if (btn) { btn.dataset.armed = ''; btn.textContent = T('cfg_import', 'Import settings'); }
-  try {
-    /* Import is one validated transaction. Direct sed updates used to bypass
-       the writer lock and could leave the daemon rejecting the whole config. */
-    const safeWriter = MD + '/runtime/asb_config_safe.sh';
-    const snapshot = '/data/adb/asb/governor.conf.snapshot';
-    const cmd = 'sh ' + shQuote(safeWriter) + ' import ' +
-      shQuote(CFG_BACKUP_PATH) + ' ' + shQuote(snapshot) + ' ' +
-      SNAP_KEYS.map(shQuote).join(' ');
-    const r = await run(cmd);
-    if (!r || r.errno !== 0) {
-      toast(T('cfg_import_err', 'Could not read or validate the backup'), 'err');
-      return;
-    }
-    await cfgLoad();
-    cfgRender();
-    toast(T('cfg_import_ok', 'Restored validated settings') +
-          T('cfg_import_reboot', ' - reboot to apply'), 'ok');
-  } catch (e) {
-    toast(T('cfg_import_err', 'Could not read the backup'), 'err');
-  }
+  const preview = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' preview ' + shQuote(name) + ' ' + cfgProfileArgs());
+  if (!preview || preview.errno !== 0) { toast(cfgResultText(preview) || T('cfg_import_err', 'Could not validate profile'), 'err'); return; }
+  const diff = cfgResultText(preview) || T('cfg_profile_no_diff', 'No settings would change.');
+  if (!confirm(T('cfg_profile_preview', 'Preview') + '\n\n' + diff.slice(0, 2600) + '\n\n' +
+      T('cfg_profile_restore_q', 'Restore this profile?'))) return;
+  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' restore ' + shQuote(name) + ' ' + cfgProfileArgs());
+  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err', 'Could not restore profile'), 'err'); return; }
+  await cfgLoad();
+  cfgRender();
+  toast(T('cfg_profile_restored', 'Restored profile ') + name + T('cfg_import_reboot', ' - reboot to apply'), 'ok');
 }
 
 async function cfgSoftReboot() {
