@@ -460,10 +460,10 @@ case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released fr
   *)
     _dsp_requested_mb=$((_dsp_g * 100))
     _dsp_expected_mb="$_dsp_requested_mb"
-    [ "$_dsp_expected_mb" -gt 1800 ] && _dsp_expected_mb=1800
+    [ "$_dsp_expected_mb" -gt 2500 ] && _dsp_expected_mb=2500
     V "  DSP gain applied (persist.asb.dsp.gain_mb)" "$_dsp_expected_mb" "$(gp persist.asb.dsp.gain_mb)" eq
     [ "$_dsp_requested_mb" -ne "$_dsp_expected_mb" ] && \
-      NOTE "  requested ${_dsp_requested_mb}mB is safely capped to ${_dsp_expected_mb}mB (+18 dB compatibility limit)"
+      NOTE "  requested ${_dsp_requested_mb}mB is safely capped to ${_dsp_expected_mb}mB (+25 dB compatibility limit)"
     V "  DSP enabled" "1" "$(gp persist.asb.dsp.enable)" eq
     ;;
 esac
