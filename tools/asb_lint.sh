@@ -564,6 +564,35 @@ for _l in en $_i18n_langs; do
 done
 ok "translation files present and parseable"
 
+# Every locale must carry every global WebUI string from en.json.
+#
+# Card names/descriptions have their own nested checks below. This covers the root-level UI
+# copy such as the named profile manager, export locations and two-step destructive reset
+# dialogs. English fallback keeps the UI usable, but a mixed-language confirmation is not a
+# release-quality result and used to hide thirty-six missing strings across eleven locales.
+if command -v python3 >/dev/null 2>&1 && [ -f webroot/i18n/en.json ]; then
+  _root_i18n_miss="$(python3 - <<'PYEOF_ROOT_I18N'
+import glob, json, os
+with open('webroot/i18n/en.json', encoding='utf-8') as f:
+    reference = set(json.load(f))
+out = []
+for path in sorted(glob.glob('webroot/i18n/*.json')):
+    if path.endswith('/en.json'):
+        continue
+    with open(path, encoding='utf-8') as f:
+        missing = sorted(reference - set(json.load(f)))
+    if missing:
+        out.append('%s: %s' % (os.path.basename(path), ', '.join(missing[:6])))
+print('; '.join(out))
+PYEOF_ROOT_I18N
+)"
+  if [ -n "$_root_i18n_miss" ]; then
+    err "locales missing global WebUI strings - $_root_i18n_miss"
+  else
+    ok "every locale contains all global WebUI strings"
+  fi
+fi
+
 # Every runtime script must be in the workflow's required-files list.
 #
 # Adding a script means touching the script itself, install.sh for its chmod, service.sh to
@@ -608,6 +637,29 @@ PYEOF_SNAP
     err "cards missing from SNAP_KEYS (never exported, never restored):$_snap_miss"
   else
     ok "every card is in SNAP_KEYS"
+  fi
+fi
+
+# Every card must declare its application semantics.
+#
+# Missing keys silently fall through applyModeOf() to APPLY_REBOOT. That is safe but can be
+# false: night_modem_idle is read by the governor after a reload and previously told users to
+# reboot for no reason. Keeping this explicit makes product copy match the actual save path.
+if [ -f webroot/index.html ] && command -v python3 >/dev/null 2>&1; then
+  _apply_miss="$(python3 - <<'PYEOF_APPLY'
+import re
+s = open('webroot/index.html', encoding='utf-8').read()
+i = s.index('const CFG_ITEMS = ['); j = s.index('\n];', i)
+items = set(re.findall(r"\{ key:'([A-Za-z_][A-Za-z_0-9]*)'", s[i:j]))
+m = re.search(r'const APPLY_MODE\s*=\s*\{(.*?)\n\};', s, re.S)
+apply = set(re.findall(r'([A-Za-z_][A-Za-z_0-9]*)\s*:\s*APPLY_(?:LIVE|NEXT|REBOOT)', m.group(1))) if m else set()
+print(' '.join(sorted(items - apply)))
+PYEOF_APPLY
+)"
+  if [ -n "$_apply_miss" ]; then
+    err "cards missing APPLY_MODE (would silently claim reboot):$_apply_miss"
+  else
+    ok "every card has an explicit APPLY_MODE"
   fi
 fi
 
