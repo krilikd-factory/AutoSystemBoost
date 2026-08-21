@@ -214,6 +214,11 @@ _validate() {
   _shadow="$(_require_num shadow_mode "$_f")"
   _game_cap="$(_require_num gaming_cpu_max_ceiling_khz "$_f")"
   _cam_enable="$(_require_num camera_hold_enable "$_f")"
+  _cam_level="$(_require_num CAMERA_LEVEL "$_f")"
+  _cam_grain="$(_require_num CAMERA_GRAIN "$_f")"
+  _cam_contrast="$(_require_num CAMERA_CONTRAST "$_f")"
+  _cam_portrait="$(_require_num CAMERA_PORTRAIT "$_f")"
+  _cam_lowlight="$(_require_num CAMERA_LOWLIGHT "$_f")"
   _cam_busy="$(_require_num camera_busy_pct "$_f")"
   _cam_grace="$(_require_num camera_hold_grace_s "$_f")"
   _cam_max="$(_require_num camera_hold_max_s "$_f")"
@@ -255,6 +260,14 @@ _validate() {
   _bool "$_shadow" || _die "shadow_mode must be 0 or 1"
   _between "$_game_cap" 0 5000000 || _die "gaming_cpu_max_ceiling_khz must be 0..5000000"
   _bool "$_cam_enable" || _die "camera_hold_enable must be 0 or 1"
+  # Camera UI, runtime grading and writer agree on one bounded schema. Accepting a value
+  # above runtime's real ceiling would make a slider appear applied while the grader silently
+  # clamps it; keep the visible maximum as the actual maximum.
+  _between "$_cam_level" 0 10 || _die "CAMERA_LEVEL must be 0..10"
+  _between "$_cam_grain" 0 10 || _die "CAMERA_GRAIN must be 0..10"
+  _between "$_cam_contrast" 0 10 || _die "CAMERA_CONTRAST must be 0..10"
+  _between "$_cam_portrait" 0 6 || _die "CAMERA_PORTRAIT must be 0..6"
+  _between "$_cam_lowlight" 0 10 || _die "CAMERA_LOWLIGHT must be 0..10"
   _between "$_cam_busy" 1 100 || _die "camera_busy_pct must be 1..100"
   _between "$_cam_grace" 0 600 || _die "camera_hold_grace_s must be 0..600"
   _between "$_cam_max" 0 7200 || _die "camera_hold_max_s must be 0..7200"

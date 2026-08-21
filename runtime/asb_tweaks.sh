@@ -49,17 +49,31 @@ asb_tw_int() {
   esac
 }
 
-# Resolve the effective camera strength LEVEL (0..4) from config, with back-compat
+# Resolve the effective camera strength LEVEL (0..10) from config, with back-compat.
 asb_tw_camera_level() {
   _conf="$1"
   _lv="$(asb_tw_int CAMERA_LEVEL "$_conf" -1)"
   if [ "$_lv" = "-1" ]; then
     if [ "$(asb_tw_flag CAMERA_AGGRESSIVE "$_conf")" = "1" ]; then _lv=3; else _lv=0; fi
   fi
-  # clamp 0..4
+  # Keep this in sync with the writer, WebUI and asb_camera_grade.sh. A prior 0..4
+  # clamp made a visible level 5–8 choice silently render as level 4 at boot.
   [ "$_lv" -lt 0 ] 2>/dev/null && _lv=0
-  [ "$_lv" -gt 4 ] 2>/dev/null && _lv=4
+  [ "$_lv" -gt 10 ] 2>/dev/null && _lv=10
   echo "$_lv"
+}
+
+# A non-stock independent camera control is sufficient to build an overlay even when
+# CAMERA_LEVEL remains 0. This must mirror asb_camera_grade.sh's early-return condition.
+asb_tw_camera_grade_needed() {
+  _conf="$1"
+  _lv="$(asb_tw_camera_level "$_conf")"
+  _gr="$(asb_tw_int CAMERA_GRAIN "$_conf" 3)"
+  _ct="$(asb_tw_int CAMERA_CONTRAST "$_conf" 3)"
+  _pt="$(asb_tw_int CAMERA_PORTRAIT "$_conf" 0)"
+  _ll="$(asb_tw_int CAMERA_LOWLIGHT "$_conf" 0)"
+  [ "$_lv" -gt 0 ] 2>/dev/null || [ "$_gr" != 3 ] || [ "$_ct" != 3 ] || \
+    [ "$_pt" != 0 ] || [ "$_ll" != 0 ]
 }
 
 # --- aggressive AUDIO layer (one mixer file) ---
@@ -294,6 +308,8 @@ asb_apply_dynamic_tweaks() {
   [ "$_audio_aggr" = "1" ] || _audio_aggr="$(asb_tw_flag AUDIO_AGGRESSIVE "$_conf")"
   _cam_inject="$(asb_tw_flag CAMERA_AGGRESSIVE_INJECT "$_conf")"
   _cam_level="$(asb_tw_camera_level "$_conf")"
+  _cam_grade_needed=0
+  asb_tw_camera_grade_needed "$_conf" && _cam_grade_needed=1
 
   # --- AUDIO mixer files --- Respect the installer categories individually.
   # The caller only checks "AUDIO or CAMERA", so without this a user who kept CAMERA but
@@ -337,7 +353,7 @@ asb_apply_dynamic_tweaks() {
   #
   # By the time we run, that old overlay is gone: this boot mounted the NEW module, which has
   # no camera file.
-  if [ "$_cam_level" -gt 0 ] 2>/dev/null \
+  if [ "$_cam_grade_needed" = 1 ] \
      && [ ! -f "$_md/system/odm/etc/camera/conf_tuning_params.json" ] \
      && [ ! -f "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" ]; then
     for _cam_rescue in /odm/etc/camera/conf_tuning_params.json \
@@ -364,8 +380,9 @@ asb_apply_dynamic_tweaks() {
     # Build the DESIRED final conf in a temp from the clean baseline, apply the
     _des="${_cf}.asbdes$$"
     cp -f "$_bp" "$_des" 2>/dev/null || { rm -f "$_des"; continue; }
-    if [ "$_cam_level" -gt 0 ] 2>/dev/null; then
-      # Grade with asb_camera_grade.sh - the SAME engine the installer uses.
+    if [ "$_cam_grade_needed" = 1 ]; then
+      # Grade with asb_camera_grade.sh - the SAME engine the installer uses. This is
+      # required for Camera Grade and for any independent non-stock camera control.
       #
       # This used to call asb_tw_aggr_camera, a stack of sed rules keyed to literal stock
       # values (find 0.35, write 0.55).

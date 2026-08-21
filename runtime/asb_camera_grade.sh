@@ -36,27 +36,25 @@ if [ -z "$_lvl" ]; then
           | head -1 | sed 's/.*=//' | tr -d ' \r')"
 fi
 case "$_lvl" in ''|*[!0-9]*) _lvl=0 ;; esac
-[ "$_lvl" -gt 8 ] 2>/dev/null && _lvl=8
+[ "$_lvl" -gt 10 ] 2>/dev/null && _lvl=10
 
 # Per-level ratios, in percent to keep the shell in integers.
 #
-# These are deliberately modest.
-# Saturation moves least because it is the one people notice going wrong.
-#
-# The top of the range is deliberately further than "tasteful".
-# Someone asking for level 8 is not being talked out of it by a cap, and the values below are
-# still bounded by the clamps in the awk - a blend weight cannot exceed 1.0, and nothing may
-# exceed 64.
+# Strength is intentionally progressive: 1–6 remains useful for natural tuning, while
+# 7–10 is visibly stylised. The high end now goes beyond the former level-8 maximum, but
+# remains capability-safe: blend weights clamp at 1.0 and all numeric values at +/-64.
 case "$_lvl" in
-  1) _sat=104; _ai=112; _sharp=108 ;;
-  2) _sat=110; _ai=126; _sharp=118 ;;
-  3) _sat=118; _ai=142; _sharp=132 ;;
-  4) _sat=128; _ai=160; _sharp=150 ;;
-  5) _sat=140; _ai=180; _sharp=172 ;;
-  6) _sat=155; _ai=200; _sharp=198 ;;
-  7) _sat=175; _ai=230; _sharp=230 ;;
-  8) _sat=200; _ai=260; _sharp=270 ;;
-  *) _sat=100; _ai=100; _sharp=100 ;;
+  1)  _sat=104; _ai=112; _sharp=108 ;;
+  2)  _sat=110; _ai=126; _sharp=118 ;;
+  3)  _sat=118; _ai=142; _sharp=132 ;;
+  4)  _sat=128; _ai=160; _sharp=150 ;;
+  5)  _sat=140; _ai=180; _sharp=172 ;;
+  6)  _sat=155; _ai=200; _sharp=198 ;;
+  7)  _sat=175; _ai=230; _sharp=230 ;;
+  8)  _sat=200; _ai=260; _sharp=270 ;;
+  9)  _sat=225; _ai=300; _sharp=305 ;;
+  10) _sat=250; _ai=340; _sharp=350 ;;
+  *)  _sat=100; _ai=100; _sharp=100 ;;
 esac
 
 # ── the four independent controls ─────────────────────────────────────────────
@@ -72,8 +70,8 @@ _cfg_num() {
 # because a perfectly smooth image reads as plastic.
 _grain="$(_cfg_num CAMERA_GRAIN "$ASB_CAM_GRAIN_IN")"
 case "$_grain" in ''|*[!0-9]*) _grain=3 ;; esac
-[ "$_grain" -gt 8 ] 2>/dev/null && _grain=8
-# 3 is stock; 8 is roughly 2.7x the shipped grain, which is a strong film look.
+[ "$_grain" -gt 10 ] 2>/dev/null && _grain=10
+# 3 is stock; 10 is roughly 3.3x the shipped grain, a clearly visible film look.
 _grain_pct=$(( _grain * 100 / 3 ))
 
 # Contrast and colour depth, from the tone-mapping block: the *contrastScale and
@@ -81,8 +79,8 @@ _grain_pct=$(( _grain * 100 / 3 ))
 # matrix - this one shapes the curve rather than the gamut.
 _contrast="$(_cfg_num CAMERA_CONTRAST "$ASB_CAM_CONTRAST_IN")"
 case "$_contrast" in ''|*[!0-9]*) _contrast=3 ;; esac
-[ "$_contrast" -gt 8 ] 2>/dev/null && _contrast=8
-# 3 = stock, exactly 100%.
+[ "$_contrast" -gt 10 ] 2>/dev/null && _contrast=10
+# 3 = stock, exactly 100%; 10 reaches 170% for intentionally visible curve depth.
 _contrast_pct=$(( 70 + _contrast * 10 ))
 
 # Portrait AI.
@@ -103,7 +101,7 @@ esac
 # Macro and low-light sharpening.
 _lowlight="$(_cfg_num CAMERA_LOWLIGHT "$ASB_CAM_LOWLIGHT_IN")"
 case "$_lowlight" in ''|*[!0-9]*) _lowlight=0 ;; esac
-[ "$_lowlight" -gt 8 ] 2>/dev/null && _lowlight=8
+[ "$_lowlight" -gt 10 ] 2>/dev/null && _lowlight=10
 if [ "$_lowlight" -gt 0 ] 2>/dev/null; then
   _low_pct=$(( 100 + _lowlight * 22 ))
 else
@@ -129,7 +127,7 @@ ASB_GRADE_MARK="ASBGRADE"
 # JSON, which the camera HAL parses at every open.
 # Tested rather than assumed: a marker line appended to the real tuning file fails json.load
 # outright.
-ASB_GRADE_DIR="/data/adb/asb/grade_marks"
+ASB_GRADE_DIR="${ASB_GRADE_DIR:-/data/adb/asb/grade_marks}"
 
 # Normalise the path before it becomes a marker name.
 #
@@ -165,7 +163,15 @@ asb_camera_grade_file() {
     return 2
   fi
 
-  [ "$_lvl" -gt 0 ] 2>/dev/null || { cp -f "$_src" "$_dst" 2>/dev/null; return 0; }
+  # Independent sliders must work on their own. Previously any Camera Grade = 0
+  # short-circuited here, so a saved max Grain/Contrast/Portrait/Low-light choice
+  # produced an unchanged baseline and looked like a broken toggle.
+  if ! [ "$_lvl" -gt 0 ] 2>/dev/null \
+     && [ "$_grain" = 3 ] && [ "$_contrast" = 3 ] \
+     && [ "$_portrait" = 0 ] && [ "$_lowlight" = 0 ]; then
+    cp -f "$_src" "$_dst" 2>/dev/null
+    return 0
+  fi
 
   awk -v SAT="$_sat" -v AI="$_ai" -v SHARP="$_sharp" \
       -v GRAIN="$_grain_pct" -v CONTR="$_contrast_pct" -v LOW="$_low_pct" \
