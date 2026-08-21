@@ -276,6 +276,23 @@ static long cpu_snap_freq(int path_idx, long want) {
     return best;
 }
 
+/* Exact hardware floor for a physical policy. Unlike cpu_snap_freq(), this never accepts
+ * a profile-derived kHz target: it returns the first real OPP only when the policy exposed a
+ * complete readable table. A missing/empty table returns 0 so callers preserve their existing
+ * profile floor rather than guessing a universal frequency. */
+static long cpu_lowest_opp(int path_idx) {
+    if (path_idx < 0 || path_idx >= 16) return 0;
+    cpu_read_freq_tables();
+    int n = g_cpu_freq_table_len[path_idx];
+    if (n <= 0) return 0;
+    long lowest = 0;
+    for (int i = 0; i < n; i++) {
+        long v = g_cpu_freq_tables[path_idx][i];
+        if (v > 0 && (lowest == 0 || v < lowest)) lowest = v;
+    }
+    return lowest;
+}
+
 static void writer_init_paths(void) {
     if (g_writer_paths_ready) return;
     cpu_topology_discover();
@@ -965,7 +982,19 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                     if (g_cpu_all_max_paths[k][0] &&
                         strcmp(g_cpu_all_max_paths[k], g_cpu_max_paths[i]) == 0) { _mi = k; break; }
                 }
-                if (_mi >= 0) want_min = (int)cpu_snap_freq(_mi, (long)want_min);
+                if (_mi >= 0) {
+                    /* A screen-off Smart DEEP_IDLE state is the one place where an exact
+                     * hardware minimum is both meaningful and safe: the FSM has already
+                     * rejected active off-screen work into LIGHT_IDLE, and the scheduler can
+                     * still raise frequency on demand. Do not apply this shortcut to manual
+                     * profiles, LIGHT_IDLE audio/decode, camera, thermal, or screen-on work. */
+                    if (fsm_profile_is_smart && state == ASB_STATE_DEEP_IDLE) {
+                        long deep_opp = cpu_lowest_opp(_mi);
+                        if (deep_opp > 0) want_min = (int)deep_opp;
+                    } else {
+                        want_min = (int)cpu_snap_freq(_mi, (long)want_min);
+                    }
+                }
             }
             /* Compare against what is ON THE DEVICE, not against our own cache.
              *
@@ -1000,6 +1029,12 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             if (want_min <= 0) continue;
             int cur_max = sysfs_read_int(g_cpu_all_max_paths[j], 0);
             if (cur_max > 0 && want_min > cur_max) want_min = cur_max;
+            if (fsm_profile_is_smart && state == ASB_STATE_DEEP_IDLE) {
+                long deep_opp = cpu_lowest_opp(j);
+                if (deep_opp > 0) want_min = (int)deep_opp;
+            } else {
+                want_min = (int)cpu_snap_freq(j, (long)want_min);
+            }
             if (force || sysfs_read_int(g_cpu_all_min_paths[j], 0) != want_min) {
                 if (sysfs_write_int(g_cpu_all_min_paths[j], want_min) == 0)
                     writes++;
