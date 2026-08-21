@@ -59,6 +59,13 @@ elif [ -f /data/adb/asb/v56_learning_reset_done ] && [ ! -f /data/adb/asb/v56_re
   : > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
 fi
 
+# Build capability-derived policy before asb_utils.sh starts the native governor.  These
+# probes are read-only and bounded; a failed probe leaves the derived manifest inactive.
+[ -f "$MODDIR/tools/asb_discover.sh" ] && sh "$MODDIR/tools/asb_discover.sh" >/dev/null 2>&1
+[ -f "$MODDIR/tools/asb_synthesize_bounds.sh" ] && sh "$MODDIR/tools/asb_synthesize_bounds.sh" >/dev/null 2>&1
+[ -f "$MODDIR/runtime/asb_active_efficiency_envelope.sh" ] && \
+  sh "$MODDIR/runtime/asb_active_efficiency_envelope.sh" >/dev/null 2>&1
+
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
 [ -r "$MODDIR/runtime/asb_arbiter.sh" ] && . "$MODDIR/runtime/asb_arbiter.sh"
 [ -r "$MODDIR/runtime/profile_core.sh" ] && . "$MODDIR/runtime/profile_core.sh"
@@ -379,6 +386,8 @@ asb_migrate_governor_conf
 (
   [ -f "$MODDIR/tools/asb_discover.sh" ] && sh "$MODDIR/tools/asb_discover.sh" >/dev/null 2>&1
   [ -f "$MODDIR/tools/asb_synthesize_bounds.sh" ] && sh "$MODDIR/tools/asb_synthesize_bounds.sh" >/dev/null 2>&1
+  [ -f "$MODDIR/runtime/asb_active_efficiency_envelope.sh" ] && \
+    sh "$MODDIR/runtime/asb_active_efficiency_envelope.sh" >/dev/null 2>&1
   # Retire the interactive prime ceilings from any bounds file written by an earlier build.
   if [ -f /data/adb/asb/device_bounds.env ] && \
      grep -qE '^(BALANCED|PERFORMANCE)_CPU_MAX_PRIME=' /data/adb/asb/device_bounds.env 2>/dev/null; then
