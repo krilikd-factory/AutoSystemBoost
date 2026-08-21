@@ -27,6 +27,10 @@ need "$BACKUP" 'profile checksum mismatch or absent'
 # Exact writer call prevents a future direct sed/echo restore implementation.
 need "$BACKUP" 'sh "$WRITER" import "$_in" "$SNAPSHOT" "$@"'
 need "$BACKUP" 'list|create|replace|preview|restore|delete'
+need "$BACKUP" 'ASB_SMART_PROFILE_SCHEMA=1'
+need "$BACKUP" '_smart_file_ok()'
+need "$BACKUP" 'smart_restore()'
+need "$BACKUP" 'smart_learning=restored'
 
 # UI must use the helper and object result handling; the former one-file /sdcard flow is gone.
 need "$WEBUI" "const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';"
@@ -39,6 +43,8 @@ need "$WEBUI" "' preview '"
 need "$WEBUI" "' restore '"
 need "$WEBUI" 'r.errno !== 0'
 absent "$WEBUI" 'CFG_BACKUP_PATH'
+need "$WEBUI" 'cfg_profile_smart_saved'
+need "$WEBUI" 'smart_learning=restored'
 
 # Debug identity changes only after rsync in package staging. It keeps the public
 # versionCode so V64-debug1 can be manually flashed over V64; public source/OTA stay V64/640.
@@ -55,6 +61,10 @@ need "$INSTALL" 'ASB_CONFIG_MIGRATION_MODE=unknown'
 need "$INSTALL" 'ASB_CONFIG_MIGRATION_MODE=fresh'
 need "$INSTALL" 'ASB_CONFIG_MIGRATION_MODE=preserved'
 need "$INSTALL" 'last_install_state'
+need "$INSTALL" 'asb_prepare_webui_first_install()'
+need "$INSTALL" 'Full component set prepared; optional tweaks remain at stock.'
+need "$INSTALL" 'asb_neutralise_fresh_install'
+absent "$INSTALL" 'asb_choose_cat AUDIO'
 need "$DIAG" 'last install: config='
 
 for f in "$ROOT_DIR"/webroot/i18n/*.json; do
@@ -64,6 +74,7 @@ for f in "$ROOT_DIR"/webroot/i18n/*.json; do
   need "$f" '"cfg_profile_load"'
   need "$f" '"cfg_profile_save_short"'
   need "$f" '"cfg_profile_load_short"'
+  # EN/RU carry the dedicated Smart strings; other locales fall back to English through T().
 done
 cmp -s "$ROOT_DIR/tools/asb_diag.sh" "$ROOT_DIR/system/bin/asbdiag" || { echo 'FAIL: asbdiag copies differ' >&2; exit 1; }
 echo 'PASS V64 hardening contract'
