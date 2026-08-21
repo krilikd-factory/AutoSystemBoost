@@ -96,6 +96,30 @@ if [ -z "$MODDIR" ]; then
   P ""; exit 0
 fi
 
+# =====================================================================
+SEC "0a. EXTERNAL KERNEL / UV COEXISTENCE  (read-only evidence; ASB owns no voltage policy)"
+_uv_tool="$MODDIR/tools/asb_kernel_uv_coexist.sh"
+_uv_tmp="/data/local/tmp/asb_uv_coexist.$$"
+if [ -r "$_uv_tool" ]; then
+  sh "$_uv_tool" > "$_uv_tmp" 2>/dev/null
+  _uvget() { grep -E "^$1=" "$_uv_tmp" 2>/dev/null | tail -1 | sed 's/^[^=]*=//'; }
+  _uv_status="$(_uvget status)"; _uv_conf="$(_uvget confidence)"; _uv_reason="$(_uvget reason)"
+  P "  coexistence verdict  : ${_uv_status:-unavailable}  (confidence=${_uv_conf:-none})"
+  P "  evidence             : ${_uv_reason:-unavailable}; $(_uvget evidence)"
+  P "  ASB voltage owner    : $(_uvget asb_voltage_owner)"
+  NOTE "$(_uvget warning)"
+  NOTE "$(_uvget limit)"
+  case "$_uv_status" in
+    voltage_surface_observed|external_uv_hint)
+      NOTE "External kernel/UV evidence is present. ASB keeps its CPU/GPU workload policy only; do not attribute voltage stability, reboot or thermal behavior to ASB alone." ;;
+    *)
+      NOTE "No explicit external UV evidence was observable. This is not proof that the current kernel uses stock voltage tables." ;;
+  esac
+  rm -f "$_uv_tmp" 2>/dev/null
+else
+  P "  coexistence verdict  : helper unavailable in this package"
+fi
+
 # ===================================================================== EFFECTIVE STATE — the
 # computed source-of-truth summary.
 SEC "0. EFFECTIVE STATE  (computed source-of-truth — read this first)"
@@ -171,6 +195,14 @@ _runtime_caps="/data/adb/asb/capabilities.env"
 _state="/dev/.asb/state"
 _rget() { grep -E "^$1=" "$2" 2>/dev/null | tail -1 | sed 's/^[^=]*=//'; }
 _stock_thermal="/data/adb/asb/thermal_stock"
+_eff_env="/data/adb/asb/active_efficiency.env"
+if [ -r "$_eff_env" ]; then
+  P "  active-use envelope  : status=$(_rget status "$_eff_env") tier=$(_rget tier "$_eff_env") soc=$(_rget soc "$_eff_env") reason=$(_rget reason "$_eff_env")"
+  P "    capability gate     : cpu_policies=$(_rget cpu_policy_count "$_eff_env") gpu=$(_rget gpu_backend "$_eff_env") thermal_zones=$(_rget thermal_zone_count "$_eff_env")"
+  P "    policy deltas       : budget=$(_rget budget_light_bonus_pct "$_eff_env")/$(_rget budget_moderate_bonus_pct "$_eff_env")/$(_rget budget_severe_bonus_pct "$_eff_env")% gpu_idle+$(_rget gpu_idle_trim_bonus_pct "$_eff_env")% bg_uclamp-$(_rget bg_uclamp_moderate_delta "$_eff_env")/$(_rget bg_uclamp_severe_delta "$_eff_env")"
+else
+  P "  active-use envelope  : unavailable (generated at boot; generic ASB policy remains active)"
+fi
 if [ -r "$_stock_thermal" ]; then
   P "  stock thermal        : source=$(_rget SOURCE \"$_stock_thermal\") zone=$(_rget ZONE \"$_stock_thermal\") trip=$(_rget INDEX \"$_stock_thermal\") type=$(_rget TYPE \"$_stock_thermal\") raw=$(_rget RAW \"$_stock_thermal\") resolved=$(_rget RESOLVED \"$_stock_thermal\")C"
   [ "$(_rget SOURCE \"$_stock_thermal\")" = "passive_trip_point" ] || NOTE "No passive CPU trip was confirmed: stock/smart mode keeps the configured threshold unchanged."
@@ -205,7 +237,8 @@ done
 if [ -r "$_state" ]; then
   _wattempts="$(_rget writer_attempts "$_state")"; _wapplied="$(_rget writer_applied "$_state")"; _wfail="$(_rget writer_failures "$_state")"; _wskip="$(_rget writer_backoff_skips "$_state")"
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
-  P "  energy policy         : shadow=$(_rget shadow_mode "$_state") budget_enabled=$(_rget thermal_budget_enabled "$_state") trim=$(_rget thermal_budget_trim_pct "$_state")% reason=$(_rget thermal_budget_reason "$_state") dwell=$(_rget thermal_budget_dwell_s "$_state")s"
+  P "  energy policy         : shadow=$(_rget shadow_mode "$_state") budget_enabled=$(_rget thermal_budget_enabled "$_state") trim=$(_rget thermal_budget_trim_pct "$_state")% (base=$(_rget thermal_budget_base_trim_pct "$_state")% + envelope=$(_rget thermal_budget_envelope_bonus_pct "$_state")%, stage=$(_rget thermal_budget_stage "$_state")) reason=$(_rget thermal_budget_reason "$_state") dwell=$(_rget thermal_budget_dwell_s "$_state")s"
+  P "  active-use runtime    : loaded=$(_rget active_efficiency_active "$_state") tier=$(_rget active_efficiency_tier "$_state") reason=$(_rget active_efficiency_reason "$_state") gpu_idle_bonus=$(_rget active_efficiency_gpu_idle_bonus_pct "$_state")% bg_delta=$(_rget active_efficiency_bg_uclamp_moderate_delta "$_state")/$(_rget active_efficiency_bg_uclamp_severe_delta "$_state")"
   P "  ASB overhead          : events=$(_rget governor_event_wakeups "$_state") timer_wakeups=$(_rget governor_timer_wakeups "$_state") cpu_ms=$(_rget governor_cpu_ms "$_state")"
   [ "${_wfail:-0}" = "0" ] && NOTE "All observed native writes have read back successfully." || NOTE "Writer failures are backoff-limited; inspect /dev/.asb/write_errors and the node-specific writer_node_* state fields."
 else
@@ -770,9 +803,15 @@ if [ "${_sq:-0}" -gt 0 ] 2>/dev/null; then
 fi
 _txn=/data/adb/asb/config_last_txn
 if [ -r "$_txn" ]; then
-  NOTE "last config transaction: class=$(_rget result_class "$_txn") key=$(_rget key "$_txn") pre_epoch=$(_rget pre_epoch "$_txn") post_epoch=$(_rget post_epoch "$_txn") reload=$(_rget reload_accepted "$_txn") recovery=$(_rget recovery "$_txn")"
+  NOTE "last config transaction: class=$(_rget result_class "$_txn") key=$(_rget key "$_txn") pre_epoch=$(_rget pre_epoch "$_txn") post_epoch=$(_rget post_epoch "$_txn") reload=$(_rget reload_accepted "$_txn") recovery=$(_rget recovery "$_txn") lock_owner=$(_rget lock_owner "$_txn") lock_age=$(_rget lock_age "$_txn") lock_recovered=$(_rget lock_recovered "$_txn")"
 else
   NOTE "last config transaction: none recorded yet"
+fi
+_install_state=/data/adb/asb/last_install_state
+if [ -r "$_install_state" ]; then
+  NOTE "last install: config=$(_rget config_mode "$_install_state") source=$(_rget config_source "$_install_state") keys=$(_rget config_keys "$_install_state") module=$(_rget module_version "$_install_state")"
+else
+  NOTE "last install: no migration record (older installation or first boot not completed)"
 fi
 
 SEC "5a4. SUSPEND  (is the phone actually sleeping?)"
