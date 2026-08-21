@@ -27,10 +27,17 @@ need "$BACKUP" 'profile checksum mismatch or absent'
 # Exact writer call prevents a future direct sed/echo restore implementation.
 need "$BACKUP" 'sh "$WRITER" import "$_in" "$SNAPSHOT" "$@"'
 need "$BACKUP" 'list|create|replace|preview|restore|delete'
-need "$BACKUP" 'ASB_SMART_PROFILE_SCHEMA=1'
+need "$BACKUP" 'ASB_SMART_PROFILE_SCHEMA=2'
 need "$BACKUP" '_smart_file_ok()'
+need "$BACKUP" 'buckets.bin.bak'
+need "$BACKUP" 'smart_mode_enabled'
 need "$BACKUP" 'smart_restore()'
+need "$BACKUP" '.smart_restore.stage.$$'
 need "$BACKUP" 'smart_learning=restored'
+need "$BACKUP" 'smart_learning_files=$_n'
+need "$BACKUP" 'smart_learning_bytes=$_total'
+need "$BACKUP" '_migrate_legacy_external()'
+need "$BACKUP" 'asb_settings_backup.conf'
 
 # UI must use the helper and object result handling; the former one-file /sdcard flow is gone.
 need "$WEBUI" "const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';"

@@ -70,9 +70,9 @@ need "$UI" "cfgResetDialogRun('smart')"
 need "$UI" "MD + '/config/governor.conf.shipped'"
 need "$UI" "MD + '/runtime/asb_config_safe.sh'"
 need "$UI" "MD + '/runtime/asb_smart_reset.sh'"
-need "$UI" 'padding-bottom: max(2px, env(safe-area-inset-bottom));'
+need "$UI" 'padding: 0 max(14px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));'
 need "$UI" 'min-height: min(36vh, 500px); max-height: min(88vh, 780px);'
-need "$UI" 'border: 1px solid #35bb99; border-radius: 30px; background-color: #080d0e; background-image: linear-gradient(160deg, #0c1415, #070a0b 72%); background-clip: padding-box; box-shadow: 0 -20px 60px rgba(0,0,0,.5);'
+need "$UI" 'border: 1px solid #35bb99; border-radius: 26px; background-color: #080d0e; background-image: linear-gradient(160deg, #0c1415, #070a0b 72%); background-clip: padding-box; box-shadow: 0 -20px 60px rgba(0,0,0,.5);'
 absent "$UI" 'rgba(73,224,187,.82)'
 absent "$UI" 'box-shadow: inset 0 -1px 0'
 need "$UI" 'function cfgProfileNameOK(name)'
@@ -96,6 +96,8 @@ need "$HELPER" 'downloads)'
 need "$HELPER" 'documents)'
 need "$HELPER" 'list-external)'
 need "$HELPER" 'import-external)'
+need "$HELPER" '_migrate_legacy_external()'
+need "$HELPER" 'asb_settings_backup.conf'
 
 # Audio remains one top-level category. DSP is a labelled subsection of it, not a second
 # destination or a duplicate renderer path; every locale must provide its compact labels.
