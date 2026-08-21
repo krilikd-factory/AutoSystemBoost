@@ -96,9 +96,10 @@ fi
 #
 # It was present in the deployed 507 build and absent from the source for three rounds -
 # nobody noticed until an audit compared the two. These assertions cover the functions, the
-# opt-in guard, and every call site, so a future merge that drops it fails here instead of
-# in a user's log six hours into a capture.
+# default full-day enablement, and every call site, so a future merge that drops it fails here
+# instead of in a user's log six hours into a capture.
 grep -q 'ASB_BT_RECONNECT_TRACE' "$ROOT/tools/logkit/_asb_logkit_common.sh"
+grep -Fq ': "${ASB_BT_RECONNECT_TRACE:=1}"' "$ROOT/tools/logkit/asb_log_full_day.sh"
 grep -q 'lk_bt_reconnect_start' "$ROOT/tools/logkit/_asb_logkit_common.sh"
 grep -q 'lk_bt_reconnect_snapshot' "$ROOT/tools/logkit/_asb_logkit_common.sh"
 grep -q 'lk_bt_reconnect_stop' "$ROOT/tools/logkit/_asb_logkit_common.sh"
@@ -107,6 +108,8 @@ if [ "$_bt_calls" -lt 6 ]; then
   printf '%s\n' "FAIL reconnect recorder call sites: found $_bt_calls, expected 6" >&2
   exit 1
 fi
-grep -q 'reconnect recorder' "$ROOT/docs/log_schemas.md"
+grep -q 'Bluetooth lifecycle recorder' "$ROOT/docs/log_schemas.md"
+grep -q 'bt_lifecycle_events.tsv' "$ROOT/docs/log_schemas.md"
+grep -q 'bt_lifecycle_context.tsv' "$ROOT/docs/log_schemas.md"
 
 printf '%s\n' 'PASS donor telemetry contract'
