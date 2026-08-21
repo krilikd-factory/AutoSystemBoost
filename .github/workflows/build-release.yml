@@ -104,10 +104,12 @@ jobs:
             tests/test_active_efficiency_contract.sh \
             tests/test_kernel_uv_coexist_contract.sh \
             tests/test_bt_lifecycle_recorder_contract.sh \
+            tests/test_logkit_capture_quality_contract.sh \
             tests/test_profile_uv_webui_package_contract.sh \
             tests/test_quick_restart_contract.sh \
             tests/test_workflow_executable_modes_contract.sh \
             tests/test_workflow_required_files_shell.sh \
+            tests/test_package_functional_parity_contract.sh \
             tests/test_v62_to_v64_migration.sh \
 
             tests/test_release_package_tool_contract.sh; do
@@ -389,11 +391,11 @@ jobs:
           done
           # Attacher daemon: creates the effect on session 0. OxygenOS ignores the
           # config <postprocess>, so without this the effect never gets instantiated.
-          if [ -f bin/arm64-v8a/asb_dsp_attach ]; then
-            install -m 0755 bin/arm64-v8a/asb_dsp_attach "${PKG_REL}/bin/asb_dsp_attach"
-          else
-            echo "::warning::asb_dsp_attach missing - DSP will register but not attach"
+          if [ ! -f bin/arm64-v8a/asb_dsp_attach ]; then
+            echo "::error::asb_dsp_attach missing - DSP would register but not attach"
+            exit 1
           fi
+          install -m 0755 bin/arm64-v8a/asb_dsp_attach "${PKG_REL}/bin/asb_dsp_attach"
           if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
             if ls src/DSP_AIDL/prebuilt/armeabi-v7a/libasbdsp_v*.so >/dev/null 2>&1; then
               echo "  = skipping generic bin/libasbdsp_32.so (versioned builds cover it)"
@@ -433,10 +435,20 @@ jobs:
           # on that list - so the one script users are asked to run when they report a
           # problem existed only in debug builds. Every diagnostic we have received came
           # from a tester on debug; a release user had no way to produce one at all.
-          for _t in asb_diag.sh asb_kernel_uv_coexist.sh asb_doctor.sh asb_recents_probe.sh asb_effective_policy.sh asb_intent.sh asb_config_backup.sh; do
+          for _t in asb_diag.sh asb_kernel_uv_coexist.sh asb_doctor.sh asb_recents_probe.sh asb_effective_policy.sh asb_intent.sh asb_config_backup.sh asb_state_sampler.sh asb_drain_analyzer.sh asb_vendor_thermal_probe.sh asb_audit_state.sh asb_verify_device.sh; do
             if [ -f "tools/$_t" ]; then
               mkdir -p "$PKG_REL/tools"
               install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"
+            fi
+          done
+
+          # Full-day, battery, audio and Smart logkit are normal on-device support tools.
+          # They are POSIX shell scripts and are used to collect the user reports ASB is tuned
+          # against; excluding them from release made normal diagnosis debug-only.
+          for _t in _asb_logkit_common.sh asb_audio_ab.sh asb_log_battery_mixed.sh asb_log_battery_sleep.sh asb_log_bgtrim_snapshot.sh asb_log_full_day.sh asb_log_perf.sh asb_log_smart_daily.sh asb_log_smart_gaming.sh asb_log_smart_sleep.sh; do
+            if [ -f "tools/logkit/$_t" ]; then
+              mkdir -p "$PKG_REL/tools/logkit"
+              install -m 0755 "tools/logkit/$_t" "$PKG_REL/tools/logkit/$_t"
             fi
           done
 
@@ -462,7 +474,7 @@ jobs:
             "version": "${ASB_VER}",
             "versionCode": ${ASB_CODE},
             "source_commit": "${ASB_COMMIT}",
-            "required_artifacts": ["bin/asb", "service.sh", "runtime/asb_arbiter.sh", "runtime/asb_capabilities.sh"],
+            "required_artifacts": ["bin/asb", "bin/asb_dsp_attach", "service.sh", "runtime/asb_arbiter.sh", "runtime/asb_capabilities.sh", "tools/asb_config_backup.sh", "tools/logkit/asb_log_full_day.sh"],
             "artifacts": {"bin/asb": {"abi": "arm64-v8a", "sha256": "${ASB_BIN_SHA}"}}
           }
           EOF
@@ -488,7 +500,9 @@ jobs:
             "bin/asb" \
             "bin/libasbdsp_legacy.so" \
             "bin/libasbdsp_legacy_32.so" \
+            "bin/asb_dsp_attach" \
             "system/bin/asbtrial" \
+            "system/bin/asbdiag" \
             "service.sh" \
             "module.prop" \
             "post-fs-data.sh" \
@@ -542,6 +556,22 @@ jobs:
             "tools/asb_intent.sh" \
             "tools/asb_config_backup.sh" \
             "tools/asb_doctor.sh" \
+            "tools/asb_recents_probe.sh" \
+            "tools/asb_state_sampler.sh" \
+            "tools/asb_drain_analyzer.sh" \
+            "tools/asb_vendor_thermal_probe.sh" \
+            "tools/asb_audit_state.sh" \
+            "tools/asb_verify_device.sh" \
+            "tools/logkit/_asb_logkit_common.sh" \
+            "tools/logkit/asb_audio_ab.sh" \
+            "tools/logkit/asb_log_battery_mixed.sh" \
+            "tools/logkit/asb_log_battery_sleep.sh" \
+            "tools/logkit/asb_log_bgtrim_snapshot.sh" \
+            "tools/logkit/asb_log_full_day.sh" \
+            "tools/logkit/asb_log_perf.sh" \
+            "tools/logkit/asb_log_smart_daily.sh" \
+            "tools/logkit/asb_log_smart_gaming.sh" \
+            "tools/logkit/asb_log_smart_sleep.sh" \
             "runtime/profile_core.sh" \
             "runtime/smart_dynamic_tune.sh" \
             "runtime/asb_tweaks.sh" \
@@ -575,9 +605,10 @@ jobs:
           for forbidden in \
             "tools/asb_lint.sh" \
             "tools/gen_bounds.sh" \
-            "tools/asb_vendor_thermal_probe.sh" \
             "tools/asb_field_report.py" \
-            "tools/logkit/" \
+            "tools/asb_field_report.sh" \
+            "tools/asb_compare_sessions.py" \
+            "tools/asb_analyze.py" \
             "docs/" \
             "tests/" \
             "bin/arm64-v8a" \

@@ -91,10 +91,12 @@ jobs:
             tests/test_active_efficiency_contract.sh \
             tests/test_kernel_uv_coexist_contract.sh \
             tests/test_bt_lifecycle_recorder_contract.sh \
+            tests/test_logkit_capture_quality_contract.sh \
             tests/test_profile_uv_webui_package_contract.sh \
             tests/test_quick_restart_contract.sh \
             tests/test_workflow_executable_modes_contract.sh \
             tests/test_workflow_required_files_shell.sh \
+            tests/test_package_functional_parity_contract.sh \
             tests/test_v62_to_v64_migration.sh \
             module.prop \
             customize.sh \
@@ -374,11 +376,11 @@ jobs:
           done
           # Attacher daemon: creates the effect on session 0. OxygenOS ignores the
           # config <postprocess>, so without this the effect never gets instantiated.
-          if [ -f bin/arm64-v8a/asb_dsp_attach ]; then
-            install -m 0755 bin/arm64-v8a/asb_dsp_attach "${PKG_DBG}/bin/asb_dsp_attach"
-          else
-            echo "::warning::asb_dsp_attach missing - DSP will register but not attach"
+          if [ ! -f bin/arm64-v8a/asb_dsp_attach ]; then
+            echo "::error::asb_dsp_attach missing - DSP would register but not attach"
+            exit 1
           fi
+          install -m 0755 bin/arm64-v8a/asb_dsp_attach "${PKG_DBG}/bin/asb_dsp_attach"
           if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
             if ls src/DSP_AIDL/prebuilt/armeabi-v7a/libasbdsp_v*.so >/dev/null 2>&1; then
               echo "  = skipping generic bin/libasbdsp_32.so (versioned builds cover it)"
@@ -432,6 +434,8 @@ jobs:
 
           for required in \
             "bin/asb" \
+            "bin/asb_dsp_attach" \
+            "system/bin/asbdiag" \
             "service.sh" \
             "module.prop" \
             "post-fs-data.sh" \
