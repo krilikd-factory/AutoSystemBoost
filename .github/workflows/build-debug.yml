@@ -88,6 +88,7 @@ jobs:
             tests/test_camera_grade_contract.sh \
             tests/test_cpu_min_opp_contract.sh \
             tests/test_named_config_profiles.sh \
+            tests/test_smart_reset_complete_contract.sh \
             tests/test_v64_hardening_contract.sh \
             tests/test_active_efficiency_contract.sh \
             tests/test_kernel_uv_coexist_contract.sh \
