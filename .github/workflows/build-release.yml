@@ -101,6 +101,7 @@ jobs:
             tests/test_active_efficiency_contract.sh \
             tests/test_kernel_uv_coexist_contract.sh \
             tests/test_bt_lifecycle_recorder_contract.sh \
+            tests/test_profile_uv_webui_package_contract.sh \
             tests/test_workflow_executable_modes_contract.sh \
             tests/test_workflow_required_files_shell.sh \
             tests/test_v62_to_v64_migration.sh \
@@ -215,7 +216,7 @@ jobs:
             echo "== tests/test_v64_webui_trial_ledger_contract.py =="
             python3 tests/test_v64_webui_trial_ledger_contract.py || _rc=1
           fi
-          for _t in tests/test_config_lock_contract.sh tests/test_named_config_profiles.sh tests/test_v64_hardening_contract.sh tests/test_active_efficiency_contract.sh tests/test_kernel_uv_coexist_contract.sh tests/test_bt_lifecycle_recorder_contract.sh tests/test_workflow_executable_modes_contract.sh tests/test_workflow_required_files_shell.sh; do
+          for _t in tests/test_config_lock_contract.sh tests/test_named_config_profiles.sh tests/test_v64_hardening_contract.sh tests/test_active_efficiency_contract.sh tests/test_kernel_uv_coexist_contract.sh tests/test_bt_lifecycle_recorder_contract.sh tests/test_profile_uv_webui_package_contract.sh tests/test_workflow_executable_modes_contract.sh tests/test_workflow_required_files_shell.sh; do
             echo "== $_t =="
             sh "$_t" || _rc=1
           done

@@ -72,6 +72,7 @@ jobs:
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
             runtime/asb_active_efficiency_envelope.sh \
+            tools/asb_config_backup.sh \
             tools/asb_schema_sync.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
@@ -87,6 +88,7 @@ jobs:
             tests/test_active_efficiency_contract.sh \
             tests/test_kernel_uv_coexist_contract.sh \
             tests/test_bt_lifecycle_recorder_contract.sh \
+            tests/test_profile_uv_webui_package_contract.sh \
             tests/test_workflow_executable_modes_contract.sh \
             tests/test_workflow_required_files_shell.sh \
             tests/test_v62_to_v64_migration.sh \
@@ -190,7 +192,7 @@ jobs:
             echo "== tests/test_v64_webui_trial_ledger_contract.py =="
             python3 tests/test_v64_webui_trial_ledger_contract.py || _rc=1
           fi
-          for _t in tests/test_config_lock_contract.sh tests/test_named_config_profiles.sh tests/test_v64_hardening_contract.sh tests/test_active_efficiency_contract.sh tests/test_kernel_uv_coexist_contract.sh tests/test_bt_lifecycle_recorder_contract.sh tests/test_workflow_executable_modes_contract.sh tests/test_workflow_required_files_shell.sh; do
+          for _t in tests/test_config_lock_contract.sh tests/test_named_config_profiles.sh tests/test_v64_hardening_contract.sh tests/test_active_efficiency_contract.sh tests/test_kernel_uv_coexist_contract.sh tests/test_bt_lifecycle_recorder_contract.sh tests/test_profile_uv_webui_package_contract.sh tests/test_workflow_executable_modes_contract.sh tests/test_workflow_required_files_shell.sh; do
             echo "== $_t =="
             sh "$_t" || _rc=1
           done
@@ -534,6 +536,7 @@ jobs:
             "runtime/asb_device_tier.sh" \
             "runtime/asb_device_pack_manifest.sh" \
             "tools/asb_kernel_uv_coexist.sh" \
+            "tools/asb_config_backup.sh" \
             "runtime/profile_core.sh" \
             "runtime/smart_dynamic_tune.sh" \
             "runtime/asb_tweaks.sh" \
@@ -567,6 +570,7 @@ jobs:
             "tools/asb_synthesize_bounds.sh" \
             "tools/asb_vendor_thermal_probe.sh" \
             "tools/asb_kernel_uv_coexist.sh" \
+            "tools/asb_config_backup.sh" \
             "tools/asb_diag.sh" \
             "tools/asb_effective_policy.sh" \
             "tools/asb_recents_probe.sh" \
