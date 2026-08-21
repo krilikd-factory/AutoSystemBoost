@@ -2067,20 +2067,19 @@ body.config-active #livePage.open {
    sized by its content - width: 100% on its own was not enough to make these rows as wide
    as the tile grid, which is why the labels still clipped to "Эксп...". stretch overrides
    the parent's centring for these two rows only. */
-#cfgToolsRow   { width: 100%; align-self: stretch; display: flex; gap: 8px; margin: 0 0 8px;  align-items: stretch; min-width: 0; }
-#cfgActionsRow { width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 7px; align-items: stretch; min-width: 0; }
-/* Profile actions are the two primary user actions. They must stay readable on a phone:
- * a shorter label plus a two-column grid is clearer than squeezing three unrelated buttons
- * into one row and hiding the important word under an ellipsis. */
-#cfgActionsRow .cfg-backup { min-width: 0; min-height: 44px; padding: 10px 8px; white-space: normal; overflow: visible; text-overflow: clip; }
-#cfgProfileHint { width: 100%; align-self: stretch; margin: 0 0 12px; font-size: 11px; line-height: 1.35; color: rgba(231,234,238,.48); text-align: center; }
-#cfgResetRow { width: 100%; align-self: stretch; display: flex; margin: 0 0 14px; }
-#cfgResetRow .cfg-backup { flex: 1 1 auto; min-height: 39px; white-space: nowrap; }
+/* Compact action cluster: this page holds more controls than the other hubs, so its search,
+ * profile actions and reset row use one tight rhythm. Every control keeps a 40px-or-larger
+ * touch target, while deleting the redundant storage sentence recovers a full text row. */
+#cfgToolsRow   { width: 100%; align-self: stretch; display: flex; gap: 7px; margin: 0 0 6px; align-items: stretch; min-width: 0; }
+#cfgActionsRow { width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 0 0 6px; align-items: stretch; min-width: 0; }
+#cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#cfgResetRow { width: 100%; align-self: stretch; display: flex; margin: 0 0 10px; }
+#cfgResetRow .cfg-backup { flex: 1 1 auto; min-height: 40px; padding: 8px 10px; white-space: nowrap; }
 /* Named-profile manager: an in-page sheet avoids the opaque KernelSU browser prompt and lets
  * saved configurations be selected by tapping a row rather than retyping an exact identifier. */
 .cfg-profile-modal[hidden] { display: none !important; }
 .cfg-profile-modal { position: fixed; z-index: 1400; inset: 0; display: flex; align-items: flex-end; background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
-.cfg-profile-sheet { width: 100%; max-height: min(82vh, 720px); overflow: auto; box-sizing: border-box; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border: 1px solid rgba(44,214,173,.34); border-radius: 23px 23px 0 0; background: linear-gradient(160deg, #0c1415, #070a0b 72%); box-shadow: 0 -20px 60px rgba(0,0,0,.5); }
+.cfg-profile-sheet { width: 100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow: auto; box-sizing: border-box; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border: 1px solid rgba(44,214,173,.34); border-radius: 23px 23px 0 0; background: linear-gradient(160deg, #0c1415, #070a0b 72%); box-shadow: 0 -20px 60px rgba(0,0,0,.5); }
 .cfg-profile-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:13px; }
 .cfg-profile-title { color:#f4f6f7; font-size:18px; font-weight:800; }
 .cfg-profile-close { flex:0 0 auto; width:34px; height:34px; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); font-size:20px; }
@@ -2501,7 +2500,6 @@ body.config-active #livePage.open {
       <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_profile_save_short">↑ Save</button>
       <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_profile_load_short">↓ Open</button>
     </div>
-    <div id="cfgProfileHint" data-i18n="cfg_profile_storage_hint">Profiles are stored safely inside ASB; choose a name, not a path.</div>
     <div id="cfgResetRow">
       <button class="cfg-backup" onclick="cfgSmartReset()" data-i18n="cfg_smart_reset">↺ Reset</button>
     </div>
@@ -4985,7 +4983,6 @@ function cfgSyncChrome() {
   const tr = _el('cfgToolsRow');
   if (tr) { tr.style.display = _cfgGroup ? 'none' : 'flex'; cfgFillLangs(); }
   const ar = _el('cfgActionsRow'); if (ar) ar.style.display = _cfgGroup ? 'none' : 'grid';
-  const ph = _el('cfgProfileHint'); if (ph) ph.style.display = _cfgGroup ? 'none' : '';
   const rr = _el('cfgResetRow'); if (rr) rr.style.display = _cfgGroup ? 'none' : 'flex';
 }
 
