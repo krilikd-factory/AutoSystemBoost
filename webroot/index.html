@@ -2078,11 +2078,13 @@ body.config-active #livePage.open {
 /* Named-profile manager: an in-page sheet avoids the opaque KernelSU browser prompt and lets
  * saved configurations be selected by tapping a row rather than retyping an exact identifier. */
 .cfg-profile-modal[hidden] { display: none !important; }
-.cfg-profile-modal { position: fixed; z-index: 1400; inset: 0; display: flex; align-items: flex-end; background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
+/* Keep the physical sheet border above Android WebView's bottom compositor clip. Some devices
+ * report a zero safe-area inset even though the last raster row is still covered by system UI. */
+.cfg-profile-modal { position: fixed; z-index: 1400; inset: 0; display: flex; align-items: flex-end; box-sizing: border-box; padding-bottom: max(2px, env(safe-area-inset-bottom)); background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
 /* The sheet sits flush with the viewport, so its outline is a screen contour rather than
- * a separate rectangular card: one uninterrupted teal frame with matching top and bottom
- * device-like corners. The inner dark layer stops the gradient from tinting the content. */
-.cfg-profile-sheet { width: 100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow: auto; box-sizing: border-box; padding: 18px 16px calc(22px + env(safe-area-inset-bottom)); border: 1px solid rgba(73,224,187,.82); border-radius: 30px; background: linear-gradient(160deg, #0c1415, #070a0b 72%) padding-box; box-shadow: 0 -20px 60px rgba(0,0,0,.5); }
+ * a separate rectangular card. Use one opaque physical 1px stroke: semi-transparent teal
+ * antialiases differently against the dark page at the lower curves on some Android WebViews. */
+.cfg-profile-sheet { width: 100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow: auto; box-sizing: border-box; padding: 18px 16px calc(22px + env(safe-area-inset-bottom)); border: 1px solid #35bb99; border-radius: 30px; background-color: #080d0e; background-image: linear-gradient(160deg, #0c1415, #070a0b 72%); background-clip: padding-box; box-shadow: 0 -20px 60px rgba(0,0,0,.5); }
 .cfg-profile-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:13px; }
 .cfg-profile-title { color:#f4f6f7; font-size:18px; font-weight:800; }
 .cfg-profile-close { flex:0 0 auto; width:34px; height:34px; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); font-size:20px; }
