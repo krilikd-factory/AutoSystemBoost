@@ -434,7 +434,7 @@
   "t_quick_confirm": "Toca otra vez para reiniciar Android rápidamente",
   "t_quick_going": "Reiniciando Android rápidamente…",
   "t_quick_unavailable": "El reinicio rápido no está disponible en esta ROM; usa el reinicio completo.",
-  "dbg_diag_btn": "Diag",
+  "dbg_diag_btn": "asbdiag",
   "dbg_log_btn": "24h log",
   "dbg_only": "Debug build only",
   "dbg_diag_saved": "asbdiag saved",

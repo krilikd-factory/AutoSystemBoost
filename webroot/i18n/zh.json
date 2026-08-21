@@ -434,7 +434,7 @@
   "t_quick_confirm": "再次点击以快速重启 Android",
   "t_quick_going": "正在快速重启 Android…",
   "t_quick_unavailable": "此 ROM 不支持快速重启；请使用完整重启。",
-  "dbg_diag_btn": "Diag",
+  "dbg_diag_btn": "asbdiag",
   "dbg_log_btn": "24h log",
   "dbg_only": "Debug build only",
   "dbg_diag_saved": "asbdiag saved",
