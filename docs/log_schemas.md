@@ -288,22 +288,20 @@ These are human-readable snapshot streams, not positional CSV schemas. Each bloc
 
 `offload.state` is deliberately conservative. It reports `offload thread present on an active BT route` only when three signals agree: AudioFlinger names an Offload or Compress thread, the active route is Bluetooth, and playback is running. A thread on its own is **not** treated as proof — it may serve a different output or outlive playback — so that case reports `unknown (thread seen, but route or playback did not corroborate)`. Where the platform or vendor property blocks offload outright the state is `off`. Anything else is `unknown`.
 
-### Bluetooth reconnect recorder (opt-in)
+### Bluetooth lifecycle recorder
 
-Off unless a capture is started with `ASB_BT_RECONNECT_TRACE=1`. It writes an event file
-alongside the other artifacts and touches nothing: no Bluetooth setting, profile, codec,
-route or power state is changed by it.
+Every `asb_log_full_day.sh` capture now enables a **bounded, read-only** Bluetooth lifecycle recorder by default. It does not change a Bluetooth setting, profile, codec, route, power state, or audio policy. A tester may explicitly disable it with `ASB_BT_RECONNECT_TRACE=0`, but no extra flag is required for ordinary full-day logging.
 
-Addresses are redacted before anything reaches disk, and the logcat tag list is narrow on
-purpose — an all-day unfiltered dump would be both expensive and privacy-hostile, and the
-question it answers ("did the buds drop, and what happened around that moment") does not
-need one.
+The recorder writes two complementary artifacts:
 
-Lifecycle: `lk_bt_reconnect_start` at capture start, `lk_bt_reconnect_snapshot` at `before`,
-at every phase change, hourly, and at `end`, then `lk_bt_reconnect_stop`. The code is the
-same in the source tree and in the deployed 507 build; `tests/test_donor_telemetry_contract.sh`
-asserts the functions and all six call sites are present, because this recorder was lost
-once already in a merge and nothing noticed until logs came back without it.
+| File | Meaning |
+|---|---|
+| `bt_lifecycle_events.tsv` | Timestamped lifecycle evidence from a narrow Bluetooth stack-tag allowlist: `connect`, `disconnect`, or `reconnect_literal`. The latter is emitted only when the stack log literally says reconnect; a connection event is never promoted to a guessed reconnect. |
+| `bt_lifecycle_context.tsv` | Timestamped capture/phase/hourly/end context with `audio_playing` and `audio_route`. It helps correlate the nearest route/playback state, but is **not** itself an event. |
+
+Addresses and device names are not written to either file. The event log has a conservative default cap of 240 records (`ASB_BT_RECONNECT_MAX_EVENTS` may lower it). The narrow logcat tag list is intentional: an all-day unfiltered dump would be expensive and privacy-hostile, while the diagnostic question only needs Bluetooth lifecycle evidence. Absence of an event remains inconclusive because vendor builds may use unobserved tags.
+
+Lifecycle: `lk_bt_reconnect_start` at capture start, `lk_bt_reconnect_snapshot` at `before`, at audio-phase entry, hourly, and at `end`, then `lk_bt_reconnect_stop`. `_full_day_report.txt` summarizes the three evidence counts and points to both files. `tests/test_donor_telemetry_contract.sh` asserts the functions and call sites so this recorder cannot silently disappear in a merge.
 
 
 The same rule runs in `tools/asb_diag.sh` and in `tools/logkit/_asb_logkit_common.sh`, and `tests/test_donor_telemetry_contract.sh` asserts both. The two copies once diverged — the manual report was tightened while every full-day archive kept the weaker single-signal logic — which is why the assertions test for the *shape* of the verdict rather than its wording.
