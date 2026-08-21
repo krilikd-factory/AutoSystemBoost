@@ -55,7 +55,7 @@ asb_big_banner() {
   ui_print " ##              ## "
   ui_print " #########  "
   ui_print " "
-  ui_print "${ASB_HELP:-${ASB_HINT:-[VOL+] Enable | [VOL-] Skip}}"
+  ui_print "  ${ASB_INSTALL_WEBUI_FIRST:-All components are prepared. Optional tweaks stay stock until you choose them in WebUI.}"
   ui_print "${SEPARATOR}"
 }
 
@@ -2667,7 +2667,7 @@ ASB_RADIO_IMS=true
 ASB_DISPLAY=true
 ASB_FPS=true
 ASB_SECURITY=true
-ASB_BG_TRIM=false
+ASB_BG_TRIM=true
 # These two had no variable at all: features.conf hardcoded LPM=1 / VENDOR_OVERLAY=1 while
 # asb_save_user_config wrote LPM=0 / VENDOR_OVERLAY=0 - it evaluated a variable that did not
 # exist, so it recorded a phantom "the user declined" that no user ever chose, and the
@@ -2685,121 +2685,20 @@ for _mroot in /data/adb/modules /data/adb/modules_update \
   rm -rf "$_mroot/AutoSystemBoost/CLEAR" 2>/dev/null
 done
 
-ASB_USER_CFG="/data/adb/asb/user_config"
-ASB_USER_CFG_LEGACY="/data/adb/asb_user_config"
-ASB_CFG_USED_SAVED=0
-
-if [ -f "$ASB_USER_CFG_LEGACY" ] && [ ! -f "$ASB_USER_CFG" ]; then
-  mkdir -p "$(dirname "$ASB_USER_CFG")" 2>/dev/null || true
-  mv "$ASB_USER_CFG_LEGACY" "$ASB_USER_CFG" 2>/dev/null || true
-fi
-
-asb_apply_saved_config() {
-  [ -f "$ASB_USER_CFG" ] || return 1
-  local _line _k _v _ucfg_schema
-  _ucfg_schema="$(grep '^cfg_schema=' "$ASB_USER_CFG" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')"
-  case "$_ucfg_schema" in ''|*[!0-9]*) _ucfg_schema=1 ;; esac
-  while IFS='=' read -r _k _v; do
-    case "$_k" in ''|\#*) continue ;; esac
-    # Must accept every key asb_save_user_config writes.
-    # It used to list 15 while the saver wrote 19, so NFC, MEDIA, LPM and VENDOR_OVERLAY were
-    # recorded on every install and silently dropped on the next one - the answers were kept
-    # and then ignored, which looks exactly like the config not being saved at all.
-    case "$_k" in
-      AUDIO|BT|NFC|CAMERA|MEDIA|CPU|VM|NET|WIFI|GPS|KERNEL|LOG|RADIO_IMS|DISPLAY|FPS|SECURITY|BG_TRIM) : ;;
-      LPM|VENDOR_OVERLAY)
-        # Only honour these from a schema-2 file. Older builds evaluated a variable
-        # that did not exist and wrote a phantom 0 for both, so restoring from such a
-        # file would switch off two subsystems the user never asked to lose.
-        [ "$_ucfg_schema" -ge 2 ] 2>/dev/null || continue
-        ;;
-      *) continue ;;
-    esac
-    case "$_v" in
-      1|true) eval "ASB_${_k}=true" ;;
-      0|false) eval "ASB_${_k}=false" ;;
-    esac
-  done < "$ASB_USER_CFG"
-  return 0
+# Installation is deliberately non-interactive. Every capability-gated component is kept in
+# the module so WebUI can enable it later, but configuration migration below decides whether
+# existing settings are preserved or a clean install starts from stock defaults.
+#
+# Old versions persisted installer category answers in this file. They only controlled which
+# assets were copied at install time, made a fresh install ask fifteen volume-key questions,
+# and were independent of the actual WebUI settings. Do not reuse those historical choices:
+# a user's current governor.conf is the upgrade source of truth.
+asb_prepare_webui_first_install() {
+  rm -f /data/adb/asb/user_config /data/adb/asb_user_config 2>/dev/null || true
+  ui_print "  ${ASB_INSTALL_WEBUI_FIRST:-Full component set prepared; optional tweaks remain at stock.}"
+  ui_print "  ${ASB_INSTALL_WEBUI_HINT:-After reboot, open WebUI and enable only the options you want.}"
 }
-
-asb_save_user_config() {
-  mkdir -p "$(dirname "$ASB_USER_CFG")" 2>/dev/null || true
-  {
-    echo "# AutoSystemBoost saved user config — auto-generated at install"
-    echo "# Edit by hand only if you know what you're doing"
-    echo "# Used on next install/update to skip the 15 category prompts"
-    echo "saved_at=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo unknown)"
-    echo "saved_from_version=$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
-    # schema 2 = LPM and VENDOR_OVERLAY below are real answers, not the phantom zeros
-    # that schema-1 files carried from an era when their variables did not exist.
-    echo "cfg_schema=2"
-    # Must list every category the installer PROMPTS for.
-    # LPM and VENDOR_OVERLAY were missing, so those two answers were thrown away on every
-    # update and silently reset to the shipped default - visible on a real install as a
-    # user_config with 17 keys next to a 19-entry prompt list.
-    for c in AUDIO BT NFC CAMERA MEDIA CPU VM NET WIFI GPS KERNEL LOG LPM \
-             RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY; do
-      eval "_v=\$ASB_${c}"
-      case "$_v" in
-        true) printf '%s=1\n' "$c" ;;
-        *) printf '%s=0\n' "$c" ;;
-      esac
-    done
-  } > "$ASB_USER_CFG" 2>/dev/null
-  chmod 644 "$ASB_USER_CFG" 2>/dev/null || true
-  ui_print "  ${ASB_CFG_SAVED_TO:-Config saved to:} $ASB_USER_CFG"
-}
-
-if [ -f "$ASB_USER_CFG" ]; then
-  _saved_at="$(grep '^saved_at=' "$ASB_USER_CFG" 2>/dev/null | head -1 | cut -d= -f2-)"
-  _saved_ver="$(grep '^saved_from_version=' "$ASB_USER_CFG" 2>/dev/null | head -1 | cut -d= -f2-)"
-  ui_print ""
-  ui_print "================================================"
-  ui_print "  ${ASB_CFG_FOUND_TITLE:-Saved configuration found}"
-  ui_print "    from: ${_saved_at:-unknown date}"
-  ui_print "    ver:  ${_saved_ver:-unknown version}"
-  ui_print "  ${ASB_CFG_FOUND_HINT:-VOL+ = use saved | VOL- = re-select}"
-  ui_print "================================================"
-  _cfg_key="$(asb_wait_key_timed 10)"
-  case "$_cfg_key" in
-    up)
-      ui_print "  ${ASB_CFG_USING_SAVED:-Using saved configuration from:} ${_saved_at:-unknown}"
-      if asb_apply_saved_config; then
-        ASB_CFG_USED_SAVED=1
-      fi
-      ;;
-    down)
-      ui_print "  ${ASB_CFG_RESELECT:-Re-selecting categories...}"
-      ;;
-    *)
-      ui_print "  ${ASB_CFG_USING_SAVED:-Using saved configuration from:} ${_saved_at:-unknown} (timeout default)"
-      if asb_apply_saved_config; then
-        ASB_CFG_USED_SAVED=1
-      fi
-      ;;
-  esac
-fi
-
-if [ "$ASB_CFG_USED_SAVED" -ne 1 ]; then
-  asb_choose_cat AUDIO  "$ASB_MENU_AUDIO"
-  asb_choose_cat BT     "$ASB_MENU_BT"
-  asb_choose_cat CAMERA "$ASB_MENU_CAMERA"
-  asb_choose_cat CPU    "$ASB_MENU_CPU"
-  asb_choose_cat VM     "$ASB_MENU_VM"
-  asb_choose_cat NET    "$ASB_MENU_NET"
-  asb_choose_cat WIFI   "$ASB_MENU_WIFI"
-  asb_choose_cat GPS    "$ASB_MENU_GPS"
-  asb_choose_cat KERNEL "$ASB_MENU_KERNEL"
-  asb_choose_cat LOG    "$ASB_MENU_LOG"
-  asb_choose_cat RADIO_IMS "$ASB_MENU_RADIO_IMS"
-  asb_choose_cat DISPLAY   "$ASB_MENU_DISPLAY"
-  asb_choose_cat FPS       "$ASB_MENU_FPS"
-  asb_choose_cat SECURITY  "$ASB_MENU_SECURITY"
-  asb_choose_cat BG_TRIM   "$ASB_MENU_BG_TRIM"
-fi
-
-asb_save_user_config
+asb_prepare_webui_first_install
 
 # MUST come before any stage that reads governor.conf (audio: DSP registration and
 # volume curves; camera: level). See asb_preserve_user_config for why.
