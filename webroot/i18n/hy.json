@@ -592,5 +592,17 @@
   "cfg_profile_restore_q": "Վերականգնե՞լ այս պրոֆիլը։",
   "cfg_profile_restored": "Վերականգնվեց պրոֆիլը՝ ",
   "cfg_profile_save": "Պահել պրոֆիլը",
-  "cfg_profile_load": "Բեռնել պրոֆիլը"
+  "cfg_profile_load": "Բեռնել պրոֆիլը",
+  "cfg_profile_save_short": "↑ Պահել",
+  "cfg_profile_load_short": "↓ Բացել",
+  "cfg_profile_storage_hint": "Պրոֆիլները անվտանգ պահվում են ASB-ի ներսում․ ընտրեք անուն, ոչ թե ուղի։",
+  "cfg_uv_title": "Արտաքին kernel / undervolt",
+  "cfg_uv_surface": "մակերեսը դիտվել է",
+  "cfg_uv_hint": "արտաքին հուշում",
+  "cfg_uv_none": "հստակ ապացույց չկա",
+  "cfg_uv_none_detail": "Undervolt-ի հստակ ապացույց չի երևում։ Սա չի ապացուցում stock լարումը։",
+  "cfg_uv_detail_unavailable": "Kernel-ը ընթեռնելի մանրամասներ չի տվել։",
+  "cfg_uv_evidence": "Ապացույցներ՝ ",
+  "cfg_uv_unavailable": "անհասանելի",
+  "cfg_uv_owner": "ASB-ը չի տիրապետում, չի գրում, չի ստուգում, չի անջատում և չի հետարկում արտաքին voltage policy-ն։"
 }

@@ -355,5 +355,17 @@
   "cfg_profile_restore_q": "Restore this profile?",
   "cfg_profile_restored": "Restored profile ",
   "cfg_profile_save": "Save profile",
-  "cfg_profile_load": "Load profile"
+  "cfg_profile_load": "Load profile",
+  "cfg_profile_save_short": "↑ Save",
+  "cfg_profile_load_short": "↓ Open",
+  "cfg_profile_storage_hint": "Profiles are stored safely inside ASB; choose a name, not a path.",
+  "cfg_uv_title": "External kernel / undervolt",
+  "cfg_uv_surface": "surface observed",
+  "cfg_uv_hint": "external hint",
+  "cfg_uv_none": "no explicit evidence",
+  "cfg_uv_none_detail": "No explicit UV evidence is visible. This is not proof of stock voltage.",
+  "cfg_uv_detail_unavailable": "The kernel exposed no readable detail.",
+  "cfg_uv_evidence": "Evidence: ",
+  "cfg_uv_unavailable": "unavailable",
+  "cfg_uv_owner": "ASB does not own, write, validate, disable or revert external voltage policy."
 }

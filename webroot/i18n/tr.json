@@ -420,5 +420,17 @@
   "cfg_profile_restore_q": "Bu profil geri yüklensin mi?",
   "cfg_profile_restored": "Profil geri yüklendi: ",
   "cfg_profile_save": "Profili kaydet",
-  "cfg_profile_load": "Profil yükle"
+  "cfg_profile_load": "Profil yükle",
+  "cfg_profile_save_short": "↑ Kaydet",
+  "cfg_profile_load_short": "↓ Aç",
+  "cfg_profile_storage_hint": "Profiller ASB içinde güvenle saklanır; yol değil, ad seçin.",
+  "cfg_uv_title": "Harici kernel / undervolt",
+  "cfg_uv_surface": "arayüz görüldü",
+  "cfg_uv_hint": "harici ipucu",
+  "cfg_uv_none": "açık kanıt yok",
+  "cfg_uv_none_detail": "Açık undervolt kanıtı görünmüyor. Bu stok voltajı kanıtlamaz.",
+  "cfg_uv_detail_unavailable": "Kernel okunabilir ayrıntı vermedi.",
+  "cfg_uv_evidence": "Kanıt: ",
+  "cfg_uv_unavailable": "kullanılamıyor",
+  "cfg_uv_owner": "ASB harici voltaj politikasına sahip değildir; yazmaz, doğrulamaz, devre dışı bırakmaz veya geri almaz."
 }

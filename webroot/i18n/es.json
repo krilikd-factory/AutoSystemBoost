@@ -420,5 +420,17 @@
   "cfg_profile_restore_q": "¿Restaurar este perfil?",
   "cfg_profile_restored": "Perfil restaurado: ",
   "cfg_profile_save": "Guardar perfil",
-  "cfg_profile_load": "Cargar perfil"
+  "cfg_profile_load": "Cargar perfil",
+  "cfg_profile_save_short": "↑ Guardar",
+  "cfg_profile_load_short": "↓ Abrir",
+  "cfg_profile_storage_hint": "Los perfiles se guardan de forma segura dentro de ASB; elige un nombre, no una ruta.",
+  "cfg_uv_title": "Kernel externo / undervolt",
+  "cfg_uv_surface": "superficie detectada",
+  "cfg_uv_hint": "indicio externo",
+  "cfg_uv_none": "sin indicios explícitos",
+  "cfg_uv_none_detail": "No hay evidencia explícita de undervolt. No prueba voltaje de fábrica.",
+  "cfg_uv_detail_unavailable": "El kernel no expuso detalles legibles.",
+  "cfg_uv_evidence": "Evidencia: ",
+  "cfg_uv_unavailable": "no disponible",
+  "cfg_uv_owner": "ASB no posee, escribe, valida, desactiva ni revierte la política de voltaje externa."
 }

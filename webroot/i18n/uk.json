@@ -420,5 +420,17 @@
   "cfg_profile_restore_q": "Відновити цей профіль?",
   "cfg_profile_restored": "Відновлено профіль ",
   "cfg_profile_save": "Зберегти профіль",
-  "cfg_profile_load": "Завантажити профіль"
+  "cfg_profile_load": "Завантажити профіль",
+  "cfg_profile_save_short": "↑ Зберегти",
+  "cfg_profile_load_short": "↓ Відкрити",
+  "cfg_profile_storage_hint": "Профілі безпечно зберігаються всередині ASB: виберіть назву, а не шлях.",
+  "cfg_uv_title": "Зовнішній kernel / undervolt",
+  "cfg_uv_surface": "поверхню виявлено",
+  "cfg_uv_hint": "зовнішня ознака",
+  "cfg_uv_none": "явних ознак немає",
+  "cfg_uv_none_detail": "Явних ознак undervolt не видно. Це не доводить стандартну напругу.",
+  "cfg_uv_detail_unavailable": "Kernel не надав читабельних деталей.",
+  "cfg_uv_evidence": "Докази: ",
+  "cfg_uv_unavailable": "недоступно",
+  "cfg_uv_owner": "ASB не володіє, не записує, не перевіряє, не вимикає та не відкочує зовнішню voltage policy."
 }
