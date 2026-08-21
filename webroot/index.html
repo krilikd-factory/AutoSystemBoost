@@ -3949,7 +3949,7 @@ const APPLY_MODE = {
   net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
-  night_quiet_enable:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
+  night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
   sustained_temp_enter:APPLY_LIVE, BG_TRIM_LEVEL:APPLY_LIVE, doze_level:APPLY_LIVE,
   UX_MANAGE_OEM_TOGGLES:APPLY_LIVE, UX_MANAGE_TIMEOUTS:APPLY_LIVE,
 
@@ -4560,7 +4560,7 @@ async function cfgSet(key, val, ctl) {
     var ANIM_KEYS = ['anim_speed'];
     var GMS_KEYS = ['gms_trim'];
     var GOV_KEYS = ['auto_battery_enable','smart_battery_bias','charge_aware_enable',
-                    'cool_gaming','bat_suppress_gaming','night_quiet_enable',
+                    'cool_gaming','bat_suppress_gaming','night_quiet_enable','night_modem_idle',
                     'sustained_temp_mode','BG_TRIM_LEVEL','UX_MANAGE_OEM_TOGGLES',
                     'UX_MANAGE_TIMEOUTS'];
       if (key === 'log_level') {
