@@ -407,5 +407,18 @@
   "trial_no_preview": "Bu ayar için önizleme yok.",
   "trial_confirm_q": "12 saatlik deneme başlatılsın mı? Onaylamazsanız kendiliğinden geri alınır.",
   "ledger_asked": "istenen",
-  "ledger_device_has": "cihazdaki"
+  "ledger_device_has": "cihazdaki",
+  "trial_expired_wait": "Deneme süresi doldu — önceki değer geri yükleniyor",
+  "cfg_profile_name": "Profil adı",
+  "cfg_profile_invalid": "1–32 harf, rakam, _ veya - kullanın",
+  "cfg_profile_replace_q": "Bu profil zaten var. Değiştirilsin mi?",
+  "cfg_profile_saved": "Profil kaydedildi: ",
+  "cfg_profiles_none": "Geçerli kayıtlı profil yok",
+  "cfg_profiles_choose": "Profil seçin:",
+  "cfg_profile_no_diff": "Hiçbir ayar değişmeyecek.",
+  "cfg_profile_preview": "Önizleme",
+  "cfg_profile_restore_q": "Bu profil geri yüklensin mi?",
+  "cfg_profile_restored": "Profil geri yüklendi: ",
+  "cfg_profile_save": "Profili kaydet",
+  "cfg_profile_load": "Profil yükle"
 }

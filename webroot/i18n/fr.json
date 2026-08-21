@@ -579,5 +579,18 @@
   "trial_no_preview": "Pas d'aperçu pour ce réglage.",
   "trial_confirm_q": "Lancer un essai de 12 heures ? Il s'annule seul sans confirmation.",
   "ledger_asked": "demandé",
-  "ledger_device_has": "l'appareil a"
+  "ledger_device_has": "l'appareil a",
+  "trial_expired_wait": "Essai expiré — restauration de la valeur précédente",
+  "cfg_profile_name": "Nom du profil",
+  "cfg_profile_invalid": "Utilisez 1 à 32 lettres, chiffres, _ ou -",
+  "cfg_profile_replace_q": "Ce profil existe déjà. Le remplacer ?",
+  "cfg_profile_saved": "Profil enregistré : ",
+  "cfg_profiles_none": "Aucun profil enregistré valide",
+  "cfg_profiles_choose": "Choisissez un profil :",
+  "cfg_profile_no_diff": "Aucun réglage ne changerait.",
+  "cfg_profile_preview": "Aperçu",
+  "cfg_profile_restore_q": "Restaurer ce profil ?",
+  "cfg_profile_restored": "Profil restauré : ",
+  "cfg_profile_save": "Enregistrer le profil",
+  "cfg_profile_load": "Charger le profil"
 }

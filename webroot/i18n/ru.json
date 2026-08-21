@@ -580,5 +580,18 @@
   "trial_no_preview": "Предпросмотр для этой настройки недоступен.",
   "trial_confirm_q": "Начать 12-часовую пробу? Она откатится сама, если не подтвердить.",
   "ledger_asked": "запрошено",
-  "ledger_device_has": "на устройстве"
+  "ledger_device_has": "на устройстве",
+  "trial_expired_wait": "Проба завершена — восстанавливается прежнее значение",
+  "cfg_profile_name": "Имя профиля",
+  "cfg_profile_invalid": "Используйте 1–32 буквы, цифры, _ или -",
+  "cfg_profile_replace_q": "Такой профиль уже есть. Заменить?",
+  "cfg_profile_saved": "Сохранён профиль ",
+  "cfg_profiles_none": "Нет сохранённых корректных профилей",
+  "cfg_profiles_choose": "Выберите профиль:",
+  "cfg_profile_no_diff": "Настройки не изменятся.",
+  "cfg_profile_preview": "Предпросмотр",
+  "cfg_profile_restore_q": "Восстановить этот профиль?",
+  "cfg_profile_restored": "Восстановлен профиль ",
+  "cfg_profile_save": "Сохранить профиль",
+  "cfg_profile_load": "Загрузить профиль"
 }

@@ -342,5 +342,18 @@
   "trial_no_preview": "No preview available for this setting.",
   "trial_confirm_q": "Start a 12-hour trial? It reverts on its own unless you confirm it.",
   "ledger_asked": "asked for",
-  "ledger_device_has": "device has"
+  "ledger_device_has": "device has",
+  "trial_expired_wait": "Trial expired — restoring previous value",
+  "cfg_profile_name": "Profile name",
+  "cfg_profile_invalid": "Use 1–32 letters, digits, _ or -",
+  "cfg_profile_replace_q": "This profile already exists. Replace it?",
+  "cfg_profile_saved": "Saved profile ",
+  "cfg_profiles_none": "No valid saved profiles",
+  "cfg_profiles_choose": "Choose a profile:",
+  "cfg_profile_no_diff": "No settings would change.",
+  "cfg_profile_preview": "Preview",
+  "cfg_profile_restore_q": "Restore this profile?",
+  "cfg_profile_restored": "Restored profile ",
+  "cfg_profile_save": "Save profile",
+  "cfg_profile_load": "Load profile"
 }

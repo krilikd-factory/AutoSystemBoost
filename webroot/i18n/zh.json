@@ -407,5 +407,18 @@
   "trial_no_preview": "此设置没有预览。",
   "trial_confirm_q": "开始 12 小时试用？未确认将自动回退。",
   "ledger_asked": "请求值",
-  "ledger_device_has": "设备值"
+  "ledger_device_has": "设备值",
+  "trial_expired_wait": "试用已到期，正在恢复之前的值",
+  "cfg_profile_name": "配置名称",
+  "cfg_profile_invalid": "请使用 1–32 个字母、数字、_ 或 -",
+  "cfg_profile_replace_q": "该配置已存在，是否替换？",
+  "cfg_profile_saved": "已保存配置：",
+  "cfg_profiles_none": "没有有效的已保存配置",
+  "cfg_profiles_choose": "选择配置：",
+  "cfg_profile_no_diff": "没有设置会改变。",
+  "cfg_profile_preview": "预览",
+  "cfg_profile_restore_q": "恢复此配置？",
+  "cfg_profile_restored": "已恢复配置：",
+  "cfg_profile_save": "保存配置",
+  "cfg_profile_load": "加载配置"
 }

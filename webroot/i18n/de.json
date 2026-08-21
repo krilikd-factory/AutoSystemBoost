@@ -407,5 +407,18 @@
   "trial_no_preview": "Keine Vorschau für diese Einstellung.",
   "trial_confirm_q": "12-Stunden-Test starten? Er wird ohne Bestätigung zurückgesetzt.",
   "ledger_asked": "angefordert",
-  "ledger_device_has": "Gerät hat"
+  "ledger_device_has": "Gerät hat",
+  "trial_expired_wait": "Test abgelaufen — vorheriger Wert wird wiederhergestellt",
+  "cfg_profile_name": "Profilname",
+  "cfg_profile_invalid": "1–32 Buchstaben, Ziffern, _ oder - verwenden",
+  "cfg_profile_replace_q": "Dieses Profil existiert bereits. Ersetzen?",
+  "cfg_profile_saved": "Profil gespeichert: ",
+  "cfg_profiles_none": "Keine gültigen gespeicherten Profile",
+  "cfg_profiles_choose": "Profil auswählen:",
+  "cfg_profile_no_diff": "Keine Einstellungen würden sich ändern.",
+  "cfg_profile_preview": "Vorschau",
+  "cfg_profile_restore_q": "Dieses Profil wiederherstellen?",
+  "cfg_profile_restored": "Profil wiederhergestellt: ",
+  "cfg_profile_save": "Profil speichern",
+  "cfg_profile_load": "Profil laden"
 }

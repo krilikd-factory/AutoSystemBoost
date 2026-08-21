@@ -407,5 +407,18 @@
   "trial_no_preview": "Попередній перегляд недоступний.",
   "trial_confirm_q": "Почати 12-годинну пробу? Вона відкотиться сама, якщо не підтвердити.",
   "ledger_asked": "запитано",
-  "ledger_device_has": "на пристрої"
+  "ledger_device_has": "на пристрої",
+  "trial_expired_wait": "Пробу завершено — відновлюється попереднє значення",
+  "cfg_profile_name": "Назва профілю",
+  "cfg_profile_invalid": "Використовуйте 1–32 літери, цифри, _ або -",
+  "cfg_profile_replace_q": "Такий профіль уже існує. Замінити?",
+  "cfg_profile_saved": "Збережено профіль ",
+  "cfg_profiles_none": "Немає збережених коректних профілів",
+  "cfg_profiles_choose": "Виберіть профіль:",
+  "cfg_profile_no_diff": "Налаштування не зміняться.",
+  "cfg_profile_preview": "Попередній перегляд",
+  "cfg_profile_restore_q": "Відновити цей профіль?",
+  "cfg_profile_restored": "Відновлено профіль ",
+  "cfg_profile_save": "Зберегти профіль",
+  "cfg_profile_load": "Завантажити профіль"
 }

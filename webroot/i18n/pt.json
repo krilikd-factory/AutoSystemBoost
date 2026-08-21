@@ -407,5 +407,18 @@
   "trial_no_preview": "Sem prévia para esta configuração.",
   "trial_confirm_q": "Iniciar um teste de 12 horas? Ele reverte sozinho se não for confirmado.",
   "ledger_asked": "solicitado",
-  "ledger_device_has": "o dispositivo tem"
+  "ledger_device_has": "o dispositivo tem",
+  "trial_expired_wait": "Teste expirado — restaurando o valor anterior",
+  "cfg_profile_name": "Nome do perfil",
+  "cfg_profile_invalid": "Use 1–32 letras, números, _ ou -",
+  "cfg_profile_replace_q": "Este perfil já existe. Substituir?",
+  "cfg_profile_saved": "Perfil salvo: ",
+  "cfg_profiles_none": "Não há perfis salvos válidos",
+  "cfg_profiles_choose": "Escolha um perfil:",
+  "cfg_profile_no_diff": "Nenhuma configuração seria alterada.",
+  "cfg_profile_preview": "Prévia",
+  "cfg_profile_restore_q": "Restaurar este perfil?",
+  "cfg_profile_restored": "Perfil restaurado: ",
+  "cfg_profile_save": "Salvar perfil",
+  "cfg_profile_load": "Carregar perfil"
 }

@@ -579,5 +579,18 @@
   "trial_no_preview": "Այս կարգավորման նախադիտում չկա։",
   "trial_confirm_q": "Սկսե՞լ 12-ժամյա փորձարկում։ Առանց հաստատման ինքնաբերաբար հետ կգա։",
   "ledger_asked": "պահանջված",
-  "ledger_device_has": "սարքում"
+  "ledger_device_has": "սարքում",
+  "trial_expired_wait": "Փորձաշրջանն ավարտվել է — վերականգնվում է նախորդ արժեքը",
+  "cfg_profile_name": "Պրոֆիլի անուն",
+  "cfg_profile_invalid": "Օգտագործեք 1–32 տառ, թիվ, _ կամ -",
+  "cfg_profile_replace_q": "Այս պրոֆիլն արդեն կա։ Փոխարինե՞լ։",
+  "cfg_profile_saved": "Պահվեց պրոֆիլը՝ ",
+  "cfg_profiles_none": "Չկան վավեր պահված պրոֆիլներ",
+  "cfg_profiles_choose": "Ընտրեք պրոֆիլ՝",
+  "cfg_profile_no_diff": "Կարգավորումներ չեն փոխվի։",
+  "cfg_profile_preview": "Նախադիտում",
+  "cfg_profile_restore_q": "Վերականգնե՞լ այս պրոֆիլը։",
+  "cfg_profile_restored": "Վերականգնվեց պրոֆիլը՝ ",
+  "cfg_profile_save": "Պահել պրոֆիլը",
+  "cfg_profile_load": "Բեռնել պրոֆիլը"
 }

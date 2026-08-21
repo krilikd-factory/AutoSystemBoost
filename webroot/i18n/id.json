@@ -407,5 +407,18 @@
   "trial_no_preview": "Tidak ada pratinjau untuk pengaturan ini.",
   "trial_confirm_q": "Mulai uji 12 jam? Akan dikembalikan sendiri bila tidak dikonfirmasi.",
   "ledger_asked": "diminta",
-  "ledger_device_has": "perangkat punya"
+  "ledger_device_has": "perangkat punya",
+  "trial_expired_wait": "Uji coba berakhir — memulihkan nilai sebelumnya",
+  "cfg_profile_name": "Nama profil",
+  "cfg_profile_invalid": "Gunakan 1–32 huruf, angka, _ atau -",
+  "cfg_profile_replace_q": "Profil ini sudah ada. Ganti?",
+  "cfg_profile_saved": "Profil disimpan: ",
+  "cfg_profiles_none": "Tidak ada profil tersimpan yang valid",
+  "cfg_profiles_choose": "Pilih profil:",
+  "cfg_profile_no_diff": "Tidak ada pengaturan yang berubah.",
+  "cfg_profile_preview": "Pratinjau",
+  "cfg_profile_restore_q": "Pulihkan profil ini?",
+  "cfg_profile_restored": "Profil dipulihkan: ",
+  "cfg_profile_save": "Simpan profil",
+  "cfg_profile_load": "Muat profil"
 }

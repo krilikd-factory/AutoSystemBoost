@@ -407,5 +407,18 @@
   "trial_no_preview": "لا توجد معاينة لهذا الإعداد.",
   "trial_confirm_q": "بدء تجربة 12 ساعة؟ ستُلغى تلقائيًا ما لم تؤكّدها.",
   "ledger_asked": "المطلوب",
-  "ledger_device_has": "لدى الجهاز"
+  "ledger_device_has": "لدى الجهاز",
+  "trial_expired_wait": "انتهت التجربة — جارٍ استعادة القيمة السابقة",
+  "cfg_profile_name": "اسم الملف الشخصي",
+  "cfg_profile_invalid": "استخدم 1–32 حرفاً أو رقماً أو _ أو -",
+  "cfg_profile_replace_q": "هذا الملف الشخصي موجود بالفعل. استبداله؟",
+  "cfg_profile_saved": "تم حفظ الملف الشخصي: ",
+  "cfg_profiles_none": "لا توجد ملفات شخصية محفوظة صالحة",
+  "cfg_profiles_choose": "اختر ملفاً شخصياً:",
+  "cfg_profile_no_diff": "لن تتغير أي إعدادات.",
+  "cfg_profile_preview": "معاينة",
+  "cfg_profile_restore_q": "استعادة هذا الملف الشخصي؟",
+  "cfg_profile_restored": "تمت استعادة الملف الشخصي: ",
+  "cfg_profile_save": "حفظ الملف الشخصي",
+  "cfg_profile_load": "تحميل الملف الشخصي"
 }
