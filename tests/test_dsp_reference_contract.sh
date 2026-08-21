@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Regression: the V63-315-compatible DSP path must not depend on a device-pack
+# Regression: the known-good DSP path must not depend on a device-pack
 # marker. It stages the exact shipped AIDL library selected by the ABI helper.
 set -eu
 

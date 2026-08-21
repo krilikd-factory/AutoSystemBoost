@@ -184,6 +184,47 @@ static void case_no_fallback_recovery_revalidates_socd(void) {
     check_i("recovery reports current socd temp", t.cpu_max_c, 58);
 }
 
+static void case_non_cpu_peer_never_replaces_cpu_control(void) {
+    asb_thermal_t t;
+    fixture_reset();
+    add_zone(0, "socd\n", 40000);
+    add_three_cpu_peers(39000, 40000, 41000);
+    add_zone(4, "shell_frame\n", 70000);
+    add_zone(5, "sys-therm-6\n", 69000);
+    add_zone(6, "board_temp\n", 71000);
+    thermal_discover();
+    metrics_read_thermal(&t, 0);
+
+    check_i("non-CPU peer leaves CPU control temperature intact", t.cpu_max_c, 40);
+    check_i("non-CPU peer captures current board temperature", t.board_temp_c, 71);
+    check_i("non-CPU peer consensus has current peers", g_thermal_peer_n, 3);
+    check_i("non-CPU peer consensus records hottest evidence", g_thermal_peer_hi, 71);
+}
+
+static void case_consensus_clears_when_peers_disappear(void) {
+    asb_thermal_t t;
+    char path[256];
+    fixture_reset();
+    add_zone(0, "socd\n", 45000);
+    add_three_cpu_peers(44000, 45000, 46000);
+    add_zone(4, "shell_frame\n", 42000);
+    add_zone(5, "sys-therm-6\n", 43000);
+    add_zone(6, "board_temp\n", 44000);
+    thermal_discover();
+    metrics_read_thermal(&t, 0);
+    check_i("consensus setup has peer evidence", g_thermal_peer_n, 3);
+
+    for (int z = 4; z <= 6; z++) {
+        snprintf(path, sizeof(path), THERMAL_BASE "/thermal_zone%d/temp", z);
+        unlink(path);
+    }
+    metrics_read_thermal(&t, 0);
+    check_i("missing peer sensors clear consensus count", g_thermal_peer_n, 0);
+    check_i("missing peer sensors clear consensus high", g_thermal_peer_hi, 0);
+    check_i("missing peer sensors clear consensus low", g_thermal_peer_lo, 0);
+    check_s("missing peer sensors clear consensus note", g_thermal_consensus_note, "");
+}
+
 static void case_periodic_socd_revalidation_recovers(void) {
     asb_thermal_t t;
     fixture_reset();
@@ -212,6 +253,8 @@ int main(void) {
     case_low_socd_rebinds_symmetrically();
     case_rejected_socd_without_valid_fallback_stays_conservative();
     case_no_fallback_recovery_revalidates_socd();
+    case_non_cpu_peer_never_replaces_cpu_control();
+    case_consensus_clears_when_peers_disappear();
     case_periodic_socd_revalidation_recovers();
 
     fixture_reset();

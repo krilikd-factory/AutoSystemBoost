@@ -30,7 +30,7 @@ run_writer() {
   MODDIR="$MOD" ASB_CONFIG_STATE="$STATE" sh "$WRITER" "$@"
 }
 
-# Upgrade compatibility: a retained active config can predate current V63 keys.
+# Upgrade compatibility: a retained active config can predate current schema keys.
 # They remain closed to the shipped schema, but must be appendable by WebUI rather
 # than reported as "unknown key" and left visually disabled.
 sed -i '/^gnss_trim=/d; /^night_modem_idle=/d' "$MOD/config/governor.conf"
