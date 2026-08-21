@@ -8,6 +8,10 @@ TMP="$(mktemp -d)"
 trap 'if [ -n "${REC_PID:-}" ]; then kill "$REC_PID" 2>/dev/null || true; fi; rm -rf "$TMP"' EXIT
 
 need() { grep -Fq -- "$2" "$1" || { echo "FAIL debug support: missing [$2]" >&2; exit 1; }; }
+count_exact() {
+  _actual="$(grep -Foc -- "$2" "$1" 2>/dev/null || true)"
+  [ "$_actual" -eq "$3" ] || { echo "FAIL debug support: expected $3 [$2], found $_actual" >&2; exit 1; }
+}
 [ -f "$HELPER" ] || { echo "FAIL debug support: helper missing" >&2; exit 1; }
 sh -n "$HELPER"
 
@@ -60,15 +64,21 @@ need "$HELPER" 'pid_guard_busy'
 if grep -nE '\beval\b|\bsource\b|/system/bin/sh -c|sh -c' "$HELPER" >/dev/null; then
   echo 'FAIL debug support: helper accepts unsafe shell execution' >&2; exit 1
 fi
-need "$UI" 'data-debug-support-row'
-need "$UI" "asbDebugAction('diag')"
-need "$UI" "asbDebugAction('full-day')"
+# Every one of Profile, Monitor and Settings gets one support wrapper. A debug build
+# swaps its single release Telegram link for exactly one no-wrap, three-control rail.
+count_exact "$UI" '<div class="footer-support-row" data-debug-support-row hidden>' 3
+count_exact "$UI" '<a class="tg-link" data-release-telegram' 3
+count_exact "$UI" '<a class="tg-link" data-debug-telegram' 3
+count_exact "$UI" "asbDebugAction('diag')" 3
+count_exact "$UI" "asbDebugAction('full-day')" 3
+need "$UI" 'flex-wrap: nowrap;'
+need "$UI" '[data-release-telegram][hidden] { display: none !important; }'
 need "$UI" 'runtime/asb_debug_support.sh'
 need "$UI" 'loadDebugSupport()'
 need "$UI" '/-debug[1-9][0-9]*$/i'
-need "$UI" 'data-release-telegram'
 for locale in "$ROOT"/webroot/i18n/*.json; do
-  need "$locale" '"dbg_diag_btn"'
+  need "$locale" '"dbg_diag_btn": "asbdiag"'
+  need "$locale" '"dbg_log_btn": "24h log"'
   need "$locale" '"dbg_log_failed"'
 done
 

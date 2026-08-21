@@ -13,34 +13,48 @@ run() { MODDIR="$MOD" ASB_CONFIG_STATE="$STATE" ASB_SMART_STATE="$SMART" ASB_SMA
 need() { grep -Fqx "$2" "$1" >/dev/null || { echo "FAIL: missing [$2]" >&2; exit 1; }; }
 KEYS='gnss_trim night_modem_idle doze_level wifi_country'
 # Minimal non-empty artifacts: helper hashes and bounds bytes while native validates its own
-# binary magic/version at boot. Six files make a clean-install restore operational, not merely
-# a copy of the aggregate buckets.
+# binary magic/version at boot. The complete portable state includes compact Smart model,
+# bounded session history and all aggregate persistent stats read by startup feedback.
 printf 'bucket-learning-fixture\n' > "$SMART/buckets.bin"
 printf 'bucket-fallback-fixture\n' > "$SMART/buckets.bin.bak"
 printf 'appheat-learning-fixture\n' > "$SMART/smart_appheat.bin"
 printf 'sleep_min=1380\nwake_min=420\nsamples=12\n' > "$SMART/night_window.conf"
 printf '1\n' > "$SMART/smart_mode_enabled"
 printf 'balanced\n' > "$SMART/smart_prev_profile"
+printf '{"v":9,"profile":"battery","dur":360,"bat_ttd":75,"bat_deep":120,"bat_light":80,"bat_mod":100}\n' > "$SMART/session_history.jsonl"
+printf '{"count":5,"t2s":30}\n' > "$MOD/runtime/session_stats.json"
+printf '{"count":4,"t2s":20}\n' > "$MOD/runtime/pstats_battery.json"
+printf '{"count":5,"t2s":30}\n' > "$MOD/runtime/pstats_balanced.json"
+printf '{"count":3,"t2s":10}\n' > "$MOD/runtime/pstats_performance.json"
 
 _create_out="$(run create battery-test $KEYS)"
 printf '%s\n' "$_create_out" | grep -q '^smart_learning=saved$' || { echo 'FAIL: Smart learning was not saved' >&2; exit 1; }
-printf '%s\n' "$_create_out" | grep -q '^smart_learning_files=6$' || { echo 'FAIL: complete Smart payload count missing' >&2; exit 1; }
+printf '%s\n' "$_create_out" | grep -q '^smart_learning_files=11$' || { echo 'FAIL: complete Smart payload count missing' >&2; exit 1; }
 printf '%s\n' "$_create_out" | grep -q '^smart_learning_bytes=[1-9][0-9]*$' || { echo 'FAIL: Smart payload byte count missing' >&2; exit 1; }
 run list | grep -q '^battery-test|.*|ok|saved$' || { echo 'FAIL: profile not listed with saved Smart learning' >&2; exit 1; }
 [ -f "$STATE/config_profiles/battery-test.conf" ] || { echo 'FAIL: profile missing' >&2; exit 1; }
 [ -f "$STATE/config_profiles/battery-test.smart/manifest" ] || { echo 'FAIL: Smart learning manifest missing' >&2; exit 1; }
-grep -Fqx '# ASB_SMART_PROFILE_SCHEMA=2' "$STATE/config_profiles/battery-test.smart/manifest" || { echo 'FAIL: Smart schema 2 manifest missing' >&2; exit 1; }
+grep -Fqx '# ASB_SMART_PROFILE_SCHEMA=3' "$STATE/config_profiles/battery-test.smart/manifest" || { echo 'FAIL: Smart schema 3 manifest missing' >&2; exit 1; }
+grep -q '^session_history.jsonl|' "$STATE/config_profiles/battery-test.smart/manifest" || { echo 'FAIL: session history missing from Smart payload' >&2; exit 1; }
+grep -q '^session_stats.json|' "$STATE/config_profiles/battery-test.smart/manifest" || { echo 'FAIL: session aggregate missing from Smart payload' >&2; exit 1; }
+grep -q '^pstats_battery.json|' "$STATE/config_profiles/battery-test.smart/manifest" || { echo 'FAIL: battery persistent stats missing from Smart payload' >&2; exit 1; }
 run preview battery-test $KEYS | grep -q 'Smart learning' || { echo 'FAIL: preview did not disclose Smart learning payload' >&2; exit 1; }
 
 # Restore must be one writer transaction and restore every learning artifact atomically.
 sed -i 's/^gnss_trim=.*/gnss_trim=1/' "$MOD/config/governor.conf"
-rm -f "$SMART/buckets.bin" "$SMART/buckets.bin.bak" "$SMART/smart_appheat.bin" "$SMART/night_window.conf" "$SMART/smart_mode_enabled" "$SMART/smart_prev_profile"
+rm -f "$SMART/buckets.bin" "$SMART/buckets.bin.bak" "$SMART/smart_appheat.bin" "$SMART/night_window.conf" "$SMART/smart_mode_enabled" "$SMART/smart_prev_profile" "$SMART/session_history.jsonl"
+rm -f "$MOD/runtime/session_stats.json" "$MOD/runtime/pstats_battery.json" "$MOD/runtime/pstats_balanced.json" "$MOD/runtime/pstats_performance.json"
 _restore_out="$(run restore battery-test $KEYS)"
 printf '%s\n' "$_restore_out" | grep -q '^smart_learning=restored$' || { echo 'FAIL: Smart learning did not restore' >&2; exit 1; }
-printf '%s\n' "$_restore_out" | grep -q '^smart_learning_files=6$' || { echo 'FAIL: Smart restore count missing' >&2; exit 1; }
+printf '%s\n' "$_restore_out" | grep -q '^smart_learning_files=11$' || { echo 'FAIL: Smart restore count missing' >&2; exit 1; }
 printf '%s\n' "$_restore_out" | grep -q '^smart_learning_bytes=[1-9][0-9]*$' || { echo 'FAIL: Smart restore byte count missing' >&2; exit 1; }
 need "$MOD/config/governor.conf" 'gnss_trim=0'
-[ -s "$SMART/buckets.bin" ] && [ -s "$SMART/buckets.bin.bak" ] && [ -s "$SMART/smart_appheat.bin" ] && [ -s "$SMART/night_window.conf" ] && [ "$(cat "$SMART/smart_mode_enabled")" = 1 ] && [ "$(cat "$SMART/smart_prev_profile")" = balanced ] || { echo 'FAIL: restored complete learner state missing' >&2; exit 1; }
+[ -s "$SMART/buckets.bin" ] && [ -s "$SMART/buckets.bin.bak" ] && [ -s "$SMART/smart_appheat.bin" ] && [ -s "$SMART/night_window.conf" ] && [ "$(cat "$SMART/smart_mode_enabled")" = 1 ] && [ "$(cat "$SMART/smart_prev_profile")" = balanced ] || { echo 'FAIL: restored compact learner state missing' >&2; exit 1; }
+grep -Fq '"bat_ttd":75' "$SMART/session_history.jsonl" || { echo 'FAIL: session history was not restored' >&2; exit 1; }
+grep -Fq '"count":5' "$MOD/runtime/session_stats.json" || { echo 'FAIL: aggregate session stats were not restored' >&2; exit 1; }
+grep -Fq '"count":4' "$MOD/runtime/pstats_battery.json" || { echo 'FAIL: battery persistent stats were not restored' >&2; exit 1; }
+grep -Fq '"count":5' "$MOD/runtime/pstats_balanced.json" || { echo 'FAIL: balanced persistent stats were not restored' >&2; exit 1; }
+grep -Fq '"count":3' "$MOD/runtime/pstats_performance.json" || { echo 'FAIL: performance persistent stats were not restored' >&2; exit 1; }
 
 # External copies are atomic and carry the full Smart sidecar. Arbitrary paths remain forbidden.
 run export battery-test downloads >/dev/null
@@ -48,6 +62,8 @@ run export battery-test downloads >/dev/null
 [ -f "$EXPORT_ROOT/Download/ASB-Profiles/battery-test.smart/manifest" ] || { echo 'FAIL: Downloads Smart learning copy missing' >&2; exit 1; }
 [ -f "$EXPORT_ROOT/Download/ASB-Profiles/battery-test.smart/buckets.bin.bak" ] || { echo 'FAIL: Downloads Smart fallback copy missing' >&2; exit 1; }
 [ -f "$EXPORT_ROOT/Download/ASB-Profiles/battery-test.smart/smart_mode_enabled" ] || { echo 'FAIL: Downloads Smart mode state missing' >&2; exit 1; }
+[ -f "$EXPORT_ROOT/Download/ASB-Profiles/battery-test.smart/session_history.jsonl" ] || { echo 'FAIL: Downloads session history missing' >&2; exit 1; }
+[ -f "$EXPORT_ROOT/Download/ASB-Profiles/battery-test.smart/pstats_battery.json" ] || { echo 'FAIL: Downloads battery persistent stats missing' >&2; exit 1; }
 run list-external downloads | grep -q '^battery-test|.*|ok|saved$' || { echo 'FAIL: exported profile not listed with Smart learning' >&2; exit 1; }
 if run export battery-test ../../escape >/dev/null 2>&1; then echo 'FAIL: arbitrary export destination accepted' >&2; exit 1; fi
 run delete battery-test >/dev/null
