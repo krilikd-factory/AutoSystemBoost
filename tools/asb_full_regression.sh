@@ -41,6 +41,7 @@ run 'native thermal fixture' bash -c 'clang -D_GNU_SOURCE -std=c11 -O2 -Wno-unus
 run_optional 'P0 provenance' tests/test_p0_provenance_contract.sh sh
 run_optional 'V64 P0' tests/test_v64_p0_contract.sh sh
 run_optional 'V64 WebUI Trial/Ledger' tests/test_v64_webui_trial_ledger_contract.py python3
+run_optional 'quick restart' tests/test_quick_restart_contract.sh bash
 for test_file in \
   tests/test_config_lock_contract.sh \
   tests/test_camera_grade_contract.sh \
