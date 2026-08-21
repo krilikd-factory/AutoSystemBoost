@@ -698,16 +698,22 @@ body::before, body::after {
 .footer-support-row {
   width: 100%;
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
 }
+.footer-support-row > * { min-width: 0; }
+/* Android WebViews may give .tg-link a stronger display declaration than the UA [hidden]
+   default. The explicit rule prevents a release link appearing under the debug-only row. */
+[data-debug-support-row][hidden],
+[data-release-telegram][hidden] { display: none !important; }
 .debug-support-btn {
   min-width: 0;
   flex: 1 1 0;
-  max-width: 112px;
+  max-width: none;
   min-height: 38px;
-  padding: 8px 9px;
+  padding: 8px 6px;
   border-radius: 13px;
   border: 1px solid rgba(0,240,180,0.15);
   background: rgba(0,240,180,0.045);
@@ -766,12 +772,14 @@ body::before, body::after {
   flex: 1 1 0;
   min-width: 0;
   justify-content: center;
-  padding: 10px 8px;
+  gap: 0;
+  padding: 10px 6px;
 }
 .footer-support-row .tg-link-main {
-  font-size: 12px;
+  font-size: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tg-link-main {
   font-size: 13px;
@@ -2360,15 +2368,14 @@ body.config-active #livePage.open {
 
   </div>
 
-  <!-- DEBUG SUPPORT + TELEGRAM. The debug row starts hidden and is revealed only after
-       the installed module version is verified as V*-debugN. -->
+  <!-- One support rail per page: debug builds reveal exactly three equal controls;
+       release builds retain exactly one Telegram control. -->
   <div class="tg-link-wrap">
     <div class="footer-support-row" data-debug-support-row hidden>
-      <button class="debug-support-btn" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">Diag</button>
+      <button class="debug-support-btn" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <button class="debug-support-btn" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
-      <a class="tg-link" href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-        <span class="tg-link-ico">✉️</span>
-        <span class="tg-link-main">@AutoSystemBoost</span>
+      <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
+        <span class="tg-link-main">Telegram</span>
       </a>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
@@ -2529,8 +2536,17 @@ body.config-active #livePage.open {
 
   </div>
 
+  <!-- One support rail per page: debug builds reveal exactly three equal controls;
+       release builds retain exactly one Telegram control. -->
   <div class="tg-link-wrap">
-    <a class="tg-link" href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
+    <div class="footer-support-row" data-debug-support-row hidden>
+      <button class="debug-support-btn" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
+      <button class="debug-support-btn" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
+      <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
+        <span class="tg-link-main">Telegram</span>
+      </a>
+    </div>
+    <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico">✉️</span>
       <span class="tg-link-main">@AutoSystemBoost</span>
     </a>
@@ -2614,8 +2630,17 @@ body.config-active #livePage.open {
   </div>
   </div>
 
+  <!-- One support rail per page: debug builds reveal exactly three equal controls;
+       release builds retain exactly one Telegram control. -->
   <div class="tg-link-wrap">
-    <a class="tg-link" href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
+    <div class="footer-support-row" data-debug-support-row hidden>
+      <button class="debug-support-btn" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
+      <button class="debug-support-btn" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
+      <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
+        <span class="tg-link-main">Telegram</span>
+      </a>
+    </div>
+    <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico">✉️</span>
       <span class="tg-link-main">@AutoSystemBoost</span>
     </a>
