@@ -13,6 +13,9 @@ for WF in "$ROOT/.github/workflows/build-debug.yml" "$ROOT/.github/workflows/bui
   _tests=$(grep -n 'name: Run canonical host regression' "$WF" | head -1 | cut -d: -f1)
   case "$_norm:$_tests" in *[!0-9:]*|:) echo "FAIL workflow executable modes: expected steps missing in $WF" >&2; exit 1 ;; esac
   [ "$_norm" -lt "$_tests" ] || { echo "FAIL workflow executable modes: normalize step must precede tests in $WF" >&2; exit 1; }
+  grep -Fq 'for tool in zip unzip curl file rsync jq; do' "$WF" || {
+    echo "FAIL workflow executable modes: jq must be a verified runner dependency in $WF" >&2; exit 1;
+  }
   sed -n "${_norm},$(( _norm + 6 ))p" "$WF" | grep -Fq 'chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_debug_support.sh tools/asb_kernel_uv_coexist.sh' || {
     echo "FAIL workflow executable modes: required chmod command missing in $WF" >&2; exit 1;
   }

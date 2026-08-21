@@ -23,12 +23,30 @@ printf '%s\n' "$REL_OUT" | grep -Fq 'error=debug_only' || {
   echo 'FAIL debug support: release gate did not refuse recorder' >&2; exit 1
 }
 
-# A debug module gets a mocked diagnostic and a sleeping recorder. The second start must be
-# idempotent and must return the same protected PID instead of creating a parallel capture.
+# A debug module gets a mocked diagnostic and recorder. The recorder reproduces the real
+# ownership protocol: it claims the tokenized directory with ITS OWN PID and only removes
+# a guard that still names that PID. This catches launcher-PID and cleanup races on host.
 DBG="$TMP/debug"; mkdir -p "$DBG/system/bin" "$DBG/tools/logkit" "$TMP/out"
 printf 'id=AutoSystemBoost\nversion=V64-debug3\n' > "$DBG/module.prop"
 printf '#!/bin/sh\necho diagnostic-ok\n' > "$DBG/system/bin/asbdiag"; chmod 0755 "$DBG/system/bin/asbdiag"
-printf '#!/bin/sh\nsleep 30\n' > "$DBG/tools/logkit/asb_log_full_day.sh"; chmod 0755 "$DBG/tools/logkit/asb_log_full_day.sh"
+cat > "$DBG/tools/logkit/asb_log_full_day.sh" <<'EOF_RECORDER'
+#!/bin/sh
+set -u
+_lock="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"
+_token="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
+[ -n "$_lock" ] && [ -d "$_lock" ] || exit 91
+[ "$(cat "$_lock/token" 2>/dev/null || true)" = "$_token" ] || exit 92
+printf '%s\n' "$$" > "$_lock/pid.tmp.$$" || exit 93
+mv -f "$_lock/pid.tmp.$$" "$_lock/pid" || exit 94
+cleanup() {
+  _pid="$(tr -dc '0-9' < "$_lock/pid" 2>/dev/null || true)"
+  [ "$_pid" = "$$" ] && rm -rf "$_lock" 2>/dev/null || true
+}
+trap 'cleanup; exit 0' TERM INT HUP
+sleep 30
+cleanup
+EOF_RECORDER
+chmod 0755 "$DBG/tools/logkit/asb_log_full_day.sh"
 ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/full_day.out" ASB_DEBUG_SUPPORT_DIAG_OUTDIR="$TMP/out")
 DIAG_OUT="$(env "${ENV[@]}" sh "$HELPER" diag)"
 echo "$DIAG_OUT" | grep -Fq 'status=saved'
@@ -42,25 +60,45 @@ START2="$(env "${ENV[@]}" sh "$HELPER" full-day)"
 echo "$START2" | grep -Fq 'status=already_running'
 echo "$START2" | grep -Fq "pid=$REC_PID"
 
-# Start two requests from a clean state at once. Exactly one may create the recorder; the
-# other must observe its atomic guard rather than launching a second full-day process.
-kill "$REC_PID" 2>/dev/null || true
+# Repeat simultaneous starts from a clean state. One and only one recorder may be created in
+# every round; the losing request must publish the winner PID rather than relying on a
+# short-lived helper process or a removable empty PID file.
+for round in $(seq 1 12); do
+  kill -KILL "$REC_PID" 2>/dev/null || true
+  wait "$REC_PID" 2>/dev/null || true
+  REC_PID=""
+  rm -rf "$TMP/state/full_day_webui.lock"
+  rm -f "$TMP/state/full_day_webui.pid"
+  env "${ENV[@]}" sh "$HELPER" full-day > "$TMP/concurrent_${round}_a.out" & C1=$!
+  env "${ENV[@]}" sh "$HELPER" full-day > "$TMP/concurrent_${round}_b.out" & C2=$!
+  wait "$C1"; wait "$C2"
+  CONCURRENT="$(cat "$TMP/concurrent_${round}_a.out" "$TMP/concurrent_${round}_b.out")"
+  [ "$(printf '%s\n' "$CONCURRENT" | grep -c '^status=started$')" -eq 1 ] || { echo "FAIL debug support: concurrent start count round=$round" >&2; exit 1; }
+  printf '%s\n' "$CONCURRENT" | grep -Fq 'status=already_running' || { echo "FAIL debug support: concurrent guard did not report running round=$round" >&2; exit 1; }
+  REC_PID="$(printf '%s\n' "$CONCURRENT" | sed -n 's/^pid=//p' | grep -E '^[0-9]+$' | head -n 1)"
+  [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo "FAIL debug support: concurrent recorder missing round=$round" >&2; exit 1; }
+  printf '%s\n' "$CONCURRENT" | grep -Fq "pid=$REC_PID" || { echo "FAIL debug support: loser did not observe winner PID round=$round" >&2; exit 1; }
+done
+
+# A killed recorder leaves a known-dead PID. The next action may reclaim only that stale lock.
+kill -KILL "$REC_PID" 2>/dev/null || true
 wait "$REC_PID" 2>/dev/null || true
-REC_PID=""
-rm -f "$TMP/state/full_day_webui.pid"
-env "${ENV[@]}" sh "$HELPER" full-day > "$TMP/concurrent_a.out" & C1=$!
-env "${ENV[@]}" sh "$HELPER" full-day > "$TMP/concurrent_b.out" & C2=$!
-wait "$C1"; wait "$C2"
-CONCURRENT="$(cat "$TMP/concurrent_a.out" "$TMP/concurrent_b.out")"
-[ "$(printf '%s\n' "$CONCURRENT" | grep -c '^status=started$')" -eq 1 ] || { echo 'FAIL debug support: concurrent start count' >&2; exit 1; }
-printf '%s\n' "$CONCURRENT" | grep -Fq 'status=already_running' || { echo 'FAIL debug support: concurrent guard did not report running' >&2; exit 1; }
-REC_PID="$(printf '%s\n' "$CONCURRENT" | sed -n 's/^pid=//p' | head -n 1)"
-[ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo 'FAIL debug support: concurrent recorder missing' >&2; exit 1; }
+STALE="$(env "${ENV[@]}" sh "$HELPER" full-day)"
+echo "$STALE" | grep -Fq 'status=started' || { echo 'FAIL debug support: known-dead lock not reclaimed' >&2; exit 1; }
+REC_PID="$(printf '%s\n' "$STALE" | sed -n 's/^pid=//p')"
 
 # The helper accepts a fixed enum only; it has no eval/source/untrusted command interpolation.
 need "$HELPER" "case \"\${1:-status}\" in"
-need "$HELPER" 'set -C'
-need "$HELPER" 'pid_guard_busy'
+need "$HELPER" 'mkdir "$LOCKDIR"'
+need "$HELPER" 'lock_known_dead()'
+need "$HELPER" 'lock_wait_live_pid()'
+need "$HELPER" 'ASB_DEBUG_SUPPORT_LOCKDIR="$LOCKDIR"'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'LK_WEBUI_LOCKDIR="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_claim()'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_claim || { echo '\''[debug-webui] guard claim failed'\''; exit 2; }'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" "trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP"
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_release'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'FULL-DAY capture complete. Output: $LK_OUT_DIR'
 if grep -nE '\beval\b|\bsource\b|/system/bin/sh -c|sh -c' "$HELPER" >/dev/null; then
   echo 'FAIL debug support: helper accepts unsafe shell execution' >&2; exit 1
 fi

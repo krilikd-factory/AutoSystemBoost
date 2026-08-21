@@ -26,4 +26,11 @@ if grep -Eq 'page-cluster[[:space:]]+(0|1|3)[[:space:]]+1[[:space:]]+0' "$SERVIC
   fail 'legacy hard-coded page-cluster write remains in service.sh'
 fi
 
+# The boot-only compatibility audio path must match the validated live path. 255 is outside
+# the documented resampler enum and is silently rejected on current OPlus stacks.
+need 'setprop af.resampler.quality 0 2>/dev/null || true'
+if grep -Fq 'setprop af.resampler.quality 255' "$SERVICE"; then
+  fail 'legacy audio writer still sets unsupported resampler value 255'
+fi
+
 printf '%s\n' 'PASS service thermal/vm contract'

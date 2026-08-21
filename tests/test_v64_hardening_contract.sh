@@ -7,6 +7,9 @@ WEBUI="$ROOT_DIR/webroot/index.html"
 DEBUG_WF="$ROOT_DIR/.github/workflows/build-debug.yml"
 INSTALL="$ROOT_DIR/common/install.sh"
 DIAG="$ROOT_DIR/tools/asb_diag.sh"
+LINT="$ROOT_DIR/tools/asb_lint.sh"
+REFERENCE_MODEL="$ROOT_DIR/docs/reference_models/asb_allocator_reference_model.py"
+REFERENCE_DOC="$ROOT_DIR/docs/reference_models.md"
 need() { grep -Fq "$2" "$1" || { echo "FAIL: $1 missing [$2]" >&2; exit 1; }; }
 absent() { ! grep -Fq "$2" "$1" || { echo "FAIL: $1 still contains [$2]" >&2; exit 1; }; }
 
@@ -57,6 +60,26 @@ need "$WEBUI" 'r.errno !== 0'
 absent "$WEBUI" 'CFG_BACKUP_PATH'
 need "$WEBUI" 'cfg_profile_smart_saved'
 need "$WEBUI" 'smart_learning=restored'
+# night_modem_idle is read after governor config reload, so it must never fall through to
+# the generic reboot-only metadata path.
+need "$WEBUI" 'night_modem_idle:APPLY_LIVE'
+need "$WEBUI" "'night_quiet_enable','night_modem_idle'"
+need "$LINT" 'cards missing APPLY_MODE'
+need "$LINT" 'locales missing global WebUI strings'
+
+# The former pytest file was a standalone reference implementation, not coverage of ASB C
+# code. Keep it explicitly documented outside tests rather than pretending an unused Python
+# dependency validates governor behaviour.
+[ -f "$REFERENCE_MODEL" ] || { echo "FAIL: missing allocator reference model" >&2; exit 1; }
+[ -f "$REFERENCE_DOC" ] || { echo "FAIL: missing reference-model boundary documentation" >&2; exit 1; }
+need "$REFERENCE_DOC" '**not** executable tests of the AutoSystemBoost production implementation'
+need "$REFERENCE_DOC" 'must be a host C harness'
+if find "$ROOT_DIR/tests" -maxdepth 1 -type f -name '*invariant_asb_governor*' | grep -q .; then
+  echo "FAIL: pytest reference model remains under tests" >&2; exit 1
+fi
+if grep -RIlE '^[[:space:]]*import[[:space:]]+pytest([[:space:]]|$)' "$ROOT_DIR/tests" 2>/dev/null | grep -q .; then
+  echo "FAIL: pytest-dependent reference material remains under tests" >&2; exit 1
+fi
 
 # Debug identity changes only after rsync in package staging. It keeps the public
 # versionCode so V64-debug1 can be manually flashed over V64; public source/OTA stay V64/640.
