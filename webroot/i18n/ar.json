@@ -433,5 +433,13 @@
   "t_quick_explain": "إعادة التشغيل السريعة تعيد تشغيل Android فقط؛ وتحتاج overlays إلى إعادة تشغيل كاملة.",
   "t_quick_confirm": "اضغط مرة أخرى لإعادة تشغيل Android سريعاً",
   "t_quick_going": "جارٍ إعادة تشغيل Android سريعاً…",
-  "t_quick_unavailable": "إعادة التشغيل السريعة غير متاحة في هذا النظام؛ استخدم إعادة تشغيل كاملة."
+  "t_quick_unavailable": "إعادة التشغيل السريعة غير متاحة في هذا النظام؛ استخدم إعادة تشغيل كاملة.",
+  "dbg_diag_btn": "Diag",
+  "dbg_log_btn": "24h log",
+  "dbg_only": "Debug build only",
+  "dbg_diag_saved": "asbdiag saved",
+  "dbg_diag_failed": "Could not collect asbdiag",
+  "dbg_log_started": "24h log started",
+  "dbg_log_running": "24h log is already running",
+  "dbg_log_failed": "Could not start 24h log"
 }

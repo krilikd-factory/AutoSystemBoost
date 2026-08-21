@@ -433,5 +433,13 @@
   "t_quick_explain": "Hızlı yeniden başlatma yalnızca Android’i yeniden başlatır; overlay’ler için tam yeniden başlatma gerekir.",
   "t_quick_confirm": "Android’i hızlı yeniden başlatmak için tekrar dokunun",
   "t_quick_going": "Android hızlı yeniden başlatılıyor…",
-  "t_quick_unavailable": "Hızlı yeniden başlatma bu ROM’da kullanılamıyor; tam yeniden başlatmayı kullanın."
+  "t_quick_unavailable": "Hızlı yeniden başlatma bu ROM’da kullanılamıyor; tam yeniden başlatmayı kullanın.",
+  "dbg_diag_btn": "Diag",
+  "dbg_log_btn": "24h log",
+  "dbg_only": "Debug build only",
+  "dbg_diag_saved": "asbdiag saved",
+  "dbg_diag_failed": "Could not collect asbdiag",
+  "dbg_log_started": "24h log started",
+  "dbg_log_running": "24h log is already running",
+  "dbg_log_failed": "Could not start 24h log"
 }
