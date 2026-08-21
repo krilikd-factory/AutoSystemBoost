@@ -59,9 +59,19 @@ need "$UI" "const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';"
 need "$UI" 'data-i18n="cfg_profile_save_short"'
 need "$UI" 'data-i18n="cfg_profile_load_short"'
 absent "$UI" 'data-i18n="cfg_profile_storage_hint"'
-need "$UI" 'grid-template-columns: repeat(2, minmax(0, 1fr))'
-need "$UI" '#cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }'
+need "$UI" 'grid-template-columns: repeat(3, minmax(0, 1fr))'
+need "$UI" '#cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 5px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }'
+need "$UI" 'onclick="cfgResetDialogOpen()" data-i18n="cfg_smart_reset"'
+absent "$UI" 'id="cfgResetRow"'
+need "$UI" 'id="cfgResetModal"'
+need "$UI" 'function cfgResetDialogOpen()'
+need "$UI" "cfgResetDialogRun('settings')"
+need "$UI" "cfgResetDialogRun('smart')"
+need "$UI" "MD + '/config/governor.conf.shipped'"
+need "$UI" "MD + '/runtime/asb_config_safe.sh'"
+need "$UI" "MD + '/runtime/asb_smart_reset.sh'"
 need "$UI" 'min-height: min(36vh, 500px); max-height: min(88vh, 780px);'
+need "$UI" 'border-radius: 30px; background: linear-gradient(160deg, #0c1415, #070a0b 72%) padding-box, linear-gradient(135deg, rgba(76,232,193,.78), rgba(44,214,173,.28) 44%, rgba(44,214,173,.62)) border-box;'
 need "$UI" 'function cfgProfileNameOK(name)'
 need "$UI" 'id="cfgProfileModal"'
 need "$UI" 'function cfgProfileOpen(mode)'
@@ -100,6 +110,7 @@ from pathlib import Path
 root = Path(sys.argv[1]) / 'webroot' / 'i18n'
 keys = {'cfg_profile_save_short','cfg_profile_load_short'}
 manager_keys = {'cfg_profile_manager_title','cfg_profile_save_copy','cfg_profile_open_copy','cfg_profile_location','cfg_profile_store_asb','cfg_profile_store_downloads','cfg_profile_store_documents','cfg_profile_save_action','cfg_profile_replace','cfg_profile_name_hint','cfg_profile_replace_ready','cfg_profile_keys','cfg_profile_apply','cfg_profile_prepare_apply','cfg_profile_delete','cfg_profile_delete_confirm','cfg_profile_apply_hint','cfg_profile_export_err'}
+reset_keys = {'cfg_reset_dialog_title','cfg_reset_dialog_copy','cfg_reset_all_title','cfg_reset_all_copy','cfg_reset_smart_title','cfg_reset_smart_copy','cfg_reset_confirm','cfg_reset_all_done','cfg_reset_all_fail'}
 files = sorted(root.glob('*.json'))
 assert len(files) == 13, f'expected 13 locale files, got {len(files)}'
 for p in files:
@@ -111,6 +122,8 @@ for p in files:
     if p.stem in {'en', 'ru'}:
         missing_manager = sorted(k for k in manager_keys if not isinstance(data.get(k), str) or not data[k].strip())
         assert not missing_manager, f'{p.name}: missing manager keys {missing_manager}'
+        missing_reset = sorted(k for k in reset_keys if not isinstance(data.get(k), str) or not data[k].strip())
+        assert not missing_reset, f'{p.name}: missing reset keys {missing_reset}'
 print('PASS profile locale keys and diagnostics-only UV boundary: 13 locales')
 PY
 
