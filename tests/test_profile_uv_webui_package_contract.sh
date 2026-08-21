@@ -70,8 +70,10 @@ need "$UI" "cfgResetDialogRun('smart')"
 need "$UI" "MD + '/config/governor.conf.shipped'"
 need "$UI" "MD + '/runtime/asb_config_safe.sh'"
 need "$UI" "MD + '/runtime/asb_smart_reset.sh'"
+need "$UI" 'padding-bottom: max(2px, env(safe-area-inset-bottom));'
 need "$UI" 'min-height: min(36vh, 500px); max-height: min(88vh, 780px);'
-need "$UI" 'border: 1px solid rgba(73,224,187,.82); border-radius: 30px; background: linear-gradient(160deg, #0c1415, #070a0b 72%) padding-box; box-shadow: 0 -20px 60px rgba(0,0,0,.5);'
+need "$UI" 'border: 1px solid #35bb99; border-radius: 30px; background-color: #080d0e; background-image: linear-gradient(160deg, #0c1415, #070a0b 72%); background-clip: padding-box; box-shadow: 0 -20px 60px rgba(0,0,0,.5);'
+absent "$UI" 'rgba(73,224,187,.82)'
 absent "$UI" 'box-shadow: inset 0 -1px 0'
 need "$UI" 'function cfgProfileNameOK(name)'
 need "$UI" 'id="cfgProfileModal"'
