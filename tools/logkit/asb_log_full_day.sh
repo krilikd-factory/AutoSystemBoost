@@ -446,6 +446,21 @@ lk_emit_full_day_report() {
       echo "wakeup attribution unavailable (no debugfs and no dumpsys)."
     fi
     echo ""
+    echo "----- BLUETOOTH LIFECYCLE (read-only, addresses redacted) -----"
+    _bt_ev="$LK_OUT_DIR/bt_lifecycle_events.tsv"
+    _bt_ctx="$LK_OUT_DIR/bt_lifecycle_context.tsv"
+    if [ -r "$_bt_ev" ]; then
+      _bt_n=$(awk '!/^#/ && NF>=4 {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      _bt_c=$(awk '!/^#/ && $3=="connect" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      _bt_d=$(awk '!/^#/ && $3=="disconnect" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      _bt_r=$(awk '!/^#/ && $3=="reconnect_literal" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      echo "lifecycle events: $_bt_n  connect=$_bt_c  disconnect=$_bt_d  explicit_reconnect=$_bt_r"
+      echo "see bt_lifecycle_events.tsv for timestamped stack evidence and bt_lifecycle_context.tsv for nearest audio route context."
+      echo "A route/context row alone is not counted as a reconnect."
+    else
+      echo "unavailable — Bluetooth lifecycle recorder did not start."
+    fi
+    echo ""
     echo "----- READING THIS -----"
     echo "* Compare pct/h across phases. 'sleep' and 'idle' should be the"
     echo "  lowest; if 'idle' ≈ 'active' something is keeping the SoC busy —"
@@ -458,6 +473,8 @@ lk_emit_full_day_report() {
     echo "* 'audio_bt' / 'audio_spk' / 'audio_wired' = media was playing on that"
     echo "  route. Compare pct/h and cpuT between BT and speaker playback, and"
     echo "  read audio_trace.txt for codec / offload / effect state per route."
+    echo "* Bluetooth reconnects: use bt_lifecycle_events.tsv; it contains only explicit"
+    echo "  stack lifecycle evidence. Use bt_lifecycle_context.tsv to correlate it with route/playback."
     echo "* kernel_params.txt captures governors, sched, io, walt and vm tunables"
     echo "  (stock vs custom kernel); network_trace.txt captures the data path,"
     echo "  signal, tcp tunables and rmnet/wlan counters."
@@ -538,9 +555,12 @@ lk_emit_full_day_report() {
 }
 
 # ── run ────────────────────────────────────────────────────────────────────
+# Full-day logs are a user-requested diagnostic capture. Enable bounded, redacted Bluetooth
+# lifecycle evidence by default so a reconnect can be proven without an extra environment flag.
+# A tester who explicitly does not want the trace may still start with ASB_BT_RECONNECT_TRACE=0.
+: "${ASB_BT_RECONNECT_TRACE:=1}"
+export ASB_BT_RECONNECT_TRACE
 lk_init
-# Optional event recorder for an unrelated Bluetooth reconnect issue. It is
-# disabled by default and does not alter Bluetooth or audio policy.
 lk_bt_reconnect_start
 
 # trace headers

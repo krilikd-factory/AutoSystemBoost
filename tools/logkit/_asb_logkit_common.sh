@@ -1818,6 +1818,9 @@ LK_BT_RECONNECT_ENABLED=0
 LK_BT_RECONNECT_PID=""
 LK_BT_RECONNECT_EVENTS=""
 LK_BT_RECONNECT_SNAPSHOTS=""
+LK_BT_RECONNECT_CONTEXT=""
+LK_BT_RECONNECT_EVENT_COUNT=0
+LK_BT_RECONNECT_MAX_EVENTS="${ASB_BT_RECONNECT_MAX_EVENTS:-240}"
 
 lk_bt_redact_addr() {
   # Device addresses are unnecessary for reconnect diagnosis and must not leave
@@ -1825,24 +1828,78 @@ lk_bt_redact_addr() {
   sed -E 's/([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}/<BT_ADDR>/g'
 }
 
+lk_bt_lifecycle_kind() {
+  # Only explicit stack lifecycle wording is classified. Audio route snapshots, codec feature
+  # names and a later `Devices: bt_a2dp` line are never turned into invented reconnect events.
+  # Shell patterns avoid spawning several grep processes for every Bluetooth stack line.
+  case "$1" in
+    # Static feature/config labels are not disconnect events (this exact false positive existed
+    # in V63 audio_trace archives and must never enter lifecycle TSV evidence).
+    *disconnect_hid_channels_serially*) return 0 ;;
+    *reconnect*|*Reconnect*|*RECONNECT*) printf '%s' 'reconnect_literal' ;;
+    *disconnect*|*Disconnect*|*DISCONNECT*) printf '%s' 'disconnect' ;;
+    *connect*|*Connect*|*CONNECT*|*connection_state*|*CONNECTION_STATE*) printf '%s' 'connect' ;;
+  esac
+}
+
+lk_bt_lifecycle_source() {
+  case "$1" in
+    *BluetoothManagerService*) printf '%s' 'BluetoothManagerService' ;;
+    *AdapterService*)          printf '%s' 'AdapterService' ;;
+    *A2dpService*|*BluetoothA2dp*) printf '%s' 'A2DP' ;;
+    *HeadsetService*|*BluetoothHeadset*) printf '%s' 'Headset' ;;
+    *GattService*)             printf '%s' 'GATT' ;;
+    *Avrcp*)                   printf '%s' 'AVRCP' ;;
+    *bt_btif*|*bt_btm*|*bt_av*|*bt_stack*) printf '%s' 'bt_stack' ;;
+    *)                         printf '%s' 'BluetoothStack' ;;
+  esac
+}
+
+lk_bt_lifecycle_record() {
+  _bt_raw="$1"
+  _bt_kind="$(lk_bt_lifecycle_kind "$_bt_raw")"
+  [ -n "$_bt_kind" ] || return 0
+  # Return 2 to stop the reader once the bounded persisted-event budget is reached.
+  [ "$LK_BT_RECONNECT_EVENT_COUNT" -lt "$LK_BT_RECONNECT_MAX_EVENTS" ] 2>/dev/null || return 2
+  _bt_epoch="$(printf '%s\n' "$_bt_raw" | awk 'match($0,/^[0-9]+([.][0-9]+)?/){print substr($0,RSTART,RLENGTH); exit}' | cut -d. -f1)"
+  case "$_bt_epoch" in ''|*[!0-9]*) _bt_epoch="$(date +%s)" ;; esac
+  _bt_iso="$(date -u -d "@$_bt_epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  _bt_source="$(lk_bt_lifecycle_source "$_bt_raw")"
+  printf '%s\t%s\t%s\t%s\n' "$_bt_epoch" "$_bt_iso" "$_bt_kind" "$_bt_source" >> "$LK_BT_RECONNECT_EVENTS"
+  LK_BT_RECONNECT_EVENT_COUNT=$((LK_BT_RECONNECT_EVENT_COUNT + 1))
+}
+
 lk_bt_reconnect_start() {
   [ "${ASB_BT_RECONNECT_TRACE:-0}" = "1" ] || return 0
   LK_BT_RECONNECT_ENABLED=1
-  LK_BT_RECONNECT_EVENTS="$LK_OUT_DIR/bt_reconnect_events.txt"
-  LK_BT_RECONNECT_SNAPSHOTS="$LK_OUT_DIR/bt_reconnect_snapshots.txt"
+  LK_BT_RECONNECT_EVENTS="$LK_OUT_DIR/bt_lifecycle_events.tsv"
+  LK_BT_RECONNECT_SNAPSHOTS="$LK_OUT_DIR/bt_lifecycle_snapshots.txt"
+  LK_BT_RECONNECT_CONTEXT="$LK_OUT_DIR/bt_lifecycle_context.tsv"
   {
-    echo "# ASB Bluetooth reconnect recorder (opt-in, read-only)"
+    echo "# ASB Bluetooth lifecycle events (read-only)"
+    echo "# epoch<TAB>iso_utc<TAB>event<TAB>source"
+    echo "# event=reconnect_literal only when stack log writes reconnect; connect/disconnect are separate evidence"
+    echo "# MAC addresses and device names are not recorded; source is a coarse service family"
     echo "# started_epoch=$(date +%s)"
-    echo "# scope=BluetoothManagerService, AdapterService, A2DP/HFP/GATT/AVRCP stack tags"
-    echo "# addresses are redacted; absence of an event does not prove absence of a reconnect"
   } > "$LK_BT_RECONNECT_EVENTS"
-  # -T 1 starts at the live tail instead of dumping prior unrelated log history.
-  # A subshell owns the pipeline, so its PID is tracked and cleaned up by stop().
+  {
+    echo "# epoch<TAB>iso_utc<TAB>tag<TAB>audio_playing<TAB>audio_route"
+    echo "# correlate lifecycle events with the nearest context row; context alone is not a connection event"
+  } > "$LK_BT_RECONNECT_CONTEXT"
+  if ! command -v logcat >/dev/null 2>&1; then
+    echo "# status=unavailable_logcat" >> "$LK_BT_RECONNECT_EVENTS"
+    return 0
+  fi
+  # -T 1 starts at the live tail instead of dumping prior unrelated log history. Only explicit
+  # lifecycle candidates are persisted, and the reader stops at the event cap.
   (
     logcat -v epoch -T 1 -b main -b system -b radio \
       -s BluetoothManagerService:V AdapterService:V A2dpService:V HeadsetService:V \
          GattService:V BluetoothA2dp:V BluetoothHeadset:V bt_stack:V bt_btif:V \
-         bt_btm:V bt_av:V Avrcp:V *:S 2>/dev/null | lk_bt_redact_addr >> "$LK_BT_RECONNECT_EVENTS"
+         bt_btm:V bt_av:V Avrcp:V *:S 2>/dev/null | while IFS= read -r _bt_line; do
+           lk_bt_lifecycle_record "$_bt_line"; _bt_rc=$?
+           [ "$_bt_rc" = 2 ] && break
+         done
   ) &
   LK_BT_RECONNECT_PID=$!
   echo "# recorder_pid=$LK_BT_RECONNECT_PID" >> "$LK_BT_RECONNECT_EVENTS"
@@ -1852,7 +1909,9 @@ lk_bt_reconnect_snapshot() {
   [ "$LK_BT_RECONNECT_ENABLED" = "1" ] || return 0
   _bt_tag="${1:-periodic}"
   {
-    echo "===== BLUETOOTH [$_bt_tag] $(date -u '+%Y-%m-%dT%H:%M:%SZ') ====="
+    _bt_epoch="$(date +%s)"; _bt_iso="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$_bt_epoch" "$_bt_iso" "$_bt_tag" "${LK_AUDIO_PLAY:-unknown}" "${LK_AUDIO_ROUTE:-unknown}" >> "$LK_BT_RECONNECT_CONTEXT"
+    echo "===== BLUETOOTH [$_bt_tag] $_bt_iso ====="
     echo "adapter.service=$(lk_get_prop init.svc.bluetooth) bluetooth_on=$(settings get global bluetooth_on 2>/dev/null)"
     echo "audio.playing=${LK_AUDIO_PLAY:-unknown} audio.route=${LK_AUDIO_ROUTE:-unknown} audio.mode=${LK_AUDIO_MODE:-unknown}"
     echo "# connection/profile evidence (MAC addresses redacted)"
@@ -1873,7 +1932,8 @@ lk_bt_reconnect_stop() {
     kill "$LK_BT_RECONNECT_PID" 2>/dev/null || true
     wait "$LK_BT_RECONNECT_PID" 2>/dev/null || true
   fi
-  echo "# recorder_stopped_epoch=$(date +%s)" >> "$LK_BT_RECONNECT_EVENTS" 2>/dev/null || true
+  _bt_saved=$(awk '!/^#/ && NF>=4 {n++} END{print n+0}' "$LK_BT_RECONNECT_EVENTS" 2>/dev/null)
+  echo "# recorder_stopped_epoch=$(date +%s) events=${_bt_saved:-0} cap=$LK_BT_RECONNECT_MAX_EVENTS" >> "$LK_BT_RECONNECT_EVENTS" 2>/dev/null || true
   LK_BT_RECONNECT_PID=""
 }
 
