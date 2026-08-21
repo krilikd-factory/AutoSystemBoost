@@ -10,6 +10,9 @@ WRITER="$MODDIR/runtime/asb_config_safe.sh"
 STATE="${ASB_CONFIG_STATE:-/data/adb/asb}"
 # Tests may point learner state elsewhere; devices use the same durable ASB state directory.
 SMART_STATE="${ASB_SMART_STATE:-$STATE}"
+# The compact Smart model lives under SMART_STATE, while governor session outcomes and
+# aggregate learned stats have their own durable destinations.
+RUNTIME_STATE="${ASB_RUNTIME_STATE:-$MODDIR/runtime}"
 PROFILES="$STATE/config_profiles"
 SNAPSHOT="$STATE/governor.conf.snapshot"
 # External copies are a convenience for user backup/sharing, never an unvalidated path API.
@@ -30,30 +33,38 @@ _profile_sha() { printf '%s/%s.conf.sha256' "$PROFILES" "$1"; }
 _prepare_dir() { mkdir -p "$PROFILES" 2>/dev/null || { echo 'cannot create profile store' >&2; exit 1; }; }
 _smart_dir() { printf '%s/%s.smart' "$PROFILES" "$1"; }
 _smart_sum() { printf '%s/%s.smart.sha256' "$PROFILES" "$1"; }
-# Bucket/appheat/window files are the learned model. The two small state files make a
-# restored model usable after a clean install as well: the master Smart flag is otherwise
-# outside governor.conf, and smart_prev_profile preserves the normal exit path from Smart.
-_smart_file_ok() { case "${1:-}" in buckets.bin|buckets.bin.bak|smart_appheat.bin|night_window.conf|smart_mode_enabled|smart_prev_profile) return 0 ;; *) return 1 ;; esac; }
+# Bucket/appheat/window files are the compact Smart model. Session history and persistent
+# stats are also bounded startup policy inputs: the governor reads them after boot for battery
+# feedback. Keep their portable names flat, but restore each file to its canonical directory.
+_smart_file_ok() { case "${1:-}" in buckets.bin|buckets.bin.bak|smart_appheat.bin|night_window.conf|smart_mode_enabled|smart_prev_profile|session_history.jsonl|session_stats.json|pstats_battery.json|pstats_balanced.json|pstats_performance.json) return 0 ;; *) return 1 ;; esac; }
+_smart_source() {
+  case "${1:-}" in
+    session_stats.json|pstats_battery.json|pstats_balanced.json|pstats_performance.json) printf '%s/%s' "$RUNTIME_STATE" "$1" ;;
+    *) printf '%s/%s' "$SMART_STATE" "$1" ;;
+  esac
+}
+_smart_target() { _smart_source "$1"; }
+_smart_max_bytes() { case "${1:-}" in session_history.jsonl) printf '%s' 5242880 ;; *) printf '%s' 1048576 ;; esac; }
 _smart_prop() { getprop "$1" 2>/dev/null | tr -d '\r\n'; }
 _smart_size() { wc -c < "$1" 2>/dev/null | tr -d ' '; }
 
-# The sidecar carries the complete portable learning state. Session history remains diagnostic
-# only: it is not a policy input and may contain much more private activity detail than the
-# compact aggregate learner model.
+# The sidecar carries the complete portable learning state. History is bounded to 5 MiB by
+# the governor and is included because startup battery feedback reads it; it remains optional
+# so existing profiles and users with no history restore normally.
 smart_save() {
   _name="$1"; _dir="$(_smart_dir "$_name")"; _sum="$(_smart_sum "$_name")"
   rm -rf "$_dir"; rm -f "$_sum"
   _tmp="$_dir.tmp.$$"; mkdir -p "$_tmp" 2>/dev/null || { echo 'smart_learning=unavailable'; return 0; }
   _n=0; _total=0
   {
-    echo '# ASB_SMART_PROFILE_SCHEMA=2'
+    echo '# ASB_SMART_PROFILE_SCHEMA=3'
     echo "# created_at=$(_now)"
     echo "# board=$(_smart_prop ro.board.platform)"
     echo "# device=$(_smart_prop ro.product.device)"
-    for _f in buckets.bin buckets.bin.bak smart_appheat.bin night_window.conf smart_mode_enabled smart_prev_profile; do
-      _src="$SMART_STATE/$_f"; [ -s "$_src" ] || continue
+    for _f in buckets.bin buckets.bin.bak smart_appheat.bin night_window.conf smart_mode_enabled smart_prev_profile session_history.jsonl session_stats.json pstats_battery.json pstats_balanced.json pstats_performance.json; do
+      _src="$(_smart_source "$_f")"; [ -s "$_src" ] || continue
       _bytes="$(_smart_size "$_src")"; case "$_bytes" in ''|*[!0-9]*) continue ;; esac
-      [ "$_bytes" -le 1048576 ] 2>/dev/null || continue
+      [ "$_bytes" -le "$(_smart_max_bytes "$_f")" ] 2>/dev/null || continue
       cp -f "$_src" "$_tmp/$_f" 2>/dev/null || continue
       _hash="$(hash_file "$_tmp/$_f")"; [ -n "$_hash" ] && [ "$_hash" != unavailable ] || { rm -f "$_tmp/$_f"; continue; }
       printf '%s|%s|%s\n' "$_f" "$_bytes" "$_hash"; _n=$((_n + 1)); _total=$((_total + _bytes))
@@ -76,7 +87,7 @@ smart_status_dir() {
   _expect="$(cat "$_msum" 2>/dev/null | tr -d ' \r\n')"; _actual="$(hash_file "$_manifest")"
   [ -n "$_expect" ] && [ "$_expect" = "$_actual" ] || { echo invalid; return 0; }
   _schema="$(grep '^# ASB_SMART_PROFILE_SCHEMA=' "$_manifest" 2>/dev/null | head -1)"
-  case "$_schema" in '# ASB_SMART_PROFILE_SCHEMA=1'|'# ASB_SMART_PROFILE_SCHEMA=2') : ;; *) echo invalid; return 0 ;; esac
+  case "$_schema" in '# ASB_SMART_PROFILE_SCHEMA=1'|'# ASB_SMART_PROFILE_SCHEMA=2'|'# ASB_SMART_PROFILE_SCHEMA=3') : ;; *) echo invalid; return 0 ;; esac
   _board_saved="$(grep '^# board=' "$_manifest" 2>/dev/null | head -1 | cut -d= -f2-)"; _board_now="$(_smart_prop ro.board.platform)"
   [ -z "$_board_saved" ] || [ -z "$_board_now" ] || [ "$_board_saved" = "$_board_now" ] || { echo incompatible; return 0; }
   _seen=' '
@@ -88,7 +99,7 @@ smart_status_dir() {
       *) _seen="$_seen$_f " ;;
     esac
     case "$_bytes:$_hash" in *[!0-9a-fA-F:]*|:*|*::*) echo invalid; return 0 ;; esac
-    [ "$_bytes" -gt 0 ] 2>/dev/null && [ "$_bytes" -le 1048576 ] 2>/dev/null || { echo invalid; return 0; }
+    [ "$_bytes" -gt 0 ] 2>/dev/null && [ "$_bytes" -le "$(_smart_max_bytes "$_f")" ] 2>/dev/null || { echo invalid; return 0; }
     [ -r "$_dir/$_f" ] && [ "$(_smart_size "$_dir/$_f")" = "$_bytes" ] && [ "$(hash_file "$_dir/$_f")" = "$_hash" ] || { echo invalid; return 0; }
   done < "$_manifest"
   case "$_seen" in ' ') echo empty ;; *) echo saved ;; esac
@@ -103,7 +114,7 @@ smart_status() {
 smart_restore() {
   _name="$1"; _src="$(_smart_dir "$_name")"; _status="$(smart_status "$_name")"
   case "$_status" in empty) echo 'smart_learning=none'; return 0 ;; incompatible) echo 'smart_learning=skipped_incompatible_device'; return 0 ;; invalid) echo 'smart_learning=skipped_invalid'; return 0 ;; esac
-  mkdir -p "$SMART_STATE" 2>/dev/null || { echo 'smart_learning=restore_failed'; return 1; }
+  mkdir -p "$SMART_STATE" "$RUNTIME_STATE" 2>/dev/null || { echo 'smart_learning=restore_failed'; return 1; }
 
   # Do not trust a previous validation across a series of copies. Build a private stage and
   # re-check every declared byte count and SHA before touching the live learner state.
@@ -127,21 +138,24 @@ smart_restore() {
   _ok=1
   while IFS='|' read -r _f _bytes _hash; do
     case "$_f" in ''|'#'*) continue ;; esac
-    if [ -e "$SMART_STATE/$_f" ]; then cp -pf "$SMART_STATE/$_f" "$_rollback/$_f" 2>/dev/null || _ok=0
+    _target="$(_smart_target "$_f")"
+    if [ -e "$_target" ]; then cp -pf "$_target" "$_rollback/$_f" 2>/dev/null || _ok=0
     else : > "$_rollback/$_f.absent" 2>/dev/null || _ok=0
     fi
   done < "$_src/manifest"
   if [ "$_ok" = 1 ]; then
     while IFS='|' read -r _f _bytes _hash; do
       case "$_f" in ''|'#'*) continue ;; esac
-      cp -f "$_stage/$_f" "$SMART_STATE/$_f.restore.$$" 2>/dev/null && mv -f "$SMART_STATE/$_f.restore.$$" "$SMART_STATE/$_f" || { _ok=0; break; }
+      _target="$(_smart_target "$_f")"
+      cp -f "$_stage/$_f" "$_target.restore.$$" 2>/dev/null && mv -f "$_target.restore.$$" "$_target" || { _ok=0; break; }
     done < "$_src/manifest"
   fi
   if [ "$_ok" != 1 ]; then
     while IFS='|' read -r _f _bytes _hash; do
       case "$_f" in ''|'#'*) continue ;; esac
-      if [ -e "$_rollback/$_f.absent" ]; then rm -f "$SMART_STATE/$_f"
-      elif [ -e "$_rollback/$_f" ]; then cp -pf "$_rollback/$_f" "$SMART_STATE/$_f" 2>/dev/null || true
+      _target="$(_smart_target "$_f")"
+      if [ -e "$_rollback/$_f.absent" ]; then rm -f "$_target"
+      elif [ -e "$_rollback/$_f" ]; then cp -pf "$_rollback/$_f" "$_target" 2>/dev/null || true
       fi
     done < "$_src/manifest"
     rm -rf "$_stage" "$_rollback"
