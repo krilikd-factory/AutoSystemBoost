@@ -97,6 +97,16 @@ need "$HELPER" 'documents)'
 need "$HELPER" 'list-external)'
 need "$HELPER" 'import-external)'
 
+# Audio remains one top-level category. DSP is a labelled subsection of it, not a second
+# destination or a duplicate renderer path; every locale must provide its compact labels.
+need "$UI" "const CFG_GROUP_SECTIONS = {"
+need "$UI" "audio: ["
+need "$UI" "titleKey:'cfg_audio_section_dsp'"
+need "$UI" "keys:['dsp_loudness','dsp_bass','dsp_compressor','dsp_outputs']"
+need "$UI" 'function cfgRenderGroup(list, groupId)'
+need "$UI" 'cfgRenderGroup(list, _cfgGroup);'
+need "$UI" '.cfg-section-hint'
+
 # UV collector remains available to asbdiag but must not display ambiguous properties in WebUI.
 need "$UV" 'asb_action" "diagnostics_only'
 need "$UV" 'ASB does not own, write, validate, disable or revert external voltage policy'
@@ -111,7 +121,7 @@ python3 - "$ROOT" <<'PY'
 import json, sys
 from pathlib import Path
 root = Path(sys.argv[1]) / 'webroot' / 'i18n'
-keys = {'cfg_profile_save_short','cfg_profile_load_short'}
+keys = {'cfg_profile_save_short','cfg_profile_load_short','cfg_audio_section_playback','cfg_audio_section_playback_hint','cfg_audio_section_dsp','cfg_audio_section_dsp_hint','cfg_audio_section_safety','cfg_audio_section_safety_hint'}
 manager_keys = {'cfg_profile_manager_title','cfg_profile_save_copy','cfg_profile_open_copy','cfg_profile_location','cfg_profile_store_asb','cfg_profile_store_downloads','cfg_profile_store_documents','cfg_profile_save_action','cfg_profile_replace','cfg_profile_name_hint','cfg_profile_replace_ready','cfg_profile_keys','cfg_profile_apply','cfg_profile_prepare_apply','cfg_profile_delete','cfg_profile_delete_confirm','cfg_profile_apply_hint','cfg_profile_export_err'}
 reset_keys = {'cfg_reset_dialog_title','cfg_reset_dialog_copy','cfg_reset_all_title','cfg_reset_all_copy','cfg_reset_smart_title','cfg_reset_smart_copy','cfg_reset_confirm','cfg_reset_all_done','cfg_reset_all_fail'}
 files = sorted(root.glob('*.json'))
@@ -127,7 +137,7 @@ for p in files:
         assert not missing_manager, f'{p.name}: missing manager keys {missing_manager}'
         missing_reset = sorted(k for k in reset_keys if not isinstance(data.get(k), str) or not data[k].strip())
         assert not missing_reset, f'{p.name}: missing reset keys {missing_reset}'
-print('PASS profile locale keys and diagnostics-only UV boundary: 13 locales')
+print('PASS profile, Audio/DSP subsection locale keys and diagnostics-only UV boundary: 13 locales')
 PY
 
 echo 'PASS profile/UV package contract'
