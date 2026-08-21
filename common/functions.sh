@@ -134,7 +134,7 @@ install_script() {
 }
 
 prop_process() {
-  # V63.416-safe deliberately forbids installer-time writes to module-level
+  # current installer-safe deliberately forbids installer-time writes to module-level
   # system.prop: Magisk would apply them before ASB can check feature flags and
   # a fingerprint-validated device pack. Add explicit, marker-delimited entries
   # to runtime/asb_managed.props instead and apply them through the managed gate.
