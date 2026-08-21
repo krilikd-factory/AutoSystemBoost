@@ -4637,9 +4637,12 @@ async function cfgReboot() {
 }
 
 /*
- * Soft reboot: restart the Android runtime without a full boot.
+ * Quick restart is deliberately not a faster full reboot. It asks the ROM for a supported
+ * userspace restart, or asks init to restart the Zygote only after the helper verified that
+ * the runtime service is live. Full reboot remains the required path for overlay/kernel work.
  */
 let _cfgSoftArmed = 0;
+const ASB_QUICK_RESTART = MD + '/runtime/asb_quick_restart.sh';
 const ASB_LANG_NAMES = { en:'English', ru:'Русский', uk:'Українська', de:'Deutsch',
   es:'Español', pt:'Português', tr:'Türkçe', id:'Indonesia', it:'Italiano',
   fr:'Français', ar:'العربية', zh:'中文', hy:'Հայերեն' };
@@ -5079,15 +5082,27 @@ function cfgExport() { void cfgProfileOpen('save'); }
 function cfgImport() { void cfgProfileOpen('open'); }
 
 async function cfgSoftReboot() {
+  let capability;
+  try { capability = await run('sh ' + shQuote(ASB_QUICK_RESTART) + ' status'); } catch (e) { capability = null; }
+  if (!capability || capability.errno !== 0) {
+    _cfgSoftArmed = 0;
+    toast(T('t_quick_unavailable', 'Quick restart is not available on this ROM; use full reboot.'), 'warn');
+    return;
+  }
   const now = Date.now();
   if (now - _cfgSoftArmed > 4000) {
     _cfgSoftArmed = now;
-    toast(T('t_soft_confirm', 'Tap again for a soft reboot'), 'soft');
+    toast(T('t_quick_explain', 'Quick restart restarts Android only; overlays still need a full reboot.') +
+      ' ' + T('t_quick_confirm', 'Tap again for a quick Android restart'), 'soft');
     return;
   }
   _cfgSoftArmed = 0;
-  toast(T('t_soft_going', 'Soft rebooting\u2026'), 'soft');
-  await run('setprop ctl.restart zygote 2>/dev/null || killall zygote 2>/dev/null');
+  toast(T('t_quick_going', 'Quick restarting Android…'), 'soft');
+  let result;
+  try { result = await run('sh ' + shQuote(ASB_QUICK_RESTART) + ' restart'); } catch (e) { result = null; }
+  if (!result || result.errno !== 0) {
+    toast(T('t_quick_unavailable', 'Quick restart is not available on this ROM; use full reboot.'), 'warn');
+  }
 }
 
 /*
