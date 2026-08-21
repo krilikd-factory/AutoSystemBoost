@@ -1577,7 +1577,9 @@ apply_audio_runtime() {
     asb_persist_safe persist.audio.uhqa 1
     asb_persist_safe persist.vendor.audio.uhqa true
     asb_persist_safe persist.vendor.audio.power.save.setting 1
-    setprop af.resampler.quality 255 2>/dev/null || true
+    # 255 is outside the platform enum and is silently rejected on current OPlus audio
+    # stacks. Keep DEFAULT (0), which is the same validated policy as asb_audio_apply.sh.
+    setprop af.resampler.quality 0 2>/dev/null || true
     setprop audio.offload.min.duration.secs 20 2>/dev/null || true
     setprop vendor.audio.offload.min.duration.secs 20 2>/dev/null || true
     setprop audio.offload.buffer.size.kb 256 2>/dev/null || true
