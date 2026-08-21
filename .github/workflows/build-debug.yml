@@ -2,6 +2,12 @@ name: ASB · Build Debug
 
 on:
   workflow_dispatch:
+    inputs:
+      debug_sequence:
+        description: 'Debug sequence after this public release (1–9)'
+        required: false
+        default: '1'
+        type: string
 
 # Debug only ever uploads an artifact, so read is all it needs - declared explicitly so
 # the job does not silently inherit whatever the repository default happens to be.
@@ -59,6 +65,7 @@ jobs:
             src/build_ndk_release.sh \
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
+            runtime/asb_active_efficiency_envelope.sh \
             tools/asb_schema_sync.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
@@ -67,7 +74,14 @@ jobs:
             tests/test_thermal_socd_validation.c \
             tests/test_p0_provenance_contract.sh \
             tests/test_v64_p0_contract.sh \
+            tests/test_v64_webui_trial_ledger_contract.py \
+            tests/test_config_lock_contract.sh \
+            tests/test_named_config_profiles.sh \
+            tests/test_v64_hardening_contract.sh \
+            tests/test_active_efficiency_contract.sh \
+            tests/test_kernel_uv_coexist_contract.sh \
             tests/test_v62_to_v64_migration.sh \
+
             module.prop \
             customize.sh \
             service.sh; do
@@ -164,6 +178,14 @@ jobs:
             echo "== tests/test_v64_p0_contract.sh =="
             sh tests/test_v64_p0_contract.sh || _rc=1
           fi
+          if [ -f tests/test_v64_webui_trial_ledger_contract.py ]; then
+            echo "== tests/test_v64_webui_trial_ledger_contract.py =="
+            python3 tests/test_v64_webui_trial_ledger_contract.py || _rc=1
+          fi
+          for _t in tests/test_config_lock_contract.sh tests/test_named_config_profiles.sh tests/test_v64_hardening_contract.sh tests/test_active_efficiency_contract.sh tests/test_kernel_uv_coexist_contract.sh; do
+            echo "== $_t =="
+            sh "$_t" || _rc=1
+          done
           if [ -f tests/test_v62_to_v64_migration.sh ]; then
             echo "== tests/test_v62_to_v64_migration.sh =="
             bash tests/test_v62_to_v64_migration.sh || _rc=1
@@ -422,8 +444,25 @@ jobs:
           fi
           find "$PKG_DBG" -name "*.log" -delete
 
-          ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
-          ZIP_DBG="ASB-${ASB_VER}-debug.zip"
+          # Keep source identity and OTA metadata stable. The staged flashable debug package
+          # receives only a human-readable suffix (V64-debug1, V64-debug2, ...), while its
+          # versionCode remains the public release code. Testers install it manually over the
+          # matching release; a future public release with a higher versionCode still wins the
+          # normal Magisk/KernelSU update comparison.
+          BASE_VER=$(grep '^version=' module.prop | cut -d= -f2)
+          BASE_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
+          DEBUG_SEQ='${{ inputs.debug_sequence }}'
+          case "$BASE_CODE:$DEBUG_SEQ" in
+            *[!0-9:]*|:*|*:0|*:[1-9][0-9]*|*:[!1-9]*)
+              echo '::error::debug_sequence must be one integer from 1 to 9'
+              exit 1 ;;
+          esac
+          DEBUG_CODE="$BASE_CODE"
+          ASB_VER="${BASE_VER}-debug${DEBUG_SEQ}"
+          sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_DBG/module.prop"
+          grep -qx "version=${ASB_VER}" "$PKG_DBG/module.prop"
+          grep -qx "versionCode=${BASE_CODE}" "$PKG_DBG/module.prop"
+          ZIP_DBG="ASB-${ASB_VER}.zip"
           rm -f "$ZIP_DBG"
           # WebUI assets readable by the root manager's WebView. The zip preserves modes,
           # so getting them right here is what customize.sh then re-asserts on device -
@@ -483,8 +522,10 @@ jobs:
             "runtime/asb_net_offload.sh" \
             "runtime/asb_athena_apply.sh" \
             "runtime/asb_config_safe.sh" \
+            "runtime/asb_active_efficiency_envelope.sh" \
             "runtime/asb_device_tier.sh" \
             "runtime/asb_device_pack_manifest.sh" \
+            "tools/asb_kernel_uv_coexist.sh" \
             "runtime/profile_core.sh" \
             "runtime/smart_dynamic_tune.sh" \
             "runtime/asb_tweaks.sh" \
@@ -517,6 +558,7 @@ jobs:
             "tools/asb_discover.sh" \
             "tools/asb_synthesize_bounds.sh" \
             "tools/asb_vendor_thermal_probe.sh" \
+            "tools/asb_kernel_uv_coexist.sh" \
             "tools/asb_diag.sh" \
             "tools/asb_effective_policy.sh" \
             "tools/asb_recents_probe.sh" \
@@ -560,7 +602,7 @@ jobs:
       - name: Upload debug artifact (flashable, not double-zipped)
         uses: actions/upload-artifact@v4
         with:
-          name: ASB-${{ env.ASB_VER }}-debug
+          name: ASB-${{ env.ASB_VER }}
           path: pkg-debug/
           retention-days: 30
 
