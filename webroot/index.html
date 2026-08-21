@@ -1333,6 +1333,33 @@ body.config-active #livePage.open {
   flex-direction: column;
   gap: 10px;
 }
+/* Subsections live inside a single category screen. Audio uses them to distinguish the
+   playback path, ASB's own DSP chain and the explicit hearing-safety control without
+   turning DSP into a second top-level destination. */
+.cfg-section {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: baseline;
+  box-sizing: border-box;
+  padding: 8px 4px 1px;
+  margin-top: 4px;
+  color: rgba(231,234,238,0.72);
+}
+.cfg-section-ico { font-size: 14px; line-height: 1; }
+.cfg-section-title {
+  color: rgba(255,122,122,0.96);
+  font: 800 11px/1.2 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cfg-section-hint {
+  grid-column: 2;
+  margin-top: 3px;
+  color: rgba(231,234,238,0.48);
+  font: 500 11px/1.35 var(--sans);
+}
 .cfg-row {
   width: 100%;
   background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
@@ -3275,6 +3302,61 @@ const CFG_GROUP_OF = {
   disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'ui', haptic_touch_strength:'ui'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
+
+/* Audio stays one top-level group. These labels only organise cards inside that screen:
+ * playback and Bluetooth define the route, DSP defines processing on that route, and the
+ * volume-limit switch remains visibly separate because it is a hearing-safety decision. */
+const CFG_GROUP_SECTIONS = {
+  audio: [
+    { id:'playback', ico:'🎧', titleKey:'cfg_audio_section_playback',
+      title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
+      hint:'Choose the audio path and Bluetooth behaviour.',
+      keys:['audio_profile','audio_dac_hifi','media_loudness','bt_absvol_mode','bt_a2dp_offload'] },
+    { id:'dsp', ico:'🎚️', titleKey:'cfg_audio_section_dsp',
+      title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
+      hint:'Optional gain, bass and dynamics processing on the outputs you select.',
+      keys:['dsp_loudness','dsp_bass','dsp_compressor','dsp_outputs'] },
+    { id:'safety', ico:'⚠️', titleKey:'cfg_audio_section_safety',
+      title:'Listening Safety', hintKey:'cfg_audio_section_safety_hint',
+      hint:'The system hearing limit is left untouched unless you explicitly change it.',
+      keys:['audio_remove_volume_limit'] }
+  ]
+};
+
+function cfgRenderSection(list, section) {
+  const head = document.createElement('div');
+  head.className = 'cfg-section';
+  const ico = document.createElement('span');
+  ico.className = 'cfg-section-ico';
+  ico.textContent = section.ico;
+  const title = document.createElement('div');
+  title.className = 'cfg-section-title';
+  title.textContent = T(section.titleKey, section.title);
+  const hint = document.createElement('div');
+  hint.className = 'cfg-section-hint';
+  hint.textContent = T(section.hintKey, section.hint);
+  head.appendChild(ico);
+  head.appendChild(title);
+  head.appendChild(hint);
+  list.appendChild(head);
+}
+
+function cfgRenderGroup(list, groupId) {
+  const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === groupId);
+  const sections = CFG_GROUP_SECTIONS[groupId];
+  if (!sections) { items.forEach(it => cfgRenderRow(list, it, false)); return; }
+  const rendered = {};
+  sections.forEach(section => {
+    const sectionItems = section.keys.map(key => items.find(it => it.key === key)).filter(Boolean);
+    if (!sectionItems.length) return;
+    cfgRenderSection(list, section);
+    sectionItems.forEach(it => { rendered[it.key] = true; cfgRenderRow(list, it, false); });
+  });
+  // Future cards still appear rather than silently disappearing when a maintainer forgets
+  // to add them to a subsection. The group remains the source of truth for reachability.
+  items.filter(it => !rendered[it.key]).forEach(it => cfgRenderRow(list, it, false));
+}
+
 // null = the hub is showing; a group id = that group's screen is.
 var _cfgGroup = null;
 
@@ -4256,8 +4338,7 @@ function cfgRender() {
   cfgRenderSearch(list);
   if (_cfgSearch) { cfgRenderMatches(list); return; }
   if (!_cfgGroup) { cfgRenderHub(list); return; }
-  CFG_ITEMS.filter(it => cfgGroupOf(it.key) === _cfgGroup)
-           .forEach(it => cfgRenderRow(list, it, false));
+  cfgRenderGroup(list, _cfgGroup);
 }
 
 function shQuote(v) {
