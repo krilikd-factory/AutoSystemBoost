@@ -59,6 +59,39 @@ LK_GPU_LO_STREAK=0
 LK_IN_GAMING=0
 LK_GPU_NOW=0
 
+# Charging phase labels are telemetry, never a governor command. OxygenOS can briefly report
+# Awake/Asleep transitions while a plugged-in screen is settling; recording each 15s flip made
+# `charging_active` and `charging_idle` look like different workloads. Screen-on remains
+# immediate, while active→idle must persist for this bounded window before the ledger changes.
+LK_CHG_PHASE_STABLE=""
+LK_CHG_IDLE_CANDIDATE_SINCE=0
+LK_CHG_IDLE_DEBOUNCE_S="${ASB_LOGKIT_CHG_IDLE_DEBOUNCE_S:-45}"
+LK_CHG_IDLE_COALESCED=0
+LK_CHG_IDLE_SAMPLES=0
+LK_CHG_IDLE_AUDIO_SAMPLES=0
+LK_SCREENOFF_LONGEST_S=0
+lk_stabilize_charging_phase() {
+  _lscp="$1"; _lscn="$2"; LK_CHG_PHASE_OUT=""
+  case "$_lscp" in charging_active|charging_idle) : ;; *)
+    LK_CHG_PHASE_STABLE=""; LK_CHG_IDLE_CANDIDATE_SINCE=0; LK_CHG_PHASE_OUT="$_lscp"; return 0 ;;
+  esac
+  # First charging sample establishes context. A return to visible screen use is immediate.
+  if [ -z "$LK_CHG_PHASE_STABLE" ] || [ "$_lscp" = "charging_active" ]; then
+    LK_CHG_PHASE_STABLE="$_lscp"; LK_CHG_IDLE_CANDIDATE_SINCE=0; LK_CHG_PHASE_OUT="$_lscp"; return 0
+  fi
+  if [ "$_lscp" = "$LK_CHG_PHASE_STABLE" ]; then
+    LK_CHG_IDLE_CANDIDATE_SINCE=0; LK_CHG_PHASE_OUT="$_lscp"; return 0
+  fi
+  # The only deferred edge is active→idle. Keep the currently visible phase until sleep is
+  # sustained; this does not suppress sampling, thermal reads or any ASB policy write.
+  [ "$LK_CHG_IDLE_CANDIDATE_SINCE" -gt 0 ] 2>/dev/null || LK_CHG_IDLE_CANDIDATE_SINCE="$_lscn"
+  if [ $(( _lscn - LK_CHG_IDLE_CANDIDATE_SINCE )) -ge "$LK_CHG_IDLE_DEBOUNCE_S" ] 2>/dev/null; then
+    LK_CHG_PHASE_STABLE="charging_idle"; LK_CHG_IDLE_CANDIDATE_SINCE=0; LK_CHG_PHASE_OUT=charging_idle
+  else
+    LK_CHG_IDLE_COALESCED=$((LK_CHG_IDLE_COALESCED + 1)); LK_CHG_PHASE_OUT="$LK_CHG_PHASE_STABLE"
+  fi
+}
+
 lk_sample_gpu_busy() {
   LK_GPU_NOW=$(cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null | tr -dc '0-9')
   [ -z "$LK_GPU_NOW" ] && LK_GPU_NOW=0
@@ -104,6 +137,7 @@ lk_detect_phase() {
   LK_LAST_SCREEN="$_scr"
   _off_for=0
   [ "$LK_SCREEN_OFF_SINCE" != "0" ] && _off_for=$(( _now - LK_SCREEN_OFF_SINCE ))
+  [ "$_off_for" -gt "$LK_SCREENOFF_LONGEST_S" ] 2>/dev/null && LK_SCREENOFF_LONGEST_S="$_off_for"
 
   # GPU busy + top-app cpu for gaming detection
   _gb="$LK_GPU_NOW"
@@ -115,7 +149,9 @@ lk_detect_phase() {
   case "$_cs" in
     Charging|Full)
       LK_IN_GAMING=0; LK_GPU_HI_STREAK=0; LK_GPU_LO_STREAK=0
-      if [ "$_scr" = "Awake" ]; then LK_PHASE_OUT="charging_active"; else LK_PHASE_OUT="charging_idle"; fi
+      if [ "$_scr" = "Awake" ]; then _charge_phase="charging_active"; else _charge_phase="charging_idle"; fi
+      lk_stabilize_charging_phase "$_charge_phase" "$_now"
+      LK_PHASE_OUT="$LK_CHG_PHASE_OUT"
       return 0 ;;
   esac
   # screen off → sleep vs idle (sleep = off > 20 min)
@@ -410,6 +446,8 @@ lk_emit_full_day_report() {
     echo "----- NIGHT / SCREEN-OFF CPU SLEEP -----"
     lk_emit_screenoff_sleep
     echo ""
+    lk_emit_capture_validity
+    echo ""
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
       cat "$LK_OUT_DIR/phase_summary.txt"
     fi
@@ -431,6 +469,8 @@ lk_emit_full_day_report() {
       echo "(if you gamed hard and still see none, ASB+thermal kept full clocks)"
     fi
     echo ""
+    lk_emit_cap_ownership_verdict
+    echo ""
     echo "----- WAKE SOURCES (who kept the device awake) -----"
     if [ -s "$LK_OUT_DIR/_wakelock_report.txt" ]; then
       echo "Android batterystats attribution (works without debugfs):"
@@ -445,6 +485,8 @@ lk_emit_full_day_report() {
     else
       echo "wakeup attribution unavailable (no debugfs and no dumpsys)."
     fi
+    echo ""
+    lk_emit_charging_idle_anomaly
     echo ""
     echo "----- BLUETOOTH LIFECYCLE (read-only, addresses redacted) -----"
     _bt_ev="$LK_OUT_DIR/bt_lifecycle_events.tsv"
@@ -554,6 +596,64 @@ lk_emit_full_day_report() {
   } > "$_out"
 }
 
+# ── report-only validity and attribution helpers ───────────────────────────
+# These helpers read recorder artifacts only. They never adjust charging, thermal, CPU or app policy.
+lk_emit_capture_validity() {
+  _lv_elapsed=$(( $(date +%s) - LK_START_EPOCH ))
+  echo "----- CAPTURE VALIDITY -----"
+  if [ "$_lv_elapsed" -lt 10800 ]; then
+    echo "runtime verdict: preliminary (${_lv_elapsed}s captured; <3h). Use it for state/ownership evidence, not battery-life conclusions."
+  elif [ "$_lv_elapsed" -lt 21600 ]; then
+    echo "runtime verdict: partial-day (${_lv_elapsed}s captured; <6h). Phase evidence is useful; day-level battery estimates remain provisional."
+  else
+    echo "runtime verdict: extended capture (${_lv_elapsed}s captured)."
+  fi
+  if [ "$LK_SCREENOFF_LONGEST_S" -ge 10800 ] 2>/dev/null; then
+    echo "night verdict: valid (longest continuous screen-off $((LK_SCREENOFF_LONGEST_S / 60)) min >=180 min)."
+  else
+    echo "night verdict: unavailable (longest continuous screen-off $((LK_SCREENOFF_LONGEST_S / 60)) min; need >=180 min)."
+  fi
+}
+
+lk_emit_cap_ownership_verdict() {
+  _lc_trace="$LK_OUT_DIR/throttle_trace.txt"
+  [ -s "$_lc_trace" ] || return 0
+  _lc_vendor=$(awk -F'cap_owner=' 'NF>1 && $2 ~ /^vendor/{n++} END{print n+0}' "$_lc_trace")
+  _lc_shell=$(awk -F'cap_owner=' 'NF>1 && $2 ~ /^shell/{n++} END{print n+0}' "$_lc_trace")
+  _lc_asb=$(awk -F'cap_owner=' 'NF>1 && $2 ~ /^asb/{n++} END{print n+0}' "$_lc_trace")
+  _lc_foreign=$(( _lc_vendor + _lc_shell ))
+  echo "----- CAP OWNERSHIP VERDICT -----"
+  echo "observed throttle owners: vendor=$_lc_vendor shell=$_lc_shell asb=$_lc_asb"
+  if [ "$_lc_foreign" -gt "$_lc_asb" ] && [ "$_lc_foreign" -ge 3 ]; then
+    echo "verdict: foreign cap ownership dominated this capture; ASB does not raise universal frequencies. Native vendor holddown/detente remains responsible for suppressing losing idle writes."
+  else
+    echo "verdict: no foreign-owner dominance established in this capture."
+  fi
+}
+
+lk_charge_idle_observe() {
+  [ "$1" = "charging_idle" ] || return 0
+  LK_CHG_IDLE_SAMPLES=$((LK_CHG_IDLE_SAMPLES + 1))
+  [ "${LK_AUDIO_PLAY:-0}" = "1" ] && LK_CHG_IDLE_AUDIO_SAMPLES=$((LK_CHG_IDLE_AUDIO_SAMPLES + 1))
+}
+
+lk_emit_charging_idle_anomaly() {
+  _lci_ledger="$LK_OUT_DIR/phase_ledger.tsv"
+  [ -s "$_lci_ledger" ] || return 0
+  _lci=$(awk -F'\t' '$1=="charging_idle" {d=$3-$2; if(d>0){sec+=d; aw+=$12*d}} END{if(sec>0) printf "%d %.1f",sec,aw/sec}' "$_lci_ledger")
+  [ -n "$_lci" ] || return 0
+  set -- $_lci; _lci_sec="$1"; _lci_awake="$2"
+  _lci_audio_pct=0
+  [ "$LK_CHG_IDLE_SAMPLES" -gt 0 ] 2>/dev/null && _lci_audio_pct=$(( LK_CHG_IDLE_AUDIO_SAMPLES * 100 / LK_CHG_IDLE_SAMPLES ))
+  echo "----- CHARGING-IDLE AWAKE VERDICT -----"
+  echo "charging_idle: $((_lci_sec / 60)) min, awake ${_lci_awake}%, audio samples ${_lci_audio_pct}%, debounce-coalesced samples ${LK_CHG_IDLE_COALESCED}"
+  if [ "$_lci_sec" -ge 900 ] && awk -v a="$_lci_awake" 'BEGIN{exit !(a >= 50)}' && [ "$_lci_audio_pct" -le 10 ]; then
+    echo "anomaly: sustained screen-off charging idle stayed awake. Inspect ranked partial wakelocks below; ASB does not alter charge current or kill apps automatically."
+  else
+    echo "verdict: no sustained no-audio charging-idle awake anomaly established."
+  fi
+}
+
 # ── run ────────────────────────────────────────────────────────────────────
 # Full-day logs are a user-requested diagnostic capture. Enable bounded, redacted Bluetooth
 # lifecycle evidence by default so a reconnect can be proven without an extra environment flag.
@@ -658,6 +758,7 @@ while : ; do
   lk_config_watch_row
   lk_charge_trace_row
   lk_asb_feature_row
+  lk_charge_idle_observe "$_phase"
   lk_phase_ledger_accumulate
   LK_TICK_COUNT=$((LK_TICK_COUNT + 1))
 
