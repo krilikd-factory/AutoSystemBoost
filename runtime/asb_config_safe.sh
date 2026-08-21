@@ -11,27 +11,61 @@ CONF="$MODDIR/config/governor.conf"
 SHIPPED="$MODDIR/config/governor.conf.shipped"
 STATE="${ASB_CONFIG_STATE:-/data/adb/asb}"
 LOCK="$STATE/config.lock"
+LOCK_WAIT_TICKS="${ASB_CONFIG_LOCK_WAIT_TICKS:-100}"       # 10 s at 100 ms
+LOCK_STALE_S="${ASB_CONFIG_LOCK_STALE_S:-30}"              # never reclaim a fresh lock
+_LOCK_HELD=0
+_LOCK_LAST_OWNER=""
+_LOCK_LAST_AGE=""
+_LOCK_RECOVERED=""
 
 # P0-5: every outcome is recorded with a stable class, not just printed to stderr.
 #
-# A user on an Ace 5 saw "write failed" in a WebUI toast and there was no way - for them
-# or for support - to tell a live lock from a validation rejection from a permission
-# problem. The three need completely different answers, and stderr text is neither stable
-# enough to match on nor safe to show raw.
-#
-# The record is written before exiting so it survives the failure, and it holds a class
-# and a short reason only: never a config dump, never a raw path, never shell stderr.
-# Default follows ASB_CONFIG_STATE so host tests, staged installs and recovery paths remain isolated.
-# On device STATE defaults to /data/adb/asb, preserving the public transaction path.
+# The writer serializes every mutable governor.conf transaction with a mkdir lease. A previous
+# version waited on config.lock but reported evidence from STATE/lock, a different path; a
+# stale owner after a killed WebUI process therefore looked like an unexplained timeout. Keep
+# owner, age, recovery and transaction reporting on the same canonical directory.
 ASB_TXN="${ASB_CONFIG_TXN:-$STATE/config_last_txn}"
 _config_epoch() { stat -c %Y "$CONF" 2>/dev/null || echo 0; }
+_now_s() { date +%s 2>/dev/null || echo 0; }
 ASB_TXN_PRE_EPOCH="$(_config_epoch)"
+
+_lock_owner() { cat "$LOCK/pid" 2>/dev/null | tr -dc '0-9'; }
+_lock_age() {
+  _now="$(_now_s)"; _then="$(stat -c %Y "$LOCK" 2>/dev/null || echo 0)"
+  _age=$((_now - _then)); [ "$_age" -ge 0 ] 2>/dev/null || _age=0
+  printf '%s' "$_age"
+}
+_lock_owner_alive() {
+  _pid="$1"
+  [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null
+}
+_lock_release() {
+  [ "${_LOCK_HELD:-0}" = 1 ] || return 0
+  rm -f "$LOCK/pid" "$LOCK/started" 2>/dev/null
+  rmdir "$LOCK" 2>/dev/null || true
+  _LOCK_HELD=0
+}
+_lock_reclaim_stale() {
+  # Never steal a live process and never reclaim a fresh incomplete lease: there is a small
+  # post-mkdir window before owner metadata is written. Rename is the atomic claim; only one
+  # waiter can move a stale directory, then it removes its private renamed copy.
+  [ -d "$LOCK" ] || return 1
+  _owner="$(_lock_owner)"; _age="$(_lock_age)"
+  _LOCK_LAST_OWNER="$_owner"; _LOCK_LAST_AGE="$_age"
+  _lock_owner_alive "$_owner" && return 1
+  [ "$_age" -ge "$LOCK_STALE_S" ] 2>/dev/null || return 1
+  _old="$STATE/config.lock.stale.$$"
+  mv "$LOCK" "$_old" 2>/dev/null || return 1
+  rm -rf "$_old" 2>/dev/null || true
+  _LOCK_RECOVERED="stale_owner=${_owner:-unknown},age=${_age}"
+  return 0
+}
 
 _txn() {
   # _txn <result_class> <reason> [key]
   mkdir -p "$(dirname "$ASB_TXN")" 2>/dev/null
   {
-    echo "timestamp=$(date +%s 2>/dev/null || echo 0)"
+    echo "timestamp=$(_now_s)"
     echo "result_class=$1"
     echo "reason=$2"
     [ -n "${3:-}" ] && echo "key=$3"
@@ -40,14 +74,11 @@ _txn() {
     # The writer is intentionally atomic-only; daemon reload is owned by its runtime path.
     echo "reload_accepted=not_requested"
     [ -n "${ASB_TXN_RECOVERY:-}" ] && echo "recovery=$ASB_TXN_RECOVERY"
-    # Lock owner is evidence when the write was blocked, and noise otherwise.
+    [ -n "${_LOCK_RECOVERED:-}" ] && echo "lock_recovered=$_LOCK_RECOVERED"
     if [ "$1" = "lock_live" ] || [ "$1" = "lock_stale" ]; then
-      _lo="$(cat "$STATE/lock/pid" 2>/dev/null | tr -dc '0-9')"
-      [ -n "$_lo" ] && echo "lock_owner=$_lo"
-      if [ -d "$STATE/lock" ]; then
-        _la=$(( $(date +%s 2>/dev/null || echo 0) - $(stat -c %Y "$STATE/lock" 2>/dev/null || echo 0) ))
-        [ "$_la" -ge 0 ] 2>/dev/null && echo "lock_age=$_la"
-      fi
+      [ -n "${_LOCK_LAST_OWNER:-}" ] && echo "lock_owner=$_LOCK_LAST_OWNER"
+      [ -n "${_LOCK_LAST_AGE:-}" ] && echo "lock_age=$_LOCK_LAST_AGE"
+      [ -d "$LOCK" ] && echo "lock_path=config.lock"
     fi
   } > "$ASB_TXN.tmp" 2>/dev/null && mv -f "$ASB_TXN.tmp" "$ASB_TXN" 2>/dev/null
 }
@@ -73,11 +104,16 @@ _lock() {
   mkdir -p "$STATE" 2>/dev/null || _die "cannot create state directory"
   _i=0
   while ! mkdir "$LOCK" 2>/dev/null; do
+    _lock_reclaim_stale && continue
     _i=$((_i + 1))
-    [ "$_i" -lt 50 ] || _die "config lock timeout"
+    [ "$_i" -lt "$LOCK_WAIT_TICKS" ] || _die "config lock timeout"
     sleep 0.1
   done
-  trap 'rmdir "$LOCK" 2>/dev/null' EXIT HUP INT TERM
+  _LOCK_HELD=1
+  # Owner metadata is diagnostics-only, written after successful atomic acquisition.
+  # A fresh metadata-less directory is protected by LOCK_STALE_S in _lock_reclaim_stale.
+  { printf '%s\n' "$$" > "$LOCK/pid"; printf '%s\n' "$(_now_s)" > "$LOCK/started"; } 2>/dev/null || true
+  trap '_lock_release' EXIT HUP INT TERM
 }
 
 _key_allowed() {
