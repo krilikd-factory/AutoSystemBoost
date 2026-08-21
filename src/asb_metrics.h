@@ -576,6 +576,18 @@ static char g_thermal_cpu_reason[256] = "uninitialized";
 static char g_thermal_rejected_type[64] = "";
 static int  g_thermal_rejected_raw = 0;      /* raw sysfs value, NOT degrees */
 
+/* Consensus v2 state.
+ *
+ * Thresholds are asymmetric on purpose. A die sensor sitting 20C above the shell is
+ * normal under load; one sitting 12C BELOW a peer that reads hot means it is blind to
+ * something, and that is the direction that burns the user. */
+#define ASB_CONSENSUS_MAX_ABOVE_C 30
+#define ASB_CONSENSUS_MAX_BELOW_C 12
+static char g_thermal_consensus_note[192] = "";
+static int  g_thermal_peer_hi = 0;
+static int  g_thermal_peer_lo = 0;
+static int  g_thermal_peer_n  = 0;
+
 static inline int thermal_raw_to_c(int raw) {
     if (raw <= 0) return 0;
     return (raw > 200) ? (raw / 1000) : raw;
@@ -1090,14 +1102,79 @@ int spike_detected = 0;
         int sv = sysfs_read_int(path, 0);
         t->surface_hotspot_c = thermal_raw_to_c(sv);
     }
+
+    /* Board must be read before consensus as well. Using last tick's board value in a
+     * current-tick decision is exactly the kind of near-miss that makes a guard look like
+     * it works while quietly using stale evidence. */
     if (g_thermal_board_zone >= 0) {
         snprintf(path, sizeof(path),
             THERMAL_BASE "/thermal_zone%d/temp", g_thermal_board_zone);
         int bv = sysfs_read_int(path, 0);
         int bc = thermal_raw_to_c(bv);
         t->board_temp_c = bc;
-        if (bc > t->surface_hotspot_c) {
-            t->surface_hotspot_c = bc;
+        if (bc > t->surface_hotspot_c) t->surface_hotspot_c = bc;
+    }
+
+    /* Consensus runs only after all current-tick non-CPU evidence is available. */
+    /* Thermal consensus v2: cross-check the control temperature against the other
+     * sources before anything acts on it.
+     *
+     * V63 closed the socd case - a sensor whose scale was wrong. This is the next class:
+     * a sensor whose scale is fine but whose reading has drifted away from everything
+     * else on the device. Firmware differs in what CPU, battery, skin and board zones
+     * mean, and a control value that disagrees with all of them is not more accurate for
+     * being more specific.
+     *
+     * The rule is deliberately one-directional and conservative:
+     *   - a control temperature far ABOVE every peer causes throttling nobody needs, so
+     *     confidence drops and the report says why
+     *   - a control temperature far BELOW every peer is the dangerous direction: it hides
+     *     real heat. There the more conservative peer wins outright.
+     *
+     * What this does NOT do, and the plan is explicit about it: no blind averaging of
+     * incomparable zones, and no substituting a vendor trip point. Battery and skin are
+     * compared as sanity peers, never promoted to control - they lag the die by minutes
+     * and driving frequency off them would throttle late every time.
+     */
+    {
+        /* Never report last tick's consensus as current evidence when a peer disappears.
+         * These globals feed both state and JSON diagnostics. */
+        g_thermal_peer_hi = 0;
+        g_thermal_peer_lo = 0;
+        g_thermal_peer_n  = 0;
+        g_thermal_consensus_note[0] = '\0';
+
+        /* Battery temperature is deliberately absent: it lives in asb_battery_t, which
+         * this function does not receive, and reaching across for it would couple two
+         * collectors that are otherwise independent. Skin, board and surface are evidence
+         * of the wider thermal envelope, never replacement CPU sensors. */
+        int peer[4], np = 0;
+        if (t->skin_temp_c        > 10 && t->skin_temp_c        < 90) peer[np++] = t->skin_temp_c;
+        if (t->board_temp_c       > 10 && t->board_temp_c       < 90) peer[np++] = t->board_temp_c;
+        if (t->surface_hotspot_c  > 10 && t->surface_hotspot_c  < 90) peer[np++] = t->surface_hotspot_c;
+
+        if (np >= 2 && t->cpu_max_c > 0) {
+            int hi = peer[0], lo = peer[0];
+            for (int i = 1; i < np; i++) {
+                if (peer[i] > hi) hi = peer[i];
+                if (peer[i] < lo) lo = peer[i];
+            }
+            /* A CPU die normally runs hotter than the shell/board. These peers can warn
+             * that the wider device envelope is hot or that the CPU source is unusual, but
+             * they are not interchangeable with a CPU die sensor and must never overwrite
+             * cpu_max_c. Platform thermal mitigation remains the hard safety authority. */
+            if (t->cpu_max_c > hi + ASB_CONSENSUS_MAX_ABOVE_C) {
+                snprintf(g_thermal_consensus_note, sizeof(g_thermal_consensus_note),
+                         "CPU control %dC is %dC above hottest non-CPU peer (%dC); source retained, review evidence",
+                         t->cpu_max_c, t->cpu_max_c - hi, hi);
+            } else if (hi > t->cpu_max_c + ASB_CONSENSUS_MAX_BELOW_C) {
+                snprintf(g_thermal_consensus_note, sizeof(g_thermal_consensus_note),
+                         "non-CPU peer is hot (%dC vs CPU control %dC); CPU source retained, platform safety may override",
+                         hi, t->cpu_max_c);
+            }
+            g_thermal_peer_hi = hi;
+            g_thermal_peer_lo = lo;
+            g_thermal_peer_n  = np;
         }
     }
 

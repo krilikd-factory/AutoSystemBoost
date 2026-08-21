@@ -613,7 +613,7 @@ static const char *g_pstats_files[3] = {
 #define PERSISTENT_STATS_MAX_SESSIONS 10
 #define BAT_FAST_IDLE_FLOOR  5  /* safety: feedback loops cannot go below 5s */
 
-#define ASB_VERSION "V63"
+#define ASB_VERSION "V64"
 
 static const char *intent_names[] = {"unknown","benchmark","long_game","idle","mixed","sleep_idle","idle_warm"};
 
@@ -1458,10 +1458,13 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "smart_boot_settle=%d\nstartup_quarantined=%lu\n"
                    "thermal_control_source=\"%s\"\nthermal_control_zone=%d\n"
                    "thermal_source_confidence=%d\nthermal_rejected_type=\"%s\"\n"
-                   "thermal_rejected_raw=%d\n",
+                   "thermal_rejected_raw=%d\nthermal_peer_hi=%d\nthermal_peer_lo=%d\n"
+                   "thermal_peer_n=%d\nthermal_consensus=\"%s\"\n",
                 g_smart_boot_settle, g_startup_quarantined,
                 g_thermal_cpu_type[0] ? g_thermal_cpu_type : "unknown", g_thermal_cpu_zone,
-                g_thermal_source_confidence, g_thermal_rejected_type, g_thermal_rejected_raw);
+                g_thermal_source_confidence, g_thermal_rejected_type, g_thermal_rejected_raw,
+                g_thermal_peer_hi, g_thermal_peer_lo, g_thermal_peer_n,
+                g_thermal_consensus_note);
         fprintf(f, "cool_gaming=%d\n", g_asb_cfg.cool_gaming);
         fprintf(f, "cool_gaming_level=%d\n", g_smart_cool_gaming_lvl);
         fprintf(f, "game_charging=%d\ngame_bat_temp_peak_dc=%d\n"
@@ -1845,6 +1848,9 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         /* Rejected candidate travels separately and unformatted. A consumer that
          * wants to show it must choose to, and cannot accidentally print it as C. */
         "\"thermal_rejected_type\":\"%s\",\"thermal_rejected_raw\":%d,"
+        /* Consensus v2: what the control value was checked against, and what that
+         * check concluded. An empty note means the sources agreed. */
+        "\"thermal_peer_hi\":%d,\"thermal_peer_n\":%d,\"thermal_consensus\":\"%s\","
         "\"thermal_skin_zone\":%d,\"thermal_surface_zone\":%d,"
         "\"soft_clamp\":%d,\"hard_clamp\":%d,"
         "\"headroom_pct\":%d,\"headroom_valid\":%d,\"headroom_invalid_reason\":\"%s\",\"headroom_real_pct\":%d,"
@@ -1883,6 +1889,9 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         g_thermal_source_confidence,
         g_thermal_rejected_type,
         g_thermal_rejected_raw,
+        g_thermal_peer_hi,
+        g_thermal_peer_n,
+        g_thermal_consensus_note,
         g_thermal_skin_zone,
         g_thermal_surface_zone,
         m->therm.soft_clamp,
