@@ -169,11 +169,11 @@ jobs:
         shell: bash
         run: |
           missing=()
-          for tool in zip unzip curl file rsync; do
+          for tool in zip unzip curl file rsync jq; do
             command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
           done
           if [ "${#missing[@]}" -eq 0 ]; then
-            printf 'Runner tools already available: %s\n' 'zip unzip curl file rsync'
+            printf 'Runner tools already available: %s\n' 'zip unzip curl file rsync jq'
             exit 0
           fi
           echo "::warning::Installing missing runner tools: ${missing[*]}"
