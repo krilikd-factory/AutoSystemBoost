@@ -376,5 +376,14 @@
   "cfg_profile_delete": "Delete",
   "cfg_profile_delete_confirm": "Delete now",
   "cfg_profile_apply_hint": "Preview first, then apply. Downloads/Documents copies are checksum-checked before they enter ASB.",
-  "cfg_profile_export_err": "Saved in ASB, but could not copy to selected location"
+  "cfg_profile_export_err": "Saved in ASB, but could not copy to selected location",
+  "cfg_reset_dialog_title": "Reset",
+  "cfg_reset_dialog_copy": "Choose exactly what to reset. Nothing changes until you confirm an option.",
+  "cfg_reset_all_title": "Reset all category settings",
+  "cfg_reset_all_copy": "Returns Audio, Camera, Interface, Network, Battery and System options to ASB defaults.",
+  "cfg_reset_smart_title": "Reset Smart learning",
+  "cfg_reset_smart_copy": "Keeps your category settings and clears only Smart’s learned behaviour.",
+  "cfg_reset_confirm": "Tap again to confirm",
+  "cfg_reset_all_done": "Category settings reset to ASB defaults",
+  "cfg_reset_all_fail": "Could not reset category settings"
 }
