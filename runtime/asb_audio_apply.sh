@@ -76,9 +76,9 @@ if [ "$_mode" = "mirror" ]; then
       if [ "$_mdsp" -ge 1 ] 2>/dev/null && [ "$_mdsp" -le 25 ] 2>/dev/null; then
         _mrequested="$(( _mdsp * 100 ))"
         _mapplied="$_mrequested"
-        # Legacy DSP is hard-limited to +18 dB. Use the same safe contract for every
-        # ABI so the UI/config never promise gain the active effect cannot deliver.
-        [ "$_mapplied" -gt 1800 ] && _mapplied=1800
+        # Both legacy and AIDL DSP cores use the same +25 dB ceiling. The effect still
+        # protects output with its true-peak limiter and final hard sample clamp.
+        [ "$_mapplied" -gt 2500 ] && _mapplied=2500
         _persist persist.asb.dsp.gain_requested_mb "$_mrequested"
         _persist persist.asb.dsp.gain_applied_mb "$_mapplied"
         _mhave="$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
@@ -183,8 +183,8 @@ _persist persist.vendor.bluetooth.disableabsvol "$_dp"
 changed="${changed}bt_absvol=${_bt} "
 
 # ---- dsp_loudness (gain only) ---------------------------------------------------- Slider
-# UI accepts 0..18 (not just 3/6/9). Older saved 19..25 values remain readable
-# and are clamped to +18 dB, the shared safe maximum for AIDL and legacy DSP.
+# UI accepts 0..25 dB. The same +25 dB ceiling is compiled into both AIDL and legacy
+# DSP cores; their true-peak limiter and final sample clamp remain active at every value.
 # The DSP effect re-reads persist.asb.dsp.* on ENABLE, and the audioserver restart below
 # triggers that ENABLE - which is why gain changes here apply live, no reboot.
 _dsp="$(_cfg dsp_loudness)"
@@ -206,7 +206,7 @@ if [ "$_dsp_ok" = "1" ]; then
     if [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; then
       _dsp_requested_mb="$((_dsp * 100))"
       _dsp_applied_mb="$_dsp_requested_mb"
-      [ "$_dsp_applied_mb" -gt 1800 ] && _dsp_applied_mb=1800
+      [ "$_dsp_applied_mb" -gt 2500 ] && _dsp_applied_mb=2500
       _persist persist.asb.dsp.gain_requested_mb "$_dsp_requested_mb"
       _persist persist.asb.dsp.gain_applied_mb "$_dsp_applied_mb"
       _dspp enable 1
