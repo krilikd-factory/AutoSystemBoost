@@ -3914,9 +3914,15 @@ AutoSystemBoost' $APIOCXM
 	    ! -name "asb_sysui_watch.sh" \
 	    ! -name "asb_diag.sh" \
 	    ! -name "asb_recents_probe.sh" \
+	    ! -name "asb_config_backup.sh" \
+	    ! -name "asb_kernel_uv_coexist.sh" \
 	    -delete 2>/dev/null
+	  # WebUI runs these helpers by path after installation. Keep them above the prune line;
+	  # packaging alone is insufficient when this allowlist deletes unrecognised top-level tools.
 	  chmod 0755 "$MODPATH/tools/asb_camera_repair.sh" 2>/dev/null || true
 	  chmod 0755 "$MODPATH/tools/asb_sysui_watch.sh" 2>/dev/null || true
+	  chmod 0755 "$MODPATH/tools/asb_config_backup.sh" 2>/dev/null || true
+	  chmod 0755 "$MODPATH/tools/asb_kernel_uv_coexist.sh" 2>/dev/null || true
 	fi
 
 	# Vendor log cleanup - explicit paths, and only when asked for.
