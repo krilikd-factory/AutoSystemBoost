@@ -40,25 +40,24 @@ for _mod in "$ASB_MODULES_ROOT"/*; do
   [ "$_id" = "AutoSystemBoost" ] && continue
   _meta="$(cat "$_mod/module.prop" 2>/dev/null | tr '\n' ' ' | tr '[:upper:]' '[:lower:]')"
   case "$_id $_meta" in
-    *undervolt*|*under-volt*|*" uv"*|*"uv_"*|*voltage*|*overclock*|*opp*)
+    *undervolt*|*under-volt*|*" uv"*|*"uv_"*|*voltage*|*overclock*)
       _add "module:${_id:-$(basename "$_mod")}" ;;
   esac
 done
 
 # 2) Explicit property names. Only the property key is reported; values are intentionally not
 # treated as proof and are not printed into user diagnostics.
-_prop_keys="$(_props | sed -n 's/^\[\([^]]*\)\]:.*$/\1/p' | grep -iE 'undervolt|under.?volt|(^|[._-])uv([._-]|$)|voltage|overclock|opp' | head -3)"
+_prop_keys="$(_props | sed -n 's/^\[\([^]]*\)\]:.*$/\1/p' | grep -iE 'undervolt|under.?volt|(^|[._-])uv([._-]|$)|voltage|overclock' | head -3)"
 for _pk in $_prop_keys; do _add "property:${_pk}"; done
 
-# 3) Readable kernel surfaces whose *names* explicitly expose voltage/UV/OPP data. Their
-# presence is observable, but a generic OPP/debug surface still cannot prove an undervolt.
+# 3) Readable kernel surfaces whose names explicitly expose voltage/UV data. Generic OPP
+# names describe operating-point metadata (and occur in unrelated Bluetooth properties), not
+# a non-stock voltage policy, so they are intentionally not UV evidence.
 for _node in \
   "$ASB_SYSROOT"/devices/system/cpu/cpufreq/policy*/*volt* \
   "$ASB_SYSROOT"/devices/system/cpu/cpufreq/policy*/*uv* \
-  "$ASB_SYSROOT"/devices/system/cpu/cpufreq/policy*/*opp* \
   "$ASB_SYSROOT"/class/kgsl/kgsl-3d0/*volt* \
   "$ASB_SYSROOT"/class/kgsl/kgsl-3d0/*uv* \
-  "$ASB_SYSROOT"/kernel/debug/opp/* \
   "$ASB_SYSROOT"/kernel/debug/*volt* \
   "$ASB_SYSROOT"/kernel/debug/*uv*; do
   [ -r "$_node" ] || continue
@@ -74,12 +73,12 @@ if [ "$_count" -gt 0 ]; then
     *node:*)
       _status="voltage_surface_observed"
       _confidence="observed_surface"
-      _reason="readable_external_voltage_or_opp_surface"
+      _reason="readable_external_voltage_or_uv_surface"
       ;;
     *)
       _status="external_uv_hint"
       _confidence="name_or_property_hint"
-      _reason="external_module_or_property_mentions_uv_voltage_or_opp"
+      _reason="external_module_or_property_mentions_uv_voltage_or_overclock"
       ;;
   esac
 fi
