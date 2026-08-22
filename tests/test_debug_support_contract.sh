@@ -24,6 +24,35 @@ cmp -s "$DIAG" "$INSTALLED_DIAG" || { echo "FAIL debug support: asbdiag copies d
 need "$DIAG" 'BOOT TIMELINE'
 need "$DIAG" 'boot_timeline.tsv'
 
+# Execute the actual asbdiag version gate fragment. A prior shell glob used
+# [1-9][0-9]*, which requires two digits and therefore hid timeline evidence on
+# V64-debug4 even though the recorder had correctly created it.
+awk '
+  /^_boot_debug=0$/ { capture=1 }
+  capture && /^if \[ "\$_boot_debug" = "1" \]; then$/ { exit }
+  capture { print }
+' "$DIAG" > "$TMP/asbdiag_boot_gate.sh"
+[ -s "$TMP/asbdiag_boot_gate.sh" ] || { echo 'FAIL debug support: cannot extract asbdiag boot gate' >&2; exit 1; }
+diag_boot_gate() (
+  _boot_version="$1"
+  . "$TMP/asbdiag_boot_gate.sh"
+  printf '%s' "$_boot_debug"
+)
+for _gate_case in \
+  'V64-debug1:1' \
+  'V64-debug4:1' \
+  'V64-debug42:1' \
+  'V64:0' \
+  'V64-debug:0' \
+  'V64-debug0:0' \
+  'V64-debug4x:0'; do
+  _gate_version="${_gate_case%:*}"; _gate_want="${_gate_case##*:}"
+  _gate_live="$(diag_boot_gate "$_gate_version")"
+  [ "$_gate_live" = "$_gate_want" ] || {
+    echo "FAIL debug support: asbdiag boot gate version=$_gate_version want=$_gate_want live=$_gate_live" >&2; exit 1
+  }
+done
+
 # A release module must refuse both mutations even if someone manufactures a DOM click.
 REL="$TMP/release"; mkdir -p "$REL"
 printf 'id=AutoSystemBoost\nversion=V64\n' > "$REL/module.prop"
@@ -41,7 +70,7 @@ printf '%s\n' "$REL_TL" | grep -Fq 'status=debug_only' || {
 # ownership protocol: it claims the tokenized directory with ITS OWN PID and only removes
 # a guard that still names that PID. This catches launcher-PID and cleanup races on host.
 DBG="$TMP/debug"; mkdir -p "$DBG/system/bin" "$DBG/tools/logkit" "$TMP/out"
-printf 'id=AutoSystemBoost\nversion=V64-debug3\n' > "$DBG/module.prop"
+printf 'id=AutoSystemBoost\nversion=V64-debug4\n' > "$DBG/module.prop"
 TL_STATE="$TMP/timeline-debug"
 ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" begin postfs_begin >/dev/null
 ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" mark service_enter >/dev/null
