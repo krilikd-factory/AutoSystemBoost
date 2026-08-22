@@ -31,7 +31,7 @@ jobs:
         run: |
           # Source archives and browser uploads can lose git executable mode bits. These two
           # runtime helpers are explicitly executed by their safety contracts below.
-          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_debug_support.sh tools/asb_kernel_uv_coexist.sh
+          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh tools/asb_kernel_uv_coexist.sh
 
       - name: Validate required source files
         run: |
@@ -82,6 +82,7 @@ jobs:
             runtime/asb_capabilities.sh \
             runtime/asb_active_efficiency_envelope.sh \
             runtime/asb_debug_support.sh \
+            runtime/asb_stock_policy.sh \
             tools/asb_schema_sync.sh \
             tools/asb_intent.sh \
             tools/asb_config_backup.sh \
@@ -110,6 +111,7 @@ jobs:
             tests/test_profile_uv_webui_package_contract.sh \
             tests/test_quick_restart_contract.sh \
             tests/test_debug_support_contract.sh \
+            tests/test_stock_profile_contract.sh \
             tests/test_workflow_executable_modes_contract.sh \
             tests/test_workflow_required_files_shell.sh \
             tests/test_package_functional_parity_contract.sh \
@@ -552,6 +554,7 @@ jobs:
             "runtime/asb_apply_managed_props.sh" \
             "runtime/asb_quick_restart.sh" \
             "runtime/asb_debug_support.sh" \
+            "runtime/asb_stock_policy.sh" \
             "runtime/asb_device_pack_manifest.sh" \
             "runtime/asb_device_tier.sh" \
             "tools/asb_diag.sh" \
