@@ -21,10 +21,28 @@ asb_resolve_moddir() {
 }
 MODDIR="$(asb_resolve_moddir)"
 
-# Debug-only passive lifecycle evidence for slow reboot investigation. The helper exits before
-# any write in release builds, so it cannot change release boot timing or policy.
-[ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
-  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark service_enter >/dev/null 2>&1 || true
+# Debug-only passive lifecycle evidence for slow reboot investigation. Keep the same strict
+# numeric suffix grammar as the recorder/asbdiag: V64-debug4 is a debug build, V64-debug4x is not.
+# The local gate prevents any extra helper process in a release boot.
+ASB_TIMELINE_DEBUG=0
+_asb_timeline_version=""
+while IFS='=' read -r _asb_timeline_key _asb_timeline_value; do
+  [ "$_asb_timeline_key" = "version" ] || continue
+  _asb_timeline_version="$_asb_timeline_value"
+  break
+done < "$MODDIR/module.prop"
+_asb_timeline_seq="${_asb_timeline_version##*-debug}"
+case "$_asb_timeline_version:$_asb_timeline_seq" in
+  *-debug[1-9]*:[1-9]*)
+    case "$_asb_timeline_seq" in *[!0-9]*) ;; *) ASB_TIMELINE_DEBUG=1 ;; esac
+    ;;
+esac
+asb_timeline_mark() {
+  [ "$ASB_TIMELINE_DEBUG" = "1" ] || return 0
+  [ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] || return 0
+  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark "$1" >/dev/null 2>&1 || true
+}
+asb_timeline_mark service_enter
 
 mkdir -p /data/adb/asb 2>/dev/null
 for _legacy_pair in \
@@ -148,8 +166,7 @@ if [ ! -f /data/adb/asb/smart_mode_enabled ]; then
 fi
 
 asb_load_profile
-[ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
-  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark service_profile_loaded >/dev/null 2>&1 || true
+asb_timeline_mark service_profile_loaded
 if [ "${ASB_STOCK_PROFILE:-0}" = "1" ]; then
   command -v asb_stock_enter >/dev/null 2>&1 && asb_stock_enter
 fi
@@ -682,6 +699,7 @@ asb_trim_logs() {
 asb_trim_logs
 asb_probe_paths
 asb_conflict_scan
+asb_timeline_mark service_maintenance_complete
 
 # ASB:CPU:BEGIN
 KREL="$(uname -r 2>/dev/null)"
@@ -824,6 +842,7 @@ apply_cpugov_hints() {
   done
 }
 asb_feature_enabled CPU && apply_cpugov_hints
+asb_timeline_mark service_cpu_complete
 # ASB:CPU:END
 if has pm; then
   if command -v asb_pm_disable >/dev/null 2>&1; then
@@ -891,6 +910,7 @@ apply_vm() {
   fi
 }
 asb_feature_enabled VM && apply_vm
+asb_timeline_mark service_vm_complete
 # ASB:VM:END
 sysctl_try() {
   k="$1"; shift
@@ -1357,6 +1377,7 @@ apply_net() {
     sysctlw net.ipv6.neigh.default.gc_thresh3 1024
 }
 asb_feature_enabled NET && apply_net
+asb_timeline_mark service_network_complete
 # ASB:NET:END
 apply_wifi_settings() {
   has settings || return 0
@@ -1568,6 +1589,7 @@ apply_gps_hygiene() {
   asb_settings_put global ntp_server_4 1.it.pool.ntp.org
 }
 asb_feature_enabled GPS && apply_gps_hygiene
+asb_timeline_mark service_connectivity_complete
 # ASB:GPS:END
 # ASB:AUDIO:BEGIN
 apply_audio_runtime() {
@@ -1860,7 +1882,13 @@ apply_bg_trim_runtime() {
   fi
 }
 
-asb_feature_enabled BG_TRIM && apply_bg_trim_runtime
+# BG_TRIM contains package-manager, app-standby, cgroup lookup and vendor-service work.
+# It must not run before Android reports boot complete: on the OP15 this entire synchronous
+# service interval was 48 seconds after a restored aggressive configuration. The same function
+# is invoked from the detached post-boot worker below, preserving every user-selected policy
+# without making init/framework startup wait behind it.
+asb_feature_enabled BG_TRIM && asb_log "bg_trim: deferred until boot_completed"
+asb_timeline_mark service_bgtrim_deferred
 
 # ASB:BG_TRIM:END
 apply_bt_runtime() {
@@ -2096,8 +2124,9 @@ apply_dsp_compute_boost() {
   done
 }
 asb_feature_enabled KERNEL && apply_dsp_compute_boost
-
+asb_timeline_mark service_media_kernel_complete
 # ASB:KERNEL:END
+
 asb_freq_pick_pct() {
   _dir="$1"; _pct="$2"
   [ -d "$_dir" ] || return 1
@@ -2773,6 +2802,7 @@ apply_extra_settings() {
   asb_settings_put global captive_portal_other_fallback_url "https://www.google.com/generate_204"
 }
 apply_extra_settings
+asb_timeline_mark service_runtime_core_complete
 asb_load_profile
 # POSIX check, not "type -t".
 # So this line silently skipped asb_apply_ux on EVERY boot, which is why "Manage UI speed" and
@@ -2918,8 +2948,7 @@ fi
     exit 0
   }
   sleep 8
-  [ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
-    ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark post_boot_tweaks_begin >/dev/null 2>&1 || true
+  asb_timeline_mark post_boot_tweaks_begin
   asb_log "post_boot_tweaks: begin"
 
   [ -f "$MODDIR/runtime/asb_gms_freeze.sh" ] && \
@@ -2928,6 +2957,12 @@ fi
     sh "$MODDIR/runtime/asb_gms_trim.sh" >/dev/null 2>&1
   [ -f "$MODDIR/runtime/asb_system_tweaks.sh" ] && \
     sh "$MODDIR/runtime/asb_system_tweaks.sh" >/dev/null 2>&1
+
+  if asb_feature_enabled BG_TRIM; then
+    asb_timeline_mark post_boot_bgtrim_begin
+    apply_bg_trim_runtime
+    asb_timeline_mark post_boot_bgtrim_complete
+  fi
 
   # Athena: pm component state does not survive a reboot on every build, so re-assert it late.
   if [ -f "$MODDIR/runtime/asb_athena_apply.sh" ]; then
@@ -2976,8 +3011,7 @@ fi
     esac
   fi
   asb_log "post_boot_tweaks: complete"
-  [ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
-    ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark post_boot_tweaks_complete >/dev/null 2>&1 || true
+  asb_timeline_mark post_boot_tweaks_complete
 ) >/dev/null 2>&1 &
 
 if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then
@@ -3120,6 +3154,5 @@ fi
   fi
 ) >/dev/null 2>&1 &
 
-[ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
-  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark service_dispatched >/dev/null 2>&1 || true
+asb_timeline_mark service_dispatched
 exit 0
