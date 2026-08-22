@@ -64,11 +64,20 @@ need "$UI" '<div class="pico">📴</div>'
 need "$UI" 'data-i18n="prof_stock"'
 need "$UI" 'data-i18n="prof_stock_sub"'
 need "$UI" '.pbtn[data-p="stock"]'
+# Stock inherits the shared inactive pbtn surface. Silver is applied only through
+# its --c token when selected; a dedicated .pbtn-stock surface would visibly split
+# its border from Performance, Balanced and Battery.
+if grep -Fq '.pbtn-stock {' "$UI"; then
+  fail 'Stock has a dedicated inactive surface instead of the shared pbtn border'
+fi
+_profile_order="$(grep -E 'class=\"pbtn[^\"]*\" data-p=\"(smart|performance|balanced|battery|stock)\"' "$UI" | sed -n 's/.*data-p="\([^"]*\)".*/\1/p' | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+[ "$_profile_order" = 'smart performance balanced battery stock' ] || \
+  fail "unexpected profile card order: $_profile_order"
 need "$UI" "['stock','performance','balanced','battery','smart'].includes(p)"
 need "$UI" "T('t_stock_applied'"
 need "$UI" 'gap: 8px;'
-need_count "$UI" 'data-debug-action="diag"' 3
-need_count "$UI" 'data-debug-action="full-day"' 3
+need_count "$UI" '<button class="debug-support-btn" data-debug-action="diag"' 3
+need_count "$UI" '<button class="debug-support-btn" data-debug-action="full-day"' 3
 need "$UI" 'debugActionPulse'
 need "$UI" "T(action === 'diag' ? 'dbg_diag_wait' : 'dbg_log_wait'"
 need "$UI" "b.classList.add('is-running')"

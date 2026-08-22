@@ -133,6 +133,22 @@ need "$UI" '[data-release-telegram][hidden] { display: none !important; }'
 need "$UI" 'runtime/asb_debug_support.sh'
 need "$UI" 'loadDebugSupport()'
 need "$UI" '/-debug[1-9][0-9]*$/i'
+# asbdiag can spend seconds writing its export. A persistent modal must open before
+# the root bridge await, stay while the pulse is active, and close only in finally.
+need "$UI" 'id="debugActionWait"'
+need "$UI" 'debug-action-wait-sheet'
+need "$UI" 'debugDiagPulse .38s'
+need "$UI" 'debugActionWaitOpen(action);'
+need "$UI" 'debugActionWaitClose();'
+awk '
+  /async function asbDebugAction\(action\)/ { in_fn=1 }
+  in_fn && /debugActionWaitOpen\(action\)/ { opened=NR }
+  in_fn && /await run\(/ && !awaited { awaited=NR }
+  in_fn && /finally \{/ { in_final=1 }
+  in_final && /debugActionWaitClose\(\)/ { closed=1 }
+  in_fn && /^}/ { if (opened && awaited && opened < awaited && closed) ok=1; in_fn=0 }
+  END { if (!ok) { print "FAIL debug support: wait modal lifecycle is not open-before-await / close-in-finally" > "/dev/stderr"; exit 1 } }
+' "$UI"
 awk '
   /<div class="footer-support-row" data-debug-support-row hidden>/ { inrow=1; seq=""; next }
   inrow && /asbDebugAction\('\''diag'\''\)/ { seq=seq "D" }
