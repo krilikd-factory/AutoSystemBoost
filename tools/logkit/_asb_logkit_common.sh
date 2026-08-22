@@ -982,7 +982,12 @@ lk_audio_wakelock_live_row() {
   _hold="$1" _epoch="${2:-$(date +%s)}"
   case "$_hold" in *AudioMix*) : ;; *) return 0 ;; esac
   _iso=$(date '+%Y-%m-%dT%H:%M:%S')
-  _uids=$(printf '%s\n' "$_hold" | grep -oE 'WorkChain\\{\\([0-9]+' 2>/dev/null | sed 's/.*(//' | sort -u)
+  # Android 16 emits `WorkSource{ chains=WorkChain{(10658), (1041)}}`.
+  # The former double-escaped pattern looked for literal backslashes and silently fell
+  # back to `-`, even though the voluntary UID→package map already contained the app.
+  # Also accept the compact `WorkSource{10658}` representation from older dumpsys builds.
+  _uids=$(printf '%s\n' "$_hold" | grep -oE 'WorkChain\{\([0-9]+|WorkSource\{[0-9]+' 2>/dev/null \
+    | sed -e 's/.*(//' -e 's/.*{//' | sort -u)
   [ -n "$_uids" ] || _uids="-"
   for _uid in $_uids; do
     _pkg=$(lk_audio_wakelock_package_for_uid "$_uid")
