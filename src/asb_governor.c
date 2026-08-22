@@ -81,6 +81,14 @@ static int g_pkg_detect_ok = 0;        /* 1 if last detection got a real pkg */
 static int g_pkg_detect_source = 0;    /* 1=cmd activity top, 2=resumed, 3=window focus */
 static int g_pkg_detect_status = 0;    /* asb_pkg_status_t code */
 
+/* Opt-in Smart Media Guard runtime. These flags are deliberately separate from the
+ * learner and from fsm.current_caps: the guard only narrows the writer-local GPU cap
+ * after a confirmed known-media workload and becomes a no-op the instant its evidence fades. */
+static int    g_smart_media_pkg_known = 0;
+static int    g_smart_media_guard_active = 0;
+static time_t g_smart_media_guard_since = 0;
+static char   g_smart_media_guard_reason[40] = "disabled";
+
 /* Smart Mode session counters, kept separate from the legacy battery/balanced/
  * performance counters so learner_state.json shows Smart activity honestly. */
 static time_t g_smart_drain_prev_ts  = 0;
@@ -1532,7 +1540,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             /* Learned per-bucket history, exposed so the effect is observable. Without
              * these two the thermal lean is invisible: alpha moves and nothing says why. */
             "smart_bucket_temp_x10=%d\nsmart_bucket_drain_x10=%d\n"
-            "smart_therm_warm_x10=%d\nsmart_therm_cool_x10=%d\n",
+            "smart_therm_warm_x10=%d\nsmart_therm_cool_x10=%d\n"
+            "smart_media_guard_setting=%d\nsmart_media_guard_pkg_known=%d\n"
+            "smart_media_guard_active=%d\nsmart_media_guard_age_s=%ld\n"
+            "smart_media_guard_reason=%s\n",
             g_smart_rt.enabled,
             g_smart_rt.bucket_id,
             g_smart_rt.daypart,
@@ -1547,7 +1558,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.bucket_temp_x10,
             g_smart_rt.bucket_drain_x10,
             g_smart_rt.therm_warm_x10,
-            g_smart_rt.therm_cool_x10);
+            g_smart_rt.therm_cool_x10,
+            g_asb_cfg.smart_media_guard,
+            g_smart_media_pkg_known,
+            g_smart_media_guard_active,
+            g_smart_media_guard_since > 0 ? (long)(time(NULL) - g_smart_media_guard_since) : 0L,
+            g_smart_media_guard_reason);
     fprintf(f, "camera_hold=%d\n", g_cam_guard_on ? 1 : 0);
     fprintf(f, "smart_lowbat_override=%d\nsmart_thermal_trend=%d\nsmart_trend_slope=%d\n",
             g_smart_rt.low_battery_override ? 1 : 0,
@@ -3580,6 +3596,65 @@ static int parse_uevent_screen(int fd) {
 }
 
 /*
+ * Smart Media Guard: a narrow, explicit guard for a known media/feed/browser app that
+ * reaches the FSM's game-like CPU+GPU band. A package has to be freshly detected and
+ * positively recognised as media; an unknown app, stale package and any known game all
+ * fail closed. This keeps the switch from becoming a universal performance cap.
+ */
+static int asb_smart_media_guard_observe(const asb_metrics_t *m,
+                                         const asb_fsm_t *fsm,
+                                         time_t now) {
+    int was_active = g_smart_media_guard_active;
+    const char *why = "disabled";
+    int eligible = 0;
+    if (!g_asb_cfg.smart_media_guard) {
+        why = "disabled";
+    } else if (!m || !fsm || fsm->profile_idx != PROFILE_SMART) {
+        why = "profile_not_smart";
+    } else if (!m->misc.screen_on || m->bat.charging) {
+        why = "not_screenon_discharge";
+    } else if (fsm->thermal_cap) {
+        why = "thermal_cap";
+    } else if (fsm->state != ASB_STATE_GAMING) {
+        why = "state_not_gaming";
+    } else if (!g_pkg_detect_ok || !g_smart_media_pkg_known ||
+               g_smart_rt.app_hint >= ASB_APP_GAMING) {
+        why = "no_fresh_known_media_pkg";
+    } else if (m->gpu.load_pct < g_asb_cfg.gaming_gpu_enter) {
+        why = "gpu_below_gaming_entry";
+    } else if (m->cpu.load1 < ASB_GAMING_MIN_LOAD1 || m->cpu.load1 >= 12.0f) {
+        why = "cpu_outside_media_band";
+    } else {
+        eligible = 1;
+        why = "warming";
+    }
+
+    if (!eligible) {
+        g_smart_media_guard_since = 0;
+        g_smart_media_guard_active = 0;
+    } else {
+        if (g_smart_media_guard_since == 0) g_smart_media_guard_since = now;
+        if ((long)(now - g_smart_media_guard_since) >= 60) {
+            g_smart_media_guard_active = 1;
+            why = "active";
+        } else {
+            g_smart_media_guard_active = 0;
+        }
+    }
+    snprintf(g_smart_media_guard_reason, sizeof(g_smart_media_guard_reason), "%s", why);
+    return was_active != g_smart_media_guard_active;
+}
+
+static void asb_smart_media_guard_apply_caps(asb_profile_caps_t *caps) {
+    enum { ASB_SMART_MEDIA_GUARD_GPU_MAX_PCT = 70 };
+    if (!caps || !g_smart_media_guard_active) return;
+    if (caps->gpu_max_pct > ASB_SMART_MEDIA_GUARD_GPU_MAX_PCT)
+        caps->gpu_max_pct = ASB_SMART_MEDIA_GUARD_GPU_MAX_PCT;
+    if (caps->gpu_min_pct > caps->gpu_max_pct)
+        caps->gpu_min_pct = caps->gpu_max_pct;
+}
+
+/*
  * Smart Mode tick — compute effective runtime values and update g_smart_bounds slot if a
  * meaningful change occurred.
  * Returns: 1 if g_smart_bounds was updated this tick (caller should refresh FSM caps
@@ -3628,6 +3703,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
             g_pkg_detect_ok = 0;
             g_pkg_detect_source = 0;
             g_pkg_detect_status = ASB_PKG_MISSING;
+            g_smart_media_pkg_known = 0;
         } else {
             char fg_pkg[128] = {0};
             uint64_t fg_hash = 0;
@@ -3644,6 +3720,10 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 g_smart_rt.app_hash = fg_hash;
                 g_smart_rt.app_hint = fg_hint;
                 g_pkg_detect_ok = 1;
+                /* Only a current, positively recognised media package may opt into the
+                 * media guard. A stale cache deliberately does not qualify. */
+                g_smart_media_pkg_known = (pst == ASB_PKG_OK &&
+                                            asb_smart_pkg_is_media_candidate(fg_pkg));
                 /* For heavy/gaming hints, double-check with load to avoid
                  * stale cache mistakes (e.g. user backgrounded the game) */
                 if (fg_hint >= ASB_APP_HEAVY && m->cpu.load1 < 3.0f) {
@@ -3664,6 +3744,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                  * but mark detect_ok=0 so observability shows the gap */
                 g_smart_rt.app_hash = 0;
                 g_pkg_detect_ok = 0;
+                g_smart_media_pkg_known = 0;
                 if (m->cpu.load1 >= 12.0f) g_smart_rt.app_hint = ASB_APP_HEAVY;
                 else if (m->cpu.load1 >= 6.0f) g_smart_rt.app_hint = ASB_APP_MEDIUM;
                 else g_smart_rt.app_hint = ASB_APP_LIGHT;
@@ -3678,12 +3759,13 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                  */
                 int boot_grace = (g_gov_start_ts > 0 &&
                                   (long)(now - g_gov_start_ts) < 180);
-                if (fsm->state == ASB_STATE_GAMING && fresh_pkg) {
+                if (fsm->state == ASB_STATE_GAMING && fresh_pkg &&
+                    !g_smart_media_pkg_known) {
                     g_smart_rt.app_hint = ASB_APP_GAMING;
                 } else if (!boot_grace &&
                            fsm->state == ASB_STATE_SUSTAINED &&
                            cpu_max_c >= 60 && m->gpu.load_pct >= 30 &&
-                           fresh_pkg) {
+                           fresh_pkg && !g_smart_media_pkg_known) {
                     g_smart_rt.app_hint = ASB_APP_GAMING;
                 }
             }
@@ -6039,6 +6121,8 @@ int main(int argc, char **argv) {
              * the next state transition.
              */
             int smart_updated = asb_smart_tick(&metrics, &fsm);
+            int smart_media_guard_changed = asb_smart_media_guard_observe(&metrics, &fsm, time(NULL));
+            if (smart_media_guard_changed) force_write = 1;
             asb_smart_persist_check();
             if (smart_updated && fsm.profile_idx == PROFILE_SMART) {
                 asb_profile_caps_t _new_caps;
@@ -6118,6 +6202,7 @@ int main(int argc, char **argv) {
                 g_write_attempts++;
                 asb_profile_caps_t _effective_caps = fsm.current_caps;
                 asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);
+                asb_smart_media_guard_apply_caps(&_effective_caps);
                 int writes = writer_apply_caps(&_effective_caps, force_write, fsm.state, fsm.thermal_cap);
                 if (writes > 0) {
                     g_total_writes += writes;

@@ -30,6 +30,9 @@ typedef struct {
      * Playback was the highest-drain phase in field captures - higher than gaming - and
      * was the one high-GPU case with no ceiling of its own. */
     int   gpu_video_max_pct;
+    /* Opt-in Smart-only guard for a known non-game app that is classified as
+     * game-like by sustained CPU+GPU work. It only narrows a GPU ceiling. */
+    int   smart_media_guard;
     int   gaming_gpu_enter;
     int   gaming_confirm_ticks;
     int   sustained_gpu_min;
@@ -236,6 +239,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->gpu_idle_trim_floor = 55;
     c->gpu_video_busy_min = 40;
     c->gpu_video_max_pct   = 70;
+    c->smart_media_guard   = 0;  /* explicit opt-in; legacy behaviour stays unchanged */
     c->gaming_gpu_enter    = 65;
     c->gaming_confirm_ticks = 6;
     c->sustained_gpu_min   = 45;
@@ -411,7 +415,8 @@ static inline int asb_cfg_validate_critical_syntax(const char *k, const char *v)
         return asb_cfg_parse_float_strict(v, &parsed_f);
     }
     if (!strcmp(k, "gaming_confirm_ticks") || !strcmp(k, "gpu_idle_trim_pct") ||
-        !strcmp(k, "gpu_video_max_pct") || !strcmp(k, "thermal_throttle_temp") ||
+        !strcmp(k, "gpu_video_max_pct") || !strcmp(k, "smart_media_guard") ||
+        !strcmp(k, "thermal_throttle_temp") ||
         !strcmp(k, "device_bounds_override") || !strcmp(k, "sustained_temp_enter") ||
         !strcmp(k, "sustained_temp_ceiling") || !strcmp(k, "sustained_temp_exit")) {
         return asb_cfg_parse_int_strict(v, &parsed_i);
@@ -491,6 +496,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "gpu_idle_trim_floor"))  c->gpu_idle_trim_floor = atoi(v);
     else if (!strcmp(k, "gpu_video_busy_min"))   c->gpu_video_busy_min = atoi(v);
     else if (!strcmp(k, "gpu_video_max_pct"))    c->gpu_video_max_pct = atoi(v);
+    else if (!strcmp(k, "smart_media_guard"))    c->smart_media_guard = atoi(v);
     else if (!strcmp(k, "bat_moderate_load_enter")) c->bat_moderate_load_enter = (float)atof(v);
     else if (!strcmp(k, "log_level")) {
         /* User-facing choice, kept readable: stock | 0 | 1 | 2 | 3.
@@ -653,6 +659,7 @@ static inline int asb_config_validate(const asb_runtime_config_t *c) {
         c->gaming_confirm_ticks < 1 || c->gaming_confirm_ticks > 120 ||
         c->gpu_idle_trim_pct < 0 || c->gpu_idle_trim_pct > 90 ||
         c->gpu_video_max_pct < 0 || c->gpu_video_max_pct > 100 ||
+        (c->smart_media_guard != 0 && c->smart_media_guard != 1) ||
         c->thermal_throttle_temp < 30 || c->thermal_throttle_temp > 110 ||
         (c->device_bounds_override != 0 && c->device_bounds_override != 1)) return -15;
     return 0;

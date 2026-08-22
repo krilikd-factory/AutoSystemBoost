@@ -267,6 +267,27 @@ static int asb_smart_app_hint_from_pkg(const char *pkg) {
     return ASB_APP_MEDIUM;
 }
 
+/* A deliberately narrow, affirmative media list for the opt-in Smart Media Guard.
+ * Unknown packages are NOT treated as media: reducing a new game's GPU headroom from a
+ * generic name would violate the guard's safety contract. This only identifies apps whose
+ * known purpose matches stream/feed/browser playback; package detection remains local. */
+static int asb_smart_pkg_is_media_candidate(const char *pkg) {
+    static const char *const P[] = {
+        "com.google.android.youtube", "com.netflix.mediaclient", "com.spotify.music",
+        "com.amazon.avod", "com.android.chrome", "com.brave.browser", "com.opera.browser",
+        "org.mozilla.firefox", "com.yandex.browser", "com.microsoft.emmx",
+        "com.zhiliaoapp.musically", "com.ss.android.ugc.trill", "tv.danmaku.bili",
+        "com.instagram.android", "com.facebook.katana", "com.twitter.android",
+        "com.vkontakte.android", "ru.ok.android", NULL
+    };
+    if (!pkg || !*pkg) return 0;
+    for (int i = 0; P[i]; i++) {
+        size_t n = strlen(P[i]);
+        if (strncmp(pkg, P[i], n) == 0) return 1;
+    }
+    return 0;
+}
+
 typedef enum {
     ASB_PKG_OK = 0,
     ASB_PKG_MISSING = 1,
