@@ -7,6 +7,7 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 HELPER="$ROOT/runtime/asb_quick_restart.sh"
 UI="$ROOT/webroot/index.html"
 INSTALL="$ROOT/common/install.sh"
+SERVICE="$ROOT/service.sh"
 fail() { echo "FAIL quick restart contract: $*" >&2; exit 1; }
 need() { grep -Fq "$2" "$1" || fail "missing [$2] in $1"; }
 absent() { ! grep -Fq "$2" "$1" || fail "unexpected [$2] in $1"; }
@@ -26,6 +27,20 @@ absent "$UI" 'setprop ctl.restart zygote 2>/dev/null || killall zygote'
 need "$UI" 't_quick_explain'
 need "$UI" 't_quick_unavailable'
 need "$INSTALL" 'asb_quick_restart.sh'
+
+# Applied user tweaks may use PackageManager/framework or cmd -w networking. They must not
+# synchronously occupy the userspace-reboot startup path: service returns first, then a bounded
+# post-boot worker reapplies them after boot_complete plus a settle window.
+need "$SERVICE" 'post_boot_tweaks: begin'
+need "$SERVICE" 'post_boot_tweaks: complete'
+need "$SERVICE" 'post_boot_tweaks: skipped (boot completion timeout)'
+need "$SERVICE" 'sleep 8'
+_pb_line="$(grep -nF 'post_boot_tweaks: begin' "$SERVICE" | head -1 | cut -d: -f1)"
+[ -n "$_pb_line" ] || fail 'post-boot stage marker missing'
+for _helper in asb_gms_freeze.sh asb_gms_trim.sh asb_system_tweaks.sh asb_athena_apply.sh asb_net_offload.sh asb_doze_apply.sh asb_net_apply.sh; do
+  _call_line="$(grep -nF "sh \"\$MODDIR/runtime/$_helper\"" "$SERVICE" | head -1 | cut -d: -f1)"
+  [ -n "$_call_line" ] && [ "$_call_line" -gt "$_pb_line" ] || fail "$_helper is not deferred after boot completion"
+done
 
 python3 - "$ROOT" <<'PY'
 import json, sys
