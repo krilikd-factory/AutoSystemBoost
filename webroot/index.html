@@ -3213,6 +3213,7 @@ const SNAP_KEYS = [
   'CAMERA_AGGRESSIVE',
   'CAMERA_AGGRESSIVE_INJECT',
   'smart_battery_bias',
+  'smart_media_guard',
   'bt_absvol_mode',
   'BG_TRIM_LEVEL',
   'cool_gaming',
@@ -3338,6 +3339,8 @@ const CFG_ITEMS = [
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
     desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
+  { key:'smart_media_guard', type:'bool', def:'0', stock:'0', name:'Smart Media Guard',
+    desc:'An opt-in guard for a narrow case: a known video, feed or browser app stays in game-like CPU + GPU load for a full minute while you use it on battery. In Smart only, ASB then keeps the effective GPU ceiling at the same 70% media envelope already used for video. It never limits a known game, an unknown app, charging, thermal protection, CPU ceilings or frequency floors. Start with the 12-hour trial; if a high-refresh stream stutters, turn it back off.' },
   // --- Power & battery ---,
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
@@ -3415,7 +3418,7 @@ async function cfgLoad() {
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
-  night_modem_idle:'battery',
+  night_modem_idle:'battery', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'system',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
@@ -3462,7 +3465,7 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
-  night_modem_idle:'battery',
+  night_modem_idle:'battery', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery', gnss_trim:'battery',
@@ -3667,7 +3670,7 @@ async function loadNetResult() {
  * matching backend semantic validator, rollback/effect contract and source test. */
 const TRIAL_KEYS = ['doze_level','doze_trim_whitelist','wakelock_action','night_modem_idle',
                     'gnss_trim','gms_trim','gms_freeze','wifi_country',
-                    'audio_remove_volume_limit','UX_MANAGE_OEM_TOGGLES'];
+                    'audio_remove_volume_limit','UX_MANAGE_OEM_TOGGLES','smart_media_guard'];
 
 let _ledger = {};   /* key -> {result, reason, req, now} - last write outcome per key */
 let _trials = {};   /* key -> {value, prev, expires} - active trials */
@@ -3974,7 +3977,7 @@ const APPLY_MODE = {
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
   net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, log_level:APPLY_LIVE,
-  smart_battery_bias:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
+  smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
   sustained_temp_enter:APPLY_LIVE, BG_TRIM_LEVEL:APPLY_LIVE, doze_level:APPLY_LIVE,
