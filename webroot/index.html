@@ -3071,38 +3071,92 @@ function debugActionWaitClose() {
   modal.setAttribute('aria-hidden', 'true');
 }
 
+function debugFrame() {
+  // KSU's bridge runs outside JS, but the WebView still needs one frame to paint a
+  // just-opened modal and pulse before the bridge request begins.
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+function debugDelay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function debugDiagPoll() {
+  // asbdiag is bounded but device-dependent. Poll the tiny status file rather than
+  // holding the original bridge call open, otherwise the WebView cannot render feedback.
+  for (let attempt = 0; attempt < 90; attempt++) {
+    await debugDelay(350);
+    const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh diag-status 2>/dev/null');
+    const info = debugActionText(r);
+    if (!r || r.errno !== 0 || info.error || info.status === 'failed') return { ok:false, info };
+    if (info.status === 'saved') return { ok:true, info };
+  }
+  return { ok:false, info:{ error:'diag_status_timeout' } };
+}
+
+async function debugFullDayPoll() {
+  // `full-day-start` only owns the launch handoff. Confirm that the recorder lock then
+  // becomes observable, but never wait for the 24-hour capture itself.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    await debugDelay(250);
+    const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh status 2>/dev/null');
+    const info = debugActionText(r);
+    if (!r || r.errno !== 0 || info.error) return { ok:false, info };
+    if (info.status === 'starting' || info.status === 'running') return { ok:true, info };
+  }
+  return { ok:false, info:{ error:'full_day_status_timeout' } };
+}
+
 async function asbDebugAction(action) {
   if (!_asbDebugBuild || _asbDebugActionBusy) { toast(T('dbg_only', 'Debug build only'), 'warn'); return; }
   const allowed = action === 'diag' || action === 'full-day';
   if (!allowed) return;
   _asbDebugActionBusy = true;
+  const openedAt = Date.now();
   const buttons = Array.from(document.querySelectorAll('.debug-support-btn'));
   const activeButtons = buttons.filter(b => b.dataset.debugAction === action);
   buttons.forEach(b => { b.disabled = true; });
   activeButtons.forEach(b => { b.classList.add('is-running'); b.setAttribute('aria-busy', 'true'); });
-  // This is deliberately before the first await: WebView paints the modal and pulse
-  // before KSU starts the potentially multi-second asbdiag export.
   debugActionWaitOpen(action);
+  // A toast remains useful after the modal has gone, but the modal is the immediate
+  // acknowledgement. Yield twice before KSU work so the first pulse is on-screen.
+  await debugFrame();
   toast(T(action === 'diag' ? 'dbg_diag_wait' : 'dbg_log_wait',
           action === 'diag' ? 'asbdiag started · please wait' : '24h log is starting · please wait'), 'warn');
   try {
-    const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + action + ' 2>/dev/null');
+    const cmd = action === 'diag' ? 'diag-start' : 'full-day-start';
+    const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + cmd + ' 2>/dev/null');
     const info = debugActionText(r);
     if (!r || r.errno !== 0 || info.error) {
       toast(T(action === 'diag' ? 'dbg_diag_failed' : 'dbg_log_failed', 'Debug action failed'), 'bad');
       return;
     }
     if (action === 'diag') {
-      toast(T('dbg_diag_saved', 'asbdiag saved') + (info.path ? ': ' + info.path : ''), 'good');
+      if (info.status === 'already_running') {
+        toast(T('dbg_diag_wait', 'asbdiag started · please wait'), 'warn');
+        return;
+      }
+      const done = await debugDiagPoll();
+      if (!done.ok) {
+        toast(T('dbg_diag_failed', 'Debug action failed'), 'bad');
+        return;
+      }
+      toast(T('dbg_diag_saved', 'asbdiag saved') + (done.info.path ? ': ' + done.info.path : ''), 'good');
     } else if (info.status === 'already_running') {
       toast(T('dbg_log_running', '24h log is already running') + (info.pid ? ' · PID ' + info.pid : ''), 'warn');
     } else if (info.status === 'started') {
-      toast(T('dbg_log_started', '24h log started') + (info.pid ? ' · PID ' + info.pid : ''), 'good');
+      const started = await debugFullDayPoll();
+      if (!started.ok) {
+        toast(T('dbg_log_failed', 'Could not start 24h log'), 'bad');
+        return;
+      }
+      toast(T('dbg_log_started', '24h log started') + ((started.info.pid || info.pid) ? ' · PID ' + (started.info.pid || info.pid) : ''), 'good');
     } else {
       toast(T('dbg_log_failed', 'Could not start 24h log'), 'bad');
     }
   } catch (e) { toast(T(action === 'diag' ? 'dbg_diag_failed' : 'dbg_log_failed', 'Debug action failed'), 'bad'); }
   finally {
+    // A fast launcher may finish before the first composite frame. Keep the acknowledgement
+    // visible long enough to be unmistakable; a real asbdiag naturally stays longer.
+    const remaining = 650 - (Date.now() - openedAt);
+    if (remaining > 0) await debugDelay(remaining);
     debugActionWaitClose();
     _asbDebugActionBusy = false;
     activeButtons.forEach(b => { b.classList.remove('is-running'); b.removeAttribute('aria-busy'); });
