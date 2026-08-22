@@ -2359,18 +2359,18 @@ asb_neutralise_fresh_install() {
     grep -qE "^[[:space:]]*${_nk}=" "$_new_conf" 2>/dev/null \
       && sed -i "s|^[[:space:]]*${_nk}=.*|${_nk}=${_nv}|" "$_new_conf" 2>/dev/null
   done
-  # No power profile either: a module that has never seen the phone does not get to
-  # decide how it runs. profile_core.sh treats an absent file as "none" and applies
-  # nothing until the user taps one of the four.
-  rm -f "$MODPATH/current_profile" 2>/dev/null
+  # Fresh installs begin in explicit Stock mode. Unlike an absent profile it is visible in
+  # WebUI and remains selected across reboot, while profile_core/service keep CPU, GPU and
+  # governor policy untouched until the user explicitly chooses an ASB profile.
+  printf '%s\n' stock > "$MODPATH/current_profile" 2>/dev/null
   # Tell service.sh this absence is deliberate. Without it the boot-time restore from
   # /data/adb/asb/active_profile - which outlives module removal - would put the old
   # profile straight back and the module card would show it.
   mkdir -p /data/adb/asb 2>/dev/null
   : > /data/adb/asb/no_profile_chosen 2>/dev/null
   rm -f /data/adb/asb/active_profile /data/adb/asb/current_profile.bak 2>/dev/null
-  ui_print "      + first install: everything starts at stock, nothing applied yet"
-  ui_print "        open the WebUI to turn on what you want"
+  ui_print "      + first install: Stock profile active; ASB CPU/GPU/governor policy is off"
+  ui_print "        open the WebUI whenever you want to choose an ASB profile"
 }
 
 # Published after installation so diagnostics can distinguish a clean first install from
@@ -2443,7 +2443,7 @@ asb_preserve_user_config() {
     [ -f "$_cp_old" ] || continue
     _cp_val="$(cat "$_cp_old" 2>/dev/null | tr -d " \r\n")"
     case "$_cp_val" in
-      performance|battery|balanced|smart|none)
+      stock|performance|battery|balanced|smart|none)
         printf '%s\n' "$_cp_val" > "$MODPATH/current_profile" 2>/dev/null
         ui_print "      + kept your power profile: $_cp_val"
         break ;;
@@ -3927,7 +3927,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_debug_support.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_debug_support.sh asb_stock_policy.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
