@@ -49,6 +49,13 @@ if _num "$_policies" && _num "$_zones" && [ "$_policies" -ge 2 ] 2>/dev/null && 
       _status="active"; _reason="supported_sm8750"; _tier="sm8750"
       _light=1; _moderate=2; _severe=1; _gpu_bonus=1; _bg_moderate=48; _bg_severe=96
       ;;
+    sm8850*|canoe*)
+      # Snapdragon 8 Elite Gen 5 / canoe: same conservative, percentage-only envelope.
+      # It is deliberately not a fixed-clock device pack and stays inactive until the
+      # established thermal budget has real heat/current evidence.
+      _status="active"; _reason="supported_sm8850"; _tier="sm8850"
+      _light=1; _moderate=2; _severe=1; _gpu_bonus=1; _bg_moderate=48; _bg_severe=96
+      ;;
     sm8650*|pineapple*|lanai*)
       # 8 Gen 3 family: retain interactive prime bounds, cool through steady-state ceiling
       # restraint and background uclamp instead of a universal frequency cap.
