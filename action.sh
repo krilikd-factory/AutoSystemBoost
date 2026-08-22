@@ -1222,10 +1222,23 @@ fi
 
 echo ""
 echo "  📷  ${H_CAMERA}"
-_vb_n="$(grep -c '"packageName"' /odm/etc/camera/config/video_beauty_default_config 2>/dev/null)"
+# OxygenOS variants may expose the effective retouch config under either /odm or /vendor/odm.
+# Do not report a staged/secondary root as live merely because it is checked first: select the
+# readable candidate with the largest app list and retain its path for an actionable verdict.
+_vb_n=0; _vb_live=""
+for _vb_try in /odm/etc/camera/config/video_beauty_default_config \
+               /vendor/odm/etc/camera/config/video_beauty_default_config; do
+  [ -r "$_vb_try" ] || continue
+  _vb_try_n="$(grep -c '"packageName"' "$_vb_try" 2>/dev/null)"
+  case "$_vb_try_n" in ''|*[!0-9]*) _vb_try_n=0 ;; esac
+  if [ "$_vb_try_n" -gt "$_vb_n" ] 2>/dev/null; then
+    _vb_n="$_vb_try_n"; _vb_live="$_vb_try"
+  fi
+done
 _cam_l="processing level ${_c_lvl}"
 [ "${_vb_n:-0}" -gt 0 ] 2>/dev/null && _cam_l="$(_join "$_cam_l" "${_vb_n} retouch apps")"
 echo "       ${_cam_l}"
+[ -n "$_vb_live" ] && echo "       retouch config: $_vb_live"
 _cam_ag="$(_cfg CAMERA_AGGRESSIVE)"
 _cam_in="$(_cfg CAMERA_AGGRESSIVE_INJECT)"
 _cam_l=""
@@ -1710,7 +1723,7 @@ fi
 # camera -> the retouch list is the visible half of the camera patch
 if [ "$(_feat CAMERA)" = "1" ] && [ "${_c_lvl:-0}" -gt 0 ] 2>/dev/null; then
   [ "${_vb_n:-0}" -ge 7 ] 2>/dev/null \
-    || _add_bad "camera — retouch app list not injected (${_vb_n:-0} apps)"
+    || _add_bad "camera — retouch app list not injected (${_vb_n:-0} apps; ${_vb_live:-no live config})"
 fi
 
 echo ""

@@ -21,6 +21,11 @@ asb_resolve_moddir() {
 }
 MODDIR="$(asb_resolve_moddir)"
 
+# Debug-only passive lifecycle evidence for slow reboot investigation. The helper exits before
+# any write in release builds, so it cannot change release boot timing or policy.
+[ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
+  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark service_enter >/dev/null 2>&1 || true
+
 mkdir -p /data/adb/asb 2>/dev/null
 for _legacy_pair in \
     "asb_active_profile:active_profile" \
@@ -143,6 +148,8 @@ if [ ! -f /data/adb/asb/smart_mode_enabled ]; then
 fi
 
 asb_load_profile
+[ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
+  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark service_profile_loaded >/dev/null 2>&1 || true
 if [ "${ASB_STOCK_PROFILE:-0}" = "1" ]; then
   command -v asb_stock_enter >/dev/null 2>&1 && asb_stock_enter
 fi
@@ -2911,6 +2918,8 @@ fi
     exit 0
   }
   sleep 8
+  [ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
+    ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark post_boot_tweaks_begin >/dev/null 2>&1 || true
   asb_log "post_boot_tweaks: begin"
 
   [ -f "$MODDIR/runtime/asb_gms_freeze.sh" ] && \
@@ -2967,6 +2976,8 @@ fi
     esac
   fi
   asb_log "post_boot_tweaks: complete"
+  [ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
+    ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark post_boot_tweaks_complete >/dev/null 2>&1 || true
 ) >/dev/null 2>&1 &
 
 if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then
@@ -3109,4 +3120,6 @@ fi
   fi
 ) >/dev/null 2>&1 &
 
+[ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
+  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark service_dispatched >/dev/null 2>&1 || true
 exit 0

@@ -16,6 +16,9 @@ fi
 chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
 
 mkdir -p /data/adb/asb 2>/dev/null
+# Debug builds record only lifecycle markers; this must remain a no-op in release builds.
+[ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
+  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" begin postfs_begin >/dev/null 2>&1 || true
 
 # Camera/media overlay is shipped to system/vendor/odm ONLY (see install.sh),
 
@@ -50,6 +53,8 @@ done
 # policy failure or retrying unsupported features every tick.
 [ -r "$MODDIR/runtime/asb_capabilities.sh" ] && \
   sh "$MODDIR/runtime/asb_capabilities.sh" probe >/data/adb/asb/capabilities.last 2>&1 || true
+[ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
+  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark postfs_capabilities_done >/dev/null 2>&1 || true
 command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
 
 asb_feature_enabled() {
@@ -310,4 +315,6 @@ if asb_feature_enabled AUDIO \
   esac
 fi
 
+[ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] && \
+  ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark postfs_complete >/dev/null 2>&1 || true
 exit 0
