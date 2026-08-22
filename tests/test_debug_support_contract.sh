@@ -99,6 +99,21 @@ need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_claim || { echo '\
 need "$ROOT/tools/logkit/asb_log_full_day.sh" "trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP"
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_release'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'FULL-DAY capture complete. Output: $LK_OUT_DIR'
+# Debug capture must expose a resolvable AudioMix owner and the evidence that made
+# a media-like workload game-like, without putting any package-manager polling in
+# the native governor. The logkit helpers are passive and use one capture-start map.
+COMMON="$ROOT/tools/logkit/_asb_logkit_common.sh"
+need "$COMMON" 'lk_audio_wakelock_attribution_init()'
+need "$COMMON" 'audio_wakelock_attribution.tsv'
+need "$COMMON" 'lk_fsm_media_trace_header()'
+need "$COMMON" 'fsm_media_trace.tsv'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_audio_wakelock_attribution_init'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_capture_fsm_media_trace_row "$_phase"'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'rmnetMiB'
+need "$ROOT/src/asb_governor.c" 'asb_smart_media_guard_observe'
+need "$ROOT/src/asb_governor.c" 'no_fresh_known_media_pkg'
+need "$ROOT/src/asb_governor.c" 'ASB_SMART_MEDIA_GUARD_GPU_MAX_PCT = 70'
+need "$ROOT/src/asb_smart.h" 'asb_smart_pkg_is_media_candidate'
 if grep -nE '\beval\b|\bsource\b|/system/bin/sh -c|sh -c' "$HELPER" >/dev/null; then
   echo 'FAIL debug support: helper accepts unsafe shell execution' >&2; exit 1
 fi

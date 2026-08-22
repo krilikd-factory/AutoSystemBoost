@@ -73,6 +73,7 @@ for _pair in \
   'heavy_load_enter nan' \
   'gpu_idle_trim_pct -100' \
   'gpu_video_max_pct 999' \
+  'smart_media_guard 2' \
   'gaming_confirm_ticks 0' \
   'thermal_throttle_temp 0' \
   'device_bounds_override 999'; do
@@ -84,6 +85,9 @@ done
 need_line "$MOD/config/governor.conf" "heavy_load_enter=20.0"
 need_line "$MOD/config/governor.conf" "gpu_idle_trim_pct=12"
 need_line "$MOD/config/governor.conf" "gaming_confirm_ticks=6"
+need_line "$MOD/config/governor.conf" "smart_media_guard=0"
+run_writer set smart_media_guard 1 >/dev/null
+need_line "$MOD/config/governor.conf" "smart_media_guard=1"
 
 # A linked slider update must commit both keys and its snapshot under one lock.
 run_writer set-many --snapshot "$SNAP" \
