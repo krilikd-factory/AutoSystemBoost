@@ -229,6 +229,10 @@
     "gnss_trim": {
       "name": "Reduzir GPS em segundo plano",
       "desc": "O GPS é das coisas mais caras que um telefone faz. O Android contabiliza à parte quanto vem de processos EM CACHE: apps fechados que não fazem nada que você pediu.\n\nNum log foram 53 de 56 mAh de todo o consumo de GPS.\n\nLigado, um app que segura a localização enquanto seu processo está em cache e a tela desligada fica limitado à precisão aproximada. A precisão total volta assim que você o abre.\n\nNunca tocados: mapas e navegação, fitness e rastreamento de rotas, apps de emergência e de localizar dispositivo."
+    },
+    "smart_media_guard": {
+      "name": "Proteção de mídia Smart",
+      "desc": "Proteção opcional apenas no Smart e para um caso específico: um app conhecido de vídeo, feed ou navegador mantém por um minuto carga de CPU + GPU semelhante a jogo durante o uso na bateria. O ASB limita então apenas o teto efetivo da GPU ao envelope de mídia existente de 70%. Nunca limita um jogo conhecido, app desconhecido, carregamento, proteção térmica, tetos de CPU ou mínimos de frequência. Teste por 12 horas primeiro; desligue se um stream de alta taxa de atualização engasgar."
     }
   },
   "nav_main": "Início",

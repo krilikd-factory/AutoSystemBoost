@@ -229,6 +229,10 @@
     "gnss_trim": {
       "name": "Pangkas GPS latar belakang",
       "desc": "GPS termasuk hal termahal yang bisa dilakukan ponsel. Android menghitung terpisah berapa yang berasal dari proses DI CACHE: aplikasi yang tertutup dan tidak melakukan apa pun yang Anda minta.\n\nDalam satu log itu 53 dari 56 mAh seluruh konsumsi GPS.\n\nSaat aktif, aplikasi yang menahan lokasi selagi prosesnya di cache dan layar mati dibatasi ke akurasi kasar. Akurasi penuh kembali begitu Anda membukanya.\n\nTidak pernah disentuh: peta dan navigasi, kebugaran dan pelacakan rute, aplikasi darurat dan pencari perangkat."
+    },
+    "smart_media_guard": {
+      "name": "Pelindung Media Smart",
+      "desc": "Perlindungan opsional hanya untuk Smart dan kasus sempit: aplikasi video, feed, atau browser yang dikenal mempertahankan beban CPU + GPU seperti game selama satu menit saat memakai baterai. ASB lalu membatasi hanya batas GPU efektif ke envelope media 70% yang sudah digunakan. Fitur ini tidak pernah membatasi game yang dikenal, aplikasi tidak dikenal, pengisian daya, perlindungan termal, batas CPU, atau minimum frekuensi. Coba 12 jam terlebih dahulu; matikan bila streaming refresh-rate tinggi tersendat."
     }
   },
   "nav_main": "Beranda",

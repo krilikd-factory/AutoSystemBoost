@@ -229,6 +229,10 @@
     "gnss_trim": {
       "name": "Recortar GPS en segundo plano",
       "desc": "El GPS es de lo más costoso que puede hacer un teléfono. Android contabiliza aparte cuánto corresponde a procesos EN CACHÉ: apps cerradas que no hacen nada que hayas pedido.\n\nEn un registro fueron 53 de 56 mAh del consumo total de GPS.\n\nActivado, una app que retiene la ubicación mientras su proceso está en caché y la pantalla apagada se limita a precisión aproximada. La precisión completa vuelve en cuanto la abres.\n\nNunca se tocan: mapas y navegación, fitness y seguimiento de rutas, apps de emergencia y de búsqueda de dispositivo."
+    },
+    "smart_media_guard": {
+      "name": "Protección multimedia Smart",
+      "desc": "Protección opcional solo para Smart y un caso concreto: una app conocida de vídeo, feed o navegador mantiene durante un minuto una carga CPU + GPU similar a un juego mientras usas batería. ASB limita entonces solo el techo efectivo de GPU al margen multimedia existente del 70%. Nunca limita un juego conocido, una app desconocida, la carga, la protección térmica, los techos de CPU ni los mínimos de frecuencia. Prueba primero 12 horas; desactívala si un stream de alta frecuencia se entrecorta."
     }
   },
   "nav_main": "Inicio",

@@ -371,6 +371,10 @@
     "gnss_trim": {
       "name": "Réduire le GPS en arrière-plan",
       "desc": "Le GPS est l'une des choses les plus coûteuses pour un téléphone. Android comptabilise séparément la part venant des processus EN CACHE : des applis fermées qui ne font rien de ce que vous avez demandé.\n\nDans un relevé, c'était 53 des 56 mAh de toute la consommation GPS.\n\nActivé, une appli qui retient la localisation pendant que son processus est en cache et l'écran éteint est limitée à une précision grossière. La précision complète revient dès que vous l'ouvrez.\n\nJamais touchées : cartes et navigation, fitness et suivi d'itinéraire, applis d'urgence et de localisation d'appareil."
+    },
+    "smart_media_guard": {
+      "name": "Protection média Smart",
+      "desc": "Protection facultative réservée à Smart et à un cas précis : une application connue de vidéo, fil ou navigateur garde pendant une minute une charge CPU + GPU de type jeu sur batterie. ASB limite alors uniquement le plafond GPU effectif à l’enveloppe média existante de 70 %. Elle ne limite jamais un jeu connu, une application inconnue, la charge, la protection thermique, les plafonds CPU ou les fréquences minimales. Essayez d’abord 12 heures ; désactivez-la si un flux à haute fréquence saccade."
     }
   },
   "opt": {

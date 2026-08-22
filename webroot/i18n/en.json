@@ -227,6 +227,10 @@
     "gnss_trim": {
       "name": "Trim Background GPS",
       "desc": "GPS is one of the most expensive things a phone can do, and Android reports how much of it happens in CACHED processes - apps that are closed and doing nothing you asked for.\n\nIn one field capture that was 53 of 56 mAh of GPS drain.\n\nWhen on, a user-installed app still holding location while its process is cached and the screen is off is limited to coarse accuracy. It gets full precision back the moment you open it.\n\nNever touched: maps and navigation, fitness and route tracking, emergency and find-my apps, and anything in the foreground."
+    },
+    "smart_media_guard": {
+      "name": "Smart Media Guard",
+      "desc": "Optional, Smart-only protection for a narrow case: a known video, feed or browser app stays game-like CPU + GPU heavy for a full minute while you use it on battery. ASB then keeps only the effective GPU ceiling at the existing 70% media envelope. It never limits a known game, an unknown app, charging, thermal protection, CPU ceilings or frequency floors. Start with the 12-hour trial; turn it off if a high-refresh stream stutters."
     }
   },
   "cfg_search": "Search",

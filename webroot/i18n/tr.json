@@ -229,6 +229,10 @@
     "gnss_trim": {
       "name": "Arka plan GPS'ini kırp",
       "desc": "GPS bir telefonun yapabileceği en pahalı işlerden biri. Android bunun ne kadarının ÖNBELLEKTEKİ süreçlerden geldiğini ayrıca sayar: kapalı olan ve sizin istemediğiniz hiçbir şey yapmayan uygulamalar.\n\nBir günlükte bu, toplam GPS tüketiminin 56 mAh'ından 53'üydü.\n\nAçıkken, süreci önbellekteyken ve ekran kapalıyken konum tutan bir uygulama kaba doğrulukla sınırlanır. Tam doğruluk uygulamayı açar açmaz geri gelir.\n\nAsla dokunulmaz: haritalar ve navigasyon, fitness ve rota takibi, acil durum ve cihaz bulma uygulamaları."
+    },
+    "smart_media_guard": {
+      "name": "Smart medya koruması",
+      "desc": "Yalnızca Smart için isteğe bağlı, dar kapsamlı koruma: bilinen bir video, akış veya tarayıcı uygulaması pille kullanımda bir dakika boyunca oyun benzeri CPU + GPU yükünü sürdürürse çalışır. ASB yalnızca etkin GPU tavanını mevcut %70 medya zarfında tutar. Bilinen oyunları, bilinmeyen uygulamaları, şarjı, termal korumayı, CPU tavanlarını veya en düşük frekansları asla sınırlamaz. Önce 12 saat deneyin; yüksek yenilemeli akış takılırsa kapatın."
     }
   },
   "nav_main": "Ana",

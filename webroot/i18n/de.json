@@ -229,6 +229,10 @@
     "gnss_trim": {
       "name": "Hintergrund-GPS kürzen",
       "desc": "GPS gehört zum Teuersten, was ein Telefon tun kann. Android zählt separat, wie viel auf Prozesse im CACHE entfällt: Apps, die geschlossen sind und nichts tun, worum Sie gebeten haben.\n\nIn einem Log waren das 53 von 56 mAh des gesamten GPS-Verbrauchs.\n\nEingeschaltet wird eine App, die Standort hält während ihr Prozess im Cache ist und der Bildschirm aus, auf grobe Genauigkeit begrenzt. Volle Genauigkeit kehrt zurück, sobald Sie sie öffnen.\n\nNie betroffen: Karten und Navigation, Fitness und Routentracking, Notfall- und Geräte-Finder-Apps."
+    },
+    "smart_media_guard": {
+      "name": "Smart-Medien-Schutz",
+      "desc": "Optionaler Schutz nur für Smart und einen engen Fall: Eine bekannte Video-, Feed- oder Browser-App erzeugt im Akkubetrieb eine Minute lang spielähnliche CPU- und GPU-Last. ASB begrenzt dann nur die effektive GPU-Obergrenze auf den bereits für Medien verwendeten 70%-Bereich. Bekannte Spiele, unbekannte Apps, Laden, Wärmeschutz, CPU-Grenzen und Frequenz-Minima bleiben immer ausgeschlossen. Starte zuerst den 12-Stunden-Test; bei Rucklern in Streams mit hoher Bildrate wieder ausschalten."
     }
   },
   "nav_main": "Start",
