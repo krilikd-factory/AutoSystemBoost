@@ -87,6 +87,37 @@ done
 need "$SERVICE" 'asb_wifi_link_reassert() {'
 need "$SERVICE" 'never launched during the init/service startup path'
 
+# Runtime framework operations are distinct from early kernel/ZRAM writes. On the OP15 they
+# occupied the residual 11-second runtime segment, so settings, DeviceIdle, tracking and
+# nonessential-service operations must execute only in the post-boot worker.
+need "$SERVICE" 'asb_timeline_mark service_runtime_kernel_memory_complete'
+need "$SERVICE" 'asb_timeline_mark service_runtime_framework_deferred'
+need "$SERVICE" 'asb_timeline_mark post_boot_runtime_framework_begin'
+need "$SERVICE" 'asb_timeline_mark post_boot_runtime_framework_complete'
+_runtime_line="$(grep -nF 'asb_timeline_mark post_boot_runtime_framework_begin' "$SERVICE" | head -1 | cut -d: -f1)"
+[ -n "$_runtime_line" ] && [ "$_runtime_line" -gt "$_conn_line" ] || fail 'runtime framework marker is not post-boot'
+for _runtime_call in \
+  '    apply_bt_settings' \
+  '    apply_bt_codec_policy' \
+  '    apply_bt_volume_behavior' \
+  '    apply_bt_audio_hygiene' \
+  '  asb_feature_enabled LOG && apply_tracking_block' \
+  '  asb_feature_enabled VM && apply_doze' \
+  '  asb_feature_enabled VM && apply_network_stats_poll' \
+  '  apply_extra_settings' \
+  '  asb_stop_nonessential_services'; do
+  # `apply_runtime_profile_now` deliberately retains a callable runtime Doze apply for
+  # manual profile changes after boot. Select the last occurrence, which is the boot worker
+  # invocation guarded by post_boot_runtime_framework_begin.
+  _runtime_call_line="$(grep -nF "$_runtime_call" "$SERVICE" | tail -1 | cut -d: -f1)"
+  [ -n "$_runtime_call_line" ] && [ "$_runtime_call_line" -gt "$_runtime_line" ] || fail "runtime framework call not deferred: $_runtime_call"
+done
+absent "$SERVICE" 'asb_feature_enabled BT && apply_bt_settings'
+absent "$SERVICE" 'asb_feature_enabled BT && apply_bt_codec_policy'
+absent "$SERVICE" 'asb_feature_enabled BT && apply_bt_volume_behavior'
+absent "$SERVICE" 'asb_feature_enabled BT && apply_bt_audio_hygiene'
+need "$SERVICE" 'asb_stop_nonessential_services() {'
+
 python3 - "$ROOT" <<'PY'
 import json, sys
 from pathlib import Path
