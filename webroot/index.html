@@ -438,7 +438,9 @@ body::before, body::after {
 .pbtn[data-p="battery"]     { --c: var(--bat);  --cg: rgba(46,213,115,0.12); --cg-strong: var(--bat-glow); }
 .pbtn[data-p="smart"]       { --c: #00e1c8; --cg: rgba(0,225,200,0.14); --cg-strong: rgba(0,225,200,0.35); }
 .pbtn[data-p="stock"]       { --c: #c8d2da; --cg: rgba(190,205,218,0.13); --cg-strong: rgba(210,224,234,0.34); }
-.pbtn-stock { background: linear-gradient(135deg, rgba(205,216,225,0.07), rgba(255,255,255,0.018)); border-color: rgba(205,216,225,0.20); }
+/* Stock is structurally the same card as every other inactive profile. Its silver
+ * identity comes from --c only once selected; a dedicated idle background/border made
+ * its outline visibly different from Performance, Balanced and Battery. */
 .pbtn-stock .pinfo { flex-direction:column; align-items:flex-start; justify-content:center; gap:3px; }
 .pbtn-stock .psub { color:rgba(210,220,228,0.58); }
 .pbtn-stock.on .psub { color:rgba(232,239,244,0.84); }
@@ -747,9 +749,23 @@ body::before, body::after {
 .debug-support-btn:not(:disabled):hover::before,
 .debug-support-btn:not(:disabled):active::before { opacity: 1; }
 .debug-support-btn:active { transform: scale(0.96); border-color: rgba(0,240,180,0.3); }
-.debug-support-btn:disabled { opacity: 0.48; cursor: wait; }
-.debug-support-btn.is-running { animation: debugActionPulse .82s ease-in-out infinite; border-color:rgba(130,228,255,.58); box-shadow:0 0 0 1px rgba(130,228,255,.14), 0 0 18px rgba(44,214,173,.20); }
-@keyframes debugActionPulse { 0%,100% { transform:scale(1); filter:brightness(1); } 50% { transform:scale(.965); filter:brightness(1.28); } }
+.debug-support-btn:disabled:not(.is-running) { opacity: 0.48; cursor: wait; }
+/* A log action must remain visibly alive while the bridge is waiting. The earlier
+ * .82s animation was too subtle, and :disabled dimmed it to the point where a
+ * user could reasonably think the tap was ignored. */
+.debug-support-btn.is-running { opacity:1; cursor:wait; animation:debugActionPulse .58s ease-in-out infinite; border-color:rgba(130,228,255,.82); color:#d4f8ff; box-shadow:0 0 0 1px rgba(130,228,255,.34), 0 0 26px rgba(44,214,173,.42); }
+.debug-support-btn[data-debug-action="diag"].is-running { animation:debugDiagPulse .38s cubic-bezier(.36,0,.64,1) infinite; background:linear-gradient(135deg, rgba(52,216,255,.26), rgba(0,240,180,.20)); }
+@keyframes debugActionPulse { 0%,100% { transform:scale(1); filter:brightness(1); } 50% { transform:scale(.95); filter:brightness(1.48); } }
+@keyframes debugDiagPulse { 0%,100% { transform:scale(1); filter:brightness(1) saturate(1); } 50% { transform:scale(.91); filter:brightness(1.72) saturate(1.35); } }
+/* Debug export has no meaningful intermediate percentage. A centered modal says
+ * that the request was accepted immediately and stays present until the text log
+ * is either saved or the bridge returns an error. */
+.debug-action-wait { position:fixed; inset:0; z-index:1400; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(0,0,0,.58); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); }
+.debug-action-wait[hidden] { display:none !important; }
+.debug-action-wait-sheet { width:min(310px,100%); padding:22px 20px 20px; border:1px solid rgba(91,230,255,.58); border-radius:20px; background:linear-gradient(145deg, rgba(10,29,35,.98), rgba(4,13,16,.99)); box-shadow:0 0 0 1px rgba(44,214,173,.16), 0 18px 48px rgba(0,0,0,.58), 0 0 30px rgba(44,214,173,.14); text-align:center; }
+.debug-action-wait-spinner { width:34px; height:34px; margin:0 auto 13px; border:3px solid rgba(178,246,255,.20); border-top-color:#78efff; border-right-color:#2cd6ad; border-radius:50%; animation:spin .66s linear infinite; }
+.debug-action-wait-title { color:#d9fbff; font-size:15px; font-weight:800; letter-spacing:.1px; }
+.debug-action-wait-copy { margin-top:8px; color:rgba(225,241,244,.72); font-size:12px; line-height:1.45; }
 .tg-link {
   display: inline-flex;
   align-items: center;
@@ -2305,6 +2321,15 @@ body.config-active #livePage.open {
 </style>
 </head>
 <body>
+<!-- Debug-only actions use this modal while the root export command is executing.
+     It is hidden for normal navigation and contains no destructive control. -->
+<div class="debug-action-wait" id="debugActionWait" hidden role="status" aria-live="assertive" aria-modal="true">
+  <div class="debug-action-wait-sheet">
+    <div class="debug-action-wait-spinner" aria-hidden="true"></div>
+    <div class="debug-action-wait-title" id="debugActionWaitTitle">asbdiag</div>
+    <div class="debug-action-wait-copy" id="debugActionWaitCopy">Please wait</div>
+  </div>
+</div>
 <div class="page">
 
   <!-- HEADER -->
@@ -2370,15 +2395,6 @@ body.config-active #livePage.open {
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
     </div>
 
-    <div class="pbtn pbtn-stock on" data-p="stock" onclick="go('stock')">
-      <div class="pico">📴</div>
-      <div class="pinfo">
-        <div class="pname" data-i18n="prof_stock">Stock</div>
-        <div class="psub" data-i18n="prof_stock_sub">ASB policy off</div>
-      </div>
-      <div class="pload"></div>
-      <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
-    </div>
 
     <div class="pbtn" data-p="balanced" onclick="go('balanced')">
       <div class="pico">⚖️</div>
@@ -2393,6 +2409,16 @@ body.config-active #livePage.open {
       <div class="pico">🔋</div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_battery">Battery</div>
+      </div>
+      <div class="pload"></div>
+      <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+    </div>
+
+    <div class="pbtn pbtn-stock on" data-p="stock" onclick="go('stock')">
+      <div class="pico">📴</div>
+      <div class="pinfo">
+        <div class="pname" data-i18n="prof_stock">Stock</div>
+        <div class="psub" data-i18n="prof_stock_sub">ASB policy off</div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
@@ -3025,6 +3051,26 @@ function debugActionText(result) {
   return map;
 }
 
+function debugActionWaitOpen(action) {
+  const modal = document.getElementById('debugActionWait');
+  const title = document.getElementById('debugActionWaitTitle');
+  const copy = document.getElementById('debugActionWaitCopy');
+  if (!modal || !title || !copy) return;
+  const isDiag = action === 'diag';
+  title.textContent = isDiag ? 'asbdiag' : '24h log';
+  copy.textContent = T(isDiag ? 'dbg_diag_wait' : 'dbg_log_wait',
+                       isDiag ? 'asbdiag started · please wait' : '24h log is starting · please wait');
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function debugActionWaitClose() {
+  const modal = document.getElementById('debugActionWait');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+}
+
 async function asbDebugAction(action) {
   if (!_asbDebugBuild || _asbDebugActionBusy) { toast(T('dbg_only', 'Debug build only'), 'warn'); return; }
   const allowed = action === 'diag' || action === 'full-day';
@@ -3034,6 +3080,9 @@ async function asbDebugAction(action) {
   const activeButtons = buttons.filter(b => b.dataset.debugAction === action);
   buttons.forEach(b => { b.disabled = true; });
   activeButtons.forEach(b => { b.classList.add('is-running'); b.setAttribute('aria-busy', 'true'); });
+  // This is deliberately before the first await: WebView paints the modal and pulse
+  // before KSU starts the potentially multi-second asbdiag export.
+  debugActionWaitOpen(action);
   toast(T(action === 'diag' ? 'dbg_diag_wait' : 'dbg_log_wait',
           action === 'diag' ? 'asbdiag started · please wait' : '24h log is starting · please wait'), 'warn');
   try {
@@ -3054,6 +3103,7 @@ async function asbDebugAction(action) {
     }
   } catch (e) { toast(T(action === 'diag' ? 'dbg_diag_failed' : 'dbg_log_failed', 'Debug action failed'), 'bad'); }
   finally {
+    debugActionWaitClose();
     _asbDebugActionBusy = false;
     activeButtons.forEach(b => { b.classList.remove('is-running'); b.removeAttribute('aria-busy'); });
     buttons.forEach(b => { b.disabled = false; });
