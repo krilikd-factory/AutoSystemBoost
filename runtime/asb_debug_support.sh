@@ -39,6 +39,13 @@ TOKENFILE="$LOCKDIR/token"
 LEGACY_PIDFILE="$STATE_DIR/full_day_webui.pid"
 RUNLOG="${ASB_DEBUG_SUPPORT_RUNLOG:-/data/local/tmp/asb_full_day.out}"
 DIAG_OUTDIR="${ASB_DEBUG_SUPPORT_DIAG_OUTDIR:-/sdcard/Download}"
+# A WebView bridge waits for stdout to close. Long actions therefore need a deliberately
+# detached launcher and a tiny status file: otherwise the browser cannot paint feedback
+# until asbdiag has already finished. This state is debug-only and never touches policy.
+DIAG_LOCKDIR="$STATE_DIR/asbdiag_webui.lock"
+DIAG_PIDFILE="$DIAG_LOCKDIR/pid"
+DIAG_TOKENFILE="$DIAG_LOCKDIR/token"
+DIAG_STATUSFILE="$STATE_DIR/asbdiag_webui.status"
 
 pid_from_file() {
   _pf="${1:-}"
@@ -146,6 +153,34 @@ full_day_status() {
   echo 'status=idle'
 }
 
+diag_lock_live_pid() {
+  _dlp="$(pid_from_file "$DIAG_PIDFILE" 2>/dev/null || true)"
+  [ -n "$_dlp" ] && pid_is_live "$_dlp" || return 1
+  printf '%s' "$_dlp"
+}
+
+diag_status_write() {
+  _ds_tmp="${DIAG_STATUSFILE}.tmp.$$"
+  printf '%s\n' "$@" > "$_ds_tmp" 2>/dev/null && mv -f "$_ds_tmp" "$DIAG_STATUSFILE" 2>/dev/null || rm -f "$_ds_tmp" 2>/dev/null || true
+}
+
+diag_status() {
+  _dspid="$(diag_lock_live_pid 2>/dev/null || true)"
+  if [ -n "$_dspid" ]; then
+    echo 'status=running'
+    echo "pid=$_dspid"
+    return 0
+  fi
+  if [ -d "$DIAG_LOCKDIR" ]; then
+    # A child owns the token but has not published a PID yet. It is intentionally
+    # fail-closed: no second export may start while this small handoff exists.
+    echo 'status=starting'
+    return 0
+  fi
+  [ -r "$DIAG_STATUSFILE" ] && { cat "$DIAG_STATUSFILE"; return 0; }
+  echo 'status=idle'
+}
+
 write_diag() {
   _outdir="$DIAG_OUTDIR"
   [ -d "$_outdir" ] || _outdir="/sdcard"
@@ -165,7 +200,60 @@ write_diag() {
   return 0
 }
 
+diag_start() {
+  [ -x "$MODDIR/system/bin/asbdiag" ] || { echo 'error=asbdiag_missing'; return 4; }
+  mkdir -p "$STATE_DIR" 2>/dev/null || { echo 'error=state_dir_failed'; return 7; }
+  _pid="$(diag_lock_live_pid 2>/dev/null || true)"
+  if [ -n "$_pid" ]; then
+    echo 'status=already_running'; echo "pid=$_pid"; return 0
+  fi
+  if [ -d "$DIAG_LOCKDIR" ]; then
+    # Never remove a PID-less lock: the owner may be between mkdir and publication.
+    echo 'status=already_running'; echo 'pid=starting'; return 0
+  fi
+  if ! mkdir "$DIAG_LOCKDIR" 2>/dev/null; then
+    echo 'status=already_running'; echo 'pid=starting'; return 0
+  fi
+  _token="$(date +%s 2>/dev/null || echo now).$$"
+  if ! printf '%s\n' "$_token" > "$DIAG_TOKENFILE" 2>/dev/null; then
+    rmdir "$DIAG_LOCKDIR" 2>/dev/null || true
+    echo 'error=diag_guard_failed'; return 8
+  fi
+  diag_status_write 'status=starting'
+  # stdout/stderr/stdin are detached BEFORE backgrounding. KSU can therefore return to
+  # WebView immediately; the caller gets a real PID and paints its modal on the next frame.
+  (
+    _owner_token="$_token"
+    # In a POSIX shell $$ in a subshell may still name the parent launcher. Wait for
+    # the parent to publish the actual background PID instead of writing an ambiguous
+    # identity into status, then let only this token owner publish terminal state.
+    _ready=0
+    while [ "$_ready" -lt 20 ]; do
+      _self="$(pid_from_file "$DIAG_PIDFILE" 2>/dev/null || true)"
+      [ -n "$_self" ] && break
+      sleep 0.05
+      _ready=$(( _ready + 1 ))
+    done
+    diag_status_write 'status=running' "pid=${_self:-starting}"
+    _result="$(write_diag)"; _rc=$?
+    if [ "$_rc" -eq 0 ]; then
+      diag_status_write "$_result"
+    else
+      diag_status_write "$_result" 'status=failed'
+    fi
+    [ "$(cat "$DIAG_TOKENFILE" 2>/dev/null || true)" = "$_owner_token" ] && rm -rf "$DIAG_LOCKDIR" 2>/dev/null || true
+  ) </dev/null >/dev/null 2>&1 &
+  _pid=$!
+  if ! printf '%s\n' "$_pid" > "$DIAG_PIDFILE" 2>/dev/null; then
+    # The worker may already be writing. Do not remove an owned lock or expose a second start.
+    echo 'error=diag_guard_unconfirmed'; return 8
+  fi
+  echo 'status=started'
+  echo "pid=$_pid"
+}
+
 start_full_day() {
+  _async="${1:-0}"
   [ -f "$MODDIR/tools/logkit/asb_log_full_day.sh" ] || { echo 'error=logkit_missing'; return 6; }
   mkdir -p "$STATE_DIR" 2>/dev/null || { echo 'error=state_dir_failed'; return 7; }
 
@@ -231,6 +319,16 @@ start_full_day() {
     return 8
   fi
 
+  # The WebUI variant returns as soon as the atomic lock and launcher PID exist. The
+  # recorder still claims its own token before capture; status then reports starting/running.
+  if [ "$_async" = 1 ]; then
+    echo 'status=started'
+    echo "pid=$_pid"
+    echo 'hours=24'
+    echo "log=$RUNLOG"
+    return 0
+  fi
+
   _wait=0
   while [ "$_wait" -lt 3 ]; do
     _claim="$(pid_from_file "$PIDFILE" 2>/dev/null || true)"
@@ -264,6 +362,9 @@ start_full_day() {
 case "${1:-status}" in
   status) full_day_status ;;
   diag) write_diag ;;
+  diag-start) diag_start ;;
+  diag-status) diag_status ;;
   full-day) start_full_day ;;
+  full-day-start) start_full_day 1 ;;
   *) echo 'error=bad_action'; exit 64 ;;
 esac
