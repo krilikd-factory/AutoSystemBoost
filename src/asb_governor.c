@@ -1208,8 +1208,10 @@ static void asb_active_efficiency_load(void) {
 
     if (schema != 1 || !active || malformed || seen != 127 ||
         (strcmp(g_active_efficiency.tier, "sm8750") &&
+         strcmp(g_active_efficiency.tier, "sm8850") &&
          strcmp(g_active_efficiency.tier, "sm8650") &&
-         strcmp(g_active_efficiency.tier, "sm8550"))) {
+         strcmp(g_active_efficiency.tier, "sm8550") &&
+         strcmp(g_active_efficiency.tier, "capability"))) {
         asb_active_efficiency_reset(malformed ? "manifest_invalid" : "manifest_inactive");
         return;
     }
@@ -1301,6 +1303,26 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
         }
     } else if (fsm->thermal_cap || fsm->state == ASB_STATE_SUSTAINED) {
         reason = "platform_thermal";
+    }
+    /*
+     * Universal active thermal recovery for recognised media/feed use. Sustained state keeps
+     * its normal conservative rail, but a warm LTE/video/feed session can keep generating heat
+     * after the interactive burst ends. Reduce that residual generation with the existing light
+     * budget only when a fresh foreground package is positively known as media. This is not a
+     * broad SUSTAINED cap: games and unknown/heavy apps fail closed, as do camera, charging,
+     * screen-off and any missing/stale package signal. It therefore works across SoCs through
+     * capabilities and QoS evidence rather than device names or fixed frequencies.
+     */
+    if (g_asb_cfg.thermal_budget_enable && !fsm->thermal_cap &&
+        fsm->state == ASB_STATE_SUSTAINED &&
+        fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
+        m->misc.screen_on && !m->misc.camera_active && !m->bat.charging &&
+        m->therm.temp_valid && m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp &&
+        m->bat.current_ma >= 450 &&
+        g_pkg_detect_ok && g_smart_media_pkg_known &&
+        g_smart_rt.app_hint < ASB_APP_GAMING) {
+        asb_budget_raise(&candidate, &reason,
+                         g_asb_cfg.thermal_budget_light_trim_pct, "media_recovery");
     }
     base_candidate = candidate;
     if (candidate > 0) {
