@@ -115,6 +115,10 @@ grep -Fq 'g_pkg_detect_ok && g_smart_media_pkg_known' "$SRC" || fail "media reco
 grep -Fq 'g_smart_rt.app_hint < ASB_APP_GAMING' "$SRC" || fail "media recovery game exclusion missing"
 grep -Fq '!m->misc.camera_active && !m->bat.charging' "$SRC" || fail "media recovery camera/charging exclusion missing"
 grep -Fq 'm->bat.current_ma >= 450' "$SRC" || fail "media recovery current evidence gate missing"
+grep -Fq 'media_recovery = !strcmp(g_budget_reason, "media_recovery")' "$SRC" || fail "media recovery must recheck dwell-held reason"
+grep -Fq 'fsm->state == ASB_STATE_SUSTAINED && !media_recovery' "$SRC" || fail "SUSTAINED must stay blocked outside fresh media recovery"
+grep -Fq '(!media_recovery && g_budget_stage < 2)' "$SRC" || fail "light-stage cgroup recovery gate missing"
+grep -Fq 'Foreground/top-app caps are deliberately untouched' "$SRC" || fail "media recovery foreground QoS guarantee missing"
 grep -Fq 'active_efficiency_active=%d' "$SRC" || fail "state telemetry missing"
 
 # The derived manifest must exist before asb_utils.sh starts the governor.
@@ -124,6 +128,7 @@ _utils="$(grep -n 'runtime/asb_utils.sh' "$SERVICE" | head -1 | cut -d: -f1)"
 
 grep -Fq 'active-use envelope' "$DIAG" || fail "diagnostic envelope section missing"
 grep -Fq 'active-use runtime' "$DIAG" || fail "diagnostic runtime telemetry missing"
+grep -Fq 'Vendor already holds a stricter CPU ceiling' "$DIAG" || fail "cooperative vendor ceiling verdict missing"
 grep -Fq '"active_efficiency"' "$EFFECTIVE" || fail "effective-policy JSON telemetry missing"
 grep -Fq 'thermal_budget_envelope_bonus_pct' "$EFFECTIVE" || fail "effective-policy staged budget telemetry missing"
 cmp -s "$DIAG" "$BIN_DIAG" || fail "asbdiag copies differ"

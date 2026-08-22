@@ -25,6 +25,15 @@ mkdir -p "$TMP/sys" "$TMP/modules"
 run_probe
 [ "$(value status "$TMP/out")" = "not_observable" ] || fail "clean device must be not_observable"
 [ "$(value asb_voltage_owner "$TMP/out")" = "external_or_vendor" ] || fail "ASB ownership wording"
+# `opp` is generic operating-point metadata and appears in unrelated Bluetooth properties;
+# it must never by itself produce an external voltage-policy verdict.
+printf '%s\n' '[bluetooth.profile.opp.enabled]: [true]' > "$TMP/props"
+run_probe
+[ "$(value status "$TMP/out")" = "not_observable" ] || fail "Bluetooth OPP property is not UV evidence"
+printf '%s\n' '[persist.kernel.cpu_voltage_offset]: [1]' > "$TMP/props"
+run_probe
+[ "$(value status "$TMP/out")" = "external_uv_hint" ] || fail "explicit voltage property should remain a hint"
+: > "$TMP/props"
 [ "$(value asb_action "$TMP/out")" = "diagnostics_only" ] || fail "diagnostics-only action"
 
 mkdir -p "$TMP/modules/MyUV"
