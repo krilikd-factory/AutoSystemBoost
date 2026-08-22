@@ -1357,10 +1357,22 @@ static void asb_active_efficiency_apply_caps(asb_profile_caps_t *caps,
                                               const asb_metrics_t *m,
                                               const asb_fsm_t *fsm) {
     int delta;
-    (void)m;
+    int media_recovery;
     if (!g_asb_cfg.thermal_budget_enable || !g_active_efficiency.active ||
-        g_budget_stage <= 0 || fsm->thermal_cap ||
-        fsm->state == ASB_STATE_SUSTAINED) return;
+        g_budget_stage <= 0 || fsm->thermal_cap) return;
+
+    /* A warm recognised media/feed SUSTAINED session may shrink background cgroups only.
+     * Re-check every QoS gate here instead of trusting the dwell-held budget reason: an app
+     * switch to a game, camera launch, charging event or stale package evidence immediately
+     * restores the normal policy. Foreground/top-app caps are deliberately untouched. */
+    media_recovery = !strcmp(g_budget_reason, "media_recovery") &&
+                     fsm->state == ASB_STATE_SUSTAINED &&
+                     fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
+                     m && m->misc.screen_on && !m->misc.camera_active && !m->bat.charging &&
+                     m->therm.temp_valid && m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp &&
+                     m->bat.current_ma >= 450 && g_pkg_detect_ok &&
+                     g_smart_media_pkg_known && g_smart_rt.app_hint < ASB_APP_GAMING;
+    if (fsm->state == ASB_STATE_SUSTAINED && !media_recovery) return;
 
     /* Extend existing idle trim only outside PERFORMANCE, gaming/video and thermal-cap paths. */
     if (g_active_efficiency.gpu_idle_bonus_pct > 0 &&
@@ -1374,8 +1386,10 @@ static void asb_active_efficiency_apply_caps(asb_profile_caps_t *caps,
         if (trimmed < caps->gpu_max_pct) caps->gpu_max_pct = trimmed;
     }
 
-    /* Keep foreground/top-app caps intact: only background cgroups lean further. */
-    if (g_budget_stage < 2 || caps->uclamp_bg_max <= 0) return;
+    /* Keep foreground/top-app caps intact: only background cgroups lean further. Known
+     * media recovery is allowed at light stage; every other workload still needs the existing
+     * moderate/severe threshold before background restraint changes. */
+    if ((!media_recovery && g_budget_stage < 2) || caps->uclamp_bg_max <= 0) return;
     delta = g_budget_stage >= 3 ? g_active_efficiency.bg_uclamp_severe_delta
                                 : g_active_efficiency.bg_uclamp_moderate_delta;
     if (delta > 0) {

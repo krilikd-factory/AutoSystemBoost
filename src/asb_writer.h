@@ -98,6 +98,10 @@ static int writer_node_is_cpu(asb_write_node_t node) {
     return node >= ASB_WRITE_CPU_MAX0 && node <= ASB_WRITE_CPU_MIN2;
 }
 
+static int writer_node_is_cpu_max(asb_write_node_t node) {
+    return node >= ASB_WRITE_CPU_MAX0 && node <= ASB_WRITE_CPU_MAX2;
+}
+
 static int writer_write_int_confirmed(asb_write_node_t node, const char *path, int requested) {
     if (!path || !*path || node < 0 || node >= ASB_WRITE_NODE_COUNT) return -1;
     asb_write_health_t *h = &g_write_health[node];
@@ -117,6 +121,20 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         h->consecutive_failures = 0;
         h->retry_at = 0;
         snprintf(h->status, sizeof(h->status), "%s", "applied");
+        return 0;
+    }
+    /* A smaller live CPU maximum still satisfies ASB's request: a ceiling is an
+     * upper bound, and a vendor PowerHAL/thermal owner that holds a stricter bound
+     * is already doing the energy/heat-safe thing. Treat it as cooperative success
+     * instead of reopening a write fight every state transition. The caller keeps
+     * watching for a later vendor raise above the requested ceiling. CPU minimums
+     * are deliberately excluded: a higher floor consumes power and must retain the
+     * existing readback/retry diagnostics. */
+    if (rc == 0 && writer_node_is_cpu_max(node) && observed > 0 && observed < requested) {
+        h->applied++;
+        h->consecutive_failures = 0;
+        h->retry_at = 0;
+        snprintf(h->status, sizeof(h->status), "%s", "vendor_stricter_ceiling");
         return 0;
     }
     h->failures++;
@@ -896,7 +914,12 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                 }
                 if (_snap_idx >= 0) cmax[i] = (int)cpu_snap_freq(_snap_idx, (long)cmax[i]);
             }
-            if (force || cmax[i] != g_wcache.cpu_max[i]) {
+            /* Reassert only when the live ceiling was raised above ASB's requested
+             * bound. A lower vendor ceiling is already energy-safe and is accepted by
+             * writer_write_int_confirmed() as cooperative ownership rather than conflict. */
+            int live_max = sysfs_read_int(g_cpu_max_paths[i], 0);
+            if (force || cmax[i] != g_wcache.cpu_max[i] ||
+                (live_max > 0 && live_max > cmax[i])) {
                 if (cmax[i] <= 0) continue;
                 if (writer_write_int_confirmed((asb_write_node_t)(ASB_WRITE_CPU_MAX0 + i),
                                                g_cpu_max_paths[i], cmax[i]) == 0) {
