@@ -26,7 +26,8 @@ _now() { date +%s 2>/dev/null || echo 0; }
 _trial_key_allowed() {
   case "${1:-}" in
     doze_level|doze_trim_whitelist|wakelock_action|gnss_trim|night_modem_idle|\
-    gms_trim|gms_freeze|UX_MANAGE_OEM_TOGGLES|wifi_country|audio_remove_volume_limit)
+    gms_trim|gms_freeze|UX_MANAGE_OEM_TOGGLES|wifi_country|audio_remove_volume_limit|\
+    smart_media_guard)
       return 0 ;;
     *) return 1 ;;
   esac
@@ -47,7 +48,7 @@ _valid_value() {
     gms_freeze) case "$_vv_v" in off|safe|more) return 0 ;; esac ;;
     wifi_country) case "$_vv_v" in auto|CR|US|DE|JP) return 0 ;; esac ;;
     doze_trim_whitelist|wakelock_action|gnss_trim|night_modem_idle|gms_trim|\
-    UX_MANAGE_OEM_TOGGLES|audio_remove_volume_limit)
+    UX_MANAGE_OEM_TOGGLES|audio_remove_volume_limit|smart_media_guard)
       case "$_vv_v" in 0|1) return 0 ;; esac ;;
   esac
   return 1

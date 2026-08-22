@@ -71,6 +71,16 @@ case "$_k" in
     _resolved="restricted standby bucket after 45+ min screen-off"
     _override="kernel and system sources are never touched"
     ;;
+  smart_media_guard)
+    _owner="native Smart governor; writer-local GPU ceiling overlay"
+    if [ "$_v" = "1" ]; then
+      _resolved="only after 60s of screen-on, discharging, game-like CPU+GPU load in Smart; requires a freshly identified known media app"
+    else
+      _resolved="guard disabled; normal Smart and Gaming policy remains unchanged"
+    fi
+    _override="known games, unknown/stale packages, charging, thermal cap, other profiles and CPU ceilings are excluded"
+    _restart="applies on the next governor tick; Trial reverts automatically unless kept"
+    ;;
   sustained_temp_enter)
     _owner="governor thermal policy"
     _tf="$STATE/thermal_floor"

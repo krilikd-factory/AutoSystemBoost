@@ -230,6 +230,7 @@ _validate() {
   _game_confirm="$(_require_num gaming_confirm_ticks "$_f")"
   _gpu_idle_trim="$(_require_num gpu_idle_trim_pct "$_f")"
   _gpu_video_max="$(_require_num gpu_video_max_pct "$_f")"
+  _smart_media_guard="$(_require_num smart_media_guard "$_f")"
   _thermal_throttle="$(_require_num thermal_throttle_temp "$_f")"
   _bounds_override="$(_require_num device_bounds_override "$_f")"
 
@@ -278,6 +279,7 @@ _validate() {
   _between "$_game_confirm" 1 120 || _die "gaming_confirm_ticks must be 1..120"
   _between "$_gpu_idle_trim" 0 90 || _die "gpu_idle_trim_pct must be 0..90"
   _between "$_gpu_video_max" 0 100 || _die "gpu_video_max_pct must be 0..100"
+  _bool "$_smart_media_guard" || _die "smart_media_guard must be 0 or 1"
   _between "$_thermal_throttle" 30 110 || _die "thermal_throttle_temp must be 30..110"
   _bool "$_bounds_override" || _die "device_bounds_override must be 0 or 1"
   return 0
