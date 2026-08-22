@@ -2460,7 +2460,7 @@ apply_bt_settings() {
     settings delete global bluetooth_disabled_profiles >/dev/null 2>&1 || true
   fi
 }
-asb_feature_enabled BT && apply_bt_settings
+# Bluetooth Settings writes are re-applied by the post-boot framework stage.
 apply_bt_codec_policy() {
   if has settings; then
     asb_settings_put global bluetooth_a2dp_optional_codecs_enabled 1
@@ -2480,7 +2480,7 @@ apply_bt_codec_policy() {
     # to tell which one a future change should follow.
   fi
 }
-asb_feature_enabled BT && apply_bt_codec_policy
+# Bluetooth Settings writes are re-applied by the post-boot framework stage.
 apply_bt_volume_behavior() {
   # Respect the user's bt_absvol_mode (auto|on|off) from governor.conf — the
   _bt_mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
@@ -2513,7 +2513,7 @@ apply_bt_volume_behavior() {
     resetprop -p --delete persist.asb.force_enableabsvol >/dev/null 2>&1 || true
   fi
 }
-asb_feature_enabled BT && apply_bt_volume_behavior
+# Bluetooth settings/props are re-applied by the post-boot framework stage.
 apply_bt_audio_hygiene() {
   if has resetprop; then
     resetprop -p --delete persist.vendor.bt.a2dp.lhdc.bitrate >/dev/null 2>&1 || true
@@ -2537,7 +2537,7 @@ apply_bt_audio_hygiene() {
     # forced — see apply_bt_runtime note: it breaks classic-BLE watch pairing.
   fi
 }
-asb_feature_enabled BT && apply_bt_audio_hygiene
+# Bluetooth audio props are re-applied by the post-boot framework stage.
 if has resetprop; then
     for _k in media.resolution.limit.16bit media.resolution.limit.24bit media.resolution.limit.32bit \
              audio.resolution.limit.16bit audio.resolution.limit.24bit audio.resolution.limit.32bit; do
@@ -2584,7 +2584,7 @@ apply_tracking_block() {
   _sp phenotype_flags "disable_log_upload=1,disable_log_for_missing_debug_id=1"
   _sp binder_calls_stats "sampling_interval=600000000,detailed_tracking=disable,enabled=false,upload_data=false"
 }
-asb_feature_enabled LOG && apply_tracking_block
+# Tracking Settings writes are re-applied by the post-boot framework stage.
 
 apply_camera_experimental() {
   # The proven-working OP12 build ran this on pineapple too (it set MFNR/EIS/SAT/
@@ -2677,23 +2677,25 @@ svc_stop_guarded() {
   done
   return 0
 }
-for s in \
-  qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd \
-  minidump minidump32 minidump64 bootstat poweroff_charger_log \
-  ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start \
-  mmi-diag qcom-diag tftp_server tcpdump modem_svc logcat-debug \
-  midasd batterysecret \
-  mdnsd \
-  oplus_sensor_fb vendor.oplus.sensor.fb \
-  oplus_crash_report \
-  oplusdebuglogauto \
-  vendor.oplus.logkit oplus_logctl \
-  oplus_gaia oplus_theia theia_screen_monitor \
-  qcom_diag_relay vendor.qti.diag \
-  oplusd mlipay \
-; do
-  svc_stop_guarded "$s"
-done
+asb_stop_nonessential_services() {
+  for s in \
+    qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd \
+    minidump minidump32 minidump64 bootstat poweroff_charger_log \
+    ostatsd charge_logger iorapd cnss_diag diag_mdlog diag_mdlog_start \
+    mmi-diag qcom-diag tftp_server tcpdump modem_svc logcat-debug \
+    midasd batterysecret \
+    mdnsd \
+    oplus_sensor_fb vendor.oplus.sensor.fb \
+    oplus_crash_report \
+    oplusdebuglogauto \
+    vendor.oplus.logkit oplus_logctl \
+    oplus_gaia oplus_theia theia_screen_monitor \
+    qcom_diag_relay vendor.qti.diag \
+    oplusd mlipay \
+  ; do
+    svc_stop_guarded "$s"
+  done
+}
 apply_zram() {
   [ -e /sys/block/zram0 ] || return 0
   CPU_CORES=$(nproc 2>/dev/null || echo 8)
@@ -2748,7 +2750,7 @@ apply_doze() {
   esac
   asb_settings_put global device_idle_constants "$_DIC"
 }
-asb_feature_enabled VM && apply_doze
+# DeviceIdle framework write is deferred to post-boot.
 # network_stats_poll_interval: how often the framework polls per-app network
 apply_network_stats_poll() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
@@ -2770,7 +2772,7 @@ apply_network_stats_poll() {
     asb_settings_put global network_stats_poll_interval 1800000
   fi
 }
-asb_feature_enabled VM && apply_network_stats_poll
+# NetworkStats Settings write is deferred to post-boot.
 apply_extra_settings() {
   has settings || return 0
   # Gated on audio_remove_volume_limit; see governor.conf. Re-asserting it every boot
@@ -2802,7 +2804,10 @@ apply_extra_settings() {
   asb_settings_put global captive_portal_fallback_url "http://connectivitycheck.gstatic.com/generate_204"
   asb_settings_put global captive_portal_other_fallback_url "https://www.google.com/generate_204"
 }
-apply_extra_settings
+# Extra Settings writes are deferred to post-boot. Keep ZRAM and kernel-node work above here:
+# they are memory/driver policy rather than framework IPC and may be needed before the first UI.
+asb_timeline_mark service_runtime_kernel_memory_complete
+asb_timeline_mark service_runtime_framework_deferred
 asb_timeline_mark service_runtime_core_complete
 asb_load_profile
 # POSIX check, not "type -t".
@@ -2985,6 +2990,22 @@ fi
   fi
   asb_feature_enabled GPS && apply_gps_hygiene
   asb_timeline_mark post_boot_connectivity_complete
+
+  # These calls use Settings, DeviceIdle, package/service state or many framework IPCs. They
+  # used to occupy the 11-second media/kernel -> runtime-core boot interval on the OP15.
+  asb_timeline_mark post_boot_runtime_framework_begin
+  if asb_feature_enabled BT; then
+    apply_bt_settings
+    apply_bt_codec_policy
+    apply_bt_volume_behavior
+    apply_bt_audio_hygiene
+  fi
+  asb_feature_enabled LOG && apply_tracking_block
+  asb_feature_enabled VM && apply_doze
+  asb_feature_enabled VM && apply_network_stats_poll
+  apply_extra_settings
+  asb_stop_nonessential_services
+  asb_timeline_mark post_boot_runtime_framework_complete
 
   # Athena: pm component state does not survive a reboot on every build, so re-assert it late.
   if [ -f "$MODDIR/runtime/asb_athena_apply.sh" ]; then
