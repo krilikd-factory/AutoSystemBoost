@@ -47,20 +47,22 @@ if _num "$_policies" && _num "$_zones" && [ "$_policies" -ge 2 ] 2>/dev/null && 
     sm8750*|sun*)
       # Reference family: smallest extra nudge. It only engages after ASB thermal budget does.
       _status="active"; _reason="supported_sm8750"; _tier="sm8750"
-      _light=1; _moderate=2; _severe=1; _gpu_bonus=1; _bg_moderate=48; _bg_severe=96
+      _light=1; _moderate=2; _severe=2; _gpu_bonus=1; _bg_moderate=48; _bg_severe=96
       ;;
     sm8850*|canoe*)
       # Snapdragon 8 Elite Gen 5 / canoe: same conservative, percentage-only envelope.
       # It is deliberately not a fixed-clock device pack and stays inactive until the
       # established thermal budget has real heat/current evidence.
       _status="active"; _reason="supported_sm8850"; _tier="sm8850"
-      _light=1; _moderate=2; _severe=1; _gpu_bonus=1; _bg_moderate=48; _bg_severe=96
+      # The native loader accepts only monotonic staged restraint. Keep the deltas deliberately
+      # small, but a severe stage may never be below moderate or the manifest is rejected.
+      _light=1; _moderate=2; _severe=2; _gpu_bonus=1; _bg_moderate=48; _bg_severe=96
       ;;
     sm8650*|pineapple*|lanai*)
       # 8 Gen 3 family: retain interactive prime bounds, cool through steady-state ceiling
       # restraint and background uclamp instead of a universal frequency cap.
       _status="active"; _reason="supported_sm8650"; _tier="sm8650"
-      _light=1; _moderate=3; _severe=2; _gpu_bonus=2; _bg_moderate=64; _bg_severe=128
+      _light=1; _moderate=3; _severe=3; _gpu_bonus=2; _bg_moderate=64; _bg_severe=128
       ;;
     sm8550*|kalama*)
       # 8 Gen 2 family: conservative envelope; background work is reduced before foreground
@@ -69,7 +71,13 @@ if _num "$_policies" && _num "$_zones" && [ "$_policies" -ge 2 ] 2>/dev/null && 
       _light=1; _moderate=2; _severe=2; _gpu_bonus=1; _bg_moderate=64; _bg_severe=112
       ;;
     *)
-      _reason="unknown_soc"
+      # Universal capability baseline. A SoC name alone is not trusted, but a device that
+      # exposes the required CPU topology, GPU backend and thermal domain can safely use this
+      # smallest percentage/uclamp-only envelope. It deliberately has no fixed OPP/frequency,
+      # voltage, scheduler or vendor-thermal writes; unsupported or incomplete hardware stays
+      # a transparent no-op before reaching this branch.
+      _status="active"; _reason="capability_baseline"; _tier="capability"
+      _light=1; _moderate=1; _severe=1; _gpu_bonus=1; _bg_moderate=32; _bg_severe=64
       ;;
   esac
 else
