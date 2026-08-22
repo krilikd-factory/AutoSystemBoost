@@ -2894,69 +2894,80 @@ fi
   done
 ) >/dev/null 2>&1 &
 
-if [ -f "$MODDIR/runtime/asb_gms_freeze.sh" ]; then
-  sh "$MODDIR/runtime/asb_gms_freeze.sh" >/dev/null 2>&1
-fi
-
-if [ -f "$MODDIR/runtime/asb_gms_trim.sh" ]; then
-  sh "$MODDIR/runtime/asb_gms_trim.sh" >/dev/null 2>&1
-fi
-
-if [ -f "$MODDIR/runtime/asb_system_tweaks.sh" ]; then
-  sh "$MODDIR/runtime/asb_system_tweaks.sh" >/dev/null 2>&1
-fi
-
-# Athena: pm component state does not survive a reboot on every build, so re-assert it.
-if [ -f "$MODDIR/runtime/asb_athena_apply.sh" ]; then
-  case "$(grep -E '^[[:space:]]*athena_service=' "$MODDIR/config/governor.conf" 2>/dev/null \
-          | head -1 | sed 's/.*=//' | tr -d ' \r')" in
-    off) sh "$MODDIR/runtime/asb_athena_apply.sh" >/dev/null 2>&1 ;;
-  esac
-fi
-
-# Network offload: RPS/RFS and queue depth do not survive a reboot or an interface reset.
-if [ -f "$MODDIR/runtime/asb_net_offload.sh" ]; then
-  sh "$MODDIR/runtime/asb_net_offload.sh" >/dev/null 2>&1
-fi
-
-if [ -f "$MODDIR/runtime/asb_doze_apply.sh" ]; then
-  case "$(grep -E '^[[:space:]]*doze_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
-          | head -1 | sed 's/.*=//' | tr -d ' \r')" in
-    moderate|aggressive|night) sh "$MODDIR/runtime/asb_doze_apply.sh" >/dev/null 2>&1 ;;
-  esac
-fi
-
-if [ -f "$MODDIR/runtime/asb_log_apply.sh" ]; then
-  sh "$MODDIR/runtime/asb_log_apply.sh" >/dev/null 2>&1
-fi
-
-if [ -f "$MODDIR/runtime/asb_net_apply.sh" ]; then
-  _asb_net_any=0
-  for _nk in net_congestion net_qdisc wifi_country wifi_scan_throttle; do
-    _nv="$(grep -E "^[[:space:]]*$_nk=" "$MODDIR/config/governor.conf" 2>/dev/null \
-           | head -1 | sed 's/.*=//' | tr -d ' \r')"
-    case "$_nv" in ''|auto) : ;; *) _asb_net_any=1 ;; esac
+# These helpers re-assert user choices, but several enter framework/package-manager code
+# (`pm disable`, `cmd appops`, `cmd -w wifi`, DeviceIdle). Running them inline during a
+# userspace reboot makes init wait behind service recovery and can turn a fast reboot into a
+# visibly slow one. They are non-critical at the first frame: defer them until boot completed,
+# then give framework services a short settle window. Every action remains enabled and is still
+# applied on every boot; only its scheduling is changed.
+(
+  _asb_pb_wait=0
+  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_asb_pb_wait" -lt 180 ]; do
+    sleep 3
+    _asb_pb_wait=$((_asb_pb_wait + 3))
   done
-  if [ "$_asb_net_any" = "1" ]; then
-    sh "$MODDIR/runtime/asb_net_apply.sh" >/dev/null 2>&1
-    asb_log "net settings re-asserted"
+  [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || {
+    asb_log "post_boot_tweaks: skipped (boot completion timeout)"
+    exit 0
+  }
+  sleep 8
+  asb_log "post_boot_tweaks: begin"
+
+  [ -f "$MODDIR/runtime/asb_gms_freeze.sh" ] && \
+    sh "$MODDIR/runtime/asb_gms_freeze.sh" >/dev/null 2>&1
+  [ -f "$MODDIR/runtime/asb_gms_trim.sh" ] && \
+    sh "$MODDIR/runtime/asb_gms_trim.sh" >/dev/null 2>&1
+  [ -f "$MODDIR/runtime/asb_system_tweaks.sh" ] && \
+    sh "$MODDIR/runtime/asb_system_tweaks.sh" >/dev/null 2>&1
+
+  # Athena: pm component state does not survive a reboot on every build, so re-assert it late.
+  if [ -f "$MODDIR/runtime/asb_athena_apply.sh" ]; then
+    case "$(grep -E '^[[:space:]]*athena_service=' "$MODDIR/config/governor.conf" 2>/dev/null \
+            | head -1 | sed 's/.*=//' | tr -d ' \r')" in
+      off) sh "$MODDIR/runtime/asb_athena_apply.sh" >/dev/null 2>&1 ;;
+    esac
   fi
 
-  # Route windows follow the link, so they have to be re-applied when the link changes - WiFi
-  # to mobile, one AP to another, a new IP.
-  _asb_rt="$(grep -E '^[[:space:]]*net_route_tune=' "$MODDIR/config/governor.conf" 2>/dev/null \
+  # Network offload and route tuning do not need to delay initial UI or userspace reboot.
+  [ -f "$MODDIR/runtime/asb_net_offload.sh" ] && \
+    sh "$MODDIR/runtime/asb_net_offload.sh" >/dev/null 2>&1
+  if [ -f "$MODDIR/runtime/asb_doze_apply.sh" ]; then
+    case "$(grep -E '^[[:space:]]*doze_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
+            | head -1 | sed 's/.*=//' | tr -d ' \r')" in
+      moderate|aggressive|night) sh "$MODDIR/runtime/asb_doze_apply.sh" >/dev/null 2>&1 ;;
+    esac
+  fi
+  [ -f "$MODDIR/runtime/asb_log_apply.sh" ] && \
+    sh "$MODDIR/runtime/asb_log_apply.sh" >/dev/null 2>&1
+
+  if [ -f "$MODDIR/runtime/asb_net_apply.sh" ]; then
+    _asb_net_any=0
+    for _nk in net_congestion net_qdisc wifi_country wifi_scan_throttle; do
+      _nv="$(grep -E "^[[:space:]]*$_nk=" "$MODDIR/config/governor.conf" 2>/dev/null \
              | head -1 | sed 's/.*=//' | tr -d ' \r')"
-  case "$_asb_rt" in
-    auto|conservative|aggressive)
-      if [ -f "$MODDIR/runtime/asb_net_routes.sh" ] && command -v ip >/dev/null 2>&1; then
-        if ! pgrep -f "asb_net_routes.sh watch" >/dev/null 2>&1; then
-          ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_routes.sh" watch >/dev/null 2>&1 & ) &
-          asb_log "net routes: link watcher started"
+      case "$_nv" in ''|auto) : ;; *) _asb_net_any=1 ;; esac
+    done
+    if [ "$_asb_net_any" = "1" ]; then
+      sh "$MODDIR/runtime/asb_net_apply.sh" >/dev/null 2>&1
+      asb_log "net settings re-asserted (post-boot)"
+    fi
+
+    # Route windows follow the link, so start their watcher only after framework networking settles.
+    _asb_rt="$(grep -E '^[[:space:]]*net_route_tune=' "$MODDIR/config/governor.conf" 2>/dev/null \
+               | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    case "$_asb_rt" in
+      auto|conservative|aggressive)
+        if [ -f "$MODDIR/runtime/asb_net_routes.sh" ] && command -v ip >/dev/null 2>&1; then
+          if ! pgrep -f "asb_net_routes.sh watch" >/dev/null 2>&1; then
+            ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_routes.sh" watch >/dev/null 2>&1 & ) &
+            asb_log "net routes: link watcher started (post-boot)"
+          fi
         fi
-      fi
-      ;;
-  esac
-fi
+        ;;
+    esac
+  fi
+  asb_log "post_boot_tweaks: complete"
+) >/dev/null 2>&1 &
 
 if [ -f "$MODDIR/runtime/asb_haptics_apply.sh" ]; then
   _asb_hap_conf="$MODDIR/config/governor.conf"
