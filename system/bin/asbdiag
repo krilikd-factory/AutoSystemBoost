@@ -100,7 +100,16 @@ fi
 SEC "0. BOOT TIMELINE  (debug-only passive lifecycle evidence)"
 _boot_timeline="/data/adb/asb/boot_timeline.tsv"
 _boot_version="$(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | cut -d= -f2)"
-case "$_boot_version" in *-debug[1-9][0-9]*) _boot_debug=1 ;; *) _boot_debug=0 ;; esac
+# Keep this strict numeric debug-build rule in lockstep with runtime/asb_boot_timeline.sh
+# and runtime/asb_debug_support.sh. A shell glob such as [1-9][0-9]* accidentally
+# requires at least two digits, so it misclassified V64-debug4 as a release build.
+_boot_debug=0
+_boot_seq="${_boot_version##*-debug}"
+case "$_boot_version:$_boot_seq" in
+  *-debug[1-9]*:[1-9]*)
+    case "$_boot_seq" in *[!0-9]*) ;; *) _boot_debug=1 ;; esac
+    ;;
+esac
 if [ "$_boot_debug" = "1" ]; then
   if [ -r "$_boot_timeline" ]; then
     _boot_rows="$(grep -cv '^#' "$_boot_timeline" 2>/dev/null)"
