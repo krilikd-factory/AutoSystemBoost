@@ -42,6 +42,26 @@ for _helper in asb_gms_freeze.sh asb_gms_trim.sh asb_system_tweaks.sh asb_athena
   [ -n "$_call_line" ] && [ "$_call_line" -gt "$_pb_line" ] || fail "$_helper is not deferred after boot completion"
 done
 
+# Aggressive BG_TRIM reaches PackageManager, app-standby buckets, cgroup UID lookups and
+# vendor services. It previously ran before boot-completed and is therefore a plausible
+# contributor to the measured 48-second OP15 service interval. Preserve its policy but run it
+# only from the detached worker, after the same lifecycle gate as other framework work.
+absent "$SERVICE" 'asb_feature_enabled BG_TRIM && apply_bg_trim_runtime'
+_bg_line="$(grep -nF '    apply_bg_trim_runtime' "$SERVICE" | head -1 | cut -d: -f1)"
+[ -n "$_bg_line" ] && [ "$_bg_line" -gt "$_pb_line" ] || fail 'BG_TRIM is not deferred after boot completion'
+need "$SERVICE" 'asb_timeline_mark service_maintenance_complete'
+need "$SERVICE" 'asb_timeline_mark service_cpu_complete'
+need "$SERVICE" 'asb_timeline_mark service_vm_complete'
+need "$SERVICE" 'asb_timeline_mark service_network_complete'
+need "$SERVICE" 'asb_timeline_mark service_connectivity_complete'
+need "$SERVICE" 'asb_timeline_mark service_media_kernel_complete'
+need "$SERVICE" 'asb_timeline_mark service_runtime_core_complete'
+need "$SERVICE" 'asb_timeline_mark service_dispatched'
+need "$SERVICE" 'asb_timeline_mark post_boot_bgtrim_begin'
+need "$SERVICE" 'asb_timeline_mark post_boot_bgtrim_complete'
+need "$SERVICE" 'ASB_TIMELINE_DEBUG=0'
+need "$SERVICE" 'case "$_asb_timeline_seq" in *[!0-9]*) ;; *) ASB_TIMELINE_DEBUG=1 ;; esac'
+
 python3 - "$ROOT" <<'PY'
 import json, sys
 from pathlib import Path
