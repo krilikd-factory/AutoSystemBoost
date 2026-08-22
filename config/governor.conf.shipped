@@ -477,6 +477,12 @@ gpu_video_busy_min=40
 #   stutter on high-refresh 4K content.
 gpu_video_max_pct=70
 
+# Smart Media Guard (opt-in): only in the Smart profile, and only for a freshly
+# identified foreground non-game app that remains game-like CPU+GPU heavy for a minute.
+# It narrows the effective GPU ceiling to the existing 70% media envelope; it never
+# changes CPU floors, power-network policy, audio playback or known-game behavior.
+smart_media_guard=0
+
 # --- Device-adaptive bounds (Phase 2) --- 0 = governor uses its compiled-in OP15 bounds
 # (default, what ships).
 device_bounds_override=1
