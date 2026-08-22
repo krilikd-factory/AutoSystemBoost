@@ -494,5 +494,10 @@
   "cfg_reset_dialog_copy": "Tam olarak neyi sıfırlayacağınızı seçin. Bir seçeneği onaylayana kadar hiçbir şey değişmez.",
   "cfg_reset_dialog_title": "Sıfırla",
   "cfg_reset_smart_copy": "Kategori ayarlarını korur ve yalnızca Smart’ın öğrendiği davranışı temizler.",
-  "cfg_reset_smart_title": "Smart öğrenmesini sıfırla"
+  "cfg_reset_smart_title": "Smart öğrenmesini sıfırla",
+  "prof_stock": "Stok",
+  "prof_stock_sub": "ASB ilkesi kapalı",
+  "t_stock_applied": "Stok etkin · ASB ilkesi durduruldu · yeniden başlatma önerilir",
+  "dbg_diag_wait": "asbdiag başlatıldı · lütfen bekleyin",
+  "dbg_log_wait": "24s günlük başlatılıyor · lütfen bekleyin"
 }

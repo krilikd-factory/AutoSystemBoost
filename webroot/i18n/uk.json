@@ -494,5 +494,10 @@
   "cfg_reset_dialog_copy": "Виберіть, що саме скинути. Нічого не зміниться, доки ви не підтвердите варіант.",
   "cfg_reset_dialog_title": "Скидання",
   "cfg_reset_smart_copy": "Зберігає налаштування категорій і очищає лише поведінку, якої навчився Smart.",
-  "cfg_reset_smart_title": "Скинути навчання Smart"
+  "cfg_reset_smart_title": "Скинути навчання Smart",
+  "prof_stock": "Сток",
+  "prof_stock_sub": "Політику ASB вимкнено",
+  "t_stock_applied": "Сток активний · політику ASB зупинено · рекомендовано перезавантаження",
+  "dbg_diag_wait": "asbdiag запущено · зачекайте",
+  "dbg_log_wait": "24h log запускається · зачекайте"
 }

@@ -494,5 +494,10 @@
   "cfg_reset_dialog_copy": "Scegli esattamente cosa reimpostare. Nulla cambia finché non confermi un’opzione.",
   "cfg_reset_dialog_title": "Reimposta",
   "cfg_reset_smart_copy": "Mantiene le impostazioni di categoria e cancella solo il comportamento appreso da Smart.",
-  "cfg_reset_smart_title": "Reimposta apprendimento Smart"
+  "cfg_reset_smart_title": "Reimposta apprendimento Smart",
+  "prof_stock": "Originale",
+  "prof_stock_sub": "Criterio ASB disattivato",
+  "t_stock_applied": "Originale attivo · criterio ASB arrestato · riavvio consigliato",
+  "dbg_diag_wait": "asbdiag avviato · attendere",
+  "dbg_log_wait": "Il log di 24h si sta avviando · attendere"
 }

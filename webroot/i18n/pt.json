@@ -494,5 +494,10 @@
   "cfg_reset_dialog_copy": "Escolha exatamente o que redefinir. Nada muda até confirmar uma opção.",
   "cfg_reset_dialog_title": "Redefinir",
   "cfg_reset_smart_copy": "Mantém as configurações de categoria e limpa apenas o comportamento aprendido pelo Smart.",
-  "cfg_reset_smart_title": "Redefinir aprendizado Smart"
+  "cfg_reset_smart_title": "Redefinir aprendizado Smart",
+  "prof_stock": "Padrão",
+  "prof_stock_sub": "Política ASB desativada",
+  "t_stock_applied": "Padrão ativo · política ASB parada · reinicialização recomendada",
+  "dbg_diag_wait": "asbdiag iniciado · aguarde",
+  "dbg_log_wait": "O log de 24h está iniciando · aguarde"
 }

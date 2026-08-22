@@ -494,5 +494,10 @@
   "cfg_reset_dialog_copy": "选择要重置的内容。确认选项前不会发生任何更改。",
   "cfg_reset_dialog_title": "重置",
   "cfg_reset_smart_copy": "保留类别设置，仅清除 Smart 已学习的行为。",
-  "cfg_reset_smart_title": "重置 Smart 学习"
+  "cfg_reset_smart_title": "重置 Smart 学习",
+  "prof_stock": "原生",
+  "prof_stock_sub": "ASB 策略已关闭",
+  "t_stock_applied": "原生模式已启用 · ASB 策略已停止 · 建议重启",
+  "dbg_diag_wait": "asbdiag 已启动 · 请稍候",
+  "dbg_log_wait": "24 小时日志正在启动 · 请稍候"
 }

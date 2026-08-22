@@ -73,11 +73,11 @@
       "more": "more"
     },
     "log_level": {
-      "stock": "stock",
       "0": "extreme",
       "1": "normal",
       "2": "detailed",
-      "3": "debug"
+      "3": "debug",
+      "stock": "stock"
     },
     "doze_trim_whitelist": {
       "0": "leave alone",
@@ -166,11 +166,11 @@
     },
     "log_level": {
       "descOpt": {
-        "stock": "ASB does not touch the device's logging at all.",
         "0": "Extreme: cuts device logging as far as it goes. Saves writes and wakeups, and makes almost any bug report from this phone useless.",
         "1": "Normal. Significant events only - what the module has always done.",
         "2": "Detailed: adds learner updates and screen transitions. Turn this on before sending a battery log.",
-        "3": "Verbose. Fills the log fast; only while reproducing something."
+        "3": "Verbose. Fills the log fast; only while reproducing something.",
+        "stock": "ASB does not touch the device's logging at all."
       }
     },
     "sustained_temp_mode": {
@@ -411,5 +411,10 @@
   "dbg_diag_failed": "Could not collect asbdiag",
   "dbg_log_started": "24h log started",
   "dbg_log_running": "24h log is already running",
-  "dbg_log_failed": "Could not start 24h log"
+  "dbg_log_failed": "Could not start 24h log",
+  "prof_stock": "Stock",
+  "prof_stock_sub": "ASB policy off",
+  "t_stock_applied": "Stock active · ASB policy stopped · reboot recommended",
+  "dbg_diag_wait": "asbdiag started · please wait",
+  "dbg_log_wait": "24h log is starting · please wait"
 }

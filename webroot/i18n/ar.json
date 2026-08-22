@@ -494,5 +494,10 @@
   "cfg_reset_dialog_copy": "اختر بدقة ما تريد إعادة تعيينه. لن يتغير شيء حتى تؤكد خياراً.",
   "cfg_reset_dialog_title": "إعادة تعيين",
   "cfg_reset_smart_copy": "يحتفظ بإعدادات الفئات ويمسح فقط السلوك الذي تعلمه Smart.",
-  "cfg_reset_smart_title": "إعادة تعيين تعلّم Smart"
+  "cfg_reset_smart_title": "إعادة تعيين تعلّم Smart",
+  "prof_stock": "النظام",
+  "prof_stock_sub": "سياسة ASB متوقفة",
+  "t_stock_applied": "النظام مفعّل · سياسة ASB متوقفة · يوصى بإعادة التشغيل",
+  "dbg_diag_wait": "بدأ asbdiag · يُرجى الانتظار",
+  "dbg_log_wait": "يبدأ سجل 24h · يُرجى الانتظار"
 }

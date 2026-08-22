@@ -494,5 +494,10 @@
   "cfg_reset_dialog_copy": "Pilih tepat apa yang akan diatur ulang. Tidak ada yang berubah hingga Anda mengonfirmasi pilihan.",
   "cfg_reset_dialog_title": "Atur ulang",
   "cfg_reset_smart_copy": "Mempertahankan pengaturan kategori dan hanya menghapus perilaku yang dipelajari Smart.",
-  "cfg_reset_smart_title": "Atur ulang pembelajaran Smart"
+  "cfg_reset_smart_title": "Atur ulang pembelajaran Smart",
+  "prof_stock": "Bawaan",
+  "prof_stock_sub": "Kebijakan ASB mati",
+  "t_stock_applied": "Bawaan aktif · kebijakan ASB dihentikan · disarankan mulai ulang",
+  "dbg_diag_wait": "asbdiag dimulai · harap tunggu",
+  "dbg_log_wait": "Log 24h sedang dimulai · harap tunggu"
 }

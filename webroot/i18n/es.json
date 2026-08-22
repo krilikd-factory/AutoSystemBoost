@@ -494,5 +494,10 @@
   "cfg_reset_dialog_copy": "Elige exactamente qué restablecer. Nada cambia hasta confirmar una opción.",
   "cfg_reset_dialog_title": "Restablecer",
   "cfg_reset_smart_copy": "Conserva los ajustes de categoría y borra solo el comportamiento aprendido por Smart.",
-  "cfg_reset_smart_title": "Restablecer aprendizaje Smart"
+  "cfg_reset_smart_title": "Restablecer aprendizaje Smart",
+  "prof_stock": "Original",
+  "prof_stock_sub": "Política de ASB desactivada",
+  "t_stock_applied": "Original activo · política de ASB detenida · se recomienda reiniciar",
+  "dbg_diag_wait": "asbdiag iniciado · espera",
+  "dbg_log_wait": "El registro de 24h se está iniciando · espera"
 }

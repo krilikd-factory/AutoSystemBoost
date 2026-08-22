@@ -494,5 +494,10 @@
   "cfg_reset_dialog_copy": "Genau auswählen, was zurückgesetzt werden soll. Erst nach Bestätigung wird etwas geändert.",
   "cfg_reset_dialog_title": "Zurücksetzen",
   "cfg_reset_smart_copy": "Behält die Kategorieeinstellungen und löscht nur das von Smart gelernte Verhalten.",
-  "cfg_reset_smart_title": "Smart-Lernen zurücksetzen"
+  "cfg_reset_smart_title": "Smart-Lernen zurücksetzen",
+  "prof_stock": "Standard",
+  "prof_stock_sub": "ASB-Richtlinie aus",
+  "t_stock_applied": "Standard aktiv · ASB-Richtlinie gestoppt · Neustart empfohlen",
+  "dbg_diag_wait": "asbdiag gestartet · bitte warten",
+  "dbg_log_wait": "24h-Protokoll startet · bitte warten"
 }
