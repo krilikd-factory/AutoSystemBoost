@@ -62,6 +62,31 @@ need "$SERVICE" 'asb_timeline_mark post_boot_bgtrim_complete'
 need "$SERVICE" 'ASB_TIMELINE_DEBUG=0'
 need "$SERVICE" 'case "$_asb_timeline_seq" in *[!0-9]*) ;; *) ASB_TIMELINE_DEBUG=1 ;; esac'
 
+# Wi-Fi readiness can wait for wlan0/operstate (10 + 15 seconds), with a separate link
+# reassertion that can wait longer. The OP15 timeline measured 19 seconds in that stage before
+# boot completion, so all initial Wi-Fi/GPS/qdisc actions must be owned by post-boot worker.
+need "$SERVICE" 'asb_timeline_mark post_boot_connectivity_begin'
+need "$SERVICE" 'asb_timeline_mark post_boot_connectivity_complete'
+_conn_line="$(grep -nF 'asb_timeline_mark post_boot_connectivity_begin' "$SERVICE" | head -1 | cut -d: -f1)"
+[ -n "$_conn_line" ] && [ "$_conn_line" -gt "$_pb_line" ] || fail 'post-boot connectivity marker is not lifecycle-gated'
+for _connect_call in \
+  '    asb_wifi_cc_heal' \
+  '    apply_wifi_settings' \
+  '    apply_wifi_country' \
+  '    apply_wlan0_txqlen' \
+  '    apply_wlan0_qdisc' \
+  '    apply_wifi_pm' \
+  '    apply_wifi_dtim' \
+  '    apply_mobile_qdisc' \
+  '    apply_net_steering' \
+  '  asb_feature_enabled GPS && apply_gps_hygiene' \
+  '    ( asb_wifi_link_reassert ) >/dev/null 2>&1 &'; do
+  _connect_line="$(grep -nF "$_connect_call" "$SERVICE" | head -1 | cut -d: -f1)"
+  [ -n "$_connect_line" ] && [ "$_connect_line" -gt "$_conn_line" ] || fail "connectivity call not deferred: $_connect_call"
+done
+need "$SERVICE" 'asb_wifi_link_reassert() {'
+need "$SERVICE" 'never launched during the init/service startup path'
+
 python3 - "$ROOT" <<'PY'
 import json, sys
 from pathlib import Path
