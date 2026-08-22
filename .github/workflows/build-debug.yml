@@ -27,7 +27,7 @@ jobs:
         run: |
           # Source archives and browser uploads can lose git executable mode bits. These two
           # runtime helpers are explicitly executed by their safety contracts below.
-          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh tools/asb_kernel_uv_coexist.sh
+          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh tools/asb_kernel_uv_coexist.sh
 
       - name: Validate required source files
         run: |
@@ -72,6 +72,7 @@ jobs:
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
             runtime/asb_active_efficiency_envelope.sh \
+            runtime/asb_boot_timeline.sh \
             runtime/asb_debug_support.sh \
             runtime/asb_stock_policy.sh \
             tools/asb_config_backup.sh \
@@ -482,6 +483,7 @@ jobs:
             "runtime/asb_athena_apply.sh" \
             "runtime/asb_config_safe.sh" \
             "runtime/asb_quick_restart.sh" \
+            "runtime/asb_boot_timeline.sh" \
             "runtime/asb_debug_support.sh" \
             "runtime/asb_stock_policy.sh" \
             "runtime/asb_active_efficiency_envelope.sh" \
