@@ -64,6 +64,7 @@ for test_file in \
   run_optional "$(basename "$test_file" .sh)" "$test_file" sh
 done
 run_optional 'debug support' tests/test_debug_support_contract.sh bash
+run_optional 'Stock profile' tests/test_stock_profile_contract.sh sh
 run_optional 'V62-to-V64 migration' tests/test_v62_to_v64_migration.sh bash
 run 'effective policy JSON' bash -c 'MODDIR="$1" sh tools/asb_effective_policy.sh | python3 -m json.tool >/dev/null' _ "$ROOT"
 cmp -s tools/asb_diag.sh system/bin/asbdiag || { echo 'ERROR: asbdiag copies differ' >&2; exit 1; }

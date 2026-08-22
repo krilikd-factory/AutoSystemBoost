@@ -35,13 +35,20 @@ _psi_avg10() {
 [ -r "$CONF" ] || { echo '{"error":"governor.conf unavailable"}'; exit 1; }
 _dups="$(awk '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {p=index($0,"="); if(!p)next; k=substr($0,1,p-1); gsub(/^[[:space:]]+|[[:space:]]+$/,"",k); if(++seen[k]>1)n++} END{print n+0}' "$CONF")"
 if [ "$_dups" = "0" ]; then _cfg_health="valid"; else _cfg_health="duplicate_keys"; fi
-_prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"; _prof="${_prof:-balanced}"
+_prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"; _prof="${_prof:-stock}"
 _sm="$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)"; _sm="${_sm:-$(_cfg smart_mode_enabled)}"
-if [ "$_sm" = "1" ] || [ "$_prof" = "smart" ]; then _owner="governor_fsm"; else _owner="service_manual"; fi
+if [ "$_prof" = "stock" ]; then
+  _owner="rom_stock"
+  _cpu_min_strategy="not_managed"
+elif [ "$_sm" = "1" ] || [ "$_prof" = "smart" ]; then
+  _owner="governor_fsm"
+else
+  _owner="service_manual"
+fi
 _fsm_state="$(_state state)"
 if [ "$_owner" = "governor_fsm" ] && [ "$_fsm_state" = "DEEP_IDLE" ]; then
   _cpu_min_strategy="hardware_lowest_opp"
-else
+elif [ "$_owner" != "rom_stock" ]; then
   _cpu_min_strategy="profile_floor"
 fi
 if [ -r /data/adb/asb/thermal_floor ]; then
