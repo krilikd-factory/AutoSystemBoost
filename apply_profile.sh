@@ -31,6 +31,7 @@ mkdir -p /data/adb/asb 2>/dev/null
 
 PROFILE_CORE=""
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
+[ -r "$MODDIR/runtime/asb_stock_policy.sh" ] && . "$MODDIR/runtime/asb_stock_policy.sh"
 for _pc in "$MODDIR/runtime/profile_core.sh" "$MODDIR/common/profile_core.sh"; do
   [ -r "$_pc" ] && { PROFILE_CORE="$_pc"; break; }
 done
@@ -48,7 +49,7 @@ else
   PROFILE_FLAG="${2:-}"
 fi
 case "$PROFILE" in
-  performance|balanced|battery)
+  stock|performance|balanced|battery)
     : ;;
   smart)
     mkdir -p /data/adb/asb 2>/dev/null
@@ -142,6 +143,7 @@ asb_update_desc_fallback() {
     performance) _s='description=status: Performance 🔥 | active ✅' ;;
     battery) _s='description=status: Battery 🔋 | active ✅' ;;
     smart) _s='description=status: Smart Mode 🤖 | active ✅' ;;
+    stock) _s='description=status: Stock ◻️ | ASB performance policy stopped' ;;
     *) _s='description=status: Balanced ⚖️ | active ✅' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
@@ -173,6 +175,15 @@ spawn_worker() {
 }
 
 notify_governor() {
+  if [ "$PROFILE" = "stock" ]; then
+    command -v asb_stock_enter >/dev/null 2>&1 && asb_stock_enter
+    return 0
+  fi
+  # A non-Stock profile re-enables the native policy engine after a live Stock transition.
+  command -v asb_stock_leave >/dev/null 2>&1 && asb_stock_leave
+  if command -v asb_stock_start_governor >/dev/null 2>&1; then
+    asb_stock_start_governor >/dev/null 2>&1 || asb_log "profile=$PROFILE: governor start pending service watchdog"
+  fi
   _gov="$MODDIR/bin/asb"
   [ -x "$_gov" ] || _gov="$MODDIR/bin/$(uname -m)/asb"
   if [ -x "$_gov" ]; then

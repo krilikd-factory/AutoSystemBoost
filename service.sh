@@ -106,7 +106,7 @@ fi
 if [ -r /data/adb/asb/active_profile ] && [ ! -f /data/adb/asb/no_profile_chosen ]; then
   _saved_profile="$(cat /data/adb/asb/active_profile 2>/dev/null)"
   case "$_saved_profile" in
-    battery|balanced|performance|smart)
+    stock|battery|balanced|performance|smart)
       _current_profile="$(cat "$MODDIR/current_profile" 2>/dev/null)"
       if [ "$_saved_profile" != "$_current_profile" ]; then
         echo "$_saved_profile" > "$MODDIR/current_profile" 2>/dev/null
@@ -143,6 +143,9 @@ if [ ! -f /data/adb/asb/smart_mode_enabled ]; then
 fi
 
 asb_load_profile
+if [ "${ASB_STOCK_PROFILE:-0}" = "1" ]; then
+  command -v asb_stock_enter >/dev/null 2>&1 && asb_stock_enter
+fi
 
 rm -f /data/adb/asb/v45_cleanup_done /data/adb/asb/v46_athena_cleanup_done /data/adb/asb/session_history_migrated_v47 2>/dev/null
 
@@ -716,6 +719,7 @@ BIG_POLICY="/sys/devices/system/cpu/cpufreq/policy${_big_start}"
 asb_cam_guard_active() { [ -f /dev/.asb/camera_guard ]; }
 
 apply_cpuset_groups() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   writef_retry /dev/cpuset/background/cpus        "0-${little_end}" 3 0.25 || true
   writef_retry /dev/cpuset/system-background/cpus "0-${little_end}" 3 0.25 || true
   if asb_cam_guard_active; then
@@ -730,6 +734,7 @@ apply_cpuset_groups() {
   fi
 }
 apply_cpuset_groups_all() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   for _cg_root in /dev/cpuset /sys/fs/cgroup; do
     [ -d "$_cg_root" ] || continue
     _bg="0-${little_end}"
@@ -751,6 +756,7 @@ apply_cpuset_groups_all() {
   done
 }
 apply_uclamp() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive $_P_LATENCY_SENSITIVE 5 0.3 || true
   writef_retry /dev/cpuctl/background/cpu.uclamp.min        $_P_UCL_BG  5 0.3 || true
   writef_retry /dev/cpuctl/system-background/cpu.uclamp.min $_P_UCL_BG  5 0.3 || true
@@ -796,6 +802,7 @@ if asb_feature_enabled CPU; then
   apply_cpuset_groups_all
 fi
 apply_cpugov_hints() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   _rate="${SCHED_RATE:-3000}"
   _up_rate="${SCHED_UP_RATE:-1200}"
   _down_rate="${SCHED_DOWN_RATE:-4000}"
@@ -820,6 +827,7 @@ if has pm; then
 fi
 # ASB:VM:BEGIN
 apply_vm() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   asb_cam_guard_active || sysctlw vm.swappiness $_P_SWAP
   if [ -e /proc/sys/vm/dirty_bytes ] && [ -e /proc/sys/vm/dirty_background_bytes ]; then
     sysctlw vm.dirty_ratio 0
@@ -1999,6 +2007,7 @@ tune_io_queues() {
 }
 # ASB:KERNEL:BEGIN
 apply_kernel() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   sysctlw kernel.perf_cpu_time_max_percent 25
   sysctlw kernel.sched_schedstats 0
   sysctlw kernel.timer_migration 0
@@ -2140,6 +2149,7 @@ asb_gpu_pick_pct() {
   [ -n "$_pick" ] && echo "$_pick"
 }
 apply_gpu_caps() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   # Manual profile caps are a lower-priority lease. Do not silently overwrite
   # camera/safety/platform decisions, and keep desired/applied observable.
   command -v asb_arbiter_can_write >/dev/null 2>&1 && ! asb_arbiter_can_write gpu_cap profile && return 0
@@ -2188,6 +2198,7 @@ apply_gpu_caps() {
   fi
 }
 apply_cpufreq_caps() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   # Camera deadline and safety owners outrank a manual profile cap. Keep the
   # previous envelope intact rather than lowering it mid-recording.
   [ -f /dev/.asb/camera_guard ] && return 0
@@ -2273,6 +2284,7 @@ asb_screen_on() {
   dumpsys power 2>/dev/null | grep -q "mHoldingDisplaySuspendBlocker=true"
 }
 apply_screen_aware_caps() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   asb_feature_enabled CPU || return 0
   asb_load_profile
   _son=0
@@ -2329,6 +2341,7 @@ apply_screen_aware_caps() {
 }
 asb_feature_enabled CPU && apply_gpu_caps
 apply_walt_live() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   asb_feature_enabled CPU || return 0
   [ -d /proc/sys/walt ] || return 0
   [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks "$RAVG_TICKS" 10 0.25 || true
@@ -2672,6 +2685,7 @@ apply_zram() {
     swapon /dev/block/zram0 >/dev/null 2>&1 || true
 }
 apply_walt_boost() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   for _pol in 0 4 7; do
     _wp="/sys/devices/system/cpu/cpufreq/policy${_pol}/walt"
     [ -d "$_wp" ] || continue
@@ -2685,6 +2699,7 @@ apply_walt_boost() {
 ( sleep 5; asb_load_profile; apply_walt_boost; apply_walt_live ) >/dev/null 2>&1 &
 asb_feature_enabled VM && apply_zram
 apply_doze() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   has settings || return 0
   case "$ASB_PROFILE" in
     battery)
@@ -2699,6 +2714,7 @@ apply_doze() {
 asb_feature_enabled VM && apply_doze
 # network_stats_poll_interval: how often the framework polls per-app network
 apply_network_stats_poll() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   has settings || return 0
   asb_feature_enabled LOG || return 0
   _eff_batt=0
@@ -3011,7 +3027,7 @@ fi
 # loop is the more expensive of the two - it exists only to hold a sleep.
 (
   sleep 90
-  if ! pgrep -f '/bin/asb$' >/dev/null 2>&1; then
+  if ! pgrep -f '/bin/asb$' >/dev/null 2>&1 && [ "${ASB_STOCK_PROFILE:-0}" != "1" ]; then
     asb_log "governor not running after 90s - starting reconcile/watchdog loops as fallback"
     [ -r "$MODDIR/runtime/asb_reconcile.sh" ] && . "$MODDIR/runtime/asb_reconcile.sh"
   fi
@@ -3077,7 +3093,7 @@ fi
 
 (
   sleep 95
-  if ! pgrep -f '/bin/asb$' >/dev/null 2>&1; then
+  if ! pgrep -f '/bin/asb$' >/dev/null 2>&1 && [ "${ASB_STOCK_PROFILE:-0}" != "1" ]; then
     [ -r "$MODDIR/runtime/asb_watchdog.sh" ] && . "$MODDIR/runtime/asb_watchdog.sh"
   fi
 ) >/dev/null 2>&1 &
