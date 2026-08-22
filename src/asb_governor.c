@@ -1279,6 +1279,20 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
          * light trim and is ignored while charging because its semantics vary. */
         if (!m->bat.charging && m->bat.current_ma >= 1800)
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_light_trim_pct, "battery_current");
+        /* Screen-on comfort is intentionally a tie-breaker, not a generic cap:
+         * it engages only on Battery or an explicitly battery-lean Smart session,
+         * after the already user-configured comfort temperature AND a meaningful
+         * discharge current are both observed. Games, camera, charging and screen-off
+         * work are excluded, so LTE/video/feed heat can settle without degrading the
+         * paths where latency or capture quality matters most. */
+        if (!m->bat.charging && m->misc.screen_on && !m->misc.camera_active &&
+            fsm->state != ASB_STATE_GAMING && m->therm.temp_valid &&
+            m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp &&
+            m->bat.current_ma >= 450 &&
+            (fsm->profile_idx == PROFILE_BATTERY ||
+             (fsm->profile_idx == PROFILE_SMART && g_asb_cfg.smart_battery_bias >= 400)))
+            asb_budget_raise(&candidate, &reason,
+                             g_asb_cfg.thermal_budget_light_trim_pct, "screenon_comfort");
         /* Camera deadlines are a QoS lease: do not introduce a light-only trim
          * during capture. Real thermal stress still wins at moderate/severe. */
         if (m->misc.camera_active && candidate <= g_asb_cfg.thermal_budget_light_trim_pct) {
