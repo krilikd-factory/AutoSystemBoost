@@ -293,6 +293,18 @@ lk_mono_s() {
   [ -n "$_m" ] && echo "$_m" || echo -1
 }
 
+# The common battery trace resolves LK_NET_RMNET_IF once per capture. Reuse that
+# counter for phase attribution rather than polling a second interface or assuming
+# rmnet_data0 exists on every modem.
+lk_phase_rmnet_bytes() {
+  _if="${LK_NET_RMNET_IF:-rmnet_data0}"
+  _rx=$(cat "/sys/class/net/$_if/statistics/rx_bytes" 2>/dev/null)
+  _tx=$(cat "/sys/class/net/$_if/statistics/tx_bytes" 2>/dev/null)
+  case "$_rx" in ''|*[!0-9]*) _rx=0 ;; esac
+  case "$_tx" in ''|*[!0-9]*) _tx=0 ;; esac
+  printf '%s %s' "$_rx" "$_tx"
+}
+
 lk_phase_ledger_row() {
   [ -z "$LK_CUR_PHASE" ] && return 1
   _endpct=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
@@ -310,10 +322,15 @@ lk_phase_ledger_row() {
   fi
   _maavg=0
   [ "$LK_PH_MACNT" -gt 0 ] 2>/dev/null && _maavg=$(( LK_PH_MASUM / LK_PH_MACNT ))
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  read -r _rmrx _rmtx <<EOF
+$(lk_phase_rmnet_bytes)
+EOF
+  _drx=$(( _rmrx - LK_PH_START_RMNET_RX )); _dtx=$(( _rmtx - LK_PH_START_RMNET_TX ))
+  [ "$_drx" -lt 0 ] && _drx=0; [ "$_dtx" -lt 0 ] && _dtx=0
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$LK_CUR_PHASE" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
     "$LK_PH_MAXCPU" "$LK_PH_MAXSURF" "$LK_PH_MAXP6" "$_gavg" \
-    "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake" "$_maavg"
+    "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake" "$_maavg" "$_drx" "$_dtx"
   return 0
 }
 
@@ -334,6 +351,9 @@ lk_phase_ledger_open() {
   LK_PH_START_PCT=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   LK_PH_MAXCPU=0; LK_PH_MAXSURF=0; LK_PH_MAXP6=0
   LK_PH_MASUM=0; LK_PH_MACNT=0
+  read -r LK_PH_START_RMNET_RX LK_PH_START_RMNET_TX <<EOF
+$(lk_phase_rmnet_bytes)
+EOF
   LK_PH_GPUSUM=0; LK_PH_GPUCNT=0; LK_PH_THROTTLE=0; LK_PH_WAKEPEAK=0
 }
 
@@ -384,8 +404,8 @@ lk_emit_phase_summary() {
   {
     echo "===== PER-PHASE SUMMARY ====="
     echo ""
-    printf "%-15s %8s %7s %8s %6s %8s %8s %9s %7s %9s %8s\n" \
-      "phase" "dur_min" "d_pct" "pct/h" "mA" "cpuT" "surfT" "p6MHz" "gpu%" "throttle" "awake%"
+    printf "%-15s %8s %7s %8s %6s %9s %8s %8s %9s %7s %9s %8s\n" \
+      "phase" "dur_min" "d_pct" "pct/h" "mA" "rmnetMiB" "cpuT" "surfT" "p6MHz" "gpu%" "throttle" "awake%"
     awk -F'\t' '
       /^#/{next}
       {
@@ -403,6 +423,7 @@ lk_emit_phase_summary() {
         # added without its accumulator, so MA[] stayed empty and every phase reported 0 mA
         # even though the ledger held real values - 681 in the very first row.
         if($13>0){ MA[ph]+=$13*dur; MAD[ph]+=dur }
+        RX[ph]+=$14; TX[ph]+=$15
       }
       END{
         for(p in D){
@@ -411,8 +432,8 @@ lk_emit_phase_summary() {
           gavg=(N[p]>0)?(G[p]/N[p]):0;
           aw=(AWD[p]>0)?(AW[p]/AWD[p]):-1;
           aws=(aw>=0)?sprintf("%.1f",aw):"-";
-          printf "%-15s %8.1f %7d %8.2f %6d %8d %8d %9d %7d %9d %8s\n", \
-            p, durm, DP[p], rate, (MAD[p]>0?MA[p]/MAD[p]:0), (TD[p]>0?CT[p]/TD[p]:0), (TD[p]>0?SF[p]/TD[p]:0), (P6[p]/1000), gavg, TH[p], aws;
+          printf "%-15s %8.1f %7d %8.2f %6d %9.1f %8d %8d %9d %7d %9d %8s\n", \
+            p, durm, DP[p], rate, (MAD[p]>0?MA[p]/MAD[p]:0), ((RX[p]+TX[p])/1048576.0), (TD[p]>0?CT[p]/TD[p]:0), (TD[p]>0?SF[p]/TD[p]:0), (P6[p]/1000), gavg, TH[p], aws;
         }
       }
     ' "$_all" | sort -k4 -rn
@@ -424,12 +445,13 @@ lk_emit_phase_summary() {
       # what makes it worth fixing rather than tolerating.
       !/^#/ && ($1=="idle" || $1=="sleep") { d=$3-$2; if(d>DUR){DUR=d;SP=$4;EP=$5;CT=$6;SF=$7;P6=$8;AW=$12;MAV=$13} }
       END{ if(DUR>=10800){ aws=(AW>=0)?sprintf("%.1f",AW):"-";
-        printf "%-15s %8.1f %7d %8.2f %6d %8d %8d %9d %7s %9s %8s\n", \
-        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, MAV, CT, SF, (P6/1000), "-", "-", aws } }
+        printf "%-15s %8.1f %7d %8.2f %6d %9s %8d %8d %9d %7s %9s %8s\n", \
+        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, MAV, "-", CT, SF, (P6/1000), "-", "-", aws } }
     ' "$_all"
     echo ""
     echo "Legend: d_pct=battery % consumed (negative=gained while charging),"
-    echo "        pct/h=drain rate (from %), mA=average discharge current, cpuT/surfT=average temps (°C), p6MHz=peak prime"
+    echo "        pct/h=drain rate (from %), mA=average discharge current, rmnetMiB=mobile RX+TX"
+    echo "        traffic in the phase, cpuT/surfT=average temps (°C), p6MHz=peak prime"
     echo "        clock, gpu%=avg GPU busy, throttle=ticks the prime was capped."
     echo "        awake%=awake share = CLOCK_MONOTONIC delta / boottime delta"
     echo "        (Android uptimeMillis/elapsedRealtime); excludes suspend."
@@ -512,8 +534,18 @@ lk_emit_full_day_report() {
       echo "wakeup attribution unavailable (no debugfs and no dumpsys)."
     fi
     echo ""
-    lk_emit_charging_idle_anomaly
-    echo ""
+  lk_emit_charging_idle_anomaly
+  echo ""
+  echo "----- AUDIOMIX LIVE ATTRIBUTION -----"
+  _amix="$LK_OUT_DIR/audio_wakelock_attribution.tsv"
+  if [ -r "$_amix" ] && [ "$(awk 'NR>1{n++} END{print n+0}' "$_amix")" -gt 0 ] 2>/dev/null; then
+    awk -F'|' 'NR>1 {k=$3"|"$4; n[k]++} END {for(k in n) print n[k]"  "k}' "$_amix" | sort -rn | head -12 | \
+      awk -F'  ' '{print "samples=" $1 "  uid|package=" $2}'
+    echo "detail: audio_wakelock_attribution.tsv; unresolved means Android did not expose a UID mapping."
+  else
+    echo "no AudioMix partial wakelock observed in live power-manager samples."
+  fi
+  echo ""
     echo "----- BLUETOOTH LIFECYCLE (read-only, addresses redacted) -----"
     _bt_ev="$LK_OUT_DIR/bt_lifecycle_events.tsv"
     _bt_ctx="$LK_OUT_DIR/bt_lifecycle_context.tsv"
@@ -687,6 +719,8 @@ lk_emit_charging_idle_anomaly() {
 : "${ASB_BT_RECONNECT_TRACE:=1}"
 export ASB_BT_RECONNECT_TRACE
 lk_init
+lk_audio_wakelock_attribution_init
+lk_fsm_media_trace_header
 lk_bt_reconnect_start
 
 # trace headers
@@ -697,7 +731,7 @@ lk_asb_feature_header
 lk_config_watch_init
 { echo "# phase timeline — epoch | iso | phase | trigger"; } > "$LK_OUT_DIR/phase_timeline.txt"
 { echo "# throttle trace — epoch | phase | p0 | p6 | temps | cap_owner"; } > "$LK_OUT_DIR/throttle_trace.txt"
-printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\tawakePct\tavgMA\n' > "$LK_OUT_DIR/phase_ledger.tsv"
+printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\tawakePct\tavgMA\trmnetRxBytes\trmnetTxBytes\n' > "$LK_OUT_DIR/phase_ledger.tsv"
 
 # wakelock baseline + reset
 lk_wakelock_kernel_baseline
@@ -732,6 +766,9 @@ lk_snapshot_kernel "before"
 lk_snapshot_network "before"
 lk_sample_gpu_busy
 lk_sample_audio
+# Resolve the live route counters before opening the first phase, so its mobile
+# traffic delta has the same interface identity as later battery-trace rows.
+lk_capture_battery_trace_row
 lk_snapshot_audio "before"
 lk_bt_reconnect_snapshot "before"
 lk_detect_phase "$(date +%s)"; _phase="$LK_PHASE_OUT"
@@ -775,6 +812,7 @@ while : ; do
   # per-poll capture
   lk_capture_perf_trace_row
   lk_capture_battery_trace_row
+  lk_capture_fsm_media_trace_row "$_phase"
   lk_wakelock_live_row
   lk_oem_toggle_row
   lk_throttle_row "$_phase"

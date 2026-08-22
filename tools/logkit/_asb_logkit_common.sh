@@ -956,6 +956,42 @@ lk_wakelock_emit_report() {
   } > "$_out"
 }
 
+# Build a local UID→package cache once for a voluntary debug capture. The governor never
+# reads it; it is only used to make an AudioMix WorkSource actionable in a user-supplied log.
+lk_audio_wakelock_attribution_init() {
+  _map="$LK_OUT_DIR/.uid_package_map.tsv"
+  : > "$_map" 2>/dev/null || return 0
+  { cmd package list packages -U 2>/dev/null || pm list packages -U 2>/dev/null; } \
+    | sed -n 's/^package:\([^ ]*\).* uid:\([0-9][0-9]*\).*$/\2|\1/p' \
+    | sort -u > "$_map" 2>/dev/null || true
+  {
+    echo "# AudioMix attribution — voluntary debug capture only"
+    echo "# epoch|iso_time|worksource_uid|package|power_manager_hold"
+  } > "$LK_OUT_DIR/audio_wakelock_attribution.tsv" 2>/dev/null || true
+}
+
+lk_audio_wakelock_package_for_uid() {
+  _uid="$1"
+  case "$_uid" in ''|*[!0-9]*) echo "unresolved"; return 0 ;; esac
+  _map="$LK_OUT_DIR/.uid_package_map.tsv"
+  _pkg=$(awk -F'|' -v u="$_uid" '$1==u { if (out) out=out ","; out=out $2 } END { print out }' "$_map" 2>/dev/null | cut -c1-180)
+  [ -n "$_pkg" ] && echo "$_pkg" || echo "unresolved"
+}
+
+lk_audio_wakelock_live_row() {
+  _hold="$1" _epoch="${2:-$(date +%s)}"
+  case "$_hold" in *AudioMix*) : ;; *) return 0 ;; esac
+  _iso=$(date '+%Y-%m-%dT%H:%M:%S')
+  _uids=$(printf '%s\n' "$_hold" | grep -oE 'WorkChain\\{\\([0-9]+' 2>/dev/null | sed 's/.*(//' | sort -u)
+  [ -n "$_uids" ] || _uids="-"
+  for _uid in $_uids; do
+    _pkg=$(lk_audio_wakelock_package_for_uid "$_uid")
+    _clean=$(printf '%s' "$_hold" | tr '\n\r|' '   ' | cut -c1-360)
+    printf '%s|%s|%s|%s|%s\n' "$_epoch" "$_iso" "$_uid" "$_pkg" "$_clean" \
+      >> "$LK_OUT_DIR/audio_wakelock_attribution.tsv" 2>/dev/null || true
+  done
+}
+
 # Live "what is awake right now" — current partial wakelocks held and the power
 # manager's view. Cheap; safe to call each poll. Appends a compact one-liner.
 lk_wakelock_live_row() {
@@ -977,6 +1013,7 @@ lk_wakelock_live_row() {
              | sed 's/^[[:space:]]*//' | tr '\n' ';')
   fi
   echo "${_e}|kactive=${_kactive}|ktop=${_ktop}|plocks=${_plock}" >> "$LK_OUT_DIR/wake_live.txt"
+  lk_audio_wakelock_live_row "$_plock" "$_e"
 }
 
 # OEM toggle state tracker — records the LIVE value of the OnePlus toggles ASB
@@ -1064,6 +1101,31 @@ lk_smart_trace_header() {
 lk_state_kv() {
   _k="$1"
   grep -m1 "^${_k}=" /dev/.asb/state 2>/dev/null | sed "s/^${_k}=//"
+}
+
+lk_fsm_media_trace_header() {
+  {
+    echo "# FSM/media evidence — one row per recorder poll; no additional native or package-manager queries"
+    echo "# epoch|iso_time|phase|fsm_state|profile|gpu_pct|load1|pkg_detect_ok|pkg_source|app_hint|media_pkg_known|guard_setting|guard_active|guard_age_s|guard_reason"
+  } > "$LK_OUT_DIR/fsm_media_trace.tsv"
+}
+
+lk_capture_fsm_media_trace_row() {
+  _phase="$1"
+  _e=$(date +%s)
+  _d=$(date '+%Y-%m-%dT%H:%M:%S')
+  _state=$(lk_state_kv state); _profile=$(lk_state_kv profile)
+  _gpu=$(lk_state_kv gpu_pct); _load=$(lk_state_kv load1)
+  _pkgok=$(lk_state_kv smart_pkg_detect_ok); _pkgsrc=$(lk_state_kv smart_pkg_source)
+  _hint=$(lk_state_kv smart_app_hint); _media=$(lk_state_kv smart_media_guard_pkg_known)
+  _setting=$(lk_state_kv smart_media_guard_setting); _active=$(lk_state_kv smart_media_guard_active)
+  _age=$(lk_state_kv smart_media_guard_age_s); _reason=$(lk_state_kv smart_media_guard_reason)
+  for _v in _phase _state _profile _gpu _load _pkgok _pkgsrc _hint _media _setting _active _age _reason; do
+    eval "_val=\${$_v}"; [ -n "$_val" ] || eval "$_v=-"
+  done
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+    "$_e" "$_d" "$_phase" "$_state" "$_profile" "$_gpu" "$_load" "$_pkgok" "$_pkgsrc" "$_hint" "$_media" "$_setting" "$_active" "$_age" "$_reason" \
+    >> "$LK_OUT_DIR/fsm_media_trace.tsv"
 }
 
 lk_capture_smart_trace_row() {
