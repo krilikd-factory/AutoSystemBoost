@@ -28,7 +28,7 @@ printf '%s\n' "$REL_OUT" | grep -Fq 'error=debug_only' || {
 # a guard that still names that PID. This catches launcher-PID and cleanup races on host.
 DBG="$TMP/debug"; mkdir -p "$DBG/system/bin" "$DBG/tools/logkit" "$TMP/out"
 printf 'id=AutoSystemBoost\nversion=V64-debug3\n' > "$DBG/module.prop"
-printf '#!/bin/sh\necho diagnostic-ok\n' > "$DBG/system/bin/asbdiag"; chmod 0755 "$DBG/system/bin/asbdiag"
+printf '#!/bin/sh\n[ "${ASB_DEBUG_SUPPORT_TEST_DIAG_DELAY:-0}" = 1 ] && sleep 1\necho diagnostic-ok\n' > "$DBG/system/bin/asbdiag"; chmod 0755 "$DBG/system/bin/asbdiag"
 cat > "$DBG/tools/logkit/asb_log_full_day.sh" <<'EOF_RECORDER'
 #!/bin/sh
 set -u
@@ -52,6 +52,24 @@ DIAG_OUT="$(env "${ENV[@]}" sh "$HELPER" diag)"
 echo "$DIAG_OUT" | grep -Fq 'status=saved'
 DIAG_PATH="$(printf '%s\n' "$DIAG_OUT" | sed -n 's/^path=//p')"
 [ -f "$DIAG_PATH" ] && grep -Fq 'diagnostic-ok' "$DIAG_PATH" || { echo 'FAIL debug support: diag export' >&2; exit 1; }
+
+# WebUI cannot paint while a KSU bridge waits for a synchronous diagnostic export.
+# The async action must acknowledge a delayed worker immediately, remain observable via
+# fixed status command, and publish a complete saved record after the worker exits.
+ASYNC_DIAG="$(ASB_DEBUG_SUPPORT_TEST_DIAG_DELAY=1 env "${ENV[@]}" sh "$HELPER" diag-start)"
+printf '%s\n' "$ASYNC_DIAG" | grep -Fqx 'status=started' || { echo 'FAIL debug support: async diag did not return started' >&2; exit 1; }
+ASYNC_PID="$(printf '%s\n' "$ASYNC_DIAG" | sed -n 's/^pid=//p')"
+[ -n "$ASYNC_PID" ] && kill -0 "$ASYNC_PID" 2>/dev/null || { echo 'FAIL debug support: async diag worker missing' >&2; exit 1; }
+ASYNC_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status)"
+printf '%s\n' "$ASYNC_STATUS" | grep -Eq '^status=(starting|running)$' || { echo 'FAIL debug support: async diag status not live' >&2; exit 1; }
+for _diag_try in $(seq 1 30); do
+  sleep 0.1
+  ASYNC_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status)"
+  printf '%s\n' "$ASYNC_STATUS" | grep -Fqx 'status=saved' && break
+done
+printf '%s\n' "$ASYNC_STATUS" | grep -Fqx 'status=saved' || { echo 'FAIL debug support: async diag never reached saved' >&2; exit 1; }
+ASYNC_PATH="$(printf '%s\n' "$ASYNC_STATUS" | sed -n 's/^path=//p')"
+[ -f "$ASYNC_PATH" ] && grep -Fq 'diagnostic-ok' "$ASYNC_PATH" || { echo 'FAIL debug support: async diag saved output missing' >&2; exit 1; }
 START1="$(env "${ENV[@]}" sh "$HELPER" full-day)"
 echo "$START1" | grep -Fq 'status=started'
 REC_PID="$(printf '%s\n' "$START1" | sed -n 's/^pid=//p')"
@@ -93,6 +111,10 @@ need "$HELPER" 'mkdir "$LOCKDIR"'
 need "$HELPER" 'lock_known_dead()'
 need "$HELPER" 'lock_wait_live_pid()'
 need "$HELPER" 'ASB_DEBUG_SUPPORT_LOCKDIR="$LOCKDIR"'
+need "$HELPER" 'diag-start) diag_start'
+need "$HELPER" 'diag-status) diag_status'
+need "$HELPER" 'full-day-start) start_full_day 1'
+need "$HELPER" 'DIAG_LOCKDIR="$STATE_DIR/asbdiag_webui.lock"'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'LK_WEBUI_LOCKDIR="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_claim()'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_claim || { echo '\''[debug-webui] guard claim failed'\''; exit 2; }'
@@ -140,6 +162,12 @@ need "$UI" 'debug-action-wait-sheet'
 need "$UI" 'debugDiagPulse .38s'
 need "$UI" 'debugActionWaitOpen(action);'
 need "$UI" 'debugActionWaitClose();'
+need "$UI" 'await debugFrame();'
+need "$UI" "'diag-start' : 'full-day-start'"
+need "$UI" 'runtime/asb_debug_support.sh diag-status'
+need "$UI" 'async function debugDiagPoll()'
+need "$UI" 'async function debugFullDayPoll()'
+need "$UI" 'runtime/asb_debug_support.sh status'
 awk '
   /async function asbDebugAction\(action\)/ { in_fn=1 }
   in_fn && /debugActionWaitOpen\(action\)/ { opened=NR }
