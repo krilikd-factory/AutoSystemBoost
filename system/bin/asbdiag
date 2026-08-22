@@ -270,6 +270,8 @@ done
 if [ -r "$_state" ]; then
   _wattempts="$(_rget writer_attempts "$_state")"; _wapplied="$(_rget writer_applied "$_state")"; _wfail="$(_rget writer_failures "$_state")"; _wskip="$(_rget writer_backoff_skips "$_state")"
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
+  _w_vendor_ceiling="$(grep -E '^writer_node_cpu_max[0-2]=.*status:vendor_stricter_ceiling' "$_state" 2>/dev/null | cut -d= -f1 | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+  [ -n "$_w_vendor_ceiling" ] && NOTE "Vendor already holds a stricter CPU ceiling on ${_w_vendor_ceiling}; ASB accepts it and avoids a cap fight."
   P "  energy policy         : shadow=$(_rget shadow_mode "$_state") budget_enabled=$(_rget thermal_budget_enabled "$_state") trim=$(_rget thermal_budget_trim_pct "$_state")% (base=$(_rget thermal_budget_base_trim_pct "$_state")% + envelope=$(_rget thermal_budget_envelope_bonus_pct "$_state")%, stage=$(_rget thermal_budget_stage "$_state")) reason=$(_rget thermal_budget_reason "$_state") dwell=$(_rget thermal_budget_dwell_s "$_state")s"
   P "  active-use runtime    : loaded=$(_rget active_efficiency_active "$_state") tier=$(_rget active_efficiency_tier "$_state") reason=$(_rget active_efficiency_reason "$_state") gpu_idle_bonus=$(_rget active_efficiency_gpu_idle_bonus_pct "$_state")% bg_delta=$(_rget active_efficiency_bg_uclamp_moderate_delta "$_state")/$(_rget active_efficiency_bg_uclamp_severe_delta "$_state")"
   P "  ASB overhead          : events=$(_rget governor_event_wakeups "$_state") timer_wakeups=$(_rget governor_timer_wakeups "$_state") cpu_ms=$(_rget governor_cpu_ms "$_state")"
