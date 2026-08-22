@@ -3,6 +3,9 @@
 set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 HELPER="$ROOT/runtime/asb_debug_support.sh"
+TIMELINE="$ROOT/runtime/asb_boot_timeline.sh"
+DIAG="$ROOT/tools/asb_diag.sh"
+INSTALLED_DIAG="$ROOT/system/bin/asbdiag"
 UI="$ROOT/webroot/index.html"
 TMP="$(mktemp -d)"
 trap 'if [ -n "${REC_PID:-}" ]; then kill "$REC_PID" 2>/dev/null || true; fi; rm -rf "$TMP"' EXIT
@@ -13,7 +16,13 @@ count_exact() {
   [ "$_actual" -eq "$3" ] || { echo "FAIL debug support: expected $3 [$2], found $_actual" >&2; exit 1; }
 }
 [ -f "$HELPER" ] || { echo "FAIL debug support: helper missing" >&2; exit 1; }
+[ -f "$TIMELINE" ] || { echo "FAIL debug support: boot timeline helper missing" >&2; exit 1; }
+[ -f "$DIAG" ] && [ -f "$INSTALLED_DIAG" ] || { echo "FAIL debug support: asbdiag copy missing" >&2; exit 1; }
 sh -n "$HELPER"
+sh -n "$TIMELINE"
+cmp -s "$DIAG" "$INSTALLED_DIAG" || { echo "FAIL debug support: asbdiag copies diverged" >&2; exit 1; }
+need "$DIAG" 'BOOT TIMELINE'
+need "$DIAG" 'boot_timeline.tsv'
 
 # A release module must refuse both mutations even if someone manufactures a DOM click.
 REL="$TMP/release"; mkdir -p "$REL"
@@ -22,12 +31,22 @@ REL_OUT="$(ASB_DEBUG_SUPPORT_MODDIR="$REL" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/sta
 printf '%s\n' "$REL_OUT" | grep -Fq 'error=debug_only' || {
   echo 'FAIL debug support: release gate did not refuse recorder' >&2; exit 1
 }
+REL_TL="$(ASB_BOOT_TIMELINE_MODDIR="$REL" ASB_BOOT_TIMELINE_STATE_DIR="$TMP/timeline-release" sh "$TIMELINE" begin postfs_begin || true)"
+printf '%s\n' "$REL_TL" | grep -Fq 'status=debug_only' || {
+  echo 'FAIL debug support: release gate did not refuse boot timeline' >&2; exit 1
+}
+[ ! -e "$TMP/timeline-release/boot_timeline.tsv" ] || { echo 'FAIL debug support: release timeline wrote state' >&2; exit 1; }
 
 # A debug module gets a mocked diagnostic and recorder. The recorder reproduces the real
 # ownership protocol: it claims the tokenized directory with ITS OWN PID and only removes
 # a guard that still names that PID. This catches launcher-PID and cleanup races on host.
 DBG="$TMP/debug"; mkdir -p "$DBG/system/bin" "$DBG/tools/logkit" "$TMP/out"
 printf 'id=AutoSystemBoost\nversion=V64-debug3\n' > "$DBG/module.prop"
+TL_STATE="$TMP/timeline-debug"
+ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" begin postfs_begin >/dev/null
+ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" mark service_enter >/dev/null
+grep -Fq $'\tpostfs_begin\t' "$TL_STATE/boot_timeline.tsv" || { echo 'FAIL debug support: postfs boot marker missing' >&2; exit 1; }
+grep -Fq $'\tservice_enter\t' "$TL_STATE/boot_timeline.tsv" || { echo 'FAIL debug support: service boot marker missing' >&2; exit 1; }
 printf '#!/bin/sh\n[ "${ASB_DEBUG_SUPPORT_TEST_DIAG_DELAY:-0}" = 1 ] && sleep 1\necho diagnostic-ok\n' > "$DBG/system/bin/asbdiag"; chmod 0755 "$DBG/system/bin/asbdiag"
 cat > "$DBG/tools/logkit/asb_log_full_day.sh" <<'EOF_RECORDER'
 #!/bin/sh

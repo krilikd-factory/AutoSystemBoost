@@ -8,6 +8,8 @@ GRADE="$ROOT/runtime/asb_camera_grade.sh"
 TWEAKS="$ROOT/runtime/asb_tweaks.sh"
 WRITER="$ROOT/runtime/asb_config_safe.sh"
 UI="$ROOT/webroot/index.html"
+ACTION="$ROOT/action.sh"
+INSTALL="$ROOT/common/install.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 MOD="$TMP/module"
@@ -39,6 +41,10 @@ need "$GRADE" '[ "$_lowlight" -gt 10 ] 2>/dev/null && _lowlight=10'
 need "$TWEAKS" '[ "$_lv" -gt 10 ] 2>/dev/null && _lv=10'
 need "$TWEAKS" 'asb_tw_camera_grade_needed()'
 need "$TWEAKS" '_cam_grade_needed=0'
+need "$TWEAKS" 'asb_tw_vb_add_apps()'
+need "$INSTALL" 'final camera bind payload verified'
+need "$ACTION" '/odm/etc/camera/config/video_beauty_default_config'
+need "$ACTION" '/vendor/odm/etc/camera/config/video_beauty_default_config'
 
 cat > "$SRC" <<'EOF'
 {
@@ -91,6 +97,29 @@ sed -i \
 MODDIR="$MOD" ASB_GRADE_DIR="$TMP/grade_marks" sh "$GRADE" "$SRC" "$OUT" >/dev/null || fail "independent contrast grade failed"
 need "$OUT" '"low20XcontrastScale": 1.7'
 need "$OUT" '"Main1x_Rgb2YuvParams": [1, 1, 1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]'
+
+# Retouch injection must survive the final staging pass and remain idempotent. A stock-like
+# fixture starts with four package entries; the helper must append the known app set once, not
+# duplicate it on every install/update.
+VB="$TMP/video_beauty_default_config"
+cat > "$VB" <<'EOF_VB'
+{
+  "appConfigList": [
+    { "appName":"Discord", "packageName":"com.discord", "videoBeautyParam": { "isOpen": 0 } },
+    { "appName":"Teams", "packageName":"com.microsoft.teams", "videoBeautyParam": { "isOpen": 0 } },
+    { "appName":"WeChat", "packageName":"com.tencent.mm", "videoBeautyParam": { "isOpen": 0 } },
+    { "appName":"WhatsApp", "packageName":"com.whatsapp", "videoBeautyParam": { "isOpen": 0 } }
+  ]
+}
+EOF_VB
+. "$TWEAKS"
+asb_tw_vb_add_apps "$VB"
+_vb_first="$(grep -c '"packageName"' "$VB" 2>/dev/null)"
+[ "${_vb_first:-0}" -ge 7 ] 2>/dev/null || fail "retouch injection count=$_vb_first"
+grep -Fq '"packageName":"org.telegram.messenger"' "$VB" || fail 'Telegram retouch entry missing'
+asb_tw_vb_add_apps "$VB"
+_vb_second="$(grep -c '"packageName"' "$VB" 2>/dev/null)"
+[ "$_vb_second" = "$_vb_first" ] || fail 'retouch injection duplicated entries'
 
 # Writer accepts the declared maximum and rejects anything the grader would clamp away.
 run_writer set CAMERA_LEVEL 10 >/dev/null
