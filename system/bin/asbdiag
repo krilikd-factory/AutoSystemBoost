@@ -97,6 +97,29 @@ if [ -z "$MODDIR" ]; then
 fi
 
 # =====================================================================
+SEC "0. BOOT TIMELINE  (debug-only passive lifecycle evidence)"
+_boot_timeline="/data/adb/asb/boot_timeline.tsv"
+_boot_version="$(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | cut -d= -f2)"
+case "$_boot_version" in *-debug[1-9][0-9]*) _boot_debug=1 ;; *) _boot_debug=0 ;; esac
+if [ "$_boot_debug" = "1" ]; then
+  if [ -r "$_boot_timeline" ]; then
+    _boot_rows="$(grep -cv '^#' "$_boot_timeline" 2>/dev/null)"
+    P "  recorder             : debug active · ${_boot_rows:-0} marker(s)"
+    P "  boot reason           : $(grep '^# bootreason=' "$_boot_timeline" 2>/dev/null | head -1 | cut -d= -f2-)"
+    P "  latest lifecycle rows:"
+    tail -n 16 "$_boot_timeline" 2>/dev/null | while IFS= read -r _boot_row; do
+      case "$_boot_row" in '#'*|'') continue ;; esac
+      P "    $_boot_row"
+    done
+    NOTE "Rows use uptime_ms. A long gap before service_enter is pre-service; a long gap after service_dispatched is framework/vendor startup; a long post_boot_tweaks span identifies deferred helper work."
+  else
+    NOTE "No boot timeline yet. Reboot once, wait for the system to finish starting, then export asbdiag again."
+  fi
+else
+  P "  recorder             : release build — disabled by design"
+fi
+
+# =====================================================================
 SEC "0a. EXTERNAL KERNEL / UV COEXISTENCE  (read-only evidence; ASB owns no voltage policy)"
 _uv_tool="$MODDIR/tools/asb_kernel_uv_coexist.sh"
 _uv_tmp="/data/local/tmp/asb_uv_coexist.$$"
