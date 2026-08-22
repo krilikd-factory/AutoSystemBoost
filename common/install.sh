@@ -2824,6 +2824,23 @@ else
   fi
 fi
 asb_register_dsp_all_configs
+
+# The final camera clone/normalization pass can run after the first dynamic-tweak pass. Re-run
+# the idempotent retouch injector here, immediately before the /odm bind payload is materialised:
+# this makes the file copied into /data/adb/asb/odm_patched the same file that carries the full
+# app list, rather than a later stock clone with only Discord/Teams/WeChat/WhatsApp.
+if [ "$ASB_CAMERA" = "true" ] && [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
+  command -v asb_tw_vb_add_apps >/dev/null 2>&1 || . "$MODPATH/runtime/asb_tweaks.sh"
+  _asb_vb_final_n=0
+  for _asb_vb_final in \
+    "$MODPATH/system/odm/etc/camera/config/video_beauty_default_config" \
+    "$MODPATH/system/vendor/odm/etc/camera/config/video_beauty_default_config"; do
+    [ -f "$_asb_vb_final" ] || continue
+    asb_tw_vb_add_apps "$_asb_vb_final"
+    _asb_vb_final_n=$((_asb_vb_final_n + 1))
+  done
+  [ "$_asb_vb_final_n" -gt 0 ] && ui_print "      + ${ASB_D_RETOUCH:-retouch apps}: final camera bind payload verified"
+fi
 asb_generate_odm_camera_binds
 
 # A real install came back with a zero-byte regular file named "vendor" sitting in the module
@@ -3927,7 +3944,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_debug_support.sh asb_stock_policy.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_boot_timeline.sh asb_debug_support.sh asb_stock_policy.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
