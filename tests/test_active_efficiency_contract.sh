@@ -37,6 +37,11 @@ run_case sm8750 2 devfreq 24
 [ "$(get budget_moderate_bonus_pct "$TMP/active_efficiency.env")" = "2" ] || fail "SM8750 moderate bonus"
 [ "$(get budget_severe_bonus_pct "$TMP/active_efficiency.env")" = "1" ] || fail "SM8750 severe bonus"
 
+run_case sm8850 2 pwrlevel 98
+[ "$(get status "$TMP/active_efficiency.env")" = "active" ] || fail "SM8850 should be active"
+[ "$(get tier "$TMP/active_efficiency.env")" = "sm8850" ] || fail "SM8850 tier"
+[ "$(get budget_moderate_bonus_pct "$TMP/active_efficiency.env")" = "2" ] || fail "SM8850 moderate bonus"
+
 run_case sm8650 3 pwrlevel 22
 [ "$(get status "$TMP/active_efficiency.env")" = "active" ] || fail "SM8650 should be active"
 [ "$(get tier "$TMP/active_efficiency.env")" = "sm8650" ] || fail "SM8650 tier"
@@ -70,6 +75,14 @@ grep -Fq 'fsm->profile_idx != PROFILE_PERFORMANCE' "$SRC" || fail "GPU performan
 grep -Fq 'fsm->state == ASB_STATE_SUSTAINED' "$SRC" || fail "platform thermal exclusion missing"
 grep -Fq 'if (target < 128) target = 128;' "$SRC" || fail "background uclamp floor missing"
 grep -Fq '!g_asb_cfg.thermal_budget_enable || !g_active_efficiency.active' "$SRC" || fail "thermal budget user opt-out gate missing"
+# Screen-on comfort may only add the already-configured light trim with evidence. It must
+# fail closed outside Battery/battery-lean Smart and never touch gaming, camera, charging or sleep.
+grep -Fq '"screenon_comfort"' "$SRC" || fail "screen-on comfort reason missing"
+grep -Fq 'm->misc.screen_on && !m->misc.camera_active' "$SRC" || fail "screen-on/camera exclusion missing"
+grep -Fq 'fsm->state != ASB_STATE_GAMING' "$SRC" || fail "gaming exclusion missing"
+grep -Fq 'm->bat.current_ma >= 450' "$SRC" || fail "current evidence gate missing"
+grep -Fq 'fsm->profile_idx == PROFILE_BATTERY' "$SRC" || fail "Battery profile gate missing"
+grep -Fq 'g_asb_cfg.smart_battery_bias >= 400' "$SRC" || fail "battery-lean Smart gate missing"
 grep -Fq 'active_efficiency_active=%d' "$SRC" || fail "state telemetry missing"
 
 # The derived manifest must exist before asb_utils.sh starts the governor.

@@ -129,6 +129,18 @@ need "$COMMON" 'lk_audio_wakelock_attribution_init()'
 need "$COMMON" 'audio_wakelock_attribution.tsv'
 need "$COMMON" 'lk_fsm_media_trace_header()'
 need "$COMMON" 'fsm_media_trace.tsv'
+# Android 16 emits a chained WorkSource for AudioMix. Test both that real form and
+# the compact legacy form; raw UID attribution is useless if the recorder prints '-'.
+sed -n '/^lk_audio_wakelock_live_row() {/,/^}/p' "$COMMON" > "$TMP/audio_wakelock_fn.sh"
+[ -s "$TMP/audio_wakelock_fn.sh" ] || { echo 'FAIL debug support: cannot extract AudioMix attribution helper' >&2; exit 1; }
+lk_audio_wakelock_package_for_uid() { printf 'pkg.uid.%s\n' "$1"; }
+LK_OUT_DIR="$TMP/audio_attr"; mkdir -p "$LK_OUT_DIR"
+. "$TMP/audio_wakelock_fn.sh"
+lk_audio_wakelock_live_row "PARTIAL_WAKE_LOCK 'AudioMix' (uid=1041 ws=WorkSource{ chains=WorkChain{(10658), (1041)}})" 123
+lk_audio_wakelock_live_row "PARTIAL_WAKE_LOCK 'AudioMix' WorkSource{10652}" 124
+grep -Fq '123|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" || { echo 'FAIL debug support: chained AudioMix row absent' >&2; exit 1; }
+grep -Fq '|10658|pkg.uid.10658|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" || { echo 'FAIL debug support: chained WorkSource UID unresolved' >&2; exit 1; }
+grep -Fq '|10652|pkg.uid.10652|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" || { echo 'FAIL debug support: compact WorkSource UID unresolved' >&2; exit 1; }
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_audio_wakelock_attribution_init'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_capture_fsm_media_trace_row "$_phase"'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'rmnetMiB'
