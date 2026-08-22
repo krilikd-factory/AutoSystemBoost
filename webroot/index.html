@@ -378,7 +378,7 @@ body::before, body::after {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .pbtn {
@@ -391,8 +391,8 @@ body::before, body::after {
    * the same four cards take noticeably more of the screen and push the list past the fold -
    * reported alongside the request to make them a little narrower.
    */
-  gap: 16px;
-  padding: 18px 20px;
+  gap: 14px;
+  padding: 13px 17px;
   border-radius: 20px;
   border: 1px solid var(--border);
   background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
@@ -437,6 +437,11 @@ body::before, body::after {
 .pbtn[data-p="balanced"]    { --c: var(--bal);  --cg: rgba(255,165,2,0.12);  --cg-strong: var(--bal-glow); }
 .pbtn[data-p="battery"]     { --c: var(--bat);  --cg: rgba(46,213,115,0.12); --cg-strong: var(--bat-glow); }
 .pbtn[data-p="smart"]       { --c: #00e1c8; --cg: rgba(0,225,200,0.14); --cg-strong: rgba(0,225,200,0.35); }
+.pbtn[data-p="stock"]       { --c: #c8d2da; --cg: rgba(190,205,218,0.13); --cg-strong: rgba(210,224,234,0.34); }
+.pbtn-stock { background: linear-gradient(135deg, rgba(205,216,225,0.07), rgba(255,255,255,0.018)); border-color: rgba(205,216,225,0.20); }
+.pbtn-stock .pinfo { flex-direction:column; align-items:flex-start; justify-content:center; gap:3px; }
+.pbtn-stock .psub { color:rgba(210,220,228,0.58); }
+.pbtn-stock.on .psub { color:rgba(232,239,244,0.84); }
 
 /* Smart Mode: AI-style primary button with animated gradient + glow */
 .pbtn-smart {
@@ -743,6 +748,8 @@ body::before, body::after {
 .debug-support-btn:not(:disabled):active::before { opacity: 1; }
 .debug-support-btn:active { transform: scale(0.96); border-color: rgba(0,240,180,0.3); }
 .debug-support-btn:disabled { opacity: 0.48; cursor: wait; }
+.debug-support-btn.is-running { animation: debugActionPulse .82s ease-in-out infinite; border-color:rgba(130,228,255,.58); box-shadow:0 0 0 1px rgba(130,228,255,.14), 0 0 18px rgba(44,214,173,.20); }
+@keyframes debugActionPulse { 0%,100% { transform:scale(1); filter:brightness(1); } 50% { transform:scale(.965); filter:brightness(1.28); } }
 .tg-link {
   display: inline-flex;
   align-items: center;
@@ -2363,7 +2370,17 @@ body.config-active #livePage.open {
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
     </div>
 
-    <div class="pbtn on" data-p="balanced" onclick="go('balanced')">
+    <div class="pbtn pbtn-stock on" data-p="stock" onclick="go('stock')">
+      <div class="pico">📴</div>
+      <div class="pinfo">
+        <div class="pname" data-i18n="prof_stock">Stock</div>
+        <div class="psub" data-i18n="prof_stock_sub">ASB policy off</div>
+      </div>
+      <div class="pload"></div>
+      <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+    </div>
+
+    <div class="pbtn" data-p="balanced" onclick="go('balanced')">
       <div class="pico">⚖️</div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_balanced">Balanced</div>
@@ -2387,12 +2404,12 @@ body.config-active #livePage.open {
        release builds retain exactly one Telegram control. -->
   <div class="tg-link-wrap">
     <div class="footer-support-row" data-debug-support-row hidden>
-      <button class="debug-support-btn" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
+      <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
         <span class="tg-link-ico">✉️</span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
-      <button class="debug-support-btn" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
+      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico">✉️</span>
@@ -2556,12 +2573,12 @@ body.config-active #livePage.open {
        release builds retain exactly one Telegram control. -->
   <div class="tg-link-wrap">
     <div class="footer-support-row" data-debug-support-row hidden>
-      <button class="debug-support-btn" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
+      <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
         <span class="tg-link-ico">✉️</span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
-      <button class="debug-support-btn" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
+      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico">✉️</span>
@@ -2651,12 +2668,12 @@ body.config-active #livePage.open {
        release builds retain exactly one Telegram control. -->
   <div class="tg-link-wrap">
     <div class="footer-support-row" data-debug-support-row hidden>
-      <button class="debug-support-btn" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
+      <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
         <span class="tg-link-ico">✉️</span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
-      <button class="debug-support-btn" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
+      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico">✉️</span>
@@ -3014,7 +3031,11 @@ async function asbDebugAction(action) {
   if (!allowed) return;
   _asbDebugActionBusy = true;
   const buttons = Array.from(document.querySelectorAll('.debug-support-btn'));
+  const activeButtons = buttons.filter(b => b.dataset.debugAction === action);
   buttons.forEach(b => { b.disabled = true; });
+  activeButtons.forEach(b => { b.classList.add('is-running'); b.setAttribute('aria-busy', 'true'); });
+  toast(T(action === 'diag' ? 'dbg_diag_wait' : 'dbg_log_wait',
+          action === 'diag' ? 'asbdiag started · please wait' : '24h log is starting · please wait'), 'warn');
   try {
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + action + ' 2>/dev/null');
     const info = debugActionText(r);
@@ -3034,6 +3055,7 @@ async function asbDebugAction(action) {
   } catch (e) { toast(T(action === 'diag' ? 'dbg_diag_failed' : 'dbg_log_failed', 'Debug action failed'), 'bad'); }
   finally {
     _asbDebugActionBusy = false;
+    activeButtons.forEach(b => { b.classList.remove('is-running'); b.removeAttribute('aria-busy'); });
     buttons.forEach(b => { b.disabled = false; });
   }
 }
@@ -3062,7 +3084,8 @@ function ui(p) {
   // raw would read like a fifth mode. No button is highlighted either, because none of
   // them is active.
   document.getElementById('curProfile').textContent =
-    (p === 'none' || !p) ? T('prof_none', 'not selected') : p;
+    (p === 'none' || !p) ? T('prof_none', 'not selected') :
+    (p === 'stock' ? T('prof_stock', 'Stock') : p);
 }
 
 let switching = false;
@@ -3084,8 +3107,12 @@ async function go(p) {
      * saw English here no matter what their locale file contained. T() already falls
      * back to English on its own; the special case only prevented the other nine from
      * ever being used. */
-    toast('\u2713 ' + T('prof_' + p, p.charAt(0).toUpperCase() + p.slice(1)) +
-          T('t_prof_applied', ' applied'), p);
+    if (p === 'stock') {
+      toast('\u2713 ' + T('t_stock_applied', 'Stock active · ASB policy stopped · reboot recommended'), 'warn');
+    } else {
+      toast('\u2713 ' + T('prof_' + p, p.charAt(0).toUpperCase() + p.slice(1)) +
+            T('t_prof_applied', ' applied'), p);
+    }
     /*
      * Refresh the Smart sub-line here rather than waiting for the live poll.
      */
@@ -3113,7 +3140,7 @@ function openTelegram(e) {
   // sees a profile they never picked and has no way to tell it is not applied.
   const r = await run('cat ' + MD + '/current_profile 2>/dev/null || echo none');
   const p = (r.stdout || 'none').trim();
-  ui(['performance','balanced','battery','smart'].includes(p) ? p : 'none');
+  ui(['stock','performance','balanced','battery','smart'].includes(p) ? p : 'none');
   /* The markup ships "adaptive · learning" as a placeholder, which is a claim about
    * state rather than a neutral label. Resolve it from the device on first paint so the
    * home screen never shows something it has not actually checked. */
