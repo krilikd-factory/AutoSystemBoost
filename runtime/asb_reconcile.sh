@@ -1,5 +1,11 @@
 #!/system/bin/sh
 
+  # This file is sourced by service.sh. Stock is an explicit no-intervention profile, so
+  # return from the sourced helper instead of keeping a reconcile loop for a stopped governor.
+  if [ "$(cat "${MODDIR:-/data/adb/modules/AutoSystemBoost}/current_profile" 2>/dev/null)" = "stock" ]; then
+    return 0 2>/dev/null || exit 0
+  fi
+
   _last_profile=""
   _last_screen="-1"
   _reconcile_fast=3

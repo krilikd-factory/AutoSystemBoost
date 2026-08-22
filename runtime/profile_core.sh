@@ -77,6 +77,7 @@ asb_update_desc() {
     performance) _s='description=status: Performance 🔥 | active ✅' ;;
     battery)     _s='description=status: Battery 🔋 | active ✅' ;;
     smart)       _s='description=status: Smart Mode 🤖 | active ✅' ;;
+    stock)       _s='description=status: Stock ◻️ | ASB performance policy stopped' ;;
     ''|none)     _s='description=status: no profile selected — open the WebUI to choose one' ;;
     *)           _s='description=status: Balanced ⚖️ | active ✅' ;;
   esac
@@ -585,6 +586,7 @@ asb_apply_wifi() {
 }
 
 asb_load_profile() {
+  ASB_STOCK_PROFILE=0
   if [ -r "$MODDIR/current_profile" ]; then
     _cp="$(cat "$MODDIR/current_profile" 2>/dev/null)"
     [ -n "$_cp" ] && PROFILE="$_cp"
@@ -596,6 +598,12 @@ asb_load_profile() {
   # applied the balanced rails anyway. Same shape as the module card saying "Balanced"
   # while the app said "not selected": a catch-all swallowing a case that has meaning.
   case "$PROFILE" in
+    stock)
+      ASB_PROFILE=stock
+      ASB_STOCK_PROFILE=1
+      command -v asb_log >/dev/null 2>&1 && asb_log 'stock profile - leaving CPU, GPU, governor and profile-owned runtime policy untouched'
+      return 0
+      ;;
     battery|balanced|performance) : ;;
     smart)
       _SHELL_BOOT_PROFILE=balanced
@@ -677,6 +685,7 @@ asb_load_profile() {
 
 asb_apply_profile_once() {
   asb_load_profile
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   asb_cpu_cluster_init
   asb_update_desc
   asb_apply_walt

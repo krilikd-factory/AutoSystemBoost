@@ -181,6 +181,7 @@ sysctlw() {
 
 ASB_GOV="$MODDIR/bin/asb"
 ASB_GOV_ENABLED=0
+[ -r "$MODDIR/runtime/asb_stock_policy.sh" ] && . "$MODDIR/runtime/asb_stock_policy.sh"
 
 asb_governor_running() {
   [ -f /dev/.asb/governor.pid ] || return 1
@@ -190,6 +191,12 @@ asb_governor_running() {
 
 asb_governor_start() {
   [ -x "$ASB_GOV" ] || return 1
+  # Stock is deliberately no-intervention: do not turn a missing daemon into a recovery
+  # event or start a policy writer merely because the CPU feature exists.
+  if command -v asb_stock_profile_active >/dev/null 2>&1 && asb_stock_profile_active; then
+    ASB_GOV_ENABLED=0
+    return 2
+  fi
   asb_governor_running && return 0
   mkdir -p "$MODDIR/config"
   if [ ! -f "$MODDIR/config/governor.conf" ] && [ -f "$MODDIR/config/governor.conf.shipped" ]; then
@@ -210,6 +217,7 @@ asb_governor_set_profile() {
   "$ASB_GOV" "profile:$ASB_PROFILE" >/dev/null 2>&1 || true
 }
 
-if asb_feature_enabled CPU && [ -x "$ASB_GOV" ]; then
+if asb_feature_enabled CPU && [ -x "$ASB_GOV" ] && \
+   { ! command -v asb_stock_profile_active >/dev/null 2>&1 || ! asb_stock_profile_active; }; then
   asb_governor_start && ASB_GOV_ENABLED=1
 fi

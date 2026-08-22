@@ -1,6 +1,9 @@
 #!/system/bin/sh
 
 [ "$ASB_GOV_ENABLED" -eq 1 ] || exit 0
+# Stock deliberately stops the governor. Treat that as an explicit user policy, never as a
+# failed daemon requiring recovery or a fallback profile write.
+[ "$(cat "${MODDIR:-/data/adb/modules/AutoSystemBoost}/current_profile" 2>/dev/null)" = "stock" ] && exit 0
 
 ASB_FAIL_COUNT=0
 ASB_SAFE_MODE_FILE="/dev/.asb/safe_mode"
