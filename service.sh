@@ -1386,7 +1386,7 @@ apply_wifi_settings() {
   asb_settings_put global wifi_suspend_optimizations_enabled 1
   asb_settings_put global wifi_verbose_logging_enabled 0
 }
-asb_feature_enabled WIFI && apply_wifi_settings
+# Deferred to post-boot: Settings/Wi-Fi service may not be ready during init.
 asb_wifi_cc_heal() {
   # One-time heal: older versions ran `force-country-code enabled IT`, which
   if [ -f /data/adb/asb/wifi_cc_forced ]; then
@@ -1394,7 +1394,7 @@ asb_wifi_cc_heal() {
     rm -f /data/adb/asb/wifi_cc_forced 2>/dev/null || true
   fi
 }
-asb_wifi_cc_heal
+# Country heal is invoked by the post-boot connectivity stage below.
 
 apply_wifi_country() {
   # Country from SIM then operator; only a confident 2-letter ISO code. We set
@@ -1410,7 +1410,7 @@ apply_wifi_country() {
     asb_settings_put global wifi_country_code "$_cc"
   }
 }
-asb_feature_enabled WIFI && apply_wifi_country
+# Deferred to post-boot: country policy belongs after framework readiness.
 apply_wlan0_txqlen() {
   [ -e /sys/class/net/wlan0/tx_queue_len ] || return 0
   _want="${_P_WLAN_TXQLEN:-768}"
@@ -1419,7 +1419,7 @@ apply_wlan0_txqlen() {
   echo $_want > /sys/class/net/wlan0/tx_queue_len 2>/dev/null || true
   ip link set wlan0 txqueuelen $_want >/dev/null 2>&1 || true
 }
-asb_feature_enabled WIFI && apply_wlan0_txqlen
+# Deferred to post-boot: wlan0 may not be published yet.
 netif_oper_upish() {
   _if="$1"
   [ -n "$_if" ] || return 1
@@ -1488,8 +1488,7 @@ apply_mobile_qdisc() {
     esac
   done
 }
-asb_feature_enabled WIFI && apply_wlan0_qdisc
-asb_feature_enabled NET && apply_mobile_qdisc
+# Qdisc setup is deferred to post-boot connectivity.
 # ASB:WIFI:BEGIN
 apply_wifi_pm() {
   wait_path /sys/class/net/wlan0 10 || return 0
@@ -1526,7 +1525,7 @@ apply_wifi_pm() {
       ;;
   esac
 }
-asb_feature_enabled WIFI && apply_wifi_pm
+# Deferred to post-boot: this function waits for wlan0/operstate.
 apply_wifi_dtim() {
   asb_has_risky_vendor_stack && return 0
   case "$ASB_PROFILE" in
@@ -1536,7 +1535,7 @@ apply_wifi_dtim() {
   esac
   writef_retry /sys/module/wlan/parameters/enable_connected_scan_result 0 3 0.25 || true
 }
-asb_feature_enabled WIFI && apply_wifi_dtim
+# Deferred to post-boot with the Wi-Fi power policy.
 apply_net_steering() {
   for q in /sys/class/net/wlan0/queues/rx-* /sys/class/net/rmnet*/queues/rx-*; do
     [ -d "$q" ] || continue
@@ -1547,10 +1546,12 @@ apply_net_steering() {
     [ -w "$q/xps_cpus" ] && echo fc > "$q/xps_cpus" 2>/dev/null || true
   done
 }
-asb_feature_enabled NET && apply_net_steering
+# Deferred to post-boot after network links exist.
 
 # ASB:WIFI:END
-(
+# This retry can wait up to two minutes for a link. It is callable from the post-boot
+# worker only, never launched during the init/service startup path.
+asb_wifi_link_reassert() {
   _skip_wlan_wait=0
   if has settings; then
     _wifi_on="$(settings get global wifi_on 2>/dev/null)"
@@ -1575,7 +1576,7 @@ asb_feature_enabled NET && apply_net_steering
     q="$(cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
     [ "$q" = "${_P_WLAN_TXQLEN:-1024}" ] && break
   done
-) >/dev/null 2>&1 &
+}
 # ASB:GPS:BEGIN
 apply_gps_hygiene() {
   has settings || return 0
@@ -1588,7 +1589,7 @@ apply_gps_hygiene() {
   asb_settings_put global ntp_server_3 0.it.pool.ntp.org
   asb_settings_put global ntp_server_4 1.it.pool.ntp.org
 }
-asb_feature_enabled GPS && apply_gps_hygiene
+# GPS settings are applied with deferred connectivity after boot completion.
 asb_timeline_mark service_connectivity_complete
 # ASB:GPS:END
 # ASB:AUDIO:BEGIN
@@ -2963,6 +2964,27 @@ fi
     apply_bg_trim_runtime
     asb_timeline_mark post_boot_bgtrim_complete
   fi
+
+  # Wi-Fi readiness/operstate polling, country policy and interface qdisc writes are applied
+  # after Android's framework and link manager settle. On the OP15 they accounted for the
+  # measured 19-second service_network_complete -> service_connectivity_complete interval.
+  asb_timeline_mark post_boot_connectivity_begin
+  if asb_feature_enabled WIFI; then
+    asb_wifi_cc_heal
+    apply_wifi_settings
+    apply_wifi_country
+    apply_wlan0_txqlen
+    apply_wlan0_qdisc
+    apply_wifi_pm
+    apply_wifi_dtim
+    ( asb_wifi_link_reassert ) >/dev/null 2>&1 &
+  fi
+  if asb_feature_enabled NET; then
+    apply_mobile_qdisc
+    apply_net_steering
+  fi
+  asb_feature_enabled GPS && apply_gps_hygiene
+  asb_timeline_mark post_boot_connectivity_complete
 
   # Athena: pm component state does not survive a reboot on every build, so re-assert it late.
   if [ -f "$MODDIR/runtime/asb_athena_apply.sh" ]; then
