@@ -2942,8 +2942,30 @@ fi
 # Watch what holds the phone awake. Runs on a slow loop - this is a night-scale problem,
 # and polling it often would be its own small version of the thing it measures.
 (
+  _slow_pass=0
   while true; do
     sleep 900
+    # Screen off: same work, quarter the cadence.
+    #
+    # This loop grew from one script to four - wakelock watch, trial check, screen-off class
+    # and GNSS trim - which between them run about two dozen dumpsys, pm list and appops
+    # calls. Each is cheap while the screen is on and expensive while it is not: waking a
+    # sleeping SoC every fifteen minutes to ask who is keeping it awake turns the
+    # measurement into the thing it measures.
+    #
+    # Field evidence, V63 against V64 on one phone with identical settings: sleep awake went
+    # from 3.8% to 69.9% and every screen-on phase drew 30-40% more. Users reported it as
+    # "V64 eats the battery", which is what it does.
+    #
+    # NOT skipped outright: two of these four exist precisely to observe screen-off
+    # behaviour, so silencing them at night would remove the answer along with the cost.
+    # Once an hour instead of four times keeps every feature and drops three wakeups in four.
+    _slow_pass=$(( _slow_pass + 1 ))
+    case "$(dumpsys deviceidle get screen 2>/dev/null)" in
+      false|Asleep)
+        [ $(( _slow_pass % 4 )) -eq 0 ] || continue
+        ;;
+    esac
     [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ] || continue
     sh "$MODDIR/runtime/asb_wakelock_watch.sh" >/dev/null 2>&1
     # Trial expiry and rejected-write detection ride the same cycle: a probation that is
