@@ -313,6 +313,14 @@ static inline int lerp_int(int a, int b, float t) {
     return (int)(a + (b - a) * t + 0.5f);
 }
 
+/* GPU ceiling with the screen off, as a percentage of hardware maximum.
+ *
+ * 15% leaves room for AOD composition and the wake path while removing the headroom the
+ * profile envelope grants for a screen that is on. Chosen above the hardware floor on
+ * purpose: the first frame after unlock is drawn from this state, and starving it trades
+ * a little heat for a visible stutter every single unlock. */
+#define ASB_DEEP_IDLE_GPU_MAX_PCT 15
+
 static void fsm_interpolate_caps(
     const asb_profile_bounds_t *bounds, int profile_idx, asb_state_t state,
     asb_profile_caps_t *out)
@@ -385,6 +393,25 @@ static void fsm_interpolate_caps(
         g_asb_cfg.bat_light_idle_gpu >= 0 &&
         out->gpu_max_pct > g_asb_cfg.bat_light_idle_gpu)
         out->gpu_max_pct = g_asb_cfg.bat_light_idle_gpu;
+
+    /* DEEP_IDLE means the screen is off. There is nothing to draw.
+     *
+     * The ceiling here comes out of the profile envelope at 40-42% - a number sized for a
+     * lit screen that happens to be idle. With the panel off, the only GPU work left is
+     * whatever a background process asks for, and none of it is being looked at.
+     *
+     * This applies on every profile, not just Battery, because the reasoning does not
+     * depend on the profile: Performance does not mean "render faster for nobody". The
+     * existing LIGHT_IDLE clamp above stays profile-gated, since there the screen IS on
+     * and the trade is real.
+     *
+     * Never zero: composition still runs for always-on display and for the wake path, and
+     * a GPU pinned to its floor makes the first frame after unlock visibly late - which
+     * users read as the module being slow, not as it being careful.
+     */
+    if (state == ASB_STATE_DEEP_IDLE &&
+        out->gpu_max_pct > ASB_DEEP_IDLE_GPU_MAX_PCT)
+        out->gpu_max_pct = ASB_DEEP_IDLE_GPU_MAX_PCT;
     out->ravg_ticks     = lerp_int(f->ravg_ticks,     c->ravg_ticks,     t > 0.5f ? 1.0f : 0.0f);
     out->idle_enough    = lerp_int(f->idle_enough,    c->idle_enough,    t);
     out->uclamp_top_max = lerp_int(f->uclamp_top_max, c->uclamp_top_max, t);
@@ -1396,6 +1423,34 @@ if (!can_leave &&
             }
             if (can_leave && desired < fsm->state) {
                 int min_dwell = fsm_min_dwell_for_state(fsm->state);
+
+                /* Two cases where holding the higher state costs more than the chattering
+                 * the dwell timer exists to prevent.
+                 *
+                 * The timer is right in the ordinary case: a user who alt-tabs out of a
+                 * game for three seconds should not have the phone drop and re-climb, which
+                 * is both slower and hotter than staying put. But it applies the same 8-25
+                 * seconds regardless of what those seconds cost.
+                 *
+                 * 1. Screen off. Nothing on the other side of the glass can perceive a
+                 *    frequency change, so there is no jank to protect against - and the
+                 *    phone is in a pocket, where the heat has nowhere to go. Field logs
+                 *    show the screen-off transition arriving straight from active use, so
+                 *    this is every unlock-use-lock cycle, not an edge case.
+                 *
+                 * 2. Genuinely hot. Above the throttle point the phone is already in the
+                 *    territory the whole thermal system exists to leave. Spending another
+                 *    25 seconds at gaming clocks on a workload that has ENDED is the
+                 *    opposite of cooling down - and it is what users describe as
+                 *    "it takes forever to cool off after a game".
+                 *
+                 * Only ever skips the wait on the way DOWN. Nothing here lets a state rise
+                 * faster, so neither branch can be used to grant more performance.
+                 */
+                int hot_now = (g_asb_cfg.sustained_temp_enter > 0 &&
+                               m->therm.cpu_max_c >= g_asb_cfg.sustained_temp_enter);
+                if (!m->misc.screen_on || hot_now) min_dwell = 0;
+
                 if (min_dwell > 0 && fsm_elapsed_sec(fsm) < min_dwell)
                     can_leave = 0;
             }

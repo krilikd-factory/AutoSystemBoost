@@ -6525,15 +6525,52 @@ int main(int argc, char **argv) {
                     g_last_reassert = now;
                     g_last_reassert_ok = (ok == 0) ? 1 : 0;
                     if (ok == 0 && g_asb_cfg.log_level >= 1) {
-                        if (vendor_clamping)
+                        if (vendor_clamping) {
+                            /* Same fix the reassert branch below already carries, applied
+                             * here too.
+                             *
+                             * This printed fsm.current_caps raw - the ratio arithmetic
+                             * before the writer snaps it to a step the cluster actually
+                             * has. A field log shows
+                             * "anti_clamp[burst]: cpu_max=[3551224,2322753]" two lines
+                             * above "reassert: cpu_max=[3513600,2227200]", the same moment
+                             * reported with and without snapping. The first pair are
+                             * frequencies no device has.
+                             *
+                             * That is not cosmetic here: this line exists to show a VENDOR
+                             * clamp, and the reader compares the two columns to judge how
+                             * far apart they are. Part of that gap was our own rounding,
+                             * so the log overstated the clamp - and I diagnosed exactly
+                             * that wrongly once already from this output.
+                             *
+                             * Both columns now come from the same place: what was asked
+                             * for after snapping, against what the device holds.
+                             */
+                            int _ac_want0 = fsm.current_caps.cpu_max[0];
+                            int _ac_want1 = fsm.current_caps.cpu_max[1];
+                            for (int _ac_i = 0; _ac_i < 2; _ac_i++) {
+                                int _ac_slot = -1;
+                                for (int _ac_k = 0; _ac_k < g_cpu_all_paths_n && _ac_k < 16; _ac_k++) {
+                                    if (g_cpu_all_max_paths[_ac_k][0] && g_cpu_max_paths[_ac_i][0] &&
+                                        strcmp(g_cpu_all_max_paths[_ac_k], g_cpu_max_paths[_ac_i]) == 0) {
+                                        _ac_slot = _ac_k; break;
+                                    }
+                                }
+                                if (_ac_slot < 0) continue;
+                                if (_ac_i == 0 && _ac_want0 > 0)
+                                    _ac_want0 = (int)cpu_snap_freq(_ac_slot, (long)_ac_want0);
+                                if (_ac_i == 1 && _ac_want1 > 0)
+                                    _ac_want1 = (int)cpu_snap_freq(_ac_slot, (long)_ac_want1);
+                            }
                             asb_log("anti_clamp[%s]: %s cpu_max=[%d,%d] actual=[%d,%d] hr=%d%% t=%ddegC",
                                     (g_ac_stage == AC_STAGE_BURST) ? "burst" :
                                     (g_ac_stage == AC_STAGE_HOLD) ? "hold" : "?",
                                     asb_state_names[fsm.state],
-                                    fsm.current_caps.cpu_max[0], fsm.current_caps.cpu_max[1],
+                                    _ac_want0, _ac_want1,
                                     sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0),
                                     sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0),
                                     metrics.therm.headroom_pct, metrics.therm.cpu_max_c);
+                        }
                         else
                             /* Log what the CPU will actually hold, not what was asked for.
                              *
