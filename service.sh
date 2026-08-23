@@ -2277,6 +2277,21 @@ apply_cpufreq_caps() {
     else
       _want="$(asb_freq_pick_pct "$_pol_dir" "$_pct")"
     fi
+    # In Smart mode the governor owns the ceiling - do not overwrite it here.
+    #
+    # This wrote the profile percentage unconditionally, so every reconcile pass stamped a
+    # static per-profile number over whatever the FSM had just decided. Field traces across
+    # four devices show the result: the governor owns the cap 11% of the time, 0% on one
+    # phone, while "shell" owns 49-70%. All the thermal work - the SUSTAINED ladder, the
+    # proportional clamp, the monotonic ratchet - was being overwritten seconds later by a
+    # fixed percentage that knows nothing about temperature.
+    #
+    # The floor below is still written: it is a single-owner value the governor does not
+    # manage. Only the ceiling is handed back.
+    if [ "$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)" = "1" ] \
+       && [ -f /dev/.asb/state ]; then
+      _want=""
+    fi
     if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 3 0.25; then
       _actual="$(cat "$_smax" 2>/dev/null)"
       command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note cpu_cap profile profile_apply "$_want" "${_actual:--}" applied || true
