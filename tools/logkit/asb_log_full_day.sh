@@ -263,6 +263,14 @@ lk_throttle_row() {
   _surf=$(echo "$_j" | awk -F'"surface_hotspot":' '{print $2}' | awk -F, '{print $1}')
   _own=$(echo "$_j"  | awk -F'"cap_owner":"' '{print $2}' | awk -F'"' '{print $1}')
   echo "${_e}|${_ph}|p0_max=${_p0}/${LK_P0_HWMAX}|p6_max=${_p6}/${LK_P6_HWMAX}|cpu_temp=${_temp}|surface=${_surf}|cap_owner=${_own}" >> "$LK_OUT_DIR/throttle_trace.txt"
+  # Count it for the summary as well as the trace.
+  #
+  # LK_PH_THROTTLE was declared, reset per phase and printed - and incremented nowhere.
+  # So every report from every device showed "throttle 0" in every phase while the trace
+  # beside it held hundreds of capping events: 538 on one capture, 297 on another. Four
+  # users read that column as "the module never throttles" and concluded the module was
+  # doing nothing about the heat. The column was wrong, not the module.
+  LK_PH_THROTTLE=$(( LK_PH_THROTTLE + 1 ))
 }
 
 # ── per-phase accounting ───────────────────────────────────────────────────
