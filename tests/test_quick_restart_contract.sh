@@ -50,13 +50,37 @@ absent "$SERVICE" 'asb_feature_enabled BG_TRIM && apply_bg_trim_runtime'
 _bg_line="$(grep -nF '    apply_bg_trim_runtime' "$SERVICE" | head -1 | cut -d: -f1)"
 [ -n "$_bg_line" ] && [ "$_bg_line" -gt "$_pb_line" ] || fail 'BG_TRIM is not deferred after boot completion'
 need "$SERVICE" 'asb_timeline_mark service_maintenance_complete'
-need "$SERVICE" 'asb_timeline_mark service_cpu_complete'
-need "$SERVICE" 'asb_timeline_mark service_vm_complete'
+need "$SERVICE" 'asb_timeline_mark service_cpu_deferred'
+need "$SERVICE" 'asb_timeline_mark service_vm_deferred'
 need "$SERVICE" 'asb_timeline_mark service_network_complete'
 need "$SERVICE" 'asb_timeline_mark service_connectivity_complete'
-need "$SERVICE" 'asb_timeline_mark service_media_kernel_complete'
-need "$SERVICE" 'asb_timeline_mark service_runtime_core_complete'
+need "$SERVICE" 'asb_timeline_mark service_media_kernel_deferred'
+need "$SERVICE" 'asb_timeline_mark service_runtime_kernel_memory_deferred'
+need "$SERVICE" 'asb_timeline_mark service_runtime_core_deferred'
 need "$SERVICE" 'asb_timeline_mark service_dispatched'
+# The first UI must not wait for cgroup readiness/retries, direct profile caps,
+# VM/kernel/DSP/ZRAM writes or WALT delayed reassertion. Stock/vendor policy is
+# retained until the lifecycle-gated core worker applies the same ASB policy.
+absent "$SERVICE" 'wait_path /dev/cpuset/background/cpus 8'
+absent "$SERVICE" 'wait_path /dev/cpuctl/top-app 8'
+absent "$SERVICE" '( sleep 5; asb_load_profile; apply_walt_boost; apply_walt_live )'
+need "$SERVICE" 'asb_timeline_mark post_boot_core_policy_begin'
+need "$SERVICE" 'asb_timeline_mark post_boot_core_policy_complete'
+need "$SERVICE" 'asb_apply_deferred_core_boot() {'
+_core_def_line="$(grep -nF 'asb_apply_deferred_core_boot() {' "$SERVICE" | head -1 | cut -d: -f1)"
+[ -n "$_core_def_line" ] || fail 'deferred core definition missing'
+# `apply_runtime_profile_now` remains a callable manual profile-switch helper and is
+# intentionally defined before this function. Its body is not an initial boot call.
+# Guard actual initial-path scheduling by requiring the explicit deferred markers and
+# forbidding the previous direct early invocations/settle task below.
+absent "$SERVICE" 'asb_feature_enabled CPU && apply_cpugov_hints'
+absent "$SERVICE" 'asb_timeline_mark service_cpu_complete'
+absent "$SERVICE" 'asb_timeline_mark service_vm_complete'
+absent "$SERVICE" 'asb_timeline_mark service_media_kernel_complete'
+absent "$SERVICE" 'asb_timeline_mark service_runtime_kernel_memory_complete'
+_core_line="$(grep -nF 'asb_timeline_mark post_boot_core_policy_begin' "$SERVICE" | head -1 | cut -d: -f1)"
+_core_call_line="$(grep -nF '  asb_apply_deferred_core_boot' "$SERVICE" | tail -1 | cut -d: -f1)"
+[ -n "$_core_line" ] && [ -n "$_core_call_line" ] && [ "$_core_call_line" -gt "$_core_line" ] && [ "$_core_line" -gt "$_pb_line" ] || fail 'deferred core policy is not boot-complete gated'
 need "$SERVICE" 'asb_timeline_mark post_boot_bgtrim_begin'
 need "$SERVICE" 'asb_timeline_mark post_boot_bgtrim_complete'
 need "$SERVICE" 'ASB_TIMELINE_DEBUG=0'
@@ -90,7 +114,7 @@ need "$SERVICE" 'never launched during the init/service startup path'
 # Runtime framework operations are distinct from early kernel/ZRAM writes. On the OP15 they
 # occupied the residual 11-second runtime segment, so settings, DeviceIdle, tracking and
 # nonessential-service operations must execute only in the post-boot worker.
-need "$SERVICE" 'asb_timeline_mark service_runtime_kernel_memory_complete'
+need "$SERVICE" 'asb_timeline_mark service_runtime_kernel_memory_deferred'
 need "$SERVICE" 'asb_timeline_mark service_runtime_framework_deferred'
 need "$SERVICE" 'asb_timeline_mark post_boot_runtime_framework_begin'
 need "$SERVICE" 'asb_timeline_mark post_boot_runtime_framework_complete'
