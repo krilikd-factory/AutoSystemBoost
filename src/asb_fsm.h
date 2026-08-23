@@ -271,6 +271,35 @@ static inline const char *asb_profile_name(int profile_idx) {
  * feed misclassified as GAMING runs the phone flat out for as long as the user scrolls.
  * The costs are not symmetric, so the threshold does not sit in the middle.
  */
+/* Load thresholds are per-core, not absolute.
+ *
+ * These were written as raw load1 figures - 2.0 for gaming, 1.2 for a GPU-led escalation -
+ * which quietly assumes a small machine. On an eight-core phone load1 is eight when every
+ * core is busy, and field traces from an OnePlus 15 show a median of 6.8 while the screen
+ * is OFF and 9.4 while scrolling a feed. Against those numbers a threshold of 2.0 is not a
+ * gate at all: it is true essentially always, so every GPU flicker could promote the phone
+ * to GAMING or HEAVY and hold the higher rails there.
+ *
+ * Expressed per core the same constants mean what they were meant to mean: 0.25 is a
+ * quarter of the machine busy, 0.15 is a GPU-led hint with some CPU behind it. The numbers
+ * below reproduce the original intent on a 8-core device, so nothing changes there, while
+ * a 4-core or 12-core chip finally gets a gate scaled to itself.
+ */
+#define ASB_GAMING_MIN_LOAD1_PER_CORE 0.25f
+#define ASB_HEAVY_GPU_MIN_LOAD1_PER_CORE 0.15f
+static float asb_load_per_core(const asb_metrics_t *m) {
+    /* Core count read once. asb_metrics_t does not carry it and adding a field would touch
+     * every producer of the struct for a number that cannot change while the process runs.
+     * Falls back to 8 - the count on every device this module currently targets - so a
+     * failed read behaves exactly as the old absolute thresholds did rather than producing
+     * a wild ratio. */
+    static int _n = 0;
+    if (_n == 0) {
+        long c = sysconf(_SC_NPROCESSORS_CONF);
+        _n = (c > 0 && c <= 64) ? (int)c : 8;
+    }
+    return m->cpu.load1 / (float)_n;
+}
 #define ASB_GAMING_MIN_LOAD1 2.0f
 
 /* Minimum load1 before a busy GPU alone may escalate to HEAVY.
@@ -784,7 +813,7 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
          * The threshold is deliberately low - this rejects "GPU busy, CPU idle", it does not
          * try to grade how hard the game works. Anything genuinely interactive clears it.
          */
-        int cpu_busy_enough = (m->cpu.load1 >= ASB_GAMING_MIN_LOAD1);
+        int cpu_busy_enough = (asb_load_per_core(m) >= ASB_GAMING_MIN_LOAD1_PER_CORE);
         if (g_gaming_confirm_streak >= g_asb_cfg.gaming_confirm_ticks && cpu_busy_enough)
             return ASB_STATE_GAMING;
         /* Above the gaming GPU threshold but the CPU is not participating: this fell
@@ -792,7 +821,7 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
          * video reaches 60% GPU with the CPU under 1.0, and HEAVY's clocks do nothing for
          * it - the decode is already in hardware. Graded by what the CPU is doing, like
          * every other branch here. */
-        if (m->cpu.load1 >= ASB_HEAVY_GPU_MIN_LOAD1)
+        if (asb_load_per_core(m) >= ASB_HEAVY_GPU_MIN_LOAD1_PER_CORE)
             return ASB_STATE_HEAVY;
         return ASB_STATE_MODERATE;
     }
@@ -831,7 +860,7 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     int gpu_says_heavy = (m->gpu.load_pct >= g_asb_cfg.heavy_gpu_enter);
     int cpu_says_heavy = (m->cpu.load1 >= heavy_thr);
     if (cpu_says_heavy ||
-        (gpu_says_heavy && m->cpu.load1 >= ASB_HEAVY_GPU_MIN_LOAD1)) {
+        (gpu_says_heavy && asb_load_per_core(m) >= ASB_HEAVY_GPU_MIN_LOAD1_PER_CORE)) {
         if (!ma_valid || m->bat.current_ma >= 150)
             return ASB_STATE_HEAVY;
     }
@@ -966,7 +995,27 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
      * screen-on, but high enough to let a decode finish and the core go quiet. An idle
      * phone is unaffected: load below the threshold still goes straight to DEEP_IDLE.
      */
-    int _off_busy = (m->cpu.load1 >= 8.0f);
+    /* Sustained load, not a single tick - and not the module's own footprint.
+     *
+     * The rule was "screen off and load1 >= 8 means real work is running". True for a
+     * decode or a sync, false for the module's own housekeeping: the 15-minute maintenance
+     * pass runs about two dozen dumpsys, pm list and appops calls, which is easily enough
+     * to push load1 past 8 for a tick or two. The FSM then read its own noise as user work
+     * and promoted the phone out of DEEP_IDLE - so the polling raised the caps, the higher
+     * caps cost current, and the next pass measured a busier phone. A feedback loop with
+     * the module on both ends of it.
+     *
+     * Three consecutive ticks required. A real background job easily holds load for a
+     * minute; a burst of shell commands does not. The counter resets the moment load falls
+     * back, so nothing accumulates across unrelated wakeups.
+     */
+    static int _off_busy_streak = 0;
+    if (m->cpu.load1 >= 8.0f) {
+        if (_off_busy_streak < 3) _off_busy_streak++;
+    } else {
+        _off_busy_streak = 0;
+    }
+    int _off_busy = (_off_busy_streak >= 3);
     if (!m->misc.screen_on && _off_busy && fsm->state != ASB_STATE_LIGHT_IDLE &&
         fsm->state != ASB_STATE_MODERATE) {
         fsm->state   = ASB_STATE_LIGHT_IDLE;
