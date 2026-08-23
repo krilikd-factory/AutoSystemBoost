@@ -1873,7 +1873,21 @@ static int asb_cap_compute_owner(const char *cap_source) {
     /*
      * Track recent vendor clamp pattern for anti-thrash.
      */
-    if (owner == ASB_CAP_OWNER_VENDOR) {
+    /* Back off when the vendor clamps DOWN. Never when it raises.
+     *
+     * The anti-thrash counter treated vendor_clamp and vendor_raised alike, so both led
+     * to the same 15-30 second hold. Clamping down is the vendor cooling the phone and
+     * standing aside is right - fighting it writes the same value twice and helps
+     * nobody. Raising is the opposite: it is the vendor undoing the ceiling ASB just
+     * set, and answering that with silence hands the phone to the higher cap for half a
+     * minute at a stretch.
+     *
+     * Field traces put vendor ownership at 39-79% across three devices while ASB held
+     * 0-11%. Some of that is legitimate cooling. The part that is not is this branch
+     * treating "you are too slow" and "you are too fast" as the same message.
+     */
+    if (owner == ASB_CAP_OWNER_VENDOR && cap_source &&
+        strcmp(cap_source, "vendor_raised") != 0) {
         /* Burst window (60s) */
         if (g_cap_recent_window_start == 0 || (now - g_cap_recent_window_start) > 60) {
             g_cap_recent_window_start = now;
