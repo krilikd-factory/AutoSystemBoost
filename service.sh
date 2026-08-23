@@ -819,13 +819,11 @@ apply_uclamp() {
     [ -f "$_lat" ] && writef_retry "$_lat" $_P_LATENCY_SENSITIVE 5 0.3 || true
   done
 }
-wait_path /dev/cpuset/background/cpus 8 || true
-wait_path /dev/cpuctl/top-app 8 || true
-asb_feature_enabled CPU && apply_uclamp
-if asb_feature_enabled CPU; then
-  apply_cpuset_groups
-  apply_cpuset_groups_all
-fi
+# Fast boot policy: cgroup/uclamp/cpuset writes can wait for Android's own
+# boot-completed gate. Their old retry loops occupied six seconds on OP15 before
+# the first UI. Stock/vendor placement is safe until the post-boot core worker
+# reapplies the same ASB policy; native governor dispatch is not delayed.
+asb_feature_enabled CPU && asb_log "boot: CPU/cgroup policy deferred until boot_completed"
 apply_cpugov_hints() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   _rate="${SCHED_RATE:-3000}"
@@ -841,8 +839,8 @@ apply_cpugov_hints() {
     [ -w "$_pol/schedutil/hispeed_freq" ] && [ -n "$SCHED_HISPEED_FREQ" ] && writef_retry "$_pol/schedutil/hispeed_freq" "$SCHED_HISPEED_FREQ" 3 0.2 || true
   done
 }
-asb_feature_enabled CPU && apply_cpugov_hints
-asb_timeline_mark service_cpu_complete
+asb_feature_enabled CPU && asb_log "boot: CPU governor hints deferred until boot_completed"
+asb_timeline_mark service_cpu_deferred
 # ASB:CPU:END
 if has pm; then
   if command -v asb_pm_disable >/dev/null 2>&1; then
@@ -909,8 +907,8 @@ apply_vm() {
     [ -e /proc/sys/vm/laptop_mode ] && sysctlw vm.laptop_mode 0 || true
   fi
 }
-asb_feature_enabled VM && apply_vm
-asb_timeline_mark service_vm_complete
+asb_feature_enabled VM && asb_log "boot: VM policy deferred until boot_completed"
+asb_timeline_mark service_vm_deferred
 # ASB:VM:END
 sysctl_try() {
   k="$1"; shift
@@ -2107,7 +2105,7 @@ apply_kernel() {
   esac
   tune_io_queues
 }
-asb_feature_enabled KERNEL && apply_kernel
+asb_feature_enabled KERNEL && asb_log "boot: kernel/DSP policy deferred until boot_completed"
 apply_dsp_compute_boost() {
   [ -e /sys/module/cdsp_loader/parameters/cdsp_load_state ] && \
     writef /sys/module/cdsp_loader/parameters/cdsp_load_state 1 || true
@@ -2124,8 +2122,8 @@ apply_dsp_compute_boost() {
     fi
   done
 }
-asb_feature_enabled KERNEL && apply_dsp_compute_boost
-asb_timeline_mark service_media_kernel_complete
+asb_feature_enabled KERNEL && asb_log "boot: DSP compute policy deferred until boot_completed"
+asb_timeline_mark service_media_kernel_deferred
 # ASB:KERNEL:END
 
 asb_freq_pick_pct() {
@@ -2376,7 +2374,7 @@ apply_screen_aware_caps() {
   apply_cpufreq_caps
   asb_log "screen_aware_caps: dev=$_dev profile=$ASB_PROFILE screen_on=$_son cap_l=${_P_CPUCAP_L:-(none)} cap_b=${_P_CPUCAP_B:-(none)}"
 }
-asb_feature_enabled CPU && apply_gpu_caps
+asb_feature_enabled CPU && asb_log "boot: GPU cap policy deferred until boot_completed"
 apply_walt_live() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   asb_feature_enabled CPU || return 0
@@ -2735,8 +2733,35 @@ apply_walt_boost() {
     writef_retry /proc/sys/kernel/sched_boost 0 3 0.25 || true
   writef_retry /proc/sys/kernel/sched_energy_aware 1 3 0.25 || true
 }
-( sleep 5; asb_load_profile; apply_walt_boost; apply_walt_live ) >/dev/null 2>&1 &
-asb_feature_enabled VM && apply_zram
+# WALT boost and ZRAM reconciliation are performed by the deferred core worker.
+# Starting them here previously contributed to the final four seconds of service startup.
+asb_feature_enabled VM && asb_log "boot: ZRAM reconciliation deferred until boot_completed"
+
+asb_apply_deferred_core_boot() {
+  # Every call below is idempotent and was previously executed synchronously before
+  # service_dispatched. Applying them after boot completion preserves the selected
+  # profile while removing init/framework contention from the path to first UI.
+  asb_load_profile
+  asb_feature_enabled CPU && asb_apply_profile_once
+  if asb_feature_enabled CPU; then
+    apply_walt_boost
+    apply_walt_live
+    apply_uclamp
+    apply_cpuset_groups
+    apply_cpuset_groups_all
+    apply_idle
+    apply_screen_aware_caps
+    apply_gpu_caps
+    apply_cpugov_hints
+  fi
+  asb_feature_enabled VM && apply_vm
+  if asb_feature_enabled KERNEL; then
+    apply_kernel
+    apply_dsp_compute_boost
+  fi
+  asb_feature_enabled VM && apply_zram
+}
+
 apply_doze() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   has settings || return 0
@@ -2806,9 +2831,9 @@ apply_extra_settings() {
 }
 # Extra Settings writes are deferred to post-boot. Keep ZRAM and kernel-node work above here:
 # they are memory/driver policy rather than framework IPC and may be needed before the first UI.
-asb_timeline_mark service_runtime_kernel_memory_complete
+asb_timeline_mark service_runtime_kernel_memory_deferred
 asb_timeline_mark service_runtime_framework_deferred
-asb_timeline_mark service_runtime_core_complete
+asb_timeline_mark service_runtime_core_deferred
 asb_load_profile
 # POSIX check, not "type -t".
 # So this line silently skipped asb_apply_ux on EVERY boot, which is why "Manage UI speed" and
@@ -2956,6 +2981,11 @@ fi
   sleep 8
   asb_timeline_mark post_boot_tweaks_begin
   asb_log "post_boot_tweaks: begin"
+  # Fast boot counterpart to the existing deferred BG_TRIM/connectivity stages.
+  # Do all profile CPU/VM/kernel/DSP/ZRAM work after Android reports completion.
+  asb_timeline_mark post_boot_core_policy_begin
+  asb_apply_deferred_core_boot
+  asb_timeline_mark post_boot_core_policy_complete
 
   [ -f "$MODDIR/runtime/asb_gms_freeze.sh" ] && \
     sh "$MODDIR/runtime/asb_gms_freeze.sh" >/dev/null 2>&1
