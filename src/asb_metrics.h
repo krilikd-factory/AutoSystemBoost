@@ -921,8 +921,20 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
     t->temp_valid  = 0;
     t->temp_age_s  = 0;
     snprintf(t->temp_invalid_reason, sizeof(t->temp_invalid_reason), "init");
-    t->perf_cap_p0 = 0;
-    t->perf_cap_p6 = 0;
+    /* Keep the last known registration when a read fails.
+     *
+     * These were zeroed at the top of every tick and refilled only if the msm_performance
+     * node opened and parsed cleanly. A single failed read - the node busy, a short read, a
+     * transient EAGAIN - therefore published "governor registered no cap" for that tick,
+     * and the classifier duly recorded cap_owner=shell. On one capture that was 173 samples
+     * out of 301, which is not a governor losing ownership but a governor whose ownership
+     * could not be read.
+     *
+     * A stale value is the honest answer here: the registration does not evaporate because
+     * one read missed, and the next successful parse overwrites it anyway. */
+    static int _last_perf_cap_p0 = 0, _last_perf_cap_p6 = 0;
+    t->perf_cap_p0 = _last_perf_cap_p0;
+    t->perf_cap_p6 = _last_perf_cap_p6;
     t->headroom_pct = 100;
     t->headroom_valid = 0;
     t->used_fallback = 0;
@@ -1188,12 +1200,29 @@ int spike_detected = 0;
             close(fd);
             if (n > 0) {
                 buf[n] = '\0';
+                /* Two passes: find the highest CPU the node lists, then read its frequency.
+                   _prime_cpu is cached because topology cannot change at runtime. */
+                static int _prime_cpu = -1;
+                int _seen_max_cpu = -1;
                 char *p = buf;
                 while (*p) {
                     int cpu = -1, freq = 0;
                     if (sscanf(p, "%d:%d", &cpu, &freq) == 2) {
+                        /* Prime CPU by topology, not by the number 6.
+                         *
+                         * msm_performance lists every CPU. Hardcoding 6 works on a 6+2 like
+                         * canoe or sun and fails on pineapple, whose clusters are numbered
+                         * 0/2/5/7 - there is no cpu 6, so perf_cap_p6 stayed zero forever.
+                         * Zero means "governor never registered a cap", which sends the
+                         * classifier down its shell-only branch and makes every sample read
+                         * as cap_owner=shell. Three devices reported ASB owning the ceiling
+                         * 0-11% of the time; this is why.
+                         *
+                         * The prime is the highest-numbered CPU the node reports, which is
+                         * true on every Qualcomm layout in use. */
+                        if (cpu > _seen_max_cpu) _seen_max_cpu = cpu;
                         if (cpu == 0 && freq > 0) t->perf_cap_p0 = freq;
-                        if (cpu == 6 && freq > 0) t->perf_cap_p6 = freq;
+                        if (cpu == _prime_cpu && freq > 0) t->perf_cap_p6 = freq;
                     }
                     while (*p && *p != ' ' && *p != '\n' && *p != '\t') p++;
                     while (*p == ' ' || *p == '\n' || *p == '\t' || *p == '\r') p++;
@@ -1237,6 +1266,24 @@ int spike_detected = 0;
                                     snprintf(t->headroom_invalid_reason,
                                              sizeof(t->headroom_invalid_reason), "ok");
                                 } else {
+                  /* First tick only: learn the prime index, then re-parse so this tick already
+                   has a value instead of publishing a zero the classifier would read as
+                   "governor registered nothing". */
+                if (_prime_cpu < 0 && _seen_max_cpu > 0) {
+                    _prime_cpu = _seen_max_cpu;
+                    p = buf;
+                    while (*p) {
+                        int cpu2 = -1, freq2 = 0;
+                        if (sscanf(p, "%d:%d", &cpu2, &freq2) == 2) {
+                            if (cpu2 == _prime_cpu && freq2 > 0) t->perf_cap_p6 = freq2;
+                        }
+                /* Remember what was parsed, for the next tick that cannot read the node. */
+                if (t->perf_cap_p0 > 0) _last_perf_cap_p0 = t->perf_cap_p0;
+                if (t->perf_cap_p6 > 0) _last_perf_cap_p6 = t->perf_cap_p6;
+                        while (*p && *p != ' ' && *p != '\n' && *p != '\t') p++;
+                        while (*p == ' ' || *p == '\n' || *p == '\t' || *p == '\r') p++;
+                    }
+                }
                                     t->headroom_valid = 0;
                                     snprintf(t->headroom_invalid_reason,
                                              sizeof(t->headroom_invalid_reason), "dead_iface");
