@@ -2892,7 +2892,27 @@ asb_load_profile
 # So this line silently skipped asb_apply_ux on EVERY boot, which is why "Manage UI speed" and
 # "Force animation restart" appeared to do nothing - the animation scales and touch timeouts
 # were only ever written when the user switched profiles by hand, and never at boot.
-command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
+# Deferred until the framework is up: this makes seven settings calls.
+#
+# asb_apply_ux reads and writes animation scales and touch timeouts through the
+# settings provider. Called here it runs while the boot animation is still on
+# screen, and every one of those calls blocks until the provider is ready - a boot
+# timeline shows 16 unaccounted seconds between service_runtime_core_deferred and
+# service_dispatched, and the user reports the boot animation visibly stuttering on
+# its third loop, which is exactly this window.
+#
+# The irony is that this line used to be broken - a bad command check meant it never
+# ran at all. Fixing it was right; leaving it on the boot path was not.
+#
+# Animation scales are cosmetic and take effect the moment they are written, so
+# waiting for boot_completed costs the user nothing and gives the animation back.
+(
+  _ux_w=0
+  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_ux_w" -lt 120 ]; do
+    sleep 2; _ux_w=$((_ux_w + 2))
+  done
+  command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
+) &
 
 # Re-assert haptic strength.
 #
