@@ -2287,11 +2287,21 @@ apply_cpufreq_caps() {
     # fixed percentage that knows nothing about temperature.
     #
     # The floor below is still written: it is a single-owner value the governor does not
-    # manage. Only the ceiling is handed back.
-    if [ "$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)" = "1" ] \
-       && [ -f /dev/.asb/state ]; then
-      _want=""
-    fi
+    # REVERTED: handing the ceiling to the governor alone made things worse, not better.
+    #
+    # The theory was sound - the profile script was stamping a static percentage over the
+    # FSM's thermal decisions, and ASB owned the cap only 11% of the time. Removing the
+    # shell write should have handed control back.
+    #
+    # It did the opposite. A capture on the same phone afterwards: ASB ownership fell to 1%,
+    # the prime cap sat below 1.2 GHz for 19% of the time, and the user reported stutter in
+    # audio, animation, camera and the lock screen - with no improvement in heat or drain.
+    # Whatever holds the cap when the shell stops writing, it is not this governor, and the
+    # phone ends up slower AND no cooler.
+    #
+    # Restoring the unconditional write. The ownership problem is real and still unsolved,
+    # but it needs to be understood before it is acted on - this was a guess, and it cost
+    # the user a day of a stuttering phone.
     if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 3 0.25; then
       _actual="$(cat "$_smax" 2>/dev/null)"
       command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note cpu_cap profile profile_apply "$_want" "${_actual:--}" applied || true
