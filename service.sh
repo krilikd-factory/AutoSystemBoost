@@ -3323,4 +3323,20 @@ fi
 ) >/dev/null 2>&1 &
 
 asb_timeline_mark service_dispatched
+# Mark the wait for boot_completed separately from our own work.
+#
+# The timeline now shows the module finishing at 15s and post_boot starting at 44s - a
+# 29-second gap in which nothing of ours is marked. That gap is either Android booting
+# at its own pace, or Android booting more slowly because of something we did, and the
+# current marks cannot tell those apart. Recording when we START waiting, plus what the
+# module is holding at that moment, makes the next capture decide it: if the gap stays
+# the same with the CPU caps left at stock, the module is not the cause.
+asb_timeline_mark boot_wait_begin
+(
+  _bw=0
+  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_bw" -lt 180 ]; do
+    sleep 1; _bw=$((_bw + 1))
+  done
+  asb_timeline_mark boot_completed_seen
+) &
 exit 0
