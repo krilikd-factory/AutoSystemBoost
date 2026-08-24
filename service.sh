@@ -291,15 +291,27 @@ fi
 # Re-enabling it automatically would be the wrong call: the XDA thread that circulates with
 # this package recommends removing it, so some people disable it deliberately, and silently
 # undoing a user's own decision is worse than leaving it.
-if [ ! -f /data/adb/asb/athena_state_checked ]; then
-  if pm list packages -d 2>/dev/null | grep -q '^package:com.oplus.athena$'; then
-    if ! grep -q "^pm|com.oplus.athena|" /data/adb/asb/baseline.txt 2>/dev/null; then
-      asb_log "athena: com.oplus.athena is DISABLED and ASB has no record of doing it (legacy build?)."
-      asb_log "athena: ASB never disables it. To restore: pm enable com.oplus.athena"
+# Backgrounded: this waits on PackageManager, and boot waits on it.
+#
+# `pm list packages` blocks until PackageManager is up, which on a cold boot is one of
+# the last services to arrive. Running it inline in service.sh holds the whole module
+# start behind it, and users report the phone taking noticeably longer to boot with
+# the module installed than without.
+#
+# Nothing here needs to happen early, or at all, for the module to work: it writes two
+# log lines about a package ASB never touches, once per install. Deferring it costs
+# nothing and gives the boot back.
+(
+  if [ ! -f /data/adb/asb/athena_state_checked ]; then
+    if pm list packages -d 2>/dev/null | grep -q '^package:com.oplus.athena$'; then
+      if ! grep -q "^pm|com.oplus.athena|" /data/adb/asb/baseline.txt 2>/dev/null; then
+        asb_log "athena: com.oplus.athena is DISABLED and ASB has no record of doing it (legacy build?)."
+        asb_log "athena: ASB never disables it. To restore: pm enable com.oplus.athena"
+      fi
     fi
+    touch /data/adb/asb/athena_state_checked 2>/dev/null
   fi
-  touch /data/adb/asb/athena_state_checked 2>/dev/null
-fi
+) &
 
 # Reset vm.oom_kill_allocating_task to kernel default (0) at every boot.
 if [ -w /proc/sys/vm/oom_kill_allocating_task ]; then
