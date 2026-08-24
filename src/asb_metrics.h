@@ -1242,6 +1242,29 @@ int spike_detected = 0;
                     while (*p && *p != ' ' && *p != '\n' && *p != '\t') p++;
                     while (*p == ' ' || *p == '\n' || *p == '\t' || *p == '\r') p++;
                 }
+                /* First tick: learn the prime index, then re-parse so this tick already has a
+                   value instead of publishing a zero the classifier reads as "no registration".
+                
+                   This block was previously spliced into an unrelated else-branch of the headroom
+                   recovery logic, several levels away from the loop whose variables it uses. It
+                   compiled - the names were still in scope - and simply never ran, so perf_cap_p6
+                   stayed 0 on a device whose node plainly lists 6:1671109, and every sample kept
+                   reporting cap_owner=shell. */
+                if (_prime_cpu < 0 && _seen_max_cpu > 0) {
+                    _prime_cpu = _seen_max_cpu;
+                    p = buf;
+                    while (*p) {
+                        int cpu2 = -1, freq2 = 0;
+                        if (sscanf(p, "%d:%d", &cpu2, &freq2) == 2) {
+                            if (cpu2 == _prime_cpu && freq2 > 0) t->perf_cap_p6 = freq2;
+                        }
+                        while (*p && *p != ' ' && *p != '\n' && *p != '\t') p++;
+                        while (*p == ' ' || *p == '\n' || *p == '\t' || *p == '\r') p++;
+                    }
+                }
+                /* Remember what parsed, for a later tick that cannot read the node. */
+                if (t->perf_cap_p0 > 0) _last_perf_cap_p0 = t->perf_cap_p0;
+                if (t->perf_cap_p6 > 0) _last_perf_cap_p6 = t->perf_cap_p6;
                 if (t->perf_cap_p0 > 0 && cpu_slot_contains_cpu(0, 0) &&
                     metrics_headroom_pct_from_cap(t->perf_cap_p0, g_cpu_slot_hwmax[0],
                                                   &t->headroom_pct) == 0) {
@@ -1281,24 +1304,6 @@ int spike_detected = 0;
                                     snprintf(t->headroom_invalid_reason,
                                              sizeof(t->headroom_invalid_reason), "ok");
                                 } else {
-                  /* First tick only: learn the prime index, then re-parse so this tick already
-                   has a value instead of publishing a zero the classifier would read as
-                   "governor registered nothing". */
-                if (_prime_cpu < 0 && _seen_max_cpu > 0) {
-                    _prime_cpu = _seen_max_cpu;
-                    p = buf;
-                    while (*p) {
-                        int cpu2 = -1, freq2 = 0;
-                        if (sscanf(p, "%d:%d", &cpu2, &freq2) == 2) {
-                            if (cpu2 == _prime_cpu && freq2 > 0) t->perf_cap_p6 = freq2;
-                        }
-                /* Remember what was parsed, for the next tick that cannot read the node. */
-                if (t->perf_cap_p0 > 0) _last_perf_cap_p0 = t->perf_cap_p0;
-                if (t->perf_cap_p6 > 0) _last_perf_cap_p6 = t->perf_cap_p6;
-                        while (*p && *p != ' ' && *p != '\n' && *p != '\t') p++;
-                        while (*p == ' ' || *p == '\n' || *p == '\t' || *p == '\r') p++;
-                    }
-                }
                                     t->headroom_valid = 0;
                                     snprintf(t->headroom_invalid_reason,
                                              sizeof(t->headroom_invalid_reason), "dead_iface");
