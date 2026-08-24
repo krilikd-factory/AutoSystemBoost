@@ -47,6 +47,11 @@ writef_retry() {
     sleep "$_delay"
     _i=$((_i+1))
   done
+  # A full round of retries and it still is not holding: remember that.
+  case " ${ASB_WRITEF_DEAD:-} " in
+    *" $_p "*) ;;
+    *) ASB_WRITEF_DEAD="${ASB_WRITEF_DEAD:-} $_p" ;;
+  esac
   return 1
 }
 
