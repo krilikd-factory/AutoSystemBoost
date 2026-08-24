@@ -757,17 +757,17 @@ asb_cam_guard_active() { [ -f /dev/.asb/camera_guard ]; }
 
 apply_cpuset_groups() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
-  writef_retry /dev/cpuset/background/cpus        "0-${little_end}" 3 0.25 || true
-  writef_retry /dev/cpuset/system-background/cpus "0-${little_end}" 3 0.25 || true
+  writef_retry /dev/cpuset/background/cpus        "0-${little_end}" 2 0.06 || true
+  writef_retry /dev/cpuset/system-background/cpus "0-${little_end}" 2 0.06 || true
   if asb_cam_guard_active; then
     return 0
   fi
   if [ "$ASB_PROFILE" = "battery" ]; then
-    writef_retry /dev/cpuset/foreground/cpus      "0-${little_end}" 3 0.25 || true
-    writef_retry /dev/cpuset/top-app/cpus         "0-${little_end}" 3 0.25 || true
+    writef_retry /dev/cpuset/foreground/cpus      "0-${little_end}" 2 0.06 || true
+    writef_retry /dev/cpuset/top-app/cpus         "0-${little_end}" 2 0.06 || true
   else
-    writef_retry /dev/cpuset/foreground/cpus      "0-${cpu_max}" 3 0.25 || true
-    writef_retry /dev/cpuset/top-app/cpus         "0-${cpu_max}" 3 0.25 || true
+    writef_retry /dev/cpuset/foreground/cpus      "0-${cpu_max}" 2 0.06 || true
+    writef_retry /dev/cpuset/top-app/cpus         "0-${cpu_max}" 2 0.06 || true
   fi
 }
 apply_cpuset_groups_all() {
@@ -780,39 +780,39 @@ apply_cpuset_groups_all() {
       _fg="0-${little_end}"
     fi
     for _grp in background system-background; do
-      [ -e "$_cg_root/$_grp/cpus" ] && writef_retry "$_cg_root/$_grp/cpus" "$_bg" 5 0.3 || true
-      [ -e "$_cg_root/$_grp/cpuset.cpus" ] && writef_retry "$_cg_root/$_grp/cpuset.cpus" "$_bg" 5 0.3 || true
+      [ -e "$_cg_root/$_grp/cpus" ] && writef_retry "$_cg_root/$_grp/cpus" "$_bg" 2 0.06 || true
+      [ -e "$_cg_root/$_grp/cpuset.cpus" ] && writef_retry "$_cg_root/$_grp/cpuset.cpus" "$_bg" 2 0.06 || true
     done
     # Native camera guard owns foreground/top-app placement until it restores
     # its snapshot. Keep background economy, but do not overwrite the lease.
     asb_cam_guard_active && continue
     for _grp in foreground top-app; do
-      [ -e "$_cg_root/$_grp/cpus" ] && writef_retry "$_cg_root/$_grp/cpus" "$_fg" 5 0.3 || true
-      [ -e "$_cg_root/$_grp/cpuset.cpus" ] && writef_retry "$_cg_root/$_grp/cpuset.cpus" "$_fg" 5 0.3 || true
+      [ -e "$_cg_root/$_grp/cpus" ] && writef_retry "$_cg_root/$_grp/cpus" "$_fg" 2 0.06 || true
+      [ -e "$_cg_root/$_grp/cpuset.cpus" ] && writef_retry "$_cg_root/$_grp/cpuset.cpus" "$_fg" 2 0.06 || true
     done
   done
 }
 apply_uclamp() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
-  writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive $_P_LATENCY_SENSITIVE 5 0.3 || true
-  writef_retry /dev/cpuctl/background/cpu.uclamp.min        $_P_UCL_BG  5 0.3 || true
-  writef_retry /dev/cpuctl/system-background/cpu.uclamp.min $_P_UCL_BG  5 0.3 || true
-  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min        $_P_UCL_FG 5 0.3 || true
-  writef_retry /dev/cpuctl/top-app/cpu.uclamp.min           $_P_UCL_TOP 5 0.3 || true
+  writef_retry /dev/cpuctl/top-app/uclamp.latency_sensitive $_P_LATENCY_SENSITIVE 2 0.06 || true
+  writef_retry /dev/cpuctl/background/cpu.uclamp.min        $_P_UCL_BG  2 0.06 || true
+  writef_retry /dev/cpuctl/system-background/cpu.uclamp.min $_P_UCL_BG  2 0.06 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.min        $_P_UCL_FG 2 0.06 || true
+  writef_retry /dev/cpuctl/top-app/cpu.uclamp.min           $_P_UCL_TOP 2 0.06 || true
   # uclamp.MIN above is a floor and never fights the guard, so it always applies.
   # The MAX ceilings below are exactly what the guard lifts - leave them alone.
   asb_cam_guard_active && return 0
   _ucl_bg_max="${UCL_BG_MAX:-40}"
   _ucl_fg_max="${UCL_FG_MAX:-70}"
   _ucl_top_max="${UCL_TOP_MAX:-85}"
-  writef_retry /dev/cpuctl/background/cpu.uclamp.max        $_ucl_bg_max 5 0.3 || true
-  writef_retry /dev/cpuctl/system-background/cpu.uclamp.max $_ucl_bg_max 5 0.3 || true
-  writef_retry /dev/cpuctl/foreground/cpu.uclamp.max        $_ucl_fg_max 5 0.3 || true
-  writef_retry /dev/cpuctl/top-app/cpu.uclamp.max           $_ucl_top_max 5 0.3 || true
-  writef_retry /dev/cpuctl/background/uclamp.min        $_P_UCL_BG  5 0.3 || true
-  writef_retry /dev/cpuctl/system-background/uclamp.min $_P_UCL_BG  5 0.3 || true
-  writef_retry /dev/cpuctl/foreground/uclamp.min        $_P_UCL_FG 5 0.3 || true
-  writef_retry /dev/cpuctl/top-app/uclamp.min           $_P_UCL_TOP 5 0.3 || true
+  writef_retry /dev/cpuctl/background/cpu.uclamp.max        $_ucl_bg_max 2 0.06 || true
+  writef_retry /dev/cpuctl/system-background/cpu.uclamp.max $_ucl_bg_max 2 0.06 || true
+  writef_retry /dev/cpuctl/foreground/cpu.uclamp.max        $_ucl_fg_max 2 0.06 || true
+  writef_retry /dev/cpuctl/top-app/cpu.uclamp.max           $_ucl_top_max 2 0.06 || true
+  writef_retry /dev/cpuctl/background/uclamp.min        $_P_UCL_BG  2 0.06 || true
+  writef_retry /dev/cpuctl/system-background/uclamp.min $_P_UCL_BG  2 0.06 || true
+  writef_retry /dev/cpuctl/foreground/uclamp.min        $_P_UCL_FG 2 0.06 || true
+  writef_retry /dev/cpuctl/top-app/uclamp.min           $_P_UCL_TOP 2 0.06 || true
   for _cg_root in /sys/fs/cgroup /dev/cgroup; do
     [ -d "$_cg_root" ] || continue
     for _tier in background system-background foreground top-app; do
@@ -820,15 +820,15 @@ apply_uclamp() {
       [ "$_tier" = "foreground" ] && _uval=$_P_UCL_FG
       [ "$_tier" = "top-app" ]    && _uval=$_P_UCL_TOP
       _node="$_cg_root/$_tier/cpu.uclamp.min"
-      [ -f "$_node" ] && writef_retry "$_node" "$_uval" 5 0.3 || true
+      [ -f "$_node" ] && writef_retry "$_node" "$_uval" 2 0.06 || true
       _mnode="$_cg_root/$_tier/cpu.uclamp.max"
       _mval=$_ucl_bg_max
       [ "$_tier" = "foreground" ] && _mval=$_ucl_fg_max
       [ "$_tier" = "top-app" ] && _mval=$_ucl_top_max
-      [ -f "$_mnode" ] && writef_retry "$_mnode" "$_mval" 5 0.3 || true
+      [ -f "$_mnode" ] && writef_retry "$_mnode" "$_mval" 2 0.06 || true
     done
     _lat="$_cg_root/top-app/cpu.uclamp.latency_sensitive"
-    [ -f "$_lat" ] && writef_retry "$_lat" $_P_LATENCY_SENSITIVE 5 0.3 || true
+    [ -f "$_lat" ] && writef_retry "$_lat" $_P_LATENCY_SENSITIVE 2 0.06 || true
   done
 }
 # Fast boot policy: cgroup/uclamp/cpuset writes can wait for Android's own
@@ -844,11 +844,11 @@ apply_cpugov_hints() {
   _hispeed="${SCHED_HISPEED_LOAD:-88}"
   for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
     [ -d "$_pol" ] || continue
-    [ -w "$_pol/schedutil/rate_limit_us" ] && writef_retry "$_pol/schedutil/rate_limit_us" "$_rate" 3 0.2 || true
-    [ -w "$_pol/schedutil/up_rate_limit_us" ] && writef_retry "$_pol/schedutil/up_rate_limit_us" "$_up_rate" 3 0.2 || true
-    [ -w "$_pol/schedutil/down_rate_limit_us" ] && writef_retry "$_pol/schedutil/down_rate_limit_us" "$_down_rate" 3 0.2 || true
-    [ -w "$_pol/schedutil/hispeed_load" ] && writef_retry "$_pol/schedutil/hispeed_load" "$_hispeed" 3 0.2 || true
-    [ -w "$_pol/schedutil/hispeed_freq" ] && [ -n "$SCHED_HISPEED_FREQ" ] && writef_retry "$_pol/schedutil/hispeed_freq" "$SCHED_HISPEED_FREQ" 3 0.2 || true
+    [ -w "$_pol/schedutil/rate_limit_us" ] && writef_retry "$_pol/schedutil/rate_limit_us" "$_rate" 2 0.06 || true
+    [ -w "$_pol/schedutil/up_rate_limit_us" ] && writef_retry "$_pol/schedutil/up_rate_limit_us" "$_up_rate" 2 0.06 || true
+    [ -w "$_pol/schedutil/down_rate_limit_us" ] && writef_retry "$_pol/schedutil/down_rate_limit_us" "$_down_rate" 2 0.06 || true
+    [ -w "$_pol/schedutil/hispeed_load" ] && writef_retry "$_pol/schedutil/hispeed_load" "$_hispeed" 2 0.06 || true
+    [ -w "$_pol/schedutil/hispeed_freq" ] && [ -n "$SCHED_HISPEED_FREQ" ] && writef_retry "$_pol/schedutil/hispeed_freq" "$SCHED_HISPEED_FREQ" 2 0.06 || true
   done
 }
 asb_feature_enabled CPU && asb_log "boot: CPU governor hints deferred until boot_completed"
@@ -1514,23 +1514,23 @@ apply_wifi_pm() {
       iw dev wlan0 set power_save off >/dev/null 2>&1 || true
       sleep 0.5
       iw dev wlan0 set power_save off >/dev/null 2>&1 || true
-      writef_retry /sys/module/wlan/parameters/wlan_pm 0 4 0.5 || true
+      writef_retry /sys/module/wlan/parameters/wlan_pm 0 2 0.06 || true
       asb_persist_safe persist.vendor.wlan.scan_throttle 0
       asb_persist_safe persist.vendor.wlan.powersave 0
-      [ -e /sys/module/wlan/parameters/wlan_pm ] && writef_retry /sys/module/wlan/parameters/wlan_pm 0 6 0.5 || true
+      [ -e /sys/module/wlan/parameters/wlan_pm ] && writef_retry /sys/module/wlan/parameters/wlan_pm 0 2 0.06 || true
       ;;
     1)
       iw dev wlan0 set power_save on >/dev/null 2>&1 || true
       sleep 0.5
       iw dev wlan0 set power_save on >/dev/null 2>&1 || true
-      writef_retry /sys/module/wlan/parameters/wlan_pm 1 4 0.5 || true
+      writef_retry /sys/module/wlan/parameters/wlan_pm 1 2 0.06 || true
       asb_persist_safe persist.vendor.wlan.scan_throttle 1
       asb_persist_safe persist.vendor.wlan.powersave 1
-      [ -e /sys/module/wlan/parameters/wlan_pm ] && writef_retry /sys/module/wlan/parameters/wlan_pm 1 6 0.5 || true
+      [ -e /sys/module/wlan/parameters/wlan_pm ] && writef_retry /sys/module/wlan/parameters/wlan_pm 1 2 0.06 || true
       ;;
     *)
       iw dev wlan0 set power_save on >/dev/null 2>&1 || true
-      writef_retry /sys/module/wlan/parameters/wlan_pm 1 3 0.25 || true
+      writef_retry /sys/module/wlan/parameters/wlan_pm 1 2 0.06 || true
       asb_persist_safe persist.vendor.wlan.scan_throttle 1
       ;;
   esac
@@ -1543,7 +1543,7 @@ apply_wifi_dtim() {
     performance) iw dev wlan0 set listen-interval 2 >/dev/null 2>&1 || true ;;
     *) iw dev wlan0 set listen-interval 4 >/dev/null 2>&1 || true ;;
   esac
-  writef_retry /sys/module/wlan/parameters/enable_connected_scan_result 0 3 0.25 || true
+  writef_retry /sys/module/wlan/parameters/enable_connected_scan_result 0 2 0.06 || true
 }
 # Deferred to post-boot with the Wi-Fi power policy.
 apply_net_steering() {
@@ -2082,7 +2082,7 @@ apply_kernel() {
   [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation $_P_COLOC 1 0 || true
   [ -e /proc/sys/walt/sched_busy_hyst_ns ] && writef_retry /proc/sys/walt/sched_busy_hyst_ns $_P_BHYST 1 0 || true
   [ -e /proc/sys/walt/sched_boost ] && writef_retry /proc/sys/walt/sched_boost $_P_SBOOST 1 0 || true
-  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks $_P_RAVG 3 0.5 || true
+  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks $_P_RAVG 2 0.06 || true
   [ -e /proc/sys/walt/sched_pipeline_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_util_thres $_P_PIPE 1 0 || true
   [ -e /proc/sys/walt/sched_pipeline_non_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_non_special_task_util_thres $_P_PIPEN 1 0 || true
   [ -e /proc/sys/walt/sched_pipeline_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_special_task_util_thres $_P_PIPES 1 0 || true
@@ -2206,7 +2206,7 @@ apply_gpu_caps() {
   # populates devfreq/max_freq + available_frequencies).
   if [ -d "$_gbase" ] && [ -n "$(cat "$_gbase/max_freq" 2>/dev/null)" ] && [ -s "$_gbase/available_frequencies" ]; then
     _gmax="$(asb_gpu_pick_pct ${_P_GPU_MAX_PCT:-100})"
-    if [ -n "$_gmax" ] && writef_retry "$_gbase/max_freq" "$_gmax" 3 0.25; then
+    if [ -n "$_gmax" ] && writef_retry "$_gbase/max_freq" "$_gmax" 2 0.06; then
       _gactual="$(cat "$_gbase/max_freq" 2>/dev/null)"
       command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note gpu_cap profile profile_apply "$_gmax" "${_gactual:--}" applied || true
     fi
@@ -2216,7 +2216,7 @@ apply_gpu_caps() {
       _gmin="$(cat "$_gbase/available_frequencies" 2>/dev/null | tr ' ' '\n' | grep -v '^$' | sort -n | head -1)"
       [ -n "$_gmin" ] || _gmin="$(cat "$_gbase/min_freq" 2>/dev/null)"
     fi
-    [ -n "$_gmin" ] && writef_retry "$_gbase/min_freq" "$_gmin" 3 0.25 || true
+    [ -n "$_gmin" ] && writef_retry "$_gbase/min_freq" "$_gmin" 2 0.06 || true
     return 0
   fi
   # Fallback: pwrlevel capping. OP15 Adreno 840 leaves devfreq freq nodes empty
@@ -2238,7 +2238,7 @@ apply_gpu_caps() {
     # Clamp into [vendor_floor .. slowest]: never faster than the vendor cap.
     [ "$_lvl" -lt "$_vfloor" ] 2>/dev/null && _lvl="$_vfloor"
     [ "$_lvl" -gt "$_last" ] 2>/dev/null && _lvl="$_last"
-    if writef_retry "$_pmax_node" "$_lvl" 3 0.25; then
+    if writef_retry "$_pmax_node" "$_lvl" 2 0.06; then
       _gactual="$(cat "$_pmax_node" 2>/dev/null)"
       command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note gpu_cap profile profile_apply "$_lvl" "${_gactual:--}" applied || true
     fi
@@ -2314,7 +2314,7 @@ apply_cpufreq_caps() {
     # Restoring the unconditional write. The ownership problem is real and still unsolved,
     # but it needs to be understood before it is acted on - this was a guess, and it cost
     # the user a day of a stuttering phone.
-    if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 3 0.25; then
+    if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 2 0.06; then
       _actual="$(cat "$_smax" 2>/dev/null)"
       command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note cpu_cap profile profile_apply "$_want" "${_actual:--}" applied || true
     fi
@@ -2329,7 +2329,7 @@ apply_cpufreq_caps() {
         if [ -n "$_curmax_now" ] && [ -n "$_minpick" ] && [ "$_minpick" -gt "$_curmax_now" ] 2>/dev/null; then
           _minpick="$_curmax_now"
         fi
-        [ -n "$_minpick" ] && writef_retry "$_smin" "$_minpick" 3 0.25 || true
+        [ -n "$_minpick" ] && writef_retry "$_smin" "$_minpick" 2 0.06 || true
       fi
     fi
   done
@@ -2416,35 +2416,35 @@ apply_walt_live() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   asb_feature_enabled CPU || return 0
   [ -d /proc/sys/walt ] || return 0
-  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks "$RAVG_TICKS" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_idle_enough ] && writef_retry /proc/sys/walt/sched_idle_enough "$WALT_IDLE" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_idle_enough_clust ] && writef_retry /proc/sys/walt/sched_idle_enough_clust "$WALT_IDLE_CLUST" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct "$WALT_CLUSTER" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_cluster_util_thres_pct_clust ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct_clust "$WALT_CLUSTER_CLUST" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation "$WALT_COLOC" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_pipeline_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_util_thres "$WALT_PIPE" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_pipeline_non_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_non_special_task_util_thres "$WALT_PIPE_NONSP" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_pipeline_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_special_task_util_thres "$WALT_PIPE_SP" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_busy_hyst_ns ] && writef_retry /proc/sys/walt/sched_busy_hyst_ns "$WALT_BUSY_HYST" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_ed_boost ] && writef_retry /proc/sys/walt/sched_ed_boost "$WALT_ED_BOOST" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_topapp_weight_pct ] && writef_retry /proc/sys/walt/sched_topapp_weight_pct "$WALT_TOPAPP_WEIGHT" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_min_task_util_for_boost ] && writef_retry /proc/sys/walt/sched_min_task_util_for_boost "$WALT_BOOST_MIN_UTIL" 10 0.25 || true
-  [ -e /proc/sys/walt/sched_boost ] && writef_retry /proc/sys/walt/sched_boost "$WALT_SCHED_BOOST" 10 0.25 || true
+  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks "$RAVG_TICKS" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_idle_enough ] && writef_retry /proc/sys/walt/sched_idle_enough "$WALT_IDLE" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_idle_enough_clust ] && writef_retry /proc/sys/walt/sched_idle_enough_clust "$WALT_IDLE_CLUST" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct "$WALT_CLUSTER" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_cluster_util_thres_pct_clust ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct_clust "$WALT_CLUSTER_CLUST" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation "$WALT_COLOC" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_pipeline_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_util_thres "$WALT_PIPE" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_pipeline_non_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_non_special_task_util_thres "$WALT_PIPE_NONSP" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_pipeline_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_special_task_util_thres "$WALT_PIPE_SP" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_busy_hyst_ns ] && writef_retry /proc/sys/walt/sched_busy_hyst_ns "$WALT_BUSY_HYST" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_ed_boost ] && writef_retry /proc/sys/walt/sched_ed_boost "$WALT_ED_BOOST" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_topapp_weight_pct ] && writef_retry /proc/sys/walt/sched_topapp_weight_pct "$WALT_TOPAPP_WEIGHT" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_min_task_util_for_boost ] && writef_retry /proc/sys/walt/sched_min_task_util_for_boost "$WALT_BOOST_MIN_UTIL" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_boost ] && writef_retry /proc/sys/walt/sched_boost "$WALT_SCHED_BOOST" 2 0.06 || true
 }
 apply_idle() {
   writef /sys/module/lpm_levels/parameters/sleep_disabled 0
   [ -w /sys/class/kgsl/kgsl-3d0/idle_timer ] &&     echo $_P_GTMR > /sys/class/kgsl/kgsl-3d0/idle_timer 2>/dev/null || true
-  writef_retry /sys/class/kgsl/kgsl-3d0/force_rail_on 0 3 0.25 || true
-  writef_retry /sys/class/kgsl/kgsl-3d0/force_clk_on  0 3 0.25 || true
-  writef_retry /sys/class/kgsl/kgsl-3d0/force_bus_on  0 3 0.25 || true
+  writef_retry /sys/class/kgsl/kgsl-3d0/force_rail_on 0 2 0.06 || true
+  writef_retry /sys/class/kgsl/kgsl-3d0/force_clk_on  0 2 0.06 || true
+  writef_retry /sys/class/kgsl/kgsl-3d0/force_bus_on  0 2 0.06 || true
   [ -w /sys/class/kgsl/kgsl-3d0/force_no_nap ] && \
-    writef_retry /sys/class/kgsl/kgsl-3d0/force_no_nap "${GPU_FORCE_NO_NAP:-0}" 3 0.25 || true
+    writef_retry /sys/class/kgsl/kgsl-3d0/force_no_nap "${GPU_FORCE_NO_NAP:-0}" 2 0.06 || true
   [ -w /sys/class/kgsl/kgsl-3d0/bus_split ] && [ -n "$GPU_BUS_SPLIT" ] && \
-    writef_retry /sys/class/kgsl/kgsl-3d0/bus_split "$GPU_BUS_SPLIT" 3 0.25 || true
+    writef_retry /sys/class/kgsl/kgsl-3d0/bus_split "$GPU_BUS_SPLIT" 2 0.06 || true
   [ -w /sys/class/kgsl/kgsl-3d0/throttling ] && [ -n "$GPU_THROTTLING" ] && \
-    writef_retry /sys/class/kgsl/kgsl-3d0/throttling "$GPU_THROTTLING" 3 0.25 || true
+    writef_retry /sys/class/kgsl/kgsl-3d0/throttling "$GPU_THROTTLING" 2 0.06 || true
   [ -w /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] && [ -n "$GPU_THERMAL_PWRLEVEL" ] && \
-    writef_retry /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel "$GPU_THERMAL_PWRLEVEL" 3 0.25 || true
+    writef_retry /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel "$GPU_THERMAL_PWRLEVEL" 2 0.06 || true
   [ -w /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor ] &&     echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor 2>/dev/null || true
 }
 asb_feature_enabled CPU && apply_idle
@@ -2763,12 +2763,12 @@ apply_walt_boost() {
   for _pol in 0 4 7; do
     _wp="/sys/devices/system/cpu/cpufreq/policy${_pol}/walt"
     [ -d "$_wp" ] || continue
-    writef_retry "$_wp/input_boost_freq" 0  3 0.25 || true
-    writef_retry "$_wp/input_boost_ms"   25 3 0.25 || true
+    writef_retry "$_wp/input_boost_freq" 0  2 0.06 || true
+    writef_retry "$_wp/input_boost_ms"   25 2 0.06 || true
   done
   [ -w /proc/sys/kernel/sched_boost ] && \
-    writef_retry /proc/sys/kernel/sched_boost 0 3 0.25 || true
-  writef_retry /proc/sys/kernel/sched_energy_aware 1 3 0.25 || true
+    writef_retry /proc/sys/kernel/sched_boost 0 2 0.06 || true
+  writef_retry /proc/sys/kernel/sched_energy_aware 1 2 0.06 || true
 }
 # WALT boost and ZRAM reconciliation are performed by the deferred core worker.
 # Starting them here previously contributed to the final four seconds of service startup.
