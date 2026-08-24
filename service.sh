@@ -2796,7 +2796,23 @@ asb_apply_deferred_core_boot() {
     apply_kernel
     apply_dsp_compute_boost
   fi
-  asb_feature_enabled VM && apply_zram
+  # zram rebuild runs in the background, not on the boot path.
+  #
+  # apply_zram calls swapoff, and swapoff does not return until every compressed page
+  # has been faulted back into RAM. On a phone that has been up long enough to fill
+  # zram that is tens of seconds of solid I/O, and it sits inside the stage a boot
+  # timeline measured at 56 of 129 seconds. The loop below it then waits up to 5 more
+  # seconds and sleeps another 2 unconditionally.
+  #
+  # Nothing depends on zram being resized before the phone is usable: it is a memory
+  # tuning that pays off over hours, not a policy the rest of the module reads. It
+  # also explains why a clean install with no tweaks boots fast - VM off, no rebuild.
+  #
+  # Backgrounded and delayed 60s so it lands after the launcher and the first apps
+  # have settled, when swapoff has less to write back and nobody is waiting.
+  if asb_feature_enabled VM; then
+    ( sleep 60; apply_zram ) >/dev/null 2>&1 &
+  fi
 }
 
 apply_doze() {
