@@ -1190,8 +1190,23 @@ int spike_detected = 0;
         }
     }
 
-    /* Read kernel-enforced freq caps from msm_performance */
-    if (need_headroom) {
+    /* Read the registered caps every tick, not only when headroom is wanted.
+     *
+     * This sat inside `if (need_headroom)`, and need_headroom follows the session plan -
+     * it is 0 on most ticks and always 0 in deep-idle economy. But the cap-source
+     * classifier runs EVERY tick and treats perf_cap == 0 as "the governor never
+     * registered a ceiling", so on every skipped tick it published cap_owner=shell.
+     *
+     * That is the whole mystery: three devices reporting ASB ownership of 0-11%, a capture
+     * where 173 of 301 samples said shell, and a diag where the kernel node plainly holds
+     * 0:2117148 ... 6:2037688 while the module records perf_cap_p0=0. The governor was
+     * registering its caps all along. Nobody was reading the answer.
+     *
+     * The read is one open, one 256-byte read, one close of a sysfs node - cheaper than the
+     * thermal zone scan that already runs unconditionally beside it, and far cheaper than
+     * the wrong decisions taken downstream from a false zero.
+     */
+    {
         char buf[256];
         int fd = open("/sys/kernel/msm_performance/parameters/cpu_max_freq",
                        O_RDONLY | O_CLOEXEC);
