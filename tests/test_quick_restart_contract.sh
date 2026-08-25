@@ -34,7 +34,7 @@ need "$INSTALL" 'asb_quick_restart.sh'
 need "$SERVICE" 'post_boot_tweaks: begin'
 need "$SERVICE" 'post_boot_tweaks: complete'
 need "$SERVICE" 'post_boot_tweaks: skipped (boot completion timeout)'
-need "$SERVICE" 'sleep 8'
+need "$SERVICE" 'sleep 2'
 _pb_line="$(grep -nF 'post_boot_tweaks: begin' "$SERVICE" | head -1 | cut -d: -f1)"
 [ -n "$_pb_line" ] || fail 'post-boot stage marker missing'
 for _helper in asb_gms_freeze.sh asb_gms_trim.sh asb_system_tweaks.sh asb_athena_apply.sh asb_net_offload.sh asb_doze_apply.sh asb_net_apply.sh; do
