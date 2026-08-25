@@ -14,11 +14,12 @@ SERVICE="$ROOT/service.sh"
 AUDIO="$ROOT/runtime/asb_audio_apply.sh"
 GUARD="$ROOT/runtime/asb_overlay_guard.sh"
 ATTACH="$ROOT/src/DSP_AIDL/asb_dsp_attach.cpp"
+NATIVE_BUILD="$ROOT/src/build_ndk_release.sh"
 REL="$ROOT/.github/workflows/build-release.yml"
 DBG="$ROOT/.github/workflows/build-debug.yml"
 ATTWF="$ROOT/.github/workflows/build-dsp-attach.yml"
 WEB="$ROOT/webroot/index.html"
-for f in "$UTILS" "$CORE" "$POSTFS" "$TWEAKS" "$SERVICE" "$AUDIO" "$GUARD" "$ATTACH" "$REL" "$DBG" "$ATTWF" "$WEB"; do
+for f in "$UTILS" "$CORE" "$POSTFS" "$TWEAKS" "$SERVICE" "$AUDIO" "$GUARD" "$ATTACH" "$NATIVE_BUILD" "$REL" "$DBG" "$ATTWF" "$WEB"; do
   [ -f "$f" ] || fail "missing $f"
 done
 for f in "$UTILS" "$CORE" "$POSTFS" "$TWEAKS" "$SERVICE" "$AUDIO" "$GUARD"; do
@@ -55,12 +56,19 @@ need "$GUARD" 'missing_payload'
 need "$GUARD" 'invalid_xml_payload'
 need "$GUARD" 'invalid_json_payload'
 
-# The attacher carries a source marker and every relevant CI path rejects a stale prebuilt.
-need "$ATTACH" 'kAsbAttachBuildId'
-need "$ATTACH" 'ASB_ATTACH_SRC_V64_GUARD_20260825'
-need "$ATTWF" 'attacher binary does not contain source build marker'
-need "$REL" 'ATT is stale for source marker'
-need "$DBG" 'ATT is stale for source marker'
+# The dedicated attacher workflow compiles current source and publishes auditable SHA-256
+# provenance. Release/debug keep the compatible prebuilt guard on functional source literals;
+# an observability-only source marker must not make normal module builds unbuildable.
+need "$ATTWF" 'SOURCE_SHA256='
+need "$ATTWF" 'source_sha256=$SOURCE_SHA256'
+need "$ATTWF" 'binary_sha256='
+need "$ATTWF" 'asb_dsp_attach.provenance'
+need "$NATIVE_BUILD" 'pushed gain_mb'
+need "$NATIVE_BUILD" 'settings change'
+need "$NATIVE_BUILD" 'attached to session'
+absent "$ATTACH" 'kAsbAttachBuildId'
+absent "$REL" 'ATT is stale for source marker'
+absent "$DBG" 'ATT is stale for source marker'
 for w in "$REL" "$DBG"; do
   need "$w" 'tests/test_bt_safe_policy_contract.sh'
   need "$w" 'tests/test_v65_smart_thermal_cap_contract.sh'
