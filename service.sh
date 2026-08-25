@@ -2805,6 +2805,22 @@ apply_walt_boost() {
 asb_feature_enabled VM && asb_log "boot: ZRAM reconciliation deferred until boot_completed"
 
 asb_apply_deferred_core_boot() {
+  # The native governor is already alive before this worker and owns Smart CPU/GPU caps on
+  # supported devices.  The boot trace from SM8850 shows that replaying the old shell policy
+  # stack here still spends 14 seconds after boot_completed on cgroups, uclamp, WALT, sysctl
+  # and GPU writes, without changing the governor-owned runtime result.  Those writes also
+  # race vendor PowerHAL/thermal during the hottest part of a reboot.
+  #
+  # Keep the legacy shell convergence available for a device that demonstrably needs it, but
+  # never make it the default.  A user can opt in with this marker after validating their ROM:
+  #   /data/adb/asb/allow_boot_shell_policy
+  # All normal ASB CPU decisions continue in the native governor.
+  if [ ! -f /data/adb/asb/allow_boot_shell_policy ]; then
+    asb_log "boot-core: native governor owns policy; legacy shell convergence skipped"
+    asb_timeline_mark post_boot_core_policy_native_only
+    return 0
+  fi
+
   # Every call below is idempotent and was previously executed synchronously before
   # service_dispatched. Applying them after boot completion preserves the selected
   # profile while removing init/framework contention from the path to first UI.
