@@ -3357,6 +3357,7 @@ const SNAP_KEYS = [
   'net_qdisc_mobile',
   'wifi_country',
   'wifi_scan_throttle',
+  'net_handover_fast',
   'haptic_touch_strength',
   'media_loudness',
   'dsp_loudness',
@@ -3455,6 +3456,8 @@ const CFG_ITEMS = [
     desc:'The region decides which WiFi channels your phone may use, and that sets the ceiling on link speed. CR opens the widest set of channels - usually the fastest WiFi. Stock keeps the region the phone gets from the SIM. IMPORTANT: using channels not permitted where you are is your call and your responsibility.' },
   { key:'wifi_scan_throttle', type:'seg', def:'auto', opts:['auto','0','1'], name:'WiFi Scan Rate',
     desc:'How often the phone looks for WiFi networks in the background. More often switches to a stronger access point sooner as you move around a house or office, at a small battery cost. Stock is the normal Android limit of 4 scans per 2 minutes. If WiFi keeps clinging to a weak AP, pick More often.' },
+  { key:'net_handover_fast', type:'bool', def:'0', stock:'0', name:'Fast WiFi → mobile handover',
+    desc:'Keeps the mobile-data context ready while the screen is on, so Android can move traffic to mobile data without waiting for the modem to wake after WiFi becomes unusable. It does not disconnect WiFi, force mobile data as the active route or change OEM signal/roaming thresholds. Screen-off save/night mode still releases the modem. Costs some battery while the screen is on; use it only if handover delay matters.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
@@ -3553,7 +3556,7 @@ const CFG_CAT = {
   night_quiet_enable:'battery', log_level:'system', phantom_procs:'system',
   sustained_temp_mode:'thermal', doze_level:'battery', doze_trim_whitelist:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
-  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
+  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', net_handover_fast:'net',
   disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
 };
 // Four groups, one screen each.
@@ -3600,7 +3603,7 @@ const CFG_GROUP_OF = {
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
-  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net',
+  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', net_handover_fast:'net',
   disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'ui', haptic_touch_strength:'ui'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
@@ -4070,6 +4073,7 @@ const WILL_BREAK = {
   media_loudness:     'wb_loud',
   sustained_temp_enter:'wb_therm',
   wifi_scan_throttle: 'wb_scan',
+  net_handover_fast:  'wb_handover',
   gms_trim:           'wb_gms',
   gms_freeze:         'wb_gmsfreeze',
   wakelock_action:    'wb_wl',
@@ -4097,7 +4101,7 @@ const APPLY_MODE = {
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
-  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, log_level:APPLY_LIVE,
+  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, net_handover_fast:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
@@ -4773,6 +4777,15 @@ async function cfgSet(key, val, ctl) {
       if (key === 'net_rps' || key === 'net_txqueue') {
         try { await run('sh ' + MD + '/runtime/asb_net_offload.sh >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      // Fast handover reuses the modem LPM owner and refreshes in its current mode, so
+      // save/night remains a hard standby boundary rather than being accidentally woken.
+      if (key === 'net_handover_fast') {
+        try { await run('sh ' + MD + '/runtime/asb_lpm.sh refresh >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' · applied'), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
@@ -5578,7 +5591,12 @@ function renderSmartSubLine(kv) {
       const dpName = (dp >= 0 && dp < dpNames.length) ? dpNames[dp] : '?';
       let sub = dpName + ' · ' + Math.round(alpha/10) + '% battery-lean';
       if (night)         sub = '🌙 night-safe override';
-      else if (veto)     sub = '🔥 thermal veto active';
+      else if (veto) {
+        const caps = parseInt(kv.vendor_clamp_1h || '0', 10);
+        sub = caps >= 300
+          ? (ASB_LANG === 'ru' ? '🛡 защитный режим · давление vendor' : '🛡 protective bias · vendor cap pressure')
+          : (ASB_LANG === 'ru' ? '🛡 защитный режим Smart' : '🛡 Smart thermal protection');
+      }
       else if (fb === 4) {
         /* Cold start says the learner has no history for this bucket. Same reasoning as
            the pending case: show the count, so "still nothing" and "nearly there" read
@@ -5938,7 +5956,12 @@ async function pollLive(visible) {
     const gpuEl = _el('liveGpu');
     if (gpuEl) {
       const gpu = (st && typeof st.gpu === 'number') ? st.gpu : null;
-      gpuEl.textContent = (gpu === null) ? '—' : (gpu + '%');
+      // New governors publish gpu_valid. Preserve readable telemetry from an older governor
+      // during a WebUI-only update, but never present an unsupported backend as a real 0% load.
+      const gpuValid = (st && Object.prototype.hasOwnProperty.call(st, 'gpu_valid'))
+        ? String(st.gpu_valid) === '1' : gpu !== null;
+      gpuEl.textContent = (gpu === null || !gpuValid) ? '—' : (gpu + '%');
+      gpuEl.title = gpuValid ? '' : 'GPU utilisation node is unavailable on this driver; ASB keeps CPU/thermal policy fail-closed.';
     }
     // Modem LPM. Read straight from /dev/.asb/lpm_mode - the governor owns that file and
     // the action screen already reports it; this puts the same reading on the monitor so
@@ -5946,7 +5969,10 @@ async function pollLive(visible) {
     const lpmEl = _el('bnLpm');
     if (lpmEl) {
       run('cat /dev/.asb/lpm_mode 2>/dev/null').then(function(r) {
-        const m = ((r && r.stdout) || '').trim();
+        const raw = ((r && r.stdout) || '').trim();
+        // lpm_mode also records the handover choice after `|`; LPM state remains the first
+        // token so legacy reports and this card continue to present the actual power mode.
+        const m = raw.split('|')[0];
         if (!m) {
           lpmEl.textContent = 'n/a';
           lpmEl.className = 'smart-banner-value';
@@ -6057,16 +6083,27 @@ async function pollLive(visible) {
       // Vendor clamp counts
       const clampEl = _el('liveClamp');
       if (clampEl) {
-        const c1h = parseInt(kv.vendor_clamp_1h || '0', 10);
-        const cTot = parseInt(kv.vendor_clamp_total || '0', 10);
-        if (c1h > 0 || cTot > 0) {
-          clampEl.textContent = c1h + ' / ' + cTot;
-          if (c1h >= 300) clampEl.classList.add('cap-clamp');
-          else clampEl.classList.remove('cap-clamp');
-        } else {
-          clampEl.textContent = 'none';
-          clampEl.classList.remove('cap-clamp');
-        }
+          const c1h = parseInt(kv.vendor_clamp_1h || '0', 10);
+          const cTot = parseInt(kv.vendor_clamp_total || '0', 10);
+          const clampLabel = clampEl.parentElement && clampEl.parentElement.querySelector('.live-cell-label');
+          clampEl.className = 'live-cell-value';
+          if (capSrc === 'vendor_clamp') {
+            // These are observations of the OEM/vendor governor, not ASB restrictions. A red
+            // alarm-style counter made external cap pressure look like ASB was issuing 320
+            // new limits per hour, exactly the wrong conclusion for a diagnostic screen.
+            if (clampLabel) clampLabel.textContent = (ASB_LANG === 'ru') ? 'Кепы vendor: 1ч / всего' : 'Vendor caps · 1h / total';
+            clampEl.title = (ASB_LANG === 'ru')
+              ? 'Наблюдаемые изменения лимитов со стороны vendor/ROM. ASB не повышает эти частоты; это не число новых ограничений ASB.'
+              : 'Observed vendor/ROM cap changes. ASB does not raise these frequencies; this is not a count of new ASB restrictions.';
+          } else {
+            if (clampLabel) clampLabel.textContent = T('lv_clamp', 'Clamp 1h / total');
+            clampEl.title = '';
+          }
+          if (c1h > 0 || cTot > 0) {
+            clampEl.textContent = c1h + ' / ' + cTot;
+          } else {
+            clampEl.textContent = 'none';
+          }
       }
     } catch(e) {}
 
@@ -6189,8 +6226,11 @@ async function pollLive(visible) {
             }
             if (veto) {
               const t = document.createElement('span');
+              const caps = parseInt(kv.vendor_clamp_1h || '0', 10);
               t.className = 'smart-banner-tag veto';
-              t.textContent = '🔥 thermal veto';
+              t.textContent = caps >= 300
+                ? (ASB_LANG === 'ru' ? '🛡 давление vendor' : '🛡 vendor cap pressure')
+                : (ASB_LANG === 'ru' ? '🛡 защита Smart' : '🛡 Smart thermal protection');
               tagRow.appendChild(t);
             }
           }
