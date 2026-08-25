@@ -1378,6 +1378,11 @@ case "$_wst" in
   0) echo "       Wi-Fi scan: unthrottled (roams sooner, costs battery)" ;;
   1) echo "       Wi-Fi scan: stock limit (4 per 2 min)" ;;
 esac
+_handover="$(_cfg net_handover_fast)"
+case "$_handover" in
+  1) echo "       Wi-Fi → mobile handover: fast (cellular context kept ready while awake)" ;;
+  *) : ;;
+esac
   # Which interface is actually carrying traffic - not always rmnet_data0.
   _if="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
   if [ -n "$_if" ]; then
@@ -1392,7 +1397,7 @@ fi
   #
   # Three things were wrong.
   if [ "$(_feat LPM)" = "1" ]; then
-    _lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null)"
+    _lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null | cut -d'|' -f1)"
     case "$_lpm" in
       fast) echo "       modem LPM: fast · data call held up (low latency)" ;;
       save) echo "       modem LPM: save · radio idling, keepalives stretched" ;;
