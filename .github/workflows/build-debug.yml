@@ -104,6 +104,8 @@ jobs:
             tests/test_workflow_executable_modes_contract.sh \
             tests/test_workflow_required_files_shell.sh \
             tests/test_package_functional_parity_contract.sh \
+            tests/test_network_handover_contract.sh \
+            tests/test_cpu_gpu_portability_contract.sh \
             tests/test_v62_to_v64_migration.sh \
             tests/test_bt_safe_policy_contract.sh \
             tests/test_v65_smart_thermal_cap_contract.sh \
