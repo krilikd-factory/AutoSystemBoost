@@ -233,6 +233,10 @@ _validate() {
   _smart_media_guard="$(_require_num smart_media_guard "$_f")"
   _thermal_throttle="$(_require_num thermal_throttle_temp "$_f")"
   _bounds_override="$(_require_num device_bounds_override "$_f")"
+  # Optional for configs created before the handover card existed; once present it is
+  # strictly boolean. This lets an update append the shipped key without rejecting a
+  # known-good older config before migration finishes.
+  _handover_fast="$(awk -F= '$1 ~ "^[[:space:]]*net_handover_fast[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
 
   if ! _between "$_enter" 40 70 || ! _between "$_exit" 30 69 || [ "$_exit" -ge "$_enter" ]; then _die "invalid sustained temperature hysteresis"; fi
   _between "$_ceiling" "$_enter" 70 || _die "sustained_temp_ceiling must be enter..70"
@@ -282,6 +286,7 @@ _validate() {
   _bool "$_smart_media_guard" || _die "smart_media_guard must be 0 or 1"
   _between "$_thermal_throttle" 30 110 || _die "thermal_throttle_temp must be 30..110"
   _bool "$_bounds_override" || _die "device_bounds_override must be 0 or 1"
+  case "$_handover_fast" in ''|0|1) : ;; *) _die "net_handover_fast must be 0 or 1" ;; esac
   return 0
 }
 

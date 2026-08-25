@@ -27,9 +27,23 @@
   . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh"
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+CONF="$MODDIR/config/governor.conf"
 MODE="${1:-normal}"
 BASE="/data/adb/asb/lpm_baseline.conf"
 STATE="/dev/.asb/lpm_mode"
+
+# A WebUI change must refresh the policy in the CURRENT governor-selected mode. Calling
+# normal unconditionally would wake the mobile data context during save/night and defeat
+# standby policy, so `refresh` decodes the persisted mode and never invents one.
+if [ "$MODE" = "refresh" ]; then
+  _saved_mode="$(cat "$STATE" 2>/dev/null | cut -d'|' -f1)"
+  case "$_saved_mode" in fast|normal|save|night) MODE="$_saved_mode" ;; *) MODE="normal" ;; esac
+fi
+
+_cfg() {
+  grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null \
+    | head -1 | sed 's/.*=//' | tr -d ' \r'
+}
 
 _feat_on() {
   _fv="$(grep -E "^[[:space:]]*$1=" "$MODDIR/features.conf" 2>/dev/null \
@@ -78,8 +92,18 @@ _ka="$(grep -E '^NET_TCP_KEEPIDLE=' "$MODDIR/profiles/${_prof}.sh" 2>/dev/null \
        | head -1 | sed 's/.*=//' | tr -d ' \r"')"
 case "$_ka" in ''|*[!0-9]*) _ka="$BASE_KEEPIDLE" ;; esac
 
-# Nothing to do if the mode has not changed - this runs on every state transition.
-[ -r "$STATE" ] && [ "$(cat "$STATE" 2>/dev/null)" = "$MODE" ] && exit 0
+# Fast handover is deliberately limited to an awake/normal or fast LPM state.  The
+# framework still decides when WiFi is unusable; we only avoid waiting for the modem's data
+# context to wake after that decision.  The save/night cases below remain authoritative.
+HANDOVER_FAST=0
+case "$(_cfg net_handover_fast)" in
+  1) HANDOVER_FAST=1 ;;
+esac
+STATE_TAG="${MODE}|handover=${HANDOVER_FAST}"
+
+# Re-apply when either LPM or the user-facing handover choice changed. Older state files
+# contain only MODE, so the first run after an update safely refreshes them once.
+[ -r "$STATE" ] && [ "$(cat "$STATE" 2>/dev/null)" = "$STATE_TAG" ] && exit 0
 
 case "$MODE" in
   fast)
@@ -124,7 +148,15 @@ case "$MODE" in
     ;;
   *)
     MODE="normal"
-    _sset mobile_data_always_on "${BASE_MDAO:-1}"
+    STATE_TAG="${MODE}|handover=${HANDOVER_FAST}"
+    if [ "$HANDOVER_FAST" = "1" ]; then
+      # Keep only the cellular context warm while Android is awake. This does not force a
+      # route, toggle WiFi or change OEM signal/roam thresholds; it only removes the modem
+      # wake-up delay once ConnectivityService itself leaves weak WiFi.
+      _sset mobile_data_always_on 1
+    else
+      _sset mobile_data_always_on "${BASE_MDAO:-1}"
+    fi
     # Hand keepalive straight back to the PROFILE. Restoring the boot-time baseline
     # here would quietly override whatever the active profile asked for the moment the
     # screen came on - the same shape of conflict the Smart tuner had with swappiness.
@@ -135,5 +167,5 @@ case "$MODE" in
 esac
 
 mkdir -p /dev/.asb 2>/dev/null
-echo "$MODE" > "$STATE" 2>/dev/null
+echo "${MODE}|handover=${HANDOVER_FAST}" > "$STATE" 2>/dev/null
 exit 0

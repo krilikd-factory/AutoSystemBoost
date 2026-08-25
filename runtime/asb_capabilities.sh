@@ -39,7 +39,14 @@ _probe() {
   _battery_current=0
   for _b in /sys/class/power_supply/battery/current_now /sys/class/power_supply/battery/current_avg /sys/class/power_supply/battery/constant_charge_current; do [ -r "$_b" ] && { _battery_current=1; break; }; done
   _gpu=0
-  for _g in /sys/class/kgsl/kgsl-3d0/devfreq/max_freq /sys/class/devfreq/*gpu*/max_freq /sys/class/devfreq/*gpu*/min_freq; do [ -e "$_g" ] && { _gpu=1; break; }; done
+  # Probe only graphics-named devfreq directories. Generic devfreq also exposes memory/ISP/NPU
+  # nodes, which must never be treated as a GPU capability merely because they have max_freq.
+  for _g in /sys/class/kgsl/kgsl-3d0/devfreq/max_freq \
+            /sys/class/devfreq/*gpu*/max_freq /sys/class/devfreq/*mali*/max_freq \
+            /sys/class/devfreq/*powervr*/max_freq /sys/class/devfreq/*xclipse*/max_freq \
+            /sys/class/devfreq/*adreno*/max_freq /sys/class/devfreq/*kgsl*/max_freq; do
+    [ -e "$_g" ] && { _gpu=1; break; }
+  done
   _camera=0; [ -d /dev/cpuset/foreground ] || [ -d /sys/fs/cgroup/foreground ] && _camera=1
 
   {
