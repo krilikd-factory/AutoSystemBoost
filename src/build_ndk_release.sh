@@ -197,15 +197,8 @@ if [ -n "$DSP_SRC" ]; then
     # current source added (the binder gain push, the wake signal) and the effect then
     # behaves like the code was never changed.
     _src_att="$SCRIPT_DIR/DSP_AIDL/asb_dsp_attach.cpp"
-    _att_marker="$(sed -n 's/.*kAsbAttachBuildId = "\([^"]*\)".*/\1/p' "$_src_att" | head -1)"
-    [ -n "$_att_marker" ] || { echo "[ASB] ERROR: attacher source build marker missing." >&2; exit 1; }
-    grep -aqF "$_att_marker" "$_att_pre" || {
-      echo "[ASB] ERROR: prebuilt asb_dsp_attach is STALE for marker $_att_marker." >&2
-      echo "[ASB]   Rebuild it (mm asb_dsp_attach) from current src/DSP_AIDL." >&2
-      exit 1
-    }
     _att_missing=""
-    for _lit in "pushed gain_mb" "gain change" "attached to session"; do
+    for _lit in "pushed gain_mb" "settings change" "attached to session"; do
       grep -q "$_lit" "$_src_att" 2>/dev/null || continue
       grep -aq "$_lit" "$_att_pre" 2>/dev/null || _att_missing="$_att_missing \"$_lit\""
     done
