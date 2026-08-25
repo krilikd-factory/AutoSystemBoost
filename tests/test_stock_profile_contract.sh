@@ -10,6 +10,7 @@ APPLY="$ROOT/apply_profile.sh"
 CORE="$ROOT/runtime/profile_core.sh"
 UTILS="$ROOT/runtime/asb_utils.sh"
 STOCK="$ROOT/runtime/asb_stock_policy.sh"
+BASELINE="$ROOT/runtime/asb_baseline.sh"
 WATCHDOG="$ROOT/runtime/asb_watchdog.sh"
 RECONCILE="$ROOT/runtime/asb_reconcile.sh"
 EFFECTIVE="$ROOT/tools/asb_effective_policy.sh"
@@ -17,10 +18,10 @@ fail() { echo "FAIL stock profile contract: $*" >&2; exit 1; }
 need() { grep -Fq "$2" "$1" || fail "missing [$2] in $1"; }
 need_count() { _n="$(grep -Fc "$2" "$1" || true)"; [ "$_n" = "$3" ] || fail "expected $3 occurrences of [$2] in $1, got $_n"; }
 
-for f in "$UI" "$INSTALL" "$SERVICE" "$APPLY" "$CORE" "$UTILS" "$STOCK" "$WATCHDOG" "$RECONCILE" "$EFFECTIVE"; do
+for f in "$UI" "$INSTALL" "$SERVICE" "$APPLY" "$CORE" "$UTILS" "$STOCK" "$BASELINE" "$WATCHDOG" "$RECONCILE" "$EFFECTIVE"; do
   [ -f "$f" ] || fail "missing source $f"
 done
-for f in "$INSTALL" "$SERVICE" "$APPLY" "$CORE" "$UTILS" "$STOCK" "$WATCHDOG" "$RECONCILE" "$EFFECTIVE"; do
+for f in "$INSTALL" "$SERVICE" "$APPLY" "$CORE" "$UTILS" "$STOCK" "$BASELINE" "$WATCHDOG" "$RECONCILE" "$EFFECTIVE"; do
   sh -n "$f" || fail "shell syntax $f"
 done
 
@@ -30,15 +31,26 @@ need "$STOCK" 'asb_stock_enter()'
 need "$STOCK" 'asb_stock_stop_governor'
 need "$STOCK" 'asb_stock_release_profile_leases'
 need "$STOCK" 'cpu_cap gpu_cap uclamp_max cpuset_fg'
-need "$STOCK" 'A reboot restores the'
+need "$STOCK" 'asb_stock_restore_profile_runtime'
+need "$STOCK" 'asb_profile_baseline_restore'
+need "$STOCK" 'profile-owned baseline restored'
+need "$BASELINE" 'ASB_PROFILE_BASELINE='
+need "$BASELINE" 'asb_profile_baseline_capture_path()'
+need "$BASELINE" 'asb_profile_baseline_capture_setting()'
+need "$BASELINE" 'asb_profile_baseline_restore()'
+need "$BASELINE" 'manual audio'
 need "$APPLY" 'stock|performance|balanced|battery)'
 need "$APPLY" 'if [ "$PROFILE" = "stock" ]; then'
 need "$APPLY" 'asb_stock_enter'
 need "$APPLY" 'asb_stock_start_governor'
+need "$APPLY" '[ "$PROFILE" = "stock" ] && _passes=1'
 ! grep -Fq '"profile:$PROFILE"' "$APPLY" || true
 need "$CORE" 'stock)'
 need "$CORE" 'ASB_STOCK_PROFILE=1'
 need "$CORE" '[ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0'
+need "$CORE" 'asb_stock_enter'
+need "$CORE" 'ASB_PROFILE_BASELINE_CAPTURE=1'
+need "$CORE" 'asb_profile_baseline_capture_path'
 need "$UTILS" 'asb_stock_profile_active'
 need "$UTILS" 'return 2'
 need "$UTILS" 'ASB_DEFER_GOVERNOR_START'
@@ -49,6 +61,8 @@ need "$SERVICE" 'asb_governor_start || asb_log "post_boot: governor start deferr
 need "$SERVICE" 'stock|battery|balanced|performance|smart)'
 need "$SERVICE" 'asb_stock_enter'
 need "$SERVICE" '[ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0'
+need "$SERVICE" 'Stock is an explicit terminal boundary for this runtime pass'
+need "$SERVICE" 'ASB_PROFILE_BASELINE_CAPTURE=1'
 need "$WATCHDOG" 'current_profile'
 need "$WATCHDOG" '"stock" ] && exit 0'
 need "$RECONCILE" '"stock" ]; then'
@@ -113,5 +127,24 @@ for p in files:
         assert isinstance(data.get(key), str) and data[key].strip(), f'{p.name}: missing {key}'
 print('PASS Stock profile and immediate debug action locale coverage: 13 locales')
 PY
+
+# Behavioural fixture: profile runtime baseline must preserve the first pre-ASB value,
+# restore it without reboot, and disappear afterwards so the next non-Stock session captures
+# a fresh ROM state. It uses a temporary ordinary file; no Android setting or sysfs is touched.
+_tmp="$(mktemp -d)"; trap 'rm -rf "$_tmp"' EXIT HUP INT TERM
+_node="$_tmp/node"; _snap="$_tmp/profile_runtime_baseline.v1"
+printf '111\n' > "$_node"
+ASB_PROFILE_BASELINE="$_snap"
+. "$BASELINE"
+asb_profile_baseline_capture_path "$_node"
+printf '222\n' > "$_node"
+asb_profile_baseline_capture_path "$_node"
+[ "$(cat "$_node")" = "222" ] || fail 'fixture setup changed node unexpectedly'
+asb_profile_baseline_restore
+[ "$(cat "$_node")" = "111" ] || fail 'immediate profile baseline restore did not restore first value'
+[ ! -e "$_snap" ] || fail 'restored profile baseline was not cleared'
+
+need "$ROOT/src/asb_writer.h" 'writer_profile_baseline_record_path'
+need "$ROOT/src/asb_writer.h" 'profile_runtime_baseline.v1'
 
 echo 'PASS stock profile contract'
