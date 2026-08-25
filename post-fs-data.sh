@@ -57,12 +57,22 @@ done
   ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark postfs_capabilities_done >/dev/null 2>&1 || true
 command -v asb_persist_safe >/dev/null 2>&1 || asb_persist_safe() { setprop "$1" "$2" 2>/dev/null || true; }
 
+# Early boot has no safe fallback for optional writers: a missing/corrupt feature file must
+# leave all optional domains untouched.  This local copy avoids sourcing asb_utils.sh here,
+# because that helper owns normal-service governor lifecycle.
 asb_feature_enabled() {
   _key="$1"
-  [ -r "$MODDIR/features.conf" ] || return 0
-  _line="$(grep -E "^${_key}=" "$MODDIR/features.conf" 2>/dev/null | tail -n 1)"
-  [ -z "$_line" ] && return 0
-  [ "${_line#*=}" = "1" ]
+  [ -n "$_key" ] || return 1
+  [ -r "$MODDIR/features.conf" ] || return 1
+  _line="$(grep -E "^[[:space:]]*${_key}=" "$MODDIR/features.conf" 2>/dev/null | tail -n 1)"
+  [ -n "$_line" ] || return 1
+  _value="${_line#*=}"
+  _value="${_value%%#*}"
+  _value="$(printf '%s' "$_value" | tr -d '[:space:]\r')"
+  [ "$_value" = "1" ]
+}
+asb_bt_policy_enabled() {
+  asb_feature_enabled BT && [ -f /data/adb/asb/enable_bt_policy ]
 }
 # Dynamic audio/camera overlay edits require the overlay feature and an exact
 # fingerprint-validated overlay pack; never mutate generic-device payloads.
@@ -70,6 +80,11 @@ if asb_feature_enabled VENDOR_OVERLAY && command -v asb_device_pack_allows >/dev
    && [ -r "$MODDIR/runtime/asb_tweaks.sh" ]; then
   . "$MODDIR/runtime/asb_tweaks.sh"
   asb_apply_dynamic_tweaks "$MODDIR"
+fi
+# A generated /odm bind must be structurally safe before later boot consumers can mount it.
+# The guard writes vendor_overlay_blocked on failure, which every overlay producer already honors.
+if [ -r "$MODDIR/runtime/asb_overlay_guard.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_overlay_guard.sh" >/dev/null 2>&1 || true
 fi
 # ASB:LOG:BEGIN
 if asb_feature_enabled LOG && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
@@ -101,7 +116,7 @@ if command -v resetprop >/dev/null 2>&1; then
   fi
   # ASB:LOG:END
   # ASB:BT:BEGIN
-  if asb_feature_enabled BT && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
+  if asb_bt_policy_enabled && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
   resetprop --delete media.resolution.limit.16bit >/dev/null 2>&1 || true
   resetprop --delete media.resolution.limit.24bit >/dev/null 2>&1 || true
   resetprop --delete media.resolution.limit.32bit >/dev/null 2>&1 || true
@@ -133,7 +148,7 @@ if asb_feature_enabled WIFI && command -v asb_device_pack_allows >/dev/null 2>&1
 fi
 # ASB:WIFI:END
 # ASB:BT:BEGIN
-if asb_feature_enabled BT && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
+if asb_bt_policy_enabled && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
   asb_persist_safe persist.vendor.bluetooth.btsnoopenable false
 fi
 # ASB:BT:END

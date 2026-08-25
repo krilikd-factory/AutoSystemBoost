@@ -1567,30 +1567,34 @@ apply_net_steering() {
 # This retry can wait up to two minutes for a link. It is callable from the post-boot
 # worker only, never launched during the init/service startup path.
 asb_wifi_link_reassert() {
+  # Only one post-boot reassert may own wlan0 at a time.  The old 120-second wait could leave
+  # multiple delayed workers alive across profile/reconcile changes, each rewriting qdisc later.
+  _lock="/data/adb/asb/wifi_reassert.lock"
+  mkdir -p /data/adb/asb 2>/dev/null || return 0
+  mkdir "$_lock" 2>/dev/null || { asb_log "wifi reassert: already running"; return 0; }
+  trap 'rmdir "$_lock" 2>/dev/null || true' EXIT INT TERM
+
   _skip_wlan_wait=0
   if has settings; then
     _wifi_on="$(settings get global wifi_on 2>/dev/null)"
-    case "$_wifi_on" in
-      0|disabled|false) _skip_wlan_wait=1 ;;
-    esac
+    case "$_wifi_on" in 0|disabled|false) _skip_wlan_wait=1 ;; esac
   fi
+  [ "$_skip_wlan_wait" = "1" ] && return 0
+  # No wlan0 after ten seconds means Wi-Fi is intentionally absent/down on this boot; do not
+  # retain a two-minute sleeper solely to retry a non-critical queue policy.
+  wait_path /sys/class/net/wlan0 10 || { asb_log "wifi reassert: wlan0 unavailable"; return 0; }
   t=0
-  while [ $_skip_wlan_wait -eq 0 ] && [ $t -lt 120 ]; do
-    [ -r /sys/class/net/wlan0/operstate ] || { sleep 2; t=$((t+2)); continue; }
+  while [ "$t" -lt 30 ]; do
     st="$(cat /sys/class/net/wlan0/operstate 2>/dev/null)"
-    case "$st" in
-      up|dormant) break ;;
-    esac
+    case "$st" in up|dormant) break ;; esac
     sleep 2
     t=$((t+2))
   done
-  for delay in 0 15; do
-    [ $delay -gt 0 ] && sleep $delay
-    asb_feature_enabled WIFI && apply_wlan0_txqlen
-    asb_feature_enabled WIFI && apply_wlan0_qdisc
-    q="$(cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
-    [ "$q" = "${_P_WLAN_TXQLEN:-1024}" ] && break
-  done
+  case "${st:-}" in up|dormant) ;; *) asb_log "wifi reassert: link not ready after ${t}s"; return 0 ;; esac
+  asb_feature_enabled WIFI && apply_wlan0_txqlen
+  asb_feature_enabled WIFI && apply_wlan0_qdisc
+  q="$(cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
+  [ "$q" = "${_P_WLAN_TXQLEN:-1024}" ] || asb_log "wifi reassert: queue policy not accepted"
 }
 # ASB:GPS:BEGIN
 apply_gps_hygiene() {
@@ -1639,20 +1643,19 @@ apply_audio_runtime() {
     setprop vendor.audio.offload.buffer.size.kb 256 2>/dev/null || true
   fi
 }
-if asb_feature_enabled AUDIO && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
-  apply_audio_runtime
-elif asb_feature_enabled AUDIO; then
-  asb_log "audio runtime: skipped on generic/unvalidated audio device pack"
+# AUDIO=1 exposes manual WebUI controls; it is not consent to rewrite the audio HAL on every
+# boot.  A user action records audio_user_policy_enabled and is restored later, after Android is
+# ready, through asb_audio_apply.sh in no-restart mode.
+if asb_audio_boot_policy_enabled; then
+  asb_log "audio runtime: explicit user policy deferred until boot_completed"
+else
+  asb_log "audio runtime: default ROM policy retained (no WebUI audio intent)"
 fi
 # ASB:AUDIO:END
 # These legacy deletions alter audio HAL policy and therefore follow the same
 # explicit AUDIO/device-pack gate as the runtime audio configuration.
-if asb_feature_enabled AUDIO && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows audio; then
-  resetprop -p --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
-  resetprop -p --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
-  resetprop --delete audio.hal.output.suspend.supported >/dev/null 2>&1 || true
-  resetprop --delete vendor.qc2audio.suspend.enabled    >/dev/null 2>&1 || true
-fi
+# Do not delete HAL suspend policy automatically.  It affects power/call routing and must be
+# left to the ROM unless a dedicated, reversible user action is implemented with a baseline.
 # ASB:BG_TRIM:BEGIN
 
 _BG_TRIM_NEVER="
@@ -1933,7 +1936,7 @@ apply_bt_runtime() {
   # Amazfit / T-Rex Ultra 2 via Zepp).
   # It is dropped anyway so the module never re-forces LE Audio from any layer.
 }
-asb_feature_enabled BT && apply_bt_runtime
+asb_bt_policy_enabled && apply_bt_runtime
 apply_camera_props_static() {
   # Camera prop layer. IMPORTANT REVERSAL: the known-good debug module that has
   _cp_plat="$(getprop ro.board.platform 2>/dev/null)"
@@ -3154,6 +3157,15 @@ fi
   asb_apply_deferred_core_boot
   asb_timeline_mark post_boot_core_policy_complete
 
+  # Restore only a user-selected WebUI audio policy.  The `boot` mode applies properties without
+  # restarting audioserver, so boot never gains an audio restart or Bluetooth reconnect side effect.
+  if asb_audio_boot_policy_enabled && [ -f "$MODDIR/runtime/asb_audio_apply.sh" ]; then
+    asb_timeline_mark post_boot_audio_user_policy_begin
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_audio_apply.sh" boot >/dev/null 2>&1 || \
+      asb_log "audio runtime: explicit policy restore failed"
+    asb_timeline_mark post_boot_audio_user_policy_complete
+  fi
+
   [ -f "$MODDIR/runtime/asb_gms_freeze.sh" ] && \
     sh "$MODDIR/runtime/asb_gms_freeze.sh" >/dev/null 2>&1
   [ -f "$MODDIR/runtime/asb_gms_trim.sh" ] && \
@@ -3203,7 +3215,9 @@ fi
   # These calls use Settings, DeviceIdle, package/service state or many framework IPCs. They
   # used to occupy the 11-second media/kernel -> runtime-core boot interval on the OP15.
   asb_timeline_mark post_boot_runtime_framework_begin
-  if asb_feature_enabled BT; then
+  # Framework Bluetooth policy is an explicit experimental opt-in.  Manual WebUI audio apply
+  # remains available and does not route through this broad codec/offload/HFP policy block.
+  if asb_bt_policy_enabled; then
     apply_bt_settings
     apply_bt_codec_policy
     apply_bt_volume_behavior
