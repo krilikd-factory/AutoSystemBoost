@@ -41,6 +41,11 @@ need "$CORE" 'ASB_STOCK_PROFILE=1'
 need "$CORE" '[ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0'
 need "$UTILS" 'asb_stock_profile_active'
 need "$UTILS" 'return 2'
+need "$UTILS" 'ASB_DEFER_GOVERNOR_START'
+need "$SERVICE" 'ASB_DEFER_GOVERNOR_START=1'
+need "$SERVICE" 'post_boot_governor_start_begin'
+need "$SERVICE" 'post_boot_governor_stock_off'
+need "$SERVICE" 'asb_governor_start || asb_log "post_boot: governor start deferred to watchdog"'
 need "$SERVICE" 'stock|battery|balanced|performance|smart)'
 need "$SERVICE" 'asb_stock_enter'
 need "$SERVICE" '[ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0'
@@ -75,6 +80,11 @@ _profile_order="$(grep -E 'class=\"pbtn[^\"]*\" data-p=\"(smart|performance|bala
   fail "unexpected profile card order: $_profile_order"
 need "$UI" "['stock','performance','balanced','battery','smart'].includes(p)"
 need "$UI" "T('t_stock_applied'"
+need "$UI" "let _selectedProfile = 'none';"
+need "$UI" 'function paintStockLive() {'
+need "$UI" "if (_selectedProfile === 'stock') paintStockLive();"
+need "$UI" "if (visible && _selectedProfile === 'stock') paintStockLive();"
+need "$UI" "const off = T('prof_stock_sub', 'ASB policy off');"
 need "$UI" 'gap: 8px;'
 need_count "$UI" '<button class="debug-support-btn" data-debug-action="diag"' 3
 need_count "$UI" '<button class="debug-support-btn" data-debug-action="full-day"' 3
