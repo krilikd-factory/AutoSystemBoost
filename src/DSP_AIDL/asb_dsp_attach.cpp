@@ -51,6 +51,10 @@ static const effect_uuid_t kAsbImplUuid = {
 static const effect_uuid_t kAsbTypeUuid = {
         0xfe3199be, 0xaed0, 0x413f, 0x87bb, {0x11, 0x26, 0x0e, 0xb6, 0x3c, 0xf1}};
 
+// This string is intentionally embedded in the ELF and printed at launch.  CI compares it to
+// the source marker before accepting an attacher prebuilt, preventing a silent stale binary.
+static constexpr const char* kAsbAttachBuildId = "ASB_ATTACH_SRC_V64_GUARD_20260825";
+
 static void logline(const char* fmt, ...) {
     // Plain stdout; the launcher redirects it to /data/adb/asb/dsp_attach.log so the state
     // is inspectable without logcat.
@@ -149,6 +153,7 @@ static void asb_tunables_sig(char *out, size_t n) {
 }
 
 int main(int /*argc*/, char** /*argv*/) {
+    logline("asb_dsp_attach build=%s", kAsbAttachBuildId);
     android::ProcessState::self()->startThreadPool();
     signal(SIGUSR1, on_wake);
 
