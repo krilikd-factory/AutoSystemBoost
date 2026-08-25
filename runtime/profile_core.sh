@@ -51,7 +51,10 @@ readf() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
 # The dead-node memory below still helps, but only for repeated calls: a boot makes exactly
 # one pass, so the first pass had to get cheaper on its own.
 writef_retry() {
-  local _p="$1" _v="$2" _tries="${3:-5}" _delay="${4:-0.12}" _i=1
+  local _p="$1" _v="$2" _tries="${3:-5}" _delay="${4:-0.12}"
+  command -v asb_profile_baseline_capture_path >/dev/null 2>&1 && \
+    asb_profile_baseline_capture_path "$_p" || true
+  _i=1
   [ -e "$_p" ] || return 1
   while [ "$_i" -le "$_tries" ]; do
     [ -w "$_p" ] || return 1
@@ -71,8 +74,10 @@ writef_retry() {
 
 sysctlw() {
   local k="$1" v="$2" p
-  if has sysctl; then sysctl -w "$k=$v" >/dev/null 2>&1 && return 0; fi
   p="/proc/sys/$(echo "$k" | tr . /)"
+  command -v asb_profile_baseline_capture_path >/dev/null 2>&1 && \
+    asb_profile_baseline_capture_path "$p" || true
+  if has sysctl; then sysctl -w "$k=$v" >/dev/null 2>&1 && return 0; fi
   [ -w "$p" ] || return 1
   echo "$v" > "$p" 2>/dev/null
 }
@@ -626,7 +631,8 @@ asb_load_profile() {
     stock)
       ASB_PROFILE=stock
       ASB_STOCK_PROFILE=1
-      command -v asb_log >/dev/null 2>&1 && asb_log 'stock profile - leaving CPU, GPU, governor and profile-owned runtime policy untouched'
+      command -v asb_stock_enter >/dev/null 2>&1 && asb_stock_enter
+      command -v asb_log >/dev/null 2>&1 && asb_log 'stock profile - immediate ASB profile baseline restore requested; native policy stopped'
       return 0
       ;;
     battery|balanced|performance) : ;;
@@ -711,6 +717,10 @@ asb_load_profile() {
 asb_apply_profile_once() {
   asb_load_profile
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
+  # Mark exactly this profile transaction as baseline-owned. The setting/path wrappers record
+  # the pre-ASB value only once; independent WebUI actions (notably manual audio) never set it.
+  ASB_PROFILE_BASELINE_CAPTURE=1
+  export ASB_PROFILE_BASELINE_CAPTURE
   asb_cpu_cluster_init
   asb_update_desc
   asb_apply_walt
@@ -720,4 +730,5 @@ asb_apply_profile_once() {
   asb_apply_net
   asb_apply_wifi
   asb_apply_ux
+  unset ASB_PROFILE_BASELINE_CAPTURE
 }

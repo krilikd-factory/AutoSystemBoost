@@ -7,6 +7,53 @@
   . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh"
 
 ASB_BASELINE="/data/adb/asb/baseline.txt"
+# Separate, short-lived snapshot for profile-owned runtime writes. It must not reuse the
+# global baseline: that file also protects independent manual audio/WebUI controls, which
+# Stock must leave alone. This ledger exists solely to return CPU/VM/network/UX profile
+# writes to their exact pre-profile values during an immediate Stock transition.
+ASB_PROFILE_BASELINE="${ASB_PROFILE_BASELINE:-/data/adb/asb/profile_runtime_baseline.v1}"
+
+asb_profile_baseline_record() {
+  _pb_type="$1" _pb_key="$2" _pb_value="$3"
+  [ -n "$_pb_type" ] && [ -n "$_pb_key" ] || return 1
+  mkdir -p /data/adb/asb 2>/dev/null || return 1
+  [ -f "$ASB_PROFILE_BASELINE" ] || : > "$ASB_PROFILE_BASELINE" 2>/dev/null || return 1
+  grep -Fq "$_pb_type|$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/null && return 0
+  printf '%s|%s|%s\n' "$_pb_type" "$_pb_key" "$(printf '%s' "$_pb_value" | tr '\n\r|' '___')" >> "$ASB_PROFILE_BASELINE" 2>/dev/null
+}
+
+asb_profile_baseline_capture_path() {
+  _pb_path="$1"
+  [ -r "$_pb_path" ] || return 0
+  asb_profile_baseline_record path "$_pb_path" "$(cat "$_pb_path" 2>/dev/null | tr -d '\r\n')"
+}
+
+asb_profile_baseline_capture_setting() {
+  _pb_ns="$1" _pb_key="$2"
+  command -v settings >/dev/null 2>&1 || return 0
+  _pb_val="$(settings get "$_pb_ns" "$_pb_key" 2>/dev/null)"
+  [ "$_pb_val" = "null" ] && _pb_val=""
+  asb_profile_baseline_record setting "$_pb_ns:$_pb_key" "$_pb_val"
+}
+
+asb_profile_baseline_restore() {
+  [ -f "$ASB_PROFILE_BASELINE" ] || return 0
+  while IFS='|' read -r _pb_type _pb_key _pb_value; do
+    case "$_pb_type" in
+      path)
+        [ -w "$_pb_key" ] && printf '%s\n' "$_pb_value" > "$_pb_key" 2>/dev/null || true
+        ;;
+      setting)
+        _pb_ns="${_pb_key%%:*}"; _pb_name="${_pb_key#*:}"
+        [ -n "$_pb_ns" ] && [ -n "$_pb_name" ] || continue
+        if [ -z "$_pb_value" ]; then settings delete "$_pb_ns" "$_pb_name" >/dev/null 2>&1 || true
+        else settings put "$_pb_ns" "$_pb_name" "$_pb_value" >/dev/null 2>&1 || true
+        fi
+        ;;
+    esac
+  done < "$ASB_PROFILE_BASELINE"
+  rm -f "$ASB_PROFILE_BASELINE" 2>/dev/null || true
+}
 
 asb_baseline_init() {
   [ -f "$ASB_BASELINE" ] && return 0
@@ -28,6 +75,9 @@ asb_settings_put() {
   local _ns="$1" _key="$2" _val="$3"
   [ -z "$_ns" ] || [ -z "$_key" ] && return 1
   asb_baseline_init
+  # Only profile_core enables this flag around its profile-owned apply transaction. Manual
+  # WebUI audio changes intentionally do not enter the Stock runtime baseline.
+  [ "${ASB_PROFILE_BASELINE_CAPTURE:-0}" = "1" ] && asb_profile_baseline_capture_setting "$_ns" "$_key"
   if ! grep -qE "^settings\|${_ns}\|${_key}\|" "$ASB_BASELINE" 2>/dev/null; then
     local _orig
     _orig="$(settings get "$_ns" "$_key" 2>/dev/null)"

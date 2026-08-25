@@ -33,13 +33,22 @@ asb_stock_stop_governor() {
   rm -f /dev/.asb/governor.pid /dev/.asb/state 2>/dev/null || true
 }
 
+asb_stock_restore_profile_runtime() {
+  # This is deliberately separate from asb_baseline_replay: the global baseline contains
+  # independent user-selected controls (including manual audio), while Stock must restore
+  # only values that a power profile itself changed.
+  command -v asb_profile_baseline_restore >/dev/null 2>&1 && \
+    asb_profile_baseline_restore || true
+}
+
 asb_stock_enter() {
   mkdir -p /data/adb/asb 2>/dev/null || true
   : > /data/adb/asb/stock_profile_active 2>/dev/null || true
   asb_stock_stop_governor
   asb_stock_release_profile_leases
+  asb_stock_restore_profile_runtime
   command -v asb_log >/dev/null 2>&1 && \
-    asb_log 'stock profile: native governor stopped; profile CPU/GPU/scheduler policy released; reboot restores ROM runtime values'
+    asb_log 'stock profile: native governor stopped; profile-owned baseline restored; no ASB power policy remains active'
 }
 
 asb_stock_leave() {
