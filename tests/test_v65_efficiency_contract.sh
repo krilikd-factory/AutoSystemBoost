@@ -42,6 +42,13 @@ if sed -n "${core_start},${core_end}p" "$SERVICE" | grep -Eq '^[[:space:]]*asb_a
   fail 'deferred core worker still uses broad profile fan-out'
 fi
 need "$SERVICE" 'asb_feature_enabled CPU && asb_cpu_cluster_init'
+# On devices with the native Smart governor, boot must return after native ownership is
+# confirmed; the legacy multi-write shell convergence is available only as an explicit opt-in.
+need "$SERVICE" 'allow_boot_shell_policy'
+need "$SERVICE" 'post_boot_core_policy_native_only'
+boot_guard="$(line_of "$SERVICE" 'allow_boot_shell_policy')"
+boot_load="$(sed -n "${core_start},${core_end}p" "$SERVICE" | grep -nE '^[[:space:]]*asb_load_profile([[:space:]]|$)' | head -1 | cut -d: -f1)"
+[ -n "$boot_guard" ] && [ -n "$boot_load" ] || fail 'boot shell-policy guard missing'
 
 # Native screen-off cadence must remain materially slower than the active loop.
 need "$GOV" '#define TIMER_IDLE_S   10'
