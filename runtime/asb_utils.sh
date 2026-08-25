@@ -88,12 +88,31 @@ asb_load_profile() {
   asb_map_profile_vars
 }
 
+# Feature state is safety-critical: a missing/corrupt features.conf must never enable a
+# property, sysfs or framework writer by accident.  Old builds are migrated by install.sh;
+# runtime itself is deliberately fail-closed.
 asb_feature_enabled() {
   _key="$1"
-  [ -r "$MODDIR/features.conf" ] || return 0
-  _line="$(grep -E "^${_key}=" "$MODDIR/features.conf" 2>/dev/null | tail -n 1)"
-  [ -z "$_line" ] && return 0
-  [ "${_line#*=}" = "1" ]
+  [ -n "$_key" ] || return 1
+  [ -r "$MODDIR/features.conf" ] || return 1
+  _line="$(grep -E "^[[:space:]]*${_key}=" "$MODDIR/features.conf" 2>/dev/null | tail -n 1)"
+  [ -n "$_line" ] || return 1
+  _value="${_line#*=}"
+  _value="${_value%%#*}"
+  _value="$(printf '%s' "$_value" | tr -d '[:space:]\r')"
+  [ "$_value" = "1" ]
+}
+
+# Broad Bluetooth stack mutations are never implied by BT=1.  BT=1 only declares that the
+# package/device supports the domain; this marker is an explicit user experiment opt-in.
+asb_bt_policy_enabled() {
+  asb_feature_enabled BT && [ -f /data/adb/asb/enable_bt_policy ]
+}
+
+# WebUI audio actions persist their own explicit intent here.  This is intentionally separate
+# from AUDIO=1, which merely makes manual audio controls available.
+asb_audio_boot_policy_enabled() {
+  asb_feature_enabled AUDIO && [ -f /data/adb/asb/audio_user_policy_enabled ]
 }
 
 has() { command -v "$1" >/dev/null 2>&1; }

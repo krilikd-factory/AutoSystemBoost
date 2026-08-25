@@ -51,6 +51,15 @@ _dspp() { _persist "persist.asb.dsp.$1" "$2"; _persist_ctx "persist.vendor.asb.d
 # audio stack down and no momentary drop-out when the slider moves.
 _mode="${1:-all}"
 
+# A manual WebUI action is explicit consent to restore this selected policy after a reboot.
+# The internal `boot`/`mirror` modes must never create consent on their own.
+case "$_mode" in
+  all|dsp)
+    mkdir -p /data/adb/asb 2>/dev/null || true
+    : > /data/adb/asb/audio_user_policy_enabled 2>/dev/null || true
+    ;;
+esac
+
 # "mirror" republishes whatever the DSP properties currently hold under the vendor namespace
 # and does nothing else.
 if [ "$_mode" = "mirror" ]; then
@@ -137,6 +146,10 @@ else
     # always ran at DEFAULT.
     setprop af.resampler.quality 0 2>/dev/null || true
   else
+    # Stock profile must actively undo the persistent HiFi values that an earlier manual
+    # selection set; otherwise a visible Stock choice kept the old boot policy alive.
+    _persist persist.audio.hifi false
+    _persist persist.vendor.audio.hifi false
     _persist persist.audio.uhqa 0
     _persist persist.vendor.audio.uhqa false
     setprop af.resampler.quality 0 2>/dev/null || true
@@ -309,6 +322,13 @@ if [ "$_mode" = "dsp" ]; then
   pkill -USR1 -f asb_dsp_attach 2>/dev/null \
     || killall -USR1 asb_dsp_attach 2>/dev/null || true
   echo "applied: $changed (live - no audioserver restart)"
+  exit 0
+fi
+# Boot restoration must not restart audioserver: services are already live and a restart can
+# produce a user-visible route drop or Bluetooth renegotiation. The properties are persistent
+# and the regular boot path will re-read them naturally.
+if [ "$_mode" = "boot" ]; then
+  echo "applied: $changed (boot restore, no audioserver restart)"
   exit 0
 fi
 setprop ctl.restart audioserver 2>/dev/null || true

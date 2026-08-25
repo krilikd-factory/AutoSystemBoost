@@ -77,12 +77,18 @@ sysctlw() {
   echo "$v" > "$p" 2>/dev/null
 }
 
+# Keep this standalone fallback aligned with runtime/asb_utils.sh: unavailable or malformed
+# feature state must disable writers rather than activating every optional domain.
 asb_feature_enabled() {
-  local _key="$1" _line
-  [ -r "$MODDIR/features.conf" ] || return 0
-  _line="$(grep -E "^${_key}=" "$MODDIR/features.conf" 2>/dev/null | tail -n 1)"
-  [ -z "$_line" ] && return 0
-  [ "${_line#*=}" = "1" ]
+  local _key="$1" _line _value
+  [ -n "$_key" ] || return 1
+  [ -r "$MODDIR/features.conf" ] || return 1
+  _line="$(grep -E "^[[:space:]]*${_key}=" "$MODDIR/features.conf" 2>/dev/null | tail -n 1)"
+  [ -n "$_line" ] || return 1
+  _value="${_line#*=}"
+  _value="${_value%%#*}"
+  _value="$(printf '%s' "$_value" | tr -d '[:space:]\r')"
+  [ "$_value" = "1" ]
 }
 
 asb_update_desc() {

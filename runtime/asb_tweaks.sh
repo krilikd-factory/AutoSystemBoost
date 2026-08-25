@@ -81,11 +81,13 @@ asb_tw_camera_grade_needed() {
 # places (post-fs-data.sh, install.sh) that do not all define asb_feature_enabled.
 asb_tw_feature_on() {
   _ftf="${MODDIR:-${MODPATH:-/data/adb/modules/AutoSystemBoost}}/features.conf"
-  [ -r "$_ftf" ] || return 0
-  _ftl="$(grep -E "^$1=" "$_ftf" 2>/dev/null | tail -n 1)"
-  [ -z "$_ftl" ] && return 0
+  [ -n "$1" ] || return 1
+  [ -r "$_ftf" ] || return 1
+  _ftl="$(grep -E "^[[:space:]]*$1=" "$_ftf" 2>/dev/null | tail -n 1)"
+  [ -n "$_ftl" ] || return 1
   _ftv="${_ftl#*=}"
-  _ftv="${_ftv%%[!01]*}"
+  _ftv="${_ftv%%#*}"
+  _ftv="$(printf '%s' "$_ftv" | tr -d '[:space:]\r')"
   [ "$_ftv" = "1" ]
 }
 
