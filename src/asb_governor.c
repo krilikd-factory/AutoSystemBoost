@@ -26,8 +26,12 @@
 #include "asb_smart.h"
 
 #define TIMER_ACTIVE_S  2   /* metrics interval, screen ON  */
-#define TIMER_IDLE_S    5   /* metrics interval, screen OFF */
-#define TIMER_DEEP_S   10   /* metrics interval, battery deep idle */
+/* Screen-off policy does not need frame-rate feedback.  The previous 5/10 s cadence kept
+ * reopening sysfs nodes hundreds of times per hour during a quiet night.  These intervals
+ * retain prompt response to uevents and socket commands while materially reducing resident
+ * governor wakeups and telemetry I/O. */
+#define TIMER_IDLE_S   10   /* metrics interval, screen OFF */
+#define TIMER_DEEP_S   30   /* metrics interval, verified deep idle */
 #define TIMER_HOURLY_S  3600
 
 #define STATE_FILE      "/dev/.asb/state"
@@ -3284,9 +3288,13 @@ static int classify_environment(const asb_fsm_t *fsm) {
      * is a sign of hostile radio environment (push services, sync storms) */
     int radio_noisy = 0;
     if (dur > 120) {
-        int radio_pct = (int)((long)fsm->bat_radio_active_ticks * 100 /
-                              (dur / (TIMER_IDLE_S > 0 ? TIMER_IDLE_S : 5)));
-        if (radio_pct > 30) radio_noisy = 1;  /* >30% of ticks had active data */
+        /* Most screen-off time now runs at TIMER_DEEP_S.  Dividing by the shorter idle period
+         * after an adaptive cadence change would inflate the active-radio share and falsely
+         * classify a quiet night as hostile, which in turn re-enables costly monitoring. */
+        long expected_samples = dur / (TIMER_DEEP_S > 0 ? TIMER_DEEP_S : 30);
+        if (expected_samples < 1) expected_samples = 1;
+        int radio_pct = (int)((long)fsm->bat_radio_active_ticks * 100 / expected_samples);
+        if (radio_pct > 30) radio_noisy = 1;  /* >30% of conservative samples had active data */
     }
     /*
      * V56 FIX: the idle-quality (iq) branch below is only meaningful when the session is
