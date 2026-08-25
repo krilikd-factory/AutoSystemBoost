@@ -16,7 +16,9 @@ ASB_PROFILE_BASELINE="${ASB_PROFILE_BASELINE:-/data/adb/asb/profile_runtime_base
 asb_profile_baseline_record() {
   _pb_type="$1" _pb_key="$2" _pb_value="$3"
   [ -n "$_pb_type" ] && [ -n "$_pb_key" ] || return 1
-  mkdir -p /data/adb/asb 2>/dev/null || return 1
+  # Use the configured snapshot directory. Production keeps /data/adb/asb, while host
+  # contracts inject a temporary path and must not need permission to create /data.
+  mkdir -p "$(dirname "$ASB_PROFILE_BASELINE")" 2>/dev/null || return 1
   [ -f "$ASB_PROFILE_BASELINE" ] || : > "$ASB_PROFILE_BASELINE" 2>/dev/null || return 1
   grep -Fq "$_pb_type|$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/null && return 0
   printf '%s|%s|%s\n' "$_pb_type" "$_pb_key" "$(printf '%s' "$_pb_value" | tr '\n\r|' '___')" >> "$ASB_PROFILE_BASELINE" 2>/dev/null
