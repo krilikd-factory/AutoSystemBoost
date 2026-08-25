@@ -350,6 +350,16 @@ static inline int lerp_int(int a, int b, float t) {
  * a little heat for a visible stutter every single unlock. */
 #define ASB_DEEP_IDLE_GPU_MAX_PCT 15
 
+/* Smart proactive thermal ceiling for canoe/SM8850.  The fresh capture repeatedly showed
+ * vendor caps around p0=1.99-2.23GHz and p6=1.50-1.63GHz while Smart still requested higher
+ * sustained envelopes.  These are real OPPs from the discovered table, one step below the
+ * common vendor thermal ceiling.  They apply only from MODERATE through SUSTAINED: Gaming is
+ * intentionally left to its own QoS/thermal path, and manual profiles remain untouched. */
+#define ASB_SMART_PROACTIVE_P0_MODERATE_MAX 1996800
+#define ASB_SMART_PROACTIVE_P6_MODERATE_MAX 1632000
+#define ASB_SMART_PROACTIVE_P0_SUSTAINED_MAX 1785600
+#define ASB_SMART_PROACTIVE_P6_SUSTAINED_MAX 1382400
+
 static void fsm_interpolate_caps(
     const asb_profile_bounds_t *bounds, int profile_idx, asb_state_t state,
     asb_profile_caps_t *out)
@@ -441,6 +451,23 @@ static void fsm_interpolate_caps(
     if (state == ASB_STATE_DEEP_IDLE &&
         out->gpu_max_pct > ASB_DEEP_IDLE_GPU_MAX_PCT)
         out->gpu_max_pct = ASB_DEEP_IDLE_GPU_MAX_PCT;
+    /* Smart must start shedding heat before the vendor thermal HAL has to clamp it.  Without
+     * this guard the blended Smart ceiling can sit above the vendor's usual 1.50-1.63GHz
+     * prime-cluster ceiling; the vendor then wins, and the writer records a clamp/write-war
+     * rather than a clean ASB-owned cap.  Keep the guard out of GAMING so this is not a hidden
+     * performance-profile replacement. */
+    if (profile_idx == PROFILE_SMART &&
+        state >= ASB_STATE_MODERATE && state < ASB_STATE_GAMING) {
+        int _p0 = (state == ASB_STATE_SUSTAINED)
+                    ? ASB_SMART_PROACTIVE_P0_SUSTAINED_MAX
+                    : ASB_SMART_PROACTIVE_P0_MODERATE_MAX;
+        int _p6 = (state == ASB_STATE_SUSTAINED)
+                    ? ASB_SMART_PROACTIVE_P6_SUSTAINED_MAX
+                    : ASB_SMART_PROACTIVE_P6_MODERATE_MAX;
+        if (out->cpu_max[0] > _p0) out->cpu_max[0] = _p0;
+        if (out->cpu_max[1] > _p6) out->cpu_max[1] = _p6;
+    }
+
     out->ravg_ticks     = lerp_int(f->ravg_ticks,     c->ravg_ticks,     t > 0.5f ? 1.0f : 0.0f);
     out->idle_enough    = lerp_int(f->idle_enough,    c->idle_enough,    t);
     out->uclamp_top_max = lerp_int(f->uclamp_top_max, c->uclamp_top_max, t);

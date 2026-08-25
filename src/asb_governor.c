@@ -370,9 +370,14 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
      * vendor thermal engine), 96-235 mA and 40°C surface in DEEP_IDLE, and the user report
      * "smart = boiler, balanced = fine".
      */
-    if (p == PROFILE_SMART)
-        p = (!screen_on || fsm->state <= ASB_STATE_LIGHT_IDLE)
-            ? PROFILE_BATTERY : PROFILE_BALANCED;
+    if (p == PROFILE_SMART) {
+        /* Smart is an energy/heat profile, not a hidden Balanced profile.  The previous
+         * screen-on mapping selected the Balanced plan and armed anti-clamp, which could
+         * re-raise vendor thermal caps.  Smart now uses the Battery-like plan for all states:
+         * its adaptive bounds still choose the requested ceiling, but it never fights the
+         * vendor thermal owner and its sensor cadence stays economical. */
+        p = PROFILE_BATTERY;
+    }
     int idle_band = (fsm->state <= ASB_STATE_LIGHT_IDLE);
     int heavy_band = (fsm->state >= ASB_STATE_HEAVY);
 
