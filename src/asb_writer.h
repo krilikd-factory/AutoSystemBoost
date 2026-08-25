@@ -6,6 +6,7 @@
 #include <limits.h>
 #include <dirent.h>
 #include <ctype.h>
+#include <string.h>
 #include "asb_fsm.h"
 #include "asb_config.h"
 
@@ -313,6 +314,32 @@ static long cpu_lowest_opp(int path_idx) {
     return lowest;
 }
 
+/* Native Smart caps do not pass through the shell profile wrapper. Record each writable
+ * path once in the same profile-only snapshot used by Stock, before the native writer makes
+ * its first change. If the file cannot be created, fail closed: never invent a ROM default. */
+static void writer_profile_baseline_record_path(const char *path) {
+    if (!path || !*path) return;
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return;
+    char value[160] = {0};
+    ssize_t n = read(fd, value, sizeof(value) - 1);
+    close(fd);
+    if (n <= 0) return;
+    for (ssize_t i = 0; i < n; i++) if (value[i] == '\n' || value[i] == '\r' || value[i] == '|') value[i] = '_';
+
+    FILE *f = fopen("/data/adb/asb/profile_runtime_baseline.v1", "a+");
+    if (!f) return;
+    char line[384]; size_t plen = strlen(path); int found = 0;
+    rewind(f);
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "path|", 5) == 0 && strncmp(line + 5, path, plen) == 0 && line[5 + plen] == '|') {
+            found = 1; break;
+        }
+    }
+    if (!found) fprintf(f, "path|%s|%s\n", path, value);
+    fclose(f);
+}
+
 static void writer_init_paths(void) {
     if (g_writer_paths_ready) return;
     cpu_topology_discover();
@@ -347,6 +374,10 @@ static void writer_init_paths(void) {
             g_cpu_all_paths_slot[g_cpu_all_paths_n] = g_cpu_all_slot[i];
             g_cpu_all_paths_n++;
         }
+    }
+    for (int i = 0; i < g_cpu_all_paths_n && i < 16; i++) {
+        writer_profile_baseline_record_path(g_cpu_all_max_paths[i]);
+        writer_profile_baseline_record_path(g_cpu_all_min_paths[i]);
     }
     g_writer_paths_ready = 1;
 }
@@ -583,6 +614,8 @@ static void writer_discover_gpu_paths(void) {
     }
 #endif
 
+    writer_profile_baseline_record_path(g_gpu_max_path);
+    writer_profile_baseline_record_path(g_gpu_min_path);
     g_gpu_paths_ready = 1;
 }
 
