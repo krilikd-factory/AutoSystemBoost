@@ -89,6 +89,11 @@ fi
 [ -f "$MODDIR/runtime/asb_active_efficiency_envelope.sh" ] && \
   sh "$MODDIR/runtime/asb_active_efficiency_envelope.sh" >/dev/null 2>&1
 
+# Non-Stock profiles previously started the native governor while Android was still bringing
+# up system services.  Stock is fast precisely because it does not keep that writer/metrics
+# loop alive during startup.  Source the helpers now, but defer the actual process until
+# boot_completed below; profile state is already persisted in current_profile.
+ASB_DEFER_GOVERNOR_START=1
 [ -r "$MODDIR/runtime/asb_utils.sh" ]   && . "$MODDIR/runtime/asb_utils.sh"
 [ -r "$MODDIR/runtime/asb_arbiter.sh" ] && . "$MODDIR/runtime/asb_arbiter.sh"
 [ -r "$MODDIR/runtime/profile_core.sh" ] && . "$MODDIR/runtime/profile_core.sh"
@@ -3129,8 +3134,22 @@ fi
   sleep 2
   asb_timeline_mark post_boot_tweaks_begin
   asb_log "post_boot_tweaks: begin"
+  # Start the native Smart/profile governor only after Android's framework reports ready.
+  # This is the material Stock/non-Stock difference: starting it during service init creates
+  # metrics/sysfs traffic while zygote, PowerHAL and vendor services are still competing for
+  # CPU.  Stock intentionally has no governor at all.
+  if [ "${ASB_STOCK_PROFILE:-0}" != "1" ]; then
+    asb_timeline_mark post_boot_governor_start_begin
+    if command -v asb_governor_start >/dev/null 2>&1; then
+      asb_governor_start || asb_log "post_boot: governor start deferred to watchdog"
+    fi
+    asb_timeline_mark post_boot_governor_start_complete
+  else
+    asb_timeline_mark post_boot_governor_stock_off
+  fi
+
   # Fast boot counterpart to the existing deferred BG_TRIM/connectivity stages.
-  # Do all profile CPU/VM/kernel/DSP/ZRAM work after Android reports completion.
+  # Do all optional profile CPU/VM/kernel/DSP/ZRAM work after Android reports completion.
   asb_timeline_mark post_boot_core_policy_begin
   asb_apply_deferred_core_boot
   asb_timeline_mark post_boot_core_policy_complete
