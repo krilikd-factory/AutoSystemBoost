@@ -52,6 +52,7 @@
   "wb_vol": "L’avertissement de volume sûr est désactivé — risque pour l’audition",
   "wb_gms": "En « strict », les notifications Google peuvent arriver en retard pendant la veille",
   "wb_scan": "Le Wi-Fi cherche des réseaux plus souvent — la batterie se vide plus vite",
+  "wb_handover": "Les données mobiles restent prêtes écran allumé et consomment un peu plus de batterie",
   "dsp_idle": "DSP désactivé",
   "as_profile": "selon le profil",
   "as_off": "désactivé",
@@ -313,6 +314,10 @@
       "desc": "À quelle fréquence le téléphone cherche un meilleur point Wi-Fi. Retirez la limite si le Wi-Fi reste accroché à un point d’accès faible quand vous vous déplacez chez vous. Au prix d’un peu de batterie.",
       "name": "Fréquence de recherche Wi-Fi"
     },
+    "net_handover_fast": {
+      "name": "Bascule rapide Wi‑Fi → données mobiles",
+      "desc": "Garde le contexte des données mobiles prêt lorsque l’écran est allumé. Quand Android juge lui-même le Wi‑Fi inutilisable, le trafic peut passer aux données mobiles sans attendre le réveil du modem. Ne coupe pas le Wi‑Fi, ne force pas les données mobiles comme route active et ne modifie pas les seuils de signal ou d’itinérance de la ROM. Écran éteint, les modes économie/nuit libèrent toujours le modem. Consomme un peu plus de batterie écran allumé ; activez-le seulement si le délai de bascule compte."
+    },
     "haptic_strength": {
       "desc": "Intensité de la vibration pour les notifications et les sonneries, sur l’échelle du constructeur. «−1» ne touche à rien : ce qui est réglé dans le téléphone reste en place.",
       "name": "Vibration"
@@ -474,6 +479,10 @@
       "0": "More often",
       "1": "Less often",
       "auto": "Stock"
+    },
+    "net_handover_fast": {
+      "0": "Stock",
+      "1": "Rapide"
     },
     "net_congestion_wifi": {
       "auto": "as global"

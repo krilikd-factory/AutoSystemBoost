@@ -28,6 +28,10 @@
       "1": "Less often",
       "auto": "Stock"
     },
+    "net_handover_fast": {
+      "0": "Stock",
+      "1": "Fast"
+    },
     "dsp_outputs": {
       "all": "all",
       "speaker": "speaker",
@@ -126,7 +130,12 @@
     }
   },
   "prof_none": "not selected",
+  "wb_handover": "Mobile data stays ready while the screen is on, which uses a little more battery",
   "cfg": {
+    "net_handover_fast": {
+      "name": "Fast WiFi → mobile handover",
+      "desc": "Keeps the mobile-data context ready while the screen is on, so Android can move traffic to mobile data without waiting for the modem to wake after WiFi becomes unusable. It does not disconnect WiFi, force mobile data as the active route or change OEM signal/roaming thresholds. Screen-off save/night mode still releases the modem. Costs some battery while the screen is on; use it only if handover delay matters."
+    },
     "athena_service": {
       "name": "Athena Background Killer",
       "desc": "OxygenOS has its own background app killer - com.oplus.athena - and AthenaService is the part that decides what to kill. It is why a messenger left in the background stops delivering notifications until you reopen it, which no amount of battery whitelisting fixes because it is not Android's Doze doing it. Off disables that one component; the rest of the package keeps running, so thermal reporting and the settings panels are unaffected. Fully reversible: the previous state is recorded before anything changes and put back when you set this to stock or remove the module. Expect more RAM in use and slightly more drain - that is what keeping apps alive costs.",

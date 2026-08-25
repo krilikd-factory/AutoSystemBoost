@@ -1,4 +1,5 @@
 {
+  "wb_handover": "Data seluler tetap siap saat layar menyala dan memakai sedikit lebih banyak baterai",
   "cfg": {
     "audio_profile": {
       "name": "Profil audio",
@@ -115,6 +116,10 @@
     "wifi_scan_throttle": {
       "name": "Frekuensi pemindaian Wi-Fi",
       "desc": "Seberapa sering ponsel mencari titik Wi-Fi yang lebih baik. Lepas batasnya jika Wi-Fi menempel pada titik lemah saat Anda berpindah di rumah. Dengan biaya sedikit baterai."
+    },
+    "net_handover_fast": {
+      "name": "Peralihan cepat Wi‑Fi → data seluler",
+      "desc": "Menjaga konteks data seluler tetap siap saat layar menyala. Ketika Android sendiri menilai Wi‑Fi tidak layak, trafik dapat beralih ke data seluler tanpa menunggu modem bangun. Tidak memutus Wi‑Fi, tidak memaksa data seluler sebagai rute aktif, dan tidak mengubah ambang sinyal atau roaming ROM. Saat layar mati, mode hemat/malam tetap melepas modem. Memakai sedikit lebih banyak baterai saat layar aktif; aktifkan hanya bila jeda peralihan penting."
     },
     "auto_battery_enable": {
       "name": "Profil baterai otomatis",
@@ -291,6 +296,11 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
+    }
+  ,
+    "net_handover_fast": {
+      "0": "Stok",
+      "1": "Cepat"
     }
   },
   "prof_none": "belum dipilih",

@@ -26,6 +26,7 @@
   "grp_net": "网络",
   "grp_battery": "电池",
   "grp_ui": "系统",
+  "wb_handover": "屏幕开启时移动数据会保持就绪，耗电会略有增加",
   "cfg": {
     "audio_profile": {
       "name": "音频配置",
@@ -142,6 +143,10 @@
     "wifi_scan_throttle": {
       "name": "Wi-Fi 扫描频率",
       "desc": "允许应用请求 Wi-Fi 扫描的频率。\n\nAndroid 将其限制为每两分钟四次。放宽限制后在接入点之间切换更快，也更耗电 — 每次扫描都会让射频满功率工作。"
+    },
+    "net_handover_fast": {
+      "name": "快速 Wi‑Fi → 移动数据切换",
+      "desc": "在屏幕开启时保持移动数据上下文就绪。当 Android 自行判断 Wi‑Fi 不可用时，流量可切换到移动数据，无需等待调制解调器唤醒。它不会断开 Wi‑Fi、不会强制移动数据成为活动路由，也不会修改 ROM 的信号或漫游阈值。屏幕关闭后，省电/夜间模式仍会释放调制解调器。屏幕开启时会略微增加耗电；仅在切换延迟重要时启用。"
     },
     "auto_battery_enable": {
       "name": "自动电池配置",
@@ -291,6 +296,11 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
+    }
+  ,
+    "net_handover_fast": {
+      "0": "原厂",
+      "1": "快速"
     }
   },
   "prof_none": "未选择",

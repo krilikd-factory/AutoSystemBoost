@@ -26,6 +26,7 @@
   "grp_net": "Rete",
   "grp_battery": "Batteria",
   "grp_ui": "Sistema",
+  "wb_handover": "I dati mobili restano pronti a schermo acceso e consumano un po’ più batteria",
   "cfg": {
     "audio_profile": {
       "name": "Profilo audio",
@@ -142,6 +143,10 @@
     "wifi_scan_throttle": {
       "name": "Frequenza scansione Wi-Fi",
       "desc": "Quanto spesso il telefono cerca un punto Wi-Fi migliore. Togli il limite se il Wi-Fi resta attaccato a un access point debole mentre ti muovi in casa. Al costo di un po’ di batteria."
+    },
+    "net_handover_fast": {
+      "name": "Passaggio rapido Wi‑Fi → dati mobili",
+      "desc": "Mantiene pronto il contesto dati mobili quando lo schermo è acceso. Quando Android decide autonomamente che il Wi‑Fi non è utilizzabile, il traffico può passare ai dati mobili senza attendere il risveglio del modem. Non disconnette il Wi‑Fi, non forza i dati mobili come percorso attivo e non modifica le soglie di segnale o roaming della ROM. A schermo spento, le modalità risparmio/notte continuano a rilasciare il modem. Consuma un po’ più batteria a schermo acceso; attivalo solo se il ritardo di passaggio è importante."
     },
     "auto_battery_enable": {
       "name": "Profilo batteria automatico",
@@ -291,6 +296,11 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
+    }
+  ,
+    "net_handover_fast": {
+      "0": "Stock",
+      "1": "Rapido"
     }
   },
   "prof_none": "non selezionato",

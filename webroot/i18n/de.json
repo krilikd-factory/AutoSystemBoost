@@ -1,4 +1,5 @@
 {
+  "wb_handover": "Mobilfunkdaten bleiben bei eingeschaltetem Display bereit und verbrauchen etwas mehr Akku",
   "cfg": {
     "audio_profile": {
       "name": "Audio-Profil",
@@ -115,6 +116,10 @@
     "wifi_scan_throttle": {
       "name": "WLAN-Suchrate",
       "desc": "Wie oft das Telefon nach einem besseren WLAN sucht. Nimm die Begrenzung weg, wenn das WLAN an einem schwachen Zugangspunkt kleben bleibt, während du dich in der Wohnung bewegst. Kostet etwas Akku."
+    },
+    "net_handover_fast": {
+      "name": "Schneller Wechsel WLAN → Mobilfunk",
+      "desc": "Hält den Mobilfunk-Datenkontext bei eingeschaltetem Display bereit. Sobald Android WLAN selbst als unbrauchbar einstuft, kann der Datenverkehr ohne Aufwecken des Modems auf Mobilfunk wechseln. WLAN wird nicht getrennt, Mobilfunk nicht als Route erzwungen und ROM-Signal- oder Roaming-Schwellen werden nicht verändert. Bei ausgeschaltetem Display geben Spar-/Nachtmodus das Modem weiterhin frei. Kostet bei aktivem Display etwas mehr Akku; nur aktivieren, wenn der Wechsel wichtig ist."
     },
     "auto_battery_enable": {
       "name": "Auto-Akkuprofil",
@@ -291,6 +296,11 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
+    }
+  ,
+    "net_handover_fast": {
+      "0": "Standard",
+      "1": "Schnell"
     }
   },
   "prof_none": "nicht gewählt",

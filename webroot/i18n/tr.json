@@ -1,4 +1,5 @@
 {
+  "wb_handover": "Mobil veri ekran açıkken hazır tutulur ve biraz daha fazla pil tüketir",
   "cfg": {
     "audio_profile": {
       "name": "Ses profili",
@@ -115,6 +116,10 @@
     "wifi_scan_throttle": {
       "name": "Wi-Fi tarama sıklığı",
       "desc": "Telefonun daha iyi bir Wi-Fi noktasını ne sıklıkla aradığı. Evde dolaşırken Wi-Fi zayıf bir noktaya yapışıp kalıyorsa sınırı kaldırın. Biraz pil pahasına."
+    },
+    "net_handover_fast": {
+      "name": "Hızlı Wi‑Fi → mobil veri geçişi",
+      "desc": "Ekran açıkken mobil veri bağlamını hazır tutar. Android Wi‑Fi’ı kendisi kullanılamaz gördüğünde trafik modemin uyanmasını beklemeden mobil veriye geçebilir. Wi‑Fi’ı kapatmaz, mobil veriyi etkin rota olarak zorlamaz ve ROM sinyal/roaming eşiklerini değiştirmez. Ekran kapalıyken tasarruf/gece modları modemi serbest bırakmaya devam eder. Ekran açıkken biraz daha fazla pil tüketir; yalnızca geçiş gecikmesi önemliyse açın."
     },
     "auto_battery_enable": {
       "name": "Otomatik pil profili",
@@ -291,6 +296,11 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
+    }
+  ,
+    "net_handover_fast": {
+      "0": "Stok",
+      "1": "Hızlı"
     }
   },
   "prof_none": "seçilmedi",

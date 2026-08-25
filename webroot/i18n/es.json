@@ -1,4 +1,5 @@
 {
+  "wb_handover": "Los datos móviles se mantienen listos con la pantalla encendida y consumen algo más de batería",
   "cfg": {
     "audio_profile": {
       "name": "Perfil de audio",
@@ -115,6 +116,10 @@
     "wifi_scan_throttle": {
       "name": "Frecuencia de búsqueda WiFi",
       "desc": "Con qué frecuencia busca el teléfono un punto Wi-Fi mejor. Quita el límite si el Wi-Fi se queda pegado a un punto débil mientras te mueves por casa. A cambio de algo de batería."
+    },
+    "net_handover_fast": {
+      "name": "Cambio rápido Wi‑Fi → datos móviles",
+      "desc": "Mantiene listo el contexto de datos móviles mientras la pantalla está encendida. Cuando Android decide por sí mismo que Wi‑Fi ya no sirve, el tráfico puede pasar a datos móviles sin esperar a que despierte el módem. No desconecta Wi‑Fi, no fuerza datos móviles como ruta activa ni modifica los umbrales de señal o roaming de la ROM. Con la pantalla apagada, los modos ahorro/noche siguen liberando el módem. Consume algo más de batería con la pantalla activa; actívalo solo si importa la demora de cambio."
     },
     "auto_battery_enable": {
       "name": "Perfil de batería automático",
@@ -291,6 +296,11 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
+    }
+  ,
+    "net_handover_fast": {
+      "0": "Stock",
+      "1": "Rápido"
     }
   },
   "prof_none": "sin seleccionar",
