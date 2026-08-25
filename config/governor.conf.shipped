@@ -316,6 +316,11 @@ net_txqueue=stock
 #   0 scans more often (roams sooner, costs battery), 1 is stock, auto leaves it alone.
 wifi_scan_throttle=auto
 
+# Fast WiFi-to-mobile handover: 0|1. When enabled, keep the cellular data context ready
+# while the screen is on and modem LPM is normal/fast. It does not disconnect WiFi or alter
+# OEM roaming thresholds; save/night LPM continues to release the modem for standby.
+net_handover_fast=0
+
 haptic_strength=-1
 
 # Touch-feedback strength: 0-10, or "auto" (follow the alert level above).
