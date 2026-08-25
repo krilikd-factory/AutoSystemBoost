@@ -2477,6 +2477,14 @@ apply_runtime_profile_now() {
   asb_load_profile
   PROFILE="$ASB_PROFILE"
   asb_log "apply_runtime_profile_now profile=$ASB_PROFILE"
+  # Stock is an explicit terminal boundary for this runtime pass. Do not let any later
+  # service helper reapply a CPU/GPU/VM/network profile after profile_core restored it.
+  if [ "${ASB_STOCK_PROFILE:-0}" = "1" ]; then
+    command -v asb_stock_enter >/dev/null 2>&1 && asb_stock_enter
+    return 0
+  fi
+  ASB_PROFILE_BASELINE_CAPTURE=1
+  export ASB_PROFILE_BASELINE_CAPTURE
   asb_feature_enabled CPU && asb_apply_profile_once
   if asb_feature_enabled CPU; then
     apply_walt_live
@@ -2497,6 +2505,7 @@ apply_runtime_profile_now() {
   asb_feature_enabled WIFI && apply_wifi_dtim
 
   asb_feature_enabled VM && apply_doze
+  unset ASB_PROFILE_BASELINE_CAPTURE
   (
     sleep 10
     asb_load_profile
