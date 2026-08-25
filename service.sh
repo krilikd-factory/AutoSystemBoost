@@ -1840,6 +1840,28 @@ asb_bg_trim_reclaim_once() {
 apply_bg_trim_runtime() {
   local _bg_level="${BG_TRIM_LEVEL:-safe}"
 
+  # "safe" must be genuinely non-disruptive.  Before this guard, the same package disables,
+  # vendor-service stops and Wi-Fi switches ran for *every* level; only the six-hour loop was
+  # conditional.  That made a safe profile behave as aggressive and could provoke service
+  # restarts precisely while Android was finishing a boot.
+  if [ "$_bg_level" != "aggressive" ]; then
+    asb_bg_trim_apply_buckets
+    asb_bg_trim_apply_memcg
+    asb_log "bg_trim: level=$_bg_level (non-disruptive)"
+    return 0
+  fi
+
+  # Package disabling, service stops and forced Wi-Fi discovery changes are not a normal
+  # battery optimisation: they can delay notifications, trigger vendor restart loops and make a
+  # userspace reboot visibly slower.  Keep the legacy aggressive path available only after an
+  # explicit local opt-in, never merely because an old preserved config says "aggressive".
+  if [ ! -f /data/adb/asb/allow_disruptive_bg_trim ]; then
+    asb_bg_trim_apply_buckets
+    asb_bg_trim_apply_memcg
+    asb_log "bg_trim: aggressive disruptive actions skipped (create /data/adb/asb/allow_disruptive_bg_trim to opt in)"
+    return 0
+  fi
+
   local _p
   for _p in $_BG_TRIM_DISABLE; do
     if command -v asb_pm_disable >/dev/null 2>&1; then
@@ -1869,28 +1891,21 @@ apply_bg_trim_runtime() {
   fi
 
   asb_bg_trim_oplus_tune
-
   asb_bg_trim_gms_wakelock_throttle
-
   asb_bg_trim_apply_buckets
-
   asb_bg_trim_apply_memcg
+  asb_log "bg_trim: level=$_bg_level (disruptive opt-in)"
 
-  asb_log "bg_trim: level=$_bg_level"
-
-  if [ "$_bg_level" = "aggressive" ]; then
-    ( sleep 30; asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
-
-    (
-      while : ; do
-        sleep 21600
-        asb_bg_trim_apply_buckets >/dev/null 2>&1
-        if asb_bg_trim_screen_off; then
-          asb_bg_trim_reclaim_once >/dev/null 2>&1
-        fi
-      done
-    ) >/dev/null 2>&1 &
-  fi
+  ( sleep 30; asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
+  (
+    while : ; do
+      sleep 21600
+      asb_bg_trim_apply_buckets >/dev/null 2>&1
+      if asb_bg_trim_screen_off; then
+        asb_bg_trim_reclaim_once >/dev/null 2>&1
+      fi
+    done
+  ) >/dev/null 2>&1 &
 }
 
 # BG_TRIM contains package-manager, app-standby, cgroup lookup and vendor-service work.
@@ -2713,6 +2728,13 @@ svc_stop_guarded() {
   return 0
 }
 asb_stop_nonessential_services() {
+  # Stopping an init service can trigger vendor restart/recovery work.  The old unconditional
+  # post-boot sweep was therefore both a reboot-latency risk and a source of background churn.
+  # Keep it as an explicit diagnostics opt-in for advanced users, not a default optimisation.
+  if [ ! -f /data/adb/asb/allow_service_stops ]; then
+    asb_log "service_stops: skipped (create /data/adb/asb/allow_service_stops to opt in)"
+    return 0
+  fi
   for s in \
     qseelogd wlanramdumpcollector mqsasd mtdoopslog debuggerd \
     minidump minidump32 minidump64 bootstat poweroff_charger_log \
@@ -2733,6 +2755,14 @@ asb_stop_nonessential_services() {
 }
 apply_zram() {
   [ -e /sys/block/zram0 ] || return 0
+  # A vendor-created zram device can contain gigabytes of live anonymous pages.  Resizing it
+  # requires swapoff and a complete writeback into RAM, which is high I/O/CPU work and can take
+  # tens of seconds after boot.  Preserve the vendor policy unless a power user explicitly
+  # requests this destructive rebuild.
+  if [ ! -f /data/adb/asb/allow_zram_rebuild ]; then
+    asb_log "zram: preserving active vendor configuration (rebuild requires /data/adb/asb/allow_zram_rebuild)"
+    return 0
+  fi
   CPU_CORES=$(nproc 2>/dev/null || echo 8)
   ZRAM_SIZE_MB=8192
   _cur_disksize=$(cat /sys/block/zram0/disksize 2>/dev/null || echo 0)
@@ -2779,7 +2809,12 @@ asb_apply_deferred_core_boot() {
   # service_dispatched. Applying them after boot completion preserves the selected
   # profile while removing init/framework contention from the path to first UI.
   asb_load_profile
-  asb_feature_enabled CPU && asb_apply_profile_once
+  # asb_apply_profile_once fan-outs into CPU, GPU, VM, network, Wi-Fi and UX writes.  Calling it
+  # here and then applying the dedicated core policy below duplicated many cgroup/sysfs writes
+  # and brought framework-facing Wi-Fi/UX work back onto the post-boot critical worker.
+  # Initialise only the CPU topology required by this lean core path; network, Wi-Fi and UX are
+  # handled in their own later, non-critical stages.
+  asb_feature_enabled CPU && asb_cpu_cluster_init
   if asb_feature_enabled CPU; then
     apply_walt_boost
     apply_walt_live
@@ -2942,12 +2977,14 @@ fi
 #
 # The route is written when audio settings change, but it also changes on its own -
 # headphones in, Bluetooth connected, speaker again - and a stale value means the DSP
-# output filter is deciding against last hour's route. Cheap to watch: only when a filter
-# other than "all" is actually set, and only re-runs the applier when the route moved.
+# output filter is deciding against last hour's route.  dumpsys audio is framework IPC, not a
+# cheap local read; every 20 seconds created a permanent polling load even when no route was
+# changing.  A 60-second fallback is sufficient because settings changes still signal the
+# attacher immediately, while ordinary unplug/connect transitions remain corrected promptly.
 (
   _prev_route=""
   while true; do
-    sleep 20
+    sleep 60
     _f="$(grep -E '^[[:space:]]*dsp_outputs=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')"
     case "$_f" in ''|all) continue ;; esac
@@ -3012,32 +3049,21 @@ fi
   rm -f /data/adb/asb/oem_preinstall 2>/dev/null
 ) >/dev/null 2>&1 &
 
-# Watch what holds the phone awake. Runs on a slow loop - this is a night-scale problem,
-# and polling it often would be its own small version of the thing it measures.
+# Watch what holds the phone awake. This is a night-scale problem, so it must never turn
+# into a periodic screen-on job or be the source of the wakeups it measures.
 (
-  _slow_pass=0
+  _screenoff_pass=0
   while true; do
-    sleep 900
-    # Screen off: same work, quarter the cadence.
-    #
-    # This loop grew from one script to four - wakelock watch, trial check, screen-off class
-    # and GNSS trim - which between them run about two dozen dumpsys, pm list and appops
-    # calls. Each is cheap while the screen is on and expensive while it is not: waking a
-    # sleeping SoC every fifteen minutes to ask who is keeping it awake turns the
-    # measurement into the thing it measures.
-    #
-    # Field evidence, V63 against V64 on one phone with identical settings: sleep awake went
-    # from 3.8% to 69.9% and every screen-on phase drew 30-40% more. Users reported it as
-    # "V64 eats the battery", which is what it does.
-    #
-    # NOT skipped outright: two of these four exist precisely to observe screen-off
-    # behaviour, so silencing them at night would remove the answer along with the cost.
-    # Once an hour instead of four times keeps every feature and drops three wakeups in four.
-    _slow_pass=$(( _slow_pass + 1 ))
+    sleep 1800
+    # The helpers below collectively make many framework / PackageManager / app-ops calls.
+    # Run only during a genuine screen-off window and only once per hour there.  A trial expiry
+    # or GNSS cleanup does not justify waking the active user-facing system every 15 minutes.
     case "$(dumpsys deviceidle get screen 2>/dev/null)" in
       false|Asleep)
-        [ $(( _slow_pass % 4 )) -eq 0 ] || continue
+        _screenoff_pass=$((_screenoff_pass + 1))
+        [ $((_screenoff_pass % 2)) -eq 0 ] || continue
         ;;
+      *) continue ;;
     esac
     [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ] || continue
     sh "$MODDIR/runtime/asb_wakelock_watch.sh" >/dev/null 2>&1
@@ -3066,14 +3092,25 @@ fi
 (
   _asb_pb_wait=0
   while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_asb_pb_wait" -lt 180 ]; do
-    sleep 3
-    _asb_pb_wait=$((_asb_pb_wait + 3))
+    sleep 1
+    _asb_pb_wait=$((_asb_pb_wait + 1))
   done
   [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || {
     asb_log "post_boot_tweaks: skipped (boot completion timeout)"
     exit 0
   }
-  sleep 8
+  # Two seconds, not eight - and the poll above is now 1s, not 3s.
+  #
+  # A timeline with an independent 1-second watcher shows boot_completed arriving at
+  # 36s while post_boot_tweaks_begin was stamped at 44s. Those eight seconds were this
+  # sleep plus up to three more lost in the polling interval: pure waiting, in the
+  # window where the user is staring at a phone that has finished booting and is not
+  # yet responsive.
+  #
+  # The pause exists to let the framework settle before the module starts writing, and
+  # two seconds does that: boot_completed is itself the signal that the system is up,
+  # so this is a courtesy margin rather than a real dependency.
+  sleep 2
   asb_timeline_mark post_boot_tweaks_begin
   asb_log "post_boot_tweaks: begin"
   # Fast boot counterpart to the existing deferred BG_TRIM/connectivity stages.
@@ -3098,23 +3135,35 @@ fi
   # Wi-Fi readiness/operstate polling, country policy and interface qdisc writes are applied
   # after Android's framework and link manager settle. On the OP15 they accounted for the
   # measured 19-second service_network_complete -> service_connectivity_complete interval.
-  asb_timeline_mark post_boot_connectivity_begin
-  if asb_feature_enabled WIFI; then
-    asb_wifi_cc_heal
-    apply_wifi_settings
-    apply_wifi_country
-    apply_wlan0_txqlen
-    apply_wlan0_qdisc
-    apply_wifi_pm
-    apply_wifi_dtim
-    ( asb_wifi_link_reassert ) >/dev/null 2>&1 &
-  fi
-  if asb_feature_enabled NET; then
-    apply_mobile_qdisc
-    apply_net_steering
-  fi
-  asb_feature_enabled GPS && apply_gps_hygiene
-  asb_timeline_mark post_boot_connectivity_complete
+  # The whole connectivity block runs in the background.
+  #
+  # It took 16 of the 46 seconds the module spends after boot_completed, and none of it
+  # is on anyone's critical path: Wi-Fi country, power-save, DTIM, queue lengths and GPS
+  # hygiene all apply to a radio that is already up and working with platform defaults.
+  # A few of these poke the Wi-Fi stack and wait for it to answer, which is exactly the
+  # kind of thing that should not sit between the user and a usable phone.
+  #
+  # Marks are kept inside the subshell so the next timeline still measures the stage -
+  # it will simply no longer be on the line the user waits behind.
+  (
+    asb_timeline_mark post_boot_connectivity_begin
+    if asb_feature_enabled WIFI; then
+      asb_wifi_cc_heal
+      apply_wifi_settings
+      apply_wifi_country
+      apply_wlan0_txqlen
+      apply_wlan0_qdisc
+      apply_wifi_pm
+      apply_wifi_dtim
+      ( asb_wifi_link_reassert ) >/dev/null 2>&1 &
+    fi
+    if asb_feature_enabled NET; then
+      apply_mobile_qdisc
+      apply_net_steering
+    fi
+    asb_feature_enabled GPS && apply_gps_hygiene
+    asb_timeline_mark post_boot_connectivity_complete
+  ) &
 
   # These calls use Settings, DeviceIdle, package/service state or many framework IPCs. They
   # used to occupy the 11-second media/kernel -> runtime-core boot interval on the OP15.
