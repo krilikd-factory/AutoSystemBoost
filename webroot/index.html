@@ -1206,6 +1206,12 @@ body.live-active .page:not(.live-page) {
 .live-cell-value.cap-raised { color: var(--bal); }
 .live-cell-value.cap-shell { color: var(--accent2); }
 
+/* Stock ROM telemetry is read-only and only visible for the Stock profile. */
+.stock-telemetry { display:none; width:100%; margin-top:8px; }
+.stock-telemetry.on { display:block; }
+.stock-telemetry-title { margin:0 0 6px; color:var(--text-tertiary); font:9px/1.1 var(--mono); letter-spacing:.06em; text-transform:uppercase; }
+.stock-telemetry-pre { margin:0; max-height:270px; overflow:auto; padding:10px 12px; border:1px solid rgba(200,210,218,.22); border-radius:14px; background:rgba(200,210,218,.035); color:rgba(232,239,244,.78); font:10px/1.42 var(--mono); white-space:pre-wrap; word-break:break-word; font-variant-numeric:tabular-nums; }
+
 /* Smart Mode section divider: compact on Live page */
 .live-page .sec { margin-top: 14px !important; margin-bottom: 6px !important; }
 .config-page .sec { margin-top: 0 !important; }
@@ -2590,6 +2596,10 @@ body.config-active #livePage.open {
       </div>
     </div>
 
+    <section class="stock-telemetry" id="stockTelemetry" aria-live="polite">
+      <div class="stock-telemetry-title">Stock ROM · read-only telemetry</div>
+      <pre class="stock-telemetry-pre" id="liveStockTelemetry">—</pre>
+    </section>
 
   </div>
 
@@ -5657,8 +5667,31 @@ function paintStockLive() {
   if (cap) cap.textContent = off;
 }
 
+let _stockTelemetryLastMs = 0;
+const STOCK_TELEMETRY_MIN_INTERVAL_MS = 10000;
+async function pollStockTelemetry(visible, force = false) {
+  const box = _el('stockTelemetry');
+  if (box) box.classList.toggle('on', visible && _selectedProfile === 'stock');
+  if (!visible || _selectedProfile !== 'stock') return;
+  const now = Date.now();
+  if (!force && (now - _stockTelemetryLastMs) < STOCK_TELEMETRY_MIN_INTERVAL_MS) return;
+  _stockTelemetryLastMs = now;
+  const pre = _el('liveStockTelemetry');
+  if (!pre) return;
+  try {
+    const cmd = "sh -c 'printf \"ts=%s\\n\" \"$(date +%s)\"; printf \"uptime=%s\\n\" \"$(cut -d\" \" -f1 /proc/uptime 2>/dev/null)\"; printf \"loadavg=%s\\n\" \"$(cut -d\" \" -f1-3 /proc/loadavg 2>/dev/null)\"; for f in capacity current_now voltage_now temp status charge_full; do printf \"battery.%s=%s\\n\" \"$f\" \"$(cat /sys/class/power_supply/battery/$f 2>/dev/null)\"; done; grep -E \"^(MemTotal|MemAvailable|MemFree|Cached|SwapFree):\" /proc/meminfo 2>/dev/null; for d in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$d\" ] || continue; n=${d##*/}; for f in scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor cpuinfo_max_freq; do printf \"cpu.%s.%s=%s\\n\" \"$n\" \"$f\" \"$(cat \"$d/$f\" 2>/dev/null)\"; done; done; g=/sys/class/kgsl/kgsl-3d0; for f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do printf \"gpu.%s=%s\\n\" \"$f\" \"$(cat \"$g/$f\" 2>/dev/null | head -1)\"; done; for z in /sys/class/thermal/thermal_zone*; do [ -r \"$z/temp\" ] || continue; label=$(cat \"$z/type\" 2>/dev/null); temp=$(cat \"$z/temp\" 2>/dev/null); [ -n \"$temp\" ] && printf \"thermal.%s=%s\\n\" \"$label\" \"$temp\"; done'";
+    const r = await run(cmd);
+    const text = ((r && r.stdout) || '').trim();
+    pre.textContent = text || T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
+  } catch(e) {
+    pre.textContent = T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
+  }
+}
+
 async function pollLive(visible) {
   try {
+    if (visible && _selectedProfile === 'stock') await pollStockTelemetry(true);
+    else pollStockTelemetry(false);
     const r = await run('cat /dev/.asb/state 2>/dev/null');
     /*
      * keep Live chip always visible — Live page handles its own empty-state fallback.
@@ -5669,7 +5702,9 @@ async function pollLive(visible) {
       // Stock deliberately removes /dev/.asb/state when it stops the native governor. This
       // is not a failed monitor poll and must never leave the static "balanced" placeholder
       // visible. Non-Stock keeps the existing neutral empty state for genuine startup errors.
-      if (visible && _selectedProfile === 'stock') paintStockLive();
+      if (visible && _selectedProfile === 'stock') {
+        paintStockLive();
+      }
       return;
     }
 
@@ -5731,6 +5766,7 @@ async function pollLive(visible) {
       else if (advActive === 1) chip.classList.add('has-issue');
     }
 
+    if (_selectedProfile !== 'stock') pollStockTelemetry(false);
     if (!visible) return;
 
     // During warm-up the state file still carries the governor's initialised default -
