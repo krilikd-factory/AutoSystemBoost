@@ -1440,7 +1440,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     int rmax1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
     fprintf(f,
         "state=%s\nprofile=%s\n"
-        "mA=%d\ngpu_pct=%d\nload1=%.2f\n"
+        "mA=%d\ngpu_pct=%d\ngpu_valid=%d\nload1=%.2f\n"
         "cpu_max=%d,%d,%d\ncpu_max_live=%d,%d\n"
         "thermal=%d\ncap_temp=%d\n"
         "headroom_pct=%d\nheadroom_valid=%d\nperf_cap_p0=%d\nperf_cap_p6=%d\n"
@@ -1461,6 +1461,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         profile_names[fsm->profile_idx],
         m->bat.current_ma,
         m->gpu.load_pct,
+        m->gpu.load_valid,
         m->cpu.load1,
         /* cpu_max stays the REQUESTED cap - asb_reconcile.sh reads this field as its target.
          *
@@ -4844,8 +4845,8 @@ int main(int argc, char **argv) {
                     _ttype[1], g_thermal_skin_zone, _tval[1],
                     _ttype[2], g_thermal_surface_zone, _tval[2]);
         }
-        asb_log("diag: gpu_load=%d%% gpu_maxfreq=%ld",
-                metrics.gpu.load_pct, metrics.gpu.max_freq_hz);
+        asb_log("diag: gpu_load=%d%% valid=%d gpu_maxfreq=%ld",
+                metrics.gpu.load_pct, metrics.gpu.load_valid, metrics.gpu.max_freq_hz);
         cpu_topology_discover();
         if (g_cpu_policy_count == 2)
             asb_log("diag: cpu_topology=policy0+policy6 (2-cluster SD8Elite)");
@@ -4871,7 +4872,7 @@ int main(int argc, char **argv) {
         g_device_caps.has_headroom = (access("/sys/kernel/msm_performance/parameters/cpu_max_freq", R_OK) == 0);
         g_device_caps.has_thermal_cpu = (g_thermal_cpu_zone >= 0);
         g_device_caps.has_thermal_skin = (g_thermal_skin_zone >= 0);
-        g_device_caps.has_gpu_load = (metrics.gpu.max_freq_hz > 0);
+        g_device_caps.has_gpu_load = (uint8_t)(metrics.gpu.load_valid ? 1 : 0);
         g_device_caps.has_uclamp = (access("/dev/cpuctl/top-app/cpu.uclamp.max", W_OK) == 0);
         asb_log("caps: msm=%d hr=%d thermal_cpu=%d thermal_skin=%d gpu=%d uclamp=%d",
                 g_device_caps.has_msm_perf, g_device_caps.has_headroom,

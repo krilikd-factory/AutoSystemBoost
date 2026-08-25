@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <limits.h>
+#include <dirent.h>
+#include <ctype.h>
 #include "asb_fsm.h"
 #include "asb_config.h"
 
@@ -428,6 +430,42 @@ static void gpu_read_freq_table(void) {
     }
 }
 
+static int writer_gpu_devfreq_name_is_graphics(const char *name) {
+    if (!name || !*name) return 0;
+    char lower[128]; size_t n = strlen(name);
+    if (n >= sizeof(lower)) n = sizeof(lower) - 1;
+    for (size_t i = 0; i < n; i++) lower[i] = (char)tolower((unsigned char)name[i]);
+    lower[n] = '\0';
+    return strstr(lower, "gpu") || strstr(lower, "mali") ||
+           strstr(lower, "kgsl") || strstr(lower, "adreno") ||
+           strstr(lower, "powervr") || strstr(lower, "xclipse");
+}
+
+/* Standard devfreq uses the same Hz max/min semantics across GPU drivers. Scan only
+ * directories with an explicit graphics identity: writing a generic devfreq node selected
+ * by filename alone could otherwise cap DDR, NPU or ISP and is deliberately forbidden. */
+static void writer_discover_generic_gpu_devfreq(void) {
+    DIR *dir = opendir("/sys/class/devfreq");
+    if (!dir) return;
+    struct dirent *de;
+    while ((de = readdir(dir)) != NULL) {
+        if (de->d_name[0] == '.' || !writer_gpu_devfreq_name_is_graphics(de->d_name)) continue;
+        char max[160], min[160], avail[160];
+        snprintf(max, sizeof(max), "/sys/class/devfreq/%s/max_freq", de->d_name);
+        snprintf(min, sizeof(min), "/sys/class/devfreq/%s/min_freq", de->d_name);
+        snprintf(avail, sizeof(avail), "/sys/class/devfreq/%s/available_frequencies", de->d_name);
+        if (!gpu_try_probe_write(max)) continue;
+        snprintf(g_gpu_max_path, sizeof(g_gpu_max_path), "%s", max);
+        g_gpu_uses_pwrlevel = 0;
+        if (gpu_try_probe_write(min))
+            snprintf(g_gpu_min_path, sizeof(g_gpu_min_path), "%s", min);
+        if (gpu_try_readable(avail))
+            snprintf(g_gpu_avail_path, sizeof(g_gpu_avail_path), "%s", avail);
+        break;
+    }
+    closedir(dir);
+}
+
 static void writer_discover_gpu_paths(void) {
     if (g_gpu_paths_ready) return;
 
@@ -473,7 +511,10 @@ static void writer_discover_gpu_paths(void) {
             }
         }
     } else {
-        /* No Hz control — try pwrlevel interface. */
+        writer_discover_generic_gpu_devfreq();
+    }
+    if (!g_gpu_max_path[0]) {
+        /* No Hz control — try KGSL-native pwrlevel interface. */
         if (gpu_try_probe_write(pwrlevel_max_path)) {
             snprintf(g_gpu_max_path, sizeof(g_gpu_max_path), "%s", pwrlevel_max_path);
             g_gpu_uses_pwrlevel = 1;
@@ -493,10 +534,12 @@ static void writer_discover_gpu_paths(void) {
     }
 
     /* Available frequencies (read-only, used for hw_max + pwrlevel translation) */
-    for (int i = 0; avail_candidates[i]; i++) {
-        if (gpu_try_readable(avail_candidates[i])) {
-            snprintf(g_gpu_avail_path, sizeof(g_gpu_avail_path), "%s", avail_candidates[i]);
-            break;
+    if (!g_gpu_avail_path[0]) {
+        for (int i = 0; avail_candidates[i]; i++) {
+            if (gpu_try_readable(avail_candidates[i])) {
+                snprintf(g_gpu_avail_path, sizeof(g_gpu_avail_path), "%s", avail_candidates[i]);
+                break;
+            }
         }
     }
 

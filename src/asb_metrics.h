@@ -9,6 +9,7 @@
 #include <time.h>
 #include <math.h>
 #include <dirent.h>
+#include <ctype.h>
 #include <sys/types.h>
 #include "asb_config.h"
 extern asb_runtime_config_t g_asb_cfg;
@@ -75,6 +76,7 @@ typedef struct {
 
 typedef struct {
     int     load_pct;
+    int     load_valid;          /* 1 only when a backend reports a 0..100 utilisation value */
     long    cur_freq_hz;
     long    max_freq_hz;
 } asb_gpu_t;
@@ -258,11 +260,51 @@ static void metrics_read_battery(asb_battery_t *b) {
 
 static char g_metrics_gpu_freq_path[160]    = {0};
 static char g_metrics_gpu_maxfreq_path[160] = {0};
+static char g_metrics_gpu_load_path[160]    = {0};
 static int  g_metrics_gpu_paths_ready       = 0;
+
+/* Only inspect generic devfreq directories whose own name identifies a graphics device.
+ * Never guess from an arbitrary devfreq node: memory, ISP and NPU nodes expose the same
+ * max_freq filenames but must not be reported as GPU telemetry. */
+static int metrics_gpu_devfreq_name_is_graphics(const char *name) {
+    if (!name || !*name) return 0;
+    char lower[128]; size_t n = strlen(name);
+    if (n >= sizeof(lower)) n = sizeof(lower) - 1;
+    for (size_t i = 0; i < n; i++) lower[i] = (char)tolower((unsigned char)name[i]);
+    lower[n] = '\0';
+    return strstr(lower, "gpu") || strstr(lower, "mali") ||
+           strstr(lower, "kgsl") || strstr(lower, "adreno") ||
+           strstr(lower, "powervr") || strstr(lower, "xclipse");
+}
+
+static void metrics_discover_generic_gpu_devfreq(void) {
+    DIR *dir = opendir("/sys/class/devfreq");
+    if (!dir) return;
+    struct dirent *de;
+    while ((de = readdir(dir)) != NULL) {
+        if (de->d_name[0] == '.' || !metrics_gpu_devfreq_name_is_graphics(de->d_name)) continue;
+        char cur[160], max[160], load[160];
+        snprintf(cur, sizeof(cur), "/sys/class/devfreq/%s/cur_freq", de->d_name);
+        snprintf(max, sizeof(max), "/sys/class/devfreq/%s/max_freq", de->d_name);
+        snprintf(load, sizeof(load), "/sys/class/devfreq/%s/load", de->d_name);
+        if (!g_metrics_gpu_freq_path[0] && access(cur, R_OK) == 0)
+            snprintf(g_metrics_gpu_freq_path, sizeof(g_metrics_gpu_freq_path), "%s", cur);
+        if (!g_metrics_gpu_maxfreq_path[0] && access(max, R_OK) == 0)
+            snprintf(g_metrics_gpu_maxfreq_path, sizeof(g_metrics_gpu_maxfreq_path), "%s", max);
+        if (!g_metrics_gpu_load_path[0] && access(load, R_OK) == 0)
+            snprintf(g_metrics_gpu_load_path, sizeof(g_metrics_gpu_load_path), "%s", load);
+        if (g_metrics_gpu_freq_path[0] && g_metrics_gpu_maxfreq_path[0]) break;
+    }
+    closedir(dir);
+}
 
 static void metrics_discover_gpu_paths(void) {
     if (g_metrics_gpu_paths_ready) return;
 
+    static const char *load_candidates[] = {
+        "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage",
+        NULL
+    };
     static const char *cur_freq_candidates[] = {
         "/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq",
         "/sys/class/devfreq/3d00000.qcom,kgsl-3d0/cur_freq",
@@ -278,6 +320,13 @@ static void metrics_discover_gpu_paths(void) {
         NULL
     };
 
+    for (int i = 0; load_candidates[i]; i++) {
+        if (access(load_candidates[i], R_OK) == 0) {
+            snprintf(g_metrics_gpu_load_path, sizeof(g_metrics_gpu_load_path),
+                     "%s", load_candidates[i]);
+            break;
+        }
+    }
     for (int i = 0; cur_freq_candidates[i]; i++) {
         int fd = open(cur_freq_candidates[i], O_RDONLY | O_CLOEXEC);
         if (fd >= 0) {
@@ -296,18 +345,25 @@ static void metrics_discover_gpu_paths(void) {
             break;
         }
     }
+    /* Standard devfreq GPUs (Mali, PowerVR, Xclipse and vendor-neutral nodes) are
+     * discovered only by an explicit graphics name. KGSL stays preferred above. */
+    if (!g_metrics_gpu_freq_path[0] || !g_metrics_gpu_maxfreq_path[0])
+        metrics_discover_generic_gpu_devfreq();
     g_metrics_gpu_paths_ready = 1;
 }
 
 static void metrics_read_gpu(asb_gpu_t *g) {
     metrics_discover_gpu_paths();
-    g->load_pct  = sysfs_read_int(PATH_GPU_LOAD, 0);
+    int load = g_metrics_gpu_load_path[0]
+               ? sysfs_read_int(g_metrics_gpu_load_path, -1) : -1;
+    g->load_valid = (load >= 0 && load <= 100) ? 1 : 0;
+    g->load_pct = g->load_valid ? load : 0;
     g->cur_freq_hz = g_metrics_gpu_freq_path[0]
                      ? sysfs_read_long(g_metrics_gpu_freq_path, 0) : 0;
     g->max_freq_hz = g_metrics_gpu_maxfreq_path[0]
-                     ? sysfs_read_long(g_metrics_gpu_maxfreq_path, 1000000000L)
-                     : 1000000000L;
-    if (g->max_freq_hz <= 0) g->max_freq_hz = 1000000000L;
+                     ? sysfs_read_long(g_metrics_gpu_maxfreq_path, 0) : 0;
+    if (g->cur_freq_hz < 0) g->cur_freq_hz = 0;
+    if (g->max_freq_hz < 0) g->max_freq_hz = 0;
 }
 
 static int g_cpu_policy_ids[3]   = {0, 6, -1};
@@ -352,6 +408,42 @@ static void cpu_topology_discover(void) {
         if (fd >= 0) { close(fd); found[nf++] = p; }
     }
 
+    /* Policy IDs are CPU-number based implementation details, not a portable little→prime
+     * ordering contract. Classify the discovered policies by their actual hardware ceiling
+     * before assigning logical ASB slots; this covers SoCs whose cpufreq policy directories
+     * are exposed in a non-frequency order. */
+    int found_hwmax[16] = {0};
+    for (int i = 0; i < nf; i++) {
+        char path[128], b[32] = {0};
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpufreq/policy%d/cpuinfo_max_freq", found[i]);
+        int fd = open(path, O_RDONLY | O_CLOEXEC);
+        if (fd >= 0) {
+            ssize_t n = read(fd, b, sizeof(b) - 1);
+            close(fd);
+            if (n > 0) found_hwmax[i] = atoi(b);
+        }
+        if (found_hwmax[i] <= 0) {
+            snprintf(path, sizeof(path),
+                     "/sys/devices/system/cpu/cpufreq/policy%d/scaling_max_freq", found[i]);
+            fd = open(path, O_RDONLY | O_CLOEXEC);
+            if (fd >= 0) {
+                ssize_t n = read(fd, b, sizeof(b) - 1);
+                close(fd);
+                if (n > 0) found_hwmax[i] = atoi(b);
+            }
+        }
+    }
+    for (int i = 0; i < nf - 1; i++) {
+        for (int j = i + 1; j < nf; j++) {
+            if (found_hwmax[j] < found_hwmax[i] ||
+                (found_hwmax[j] == found_hwmax[i] && found[j] < found[i])) {
+                int ti = found[i]; found[i] = found[j]; found[j] = ti;
+                ti = found_hwmax[i]; found_hwmax[i] = found_hwmax[j]; found_hwmax[j] = ti;
+            }
+        }
+    }
+
     if (nf <= 0) {
         /* nothing found — keep the old safe default */
         g_cpu_policy_ids[0] = 0;
@@ -381,9 +473,9 @@ static void cpu_topology_discover(void) {
         return;
     }
     /*
-     * 3+ clusters (OP12 has 4): map slot0=little(first), slot2=prime(last), slot1=the
-     * strongest middle cluster (highest cpuinfo_max_freq among the middles) so the "big" slot
-     * tracks the cluster that actually carries the interactive load.
+     * 3+ clusters (OP12 has 4): policies have already been ordered by hardware max, so
+     * slot0=little(first), slot2=prime(last), slot1=the strongest middle cluster. This keeps
+     * the logical mapping correct even when policy directory numbers are not ordered by OPP.
      */
     int first = found[0];
     int last  = found[nf - 1];
