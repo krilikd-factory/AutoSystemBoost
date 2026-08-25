@@ -1886,6 +1886,7 @@ LK_BT_RECONNECT_PID=""
 LK_BT_RECONNECT_EVENTS=""
 LK_BT_RECONNECT_SNAPSHOTS=""
 LK_BT_RECONNECT_CONTEXT=""
+LK_BT_RECONNECT_RAW=""
 LK_BT_RECONNECT_EVENT_COUNT=0
 LK_BT_RECONNECT_MAX_EVENTS="${ASB_BT_RECONNECT_MAX_EVENTS:-240}"
 
@@ -1932,7 +1933,13 @@ lk_bt_lifecycle_record() {
   case "$_bt_epoch" in ''|*[!0-9]*) _bt_epoch="$(date +%s)" ;; esac
   _bt_iso="$(date -u -d "@$_bt_epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')"
   _bt_source="$(lk_bt_lifecycle_source "$_bt_raw")"
+  # Preserve a bounded, address-redacted copy of the triggering stack line. This is the only
+  # artifact that can expose reason/status/transport text missing from the summary TSV.
+  # Do not add package names or raw Bluetooth addresses to the shareable lifecycle table.
   printf '%s\t%s\t%s\t%s\n' "$_bt_epoch" "$_bt_iso" "$_bt_kind" "$_bt_source" >> "$LK_BT_RECONNECT_EVENTS"
+  if [ -n "$LK_BT_RECONNECT_RAW" ]; then
+    printf '%s\t%s\t%s\n' "$_bt_epoch" "$_bt_iso" "$_bt_raw" | lk_bt_redact_addr >> "$LK_BT_RECONNECT_RAW"
+  fi
   LK_BT_RECONNECT_EVENT_COUNT=$((LK_BT_RECONNECT_EVENT_COUNT + 1))
 }
 
@@ -1942,6 +1949,7 @@ lk_bt_reconnect_start() {
   LK_BT_RECONNECT_EVENTS="$LK_OUT_DIR/bt_lifecycle_events.tsv"
   LK_BT_RECONNECT_SNAPSHOTS="$LK_OUT_DIR/bt_lifecycle_snapshots.txt"
   LK_BT_RECONNECT_CONTEXT="$LK_OUT_DIR/bt_lifecycle_context.tsv"
+  LK_BT_RECONNECT_RAW="$LK_OUT_DIR/bt_lifecycle_stack_evidence.tsv"
   {
     echo "# ASB Bluetooth lifecycle events (read-only)"
     echo "# epoch<TAB>iso_utc<TAB>event<TAB>source"
@@ -1953,8 +1961,14 @@ lk_bt_reconnect_start() {
     echo "# epoch<TAB>iso_utc<TAB>tag<TAB>audio_playing<TAB>audio_route"
     echo "# correlate lifecycle events with the nearest context row; context alone is not a connection event"
   } > "$LK_BT_RECONNECT_CONTEXT"
+  {
+    echo "# ASB Bluetooth stack evidence (read-only, Bluetooth addresses redacted)"
+    echo "# epoch<TAB>iso_utc<TAB>redacted_stack_line"
+    echo "# This file preserves only lines that matched connect/disconnect lifecycle filters."
+  } > "$LK_BT_RECONNECT_RAW"
   if ! command -v logcat >/dev/null 2>&1; then
     echo "# status=unavailable_logcat" >> "$LK_BT_RECONNECT_EVENTS"
+    echo "# status=unavailable_logcat" >> "$LK_BT_RECONNECT_RAW"
     return 0
   fi
   # -T 1 starts at the live tail instead of dumping prior unrelated log history. Only explicit
@@ -1970,6 +1984,7 @@ lk_bt_reconnect_start() {
   ) &
   LK_BT_RECONNECT_PID=$!
   echo "# recorder_pid=$LK_BT_RECONNECT_PID" >> "$LK_BT_RECONNECT_EVENTS"
+  echo "# recorder_pid=$LK_BT_RECONNECT_PID" >> "$LK_BT_RECONNECT_RAW"
 }
 
 lk_bt_reconnect_snapshot() {
