@@ -62,6 +62,8 @@ for test_file in \
   tests/test_workflow_required_files_shell.sh \
   tests/test_release_package_tool_contract.sh \
   tests/test_package_functional_parity_contract.sh \
+  tests/test_network_handover_contract.sh \
+  tests/test_cpu_gpu_portability_contract.sh \
   tests/test_arbiter.sh \
   tests/test_intent_backup.sh \
   tests/test_service_thermal_vm_contract.sh; do

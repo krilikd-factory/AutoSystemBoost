@@ -683,6 +683,14 @@ else
   NOTE "net_apply_result missing - no network key applied through the WebUI yet"
 fi
 
+# Fast handover is owned by modem LPM rather than the route-tuning script.  Report both the
+# stored request and LPM's state tag, so a device log distinguishes "chosen" from "active now"
+# (save/night correctly defer it until the screen is awake again).
+case "$(cfg net_handover_fast)" in
+  1) NOTE "Wi-Fi → mobile handover: fast requested; LPM state: $(cat /dev/.asb/lpm_mode 2>/dev/null || echo not-written)" ;;
+  *) NOTE "Wi-Fi → mobile handover: stock/off" ;;
+esac
+
 # Per-interface reality. The global sysctls say nothing about what each link is doing, and
 # here they can legitimately differ: congestion is set per route, the queue per interface.
 if command -v ip >/dev/null 2>&1; then
@@ -1561,7 +1569,22 @@ if [ -d "$_kg" ]; then
     [ -n "$_p_orig" ] && echo "$_p_orig" > "$_kg/max_pwrlevel" 2>/dev/null
   fi
 else
-  NOTE "kgsl-3d0 not found"
+  _gdev=""
+  for _gd in /sys/class/devfreq/*gpu* /sys/class/devfreq/*mali* /sys/class/devfreq/*powervr* \
+             /sys/class/devfreq/*xclipse* /sys/class/devfreq/*adreno* /sys/class/devfreq/*kgsl*; do
+    [ -r "$_gd/max_freq" ] && { _gdev="$_gd"; break; }
+  done
+  if [ -n "$_gdev" ]; then
+    P "    generic devfreq  = ${_gdev##*/}"
+    P "    governor        = $(cat "$_gdev/governor" 2>/dev/null)"
+    P "    cur_freq        = $(cat "$_gdev/cur_freq" 2>/dev/null)"
+    P "    min/max_freq    = $(cat "$_gdev/min_freq" 2>/dev/null) / $(cat "$_gdev/max_freq" 2>/dev/null)"
+    P "    available_freq  = $(cat "$_gdev/available_frequencies" 2>/dev/null)"
+    [ -r "$_gdev/load" ] && P "    load             = $(cat "$_gdev/load" 2>/dev/null)"
+    NOTE "generic GPU telemetry is capability-gated; no KGSL pwrlevel assumptions are made"
+  else
+    NOTE "no recognised GPU devfreq backend (CPU/thermal policy remains active; GPU telemetry is unavailable)"
+  fi
 fi
 
 # --- 10e. Thermal zones + cooling (why OP12 throttles differently) ---
