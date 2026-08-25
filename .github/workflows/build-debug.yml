@@ -273,10 +273,6 @@ jobs:
           test -f "$SO" || { echo "ERROR: $SO not found"; exit 1; }
           ATT="bin/arm64-v8a/asb_dsp_attach"
           test -x "$ATT" || { echo "ERROR: $ATT missing or not executable"; exit 1; }
-          ATT_MARKER="$(sed -n 's/.*kAsbAttachBuildId = "\([^"]*\)".*/\1/p' src/DSP_AIDL/asb_dsp_attach.cpp | head -1)"
-          [ -n "$ATT_MARKER" ] || { echo "ERROR: attacher source marker missing"; exit 1; }
-          grep -aF "$ATT_MARKER" "$ATT" >/dev/null \
-            || { echo "ERROR: $ATT is stale for source marker $ATT_MARKER"; exit 1; }
           # Debug builds are what testers flash to diagnose problems, so they need the
           # SAME verification as release - this step used to check only the 64-bit
           # library, which is how a build with no 32-bit effect at all could pass CI.

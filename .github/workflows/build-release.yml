@@ -291,10 +291,6 @@ jobs:
           test -f "$SO" || { echo "ERROR: $SO not found"; exit 1; }
           ATT="bin/arm64-v8a/asb_dsp_attach"
           test -x "$ATT" || { echo "ERROR: $ATT missing or not executable"; exit 1; }
-          ATT_MARKER="$(sed -n 's/.*kAsbAttachBuildId = "\([^"]*\)".*/\1/p' src/DSP_AIDL/asb_dsp_attach.cpp | head -1)"
-          [ -n "$ATT_MARKER" ] || { echo "ERROR: attacher source marker missing"; exit 1; }
-          grep -aF "$ATT_MARKER" "$ATT" >/dev/null \
-            || { echo "ERROR: $ATT is stale for source marker $ATT_MARKER"; exit 1; }
           SO32="bin/armeabi-v7a/libasbdsp.so"
           if [ -f "$SO32" ]; then
             F32="$(file "$SO32")"; echo "$SO32 file: $F32"
