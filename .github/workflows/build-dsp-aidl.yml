@@ -925,6 +925,10 @@ jobs:
           done
           check "$DEST/arm64-v8a/asb_dsp_attach" "$SRC/asb_dsp_attach.cpp" \
                 "pushed gain_mb" "gain change"
+          ATT_MARKER="$(sed -n 's/.*kAsbAttachBuildId = "\([^"]*\)".*/\1/p' "$SRC/asb_dsp_attach.cpp" | head -1)"
+          [ -n "$ATT_MARKER" ] || { echo "::error::attacher source build marker missing"; exit 1; }
+          grep -aF "$ATT_MARKER" "$DEST/arm64-v8a/asb_dsp_attach" >/dev/null \
+            || { echo "::error::asb_dsp_attach is stale for source marker $ATT_MARKER"; exit 1; }
           [ "$fail" = "0" ] || { echo "::error::artifacts do not match the sources - refusing to upload"; exit 1; }
           echo "artifacts match the sources"
 

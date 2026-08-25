@@ -31,7 +31,7 @@ jobs:
         run: |
           # Source archives and browser uploads can lose git executable mode bits. These two
           # runtime helpers are explicitly executed by their safety contracts below.
-          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh tools/asb_kernel_uv_coexist.sh
+          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh tools/asb_kernel_uv_coexist.sh
 
       - name: Validate required source files
         run: |
@@ -84,6 +84,7 @@ jobs:
             runtime/asb_boot_timeline.sh \
             runtime/asb_debug_support.sh \
             runtime/asb_stock_policy.sh \
+            runtime/asb_overlay_guard.sh \
             tools/asb_schema_sync.sh \
             tools/asb_intent.sh \
             tools/asb_config_backup.sh \
@@ -117,7 +118,10 @@ jobs:
             tests/test_workflow_required_files_shell.sh \
             tests/test_package_functional_parity_contract.sh \
             tests/test_v62_to_v64_migration.sh \
-
+            tests/test_bt_safe_policy_contract.sh \
+            tests/test_v65_smart_thermal_cap_contract.sh \
+            tests/test_v65_efficiency_contract.sh \
+            tests/test_project_safety_hardening_contract.sh \
             tests/test_release_package_tool_contract.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
@@ -285,6 +289,12 @@ jobs:
           [ "$SIZE" -lt 2000000 ] || { echo "ERROR: too large"; exit 1; }
 
           test -f "$SO" || { echo "ERROR: $SO not found"; exit 1; }
+          ATT="bin/arm64-v8a/asb_dsp_attach"
+          test -x "$ATT" || { echo "ERROR: $ATT missing or not executable"; exit 1; }
+          ATT_MARKER="$(sed -n 's/.*kAsbAttachBuildId = "\([^"]*\)".*/\1/p' src/DSP_AIDL/asb_dsp_attach.cpp | head -1)"
+          [ -n "$ATT_MARKER" ] || { echo "ERROR: attacher source marker missing"; exit 1; }
+          grep -aF "$ATT_MARKER" "$ATT" >/dev/null \
+            || { echo "ERROR: $ATT is stale for source marker $ATT_MARKER"; exit 1; }
           SO32="bin/armeabi-v7a/libasbdsp.so"
           if [ -f "$SO32" ]; then
             F32="$(file "$SO32")"; echo "$SO32 file: $F32"
@@ -557,6 +567,7 @@ jobs:
             "runtime/asb_boot_timeline.sh" \
             "runtime/asb_debug_support.sh" \
             "runtime/asb_stock_policy.sh" \
+            "runtime/asb_overlay_guard.sh" \
             "runtime/asb_device_pack_manifest.sh" \
             "runtime/asb_device_tier.sh" \
             "tools/asb_diag.sh" \
