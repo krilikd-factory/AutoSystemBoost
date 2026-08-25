@@ -82,8 +82,13 @@ need "$UI" "['stock','performance','balanced','battery','smart'].includes(p)"
 need "$UI" "T('t_stock_applied'"
 need "$UI" "let _selectedProfile = 'none';"
 need "$UI" 'function paintStockLive() {'
+need "$UI" 'id="stockTelemetry"'
+need "$UI" 'async function pollStockTelemetry(visible, force = false)'
+need "$UI" '/sys/class/power_supply/battery'
+need "$UI" '/sys/devices/system/cpu/cpufreq/policy'
 need "$UI" "if (_selectedProfile === 'stock') paintStockLive();"
-need "$UI" "if (visible && _selectedProfile === 'stock') paintStockLive();"
+! grep -A70 'async function pollStockTelemetry' "$UI" | grep -Eq 'settings put|resetprop|tee .*\/sys|echo .*\/sys' || fail 'Stock telemetry contains a write operation'
+need "$UI" "if (visible && _selectedProfile === 'stock') {"
 need "$UI" "const off = T('prof_stock_sub', 'ASB policy off');"
 need "$UI" 'gap: 8px;'
 need_count "$UI" '<button class="debug-support-btn" data-debug-action="diag"' 3
