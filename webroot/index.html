@@ -3179,7 +3179,12 @@ async function haptic() {
   try { if (navigator.vibrate) navigator.vibrate(18); } catch(e) {}
 }
 
+let _selectedProfile = 'none';
 function ui(p) {
+  // Keep the machine-readable selection separately from the translated header. The live
+  // monitor must not infer state from text such as "СТОК", otherwise it falls back to its
+  // markup default (Balanced) when Stock deliberately removes /dev/.asb/state.
+  _selectedProfile = ['stock','performance','balanced','battery','smart'].includes(p) ? p : 'none';
   document.querySelectorAll('.pbtn').forEach(b => {
     b.classList.toggle('on', b.dataset.p === p);
     b.classList.remove('ld');
@@ -3271,6 +3276,7 @@ function openLivePage() {
   p.setAttribute('aria-hidden', 'false');
   p.scrollTop = 0;
   _liveOpen = true;
+  if (_selectedProfile === 'stock') paintStockLive();
   pollLive(true);
   if (_liveTimer) clearInterval(_liveTimer);
   _liveTimer = setInterval(() => pollLive(true), 3000);
@@ -3673,6 +3679,7 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
+  smart_media_guard:'\uD83D\uDCFA',
   night_modem_idle:'\uD83D\uDCF4',
   net_rps:'\uD83E\uDDF5', net_txqueue:'\uD83D\uDCE4',
   athena_service:'\uD83D\uDEE1\uFE0F',
@@ -5632,6 +5639,24 @@ async function refreshSmartSubLine() {
   } catch(e) { return false; }
 }
 
+function paintStockLive() {
+  const stock = T('prof_stock', 'Stock');
+  const off = T('prof_stock_sub', 'ASB policy off');
+  const profile = _el('liveCurProfile');
+  if (profile) profile.textContent = stock;
+  const state = _el('liveState');
+  if (state) state.textContent = stock + ' · ' + off;
+  // These are governor-owned values. Stock intentionally terminates the governor and removes
+  // its state file, so retaining a previous profile's numbers would be less honest than an
+  // explicit empty state. Raw Android thermal/battery telemetry remains available in asbdiag.
+  ['liveClamp','liveCpu','liveSkin','liveSurface','liveEtaOn','liveEtaOff',
+   'liveCapSrc','liveLearner','liveGpu','liveHeadroom'].forEach(id => {
+    const node = _el(id); if (node) node.textContent = '—';
+  });
+  const cap = _el('liveCapSrc');
+  if (cap) cap.textContent = off;
+}
+
 async function pollLive(visible) {
   try {
     const r = await run('cat /dev/.asb/state 2>/dev/null');
@@ -5641,6 +5666,10 @@ async function pollLive(visible) {
     const chip = _el('liveChip');
     if (chip) chip.style.display = '';
     if (!r || !r.stdout || !r.stdout.trim()) {
+      // Stock deliberately removes /dev/.asb/state when it stops the native governor. This
+      // is not a failed monitor poll and must never leave the static "balanced" placeholder
+      // visible. Non-Stock keeps the existing neutral empty state for genuine startup errors.
+      if (visible && _selectedProfile === 'stock') paintStockLive();
       return;
     }
 
