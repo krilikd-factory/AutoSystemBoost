@@ -245,7 +245,11 @@ run_worker() {
 
   _rc=0
   _i=1
-  while [ "$_i" -le 4 ]; do
+  # Stock is a release/restore transaction, not a profile that needs retrying. One guarded
+  # pass makes the WebUI change immediate and avoids three needless stop/restore cycles.
+  _passes=4
+  [ "$PROFILE" = "stock" ] && _passes=1
+  while [ "$_i" -le "$_passes" ]; do
     if ! profile_epoch_current; then
       asb_log "worker superseded profile=$PROFILE epoch=$WORKER_EPOCH pass=$_i"
       exit 0
