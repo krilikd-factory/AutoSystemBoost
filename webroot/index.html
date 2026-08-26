@@ -3213,16 +3213,21 @@ function ui(p) {
 let switching = false;
 async function go(p) {
   const btn = document.querySelector('[data-p="' + p + '"]');
-  if (switching || btn.classList.contains('on')) return;
-  
+  if (switching || !btn || btn.classList.contains('on')) return;
+
+  // Applying a profile is deliberately synchronous on the root side: Smart → Stock stops the
+  // governor and restores its profile baseline before reporting success. Do not make the touch
+  // response wait for that safe lifecycle. Optimistically select the requested card now, retain
+  // a single in-flight switch, and roll back only if apply_profile.sh actually fails.
+  const previousProfile = _selectedProfile;
   switching = true;
+  ui(p);
   btn.classList.add('ld');
   const r = await run('sh ' + MD + '/apply_profile.sh ' + p);
   document.querySelectorAll('.pbtn').forEach(b => b.classList.remove('ld'));
   if (r.errno === 0) {
     haptic();
     try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
-    ui(p);
     /* One code path for every language.
      * This branched on ASB_LANG === 'ru': Russian got a translated profile name and
      * "применён", everyone else got a capitalised key and "applied" - so nine languages
@@ -3243,6 +3248,8 @@ async function go(p) {
       setTimeout(function() { refreshSmartSubLine(); }, ms);
     });
   } else {
+    // Never leave the home screen claiming a profile whose root-side transition failed.
+    ui(previousProfile);
     toast(T('t_profile_err', '\u2717 Error applying profile'), 'err');
   }
   switching = false;
@@ -3702,7 +3709,7 @@ const CFG_ICONS = {
   sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
   bt_a2dp_offload:'\uD83D\uDCFB', night_quiet_enable:'\uD83C\uDF19',
   bat_suppress_gaming:'\uD83D\uDE34', log_level:'\uD83D\uDCDD', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
-  net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDEA6', net_qdisc_mobile:'\uD83D\uDEA7', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDD0D',
+  net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDEA6', net_qdisc_mobile:'\uD83D\uDEA7', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDD0D', net_handover_fast:'\uD83D\uDD04',
   audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
   audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
   dsp_compressor:'\uD83E\uDDF0',                // toolbox - dynamics processing
@@ -3712,6 +3719,7 @@ const CFG_ICONS = {
   CAMERA_LOWLIGHT:'\uD83D\uDD26',              // torch - macro and low light
   CAMERA_LEVEL:'\uD83D\uDCF7',                // camera
   smart_battery_bias:'\uD83D\uDD0B',           // battery
+  CAMERA_AGGRESSIVE:'\uD83C\uDFAF',              // target: aggressive camera processing
   CAMERA_AGGRESSIVE_INJECT:'\uD83C\uDF9B\uFE0F',  // slider/mode
   dsp_loudness:'\uD83C\uDF9A\uFE0F',                // control knobs (DSP gain)
   dsp_bass:'\uD83E\uDD41',                    // drum (bass shelf)
