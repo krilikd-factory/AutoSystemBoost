@@ -44,6 +44,13 @@ need "$APPLY" 'if [ "$PROFILE" = "stock" ]; then'
 need "$APPLY" 'asb_stock_enter'
 need "$APPLY" 'asb_stock_start_governor'
 need "$APPLY" '[ "$PROFILE" = "stock" ] && _passes=1'
+need "$APPLY" 'stock_cancel_pending_worker()'
+need "$APPLY" 'profile_next_epoch 0.05 4'
+need "$APPLY" 'stock applied immediately; no duplicate profile worker spawned'
+# Stock is fully restored by notify_governor in the direct path. Do not queue a second worker
+# behind the outgoing Smart worker lock after that real Stock restore has completed.
+_stock_direct="$(sed -n '/^quick_return_or_spawn()/,/^run_worker()/p' "$APPLY" | sed -n '/if \[ "$PROFILE" = "stock" \]; then/,/^[[:space:]]*fi/p')"
+printf '%s\n' "$_stock_direct" | grep -Fq 'spawn_worker' && fail 'Stock direct path still spawns a duplicate worker'
 ! grep -Fq '"profile:$PROFILE"' "$APPLY" || true
 need "$CORE" 'stock)'
 need "$CORE" 'ASB_STOCK_PROFILE=1'
@@ -93,7 +100,8 @@ _profile_order="$(grep -E 'class=\"pbtn[^\"]*\" data-p=\"(smart|performance|bala
 [ "$_profile_order" = 'smart performance balanced battery stock' ] || \
   fail "unexpected profile card order: $_profile_order"
 need "$UI" "['stock','performance','balanced','battery','smart'].includes(p)"
-need "$UI" "T('t_stock_applied'"
+need "$UI" "T('t_stock_applied', 'Stock active · ASB policy stopped')"
+! grep -Fq 'reboot recommended' "$UI" || fail 'Stock WebUI fallback still recommends a reboot'
 need "$UI" "let _selectedProfile = 'none';"
 need "$UI" 'function paintStockLive(stockKv = null) {'
 need "$UI" 'let _stockTelemetryKv = {};'
@@ -107,7 +115,17 @@ need "$UI" 'paintStockLive(_stockTelemetryKv);'
 need "$UI" "set('liveCpu'"
 need "$UI" "set('liveGpu'"
 need "$UI" "set('liveHeadroom'"
-! grep -A90 'async function pollStockTelemetry' "$UI" | grep -Eq 'settings put|resetprop|tee .*\/sys|echo .*\/sys' || fail 'Stock telemetry contains a write operation'
+need "$UI" 'id="liveStockRomBanner"'
+need "$UI" 'id="bnStockDrain"'
+need "$UI" 'id="bnStockTrend"'
+need "$UI" 'id="bnStockLpm"'
+need "$UI" 'id="bnStockCpuClock"'
+need "$UI" 'id="bnStockLoad"'
+need "$UI" 'id="bnStockBattery"'
+need "$UI" 'id="bnStockUptime"'
+need "$UI" 'settings get global mobile_data_always_on'
+need "$UI" 'let _stockRomHistory = { ts: 0, cpuT: 0 };'
+! grep -A130 'async function pollStockTelemetry' "$UI" | grep -Eq 'settings put|resetprop|tee .*\/sys|echo .*\/sys' || fail 'Stock telemetry contains a write operation'
 need "$UI" "if (visible && _selectedProfile === 'stock') {"
 need "$UI" "const off = T('prof_stock_sub', 'ASB policy off');"
 # UI must acknowledge a profile tap before waiting for the root-side lifecycle. In particular,
@@ -153,9 +171,11 @@ files = sorted(root.glob('*.json'))
 assert len(files) == 13, f'expected 13 locales, got {len(files)}'
 for p in files:
     data = json.loads(p.read_text(encoding='utf-8'))
-    for key in ('prof_stock', 'prof_stock_sub', 't_stock_applied', 'dbg_diag_wait', 'dbg_log_wait'):
+    for key in ('prof_stock', 'prof_stock_sub', 't_stock_applied', 'stock_cpu_clock', 'stock_load', 'stock_battery', 'stock_uptime', 'dbg_diag_wait', 'dbg_log_wait'):
         assert isinstance(data.get(key), str) and data[key].strip(), f'{p.name}: missing {key}'
-print('PASS Stock profile and immediate debug action locale coverage: 13 locales')
+    stale = ('reboot', 'перезаг', 'neustart', 'reiniciar', 'redémarrage', 'վերագործարկ', 'mulai ulang', 'riavvio', 'yeniden başlat', '重启')
+    assert not any(word in data['t_stock_applied'].lower() for word in stale), f'{p.name}: stale reboot recommendation'
+print('PASS Stock profile, live ROM metric and immediate action locale coverage: 13 locales')
 PY
 
 # Behavioural fixture: profile runtime baseline must preserve the first pre-ASB value,
