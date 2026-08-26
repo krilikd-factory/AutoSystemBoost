@@ -2344,7 +2344,18 @@ apply_cpufreq_caps() {
     # Per-cluster min-freq floor (single owner, 4-cluster aware). little cluster
     _smin="$_pol_dir/scaling_min_freq"
     if [ -w "$_smin" ]; then
-      if [ "$_rel" -le "$little_end" ]; then _minw="$CPU_MIN_LITTLE"; else _minw="$CPU_MIN_BIG"; fi
+      # Smart owns a dynamic ceiling, but it must not keep the Balanced minimum as a
+      # permanent floor. On 6+2 SoCs that pins six little cores at 787 MHz while the
+      # user is merely scrolling a feed. Hardware min is topology-specific and lets
+      # schedutil raise instantly; manual and Gaming paths retain their profile floor.
+      if [ "${ASB_PROFILE:-$PROFILE}" = "smart" ]; then
+        _minw="$(cat "$_pol_dir/cpuinfo_min_freq" 2>/dev/null)"
+        case "$_minw" in ''|*[!0-9]*) _minw="" ;; esac
+      elif [ "$_rel" -le "$little_end" ]; then
+        _minw="$CPU_MIN_LITTLE"
+      else
+        _minw="$CPU_MIN_BIG"
+      fi
       if [ -n "$_minw" ]; then
         _minpick="$(asb_pick_nearest_freq "$_pol_dir" "$_minw" 2>/dev/null)"
         [ -z "$_minpick" ] && _minpick="$_minw"
