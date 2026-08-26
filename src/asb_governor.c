@@ -1290,20 +1290,25 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
          * light trim and is ignored while charging because its semantics vary. */
         if (!m->bat.charging && m->bat.current_ma >= 1800)
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_light_trim_pct, "battery_current");
-        /* Screen-on comfort is intentionally a tie-breaker, not a generic cap:
-         * it engages only on Battery or an explicitly battery-lean Smart session,
-         * after the already user-configured comfort temperature AND a meaningful
-         * discharge current are both observed. Games, camera, charging and screen-off
-         * work are excluded, so LTE/video/feed heat can settle without degrading the
-         * paths where latency or capture quality matters most. */
+        /* Screen-on comfort is intentionally a tie-breaker, not a generic cap.
+         *
+         * Battery keeps its proven 450 mA evidence gate.  A Smart session with bias >= 400
+         * has explicitly selected the Battery envelope, but an LTE/social feed can heat the
+         * handset gradually at 250-450 mA — below the old gate — while CPU/surface temperature
+         * already confirms the trend.  Give that narrowly defined Smart mode the existing
+         * light trim earlier, not a second cap ladder.  Games, camera, charging and screen-off
+         * work remain excluded, so latency- and capture-sensitive paths are unaffected. */
+        int smart_screenon_comfort =
+            fsm->profile_idx == PROFILE_SMART && g_asb_cfg.smart_battery_bias >= 400;
+        int comfort_current_ma = smart_screenon_comfort ? 250 : 450;
         if (!m->bat.charging && m->misc.screen_on && !m->misc.camera_active &&
             fsm->state != ASB_STATE_GAMING && m->therm.temp_valid &&
             m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp &&
-            m->bat.current_ma >= 450 &&
-            (fsm->profile_idx == PROFILE_BATTERY ||
-             (fsm->profile_idx == PROFILE_SMART && g_asb_cfg.smart_battery_bias >= 400)))
+            m->bat.current_ma >= comfort_current_ma &&
+            (fsm->profile_idx == PROFILE_BATTERY || smart_screenon_comfort))
             asb_budget_raise(&candidate, &reason,
-                             g_asb_cfg.thermal_budget_light_trim_pct, "screenon_comfort");
+                             g_asb_cfg.thermal_budget_light_trim_pct,
+                             smart_screenon_comfort ? "screenon_comfort_smart" : "screenon_comfort");
         /* Camera deadlines are a QoS lease: do not introduce a light-only trim
          * during capture. Real thermal stress still wins at moderate/severe. */
         if (m->misc.camera_active && candidate <= g_asb_cfg.thermal_budget_light_trim_pct) {
@@ -5949,12 +5954,26 @@ int main(int argc, char **argv) {
                  * at 3am, not at 3pm. It engages only inside a window the learner derived from this
                  * user's own nights, so a shift worker gets theirs rather than someone's idea of
                  * night. */
+                /* Smart can deliberately lean into the Battery envelope (bias >= 400),
+                 * which means its active session is asking for economy over latency.  Do not
+                 * defeat that choice by holding mobile_data_always_on in fast merely because
+                 * a feed/media burst reached HEAVY.  Confirmed GAMING stays fast, as does a
+                 * camera session or any Smart context that is not explicitly battery-lean.
+                 * The user-facing handover opt-in remains independent: normal mode still
+                 * honours net_handover_fast inside asb_lpm.sh. */
+                int smart_battery_lean =
+                    fsm.profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
+                    g_asb_cfg.smart_battery_bias >= 400 &&
+                    !metrics.misc.camera_active && !metrics.bat.charging &&
+                    g_smart_rt.app_hint < ASB_APP_GAMING;
                 const char *lpm_mode =
                     (g_asb_cfg.night_modem_idle && !metrics.misc.screen_on &&
                      asb_night_window_active(time(NULL)))   ? "night" :
                     !metrics.misc.screen_on                 ? "save" :
                     (fsm.profile_idx == PROFILE_BATTERY)    ? "save" :
-                    (fsm.state >= ASB_STATE_HEAVY)          ? "fast" : "normal";
+                    (fsm.state == ASB_STATE_GAMING ||
+                     (fsm.state == ASB_STATE_HEAVY && !smart_battery_lean))
+                                                        ? "fast" : "normal";
                 static const char *g_lpm_last = NULL;
                 static time_t g_lpm_last_ts = 0;
                 time_t lpm_now = time(NULL);
