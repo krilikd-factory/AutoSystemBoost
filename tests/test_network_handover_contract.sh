@@ -31,6 +31,7 @@ need "$WEB" "key:'net_handover_fast'"
 need "$WEB" "'net_handover_fast',"
 need "$WEB" 'net_handover_fast:APPLY_LIVE'
 need "$WEB" "key === 'net_handover_fast'"
+need "$WEB" "net_handover_fast:'\\uD83D\\uDD04'"
 need "$WEB" '/runtime/asb_lpm.sh refresh'
 need "$WEB" "raw.split('|')[0]"
 need "$WEB" 'Vendor caps · 1h / total'

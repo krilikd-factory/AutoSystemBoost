@@ -34,6 +34,7 @@ need "$UI" "{ key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:10"
 need "$UI" "{ key:'CAMERA_CONTRAST', type:'range', def:'3', min:0, max:10"
 need "$UI" "{ key:'CAMERA_GRAIN', type:'range', def:'3', min:0, max:10"
 need "$UI" "{ key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:10"
+need "$UI" "CAMERA_AGGRESSIVE:'\\uD83C\\uDFAF'"
 need "$GRADE" '[ "$_lvl" -gt 10 ] 2>/dev/null && _lvl=10'
 need "$GRADE" '[ "$_grain" -gt 10 ] 2>/dev/null && _grain=10'
 need "$GRADE" '[ "$_contrast" -gt 10 ] 2>/dev/null && _contrast=10'

@@ -110,6 +110,30 @@ need "$UI" "set('liveHeadroom'"
 ! grep -A90 'async function pollStockTelemetry' "$UI" | grep -Eq 'settings put|resetprop|tee .*\/sys|echo .*\/sys' || fail 'Stock telemetry contains a write operation'
 need "$UI" "if (visible && _selectedProfile === 'stock') {"
 need "$UI" "const off = T('prof_stock_sub', 'ASB policy off');"
+# UI must acknowledge a profile tap before waiting for the root-side lifecycle. In particular,
+# Smart → Stock can safely take longer while the governor stops and the profile baseline restores.
+# A failed root transition must return the highlight to the confirmed previous profile.
+python3 - "$UI" <<'PY'
+import sys
+from pathlib import Path
+s = Path(sys.argv[1]).read_text(encoding='utf-8')
+start = s.index('async function go(p) {')
+end = s.index('\nfunction openTelegram', start)
+go = s[start:end]
+def require(fragment):
+    if fragment not in go:
+        raise SystemExit('FAIL Stock UI switch contract: missing ' + fragment)
+def before(left, right):
+    if go.index(left) >= go.index(right):
+        raise SystemExit('FAIL Stock UI switch contract: expected ' + left + ' before ' + right)
+require("const previousProfile = _selectedProfile;")
+require('ui(p);')
+require("const r = await run('sh ' + MD + '/apply_profile.sh ' + p);")
+require('ui(previousProfile);')
+before('ui(p);', "const r = await run('sh ' + MD + '/apply_profile.sh ' + p);")
+before("const r = await run('sh ' + MD + '/apply_profile.sh ' + p);", 'ui(previousProfile);')
+print('PASS Stock UI immediate-selection contract')
+PY
 need "$UI" 'gap: 8px;'
 need_count "$UI" '<button class="debug-support-btn" data-debug-action="diag"' 3
 need_count "$UI" '<button class="debug-support-btn" data-debug-action="full-day"' 3
