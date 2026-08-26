@@ -2528,6 +2528,22 @@ body.config-active #livePage.open {
     </div>
   </div>
 
+  <!-- Stock has no Smart/FSM policy, but direct ROM readings still belong in Monitor. -->
+  <div class="smart-banner stock-rom-banner" id="liveStockRomBanner" style="display:none;" aria-live="polite">
+    <div class="smart-banner-row">
+      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="lv_drain">Drain</span><span class="smart-banner-value" id="bnStockDrain">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="lv_trend">Trend</span><span class="smart-banner-value" id="bnStockTrend">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="lv_lpm">Modem LPM</span><span class="smart-banner-value" id="bnStockLpm">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="lv_headroom">Headroom</span><span class="smart-banner-value" id="bnStockRam">—</span></div>
+    </div>
+    <div class="smart-banner-row">
+      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_cpu_clock">CPU clock</span><span class="smart-banner-value" id="bnStockCpuClock">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_load">System load</span><span class="smart-banner-value" id="bnStockLoad">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_battery">Battery</span><span class="smart-banner-value" id="bnStockBattery">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_uptime">Uptime</span><span class="smart-banner-value" id="bnStockUptime">—</span></div>
+    </div>
+  </div>
+
   <div class="sec">
     <div class="sec-line"></div>
     <div class="sec-label" data-i18n="sec_live">Live Status</div>
@@ -3235,7 +3251,7 @@ async function go(p) {
      * back to English on its own; the special case only prevented the other nine from
      * ever being used. */
     if (p === 'stock') {
-      toast('\u2713 ' + T('t_stock_applied', 'Stock active · ASB policy stopped · reboot recommended'), 'warn');
+      toast('\u2713 ' + T('t_stock_applied', 'Stock active · ASB policy stopped'), 'warn');
     } else {
       toast('\u2713 ' + T('prof_' + p, p.charAt(0).toUpperCase() + p.slice(1)) +
             T('t_prof_applied', ' applied'), p);
@@ -5711,6 +5727,16 @@ function paintStockLive(stockKv = null) {
   const gpu = n(kv['gpu.gpu_busy_percentage'] || kv['gpu.gpubusy']);
   const ramKb = n(kv.MemAvailable);
   const ramGb = ramKb > 0 ? (ramKb / 1048576).toFixed(1) + ' GB' : '—';
+  const cpuKHz = Object.entries(kv).filter(([k]) => /^cpu\.policy\d+\.scaling_cur_freq$/.test(k))
+    .map(([, v]) => n(v)).filter(v => v > 0);
+  const cpuClock = cpuKHz.length ? Math.round(Math.max(...cpuKHz) / 1000) + ' MHz' : '—';
+  const chargeFullRaw = n(kv['battery.charge_full']);
+  const chargeFullMah = chargeFullRaw > 10000 ? chargeFullRaw / 1000 : chargeFullRaw;
+  const batteryStatus = String(kv['battery.status'] || '').toLowerCase();
+  const isCharging = /charg/.test(batteryStatus) || ma < 0;
+  const pctph = (!isCharging && chargeFullMah > 0 && Math.abs(ma) > 0)
+    ? (Math.abs(ma) * 100 / chargeFullMah) : 0;
+  const sampleTs = n(kv.ts) * 1000;
   const set = (id, value, title = '') => { const el = _el(id); if (el) { el.textContent = value || '—'; el.title = title; } };
 
   set('liveClamp', '—', off + ': ROM cap history is not collected in Stock.');
@@ -5728,6 +5754,48 @@ function paintStockLive(stockKv = null) {
   set('liveGpu', gpu > 0 ? gpu + '%' : '—');
   set('liveHeadroom', ramGb, 'MemAvailable from /proc/meminfo (read-only).');
 
+  // Read-only Stock telemetry is deliberately separate from Smart: no bucket, confidence,
+  // learner or ASB cap claim survives here. It is a direct ROM snapshot with a local thermal
+  // delta calculated only from consecutive 10-second read-only samples.
+  const stockBanner = _el('liveStockRomBanner');
+  const bset = (id, value, title = '', cls = 'smart-banner-value') => {
+    const el = _el(id); if (!el) return;
+    el.textContent = value || '—'; el.title = title; el.className = cls;
+  };
+  let trend = T('lv_measuring', 'measuring…');
+  let trendCls = 'smart-banner-value';
+  if (sampleTs && cpuT) {
+    if (_stockRomHistory.ts && _stockRomHistory.ts !== sampleTs && _stockRomHistory.cpuT > 0) {
+      const elapsedMs = sampleTs - _stockRomHistory.ts;
+      const slopePerMin = elapsedMs > 0 ? ((cpuT - _stockRomHistory.cpuT) * 60000 / elapsedMs) : 0;
+      if (slopePerMin > 0.35) { trend = '↑ ' + T('lv_trend_up', 'warming'); trendCls += ' cap-clamp'; }
+      else if (slopePerMin < -0.35) { trend = '↓ ' + T('lv_trend_dn', 'cooling'); trendCls += ' cap-raised'; }
+      else trend = '→ ' + T('lv_trend_fl', 'steady');
+    }
+    if (_stockRomHistory.ts !== sampleTs) _stockRomHistory = { ts: sampleTs, cpuT: cpuT };
+  }
+  const uptimeSec = Math.floor(parseFloat(kv.uptime || '0'));
+  const uptime = uptimeSec > 0
+    ? (Math.floor(uptimeSec / 86400) ? Math.floor(uptimeSec / 86400) + 'd ' : '')
+      + Math.floor((uptimeSec % 86400) / 3600) + 'h '
+      + Math.floor((uptimeSec % 3600) / 60) + 'm'
+    : '—';
+  const lpmHeld = n(kv['settings.global.mobile_data_always_on']) === 1;
+  if (stockBanner) stockBanner.style.display = Object.keys(kv).length ? '' : 'none';
+  bset('bnStockDrain', (!isCharging && Math.abs(ma) > 0)
+    ? (Math.abs(ma) + ' mA' + (pctph > 0 ? ' · ' + pctph.toFixed(1) + '%/h' : '')) : '—',
+    'Direct battery current and capacity calculation; Stock does not use ASB drain learning.');
+  bset('bnStockTrend', trend, 'CPU thermal delta between consecutive direct ROM samples.', trendCls);
+  bset('bnStockLpm', lpmHeld ? T('lv_lpm_fast', 'fast') : T('lv_lpm_normal', 'normal'),
+    'Direct read of global mobile_data_always_on; Stock itself applies no modem policy.',
+    'smart-banner-value' + (lpmHeld ? ' cap-clamp' : ''));
+  bset('bnStockRam', ramGb, 'MemAvailable from /proc/meminfo (read-only).');
+  bset('bnStockCpuClock', cpuClock, 'Highest current cpufreq policy clock in this sample.');
+  bset('bnStockLoad', kv.loadavg || '—', 'First three values from /proc/loadavg.');
+  bset('bnStockBattery', capPct ? (capPct + '%' + (volt > 0 ? ' · ' + volt.toFixed(2) + 'V' : '')) : '—',
+    'Direct battery capacity and voltage.');
+  bset('bnStockUptime', uptime, 'Direct /proc/uptime reading.');
+
   // These indicators belong to an active ASB governor. Clear stale values carried over from
   // the previous profile: Stock has no Smart state, learner, LPM policy or ASB recovery state.
   const smartBanner = _el('liveSmartBanner');
@@ -5738,18 +5806,24 @@ function paintStockLive(stockKv = null) {
 
 let _stockTelemetryLastMs = 0;
 let _stockTelemetryKv = {};
+let _stockRomHistory = { ts: 0, cpuT: 0 };
 const STOCK_TELEMETRY_MIN_INTERVAL_MS = 10000;
 async function pollStockTelemetry(visible, force = false) {
   const box = _el('stockTelemetry');
   // Retained only as a hidden compatibility node; normal cards below receive the parsed data.
   if (box) box.classList.remove('on');
-  if (!visible || _selectedProfile !== 'stock') return;
+  if (!visible || _selectedProfile !== 'stock') {
+    _stockRomHistory = { ts: 0, cpuT: 0 };
+    const stockBanner = _el('liveStockRomBanner');
+    if (stockBanner) stockBanner.style.display = 'none';
+    return;
+  }
   const now = Date.now();
   if (!force && (now - _stockTelemetryLastMs) < STOCK_TELEMETRY_MIN_INTERVAL_MS) return;
   _stockTelemetryLastMs = now;
   const pre = _el('liveStockTelemetry');
   try {
-    const cmd = "sh -c 'printf \"ts=%s\\n\" \"$(date +%s)\"; printf \"uptime=%s\\n\" \"$(cut -d\" \" -f1 /proc/uptime 2>/dev/null)\"; printf \"loadavg=%s\\n\" \"$(cut -d\" \" -f1-3 /proc/loadavg 2>/dev/null)\"; for f in capacity current_now voltage_now temp status charge_full; do printf \"battery.%s=%s\\n\" \"$f\" \"$(cat /sys/class/power_supply/battery/$f 2>/dev/null)\"; done; grep -E \"^(MemTotal|MemAvailable|MemFree|Cached|SwapFree):\" /proc/meminfo 2>/dev/null; for d in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$d\" ] || continue; n=${d##*/}; for f in scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor cpuinfo_max_freq; do printf \"cpu.%s.%s=%s\\n\" \"$n\" \"$f\" \"$(cat \"$d/$f\" 2>/dev/null)\"; done; done; g=/sys/class/kgsl/kgsl-3d0; for f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do printf \"gpu.%s=%s\\n\" \"$f\" \"$(cat \"$g/$f\" 2>/dev/null | head -1)\"; done; for z in /sys/class/thermal/thermal_zone*; do [ -r \"$z/temp\" ] || continue; label=$(cat \"$z/type\" 2>/dev/null); temp=$(cat \"$z/temp\" 2>/dev/null); [ -n \"$temp\" ] && printf \"thermal.%s=%s\\n\" \"$label\" \"$temp\"; done'";
+    const cmd = "sh -c 'printf \"ts=%s\\n\" \"$(date +%s)\"; printf \"uptime=%s\\n\" \"$(cut -d\" \" -f1 /proc/uptime 2>/dev/null)\"; printf \"loadavg=%s\\n\" \"$(cut -d\" \" -f1-3 /proc/loadavg 2>/dev/null)\"; for f in capacity current_now voltage_now temp status charge_full; do printf \"battery.%s=%s\\n\" \"$f\" \"$(cat /sys/class/power_supply/battery/$f 2>/dev/null)\"; done; printf \"settings.global.mobile_data_always_on=%s\\n\" \"$(settings get global mobile_data_always_on 2>/dev/null)\"; grep -E \"^(MemTotal|MemAvailable|MemFree|Cached|SwapFree):\" /proc/meminfo 2>/dev/null; for d in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$d\" ] || continue; n=${d##*/}; for f in scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor cpuinfo_max_freq; do printf \"cpu.%s.%s=%s\\n\" \"$n\" \"$f\" \"$(cat \"$d/$f\" 2>/dev/null)\"; done; done; g=/sys/class/kgsl/kgsl-3d0; for f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do printf \"gpu.%s=%s\\n\" \"$f\" \"$(cat \"$g/$f\" 2>/dev/null | head -1)\"; done; for z in /sys/class/thermal/thermal_zone*; do [ -r \"$z/temp\" ] || continue; label=$(cat \"$z/type\" 2>/dev/null); temp=$(cat \"$z/temp\" 2>/dev/null); [ -n \"$temp\" ] && printf \"thermal.%s=%s\\n\" \"$label\" \"$temp\"; done'";
     const r = await run(cmd);
     const text = ((r && r.stdout) || '').trim();
     const kv = {};
