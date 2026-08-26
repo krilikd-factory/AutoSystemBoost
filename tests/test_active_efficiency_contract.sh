@@ -106,6 +106,11 @@ grep -Fq 'fsm->state != ASB_STATE_SUSTAINED) {' "$SRC" || fail "SUSTAINED game-s
 grep -Fq 'int comfort_current_ma = smart_screenon_comfort ? 250 : 450;' "$SRC" || fail "Smart/Battery comfort current split missing"
 grep -Fq 'm->bat.current_ma >= comfort_current_ma' "$SRC" || fail "adaptive comfort current evidence gate missing"
 grep -Fq 'screenon_comfort_smart' "$SRC" || fail "early Smart comfort telemetry reason missing"
+grep -Fq 'surface_comfort_smart' "$SRC" || fail "surface-hotspot Smart comfort telemetry reason missing"
+grep -Fq 'm->therm.surface_hotspot_c >= 43' "$SRC" || fail "surface-hotspot Smart comfort threshold missing"
+grep -Fq 'g_asb_cfg.thermal_budget_moderate_trim_pct' "$SRC" || fail "surface-hotspot path must reuse bounded moderate trim"
+grep -Fq 'smart_screenon_comfort && !m->bat.charging && m->misc.screen_on' "$SRC" || fail "surface comfort charging/screen exclusion missing"
+grep -Fq '!m->misc.camera_active && fsm->state != ASB_STATE_GAMING' "$SRC" || fail "surface comfort camera/gaming exclusion missing"
 grep -Fq 'fsm->profile_idx == PROFILE_BATTERY' "$SRC" || fail "Battery profile gate missing"
 grep -Fq 'g_asb_cfg.smart_battery_bias >= 400' "$SRC" || fail "battery-lean Smart gate missing"
 # Media recovery may use the existing light trim only after fresh, positively recognised media

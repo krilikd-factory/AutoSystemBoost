@@ -10,6 +10,9 @@ DIAG="$ROOT_DIR/tools/asb_diag.sh"
 LINT="$ROOT_DIR/tools/asb_lint.sh"
 REFERENCE_MODEL="$ROOT_DIR/docs/reference_models/asb_allocator_reference_model.py"
 REFERENCE_DOC="$ROOT_DIR/docs/reference_models.md"
+PROFILE_CORE="$ROOT_DIR/runtime/profile_core.sh"
+BLUR_APPLY="$ROOT_DIR/runtime/asb_blur_apply.sh"
+SERVICE="$ROOT_DIR/service.sh"
 need() { grep -Fq "$2" "$1" || { echo "FAIL: $1 missing [$2]" >&2; exit 1; }; }
 absent() { ! grep -Fq "$2" "$1" || { echo "FAIL: $1 still contains [$2]" >&2; exit 1; }; }
 
@@ -66,6 +69,19 @@ need "$WEBUI" 'night_modem_idle:APPLY_LIVE'
 need "$WEBUI" "'night_quiet_enable','night_modem_idle'"
 need "$LINT" 'cards missing APPLY_MODE'
 need "$LINT" 'locales missing global WebUI strings'
+
+# `disable_blur=0` is a true user-owned stock/no-touch display state.  In particular, no
+# post-boot WindowManager transaction may re-resolve a vendor screen-scale/density override.
+# Explicit blur-off and an explicit WebUI return-to-stock action remain supported.
+need "$PROFILE_CORE" '0) : ;;  # stock mode does not touch WindowManager or display configuration'
+absent "$PROFILE_CORE" '0) asb_settings_put global disable_window_blurs 0'
+need "$BLUR_APPLY" 'ASB_BLUR_BOOT_SYNC=0'
+need "$BLUR_APPLY" '[ "${1:-}" = "--boot" ] && ASB_BLUR_BOOT_SYNC=1'
+need "$BLUR_APPLY" 'elif [ "$ASB_BLUR_BOOT_SYNC" != "1" ]; then'
+need "$BLUR_APPLY" 'wm disable-blur false >/dev/null 2>&1 || true'
+need "$SERVICE" 'sh "$MODDIR/runtime/asb_blur_apply.sh" --boot >/dev/null 2>&1'
+need "$SERVICE" 'elif [ "$_asb_blur_want" = "1" ]; then'
+absent "$SERVICE" 'Re-assert BOTH directions, not just "off".'
 
 # The former pytest file was a standalone reference implementation, not coverage of ASB C
 # code. Keep it explicitly documented outside tests rather than pretending an unused Python
