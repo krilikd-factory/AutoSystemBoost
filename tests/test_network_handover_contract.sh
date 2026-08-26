@@ -12,6 +12,7 @@ for f in "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped"; do
 done
 
 LPM="$ROOT/runtime/asb_lpm.sh"
+GOV="$ROOT/src/asb_governor.c"
 need "$LPM" 'if [ "$MODE" = "refresh" ]; then'
 need "$LPM" 'case "$_saved_mode" in fast|normal|save|night)'
 need "$LPM" 'case "$(_cfg net_handover_fast)" in'
@@ -20,6 +21,17 @@ need "$LPM" 'echo "${MODE}|handover=${HANDOVER_FAST}" > "$STATE"'
 need "$LPM" '_sset mobile_data_always_on 0'
 need "$LPM" 'if [ "$HANDOVER_FAST" = "1" ]; then'
 need "$LPM" '_sset mobile_data_always_on 1'
+
+# A high battery bias means Smart is explicitly following the Battery envelope.  HEAVY media
+# must not silently re-enable the always-on mobile data context; confirmed games, camera and
+# charging retain the low-latency path, while normal still honours the explicit handover opt-in.
+need "$GOV" 'int smart_battery_lean ='
+need "$GOV" 'g_asb_cfg.smart_battery_bias >= 400'
+need "$GOV" '!metrics.misc.camera_active && !metrics.bat.charging'
+need "$GOV" 'g_smart_rt.app_hint < ASB_APP_GAMING'
+need "$GOV" 'fsm.state == ASB_STATE_GAMING ||'
+need "$GOV" '(fsm.state == ASB_STATE_HEAVY && !smart_battery_lean)'
+need "$GOV" 'honours net_handover_fast inside asb_lpm.sh'
 
 # No second helper may write the handover setting directly. The only intended mobile_data
 # owner is LPM; its normal/fast/save/night policy already captures/restores a single baseline.
@@ -40,6 +52,7 @@ need "$WEB" 'protective bias · vendor cap pressure'
 need "$ROOT/common/install.sh" 'wifi_scan_throttle net_handover_fast haptic_touch_strength'
 need "$ROOT/action.sh" 'Wi-Fi → mobile handover: fast'
 need "$ROOT/tools/asb_diag.sh" 'Wi-Fi → mobile handover: fast requested'
+need "$ROOT/tools/asb_diag.sh" 'Smart battery-lean: HEAVY media uses normal LPM; gaming/camera retain fast'
 
 # This is a user-facing card, so every shipped language must carry a full native card,
 # both stored-value labels and the battery-cost warning. English fallback is not enough.

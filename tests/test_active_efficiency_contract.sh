@@ -103,7 +103,9 @@ grep -Fq 'm->misc.screen_on && !m->misc.camera_active' "$SRC" || fail "screen-on
 grep -Fq 'fsm->state != ASB_STATE_GAMING' "$SRC" || fail "gaming exclusion missing"
 grep -Fq 'if (g_asb_cfg.thermal_budget_enable && !fsm->thermal_cap &&' "$SRC" || fail "comfort path must remain thermal-cap gated"
 grep -Fq 'fsm->state != ASB_STATE_SUSTAINED) {' "$SRC" || fail "SUSTAINED game-safety exclusion missing"
-grep -Fq 'm->bat.current_ma >= 450' "$SRC" || fail "current evidence gate missing"
+grep -Fq 'int comfort_current_ma = smart_screenon_comfort ? 250 : 450;' "$SRC" || fail "Smart/Battery comfort current split missing"
+grep -Fq 'm->bat.current_ma >= comfort_current_ma' "$SRC" || fail "adaptive comfort current evidence gate missing"
+grep -Fq 'screenon_comfort_smart' "$SRC" || fail "early Smart comfort telemetry reason missing"
 grep -Fq 'fsm->profile_idx == PROFILE_BATTERY' "$SRC" || fail "Battery profile gate missing"
 grep -Fq 'g_asb_cfg.smart_battery_bias >= 400' "$SRC" || fail "battery-lean Smart gate missing"
 # Media recovery may use the existing light trim only after fresh, positively recognised media
@@ -115,6 +117,7 @@ grep -Fq 'g_pkg_detect_ok && g_smart_media_pkg_known' "$SRC" || fail "media reco
 grep -Fq 'g_smart_rt.app_hint < ASB_APP_GAMING' "$SRC" || fail "media recovery game exclusion missing"
 grep -Fq '!m->misc.camera_active && !m->bat.charging' "$SRC" || fail "media recovery camera/charging exclusion missing"
 grep -Fq 'm->bat.current_ma >= 450' "$SRC" || fail "media recovery current evidence gate missing"
+grep -Fq 'smart_screenon_comfort ? "screenon_comfort_smart" : "screenon_comfort"' "$SRC" || fail "Smart comfort must retain Battery reason split"
 grep -Fq 'media_recovery = !strcmp(g_budget_reason, "media_recovery")' "$SRC" || fail "media recovery must recheck dwell-held reason"
 grep -Fq 'fsm->state == ASB_STATE_SUSTAINED && !media_recovery' "$SRC" || fail "SUSTAINED must stay blocked outside fresh media recovery"
 grep -Fq '(!media_recovery && g_budget_stage < 2)' "$SRC" || fail "light-stage cgroup recovery gate missing"
