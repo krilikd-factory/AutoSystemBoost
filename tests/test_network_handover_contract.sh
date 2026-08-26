@@ -46,7 +46,7 @@ need "$WEB" "key === 'net_handover_fast'"
 need "$WEB" "net_handover_fast:'handover'"
 need "$WEB" '/runtime/asb_lpm.sh refresh'
 need "$WEB" "raw.split('|')[0]"
-need "$WEB" 'Vendor caps · 1h / total'
+need "$WEB" "T('lv_vendor_period', 'Vendor cap period')"
 need "$WEB" 'protective bias · vendor cap pressure'
 
 need "$ROOT/common/install.sh" 'wifi_scan_throttle net_handover_fast haptic_touch_strength'

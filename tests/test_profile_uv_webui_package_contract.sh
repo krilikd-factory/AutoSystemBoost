@@ -64,6 +64,9 @@ need "$UI" '#cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding
 need "$UI" 'onclick="cfgResetDialogOpen()" data-i18n="cfg_smart_reset"'
 absent "$UI" 'id="cfgResetRow"'
 need "$UI" 'id="cfgResetModal"'
+need "$UI" '.cfg-reset-modal { position:fixed; z-index:1410; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,.91); backdrop-filter:none; -webkit-backdrop-filter:none; }'
+need "$UI" 'background:#000 padding-box'
+need "$UI" '.cfg-reset-choice { width:100%; display:block; margin:0 0 9px; padding:13px 12px; text-align:left; border:1px solid rgba(255,255,255,.14); border-radius:14px; color:#eef5f3; background:#050505; }'
 need "$UI" 'function cfgResetDialogOpen()'
 need "$UI" "cfgResetDialogRun('settings')"
 need "$UI" "cfgResetDialogRun('smart')"
@@ -132,6 +135,12 @@ need "$UI" "ic.innerHTML = techIcon(g.icon);"
 need "$UI" "ico.innerHTML = techIcon(section.icon);"
 need "$UI" "ic.innerHTML = techIcon(CFG_ICONS[it.key] || 'generic');"
 need "$UI" 'data-tech-icon="telegram"'
+need "$UI" "const vendorPeriodActive = capSrc === 'vendor_clamp' || String(kv.cap_owner || '') === 'vendor';"
+need "$UI" "const ownerSince = parseInt(kv.cap_owner_since || '0', 10);"
+need "$UI" "T('lv_vendor_period', 'Vendor cap period')"
+need "$UI" "fmt('cap_period_active', 'active · {time}', {time: duration})"
+need "$UI" "T('cap_period_tip', 'One continuous vendor-held period can contain many polling samples. Raw samples remain in asbdiag and the 24h report.')"
+absent "$UI" 'Кепы vendor: 1ч / всего'
 need "$UI" "CAMERA_AGGRESSIVE:'camera_aggressive'"
 need "$UI" "net_handover_fast:'handover'"
 need "$UI" 'grid-template-areas: "ico title" ". hint";'
@@ -186,7 +195,7 @@ python3 - "$ROOT" <<'PY'
 import json, sys
 from pathlib import Path
 root = Path(sys.argv[1]) / 'webroot' / 'i18n'
-keys = {'cfg_profile_save_short','cfg_profile_load_short','cfg_audio_section_playback','cfg_audio_section_playback_hint','cfg_audio_section_dsp','cfg_audio_section_dsp_hint','cfg_audio_section_safety','cfg_audio_section_safety_hint'}
+keys = {'cfg_profile_save_short','cfg_profile_load_short','cfg_audio_section_playback','cfg_audio_section_playback_hint','cfg_audio_section_dsp','cfg_audio_section_dsp_hint','cfg_audio_section_safety','cfg_audio_section_safety_hint','lv_vendor_period','cap_period_active','cap_period_none','cap_period_none_tip','cap_period_just_now','cap_period_minutes','cap_period_hours_minutes','cap_period_tip'}
 manager_keys = {'cfg_profile_manager_title','cfg_profile_save_copy','cfg_profile_open_copy','cfg_profile_location','cfg_profile_store_asb','cfg_profile_store_downloads','cfg_profile_store_documents','cfg_profile_save_action','cfg_profile_replace','cfg_profile_name_hint','cfg_profile_replace_ready','cfg_profile_keys','cfg_profile_apply','cfg_profile_apply_active','cfg_profile_apply_wait','cfg_profile_delete','cfg_profile_delete_confirm','cfg_profile_apply_hint','cfg_profile_export_err'}
 reset_keys = {'cfg_reset_dialog_title','cfg_reset_dialog_copy','cfg_reset_all_title','cfg_reset_all_copy','cfg_reset_smart_title','cfg_reset_smart_copy','cfg_reset_confirm','cfg_reset_all_done','cfg_reset_all_fail'}
 files = sorted(root.glob('*.json'))

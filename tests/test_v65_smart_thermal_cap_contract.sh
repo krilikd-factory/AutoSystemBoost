@@ -16,6 +16,8 @@ need "$FSM" 'state >= ASB_STATE_MODERATE && state < ASB_STATE_GAMING'
 need "$GOV" 'Smart is an energy/heat profile, not a hidden Balanced profile'
 need "$GOV" 'p = PROFILE_BATTERY;'
 need "$GOV" 'fsm->plan.ac_eligible  = 0'
+need "$GOV" 'fsm.profile_idx != PROFILE_SMART'
+need "$GOV" 'it must never enter the anti-clamp reassert path'
 # Host syntax/warning compilation is covered by the main regression; this test only protects the
 # source-level policy invariants that a host cannot observe through sysfs.
 echo 'PASS Smart proactive thermal cap contract'
