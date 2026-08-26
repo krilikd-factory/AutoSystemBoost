@@ -76,7 +76,7 @@ ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIM
 ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" mark service_enter >/dev/null
 grep -Fq $'\tpostfs_begin\t' "$TL_STATE/boot_timeline.tsv" || { echo 'FAIL debug support: postfs boot marker missing' >&2; exit 1; }
 grep -Fq $'\tservice_enter\t' "$TL_STATE/boot_timeline.tsv" || { echo 'FAIL debug support: service boot marker missing' >&2; exit 1; }
-printf '#!/bin/sh\n[ "${ASB_DEBUG_SUPPORT_TEST_DIAG_DELAY:-0}" = 1 ] && sleep 1\necho diagnostic-ok\n' > "$DBG/system/bin/asbdiag"; chmod 0755 "$DBG/system/bin/asbdiag"
+printf '#!/bin/sh\n[ "${ASB_DEBUG_SUPPORT_TEST_DIAG_DELAY:-0}" = 1 ] && sleep 1\nif [ "${ASB_DEBUG_SUPPORT_TEST_DIAG_FAIL:-0}" = 1 ]; then echo diagnostic-failed; exit 9; fi\necho diagnostic-ok\n' > "$DBG/system/bin/asbdiag"; chmod 0755 "$DBG/system/bin/asbdiag"
 cat > "$DBG/tools/logkit/asb_log_full_day.sh" <<'EOF_RECORDER'
 #!/bin/sh
 set -u
@@ -86,6 +86,8 @@ _token="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
 [ "$(cat "$_lock/token" 2>/dev/null || true)" = "$_token" ] || exit 92
 printf '%s\n' "$$" > "$_lock/pid.tmp.$$" || exit 93
 mv -f "$_lock/pid.tmp.$$" "$_lock/pid" || exit 94
+_out="$_lock/capture_output"; mkdir -p "$_out" || exit 95
+printf '%s\n' "$_out" > "$_lock/output_dir" || exit 96
 cleanup() {
   _pid="$(tr -dc '0-9' < "$_lock/pid" 2>/dev/null || true)"
   [ "$_pid" = "$$" ] && rm -rf "$_lock" 2>/dev/null || true
@@ -118,6 +120,23 @@ done
 printf '%s\n' "$ASYNC_STATUS" | grep -Fqx 'status=saved' || { echo 'FAIL debug support: async diag never reached saved' >&2; exit 1; }
 ASYNC_PATH="$(printf '%s\n' "$ASYNC_STATUS" | sed -n 's/^path=//p')"
 [ -f "$ASYNC_PATH" ] && grep -Fq 'diagnostic-ok' "$ASYNC_PATH" || { echo 'FAIL debug support: async diag saved output missing' >&2; exit 1; }
+
+# A dead diagnostic worker must not leave a permanent `already_running` lock, and a nonzero
+# asbdiag exit must become an explicit failed status rather than a misleading saved toast.
+mkdir -p "$TMP/state/asbdiag_webui.lock"
+printf '999999\n' > "$TMP/state/asbdiag_webui.lock/pid"
+STALE_DIAG="$(env "${ENV[@]}" sh "$HELPER" diag-start)"
+printf '%s\n' "$STALE_DIAG" | grep -Fqx 'status=started' || { echo 'FAIL debug support: known-dead diag lock not reclaimed' >&2; exit 1; }
+for _diag_try in $(seq 1 30); do sleep 0.1; env "${ENV[@]}" sh "$HELPER" diag-status | grep -Fqx 'status=saved' && break; done
+FAIL_DIAG="$(ASB_DEBUG_SUPPORT_TEST_DIAG_FAIL=1 env "${ENV[@]}" sh "$HELPER" diag-start)"
+printf '%s\n' "$FAIL_DIAG" | grep -Fqx 'status=started' || { echo 'FAIL debug support: failing diag did not launch' >&2; exit 1; }
+for _diag_try in $(seq 1 30); do
+  sleep 0.1
+  FAIL_DIAG_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status)"
+  printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'status=failed' && break
+done
+printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'status=failed' || { echo 'FAIL debug support: nonzero diag did not reach failed state' >&2; exit 1; }
+printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'error=asbdiag_exit_9' || { echo 'FAIL debug support: nonzero diag exit was not surfaced' >&2; exit 1; }
 START1="$(env "${ENV[@]}" sh "$HELPER" full-day)"
 echo "$START1" | grep -Fq 'status=started'
 REC_PID="$(printf '%s\n' "$START1" | sed -n 's/^pid=//p')"
@@ -125,6 +144,16 @@ REC_PID="$(printf '%s\n' "$START1" | sed -n 's/^pid=//p')"
 START2="$(env "${ENV[@]}" sh "$HELPER" full-day)"
 echo "$START2" | grep -Fq 'status=already_running'
 echo "$START2" | grep -Fq "pid=$REC_PID"
+
+# Deleting the exact directory published by the live recorder is an explicit cancellation.
+# The helper may stop ONLY that recorder, clear its lock and launch a new single capture.
+ORPHAN_OUT="$(cat "$TMP/state/full_day_webui.lock/output_dir")"
+[ -d "$ORPHAN_OUT" ] || { echo 'FAIL debug support: recorder did not publish output dir' >&2; exit 1; }
+rm -rf "$ORPHAN_OUT"
+RECOVERED="$(env "${ENV[@]}" sh "$HELPER" full-day)"
+printf '%s\n' "$RECOVERED" | grep -Fq 'status=started' || { echo 'FAIL debug support: removed output dir did not recover capture slot' >&2; exit 1; }
+REC_PID="$(printf '%s\n' "$RECOVERED" | sed -n 's/^pid=//p')"
+[ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo 'FAIL debug support: recovered recorder missing' >&2; exit 1; }
 
 # Repeat simultaneous starts from a clean state. One and only one recorder may be created in
 # every round; the losing request must publish the winner PID rather than relying on a
@@ -157,6 +186,11 @@ REC_PID="$(printf '%s\n' "$STALE" | sed -n 's/^pid=//p')"
 need "$HELPER" "case \"\${1:-status}\" in"
 need "$HELPER" 'mkdir "$LOCKDIR"'
 need "$HELPER" 'lock_known_dead()'
+need "$HELPER" 'full_day_output_missing()'
+need "$HELPER" 'full_day_cancel_orphan()'
+need "$HELPER" 'full_day_pid_matches_recorder()'
+need "$HELPER" 'diag_lock_known_dead()'
+need "$HELPER" 'asbdiag_exit_${_rc}'
 need "$HELPER" 'lock_wait_live_pid()'
 need "$HELPER" 'ASB_DEBUG_SUPPORT_LOCKDIR="$LOCKDIR"'
 need "$HELPER" 'diag-start) diag_start'
@@ -168,6 +202,8 @@ need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_claim()'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_claim || { echo '\''[debug-webui] guard claim failed'\''; exit 2; }'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" "trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP"
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_release'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_publish_output()'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'LK_WEBUI_OUTPUTFILE'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'FULL-DAY capture complete. Output: $LK_OUT_DIR'
 # Debug capture must expose a resolvable AudioMix owner and the evidence that made
 # a media-like workload game-like, without putting any package-manager polling in
@@ -220,6 +256,11 @@ need "$UI" '/-debug[1-9][0-9]*$/i'
 # the root bridge await, stay while the pulse is active, and close only in finally.
 need "$UI" 'id="debugActionWait"'
 need "$UI" 'debug-action-wait-sheet'
+need "$UI" 'background:#000;'
+need "$UI" 'stockRestoreToastOpen();'
+need "$UI" 'stockRestoreToastClose();'
+need "$UI" 'toast.stock-restoring'
+need "$UI" 'stockRestoreToastPulse'
 need "$UI" 'debugDiagPulse .38s'
 need "$UI" 'debugActionWaitOpen(action);'
 need "$UI" 'debugActionWaitClose();'
