@@ -1320,13 +1320,27 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
          * than introducing a per-device frequency table.  Battery, gaming, camera,
          * charging and screen-off paths remain excluded; vendor thermal is still
          * authoritative above it. */
+        /* SUSTAINED is normally excluded from the generic budget ladder to protect a
+         * genuinely heavy/video workload. The capture here exposes a narrow exception:
+         * a high-bias Smart session can be SUSTAINED while the CPU/body hotspot is warm,
+         * yet the foreground classification is only idle/light/medium and GPU remains below
+         * the HEAVY gate. Waiting for SUSTAINED to exit leaves the user under a vendor cap
+         * without ASB first lowering its own requested rail. Keep this fail-closed: no
+         * package evidence, heavy/gaming hint, invalid/high GPU, camera, charging or screen
+         * off all retain the existing no-trim SUSTAINED behavior. */
+        int surface_comfort_sustained =
+            fsm->state == ASB_STATE_SUSTAINED && g_pkg_detect_ok &&
+            g_smart_rt.app_hint <= ASB_APP_MEDIUM && m->gpu.load_valid &&
+            m->gpu.load_pct < g_asb_cfg.heavy_gpu_enter;
         if (smart_screenon_comfort && !m->bat.charging && m->misc.screen_on &&
             !m->misc.camera_active && fsm->state != ASB_STATE_GAMING &&
             m->therm.temp_valid && m->therm.surface_hotspot_c >= 43 &&
-            m->bat.current_ma >= 250)
+            m->bat.current_ma >= 250 &&
+            (fsm->state != ASB_STATE_SUSTAINED || surface_comfort_sustained))
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_moderate_trim_pct,
-                             "surface_comfort_smart");
+                             surface_comfort_sustained ? "surface_comfort_smart_sustained"
+                                                       : "surface_comfort_smart");
         /* Camera deadlines are a QoS lease: do not introduce a light-only trim
          * during capture. Real thermal stress still wins at moderate/severe. */
         if (m->misc.camera_active && candidate <= g_asb_cfg.thermal_budget_light_trim_pct) {
@@ -6447,7 +6461,13 @@ int main(int argc, char **argv) {
                 g_msm_boost_active = boost_want;
             }
             if ((fsm.state == ASB_STATE_HEAVY || fsm.state == ASB_STATE_GAMING
-                 || fsm.state == ASB_STATE_SUSTAINED) && !fsm.thermal_cap) {
+                 || fsm.state == ASB_STATE_SUSTAINED) && !fsm.thermal_cap &&
+                /* Smart is an energy/heat profile. Its calculated caps remain applied by the
+                 * normal writer, but it must never enter the anti-clamp reassert path that
+                 * tries to lift a foreign vendor ceiling. This avoids wasted writes/backoff
+                 * during vendor-held light-use caps and preserves anti-clamp for the explicit
+                 * Performance/Balanced paths where the user requested performance. */
+                fsm.profile_idx != PROFILE_SMART) {
                 /* anti-clamp with cadence ladder
                  * Stages: IDLE -> BURST(2s,3 attempts) -> HOLD(4s) -> BACKOFF(30s)
                  * Detection: gap > 500kHz on either cluster + temp < 95 + headroom >= 60%
