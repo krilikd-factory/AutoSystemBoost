@@ -95,13 +95,19 @@ _profile_order="$(grep -E 'class=\"pbtn[^\"]*\" data-p=\"(smart|performance|bala
 need "$UI" "['stock','performance','balanced','battery','smart'].includes(p)"
 need "$UI" "T('t_stock_applied'"
 need "$UI" "let _selectedProfile = 'none';"
-need "$UI" 'function paintStockLive() {'
+need "$UI" 'function paintStockLive(stockKv = null) {'
+need "$UI" 'let _stockTelemetryKv = {};'
 need "$UI" 'id="stockTelemetry"'
+need "$UI" '.stock-telemetry { display:none !important;'
 need "$UI" 'async function pollStockTelemetry(visible, force = false)'
 need "$UI" '/sys/class/power_supply/battery'
 need "$UI" '/sys/devices/system/cpu/cpufreq/policy'
-need "$UI" "if (_selectedProfile === 'stock') paintStockLive();"
-! grep -A70 'async function pollStockTelemetry' "$UI" | grep -Eq 'settings put|resetprop|tee .*\/sys|echo .*\/sys' || fail 'Stock telemetry contains a write operation'
+need "$UI" "_stockTelemetryKv = kv;"
+need "$UI" 'paintStockLive(_stockTelemetryKv);'
+need "$UI" "set('liveCpu'"
+need "$UI" "set('liveGpu'"
+need "$UI" "set('liveHeadroom'"
+! grep -A90 'async function pollStockTelemetry' "$UI" | grep -Eq 'settings put|resetprop|tee .*\/sys|echo .*\/sys' || fail 'Stock telemetry contains a write operation'
 need "$UI" "if (visible && _selectedProfile === 'stock') {"
 need "$UI" "const off = T('prof_stock_sub', 'ASB policy off');"
 need "$UI" 'gap: 8px;'
