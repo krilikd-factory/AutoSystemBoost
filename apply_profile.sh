@@ -145,7 +145,7 @@ asb_update_desc_fallback() {
     performance) _s='description=status: Performance 🔥 | active ✅' ;;
     battery) _s='description=status: Battery 🔋 | active ✅' ;;
     smart) _s='description=status: Smart Mode 🤖 | active ✅' ;;
-    stock) _s='description=status: Stock ◻️ | ASB performance policy stopped' ;;
+    stock) _s='description=status: Stock 👶🏻 | active ✅' ;;
     *) _s='description=status: Balanced ⚖️ | active ✅' ;;
   esac
   sed "s/^description=.*/$_s/g" "$MODDIR/module.prop" > "$MODDIR/module.prop.tmp" 2>/dev/null || true
