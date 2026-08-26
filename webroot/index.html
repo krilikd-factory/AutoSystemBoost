@@ -2333,13 +2333,15 @@ body.config-active #livePage.open {
  * hidden immediate command. It shares the ASB dark/teal language but has neutral and
  * amber choices that tell a configuration reset from a Smart-learning reset apart. */
 .cfg-reset-modal[hidden] { display:none !important; }
-.cfg-reset-modal { position:fixed; z-index:1410; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,.72); backdrop-filter:blur(6px); }
-.cfg-reset-dialog { width:min(100%, 372px); box-sizing:border-box; padding:19px 17px 18px; border:1px solid transparent; border-radius:26px; color:#edf5f3; background:linear-gradient(160deg,#0c1415,#070a0b 78%) padding-box, linear-gradient(135deg,rgba(76,232,193,.72),rgba(44,214,173,.22),rgba(76,232,193,.54)) border-box; box-shadow:0 20px 64px rgba(0,0,0,.62); }
+.cfg-reset-modal { position:fixed; z-index:1410; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,.91); backdrop-filter:none; -webkit-backdrop-filter:none; }
+/* Reset is a consequential action, but it remains part of the same true-black WebUI surface.
+   Keep the teal border and amber Smart-learning accent; neither reintroduces grey card fills. */
+.cfg-reset-dialog { width:min(100%, 372px); box-sizing:border-box; padding:19px 17px 18px; border:1px solid transparent; border-radius:26px; color:#edf5f3; background:#000 padding-box, linear-gradient(135deg,rgba(76,232,193,.72),rgba(44,214,173,.22),rgba(76,232,193,.54)) border-box; box-shadow:0 20px 64px rgba(0,0,0,.84),0 0 24px rgba(44,214,173,.10); }
 .cfg-reset-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:9px; }
 .cfg-reset-title { font-size:18px; font-weight:800; }
-.cfg-reset-close { flex:0 0 auto; width:34px; height:34px; padding:0; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); font-size:20px; }
+.cfg-reset-close { flex:0 0 auto; width:34px; height:34px; padding:0; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:#000; font-size:20px; }
 .cfg-reset-copy { margin:0 0 14px; color:rgba(231,234,238,.62); font-size:12px; line-height:1.42; }
-.cfg-reset-choice { width:100%; display:block; margin:0 0 9px; padding:13px 12px; text-align:left; border:1px solid rgba(255,255,255,.14); border-radius:14px; color:#eef5f3; background:rgba(255,255,255,.045); }
+.cfg-reset-choice { width:100%; display:block; margin:0 0 9px; padding:13px 12px; text-align:left; border:1px solid rgba(255,255,255,.14); border-radius:14px; color:#eef5f3; background:#050505; }
 .cfg-reset-choice:last-child { margin-bottom:0; }
 .cfg-reset-choice .cfg-reset-choice-title { display:block; font-size:13px; font-weight:800; }
 .cfg-reset-choice .cfg-reset-choice-copy { display:block; margin-top:4px; color:rgba(231,234,238,.57); font-size:11px; line-height:1.35; }
@@ -6534,29 +6536,34 @@ async function pollLive(visible) {
         surfaceEl.textContent = surf > 0 ? surf + '°C' : '—';
       }
 
-      // Vendor clamp counts
+      // Vendor cap period — `vendor_clamp_1h` is a poll-observation counter, not a count of
+      // independent thermal incidents. Show the active owner-held period here; raw samples stay
+      // in asbdiag / 24h evidence where their collection cadence is visible.
       const clampEl = _el('liveClamp');
       if (clampEl) {
-          const c1h = parseInt(kv.vendor_clamp_1h || '0', 10);
-          const cTot = parseInt(kv.vendor_clamp_total || '0', 10);
           const clampLabel = clampEl.parentElement && clampEl.parentElement.querySelector('.live-cell-label');
+          const vendorPeriodActive = capSrc === 'vendor_clamp' || String(kv.cap_owner || '') === 'vendor';
+          const ownerSince = parseInt(kv.cap_owner_since || '0', 10);
+          const elapsed = ownerSince > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - ownerSince) : 0;
+          const mins = Math.floor(elapsed / 60);
+          const fmt = (key, fallback, values) => {
+            let s = T(key, fallback);
+            Object.keys(values || {}).forEach(k => { s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), String(values[k])); });
+            return s;
+          };
+          const duration = mins < 1
+            ? T('cap_period_just_now', 'just now')
+            : (mins < 60
+              ? fmt('cap_period_minutes', '{n} min', {n: mins})
+              : fmt('cap_period_hours_minutes', '{h} h {m} min', {h: Math.floor(mins / 60), m: mins % 60}));
           clampEl.className = 'live-cell-value';
-          if (capSrc === 'vendor_clamp') {
-            // These are observations of the OEM/vendor governor, not ASB restrictions. A red
-            // alarm-style counter made external cap pressure look like ASB was issuing 320
-            // new limits per hour, exactly the wrong conclusion for a diagnostic screen.
-            if (clampLabel) clampLabel.textContent = (ASB_LANG === 'ru') ? 'Кепы vendor: 1ч / всего' : 'Vendor caps · 1h / total';
-            clampEl.title = (ASB_LANG === 'ru')
-              ? 'Наблюдаемые изменения лимитов со стороны vendor/ROM. ASB не повышает эти частоты; это не число новых ограничений ASB.'
-              : 'Observed vendor/ROM cap changes. ASB does not raise these frequencies; this is not a count of new ASB restrictions.';
+          if (clampLabel) clampLabel.textContent = T('lv_vendor_period', 'Vendor cap period');
+          if (vendorPeriodActive) {
+            clampEl.textContent = fmt('cap_period_active', 'active · {time}', {time: duration});
+            clampEl.title = T('cap_period_tip', 'One continuous vendor-held period can contain many polling samples. Raw samples remain in asbdiag and the 24h report.');
           } else {
-            if (clampLabel) clampLabel.textContent = T('lv_clamp', 'Clamp 1h / total');
-            clampEl.title = '';
-          }
-          if (c1h > 0 || cTot > 0) {
-            clampEl.textContent = c1h + ' / ' + cTot;
-          } else {
-            clampEl.textContent = 'none';
+            clampEl.textContent = T('cap_period_none', 'no active vendor cap');
+            clampEl.title = T('cap_period_none_tip', 'No vendor-held cap is active now. Historical polling samples are available only in detailed diagnostics.');
           }
       }
     } catch(e) {}
