@@ -559,10 +559,15 @@ lk_emit_full_day_report() {
     _bt_ctx="$LK_OUT_DIR/bt_lifecycle_context.tsv"
     if [ -r "$_bt_ev" ]; then
       _bt_n=$(awk '!/^#/ && NF>=4 {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
-      _bt_c=$(awk '!/^#/ && $3=="connect" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
-      _bt_d=$(awk '!/^#/ && $3=="disconnect" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      _bt_hfp_c=$(awk '!/^#/ && $3=="hfp_audio_connect" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      _bt_hfp_d=$(awk '!/^#/ && $3=="hfp_audio_disconnect" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      _bt_a2dp_c=$(awk '!/^#/ && $3=="a2dp_profile_connect" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      _bt_a2dp_d=$(awk '!/^#/ && $3=="a2dp_profile_disconnect" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      _bt_gc=$(awk '!/^#/ && $3=="connect_generic" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      _bt_gd=$(awk '!/^#/ && $3=="disconnect_generic" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
       _bt_r=$(awk '!/^#/ && $3=="reconnect_literal" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
-      echo "lifecycle events: $_bt_n  connect=$_bt_c  disconnect=$_bt_d  explicit_reconnect=$_bt_r"
+      echo "lifecycle events: $_bt_n  A2DP profile=$_bt_a2dp_c/$_bt_a2dp_d (connect/disconnect)  HFP audio=$_bt_hfp_c/$_bt_hfp_d (attach/detach)  generic=$_bt_gc/$_bt_gd  explicit_reconnect=$_bt_r"
+      echo "HFP audio detach is not a Bluetooth-device disconnect; A2DP profile disconnect is the media-profile evidence."
       echo "see bt_lifecycle_events.tsv for timestamped stack evidence and bt_lifecycle_context.tsv for nearest audio route context."
       echo "A route/context row alone is not counted as a reconnect."
     else
@@ -581,8 +586,8 @@ lk_emit_full_day_report() {
     echo "* 'audio_bt' / 'audio_spk' / 'audio_wired' = media was playing on that"
     echo "  route. Compare pct/h and cpuT between BT and speaker playback, and"
     echo "  read audio_trace.txt for codec / offload / effect state per route."
-    echo "* Bluetooth reconnects: use bt_lifecycle_events.tsv; it contains only explicit"
-    echo "  stack lifecycle evidence. Use bt_lifecycle_context.tsv to correlate it with route/playback."
+    echo "* Bluetooth evidence: `hfp_audio_disconnect` is an HFP/SCO audio-link detach, not a device loss;"
+    echo "  `a2dp_profile_disconnect` is the media-profile disconnect evidence. Use context to correlate route/playback."
     echo "* kernel_params.txt captures governors, sched, io, walt and vm tunables"
     echo "  (stock vs custom kernel); network_trace.txt captures the data path,"
     echo "  signal, tcp tunables and rmnet/wlan counters."

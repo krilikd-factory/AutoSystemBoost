@@ -1899,14 +1899,23 @@ lk_bt_redact_addr() {
 lk_bt_lifecycle_kind() {
   # Only explicit stack lifecycle wording is classified. Audio route snapshots, codec feature
   # names and a later `Devices: bt_a2dp` line are never turned into invented reconnect events.
-  # Shell patterns avoid spawning several grep processes for every Bluetooth stack line.
+  #
+  # `HeadsetService: disconnectAudio` is an HFP/SCO audio-link detach, not proof that the
+  # Bluetooth device disconnected.  Earlier reports called all of these `disconnect`, which
+  # made routine car-call/audio-focus churn look like a headset reconnect storm.  Keep it as
+  # useful evidence, but separate it from A2DP profile state 2->3->0, which is a real media
+  # profile disconnect.  Shell patterns avoid spawning grep for every stack line.
   case "$1" in
     # Static feature/config labels are not disconnect events (this exact false positive existed
     # in V63 audio_trace archives and must never enter lifecycle TSV evidence).
     *disconnect_hid_channels_serially*) return 0 ;;
     *reconnect*|*Reconnect*|*RECONNECT*) printf '%s' 'reconnect_literal' ;;
-    *disconnect*|*Disconnect*|*DISCONNECT*) printf '%s' 'disconnect' ;;
-    *connect*|*Connect*|*CONNECT*|*connection_state*|*CONNECTION_STATE*) printf '%s' 'connect' ;;
+    *HeadsetService:*disconnectAudio:*|*BluetoothHeadset:*disconnectAudio:*) printf '%s' 'hfp_audio_disconnect' ;;
+    *HeadsetService:*connectAudio:*|*BluetoothHeadset:*connectAudio:*) printf '%s' 'hfp_audio_connect' ;;
+    *A2dpService:*connectionStateChanged*state:*2-\>3*|*A2dpService:*connectionStateChanged*state:*3-\>0*) printf '%s' 'a2dp_profile_disconnect' ;;
+    *A2dpService:*connectionStateChanged*state:*0-\>1*|*A2dpService:*connectionStateChanged*state:*1-\>2*|*A2dpService:*okToConnect:*) printf '%s' 'a2dp_profile_connect' ;;
+    *disconnect*|*Disconnect*|*DISCONNECT*) printf '%s' 'disconnect_generic' ;;
+    *connect*|*Connect*|*CONNECT*|*connection_state*|*CONNECTION_STATE*) printf '%s' 'connect_generic' ;;
   esac
 }
 
@@ -1953,7 +1962,7 @@ lk_bt_reconnect_start() {
   {
     echo "# ASB Bluetooth lifecycle events (read-only)"
     echo "# epoch<TAB>iso_utc<TAB>event<TAB>source"
-    echo "# event=reconnect_literal only when stack log writes reconnect; connect/disconnect are separate evidence"
+    echo "# event types distinguish HFP audio-link attach/detach from A2DP media-profile state; reconnect_literal needs literal stack wording"
     echo "# MAC addresses and device names are not recorded; source is a coarse service family"
     echo "# started_epoch=$(date +%s)"
   } > "$LK_BT_RECONNECT_EVENTS"
@@ -1964,7 +1973,7 @@ lk_bt_reconnect_start() {
   {
     echo "# ASB Bluetooth stack evidence (read-only, Bluetooth addresses redacted)"
     echo "# epoch<TAB>iso_utc<TAB>redacted_stack_line"
-    echo "# This file preserves only lines that matched connect/disconnect lifecycle filters."
+    echo "# This file preserves only lines that matched HFP/A2DP/generic lifecycle filters."
   } > "$LK_BT_RECONNECT_RAW"
   if ! command -v logcat >/dev/null 2>&1; then
     echo "# status=unavailable_logcat" >> "$LK_BT_RECONNECT_EVENTS"
