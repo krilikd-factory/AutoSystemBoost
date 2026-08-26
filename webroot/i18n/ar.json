@@ -530,5 +530,13 @@
   "stock_live_battery": "حالة البطارية المباشرة",
   "stock_cap_owner": "مالك الحد",
   "stock_asb_learner": "متعلم ASB",
-  "stock_gpu_load": "حمل GPU"
+  "stock_gpu_load": "حمل GPU",
+  "lv_vendor_period": "فترة حدّ المورّد",
+  "cap_period_active": "نشط · {time}",
+  "cap_period_none": "لا يوجد حدّ مورّد نشط",
+  "cap_period_none_tip": "لا يوجد حدّ يحتفظ به المورّد حالياً. عينات الاستطلاع التاريخية متاحة فقط في التشخيصات التفصيلية.",
+  "cap_period_just_now": "الآن",
+  "cap_period_minutes": "{n} د",
+  "cap_period_hours_minutes": "{h} س {m} د",
+  "cap_period_tip": "قد تتضمن فترة واحدة مستمرة يحتفظ بها المورّد العديد من عينات الاستطلاع. تبقى العينات الخام في asbdiag وتقرير 24 ساعة."
 }

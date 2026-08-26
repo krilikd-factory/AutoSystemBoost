@@ -530,5 +530,13 @@
   "stock_live_battery": "实时电池",
   "stock_cap_owner": "限制来源",
   "stock_asb_learner": "ASB 学习",
-  "stock_gpu_load": "GPU 负载"
+  "stock_gpu_load": "GPU 负载",
+  "lv_vendor_period": "厂商上限持续期",
+  "cap_period_active": "当前 · {time}",
+  "cap_period_none": "当前无厂商上限",
+  "cap_period_none_tip": "当前没有厂商持续保持的上限。历史轮询样本仅在详细诊断中提供。",
+  "cap_period_just_now": "刚刚",
+  "cap_period_minutes": "{n} 分钟",
+  "cap_period_hours_minutes": "{h} 小时 {m} 分钟",
+  "cap_period_tip": "一个连续的厂商保持期可包含许多轮询样本。原始样本保留在 asbdiag 和 24 小时报告中。"
 }

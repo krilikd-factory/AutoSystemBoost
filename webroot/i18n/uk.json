@@ -530,5 +530,13 @@
   "stock_live_battery": "Батарея зараз",
   "stock_cap_owner": "Джерело кепа",
   "stock_asb_learner": "Навчання ASB",
-  "stock_gpu_load": "Навантаження GPU"
+  "stock_gpu_load": "Навантаження GPU",
+  "lv_vendor_period": "Період ліміту vendor",
+  "cap_period_active": "активний · {time}",
+  "cap_period_none": "немає активного ліміту vendor",
+  "cap_period_none_tip": "Зараз vendor не утримує ліміт. Історичні poll samples доступні лише в детальній діагностиці.",
+  "cap_period_just_now": "щойно",
+  "cap_period_minutes": "{n} хв",
+  "cap_period_hours_minutes": "{h} год {m} хв",
+  "cap_period_tip": "Один безперервний період, який утримує vendor, може містити багато poll samples. Сирі samples залишаються в asbdiag та 24h report."
 }

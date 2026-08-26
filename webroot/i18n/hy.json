@@ -684,5 +684,13 @@
   "stock_live_battery": "Մարտկոց՝ ուղիղ",
   "stock_cap_owner": "Սահմանի աղբյուր",
   "stock_asb_learner": "ASB ուսուցում",
-  "stock_gpu_load": "GPU բեռ"
+  "stock_gpu_load": "GPU բեռ",
+  "lv_vendor_period": "Արտադրողի սահմանափակման շրջան",
+  "cap_period_active": "ակտիվ · {time}",
+  "cap_period_none": "արտադրողի ակտիվ սահմանափակում չկա",
+  "cap_period_none_tip": "Այս պահին արտադրողի կողմից պահվող սահմանափակում չկա։ Պատմական հարցման նմուշները հասանելի են միայն մանրամասն ախտորոշման մեջ։",
+  "cap_period_just_now": "հենց հիմա",
+  "cap_period_minutes": "{n} ր",
+  "cap_period_hours_minutes": "{h} ժ {m} ր",
+  "cap_period_tip": "Արտադրողի կողմից պահվող մեկ անընդհատ շրջանը կարող է ներառել բազմաթիվ հարցման նմուշներ։ Հում նմուշները մնում են asbdiag-ում և 24-ժամյա հաշվետվությունում։"
 }

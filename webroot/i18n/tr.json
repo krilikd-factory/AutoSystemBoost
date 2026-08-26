@@ -530,5 +530,13 @@
   "stock_live_battery": "Canlı batarya",
   "stock_cap_owner": "Limit sahibi",
   "stock_asb_learner": "ASB öğrenimi",
-  "stock_gpu_load": "GPU yükü"
+  "stock_gpu_load": "GPU yükü",
+  "lv_vendor_period": "Sağlayıcı limit dönemi",
+  "cap_period_active": "etkin · {time}",
+  "cap_period_none": "etkin sağlayıcı limiti yok",
+  "cap_period_none_tip": "Şu anda sağlayıcının tuttuğu bir limit etkin değil. Geçmiş yoklama örnekleri yalnızca ayrıntılı tanılarda bulunur.",
+  "cap_period_just_now": "az önce",
+  "cap_period_minutes": "{n} dk",
+  "cap_period_hours_minutes": "{h} sa {m} dk",
+  "cap_period_tip": "Sağlayıcının tuttuğu tek bir kesintisiz dönem çok sayıda yoklama örneği içerebilir. Ham örnekler asbdiag ve 24 saat raporunda kalır."
 }

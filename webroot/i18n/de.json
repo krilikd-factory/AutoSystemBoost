@@ -530,5 +530,13 @@
   "stock_live_battery": "Batterie live",
   "stock_cap_owner": "Limit-Inhaber",
   "stock_asb_learner": "ASB-Lernen",
-  "stock_gpu_load": "GPU-Last"
+  "stock_gpu_load": "GPU-Last",
+  "lv_vendor_period": "Vendor-Cap-Zeitraum",
+  "cap_period_active": "aktiv · {time}",
+  "cap_period_none": "kein aktives Vendor-Limit",
+  "cap_period_none_tip": "Derzeit ist kein vom Vendor gehaltener Grenzwert aktiv. Historische Polling-Samples stehen nur in der Detaildiagnose zur Verfügung.",
+  "cap_period_just_now": "gerade eben",
+  "cap_period_minutes": "{n} Min.",
+  "cap_period_hours_minutes": "{h} Std. {m} Min.",
+  "cap_period_tip": "Ein zusammenhängender Vendor-Haltezeitraum kann viele Polling-Samples enthalten. Rohsamples bleiben in asbdiag und im 24h-Bericht."
 }

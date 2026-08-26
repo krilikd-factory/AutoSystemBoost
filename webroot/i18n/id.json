@@ -530,5 +530,13 @@
   "stock_live_battery": "Baterai langsung",
   "stock_cap_owner": "Pemilik batas",
   "stock_asb_learner": "Pembelajaran ASB",
-  "stock_gpu_load": "Beban GPU"
+  "stock_gpu_load": "Beban GPU",
+  "lv_vendor_period": "Periode batas vendor",
+  "cap_period_active": "aktif · {time}",
+  "cap_period_none": "tidak ada batas vendor aktif",
+  "cap_period_none_tip": "Tidak ada batas yang ditahan vendor saat ini. Sampel polling historis hanya tersedia dalam diagnostik terperinci.",
+  "cap_period_just_now": "baru saja",
+  "cap_period_minutes": "{n} mnt",
+  "cap_period_hours_minutes": "{h} j {m} mnt",
+  "cap_period_tip": "Satu periode berkelanjutan yang ditahan vendor dapat berisi banyak sampel polling. Sampel mentah tetap ada di asbdiag dan laporan 24 jam."
 }

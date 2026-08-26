@@ -530,5 +530,13 @@
   "stock_live_battery": "Batería en directo",
   "stock_cap_owner": "Origen del límite",
   "stock_asb_learner": "Aprendizaje ASB",
-  "stock_gpu_load": "Carga de GPU"
+  "stock_gpu_load": "Carga de GPU",
+  "lv_vendor_period": "Período de límite del proveedor",
+  "cap_period_active": "activo · {time}",
+  "cap_period_none": "sin límite activo del proveedor",
+  "cap_period_none_tip": "No hay un límite mantenido por el proveedor activo ahora. Las muestras históricas solo están en los diagnósticos detallados.",
+  "cap_period_just_now": "ahora mismo",
+  "cap_period_minutes": "{n} min",
+  "cap_period_hours_minutes": "{h} h {m} min",
+  "cap_period_tip": "Un período continuo mantenido por el proveedor puede incluir muchas muestras de sondeo. Las muestras brutas permanecen en asbdiag y en el informe de 24 h."
 }

@@ -530,5 +530,13 @@
   "stock_live_battery": "Batteria live",
   "stock_cap_owner": "Origine limite",
   "stock_asb_learner": "Apprendimento ASB",
-  "stock_gpu_load": "Carico GPU"
+  "stock_gpu_load": "Carico GPU",
+  "lv_vendor_period": "Periodo limite vendor",
+  "cap_period_active": "attivo · {time}",
+  "cap_period_none": "nessun limite vendor attivo",
+  "cap_period_none_tip": "Nessun limite mantenuto dal vendor è attivo ora. I campioni storici sono disponibili solo nella diagnostica dettagliata.",
+  "cap_period_just_now": "proprio ora",
+  "cap_period_minutes": "{n} min",
+  "cap_period_hours_minutes": "{h} h {m} min",
+  "cap_period_tip": "Un periodo continuo mantenuto dal vendor può contenere molti campioni di polling. I campioni grezzi restano in asbdiag e nel report di 24 h."
 }

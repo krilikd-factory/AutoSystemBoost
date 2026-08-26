@@ -447,5 +447,13 @@
   "stock_live_battery": "Battery live",
   "stock_cap_owner": "Cap owner",
   "stock_asb_learner": "ASB learner",
-  "stock_gpu_load": "GPU load"
+  "stock_gpu_load": "GPU load",
+  "lv_vendor_period": "Vendor cap period",
+  "cap_period_active": "active · {time}",
+  "cap_period_none": "no active vendor cap",
+  "cap_period_none_tip": "No vendor-held cap is active now. Historical polling samples are available only in detailed diagnostics.",
+  "cap_period_just_now": "just now",
+  "cap_period_minutes": "{n} min",
+  "cap_period_hours_minutes": "{h} h {m} min",
+  "cap_period_tip": "One continuous vendor-held period can contain many polling samples. Raw samples remain in asbdiag and the 24h report."
 }
