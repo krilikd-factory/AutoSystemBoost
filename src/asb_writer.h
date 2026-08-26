@@ -1082,14 +1082,15 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                         strcmp(g_cpu_all_max_paths[k], g_cpu_max_paths[i]) == 0) { _mi = k; break; }
                 }
                 if (_mi >= 0) {
-                    /* A screen-off Smart DEEP_IDLE state is the one place where an exact
-                     * hardware minimum is both meaningful and safe: the FSM has already
-                     * rejected active off-screen work into LIGHT_IDLE, and the scheduler can
-                     * still raise frequency on demand. Do not apply this shortcut to manual
-                     * profiles, LIGHT_IDLE audio/decode, camera, thermal, or screen-on work. */
-                    if (fsm_profile_is_smart && state == ASB_STATE_DEEP_IDLE) {
-                        long deep_opp = cpu_lowest_opp(_mi);
-                        if (deep_opp > 0) want_min = (int)deep_opp;
+                    /* In Smart, a profile-derived minimum is an energy regression whenever
+                     * the state is not HEAVY/GAMING: the scheduler can still request a high
+                     * OPP immediately, while a 6-core little policy otherwise stays pinned at
+                     * its Balanced floor during feeds, video decode and sustained cooldown.
+                     * Use each physical policy's real lowest OPP; manual profiles and
+                     * HEAVY/GAMING keep their requested floors unchanged. */
+                    if (fsm_profile_is_smart && state <= ASB_STATE_SUSTAINED) {
+                        long smart_opp = cpu_lowest_opp(_mi);
+                        if (smart_opp > 0) want_min = (int)smart_opp;
                     } else {
                         want_min = (int)cpu_snap_freq(_mi, (long)want_min);
                     }
@@ -1128,9 +1129,9 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             if (want_min <= 0) continue;
             int cur_max = sysfs_read_int(g_cpu_all_max_paths[j], 0);
             if (cur_max > 0 && want_min > cur_max) want_min = cur_max;
-            if (fsm_profile_is_smart && state == ASB_STATE_DEEP_IDLE) {
-                long deep_opp = cpu_lowest_opp(j);
-                if (deep_opp > 0) want_min = (int)deep_opp;
+            if (fsm_profile_is_smart && state <= ASB_STATE_SUSTAINED) {
+                long smart_opp = cpu_lowest_opp(j);
+                if (smart_opp > 0) want_min = (int)smart_opp;
             } else {
                 want_min = (int)cpu_snap_freq(j, (long)want_min);
             }
