@@ -1451,14 +1451,15 @@ for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
   P "        hw_range : $_cmin .. $_cmax"
   P "        scaling  : min=$_smin max=$_smax cur=$_cur"
   P "        lowest_opp: ${_lowest:-unknown}"
-  if [ "$_prof_live" = "smart" ] && [ "$_state_live" = "DEEP_IDLE" ] && [ -n "$_lowest" ]; then
+  case "$_state_live" in DEEP_IDLE|LIGHT_IDLE|MODERATE|SUSTAINED) _smart_low_floor_state=1 ;; *) _smart_low_floor_state=0 ;; esac
+  if [ "$_prof_live" = "smart" ] && [ "$_smart_low_floor_state" = "1" ] && [ -n "$_lowest" ]; then
     if [ "$_smin" = "$_lowest" ]; then
-      P "        deep-idle minimum: [PASS] Smart requested hardware lowest OPP"
+      P "        smart minimum: [PASS] Smart requested hardware lowest OPP"
     else
-      P "        deep-idle minimum: [WARN] want=$_lowest live=${_smin:-unknown} (vendor/kernel override or write failure)"
+      P "        smart minimum: [WARN] want=$_lowest live=${_smin:-unknown} (vendor/kernel override or write failure)"
     fi
   else
-    P "        deep-idle minimum: not expected (profile=${_prof_live:-none} state=${_state_live:-unknown})"
+    P "        smart minimum: not expected (profile=${_prof_live:-none} state=${_state_live:-unknown})"
   fi
   P "        available: $(cat "$_pol/scaling_available_frequencies" 2>/dev/null)"
   # governor tunables that shape responsiveness (schedutil / walt)

@@ -46,7 +46,8 @@ else
   _owner="service_manual"
 fi
 _fsm_state="$(_state state)"
-if [ "$_owner" = "governor_fsm" ] && [ "$_fsm_state" = "DEEP_IDLE" ]; then
+case "$_fsm_state" in DEEP_IDLE|LIGHT_IDLE|MODERATE|SUSTAINED) _smart_low_floor_state=1 ;; *) _smart_low_floor_state=0 ;; esac
+if [ "$_owner" = "governor_fsm" ] && [ "$_smart_low_floor_state" = "1" ]; then
   _cpu_min_strategy="hardware_lowest_opp"
 elif [ "$_owner" != "rom_stock" ]; then
   _cpu_min_strategy="profile_floor"
@@ -74,7 +75,7 @@ fi
 printf '{'
 printf '"config_health":"%s","duplicate_key_count":%s,' "$(_json "$_cfg_health")" "$_dups"
 printf '"profile":{"requested":"%s","smart_enabled":"%s","cap_owner":"%s"},' "$(_json "$_prof")" "$(_json "$_sm")" "$(_json "$_owner")"
-printf '"cpu_min_policy":{"strategy":"%s","fsm_state":"%s","scope":"smart_deep_idle_only"},' "$(_json "$_cpu_min_strategy")" "$(_json "$_fsm_state")"
+printf '"cpu_min_policy":{"strategy":"%s","fsm_state":"%s","scope":"smart_non_gaming"},' "$(_json "$_cpu_min_strategy")" "$(_json "$_fsm_state")"
 printf '"thermal":{"sustained_enter_requested":"%s","runtime_floor":"%s"},' "$(_json "$(_cfg sustained_temp_enter)")" "$(_json "$_floor")"
 printf '"features":{"camera":"%s","bt":"%s","net":"%s","kernel":"%s","log":"%s","vendor_overlay":"%s"},' \
   "$(_json "$(_feat CAMERA)")" "$(_json "$(_feat BT)")" "$(_json "$(_feat NET)")" "$(_json "$(_feat KERNEL)")" "$(_json "$(_feat LOG)")" "$(_json "$(_feat VENDOR_OVERLAY)")"
