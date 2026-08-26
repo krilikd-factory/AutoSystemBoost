@@ -427,7 +427,11 @@
   "dbg_log_failed": "Could not start 24h log",
   "prof_stock": "Stock",
   "prof_stock_sub": "ASB policy off",
-  "t_stock_applied": "Stock active · ASB policy stopped · reboot recommended",
+  "t_stock_applied": "Stock active · ASB policy stopped",
   "dbg_diag_wait": "asbdiag started · please wait",
-  "dbg_log_wait": "24h log is starting · please wait"
+  "dbg_log_wait": "24h log is starting · please wait",
+  "stock_cpu_clock": "CPU clock",
+  "stock_load": "System load",
+  "stock_battery": "Battery",
+  "stock_uptime": "Uptime"
 }

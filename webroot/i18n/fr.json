@@ -664,7 +664,11 @@
   "cfg_reset_smart_title": "Réinitialiser l’apprentissage Smart",
   "prof_stock": "D’origine",
   "prof_stock_sub": "Politique ASB désactivée",
-  "t_stock_applied": "Profil d’origine actif · politique ASB arrêtée · redémarrage recommandé",
+  "t_stock_applied": "Profil d’origine actif · politique ASB arrêtée",
   "dbg_diag_wait": "asbdiag démarré · veuillez patienter",
-  "dbg_log_wait": "Le journal 24h démarre · veuillez patienter"
+  "dbg_log_wait": "Le journal 24h démarre · veuillez patienter",
+  "stock_cpu_clock": "Fréquence CPU",
+  "stock_load": "Charge système",
+  "stock_battery": "Batterie",
+  "stock_uptime": "Temps de fonctionnement"
 }

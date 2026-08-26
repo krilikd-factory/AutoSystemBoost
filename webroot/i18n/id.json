@@ -296,8 +296,7 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
-    }
-  ,
+    },
     "net_handover_fast": {
       "0": "Stok",
       "1": "Cepat"
@@ -511,7 +510,11 @@
   "cfg_reset_smart_title": "Atur ulang pembelajaran Smart",
   "prof_stock": "Bawaan",
   "prof_stock_sub": "Kebijakan ASB mati",
-  "t_stock_applied": "Bawaan aktif · kebijakan ASB dihentikan · disarankan mulai ulang",
+  "t_stock_applied": "Bawaan aktif · kebijakan ASB dihentikan",
   "dbg_diag_wait": "asbdiag dimulai · harap tunggu",
-  "dbg_log_wait": "Log 24h sedang dimulai · harap tunggu"
+  "dbg_log_wait": "Log 24h sedang dimulai · harap tunggu",
+  "stock_cpu_clock": "Kecepatan CPU",
+  "stock_load": "Beban sistem",
+  "stock_battery": "Baterai",
+  "stock_uptime": "Waktu aktif"
 }

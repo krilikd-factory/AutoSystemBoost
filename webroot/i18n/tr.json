@@ -296,8 +296,7 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
-    }
-  ,
+    },
     "net_handover_fast": {
       "0": "Stok",
       "1": "Hızlı"
@@ -511,7 +510,11 @@
   "cfg_reset_smart_title": "Smart öğrenmesini sıfırla",
   "prof_stock": "Stok",
   "prof_stock_sub": "ASB ilkesi kapalı",
-  "t_stock_applied": "Stok etkin · ASB ilkesi durduruldu · yeniden başlatma önerilir",
+  "t_stock_applied": "Stok etkin · ASB ilkesi durduruldu",
   "dbg_diag_wait": "asbdiag başlatıldı · lütfen bekleyin",
-  "dbg_log_wait": "24s günlük başlatılıyor · lütfen bekleyin"
+  "dbg_log_wait": "24s günlük başlatılıyor · lütfen bekleyin",
+  "stock_cpu_clock": "CPU hızı",
+  "stock_load": "Sistem yükü",
+  "stock_battery": "Batarya",
+  "stock_uptime": "Çalışma süresi"
 }

@@ -665,7 +665,11 @@
   "dbg_log_failed": "Не удалось запустить лог на 24 ч",
   "prof_stock": "Сток",
   "prof_stock_sub": "Политика ASB выключена",
-  "t_stock_applied": "Сток активен · политика ASB остановлена · рекомендуется перезагрузка",
+  "t_stock_applied": "Сток активен · политика ASB остановлена",
   "dbg_diag_wait": "asbdiag запущен · подождите",
-  "dbg_log_wait": "24h log запускается · подождите"
+  "dbg_log_wait": "24h log запускается · подождите",
+  "stock_cpu_clock": "Частота ЦП",
+  "stock_load": "Нагрузка системы",
+  "stock_battery": "Батарея",
+  "stock_uptime": "Время работы"
 }

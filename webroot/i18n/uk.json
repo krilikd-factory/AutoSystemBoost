@@ -296,8 +296,7 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
-    }
-  ,
+    },
     "net_handover_fast": {
       "0": "Сток",
       "1": "Швидко"
@@ -511,7 +510,11 @@
   "cfg_reset_smart_title": "Скинути навчання Smart",
   "prof_stock": "Сток",
   "prof_stock_sub": "Політику ASB вимкнено",
-  "t_stock_applied": "Сток активний · політику ASB зупинено · рекомендовано перезавантаження",
+  "t_stock_applied": "Сток активний · політику ASB зупинено",
   "dbg_diag_wait": "asbdiag запущено · зачекайте",
-  "dbg_log_wait": "24h log запускається · зачекайте"
+  "dbg_log_wait": "24h log запускається · зачекайте",
+  "stock_cpu_clock": "Частота ЦП",
+  "stock_load": "Навантаження системи",
+  "stock_battery": "Акумулятор",
+  "stock_uptime": "Час роботи"
 }

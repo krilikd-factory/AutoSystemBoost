@@ -296,8 +296,7 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
-    }
-  ,
+    },
     "net_handover_fast": {
       "0": "افتراضي",
       "1": "سريع"
@@ -511,7 +510,11 @@
   "cfg_reset_smart_title": "إعادة تعيين تعلّم Smart",
   "prof_stock": "النظام",
   "prof_stock_sub": "سياسة ASB متوقفة",
-  "t_stock_applied": "النظام مفعّل · سياسة ASB متوقفة · يوصى بإعادة التشغيل",
+  "t_stock_applied": "الوضع الأصلي نشط · تم إيقاف سياسة ASB",
   "dbg_diag_wait": "بدأ asbdiag · يُرجى الانتظار",
-  "dbg_log_wait": "يبدأ سجل 24h · يُرجى الانتظار"
+  "dbg_log_wait": "يبدأ سجل 24h · يُرجى الانتظار",
+  "stock_cpu_clock": "تردد المعالج",
+  "stock_load": "حمل النظام",
+  "stock_battery": "البطارية",
+  "stock_uptime": "مدة التشغيل"
 }

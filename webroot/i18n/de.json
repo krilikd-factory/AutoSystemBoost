@@ -296,8 +296,7 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
-    }
-  ,
+    },
     "net_handover_fast": {
       "0": "Standard",
       "1": "Schnell"
@@ -511,7 +510,11 @@
   "cfg_reset_smart_title": "Smart-Lernen zurücksetzen",
   "prof_stock": "Standard",
   "prof_stock_sub": "ASB-Richtlinie aus",
-  "t_stock_applied": "Standard aktiv · ASB-Richtlinie gestoppt · Neustart empfohlen",
+  "t_stock_applied": "Stock aktiv · ASB-Richtlinie beendet",
   "dbg_diag_wait": "asbdiag gestartet · bitte warten",
-  "dbg_log_wait": "24h-Protokoll startet · bitte warten"
+  "dbg_log_wait": "24h-Protokoll startet · bitte warten",
+  "stock_cpu_clock": "CPU-Takt",
+  "stock_load": "Systemlast",
+  "stock_battery": "Akku",
+  "stock_uptime": "Laufzeit"
 }
