@@ -476,7 +476,7 @@ body::before, body::after {
   background: radial-gradient(circle at 80% 50%, rgba(0,225,200,0.45), transparent 70%) !important;
 }
 
-/* Smart icon: animated ring around emoji */
+/* Smart icon: animated ring around the adaptive hi-tech glyph */
 .pico-smart {
   background: radial-gradient(circle at 30% 30%, rgba(0,225,200,0.22), rgba(0,200,235,0.06) 70%) !important;
   border-color: rgba(0,225,200,0.35) !important;
@@ -510,11 +510,35 @@ body::before, body::after {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
-.pico-smart .ai-emoji {
+.pico-smart .tech-icon {
   position: relative;
   z-index: 2;
-  font-size: 22px;
+  width: 24px;
+  height: 24px;
 }
+
+/* One vector language for profiles, category tiles, sections and every tweak card.
+ * The glyphs are intentionally inline SVG: no bitmap load, no emoji-font substitution,
+ * and the same shape stays crisp at the user's chosen display scale. */
+.tech-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+  color: var(--tech-icon, #00e1c8);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, currentColor 52%, transparent));
+}
+.tech-icon path,
+.tech-icon circle,
+.tech-icon rect,
+.tech-icon line,
+.tech-icon polyline,
+.tech-icon polygon { vector-effect: non-scaling-stroke; }
+.pico .tech-icon { width: 24px; height: 24px; }
+.pbtn[data-p="performance"] { --tech-icon: #ff6b65; }
+.pbtn[data-p="balanced"]    { --tech-icon: #aab8cb; }
+.pbtn[data-p="battery"]     { --tech-icon: #69e59b; }
+.pbtn[data-p="stock"]       { --tech-icon: #89a6c4; }
+.pbtn[data-p="smart"]       { --tech-icon: #00e1c8; }
 
 /* Alpha tag inside name */
 .alpha-tag {
@@ -1508,6 +1532,14 @@ body.config-active #livePage.open {
   border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.04);
 }
+.cfg-tile-ico .tech-icon { width: 23px; height: 23px; }
+.cfg-tile.cat-audio   { --tech-icon: #ff5f72; }
+.cfg-tile.cat-camera  { --tech-icon: #55a0ff; }
+.cfg-tile.cat-battery { --tech-icon: #63dc91; }
+.cfg-tile.cat-ux      { --tech-icon: #ffb347; }
+.cfg-tile.cat-net     { --tech-icon: #37d2ed; }
+.cfg-tile.cat-iface   { --tech-icon: #c58aff; }
+
 .cfg-tile-name {
   font-size: 13px;
   font-weight: 600;
@@ -1623,6 +1655,7 @@ body.config-active #livePage.open {
 }
 .cfg-icon {
   flex: 0 0 auto;
+  --tech-icon: #9eb2c8;
   width: 44px;
   height: 44px;
   border-radius: 13px;
@@ -1668,6 +1701,21 @@ body.config-active #livePage.open {
 .cfg-row.is-on .cfg-icon.cat-blur    { background: rgba(167,139,250,0.18); border-color: rgba(167,139,250,0.52); }
 .cfg-row.is-on .cfg-icon.cat-motion  { background: rgba(255,95,162,0.18);  border-color: rgba(255,95,162,0.52); }
 .cfg-row.is-on .cfg-icon.cat-haptic  { background: rgba(255,179,64,0.18);  border-color: rgba(255,179,64,0.52); }
+.cfg-icon.cat-audio   { --tech-icon: #ff6174; }
+.cfg-icon.cat-camera  { --tech-icon: #58a2ff; }
+.cfg-icon.cat-battery { --tech-icon: #6fe69e; }
+.cfg-icon.cat-perf    { --tech-icon: #bc8cff; }
+.cfg-icon.cat-ux      { --tech-icon: #ffb64e; }
+.cfg-icon.cat-display { --tech-icon: #c9d0dd; }
+.cfg-icon.cat-memory  { --tech-icon: #32dccc; }
+.cfg-icon.cat-system  { --tech-icon: #b8c1cf; }
+.cfg-icon.cat-thermal { --tech-icon: #ffbc54; }
+.cfg-icon.cat-net     { --tech-icon: #39d8f0; }
+.cfg-icon.cat-iface   { --tech-icon: #cf94ff; }
+.cfg-icon.cat-blur    { --tech-icon: #b9a5ff; }
+.cfg-icon.cat-motion  { --tech-icon: #ff82bb; }
+.cfg-icon.cat-haptic  { --tech-icon: #ffbd54; }
+.cfg-icon .tech-icon { width: 22px; height: 22px; }
 .cfg-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -2209,29 +2257,35 @@ body.config-active #livePage.open {
 /* The sheet sits flush with the viewport, so its outline is a screen contour rather than
  * a separate rectangular card. Use one opaque physical 1px stroke: semi-transparent teal
  * antialiases differently against the dark page at the lower curves on some Android WebViews. */
-.cfg-profile-sheet { width: 100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow: auto; box-sizing: border-box; padding: 18px 16px 22px; border: 1px solid #35bb99; border-radius: 26px; background-color: #080d0e; background-image: linear-gradient(160deg, #0c1415, #070a0b 72%); background-clip: padding-box; box-shadow: 0 -20px 60px rgba(0,0,0,.5); }
+.cfg-profile-sheet { width:100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow:auto; box-sizing:border-box; padding:18px 16px 22px; border:1px solid #35bb99; border-radius:26px; background:#000; box-shadow:0 -20px 60px rgba(0,0,0,.70); }
 .cfg-profile-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:13px; }
 .cfg-profile-title { color:#f4f6f7; font-size:18px; font-weight:800; }
-.cfg-profile-close { flex:0 0 auto; width:34px; height:34px; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); font-size:20px; }
+.cfg-profile-close { flex:0 0 auto; width:34px; height:34px; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:#050707; font-size:20px; }
+.cfg-profile-close:disabled { opacity:.45; cursor:wait; }
 .cfg-profile-copy { color:rgba(231,234,238,.62); font-size:12px; line-height:1.42; margin:0 0 13px; }
-.cfg-profile-name { display:block; width:100%; box-sizing:border-box; min-height:45px; padding:11px 12px; color:#f5f7f7; background:#080d0e; border:1px solid rgba(44,214,173,.28); border-radius:12px; outline:none; font:inherit; }
+.cfg-profile-name { display:block; width:100%; box-sizing:border-box; min-height:45px; padding:11px 12px; color:#f5f7f7; background:#000; border:1px solid rgba(44,214,173,.28); border-radius:12px; outline:none; font:inherit; }
 .cfg-profile-name:focus { border-color:#2cd6ad; box-shadow:0 0 0 3px rgba(44,214,173,.12); }
 .cfg-profile-label { display:block; margin:13px 0 7px; color:rgba(231,234,238,.74); font-size:11px; font-weight:700; letter-spacing:.35px; text-transform:uppercase; }
 .cfg-profile-dest { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
-.cfg-profile-dest button { min-height:39px; padding:7px 5px; color:rgba(231,234,238,.72); border:1px solid rgba(255,255,255,.13); border-radius:10px; background:rgba(255,255,255,.035); font-size:11px; }
-.cfg-profile-dest button.active { color:#5ce7c3; border-color:rgba(44,214,173,.6); background:rgba(44,214,173,.12); }
+.cfg-profile-dest button { min-height:39px; padding:7px 5px; color:rgba(231,234,238,.72); border:1px solid rgba(255,255,255,.13); border-radius:10px; background:#050707; font-size:11px; }
+.cfg-profile-dest button.active { color:#5ce7c3; border-color:rgba(44,214,173,.6); background:rgba(44,214,173,.09); }
 .cfg-profile-primary { width:100%; min-height:47px; margin-top:12px; color:#04120f; border:0; border-radius:12px; background:linear-gradient(135deg,#2cd6ad,#67e4c8); font-weight:800; font-size:14px; }
 .cfg-profile-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
-.cfg-profile-row { width:100%; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; text-align:left; padding:11px 12px; color:#edf2f3; border:1px solid rgba(255,255,255,.11); border-radius:12px; background:rgba(255,255,255,.035); }
-.cfg-profile-row.selected { border-color:rgba(44,214,173,.72); background:rgba(44,214,173,.10); }
+.cfg-profile-row { width:100%; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; text-align:left; padding:11px 12px; color:#edf2f3; border:1px solid rgba(255,255,255,.11); border-radius:12px; background:#050707; }
+.cfg-profile-row.selected { border-color:rgba(44,214,173,.72); background:rgba(44,214,173,.09); }
+.cfg-profile-row:disabled { opacity:.58; cursor:wait; }
 .cfg-profile-row-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
 .cfg-profile-row-meta { color:rgba(231,234,238,.52); font-size:11px; }
 .cfg-profile-empty { padding:16px 8px; color:rgba(231,234,238,.50); text-align:center; font-size:12px; }
-.cfg-profile-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:12px; }
-.cfg-profile-actions button { min-height:42px; border:1px solid rgba(255,255,255,.16); border-radius:11px; color:#eaf0f1; background:rgba(255,255,255,.06); font-weight:700; }
-.cfg-profile-actions button.warn { color:#ffd68a; border-color:rgba(251,191,36,.38); }
+.cfg-profile-actions { display:grid; grid-template-columns:1fr; gap:8px; margin-top:12px; }
+.cfg-profile-actions.has-delete { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.cfg-profile-actions button { min-height:44px; border:1px solid rgba(255,255,255,.16); border-radius:11px; color:#eaf0f1; background:#050707; font-weight:700; }
+.cfg-profile-actions button.cfg-profile-apply { color:#04120f; border:0; background:linear-gradient(135deg,#2cd6ad,#67e4c8); }
+.cfg-profile-actions button.cfg-profile-apply.is-running { opacity:1; cursor:wait; animation:cfgProfileApplyPulse .46s cubic-bezier(.36,0,.64,1) infinite; box-shadow:0 0 0 1px rgba(120,239,255,.36),0 0 25px rgba(44,214,173,.40); }
 .cfg-profile-actions button.danger { color:#ffaaa7; border-color:rgba(248,113,113,.38); }
-.cfg-profile-preview { max-height:160px; margin:12px 0 0; padding:10px; overflow:auto; white-space:pre-wrap; color:rgba(231,234,238,.78); background:#060a0b; border:1px solid rgba(255,255,255,.09); border-radius:10px; font:10px/1.35 monospace; }
+.cfg-profile-actions button:disabled:not(.is-running) { opacity:.48; cursor:wait; }
+@keyframes cfgProfileApplyPulse { 0%,100% { transform:scale(1); filter:brightness(1) saturate(1); } 50% { transform:scale(.94); filter:brightness(1.22) saturate(1.24); } }
+.cfg-profile-progress { margin-top:10px; padding:10px 11px; color:#bdf7ea; border:1px solid rgba(44,214,173,.42); border-radius:11px; background:rgba(44,214,173,.08); font-size:11px; line-height:1.4; }
 .cfg-profile-hint { margin-top:9px; color:rgba(231,234,238,.47); font-size:10.5px; line-height:1.35; }
 /* Reset is a consequential action, so it uses a centred decision dialog instead of a
  * hidden immediate command. It shares the ASB dark/teal language but has neutral and
@@ -2385,7 +2439,7 @@ body.config-active #livePage.open {
     <div class="pbtn pbtn-smart" data-p="smart" onclick="go('smart')">
       <div class="pico pico-smart">
         <div class="ai-glow"></div>
-        <span class="ai-emoji">🤖</span>
+        <span class="tech-icon-slot" data-tech-icon="smart"></span>
       </div>
       <div class="pinfo">
         <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" data-i18n="tag_alpha">alpha</span></div>
@@ -2396,7 +2450,7 @@ body.config-active #livePage.open {
     </div>
 
     <div class="pbtn" data-p="performance" onclick="go('performance')">
-      <div class="pico">🔥</div>
+      <div class="pico" data-tech-icon="performance"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_performance">Performance</div>
       </div>
@@ -2406,7 +2460,7 @@ body.config-active #livePage.open {
 
 
     <div class="pbtn" data-p="balanced" onclick="go('balanced')">
-      <div class="pico">⚖️</div>
+      <div class="pico" data-tech-icon="balanced"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_balanced">Balanced</div>
       </div>
@@ -2415,7 +2469,7 @@ body.config-active #livePage.open {
     </div>
 
     <div class="pbtn" data-p="battery" onclick="go('battery')">
-      <div class="pico">🔋</div>
+      <div class="pico" data-tech-icon="battery"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_battery">Battery</div>
       </div>
@@ -2424,7 +2478,7 @@ body.config-active #livePage.open {
     </div>
 
     <div class="pbtn pbtn-stock on" data-p="stock" onclick="go('stock')">
-      <div class="pico">📴</div>
+      <div class="pico" data-tech-icon="stock"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_stock">Stock</div>
         <div class="psub" data-i18n="prof_stock_sub">ASB policy off</div>
@@ -2441,13 +2495,13 @@ body.config-active #livePage.open {
     <div class="footer-support-row" data-debug-support-row hidden>
       <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-        <span class="tg-link-ico">✉️</span>
+        <span class="tg-link-ico" data-tech-icon="audio"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
       <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-      <span class="tg-link-ico">✉️</span>
+      <span class="tg-link-ico" data-tech-icon="audio"></span>
       <span class="tg-link-main">@AutoSystemBoost</span>
     </a>
     <div class="tg-link-sub">ASB Telegram group</div>
@@ -2630,13 +2684,13 @@ body.config-active #livePage.open {
     <div class="footer-support-row" data-debug-support-row hidden>
       <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-        <span class="tg-link-ico">✉️</span>
+        <span class="tg-link-ico" data-tech-icon="audio"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
       <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-      <span class="tg-link-ico">✉️</span>
+      <span class="tg-link-ico" data-tech-icon="audio"></span>
       <span class="tg-link-main">@AutoSystemBoost</span>
     </a>
     <div class="tg-link-sub">ASB Telegram group</div>
@@ -2725,13 +2779,13 @@ body.config-active #livePage.open {
     <div class="footer-support-row" data-debug-support-row hidden>
       <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-        <span class="tg-link-ico">✉️</span>
+        <span class="tg-link-ico" data-tech-icon="audio"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
       <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-      <span class="tg-link-ico">✉️</span>
+      <span class="tg-link-ico" data-tech-icon="audio"></span>
       <span class="tg-link-main">@AutoSystemBoost</span>
     </a>
     <div class="tg-link-sub">ASB Telegram group</div>
@@ -2749,7 +2803,7 @@ body.config-active #livePage.open {
   <div class="cfg-profile-sheet" role="dialog" aria-modal="true" aria-labelledby="cfgProfileTitle">
     <div class="cfg-profile-head">
       <div class="cfg-profile-title" id="cfgProfileTitle" data-i18n="cfg_profile_manager_title">Saved configurations</div>
-      <button class="cfg-profile-close" type="button" onclick="cfgProfileClose()" aria-label="Close">×</button>
+      <button class="cfg-profile-close" id="cfgProfileCloseBtn" type="button" onclick="cfgProfileClose()" aria-label="Close">×</button>
     </div>
     <div id="cfgProfileBody"></div>
   </div>
@@ -2781,6 +2835,106 @@ const clickAudio = new Audio("switch.mp3"); clickAudio.preload = "auto"; try { c
 // through the very output being reconfigured - amplified by whatever gain was just set,
 // or cut mid-sample by the parameter push - so these change silently. Haptic stays.
 const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass'];
+
+/* ── Hi-tech vector language ─────────────────────────────────────────────
+ * All feature symbols are deterministic inline SVG rather than system emoji. That keeps
+ * their color, silhouette and perceived size stable across Android emoji fonts, while
+ * remaining crisp under display-density and font-scale changes. */
+const TECH_ICON_PATHS = {
+  smart:       '<path d="M8 8h8v8H8z"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="10" cy="11" r=".8" fill="currentColor"/><circle cx="14" cy="11" r=".8" fill="currentColor"/><path d="M10 14h4"/>',
+  performance: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  balanced:    '<path d="M12 3v18M5 7h14M7 7l-3 7h6L7 7zm10 0-3 7h6l-3-7z"/>',
+  battery:     '<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 2h6M9 12h6M12 8v8"/>',
+  stock:       '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 12h8M12 8v8"/><path d="m8 8 8 8"/>',
+  audio:       '<path d="M4 10v4h4l5 4V6l-5 4z"/><path d="M17 9c1.5 1.7 1.5 4.3 0 6M19.5 6.5c3 3.1 3 7.9 0 11"/>',
+  dac:         '<path d="M7 6h10v12H7z"/><path d="M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3M10 10h4v4h-4z"/>',
+  dsp:         '<path d="M4 18V6M10 18V9M16 18V4M22 18V11"/><circle cx="4" cy="11" r="2"/><circle cx="10" cy="14" r="2"/><circle cx="16" cy="9" r="2"/><circle cx="22" cy="15" r="2"/>',
+  bluetooth:   '<path d="m9 4 6 6-6 6V4zm0 8 6 6"/><path d="m4 7 12 10M4 17 9 12"/>',
+  camera:      '<path d="M4 8h4l2-3h4l2 3h4v11H4z"/><circle cx="12" cy="13" r="4"/><path d="M17 5h.01"/>',
+  target:      '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+  moon:        '<path d="M20 15.5A8 8 0 0 1 8.5 4 8 8 0 1 0 20 15.5z"/>',
+  sun:         '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/>',
+  network:     '<path d="M4 18h2M9 14h2M14 10h2M19 6h2"/><path d="M5 18 10 14l5-4 5-4"/>',
+  wifi:        '<path d="M3 9a13 13 0 0 1 18 0M6 12a9 9 0 0 1 12 0M9 15a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1" fill="currentColor"/>',
+  route:       '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h4a3 3 0 0 1 3 3v6"/><path d="m13 15 2 2 2-2"/>',
+  globe:       '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  thermal:     '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 10v7"/>',
+  shield:      '<path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>',
+  memory:      '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M3 9h3M3 12h3M3 15h3M18 9h3M18 12h3M18 15h3M9 3v3M12 3v3M15 3v3M9 18v3M12 18v3M15 18v3"/>',
+  touch:       '<path d="M12 21c-3.5 0-6-2.3-6-5.5V9.8a1.4 1.4 0 0 1 2.8 0V14"/><path d="M8.8 12.2V7a1.4 1.4 0 0 1 2.8 0v5M11.6 11V6.2a1.4 1.4 0 0 1 2.8 0V12M14.4 12V8a1.4 1.4 0 0 1 2.8 0v6.5"/><path d="m8.8 14.5-1.4-1.4a1.4 1.4 0 0 0-2 2l2.6 2.6"/>',
+  glass:       '<path d="M5 5h14v14H5z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  motion:      '<path d="M5 7h11M5 12h15M5 17h9"/><path d="m15 4 4 3-4 3M17 9l3 3-3 3M13 14l4 3-4 3"/>',
+  haptic:      '<rect x="8" y="4" width="8" height="16" rx="2"/><path d="M5 8c-1.5 2.5-1.5 5.5 0 8M19 8c1.5 2.5 1.5 5.5 0 8"/>',
+  system:      '<circle cx="12" cy="12" r="3"/><path d="M19 12h2M3 12h2M12 3v2M12 19v2M17 7l1.4-1.4M5.6 18.4 7 17M17 17l1.4 1.4M5.6 5.6 7 7"/>',
+  game:        '<path d="M7 9h10a4 4 0 0 1 3.8 5.2l-1 3A2.4 2.4 0 0 1 15.3 18l-1.1-1h-4.4l-1.1 1a2.4 2.4 0 0 1-4.5-.8l-1-3A4 4 0 0 1 7 9z"/><path d="M7 13h4M9 11v4M16 13h.01M18 11h.01"/>',
+  sleep:       '<path d="M18 4a7 7 0 1 0 2 12A8 8 0 1 1 18 4z"/><path d="M15 5h5M17.5 2.5v5"/>',
+  log:         '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  scan:        '<circle cx="10" cy="10" r="5"/><path d="m14 14 6 6M4 4l2 2M16 4l-2 2"/>',
+  limit:       '<path d="M12 3a6 6 0 0 0-3 11.2V18h6v-3.8A6 6 0 0 0 12 3z"/><path d="M9 21h6M8 11h8"/>',
+  power:       '<path d="M12 2v10M7.2 5.2a8 8 0 1 0 9.6 0"/>',
+  queue:       '<path d="M4 6h16M4 12h12M4 18h8"/><circle cx="18" cy="12" r="2"/>',
+  generic:     '<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 8v8M8.5 10l7 4M15.5 10l-7 4"/>'
+};
+function techIcon(kind) {
+  const glyph = TECH_ICON_PATHS[kind] || TECH_ICON_PATHS.generic;
+  return '<svg class="tech-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + glyph + '</svg>';
+}
+function renderStaticTechIcons() {
+  document.querySelectorAll('[data-tech-icon]').forEach(function(node) {
+    node.innerHTML = techIcon(node.getAttribute('data-tech-icon'));
+  });
+}
+
+/* Contextual sonic feedback. It is intentionally a compact synthesised cue rather than
+ * spoken TTS: no language mismatch, no network/assets, and it stays unobtrusive in a
+ * tuning interface. DSP gain/bass sliders never call this function. */
+const UI_SONIC = {
+  nav:[[540,0.035,'sine'],[690,0.045,'sine']],
+  profile:[[350,0.045,'triangle'],[520,0.055,'triangle'],[780,0.075,'sine']],
+  toggle_on:[[470,0.035,'sine'],[820,0.065,'triangle']],
+  toggle_off:[[520,0.035,'sine'],[280,0.065,'triangle']],
+  option:[[520,0.04,'triangle'],[700,0.05,'sine']],
+  range:[[430,0.04,'sine']],
+  capture:[[250,0.04,'square'],[420,0.07,'triangle']],
+  success:[[620,0.03,'sine'],[820,0.04,'sine'],[1040,0.06,'triangle']],
+  error:[[220,0.05,'sawtooth'],[160,0.08,'triangle']]
+};
+let _uiAudioCtx = null;
+function uiSound(kind) {
+  const seq = UI_SONIC[kind] || UI_SONIC.option;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) throw new Error('no AudioContext');
+    if (!_uiAudioCtx) _uiAudioCtx = new AC();
+    const ctx = _uiAudioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const start = ctx.currentTime + 0.008;
+    let offset = 0;
+    seq.forEach(function(part) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = part[2]; osc.frequency.setValueAtTime(part[0], start + offset);
+      gain.gain.setValueAtTime(0.0001, start + offset);
+      gain.gain.exponentialRampToValueAtTime(0.045, start + offset + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + part[1]);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(start + offset); osc.stop(start + offset + part[1] + 0.015);
+      offset += part[1] * 0.72;
+    });
+  } catch (e) {
+    try { clickAudio.currentTime = 0; clickAudio.play(); } catch (_) {}
+  }
+}
+function cfgSoundKind(key, val) {
+  const it = CFG_ITEMS.filter(function(x) { return x.key === key; })[0];
+  if (!it) return 'option';
+  if (it.type === 'bool') return String(val) === '1' ? 'toggle_on' : 'toggle_off';
+  if (it.type === 'range') return 'range';
+  return 'option';
+}
+
+renderStaticTechIcons();
+
 const MD = '/data/adb/modules/AutoSystemBoost';
 
 /*
@@ -3144,6 +3298,7 @@ async function asbDebugAction(action) {
   buttons.forEach(b => { b.disabled = true; });
   activeButtons.forEach(b => { b.classList.add('is-running'); b.setAttribute('aria-busy', 'true'); });
   debugActionWaitOpen(action);
+  uiSound('capture');
   // A toast remains useful after the modal has gone, but the modal is the immediate
   // acknowledgement. Yield twice before KSU work so the first pulse is on-screen.
   await debugFrame();
@@ -3154,6 +3309,7 @@ async function asbDebugAction(action) {
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + cmd + ' 2>/dev/null');
     const info = debugActionText(r);
     if (!r || r.errno !== 0 || info.error) {
+      uiSound('error');
       toast(T(action === 'diag' ? 'dbg_diag_failed' : 'dbg_log_failed', 'Debug action failed'), 'bad');
       return;
     }
@@ -3167,6 +3323,7 @@ async function asbDebugAction(action) {
         toast(T('dbg_diag_failed', 'Debug action failed'), 'bad');
         return;
       }
+      uiSound('success');
       toast(T('dbg_diag_saved', 'asbdiag saved') + (done.info.path ? ': ' + done.info.path : ''), 'good');
     } else if (info.status === 'already_running') {
       toast(T('dbg_log_running', '24h log is already running') + (info.pid ? ' · PID ' + info.pid : ''), 'warn');
@@ -3176,6 +3333,7 @@ async function asbDebugAction(action) {
         toast(T('dbg_log_failed', 'Could not start 24h log'), 'bad');
         return;
       }
+      uiSound('success');
       toast(T('dbg_log_started', '24h log started') + ((started.info.pid || info.pid) ? ' · PID ' + (started.info.pid || info.pid) : ''), 'good');
     } else {
       toast(T('dbg_log_failed', 'Could not start 24h log'), 'bad');
@@ -3243,7 +3401,7 @@ async function go(p) {
   document.querySelectorAll('.pbtn').forEach(b => b.classList.remove('ld'));
   if (r.errno === 0) {
     haptic();
-    try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
+    uiSound('profile');
     /* One code path for every language.
      * This branched on ASB_LANG === 'ru': Russian got a translated profile name and
      * "применён", everyone else got a capitalised key and "applied" - so nine languages
@@ -3264,6 +3422,7 @@ async function go(p) {
       setTimeout(function() { refreshSmartSubLine(); }, ms);
     });
   } else {
+    uiSound('error');
     // Never leave the home screen claiming a profile whose root-side transition failed.
     ui(previousProfile);
     toast(T('t_profile_err', '\u2717 Error applying profile'), 'err');
@@ -3305,6 +3464,7 @@ let _liveBgTimer = null;
 let _liveOpen = false;
 
 function openLivePage() {
+  uiSound('nav');
   const p = _el('livePage');
   if (!p) return;
   p.classList.add('open');
@@ -3319,6 +3479,7 @@ function openLivePage() {
 }
 
 function closeLivePage() {
+  uiSound('nav');
   const p = _el('livePage');
   if (!p) return;
   p.classList.remove('open');
@@ -3603,12 +3764,12 @@ function grpName(g) {
 }
 
 const CFG_GROUPS = [
-  { id:'audio',   ico:'\uD83C\uDFB5', name:'Audio',   ru:'\u0410\u0443\u0434\u0438\u043E' },
-  { id:'camera',  ico:'\uD83D\uDCF7', name:'Camera',  ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
-  { id:'iface',   ico:'\uD83C\uDFA8', name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
-  { id:'net',     ico:'\uD83D\uDCF6', name:'Network',   ru:'\u0421\u0435\u0442\u044C' },
-  { id:'battery', ico:'\uD83D\uDD0B', name:'Battery', ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
-  { id:'ui',      ico:'\u2699\uFE0F',    name:'System', ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
+  { id:'audio',   icon:'audio',   name:'Audio',     ru:'\u0410\u0443\u0434\u0438\u043E' },
+  { id:'camera',  icon:'camera',  name:'Camera',    ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
+  { id:'iface',   icon:'glass',   name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
+  { id:'net',     icon:'network', name:'Network',   ru:'\u0421\u0435\u0442\u044C' },
+  { id:'battery', icon:'battery', name:'Battery',   ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
+  { id:'ui',      icon:'system',  name:'System',    ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
 ];
 // Where each tunable lives. BG_TRIM and cool_gaming sit under Battery rather than their
 // own colour category: both are battery-vs-something trades, and that is what someone is
@@ -3639,15 +3800,15 @@ function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
  * volume-limit switch remains visibly separate because it is a hearing-safety decision. */
 const CFG_GROUP_SECTIONS = {
   audio: [
-    { id:'playback', ico:'🎧', titleKey:'cfg_audio_section_playback',
+    { id:'playback', icon:'audio', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
       hint:'Choose the audio path and Bluetooth behaviour.',
       keys:['audio_profile','audio_dac_hifi','media_loudness','bt_absvol_mode','bt_a2dp_offload'] },
-    { id:'dsp', ico:'🎚️', titleKey:'cfg_audio_section_dsp',
+    { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
       title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
       hint:'Optional gain, bass and dynamics processing on the outputs you select.',
       keys:['dsp_loudness','dsp_bass','dsp_compressor','dsp_outputs'] },
-    { id:'safety', ico:'⚠️', titleKey:'cfg_audio_section_safety',
+    { id:'safety', icon:'shield', titleKey:'cfg_audio_section_safety',
       title:'Listening Safety', hintKey:'cfg_audio_section_safety_hint',
       hint:'The system hearing limit is left untouched unless you explicitly change it.',
       keys:['audio_remove_volume_limit'] }
@@ -3659,7 +3820,7 @@ function cfgRenderSection(list, section) {
   head.className = 'cfg-section';
   const ico = document.createElement('span');
   ico.className = 'cfg-section-ico';
-  ico.textContent = section.ico;
+  ico.innerHTML = techIcon(section.icon);
   const title = document.createElement('div');
   title.className = 'cfg-section-title';
   title.textContent = T(section.titleKey, section.title);
@@ -3718,54 +3879,23 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  smart_media_guard:'\uD83D\uDCFA',
-  night_modem_idle:'\uD83D\uDCF4',
-  net_rps:'\uD83E\uDDF5', net_txqueue:'\uD83D\uDCE4',
-  athena_service:'\uD83D\uDEE1\uFE0F',
-  sustained_temp_mode:'\uD83D\uDD25', doze_level:'\uD83D\uDCA4', camera_hold_enable:'\uD83D\uDCF8',
-  bt_a2dp_offload:'\uD83D\uDCFB', night_quiet_enable:'\uD83C\uDF19',
-  bat_suppress_gaming:'\uD83D\uDE34', log_level:'\uD83D\uDCDD', net_congestion:'\uD83D\uDCE1', net_qdisc:'\uD83D\uDCE6', net_route_tune:'\uD83D\uDCCF',
-  net_congestion_wifi:'\uD83D\uDCF6', net_congestion_mobile:'\uD83D\uDCF1', net_qdisc_wifi:'\uD83D\uDEA6', net_qdisc_mobile:'\uD83D\uDEA7', wifi_country:'\uD83C\uDF10', wifi_scan_throttle:'\uD83D\uDD0D', net_handover_fast:'\uD83D\uDD04',
-  audio_profile:'\uD83C\uDF9B',            // studio mic (who processes the sound)
-  audio_dac_hifi:'\uD83C\uDFA7',               // headphones (codec/DAC)
-  dsp_compressor:'\uD83E\uDDF0',                // toolbox - dynamics processing
-  CAMERA_GRAIN:'\uD83C\uDF11',                 // new moon - grain/noise texture
-  CAMERA_CONTRAST:'\uD83C\uDF13',              // waxing moon - light and shade
-  CAMERA_PORTRAIT:'\uD83D\uDC64',              // bust - portrait AI
-  CAMERA_LOWLIGHT:'\uD83D\uDD26',              // torch - macro and low light
-  CAMERA_LEVEL:'\uD83D\uDCF7',                // camera
-  smart_battery_bias:'\uD83D\uDD0B',           // battery
-  CAMERA_AGGRESSIVE:'\uD83C\uDFAF',              // target: aggressive camera processing
-  CAMERA_AGGRESSIVE_INJECT:'\uD83C\uDF9B\uFE0F',  // slider/mode
-  dsp_loudness:'\uD83C\uDF9A\uFE0F',                // control knobs (DSP gain)
-  dsp_bass:'\uD83E\uDD41',                    // drum (bass shelf)
-  media_loudness:'\uD83D\uDCE2',            // loudspeaker (media loudness)
-  bt_absvol_mode:'\uD83D\uDD0A',              // loud speaker (BT volume)
-  cool_gaming:'\uD83C\uDFAE',                 // gamepad
-  charge_aware_enable:'\u26A1',                // high voltage (charging)
-  auto_battery_enable:'\uD83E\uDEAB',         // low battery
-  BG_TRIM_LEVEL:'\uD83E\uDDF9',               // broom (RAM trim)
-  UX_MANAGE_TIMEOUTS:'\uD83D\uDC46',          // pointing finger (touch)
-  UX_MANAGE_OEM_TOGGLES:'\uD83E\uDDE9',         // puzzle piece (OEM toggles)
-  disable_blur:'\uD83C\uDF2B',                  // fog (blur off)
-  ui_effects_level:'\uD83C\uDFA8',              // artist palette (visual style)
-  haptic_strength:'\uD83D\uDCF3',               // vibration mode
-  haptic_touch_strength:'\u2328\uFE0F',          // keyboard - typing feedback, and
-                                                 // distinct from the pointing hand that
-                                                 // UX_MANAGE_TIMEOUTS already uses
-  UX_ANIM_FORCE_RESTART:'\uD83D\uDD04',       // restart arrows
-  region_allow_locale:'\uD83C\uDF0D',         // globe
-  sustained_temp_enter:'\uD83C\uDF21\uFE0F',
-  phantom_procs:'\uD83D\uDC7B',
-  anim_speed:'\uD83C\uDFAC',
-  dsp_outputs:'\uD83D\uDD00',
-  gms_trim:'\u2601\uFE0F',
-  audio_remove_volume_limit:'\uD83D\uDC42',
-  doze_trim_whitelist:'\uD83D\uDEAB',
-  gms_freeze:'\uD83E\uDDCA',
-  perf_ceiling_pct:'\uD83D\uDCC9',
-  wakelock_action:'\uD83D\uDD14',
-  gnss_trim:'\uD83D\uDCCD',
+  smart_media_guard:'shield', night_modem_idle:'sleep',
+  net_rps:'network', net_txqueue:'queue', athena_service:'shield',
+  sustained_temp_mode:'thermal', doze_level:'sleep', camera_hold_enable:'camera',
+  bt_a2dp_offload:'bluetooth', night_quiet_enable:'moon',
+  bat_suppress_gaming:'sleep', log_level:'log', net_congestion:'network', net_qdisc:'queue', net_route_tune:'route',
+  net_congestion_wifi:'wifi', net_congestion_mobile:'network', net_qdisc_wifi:'queue', net_qdisc_mobile:'queue',
+  wifi_country:'globe', wifi_scan_throttle:'scan', net_handover_fast:'route',
+  audio_profile:'audio', audio_dac_hifi:'dac', dsp_compressor:'dsp',
+  CAMERA_GRAIN:'moon', CAMERA_CONTRAST:'sun', CAMERA_PORTRAIT:'target', CAMERA_LOWLIGHT:'camera', CAMERA_LEVEL:'camera',
+  smart_battery_bias:'battery', CAMERA_AGGRESSIVE:'target', CAMERA_AGGRESSIVE_INJECT:'dsp',
+  dsp_loudness:'dsp', dsp_bass:'dsp', media_loudness:'audio', bt_absvol_mode:'audio',
+  cool_gaming:'game', charge_aware_enable:'power', auto_battery_enable:'battery', BG_TRIM_LEVEL:'memory',
+  UX_MANAGE_TIMEOUTS:'touch', UX_MANAGE_OEM_TOGGLES:'system', disable_blur:'glass', ui_effects_level:'motion',
+  haptic_strength:'haptic', haptic_touch_strength:'haptic', UX_ANIM_FORCE_RESTART:'motion', region_allow_locale:'globe',
+  sustained_temp_enter:'thermal', phantom_procs:'system', anim_speed:'motion', dsp_outputs:'route',
+  gms_trim:'memory', audio_remove_volume_limit:'limit', doze_trim_whitelist:'shield', gms_freeze:'memory',
+  perf_ceiling_pct:'thermal', wakelock_action:'sleep', gnss_trim:'route'
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -4045,11 +4175,11 @@ function cfgRenderHub(list) {
     });
     const tile = document.createElement('button');
     tile.className = 'cfg-tile cat-' + (g.id === 'ui' ? 'ux' : g.id);
-    tile.onclick = () => { _cfgGroup = g.id; cfgRender(); };
+    tile.onclick = () => { uiSound('nav'); _cfgGroup = g.id; cfgRender(); };
 
     const ic = document.createElement('div');
     ic.className = 'cfg-tile-ico';
-    ic.textContent = g.ico;
+    ic.innerHTML = techIcon(g.icon);
     tile.appendChild(ic);
 
     const nm = document.createElement('div');
@@ -4266,7 +4396,7 @@ function cfgRenderRow(list, it, showCat) {
 
     const ic = document.createElement('div');
     ic.className = 'cfg-icon ' + cfgCatClass(it.key);
-    ic.textContent = CFG_ICONS[it.key] || '\u2699\uFE0F';
+    ic.innerHTML = techIcon(CFG_ICONS[it.key] || 'generic');
     top.appendChild(ic);
 
     const main = document.createElement('div');
@@ -4715,9 +4845,9 @@ async function cfgSet(key, val, ctl) {
     // one lock. Keeping the two writes in separate WebUI shell commands used
     // to allow a reboot/import race to create split-brain configuration.
     haptic();
-    if (CFG_SILENT_KEYS.indexOf(key) < 0) {
-      try { clickAudio.currentTime = 0; clickAudio.play(); } catch(e) {}
-    }
+    // DSP gain/bass move the same audio path that would reproduce the cue, so they remain
+    // deliberately silent. Every other setting gets a cue matched to its control type.
+    if (CFG_SILENT_KEYS.indexOf(key) < 0) uiSound(cfgSoundKind(key, val));
     // Audio settings apply live (ViperFX-style): changing an audio card fires the same apply
     // script the old "Apply audio now" button used, so there is no separate button and no
     // reboot for these.
@@ -4961,6 +5091,7 @@ async function cfgSet(key, val, ctl) {
         .filter(function (x) { return x.indexOf('asb_config_safe:') === 0; })[0] || '';
       _why = _why.replace('asb_config_safe:', '').trim();
     } catch (e) {}
+    uiSound('error');
     toast(T('t_cfg_err', '\u2717 Failed to write config') + (_why ? ': ' + _why : ''), 'err');
   }
   cfgRender();
@@ -5270,7 +5401,7 @@ async function dozeSaveKeep(box) {
  * canonical profile remains checksum-protected in ASB state; Downloads/Documents are bounded
  * convenience copies, never arbitrary path entry points. */
 const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';
-const _cfgProfile = { mode:'', store:'internal', rows:[], selected:'', ready:'', replace:'', remove:'', draft:'', _preview:'' };
+const _cfgProfile = { mode:'', store:'internal', rows:[], selected:'', replace:'', remove:'', draft:'', busy:false };
 function cfgProfileNameOK(name) { return /^[A-Za-z0-9_-]{1,32}$/.test(name || ''); }
 function cfgProfileArgs() { return SNAP_KEYS.map(shQuote).join(' '); }
 function cfgResultText(r) { return ((r && r.stdout) || (r && r.stderr) || '').trim(); }
@@ -5292,12 +5423,13 @@ function cfgProfileButton(text, cls, click) {
   if (cls) b.className = cls; b.onclick = click; return b;
 }
 function cfgProfileClose() {
+  if (_cfgProfile.busy) return;
   const m = _el('cfgProfileModal'); if (!m) return;
   m.hidden = true; m.setAttribute('aria-hidden', 'true'); _cfgProfile.mode = '';
 }
 async function cfgProfileOpen(mode) {
   _cfgProfile.mode = mode; _cfgProfile.store = 'internal'; _cfgProfile.rows = [];
-  _cfgProfile.selected = ''; _cfgProfile.ready = ''; _cfgProfile.replace = ''; _cfgProfile.remove = ''; _cfgProfile.draft = ''; _cfgProfile._preview = '';
+  _cfgProfile.selected = ''; _cfgProfile.replace = ''; _cfgProfile.remove = ''; _cfgProfile.draft = ''; _cfgProfile.busy = false;
   const m = _el('cfgProfileModal'); if (!m) return;
   m.hidden = false; m.setAttribute('aria-hidden', 'false');
   await cfgProfileRefresh();
@@ -5311,11 +5443,13 @@ async function cfgProfileRefresh() {
   cfgProfilePaint();
 }
 function cfgProfileSetStore(store) {
-  _cfgProfile.store = store; _cfgProfile.selected = ''; _cfgProfile.ready = ''; _cfgProfile.remove = ''; _cfgProfile._preview = '';
+  if (_cfgProfile.busy) return;
+  _cfgProfile.store = store; _cfgProfile.selected = ''; _cfgProfile.remove = '';
   void cfgProfileRefresh();
 }
 function cfgProfileSelect(name) {
-  _cfgProfile.selected = name; _cfgProfile.ready = ''; _cfgProfile.remove = ''; _cfgProfile._preview = ''; cfgProfilePaint();
+  if (_cfgProfile.busy) return;
+  _cfgProfile.selected = name; _cfgProfile.remove = ''; cfgProfilePaint();
 }
 function cfgProfileDestination(box) {
   const label = document.createElement('div'); label.className = 'cfg-profile-label';
@@ -5323,17 +5457,18 @@ function cfgProfileDestination(box) {
   const dest = document.createElement('div'); dest.className = 'cfg-profile-dest';
   [['internal',T('cfg_profile_store_asb','ASB')],['downloads',T('cfg_profile_store_downloads','Downloads')],['documents',T('cfg_profile_store_documents','Documents')]].forEach(function(x) {
     const b = cfgProfileButton(x[1], _cfgProfile.store === x[0] ? 'active' : '', function() { cfgProfileSetStore(x[0]); });
-    dest.appendChild(b);
+    b.disabled = _cfgProfile.busy; dest.appendChild(b);
   });
   box.appendChild(dest);
 }
 function cfgProfilePaint() {
+  const close = _el('cfgProfileCloseBtn'); if (close) close.disabled = _cfgProfile.busy;
   const body = _el('cfgProfileBody'); if (!body) return;
   body.textContent = '';
   const save = _cfgProfile.mode === 'save';
   const copy = document.createElement('div'); copy.className = 'cfg-profile-copy';
   copy.textContent = save ? T('cfg_profile_save_copy','Save the current settings and, when available, Smart learning as a named configuration. You can also copy it to Downloads or Documents.') :
-    T('cfg_profile_open_copy','Tap a saved configuration to preview and apply it. No profile name needs to be typed.');
+    T('cfg_profile_open_copy','Select a saved configuration, then press Apply. No profile name needs to be typed.');
   body.appendChild(copy);
   if (save) {
     const lab = document.createElement('label'); lab.className = 'cfg-profile-label'; lab.textContent = T('cfg_profile_name','Profile name'); body.appendChild(lab);
@@ -5355,6 +5490,7 @@ function cfgProfilePaint() {
     empty.textContent = T('cfg_profiles_none','No valid saved profiles'); list.appendChild(empty);
   } else _cfgProfile.rows.forEach(function(p) {
     const row = cfgProfileButton('', 'cfg-profile-row' + (_cfgProfile.selected === p.name ? ' selected' : ''), function() { cfgProfileSelect(p.name); });
+    row.disabled = _cfgProfile.busy;
     const left = document.createElement('div'); const nm = document.createElement('div'); nm.className = 'cfg-profile-row-name'; nm.textContent = p.name;
     const meta = document.createElement('div'); meta.className = 'cfg-profile-row-meta';
     const smart = p.smart === 'saved' ? T('cfg_profile_smart_saved','Smart learning saved') :
@@ -5366,14 +5502,22 @@ function cfgProfilePaint() {
   });
   body.appendChild(list);
   if (!_cfgProfile.selected) return;
-  const actions = document.createElement('div'); actions.className = 'cfg-profile-actions';
-  actions.appendChild(cfgProfileButton(T('cfg_profile_preview','Preview'), 'warn', cfgProfilePreview));
-  actions.appendChild(cfgProfileButton(_cfgProfile.ready === _cfgProfile.selected ? T('cfg_profile_apply','Apply configuration') : T('cfg_profile_prepare_apply','Prepare apply'), '', cfgProfileApply));
-  if (_cfgProfile.store === 'internal') actions.appendChild(cfgProfileButton(_cfgProfile.remove === _cfgProfile.selected ? T('cfg_profile_delete_confirm','Delete now') : T('cfg_profile_delete','Delete'), 'danger', cfgProfileDelete));
+  const actions = document.createElement('div');
+  actions.className = 'cfg-profile-actions' + (_cfgProfile.store === 'internal' ? ' has-delete' : '');
+  const apply = cfgProfileButton(_cfgProfile.busy ? T('cfg_profile_apply_active','Applying saved configuration…') : T('cfg_profile_apply','Apply saved configuration'), 'cfg-profile-apply' + (_cfgProfile.busy ? ' is-running' : ''), cfgProfileApply);
+  apply.disabled = _cfgProfile.busy; actions.appendChild(apply);
+  if (_cfgProfile.store === 'internal') {
+    const remove = cfgProfileButton(_cfgProfile.remove === _cfgProfile.selected ? T('cfg_profile_delete_confirm','Delete now') : T('cfg_profile_delete','Delete'), 'danger', cfgProfileDelete);
+    remove.disabled = _cfgProfile.busy; actions.appendChild(remove);
+  }
   body.appendChild(actions);
-  if (_cfgProfile._preview) { const pre = document.createElement('pre'); pre.className = 'cfg-profile-preview'; pre.textContent = _cfgProfile._preview; body.appendChild(pre); }
-  const hint = document.createElement('div'); hint.className = 'cfg-profile-hint';
-  hint.textContent = T('cfg_profile_apply_hint','Preview first, then apply. Downloads/Documents copies are checksum-checked before they enter ASB.'); body.appendChild(hint);
+  if (_cfgProfile.busy) {
+    const progress = document.createElement('div'); progress.className = 'cfg-profile-progress'; progress.setAttribute('role','status'); progress.setAttribute('aria-live','polite');
+    progress.textContent = T('cfg_profile_apply_wait','Please wait while ASB restores every saved setting. Do not close this window.'); body.appendChild(progress);
+  } else {
+    const hint = document.createElement('div'); hint.className = 'cfg-profile-hint';
+    hint.textContent = T('cfg_profile_apply_hint','Apply restores all saved settings at once. Downloads/Documents copies are checksum-checked before they enter ASB.'); body.appendChild(hint);
+  }
 }
 async function cfgProfileSave() {
   const inp = _el('cfgProfileNameInput'); const name = String(inp && inp.value || '').trim();
@@ -5397,21 +5541,31 @@ async function cfgProfileEnsureInternal() {
   _cfgProfile.store = 'internal'; await cfgProfileRefresh(); _cfgProfile.selected = _cfgProfile.rows.some(function(x) { return x.name === _cfgProfile.selected; }) ? _cfgProfile.selected : '';
   return !!_cfgProfile.selected;
 }
-async function cfgProfilePreview() {
-  if (!_cfgProfile.selected || !(await cfgProfileEnsureInternal())) return;
-  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' preview ' + shQuote(_cfgProfile.selected) + ' ' + cfgProfileArgs());
-  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err','Could not validate profile'), 'err'); return; }
-  _cfgProfile.ready = _cfgProfile.selected; _cfgProfile._preview = (cfgResultText(r) || T('cfg_profile_no_diff','No settings would change.')).slice(0, 2600); cfgProfilePaint();
+function cfgProfilePaintYield() {
+  return new Promise(function(resolve) {
+    const frame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : function(cb) { return setTimeout(cb, 0); };
+    frame(function() { frame(resolve); });
+  });
 }
 async function cfgProfileApply() {
-  if (!_cfgProfile.selected) return;
-  if (_cfgProfile.ready !== _cfgProfile.selected) { await cfgProfilePreview(); return; }
+  if (!_cfgProfile.selected || _cfgProfile.busy) return;
+  _cfgProfile.busy = true;
+  uiSound('option'); void haptic(); cfgProfilePaint();
+  // Yield two paints before crossing the root bridge: the pulse and explicit wait message must
+  // be visible immediately, including on devices where profile restore needs a few seconds.
+  await cfgProfilePaintYield();
+  if (!(await cfgProfileEnsureInternal())) { _cfgProfile.busy = false; cfgProfilePaint(); return; }
   const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' restore ' + shQuote(_cfgProfile.selected) + ' ' + cfgProfileArgs());
-  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err','Could not restore profile'), 'err'); return; }
-  const name = _cfgProfile.selected; const detail = String((r && r.stdout) || ''); cfgProfileClose(); await cfgLoad(); cfgRender();
+  if (!r || r.errno !== 0) {
+    _cfgProfile.busy = false; cfgProfilePaint(); uiSound('error');
+    toast(cfgResultText(r) || T('cfg_import_err','Could not restore profile'), 'err'); return;
+  }
+  const name = _cfgProfile.selected; const detail = String((r && r.stdout) || '');
+  _cfgProfile.busy = false; cfgProfileClose(); await cfgLoad(); cfgRender();
   const smartDetail = /(^|\n)smart_learning=restored(\n|$)/.test(detail) ? T('cfg_profile_smart_restored',' · Smart learning restored') :
     (/smart_learning=skipped_incompatible_device/.test(detail) ? T('cfg_profile_smart_skipped_device',' · Smart learning was kept: another device') :
     (/smart_learning=skipped_invalid/.test(detail) ? T('cfg_profile_smart_skipped_invalid',' · Smart learning backup was invalid') : ''));
+  uiSound('success');
   toast(T('cfg_profile_restored','Restored profile ') + name + smartDetail + T('cfg_import_reboot',' - reboot to apply'), smartDetail.indexOf('invalid') >= 0 ? 'warn' : 'ok');
 }
 async function cfgProfileDelete() {
@@ -5419,7 +5573,7 @@ async function cfgProfileDelete() {
   if (_cfgProfile.remove !== _cfgProfile.selected) { _cfgProfile.remove = _cfgProfile.selected; cfgProfilePaint(); return; }
   const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' delete ' + shQuote(_cfgProfile.selected));
   if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err','Could not delete profile'), 'err'); return; }
-  _cfgProfile.selected = ''; _cfgProfile.remove = ''; _cfgProfile.ready = ''; _cfgProfile._preview = ''; await cfgProfileRefresh();
+  _cfgProfile.selected = ''; _cfgProfile.remove = ''; await cfgProfileRefresh();
 }
 function cfgExport() { void cfgProfileOpen('save'); }
 function cfgImport() { void cfgProfileOpen('open'); }
@@ -5457,6 +5611,7 @@ async function cfgRestartSysUI() {
 }
 
 function openConfigPage() {
+  uiSound('nav');
   // Loaded before the first render, or a non-reference device would flash "simplified"
   // for a frame before it is filtered out.
   loadDeviceClass();
@@ -5500,6 +5655,7 @@ function cfgSyncChrome() {
 }
 
 function cfgBack() {
+  uiSound('nav');
   if (_cfgGroup) { _cfgGroup = null; cfgRender(); return; }
   closeConfigPage(true);
 }
