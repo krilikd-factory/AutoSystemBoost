@@ -473,8 +473,8 @@
     "safe": "Güvenli",
     "aggressive": "Agresif"
   },
-  "cfg_profile_apply": "Yapılandırmayı uygula",
-  "cfg_profile_apply_hint": "Önce önizlemeyi inceleyin, sonra uygulayın. İndirilenler ve Belgeler kopyaları ASB’ye alınmadan önce sağlama toplamı ile doğrulanır.",
+  "cfg_profile_apply": "Kaydedilmiş yapılandırmayı uygula",
+  "cfg_profile_apply_hint": "Uygula, tüm kaydedilmiş ayarları tek seferde geri yükler. İndirilenler/Belgeler kopyaları ASB’ye alınmadan önce checksum ile doğrulanır.",
   "cfg_profile_delete": "Sil",
   "cfg_profile_delete_confirm": "Şimdi sil",
   "cfg_profile_export_err": "ASB’ye kaydedildi, ancak seçilen konuma kopyalanamadı",
@@ -482,7 +482,7 @@
   "cfg_profile_location": "Depolama konumu",
   "cfg_profile_manager_title": "Kaydedilen yapılandırmalar",
   "cfg_profile_name_hint": "Harf, rakam, _ veya - kullanın. Var olan adlar için bir kez daha Değiştir’e dokunun.",
-  "cfg_profile_open_copy": "Değişiklikleri görmek ve uygulamak için kaydedilen yapılandırmaya dokunun. Ad yazmanız gerekmez.",
+  "cfg_profile_open_copy": "Kaydedilmiş bir yapılandırma seçin, ardından Uygula’ya basın. Profil adı girmeniz gerekmez.",
   "cfg_profile_prepare_apply": "Uygulamayı hazırla",
   "cfg_profile_replace": "Kaydedilen yapılandırmayı değiştir",
   "cfg_profile_replace_ready": "Bu kaydedilen yapılandırmanın üzerine yazmak için Değiştir’e dokunun.",
@@ -516,5 +516,7 @@
   "stock_cpu_clock": "CPU hızı",
   "stock_load": "Sistem yükü",
   "stock_battery": "Batarya",
-  "stock_uptime": "Çalışma süresi"
+  "stock_uptime": "Çalışma süresi",
+  "cfg_profile_apply_active": "Kaydedilmiş yapılandırma uygulanıyor…",
+  "cfg_profile_apply_wait": "ASB tüm kaydedilmiş ayarları geri yüklerken lütfen bekleyin. Bu pencereyi kapatmayın."
 }

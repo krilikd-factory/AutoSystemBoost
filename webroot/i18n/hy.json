@@ -627,8 +627,8 @@
   "dbg_log_started": "24h log started",
   "dbg_log_running": "24h log is already running",
   "dbg_log_failed": "Could not start 24h log",
-  "cfg_profile_apply": "Կիրառել կարգավորումը",
-  "cfg_profile_apply_hint": "Սկզբում դիտեք նախադիտումը, ապա կիրառեք։ Ներբեռնումների և Փաստաթղթերի պատճենները ASB ներմուծվելուց առաջ ստուգվում են checksum-ով։",
+  "cfg_profile_apply": "Կիրառել պահված կազմաձևը",
+  "cfg_profile_apply_hint": "Կիրառումը միանգամից վերականգնում է բոլոր պահված կարգավորումները։ Downloads/Documents պատճենները ստուգվում են checksum-ով՝ ASB մտնելուց առաջ։",
   "cfg_profile_delete": "Ջնջել",
   "cfg_profile_delete_confirm": "Ջնջել հիմա",
   "cfg_profile_export_err": "Պահվել է ASB-ում, բայց չհաջողվեց պատճենել ընտրված տեղը",
@@ -636,7 +636,7 @@
   "cfg_profile_location": "Պահեստավորման տեղ",
   "cfg_profile_manager_title": "Պահված կարգավորումներ",
   "cfg_profile_name_hint": "Օգտագործեք տառեր, թվեր, _ կամ -։ Գոյություն ունեցող անունների համար կրկին սեղմեք «Փոխարինել»։",
-  "cfg_profile_open_copy": "Սեղմեք պահված կարգավորումը՝ փոփոխությունները տեսնելու և կիրառելու համար։ Անուն մուտքագրել պետք չէ։",
+  "cfg_profile_open_copy": "Ընտրեք պահված կազմաձևը, ապա սեղմեք «Կիրառել»։ Անվան մուտքագրում պետք չէ։",
   "cfg_profile_prepare_apply": "Պատրաստել կիրառումը",
   "cfg_profile_replace": "Փոխարինել պահված կարգավորումը",
   "cfg_profile_replace_ready": "Սեղմեք «Փոխարինել»՝ այս պահված կարգավորումը վերագրանցելու համար։",
@@ -670,5 +670,7 @@
   "stock_cpu_clock": "CPU հաճախականություն",
   "stock_load": "Համակարգի բեռ",
   "stock_battery": "Մարտկոց",
-  "stock_uptime": "Աշխատանքի ժամանակ"
+  "stock_uptime": "Աշխատանքի ժամանակ",
+  "cfg_profile_apply_active": "Պահված կազմաձևը կիրառվում է…",
+  "cfg_profile_apply_wait": "Սպասեք, մինչ ASB-ն վերականգնում է բոլոր պահված կարգավորումները։ Մի փակեք այս պատուհանը։"
 }

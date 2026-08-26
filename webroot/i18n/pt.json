@@ -473,8 +473,8 @@
     "safe": "Seguro",
     "aggressive": "Agressivo"
   },
-  "cfg_profile_apply": "Aplicar configuração",
-  "cfg_profile_apply_hint": "Veja a prévia primeiro e depois aplique. Cópias em Downloads e Documentos são verificadas por checksum antes de entrar no ASB.",
+  "cfg_profile_apply": "Aplicar configuração guardada",
+  "cfg_profile_apply_hint": "Aplicar restaura todas as definições guardadas de uma vez. As cópias de Downloads/Documentos são verificadas por checksum antes de entrar no ASB.",
   "cfg_profile_delete": "Excluir",
   "cfg_profile_delete_confirm": "Excluir agora",
   "cfg_profile_export_err": "Salvo no ASB, mas não foi possível copiar para o local selecionado",
@@ -482,7 +482,7 @@
   "cfg_profile_location": "Local de armazenamento",
   "cfg_profile_manager_title": "Configurações salvas",
   "cfg_profile_name_hint": "Use letras, números, _ ou -. Nomes existentes exigem mais um toque em Substituir.",
-  "cfg_profile_open_copy": "Toque em uma configuração salva para ver as alterações e aplicá-la. Não é necessário digitar o nome.",
+  "cfg_profile_open_copy": "Selecione uma configuração guardada e depois toque em Aplicar. Não é necessário escrever o nome do perfil.",
   "cfg_profile_prepare_apply": "Preparar aplicação",
   "cfg_profile_replace": "Substituir configuração salva",
   "cfg_profile_replace_ready": "Toque em Substituir para sobrescrever esta configuração salva.",
@@ -516,5 +516,7 @@
   "stock_cpu_clock": "Frequência da CPU",
   "stock_load": "Carga do sistema",
   "stock_battery": "Bateria",
-  "stock_uptime": "Tempo de atividade"
+  "stock_uptime": "Tempo de atividade",
+  "cfg_profile_apply_active": "A aplicar configuração guardada…",
+  "cfg_profile_apply_wait": "Aguarde enquanto o ASB restaura todas as definições guardadas. Não feche esta janela."
 }

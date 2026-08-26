@@ -473,8 +473,8 @@
     "safe": "安全",
     "aggressive": "激进"
   },
-  "cfg_profile_apply": "应用配置",
-  "cfg_profile_apply_hint": "请先查看预览，再应用。下载和文档中的副本在导入 ASB 前会通过校验和验证。",
+  "cfg_profile_apply": "应用已保存的配置",
+  "cfg_profile_apply_hint": "应用会一次性恢复所有已保存的设置。下载/文档中的副本会在导入 ASB 前进行校验和验证。",
   "cfg_profile_delete": "删除",
   "cfg_profile_delete_confirm": "立即删除",
   "cfg_profile_export_err": "已保存到 ASB，但无法复制到所选位置",
@@ -482,7 +482,7 @@
   "cfg_profile_location": "存储位置",
   "cfg_profile_manager_title": "已保存的配置",
   "cfg_profile_name_hint": "可使用字母、数字、_ 或 -。已有名称需要再点一次“替换”。",
-  "cfg_profile_open_copy": "点按已保存的配置即可查看更改并应用，无需输入名称。",
+  "cfg_profile_open_copy": "选择已保存的配置，然后点击“应用”。无需输入配置名称。",
   "cfg_profile_prepare_apply": "准备应用",
   "cfg_profile_replace": "替换已保存的配置",
   "cfg_profile_replace_ready": "点按“替换”以覆盖这份已保存的配置。",
@@ -516,5 +516,7 @@
   "stock_cpu_clock": "CPU 频率",
   "stock_load": "系统负载",
   "stock_battery": "电池",
-  "stock_uptime": "运行时间"
+  "stock_uptime": "运行时间",
+  "cfg_profile_apply_active": "正在应用已保存的配置…",
+  "cfg_profile_apply_wait": "请等待 ASB 恢复所有已保存的设置。请勿关闭此窗口。"
 }

@@ -473,8 +473,8 @@
     "safe": "Sicher",
     "aggressive": "Aggressiv"
   },
-  "cfg_profile_apply": "Konfiguration anwenden",
-  "cfg_profile_apply_hint": "Zuerst Vorschau ansehen, dann anwenden. Kopien in Downloads und Dokumente werden per Prüfsumme geprüft, bevor sie in ASB importiert werden.",
+  "cfg_profile_apply": "Gespeicherte Konfiguration anwenden",
+  "cfg_profile_apply_hint": "Anwenden stellt alle gespeicherten Einstellungen auf einmal wieder her. Kopien aus Downloads/Dokumente werden vor dem Import in ASB per Checksumme geprüft.",
   "cfg_profile_delete": "Löschen",
   "cfg_profile_delete_confirm": "Jetzt löschen",
   "cfg_profile_export_err": "In ASB gespeichert, aber nicht an den gewählten Ort kopiert",
@@ -482,7 +482,7 @@
   "cfg_profile_location": "Speicherort",
   "cfg_profile_manager_title": "Gespeicherte Konfigurationen",
   "cfg_profile_name_hint": "Buchstaben, Ziffern, _ oder - verwenden. Vorhandene Namen benötigen einen weiteren Tipp auf Ersetzen.",
-  "cfg_profile_open_copy": "Eine gespeicherte Konfiguration antippen, um Änderungen anzusehen und sie anzuwenden. Es muss kein Name eingegeben werden.",
+  "cfg_profile_open_copy": "Wähle eine gespeicherte Konfiguration und drücke dann Anwenden. Es muss kein Profilname eingegeben werden.",
   "cfg_profile_prepare_apply": "Anwenden vorbereiten",
   "cfg_profile_replace": "Gespeicherte Konfiguration ersetzen",
   "cfg_profile_replace_ready": "Auf Ersetzen tippen, um diese gespeicherte Konfiguration zu überschreiben.",
@@ -516,5 +516,7 @@
   "stock_cpu_clock": "CPU-Takt",
   "stock_load": "Systemlast",
   "stock_battery": "Akku",
-  "stock_uptime": "Laufzeit"
+  "stock_uptime": "Laufzeit",
+  "cfg_profile_apply_active": "Gespeicherte Konfiguration wird angewendet…",
+  "cfg_profile_apply_wait": "Bitte warten, während ASB alle gespeicherten Einstellungen wiederherstellt. Dieses Fenster nicht schließen."
 }

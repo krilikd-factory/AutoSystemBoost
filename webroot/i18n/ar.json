@@ -473,8 +473,8 @@
     "safe": "آمن",
     "aggressive": "هجومي"
   },
-  "cfg_profile_apply": "تطبيق التهيئة",
-  "cfg_profile_apply_hint": "اعرض المعاينة أولاً ثم طبّقها. تُتحقق نسخ التنزيلات والمستندات بمجموع الاختبار قبل إدخالها إلى ASB.",
+  "cfg_profile_apply": "تطبيق التكوين المحفوظ",
+  "cfg_profile_apply_hint": "يعيد التطبيق كل الإعدادات المحفوظة دفعة واحدة. تُفحص نسخ التنزيلات/المستندات عبر checksum قبل دخولها إلى ASB.",
   "cfg_profile_delete": "حذف",
   "cfg_profile_delete_confirm": "حذف الآن",
   "cfg_profile_export_err": "حُفظ في ASB، لكن تعذّر النسخ إلى الموقع المحدد",
@@ -482,7 +482,7 @@
   "cfg_profile_location": "موقع التخزين",
   "cfg_profile_manager_title": "التهيئات المحفوظة",
   "cfg_profile_name_hint": "استخدم حروفاً أو أرقاماً أو _ أو -. تتطلب الأسماء الموجودة لمسة إضافية على «استبدال».",
-  "cfg_profile_open_copy": "المس تهيئة محفوظة لمعاينة التغييرات وتطبيقها. لا حاجة لكتابة الاسم.",
+  "cfg_profile_open_copy": "اختر تكوينًا محفوظًا ثم اضغط «تطبيق». لا يلزم إدخال اسم.",
   "cfg_profile_prepare_apply": "تحضير التطبيق",
   "cfg_profile_replace": "استبدال التهيئة المحفوظة",
   "cfg_profile_replace_ready": "المس «استبدال» للكتابة فوق هذه التهيئة المحفوظة.",
@@ -516,5 +516,7 @@
   "stock_cpu_clock": "تردد المعالج",
   "stock_load": "حمل النظام",
   "stock_battery": "البطارية",
-  "stock_uptime": "مدة التشغيل"
+  "stock_uptime": "مدة التشغيل",
+  "cfg_profile_apply_active": "جارٍ تطبيق التكوين المحفوظ…",
+  "cfg_profile_apply_wait": "يرجى الانتظار بينما يستعيد ASB كل الإعدادات المحفوظة. لا تغلق هذه النافذة."
 }

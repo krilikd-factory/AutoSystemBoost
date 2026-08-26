@@ -473,8 +473,8 @@
     "safe": "Aman",
     "aggressive": "Agresif"
   },
-  "cfg_profile_apply": "Terapkan konfigurasi",
-  "cfg_profile_apply_hint": "Lihat pratinjau terlebih dahulu, lalu terapkan. Salinan di Unduhan dan Dokumen diverifikasi dengan checksum sebelum masuk ke ASB.",
+  "cfg_profile_apply": "Terapkan konfigurasi tersimpan",
+  "cfg_profile_apply_hint": "Terapkan memulihkan semua pengaturan tersimpan sekaligus. Salinan Downloads/Documents diperiksa checksum sebelum masuk ke ASB.",
   "cfg_profile_delete": "Hapus",
   "cfg_profile_delete_confirm": "Hapus sekarang",
   "cfg_profile_export_err": "Tersimpan di ASB, tetapi tidak dapat disalin ke lokasi yang dipilih",
@@ -482,7 +482,7 @@
   "cfg_profile_location": "Lokasi penyimpanan",
   "cfg_profile_manager_title": "Konfigurasi tersimpan",
   "cfg_profile_name_hint": "Gunakan huruf, angka, _ atau -. Nama yang sudah ada memerlukan satu ketukan Ganti lagi.",
-  "cfg_profile_open_copy": "Ketuk konfigurasi tersimpan untuk melihat perubahan dan menerapkannya. Tidak perlu mengetik nama.",
+  "cfg_profile_open_copy": "Pilih konfigurasi tersimpan, lalu tekan Terapkan. Nama profil tidak perlu diketik.",
   "cfg_profile_prepare_apply": "Siapkan penerapan",
   "cfg_profile_replace": "Ganti konfigurasi tersimpan",
   "cfg_profile_replace_ready": "Ketuk Ganti untuk menimpa konfigurasi tersimpan ini.",
@@ -516,5 +516,7 @@
   "stock_cpu_clock": "Kecepatan CPU",
   "stock_load": "Beban sistem",
   "stock_battery": "Baterai",
-  "stock_uptime": "Waktu aktif"
+  "stock_uptime": "Waktu aktif",
+  "cfg_profile_apply_active": "Menerapkan konfigurasi tersimpan…",
+  "cfg_profile_apply_wait": "Harap tunggu sementara ASB memulihkan semua pengaturan tersimpan. Jangan tutup jendela ini."
 }

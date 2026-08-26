@@ -374,7 +374,7 @@
   "cfg_profile_storage_hint": "Profiles are stored safely inside ASB; choose a name, not a path.",
   "cfg_profile_manager_title": "Saved configurations",
   "cfg_profile_save_copy": "Save the current settings and, when available, Smart learning as a named configuration. You can also copy it to Downloads or Documents.",
-  "cfg_profile_open_copy": "Tap a saved configuration to preview and apply it. No profile name needs to be typed.",
+  "cfg_profile_open_copy": "Select a saved configuration, then press Apply. No profile name needs to be typed.",
   "cfg_profile_location": "Storage location",
   "cfg_profile_store_asb": "ASB",
   "cfg_profile_store_downloads": "Downloads",
@@ -384,11 +384,11 @@
   "cfg_profile_name_hint": "Use letters, digits, _ or -. Existing names require one extra Replace tap.",
   "cfg_profile_replace_ready": "Tap Replace to overwrite this saved configuration.",
   "cfg_profile_keys": "settings",
-  "cfg_profile_apply": "Apply configuration",
+  "cfg_profile_apply": "Apply saved configuration",
   "cfg_profile_prepare_apply": "Prepare apply",
   "cfg_profile_delete": "Delete",
   "cfg_profile_delete_confirm": "Delete now",
-  "cfg_profile_apply_hint": "Preview first, then apply. Downloads/Documents copies are checksum-checked before they enter ASB.",
+  "cfg_profile_apply_hint": "Apply restores all saved settings at once. Downloads/Documents copies are checksum-checked before they enter ASB.",
   "cfg_profile_export_err": "Saved in ASB, but could not copy to selected location",
   "cfg_profile_smart_saved": "Smart learning saved",
   "cfg_profile_smart_empty": "No Smart learning yet",
@@ -433,5 +433,7 @@
   "stock_cpu_clock": "CPU clock",
   "stock_load": "System load",
   "stock_battery": "Battery",
-  "stock_uptime": "Uptime"
+  "stock_uptime": "Uptime",
+  "cfg_profile_apply_active": "Applying saved configuration…",
+  "cfg_profile_apply_wait": "Please wait while ASB restores every saved setting. Do not close this window."
 }
