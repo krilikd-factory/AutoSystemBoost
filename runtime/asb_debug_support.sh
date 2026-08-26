@@ -34,6 +34,9 @@ LOCKDIR="$STATE_DIR/full_day_webui.lock"
 PIDFILE="$LOCKDIR/pid"
 LAUNCHERFILE="$LOCKDIR/launcher"
 TOKENFILE="$LOCKDIR/token"
+# Recorder-owned output directory. It is published only after the recorder has created it;
+# a missing published directory means the user intentionally removed this capture's results.
+OUTPUTFILE="$LOCKDIR/output_dir"
 # Kept only to avoid starting a second recorder when the module is upgraded while a capture
 # started by the pre-lock-directory helper is still alive. New starts never create this file.
 LEGACY_PIDFILE="$STATE_DIR/full_day_webui.pid"
@@ -99,6 +102,55 @@ lock_wait_live_pid() {
   return 1
 }
 
+full_day_output_path() {
+  [ -r "$OUTPUTFILE" ] || return 1
+  _fdo_path="$(tr -d '\r\n' < "$OUTPUTFILE" 2>/dev/null)"
+  [ -n "$_fdo_path" ] || return 1
+  printf '%s' "$_fdo_path"
+}
+
+full_day_output_missing() {
+  _fdom_path="$(full_day_output_path 2>/dev/null || true)"
+  [ -n "$_fdom_path" ] && [ ! -d "$_fdom_path" ]
+}
+
+full_day_pid_matches_recorder() {
+  _fdpm_pid="${1:-}"
+  [ -n "$_fdpm_pid" ] || return 1
+  _fdpm_cmd="$(ps -p "$_fdpm_pid" -o args= 2>/dev/null || ps -p "$_fdpm_pid" -o cmd= 2>/dev/null || true)"
+  case "$_fdpm_cmd" in *"$MODDIR/tools/logkit/asb_log_full_day.sh"*) return 0 ;; esac
+  return 1
+}
+
+full_day_cancel_orphan() {
+  # Deleting the published output directory is an explicit user cancellation of this capture.
+  # Never kill an arbitrary reused PID: only a live command line that is our own recorder may
+  # be terminated, and the atomic lock is removed only after that process is confirmed dead.
+  _fdco_pid="${1:-}"
+  full_day_output_missing || return 1
+  pid_is_live "$_fdco_pid" || return 1
+  full_day_pid_matches_recorder "$_fdco_pid" || return 1
+  kill -TERM "$_fdco_pid" 2>/dev/null || return 1
+  _fdco_try=0
+  while [ "$_fdco_try" -lt 12 ]; do
+    pid_is_live "$_fdco_pid" || break
+    sleep 0.1
+    _fdco_try=$(( _fdco_try + 1 ))
+  done
+  if pid_is_live "$_fdco_pid"; then
+    kill -KILL "$_fdco_pid" 2>/dev/null || return 1
+    _fdco_try=0
+    while [ "$_fdco_try" -lt 5 ]; do
+      pid_is_live "$_fdco_pid" || break
+      sleep 0.1
+      _fdco_try=$(( _fdco_try + 1 ))
+    done
+  fi
+  pid_is_live "$_fdco_pid" && return 1
+  rm -rf "$LOCKDIR" 2>/dev/null || true
+  return 0
+}
+
 lock_known_dead() {
   # A lock can be released only after both recorded process identities are known to be dead.
   # A missing PID is deliberately NOT considered stale: fail closed rather than risk a second
@@ -159,6 +211,12 @@ diag_lock_live_pid() {
   printf '%s' "$_dlp"
 }
 
+diag_lock_known_dead() {
+  [ -d "$DIAG_LOCKDIR" ] || return 1
+  _dld_pid="$(pid_from_file "$DIAG_PIDFILE" 2>/dev/null || true)"
+  [ -n "$_dld_pid" ] && ! pid_is_live "$_dld_pid"
+}
+
 diag_status_write() {
   _ds_tmp="${DIAG_STATUSFILE}.tmp.$$"
   printf '%s\n' "$@" > "$_ds_tmp" 2>/dev/null && mv -f "$_ds_tmp" "$DIAG_STATUSFILE" 2>/dev/null || rm -f "$_ds_tmp" 2>/dev/null || true
@@ -194,9 +252,13 @@ write_diag() {
   "$MODDIR/system/bin/asbdiag" > "$_tmp" 2>&1
   _rc=$?
   mv -f "$_tmp" "$_out" 2>/dev/null || { rm -f "$_tmp" 2>/dev/null || true; echo 'error=diag_write_failed'; return 5; }
-  echo "status=saved"
   echo "path=$_out"
   echo "exit=$_rc"
+  if [ "$_rc" -ne 0 ]; then
+    echo "error=asbdiag_exit_${_rc}"
+    return "$_rc"
+  fi
+  echo "status=saved"
   return 0
 }
 
@@ -208,8 +270,13 @@ diag_start() {
     echo 'status=already_running'; echo "pid=$_pid"; return 0
   fi
   if [ -d "$DIAG_LOCKDIR" ]; then
-    # Never remove a PID-less lock: the owner may be between mkdir and publication.
-    echo 'status=already_running'; echo 'pid=starting'; return 0
+    # A recorded dead worker cannot become live again. Reclaim exactly that stale lock;
+    # PID-less locks remain fail-closed because they may be in the publish window.
+    if diag_lock_known_dead; then
+      rm -rf "$DIAG_LOCKDIR" 2>/dev/null || true
+    else
+      echo 'status=already_running'; echo 'pid=starting'; return 0
+    fi
   fi
   if ! mkdir "$DIAG_LOCKDIR" 2>/dev/null; then
     echo 'status=already_running'; echo 'pid=starting'; return 0
@@ -259,10 +326,17 @@ start_full_day() {
 
   _pid="$(lock_live_pid 2>/dev/null || true)"
   if [ -n "$_pid" ]; then
-    echo "status=already_running"
-    echo "pid=$_pid"
-    echo "log=$RUNLOG"
-    return 0
+    # A live recorder normally blocks a second 24h job. The one exception is a capture whose
+    # published output directory was manually removed: safely terminate that orphan and reuse
+    # the single slot, instead of leaving the user with a stale PID forever.
+    if full_day_output_missing && full_day_cancel_orphan "$_pid"; then
+      echo 'orphan_recovered=output_dir_removed'
+    else
+      echo "status=already_running"
+      echo "pid=$_pid"
+      echo "log=$RUNLOG"
+      return 0
+    fi
   fi
   _pid="$(legacy_live_pid 2>/dev/null || true)"
   if [ -n "$_pid" ]; then
