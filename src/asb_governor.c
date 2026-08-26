@@ -1309,6 +1309,24 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_light_trim_pct,
                              smart_screenon_comfort ? "screenon_comfort_smart" : "screenon_comfort");
+        /* Some vendor `skin` zones are internal/remote and remain 35-40C while the
+         * body-adjacent hotspot that the user actually feels reaches 43-45C.  The
+         * new capture on canoe showed exactly that: CPU/skin remained below the
+         * configured skin threshold, so Smart only kept the headroom light trim
+         * despite sustained screen-on LTE/media drain and a 44C surface hotspot.
+         *
+         * Treat that verified surface signal as an earlier, bounded Smart-only
+         * comfort trigger.  It reuses the existing moderate budget ladder rather
+         * than introducing a per-device frequency table.  Battery, gaming, camera,
+         * charging and screen-off paths remain excluded; vendor thermal is still
+         * authoritative above it. */
+        if (smart_screenon_comfort && !m->bat.charging && m->misc.screen_on &&
+            !m->misc.camera_active && fsm->state != ASB_STATE_GAMING &&
+            m->therm.temp_valid && m->therm.surface_hotspot_c >= 43 &&
+            m->bat.current_ma >= 250)
+            asb_budget_raise(&candidate, &reason,
+                             g_asb_cfg.thermal_budget_moderate_trim_pct,
+                             "surface_comfort_smart");
         /* Camera deadlines are a QoS lease: do not introduce a light-only trim
          * during capture. Real thermal stress still wins at moderate/severe. */
         if (m->misc.camera_active && candidate <= g_asb_cfg.thermal_budget_light_trim_pct) {
