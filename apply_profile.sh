@@ -93,10 +93,12 @@ fi
 
 profile_next_epoch() {
   _tries=0
+  _retry_sleep="${1:-1}"
+  _max_tries="${2:-5}"
   while ! mkdir "$EPOCH_LOCK" 2>/dev/null; do
     _tries=$((_tries + 1))
-    [ "$_tries" -ge 5 ] && return 1
-    sleep 1
+    [ "$_tries" -ge "$_max_tries" ] && return 1
+    sleep "$_retry_sleep"
   done
   _old="$(cat "$EPOCH_FILE" 2>/dev/null)"
   case "$_old" in ''|*[!0-9]*) _old=0 ;; esac
@@ -195,12 +197,34 @@ notify_governor() {
   fi
 }
 
+stock_cancel_pending_worker() {
+  # Smart/other profile work may still be applying when the user requests Stock. Advance the
+  # epoch with a short bounded lock attempt, then terminate the old worker. Stock has already
+  # been persisted before this call, so a worker that wakes in the small race window reads Stock
+  # and exits through profile_core's terminal boundary instead of writing another profile.
+  profile_next_epoch 0.05 4 >/dev/null 2>&1 || asb_log 'stock: epoch lock busy; terminating previous worker anyway'
+  kill_prev_worker
+}
+
 quick_return_or_spawn() {
   _prev="$(cat /data/adb/asb/active_profile 2>/dev/null)"
   [ -z "$_prev" ] && _prev="unknown"
   echo "$_prev" > "$STATE_DIR/prev_profile" 2>/dev/null || true
   echo "$PROFILE" > "$MODDIR/current_profile" 2>/dev/null || true
   echo "$PROFILE" > /data/adb/asb/active_profile 2>/dev/null || true
+
+  if [ "$PROFILE" = "stock" ]; then
+    # notify_governor performs the complete synchronous Stock transaction: stop ASB, release
+    # profile leases and restore the captured profile baseline. Starting the ordinary worker
+    # afterwards only repeats that same no-policy branch and can sit behind the old Smart lock.
+    stock_cancel_pending_worker
+    notify_governor
+    update_desc_now
+    asb_log 'stock applied immediately; no duplicate profile worker spawned'
+    echo "Stock applied: ASB policy stopped"
+    exit 0
+  fi
+
   notify_governor
   update_desc_now
   spawn_worker
