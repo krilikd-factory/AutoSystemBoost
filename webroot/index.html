@@ -795,9 +795,11 @@ body::before, body::after {
 /* Debug export has no meaningful intermediate percentage. A centered modal says
  * that the request was accepted immediately and stays present until the text log
  * is either saved or the bridge returns an error. */
-.debug-action-wait { position:fixed; inset:0; z-index:1400; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(0,0,0,.58); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); }
+.debug-action-wait { position:fixed; inset:0; z-index:1400; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(0,0,0,.90); backdrop-filter:none; -webkit-backdrop-filter:none; }
 .debug-action-wait[hidden] { display:none !important; }
-.debug-action-wait-sheet { width:min(310px,100%); padding:22px 20px 20px; border:1px solid rgba(91,230,255,.58); border-radius:20px; background:linear-gradient(145deg, rgba(10,29,35,.98), rgba(4,13,16,.99)); box-shadow:0 0 0 1px rgba(44,214,173,.16), 0 18px 48px rgba(0,0,0,.58), 0 0 30px rgba(44,214,173,.14); text-align:center; }
+/* Diagnostic capture is an ASB operation sheet, not a translucent system dialog. Keep both
+   the scrim and the dialog surface truly black so gray OEM modal styling cannot leak through. */
+.debug-action-wait-sheet { width:min(310px,100%); padding:22px 20px 20px; border:1px solid rgba(91,230,255,.58); border-radius:20px; background:#000; box-shadow:0 0 0 1px rgba(44,214,173,.16), 0 18px 48px rgba(0,0,0,.82), 0 0 30px rgba(44,214,173,.14); text-align:center; }
 .debug-action-wait-spinner { width:34px; height:34px; margin:0 auto 13px; border:3px solid rgba(178,246,255,.20); border-top-color:#78efff; border-right-color:#2cd6ad; border-radius:50%; animation:spin .66s linear infinite; }
 .debug-action-wait-title { color:#d9fbff; font-size:15px; font-weight:800; letter-spacing:.1px; }
 .debug-action-wait-copy { margin-top:8px; color:rgba(225,241,244,.72); font-size:12px; line-height:1.45; }
@@ -927,6 +929,11 @@ body::before, body::after {
   opacity: 1; 
   transform: translateX(-50%) translateY(0) scale(1); 
 }
+/* The Stock restore notice is persistent only for the guarded root transaction. Unlike a
+   normal toast it must not time out while profile-owned baseline nodes are still returning. */
+.toast.stock-restoring { border-color:rgba(200,218,232,.72); color:#e5f1fa; background:#000; box-shadow:0 0 0 1px rgba(200,218,232,.20), 0 0 24px rgba(139,190,230,.18); }
+.toast.stock-restoring.show { animation:stockRestoreToastPulse .92s ease-in-out infinite; }
+@keyframes stockRestoreToastPulse { 0%,100% { filter:brightness(1); box-shadow:0 0 0 1px rgba(200,218,232,.20), 0 0 24px rgba(139,190,230,.18); } 50% { filter:brightness(1.34); box-shadow:0 0 0 2px rgba(210,232,248,.42), 0 0 34px rgba(126,205,255,.34); } }
 
 .toast.t-performance { 
   background: rgba(40,10,10,0.95); 
@@ -3444,13 +3451,29 @@ async function asbDebugAction(action) {
   }
 }
 
+let _stockRestoreToastTimer = 0;
+function stockRestoreToastOpen() {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  clearTimeout(_stockRestoreToastTimer);
+  t.className = 'toast t-warn stock-restoring';
+  t.textContent = T('t_stock_switching', 'Stock selected · restoring ROM baseline…');
+  requestAnimationFrame(() => t.classList.add('show'));
+}
+function stockRestoreToastClose() {
+  const t = document.getElementById('toast');
+  if (!t || !t.classList.contains('stock-restoring')) return;
+  t.classList.remove('stock-restoring');
+  t.classList.remove('show');
+}
 function toast(msg, type) {
   const t = document.getElementById('toast');
+  clearTimeout(_stockRestoreToastTimer);
   t.className = 'toast t-' + type;
   t.textContent = msg;
   requestAnimationFrame(() => {
     t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2200);
+    _stockRestoreToastTimer = setTimeout(() => t.classList.remove('show'), 2200);
   });
 }
 
@@ -3492,13 +3515,14 @@ async function go(p) {
   btn.classList.add('ld');
   if (p === 'stock') {
     stockMonitorReset();
-    toast(T('t_stock_switching', 'Stock selected · restoring ROM baseline…'), 'warn');
+    stockRestoreToastOpen();
   }
   // Do not enter the synchronous root bridge in the same event turn as ui(p). On slower
   // WebViews the bridge wins that race and the Stock card appears unchanged until restore ends.
   await profilePaintFrame();
   const r = await run('sh ' + MD + '/apply_profile.sh ' + p);
   document.querySelectorAll('.pbtn').forEach(b => b.classList.remove('ld'));
+  if (p === 'stock') stockRestoreToastClose();
   if (r.errno === 0) {
     haptic();
     uiSound('profile');
