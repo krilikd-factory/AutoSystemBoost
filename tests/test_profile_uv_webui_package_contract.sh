@@ -131,8 +131,13 @@ need "$UI" 'data-tech-icon="stock"'
 need "$UI" "ic.innerHTML = techIcon(g.icon);"
 need "$UI" "ico.innerHTML = techIcon(section.icon);"
 need "$UI" "ic.innerHTML = techIcon(CFG_ICONS[it.key] || 'generic');"
-need "$UI" "CAMERA_AGGRESSIVE:'target'"
-need "$UI" "net_handover_fast:'route'"
+need "$UI" 'data-tech-icon="telegram"'
+need "$UI" "CAMERA_AGGRESSIVE:'camera_aggressive'"
+need "$UI" "net_handover_fast:'handover'"
+need "$UI" 'grid-template-areas: "ico title" ". hint";'
+need "$UI" '.cfg-section-title {'
+need "$UI" 'min-height: 22px;'
+need "$UI" '.tg-link-ico .tech-icon { width: 18px; height: 18px; }'
 
 # Contextual sonic feedback is local WebAudio with the old click asset only as fallback. DSP
 # gain/bass stay silent because they reconfigure the path through which a cue would play.
@@ -150,12 +155,21 @@ text = open(sys.argv[1], encoding='utf-8').read()
 items = set(re.findall(r"\{ key:'([^']+)'", text))
 block = re.search(r'const CFG_ICONS = \{(.*?)\n\};', text, re.S)
 assert block, 'CFG_ICONS block missing'
-icons = set(re.findall(r"(?:^|,)\s*([A-Za-z0-9_]+):'([a-z_]+)'", block.group(1), re.M))
+icons = re.findall(r"(?:^|,)\s*([A-Za-z0-9_]+):'([a-z_]+)'", block.group(1), re.M)
 icon_keys = {k for k, _ in icons}
 missing = sorted(items - icon_keys)
 assert not missing, f'config keys without hi-tech icon kind: {missing}'
+used_kinds = [kind for key, kind in icons if key in items]
+assert len(used_kinds) == len(items), 'registered item map count drifted'
+duplicates = sorted({kind for kind in used_kinds if used_kinds.count(kind) > 1})
+assert not duplicates, f'visible tweak cards reuse glyph kinds: {duplicates}'
+paths = re.search(r'const TECH_ICON_PATHS = \{(.*?)\n\};', text, re.S)
+assert paths, 'TECH_ICON_PATHS block missing'
+path_kinds = set(re.findall(r'^\s*([a-z_]+):', paths.group(1), re.M))
+unknown = sorted(set(used_kinds) - path_kinds)
+assert not unknown, f'visible tweak mappings miss SVG paths: {unknown}'
 assert not re.search(r"CFG_ICONS = \{[^}]*\\uD83|CFG_ICONS = \{[^}]*\\u26", block.group(0), re.S), 'emoji literal remains in CFG_ICONS'
-print(f'PASS SVG icon coverage: {len(items)} config keys')
+print(f'PASS unique SVG icon coverage: {len(items)} config keys')
 PY
 
 # UV collector remains available to asbdiag but must not display ambiguous properties in WebUI.

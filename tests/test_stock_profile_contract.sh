@@ -130,8 +130,19 @@ need "$UI" 'id="bnStockUptime"'
 need "$UI" 'settings get global mobile_data_always_on'
 need "$UI" 'let _stockRomHistory = { ts: 0, cpuT: 0 };'
 ! grep -A130 'async function pollStockTelemetry' "$UI" | grep -Eq 'settings put|resetprop|tee .*\/sys|echo .*\/sys' || fail 'Stock telemetry contains a write operation'
-need "$UI" "if (visible && _selectedProfile === 'stock') {"
+need "$UI" "if (_selectedProfile === 'stock') {"
+need "$UI" "if (visible) await pollStockTelemetry(true);"
+need "$UI" 'Terminal boundary: never read /dev/.asb/state, learner_state.json, native status or'
 need "$UI" "const off = T('prof_stock_sub', 'ASB policy off');"
+need "$UI" 'function stockMonitorReset() {'
+need "$UI" 'function restoreManagedLiveLabels() {'
+need "$UI" "setLiveLabel('liveStateLabel', 'stock_rom_status', 'ROM status');"
+need "$UI" "setLiveLabel('liveEtaOnLabel', 'stock_live_drain', 'Battery current');"
+need "$UI" "setLiveLabel('liveCapSrcLabel', 'stock_cap_owner', 'Cap owner');"
+need "$UI" "setLiveLabel('liveLearnerLabel', 'stock_asb_learner', 'ASB learner');"
+need "$UI" 'stockProfileCommit'
+need "$UI" 'function profilePaintFrame() {'
+need "$UI" "T('t_stock_switching', 'Stock selected · restoring ROM baseline…')"
 # UI must acknowledge a profile tap before waiting for the root-side lifecycle. In particular,
 # Smart → Stock can safely take longer while the governor stops and the profile baseline restores.
 # A failed root transition must return the highlight to the confirmed previous profile.
@@ -150,11 +161,21 @@ def before(left, right):
         raise SystemExit('FAIL Stock UI switch contract: expected ' + left + ' before ' + right)
 require("const previousProfile = _selectedProfile;")
 require('ui(p);')
+require('stockMonitorReset();')
+require('await profilePaintFrame();')
 require("const r = await run('sh ' + MD + '/apply_profile.sh ' + p);")
 require('ui(previousProfile);')
-before('ui(p);', "const r = await run('sh ' + MD + '/apply_profile.sh ' + p);")
+before('ui(p);', 'await profilePaintFrame();')
+before('await profilePaintFrame();', "const r = await run('sh ' + MD + '/apply_profile.sh ' + p);")
 before("const r = await run('sh ' + MD + '/apply_profile.sh ' + p);", 'ui(previousProfile);')
-print('PASS Stock UI immediate-selection contract')
+# Stock must return from pollLive before it can parse stale governor state or learner data.
+poll = s[s.index('async function pollLive(visible) {'):s.index('\nfunction fmtStock', s.index('async function pollLive(visible) {')) if '\nfunction fmtStock' in s[s.index('async function pollLive(visible) {'):] else len(s)]
+terminal = poll.index("if (_selectedProfile === 'stock') {")
+state_read = poll.index("const r = await run('cat /dev/.asb/state 2>/dev/null');")
+assert terminal < state_read, 'Stock terminal boundary occurs after stale state read'
+stock_branch = poll[terminal:state_read]
+assert 'return;' in stock_branch, 'Stock terminal branch does not return before stale state read'
+print('PASS Stock immediate paint and ROM-only terminal monitor contract')
 PY
 need "$UI" 'gap: 8px;'
 need_count "$UI" '<button class="debug-support-btn" data-debug-action="diag"' 3
@@ -175,7 +196,7 @@ files = sorted(root.glob('*.json'))
 assert len(files) == 13, f'expected 13 locales, got {len(files)}'
 for p in files:
     data = json.loads(p.read_text(encoding='utf-8'))
-    for key in ('prof_stock', 'prof_stock_sub', 't_stock_applied', 'stock_cpu_clock', 'stock_load', 'stock_battery', 'stock_uptime', 'dbg_diag_wait', 'dbg_log_wait'):
+    for key in ('prof_stock', 'prof_stock_sub', 't_stock_applied', 't_stock_switching', 'stock_cpu_clock', 'stock_load', 'stock_battery', 'stock_uptime', 'stock_battery_current', 'stock_thermal_trend', 'stock_lpm_state', 'stock_ram_available', 'stock_rom_status', 'stock_asb_caps', 'stock_live_drain', 'stock_live_battery', 'stock_cap_owner', 'stock_asb_learner', 'stock_gpu_load', 'dbg_diag_wait', 'dbg_log_wait'):
         assert isinstance(data.get(key), str) and data[key].strip(), f'{p.name}: missing {key}'
     stale = ('reboot', 'перезаг', 'neustart', 'reiniciar', 'redémarrage', 'վերագործարկ', 'mulai ulang', 'riavvio', 'yeniden başlat', '重启')
     assert not any(word in data['t_stock_applied'].lower() for word in stale), f'{p.name}: stale reboot recommendation'

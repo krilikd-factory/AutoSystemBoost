@@ -206,8 +206,9 @@ count_exact "$UI" '<a class="tg-link" data-release-telegram' 3
 count_exact "$UI" '<a class="tg-link" data-debug-telegram' 3
 count_exact "$UI" "asbDebugAction('diag')" 3
 count_exact "$UI" "asbDebugAction('full-day')" 3
-count_exact "$UI" '<span class="tg-link-ico" data-tech-icon="audio"></span>' 6
-need "$UI" '.footer-support-row .tg-link-ico { font-size: 14px; }'
+count_exact "$UI" '<span class="tg-link-ico" data-tech-icon="telegram"></span>' 6
+need "$UI" '.tg-link-ico .tech-icon { width: 18px; height: 18px; }'
+need "$UI" '.footer-support-row .tg-link-ico { width: 16px; height: 16px; flex-basis: 16px; }'
 need "$UI" 'background: linear-gradient(135deg, rgba(0,240,180,0.08), rgba(0,212,255,0.05));'
 need "$UI" 'height: 40px;'
 need "$UI" 'flex-wrap: nowrap;'
