@@ -518,5 +518,17 @@
   "stock_battery": "Batarya",
   "stock_uptime": "Çalışma süresi",
   "cfg_profile_apply_active": "Kaydedilmiş yapılandırma uygulanıyor…",
-  "cfg_profile_apply_wait": "ASB tüm kaydedilmiş ayarları geri yüklerken lütfen bekleyin. Bu pencereyi kapatmayın."
+  "cfg_profile_apply_wait": "ASB tüm kaydedilmiş ayarları geri yüklerken lütfen bekleyin. Bu pencereyi kapatmayın.",
+  "t_stock_switching": "Stok seçildi · ROM temeli geri yükleniyor…",
+  "stock_battery_current": "Batarya akımı",
+  "stock_thermal_trend": "ROM termal eğilimi",
+  "stock_lpm_state": "Modem durumu",
+  "stock_ram_available": "Kullanılabilir RAM",
+  "stock_rom_status": "ROM durumu",
+  "stock_asb_caps": "ASB limitleri",
+  "stock_live_drain": "Batarya akımı",
+  "stock_live_battery": "Canlı batarya",
+  "stock_cap_owner": "Limit sahibi",
+  "stock_asb_learner": "ASB öğrenimi",
+  "stock_gpu_load": "GPU yükü"
 }

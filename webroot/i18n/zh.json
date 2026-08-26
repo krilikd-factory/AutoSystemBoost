@@ -518,5 +518,17 @@
   "stock_battery": "电池",
   "stock_uptime": "运行时间",
   "cfg_profile_apply_active": "正在应用已保存的配置…",
-  "cfg_profile_apply_wait": "请等待 ASB 恢复所有已保存的设置。请勿关闭此窗口。"
+  "cfg_profile_apply_wait": "请等待 ASB 恢复所有已保存的设置。请勿关闭此窗口。",
+  "t_stock_switching": "已选择原生模式 · 正在恢复 ROM 基线…",
+  "stock_battery_current": "电池电流",
+  "stock_thermal_trend": "ROM 温度趋势",
+  "stock_lpm_state": "调制解调器状态",
+  "stock_ram_available": "可用 RAM",
+  "stock_rom_status": "ROM 状态",
+  "stock_asb_caps": "ASB 限制",
+  "stock_live_drain": "电池电流",
+  "stock_live_battery": "实时电池",
+  "stock_cap_owner": "限制来源",
+  "stock_asb_learner": "ASB 学习",
+  "stock_gpu_load": "GPU 负载"
 }

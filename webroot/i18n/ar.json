@@ -518,5 +518,17 @@
   "stock_battery": "البطارية",
   "stock_uptime": "مدة التشغيل",
   "cfg_profile_apply_active": "جارٍ تطبيق التكوين المحفوظ…",
-  "cfg_profile_apply_wait": "يرجى الانتظار بينما يستعيد ASB كل الإعدادات المحفوظة. لا تغلق هذه النافذة."
+  "cfg_profile_apply_wait": "يرجى الانتظار بينما يستعيد ASB كل الإعدادات المحفوظة. لا تغلق هذه النافذة.",
+  "t_stock_switching": "تم اختيار المخزون · جارٍ استعادة أساس ROM…",
+  "stock_battery_current": "تيار البطارية",
+  "stock_thermal_trend": "اتجاه حرارة ROM",
+  "stock_lpm_state": "حالة المودم",
+  "stock_ram_available": "ذاكرة RAM المتاحة",
+  "stock_rom_status": "حالة ROM",
+  "stock_asb_caps": "حدود ASB",
+  "stock_live_drain": "تيار البطارية",
+  "stock_live_battery": "حالة البطارية المباشرة",
+  "stock_cap_owner": "مالك الحد",
+  "stock_asb_learner": "متعلم ASB",
+  "stock_gpu_load": "حمل GPU"
 }

@@ -518,5 +518,17 @@
   "stock_battery": "Baterai",
   "stock_uptime": "Waktu aktif",
   "cfg_profile_apply_active": "Menerapkan konfigurasi tersimpan…",
-  "cfg_profile_apply_wait": "Harap tunggu sementara ASB memulihkan semua pengaturan tersimpan. Jangan tutup jendela ini."
+  "cfg_profile_apply_wait": "Harap tunggu sementara ASB memulihkan semua pengaturan tersimpan. Jangan tutup jendela ini.",
+  "t_stock_switching": "Bawaan dipilih · memulihkan basis ROM…",
+  "stock_battery_current": "Arus baterai",
+  "stock_thermal_trend": "Tren termal ROM",
+  "stock_lpm_state": "Status modem",
+  "stock_ram_available": "RAM tersedia",
+  "stock_rom_status": "Status ROM",
+  "stock_asb_caps": "Batas ASB",
+  "stock_live_drain": "Arus baterai",
+  "stock_live_battery": "Baterai langsung",
+  "stock_cap_owner": "Pemilik batas",
+  "stock_asb_learner": "Pembelajaran ASB",
+  "stock_gpu_load": "Beban GPU"
 }

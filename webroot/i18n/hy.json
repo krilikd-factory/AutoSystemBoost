@@ -672,5 +672,17 @@
   "stock_battery": "Մարտկոց",
   "stock_uptime": "Աշխատանքի ժամանակ",
   "cfg_profile_apply_active": "Պահված կազմաձևը կիրառվում է…",
-  "cfg_profile_apply_wait": "Սպասեք, մինչ ASB-ն վերականգնում է բոլոր պահված կարգավորումները։ Մի փակեք այս պատուհանը։"
+  "cfg_profile_apply_wait": "Սպասեք, մինչ ASB-ն վերականգնում է բոլոր պահված կարգավորումները։ Մի փակեք այս պատուհանը։",
+  "t_stock_switching": "Ստանդարտն ընտրված է · ROM-ի հիմքը վերականգնվում է…",
+  "stock_battery_current": "Մարտկոցի հոսանք",
+  "stock_thermal_trend": "ROM ջերմային միտում",
+  "stock_lpm_state": "Մոդեմի վիճակ",
+  "stock_ram_available": "Հասանելի RAM",
+  "stock_rom_status": "ROM-ի վիճակ",
+  "stock_asb_caps": "ASB սահմաններ",
+  "stock_live_drain": "Մարտկոցի հոսանք",
+  "stock_live_battery": "Մարտկոց՝ ուղիղ",
+  "stock_cap_owner": "Սահմանի աղբյուր",
+  "stock_asb_learner": "ASB ուսուցում",
+  "stock_gpu_load": "GPU բեռ"
 }

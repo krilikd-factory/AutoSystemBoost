@@ -673,5 +673,17 @@
   "stock_battery": "Батарея",
   "stock_uptime": "Время работы",
   "cfg_profile_apply_active": "Применение сохранённой конфигурации…",
-  "cfg_profile_apply_wait": "Подождите: ASB восстанавливает все сохранённые настройки. Не закрывайте это окно."
+  "cfg_profile_apply_wait": "Подождите: ASB восстанавливает все сохранённые настройки. Не закрывайте это окно.",
+  "t_stock_switching": "Сток выбран · восстанавливается ROM-база…",
+  "stock_battery_current": "Ток батареи",
+  "stock_thermal_trend": "Тепловой тренд ROM",
+  "stock_lpm_state": "Состояние модема",
+  "stock_ram_available": "Доступно RAM",
+  "stock_rom_status": "Состояние ROM",
+  "stock_asb_caps": "Кепы ASB",
+  "stock_live_drain": "Ток батареи",
+  "stock_live_battery": "Батарея сейчас",
+  "stock_cap_owner": "Источник кепа",
+  "stock_asb_learner": "Обучение ASB",
+  "stock_gpu_load": "Нагрузка GPU"
 }

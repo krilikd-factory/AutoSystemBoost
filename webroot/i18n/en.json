@@ -435,5 +435,17 @@
   "stock_battery": "Battery",
   "stock_uptime": "Uptime",
   "cfg_profile_apply_active": "Applying saved configuration…",
-  "cfg_profile_apply_wait": "Please wait while ASB restores every saved setting. Do not close this window."
+  "cfg_profile_apply_wait": "Please wait while ASB restores every saved setting. Do not close this window.",
+  "t_stock_switching": "Stock selected · restoring ROM baseline…",
+  "stock_battery_current": "Battery current",
+  "stock_thermal_trend": "ROM thermal trend",
+  "stock_lpm_state": "Modem state",
+  "stock_ram_available": "RAM available",
+  "stock_rom_status": "ROM status",
+  "stock_asb_caps": "ASB caps",
+  "stock_live_drain": "Battery current",
+  "stock_live_battery": "Battery live",
+  "stock_cap_owner": "Cap owner",
+  "stock_asb_learner": "ASB learner",
+  "stock_gpu_load": "GPU load"
 }

@@ -518,5 +518,17 @@
   "stock_battery": "Akku",
   "stock_uptime": "Laufzeit",
   "cfg_profile_apply_active": "Gespeicherte Konfiguration wird angewendet…",
-  "cfg_profile_apply_wait": "Bitte warten, während ASB alle gespeicherten Einstellungen wiederherstellt. Dieses Fenster nicht schließen."
+  "cfg_profile_apply_wait": "Bitte warten, während ASB alle gespeicherten Einstellungen wiederherstellt. Dieses Fenster nicht schließen.",
+  "t_stock_switching": "Stock ausgewählt · ROM-Basis wird wiederhergestellt…",
+  "stock_battery_current": "Batteriestrom",
+  "stock_thermal_trend": "ROM-Temperaturtrend",
+  "stock_lpm_state": "Modemstatus",
+  "stock_ram_available": "RAM verfügbar",
+  "stock_rom_status": "ROM-Status",
+  "stock_asb_caps": "ASB-Limits",
+  "stock_live_drain": "Batteriestrom",
+  "stock_live_battery": "Batterie live",
+  "stock_cap_owner": "Limit-Inhaber",
+  "stock_asb_learner": "ASB-Lernen",
+  "stock_gpu_load": "GPU-Last"
 }

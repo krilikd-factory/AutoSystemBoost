@@ -672,5 +672,17 @@
   "stock_battery": "Batterie",
   "stock_uptime": "Temps de fonctionnement",
   "cfg_profile_apply_active": "Application de la configuration enregistrée…",
-  "cfg_profile_apply_wait": "Veuillez patienter pendant qu’ASB restaure tous les réglages enregistrés. Ne fermez pas cette fenêtre."
+  "cfg_profile_apply_wait": "Veuillez patienter pendant qu’ASB restaure tous les réglages enregistrés. Ne fermez pas cette fenêtre.",
+  "t_stock_switching": "Origine sélectionné · restauration de la base ROM…",
+  "stock_battery_current": "Courant de batterie",
+  "stock_thermal_trend": "Tendance thermique ROM",
+  "stock_lpm_state": "État du modem",
+  "stock_ram_available": "RAM disponible",
+  "stock_rom_status": "État de la ROM",
+  "stock_asb_caps": "Limites ASB",
+  "stock_live_drain": "Courant de batterie",
+  "stock_live_battery": "Batterie en direct",
+  "stock_cap_owner": "Source de limite",
+  "stock_asb_learner": "Apprentissage ASB",
+  "stock_gpu_load": "Charge GPU"
 }
