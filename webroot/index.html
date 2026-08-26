@@ -1207,8 +1207,11 @@ body.live-active .page:not(.live-page) {
 .live-cell-value.cap-shell { color: var(--accent2); }
 
 /* Stock ROM telemetry is read-only and only visible for the Stock profile. */
-.stock-telemetry { display:none; width:100%; margin-top:8px; }
-.stock-telemetry.on { display:block; }
+/* Stock telemetry is consumed by the normal read-only monitor cards. Keep this hidden
+   compatibility node out of the user-facing page: a raw /proc/sysfs dump is useful for
+   diagnostics, but it is not a monitor UI. */
+.stock-telemetry { display:none !important; width:100%; margin-top:8px; }
+.stock-telemetry.on { display:none !important; }
 .stock-telemetry-title { margin:0 0 6px; color:var(--text-tertiary); font:9px/1.1 var(--mono); letter-spacing:.06em; text-transform:uppercase; }
 .stock-telemetry-pre { margin:0; max-height:270px; overflow:auto; padding:10px 12px; border:1px solid rgba(200,210,218,.22); border-radius:14px; background:rgba(200,210,218,.035); color:rgba(232,239,244,.78); font:10px/1.42 var(--mono); white-space:pre-wrap; word-break:break-word; font-variant-numeric:tabular-nums; }
 
@@ -5667,42 +5670,92 @@ async function refreshSmartSubLine() {
   } catch(e) { return false; }
 }
 
-function paintStockLive() {
+function paintStockLive(stockKv = null) {
   const stock = T('prof_stock', 'Stock');
   const off = T('prof_stock_sub', 'ASB policy off');
   const profile = _el('liveCurProfile');
   if (profile) profile.textContent = stock;
   const state = _el('liveState');
   if (state) state.textContent = stock + ' · ' + off;
-  // These are governor-owned values. Stock intentionally terminates the governor and removes
-  // its state file, so retaining a previous profile's numbers would be less honest than an
-  // explicit empty state. Raw Android thermal/battery telemetry remains available in asbdiag.
-  ['liveClamp','liveCpu','liveSkin','liveSurface','liveEtaOn','liveEtaOff',
-   'liveCapSrc','liveLearner','liveGpu','liveHeadroom'].forEach(id => {
-    const node = _el(id); if (node) node.textContent = '—';
-  });
+
+  // Stock intentionally has no governor state, prediction, learner or cap ownership. It does,
+  // however, expose safe ROM telemetry. Render that telemetry in the same cards as other
+  // profiles rather than showing a user-facing raw sysfs dump. This function is read-only: the
+  // payload is collected by pollStockTelemetry with cat/cut/grep only.
+  const kv = stockKv || {};
+  const n = (v) => { const m = String(v || '').match(/-?\d+/); return m ? parseInt(m[0], 10) : 0; };
+  const c = (v) => { const x = n(v); return x > 1000 || x < -1000 ? Math.round(x / 1000) : x; };
+  const maxTemp = (re) => {
+    const a = Object.entries(kv).filter(([k]) => k.startsWith('thermal.') && re.test(k))
+      .map(([, v]) => c(v)).filter(v => v > 0 && v < 120);
+    return a.length ? Math.max(...a) : 0;
+  };
+  const cpuT = maxTemp(/cpu|cpullc|socd/i);
+  const skinT = maxTemp(/shell|skin|surface|frame|back|front/i);
+  const hotT = maxTemp(/cpu|cpullc|socd|gpu|gpuss|ddr/i);
+  let ma = n(kv['battery.current_now']);
+  if (Math.abs(ma) > 10000) ma = Math.round(ma / 1000);
+  const capPct = n(kv['battery.capacity']);
+  let volt = n(kv['battery.voltage_now']);
+  if (volt > 10000) volt /= 1000000;
+  const batTRaw = n(kv['battery.temp']);
+  const batT = batTRaw > 100 ? Math.round(batTRaw / 10) : batTRaw;
+  const gpu = n(kv['gpu.gpu_busy_percentage'] || kv['gpu.gpubusy']);
+  const ramKb = n(kv.MemAvailable);
+  const ramGb = ramKb > 0 ? (ramKb / 1048576).toFixed(1) + ' GB' : '—';
+  const set = (id, value, title = '') => { const el = _el(id); if (el) { el.textContent = value || '—'; el.title = title; } };
+
+  set('liveClamp', '—', off + ': ROM cap history is not collected in Stock.');
+  set('liveCpu', cpuT ? fmtTempC(cpuT) + '°C' : '—');
+  set('liveSkin', skinT ? skinT + '°C' : '—');
+  set('liveSurface', hotT ? hotT + '°C' : '—');
+  set('liveEtaOn', capPct ? (capPct + '% · ' + Math.abs(ma) + ' mA') : '—',
+      'Live ROM battery capacity and current; Stock does not fabricate an ASB forecast.');
+  set('liveEtaOff', (volt > 0 ? volt.toFixed(2) + ' V' : '—') + (batT ? ' · ' + batT + '°C' : ''),
+      'Live ROM battery voltage and temperature.');
+  set('liveCapSrc', 'ROM', off);
   const cap = _el('liveCapSrc');
-  if (cap) cap.textContent = off;
+  if (cap) cap.className = 'live-cell-value';
+  set('liveLearner', off);
+  set('liveGpu', gpu > 0 ? gpu + '%' : '—');
+  set('liveHeadroom', ramGb, 'MemAvailable from /proc/meminfo (read-only).');
+
+  // These indicators belong to an active ASB governor. Clear stale values carried over from
+  // the previous profile: Stock has no Smart state, learner, LPM policy or ASB recovery state.
+  const smartBanner = _el('liveSmartBanner');
+  if (smartBanner) smartBanner.style.display = 'none';
+  const chip = _el('liveChip');
+  if (chip) chip.classList.remove('has-issue', 'has-error');
 }
 
 let _stockTelemetryLastMs = 0;
+let _stockTelemetryKv = {};
 const STOCK_TELEMETRY_MIN_INTERVAL_MS = 10000;
 async function pollStockTelemetry(visible, force = false) {
   const box = _el('stockTelemetry');
-  if (box) box.classList.toggle('on', visible && _selectedProfile === 'stock');
+  // Retained only as a hidden compatibility node; normal cards below receive the parsed data.
+  if (box) box.classList.remove('on');
   if (!visible || _selectedProfile !== 'stock') return;
   const now = Date.now();
   if (!force && (now - _stockTelemetryLastMs) < STOCK_TELEMETRY_MIN_INTERVAL_MS) return;
   _stockTelemetryLastMs = now;
   const pre = _el('liveStockTelemetry');
-  if (!pre) return;
   try {
     const cmd = "sh -c 'printf \"ts=%s\\n\" \"$(date +%s)\"; printf \"uptime=%s\\n\" \"$(cut -d\" \" -f1 /proc/uptime 2>/dev/null)\"; printf \"loadavg=%s\\n\" \"$(cut -d\" \" -f1-3 /proc/loadavg 2>/dev/null)\"; for f in capacity current_now voltage_now temp status charge_full; do printf \"battery.%s=%s\\n\" \"$f\" \"$(cat /sys/class/power_supply/battery/$f 2>/dev/null)\"; done; grep -E \"^(MemTotal|MemAvailable|MemFree|Cached|SwapFree):\" /proc/meminfo 2>/dev/null; for d in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$d\" ] || continue; n=${d##*/}; for f in scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor cpuinfo_max_freq; do printf \"cpu.%s.%s=%s\\n\" \"$n\" \"$f\" \"$(cat \"$d/$f\" 2>/dev/null)\"; done; done; g=/sys/class/kgsl/kgsl-3d0; for f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do printf \"gpu.%s=%s\\n\" \"$f\" \"$(cat \"$g/$f\" 2>/dev/null | head -1)\"; done; for z in /sys/class/thermal/thermal_zone*; do [ -r \"$z/temp\" ] || continue; label=$(cat \"$z/type\" 2>/dev/null); temp=$(cat \"$z/temp\" 2>/dev/null); [ -n \"$temp\" ] && printf \"thermal.%s=%s\\n\" \"$label\" \"$temp\"; done'";
     const r = await run(cmd);
     const text = ((r && r.stdout) || '').trim();
-    pre.textContent = text || T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
+    const kv = {};
+    text.split(/\r?\n/).forEach(line => {
+      const eq = line.indexOf('=');
+      if (eq > 0) kv[line.slice(0, eq)] = line.slice(eq + 1);
+    });
+    _stockTelemetryKv = kv;
+    paintStockLive(_stockTelemetryKv);
+    if (pre) pre.textContent = text || T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
   } catch(e) {
-    pre.textContent = T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
+    _stockTelemetryKv = {};
+    paintStockLive(_stockTelemetryKv);
+    if (pre) pre.textContent = T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
   }
 }
 
@@ -5721,7 +5774,7 @@ async function pollLive(visible) {
       // is not a failed monitor poll and must never leave the static "balanced" placeholder
       // visible. Non-Stock keeps the existing neutral empty state for genuine startup errors.
       if (visible && _selectedProfile === 'stock') {
-        paintStockLive();
+        paintStockLive(_stockTelemetryKv);
       }
       return;
     }
