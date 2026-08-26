@@ -552,16 +552,17 @@ asb_apply_ux() {
   # Do not modify google_core_control here. Its meaning is ROM/OEM-specific and
   # ASB has no explicit opt-in, baseline or restore contract for this setting.
 
-  # Blur is a UX setting like the rest, and the one part of it that does NOT need a reboot:
-  # WindowManager watches this global live, so the shade and the launcher drop their blur the
-  # moment it is written.
+  # Blur is a user-owned display preference.  On ColorOS/OxygenOS a late WindowManager
+  # reconfiguration can make the OEM re-resolve display scale/density during boot.  Therefore
+  # the default `disable_blur=0` is true stock/no-touch: only an explicit "disable blur" choice
+  # may write the WindowManager setting.  The WebUI helper still restores blur once when a user
+  # deliberately changes the card back to stock.
   _blur_want="$(grep -E '^[[:space:]]*disable_blur=' "$_ux_conf" 2>/dev/null \
                 | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_blur_want" in
     1) asb_settings_put global disable_window_blurs 1
        wm disable-blur true >/dev/null 2>&1 || true ;;
-    0) asb_settings_put global disable_window_blurs 0
-       wm disable-blur false >/dev/null 2>&1 || true ;;
+    0) : ;;  # stock mode does not touch WindowManager or display configuration
   esac
 
   if [ "$_anim_changed" = "1" ]; then
