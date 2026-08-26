@@ -27,6 +27,7 @@ LK_MAX_SEC=$(( LK_HOURS * 3600 ))
 # not set these variables and retain their original behaviour.
 LK_WEBUI_LOCKDIR="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"
 LK_WEBUI_LOCK_TOKEN="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
+LK_WEBUI_OUTPUTFILE="${LK_WEBUI_LOCKDIR:+$LK_WEBUI_LOCKDIR/output_dir}"
 lk_webui_guard_claim() {
   [ -n "$LK_WEBUI_LOCKDIR" ] && [ -n "$LK_WEBUI_LOCK_TOKEN" ] || return 0
   [ -d "$LK_WEBUI_LOCKDIR" ] || return 1
@@ -42,6 +43,14 @@ lk_webui_guard_release() {
   _lwg_pid="$(tr -dc '0-9' < "$LK_WEBUI_LOCKDIR/pid" 2>/dev/null || true)"
   [ "$_lwg_pid" = "$$" ] || return 0
   rm -rf "$LK_WEBUI_LOCKDIR" 2>/dev/null || true
+}
+lk_webui_guard_publish_output() {
+  [ -n "$LK_WEBUI_OUTPUTFILE" ] || return 0
+  [ -d "$LK_WEBUI_LOCKDIR" ] && [ -d "$LK_OUT_DIR" ] || return 1
+  _lwo_tmp="${LK_WEBUI_OUTPUTFILE}.tmp.$$"
+  printf '%s\n' "$LK_OUT_DIR" > "$_lwo_tmp" 2>/dev/null || return 1
+  mv -f "$_lwo_tmp" "$LK_WEBUI_OUTPUTFILE" 2>/dev/null || { rm -f "$_lwo_tmp" 2>/dev/null || true; return 1; }
+  return 0
 }
 # Claim before creating capture artefacts, so any observer sees a recorder PID rather than
 # a transient launcher PID. A failed claim means a stale/mismatched caller and must exit.
@@ -732,6 +741,9 @@ lk_emit_charging_idle_anomaly() {
 : "${ASB_BT_RECONNECT_TRACE:=1}"
 export ASB_BT_RECONNECT_TRACE
 lk_init
+# Publish after lk_init created the per-capture directory. If the user later deletes this
+# exact directory, the launcher can safely identify this capture as cancelled/orphaned.
+lk_webui_guard_publish_output || { echo '[debug-webui] output marker publish failed'; lk_webui_guard_release; exit 2; }
 lk_audio_wakelock_attribution_init
 lk_fsm_media_trace_header
 lk_bt_reconnect_start
