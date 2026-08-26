@@ -3335,26 +3335,19 @@ _asb_blur_have=0
 grep -q '^persist\.sys\.sf\.disable_blurs=1' "$MODDIR/system.prop" 2>/dev/null && _asb_blur_have=1
 if [ -f "$MODDIR/runtime/asb_blur_apply.sh" ]; then
   if [ "$_asb_blur_want" != "$_asb_blur_have" ]; then
-    sh "$MODDIR/runtime/asb_blur_apply.sh" >/dev/null 2>&1
-    asb_log "disable_blur=$_asb_blur_want: system.prop block rebuilt, compositor half active next boot"
-  else
-    # Re-assert BOTH directions, not just "off".
-    #
-    # This branch runs when system.prop already matches, i.e.
-    # Only write when the live value is actually wrong.
-    #
-    # WindowManager watches this key and rebuilds its blur state whenever it changes -
-    # and re-writing the same value still counts as a change to the observer. Doing that
-    # late in boot is why the launcher background lost its blur for about a second the
-    # first time the app drawer opened, then corrected itself: the drawer was drawn with
-    # blur state that had just been invalidated underneath it. Reported after V61.
+    # Rebuild only the managed property payload.  The helper receives --boot so default
+    # `disable_blur=0` cannot issue a late WindowManager display transaction on OOS/ColorOS.
+    sh "$MODDIR/runtime/asb_blur_apply.sh" --boot >/dev/null 2>&1
+    asb_log "disable_blur=$_asb_blur_want: system.prop block rebuilt; default display state untouched"
+  elif [ "$_asb_blur_want" = "1" ]; then
+    # Re-assert only the explicit opt-in direction.  Stock blur is owned by Android/OEM and
+    # must not be rewritten at boot, because some vendor WindowManager stacks re-resolve user
+    # display scale/density after a blur configuration transaction.
     _blur_now="$(settings get global disable_window_blurs 2>/dev/null)"
     case "$_blur_now" in ""|null) _blur_now=0 ;; esac
-    _blur_want=0
-    [ "$_asb_blur_want" = "1" ] && _blur_want=1
-    if [ "$_blur_now" != "$_blur_want" ]; then
-      settings put global disable_window_blurs "$_blur_want" >/dev/null 2>&1
-      asb_log "blur: disable_window_blurs $_blur_now -> $_blur_want"
+    if [ "$_blur_now" != "1" ]; then
+      settings put global disable_window_blurs 1 >/dev/null 2>&1
+      asb_log "blur: disable_window_blurs $_blur_now -> 1 (explicit opt-in)"
     fi
   fi
 fi
