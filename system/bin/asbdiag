@@ -691,6 +691,17 @@ case "$(cfg net_handover_fast)" in
   *) NOTE "Wi-Fi → mobile handover: stock/off" ;;
 esac
 
+# A strongly battery-lean Smart session must not negate its own economy choice by holding
+# mobile_data_always_on during a feed/media HEAVY burst.  This is read-only explanation of the
+# native policy; confirmed games and camera sessions retain fast LPM.
+_smart_lpm_bias="$(cfg smart_battery_bias)"
+case "$_smart_lpm_bias" in
+  ''|*[!0-9]*) ;;
+  *) if [ "$_prof" = "smart" ] && [ "$_smart_lpm_bias" -ge 400 ]; then
+       NOTE "Smart battery-lean: HEAVY media uses normal LPM; gaming/camera retain fast"
+     fi ;;
+esac
+
 # Per-interface reality. The global sysctls say nothing about what each link is doing, and
 # here they can legitimately differ: congestion is set per route, the queue per interface.
 if command -v ip >/dev/null 2>&1; then
