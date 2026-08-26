@@ -72,7 +72,11 @@ need "$UI" "MD + '/runtime/asb_config_safe.sh'"
 need "$UI" "MD + '/runtime/asb_smart_reset.sh'"
 need "$UI" 'padding: 0 max(14px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));'
 need "$UI" 'min-height: min(36vh, 500px); max-height: min(88vh, 780px);'
-need "$UI" 'border: 1px solid #35bb99; border-radius: 26px; background-color: #080d0e; background-image: linear-gradient(160deg, #0c1415, #070a0b 72%); background-clip: padding-box; box-shadow: 0 -20px 60px rgba(0,0,0,.5);'
+need "$UI" 'border:1px solid #35bb99; border-radius:26px; background:#000; box-shadow:0 -20px 60px rgba(0,0,0,.70);'
+need "$UI" 'cfg-profile-actions button.cfg-profile-apply.is-running'
+need "$UI" '@keyframes cfgProfileApplyPulse'
+need "$UI" 'cfg-profile-progress'
+absent "$UI" 'background-image: linear-gradient(160deg, #0c1415, #070a0b 72%)'
 absent "$UI" 'rgba(73,224,187,.82)'
 absent "$UI" 'box-shadow: inset 0 -1px 0'
 need "$UI" 'function cfgProfileNameOK(name)'
@@ -85,8 +89,14 @@ need "$UI" 'cfg-profile-row'
 need "$UI" "'list-external '"
 need "$UI" "' import-external '"
 need "$UI" "' export '"
-need "$UI" "' preview '"
 need "$UI" "' restore '"
+need "$UI" 'function cfgProfilePaintYield()'
+need "$UI" "_cfgProfile.busy = true;"
+need "$UI" "await cfgProfilePaintYield();"
+need "$UI" "T('cfg_profile_apply_active','Applying saved configuration…')"
+need "$UI" "T('cfg_profile_apply_wait','Please wait while ASB restores every saved setting. Do not close this window.')"
+absent "$UI" 'cfgProfilePreview'
+absent "$UI" 'cfg_profile_prepare_apply'
 absent "$UI" "prompt(T('cfg_profile_name'"
 absent "$UI" "confirm(T('cfg_profile_replace_q'"
 absent "$UI" "confirm(T('cfg_profile_preview'"
@@ -109,6 +119,45 @@ need "$UI" 'function cfgRenderGroup(list, groupId)'
 need "$UI" 'cfgRenderGroup(list, _cfgGroup);'
 need "$UI" '.cfg-section-hint'
 
+# Every profile/category/section/tweak now uses a deterministic inline SVG glyph instead of
+# Android-dependent emoji. The map must cover all registered config keys, while the fallback
+# remains semantic (`generic`) rather than a gear emoji.
+need "$UI" 'const TECH_ICON_PATHS = {'
+need "$UI" 'function techIcon(kind) {'
+need "$UI" 'function renderStaticTechIcons() {'
+need "$UI" 'data-tech-icon="smart"'
+need "$UI" 'data-tech-icon="performance"'
+need "$UI" 'data-tech-icon="stock"'
+need "$UI" "ic.innerHTML = techIcon(g.icon);"
+need "$UI" "ico.innerHTML = techIcon(section.icon);"
+need "$UI" "ic.innerHTML = techIcon(CFG_ICONS[it.key] || 'generic');"
+need "$UI" "CAMERA_AGGRESSIVE:'target'"
+need "$UI" "net_handover_fast:'route'"
+
+# Contextual sonic feedback is local WebAudio with the old click asset only as fallback. DSP
+# gain/bass stay silent because they reconfigure the path through which a cue would play.
+need "$UI" 'const UI_SONIC = {'
+need "$UI" 'function uiSound(kind) {'
+need "$UI" "uiSound('profile');"
+need "$UI" "uiSound('capture');"
+need "$UI" "tile.onclick = () => { uiSound('nav');"
+need "$UI" "if (CFG_SILENT_KEYS.indexOf(key) < 0) uiSound(cfgSoundKind(key, val));"
+need "$UI" "const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass'];"
+
+python3 - "$UI" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding='utf-8').read()
+items = set(re.findall(r"\{ key:'([^']+)'", text))
+block = re.search(r'const CFG_ICONS = \{(.*?)\n\};', text, re.S)
+assert block, 'CFG_ICONS block missing'
+icons = set(re.findall(r"(?:^|,)\s*([A-Za-z0-9_]+):'([a-z_]+)'", block.group(1), re.M))
+icon_keys = {k for k, _ in icons}
+missing = sorted(items - icon_keys)
+assert not missing, f'config keys without hi-tech icon kind: {missing}'
+assert not re.search(r"CFG_ICONS = \{[^}]*\\uD83|CFG_ICONS = \{[^}]*\\u26", block.group(0), re.S), 'emoji literal remains in CFG_ICONS'
+print(f'PASS SVG icon coverage: {len(items)} config keys')
+PY
+
 # UV collector remains available to asbdiag but must not display ambiguous properties in WebUI.
 need "$UV" 'asb_action" "diagnostics_only'
 need "$UV" 'ASB does not own, write, validate, disable or revert external voltage policy'
@@ -124,7 +173,7 @@ import json, sys
 from pathlib import Path
 root = Path(sys.argv[1]) / 'webroot' / 'i18n'
 keys = {'cfg_profile_save_short','cfg_profile_load_short','cfg_audio_section_playback','cfg_audio_section_playback_hint','cfg_audio_section_dsp','cfg_audio_section_dsp_hint','cfg_audio_section_safety','cfg_audio_section_safety_hint'}
-manager_keys = {'cfg_profile_manager_title','cfg_profile_save_copy','cfg_profile_open_copy','cfg_profile_location','cfg_profile_store_asb','cfg_profile_store_downloads','cfg_profile_store_documents','cfg_profile_save_action','cfg_profile_replace','cfg_profile_name_hint','cfg_profile_replace_ready','cfg_profile_keys','cfg_profile_apply','cfg_profile_prepare_apply','cfg_profile_delete','cfg_profile_delete_confirm','cfg_profile_apply_hint','cfg_profile_export_err'}
+manager_keys = {'cfg_profile_manager_title','cfg_profile_save_copy','cfg_profile_open_copy','cfg_profile_location','cfg_profile_store_asb','cfg_profile_store_downloads','cfg_profile_store_documents','cfg_profile_save_action','cfg_profile_replace','cfg_profile_name_hint','cfg_profile_replace_ready','cfg_profile_keys','cfg_profile_apply','cfg_profile_apply_active','cfg_profile_apply_wait','cfg_profile_delete','cfg_profile_delete_confirm','cfg_profile_apply_hint','cfg_profile_export_err'}
 reset_keys = {'cfg_reset_dialog_title','cfg_reset_dialog_copy','cfg_reset_all_title','cfg_reset_all_copy','cfg_reset_smart_title','cfg_reset_smart_copy','cfg_reset_confirm','cfg_reset_all_done','cfg_reset_all_fail'}
 files = sorted(root.glob('*.json'))
 assert len(files) == 13, f'expected 13 locale files, got {len(files)}'
@@ -134,9 +183,9 @@ for p in files:
     assert not missing, f'{p.name}: missing {missing}'
     stale = sorted(k for k in data if k.startswith('cfg_uv_'))
     assert not stale, f'{p.name}: stale UV card keys {stale}'
+    missing_manager = sorted(k for k in manager_keys if not isinstance(data.get(k), str) or not data[k].strip())
+    assert not missing_manager, f'{p.name}: missing manager keys {missing_manager}'
     if p.stem in {'en', 'ru'}:
-        missing_manager = sorted(k for k in manager_keys if not isinstance(data.get(k), str) or not data[k].strip())
-        assert not missing_manager, f'{p.name}: missing manager keys {missing_manager}'
         missing_reset = sorted(k for k in reset_keys if not isinstance(data.get(k), str) or not data[k].strip())
         assert not missing_reset, f'{p.name}: missing reset keys {missing_reset}'
 print('PASS profile, Audio/DSP subsection locale keys and diagnostics-only UV boundary: 13 locales')

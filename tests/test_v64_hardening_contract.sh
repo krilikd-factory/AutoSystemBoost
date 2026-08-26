@@ -57,8 +57,13 @@ need "$WEBUI" 'data-i18n="cfg_profile_load_short"'
 absent "$WEBUI" 'data-i18n="cfg_profile_storage_hint"'
 need "$WEBUI" 'function cfgProfileNameOK(name)'
 need "$WEBUI" ' cfgProfileArgs()'
-need "$WEBUI" "' preview '"
 need "$WEBUI" "' restore '"
+need "$WEBUI" 'function cfgProfilePaintYield()'
+need "$WEBUI" '_cfgProfile.busy = true;'
+need "$WEBUI" 'await cfgProfilePaintYield();'
+need "$WEBUI" "T('cfg_profile_apply_wait','Please wait while ASB restores every saved setting. Do not close this window.')"
+absent "$WEBUI" 'cfgProfilePreview'
+absent "$WEBUI" 'cfg_profile_prepare_apply'
 need "$WEBUI" 'r.errno !== 0'
 absent "$WEBUI" 'CFG_BACKUP_PATH'
 need "$WEBUI" 'cfg_profile_smart_saved'

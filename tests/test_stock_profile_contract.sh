@@ -90,7 +90,7 @@ need "$INSTALL" 'asb_stock_policy.sh'
 # WebUI: one fifth Stock card starts selected in shipped markup; live load replaces it with the
 # actual stored profile. The compact spacing retains the support rail's three equal controls.
 need "$UI" "class=\"pbtn pbtn-stock on\" data-p=\"stock\" onclick=\"go('stock')\""
-need "$UI" '<div class="pico">📴</div>'
+need "$UI" '<div class="pico" data-tech-icon="stock"></div>'
 need "$UI" 'data-i18n="prof_stock"'
 need "$UI" 'data-i18n="prof_stock_sub"'
 need "$UI" '.pbtn[data-p="stock"]'
