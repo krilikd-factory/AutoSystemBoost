@@ -524,6 +524,7 @@ body::before, body::after {
   width: 22px;
   height: 22px;
   display: block;
+  flex: 0 0 auto;
   color: var(--tech-icon, #00e1c8);
   filter: drop-shadow(0 0 5px color-mix(in srgb, currentColor 52%, transparent));
 }
@@ -700,6 +701,16 @@ body::before, body::after {
 
 .pbtn.ld .pload { display: block; }
 .pbtn.ld .pchk  { display: none; }
+/* Stock is committed visually before its terminal restore transaction begins. Keep its
+   selected check visible while the ROM baseline is being restored: a spinner in place of
+   the check was interpreted as the tap having been ignored. A failed transaction still
+   rolls the optimistic card back in go(). */
+.pbtn[data-p="stock"].ld .pload { display: none; }
+.pbtn[data-p="stock"].ld .pchk  { display: flex; animation: stockProfileCommit 1.05s ease-in-out infinite; }
+@keyframes stockProfileCommit {
+  0%,100% { box-shadow: 0 0 12px var(--cg-strong); }
+  50% { box-shadow: 0 0 22px var(--cg-strong), 0 0 0 5px rgba(200,218,232,.10); }
+}
 
 @keyframes spin { 
   to { transform: rotate(360deg); } 
@@ -824,10 +835,16 @@ body::before, body::after {
   border-color: rgba(0,240,180,0.3);
 }
 
-.tg-link-ico { 
-  font-size: 16px; 
+.tg-link-ico {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
   filter: drop-shadow(0 0 8px rgba(0,240,180,0.3));
 }
+.tg-link-ico .tech-icon { width: 18px; height: 18px; }
 
 .footer-support-row .tg-link {
   flex: 1 1 0;
@@ -838,7 +855,8 @@ body::before, body::after {
   gap: 5px;
   padding: 10px 6px;
 }
-.footer-support-row .tg-link-ico { font-size: 14px; }
+.footer-support-row .tg-link-ico { width: 16px; height: 16px; flex-basis: 16px; }
+.footer-support-row .tg-link-ico .tech-icon { width: 16px; height: 16px; }
 .footer-support-row .tg-link-main {
   font-size: 10px;
   white-space: nowrap;
@@ -1457,24 +1475,41 @@ body.config-active #livePage.open {
 .cfg-section {
   width: 100%;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 8px;
-  align-items: baseline;
+  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-areas: "ico title" ". hint";
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: start;
   box-sizing: border-box;
-  padding: 8px 4px 1px;
-  margin-top: 4px;
+  padding: 12px 8px 5px;
+  margin-top: 6px;
   color: rgba(231,234,238,0.72);
 }
-.cfg-section-ico { font-size: 14px; line-height: 1; }
+.cfg-section-ico {
+  grid-area: ico;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 1px;
+}
+.cfg-section-ico .tech-icon { width: 19px; height: 19px; }
 .cfg-section-title {
+  grid-area: title;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  margin: 0;
   color: rgba(255,122,122,0.96);
-  font: 800 11px/1.2 var(--mono);
+  font: 800 11px/1.18 var(--mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .cfg-section-hint {
-  grid-column: 2;
-  margin-top: 3px;
+  grid-area: hint;
+  margin: 0;
+  padding-top: 1px;
   color: rgba(231,234,238,0.48);
   font: 500 11px/1.35 var(--sans);
 }
@@ -2495,13 +2530,13 @@ body.config-active #livePage.open {
     <div class="footer-support-row" data-debug-support-row hidden>
       <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-        <span class="tg-link-ico" data-tech-icon="audio"></span>
+        <span class="tg-link-ico" data-tech-icon="telegram"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
       <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-      <span class="tg-link-ico" data-tech-icon="audio"></span>
+      <span class="tg-link-ico" data-tech-icon="telegram"></span>
       <span class="tg-link-main">@AutoSystemBoost</span>
     </a>
     <div class="tg-link-sub">ASB Telegram group</div>
@@ -2585,10 +2620,10 @@ body.config-active #livePage.open {
   <!-- Stock has no Smart/FSM policy, but direct ROM readings still belong in Monitor. -->
   <div class="smart-banner stock-rom-banner" id="liveStockRomBanner" style="display:none;" aria-live="polite">
     <div class="smart-banner-row">
-      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="lv_drain">Drain</span><span class="smart-banner-value" id="bnStockDrain">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="lv_trend">Trend</span><span class="smart-banner-value" id="bnStockTrend">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="lv_lpm">Modem LPM</span><span class="smart-banner-value" id="bnStockLpm">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="lv_headroom">Headroom</span><span class="smart-banner-value" id="bnStockRam">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockDrainLabel" data-i18n="stock_battery_current">Battery current</span><span class="smart-banner-value" id="bnStockDrain">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockTrendLabel" data-i18n="stock_thermal_trend">ROM thermal trend</span><span class="smart-banner-value" id="bnStockTrend">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockLpmLabel" data-i18n="stock_lpm_state">Modem state</span><span class="smart-banner-value" id="bnStockLpm">—</span></div>
+      <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockRamLabel" data-i18n="stock_ram_available">RAM available</span><span class="smart-banner-value" id="bnStockRam">—</span></div>
     </div>
     <div class="smart-banner-row">
       <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_cpu_clock">CPU clock</span><span class="smart-banner-value" id="bnStockCpuClock">—</span></div>
@@ -2609,11 +2644,11 @@ body.config-active #livePage.open {
     <!-- Thermal & power -->
     <div class="live-row">
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" data-i18n="lv_fsm">FSM</div>
+        <div class="live-cell-label" id="liveStateLabel" data-i18n="lv_fsm">FSM</div>
         <div class="live-cell-value" id="liveState">—</div>
       </div>
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" data-i18n="lv_clamp">Clamp 1h / total</div>
+        <div class="live-cell-label" id="liveClampLabel" data-i18n="lv_clamp">Clamp 1h / total</div>
         <div class="live-cell-value" id="liveClamp">—</div>
       </div>
     </div>
@@ -2636,11 +2671,11 @@ body.config-active #livePage.open {
     <!-- Battery ETA -->
     <div class="live-row">
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" data-i18n="lv_est_on">Est. on</div>
+        <div class="live-cell-label" id="liveEtaOnLabel" data-i18n="lv_est_on">Est. on</div>
         <div class="live-cell-value" id="liveEtaOn">—</div>
       </div>
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" data-i18n="lv_est_idle">Est. idle</div>
+        <div class="live-cell-label" id="liveEtaOffLabel" data-i18n="lv_est_idle">Est. idle</div>
         <div class="live-cell-value" id="liveEtaOff">—</div>
       </div>
     </div>
@@ -2648,11 +2683,11 @@ body.config-active #livePage.open {
     <!-- Governor diagnostics -->
     <div class="live-row">
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" data-i18n="lv_capsrc">Cap Src</div>
+        <div class="live-cell-label" id="liveCapSrcLabel" data-i18n="lv_capsrc">Cap Src</div>
         <div class="live-cell-value" id="liveCapSrc">—</div>
       </div>
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" data-i18n="lv_learner">Learner</div>
+        <div class="live-cell-label" id="liveLearnerLabel" data-i18n="lv_learner">Learner</div>
         <div class="live-cell-value" id="liveLearner">—</div>
       </div>
     </div>
@@ -2660,11 +2695,11 @@ body.config-active #livePage.open {
     <!-- GPU & headroom -->
     <div class="live-row">
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" data-i18n="lv_gpuload">GPU Load</div>
+        <div class="live-cell-label" id="liveGpuLabel" data-i18n="lv_gpuload">GPU Load</div>
         <div class="live-cell-value" id="liveGpu">—</div>
       </div>
       <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" data-i18n="lv_headroom">Headroom</div>
+        <div class="live-cell-label" id="liveHeadroomLabel" data-i18n="lv_headroom">Headroom</div>
         <div class="live-cell-value" id="liveHeadroom">—</div>
       </div>
     </div>
@@ -2684,13 +2719,13 @@ body.config-active #livePage.open {
     <div class="footer-support-row" data-debug-support-row hidden>
       <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-        <span class="tg-link-ico" data-tech-icon="audio"></span>
+        <span class="tg-link-ico" data-tech-icon="telegram"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
       <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-      <span class="tg-link-ico" data-tech-icon="audio"></span>
+      <span class="tg-link-ico" data-tech-icon="telegram"></span>
       <span class="tg-link-main">@AutoSystemBoost</span>
     </a>
     <div class="tg-link-sub">ASB Telegram group</div>
@@ -2779,13 +2814,13 @@ body.config-active #livePage.open {
     <div class="footer-support-row" data-debug-support-row hidden>
       <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
       <a class="tg-link" data-debug-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-        <span class="tg-link-ico" data-tech-icon="audio"></span>
+        <span class="tg-link-ico" data-tech-icon="telegram"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
       <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
-      <span class="tg-link-ico" data-tech-icon="audio"></span>
+      <span class="tg-link-ico" data-tech-icon="telegram"></span>
       <span class="tg-link-main">@AutoSystemBoost</span>
     </a>
     <div class="tg-link-sub">ASB Telegram group</div>
@@ -2841,39 +2876,91 @@ const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass'];
  * their color, silhouette and perceived size stable across Android emoji fonts, while
  * remaining crisp under display-density and font-scale changes. */
 const TECH_ICON_PATHS = {
-  smart:       '<path d="M8 8h8v8H8z"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="10" cy="11" r=".8" fill="currentColor"/><circle cx="14" cy="11" r=".8" fill="currentColor"/><path d="M10 14h4"/>',
-  performance: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
-  balanced:    '<path d="M12 3v18M5 7h14M7 7l-3 7h6L7 7zm10 0-3 7h6l-3-7z"/>',
-  battery:     '<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 2h6M9 12h6M12 8v8"/>',
-  stock:       '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 12h8M12 8v8"/><path d="m8 8 8 8"/>',
-  audio:       '<path d="M4 10v4h4l5 4V6l-5 4z"/><path d="M17 9c1.5 1.7 1.5 4.3 0 6M19.5 6.5c3 3.1 3 7.9 0 11"/>',
-  dac:         '<path d="M7 6h10v12H7z"/><path d="M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3M10 10h4v4h-4z"/>',
-  dsp:         '<path d="M4 18V6M10 18V9M16 18V4M22 18V11"/><circle cx="4" cy="11" r="2"/><circle cx="10" cy="14" r="2"/><circle cx="16" cy="9" r="2"/><circle cx="22" cy="15" r="2"/>',
-  bluetooth:   '<path d="m9 4 6 6-6 6V4zm0 8 6 6"/><path d="m4 7 12 10M4 17 9 12"/>',
-  camera:      '<path d="M4 8h4l2-3h4l2 3h4v11H4z"/><circle cx="12" cy="13" r="4"/><path d="M17 5h.01"/>',
-  target:      '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
-  moon:        '<path d="M20 15.5A8 8 0 0 1 8.5 4 8 8 0 1 0 20 15.5z"/>',
-  sun:         '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/>',
-  network:     '<path d="M4 18h2M9 14h2M14 10h2M19 6h2"/><path d="M5 18 10 14l5-4 5-4"/>',
-  wifi:        '<path d="M3 9a13 13 0 0 1 18 0M6 12a9 9 0 0 1 12 0M9 15a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1" fill="currentColor"/>',
-  route:       '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h4a3 3 0 0 1 3 3v6"/><path d="m13 15 2 2 2-2"/>',
-  globe:       '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
-  thermal:     '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 10v7"/>',
-  shield:      '<path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>',
-  memory:      '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M3 9h3M3 12h3M3 15h3M18 9h3M18 12h3M18 15h3M9 3v3M12 3v3M15 3v3M9 18v3M12 18v3M15 18v3"/>',
-  touch:       '<path d="M12 21c-3.5 0-6-2.3-6-5.5V9.8a1.4 1.4 0 0 1 2.8 0V14"/><path d="M8.8 12.2V7a1.4 1.4 0 0 1 2.8 0v5M11.6 11V6.2a1.4 1.4 0 0 1 2.8 0V12M14.4 12V8a1.4 1.4 0 0 1 2.8 0v6.5"/><path d="m8.8 14.5-1.4-1.4a1.4 1.4 0 0 0-2 2l2.6 2.6"/>',
-  glass:       '<path d="M5 5h14v14H5z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-  motion:      '<path d="M5 7h11M5 12h15M5 17h9"/><path d="m15 4 4 3-4 3M17 9l3 3-3 3M13 14l4 3-4 3"/>',
-  haptic:      '<rect x="8" y="4" width="8" height="16" rx="2"/><path d="M5 8c-1.5 2.5-1.5 5.5 0 8M19 8c1.5 2.5 1.5 5.5 0 8"/>',
-  system:      '<circle cx="12" cy="12" r="3"/><path d="M19 12h2M3 12h2M12 3v2M12 19v2M17 7l1.4-1.4M5.6 18.4 7 17M17 17l1.4 1.4M5.6 5.6 7 7"/>',
-  game:        '<path d="M7 9h10a4 4 0 0 1 3.8 5.2l-1 3A2.4 2.4 0 0 1 15.3 18l-1.1-1h-4.4l-1.1 1a2.4 2.4 0 0 1-4.5-.8l-1-3A4 4 0 0 1 7 9z"/><path d="M7 13h4M9 11v4M16 13h.01M18 11h.01"/>',
-  sleep:       '<path d="M18 4a7 7 0 1 0 2 12A8 8 0 1 1 18 4z"/><path d="M15 5h5M17.5 2.5v5"/>',
-  log:         '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-  scan:        '<circle cx="10" cy="10" r="5"/><path d="m14 14 6 6M4 4l2 2M16 4l-2 2"/>',
-  limit:       '<path d="M12 3a6 6 0 0 0-3 11.2V18h6v-3.8A6 6 0 0 0 12 3z"/><path d="M9 21h6M8 11h8"/>',
-  power:       '<path d="M12 2v10M7.2 5.2a8 8 0 1 0 9.6 0"/>',
-  queue:       '<path d="M4 6h16M4 12h12M4 18h8"/><circle cx="18" cy="12" r="2"/>',
-  generic:     '<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 8v8M8.5 10l7 4M15.5 10l-7 4"/>'
+  /* Persistent navigation and profile identity. */
+  smart:          '<path d="M8 8h8v8H8z"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="10" cy="11" r=".8" fill="currentColor"/><circle cx="14" cy="11" r=".8" fill="currentColor"/><path d="M10 14h4"/>',
+  performance:    '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  balanced:        '<path d="M12 3v18M5 7h14M7 7l-3 7h6L7 7zm10 0-3 7h6l-3-7z"/>',
+  battery:         '<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 2h6M9 12h6M12 8v8"/>',
+  stock:           '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 12h8M12 8v8"/><path d="m8 8 8 8"/>',
+  telegram:        '<path d="m21 4-6.2 16-3.9-6.1L4 10.8z"/><path d="m10.9 13.9 3-2.8M4 10.8l13.2-5.2"/>',
+  headphones:      '<path d="M4 13a8 8 0 0 1 16 0v4"/><path d="M4 13h4v6H5a1 1 0 0 1-1-1zM16 13h4v5a1 1 0 0 1-1 1h-3z"/>',
+  camera:          '<path d="M4 8h4l2-3h4l2 3h4v11H4z"/><circle cx="12" cy="13" r="4"/><path d="M17 5h.01"/>',
+  panel:           '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M7 8h10M7 12h5M7 16h8"/>',
+  network:         '<circle cx="5" cy="17" r="1.5"/><circle cx="12" cy="8" r="1.5"/><circle cx="19" cy="15" r="1.5"/><path d="m6.3 16 4.4-6.7 6.9 5"/>',
+  switches:        '<path d="M5 7h14M5 17h14"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/>',
+  dsp:             '<path d="M4 18V6M10 18V9M16 18V4M22 18V11"/><circle cx="4" cy="11" r="2"/><circle cx="10" cy="14" r="2"/><circle cx="16" cy="9" r="2"/><circle cx="22" cy="15" r="2"/>',
+  ear_safe:        '<path d="M16.8 14.3A5.7 5.7 0 1 0 7 10.4c0 2.3 1.2 3.6 2.3 4.7.8.8.7 2.4-.6 3"/><path d="M13.5 11.5c.9-.6 1.2-1.8.5-2.7a2 2 0 0 0-3.2.1"/><path d="M17 19h3M18.5 17.5v3"/>',
+
+  /* Audio path: each card has an explicit device, signal or transport metaphor. */
+  audio_profile:   '<path d="M4 15V9l5-3v12zM9 9c4-1 6 1 10-1v8c-4 2-6 0-10 1"/><path d="M12 11v4M15 10v4M18 10v4"/>',
+  dac:             '<path d="M7 6h10v12H7z"/><path d="M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3M10 10h4v4h-4z"/>',
+  media_volume:    '<path d="M4 10v4h4l5 4V6l-5 4z"/><path d="M17 10v4M20 8v8"/>',
+  volume_sync:     '<path d="M4 10v4h4l4 3V7l-4 3z"/><path d="M15 9h4v4M19 9l-4 4"/><path d="M20 15v2a2 2 0 0 1-2 2h-3"/>',
+  bluetooth_offload:'<path d="m9 4 6 6-6 6V4zm0 8 6 6"/><rect x="16" y="14" width="5" height="5" rx="1"/><path d="M17.5 16.5h2"/>',
+  loudness:        '<path d="M4 14h3l4 4V6l-4 4H4z"/><path d="M15 9c2 1.7 2 4.3 0 6M18 6c4 3.3 4 8.7 0 12"/>',
+  bass:            '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M4 5v14M20 5v14"/>',
+  compressor:      '<path d="M4 7h5M15 7h5M4 17h5M15 17h5"/><path d="m9 4 3 3-3 3M15 4l-3 3 3 3M9 14l3 3-3 3M15 14l-3 3 3 3"/>',
+  audio_route:     '<circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 12h4a4 4 0 0 0 4-4M7 12h4a4 4 0 0 1 4 4"/>',
+
+  /* Camera controls. */
+  camera_level:    '<path d="M4 8h4l2-3h4l2 3h4v11H4z"/><circle cx="12" cy="13" r="4"/><path d="M9 13h6M12 10v6"/>',
+  contrast:        '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z"/>',
+  grain:           '<rect x="5" y="5" width="14" height="14" rx="2"/><circle cx="9" cy="9" r=".7" fill="currentColor"/><circle cx="15" cy="9" r=".7" fill="currentColor"/><circle cx="12" cy="12" r=".7" fill="currentColor"/><circle cx="9" cy="15" r=".7" fill="currentColor"/><circle cx="15" cy="15" r=".7" fill="currentColor"/>',
+  portrait:        '<circle cx="12" cy="8" r="3"/><path d="M6 20c.6-4 2.7-6 6-6s5.4 2 6 6"/><rect x="4" y="3" width="16" height="18" rx="3"/>',
+  lowlight:        '<path d="M4 9h4l2-3h4l2 3h4v10H4z"/><circle cx="12" cy="14" r="3"/><path d="M18 4a4 4 0 1 0 2 6"/>',
+  camera_hold:     '<path d="M5 7h14v8H5z"/><circle cx="12" cy="11" r="2.5"/><path d="m9 15-2 6M15 15l2 6M12 15v6"/>',
+  camera_aggressive:'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><path d="m16 6 2-2"/>',
+  camera_inject:   '<path d="m6 18 8-8 4 4-8 8H6z"/><path d="m15 5 4 4M13 7l4 4"/><path d="M5 5h4M7 3v4"/>',
+
+  /* Interface controls. */
+  timeout:         '<path d="M7 3h10M7 21h10M8 3v4l3 3-3 3v4M16 3v4l-3 3 3 3v4"/>',
+  anim_speed:      '<path d="M4 14a8 8 0 1 1 16 0"/><path d="m12 14 4-5M7 18h10"/><circle cx="12" cy="14" r="1"/>',
+  anim_restart:    '<path d="M19 8V4l-2 2a8 8 0 1 0 2 8"/><path d="M12 8v4l3 2"/>',
+  blur:            '<rect x="4" y="5" width="12" height="12" rx="2"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="m5 20 14-14"/>',
+  effects:         '<path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4z"/><path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7z"/>',
+
+  /* Network controls. */
+  congestion:      '<path d="M4 18h3M10 14h3M16 10h4"/><path d="m5 18 6-5 7-6"/><path d="M18 4v3h-3"/>',
+  wifi_congestion: '<path d="M4 10a12 12 0 0 1 16 0M7 13a8 8 0 0 1 10 0M10 16a4 4 0 0 1 4 0"/><path d="M17 5v4h-4"/>',
+  mobile_congestion:'<path d="M5 19h2M9 15h2M13 11h2M17 7h2"/><path d="M4 5h7l2 3h7"/><path d="m17 5 3 3-3 3"/>',
+  qdisc:           '<ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v6c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 13v4c0 1.7 3.1 3 7 3s7-1.3 7-3v-4"/>',
+  wifi_queue:      '<path d="M4 10a12 12 0 0 1 16 0M7 13a8 8 0 0 1 10 0"/><path d="M6 18h12M6 21h8"/>',
+  mobile_queue:    '<path d="M6 19h2M10 15h2M14 11h2M18 7h2"/><path d="M4 20h9M4 23h6"/>',
+  rps:             '<circle cx="7" cy="7" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="12" cy="17" r="2"/><path d="m8.5 8.5 2.3 6M15.5 8.5l-2.3 6"/>',
+  txqueue:         '<path d="M4 6h11M4 12h11M4 18h11"/><path d="m15 4 5 2-5 2M15 10l5 2-5 2M15 16l5 2-5 2"/>',
+  route:           '<circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h4a3 3 0 0 1 3 3v6"/><path d="m13 15 2 2 2-2"/>',
+  globe_pin:       '<circle cx="12" cy="12" r="8"/><path d="M4 12h8M12 4c2 2 3 5 3 8"/><path d="M17 14c0 3-3 5-3 5s-3-2-3-5a3 3 0 1 1 6 0z"/>',
+  radar:           '<circle cx="12" cy="12" r="8"/><path d="M12 12 18 7M12 4v8h8"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+  handover:        '<path d="M4 16h4M10 12h4M16 8h4"/><path d="m7 13 3-3 3 3 3-3"/><path d="M3 20h18"/>',
+
+  /* Battery, thermal and background policy. */
+  battery_auto:    '<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 2h6M12 8v5M9.5 10.5h5"/><path d="m16 16 1 1 2-2"/>',
+  battery_bias:    '<rect x="4" y="5" width="12" height="14" rx="2"/><path d="M16 9h2v6h-2M7 14h6"/><path d="m18 5 2 2-2 2"/>',
+  media_guard:    '<path d="M4 10v4h4l4 3V7l-4 3z"/><path d="M16 5l4 2v4c0 4-2.3 6.6-5 8-2.7-1.4-5-4-5-8V7z"/>',
+  charge_aware:   '<path d="M12 2v5M8 7h8"/><rect x="5" y="7" width="14" height="14" rx="2"/><path d="m13 10-3 5h3l-2 4 4-6h-3z"/>',
+  doze:           '<path d="M19 15.5A8 8 0 0 1 8.5 4 8 8 0 1 0 19 15.5z"/><path d="M15 5h5M17.5 2.5v5"/>',
+  whitelist:      '<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 9h5M8 13h5M8 17h5"/><path d="m15 16 1.5 1.5L19 15"/>',
+  wakelock:       '<rect x="6" y="9" width="12" height="10" rx="2"/><path d="M9 9V7a3 3 0 0 1 6 0v2M12 12v3"/><path d="M18 5h3M19.5 3.5v3"/>',
+  satellite:      '<path d="m14 10 4-4 2 2-4 4"/><path d="m9 15-4 4 2 2 4-4"/><path d="m9 15 5-5 3 3-5 5z"/><path d="M5 11a6 6 0 0 1 2-5M13 19a6 6 0 0 0 5-2"/>',
+  radio_moon:     '<path d="M5 18a9 9 0 0 1 0-12"/><path d="M8 15a5 5 0 0 1 0-6"/><circle cx="11" cy="12" r="1" fill="currentColor"/><path d="M19 17a4 4 0 1 1-4-7"/>',
+  quiet_moon:     '<path d="M19 15.5A8 8 0 0 1 8.5 4 8 8 0 1 0 19 15.5z"/><path d="M4 19h7M4 16h4"/>',
+  thermal_mode:   '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 10v7M17 5h4M19 3v4"/>',
+  thermal_point:  '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><circle cx="12" cy="17" r="1" fill="currentColor"/><path d="M18 12h3"/>',
+  perf_cap:       '<path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16 17 9"/><path d="M5 20h14M15 4h5v5"/>',
+  cool_game:      '<path d="M7 10h10a4 4 0 0 1 3.8 5.2l-1 3A2.4 2.4 0 0 1 15.3 18l-1.1-1h-4.4l-1.1 1a2.4 2.4 0 0 1-4.5-.8l-1-3A4 4 0 0 1 7 10z"/><path d="M7 14h4M9 12v4M16 14h.01M18 12h.01"/><path d="m18 5-2 2-2-2-2 2"/>',
+  game_battery:   '<path d="M7 10h10a4 4 0 0 1 3.8 5.2l-1 3A2.4 2.4 0 0 1 15.3 18l-1.1-1h-4.4l-1.1 1a2.4 2.4 0 0 1-4.5-.8l-1-3A4 4 0 0 1 7 10z"/><path d="M8 14h3M9.5 12.5v3M17 14h.01"/><path d="M12 4v4M10 6h4"/>',
+  cleaner:        '<path d="M5 18h14M8 18l2-10h4l2 10M7 8h10"/><path d="m5 5 2 2M17 5l2 2"/>',
+  service_trim:   '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M8 9h8M8 13h5M8 17h3"/><path d="m17 15 3 3M20 15l-3 3"/>',
+  service_freeze: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M12 7v10M8 9l8 6M16 9l-8 6"/><path d="M12 3v2M12 19v2"/>',
+
+  /* System and tactile controls. */
+  oem_switches:   '<path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="2.5"/><circle cx="16" cy="17" r="2.5"/><path d="M12 4v6M12 14v6"/>',
+  athena:         '<path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z"/><path d="M9 12h6M12 9v6"/>',
+  phantom:        '<path d="M6 19v-7a6 6 0 0 1 12 0v7"/><path d="M6 19h12"/><circle cx="10" cy="13" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><path d="M9 17c1-1 5-1 6 0"/>',
+  haptic_power:   '<rect x="9" y="4" width="6" height="16" rx="2"/><path d="M5 9c-2 2-2 4 0 6M19 9c2 2 2 4 0 6M3 6c-3 4-3 8 0 12"/>',
+  haptic_touch:   '<path d="M12 21c-3.5 0-6-2.3-6-5.5V9.8a1.4 1.4 0 0 1 2.8 0V14"/><path d="M8.8 12.2V7a1.4 1.4 0 0 1 2.8 0v5M11.6 11V6.2a1.4 1.4 0 0 1 2.8 0V12M14.4 12V8a1.4 1.4 0 0 1 2.8 0v6.5"/><path d="M18 5v3M16.5 6.5h3"/>',
+  log_detail:     '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="16.5" cy="16.5" r="1" fill="currentColor"/>',
+  generic:        '<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 8v8M8.5 10l7 4M15.5 10l-7 4"/>'
 };
 function techIcon(kind) {
   const glyph = TECH_ICON_PATHS[kind] || TECH_ICON_PATHS.generic;
@@ -3260,6 +3347,12 @@ function debugFrame() {
   return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 function debugDelay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+function profilePaintFrame() {
+  // The root bridge can begin synchronous shell work immediately. Give the WebView two frames
+  // after the optimistic card commit so Smart → Stock visibly selects Stock before the governor
+  // stop/baseline restore transaction occupies the bridge.
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
 
 async function debugDiagPoll() {
   // asbdiag is bounded but device-dependent. Poll the tiny status file rather than
@@ -3397,6 +3490,13 @@ async function go(p) {
   switching = true;
   ui(p);
   btn.classList.add('ld');
+  if (p === 'stock') {
+    stockMonitorReset();
+    toast(T('t_stock_switching', 'Stock selected · restoring ROM baseline…'), 'warn');
+  }
+  // Do not enter the synchronous root bridge in the same event turn as ui(p). On slower
+  // WebViews the bridge wins that race and the Stock card appears unchanged until restore ends.
+  await profilePaintFrame();
   const r = await run('sh ' + MD + '/apply_profile.sh ' + p);
   document.querySelectorAll('.pbtn').forEach(b => b.classList.remove('ld'));
   if (r.errno === 0) {
@@ -3410,6 +3510,9 @@ async function go(p) {
      * ever being used. */
     if (p === 'stock') {
       toast('\u2713 ' + T('t_stock_applied', 'Stock active · ASB policy stopped'), 'warn');
+      // A successful Stock transaction invalidates all values sampled under Smart/other ASB
+      // policy. If Monitor is already open, request a fresh ROM-only snapshot now.
+      if (_liveOpen) void pollLive(true);
     } else {
       toast('\u2713 ' + T('prof_' + p, p.charAt(0).toUpperCase() + p.slice(1)) +
             T('t_prof_applied', ' applied'), p);
@@ -3764,12 +3867,12 @@ function grpName(g) {
 }
 
 const CFG_GROUPS = [
-  { id:'audio',   icon:'audio',   name:'Audio',     ru:'\u0410\u0443\u0434\u0438\u043E' },
-  { id:'camera',  icon:'camera',  name:'Camera',    ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
-  { id:'iface',   icon:'glass',   name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
-  { id:'net',     icon:'network', name:'Network',   ru:'\u0421\u0435\u0442\u044C' },
-  { id:'battery', icon:'battery', name:'Battery',   ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
-  { id:'ui',      icon:'system',  name:'System',    ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
+  { id:'audio',   icon:'headphones', name:'Audio',     ru:'\u0410\u0443\u0434\u0438\u043E' },
+  { id:'camera',  icon:'camera',     name:'Camera',    ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
+  { id:'iface',   icon:'panel',      name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
+  { id:'net',     icon:'network',    name:'Network',   ru:'\u0421\u0435\u0442\u044C' },
+  { id:'battery', icon:'battery',    name:'Battery',   ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
+  { id:'ui',      icon:'switches',   name:'System',    ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
 ];
 // Where each tunable lives. BG_TRIM and cool_gaming sit under Battery rather than their
 // own colour category: both are battery-vs-something trades, and that is what someone is
@@ -3800,7 +3903,7 @@ function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
  * volume-limit switch remains visibly separate because it is a hearing-safety decision. */
 const CFG_GROUP_SECTIONS = {
   audio: [
-    { id:'playback', icon:'audio', titleKey:'cfg_audio_section_playback',
+    { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
       hint:'Choose the audio path and Bluetooth behaviour.',
       keys:['audio_profile','audio_dac_hifi','media_loudness','bt_absvol_mode','bt_a2dp_offload'] },
@@ -3808,7 +3911,7 @@ const CFG_GROUP_SECTIONS = {
       title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
       hint:'Optional gain, bass and dynamics processing on the outputs you select.',
       keys:['dsp_loudness','dsp_bass','dsp_compressor','dsp_outputs'] },
-    { id:'safety', icon:'shield', titleKey:'cfg_audio_section_safety',
+    { id:'safety', icon:'ear_safe', titleKey:'cfg_audio_section_safety',
       title:'Listening Safety', hintKey:'cfg_audio_section_safety_hint',
       hint:'The system hearing limit is left untouched unless you explicitly change it.',
       keys:['audio_remove_volume_limit'] }
@@ -3879,23 +3982,16 @@ function cfgToastText(key, val) {
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
 
 const CFG_ICONS = {
-  smart_media_guard:'shield', night_modem_idle:'sleep',
-  net_rps:'network', net_txqueue:'queue', athena_service:'shield',
-  sustained_temp_mode:'thermal', doze_level:'sleep', camera_hold_enable:'camera',
-  bt_a2dp_offload:'bluetooth', night_quiet_enable:'moon',
-  bat_suppress_gaming:'sleep', log_level:'log', net_congestion:'network', net_qdisc:'queue', net_route_tune:'route',
-  net_congestion_wifi:'wifi', net_congestion_mobile:'network', net_qdisc_wifi:'queue', net_qdisc_mobile:'queue',
-  wifi_country:'globe', wifi_scan_throttle:'scan', net_handover_fast:'route',
-  audio_profile:'audio', audio_dac_hifi:'dac', dsp_compressor:'dsp',
-  CAMERA_GRAIN:'moon', CAMERA_CONTRAST:'sun', CAMERA_PORTRAIT:'target', CAMERA_LOWLIGHT:'camera', CAMERA_LEVEL:'camera',
-  smart_battery_bias:'battery', CAMERA_AGGRESSIVE:'target', CAMERA_AGGRESSIVE_INJECT:'dsp',
-  dsp_loudness:'dsp', dsp_bass:'dsp', media_loudness:'audio', bt_absvol_mode:'audio',
-  cool_gaming:'game', charge_aware_enable:'power', auto_battery_enable:'battery', BG_TRIM_LEVEL:'memory',
-  UX_MANAGE_TIMEOUTS:'touch', UX_MANAGE_OEM_TOGGLES:'system', disable_blur:'glass', ui_effects_level:'motion',
-  haptic_strength:'haptic', haptic_touch_strength:'haptic', UX_ANIM_FORCE_RESTART:'motion', region_allow_locale:'globe',
-  sustained_temp_enter:'thermal', phantom_procs:'system', anim_speed:'motion', dsp_outputs:'route',
-  gms_trim:'memory', audio_remove_volume_limit:'limit', doze_trim_whitelist:'shield', gms_freeze:'memory',
-  perf_ceiling_pct:'thermal', wakelock_action:'sleep', gnss_trim:'route'
+  audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
+  dsp_loudness:'loudness', dsp_bass:'bass', dsp_compressor:'compressor', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe',
+  CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
+  UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
+  net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
+  net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', wifi_country:'globe_pin', wifi_scan_throttle:'radar', net_handover_fast:'handover',
+  auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', doze_level:'doze', doze_trim_whitelist:'whitelist',
+  wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
+  perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
+  UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail'
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -5850,6 +5946,25 @@ async function refreshSmartSubLine() {
   } catch(e) { return false; }
 }
 
+function setLiveLabel(id, key, fallback) {
+  const el = _el(id); if (el) el.textContent = T(key, fallback);
+}
+function restoreManagedLiveLabels() {
+  setLiveLabel('liveStateLabel', 'lv_fsm', 'FSM');
+  setLiveLabel('liveClampLabel', 'lv_clamp', 'Clamp 1h / total');
+  setLiveLabel('liveEtaOnLabel', 'lv_est_on', 'Est. on');
+  setLiveLabel('liveEtaOffLabel', 'lv_est_idle', 'Est. idle');
+  setLiveLabel('liveCapSrcLabel', 'lv_capsrc', 'Cap Src');
+  setLiveLabel('liveLearnerLabel', 'lv_learner', 'Learner');
+  setLiveLabel('liveGpuLabel', 'lv_gpuload', 'GPU Load');
+  setLiveLabel('liveHeadroomLabel', 'lv_headroom', 'Headroom');
+}
+function stockMonitorReset() {
+  _stockTelemetryKv = {};
+  _stockTelemetryLastMs = 0;
+  _stockRomHistory = { ts: 0, cpuT: 0 };
+  if (_liveOpen) paintStockLive({});
+}
 function paintStockLive(stockKv = null) {
   const stock = T('prof_stock', 'Stock');
   const off = T('prof_stock_sub', 'ASB policy off');
@@ -5857,6 +5972,20 @@ function paintStockLive(stockKv = null) {
   if (profile) profile.textContent = stock;
   const state = _el('liveState');
   if (state) state.textContent = stock + ' · ' + off;
+  // The ordinary Monitor labels describe ASB concepts (FSM, forecast, cap source, learner).
+  // In Stock the values below are direct ROM readings, so rename the cards before painting them.
+  setLiveLabel('liveStateLabel', 'stock_rom_status', 'ROM status');
+  setLiveLabel('liveClampLabel', 'stock_asb_caps', 'ASB caps');
+  setLiveLabel('liveEtaOnLabel', 'stock_live_drain', 'Battery current');
+  setLiveLabel('liveEtaOffLabel', 'stock_live_battery', 'Battery live');
+  setLiveLabel('liveCapSrcLabel', 'stock_cap_owner', 'Cap owner');
+  setLiveLabel('liveLearnerLabel', 'stock_asb_learner', 'ASB learner');
+  setLiveLabel('liveGpuLabel', 'stock_gpu_load', 'GPU load');
+  setLiveLabel('liveHeadroomLabel', 'stock_ram_available', 'RAM available');
+  setLiveLabel('bnStockDrainLabel', 'stock_battery_current', 'Battery current');
+  setLiveLabel('bnStockTrendLabel', 'stock_thermal_trend', 'ROM thermal trend');
+  setLiveLabel('bnStockLpmLabel', 'stock_lpm_state', 'Modem state');
+  setLiveLabel('bnStockRamLabel', 'stock_ram_available', 'RAM available');
 
   // Stock intentionally has no governor state, prediction, learner or cap ownership. It does,
   // however, expose safe ROM telemetry. Render that telemetry in the same cards as other
@@ -5918,7 +6047,9 @@ function paintStockLive(stockKv = null) {
     const el = _el(id); if (!el) return;
     el.textContent = value || '—'; el.title = title; el.className = cls;
   };
-  let trend = T('lv_measuring', 'measuring…');
+  // A single ROM sample has no direction. Showing ASB's generic "measuring…" here looked
+  // like a running policy; leave it neutral until a second direct sample exists.
+  let trend = '—';
   let trendCls = 'smart-banner-value';
   if (sampleTs && cpuT) {
     if (_stockRomHistory.ts && _stockRomHistory.ts !== sampleTs && _stockRomHistory.cpuT > 0) {
@@ -5999,8 +6130,16 @@ async function pollStockTelemetry(visible, force = false) {
 
 async function pollLive(visible) {
   try {
-    if (visible && _selectedProfile === 'stock') await pollStockTelemetry(true);
-    else pollStockTelemetry(false);
+    if (_selectedProfile === 'stock') {
+      // Terminal boundary: never read /dev/.asb/state, learner_state.json, native status or
+      // recovery.json while Stock is selected. Those files may be from the outgoing Smart tick
+      // and mixing them into a ROM snapshot was the source of stale 95°C/cap/forecast cards.
+      if (visible) await pollStockTelemetry(true);
+      else pollStockTelemetry(false);
+      return;
+    }
+    restoreManagedLiveLabels();
+    pollStockTelemetry(false);
     const r = await run('cat /dev/.asb/state 2>/dev/null');
     /*
      * keep Live chip always visible — Live page handles its own empty-state fallback.
