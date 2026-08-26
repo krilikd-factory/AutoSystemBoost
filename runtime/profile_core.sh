@@ -107,7 +107,7 @@ asb_update_desc() {
     performance) _s='description=status: Performance 🔥 | active ✅' ;;
     battery)     _s='description=status: Battery 🔋 | active ✅' ;;
     smart)       _s='description=status: Smart Mode 🤖 | active ✅' ;;
-    stock)       _s='description=status: Stock ◻️ | ASB performance policy stopped' ;;
+    stock)       _s='description=status: Stock 👶🏻 | active ✅' ;;
     ''|none)     _s='description=status: no profile selected — open the WebUI to choose one' ;;
     *)           _s='description=status: Balanced ⚖️ | active ✅' ;;
   esac
