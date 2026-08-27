@@ -50,6 +50,7 @@ for test_file in \
   tests/test_named_config_profiles.sh \
   tests/test_smart_reset_complete_contract.sh \
   tests/test_v64_hardening_contract.sh \
+  tests/test_reversible_settings_contract.sh \
   tests/test_v65_efficiency_contract.sh \
   tests/test_v65_smart_thermal_cap_contract.sh \
   tests/test_bt_safe_policy_contract.sh \
