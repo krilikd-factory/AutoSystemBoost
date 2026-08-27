@@ -20,6 +20,18 @@ LK_CHG_PHASE_STABLE=""
 LK_CHG_IDLE_CANDIDATE_SINCE=0
 LK_CHG_IDLE_DEBOUNCE_S=45
 LK_CHG_IDLE_COALESCED=0
+# Charging-idle telemetry is intentionally less frequent than visible charging/gaming so an
+# opt-in diagnostic capture does not itself keep a plugged, screen-off device busy.
+need "$LOGKIT" 'LK_POLL_CHARGING_IDLE=60'
+need "$LOGKIT" 'charging_idle)          echo "$LK_POLL_CHARGING_IDLE" ;'
+sed -n '/^lk_poll_for_phase() {/,/^}/p' "$LOGKIT" > "$TMP/cadence.sh"
+[ -s "$TMP/cadence.sh" ] || { echo 'FAIL logkit capture-quality: cannot extract cadence helper' >&2; exit 1; }
+LK_POLL_FAST=15 LK_POLL_NORMAL=45 LK_POLL_SLOW=90 LK_POLL_CHARGING_IDLE=60
+. "$TMP/cadence.sh"
+[ "$(lk_poll_for_phase charging_idle)" = 60 ] || { echo 'FAIL logkit capture-quality: charging-idle cadence' >&2; exit 1; }
+[ "$(lk_poll_for_phase charging_active)" = 15 ] || { echo 'FAIL logkit capture-quality: visible charging cadence' >&2; exit 1; }
+[ "$(lk_poll_for_phase gaming)" = 15 ] || { echo 'FAIL logkit capture-quality: gaming cadence' >&2; exit 1; }
+[ "$(lk_poll_for_phase sleep)" = 90 ] || { echo 'FAIL logkit capture-quality: sleep cadence' >&2; exit 1; }
 lk_stabilize_charging_phase charging_active 100
 [ "$LK_CHG_PHASE_OUT" = charging_active ] || { echo "FAIL logkit capture-quality: first active sample" >&2; exit 1; }
 lk_stabilize_charging_phase charging_idle 115

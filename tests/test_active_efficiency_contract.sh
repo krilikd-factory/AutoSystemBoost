@@ -96,16 +96,20 @@ grep -Fq 'fsm->profile_idx != PROFILE_PERFORMANCE' "$SRC" || fail "GPU performan
 grep -Fq 'fsm->state == ASB_STATE_SUSTAINED' "$SRC" || fail "platform thermal exclusion missing"
 grep -Fq 'if (target < 128) target = 128;' "$SRC" || fail "background uclamp floor missing"
 grep -Fq '!g_asb_cfg.thermal_budget_enable || !g_active_efficiency.active' "$SRC" || fail "thermal budget user opt-out gate missing"
-# Screen-on comfort may only add the already-configured light trim with evidence. It must
-# fail closed outside Battery/battery-lean Smart and never touch gaming, camera, charging or sleep.
+# Screen-on comfort may only add the already-configured light trim with fresh foreground
+# evidence. It must fail closed outside Battery/known light-or-medium Smart and never touch
+# gaming, camera, charging or sleep.
 grep -Fq '"screenon_comfort"' "$SRC" || fail "screen-on comfort reason missing"
 grep -Fq 'm->misc.screen_on && !m->misc.camera_active' "$SRC" || fail "screen-on/camera exclusion missing"
 grep -Fq 'fsm->state != ASB_STATE_GAMING' "$SRC" || fail "gaming exclusion missing"
 grep -Fq 'if (g_asb_cfg.thermal_budget_enable && !fsm->thermal_cap &&' "$SRC" || fail "comfort path must remain thermal-cap gated"
 grep -Fq 'fsm->state != ASB_STATE_SUSTAINED) {' "$SRC" || fail "SUSTAINED game-safety exclusion missing"
-grep -Fq 'int comfort_current_ma = smart_screenon_comfort ? 250 : 450;' "$SRC" || fail "Smart/Battery comfort current split missing"
+grep -Fq 'fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled && g_pkg_detect_ok' "$SRC" || fail "Smart comfort fresh-context gate missing"
+grep -Fq 'g_smart_rt.app_hint <= ASB_APP_MEDIUM' "$SRC" || fail "Smart comfort light/medium app gate missing"
+grep -Fq 'int comfort_current_ma = g_asb_cfg.smart_battery_bias >= 400 ? 250 :' "$SRC" || fail "Smart/Battery comfort current split missing"
+grep -Fq '(smart_screenon_comfort ? 350 : 450);' "$SRC" || fail "Smart moderate-current comfort threshold missing"
 grep -Fq 'm->bat.current_ma >= comfort_current_ma' "$SRC" || fail "adaptive comfort current evidence gate missing"
-grep -Fq 'screenon_comfort_smart' "$SRC" || fail "early Smart comfort telemetry reason missing"
+grep -Fq 'screenon_comfort_smart_medium' "$SRC" || fail "early Smart comfort telemetry reason missing"
 grep -Fq 'surface_comfort_smart' "$SRC" || fail "surface-hotspot Smart comfort telemetry reason missing"
 grep -Fq 'surface_comfort_smart_sustained' "$SRC" || fail "light SUSTAINED Smart surface-comfort telemetry reason missing"
 grep -Fq 'int surface_comfort_sustained =' "$SRC" || fail "light SUSTAINED Smart comfort gate missing"
@@ -126,7 +130,7 @@ grep -Fq 'g_pkg_detect_ok && g_smart_media_pkg_known' "$SRC" || fail "media reco
 grep -Fq 'g_smart_rt.app_hint < ASB_APP_GAMING' "$SRC" || fail "media recovery game exclusion missing"
 grep -Fq '!m->misc.camera_active && !m->bat.charging' "$SRC" || fail "media recovery camera/charging exclusion missing"
 grep -Fq 'm->bat.current_ma >= 450' "$SRC" || fail "media recovery current evidence gate missing"
-grep -Fq 'smart_screenon_comfort ? "screenon_comfort_smart" : "screenon_comfort"' "$SRC" || fail "Smart comfort must retain Battery reason split"
+grep -Fq 'smart_screenon_comfort ? "screenon_comfort_smart_medium" : "screenon_comfort"' "$SRC" || fail "Smart comfort must retain Battery reason split"
 grep -Fq 'media_recovery = !strcmp(g_budget_reason, "media_recovery")' "$SRC" || fail "media recovery must recheck dwell-held reason"
 grep -Fq 'fsm->state == ASB_STATE_SUSTAINED && !media_recovery' "$SRC" || fail "SUSTAINED must stay blocked outside fresh media recovery"
 grep -Fq '(!media_recovery && g_budget_stage < 2)' "$SRC" || fail "light-stage cgroup recovery gate missing"
