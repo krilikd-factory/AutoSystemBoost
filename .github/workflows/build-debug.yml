@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       debug_sequence:
-        description: 'Debug sequence after this public release (1–9)'
+        description: 'Positive debug sequence after this public release (1, 2, …, 10, …)'
         required: false
         default: '1'
         type: string
@@ -323,6 +323,8 @@ jobs:
           done
 
       - name: Package DEBUG zip
+        env:
+          DEBUG_SEQ_INPUT: ${{ inputs.debug_sequence }}
         run: |
           PKG_DBG="$PWD/pkg-debug"
           rm -rf "$PKG_DBG"
@@ -426,10 +428,19 @@ jobs:
           # normal Magisk/KernelSU update comparison.
           BASE_VER=$(grep '^version=' module.prop | cut -d= -f2)
           BASE_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
-          DEBUG_SEQ='${{ inputs.debug_sequence }}'
-          case "$BASE_CODE:$DEBUG_SEQ" in
-            *[!0-9:]*|:*|*:0|*:[1-9][0-9]*|*:[!1-9]*)
-              echo '::error::debug_sequence must be one integer from 1 to 9'
+          DEBUG_SEQ="${DEBUG_SEQ_INPUT:-}"
+          # A debug package is manually flashed over the matching public release, so the
+          # suffix is an identifier, not an OTA versionCode. Accept every positive decimal
+          # integer (debug1 … debug10 … debug999999) while refusing empty, signed, decimal,
+          # non-numeric and ambiguous leading-zero values.
+          case "$BASE_CODE" in
+            ''|*[!0-9]*)
+              echo '::error::module versionCode must be a decimal integer'
+              exit 1 ;;
+          esac
+          case "$DEBUG_SEQ" in
+            ''|0|0*|*[!0-9]*)
+              echo '::error::debug_sequence must be one positive decimal integer (1, 2, …, 10, …)'
               exit 1 ;;
           esac
           DEBUG_CODE="$BASE_CODE"
