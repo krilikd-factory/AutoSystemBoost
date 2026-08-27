@@ -54,8 +54,13 @@ _feat_on() {
 _sset() { settings put global "$1" "$2" >/dev/null 2>&1 || true; }
 _sysc() { [ -w "/proc/sys/$(echo "$1" | tr . /)" ] && echo "$2" > "/proc/sys/$(echo "$1" | tr . /)" 2>/dev/null || true; }
 
-# Feature off: restore whatever we saved, once, then stay out of the way.
-if ! _feat_on LPM; then
+# The power profile must not silently become an antenna/radio preference. The radio master is
+# off by default, so a no-SIM device (or a user who simply wants stock telephony behaviour)
+# cannot get mobile-data context or TCP keepalive changes merely by selecting Balanced/Smart.
+_radio_policy_enabled() { [ "$(_cfg radio_policy_enable)" = "1" ]; }
+
+# Feature or explicit radio policy off: restore whatever we saved, once, then stay out of the way.
+if ! _feat_on LPM || ! _radio_policy_enabled; then
   if [ -f "$BASE" ]; then
     . "$BASE" 2>/dev/null
     [ -n "${BASE_MDAO:-}" ] && [ "$BASE_MDAO" != "null" ] && _sset mobile_data_always_on "$BASE_MDAO"

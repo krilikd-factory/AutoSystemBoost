@@ -35,7 +35,8 @@ _valid_seconds "$_raw_cooldown" 1 3600 && COOLDOWN_S="$_raw_cooldown"
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
 }
-_enabled() { [ "$(_cfg net_handover_active)" = 1 ]; }
+_radio_policy_enabled() { [ "$(_cfg radio_policy_enable)" = 1 ]; }
+_enabled() { _radio_policy_enabled && [ "$(_cfg net_handover_active)" = 1 ]; }
 _now() { date +%s 2>/dev/null || echo 0; }
 _log() { mkdir -p "$STATE_DIR" 2>/dev/null; printf '%s wifi_fallback: %s\n' "$(date '+%F %T' 2>/dev/null || echo now)" "$*" >> "$LOG" 2>/dev/null; tail -n 80 "$LOG" > "$LOG.tmp" 2>/dev/null && mv -f "$LOG.tmp" "$LOG" 2>/dev/null || true; }
 
@@ -118,6 +119,7 @@ _try_release() {
   fi
 }
 _status() {
+  if ! _radio_policy_enabled; then echo 'radio_policy_off'; return; fi
   if ! _enabled; then echo 'off'; return; fi
   if [ -f "$ACTION" ]; then
     _until="$(cut -d'|' -f2 "$ACTION" 2>/dev/null | tr -dc '0-9')"

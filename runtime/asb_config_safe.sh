@@ -236,6 +236,7 @@ _validate() {
   # Optional for configs created before the handover card existed; once present it is
   # strictly boolean. This lets an update append the shipped key without rejecting a
   # known-good older config before migration finishes.
+  _radio_policy="$(awk -F= '$1 ~ "^[[:space:]]*radio_policy_enable[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _handover_fast="$(awk -F= '$1 ~ "^[[:space:]]*net_handover_fast[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _handover_active="$(awk -F= '$1 ~ "^[[:space:]]*net_handover_active[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
 
@@ -287,6 +288,7 @@ _validate() {
   _bool "$_smart_media_guard" || _die "smart_media_guard must be 0 or 1"
   _between "$_thermal_throttle" 30 110 || _die "thermal_throttle_temp must be 30..110"
   _bool "$_bounds_override" || _die "device_bounds_override must be 0 or 1"
+  case "$_radio_policy" in ''|0|1) : ;; *) _die "radio_policy_enable must be 0 or 1" ;; esac
   case "$_handover_fast" in ''|0|1) : ;; *) _die "net_handover_fast must be 0 or 1" ;; esac
   case "$_handover_active" in ''|0|1) : ;; *) _die "net_handover_active must be 0 or 1" ;; esac
   return 0

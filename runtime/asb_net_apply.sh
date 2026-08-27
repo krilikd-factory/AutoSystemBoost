@@ -271,9 +271,13 @@ fi
 # watcher only starts/stops after config has committed, while LPM remains the sole
 # mobile_data_always_on writer.
 if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
+  _rp="$(grep -E '^[[:space:]]*radio_policy_enable=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   _wf="$(grep -E '^[[:space:]]*net_handover_active=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" reconcile >/dev/null 2>&1 || true
-  _out="$_out wifi_fallback=${_wf:-0}"
+  case "$_rp" in
+    1) _out="$_out radio_policy=on wifi_fallback=${_wf:-0}" ;;
+    *) _out="$_out radio_policy=off wifi_fallback=master_off" ;;
+  esac
 fi
 
 # Machine-readable result for the WebUI.
@@ -306,6 +310,8 @@ mkdir -p /data/adb/asb 2>/dev/null
       scan_throttle=*)              printf 'wifi_scan_throttle=ok\n' ;;
       route_tune=FAILED)          printf 'net_route_tune=failed\n' ;;
       route_tune=*)               printf 'net_route_tune=ok\n' ;;
+      radio_policy=on)            printf 'radio_policy_enable=ok\n' ;;
+      radio_policy=*)             printf 'radio_policy_enable=off\n' ;;
       wifi_fallback=1)            printf 'net_handover_active=ok\n' ;;
       wifi_fallback=*)            printf 'net_handover_active=off\n' ;;
 
