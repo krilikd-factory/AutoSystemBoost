@@ -60,9 +60,14 @@ LK_BSTATS_WINDOW_MIN=$(( LK_SNAPSHOT_S / 60 ))
 export LK_BSTATS_WINDOW_MIN
 
 # Phase-adaptive poll cadence (seconds)
-LK_POLL_FAST=15             # gaming / charging — catch transients
+LK_POLL_FAST=15             # gaming / visible charging — catch user-visible transients
 LK_POLL_NORMAL=45           # active / post-wake
-LK_POLL_SLOW=90             # sleep / idle — don't cost battery
+LK_POLL_SLOW=90             # uncharged sleep / idle — don't cost battery
+# A debug recorder must not repeatedly wake a plugged-in, screen-off phone every 15 seconds.
+# Charging-idle state has no interactive deadline, so 60 seconds preserves trend diagnostics
+# while cutting dumpsys/sysfs collection opportunities by 75%. This is logkit-only; it never
+# changes the installed governor, charge current, radio policy or Android suspend rules.
+LK_POLL_CHARGING_IDLE=60
 LK_POLL_S=$LK_POLL_NORMAL
 
 # Wakelock attribution snapshot cadence (kernel sources are cheap; app-side
@@ -239,9 +244,10 @@ lk_detect_phase() {
 # Poll cadence per phase
 lk_poll_for_phase() {
   case "$1" in
-    gaming|charging_active|charging_idle) echo "$LK_POLL_FAST" ;;
-    sleep|idle)                           echo "$LK_POLL_SLOW" ;;
-    *)                                    echo "$LK_POLL_NORMAL" ;;
+    gaming|charging_active) echo "$LK_POLL_FAST" ;;
+    charging_idle)          echo "$LK_POLL_CHARGING_IDLE" ;;
+    sleep|idle)             echo "$LK_POLL_SLOW" ;;
+    *)                      echo "$LK_POLL_NORMAL" ;;
   esac
 }
 
