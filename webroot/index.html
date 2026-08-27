@@ -2436,46 +2436,36 @@ body.config-active #livePage.open {
 /* Marker so a screenshot can prove which build is installed: if the search row is still
    narrow AND this rule is present, the cause is CSS; if the rule is absent, the phone is
    running an older package. */
-#cfgVerBadge::after { content: ''; }   /* ASB_UI_BUILD=langpop-js-1 */
+#cfgVerBadge::after { content: ''; }   /* ASB_UI_BUILD=light-surface-contract-1 */
 
 /* Full light theme: near-white materials, retained ASB status accents, no colour inversion. */
 html[data-asb-theme="light"] {
   color-scheme: light;
-  --bg:#f3f7f6; --surface:#ffffff; --surface-hover:#eaf4f1;
+  /* A restrained warm-grey canvas keeps white operational cards distinct without the dark
+     theme’s neon glow. Values are opaque enough for Android WebView composition. */
+  --bg:#edf4f1; --surface:#ffffff; --surface-hover:#e3efea;
   --accent:#007c63; --accent2:#006f9b; --accent-glow:rgba(0,124,99,.20);
   --perf:#b42318; --perf-glow:rgba(180,35,24,.18); --bal:#8a5700; --bal-glow:rgba(138,87,0,.17);
-  --bat:#08753c; --bat-glow:rgba(8,117,60,.17); --text:#152320;
-  --text-secondary:#465853; --text-tertiary:#61736d;
-  --border:rgba(11,56,47,.16); --border-active:rgba(11,56,47,.32);
+  --bat:#08753c; --bat-glow:rgba(8,117,60,.17); --text:#14231f;
+  --text-secondary:#365048; --text-tertiary:#526b62;
+  --border:rgba(11,56,47,.22); --border-active:rgba(11,56,47,.42);
 }
 html[data-asb-theme="light"] body,
 html[data-asb-theme="light"] .page,
 html[data-asb-theme="light"] .live-page,
 html[data-asb-theme="light"] .config-page { background:var(--bg) !important; color:var(--text); }
-html[data-asb-theme="light"] .theme-toggle,
-html[data-asb-theme="light"] .badge,
-html[data-asb-theme="light"] .status-row,
-html[data-asb-theme="light"] .live-chip,
-html[data-asb-theme="light"] .tg-link,
-html[data-asb-theme="light"] .debug-support-btn,
-html[data-asb-theme="light"] .cfg-backup,
-html[data-asb-theme="light"] .cfg-lang-btn,
-html[data-asb-theme="light"] .cfg-lang-pop,
-html[data-asb-theme="light"] [class*="cfg-card"],
-html[data-asb-theme="light"] [class*="cfg-tile"],
-html[data-asb-theme="light"] [class*="cfg-row"],
-html[data-asb-theme="light"] [class*="live-cell"],
-html[data-asb-theme="light"] [class*="live-panel"],
-html[data-asb-theme="light"] [class*="stock-telemetry"],
-html[data-asb-theme="light"] [class*="cfg-profile-sheet"],
-html[data-asb-theme="light"] [class*="cfg-reset-dialog"],
-html[data-asb-theme="light"] [class*="diag-wait"],
-html[data-asb-theme="light"] [class*="modal"],
-html[data-asb-theme="light"] [class*="dialog"],
-html[data-asb-theme="light"] [class*="sheet"],
-html[data-asb-theme="light"] [class*="pop"] { background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important; box-shadow:0 10px 28px rgba(20,50,42,.10); }
+/* Do not use [class*="…"] here. It styled children such as .cfg-row-top,
+   .live-cell-value and .cfg-tile-ico as separate opaque white slabs, which created the
+   rectangular seams visible inside otherwise rounded cards. Only outer material surfaces
+   receive a paper background; child labels retain transparent backgrounds. */
+html[data-asb-theme="light"] :is(.badge,.status-row,.live-chip,.tg-link,.debug-support-btn,
+  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
+  .live-cell,.stock-telemetry,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet) {
+  background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important;
+  box-shadow:0 10px 28px rgba(20,50,42,.10);
+}
 html[data-asb-theme="light"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) { background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important; }
-html[data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,[class*="overlay"]) { background:rgba(15,31,27,.58) !important; }
+html[data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,[class*="overlay"]) { background:rgba(15,31,27,.58) !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-row.selected,.cfg-tile.active,.cfg-reset-choice.armed,.theme-choice.active,.seg-opt.active,.seg button.active,.p-card.active,.profile-card.active) { border-color:var(--accent) !important; }
 html[data-asb-theme="light"] .cfg-reset-choice.armed { color:#201300 !important; background:linear-gradient(135deg,#ffd166,#f6a623) !important; }
 html[data-asb-theme="light"] :is(.app-name,.status-val,.live-cell-value,.cfg-tile-count.has-on,.tg-link-main,.theme-choice.active) { color:var(--accent) !important; }
@@ -2552,6 +2542,16 @@ html[data-asb-theme="light"] .cfg-status.warn { color:#8a5700; background:rgba(1
 html[data-asb-theme="light"] .cfg-status.bad { color:#b42318; background:rgba(180,35,24,.11); }
 html[data-asb-theme="light"] .cfg-status.neutral { color:var(--text-secondary); background:#eff4f2; }
 html[data-asb-theme="light"] .cfg-desc { color:var(--text-secondary); opacity:1; }
+/* Hard-coded dark-theme whites need explicit light counterparts after the broad selector was
+   removed. These keep every control legible without painting card descendants white. */
+html[data-asb-theme="light"] .cfg-search { background:#fff; color:var(--text); border-color:var(--border); box-shadow:0 2px 8px rgba(20,50,42,.05); }
+html[data-asb-theme="light"] .cfg-search::placeholder { color:#61776f; opacity:1; }
+html[data-asb-theme="light"] .cfg-search-empty, html[data-asb-theme="light"] .cfg-row-cat { color:var(--text-tertiary); }
+html[data-asb-theme="light"] .cfg-switch { background:#e0ebe6; border-color:rgba(11,56,47,.28); box-shadow:inset 0 1px 2px rgba(20,50,42,.10); }
+html[data-asb-theme="light"] .cfg-switch::after { background:#fff; box-shadow:0 1px 3px rgba(20,50,42,.22); }
+html[data-asb-theme="light"] .cfg-switch.on { background:linear-gradient(135deg,#57d9cc,#53cce8); border-color:#129f92; box-shadow:0 2px 9px rgba(0,124,99,.24); }
+html[data-asb-theme="light"] :is(.live-cell-label,.stock-telemetry-title) { background:transparent !important; color:var(--text-tertiary) !important; opacity:1; }
+html[data-asb-theme="light"] :is(.cfg-tile-ico,.cfg-icon,.pbtn .pico) { box-shadow:inset 0 1px 0 rgba(255,255,255,.82); }
 html[data-asb-theme="light"] .cfg-pending { color:#765000; background:#fff5d6; border-color:#d89d24; }
 html[data-asb-theme="light"] :is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-close,.cfg-reset-close) { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
