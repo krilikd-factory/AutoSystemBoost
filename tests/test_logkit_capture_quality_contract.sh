@@ -40,6 +40,31 @@ need "$LOGKIT" 'Native vendor holddown/detente'
 need "$LOGKIT" 'throttle samples logged: $_tc (poll observations, not independent clamp incidents)'
 need "$LOGKIT" 'continuous clamp periods (new period after >180s gap or owner change):'
 need "$LOGKIT" 'owner=%-8s duration=%4d min samples=%d'
+need "$LOGKIT" "_tc=\$(awk -F'|' 'NR>1 && NF>=6 {n++} END{print n+0}'"
+if grep -Fq '%s..%s\\\\n", own' "$LOGKIT"; then
+  echo 'FAIL logkit capture-quality: grouping would print literal \\n' >&2
+  exit 1
+fi
+cat > "$TMP/throttle_trace.txt" <<'EOF_TRACE'
+# throttle trace — epoch | phase | p0 | p6 | temps | cap_owner
+100|active|p0_max=1/2|p6_max=1/2|cpu_temp=45|surface=40|cap_owner=vendor
+160|active|p0_max=1/2|p6_max=1/2|cpu_temp=46|surface=41|cap_owner=vendor
+400|idle|p0_max=1/2|p6_max=1/2|cpu_temp=44|surface=39|cap_owner=asb
+EOF_TRACE
+_count="$(awk -F'|' 'NR>1 && NF>=6 {n++} END{print n+0}' "$TMP/throttle_trace.txt")"
+[ "$_count" = 3 ] || { echo "FAIL logkit capture-quality: expected 3 data rows, got $_count" >&2; exit 1; }
+_grouped="$(awk -F'|' '
+  function emit(){ if(n>0) printf "owner=%s samples=%d epoch=%s..%s\n", own, n, start, last }
+  NR==1 {next}; NF<6 {next}
+  { split($0,a,"cap_owner="); own_now=a[2]; sub(/\|.*/,"",own_now); now=$1+0
+    if(n==0){start=now;last=now;own=own_now;n=1;next}
+    if((now-last)>180 || own_now!=own){emit();start=now;own=own_now;n=1}else n++
+    last=now }
+  END{emit()}
+' "$TMP/throttle_trace.txt")"
+printf '%s\n' "$_grouped" | grep -Fqx 'owner=vendor samples=2 epoch=100..160' || { echo 'FAIL logkit capture-quality: vendor period grouping' >&2; exit 1; }
+printf '%s\n' "$_grouped" | grep -Fqx 'owner=asb samples=1 epoch=400..400' || { echo 'FAIL logkit capture-quality: ASB period grouping' >&2; exit 1; }
+case "$_grouped" in *'\\n'*) echo 'FAIL logkit capture-quality: literal \\n in fixture output' >&2; exit 1 ;; esac
 need "$LOGKIT" '----- CHARGING-IDLE AWAKE VERDICT -----'
 need "$LOGKIT" 'ASB does not alter charge current or kill apps automatically.'
 need "$LOGKIT" 'lk_charge_idle_observe "$_phase"'

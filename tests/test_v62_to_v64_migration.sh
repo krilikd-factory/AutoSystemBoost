@@ -26,7 +26,7 @@ V62_ONLY_MISSING=(
   thermal_budget_dwell_s thermal_budget_enable thermal_budget_light_headroom_pct
   thermal_budget_light_trim_pct thermal_budget_moderate_headroom_pct
   thermal_budget_moderate_trim_pct thermal_budget_severe_headroom_pct
-  thermal_budget_severe_trim_pct wakelock_action
+  thermal_budget_severe_trim_pct wakelock_action net_handover_active
 )
 for key in "${V62_ONLY_MISSING[@]}"; do
   sed -i "/^[[:space:]]*${key}=/d" "$MODDIR/config/governor.conf"
@@ -50,7 +50,7 @@ asb_log() { printf '%s\n' "$*" >> "$TMP/migrate.log"; }
 source "$TMP/migrate_fn.sh"
 asb_migrate_governor_conf
 
-need_line "$MODDIR/config/.schema_version" '18'
+need_line "$MODDIR/config/.schema_version" '19'
 find "$MODDIR/config" -maxdepth 1 -name 'governor.conf.bak.schema17.*' | grep -q . || fail "V62 backup missing"
 for line in \
   'sustained_temp_enter=64' \
@@ -68,11 +68,11 @@ if ! awk '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {p=index($0,"="); if(!p)ne
   fail "migration left duplicate keys"
 fi
 
-# Re-running migration must be a no-op once marker 18 is committed.
+# Re-running migration must be a no-op once marker 19 is committed.
 first_sum=$(sha256sum "$MODDIR/config/governor.conf" | awk '{print $1}')
 asb_migrate_governor_conf
 second_sum=$(sha256sum "$MODDIR/config/governor.conf" | awk '{print $1}')
-[ "$first_sum" = "$second_sum" ] || fail "migration is not idempotent at schema 18"
+[ "$first_sum" = "$second_sum" ] || fail "migration is not idempotent at schema 19"
 
 # The V64 safe writer must accept and atomically update an added V64 key afterwards.
 MODDIR="$MODDIR" ASB_CONFIG_STATE="$STATE" sh "$ROOT_DIR/runtime/asb_config_safe.sh" set gnss_trim 1 >/dev/null

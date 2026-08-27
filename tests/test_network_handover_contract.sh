@@ -9,6 +9,7 @@ need() { grep -Fq "$2" "$1" || fail "missing $2 in ${1#$ROOT/}"; }
 
 for f in "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped"; do
   need "$f" 'net_handover_fast=0'
+  need "$f" 'net_handover_active=0'
 done
 
 LPM="$ROOT/runtime/asb_lpm.sh"
@@ -16,8 +17,10 @@ GOV="$ROOT/src/asb_governor.c"
 need "$LPM" 'if [ "$MODE" = "refresh" ]; then'
 need "$LPM" 'case "$_saved_mode" in fast|normal|save|night)'
 need "$LPM" 'case "$(_cfg net_handover_fast)" in'
-need "$LPM" 'STATE_TAG="${MODE}|handover=${HANDOVER_FAST}"'
-need "$LPM" 'echo "${MODE}|handover=${HANDOVER_FAST}" > "$STATE"'
+need "$LPM" 'case "$(_cfg net_handover_active)" in'
+need "$LPM" 'HANDOVER_ACTIVE=1; HANDOVER_FAST=1'
+need "$LPM" 'STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"'
+need "$LPM" 'echo "$STATE_TAG" > "$STATE"'
 need "$LPM" '_sset mobile_data_always_on 0'
 need "$LPM" 'if [ "$HANDOVER_FAST" = "1" ]; then'
 need "$LPM" '_sset mobile_data_always_on 1'
@@ -40,6 +43,9 @@ printf '%s\n' "$writers" | grep -qx "$LPM" || fail 'mobile_data_always_on has a 
 
 WEB="$ROOT/webroot/index.html"
 need "$WEB" "key:'net_handover_fast'"
+need "$WEB" "key:'net_handover_active'"
+need "$WEB" "net_handover_active:'wifi_escape'"
+need "$WEB" "key === 'net_handover_fast' || key === 'net_handover_active'"
 need "$WEB" "'net_handover_fast',"
 need "$WEB" 'net_handover_fast:APPLY_LIVE'
 need "$WEB" "key === 'net_handover_fast'"
@@ -49,7 +55,16 @@ need "$WEB" "raw.split('|')[0]"
 need "$WEB" "T('lv_vendor_period', 'Vendor cap period')"
 need "$WEB" 'protective bias · vendor cap pressure'
 
-need "$ROOT/common/install.sh" 'wifi_scan_throttle net_handover_fast haptic_touch_strength'
+need "$ROOT/common/install.sh" 'wifi_scan_throttle net_handover_fast net_handover_active haptic_touch_strength'
+need "$ROOT/runtime/asb_wifi_fallback.sh" '_screen_on || return 0'
+need "$ROOT/runtime/asb_wifi_fallback.sh" '_mobile_allowed || return 0'
+need "$ROOT/runtime/asb_wifi_fallback.sh" '_wifi_default || return 0'
+need "$ROOT/runtime/asb_wifi_fallback.sh" '_wifi_unvalidated || return 0'
+need "$ROOT/runtime/asb_wifi_fallback.sh" 'RELEASE_S=28'
+need "$ROOT/runtime/asb_wifi_fallback.sh" 'COOLDOWN_S=150'
+need "$ROOT/runtime/asb_wifi_fallback.sh" '_valid_seconds "$_raw_interval" 1 120'
+need "$ROOT/runtime/asb_wifi_fallback.sh" '_valid_seconds "$_raw_release" 1 120'
+need "$ROOT/runtime/asb_wifi_fallback.sh" '_valid_seconds "$_raw_cooldown" 1 3600'
 need "$ROOT/action.sh" 'Wi-Fi → mobile handover: fast'
 need "$ROOT/tools/asb_diag.sh" 'Wi-Fi → mobile handover: fast requested'
 need "$ROOT/tools/asb_diag.sh" 'Smart battery-lean: HEAVY media uses normal LPM; gaming/camera retain fast'
@@ -60,6 +75,10 @@ _locale_n=0
 for _locale in "$ROOT"/webroot/i18n/*.json; do
   _locale_n=$((_locale_n + 1))
   need "$_locale" '"wb_handover"'
+  need "$_locale" '"net_handover_active"'
+  need "$_locale" '"wb_handover_active"'
+  need "$_locale" '"theme_dark"'
+  need "$_locale" '"theme_light"'
   _handover_n="$(grep -c '"net_handover_fast"' "$_locale" || true)"
   [ "$_handover_n" -ge 2 ] || fail "incomplete handover card/options in ${_locale#$ROOT/}"
   need "$_locale" '"name"'
@@ -103,6 +122,6 @@ tail -n 1 "$TMP/settings.log" | grep -qx 'put mobile_data_always_on 0' || fail '
 printf 'net_handover_fast=0\n' > "$TMP/mod/config/governor.conf"
 MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" refresh
 tail -n 1 "$TMP/settings.log" | grep -qx 'put mobile_data_always_on 0' || fail 'refresh woke modem during save mode'
-grep -qx 'save|handover=0' "$TMP/state/lpm_mode" || fail 'refresh did not preserve save state tag'
+grep -qx 'save|handover=0|active=0' "$TMP/state/lpm_mode" || fail 'refresh did not preserve save state tag'
 
 echo 'PASS: network handover contract'

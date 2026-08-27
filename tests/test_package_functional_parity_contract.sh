@@ -13,12 +13,14 @@ for wf in "$REL" "$DBG"; do
   need "$wf" 'bin/asb_dsp_attach'
   need "$wf" 'system/bin/asbdiag'
   need "$wf" 'runtime/asb_debug_support.sh'
+  need "$wf" 'runtime/asb_wifi_fallback.sh'
   need "$wf" 'runtime/asb_stock_policy.sh'
 done
 
 # The helper is physically present in both packages because runtime/ is a module runtime
 # dependency; its own installed module.prop check denies every release action.
 need "$ROOT/runtime/asb_debug_support.sh" 'debug_only'
+need "$ROOT/runtime/asb_wifi_fallback.sh" 'net_handover_active'
 need "$ROOT/runtime/asb_stock_policy.sh" 'asb_stock_enter'
 
 # Release must retain every normal on-device capture and support script. They are POSIX shell,
