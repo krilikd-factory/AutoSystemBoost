@@ -43,7 +43,10 @@ need "$WEB" "setAttribute('data-asb-theme', 'light')"
 need "$WEB" "removeAttribute('data-asb-theme')"
 absent "$WEB" "toggleAttribute('data-asb-theme'"
 # Both buttons are independent compact chips, with a pale semantic tint rather than a full green fill.
-need "$WEB" '.theme-choice { display:grid; place-items:center; width:30px; height:29px;'
+need "$WEB" '.theme-choice { display:grid; place-items:center; width:34px; height:29px;'
+need "$WEB" '<div class="badge badge-a" id="verBadge">V64</div>'
+need "$WEB" '<div class="badge badge-a" id="liveVerBadge">V64</div>'
+need "$WEB" '<div class="badge badge-a" id="cfgVerBadge">V64</div>'
 need "$WEB" '.theme-choice.active { color:var(--accent); background:rgba(0,240,180,.09);'
 absent "$WEB" '.theme-choice.active { color:#04120f; background:linear-gradient'
 # These cover the previously unreadable dialog title/copy, Smart monitor telemetry and config small text.
@@ -51,6 +54,12 @@ need "$WEB" '--text-secondary:#465853; --text-tertiary:#61736d;'
 need "$WEB" ':is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }'
 need "$WEB" '.smart-banner-value { color:#006c56; }'
 need "$WEB" '.cfg-desc { color:var(--text-secondary); opacity:1; }'
+# Android WebView light controls: every control that had retained translucent light text has an explicit override.
+need "$WEB" 'html[data-asb-theme="light"] .badge-a { background:linear-gradient(135deg,rgba(0,124,99,.14),rgba(0,111,155,.09)) !important;'
+need "$WEB" 'html[data-asb-theme="light"] .cfg-sel-btn { color:var(--text) !important; background:#fff !important;'
+need "$WEB" 'html[data-asb-theme="light"] .cfg-sel-pop button { color:var(--text-secondary) !important;'
+need "$WEB" 'html[data-asb-theme="light"] .cfg-range input[type="range"] { height:6px; background:linear-gradient(90deg,#adc2bb,#e4eeeb) !important;'
+need "$WEB" 'html[data-asb-theme="light"] .cfg-seg button.on { color:#063d32; background:linear-gradient(135deg,#b7f4e6,#b8edf2);'
 need "$WEB" "key:'radio_policy_enable'"
 # Radio master must be the first actual card after the Network heading, ahead of every dependent setting.
 first_net_card=$(awk '/\/\/ ---- Network/{in_network=1; next} in_network && /\{ key:/{print; exit}' "$WEB")
