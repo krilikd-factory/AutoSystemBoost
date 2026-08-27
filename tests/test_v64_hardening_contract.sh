@@ -7,7 +7,6 @@ WEBUI="$ROOT_DIR/webroot/index.html"
 DEBUG_WF="$ROOT_DIR/.github/workflows/build-debug.yml"
 RELEASE_WF="$ROOT_DIR/.github/workflows/build-release.yml"
 MODULE_PROP="$ROOT_DIR/module.prop"
-UPDATE_JSON="$ROOT_DIR/update.json"
 CHANGELOG="$ROOT_DIR/CHANGELOG.md"
 INSTALL="$ROOT_DIR/common/install.sh"
 DIAG="$ROOT_DIR/tools/asb_diag.sh"
@@ -150,14 +149,11 @@ if ( BASE_CODE=64x DEBUG_SEQ_INPUT=10 . "$TMP_DEBUG_GATE/gate.sh" ) >"$TMP_DEBUG
   exit 1
 fi
 
-# Public V64 release identity, OTA metadata and GitHub-facing notes must agree. `update.json`
-# is deliberately outside the flashable module ZIP, but a stale V63 pointer here would make
-# an otherwise valid V64 release advertise the wrong asset to update-aware managers.
+# Public V64 release identity and GitHub-facing notes must agree. `update.json` remains
+# deliberately outside build-time contracts: it can only point to a V64 asset after that asset
+# has been uploaded and published, so it must never block the first debug or release build.
 need "$MODULE_PROP" 'version=V64'
 need "$MODULE_PROP" 'versionCode=640'
-need "$UPDATE_JSON" '"version": "V64"'
-need "$UPDATE_JSON" '"versionCode": 640'
-need "$UPDATE_JSON" 'releases/download/64/ASB-V64.zip'
 need "$CHANGELOG" '# AutoSystemBoost — V64 Release Notes'
 need "$CHANGELOG" '## V63 → V64 at a glance'
 need "$CHANGELOG" '## Known boundaries'
