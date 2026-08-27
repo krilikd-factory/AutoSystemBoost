@@ -267,6 +267,15 @@ if [ -x "$MODDIR/runtime/asb_net_routes.sh" ] || [ -f "$MODDIR/runtime/asb_net_r
   [ -n "$_rt_out" ] && printf '%s\n' "$_rt_out"
 fi
 
+# Active fallback is separate from route-window tuning. It owns no radio setting; the
+# watcher only starts/stops after config has committed, while LPM remains the sole
+# mobile_data_always_on writer.
+if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
+  _wf="$(grep -E '^[[:space:]]*net_handover_active=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" reconcile >/dev/null 2>&1 || true
+  _out="$_out wifi_fallback=${_wf:-0}"
+fi
+
 # Machine-readable result for the WebUI.
 #
 # Without this the UI can only show what the user picked, not what the kernel accepted - so
@@ -295,8 +304,11 @@ mkdir -p /data/adb/asb 2>/dev/null
       wifi_country=*)               printf 'wifi_country=ok\n' ;;
       scan_throttle=FAILED)         printf 'wifi_scan_throttle=failed\n' ;;
       scan_throttle=*)              printf 'wifi_scan_throttle=ok\n' ;;
-      route_tune=FAILED)            printf 'net_route_tune=failed\n' ;;
-      route_tune=*)                 printf 'net_route_tune=ok\n' ;;
+      route_tune=FAILED)          printf 'net_route_tune=failed\n' ;;
+      route_tune=*)               printf 'net_route_tune=ok\n' ;;
+      wifi_fallback=1)            printf 'net_handover_active=ok\n' ;;
+      wifi_fallback=*)            printf 'net_handover_active=off\n' ;;
+
     esac
   done
 } > "$_res" 2>/dev/null

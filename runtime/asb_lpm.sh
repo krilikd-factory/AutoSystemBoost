@@ -96,10 +96,14 @@ case "$_ka" in ''|*[!0-9]*) _ka="$BASE_KEEPIDLE" ;; esac
 # framework still decides when WiFi is unusable; we only avoid waiting for the modem's data
 # context to wake after that decision.  The save/night cases below remain authoritative.
 HANDOVER_FAST=0
+HANDOVER_ACTIVE=0
 case "$(_cfg net_handover_fast)" in
   1) HANDOVER_FAST=1 ;;
 esac
-STATE_TAG="${MODE}|handover=${HANDOVER_FAST}"
+case "$(_cfg net_handover_active)" in
+  1) HANDOVER_ACTIVE=1; HANDOVER_FAST=1 ;;
+esac
+STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
 
 # Re-apply when either LPM or the user-facing handover choice changed. Older state files
 # contain only MODE, so the first run after an update safely refreshes them once.
@@ -148,7 +152,7 @@ case "$MODE" in
     ;;
   *)
     MODE="normal"
-    STATE_TAG="${MODE}|handover=${HANDOVER_FAST}"
+    STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
     if [ "$HANDOVER_FAST" = "1" ]; then
       # Keep only the cellular context warm while Android is awake. This does not force a
       # route, toggle WiFi or change OEM signal/roam thresholds; it only removes the modem
@@ -167,5 +171,5 @@ case "$MODE" in
 esac
 
 mkdir -p /dev/.asb 2>/dev/null
-echo "${MODE}|handover=${HANDOVER_FAST}" > "$STATE" 2>/dev/null
+echo "$STATE_TAG" > "$STATE" 2>/dev/null
 exit 0
