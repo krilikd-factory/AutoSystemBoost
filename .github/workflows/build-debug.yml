@@ -118,6 +118,7 @@ jobs:
             tests/test_v65_smart_thermal_cap_contract.sh \
             tests/test_v65_efficiency_contract.sh \
             tests/test_project_safety_hardening_contract.sh \
+            tests/test_wakelock_watch_safety_contract.sh \
             module.prop \
             customize.sh \
             service.sh; do
