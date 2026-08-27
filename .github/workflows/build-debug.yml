@@ -78,6 +78,7 @@ jobs:
             runtime/asb_stock_policy.sh \
             runtime/asb_overlay_guard.sh \
             tools/asb_config_backup.sh \
+            config/key_ownership.tsv \
             tools/asb_schema_sync.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
@@ -89,11 +90,13 @@ jobs:
             tests/test_v64_p0_contract.sh \
             tests/test_v64_webui_trial_ledger_contract.py \
             tests/test_config_lock_contract.sh \
+            tests/test_config_ownership_registry.sh \
             tests/test_camera_grade_contract.sh \
             tests/test_cpu_min_opp_contract.sh \
             tests/test_named_config_profiles.sh \
             tests/test_smart_reset_complete_contract.sh \
             tests/test_v64_hardening_contract.sh \
+            tests/test_reversible_settings_contract.sh \
             tests/test_active_efficiency_contract.sh \
             tests/test_kernel_uv_coexist_contract.sh \
             tests/test_bt_lifecycle_recorder_contract.sh \
