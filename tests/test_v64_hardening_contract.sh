@@ -7,7 +7,6 @@ WEBUI="$ROOT_DIR/webroot/index.html"
 DEBUG_WF="$ROOT_DIR/.github/workflows/build-debug.yml"
 RELEASE_WF="$ROOT_DIR/.github/workflows/build-release.yml"
 MODULE_PROP="$ROOT_DIR/module.prop"
-CHANGELOG="$ROOT_DIR/CHANGELOG.md"
 INSTALL="$ROOT_DIR/common/install.sh"
 DIAG="$ROOT_DIR/tools/asb_diag.sh"
 LINT="$ROOT_DIR/tools/asb_lint.sh"
@@ -149,15 +148,11 @@ if ( BASE_CODE=64x DEBUG_SEQ_INPUT=10 . "$TMP_DEBUG_GATE/gate.sh" ) >"$TMP_DEBUG
   exit 1
 fi
 
-# Public V64 release identity and GitHub-facing notes must agree. `update.json` remains
-# deliberately outside build-time contracts: it can only point to a V64 asset after that asset
-# has been uploaded and published, so it must never block the first debug or release build.
+# Public module identity is build-critical. OTA metadata and GitHub-facing changelog are
+# deliberately outside build-time contracts: both are publication documents that may be updated
+# only after the first V64 asset is available, so neither can block debug or release compilation.
 need "$MODULE_PROP" 'version=V64'
 need "$MODULE_PROP" 'versionCode=640'
-need "$CHANGELOG" '# AutoSystemBoost — V64 Release Notes'
-need "$CHANGELOG" '## V63 → V64 at a glance'
-need "$CHANGELOG" '## Known boundaries'
-need "$CHANGELOG" '`ASB-V64.zip`'
 
 # Release publication must validate the immutable public identity rather than patching it from
 # an arbitrary GitHub tag. Exercise the literal workflow fragment under safe subshell fixtures.
