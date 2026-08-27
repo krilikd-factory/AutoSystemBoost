@@ -20,6 +20,10 @@ This document describes every file the ASB governor and logkit produce, what fie
 | `<logkit_dir>/status_watch.txt` | concatenated state JSON | logkit shell | 5s sampling |
 | `<logkit_dir>/cap_verify.txt` | freeform text report | logkit shell | At capture finalize |
 | `<logkit_dir>/cap_source_summary.txt` | text histogram | logkit shell | At capture finalize |
+| `<logkit_dir>/phase_ledger.tsv` | tab-delimited phase intervals | full-day logkit shell | On phase transition and finalization |
+| `<logkit_dir>/phase_summary.txt` | text table | full-day logkit shell | Hourly and final report |
+| `<logkit_dir>/sampled_current_distribution.txt` | text table | full-day logkit shell | Hourly and final report |
+| `<logkit_dir>/mobile_traffic_context.txt` | text table | full-day logkit shell | Hourly and final report |
 
 ---
 
@@ -279,6 +283,16 @@ Pipe-delimited CSV. 29 columns, sampled by `asb_log_battery_sleep.sh` and `asb_l
 ```
 
 Most columns are reads of /dev/.asb/state with explicit type. `bat_temp_10x` is battery temperature × 10 (147 = 14.7°C). `wlan_rx`/`wlan_tx`/`rmnet_rx`/`rmnet_tx` are total bytes from `/proc/net/dev`.
+
+---
+
+## Full-day derived report artifacts
+
+`asb_log_full_day.sh` writes a tab-delimited `phase_ledger.tsv` with one concrete time interval per detected phase. Its phase summary is **not** a causal energy split: temperature and current fields are sampled observations, Android capacity is integer-quantised, and repeated phase labels may represent disjoint intervals.
+
+`sampled_current_distribution.txt` maps each positive raw `battery_trace.txt` discharge-current sample to a concrete ledger interval, then groups the mapped samples by phase. It reports the number of samples, the mean sampled mA, and the **median sampled mA**. The median is intentionally resistant to brief outliers; neither figure is a physical whole-phase current average because suspend and gaps between recorder wake-ups are under-sampled. Charging/zero/invalid samples are excluded, and `current_now` values at or above 100000 are normalized from µA to mA for this derived report.
+
+`mobile_traffic_context.txt` aggregates the existing ledger's selected-rmnet RX+TX counters by phase and lists only phases with at least **32 MiB**. It keeps the phase duration and screen context so a reviewer can identify a potentially material transfer window. It is a report-only context flag: observed bytes may contribute to radio energy in that phase, but they do not prove cause or assign a battery percentage.
 
 ---
 
