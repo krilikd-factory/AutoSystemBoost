@@ -690,6 +690,10 @@ case "$(cfg net_handover_fast)" in
   1) NOTE "Wi-Fi → mobile handover: fast requested; LPM state: $(cat /dev/.asb/lpm_mode 2>/dev/null || echo not-written)" ;;
   *) NOTE "Wi-Fi → mobile handover: stock/off" ;;
 esac
+case "$(cfg net_handover_active)" in
+  1) NOTE "Wi-Fi fallback: active opt-in; $(MODDIR=\"${MODDIR:-/data/adb/modules/AutoSystemBoost}\" sh \"${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo status-unavailable)" ;;
+  *) NOTE "Wi-Fi fallback: off" ;;
+esac
 
 # A strongly battery-lean Smart session must not negate its own economy choice by holding
 # mobile_data_always_on during a feed/media HEAVY burst.  This is read-only explanation of the
@@ -863,7 +867,7 @@ else
 fi
 _install_state=/data/adb/asb/last_install_state
 if [ -r "$_install_state" ]; then
-  NOTE "last install: config=$(_rget config_mode "$_install_state") source=$(_rget config_source "$_install_state") keys=$(_rget config_keys "$_install_state") module=$(_rget module_version "$_install_state")"
+  NOTE "last install: config=$(_rget config_mode "$_install_state") source=$(_rget config_source "$_install_state") keys=$(_rget config_keys "$_install_state") module=$(_rget module_version "$_install_state") profiles=$(_rget named_profiles "$_install_state") learning=$(_rget smart_learning "$_install_state") snapshot=$(_rget snapshot_state "$_install_state")"
 else
   NOTE "last install: no migration record (older installation or first boot not completed)"
 fi
