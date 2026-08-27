@@ -18,6 +18,7 @@ cp "$ROOT/config/governor.conf.shipped" "$MODPATH/config/governor.conf"
 # This represents ASB's prior atomic snapshot. There is deliberately no NVBASE/modules/<id>.
 cat > "$STATE/governor.conf.snapshot" <<'EOF'
 # ASB WebUI settings snapshot — survives module update/reinstall
+radio_policy_enable=1
 net_handover_active=1
 net_handover_fast=1
 audio_profile=eq_friendly
@@ -48,7 +49,8 @@ set -e
 
 [ "$ASB_CONFIG_MIGRATION_MODE" = preserved ] || fail "migration mode is $ASB_CONFIG_MIGRATION_MODE"
 [ "$ASB_CONFIG_MIGRATION_SOURCE" = snapshot ] || fail "migration source is $ASB_CONFIG_MIGRATION_SOURCE"
-[ "$ASB_CONFIG_MIGRATED_COUNT" -ge 4 ] || fail 'snapshot values were not migrated'
+[ "$ASB_CONFIG_MIGRATED_COUNT" -ge 5 ] || fail 'snapshot values were not migrated'
+need_line "$MODPATH/config/governor.conf" 'radio_policy_enable=1'
 need_line "$MODPATH/config/governor.conf" 'net_handover_active=1'
 need_line "$MODPATH/config/governor.conf" 'net_handover_fast=1'
 need_line "$MODPATH/config/governor.conf" 'audio_profile=eq_friendly'
