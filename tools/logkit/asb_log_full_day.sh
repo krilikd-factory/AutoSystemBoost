@@ -410,6 +410,67 @@ lk_phase_ledger_accumulate() {
   fi
 }
 
+# ── screen-off class observation ─────────────────────────────────────────────
+# The runtime classifier already produces one read-only state record while the screen is off.
+# Reuse it during the user-requested full-day capture; do not wake or probe another subsystem.
+lk_screenoff_class_trace_header() {
+  printf '# epoch|phase|class|awake_pct|window_min|bat_mA|reason\n' > "$LK_OUT_DIR/screenoff_class_trace.tsv"
+}
+
+lk_capture_screenoff_class_row() {
+  _sc_phase="${1:-}"
+  # Only true screen-off phase labels may consume the classifier's state. The file remains
+  # deliberately persistent after waking, so reading it for active/post_wake would be stale.
+  case "$_sc_phase" in sleep|idle|gap|audio_bt|audio_spk|audio_wired|audio) : ;; *) return 0 ;; esac
+  _sc_file=/dev/.asb/screenoff_class
+  [ -r "$_sc_file" ] || return 0
+  _sc_values="$(awk -F= '
+    /^class=/{c=$2}
+    /^awake_pct=/{a=$2}
+    /^window_min=/{w=$2}
+    END{printf "%s|%s|%s", c,a,w}
+  ' "$_sc_file" 2>/dev/null)"
+  _sc_reason="$(sed -n 's/^reason=//p' "$_sc_file" 2>/dev/null | head -n 1 | tr '|' '/')"
+  [ -n "$_sc_values" ] || return 0
+  _sc_bma="$(tail -n 1 "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null | cut -d'|' -f7)"
+  case "$_sc_bma" in ''|*[!0-9-]*) _sc_bma='' ;; esac
+  # Header order is epoch, phase, class, awake, window, battery current, reason.
+  printf '%s|%s|%s|%s|%s\n' "$(date +%s)" "$_sc_phase" "$_sc_values" "$_sc_bma" "$_sc_reason" >> "$LK_OUT_DIR/screenoff_class_trace.tsv"
+}
+
+lk_emit_screenoff_class_summary() {
+  _sc_trace="$LK_OUT_DIR/screenoff_class_trace.tsv"
+  [ -s "$_sc_trace" ] || return 0
+  echo "===== SCREEN-OFF CLASS OBSERVATIONS ====="
+  echo "class        samples cover_min avgAwake    avg_mA  latest observed reason"
+  awk -F'|' '
+    NR==1 {next}
+    NF<7 {next}
+    {
+      now=$1+0; c=$3; aw=$4; ma=$6; reason=$7
+      if(c=="") next
+      n[c]++
+      if(aw ~ /^[0-9]+$/){aws[c]+=aw; awn[c]++}
+      # Assign only a short, same-class interval. Gaps/transitions stay unassigned rather than
+      # pretending to know their source; this is observed coverage, not causal energy split.
+      if(last[c]>0 && now>=last[c] && now-last[c]<=180) cov[c]+=now-last[c]
+      last[c]=now; why[c]=reason
+      if(ma ~ /^[0-9]+$/ && ma>0){mas[c]+=ma; man[c]++}
+    }
+    END{
+      for(c in n){
+        aa=(awn[c]>0)?aws[c]/awn[c]:-1; mm=(man[c]>0)?mas[c]/man[c]:-1
+        aas=(aa>=0)?sprintf("%7.1f",aa):"      -"; mms=(mm>=0)?sprintf("%8.0f",mm):"       -"
+        printf "%-12s %7d %9.1f %8s %9s  %s\n",c,n[c],cov[c]/60.0,aas,mms,why[c]
+      }
+    }
+  ' "$_sc_trace" | sort
+  echo "Coverage counts adjacent samples of the same observed class (intervals <=180s)."
+  echo "avg_mA is sampled discharge current only; it is not a percentage or causal energy allocation."
+  echo "Use quiet as a valid night reference; media/network/noisy identify context to investigate."
+  echo ""
+}
+
 # ── reporting ──────────────────────────────────────────────────────────────
 lk_emit_phase_summary() {
   _led="$LK_OUT_DIR/phase_ledger.tsv"
@@ -513,6 +574,7 @@ lk_emit_full_day_report() {
     echo ""
     lk_emit_capture_validity
     echo ""
+    lk_emit_screenoff_class_summary
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
       cat "$LK_OUT_DIR/phase_summary.txt"
     fi
@@ -773,6 +835,7 @@ lk_battery_trace_header
 lk_charge_trace_header
 lk_asb_feature_header
 lk_config_watch_init
+lk_screenoff_class_trace_header
 { echo "# phase timeline — epoch | iso | phase | trigger"; } > "$LK_OUT_DIR/phase_timeline.txt"
 { echo "# throttle trace — epoch | phase | p0 | p6 | temps | cap_owner"; } > "$LK_OUT_DIR/throttle_trace.txt"
 printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\tawakePct\tavgMA\trmnetRxBytes\trmnetTxBytes\n' > "$LK_OUT_DIR/phase_ledger.tsv"
@@ -816,6 +879,7 @@ lk_capture_battery_trace_row
 lk_snapshot_audio "before"
 lk_bt_reconnect_snapshot "before"
 lk_detect_phase "$(date +%s)"; _phase="$LK_PHASE_OUT"
+lk_capture_screenoff_class_row "$_phase"
 lk_phase_ledger_open "$_phase"
 echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|capture_start" >> "$LK_OUT_DIR/phase_timeline.txt"
 
@@ -856,6 +920,7 @@ while : ; do
   # per-poll capture
   lk_capture_perf_trace_row
   lk_capture_battery_trace_row
+  lk_capture_screenoff_class_row "$_phase"
   lk_capture_fsm_media_trace_row "$_phase"
   lk_wakelock_live_row
   lk_oem_toggle_row
