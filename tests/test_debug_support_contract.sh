@@ -147,11 +147,21 @@ echo "$START2" | grep -Fq "pid=$REC_PID"
 
 # Deleting the exact directory published by the live recorder is an explicit cancellation.
 # The helper may stop ONLY that recorder, clear its lock and launch a new single capture.
+# Simulate a common Android toybox limitation: both ps formats expose only a shortened command
+# line. The recovery still needs the script basename, but remains gated by a live lock PID and
+# an explicitly removed recorder-owned output directory.
+mkdir -p "$TMP/ps-truncated"
+cat > "$TMP/ps-truncated/ps" <<'EOF_PS'
+#!/bin/sh
+printf '%s\n' 'sh asb_log_full_day.sh 24'
+EOF_PS
+chmod 0755 "$TMP/ps-truncated/ps"
 ORPHAN_OUT="$(cat "$TMP/state/full_day_webui.lock/output_dir")"
 [ -d "$ORPHAN_OUT" ] || { echo 'FAIL debug support: recorder did not publish output dir' >&2; exit 1; }
 rm -rf "$ORPHAN_OUT"
-RECOVERED="$(env "${ENV[@]}" sh "$HELPER" full-day)"
+RECOVERED="$(PATH="$TMP/ps-truncated:$PATH" env "${ENV[@]}" sh "$HELPER" full-day)"
 printf '%s\n' "$RECOVERED" | grep -Fq 'status=started' || { echo 'FAIL debug support: removed output dir did not recover capture slot' >&2; exit 1; }
+grep -Fq 'recovered=output_removed' "$TMP/state/full_day_webui.recovery.log" || { echo 'FAIL debug support: orphan recovery evidence missing' >&2; exit 1; }
 REC_PID="$(printf '%s\n' "$RECOVERED" | sed -n 's/^pid=//p')"
 [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo 'FAIL debug support: recovered recorder missing' >&2; exit 1; }
 
@@ -189,6 +199,10 @@ need "$HELPER" 'lock_known_dead()'
 need "$HELPER" 'full_day_output_missing()'
 need "$HELPER" 'full_day_cancel_orphan()'
 need "$HELPER" 'full_day_pid_matches_recorder()'
+need "$HELPER" 'asb_log_full_day.sh*) return 0'
+need "$HELPER" 'full_day_recovery_note()'
+need "$HELPER" 'RECOVERY_LOG='
+need "$HELPER" 'PROC_ROOT='
 need "$HELPER" 'diag_lock_known_dead()'
 need "$HELPER" 'asbdiag_exit_${_rc}'
 need "$HELPER" 'lock_wait_live_pid()'

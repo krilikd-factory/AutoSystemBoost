@@ -41,8 +41,18 @@ run() {
     sh "$TMP/mod/runtime/asb_wifi_fallback.sh" "$@"
 }
 wait_for() {
-  local f="$1" n="${2:-5}"
-  while (( n > 0 )); do [ -e "$f" ] && return 0; sleep 1; ((n--)); done
+  local f="$1" n="${2:-50}"
+  while (( n > 0 )); do [ -e "$f" ] && return 0; sleep 0.1; ((n--)); done
+  return 1
+}
+wait_for_line() {
+  local want="$1" f="$2" n="${3:-80}"
+  while (( n > 0 )); do grep -qx "$want" "$f" 2>/dev/null && return 0; sleep 0.1; ((n--)); done
+  return 1
+}
+wait_for_absent() {
+  local f="$1" n="${2:-50}"
+  while (( n > 0 )); do [ ! -e "$f" ] && return 0; sleep 0.1; ((n--)); done
   return 1
 }
 
@@ -53,28 +63,25 @@ run reconcile
 wait_for "$TMP/state/wifi_fallback.pid" || fail 'reconcile did not start watcher'
 WPID="$(cat "$TMP/state/wifi_fallback.pid")"
 kill -0 "$WPID" 2>/dev/null || fail 'recorded watcher is not alive'
-sleep 2
+sleep 0.3
 [ ! -s "$TMP/svc.log" ] || fail 'released validated Wi-Fi'
 run reconcile
-sleep 1
+wait_for "$TMP/state/wifi_fallback.pid" || fail 'reconcile lost watcher PID'
 [ "$(cat "$TMP/state/wifi_fallback.pid")" = "$WPID" ] || fail 'reconcile spawned duplicate watcher'
 [ "$(find "$TMP/state" -maxdepth 1 -type d -name 'wifi_fallback.watch.lock' | wc -l | tr -d ' ')" = 1 ] || fail 'watcher lock missing or duplicated'
 
 # Android-owned non-validation evidence while wlan0 is default releases once, then restores.
 printf '%s\n' 'NetworkInfo: VALIDATED=false' > "$TMP/wifi.dump"
-sleep 2
-grep -qx 'wifi disable' "$TMP/svc.log" || fail 'did not release unvalidated default Wi-Fi'
-sleep 2
-grep -qx 'wifi enable' "$TMP/svc.log" || fail 'did not restore Wi-Fi after bounded release'
+wait_for_line 'wifi disable' "$TMP/svc.log" || fail 'did not release unvalidated default Wi-Fi'
+wait_for_line 'wifi enable' "$TMP/svc.log" || fail 'did not restore Wi-Fi after bounded release'
 [ "$(grep -cx 'wifi disable' "$TMP/svc.log")" -eq 1 ] || fail 'repeated Wi-Fi release during cooldown'
 
 # Turning the feature off via reconcile terminates its watcher and clears only ASB state.
 printf 'radio_policy_enable=1\nnet_handover_active=0\n' > "$TMP/mod/config/governor.conf"
 run reconcile
-sleep 1
+wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'stale watcher PID after OFF'
+wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'stale watcher lock after OFF'
 kill -0 "$WPID" 2>/dev/null && fail 'reconcile OFF did not stop watcher'
-[ ! -e "$TMP/state/wifi_fallback.pid" ] || fail 'stale watcher PID after OFF'
-[ ! -e "$TMP/state/wifi_fallback.watch.lock" ] || fail 'stale watcher lock after OFF'
 [ "$(grep -cx 'wifi disable' "$TMP/svc.log")" -eq 1 ] || fail 'fallback acted after explicit off'
 unset WPID
 
@@ -85,8 +92,9 @@ wait_for "$TMP/state/wifi_fallback.action" || fail 'did not enter owned release 
 WPID="$(cat "$TMP/state/wifi_fallback.pid")"
 printf 'radio_policy_enable=1\nnet_handover_active=0\n' > "$TMP/mod/config/governor.conf"
 run reconcile
-sleep 1
-[ ! -e "$TMP/state/wifi_fallback.action" ] || fail 'OFF did not clear ASB action marker after restore'
+wait_for_absent "$TMP/state/wifi_fallback.action" || fail 'OFF did not clear ASB action marker after restore'
+wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'watcher PID remained after active-window OFF'
+wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'watcher lock remained after active-window OFF'
 [ "$(grep -cx 'wifi enable' "$TMP/svc.log")" -ge 2 ] || fail 'OFF did not return ASB-owned Wi-Fi'
 kill -0 "$WPID" 2>/dev/null && fail 'watcher survived active-window OFF'
 unset WPID

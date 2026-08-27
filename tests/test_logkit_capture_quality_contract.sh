@@ -68,6 +68,28 @@ case "$_grouped" in *'\\n'*) echo 'FAIL logkit capture-quality: literal \\n in f
 need "$LOGKIT" '----- CHARGING-IDLE AWAKE VERDICT -----'
 need "$LOGKIT" 'ASB does not alter charge current or kill apps automatically.'
 need "$LOGKIT" 'lk_charge_idle_observe "$_phase"'
+# The source-class report is a passive observed-context diagnostic. It must never claim a
+# causal battery percentage by class, and may only cover adjacent same-class samples.
+need "$LOGKIT" '===== SCREEN-OFF CLASS OBSERVATIONS ====='
+need "$LOGKIT" 'screenoff_class_trace.tsv'
+need "$LOGKIT" 'lk_capture_screenoff_class_row "$_phase"'
+need "$LOGKIT" 'intervals <=180s'
+need "$LOGKIT" 'not a percentage or causal energy allocation'
+sed -n '/^lk_emit_screenoff_class_summary() {/,/^}/p' "$LOGKIT" > "$TMP/screenoff_summary.sh"
+[ -s "$TMP/screenoff_summary.sh" ] || { echo 'FAIL logkit capture-quality: cannot extract screen-off summary' >&2; exit 1; }
+cat > "$TMP/screenoff_class_trace.tsv" <<'EOF_CLASS'
+# epoch|phase|class|awake_pct|window_min|bat_mA|reason
+100|sleep|quiet|2|55|80|low awake / no media or network
+160|sleep|quiet|4|56|100|low awake / no media or network
+230|idle|network|28|58|240|active mobile transfer
+700|idle|network|31|60|280|active mobile transfer
+EOF_CLASS
+LK_OUT_DIR="$TMP"
+. "$TMP/screenoff_summary.sh"
+_class_summary="$(lk_emit_screenoff_class_summary)"
+printf '%s\n' "$_class_summary" | grep -Eq '^quiet[[:space:]]+2[[:space:]]+1\.0' || { echo 'FAIL logkit capture-quality: quiet observed coverage' >&2; exit 1; }
+printf '%s\n' "$_class_summary" | grep -Eq '^network[[:space:]]+2[[:space:]]+0\.0' || { echo 'FAIL logkit capture-quality: gap must not be attributed to network class' >&2; exit 1; }
+printf '%s\n' "$_class_summary" | grep -Fq 'not a percentage or causal energy allocation' || { echo 'FAIL logkit capture-quality: causal allocation disclaimer missing' >&2; exit 1; }
 
 # New verdict code must remain read-only: no global runtime-policy writes are allowed here.
 if grep -nE 'setprop|settings[[:space:]]+put|sysctl[[:space:]]+-w|swapoff|svc[[:space:]]+power|reboot' "$LOGKIT" >/dev/null 2>&1; then
