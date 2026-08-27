@@ -2404,22 +2404,13 @@ asb_preserve_user_config() {
   done
   _src=""
   [ -f "$_old_conf" ] && _src="$_old_conf"
-  # The snapshot only counts while the module is still installed.
-  #
-  # It lives in /data/adb/asb, which survives module removal - so uninstalling and
-  # reinstalling was read as an update and restored every setting the user had just
-  # thrown away. uninstall.sh does clear that directory, but it does not always run:
-  # removing through the manager and flashing again before a reboot skips it entirely.
-  #
-  # Its purpose is surviving an in-place update, and in that case the module directory
-  # is still there. Gone module directory means the user removed it on purpose, and
-  # honouring the leftover snapshot would be second-guessing that.
-  if [ -z "$_src" ] && [ -f "$_snap_conf" ] \
-     && [ -d "$NVBASE/modules/$MODID" ]; then
+  # Root managers do not agree on update ordering. Some remove modules/<id> before
+  # customize.sh runs while durable /data/adb/asb is still intact. The snapshot is
+  # module-specific and written by ASB only after an atomic config transaction, so it
+  # remains a valid source for that update path. A real uninstall runs uninstall.sh and
+  # clears /data/adb/asb; a later clean install therefore still starts fresh.
+  if [ -z "$_src" ] && [ -f "$_snap_conf" ]; then
     _src="$_snap_conf"
-  elif [ -z "$_src" ] && [ -f "$_snap_conf" ]; then
-    ui_print "      + previous install was removed - starting fresh, not from its snapshot"
-    rm -f "$_snap_conf" 2>/dev/null
   fi
   if [ -z "$_src" ]; then
     # Nothing to migrate from: this is a first install, whatever else is on disk.
@@ -2473,7 +2464,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle net_handover_fast haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle net_handover_fast net_handover_active haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard"
 
   _migrated=0
   # Which numbering the stored values were written against. Absent means "before schemas
@@ -2569,7 +2560,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle net_handover_fast haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle net_handover_fast net_handover_active haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -2578,6 +2569,8 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
     done
   } > "$_snap_conf" 2>/dev/null
   chmod 644 "$_snap_conf" 2>/dev/null || true
+  # Provenance makes cross-manager update continuity diagnosable from asbdiag.
+  { echo "module_id=$MODID"; echo "snapshot_epoch=$(date +%s 2>/dev/null || echo 0)"; } > /data/adb/asb/update_snapshot_state 2>/dev/null || true
 }
 
 asb_prune_module() {
@@ -3944,7 +3937,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_boot_timeline.sh asb_debug_support.sh asb_stock_policy.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh asb_wifi_fallback.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_boot_timeline.sh asb_debug_support.sh asb_stock_policy.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
@@ -4044,10 +4037,13 @@ fi
 		  echo "config_mode=${ASB_CONFIG_MIGRATION_MODE:-unknown}"
 		  echo "config_source=${ASB_CONFIG_MIGRATION_SOURCE:-none}"
 		  echo "config_keys=${ASB_CONFIG_MIGRATED_COUNT:-0}"
+  echo "snapshot_state=$(test -f /data/adb/asb/update_snapshot_state && echo present || echo absent)"
+  echo "named_profiles=$(find /data/adb/asb/config_profiles -maxdepth 1 -type f -name '*.conf' 2>/dev/null | wc -l | tr -d ' ')"
+  if [ -e /data/adb/asb/buckets.bin ] || [ -e /data/adb/asb/smart_appheat.bin ]; then echo "smart_learning=present"; else echo "smart_learning=none_yet"; fi
 		} > "$_asb_install_state.tmp.$$" 2>/dev/null && mv -f "$_asb_install_state.tmp.$$" "$_asb_install_state" 2>/dev/null || true
 
 		if [ -d "$MODPATH/config" ]; then
-	  echo 18 > "$MODPATH/config/.schema_version" 2>/dev/null || true
+	  echo 19 > "$MODPATH/config/.schema_version" 2>/dev/null || true
 	  chmod 644 "$MODPATH/config/.schema_version" 2>/dev/null || true
 	fi
 
@@ -4063,7 +4059,7 @@ fi
 {
   "asb_version": "$_asb_ver",
   "build_date": "$_asb_date",
-  "schema_version": 18,
+  "schema_version": 19,
   "hashes": {
     "governor": "$_gov_hash",
     "performance": "$_perf_hash",
