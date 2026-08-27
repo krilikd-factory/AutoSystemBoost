@@ -522,15 +522,15 @@ lk_emit_full_day_report() {
       # One trace row is one scheduled poll where a ceiling was already below hardware max;
       # it is not one independent thermal incident. Count data rows only and group continuous
       # ownership so a 30-minute vendor hold is read as one period, not dozens of "events".
-      _tc=$(awk 'NR>1 && NF>=6 {n++} END{print n+0}' "$LK_OUT_DIR/throttle_trace.txt")
+      _tc=$(awk -F'|' 'NR>1 && NF>=6 {n++} END{print n+0}' "$LK_OUT_DIR/throttle_trace.txt")
       echo "throttle samples logged: $_tc (poll observations, not independent clamp incidents)"
       echo "continuous clamp periods (new period after >180s gap or owner change):"
       awk -F'|' '
-        function emit(){ if(n>0) printf "  owner=%-8s duration=%4d min samples=%d  epoch=%s..%s\\n", own, (last-start)/60, n, start, last }
+        function emit(){ if(n>0) printf "  owner=%-8s duration=%4d min samples=%d  epoch=%s..%s\n", own, (last-start)/60, n, start, last }
         NR==1 {next}
         NF<6 {next}
         {
-          raw=$0; split(raw,a,"cap_owner="); own_now=a[2]; sub(/\\|.*/,"",own_now)
+          raw=$0; split(raw,a,"cap_owner="); own_now=a[2]; sub(/\|.*/,"",own_now)
           if(own_now=="") own_now="unknown"
           now=$1+0
           if(n==0){ start=now; last=now; own=own_now; n=1; next }
