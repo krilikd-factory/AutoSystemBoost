@@ -683,15 +683,23 @@ else
   NOTE "net_apply_result missing - no network key applied through the WebUI yet"
 fi
 
-# Fast handover is owned by modem LPM rather than the route-tuning script.  Report both the
-# stored request and LPM's state tag, so a device log distinguishes "chosen" from "active now"
-# (save/night correctly defer it until the screen is awake again).
-case "$(cfg net_handover_fast)" in
-  1) NOTE "Wi-Fi → mobile handover: fast requested; LPM state: $(cat /dev/.asb/lpm_mode 2>/dev/null || echo not-written)" ;;
+# Radio policy is deliberately independent of the power profile. Report the master first, so a
+# device log distinguishes a stored handover preference from an allowed active modem policy.
+_radio_policy="$(cfg radio_policy_enable)"
+case "$_radio_policy" in
+  1) NOTE "Cellular/radio controls: enabled by explicit user choice; LPM state: $(cat /dev/.asb/lpm_mode 2>/dev/null || echo not-written)" ;;
+  *) NOTE "Cellular/radio controls: off — profiles leave Android mobile-data context and TCP keepalives untouched" ;;
+esac
+# Fast handover is owned by modem LPM rather than the route-tuning script. Report both the
+# stored request and the master gate; save/night correctly defer it until the screen is awake.
+case "$(cfg net_handover_fast):$_radio_policy" in
+  1:1) NOTE "Wi-Fi → mobile handover: fast requested; LPM state: $(cat /dev/.asb/lpm_mode 2>/dev/null || echo not-written)" ;;
+  1:*) NOTE "Wi-Fi → mobile handover: stored but inactive (cellular/radio controls off)" ;;
   *) NOTE "Wi-Fi → mobile handover: stock/off" ;;
 esac
-case "$(cfg net_handover_active)" in
-  1) NOTE "Wi-Fi fallback: active opt-in; $(MODDIR=\"${MODDIR:-/data/adb/modules/AutoSystemBoost}\" sh \"${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo status-unavailable)" ;;
+case "$(cfg net_handover_active):$_radio_policy" in
+  1:1) NOTE "Wi-Fi fallback: active opt-in; $(MODDIR=\"${MODDIR:-/data/adb/modules/AutoSystemBoost}\" sh \"${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo status-unavailable)" ;;
+  1:*) NOTE "Wi-Fi fallback: stored but inactive (cellular/radio controls off)" ;;
   *) NOTE "Wi-Fi fallback: off" ;;
 esac
 
