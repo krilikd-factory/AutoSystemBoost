@@ -1378,15 +1378,21 @@ case "$_wst" in
   0) echo "       Wi-Fi scan: unthrottled (roams sooner, costs battery)" ;;
   1) echo "       Wi-Fi scan: stock limit (4 per 2 min)" ;;
 esac
+_radio_policy="$(_cfg radio_policy_enable)"
 _handover="$(_cfg net_handover_fast)"
 _handover_active="$(_cfg net_handover_active)"
-case "$_handover" in
-  1) echo "       Wi-Fi → mobile handover: fast (cellular context kept ready while awake)" ;;
-  *) : ;;
+case "$_radio_policy" in
+  1) echo "       cellular/radio controls: enabled by explicit choice" ;;
+  *) echo "       cellular/radio controls: off · profiles leave Android radio policy untouched" ;;
 esac
-case "$_handover_active" in
-  1) _hf="$(MODDIR=\"$MODDIR\" sh \"$MODDIR/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo unavailable)"
-     echo "       Wi-Fi fallback: active opt-in · ${_hf}" ;;
+case "$_handover:$_radio_policy" in
+  1:1) echo "       Wi-Fi → mobile handover: fast (cellular context kept ready while awake)" ;;
+  1:*) echo "       Wi-Fi → mobile handover: stored, inactive (radio controls off)" ;;
+esac
+case "$_handover_active:$_radio_policy" in
+  1:1) _hf="$(MODDIR=\"$MODDIR\" sh \"$MODDIR/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo unavailable)"
+       echo "       Wi-Fi fallback: active opt-in · ${_hf}" ;;
+  1:*) echo "       Wi-Fi fallback: stored, inactive (radio controls off)" ;;
 esac
   # Which interface is actually carrying traffic - not always rmnet_data0.
   _if="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
@@ -1401,7 +1407,7 @@ fi
   # Modem LPM: a NETWORK line, gated on LPM, with its own wording.
   #
   # Three things were wrong.
-  if [ "$(_feat LPM)" = "1" ]; then
+  if [ "$(_feat LPM)" = "1" ] && [ "${_radio_policy:-0}" = "1" ]; then
     _lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null | cut -d'|' -f1)"
     case "$_lpm" in
       fast) echo "       modem LPM: fast · data call held up (low latency)" ;;
