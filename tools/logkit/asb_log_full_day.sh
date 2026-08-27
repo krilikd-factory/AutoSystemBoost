@@ -20,6 +20,9 @@ LK_SCENARIO="full_day"
 LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"
 LK_HOURS="${1:-24}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
+# Report-only threshold: a phase needs at least this much observed mobile RX+TX before
+# it is listed as traffic context. This does not trigger a radio action or allocate drain.
+LK_MOBILE_TRAFFIC_CONTEXT_MIN_MIB=32
 
 # Debug WebUI starts this script behind an atomic lock directory. The recorder, not its
 # short-lived launcher, owns the lock: publish our own PID only after the helper-provided
@@ -401,8 +404,8 @@ lk_phase_ledger_accumulate() {
   _ma=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null)
   case "$_ma" in ''|*[!0-9-]*) _ma='' ;; esac
   if [ -n "$_ma" ]; then
-    [ "$_ma" -gt 100000 ] 2>/dev/null && _ma=$(( _ma / 1000 ))
-    [ "$_ma" -lt -100000 ] 2>/dev/null && _ma=$(( _ma / 1000 ))
+    [ "$_ma" -ge 100000 ] 2>/dev/null && _ma=$(( _ma / 1000 ))
+    [ "$_ma" -le -100000 ] 2>/dev/null && _ma=$(( _ma / 1000 ))
     if [ "$_ma" -gt 0 ] && [ "$_ma" -lt 15000 ] 2>/dev/null; then
       LK_PH_MASUM=$(( LK_PH_MASUM + _ma )); LK_PH_MACNT=$(( LK_PH_MACNT + 1 ))
     fi
@@ -516,6 +519,100 @@ lk_emit_current_soc_consistency() {
   echo ""
 }
 
+# The ledger can contain several disjoint blocks with the same phase label. Map every raw
+# battery sample to its concrete [start,end) phase interval before grouping it, rather than
+# taking a median of per-row means. The final snapshot interval includes its endpoint, so an
+# already-captured sample on an interim-report second is not needlessly dropped.
+lk_emit_sampled_current_distribution() {
+  _scd_ledger="${1:-$LK_OUT_DIR/phase_ledger.tsv}"
+  _scd_trace="$LK_OUT_DIR/battery_trace.txt"
+  echo "===== SAMPLED CURRENT DISTRIBUTION ====="
+  [ -r "$_scd_ledger" ] && [ -r "$_scd_trace" ] || { echo "unavailable — phase ledger or battery trace is absent."; echo ""; return 0; }
+  echo "phase             dur_min samples  mean sampled mA  median sampled mA"
+  awk -F'|' -v ledger="$_scd_ledger" '
+    # Keep values in a global composite-key array. Passing values[p] as an array is not
+    # portable awk (mawk treats that expression as scalar), while value[p,i] works on
+    # Android awk as well as host awk.
+    function sort_phase(p,n,  i,j,t){
+      for(i=2;i<=n;i++){
+        t=value[p,i]; j=i-1
+        while(j>=1 && value[p,j]>t){value[p,j+1]=value[p,j]; j--}
+        value[p,j+1]=t
+      }
+    }
+    BEGIN {
+      while((getline row < ledger)>0){
+        if(row ~ /^#/) continue
+        nf=split(row,f,"\t")
+        if(nf<15) continue
+        nrow++; phase[nrow]=f[1]; start[nrow]=f[2]+0; finish[nrow]=f[3]+0
+        duration[f[1]]+=finish[nrow]-start[nrow]
+      }
+      close(ledger)
+    }
+    NR==1 {next}
+    {
+      ts=$1+0; ma=$7
+      if(ts<=0 || ma !~ /^[0-9]+$/) next
+      if(ma>=100000) ma=ma/1000.0
+      if(ma<=0 || ma>=15000) next
+      for(i=1;i<=nrow;i++){
+        if(ts>=start[i] && (ts<finish[i] || i==nrow)){
+          p=phase[i]; count[p]++; value[p,count[p]]=ma; sum[p]+=ma
+          break
+        }
+      }
+    }
+    END {
+      for(p in count){
+        sort_phase(p,count[p])
+        mid=int((count[p]+1)/2)
+        median=(count[p]%2)?value[p,mid]:(value[p,mid]+value[p,mid+1])/2.0
+        printf "%-17s %7.1f %7d %16.1f %18.1f\n",p,duration[p]/60.0,count[p],sum[p]/count[p],median
+        emitted++
+      }
+      if(emitted==0) print "no positive discharge samples mapped to completed/current phase intervals."
+    }
+  ' "$_scd_trace" | sort
+  echo "Mean/median are raw positive discharge samples captured by this recorder, not physical whole-phase averages."
+  echo "Suspend and intervals between recorder wake-ups are under-sampled; the median is outlier-resistant, not causal attribution."
+  echo ""
+}
+
+# Traffic is already captured as phase-start/end counter deltas. Flag only material observed
+# volume and preserve phase/screen context; never turn bytes into a claim about radio drain.
+lk_emit_mobile_traffic_context() {
+  _mtc_ledger="${1:-$LK_OUT_DIR/phase_ledger.tsv}"
+  _mtc_min="${LK_MOBILE_TRAFFIC_CONTEXT_MIN_MIB:-32}"
+  echo "===== MOBILE TRAFFIC CONTEXT ====="
+  [ -r "$_mtc_ledger" ] || { echo "unavailable — phase ledger is absent."; echo ""; return 0; }
+  echo "threshold: >=${_mtc_min} MiB observed mobile RX+TX aggregated by phase"
+  echo "phase             dur_min  mobileMiB  screen context"
+  awk -F'\t' -v min="$_mtc_min" '
+    function context(ph){
+      if(ph ~ /_scr$/ || ph=="active" || ph=="gaming" || ph=="post_wake" || ph=="charging_active") return "screen-on"
+      return "screen-off"
+    }
+    !/^#/ && NF>=15 {
+      d=$3-$2; if(d<0) d=0
+      dur[$1]+=d; bytes[$1]+=$14+$15
+    }
+    END {
+      for(p in bytes){
+        mib=bytes[p]/1048576.0
+        if(mib>=min){
+          printf "%-17s %7.1f %10.1f  %s\n",p,dur[p]/60.0,mib,context(p)
+          emitted++
+        }
+      }
+      if(emitted==0) print "none at or above the report-only traffic-context threshold."
+    }
+  ' "$_mtc_ledger" | sort
+  echo "Observed mobile traffic may materially contribute to radio energy in a listed phase; it does not prove cause or assign battery percentage."
+  echo "Use this as context alongside screen state, current sampling and a longer uncharged screen-off capture."
+  echo ""
+}
+
 # ── reporting ──────────────────────────────────────────────────────────────
 lk_emit_phase_summary() {
   _led="$LK_OUT_DIR/phase_ledger.tsv"
@@ -583,6 +680,8 @@ lk_emit_phase_summary() {
     echo "        overnight rate; compare IT (not the mixed idle row) against 0.3-0.7 %/h."
     echo "        The currently-open phase is included, so interim reports are complete."
   } > "$LK_OUT_DIR/phase_summary.txt"
+  lk_emit_sampled_current_distribution "$_all" > "$LK_OUT_DIR/sampled_current_distribution.txt"
+  lk_emit_mobile_traffic_context "$_all" > "$LK_OUT_DIR/mobile_traffic_context.txt"
   rm -f "$_all" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null
 }
 
@@ -623,6 +722,12 @@ lk_emit_full_day_report() {
     lk_emit_current_soc_consistency
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
       cat "$LK_OUT_DIR/phase_summary.txt"
+    fi
+    if [ -r "$LK_OUT_DIR/sampled_current_distribution.txt" ]; then
+      cat "$LK_OUT_DIR/sampled_current_distribution.txt"
+    fi
+    if [ -r "$LK_OUT_DIR/mobile_traffic_context.txt" ]; then
+      cat "$LK_OUT_DIR/mobile_traffic_context.txt"
     fi
     echo ""
     echo "----- THROTTLE HOTSPOTS (prime capped below hardware max) -----"
