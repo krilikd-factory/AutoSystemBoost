@@ -261,7 +261,9 @@ body::before, body::after {
  * version badges. They are two separate 29px chips, not a filled segmented switch: the selected
  * state is a readable teal contour + soft tint, so neither moon nor sun becomes a solid green tile. */
 .theme-toggle { display:inline-flex; align-items:center; gap:5px; min-height:29px; padding:0; border:0; border-radius:0; background:transparent; }
-.theme-choice { display:grid; place-items:center; width:30px; height:29px; padding:0; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-secondary); box-shadow:0 2px 8px rgba(0,0,0,.10); transition:color .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .12s ease; }
+/* Same 8px-radius chip geometry and vertical rhythm as DEVICE / V64 badges. The icon cards
+ * remain compact, while a thin active contour communicates selection more calmly than a full fill. */
+.theme-choice { display:grid; place-items:center; width:34px; height:29px; padding:0; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-secondary); box-shadow:0 0 20px rgba(0,240,180,.06); transition:color .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .12s ease; }
 .theme-choice svg { width:14px; height:14px; stroke:currentColor; }
 .theme-choice.active { color:var(--accent); background:rgba(0,240,180,.09); border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 24%,transparent),0 3px 10px var(--accent-glow); }
 .theme-choice:active { transform:scale(.92); }
@@ -2494,6 +2496,27 @@ html[data-asb-theme="light"] .cfg-profile-close { color:var(--text-secondary) !i
 html[data-asb-theme="light"] .theme-toggle { background:transparent !important; border:0 !important; box-shadow:none !important; }
 html[data-asb-theme="light"] .theme-choice { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; box-shadow:0 2px 7px rgba(20,50,42,.08) !important; }
 html[data-asb-theme="light"] .theme-choice.active { color:var(--accent) !important; background:rgba(0,124,99,.10) !important; border-color:var(--accent) !important; box-shadow:0 0 0 1px rgba(0,124,99,.18),0 3px 9px rgba(0,124,99,.14) !important; }
+/* Device and version share one soft accent chip, deliberately more subdued than the active theme icon. */
+html[data-asb-theme="light"] .badge-a { background:linear-gradient(135deg,rgba(0,124,99,.14),rgba(0,111,155,.09)) !important; border-color:rgba(0,124,99,.36) !important; color:#006c56 !important; box-shadow:0 0 20px rgba(0,124,99,.09) !important; }
+/* Native-looking white controls left their dark-mode #e7eaee text on white in Android WebView.
+ * Style both the trigger and its custom list explicitly, including all option states. */
+html[data-asb-theme="light"] .cfg-sel-btn { color:var(--text) !important; background:#fff !important; border-color:var(--border) !important; box-shadow:0 2px 8px rgba(20,50,42,.06); }
+html[data-asb-theme="light"] .cfg-sel-btn::after { color:var(--accent) !important; opacity:1; }
+html[data-asb-theme="light"] .cfg-sel-pop { background:#fff !important; border-color:rgba(11,56,47,.22) !important; box-shadow:0 14px 34px rgba(20,50,42,.18) !important; }
+html[data-asb-theme="light"] .cfg-sel-pop button { color:var(--text-secondary) !important; background:transparent !important; opacity:1; }
+html[data-asb-theme="light"] .cfg-sel-pop button.active { color:#006c56 !important; background:rgba(0,124,99,.10) !important; }
+html[data-asb-theme="light"] .cfg-sel-pop button:active { background:rgba(0,124,99,.16) !important; }
+/* Range tracks must retain an opaque neutral rail; the teal thumb gets a white keyline so it
+ * stays distinguishable on pale cards at any Android display density. */
+html[data-asb-theme="light"] .cfg-range input[type="range"] { height:6px; background:linear-gradient(90deg,#adc2bb,#e4eeeb) !important; box-shadow:inset 0 1px 2px rgba(20,50,42,.16); }
+html[data-asb-theme="light"] .cfg-range input[type="range"]::-webkit-slider-thumb { width:18px; height:18px; background:#007c63; border:3px solid #fff; box-shadow:0 2px 7px rgba(0,124,99,.34); }
+html[data-asb-theme="light"] .cfg-range input[type="range"]::-moz-range-track { height:6px; background:#adc2bb; border-radius:4px; }
+html[data-asb-theme="light"] .cfg-range input[type="range"]::-moz-range-thumb { width:14px; height:14px; background:#007c63; border:3px solid #fff; box-shadow:0 2px 7px rgba(0,124,99,.34); }
+html[data-asb-theme="light"] .cfg-range-val { color:#006c56 !important; font-weight:700; }
+html[data-asb-theme="light"] .cfg-seg { background:#edf4f2; border-color:rgba(11,56,47,.20); }
+html[data-asb-theme="light"] .cfg-seg button { color:var(--text-secondary); background:#fff; opacity:1; }
+html[data-asb-theme="light"] .cfg-seg button.on { color:#063d32; background:linear-gradient(135deg,#b7f4e6,#b8edf2); font-weight:700; }
+html[data-asb-theme="light"] select, html[data-asb-theme="light"] option { color:var(--text); background:#fff; }
 html[data-asb-theme="light"] .pbtn { background:#fff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .pbtn::after { background:linear-gradient(90deg,transparent,rgba(21,35,32,.10),transparent); }
 html[data-asb-theme="light"] .pbtn[data-p="performance"] { --c:#b42318; --cg:rgba(180,35,24,.10); --cg-strong:rgba(180,35,24,.18); }
@@ -2559,7 +2582,7 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
-      <div class="badge" id="verBadge">V64</div>
+      <div class="badge badge-a" id="verBadge">V64</div>
       <div class="theme-toggle" role="group" data-theme-toggle="verBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="quiet_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
     </div>
     <div class="status-row">
@@ -2680,7 +2703,7 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
-      <div class="badge" id="liveVerBadge">V64</div>
+      <div class="badge badge-a" id="liveVerBadge">V64</div>
       <div class="theme-toggle" role="group" data-theme-toggle="liveVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="quiet_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
     </div>
     <div class="status-row">
@@ -2870,7 +2893,7 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
     <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="badge badge-a" id="cfgSocBadge">DEVICE</div>
-      <div class="badge" id="cfgVerBadge">V64</div>
+      <div class="badge badge-a" id="cfgVerBadge">V64</div>
       <div class="theme-toggle" role="group" data-theme-toggle="cfgVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="quiet_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
     </div>
     <div class="status-row">
