@@ -121,6 +121,63 @@ printf '%s\n' "$_consistency" | grep -Eq '^sleep[[:space:]]+60\.0[[:space:]]+2\.
 printf '%s\n' "$_consistency" | grep -Eq '^idle[[:space:]]+60\.0[[:space:]]+1\.00[[:space:]]+8\.00[[:space:]]+87\.5%[[:space:]]+CHECK \(>30%\)$' || { echo 'FAIL logkit capture-quality: current/SOC check verdict' >&2; exit 1; }
 printf '%s\n' "$_consistency" | grep -Fq 'not causal energy attribution' || { echo 'FAIL logkit capture-quality: current/SOC causal disclaimer missing' >&2; exit 1; }
 
+# Per-phase distribution must use raw battery samples mapped to each concrete ledger interval,
+# not a median of phase averages. The outlier makes this distinction visible: mean=250 but
+# median=100 for the two disjoint active intervals. The endpoint rule must not double-count
+# the transition sample at epoch 200, while epoch 400 belongs once to the final interval.
+need "$LOGKIT" '===== SAMPLED CURRENT DISTRIBUTION ====='
+need "$LOGKIT" 'raw positive discharge samples'
+need "$LOGKIT" 'not physical whole-phase averages'
+need "$LOGKIT" 'Suspend and intervals between recorder wake-ups are under-sampled'
+sed -n '/^lk_emit_sampled_current_distribution() {/,/^}/p' "$LOGKIT" > "$TMP/sampled_current_distribution.sh"
+[ -s "$TMP/sampled_current_distribution.sh" ] || { echo 'FAIL logkit capture-quality: cannot extract sampled-current helper' >&2; exit 1; }
+cat > "$TMP/phase_ledger.tsv" <<'EOF_SAMPLE_LEDGER'
+# phase	start	end	start_pct	end_pct	maxCpuT	maxSurfT	maxP6	gpuAvg	throttle	wakePeak	awakePct	avgMA	rmnetRxBytes	rmnetTxBytes
+active	100	200	90	90	40	35	1000000	0	0	0	0	0	0	0
+idle	200	300	90	90	40	35	1000000	0	0	0	0	0	0	0
+active	300	400	90	90	40	35	1000000	0	0	0	0	0	0	0
+EOF_SAMPLE_LEDGER
+cat > "$TMP/battery_trace.txt" <<'EOF_SAMPLE_TRACE'
+epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA
+100|x|x|x|1|90|100000
+150|x|x|x|1|90|100000
+199|x|x|x|1|90|1000000
+200|x|x|x|0|90|900000
+250|x|x|x|0|90|-100000
+300|x|x|x|1|90|100000
+350|x|x|x|1|90|100000
+400|x|x|x|1|90|100000
+EOF_SAMPLE_TRACE
+LK_OUT_DIR="$TMP"
+. "$TMP/sampled_current_distribution.sh"
+_sampled_current="$(lk_emit_sampled_current_distribution "$TMP/phase_ledger.tsv")"
+printf '%s\n' "$_sampled_current" | grep -Eq '^active[[:space:]]+3\.3[[:space:]]+6[[:space:]]+250\.0[[:space:]]+100\.0$' || { echo 'FAIL logkit capture-quality: mapped active raw-sample mean/median' >&2; exit 1; }
+printf '%s\n' "$_sampled_current" | grep -Eq '^idle[[:space:]]+1\.7[[:space:]]+1[[:space:]]+900\.0[[:space:]]+900\.0$' || { echo 'FAIL logkit capture-quality: endpoint belongs to next interval once' >&2; exit 1; }
+printf '%s\n' "$_sampled_current" | grep -Fq 'not causal attribution' || { echo 'FAIL logkit capture-quality: sampled-current disclaimer missing' >&2; exit 1; }
+
+# Mobile traffic is a qualified phase context only. Aggregate two active blocks across the
+# 32 MiB report-only threshold and keep a 31 MiB idle block out of the listing.
+need "$LOGKIT" '===== MOBILE TRAFFIC CONTEXT ====='
+need "$LOGKIT" 'LK_MOBILE_TRAFFIC_CONTEXT_MIN_MIB=32'
+need "$LOGKIT" 'does not prove cause or assign battery percentage'
+sed -n '/^lk_emit_mobile_traffic_context() {/,/^}/p' "$LOGKIT" > "$TMP/mobile_traffic_context.sh"
+[ -s "$TMP/mobile_traffic_context.sh" ] || { echo 'FAIL logkit capture-quality: cannot extract mobile-traffic helper' >&2; exit 1; }
+cat > "$TMP/phase_ledger.tsv" <<'EOF_TRAFFIC_LEDGER'
+# phase	start	end	start_pct	end_pct	maxCpuT	maxSurfT	maxP6	gpuAvg	throttle	wakePeak	awakePct	avgMA	rmnetRxBytes	rmnetTxBytes
+active	100	200	90	90	40	35	1000000	0	0	0	0	0	20971520	0
+idle	200	300	90	90	40	35	1000000	0	0	0	0	0	32505856	0
+active	300	400	90	90	40	35	1000000	0	0	0	0	0	13631488	0
+EOF_TRAFFIC_LEDGER
+LK_OUT_DIR="$TMP" LK_MOBILE_TRAFFIC_CONTEXT_MIN_MIB=32
+. "$TMP/mobile_traffic_context.sh"
+_traffic_context="$(lk_emit_mobile_traffic_context "$TMP/phase_ledger.tsv")"
+printf '%s\n' "$_traffic_context" | grep -Eq '^active[[:space:]]+3\.3[[:space:]]+33\.0[[:space:]]+screen-on$' || { echo 'FAIL logkit capture-quality: aggregated traffic context' >&2; exit 1; }
+if printf '%s\n' "$_traffic_context" | grep -Eq '^idle[[:space:]]'; then
+  echo 'FAIL logkit capture-quality: below-threshold mobile traffic was listed' >&2
+  exit 1
+fi
+printf '%s\n' "$_traffic_context" | grep -Fq 'does not prove cause or assign battery percentage' || { echo 'FAIL logkit capture-quality: mobile-traffic disclaimer missing' >&2; exit 1; }
+
 # New verdict code must remain read-only: no global runtime-policy writes are allowed here.
 if grep -nE 'setprop|settings[[:space:]]+put|sysctl[[:space:]]+-w|swapoff|svc[[:space:]]+power|reboot' "$LOGKIT" >/dev/null 2>&1; then
   echo "FAIL logkit capture-quality: full-day telemetry gained a policy write" >&2

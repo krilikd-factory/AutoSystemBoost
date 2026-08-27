@@ -49,6 +49,56 @@ grep -q '"memory"' "$ROOT/tools/asb_effective_policy.sh"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag"
 grep -q 'provenance snapshots' "$ROOT/docs/log_schemas.md"
 
+# A selected throttle point equal to the live CPU maximum is the policy transition edge,
+# not evidence that the diagnostic itself failed. Only a strictly hotter live sensor may
+# emit the red verdict. A vendor camera file with comments is similarly not proof that ASB
+# wrote malformed JSON unless one of ASB's staged payloads is itself commented.
+grep -Fq '[ "$_tp_set" -lt "$_tp_now" ]' "$ROOT/tools/asb_diag.sh"
+grep -Fq 'boundary observed, not a failure' "$ROOT/tools/asb_diag.sh"
+if grep -Fq '[ "$_tp_set" -le "$_tp_now" ]' "$ROOT/tools/asb_diag.sh"; then
+  printf '%s\n' 'FAIL asbdiag equality is still a red throttle diagnostic' >&2
+  exit 1
+fi
+grep -q '^camera_json_comment_verdict() {' "$ROOT/tools/asb_diag.sh"
+grep -Fq 'ASB-managed camera payload has // comments' "$ROOT/tools/asb_diag.sh"
+grep -Fq 'vendor JSON-with-comments:' "$ROOT/tools/asb_diag.sh"
+grep -Fq 'ASB did not assert a JSON policy for this live vendor camera domain' "$ROOT/tools/asb_diag.sh"
+# Execute the branch in isolation: equality must not call V (the failure printer), while
+# a live temperature strictly over the configured point must still do so.
+sed -n '/^case "$_tp_set" in/,/^esac$/p' "$ROOT/tools/asb_diag.sh" > "$TMP/throttle_boundary.sh"
+[ -s "$TMP/throttle_boundary.sh" ] || { printf '%s\n' 'FAIL asbdiag throttle boundary branch not extracted' >&2; exit 1; }
+P(){ printf 'P:%s\n' "$1"; }
+NOTE(){ printf 'NOTE:%s\n' "$1"; }
+V(){ printf 'V:%s|%s|%s|%s\n' "$1" "$2" "$3" "$4"; }
+_tp_set=60 _tp_now=60 _tp_n=1
+_boundary_out="$(. "$TMP/throttle_boundary.sh")"
+printf '%s\n' "$_boundary_out" | grep -Fq 'boundary observed, not a failure' || { printf '%s\n' 'FAIL asbdiag equality boundary message missing' >&2; exit 1; }
+if printf '%s\n' "$_boundary_out" | grep -q '^V:'; then
+  printf '%s\n' 'FAIL asbdiag equality invoked red verdict' >&2
+  exit 1
+fi
+_tp_set=60 _tp_now=61 _tp_n=1
+_over_out="$(. "$TMP/throttle_boundary.sh")"
+printf '%s\n' "$_over_out" | grep -Fq 'V:  throttle point below live CPU sensor' || { printf '%s\n' 'FAIL asbdiag strictly-over-threshold sensor lost verdict' >&2; exit 1; }
+# Exercise camera provenance without Android paths. A commented live vendor file is INFO
+# when ASB carries no malformed payload; a commented ASB payload remains a V failure.
+sed -n '/^camera_json_comment_verdict() {/,/^}/p' "$ROOT/tools/asb_diag.sh" > "$TMP/camera_json_verdict.sh"
+[ -s "$TMP/camera_json_verdict.sh" ] || { printf '%s\n' 'FAIL asbdiag camera JSON helper not extracted' >&2; exit 1; }
+MODDIR="$TMP/module"
+LIVE="$TMP/live_camera/video_beauty_default_config"
+mkdir -p "$(dirname "$LIVE")" "$MODDIR/system/odm$(dirname "$LIVE")"
+printf '// vendor comment\n{}\n' > "$LIVE"
+. "$TMP/camera_json_verdict.sh"
+_vendor_out="$(camera_json_comment_verdict "$LIVE")"
+printf '%s\n' "$_vendor_out" | grep -Fq 'vendor JSON-with-comments:' || { printf '%s\n' 'FAIL asbdiag vendor comment was not informational' >&2; exit 1; }
+if printf '%s\n' "$_vendor_out" | grep -q '^V:'; then
+  printf '%s\n' 'FAIL asbdiag vendor comment emitted a malformed-ASB verdict' >&2
+  exit 1
+fi
+printf '// broken staged payload\n{}\n' > "$MODDIR/system/odm$LIVE"
+_managed_out="$(camera_json_comment_verdict "$LIVE")"
+printf '%s\n' "$_managed_out" | grep -Fq 'V:  ASB-managed camera payload has // comments' || { printf '%s\n' 'FAIL asbdiag malformed ASB camera payload lost verdict' >&2; exit 1; }
+
 # Conservative offload semantics must stay conservative.
 #
 # A review found this contract had lost its offload assertions at the same time the code

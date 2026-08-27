@@ -38,6 +38,9 @@ need "$WEB" 'data-theme-toggle="liveVerBadge"'
 need "$WEB" 'data-theme-toggle="cfgVerBadge"'
 need "$WEB" 'data-theme-choice="dark"'
 need "$WEB" 'data-theme-choice="light"'
+need "$WEB" 'data-tech-icon="theme_moon"'
+absent "$WEB" 'data-tech-icon="quiet_moon"></span></button><button class="theme-choice"'
+need "$WEB" 'theme_moon:'
 # CSS matches the literal value selector, so assigning/removing that literal must be immediate.
 need "$WEB" "setAttribute('data-asb-theme', 'light')"
 need "$WEB" "removeAttribute('data-asb-theme')"
@@ -68,6 +71,14 @@ absent "$WEB" '[class*="cfg-row"]'
 absent "$WEB" '[class*="live-cell"]'
 need "$WEB" '.cfg-search::placeholder { color:#61776f; opacity:1; }'
 need "$WEB" '.cfg-switch.on { background:linear-gradient(135deg,#57d9cc,#53cce8);'
+# The page-ending support caption and selected Smart mark must remain readable in both themes.
+need "$WEB" '.tg-link-sub {'
+need "$WEB" 'color: var(--text-secondary);'
+need "$WEB" 'font-weight: 600;'
+need "$WEB" 'html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }'
+need "$WEB" '.pbtn-smart.on .pico-smart .tech-icon { color:#e5fffb;'
+need "$WEB" 'html[data-asb-theme="light"] .pbtn-smart.on .pico-smart .tech-icon { color:#004f40;'
+need "$WEB" 'stroke-width: 1.95;'
 need "$WEB" "key:'radio_policy_enable'"
 # Radio master must be the first actual card after the Network heading, ahead of every dependent setting.
 first_net_card=$(awk '/\/\/ ---- Network/{in_network=1; next} in_network && /\{ key:/{print; exit}' "$WEB")

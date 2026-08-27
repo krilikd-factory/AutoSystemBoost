@@ -110,6 +110,14 @@ grep -Fq 'int comfort_current_ma = g_asb_cfg.smart_battery_bias >= 400 ? 250 :' 
 grep -Fq '(smart_screenon_comfort ? 350 : 450);' "$SRC" || fail "Smart moderate-current comfort threshold missing"
 grep -Fq 'm->bat.current_ma >= comfort_current_ma' "$SRC" || fail "adaptive comfort current evidence gate missing"
 grep -Fq 'screenon_comfort_smart_medium' "$SRC" || fail "early Smart comfort telemetry reason missing"
+# Repeated field captures permit an earlier Smart-only light trim only for a high-current,
+# positively classified light/medium foreground context. It must never become a generic cap.
+grep -Fq 'int smart_high_current_comfort =' "$SRC" || fail "high-current Smart comfort guard missing"
+grep -Fq 'screenon_comfort_smart_high_current' "$SRC" || fail "high-current Smart comfort telemetry reason missing"
+grep -Fq 'm->bat.current_ma >= 600' "$SRC" || fail "high-current Smart evidence threshold missing"
+grep -Fq 'm->therm.cpu_max_c >= 42' "$SRC" || fail "high-current Smart warmth floor missing"
+grep -Fq 'm->gpu.load_pct < g_asb_cfg.heavy_gpu_enter' "$SRC" || fail "high-current Smart low-GPU exclusion missing"
+grep -Fq 'fsm->state != ASB_STATE_GAMING && fsm->state != ASB_STATE_SUSTAINED' "$SRC" || fail "high-current Smart game/sustained exclusion missing"
 grep -Fq 'surface_comfort_smart' "$SRC" || fail "surface-hotspot Smart comfort telemetry reason missing"
 grep -Fq 'surface_comfort_smart_sustained' "$SRC" || fail "light SUSTAINED Smart surface-comfort telemetry reason missing"
 grep -Fq 'int surface_comfort_sustained =' "$SRC" || fail "light SUSTAINED Smart comfort gate missing"

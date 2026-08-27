@@ -51,8 +51,12 @@ boot_load="$(sed -n "${core_start},${core_end}p" "$SERVICE" | grep -nE '^[[:spac
 [ -n "$boot_guard" ] && [ -n "$boot_load" ] || fail 'boot shell-policy guard missing'
 
 # Native screen-off cadence must remain materially slower than the active loop.
+# The 45-second deep-idle and 60-second verified Quiet Night intervals leave display/socket
+# events epoll-driven; they must not regress to the older high-frequency idle sampling.
 need "$GOV" '#define TIMER_IDLE_S   10'
-need "$GOV" '#define TIMER_DEEP_S   30'
+need "$GOV" '#define TIMER_DEEP_S   45'
+need "$ROOT/config/governor.conf" 'quiet_tick_s=60'
+need "$GOV" 'screen-on, socket and display uevents remain independently epoll-driven'
 need "$GOV" 'expected_samples = dur / (TIMER_DEEP_S'
 
 echo 'PASS V65 efficiency contract'
