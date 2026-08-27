@@ -109,12 +109,19 @@ need "$UI" "T('t_stock_applied', 'Stock active · ASB policy stopped')"
 need "$UI" "let _selectedProfile = 'none';"
 need "$UI" 'function paintStockLive(stockKv = null) {'
 need "$UI" 'let _stockTelemetryKv = {};'
+need "$UI" 'function parseStockTelemetry(text) {'
+need "$UI" "const colon = line.indexOf(':');"
+need "$UI" 'const cut = eq > 0 ? eq : colon;'
+need "$UI" 'function fmtStockLoad(raw) {'
+need "$UI" "T('stock_load_now', '1 min')"
+need "$UI" "setLiveLabel('bnStockDrainLabel', 'lv_drain', 'Screen drain');"
+need "$UI" 'Live read-only screen-on estimate from battery current and charge_full'
 need "$UI" 'id="stockTelemetry"'
 need "$UI" '.stock-telemetry { display:none !important;'
 need "$UI" 'async function pollStockTelemetry(visible, force = false)'
 need "$UI" '/sys/class/power_supply/battery'
 need "$UI" '/sys/devices/system/cpu/cpufreq/policy'
-need "$UI" "_stockTelemetryKv = kv;"
+need "$UI" '_stockTelemetryKv = parseStockTelemetry(text);'
 need "$UI" 'paintStockLive(_stockTelemetryKv);'
 need "$UI" "set('liveCpu'"
 need "$UI" "set('liveGpu'"
@@ -196,7 +203,7 @@ files = sorted(root.glob('*.json'))
 assert len(files) == 13, f'expected 13 locales, got {len(files)}'
 for p in files:
     data = json.loads(p.read_text(encoding='utf-8'))
-    for key in ('prof_stock', 'prof_stock_sub', 't_stock_applied', 't_stock_switching', 'stock_cpu_clock', 'stock_load', 'stock_battery', 'stock_uptime', 'stock_battery_current', 'stock_thermal_trend', 'stock_lpm_state', 'stock_ram_available', 'stock_rom_status', 'stock_asb_caps', 'stock_live_drain', 'stock_live_battery', 'stock_cap_owner', 'stock_asb_learner', 'stock_gpu_load', 'dbg_diag_wait', 'dbg_log_wait'):
+    for key in ('prof_stock', 'prof_stock_sub', 't_stock_applied', 't_stock_switching', 'stock_cpu_clock', 'stock_load', 'stock_load_now', 'stock_battery', 'stock_uptime', 'stock_battery_current', 'stock_thermal_trend', 'stock_lpm_state', 'stock_ram_available', 'stock_rom_status', 'stock_asb_caps', 'stock_live_drain', 'stock_live_battery', 'stock_cap_owner', 'stock_asb_learner', 'stock_gpu_load', 'dbg_diag_wait', 'dbg_log_wait'):
         assert isinstance(data.get(key), str) and data[key].strip(), f'{p.name}: missing {key}'
     stale = ('reboot', 'перезаг', 'neustart', 'reiniciar', 'redémarrage', 'վերագործարկ', 'mulai ulang', 'riavvio', 'yeniden başlat', '重启')
     assert not any(word in data['t_stock_applied'].lower() for word in stale), f'{p.name}: stale reboot recommendation'
