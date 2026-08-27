@@ -232,13 +232,22 @@ jobs:
           echo "ANDROID_NDK_ROOT=$PWD/android-ndk-r28c" >> $GITHUB_ENV
           echo "NDK_ROOT=$PWD/android-ndk-r28c"         >> $GITHUB_ENV
 
-      - name: Patch module.prop
+      - name: Validate release tag
         run: |
           TAG="${GITHUB_REF_NAME:-}"
-          if echo "$TAG" | grep -qE '^v[0-9]'; then
-            sed -i "s/^version=.*/version=${TAG}/" module.prop
-          fi
-          cat module.prop
+          BASE_VER="$(sed -n 's/^version=//p' module.prop | head -n 1)"
+          BASE_CODE="$(sed -n 's/^versionCode=//p' module.prop | head -n 1)"
+          case "$BASE_VER:$BASE_CODE" in
+            V[0-9]*:[0-9]*) ;;
+            *) echo "::error::module.prop must expose V<number> and a decimal versionCode"; exit 1 ;;
+          esac
+          # A GitHub release is allowed to use V64, v64 or 64, but it must describe the
+          # immutable public module identity already validated by source/package contracts.
+          case "$TAG" in
+            ""|"$BASE_VER"|v"${BASE_VER#V}"|"${BASE_VER#V}") ;;
+            *) echo "::error::Release tag '$TAG' does not match module version '$BASE_VER'"; exit 1 ;;
+          esac
+          echo "Release identity: version=$BASE_VER versionCode=$BASE_CODE tag=${TAG:-manual}"
 
       - name: Normalize DSP source path for Linux CI
         run: |
