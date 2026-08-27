@@ -55,6 +55,7 @@ for test_file in \
   tests/test_v65_smart_thermal_cap_contract.sh \
   tests/test_bt_safe_policy_contract.sh \
   tests/test_project_safety_hardening_contract.sh \
+  tests/test_wakelock_watch_safety_contract.sh \
   tests/test_active_efficiency_contract.sh \
   tests/test_kernel_uv_coexist_contract.sh \
   tests/test_bt_lifecycle_recorder_contract.sh \
