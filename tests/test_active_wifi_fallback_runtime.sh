@@ -63,6 +63,10 @@ run reconcile
 wait_for "$TMP/state/wifi_fallback.pid" || fail 'reconcile did not start watcher'
 WPID="$(cat "$TMP/state/wifi_fallback.pid")"
 kill -0 "$WPID" 2>/dev/null || fail 'recorded watcher is not alive'
+# A shell may exec this script and omit the literal `sh` token from cmdline. Lifecycle
+# ownership must depend on the exact ASB script and watch argument, not its interpreter name.
+_cmdline="$(tr '\000' ' ' < "/proc/$WPID/cmdline" 2>/dev/null)"
+case "$_cmdline" in *"$TMP/mod/runtime/asb_wifi_fallback.sh watch"*) : ;; *) fail 'watcher argv lacks exact script plus watch argument' ;; esac
 sleep 0.3
 [ ! -s "$TMP/svc.log" ] || fail 'released validated Wi-Fi'
 run reconcile
@@ -99,8 +103,26 @@ wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'watcher lock rema
 kill -0 "$WPID" 2>/dev/null && fail 'watcher survived active-window OFF'
 unset WPID
 
+# Model an Android shell that execs the script directly: no literal `sh` argument precedes
+# the script, yet the ASB-owned exact path and `watch` role remain verifiable through /proc.
+mkdir -p "$TMP/proc/4242"
+printf '%s\0' "$TMP/mod/runtime/asb_wifi_fallback.sh" watch > "$TMP/proc/4242/cmdline"
+sed -n '/^_pid_is_our_watcher() {/,/^}/p' "$SRC" > "$TMP/pid_identity.sh"
+PROC_ROOT="$TMP/proc" MODDIR="$TMP/mod"
+. "$TMP/pid_identity.sh"
+_pid_is_our_watcher 4242 || fail 'direct-exec watcher identity was not accepted'
+printf '%s\0' '/data/local/tmp/asb_wifi_fallback.sh' watch > "$TMP/proc/4242/cmdline"
+if _pid_is_our_watcher 4242; then
+  fail 'same-basename non-module watcher was accepted'
+fi
+
 # Source-visible bounds prevent malformed host overrides from becoming a production busy loop.
 grep -Fq '_valid_seconds "$_raw_interval" 1 120' "$SRC" || fail 'interval override is not bounded'
 grep -Fq '_valid_seconds "$_raw_release" 1 120' "$SRC" || fail 'release override is not bounded'
 grep -Fq '_valid_seconds "$_raw_cooldown" 1 3600' "$SRC" || fail 'cooldown override is not bounded'
+grep -Fq 'PROC_ROOT="${ASB_WIFI_FALLBACK_PROC_ROOT:-/proc}"' "$SRC" || fail 'watcher proc root is not injectable for portability fixtures'
+grep -Fq '*"$MODDIR/runtime/asb_wifi_fallback.sh watch"*) return 0 ;;' "$SRC" || fail 'watcher identity is not exact script plus watch argument'
+if grep -Fq '*"sh $MODDIR/runtime/asb_wifi_fallback.sh watch"*)' "$SRC"; then
+  fail 'watcher identity still requires a literal sh interpreter token'
+fi
 echo 'PASS: active Wi-Fi fallback runtime'

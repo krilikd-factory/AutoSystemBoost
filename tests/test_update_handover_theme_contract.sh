@@ -49,8 +49,8 @@ need "$WEB" '<div class="badge badge-a" id="liveVerBadge">V64</div>'
 need "$WEB" '<div class="badge badge-a" id="cfgVerBadge">V64</div>'
 need "$WEB" '.theme-choice.active { color:var(--accent); background:rgba(0,240,180,.09);'
 absent "$WEB" '.theme-choice.active { color:#04120f; background:linear-gradient'
-# These cover the previously unreadable dialog title/copy, Smart monitor telemetry and config small text.
-need "$WEB" '--text-secondary:#465853; --text-tertiary:#61736d;'
+# These cover readable dialog/title copy, Smart monitor telemetry and small configuration text.
+need "$WEB" '--text-secondary:#365048; --text-tertiary:#526b62;'
 need "$WEB" ':is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }'
 need "$WEB" '.smart-banner-value { color:#006c56; }'
 need "$WEB" '.cfg-desc { color:var(--text-secondary); opacity:1; }'
@@ -60,11 +60,20 @@ need "$WEB" 'html[data-asb-theme="light"] .cfg-sel-btn { color:var(--text) !impo
 need "$WEB" 'html[data-asb-theme="light"] .cfg-sel-pop button { color:var(--text-secondary) !important;'
 need "$WEB" 'html[data-asb-theme="light"] .cfg-range input[type="range"] { height:6px; background:linear-gradient(90deg,#adc2bb,#e4eeeb) !important;'
 need "$WEB" 'html[data-asb-theme="light"] .cfg-seg button.on { color:#063d32; background:linear-gradient(135deg,#b7f4e6,#b8edf2);'
+# Only outer cards may receive the paper surface; broad substring selectors paint transparent
+# children into the rectangular white seams reported in the light-theme screenshots.
+need "$WEB" 'Only outer material surfaces'
+need "$WEB" '.live-cell,.stock-telemetry,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet) {'
+absent "$WEB" '[class*="cfg-row"]'
+absent "$WEB" '[class*="live-cell"]'
+need "$WEB" '.cfg-search::placeholder { color:#61776f; opacity:1; }'
+need "$WEB" '.cfg-switch.on { background:linear-gradient(135deg,#57d9cc,#53cce8);'
 need "$WEB" "key:'radio_policy_enable'"
 # Radio master must be the first actual card after the Network heading, ahead of every dependent setting.
 first_net_card=$(awk '/\/\/ ---- Network/{in_network=1; next} in_network && /\{ key:/{print; exit}' "$WEB")
 [ "$first_net_card" = "  { key:'radio_policy_enable', type:'bool', def:'0', stock:'0', name:'Cellular / radio controls'," ] || fail 'radio policy master is not the first Network card'
 need "$WEB" 'radio_policy_enable:APPLY_LIVE'
-need "$WEB" '--bg:#f3f7f6'
+need "$WEB" '--bg:#edf4f1'
+need "$WEB" 'ASB_UI_BUILD=light-surface-contract-1'
 
 echo 'PASS: update continuity, active fallback and theme contract'

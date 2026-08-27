@@ -91,6 +91,24 @@ printf '%s\n' "$_class_summary" | grep -Eq '^quiet[[:space:]]+2[[:space:]]+1\.0'
 printf '%s\n' "$_class_summary" | grep -Eq '^network[[:space:]]+2[[:space:]]+0\.0' || { echo 'FAIL logkit capture-quality: gap must not be attributed to network class' >&2; exit 1; }
 printf '%s\n' "$_class_summary" | grep -Fq 'not a percentage or causal energy allocation' || { echo 'FAIL logkit capture-quality: causal allocation disclaimer missing' >&2; exit 1; }
 
+# Current and capacity-percent rates are complementary measurements, not source attribution.
+# A synthetic ledger verifies both the aligned path and the explicit >30% quality warning.
+need "$LOGKIT" '===== CURRENT / SOC CONSISTENCY (MEASUREMENT QUALITY) ====='
+need "$LOGKIT" 'A CHECK result is a measurement-consistency warning, not causal energy attribution.'
+sed -n '/^lk_emit_current_soc_consistency() {/,/^}/p' "$LOGKIT" > "$TMP/current_soc_summary.sh"
+[ -s "$TMP/current_soc_summary.sh" ] || { echo 'FAIL logkit capture-quality: cannot extract current/SOC helper' >&2; exit 1; }
+cat > "$TMP/phase_ledger.tsv" <<'EOF_LEDGER'
+# phase	start	end	start_pct	end_pct	maxCpuT	maxSurfT	maxP6	gpuAvg	throttle	wakePeak	awakePct	avgMA	rmnetRxBytes	rmnetTxBytes
+sleep	0	3600	90	88	40	35	1000000	0	0	0	2	100	0	0
+idle	3600	7200	88	87	42	36	1000000	0	0	0	5	400	0	0
+EOF_LEDGER
+LK_OUT_DIR="$TMP" LK_BATTERY_CAPACITY_MAH=5000
+. "$TMP/current_soc_summary.sh"
+_consistency="$(lk_emit_current_soc_consistency)"
+printf '%s\n' "$_consistency" | grep -Eq '^sleep[[:space:]]+60\.0[[:space:]]+2\.00[[:space:]]+2\.00[[:space:]]+0\.0%[[:space:]]+aligned$' || { echo 'FAIL logkit capture-quality: aligned current/SOC verdict' >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -Eq '^idle[[:space:]]+60\.0[[:space:]]+1\.00[[:space:]]+8\.00[[:space:]]+87\.5%[[:space:]]+CHECK \(>30%\)$' || { echo 'FAIL logkit capture-quality: current/SOC check verdict' >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -Fq 'not causal energy attribution' || { echo 'FAIL logkit capture-quality: current/SOC causal disclaimer missing' >&2; exit 1; }
+
 # New verdict code must remain read-only: no global runtime-policy writes are allowed here.
 if grep -nE 'setprop|settings[[:space:]]+put|sysctl[[:space:]]+-w|swapoff|svc[[:space:]]+power|reboot' "$LOGKIT" >/dev/null 2>&1; then
   echo "FAIL logkit capture-quality: full-day telemetry gained a policy write" >&2
