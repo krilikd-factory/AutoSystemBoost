@@ -60,6 +60,46 @@ NOTE(){ P "  (i) $1"; INFO=$((INFO+1)); }
 gp() { getprop "$1" 2>/dev/null; }
 firstf() { for _g in $@; do for _f in $_g; do [ -f "$_f" ] && { printf '%s' "$_f"; return 0; }; done; done; return 1; }
 
+# A vendor camera config may deliberately use JSON-with-comments. ASB strips leading
+# comments from every payload it stages, but the live /odm file is not proof that ASB
+# owns it: some root managers leave the vendor file visible, and unsupported camera
+# domains have no ASB overlay at all. Report a real malformed ASB payload as FAIL;
+# otherwise retain the observation as information rather than a false thermal/power alarm.
+camera_json_comment_verdict() {
+  _cj_file="$1"
+  _cj_count="$(grep -cE '^[[:space:]]*//' "$_cj_file" 2>/dev/null)"
+  if [ "${_cj_count:-0}" = "0" ]; then
+    P "  [PASS] $_cj_file present, strict JSON (no // comments)"; PASS=$((PASS+1))
+    return 0
+  fi
+
+  _cj_rel="${_cj_file#/odm}"
+  _cj_asb_file=""
+  _cj_asb_count=0
+  # These are the exact destinations used by the installer and its deferred /odm bind.
+  # A clean staged payload is intentionally not treated as ownership of a commented live
+  # vendor file: the diagnostic must not turn a failed/unsupported mount into a false
+  # claim that ASB wrote malformed JSON.
+  for _cj_candidate in \
+      "$MODDIR/system/odm$_cj_rel" \
+      "$MODDIR/system/vendor/odm$_cj_rel" \
+      "/data/adb/asb/odm_patched$_cj_file"; do
+    [ -f "$_cj_candidate" ] || continue
+    _cj_candidate_count="$(grep -cE '^[[:space:]]*//' "$_cj_candidate" 2>/dev/null)"
+    if [ "${_cj_candidate_count:-0}" -gt 0 ] 2>/dev/null; then
+      _cj_asb_file="$_cj_candidate"
+      _cj_asb_count="$_cj_candidate_count"
+      break
+    fi
+  done
+  if [ -n "$_cj_asb_file" ]; then
+    V "  ASB-managed camera payload has // comments (HAL JSON parser may reject)" "0" "$_cj_asb_count" eq
+    NOTE "  staged payload: $_cj_asb_file"
+  else
+    NOTE "vendor JSON-with-comments: $_cj_file (${_cj_count}); ASB did not assert a JSON policy for this live vendor camera domain"
+  fi
+}
+
 # ---- module discovery (KSU / APatch / Magisk) ----
 MODDIR=""
 for _root in /data/adb/modules /data/adb/ap/modules /data/adb/ksu/modules; do
@@ -811,10 +851,13 @@ if [ -n "$_pl_cls" ]; then
 case "$_tp_set" in
   ''|*[!0-9]*) : ;;
   *)
-    if [ "$_tp_now" -gt 0 ] && [ "$_tp_set" -le "$_tp_now" ]; then
-      V "  throttle point above live CPU sensor" "> ${_tp_now}C" "${_tp_set}C" eq
-      NOTE "  a real CPU sensor is already at or above the selected point; sustained policy may engage."
+    if [ "$_tp_now" -gt 0 ] && [ "$_tp_set" -lt "$_tp_now" ]; then
+      V "  throttle point below live CPU sensor" "< ${_tp_now}C" "${_tp_set}C" eq
+      NOTE "  a real CPU sensor is already above the selected point; sustained policy may engage."
       NOTE "  Check workload/cooling before raising the threshold."
+    elif [ "$_tp_now" -gt 0 ] && [ "$_tp_set" -eq "$_tp_now" ]; then
+      NOTE "throttle point ${_tp_set}C equals live CPU max ${_tp_now}C across ${_tp_n} sensor(s) - boundary observed, not a failure"
+      NOTE "  Equality is a transition edge; the operational policy remains strict-above to avoid threshold chatter."
     else
       NOTE "throttle point ${_tp_set}C vs live CPU max ${_tp_now}C across ${_tp_n} sensor(s) - headroom ok"
     fi
@@ -1106,12 +1149,7 @@ if [ "$_is_pineapple" = "1" ]; then
     # values - a URL, a path, an escaped separator. That made this check fail on all six
     # devices in a cross-device sweep, including ones whose file ASB never touched, and a
     # red line that is always red tells you nothing.
-    _cm=$(grep -cE '^[[:space:]]*//' "$VB" 2>/dev/null)
-    if [ "${_cm:-0}" = "0" ]; then
-      P "  [PASS] $VB present, strict JSON (no // comments)"; PASS=$((PASS+1))
-    else
-      V "  $VB has // comments (HAL JSON parser may reject)" "0" "$_cm" eq
-    fi
+    camera_json_comment_verdict "$VB"
   done
   # multicamera/HAL props that must be live for configure_streams to succeed.
   P "  multicamera props live:"
@@ -1132,7 +1170,7 @@ else
       NA=$((NA+2))
       P "  [N/A ] retouch/Telegram content is OP15 camera-tone specific (no conf_tuning on this model)"
     fi
-    V "  strict JSON (no // comments)" "0" "$(grep -cE '^[[:space:]]*//' "$VB" 2>/dev/null)" eq
+    camera_json_comment_verdict "$VB"
   done
   CT="$(firstf '/odm/etc/camera/conf_tuning_params.json' '/vendor/odm/etc/camera/conf_tuning_params.json')"
   if [ -n "$CT" ]; then
