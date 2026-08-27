@@ -257,10 +257,13 @@ body::before, body::after {
   background: var(--surface);
 }
 
-.theme-toggle { display:inline-flex; align-items:center; gap:1px; min-height:29px; padding:2px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
-.theme-choice { display:grid; place-items:center; width:24px; height:23px; padding:0; border:0; border-radius:6px; background:transparent; color:var(--text-tertiary); }
+/* Theme choices deliberately use the same 8px rounded chip language as the adjacent device and
+ * version badges. They are two separate 29px chips, not a filled segmented switch: the selected
+ * state is a readable teal contour + soft tint, so neither moon nor sun becomes a solid green tile. */
+.theme-toggle { display:inline-flex; align-items:center; gap:5px; min-height:29px; padding:0; border:0; border-radius:0; background:transparent; }
+.theme-choice { display:grid; place-items:center; width:30px; height:29px; padding:0; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-secondary); box-shadow:0 2px 8px rgba(0,0,0,.10); transition:color .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .12s ease; }
 .theme-choice svg { width:14px; height:14px; stroke:currentColor; }
-.theme-choice.active { color:#04120f; background:linear-gradient(135deg,#2cd6ad,#67e4c8); box-shadow:0 2px 8px rgba(44,214,173,.28); }
+.theme-choice.active { color:var(--accent); background:rgba(0,240,180,.09); border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 24%,transparent),0 3px 10px var(--accent-glow); }
 .theme-choice:active { transform:scale(.92); }
 
 .badge-a {
@@ -2437,10 +2440,10 @@ body.config-active #livePage.open {
 html[data-asb-theme="light"] {
   color-scheme: light;
   --bg:#f3f7f6; --surface:#ffffff; --surface-hover:#eaf4f1;
-  --accent:#008f70; --accent2:#007fb3; --accent-glow:rgba(0,143,112,.22);
-  --perf:#d92d32; --perf-glow:rgba(217,45,50,.20); --bal:#a86000; --bal-glow:rgba(168,96,0,.18);
-  --bat:#128a4b; --bat-glow:rgba(18,138,75,.18); --text:#152320;
-  --text-secondary:rgba(21,35,32,.65); --text-tertiary:rgba(21,35,32,.46);
+  --accent:#007c63; --accent2:#006f9b; --accent-glow:rgba(0,124,99,.20);
+  --perf:#b42318; --perf-glow:rgba(180,35,24,.18); --bal:#8a5700; --bal-glow:rgba(138,87,0,.17);
+  --bat:#08753c; --bat-glow:rgba(8,117,60,.17); --text:#152320;
+  --text-secondary:#465853; --text-tertiary:#61736d;
   --border:rgba(11,56,47,.16); --border-active:rgba(11,56,47,.32);
 }
 html[data-asb-theme="light"] body,
@@ -2470,7 +2473,7 @@ html[data-asb-theme="light"] [class*="dialog"],
 html[data-asb-theme="light"] [class*="sheet"],
 html[data-asb-theme="light"] [class*="pop"] { background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important; box-shadow:0 10px 28px rgba(20,50,42,.10); }
 html[data-asb-theme="light"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) { background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important; }
-html[data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,[class*="overlay"]) { background:rgba(15,31,27,.38) !important; }
+html[data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,[class*="overlay"]) { background:rgba(15,31,27,.58) !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-row.selected,.cfg-tile.active,.cfg-reset-choice.armed,.theme-choice.active,.seg-opt.active,.seg button.active,.p-card.active,.profile-card.active) { border-color:var(--accent) !important; }
 html[data-asb-theme="light"] .cfg-reset-choice.armed { color:#201300 !important; background:linear-gradient(135deg,#ffd166,#f6a623) !important; }
 html[data-asb-theme="light"] :is(.app-name,.status-val,.live-cell-value,.cfg-tile-count.has-on,.tg-link-main,.theme-choice.active) { color:var(--accent) !important; }
@@ -2486,7 +2489,50 @@ html[data-asb-theme="light"] .alpha-tag { color:#006e57; background:linear-gradi
 html[data-asb-theme="light"] .cfg-profile-dest button { color:var(--text-secondary) !important; background:#ffffff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .cfg-profile-dest button.active { color:var(--accent) !important; background:rgba(0,143,112,.10) !important; border-color:rgba(0,143,112,.42) !important; }
 html[data-asb-theme="light"] .cfg-profile-close { color:var(--text-secondary) !important; background:#ffffff !important; border-color:var(--border) !important; }
-html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,143,112,.28)); }
+/* Contrast pass for elements whose dark design used hard-coded translucent white rather than a
+ * theme variable. Keep surfaces calm, but make every operational label readable on near-white. */
+html[data-asb-theme="light"] .theme-toggle { background:transparent !important; border:0 !important; box-shadow:none !important; }
+html[data-asb-theme="light"] .theme-choice { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; box-shadow:0 2px 7px rgba(20,50,42,.08) !important; }
+html[data-asb-theme="light"] .theme-choice.active { color:var(--accent) !important; background:rgba(0,124,99,.10) !important; border-color:var(--accent) !important; box-shadow:0 0 0 1px rgba(0,124,99,.18),0 3px 9px rgba(0,124,99,.14) !important; }
+html[data-asb-theme="light"] .pbtn { background:#fff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .pbtn::after { background:linear-gradient(90deg,transparent,rgba(21,35,32,.10),transparent); }
+html[data-asb-theme="light"] .pbtn[data-p="performance"] { --c:#b42318; --cg:rgba(180,35,24,.10); --cg-strong:rgba(180,35,24,.18); }
+html[data-asb-theme="light"] .pbtn[data-p="balanced"] { --c:#8a5700; --cg:rgba(138,87,0,.10); --cg-strong:rgba(138,87,0,.17); }
+html[data-asb-theme="light"] .pbtn[data-p="battery"] { --c:#08753c; --cg:rgba(8,117,60,.10); --cg-strong:rgba(8,117,60,.17); }
+html[data-asb-theme="light"] .pbtn[data-p="smart"] { --c:#007c63; --cg:rgba(0,124,99,.11); --cg-strong:rgba(0,124,99,.19); }
+html[data-asb-theme="light"] .pbtn[data-p="stock"] { --c:#516a82; --cg:rgba(81,106,130,.10); --cg-strong:rgba(81,106,130,.16); }
+html[data-asb-theme="light"] .pbtn-smart.on { background:linear-gradient(135deg,rgba(0,124,99,.16),rgba(0,111,155,.08) 50%,#f8fffc 100%) !important; border-color:#007c63 !important; box-shadow:0 0 0 1px #007c63,0 4px 18px rgba(0,124,99,.18),inset 0 1px 1px rgba(255,255,255,.92) !important; }
+html[data-asb-theme="light"] .pbtn-smart.on::before { background:radial-gradient(circle at 80% 50%,rgba(0,124,99,.20),transparent 68%) !important; }
+html[data-asb-theme="light"] .pbtn.on:not(.pbtn-smart) { background:linear-gradient(135deg,var(--cg),#fff 74%) !important; box-shadow:0 0 0 1px var(--c),0 4px 18px var(--cg-strong),inset 0 1px 1px rgba(255,255,255,.92); }
+html[data-asb-theme="light"] .pbtn .pico { background:#f1f6f4; border-color:var(--border); }
+html[data-asb-theme="light"] .pbtn.on .pico { background:linear-gradient(135deg,var(--cg),#fff); border-color:var(--c); }
+html[data-asb-theme="light"] .pbtn .pname { color:var(--text) !important; }
+html[data-asb-theme="light"] .pbtn.on .pname { color:var(--c) !important; text-shadow:none; }
+html[data-asb-theme="light"] .pbtn .psub { color:var(--text-secondary) !important; -webkit-text-fill-color:var(--text-secondary); text-shadow:none; }
+html[data-asb-theme="light"] .pbtn .alpha-tag { color:#00664f; background:rgba(0,124,99,.12); border-color:rgba(0,124,99,.27); }
+html[data-asb-theme="light"] .pbtn .pchk { border-color:rgba(21,35,32,.22); }
+html[data-asb-theme="light"] .pbtn.on .pchk { background:var(--c); border-color:var(--c); }
+html[data-asb-theme="light"] .pbtn .pchk svg { fill:#fff; }
+html[data-asb-theme="light"] .smart-banner { background:linear-gradient(135deg,rgba(0,124,99,.12),rgba(0,111,155,.06),#fff 88%); border-color:rgba(0,124,99,.28); box-shadow:0 8px 22px rgba(20,50,42,.08); }
+html[data-asb-theme="light"] .smart-banner-label { color:var(--text-tertiary); }
+html[data-asb-theme="light"] .smart-banner-value { color:#006c56; }
+html[data-asb-theme="light"] .smart-banner-tag { color:#006c56; background:rgba(0,124,99,.12); border-color:rgba(0,124,99,.28); }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-section-hint,.cfg-tile-count,.cfg-sub-label,.cfg-sub-hint,.cfg-trial-info,.doze-edit-row,.doze-msg-ico,.doze-pkg,.doze-not-exempt,.doze-edit-hint,.cfg-desc-opt) { color:var(--text-secondary) !important; opacity:1; }
+html[data-asb-theme="light"] .cfg-section-title { color:#a52620 !important; }
+html[data-asb-theme="light"] :is(.cfg-tile,.cfg-row) { background:#fff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-tile-count.has-on { color:var(--accent) !important; }
+html[data-asb-theme="light"] .cfg-row.is-on { background:linear-gradient(160deg,rgba(0,124,99,.10),#fff 78%) !important; border-color:rgba(0,124,99,.38) !important; }
+html[data-asb-theme="light"] .cfg-sub { border-top-color:rgba(21,35,32,.13); }
+html[data-asb-theme="light"] .cfg-icon { background:#f1f6f4; border-color:var(--border); }
+html[data-asb-theme="light"] .cfg-status.good { color:#006c56; background:rgba(0,124,99,.11); }
+html[data-asb-theme="light"] .cfg-status.warn { color:#8a5700; background:rgba(138,87,0,.12); }
+html[data-asb-theme="light"] .cfg-status.bad { color:#b42318; background:rgba(180,35,24,.11); }
+html[data-asb-theme="light"] .cfg-status.neutral { color:var(--text-secondary); background:#eff4f2; }
+html[data-asb-theme="light"] .cfg-desc { color:var(--text-secondary); opacity:1; }
+html[data-asb-theme="light"] .cfg-pending { color:#765000; background:#fff5d6; border-color:#d89d24; }
+html[data-asb-theme="light"] :is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }
+html[data-asb-theme="light"] :is(.cfg-profile-close,.cfg-reset-close) { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,124,99,.28)); }
 
 </style>
 </head>
@@ -3298,7 +3344,11 @@ function asbThemeValue() {
 }
 function asbPaintThemeControls() {
   const theme = asbThemeValue();
-  document.documentElement.toggleAttribute('data-asb-theme', theme === 'light');
+  // CSS uses the value selector [data-asb-theme="light"]. toggleAttribute() creates an empty
+  // attribute, which made dark → light wait until the next page load (prepaint writes "light").
+  // Set or remove the value explicitly so both directions redraw in the same running WebView.
+  if (theme === 'light') document.documentElement.setAttribute('data-asb-theme', 'light');
+  else document.documentElement.removeAttribute('data-asb-theme');
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f7f6' : '#000000');
   document.querySelectorAll('[data-theme-choice]').forEach(function(btn) {
@@ -3844,6 +3894,9 @@ const CFG_ITEMS = [
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
     desc:'How richly the system draws transitions and Recents. Normal is what the device ships with. Simplified uses fewer effects and a little less GPU. IMPORTANT: with simplified, Recents becomes a plain list and OxygenOS removes the Cards/Simple selector from Recent Tasks Manager altogether - the only way back is setting this to normal and rebooting. If you want the card previews, leave this alone. The simplified option is offered on the OnePlus 15 only: on other models it removes the selector with no way back except this same setting, so it is not shown there.' },
   // ---- Network ----------------------------------------------------------------,
+  // The explicit radio master belongs first: every ASB modem/handover choice below depends on it.
+  { key:'radio_policy_enable', type:'bool', def:'0', stock:'0', name:'Cellular / radio controls',
+    desc:'Independent master for ASB modem controls. OFF is the default: choosing any power profile leaves Android’s mobile-data context and TCP keepalive settings untouched. This is the recommended setting on WiFi-only or no-SIM devices. Turn it on only if this phone uses a SIM/eSIM and you deliberately want ASB’s separate radio options below. Turning it off immediately restores the Android values recorded before ASB changed them; it never changes airplane mode, carrier selection, roaming, preferred network type, Bluetooth or audio.' },
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 other links',
     desc:'How the phone ramps up when downloading - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, Ethernet. WiFi and mobile take their own values from the cards below. Stock is what the device shipped with. bbr paces to the real measured speed, cubic is the classic. Stock kernels usually lack bbr, and the card will say \u201cnot supported\u201d rather than pretend.' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 WiFi',
@@ -3866,8 +3919,6 @@ const CFG_ITEMS = [
     desc:'The region decides which WiFi channels your phone may use, and that sets the ceiling on link speed. CR opens the widest set of channels - usually the fastest WiFi. Stock keeps the region the phone gets from the SIM. IMPORTANT: using channels not permitted where you are is your call and your responsibility.' },
   { key:'wifi_scan_throttle', type:'seg', def:'auto', opts:['auto','0','1'], name:'WiFi Scan Rate',
     desc:'How often the phone looks for WiFi networks in the background. More often switches to a stronger access point sooner as you move around a house or office, at a small battery cost. Stock is the normal Android limit of 4 scans per 2 minutes. If WiFi keeps clinging to a weak AP, pick More often.' },
-  { key:'radio_policy_enable', type:'bool', def:'0', stock:'0', name:'Cellular / radio controls',
-    desc:'Independent master for ASB modem controls. OFF is the default: choosing any power profile leaves Android’s mobile-data context and TCP keepalive settings untouched. This is the recommended setting on WiFi-only or no-SIM devices. Turn it on only if this phone uses a SIM/eSIM and you deliberately want ASB’s separate radio options below. Turning it off immediately restores the Android values recorded before ASB changed them; it never changes airplane mode, carrier selection, roaming, preferred network type, Bluetooth or audio.' },
   { key:'net_handover_fast', type:'bool', def:'0', stock:'0', name:'Fast WiFi → mobile handover',
     desc:'Keeps the mobile-data context ready while the screen is on, so Android can move traffic to mobile data without waiting for the modem to wake after WiFi becomes unusable. It does not disconnect WiFi, force mobile data as the active route or change OEM signal/roaming thresholds. Screen-off save/night mode still releases the modem. Costs some battery while the screen is on; use it only if handover delay matters.' },
   { key:'net_handover_active', type:'bool', def:'0', stock:'0', name:'Active fallback from dead WiFi',
