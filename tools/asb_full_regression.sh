@@ -44,6 +44,7 @@ run_optional 'V64 WebUI Trial/Ledger' tests/test_v64_webui_trial_ledger_contract
 run_optional 'quick restart' tests/test_quick_restart_contract.sh bash
 for test_file in \
   tests/test_config_lock_contract.sh \
+  tests/test_config_ownership_registry.sh \
   tests/test_camera_grade_contract.sh \
   tests/test_cpu_min_opp_contract.sh \
   tests/test_named_config_profiles.sh \

@@ -141,8 +141,69 @@ else
   fi
 fi
 
+# Config ownership is deliberately a separate, machine-readable registry instead of inline
+# comments. Inline comments are too easy to lose during generated/default-config updates; this
+# guard makes every shipped key declare whether it is a normal user control, a sensitive advanced
+# control, or an internal engine/derived setting.
 echo
-echo "📋 Profile Consistency"
+ echo "🧭 Config Key Ownership"
+OWNERSHIP="$MODDIR/config/key_ownership.tsv"
+if [ ! -f "$CONF" ]; then
+  err "cannot validate config ownership without governor.conf"
+elif [ ! -f "$OWNERSHIP" ]; then
+  err "config/key_ownership.tsv missing"
+else
+  _own_bad="$(awk -F'|' '
+    /^[[:space:]]*#/ || /^[[:space:]]*$/ {next}
+    NF != 3 {print "malformed:" NR; next}
+    $1 !~ /^[A-Za-z_][A-Za-z0-9_]*$/ {print "invalid-key:" $1; next}
+    $2 !~ /^(user|advanced|internal)$/ {print "invalid-class:" $1 "=" $2; next}
+    $3 !~ /^[a-z_][a-z0-9_]*$/ {print "invalid-intent:" $1 "=" $3}
+  ' "$OWNERSHIP")"
+  _own_dupes="$(awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==3 {print $1}' "$OWNERSHIP" | sort | uniq -d)"
+  if [ -n "$_own_bad" ]; then
+    err "key ownership registry invalid: $_own_bad"
+  elif [ -n "$_own_dupes" ]; then
+    err "duplicate keys in ownership registry: $_own_dupes"
+  else
+    _own_conf="${TMPDIR:-/tmp}/asb_own_conf.$$"
+    _own_reg="${TMPDIR:-/tmp}/asb_own_reg.$$"
+    awk -F= '/^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=/{k=$1; sub(/^[[:space:]]+/, "", k); sub(/[[:space:]]+$/, "", k); print k}' "$CONF" > "$_own_conf"
+    awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==3 {print $1}' "$OWNERSHIP" > "$_own_reg"
+    _own_missing="$(while IFS= read -r _ok; do grep -Fqx "$_ok" "$_own_reg" || printf '%s ' "$_ok"; done < "$_own_conf")"
+    _own_extra="$(while IFS= read -r _ok; do grep -Fqx "$_ok" "$_own_conf" || printf '%s ' "$_ok"; done < "$_own_reg")"
+    rm -f "$_own_conf" "$_own_reg"
+    if [ -n "$_own_missing" ] || [ -n "$_own_extra" ]; then
+      err "config ownership key-set drift: missing=[${_own_missing:-}] extra=[${_own_extra:-}]"
+    else
+      _own_counts="$(awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==3 {n[$2]++} END{printf "user=%d advanced=%d internal=%d", n["user"]+0, n["advanced"]+0, n["internal"]+0}' "$OWNERSHIP")"
+      ok "config ownership registry exactly matches governor.conf ($_own_counts)"
+    fi
+  fi
+
+  # A visible card must never be silently classified as internal; conversely an old public
+  # registry row must be removed if its card disappears. This checks the ownership boundary,
+  # not the user-facing translations (covered by the existing locale contracts below).
+  if [ -f "$MODDIR/webroot/index.html" ] && [ -f "$OWNERSHIP" ]; then
+    _own_ui="${TMPDIR:-/tmp}/asb_own_ui.$$"
+    sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$MODDIR/webroot/index.html" | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$_own_ui"
+    _own_card_bad="$(while IFS= read -r _ok; do
+      _oc="$(awk -F'|' -v k="$_ok" '$1==k {print $2; exit}' "$OWNERSHIP")"
+      case "$_oc" in user|advanced) : ;; *) printf '%s ' "$_ok" ;; esac
+    done < "$_own_ui")"
+    _own_public_stale="$(awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} ($2=="user" || $2=="advanced") {print $1}' "$OWNERSHIP" | while IFS= read -r _ok; do grep -Fqx "$_ok" "$_own_ui" || printf '%s ' "$_ok"; done)"
+    rm -f "$_own_ui"
+    if [ -n "$_own_card_bad" ] || [ -n "$_own_public_stale" ]; then
+      err "WebUI/ownership drift: internal-or-unregistered-cards=[${_own_card_bad:-}] stale-public-keys=[${_own_public_stale:-}]"
+    else
+      ok "every WebUI card is user/advanced and every public registry key has a card"
+    fi
+  fi
+fi
+
+echo
+ echo "📋 Profile Consistency"
+
 for p in battery balanced performance; do
   f="$MODDIR/profiles/${p}.sh"
   [ ! -f "$f" ] && { err "$p.sh missing"; continue; }
