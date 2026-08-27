@@ -502,7 +502,7 @@ body::before, body::after {
 }
 /* The rotating halo is decorative. Keep the actual Smart mark above it with an explicit
  * foreground paint so a selected profile is legible on both luminous and paper materials. */
-.pbtn-smart.on .pico-smart .tech-icon { color:#e5fffb; filter:drop-shadow(0 1px 2px rgba(0,33,27,.72)); }
+.pbtn-smart.on .pico-smart .tech-icon { color:var(--c); filter:drop-shadow(0 1px 2px rgba(0,33,27,.72)); }
 .pico-smart .ai-glow {
   position: absolute;
   inset: -2px;
@@ -553,11 +553,10 @@ body::before, body::after {
 .tech-icon polyline,
 .tech-icon polygon { vector-effect: non-scaling-stroke; }
 .pico .tech-icon { width: 24px; height: 24px; }
-.pbtn[data-p="performance"] { --tech-icon: #ff6b65; }
-.pbtn[data-p="balanced"]    { --tech-icon: #aab8cb; }
-.pbtn[data-p="battery"]     { --tech-icon: #69e59b; }
-.pbtn[data-p="stock"]       { --tech-icon: #89a6c4; }
-.pbtn[data-p="smart"]       { --tech-icon: #00e1c8; }
+/* Profile glyph paint is sourced from the same --c token as its selected card border,
+ * label and checkmark. This keeps Balance gold rather than grey and prevents profile/icon
+ * colour drift when a theme adjusts the card palette. */
+.pbtn[data-p] { --tech-icon: var(--c); }
 
 /* Alpha tag inside name */
 .alpha-tag {
@@ -2529,9 +2528,9 @@ html[data-asb-theme="light"] .pbtn-smart.on::before { background:radial-gradient
 html[data-asb-theme="light"] .pbtn.on:not(.pbtn-smart) { background:linear-gradient(135deg,var(--cg),#fff 74%) !important; box-shadow:0 0 0 1px var(--c),0 4px 18px var(--cg-strong),inset 0 1px 1px rgba(255,255,255,.92); }
 html[data-asb-theme="light"] .pbtn .pico { background:#f1f6f4; border-color:var(--border); }
 html[data-asb-theme="light"] .pbtn.on .pico { background:linear-gradient(135deg,var(--cg),#fff); border-color:var(--c); }
-/* On a pale selected Smart tile, dark teal foreground survives both the cyan halo and the
-   translucent profile material; the surrounding ring remains the active-state accent. */
-html[data-asb-theme="light"] .pbtn-smart.on .pico-smart .tech-icon { color:#004f40; filter:drop-shadow(0 1px 1px rgba(255,255,255,.88)); }
+/* The selected Smart glyph uses the same accent token as its card. The dark shadow
+   preserves the compact chip/core silhouette over the pale theme material and cyan halo. */
+html[data-asb-theme="light"] .pbtn-smart.on .pico-smart .tech-icon { color:var(--c); filter:drop-shadow(0 1px 1px rgba(255,255,255,.88)); }
 html[data-asb-theme="light"] .pbtn-smart.on .pico-smart .ai-glow { opacity:.36; }
 html[data-asb-theme="light"] .pbtn .pname { color:var(--text) !important; }
 html[data-asb-theme="light"] .pbtn.on .pname { color:var(--c) !important; text-shadow:none; }
@@ -3035,9 +3034,9 @@ const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass'];
  * remaining crisp under display-density and font-scale changes. */
 const TECH_ICON_PATHS = {
   /* Completed ASB vector system: centred silhouettes, 4–20px optical frame and one coherent rounded-line language. */
-  smart: '<path d="m12 3 6.5 3.8v7.4L12 18l-6.5-3.8V6.8z"/><circle cx="12" cy="11.5" r="2.15"/><path d="M12 5.3v4.05M7 8.2l3.5 2M17 8.2l-3.5 2M8.3 15l2.1-1.55M15.7 15l-2.1-1.55"/>',
-  performance: '<path d="m13.4 2.8-8 10.2h5.3l-1 8.2 8.9-11.3h-5.4z"/><path d="M5.6 18.6h12.8"/>',
-  balanced: '<path d="M5 6h14M5 18h14"/><path d="M8 6v12M16 6v12"/><circle cx="8" cy="10" r="2.2"/><circle cx="16" cy="14" r="2.2"/>',
+  smart: '<rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 3.5v2.5M15 3.5v2.5M9 18v2.5M15 18v2.5M3.5 9h2.5M3.5 15h2.5M18 9h2.5M18 15h2.5"/><path d="M9.5 12h5M12 9.5v5"/>',
+  performance: '<path d="m13.5 2.8-8.2 10.7h5.25l-1 7.7 9.15-11.7h-5.3z"/><path d="M5.5 20.5h13"/>',
+  balanced: '<path d="M12 4v15M7 7h10M5 20h14"/><path d="m7 7-3 6h6zM17 7l-3 6h6z"/>',
   battery: '<rect x="5" y="5" width="13" height="15" rx="2.5"/><path d="M9 3h5M18 10h2v5h-2M11 9v6M8 12h6"/>',
   stock: '<rect x="4.5" y="4.5" width="15" height="15" rx="4"/><path d="M8 12h8M12 8v8"/><path d="m8.8 8.8 6.4 6.4"/>',
   telegram: '<path d="m20.5 4.2-6.3 15.5-3.7-5.7-6.1-3.1z"/><path d="m10.5 14 3.3-3.1M4.4 10.9l12.8-5.1"/>',
@@ -3048,11 +3047,11 @@ const TECH_ICON_PATHS = {
   switches: '<path d="M5 7h14M5 17h14"/><circle cx="9" cy="7" r="2.6"/><circle cx="15" cy="17" r="2.6"/>',
   dsp: '<path d="M4 19V5M9.3 19V9M14.7 19V4M20 19V11"/><circle cx="4" cy="11" r="1.8"/><circle cx="9.3" cy="14" r="1.8"/><circle cx="14.7" cy="8" r="1.8"/><circle cx="20" cy="15" r="1.8"/>',
   ear_safe: '<path d="M16.6 14.1A5.7 5.7 0 1 0 7 10.5c0 2.3 1.2 3.6 2.3 4.7.8.8.7 2.4-.6 3"/><path d="M13.5 11.5c.9-.6 1.2-1.8.5-2.7a2 2 0 0 0-3.2.1"/><path d="M17 18h3M18.5 16.5v3"/>',
-  audio_profile: '<path d="M4.5 16V8l4.8-2.8v13.6z"/><path d="M9.3 8.5c3.6-.9 6.4.9 10.2-.5v8c-3.8 1.4-6.6-.4-10.2.5"/><path d="M12.5 10.5v4M15.5 10v4M18 9.5v4"/>',
+  audio_profile: '<rect x="4.5" y="5" width="15" height="14" rx="3"/><path d="M8 9v6M12 8v8M16 10v4"/><circle cx="8" cy="11" r="1.15" fill="currentColor"/><circle cx="12" cy="14" r="1.15" fill="currentColor"/><circle cx="16" cy="11.5" r="1.15" fill="currentColor"/>',
   dac: '<rect x="7" y="6" width="10" height="12" rx="1.7"/><path d="M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3"/><path d="M10 10h4v4h-4z"/>',
   media_volume: '<path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16.5 10c1.8 1.4 1.8 3.6 0 5M19 7.7c3.1 2.7 3.1 6 0 8.6"/>',
-  volume_sync: '<path d="M4 10v4h4l4 3V7l-4 3z"/><path d="M15 9h4v4M19 9l-4 4"/><path d="M16 17h2.5A1.5 1.5 0 0 0 20 15.5V15"/>',
-  bluetooth_offload: '<path d="m9 4 6 6-6 6V4zm0 8 6 6"/><rect x="16" y="14" width="4.5" height="4.5" rx="1"/><path d="M17.4 16.3h1.7"/>',
+  volume_sync: '<path d="M4 10v4h3.5l4 3V7l-4 3z"/><rect x="16" y="7" width="4" height="10" rx="1.1"/><path d="M12.5 9.5h2M12.5 14.5h2M17.3 10h1.4M17.3 14h1.4"/>',
+  bluetooth_offload: '<path d="m9 3 6 6-6 6V3zm0 12 6 6-6-6"/><rect x="16.5" y="8" width="4" height="8" rx="1.1"/><path d="M13.5 12h3M17.7 10.5h1.6M17.7 13.5h1.6"/>',
   loudness: '<path d="M4 10v4h3.5l4 4V6l-4 4z"/><path d="M15.5 9.5c2 1.6 2 3.4 0 5M18.5 6.7c4 3.1 4 7.5 0 10.6"/>',
   bass: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/><path d="M4 5v14M20 5v14"/>',
   compressor: '<rect x="4.5" y="5" width="15" height="14" rx="3"/><path d="M8 9h3M13 9h3M8 15h3M13 15h3"/><path d="m11 7 2 2-2 2m2-4-2 2 2 2m-2 3 2 2-2 2m2-4-2 2 2 2"/>',
@@ -3061,7 +3060,7 @@ const TECH_ICON_PATHS = {
   contrast: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z"/>',
   grain: '<rect x="5" y="5" width="14" height="14" rx="2.5"/><circle cx="9" cy="9" r=".8" fill="currentColor"/><circle cx="15" cy="9" r=".8" fill="currentColor"/><circle cx="12" cy="12" r=".8" fill="currentColor"/><circle cx="9" cy="15" r=".8" fill="currentColor"/><circle cx="15" cy="15" r=".8" fill="currentColor"/>',
   portrait: '<rect x="4.5" y="3.5" width="15" height="17" rx="3"/><circle cx="12" cy="9" r="2.7"/><path d="M7.5 17c.6-3 2.2-4.6 4.5-4.6s3.9 1.6 4.5 4.6"/>',
-  lowlight: '<path d="M4 9h4l2-3h4l2 3h4v10H4z"/><circle cx="12" cy="14" r="3"/><path d="M18 4a4 4 0 1 0 2 6"/>',
+  lowlight: '<path d="M4 9h4l2-3h4l2 3h4v10H4z"/><circle cx="11.5" cy="14" r="3"/><path d="M18.7 4.2a3.1 3.1 0 1 0 1.1 5.7A3.2 3.2 0 0 1 18.7 4.2z"/>',
   camera_hold: '<path d="M5 8h14v8H5z"/><circle cx="12" cy="12" r="2.5"/><path d="m9 16-2 5M15 16l2 5M12 16v5"/>',
   camera_aggressive: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M17 7l2-2"/>',
   camera_inject: '<path d="m6 18 8-8 4 4-8 8H6z"/><path d="m14.5 5.5 4 4M12.5 7.5l4 4"/><path d="M5 5h4M7 3v4"/>',
@@ -3073,37 +3072,37 @@ const TECH_ICON_PATHS = {
   congestion: '<path d="M4 18h3M10 14h3M16 10h4"/><path d="m5 18 6-5 7-6"/><path d="M18 4v3h-3"/>',
   wifi_congestion: '<path d="M4 10a12 12 0 0 1 16 0M7 13a8 8 0 0 1 10 0M10 16a4 4 0 0 1 4 0"/><circle cx="12" cy="19" r="1" fill="currentColor"/><path d="M17 5v4h-4"/>',
   mobile_congestion: '<path d="M5 19h2M9 15h2M13 11h2M17 7h2"/><path d="M4 5h7l2 3h7"/><path d="m17 5 3 3-3 3"/>',
-  qdisc: '<path d="M5 7c0 1.8 3.1 3 7 3s7-1.2 7-3-3.1-3-7-3-7 1.2-7 3z"/><path d="M5 7v6c0 1.8 3.1 3 7 3s7-1.2 7-3V7M5 13v4c0 1.8 3.1 3 7 3s7-1.2 7-3v-4"/>',
-  wifi_queue: '<path d="M4 10a12 12 0 0 1 16 0M7 13a8 8 0 0 1 10 0"/><circle cx="12" cy="16" r="1" fill="currentColor"/><path d="M5 20h14M5 23h9"/>',
-  mobile_queue: '<path d="M5 19h2M9 15h2M13 11h2M17 7h2"/><path d="M4 20h16M4 23h10"/><path d="M18 4v2M16.5 5.5h3"/>',
+  qdisc: '<rect x="4" y="5" width="11" height="3" rx="1.5"/><rect x="4" y="10.5" width="11" height="3" rx="1.5"/><rect x="4" y="16" width="11" height="3" rx="1.5"/><path d="M14 12h6m-2.5-2.5L20 12l-2.5 2.5"/>',
+  wifi_queue: '<path d="M4 9.5a12 12 0 0 1 16 0M7 13a8 8 0 0 1 10 0M10 16a4 4 0 0 1 4 0"/><circle cx="8" cy="20" r="1" fill="currentColor"/><circle cx="12" cy="20" r="1" fill="currentColor"/><circle cx="16" cy="20" r="1" fill="currentColor"/>',
+  mobile_queue: '<path d="M5 18v2M9 15v5M13 12v8M17 9v11"/><path d="M4 6h9m-2.5-2.5L13 6l-2.5 2.5"/><circle cx="18" cy="5" r="1" fill="currentColor"/>',
   rps: '<circle cx="7" cy="7" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="12" cy="17" r="2"/><path d="m8.5 8.5 2.3 6M15.5 8.5l-2.3 6M9 7h6"/>',
   txqueue: '<path d="M4 6h10M4 12h10M4 18h10"/><path d="m15 4 5 2-5 2M15 10l5 2-5 2M15 16l5 2-5 2"/>',
   route: '<circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h4a3 3 0 0 1 3 3v6"/><path d="m13 15 2 2 2-2"/>',
-  globe_pin: '<circle cx="11" cy="11" r="7"/><path d="M4 11h14M11 4c2 2 3 4.5 3 7"/><path d="M17 15c0 3-3 5-3 5s-3-2-3-5a3 3 0 1 1 6 0z"/>',
-  radar: '<circle cx="12" cy="12" r="8"/><path d="M12 12 18 7M12 4v8h8"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
-  handover: '<path d="M4 16h4M10 12h4M16 8h4"/><path d="m7 13 3-3 3 3 3-3"/><path d="M3 20h18"/>',
+  globe_pin: '<circle cx="10" cy="11" r="6"/><path d="M4 11h12M10 5c1.7 1.7 2.6 3.8 2.6 6S11.7 15.3 10 17"/><path d="M18 14c0 3.2-3 5.5-3 5.5S12 17.2 12 14a3 3 0 1 1 6 0z"/>',
+  radar: '<path d="M3.5 10a12.5 12.5 0 0 1 12.4-1M6.5 13a8.2 8.2 0 0 1 6.2-.4M9.7 16.1a3.7 3.7 0 0 1 2.1-.2"/><circle cx="17" cy="8" r="3"/><path d="m19.2 10.2 2.3 2.3"/>',
+  handover: '<path d="M3.5 10a8.5 8.5 0 0 1 7 0M5.5 13a5 5 0 0 1 3 0"/><circle cx="8" cy="16" r="1" fill="currentColor"/><path d="M16 17v3M19 14v6M22 11v9"/><path d="M10.5 12h4m-2-2 2 2-2 2"/>',
   battery_auto: '<rect x="5" y="4" width="14" height="16" rx="2.5"/><path d="M9 2h6M12 8v5M9.5 10.5h5"/><path d="m16 16 1.2 1.2 2.3-2.5"/>',
-  battery_bias: '<rect x="4" y="5" width="12" height="14" rx="2"/><path d="M16 9h2v6h-2M7 14h6"/><path d="m18 5 2 2-2 2"/>',
-  media_guard: '<path d="M4 10v4h4l4 3V7l-4 3z"/><path d="M16 5l4 2v4c0 4-2.3 6.6-5 8-2.7-1.4-5-4-5-8V7z"/>',
-  charge_aware: '<path d="M12 2v5M8 7h8"/><rect x="5" y="7" width="14" height="14" rx="2.5"/><path d="m13 10-3 5h3l-2 4 4-6h-3z"/>',
+  battery_bias: '<rect x="4" y="6" width="12" height="13" rx="2.3"/><path d="M16 10h2v5h-2M7 14h6"/><path d="m17 7 3-3M20 4v3h-3"/>',
+  media_guard: '<path d="M12 3 19 6v5c0 4.7-3 7.8-7 9.7-4-1.9-7-5-7-9.7V6z"/><path d="m10 9.5 5 2.5-5 2.5z"/>',
+  charge_aware: '<path d="M9 3v4M15 3v4M7 7h10"/><rect x="5" y="7" width="14" height="14" rx="2.5"/><path d="m13 10-3 5h3l-2 4 4-6h-3z"/>',
   doze: '<path d="M18.8 15.5A8 8 0 0 1 8.5 4.2 8 8 0 1 0 18.8 15.5z"/><path d="M15.5 5h4M17.5 3v4"/>',
-  whitelist: '<rect x="5" y="4" width="14" height="16" rx="2.5"/><path d="M8 9h5M8 13h5M8 17h5"/><path d="m15 16 1.5 1.5L19 15"/>',
+  whitelist: '<path d="M10.8 19A7.5 7.5 0 0 1 8.2 4.7 7.5 7.5 0 0 0 16 15.8"/><path d="M15 8h5M15 12h5M15 16h3"/><path d="m17.5 18 1.2 1.2 2.1-2.2"/>',
   wakelock: '<rect x="6" y="9" width="12" height="10" rx="2.2"/><path d="M9 9V7a3 3 0 0 1 6 0v2M12 12v3"/><path d="M18 5h3M19.5 3.5v3"/>',
-  satellite: '<path d="m14 10 4-4 2 2-4 4"/><path d="m9 15-4 4 2 2 4-4"/><path d="m9 15 5-5 3 3-5 5z"/><path d="M5 11a6 6 0 0 1 2-5M13 19a6 6 0 0 0 5-2"/>',
+  satellite: '<path d="M12 20s6-4.1 6-10a6 6 0 1 0-12 0c0 5.9 6 10 6 10z"/><circle cx="12" cy="10" r="2"/><path d="m4 20 16-16"/>',
   radio_moon: '<path d="M5 18a9 9 0 0 1 0-12M8 15a5 5 0 0 1 0-6"/><circle cx="11" cy="12" r="1" fill="currentColor"/><path d="M19 17a4 4 0 1 1-4-7"/>',
-  cellular_controls: '<path d="M5 19V9a7 7 0 0 1 14 0v10"/><path d="M8 19v-6a4 4 0 0 1 8 0v6"/><circle cx="12" cy="9" r="1" fill="currentColor"/><path d="M18 4h4M20 2v4"/>',
+  cellular_controls: '<path d="M6 4h9l3 3v13H6z"/><path d="M9 10h6M9 15h6"/><circle cx="11" cy="10" r="1.2" fill="currentColor"/><circle cx="14" cy="15" r="1.2" fill="currentColor"/><path d="M18 5v2h-2"/>',
   theme_moon: '<path d="M19 15.5A8.2 8.2 0 0 1 8.5 4 8.2 8.2 0 1 0 19 15.5z"/><path d="m17.5 4 .55 1.45L19.5 6l-1.45.55L17.5 8l-.55-1.45L15.5 6l1.45-.55z"/><path d="m6.5 5 .35.9.9.35-.9.35-.35.9-.35-.9-.9-.35.9-.35z"/>',
   quiet_moon: '<path d="M19 15.5A8 8 0 0 1 8.5 4 8 8 0 1 0 19 15.5z"/><path d="M4 19h7M4 16h4"/>',
   sun: '<circle cx="12" cy="12" r="3.5"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
-  wifi_escape: '<path d="M3.5 9.5a12.5 12.5 0 0 1 17 0M6.5 13a8.2 8.2 0 0 1 11 0M9.6 16.2a3.7 3.7 0 0 1 4.8 0"/><circle cx="12" cy="19" r="1" fill="currentColor"/><path d="M19 4l2 2-2 2M21 6h-5"/>',
+  wifi_escape: '<path d="M3.5 9.5a12.5 12.5 0 0 1 13.2-1.7M6.5 13a8.2 8.2 0 0 1 7.6-.6M9.6 16.2a3.7 3.7 0 0 1 2.5-.3"/><circle cx="12" cy="19" r="1" fill="currentColor"/><path d="M16 9h5m-2.5-2.5L21 9l-2.5 2.5"/>',
   thermal_mode: '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 10v7M17 5h4M19 3v4"/>',
   thermal_point: '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><circle cx="12" cy="17" r="1" fill="currentColor"/><path d="M18 12h3"/>',
   perf_cap: '<path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16 17 9M5 20h14M15 4h5v5"/>',
   cool_game: '<path d="M7 10h10a4 4 0 0 1 3.8 5.2l-1 3A2.4 2.4 0 0 1 15.3 18l-1.1-1h-4.4l-1.1 1a2.4 2.4 0 0 1-4.5-.8l-1-3A4 4 0 0 1 7 10z"/><path d="M7 14h4M9 12v4M16 14h.01M18 12h.01"/><path d="m18 5-2 2-2-2-2 2"/>',
   game_battery: '<path d="M7 10h10a4 4 0 0 1 3.8 5.2l-1 3A2.4 2.4 0 0 1 15.3 18l-1.1-1h-4.4l-1.1 1a2.4 2.4 0 0 1-4.5-.8l-1-3A4 4 0 0 1 7 10z"/><path d="M8 14h3M9.5 12.5v3M17 14h.01"/><path d="M12 4v4M10 6h4"/>',
-  cleaner: '<path d="M5 18h14M8 18l2-10h4l2 10M7 8h10"/><path d="m5 5 2 2M17 5l2 2"/>',
-  service_trim: '<rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M8 9h8M8 13h5M8 17h3"/><path d="m17 15 3 3M20 15l-3 3"/>',
-  service_freeze: '<rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M12 7v10M8 9l8 6M16 9l-8 6"/><path d="M12 3v2M12 19v2"/>',
+  cleaner: '<path d="M5 8h14M7 12h10M9 16h6"/><path d="m16 5 3 3-5 5-3-3z"/><path d="M5 19h14"/>',
+  service_trim: '<rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M8 9h8M8 13h6M8 17h4"/><path d="m17 15 3 3M20 15l-3 3"/>',
+  service_freeze: '<rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M8 10h8M8 14h8"/><path d="M12 3v3M12 18v3M7.8 5.8l1.5 1.5M14.7 16.7l1.5 1.5M5 12h3M16 12h3M7.8 18.2l1.5-1.5M14.7 7.3l1.5-1.5"/>',
   oem_switches: '<path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="2.5"/><circle cx="16" cy="17" r="2.5"/><path d="M12 4v6M12 14v6"/>',
   athena: '<path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z"/><path d="M9 12h6M12 9v6"/>',
   phantom: '<path d="M6 19v-7a6 6 0 0 1 12 0v7"/><path d="M6 19h12"/><circle cx="10" cy="13" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><path d="M9 17c1-1 5-1 6 0"/>',
