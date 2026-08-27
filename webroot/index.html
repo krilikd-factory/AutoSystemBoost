@@ -6168,6 +6168,30 @@ function stockMonitorReset() {
   _stockRomHistory = { ts: 0, cpuT: 0 };
   if (_liveOpen) paintStockLive({});
 }
+// Android emits /proc/meminfo as `MemAvailable: 123456 kB`, while most values in
+// the ROM snapshot are deliberately emitted as key=value. Accept both read-only
+// representations so Stock does not drop RAM just because its source is /proc.
+function parseStockTelemetry(text) {
+  const kv = {};
+  String(text || '').split(/\r?\n/).forEach(line => {
+    const eq = line.indexOf('=');
+    const colon = line.indexOf(':');
+    const cut = eq > 0 ? eq : colon;
+    if (cut <= 0) return;
+    const key = line.slice(0, cut).trim();
+    const value = line.slice(cut + 1).trim();
+    if (key) kv[key] = value;
+  });
+  return kv;
+}
+// Load average is not a percentage and the raw 1/5/15-minute triplet overflowed
+// the compact Stock banner. Show the current one-minute value, keep the complete
+// triplet in title, and never present any of it as an ASB load verdict.
+function fmtStockLoad(raw) {
+  const first = String(raw || '').trim().split(/\s+/)[0];
+  const value = Number(first);
+  return Number.isFinite(value) && value >= 0 ? T('stock_load_now', '1 min') + ' ' + value.toFixed(2) : '—';
+}
 function paintStockLive(stockKv = null) {
   const stock = T('prof_stock', 'Stock');
   const off = T('prof_stock_sub', 'ASB policy off');
@@ -6185,7 +6209,7 @@ function paintStockLive(stockKv = null) {
   setLiveLabel('liveLearnerLabel', 'stock_asb_learner', 'ASB learner');
   setLiveLabel('liveGpuLabel', 'stock_gpu_load', 'GPU load');
   setLiveLabel('liveHeadroomLabel', 'stock_ram_available', 'RAM available');
-  setLiveLabel('bnStockDrainLabel', 'stock_battery_current', 'Battery current');
+  setLiveLabel('bnStockDrainLabel', 'lv_drain', 'Screen drain');
   setLiveLabel('bnStockTrendLabel', 'stock_thermal_trend', 'ROM thermal trend');
   setLiveLabel('bnStockLpmLabel', 'stock_lpm_state', 'Modem state');
   setLiveLabel('bnStockRamLabel', 'stock_ram_available', 'RAM available');
@@ -6272,16 +6296,18 @@ function paintStockLive(stockKv = null) {
     : '—';
   const lpmHeld = n(kv['settings.global.mobile_data_always_on']) === 1;
   if (stockBanner) stockBanner.style.display = Object.keys(kv).length ? '' : 'none';
+  // This is a live, current-derived screen-on estimate while the Monitor is open;
+  // it is not a Smart learner forecast or a battery-cause attribution.
   bset('bnStockDrain', (!isCharging && Math.abs(ma) > 0)
-    ? (Math.abs(ma) + ' mA' + (pctph > 0 ? ' · ' + pctph.toFixed(1) + '%/h' : '')) : '—',
-    'Direct battery current and capacity calculation; Stock does not use ASB drain learning.');
+    ? ((pctph > 0 ? pctph.toFixed(1) + '%/h · ' : '') + Math.abs(ma) + ' mA') : '—',
+    'Live read-only screen-on estimate from battery current and charge_full; Stock does not use ASB drain learning.');
   bset('bnStockTrend', trend, 'CPU thermal delta between consecutive direct ROM samples.', trendCls);
   bset('bnStockLpm', lpmHeld ? T('lv_lpm_fast', 'fast') : T('lv_lpm_normal', 'normal'),
     'Direct read of global mobile_data_always_on; Stock itself applies no modem policy.',
     'smart-banner-value' + (lpmHeld ? ' cap-clamp' : ''));
   bset('bnStockRam', ramGb, 'MemAvailable from /proc/meminfo (read-only).');
   bset('bnStockCpuClock', cpuClock, 'Highest current cpufreq policy clock in this sample.');
-  bset('bnStockLoad', kv.loadavg || '—', 'First three values from /proc/loadavg.');
+  bset('bnStockLoad', fmtStockLoad(kv.loadavg), '1/5/15 minute /proc/loadavg: ' + (kv.loadavg || 'unavailable') + '.');
   bset('bnStockBattery', capPct ? (capPct + '%' + (volt > 0 ? ' · ' + volt.toFixed(2) + 'V' : '')) : '—',
     'Direct battery capacity and voltage.');
   bset('bnStockUptime', uptime, 'Direct /proc/uptime reading.');
@@ -6316,12 +6342,7 @@ async function pollStockTelemetry(visible, force = false) {
     const cmd = "sh -c 'printf \"ts=%s\\n\" \"$(date +%s)\"; printf \"uptime=%s\\n\" \"$(cut -d\" \" -f1 /proc/uptime 2>/dev/null)\"; printf \"loadavg=%s\\n\" \"$(cut -d\" \" -f1-3 /proc/loadavg 2>/dev/null)\"; for f in capacity current_now voltage_now temp status charge_full; do printf \"battery.%s=%s\\n\" \"$f\" \"$(cat /sys/class/power_supply/battery/$f 2>/dev/null)\"; done; printf \"settings.global.mobile_data_always_on=%s\\n\" \"$(settings get global mobile_data_always_on 2>/dev/null)\"; grep -E \"^(MemTotal|MemAvailable|MemFree|Cached|SwapFree):\" /proc/meminfo 2>/dev/null; for d in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$d\" ] || continue; n=${d##*/}; for f in scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor cpuinfo_max_freq; do printf \"cpu.%s.%s=%s\\n\" \"$n\" \"$f\" \"$(cat \"$d/$f\" 2>/dev/null)\"; done; done; g=/sys/class/kgsl/kgsl-3d0; for f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do printf \"gpu.%s=%s\\n\" \"$f\" \"$(cat \"$g/$f\" 2>/dev/null | head -1)\"; done; for z in /sys/class/thermal/thermal_zone*; do [ -r \"$z/temp\" ] || continue; label=$(cat \"$z/type\" 2>/dev/null); temp=$(cat \"$z/temp\" 2>/dev/null); [ -n \"$temp\" ] && printf \"thermal.%s=%s\\n\" \"$label\" \"$temp\"; done'";
     const r = await run(cmd);
     const text = ((r && r.stdout) || '').trim();
-    const kv = {};
-    text.split(/\r?\n/).forEach(line => {
-      const eq = line.indexOf('=');
-      if (eq > 0) kv[line.slice(0, eq)] = line.slice(eq + 1);
-    });
-    _stockTelemetryKv = kv;
+    _stockTelemetryKv = parseStockTelemetry(text);
     paintStockLive(_stockTelemetryKv);
     if (pre) pre.textContent = text || T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
   } catch(e) {
