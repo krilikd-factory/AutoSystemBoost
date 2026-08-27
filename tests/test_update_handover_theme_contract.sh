@@ -3,6 +3,7 @@ set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 need() { grep -Fq -- "$2" "$1" || fail "missing $2 in ${1#$ROOT/}"; }
+absent() { ! grep -Fq -- "$2" "$1" || fail "unexpected $2 in ${1#$ROOT/}"; }
 
 INSTALL="$ROOT/common/install.sh"
 SERVICE="$ROOT/service.sh"
@@ -37,7 +38,23 @@ need "$WEB" 'data-theme-toggle="liveVerBadge"'
 need "$WEB" 'data-theme-toggle="cfgVerBadge"'
 need "$WEB" 'data-theme-choice="dark"'
 need "$WEB" 'data-theme-choice="light"'
+# CSS matches the literal value selector, so assigning/removing that literal must be immediate.
+need "$WEB" "setAttribute('data-asb-theme', 'light')"
+need "$WEB" "removeAttribute('data-asb-theme')"
+absent "$WEB" "toggleAttribute('data-asb-theme'"
+# Both buttons are independent compact chips, with a pale semantic tint rather than a full green fill.
+need "$WEB" '.theme-choice { display:grid; place-items:center; width:30px; height:29px;'
+need "$WEB" '.theme-choice.active { color:var(--accent); background:rgba(0,240,180,.09);'
+absent "$WEB" '.theme-choice.active { color:#04120f; background:linear-gradient'
+# These cover the previously unreadable dialog title/copy, Smart monitor telemetry and config small text.
+need "$WEB" '--text-secondary:#465853; --text-tertiary:#61736d;'
+need "$WEB" ':is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }'
+need "$WEB" '.smart-banner-value { color:#006c56; }'
+need "$WEB" '.cfg-desc { color:var(--text-secondary); opacity:1; }'
 need "$WEB" "key:'radio_policy_enable'"
+# Radio master must be the first actual card after the Network heading, ahead of every dependent setting.
+first_net_card=$(awk '/\/\/ ---- Network/{in_network=1; next} in_network && /\{ key:/{print; exit}' "$WEB")
+[ "$first_net_card" = "  { key:'radio_policy_enable', type:'bool', def:'0', stock:'0', name:'Cellular / radio controls'," ] || fail 'radio policy master is not the first Network card'
 need "$WEB" 'radio_policy_enable:APPLY_LIVE'
 need "$WEB" '--bg:#f3f7f6'
 
