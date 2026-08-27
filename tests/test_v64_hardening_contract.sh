@@ -133,12 +133,15 @@ for _valid_seq in 1 9 10 42 999999999; do
   debug_sequence_valid "$_valid_seq" || { echo "FAIL: valid debug sequence rejected: $_valid_seq" >&2; exit 1; }
 done
 for _invalid_seq in '' 0 00 01 -1 +1 1.0 debug10 '10 '; do
-  if debug_sequence_valid "$_invalid_seq"; then
+  # The real gate deliberately writes a GitHub `::error::` for invalid manual input.
+  # This is a negative host fixture, not a failed CI build; capture that expected text so
+  # a passing test cannot manufacture red workflow annotations in the parent job.
+  if debug_sequence_valid "$_invalid_seq" >"$TMP_DEBUG_GATE/invalid.out" 2>&1; then
     echo "FAIL: invalid debug sequence accepted: $_invalid_seq" >&2
     exit 1
   fi
 done
-if ( BASE_CODE=64x DEBUG_SEQ_INPUT=10 . "$TMP_DEBUG_GATE/gate.sh" ); then
+if ( BASE_CODE=64x DEBUG_SEQ_INPUT=10 . "$TMP_DEBUG_GATE/gate.sh" ) >"$TMP_DEBUG_GATE/invalid-base-code.out" 2>&1; then
   echo 'FAIL: non-decimal module versionCode accepted by debug gate' >&2
   exit 1
 fi
