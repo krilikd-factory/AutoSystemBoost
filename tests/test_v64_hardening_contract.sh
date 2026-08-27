@@ -5,6 +5,10 @@ WRITER="$ROOT_DIR/runtime/asb_config_safe.sh"
 BACKUP="$ROOT_DIR/tools/asb_config_backup.sh"
 WEBUI="$ROOT_DIR/webroot/index.html"
 DEBUG_WF="$ROOT_DIR/.github/workflows/build-debug.yml"
+RELEASE_WF="$ROOT_DIR/.github/workflows/build-release.yml"
+MODULE_PROP="$ROOT_DIR/module.prop"
+UPDATE_JSON="$ROOT_DIR/update.json"
+CHANGELOG="$ROOT_DIR/CHANGELOG.md"
 INSTALL="$ROOT_DIR/common/install.sh"
 DIAG="$ROOT_DIR/tools/asb_diag.sh"
 LINT="$ROOT_DIR/tools/asb_lint.sh"
@@ -13,8 +17,8 @@ REFERENCE_DOC="$ROOT_DIR/docs/reference_models.md"
 PROFILE_CORE="$ROOT_DIR/runtime/profile_core.sh"
 BLUR_APPLY="$ROOT_DIR/runtime/asb_blur_apply.sh"
 SERVICE="$ROOT_DIR/service.sh"
-need() { grep -Fq "$2" "$1" || { echo "FAIL: $1 missing [$2]" >&2; exit 1; }; }
-absent() { ! grep -Fq "$2" "$1" || { echo "FAIL: $1 still contains [$2]" >&2; exit 1; }; }
+need() { grep -Fq -- "$2" "$1" || { echo "FAIL: $1 missing [$2]" >&2; exit 1; }; }
+absent() { ! grep -Fq -- "$2" "$1" || { echo "FAIL: $1 still contains [$2]" >&2; exit 1; }; }
 
 # Lock evidence and recovery must use the same canonical directory the writer acquires.
 need "$WRITER" 'LOCK="$STATE/config.lock"'
@@ -145,6 +149,43 @@ if ( BASE_CODE=64x DEBUG_SEQ_INPUT=10 . "$TMP_DEBUG_GATE/gate.sh" ) >"$TMP_DEBUG
   echo 'FAIL: non-decimal module versionCode accepted by debug gate' >&2
   exit 1
 fi
+
+# Public V64 release identity, OTA metadata and GitHub-facing notes must agree. `update.json`
+# is deliberately outside the flashable module ZIP, but a stale V63 pointer here would make
+# an otherwise valid V64 release advertise the wrong asset to update-aware managers.
+need "$MODULE_PROP" 'version=V64'
+need "$MODULE_PROP" 'versionCode=640'
+need "$UPDATE_JSON" '"version": "V64"'
+need "$UPDATE_JSON" '"versionCode": 640'
+need "$UPDATE_JSON" 'releases/download/64/ASB-V64.zip'
+need "$CHANGELOG" '# AutoSystemBoost — V64 Release Notes'
+need "$CHANGELOG" '## V63 → V64 at a glance'
+need "$CHANGELOG" '## Known boundaries'
+need "$CHANGELOG" '`ASB-V64.zip`'
+
+# Release publication must validate the immutable public identity rather than patching it from
+# an arbitrary GitHub tag. Exercise the literal workflow fragment under safe subshell fixtures.
+need "$RELEASE_WF" '- name: Validate release tag'
+need "$RELEASE_WF" 'does not match module version'
+absent "$RELEASE_WF" 'sed -i "s/^version=.*/version=${TAG}/" module.prop'
+TMP_RELEASE_GATE="$(mktemp -d)"
+trap 'rm -rf "$TMP_DEBUG_GATE" "$TMP_RELEASE_GATE"' EXIT HUP INT TERM
+sed -n '/^          TAG="${GITHUB_REF_NAME:-}"$/,/^          echo "Release identity: version=/p' "$RELEASE_WF" | sed 's/^          //' > "$TMP_RELEASE_GATE/gate.sh"
+[ -s "$TMP_RELEASE_GATE/gate.sh" ] || { echo 'FAIL: release workflow identity gate missing' >&2; exit 1; }
+release_tag_valid() (
+  cd "$ROOT_DIR"
+  GITHUB_REF_NAME="$1"
+  . "$TMP_RELEASE_GATE/gate.sh"
+)
+for _valid_tag in '' V64 v64 64; do
+  release_tag_valid "$_valid_tag" || { echo "FAIL: accepted V64 tag rejected: $_valid_tag" >&2; exit 1; }
+done
+for _invalid_tag in V63 v63 63 V65 v65 65 debug10 'V64 '; do
+  if release_tag_valid "$_invalid_tag" >"$TMP_RELEASE_GATE/invalid-tag.out" 2>&1; then
+    echo "FAIL: mismatched release tag accepted: $_invalid_tag" >&2
+    exit 1
+  fi
+done
 
 # Installer and diagnostics expose, but do not alter, the actual config migration result.
 need "$INSTALL" 'ASB_CONFIG_MIGRATION_MODE=unknown'
