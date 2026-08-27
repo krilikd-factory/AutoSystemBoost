@@ -18,6 +18,10 @@
 # error text as a value - this makes those calls work without changing any of them.
 [ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh" ] && \
   . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh"
+# `wifi_scan_throttle_enabled` is a user-visible framework setting. Record its pre-ASB value
+# once so uninstall restores the user's own scanning preference.
+[ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_baseline.sh" ] && \
+  . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_baseline.sh"
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
@@ -29,6 +33,9 @@ _cfg() {
 }
 
 _has() { command -v "$1" >/dev/null 2>&1; }
+_asb_setting_put() {
+  if command -v asb_settings_put >/dev/null 2>&1; then asb_settings_put "$@"; else settings put "$@" >/dev/null 2>&1; fi
+}
 
 # Write a sysctl only if the value is one the kernel actually offers. Writing an
 # unsupported congestion algorithm returns EINVAL and leaves the previous one in place,
@@ -251,7 +258,7 @@ case "$_wt" in
     # setting was never touched" - so the badge stayed green on a device where the write
     # had been refused. Read back rather than trusting the exit code: `settings put`
     # returns 0 on some ROMs even when the value does not stick.
-    settings put global wifi_scan_throttle_enabled "$_wt" >/dev/null 2>&1
+    _asb_setting_put global wifi_scan_throttle_enabled "$_wt" || true
     if [ "$(settings get global wifi_scan_throttle_enabled 2>/dev/null)" = "$_wt" ]; then
       _out="$_out scan_throttle=$_wt"
     else

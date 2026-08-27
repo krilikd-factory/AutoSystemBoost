@@ -27,6 +27,10 @@
 # error text as a value - this makes those calls work without changing any of them.
 [ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh" ] && \
   . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh"
+# Keep the per-key haptics baseline for immediate stock restoration, and also record every
+# ASB-owned framework write in the common uninstall baseline with its correct `system` namespace.
+[ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_baseline.sh" ] && \
+  . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_baseline.sh"
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
@@ -36,6 +40,9 @@ BASE="/data/adb/asb/haptics_baseline.conf"
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null \
     | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]'
+}
+_asb_setting_put() {
+  if command -v asb_settings_put >/dev/null 2>&1; then asb_settings_put "$@"; else settings put "$@" >/dev/null 2>&1; fi
 }
 
 _lvl="$(_cfg haptic_strength)"
@@ -127,8 +134,8 @@ fi
 
 # Everything off.
 if [ "$_want" = "0" ] && [ "$_want_t" = "0" ]; then
-  for _k in $_coarse;   do settings put system "$_k" 0 >/dev/null 2>&1 || true; done
-  for _k in $_stepless; do settings put system "$_k" 0 >/dev/null 2>&1 || true; done
+  for _k in $_coarse;   do _asb_setting_put system "$_k" 0 || true; done
+  for _k in $_stepless; do _asb_setting_put system "$_k" 0 || true; done
   echo "haptics: off"
   exit 0
 fi
@@ -141,7 +148,7 @@ if [ -z "$_want" ]; then
   for _k in $_stepless_alert; do _hap_restore_key "$_k"; done
   _amp=""
 else
-  for _k in $_coarse_alert; do settings put system "$_k" 3 >/dev/null 2>&1 || true; done
+  for _k in $_coarse_alert; do _asb_setting_put system "$_k" 3 || true; done
   _amp=$(( ASB_HAP_MAX * _want / 10 ))
 fi
 
@@ -154,9 +161,9 @@ else
   # if/else, not "A && B || C": a failed `settings put` in the middle of that idiom
   # falls through to the C branch and writes 3 where 0 was wanted.
   if [ "$_want_t" = "0" ]; then
-    settings put system haptic_feedback_intensity 0 >/dev/null 2>&1 || true
+    _asb_setting_put system haptic_feedback_intensity 0 || true
   else
-    settings put system haptic_feedback_intensity 3 >/dev/null 2>&1 || true
+    _asb_setting_put system haptic_feedback_intensity 3 || true
   fi
   _amp_t=$(( ASB_HAP_MAX * _want_t / 10 ))
 fi
@@ -171,11 +178,11 @@ for _k in $_stepless; do
   esac
   [ -z "$_try" ] && continue                 # that side is on stock - already restored
   if [ "$_try" = "0" ]; then
-    settings put system "$_k" 0 >/dev/null 2>&1 || true
+    _asb_setting_put system "$_k" 0 || true
     continue
   fi
   while [ "$_try" -ge 200 ]; do
-    settings put system "$_k" "$_try" >/dev/null 2>&1 || true
+    _asb_setting_put system "$_k" "$_try" || true
     [ "$(settings get system "$_k" 2>/dev/null)" = "$_try" ] && break
     _try=$(( _try - 150 ))
   done
@@ -185,7 +192,7 @@ done
 # nothing. Only ever turn it ON, and only when a touch level is actually active.
 if [ -n "$_want_t" ] && [ "$_want_t" != "0" ]; then
   [ "$(settings get system haptic_feedback_enabled 2>/dev/null)" = "0" ] && \
-    settings put system haptic_feedback_enabled 1 >/dev/null 2>&1
+    _asb_setting_put system haptic_feedback_enabled 1 || true
 fi
 
 _hap_fmt() { [ -z "$1" ] && echo "stock" || { [ "$1" = "0" ] && echo "off" || echo "$1/10"; }; }

@@ -17,6 +17,10 @@
 # error text as a value - this makes those calls work without changing any of them.
 [ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh" ] && \
   . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh"
+# Capture the original WindowManager global before ASB writes it, so uninstall can restore the
+# user's own preference rather than assuming stock means a literal zero.
+[ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_baseline.sh" ] && \
+  . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_baseline.sh"
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
@@ -31,6 +35,9 @@ PROP="$MODDIR/runtime/asb_managed.props"
 [ -f "$CONF" ] || { echo "config not found: $CONF"; exit 1; }
 
 _db="$(grep -E '^[[:space:]]*disable_blur=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+_asb_setting_put() {
+  if command -v asb_settings_put >/dev/null 2>&1; then asb_settings_put "$@"; else settings put "$@" >/dev/null 2>&1; fi
+}
 # stock | light | off off - no blur anywhere.
 #
 # "light" exists because "off" removes the blur behind notification popups too, and a heads-up
@@ -104,14 +111,19 @@ if [ "$_blur_want" = "1" ]; then
   _blur_live="$(settings get global disable_window_blurs 2>/dev/null)"
   case "$_blur_live" in ''|null) _blur_live=0 ;; esac
   if [ "$_blur_live" != "1" ]; then
-    settings put global disable_window_blurs 1 2>/dev/null
+    _asb_setting_put global disable_window_blurs 1 || true
   fi
   wm disable-blur true >/dev/null 2>&1 || true
 elif [ "$ASB_BLUR_BOOT_SYNC" != "1" ]; then
-  _blur_live="$(settings get global disable_window_blurs 2>/dev/null)"
-  case "$_blur_live" in ''|null) _blur_live=0 ;; esac
-  if [ "$_blur_live" != "0" ]; then
-    settings put global disable_window_blurs 0 2>/dev/null
+  # A user returning this control to stock expects their pre-ASB setting, not a module-defined
+  # zero. Old installs without a baseline keep the conservative zero fallback for compatibility.
+  if command -v asb_baseline_restore_setting >/dev/null 2>&1 && \
+     asb_baseline_restore_setting global disable_window_blurs; then
+    :
+  else
+    _blur_live="$(settings get global disable_window_blurs 2>/dev/null)"
+    case "$_blur_live" in ''|null) _blur_live=0 ;; esac
+    [ "$_blur_live" = "0" ] || _asb_setting_put global disable_window_blurs 0 || true
   fi
   wm disable-blur false >/dev/null 2>&1 || true
 fi

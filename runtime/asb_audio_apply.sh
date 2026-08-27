@@ -18,6 +18,10 @@
 # error text as a value - this makes those calls work without changing any of them.
 [ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh" ] && \
   . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh"
+# Bluetooth framework settings are user-visible, so preserve the pre-ASB values before the
+# first live write. The helper also keeps the settings-provider fallback path intact.
+[ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_baseline.sh" ] && \
+  . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_baseline.sh"
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
@@ -29,6 +33,11 @@ CONF="$MODDIR/config/governor.conf"
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null \
     | head -1 | sed 's/.*=//' | tr -d ' \r' | tr '[:upper:]' '[:lower:]'
+}
+# Full modules ship asb_baseline.sh. Retain a direct fallback solely for a deliberately
+# stripped/legacy layout, so an explicit user action never turns into a silent no-op.
+_asb_setting_put() {
+  if command -v asb_settings_put >/dev/null 2>&1; then asb_settings_put "$@"; else settings put "$@" >/dev/null 2>&1; fi
 }
 _has() { command -v "$1" >/dev/null 2>&1; }
 _persist() { _has resetprop && resetprop -n "$1" "$2" >/dev/null 2>&1 || setprop "$1" "$2" 2>/dev/null; }
@@ -169,14 +178,14 @@ changed="${changed}profile=${_ap} "
 _a2dp="$(_cfg bt_a2dp_offload)"
 case "$_a2dp" in
   off|0|false)
-    settings put global bluetooth_a2dp_offload_enabled 0 >/dev/null 2>&1 || true
+    _asb_setting_put global bluetooth_a2dp_offload_enabled 0 || true
     if _has resetprop; then
       resetprop -n persist.bluetooth.a2dp_offload.disabled true >/dev/null 2>&1 || true
       resetprop -n persist.vendor.bluetooth.a2dp_offload.disabled true >/dev/null 2>&1 || true
     fi
     changed="${changed}a2dp_offload=off " ;;
   on|1|true)
-    settings put global bluetooth_a2dp_offload_enabled 1 >/dev/null 2>&1 || true
+    _asb_setting_put global bluetooth_a2dp_offload_enabled 1 || true
     if _has resetprop; then
       resetprop -n persist.bluetooth.a2dp_offload.disabled false >/dev/null 2>&1 || true
       resetprop -n persist.vendor.bluetooth.a2dp_offload.disabled false >/dev/null 2>&1 || true
@@ -188,8 +197,8 @@ _bt="$(_cfg bt_absvol_mode)"
 case "$_bt" in on|disabled) _bt="disabled" ;; *) _bt="stock" ;; esac
 if [ "$_bt" = "disabled" ]; then _dav=1; _dp="true"; else _dav=0; _dp="false"; fi
 if _has settings; then
-  settings put global bluetooth_disable_absolute_volume "$_dav" >/dev/null 2>&1 || true
-  settings put secure bluetooth_disable_absolute_volume "$_dav" >/dev/null 2>&1 || true
+  _asb_setting_put global bluetooth_disable_absolute_volume "$_dav" || true
+  _asb_setting_put secure bluetooth_disable_absolute_volume "$_dav" || true
 fi
 _persist persist.bluetooth.disableabsvol "$_dp"
 _persist persist.vendor.bluetooth.disableabsvol "$_dp"

@@ -15,6 +15,9 @@ ACTION="$STATE_DIR/wifi_fallback.action"
 COOLDOWN="$STATE_DIR/wifi_fallback.cooldown"
 LOG="$STATE_DIR/wifi_fallback.log"
 LOCK="$STATE_DIR/wifi_fallback.watch.lock"
+# Injected only by host fixtures; production always reads Android's /proc. Keeping this separate
+# makes watcher identity portable across toybox shells that exec the script without retaining `sh`.
+PROC_ROOT="${ASB_WIFI_FALLBACK_PROC_ROOT:-/proc}"
 
 # The environment overrides are only for deterministic host fixtures. Still validate them here:
 # a malformed or zero value must never turn the root watcher into a busy loop or endless outage.
@@ -132,10 +135,14 @@ _pid_is_our_watcher() {
   _candidate="$1"
   case "$_candidate" in ''|*[!0-9]*) return 1 ;; esac
   [ "$_candidate" != "$$" ] || return 1
-  [ -r "/proc/$_candidate/cmdline" ] || return 1
-  _cmdline="$(tr '\000' ' ' < "/proc/$_candidate/cmdline" 2>/dev/null)"
+  [ -r "$PROC_ROOT/$_candidate/cmdline" ] || return 1
+  _cmdline="$(tr '\000' ' ' < "$PROC_ROOT/$_candidate/cmdline" 2>/dev/null)"
+  # Android can retain `sh`, use an absolute interpreter, or exec the script directly. The
+  # invariant is the exact module script plus its dedicated `watch` argument, not the token
+  # immediately before it. This remains a narrow identity check: a stale/reused state PID is
+  # never accepted merely for containing a generic Wi-Fi word or the script basename.
   case "$_cmdline" in
-    *"sh $MODDIR/runtime/asb_wifi_fallback.sh watch"*) return 0 ;;
+    *"$MODDIR/runtime/asb_wifi_fallback.sh watch"*) return 0 ;;
     *) return 1 ;;
   esac
 }

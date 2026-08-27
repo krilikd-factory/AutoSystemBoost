@@ -6,7 +6,7 @@
 [ -f "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh" ] && \
   . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_settings.sh"
 
-ASB_BASELINE="/data/adb/asb/baseline.txt"
+ASB_BASELINE="${ASB_BASELINE:-/data/adb/asb/baseline.txt}"
 # Separate, short-lived snapshot for profile-owned runtime writes. It must not reuse the
 # global baseline: that file also protects independent manual audio/WebUI controls, which
 # Stock must leave alone. This ledger exists solely to return CPU/VM/network/UX profile
@@ -97,6 +97,26 @@ asb_settings_put() {
   else
     settings put "$_ns" "$_key" "$_val" >/dev/null 2>&1 || true
   fi
+}
+
+# Restore one ASB-owned settings key to the value present before its first ASB write. This is
+# intentionally narrower than asb_baseline_replay(): a live control returning to stock must not
+# reset unrelated manual audio, network or accessibility controls.
+asb_baseline_restore_setting() {
+  _brs_ns="$1" _brs_key="$2"
+  [ -n "$_brs_ns" ] && [ -n "$_brs_key" ] && [ -f "$ASB_BASELINE" ] || return 1
+  if ! _brs_val="$(awk -F'|' -v ns="$_brs_ns" -v key="$_brs_key" '
+    $1=="settings" && $2==ns && $3==key { found=1; print $4; exit }
+    END { exit !found }
+  ' "$ASB_BASELINE" 2>/dev/null)"; then
+    return 1
+  fi
+  if [ -z "$_brs_val" ]; then
+    settings delete "$_brs_ns" "$_brs_key" >/dev/null 2>&1 || return 1
+  else
+    settings put "$_brs_ns" "$_brs_key" "$_brs_val" >/dev/null 2>&1 || return 1
+  fi
+  return 0
 }
 
 asb_persist_safe() {
