@@ -105,12 +105,43 @@ fi
 # Debug identity changes only after rsync in package staging. It keeps the public
 # versionCode so V64-debug1 can be manually flashed over V64; public source/OTA stay V64/640.
 need "$DEBUG_WF" 'debug_sequence:'
+need "$DEBUG_WF" 'Positive debug sequence after this public release'
+need "$DEBUG_WF" 'DEBUG_SEQ_INPUT: ${{ inputs.debug_sequence }}'
+need "$DEBUG_WF" 'DEBUG_SEQ="${DEBUG_SEQ_INPUT:-}"'
 need "$DEBUG_WF" 'DEBUG_CODE="$BASE_CODE"'
 need "$DEBUG_WF" 'ASB_VER="${BASE_VER}-debug${DEBUG_SEQ}"'
 need "$DEBUG_WF" 'sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_DBG/module.prop"'
 need "$DEBUG_WF" 'grep -qx "versionCode=${BASE_CODE}" "$PKG_DBG/module.prop"'
 absent "$DEBUG_WF" 'DEBUG_CODE=$((BASE_CODE + DEBUG_SEQ))'
+absent "$DEBUG_WF" 'one integer from 1 to 9'
 need "$DEBUG_WF" 'name: ASB-${{ env.ASB_VER }}'
+
+# Execute the workflow's real validation fragment: debug suffixes are local identifiers,
+# therefore every positive decimal integer is valid (including debug10 and numbers larger
+# than a single digit), but ambiguous/unsafe spellings must never become filenames or shell
+# input. `exit 1` runs inside the subshell only.
+TMP_DEBUG_GATE="$(mktemp -d)"
+trap 'rm -rf "$TMP_DEBUG_GATE"' EXIT HUP INT TERM
+sed -n '/^          DEBUG_SEQ="${DEBUG_SEQ_INPUT:-}"$/,/^          DEBUG_CODE="$BASE_CODE"$/p' "$DEBUG_WF" > "$TMP_DEBUG_GATE/gate.sh"
+[ -s "$TMP_DEBUG_GATE/gate.sh" ] || { echo 'FAIL: debug workflow validation fragment missing' >&2; exit 1; }
+debug_sequence_valid() (
+  BASE_CODE=640 DEBUG_SEQ_INPUT="$1"
+  . "$TMP_DEBUG_GATE/gate.sh"
+  [ "$DEBUG_SEQ" = "$1" ]
+)
+for _valid_seq in 1 9 10 42 999999999; do
+  debug_sequence_valid "$_valid_seq" || { echo "FAIL: valid debug sequence rejected: $_valid_seq" >&2; exit 1; }
+done
+for _invalid_seq in '' 0 00 01 -1 +1 1.0 debug10 '10 '; do
+  if debug_sequence_valid "$_invalid_seq"; then
+    echo "FAIL: invalid debug sequence accepted: $_invalid_seq" >&2
+    exit 1
+  fi
+done
+if ( BASE_CODE=64x DEBUG_SEQ_INPUT=10 . "$TMP_DEBUG_GATE/gate.sh" ); then
+  echo 'FAIL: non-decimal module versionCode accepted by debug gate' >&2
+  exit 1
+fi
 
 # Installer and diagnostics expose, but do not alter, the actual config migration result.
 need "$INSTALL" 'ASB_CONFIG_MIGRATION_MODE=unknown'

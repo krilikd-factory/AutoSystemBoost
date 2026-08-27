@@ -41,7 +41,9 @@ diag_boot_gate() (
 for _gate_case in \
   'V64-debug1:1' \
   'V64-debug4:1' \
+  'V64-debug10:1' \
   'V64-debug42:1' \
+  'V64-debug999999999:1' \
   'V64:0' \
   'V64-debug:0' \
   'V64-debug0:0' \
@@ -70,7 +72,7 @@ printf '%s\n' "$REL_TL" | grep -Fq 'status=debug_only' || {
 # ownership protocol: it claims the tokenized directory with ITS OWN PID and only removes
 # a guard that still names that PID. This catches launcher-PID and cleanup races on host.
 DBG="$TMP/debug"; mkdir -p "$DBG/system/bin" "$DBG/tools/logkit" "$TMP/out"
-printf 'id=AutoSystemBoost\nversion=V64-debug4\n' > "$DBG/module.prop"
+printf 'id=AutoSystemBoost\nversion=V64-debug10\n' > "$DBG/module.prop"
 TL_STATE="$TMP/timeline-debug"
 ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" begin postfs_begin >/dev/null
 ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" mark service_enter >/dev/null
