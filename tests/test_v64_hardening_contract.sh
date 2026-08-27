@@ -157,22 +157,31 @@ need "$MODULE_PROP" 'versionCode=640'
 # Release publication must validate the immutable public identity rather than patching it from
 # an arbitrary GitHub tag. Exercise the literal workflow fragment under safe subshell fixtures.
 need "$RELEASE_WF" '- name: Validate release tag'
+need "$RELEASE_WF" 'GITHUB_EVENT_NAME'
+need "$RELEASE_WF" 'GITHUB_REF_TYPE'
 need "$RELEASE_WF" 'does not match module version'
 absent "$RELEASE_WF" 'sed -i "s/^version=.*/version=${TAG}/" module.prop'
 TMP_RELEASE_GATE="$(mktemp -d)"
 trap 'rm -rf "$TMP_DEBUG_GATE" "$TMP_RELEASE_GATE"' EXIT HUP INT TERM
-sed -n '/^          TAG="${GITHUB_REF_NAME:-}"$/,/^          echo "Release identity: version=/p' "$RELEASE_WF" | sed 's/^          //' > "$TMP_RELEASE_GATE/gate.sh"
+sed -n '/^          TAG="${GITHUB_REF_NAME:-}"$/,/^          fi$/p' "$RELEASE_WF" | sed 's/^          //' > "$TMP_RELEASE_GATE/gate.sh"
 [ -s "$TMP_RELEASE_GATE/gate.sh" ] || { echo 'FAIL: release workflow identity gate missing' >&2; exit 1; }
-release_tag_valid() (
+release_identity_valid() (
   cd "$ROOT_DIR"
-  GITHUB_REF_NAME="$1"
+  GITHUB_REF_NAME="$1" GITHUB_EVENT_NAME="$2" GITHUB_REF_TYPE="$3"
   . "$TMP_RELEASE_GATE/gate.sh"
 )
-for _valid_tag in '' V64 v64 64; do
-  release_tag_valid "$_valid_tag" || { echo "FAIL: accepted V64 tag rejected: $_valid_tag" >&2; exit 1; }
+# workflow_dispatch uses the selected branch as ref name; it must not be treated as a
+# release tag and therefore must pass for main or any other branch.
+for _manual_ref in '' main develop maintenance/V64; do
+  release_identity_valid "$_manual_ref" workflow_dispatch branch || { echo "FAIL: manual branch build rejected: $_manual_ref" >&2; exit 1; }
 done
-for _invalid_tag in V63 v63 63 V65 v65 65 debug10 'V64 '; do
-  if release_tag_valid "$_invalid_tag" >"$TMP_RELEASE_GATE/invalid-tag.out" 2>&1; then
+# GitHub Release and tag-ref runs may publish an asset, so only spellings for V64 are valid.
+for _valid_tag in V64 v64 64; do
+  release_identity_valid "$_valid_tag" release tag || { echo "FAIL: accepted release tag rejected: $_valid_tag" >&2; exit 1; }
+  release_identity_valid "$_valid_tag" push tag || { echo "FAIL: accepted tag ref rejected: $_valid_tag" >&2; exit 1; }
+done
+for _invalid_tag in '' main V63 v63 63 V65 v65 65 debug10 'V64 '; do
+  if release_identity_valid "$_invalid_tag" release tag >"$TMP_RELEASE_GATE/invalid-tag.out" 2>&1; then
     echo "FAIL: mismatched release tag accepted: $_invalid_tag" >&2
     exit 1
   fi
