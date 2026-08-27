@@ -89,9 +89,14 @@ asb_wl_relax() {
               | sed -n 's/.*PARTIAL_WAKE_LOCK.*ACQ.*(\([a-zA-Z0-9_.]*\)).*/\1/p' \
               | sort -u); do
     case "$_third" in *"$_p"*) : ;; *) continue ;; esac
+    # Package identifiers rarely contain the literal word `messaging`: WhatsApp, Telegram
+    # and Signal are examples in real wake traces. These apps are notification-bearing, so
+    # never auto-restrict them here; a user can still manage them directly in Android Settings.
     case "$_p" in
       *authenticator*|*.auth.*|*.otp.*|*.mfa.*|*passkey*|\
-      *dialer*|*.mms*|*messaging*|*clock*|*alarm*) continue ;;
+      *dialer*|*.mms*|*messaging*|*whatsapp*|*telegram*|*signal*|*viber*|\
+      *line*|*discord*|*slack*|*matrix*|*threema*|*wechat*|*kakao*|\
+      *clock*|*alarm*) continue ;;
     esac
     # forcestop is not used: it kills the app. Standby-bucket restricted tells Android to
     # stop honouring its background requests, which the platform already knows how to undo.
