@@ -146,7 +146,7 @@
     },
     "net_handover_fast": {
       "name": "快速 Wi‑Fi → 移动数据切换",
-      "desc": "在屏幕开启时保持移动数据上下文就绪。当 Android 自行判断 Wi‑Fi 不可用时，流量可切换到移动数据，无需等待调制解调器唤醒。它不会断开 Wi‑Fi、不会强制移动数据成为活动路由，也不会修改 ROM 的信号或漫游阈值。屏幕关闭后，省电/夜间模式仍会释放调制解调器。屏幕开启时会略微增加耗电；仅在切换延迟重要时启用。"
+      "desc": "需要先开启上方的蜂窝网络 / 无线电控制。屏幕开启时保持移动数据上下文就绪，使 Android 在 Wi‑Fi 不可用后无需等待调制解调器唤醒即可切换。不关闭 Wi‑Fi、不强制移动数据作为路由，也不更改运营商或漫游阈值。屏幕关闭时 save/night 仍会释放调制解调器。会略增耗电；仅在切换速度重要时使用。"
     },
     "auto_battery_enable": {
       "name": "自动电池配置",
@@ -256,7 +256,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\n需要先开启上方的蜂窝网络 / 无线电控制。关闭时，此选项和任何电源配置文件都不会更改 Android 无线电策略。"
     },
     "gnss_trim": {
       "name": "精简后台 GPS",
@@ -268,7 +268,11 @@
     },
     "net_handover_active": {
       "name": "无网络 Wi‑Fi 主动回退",
-      "desc": "针对 Android 标记为未验证的 Wi‑Fi 路由的可选功能。仅在亮屏时，如果 Wi‑Fi 仍是默认路由但没有已验证的互联网，ASB 会短暂关闭 Wi‑Fi，使移动数据立即接管。短时间后 Wi‑Fi 会自动恢复，冷却时间可避免循环。不会仅因信号弱而触发，也不会修改运营商/漫游阈值、网络模式、蓝牙或音频。会使用移动数据；如需持续连接本地 Wi‑Fi 设备，请保持关闭。"
+      "desc": "需要先开启上方的蜂窝网络 / 无线电控制。针对 Android 标记为未验证的 Wi‑Fi 路由的自愿退出机制。仅在屏幕开启时，当 Wi‑Fi 仍是默认路由但没有已验证互联网时，ASB 才会暂时关闭 Wi‑Fi，移动数据即可立即接管路由。短暂窗口后 Wi‑Fi 会重新开启，冷却时间可避免循环。弱信号本身绝不会触发；运营商/漫游阈值、网络类型、蓝牙和音频不变。会使用移动数据；若本地 Wi‑Fi 设备必须持续连接，请保持关闭。"
+    },
+    "radio_policy_enable": {
+      "name": "蜂窝网络 / 无线电控制",
+      "desc": "ASB 调制解调器功能的独立总开关。默认关闭：选择任何电源配置文件都不会修改 Android 的移动数据上下文或 TCP keepalive 设置。建议在仅 Wi‑Fi 或无 SIM 的设备上保持关闭。只有在设备使用 SIM/eSIM 且您明确需要下方独立无线电选项时才开启。关闭后会立即恢复 ASB 修改前记录的 Android 值；绝不会更改飞行模式、运营商、漫游、首选网络类型、蓝牙或音频。"
     }
   },
   "optFor": {
@@ -545,5 +549,6 @@
   "cap_period_tip": "一个连续的厂商保持期可包含许多轮询样本。原始样本保留在 asbdiag 和 24 小时报告中。",
   "wb_handover_active": "仅当 Android 将默认 Wi‑Fi 路由标记为未验证时才会短暂关闭 Wi‑Fi。可能使用移动数据并短暂断开本地 Wi‑Fi 设备；Wi‑Fi 会自动恢复。",
   "theme_dark": "深色主题",
-  "theme_light": "浅色主题"
+  "theme_light": "浅色主题",
+  "wb_radio_policy": "启用 ASB 独立的移动数据上下文和 keepalive 策略。仅 Wi‑Fi 或无 SIM 的设备请保持关闭。"
 }

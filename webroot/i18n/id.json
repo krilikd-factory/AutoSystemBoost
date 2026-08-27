@@ -119,7 +119,7 @@
     },
     "net_handover_fast": {
       "name": "Peralihan cepat Wi‑Fi → data seluler",
-      "desc": "Menjaga konteks data seluler tetap siap saat layar menyala. Ketika Android sendiri menilai Wi‑Fi tidak layak, trafik dapat beralih ke data seluler tanpa menunggu modem bangun. Tidak memutus Wi‑Fi, tidak memaksa data seluler sebagai rute aktif, dan tidak mengubah ambang sinyal atau roaming ROM. Saat layar mati, mode hemat/malam tetap melepas modem. Memakai sedikit lebih banyak baterai saat layar aktif; aktifkan hanya bila jeda peralihan penting."
+      "desc": "Memerlukan kontrol seluler / radio di atas. Menjaga konteks data seluler siap saat layar menyala sehingga Android dapat berpindah dari Wi‑Fi yang tidak dapat digunakan tanpa menunggu modem bangun. Tidak memutus Wi‑Fi, tidak memaksa rute seluler, dan tidak mengubah ambang operator/roaming. Saat layar mati save/night tetap melepas modem. Menggunakan sedikit lebih banyak baterai; gunakan hanya bila kecepatan perpindahan penting."
     },
     "auto_battery_enable": {
       "name": "Profil baterai otomatis",
@@ -229,7 +229,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\nMemerlukan kontrol seluler / radio di atas. Saat dimatikan, pengaturan ini dan semua profil daya membiarkan kebijakan radio Android tetap utuh."
     },
     "gnss_trim": {
       "name": "Pangkas GPS latar belakang",
@@ -241,7 +241,11 @@
     },
     "net_handover_active": {
       "name": "Fallback aktif dari Wi‑Fi tanpa internet",
-      "desc": "Opsi sukarela untuk rute Wi‑Fi yang ditandai Android sebagai tidak tervalidasi. Hanya saat layar menyala, ASB mematikan Wi‑Fi sebentar bila masih menjadi rute default tanpa internet tervalidasi agar data seluler segera mengambil alih. Wi‑Fi dinyalakan lagi setelah waktu singkat dan cooldown mencegah loop. Tidak pernah bertindak karena sinyal lemah saja serta tidak mengubah ambang operator/roaming, mode jaringan, Bluetooth, atau audio. Menggunakan data seluler; biarkan mati jika perangkat Wi‑Fi lokal harus selalu tersambung."
+      "desc": "Memerlukan kontrol seluler / radio di atas. Jalur keluar opsional untuk rute Wi‑Fi yang ditandai Android sebagai tidak tervalidasi. Hanya saat layar menyala, ASB sementara mematikan Wi‑Fi ketika masih menjadi rute bawaan tanpa internet tervalidasi; data seluler kemudian dapat mengambil rute segera. Wi‑Fi segera dinyalakan kembali dan cooldown mencegah loop. Sinyal lemah saja tidak pernah memicu tindakan; ambang operator/roaming, jenis jaringan, Bluetooth, dan audio tidak berubah. Menggunakan data seluler; biarkan mati jika perangkat Wi‑Fi lokal harus tetap tersambung tanpa jeda."
+    },
+    "radio_policy_enable": {
+      "name": "Kontrol seluler / radio",
+      "desc": "Sakelar utama independen untuk fungsi modem ASB. Mati secara bawaan: memilih profil daya apa pun tidak mengubah konteks data seluler Android atau TCP keepalive. Ini pengaturan yang disarankan pada perangkat hanya Wi‑Fi atau tanpa SIM. Nyalakan hanya dengan SIM/eSIM bila Anda memang menginginkan opsi radio terpisah di bawah. Saat dimatikan, nilai Android yang dicatat sebelum ASB segera dipulihkan; mode pesawat, operator, roaming, jenis jaringan pilihan, Bluetooth, dan audio tidak pernah diubah."
     }
   },
   "nav_main": "Beranda",
@@ -545,5 +549,6 @@
   "cap_period_tip": "Satu periode berkelanjutan yang ditahan vendor dapat berisi banyak sampel polling. Sampel mentah tetap ada di asbdiag dan laporan 24 jam.",
   "wb_handover_active": "Mematikan Wi‑Fi sementara hanya bila Android melaporkan rute Wi‑Fi default tidak tervalidasi. Dapat memakai data seluler dan sesaat memutus perangkat Wi‑Fi lokal; Wi‑Fi menyala kembali otomatis.",
   "theme_dark": "Tema gelap",
-  "theme_light": "Tema terang"
+  "theme_light": "Tema terang",
+  "wb_radio_policy": "Mengaktifkan kebijakan terpisah ASB untuk konteks seluler dan keepalive. Biarkan mati pada perangkat hanya Wi‑Fi atau tanpa SIM."
 }

@@ -119,7 +119,7 @@
     },
     "net_handover_fast": {
       "name": "Швидкий перехід Wi‑Fi → мобільні дані",
-      "desc": "Тримає контекст мобільних даних готовим, поки екран увімкнений. Коли Android сам визначає Wi‑Fi непридатним, трафік може перейти на мобільні дані без очікування пробудження модему. Не відключає Wi‑Fi, не примушує мобільні дані бути активним маршрутом і не змінює пороги сигналу чи роумінгу ROM. За вимкненого екрана режими економії/ночі й далі звільняють модем. Трохи підвищує витрату з активним екраном; вмикайте лише коли важлива затримка переходу."
+      "desc": "Потребує увімкненого керування стільниковою мережею вище. Тримає контекст мобільних даних готовим при увімкненому екрані, щоб Android міг перейти з непрацюючого Wi‑Fi без очікування модема. Не вимикає Wi‑Fi, не примусово обирає мобільний маршрут і не змінює пороги оператора чи роумінгу. За вимкненого екрана save/night все одно звільняють модем. Додає невелику витрату; використовуйте лише якщо важлива швидкість переходу."
     },
     "auto_battery_enable": {
       "name": "Автопрофіль батареї",
@@ -229,7 +229,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\nПотребує увімкненого керування стільниковою мережею вище. Поки воно вимкнене, це налаштування й жоден профіль живлення не змінюють радіополітику Android."
     },
     "gnss_trim": {
       "name": "Підрізати фоновий GPS",
@@ -241,7 +241,11 @@
     },
     "net_handover_active": {
       "name": "Активний перехід з непрацюючого Wi‑Fi",
-      "desc": "Окремий opt-in для Wi‑Fi, який Android позначив як невалідований. Лише за увімкненого екрана ASB тимчасово вимикає Wi‑Fi, якщо він досі є маршрутом за замовчуванням без підтвердженого інтернету, щоб мобільні дані одразу стали маршрутом. Через коротке вікно Wi‑Fi вмикається назад, а cooldown захищає від циклів. Сам слабкий сигнал не є причиною; пороги оператора/роумінгу, режим мережі, Bluetooth і аудіо не змінюються. Використовуються мобільні дані; не вмикайте, якщо потрібен безперервний доступ до локальних Wi‑Fi пристроїв."
+      "desc": "Потребує увімкненого керування стільниковою мережею вище. Добровільний вихід із Wi‑Fi, який Android позначив як невалідований. Лише за увімкненого екрана ASB тимчасово вимикає Wi‑Fi, коли він лишається маршрутом за замовчуванням без підтвердженого інтернету; мобільна мережа тоді може стати маршрутом одразу. Wi‑Fi швидко вмикається назад, а cooldown не допускає циклів. Слабкий сигнал сам по собі не є причиною; оператор/роумінг, тип мережі, Bluetooth і звук не змінюються. Використовує мобільні дані; залиште вимкненим, якщо потрібні локальні Wi‑Fi-пристрої без перерв."
+    },
+    "radio_policy_enable": {
+      "name": "Керування стільниковою мережею",
+      "desc": "Незалежний головний перемикач модемних функцій ASB. Типово вимкнено: вибір будь-якого профілю живлення не змінює контекст мобільних даних Android і TCP keepalive. Це рекомендовано для пристроїв лише з Wi‑Fi або без SIM. Увімкніть тільки за наявності SIM/eSIM, якщо свідомо потрібні окремі параметри радіомережі нижче. Вимкнення одразу відновлює значення Android, записані до ASB; режим польоту, оператор, роумінг, тип мережі, Bluetooth і звук не змінюються."
     }
   },
   "nav_main": "Головна",
@@ -545,5 +549,6 @@
   "cap_period_tip": "Один безперервний період, який утримує vendor, може містити багато poll samples. Сирі samples залишаються в asbdiag та 24h report.",
   "wb_handover_active": "Тимчасово вимикає Wi‑Fi лише коли Android позначив маршрут Wi‑Fi за замовчуванням як невалідований. Може витрачати мобільний трафік і коротко від’єднати локальні Wi‑Fi пристрої; Wi‑Fi увімкнеться сам.",
   "theme_dark": "Темна тема",
-  "theme_light": "Світла тема"
+  "theme_light": "Світла тема",
+  "wb_radio_policy": "Увімкнено окрему політику ASB для контексту мобільних даних і keepalive. Залиште вимкненою на пристрої без SIM або лише з Wi‑Fi."
 }

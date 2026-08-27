@@ -119,7 +119,7 @@
     },
     "net_handover_fast": {
       "name": "Hızlı Wi‑Fi → mobil veri geçişi",
-      "desc": "Ekran açıkken mobil veri bağlamını hazır tutar. Android Wi‑Fi’ı kendisi kullanılamaz gördüğünde trafik modemin uyanmasını beklemeden mobil veriye geçebilir. Wi‑Fi’ı kapatmaz, mobil veriyi etkin rota olarak zorlamaz ve ROM sinyal/roaming eşiklerini değiştirmez. Ekran kapalıyken tasarruf/gece modları modemi serbest bırakmaya devam eder. Ekran açıkken biraz daha fazla pil tüketir; yalnızca geçiş gecikmesi önemliyse açın."
+      "desc": "Yukarıdaki hücresel / radyo denetimlerini gerektirir. Ekran açıkken mobil veri bağlamını hazır tutar; böylece Android kullanılamayan Wi‑Fi’den modem uyanmasını beklemeden geçebilir. Wi‑Fi’yi kesmez, mobil rotayı zorlamaz ve operatör/dolaşım eşiklerini değiştirmez. Ekran kapalıyken save/night modemi yine serbest bırakır. Biraz daha fazla pil harcar; yalnızca hızlı geçiş önemliyse kullanın."
     },
     "auto_battery_enable": {
       "name": "Otomatik pil profili",
@@ -229,7 +229,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\nYukarıdaki hücresel / radyo denetimlerini gerektirir. Kapalıyken bu ayar ve hiçbir güç profili Android radyo politikasını değiştirmez."
     },
     "gnss_trim": {
       "name": "Arka plan GPS'ini kırp",
@@ -241,7 +241,11 @@
     },
     "net_handover_active": {
       "name": "İnternetsiz Wi‑Fi için etkin geçiş",
-      "desc": "Android’in doğrulanmadı olarak işaretlediği Wi‑Fi rotası için isteğe bağlı seçenektir. Yalnızca ekran açıkken, Wi‑Fi doğrulanmış internet olmadan varsayılan rota olarak kalırsa ASB Wi‑Fi’yi kısa süreli kapatır; mobil veri hemen devralabilir. Kısa pencerenin ardından Wi‑Fi geri açılır ve cooldown döngüleri önler. Yalnızca zayıf sinyale göre çalışmaz; operatör/dolaşım eşikleri, ağ modu, Bluetooth veya sesi değiştirmez. Mobil veri kullanır; yerel Wi‑Fi cihazlarına kesintisiz erişim gerekirse kapalı bırakın."
+      "desc": "Yukarıdaki hücresel / radyo denetimlerini gerektirir. Android’in doğrulanmamış olarak işaretlediği Wi‑Fi rotası için isteğe bağlı çıkış yoludur. Yalnızca ekran açıkken, doğrulanmış internet olmadan varsayılan rota olarak kalan Wi‑Fi’yi ASB geçici kapatır; mobil veri hemen rotayı alabilir. Wi‑Fi kısa süre sonra tekrar açılır ve cooldown döngüleri önler. Zayıf sinyal tek başına eylemi başlatmaz; operatör/dolaşım eşikleri, ağ türü, Bluetooth ve ses değişmez. Mobil veri kullanır; kesintisiz yerel Wi‑Fi cihazları gerekirse kapalı bırakın."
+    },
+    "radio_policy_enable": {
+      "name": "Hücresel / radyo denetimleri",
+      "desc": "ASB modem işlevleri için bağımsız ana anahtar. Varsayılan olarak kapalıdır: herhangi bir güç profili seçmek Android mobil veri bağlamını veya TCP keepalive ayarlarını değiştirmez. Yalnızca Wi‑Fi kullanan ya da SIM’siz cihazlarda önerilen ayardır. Yalnızca SIM/eSIM varsa ve aşağıdaki ayrı radyo seçeneklerini bilinçli olarak istiyorsanız açın. Kapatıldığında ASB öncesinde kaydedilen Android değerleri hemen geri yüklenir; uçak modu, operatör, dolaşım, tercih edilen ağ türü, Bluetooth ve ses asla değiştirilmez."
     }
   },
   "nav_main": "Ana",
@@ -545,5 +549,6 @@
   "cap_period_tip": "Sağlayıcının tuttuğu tek bir kesintisiz dönem çok sayıda yoklama örneği içerebilir. Ham örnekler asbdiag ve 24 saat raporunda kalır.",
   "wb_handover_active": "Wi‑Fi’yi yalnızca Android varsayılan Wi‑Fi rotasını doğrulanmamış olarak bildirirse kısa süreli kapatır. Mobil veri kullanılabilir ve yerel Wi‑Fi cihazları kısa süre ayrılabilir; Wi‑Fi otomatik geri gelir.",
   "theme_dark": "Koyu tema",
-  "theme_light": "Açık tema"
+  "theme_light": "Açık tema",
+  "wb_radio_policy": "ASB’nin ayrı mobil bağlam ve keepalive politikasını etkinleştirir. Yalnızca Wi‑Fi kullanan veya SIM’siz cihazlarda kapalı bırakın."
 }

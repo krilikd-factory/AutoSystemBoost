@@ -119,7 +119,7 @@
     },
     "net_handover_fast": {
       "name": "Schneller Wechsel WLAN → Mobilfunk",
-      "desc": "Hält den Mobilfunk-Datenkontext bei eingeschaltetem Display bereit. Sobald Android WLAN selbst als unbrauchbar einstuft, kann der Datenverkehr ohne Aufwecken des Modems auf Mobilfunk wechseln. WLAN wird nicht getrennt, Mobilfunk nicht als Route erzwungen und ROM-Signal- oder Roaming-Schwellen werden nicht verändert. Bei ausgeschaltetem Display geben Spar-/Nachtmodus das Modem weiterhin frei. Kostet bei aktivem Display etwas mehr Akku; nur aktivieren, wenn der Wechsel wichtig ist."
+      "desc": "Erfordert die obige Mobilfunk-/Funksteuerung. Hält bei eingeschaltetem Display den Mobilfunkdaten-Kontext bereit, damit Android nach unbrauchbarem WLAN nicht auf das Aufwachen des Modems warten muss. WLAN wird nicht getrennt, Mobilfunk nicht als Route erzwungen und Betreiber-/Roaming-Schwellen werden nicht geändert. Bei ausgeschaltetem Display geben save/night das Modem weiter frei. Verbraucht etwas mehr Akku; nur bei wichtigem schnellen Wechsel verwenden."
     },
     "auto_battery_enable": {
       "name": "Auto-Akkuprofil",
@@ -229,7 +229,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\nErfordert die obige Mobilfunk-/Funksteuerung; bei AUS verändert dieses oder ein anderes Energieprofil keine Android-Funkrichtlinie."
     },
     "gnss_trim": {
       "name": "Hintergrund-GPS kürzen",
@@ -241,7 +241,11 @@
     },
     "net_handover_active": {
       "name": "Aktiver Fallback bei totem WLAN",
-      "desc": "Optionale Ausweichfunktion für eine von Android als nicht validiert markierte WLAN-Route. Nur bei eingeschaltetem Display schaltet ASB WLAN kurz aus, wenn es trotz fehlendem validierten Internet noch die Standardroute ist, damit Mobilfunk sofort übernehmen kann. WLAN wird nach einem kurzen Zeitfenster wieder eingeschaltet; ein Cooldown verhindert Schleifen. Reagiert nie nur auf schwaches Signal und ändert weder Carrier-/Roaming-Schwellen, Netzmodus, Bluetooth noch Audio. Verbraucht mobile Daten; ausgeschaltet lassen, wenn lokale WLAN-Geräte dauerhaft erreichbar bleiben müssen."
+      "desc": "Erfordert die obige Mobilfunk-/Funksteuerung. Freiwilliger Ausweg für eine von Android als nicht validiert markierte WLAN-Route. Nur bei eingeschaltetem Display schaltet ASB WLAN kurz aus, wenn es noch Standardroute ohne bestätigtes Internet ist; Mobilfunk kann dann sofort übernehmen. WLAN wird nach kurzer Zeit wieder eingeschaltet und ein Cooldown verhindert Schleifen. Schwaches Signal allein löst nichts aus; Betreiber-/Roaming-Schwellen, Netztyp, Bluetooth und Audio bleiben unverändert. Verwendet mobile Daten; bei unterbrechungsfreien lokalen WLAN-Geräten ausgeschaltet lassen."
+    },
+    "radio_policy_enable": {
+      "name": "Mobilfunk-/Funksteuerung",
+      "desc": "Unabhängiger Hauptschalter für ASB-Modemfunktionen. Standardmäßig AUS: Die Wahl eines Energieprofils lässt Androids Mobilfunkdaten-Kontext und TCP-Keepalive unverändert. Dies wird für WLAN-only-Geräte oder Geräte ohne SIM empfohlen. Nur mit SIM/eSIM einschalten, wenn die separaten Funkoptionen unten ausdrücklich gewünscht sind. Beim Ausschalten werden die vor ASB gespeicherten Android-Werte sofort wiederhergestellt; Flugmodus, Netzbetreiber, Roaming, bevorzugter Netztyp, Bluetooth und Audio werden nie verändert."
     }
   },
   "nav_main": "Start",
@@ -545,5 +549,6 @@
   "cap_period_tip": "Ein zusammenhängender Vendor-Haltezeitraum kann viele Polling-Samples enthalten. Rohsamples bleiben in asbdiag und im 24h-Bericht.",
   "wb_handover_active": "Schaltet WLAN nur kurz aus, wenn Android die Standard-WLAN-Route als nicht validiert meldet. Dies kann mobile Daten verbrauchen und lokale WLAN-Geräte kurz trennen; WLAN wird automatisch wieder eingeschaltet.",
   "theme_dark": "Dunkles Design",
-  "theme_light": "Helles Design"
+  "theme_light": "Helles Design",
+  "wb_radio_policy": "Aktiviert ASBs getrennte Mobilfunk-Kontext- und Keepalive-Policy. Auf WLAN-only-Geräten oder ohne SIM ausgeschaltet lassen."
 }

@@ -316,7 +316,7 @@
     },
     "net_handover_fast": {
       "name": "Bascule rapide Wi‑Fi → données mobiles",
-      "desc": "Garde le contexte des données mobiles prêt lorsque l’écran est allumé. Quand Android juge lui-même le Wi‑Fi inutilisable, le trafic peut passer aux données mobiles sans attendre le réveil du modem. Ne coupe pas le Wi‑Fi, ne force pas les données mobiles comme route active et ne modifie pas les seuils de signal ou d’itinérance de la ROM. Écran éteint, les modes économie/nuit libèrent toujours le modem. Consomme un peu plus de batterie écran allumé ; activez-le seulement si le délai de bascule compte."
+      "desc": "Nécessite les contrôles cellulaire / radio ci-dessus. Garde le contexte de données mobiles prêt écran allumé, afin qu’Android puisse quitter un Wi‑Fi inutilisable sans attendre le modem. Ne déconnecte pas le Wi‑Fi, ne force pas la route mobile et ne modifie pas les seuils opérateur/itinérance. Écran éteint, save/night libèrent toujours le modem. Consomme un peu plus ; utilisez-le seulement si la vitesse de bascule est importante."
     },
     "haptic_strength": {
       "desc": "Intensité de la vibration pour les notifications et les sonneries, sur l’échelle du constructeur. «−1» ne touche à rien : ce qui est réglé dans le téléphone reste en place.",
@@ -371,7 +371,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\nNécessite les contrôles cellulaire / radio ci-dessus. Lorsqu’ils sont désactivés, ce réglage comme tout profil d’alimentation laisse la politique radio Android intacte."
     },
     "gnss_trim": {
       "name": "Réduire le GPS en arrière-plan",
@@ -383,7 +383,11 @@
     },
     "net_handover_active": {
       "name": "Bascule active depuis un Wi‑Fi inutilisable",
-      "desc": "Option facultative pour une route Wi‑Fi qu’Android a marquée non validée. Écran allumé uniquement, ASB coupe brièvement le Wi‑Fi s’il reste la route par défaut sans Internet validé, afin que les données mobiles prennent immédiatement le relais. Le Wi‑Fi est réactivé après une courte fenêtre et un délai évite les boucles. Ne réagit jamais au seul signal faible et ne modifie ni seuils opérateur/itinérance, ni mode réseau, Bluetooth ou audio. Utilise les données mobiles ; laissez désactivé si des appareils Wi‑Fi locaux doivent rester accessibles."
+      "desc": "Nécessite les contrôles cellulaire / radio ci-dessus. Issue facultative pour une route Wi‑Fi qu’Android a marquée non validée. Seulement écran allumé, ASB coupe brièvement le Wi‑Fi lorsqu’il reste route par défaut sans internet validé ; les données mobiles peuvent alors prendre la route immédiatement. Le Wi‑Fi est réactivé après peu de temps et un délai empêche les boucles. Un signal faible seul ne déclenche jamais l’action ; opérateur/itinérance, type de réseau, Bluetooth et audio restent inchangés. Utilise les données mobiles ; laissez désactivé si des appareils Wi‑Fi locaux doivent rester continus."
+    },
+    "radio_policy_enable": {
+      "name": "Contrôles cellulaire / radio",
+      "desc": "Commutateur maître indépendant des fonctions modem d’ASB. Désactivé par défaut : choisir un profil d’alimentation ne modifie ni le contexte de données mobiles Android ni TCP keepalive. C’est le réglage recommandé pour un appareil Wi‑Fi uniquement ou sans SIM. Activez-le seulement avec une SIM/eSIM si vous souhaitez volontairement les options radio séparées ci-dessous. Sa désactivation restaure immédiatement les valeurs Android enregistrées avant ASB ; mode avion, opérateur, itinérance, type de réseau préféré, Bluetooth et audio ne changent jamais."
     }
   },
   "opt": {
@@ -699,5 +703,6 @@
   "cap_period_tip": "Une période continue maintenue par le constructeur peut contenir de nombreux échantillons de sondage. Les échantillons bruts restent dans asbdiag et le rapport 24 h.",
   "wb_handover_active": "Coupe brièvement le Wi‑Fi uniquement si Android signale que la route Wi‑Fi par défaut n’est pas validée. Cela peut utiliser les données mobiles et déconnecter brièvement des appareils Wi‑Fi locaux ; le Wi‑Fi revient automatiquement.",
   "theme_dark": "Thème sombre",
-  "theme_light": "Thème clair"
+  "theme_light": "Thème clair",
+  "wb_radio_policy": "Active la politique distincte d’ASB pour contexte cellulaire et keepalive. Laissez-la désactivée sur un appareil Wi‑Fi uniquement ou sans SIM."
 }

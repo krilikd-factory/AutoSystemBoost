@@ -134,7 +134,7 @@
   "cfg": {
     "net_handover_fast": {
       "name": "Fast WiFi → mobile handover",
-      "desc": "Keeps the mobile-data context ready while the screen is on, so Android can move traffic to mobile data without waiting for the modem to wake after WiFi becomes unusable. It does not disconnect WiFi, force mobile data as the active route or change OEM signal/roaming thresholds. Screen-off save/night mode still releases the modem. Costs some battery while the screen is on; use it only if handover delay matters."
+      "desc": "Requires Cellular / radio controls above. Keeps the mobile-data context ready while the screen is on, so Android can move traffic to mobile data without waiting for the modem to wake after WiFi becomes unusable. It does not disconnect WiFi, force mobile data as the active route or change carrier/roaming thresholds. Screen-off save/night mode still releases the modem. Costs some battery while the screen is on; use it only if handover delay matters."
     },
     "athena_service": {
       "name": "Athena Background Killer",
@@ -231,7 +231,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\nRequires Cellular / radio controls above. When they are off, this and every power profile leave Android radio policy untouched."
     },
     "gnss_trim": {
       "name": "Trim Background GPS",
@@ -243,7 +243,11 @@
     },
     "net_handover_active": {
       "name": "Active fallback from dead WiFi",
-      "desc": "Opt-in escape hatch for a WiFi route Android marked not validated. Only while the screen is on, ASB temporarily turns WiFi off when it remains the default route without validated internet, so mobile data can take over. WiFi comes back after a short window and a cooldown prevents loops. Never acts from weak signal alone and never changes carrier/roaming thresholds, preferred network mode, Bluetooth or audio. Uses mobile data; keep off if you need uninterrupted local WiFi devices."
+      "desc": "Requires Cellular / radio controls above. Opt-in escape hatch for a WiFi route Android has marked not validated. Only while the screen is on, ASB temporarily turns WiFi off when it is still the default route but has no validated internet; mobile data can then become the route immediately. WiFi is turned back on after a short window and a cooldown prevents loops. Never acts from weak signal alone, never changes carrier/roaming thresholds, preferred network mode, Bluetooth or audio. Uses mobile data; keep off if you need uninterrupted local WiFi devices."
+    },
+    "radio_policy_enable": {
+      "name": "Cellular / radio controls",
+      "desc": "Independent master for ASB modem controls. OFF is the default: choosing any power profile leaves Android’s mobile-data context and TCP keepalive settings untouched. This is the recommended setting on WiFi-only or no-SIM devices. Turn it on only if this phone uses a SIM/eSIM and you deliberately want ASB’s separate radio options below. Turning it off immediately restores the Android values recorded before ASB changed them; it never changes airplane mode, carrier selection, roaming, preferred network type, Bluetooth or audio."
     }
   },
   "cfg_search": "Search",
@@ -462,5 +466,6 @@
   "cap_period_tip": "One continuous vendor-held period can contain many polling samples. Raw samples remain in asbdiag and the 24h report.",
   "wb_handover_active": "Temporarily turns WiFi off only when Android reports its default WiFi route as not validated. This can use mobile data and briefly disconnect local WiFi devices; WiFi returns automatically after a short window.",
   "theme_dark": "Dark theme",
-  "theme_light": "Light theme"
+  "theme_light": "Light theme",
+  "wb_radio_policy": "Enables ASB’s separate cellular-context and keepalive policy. Leave it off on WiFi-only or no-SIM devices."
 }

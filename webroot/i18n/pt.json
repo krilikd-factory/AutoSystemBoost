@@ -119,7 +119,7 @@
     },
     "net_handover_fast": {
       "name": "Troca rápida Wi‑Fi → dados móveis",
-      "desc": "Mantém o contexto de dados móveis pronto enquanto a tela está ligada. Quando o próprio Android considera o Wi‑Fi inutilizável, o tráfego pode passar para dados móveis sem esperar o modem acordar. Não desconecta o Wi‑Fi, não força os dados móveis como rota ativa e não altera limites de sinal ou roaming da ROM. Com a tela desligada, os modos economia/noite continuam liberando o modem. Consome um pouco mais de bateria com a tela ativa; ative apenas se o atraso da troca for importante."
+      "desc": "Requer os controlos de rede móvel / rádio acima. Mantém o contexto de dados móveis pronto com o ecrã ligado, para que o Android possa sair de Wi‑Fi inutilizável sem esperar pelo modem. Não desliga o Wi‑Fi, não força a rota móvel e não altera limites de operadora/roaming. Com o ecrã desligado save/night continuam a libertar o modem. Consome um pouco mais; use apenas se a rapidez da troca for importante."
     },
     "auto_battery_enable": {
       "name": "Perfil de bateria automático",
@@ -229,7 +229,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\nRequer os controlos de rede móvel / rádio acima. Quando estão desligados, esta opção e qualquer perfil de energia deixam a política de rádio do Android intocada."
     },
     "gnss_trim": {
       "name": "Reduzir GPS em segundo plano",
@@ -241,7 +241,11 @@
     },
     "net_handover_active": {
       "name": "Fallback ativo para Wi‑Fi sem Internet",
-      "desc": "Opção voluntária para uma rota Wi‑Fi que o Android marcou como não validada. Só com a tela ligada, o ASB desliga o Wi‑Fi por pouco tempo se ele ainda for a rota padrão sem Internet validada, permitindo que os dados móveis assumam. O Wi‑Fi volta após uma janela curta e um intervalo evita ciclos. Nunca age apenas por sinal fraco e não altera limites da operadora/roaming, modo de rede, Bluetooth ou áudio. Usa dados móveis; mantenha desligado se precisar de dispositivos Wi‑Fi locais sem interrupção."
+      "desc": "Requer os controlos de rede móvel / rádio acima. Saída opcional para uma rota Wi‑Fi marcada pelo Android como não validada. Apenas com o ecrã ligado, o ASB desliga o Wi‑Fi temporariamente quando ainda é a rota predefinida sem internet validada; os dados móveis podem assumir de imediato. O Wi‑Fi volta a ligar pouco depois e um cooldown evita ciclos. Sinal fraco sozinho nunca ativa a ação; operadora/roaming, tipo de rede, Bluetooth e áudio não mudam. Usa dados móveis; mantenha desligado se precisar de dispositivos Wi‑Fi locais sem interrupção."
+    },
+    "radio_policy_enable": {
+      "name": "Controlos de rede móvel / rádio",
+      "desc": "Interruptor principal independente para as funções de modem do ASB. Desligado por predefinição: escolher qualquer perfil de energia não altera o contexto de dados móveis do Android nem o TCP keepalive. É a definição recomendada para aparelhos apenas Wi‑Fi ou sem SIM. Ligue apenas com SIM/eSIM se pretender deliberadamente as opções de rádio separadas abaixo. Ao desligar, os valores Android registados antes do ASB são restaurados de imediato; modo de avião, operadora, roaming, tipo de rede preferido, Bluetooth e áudio nunca são alterados."
     }
   },
   "nav_main": "Início",
@@ -545,5 +549,6 @@
   "cap_period_tip": "Um período contínuo mantido pelo fornecedor pode conter muitas amostras de sondagem. As amostras brutas permanecem no asbdiag e no relatório de 24 h.",
   "wb_handover_active": "Desliga o Wi‑Fi temporariamente apenas quando o Android informa que a rota Wi‑Fi padrão não é validada. Pode usar dados móveis e desconectar brevemente dispositivos Wi‑Fi locais; o Wi‑Fi volta automaticamente.",
   "theme_dark": "Tema escuro",
-  "theme_light": "Tema claro"
+  "theme_light": "Tema claro",
+  "wb_radio_policy": "Ativa a política separada do ASB para contexto móvel e keepalive. Mantenha desligada em aparelhos apenas Wi‑Fi ou sem SIM."
 }

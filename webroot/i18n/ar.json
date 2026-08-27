@@ -146,7 +146,7 @@
     },
     "net_handover_fast": {
       "name": "تبديل Wi‑Fi إلى البيانات الخلوية بسرعة",
-      "desc": "يبقي سياق بيانات الهاتف جاهزاً أثناء تشغيل الشاشة. عندما يقرر Android أن Wi‑Fi غير صالح، ينتقل المرور إلى البيانات الخلوية من دون انتظار إيقاظ المودم. لا يفصل Wi‑Fi ولا يفرض البيانات الخلوية كمسار نشط ولا يغيّر عتبات الإشارة أو التجوال الخاصة بالنظام. يستمر وضع التوفير/الليل مع الشاشة المطفأة في تحرير المودم. يستهلك طاقة إضافية بسيطة أثناء تشغيل الشاشة؛ فعّله فقط إذا كانت سرعة الانتقال مهمة."
+      "desc": "يتطلب عناصر تحكم الشبكة الخلوية / الراديو أعلاه. يبقي سياق بيانات الهاتف جاهزاً والشاشة قيد التشغيل لكي ينتقل Android من Wi‑Fi غير القابل للاستخدام من دون انتظار استيقاظ المودم. لا يفصل Wi‑Fi ولا يفرض مسار الهاتف ولا يغير حدود المشغل أو التجوال. عند إطفاء الشاشة يظل save/night يحرر المودم. يستهلك طاقة إضافية بسيطة؛ استخدمه فقط إذا كانت سرعة الانتقال مهمة."
     },
     "auto_battery_enable": {
       "name": "ملف البطارية التلقائي",
@@ -256,7 +256,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\nيتطلب تفعيل عناصر تحكم الشبكة الخلوية / الراديو أعلاه؛ وعند إيقافها لا يغيّر ملف الطاقة هذا أو أي ملف آخر سياسة الراديو في Android."
     },
     "gnss_trim": {
       "name": "تقليص GPS في الخلفية",
@@ -268,7 +268,11 @@
     },
     "net_handover_active": {
       "name": "تحويل نشط من Wi‑Fi غير صالح",
-      "desc": "خيار اختياري لمسار Wi‑Fi علّمه Android بأنه غير مُتحقق. فقط مع تشغيل الشاشة، يوقف ASB شبكة Wi‑Fi مؤقتاً إذا بقيت المسار الافتراضي بلا إنترنت مُتحقق لكي تنتقل البيانات إلى الشبكة الخلوية فوراً. تعود Wi‑Fi بعد فترة قصيرة ويمنع cooldown التكرار. لا يعمل بسبب الإشارة الضعيفة وحدها ولا يغير حدود المشغل/التجوال أو وضع الشبكة أو Bluetooth أو الصوت. يستخدم بيانات الجوال؛ اتركه متوقفاً إذا كنت تحتاج أجهزة Wi‑Fi محلية متصلة باستمرار."
+      "desc": "يتطلب عناصر تحكم الشبكة الخلوية / الراديو أعلاه. مخرج اختياري لمسار Wi‑Fi وضعه Android كغير مُتحقق. فقط والشاشة قيد التشغيل، يوقف ASB Wi‑Fi مؤقتاً عندما يبقى المسار الافتراضي بلا إنترنت مُتحقق؛ عندها يمكن لبيانات الهاتف استلام المسار فوراً. يعاد تشغيل Wi‑Fi بعد وقت قصير ويمنع cooldown الحلقات. الإشارة الضعيفة وحدها لا تشغّل شيئاً؛ لا تتغير حدود المشغل/التجوال أو نوع الشبكة أو Bluetooth أو الصوت. يستخدم بيانات الهاتف؛ اتركه مغلقاً إذا كانت أجهزة Wi‑Fi المحلية تحتاج اتصالاً مستمراً."
+    },
+    "radio_policy_enable": {
+      "name": "عناصر تحكم الشبكة الخلوية / الراديو",
+      "desc": "مفتاح رئيسي مستقل لوظائف مودم ASB. يكون مغلقاً افتراضياً: اختيار أي ملف طاقة لا يغير سياق بيانات الهاتف في Android أو إعدادات TCP keepalive. هذا هو الإعداد الموصى به للأجهزة التي تعمل عبر Wi‑Fi فقط أو من دون SIM. فعّله فقط عند وجود SIM/eSIM وإذا كنت تريد عمداً خيارات الراديو المستقلة أدناه. عند إيقافه تُستعاد فوراً قيم Android المسجلة قبل ASB؛ ولا يتغير وضع الطيران أو المشغل أو التجوال أو نوع الشبكة المفضل أو Bluetooth أو الصوت أبداً."
     }
   },
   "optFor": {
@@ -545,5 +549,6 @@
   "cap_period_tip": "قد تتضمن فترة واحدة مستمرة يحتفظ بها المورّد العديد من عينات الاستطلاع. تبقى العينات الخام في asbdiag وتقرير 24 ساعة.",
   "wb_handover_active": "يوقف Wi‑Fi مؤقتاً فقط عندما يذكر Android أن مسار Wi‑Fi الافتراضي غير مُتحقق. قد يستخدم بيانات الجوال ويفصل أجهزة Wi‑Fi المحلية لفترة قصيرة؛ تعود Wi‑Fi تلقائياً.",
   "theme_dark": "المظهر الداكن",
-  "theme_light": "المظهر الفاتح"
+  "theme_light": "المظهر الفاتح",
+  "wb_radio_policy": "يفعّل سياسة ASB المنفصلة لسياق بيانات الهاتف وkeepalive. اتركه مغلقاً على أجهزة Wi‑Fi فقط أو من دون SIM."
 }
