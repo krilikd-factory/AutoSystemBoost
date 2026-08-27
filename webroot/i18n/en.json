@@ -467,5 +467,6 @@
   "wb_handover_active": "Temporarily turns WiFi off only when Android reports its default WiFi route as not validated. This can use mobile data and briefly disconnect local WiFi devices; WiFi returns automatically after a short window.",
   "theme_dark": "Dark theme",
   "theme_light": "Light theme",
-  "wb_radio_policy": "Enables ASB’s separate cellular-context and keepalive policy. Leave it off on WiFi-only or no-SIM devices."
+  "wb_radio_policy": "Enables ASB’s separate cellular-context and keepalive policy. Leave it off on WiFi-only or no-SIM devices.",
+  "stock_load_now": "1 min"
 }

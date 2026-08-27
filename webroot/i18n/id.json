@@ -550,5 +550,6 @@
   "wb_handover_active": "Mematikan Wi‑Fi sementara hanya bila Android melaporkan rute Wi‑Fi default tidak tervalidasi. Dapat memakai data seluler dan sesaat memutus perangkat Wi‑Fi lokal; Wi‑Fi menyala kembali otomatis.",
   "theme_dark": "Tema gelap",
   "theme_light": "Tema terang",
-  "wb_radio_policy": "Mengaktifkan kebijakan terpisah ASB untuk konteks seluler dan keepalive. Biarkan mati pada perangkat hanya Wi‑Fi atau tanpa SIM."
+  "wb_radio_policy": "Mengaktifkan kebijakan terpisah ASB untuk konteks seluler dan keepalive. Biarkan mati pada perangkat hanya Wi‑Fi atau tanpa SIM.",
+  "stock_load_now": "1 mnt"
 }

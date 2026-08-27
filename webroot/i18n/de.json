@@ -550,5 +550,6 @@
   "wb_handover_active": "Schaltet WLAN nur kurz aus, wenn Android die Standard-WLAN-Route als nicht validiert meldet. Dies kann mobile Daten verbrauchen und lokale WLAN-Geräte kurz trennen; WLAN wird automatisch wieder eingeschaltet.",
   "theme_dark": "Dunkles Design",
   "theme_light": "Helles Design",
-  "wb_radio_policy": "Aktiviert ASBs getrennte Mobilfunk-Kontext- und Keepalive-Policy. Auf WLAN-only-Geräten oder ohne SIM ausgeschaltet lassen."
+  "wb_radio_policy": "Aktiviert ASBs getrennte Mobilfunk-Kontext- und Keepalive-Policy. Auf WLAN-only-Geräten oder ohne SIM ausgeschaltet lassen.",
+  "stock_load_now": "1 Min"
 }

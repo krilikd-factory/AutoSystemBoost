@@ -550,5 +550,6 @@
   "wb_handover_active": "仅当 Android 将默认 Wi‑Fi 路由标记为未验证时才会短暂关闭 Wi‑Fi。可能使用移动数据并短暂断开本地 Wi‑Fi 设备；Wi‑Fi 会自动恢复。",
   "theme_dark": "深色主题",
   "theme_light": "浅色主题",
-  "wb_radio_policy": "启用 ASB 独立的移动数据上下文和 keepalive 策略。仅 Wi‑Fi 或无 SIM 的设备请保持关闭。"
+  "wb_radio_policy": "启用 ASB 独立的移动数据上下文和 keepalive 策略。仅 Wi‑Fi 或无 SIM 的设备请保持关闭。",
+  "stock_load_now": "1 分"
 }

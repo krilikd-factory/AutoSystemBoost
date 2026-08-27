@@ -704,5 +704,6 @@
   "wb_handover_active": "Coupe brièvement le Wi‑Fi uniquement si Android signale que la route Wi‑Fi par défaut n’est pas validée. Cela peut utiliser les données mobiles et déconnecter brièvement des appareils Wi‑Fi locaux ; le Wi‑Fi revient automatiquement.",
   "theme_dark": "Thème sombre",
   "theme_light": "Thème clair",
-  "wb_radio_policy": "Active la politique distincte d’ASB pour contexte cellulaire et keepalive. Laissez-la désactivée sur un appareil Wi‑Fi uniquement ou sans SIM."
+  "wb_radio_policy": "Active la politique distincte d’ASB pour contexte cellulaire et keepalive. Laissez-la désactivée sur un appareil Wi‑Fi uniquement ou sans SIM.",
+  "stock_load_now": "1 min"
 }

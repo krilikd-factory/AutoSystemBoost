@@ -550,5 +550,6 @@
   "wb_handover_active": "Spegne temporaneamente il Wi‑Fi solo quando Android segnala che la rotta Wi‑Fi predefinita non è convalidata. Può usare dati mobili e scollegare brevemente dispositivi Wi‑Fi locali; il Wi‑Fi torna automaticamente.",
   "theme_dark": "Tema scuro",
   "theme_light": "Tema chiaro",
-  "wb_radio_policy": "Abilita la policy separata ASB per contesto cellulare e keepalive. Lasciarla disattivata su dispositivi solo Wi‑Fi o senza SIM."
+  "wb_radio_policy": "Abilita la policy separata ASB per contesto cellulare e keepalive. Lasciarla disattivata su dispositivi solo Wi‑Fi o senza SIM.",
+  "stock_load_now": "1 min"
 }

@@ -550,5 +550,6 @@
   "wb_handover_active": "Desliga o Wi‑Fi temporariamente apenas quando o Android informa que a rota Wi‑Fi padrão não é validada. Pode usar dados móveis e desconectar brevemente dispositivos Wi‑Fi locais; o Wi‑Fi volta automaticamente.",
   "theme_dark": "Tema escuro",
   "theme_light": "Tema claro",
-  "wb_radio_policy": "Ativa a política separada do ASB para contexto móvel e keepalive. Mantenha desligada em aparelhos apenas Wi‑Fi ou sem SIM."
+  "wb_radio_policy": "Ativa a política separada do ASB para contexto móvel e keepalive. Mantenha desligada em aparelhos apenas Wi‑Fi ou sem SIM.",
+  "stock_load_now": "1 min"
 }
