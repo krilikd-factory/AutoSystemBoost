@@ -164,12 +164,16 @@ fi
 for _rf in /data/adb/asb/tracking_restore.log /data/adb/asb/oem_restore.log \
            /data/adb/asb/haptics_baseline.conf; do
   [ -f "$_rf" ] || continue
+  # tracking_restore.log and oem_restore.log are legacy global-key ledgers. Haptics has always
+  # stored system-namespace keys in the same two-column shape; restoring those as global made a
+  # remove/reinstall leave the physical feedback state behind. Keep both legacy formats explicit.
+  case "$_rf" in */haptics_baseline.conf) _restore_ns=system ;; *) _restore_ns=global ;; esac
   while IFS='|' read -r _k _v; do
     [ -n "$_k" ] || continue
     if [ -z "$_v" ] || [ "$_v" = "null" ]; then
-      settings delete global "$_k" >/dev/null 2>&1 || true
+      settings delete "$_restore_ns" "$_k" >/dev/null 2>&1 || true
     else
-      settings put global "$_k" "$_v" >/dev/null 2>&1 || true
+      settings put "$_restore_ns" "$_k" "$_v" >/dev/null 2>&1 || true
     fi
   done < "$_rf"
 done
