@@ -2978,6 +2978,16 @@ asb_apply_bt_absvol() {
 # ro.* props are read once at process start and cannot be changed afterwards, which is why the
 # runtime resetprop calls were rejected too (5/5 ro.* not applied).
 asb_apply_blur_prop() {
+  # The installer may be the first ASB code that touches this user-visible setting. Source the
+  # same reversible ledger used at runtime before an explicit blur-off write; stock setup must
+  # not overwrite a pre-existing user choice just because the module was installed.
+  if [ -f "$MODPATH/runtime/asb_baseline.sh" ]; then
+    MODDIR="$MODPATH"
+    . "$MODPATH/runtime/asb_baseline.sh"
+  fi
+  _asb_install_setting_put() {
+    if command -v asb_settings_put >/dev/null 2>&1; then asb_settings_put "$@"; else settings put "$@" >/dev/null 2>&1; fi
+  }
   _prop="$MODPATH/system.prop"
   [ -f "$_prop" ] || : > "$_prop"
   _db="$(grep -E '^[[:space:]]*disable_blur=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
@@ -3063,14 +3073,15 @@ asb_apply_blur_prop() {
   if [ "$_db" = "1" ]; then
     # WindowManager watches this global live. It is a global switch too, so light must
     # NOT set it: that is the one that takes the backdrop out from behind notifications.
-    settings put global disable_window_blurs 1 >/dev/null 2>&1 || true
+    _asb_install_setting_put global disable_window_blurs 1 || true
     ui_print " "
     ui_print "  🖥  ${ASB_SEC_DISPLAY:-DISPLAY}"
     ui_print "      + ${ASB_D_BLUR:-blur disabled via system.prop (applies after reboot)}"
     ASB_BLUR_APPLIED="disabled"
   else
-    settings put global disable_window_blurs 0 >/dev/null 2>&1 || true
-    ASB_BLUR_APPLIED="stock"
+    # Fresh/default stock must be a true no-touch path. A prior explicit ASB blur change is
+    # restored by its recorded baseline when the user returns the control to stock.
+    ASB_BLUR_APPLIED="stock (no WindowManager setting write)"
   fi
 }
 asb_apply_blur_prop
