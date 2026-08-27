@@ -1292,15 +1292,21 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_light_trim_pct, "battery_current");
         /* Screen-on comfort is intentionally a tie-breaker, not a generic cap.
          *
-         * Battery keeps its proven 450 mA evidence gate.  A Smart session with bias >= 400
-         * has explicitly selected the Battery envelope, but an LTE/social feed can heat the
-         * handset gradually at 250-450 mA — below the old gate — while CPU/surface temperature
-         * already confirms the trend.  Give that narrowly defined Smart mode the existing
-         * light trim earlier, not a second cap ladder.  Games, camera, charging and screen-off
-         * work remain excluded, so latency- and capture-sensitive paths are unaffected. */
+         * Battery keeps its proven 450 mA evidence gate. Debug 6 telemetry adds a second
+         * safe case: ordinary screen-on feed/browser use averaged about 430 mA with a warm
+         * CPU, while its foreground load was not gaming or camera work. Waiting for the old
+         * Battery-bias opt-in misses that common Smart profile use case.
+         *
+         * Admit only a freshly identified light/medium Smart foreground app at a modest
+         * 350 mA. It still reuses the existing light trim (not a new cap ladder), requires
+         * valid thermal evidence, and excludes games, camera, charging and screen-off work.
+         * Unknown/stale package context fails closed; the explicit battery-bias setting retains
+         * its earlier 250 mA path. */
         int smart_screenon_comfort =
-            fsm->profile_idx == PROFILE_SMART && g_asb_cfg.smart_battery_bias >= 400;
-        int comfort_current_ma = smart_screenon_comfort ? 250 : 450;
+            fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled && g_pkg_detect_ok &&
+            (g_smart_rt.app_hint <= ASB_APP_MEDIUM || g_asb_cfg.smart_battery_bias >= 400);
+        int comfort_current_ma = g_asb_cfg.smart_battery_bias >= 400 ? 250 :
+                                 (smart_screenon_comfort ? 350 : 450);
         if (!m->bat.charging && m->misc.screen_on && !m->misc.camera_active &&
             fsm->state != ASB_STATE_GAMING && m->therm.temp_valid &&
             m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp &&
@@ -1308,7 +1314,7 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             (fsm->profile_idx == PROFILE_BATTERY || smart_screenon_comfort))
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_light_trim_pct,
-                             smart_screenon_comfort ? "screenon_comfort_smart" : "screenon_comfort");
+                             smart_screenon_comfort ? "screenon_comfort_smart_medium" : "screenon_comfort");
         /* Some vendor `skin` zones are internal/remote and remain 35-40C while the
          * body-adjacent hotspot that the user actually feels reaches 43-45C.  The
          * new capture on canoe showed exactly that: CPU/skin remained below the
