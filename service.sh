@@ -329,10 +329,10 @@ command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
 command -v asb_backup_profile >/dev/null 2>&1 && asb_backup_profile 2>/dev/null
 
 asb_migrate_governor_conf() {
-  # Schema 18 makes the duplicate-key safety migration run once for existing
+  # Schema 19 makes the duplicate-key safety migration run once for existing
   # installs. Historical shell readers used the first key, so migration keeps
   # the first occurrence rather than silently changing the user's intent.
-  local _expected_schema=18
+  local _expected_schema=19
   local _conf_dir="$MODDIR/config"
   local _user_conf="$_conf_dir/governor.conf"
   local _shipped_conf="$_conf_dir/governor.conf.shipped"
@@ -3295,6 +3295,13 @@ fi
         fi
         ;;
     esac
+  fi
+
+  # The active poor-Wi-Fi fallback is an explicit opt-in. Start/reconcile it only after
+  # Android reports boot completion and normal network settling; it owns no preferred
+  # radio mode, carrier setting or roaming threshold.
+  if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" reconcile >/dev/null 2>&1
   fi
   asb_log "post_boot_tweaks: complete"
   asb_timeline_mark post_boot_tweaks_complete

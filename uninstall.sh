@@ -320,6 +320,9 @@ if [ -f /data/adb/asb/net_stock.env ]; then
   [ -n "$_ns_qd" ] && sysctl -w "net.core.default_qdisc=$_ns_qd" >/dev/null 2>&1
 fi
 
+# If the active fallback had temporarily released Wi-Fi, restore it before its state is
+# removed; the helper targets only its exact watcher argv and never touches other network tasks.
+[ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" stop >/dev/null 2>&1 || true
 rm -rf /data/adb/asb 2>/dev/null
 
 for _legacy in asb_active_profile asb_baseline.txt asb_profile_switches.log \
