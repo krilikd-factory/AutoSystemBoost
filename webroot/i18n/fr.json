@@ -380,6 +380,10 @@
     "smart_media_guard": {
       "name": "Protection média Smart",
       "desc": "Protection facultative réservée à Smart et à un cas précis : une application connue de vidéo, fil ou navigateur garde pendant une minute une charge CPU + GPU de type jeu sur batterie. ASB limite alors uniquement le plafond GPU effectif à l’enveloppe média existante de 70 %. Elle ne limite jamais un jeu connu, une application inconnue, la charge, la protection thermique, les plafonds CPU ou les fréquences minimales. Essayez d’abord 12 heures ; désactivez-la si un flux à haute fréquence saccade."
+    },
+    "net_handover_active": {
+      "name": "Bascule active depuis un Wi‑Fi inutilisable",
+      "desc": "Option facultative pour une route Wi‑Fi qu’Android a marquée non validée. Écran allumé uniquement, ASB coupe brièvement le Wi‑Fi s’il reste la route par défaut sans Internet validé, afin que les données mobiles prennent immédiatement le relais. Le Wi‑Fi est réactivé après une courte fenêtre et un délai évite les boucles. Ne réagit jamais au seul signal faible et ne modifie ni seuils opérateur/itinérance, ni mode réseau, Bluetooth ou audio. Utilise les données mobiles ; laissez désactivé si des appareils Wi‑Fi locaux doivent rester accessibles."
     }
   },
   "opt": {
@@ -692,5 +696,8 @@
   "cap_period_just_now": "à l’instant",
   "cap_period_minutes": "{n} min",
   "cap_period_hours_minutes": "{h} h {m} min",
-  "cap_period_tip": "Une période continue maintenue par le constructeur peut contenir de nombreux échantillons de sondage. Les échantillons bruts restent dans asbdiag et le rapport 24 h."
+  "cap_period_tip": "Une période continue maintenue par le constructeur peut contenir de nombreux échantillons de sondage. Les échantillons bruts restent dans asbdiag et le rapport 24 h.",
+  "wb_handover_active": "Coupe brièvement le Wi‑Fi uniquement si Android signale que la route Wi‑Fi par défaut n’est pas validée. Cela peut utiliser les données mobiles et déconnecter brièvement des appareils Wi‑Fi locaux ; le Wi‑Fi revient automatiquement.",
+  "theme_dark": "Thème sombre",
+  "theme_light": "Thème clair"
 }

@@ -265,6 +265,10 @@
     "smart_media_guard": {
       "name": "Smart 媒体保护",
       "desc": "仅适用于 Smart 的可选保护，针对一种很窄的情况：已知的视频、信息流或浏览器应用在电池供电时持续一分钟呈现类似游戏的 CPU + GPU 负载。ASB 此时只会把有效 GPU 上限维持在现有的 70% 媒体范围内。它绝不会限制已知游戏、未知应用、充电、热保护、CPU 上限或最低频率。请先试用 12 小时；如果高刷新率视频出现卡顿，请关闭此项。"
+    },
+    "net_handover_active": {
+      "name": "无网络 Wi‑Fi 主动回退",
+      "desc": "针对 Android 标记为未验证的 Wi‑Fi 路由的可选功能。仅在亮屏时，如果 Wi‑Fi 仍是默认路由但没有已验证的互联网，ASB 会短暂关闭 Wi‑Fi，使移动数据立即接管。短时间后 Wi‑Fi 会自动恢复，冷却时间可避免循环。不会仅因信号弱而触发，也不会修改运营商/漫游阈值、网络模式、蓝牙或音频。会使用移动数据；如需持续连接本地 Wi‑Fi 设备，请保持关闭。"
     }
   },
   "optFor": {
@@ -538,5 +542,8 @@
   "cap_period_just_now": "刚刚",
   "cap_period_minutes": "{n} 分钟",
   "cap_period_hours_minutes": "{h} 小时 {m} 分钟",
-  "cap_period_tip": "一个连续的厂商保持期可包含许多轮询样本。原始样本保留在 asbdiag 和 24 小时报告中。"
+  "cap_period_tip": "一个连续的厂商保持期可包含许多轮询样本。原始样本保留在 asbdiag 和 24 小时报告中。",
+  "wb_handover_active": "仅当 Android 将默认 Wi‑Fi 路由标记为未验证时才会短暂关闭 Wi‑Fi。可能使用移动数据并短暂断开本地 Wi‑Fi 设备；Wi‑Fi 会自动恢复。",
+  "theme_dark": "深色主题",
+  "theme_light": "浅色主题"
 }

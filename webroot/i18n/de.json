@@ -238,6 +238,10 @@
     "smart_media_guard": {
       "name": "Smart-Medien-Schutz",
       "desc": "Optionaler Schutz nur für Smart und einen engen Fall: Eine bekannte Video-, Feed- oder Browser-App erzeugt im Akkubetrieb eine Minute lang spielähnliche CPU- und GPU-Last. ASB begrenzt dann nur die effektive GPU-Obergrenze auf den bereits für Medien verwendeten 70%-Bereich. Bekannte Spiele, unbekannte Apps, Laden, Wärmeschutz, CPU-Grenzen und Frequenz-Minima bleiben immer ausgeschlossen. Starte zuerst den 12-Stunden-Test; bei Rucklern in Streams mit hoher Bildrate wieder ausschalten."
+    },
+    "net_handover_active": {
+      "name": "Aktiver Fallback bei totem WLAN",
+      "desc": "Optionale Ausweichfunktion für eine von Android als nicht validiert markierte WLAN-Route. Nur bei eingeschaltetem Display schaltet ASB WLAN kurz aus, wenn es trotz fehlendem validierten Internet noch die Standardroute ist, damit Mobilfunk sofort übernehmen kann. WLAN wird nach einem kurzen Zeitfenster wieder eingeschaltet; ein Cooldown verhindert Schleifen. Reagiert nie nur auf schwaches Signal und ändert weder Carrier-/Roaming-Schwellen, Netzmodus, Bluetooth noch Audio. Verbraucht mobile Daten; ausgeschaltet lassen, wenn lokale WLAN-Geräte dauerhaft erreichbar bleiben müssen."
     }
   },
   "nav_main": "Start",
@@ -538,5 +542,8 @@
   "cap_period_just_now": "gerade eben",
   "cap_period_minutes": "{n} Min.",
   "cap_period_hours_minutes": "{h} Std. {m} Min.",
-  "cap_period_tip": "Ein zusammenhängender Vendor-Haltezeitraum kann viele Polling-Samples enthalten. Rohsamples bleiben in asbdiag und im 24h-Bericht."
+  "cap_period_tip": "Ein zusammenhängender Vendor-Haltezeitraum kann viele Polling-Samples enthalten. Rohsamples bleiben in asbdiag und im 24h-Bericht.",
+  "wb_handover_active": "Schaltet WLAN nur kurz aus, wenn Android die Standard-WLAN-Route als nicht validiert meldet. Dies kann mobile Daten verbrauchen und lokale WLAN-Geräte kurz trennen; WLAN wird automatisch wieder eingeschaltet.",
+  "theme_dark": "Dunkles Design",
+  "theme_light": "Helles Design"
 }

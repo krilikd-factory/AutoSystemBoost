@@ -240,6 +240,10 @@
     "smart_media_guard": {
       "name": "Smart Media Guard",
       "desc": "Optional, Smart-only protection for a narrow case: a known video, feed or browser app stays game-like CPU + GPU heavy for a full minute while you use it on battery. ASB then keeps only the effective GPU ceiling at the existing 70% media envelope. It never limits a known game, an unknown app, charging, thermal protection, CPU ceilings or frequency floors. Start with the 12-hour trial; turn it off if a high-refresh stream stutters."
+    },
+    "net_handover_active": {
+      "name": "Active fallback from dead WiFi",
+      "desc": "Opt-in escape hatch for a WiFi route Android marked not validated. Only while the screen is on, ASB temporarily turns WiFi off when it remains the default route without validated internet, so mobile data can take over. WiFi comes back after a short window and a cooldown prevents loops. Never acts from weak signal alone and never changes carrier/roaming thresholds, preferred network mode, Bluetooth or audio. Uses mobile data; keep off if you need uninterrupted local WiFi devices."
     }
   },
   "cfg_search": "Search",
@@ -455,5 +459,8 @@
   "cap_period_just_now": "just now",
   "cap_period_minutes": "{n} min",
   "cap_period_hours_minutes": "{h} h {m} min",
-  "cap_period_tip": "One continuous vendor-held period can contain many polling samples. Raw samples remain in asbdiag and the 24h report."
+  "cap_period_tip": "One continuous vendor-held period can contain many polling samples. Raw samples remain in asbdiag and the 24h report.",
+  "wb_handover_active": "Temporarily turns WiFi off only when Android reports its default WiFi route as not validated. This can use mobile data and briefly disconnect local WiFi devices; WiFi returns automatically after a short window.",
+  "theme_dark": "Dark theme",
+  "theme_light": "Light theme"
 }

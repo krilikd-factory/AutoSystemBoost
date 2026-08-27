@@ -238,6 +238,10 @@
     "smart_media_guard": {
       "name": "Protección multimedia Smart",
       "desc": "Protección opcional solo para Smart y un caso concreto: una app conocida de vídeo, feed o navegador mantiene durante un minuto una carga CPU + GPU similar a un juego mientras usas batería. ASB limita entonces solo el techo efectivo de GPU al margen multimedia existente del 70%. Nunca limita un juego conocido, una app desconocida, la carga, la protección térmica, los techos de CPU ni los mínimos de frecuencia. Prueba primero 12 horas; desactívala si un stream de alta frecuencia se entrecorta."
+    },
+    "net_handover_active": {
+      "name": "Respaldo activo para Wi‑Fi sin conexión",
+      "desc": "Opción voluntaria para una ruta Wi‑Fi que Android marcó como no validada. Solo con la pantalla encendida, ASB apaga Wi‑Fi brevemente si sigue siendo la ruta predeterminada sin Internet validado, para que los datos móviles tomen el control. Wi‑Fi vuelve tras una ventana corta y un enfriamiento evita bucles. Nunca actúa solo por señal débil ni cambia umbrales de operador/itinerancia, modo de red, Bluetooth o audio. Usa datos móviles; déjalo apagado si necesitas acceso continuo a dispositivos Wi‑Fi locales."
     }
   },
   "nav_main": "Inicio",
@@ -538,5 +542,8 @@
   "cap_period_just_now": "ahora mismo",
   "cap_period_minutes": "{n} min",
   "cap_period_hours_minutes": "{h} h {m} min",
-  "cap_period_tip": "Un período continuo mantenido por el proveedor puede incluir muchas muestras de sondeo. Las muestras brutas permanecen en asbdiag y en el informe de 24 h."
+  "cap_period_tip": "Un período continuo mantenido por el proveedor puede incluir muchas muestras de sondeo. Las muestras brutas permanecen en asbdiag y en el informe de 24 h.",
+  "wb_handover_active": "Apaga Wi‑Fi temporalmente solo cuando Android informa que la ruta Wi‑Fi predeterminada no está validada. Puede usar datos móviles y desconectar brevemente dispositivos Wi‑Fi locales; Wi‑Fi vuelve automáticamente.",
+  "theme_dark": "Tema oscuro",
+  "theme_light": "Tema claro"
 }

@@ -238,6 +238,10 @@
     "smart_media_guard": {
       "name": "Proteção de mídia Smart",
       "desc": "Proteção opcional apenas no Smart e para um caso específico: um app conhecido de vídeo, feed ou navegador mantém por um minuto carga de CPU + GPU semelhante a jogo durante o uso na bateria. O ASB limita então apenas o teto efetivo da GPU ao envelope de mídia existente de 70%. Nunca limita um jogo conhecido, app desconhecido, carregamento, proteção térmica, tetos de CPU ou mínimos de frequência. Teste por 12 horas primeiro; desligue se um stream de alta taxa de atualização engasgar."
+    },
+    "net_handover_active": {
+      "name": "Fallback ativo para Wi‑Fi sem Internet",
+      "desc": "Opção voluntária para uma rota Wi‑Fi que o Android marcou como não validada. Só com a tela ligada, o ASB desliga o Wi‑Fi por pouco tempo se ele ainda for a rota padrão sem Internet validada, permitindo que os dados móveis assumam. O Wi‑Fi volta após uma janela curta e um intervalo evita ciclos. Nunca age apenas por sinal fraco e não altera limites da operadora/roaming, modo de rede, Bluetooth ou áudio. Usa dados móveis; mantenha desligado se precisar de dispositivos Wi‑Fi locais sem interrupção."
     }
   },
   "nav_main": "Início",
@@ -538,5 +542,8 @@
   "cap_period_just_now": "agora mesmo",
   "cap_period_minutes": "{n} min",
   "cap_period_hours_minutes": "{h} h {m} min",
-  "cap_period_tip": "Um período contínuo mantido pelo fornecedor pode conter muitas amostras de sondagem. As amostras brutas permanecem no asbdiag e no relatório de 24 h."
+  "cap_period_tip": "Um período contínuo mantido pelo fornecedor pode conter muitas amostras de sondagem. As amostras brutas permanecem no asbdiag e no relatório de 24 h.",
+  "wb_handover_active": "Desliga o Wi‑Fi temporariamente apenas quando o Android informa que a rota Wi‑Fi padrão não é validada. Pode usar dados móveis e desconectar brevemente dispositivos Wi‑Fi locais; o Wi‑Fi volta automaticamente.",
+  "theme_dark": "Tema escuro",
+  "theme_light": "Tema claro"
 }

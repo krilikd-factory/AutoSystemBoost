@@ -238,6 +238,10 @@
     "smart_media_guard": {
       "name": "Pelindung Media Smart",
       "desc": "Perlindungan opsional hanya untuk Smart dan kasus sempit: aplikasi video, feed, atau browser yang dikenal mempertahankan beban CPU + GPU seperti game selama satu menit saat memakai baterai. ASB lalu membatasi hanya batas GPU efektif ke envelope media 70% yang sudah digunakan. Fitur ini tidak pernah membatasi game yang dikenal, aplikasi tidak dikenal, pengisian daya, perlindungan termal, batas CPU, atau minimum frekuensi. Coba 12 jam terlebih dahulu; matikan bila streaming refresh-rate tinggi tersendat."
+    },
+    "net_handover_active": {
+      "name": "Fallback aktif dari Wi‑Fi tanpa internet",
+      "desc": "Opsi sukarela untuk rute Wi‑Fi yang ditandai Android sebagai tidak tervalidasi. Hanya saat layar menyala, ASB mematikan Wi‑Fi sebentar bila masih menjadi rute default tanpa internet tervalidasi agar data seluler segera mengambil alih. Wi‑Fi dinyalakan lagi setelah waktu singkat dan cooldown mencegah loop. Tidak pernah bertindak karena sinyal lemah saja serta tidak mengubah ambang operator/roaming, mode jaringan, Bluetooth, atau audio. Menggunakan data seluler; biarkan mati jika perangkat Wi‑Fi lokal harus selalu tersambung."
     }
   },
   "nav_main": "Beranda",
@@ -538,5 +542,8 @@
   "cap_period_just_now": "baru saja",
   "cap_period_minutes": "{n} mnt",
   "cap_period_hours_minutes": "{h} j {m} mnt",
-  "cap_period_tip": "Satu periode berkelanjutan yang ditahan vendor dapat berisi banyak sampel polling. Sampel mentah tetap ada di asbdiag dan laporan 24 jam."
+  "cap_period_tip": "Satu periode berkelanjutan yang ditahan vendor dapat berisi banyak sampel polling. Sampel mentah tetap ada di asbdiag dan laporan 24 jam.",
+  "wb_handover_active": "Mematikan Wi‑Fi sementara hanya bila Android melaporkan rute Wi‑Fi default tidak tervalidasi. Dapat memakai data seluler dan sesaat memutus perangkat Wi‑Fi lokal; Wi‑Fi menyala kembali otomatis.",
+  "theme_dark": "Tema gelap",
+  "theme_light": "Tema terang"
 }

@@ -238,6 +238,10 @@
     "smart_media_guard": {
       "name": "Smart medya koruması",
       "desc": "Yalnızca Smart için isteğe bağlı, dar kapsamlı koruma: bilinen bir video, akış veya tarayıcı uygulaması pille kullanımda bir dakika boyunca oyun benzeri CPU + GPU yükünü sürdürürse çalışır. ASB yalnızca etkin GPU tavanını mevcut %70 medya zarfında tutar. Bilinen oyunları, bilinmeyen uygulamaları, şarjı, termal korumayı, CPU tavanlarını veya en düşük frekansları asla sınırlamaz. Önce 12 saat deneyin; yüksek yenilemeli akış takılırsa kapatın."
+    },
+    "net_handover_active": {
+      "name": "İnternetsiz Wi‑Fi için etkin geçiş",
+      "desc": "Android’in doğrulanmadı olarak işaretlediği Wi‑Fi rotası için isteğe bağlı seçenektir. Yalnızca ekran açıkken, Wi‑Fi doğrulanmış internet olmadan varsayılan rota olarak kalırsa ASB Wi‑Fi’yi kısa süreli kapatır; mobil veri hemen devralabilir. Kısa pencerenin ardından Wi‑Fi geri açılır ve cooldown döngüleri önler. Yalnızca zayıf sinyale göre çalışmaz; operatör/dolaşım eşikleri, ağ modu, Bluetooth veya sesi değiştirmez. Mobil veri kullanır; yerel Wi‑Fi cihazlarına kesintisiz erişim gerekirse kapalı bırakın."
     }
   },
   "nav_main": "Ana",
@@ -538,5 +542,8 @@
   "cap_period_just_now": "az önce",
   "cap_period_minutes": "{n} dk",
   "cap_period_hours_minutes": "{h} sa {m} dk",
-  "cap_period_tip": "Sağlayıcının tuttuğu tek bir kesintisiz dönem çok sayıda yoklama örneği içerebilir. Ham örnekler asbdiag ve 24 saat raporunda kalır."
+  "cap_period_tip": "Sağlayıcının tuttuğu tek bir kesintisiz dönem çok sayıda yoklama örneği içerebilir. Ham örnekler asbdiag ve 24 saat raporunda kalır.",
+  "wb_handover_active": "Wi‑Fi’yi yalnızca Android varsayılan Wi‑Fi rotasını doğrulanmamış olarak bildirirse kısa süreli kapatır. Mobil veri kullanılabilir ve yerel Wi‑Fi cihazları kısa süre ayrılabilir; Wi‑Fi otomatik geri gelir.",
+  "theme_dark": "Koyu tema",
+  "theme_light": "Açık tema"
 }
