@@ -41,6 +41,11 @@ OUTPUTFILE="$LOCKDIR/output_dir"
 # started by the pre-lock-directory helper is still alive. New starts never create this file.
 LEGACY_PIDFILE="$STATE_DIR/full_day_webui.pid"
 RUNLOG="${ASB_DEBUG_SUPPORT_RUNLOG:-/data/local/tmp/asb_full_day.out}"
+# Debug-only bounded evidence for a manually removed capture directory. This tells a future
+# diagnostic exactly why the slot was or was not recovered without writing policy state.
+RECOVERY_LOG="${ASB_DEBUG_SUPPORT_RECOVERY_LOG:-$STATE_DIR/full_day_webui.recovery.log}"
+# Kept injectable for the host contract only; production always reads Android's /proc.
+PROC_ROOT="${ASB_DEBUG_SUPPORT_PROC_ROOT:-/proc}"
 DIAG_OUTDIR="${ASB_DEBUG_SUPPORT_DIAG_OUTDIR:-/sdcard/Download}"
 # A WebView bridge waits for stdout to close. Long actions therefore need a deliberately
 # detached launcher and a tiny status file: otherwise the browser cannot paint feedback
@@ -62,6 +67,18 @@ pid_is_live() {
   _pl_pid="${1:-}"
   [ -n "$_pl_pid" ] || return 1
   kill -0 "$_pl_pid" 2>/dev/null
+}
+
+full_day_recovery_note() {
+  # Keep this log tiny: it exists for the explicit "I deleted the output directory" recovery
+  # path only, in debug builds. Never let diagnostics make a capture start fail.
+  _fdrn_msg="${1:-unknown}"
+  mkdir -p "$STATE_DIR" 2>/dev/null || true
+  _fdrn_tmp="${RECOVERY_LOG}.tmp.$$"
+  {
+    [ -r "$RECOVERY_LOG" ] && tail -n 79 "$RECOVERY_LOG" 2>/dev/null || true
+    printf '%s full-day-recovery %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo now)" "$_fdrn_msg"
+  } > "$_fdrn_tmp" 2>/dev/null && mv -f "$_fdrn_tmp" "$RECOVERY_LOG" 2>/dev/null || rm -f "$_fdrn_tmp" 2>/dev/null || true
 }
 
 lock_live_pid() {
@@ -117,8 +134,21 @@ full_day_output_missing() {
 full_day_pid_matches_recorder() {
   _fdpm_pid="${1:-}"
   [ -n "$_fdpm_pid" ] || return 1
+  # Android toybox ps differs by release: `args` can be unsupported, `cmd` can be truncated,
+  # and some builds expose only /proc/PID/cmdline. Read every available representation.
   _fdpm_cmd="$(ps -p "$_fdpm_pid" -o args= 2>/dev/null || ps -p "$_fdpm_pid" -o cmd= 2>/dev/null || true)"
-  case "$_fdpm_cmd" in *"$MODDIR/tools/logkit/asb_log_full_day.sh"*) return 0 ;; esac
+  if [ -r "$PROC_ROOT/$_fdpm_pid/cmdline" ]; then
+    _fdpm_proc="$(tr '\000' ' ' < "$PROC_ROOT/$_fdpm_pid/cmdline" 2>/dev/null || true)"
+    [ -n "$_fdpm_proc" ] && _fdpm_cmd="$_fdpm_cmd $_fdpm_proc"
+  fi
+  # The exact path remains the strongest proof. The basename fallback is intentionally limited
+  # to an already-live lock PID whose recorder-owned published output was explicitly deleted.
+  # This avoids a permanent slot when toybox has shortened a legitimate command line while
+  # still never killing a PID merely because it is stale or because an output path is absent.
+  case "$_fdpm_cmd" in
+    *"$MODDIR/tools/logkit/asb_log_full_day.sh"*) return 0 ;;
+    *asb_log_full_day.sh*) return 0 ;;
+  esac
   return 1
 }
 
@@ -127,10 +157,11 @@ full_day_cancel_orphan() {
   # Never kill an arbitrary reused PID: only a live command line that is our own recorder may
   # be terminated, and the atomic lock is removed only after that process is confirmed dead.
   _fdco_pid="${1:-}"
-  full_day_output_missing || return 1
-  pid_is_live "$_fdco_pid" || return 1
-  full_day_pid_matches_recorder "$_fdco_pid" || return 1
-  kill -TERM "$_fdco_pid" 2>/dev/null || return 1
+  if ! full_day_output_missing; then full_day_recovery_note "skip=output_present pid=${_fdco_pid:-none}"; return 1; fi
+  if ! pid_is_live "$_fdco_pid"; then full_day_recovery_note "skip=pid_dead pid=${_fdco_pid:-none}"; return 1; fi
+  if ! full_day_pid_matches_recorder "$_fdco_pid"; then full_day_recovery_note "skip=recorder_unverified pid=$_fdco_pid"; return 1; fi
+  full_day_recovery_note "cancel=output_removed pid=$_fdco_pid"
+  kill -TERM "$_fdco_pid" 2>/dev/null || { full_day_recovery_note "skip=term_failed pid=$_fdco_pid"; return 1; }
   _fdco_try=0
   while [ "$_fdco_try" -lt 12 ]; do
     pid_is_live "$_fdco_pid" || break
@@ -146,8 +177,9 @@ full_day_cancel_orphan() {
       _fdco_try=$(( _fdco_try + 1 ))
     done
   fi
-  pid_is_live "$_fdco_pid" && return 1
+  if pid_is_live "$_fdco_pid"; then full_day_recovery_note "skip=still_live pid=$_fdco_pid"; return 1; fi
   rm -rf "$LOCKDIR" 2>/dev/null || true
+  full_day_recovery_note "recovered=output_removed pid=$_fdco_pid"
   return 0
 }
 
