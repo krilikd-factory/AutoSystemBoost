@@ -29,9 +29,10 @@
 /* Screen-off policy does not need frame-rate feedback.  The previous 5/10 s cadence kept
  * reopening sysfs nodes hundreds of times per hour during a quiet night.  These intervals
  * retain prompt response to uevents and socket commands while materially reducing resident
- * governor wakeups and telemetry I/O. */
+ * governor wakeups and telemetry I/O. Verified deep idle can use a 45-second cadence because
+ * screen-on, socket and display uevents remain independently epoll-driven. */
 #define TIMER_IDLE_S   10   /* metrics interval, screen OFF */
-#define TIMER_DEEP_S   30   /* metrics interval, verified deep idle */
+#define TIMER_DEEP_S   45   /* metrics interval, verified deep idle */
 #define TIMER_HOURLY_S  3600
 
 #define STATE_FILE      "/dev/.asb/state"
@@ -1315,6 +1316,24 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_light_trim_pct,
                              smart_screenon_comfort ? "screenon_comfort_smart_medium" : "screenon_comfort");
+        /* The multi-user V64 captures repeat a second safe Smart-only foreground pattern:
+         * a fresh light/medium app at a high sampled discharge current can warm the CPU/body
+         * before the ordinary 48C comfort point.  Do not turn that into a universal current
+         * cap: require valid low-GPU data, current >=600mA, a recognised non-heavy app,
+         * screen-on discharge and a small 42C CPU floor. Games, camera, charging, screen-off,
+         * SUSTAINED and unknown/stale app context all fail closed. It reuses the same light
+         * trim rather than changing the profile's frequency tables or radio policy. */
+        int smart_high_current_comfort =
+            fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled && g_pkg_detect_ok &&
+            g_smart_rt.app_hint <= ASB_APP_MEDIUM && m->gpu.load_valid &&
+            m->gpu.load_pct < g_asb_cfg.heavy_gpu_enter &&
+            fsm->state != ASB_STATE_GAMING && fsm->state != ASB_STATE_SUSTAINED;
+        if (smart_high_current_comfort && !m->bat.charging && m->misc.screen_on &&
+            !m->misc.camera_active && m->therm.temp_valid &&
+            m->therm.cpu_max_c >= 42 && m->bat.current_ma >= 600)
+            asb_budget_raise(&candidate, &reason,
+                             g_asb_cfg.thermal_budget_light_trim_pct,
+                             "screenon_comfort_smart_high_current");
         /* Some vendor `skin` zones are internal/remote and remain 35-40C while the
          * body-adjacent hotspot that the user actually feels reaches 43-45C.  The
          * new capture on canoe showed exactly that: CPU/skin remained below the
