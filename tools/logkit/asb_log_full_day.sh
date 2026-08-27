@@ -471,6 +471,45 @@ lk_emit_screenoff_class_summary() {
   echo ""
 }
 
+# Compare two independent drain estimates only for sufficiently long discharge phases. Android
+# capacity is integer-quantised and may lag, so a mismatch is a data-quality flag — never proof
+# that a radio, app, ASB or any other source caused a given percentage of battery drain.
+lk_emit_current_soc_consistency() {
+  _cc_led="$LK_OUT_DIR/phase_ledger.tsv"
+  echo "===== CURRENT / SOC CONSISTENCY (MEASUREMENT QUALITY) ====="
+  [ -r "$_cc_led" ] || { echo "unavailable — phase ledger is absent."; echo ""; return 0; }
+  _cc_cap="${LK_BATTERY_CAPACITY_MAH:-}"
+  if [ -z "$_cc_cap" ]; then
+    _cc_raw="$(cat /sys/class/power_supply/battery/charge_full 2>/dev/null)"
+    [ -z "$_cc_raw" ] && _cc_raw="$(cat /sys/class/power_supply/battery/charge_full_design 2>/dev/null)"
+    case "$_cc_raw" in ''|*[!0-9]*) _cc_raw='' ;; esac
+    [ -n "$_cc_raw" ] && [ "$_cc_raw" -gt 100000 ] 2>/dev/null && _cc_cap=$(( _cc_raw / 1000 ))
+  fi
+  case "$_cc_cap" in ''|*[!0-9]*) _cc_cap=0 ;; esac
+  if [ "$_cc_cap" -lt 800 ] 2>/dev/null || [ "$_cc_cap" -gt 15000 ] 2>/dev/null; then
+    echo "unavailable — usable battery charge_full capacity was not exposed."
+    echo ""
+    return 0
+  fi
+  echo "phase             dur_min  pct/h  current_pct/h  difference  verdict"
+  awk -F'\t' -v cap="$_cc_cap" '
+    !/^#/ {
+      ph=$1; dur=$3-$2; dp=$4-$5; ma=$13
+      # A 30-minute floor prevents one capacity step from dominating a very short sample.
+      if(dur<1800 || dp<=0 || ma<=0) next
+      soc=dp*3600.0/dur; cur=ma*100.0/cap
+      hi=(soc>cur)?soc:cur; diff=(hi>0)?(100.0*((soc>cur)?soc-cur:cur-soc)/hi):0
+      verdict=(diff>30)?"CHECK (>30%)":"aligned"
+      printf "%-17s %7.1f %6.2f %13.2f %9.1f%%  %s\n", ph,dur/60.0,soc,cur,diff,verdict
+      n++
+    }
+    END { if(n==0) print "no comparable discharge phase >=30 min with both SOC and current evidence." }
+  ' "$_cc_led" | sort
+  echo "current_pct/h uses the reported charge_full capacity and sampled discharge current."
+  echo "A CHECK result is a measurement-consistency warning, not causal energy attribution."
+  echo ""
+}
+
 # ── reporting ──────────────────────────────────────────────────────────────
 lk_emit_phase_summary() {
   _led="$LK_OUT_DIR/phase_ledger.tsv"
@@ -575,6 +614,7 @@ lk_emit_full_day_report() {
     lk_emit_capture_validity
     echo ""
     lk_emit_screenoff_class_summary
+    lk_emit_current_soc_consistency
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
       cat "$LK_OUT_DIR/phase_summary.txt"
     fi
