@@ -329,10 +329,11 @@ command -v asb_update_desc >/dev/null 2>&1 && asb_update_desc 2>/dev/null
 command -v asb_backup_profile >/dev/null 2>&1 && asb_backup_profile 2>/dev/null
 
 asb_migrate_governor_conf() {
-  # Schema 19 makes the duplicate-key safety migration run once for existing
-  # installs. Historical shell readers used the first key, so migration keeps
-  # the first occurrence rather than silently changing the user's intent.
-  local _expected_schema=19
+  # Schema 20 makes the duplicate-key safety migration and the new independent
+  # radio_policy_enable=0 default run once for existing installs. Historical shell
+  # readers used the first key, so migration keeps the first occurrence rather than
+  # silently changing the user's intent.
+  local _expected_schema=20
   local _conf_dir="$MODDIR/config"
   local _user_conf="$_conf_dir/governor.conf"
   local _shipped_conf="$_conf_dir/governor.conf.shipped"
