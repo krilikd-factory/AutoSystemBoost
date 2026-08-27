@@ -1379,9 +1379,14 @@ case "$_wst" in
   1) echo "       Wi-Fi scan: stock limit (4 per 2 min)" ;;
 esac
 _handover="$(_cfg net_handover_fast)"
+_handover_active="$(_cfg net_handover_active)"
 case "$_handover" in
   1) echo "       Wi-Fi → mobile handover: fast (cellular context kept ready while awake)" ;;
   *) : ;;
+esac
+case "$_handover_active" in
+  1) _hf="$(MODDIR=\"$MODDIR\" sh \"$MODDIR/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo unavailable)"
+     echo "       Wi-Fi fallback: active opt-in · ${_hf}" ;;
 esac
   # Which interface is actually carrying traffic - not always rmnet_data0.
   _if="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
