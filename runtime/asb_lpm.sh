@@ -114,8 +114,67 @@ STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
 # contain only MODE, so the first run after an update safely refreshes them once.
 [ -r "$STATE" ] && [ "$(cat "$STATE" 2>/dev/null)" = "$STATE_TAG" ] && exit 0
 
+
+# ── modem-path wakeup gating ────────────────────────────────────────────────
+#
+# TCP keepalive is the top of the stack; these are the bottom. A night capture on an OP15
+# shows what actually resumed the SoC over a full sleep:
+#
+#   x37  "Pending Wakeup Sources: IPA_CLIENT_APPS_WAN_LOW_LAT_CONS rmnet_ctl IPA_..._LAN_CONS"
+#   x24  "IPA_CLIENT_APPS_WAN_LOW_LAT_CONS rmnet_ctl"
+#   x21  "404 ipa"
+#   x20  "Last active Wakeup Source: qrtr_ws_cmd"
+#   x14  "264 hs_uart_wakeup"
+#
+# Over a hundred resumes from the packet accelerator and the modem control channel. Those
+# have their own timers; stretching keepalive never reached them, which is why the night
+# tweak helped less than it promised.
+#
+# WHAT THIS DOES NOT TOUCH: the modem itself, airplane mode, radio power, QMI, or the
+# telephony wakeup path. Calls and SMS arrive over the modem's own channel and are not
+# gated here. What is gated is the DATA path waking the application processor - so a push
+# notification may land at the next wake instead of instantly, which is the deal the night
+# tweak already offers for keepalive.
+#
+# Every interface touched is recorded with its previous value and restored on exit, because
+# a device left with wakeup disabled after the module goes away is a phone that silently
+# stops receiving overnight - the worst failure this file could produce.
+_ASB_WAKEUP_STATE=/data/adb/asb/lpm_wakeup_prev
+
+_lpm_wakeup_gate() {
+  # $1 = "disabled" to gate, "enabled" to release
+  _want="$1"
+  [ -d /sys/class/net ] || return 0
+  mkdir -p /data/adb/asb 2>/dev/null
+  for _if in /sys/class/net/rmnet*; do
+    [ -e "$_if/device/power/wakeup" ] || continue
+    _n="$(basename "$_if")"
+    _cur="$(cat "$_if/device/power/wakeup" 2>/dev/null)"
+    case "$_cur" in enabled|disabled) : ;; *) continue ;; esac
+    if [ "$_want" = "disabled" ]; then
+      # Record the first time only: a second pass must not overwrite the real baseline
+      # with a value this script itself wrote.
+      grep -q "^$_n=" "$_ASB_WAKEUP_STATE" 2>/dev/null ||         echo "$_n=$_cur" >> "$_ASB_WAKEUP_STATE" 2>/dev/null
+    fi
+    echo "$_want" > "$_if/device/power/wakeup" 2>/dev/null || true
+  done
+  return 0
+}
+
+_lpm_wakeup_restore() {
+  [ -f "$_ASB_WAKEUP_STATE" ] || return 0
+  while IFS='=' read -r _n _v; do
+    case "$_n" in ''|*[!A-Za-z0-9_]*) continue ;; esac
+    case "$_v" in enabled|disabled) : ;; *) continue ;; esac
+    [ -e "/sys/class/net/$_n/device/power/wakeup" ] &&       echo "$_v" > "/sys/class/net/$_n/device/power/wakeup" 2>/dev/null || true
+  done < "$_ASB_WAKEUP_STATE"
+  rm -f "$_ASB_WAKEUP_STATE" 2>/dev/null
+  return 0
+}
+
 case "$MODE" in
   fast)
+    _lpm_wakeup_restore
     # Data call stays up: coming back from an idle RRC state is the latency spike that matters
     # in an online match, and it costs far more than the power saved.
     _sset mobile_data_always_on 1
@@ -126,6 +185,7 @@ case "$MODE" in
     _sysc net.ipv4.tcp_keepalive_time "$_kaf"
     ;;
   night)
+    _lpm_wakeup_gate disabled
     # Inside the learner's own sleep window: the same idea as "save", taken further.
     #
     # save halves the radio's reasons to wake; night removes most of them. Keepalives go
@@ -145,6 +205,7 @@ case "$MODE" in
     _sysc net.ipv4.tcp_keepalive_probes 5
     ;;
   save)
+    _lpm_wakeup_restore
     # Screen off. Let the framework drop the always-on data call so the radio can sit
     # idle, and stretch keepalives so fewer sockets drag it back up - that traffic is
     # the biggest single modem drain overnight.
@@ -156,6 +217,8 @@ case "$MODE" in
     _sysc net.ipv4.tcp_keepalive_time "$_kas"
     ;;
   *)
+    # Default/normal mode: the phone is in use, the data path must wake it.
+    _lpm_wakeup_restore
     MODE="normal"
     STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
     if [ "$HANDOVER_FAST" = "1" ]; then
