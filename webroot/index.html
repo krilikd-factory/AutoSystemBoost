@@ -6156,7 +6156,16 @@ function setLiveLabel(id, key, fallback) {
 }
 function restoreManagedLiveLabels() {
   setLiveLabel('liveStateLabel', 'lv_fsm', 'FSM');
-  setLiveLabel('liveClampLabel', 'lv_clamp', 'Clamp 1h / total');
+  // Not restored here: the vendor-period updater owns this label.
+  //
+  // Three places wrote to liveClampLabel every tick - this restore, the Stock-mode
+  // rename, and the vendor cap-period block that sets 'Vendor cap period'. Each ran on
+  // its own schedule, so the text alternated between 'Clamp 1h / total' and 'Vendor cap
+  // period' roughly every three seconds. A label that changes what it is called while
+  // you read it is worse than either wording.
+  //
+  // The vendor-period block is the one with the live data behind it, so it keeps the
+  // label. This line restores only the cards it actually owns.
   setLiveLabel('liveEtaOnLabel', 'lv_est_on', 'Est. on');
   setLiveLabel('liveEtaOffLabel', 'lv_est_idle', 'Est. idle');
   setLiveLabel('liveCapSrcLabel', 'lv_capsrc', 'Cap Src');
