@@ -155,13 +155,30 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
      * PowerHAL/thermal owner is active. Back off for fifteen minutes instead
      * of entering a reassert fight that costs energy and can worsen heat. */
     if (writer_node_is_cpu(node) && rc == 0 && observed != INT_MIN && h->consecutive_failures >= 3) {
-        h->retry_at = now + 900;
+        /* Ninety seconds, not fifteen minutes.
+         *
+         * Avoiding a reassert fight with a vendor PowerHAL is right; 900 s is not. A diag
+         * reads attempts=34 applied=23 failures=11 backoff_skips=25 - on a phone whose
+         * vendor disagrees routinely, this holddown keeps the governor silent for most of
+         * its life and every thermal decision is discarded before reaching sysfs. That is
+         * why cap_owner reads vendor 92% / asb 0%.
+         *
+         * Fifteen minutes outlasts most thermal episodes, so by the time the node is
+         * eligible again the situation is over. Ninety seconds still prevents a
+         * tick-by-tick fight while letting the governor act within one heating episode. */
+        h->retry_at = now + 90;
         snprintf(h->status, sizeof(h->status), "%s", "external_policy_holddown");
         writer_write_failure_event(node, path, requested, observed, h->retry_at);
         return -1;
     }
     /* 60, 120, 240, then cap at five minutes for ordinary transient errors. */
-    unsigned long step = h->failures > 3 ? 300UL : (60UL << (h->failures - 1));
+    /* 10, 20, 40, capped at 60 s - not 60, 120, 240, capped at 300.
+     *
+     * Sized for a permanently unsupported node, where waiting costs nothing. But the
+     * same path catches a node that merely lost one write, and a five-minute lockout
+     * there discards sixty ticks of governor decisions. The capability backoff below
+     * still handles genuinely dead nodes; this one only has to stop a hot loop. */
+    unsigned long step = h->failures > 3 ? 60UL : (10UL << (h->failures - 1));
     if (step > 300UL) step = 300UL;
     h->retry_at = now + (time_t)step;
     snprintf(h->status, sizeof(h->status), "%s", (rc == 0) ? "readback_mismatch" : "write_failed");
