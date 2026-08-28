@@ -134,6 +134,24 @@ settings delete global device_idle_constants >/dev/null 2>&1 || true
 # without coarse location permanently, with no trace of who took it away. Read the record
 # directly rather than running the script: by this point the module tree may already be
 # gone, and the file lives outside it.
+# Re-enable data-path wakeups the night mode had gated.
+#
+# The night LPM mode writes "disabled" to /sys/class/net/rmnet*/device/power/wakeup so the
+# packet accelerator stops resuming the SoC overnight, and records the previous value. If
+# the module is removed while that gate is on, the setting survives - and a phone whose
+# data path cannot wake it silently stops delivering notifications, with nothing left on
+# disk to explain why. That is the worst failure this file could leave behind, so it is
+# restored before anything else.
+if [ -f /data/adb/asb/lpm_wakeup_prev ]; then
+  while IFS='=' read -r _wn _wv; do
+    case "$_wn" in ''|*[!A-Za-z0-9_]*) continue ;; esac
+    case "$_wv" in enabled|disabled) ;; *) continue ;; esac
+    [ -e "/sys/class/net/$_wn/device/power/wakeup" ] && \
+      echo "$_wv" > "/sys/class/net/$_wn/device/power/wakeup" 2>/dev/null || true
+  done < /data/adb/asb/lpm_wakeup_prev
+  rm -f /data/adb/asb/lpm_wakeup_prev 2>/dev/null
+fi
+
 if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; then
   while IFS= read -r _gp; do
     case "$_gp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
