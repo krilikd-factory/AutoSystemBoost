@@ -1722,6 +1722,29 @@ if (!can_leave &&
         }
     }
 
+    /* Interactive floor: a screen-on phone never gets less than a third of its prime.
+     *
+     * Settings compose, and nothing checked what they compose into. A field device running
+     * smart_battery_bias=600 with perf_ceiling_pct=70 ended up holding the prime cluster at
+     * 1382400 of 4608000 - thirty percent - while scrolling a feed, and its user reported
+     * exactly what that produces: heat and drain. Capping a phone below what the work needs
+     * does not save energy, it stretches the work. The job still finishes, just later, with
+     * the screen lit and the radio awake for all of it.
+     *
+     * A third of hardware maximum is deliberately low - it is a floor against
+     * misconfiguration, not a performance target. Deep idle, light idle and any thermal
+     * clamp are exempt: when the phone is asleep or genuinely too hot, low is correct.
+     */
+    if (m->misc.screen_on && !fsm->thermal_cap &&
+        fsm->state != ASB_STATE_DEEP_IDLE && fsm->state != ASB_STATE_LIGHT_IDLE) {
+        for (int i = 0; i < 3; i++) {
+            int hw = g_cpu_slot_hwmax[i];
+            if (hw <= 0 || new_caps.cpu_max[i] <= 0) continue;
+            int floor_hz = hw / 3;
+            if (new_caps.cpu_max[i] < floor_hz) new_caps.cpu_max[i] = floor_hz;
+        }
+    }
+    
     if (fsm->state_changed ||
         memcmp(&new_caps, &fsm->current_caps, sizeof(new_caps)) != 0)
     {
