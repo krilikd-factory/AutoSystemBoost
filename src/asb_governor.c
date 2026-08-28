@@ -1973,14 +1973,44 @@ static int asb_cap_compute_owner(const char *cap_source) {
         } else {
             g_cap_slow_vendor_clamps++;
         }
-        int burst_trip = (g_cap_recent_vendor_clamps >= 3);
-        int slow_trip  = (g_cap_slow_vendor_clamps  >= 8);
-        int persistent = (g_cap_slow_vendor_clamps  >= 20);
+        /* Back off from a WRITE WAR, not from the vendor simply being present.
+         *
+         * The old thresholds - 3 clamps in 60 s, 8 in 300 s - describe a vendor HAL that
+         * intervenes occasionally. Every Qualcomm thermal HAL in this fleet re-evaluates far
+         * more often than once per 37 seconds, so `slow_trip` was true essentially always and
+         * the governor spent its life in a 15-30 second hold. A device diag shows the bill
+         * directly: attempts=282 applied=241 backoff_skips=174. Two thirds of the governor's
+         * writes were never attempted, which is why cap_owner reads vendor 92% / asb 0% on a
+         * phone with Smart active - and why none of the thermal work in this file reached the
+         * hardware.
+         *
+         * A write war is two writers fighting over the SAME tick, not a vendor that also has
+         * opinions. The burst window is what detects that, so it keeps a tight threshold and a
+         * short hold. The slow window now needs a rate no normal HAL produces, and its hold is
+         * cut to the length of a couple of ticks: long enough to break a feedback loop, short
+         * enough that the governor is back before the next thermal decision matters.
+         *
+         * Both counters also decay on a tick where the vendor did NOT clamp, so a quiet minute
+         * earns the governor its voice back instead of the count ratcheting up all session.
+         */
+        int burst_trip = (g_cap_recent_vendor_clamps >= 6);
+        int slow_trip  = (g_cap_slow_vendor_clamps  >= 40);
+        int persistent = (g_cap_slow_vendor_clamps  >= 90);
         if (persistent) {
-            g_cap_vendor_hold_until = now + 30;
+            g_cap_vendor_hold_until = now + 6;
         } else if (burst_trip || slow_trip) {
-            g_cap_vendor_hold_until = now + 15;
+            g_cap_vendor_hold_until = now + 3;
         }
+    }
+    else {
+        /* A tick the vendor did not take: give the governor its voice back gradually.
+         *
+         * Without this the counters only ever climb until their window rolls over, so one
+         * busy minute could hold the governor quiet for the following four. Decaying on
+         * quiet ticks means the backoff tracks what is happening now rather than what
+         * happened at the start of the window. */
+        if (g_cap_recent_vendor_clamps > 0) g_cap_recent_vendor_clamps--;
+        if (g_cap_slow_vendor_clamps  > 0) g_cap_slow_vendor_clamps--;
     }
 
     if (owner != g_cap_owner_eff) {
