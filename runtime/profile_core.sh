@@ -272,6 +272,22 @@ asb_apply_uclamp() {
       esac
       # Only the ceilings are scaled. The floors are what keep touch response and audio
       # alive; trimming those would trade heat for jank, which is not the deal on offer.
+      # perf_ceiling_pct does not apply to the foreground.
+      #
+      # It multiplied every tier including top-app, so a profile with UCL_TOP_MAX=85 and
+      # perf_ceiling_pct=70 published uclamp.max=59 for the app the user is looking at. A
+      # device diag shows exactly that: "lease uclamp_max desired=59 applied=59" while the
+      # prime cluster sat at 24% of hardware. The scheduler then refuses to raise frequency
+      # past 59% no matter what the task asks for - on top of the frequency cap, not instead
+      # of it. Two independent ceilings on the same work.
+      #
+      # That is the mechanism behind "I only scrolled a feed and it got hot": the work cannot
+      # finish quickly, so it finishes slowly with the display and radio awake throughout.
+      #
+      # The setting keeps its meaning where it was intended - background and foreground tiers,
+      # which is where a performance ceiling saves energy. top-app is what the user is
+      # actually waiting on and is left to the profile rail alone.
+      case "$_tier" in top-app) : ;; *)
       if [ "$_pc" -lt 100 ] 2>/dev/null; then
         case "$_max" in
           ''|*[!0-9]*) : ;;
@@ -279,6 +295,7 @@ asb_apply_uclamp() {
              [ "$_max" -lt 10 ] && _max=10 ;;
         esac
       fi
+      esac
       [ -e "$_root/$_tier/cpu.uclamp.min" ] && writef_retry "$_root/$_tier/cpu.uclamp.min" "$_min" 2 0.06 || true
       [ -e "$_root/$_tier/uclamp.min" ] && writef_retry "$_root/$_tier/uclamp.min" "$_min" 2 0.06 || true
       # Camera guard deliberately lifts max ceilings for deadline-sensitive
