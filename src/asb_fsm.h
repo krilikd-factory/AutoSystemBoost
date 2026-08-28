@@ -1740,7 +1740,27 @@ if (!can_leave &&
         for (int i = 0; i < 3; i++) {
             int hw = g_cpu_slot_hwmax[i];
             if (hw <= 0 || new_caps.cpu_max[i] <= 0) continue;
-            int floor_hz = hw / 3;
+            /* Never below the profile's own idle rail.
+             *
+             * The reductions in this file multiply: the ladder interpolates floor to ceiling,
+             * thermal_budget trims a percentage of that, the proportional SUSTAINED step trims
+             * again, and each is written as though it were the only one. A field device landed at
+             * 1267200 of 4608000 - 27% - while scrolling a feed, below what any single stage
+             * would have produced on its own.
+             *
+             * bounds->floor.cpu_max is what the profile itself calls enough for an idle phone.
+             * Nothing stacked on top should land under it while the screen is on: past that point
+             * the work just takes longer, and a task needing 100 ms at full clock spends 330 ms
+             * with the cores, display and radio all awake. That is the mechanism behind "I did
+             * not load it at all and it got hot".
+             */
+            /* g_profile_bounds is the same table the ladder interpolates from; index by the
+   active profile so the floor tracks whatever profile the user selected. */
+int _pi = fsm->profile_idx;
+if (_pi < 0 || _pi > 2) _pi = 0;
+int floor_hz = g_profile_bounds[_pi].floor.cpu_max[i];
+            if (floor_hz <= 0) floor_hz = hw / 3;
+            if (floor_hz > hw) floor_hz = hw;
             if (new_caps.cpu_max[i] < floor_hz) new_caps.cpu_max[i] = floor_hz;
         }
     }
