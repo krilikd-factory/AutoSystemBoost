@@ -229,7 +229,7 @@
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture explains why: the CPU slept 97% of the time and the phone still drew 96 mA, because the modem path woke it roughly a thousand times. Keepalives go to six times the profile value and the probe burst is shortened, so far fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.\n\nПотребує увімкненого керування стільниковою мережею вище. Поки воно вимкнене, це налаштування й жоден профіль живлення не змінюють радіополітику Android."
+      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture showed the CPU was woken not by apps but by the network path: over a hundred resumes from IPA and rmnet. This stretches keepalive sixfold AND gates data-path wakeups at the rmnet level - top and bottom of the stack together. THE COST: a push notification may arrive at the next wake rather than instantly. Calls and SMS travel the modem's own channel and are untouched; radio power and airplane mode are never altered. Every change is recorded and restored on disable or uninstall."
     },
     "gnss_trim": {
       "name": "Підрізати фоновий GPS",
