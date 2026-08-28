@@ -446,6 +446,46 @@ _a2dp_req="$(cfg bt_a2dp_offload)"
 _a2dp_set="$(settings get global bluetooth_a2dp_offload_enabled 2>/dev/null)"
 NOTE "bt_a2dp_offload: requested=${_a2dp_req:-auto}  ·  setting=${_a2dp_set:-<unavailable>}  ·  platform_disabled=$(gp persist.bluetooth.a2dp_offload.disabled)  ·  vendor_disabled=$(gp persist.vendor.bluetooth.a2dp_offload.disabled)"
 
+SEC "0f. LSPOSED LOGGING  (read only — ASB never changes another module's settings)"
+# Report it, do not touch it.
+#
+# A user asked ASB to switch LSPosed logging off, reasoning that the logging costs battery.
+# ASB will not: LSPosed is a separate root module with its own configuration, and writing
+# into another module's files makes ASB the kind of unannounced second writer this project
+# has spent weeks untangling on the cap path. LSPosed does not know about us and would not
+# put its settings back.
+#
+# What is useful is showing the state, so the answer is one glance instead of a guess. On
+# the capture that prompted this, LSPosed had written zero lines - the noisy tags were
+# ifw_intent_matched, FlagUtils and SmartTempDdsSwitchController, all OxygenOS components.
+_lsp_dir=""
+for _d in /data/adb/lspd /data/adb/lspd/log /data/misc/lspd; do
+  [ -d "$_d" ] && { _lsp_dir="$_d"; break; }
+done
+if [ -z "$_lsp_dir" ]; then
+  NOTE "LSPosed not present (no /data/adb/lspd) - nothing to report"
+else
+  NOTE "LSPosed directory: $_lsp_dir"
+  _lsp_log_bytes=0
+  for _f in /data/adb/lspd/log/*.log /data/adb/lspd/log/*/*.log; do
+    [ -f "$_f" ] || continue
+    _sz=$(wc -c < "$_f" 2>/dev/null)
+    case "$_sz" in ''|*[!0-9]*) continue ;; esac
+    _lsp_log_bytes=$(( _lsp_log_bytes + _sz ))
+  done
+  NOTE "log files on disk: $(( _lsp_log_bytes / 1024 )) KiB"
+  # A verbose_* file is the one LSPosed only writes when verbose logging is enabled, so its
+  # presence answers the question directly.
+  _lsp_verbose=0
+  for _f in /data/adb/lspd/log/verbose_*.log; do [ -f "$_f" ] && _lsp_verbose=1; done
+  if [ "$_lsp_verbose" = "1" ]; then
+    NOTE "verbose logging: ON  -  turn it off in the LSPosed manager under Logs, not here"
+  else
+    NOTE "verbose logging: no verbose_*.log present (likely off)"
+  fi
+  NOTE "(ASB reports this and changes nothing: another module's settings are its own)"
+fi
+
 SEC "1a2. AUDIO ROUTE  (what the pipeline is doing right now — read only)"
 # Measure the audio path instead of asserting properties at it.
 #
