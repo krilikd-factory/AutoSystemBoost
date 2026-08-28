@@ -1758,8 +1758,22 @@ if (!can_leave &&
    active profile so the floor tracks whatever profile the user selected. */
 int _pi = fsm->profile_idx;
 if (_pi < 0 || _pi > 2) _pi = 0;
-int floor_hz = g_profile_bounds[_pi].floor.cpu_max[i];
-            if (floor_hz <= 0) floor_hz = hw / 3;
+/* The floor for a screen-on phone is the LIGHT_IDLE rail, not the idle rail.
+ *
+ * Using floor.cpu_max was too weak to bite: on balanced/big that rail is 883200, while the
+ * observed cap during feed scrolling was 1267200 - already above it, so the guard never
+ * fired. Working back through the ladder, 1267200 corresponds to t=0.12, which sits BELOW
+ * LIGHT_IDLE (0.15). A phone in the user's hand was being given a rail meant for a phone
+ * doing nothing, at 51.7 degC - not hot, just quietly starved.
+ *
+ * LIGHT_IDLE is the right reference: it is the least the ladder ever grants a state that
+ * is awake at all. Anything under that during interaction is the composition bug this
+ * guard exists to catch, not a decision any single stage intended.
+ */
+int floor_hz = lerp_int(g_profile_bounds[_pi].floor.cpu_max[i],
+                        g_profile_bounds[_pi].ceil.cpu_max[i],
+                        g_state_level[ASB_STATE_LIGHT_IDLE]);
+if (floor_hz <= 0) floor_hz = hw / 3;
             if (floor_hz > hw) floor_hz = hw;
             if (new_caps.cpu_max[i] < floor_hz) new_caps.cpu_max[i] = floor_hz;
         }
