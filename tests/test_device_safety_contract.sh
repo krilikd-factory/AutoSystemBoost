@@ -44,7 +44,19 @@ grep -q 'writer_node_is_cpu_max' "$ROOT/src/asb_writer.h"
 grep -q 'live_max > cmax\[i\]' "$ROOT/src/asb_writer.h"
 grep -q 'consecutive_failures' "$ROOT/src/asb_writer.h"
 grep -q 'retry_at = now + 86400' "$ROOT/src/asb_writer.h"
-grep -q 'retry_at = now + 900' "$ROOT/src/asb_writer.h"
+# The vendor-disagreement holddown must exist and be short enough to act within one
+# thermal episode.
+#
+# This asserted the literal string "now + 900". That pinned a number, not a behaviour, and
+# the number turned out to be the bug: at fifteen minutes the governor was silent for most
+# of its life - a field diag read attempts=34 applied=23 backoff_skips=25, with cap_owner
+# vendor 92% / asb 0%. Asserting the constant meant the suite defended the defect.
+#
+# What matters is that the holddown is present (so no tick-by-tick write war) and bounded
+# (so the governor still gets to act). 300 s is the ceiling: longer than most thermal
+# episodes, which is what made 900 useless.
+grep -qE 'retry_at = now \+ (9|[1-9][0-9]|[12][0-9][0-9]|300);' "$ROOT/src/asb_writer.h"
+grep -q 'external_policy_holddown' "$ROOT/src/asb_writer.h"
 ! grep -q 'asb_settings_put global google_core_control 0' "$ROOT/runtime/profile_core.sh"
 
 # Diagnostics must expose the safely blocked property state and the DSP clamp.
