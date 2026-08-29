@@ -266,9 +266,9 @@ asb_apply_uclamp() {
 
     for _tier in background system-background foreground top-app; do
       case "$_tier" in
-        background|system-background) _min="$UCL_BG_MIN"; _max="$UCL_BG_MAX" ;;
-        foreground) _min="$UCL_FG_MIN"; _max="$UCL_FG_MAX" ;;
-        *) _min="$UCL_TOP_MIN"; _max="$UCL_TOP_MAX" ;;
+        background|system-background) _min="${UCL_BG_MIN:-}"; _max="${UCL_BG_MAX:-40}" ;;
+        foreground) _min="${UCL_FG_MIN:-}"; _max="${UCL_FG_MAX:-70}" ;;
+        *) _min="${UCL_TOP_MIN:-}"; _max="${UCL_TOP_MAX:-85}" ;;
       esac
       # Only the ceilings are scaled. The floors are what keep touch response and audio
       # alive; trimming those would trade heat for jank, which is not the deal on offer.
@@ -301,7 +301,27 @@ asb_apply_uclamp() {
       # Camera guard deliberately lifts max ceilings for deadline-sensitive
       # encode work. Keep writing minima, but defer every max write until it
       # releases its lease.
-      if [ "$_cam_guard" != "1" ] && { ! command -v asb_arbiter_can_write >/dev/null 2>&1 || asb_arbiter_can_write uclamp_max profile; }; then
+      # Never write an empty or zero ceiling.
+      #
+      # uclamp.max is a percentage and 0 is a legal value meaning "this group needs no CPU
+      # at all" - the scheduler then refuses to raise frequency for it no matter what the
+      # task does. An unset UCL_* variable expanded to the empty string here, which the
+      # kernel accepts as exactly that. A device diag reads:
+      #
+      #   top-app uclamp.max = 0.00      foreground uclamp.max = 70.00
+      #   background uclamp.max = 0.00   system-background uclamp.max = 0.00
+      #
+      # foreground got its value and the rest were clamped to zero. The app on screen was
+      # told it needs no CPU, which is the strongest possible version of the "everything is
+      # slow and the phone is hot" report: the work cannot go fast, so it goes long, with
+      # the display and radio awake throughout.
+      #
+      # service.sh already guarded the same variables with :- defaults; this path did not.
+      case "$_max" in
+        ''|*[!0-9]*) _max="" ;;
+        *) [ "$_max" -lt 1 ] 2>/dev/null && _max="" ;;
+      esac
+      if [ -n "$_max" ] && [ "$_cam_guard" != "1" ] && { ! command -v asb_arbiter_can_write >/dev/null 2>&1 || asb_arbiter_can_write uclamp_max profile; }; then
         [ -e "$_root/$_tier/cpu.uclamp.max" ] && writef_retry "$_root/$_tier/cpu.uclamp.max" "$_max" 2 0.06 || true
         [ -e "$_root/$_tier/uclamp.max" ] && writef_retry "$_root/$_tier/uclamp.max" "$_max" 2 0.06 || true
         command -v asb_arbiter_claim >/dev/null 2>&1 && asb_arbiter_claim uclamp_max profile 30 120 profile_apply || true
