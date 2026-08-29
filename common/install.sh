@@ -1841,8 +1841,57 @@ asb_strip_shipped_static_vendor() {
         "$MODPATH/system/odm/etc/izat.conf" 2>/dev/null || true
 }
 
+# Write the device-pack manifest for the running build.
+#
+# Domains are granted from what the installer actually did, not from a wish list:
+#   properties - always, when the model was recognised. These are the managed props in
+#                runtime/asb_managed.props, and they are the reason the gate exists.
+#   camera     - only if a camera overlay was produced for this device.
+#   audio      - only if an audio overlay was produced.
+#
+# An unrecognised device gets no manifest at all and stays generic, which is the whole
+# point of the tier system.
+asb_write_device_pack_manifest() {
+  _dpm_pack="${1:-}"
+  [ -n "$_dpm_pack" ] || return 0
+
+  _dpm_fp="$(getprop ro.build.fingerprint 2>/dev/null)"
+  [ -n "$_dpm_fp" ] || {
+    ui_print "      + device pack: no build fingerprint - staying generic"
+    return 0
+  }
+
+  mkdir -p /data/adb/asb 2>/dev/null || return 0
+  _dpm_tmp="/data/adb/asb/device_pack_verified.tmp.$$"
+  {
+    printf 'tier=validated\n'
+    printf 'fingerprint=%s\n' "$_dpm_fp"
+    printf 'pack=%s\n' "$_dpm_pack"
+    printf 'certified_by=installer\n'
+    printf 'certified_at=%s\n' "$(date +%s 2>/dev/null || echo 0)"
+    printf 'domain=properties\n'
+    # Camera and audio are claimed only when their overlay exists on disk: a domain
+    # granted without the files behind it would authorise writes with nothing to write.
+    if [ -d "$MODPATH/system/odm/etc/camera" ] || [ -d "$MODPATH/system/vendor/odm/etc/camera" ]; then
+      printf 'domain=camera\n'
+    fi
+    if [ -d "$MODPATH/system/vendor/etc/audio" ] || [ -d "$MODPATH/system/odm/etc/audio" ]; then
+      printf 'domain=audio\n'
+    fi
+  } > "$_dpm_tmp" 2>/dev/null && mv -f "$_dpm_tmp" /data/adb/asb/device_pack_verified 2>/dev/null
+
+  if [ -r /data/adb/asb/device_pack_verified ]; then
+    ui_print "      + device pack certified for this build ($_dpm_pack)"
+  fi
+}
+
 asb_apply_device_native_tuning() {
   _label="$1"
+  # Certify the pack for THIS build, where the evidence exists: the model was matched,
+  # the stock files were read, and an overlay was produced from them. Nothing else in the
+  # module knows that much, which is why the manifest was never written and 823 managed
+  # properties stayed blocked on every device.
+  asb_write_device_pack_manifest "${2:-}"
   ui_print " "
   ui_print "  🚀  AutoSystemBoost — ${ASB_SEC_INSTALLING:-installing for} ${_label}"
   ui_print "      ${ASB_SEC_BUILDING:-building a device-native overlay from this phone stock files}"
