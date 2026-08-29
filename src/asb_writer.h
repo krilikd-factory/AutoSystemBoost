@@ -357,6 +357,57 @@ static void writer_profile_baseline_record_path(const char *path) {
     fclose(f);
 }
 
+/* Absolute floor under every ceiling ASB writes.
+ *
+ * Eight independent places multiply cpu_max: ladder interpolation, hardware scaling,
+ * perf_ceiling_pct, the thermal overlay, the thermal budget, gaming ceiling, anti-clamp
+ * backoff and the shell profile path. Each factor is defensible on its own. Nothing was
+ * looking at the product.
+ *
+ * A field capture shows where that ends: policy6 held at 1382400 on a 4.6 GHz part, below
+ * the profile's OWN floor ceiling of 1881600 - a value the profile already considers the
+ * least that state should ever get. The phone then spent 7-19%/h scrolling a feed with
+ * the GPU at 4-8%, because work that should take 100 ms took three times longer with every
+ * core, the panel and the radio awake for the whole stretch.
+ *
+ * This is race-to-idle and it is measurable, not theoretical: below roughly a third of
+ * peak, finishing later costs more energy than running slower saves. So the writer - the
+ * one place every path funnels through - refuses to publish a ceiling under a hard
+ * fraction of what the cluster can do.
+ *
+ * Deliberately a fraction of hardware, not of the profile: the profile bounds are what the
+ * multipliers already chewed through, and a guard expressed in the same currency as the
+ * thing it guards can be argued down by the next factor. Hardware capability cannot.
+ *
+ * 40% is taken from the profiles themselves rather than picked. BALANCED_FLOOR_CPU_MAX is
+ * 1190400 of 3628800 on the little cluster (32%) and 1881600 of 4608000 on the big one
+ * (41%) - those are the numbers the profile already calls the least a resting state should
+ * get. A guard below them would permit a ceiling the profile itself considers too low, so
+ * the floor is set at the upper end of that observed range.
+ *
+ * Thermal emergencies are exempt: a vendor hard clamp or the junction guard must still be
+ * able to take the phone below this, because there the alternative is damage rather than
+ * slowness.
+ */
+#define ASB_MIN_CEILING_PCT_OF_HW 40
+
+static int cpu_floor_ceiling(int path_idx, int want, int thermal_emergency) {
+    if (want <= 0 || thermal_emergency) return want;
+    if (path_idx < 0 || path_idx >= 16) return want;
+    cpu_read_freq_tables();
+    int n = g_cpu_freq_table_len[path_idx];
+    if (n <= 0) return want;
+    long hw = 0;
+    for (int i = 0; i < n; i++)
+        if (g_cpu_freq_tables[path_idx][i] > hw) hw = g_cpu_freq_tables[path_idx][i];
+    if (hw <= 0) return want;
+    long guard = hw * ASB_MIN_CEILING_PCT_OF_HW / 100;
+    if ((long)want >= guard) return want;
+    /* Snap the guard itself to a real step, otherwise the kernel rounds it up and the
+     * floor ends up higher than intended. */
+    return (int)cpu_snap_freq(path_idx, guard);
+}
+
 static void writer_init_paths(void) {
     if (g_writer_paths_ready) return;
     cpu_topology_discover();
@@ -1005,7 +1056,10 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                         _snap_idx = k; break;
                     }
                 }
-                if (_snap_idx >= 0) cmax[i] = (int)cpu_snap_freq(_snap_idx, (long)cmax[i]);
+                if (_snap_idx >= 0) {
+                    cmax[i] = (int)cpu_snap_freq(_snap_idx, (long)cmax[i]);
+                    cmax[i] = cpu_floor_ceiling(_snap_idx, cmax[i], thermal_cap);
+                }
             }
             /* Reassert only when the live ceiling was raised above ASB's requested
              * bound. A lower vendor ceiling is already energy-safe and is accepted by
@@ -1046,6 +1100,8 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
         /* Snap to a step this cluster actually has, downwards. Writing an arbitrary number
          * lets the kernel round it up, which quietly loosens the cap. */
         target = (int)cpu_snap_freq(j, (long)target);
+        /* Last gate before the value reaches the kernel. */
+        target = cpu_floor_ceiling(j, target, thermal_cap);
         int cur = sysfs_read_int(g_cpu_all_max_paths[j], 0);
         if (force || cur != target) {
             if (sysfs_write_int(g_cpu_all_max_paths[j], target) == 0)
