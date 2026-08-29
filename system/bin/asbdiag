@@ -446,6 +446,37 @@ _a2dp_req="$(cfg bt_a2dp_offload)"
 _a2dp_set="$(settings get global bluetooth_a2dp_offload_enabled 2>/dev/null)"
 NOTE "bt_a2dp_offload: requested=${_a2dp_req:-auto}  ·  setting=${_a2dp_set:-<unavailable>}  ·  platform_disabled=$(gp persist.bluetooth.a2dp_offload.disabled)  ·  vendor_disabled=$(gp persist.vendor.bluetooth.a2dp_offload.disabled)"
 
+SEC "0e. UCLAMP TIERS  (what the scheduler is allowed to ask for, per tier)"
+# Read the tiers, not the lease.
+#
+# The lease line reports whichever tier claimed it last, so a diag showed desired=24 - the
+# background value - while top-app was a different number entirely. One figure standing in
+# for four made it impossible to tell whether a change to the foreground tier had taken
+# effect, which is exactly the question that mattered after top-app was exempted from
+# perf_ceiling_pct.
+#
+# top-app is the one the user is waiting on. If it reads far below the profile rail, the
+# scheduler will refuse to raise frequency for the app on screen no matter what the task
+# asks for - and the work then finishes slowly, with the display and radio awake for all
+# of it.
+for _uc_root in /dev/cpuctl /sys/fs/cgroup/cpu; do
+  [ -d "$_uc_root" ] || continue
+  for _uc_t in top-app foreground background system-background; do
+    _uc_v=""
+    for _uc_f in "$_uc_root/$_uc_t/cpu.uclamp.max" "$_uc_root/$_uc_t/uclamp.max"; do
+      [ -r "$_uc_f" ] && { _uc_v="$(cat "$_uc_f" 2>/dev/null)"; break; }
+    done
+    [ -n "$_uc_v" ] && NOTE "$_uc_t uclamp.max = $_uc_v"
+  done
+  _uc_ls=""
+  for _uc_f in "$_uc_root/top-app/cpu.uclamp.latency_sensitive" "$_uc_root/top-app/uclamp.latency_sensitive"; do
+    [ -r "$_uc_f" ] && { _uc_ls="$(cat "$_uc_f" 2>/dev/null)"; break; }
+  done
+  [ -n "$_uc_ls" ] && NOTE "top-app latency_sensitive = $_uc_ls"
+  break
+done
+NOTE "(profile rails: top-app should track UCL_TOP_MAX; perf_ceiling_pct no longer scales it)"
+
 SEC "0f. LSPOSED LOGGING  (read only — ASB never changes another module's settings)"
 # Report it, do not touch it.
 #
