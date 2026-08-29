@@ -31,6 +31,28 @@ STATE_DIR="${ASB_DEBUG_SUPPORT_STATE_DIR:-/data/adb/asb/logkit}"
 # A directory is an atomic lock on Android filesystems. Unlike a PID file, it cannot be
 # observed as a simultaneously absent/empty guard, and it carries the recorder's own PID.
 LOCKDIR="$STATE_DIR/full_day_webui.lock"
+BOOTIDFILE="$LOCKDIR/boot_id"
+
+# Identity of the current boot session.
+#
+# A PID only means something within the boot that produced it. This lock lives in
+# /data/adb/asb/logkit, which survives a reboot, so after a restart the recorded PID is
+# just a number - and the kernel hands out low PIDs again from scratch. Roughly half the
+# time that number now belongs to somebody else's process, kill -0 succeeds, and the lock
+# is judged live forever. That is the "log capture works every other reboot" report: it
+# depends purely on whether the stale PID landed on a live one.
+#
+# boot_id changes on every boot and is readable without root on every Android kernel.
+# Where it is absent, the boot instant derived from uptime is close enough - it moves by
+# whole reboots, which is the only resolution this needs.
+current_boot_id() {
+  _cb="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null | tr -d ' \r\n')"
+  if [ -n "$_cb" ]; then printf '%s' "$_cb"; return 0; fi
+  _up="$(cut -d. -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')"
+  _now="$(date +%s 2>/dev/null || echo 0)"
+  case "$_up" in ''|*[!0-9]*) _up=0 ;; esac
+  printf 'boot-%s' "$(( _now - _up ))"
+}
 PIDFILE="$LOCKDIR/pid"
 LAUNCHERFILE="$LOCKDIR/launcher"
 TOKENFILE="$LOCKDIR/token"
@@ -51,6 +73,7 @@ DIAG_OUTDIR="${ASB_DEBUG_SUPPORT_DIAG_OUTDIR:-/sdcard/Download}"
 # detached launcher and a tiny status file: otherwise the browser cannot paint feedback
 # until asbdiag has already finished. This state is debug-only and never touches policy.
 DIAG_LOCKDIR="$STATE_DIR/asbdiag_webui.lock"
+DIAG_BOOTIDFILE="$DIAG_LOCKDIR/boot_id"
 DIAG_PIDFILE="$DIAG_LOCKDIR/pid"
 DIAG_TOKENFILE="$DIAG_LOCKDIR/token"
 DIAG_STATUSFILE="$STATE_DIR/asbdiag_webui.status"
@@ -188,6 +211,18 @@ lock_known_dead() {
   # A missing PID is deliberately NOT considered stale: fail closed rather than risk a second
   # recorder during startup or after an interrupted launch.
   [ -d "$LOCKDIR" ] || return 1
+
+  # A lock from a previous boot is dead by definition, whatever its PIDs now point at.
+  # Checked before the PID logic, because that logic cannot tell our old recorder from
+  # an unrelated process that inherited the number.
+  _lk_boot="$(cat "$BOOTIDFILE" 2>/dev/null | tr -d ' \r\n')"
+  if [ -n "$_lk_boot" ] && [ "$_lk_boot" != "$(current_boot_id)" ]; then
+    return 0
+  fi
+  # An older lock with no boot_id recorded cannot be attributed to this boot either.
+  # Releasing it is safe: the recorder it belonged to cannot have survived a restart.
+  [ -n "$_lk_boot" ] || return 0
+
   _lk_seen=0
   for _lk_file in "$PIDFILE" "$LAUNCHERFILE"; do
     _lk_pid="$(pid_from_file "$_lk_file" 2>/dev/null || true)"
@@ -245,6 +280,16 @@ diag_lock_live_pid() {
 
 diag_lock_known_dead() {
   [ -d "$DIAG_LOCKDIR" ] || return 1
+
+  # Same reasoning as the full-day lock: a PID recorded before a reboot names nothing,
+  # and roughly half the time it now names an unrelated live process. asbdiag is the
+  # button people press first after restarting, so this path sees the problem more often
+  # than the recorder does.
+  _dld_boot="$(cat "$DIAG_BOOTIDFILE" 2>/dev/null | tr -d ' \r\n')"
+  if [ -n "$_dld_boot" ] && [ "$_dld_boot" != "$(current_boot_id)" ]; then
+    return 0
+  fi
+  [ -n "$_dld_boot" ] || return 0
   _dld_pid="$(pid_from_file "$DIAG_PIDFILE" 2>/dev/null || true)"
   [ -n "$_dld_pid" ] && ! pid_is_live "$_dld_pid"
 }
@@ -314,6 +359,7 @@ diag_start() {
     echo 'status=already_running'; echo 'pid=starting'; return 0
   fi
   _token="$(date +%s 2>/dev/null || echo now).$$"
+  printf '%s\n' "$(current_boot_id)" > "$DIAG_BOOTIDFILE" 2>/dev/null
   if ! printf '%s\n' "$_token" > "$DIAG_TOKENFILE" 2>/dev/null; then
     rmdir "$DIAG_LOCKDIR" 2>/dev/null || true
     echo 'error=diag_guard_failed'; return 8
@@ -408,6 +454,9 @@ start_full_day() {
     return 0
   fi
   _token="$(date +%s 2>/dev/null || echo now).$$"
+  # Stamp the boot session before anything else. Written first so a lock can never exist
+  # without the one fact that makes its PIDs interpretable.
+  printf '%s\n' "$(current_boot_id)" > "$BOOTIDFILE" 2>/dev/null
   if ! printf '%s\n' "$_token" > "$TOKENFILE" 2>/dev/null; then
     rmdir "$LOCKDIR" 2>/dev/null || true
     echo 'error=pid_guard_failed'
