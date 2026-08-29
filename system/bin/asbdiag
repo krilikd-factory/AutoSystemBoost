@@ -1095,6 +1095,28 @@ if [ -d "$_trd" ] && ls "$_trd"/*.kept >/dev/null 2>&1; then
 fi
 
 SEC "5a7. APPLY LEDGER  (what the device actually accepted)"
+# Scheduler ceilings that drifted and were put back.
+#
+# Recorded separately because the module CORRECTS them: a live reading always looks right,
+# so this is the only trace that anything was wrong. top-app uclamp.max at 0 means the
+# scheduler was forbidden from asking for performance for the app on screen - expensive,
+# and invisible without this line.
+_led_r="${ASB_CONFIG_STATE:-/data/adb/asb}/apply_ledger"
+if [ -s "$_led_r" ]; then
+  _rc=$(grep -c '^[0-9]*|reconcile|' "$_led_r" 2>/dev/null)
+  case "$_rc" in ''|*[!0-9]*) _rc=0 ;; esac
+  if [ "$_rc" -gt 0 ]; then
+    NOTE "scheduler ceilings restored ${_rc} time(s) since boot:"
+    grep '^[0-9]*|reconcile|' "$_led_r" 2>/dev/null | cut -d'|' -f3,5 | sort | uniq -c |
+      while read -r _n _kv; do
+        P "    $(printf '%s' "$_kv" | cut -d'|' -f1) was $(printf '%s' "$_kv" | cut -d'|' -f2) (${_n}x)"
+      done
+    NOTE "-> all were corrected; frequent entries mean the ROM keeps overwriting ASB"
+  else
+    NOTE "no scheduler ceiling drift recorded"
+  fi
+fi
+
 # "Enabled" in the UI and "the ROM took it" are different claims. Every writer records a
 # read-back result here, so a tweak that reads back wrong is visible instead of silently
 # looking fine.
