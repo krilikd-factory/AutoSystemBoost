@@ -652,8 +652,22 @@ lk_emit_phase_summary() {
           gavg=(N[p]>0)?(G[p]/N[p]):0;
           aw=(AWD[p]>0)?(AW[p]/AWD[p]):-1;
           aws=(aw>=0)?sprintf("%.1f",aw):"-";
-          printf "%-15s %8.1f %7d %8.2f %6d %9.1f %8d %8d %9d %7d %9d %8s\n", \
-            p, durm, DP[p], rate, (MAD[p]>0?MA[p]/MAD[p]:0), ((RX[p]+TX[p])/1048576.0), (TD[p]>0?CT[p]/TD[p]:0), (TD[p]>0?SF[p]/TD[p]:0), (P6[p]/1000), gavg, TH[p], aws;
+          # Mark a rate the measurement cannot actually resolve.
+          #
+          # Battery level moves in whole percent. On a short phase a single step dominates
+          # the arithmetic: 1% over 1.6 minutes prints 37.50 pct/h, and 0% over the same
+          # span prints 0.00 - neither is a drain figure, both are the quantiser. A capture
+          # from this build shows exactly that pattern, and it is what "the phone is
+          # burning through the battery" was read from.
+          #
+          # The threshold is where one SOC step is worth less than about 3 pct/h, i.e.
+          # roughly twenty minutes, or where the level moved by at least three steps. Below
+          # that the number is printed - it is still evidence of direction - but flagged, so
+          # nobody builds a conclusion on the width of the quantiser.
+          step=(D[p]>0)?(3600.0/D[p]):999;
+          conf=(step<=3.0 || DP[p]>=3)?"":"~";
+          printf "%-15s %8.1f %7d %7.2f%1s %6d %9.1f %8d %8d %9d %7d %9d %8s\n", \
+            p, durm, DP[p], rate, conf, (MAD[p]>0?MA[p]/MAD[p]:0), ((RX[p]+TX[p])/1048576.0), (TD[p]>0?CT[p]/TD[p]:0), (TD[p]>0?SF[p]/TD[p]:0), (P6[p]/1000), gavg, TH[p], aws;
         }
       }
     ' "$_all" | sort -k4 -rn
@@ -669,7 +683,10 @@ lk_emit_phase_summary() {
         "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, MAV, "-", CT, SF, (P6/1000), "-", "-", aws } }
     ' "$_all"
     echo ""
-    echo "Legend: d_pct=battery % consumed (negative=gained while charging),"
+    echo "Legend: '~' after pct/h = below measurement resolution: the phase was too short or"
+  echo "        the battery level moved too few whole steps for the rate to mean anything."
+  echo "        Compare only unmarked rows."
+  echo "Legend: d_pct=battery % consumed (negative=gained while charging),"
     echo "        pct/h=drain rate (from %), mA=average discharge current, rmnetMiB=mobile RX+TX"
     echo "        traffic in the phase, cpuT/surfT=average temps (°C), p6MHz=peak prime"
     echo "        clock, gpu%=avg GPU busy, throttle=ticks the prime was capped."
