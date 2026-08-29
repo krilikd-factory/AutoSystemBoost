@@ -156,7 +156,7 @@
           case "$_cur_ucl" in max) _cur_ucl="100" ;; esac
           _want_ucl="${UCL_TOP_MAX:-85}"
           case "$_want_ucl" in max) _want_ucl="100" ;; esac
-          [ $_need -eq 0 ] && [ -n "$_cur_ucl" ] && [ "$_cur_ucl" != "$_want_ucl" ] && { _need=1; _reason="uclamp"; }
+          [ $_need -eq 0 ] && [ -n "$_cur_ucl" ] && [ "$_cur_ucl" != "$_want_ucl" ] && { _need=1; _reason="uclamp"; _drift_saw="$_cur_ucl"; _drift_want="$_want_ucl"; }
           # foreground as well, not just top-app.
           #
           # Only top-app was checked, so a foreground ceiling put back to "max" by the ROM
@@ -170,7 +170,7 @@
           _want_ucl_fg="${UCL_FG_MAX:-70}"
           case "$_want_ucl_fg" in max) _want_ucl_fg="100" ;; esac
           [ $_need -eq 0 ] && [ -n "$_cur_ucl_fg" ] && [ "$_cur_ucl_fg" != "$_want_ucl_fg" ] \
-            && { _need=1; _reason="uclamp-fg"; }
+            && { _need=1; _reason="uclamp-fg"; _drift_saw="$_cur_ucl_fg"; _drift_want="$_want_ucl_fg"; }
           # And background, which is the cheapest ceiling to lose track of and the most
           # expensive to have lifted: it sits at 35% precisely so work nobody is looking at
           # does not run at full speed. The profile writes all four tiers; only two were
@@ -180,7 +180,7 @@
           _want_ucl_bg="${UCL_BG_MAX:-35}"
           case "$_want_ucl_bg" in max) _want_ucl_bg="100" ;; esac
           [ $_need -eq 0 ] && [ -n "$_cur_ucl_bg" ] && [ "$_cur_ucl_bg" != "$_want_ucl_bg" ] \
-            && { _need=1; _reason="uclamp-bg"; }
+            && { _need=1; _reason="uclamp-bg"; _drift_saw="$_cur_ucl_bg"; _drift_want="$_want_ucl_bg"; }
         fi
       fi
       if [ $_need -eq 0 ] && asb_feature_enabled WIFI; then
@@ -225,6 +225,31 @@
       _reconcile_fast=3
       asb_update_desc
       asb_log "runtime reconcile reason=$_reason profile=$_now"
+
+      # Record the drift with its numbers, not just its name.
+      #
+      # asb_log keeps a rolling text line, which is enough to know something happened and
+      # useless for knowing what. A capture from a real device showed top-app uclamp.max
+      # sitting at 0.00 in two diagnostics and 85.00 in six others - the scheduler had been
+      # forbidden from asking for performance for the app on screen, which is as expensive
+      # as it sounds. Finding that took comparing ten files by hand, because nothing had
+      # written down the observed value at the moment it was wrong.
+      #
+      # The apply ledger already carries exactly this shape for every other writer:
+      # requested, observed, result. A drift the module corrected is still a drift, and the
+      # next capture should show how often and when instead of requiring an archaeologist.
+      case "$_reason" in
+        uclamp|uclamp-fg|uclamp-bg)
+          if [ -f "$MODDIR/runtime/asb_apply_ledger.sh" ]; then
+            # shellcheck source=/dev/null
+            . "$MODDIR/runtime/asb_apply_ledger.sh" 2>/dev/null || true
+            command -v asb_ledger_note >/dev/null 2>&1 && \
+              asb_ledger_note reconcile "$_reason" "${_drift_want:-}" "${_drift_saw:-}" \
+                              "${_drift_saw:-}" readback_mismatch \
+                              "drift found by reconcile, restoring" ""
+          fi ;;
+      esac
+      _drift_saw=""; _drift_want=""
       if [ "$ASB_GOV_ENABLED" = "1" ] && asb_governor_running; then
         if [ "$_reason" = "profile-change" ]; then
           asb_governor_set_profile
