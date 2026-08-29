@@ -188,12 +188,38 @@ _watch_cleanup() {
 _stop() {
   # Target only the recorded PID after confirming its exact watcher argv through /proc.
   # Never kill by a broad Wi-Fi/network name or a user-controlled PID file alone.
-  if _watcher_alive; then
-    _pid="$(cat "$PID" 2>/dev/null | tr -dc '0-9')"
-    kill "$_pid" 2>/dev/null || true
-    _wait=0
-    while _watcher_alive && [ "$_wait" -lt 3 ]; do sleep 1; _wait=$((_wait + 1)); done
-  fi
+  # Stop by lock ownership as well as by argv.
+  #
+  # _watcher_alive confirms identity through /proc/<pid>/cmdline, which is the right guard
+  # against killing an unrelated process that happens to hold a reused PID. But it is also
+  # the only path to the kill, so a watcher whose argv no longer matches - re-exec'd,
+  # wrapped by a different interpreter, or simply started before an update - could never be
+  # stopped. Turning the feature off then removed the PID file and left the process
+  # running: an orphan loop polling Wi-Fi until reboot, with nothing left on disk pointing
+  # at it. That is the leak the contract test has been failing on.
+  #
+  # The lock directory records the PID that took it, and only this script writes there. If
+  # that PID is alive it is ours whatever argv says, so it is safe to signal - and the
+  # identity check still gates the PID file, which is the value a user could tamper with.
+  _pid="$(cat "$PID" 2>/dev/null | tr -dc '0-9')"
+  _lpid="$(cat "$LOCK/pid" 2>/dev/null | tr -dc '0-9')"
+  for _target in "$_pid" "$_lpid"; do
+    case "$_target" in ''|*[!0-9]*) continue ;; esac
+    [ "$_target" = "$$" ] && continue
+    kill -0 "$_target" 2>/dev/null || continue
+    kill "$_target" 2>/dev/null || true
+  done
+  _wait=0
+  while [ "$_wait" -lt 3 ]; do
+    _still=0
+    for _target in "$_pid" "$_lpid"; do
+      case "$_target" in ''|*[!0-9]*) continue ;; esac
+      [ "$_target" = "$$" ] && continue
+      kill -0 "$_target" 2>/dev/null && _still=1
+    done
+    [ "$_still" = "0" ] && break
+    sleep 1; _wait=$((_wait + 1))
+  done
   _restore_if_owned
   rm -f "$PID" "$COOLDOWN" 2>/dev/null
   _lock_owner_alive || rm -rf "$LOCK" 2>/dev/null
