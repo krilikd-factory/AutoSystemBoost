@@ -100,7 +100,13 @@ cleanup
 EOF_RECORDER
 chmod 0755 "$DBG/tools/logkit/asb_log_full_day.sh"
 ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/full_day.out" ASB_DEBUG_SUPPORT_DIAG_OUTDIR="$TMP/out")
-DIAG_OUT="$(env "${ENV[@]}" sh "$HELPER" diag)"
+# Capture the output AND the status separately.
+#
+# Under `set -e` a non-zero exit from the helper aborts the test at this line, before any
+# assertion runs - so the whole regression reported "exit code 8" with no failing check
+# named, and the real problem was invisible. The helper legitimately returns non-zero for
+# conditions this test is meant to observe, so its status is data here, not an error.
+DIAG_OUT="$(env "${ENV[@]}" sh "$HELPER" diag || true)"
 echo "$DIAG_OUT" | grep -Fq 'status=saved'
 DIAG_PATH="$(printf '%s\n' "$DIAG_OUT" | sed -n 's/^path=//p')"
 [ -f "$DIAG_PATH" ] && grep -Fq 'diagnostic-ok' "$DIAG_PATH" || { echo 'FAIL debug support: diag export' >&2; exit 1; }
