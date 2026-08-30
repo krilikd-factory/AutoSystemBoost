@@ -318,6 +318,13 @@ if [ -r "$_state" ]; then
   if [ "${_wfail:-0}" = "0" ]; then
     NOTE "All observed native writes have read back successfully."
   else
+    # Frequency-table size first: it decides how to read everything below.
+    _ftn="$(grep -m1 "^freq_table_n=" /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -d "\"")"
+    case "${_ftn:-}" in
+      ""|0,0,0) NOTE "OPP table not enumerable on this kernel - ceilings are written unrounded,"
+                NOTE "  so observed>requested below is the kernel rounding up, not a vendor override." ;;
+      *) NOTE "OPP steps per cluster: ${_ftn} (snapping active)" ;;
+    esac
     NOTE "Writer failures are backoff-limited. Recent rejected writes:"
     # Show the rows instead of naming the file.
     #
