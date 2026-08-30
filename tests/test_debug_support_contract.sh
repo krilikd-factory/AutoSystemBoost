@@ -114,15 +114,15 @@ DIAG_PATH="$(printf '%s\n' "$DIAG_OUT" | sed -n 's/^path=//p')"
 # WebUI cannot paint while a KSU bridge waits for a synchronous diagnostic export.
 # The async action must acknowledge a delayed worker immediately, remain observable via
 # fixed status command, and publish a complete saved record after the worker exits.
-ASYNC_DIAG="$(ASB_DEBUG_SUPPORT_TEST_DIAG_DELAY=1 env "${ENV[@]}" sh "$HELPER" diag-start)"
+ASYNC_DIAG="$(ASB_DEBUG_SUPPORT_TEST_DIAG_DELAY=1 env "${ENV[@]}" sh "$HELPER" diag-start || true)"
 printf '%s\n' "$ASYNC_DIAG" | grep -Fqx 'status=started' || { echo 'FAIL debug support: async diag did not return started' >&2; exit 1; }
 ASYNC_PID="$(printf '%s\n' "$ASYNC_DIAG" | sed -n 's/^pid=//p')"
 [ -n "$ASYNC_PID" ] && kill -0 "$ASYNC_PID" 2>/dev/null || { echo 'FAIL debug support: async diag worker missing' >&2; exit 1; }
-ASYNC_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status)"
+ASYNC_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status || true)"
 printf '%s\n' "$ASYNC_STATUS" | grep -Eq '^status=(starting|running)$' || { echo 'FAIL debug support: async diag status not live' >&2; exit 1; }
 for _diag_try in $(seq 1 30); do
   sleep 0.1
-  ASYNC_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status)"
+  ASYNC_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status || true)"
   printf '%s\n' "$ASYNC_STATUS" | grep -Fqx 'status=saved' && break
 done
 printf '%s\n' "$ASYNC_STATUS" | grep -Fqx 'status=saved' || { echo 'FAIL debug support: async diag never reached saved' >&2; exit 1; }
@@ -133,23 +133,23 @@ ASYNC_PATH="$(printf '%s\n' "$ASYNC_STATUS" | sed -n 's/^path=//p')"
 # asbdiag exit must become an explicit failed status rather than a misleading saved toast.
 mkdir -p "$TMP/state/asbdiag_webui.lock"
 printf '999999\n' > "$TMP/state/asbdiag_webui.lock/pid"
-STALE_DIAG="$(env "${ENV[@]}" sh "$HELPER" diag-start)"
+STALE_DIAG="$(env "${ENV[@]}" sh "$HELPER" diag-start || true)"
 printf '%s\n' "$STALE_DIAG" | grep -Fqx 'status=started' || { echo 'FAIL debug support: known-dead diag lock not reclaimed' >&2; exit 1; }
 for _diag_try in $(seq 1 30); do sleep 0.1; env "${ENV[@]}" sh "$HELPER" diag-status | grep -Fqx 'status=saved' && break; done
-FAIL_DIAG="$(ASB_DEBUG_SUPPORT_TEST_DIAG_FAIL=1 env "${ENV[@]}" sh "$HELPER" diag-start)"
+FAIL_DIAG="$(ASB_DEBUG_SUPPORT_TEST_DIAG_FAIL=1 env "${ENV[@]}" sh "$HELPER" diag-start || true)"
 printf '%s\n' "$FAIL_DIAG" | grep -Fqx 'status=started' || { echo 'FAIL debug support: failing diag did not launch' >&2; exit 1; }
 for _diag_try in $(seq 1 30); do
   sleep 0.1
-  FAIL_DIAG_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status)"
+  FAIL_DIAG_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status || true)"
   printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'status=failed' && break
 done
 printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'status=failed' || { echo 'FAIL debug support: nonzero diag did not reach failed state' >&2; exit 1; }
 printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'error=asbdiag_exit_9' || { echo 'FAIL debug support: nonzero diag exit was not surfaced' >&2; exit 1; }
-START1="$(env "${ENV[@]}" sh "$HELPER" full-day)"
+START1="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
 echo "$START1" | grep -Fq 'status=started'
 REC_PID="$(printf '%s\n' "$START1" | sed -n 's/^pid=//p')"
 [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo 'FAIL debug support: recorder did not stay alive' >&2; exit 1; }
-START2="$(env "${ENV[@]}" sh "$HELPER" full-day)"
+START2="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
 echo "$START2" | grep -Fq 'status=already_running'
 echo "$START2" | grep -Fq "pid=$REC_PID"
 
@@ -167,7 +167,7 @@ chmod 0755 "$TMP/ps-truncated/ps"
 ORPHAN_OUT="$(cat "$TMP/state/full_day_webui.lock/output_dir")"
 [ -d "$ORPHAN_OUT" ] || { echo 'FAIL debug support: recorder did not publish output dir' >&2; exit 1; }
 rm -rf "$ORPHAN_OUT"
-RECOVERED="$(PATH="$TMP/ps-truncated:$PATH" env "${ENV[@]}" sh "$HELPER" full-day)"
+RECOVERED="$(PATH="$TMP/ps-truncated:$PATH" env "${ENV[@]}" sh "$HELPER" full-day || true)"
 printf '%s\n' "$RECOVERED" | grep -Fq 'status=started' || { echo 'FAIL debug support: removed output dir did not recover capture slot' >&2; exit 1; }
 grep -Fq 'recovered=output_removed' "$TMP/state/full_day_webui.recovery.log" || { echo 'FAIL debug support: orphan recovery evidence missing' >&2; exit 1; }
 REC_PID="$(printf '%s\n' "$RECOVERED" | sed -n 's/^pid=//p')"
@@ -184,7 +184,10 @@ for round in $(seq 1 12); do
   rm -f "$TMP/state/full_day_webui.pid"
   env "${ENV[@]}" sh "$HELPER" full-day > "$TMP/concurrent_${round}_a.out" & C1=$!
   env "${ENV[@]}" sh "$HELPER" full-day > "$TMP/concurrent_${round}_b.out" & C2=$!
-  wait "$C1"; wait "$C2"
+  # wait propagates the child status, and under set -e that aborts the test before the
+  # assertion that is meant to inspect it. The helper legitimately returns non-zero for
+  # the losing side of this race - that is the behaviour being measured.
+  wait "$C1" || true; wait "$C2" || true
   CONCURRENT="$(cat "$TMP/concurrent_${round}_a.out" "$TMP/concurrent_${round}_b.out")"
   [ "$(printf '%s\n' "$CONCURRENT" | grep -c '^status=started$')" -eq 1 ] || { echo "FAIL debug support: concurrent start count round=$round" >&2; exit 1; }
   printf '%s\n' "$CONCURRENT" | grep -Fq 'status=already_running' || { echo "FAIL debug support: concurrent guard did not report running round=$round" >&2; exit 1; }
@@ -196,7 +199,7 @@ done
 # A killed recorder leaves a known-dead PID. The next action may reclaim only that stale lock.
 kill -KILL "$REC_PID" 2>/dev/null || true
 wait "$REC_PID" 2>/dev/null || true
-STALE="$(env "${ENV[@]}" sh "$HELPER" full-day)"
+STALE="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
 echo "$STALE" | grep -Fq 'status=started' || { echo 'FAIL debug support: known-dead lock not reclaimed' >&2; exit 1; }
 REC_PID="$(printf '%s\n' "$STALE" | sed -n 's/^pid=//p')"
 
