@@ -322,16 +322,56 @@ static void cpu_read_freq_tables(void) {
                  "/sys/devices/system/cpu/cpufreq/policy%d/scaling_available_frequencies",
                  g_cpu_all_ids[i]);
         int fd = open(path, O_RDONLY | O_CLOEXEC);
-        if (fd < 0) continue;
-        char buf[1024] = {0};
+        if (fd < 0) {
+            /* scaling_available_frequencies is optional.
+             *
+             * It exists only for the "table" cpufreq drivers. Recent Qualcomm kernels use
+             * the EPSS/OSM driver, where the node is simply absent - and then this
+             * function left the table empty, cpu_snap_freq returned the raw value
+             * untouched, and every ceiling written was a number no OPP has.
+             *
+             * A device capture shows the result: requested=1440000 observed=1785600,
+             * requested=1555200 observed=1996800 - the kernel rounding each unsnapped
+             * request up to the next real step, the confirmation seeing a mismatch, and
+             * the node being backed off. Eight rejected writes on cpu_max0 alone, which is
+             * the little cluster ceiling failing to hold at all.
+             *
+             * stats/time_in_state lists exactly the frequencies the driver will accept and
+             * is present on every driver, because cpufreq-stats is built from the OPP
+             * table itself. Falling back to it costs one extra open on devices that need
+             * it and nothing on devices that do not.
+             */
+            snprintf(path, sizeof(path),
+                     "/sys/devices/system/cpu/cpufreq/policy%d/stats/time_in_state",
+                     g_cpu_all_ids[i]);
+            fd = open(path, O_RDONLY | O_CLOEXEC);
+            if (fd < 0) continue;
+        }
+        char buf[4096] = {0};
         ssize_t rd = read(fd, buf, sizeof(buf) - 1);
         close(fd);
         if (rd <= 0) continue;
+        /* Two formats, one parser.
+         *
+         * scaling_available_frequencies is a single space-separated line of frequencies.
+         * time_in_state is one "freq jiffies" pair per line - so taking every number would
+         * fill the table with residency counters and snap requests to nonsense.
+         *
+         * Reading the FIRST number of each line handles both: the flat list has one line
+         * and would lose everything after the first entry, so the flat case is detected by
+         * the absence of a newline before the second number.
+         */
+        int _tis = (strchr(buf, '\n') != NULL &&
+                    strstr(path, "time_in_state") != NULL);
         char *q = buf;
         int idx = 0;
         while (*q && idx < 32) {
             long v = strtol(q, &q, 10);
             if (v > 0) g_cpu_freq_tables[i][idx++] = v;
+            if (_tis) {
+                /* Skip the rest of this line: it is the residency counter. */
+                while (*q && *q != '\n') q++;
+            }
             while (*q == ' ' || *q == '\n' || *q == '\t' || *q == '\r') q++;
         }
         g_cpu_freq_table_len[i] = idx;
