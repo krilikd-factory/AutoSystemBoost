@@ -370,7 +370,14 @@ diag_start() {
   # is genuinely optional - a missing boot stamp degrades to "cannot attribute this lock to
   # a boot", which the caller already handles - so failing quietly is correct here.
   { printf '%s\n' "$(current_boot_id)" > "$DIAG_BOOTIDFILE"; } 2>/dev/null || true
-  if ! printf '%s\n' "$_token" > "$DIAG_TOKENFILE" 2>/dev/null; then
+  # Every optional write here needs the braces, not just the boot stamp.
+  #
+  # A failed redirect is reported by the shell before the command runs, so a trailing
+  # 2>/dev/null never suppresses it. I fixed this for BOOTIDFILE last round and left these
+  # four alone because they predated my changes - but "it was already there" is not the
+  # same as "it is correct", and the host regression fails on the printed line regardless
+  # of who wrote it.
+  if ! { printf '%s\n' "$_token" > "$DIAG_TOKENFILE"; } 2>/dev/null; then
     rmdir "$DIAG_LOCKDIR" 2>/dev/null || true
     echo 'error=diag_guard_failed'; return 8
   fi
@@ -399,7 +406,7 @@ diag_start() {
     [ "$(cat "$DIAG_TOKENFILE" 2>/dev/null || true)" = "$_owner_token" ] && rm -rf "$DIAG_LOCKDIR" 2>/dev/null || true
   ) </dev/null >/dev/null 2>&1 &
   _pid=$!
-  if ! printf '%s\n' "$_pid" > "$DIAG_PIDFILE" 2>/dev/null; then
+  if ! { printf '%s\n' "$_pid" > "$DIAG_PIDFILE"; } 2>/dev/null; then
     # The worker may already be writing. Do not remove an owned lock or expose a second start.
     echo 'error=diag_guard_unconfirmed'; return 8
   fi
@@ -467,7 +474,7 @@ start_full_day() {
   # Stamp the boot session before anything else. Written first so a lock can never exist
   # without the one fact that makes its PIDs interpretable.
   { printf '%s\n' "$(current_boot_id)" > "$BOOTIDFILE"; } 2>/dev/null || true
-  if ! printf '%s\n' "$_token" > "$TOKENFILE" 2>/dev/null; then
+  if ! { printf '%s\n' "$_token" > "$TOKENFILE"; } 2>/dev/null; then
     rmdir "$LOCKDIR" 2>/dev/null || true
     echo 'error=pid_guard_failed'
     return 8
@@ -478,7 +485,7 @@ start_full_day() {
   ASB_DEBUG_SUPPORT_LOCKDIR="$LOCKDIR" ASB_DEBUG_SUPPORT_LOCK_TOKEN="$_token" \
     nohup sh "$MODDIR/tools/logkit/asb_log_full_day.sh" 24 > "$RUNLOG" 2>&1 < /dev/null &
   _pid=$!
-  if ! printf '%s\n' "$_pid" > "$LAUNCHERFILE" 2>/dev/null; then
+  if ! { printf '%s\n' "$_pid" > "$LAUNCHERFILE"; } 2>/dev/null; then
     # Recorder may already be alive: leave the lock in place rather than clearing ownership.
     echo 'error=pid_guard_unconfirmed'
     return 8
