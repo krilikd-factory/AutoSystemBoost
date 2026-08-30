@@ -13,6 +13,7 @@ STATE_DIR="${ASB_WIFI_FALLBACK_STATE_DIR:-/data/adb/asb}"
 PID="$STATE_DIR/wifi_fallback.pid"
 ACTION="$STATE_DIR/wifi_fallback.action"
 COOLDOWN="$STATE_DIR/wifi_fallback.cooldown"
+CONFIRM="$STATE_DIR/wifi_fallback.confirm"
 LOG="$STATE_DIR/wifi_fallback.log"
 LOCK="$STATE_DIR/wifi_fallback.watch.lock"
 # Injected only by host fixtures; production always reads Android's /proc. Keeping this separate
@@ -62,6 +63,33 @@ _wifi_unvalidated() {
   # a weak but still working local Wi-Fi link must remain Android's and the user's choice.
   printf '%s\n' "$_w" | grep -Eqi 'VALIDATED[=: ]*false|NOT_VALIDATED|not[[:space:]-]*validated|no[[:space:]-]*internet|validated=false'
 }
+
+# Current Wi-Fi signal in dBm, or empty when it cannot be read.
+_wifi_rssi() {
+  _r="$(dumpsys wifi 2>/dev/null | sed -n 's/.*[Rr][Ss][Ss][Ii][=: ]*\(-[0-9][0-9]*\).*/\1/p' | head -1)"
+  case "$_r" in -[0-9]*) printf '%s' "$_r" ;; *) : ;; esac
+}
+
+# Is the link weak enough that the walk-away case is worth deciding sooner?
+#
+# Requested by a user leaving Wi-Fi range: "I have already walked away and it is still
+# trying to hold on." The reasoning is sound but the obvious fix is not - a threshold on
+# RSSI alone produces exactly the wrong behaviour at the edge of coverage, where the phone
+# drops the network, immediately sees it again and reconnects. That ping-pong costs more
+# battery than the seconds it saves and is far more annoying.
+#
+# So signal strength is never the reason to act. It only shortens the wait for a link that
+# has ALREADY failed validation: unusable and weak is a walk-away, unusable and strong is a
+# captive portal or a broken router, which deserves the full grace period because the user
+# may be about to sign in.
+#
+# -78 dBm is where 802.11 link rates collapse on every band; above that a network that
+# still validates is worth keeping whatever the bars show.
+_wifi_signal_weak() {
+  _rs="$(_wifi_rssi)"
+  [ -n "$_rs" ] || return 1
+  [ "$_rs" -lt "${ASB_WIFI_WEAK_DBM:--78}" ] 2>/dev/null
+}
 _wifi_disable() {
   svc wifi disable >/dev/null 2>&1 || cmd wifi set-wifi-enabled disabled >/dev/null 2>&1 || return 1
   return 0
@@ -109,9 +137,42 @@ _try_release() {
   _enabled || return 0
   _screen_on || return 0
   _mobile_allowed || return 0
+  # Contract-pinned form: these guards must stay literally as the handover test asserts,
+  # so the streak is cleared on the line after rather than folded into the guard.
   _wifi_default || return 0
+  # Validation stays the gate, in the exact form the handover contract pins: RSSI must
+  # never become a second way to reach this decision.
+  # A validated network clears the streak on the way out: confirmation has to measure a
+  # CONTINUOUS failure, not a tally of unrelated blips across the day.
+  if ! _wifi_unvalidated; then rm -f "$CONFIRM" 2>/dev/null; fi
   _wifi_unvalidated || return 0
   _in_cooldown && return 0
+
+  # Confirm the failure across consecutive passes before acting.
+  #
+  # Validation flips to false during ordinary events - a roam between access points, a DHCP
+  # renewal, the first seconds on a network. Acting on the first sample turns those into a
+  # Wi-Fi drop the user did not ask for.
+  #
+  # How long to wait depends on what kind of failure it is, which is where signal strength
+  # earns its place: a link that is both unusable AND weak is someone walking out of range,
+  # and there is nothing to wait for. A link that is unusable but strong is a captive
+  # portal or a broken router - the user may be about to sign in, so it gets the full
+  # confirmation window.
+  _need="${ASB_WIFI_CONFIRM_PASSES:-3}"
+  if _wifi_signal_weak; then
+    _need="${ASB_WIFI_CONFIRM_PASSES_WEAK:-1}"
+  fi
+  _seen="$(cat "$CONFIRM" 2>/dev/null | tr -dc '0-9')"
+  case "$_seen" in '') _seen=0 ;; esac
+  _seen=$(( _seen + 1 ))
+  { printf '%s\n' "$_seen" > "$CONFIRM"; } 2>/dev/null || true
+  if [ "$_seen" -lt "$_need" ] 2>/dev/null; then
+    _log "unvalidated Wi-Fi pass ${_seen}/${_need} (rssi=$(_wifi_rssi 2>/dev/null || echo '?')) - waiting"
+    return 0
+  fi
+  rm -f "$CONFIRM" 2>/dev/null
+
   _nowv="$(_now)"
   _until=$((_nowv + RELEASE_S))
   if _wifi_disable; then
@@ -221,7 +282,9 @@ _stop() {
     sleep 1; _wait=$((_wait + 1))
   done
   _restore_if_owned
-  rm -f "$PID" "$COOLDOWN" 2>/dev/null
+  # CONFIRM too: a streak counted before the feature was turned off must not survive to
+  # shorten the first decision after it is turned back on.
+  rm -f "$PID" "$COOLDOWN" "$CONFIRM" 2>/dev/null
   _lock_owner_alive || rm -rf "$LOCK" 2>/dev/null
 }
 _watch() {
