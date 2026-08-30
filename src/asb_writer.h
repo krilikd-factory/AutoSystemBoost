@@ -180,6 +180,30 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
      * watching for a later vendor raise above the requested ceiling. CPU minimums
      * are deliberately excluded: a higher floor consumes power and must retain the
      * existing readback/retry diagnostics. */
+    /* A floor the kernel refuses to lower is the kernel's decision, not a write error.
+     *
+     * scaling_min_freq is clamped by the driver's own minimum: ask for 384000 on a policy
+     * whose QoS floor is 787200 and the node reads back 787200 no matter how often you
+     * write it. The same applies to a ceiling a vendor thermal engine is holding above our
+     * request during an episode.
+     *
+     * Counted as failures, three of these in a row put the node into holddown - so the one
+     * knob the vendor happens to disagree about took the whole cluster's management with
+     * it. A device capture shows 384000->787200 and 768000->1747200 repeating: the module
+     * fighting a bound it cannot move, and losing the ability to set anything else while
+     * it did.
+     *
+     * Recorded with its own status so it stays visible in the report: this is information
+     * about the device, not about a defect, and the reader should be able to tell them
+     * apart.
+     */
+    if (rc == 0 && writer_node_is_cpu(node) && observed > 0 && observed > requested) {
+        h->applied++;
+        h->consecutive_failures = 0;
+        h->retry_at = 0;
+        snprintf(h->status, sizeof(h->status), "%s", "kernel_floor_higher");
+        return 0;
+    }
     if (rc == 0 && writer_node_is_cpu_max(node) && observed > 0 && observed < requested) {
         h->applied++;
         h->consecutive_failures = 0;
