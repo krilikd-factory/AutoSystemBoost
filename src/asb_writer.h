@@ -1323,14 +1323,35 @@ skip_cpu_caps: ;
     /* While the camera guard holds these open, a cap change must not write them
      * back down -- otherwise the very next tick undoes the guard. */
     if (!g_cam_guard_on) {
-        if (force || caps->uclamp_top_max != g_wcache.uclamp_top_max) {
+        /* Compare against the device, not only against our own cache.
+         *
+         * Same asymmetry that was fixed for the frequency floors: the cache only knows
+         * what WE last decided, so anything that moves these behind our back stays moved
+         * until our wanted value happens to change.
+         *
+         * The boot path makes that permanent rather than transient. Since the legacy shell
+         * convergence became opt-in, nothing writes the uclamp tiers at boot except this
+         * writer - and if its first tick computes the same value it already has cached, no
+         * write is issued at all. A capture shows the result: top-app uclamp.max=0.00 with
+         * foreground, background and system-background all at "max" - every tier at ROM
+         * stock, an hour after boot, with the governor running and reporting the profile
+         * applied. The scheduler was forbidden from asking for performance for the app on
+         * screen while background work had no ceiling at all.
+         *
+         * Reading four sysfs files per tick is cheap next to being wrong for an hour.
+         */
+        int _ucl_top_now = sysfs_read_int(UCLAMP_TOP_MAX, -1);
+        int _ucl_drift = (_ucl_top_now >= 0 && _ucl_top_now != g_wcache.uclamp_top_max);
+        if (force || _ucl_drift || caps->uclamp_top_max != g_wcache.uclamp_top_max) {
             if (writer_write_int_confirmed(ASB_WRITE_UCL_TOP, UCLAMP_TOP_MAX,
                                            caps->uclamp_top_max) == 0) {
                 g_wcache.uclamp_top_max = caps->uclamp_top_max;
                 writes++;
             }
         }
-        if (force || caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
+        int _ucl_bg_now = sysfs_read_int(UCLAMP_BG_MAX, -1);
+        int _ucl_bg_drift = (_ucl_bg_now >= 0 && _ucl_bg_now != g_wcache.uclamp_bg_max);
+        if (force || _ucl_bg_drift || caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
             int bg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_BG, UCLAMP_BG_MAX,
                                                     caps->uclamp_bg_max) == 0;
             int sybg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_SYBG, UCLAMP_SYBG_MAX,
