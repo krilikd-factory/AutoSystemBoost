@@ -1779,12 +1779,17 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                    "thermal_control_source=\"%s\"\nthermal_control_zone=%d\n"
                    "thermal_source_confidence=%d\nthermal_rejected_type=\"%s\"\n"
                    "thermal_rejected_raw=%d\nthermal_peer_hi=%d\nthermal_peer_lo=%d\n"
-                   "thermal_peer_n=%d\nthermal_consensus=\"%s\"\n",
+                   "thermal_peer_n=%d\nthermal_consensus=\"%s\"\n"
+                   /* Same file the diagnostic reads. This was published only into the
+                    * status JSON, so the report could never see it - the identical
+                    * producer/consumer split that hid the consensus fields before. */
+                   "freq_table_n=\"%d,%d,%d\"\n",
                 g_smart_boot_settle, g_startup_quarantined,
                 g_thermal_cpu_type[0] ? g_thermal_cpu_type : "unknown", g_thermal_cpu_zone,
                 g_thermal_source_confidence, g_thermal_rejected_type, g_thermal_rejected_raw,
                 g_thermal_peer_hi, g_thermal_peer_lo, g_thermal_peer_n,
-                g_thermal_consensus_note);
+                g_thermal_consensus_note,
+                writer_freq_table_len(0), writer_freq_table_len(1), writer_freq_table_len(2));
         fprintf(f, "cool_gaming=%d\n", g_asb_cfg.cool_gaming);
         fprintf(f, "cool_gaming_level=%d\n", g_smart_cool_gaming_lvl);
         fprintf(f, "game_charging=%d\ngame_bat_temp_peak_dc=%d\n"

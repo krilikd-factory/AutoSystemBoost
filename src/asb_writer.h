@@ -403,7 +403,24 @@ static void cpu_read_freq_tables(void) {
         }
         g_cpu_freq_table_len[i] = idx;
     }
-    g_cpu_freq_tables_ready = 1;
+    /* Only latch success.
+     *
+     * This flag was set unconditionally at the end, so a single early call - before the
+     * cpufreq nodes are readable, or before topology discovery had run - permanently
+     * recorded "tables read" with every length at zero. cpu_snap_freq then returned every
+     * request untouched for the rest of the session, the kernel rounded each one up to the
+     * next real OPP, and the confirmation step logged a mismatch that looked exactly like a
+     * vendor override.
+     *
+     * The device reported "OPP table not enumerable" twice in a row across a rebuild, which
+     * is what a permanently latched empty table looks like from the outside.
+     *
+     * Latching only when at least one cluster produced entries means a later tick can still
+     * succeed once the driver is up, and costs one directory read per tick until it does.
+     */
+    int _got = 0;
+    for (int k = 0; k < 16; k++) if (g_cpu_freq_table_len[k] > 0) { _got = 1; break; }
+    if (_got) g_cpu_freq_tables_ready = 1;
 }
 
 /* Number of OPP steps enumerated for a slot, for diagnostics. 0 means snapping is
