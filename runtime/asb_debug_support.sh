@@ -318,6 +318,16 @@ diag_status() {
 
 write_diag() {
   _outdir="$DIAG_OUTDIR"
+  # Create it rather than only testing for it.
+  #
+  # The fallback to /sdcard is right on a phone and meaningless on a build host, where the
+  # configured directory simply does not exist yet - the write then failed, the helper
+  # returned non-zero, and the regression aborted at the first assertion line with nothing
+  # but "exit code 8" to show for it.
+  #
+  # mkdir -p is safe in both worlds: on a device the directory already exists and this is a
+  # no-op, and if creation is genuinely impossible the /sdcard fallback still applies.
+  [ -d "$_outdir" ] || mkdir -p "$_outdir" 2>/dev/null || true
   [ -d "$_outdir" ] || _outdir="/sdcard"
   _stamp="$(date '+%Y%m%d_%H%M%S' 2>/dev/null || echo now)"
   _out="$_outdir/asbdiag_${_stamp}.txt"
