@@ -464,6 +464,54 @@ static void fsm_interpolate_caps(
         int _p6 = (state == ASB_STATE_SUSTAINED)
                     ? ASB_SMART_PROACTIVE_P6_SUSTAINED_MAX
                     : ASB_SMART_PROACTIVE_P6_MODERATE_MAX;
+        /* Express the proactive cap as a share of what the cluster can do.
+         *
+         * These constants are absolute kHz picked on an OP15, where 1632000 on the big
+         * cluster is 35% of 4608000 - a sensible "do not chase the peak during ordinary
+         * work" limit. On a different topology the same number means something else
+         * entirely: on an Ace 5 slot 1 is the MIDDLE pair at 3014400, so the identical cap
+         * lands at 54% there, and slot 1 is that phone's main working cluster rather than
+         * its boost cluster.
+         *
+         * A field capture from that device shows policy2 and policy5 both pinned at
+         * 1190400 of 3014400 - 39% - while the prime core ran free at 3302400. The user
+         * reported the phone as "very sluggish", which is what happens when the cores that
+         * do the ordinary work are held at a third of their capability and everything has
+         * to wait for the single prime core.
+         *
+         * Converting to a percentage keeps the OP15 behaviour identical (35% and 55% are
+         * what those constants already mean there) while giving every other topology the
+         * same INTENT instead of the same number.
+         */
+        int _hw0 = g_cpu_slot_hwmax[0];
+        int _hw1 = g_cpu_slot_hwmax[1];
+        if (_hw0 > 0) {
+            int _pct0 = (state == ASB_STATE_SUSTAINED) ? 49 : 55;
+            int _lim0 = (int)((long)_hw0 * _pct0 / 100);
+            if (_lim0 > _p0) _p0 = _lim0;      /* never stricter than the OP15 baseline */
+        }
+        if (_hw1 > 0) {
+            /* What slot 1 IS depends on the topology, and the cap has to follow.
+             *
+             * On a 2-cluster phone (OP15: policy0 + policy6) slot 1 is the boost cluster.
+             * Holding it at 35% during ordinary work is the whole point - the little cores
+             * carry the load and the big ones stay out of it.
+             *
+             * On a 3- or 4-cluster phone (Ace 5: policy0/2/5/7) slot 1 is the MIDDLE pair,
+             * which is where ordinary work actually runs; the prime core is a separate
+             * slot. Capping the middle at a boost-cluster fraction leaves the phone with
+             * two slow pairs and one fast core, and everything queues behind that core.
+             * The capture shows the result: policy2 and policy5 both at 39% while policy7
+             * ran free, on a phone reported as very sluggish.
+             */
+            int _pct1 = (state == ASB_STATE_SUSTAINED) ? 30 : 35;
+            if (g_cpu_policy_count >= 3) {
+                /* Middle cores do the work: give them room, not boost-cluster restraint. */
+                _pct1 = (state == ASB_STATE_SUSTAINED) ? 50 : 58;
+            }
+            int _lim1 = (int)((long)_hw1 * _pct1 / 100);
+            if (_lim1 > _p6) _p6 = _lim1;
+        }
         if (out->cpu_max[0] > _p0) out->cpu_max[0] = _p0;
         if (out->cpu_max[1] > _p6) out->cpu_max[1] = _p6;
     }
