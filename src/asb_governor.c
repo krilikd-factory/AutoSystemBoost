@@ -2214,6 +2214,11 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         /* Consensus v2: what the control value was checked against, and what that
          * check concluded. An empty note means the sources agreed. */
         "\"thermal_peer_hi\":%d,\"thermal_peer_n\":%d,\"thermal_consensus\":\"%s\","
+        /* How many OPP steps the writer could enumerate per cluster. Zero means
+         * cpu_snap_freq is a no-op and every ceiling is written unsnapped - which
+         * looks identical to a vendor override in the failure log and took three
+         * rounds to tell apart. Published so it can be read instead of inferred. */
+        "\"freq_table_n\":\"%d,%d,%d\","
         "\"thermal_skin_zone\":%d,\"thermal_surface_zone\":%d,"
         "\"soft_clamp\":%d,\"hard_clamp\":%d,"
         "\"headroom_pct\":%d,\"headroom_valid\":%d,\"headroom_invalid_reason\":\"%s\",\"headroom_real_pct\":%d,"
@@ -2255,6 +2260,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         g_thermal_peer_hi,
         g_thermal_peer_n,
         g_thermal_consensus_note,
+        writer_freq_table_len(0), writer_freq_table_len(1), writer_freq_table_len(2),
         g_thermal_skin_zone,
         g_thermal_surface_zone,
         m->therm.soft_clamp,

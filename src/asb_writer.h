@@ -379,6 +379,18 @@ static void cpu_read_freq_tables(void) {
     g_cpu_freq_tables_ready = 1;
 }
 
+/* Number of OPP steps enumerated for a slot, for diagnostics. 0 means snapping is
+ * inactive on this device and ceilings reach the kernel unrounded. */
+static int writer_freq_table_len(int slot) {
+    if (slot < 0 || slot > 2) return 0;
+    cpu_read_freq_tables();
+    for (int k = 0; k < g_cpu_all_paths_n && k < 16; k++)
+        if (g_cpu_all_max_paths[k][0] && g_cpu_max_paths[slot][0] &&
+            strcmp(g_cpu_all_max_paths[k], g_cpu_max_paths[slot]) == 0)
+            return g_cpu_freq_table_len[k];
+    return 0;
+}
+
 /* Largest table entry <= want. Returns want unchanged when the table is unreadable -
  * a device whose frequencies we cannot enumerate is no worse off than before. */
 static long cpu_snap_freq(int path_idx, long want) {
