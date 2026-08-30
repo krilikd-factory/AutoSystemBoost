@@ -150,7 +150,12 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
      */
     if (rc == 0 && writer_node_is_uclamp(node)) {
         char _uc_buf[32] = {0};
-        if (sysfs_read_str(path, _uc_buf, sizeof(_uc_buf)) == 0) {
+        /* sysfs_read_str returns the LENGTH read, not a status code - it is > 0 on
+         * success and -1 on failure. Comparing it to 0 meant this branch only ran for an
+         * empty file, so the percent-format confirmation never executed and every uclamp
+         * write still counted as a failure. The device kept reporting 0.00 with
+         * writer health failures=8, which is what sent me looking here a second time. */
+        if (sysfs_read_str(path, _uc_buf, sizeof(_uc_buf)) > 0) {
             int _uc_seen;
             if (strncmp(_uc_buf, "max", 3) == 0) {
                 _uc_seen = 100;                    /* "max" is 100% by definition */
