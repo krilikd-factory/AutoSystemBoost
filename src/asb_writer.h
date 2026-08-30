@@ -315,7 +315,34 @@ static int  g_cpu_freq_tables_ready = 0;
 
 static void cpu_read_freq_tables(void) {
     if (g_cpu_freq_tables_ready) return;
-    for (int i = 0; i < g_cpu_all_paths_n && i < 16; i++) {
+    /* Topology first: this builds g_cpu_all_ids, and without it every path below is
+     * assembled from a zeroed array - "policy0/..." for all three slots.
+     *
+     * cpu_snap_freq calls this function lazily, and on the first tick it can run before
+     * writer_init_paths has discovered anything. The loop then reads policy0 three times,
+     * or nothing at all when g_cpu_all_paths_n is still zero, and the table stays empty.
+     * cpu_snap_freq returns want unchanged, ceilings reach the kernel unrounded, the
+     * kernel rounds each one up to the next real OPP, and the confirmation step records a
+     * mismatch.
+     *
+     * That is the whole failure the device reported: requested=1440000 observed=1785600,
+     * requested=384000 observed=998400 - values no OPP table contains, blamed on a vendor
+     * override for three rounds. The diagnostic line "OPP table not enumerable" is what
+     * finally made it visible.
+     *
+     * The call is idempotent and returns immediately once discovery has run. */
+    cpu_topology_discover();
+    /* Enumerate from the topology directly, not from g_cpu_all_paths_n.
+     *
+     * That counter is filled by writer_init_paths, which is defined further down this file
+     * and may not have run when cpu_snap_freq calls us on the first tick. Reading it here
+     * gave a loop count of zero, so the table stayed empty no matter which sysfs node
+     * existed. cpu_topology_discover above fills g_cpu_all_ids and g_cpu_all_count, and
+     * those are the facts this loop actually needs.
+     */
+    int _n_pol = g_cpu_all_count;
+    if (_n_pol > 16) _n_pol = 16;
+    for (int i = 0; i < _n_pol; i++) {
         g_cpu_freq_table_len[i] = 0;
         char path[256];
         snprintf(path, sizeof(path),
