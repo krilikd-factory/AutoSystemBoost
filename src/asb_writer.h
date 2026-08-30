@@ -101,6 +101,11 @@ static int writer_node_is_cpu(asb_write_node_t node) {
     return node >= ASB_WRITE_CPU_MAX0 && node <= ASB_WRITE_CPU_MIN2;
 }
 
+/* uclamp tier nodes report percent with decimals, or the word "max". */
+static int writer_node_is_uclamp(asb_write_node_t n) {
+    return n == ASB_WRITE_UCL_TOP || n == ASB_WRITE_UCL_BG;
+}
+
 static int writer_node_is_cpu_max(asb_write_node_t node) {
     return node >= ASB_WRITE_CPU_MAX0 && node <= ASB_WRITE_CPU_MAX2;
 }
@@ -125,6 +130,43 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         h->retry_at = 0;
         snprintf(h->status, sizeof(h->status), "%s", "applied");
         return 0;
+    }
+    /* uclamp nodes answer in percent-with-decimals, or with the word "max".
+     *
+     * cgroup reports cpu.uclamp.max as "85.00", and as the literal string "max" when the
+     * tier is unconstrained. sysfs_read_int truncates the first to 85 - which matches - but
+     * cannot parse the second at all, so an unconstrained tier reads back as garbage and
+     * every write to it is recorded as a failure.
+     *
+     * A device capture shows the consequence: writer health attempts=39 applied=21
+     * failures=18 backoff_skips=15, with all four uclamp tiers sitting at ROM stock. The
+     * writes were not refused by the kernel - they were judged failed by the confirmation
+     * step, the node was backed off, and the tiers were never brought under ASB control.
+     * That is an hour of the app on screen having no scheduler ceiling while background
+     * work had none either.
+     *
+     * Confirmed by re-reading as text and comparing the integer part, which is the only
+     * part ASB ever asks for.
+     */
+    if (rc == 0 && writer_node_is_uclamp(node)) {
+        char _uc_buf[32] = {0};
+        if (sysfs_read_str(path, _uc_buf, sizeof(_uc_buf)) == 0) {
+            int _uc_seen;
+            if (strncmp(_uc_buf, "max", 3) == 0) {
+                _uc_seen = 100;                    /* "max" is 100% by definition */
+            } else {
+                _uc_seen = atoi(_uc_buf);          /* "85.00" -> 85 */
+            }
+            if (_uc_seen == requested) {
+                h->observed = _uc_seen;
+                h->applied++;
+                h->consecutive_failures = 0;
+                h->retry_at = 0;
+                snprintf(h->status, sizeof(h->status), "%s", "applied");
+                return 0;
+            }
+            h->observed = _uc_seen;
+        }
     }
     /* A smaller live CPU maximum still satisfies ASB's request: a ceiling is an
      * upper bound, and a vendor PowerHAL/thermal owner that holds a stricter bound
