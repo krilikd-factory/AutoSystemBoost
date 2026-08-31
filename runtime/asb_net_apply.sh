@@ -281,6 +281,41 @@ if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
   _rp="$(grep -E '^[[:space:]]*radio_policy_enable=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   _wf="$(grep -E '^[[:space:]]*net_handover_active=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" reconcile >/dev/null 2>&1 || true
+
+  # Hand the decision to Android instead of pulling the radio down.
+  #
+  # net_handover_active works by disabling Wi-Fi outright, because that is the only way a
+  # shell script can force the default route to move. It works, and it is also visible and
+  # blunt: a user reported the phone leaving a good network and rejoining a minute later,
+  # which is exactly what that mechanism looks like from the outside.
+  #
+  # network_avoid_bad_wifi is the platform's own switch for the same intent - when Wi-Fi
+  # stops passing validation, move the default route to mobile - except the system does the
+  # switching, the radio stays associated, and it moves back on its own when the link
+  # recovers. That is the Pixel quick-settings behaviour people ask for, and choosing the
+  # active network directly needs a system API no module can reach.
+  #
+  # Only written when the user asked for it, and only ever restored to the value the device
+  # had: this is a system setting other things may care about.
+  _abw="$(grep -E '^[[:space:]]*net_avoid_bad_wifi=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "${_abw:-0}" in
+    1)
+      # Capture the device's own value before the first write, so uninstall puts back what
+      # was there rather than a guess. The recorder is idempotent - a second capture of an
+      # already-recorded key is ignored - so calling it on every apply is safe.
+      command -v asb_profile_baseline_capture_setting >/dev/null 2>&1 && \
+        asb_profile_baseline_capture_setting global network_avoid_bad_wifi || true
+      if command -v asb_ledger_settings >/dev/null 2>&1; then
+        asb_ledger_settings global network_avoid_bad_wifi 1 "user opted in" || true
+      else
+        settings put global network_avoid_bad_wifi 1 >/dev/null 2>&1 || true
+      fi
+      _out="$_out avoid_bad_wifi=on" ;;
+    *)
+      # Off means "leave it as the device had it", not "force 0" - the baseline restore on
+      # uninstall owns the original value.
+      _out="$_out avoid_bad_wifi=off" ;;
+  esac
   case "$_rp" in
     1) _out="$_out radio_policy=on wifi_fallback=${_wf:-0}" ;;
     *) _out="$_out radio_policy=off wifi_fallback=master_off" ;;

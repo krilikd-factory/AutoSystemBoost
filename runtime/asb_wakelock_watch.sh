@@ -63,6 +63,57 @@ asb_wl_snapshot() {
 # Casting, printer discovery and some smart-home apps genuinely need it WHILE IN USE. None
 # of them need it with the screen off for the better part of an hour, which is the only
 # case this touches.
+# Limit multicast for apps that are not being used.
+#
+# The report-only version named the holder and stopped there, on the grounds that casting
+# and printer discovery genuinely need this while in use. That reasoning still holds - but
+# a capture now shows 35 minutes of multicast wakelock in a single session, on a phone
+# whose owner reported the battery going faster. A multicast lock keeps the Wi-Fi chip
+# receiving every packet on the network instead of just its own, so the radio cannot enter
+# its low-power filter mode for as long as it is held.
+#
+# The same three conditions as the GPS trim, for the same reason: user-installed app, its
+# process CACHED, screen off. An app being looked at is never touched, and neither is a
+# system component. Recorded per package so it is undone on uninstall.
+asb_wl_trim_multicast() {
+  case "$(_cfg wakelock_action)" in 1|on|true) : ;; *) return 0 ;; esac
+  _has appops || return 0
+  _has pm || return 0
+  _has dumpsys || return 0
+
+  case "$(dumpsys deviceidle get screen 2>/dev/null)" in *true*|*on*) return 0 ;; esac
+
+  _mc_raw="$(dumpsys batterystats 2>/dev/null \
+             | sed -n 's/.*Total WiFi Multicast wakelock time: \([0-9]*\)m.*/\1/p' | head -1)"
+  case "$_mc_raw" in ''|*[!0-9]*) return 0 ;; esac
+  # Ten minutes of held multicast is well past discovery and into "something forgot to
+  # release it". Below that, leave it alone.
+  [ "$_mc_raw" -ge 10 ] 2>/dev/null || return 0
+
+  _third="$(pm list packages -3 2>/dev/null | sed 's/^package://')"
+  [ -n "$_third" ] || return 0
+  mkdir -p /data/adb/asb 2>/dev/null
+
+  for _p in $(dumpsys wifi 2>/dev/null \
+              | sed -n 's/.*Multicast.*uid=[0-9]* *\([a-zA-Z0-9_.]*\).*/\1/p' | sort -u); do
+    case "$_third" in *"$_p"*) : ;; *) continue ;; esac
+    # Casting, printing and local-device control need multicast the moment the user opens
+    # them; breaking those is a worse outcome than the battery cost.
+    case "$_p" in
+      *cast*|*chromecast*|*printer*|*print*|*dlna*|*upnp*|*smartthings*|\
+      *homeassistant*|*miio*|*tuya*|*yeelight*|*sonos*|*spotify*) continue ;;
+    esac
+    _proc="$(dumpsys activity processes "$_p" 2>/dev/null | grep -m1 -oE 'cached|foreground|perceptible|visible')"
+    [ "$_proc" = "cached" ] || continue
+    if appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1; then
+      grep -qxF "$_p" /data/adb/asb/multicast_restricted 2>/dev/null || \
+        echo "$_p" >> /data/adb/asb/multicast_restricted
+      echo "wakelock: $_p held multicast while cached - limited until it is opened again"
+    fi
+  done
+  return 0
+}
+
 asb_wl_relax_multicast() {
   _has dumpsys || return 0
   _mc="$(dumpsys batterystats 2>/dev/null \
@@ -151,4 +202,5 @@ case "${_awake:--1}" in ''|-1) exit 0 ;; esac
 
 asb_wl_relax
 asb_wl_relax_multicast
+asb_wl_trim_multicast
 exit 0

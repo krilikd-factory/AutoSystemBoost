@@ -405,7 +405,18 @@ _set_many() {
     _snapshot="$2"
     shift 2
   fi
-  [ -f "$CONF" ] || _die "missing governor.conf"
+  # Say what to do about it, not just what is wrong.
+  #
+  # "missing governor.conf" is accurate and useless: the user cannot tell whether the file
+  # was deleted, never installed, or is being looked for in the wrong place. One reported
+  # reinstalling twice with reboots and getting the same message each time.
+  #
+  # Recovering from the shipped copy handles the common case without involving them at all.
+  if [ ! -f "$CONF" ] && [ -f "$MODDIR/config/governor.conf.shipped" ]; then
+    cp -f "$MODDIR/config/governor.conf.shipped" "$CONF" 2>/dev/null || true
+    chmod 644 "$CONF" 2>/dev/null || true
+  fi
+  [ -f "$CONF" ] || _die "config file not found at $CONF - reinstall the module ZIP"
   _lock
   _apply_pairs_locked "$_snapshot" "$@"
 }
