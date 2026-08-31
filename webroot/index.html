@@ -3843,6 +3843,7 @@ const SNAP_KEYS = [
   'radio_policy_enable',
   'net_handover_fast',
   'net_handover_active',
+  'net_avoid_bad_wifi',
   'haptic_touch_strength',
   'media_loudness',
   'dsp_loudness',
@@ -3948,6 +3949,8 @@ const CFG_ITEMS = [
     desc:'Keeps the mobile-data context ready while the screen is on, so Android can move traffic to mobile data without waiting for the modem to wake after WiFi becomes unusable. It does not disconnect WiFi, force mobile data as the active route or change OEM signal/roaming thresholds. Screen-off save/night mode still releases the modem. Costs some battery while the screen is on; use it only if handover delay matters.' },
   { key:'net_handover_active', type:'bool', def:'0', stock:'0', name:'Active fallback from dead WiFi',
     desc:'Opt-in escape hatch for a WiFi route Android has marked not validated. Only while the screen is on, ASB temporarily turns WiFi off when it is still the default route but has no validated internet; mobile data can then become the route immediately. WiFi is turned back on after a short window and a cooldown prevents loops. Never acts from weak signal alone, never changes carrier/roaming thresholds, preferred network mode, Bluetooth or audio. Uses mobile data; keep off if you need uninterrupted local WiFi devices.' },
+  { key:'net_avoid_bad_wifi', type:'bool', def:'0', stock:'0', name:'Let Android Leave Bad Wi-Fi',
+    desc:'Turns on the platform switch that moves your data to mobile when a Wi-Fi network stops actually working - the captive portal that never loads, the router that answers but has no internet, the hotel network that dropped out.\n\nAndroid does the switching itself: the Wi-Fi radio stays connected, nothing is turned off, and it moves back on its own the moment the link works again.\n\nThis is the closest a module can get to the Pixel behaviour where tapping the Wi-Fi tile switches networks instead of killing the radio - choosing the active network directly needs a system API no module can reach.\n\nDifferent from Active Fallback above: that one disables Wi-Fi outright, which is faster but visible and blunt. This one is quieter and hands the decision to the system.\n\nYour original value is saved and restored when you turn this off or uninstall ASB.' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
@@ -4046,7 +4049,7 @@ const CFG_CAT = {
   night_quiet_enable:'battery', log_level:'system', phantom_procs:'system',
   sustained_temp_mode:'thermal', doze_level:'battery', doze_trim_whitelist:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
-  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net', net_handover_fast:'net', net_handover_active:'net',
+  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net', net_handover_fast:'net', net_handover_active:'net', net_avoid_bad_wifi:'net',
   disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
 };
 // Four groups, one screen each.
@@ -4093,7 +4096,7 @@ const CFG_GROUP_OF = {
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
-  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net', net_handover_fast:'net', net_handover_active:'net',
+  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net', net_handover_fast:'net', net_handover_active:'net', net_avoid_bad_wifi:'net',
   disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'ui', haptic_touch_strength:'ui'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
@@ -4191,7 +4194,10 @@ const CFG_ICONS = {
   auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
-  UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail'
+  UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail',
+  /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
+   * system instead of by us. Reusing the handover glyph says that at a glance. */
+  net_avoid_bad_wifi:'handover',
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -4556,7 +4562,7 @@ const APPLY_MODE = {
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
-  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, net_handover_fast:APPLY_LIVE, net_handover_active:APPLY_LIVE, log_level:APPLY_LIVE,
+  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, net_handover_fast:APPLY_LIVE, net_handover_active:APPLY_LIVE, net_avoid_bad_wifi:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
