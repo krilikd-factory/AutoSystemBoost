@@ -3094,6 +3094,11 @@ const TECH_ICON_PATHS = {
   theme_moon: '<path d="M19 15.5A8.2 8.2 0 0 1 8.5 4 8.2 8.2 0 1 0 19 15.5z"/><path d="m17.5 4 .55 1.45L19.5 6l-1.45.55L17.5 8l-.55-1.45L15.5 6l1.45-.55z"/><path d="m6.5 5 .35.9.9.35-.9.35-.35.9-.35-.9-.9-.35.9-.35z"/>',
   quiet_moon: '<path d="M19 15.5A8 8 0 0 1 8.5 4 8 8 0 1 0 19 15.5z"/><path d="M4 19h7M4 16h4"/>',
   sun: '<circle cx="12" cy="12" r="3.5"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+  /* Wi-Fi arcs with the outermost one broken, and an arrow handing off to a cell mast:
+   * the link is still there but no longer carrying traffic, and the system moved the
+   * route rather than switching the radio off. Distinct from wifi_escape, which shows
+   * ASB itself pushing the connection away. */
+  wifi_auto_leave: '<path d="M6.5 13a8.2 8.2 0 0 1 7.6-.6M9.6 16.2a3.7 3.7 0 0 1 2.5-.3"/><path d="M3.5 9.5a12.5 12.5 0 0 1 4.6-2.4M14.4 7.6a12.5 12.5 0 0 1 2.3.9" stroke-dasharray="2 2"/><circle cx="12" cy="19" r="1" fill="currentColor"/><path d="M19 15v-5m-1.6 1.2a2.6 2.6 0 0 1 3.2 0"/>',
   wifi_escape: '<path d="M3.5 9.5a12.5 12.5 0 0 1 13.2-1.7M6.5 13a8.2 8.2 0 0 1 7.6-.6M9.6 16.2a3.7 3.7 0 0 1 2.5-.3"/><circle cx="12" cy="19" r="1" fill="currentColor"/><path d="M16 9h5m-2.5-2.5L21 9l-2.5 2.5"/>',
   thermal_mode: '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 10v7M17 5h4M19 3v4"/>',
   thermal_point: '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><circle cx="12" cy="17" r="1" fill="currentColor"/><path d="M18 12h3"/>',
@@ -4197,7 +4202,7 @@ const CFG_ICONS = {
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail',
   /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
    * system instead of by us. Reusing the handover glyph says that at a glance. */
-  net_avoid_bad_wifi:'handover',
+  net_avoid_bad_wifi:'wifi_auto_leave',
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
