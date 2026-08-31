@@ -246,6 +246,10 @@
     "radio_policy_enable": {
       "name": "Controlos de rede móvel / rádio",
       "desc": "Interruptor principal independente para as funções de modem do ASB. Desligado por predefinição: escolher qualquer perfil de energia não altera o contexto de dados móveis do Android nem o TCP keepalive. É a definição recomendada para aparelhos apenas Wi‑Fi ou sem SIM. Ligue apenas com SIM/eSIM se pretender deliberadamente as opções de rádio separadas abaixo. Ao desligar, os valores Android registados antes do ASB são restaurados de imediato; modo de avião, operadora, roaming, tipo de rede preferido, Bluetooth e áudio nunca são alterados."
+    },
+    "net_avoid_bad_wifi": {
+      "name": "Sair de Wi-Fi sem internet",
+      "desc": "Ativa a chave do sistema que move os dados para a rede móvel quando um Wi-Fi deixa de funcionar: um portal que não carrega, um roteador sem internet, uma rede de hotel que caiu.\n\nO sistema faz a troca: o rádio Wi-Fi continua conectado, nada é desligado, e volta sozinho assim que o link funcionar de novo.\n\nDiferença para \"Troca ativa\" acima: aquela desliga o Wi-Fi por completo - mais rápido, porém visível e brusco.\n\nSeu valor original é salvo e restaurado."
     }
   },
   "nav_main": "Início",

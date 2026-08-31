@@ -246,6 +246,10 @@
     "radio_policy_enable": {
       "name": "Kontrol seluler / radio",
       "desc": "Sakelar utama independen untuk fungsi modem ASB. Mati secara bawaan: memilih profil daya apa pun tidak mengubah konteks data seluler Android atau TCP keepalive. Ini pengaturan yang disarankan pada perangkat hanya Wi‑Fi atau tanpa SIM. Nyalakan hanya dengan SIM/eSIM bila Anda memang menginginkan opsi radio terpisah di bawah. Saat dimatikan, nilai Android yang dicatat sebelum ASB segera dipulihkan; mode pesawat, operator, roaming, jenis jaringan pilihan, Bluetooth, dan audio tidak pernah diubah."
+    },
+    "net_avoid_bad_wifi": {
+      "name": "Tinggalkan Wi-Fi bermasalah",
+      "desc": "Mengaktifkan sakelar sistem yang memindahkan data ke jaringan seluler saat Wi-Fi berhenti berfungsi: portal masuk yang tak pernah termuat, router tanpa internet, jaringan hotel yang putus.\n\nSistem yang memindahkan: radio Wi-Fi tetap tersambung, tidak ada yang dimatikan, dan kembali sendiri begitu tautan berfungsi lagi.\n\nBeda dengan \"Peralihan aktif\" di atas: yang itu mematikan Wi-Fi sepenuhnya - lebih cepat tapi kentara dan kasar.\n\nNilai asli Anda disimpan dan dipulihkan."
     }
   },
   "nav_main": "Beranda",

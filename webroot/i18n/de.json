@@ -246,6 +246,10 @@
     "radio_policy_enable": {
       "name": "Mobilfunk-/Funksteuerung",
       "desc": "Unabhängiger Hauptschalter für ASB-Modemfunktionen. Standardmäßig AUS: Die Wahl eines Energieprofils lässt Androids Mobilfunkdaten-Kontext und TCP-Keepalive unverändert. Dies wird für WLAN-only-Geräte oder Geräte ohne SIM empfohlen. Nur mit SIM/eSIM einschalten, wenn die separaten Funkoptionen unten ausdrücklich gewünscht sind. Beim Ausschalten werden die vor ASB gespeicherten Android-Werte sofort wiederhergestellt; Flugmodus, Netzbetreiber, Roaming, bevorzugter Netztyp, Bluetooth und Audio werden nie verändert."
+    },
+    "net_avoid_bad_wifi": {
+      "name": "Schlechtes WLAN verlassen",
+      "desc": "Aktiviert den System-Schalter, der die Daten ins Mobilfunknetz verlegt, sobald ein WLAN nicht mehr funktioniert: ein Anmeldeportal, das nicht lädt, ein Router ohne Internet, ein abgebrochenes Hotel-WLAN.\n\nDas System schaltet selbst um: das WLAN-Radio bleibt verbunden, nichts wird abgeschaltet, und es kehrt von allein zurück, sobald die Verbindung wieder trägt.\n\nUnterschied zum \"Aktiven Wechsel\" oben: der schaltet WLAN ganz ab - schneller, aber sichtbar und grob.\n\nIhr ursprünglicher Wert wird gesichert und wiederhergestellt."
     }
   },
   "nav_main": "Start",

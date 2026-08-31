@@ -246,6 +246,10 @@
     "radio_policy_enable": {
       "name": "Hücresel / radyo denetimleri",
       "desc": "ASB modem işlevleri için bağımsız ana anahtar. Varsayılan olarak kapalıdır: herhangi bir güç profili seçmek Android mobil veri bağlamını veya TCP keepalive ayarlarını değiştirmez. Yalnızca Wi‑Fi kullanan ya da SIM’siz cihazlarda önerilen ayardır. Yalnızca SIM/eSIM varsa ve aşağıdaki ayrı radyo seçeneklerini bilinçli olarak istiyorsanız açın. Kapatıldığında ASB öncesinde kaydedilen Android değerleri hemen geri yüklenir; uçak modu, operatör, dolaşım, tercih edilen ağ türü, Bluetooth ve ses asla değiştirilmez."
+    },
+    "net_avoid_bad_wifi": {
+      "name": "Bozuk Wi-Fi'dan çık",
+      "desc": "Bir Wi-Fi ağı gerçekten çalışmayı bıraktığında veriyi mobil ağa taşıyan sistem anahtarını açar: açılmayan oturum portalı, interneti olmayan modem, kopan otel ağı.\n\nDeğişimi sistem yapar: Wi-Fi radyosu bağlı kalır, hiçbir şey kapatılmaz ve bağlantı düzelir düzelmez kendiliğinden geri döner.\n\nYukarıdaki \"Etkin geçiş\"ten farkı: o Wi-Fi'ı tamamen kapatır - daha hızlı ama görünür ve sert.\n\nÖzgün değeriniz kaydedilir ve geri yüklenir."
     }
   },
   "nav_main": "Ana",

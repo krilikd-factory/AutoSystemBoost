@@ -273,6 +273,10 @@
     "radio_policy_enable": {
       "name": "Controlli cellulare / radio",
       "desc": "Interruttore principale indipendente per le funzioni modem di ASB. Per impostazione predefinita è disattivato: scegliere un profilo energetico non modifica il contesto dati mobili Android né TCP keepalive. È l’impostazione consigliata per dispositivi solo Wi‑Fi o senza SIM. Attivarlo solo con SIM/eSIM se si desiderano esplicitamente le opzioni radio separate sottostanti. Disattivandolo vengono ripristinati subito i valori Android registrati prima di ASB; modalità aereo, operatore, roaming, tipo di rete preferito, Bluetooth e audio non vengono mai modificati."
+    },
+    "net_avoid_bad_wifi": {
+      "name": "Abbandona il Wi-Fi non funzionante",
+      "desc": "Attiva l'interruttore di sistema che sposta i dati sulla rete mobile quando un Wi-Fi smette di funzionare: un portale di accesso che non si carica, un router senza internet, una rete d'albergo caduta.\n\nÈ il sistema a commutare: la radio Wi-Fi resta connessa, non viene spento nulla, e torna da sola appena il collegamento funziona di nuovo.\n\nDifferenza con \"Passaggio attivo\" sopra: quello disattiva del tutto il Wi-Fi - più rapido ma visibile e brusco.\n\nIl valore originale viene salvato e ripristinato."
     }
   },
   "optFor": {

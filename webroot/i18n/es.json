@@ -246,6 +246,10 @@
     "radio_policy_enable": {
       "name": "Controles de red móvil / radio",
       "desc": "Control maestro independiente para las funciones de módem de ASB. Está desactivado por defecto: elegir cualquier perfil de energía no modifica el contexto de datos móviles de Android ni TCP keepalive. Es la opción recomendada en dispositivos solo Wi‑Fi o sin SIM. Actívalo solo con SIM/eSIM si deseas deliberadamente las opciones de radio independientes de abajo. Al desactivarlo se restauran de inmediato los valores de Android guardados antes de ASB; nunca cambia el modo avión, operador, roaming, tipo de red preferido, Bluetooth ni audio."
+    },
+    "net_avoid_bad_wifi": {
+      "name": "Abandonar Wi-Fi que no funciona",
+      "desc": "Activa el interruptor del sistema que mueve los datos a la red móvil cuando una Wi-Fi deja de funcionar: un portal de acceso que no carga, un router sin internet, una red de hotel caída.\n\nEl sistema hace el cambio: la radio Wi-Fi sigue conectada, no se apaga nada, y vuelve sola en cuanto el enlace funciona otra vez.\n\nDiferencia con \"Cambio activo\" de arriba: aquel desactiva la Wi-Fi por completo, más rápido pero visible y brusco.\n\nTu valor original se guarda y se restaura."
     }
   },
   "nav_main": "Inicio",

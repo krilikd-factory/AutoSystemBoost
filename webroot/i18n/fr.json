@@ -388,6 +388,10 @@
     "radio_policy_enable": {
       "name": "Contrôles cellulaire / radio",
       "desc": "Commutateur maître indépendant des fonctions modem d’ASB. Désactivé par défaut : choisir un profil d’alimentation ne modifie ni le contexte de données mobiles Android ni TCP keepalive. C’est le réglage recommandé pour un appareil Wi‑Fi uniquement ou sans SIM. Activez-le seulement avec une SIM/eSIM si vous souhaitez volontairement les options radio séparées ci-dessous. Sa désactivation restaure immédiatement les valeurs Android enregistrées avant ASB ; mode avion, opérateur, itinérance, type de réseau préféré, Bluetooth et audio ne changent jamais."
+    },
+    "net_avoid_bad_wifi": {
+      "name": "Quitter un Wi-Fi défaillant",
+      "desc": "Active l'interrupteur système qui bascule les données vers le réseau mobile quand un Wi-Fi cesse de fonctionner : un portail de connexion qui ne charge pas, un routeur sans internet, un réseau d'hôtel tombé.\n\nC'est le système qui bascule : la radio Wi-Fi reste connectée, rien n'est éteint, et il revient seul dès que le lien refonctionne.\n\nDifférence avec « Bascule active » ci-dessus : celle-ci coupe le Wi-Fi entièrement - plus rapide mais visible et brutal.\n\nVotre valeur d'origine est sauvegardée et restaurée."
     }
   },
   "opt": {
