@@ -203,6 +203,17 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh ] && \
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_net_routes.sh restore >/dev/null 2>&1 || true
 
+# Give multicast back to apps ASB limited.
+#
+# Same shape as the location restore below: recorded per package, so an app the user
+# restricted themselves stays restricted.
+if [ -f /data/adb/asb/multicast_restricted ] && command -v appops >/dev/null 2>&1; then
+  while IFS= read -r _mp; do
+    [ -n "$_mp" ] && appops set "$_mp" WIFI_MULTICAST allow >/dev/null 2>&1
+  done < /data/adb/asb/multicast_restricted
+  rm -f /data/adb/asb/multicast_restricted 2>/dev/null
+fi
+
 # Give location back to apps ASB limited.
 #
 # Recorded per package: an app the user restricted themselves in Android settings stays
