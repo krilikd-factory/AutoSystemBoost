@@ -9,7 +9,28 @@ set +v 2>/dev/null
 asb_push_old_output() {
   local i=0
   while [ $i -lt 3 ]; do
-    ui_print " "
+    # Make sure the module has a config before anything else runs.
+#
+# The release workflow deliberately excludes config/governor.conf and ships
+# config/governor.conf.shipped instead, so the flashable ZIP has no working config until
+# the installer creates one. Nothing did. A user on release V63 could not change a single
+# setting - every WebUI write answered "missing governor.conf" - and reinstalling did not
+# help, because reinstalling ran the same installer that never created the file.
+#
+# This has to happen before any code that READS the config, which is most of this script,
+# so it goes at the very top rather than wherever it was convenient to add.
+if [ ! -f "$MODPATH/config/governor.conf" ] && [ -f "$MODPATH/config/governor.conf.shipped" ]; then
+  cp -f "$MODPATH/config/governor.conf.shipped" "$MODPATH/config/governor.conf" 2>/dev/null || true
+  chmod 644 "$MODPATH/config/governor.conf" 2>/dev/null || true
+fi
+if [ ! -f "$MODPATH/config/governor.conf" ]; then
+  ui_print " "
+  ui_print "  config/governor.conf is missing and cannot be restored."
+  ui_print "  Every setting change will fail. Re-download the module ZIP."
+  ui_print " "
+fi
+
+ui_print " "
     i=$((i+1))
   done
 }
@@ -2513,7 +2534,7 @@ bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable net_handover_fast net_handover_active haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable net_handover_fast net_handover_active net_avoid_bad_wifi haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard"
 
   _migrated=0
   # Which numbering the stored values were written against. Absent means "before schemas
