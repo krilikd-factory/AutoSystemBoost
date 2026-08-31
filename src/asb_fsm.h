@@ -686,6 +686,15 @@ static inline long fsm_elapsed_sec(const asb_fsm_t *fsm) {
     return (long)(now.tv_sec - fsm->last_transition.tv_sec);
 }
 
+/* Run-queue floor for treating GPU activity as user-driven UI work.
+ *
+ * 0.7 is below a scroll (which moves several runnables at once) and above idle
+ * compositing, where the GPU is busy but the CPU has nothing queued. Deliberately lower
+ * than the gaming and heavy thresholds: this state is cheap to enter and the cost of
+ * missing a real burst is a visible stutter, while the cost of entering it needlessly is
+ * only a slightly higher ceiling. */
+#define ASB_UI_BURST_MIN_LOAD1 0.7f
+
 static inline int fsm_min_dwell_for_state(asb_state_t st) {
     switch (st) {
         case ASB_STATE_HEAVY: return g_asb_cfg.heavy_min_dwell_s;
@@ -963,8 +972,19 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     /*
      * UI-burst escalation: GPU > 12% with screen on = active UI work (scrolling shelf, app
      * menu, transitions).
+     *
+     * GPU load alone is not that work, and this is the third place that had to learn it -
+     * after the GAMING and HEAVY entries in V63. Compositing the status bar, decoding an
+     * album cover and running a progress animation together push past 12% with nobody
+     * touching the phone. A capture shows it plainly: audio_spk_scr phases sitting at
+     * 13-19% GPU while music plays, each one held at MODERATE (ladder 0.45) instead of
+     * LIGHT_IDLE (0.15) for the whole listening session.
+     *
+     * Requiring some CPU alongside it keeps every real case - a scroll, a menu, a
+     * transition all move the run queue - and drops the one where the screen is simply on.
      */
-    if (m->misc.screen_on && m->gpu.load_pct >= 12)
+    if (m->misc.screen_on && m->gpu.load_pct >= 12 &&
+        m->cpu.load1 >= ASB_UI_BURST_MIN_LOAD1)
         return ASB_STATE_MODERATE;
 
     /*
