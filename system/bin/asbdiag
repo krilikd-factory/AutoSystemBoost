@@ -842,6 +842,16 @@ case "$(cfg net_handover_active):$_radio_policy" in
   1:*) NOTE "Wi-Fi fallback: stored but inactive (cellular/radio controls off)" ;;
   *) NOTE "Wi-Fi fallback: off" ;;
 esac
+# Why it fired, not just whether it is armed.
+#
+# A user reported the phone leaving a good Wi-Fi network and rejoining a minute later. The
+# status line says "armed" either way, so there was nothing to look at - the watcher writes
+# its reasoning to its own log and the report never showed it.
+if [ -s "${ASB_CONFIG_STATE:-/data/adb/asb}/wifi_fallback.log" ]; then
+  NOTE "recent Wi-Fi fallback decisions:"
+  tail -6 "${ASB_CONFIG_STATE:-/data/adb/asb}/wifi_fallback.log" 2>/dev/null |
+    while IFS= read -r _wfl; do P "    $_wfl"; done
+fi
 
 # A strongly battery-lean Smart session must not negate its own economy choice by holding
 # mobile_data_always_on during a feed/media HEAVY burst.  This is read-only explanation of the
