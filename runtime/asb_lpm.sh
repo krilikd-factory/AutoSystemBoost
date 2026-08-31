@@ -146,7 +146,17 @@ _lpm_wakeup_gate() {
   _want="$1"
   [ -d /sys/class/net ] || return 0
   mkdir -p /data/adb/asb 2>/dev/null
-  for _if in /sys/class/net/rmnet*; do
+  # Wi-Fi as well as the modem path.
+  #
+  # The first version covered rmnet* only, because the capture that prompted it was all IPA
+  # and rmnet_ctl. A later capture on another device shows the same modem traffic plus
+  # "300 WLAN_CE_2" 76 times - the Wi-Fi copy engine resuming the SoC on its own. Gating one
+  # radio and leaving the other is half a fix: that phone spent 62% of "sleep" awake.
+  #
+  # Same rule as before: this is a wakeup-timing change on the data path, not a power or
+  # association change. Wi-Fi stays connected and calls are unaffected; a push that arrives
+  # over Wi-Fi may wait for the next wake, which is the deal this tweak already states.
+  for _if in /sys/class/net/rmnet* /sys/class/net/wlan*; do
     [ -e "$_if/device/power/wakeup" ] || continue
     _n="$(basename "$_if")"
     _cur="$(cat "$_if/device/power/wakeup" 2>/dev/null)"
