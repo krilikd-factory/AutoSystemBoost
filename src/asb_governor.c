@@ -3947,6 +3947,33 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                            cpu_max_c >= 60 && m->gpu.load_pct >= 30 &&
                            fresh_pkg && !g_smart_media_pkg_known) {
                     g_smart_rt.app_hint = ASB_APP_GAMING;
+                } else if (!boot_grace &&
+                           g_asb_cfg.bat_suppress_gaming &&
+                           fsm->state == ASB_STATE_HEAVY &&
+                           cpu_max_c >= 60 && m->gpu.load_pct >= 45 &&
+                           m->cpu.load1 >= 3.0f &&
+                           fresh_pkg && !g_smart_media_pkg_known) {
+                    /* A suppressed game is still a game.
+                     *
+                     * bat_suppress_gaming deliberately keeps the FSM in HEAVY on a
+                     * battery-leaning profile, so a game never unlocks GAMING clocks. That
+                     * part works. What it also does is hide the workload from every
+                     * gaming-specific thermal control - cool_gaming, the retry cooldown,
+                     * the gap-to-SUSTAINED escape - because all of them key off this hint,
+                     * and this hint was only ever set from GAMING or SUSTAINED.
+                     *
+                     * The result is the worst of both: the phone does not get game
+                     * performance, and it does not get game heat management either. A user
+                     * reported exactly that - "played briefly, the device turned into a
+                     * heater" - with cool_gaming=1 and suppress_gaming_on_battery=1 both
+                     * enabled, GPU past the gaming threshold and 95 C on the die.
+                     *
+                     * The thresholds here are stricter than the GAMING entry, not looser:
+                     * hot, GPU busy past the exit threshold, AND real CPU load. That
+                     * combination is not a video feed - the case the GPU-only check was
+                     * tightened for in V63 - it is sustained rendering work.
+                     */
+                    g_smart_rt.app_hint = ASB_APP_GAMING;
                 }
             }
         }

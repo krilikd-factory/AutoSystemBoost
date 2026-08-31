@@ -1502,6 +1502,9 @@ static void metrics_read_network(asb_misc_t *m, const struct timespec *now) {
  * and any HAL client alike.
  */
 #define ASB_CAM_RESCAN_COOLDOWN_S 30
+/* Screen on: the camera can be opened at any moment, so the guard has to be able to
+ * arrive within a few seconds rather than up to half a minute. */
+#define ASB_CAM_RESCAN_SCREEN_ON_S 5
 
 static pid_t             g_cam_pid = 0;
 static time_t            g_cam_scan_ts = 0;
@@ -1579,7 +1582,27 @@ static int metrics_camera_active(const struct timespec *now) {
     }
     time_t wall = time(NULL);
     if (g_cam_pid <= 0) {
-        if (wall - g_cam_scan_ts < ASB_CAM_RESCAN_COOLDOWN_S)
+        /* Rescan sooner while the screen is on.
+         *
+         * The /proc walk is throttled because it is expensive, and 30 s is a reasonable
+         * price when nothing is happening. But it also means a camera opened one second
+         * after the last scan runs unguarded for the next twenty-nine - and those are
+         * exactly the seconds that matter: preview bring-up, autofocus, exposure
+         * convergence, the first frames. Users report the camera as slow to open and
+         * stuttery while shooting, which is what an unguarded bring-up looks like.
+         *
+         * Nobody opens the camera with the screen off, so the long interval is only ever
+         * right in that case - and that is where the saving actually matters, since a
+         * sleeping phone should not be walking /proc at all. With the screen on, five
+         * seconds costs a few hundred directory entries and buys a guard that arrives
+         * before the shot instead of after it.
+         *
+         * screen_on is read directly here rather than taken from the metrics struct,
+         * because this function runs before that field is filled this tick.
+         */
+        int _cam_cooldown = ASB_CAM_RESCAN_COOLDOWN_S;
+        if (metrics_screen_on()) _cam_cooldown = ASB_CAM_RESCAN_SCREEN_ON_S;
+        if (wall - g_cam_scan_ts < _cam_cooldown)
             return (wall < g_cam_hold_until) ? 1 : 0;
         g_cam_scan_ts  = wall;
         g_cam_pid      = cam_find_pid();
