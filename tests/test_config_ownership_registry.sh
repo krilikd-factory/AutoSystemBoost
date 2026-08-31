@@ -24,14 +24,14 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "172" ] || fail "expected 172 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "172" ] || fail "expected 172 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "173" ] || fail "expected 173 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "173" ] || fail "expected 173 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "59" ] || fail "expected 59 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "60" ] || fail "expected 60 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -50,4 +50,4 @@ grep -Fq 'Config Key Ownership' "$LINT" || fail 'lint does not enforce ownership
 grep -Fq 'config ownership key-set drift' "$LINT" || fail 'lint lacks key-set drift failure'
 grep -Fq 'WebUI/ownership drift' "$LINT" || fail 'lint lacks WebUI ownership boundary failure'
 
-echo 'PASS config ownership registry contract (172 keys; 26 user, 33 advanced, 113 internal)'
+echo 'PASS config ownership registry contract (173 keys; 26 user, 34 advanced, 113 internal)'
