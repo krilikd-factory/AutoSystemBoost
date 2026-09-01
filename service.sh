@@ -3276,6 +3276,36 @@ fi
   # Network offload and route tuning do not need to delay initial UI or userspace reboot.
   [ -f "$MODDIR/runtime/asb_net_offload.sh" ] && \
     sh "$MODDIR/runtime/asb_net_offload.sh" >/dev/null 2>&1
+  
+  # Re-apply when new receive queues appear.
+  #
+  # This ran exactly once, at boot. But rmnet interfaces are created when the data call is
+  # established and re-created on every network change - roaming, a SIM switch, airplane
+  # mode, or the tower hopping this user sees on two SIMs in a weak-signal area. A queue
+  # that appears after boot never gets its rps_cpus written, so packet processing lands on
+  # whichever core the interrupt picked, typically a big one.
+  #
+  # That matters most for exactly the phone this was found on: 1.5 GB of mobile data in two
+  # and a half hours. Steering that to the little cluster does not reduce the traffic, it
+  # makes each packet cheaper - which is the only lever the module actually has here.
+  #
+  # Counting queues is a directory listing, not a write. When the count changes the script
+  # re-runs and rewrites every queue, including the ones it already owned; that is cheap and
+  # idempotent, and far simpler than tracking which interface came and went.
+  (
+    _no_prev=""
+    while true; do
+      sleep 120
+      case "$(dumpsys deviceidle get screen 2>/dev/null)" in
+        false|Asleep) continue ;;
+      esac
+      _no_now="$(ls -d /sys/class/net/*/queues/rx-* 2>/dev/null | wc -l)"
+      [ "$_no_now" = "$_no_prev" ] && continue
+      _no_prev="$_no_now"
+      [ -f "$MODDIR/runtime/asb_net_offload.sh" ] && \
+        sh "$MODDIR/runtime/asb_net_offload.sh" >/dev/null 2>&1
+    done
+  ) &
   if [ -f "$MODDIR/runtime/asb_doze_apply.sh" ]; then
     case "$(grep -E '^[[:space:]]*doze_level=' "$MODDIR/config/governor.conf" 2>/dev/null \
             | head -1 | sed 's/.*=//' | tr -d ' \r')" in
