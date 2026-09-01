@@ -2570,6 +2570,18 @@ html[data-asb-theme="light"] :is(.cfg-profile-title,.cfg-reset-title,.debug-acti
 html[data-asb-theme="light"] :is(.cfg-profile-close,.cfg-reset-close) { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,124,99,.28)); }
 
+
+/* Unavailable-on-this-device badge.
+ *
+ * Deliberately muted rather than red: this is not an error and nothing is broken. The
+ * phone simply does not expose what the tweak needs, and a warning colour would send
+ * people hunting for a fault that does not exist. */
+.cfg-status.na {
+  color: var(--muted, #8b95a1);
+  background: rgba(139,149,161,0.10);
+  border: 1px solid rgba(139,149,161,0.22);
+}
+
 </style>
 </head>
 <body>
@@ -4126,7 +4138,20 @@ const CFG_GROUP_SECTIONS = {
   ]
 };
 
+/* Populate the capability manifest on first use.
+ *
+ * Called from the render path rather than a page-open hook because the config page is
+ * reached by several routes. The read is one cat of a small file and only happens while
+ * ASB_CAPS is still empty. */
+let _capsLoaded = false;
+function cfgEnsureCaps() {
+  if (_capsLoaded) return;
+  _capsLoaded = true;
+  cfgLoadCaps().then(function () { try { cfgRender(); } catch (e) {} });
+}
+
 function cfgRenderSection(list, section) {
+  cfgEnsureCaps();
   const head = document.createElement('div');
   head.className = 'cfg-section';
   const ico = document.createElement('span');
@@ -4188,6 +4213,35 @@ function cfgToastText(key, val) {
 }
 
 function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
+
+/* Which hardware capability each tweak actually needs.
+ *
+ * Only entries whose absence makes the tweak a no-op. A tweak missing from this table is
+ * assumed to work everywhere, which is the safe default: a wrong "unavailable" hides a
+ * working control, and that is worse than showing one that does little. */
+const ASB_CAP_REQUIRES = {
+  BG_TRIM_LEVEL: 'memcg',
+  gms_trim: 'memcg',
+  gms_freeze: 'memcg',
+  dsp_loudness: 'dsp_soundfx',
+  dsp_bass: 'dsp_soundfx',
+  dsp_compressor: 'dsp_soundfx',
+  dsp_outputs: 'dsp_soundfx'
+};
+
+/* Capability manifest, read once per page load. Empty object when the file is missing, so
+   every tweak renders normally rather than everything claiming to be unavailable. */
+let ASB_CAPS = {};
+async function cfgLoadCaps() {
+  try {
+    const r = await run("cat /data/adb/asb/capabilities.env 2>/dev/null");
+    const out = (r && (r.stdout || r)) || '';
+    String(out).split('\n').forEach(function (line) {
+      const eq = line.indexOf('=');
+      if (eq > 0) ASB_CAPS[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+    });
+  } catch (e) { ASB_CAPS = {}; }
+}
 
 const CFG_ICONS = {
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
@@ -4722,6 +4776,21 @@ function cfgRenderRow(list, it, showCat) {
     const badge = document.createElement('div');
     badge.className = 'cfg-status ' + st.cls;
     badge.textContent = st.text;
+    /* Say when the hardware cannot do this, instead of showing it as Enabled.
+     *
+     * A CPH2769 has no memory cgroups, so BG_TRIM does nothing there - yet the switch read
+     * Enabled and its owner reasonably concluded the module was broken. Roughly half the
+     * checks on that device come back N/A: no memcg, no DSP library, no camera tone files.
+     * A switch that promises what the phone cannot deliver is worse than one that is
+     * honestly greyed out - the user stops trusting every other switch too.
+     *
+     * The capability manifest already knows all of this; it simply never reached the UI. */
+    const _unav = ASB_CAP_REQUIRES[it.key];
+    if (_unav && ASB_CAPS && ASB_CAPS[_unav] === '0') {
+      badge.className = 'cfg-status na';
+      badge.textContent = T('cfg_unavailable', 'unavailable on this device');
+      badge.title = T('cfg_unavailable_why', 'This phone does not expose: ') + _unav;
+    }
 
     // Verify against the DEVICE, not the config.
     // A card reads "Max" because governor.conf says 4.
