@@ -349,6 +349,20 @@ write_diag() {
   return 0
 }
 
+# Has a PID-less lock outlived the window a starting worker needs to publish its PID?
+#
+# The worker writes its PID immediately after taking the lock, so anything past two minutes
+# means it died in between. Returns false when the timestamp cannot be read, preserving the
+# old fail-closed behaviour rather than guessing.
+diag_lock_stale_by_age() {
+  [ -d "$DIAG_LOCKDIR" ] || return 1
+  _dls_now="$(date +%s 2>/dev/null)" || return 1
+  case "$_dls_now" in ''|*[!0-9]*) return 1 ;; esac
+  _dls_mt="$(stat -c %Y "$DIAG_LOCKDIR" 2>/dev/null)" || return 1
+  case "$_dls_mt" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$(( _dls_now - _dls_mt ))" -ge 120 ]
+}
+
 diag_start() {
   [ -x "$MODDIR/system/bin/asbdiag" ] || { echo 'error=asbdiag_missing'; return 4; }
   mkdir -p "$STATE_DIR" 2>/dev/null || { echo 'error=state_dir_failed'; return 7; }
@@ -362,7 +376,15 @@ diag_start() {
     if diag_lock_known_dead; then
       rm -rf "$DIAG_LOCKDIR" 2>/dev/null || true
     else
-      echo 'status=already_running'; echo 'pid=starting'; return 0
+      # A lock with no PID that is older than the publish window is debris, not a
+      # starting worker. Left alone it occupied the slot until reboot: the WebUI kept
+      # answering "already running" while the output folder stayed empty, which is why
+      # the daily capture worked only every other time.
+      if diag_lock_stale_by_age; then
+        rm -rf "$DIAG_LOCKDIR" 2>/dev/null || true
+      else
+        echo 'status=already_running'; echo 'pid=starting'; return 0
+      fi
     fi
   fi
   if ! mkdir "$DIAG_LOCKDIR" 2>/dev/null; then
@@ -416,10 +438,19 @@ diag_start() {
     [ "$(cat "$DIAG_TOKENFILE" 2>/dev/null || true)" = "$_owner_token" ] && rm -rf "$DIAG_LOCKDIR" 2>/dev/null || true
   ) </dev/null >/dev/null 2>&1 &
   _pid=$!
-  if ! { printf '%s\n' "$_pid" > "$DIAG_PIDFILE"; } 2>/dev/null; then
-    # The worker may already be writing. Do not remove an owned lock or expose a second start.
-    echo 'error=diag_guard_unconfirmed'; return 8
-  fi
+    # The worker is already running - do not report failure for a bookkeeping miss.
+    #
+    # The background job is forked on the line above; by the time this runs it is already
+    # writing the report. Returning an error here told the WebUI "could not collect log"
+    # while the file was visibly filling up on disk - exactly the report we received. The
+    # user then has a red toast, a growing file, and no idea which to believe.
+    #
+    # A PID we could not record is a tracking problem, not a collection failure. Say the
+    # capture started, because it did, and note the gap so status can still be read from
+    # the worker's own published state.
+    if ! { printf '%s\n' "$_pid" > "$DIAG_PIDFILE"; } 2>/dev/null; then
+      echo 'warn=diag_pid_unrecorded'
+    fi
   echo 'status=started'
   echo "pid=$_pid"
 }
