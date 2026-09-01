@@ -693,7 +693,42 @@ static inline long fsm_elapsed_sec(const asb_fsm_t *fsm) {
  * than the gaming and heavy thresholds: this state is cheap to enter and the cost of
  * missing a real burst is a visible stutter, while the cost of entering it needlessly is
  * only a slightly higher ceiling. */
-#define ASB_UI_BURST_MIN_LOAD1 0.7f
+/* The quiet-load baseline is learned per device, not written down.
+ *
+ * A fixed 0.7 was wrong twice over: it is an absolute load1, so it means different things
+ * on 4, 8 and 12 cores, and it assumes every phone idles near zero. Field data says
+ * otherwise - a CPH2769 never reads below 6.9 with the screen on, so the gate was true on
+ * 299 of 299 samples and LIGHT_IDLE became unreachable. On a CPH2691 the same constant did
+ * fire and cut the listening phase from 24.66 to 7.74 %/h. One number, opposite outcomes,
+ * for reasons that have nothing to do with what the user is doing.
+ *
+ * There is no constant that fits both, because "idle" is a property of the device and its
+ * ROM, not of the workload. So measure it: track the lowest load this phone actually
+ * reaches while its screen is on, and treat anything close to that as compositing rather
+ * than work.
+ *
+ * The floor falls fast (a new low is believed at once) and rises slowly (one part in
+ * sixteen per tick), so a long busy stretch cannot drag the baseline up and quietly disable
+ * the gate - the failure mode that would be hardest to notice.
+ */
+#define ASB_UI_BURST_MARGIN_PCT 35   /* how far above the learned floor still counts as idle */
+
+static float asb_ui_quiet_floor(const asb_metrics_t *m) {
+    static float floor_l1 = -1.0f;
+    float now = m->cpu.load1;
+    if (now < 0.0f) return -1.0f;
+    if (floor_l1 < 0.0f)      floor_l1 = now;          /* first sample seeds it */
+    else if (now < floor_l1)  floor_l1 = now;          /* believe a new low immediately */
+    else if (now < floor_l1 * 2.0f)
+        floor_l1 += (now - floor_l1) / 16.0f;          /* drift up slowly */
+    /* Load far above the floor is work, not a new resting level - ignore it entirely.
+     *
+     * Without this an hour of gaming drags the baseline up to the gaming load itself, and
+     * afterwards the phone needs that much again before anything counts as busy. Modelled
+     * on the real numbers: 720 ticks at 18.0 moved a 6.9 floor all the way to 18.0, which
+     * would have left the gate permanently open on the very device it was meant to help. */
+    return floor_l1;
+}
 
 static inline int fsm_min_dwell_for_state(asb_state_t st) {
     switch (st) {
@@ -983,9 +1018,15 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
      * Requiring some CPU alongside it keeps every real case - a scroll, a menu, a
      * transition all move the run queue - and drops the one where the screen is simply on.
      */
-    if (m->misc.screen_on && m->gpu.load_pct >= 12 &&
-        m->cpu.load1 >= ASB_UI_BURST_MIN_LOAD1)
-        return ASB_STATE_MODERATE;
+    if (m->misc.screen_on && m->gpu.load_pct >= 12) {
+        float qf = asb_ui_quiet_floor(m);
+        /* Above the learned floor by a clear margin means the run queue really moved:
+           a scroll, a menu, a transition. Within the margin the GPU is busy on its own
+           and the CPU is only compositing, which is what LIGHT_IDLE is for. */
+        if (qf < 0.0f ||
+            m->cpu.load1 >= qf * (1.0f + (float)ASB_UI_BURST_MARGIN_PCT / 100.0f))
+            return ASB_STATE_MODERATE;
+    }
 
     /*
      * Battery profile + screen on: skip LIGHT_IDLE entirely.
