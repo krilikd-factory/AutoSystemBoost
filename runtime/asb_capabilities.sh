@@ -48,6 +48,26 @@ _probe() {
     [ -e "$_g" ] && { _gpu=1; break; }
   done
   _camera=0; [ -d /dev/cpuset/foreground ] || [ -d /sys/fs/cgroup/foreground ] && _camera=1
+  
+  # Memory cgroups: BG_TRIM is built on them and silently does nothing without them.
+  #
+  # A CPH2769 diag reports "no memcg path (BG_TRIM limited)" while the WebUI still shows the
+  # tweak Enabled. Its owner sees no change and concludes the module does not work - fairly,
+  # since the switch says it is on. Recording the capability lets the UI say "unavailable on
+  # this device" instead of promising what the hardware cannot do.
+  _memcg=0
+  for _m in /dev/memcg /sys/fs/cgroup/memory /sys/fs/cgroup/memcg; do
+    [ -d "$_m" ] && { _memcg=1; break; }
+  done
+  # msm_performance is how the governor registers its caps; without it cap ownership can
+  # never read as ours - a fortnight of misdiagnosis on its own.
+  _perfnode=0
+  [ -r /sys/kernel/msm_performance/parameters/cpu_max_freq ] && _perfnode=1
+  # The DSP effect needs its library present; several models ship without it.
+  _dsp=0
+  for _d in /vendor/lib64/soundfx /system/lib64/soundfx /odm/lib64/soundfx; do
+    [ -d "$_d" ] && { _dsp=1; break; }
+  done
 
   {
     echo "schema=1"
@@ -65,6 +85,9 @@ _probe() {
     echo "battery_current=$_battery_current"
     echo "gpu_devfreq=$_gpu"
     echo "camera_cpuset=$_camera"
+    echo "memcg=$_memcg"
+    echo "msm_performance=$_perfnode"
+    echo "dsp_soundfx=$_dsp"
   } > "$_tmp" || { rm -f "$_tmp"; _die "cannot write manifest"; }
   chmod 0644 "$_tmp" 2>/dev/null || true
   mv -f "$_tmp" "$OUT" || _die "cannot replace manifest"
