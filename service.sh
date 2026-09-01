@@ -3030,6 +3030,20 @@ fi
   _prev_route=""
   while true; do
     sleep 60
+    # Skip the whole pass while the screen is off.
+    #
+    # This watches which output the DSP effect should follow, and it ran every 60 seconds
+    # around the clock - 60 wakeups an hour, each one a dumpsys audio call, on a phone that
+    # is supposed to be asleep. Unlike the governor, which waits on CLOCK_MONOTONIC and so
+    # stops during suspend, a shell `sleep` runs on a timer that resumes the SoC.
+    #
+    # Nothing here is needed while the screen is off: the route only matters when audio is
+    # actually being rendered to a user, and a route change with the screen off is picked up
+    # on the first pass after it comes back on. Screen-off audio keeps working - this only
+    # decides which output the effect attaches to, not whether sound plays.
+    case "$(dumpsys deviceidle get screen 2>/dev/null)" in
+      false|Asleep) continue ;;
+    esac
     _f="$(grep -E '^[[:space:]]*dsp_outputs=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')"
     case "$_f" in ''|all) continue ;; esac
