@@ -353,16 +353,6 @@ write_diag() {
 #
 # The worker writes its PID immediately after taking the lock, so anything past two minutes
 # means it died in between. Returns false when the timestamp cannot be read, preserving the
-# old fail-closed behaviour rather than guessing.
-diag_lock_stale_by_age() {
-  [ -d "$DIAG_LOCKDIR" ] || return 1
-  _dls_now="$(date +%s 2>/dev/null)" || return 1
-  case "$_dls_now" in ''|*[!0-9]*) return 1 ;; esac
-  _dls_mt="$(stat -c %Y "$DIAG_LOCKDIR" 2>/dev/null)" || return 1
-  case "$_dls_mt" in ''|*[!0-9]*) return 1 ;; esac
-  [ "$(( _dls_now - _dls_mt ))" -ge 120 ]
-}
-
 diag_start() {
   [ -x "$MODDIR/system/bin/asbdiag" ] || { echo 'error=asbdiag_missing'; return 4; }
   mkdir -p "$STATE_DIR" 2>/dev/null || { echo 'error=state_dir_failed'; return 7; }
@@ -379,12 +369,7 @@ diag_start() {
       # A lock with no PID that is older than the publish window is debris, not a
       # starting worker. Left alone it occupied the slot until reboot: the WebUI kept
       # answering "already running" while the output folder stayed empty, which is why
-      # the daily capture worked only every other time.
-      if diag_lock_stale_by_age; then
-        rm -rf "$DIAG_LOCKDIR" 2>/dev/null || true
-      else
-        echo 'status=already_running'; echo 'pid=starting'; return 0
-      fi
+      echo 'status=already_running'; echo 'pid=starting'; return 0
     fi
   fi
   if ! mkdir "$DIAG_LOCKDIR" 2>/dev/null; then
