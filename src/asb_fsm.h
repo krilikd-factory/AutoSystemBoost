@@ -713,22 +713,28 @@ static inline long fsm_elapsed_sec(const asb_fsm_t *fsm) {
  */
 #define ASB_UI_BURST_MARGIN_PCT 35   /* how far above the learned floor still counts as idle */
 
-static float asb_ui_quiet_floor(const asb_metrics_t *m) {
-    static float floor_l1 = -1.0f;
+/* Split into update and read: the floor must move once per tick, not once per caller.
+ *
+ * Two call sites now consult it - the GPU shortcut and the burst gate below - and the
+ * original single function both updated and returned. Called twice in one tick it applied
+ * the 1/16 rise twice, so the baseline climbed at double the intended rate and would
+ * eventually drift above the real idle level, silently switching the gate off. */
+static float g_ui_quiet_floor = -1.0f;
+
+static void asb_ui_quiet_floor_update(const asb_metrics_t *m) {
     float now = m->cpu.load1;
-    if (now < 0.0f) return -1.0f;
-    if (floor_l1 < 0.0f)      floor_l1 = now;          /* first sample seeds it */
-    else if (now < floor_l1)  floor_l1 = now;          /* believe a new low immediately */
-    else if (now < floor_l1 * 2.0f)
-        floor_l1 += (now - floor_l1) / 16.0f;          /* drift up slowly */
-    /* Load far above the floor is work, not a new resting level - ignore it entirely.
-     *
-     * Without this an hour of gaming drags the baseline up to the gaming load itself, and
-     * afterwards the phone needs that much again before anything counts as busy. Modelled
-     * on the real numbers: 720 ticks at 18.0 moved a 6.9 floor all the way to 18.0, which
-     * would have left the gate permanently open on the very device it was meant to help. */
-    return floor_l1;
+    if (now < 0.0f) return;
+    if (g_ui_quiet_floor < 0.0f)      g_ui_quiet_floor = now;
+    else if (now < g_ui_quiet_floor)  g_ui_quiet_floor = now;
+    else if (now < g_ui_quiet_floor * 2.0f)
+        g_ui_quiet_floor += (now - g_ui_quiet_floor) / 16.0f;
 }
+
+static float asb_ui_quiet_floor(const asb_metrics_t *m) {
+    (void)m;
+    return g_ui_quiet_floor;
+}
+
 
 static inline int fsm_min_dwell_for_state(asb_state_t st) {
     switch (st) {
@@ -903,6 +909,8 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
 static int g_gaming_confirm_streak = 0;
 
 static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
+    /* Move the learned idle baseline exactly once per evaluation. */
+    asb_ui_quiet_floor_update(m);
     if (!m->misc.screen_on) { g_screen_on_since = 0; return ASB_STATE_DEEP_IDLE; }
     if (g_screen_on_since == 0) g_screen_on_since = time(NULL);
 
@@ -983,9 +991,24 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
         if (!ma_valid || m->bat.current_ma >= 150)
             return ASB_STATE_HEAVY;
     }
-    /* GPU busy but CPU quiet: video, or an animation. MODERATE, not HEAVY. */
-    if (gpu_says_heavy)
+    /* GPU busy but CPU quiet: video, or an animation. MODERATE, not HEAVY -
+     * unless the CPU is at this device's own resting level, in which case the GPU is
+     * compositing and LIGHT_IDLE is the honest answer.
+     *
+     * This returned MODERATE on GPU alone and sat above the quiet-floor gate below, so it
+     * decided first and that gate never ran. A v17 capture shows the cost precisely: 124
+     * samples were at or under the learned floor and should have been LIGHT_IDLE; 112 of
+     * them came out MODERATE here, and LIGHT_IDLE appeared 6 times in 241. The whole
+     * mechanism was unreachable on a device whose GPU idles above 35%.
+     *
+     * Same test as the gate below, applied before this shortcut rather than after it. */
+    if (gpu_says_heavy) {
+        float qf_g = asb_ui_quiet_floor(m);
+        if (qf_g > 0.0f &&
+            m->cpu.load1 < qf_g * (1.0f + (float)ASB_UI_BURST_MARGIN_PCT / 100.0f))
+            return ASB_STATE_LIGHT_IDLE;
         return ASB_STATE_MODERATE;
+    }
 
     if (m->cpu.load1 >= mod_thr)
         return ASB_STATE_MODERATE;
