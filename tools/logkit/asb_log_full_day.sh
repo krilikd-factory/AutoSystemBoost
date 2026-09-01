@@ -347,6 +347,16 @@ lk_phase_ledger_row() {
     [ "$_awake" -gt 100 ] && _awake=100
   fi
   _maavg=0
+    # Blank the average when most readings were unusable.
+    #
+    # A CPH2691 capture returned 0 mA for 84 of 219 reads - the sensor is not exposed there.
+    # The remaining sparse spikes averaged to 619 mA for a sleep phase that actually used
+    # 0.82 %/h, roughly 40 mA. A wrong number that looks precise is worse than no number: it
+    # gets quoted and reasoned from. Below half usable, report nothing and let pct/h speak.
+    if [ "${LK_PH_MASEEN:-0}" -gt 0 ] 2>/dev/null && \
+       [ $(( ${LK_PH_MACNT:-0} * 2 )) -lt "${LK_PH_MASEEN:-0}" ] 2>/dev/null; then
+      LK_PH_MACNT=0
+    fi
   [ "$LK_PH_MACNT" -gt 0 ] 2>/dev/null && _maavg=$(( LK_PH_MASUM / LK_PH_MACNT ))
   read -r _rmrx _rmtx <<EOF
 $(lk_phase_rmnet_bytes)
@@ -376,7 +386,7 @@ lk_phase_ledger_open() {
   LK_PH_START_MONO=$(lk_mono_s)
   LK_PH_START_PCT=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   LK_PH_MAXCPU=0; LK_PH_MAXSURF=0; LK_PH_MAXP6=0
-  LK_PH_MASUM=0; LK_PH_MACNT=0
+  LK_PH_MASUM=0; LK_PH_MACNT=0; LK_PH_MASEEN=0
   read -r LK_PH_START_RMNET_RX LK_PH_START_RMNET_TX <<EOF
 $(lk_phase_rmnet_bytes)
 EOF
@@ -406,6 +416,7 @@ lk_phase_ledger_accumulate() {
   if [ -n "$_ma" ]; then
     [ "$_ma" -ge 100000 ] 2>/dev/null && _ma=$(( _ma / 1000 ))
     [ "$_ma" -le -100000 ] 2>/dev/null && _ma=$(( _ma / 1000 ))
+    LK_PH_MASEEN=$(( ${LK_PH_MASEEN:-0} + 1 ))
     if [ "$_ma" -gt 0 ] && [ "$_ma" -lt 15000 ] 2>/dev/null; then
       LK_PH_MASUM=$(( LK_PH_MASUM + _ma )); LK_PH_MACNT=$(( LK_PH_MACNT + 1 ))
     fi
