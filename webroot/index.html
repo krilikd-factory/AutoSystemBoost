@@ -4220,7 +4220,16 @@ function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
  * assumed to work everywhere, which is the safe default: a wrong "unavailable" hides a
  * working control, and that is worse than showing one that does little. */
 const ASB_CAP_REQUIRES = {
-  BG_TRIM_LEVEL: 'memcg',
+  /* BG_TRIM is NOT listed against memcg.
+   *
+   * The memcg path is only half of it: the other half puts packages into standby buckets
+   * through `am set-standby-bucket`, which works on every device and is what actually
+   * restrains background wakeups. A CPH2769 reports "no memcg path (BG_TRIM limited)" and
+   * the diag's own wording made it read as broken - but 2744 timer wakeups a session is
+   * exactly what buckets exist to reduce, and that part runs.
+   *
+   * Marking it unavailable would grey out a control that is doing real work on that phone,
+   * which is worse than the vaguer status it has now. */
   gms_trim: 'memcg',
   gms_freeze: 'memcg',
   dsp_loudness: 'dsp_soundfx',
