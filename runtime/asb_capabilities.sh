@@ -105,8 +105,23 @@ _probe() {
     done
   fi
   _dsp=0
-  for _d in /vendor/lib64/soundfx /system/lib64/soundfx /odm/lib64/soundfx; do
-    [ -d "$_d" ] && { _dsp=1; break; }
+  # Look for the library ASB installs, in every place the installer puts it.
+  #
+  # The first version checked three soundfx directories and asked only whether the directory
+  # existed. Both halves were wrong: the installer also writes /system/vendor/lib*/soundfx
+  # and /odm/lib/soundfx, and a soundfx directory exists on plenty of devices that have no
+  # ASB effect in it. On a CPH2769 with a working, audible DSP the probe reported
+  # dsp_soundfx=0, and the WebUI then greyed out all four DSP tweaks as "unavailable on this
+  # device" - telling the user a feature they can hear is not supported.
+  #
+  # Test for the file, not the folder, and cover every install path.
+  for _d in /vendor/lib64/soundfx /vendor/lib/soundfx \
+            /system/vendor/lib64/soundfx /system/vendor/lib/soundfx \
+            /system/lib64/soundfx /system/lib/soundfx \
+            /odm/lib64/soundfx /odm/lib/soundfx; do
+    for _l in "$_d"/libasbdsp*.so; do
+      [ -f "$_l" ] && { _dsp=1; break 2; }
+    done
   done
 
   {
