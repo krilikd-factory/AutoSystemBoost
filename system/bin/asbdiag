@@ -242,6 +242,39 @@ P "  root_manager         : $_rm"
 [ "$_rm" = "apatch" ] && NOTE "APatch path: OP12 camera handling is scoped specifically for APatch (real /odm mount)."
 
 # =====================================================================
+SEC "0b. CAMERA GRADE  (is the live tone table actually the graded one?)"
+# Compare the marker against the file the camera really reads.
+#
+# The WebUI can say a camera tweak is saved, and it can say the value matches what was last
+# baked - but neither answers "did the graded table reach the camera". The grader writes
+# into the module tree, which is bind-mounted over /odm at boot; if that mount is missing or
+# a later update replaced the file, the settings are correct and the picture is unchanged.
+#
+# So read the live path, pull one value the grader always rewrites, and print it next to
+# the recorded one. Two numbers that agree is evidence; a status word is not.
+_cg_mark=""
+for _m in /data/adb/asb/grade_marks/*.mark; do
+  [ -f "$_m" ] && { _cg_mark="$(cat "$_m" 2>/dev/null)"; break; }
+done
+if [ -n "$_cg_mark" ]; then
+  NOTE "recorded grade: ${_cg_mark#*=}   (hash:level:grain:contrast:portrait:lowlight)"
+else
+  NOTE "recorded grade: none - the grader has not run on this install"
+fi
+_cg_live=""
+for _f in /odm/etc/camera/config/video_beauty_default_config \
+          /vendor/odm/etc/camera/config/video_beauty_default_config; do
+  [ -r "$_f" ] || continue
+  _cg_live="$_f"
+  NOTE "live file: $_f"
+  NOTE "  SatuColorScale in live file: $(grep -m1 -oE 'SatuColorScale[^,}]*' "$_f" 2>/dev/null)"
+  NOTE "  sunsetSatScale in live file: $(grep -m1 -oE 'sunsetSatScale[^,}]*' "$_f" 2>/dev/null)"
+  break
+done
+[ -n "$_cg_live" ] || NOTE "live file: not readable - camera config is not exposed here"
+NOTE "(the module tree is bind-mounted over /odm at boot; a value here that never changes"
+NOTE " between grade levels means the mount did not take, not that the tweak failed)"
+
 SEC "0c. AUDIO CONFIG TREE  (which SKU the platform actually reads)"
 # ColorOS keeps several SKU trees in one image and loads exactly one.
 #
