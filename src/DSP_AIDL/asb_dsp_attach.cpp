@@ -265,10 +265,19 @@ int main(int /*argc*/, char** /*argv*/) {
                 snprintf(pushed_sig, sizeof(pushed_sig), "%s", _sig);
             }
         }
-        // 30 s instead of 5 s: re-attaching a few seconds later after an audioserver restart
-        // is inaudible, and this cuts idle wakeups by 6x. The check itself is a local field
-        // read plus two property reads - no IPC, microseconds of CPU.
-        sleep(30);
+        // Poll fast while the effect is not attached, slowly once it is.
+        //
+        // A flat 30 s is inaudible for a re-attach after an audioserver restart, but it is
+        // very audible at the START of playback: the user opens YouTube, hears stock volume
+        // for up to half a minute, and then the boost arrives. That is the report from the
+        // field, and it makes the feature feel broken even though it works.
+        //
+        // The two cases are not the same. While fx is null there is nothing to maintain and
+        // everything to gain from noticing a new stream quickly; once attached, the effect
+        // stays attached and there is no reason to look often. Two seconds unattached costs
+        // a local file read and two property reads - no IPC - and only runs in the window
+        // between playback starting and the effect landing.
+        sleep(fx == nullptr ? 2 : 30);
     }
 
     android::IPCThreadState::self()->joinThreadPool();
