@@ -489,6 +489,31 @@ for _p in persist.audio.hifi persist.audio.uhqa vendor.audio.hifi.dac \
           persist.vendor.audio.ull.period.size; do
   P "    $_p = $(gp $_p)"
 done
+
+# HFP state, because that is where the field failures are.
+#
+# A capture from a CPH2769 recorded 35 hfp_audio disconnects in one session, median hold
+# 27 seconds, 18 of them under 30 - the signature of SCO being opened, carrying nothing,
+# and being torn down. A2DP was almost untouched, so this is the call profile, not music.
+#
+# ASB does not configure HFP and will not start: the read-only picture comes first. These
+# are the knobs that decide whether the stack keeps an idle SCO link alive, and knowing
+# their live values is what separates a fix from a guess.
+P "  HFP / SCO state:"
+for _p in persist.bluetooth.hfp_available_guard bt.max.hfpclient.connections \
+          persist.vendor.btstack.enable.swb persist.vendor.qcom.bluetooth.enable.splita2dp \
+          persist.bluetooth.sco_managed_by_audio; do
+  P "    $_p = $(gp $_p)"
+done
+_hfp_sr="$(settings get global bluetooth_hfp_client_enabled 2>/dev/null)"
+P "    setting bluetooth_hfp_client_enabled = ${_hfp_sr:-<unset>}"
+_hfp_ev="/data/adb/asb/bt_lifecycle_events.tsv"
+if [ -r "$_hfp_ev" ]; then
+  P "    recorded hfp disconnects: $(grep -c 'hfp_audio_disconnect' "$_hfp_ev" 2>/dev/null)"
+  P "    recorded a2dp disconnects: $(grep -c 'a2dp_profile_disconnect' "$_hfp_ev" 2>/dev/null)"
+else
+  P "    (no lifecycle recording - start a capture with ASB_BT_RECONNECT_TRACE=1)"
+fi
 # audio_profile (replaced AUDIO_EQ_COMPAT + the property half of AUDIO_AGGRESSIVE)
 NOTE "audio_profile = $(cfg audio_profile)"
 
@@ -1553,7 +1578,17 @@ for _vm in swappiness vfs_cache_pressure watermark_scale_factor; do
 done
 # memory cgroup presence (ASB BG_TRIM depends on memcg)
 _memcg="$(firstf '/dev/memcg' '/sys/fs/cgroup/memory')"
-[ -n "$_memcg" ] && NOTE "memcg present: $_memcg (BG_TRIM can act)" || NOTE "no memcg path (BG_TRIM limited)"
+# Say which half is missing, not that the whole tweak is limited.
+#
+# BG_TRIM has two mechanisms: memory cgroups, and standby buckets via am set-standby-bucket.
+# Only the first needs memcg. The old wording - "BG_TRIM limited" - read as "this does not
+# work here", and that is how a CPH2769 owner took it, on a device logging 2744 timer
+# wakeups a session: exactly what buckets are for, and buckets were running the whole time.
+if [ -n "$_memcg" ]; then
+  NOTE "memcg present: $_memcg (BG_TRIM: memory limits + standby buckets)"
+else
+  NOTE "no memcg path (BG_TRIM: standby buckets only - memory limits unavailable here)"
+fi
 _bgtrim="$(cfg BG_TRIM_LEVEL)"; NOTE "BG_TRIM_LEVEL = ${_bgtrim:-safe}"
 # Athena state. ASB never disables com.oplus.athena, but older builds did and did not
 # record it, so uninstall could not restore it either. Surfacing it here means a tester
