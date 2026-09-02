@@ -807,7 +807,28 @@ apply_uclamp() {
   writef_retry /dev/cpuctl/top-app/cpu.uclamp.min           $_P_UCL_TOP 2 0.06 || true
   # uclamp.MIN above is a floor and never fights the guard, so it always applies.
   # The MAX ceilings below are exactly what the guard lifts - leave them alone.
-  asb_cam_guard_active && return 0
+  # The camera guard must not leave the ceilings unset.
+  #
+  # Returning here skips every uclamp.max write, which is right while the camera holds
+  # its lease - deadline work must not be capped. But on a cold boot nothing has
+  # written these nodes yet, and cpuctl defaults to 0: a diag taken shortly after boot
+  # reads "top-app uclamp.max = 0.00", meaning the scheduler is told the foreground app
+  # needs no CPU at all. That is the strongest possible throttle, applied by accident,
+  # and it is the shape of "slow and hot for the first minutes after a reboot".
+  #
+  # Publish an unrestricted ceiling before stepping aside. 100 means "no limit", so the
+  # camera keeps the free hand it needs and the nodes are never left at zero.
+  if asb_cam_guard_active; then
+    for _cg_t in top-app foreground background system-background; do
+      for _cg_n in "/dev/cpuctl/$_cg_t/cpu.uclamp.max" "/dev/cpuctl/$_cg_t/uclamp.max"; do
+        [ -e "$_cg_n" ] || continue
+        case "$(cat "$_cg_n" 2>/dev/null)" in
+          0|0.00) writef_retry "$_cg_n" 100 2 0.06 || true ;;
+        esac
+      done
+    done
+    return 0
+  fi
   _ucl_bg_max="${UCL_BG_MAX:-40}"
   _ucl_fg_max="${UCL_FG_MAX:-70}"
   _ucl_top_max="${UCL_TOP_MAX:-85}"
