@@ -3057,7 +3057,19 @@ fi
 (
   _prev_route=""
   while true; do
-    sleep 60
+    # 5 s while the screen is on, 60 s otherwise.
+    #
+    # This loop now also has to notice playback starting, and a 60 s cadence would hand
+    # the user the same delay the signal was meant to remove. Five seconds is a bounded
+    # wait nobody will call broken.
+    #
+    # The screen-off branch keeps the slow interval and the guard below skips the pass
+    # entirely, so a sleeping phone is not woken any more often than before - the whole
+    # point of the earlier change to this loop.
+    case "$(dumpsys deviceidle get screen 2>/dev/null)" in
+      false|Asleep) sleep 60 ;;
+      *) sleep 5 ;;
+    esac
     # Skip the whole pass while the screen is off.
     #
     # This watches which output the DSP effect should follow, and it ran every 60 seconds
@@ -3086,6 +3098,22 @@ fi
       *speaker*|*SPEAKER*) _now="speaker" ;;
     esac
     [ -n "$_now" ] || continue
+    # Also wake the attacher when playback STARTS, not only when the route changes.
+    #
+    # The attacher polls every 30 s while idle, so opening YouTube gives up to half a
+    # minute of stock volume before the effect lands - audible, and it reads as the
+    # feature being broken. The daemon already handles SIGUSR1 to cut its sleep short;
+    # nothing was sending it on a playback transition, only on a route change.
+    #
+    # This needs no rebuild of the native binary, which matters: the fix inside
+    # asb_dsp_attach.cpp is correct but cannot ship until that workflow can run.
+    _play_now=0
+    dumpsys audio 2>/dev/null | grep -qiE "state:started|player piid.*started" && _play_now=1
+    if [ "$_play_now" = "1" ] && [ "${_prev_play:-0}" = "0" ]; then
+      pkill -USR1 -f asb_dsp_attach 2>/dev/null \
+        || killall -USR1 asb_dsp_attach 2>/dev/null || true
+    fi
+    _prev_play="$_play_now"
     [ "$_now" = "$_prev_route" ] && continue
     _prev_route="$_now"
     resetprop -n persist.asb.dsp.route "$_now" >/dev/null 2>&1 \
