@@ -4152,6 +4152,7 @@ function cfgEnsureCaps() {
 
 function cfgRenderSection(list, section) {
   cfgEnsureCaps();
+  if (ASB_GRADE === null) { ASB_GRADE = {}; cfgLoadGrade().then(function(){ try { cfgRender(); } catch(e){} }); }
   const head = document.createElement('div');
   head.className = 'cfg-section';
   const ico = document.createElement('span');
@@ -4228,6 +4229,39 @@ function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
  *
  * The UI said "not applied", which reads as failure. It is not a failure; it is a pending
  * reboot, and saying so is the difference between a user waiting and a user filing a bug. */
+/* Applied camera grade, read from the marker the grader leaves behind.
+ *
+ * asb_camera_grade.sh records the values it actually baked into the tone tables:
+ *   <mark>=<srchash>:<level>:<grain>:<contrast>:<portrait>:<lowlight>
+ *
+ * Comparing the saved config against that marker is what separates "changed, waiting for a
+ * reboot" from "already live". Without it the badge said "applies after reboot" forever,
+ * including right after a reboot - which is its own kind of wrong answer, and the one the
+ * user is looking at now. */
+let ASB_GRADE = null;
+async function cfgLoadGrade() {
+  try {
+    const r = await run("cat /data/adb/asb/grade_marks/*.mark 2>/dev/null | head -1");
+    const line = String((r && (r.stdout || r)) || '').trim();
+    const eq = line.indexOf('=');
+    if (eq < 0) { ASB_GRADE = {}; return; }
+    const f = line.slice(eq + 1).split(':');
+    ASB_GRADE = {
+      CAMERA_LEVEL: f[1], CAMERA_GRAIN: f[2], CAMERA_CONTRAST: f[3],
+      CAMERA_PORTRAIT: f[4], CAMERA_LOWLIGHT: f[5]
+    };
+  } catch (e) { ASB_GRADE = {}; }
+}
+
+/* Pending only when the saved value differs from the baked one. Unknown marker means we
+   cannot tell, and claiming "pending" on a guess is worse than staying quiet. */
+function cfgCameraPending(key, cur) {
+  if (!ASB_GRADE) return false;
+  const baked = ASB_GRADE[key];
+  if (baked === undefined || baked === '') return false;
+  return String(cur) !== String(baked);
+}
+
 const ASB_NEEDS_REBOOT = {
   CAMERA_LEVEL: 1, CAMERA_GRAIN: 1, CAMERA_CONTRAST: 1,
   CAMERA_PORTRAIT: 1, CAMERA_LOWLIGHT: 1,
@@ -4814,7 +4848,7 @@ function cfgRenderRow(list, it, showCat) {
      * honestly greyed out - the user stops trusting every other switch too.
      *
      * The capability manifest already knows all of this; it simply never reached the UI. */
-    if (ASB_NEEDS_REBOOT[it.key] && st.cls !== 'off') {
+    if (ASB_NEEDS_REBOOT[it.key] && st.cls !== 'off' && cfgCameraPending(it.key, cur)) {
   /* Saved and correct, but the graded file is only rebuilt at install/boot. */
   badge.className = 'cfg-status na';
   badge.textContent = T('cfg_after_reboot', 'applies after reboot');
