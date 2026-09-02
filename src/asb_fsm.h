@@ -724,10 +724,25 @@ static float g_ui_quiet_floor = -1.0f;
 static void asb_ui_quiet_floor_update(const asb_metrics_t *m) {
     float now = m->cpu.load1;
     if (now < 0.0f) return;
+    /* Hold the observed minimum; let it expire slowly rather than chase the average.
+     *
+     * The 1/16 rise was far too eager. Replaying a real capture through it, a floor that
+     * should have settled at the observed minimum of 6.3 drifted to 8.03 - close enough to
+     * the median of 8.9 that the margin swallowed almost everything and 210 of 221 samples
+     * came out LIGHT_IDLE. Tuning the divisor fixes that one log and nothing else: every
+     * value from 1/64 to 1/1024 gives a different split on the same data, which is the
+     * signature of fitting noise.
+     *
+     * So do not average at all. Keep the lowest load seen, and let it age out over a long
+     * window so a genuine change in the device's resting level is still picked up - a ROM
+     * update, a new always-on service - without a busy afternoon moving it at all.
+     *
+     * 0.1% per tick is roughly a 10% rise per thousand ticks; at a 2 s screen-on tick that
+     * is about half an hour to move the floor a tenth. Slow enough to ignore workload,
+     * fast enough that a permanent change is absorbed within a day. */
     if (g_ui_quiet_floor < 0.0f)      g_ui_quiet_floor = now;
     else if (now < g_ui_quiet_floor)  g_ui_quiet_floor = now;
-    else if (now < g_ui_quiet_floor * 2.0f)
-        g_ui_quiet_floor += (now - g_ui_quiet_floor) / 16.0f;
+    else                              g_ui_quiet_floor *= 1.001f;
 }
 
 static float asb_ui_quiet_floor(const asb_metrics_t *m) {
