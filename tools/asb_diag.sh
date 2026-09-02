@@ -242,6 +242,35 @@ P "  root_manager         : $_rm"
 [ "$_rm" = "apatch" ] && NOTE "APatch path: OP12 camera handling is scoped specifically for APatch (real /odm mount)."
 
 # =====================================================================
+SEC "0c. AUDIO CONFIG TREE  (which SKU the platform actually reads)"
+# ColorOS keeps several SKU trees in one image and loads exactly one.
+#
+# A stock Ace 5 capture carries sku_pineapple, sku_cliffs and their _qssi variants side by
+# side, plus audio_effects.xml at eleven separate paths. ASB's own path list has no SKU
+# component, so on such a device it can find a file the framework never reads - and an
+# effect registered in one config while audioserver loads another is how audioserver dies,
+# taking SystemUI and the camera with it.
+#
+# Read-only. Printed so a mismatch is visible before it becomes a crash report.
+NOTE "board platform: $(gp ro.board.platform)"
+_ad_p="$(gp ro.board.platform)"
+_ad_live=""
+case "$_ad_p" in ''|*[!a-z0-9_]*) _ad_p="" ;; esac
+if [ -n "$_ad_p" ]; then
+  for _d in "/vendor/etc/audio/sku_$_ad_p" "/odm/etc/audio/sku_$_ad_p"; do
+    [ -d "$_d" ] && { _ad_live="$_d"; break; }
+  done
+fi
+NOTE "live audio SKU dir: ${_ad_live:-none (no SKU split on this platform)}"
+_ad_n=0
+for _f in /vendor/etc/audio_effects.xml /odm/etc/audio_effects.xml \
+          /vendor/etc/audio/sku_*/audio_effects.xml /odm/etc/audio/sku_*/audio_effects.xml \
+          /vendor/etc/audio_effects_config.xml /odm/etc/audio_effects_config.xml; do
+  [ -f "$_f" ] && _ad_n=$(( _ad_n + 1 ))
+done
+NOTE "audio effect configs present: $_ad_n"
+NOTE "(ASB patches audio only where the DSP library exists - see dsp_soundfx in capabilities)"
+
 SEC "0a. DEVICE CAPABILITIES  (discovered facts — from device_caps.env)"
 _caps="/data/adb/asb/device_caps.env"
 if [ -f "$_caps" ]; then
