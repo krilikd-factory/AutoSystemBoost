@@ -555,5 +555,9 @@
   "theme_dark": "Dunkles Design",
   "theme_light": "Helles Design",
   "wb_radio_policy": "Aktiviert ASBs getrennte Mobilfunk-Kontext- und Keepalive-Policy. Auf WLAN-only-Geräten oder ohne SIM ausgeschaltet lassen.",
-  "stock_load_now": "1 Min"
+  "stock_load_now": "1 Min",
+  "cfg_unavailable": "unavailable on this device",
+  "cfg_unavailable_why": "This phone does not expose: ",
+  "cfg_after_reboot": "applies after reboot",
+  "cfg_after_reboot_why": "Saved. Camera tone tables are rebuilt when the module starts."
 }

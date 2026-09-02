@@ -555,5 +555,9 @@
   "theme_dark": "المظهر الداكن",
   "theme_light": "المظهر الفاتح",
   "wb_radio_policy": "يفعّل سياسة ASB المنفصلة لسياق بيانات الهاتف وkeepalive. اتركه مغلقاً على أجهزة Wi‑Fi فقط أو من دون SIM.",
-  "stock_load_now": "1 د"
+  "stock_load_now": "1 د",
+  "cfg_unavailable": "unavailable on this device",
+  "cfg_unavailable_why": "This phone does not expose: ",
+  "cfg_after_reboot": "applies after reboot",
+  "cfg_after_reboot_why": "Saved. Camera tone tables are rebuilt when the module starts."
 }

@@ -709,5 +709,9 @@
   "theme_dark": "Մութ թեմա",
   "theme_light": "Բաց թեմա",
   "wb_radio_policy": "Միացնում է ASB-ի առանձին բջջային համատեքստի և keepalive քաղաքականությունը։ Անջատված թողեք միայն Wi‑Fi-ով կամ SIM չունեցող սարքերում։",
-  "stock_load_now": "1 րոպե"
+  "stock_load_now": "1 րոպե",
+  "cfg_unavailable": "unavailable on this device",
+  "cfg_unavailable_why": "This phone does not expose: ",
+  "cfg_after_reboot": "applies after reboot",
+  "cfg_after_reboot_why": "Saved. Camera tone tables are rebuilt when the module starts."
 }

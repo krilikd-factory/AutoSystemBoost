@@ -709,5 +709,9 @@
   "theme_dark": "Thème sombre",
   "theme_light": "Thème clair",
   "wb_radio_policy": "Active la politique distincte d’ASB pour contexte cellulaire et keepalive. Laissez-la désactivée sur un appareil Wi‑Fi uniquement ou sans SIM.",
-  "stock_load_now": "1 min"
+  "stock_load_now": "1 min",
+  "cfg_unavailable": "unavailable on this device",
+  "cfg_unavailable_why": "This phone does not expose: ",
+  "cfg_after_reboot": "applies after reboot",
+  "cfg_after_reboot_why": "Saved. Camera tone tables are rebuilt when the module starts."
 }

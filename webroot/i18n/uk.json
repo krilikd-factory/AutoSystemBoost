@@ -555,5 +555,9 @@
   "theme_dark": "Темна тема",
   "theme_light": "Світла тема",
   "wb_radio_policy": "Увімкнено окрему політику ASB для контексту мобільних даних і keepalive. Залиште вимкненою на пристрої без SIM або лише з Wi‑Fi.",
-  "stock_load_now": "1 хв"
+  "stock_load_now": "1 хв",
+  "cfg_unavailable": "unavailable on this device",
+  "cfg_unavailable_why": "This phone does not expose: ",
+  "cfg_after_reboot": "applies after reboot",
+  "cfg_after_reboot_why": "Saved. Camera tone tables are rebuilt when the module starts."
 }

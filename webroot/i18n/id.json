@@ -555,5 +555,9 @@
   "theme_dark": "Tema gelap",
   "theme_light": "Tema terang",
   "wb_radio_policy": "Mengaktifkan kebijakan terpisah ASB untuk konteks seluler dan keepalive. Biarkan mati pada perangkat hanya Wi‑Fi atau tanpa SIM.",
-  "stock_load_now": "1 mnt"
+  "stock_load_now": "1 mnt",
+  "cfg_unavailable": "unavailable on this device",
+  "cfg_unavailable_why": "This phone does not expose: ",
+  "cfg_after_reboot": "applies after reboot",
+  "cfg_after_reboot_why": "Saved. Camera tone tables are rebuilt when the module starts."
 }

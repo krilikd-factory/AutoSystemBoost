@@ -472,5 +472,9 @@
   "theme_dark": "Dark theme",
   "theme_light": "Light theme",
   "wb_radio_policy": "Enables ASB’s separate cellular-context and keepalive policy. Leave it off on WiFi-only or no-SIM devices.",
-  "stock_load_now": "1 min"
+  "stock_load_now": "1 min",
+  "cfg_unavailable": "unavailable on this device",
+  "cfg_unavailable_why": "This phone does not expose: ",
+  "cfg_after_reboot": "applies after reboot",
+  "cfg_after_reboot_why": "Saved. Camera tone tables are rebuilt when the module starts."
 }
