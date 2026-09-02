@@ -64,6 +64,46 @@ _probe() {
   _perfnode=0
   [ -r /sys/kernel/msm_performance/parameters/cpu_max_freq ] && _perfnode=1
   # The DSP effect needs its library present; several models ship without it.
+  # Which audio config the platform actually reads.
+  #
+  # ColorOS ships several SKU trees in one image - a captured Ace 5 has sku_pineapple,
+  # sku_cliffs and their _qssi variants side by side - and the framework loads exactly one,
+  # chosen by ro.board.platform. ASB's audio paths list has no SKU component at all, so on
+  # such a device it would find and patch a file the system never reads: the effect gets
+  # registered in one config while audioserver loads another, which is the shape of failure
+  # that takes audioserver down and SystemUI and the camera with it.
+  #
+  # Nothing here patches anything. It records which tree is live so the audio code has a
+  # correct target the day DSP support reaches this platform, and so a diag can show it.
+  _audio_sku=""
+  _plat="$(getprop ro.board.platform 2>/dev/null)"
+  case "$_plat" in ''|*[!a-z0-9_]*) _plat="" ;; esac
+  if [ -n "$_plat" ]; then
+    for _c in "/vendor/etc/audio/sku_${_plat}" "/odm/etc/audio/sku_${_plat}" \
+              "/vendor/etc/audio/sku_${_plat}_qssi"; do
+      [ -d "$_c" ] && { _audio_sku="$_c"; break; }
+    done
+  fi
+  # Which audio config tree the platform actually reads.
+  #
+  # ColorOS ships several SKU trees in one image - a captured Ace 5 carries sku_pineapple,
+  # sku_cliffs and their _qssi variants side by side - and the framework loads exactly one,
+  # selected by ro.board.platform. ASB's audio path list has no SKU component, so on such a
+  # device it would patch a file the system never reads: the effect registered in one
+  # config while audioserver loads another. That mismatch is what takes audioserver down,
+  # and SystemUI and the camera follow it.
+  #
+  # This patches nothing. It records which tree is live, so the audio code has a correct
+  # target the day DSP support reaches this platform, and a diag can show it today.
+  _audio_sku=""
+  _plat="$(getprop ro.board.platform 2>/dev/null)"
+  case "$_plat" in ''|*[!a-z0-9_]*) _plat="" ;; esac
+  if [ -n "$_plat" ]; then
+    for _c in "/vendor/etc/audio/sku_${_plat}" "/odm/etc/audio/sku_${_plat}" \
+              "/vendor/etc/audio/sku_${_plat}_qssi"; do
+      [ -d "$_c" ] && { _audio_sku="$_c"; break; }
+    done
+  fi
   _dsp=0
   for _d in /vendor/lib64/soundfx /system/lib64/soundfx /odm/lib64/soundfx; do
     [ -d "$_d" ] && { _dsp=1; break; }
@@ -88,6 +128,8 @@ _probe() {
     echo "memcg=$_memcg"
     echo "msm_performance=$_perfnode"
     echo "dsp_soundfx=$_dsp"
+    echo "audio_sku_dir=${_audio_sku:-none}"
+    echo "board_platform=${_plat:-unknown}"
   } > "$_tmp" || { rm -f "$_tmp"; _die "cannot write manifest"; }
   chmod 0644 "$_tmp" 2>/dev/null || true
   mv -f "$_tmp" "$OUT" || _die "cannot replace manifest"

@@ -113,7 +113,19 @@ if [ "$_blur_want" = "1" ]; then
   if [ "$_blur_live" != "1" ]; then
     _asb_setting_put global disable_window_blurs 1 || true
   fi
-  wm disable-blur true >/dev/null 2>&1 || true
+  # Not during boot - `wm` here is what re-resolves the user's display scale.
+  #
+  # The guard existed on the else-branch below but not on this one, so a phone with blur
+  # disabled ran `wm disable-blur true` on every boot. On ColorOS/OxygenOS that late
+  # WindowManager transaction makes the framework re-resolve display scale and density,
+  # and an Ace 5 user reports exactly that: screen scale reset to the middle option after
+  # every reboot, needing manual correction each time.
+  #
+  # The setting written above is what actually disables blur and it persists on its own.
+  # This call only pokes WindowManager to pick it up immediately, which matters when the
+  # user just flipped the switch and is watching - and not at all during boot, where the
+  # framework reads the setting as it starts anyway.
+  [ "$ASB_BLUR_BOOT_SYNC" = "1" ] || wm disable-blur true >/dev/null 2>&1 || true
 elif [ "$ASB_BLUR_BOOT_SYNC" != "1" ]; then
   # A user returning this control to stock expects their pre-ASB setting, not a module-defined
   # zero. Old installs without a baseline keep the conservative zero fallback for compatibility.
