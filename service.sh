@@ -819,11 +819,18 @@ apply_uclamp() {
   # Publish an unrestricted ceiling before stepping aside. 100 means "no limit", so the
   # camera keeps the free hand it needs and the nodes are never left at zero.
   if asb_cam_guard_active; then
-    for _cg_t in top-app foreground background system-background; do
+    # Write the profile rail, not 100.
+    #
+    # 100 means no ceiling at all - higher than the profile ever asks for. A phone left
+    # there runs hotter than intended and silently ignores the setting the user chose. The
+    # only safe value to publish here is the one the normal path would write moments later.
+    for _cg_e in "top-app:${UCL_TOP_MAX:-85}" "foreground:${UCL_FG_MAX:-70}" \
+                 "background:${UCL_BG_MAX:-40}" "system-background:${UCL_BG_MAX:-40}"; do
+      _cg_t="${_cg_e%%:*}"; _cg_v="${_cg_e##*:}"
       for _cg_n in "/dev/cpuctl/$_cg_t/cpu.uclamp.max" "/dev/cpuctl/$_cg_t/uclamp.max"; do
         [ -e "$_cg_n" ] || continue
         case "$(cat "$_cg_n" 2>/dev/null)" in
-          0|0.00) writef_retry "$_cg_n" 100 2 0.06 || true ;;
+          0|0.00) writef_retry "$_cg_n" "$_cg_v" 2 0.06 || true ;;
         esac
       done
     done
