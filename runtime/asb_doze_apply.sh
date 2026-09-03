@@ -200,6 +200,15 @@ asb_doze_trim_whitelist() {
     esac
     # Never trim an authenticator, whatever the user has or has not configured.
     #
+    # The Bluetooth stack is on this list for the same reason. A user reported headphones
+    # dropping twice in ten minutes, and the phase ledger shows the pattern: audio_bt
+    # sessions arriving in 0.8, 0.9, 3.1 and 5.4 minute fragments instead of one continuous
+    # stretch. Doze defers work for exempt-list removals, and an A2DP link that misses its
+    # timing does not degrade gracefully - it disconnects, and the user hears it stop.
+    #
+    # Telecom is here too: a call routed over the same stack has the same failure mode and
+    # a much higher cost when it happens.
+    #
     # Reported by a user with Microsoft Authenticator: it is a third-party package, so it
     # was trimmed like any other - and a 2FA push that arrives late is a login that fails.
     # Unlike a chat message, there is no "read it in the morning" for a one-time code: the
@@ -217,7 +226,11 @@ asb_doze_trim_whitelist() {
       com.azure.authenticator|com.google.android.apps.authenticator*|\
       com.duosecurity.duomobile|org.fedorahosted.freeotp|com.authy.authy|\
       com.beemdevelopment.aegis|com.yubico.yubioath|com.symantec.mobile.idsafe|\
-      *.mfa.*|*passkey*)
+      *.mfa.*|*passkey*|\
+      \
+      \
+      com.android.bluetooth|com.google.android.bluetooth|*.bluetooth.*|\
+      *bluetoothmidiservice*|com.android.server.telecom)
         continue ;;
     esac
 
