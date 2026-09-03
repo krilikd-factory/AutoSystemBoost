@@ -160,11 +160,11 @@ mount_mirrors() {
 }
 
 ui_print " "
-ui_print "    █████╗ ███████╗██████╗ "
+ui_print "   █████╗ ███████╗██████╗ "
 ui_print "  ██╔══██╗██╔════╝██╔══██╗"
 ui_print "  ███████║███████╗██████╔╝"
 ui_print "  ██╔══██║╚════██║██╔══██╗"
-ui_print "  ██║    ██║███████║██████╔╝"
+ui_print "  ██║  ██║███████║██████╔╝"
 ui_print "  ╚═╝  ╚═╝╚══════╝╚═════╝ "
 ui_print " "
 ui_print "  A u t o S y s t e m B o o s t"
