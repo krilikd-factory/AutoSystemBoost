@@ -4268,29 +4268,22 @@ const ASB_NEEDS_REBOOT = {
   CAMERA_AGGRESSIVE: 1, CAMERA_AGGRESSIVE_INJECT: 1
 };
 
-const ASB_CAP_REQUIRES = {
-  /* BG_TRIM is NOT listed against memcg.
-   *
-   * The memcg path is only half of it: the other half puts packages into standby buckets
-   * through `am set-standby-bucket`, which works on every device and is what actually
-   * restrains background wakeups. A CPH2769 reports "no memcg path (BG_TRIM limited)" and
-   * the diag's own wording made it read as broken - but 2744 timer wakeups a session is
-   * exactly what buckets exist to reduce, and that part runs.
-   *
-   * Marking it unavailable would grey out a control that is doing real work on that phone,
-   * which is worse than the vaguer status it has now. */
-  /* gms_trim and gms_freeze do NOT need memcg.
-   *
-   * Checked their sources: neither mentions memory cgroups at all. They work through
-   * appops and am set-standby-bucket, which exist on every device. Listing them here
-   * greyed out two working controls on a phone that merely lacks memcg - the same mistake
-   * as BG_TRIM, and with the same cost: the user is told a feature is unsupported while
-   * it is quietly doing its job. */
-  dsp_loudness: 'dsp_soundfx',
-  dsp_bass: 'dsp_soundfx',
-  dsp_compressor: 'dsp_soundfx',
-  dsp_outputs: 'dsp_soundfx'
-};
+/* Empty on purpose. The "unavailable on this device" mechanism is retired.
+ *
+ * It was wrong every time it fired. BG_TRIM was greyed out over memcg while its standby
+ * buckets ran fine; gms_trim and gms_freeze were listed against memcg they never use; the
+ * DSP tweaks were greyed out on a phone where the boost is plainly audible. Four entries,
+ * four false negatives - and each one told a user a working feature was unsupported, which
+ * is worse than the vague status it replaced.
+ *
+ * The root cause is structural: this reads /data/adb/asb/capabilities.env, and nothing
+ * regenerates that file - asb_capabilities.sh is not called from service.sh at all. So the
+ * UI was gating live controls on a probe that may never have run on this install.
+ *
+ * The probe itself stays: it is useful evidence in asbdiag, where a human reads it in
+ * context. What it must not do is silently disable switches. If a tweak genuinely cannot
+ * work, the honest place to say so is the diagnostic report, not a greyed-out toggle. */
+const ASB_CAP_REQUIRES = {};
 
 /* Capability manifest, read once per page load. Empty object when the file is missing, so
    every tweak renders normally rather than everything claiming to be unavailable. */
