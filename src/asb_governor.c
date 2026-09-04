@@ -1122,6 +1122,22 @@ static void asb_night_window_tick(int screen_on, time_t now) {
  * noisy headroom samples do not oscillate caps and create sysfs churn.
  */
 static int g_budget_trim_pct = 0;
+/* Whether the surface-comfort trim is currently engaged, for hysteresis.
+ *
+ * The threshold was a bare >= 43 with no exit band, and a field capture shows the cost:
+ * mean surface temperature across 122 phases was exactly 43 C, so a 20% ceiling trim was
+ * active essentially all the time - on a phone whose owner reported it running hotter and
+ * draining faster WITH the module than without.
+ *
+ * That is race-to-idle arriving from the other direction. Trimming the ceiling makes every
+ * task take longer, and a longer task keeps the cores, the panel and the radio awake for
+ * the whole of it. Past a point the trim costs more heat than it saves.
+ *
+ * 43 C is also not a comfort problem. A phone in the hand sits there under any real use;
+ * the temperature people actually describe as too hot to hold is closer to 46-48. Entering
+ * at 46 and leaving at 42 keeps the guard for the case it was written for and stops it
+ * living permanently in ordinary use. */
+static int g_budget_surface_engaged = 0;
 static time_t g_budget_trim_changed_at = 0;
 static char g_budget_reason[32] = "disabled";
 static int g_budget_base_trim_pct = 0;
@@ -1359,7 +1375,8 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             m->gpu.load_pct < g_asb_cfg.heavy_gpu_enter;
         if (smart_screenon_comfort && !m->bat.charging && m->misc.screen_on &&
             !m->misc.camera_active && fsm->state != ASB_STATE_GAMING &&
-            m->therm.temp_valid && m->therm.surface_hotspot_c >= 43 &&
+            m->therm.temp_valid &&
+            m->therm.surface_hotspot_c >= (g_budget_surface_engaged ? 42 : 46) &&
             m->bat.current_ma >= 250 &&
             (fsm->state != ASB_STATE_SUSTAINED || surface_comfort_sustained))
             asb_budget_raise(&candidate, &reason,
@@ -1409,6 +1426,10 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
         now - g_budget_trim_changed_at >= g_asb_cfg.thermal_budget_dwell_s) {
         if (candidate != g_budget_trim_pct || strcmp(reason, g_budget_reason) != 0) {
             g_budget_trim_pct = candidate;
+            /* Track engagement for the surface hysteresis: the band only means anything
+             * if the exit threshold is checked against a state we actually recorded. */
+            g_budget_surface_engaged =
+                (reason && strncmp(reason, "surface_comfort", 15) == 0) ? 1 : 0;
             g_budget_trim_changed_at = now;
             g_budget_base_trim_pct = base_candidate;
             g_budget_stage = stage;
