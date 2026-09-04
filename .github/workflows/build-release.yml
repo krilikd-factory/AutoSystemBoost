@@ -568,6 +568,7 @@ jobs:
             "runtime/asb_gms_trim.sh" \
             "runtime/asb_gms_freeze.sh" \
             "runtime/asb_wakelock_watch.sh" \
+            "runtime/asb_bt_link_watch.sh" \
             "runtime/asb_screenoff_class.sh" \
             "runtime/asb_smart_reset.sh" \
             "runtime/asb_gnss_trim.sh" \
