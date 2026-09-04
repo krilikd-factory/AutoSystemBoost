@@ -164,6 +164,7 @@ audio_remove_volume_limit|advanced|webui_sensitive
 purge_vendor_logs|internal|engine_or_derived
 dsp_effect_abi|internal|engine_or_derived
 bt_absvol_mode|user|webui_standard
+bt_link_stability|advanced|webui_sensitive
 bt_a2dp_offload|advanced|webui_sensitive
 region_allow_locale|internal|engine_or_derived
 charge_assist_alpha_max|internal|engine_or_derived
