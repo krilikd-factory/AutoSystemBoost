@@ -249,6 +249,28 @@ if _has cmd; then
 fi
 
 # --- WiFi scan throttle -----------------------------------------------------------------
+# Bluetooth link stability, when the user has asked for it.
+#
+# One user reports headphones dropping repeatedly where nobody else does, so this is not a
+# module defect to fix for everyone - it is a device-specific fault ASB can help with, and
+# only for whoever turns it on.
+#
+# Wi-Fi scanning is the first thing to try: the 2.4 GHz band and Bluetooth share an antenna
+# on every phone, and a scan sweeps the whole band. An A2DP stream that misses its slot
+# does not degrade, it disconnects. Throttling scans costs slower network discovery, which
+# nobody notices.
+#
+# Forced on top of whatever wifi_scan_throttle says, because both want the same thing here
+# and the stability request is the more specific one.
+_btls="$(_cfg bt_link_stability)"
+case "$_btls" in
+  stable)
+    _asb_setting_put global wifi_scan_throttle_enabled 1 || true
+    _out="$_out bt_link=stable"
+    ;;
+  *) : ;;
+esac
+
 _wt="$(_cfg wifi_scan_throttle)"
 case "$_wt" in
   0|1)
