@@ -122,6 +122,7 @@ wifi_scan_throttle|advanced|webui_sensitive
 radio_policy_enable|advanced|webui_sensitive
 net_handover_fast|advanced|webui_sensitive
 net_handover_active|advanced|webui_sensitive
+net_wifi_leave_rssi|advanced|webui_sensitive
 net_avoid_bad_wifi|advanced|webui_sensitive
 haptic_strength|user|webui_standard
 haptic_touch_strength|user|webui_standard
