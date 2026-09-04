@@ -145,6 +145,46 @@ _try_release() {
   # A validated network clears the streak on the way out: confirmation has to measure a
   # CONTINUOUS failure, not a tally of unrelated blips across the day.
   if ! _wifi_unvalidated; then rm -f "$CONFIRM" 2>/dev/null; fi
+  # Out of range is its own reason to leave, separate from validation.
+  #
+  # Requested by a user walking away from a hotspot: "it clings to the access point and
+  # will not switch". Validation alone cannot help there - a router at the edge of range
+  # still answers, so the network stays technically valid while nothing actually loads.
+  #
+  # Deliberately a much lower bar than the weak-signal shortcut below. -78 dBm means
+  # "degraded, decide sooner if it also fails validation"; this is -85, where 802.11 has
+  # essentially no usable rate left on any band and staying attached is not a judgement
+  # call. Requiring the same confirmation passes as everything else keeps a momentary dip
+  # behind a wall from triggering it.
+  #
+  # Off unless the user asks: ASB_WIFI_LEAVE_ON_RSSI is empty by default, and an empty
+  # value skips this branch entirely. Nobody gets a new disconnect reason without opting in.
+  # The config key is the user-facing form; the env var stays as an override for testing.
+  if [ -z "${ASB_WIFI_LEAVE_ON_RSSI:-}" ]; then
+    _cfg_rssi="$(_cfg net_wifi_leave_rssi)"
+    case "$_cfg_rssi" in -[0-9]*) ASB_WIFI_LEAVE_ON_RSSI="$_cfg_rssi" ;; esac
+  fi
+  if [ -n "${ASB_WIFI_LEAVE_ON_RSSI:-}" ]; then
+    _rs_now="$(_wifi_rssi)"
+    if [ -n "$_rs_now" ] && [ "$_rs_now" -lt "$ASB_WIFI_LEAVE_ON_RSSI" ] 2>/dev/null; then
+      _seen_r="$(cat "$CONFIRM" 2>/dev/null | tr -dc '0-9')"
+      case "$_seen_r" in '') _seen_r=0 ;; esac
+      _seen_r=$(( _seen_r + 1 ))
+      { printf '%s\n' "$_seen_r" > "$CONFIRM"; } 2>/dev/null || true
+      if [ "$_seen_r" -ge "${ASB_WIFI_CONFIRM_PASSES:-3}" ] 2>/dev/null; then
+        rm -f "$CONFIRM" 2>/dev/null
+        _log "out of range (rssi=${_rs_now}) - releasing Wi-Fi default route"
+        _nowv="$(_now)"
+        if _wifi_disable; then
+          printf '%s|%s\n' "$_nowv" "$(( _nowv + RELEASE_S ))" > "$ACTION" 2>/dev/null
+        fi
+        return 0
+      fi
+      _log "out of range (rssi=${_rs_now}) pass ${_seen_r}/${ASB_WIFI_CONFIRM_PASSES:-3}"
+      return 0
+    fi
+  fi
+
   _wifi_unvalidated || return 0
   _in_cooldown && return 0
 

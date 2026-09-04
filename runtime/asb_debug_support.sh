@@ -89,7 +89,20 @@ pid_from_file() {
 pid_is_live() {
   _pl_pid="${1:-}"
   [ -n "$_pl_pid" ] || return 1
-  kill -0 "$_pl_pid" 2>/dev/null
+  kill -0 "$_pl_pid" 2>/dev/null || return 1
+  # A killed child stays visible as a zombie until its parent reaps it, and kill -0
+  # succeeds on a zombie - so "did it die?" answered no for a process that is already gone.
+  # That is the "skip=still_live" line in the recovery log after a successful
+  # cancel=output_removed: the slot was never reclaimed because the corpse still answered.
+  #
+  # /proc state Z is the difference between "running" and "finished but not collected".
+  # Falls through to the kill -0 answer where /proc is unavailable.
+  if [ -r "/proc/$_pl_pid/stat" ]; then
+    case "$(cat "/proc/$_pl_pid/stat" 2>/dev/null)" in
+      *') Z '*) return 1 ;;
+    esac
+  fi
+  return 0
 }
 
 full_day_recovery_note() {
@@ -468,7 +481,37 @@ start_full_day() {
   fi
   if [ -d "$LOCKDIR" ]; then
     if lock_known_dead; then
-      rm -rf "$LOCKDIR" 2>/dev/null || true
+      # Claim the dead lock by RENAMING it, not by deleting it.
+      #
+      # rm -rf followed by mkdir is two steps, and two concurrent requests can both pass
+      # lock_known_dead, both delete, and both then succeed at mkdir - which is exactly the
+      # "concurrent start count round=N" failure: two recorders, two status=started.
+      #
+      # mv of a directory onto a name that does not exist is a single rename() and only one
+      # caller can win it. The loser finds the lock already gone, falls through to mkdir,
+      # and one of the two ends up owning the slot - never both.
+      _reclaim="$LOCKDIR.dead.$$"
+      if mv "$LOCKDIR" "$_reclaim" 2>/dev/null; then
+        rm -rf "$_reclaim" 2>/dev/null || true
+        # The rename winner creates the fresh lock immediately, inside the same branch.
+        # Doing it here rather than falling through closes the window between "the dead
+        # lock is gone" and "the new lock exists", which is where a second request would
+        # otherwise slip in and also succeed at mkdir - two owners, two recorders.
+        if ! mkdir "$LOCKDIR" 2>/dev/null; then
+          _pid="$(lock_wait_live_pid 2>/dev/null || true)"
+          echo 'status=already_running'; echo "pid=${_pid:-starting}"; echo "log=$RUNLOG"
+          return 0
+        fi
+        _lock_claimed=1
+      else
+        # Someone else won the rename and is already creating the lock. The request is
+        # being served, just not by us.
+        _pid="$(lock_wait_live_pid 2>/dev/null || true)"
+        echo 'status=already_running'
+        echo "pid=${_pid:-starting}"
+        echo "log=$RUNLOG"
+        return 0
+      fi
     else
       _pid="$(lock_wait_live_pid 2>/dev/null || true)"
       # A lock without a ready PID is still owned by another request. Returning a benign
@@ -489,7 +532,7 @@ start_full_day() {
   # mkdir is atomic. Metadata failures here occur before any child exists, so removing this
   # just-created directory is safe; from the nohup line onward only the recorder/dead-PID
   # verifier may release the guard.
-  if ! mkdir "$LOCKDIR" 2>/dev/null; then
+  if [ "${_lock_claimed:-0}" != "1" ] && ! mkdir "$LOCKDIR" 2>/dev/null; then
     _pid="$(lock_wait_live_pid 2>/dev/null || true)"
     echo 'status=already_running'
     echo "pid=${_pid:-starting}"
