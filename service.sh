@@ -1689,6 +1689,9 @@ fi
 
 _BG_TRIM_NEVER="
 com.android.systemui
+com.android.bluetooth
+com.google.android.bluetooth
+com.android.server.telecom
 com.android.launcher3
 net.oneplus.launcher
 com.oneplus.launcher
@@ -3184,6 +3187,10 @@ fi
     sh "$MODDIR/runtime/asb_wakelock_watch.sh" >/dev/null 2>&1
     # Trial expiry and rejected-write detection ride the same cycle: a probation that is
     # only checked when the user opens the UI is not a probation.
+    # Bluetooth link health rides the same cycle: the evidence accumulates over a session,
+    # so checking it once an hour would miss the window it appears in.
+    [ -f "$MODDIR/runtime/asb_bt_link_watch.sh" ] \
+      && sh "$MODDIR/runtime/asb_bt_link_watch.sh" >/dev/null 2>&1
     [ -f "$MODDIR/runtime/asb_trial.sh" ] \
       && sh "$MODDIR/runtime/asb_trial.sh" check >/dev/null 2>&1
     # Classify the screen-off stretch alongside the wakelock snapshot: both answer
