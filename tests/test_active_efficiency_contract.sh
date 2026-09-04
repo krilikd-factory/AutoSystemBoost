@@ -123,7 +123,21 @@ grep -Fq 'surface_comfort_smart_sustained' "$SRC" || fail "light SUSTAINED Smart
 grep -Fq 'int surface_comfort_sustained =' "$SRC" || fail "light SUSTAINED Smart comfort gate missing"
 grep -Fq 'g_smart_rt.app_hint <= ASB_APP_MEDIUM' "$SRC" || fail "SUSTAINED comfort must stay below heavy/gaming app hint"
 grep -Fq 'm->gpu.load_valid' "$SRC" || fail "SUSTAINED comfort requires valid GPU evidence"
-grep -Fq 'm->therm.surface_hotspot_c >= 43' "$SRC" || fail "surface-hotspot Smart comfort threshold missing"
+# The surface-comfort gate now has an entry/exit band instead of one bare threshold.
+#
+# It was pinned at >= 43, and a field capture showed why that number was wrong: mean
+# surface temperature across 122 phases was exactly 43 C, so the 20% ceiling trim was
+# engaged essentially all the time on a phone reported as running hotter and draining
+# faster WITH the module than without. A trim that never lifts makes every task longer,
+# and a longer task keeps the cores, panel and radio awake for all of it.
+#
+# What the contract protects is that the gate exists, is driven by surface temperature,
+# and has hysteresis - not one particular degree. Pinning the exact value made the test
+# fail on the fix rather than on a regression.
+grep -Eq 'surface_hotspot_c >= \(g_budget_surface_engaged \? [0-9]+ : [0-9]+\)' "$SRC" \
+  || fail "surface-hotspot Smart comfort threshold missing or lost its hysteresis"
+grep -Fq 'g_budget_surface_engaged' "$SRC" \
+  || fail "surface-comfort hysteresis state missing"
 grep -Fq 'g_asb_cfg.thermal_budget_moderate_trim_pct' "$SRC" || fail "surface-hotspot path must reuse bounded moderate trim"
 grep -Fq 'smart_screenon_comfort && !m->bat.charging && m->misc.screen_on' "$SRC" || fail "surface comfort charging/screen exclusion missing"
 grep -Fq '!m->misc.camera_active && fsm->state != ASB_STATE_GAMING' "$SRC" || fail "surface comfort camera/gaming exclusion missing"
