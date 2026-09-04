@@ -760,6 +760,15 @@ V "  effect registered with audioflinger" "present" \
 
 # =====================================================================
 SEC "2. BLUETOOTH"
+# Automatic link-drop mitigation, when it engaged.
+#
+# Shown because the phone quietly changed a Wi-Fi setting on the user's behalf, and that
+# should never be invisible - even when it is the right call.
+if [ -f "${ASB_CONFIG_STATE:-/data/adb/asb}/bt_link_auto" ]; then
+  NOTE "repeated audio-link drops were detected - Wi-Fi scanning is throttled to keep the link"
+  _btl="${ASB_CONFIG_STATE:-/data/adb/asb}/bt_link_watch.log"
+  [ -s "$_btl" ] && tail -2 "$_btl" 2>/dev/null | while IFS= read -r _l; do P "    $_l"; done
+fi
 _btmode="$(cfg bt_absvol_mode)"
 NOTE "bt_absvol_mode toggle = ${_btmode:-auto}"
 P "  live bluetooth props:"
