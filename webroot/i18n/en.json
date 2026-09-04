@@ -252,6 +252,10 @@
     "net_avoid_bad_wifi": {
       "name": "Let Android Leave Bad Wi-Fi",
       "desc": "Turns on the platform switch that moves your data to mobile when a Wi-Fi network stops actually working - a captive portal that never loads, a router with no internet, a hotel network that dropped out.\n\nAndroid does the switching itself: the Wi-Fi radio stays connected, nothing is turned off, and it moves back on its own the moment the link works again.\n\nDifferent from Active Fallback above: that one disables Wi-Fi outright, which is faster but visible and blunt.\n\nYour original value is saved and restored."
+    },
+    "net_wifi_leave_rssi": {
+      "name": "Leave Wi-Fi On Weak Signal",
+      "desc": "Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays valid while nothing loads.\n\nWith a threshold set, a weaker signal releases the route on its own. The same confirmation passes apply, so stepping behind a wall briefly does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left. -80 and -75 leave sooner.\n\nOff by default."
     }
   },
   "cfg_search": "Search",

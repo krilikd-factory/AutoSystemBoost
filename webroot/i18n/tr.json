@@ -250,6 +250,10 @@
     "net_avoid_bad_wifi": {
       "name": "Bozuk Wi-Fi'dan çık",
       "desc": "Bir Wi-Fi ağı gerçekten çalışmayı bıraktığında veriyi mobil ağa taşıyan sistem anahtarını açar: açılmayan oturum portalı, interneti olmayan modem, kopan otel ağı.\n\nDeğişimi sistem yapar: Wi-Fi radyosu bağlı kalır, hiçbir şey kapatılmaz ve bağlantı düzelir düzelmez kendiliğinden geri döner.\n\nYukarıdaki \"Etkin geçiş\"ten farkı: o Wi-Fi'ı tamamen kapatır - daha hızlı ama görünür ve sert.\n\nÖzgün değeriniz kaydedilir ve geri yüklenir."
+    },
+    "net_wifi_leave_rssi": {
+      "name": "Zayıf sinyalde Wi-Fi'dan çık",
+      "desc": "Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays valid while nothing loads.\n\nWith a threshold set, a weaker signal releases the route on its own. The same confirmation passes apply, so stepping behind a wall briefly does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left. -80 and -75 leave sooner.\n\nOff by default."
     }
   },
   "nav_main": "Ana",

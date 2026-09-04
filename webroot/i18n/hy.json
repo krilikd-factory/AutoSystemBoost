@@ -392,6 +392,10 @@
     "net_avoid_bad_wifi": {
       "name": "Լքել չաշխատող Wi-Fi-ը",
       "desc": "Միացնում է համակարգային անջատիչը, որը տվյալները տեղափոխում է բջջային ցանց, երբ Wi-Fi-ը դադարում է աշխատել՝ չբացվող մուտքի էջ, առանց ինտերնետի երթուղիչ, ընկած հյուրանոցային ցանց։\n\nՓոխարկումն անում է համակարգը՝ Wi-Fi ռադիոն մնում է միացած, ոչինչ չի անջատվում, և կապը ինքնուրույն վերադառնում է, հենց որ կապուղին նորից աշխատի։\n\nՏարբերությունը վերևի «Ակտիվ անցումից»՝ այն ամբողջովին անջատում է Wi-Fi-ը՝ ավելի արագ, բայց նկատելի և կոպիտ։\n\nՁեր սկզբնական արժեքը պահվում և վերականգնվում է։"
+    },
+    "net_wifi_leave_rssi": {
+      "name": "Լքել Wi-Fi-ը թույլ ազդանշանի դեպքում",
+      "desc": "Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays valid while nothing loads.\n\nWith a threshold set, a weaker signal releases the route on its own. The same confirmation passes apply, so stepping behind a wall briefly does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left. -80 and -75 leave sooner.\n\nOff by default."
     }
   },
   "opt": {

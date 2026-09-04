@@ -250,6 +250,10 @@
     "net_avoid_bad_wifi": {
       "name": "Sair de Wi-Fi sem internet",
       "desc": "Ativa a chave do sistema que move os dados para a rede móvel quando um Wi-Fi deixa de funcionar: um portal que não carrega, um roteador sem internet, uma rede de hotel que caiu.\n\nO sistema faz a troca: o rádio Wi-Fi continua conectado, nada é desligado, e volta sozinho assim que o link funcionar de novo.\n\nDiferença para \"Troca ativa\" acima: aquela desliga o Wi-Fi por completo - mais rápido, porém visível e brusco.\n\nSeu valor original é salvo e restaurado."
+    },
+    "net_wifi_leave_rssi": {
+      "name": "Sair do Wi-Fi com sinal fraco",
+      "desc": "Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays valid while nothing loads.\n\nWith a threshold set, a weaker signal releases the route on its own. The same confirmation passes apply, so stepping behind a wall briefly does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left. -80 and -75 leave sooner.\n\nOff by default."
     }
   },
   "nav_main": "Início",

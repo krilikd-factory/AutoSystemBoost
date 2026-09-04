@@ -392,6 +392,10 @@
     "net_avoid_bad_wifi": {
       "name": "Quitter un Wi-Fi défaillant",
       "desc": "Active l'interrupteur système qui bascule les données vers le réseau mobile quand un Wi-Fi cesse de fonctionner : un portail de connexion qui ne charge pas, un routeur sans internet, un réseau d'hôtel tombé.\n\nC'est le système qui bascule : la radio Wi-Fi reste connectée, rien n'est éteint, et il revient seul dès que le lien refonctionne.\n\nDifférence avec « Bascule active » ci-dessus : celle-ci coupe le Wi-Fi entièrement - plus rapide mais visible et brutal.\n\nVotre valeur d'origine est sauvegardée et restaurée."
+    },
+    "net_wifi_leave_rssi": {
+      "name": "Quitter le Wi-Fi si le signal est faible",
+      "desc": "Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays valid while nothing loads.\n\nWith a threshold set, a weaker signal releases the route on its own. The same confirmation passes apply, so stepping behind a wall briefly does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left. -80 and -75 leave sooner.\n\nOff by default."
     }
   },
   "opt": {

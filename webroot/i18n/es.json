@@ -250,6 +250,10 @@
     "net_avoid_bad_wifi": {
       "name": "Abandonar Wi-Fi que no funciona",
       "desc": "Activa el interruptor del sistema que mueve los datos a la red móvil cuando una Wi-Fi deja de funcionar: un portal de acceso que no carga, un router sin internet, una red de hotel caída.\n\nEl sistema hace el cambio: la radio Wi-Fi sigue conectada, no se apaga nada, y vuelve sola en cuanto el enlace funciona otra vez.\n\nDiferencia con \"Cambio activo\" de arriba: aquel desactiva la Wi-Fi por completo, más rápido pero visible y brusco.\n\nTu valor original se guarda y se restaura."
+    },
+    "net_wifi_leave_rssi": {
+      "name": "Salir del Wi-Fi con señal débil",
+      "desc": "Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays valid while nothing loads.\n\nWith a threshold set, a weaker signal releases the route on its own. The same confirmation passes apply, so stepping behind a wall briefly does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left. -80 and -75 leave sooner.\n\nOff by default."
     }
   },
   "nav_main": "Inicio",

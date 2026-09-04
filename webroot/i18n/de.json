@@ -250,6 +250,10 @@
     "net_avoid_bad_wifi": {
       "name": "Schlechtes WLAN verlassen",
       "desc": "Aktiviert den System-Schalter, der die Daten ins Mobilfunknetz verlegt, sobald ein WLAN nicht mehr funktioniert: ein Anmeldeportal, das nicht lädt, ein Router ohne Internet, ein abgebrochenes Hotel-WLAN.\n\nDas System schaltet selbst um: das WLAN-Radio bleibt verbunden, nichts wird abgeschaltet, und es kehrt von allein zurück, sobald die Verbindung wieder trägt.\n\nUnterschied zum \"Aktiven Wechsel\" oben: der schaltet WLAN ganz ab - schneller, aber sichtbar und grob.\n\nIhr ursprünglicher Wert wird gesichert und wiederhergestellt."
+    },
+    "net_wifi_leave_rssi": {
+      "name": "WLAN bei schwachem Signal verlassen",
+      "desc": "Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays valid while nothing loads.\n\nWith a threshold set, a weaker signal releases the route on its own. The same confirmation passes apply, so stepping behind a wall briefly does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left. -80 and -75 leave sooner.\n\nOff by default."
     }
   },
   "nav_main": "Start",

@@ -250,6 +250,10 @@
     "net_avoid_bad_wifi": {
       "name": "Йти з непрацюючого Wi-Fi",
       "desc": "Вмикає системний перемикач, який переводить трафік на мобільну мережу, коли Wi-Fi перестає працювати: портал авторизації, що не відкривається, роутер без інтернету, відвалена готельна мережа.\n\nПеремикає сама система: радіо Wi-Fi лишається підключеним, нічого не вимикається, і зв'язок повертається на Wi-Fi сам, щойно він знову запрацює.\n\nВідмінність від «Активного переходу» вище: той вимикає Wi-Fi цілком — швидше, але помітно й грубо.\n\nВихідне значення зберігається й повертається при вимкненні твіка або видаленні ASB."
+    },
+    "net_wifi_leave_rssi": {
+      "name": "Йти з Wi-Fi при слабкому сигналі",
+      "desc": "Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays valid while nothing loads.\n\nWith a threshold set, a weaker signal releases the route on its own. The same confirmation passes apply, so stepping behind a wall briefly does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left. -80 and -75 leave sooner.\n\nOff by default."
     }
   },
   "nav_main": "Головна",

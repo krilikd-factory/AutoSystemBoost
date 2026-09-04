@@ -277,6 +277,10 @@
     "net_avoid_bad_wifi": {
       "name": "离开无法上网的 Wi-Fi",
       "desc": "打开系统开关：当 Wi-Fi 实际不通时把数据切到移动网络——打不开的认证页、有信号却没有网络的路由器、掉线的酒店网络。\n\n由系统自己切换：Wi-Fi 射频保持连接，什么都不会被关闭，链路恢复后会自动切回。\n\n与上面的\"主动切换\"不同：那个会直接关闭 Wi-Fi，更快但明显且粗暴。\n\n你的原始设置会被保存并在关闭时恢复。"
+    },
+    "net_wifi_leave_rssi": {
+      "name": "信号弱时离开 Wi-Fi",
+      "desc": "Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays valid while nothing loads.\n\nWith a threshold set, a weaker signal releases the route on its own. The same confirmation passes apply, so stepping behind a wall briefly does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left. -80 and -75 leave sooner.\n\nOff by default."
     }
   },
   "optFor": {
