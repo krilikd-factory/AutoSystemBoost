@@ -3116,6 +3116,10 @@ const TECH_ICON_PATHS = {
    * holding on. Distinct from wifi_escape (ASB pushing a dead network away) and
    * wifi_auto_leave (the system moving the route itself). */
   wifi_weak_leave: '<path d="M9.6 16.2a3.7 3.7 0 0 1 4.8 0"/><path d="M6.5 13a8.2 8.2 0 0 1 5.5-2" stroke-dasharray="3 2"/><path d="M3.5 9.5a12.5 12.5 0 0 1 5-3" stroke-dasharray="2 3"/><circle cx="12" cy="19" r="1" fill="currentColor"/><path d="M18 8v6m-2-2 2 2 2-2"/>',
+  /* Headphone band with a steady link line beneath it, unbroken: the point of the tweak
+   * is that the connection holds. Distinct from the audio glyphs, which are about how
+   * sound is processed rather than whether it keeps arriving. */
+  bt_link_steady: '<path d="M6 14v-2a6 6 0 0 1 12 0v2"/><rect x="4" y="14" width="3.2" height="5" rx="1.2"/><rect x="16.8" y="14" width="3.2" height="5" rx="1.2"/><path d="M8.5 21.5h7"/>',
   wifi_escape: '<path d="M3.5 9.5a12.5 12.5 0 0 1 13.2-1.7M6.5 13a8.2 8.2 0 0 1 7.6-.6M9.6 16.2a3.7 3.7 0 0 1 2.5-.3"/><circle cx="12" cy="19" r="1" fill="currentColor"/><path d="M16 9h5m-2.5-2.5L21 9l-2.5 2.5"/>',
   thermal_mode: '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 10v7M17 5h4M19 3v4"/>',
   thermal_point: '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><circle cx="12" cy="17" r="1" fill="currentColor"/><path d="M18 12h3"/>',
@@ -3840,6 +3844,7 @@ const SNAP_KEYS = [
   'smart_battery_bias',
   'smart_media_guard',
   'bt_absvol_mode',
+  'bt_link_stability',
   'BG_TRIM_LEVEL',
   'cool_gaming',
   'auto_battery_enable',
@@ -3906,6 +3911,8 @@ const CFG_ITEMS = [
     desc:'Louder at the slider positions you actually use: mild \u2248+3 dB, strong \u2248+6, max \u2248+10. Leaves the quietest steps, alarms and ringtones alone, and cannot clip. On Max the top of the slider gets coarse. Reboot to apply.' },
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Volume Control',
     desc:'Stock = one shared scale: the phone slider moves the headset volume directly. Disabled = the two are independent, so the phone applies its own gain on top of whatever the headset is set to - usually louder, and what ViPER/EQ need. The trade is that the two scales no longer line up, which on some headsets makes the lowest steps too quiet. Applies without a reboot.' },
+  { key:'bt_link_stability', type:'seg', def:'stock', stock:'stock', opts:['stock','stable'], name:'Bluetooth Link Stability',
+    desc:'For phones where Bluetooth headphones disconnect on their own during playback. Most devices never do this, so it is off by default - it is here for the ones that do.\n\nOn stable, Wi-Fi stops scanning for new networks while audio is playing. The 2.4 GHz band and Bluetooth share one antenna on every phone, and a scan sweeps the whole band: a stream that misses its slot does not get quieter, it disconnects. This is the standard remedy for that symptom.\n\nThe cost is that new Wi-Fi networks appear more slowly in the list. Nothing else changes.\n\nIt does not force an audio codec. LDAC and aptX HD on a weak link do cause dropouts, but which one your headset uses is your choice and your headset\u2019s - changing it silently would change how your music sounds without asking.' },
   { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
     desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. Auto is the hands-off setting: ASB writes nothing and whatever the ROM chose stays. On actively writes hardware encoding (usually also what the phone ships with, but ASB sets it rather than leaving it). Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:25, step:1, name:'DSP Loudness',
@@ -3972,7 +3979,7 @@ const CFG_ITEMS = [
     desc:'Keeps the mobile-data context ready while the screen is on, so Android can move traffic to mobile data without waiting for the modem to wake after WiFi becomes unusable. It does not disconnect WiFi, force mobile data as the active route or change OEM signal/roaming thresholds. Screen-off save/night mode still releases the modem. Costs some battery while the screen is on; use it only if handover delay matters.' },
   { key:'net_handover_active', type:'bool', def:'0', stock:'0', name:'Active fallback from dead WiFi',
     desc:'Opt-in escape hatch for a WiFi route Android has marked not validated. Only while the screen is on, ASB temporarily turns WiFi off when it is still the default route but has no validated internet; mobile data can then become the route immediately. WiFi is turned back on after a short window and a cooldown prevents loops. Never acts from weak signal alone, never changes carrier/roaming thresholds, preferred network mode, Bluetooth or audio. Uses mobile data; keep off if you need uninterrupted local WiFi devices.' },
-  { key:'net_wifi_leave_rssi', type:'seg', def:'off', stock:'off', opts:['off','-85','-80','-75'], name:'Leave Wi-Fi On Weak Signal',
+  { key:'net_wifi_leave_rssi', type:'seg', def:'off', stock:'off', opts:['off','-85','-80','-75','-70','-65'], name:'Leave Wi-Fi On Weak Signal',
     desc:'Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people actually notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays technically valid while nothing loads, and the phone holds on.\n\nWith a threshold set, a signal weaker than it releases the route on its own. The same confirmation passes apply, so stepping behind a wall for a moment does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left on any band - at that point staying attached is not a judgement call. -80 and -75 leave sooner and are more likely to drop a network that would still have worked.\n\nOff by default. A phone that disconnects from Wi-Fi by itself is a surprise, and nobody should get that without choosing it.' },
   { key:'net_avoid_bad_wifi', type:'bool', def:'0', stock:'0', name:'Let Android Leave Bad Wi-Fi',
     desc:'Turns on the platform switch that moves your data to mobile when a Wi-Fi network stops actually working - the captive portal that never loads, the router that answers but has no internet, the hotel network that dropped out.\n\nAndroid does the switching itself: the Wi-Fi radio stays connected, nothing is turned off, and it moves back on its own the moment the link works again.\n\nThis is the closest a module can get to the Pixel behaviour where tapping the Wi-Fi tile switches networks instead of killing the radio - choosing the active network directly needs a system API no module can reach.\n\nDifferent from Active Fallback above: that one disables Wi-Fi outright, which is faster but visible and blunt. This one is quieter and hands the decision to the system.\n\nYour original value is saved and restored when you turn this off or uninstall ASB.' },
@@ -4064,7 +4071,7 @@ const CFG_CAT = {
   athena_service:'system',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', bt_absvol_mode:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'perf',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
@@ -4114,7 +4121,7 @@ const CFG_GROUP_OF = {
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio',
-  bt_absvol_mode:'audio',
+  bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
@@ -4322,6 +4329,7 @@ const CFG_ICONS = {
    * system instead of by us. Reusing the handover glyph says that at a glance. */
   net_avoid_bad_wifi:'wifi_auto_leave',
   net_wifi_leave_rssi:'wifi_weak_leave',
+  bt_link_stability:'bt_link_steady',
 };
 // What the kernel actually did with the network keys, read from the file
 // asb_net_apply.sh writes. Refreshed alongside the config, so a card can say "not
@@ -4682,7 +4690,7 @@ function willBreakOf(it, cur) {
 const APPLY_MODE = {
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE,
-  dsp_compressor:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
+  dsp_compressor:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
