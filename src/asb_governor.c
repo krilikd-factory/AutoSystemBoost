@@ -33,6 +33,9 @@
  * screen-on, socket and display uevents remain independently epoll-driven. */
 #define TIMER_IDLE_S   10   /* metrics interval, screen OFF */
 #define TIMER_DEEP_S   45   /* metrics interval, verified deep idle */
+/* Screen off with background work: halves the wakeup rate of the idle tier without
+ * waiting for the verified-deep-idle conditions that busy background work prevents. */
+#define TIMER_IDLE_NOISY_S 20
 #define TIMER_HOURLY_S  3600
 
 #define STATE_FILE      "/dev/.asb/state"
@@ -361,6 +364,9 @@ static void storm_shield_reset(void) {
 }
 
 static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
+    /* Cleared every pass: the branches below set what applies, and a flag left over from
+     * the previous tick would keep a slower cadence after the reason for it was gone. */
+    fsm->plan.idle_noisy_slow = 0;
     int p = fsm->profile_idx;
     /*
      * V56 HEAT FIX: SMART matched none of the branches below and fell through to the else =
@@ -420,11 +426,30 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
             }
         }
     } else if (p == PROFILE_BATTERY && !screen_on) {
+        /* Screen off with the state above LIGHT_IDLE: something is running, but nobody is
+         * looking at it.
+         *
+         * This branch keeps the 10 s cadence, and measurement says that is where the phone
+         * actually lives: overhead sampled across two diagnostics 14 minutes apart works
+         * out at 6.1 timer wakeups per minute, which is TIMER_IDLE_S exactly. The 45 s deep
+         * tier needs the state to be LIGHT_IDLE or lower, and background work keeps it just
+         * above that for long stretches.
+         *
+         * Six wakeups a minute is 360 an hour of pulling the CPU out of idle to look at
+         * sensors nobody can see the result of. The work behind them is real - a sync, a
+         * download - but ASB does not need to re-evaluate it twice a minute to stay
+         * correct: its own decisions here change on the scale of minutes.
+         *
+         * So this gets its own tier between IDLE and DEEP rather than sharing the
+         * screen-on-adjacent one. Reaction to something genuinely new is slower by at most
+         * a few seconds, and with the screen off nothing is waiting on it.
+         */
         fsm->plan.sensor_tier  = 1;  /* REDUCED */
         fsm->plan.thermal_div  = 1;
         fsm->plan.allow_hr     = 0;
         fsm->plan.ac_eligible  = 0;
         fsm->plan.deep_sleep   = 0;
+        fsm->plan.idle_noisy_slow = 1;
         fsm->plan.ac_budget    = 0;
         fsm->plan.sensor_budget = 0;
         fsm->plan.plan_class   = PLAN_CLASS_IDLE_NOISY;
@@ -6982,7 +7007,9 @@ int main(int argc, char **argv) {
             }
             {
                 static int g_idle_interval = TIMER_IDLE_S;
-                int want = fsm.plan.deep_sleep ? TIMER_DEEP_S : TIMER_IDLE_S;
+                int want = fsm.plan.deep_sleep ? TIMER_DEEP_S
+                         : fsm.plan.idle_noisy_slow ? TIMER_IDLE_NOISY_S
+                         : TIMER_IDLE_S;
                 /* Quiet Night Baseline -- even longer ticks in ultra-quiet */
                 if (g_quiet_night_active) want = g_asb_cfg.quiet_tick_s;
                 if (want != g_idle_interval) {

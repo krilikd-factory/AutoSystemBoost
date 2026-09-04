@@ -658,6 +658,10 @@ typedef struct {
         uint8_t allow_hr;       /* allow headroom reads */
         uint8_t ac_eligible;    /* anti-clamp allowed */
         uint8_t deep_sleep;     /* use extended tick interval */
+        /* Screen off, but the state is above LIGHT_IDLE: background work is running and
+         * nobody is watching. Between the idle and deep tiers - slower than "user might
+         * come back any second", faster than "verified deep idle". */
+        uint8_t idle_noisy_slow;
         uint8_t ac_prearm;      /* skip first detection delay on clamp (perf only) */
         uint8_t ac_budget;      /* max anti-clamp windows per session */
         uint8_t ac_used;        /* consumed anti-clamp budget (runtime) */
