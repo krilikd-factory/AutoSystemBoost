@@ -159,6 +159,14 @@ _try_release() {
   #
   # Off unless the user asks: ASB_WIFI_LEAVE_ON_RSSI is empty by default, and an empty
   # value skips this branch entirely. Nobody gets a new disconnect reason without opting in.
+  # Cooldown applies to this path too.
+  #
+  # It sits below for the validation path, and putting the signal check above it would let
+  # the two reasons take turns: validation releases, cooldown starts, and the RSSI branch
+  # releases again immediately because it never looked. One release then a rest, whichever
+  # reason triggered it - that is what the cooldown is for.
+  _in_cooldown && return 0
+
   # The config key is the user-facing form; the env var stays as an override for testing.
   if [ -z "${ASB_WIFI_LEAVE_ON_RSSI:-}" ]; then
     _cfg_rssi="$(_cfg net_wifi_leave_rssi)"
