@@ -66,7 +66,29 @@ _wifi_unvalidated() {
 
 # Current Wi-Fi signal in dBm, or empty when it cannot be read.
 _wifi_rssi() {
-  _r="$(dumpsys wifi 2>/dev/null | sed -n 's/.*[Rr][Ss][Ss][Ii][=: ]*\(-[0-9][0-9]*\).*/\1/p' | head -1)"
+  # Read the CURRENT link, not the first RSSI-looking number in the dump.
+  #
+  # dumpsys wifi contains three kinds of RSSI: the connected link, every network from the
+  # last scan, and the threshold constants in the configuration block. Taking the first
+  # match picked whichever came first in the output, and a field capture shows what that
+  # produced: "rssi=-30" logged by a user who was walking out of an office and had already
+  # lost the connection - -30 dBm is standing next to the router.
+  #
+  # So the signal check never fired for him even with a -75 threshold set, and the only
+  # thing that ever released the route was validation. That is exactly the complaint:
+  # the phone holds on to a network it can no longer use.
+  #
+  # /proc/net/wireless is the kernel's own view of the associated link and has no scan
+  # results in it at all. dumpsys stays as a fallback for ROMs that do not expose it,
+  # narrowed to the line that describes the connection.
+  _r=""
+  if [ -r /proc/net/wireless ]; then
+    _r="$(awk 'NR>2 && $1 ~ /^wlan/ {gsub(/\./,"",$4); print $4; exit}' /proc/net/wireless 2>/dev/null)"
+    case "$_r" in -[0-9]*) printf '%s' "$_r"; return 0 ;; *) _r="" ;; esac
+  fi
+  _r="$(dumpsys wifi 2>/dev/null \
+        | grep -m1 -E 'mWifiInfo|WifiInfo:|SSID:.*RSSI' \
+        | sed -n 's/.*[Rr][Ss][Ss][Ii][=: ]*\(-[0-9][0-9]*\).*/\1/p' | head -1)"
   case "$_r" in -[0-9]*) printf '%s' "$_r" ;; *) : ;; esac
 }
 
