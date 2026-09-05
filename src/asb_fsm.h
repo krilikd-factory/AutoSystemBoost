@@ -787,6 +787,25 @@ static inline int fsm_min_dwell_for_state(asb_state_t st) {
         case ASB_STATE_HEAVY: return g_asb_cfg.heavy_min_dwell_s;
         case ASB_STATE_SUSTAINED: return g_asb_cfg.sustained_min_dwell_s;
         case ASB_STATE_GAMING: return g_asb_cfg.gaming_min_dwell_s;
+        /* The light states had no dwell at all, and it shows in the trace.
+         *
+         * A capture with ASB owning the caps has 78 ceiling changes across 288 samples,
+         * cycling 1440000 -> 1785600 -> 1555200 -> 1785600 with a mean temperature delta of
+         * 2.4 C. Every one of those values maps to LIGHT_IDLE or MODERATE, so the ladder
+         * was not climbing under load - it was oscillating between two adjacent rungs on
+         * noise.
+         *
+         * Each change is a write, a re-plan, and a cluster ramping to a new ceiling for a
+         * few seconds before the next tick moves it again. That costs more energy than
+         * either ceiling saves.
+         *
+         * Four seconds is short enough that a real burst still gets through on the next
+         * tick - the screen-on cadence is 2 to 6 seconds - and long enough that a single
+         * noisy sample cannot flip the state on its own. Deliberately smaller than the
+         * heavy tiers: entering MODERATE is cheap and leaving it late is cheaper still.
+         */
+        case ASB_STATE_MODERATE:
+        case ASB_STATE_LIGHT_IDLE: return 4;
         default: return 0;
     }
 }
