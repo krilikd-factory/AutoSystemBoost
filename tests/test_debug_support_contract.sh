@@ -313,8 +313,19 @@ awk '
   END { if (rails != 3) { printf "FAIL debug support: checked %d central rails\\n", rails > "/dev/stderr"; exit 1 } }
 ' "$UI"
 for locale in "$ROOT"/webroot/i18n/*.json; do
-  need "$locale" '"dbg_diag_btn": "asbdiag"'
-  need "$locale" '"dbg_log_btn": "24h log"'
+  # Check the VALUE, not the byte sequence.
+  #
+  # These matched '"key": "value"' with the space that json.dump's indent mode happens to
+  # emit. Compacting the locale files to save 43 KB changed no data at all and broke both
+  # lines, because a grep for punctuation is not a test of content.
+  #
+  # Matching the key and value with optional whitespace between them holds for either
+  # formatting, and still fails if the string is actually missing or renamed - which is
+  # what the contract is about.
+  grep -Eq '"dbg_diag_btn"[[:space:]]*:[[:space:]]*"asbdiag"' "$locale" \
+    || fail "missing dbg_diag_btn=asbdiag in $locale"
+  grep -Eq '"dbg_log_btn"[[:space:]]*:[[:space:]]*"24h log"' "$locale" \
+    || fail "missing dbg_log_btn=24h log in $locale"
   need "$locale" '"dbg_log_failed"'
 done
 
