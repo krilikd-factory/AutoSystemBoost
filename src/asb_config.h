@@ -473,7 +473,13 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "camera_hold_max_s"))    c->camera_hold_max_s = atoi(v);
     else if (!strcmp(k, "perf_ceiling_pct")) {
         int _pc = atoi(v);
-        if (_pc < 60)  _pc = 60;
+        /* 65, not 60: below that the weighted trim inverts the ladder.
+         *
+         * The trim grows with ladder position faster than the raw ceiling does, so at 60%
+         * GAMING computes lower than HEAVY - the phone ends up slower under load than at
+         * rest. Nobody moving this slider is asking for that, and the WebUI is not the only
+         * way a value reaches this file. */
+        if (_pc < 65)  _pc = 65;
         if (_pc > 100) _pc = 100;
         c->perf_ceiling_pct = _pc;
     }

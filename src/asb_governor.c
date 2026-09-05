@@ -4955,14 +4955,69 @@ int main(int argc, char **argv) {
                     _new_caps.cpu_max[i] = (int)cpu_snap_freq(_si, (long)_new_caps.cpu_max[i]);
             }
             if (g_asb_cfg.perf_ceiling_pct > 0 && g_asb_cfg.perf_ceiling_pct < 100) {
+                /* Trim the PEAK, not the whole ladder.
+                 *
+                 * Applied flat, this multiplies the idle and light states too - and those
+                 * are already low by design, so there it does harm instead of good. Worse,
+                 * because the ladder rises faster than the trim, a low setting inverts it:
+                 * at 60% on an OP15 little cluster GAMING lands on 1566720 while HEAVY
+                 * lands on 1593630. The phone ends up SLOWER under load than off it, which
+                 * is the opposite of every reason someone touches this control.
+                 *
+                 * A user lowering this expects a calmer phone under load. What they got was
+                 * one that crawls at rest: a task needing 100 ms at full clock needs 330 ms
+                 * at a third of it, with every core, the display and the radio awake for
+                 * the whole stretch. That is race-to-idle, and it is why a capture with
+                 * perf_ceiling_pct=70 showed higher drain than none at all.
+                 *
+                 * Weighted by ladder position: full effect at GAMING, none at DEEP_IDLE.
+                 * The setting keeps meaning what the user thinks it means, and the ladder
+                 * stays monotonic at every value the slider can produce.
+                 */
+                float _pc_w = (fsm.state >= 0 && fsm.state < ASB_STATE_COUNT)
+                              ? g_state_level[fsm.state] : 1.0f;
+                if (_pc_w < 0.0f) _pc_w = 0.0f;
+                if (_pc_w > 1.0f) _pc_w = 1.0f;
+
+                /* Scale the weighting to the ladder this profile actually has.
+                 *
+                 * Raising the slider's minimum was not enough, and could not be: the trim
+                 * grows with ladder position at a fixed rate, while how much room the
+                 * ladder has depends on the profile. Battery spans 45% between its floor
+                 * and ceiling, Performance only 36% - so the same 35% trim eats the whole
+                 * ladder on one and not the other, and the state above ends up capped
+                 * lower than the state below it.
+                 *
+                 * Checked across all six profile/cluster pairs at every slider value: five
+                 * inversions remained at 65%, all of them on the narrow ladders.
+                 *
+                 * Limiting the weighted trim to half the ladder's own span keeps the peak
+                 * above every rung under it on any profile, and on any SoC - the span is
+                 * read from the bounds in force, not assumed.
+                 */
+                {
+                    const asb_profile_bounds_t *_pb = asb_profile_bounds_for(fsm.profile_idx);
+                    if (_pb && _pb->ceil.cpu_max[0] > 0 && _pb->floor.cpu_max[0] > 0) {
+                        long _span = _pb->ceil.cpu_max[0] - _pb->floor.cpu_max[0];
+                        long _room = _span * 50 / (_pb->ceil.cpu_max[0] ? _pb->ceil.cpu_max[0] : 1);
+                        if (_room > 0 && _pc_w * (100 - g_asb_cfg.perf_ceiling_pct) > (float)_room)
+                            _pc_w = (float)_room / (float)(100 - g_asb_cfg.perf_ceiling_pct);
+                    }
+                }
+
+                int _pc_eff = 100 - (int)((100 - g_asb_cfg.perf_ceiling_pct) * _pc_w);
+                if (_pc_eff < g_asb_cfg.perf_ceiling_pct) _pc_eff = g_asb_cfg.perf_ceiling_pct;
+                if (_pc_eff > 100) _pc_eff = 100;
+
+
                 for (int i = 0; i < 3; i++) {
                     if (_new_caps.cpu_max[i] > 0)
                         _new_caps.cpu_max[i] =
-                            (int)((long)_new_caps.cpu_max[i] * g_asb_cfg.perf_ceiling_pct / 100);
+                            (int)((long)_new_caps.cpu_max[i] * _pc_eff / 100);
                 }
                 if (_new_caps.gpu_max_pct > 0)
                     _new_caps.gpu_max_pct =
-                        _new_caps.gpu_max_pct * g_asb_cfg.perf_ceiling_pct / 100;
+                        _new_caps.gpu_max_pct * _pc_eff / 100;
                 for (int i = 0; i < 3; i++) {
                     /* Never leave a floor above the ceiling we just lowered - that is the
                      * contradiction the writer had to clean up after. */

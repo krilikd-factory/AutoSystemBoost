@@ -488,7 +488,19 @@ static void fsm_interpolate_caps(
         if (_hw0 > 0) {
             int _pct0 = (state == ASB_STATE_SUSTAINED) ? 49 : 55;
             int _lim0 = (int)((long)_hw0 * _pct0 / 100);
-            if (_lim0 > _p0) _p0 = _lim0;      /* never stricter than the OP15 baseline */
+            /* Take the share, not the larger of the two.
+             *
+             * "never stricter than the OP15 baseline" reads as safe and is the opposite:
+             * the constant is 55% of an OP15 little cluster and 99% of an Ace 5 one, so
+             * keeping whichever is higher means the proactive cap simply does not exist on
+             * the smaller part. Same on an OP12 at 90%.
+             *
+             * The intent of this cap is "do not chase the peak during ordinary work", and
+             * that is a proportion of the silicon, not a frequency. Using the share
+             * everywhere gives every device the same restraint the OP15 was tuned for -
+             * which on the OP15 itself is the identical number it always was.
+             */
+            _p0 = _lim0;
         }
         if (_hw1 > 0) {
             /* What slot 1 IS depends on the topology, and the cap has to follow.
@@ -510,7 +522,7 @@ static void fsm_interpolate_caps(
                 _pct1 = (state == ASB_STATE_SUSTAINED) ? 50 : 58;
             }
             int _lim1 = (int)((long)_hw1 * _pct1 / 100);
-            if (_lim1 > _p6) _p6 = _lim1;
+            _p6 = _lim1;
         }
         if (out->cpu_max[0] > _p0) out->cpu_max[0] = _p0;
         if (out->cpu_max[1] > _p6) out->cpu_max[1] = _p6;
@@ -1553,7 +1565,16 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
              * ceiling_lock -- if virtual ceiling on big cluster is below 1.5GHz, GAMING is
              * pointless.
              */
-            if (fsm->virtual_ceiling_p1 > 0 && fsm->virtual_ceiling_p1 < 1500000) {
+            /* "GAMING is pointless below this ceiling" is a proportion, not a frequency.
+             *
+             * 1500000 is 32% of an OP15 big cluster and 49% of an Ace 5 middle pair, so
+             * the same line drops GAMING on one device at a ceiling the other still
+             * considers usable. A phone kicked out of GAMING gets none of the gaming
+             * thermal handling either, which is the expensive half of that decision.
+             */
+            int _gp_hw = g_cpu_slot_hwmax[1];
+            int _gp_min = (_gp_hw > 0) ? (int)((long)_gp_hw * 32 / 100) : 1500000;
+            if (fsm->virtual_ceiling_p1 > 0 && fsm->virtual_ceiling_p1 < _gp_min) {
                 desired = ASB_STATE_HEAVY;
             }
 
