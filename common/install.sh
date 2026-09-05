@@ -193,15 +193,19 @@ asb_end_banner() {
   # BATTERY, MEMORY, PREPARED COMPONENTS - is useful while it streams past and noise once
   # the summary is there to replace it.
   #
-  # 26 lines: the block from WI-FI through the component list is 18 lines of content plus
-  # the blanks between sections, and the summary itself needs room under that. Sized with
-  # margin because installer windows differ in height, and a few extra blank lines cost
-  # nothing while too few leave a half-scrolled section on screen.
+  # 60 lines. The tail after this gap - summary, banner, the manager's own output - is
+  # 17 lines, so a window taller than 77 lines would still show BATTERY and MEMORY at 26.
+  # A tablet or a landscape phone is easily that tall, and the report was still visible
+  # there.
+  #
+  # Sizing this by counting is the wrong instinct anyway: there is no height to count
+  # against, and a blank line costs nothing. Enough to clear any plausible window beats
+  # exactly enough for the one that was measured.
   #
   # It used to sit ABOVE the component list, which put the hole in the middle of the
   # report instead of at its end.
   _i=0
-  while [ "$_i" -lt 26 ]; do
+  while [ "$_i" -lt 60 ]; do
     ui_print " "
     _i=$((_i + 1))
   done
