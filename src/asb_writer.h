@@ -121,6 +121,27 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
     h->attempts++;
     h->requested = requested;
     snprintf(h->path, sizeof(h->path), "%s", path);
+    /* Skip the write when the node already holds the value.
+     *
+     * Every write is an open, a write and a close, and on a contended node it is also a
+     * chance for the kernel or a vendor daemon to react to a change that is not a change.
+     * A read costs one of those three, and most ticks ask for the same value they asked
+     * for last time - the ladder only moves when the state moves.
+     *
+     * Counted as applied because the device IS in the requested state, which is what the
+     * caller asked about. Reporting it as a skip would make the health line look like
+     * something was refused.
+     */
+    int pre = sysfs_read_int(path, INT_MIN);
+    if (pre != INT_MIN && pre == requested) {
+        h->observed = pre;
+        h->applied++;
+        h->consecutive_failures = 0;
+        h->retry_at = 0;
+        snprintf(h->status, sizeof(h->status), "%s", "already_set");
+        return 0;
+    }
+
     int rc = sysfs_write_int(path, requested);
     int observed = (rc == 0) ? sysfs_read_int(path, INT_MIN) : INT_MIN;
     h->observed = observed;

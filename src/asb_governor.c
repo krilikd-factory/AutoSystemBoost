@@ -1146,6 +1146,10 @@ static void asb_night_window_tick(int screen_on, time_t now) {
  * Increasing restraint is immediate. Releasing restraint is dwell-limited so
  * noisy headroom samples do not oscillate caps and create sysfs churn.
  */
+/* Last valid control temperature, kept so the thermal read can be skipped without
+ * losing the distance-to-threshold check that decides whether skipping is safe. */
+static int g_last_cpu_max_c = 0;
+
 static int g_budget_trim_pct = 0;
 /* Whether the surface-comfort trim is currently engaged, for hysteresis.
  *
@@ -5556,6 +5560,31 @@ int main(int argc, char **argv) {
             int need_hr = fsm.plan.allow_hr;
             int need_thermal = 1;
 
+            /* Read the thermal zones less often when nothing is close to a threshold.
+             *
+             * Every pass opens eight or more zone files. That is the right price when the
+             * die is near the throttle point and a decision might change this tick; at
+             * 35 C with a 60 C threshold it buys nothing - the answer cannot change fast
+             * enough to matter between one tick and the next.
+             *
+             * plan.thermal_div already existed for exactly this and was only ever
+             * published, never applied. Using it now means the cadence follows the plan the
+             * FSM already built rather than a second rule that can drift from it.
+             *
+             * The skip is bounded by distance, not by state alone: within 12 C of the
+             * threshold every tick reads, whatever the plan says. Heat rises faster than
+             * a state machine notices, and being late there costs a hot phone.
+             */
+            if (fsm.plan.thermal_div > 1 && g_last_cpu_max_c > 0) {
+                int trip = asb_config_profile_sustained_temp_enter(&g_asb_cfg, 1);
+                if (trip > 0 && g_last_cpu_max_c <= trip - 12) {
+                    static int g_therm_skip = 0;
+                    g_therm_skip++;
+                    if (g_therm_skip % fsm.plan.thermal_div != 0)
+                        need_thermal = 0;
+                }
+            }
+
             /* Quiet Night Baseline -- after sustained quiet DEEP_IDLE,
              * enter ultra-quiet mode: even less reads, longer ticks. */
             if (fsm.state == ASB_STATE_DEEP_IDLE &&
@@ -5753,6 +5782,10 @@ int main(int argc, char **argv) {
                 }
             }
             metrics_read_all(&metrics, need_hr, need_thermal);
+            /* Remember the last real reading: on a skipped tick the struct still holds it,
+             * and the distance check above needs a value it can trust. */
+            if (need_thermal && metrics.therm.cpu_max_c > 0)
+                g_last_cpu_max_c = metrics.therm.cpu_max_c;
 
             /*
              * low-battery auto-switch.

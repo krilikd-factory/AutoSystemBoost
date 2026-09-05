@@ -728,6 +728,21 @@ static float g_ui_quiet_floor = -1.0f;
 static void asb_ui_quiet_floor_update(const asb_metrics_t *m) {
     float now = m->cpu.load1;
     if (now < 0.0f) return;
+    /* Learn only while the screen is on.
+     *
+     * The floor is meant to answer "what does the run queue look like when this phone is
+     * displaying something but the user is not driving it" - the baseline a UI burst has
+     * to rise above. Screen-off ticks are a different world: a sleeping phone runs at a
+     * load nothing on screen ever matches, and folding those samples in drags the floor
+     * toward zero.
+     *
+     * A floor near zero makes the +35% margin meaningless, so the GPU>=12 check goes back
+     * to being GPU-only in practice. A capture shows the consequence: 15 of 40 audio
+     * phases sat above that threshold at 465 mA average, with the GPU at 14% - music with
+     * a lit screen held at MODERATE for the whole session, which is the case the margin
+     * was added to catch.
+     */
+    if (!m->misc.screen_on) return;
     /* Hold the observed minimum; let it expire slowly rather than chase the average.
      *
      * The 1/16 rise was far too eager. Replaying a real capture through it, a floor that
