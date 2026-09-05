@@ -29,7 +29,12 @@ case "$(_cfg gnss_trim)" in
     # Turned off: release anything we restricted, then stop.
     if [ -f "$STATE" ] && _has appops; then
       while IFS= read -r _p; do
-        [ -n "$_p" ] && appops set "$_p" COARSE_LOCATION allow >/dev/null 2>&1
+        # Restore the recorded mode, not a blanket allow. Older records have no mode
+        # stored, and for those "allow" is the only thing we can say - but new ones carry
+        # what the app actually had.
+        _rp="${_p%%|*}"; _rm="${_p#*|}"
+        case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
+        [ -n "$_rp" ] && appops set "$_rp" COARSE_LOCATION "$_rm" >/dev/null 2>&1
       done < "$STATE"
       rm -f "$STATE" 2>/dev/null
       echo "gnss trim: off - location restored for the apps ASB had limited"
@@ -71,8 +76,18 @@ for _p in $(dumpsys location 2>/dev/null \
 
   # COARSE only, and only while cached: the app keeps precise location the moment it is
   # opened again. Android restores it on its own when the process is promoted.
+  # Record what the app had BEFORE changing it.
+  #
+  # Restore wrote "allow" unconditionally, which is not an undo: an app the user had
+  # already denied location to came back with it granted, and an app on "foreground only"
+  # came back on "always". ASB handed out a permission nobody gave it.
+  #
+  # appops get prints a line like "COARSE_LOCATION: allow"; the mode is the last field.
+  _prev="$(appops get "$_p" COARSE_LOCATION 2>/dev/null | head -1 | awk '{print $NF}')"
+  case "$_prev" in allow|ignore|deny|default|foreground) : ;; *) _prev="allow" ;; esac
+
   if appops set "$_p" COARSE_LOCATION ignore >/dev/null 2>&1; then
-    grep -qxF "$_p" "$STATE" 2>/dev/null || echo "$_p" >> "$STATE"
+    grep -qE "^${_p}\|" "$STATE" 2>/dev/null || printf '%s|%s\n' "$_p" "$_prev" >> "$STATE"
     echo "gnss trim: $_p was holding location while cached - limited until it is opened again"
   fi
 done

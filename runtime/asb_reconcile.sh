@@ -20,10 +20,26 @@
   ASB_REC_ONCE=0
   case "$1" in --once) ASB_REC_ONCE=1 ;; esac
   while true; do
+    # --once means one pass, whichever branch below is taken.
+    #
+    # The check used to live inside the governor-running branch only, so a run that took
+    # the lease branch or the fast-reconcile branch slept and looped forever instead of
+    # returning. The governor schedules this with `&` every few minutes, so each of those
+    # runs stayed resident: a background process per invocation, accumulating for as long
+    # as the phone is up.
+    #
+    # Verified in isolation: `sh asb_reconcile.sh --once` did not exit, stopping at the
+    # `sleep 45` in the fast branch.
+    #
+    # Placed at the top of the iteration so it holds for every branch, including any added
+    # later - the previous placement was correct for the code as written and silently wrong
+    # the moment a branch was added above it.
+    _rec_did_pass=1
+
     if [ "$_lease_remaining" -gt 0 ]; then
       _d=$(echo "$_lease_delays" | awk -v i="$_lease_remaining" '{print $(NF - i + 1)}')
       [ -z "$_d" ] || [ "$_d" = "0" ] && _d=2
-      sleep "$_d"
+      { [ "${ASB_REC_ONCE:-0}" = "1" ] && break; }; sleep "$_d"
       _lease_remaining=$((_lease_remaining - 1))
     elif [ "$ASB_GOV_ENABLED" = "1" ] && asb_governor_running; then
       _rec_scr=0
@@ -37,13 +53,13 @@
       [ "$_rec_scr" -eq 1 ] && sleep 120 || {
         _rec_prof="$(cat "$MODDIR/current_profile" 2>/dev/null)"
         if [ "$_rec_prof" = "battery" ]; then
-          sleep 600
+          { [ "${ASB_REC_ONCE:-0}" = "1" ] && break; }; sleep 600
         else
-          sleep 180
+          { [ "${ASB_REC_ONCE:-0}" = "1" ] && break; }; sleep 180
         fi
       }
     elif [ "$_reconcile_fast" -gt 0 ]; then
-      sleep 45
+      { [ "${ASB_REC_ONCE:-0}" = "1" ] && break; }; sleep 45
       _reconcile_fast=$((_reconcile_fast - 1))
     else
       _scr_idle=0
