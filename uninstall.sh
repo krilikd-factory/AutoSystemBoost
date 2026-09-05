@@ -155,7 +155,17 @@ fi
 if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; then
   while IFS= read -r _gp; do
     case "$_gp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
-    appops set "$_gp" COARSE_LOCATION allow >/dev/null 2>&1
+    # Restore the recorded mode, not a blanket allow: the record now carries what the
+
+    # app had before ASB touched it, and handing back "allow" to an app the user had
+
+    # denied is not an undo.
+
+    _rp="${_gp%%|*}"; _rm="${_gp#*|}"
+
+    case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
+
+    [ -n "$_rp" ] && appops set "$_rp" COARSE_LOCATION "$_rm" >/dev/null 2>&1
   done < /data/adb/asb/gnss_restricted
   rm -f /data/adb/asb/gnss_restricted 2>/dev/null
 fi
@@ -220,7 +230,17 @@ fi
 # restricted, because undoing their choice would be the same overreach in reverse.
 if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; then
   while IFS= read -r _gp; do
-    [ -n "$_gp" ] && appops set "$_gp" COARSE_LOCATION allow >/dev/null 2>&1
+    # Restore the recorded mode, not a blanket allow: the record now carries what the
+
+    # app had before ASB touched it, and handing back "allow" to an app the user had
+
+    # denied is not an undo.
+
+    _rp="${_gp%%|*}"; _rm="${_gp#*|}"
+
+    case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
+
+    [ -n "$_rp" ] && appops set "$_rp" COARSE_LOCATION "$_rm" >/dev/null 2>&1
   done < /data/adb/asb/gnss_restricted
   rm -f /data/adb/asb/gnss_restricted 2>/dev/null
 fi
