@@ -5000,12 +5000,15 @@ int main(int argc, char **argv) {
                     if (_pb && _pb->ceil.cpu_max[0] > 0 && _pb->floor.cpu_max[0] > 0) {
                         long _span = _pb->ceil.cpu_max[0] - _pb->floor.cpu_max[0];
                         long _room = _span * 50 / (_pb->ceil.cpu_max[0] ? _pb->ceil.cpu_max[0] : 1);
-                        if (_room > 0 && _pc_w * (100 - g_asb_cfg.perf_ceiling_pct) > (float)_room)
-                            _pc_w = (float)_room / (float)(100 - g_asb_cfg.perf_ceiling_pct);
+                        /* Explicit casts: the strict-warning budget counts implicit
+                         * int-to-float conversions, and these two were the whole overage. */
+                        float _pc_gap = (float)(100 - g_asb_cfg.perf_ceiling_pct);
+                        if (_room > 0 && _pc_gap > 0.0f && _pc_w * _pc_gap > (float)_room)
+                            _pc_w = (float)_room / _pc_gap;
                     }
                 }
 
-                int _pc_eff = 100 - (int)((100 - g_asb_cfg.perf_ceiling_pct) * _pc_w);
+                int _pc_eff = 100 - (int)((float)(100 - g_asb_cfg.perf_ceiling_pct) * _pc_w);
                 if (_pc_eff < g_asb_cfg.perf_ceiling_pct) _pc_eff = g_asb_cfg.perf_ceiling_pct;
                 if (_pc_eff > 100) _pc_eff = 100;
 
