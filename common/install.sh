@@ -161,16 +161,6 @@ asb_end_banner() {
       ui_print "      + $(printf "${ASB_L_MEM_TRIM:-background trimming: %s}" "$(_sg BG_TRIM_LEVEL)")" ;;
   esac
 
-  # Breathing room before the closing summary.
-  #
-  # These blank lines used to sit loose in the top-level install flow, so they landed wherever
-  # execution happened to reach them - which, once the sections below moved, meant a large gap
-  # opening up in the middle of the report rather than at its end.
-  _i=0
-  while [ "$_i" -lt 13 ]; do
-    ui_print " "
-    _i=$((_i + 1))
-  done
 
   # Categories last, not first.
   #
@@ -196,6 +186,17 @@ asb_end_banner() {
     ui_print "  📋  ${ASB_SEC_CATEGORIES:-ENABLED CATEGORIES}"
     printf '%s\n' "$_en" | while IFS= read -r _l; do ui_print "$_l"; done
   fi
+  # Breathing room before the closing summary.
+  #
+  # This used to sit above the component list, which put a fourteen-line hole between
+  # MEMORY and PREPARED COMPONENTS and left the summary crowded right underneath it - the
+  # opposite of what the gap is for. The components are the last thing the report says
+  # before the summary, so the space belongs after them.
+  _i=0
+  while [ "$_i" -lt 13 ]; do
+    ui_print " "
+    _i=$((_i + 1))
+  done
 
   if [ -n "$INFO" ] && [ -f "$INFO" ] && [ ! -s "$INFO" ]; then
     rm -f "$INFO" 2>/dev/null || true
