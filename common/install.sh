@@ -186,14 +186,22 @@ asb_end_banner() {
     ui_print "  📋  ${ASB_SEC_CATEGORIES:-ENABLED CATEGORIES}"
     printf '%s\n' "$_en" | while IFS= read -r _l; do ui_print "$_l"; done
   fi
-  # Breathing room before the closing summary.
+  # Scroll the detail off screen, leaving the summary alone at the end.
   #
-  # This used to sit above the component list, which put a fourteen-line hole between
-  # MEMORY and PREPARED COMPONENTS and left the summary crowded right underneath it - the
-  # opposite of what the gap is for. The components are the last thing the report says
-  # before the summary, so the space belongs after them.
+  # The installer view does not scroll back on most managers, so whatever sits at the
+  # bottom when it finishes is what the user reads. The per-section detail - WI-FI,
+  # BATTERY, MEMORY, PREPARED COMPONENTS - is useful while it streams past and noise once
+  # the summary is there to replace it.
+  #
+  # 26 lines: the block from WI-FI through the component list is 18 lines of content plus
+  # the blanks between sections, and the summary itself needs room under that. Sized with
+  # margin because installer windows differ in height, and a few extra blank lines cost
+  # nothing while too few leave a half-scrolled section on screen.
+  #
+  # It used to sit ABOVE the component list, which put the hole in the middle of the
+  # report instead of at its end.
   _i=0
-  while [ "$_i" -lt 13 ]; do
+  while [ "$_i" -lt 26 ]; do
     ui_print " "
     _i=$((_i + 1))
   done
