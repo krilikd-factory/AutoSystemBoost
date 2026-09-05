@@ -5332,7 +5332,10 @@ async function cfgSet(key, val, ctl) {
     var GOV_KEYS = ['auto_battery_enable','smart_battery_bias','charge_aware_enable',
                     'cool_gaming','bat_suppress_gaming','night_quiet_enable','night_modem_idle',
                     'sustained_temp_mode','BG_TRIM_LEVEL','UX_MANAGE_OEM_TOGGLES',
-                    'UX_MANAGE_TIMEOUTS'];
+                    'UX_MANAGE_TIMEOUTS',
+                    /* Read by the governor on reload like the rest of this list. Its card
+                     * said "applies immediately" while the toast sent the user to reboot. */
+                    'smart_media_guard'];
       if (key === 'log_level') {
         // Applied live: extreme mode changes device properties, and leaving it restores
         // them - waiting for a reboot would leave the phone in whichever state it was.
@@ -5398,7 +5401,10 @@ async function cfgSet(key, val, ctl) {
       }
       // Fast handover reuses the modem LPM owner and refreshes in its current mode, so
       // save/night remains a hard standby boundary rather than being accidentally woken.
-      if (key === 'radio_policy_enable' || key === 'net_handover_fast' || key === 'net_handover_active') {
+      if (key === 'radio_policy_enable' || key === 'net_handover_fast' || key === 'net_handover_active' ||
+          /* Same reconcile path: the watcher re-reads the threshold on the spot,
+           * so telling the user to reboot for it was simply wrong. */
+          key === 'net_wifi_leave_rssi') {
         try { await run('sh ' + MD + '/runtime/asb_lpm.sh refresh >/dev/null 2>&1'); } catch (e) {}
         try { await run('sh ' + MD + '/runtime/asb_wifi_fallback.sh reconcile >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' · applied'), cfgToastType(key));
@@ -5489,7 +5495,12 @@ async function cfgSet(key, val, ctl) {
       }
     var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune',
       'net_congestion_wifi','net_congestion_mobile','net_qdisc_wifi','net_qdisc_mobile',
-      'wifi_country','wifi_scan_throttle'];
+      'wifi_country','wifi_scan_throttle',
+      /* These reach the device through the same net-apply pass as the rest of this list.
+       * Left out of it, they fell to the final else and were announced as needing a
+       * reboot while their card said "applies immediately" - two answers to the same
+       * question, and the wrong one is the one the user sees after tapping. */
+      'net_avoid_bad_wifi','bt_link_stability'];
     var HAPTIC_KEYS = ['haptic_strength','haptic_touch_strength'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
