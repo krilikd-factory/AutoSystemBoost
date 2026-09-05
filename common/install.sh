@@ -3879,6 +3879,11 @@ AutoSystemBoost' $APIOCXM
 	  # Two user-facing tools were shipped by CI, verified present in the package, and then
 	  # removed right here - so asb_camera_repair.sh never existed on any device that was told to
 	  # run it, and asb_sysui_watch.sh came back "No such file or directory".
+	#
+	# asb_discover.sh is on this list because service.sh runs it at boot to build the
+	# capability manifest before the native governor starts. The call is guarded with
+	# [ -f ], so deleting it did not break the boot - it just silently skipped the step,
+	# and the governor came up without the derived policy it was meant to have.
 	  find "$MODPATH/tools" -maxdepth 1 -type f \
 	    ! -name "asb_state_sampler.sh" \
 	    ! -name "asb_drain_analyzer.sh" \
@@ -3890,6 +3895,8 @@ AutoSystemBoost' $APIOCXM
 	    ! -name "asb_camera_repair.sh" \
 	    ! -name "asb_sysui_watch.sh" \
 	    ! -name "asb_diag.sh" \
+	    ! -name "asb_discover.sh" \
+	    ! -name "asb_synthesize_bounds.sh" \
 	    ! -name "asb_recents_probe.sh" \
 	    ! -name "asb_config_backup.sh" \
 	    ! -name "asb_kernel_uv_coexist.sh" \
