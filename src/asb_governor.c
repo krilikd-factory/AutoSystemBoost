@@ -1152,6 +1152,10 @@ static void asb_night_window_tick(int screen_on, time_t now) {
 /* Last valid control temperature, kept so the thermal read can be skipped without
  * losing the distance-to-threshold check that decides whether skipping is safe. */
 static int g_last_cpu_max_c = 0;
+/* Last banked session as it was handed to the learner, for diagnostics. */
+static int  g_ses_last_temp = 0;
+static int  g_ses_last_dur  = 0;
+static char g_ses_last_reason[24] = "none";
 /* Current screen-on tick interval, so the timer is only re-armed when it actually
  * changes rather than on every pass. */
 static int g_active_interval = TIMER_ACTIVE_S;
@@ -1863,14 +1867,24 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                     * them a tier stuck at stock is indistinguishable from a tier
                     * the FSM deliberately left alone, and that ambiguity has cost
                     * several rounds of guessing already. */
-                   "uclamp_want=\"%d,%d\"\n",
+                   "uclamp_want=\"%d,%d\"\n"
+                   /* What the LAST banked session actually carried.
+                    *
+                    * The report shows the bucket average, and a capture had it at 30 C
+                    * while the phase ledger averaged 46 C - so the learner concluded "this
+                    * bucket runs cool" and raised the ceiling on a phone that was warm.
+                    * The average alone cannot say whether the sessions arrive cold or the
+                    * averaging is wrong, and guessing between those cost three rounds on
+                    * the uclamp problem already. */
+                   "ses_last_temp=%d\nses_last_dur=%d\nses_last_reason=\"%s\"\n",
                 g_smart_boot_settle, g_startup_quarantined,
                 g_thermal_cpu_type[0] ? g_thermal_cpu_type : "unknown", g_thermal_cpu_zone,
                 g_thermal_source_confidence, g_thermal_rejected_type, g_thermal_rejected_raw,
                 g_thermal_peer_hi, g_thermal_peer_lo, g_thermal_peer_n,
                 g_thermal_consensus_note,
                 writer_freq_table_len(0), writer_freq_table_len(1), writer_freq_table_len(2),
-                writer_last_uclamp_top(), writer_last_uclamp_bg());
+                writer_last_uclamp_top(), writer_last_uclamp_bg(),
+                g_ses_last_temp, g_ses_last_dur, g_ses_last_reason);
         fprintf(f, "cool_gaming=%d\n", g_asb_cfg.cool_gaming);
         fprintf(f, "cool_gaming_level=%d\n", g_smart_cool_gaming_lvl);
         fprintf(f, "game_charging=%d\ngame_bat_temp_peak_dc=%d\n"
@@ -3259,6 +3273,10 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         asb_smart_session_input_t sin = {0};
         sin.dur_s = (int)dur;
         sin.max_temp_c = fsm->ses_max_temp;
+        /* Record it as handed over, before anything downstream can average it away. */
+        g_ses_last_temp = fsm->ses_max_temp;
+        g_ses_last_dur  = (int)dur;
+        snprintf(g_ses_last_reason, sizeof(g_ses_last_reason), "%s", reason ? reason : "?");
         sin.max_skin_c = fsm->ses_max_skin_temp;
         sin.trust = (bat_trust_val >= 0) ? bat_trust_val : ASB_TRUST_PARTIAL;
         sin.was_heavy = (fsm->ses_time_heavy_sec > 60 || fsm->ses_time_gaming_sec > 60) ? 1 : 0;
