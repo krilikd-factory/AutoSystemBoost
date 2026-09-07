@@ -1006,6 +1006,15 @@ fi
 SEC "5a2. SMART LEARNING  (what the current bucket knows)"
 _sb_t="$(grep -m1 '^smart_bucket_temp_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _sb_d="$(grep -m1 '^smart_bucket_drain_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  # The last banked session beside the bucket average.
+  #
+  # If the session carried 46 C and the bucket reads 30, the averaging is at fault; if the
+  # session itself arrives at 30, sessions are closing while the phone is already cool and
+  # the learner never sees the warm part of the day.
+  _sl="$(grep -m1 "^ses_last_temp=" /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _sd="$(grep -m1 "^ses_last_dur=" /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _sr="$(grep -m1 "^ses_last_reason=" /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -d '"')"
+  [ -n "$_sl" ] && NOTE "last banked session: max ${_sl}C over ${_sd}s (${_sr})"
 NOTE "bucket avg temp = ${_sb_t:-0} (tenths C)  ·  avg drain = ${_sb_d:-0} (tenths %/h)"
 _tw="$(grep -m1 '^smart_therm_warm_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _tc="$(grep -m1 '^smart_therm_cool_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
