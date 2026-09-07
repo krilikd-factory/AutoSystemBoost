@@ -1876,7 +1876,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                     * The average alone cannot say whether the sessions arrive cold or the
                     * averaging is wrong, and guessing between those cost three rounds on
                     * the uclamp problem already. */
-                   "ses_last_temp=%d\nses_last_dur=%d\nses_last_reason=\"%s\"\n",
+                   "ses_last_temp=%d\nses_last_dur=%d\nses_last_reason=\"%s\"\n"
+                   /* Engine version for the WebUI badge. The card showed the raw
+                    * alpha, which is an internal weight nobody outside this file
+                    * can interpret; the schema version is what actually changes
+                    * when the learner is reworked. */
+                   "smart_engine_ver=%d\n",
                 g_smart_boot_settle, g_startup_quarantined,
                 g_thermal_cpu_type[0] ? g_thermal_cpu_type : "unknown", g_thermal_cpu_zone,
                 g_thermal_source_confidence, g_thermal_rejected_type, g_thermal_rejected_raw,
@@ -1884,7 +1889,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 g_thermal_consensus_note,
                 writer_freq_table_len(0), writer_freq_table_len(1), writer_freq_table_len(2),
                 writer_last_uclamp_top(), writer_last_uclamp_bg(),
-                g_ses_last_temp, g_ses_last_dur, g_ses_last_reason);
+                g_ses_last_temp, g_ses_last_dur, g_ses_last_reason,
+                ASB_SMART_VER);
         fprintf(f, "cool_gaming=%d\n", g_asb_cfg.cool_gaming);
         fprintf(f, "cool_gaming_level=%d\n", g_smart_cool_gaming_lvl);
         fprintf(f, "game_charging=%d\ngame_bat_temp_peak_dc=%d\n"

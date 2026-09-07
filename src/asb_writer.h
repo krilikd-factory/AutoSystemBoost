@@ -1293,9 +1293,47 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
              * bound. A lower vendor ceiling is already energy-safe and is accepted by
              * writer_write_int_confirmed() as cooperative ownership rather than conflict. */
             int live_max = sysfs_read_int(g_cpu_max_paths[i], 0);
-            if (force || cmax[i] != g_wcache.cpu_max[i] ||
+            /* Ignore a ceiling that moved by less than one meaningful step.
+             *
+             * The ladder is recomputed every tick from a temperature that wanders by a
+             * couple of degrees, so the target drifts between adjacent OPP steps without
+             * the state ever changing. A field trace shows 34 ceiling changes with a mean
+             * temperature delta of 3.1 C behind them, cycling 1785600 -> 1440000 ->
+             * 1785600 inside the same phase.
+             *
+             * Each of those is a write, a governor re-plan, and a cluster ramping to a new
+             * ceiling for a few seconds before the next tick moves it back - which costs
+             * more than either ceiling saves.
+             *
+             * 3% of the current value is below one OPP step on every table in this fleet,
+             * so a real ladder move always passes; only the jitter is filtered. force and
+             * thermal emergencies bypass it entirely. */
+            /* A 3% band was the first idea and it does not work: the observed churn is
+             * between REAL adjacent OPP steps - 1785600 to 1440000 and back - which any
+             * value-based filter has to let through, because a genuine ladder move looks
+             * identical.
+             *
+             * What separates them is time. A ladder move follows a state change and then
+             * holds; jitter reverses within seconds. So the guard is a minimum interval
+             * between ceiling writes for the same slot while the FSM state has not moved.
+             *
+             * 10 s is longer than the observed reversal and far shorter than any real
+             * workload phase. State changes and thermal caps bypass it, so responsiveness
+             * where it matters is untouched.
+             */
+            static time_t _cm_last_ts[3]  = {0,0,0};
+            static int    _cm_last_state  = -1;
+            time_t _cm_now = time(NULL);
+            int _cm_state_moved = (_cm_last_state != (int)state);
+            int _cm_moved = _cm_state_moved || (thermal_cap != 0) ||
+                            (g_wcache.cpu_max[i] <= 0) ||
+                            (_cm_now - _cm_last_ts[i] >= 10);
+
+            if (force || (cmax[i] != g_wcache.cpu_max[i] && _cm_moved) ||
                 (live_max > 0 && live_max > cmax[i])) {
                 if (cmax[i] <= 0) continue;
+                _cm_last_ts[i] = _cm_now;
+                _cm_last_state = (int)state;
                 if (writer_write_int_confirmed((asb_write_node_t)(ASB_WRITE_CPU_MAX0 + i),
                                                g_cpu_max_paths[i], cmax[i]) == 0) {
                     g_wcache.cpu_max[i] = cmax[i];
