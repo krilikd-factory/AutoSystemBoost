@@ -2831,7 +2831,7 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
         <div class="live-cell-value" id="liveSkin">—</div>
       </div>
       <div class="live-cell">
-        <div class="live-cell-label" data-i18n="lv_hotspot">Hotspot · internal</div>
+        <div class="live-cell-label" data-i18n="lv_hotspot">Die · max</div>
         <div class="live-cell-value" id="liveSurface">—</div>
       </div>
     </div>
@@ -3794,7 +3794,7 @@ function openLivePage() {
   p.setAttribute('aria-hidden', 'false');
   p.scrollTop = 0;
   _liveOpen = true;
-  if (_selectedProfile === 'stock') paintStockLive();
+  if (_selectedProfile !== 'smart') paintStockLive();
   pollLive(true);
   if (_liveTimer) clearInterval(_liveTimer);
   _liveTimer = setInterval(() => pollLive(true), 3000);
@@ -6244,7 +6244,14 @@ function renderSmartSubLine(kv) {
       const veto  = parseInt(kv.smart_thermal_veto   || '0',   10);
       const dpNames = ['sleep','wake','morn','day','evening','late'];
       const dpName = (dp >= 0 && dp < dpNames.length) ? dpNames[dp] : '?';
-      let sub = dpName + ' · ' + Math.round(alpha/10) + '% battery-lean';
+      /* Engine version, not the raw weight.
+       *
+       * "50% battery-lean" is an internal blend coefficient: it moves on its own as the
+       * learner works, and nobody outside the governor can say whether a given number is
+       * good. The engine version is the thing that actually changes when the learner is
+       * reworked, which is what a badge on this card is for. */
+      const engV = parseInt(kv.smart_engine_ver || '0', 10);
+      let sub = dpName + (engV > 0 ? ' · V' + engV : '');
       if (night)         sub = '🌙 night-safe override';
       else if (veto) {
         const caps = parseInt(kv.vendor_clamp_1h || '0', 10);
@@ -6375,12 +6382,23 @@ function fmtStockLoad(raw) {
   return Number.isFinite(value) && value >= 0 ? T('stock_load_now', '1 min') + ' ' + value.toFixed(2) : '—';
 }
 function paintStockLive(stockKv = null) {
+  /* Governor-owned cells stay untouched outside Stock.
+   *
+   * Clamp history, cap source and learner state come from the running governor. On Stock
+   * there is none, so writing "ASB policy off" is honest; on Battery and Balanced the
+   * governor is running and pollLive fills these from real state - overwriting them with
+   * "off" would report the module as idle while it is working. */
   const stock = T('prof_stock', 'Stock');
   const off = T('prof_stock_sub', 'ASB policy off');
   const profile = _el('liveCurProfile');
   if (profile) profile.textContent = stock;
   const state = _el('liveState');
-  if (state) state.textContent = stock + ' · ' + off;
+  /* Only claim "Stock · ASB policy off" when that is actually true.
+   *
+   * This function now paints the panel on Battery and Balanced too, and on those the
+   * governor IS running - overwriting the state line with "policy off" would be a plain
+   * lie about what the module is doing. Leave the line to whoever owns it there. */
+  if (state && _selectedProfile === 'stock') state.textContent = stock + ' · ' + off;
   // The ordinary Monitor labels describe ASB concepts (FSM, forecast, cap source, learner).
   // In Stock the values below are direct ROM readings, so rename the cards before painting them.
   setLiveLabel('liveStateLabel', 'stock_rom_status', 'ROM status');
@@ -6433,18 +6451,27 @@ function paintStockLive(stockKv = null) {
   const sampleTs = n(kv.ts) * 1000;
   const set = (id, value, title = '') => { const el = _el(id); if (el) { el.textContent = value || '—'; el.title = title; } };
 
-  set('liveClamp', '—', off + ': ROM cap history is not collected in Stock.');
+  if (_selectedProfile === 'stock') set('liveClamp', '—', off + ': ROM cap history is not collected in Stock.');
   set('liveCpu', cpuT ? fmtTempC(cpuT) + '°C' : '—');
   set('liveSkin', skinT ? skinT + '°C' : '—');
+  /* Label says "die", because that is what this number is.
+   *
+   * It was "Hotspot · internal", which reads as a hotspot on the case - and users compare
+   * it to the shell reading and conclude the phone is overheating. The value is
+   * max(cpu, gpu, ddr): the hottest silicon zone, which sits 10-20 C above the shell on
+   * every phone under load, because heat travels outward. The old wording made a normal
+   * gap look like a fault. */
   set('liveSurface', hotT ? hotT + '°C' : '—');
+  { const _hs = _el('liveSurface');
+    if (_hs && _hs.parentElement) _hs.parentElement.title = T('lv_hotspot_tip', ''); }
   set('liveEtaOn', capPct ? (capPct + '% · ' + Math.abs(ma) + ' mA') : '—',
       'Live ROM battery capacity and current; Stock does not fabricate an ASB forecast.');
   set('liveEtaOff', (volt > 0 ? volt.toFixed(2) + ' V' : '—') + (batT ? ' · ' + batT + '°C' : ''),
       'Live ROM battery voltage and temperature.');
-  set('liveCapSrc', 'ROM', off);
+  if (_selectedProfile === 'stock') set('liveCapSrc', 'ROM', off);
   const cap = _el('liveCapSrc');
   if (cap) cap.className = 'live-cell-value';
-  set('liveLearner', off);
+  if (_selectedProfile === 'stock') set('liveLearner', off);
   set('liveGpu', gpu > 0 ? gpu + '%' : '—');
   set('liveHeadroom', ramGb, 'MemAvailable from /proc/meminfo (read-only).');
 
@@ -6510,7 +6537,15 @@ async function pollStockTelemetry(visible, force = false) {
   const box = _el('stockTelemetry');
   // Retained only as a hidden compatibility node; normal cards below receive the parsed data.
   if (box) box.classList.remove('on');
-  if (!visible || _selectedProfile !== 'stock') {
+  /* Every profile gets this panel, not just Stock.
+   *
+   * The reading comes straight from /sys and /proc - thermal zones, battery, memory,
+   * uptime - so it is true whatever ASB happens to be doing. It was gated to Stock
+   * because that is the profile where the governor is not running and there was no other
+   * source; on Battery and Balanced the same numbers were simply hidden.
+   *
+   * Smart keeps its own richer panel above, so this stays out of its way there. */
+  if (!visible || _selectedProfile === 'smart') {
     _stockRomHistory = { ts: 0, cpuT: 0 };
     const stockBanner = _el('liveStockRomBanner');
     if (stockBanner) stockBanner.style.display = 'none';
@@ -6556,7 +6591,12 @@ async function pollLive(visible) {
       // Stock deliberately removes /dev/.asb/state when it stops the native governor. This
       // is not a failed monitor poll and must never leave the static "balanced" placeholder
       // visible. Non-Stock keeps the existing neutral empty state for genuine startup errors.
-      if (visible && _selectedProfile === 'stock') {
+      /* Paint from the ROM reading on every profile that uses this panel.
+       *
+       * On Battery and Balanced the governor also publishes state, and pollLive fills the
+       * same cells from it - so this only runs where that has not happened, which is the
+       * case the panel exists for. */
+      if (visible && _selectedProfile !== 'smart') {
         paintStockLive(_stockTelemetryKv);
       }
       return;
@@ -6937,14 +6977,20 @@ async function pollLive(visible) {
               ? fmt('cap_period_minutes', '{n} min', {n: mins})
               : fmt('cap_period_hours_minutes', '{h} h {m} min', {h: Math.floor(mins / 60), m: mins % 60}));
           clampEl.className = 'live-cell-value';
-          if (clampLabel) clampLabel.textContent = T('lv_vendor_period', 'Vendor cap period');
-          if (vendorPeriodActive) {
-            clampEl.textContent = fmt('cap_period_active', 'active · {time}', {time: duration});
-            clampEl.title = T('cap_period_tip', 'One continuous vendor-held period can contain many polling samples. Raw samples remain in asbdiag and the 24h report.');
-          } else {
-            clampEl.textContent = T('cap_period_none', 'no active vendor cap');
-            clampEl.title = T('cap_period_none_tip', 'No vendor-held cap is active now. Historical polling samples are available only in detailed diagnostics.');
-          }
+          /* Count the clamps, not the length of the current one.
+           *
+           * A duration answers "how long has this one been held", which is one event -
+           * and if none is held right now the row reads "no active vendor cap" and says
+           * nothing at all. What matters for judging pressure is how OFTEN the vendor
+           * intervenes, which is what the counters already track.
+           *
+           * Both numbers: the hour is the live picture, the total is the session. */
+          const c1h = parseInt(kv.vendor_clamp_1h || '0', 10);
+          const cTot = parseInt(kv.vendor_clamp_total || '0', 10);
+          if (clampLabel) clampLabel.textContent = T('lv_vendor_clamps', 'Vendor clamps');
+          clampEl.textContent = fmt('cap_clamps_val', '{h}/h · {t} total', {h: c1h, t: cTot});
+          clampEl.title = T('cap_clamps_tip',
+            'How often the vendor thermal engine took the cap away from ASB: in the last hour, and since boot.');
       }
     } catch(e) {}
 
