@@ -137,9 +137,8 @@ need "$UI" "ic.innerHTML = techIcon(CFG_ICONS[it.key] || 'generic');"
 need "$UI" 'data-tech-icon="telegram"'
 need "$UI" "const vendorPeriodActive = capSrc === 'vendor_clamp' || String(kv.cap_owner || '') === 'vendor';"
 need "$UI" "const ownerSince = parseInt(kv.cap_owner_since || '0', 10);"
-need "$UI" "T('lv_vendor_period', 'Vendor cap period')"
-need "$UI" "fmt('cap_period_active', 'active · {time}', {time: duration})"
-need "$UI" "T('cap_period_tip', 'One continuous vendor-held period can contain many polling samples. Raw samples remain in asbdiag and the 24h report.')"
+need "$UI" "T('lv_vendor_clamps', 'Vendor clamps')"
+need "$UI" "fmt('cap_clamps_val', '{h}/h · {t} total', {h: c1h, t: cTot})"
 absent "$UI" 'Кепы vendor: 1ч / всего'
 need "$UI" "CAMERA_AGGRESSIVE:'camera_aggressive'"
 need "$UI" "net_handover_fast:'handover'"

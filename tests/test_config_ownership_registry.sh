@@ -50,4 +50,18 @@ grep -Fq 'Config Key Ownership' "$LINT" || fail 'lint does not enforce ownership
 grep -Fq 'config ownership key-set drift' "$LINT" || fail 'lint lacks key-set drift failure'
 grep -Fq 'WebUI/ownership drift' "$LINT" || fail 'lint lacks WebUI ownership boundary failure'
 
+# Every WebUI card must survive an update.
+#
+# common/install.sh carries user values across a reinstall using a hand-written
+# _user_keys list. Two cards were added without being put on it, so their values were
+# silently dropped on every update - indistinguishable, from the user's side, from a
+# tweak that does not save. Nothing checked this, so nothing caught it.
+_uk="$(awk '/_user_keys="/{f=1} f{printf "%s ", $0} f&&/"[[:space:]]*$/{exit}' "$ROOT/common/install.sh" | sed 's/.*_user_keys="//;s/".*//;s/\\\\//g')"
+_missing=""
+for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html" \
+            | sed "s/.*key:'//;s/'//" | sort -u); do
+  case " $_uk " in *" $_c "*) : ;; *) _missing="$_missing $_c" ;; esac
+done
+[ -z "$_missing" ] || fail "cards missing from install.sh _user_keys:$_missing"
+
 echo 'PASS config ownership registry contract (175 keys; 26 user, 36 advanced, 113 internal)'
