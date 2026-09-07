@@ -2644,7 +2644,7 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
         <span class="tech-icon-slot" data-tech-icon="smart"></span>
       </div>
       <div class="pinfo">
-        <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" data-i18n="tag_alpha">alpha</span></div>
+        <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" id="smartEngineTag">V2</span></div>
         <div class="psub" id="smartSubLine">adaptive · learning</div>
       </div>
       <div class="pload"></div>
@@ -6244,14 +6244,17 @@ function renderSmartSubLine(kv) {
       const veto  = parseInt(kv.smart_thermal_veto   || '0',   10);
       const dpNames = ['sleep','wake','morn','day','evening','late'];
       const dpName = (dp >= 0 && dp < dpNames.length) ? dpNames[dp] : '?';
-      /* Engine version, not the raw weight.
+      /* Engine version on the badge beside the profile name.
        *
-       * "50% battery-lean" is an internal blend coefficient: it moves on its own as the
-       * learner works, and nobody outside the governor can say whether a given number is
-       * good. The engine version is the thing that actually changes when the learner is
-       * reworked, which is what a badge on this card is for. */
+       * That badge said "alpha", which described the module's maturity when Smart was new
+       * and has meant nothing since. The learner has a schema version that changes when it
+       * is reworked - that is the useful thing to show there. The subtitle below keeps
+       * describing what Smart is doing right now, which is a different question. */
       const engV = parseInt(kv.smart_engine_ver || '0', 10);
-      let sub = dpName + (engV > 0 ? ' · V' + engV : '');
+      const engTag = document.getElementById('smartEngineTag');
+      if (engTag && engV > 0) engTag.textContent = 'V' + engV;
+
+      let sub = dpName + ' · ' + Math.round(alpha/10) + '% battery-lean';
       if (night)         sub = '🌙 night-safe override';
       else if (veto) {
         const caps = parseInt(kv.vendor_clamp_1h || '0', 10);
