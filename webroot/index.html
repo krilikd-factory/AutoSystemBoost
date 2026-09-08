@@ -2797,6 +2797,9 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
       <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_battery">Battery</span><span class="smart-banner-value" id="bnStockBattery">—</span></div>
       <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_uptime">Uptime</span><span class="smart-banner-value" id="bnStockUptime">—</span></div>
     </div>
+    <div class="smart-banner-row tags" id="bnStockTagRow">
+      <span class="smart-banner-tag" id="bnStockSrc">rom</span>
+    </div>
   </div>
 
   <div class="sec">
@@ -6514,6 +6517,18 @@ function paintStockLive(stockKv = null) {
       + Math.floor((uptimeSec % 3600) / 60) + 'm'
     : '—';
   const lpmHeld = n(kv['settings.global.mobile_data_always_on']) === 1;
+  /* Tag row, so the card is the same height as Smart's.
+   *
+   * Smart's banner has a third row carrying its confidence tag, and that row is what made
+   * it visibly taller. Matching the structure rather than padding the CSS keeps the two
+   * cards aligned if either grows another row later.
+   *
+   * The tag says where the numbers come from: read straight from the ROM, not from the
+   * governor - which is exactly what distinguishes this card from Smart's. */
+  {
+    const stockTag = _el('bnStockSrc');
+    if (stockTag) stockTag.textContent = T('lv_src_rom', 'direct ROM reading');
+  }
   if (stockBanner) stockBanner.style.display = Object.keys(kv).length ? '' : 'none';
   // This is a live, current-derived screen-on estimate while the Monitor is open;
   // it is not a Smart learner forecast or a battery-cause attribution.
