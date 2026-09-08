@@ -44,9 +44,39 @@ STATE=/data/adb/asb/gms_components_frozen
 # Deliberately NOT included at any level: anything under gcm/chimera/auth/wallet. Those
 # carry push delivery, module loading, account sign-in and payments - freezing them is
 # how a "battery module" turns into a support thread about missing notifications.
+# Checkin stays OUT of every level.
+#
+# A user asked whether restricting Google services blocks notifications. For everything
+# else in these lists the answer is no - but checkin was the one entry where "no" needed a
+# footnote, and a footnote is not good enough for notifications.
+#
+# Checkin is the daily device registration: config, feature flags, timezone. It is not the
+# push transport, and freezing it on an already-registered phone does not stop delivery.
+# The problem is the edge: FIRST push registration goes through checkin, so a new device,
+# a factory reset, or an app registering for push the first time can quietly fail. Nobody
+# would connect that to a battery tweak, and it buys one wakeup a day.
 _SAFE="
-com.google.android.gms/.checkin.CheckinService
-com.google.android.gms/.checkin.CheckinChimeraService
+com.google.android.gms/.stats.service.DropBoxEntryAddedService
+com.google.android.gms/.stats.PlatformStatsCollectorService
+com.google.android.gms/.usagereporting.service.UsageReportingService
+com.google.android.gms/.playlog.service.PlayLogBrokerService
+com.google.android.gms/.playlog.uploader.PlayLogUploaderService
+com.google.android.gms/.clearcut.service.ClearcutLoggerService
+com.google.android.gms/.analytics.service.AnalyticsService
+com.google.android.gms/.analytics.AnalyticsReceiver
+com.google.android.gms/.feedback.FeedbackAsyncService
+"no" needed a
+# footnote, and a footnote is not good enough for notifications.
+#
+# Checkin is the daily device registration: config, feature flags, timezone. It is not the
+# push transport, and freezing it on a phone that is already registered does not stop
+# delivery. The problem is the edge: FIRST push registration goes through checkin, so a
+# new device, a factory reset, or an app registering for push for the first time can
+# quietly fail to arrive at all. Nobody would connect that to a battery tweak, and the
+# saving it buys is one wakeup a day.
+#
+# com.google.android.gms/.checkin.CheckinService
+# com.google.android.gms/.checkin.CheckinChimeraService
 com.google.android.gms/.stats.service.DropBoxEntryAddedService
 com.google.android.gms/.stats.PlatformStatsCollectorService
 com.google.android.gms/.usagereporting.service.UsageReportingService
