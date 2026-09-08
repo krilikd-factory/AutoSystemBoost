@@ -6626,16 +6626,65 @@ function asbApplyNavPillInset() {
     const reported = parseFloat(getComputedStyle(document.documentElement)
       .getPropertyValue('--window-inset-bottom')) || 0;
     if (reported > 4) { document.documentElement.style.setProperty('--nav-pill-extra', '0px'); return; }
-    const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
+    /* screen.availHeight, not the viewport.
+     *
+     * The first attempt compared visualViewport to screen height, which is always zero
+     * here: this WebView draws UNDER the system bars, so the viewport already spans the
+     * full display whether or not a pill sits on top of it.
+     *
+     * availHeight is the display minus what the system reserves, so a pill shows up as a
+     * real difference. Where the ROM does not distinguish them either, the manual setting
+     * below is the answer - guessing again would just move the breakage to a different
+     * set of phones. */
     const sh = (window.screen && window.screen.height) || 0;
-    const dpr = window.devicePixelRatio || 1;
-    const gap = sh > 0 ? (sh - vh) : 0;
-    /* A pill occupies roughly 20-40 CSS px. Below 8 there is nothing there; above 80 the
-     * gap is a status bar or a split-screen divider, not a pill. */
-    const extra = (gap >= 8 && gap <= 80 && dpr >= 1) ? Math.min(Math.round(gap), 24) : 0;
+    const ah = (window.screen && window.screen.availHeight) || 0;
+    const gap = (sh > 0 && ah > 0) ? (sh - ah) : 0;
+    const auto = (gap >= 8 && gap <= 80) ? Math.min(Math.round(gap), 24) : 0;
+
+    /* Manual override wins when set: auto | on | off, stored per install. */
+    let extra = auto;
+    try {
+      const mode = localStorage.getItem('asb_nav_pill') || 'auto';
+      if (mode === 'on')  extra = 24;
+      if (mode === 'off') extra = 0;
+    } catch (e) { /* storage unavailable: keep the measured value */ }
     document.documentElement.style.setProperty('--nav-pill-extra', extra + 'px');
   } catch (e) { /* measurement unavailable: leave the default of 0 */ }
 }
+/* Long-press the tab bar to cycle the nav-pill spacing.
+ *
+ * Auto-detection covers the ROMs that report the reserved space; some report nothing at
+ * all, and there is no measurement left that separates "pill on top of the bar" from
+ * "no navigation at all". Rather than guess and break one group to fix the other, the
+ * user settles it: three states, remembered per install.
+ *
+ * Long-press because this is a rare fix, not a daily control - it must not sit in the
+ * way of the tabs themselves. */
+function asbInitNavPillToggle() {
+  const bar = document.querySelector('.asb-tabbar');
+  if (!bar) return;
+  let timer = null;
+  const start = () => {
+    timer = setTimeout(() => {
+      let mode = 'auto';
+      try { mode = localStorage.getItem('asb_nav_pill') || 'auto'; } catch (e) {}
+      const next = mode === 'auto' ? 'on' : (mode === 'on' ? 'off' : 'auto');
+      try { localStorage.setItem('asb_nav_pill', next); } catch (e) {}
+      asbApplyNavPillInset();
+  asbInitNavPillToggle();
+      if (typeof toast === 'function') {
+        toast(T('nav_pill_' + next, next === 'on' ? 'nav bar spacing: on'
+                : next === 'off' ? 'nav bar spacing: off' : 'nav bar spacing: auto'));
+      }
+    }, 700);
+  };
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  bar.addEventListener('touchstart', start, { passive: true });
+  bar.addEventListener('touchend', cancel);
+  bar.addEventListener('touchmove', cancel);
+  bar.addEventListener('touchcancel', cancel);
+}
+
 window.addEventListener('resize', asbApplyNavPillInset);
 window.addEventListener('orientationchange', asbApplyNavPillInset);
 
