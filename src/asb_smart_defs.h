@@ -15,7 +15,14 @@
  * resets only the conclusions. That leaves the phone with its own history intact and the
  * learner starting from neutral rather than from wrong.
  */
-#define ASB_SMART_VER         2
+/* V3: the thermal trend now sees a slow climb, not only a fast one.
+ *
+ * Buckets learned under V2 were taught against a trend that never fired on a gradual
+ * rise - the learner saw "warm but no trend" as normal and had no reason to lean. Those
+ * conclusions are not wrong in the way V1's were (the sign is right), but they were drawn
+ * from a device that behaved differently, so the outputs are reset while the measurements
+ * carry forward, exactly as in the V1 to V2 migration. */
+#define ASB_SMART_VER         3
 #define ASB_SMART_VER_LEGACY  1
 #define ASB_SMART_MAGIC       0x41534253u
 #define ASB_SMART_BUCKETS     12

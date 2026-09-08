@@ -541,6 +541,9 @@ typedef struct {
     int             thermal_cap;
 
     int             prev_temp; 
+    /* Die temperature at the start of the current warm stretch, for the net-rise view
+     * of the thermal trend. Reset whenever the phone is cool again. */
+    int             warm_anchor_c;
     int             thermal_trend;
     int             trend_buf[3];
     int             trend_idx;
@@ -2019,6 +2022,28 @@ if (floor_hz <= 0) floor_hz = hw / 3;
             fsm->trend_buf[fsm->trend_idx % 3] = delta;
             fsm->trend_idx++;
             fsm->thermal_trend = fsm->trend_buf[0] + fsm->trend_buf[1] + fsm->trend_buf[2];
+
+            /* A slow climb is still a climb.
+             *
+             * The trend sums three consecutive deltas, so it only sees heat that arrives
+             * fast: 1 C per tick sums to 3 and never reaches the threshold of 6, however
+             * long it continues. A capture shows the cost - 62 upward steps across an
+             * evening, 45 C to 63 C, with the trend never firing on the climb itself.
+             *
+             * Second view: how far the die has risen since this warm stretch began. Once
+             * the phone is warm at all, a 6 C net rise counts the same as a fast one -
+             * it is heading somewhere hot either way, and reacting at 55 on the way up
+             * costs far less than reacting at 63 on arrival.
+             *
+             * The anchor resets whenever the phone is genuinely cool, so an ordinary
+             * warm-up from cold does not carry a stale baseline into the next session. */
+            if (m->therm.cpu_max_c > 0) {
+                if (m->therm.cpu_max_c <= 45 || fsm->warm_anchor_c <= 0)
+                    fsm->warm_anchor_c = m->therm.cpu_max_c;
+                int _rise = m->therm.cpu_max_c - fsm->warm_anchor_c;
+                if (m->therm.cpu_max_c >= 50 && _rise >= 6 && fsm->thermal_trend < 6)
+                    fsm->thermal_trend = 6;
+            }
         }
     }
 

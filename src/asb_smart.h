@@ -574,7 +574,9 @@ static int asb_smart_store_validate(const asb_smart_store_t *st) {
     if (!st) return -1;
     if (st->magic != ASB_SMART_MAGIC) return -2;
     /* Accept the previous schema: the loader migrates it in place. */
-    if (st->version != ASB_SMART_VER && st->version != ASB_SMART_VER_LEGACY) return -3;
+    /* Accept anything from the legacy schema up to the current one: the loader migrates
+     * whatever it finds. */
+    if (st->version < ASB_SMART_VER_LEGACY || st->version > ASB_SMART_VER) return -3;
     if (st->bucket_count != ASB_SMART_BUCKETS) return -4;
     for (int i = 0; i < ASB_SMART_BUCKETS; i++) {
         if (st->buckets[i].bucket_id != (uint32_t)i) return -5;
