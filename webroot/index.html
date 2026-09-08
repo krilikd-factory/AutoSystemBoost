@@ -6475,18 +6475,43 @@ document.addEventListener('keydown', function (e) {
  * Re-run on resize and orientation change because the WebUI is also opened in split screen,
  * where the width can halve while the page is live.
  */
-const ASB_UI_REFERENCE_W = 484;
+/* 440 = the layout's own container (420px max-width) plus its side padding.
+ *
+ * The first attempt used 484 - the CSS width I calculated for a 1440 panel at density 476.
+ * That was arithmetic, not measurement, and it was wrong: the reference device reported
+ * less than 484, so it scaled itself down and the whole UI came out small on the one phone
+ * that was already correct.
+ *
+ * The container is a fact in this stylesheet rather than a guess about a device: below
+ * ~440 the 420px panel genuinely has no room for its margins, and above it there is
+ * nothing to fix. Anything wider is left at 1. */
+const ASB_UI_REFERENCE_W = 440;
 
 function asbApplyUiScale() {
   try {
     const w = document.documentElement.clientWidth || window.innerWidth || ASB_UI_REFERENCE_W;
     let scale = w / ASB_UI_REFERENCE_W;
     if (scale > 1) scale = 1;
-    if (scale < 0.78) scale = 0.78;
+    if (scale < 0.82) scale = 0.82;
     /* Round to hundredths: sub-pixel scale values make text render blurrily in WebView
        without changing what fits. */
     scale = Math.round(scale * 100) / 100;
     document.documentElement.style.setProperty('--asb-ui-scale', String(scale));
+    /* Publish both numbers. Guessing the viewport width from density arithmetic is what
+       produced the first wrong reference; a real reading, visible in the UI, means the
+       next adjustment is calibrated against the device rather than against my model. */
+    window._asbUiWidth = w;
+    window._asbUiScale = scale;
+    /* Show it on the device line, but only when scaling is actually in effect - on a phone
+       that needs no adjustment this would be noise. One glance answers "is the UI small
+       because ASB shrank it, or because the screen is dense", which is the question I could
+       not answer from a screenshot. */
+    ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const base = el.dataset.baseText || (el.dataset.baseText = el.textContent);
+      el.textContent = (scale < 1) ? (base + '  ·  ' + w + 'px @ ' + scale + 'x') : base;
+    });
   } catch (e) {}
 }
 
