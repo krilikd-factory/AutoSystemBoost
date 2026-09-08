@@ -242,6 +242,21 @@ P "  root_manager         : $_rm"
 [ "$_rm" = "apatch" ] && NOTE "APatch path: OP12 camera handling is scoped specifically for APatch (real /odm mount)."
 
 # =====================================================================
+SEC "0a2. WEBUI SCALE  (measured, not assumed)"
+# Density is not the number that matters - the CSS viewport width is.
+#
+# Two attempts at "everything is too big on stock density" were calibrated against a width
+# calculated from dpi, and both were wrong: the reference device reported something other
+# than the arithmetic predicted, so it scaled itself down and the one phone that was
+# already correct got smaller. The layout container is 420px, so at or above ~440 CSS px
+# nothing is applied at all; below that the UI is scaled by exactly the shortfall.
+#
+# Printed so a support question is answered with numbers instead of screenshots.
+NOTE "physical density: $(wm density 2>/dev/null | sed -n 's/.*Physical density: *//p' | head -1)"
+NOTE "override density: $(wm density 2>/dev/null | sed -n 's/.*Override density: *//p' | head -1)"
+NOTE "physical size: $(wm size 2>/dev/null | sed -n 's/.*Physical size: *//p' | head -1)"
+NOTE "(no zoom is applied at or above 440 CSS px - the WebUI renders exactly as authored)"
+
 SEC "0b. CAMERA GRADE  (is the live tone table actually the graded one?)"
 # Compare the marker against the file the camera really reads.
 #
