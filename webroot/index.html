@@ -2582,6 +2582,192 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
   border: 1px solid rgba(139,149,161,0.22);
 }
 
+
+/* ── Bottom navigation ─────────────────────────────────────────────────────────────
+   Fixed to the bottom edge, inside the gesture-bar inset. env(safe-area-inset-bottom)
+   matters here: without it the bar sits under the system gesture pill on every modern
+   OnePlus and the middle tab becomes unpressable. */
+.asb-tabbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 200;
+  display: flex;
+  align-items: stretch;
+  /* --surface and --border are the real variables in this stylesheet; --panel never
+     existed, so the bar fell through to a hard-coded slate that matched neither theme and
+     never changed when the user switched. */
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* The blur keeps content legible when it scrolls behind the bar without hiding it. */
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.asb-tab {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  /* 56px is the floor for a comfortable thumb target; the label sits under the icon so
+     the tap area is the whole column, not just the glyph. */
+  min-height: 56px;
+  padding: 7px 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .16s ease;
+}
+.asb-tab svg { opacity: .85; transition: opacity .16s ease, transform .16s ease; }
+.asb-tab:active { transform: scale(0.94); }
+.asb-tab.is-active { color: var(--accent); }
+.asb-tab.is-active svg { opacity: 1; }
+/* A short bar above the active tab reads faster than colour alone, and stays visible
+   for users who cannot distinguish the accent from the muted tone. */
+.asb-tab.is-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 26px;
+  height: 2.5px;
+  border-radius: 0 0 3px 3px;
+  background: var(--accent);
+}
+.asb-tab { position: relative; }
+
+/* Give every page room so its last row is never trapped under the bar. */
+body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+
+/* The old header chips are redundant now that navigation is always on screen, and two
+   sets of controls for one action is how a UI starts feeling arbitrary. Hidden rather
+   than deleted: they carry ids and handlers that other code still references. */
+/* Hide the old page-switch chips - the tab bar replaces them - but NOT the back chip.
+ *
+ * cfgBackChip shares the .live-chip class and lives in the same row, so the blanket rule
+ * took it out too. It is the only way back from a tweak category to the six-tile hub:
+ * without it a user who opened Audio had to leave for Monitor and come back to Config just
+ * to reach Camera. The tab bar cannot do this job - it moves between pages, and this is
+ * movement inside one. */
+.status-row .live-chip:not(#cfgBackChip) { display: none; }
+
+
+/* Live and Config are position:fixed from top:0 to bottom:0, so the padding on <body>
+   never reaches them - their last row would sit behind the bar. They scroll internally,
+   so the room has to go on the scrolling child, not the container. */
+.live-page { padding-bottom: 0; }
+.live-page > *:last-child,
+.live-page .live-scroll,
+.live-page .cfg-scroll {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+/* Modals must clear the bar as well: a sheet that stops above it looks broken, and one
+   that ends under it hides its own confirm button. */
+.cfg-profile-modal, .cfg-reset-modal { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+
+/* ── Island actions: logs + channel ──────────────────────────────────────────────── */
+.island-actions { display: inline-flex; gap: 6px; margin-left: 8px; flex: 0 0 auto; }
+.island-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 100px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit; font-size: 11.5px; line-height: 1;
+  text-decoration: none; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .15s ease, color .15s ease;
+}
+.island-btn:active { transform: scale(0.96); }
+.island-btn:hover  { border-color: var(--border-active); color: var(--text); }
+.island-btn svg    { opacity: .9; }
+
+/* Anchored under the island rather than inside it: the island clips, and a menu that is
+   half-visible is worse than no menu. */
+.log-menu {
+  position: fixed; z-index: 500;
+  min-width: 200px;
+  padding: 6px;
+  border-radius: 14px;
+  /* Opaque and clearly bordered.
+   *
+   * The first version leaned on var(--surface) and a soft shadow, and on screen the two
+   * items were barely legible against the profile card behind them. A dropdown that has to
+   * be squinted at is worse than no dropdown, so this one is solid, outlined in the accent,
+   * and lifted well clear of everything underneath. */
+  border: 1px solid var(--accent);
+  background: #0b0f14;
+  box-shadow: 0 18px 44px rgba(0,0,0,.72);
+}
+html[data-asb-theme="light"] .log-menu {
+  background: #ffffff;
+  box-shadow: 0 18px 44px rgba(11,56,47,.24);
+}
+.log-menu[hidden] { display: none; }
+.log-menu-item {
+  display: flex; align-items: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 14px;
+  border: 0; border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  /* 14.5px, not 13: these are two short labels with plenty of room, and the previous size
+     was the main reason the menu read as faint. */
+  font: inherit; font-size: 14.5px; font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.log-menu-item + .log-menu-item { margin-top: 2px; }
+.log-menu-item:hover  { background: var(--surface-hover); }
+.log-menu-item:active { transform: scale(0.98); }
+
+/* The three footer copies of these buttons are replaced by the island pair. Hidden, not
+   deleted: asbDebugAction and its status wiring still address them by attribute. */
+.debug-support-btn { display: none; }
+/* The footer channel banner too. Hiding .debug-support-btn only removed the two log
+   buttons; the banner is .tg-link-wrap, and on the Monitor page it was left stranded
+   above the bar with its caption clipped. */
+.tg-link-wrap { display: none; }
+
+
+/* A ticked app that Android is still dozing is the one case worth drawing the eye to:
+   the user has asked ASB to protect something that has nothing to protect yet. Amber, not
+   red - nothing is broken, there is simply an action left to take in system settings. */
+.doze-not-exempt.is-pending {
+  color: var(--bal, #d08700);
+  opacity: 1;
+}
+
+.doze-pending-hint { color: var(--bal, #d08700); opacity: 1; }
+
+
+/* ── Density scaling ───────────────────────────────────────────────────────────────
+   This layout was built and tested on a phone with an override density of 476, which
+   gives a 1440-wide panel about 484 CSS pixels of room. At the stock 560 the same panel
+   reports 411 - fifteen percent less - and every fixed px in this stylesheet suddenly
+   asks for more space than exists. Cards overflow, the Monitor page runs off the bottom,
+   and users describe it exactly as "everything is too big".
+
+   The honest fix is proportional: the design has a known reference width, so scale the
+   whole surface by however much of that width the device actually gives. Nothing is
+   re-laid-out, so no card can break in a way it does not break today - it is the same
+   pixels, drawn smaller.
+
+   Applied as a custom property rather than hard-coded so the value can be read back and
+   shown in diagnostics, and so a device that has MORE room than the reference is left
+   alone (the scale is capped at 1 - blowing the UI up would be its own bug). */
+:root { --asb-ui-scale: 1; }
+body {
+  zoom: var(--asb-ui-scale);
+}
+
 </style>
 </head>
 <body>
@@ -2614,6 +2800,35 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
       <div class="dot"></div>
       <span class="status-label">Profile:&nbsp;</span>
       <span class="status-val" id="curProfile">balanced</span>
+      <!-- Log tools and the channel, on the profile island.
+           Both were duplicated on three pages before this - the same two debug buttons in
+           the main, Live and Config footers - so a user hunting for a capture had to know
+           which page happened to be in front of them. One place, always reachable, and the
+           three footer copies come out. -->
+      <div class="island-actions">
+        <button class="island-btn" id="logsBtn" type="button"
+                onclick="asbToggleLogMenu(event)" aria-haspopup="menu"
+                aria-expanded="false" aria-label="Logs">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z"></path>
+            <path d="M14 3.5V8h4M9 12.5h6M9 16h4"></path>
+          </svg>
+          <span data-i18n="nav_logs">Logs</span>
+        </button>
+        <!-- tg:// plus openTelegram, exactly as the footer links do. An https URL with
+             target=_blank does nothing in this WebView - there is no browser to hand it to,
+             which is why the button looked dead. -->
+        <a class="island-btn" id="tgBtn" href="tg://resolve?domain=AutoSystemBoost"
+           onclick="openTelegram(event)" aria-label="Telegram">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 4.5 2.8 11.3l5.4 1.9 1.9 5.4z"></path>
+            <path d="M8.2 13.2 21 4.5l-8.9 13.9-1.8-4.2z"></path>
+          </svg>
+          <span data-i18n="nav_channel">Channel</span>
+        </a>
+      </div>
       <button class="live-chip" id="liveChip" onclick="openLivePage()" aria-label="Open Live Status page">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 12h3l3-9 4 18 3-9h5"></path>
@@ -2735,6 +2950,28 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
       <div class="dot"></div>
       <span class="status-label">Profile:&nbsp;</span>
       <span class="status-val" id="liveCurProfile">balanced</span>
+        <!-- Same pair as the main island, inside the pill so it shares its row instead of
+             wrapping to a second one. -->
+        <div class="island-actions">
+          <button class="island-btn" type="button" onclick="asbToggleLogMenu(event)"
+                  aria-haspopup="menu" aria-expanded="false" aria-label="Logs">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z"></path>
+              <path d="M14 3.5V8h4M9 12.5h6M9 16h4"></path>
+            </svg>
+            <span data-i18n="nav_logs">Logs</span>
+          </button>
+          <a class="island-btn" href="tg://resolve?domain=AutoSystemBoost"
+             onclick="openTelegram(event)" aria-label="Telegram">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 4.5 2.8 11.3l5.4 1.9 1.9 5.4z"></path>
+              <path d="M8.2 13.2 21 4.5l-8.9 13.9-1.8-4.2z"></path>
+            </svg>
+            <span data-i18n="nav_channel">Channel</span>
+          </a>
+        </div>
       <button class="live-chip" id="liveBackChip" onclick="closeLivePage()" aria-label="Back to main">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6"></path>
@@ -2926,6 +3163,28 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
       <div class="dot"></div>
       <span class="status-label">Profile:&nbsp;</span>
       <span class="status-val" id="cfgCurProfile">balanced</span>
+        <!-- Same pair as the main island, inside the pill so it shares its row instead of
+             wrapping to a second one. -->
+        <div class="island-actions">
+          <button class="island-btn" type="button" onclick="asbToggleLogMenu(event)"
+                  aria-haspopup="menu" aria-expanded="false" aria-label="Logs">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z"></path>
+              <path d="M14 3.5V8h4M9 12.5h6M9 16h4"></path>
+            </svg>
+            <span data-i18n="nav_logs">Logs</span>
+          </button>
+          <a class="island-btn" href="tg://resolve?domain=AutoSystemBoost"
+             onclick="openTelegram(event)" aria-label="Telegram">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 4.5 2.8 11.3l5.4 1.9 1.9 5.4z"></path>
+              <path d="M8.2 13.2 21 4.5l-8.9 13.9-1.8-4.2z"></path>
+            </svg>
+            <span data-i18n="nav_channel">Channel</span>
+          </a>
+        </div>
       <button class="live-chip" id="cfgBackChip" onclick="cfgBack()" aria-label="Back to main">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6"></path>
@@ -3413,6 +3672,16 @@ function asbPaintThemeControls() {
 function asbSetTheme(theme) {
   theme = theme === 'light' ? 'light' : 'dark';
   try { localStorage.setItem('asb_theme', theme); } catch (e) {}
+  /* Apply it now, not on the next launch.
+   *
+   * The attribute that drives every light-theme rule was only set by the inline script at
+   * the top of the document, which runs once. Switching themes therefore saved the choice
+   * and repainted the toggle, while the page itself stayed as it was until a restart -
+   * most visible on surfaces that use --surface directly, like the bottom bar. */
+  try {
+    if (theme === 'light') document.documentElement.setAttribute('data-asb-theme', 'light');
+    else document.documentElement.removeAttribute('data-asb-theme');
+  } catch (e) {}
   asbPaintThemeControls();
   uiSound('option');
 }
@@ -5835,10 +6104,21 @@ async function dozeOpenEditor(row) {
         nm.textContent = pk;
         line.appendChild(nm);
         if (exempt.indexOf(pk) < 0) {
-          /* Not currently exempt - say so, or ticking it looks like it did nothing. */
-          const tag = document.createElement('span');
-          tag.className = 'doze-not-exempt';
-          tag.textContent = T('doze_not_exempt', 'not exempt');
+          /* Name WHOSE decision this is, and say what to do about it.
+           *
+           * "not exempt" beside a ticked box reads as a contradiction: the user ticked it,
+           * so why does it say no? They are about different things. The tick is ASB's promise
+           * to preserve an exemption; the label is Android reporting there is none to
+           * preserve, because the app never asked or was never granted one.
+           *
+           * Ticking such an app is not wrong - it takes effect the day Android does exempt
+           * it - but alone it changes nothing, and a messenger the user believes is protected
+           * while Android keeps dozing it is the worst outcome this screen can produce. */
+          const tag = document.createElement("span");
+          tag.className = "doze-not-exempt" + (keep.indexOf(pk) >= 0 ? " is-pending" : "");
+          tag.textContent = T("doze_android_dozes", "Android dozes it");
+          tag.title = T("doze_android_dozes_hint",
+            "Android has no battery exemption for this app, so ASB has none to keep. Grant it in Settings > Apps > this app > Battery > Unrestricted.");
           line.appendChild(tag);
         }
         line.dataset.pkg = pk;
@@ -5848,6 +6128,19 @@ async function dozeOpenEditor(row) {
     hint.className = 'doze-edit-hint';
     hint.textContent = T('doze_hint', 'Ticked apps stay exempt from Doze.');
     box.appendChild(hint);
+    /* A second line, only when it applies.
+     *
+     * The tooltip on the label is unreachable on a touch screen - there is no hover - so
+     * the explanation has to live somewhere a thumb can find it. Shown only when at least
+     * one ticked app is in this state, because a permanent warning about a situation the
+     * user does not have is noise. */
+    if (keep.some(function (k) { return exempt.indexOf(k) < 0; })) {
+      const warn = document.createElement("div");
+      warn.className = "doze-edit-hint doze-pending-hint";
+      warn.textContent = T("doze_pending_note",
+        "Some ticked apps are not exempt in Android yet, so there is nothing to keep for them. Grant it in Settings > Apps > the app > Battery > Unrestricted.");
+      box.appendChild(warn);
+    }
   } catch (e) {
     box.textContent = T('doze_err', 'Could not read the list');
   }
@@ -6083,6 +6376,206 @@ async function cfgRestartSysUI() {
   await run('pkill -f com.android.systemui 2>/dev/null || killall com.android.systemui 2>/dev/null');
 }
 
+/* Bottom-bar navigation.
+ *
+ * A thin router over the page functions that already exist - openLivePage, closeLivePage,
+ * openConfigPage, closeConfigPage. Deliberately not a new page system: those functions
+ * carry state the pages depend on (Config resets its drill-down on open, Live tears down
+ * its pollers on close), and reimplementing that would be how a navigation change turns
+ * into a data bug.
+ *
+ * The one thing the router adds is direct movement between Live and Config. The old chips
+ * could not do it - you closed back to main first - so this closes the outgoing page with
+ * toMain=false, which the existing code already understands as "another page is taking
+ * over" and skips the intermediate repaint.
+ */
+/* Log menu on the profile island.
+ *
+ * A thin opener over asbDebugAction, which already owns the capture logic, its status
+ * reporting and its guards. Nothing here duplicates that - picking an item closes the menu
+ * and hands straight over, so the two footers' worth of buttons this replaces behave
+ * exactly as they did.
+ *
+ * Positioned in JS rather than CSS: the island is a flex row that can wrap on narrow
+ * screens, so the button's left edge is not knowable from the stylesheet. Same lesson as
+ * the language popup - anchor to the measured rect, not to an assumed layout.
+ */
+function asbCloseLogMenu() {
+  const m = document.getElementById('logMenu');
+  if (m) m.hidden = true;
+  document.querySelectorAll('[aria-haspopup="menu"]').forEach(function (b) {
+    b.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function asbToggleLogMenu(ev) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById('logMenu');
+  /* Anchor to the button that was actually pressed, not to the one on the main page.
+     Three headers carry this pair now, and getElementById would have pinned the menu to
+     the off-screen copy - it would open somewhere above the viewport. */
+  const b = (ev && ev.currentTarget) || document.getElementById('logsBtn');
+  if (!m || !b) return;
+  if (!m.hidden) { asbCloseLogMenu(); return; }
+
+  const r = b.getBoundingClientRect();
+  m.hidden = false;
+  /* Measure after unhiding, then keep the menu inside the viewport: right-anchored when
+     the button sits in the right half, which is where it is on every layout so far. */
+  const w = m.offsetWidth || 168;
+  /* Undo the body zoom before positioning.
+   *
+   * getBoundingClientRect returns real viewport pixels, but the menu is a child of the
+   * zoomed body, so the left/top it is given are multiplied by that zoom on the way to the
+   * screen. At 0.85 an anchor measured at 300 lands at 255 - the menu drifts left of its
+   * button, further the wider the screen. Dividing here cancels it exactly.
+   *
+   * getBoundingClientRect is already viewport-relative and the menu is position:fixed, so
+   * scroll offsets must NOT be added - that would double-count on a scrolled page. */
+  const z = parseFloat(getComputedStyle(document.documentElement)
+              .getPropertyValue('--asb-ui-scale')) || 1;
+  let left = r.left / z;
+  const vw = window.innerWidth / z;
+  if (left + w > vw - 8) left = vw - w - 8;
+  if (left < 8) left = 8;
+  m.style.left = left + 'px';
+  m.style.top  = (r.bottom / z + 6) + 'px';
+  b.setAttribute('aria-expanded', 'true');
+  if (typeof uiSound === 'function') uiSound('option');
+}
+
+function asbLogMenuPick(action) {
+  asbCloseLogMenu();
+  if (typeof asbDebugAction === 'function') asbDebugAction(action);
+}
+
+/* Any tap outside closes it, as does Escape - a dropdown that can only be dismissed by
+   hitting its own button is a trap on a touch screen. */
+document.addEventListener('click', function (e) {
+  const m = document.getElementById('logMenu');
+  if (!m || m.hidden) return;
+  if (m.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('[aria-haspopup="menu"]')) return;
+  asbCloseLogMenu();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') asbCloseLogMenu();
+});
+
+/* Measure the room we actually have and scale to it.
+ *
+ * REFERENCE_W is the CSS width the layout was authored against - a 1440 panel at density
+ * 476. A device at the stock 560 reports 411, so it gets 411/484 = 0.85 and sees the same
+ * arrangement, slightly smaller, instead of a clipped one.
+ *
+ * Floor of 0.78: below that text stops being comfortably readable, and a cramped-but-legible
+ * screen beats a tiny one. Ceiling of 1: a tablet or a low-density phone has room to spare,
+ * and enlarging the UI to fill it would be a different bug, not a fix.
+ *
+ * Re-run on resize and orientation change because the WebUI is also opened in split screen,
+ * where the width can halve while the page is live.
+ */
+const ASB_UI_REFERENCE_W = 484;
+
+function asbApplyUiScale() {
+  try {
+    const w = document.documentElement.clientWidth || window.innerWidth || ASB_UI_REFERENCE_W;
+    let scale = w / ASB_UI_REFERENCE_W;
+    if (scale > 1) scale = 1;
+    if (scale < 0.78) scale = 0.78;
+    /* Round to hundredths: sub-pixel scale values make text render blurrily in WebView
+       without changing what fits. */
+    scale = Math.round(scale * 100) / 100;
+    document.documentElement.style.setProperty('--asb-ui-scale', String(scale));
+  } catch (e) {}
+}
+
+asbApplyUiScale();
+window.addEventListener('resize', asbApplyUiScale);
+window.addEventListener('orientationchange', asbApplyUiScale);
+
+function asbNavCurrent() {
+  if (document.body.classList.contains('config-active')) return 'config';
+  if (document.body.classList.contains('live-active'))   return 'live';
+  return 'home';
+}
+
+function asbNavSync() {
+  const at = asbNavCurrent();
+  [['tabHome','home'],['tabLive','live'],['tabConfig','config']].forEach(function (pair) {
+    const el = document.getElementById(pair[0]);
+    if (!el) return;
+    const on = (pair[1] === at);
+    el.classList.toggle('is-active', on);
+    el.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+}
+
+function asbNavGo(target) {
+  const at = asbNavCurrent();
+  if (at === target) return;          /* tapping the current tab does nothing */
+
+  /* Monitor <-> Config: bring the new page in FIRST, then drop the old one behind it.
+   *
+   * Closing and opening in the same frame ran both slide animations at once: the outgoing
+   * page moved right while the incoming one moved left, and for a third of a second the
+   * background showed through the gap between them. A swipe never looks like this because
+   * it only ever moves one page - the other is already where it needs to be.
+   *
+   * Config sits at z-index 120 and Monitor at 100, so the incoming page covers the
+   * outgoing one on its own. Mounting it first means the transition the user sees is a
+   * single surface arriving; the page underneath is dismissed once it is hidden anyway,
+   * which is why the removal is deferred rather than skipped.
+   */
+  const lateral = (at === 'live' && target === 'config') ||
+                  (at === 'config' && target === 'live');
+
+  if (lateral) {
+    if (target === 'config') {
+      /* Config (z-index 120) arrives ON TOP of Monitor (100), so it hides the old page by
+         itself. Nothing else has to move, and Monitor is left mounted underneath - which
+         is exactly the state closeConfigPage(false) expects on the way back. */
+      if (typeof openConfigPage === 'function') openConfigPage();
+    } else {
+      /* The other direction is not symmetrical, and treating it as if it were is what
+         added the pause. Monitor sits UNDER Config, so opening it changes nothing on
+         screen - the user waits out the timer staring at Config, then it vanishes.
+         
+         Mount Monitor first so it is already in place, then dismiss Config in the same
+         frame: the single animation is Config sliding away to reveal a page that is
+         already there. No gap, because nothing is missing behind it, and no wait, because
+         the reveal IS the transition. */
+      if (typeof openLivePage === 'function') openLivePage();
+      if (typeof closeConfigPage === 'function') closeConfigPage(false);
+    }
+    setTimeout(asbNavSync, 60);
+    return;
+  }
+
+  /* Home <-> anything: a single page moves, so the original order is correct. */
+  if (at === 'config' && typeof closeConfigPage === 'function') {
+    closeConfigPage(target === 'home');
+  } else if (at === 'live' && typeof closeLivePage === 'function' && target !== 'live') {
+    closeLivePage();
+    document.body.classList.remove('live-active');
+  }
+
+  if (target === 'live'   && typeof openLivePage   === 'function') openLivePage();
+  if (target === 'config' && typeof openConfigPage === 'function') openConfigPage();
+
+  /* The page functions animate; read the classes back after they have settled so the
+     highlight matches what is actually on screen rather than what we asked for. */
+  setTimeout(asbNavSync, 60);
+}
+
+/* Keep the highlight honest when a page is opened or closed by anything else - a swipe,
+   the back gesture, or one of the in-page buttons. Cheap: three class toggles. */
+document.addEventListener('DOMContentLoaded', function () {
+  asbNavSync();
+  const mo = new MutationObserver(asbNavSync);
+  mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+});
+
 function openConfigPage() {
   uiSound('nav');
   // Loaded before the first render, or a non-reference device would flash "simplified"
@@ -6124,6 +6617,14 @@ function cfgSyncChrome() {
   if (rw) rw.style.display = _cfgGroup ? 'none' : '';
   const tr = _el('cfgToolsRow');
   if (tr) { tr.style.display = _cfgGroup ? 'none' : 'flex'; cfgFillLangs(); }
+  /* The back chip only means something inside a category.
+   *
+   * It used to double as "leave Config entirely", which is why it was always visible. The
+   * tab bar owns leaving now, so on the hub the chip would be a second button for a job
+   * another control already does - and two ways to do one thing is how a screen starts
+   * feeling arbitrary. Shown when drilled in, hidden on the hub. */
+  const bc = _el('cfgBackChip');
+  if (bc) bc.style.display = _cfgGroup ? 'inline-flex' : 'none';
   const ar = _el('cfgActionsRow'); if (ar) ar.style.display = _cfgGroup ? 'none' : 'grid';
 }
 
@@ -6169,6 +6670,16 @@ function closeConfigPage(toMain) {
     // Dragging a range slider moves the finger horizontally, which otherwise looked exactly
     // like a page swipe and flipped the page mid-drag.
     var tgt = e.target;
+    /* The tab bar is made of buttons, and buttons are excluded below - so a swipe that
+       started on it was dropped before it began. That is correct for a slider or a segment
+       control, where a horizontal drag means something to the control itself; a nav tab
+       has no horizontal gesture of its own, and the bar is the most natural place to swipe
+       between the very pages it lists. Let it through and keep every other exclusion. */
+    if (tgt && tgt.closest && tgt.closest('.asb-tabbar')) {
+      var _tb = e.touches ? e.touches[0] : e;
+      x0 = _tb.clientX; y0 = _tb.clientY; t0 = Date.now(); tracking = true;
+      return;
+    }
     if (tgt && tgt.closest &&
         tgt.closest('input, select, textarea, button, .cfg-range, .cfg-seg, [type="range"]')) {
       tracking = false; x0 = y0 = null; return;
@@ -6186,6 +6697,10 @@ function closeConfigPage(toMain) {
     if (Math.abs(dx) < MIN_DX) return;
     if (Math.abs(dy) > Math.abs(dx) * MAX_OFF) return;  // too vertical
     var right = dx > 0;   // swipe-right gesture (finger moves right)
+    /* Remember that this gesture came off the bar, so the click it generates is dropped. */
+    if (e.target && e.target.closest && e.target.closest('.asb-tabbar')) {
+      window._asbSwipedOnBar = true;
+    }
     var haveLive = (typeof openLivePage === 'function');
     var haveCfg  = (typeof openConfigPage === 'function');
     if (_cfgOpen) {
@@ -6193,7 +6708,14 @@ function closeConfigPage(toMain) {
       // mounted underneath (Live→Config path) closeConfigPage just fades it
       // back in; if Config was reached from Main, fall through to Main.
       if (right) {
-        if (_liveOpen) { closeConfigPage(false); }
+        /* Inside a category, swipe-right means "up one level", not "leave Config".
+         *
+         * Matching the back chip: the gesture that goes back should go back by one step,
+         * and dropping the whole page from inside Audio to reach Camera is the long way
+         * round the user just described. Only from the hub does it leave the page. */
+        if (typeof _cfgGroup !== 'undefined' && _cfgGroup) {
+          if (typeof cfgBack === 'function') cfgBack();
+        } else if (_liveOpen) { closeConfigPage(false); }
         else { closeConfigPage(true); }
       }
     } else if (_liveOpen) {
@@ -6207,6 +6729,20 @@ function closeConfigPage(toMain) {
       if (!right && haveLive) openLivePage();
     }
   }
+  /* A swipe that began on a tab must not also fire that tab's click.
+   *
+   * Without this, dragging from Monitor to Config also counts as a tap on whichever tab
+   * the finger started on - the page would move twice, or move and come straight back.
+   * The flag is set by the swipe handler and consumed by the first click that follows. */
+  document.addEventListener('click', function (e) {
+    if (!window._asbSwipedOnBar) return;
+    window._asbSwipedOnBar = false;
+    if (e.target && e.target.closest && e.target.closest('.asb-tabbar')) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
+
   document.addEventListener('touchstart', start, { passive: true });
   document.addEventListener('touchend', end, { passive: true });
 })();
@@ -7183,5 +7719,53 @@ _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
 })();
 setTimeout(() => pollLive(false), 1500);
 </script>
+
+<!-- Bottom navigation.
+     Placed last in the body so it overlays whichever page is mounted, and fixed to the
+     bottom edge where a thumb already rests. The previous chips lived in the header of the
+     main page: reaching them meant stretching to the top of a 6.7" screen, and from inside
+     Live or Config there was no direct route to the other one at all - you closed back to
+     main first. Three fixed targets remove both problems.
+
+     Kept deliberately plain: same three destinations, same functions behind them. This is
+     a change of WHERE navigation lives, not of what it does - the pages, their state and
+     every tweak underneath are untouched. -->
+<!-- Log menu, at body level.
+     It used to live inside the main page's markup. The main page is hidden while Live or
+     Config is mounted, so unhiding a child of it changed nothing - the menu simply never
+     appeared on those two pages, and the button looked broken. Same reasoning as the tab
+     bar: an overlay that must work above every page cannot be parented to one of them. -->
+<div class="log-menu" id="logMenu" role="menu" hidden>
+  <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('diag')">
+    <span data-i18n="dbg_diag_btn">asbdiag</span>
+  </button>
+  <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('full-day')">
+    <span data-i18n="dbg_log_btn">24h log</span>
+  </button>
+</div>
+<nav class="asb-tabbar" id="asbTabbar" role="tablist" aria-label="Sections">
+  <button class="asb-tab" id="tabHome" role="tab" onclick="asbNavGo('home')" aria-label="Home">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 10.5 12 3l9 7.5"></path><path d="M5.5 9.5V20h13V9.5"></path>
+    </svg>
+    <span data-i18n="nav_home">Home</span>
+  </button>
+  <button class="asb-tab" id="tabLive" role="tab" onclick="asbNavGo('live')" aria-label="Monitor">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12h3l3-9 4 18 3-9h5"></path>
+    </svg>
+    <span data-i18n="nav_live">Monitor</span>
+  </button>
+  <button class="asb-tab" id="tabConfig" role="tab" onclick="asbNavGo('config')" aria-label="Config">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 7h6M14 7h6M4 12h10M18 12h2M4 17h3M11 17h9"></path>
+      <circle cx="12" cy="7" r="2"></circle><circle cx="16" cy="12" r="2"></circle><circle cx="9" cy="17" r="2"></circle>
+    </svg>
+    <span data-i18n="nav_config">Config</span>
+  </button>
+</nav>
 </body>
 </html>
