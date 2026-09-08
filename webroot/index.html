@@ -2764,7 +2764,16 @@ html[data-asb-theme="light"] .log-menu {
    shown in diagnostics, and so a device that has MORE room than the reference is left
    alone (the scale is capped at 1 - blowing the UI up would be its own bug). */
 :root { --asb-ui-scale: 1; }
-body {
+/* Applied only when a scale is actually needed - see the JS, which adds the class.
+ *
+ * zoom is not a no-op at 1 in a Chromium WebView: it establishes a containing block, which
+ * changes how position:fixed children resolve and can shift metrics by a pixel here and
+ * there. On a phone that needs no scaling that is a change for nothing, and the user of the
+ * reference device reported exactly that - close to the original, but not identical.
+ *
+ * With the property absent unless it is doing work, a device at scale 1 renders byte for
+ * byte as it did before any of this existed. */
+body.asb-scaled {
   zoom: var(--asb-ui-scale);
 }
 
@@ -6497,6 +6506,8 @@ function asbApplyUiScale() {
        without changing what fits. */
     scale = Math.round(scale * 100) / 100;
     document.documentElement.style.setProperty('--asb-ui-scale', String(scale));
+    /* Add the class only below 1, so an unscaled device carries no zoom at all. */
+    if (document.body) document.body.classList.toggle('asb-scaled', scale < 1);
     /* Publish both numbers. Guessing the viewport width from density arithmetic is what
        produced the first wrong reference; a real reading, visible in the UI, means the
        next adjustment is calibrated against the device rather than against my model. */
