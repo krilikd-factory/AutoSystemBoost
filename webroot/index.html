@@ -2598,7 +2598,7 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
      never changed when the user switched. */
   background: var(--surface);
   border-top: 1px solid var(--border);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--nav-pill-extra, 0px));
   /* The blur keeps content legible when it scrolls behind the bar without hiding it. */
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -2642,7 +2642,7 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
 .asb-tab { position: relative; }
 
 /* Give every page room so its last row is never trapped under the bar. */
-body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px) + var(--nav-pill-extra, 0px)); }
 
 /* The old header chips are redundant now that navigation is always on screen, and two
    sets of controls for one action is how a UI starts feeling arbitrary. Hidden rather
@@ -2664,7 +2664,7 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 .live-page > *:last-child,
 .live-page .live-scroll,
 .live-page .cfg-scroll {
-  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px) + var(--nav-pill-extra, 0px));
 }
 /* Modals must clear the bar as well: a sheet that stops above it looks broken, and one
    that ends under it hides its own confirm button. */
@@ -6606,7 +6606,41 @@ function asbNavGo(target) {
 
 /* Keep the highlight honest when a page is opened or closed by anything else - a swipe,
    the back gesture, or one of the in-page buttons. Cheap: three class toggles. */
+/* Detect a navigation pill the ROM does not report.
+ *
+ * Some OxygenOS builds return safe-area-inset-bottom = 0 with the gesture pill visible,
+ * so the tab labels end up underneath it. A fixed floor fixes those phones and breaks
+ * every phone that reports zero HONESTLY - full-screen with no navigation at all - by
+ * leaving dead space at the bottom. The two cases look identical in CSS.
+ *
+ * They differ in geometry: with a pill, the visual viewport is shorter than the screen
+ * by roughly the pill's height, while a true full-screen window matches the screen. So
+ * measure instead of guessing, and only add padding when the gap is real.
+ *
+ * Runs on load and on resize/orientation, because the pill can be toggled without
+ * restarting the WebView. The variable defaults to 0, so any device where this check
+ * does not apply keeps exactly the layout it had.
+ */
+function asbApplyNavPillInset() {
+  try {
+    const reported = parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue('--window-inset-bottom')) || 0;
+    if (reported > 4) { document.documentElement.style.setProperty('--nav-pill-extra', '0px'); return; }
+    const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
+    const sh = (window.screen && window.screen.height) || 0;
+    const dpr = window.devicePixelRatio || 1;
+    const gap = sh > 0 ? (sh - vh) : 0;
+    /* A pill occupies roughly 20-40 CSS px. Below 8 there is nothing there; above 80 the
+     * gap is a status bar or a split-screen divider, not a pill. */
+    const extra = (gap >= 8 && gap <= 80 && dpr >= 1) ? Math.min(Math.round(gap), 24) : 0;
+    document.documentElement.style.setProperty('--nav-pill-extra', extra + 'px');
+  } catch (e) { /* measurement unavailable: leave the default of 0 */ }
+}
+window.addEventListener('resize', asbApplyNavPillInset);
+window.addEventListener('orientationchange', asbApplyNavPillInset);
+
 document.addEventListener('DOMContentLoaded', function () {
+  asbApplyNavPillInset();
   asbNavSync();
   const mo = new MutationObserver(asbNavSync);
   mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
