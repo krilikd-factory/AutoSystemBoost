@@ -6592,16 +6592,8 @@ async function pollLive(visible) {
       return;
     }
     restoreManagedLiveLabels();
-    /* Collect the ROM banner on every profile, not only Stock.
-     *
-     * This passed visible=false, which makes pollStockTelemetry return immediately - so
-     * outside Stock the banner had no data and stayed hidden. That is why Battery,
-     * Balanced and Performance showed no green card at all: not a styling problem, the
-     * reading was never taken.
-     *
-     * Smart has its own richer banner and is excluded inside pollStockTelemetry, so
-     * passing the real visibility here does not double up there. */
-    pollStockTelemetry(_liveOpen);
+    /* Collection happens once per pass, after the governor state is read - see the call
+     * further down. Calling it here as well would double the /sys reads for nothing. */
     const r = await run('cat /dev/.asb/state 2>/dev/null');
     /*
      * keep Live chip always visible — Live page handles its own empty-state fallback.
@@ -6681,7 +6673,16 @@ async function pollLive(visible) {
       else if (advActive === 1) chip.classList.add('has-issue');
     }
 
-    if (_selectedProfile !== 'stock') pollStockTelemetry(false);
+    /* Keep collecting for the ROM banner on Battery, Balanced and Performance.
+     *
+     * This ran after the governor state was read and passed false, which makes
+     * pollStockTelemetry return without reading anything - so it undid the collection
+     * started earlier in the same pass. The banner had no data and stayed hidden, which
+     * is why the green card never appeared outside Stock and Smart.
+     *
+     * Smart is excluded inside pollStockTelemetry itself, so passing the real visibility
+     * here does not compete with its own richer banner. */
+    if (_selectedProfile !== 'stock') pollStockTelemetry(visible);
     if (!visible) return;
 
     // During warm-up the state file still carries the governor's initialised default -
