@@ -2644,7 +2644,7 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
         <span class="tech-icon-slot" data-tech-icon="smart"></span>
       </div>
       <div class="pinfo">
-        <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" id="smartEngineTag">V2</span></div>
+        <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" id="smartEngineTag"></span></div>
         <div class="psub" id="smartSubLine">adaptive · learning</div>
       </div>
       <div class="pload"></div>
@@ -6251,8 +6251,17 @@ function renderSmartSubLine(kv) {
        * is reworked - that is the useful thing to show there. The subtitle below keeps
        * describing what Smart is doing right now, which is a different question. */
       const engV = parseInt(kv.smart_engine_ver || '0', 10);
+      /* The badge is empty in the markup and filled from state.
+       *
+       * It used to carry a hardcoded "V2", which went stale the moment the engine moved
+       * to V3 - a version badge that lies is worse than none. Empty until the governor
+       * reports, and hidden while it has not: the element keeps its space either way, so
+       * nothing shifts when the value arrives. */
       const engTag = document.getElementById('smartEngineTag');
-      if (engTag && engV > 0) engTag.textContent = 'V' + engV;
+      if (engTag) {
+        if (engV > 0) { engTag.textContent = 'V' + engV; engTag.style.display = ''; }
+        else engTag.style.display = 'none';
+      }
 
       let sub = dpName + ' · ' + Math.round(alpha/10) + '% battery-lean';
       if (night)         sub = '🌙 night-safe override';
@@ -6583,7 +6592,16 @@ async function pollLive(visible) {
       return;
     }
     restoreManagedLiveLabels();
-    pollStockTelemetry(false);
+    /* Collect the ROM banner on every profile, not only Stock.
+     *
+     * This passed visible=false, which makes pollStockTelemetry return immediately - so
+     * outside Stock the banner had no data and stayed hidden. That is why Battery,
+     * Balanced and Performance showed no green card at all: not a styling problem, the
+     * reading was never taken.
+     *
+     * Smart has its own richer banner and is excluded inside pollStockTelemetry, so
+     * passing the real visibility here does not double up there. */
+    pollStockTelemetry(_liveOpen);
     const r = await run('cat /dev/.asb/state 2>/dev/null');
     /*
      * keep Live chip always visible — Live page handles its own empty-state fallback.
