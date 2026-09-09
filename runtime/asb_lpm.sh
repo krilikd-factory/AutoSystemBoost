@@ -156,6 +156,30 @@ _lpm_wakeup_gate() {
   # Same rule as before: this is a wakeup-timing change on the data path, not a power or
   # association change. Wi-Fi stays connected and calls are unaffected; a push that arrives
   # over Wi-Fi may wait for the next wake, which is the deal this tweak already states.
+  # The IPA device itself, not only the interfaces it feeds.
+  #
+  # A kernel wake-source table shows where the night actually goes: rmnet_ctl 177 wakeups,
+  # IPA_CLIENT_APPS_WAN_LOW_LAT_CONS 177, IPA_CLIENT_APPS_LAN_CONS 182 - about 500 in an
+  # hour, holding the SoC for ~101 s, with mobile traffic near zero. Those are kernel
+  # wakelocks held by the packet accelerator, and gating /sys/class/net/rmnet* does not
+  # reach them: the interface is what carries traffic, the IPA device is what wakes up.
+  #
+  # There is no API to release a named kernel wakelock, so the only lever is the device's
+  # own wakeup attribute - the same one already used for the interfaces, applied one level
+  # down. Recorded and restored by the same loop, so a device that does not expose it, or
+  # ignores the write, is left exactly as it was.
+  for _ipa in /sys/devices/platform/soc/*ipa*/power/wakeup \
+              /sys/bus/platform/devices/*ipa*/power/wakeup; do
+    [ -e "$_ipa" ] || continue
+    _cur="$(cat "$_ipa" 2>/dev/null)"
+    case "$_cur" in enabled|disabled) : ;; *) continue ;; esac
+    if [ "$1" = "disabled" ]; then
+      grep -q "^$_ipa=" "$_ASB_WAKEUP_STATE" 2>/dev/null || \
+        printf '%s=%s\n' "$_ipa" "$_cur" >> "$_ASB_WAKEUP_STATE" 2>/dev/null
+    fi
+    echo "$1" > "$_ipa" 2>/dev/null || true
+  done
+
   for _if in /sys/class/net/rmnet* /sys/class/net/wlan*; do
     [ -e "$_if/device/power/wakeup" ] || continue
     _n="$(basename "$_if")"
@@ -174,7 +198,15 @@ _lpm_wakeup_gate() {
 _lpm_wakeup_restore() {
   [ -f "$_ASB_WAKEUP_STATE" ] || return 0
   while IFS='=' read -r _n _v; do
-    case "$_n" in ''|*[!A-Za-z0-9_]*) continue ;; esac
+    # Two record kinds: a bare interface name, and an absolute sysfs path for the IPA
+    # device. Restoring only the first would leave the accelerator gated after everything
+    # else was released - a phone that quietly stops waking for data, with nothing on disk
+    # to explain why.
+    case "$_n" in
+      /*) [ -e "$_n" ] && echo "$_v" > "$_n" 2>/dev/null || true
+          continue ;;
+      ''|*[!A-Za-z0-9_]*) continue ;;
+    esac
     case "$_v" in enabled|disabled) : ;; *) continue ;; esac
     [ -e "/sys/class/net/$_n/device/power/wakeup" ] &&       echo "$_v" > "/sys/class/net/$_n/device/power/wakeup" 2>/dev/null || true
   done < "$_ASB_WAKEUP_STATE"

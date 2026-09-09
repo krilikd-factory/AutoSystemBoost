@@ -602,8 +602,30 @@ asb_apply_ux() {
     0) : ;;  # stock mode does not touch WindowManager or display configuration
   esac
 
+  # Never broadcast a configuration change while the screen is on.
+  #
+  # CONFIGURATION_CHANGED makes every process holding a Configuration re-read it, and
+  # SystemUI responds by rebuilding its views. Done while the user is looking at the
+  # screen that is a visible hitch at best; if it lands during another reconfiguration -
+  # a rotation, a theme switch, an app resuming - SystemUI can lose the race and restart.
+  # A user reported exactly that, and nothing in the module restarts SystemUI directly,
+  # so a broadcast we send at a bad moment is the plausible mechanism.
+  #
+  # Animation scales are read at process start, so the broadcast only matters for the
+  # next thing that reads them, not for anything on screen now. Deferring it to screen-off
+  # costs the user nothing and takes the module out of the risky window entirely.
   if [ "$_anim_changed" = "1" ]; then
-    am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
+    _scr_on=1
+    case "$(dumpsys deviceidle get screen 2>/dev/null)" in
+      false|Asleep) _scr_on=0 ;;
+    esac
+    if [ "$_scr_on" = "0" ]; then
+      am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
+    else
+      # Leave a marker; the screen-off pass picks it up rather than dropping the change.
+      mkdir -p /data/adb/asb 2>/dev/null
+      : > /data/adb/asb/anim_broadcast_pending 2>/dev/null || true
+    fi
   fi
   # SystemUI caches the animation scales at process start, so a restart is only meaningful when
   # a scale was actually rewritten this run - restarting it on every boot regardless would be a

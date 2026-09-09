@@ -190,6 +190,23 @@ if _has tc; then
     case "$_want" in ''|auto) continue ;; esac
     # Arguments matter as much as the name: fq_codel with default target is not the same
     # tuning as fq_codel at 5 ms, and cake without an isolation mode is barely cake.
+    # Check the live qdisc before replacing it.
+    #
+    # A device diag reports "[FAIL] net_qdisc want: fq_codel live: failed" while section 5a
+    # on the same report shows "qdisc in force: fq_codel". Both are right: the value was
+    # already correct, and `tc qdisc replace` on an interface whose root qdisc cannot be
+    # swapped returns non-zero anyway - so a phone in the desired state was recorded as a
+    # failure, every pass, forever.
+    #
+    # Same class as the uclamp fast-path bug: acting without reading first, then judging the
+    # outcome by the write instead of by the state. Read, and skip when there is nothing to
+    # do - it removes the write, the retry and the false FAIL together.
+    if tc qdisc show dev "$_if" 2>/dev/null | grep -q "qdisc $_want "; then
+      _qd_tried=$(( _qd_tried + 1 ))
+      _qd_ok=$(( _qd_ok + 1 ))
+      _out="$_out qdisc[$_kind:$_if]=$_want-already"
+      continue
+    fi
     case "$_want" in
       fq)       tc qdisc replace dev "$_if" root fq pacing >/dev/null 2>&1 ;;
       fq_codel) tc qdisc replace dev "$_if" root fq_codel target 5ms interval 100ms ecn >/dev/null 2>&1 ;;

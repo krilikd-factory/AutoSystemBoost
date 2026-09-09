@@ -149,16 +149,43 @@ case "$_lvl" in
     # window closes, so this borrows AOD for the night rather than turning it off. If they
     # never had it on, nothing happens at all.
     _aod_base="/data/adb/asb/aod_baseline"
-    _aod_now="$(asb_set_get secure doze_always_on)"
+    # Look for the vendor key too, not just the AOSP one.
+    #
+    # doze_always_on came back EMPTY on a CPH2581 while the wakelock report showed 25 AOD
+    # alarms an hour - HIDE_TIME x16 plus UPDATE_TIME x9, the largest single group of RTC
+    # wakeups in that capture. Empty is not "off": ColorOS and OxygenOS keep the switch
+    # under their own key, so the AOSP one is simply never written and the pause never
+    # armed on the devices that needed it most.
+    #
+    # First key that answers wins, and its name is remembered so the restore writes back
+    # to the same place. A device that uses none of them still reports empty and is left
+    # alone, exactly as before.
+    _aod_key=""
+    for _ak in secure:doze_always_on \
+               secure:aod_mode \
+               system:aod_mode \
+               secure:oplus_aod_switch \
+               system:oplus_customize_aod_switch; do
+      _aod_ns="${_ak%%:*}"; _aod_nm="${_ak##*:}"
+      _aod_try="$(asb_set_get "$_aod_ns" "$_aod_nm")"
+      case "$_aod_try" in ''|null) continue ;; esac
+      _aod_key="$_ak"; break
+    done
+    [ -n "$_aod_key" ] || _aod_key="secure:doze_always_on"
+    _aod_ns="${_aod_key%%:*}"; _aod_nm="${_aod_key##*:}"
+    _aod_now="$(asb_set_get "$_aod_ns" "$_aod_nm")"
     if [ "$_in_night" = "1" ]; then
       if [ "$_aod_now" = "1" ]; then
         [ -f "$_aod_base" ] || printf '1\n' > "$_aod_base" 2>/dev/null
-        asb_set_put secure doze_always_on 0 >/dev/null 2>&1 \
-          && echo "doze: AOD paused for the night window"
+        printf '%s\n' "$_aod_key" > "${_aod_base}.key" 2>/dev/null
+        asb_set_put "$_aod_ns" "$_aod_nm" 0 >/dev/null 2>&1 \
+          && echo "doze: AOD paused for the night window ($_aod_key)"
       fi
     elif [ -f "$_aod_base" ]; then
-      asb_set_put secure doze_always_on "$(cat "$_aod_base" 2>/dev/null || echo 1)" >/dev/null 2>&1
-      rm -f "$_aod_base" 2>/dev/null
+      # Restore through the key we actually paused, not the AOSP default.
+      _aod_rk="$(cat "${_aod_base}.key" 2>/dev/null || echo 'secure:doze_always_on')"
+      asb_set_put "${_aod_rk%%:*}" "${_aod_rk##*:}" "$(cat "$_aod_base" 2>/dev/null || echo 1)" >/dev/null 2>&1
+      rm -f "$_aod_base" "${_aod_base}.key" 2>/dev/null
       echo "doze: AOD restored"
     fi
     ;;
