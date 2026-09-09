@@ -386,7 +386,28 @@ done
 [ -f /dev/.asb/camera_guard ] && P "  camera lease          : ACTIVE (foreground/top-app/uclamp remain camera-owned)" || P "  camera lease          : inactive"
 if [ -r "$_state" ]; then
   _wattempts="$(_rget writer_attempts "$_state")"; _wapplied="$(_rget writer_applied "$_state")"; _wfail="$(_rget writer_failures "$_state")"; _wskip="$(_rget writer_backoff_skips "$_state")"
+  # Screen-off cooldown: is the clamp holding the caps down right now?
+  #
+  # Only engages on a phone that went to sleep warm - so it will read 0 in almost every
+  # diag taken by hand, and that is correct. It matters in a capture taken the morning
+  # after a heavy evening, where it is the difference between "the night was expensive"
+  # and "the night was expensive and nothing tried to fix it".
+  _cd="$(grep -m1 '^thermal_cooldown=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  case "$_cd" in
+    1) P "  cooldown clamp        : ACTIVE (screen off, die still warm - caps at hw minimum)" ;;
+    0) P "  cooldown clamp        : idle (not needed - phone is cool or screen is on)" ;;
+    *) P "  cooldown clamp        : unknown (governor state not readable)" ;;
+  esac
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
+  # Separate "this kernel does not have the node" from "the write was refused".
+  #
+  # walt_ravg reads back INT_MIN on a custom kernel that lacks it. The writer already
+  # handles that correctly - one attempt, then quiet for the day - but it still counts
+  # in the failures total, so a healthy phone on OP-WILD shows a permanent FAIL and its
+  # owner reasonably reports a bug. Nothing is wrong; the node is simply not there.
+  _wh_unsup="$(grep -cE '^writer_node_.*status:unsupported' /dev/.asb/state 2>/dev/null)"
+  case "$_wh_unsup" in ''|*[!0-9]*) _wh_unsup=0 ;; esac
+  [ "$_wh_unsup" -gt 0 ] && NOTE "of which unsupported on this kernel: $_wh_unsup (not errors - the node does not exist here)"
   _w_vendor_ceiling="$(grep -E '^writer_node_cpu_max[0-2]=.*status:vendor_stricter_ceiling' "$_state" 2>/dev/null | cut -d= -f1 | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
   [ -n "$_w_vendor_ceiling" ] && NOTE "Vendor already holds a stricter CPU ceiling on ${_w_vendor_ceiling}; ASB accepts it and avoids a cap fight."
   P "  energy policy         : shadow=$(_rget shadow_mode "$_state") budget_enabled=$(_rget thermal_budget_enabled "$_state") trim=$(_rget thermal_budget_trim_pct "$_state")% (base=$(_rget thermal_budget_base_trim_pct "$_state")% + envelope=$(_rget thermal_budget_envelope_bonus_pct "$_state")%, stage=$(_rget thermal_budget_stage "$_state")) reason=$(_rget thermal_budget_reason "$_state") dwell=$(_rget thermal_budget_dwell_s "$_state")s"
