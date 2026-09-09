@@ -145,7 +145,7 @@ static inline int sysfs_read_int(const char *path, int def) {
     char buf[32];
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return def;
-    int n = read(fd, buf, sizeof(buf) - 1);
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
     close(fd);
     if (n <= 0) return def;
     buf[n] = '\0';
