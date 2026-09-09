@@ -5,6 +5,14 @@
 #include "asb_metrics.h"
 #include "asb_config.h"
 #include "asb_fsm_bounds.generated.h"  /* bounds from config/profile_bounds.conf */
+/* For ASB_APP_GAMING, used by the gaming GPU gate below.
+ *
+ * The gate was written as a bare 4 with a comment explaining that the constant could not
+ * be reached from here. It can: asb_smart_defs.h has an include guard and depends on
+ * nothing but stdint.h, so there is no cycle to avoid. A literal that must be kept in step
+ * with an enum in another file is the kind of thing that stays correct right up until
+ * someone inserts a value above it. */
+#include "asb_smart_defs.h"
 
 extern asb_runtime_config_t g_asb_cfg;
 
@@ -544,6 +552,11 @@ typedef struct {
     /* Die temperature at the start of the current warm stretch, for the net-rise view
      * of the thermal trend. Reset whenever the phone is cool again. */
     int             warm_anchor_c;
+    /* Set while the screen-off cooldown clamp holds the caps down. Reported only - nothing
+       reads it back to make a decision. Named thermal_cooldown, not cooldown_active: that
+       name is already a local in the gaming-retry logic and shadowing it would compile
+       cleanly while meaning something else entirely. */
+    int             thermal_cooldown;
     int             thermal_trend;
     int             trend_buf[3];
     int             trend_idx;
@@ -998,10 +1011,8 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
      * gaming ceiling.
      */
     int _gpu_gate = g_asb_cfg.gaming_gpu_enter;
-    /* 4 is ASB_APP_GAMING. Written as a literal because asb_smart_defs.h is included
-     * after this header, and pulling it in here would reorder half the tree for one
-     * constant; the value is asserted below so a renumbering cannot slip through. */
-    if (m->misc.app_hint >= 4 && _gpu_gate > 25) _gpu_gate = 25;
+/* A known game relaxes the GPU gate: many are CPU-bound and never push it high. */
+    if (m->misc.app_hint >= ASB_APP_GAMING && _gpu_gate > 25) _gpu_gate = 25;
 
     if (m->gpu.load_pct >= _gpu_gate) {
         if (g_gaming_confirm_streak < 10000) g_gaming_confirm_streak++;
@@ -1671,6 +1682,26 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         int window = (desired > fsm->state)
                      ? fsm->up_window
                      : fsm->down_window;
+        /* MODERATE <-> HEAVY needs more confirmation than the rest of the ladder.
+         *
+         * A snapshot audit of one session counted 20 transitions, of which 14 were this one
+         * pair going back and forth - seven each way. CPU load sat near 8.9% throughout while
+         * GPU swung between 0 and 61%, so the phone was not alternating between two workloads;
+         * it was tracking a metric that crosses its threshold on its own.
+         *
+         * Each transition costs a caps recompute, a round of sysfs writes, a vendor ownership
+         * check and a ledger entry - about 4.5 writes apiece, 98 across that window. A short
+         * hop to a higher ceiling delivers no useful performance while still raising voltage
+         * and heat, which is the opposite of what either state is for.
+         *
+         * Three ticks instead of the default: long enough to ignore a wobbling metric, short
+         * enough to follow a real workload change within seconds. Anything urgent bypasses it -
+         * thermal escalation sets window to 1 on the next line, and GAMING and camera have
+         * their own paths entirely. */
+        if ((fsm->state == ASB_STATE_MODERATE && desired == ASB_STATE_HEAVY) ||
+            (fsm->state == ASB_STATE_HEAVY && desired == ASB_STATE_MODERATE)) {
+            if (window < 3) window = 3;
+        }
         if (thermal_to_sustained) window = 1;
         /*
          * UI-burst fast escalation: when desired bumped up by gpu.load_pct≥12 on screen-on,
@@ -1950,6 +1981,58 @@ if (!can_leave &&
         }
     }
 
+    /* Active cooldown: a phone that fell asleep hot gets pushed below its idle rail.
+     *
+     * A field night shows the cost of not doing this. The phone went to sleep at 63 degC
+     * after 22 minutes of heavy use and spent the whole night shedding it:
+     *
+     *   48 -> 48 -> 48 -> 41 -> 41 -> 41 -> 39 degC
+     *
+     * It drew 1.32 %/h against 0.56 on the same phone starting cool. Extra wakefulness
+     * accounts for barely a seventh of that; the rest is leakage current, which rises
+     * steeply with die temperature. The night was expensive because it started hot.
+     *
+     * DEEP_IDLE already gives the profile floor rail - but that rail is sized for a cool
+     * phone doing nothing, not for one trying to lose heat. The silicon goes lower: a
+     * captured OP13 reports 787200 on the prime and 499200 on the little cluster against
+     * an 883200 rail. Those steps are available and unused.
+     *
+     * So while the screen is off and the die is still warm, clamp to the hardware minimum
+     * and let it cool faster. Releases at 40 degC with hysteresis, so a phone that went to
+     * bed cool never enters this at all and a normal night is untouched.
+     *
+     * Nothing is lost: at these temperatures with the screen off there is no work whose
+     * completion time anyone can observe. This is the one case where a lower ceiling really
+     * does mean less energy, because the thing being reduced is leakage, not throughput.
+     */
+    {
+        static int _cool_active = 0;
+        int _t = m->therm.cpu_max_c;
+        if (m->misc.screen_on || _t <= 0) {
+            _cool_active = 0;
+        } else {
+            if (_t >= 45)      _cool_active = 1;
+            else if (_t <= 40) _cool_active = 0;
+            if (_cool_active) {
+                for (int i = 0; i < 3; i++) {
+                    int lo = g_cpu_slot_hwmin[i];
+                    if (lo <= 0 || new_caps.cpu_max[i] <= 0) continue;
+                    if (new_caps.cpu_max[i] > lo) new_caps.cpu_max[i] = lo;
+                }
+                /* The GPU shares the die and the same heat budget.
+                 *
+                 * Clamping only the CPU leaves half the source running. With the screen off nothing
+                 * is being rendered, so a 15% ceiling costs nothing observable and removes the GPU
+                 * contribution to the load we are shedding. Not zero: the compositor still services
+                 * the occasional notification or always-on surface. */
+                if (new_caps.gpu_max_pct > 15) new_caps.gpu_max_pct = 15;
+            }
+            /* Publish it: a cooldown that silently does nothing looks identical to one that
+               worked, and only the recorded state tells them apart in a capture. */
+            fsm->thermal_cooldown = _cool_active;
+        }
+    }
+    
     /* Interactive floor: a screen-on phone never gets less than a third of its prime.
      *
      * Settings compose, and nothing checked what they compose into. A field device running

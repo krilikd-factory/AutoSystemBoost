@@ -955,6 +955,10 @@ static time_t g_cap_recent_window_start = 0;
 static int    g_cap_slow_vendor_clamps = 0;
 static time_t g_cap_slow_window_start = 0;
 static time_t g_cap_vendor_hold_until = 0;
+/* Set when the vendor owns the cap outright - see asb_cap_writes_should_back_off. Declared
+   here with the rest of the cap state because write_state() reports it and runs earlier in
+   the file than the function that maintains it. */
+static int    g_cap_vendor_passive    = 0;
 static int    g_cap_detente_active = 0;
 static time_t g_cap_detente_since = 0;
 static long   g_cap_detente_skipped = 0;
@@ -1948,6 +1952,16 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "smart_pkg_detect_ok=%d\nsmart_pkg_source=%d\nsmart_pkg_status=%d\n",
             g_pkg_detect_ok, g_pkg_detect_source, g_pkg_detect_status);
     /* — Cap ownership */
+    /* Published separately from the short holddown: "we paused for three seconds" and
+       "the vendor owns this cap and we have stopped writing" look identical otherwise, and
+       only the second one explains an hour of asb 0% in the ownership trace. */
+    fprintf(f, "cap_vendor_passive=%d\n", g_cap_vendor_passive);
+    /* Screen-off cooldown clamp, so a night capture can show whether it engaged.
+     *
+     * The clamp only fires on a phone that fell asleep warm, which is exactly the night
+     * nobody plans to have - so it cannot be triggered on demand, and without this line
+     * the only evidence would be an absence of heat, which proves nothing either way. */
+    fprintf(f, "thermal_cooldown=%d\n", fsm->thermal_cooldown);
     fprintf(f, "cap_owner=%s\ncap_owner_since=%ld\ncap_vendor_holddown=%d\n",
             asb_cap_owner_name(g_cap_owner_eff),
             (long)g_cap_owner_since,
@@ -2127,8 +2141,30 @@ static int asb_cap_compute_owner(const char *cap_source) {
 }
 
 /* Anti-thrash gate: returns 1 if ASB should back off cap writes right now. */
+/* Sustained vendor pressure: stop rewriting a ceiling the vendor owns outright.
+ *
+ * The short holddown above breaks a burst - two or three clamps in a row - and then we go
+ * back to writing. That is right when the vendor intervenes occasionally. It is wrong when
+ * the vendor simply owns the cap: a field capture recorded 35 vendor clamps in an hour, 14
+ * in the last minute, with cap_source on both clusters reading "vendor_clamp" and the CPU
+ * at 54 degC against our own 60 degC throttle point. The vendor was throttling earlier
+ * than we would, and every tick we wrote a ceiling it immediately took back.
+ *
+ * That loop costs I/O, OPP switches and the energy of the ramp, and it buys nothing: the
+ * value we write never survives. Hysteresis cannot fix it because hysteresis governs how
+ * WE change our mind, and here the disagreement is with something else entirely.
+ *
+ * So: 20 or more clamps in the slow window means the vendor is the owner, not a visitor.
+ * Go passive - keep measuring, keep deciding, stop writing - and resume the moment the
+ * rate drops back under half that. Nothing thermal is lost: the vendor's ceiling is the
+ * stricter of the two in every capture we have, so passive means the phone runs cooler,
+ * not hotter.
+ */
 static int asb_cap_writes_should_back_off(void) {
     time_t now = time(NULL);
+    if (g_cap_slow_vendor_clamps >= 20) g_cap_vendor_passive = 1;
+    else if (g_cap_slow_vendor_clamps < 10) g_cap_vendor_passive = 0;
+    if (g_cap_vendor_passive) return 1;
     return (g_cap_vendor_hold_until > 0 && now < g_cap_vendor_hold_until) ? 1 : 0;
 }
 
@@ -2407,7 +2443,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fsm->bat_wake_cycles,
         fsm->clamp_hold,
         asb_cap_owner_name(g_cap_owner_eff),
-        (g_cap_vendor_hold_until > time(NULL)) ? 1 : 0,
+        (g_cap_vendor_passive || g_cap_vendor_hold_until > time(NULL)) ? 1 : 0,
         g_cap_recent_vendor_clamps,
         v44_clamp_1h_now());
     {
@@ -5170,10 +5206,30 @@ int main(int argc, char **argv) {
         asb_log("diag: gpu_load=%d%% valid=%d gpu_maxfreq=%ld",
                 metrics.gpu.load_pct, metrics.gpu.load_valid, metrics.gpu.max_freq_hz);
         cpu_topology_discover();
-        if (g_cpu_policy_count == 2)
-            asb_log("diag: cpu_topology=policy0+policy6 (2-cluster SD8Elite)");
-        else
-            asb_log("diag: cpu_topology=policy0+policy4+policy7 (3-cluster fallback)");
+        /* Print the policies actually chosen, not a guess at what they must be.
+         *
+         * These two lines named fixed policy numbers regardless of what discovery found.
+         * On a CPH2581 - policies 0, 2, 5 and 7 - the log read "policy0+policy4+policy7"
+         * while policy4 does not exist on that device at all. Discovery had in fact picked
+         * correctly; only the message was wrong, which is worse than no message: it sent
+         * two people looking for a topology bug that was not there.
+         *
+         * Reading the array costs nothing and cannot drift from reality. */
+        {
+            /* Build the list from the slots that are actually filled: an unused slot holds
+               -1, and printing "policy-1" would trade one confusing message for another. */
+            char _topo[64]; int _tp = 0;
+            _topo[0] = 0;
+            for (int _s = 0; _s < 3; _s++) {
+                if (g_cpu_policy_ids[_s] < 0) continue;
+                _tp += snprintf(_topo + _tp, sizeof(_topo) - (size_t)_tp,
+                                "%spolicy%d", _tp ? "+" : "", g_cpu_policy_ids[_s]);
+                if (_tp >= (int)sizeof(_topo)) break;
+            }
+            asb_log("diag: cpu_topology=%s (%d cluster%s)",
+                    _topo[0] ? _topo : "none",
+                    g_cpu_policy_count, g_cpu_policy_count == 1 ? "" : "s");
+        }
         for (int _i = 0; _i < 3; _i++) {
             char _mp[128]; int _maxf;
             if (g_cpu_policy_ids[_i] < 0) continue;
@@ -6356,7 +6412,21 @@ int main(int argc, char **argv) {
                 static const char *g_lpm_last = NULL;
                 static time_t g_lpm_last_ts = 0;
                 time_t lpm_now = time(NULL);
-                if (lpm_mode != g_lpm_last && (lpm_now - g_lpm_last_ts) >= 15) {
+                /* Compare the strings, not the pointers.
+         *
+         * lpm_mode is assigned from string literals in a conditional chain, and this test
+         * relied on the compiler pooling identical literals so that two "save" results
+         * share an address. GCC does pool them here, so it happens to work - but nothing
+         * in the language requires it, and the failure mode is silent: with pooling off,
+         * every tick looks like a mode change and the LPM script is re-run every fifteen
+         * seconds forever; with a future edit that builds the string instead of selecting
+         * a literal, a real change stops being noticed at all.
+         *
+         * A field diag shows LPM sitting at "normal" for 219 ticks against 56 in "save" on
+         * a phone that spent the night with its screen off, which is the shape of the
+         * second failure. strcmp costs nothing here and cannot depend on the toolchain. */
+        if ((g_lpm_last == NULL || strcmp(lpm_mode, g_lpm_last) != 0) &&
+            (lpm_now - g_lpm_last_ts) >= 15) {
                     char lcmd[192];
                     snprintf(lcmd, sizeof(lcmd),
                              "sh /data/adb/modules/AutoSystemBoost/runtime/asb_lpm.sh %s"

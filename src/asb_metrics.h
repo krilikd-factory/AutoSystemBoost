@@ -403,6 +403,14 @@ static int g_cpu_policy_count    = 0;
  * pulls to the floor the UI freezes.
  */
 static int g_cpu_slot_hwmax[3] = {0, 0, 0};
+/* Lowest frequency each cluster can actually run.
+ *
+ * Needed for the cooldown clamp: a phone that goes to sleep hot spends the night shedding
+ * heat, and the idle rail - sized for a cool phone - is nowhere near the floor the silicon
+ * offers. A captured OP13 reports policy7 min=787200 against an idle rail of 883200, and
+ * the little cluster can reach 499200. Reading the real minimum means the clamp asks for
+ * something the hardware will accept rather than a number we invented. */
+static int g_cpu_slot_hwmin[3] = {0, 0, 0};
 #define ASB_BOUNDS_REF_HWMAX_LITTLE 2035200  /* SM8650 policy0 reference */
 #define ASB_BOUNDS_REF_HWMAX_BIG    3302400  /* SM8650 policy7 reference */
 static void cpu_capture_slot_hwmax(void);
@@ -547,6 +555,26 @@ static void cpu_capture_slot_hwmax(void) {
         char b[32] = {0};
         int n = read(fd, b, sizeof(b) - 1); close(fd);
         if (n > 0) g_cpu_slot_hwmax[s] = atoi(b);
+    
+    /* Lowest OPP the cluster offers, read in the same pass.
+     *
+     * One extra open per cluster, once per boot, and it is what makes an active cooldown
+     * possible: the idle rail is sized for a cool phone, while the silicon on a captured
+     * OP13 reaches 787200 on the prime and 499200 on the little cluster. Without the real
+     * number a cooldown clamp would be guessing at a frequency the hardware may refuse. */
+    g_cpu_slot_hwmin[s] = 0;
+    snprintf(path, sizeof(path),
+             "/sys/devices/system/cpu/cpufreq/policy%d/cpuinfo_min_freq",
+             g_cpu_policy_ids[s]);
+    fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd >= 0) {
+      char lb[32] = {0};
+      int ln = read(fd, lb, sizeof(lb) - 1); close(fd);
+      if (ln > 0) {
+        int lo = atoi(lb);
+        if (lo > 0 && lo < g_cpu_slot_hwmax[s]) g_cpu_slot_hwmin[s] = lo;
+      }
+    }
     }
 }
 
