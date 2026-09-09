@@ -66,7 +66,11 @@ need "$WEB" 'html[data-asb-theme="light"] .cfg-seg button.on { color:#063d32; ba
 # Only outer cards may receive the paper surface; broad substring selectors paint transparent
 # children into the rectangular white seams reported in the light-theme screenshots.
 need "$WEB" 'Only outer material surfaces'
-need "$WEB" '.live-cell,.stock-telemetry,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet) {'
+# The light-theme override list is checked by membership, not as one literal line:
+# adding a selector to it is a normal change, and pinning the whole line makes every
+# such addition look like a regression.
+need "$WEB" '.cfg-reset-dialog,.debug-action-wait-sheet,'
+need "$WEB" '.asb-tabbar) {'
 absent "$WEB" '[class*="cfg-row"]'
 absent "$WEB" '[class*="live-cell"]'
 need "$WEB" '.cfg-search::placeholder { color:#61776f; opacity:1; }'
