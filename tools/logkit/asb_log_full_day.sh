@@ -648,7 +648,19 @@ lk_emit_phase_summary() {
         # mostly at 38-44. Peaks keep their place in the hotspots section, where a
         # single moment is exactly the point.
         CT[ph]+=$6*dur; SF[ph]+=$7*dur; TD[ph]+=dur;
-        if($8>P6[ph])P6[ph]=$8; G[ph]+=$9; TH[ph]+=$10;
+        # Average the prime ceiling, do not take its peak.
+        #
+        # if($8>P6[ph]) kept the highest value seen in the phase. Every phase here is long -
+        # a ten-hour sleep has 99 wakeups in it - so each one contains at least one moment
+        # at the top, and the column printed the same number for all nine phases: 1689 for
+        # sleep, gaming and charging alike. A reader concludes the governor never lowers the
+        # cap, which is the opposite of true - the live nodes on both reference devices read
+        # well under hardware maximum.
+        #
+        # Duration-weighted, like cpuT and surfT beside it, so the figure answers "what did
+        # this phase mostly run at" rather than "did it ever touch the ceiling".
+        if($8>0){ P6[ph]+=$8*dur; P6D[ph]+=dur }
+        G[ph]+=$9; TH[ph]+=$10;
         if($12>=0){ AW[ph]+=$12*dur; AWD[ph]+=dur }
         # Current, averaged on the same duration basis. The print line for this column was
         # added without its accumulator, so MA[] stayed empty and every phase reported 0 mA
@@ -676,9 +688,21 @@ lk_emit_phase_summary() {
           # that the number is printed - it is still evidence of direction - but flagged, so
           # nobody builds a conclusion on the width of the quantiser.
           step=(D[p]>0)?(3600.0/D[p]):999;
-          conf=(step<=3.0 || DP[p]>=3)?"":"~";
+          # Quantiser noise has to be small COMPARED TO the rate, not small in absolute
+          # terms - and the "three whole steps" escape hatch let that slip through.
+          #
+          # A 14-minute phase with 5 steps passed the old test and printed 21.15 %/h, while
+          # a 71-minute phase in the same log printed 5.05 %/h at almost the same current
+          # (146 mA vs 166 mA). One SOC step is worth 4.2 %/h over 14 minutes and 0.8 %/h
+          # over 71: the short row was mostly quantiser, and it was shown unmarked next to
+          # the long one as if the two were comparable.
+          #
+          # The rate is meaningful when one step is under a quarter of it. That is a
+          # relative test, so it scales: a fast drain can be measured over a shorter window
+          # than a slow one, which is exactly right.
+          conf=(rate>0 && step<=rate/4.0)?"":"~";
           printf "%-15s %8.1f %7d %7.2f%1s %6d %9.1f %8d %8d %9d %7d %9d %8s\n", \
-            p, durm, DP[p], rate, conf, (MAD[p]>0?MA[p]/MAD[p]:0), ((RX[p]+TX[p])/1048576.0), (TD[p]>0?CT[p]/TD[p]:0), (TD[p]>0?SF[p]/TD[p]:0), (P6[p]/1000), gavg, TH[p], aws;
+            p, durm, DP[p], rate, conf, (MAD[p]>0?MA[p]/MAD[p]:0), ((RX[p]+TX[p])/1048576.0), (TD[p]>0?CT[p]/TD[p]:0), (TD[p]>0?SF[p]/TD[p]:0), (P6D[p]>0?P6[p]/P6D[p]/1000:0), gavg, TH[p], aws;
         }
       }
     ' "$_all" | sort -k4 -rn
