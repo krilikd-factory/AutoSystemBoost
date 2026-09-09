@@ -144,8 +144,17 @@ settings delete global device_idle_constants >/dev/null 2>&1 || true
 # restored before anything else.
 if [ -f /data/adb/asb/lpm_wakeup_prev ]; then
   while IFS='=' read -r _wn _wv; do
-    case "$_wn" in ''|*[!A-Za-z0-9_]*) continue ;; esac
     case "$_wv" in enabled|disabled) ;; *) continue ;; esac
+    # Absolute paths are IPA device records; bare names are network interfaces.
+    #
+    # The pattern below rejects anything containing a slash, so an IPA entry would have
+    # been skipped and the accelerator left gated after the module was removed - a phone
+    # that stops waking for mobile data, with the module gone and nothing to point at.
+    case "$_wn" in
+      /*) [ -e "$_wn" ] && echo "$_wv" > "$_wn" 2>/dev/null || true
+          continue ;;
+      ''|*[!A-Za-z0-9_]*) continue ;;
+    esac
     [ -e "/sys/class/net/$_wn/device/power/wakeup" ] && \
       echo "$_wv" > "/sys/class/net/$_wn/device/power/wakeup" 2>/dev/null || true
   done < /data/adb/asb/lpm_wakeup_prev

@@ -839,8 +839,23 @@ apply_uclamp() {
   _ucl_bg_max="${UCL_BG_MAX:-40}"
   _ucl_fg_max="${UCL_FG_MAX:-70}"
   _ucl_top_max="${UCL_TOP_MAX:-85}"
-  writef_retry /dev/cpuctl/background/cpu.uclamp.max        $_ucl_bg_max 2 0.06 || true
-  writef_retry /dev/cpuctl/system-background/cpu.uclamp.max $_ucl_bg_max 2 0.06 || true
+  # Background tiers belong to the governor, which varies them by state.
+  #
+  # Two writers, one node. The governor interpolates uclamp_bg_max along the ladder -
+  # 25 at the floor, 35 at the ceiling on balanced - and this line overwrote it with the
+  # profile constant on every apply. A field capture shows the result: the value sits at
+  # one number all day regardless of what the phone is doing, so background work is free
+  # to pull cores up while the screen is off, which is the case the ladder exists for.
+  #
+  # Written here only as a seed when the node is unset, the same rule already used for
+  # the camera-guard path above: publish something sane, then let the owner own it.
+  for _sb in /dev/cpuctl/background/cpu.uclamp.max \
+             /dev/cpuctl/system-background/cpu.uclamp.max; do
+    [ -e "$_sb" ] || continue
+    case "$(cat "$_sb" 2>/dev/null)" in
+      0|0.00|max) writef_retry "$_sb" "$_ucl_bg_max" 2 0.06 || true ;;
+    esac
+  done
   writef_retry /dev/cpuctl/foreground/cpu.uclamp.max        $_ucl_fg_max 2 0.06 || true
   writef_retry /dev/cpuctl/top-app/cpu.uclamp.max           $_ucl_top_max 2 0.06 || true
   writef_retry /dev/cpuctl/background/uclamp.min        $_P_UCL_BG  2 0.06 || true
@@ -3234,6 +3249,26 @@ fi
   _screenoff_pass=0
   while true; do
     sleep 1800
+    # Bring the route link watcher back if it died.
+#
+# It is started once, post-boot, and never checked again. `ip monitor` blocks on a netlink
+# socket, so it survives most things - but a diag from the field reads "route link watcher:
+# NOT running", and after that the route windows silently stop surviving a network change.
+# Nothing announces it; the tuning just quietly stops re-applying.
+#
+# Guarded by the same setting as the original launch, so a user with net_route_tune=off
+# gets nothing started behind their back. pgrep costs one process every half hour.
+_rw_mode="$(grep -E '^[[:space:]]*net_route_tune=' "$MODDIR/config/governor.conf" 2>/dev/null \
+            | head -1 | sed 's/.*=//' | tr -d ' \r')"
+case "$_rw_mode" in
+  auto|conservative|aggressive)
+    if [ -f "$MODDIR/runtime/asb_net_routes.sh" ] && command -v ip >/dev/null 2>&1 \
+       && ! pgrep -f "asb_net_routes.sh watch" >/dev/null 2>&1; then
+      ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_routes.sh" watch >/dev/null 2>&1 & ) &
+      asb_log "net routes: link watcher restarted (was not running)"
+    fi
+    ;;
+esac
     # The helpers below collectively make many framework / PackageManager / app-ops calls.
     # Run only during a genuine screen-off window and only once per hour there.  A trial expiry
     # or GNSS cleanup does not justify waking the active user-facing system every 15 minutes.
@@ -3421,7 +3456,19 @@ fi
     while true; do
       sleep 120
       case "$(dumpsys deviceidle get screen 2>/dev/null)" in
-        false|Asleep) continue ;;
+        false|Asleep)
+          # Screen just went off: flush a configuration broadcast held back earlier.
+          #
+          # profile_core defers it rather than dropping it - the animation scales really
+          # did change and the framework has to be told. Screen-off is when that costs
+          # nothing: no views to rebuild, no rotation to collide with, and SystemUI is not
+          # in the middle of anything. Sending it while the user was watching is the one
+          # plausible way this module could have contributed to a SystemUI restart.
+          if [ -f /data/adb/asb/anim_broadcast_pending ]; then
+            rm -f /data/adb/asb/anim_broadcast_pending 2>/dev/null
+            am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
+          fi
+          continue ;;
       esac
       _no_now="$(ls -d /sys/class/net/*/queues/rx-* 2>/dev/null | wc -l)"
       [ "$_no_now" = "$_no_prev" ] && continue
