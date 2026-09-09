@@ -2449,6 +2449,9 @@ body.config-active #livePage.open {
 
 /* Full light theme: near-white materials, retained ASB status accents, no colour inversion. */
 html[data-asb-theme="light"] {
+  /* The floating bar keeps the light theme's own surface: the white wash that reads as
+   * grey over black is exactly right over a near-white page. */
+  --tabbar-bg: #ffffff;
   color-scheme: light;
   /* A restrained warm-grey canvas keeps white operational cards distinct without the dark
      theme’s neon glow. Values are opaque enough for Android WebView composition. */
@@ -2469,7 +2472,10 @@ html[data-asb-theme="light"] .config-page { background:var(--bg) !important; col
    receive a paper background; child labels retain transparent backgrounds. */
 html[data-asb-theme="light"] :is(.badge,.status-row,.live-chip,.tg-link,.debug-support-btn,
   .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
-  .live-cell,.stock-telemetry,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet) {
+  .live-cell,.stock-telemetry,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
+  /* The tab bar now carries the same teal wash as .status-row, so it needs the same
+   * light-theme override - otherwise the wash sits over white and turns the bar green. */
+  .asb-tabbar) {
   background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 10px 28px rgba(20,50,42,.10);
 }
@@ -2588,21 +2594,67 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
    matters here: without it the bar sits under the system gesture pill on every modern
    OnePlus and the middle tab becomes unpressable. */
 .asb-tabbar {
+  /* Floating bar, lifted clear of the bottom edge.
+   *
+   * Edge-to-edge meant the bar and the system pill fought for the same strip: on ROMs
+   * that report the reserved space it worked, on ROMs that report nothing the pill drew
+   * straight through the tab labels, and padding it out left dead space on phones with
+   * no navigation at all. Three outcomes from one layout, and no measurement separates
+   * the last two.
+   *
+   * Lifting the bar sidesteps the question. It sits above the very bottom with rounded
+   * ends, so the strip underneath belongs to the system - a pill lands in empty space
+   * there, and with no navigation the gap simply reads as margin.
+   *
+   * The lift is the reported inset plus a fixed rail. Where the inset is honest the bar
+   * rises further; where it is zero the rail alone is enough to clear a pill. */
   position: fixed;
-  left: 0; right: 0; bottom: 0;
+  left: 12px; right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
   z-index: 200;
   display: flex;
   align-items: stretch;
-  /* --surface and --border are the real variables in this stylesheet; --panel never
-     existed, so the bar fell through to a hard-coded slate that matched neither theme and
-     never changed when the user switched. */
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--nav-pill-extra, 0px));
-  /* The blur keeps content legible when it scrolls behind the bar without hiding it. */
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* Own background, not --surface.
+   *
+   * --surface is rgba(255,255,255,0.04) - a white wash meant to lift a panel off the
+   * page. Over the pure black background that reads as grey, and on a floating bar with
+   * nothing behind it the effect is stronger than on an inline card.
+   *
+   * A near-black with its own slight lift keeps the bar distinct from the page without
+   * looking washed out; the light theme keeps --surface, where the wash does its job. */
+  /* Same material as the status pill at the top of the page.
+   *
+   * That pill - profile name, Logs and Channel chips - is the other floating element on
+   * screen, and the two reading as different surfaces made the bar look like it belonged
+   * to a different app. Its teal-to-cyan wash over a dark base is what gives it the thin
+   * green edge; copying both keeps the pair consistent.
+   *
+   * The dark base stays underneath: the wash alone is transparent, and over content
+   * scrolling behind it the tabs would be hard to read. */
+  background:
+    /* Half the wash of the status pill, over pure black.
+     *
+     * The pill sits on a page background that is already lifted, so 0.08 reads as a hint
+     * of colour there. The bar sits on #000 with nothing behind it, where the same value
+     * reads as grey - the eye judges it against the black around it, not against the
+     * value it was copied from. Halving keeps the green edge and the gradient direction
+     * while letting the bar stay black. */
+    linear-gradient(135deg, rgba(0,240,180,0.04), rgba(0,212,255,0.025)),
+    var(--tabbar-bg, #000000);
+  border: 1px solid rgba(0,240,180,0.15);
+  border-radius: 26px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.55);
+  /* No backdrop blur.
+   *
+   * Blur samples whatever is behind the element and mixes it in. Against a bar pinned to
+   * the bottom edge there was rarely anything there; a floating bar hovers over the page
+   * content, so the light cards underneath bled through and washed it to grey.
+   *
+   * The base is opaque now, which makes the blur invisible anyway - and dropping it
+   * saves a compositor pass on every scroll frame. */
 }
+
 .asb-tab {
   flex: 1 1 0;
   display: flex;
@@ -2632,17 +2684,21 @@ html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,1
    for users who cannot distinguish the accent from the muted tone. */
 .asb-tab.is-active::before {
   content: "";
+  /* Pulled in from the very top: the bar is rounded now, and a marker flush against the
+   * edge gets clipped by the corner radius on the outer tabs. Three pixels down clears
+   * the curve on every tab and reads the same on all of them. */
   position: absolute;
-  top: 0;
+  top: 3px;
   width: 26px;
   height: 2.5px;
-  border-radius: 0 0 3px 3px;
+  border-radius: 3px;
   background: var(--accent);
 }
 .asb-tab { position: relative; }
 
 /* Give every page room so its last row is never trapped under the bar. */
-body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px) + var(--nav-pill-extra, 0px)); }
+/* Clear the floating bar: its own height, the lift beneath it, and the reported inset. */
+body { padding-bottom: calc(var(--tabbar-space, 78px) + env(safe-area-inset-bottom, 0px)); }
 
 /* The old header chips are redundant now that navigation is always on screen, and two
    sets of controls for one action is how a UI starts feeling arbitrary. Hidden rather
@@ -2664,7 +2720,7 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px) + var(--nav-
 .live-page > *:last-child,
 .live-page .live-scroll,
 .live-page .cfg-scroll {
-  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px) + var(--nav-pill-extra, 0px));
+  padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px));
 }
 /* Modals must clear the bar as well: a sheet that stops above it looks broken, and one
    that ends under it hides its own confirm button. */
@@ -4070,6 +4126,7 @@ function openLivePage() {
   if (!p) return;
   p.classList.add('open');
   document.body.classList.add('live-active');
+  asbTabbarVisibility();
   p.setAttribute('aria-hidden', 'false');
   p.scrollTop = 0;
   _liveOpen = true;
@@ -4085,6 +4142,7 @@ function closeLivePage() {
   if (!p) return;
   p.classList.remove('open');
   document.body.classList.remove('live-active');
+  asbTabbarVisibility();
   p.setAttribute('aria-hidden', 'true');
   _liveOpen = false;
   if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
@@ -5521,7 +5579,34 @@ function cfgRenderMatches(list) {
   hits.forEach(it => cfgRenderRow(list, it, true));
 }
 
+/* Single place that decides whether the tab bar is on screen.
+ *
+ * A settings CATEGORY hides it - the page is a long list of controls and a floating bar
+ * over the last of them is in the way, while the back gesture is how you leave anyway.
+ * Every other screen shows it, including the settings hub itself.
+ *
+ * Called from cfgRender and from each page switch, because leaving a category by tapping
+ * another tab does not go through cfgRender - without that the bar would stay hidden on
+ * Monitor until settings was reopened. */
+function asbTabbarVisibility() {
+  const inCategory = (typeof _cfgGroup !== 'undefined' && _cfgGroup) &&
+                     document.body.classList.contains('config-active');
+  const bar = document.querySelector('.asb-tabbar');
+  if (bar) bar.style.display = inCategory ? 'none' : '';
+  document.documentElement.style.setProperty('--tabbar-space', inCategory ? '16px' : '78px');
+}
+
 function cfgRender() {
+  /* Hide the tab bar while a settings category is open.
+   *
+   * The hub lists six categories and the bar belongs there - it is a top-level screen.
+   * Inside a category the page is a long list of controls, and a floating bar sitting
+   * over the last of them is in the way: the back gesture is how you leave, not the tabs.
+   *
+   * Driven by _cfgGroup, which is null on the hub and set to the category id inside one,
+   * so this follows the same state the rest of the screen already uses. */
+  asbTabbarVisibility();
+
   const list = _el('cfgList');
   if (!list) return;
   list.innerHTML = '';
@@ -6594,6 +6679,7 @@ function asbNavGo(target) {
   } else if (at === 'live' && typeof closeLivePage === 'function' && target !== 'live') {
     closeLivePage();
     document.body.classList.remove('live-active');
+  asbTabbarVisibility();
   }
 
   if (target === 'live'   && typeof openLivePage   === 'function') openLivePage();
@@ -6606,90 +6692,15 @@ function asbNavGo(target) {
 
 /* Keep the highlight honest when a page is opened or closed by anything else - a swipe,
    the back gesture, or one of the in-page buttons. Cheap: three class toggles. */
-/* Detect a navigation pill the ROM does not report.
+/* The floating tab bar makes pill detection unnecessary.
  *
- * Some OxygenOS builds return safe-area-inset-bottom = 0 with the gesture pill visible,
- * so the tab labels end up underneath it. A fixed floor fixes those phones and breaks
- * every phone that reports zero HONESTLY - full-screen with no navigation at all - by
- * leaving dead space at the bottom. The two cases look identical in CSS.
- *
- * They differ in geometry: with a pill, the visual viewport is shorter than the screen
- * by roughly the pill's height, while a true full-screen window matches the screen. So
- * measure instead of guessing, and only add padding when the gap is real.
- *
- * Runs on load and on resize/orientation, because the pill can be toggled without
- * restarting the WebView. The variable defaults to 0, so any device where this check
- * does not apply keeps exactly the layout it had.
+ * The previous version measured the display to decide how much bottom padding to add,
+ * then fell back to a long-press toggle when no measurement worked. Both were attempts
+ * to answer a question the layout no longer asks: the bar is lifted clear of the bottom
+ * strip, so whatever the system draws there does not collide with it.
  */
-function asbApplyNavPillInset() {
-  try {
-    const reported = parseFloat(getComputedStyle(document.documentElement)
-      .getPropertyValue('--window-inset-bottom')) || 0;
-    if (reported > 4) { document.documentElement.style.setProperty('--nav-pill-extra', '0px'); return; }
-    /* screen.availHeight, not the viewport.
-     *
-     * The first attempt compared visualViewport to screen height, which is always zero
-     * here: this WebView draws UNDER the system bars, so the viewport already spans the
-     * full display whether or not a pill sits on top of it.
-     *
-     * availHeight is the display minus what the system reserves, so a pill shows up as a
-     * real difference. Where the ROM does not distinguish them either, the manual setting
-     * below is the answer - guessing again would just move the breakage to a different
-     * set of phones. */
-    const sh = (window.screen && window.screen.height) || 0;
-    const ah = (window.screen && window.screen.availHeight) || 0;
-    const gap = (sh > 0 && ah > 0) ? (sh - ah) : 0;
-    const auto = (gap >= 8 && gap <= 80) ? Math.min(Math.round(gap), 24) : 0;
-
-    /* Manual override wins when set: auto | on | off, stored per install. */
-    let extra = auto;
-    try {
-      const mode = localStorage.getItem('asb_nav_pill') || 'auto';
-      if (mode === 'on')  extra = 24;
-      if (mode === 'off') extra = 0;
-    } catch (e) { /* storage unavailable: keep the measured value */ }
-    document.documentElement.style.setProperty('--nav-pill-extra', extra + 'px');
-  } catch (e) { /* measurement unavailable: leave the default of 0 */ }
-}
-/* Long-press the tab bar to cycle the nav-pill spacing.
- *
- * Auto-detection covers the ROMs that report the reserved space; some report nothing at
- * all, and there is no measurement left that separates "pill on top of the bar" from
- * "no navigation at all". Rather than guess and break one group to fix the other, the
- * user settles it: three states, remembered per install.
- *
- * Long-press because this is a rare fix, not a daily control - it must not sit in the
- * way of the tabs themselves. */
-function asbInitNavPillToggle() {
-  const bar = document.querySelector('.asb-tabbar');
-  if (!bar) return;
-  let timer = null;
-  const start = () => {
-    timer = setTimeout(() => {
-      let mode = 'auto';
-      try { mode = localStorage.getItem('asb_nav_pill') || 'auto'; } catch (e) {}
-      const next = mode === 'auto' ? 'on' : (mode === 'on' ? 'off' : 'auto');
-      try { localStorage.setItem('asb_nav_pill', next); } catch (e) {}
-      asbApplyNavPillInset();
-  asbInitNavPillToggle();
-      if (typeof toast === 'function') {
-        toast(T('nav_pill_' + next, next === 'on' ? 'nav bar spacing: on'
-                : next === 'off' ? 'nav bar spacing: off' : 'nav bar spacing: auto'));
-      }
-    }, 700);
-  };
-  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
-  bar.addEventListener('touchstart', start, { passive: true });
-  bar.addEventListener('touchend', cancel);
-  bar.addEventListener('touchmove', cancel);
-  bar.addEventListener('touchcancel', cancel);
-}
-
-window.addEventListener('resize', asbApplyNavPillInset);
-window.addEventListener('orientationchange', asbApplyNavPillInset);
 
 document.addEventListener('DOMContentLoaded', function () {
-  asbApplyNavPillInset();
   asbNavSync();
   const mo = new MutationObserver(asbNavSync);
   mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
@@ -6711,7 +6722,9 @@ function openConfigPage() {
   } catch(e) {}
   p.classList.add('open');
   document.body.classList.add('live-active');
+  asbTabbarVisibility();
   document.body.classList.add('config-active');
+  asbTabbarVisibility();
   p.setAttribute('aria-hidden', 'false');
   p.scrollTop = 0;
   _cfgOpen = true;
@@ -6758,11 +6771,13 @@ function closeConfigPage(toMain) {
   if (!p) return;
   p.classList.remove('open');
   document.body.classList.remove('config-active');
+  asbTabbarVisibility();
   // Two exit paths: - swipe-right from Config when Live is mounted underneath: just drop
   // config-active and Live fades straight back in (no tear-down → no double animation).
   if (toMain || !_liveOpen) {
     if (_liveOpen && typeof closeLivePage === 'function') closeLivePage();
     document.body.classList.remove('live-active');
+  asbTabbarVisibility();
   }
   p.setAttribute('aria-hidden', 'true');
   _cfgOpen = false;
