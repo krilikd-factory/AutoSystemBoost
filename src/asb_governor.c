@@ -4927,6 +4927,11 @@ int main(int argc, char **argv) {
     memset(&metrics, 0, sizeof(metrics));
 
     metrics_read_all(&metrics, 1, 1);  /* startup: always read headroom + thermal */
+    /* Hand the app classification to the FSM before it decides.
+     * The Smart package table already knows which app is a game; without this the FSM
+     * only ever saw GPU load, and a game that does not push the GPU past the entry
+     * threshold never reached GAMING at all. */
+    metrics.misc.app_hint = g_smart_rt.app_hint;
     fsm_update(&fsm, &metrics);
 
     /* detect initial user ID */
@@ -6405,6 +6410,11 @@ int main(int argc, char **argv) {
                 }
             }
 
+            /* Hand the app classification to the FSM before it decides.
+             * The Smart package table already knows which app is a game; without this the FSM
+             * only ever saw GPU load, and a game that does not push the GPU past the entry
+             * threshold never reached GAMING at all. */
+            metrics.misc.app_hint = g_smart_rt.app_hint;
             int changed = fsm_update(&fsm, &metrics);
 
             /* rebuild plan on state band cross (idle<->active<->heavy) */

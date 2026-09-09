@@ -57,6 +57,8 @@ typedef enum {
     ASB_APP_MEDIUM = 2,
     ASB_APP_HEAVY  = 3,
     ASB_APP_GAMING = 4,
+    /* asb_fsm.h hardcodes 4 for this: it is included before this header. If the value
+     * moves, the check there moves with it. */
     ASB_APP_N      = 5
 } asb_app_hint_t;
 

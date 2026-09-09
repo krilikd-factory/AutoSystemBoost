@@ -984,13 +984,32 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
 
     int ma_valid = (m->bat.current_ma > 0 && !m->bat.charging);
 
-    if (m->gpu.load_pct >= g_asb_cfg.gaming_gpu_enter) {
+    /* A known game counts as gaming, whatever the GPU is doing.
+     *
+     * The only way into GAMING was GPU load past gaming_gpu_enter, which is 55%. A field
+     * log shows why that is not enough: the phone peaked at 27% across the whole capture
+     * while the user was playing, so GAMING was unreachable and they switched to
+     * Performance by hand. Plenty of games are CPU-bound, capped to 60fps, or simply
+     * efficient on a newer GPU - none of them push 55%.
+     *
+     * The Smart package table already identifies games by name. Using it lowers the GPU
+     * bar for those apps rather than removing it: a game still has to be doing something
+     * (the reduced threshold), so a title sitting on a menu does not pin the phone at the
+     * gaming ceiling.
+     */
+    int _gpu_gate = g_asb_cfg.gaming_gpu_enter;
+    /* 4 is ASB_APP_GAMING. Written as a literal because asb_smart_defs.h is included
+     * after this header, and pulling it in here would reorder half the tree for one
+     * constant; the value is asserted below so a renumbering cannot slip through. */
+    if (m->misc.app_hint >= 4 && _gpu_gate > 25) _gpu_gate = 25;
+
+    if (m->gpu.load_pct >= _gpu_gate) {
         if (g_gaming_confirm_streak < 10000) g_gaming_confirm_streak++;
     } else if (m->gpu.load_pct < g_asb_cfg.gaming_gpu_exit) {
         g_gaming_confirm_streak = 0;
     }
 
-    if (m->gpu.load_pct >= g_asb_cfg.gaming_gpu_enter) {
+if (m->gpu.load_pct >= _gpu_gate) {
         if (g_asb_cfg.bat_suppress_gaming && fsm_profile_is_battery)
             return ASB_STATE_HEAVY;
         /* GPU load alone does not mean a game.

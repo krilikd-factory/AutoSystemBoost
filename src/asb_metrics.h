@@ -127,6 +127,9 @@ typedef struct {
      * Derived from the camera HAL provider's own CPU time, so it covers every
      * camera app rather than a package list, and it needs no permissions. */
     int     camera_active;
+    /* What kind of app is in front, as classified by the Smart package table. Filled by
+     * the governor each tick; 0 when package detection is unavailable. */
+    int     app_hint;
 } asb_misc_t;
 
 typedef struct {
