@@ -200,7 +200,29 @@ lk_detect_phase() {
   # screen off → sleep vs idle (sleep = off > 20 min)
   if [ "$_scr" = "Asleep" ] || [ "$_scr" = "Dozing" ]; then
     LK_IN_GAMING=0; LK_GPU_HI_STREAK=0; LK_GPU_LO_STREAK=0
-    if [ "$LK_AUDIO_PLAY" = "1" ]; then LK_PHASE_OUT="$(lk_audio_phase_name)"; return 0; fi
+    # Audio wins over idle, but not over a genuine night.
+    #
+    # This returned an audio phase for any screen-off playback, whatever the hour or the
+    # duration. AudioMix legitimately holds a partial wakelock, so such a phase reads 99%
+    # awake - and a night spent falling asleep to music was therefore classified as
+    # audio_bt rather than sleep, with no sleep row in the report at all. The reader then
+    # has no baseline to compare against, which is exactly the number these captures exist
+    # to produce.
+    #
+    # Both facts matter, so keep both: past the sleep threshold the phase is named for the
+    # night and the audio is recorded as an attribute of it. Short playback with the screen
+    # off is unchanged - that really is an audio phase, not a night.
+    if [ "$LK_AUDIO_PLAY" = "1" ]; then
+      if [ "$_off_for" -ge 1200 ] 2>/dev/null; then
+        LK_PHASE_AUDIO_NIGHT=1
+        LK_PHASE_OUT="sleep"
+      else
+        LK_PHASE_AUDIO_NIGHT=0
+        LK_PHASE_OUT="$(lk_audio_phase_name)"
+      fi
+      return 0
+    fi
+    LK_PHASE_AUDIO_NIGHT=0
     # Three bands, not two: a pause is not idle.
     #
     # Screen-off under 20 min was all called "idle", so the 40 seconds between putting the
@@ -289,6 +311,16 @@ lk_throttle_row() {
   # users read that column as "the module never throttles" and concluded the module was
   # doing nothing about the heat. The column was wrong, not the module.
   LK_PH_THROTTLE=$(( LK_PH_THROTTLE + 1 ))
+  # Count the ticks where the screen-off cooldown clamp was holding.
+  #
+  # The clamp only engages on a night that started warm, so the question a capture has
+  # to answer is not "is it on now" but "how much of that night did it cover". A count
+  # per phase gives that directly: a sleep row with a high number is a night the module
+  # actively cooled, and one with zero on a warm night means it never fired and the
+  # threshold needs looking at.
+  case "$(grep -m1 '^thermal_cooldown=' /dev/.asb/state 2>/dev/null | cut -d= -f2)" in
+    1) LK_PH_COOLDOWN=$(( ${LK_PH_COOLDOWN:-0} + 1 )) ;;
+  esac
 }
 
 # ── per-phase accounting ───────────────────────────────────────────────────
@@ -346,6 +378,40 @@ lk_phase_ledger_row() {
     _awake=$(( _mono * 100 / _elapsed ))
     [ "$_awake" -gt 100 ] && _awake=100
   fi
+
+  # Name who held the phone awake, for the phases where that is the whole question.
+  #
+  # A capture recorded gap at 43.7% awake and 236 mA, and the report said exactly that and
+  # nothing more - the classifier labelled the phase but never named a culprit, so the only
+  # honest reading was "something kept it up". The wakelock report exists but covers the
+  # whole session, which is useless for a 25-minute window in the middle of it.
+  #
+  # Only for the screen-off phases: those are the ones where being awake is the anomaly.
+  # dumpsys batterystats is heavy, so this runs once per phase close rather than per tick,
+  # and only when the phase actually spent time awake.
+  # Mark a sleep phase that had audio playing through it.
+  #
+  # Without this the row is indistinguishable from a silent night, and its awake% - which
+  # AudioMix legitimately pushes near 100 - looks like a defect instead of a playing
+  # stream. One line in the notes file costs nothing and stops the next reader chasing it.
+  if [ "${LK_PHASE_AUDIO_NIGHT:-0}" = "1" ] && [ "$LK_CUR_PHASE" = "sleep" ]; then
+    printf 'phase=sleep note=audio_played_through awake=%s%%\n' "$_awake" \
+      >> "$LK_OUT_DIR/phase_wakeholders.txt" 2>/dev/null || true
+  fi
+
+  case "$LK_CUR_PHASE" in
+    gap|idle|sleep)
+      if [ "$_awake" -gt 15 ] 2>/dev/null; then
+        {
+          printf 'phase=%s awake=%s%% dur=%ss\n' "$LK_CUR_PHASE" "$_awake" "$_elapsed"
+          dumpsys batterystats 2>/dev/null \
+            | sed -n '/Wake lock/,/^$/p' \
+            | grep -iE 'partial.*realtime' \
+            | head -3 | sed 's/^[[:space:]]*/  /'
+        } >> "$LK_OUT_DIR/phase_wakeholders.txt" 2>/dev/null || true
+      fi
+      ;;
+  esac
   _maavg=0
     # Blank the average when most readings were unusable.
     #
@@ -363,10 +429,13 @@ $(lk_phase_rmnet_bytes)
 EOF
   _drx=$(( _rmrx - LK_PH_START_RMNET_RX )); _dtx=$(( _rmtx - LK_PH_START_RMNET_TX ))
   [ "$_drx" -lt 0 ] && _drx=0; [ "$_dtx" -lt 0 ] && _dtx=0
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  # Appended, never inserted: consumers index this file by column number, and a new
+  # field in the middle would silently shift throttle into wakepeak everywhere.
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$LK_CUR_PHASE" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
     "$LK_PH_MAXCPU" "$LK_PH_MAXSURF" "$LK_PH_MAXP6" "$_gavg" \
-    "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake" "$_maavg" "$_drx" "$_dtx"
+    "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake" "$_maavg" "$_drx" "$_dtx" \
+    "${LK_PH_COOLDOWN:-0}"
   return 0
 }
 
@@ -386,7 +455,7 @@ lk_phase_ledger_open() {
   LK_PH_START_MONO=$(lk_mono_s)
   LK_PH_START_PCT=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
   LK_PH_MAXCPU=0; LK_PH_MAXSURF=0; LK_PH_MAXP6=0
-  LK_PH_MASUM=0; LK_PH_MACNT=0; LK_PH_MASEEN=0
+  LK_PH_MASUM=0; LK_PH_MACNT=0; LK_PH_MASEEN=0; LK_PH_COOLDOWN=0
   read -r LK_PH_START_RMNET_RX LK_PH_START_RMNET_TX <<EOF
 $(lk_phase_rmnet_bytes)
 EOF

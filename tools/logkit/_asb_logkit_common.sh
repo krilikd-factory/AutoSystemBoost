@@ -86,14 +86,31 @@ lk_probe_env() {
     echo "selinux:         $(getenforce 2>/dev/null || echo unknown)"
     echo ""
     echo "# asb"
-    echo "module_dir:      $MODDIR"
-    if [ -f "$MODDIR/module.prop" ]; then
-      sed 's/^/  /' "$MODDIR/module.prop"
+    # Fall back to the standard install path when MODDIR is not in the environment.
+    #
+    # MODDIR is exported by service.sh, so a capture started from the WebUI has it and one
+    # started by hand from a shell does not. The report then prints an empty module_dir and
+    # "module.prop: MISSING" on a phone whose governor is plainly running - which sends the
+    # reader looking for a broken install instead of at the data.
+    #
+    # Only used for reporting; nothing here writes, so a wrong guess costs a wrong line in
+    # one file rather than a wrong action on the device.
+    _lk_moddir="$MODDIR"
+    [ -n "$_lk_moddir" ] || {
+      for _lk_c in /data/adb/modules/AutoSystemBoost /data/adb/modules_update/AutoSystemBoost; do
+        [ -f "$_lk_c/module.prop" ] && { _lk_moddir="$_lk_c"; break; }
+      done
+    }
+    echo "module_dir:      ${_lk_moddir:-<not found>}"
+    # Same resolved path as the line above - reading $MODDIR here would report MISSING for
+    # exactly the hand-started captures the fallback was added for.
+    if [ -f "$_lk_moddir/module.prop" ]; then
+      sed 's/^/  /' "$_lk_moddir/module.prop"
     else
       echo "  module.prop: MISSING"
     fi
     echo ""
-    echo "current_profile: $(cat "$MODDIR/current_profile" 2>/dev/null || echo '(unreadable)')"
+    echo "current_profile: $(cat "$_lk_moddir/current_profile" 2>/dev/null || echo '(unreadable)')"
     echo "asb_binary:      $(lk_have asb && which asb || echo missing)"
     _gpid=$(cat /dev/.asb/governor.pid 2>/dev/null)
     [ -z "$_gpid" ] && _gpid=$(pgrep -f "bin/asb" 2>/dev/null | tr '\n' ' ')
