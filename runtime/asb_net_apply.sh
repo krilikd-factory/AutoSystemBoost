@@ -207,11 +207,29 @@ if _has tc; then
       _out="$_out qdisc[$_kind:$_if]=$_want-already"
       continue
     fi
+    # Keep tc's own words: they are the only thing that distinguishes the six causes.
+    #
+    # The failure was reported as a bare "failed", which covers a kernel without the qdisc
+    # compiled in, a missing module, a vendor stack that owns the root qdisc, a down
+    # interface, and an SELinux denial - each needing a different response, and none of them
+    # a module bug. Discarding stderr threw away the one sentence that tells them apart.
+    _qd_err=""
     case "$_want" in
-      fq)       tc qdisc replace dev "$_if" root fq pacing >/dev/null 2>&1 ;;
-      fq_codel) tc qdisc replace dev "$_if" root fq_codel target 5ms interval 100ms ecn >/dev/null 2>&1 ;;
-      cake)     tc qdisc replace dev "$_if" root cake besteffort triple-isolate >/dev/null 2>&1 ;;
+      fq)       _qd_err="$(tc qdisc replace dev "$_if" root fq pacing 2>&1 >/dev/null)" ;;
+      fq_codel) _qd_err="$(tc qdisc replace dev "$_if" root fq_codel target 5ms interval 100ms ecn 2>&1 >/dev/null)" ;;
+      cake)     _qd_err="$(tc qdisc replace dev "$_if" root cake besteffort triple-isolate 2>&1 >/dev/null)" ;;
       *)        continue ;;
+    esac
+    # Classify once, here, where the message is still in hand.
+    _qd_why=""
+    case "$_qd_err" in
+      *"Unknown qdisc"*|*"unknown qdisc"*)  _qd_why="kernel_lacks_qdisc" ;;
+      *"No such file"*|*"not found"*)       _qd_why="module_missing" ;;
+      *"Operation not permitted"*|*"Permission denied"*) _qd_why="permission_or_selinux" ;;
+      *"Cannot find device"*|*"does not exist"*) _qd_why="iface_absent" ;;
+      *"Device or resource busy"*)          _qd_why="root_qdisc_owned" ;;
+      "")                                   _qd_why="" ;;
+      *)                                    _qd_why="tc_error" ;;
     esac
     # Read back: tc accepts a qdisc the kernel has no module for and silently keeps the
     # old one, which is indistinguishable from success unless you look.
@@ -220,7 +238,21 @@ if _has tc; then
       _qd_ok=$(( _qd_ok + 1 ))
       _out="$_out qdisc[$_kind:$_if]=$_want"
     else
-      _out="$_out qdisc[$_kind:$_if]=$_want-not-applied"
+      # Report the cause, not just the outcome.
+      #
+      # "not-applied" is where six investigations start and none of them should: five of
+      # the six causes are facts about the device, and only one is worth a code change.
+      # A phone whose kernel has no fq_codel will say so now instead of looking broken.
+      _out="$_out qdisc[$_kind:$_if]=$_want-not-applied${_qd_why:+:$_qd_why}"
+      # Keep the raw sentence too - the classifier above only knows the messages it has
+      # seen, and an unrecognised one is exactly the case worth reading in full.
+      if [ -n "$_qd_err" ]; then
+        mkdir -p /data/adb/asb 2>/dev/null
+        printf '%s if=%s want=%s why=%s err=%s\n' \
+          "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$_if" "$_want" \
+          "${_qd_why:-unclassified}" "$_qd_err" \
+          >> /data/adb/asb/qdisc_failures.log 2>/dev/null || true
+      fi
     fi
   done
 fi

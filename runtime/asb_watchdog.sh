@@ -148,7 +148,21 @@ ASB_WD_ONCE=0
 case "$1" in --once) ASB_WD_ONCE=1 ;; esac
 
 while true; do
-  [ "$ASB_WD_ONCE" = "1" ] || sleep 300
+  # 5 minutes with the screen on, 30 with it off.
+  #
+  # This is a liveness check on a governor that does not die - it exists for the rare case
+  # when it does. Running it every 5 minutes through the night costs 12 wakeups an hour to
+  # confirm something that was already true, on a phone whose whole point right now is to
+  # stay asleep. If the governor dies while the screen is off, nothing observable happens
+  # until the user picks the phone up, and a 30-minute detection window is invisible there.
+  #
+  # ASB_WD_ONCE still bypasses the wait entirely, so the contract tests are unaffected.
+  if [ "$ASB_WD_ONCE" != "1" ]; then
+    case "$(dumpsys deviceidle get screen 2>/dev/null)" in
+      false|Asleep) sleep 1800 ;;
+      *)            sleep 300 ;;
+    esac
+  fi
 
   if ! asb_governor_running; then
     asb_recovery_acquire_lock || {

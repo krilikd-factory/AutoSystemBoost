@@ -230,12 +230,26 @@ _apply() {
 # That is a few events a day instead of a wakeup every N seconds forever - the reason this
 # does not need the sleep loop the usual implementations run.
 _watch() {
-  _has ip || exit 0
+  # Record why this stops, so a later diag can say more than "NOT running".
+  #
+  # ip monitor either blocks forever or dies for a reason - no ip binary, a netlink socket
+  # SELinux will not open, or a kernel that refuses the subscription. All three look
+  # identical from outside once the process is gone, and the six possible causes need
+  # different fixes. One line on the way out turns a guess into an answer.
+  _nrw_note() {
+    mkdir -p /data/adb/asb 2>/dev/null
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$1" \
+      > /data/adb/asb/net_routes_watch.exit 2>/dev/null || true
+  }
+  _has ip || { _nrw_note "missing_ip"; exit 0; }
+  rm -f /data/adb/asb/net_routes_watch.exit 2>/dev/null
   ip monitor route 2>/dev/null | while IFS= read -r _ev; do
     case "$_ev" in
       *default*) sleep 2; _apply >/dev/null 2>&1 ;;
     esac
   done
+  # Reached only if ip monitor terminated: a healthy watcher never gets here.
+  _nrw_note "ip_monitor_ended rc=$?"
 }
 
 case "$MODE" in
