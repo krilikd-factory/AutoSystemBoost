@@ -1769,7 +1769,31 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             if (fsm->state == ASB_STATE_SUSTAINED &&
                 sustained_temp_exit > 0 &&
                 m->therm.cpu_max_c >= sustained_temp_exit)
+            {
                 can_leave = 0;
+            }
+                /* A confirmed game may leave SUSTAINED while it is still below the throttle point.
+                 *
+                 * A gaming capture shows the problem: 168 of 177 samples in SUSTAINED and none in
+                 * GAMING, with GPU at 100% for 156 of them and CPU load at 1.40 per core against a
+                 * 0.25 threshold. Both entry conditions were met by a wide margin - but a game heats
+                 * the phone, SUSTAINED is reached first, and this guard then holds it there for the
+                 * rest of the session. The prime cluster sat at 37% of hardware while the user played.
+                 *
+                 * The guard is right in general: SUSTAINED exists so a long load does not cook the
+                 * device. But it was written for the case where the phone is ALREADY too hot, and
+                 * sustained_temp_exit sits well below the throttle point - so a game that is warm but
+                 * not overheating gets held down for no thermal reason.
+                 *
+                 * Narrow exception: the app must be a known game (package match, not GPU load, which
+                 * a video would also produce), and the die must still be under the profile's own
+                 * throttle point. Above that, the guard stands exactly as before - protection follows
+                 * the temperature, not the label on the workload. */
+                if (!can_leave && desired == ASB_STATE_GAMING &&
+                    m->misc.app_hint >= ASB_APP_GAMING &&
+                    sustained_temp_enter > 0 &&
+                    m->therm.cpu_max_c < sustained_temp_enter)
+                    can_leave = 1;
 if (!can_leave &&
                 fsm->state == ASB_STATE_SUSTAINED &&
                 fsm->profile_idx == PROFILE_PERFORMANCE &&
