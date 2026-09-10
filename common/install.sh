@@ -4138,6 +4138,16 @@ fi
 	_asb_ver="$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
 	_asb_date="$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo unknown)"
 	_gov_hash="$(sha256sum "$MODPATH/bin/asb" 2>/dev/null | cut -c1-12 || echo none)"
+	# Full digest, version code, config schema and toolchain.
+	#
+	# A twelve-character prefix distinguishes two binaries but cannot verify one against a
+	# release. versionCode, the config schema fingerprint and the build identity are what
+	# tie a capture to a specific build rather than to a version string several builds
+	# share. All are already on disk; nothing here is expensive.
+	_gov_full="$(sha256sum "$MODPATH/bin/asb" 2>/dev/null | cut -d' ' -f1 || echo none)"
+	_asb_vercode="$(grep '^versionCode=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2)"
+	_asb_cfgshape="$(grep -m1 '^# CONFIG_SHAPE=' "$MODPATH/config/governor.conf" 2>/dev/null | sed 's/.*=//')"
+	_asb_tool="$(getprop ro.build.version.release 2>/dev/null)/$(uname -m 2>/dev/null)"
 	_perf_hash="$(sha256sum "$MODPATH/profiles/performance.sh" 2>/dev/null | cut -c1-12 || echo none)"
 	_bat_hash="$(sha256sum "$MODPATH/profiles/battery.sh" 2>/dev/null | cut -c1-12 || echo none)"
 	_bal_hash="$(sha256sum "$MODPATH/profiles/balanced.sh" 2>/dev/null | cut -c1-12 || echo none)"
@@ -4146,6 +4156,10 @@ fi
 	cat > "$MODPATH/runtime/build_manifest.json" <<MANIFEST_EOF
 {
   "asb_version": "$_asb_ver",
+  "version_code": "$_asb_vercode",
+  "config_schema": "$_asb_cfgshape",
+  "toolchain": "$_asb_tool",
+  "governor_sha256": "$_gov_full",
   "build_date": "$_asb_date",
   "schema_version": 20,
   "hashes": {
