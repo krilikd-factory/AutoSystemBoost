@@ -424,6 +424,23 @@ if [ -r "$_state" ]; then
   case "$_ov_t" in ''|*[!0-9]*) _ov_t=0 ;; esac
   case "$_ov_w" in ''|*[!0-9]*) _ov_w=0 ;; esac
   P "    by source        : transitions=$_ov_t writes=$_ov_w readbacks=$(_rget governor_readbacks "$_state") vendor_overrides=$(_rget governor_vendor_overrides "$_state")"
+  _ph="$(_rget probe_cache_hits "$_state")"; _pm="$(_rget probe_cache_misses "$_state")"
+  case "$_ph" in ''|*[!0-9]*) _ph=0 ;; esac
+  case "$_pm" in ''|*[!0-9]*) _pm=0 ;; esac
+  if [ $(( _ph + _pm )) -gt 0 ]; then
+    P "    probe cache      : hits=$_ph misses=$_pm ($(( _ph * 100 / (_ph + _pm) ))% avoided forks)"
+  fi
+    _nt="$(_rget noop_ticks "$_state")"
+    case "$_nt" in ''|*[!0-9]*) _nt=0 ;; esac
+    if [ $(( _nt + _ov_t )) -gt 0 ]; then
+      P "    settled ticks    : $_nt decided nothing ($(( _nt * 100 / (_nt + _ov_t) ))% - high is healthy)"
+    fi
+      _jw="$(_rget json_written "$_state")"; _js="$(_rget json_skipped "$_state")"
+      case "$_jw" in ''|*[!0-9]*) _jw=0 ;; esac
+      case "$_js" in ''|*[!0-9]*) _js=0 ;; esac
+      if [ $(( _jw + _js )) -gt 0 ]; then
+        P "    json publishes   : written=$_jw skipped=$_js ($(( _js * 100 / (_jw + _js) ))% avoided fsync)"
+      fi
   [ "$_ov_t" -gt 0 ] 2>/dev/null && \
     P "    writes per transition: $(( _ov_w / _ov_t )) (4+ suggests the ladder is chattering)"
   if [ "${_wfail:-0}" = "0" ]; then
