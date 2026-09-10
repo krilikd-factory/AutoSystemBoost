@@ -899,7 +899,7 @@ if [ -f "$_mp" ]; then
       if [ "$_uj_ver" = "$_mp_ver" ] && [ "$_uj_code" = "$_mp_code" ]; then
         ok "update.json matches module.prop"
       else
-        warn "update.json says $_uj_ver/$_uj_code but module.prop says $_mp_ver/$_mp_code (release metadata is updated manually)"
+        err "update.json says $_uj_ver/$_uj_code but module.prop says $_mp_ver/$_mp_code"
       fi
     fi
   else
