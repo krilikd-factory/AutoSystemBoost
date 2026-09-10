@@ -1702,6 +1702,33 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             (fsm->state == ASB_STATE_HEAVY && desired == ASB_STATE_MODERATE)) {
             if (window < 3) window = 3;
         }
+        /* MODERATE <-> SUSTAINED needs the same treatment, for the same reason.
+         *
+         * A later capture counted 99 screen-on transitions: 39 were MODERATE/HEAVY, covered
+         * by the window above, and 20 more were MODERATE/SUSTAINED. Their temperature ranges
+         * overlap heavily - MODERATE spans 32-50 degC and SUSTAINED 40-62 - so between 40 and
+         * 50 the die can cross the entry threshold on its own drift, with no change in what
+         * the user is doing.
+         *
+         * Thermal escalation stays exempt: thermal_to_sustained sets window to 1 just below,
+         * so a phone genuinely getting hot still moves on the next tick. This slows only the
+         * ordinary load-driven crossing. */
+        if ((fsm->state == ASB_STATE_MODERATE && desired == ASB_STATE_SUSTAINED) ||
+            (fsm->state == ASB_STATE_SUSTAINED && desired == ASB_STATE_MODERATE)) {
+            if (window < 3) window = 3;
+        }
+        /* A disputed sensor buys more confirmation, never less safety.
+         *
+         * A field snapshot reports the control sensor at confidence 1 of 2: socd was rejected
+         * outright (raw value 3, not a temperature) and three peers sat across 35-41 degC while
+         * the chosen zone read 56. Acting on a single uncorroborated number as though it were
+         * measured is how a state machine ends up chasing a sensor rather than the die.
+         *
+         * One extra tick, applied only to load-driven moves. The thermal escalation path below
+         * still sets window to 1, so a phone that is genuinely hot is not slowed down by our
+         * uncertainty about which sensor to believe - the doubt costs latency, not protection.
+         */
+        if (m->therm.source_confidence == 1 && !thermal_to_sustained) window += 1;
         if (thermal_to_sustained) window = 1;
         /*
          * UI-burst fast escalation: when desired bumped up by gpu.load_pct≥12 on screen-on,

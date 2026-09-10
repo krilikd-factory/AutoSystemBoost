@@ -114,6 +114,11 @@ typedef struct {
      */
     int     gpu_thermal_pwrlevel;
     int     gpu_thermal_pwrlevel_active;  /* 1 = vendor capping above our write */
+    /* How much the control sensor can be trusted: 2 = corroborated by peers, 1 = the only
+       reading we have, 0 = none. Published so the FSM can slow down rather than act on a
+       disputed number - a field snapshot shows confidence 1/2 with socd rejected as
+       nonsense (raw value 3) and three peers spread over 35-41 degC. */
+    int     source_confidence;
 } asb_thermal_t;
 
 typedef struct {
@@ -145,7 +150,7 @@ static inline int sysfs_read_int(const char *path, int def) {
     char buf[32];
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return def;
-    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    int n = read(fd, buf, sizeof(buf) - 1);
     close(fd);
     if (n <= 0) return def;
     buf[n] = '\0';
@@ -1164,6 +1169,8 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
                         g_thermal_cpu_fallback_type[0] = '\0';
                         c_now = fb_c;
                         t->cpu_max_c = c_now;
+                        /* Carry the trust level alongside the reading it applies to. */
+                        t->source_confidence = g_thermal_source_confidence;
                         t->temp_valid = 1;
                         snprintf(t->temp_invalid_reason, sizeof(t->temp_invalid_reason), "rebind");
                         g_last_thermal_read_ts = time(NULL);

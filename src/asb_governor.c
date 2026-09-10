@@ -958,6 +958,34 @@ static time_t g_cap_vendor_hold_until = 0;
 /* Set when the vendor owns the cap outright - see asb_cap_writes_should_back_off. Declared
    here with the rest of the cap state because write_state() reports it and runs earlier in
    the file than the function that maintains it. */
+/* One read of scaling_max_freq per policy per tick, not five.
+ *
+ * The main loop reads the same two nodes from at least six places - the reconcile check,
+ * the drift detector, the clamp probe, the ownership classifier and the state writer -
+ * and each one opens, reads and closes independently. On a tick where nothing changed
+ * that is ten syscalls to learn two numbers that cannot have moved between them, because
+ * nothing in the loop writes them in that window.
+ *
+ * Cached for the tick and invalidated at the top of the next one. Deliberately not longer:
+ * the vendor CAN move these behind our back, and a stale reading there is how the
+ * ownership classifier starts lying.
+ */
+static int  g_tick_smax[3]       = { -1, -1, -1 };
+static int  g_tick_smax_valid    = 0;
+
+static int tick_scaling_max(int slot) {
+    if (slot < 0 || slot > 2) return 0;
+    if (!g_tick_smax_valid) {
+        for (int i = 0; i < 3; i++) g_tick_smax[i] = -1;
+        g_tick_smax_valid = 1;
+    }
+    if (g_tick_smax[slot] < 0)
+        g_tick_smax[slot] = sysfs_read_int(cpu_policy_path(slot, "scaling_max_freq"), 0);
+    return g_tick_smax[slot];
+}
+
+static void tick_scaling_max_invalidate(void) { g_tick_smax_valid = 0; }
+
 static int    g_cap_vendor_passive    = 0;
 static int    g_cap_detente_active = 0;
 static time_t g_cap_detente_since = 0;
@@ -1681,6 +1709,19 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_active_efficiency.reason, g_active_efficiency.gpu_idle_bonus_pct,
             g_active_efficiency.bg_uclamp_moderate_delta,
             g_active_efficiency.bg_uclamp_severe_delta);
+    /* Break the overhead down by source, not just by total.
+     *
+     * events / timer_wakeups / cpu_ms answer "how much" and never "from what". A capture
+     * showing 4.45 writer operations per FSM record was the clue that led to the state
+     * oscillation, and finding it took manual correlation of three separate files. With
+     * the sources counted separately the same question is one line of the report: a high
+     * transition count means the ladder is chattering, a high write count with few
+     * transitions means the reconcile loop is fighting something, and a high vendor count
+     * means neither - the phone is simply not ours to drive right now. */
+    fprintf(f, "governor_transitions=%lu\ngovernor_writes=%lu\n"
+               "governor_readbacks=%lu\ngovernor_vendor_overrides=%lu\n",
+            g_stat_transitions, g_stat_writes, g_stat_readbacks,
+            g_stat_vendor_overrides);
     fprintf(f, "governor_event_wakeups=%lu\ngovernor_timer_wakeups=%lu\n"
                "governor_cpu_ms=%ld\n",
             g_governor_event_wakeups, g_governor_timer_wakeups,
@@ -2163,6 +2204,7 @@ static int asb_cap_compute_owner(const char *cap_source) {
 static int asb_cap_writes_should_back_off(void) {
     time_t now = time(NULL);
     if (g_cap_slow_vendor_clamps >= 20) g_cap_vendor_passive = 1;
+    if (g_cap_vendor_passive) g_stat_vendor_overrides++;
     else if (g_cap_slow_vendor_clamps < 10) g_cap_vendor_passive = 0;
     if (g_cap_vendor_passive) return 1;
     return (g_cap_vendor_hold_until > 0 && now < g_cap_vendor_hold_until) ? 1 : 0;
@@ -5465,8 +5507,26 @@ int main(int argc, char **argv) {
                  * the slow tier can delay noticing by a few seconds at most, and only when
                  * nothing has been happening.
                  */
-                int calm = (fsm.state <= ASB_STATE_LIGHT_IDLE) &&
-                           !metrics.misc.camera_active;
+                /* MODERATE with an idle CPU is calm too - and it is where the time goes.
+                 *
+                 * Gating on LIGHT_IDLE or below sounded conservative, but a field capture
+                 * shows what it covers: of 359 screen-on samples, LIGHT_IDLE accounts for
+                 * 12. MODERATE alone is 173. The slow cadence was reaching 3% of the time
+                 * it was written for, so the saving it promised was almost entirely
+                 * theoretical.
+                 *
+                 * MODERATE spans everything from a resting feed to real scrolling, so the
+                 * state alone is not enough - but the run queue tells them apart. Below the
+                 * learned quiet floor the CPU is doing compositing and nothing else, which
+                 * is exactly the case a 6-second tick was meant for.
+                 *
+                 * Anything above that, and GAMING, HEAVY, SUSTAINED and the camera, keep
+                 * the 2-second tick: those are the states where a late decision is felt. */
+                int calm = !metrics.misc.camera_active &&
+                           (fsm.state <= ASB_STATE_LIGHT_IDLE ||
+                            (fsm.state == ASB_STATE_MODERATE &&
+                             g_ui_quiet_floor > 0.0f &&
+                             metrics.cpu.load1 < g_ui_quiet_floor * 1.35f));
                 int want_active = calm ? TIMER_ACTIVE_CALM_S : TIMER_ACTIVE_S;
                 if (want_active != g_active_interval) {
                     arm_timerfd_periodic(tfd_active, want_active);
@@ -5951,7 +6011,7 @@ int main(int argc, char **argv) {
                 if (ses_age <= 60 && !g_burst_early_collapse) {
                     g_burst_probation = 1;
                     if (fsm.clamp_hold) {
-                        int obs_p1_now = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
+                        int obs_p1_now = tick_scaling_max(1);
                         if (obs_p1_now > 0 && obs_p1_now < 2000000) {
                             g_burst_early_collapse = 1;
                             g_burst_probation = 0;
@@ -5983,8 +6043,8 @@ int main(int argc, char **argv) {
                 if (g_clamp_thermal_skip % g_asb_cfg.clamp_thermal_every_n != 0) need_thermal = 0;
                 /* Ceiling-Adaptive Reshaping -- track actual ceiling with EMA.
                  * This becomes the reference for gap/eff instead of target. */
-                int obs_p0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
-                int obs_p1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
+                int obs_p0 = tick_scaling_max(0);
+                int obs_p1 = tick_scaling_max(1);
                 if (obs_p0 > 0) {
                     if (g_virtual_ceiling_p0 == 0) g_virtual_ceiling_p0 = obs_p0;
                     else g_virtual_ceiling_p0 = (g_virtual_ceiling_p0 * g_asb_cfg.virtual_ceiling_alpha + obs_p0) / (g_asb_cfg.virtual_ceiling_alpha + 1);
@@ -6012,6 +6072,12 @@ int main(int argc, char **argv) {
                     fsm.plan.sensor_used++;
                 }
             }
+            /* Drop last tick's cached ceilings before reading anything new.
+             *
+             * Placed here rather than at the end of the previous iteration because the loop has
+             * several exit paths: invalidating on the way in is the one position that cannot be
+             * skipped, and a cache that survives a tick is exactly the bug this must not become. */
+            tick_scaling_max_invalidate();
             metrics_read_all(&metrics, need_hr, need_thermal);
             /* Remember the last real reading: on a skipped tick the struct still holds it,
              * and the distance check above needs a value it can trust. */
@@ -6765,9 +6831,10 @@ int main(int argc, char **argv) {
                 write_learner_state_json(&fsm);
 
                 if (fsm.state_changed) {
+                    g_stat_transitions++;   /* overhead attribution - see write_state */
                     int ma_v = (metrics.bat.current_ma > 0 && !metrics.bat.charging) ? 1 : 0;
-                    int fsm_rmax0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
-                    int fsm_rmax1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
+                    int fsm_rmax0 = tick_scaling_max(0);
+                    int fsm_rmax1 = tick_scaling_max(1);
                     int gap0 = (fsm_rmax0 > 0) ? (fsm.current_caps.cpu_max[0] - fsm_rmax0) : 0;
                     int gap1 = (fsm_rmax1 > 0) ? (fsm.current_caps.cpu_max[1] - fsm_rmax1) : 0;
                     if (g_asb_cfg.log_level >= 1) asb_log("FSM: %s mA=%d(v=%d) gpu=%d%% load=%.2f "
@@ -6906,8 +6973,8 @@ int main(int argc, char **argv) {
                             g_ac_stage = AC_STAGE_IDLE;
                             g_ac_fails = 0;
                         }
-                        int actual_p0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
-                        int actual_p1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
+                        int actual_p0 = tick_scaling_max(0);
+                        int actual_p1 = tick_scaling_max(1);
                         int desired_p0 = fsm.current_caps.cpu_max[0];
                         int desired_p1 = fsm.current_caps.cpu_max[1];
                         int gap0 = (desired_p0 > 0 && actual_p0 > 0) ? desired_p0 - actual_p0 : 0;
@@ -6970,8 +7037,8 @@ int main(int argc, char **argv) {
                 if (now - g_last_reassert >= reassert_interval) {
                     int pre_p0 = 0, pre_p1 = 0;
                     if (vendor_clamping) {
-                        pre_p0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
-                        pre_p1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
+                        pre_p0 = tick_scaling_max(0);
+                        pre_p1 = tick_scaling_max(1);
                     }
                     /* Write msm_performance */
                     int ok = msm_perf_write_all_max(
@@ -6985,8 +7052,8 @@ int main(int argc, char **argv) {
                                                fsm.current_caps.cpu_max[ci]);
                         }
                         /* Evaluate effectiveness on BOTH clusters */
-                        int post_p0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
-                        int post_p1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
+                        int post_p0 = tick_scaling_max(0);
+                        int post_p1 = tick_scaling_max(1);
                         int delta0 = (post_p0 > 0 && pre_p0 > 0) ? post_p0 - pre_p0 : 0;
                         int delta1 = (post_p1 > 0 && pre_p1 > 0) ? post_p1 - pre_p1 : 0;
                         int max_delta = (delta0 > delta1) ? delta0 : delta1;
@@ -7073,8 +7140,8 @@ int main(int argc, char **argv) {
                                     (g_ac_stage == AC_STAGE_HOLD) ? "hold" : "?",
                                     asb_state_names[fsm.state],
                                     _ac_want0, _ac_want1,
-                                    sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0),
-                                    sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0),
+                                    tick_scaling_max(0),
+                                    tick_scaling_max(1),
                                     metrics.therm.headroom_pct, metrics.therm.cpu_max_c);
                         }
                         else
@@ -7089,8 +7156,8 @@ int main(int argc, char **argv) {
                              * log: it sends the next person looking in the wrong place. */
                             asb_log("reassert: %s cpu_max=[%d,%d] t=%ddegC",
                                     asb_state_names[fsm.state],
-                                    sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0),
-                                    sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0),
+                                    tick_scaling_max(0),
+                                    tick_scaling_max(1),
                                     metrics.therm.cpu_max_c);
                     }
                 }
@@ -7115,8 +7182,8 @@ int main(int argc, char **argv) {
             if (fsm.profile_idx != PROFILE_PERFORMANCE &&
                 (fsm.state == ASB_STATE_DEEP_IDLE || fsm.state == ASB_STATE_LIGHT_IDLE ||
                  fsm.state == ASB_STATE_MODERATE  || fsm.state == ASB_STATE_HEAVY)) {
-                int actual_p0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
-                int actual_p1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
+                int actual_p0 = tick_scaling_max(0);
+                int actual_p1 = tick_scaling_max(1);
                 int want_p0 = fsm.current_caps.cpu_max[0];
                 int want_p1 = fsm.current_caps.cpu_max[1];
                 int leak0 = (actual_p0 > 0 && want_p0 > 0 && actual_p0 > want_p0 + 100000) ? 1 : 0;
@@ -7250,8 +7317,8 @@ int main(int argc, char **argv) {
                     probe_interval = probe_interval * 2;
                 if (++g_clamp_probe_skip >= probe_interval) {
                     g_clamp_probe_skip = 0;
-                    int probe_p0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
-                    int probe_p1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
+                    int probe_p0 = tick_scaling_max(0);
+                    int probe_p1 = tick_scaling_max(1);
                     int gap0 = (probe_p0 > 0 && fsm.current_caps.cpu_max[0] > 0)
                                ? fsm.current_caps.cpu_max[0] - probe_p0 : 0;
                     int gap1 = (probe_p1 > 0 && fsm.current_caps.cpu_max[1] > 0)

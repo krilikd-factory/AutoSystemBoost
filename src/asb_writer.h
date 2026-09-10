@@ -77,6 +77,15 @@ typedef struct {
     char path[96];
 } asb_write_health_t;
 
+/* Overhead attribution, defined here because this is where writes happen and this header
+   is included before anything that reports them. One write and one confirming read per
+   attempt - see write_state in asb_governor.c for why the aggregate counters were not
+   enough to find the state oscillation. */
+static unsigned long g_stat_writes           = 0;
+static unsigned long g_stat_readbacks        = 0;
+static unsigned long g_stat_transitions      = 0;
+static unsigned long g_stat_vendor_overrides = 0;
+
 static asb_write_health_t g_write_health[ASB_WRITE_NODE_COUNT];
 
 static const char *writer_write_node_name(asb_write_node_t node) {
@@ -119,6 +128,11 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         return 1; /* deferred: not an applied write */
     }
     h->attempts++;
+    /* Overhead attribution: one write and one confirming read per attempt. Defined in
+       asb_governor.c, which includes this header - see write_state for why they are split
+       out from the aggregate counters. */
+    g_stat_writes++;
+    g_stat_readbacks++;
     h->requested = requested;
     snprintf(h->path, sizeof(h->path), "%s", path);
     /* Skip the write when the node already holds the value.
