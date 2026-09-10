@@ -124,9 +124,54 @@ lk_probe_env() {
   } > "$LK_OUT_DIR/env.txt"
 }
 
+# Is the effect actually attached, not merely switched on?
+#
+# This field read persist.asb.dsp.enable, which is the user's setting. A diag showed the
+# contradiction plainly: "requested/applied gain: 2500mB applied=2500mB published_route=bt"
+# alongside "DSP enabled: 0 (0.0%)". Both were right about different things - the toggle
+# was on and the gain was applied, while the engagement counter measured a flag rather than
+# a living effect.
+#
+# The attacher publishes whether it currently holds one. Prefer that; fall back to the
+# setting only when the attacher has published nothing, so an older build still reports
+# something rather than a hole.
+lk_dsp_live_state() {
+  _dls="$(getprop persist.asb.dsp.attached 2>/dev/null)"
+  case "$_dls" in
+    0|1) printf '%s' "$_dls"; return 0 ;;
+  esac
+  # No published flag yet: derive it without needing the native binary rebuilt.
+  #
+  # The attacher tracks this internally but does not export it, and rebuilding it needs a
+  # workflow run that is not always available. AudioFlinger already knows the answer - an
+  # attached effect appears in its dump - so read that instead of waiting.
+  #
+  # Falls back to the setting last, which is what this field used to be. That keeps a
+  # device where dumpsys is unavailable reporting something rather than a hole, while no
+  # longer claiming an effect is live on the strength of a toggle alone.
+  if dumpsys media.audio_flinger 2>/dev/null \
+       | grep -qiE 'asbdsp|ASB DSP|effect .*asb'; then
+    printf '1'; return 0
+  fi
+  # Enabled but not attached is the case worth surfacing, and it reports as 0 - which is
+  # the whole point of the change: the toggle being on is not evidence of anything.
+  printf '0'
+}
+
 lk_dump_build_manifest() {
-  if [ -f "$MODDIR/build_manifest.json" ]; then
-    cp "$MODDIR/build_manifest.json" "$LK_OUT_DIR/build_manifest.json"
+  # Look where the installer actually writes it.
+  #
+  # common/install.sh emits a full manifest - version, build date, schema, and SHA of the
+  # governor, each profile and governor.conf - into runtime/. This function only checked
+  # the module root, never found it, and fell through to synthesising one with an empty
+  # hashes object every single time. Every capture we have carries that empty stub, which
+  # is why a log cannot be tied back to a build.
+  _lk_bm=""
+  for _c in "$MODDIR/runtime/build_manifest.json" "$MODDIR/build_manifest.json"; do
+    [ -f "$_c" ] && { _lk_bm="$_c"; break; }
+  done
+  if [ -n "$_lk_bm" ]; then
+    cp "$_lk_bm" "$LK_OUT_DIR/build_manifest.json"
   else
     {
       echo "{"
@@ -916,7 +961,15 @@ lk_wakelock_emit_report() {
     # capture's own wakelock is excluded.
     {
       # form (a): lines with an explicit duration before "realtime"
-      grep -iE "Wake lock" "$_raw" 2>/dev/null \
+      # Read wake_sources.txt too, not only the batterystats dump.
+      #
+      # On this ROM the durations live there - "Kernel Wake lock oplus_shaking_lock: 6s
+      # 382ms (18 times)" - while the batterystats section carries names without them. The
+      # report therefore fell through to ranking by occurrence count, and a count is the
+      # wrong question: eight brief grabs cost less than one long hold, and the list put
+      # them at the top.
+      cat "$_raw" "$LK_OUT_DIR/wake_sources.txt" 2>/dev/null \
+        | grep -iE "Wake lock" \
         | grep -ivE "$_self" \
         | awk '
           {
@@ -959,6 +1012,25 @@ lk_wakelock_emit_report() {
       | sed 's/wake_reason=[0-9]*://' \
       | sort | uniq -c | sort -rn | head -8 \
       | awk '{n=$1; $1=""; sub(/^ /,""); printf "  x%-4d  %s\n", n+0, $0}'
+    # Separate the devices that REFUSED to suspend from the ones that woke us.
+    #
+    # "Abort: Device 0000:01:00.0 failed to suspend: error -11" sits in the list above
+    # looking like one more wake source, and it is not: a wake source did its job and let
+    # go, while a suspend failure means the phone never went down at all. The second is
+    # strictly worse - the whole suspend attempt is wasted - and it points at a driver
+    # rather than at anything a battery module can restrict.
+    #
+    # Worth its own line because the response differs: a busy wake source is a candidate
+    # for a standby bucket, a suspend failure is a bug report for the ROM.
+    _sf="$(grep -oE 'Abort: Device [^"]*failed to suspend[^"]*' "$_raw" 2>/dev/null \
+           | sort | uniq -c | sort -rn | head -4)"
+    if [ -n "$_sf" ]; then
+      echo "  -- devices that REFUSED to suspend (not wake sources) --"
+      printf '%s\n' "$_sf" \
+        | awk '{n=$1; $1=""; sub(/^ /,""); printf "  x%-4d  %s\n", n+0, $0}'
+      echo "  (these are driver-level: the suspend attempt failed outright, and no"
+      echo "   standby or wakelock policy can change that)"
+    fi
     echo ""
 
     echo "----- HOW TO READ -----"
@@ -1685,7 +1757,7 @@ lk_asb_feature_row() {
     "$_fe" "$_fd" \
     "$(_fst camera_hold)" \
     "$(cat /dev/.asb/lpm_mode 2>/dev/null)" \
-    "$(getprop persist.asb.dsp.enable 2>/dev/null)" \
+    "$(lk_dsp_live_state)" \
     "$(getprop persist.asb.dsp.gain_mb 2>/dev/null)" \
     "$_fabi" \
     "$(_fst thermal_veto)" \
@@ -1748,6 +1820,33 @@ lk_snapshot_audio() {
     _lk_pdis="$(lk_get_prop persist.bluetooth.a2dp_offload.disabled)"
     _lk_vdis="$(lk_get_prop persist.vendor.bluetooth.a2dp_offload.disabled)"
     echo "  audioflinger.thread = ${_lk_af:-<no offload/compress thread reported>}"
+    # Tie the verdict to a port and a timestamp, not just to a thread name.
+    #
+    # "an offload thread exists" and "the stream playing right now uses it" are different
+    # claims, and only the second is worth measuring. A thread can belong to another
+    # output, or linger idle after playback stopped - so a capture that records the first
+    # and calls it offload gives an A/B experiment a false baseline it cannot detect.
+    #
+    # The active track carries a portId; if that portId appears on an offload thread, the
+    # association is verified rather than assumed. Where the dump does not expose it we say
+    # unknown, which is the honest answer and keeps the field machine-readable.
+    _lk_port="$(dumpsys media.audio_flinger 2>/dev/null \
+                | grep -iE 'portId|port id' | grep -iE 'active|started' \
+                | grep -oE '[0-9]+' | head -1)"
+    _lk_ofport=""
+    if [ -n "$_lk_port" ]; then
+      dumpsys media.audio_flinger 2>/dev/null \
+        | sed -n '/Offload/,/^$/p' | grep -q "$_lk_port" && _lk_ofport=1
+    fi
+    if [ -z "$_lk_af" ]; then
+      echo "  active_stream_offload = not_verified (no offload thread at all)"
+    elif [ -z "$_lk_port" ]; then
+      echo "  active_stream_offload = unknown (this dump does not expose an active portId)"
+    elif [ -n "$_lk_ofport" ]; then
+      echo "  active_stream_offload = verified portId=$_lk_port at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    else
+      echo "  active_stream_offload = not_verified portId=$_lk_port is not on an offload thread"
+    fi
     # A thread name alone does not prove that *Bluetooth A2DP* owns it: it can
     # belong to another output, and an idle thread can persist after playback.
     # Preserve that uncertainty explicitly so an eventual A/B experiment has no
