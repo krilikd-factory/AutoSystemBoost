@@ -1023,9 +1023,20 @@ asb_clone_device_camera_tone() {
                     "/system/vendor/odm/etc/camera/$_ct_base"; do
       [ -f "$_ct_live" ] || continue
       if [ "$ASB_IS_OP15" = "true" ] || [ "$ASB_IS_OP13" = "true" ]; then
-        _ct_dsts="system/vendor/odm/etc/camera/$_ct_base system/odm/etc/camera/$_ct_base"
+        # Mirror the live path, the way the audio overlay already does.
+        #
+        # These were written to system/odm/... and system/vendor/odm/..., so the overlay
+        # landed on /system/odm/etc/camera. The camera reads /odm/etc/camera, and on this
+        # device that is a separate mount point, not a symlink into /system - so the graded
+        # table was built, verified, and then placed where nothing would ever read it.
+        #
+        # The audio files in this same installer use odm/etc/audio and they work; a diag
+        # from the field shows odm/etc/audio/*.xml present in the module and no camera
+        # directory at all. Same treatment: put the file at the path it must appear at,
+        # and keep the system/ variants for devices where /odm really is a symlink.
+        _ct_dsts="odm/etc/camera/$_ct_base system/vendor/odm/etc/camera/$_ct_base system/odm/etc/camera/$_ct_base"
       else
-        _ct_dsts="system/vendor/odm/etc/camera/$_ct_base"
+        _ct_dsts="odm/etc/camera/$_ct_base system/vendor/odm/etc/camera/$_ct_base"
       fi
       for _ct_dst in $_ct_dsts; do
         if [ ! -f "$MODPATH/$_ct_dst" ]; then
