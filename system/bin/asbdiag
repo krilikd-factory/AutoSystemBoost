@@ -413,6 +413,19 @@ if [ -r "$_state" ]; then
   P "  energy policy         : shadow=$(_rget shadow_mode "$_state") budget_enabled=$(_rget thermal_budget_enabled "$_state") trim=$(_rget thermal_budget_trim_pct "$_state")% (base=$(_rget thermal_budget_base_trim_pct "$_state")% + envelope=$(_rget thermal_budget_envelope_bonus_pct "$_state")%, stage=$(_rget thermal_budget_stage "$_state")) reason=$(_rget thermal_budget_reason "$_state") dwell=$(_rget thermal_budget_dwell_s "$_state")s"
   P "  active-use runtime    : loaded=$(_rget active_efficiency_active "$_state") tier=$(_rget active_efficiency_tier "$_state") reason=$(_rget active_efficiency_reason "$_state") gpu_idle_bonus=$(_rget active_efficiency_gpu_idle_bonus_pct "$_state")% bg_delta=$(_rget active_efficiency_bg_uclamp_moderate_delta "$_state")/$(_rget active_efficiency_bg_uclamp_severe_delta "$_state")"
   P "  ASB overhead          : events=$(_rget governor_event_wakeups "$_state") timer_wakeups=$(_rget governor_timer_wakeups "$_state") cpu_ms=$(_rget governor_cpu_ms "$_state")"
+  # Attribution, not just a total.
+  #
+  # The line above says how much overhead there was; this one says where it came from.
+  # The ratio is what carries the meaning: many writes per transition means the reconcile
+  # loop is fighting something, many transitions means the ladder is chattering, and a
+  # high vendor count means neither - the cap is simply not ours right now.
+  _ov_t="$(_rget governor_transitions "$_state")"
+  _ov_w="$(_rget governor_writes "$_state")"
+  case "$_ov_t" in ''|*[!0-9]*) _ov_t=0 ;; esac
+  case "$_ov_w" in ''|*[!0-9]*) _ov_w=0 ;; esac
+  P "    by source        : transitions=$_ov_t writes=$_ov_w readbacks=$(_rget governor_readbacks "$_state") vendor_overrides=$(_rget governor_vendor_overrides "$_state")"
+  [ "$_ov_t" -gt 0 ] 2>/dev/null && \
+    P "    writes per transition: $(( _ov_w / _ov_t )) (4+ suggests the ladder is chattering)"
   if [ "${_wfail:-0}" = "0" ]; then
     NOTE "All observed native writes have read back successfully."
   else
@@ -957,7 +970,24 @@ if [ -f "$_nvf" ]; then
     case "$_nv" in
       ok)          V "  $_nk" "$_nw" "$_nw" eq ;;
       unavailable) V "  $_nk (kernel lacks it)" "$_nw" "unavailable" eq ;;
-      failed)      V "  $_nk (write refused)"   "$_nw" "failed" eq ;;
+      failed)
+        # Name the cause when we have it.
+        #
+        # "write refused" is true of six different situations, five of which are facts
+        # about the device rather than defects: no qdisc in the kernel, no module, a vendor
+        # stack holding the root qdisc, a down interface, or SELinux. asb_net_apply now
+        # records which one, so print it instead of sending the reader to guess.
+        _qw="$(grep -m1 "want=${_nw} " /data/adb/asb/qdisc_failures.log 2>/dev/null \
+               | sed -n 's/.*why=\([a-z_]*\).*/\1/p')"
+        case "$_qw" in
+          kernel_lacks_qdisc)    V "  $_nk (kernel has no such qdisc)" "$_nw" "failed" eq ;;
+          module_missing)        V "  $_nk (qdisc module not loadable)" "$_nw" "failed" eq ;;
+          permission_or_selinux) V "  $_nk (refused - permission/SELinux)" "$_nw" "failed" eq ;;
+          iface_absent)          V "  $_nk (interface was not up)" "$_nw" "failed" eq ;;
+          root_qdisc_owned)      V "  $_nk (root qdisc held by vendor stack)" "$_nw" "failed" eq ;;
+          "")                    V "  $_nk (write refused)" "$_nw" "failed" eq ;;
+          *)                     V "  $_nk (tc error - see qdisc_failures.log)" "$_nw" "failed" eq ;;
+        esac ;;
       pending)     NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
       *)           NOTE "$_nk = $_nw - no verdict recorded yet (apply has not run)" ;;
     esac
@@ -1030,12 +1060,30 @@ fi
 
 # The link watcher re-applies route windows when the network changes. Without it the
 # tuning survives only until the next reconnect, and does so silently.
+# Say WHY, not just whether.
+#
+# "NOT running" covers at least six different situations - the tweak is off, ip is absent,
+# the process exited, it never started, it was blocked by the duplicate guard, or SELinux
+# refused it - and they need opposite responses. A single negative sentence sent two people
+# hunting for a runtime defect when the answer was a config value.
 if pgrep -f "asb_net_routes.sh watch" >/dev/null 2>&1; then
-  NOTE "route link watcher: running (re-applies on network change)"
+  NOTE "route link watcher: running (event-driven on ip monitor; no polling)"
 else
-  case "$(cfg net_route_tune)" in
-    ''|off) : ;;
-    *) NOTE "route link watcher: NOT running - windows will not survive a network change" ;;
+  _rw_cfg="$(cfg net_route_tune)"
+  case "$_rw_cfg" in
+    ''|off)
+      NOTE "route link watcher: disabled (net_route_tune=${_rw_cfg:-unset}) - nothing to run" ;;
+    *)
+      if ! command -v ip >/dev/null 2>&1; then
+        NOTE "route link watcher: missing_ip - the ip binary is not on PATH for this shell"
+      elif [ ! -f "$MODDIR/runtime/asb_net_routes.sh" ]; then
+        NOTE "route link watcher: missing_script - runtime/asb_net_routes.sh is not installed"
+      elif [ -f /data/adb/asb/net_routes_watch.exit ]; then
+        NOTE "route link watcher: exited - last reason: $(cat /data/adb/asb/net_routes_watch.exit 2>/dev/null)"
+      else
+        NOTE "route link watcher: not_started (net_route_tune=$_rw_cfg) - the half-hour"
+        NOTE "  maintenance pass restarts it; if this persists, ip monitor is being refused"
+      fi ;;
   esac
 fi
 
