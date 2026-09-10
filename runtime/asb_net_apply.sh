@@ -244,9 +244,27 @@ if _has tc; then
       # the six causes are facts about the device, and only one is worth a code change.
       # A phone whose kernel has no fq_codel will say so now instead of looking broken.
       _out="$_out qdisc[$_kind:$_if]=$_want-not-applied${_qd_why:+:$_qd_why}"
+      # Cooldown: do not retry a refusal that cannot succeed, and log it once.
+      #
+      # Five of the six causes are properties of the device - no qdisc in the kernel, no
+      # module, a vendor stack owning the root qdisc, SELinux. Retrying those on every
+      # apply is a tc invocation that will fail identically, and appending the reason each
+      # time turns the log into a wall of the same line.
+      #
+      # A marker per interface and want, cleared by the caller on a link event. That is the
+      # only thing that can plausibly change the answer, which is exactly the audit's rule:
+      # retry on link event or policy change, not on a timer.
+      mkdir -p /data/adb/asb/qdisc_cool 2>/dev/null
+      _qd_mark="/data/adb/asb/qdisc_cool/$(printf '%s' "${_if}_${_want}" | tr -c 'A-Za-z0-9_' '_')"
+      if [ -f "$_qd_mark" ]; then
+        _qd_logged=1
+      else
+        _qd_logged=0
+        : > "$_qd_mark" 2>/dev/null
+      fi
       # Keep the raw sentence too - the classifier above only knows the messages it has
       # seen, and an unrecognised one is exactly the case worth reading in full.
-      if [ -n "$_qd_err" ]; then
+      if [ -n "$_qd_err" ] && [ "$_qd_logged" = "0" ]; then
         mkdir -p /data/adb/asb 2>/dev/null
         printf '%s if=%s want=%s why=%s err=%s\n' \
           "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$_if" "$_want" \

@@ -245,7 +245,15 @@ _watch() {
   rm -f /data/adb/asb/net_routes_watch.exit 2>/dev/null
   ip monitor route 2>/dev/null | while IFS= read -r _ev; do
     case "$_ev" in
-      *default*) sleep 2; _apply >/dev/null 2>&1 ;;
+      # A route change is the one event that can change a qdisc verdict.
+      #
+      # asb_net_apply marks a refused qdisc so it stops retrying something the kernel or
+      # the vendor stack will refuse identically forever. That marker has to be cleared
+      # by whatever could make the answer different - a new default route means a new or
+      # re-created interface, which is exactly that case. Clearing it here rather than on
+      # a timer keeps the retry event-driven, which is the point of this watcher.
+      *default*) rm -rf /data/adb/asb/qdisc_cool 2>/dev/null
+                 sleep 2; _apply >/dev/null 2>&1 ;;
     esac
   done
   # Reached only if ip monitor terminated: a healthy watcher never gets here.
