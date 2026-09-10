@@ -3454,8 +3454,25 @@ esac
   (
     _no_prev=""
     while true; do
-      sleep 120
-      case "$(dumpsys deviceidle get screen 2>/dev/null)" in
+      # Two minutes with the screen on, ten with it off.
+      #
+      # The body of this loop is almost entirely screen-on work: it re-applies packet
+      # steering when interfaces change and signals the DSP attacher when playback
+      # starts. With the screen off it wakes, reads one property, flushes a pending
+      # broadcast on the rare occasion there is one, and goes back to sleep - 30 wakeups
+      # an hour to do nothing, on the phone where wakeups are the whole cost.
+      #
+      # The deferred broadcast is the only thing here that must still run with the screen
+      # off, and it is not urgent: it exists precisely because it should NOT fire while
+      # the user is looking. Ten minutes late is invisible.
+      # One screen read, used twice: for the sleep length and for the branch below.
+      # Two dumpsys calls per iteration would cost more than the wakeup this loop saves.
+      _nl_scr="$(dumpsys deviceidle get screen 2>/dev/null)"
+      case "$_nl_scr" in
+        false|Asleep) sleep 600 ;;
+        *)            sleep 120 ;;
+      esac
+      case "$_nl_scr" in
         false|Asleep)
           # Screen just went off: flush a configuration broadcast held back earlier.
           #
