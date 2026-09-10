@@ -306,7 +306,28 @@ typedef struct {
     int      last_source;   /* 1=cmd, 2=activity, 3=window */
 } asb_pkg_cache_t;
 
+/* Probe accounting: did the TTL cache save the forks it was added for?
+ *
+ * A hit turns up to three popen() calls into none. Without a hit rate the only way to
+ * judge the cache is to reason about frequency - and this project has repeatedly shown
+ * that is where the mistakes are. The previous cache sat in the failure path, so it never
+ * fired on a healthy device, and nothing in any report would have revealed that. */
+static unsigned long g_stat_probe_hits   = 0;
+static unsigned long g_stat_probe_misses = 0;
+
 static asb_pkg_cache_t g_pkg_cache = {0};
+
+/* Force the next lookup to probe, whatever the TTL says.
+ *
+ * The TTL answers "how stale may this be by default". It cannot answer "something just
+ * happened that certainly changed it" - a profile switch, or the camera opening or
+ * closing. Waiting out 8 seconds there means the first decision after the event is made
+ * about the previous app.
+ *
+ * Cheap enough to call liberally: it only clears a timestamp. */
+static void asb_smart_pkg_cache_invalidate(void) {
+    g_pkg_cache.last_seen_ts = 0;
+}
 
 /* Filter: known system UI/launcher packages should not be treated as
  * "user is doing X" — they're background scaffold. */
@@ -440,12 +461,52 @@ static int asb_smart_pkg_via_window_focus(char *out_pkg, size_t outsz) {
  * Returns status code; out_pkg/out_hash/out_hint populated. */
 static asb_pkg_status_t asb_smart_detect_foreground_pkg(
         char *out_pkg, size_t outsz,
-        uint64_t *out_hash, int *out_hint, int *out_source)
+        uint64_t *out_hash, int *out_hint, int *out_source,
+    int screen_on_now, int interacting_now)
 {
     char pkg[128];
     int source = 0;
     time_t now = time(NULL);
 
+    /* Serve from cache BEFORE probing, not only after every probe has failed.
+     *
+     * The cache below is checked in the failure path, so a healthy device runs the full
+     * chain every tick: up to three popen() calls, each forking a shell and a dumpsys.
+     * At the 2-second screen-on cadence that is a fork per second to answer a question
+     * whose answer changes when the user switches app - a few times an hour.
+     *
+     * TTL depends on the screen, because the cost and the value both do. 8 seconds with
+     * the screen on keeps app switches responsive; 120 with it off, where the foreground
+     * package cannot change without the screen coming back and nothing is watching
+     * anyway. A profile change or an explicit invalidation still forces a fresh probe. */
+    {
+        /* Screen state comes in as a parameter: g_smart_rt is declared further down this
+       header and is not visible here. One call site, so the signature change is cheap. */
+    /* Three levels, not two - the middle one is where most screen-on time lives.
+     *
+     * A phone with the screen on is not necessarily being used: a resting feed, a paused
+     * video, a page left open. The audit's TTL table separates active interaction from
+     * screen-on idle for exactly that reason, and a field capture backs it up - MODERATE
+     * with a quiet run queue was 87% of screen-on samples in the last daily log.
+     *
+     * 8s while the user is actually driving the phone keeps app switches responsive.
+     * 25s when the screen is on but nothing is happening - the foreground package cannot
+     * change without input, and if it does the next input invalidates the cache anyway.
+     * 120s with the screen off, where it cannot change at all. */
+    int _ttl = !screen_on_now ? 120 : (interacting_now ? 8 : 25);
+        if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < _ttl) {
+            if (out_pkg && outsz > 0) {
+                strncpy(out_pkg, g_pkg_cache.pkg, outsz - 1);
+                out_pkg[outsz - 1] = 0;
+            }
+            if (out_hash)   *out_hash   = g_pkg_cache.hash;
+            if (out_hint)   *out_hint   = g_pkg_cache.hint;
+            if (out_source) *out_source = g_pkg_cache.last_source;
+            g_stat_probe_hits++;
+            return ASB_PKG_OK;
+        }
+    }
+    g_stat_probe_misses++;   /* cache did not answer: the fork chain runs */
     if (asb_smart_pkg_via_activity_top(pkg, sizeof(pkg))) source = 1;
     else if (asb_smart_pkg_via_resumed(pkg, sizeof(pkg))) source = 2;
     else if (asb_smart_pkg_via_window_focus(pkg, sizeof(pkg))) source = 3;

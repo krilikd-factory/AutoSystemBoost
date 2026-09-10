@@ -557,6 +557,10 @@ typedef struct {
        name is already a local in the gaming-retry logic and shadowing it would compile
        cleanly while meaning something else entirely. */
     int             thermal_cooldown;
+    /* 1 = just entered cooldown, -1 = just left, 0 = no change this tick. Consumed and
+       cleared by the governor, which owns logging. */
+    int             cooldown_edge;
+    int             cooldown_die_c;
     int             thermal_trend;
     int             trend_buf[3];
     int             trend_idx;
@@ -2062,8 +2066,18 @@ if (!can_leave &&
         if (m->misc.screen_on || _t <= 0) {
             _cool_active = 0;
         } else {
+            /* Log the edges, not the state: thermal_cooldown is published every tick, so a
+               morning diag shows what is true now - the night capture has no record of when
+               the clamp engaged or how long it held. */
+            int _cool_was = _cool_active;
             if (_t >= 45)      _cool_active = 1;
             else if (_t <= 40) _cool_active = 0;
+            /* asb_log is declared in asb_governor.c, which includes this header - not reachable
+               from here. Publish the edge as a field instead and let the governor log it, which
+               also keeps the logging decision (level, rate limit) in one place. */
+            fsm->cooldown_edge = (_cool_active != _cool_was)
+                                 ? (_cool_active ? 1 : -1) : 0;
+            fsm->cooldown_die_c = _t;
             if (_cool_active) {
                 for (int i = 0; i < 3; i++) {
                     int lo = g_cpu_slot_hwmin[i];
@@ -2077,6 +2091,18 @@ if (!can_leave &&
                  * contribution to the load we are shedding. Not zero: the compositor still services
                  * the occasional notification or always-on surface. */
                 if (new_caps.gpu_max_pct > 15) new_caps.gpu_max_pct = 15;
+            /* Background tiers go below the profile floor while we are cooling.
+             *
+             * bg and system-bg interpolate between the profile's floor and ceiling, and the
+             * floor is sized for a phone sitting idle with the screen on - not for one
+             * shedding heat with nobody watching. Whatever background work runs here has no
+             * observable deadline, and letting it pull cores up is the opposite of what the
+             * clamp is for.
+             *
+             * 18 rather than 0: a hard floor of zero is the bug we fixed in the profile
+             * rails, where an empty uclamp told the scheduler the task needed no CPU at all
+             * and work simply stopped. This leaves a working floor. */
+            if (new_caps.uclamp_bg_max > 18) new_caps.uclamp_bg_max = 18;
             }
             /* Publish it: a cooldown that silently does nothing looks identical to one that
                worked, and only the recorded state tells them apart in a capture. */

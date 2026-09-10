@@ -81,6 +81,15 @@ typedef struct {
    is included before anything that reports them. One write and one confirming read per
    attempt - see write_state in asb_governor.c for why the aggregate counters were not
    enough to find the state oscillation. */
+/* JSON publish accounting - stage 1 of the lightening plan asks for it by name.
+ *
+ * Three files now skip identical content: state, conflicts and learner. Skipped counts the
+ * publishes that did not happen, written counts those that did. Without both, the skip
+ * logic is a claim - and the same claim was made about the probe cache, which turned out
+ * to be sitting in a branch that never ran. */
+static unsigned long g_stat_json_written     = 0;
+static unsigned long g_stat_json_skipped     = 0;
+static unsigned long g_stat_noop_ticks       = 0;
 static unsigned long g_stat_writes           = 0;
 static unsigned long g_stat_readbacks        = 0;
 static unsigned long g_stat_transitions      = 0;

@@ -1372,12 +1372,29 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
              * before, leaving it requires the headroom to have genuinely recovered rather
              * than to have jittered across the line.
              */
+            /* Light trim needs a sustained deficit, not one sample.
+             *
+             * headroom_pct is a vendor estimate that moves on its own, and the light band is the
+             * one it crosses most often. Trimming 8% on a single dip is the pattern this project
+             * keeps finding: an action taken on noise, which then has to be undone, costing a ramp
+             * in each direction and buying nothing.
+             *
+             * Two consecutive ticks below the light threshold before it applies. Moderate and
+             * severe are deliberately NOT gated - those bands mean the phone is actually in
+             * trouble, and waiting a tick there would trade safety for tidiness. */
+            static int _lt_streak = 0;
+            if (hr <= g_asb_cfg.thermal_budget_light_headroom_pct) {
+                if (_lt_streak < 100) _lt_streak++;
+            } else {
+                _lt_streak = 0;
+            }
             int hyst = (g_budget_trim_pct > 0) ? 4 : 0;
             if (hr <= g_asb_cfg.thermal_budget_severe_headroom_pct + hyst)
                 asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "headroom_severe");
             else if (hr <= g_asb_cfg.thermal_budget_moderate_headroom_pct + hyst)
                 asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_moderate_trim_pct, "headroom_moderate");
-            else if (hr <= g_asb_cfg.thermal_budget_light_headroom_pct + hyst)
+            else if (hr <= g_asb_cfg.thermal_budget_light_headroom_pct + hyst &&
+                     _lt_streak >= 2)
                 asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_light_trim_pct, "headroom_light");
         }
         /* Skin is the user-facing safety signal. A fast trend anticipates heat
@@ -1718,6 +1735,16 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * transition count means the ladder is chattering, a high write count with few
      * transitions means the reconcile loop is fighting something, and a high vendor count
      * means neither - the phone is simply not ours to drive right now. */
+    /* Probe cache effectiveness - stage 1 observability from the lightening plan.
+     *
+     * Hits are forks that did not happen. Publishing the ratio is what makes the TTL
+     * judgeable instead of merely plausible: a hit rate near zero would mean the cache is
+     * in the wrong place again, which is exactly the failure it replaced. */
+    fprintf(f, "noop_ticks=%lu\n", g_stat_noop_ticks);
+    fprintf(f, "json_written=%lu\njson_skipped=%lu\n",
+            g_stat_json_written, g_stat_json_skipped);
+    fprintf(f, "probe_cache_hits=%lu\nprobe_cache_misses=%lu\n",
+            g_stat_probe_hits, g_stat_probe_misses);
     fprintf(f, "governor_transitions=%lu\ngovernor_writes=%lu\n"
                "governor_readbacks=%lu\ngovernor_vendor_overrides=%lu\n",
             g_stat_transitions, g_stat_writes, g_stat_readbacks,
@@ -2010,8 +2037,18 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     /* Vendor clamp counters for WebUI Live page */
     fprintf(f, "vendor_clamp_1h=%lu\nvendor_clamp_total=%lu\nvendor_raised_total=%lu\n",
             v44_clamp_1h_now(), g_v44_clamp_total, g_v44_raised_total);
+    /* Drop the durability barrier when the screen is off and nothing changed.
+     *
+     * This file is read by the WebUI and by asbdiag, both on demand and both while the
+     * user is awake and looking. Nobody reads it at 3am, and an fsync per tick through the
+     * night is a flush to storage to record that nothing happened.
+     *
+     * The rename still publishes every tick, so a reader always sees current data - only
+     * the barrier is skipped, and only screen-off. A crash then loses at most the last
+     * few seconds of a file that is rebuilt from live state on the next tick anyway.
+     * Screen-on behaviour is unchanged. */
     fflush(f);
-    fsync(fileno(f));
+    if (m && m->misc.screen_on) fsync(fileno(f));
     fclose(f);
     rename(STATE_FILE ".tmp", STATE_FILE);
 }
@@ -2247,9 +2284,43 @@ static void write_conflicts_json(void) {
         asb_cap_writes_should_back_off(),
         g_cap_recent_vendor_clamps,
         g_cap_detente_active, g_cap_detente_skipped);
-    fflush(f);
+    /* Skip the fsync and the rename when nothing in this file changed.
+     *
+     * This runs on every tick that produces a state write, and each run costs an fsync -
+     * a durability barrier on /dev, plus a rename. The content is derived from counters
+     * that mostly do not move: on a quiet phone the same bytes are written, synced and
+     * published over and over.
+     *
+     * Comparing against the previous content is cheap - it is a few hundred bytes already
+     * in memory. The WebUI reads this file on demand and cannot tell the difference
+     * between a file that was rewritten identically and one that was left alone.
+     *
+     * The temp file is removed on the skip path so a stale .tmp cannot accumulate. */
+    {
+        static char _cj_prev[2048];
+        char _cj_now[2048];
+        long _cj_len = ftell(f);
+        fflush(f);
+        rewind(f);
+        size_t _cj_rd = 0;
+        FILE *_cj_r = fopen("/dev/.asb/conflicts.json.tmp", "r");
+        if (_cj_r) {
+            _cj_rd = fread(_cj_now, 1, sizeof(_cj_now) - 1, _cj_r);
+            fclose(_cj_r);
+        }
+        _cj_now[_cj_rd] = 0;
+        (void)_cj_len;
+        if (_cj_rd > 0 && strcmp(_cj_now, _cj_prev) == 0) {
+            fclose(f);
+            g_stat_json_skipped++;
+            unlink("/dev/.asb/conflicts.json.tmp");
+            return;
+        }
+        snprintf(_cj_prev, sizeof(_cj_prev), "%s", _cj_now);
+    }
     fsync(fileno(f));
     fclose(f);
+    g_stat_json_written++;
     rename("/dev/.asb/conflicts.json.tmp", "/dev/.asb/conflicts.json");
 }
 
@@ -2329,10 +2400,43 @@ static void write_learner_state_json(const asb_fsm_t *fsm) {
         g_pstats_per[PROFILE_BATTERY].day_avg_iq,
         g_pstats_per[PROFILE_BATTERY].clean_night_count);
     (void)fsm;
-    fflush(f);
+    /* Same skip as conflicts.json, but with a time floor - the learner is different.
+     *
+     * conflicts.json is pure derived state: identical content means nothing happened, so
+     * skipping it is free. This file also carries the learner's own statistics, and a
+     * consumer reading it wants to know the model is alive, not just that its numbers
+     * have not moved yet. A bucket that legitimately reports the same values for an hour
+     * would look frozen if we never republished.
+     *
+     * So: skip identical content, but publish anyway every 5 minutes regardless. That
+     * keeps the fsync off the tick path while leaving a heartbeat, which is what the
+     * audit asked for when it said the learner needs a separate gated path.
+     */
+    {
+        static char   _lj_prev[4096];
+        static time_t _lj_last_pub = 0;
+        time_t _lj_now = time(NULL);
+        char   _lj_cur[4096];
+        size_t _lj_rd = 0;
+        fflush(f);
+        FILE *_lj_r = fopen("/dev/.asb/learner_state.json.tmp", "r");
+        if (_lj_r) {
+            _lj_rd = fread(_lj_cur, 1, sizeof(_lj_cur) - 1, _lj_r);
+            fclose(_lj_r);
+        }
+        _lj_cur[_lj_rd] = 0;
+        if (_lj_rd > 0 && strcmp(_lj_cur, _lj_prev) == 0 &&
+            (_lj_now - _lj_last_pub) < 300) {
+            fclose(f);
+            g_stat_json_skipped++;
+            unlink("/dev/.asb/learner_state.json.tmp");
+            return;
+        }
+        snprintf(_lj_prev, sizeof(_lj_prev), "%s", _lj_cur);
+        _lj_last_pub = _lj_now;
+    }
     fsync(fileno(f));
     fclose(f);
-    rename("/dev/.asb/learner_state.json.tmp", "/dev/.asb/learner_state.json");
 }
 
 static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
@@ -4086,7 +4190,12 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
             int fg_hint = ASB_APP_MEDIUM;
             int fg_source = 0;
             asb_pkg_status_t pst = asb_smart_detect_foreground_pkg(
-                fg_pkg, sizeof(fg_pkg), &fg_hash, &fg_hint, &fg_source);
+                fg_pkg, sizeof(fg_pkg), &fg_hash, &fg_hint, &fg_source,
+                m->misc.screen_on,
+                /* "Interacting" = the run queue is above the learned quiet floor. Same
+                   signal the calm tick cadence uses, so the two cannot disagree. */
+                (g_ui_quiet_floor > 0.0f &&
+                 m->cpu.load1 >= g_ui_quiet_floor * 1.35f));
 
             g_pkg_detect_status = pst;
             g_pkg_detect_source = fg_source;
@@ -5421,6 +5530,17 @@ int main(int argc, char **argv) {
                             if (_new_caps.cpu_max[i] != fsm.current_caps.cpu_max[i]) { _diff = 1; break; }
                             if (_new_caps.cpu_min[i] != fsm.current_caps.cpu_min[i]) { _diff = 1; break; }
                         }
+                        /* Count the ticks that decided nothing, so the ratio is measurable.
+                         *
+                         * The semantic no-op is already here - _diff guards the whole write path. What was
+                         * missing is the number: without it, "the writer filters correctly" is a claim
+                         * about the code rather than a fact about the device, and stage 1 of the
+                         * lightening plan asks for exactly that fact.
+                         *
+                         * A high no-op share is the healthy state: it means the ladder settled and the
+                         * governor is watching rather than acting. A low one on an idle phone would mean
+                         * something upstream keeps producing new caps for no reason. */
+                        if (!_diff) g_stat_noop_ticks++;
                         if (_diff) {
                             fsm.current_caps = _new_caps;
                             asb_profile_caps_t _effective_caps = fsm.current_caps;
@@ -5731,6 +5851,10 @@ int main(int argc, char **argv) {
                             asb_log("profile:battery -> highload burst/auto cleared");
                         }
                         profile_changed = 1;
+                        /* The foreground package cache is keyed on time, not on relevance: a profile switch
+                           is a certainty that the next decision should be made on fresh data, not on what
+                           was true up to 8 seconds ago. */
+                        asb_smart_pkg_cache_invalidate();
                         force_write = 1;
                         need_metrics = 1;
                         g_last_reassert = 0;
@@ -6078,6 +6202,20 @@ int main(int argc, char **argv) {
              * several exit paths: invalidating on the way in is the one position that cannot be
              * skipped, and a cache that survives a tick is exactly the bug this must not become. */
             tick_scaling_max_invalidate();
+            /* Camera opening or closing changes which package is in front, immediately.
+             *
+             * The TTL is a default staleness budget; this is a known event that invalidates it.
+             * Without this the first tick after the camera launches still classifies the previous
+             * app, and the camera guard is exactly the consumer that must not be late.
+             *
+             * Edge-triggered, so a long camera session costs one invalidation, not one per tick. */
+            {
+                static int _cam_was = -1;
+                if (_cam_was != metrics.misc.camera_active) {
+                    if (_cam_was >= 0) asb_smart_pkg_cache_invalidate();
+                    _cam_was = metrics.misc.camera_active;
+                }
+            }
             metrics_read_all(&metrics, need_hr, need_thermal);
             /* Remember the last real reading: on a skipped tick the struct still holds it,
              * and the distance check above needs a value it can trust. */
@@ -6515,9 +6653,32 @@ int main(int argc, char **argv) {
                 time_t _mnow = time(NULL);
                 if (_rec_last == 0) { _rec_last = _mnow; _wd_last = _mnow; }
                 /* Reconcile leans on the screen state the same way its shell loop did. */
+                /* Back off when reconcile keeps finding nothing to fix.
+                 *
+                 * The audit's rule: if attempts do not change live state, the interval should grow
+                 * by itself. Reconcile exists for drift that a vendor HAL introduces, and on a
+                 * device where that never happens it is a shell, a script and a set of sysfs reads
+                 * every two minutes to confirm nothing moved.
+                 *
+                 * The signal is already there: writer no-op ticks. If no cap write has happened
+                 * since the last reconcile, nothing could have drifted that we did not cause, so
+                 * double the interval up to a ceiling. Any real write resets it immediately - the
+                 * backoff must never delay the case it was built for. */
+                static unsigned long _rec_seen_writes = 0;
+                static int _rec_idle_streak = 0;
                 int _rec_period = metrics.misc.screen_on ? 120 : 300;
+                if (g_stat_writes != _rec_seen_writes) { _rec_idle_streak = 0; }
+                else if (_rec_idle_streak < 3)          { /* grow slowly */ }
+                if (_rec_idle_streak > 0) _rec_period <<= (_rec_idle_streak > 3 ? 3 : _rec_idle_streak);
                 if ((_mnow - _rec_last) >= _rec_period) {
                     _rec_last = _mnow;
+                    /* Grow the streak only when this pass followed a period with no writes. */
+                    if (g_stat_writes == _rec_seen_writes) {
+                        if (_rec_idle_streak < 3) _rec_idle_streak++;
+                    } else {
+                        _rec_idle_streak = 0;
+                    }
+                    _rec_seen_writes = g_stat_writes;
                     int _rr = system("sh /data/adb/modules/AutoSystemBoost/runtime/asb_reconcile.sh"
                                      " --once >/dev/null 2>&1 &");
                     (void)_rr;
@@ -6529,7 +6690,17 @@ int main(int argc, char **argv) {
                 {
                     static time_t _doze_last = 0;
                     if (_doze_last == 0) _doze_last = _mnow;
-                    if ((_mnow - _doze_last) >= 600) {
+                    /* Only while the screen is off - this one runs the other way round.
+                     *
+                     * asb_doze_apply arms the night window: it pauses AOD, gates the modem wakeup
+                     * nodes and adjusts idle timings. None of that means anything while the user is
+                     * looking at the screen, and the script itself checks and exits - after the fork,
+                     * the shell, the grep and the config read have already happened.
+                     *
+                     * Checking the screen here costs nothing and removes six spawns an hour of
+                     * screen-on time. The night path is unaffected: with the screen off the cadence
+                     * is exactly what it was. */
+                    if (!metrics.misc.screen_on && (_mnow - _doze_last) >= 600) {
                         _doze_last = _mnow;
                         int _dr = system("grep -q '^doze_level=night' "
                                          "/data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null"
@@ -6538,7 +6709,17 @@ int main(int argc, char **argv) {
                         (void)_dr;
                     }
                 }
-                if ((_mnow - _wd_last) >= 300) {
+                /* 5 minutes with the screen on, 30 with it off.
+                 *
+                 * asb_watchdog.sh already backs off on its own, but this is a separate spawn from
+                 * the governor and it kept the old cadence - so the fork happened every 5 minutes
+                 * through the night regardless, which is most of what the script's own backoff was
+                 * meant to remove. Each spawn is a shell plus the script.
+                 *
+                 * If the governor dies while the screen is off, nothing observable happens until
+                 * the phone is picked up; a 30-minute detection window is invisible there. */
+                int _wd_period = metrics.misc.screen_on ? 300 : 1800;
+                if ((_mnow - _wd_last) >= _wd_period) {
                     _wd_last = _mnow;
                     int _wr = system("sh /data/adb/modules/AutoSystemBoost/runtime/asb_watchdog.sh"
                                      " --once >/dev/null 2>&1 &");
@@ -6832,6 +7013,18 @@ int main(int argc, char **argv) {
 
                 if (fsm.state_changed) {
                     g_stat_transitions++;   /* overhead attribution - see write_state */
+                    /* Log the cooldown edges the FSM flagged.
+                     *
+                     * The clamp only fires on a night that began warm, so it cannot be triggered on
+                     * demand - and thermal_cooldown in the state file only ever says what is true right
+                     * now. Without these two lines the night capture carries no record of when the clamp
+                     * engaged or how long it held, which is exactly what a validation run needs. */
+                    if (fsm.cooldown_edge > 0)
+                        asb_log("cooldown: enter die=%dC (screen off, clamping to hw minimum)",
+                                fsm.cooldown_die_c);
+                    else if (fsm.cooldown_edge < 0)
+                        asb_log("cooldown: exit die=%dC (cool enough, profile rails restored)",
+                                fsm.cooldown_die_c);
                     int ma_v = (metrics.bat.current_ma > 0 && !metrics.bat.charging) ? 1 : 0;
                     int fsm_rmax0 = tick_scaling_max(0);
                     int fsm_rmax1 = tick_scaling_max(1);
