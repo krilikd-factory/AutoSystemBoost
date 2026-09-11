@@ -2316,11 +2316,29 @@ body.config-active #livePage.open {
    the WebView viewport. Some OxygenOS builds report a zero bottom safe-area although the
    compositor still clips the last pixels at curved corners. A symmetric 14px rail avoids
    that false zero without changing the sheet's own one-pixel border thickness. */
-.cfg-profile-modal { position: fixed; z-index: 1400; inset: 0; display: flex; align-items: flex-end; box-sizing: border-box; padding: 0 max(14px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
+.cfg-profile-modal { position: fixed; z-index: 1400; inset: 0; display: flex; align-items: flex-end; box-sizing: border-box; /* Bottom gap must clear the gesture bar AND leave the corners visible.
+     *
+     * max(14px, inset) returns the inset alone on a phone with a gesture bar - about 14px
+     * there too - so the sheet sat right on the system pill with its rounded corners in
+     * the last few pixels of the screen. The curve was drawn but had nowhere to be seen,
+     * which reads as a square edge that lost its gradient.
+     *
+     * Adding the two instead of taking the larger keeps a real gap below the corner. */
+    padding: 0 max(14px, env(safe-area-inset-right, 0px))
+             calc(16px + env(safe-area-inset-bottom, 0px))
+             max(14px, env(safe-area-inset-left, 0px)); background: rgba(0,0,0,.68); backdrop-filter: blur(5px); }
 /* The sheet sits flush with the viewport, so its outline is a screen contour rather than
  * a separate rectangular card. Use one opaque physical 1px stroke: semi-transparent teal
  * antialiases differently against the dark page at the lower curves on some Android WebViews. */
-.cfg-profile-sheet { width:100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow:auto; box-sizing:border-box; padding:18px 16px 22px; border:1px solid #35bb99; border-radius:26px; background:#000; box-shadow:0 -20px 60px rgba(0,0,0,.70); }
+.cfg-profile-sheet { width:100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow:auto; box-sizing:border-box; padding:18px 16px 22px; border:1px solid transparent; border-radius:26px;
+  /* Gradient border via two backgrounds: the inner one paints the sheet, the outer one
+     shows through the border box. A plain 1px #35bb99 looked flat where the sheet meets
+     the bottom corners - the curve there is long, and a single colour gives the eye
+     nothing to follow, so the corners read as unfinished rather than rounded. */
+  background:
+    linear-gradient(#000, #000) padding-box,
+    linear-gradient(160deg, #35bb99 0%, #2aa9b3 45%, #1f7d68 100%) border-box;
+  box-shadow:0 -20px 60px rgba(0,0,0,.70); }
 .cfg-profile-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:13px; }
 .cfg-profile-title { color:#f4f6f7; font-size:18px; font-weight:800; }
 .cfg-profile-close { flex:0 0 auto; width:34px; height:34px; border-radius:50%; color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:#050707; font-size:20px; }
@@ -2831,6 +2849,17 @@ html[data-asb-theme="light"] .log-menu {
  * byte as it did before any of this existed. */
 body.asb-scaled {
   zoom: var(--asb-ui-scale);
+}
+
+
+/* The light theme sets background with !important, which wipes the gradient border above
+   and leaves border-color:transparent showing nothing at all. Give it its own gradient
+   rather than letting the sheet lose its outline entirely. */
+html[data-asb-theme="light"] .cfg-profile-sheet {
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(160deg, #0f9c7c 0%, #10879a 45%, #0b5f4f 100%) border-box !important;
+  border: 1px solid transparent !important;
 }
 
 </style>
