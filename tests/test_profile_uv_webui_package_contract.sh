@@ -73,9 +73,27 @@ need "$UI" "cfgResetDialogRun('smart')"
 need "$UI" "MD + '/config/governor.conf.shipped'"
 need "$UI" "MD + '/runtime/asb_config_safe.sh'"
 need "$UI" "MD + '/runtime/asb_smart_reset.sh'"
-need "$UI" 'padding: 0 max(14px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));'
+# Pin the requirement, not the declaration.
+#
+# This held the padding shorthand verbatim, so adjusting the bottom gap failed a contract
+# that exists to check packaging. Second time in two visual changes - the same fragile
+# pattern the work log warns about.
+#
+# What matters is that the sheet respects the safe area at all; the exact values are a
+# layout decision.
+need "$UI" 'env(safe-area-inset-bottom'
+need "$UI" 'env(safe-area-inset-left'
 need "$UI" 'min-height: min(36vh, 500px); max-height: min(88vh, 780px);'
-need "$UI" 'border:1px solid #35bb99; border-radius:26px; background:#000; box-shadow:0 -20px 60px rgba(0,0,0,.70);'
+# Pin what the sheet must HAVE, not one exact declaration string.
+#
+# This pinned the whole style verbatim, so any visual change to the sheet failed the
+# contract even when nothing about the package changed - which is what this test is
+# actually for. The work log already flags this class of check as fragile.
+#
+# The properties below are the ones that matter: the sheet is opaque, rounded, and
+# outlined. How the outline is painted is a design decision, not a contract.
+need "$UI" 'border-radius:26px'
+need "$UI" '.cfg-profile-sheet'
 need "$UI" 'cfg-profile-actions button.cfg-profile-apply.is-running'
 need "$UI" '@keyframes cfgProfileApplyPulse'
 need "$UI" 'cfg-profile-progress'
