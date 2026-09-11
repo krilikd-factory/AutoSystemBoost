@@ -1740,6 +1740,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * Hits are forks that did not happen. Publishing the ratio is what makes the TTL
      * judgeable instead of merely plausible: a hit rate near zero would mean the cache is
      * in the wrong place again, which is exactly the failure it replaced. */
+    /* Foreground app class, so consumers can tell a game from a busy GPU.
+     *
+     * The logkit labelled any sustained GPU streak as a gaming phase - video and maps
+     * included - because GPU load was the only signal it had. The governor already knows
+     * the answer from the package table; it just never published it. */
+    fprintf(f, "app_hint=%d\n", g_smart_rt.app_hint);
     fprintf(f, "noop_ticks=%lu\n", g_stat_noop_ticks);
     fprintf(f, "json_written=%lu\njson_skipped=%lu\n",
             g_stat_json_written, g_stat_json_skipped);
