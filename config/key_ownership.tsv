@@ -100,6 +100,7 @@ night_quiet_enable|user|webui_standard
 night_quiet_hour_start|internal|engine_or_derived
 night_quiet_hour_end|internal|engine_or_derived
 BG_TRIM_LEVEL|user|webui_standard
+mglru_hold|user|webui_standard
 gms_trim|advanced|webui_sensitive
 gms_freeze|advanced|webui_sensitive
 UX_ANIM_FORCE_RESTART|user|webui_standard
