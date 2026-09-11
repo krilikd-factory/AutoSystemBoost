@@ -2437,6 +2437,12 @@ static void write_learner_state_json(const asb_fsm_t *fsm) {
     }
     fsync(fileno(f));
     fclose(f);
+    /* Publish it. This rename was lost when the skip block was added: the function wrote
+       learner_state.json.tmp, fsynced it and returned, so the real file was never replaced.
+       The WebUI kept reading a stale copy from install time - which is why Monitor showed
+       "no data" on a phone with 49 sessions recorded and visible in the Smart card. */
+    rename("/dev/.asb/learner_state.json.tmp", "/dev/.asb/learner_state.json");
+    g_stat_json_written++;
 }
 
 static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
