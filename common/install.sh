@@ -3105,7 +3105,19 @@ asb_apply_bt_absvol() {
   ui_print "      + ${ASB_D_BT:-BT absolute volume: disabled (phone drives gain)}"
   ui_print "        ${ASB_D_BT_NOTE:-(headset drives its own level; use 'stock' if BT starts quiet)}"
 }
-[ "$ASB_BT" = "true" ] && asb_apply_bt_absvol
+# Bluetooth output gets its own heading.
+#
+# This prints "+ BT absolute volume: ..." with no section of its own, so it appeared under
+# whichever heading happened to be last - CAMERA, which is where the user found it and
+# reasonably asked what Bluetooth was doing in the camera section.
+#
+# BT=0 shipped for a long time, so the line was rarely reached and the misplacement went
+# unnoticed until the feature flags started working.
+if [ "$ASB_BT" = "true" ]; then
+  ui_print " "
+  ui_print "  🎧  ${ASB_SEC_BT:-BLUETOOTH}"
+  asb_apply_bt_absvol
+fi
 
 # Build the blur block into system.prop at INSTALL time, not in post-fs-data.
 #
