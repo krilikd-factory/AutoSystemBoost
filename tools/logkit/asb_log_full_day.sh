@@ -1008,6 +1008,30 @@ lk_emit_full_day_report() {
     if [ -s "$LK_OUT_DIR/asb_features.txt" ] \
        && [ "$(wc -l < "$LK_OUT_DIR/asb_features.txt" 2>/dev/null)" -gt 1 ]; then
       echo ""
+      # What the module itself cost, in one block.
+      #
+      # The validation table asks for governor CPU time, physical writes and FSM transitions
+      # per hour. All three are already published to the state file - and all three had to be
+      # pulled from asbdiag by hand, which means a capture taken overnight and read the next
+      # morning did not contain them at all.
+      #
+      # Rates, not totals: the counters are cumulative since boot, and a total is meaningless
+      # without knowing how long the governor has been up.
+      _mc="/dev/.asb/state"
+      if [ -r "$_mc" ]; then
+        _mc_get() { grep -m1 "^$1=" "$_mc" 2>/dev/null | cut -d= -f2 | tr -dc '0-9'; }
+        _up="$(cut -d. -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')"
+        case "$_up" in ''|0) _up=1 ;; esac
+        _h=$(( _up / 3600 )); [ "$_h" -lt 1 ] && _h=1
+        echo ""
+        echo "── ASB COST (per hour of uptime) ──────────────────────────────"
+        printf "  governor cpu             : %s ms total\n" "$(_mc_get governor_cpu_ms)"
+        printf "  physical writes          : %s/h\n" "$(( $(_mc_get governor_writes || echo 0) / _h ))"
+        printf "  fsm transitions          : %s/h\n" "$(( $(_mc_get governor_transitions || echo 0) / _h ))"
+        printf "  timer wakeups            : %s/h\n" "$(( $(_mc_get governor_timer_wakeups || echo 0) / _h ))"
+        printf "  settled ticks (no write) : %s\n" "$(_mc_get noop_ticks)"
+        printf "  json publishes avoided   : %s\n" "$(_mc_get json_skipped)"
+      fi
       echo "── ASB FEATURE ENGAGEMENT ─────────────────────────────────────"
       awk -F'|' '
         NR<=1 { next }
