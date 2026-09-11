@@ -138,6 +138,30 @@ lk_stabilize_charging_phase() {
 lk_sample_gpu_busy() {
   LK_GPU_NOW=$(cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null | tr -dc '0-9')
   [ -z "$LK_GPU_NOW" ] && LK_GPU_NOW=0
+  # Sample the GPU CEILING too, not only its load.
+  #
+  # A user reports the display dropping to a lower refresh rate for a few seconds after
+  # waking the screen, then recovering. The module never writes a refresh-rate setting -
+  # but it does clamp the GPU to 15% in DEEP_IDLE, and the state machine needs two
+  # confirmations at a 2-second tick before it lifts that. If the compositor cannot hold
+  # 120 Hz under the clamp, the system lowers the rate by itself.
+  #
+  # That is a reconstruction from the code, not a measurement. The capture records GPU
+  # LOAD, which stays low either way, so it cannot tell a clamped GPU from an idle one.
+  # max_pwrlevel is the number that separates them: higher means more restricted.
+  LK_GPU_CAP=$(cat /sys/class/kgsl/kgsl-3d0/max_pwrlevel 2>/dev/null | tr -dc '0-9')
+  [ -z "$LK_GPU_CAP" ] && LK_GPU_CAP=-1
+  if [ -n "${LK_WAKE_AT:-}" ]; then
+    _wa=$(( $(date +%s 2>/dev/null) - LK_WAKE_AT ))
+    if [ "$_wa" -ge 0 ] && [ "$_wa" -le 20 ]; then
+      printf '%s\t%s\t%s\t%s\t%s\n' "$_wa" "$LK_GPU_CAP" "$LK_GPU_NOW" \
+        "$(cat /dev/.asb/state 2>/dev/null | sed -n 's/^state=//p' | head -1)" \
+        "$(cat /dev/.asb/state 2>/dev/null | sed -n 's/^thermal_cooldown=//p' | head -1)" \
+        >> "$LK_OUT_DIR/wake_gpu_trace.tsv" 2>/dev/null || true
+    else
+      LK_WAKE_AT=""
+    fi
+  fi
   export LK_GPU_NOW
 }
 
@@ -168,6 +192,21 @@ lk_detect_phase() {
   # screen state via power manager (cheap, no toybox dep beyond grep/sed)
   _scr=$(dumpsys power 2>/dev/null | grep -m1 'mWakefulness=' | sed 's/.*mWakefulness=//;s/ .*//')
   [ -z "$_scr" ] && _scr="$LK_LAST_SCREEN"
+  # Record the first seconds after the screen comes on, at tick resolution.
+  #
+  # The per-phase summary averages over minutes, so a clamp that lasts four seconds
+  # disappears into it entirely - the phase would read "GPU ceiling normal" because it
+  # was normal for 99% of the phase. The complaint is specifically about the first few
+  # seconds, so those need their own rows.
+  #
+  # Written only on the transition and for a short window after, so a phone that never
+  # shows the problem pays almost nothing for the instrumentation.
+  if [ "${LK_SCR_PREV:-x}" != "$_scr" ]; then
+    LK_SCR_PREV="$_scr"
+    case "$_scr" in
+      Awake|true) LK_WAKE_AT="$(date +%s 2>/dev/null)" ;;
+    esac
+  fi
   # screen-off duration tracking
   if [ "$_scr" = "Asleep" ] || [ "$_scr" = "Dozing" ]; then
     [ "$LK_SCREEN_OFF_SINCE" = "0" ] && LK_SCREEN_OFF_SINCE="$_now"
