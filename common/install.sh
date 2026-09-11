@@ -512,6 +512,73 @@ asb_detect_compat() {
 
   echo "$ASB_MANUFACTURER_L $ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" | grep -Eqi '(oneplus|oplus)' && ASB_IS_ONEPLUS=true
 
+# Feature flags, at verified top level - every device, no exceptions.
+#
+# The previous position looked top level but sat inside
+# `if [ "$ASB_IS_OP15" != "true" ]`, so on an OP15 no flag was ever assigned and every
+# category printed "off". Indentation is not scope in shell; depth here was checked by
+# walking the file.
+#
+# Placed right after device detection so the flags exist before ANY gated section,
+# and identically for every OnePlus model - the capabilities install for everyone,
+# and which tweaks are active is decided later by the user in the WebUI.
+# Feature flags are resolved HERE, before anything reads them.
+#
+# This block used to sit at line ~2724, while the first `[ "$ASB_CAMERA" = "true" ]`
+# test runs at ~711 - two thousand lines earlier. Every flag was therefore empty at
+# the point it was checked, so every gated section was skipped and the installed
+# module kept stock values. It affected all of them: 23 reads of ASB_AUDIO, 16 of
+# ASB_CAMERA, and a handful each of WIFI and MEDIA happened before their definition.
+#
+# The block depends on nothing but MODPATH and features.conf, both available from the
+# start, so moving it up is safe - and it is the only position where the flags mean
+# what they say.
+# Defaults, overridden below by whatever the shipped features.conf says.
+#
+# These were plain `true` and the generated features.conf is written from them, so the
+# file in the ZIP was overwritten on every install. A build that deliberately ships
+# BT=0 or VENDOR_OVERLAY=0 - which this one does, for eight features - had that choice
+# silently reversed, and the installed module ran with everything on.
+#
+# Reading the shipped file first makes it the source of truth it was meant to be: a
+# packager can disable a feature for a build, and the installer honours it.
+_asb_feat_from_zip() {
+  _ff="$MODPATH/features.conf"
+  [ -f "$_ff" ] || return 0
+  _fv="$(grep -E "^[[:space:]]*$1=" "$_ff" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r' | cut -d'#' -f1)"
+  case "$_fv" in
+    0) printf 'false' ;;
+    1) printf 'true' ;;
+    *) printf '%s' "$2" ;;
+  esac
+}
+
+ASB_AUDIO="$(_asb_feat_from_zip AUDIO true)"
+ASB_BT="$(_asb_feat_from_zip BT true)"
+ASB_NFC="$(_asb_feat_from_zip NFC true)"
+ASB_CAMERA="$(_asb_feat_from_zip CAMERA true)"
+
+ASB_MEDIA="$(_asb_feat_from_zip MEDIA true)"
+ASB_CPU="$(_asb_feat_from_zip CPU true)"
+ASB_VM="$(_asb_feat_from_zip VM true)"
+ASB_NET="$(_asb_feat_from_zip NET true)"
+ASB_WIFI="$(_asb_feat_from_zip WIFI true)"
+ASB_GPS="$(_asb_feat_from_zip GPS true)"
+ASB_KERNEL="$(_asb_feat_from_zip KERNEL true)"
+ASB_LOG="$(_asb_feat_from_zip LOG true)"
+ASB_RADIO_IMS="$(_asb_feat_from_zip RADIO_IMS true)"
+ASB_DISPLAY="$(_asb_feat_from_zip DISPLAY true)"
+ASB_FPS="$(_asb_feat_from_zip FPS true)"
+ASB_SECURITY="$(_asb_feat_from_zip SECURITY true)"
+ASB_BG_TRIM="$(_asb_feat_from_zip BG_TRIM true)"
+# These two had no variable at all: features.conf hardcoded LPM=1 / VENDOR_OVERLAY=1 while
+# asb_save_user_config wrote LPM=0 / VENDOR_OVERLAY=0 - it evaluated a variable that did not
+# exist, so it recorded a phantom "the user declined" that no user ever chose, and the
+# end-of-install banner left both out of the enabled list while both were in fact running.
+ASB_LPM="$(_asb_feat_from_zip LPM true)"
+ASB_VENDOR_OVERLAY="$(_asb_feat_from_zip VENDOR_OVERLAY true)"
+
+
   case "$ASB_MODEL_L $ASB_DEVICE_L $ASB_FP_L" in
     *"oneplus 15"*|*"oneplus15"*|*"op15"*|*"cph274"*|*"cph275"*|*"op611fl1"*|*"plk110"*|*"pjz110"*|*"pkz110"*)
       ASB_IS_OP15=true ;;
@@ -708,62 +775,6 @@ asb_apply_device_overlay() {
         fi
       done
     fi
-# Feature flags are resolved HERE, before anything reads them.
-#
-# This block used to sit at line ~2724, while the first `[ "$ASB_CAMERA" = "true" ]`
-# test runs at ~711 - two thousand lines earlier. Every flag was therefore empty at
-# the point it was checked, so every gated section was skipped and the installed
-# module kept stock values. It affected all of them: 23 reads of ASB_AUDIO, 16 of
-# ASB_CAMERA, and a handful each of WIFI and MEDIA happened before their definition.
-#
-# The block depends on nothing but MODPATH and features.conf, both available from the
-# start, so moving it up is safe - and it is the only position where the flags mean
-# what they say.
-# Defaults, overridden below by whatever the shipped features.conf says.
-#
-# These were plain `true` and the generated features.conf is written from them, so the
-# file in the ZIP was overwritten on every install. A build that deliberately ships
-# BT=0 or VENDOR_OVERLAY=0 - which this one does, for eight features - had that choice
-# silently reversed, and the installed module ran with everything on.
-#
-# Reading the shipped file first makes it the source of truth it was meant to be: a
-# packager can disable a feature for a build, and the installer honours it.
-_asb_feat_from_zip() {
-  _ff="$MODPATH/features.conf"
-  [ -f "$_ff" ] || return 0
-  _fv="$(grep -E "^[[:space:]]*$1=" "$_ff" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r' | cut -d'#' -f1)"
-  case "$_fv" in
-    0) printf 'false' ;;
-    1) printf 'true' ;;
-    *) printf '%s' "$2" ;;
-  esac
-}
-
-ASB_AUDIO="$(_asb_feat_from_zip AUDIO true)"
-ASB_BT="$(_asb_feat_from_zip BT true)"
-ASB_NFC="$(_asb_feat_from_zip NFC true)"
-ASB_CAMERA="$(_asb_feat_from_zip CAMERA true)"
-
-ASB_MEDIA="$(_asb_feat_from_zip MEDIA true)"
-ASB_CPU="$(_asb_feat_from_zip CPU true)"
-ASB_VM="$(_asb_feat_from_zip VM true)"
-ASB_NET="$(_asb_feat_from_zip NET true)"
-ASB_WIFI="$(_asb_feat_from_zip WIFI true)"
-ASB_GPS="$(_asb_feat_from_zip GPS true)"
-ASB_KERNEL="$(_asb_feat_from_zip KERNEL true)"
-ASB_LOG="$(_asb_feat_from_zip LOG true)"
-ASB_RADIO_IMS="$(_asb_feat_from_zip RADIO_IMS true)"
-ASB_DISPLAY="$(_asb_feat_from_zip DISPLAY true)"
-ASB_FPS="$(_asb_feat_from_zip FPS true)"
-ASB_SECURITY="$(_asb_feat_from_zip SECURITY true)"
-ASB_BG_TRIM="$(_asb_feat_from_zip BG_TRIM true)"
-# These two had no variable at all: features.conf hardcoded LPM=1 / VENDOR_OVERLAY=1 while
-# asb_save_user_config wrote LPM=0 / VENDOR_OVERLAY=0 - it evaluated a variable that did not
-# exist, so it recorded a phantom "the user declined" that no user ever chose, and the
-# end-of-install banner left both out of the enabled list while both were in fact running.
-ASB_LPM="$(_asb_feat_from_zip LPM true)"
-ASB_VENDOR_OVERLAY="$(_asb_feat_from_zip VENDOR_OVERLAY true)"
-
     if [ "$ASB_CAMERA" = "true" ]; then
       for _cf_rel in vendor/odm/etc/camera/conf_tuning_params.json \
                      vendor/odm/etc/camera/config/video_beauty_default_config; do
@@ -3212,27 +3223,21 @@ asb_apply_blur_prop() {
 }
 asb_apply_blur_prop
 
-cat > "$MODPATH/features.conf" <<EOF
-AUDIO=$([ "$ASB_AUDIO" = "true" ] && echo 1 || echo 0)
-BT=$([ "$ASB_BT" = "true" ] && echo 1 || echo 0)
-NFC=$([ "$ASB_NFC" = "true" ] && echo 1 || echo 0)
-CAMERA=$([ "$ASB_CAMERA" = "true" ] && echo 1 || echo 0)
-MEDIA=$([ "$ASB_MEDIA" = "true" ] && echo 1 || echo 0)
-CPU=$([ "$ASB_CPU" = "true" ] && echo 1 || echo 0)
-VM=$([ "$ASB_VM" = "true" ] && echo 1 || echo 0)
-NET=$([ "$ASB_NET" = "true" ] && echo 1 || echo 0)
-WIFI=$([ "$ASB_WIFI" = "true" ] && echo 1 || echo 0)
-GPS=$([ "$ASB_GPS" = "true" ] && echo 1 || echo 0)
-KERNEL=$([ "$ASB_KERNEL" = "true" ] && echo 1 || echo 0)
-LOG=$([ "$ASB_LOG" = "true" ] && echo 1 || echo 0)
-LPM=$([ "$ASB_LPM" = "true" ] && echo 1 || echo 0)
-RADIO_IMS=$([ "$ASB_RADIO_IMS" = "true" ] && echo 1 || echo 0)
-DISPLAY=$([ "$ASB_DISPLAY" = "true" ] && echo 1 || echo 0)
-FPS=$([ "$ASB_FPS" = "true" ] && echo 1 || echo 0)
-SECURITY=$([ "$ASB_SECURITY" = "true" ] && echo 1 || echo 0)
-BG_TRIM=$([ "$ASB_BG_TRIM" = "true" ] && echo 1 || echo 0)
-VENDOR_OVERLAY=$([ "$ASB_VENDOR_OVERLAY" = "true" ] && echo 1 || echo 0)
-EOF
+# features.conf is shipped, not regenerated.
+#
+# This used to rewrite the file from the ASB_* variables at the end of every install. That
+# made the file a snapshot of one run rather than a shipped default: when the variables
+# were empty - which they were, for two thousand lines - it wrote zeros, the zeros landed
+# in the repository, and every later build shipped them. A user reinstalling then got the
+# same zeros back however many times they fixed things in the WebUI.
+#
+# The file in the ZIP is now the single source of truth. Capabilities install for every
+# device; which tweaks are actually on is decided in the WebUI and lives in governor.conf,
+# which the installer reads from the existing install first and never overwrites.
+#
+# Deleting features.conf entirely was the other option. Kept because a packager still needs
+# a way to ship one subsystem disabled - VENDOR_OVERLAY needs a fingerprint-validated
+# device pack - and _asb_feat_from_zip already falls back to enabled when a key is absent.
 
 {
   echo "ASB install summary"
