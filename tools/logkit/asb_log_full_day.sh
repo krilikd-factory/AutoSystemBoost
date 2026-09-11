@@ -295,7 +295,23 @@ lk_detect_phase() {
   else
     [ "$LK_GPU_HI_STREAK" -ge "$LK_GPU_ENTER" ] && LK_IN_GAMING=1
   fi
-  if [ "$LK_IN_GAMING" = "1" ]; then LK_PHASE_OUT="gaming"; return 0; fi
+  # A GPU streak alone is not a game.
+  #
+  # This labelled any sustained GPU load as "gaming": video, maps, a scrolling feed with
+  # heavy animation all reach the threshold. A capture was labelled with a 4-minute
+  # gaming phase on a session where the user played nothing, and that phase then
+  # carried its own temperature and drain figures into the report as if it were one.
+  #
+  # The governor already classifies the foreground package and publishes app_hint;
+  # 4 is ASB_APP_GAMING. Requiring it means the label follows what is actually running
+  # rather than how busy the GPU happens to be. Where the hint is unavailable the
+  # phase falls through to active, which is the honest answer for an unknown workload.
+  if [ "$LK_IN_GAMING" = "1" ]; then
+    _lk_hint="$(grep -m1 '^app_hint=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
+    if [ "${_lk_hint:-0}" -ge 4 ] 2>/dev/null; then
+      LK_PHASE_OUT="gaming"; return 0
+    fi
+  fi
   if [ "$LK_AUDIO_PLAY" = "1" ]; then LK_PHASE_OUT="$(lk_audio_phase_name scr)"; return 0; fi
   # within 5 min of waking → post_wake (ASB ramp window of interest)
   if [ "$LK_WOKE_AT" != "0" ] && [ $(( _now - LK_WOKE_AT )) -le 300 ]; then
