@@ -1962,6 +1962,34 @@ asb_apply_device_native_tuning() {
   # Each stage prints ONE section with an emoji header and a few "+" detail lines, the same
   # shape as the action screen.
 
+# Defined here, immediately above its only caller.
+#
+# Moving the Bluetooth SECTION under Audio left the FUNCTION at line ~3100, so the
+# call at 1979 hit "asb_apply_bt_absvol: not found" and the absolute-volume setting
+# was silently not applied. A shell function exists only after its definition runs;
+# moving a call without its definition is the same mistake as _cam_get.
+asb_apply_bt_absvol() {
+  _prop="$MODPATH/system.prop"
+  [ -f "$_prop" ] || return 0
+  _mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
+  case "$_mode" in
+    on)            _mode="disabled" ;;
+    disabled)      _mode="disabled" ;;
+    auto|off|''|*) _mode="stock" ;;
+  esac
+  if [ "$_mode" = "disabled" ]; then _val="true"; else _val="false"; fi
+  sed -i "s/^persist.bluetooth.disableabsvol=.*/persist.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
+  sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
+  if [ "$_mode" = "stock" ]; then
+    sed -i '/^persist\.bluetooth\.enablenewavrcp=/d' "$_prop" 2>/dev/null
+    ASB_BT_ABSVOL_APPLIED="mode=stock (absolute volume ON — loud, synced)"
+    return 0
+  fi
+  ASB_BT_ABSVOL_APPLIED="mode=disabled (absolute volume OFF — phone-side gain)"
+  ui_print "      + ${ASB_D_BT:-BT absolute volume: disabled (phone drives gain)}"
+  ui_print "        ${ASB_D_BT_NOTE:-(headset drives its own level; use 'stock' if BT starts quiet)}"
+}
+
   # Bluetooth sits under Audio: it is an output route, not a separate subsystem, and a
   # reader scanning the install output looks for it there. It printed near the end
   # before, after CONFIG, which is why its one line landed under the CAMERA heading.
@@ -3101,27 +3129,6 @@ asb_localize_region() {
 }
 asb_localize_region
 
-asb_apply_bt_absvol() {
-  _prop="$MODPATH/system.prop"
-  [ -f "$_prop" ] || return 0
-  _mode="$(grep -E '^[[:space:]]*bt_absvol_mode=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
-  case "$_mode" in
-    on)            _mode="disabled" ;;
-    disabled)      _mode="disabled" ;;
-    auto|off|''|*) _mode="stock" ;;
-  esac
-  if [ "$_mode" = "disabled" ]; then _val="true"; else _val="false"; fi
-  sed -i "s/^persist.bluetooth.disableabsvol=.*/persist.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
-  sed -i "s/^persist.vendor.bluetooth.disableabsvol=.*/persist.vendor.bluetooth.disableabsvol=$_val/" "$_prop" 2>/dev/null
-  if [ "$_mode" = "stock" ]; then
-    sed -i '/^persist\.bluetooth\.enablenewavrcp=/d' "$_prop" 2>/dev/null
-    ASB_BT_ABSVOL_APPLIED="mode=stock (absolute volume ON — loud, synced)"
-    return 0
-  fi
-  ASB_BT_ABSVOL_APPLIED="mode=disabled (absolute volume OFF — phone-side gain)"
-  ui_print "      + ${ASB_D_BT:-BT absolute volume: disabled (phone drives gain)}"
-  ui_print "        ${ASB_D_BT_NOTE:-(headset drives its own level; use 'stock' if BT starts quiet)}"
-}
 
 # Build the blur block into system.prop at INSTALL time, not in post-fs-data.
 #
