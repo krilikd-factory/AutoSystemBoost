@@ -1937,9 +1937,6 @@ asb_apply_device_native_tuning() {
   ui_print " "
 
   asb_strip_shipped_static_vendor
-
-  # Each stage prints ONE section with an emoji header and a few "+" detail lines, the same
-  # shape as the action screen.
   ui_print "  🎵  ${ASB_SEC_AUDIO:-AUDIO}"
   asb_clone_device_audio_wifi   "$_label"
   asb_patch_audio_inplace       "$_label"
@@ -1961,6 +1958,26 @@ asb_apply_device_native_tuning() {
   ui_print " "
 
   ui_print " "
+
+  # Each stage prints ONE section with an emoji header and a few "+" detail lines, the same
+  # shape as the action screen.
+
+  # Bluetooth sits under Audio: it is an output route, not a separate subsystem, and a
+  # reader scanning the install output looks for it there. It printed near the end
+  # before, after CONFIG, which is why its one line landed under the CAMERA heading.
+# Bluetooth output gets its own heading.
+#
+# This prints "+ BT absolute volume: ..." with no section of its own, so it appeared under
+# whichever heading happened to be last - CAMERA, which is where the user found it and
+# reasonably asked what Bluetooth was doing in the camera section.
+#
+# BT=0 shipped for a long time, so the line was rarely reached and the misplacement went
+# unnoticed until the feature flags started working.
+if [ "$ASB_BT" = "true" ]; then
+  ui_print " "
+  ui_print "  🎧  ${ASB_SEC_BT:-BLUETOOTH}"
+  asb_apply_bt_absvol
+fi
   ui_print "  🎬  ${ASB_SEC_MEDIA:-MEDIA}"
   asb_patch_media_profiles_inplace
 
@@ -2620,7 +2637,7 @@ asb_preserve_user_config() {
   # list, so nothing caught it. There is a check for that below now.
   _user_keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
-bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
+bt_absvol_mode mglru_hold BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
@@ -3105,19 +3122,6 @@ asb_apply_bt_absvol() {
   ui_print "      + ${ASB_D_BT:-BT absolute volume: disabled (phone drives gain)}"
   ui_print "        ${ASB_D_BT_NOTE:-(headset drives its own level; use 'stock' if BT starts quiet)}"
 }
-# Bluetooth output gets its own heading.
-#
-# This prints "+ BT absolute volume: ..." with no section of its own, so it appeared under
-# whichever heading happened to be last - CAMERA, which is where the user found it and
-# reasonably asked what Bluetooth was doing in the camera section.
-#
-# BT=0 shipped for a long time, so the line was rarely reached and the misplacement went
-# unnoticed until the feature flags started working.
-if [ "$ASB_BT" = "true" ]; then
-  ui_print " "
-  ui_print "  🎧  ${ASB_SEC_BT:-BLUETOOTH}"
-  asb_apply_bt_absvol
-fi
 
 # Build the blur block into system.prop at INSTALL time, not in post-fs-data.
 #
