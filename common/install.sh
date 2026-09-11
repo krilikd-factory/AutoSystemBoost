@@ -1134,41 +1134,6 @@ asb_clone_device_camera_tone() {
           done
           echo ""
         }
-        _asb_cam_grain="$(_cam_get CAMERA_GRAIN)";    [ -n "$_asb_cam_grain" ] || _asb_cam_grain=3
-        _asb_cam_contrast="$(_cam_get CAMERA_CONTRAST)"; [ -n "$_asb_cam_contrast" ] || _asb_cam_contrast=3
-        _asb_cam_portrait="$(_cam_get CAMERA_PORTRAIT)"; [ -n "$_asb_cam_portrait" ] || _asb_cam_portrait=0
-        _asb_cam_lowlight="$(_cam_get CAMERA_LOWLIGHT)"; [ -n "$_asb_cam_lowlight" ] || _asb_cam_lowlight=0
-        if [ "${_ASB_CAMERA_LEVEL:-0}" -gt 0 ] 2>/dev/null \
-           || [ "$_asb_cam_grain" != 3 ] || [ "$_asb_cam_contrast" != 3 ] \
-           || [ "$_asb_cam_portrait" != 0 ] || [ "$_asb_cam_lowlight" != 0 ]; then
-          _ct_done=0
-          for _ct_dst in $ASB_CT_ALL; do
-            [ -f "$MODPATH/$_ct_dst" ] || continue
-            # Sweep markers whose destination no longer exists. Before the names were
-            # normalised these piled up one per install; an old device carries a directory
-            # of them, and they are not worth keeping - a marker for a path that is gone
-            # guards nothing.
-            for _gm in /data/adb/asb/grade_marks/*.mark; do
-              [ -f "$_gm" ] || continue
-              case "$_gm" in *.asbdes*|*.graded.mark|*modules_update*) rm -f "$_gm" 2>/dev/null ;; esac
-            done
-            MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
-              ASB_CAM_GRAIN_IN="$_asb_cam_grain" \
-              ASB_CAM_CONTRAST_IN="$_asb_cam_contrast" \
-              ASB_CAM_PORTRAIT_IN="$_asb_cam_portrait" \
-              ASB_CAM_LOWLIGHT_IN="$_asb_cam_lowlight" \
-              sh "$MODPATH/runtime/asb_camera_grade.sh" \
-                 "$MODPATH/$_ct_dst" "$MODPATH/$_ct_dst.graded" >/dev/null 2>&1
-            if [ -s "$MODPATH/$_ct_dst.graded" ]; then
-              mv -f "$MODPATH/$_ct_dst.graded" "$MODPATH/$_ct_dst" 2>/dev/null
-              chmod 0644 "$MODPATH/$_ct_dst" 2>/dev/null
-              _ct_done=$((_ct_done + 1))
-            else
-              rm -f "$MODPATH/$_ct_dst.graded" 2>/dev/null
-            fi
-          done
-          [ "$_ct_done" -gt 0 ] && ui_print "      + Camera tuning: level ${_ASB_CAMERA_LEVEL:-0} / independent controls applied to ${_ct_done} file(s)"
-        fi
       fi
       case "$_ct_base" in
         conf_tuning_params.json)
@@ -1919,6 +1884,47 @@ asb_apply_device_native_tuning() {
   ui_print " "
   ui_print "  📷  ${ASB_SEC_CAMERA:-CAMERA}"
   asb_clone_device_camera_tone
+  # Grade the tone tables here, after asb_clone_device_camera_tone has run.
+  #
+  # This block used to sit 776 lines earlier, reading ASB_CT_ALL before the function
+  # that fills it had been called. The list was empty, the loop body never ran, and the
+  # installer finished without a word - which is why the diag reported "recorded grade:
+  # none" on a device where the paths and the live file were both correct.
+        _asb_cam_grain="$(_cam_get CAMERA_GRAIN)";    [ -n "$_asb_cam_grain" ] || _asb_cam_grain=3
+        _asb_cam_contrast="$(_cam_get CAMERA_CONTRAST)"; [ -n "$_asb_cam_contrast" ] || _asb_cam_contrast=3
+        _asb_cam_portrait="$(_cam_get CAMERA_PORTRAIT)"; [ -n "$_asb_cam_portrait" ] || _asb_cam_portrait=0
+        _asb_cam_lowlight="$(_cam_get CAMERA_LOWLIGHT)"; [ -n "$_asb_cam_lowlight" ] || _asb_cam_lowlight=0
+        if [ "${_ASB_CAMERA_LEVEL:-0}" -gt 0 ] 2>/dev/null \
+           || [ "$_asb_cam_grain" != 3 ] || [ "$_asb_cam_contrast" != 3 ] \
+           || [ "$_asb_cam_portrait" != 0 ] || [ "$_asb_cam_lowlight" != 0 ]; then
+          _ct_done=0
+          for _ct_dst in $ASB_CT_ALL; do
+            [ -f "$MODPATH/$_ct_dst" ] || continue
+            # Sweep markers whose destination no longer exists. Before the names were
+            # normalised these piled up one per install; an old device carries a directory
+            # of them, and they are not worth keeping - a marker for a path that is gone
+            # guards nothing.
+            for _gm in /data/adb/asb/grade_marks/*.mark; do
+              [ -f "$_gm" ] || continue
+              case "$_gm" in *.asbdes*|*.graded.mark|*modules_update*) rm -f "$_gm" 2>/dev/null ;; esac
+            done
+            MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
+              ASB_CAM_GRAIN_IN="$_asb_cam_grain" \
+              ASB_CAM_CONTRAST_IN="$_asb_cam_contrast" \
+              ASB_CAM_PORTRAIT_IN="$_asb_cam_portrait" \
+              ASB_CAM_LOWLIGHT_IN="$_asb_cam_lowlight" \
+              sh "$MODPATH/runtime/asb_camera_grade.sh" \
+                 "$MODPATH/$_ct_dst" "$MODPATH/$_ct_dst.graded" >/dev/null 2>&1
+            if [ -s "$MODPATH/$_ct_dst.graded" ]; then
+              mv -f "$MODPATH/$_ct_dst.graded" "$MODPATH/$_ct_dst" 2>/dev/null
+              chmod 0644 "$MODPATH/$_ct_dst" 2>/dev/null
+              _ct_done=$((_ct_done + 1))
+            else
+              rm -f "$MODPATH/$_ct_dst.graded" 2>/dev/null
+            fi
+          done
+          [ "$_ct_done" -gt 0 ] && ui_print "      + Camera tuning: level ${_ASB_CAMERA_LEVEL:-0} / independent controls applied to ${_ct_done} file(s)"
+        fi
 
   ui_print " "
   ui_print "  🎬  ${ASB_SEC_MEDIA:-MEDIA}"
