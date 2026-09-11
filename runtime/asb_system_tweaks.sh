@@ -27,6 +27,35 @@ _put() {
 
 _changed=""
 
+# --- MGLRU working-set protection ------------------------------------------
+#
+# min_ttl_ms is how long a page generation is protected from reclaim. At 0 - the value on
+# every device checked so far - there is no protection at all, so the foreground app can be
+# evicted under memory pressure and has to be rebuilt when the user returns to it.
+#
+# This is the ONE actionable lever of the two a third-party module ships in this area:
+#   lru_gen_config asks the kernel for a bit it does not honour here (the property says
+#   core_and_nonleaf_young, the kernel reports 0x3 - the non-leaf bit stays off), and
+#   enable_uffd_gc=false disables the Android 14+ collector, which is a downgrade.
+#
+# Guarded on the node existing. A kernel without MGLRU is left alone rather than told the
+# tweak is unavailable, and "stock" restores 0 rather than walking away - the same rule the
+# rest of this file follows.
+_mg_node="/sys/kernel/mm/lru_gen/min_ttl_ms"
+if [ -w "$_mg_node" ]; then
+  case "$(_cfg mglru_hold)" in
+    hold)
+      echo 1000 > "$_mg_node" 2>/dev/null && _changed="${_changed}mglru_hold=1000ms "
+      ;;
+    aggressive)
+      echo 2000 > "$_mg_node" 2>/dev/null && _changed="${_changed}mglru_hold=2000ms "
+      ;;
+    *)
+      echo 0 > "$_mg_node" 2>/dev/null && _changed="${_changed}mglru_hold=stock "
+      ;;
+  esac
+fi
+
 # --- phantom process monitor ---------------------------------------------------------
 case "$(_cfg phantom_procs)" in
   relaxed)
