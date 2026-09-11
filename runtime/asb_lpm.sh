@@ -168,9 +168,27 @@ _lpm_wakeup_gate() {
   # own wakeup attribute - the same one already used for the interfaces, applied one level
   # down. Recorded and restored by the same loop, so a device that does not expose it, or
   # ignores the write, is left exactly as it was.
-  for _ipa in /sys/devices/platform/soc/*ipa*/power/wakeup \
-              /sys/bus/platform/devices/*ipa*/power/wakeup; do
-    [ -e "$_ipa" ] || continue
+  # Find the wakeup node by the name the kernel reports, not by a guessed path.
+  #
+  # The previous version hard-coded /sys/devices/platform/soc/*ipa*/power/wakeup and
+  # /sys/bus/platform/devices/*ipa*/power/wakeup. Neither exists on a CPH2745 - the user
+  # checked, both globs came back empty - so the gate silently did nothing while the
+  # night capture still showed 73 IPA wakeups. A path I invented is not evidence.
+  #
+  # /sys/class/wakeup is the canonical index: every wakeup source registers there with a
+  # name file, whatever its device path. Matching on the name the wake_reason log itself
+  # prints means the lookup follows the kernel rather than my model of it.
+  for _wsdir in /sys/class/wakeup/wakeup*; do
+    [ -d "$_wsdir" ] || continue
+    _wsname="$(cat "$_wsdir/name" 2>/dev/null)"
+    case "$_wsname" in
+      *IPA_CLIENT*|*ipa*|*rmnet_ctl*) : ;;
+      *) continue ;;
+    esac
+    # The wakeup class entry is a symlink into the device; its power/wakeup is what the
+    # runtime-PM interface actually honours.
+    _ipa="$(readlink -f "$_wsdir/device/power/wakeup" 2>/dev/null)"
+    [ -n "$_ipa" ] && [ -e "$_ipa" ] || continue
     _cur="$(cat "$_ipa" 2>/dev/null)"
     case "$_cur" in enabled|disabled) : ;; *) continue ;; esac
     if [ "$1" = "disabled" ]; then
