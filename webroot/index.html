@@ -4404,7 +4404,7 @@ const CFG_ITEMS = [
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
   { key:'mglru_hold', type:'seg', def:'stock', stock:'stock',
     opts:['stock','hold','aggressive'], name:'Keep Apps In Memory',
-    cat:'memory' },
+    cat:'battery' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces what Google Play services does in the background. This does NOT freeze or disable GMS - push notifications, sign-in, payments and the Play Store keep working, because a module that broke those would be lying about what it is for.\n\nlite stops location reporting and the search widget\u2019s background work; neither is involved in delivering a notification. strict additionally removes GMS from the Doze whitelist, which is where the real saving is on a phone where Google services are the main drain - and which can delay notifications by minutes while the phone is asleep. If messages arriving late would bother you, stay on lite.\n\nFully reversible: the permissions changed are recorded and restored when ASB is removed.' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
@@ -4453,7 +4453,10 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
-  mglru_hold: 'memory',
+  /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
+     so the card existed and was never drawn. BG_TRIM and gms_trim - the other RAM tweaks -
+     live under battery for the same reason. */
+  mglru_hold: 'battery',
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
   night_modem_idle:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
@@ -4502,7 +4505,10 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
-  mglru_hold: 'memory',
+  /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
+     so the card existed in CFG_ITEMS and was never drawn. BG_TRIM_LEVEL and gms_trim -
+     the other RAM tweaks - sit under battery for exactly this reason. */
+  mglru_hold:'battery',
   night_modem_idle:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui',
