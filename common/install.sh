@@ -1009,6 +1009,26 @@ asb_cam_chroma_ok() {
     | grep -o -- '-0\.1687[0-9]*'
 }
 
+# Read one camera setting from the live config.
+#
+# This was defined inside "if [ "$_ct_base" = conf_tuning_params.json ]" within a loop,
+# so it existed only while that branch was executing. The grading block calls it ~1600
+# lines later, at top level, where the shell reports "_cam_get: not found" and every
+# slider reads empty - which is why the tone tables were never graded even after the
+# ordering and path fixes.
+#
+# A helper used from two places belongs at the level both can see.
+_cam_get() {
+  for _cg in /data/adb/modules/AutoSystemBoost/config/governor.conf \
+             "$MODPATH/config/governor.conf"; do
+    [ -f "$_cg" ] || continue
+    _cv="$(grep -E "^[[:space:]]*$1=" "$_cg" 2>/dev/null | head -1 \
+           | sed 's/.*=//' | tr -d ' \r')"
+    case "$_cv" in ''|*[!0-9]*) : ;; *) echo "$_cv"; return 0 ;; esac
+  done
+  echo ""
+}
+
 asb_clone_device_camera_tone() {
   [ "$ASB_CAMERA" = "true" ] || return 0
   # Needed here for asb_tw_base_path / asb_tw_save_base: this function is the first
@@ -1124,16 +1144,6 @@ asb_clone_device_camera_tone() {
         # Independent sliders used to be inside the CAMERA_LEVEL > 0 gate, so a user could
         # save max Contrast/Grain/Portrait/Low-light values and still receive a stock file.
         # Resolve each once and build a grade whenever any one differs from its stock value.
-        _cam_get() {
-          for _cg in /data/adb/modules/AutoSystemBoost/config/governor.conf \
-                     "$MODPATH/config/governor.conf"; do
-            [ -f "$_cg" ] || continue
-            _cv="$(grep -E "^[[:space:]]*$1=" "$_cg" 2>/dev/null | head -1 \
-                   | sed 's/.*=//' | tr -d ' \r')"
-            case "$_cv" in ''|*[!0-9]*) : ;; *) echo "$_cv"; return 0 ;; esac
-          done
-          echo ""
-        }
       fi
       case "$_ct_base" in
         conf_tuning_params.json)
