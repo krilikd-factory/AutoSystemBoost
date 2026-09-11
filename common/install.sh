@@ -1038,6 +1038,14 @@ asb_clone_device_camera_tone() {
       else
         _ct_dsts="odm/etc/camera/$_ct_base system/vendor/odm/etc/camera/$_ct_base"
       fi
+      # Accumulate destinations across both files and all live paths.
+      #
+      # _ct_dsts is rebuilt on every iteration of the outer loop over _ct_base and the
+      # inner loop over live paths. The grader below runs AFTER both have closed, so it
+      # only ever saw the last assignment - the tone table was copied and then never
+      # graded, which is exactly what the field diag reports: "recorded grade: none"
+      # on a device where the file is present and the paths are right.
+      ASB_CT_ALL="${ASB_CT_ALL:-} $_ct_dsts"
       for _ct_dst in $_ct_dsts; do
         if [ ! -f "$MODPATH/$_ct_dst" ]; then
           mkdir -p "$MODPATH/$(dirname "$_ct_dst")" 2>/dev/null
@@ -1134,7 +1142,7 @@ asb_clone_device_camera_tone() {
            || [ "$_asb_cam_grain" != 3 ] || [ "$_asb_cam_contrast" != 3 ] \
            || [ "$_asb_cam_portrait" != 0 ] || [ "$_asb_cam_lowlight" != 0 ]; then
           _ct_done=0
-          for _ct_dst in $_ct_dsts; do
+          for _ct_dst in $ASB_CT_ALL; do
             [ -f "$MODPATH/$_ct_dst" ] || continue
             # Sweep markers whose destination no longer exists. Before the names were
             # normalised these piled up one per install; an old device carries a directory
