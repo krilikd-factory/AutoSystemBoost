@@ -242,6 +242,28 @@ P "  root_manager         : $_rm"
 [ "$_rm" = "apatch" ] && NOTE "APatch path: OP12 camera handling is scoped specifically for APatch (real /odm mount)."
 
 # =====================================================================
+SEC "0a4. MEMORY / GC  (MGLRU and the ART collector)"
+# Report before proposing. A third-party module ships two settings in this area and the
+# question is whether ASB should follow - which cannot be answered without knowing what
+# the device already does.
+#
+# MGLRU is a kernel feature; on 6.1+ the vendor usually enables it, and forcing it from
+# userspace when it is already on changes nothing while looking like it did something.
+if [ -r /sys/kernel/mm/lru_gen/enabled ]; then
+  NOTE "MGLRU: $(cat /sys/kernel/mm/lru_gen/enabled 2>/dev/null) (0x7 = fully on)"
+  NOTE "  min_ttl_ms: $(cat /sys/kernel/mm/lru_gen/min_ttl_ms 2>/dev/null)"
+else
+  NOTE "MGLRU: not exposed by this kernel"
+fi
+NOTE "lru_gen_config prop: $(getprop persist.device_config.mglru_native.lru_gen_config 2>/dev/null)"
+#
+# UFFD GC is the ART collector introduced in Android 14. On a build compiled for it,
+# turning it off does not revert to a tuned alternative - it falls back to the older
+# concurrent-copying collector, which pauses more. Worth knowing before copying a tweak
+# that sets it to false.
+NOTE "ART uffd_gc: $(getprop ro.dalvik.vm.enable_uffd_gc 2>/dev/null) (empty = build default)"
+NOTE "  (Android 14+ builds default to UFFD; disabling it is a downgrade, not a tune)"
+
 SEC "0a3. WAKEUP SOURCES  (which ones ASB can actually gate)"
 # List what exists, so a gate is never written against a guessed path again.
 #
@@ -265,6 +287,28 @@ if [ -d /sys/class/wakeup ]; then
   done
 else
   NOTE "/sys/class/wakeup absent - this kernel does not expose the index"
+fi
+# Say plainly when nothing here can be gated.
+#
+# A PLQ110 capture shows 254 IPA/rmnet wakeups an hour and 28 wake sources, none of which
+# exposes a power/wakeup node. The night modem gate therefore cannot help on that device -
+# and without this line the user reads 28 "cannot be gated" entries and is left to draw
+# that conclusion themselves, or worse, to keep enabling a tweak that has no effect.
+if [ -d /sys/class/wakeup ]; then
+  _wg=0; _wn=0
+  for _wd in /sys/class/wakeup/wakeup*; do
+    [ -d "$_wd" ] || continue
+    _wnm="$(cat "$_wd/name" 2>/dev/null)"
+    case "$_wnm" in *IPA*|*ipa*|*rmnet*|*wlan*|*qrtr*) : ;; *) continue ;; esac
+    _wn=$(( _wn + 1 ))
+    _wp="$(readlink -f "$_wd/device/power/wakeup" 2>/dev/null)"
+    [ -n "$_wp" ] && [ -e "$_wp" ] && _wg=$(( _wg + 1 ))
+  done
+  if [ "$_wn" -gt 0 ] && [ "$_wg" -eq 0 ]; then
+    NOTE "none of the $_wn radio wake sources can be gated from userspace on this kernel"
+    NOTE "  night_modem_idle will not reduce them here - the wakeups are held by the"
+    NOTE "  modem subsystem itself, with no runtime-PM handle exposed"
+  fi
 fi
 
 SEC "0a2. WEBUI SCALE  (measured, not assumed)"
