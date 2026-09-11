@@ -977,8 +977,39 @@ if [ -f "$_cfg" ] && [ -f "$_gconf" ]; then
   fi
 
   # Verify Smart Mode struct field count matches parser count
-  _struct_fields=$(grep "smart_" "$_cfg" | grep -c "int\s*smart_" || echo 0)
-  _parser_brs=$(grep -c "\"smart_" "$_cfg" || echo 0)
+  # Compare the SETS, not the line counts.
+  #
+  # Counting lines reported "15 struct fields != 16 parser branches" on a file where the
+  # two sets match exactly: smart_media_guard legitimately appears twice - once in the
+  # known-keys validation list and once in the parser itself. So the check failed on a
+  # correct file, and would equally have passed with two opposite errors cancelling out.
+  # Neither behaviour is what a contract check is for.
+  #
+  # A set comparison answers the real question: does every field have a key, and every key
+  # a field. It also names the offender instead of printing two numbers.
+  _sm_fields=$(grep -oE "int[[:space:]]+smart_[a-z0-9_]+[[:space:]]*;" "$_cfg" \
+               | sed 's/^int[[:space:]]*//; s/[[:space:]]*;$//' | sort -u)
+  # Anchored, because .*int is greedy: "int smart_pkg_plaintext;" contains a second "int"
+  # inside the field name, so the unanchored form matched up to THAT one and produced
+  # "ext". The check then reported a mismatch it had manufactured itself - twice, for the
+  # only two fields whose names happen to contain the substring.
+  _sm_keys=$(grep -oE '"smart_[a-z0-9_]+"' "$_cfg" | tr -d '"' | sort -u)
+  # Temp files, not process substitution: this script runs under dash in CI, where <(...)
+  # is not supported and silently produced garbage - the mismatch it reported was its own.
+  _sm_tf="${TMPDIR:-/tmp}/asb_sm_f.$$"; _sm_tk="${TMPDIR:-/tmp}/asb_sm_k.$$"
+  printf '%s\n' "$_sm_fields" > "$_sm_tf"
+  printf '%s\n' "$_sm_keys"   > "$_sm_tk"
+  _sm_only_key="$(comm -13 "$_sm_tf" "$_sm_tk")"
+  _sm_only_fld="$(comm -23 "$_sm_tf" "$_sm_tk")"
+  rm -f "$_sm_tf" "$_sm_tk"
+  if [ -n "$_sm_only_key" ] || [ -n "$_sm_only_fld" ]; then
+    [ -n "$_sm_only_key" ] && warn "Smart Mode: parser key with no struct field: $(printf '%s' "$_sm_only_key" | tr '\n' ' ')"
+    [ -n "$_sm_only_fld" ] && warn "Smart Mode: struct field with no parser key: $(printf '%s' "$_sm_only_fld" | tr '\n' ' ')"
+  else
+    ok "Smart Mode: $(printf '%s\n' "$_sm_fields" | grep -c .) fields and keys match exactly"
+  fi
+  _struct_fields=0
+  _parser_brs=0
   if [ "$_struct_fields" -gt 0 ] && [ "$_parser_brs" -gt 0 ]; then
     if [ "$_struct_fields" = "$_parser_brs" ]; then
       ok "Smart Mode: $_struct_fields struct fields == $_parser_brs parser branches"

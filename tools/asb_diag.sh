@@ -242,6 +242,31 @@ P "  root_manager         : $_rm"
 [ "$_rm" = "apatch" ] && NOTE "APatch path: OP12 camera handling is scoped specifically for APatch (real /odm mount)."
 
 # =====================================================================
+SEC "0a3. WAKEUP SOURCES  (which ones ASB can actually gate)"
+# List what exists, so a gate is never written against a guessed path again.
+#
+# The night gate targeted /sys/devices/platform/soc/*ipa*/power/wakeup for two releases.
+# That path does not exist on a CPH2745 - the glob matched nothing, the gate did nothing,
+# and the capture still showed 73 IPA wakeups with no error anywhere to explain it.
+#
+# /sys/class/wakeup is the kernel's own index. Printing the names and their current state
+# means the next question about a wakeup source is answered from the device.
+if [ -d /sys/class/wakeup ]; then
+  for _wd in /sys/class/wakeup/wakeup*; do
+    [ -d "$_wd" ] || continue
+    _wn="$(cat "$_wd/name" 2>/dev/null)"
+    case "$_wn" in *IPA*|*ipa*|*rmnet*|*wlan*|*qrtr*) : ;; *) continue ;; esac
+    _wp="$(readlink -f "$_wd/device/power/wakeup" 2>/dev/null)"
+    if [ -n "$_wp" ] && [ -e "$_wp" ]; then
+      NOTE "$_wn = $(cat "$_wp" 2>/dev/null) (gateable)"
+    else
+      NOTE "$_wn = no power/wakeup node (cannot be gated from userspace)"
+    fi
+  done
+else
+  NOTE "/sys/class/wakeup absent - this kernel does not expose the index"
+fi
+
 SEC "0a2. WEBUI SCALE  (measured, not assumed)"
 # Density is not the number that matters - the CSS viewport width is.
 #
