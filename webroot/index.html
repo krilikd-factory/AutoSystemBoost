@@ -2316,7 +2316,16 @@ body.config-active #livePage.open {
    the WebView viewport. Some OxygenOS builds report a zero bottom safe-area although the
    compositor still clips the last pixels at curved corners. A symmetric 14px rail avoids
    that false zero without changing the sheet's own one-pixel border thickness. */
-.cfg-profile-modal { position: fixed; z-index: 1400; inset: 0; display: flex; align-items: flex-end; box-sizing: border-box; /* Bottom gap must clear the gesture bar AND leave the corners visible.
+.cfg-profile-modal { position: fixed; z-index: 1400; inset: 0; display: flex;
+  /* Centred, not bottom-anchored.
+   *
+   * A bottom sheet has to fight the gesture bar for its last few pixels - that is what put
+   * its rounded corners off screen and made them look cut. Centring removes the conflict
+   * entirely: the safe-area padding still applies, but nothing is pressed against it.
+   *
+   * It also matches the reset dialog, which was already centred, so the two no longer
+   * behave differently for no visible reason. */
+  align-items: center; justify-content: center; box-sizing: border-box; /* Bottom gap must clear the gesture bar AND leave the corners visible.
      *
      * max(14px, inset) returns the inset alone on a phone with a gesture bar - about 14px
      * there too - so the sheet sat right on the system pill with its rounded corners in
@@ -2330,7 +2339,10 @@ body.config-active #livePage.open {
 /* The sheet sits flush with the viewport, so its outline is a screen contour rather than
  * a separate rectangular card. Use one opaque physical 1px stroke: semi-transparent teal
  * antialiases differently against the dark page at the lower curves on some Android WebViews. */
-.cfg-profile-sheet { width:100%; min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow:auto; box-sizing:border-box; padding:18px 16px 22px; border:1px solid transparent; border-radius:26px;
+.cfg-profile-sheet { width:100%; max-width:520px;
+  /* Bounded now that the sheet is centred: full width against the screen edges reads as a
+     panel that failed to fit, and the rounded corners had nothing to sit against. */
+  min-height: min(36vh, 500px); max-height: min(88vh, 780px); overflow:auto; box-sizing:border-box; padding:18px 16px 22px; border:1px solid transparent; border-radius:26px;
   /* Gradient border via two backgrounds: the inner one paints the sheet, the outer one
      shows through the border box. A plain 1px #35bb99 looked flat where the sheet meets
      the bottom corners - the curve there is long, and a single colour gives the eye
@@ -3399,6 +3411,12 @@ const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass'];
  * their color, silhouette and perceived size stable across Android emoji fonts, while
  * remaining crisp under display-density and font-scale changes. */
 const TECH_ICON_PATHS = {
+  /* memhold: a memory die with a retaining bracket - distinct from `cleaner`, which is a
+     brush and means the opposite action. The tweak holds pages in RAM; the icon should not
+     look like something that sweeps them out. */
+  memhold: '<rect x="6" y="6" width="12" height="12" rx="2"></rect>'
+         + '<path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"></path>'
+         + '<path d="M9.5 12.5l1.8 1.8 3.4-3.6"></path>',
   /* Completed ASB vector system: centred silhouettes, 4–20px optical frame and one coherent rounded-line language. */
   smart: '<path d="M4 17a8 8 0 0 1 16 0"/><path d="M12 17 9 12.6M12 17l3-4.4" stroke-dasharray="2 1.6"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/><path d="M12 4.2v2M10.3 5.1l1 1.7M13.7 5.1l-1 1.7"/>',
   performance: '<path d="M4 17a8 8 0 0 1 16 0"/><path d="m12 17 4.4-4.8"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/><path d="m12.6 4.2-2.4 3.3h2.4l-.6 3 2.6-3.6h-2.4z"/>',
@@ -4212,6 +4230,7 @@ const SNAP_KEYS = [
   'bt_absvol_mode',
   'bt_link_stability',
   'BG_TRIM_LEVEL',
+  'mglru_hold',
   'cool_gaming',
   'auto_battery_enable',
   'charge_aware_enable',
@@ -4383,6 +4402,9 @@ const CFG_ITEMS = [
     desc:'On the Battery profile, treat a game as ordinary heavy load rather than entering the gaming state. Gaming mode raises frequency ceilings, which is the opposite of what the Battery profile is for - so this keeps that profile honest. Off lets games get the full gaming treatment even on Battery. Affects the Battery profile only; the other three are untouched.' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['off','safe','aggressive'], name:'Background Trim Level',
     desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
+  { key:'mglru_hold', type:'seg', def:'stock', stock:'stock',
+    opts:['stock','hold','aggressive'], name:'Keep Apps In Memory',
+    cat:'memory' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces what Google Play services does in the background. This does NOT freeze or disable GMS - push notifications, sign-in, payments and the Play Store keep working, because a module that broke those would be lying about what it is for.\n\nlite stops location reporting and the search widget\u2019s background work; neither is involved in delivering a notification. strict additionally removes GMS from the Doze whitelist, which is where the real saving is on a phone where Google services are the main drain - and which can delay notifications by minutes while the phone is asleep. If messages arriving late would bother you, stay on lite.\n\nFully reversible: the permissions changed are recorded and restored when ASB is removed.' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
@@ -4431,6 +4453,7 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
+  mglru_hold: 'memory',
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
   night_modem_idle:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
@@ -4479,6 +4502,7 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
+  mglru_hold: 'memory',
   night_modem_idle:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui',
@@ -4681,6 +4705,7 @@ async function cfgLoadCaps() {
 }
 
 const CFG_ICONS = {
+  mglru_hold:'memhold',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_compressor:'compressor', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
@@ -5054,6 +5079,9 @@ function willBreakOf(it, cur) {
 }
 
 const APPLY_MODE = {
+  /* Live: asb_system_tweaks writes the sysfs node on save, and the value can be read
+     straight back from /sys/kernel/mm/lru_gen/min_ttl_ms - no reboot, verifiable. */
+  mglru_hold: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE,
   dsp_compressor:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
