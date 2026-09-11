@@ -7372,10 +7372,18 @@ async function pollLive(visible) {
     // "balanced" - while the main page reads current_profile off disk and is already right.
     const _mainProf = _el('curProfile');
     const _warmup = (kv.state_warmup === '1');
-    const profile = (_warmup && _mainProf && _mainProf.textContent
-                      && _mainProf.textContent !== '—')
-                    ? _mainProf.textContent.toLowerCase()
-                    : ((st && st.profile) || kv.profile || '—');
+    /* Prefer the machine-readable profile, not the label on screen.
+     *
+     * The visible text is translated: on a Russian UI curProfile reads "Смарт", so the
+     * check `profile === 'smart'` was false and Monitor showed "no data" for the learner
+     * on a device with 50 sessions recorded and published correctly. Every comparison
+     * against this variable uses an English token, so a localised string was wrong for
+     * all of them, not only the learner. */
+    const _profRaw = (st && st.profile) || kv.profile || '';
+    const profile = _profRaw ? String(_profRaw).toLowerCase()
+      : ((_warmup && _mainProf && _mainProf.textContent && _mainProf.textContent !== '\u2014')
+          ? asbProfileToken(_mainProf.textContent)
+          : '\u2014');
     const state = (st && st.state) || kv.state || '—';
 
     const mainDevLine = _el('deviceLine'); const liveDevLine = _el('liveDeviceLine');
