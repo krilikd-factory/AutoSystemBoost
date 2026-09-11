@@ -708,6 +708,62 @@ asb_apply_device_overlay() {
         fi
       done
     fi
+# Feature flags are resolved HERE, before anything reads them.
+#
+# This block used to sit at line ~2724, while the first `[ "$ASB_CAMERA" = "true" ]`
+# test runs at ~711 - two thousand lines earlier. Every flag was therefore empty at
+# the point it was checked, so every gated section was skipped and the installed
+# module kept stock values. It affected all of them: 23 reads of ASB_AUDIO, 16 of
+# ASB_CAMERA, and a handful each of WIFI and MEDIA happened before their definition.
+#
+# The block depends on nothing but MODPATH and features.conf, both available from the
+# start, so moving it up is safe - and it is the only position where the flags mean
+# what they say.
+# Defaults, overridden below by whatever the shipped features.conf says.
+#
+# These were plain `true` and the generated features.conf is written from them, so the
+# file in the ZIP was overwritten on every install. A build that deliberately ships
+# BT=0 or VENDOR_OVERLAY=0 - which this one does, for eight features - had that choice
+# silently reversed, and the installed module ran with everything on.
+#
+# Reading the shipped file first makes it the source of truth it was meant to be: a
+# packager can disable a feature for a build, and the installer honours it.
+_asb_feat_from_zip() {
+  _ff="$MODPATH/features.conf"
+  [ -f "$_ff" ] || return 0
+  _fv="$(grep -E "^[[:space:]]*$1=" "$_ff" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r' | cut -d'#' -f1)"
+  case "$_fv" in
+    0) printf 'false' ;;
+    1) printf 'true' ;;
+    *) printf '%s' "$2" ;;
+  esac
+}
+
+ASB_AUDIO="$(_asb_feat_from_zip AUDIO true)"
+ASB_BT="$(_asb_feat_from_zip BT true)"
+ASB_NFC="$(_asb_feat_from_zip NFC true)"
+ASB_CAMERA="$(_asb_feat_from_zip CAMERA true)"
+
+ASB_MEDIA="$(_asb_feat_from_zip MEDIA true)"
+ASB_CPU="$(_asb_feat_from_zip CPU true)"
+ASB_VM="$(_asb_feat_from_zip VM true)"
+ASB_NET="$(_asb_feat_from_zip NET true)"
+ASB_WIFI="$(_asb_feat_from_zip WIFI true)"
+ASB_GPS="$(_asb_feat_from_zip GPS true)"
+ASB_KERNEL="$(_asb_feat_from_zip KERNEL true)"
+ASB_LOG="$(_asb_feat_from_zip LOG true)"
+ASB_RADIO_IMS="$(_asb_feat_from_zip RADIO_IMS true)"
+ASB_DISPLAY="$(_asb_feat_from_zip DISPLAY true)"
+ASB_FPS="$(_asb_feat_from_zip FPS true)"
+ASB_SECURITY="$(_asb_feat_from_zip SECURITY true)"
+ASB_BG_TRIM="$(_asb_feat_from_zip BG_TRIM true)"
+# These two had no variable at all: features.conf hardcoded LPM=1 / VENDOR_OVERLAY=1 while
+# asb_save_user_config wrote LPM=0 / VENDOR_OVERLAY=0 - it evaluated a variable that did not
+# exist, so it recorded a phantom "the user declined" that no user ever chose, and the
+# end-of-install banner left both out of the enabled list while both were in fact running.
+ASB_LPM="$(_asb_feat_from_zip LPM true)"
+ASB_VENDOR_OVERLAY="$(_asb_feat_from_zip VENDOR_OVERLAY true)"
+
     if [ "$ASB_CAMERA" = "true" ]; then
       for _cf_rel in vendor/odm/etc/camera/conf_tuning_params.json \
                      vendor/odm/etc/camera/config/video_beauty_default_config; do
@@ -1909,6 +1965,55 @@ asb_apply_device_native_tuning() {
   ui_print "  📶  ${ASB_SEC_WIFI:-WI-FI}"
   asb_patch_wifi_inplace        "$_label"
   ui_print " "
+  # Camera belongs with the other tweak categories, after Wi-Fi.
+  #
+  # It briefly sat near the end of the installer, printed after CONFIG and outside the
+  # category group - a side effect of moving the block to reach a flag that was itself
+  # defined too late. With the flags resolved up front there is no reason for it to be
+  # anywhere but here.
+  ui_print "  📷  ${ASB_SEC_CAMERA:-CAMERA}"
+  asb_clone_device_camera_tone
+  # Grade the tone tables here, after asb_clone_device_camera_tone has run.
+  #
+  # This block used to sit 776 lines earlier, reading ASB_CT_ALL before the function
+  # that fills it had been called. The list was empty, the loop body never ran, and the
+  # installer finished without a word - which is why the diag reported "recorded grade:
+  # none" on a device where the paths and the live file were both correct.
+        _asb_cam_grain="$(_cam_get CAMERA_GRAIN)";    [ -n "$_asb_cam_grain" ] || _asb_cam_grain=3
+        _asb_cam_contrast="$(_cam_get CAMERA_CONTRAST)"; [ -n "$_asb_cam_contrast" ] || _asb_cam_contrast=3
+        _asb_cam_portrait="$(_cam_get CAMERA_PORTRAIT)"; [ -n "$_asb_cam_portrait" ] || _asb_cam_portrait=0
+        _asb_cam_lowlight="$(_cam_get CAMERA_LOWLIGHT)"; [ -n "$_asb_cam_lowlight" ] || _asb_cam_lowlight=0
+        if [ "${_ASB_CAMERA_LEVEL:-0}" -gt 0 ] 2>/dev/null \
+           || [ "$_asb_cam_grain" != 3 ] || [ "$_asb_cam_contrast" != 3 ] \
+           || [ "$_asb_cam_portrait" != 0 ] || [ "$_asb_cam_lowlight" != 0 ]; then
+          _ct_done=0
+          for _ct_dst in $ASB_CT_ALL; do
+            [ -f "$MODPATH/$_ct_dst" ] || continue
+            # Sweep markers whose destination no longer exists. Before the names were
+            # normalised these piled up one per install; an old device carries a directory
+            # of them, and they are not worth keeping - a marker for a path that is gone
+            # guards nothing.
+            for _gm in /data/adb/asb/grade_marks/*.mark; do
+              [ -f "$_gm" ] || continue
+              case "$_gm" in *.asbdes*|*.graded.mark|*modules_update*) rm -f "$_gm" 2>/dev/null ;; esac
+            done
+            MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
+              ASB_CAM_GRAIN_IN="$_asb_cam_grain" \
+              ASB_CAM_CONTRAST_IN="$_asb_cam_contrast" \
+              ASB_CAM_PORTRAIT_IN="$_asb_cam_portrait" \
+              ASB_CAM_LOWLIGHT_IN="$_asb_cam_lowlight" \
+              sh "$MODPATH/runtime/asb_camera_grade.sh" \
+                 "$MODPATH/$_ct_dst" "$MODPATH/$_ct_dst.graded" >/dev/null 2>&1
+            if [ -s "$MODPATH/$_ct_dst.graded" ]; then
+              mv -f "$MODPATH/$_ct_dst.graded" "$MODPATH/$_ct_dst" 2>/dev/null
+              chmod 0644 "$MODPATH/$_ct_dst" 2>/dev/null
+              _ct_done=$((_ct_done + 1))
+            else
+              rm -f "$MODPATH/$_ct_dst.graded" 2>/dev/null
+            fi
+          done
+          [ "$_ct_done" -gt 0 ] && ui_print "      + Camera tuning: level ${_ASB_CAMERA_LEVEL:-0} / independent controls applied to ${_ct_done} file(s)"
+        fi
 
   if [ "$ASB_AUDIO" = "true" ] || [ "$ASB_CAMERA" = "true" ]; then
     if [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
@@ -2712,100 +2817,6 @@ asb_prune_module() {
   find "$MODPATH/system" -type d -empty -print -delete 2>/dev/null || true
 }
 
-# Defaults, overridden below by whatever the shipped features.conf says.
-#
-# These were plain `true` and the generated features.conf is written from them, so the
-# file in the ZIP was overwritten on every install. A build that deliberately ships
-# BT=0 or VENDOR_OVERLAY=0 - which this one does, for eight features - had that choice
-# silently reversed, and the installed module ran with everything on.
-#
-# Reading the shipped file first makes it the source of truth it was meant to be: a
-# packager can disable a feature for a build, and the installer honours it.
-_asb_feat_from_zip() {
-  _ff="$MODPATH/features.conf"
-  [ -f "$_ff" ] || return 0
-  _fv="$(grep -E "^[[:space:]]*$1=" "$_ff" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r' | cut -d'#' -f1)"
-  case "$_fv" in
-    0) printf 'false' ;;
-    1) printf 'true' ;;
-    *) printf '%s' "$2" ;;
-  esac
-}
-
-ASB_AUDIO="$(_asb_feat_from_zip AUDIO true)"
-ASB_BT="$(_asb_feat_from_zip BT true)"
-ASB_NFC="$(_asb_feat_from_zip NFC true)"
-ASB_CAMERA="$(_asb_feat_from_zip CAMERA true)"
-
-# Camera tone grading runs here, after ASB_CAMERA is known.
-#
-# It used to sit ~880 lines earlier, where ASB_CAMERA is still empty - so the very
-# first line of asb_clone_device_camera_tone, [ "$ASB_CAMERA" = "true" ] || return 0,
-# was false and the function returned immediately. Every later fix to paths and
-# ordering was correct and none of it ran: the diag kept reporting "recorded grade:
-# none" because the grader was never reached at all.
-  ui_print "  📷  ${ASB_SEC_CAMERA:-CAMERA}"
-  asb_clone_device_camera_tone
-  # Grade the tone tables here, after asb_clone_device_camera_tone has run.
-  #
-  # This block used to sit 776 lines earlier, reading ASB_CT_ALL before the function
-  # that fills it had been called. The list was empty, the loop body never ran, and the
-  # installer finished without a word - which is why the diag reported "recorded grade:
-  # none" on a device where the paths and the live file were both correct.
-        _asb_cam_grain="$(_cam_get CAMERA_GRAIN)";    [ -n "$_asb_cam_grain" ] || _asb_cam_grain=3
-        _asb_cam_contrast="$(_cam_get CAMERA_CONTRAST)"; [ -n "$_asb_cam_contrast" ] || _asb_cam_contrast=3
-        _asb_cam_portrait="$(_cam_get CAMERA_PORTRAIT)"; [ -n "$_asb_cam_portrait" ] || _asb_cam_portrait=0
-        _asb_cam_lowlight="$(_cam_get CAMERA_LOWLIGHT)"; [ -n "$_asb_cam_lowlight" ] || _asb_cam_lowlight=0
-        if [ "${_ASB_CAMERA_LEVEL:-0}" -gt 0 ] 2>/dev/null \
-           || [ "$_asb_cam_grain" != 3 ] || [ "$_asb_cam_contrast" != 3 ] \
-           || [ "$_asb_cam_portrait" != 0 ] || [ "$_asb_cam_lowlight" != 0 ]; then
-          _ct_done=0
-          for _ct_dst in $ASB_CT_ALL; do
-            [ -f "$MODPATH/$_ct_dst" ] || continue
-            # Sweep markers whose destination no longer exists. Before the names were
-            # normalised these piled up one per install; an old device carries a directory
-            # of them, and they are not worth keeping - a marker for a path that is gone
-            # guards nothing.
-            for _gm in /data/adb/asb/grade_marks/*.mark; do
-              [ -f "$_gm" ] || continue
-              case "$_gm" in *.asbdes*|*.graded.mark|*modules_update*) rm -f "$_gm" 2>/dev/null ;; esac
-            done
-            MODDIR="$MODPATH" ASB_CAMERA_LEVEL_IN="$_ASB_CAMERA_LEVEL" \
-              ASB_CAM_GRAIN_IN="$_asb_cam_grain" \
-              ASB_CAM_CONTRAST_IN="$_asb_cam_contrast" \
-              ASB_CAM_PORTRAIT_IN="$_asb_cam_portrait" \
-              ASB_CAM_LOWLIGHT_IN="$_asb_cam_lowlight" \
-              sh "$MODPATH/runtime/asb_camera_grade.sh" \
-                 "$MODPATH/$_ct_dst" "$MODPATH/$_ct_dst.graded" >/dev/null 2>&1
-            if [ -s "$MODPATH/$_ct_dst.graded" ]; then
-              mv -f "$MODPATH/$_ct_dst.graded" "$MODPATH/$_ct_dst" 2>/dev/null
-              chmod 0644 "$MODPATH/$_ct_dst" 2>/dev/null
-              _ct_done=$((_ct_done + 1))
-            else
-              rm -f "$MODPATH/$_ct_dst.graded" 2>/dev/null
-            fi
-          done
-          [ "$_ct_done" -gt 0 ] && ui_print "      + Camera tuning: level ${_ASB_CAMERA_LEVEL:-0} / independent controls applied to ${_ct_done} file(s)"
-        fi
-ASB_MEDIA="$(_asb_feat_from_zip MEDIA true)"
-ASB_CPU="$(_asb_feat_from_zip CPU true)"
-ASB_VM="$(_asb_feat_from_zip VM true)"
-ASB_NET="$(_asb_feat_from_zip NET true)"
-ASB_WIFI="$(_asb_feat_from_zip WIFI true)"
-ASB_GPS="$(_asb_feat_from_zip GPS true)"
-ASB_KERNEL="$(_asb_feat_from_zip KERNEL true)"
-ASB_LOG="$(_asb_feat_from_zip LOG true)"
-ASB_RADIO_IMS="$(_asb_feat_from_zip RADIO_IMS true)"
-ASB_DISPLAY="$(_asb_feat_from_zip DISPLAY true)"
-ASB_FPS="$(_asb_feat_from_zip FPS true)"
-ASB_SECURITY="$(_asb_feat_from_zip SECURITY true)"
-ASB_BG_TRIM="$(_asb_feat_from_zip BG_TRIM true)"
-# These two had no variable at all: features.conf hardcoded LPM=1 / VENDOR_OVERLAY=1 while
-# asb_save_user_config wrote LPM=0 / VENDOR_OVERLAY=0 - it evaluated a variable that did not
-# exist, so it recorded a phantom "the user declined" that no user ever chose, and the
-# end-of-install banner left both out of the enabled list while both were in fact running.
-ASB_LPM="$(_asb_feat_from_zip LPM true)"
-ASB_VENDOR_OVERLAY="$(_asb_feat_from_zip VENDOR_OVERLAY true)"
 
 asb_install_prebuilt_governor
 asb_big_banner
