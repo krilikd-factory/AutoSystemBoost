@@ -87,6 +87,13 @@ typedef struct {
  * publishes that did not happen, written counts those that did. Without both, the skip
  * logic is a claim - and the same claim was made about the probe cache, which turned out
  * to be sitting in a branch that never ran. */
+/* One batch = one writer_apply_caps call that actually wrote something.
+ *
+ * g_stat_writes counts NODES, so a single decision that touches six sysfs files reads as
+ * six writes. The audit asks for both: nodes give the I/O cost, batches give how often the
+ * governor genuinely changed its mind. Six nodes in one batch and six batches of one node
+ * cost the same in writes but mean completely different things. */
+static unsigned long g_stat_write_batches    = 0;
 static unsigned long g_stat_json_written     = 0;
 static unsigned long g_stat_json_skipped     = 0;
 static unsigned long g_stat_noop_ticks       = 0;
@@ -1666,6 +1673,8 @@ skip_cpu_caps: ;
         }
     }
 
+    /* Count the batch, not just its nodes - see g_stat_write_batches. */
+    if (writes > 0) g_stat_write_batches++;
     return writes;
 }
 

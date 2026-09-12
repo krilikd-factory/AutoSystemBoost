@@ -987,6 +987,8 @@ static int tick_scaling_max(int slot) {
 static void tick_scaling_max_invalidate(void) { g_tick_smax_valid = 0; }
 
 static int    g_cap_vendor_passive    = 0;
+/* Set once at startup; the denominator for every per-hour rate in the report. */
+static time_t g_governor_start_ts     = 0;
 static int    g_cap_detente_active = 0;
 static time_t g_cap_detente_since = 0;
 static long   g_cap_detente_skipped = 0;
@@ -1746,6 +1748,18 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * included - because GPU load was the only signal it had. The governor already knows
      * the answer from the package table; it just never published it. */
     fprintf(f, "app_hint=%d\n", g_smart_rt.app_hint);
+    /* How long THIS governor has been running.
+     *
+     * Every counter above is cumulative since the governor started, and the report divides
+     * them by system uptime - which is longer, because the governor starts after boot and
+     * restarts on profile changes. A capture showed 29 timer wakeups per hour where the
+     * 10-second idle tick alone accounts for 360: the counters were right and the divisor
+     * was wrong, making the module look an order of magnitude cheaper than it is.
+     *
+     * Publishing the real denominator is the difference between a measurement and a
+     * flattering number. */
+    fprintf(f, "governor_uptime_s=%ld\n", (long)(time(NULL) - g_governor_start_ts));
+    fprintf(f, "write_batches=%lu\n", g_stat_write_batches);
     fprintf(f, "noop_ticks=%lu\n", g_stat_noop_ticks);
     fprintf(f, "json_written=%lu\njson_skipped=%lu\n",
             g_stat_json_written, g_stat_json_skipped);
@@ -2029,6 +2043,19 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     /* Published separately from the short holddown: "we paused for three seconds" and
        "the vendor owns this cap and we have stopped writing" look identical otherwise, and
        only the second one explains an hour of asb 0% in the ownership trace. */
+    /* What ASB asked for, what the hardware actually has, and whether we may retry.
+     *
+     * cap_owner says WHO won; it does not say by how much, so a log cannot distinguish
+     * "vendor trimmed us by 5%" from "vendor ignored us completely". The audit asks for
+     * the three states separately, and they are the difference between a report that
+     * describes a disagreement and one that only notes it happened.
+     *
+     * Slot 0 and the prime slot: enough to see the shape without three more columns. */
+    fprintf(f, "desired_cpu_max0=%d\ndesired_cpu_maxp=%d\n",
+            fsm->current_caps.cpu_max[0], fsm->current_caps.cpu_max[1]);
+    fprintf(f, "effective_cpu_max0=%d\neffective_cpu_maxp=%d\n",
+            tick_scaling_max(0), tick_scaling_max(1));
+    fprintf(f, "reassert_eligible=%d\n", asb_cap_writes_should_back_off() ? 0 : 1);
     fprintf(f, "cap_vendor_passive=%d\n", g_cap_vendor_passive);
     /* Screen-off cooldown clamp, so a night capture can show whether it engaged.
      *
@@ -5097,6 +5124,9 @@ int main(int argc, char **argv) {
     int epfd = epoll_create1(EPOLL_CLOEXEC);
     if (epfd < 0) { perror("epoll_create1"); return 1; }
 
+    /* Stamp the start before the loop: without it the published uptime is the whole
+       epoch and every rate comes out as zero. */
+    g_governor_start_ts = time(NULL);
     int tfd_active = make_timerfd(TIMER_ACTIVE_S);
     int tfd_idle   = make_timerfd(TIMER_IDLE_S);
     int tfd_hourly = make_timerfd(TIMER_HOURLY_S);
