@@ -491,6 +491,16 @@ if [ -r "$_state" ]; then
   # says which timer to look at before touching any interval.
   _wbs="$(grep -m1 '^wake_by_src=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
   [ -n "$_wbs" ] && NOTE "wakeups by source: $_wbs"
+  # Which path answered the screen question. 0=unknown 1,2=oplus 3=panel0 4=generic 5=default.
+  # 5 means nothing was readable and the module assumed "on"; 0 means it never asked.
+  _ssr="$(grep -m1 '^screen_src=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  case "${_ssr:-}" in
+    1|2) NOTE "screen source: oplus_display (${_ssr})" ;;
+    3)   NOTE "screen source: panel0-backlight" ;;
+    4)   NOTE "screen source: generic backlight" ;;
+    5)   NOTE "screen source: NONE readable - assuming on (idle cadence will be wrong)" ;;
+    0)   NOTE "screen source: not sampled yet" ;;
+  esac
   [ -n "$_wbn" ] && NOTE "writes by node: $_wbn"
   # Vendor contention beside it: passive=1 means ASB stopped reasserting on purpose.
   _vp="$(grep -m1 '^cap_vendor_passive=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
