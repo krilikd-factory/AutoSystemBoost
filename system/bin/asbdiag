@@ -467,6 +467,21 @@ if [ -r "$_state" ]; then
     0) P "  cooldown clamp        : idle (not needed - phone is cool or screen is on)" ;;
     *) P "  cooldown clamp        : unknown (governor state not readable)" ;;
   esac
+  # Desired versus effective: how far the hardware is from what ASB asked for.
+  #
+  # cap_owner names the winner but not the margin. A 5% trim and a total override read
+  # identically, so a capture could not tell "vendor is slightly stricter" from "our
+  # writes are being discarded" - and those need opposite responses.
+  _dw0="$(_rget desired_cpu_max0 "$_state")"; _ew0="$(_rget effective_cpu_max0 "$_state")"
+  _dwp="$(_rget desired_cpu_maxp "$_state")"; _ewp="$(_rget effective_cpu_maxp "$_state")"
+  case "$_dw0$_ew0" in ''|*[!0-9]*) : ;; *)
+    P "  cap desired/effective : little $_dw0 -> $_ew0 kHz, prime $_dwp -> $_ewp kHz"
+    if [ "$_ew0" -lt "$_dw0" ] 2>/dev/null; then
+      P "    (hardware is stricter than ASB asked - vendor or thermal owns the cap)"
+    fi ;;
+  esac
+  _re="$(_rget reassert_eligible "$_state")"
+  [ "$_re" = "0" ] && P "  reassert              : suppressed (vendor owns the cap right now)"
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
   # Separate "this kernel does not have the node" from "the write was refused".
   #
@@ -493,6 +508,11 @@ if [ -r "$_state" ]; then
   case "$_ov_t" in ''|*[!0-9]*) _ov_t=0 ;; esac
   case "$_ov_w" in ''|*[!0-9]*) _ov_w=0 ;; esac
   P "    by source        : transitions=$_ov_t writes=$_ov_w readbacks=$(_rget governor_readbacks "$_state") vendor_overrides=$(_rget governor_vendor_overrides "$_state")"
+  _wb="$(_rget write_batches "$_state")"
+  case "$_wb" in ''|*[!0-9]*) _wb=0 ;; esac
+  if [ "$_wb" -gt 0 ] 2>/dev/null && [ "$_ov_w" -gt 0 ] 2>/dev/null; then
+    P "    write batches    : $_wb ($(( _ov_w / _wb )) nodes per batch)"
+  fi
   _ph="$(_rget probe_cache_hits "$_state")"; _pm="$(_rget probe_cache_misses "$_state")"
   case "$_ph" in ''|*[!0-9]*) _ph=0 ;; esac
   case "$_pm" in ''|*[!0-9]*) _pm=0 ;; esac
