@@ -482,6 +482,16 @@ if [ -r "$_state" ]; then
   esac
   _re="$(_rget reassert_eligible "$_state")"
   [ "$_re" = "0" ] && P "  reassert              : suppressed (vendor owns the cap right now)"
+  # Per-node breakdown beside the totals.
+  #
+  # "attempts=471" says the writer is busy, not with what. This line names the nodes so a
+  # cut in writes can target the one doing the work instead of being spread blindly.
+  _wbn="$(grep -m1 '^write_by_node=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
+  [ -n "$_wbn" ] && NOTE "writes by node: $_wbn"
+  # Vendor contention beside it: passive=1 means ASB stopped reasserting on purpose.
+  _vp="$(grep -m1 '^cap_vendor_passive=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _vc="$(grep -m1 '^cap_vendor_slow_clamps=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  [ -n "$_vp" ] && NOTE "vendor contention: passive=${_vp} slow_clamps=${_vc:-0}"
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
   # Separate "this kernel does not have the node" from "the write was refused".
   #
