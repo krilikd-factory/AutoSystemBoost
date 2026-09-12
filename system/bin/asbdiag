@@ -487,6 +487,10 @@ if [ -r "$_state" ]; then
   # "attempts=471" says the writer is busy, not with what. This line names the nodes so a
   # cut in writes can target the one doing the work instead of being spread blindly.
   _wbn="$(grep -m1 '^write_by_node=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
+  # Wakeups by source beside the writes: 674/h is the module's real cost, and the split
+  # says which timer to look at before touching any interval.
+  _wbs="$(grep -m1 '^wake_by_src=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
+  [ -n "$_wbs" ] && NOTE "wakeups by source: $_wbs"
   [ -n "$_wbn" ] && NOTE "writes by node: $_wbn"
   # Vendor contention beside it: passive=1 means ASB stopped reasserting on purpose.
   _vp="$(grep -m1 '^cap_vendor_passive=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
