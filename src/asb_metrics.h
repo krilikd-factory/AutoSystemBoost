@@ -1520,16 +1520,30 @@ int spike_detected = 0;
     }
 }
 
+/* Which source answered last, for diagnostics.
+ *
+ * A field capture shows the cost of not knowing: the active tick did not fire once
+ * across an hour of screen-ON use, so the module ran the whole session on the 10 s idle
+ * cadence - slow reactions on a phone someone was actively using. The report said
+ * "screen_on=?" and there was no way to tell whether the vendor node was missing, the
+ * generic fallback answered, or nothing was readable at all.
+ *
+ * 0 = unknown, 1..3 = vendor paths, 4 = generic backlight, 5 = default. */
+static int g_screen_src = 0;
+
+/* Read accessor for the screen-source tag. */
+static int metrics_screen_src(void) { return g_screen_src; }
+
 static int metrics_screen_on(void) {
     const char *paths[] = { PATH_SCREEN_STATUS, PATH_SCREEN_STATUS2, NULL };
     for (int i = 0; paths[i]; i++) {
         int v = sysfs_read_int(paths[i], -1);
-        if (v == 1) return 1;
-        if (v == 0) return 0;
+        if (v == 1) { g_screen_src = i + 1; return 1; }
+        if (v == 0) { g_screen_src = i + 1; return 0; }
     }
     int bl = sysfs_read_int(PATH_BACKLIGHT, -1);
-    if (bl > 0) return 1;
-    if (bl == 0) return 0;
+    if (bl > 0)  { g_screen_src = 3; return 1; }
+    if (bl == 0) { g_screen_src = 3; return 0; }
 
     /* All three sources above are OPlus paths. A ROM that names them differently reached
      * the fallback and got "screen on" forever - which means DEEP_IDLE is never entered,
@@ -1549,15 +1563,15 @@ static int metrics_screen_on(void) {
         };
         for (int i = 0; generic_bl[i]; i++) {
             int g = sysfs_read_int(generic_bl[i], -1);
-            if (g > 0) return 1;
-            if (g == 0) return 0;
+            if (g > 0)  { g_screen_src = 4; return 1; }
+            if (g == 0) { g_screen_src = 4; return 0; }
         }
     }
 
     /* Still nothing readable. "On" remains the safe default - treating an unknown screen
      * as off would let the module apply screen-off ceilings while someone is using the
      * phone, and a stutter is worse than a missed saving. */
-    return 1;
+    g_screen_src = 5; return 1;
 }
 
 static long g_wlan_tx_prev = 0, g_wlan_rx_prev = 0;

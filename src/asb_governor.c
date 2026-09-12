@@ -2046,6 +2046,13 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
          * previous attempt produced a filter that filtered nothing. */
         fprintf(f, "cap_vendor_passive=%d\ncap_vendor_slow_clamps=%d\n",
                 g_cap_vendor_passive, g_cap_slow_vendor_clamps);
+        /* Which source answered the screen question, and what it said.
+         *
+         * A capture had the active tick at zero across an hour of screen-ON use: the
+         * module ran the entire session on the 10 s idle cadence. "screen_on=?" in the
+         * report gave nothing to work with - this names the path that answered. */
+        fprintf(f, "screen_src=%d\n", metrics_screen_src());
+
         /* Wakeups by source, same shape as the write breakdown below. */
         fprintf(f, "wake_by_src=\"");
         for (int _w = 0, _wf = 1; _w < ASB_WAKE_SRC_COUNT; _w++) {
