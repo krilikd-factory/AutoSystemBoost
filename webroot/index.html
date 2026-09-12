@@ -5962,6 +5962,16 @@ async function cfgSet(key, val, ctl) {
       // immediate and the popup confirmed nothing. Not a contradiction, but the one
       // place a user cannot tell a working setting from a silently ignored one.
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+    } else if (key === 'mglru_hold') {
+      /* Run the script that owns the node, then say it applied.
+       *
+       * Without its own branch this key fell through to the default, which prints "reboot
+       * to apply" - contradicting the card, which correctly says APPLY_LIVE. The card was
+       * right: asb_system_tweaks writes /sys/kernel/mm/lru_gen/min_ttl_ms directly and the
+       * value is readable back immediately. Nothing here needs a reboot; the popup was
+       * simply the only branch that had not been told. */
+      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_system_tweaks.sh >/dev/null 2>&1'); } catch (e) {}
+      toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
     } else if (BLUR_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_blur_apply.sh >/dev/null 2>&1'); } catch(e) {}
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_blur', ' \u00b7 shade now, rest after reboot'), cfgToastType(key));
