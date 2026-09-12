@@ -2021,6 +2021,27 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                    "write_skipped_backoff=%ld\nbudget_spike_bump=%d\n",
                 g_write_attempts, g_write_skipped_detente,
                 g_write_skipped_backoff, g_drain_spike_bump);
+
+        /* Per-node write breakdown and vendor-contention state.
+         *
+         * write_attempts says the writer is busy, not with what; and the passive mode -
+         * stop reasserting after 20 vendor clamps in the slow window - exists but was
+         * only published in JSON. A capture with cap_owner=vendor at 71% cannot be read
+         * without knowing whether ASB stepped back deliberately or is still fighting.
+         *
+         * An audit asks for a 40-60% cut in writes per hour. Cutting blind is how the
+         * previous attempt produced a filter that filtered nothing. */
+        fprintf(f, "cap_vendor_passive=%d\ncap_vendor_slow_clamps=%d\n",
+                g_cap_vendor_passive, g_cap_slow_vendor_clamps);
+        fprintf(f, "write_by_node=\"");
+        for (int _n = 0, _first = 1; _n < ASB_WRITE_NODE_COUNT; _n++) {
+            unsigned _c = writer_node_writes((asb_write_node_t)_n);
+            if (!_c) continue;
+            fprintf(f, "%s%s:%u", _first ? "" : ",",
+                    writer_write_node_name((asb_write_node_t)_n), _c);
+            _first = 0;
+        }
+        fprintf(f, "\"\n");
         fprintf(f, "cap_sleep_detente=%d\ncap_detente_skipped=%ld\n"
                    "build_flavor=%s\nbat_cur_unit=%d\n",
                 g_cap_detente_active, g_cap_detente_skipped,

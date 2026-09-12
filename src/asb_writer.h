@@ -104,6 +104,21 @@ static unsigned long g_stat_vendor_overrides = 0;
 
 static asb_write_health_t g_write_health[ASB_WRITE_NODE_COUNT];
 
+/* Per-node write tally, for answering "what is doing 178 writes an hour".
+ *
+ * The health line counts attempts in total, which says the writer is busy but not with
+ * what. An audit asked for a 40-60% cut in physical writes; without knowing the split
+ * between CPU ceilings, uclamp tiers and WALT knobs, any cut would be a guess - and the
+ * previous guess at this (a value-based churn filter) turned out to filter nothing.
+ *
+ * Indexed by asb_write_node_t, printed in the diag report. */
+static unsigned g_write_tally[ASB_WRITE_NODE_COUNT];
+
+/* Read accessor, so the governor does not reach into writer state directly. */
+static unsigned writer_node_writes(asb_write_node_t n) {
+    return (n >= 0 && n < ASB_WRITE_NODE_COUNT) ? g_write_tally[n] : 0u;
+}
+
 static const char *writer_write_node_name(asb_write_node_t node) {
     static const char *const names[ASB_WRITE_NODE_COUNT] = {
         "cpu_max0", "cpu_max1", "cpu_max2", "cpu_min0", "cpu_min1", "cpu_min2",
@@ -183,6 +198,7 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         return 0;
     }
 
+    if (node >= 0 && node < ASB_WRITE_NODE_COUNT) g_write_tally[node]++;
     int rc = sysfs_write_int(path, requested);
     int observed = (rc == 0) ? sysfs_read_int(path, INT_MIN) : INT_MIN;
     h->observed = observed;
@@ -1065,6 +1081,8 @@ typedef struct {
  * so a zeroed cache would claim we had written it and mask a real vendor override on the
  * very first comparison. */
 static asb_writer_cache_t g_wcache = { .gpu_min_written = -1 };
+
+
 
 /* Last uclamp values the writer was asked to apply, for diagnostics. Read from the
  * cache rather than the node: the point is to compare intent against reality, and the
