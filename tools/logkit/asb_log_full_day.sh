@@ -204,7 +204,25 @@ lk_detect_phase() {
   if [ "${LK_SCR_PREV:-x}" != "$_scr" ]; then
     LK_SCR_PREV="$_scr"
     case "$_scr" in
-      Awake|true) LK_WAKE_AT="$(date +%s 2>/dev/null)" ;;
+      Awake|true)
+        # Sample the first seconds at 1 Hz here, not on the next ordinary tick.
+        #
+        # The main loop runs about every 47 s, so the 20-second window below caught
+        # exactly one sample - and one sample cannot show a ceiling that lifts a few
+        # seconds after wake, which is the whole question being asked. Twenty reads of
+        # two sysfs files cost nothing and only happen on a screen-on transition.
+        LK_WAKE_AT="$(date +%s 2>/dev/null)"
+        _wt=0
+        while [ "$_wt" -lt 20 ]; do
+          printf '%s\t%s\t%s\t%s\n' "$_wt" \
+            "$(cat /sys/class/kgsl/kgsl-3d0/max_pwrlevel 2>/dev/null | tr -dc '0-9')" \
+            "$(cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null | tr -dc '0-9')" \
+            "$(sed -n 's/^state=//p' /dev/.asb/state 2>/dev/null | head -1)" \
+            >> "$LK_OUT_DIR/wake_gpu_trace.tsv" 2>/dev/null || true
+          _wt=$(( _wt + 1 ))
+          sleep 1
+        done
+        ;;
     esac
   fi
   # screen-off duration tracking
@@ -1075,7 +1093,14 @@ lk_emit_full_day_report() {
       _mc="/dev/.asb/state"
       if [ -r "$_mc" ]; then
         _mc_get() { grep -m1 "^$1=" "$_mc" 2>/dev/null | cut -d= -f2 | tr -dc '0-9'; }
-        _up="$(cut -d. -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')"
+        # Divide by the GOVERNOR's uptime, not the system's.
+  #
+  # The counters start when the governor does, which is after boot and again after every
+  # profile change. Using system uptime made a capture report 29 timer wakeups per hour
+  # where the idle tick alone produces 360 - the module looked ten times cheaper than it
+  # is, and that is the kind of error that stops a real regression being noticed.
+  _up="$(_mc_get governor_uptime_s)"
+  case "$_up" in ''|0) _up="$(cut -d. -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')" ;; esac
         case "$_up" in ''|0) _up=1 ;; esac
         _h=$(( _up / 3600 )); [ "$_h" -lt 1 ] && _h=1
         echo ""
