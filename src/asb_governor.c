@@ -1186,6 +1186,19 @@ static void asb_night_window_tick(int screen_on, time_t now) {
 /* Last valid control temperature, kept so the thermal read can be skipped without
  * losing the distance-to-threshold check that decides whether skipping is safe. */
 static int g_last_cpu_max_c = 0;
+
+/* Wakeup ledger, by source.
+ *
+ * The overhead line counts timer wakeups in total - 674/h in a field capture, which is
+ * the module's real cost now that physical writes turned out to be 21/h. Cutting that
+ * total without knowing the split is how the last two "savings" went wrong: a flat 20%
+ * trim that made the phone hotter, and a ceiling cut that inverted the ladder.
+ *
+ * Three sources, matching the three timerfds. An audit asked for owner/reason tagging;
+ * this is the owner half, which is the part that can be acted on. */
+typedef enum { ASB_WAKE_ACTIVE = 0, ASB_WAKE_IDLE, ASB_WAKE_HOURLY, ASB_WAKE_SRC_COUNT } asb_wake_src_t;
+static unsigned long g_wake_by_src[ASB_WAKE_SRC_COUNT];
+static const char *const g_wake_src_name[ASB_WAKE_SRC_COUNT] = { "active", "idle", "hourly" };
 /* Last banked session as it was handed to the learner, for diagnostics. */
 static int  g_ses_last_temp = 0;
 static int  g_ses_last_dur  = 0;
@@ -2033,6 +2046,15 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
          * previous attempt produced a filter that filtered nothing. */
         fprintf(f, "cap_vendor_passive=%d\ncap_vendor_slow_clamps=%d\n",
                 g_cap_vendor_passive, g_cap_slow_vendor_clamps);
+        /* Wakeups by source, same shape as the write breakdown below. */
+        fprintf(f, "wake_by_src=\"");
+        for (int _w = 0, _wf = 1; _w < ASB_WAKE_SRC_COUNT; _w++) {
+            if (!g_wake_by_src[_w]) continue;
+            fprintf(f, "%s%s:%lu", _wf ? "" : ",", g_wake_src_name[_w], g_wake_by_src[_w]);
+            _wf = 0;
+        }
+        fprintf(f, "\"\n");
+
         fprintf(f, "write_by_node=\"");
         for (int _n = 0, _first = 1; _n < ASB_WRITE_NODE_COUNT; _n++) {
             unsigned _c = writer_node_writes((asb_write_node_t)_n);
@@ -5214,7 +5236,8 @@ int main(int argc, char **argv) {
         if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
             asb_profile_caps_t _new_caps;
             fsm_interpolate_caps(asb_profile_bounds_for(fsm.profile_idx),
-                                 fsm.profile_idx, fsm.state, &_new_caps);
+                                 fsm.profile_idx, fsm.state,
+                         0, 0.0f, &_new_caps);
             if (fsm.thermal_cap && fsm.state != ASB_STATE_SUSTAINED) {
                 float keep = (100 - g_asb_cfg.thermal_overlay_pct) / 100.0f;
                 for (int i = 0; i < 3; i++)
@@ -5582,7 +5605,8 @@ int main(int argc, char **argv) {
                     if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
                         asb_profile_caps_t _new_caps;
                         fsm_interpolate_caps(asb_profile_bounds_for(fsm.profile_idx),
-                                             fsm.profile_idx, fsm.state, &_new_caps);
+                                             fsm.profile_idx, fsm.state,
+                         0, 0.0f, &_new_caps);
                         if (fsm.thermal_cap && fsm.state != ASB_STATE_SUSTAINED) {
                             float keep = (100 - g_asb_cfg.thermal_overlay_pct) / 100.0f;
                             for (int i = 0; i < 3; i++)
@@ -5670,6 +5694,7 @@ int main(int argc, char **argv) {
             if (fd == tfd_active) {
                 timerfd_drain(fd);
                 g_governor_timer_wakeups++;
+                g_wake_by_src[ASB_WAKE_ACTIVE]++;
                 need_metrics = 1;
 
                 /* Slow the screen-on cadence while the screen is quiet.
@@ -5722,11 +5747,13 @@ int main(int argc, char **argv) {
             else if (fd == tfd_idle) {
                 timerfd_drain(fd);
                 g_governor_timer_wakeups++;
+                g_wake_by_src[ASB_WAKE_IDLE]++;
                 need_metrics = 1;
             }
             else if (fd == tfd_hourly) {
                 timerfd_drain(fd);
                 g_governor_timer_wakeups++;
+                g_wake_by_src[ASB_WAKE_HOURLY]++;
                 float avg_drain = 0, avg_screen = 0;
                 if (accum.drain_count > 0) {
                     avg_drain  = accum.drain_sum / accum.drain_count;
@@ -6987,7 +7014,8 @@ int main(int argc, char **argv) {
             if (smart_updated && fsm.profile_idx == PROFILE_SMART) {
                 asb_profile_caps_t _new_caps;
                 fsm_interpolate_caps(asb_profile_bounds_for(fsm.profile_idx),
-                                     fsm.profile_idx, fsm.state, &_new_caps);
+                                     fsm.profile_idx, fsm.state,
+                         0, 0.0f, &_new_caps);
                 /* Apply same thermal overlay as the normal FSM path */
                 if (fsm.thermal_cap && fsm.state != ASB_STATE_SUSTAINED) {
                     float keep = (100 - g_asb_cfg.thermal_overlay_pct) / 100.0f;

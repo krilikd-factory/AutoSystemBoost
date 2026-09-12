@@ -363,6 +363,11 @@ static inline int lerp_int(int a, int b, float t) {
  * sustained envelopes.  These are real OPPs from the discovered table, one step below the
  * common vendor thermal ceiling.  They apply only from MODERATE through SUSTAINED: Gaming is
  * intentionally left to its own QoS/thermal path, and manual profiles remain untouched. */
+/* Load that counts as a game genuinely working, for the proactive-guard stand-down.
+ * 2.0 is roughly two busy cores - a loading screen sits well above it, a game idling on
+ * a menu well below. */
+#define ASB_PROACTIVE_CPU_BUSY 2.0f
+
 #define ASB_SMART_PROACTIVE_P0_MODERATE_MAX 1996800
 #define ASB_SMART_PROACTIVE_P6_MODERATE_MAX 1632000
 #define ASB_SMART_PROACTIVE_P0_SUSTAINED_MAX 1785600
@@ -370,6 +375,10 @@ static inline int lerp_int(int a, int b, float t) {
 
 static void fsm_interpolate_caps(
     const asb_profile_bounds_t *bounds, int profile_idx, asb_state_t state,
+    /* App class and CPU load, so the proactive guard can stand down while a known game
+     * is loading - see the guard below. Pass 0 for both where they are unknown; that
+     * reproduces the previous behaviour exactly. */
+    int m_app_hint, float cpu_load1,
     asb_profile_caps_t *out)
 {
     float t = (state == ASB_STATE_SUSTAINED)
@@ -464,7 +473,23 @@ static void fsm_interpolate_caps(
      * prime-cluster ceiling; the vendor then wins, and the writer records a clamp/write-war
      * rather than a clean ASB-owned cap.  Keep the guard out of GAMING so this is not a hidden
      * performance-profile replacement. */
-    if (profile_idx == PROFILE_SMART &&
+    /* Stand down while a known game is loading.
+     *
+     * A loading screen is CPU-bound: unpacking assets, decompressing, reading from disk.
+     * The GPU sits at 10-15%, so GAMING is not entered even with the lowered gate - the
+     * state is HEAVY, and this proactive guard cuts the little cluster to 55%. That is
+     * exactly the phase a user notices: "every load in Smart is like a ten-year-old
+     * phone, Performance and it flies".
+     *
+     * The guard exists to stop Smart chasing the peak during ordinary work. A game asking
+     * for CPU is not ordinary work, and it is bounded: loads end. Leaving the ceiling
+     * alone there costs seconds of full clock and buys back the whole complaint.
+     *
+     * Requires BOTH the app hint and real CPU demand, so a game sitting on a menu at idle
+     * load still gets the guard. */
+    int _game_busy = (m_app_hint >= ASB_APP_GAMING && cpu_load1 >= ASB_PROACTIVE_CPU_BUSY);
+
+    if (profile_idx == PROFILE_SMART && !_game_busy &&
         state >= ASB_STATE_MODERATE && state < ASB_STATE_GAMING) {
         int _p0 = (state == ASB_STATE_SUSTAINED)
                     ? ASB_SMART_PROACTIVE_P0_SUSTAINED_MAX
@@ -903,7 +928,8 @@ static void fsm_init(asb_fsm_t *fsm, int profile_idx) {
     clock_gettime(CLOCK_MONOTONIC, &fsm->last_transition);
     clock_gettime(CLOCK_MONOTONIC, &fsm->ses_state_enter);
     fsm_interpolate_caps(asb_profile_bounds_for(profile_idx),
-                         profile_idx, fsm->state, &fsm->current_caps);
+                         profile_idx, fsm->state,
+                         0, 0.0f, &fsm->current_caps);
 }
 
 static inline void fsm_auto_battery_persist(const asb_fsm_t *fsm) {
@@ -1863,7 +1889,8 @@ if (!can_leave &&
 
     asb_profile_caps_t new_caps;
     fsm_interpolate_caps(asb_profile_bounds_for(fsm->profile_idx),
-                         fsm->profile_idx, fsm->state, &new_caps);
+                         fsm->profile_idx, fsm->state,
+                         m->misc.app_hint, m->cpu.load1, &new_caps);
     
     /* SUSTAINED gets a cap that deepens with temperature.
      *
