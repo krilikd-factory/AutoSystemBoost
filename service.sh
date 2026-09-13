@@ -483,6 +483,16 @@ asb_migrate_governor_conf
     _t=$((_t + 5))
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
+    # Time the post-boot policy work.
+    #
+    # An audit argues the config reads - grep|head|sed|tr, five processes per key across
+    # 29 call sites - are what makes the phone warm right after a reboot, and proposes a
+    # cache in the atomic writer. The description is accurate; the conclusion is a guess.
+    #
+    # A cache there means new state in the one place we have already fixed a lock race and
+    # a key-loss bug, so it needs a number behind it. If this block takes seconds, caching
+    # is worth the risk; if it takes tens of milliseconds, it is not.
+    _asb_boot_t0="$(date +%s%N 2>/dev/null || echo 0)"
     # The bundled DSP chain is selected by actual effect ABI and staged files. It must
     # remain available to supported devices even when no optional fingerprint pack exists;
     # otherwise overlay bind and attacher never run and the loudness slider has no effect.
@@ -510,6 +520,16 @@ asb_migrate_governor_conf
         echo "ts=$(date +%s) action=odm_bind_late result=applied" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
         setprop ctl.restart audioserver 2>/dev/null || true
       fi
+    fi
+    # Close the boot-cost measurement started above.
+    #
+    # Printed once per boot. If this is seconds, the config-read cache an audit asks
+    # for is worth its risk; if it is tens of milliseconds, it is not - and the number
+    # settles that instead of a plausible-sounding argument.
+    if [ "${_asb_boot_t0:-0}" != "0" ]; then
+      _asb_boot_t1="$(date +%s%N 2>/dev/null || echo 0)"
+      [ "$_asb_boot_t1" != "0" ] && \
+        asb_log "boot: post-boot policy took $(( (_asb_boot_t1 - _asb_boot_t0) / 1000000 )) ms"
     fi
     # Launch the attacher daemon from OUR data dir (post-fs-data staged it there and made it
     # executable; the copy inside the module dir stays 0644 because the root manager resets
