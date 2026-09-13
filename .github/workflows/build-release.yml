@@ -99,6 +99,7 @@ jobs:
             tests/test_dsp_reference_contract.sh \
             tests/test_device_safety_contract.sh \
             tests/test_thermal_socd_validation.c \
+            tests/test_v64_regression_contract.sh \
             tests/test_p0_provenance_contract.sh \
             tests/test_v64_p0_contract.sh \
             tests/test_v64_webui_trial_ledger_contract.py \
