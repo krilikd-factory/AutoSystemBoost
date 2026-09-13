@@ -27,6 +27,10 @@ run 'DSP syntax' bash tools/dsp_stubs/asb_dsp_syntax_check.sh
 
 run_optional 'smart learner session 2' tests/test_smart_session2.sh bash
 run_optional 'smart learner session 3' tests/test_smart_session3.sh bash
+# Guards for the defects fixed in V64 - blend direction and overflow, config clamps,
+# threshold ordering. Each cost a round of field logs to find; this catches a
+# reintroduction at build time instead.
+run_optional 'V64 regression contract' tests/test_v64_regression_contract.sh bash
 run_optional 'DSP reference' tests/test_dsp_reference_contract.sh bash
 run_optional 'device safety' tests/test_device_safety_contract.sh sh
 run_optional 'donor telemetry boundary' tests/test_donor_telemetry_contract.sh sh
