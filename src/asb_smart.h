@@ -2029,7 +2029,16 @@ static void asb_smart_blend_values_int(
             out_vals[i] = 0;
             continue;
         }
-        int blended = (b_val * a + x_val * inv) / 1000;
+        /* long arithmetic: the product overflows int on a wide ladder.
+         *
+         * balanced ceil 2611200 times inv 700 is 1.83e9, and adding the battery term
+         * pushes the sum past INT_MAX - the result wraps negative, and a negative ceiling
+         * means the cluster gets whatever the kernel does with a nonsense value.
+         *
+         * It only bites where the gap between the two profiles is wide and alpha is low,
+         * which is exactly the cold-start case every new install passes through. Found by
+         * a contract test written for the blend DIRECTION; the direction was right. */
+        int blended = (int)(((long)b_val * a + (long)x_val * inv) / 1000);
         /* Hard cap: never exceed balanced value */
         if (blended > x_val) blended = x_val;
         /* Hard floor: never go below battery value */

@@ -7599,10 +7599,20 @@ int main(int argc, char **argv) {
              * Dual-cluster: both policy0 AND policy6 must be unclamped.
              */
             if (fsm.clamp_hold && metrics.misc.screen_on) {
-                int probe_interval = 60;  /* ~5min default */
+                /* Counted in TICKS, not seconds.
+                 *
+                 * The old comment said "~5min", which is true only at the 6 s calm
+                 * cadence; at the 2 s busy tick the same 60 ticks are two minutes. The
+                 * behaviour is reasonable either way - probing more often while the phone
+                 * is busy is what you want - but the number drifts silently whenever a
+                 * TIMER_*_S value changes, and a comment that quietly stops being true is
+                 * how the next reader gets misled.
+                 *
+                 * 60 ticks = 2 min busy / 6 min calm / 10 min screen-off. */
+                int probe_interval = 60;  /* ticks, not seconds - see above */
                 if (g_clamp_hold_since > 0 &&
                     (time(NULL) - g_clamp_hold_since) >= 600)
-                    probe_interval = 120;  /* ~10min economy after 10min hold */
+                    probe_interval = 120;  /* ticks: 4 min busy / 12 min calm */
                 /* action cost economy -- more waste = longer between probes */
                 if (g_action_waste >= g_asb_cfg.action_waste_threshold)
                     probe_interval = probe_interval * 2;

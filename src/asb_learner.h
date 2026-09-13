@@ -57,11 +57,37 @@ static int learner_load(asb_learn_db_t *db) {
 
 static void learner_save(asb_learn_db_t *db) {
     db->crc32 = crc32_simple(db->slots, sizeof(db->slots));
-    FILE *f = fopen(LEARN_FILE, "wb");
+
+    /* Write to a temporary file, then rename over the target.
+     *
+     * Opening the real file with "wb" truncates it immediately: from that moment until
+     * fclose returns, learn.bin is empty or half-written. A reboot, a crash or a module
+     * update in that window leaves nothing to load, and the learner starts from scratch -
+     * days of accumulated buckets gone for a few milliseconds of exposure.
+     *
+     * rename() on the same filesystem is atomic: a reader sees either the old file or the
+     * new one, never a partial. asb_smart.h already saves its store this way; this makes
+     * the learner match.
+     */
+    char tmp[288];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", LEARN_FILE);
+
+    FILE *f = fopen(tmp, "wb");
     if (!f) return;
-    fwrite(db, 1, sizeof(*db), f);
+    size_t wrote = fwrite(db, 1, sizeof(*db), f);
     fflush(f);
+    int fd = fileno(f);
+    if (fd >= 0) fsync(fd);
     fclose(f);
+
+    /* Only replace the good copy if the new one is complete. A short write means the
+     * filesystem is full or failing - keeping the previous file is strictly better than
+     * replacing it with a truncated one. */
+    if (wrote == sizeof(*db)) {
+        if (rename(tmp, LEARN_FILE) != 0) unlink(tmp);
+    } else {
+        unlink(tmp);
+    }
 }
 
 static void learner_init(asb_learn_db_t *db) {
