@@ -669,6 +669,10 @@ lk_emit_current_soc_consistency() {
   ' "$_cc_led" | sort
   echo "current_pct/h uses the reported charge_full capacity and sampled discharge current."
   echo "A CHECK result is a measurement-consistency warning, not causal energy attribution."
+  echo "A CHECK means avg_mA under-reports: current_now sees the main supply path, while"
+  echo "modem TX, display and peripherals draw partly outside it. Compare phases to each"
+  echo "other by mA - the bias is systematic - but take absolute mA as a lower bound. The"
+  echo "honest figure is d_pct x capacity / hours, which is what pct/h already is."
   echo ""
 }
 
