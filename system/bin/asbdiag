@@ -491,6 +491,10 @@ if [ -r "$_state" ]; then
   # says which timer to look at before touching any interval.
   _wbs="$(grep -m1 '^wake_by_src=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
   [ -n "$_wbs" ] && NOTE "wakeups by source: $_wbs"
+  # Boot cost, from the last boot's log line. Decides whether a config-read cache is
+  # worth the risk of new state in the atomic writer.
+  _bms="$(grep -ao 'post-boot policy took [0-9]* ms' /dev/.asb_profile_state/runtime_apply.log 2>/dev/null | tail -1)"
+  [ -n "$_bms" ] && NOTE "boot: $_bms"
   # Which path answered the screen question. 0=unknown 1,2=oplus 3=panel0 4=generic 5=default.
   # 5 means nothing was readable and the module assumed "on"; 0 means it never asked.
   _ssr="$(grep -m1 '^screen_src=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
