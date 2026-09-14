@@ -7848,7 +7848,16 @@ async function pollLive(visible) {
           // "measuring..." with a perfectly good number sitting in the state file.
           if (dr > 0) {
             _lastDrain = dr;
+            /* Label says "app drain" because that is what this is.
+             *
+             * The value comes from asb_smart_appheat_drain(app_hash) - a rolling figure
+             * for the app in front, not the phone average. It was labelled "Screen drain",
+             * which reads as "what the phone costs with the screen on", and a user
+             * comparing 13.4%/h here against 2%/h in the day log has no way to know they
+             * are different quantities. */
             _el('bnDrain').textContent = (dr / 10).toFixed(1) + '%/h';
+            { const _dp = _el('bnDrain');
+              if (_dp && _dp.parentElement) _dp.parentElement.title = T('lv_drain_tip', ''); }
           } else if (kv.charging === '1' || kv.plugged === '1') {
             _el('bnDrain').textContent = '\u2014';
           } else if (_lastDrain > 0) {
