@@ -1327,7 +1327,10 @@ _conf_mtime="$(stat -c %Y /data/adb/modules/AutoSystemBoost/config/governor.conf
 _gov_start="$(stat -c %Y /dev/.asb/governor.pid 2>/dev/null)"
 if [ -n "$_conf_mtime" ] && [ -n "$_gov_start" ]; then
   if [ "$_conf_mtime" -gt "$_gov_start" ] 2>/dev/null; then
-    NOTE "governor.conf was edited AFTER the governor started - run 'asb reload' or reboot for governor-owned keys to take effect"
+    # The governor now reloads governor.conf by itself when the file changes, so this is
+    # a timing note, not an instruction. Telling the user to reload by hand after that
+    # was fixed would send them chasing a problem that resolves within one tick.
+    NOTE "governor.conf changed after the governor started - it reloads automatically within a tick; reboot only if a value still looks unapplied a minute later"
   else
     NOTE "governor started after the last config edit - its values are current"
   fi
