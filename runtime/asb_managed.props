@@ -803,6 +803,22 @@ debug.sf.showbackground=0
 debug.sf.showfps=0
 debug.sf.disable_client_composition_cache=0
 debug.sf.no_hw_vsync=0
+# Stop issuing vsync callbacks while the panel is off.
+#
+# With the screen off nothing is composited, so every vsync tick is a wakeup that ends in
+# no work - SurfaceFlinger is scheduled, finds nothing to draw and goes back to sleep.
+#
+# Verified unset on this fleet (getprop returns empty), which means the built-in default
+# applies; on the OxygenOS builds checked that default leaves the ticks running.
+#
+# Deliberately the only one taken from a set of six circulating in other modules. The
+# other five are either current AOSP defaults (multithreaded_present,
+# use_frame_rate_priority, egl.swapinterval), inert on OPlus where the vendor owns
+# refresh-rate control (idle_reduce_framerate_enable), or actively risky:
+# use_phase_offsets_as_durations changes how SurfaceFlinger INTERPRETS the vendor's phase
+# configuration, and a mismatch there shows up as compositor micro-stutter that nobody
+# would trace back to a battery module.
+debug.sf.no_vsyncs_on_screen_off=1
 debug.cpurend.vsync=true
 debug.hwui.use_buffer_age=true
 debug.hwui.use_partial_updates=true
