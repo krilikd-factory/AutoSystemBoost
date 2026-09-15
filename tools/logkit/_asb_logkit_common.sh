@@ -1756,7 +1756,15 @@ lk_asb_feature_row() {
   printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
     "$_fe" "$_fd" \
     "$(_fst camera_hold)" \
-    "$(cat /dev/.asb/lpm_mode 2>/dev/null)" \
+    # Strip the field separator out of the value, do not let it split the row.
+    #
+    # /dev/.asb/lpm_mode holds "normal|handover=1|active=1" - three pipes inside ONE
+    # field. The row then carried 14 columns against a 12-column header, and every
+    # reader after that point was off by two: an audit read thermal_veto as a constant
+    # 2500 and asked what the number meant. It is dsp_gain_mb, in the wrong column.
+    #
+    # Replacing the separator with a comma keeps the value readable and the row parsable.
+    "$(cat /dev/.asb/lpm_mode 2>/dev/null | tr '|' ',')" \\
     "$(lk_dsp_live_state)" \
     "$(getprop persist.asb.dsp.gain_mb 2>/dev/null)" \
     "$_fabi" \

@@ -206,6 +206,12 @@ lk_detect_phase() {
     case "$_scr" in
       Awake|true)
         # Sample the first seconds at 1 Hz here, not on the next ordinary tick.
+  #
+  # RESULT SO FAR: across 18 wakes in a 3-hour capture the GPU ceiling was unchanged in
+  # 13 and only loosened in 3, and the FSM was already in MODERATE at t=0 for 11 of them.
+  # The reported "refresh rate drops for a few seconds after wake" is therefore NOT the
+  # governor holding a DEEP_IDLE ceiling - it wakes into an unclamped state. The trace
+  # stays because it is the only thing that can rule the module out, and it now has.
         #
         # The main loop runs about every 47 s, so the 20-second window below caught
         # exactly one sample - and one sample cannot show a ceiling that lifts a few
@@ -408,7 +414,7 @@ LK_PH_MAXCPU=0
 LK_PH_MASUM=0
 LK_PH_MACNT=0
 LK_PH_MAXSURF=0
-LK_PH_MAXP6=0
+LK_PH_MAXP6=0; LK_PH_SUMP6=0; LK_PH_CNTP6=0; LK_PH_SUMCPU=0; LK_PH_CNTCPU=0; LK_PH_SUMSURF=0; LK_PH_CNTSURF=0
 LK_PH_GPUSUM=0
 LK_PH_GPUCNT=0
 LK_PH_THROTTLE=0
@@ -477,9 +483,15 @@ lk_phase_ledger_row() {
       if [ "$_awake" -gt 15 ] 2>/dev/null; then
         {
           printf 'phase=%s awake=%s%% dur=%ss\n' "$LK_CUR_PHASE" "$_awake" "$_elapsed"
+            # Match 'realtime' alone - this build does not print 'partial' on the line.
+            #
+            # The pattern required both words on one line. Real output reads "Wake lock
+            # ActivityManager-Sleep realtime" with no "partial" anywhere, so 11 of 14 recorded
+            # phases got a header and no culprit - the section existed and answered nothing,
+            # which is worse than not having it, because it looks like there was no holder.
           dumpsys batterystats 2>/dev/null \
             | sed -n '/Wake lock/,/^$/p' \
-            | grep -iE 'partial.*realtime' \
+            | grep -iE 'wake lock .*realtime' \
             | head -3 | sed 's/^[[:space:]]*/  /'
         } >> "$LK_OUT_DIR/phase_wakeholders.txt" 2>/dev/null || true
       fi
@@ -506,7 +518,13 @@ EOF
   # field in the middle would silently shift throttle into wakepeak everywhere.
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$LK_CUR_PHASE" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
-    "$LK_PH_MAXCPU" "$LK_PH_MAXSURF" "$LK_PH_MAXP6" "$_gavg" \
+  _p6avg="$LK_PH_MAXP6"
+  [ "${LK_PH_CNTP6:-0}" -gt 0 ] 2>/dev/null && \
+    _p6avg=$(( LK_PH_SUMP6 / LK_PH_CNTP6 ))
+    _cavg="$LK_PH_MAXCPU"; _savg="$LK_PH_MAXSURF"
+    [ "${LK_PH_CNTCPU:-0}" -gt 0 ] 2>/dev/null && _cavg=$(( LK_PH_SUMCPU / LK_PH_CNTCPU ))
+    [ "${LK_PH_CNTSURF:-0}" -gt 0 ] 2>/dev/null && _savg=$(( LK_PH_SUMSURF / LK_PH_CNTSURF ))
+    "$_cavg" "$_savg" "$_p6avg" "$_gavg" \
     "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake" "$_maavg" "$_drx" "$_dtx" \
     "${LK_PH_COOLDOWN:-0}"
   return 0
@@ -527,7 +545,7 @@ lk_phase_ledger_open() {
   LK_PH_START_UP=$(lk_uptime_s)
   LK_PH_START_MONO=$(lk_mono_s)
   LK_PH_START_PCT=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
-  LK_PH_MAXCPU=0; LK_PH_MAXSURF=0; LK_PH_MAXP6=0
+  LK_PH_MAXCPU=0; LK_PH_MAXSURF=0; LK_PH_MAXP6=0; LK_PH_SUMP6=0; LK_PH_CNTP6=0; LK_PH_SUMCPU=0; LK_PH_CNTCPU=0; LK_PH_SUMSURF=0; LK_PH_CNTSURF=0
   LK_PH_MASUM=0; LK_PH_MACNT=0; LK_PH_MASEEN=0; LK_PH_COOLDOWN=0
   read -r LK_PH_START_RMNET_RX LK_PH_START_RMNET_TX <<EOF
 $(lk_phase_rmnet_bytes)
@@ -541,9 +559,35 @@ lk_phase_ledger_accumulate() {
   _surf=$(echo "$_j" | awk -F'"surface_hotspot":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
   _p6=$(cat /sys/devices/system/cpu/cpufreq/policy6/scaling_cur_freq 2>/dev/null)
   _gb="$LK_GPU_NOW"
+  # Accumulate means as well as peaks - the legend promises averages.
+  #
+  # The table header says "cpuT/surfT=average temps" and the code stored maxima, so a
+  # phase that touched 57C once for a second reported 57C throughout. Peak and mean
+  # answer different questions: peak says whether the phone got hot at all, mean says
+  # whether it stayed hot - and the second is what a drain figure should be read against.
   [ -n "$_temp" ] && [ "$_temp" -gt "$LK_PH_MAXCPU" ] 2>/dev/null && LK_PH_MAXCPU=$_temp
   [ -n "$_surf" ] && [ "$_surf" -gt "$LK_PH_MAXSURF" ] 2>/dev/null && LK_PH_MAXSURF=$_surf
+  case "$_temp" in ''|*[!0-9]*) : ;; *)
+    LK_PH_SUMCPU=$(( ${LK_PH_SUMCPU:-0} + _temp )); LK_PH_CNTCPU=$(( ${LK_PH_CNTCPU:-0} + 1 )) ;;
+  esac
+  case "$_surf" in ''|*[!0-9]*) : ;; *)
+    LK_PH_SUMSURF=$(( ${LK_PH_SUMSURF:-0} + _surf )); LK_PH_CNTSURF=$(( ${LK_PH_CNTSURF:-0} + 1 )) ;;
+  esac
+  # Duration-weighted average, not the phase peak.
+  #
+  # The peak is whatever the cluster touched once in the whole phase, so every row of the
+  # table printed roughly the same number - 1731..1775 across phases at 40C and 57C alike.
+  # Read literally that says the governor never lowers the prime cap, which is the
+  # opposite of what it spends its time doing.
+  #
+  # The peak is kept alongside: a phase that briefly reached hardware max is worth seeing,
+  # it just should not be the only number.
   [ -n "$_p6" ] && [ "$_p6" -gt "$LK_PH_MAXP6" ] 2>/dev/null && LK_PH_MAXP6=$_p6
+  case "$_p6" in ''|*[!0-9]*) : ;; *)
+    LK_PH_SUMP6=$(( ${LK_PH_SUMP6:-0} + _p6 ))
+    LK_PH_CNTP6=$(( ${LK_PH_CNTP6:-0} + 1 ))
+   ;;
+  esac
   if [ -n "$_gb" ]; then LK_PH_GPUSUM=$(( LK_PH_GPUSUM + _gb )); LK_PH_GPUCNT=$(( LK_PH_GPUCNT + 1 )); fi
   # Discharge current only, and the sign convention decides which samples those are.
   #
@@ -1113,8 +1157,22 @@ lk_emit_full_day_report() {
         printf "  physical writes          : %s/h\n" "$(( $(_mc_get governor_writes || echo 0) / _h ))"
         printf "  fsm transitions          : %s/h\n" "$(( $(_mc_get governor_transitions || echo 0) / _h ))"
         printf "  timer wakeups            : %s/h\n" "$(( $(_mc_get governor_timer_wakeups || echo 0) / _h ))"
-        printf "  settled ticks (no write) : %s\n" "$(_mc_get noop_ticks)"
-        printf "  json publishes avoided   : %s\n" "$(_mc_get json_skipped)"
+        # Same unit as the four lines above, or the block compares apples with oranges.
+        #
+        # These printed running totals beside per-hour rates, so a capture read "923 timer
+        # wakeups/h" next to "10 settled ticks" and the second looked alarming. It was a
+        # lifetime count sitting next to hourly ones.
+        _nt="$(_mc_get noop_ticks)"; _js="$(_mc_get json_skipped)"; _jw="$(_mc_get json_written)"
+        case "$_nt" in ''|*[!0-9]*) _nt=0 ;; esac
+        case "$_js" in ''|*[!0-9]*) _js=0 ;; esac
+        case "$_jw" in ''|*[!0-9]*) _jw=0 ;; esac
+        printf "  settled ticks (no write) : %s/h\n" "$(( _nt / _h ))"
+        if [ $(( _js + _jw )) -gt 0 ]; then
+          printf "  json publishes avoided   : %s/h (%s%% of attempts)\n" \
+            "$(( _js / _h ))" "$(( _js * 100 / (_js + _jw) ))"
+        else
+          printf "  json publishes avoided   : %s/h\n" "$(( _js / _h ))"
+        fi
       fi
       echo "── ASB FEATURE ENGAGEMENT ─────────────────────────────────────"
       awk -F'|' '
