@@ -127,6 +127,18 @@ _start() {
 
   _prev="$(_conf_value "$_k")"
   [ -n "$_prev" ] || { echo "trial: key is not present in active config: $_k" >&2; return 1; }
+  # A trial of the value that is already set is a no-op, and saying so is the point.
+  #
+  # A user pressed "12 hours" on gnss_trim and wakelock_action while both were already 1
+  # and got a bare "Could not start the trial". Nothing was wrong with the key, the value
+  # or the config - there was simply nothing to try, and the message said none of that.
+  #
+  # A trial exists to hold a DIFFERENT value for a while and roll it back. Refusing early
+  # with a reason beats letting the writer fail somewhere downstream with a generic one.
+  if [ "$_prev" = "$_v" ]; then
+    echo "trial: $_k is already $_v - a trial would change nothing" >&2
+    return 1
+  fi
   _started="$(_now)"
   _expires=$(( _started + _h * 3600 ))
   _pending="$TRIAL/.$_k.pending.$$"

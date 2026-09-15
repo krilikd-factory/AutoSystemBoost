@@ -324,7 +324,26 @@ diag_lock_known_dead() {
   fi
   [ -n "$_dld_boot" ] || return 0
   _dld_pid="$(pid_from_file "$DIAG_PIDFILE" 2>/dev/null || true)"
-  [ -n "$_dld_pid" ] && ! pid_is_live "$_dld_pid"
+  # A lock with no recorded PID and no live worker is dead, not alive.
+  #
+  # This required a PID to declare the lock stale, so a run that started the worker but
+  # failed to record its PID - the warn=diag_pid_unrecorded path a few lines below -
+  # left a lock nothing could ever clear. The next press got "already running", and the
+  # press after that succeeded only because the boot id or the worker had moved on.
+  # That is the "works on the second try" the user reported.
+  #
+  # With no PID, fall back to the status file: if the worker published a terminal
+  # state, or nothing at all for over a minute, there is no run to protect.
+  if [ -n "$_dld_pid" ]; then
+    ! pid_is_live "$_dld_pid"
+  else
+    case "$(cat "$DIAG_STATUSFILE" 2>/dev/null)" in
+      *status=done*|*status=failed*) return 0 ;;
+    esac
+    # No _mtime helper exists here; find is in every toybox build. A lock older than a
+    # minute with no PID and no terminal status is not protecting a live run.
+    [ -n "$(find "$DIAG_LOCKDIR" -maxdepth 0 -mmin +1 2>/dev/null)" ]
+  fi
 }
 
 diag_status_write() {
