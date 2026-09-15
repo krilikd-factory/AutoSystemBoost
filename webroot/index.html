@@ -74,25 +74,6 @@ html, body {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
-/* Portrait scrolls, whatever the page height works out to.
- *
- * html/body are pinned to height:100% for the layout below, and with only overflow-x
- * declared the vertical axis follows whatever the browser infers - which on a narrow
- * portrait viewport can end up clipped rather than scrollable once the floating tab bar
- * and its clearance are subtracted.
- *
- * min-height with 100dvh rather than 100% tracks the dynamic viewport, so the page still
- * reaches its end when the system bars hide and reappear. Portrait-only: landscape was
- * never affected and does not need the extra rule. */
-@media (orientation: portrait) {
-  html, body {
-    height: auto;
-    min-height: 100dvh;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
-  }
-}
 
 html::-webkit-scrollbar,
 body::-webkit-scrollbar,
