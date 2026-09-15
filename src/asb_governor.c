@@ -1958,6 +1958,14 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                    "smart_q_vendor=%d\nsmart_q_fail=%d\nsmart_budget_src=%d\n",
                 g_smart_q_bat, g_smart_q_heat, g_smart_q_stab,
                 g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
+        /* The live control-sensor reading, for consumers outside the governor.
+         *
+         * Peer counts, rejected sources and confidence are all published; the temperature
+         * they describe was not. Anything outside this process that wants to react to heat -
+         * the audio gain backoff, a log, a future tweak - had no number to read and would
+         * have to pick a thermal zone for itself, which is exactly the guessing this file
+         * spent months eliminating. */
+        fprintf(f, "cpu_max_c=%d\n", m ? m->therm.cpu_max_c : 0);
         fprintf(f, "smart_boot_settle=%d\nstartup_quarantined=%lu\n"
                    "thermal_control_source=\"%s\"\nthermal_control_zone=%d\n"
                    "thermal_source_confidence=%d\nthermal_rejected_type=\"%s\"\n"
@@ -2323,7 +2331,16 @@ static int asb_cap_compute_owner(const char *cap_source) {
  */
 static int asb_cap_writes_should_back_off(void) {
     time_t now = time(NULL);
-    if (g_cap_slow_vendor_clamps >= 20) g_cap_vendor_passive = 1;
+    /* Threshold comes from config now - see vendor_passive_clamps.
+     *
+     * 20 was tuned against one ROM. A capture from a build where the vendor owns 77% of
+     * clamp events reaches it constantly, so ASB goes passive and stays there; a quieter
+     * ROM may never reach it and keeps fighting a cap it cannot win. The right number is a
+     * property of the firmware, which means it belongs in the config, not the binary. */
+    {
+        int _vpc = g_asb_cfg.vendor_passive_clamps > 0 ? g_asb_cfg.vendor_passive_clamps : 20;
+        if (g_cap_slow_vendor_clamps >= _vpc) g_cap_vendor_passive = 1;
+    }
     if (g_cap_vendor_passive) g_stat_vendor_overrides++;
     else if (g_cap_slow_vendor_clamps < 10) g_cap_vendor_passive = 0;
     if (g_cap_vendor_passive) return 1;
@@ -6763,6 +6780,36 @@ int main(int argc, char **argv) {
                  * backoff must never delay the case it was built for. */
                 static unsigned long _rec_seen_writes = 0;
                 static int _rec_idle_streak = 0;
+                /* Reload governor.conf when it changes on disk.
+                 *
+                 * Until now only an explicit "asb reload" re-read the file, so a WebUI save of any
+                 * governor-owned key sat inert until the next reboot - and the diag had to print a
+                 * warning telling the user to reload by hand. That warning is the symptom; the file
+                 * watch is the fix, and it removes a whole class of "the setting did nothing".
+                 *
+                 * mtime, not inotify: one stat per tick against a file already in page cache costs
+                 * nothing, and it cannot leak a watch descriptor across the reload it triggers.
+                 * The existing reload path validates and rejects a bad file, so a partial write
+                 * mid-save is refused rather than applied. */
+                {
+                    static time_t _cfg_mtime = 0;
+                    struct stat _cst;
+                    if (stat(CONFIG_FILE, &_cst) == 0) {
+                        if (_cfg_mtime == 0) {
+                            _cfg_mtime = _cst.st_mtime;
+                        } else if (_cst.st_mtime != _cfg_mtime) {
+                            _cfg_mtime = _cst.st_mtime;
+                            asb_runtime_config_t _ncfg = g_asb_cfg;
+                            int _rc = asb_config_load_file(CONFIG_FILE, &_ncfg);
+                            if (_rc == 0) {
+                                g_asb_cfg = _ncfg;
+                                asb_log("config: reloaded automatically (governor.conf changed on disk)");
+                            } else {
+                                asb_log("config: auto-reload refused rc=%d; keeping last-known-good", _rc);
+                            }
+                        }
+                    }
+                }
                 int _rec_period = metrics.misc.screen_on ? 120 : 300;
                 if (g_stat_writes != _rec_seen_writes) { _rec_idle_streak = 0; }
                 else if (_rec_idle_streak < 3)          { /* grow slowly */ }

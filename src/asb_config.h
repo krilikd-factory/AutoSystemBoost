@@ -92,6 +92,10 @@ typedef struct {
     int   thermal_budget_moderate_trim_pct;
     int   thermal_budget_severe_trim_pct;
     int   thermal_budget_dwell_s;
+    /* How many vendor clamps in the slow window before ASB stops fighting for the cap.
+       Hardcoded at 20 until now; a ROM where the vendor owns 77% of clamps needs a lower
+       number, and one that rarely clamps needs a higher one. */
+    int   vendor_passive_clamps;
     /* Shadow mode calculates/logs policy but never mutates hardware nodes. */
     int   shadow_mode;
     int   gaming_cpu_max_ceiling_khz; /* cap declared scaling_max in GAMING (vendor clamps anyway); 0=off */
@@ -279,6 +283,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->thermal_budget_moderate_trim_pct = 18;
     c->thermal_budget_severe_trim_pct = 32;
     c->thermal_budget_dwell_s = 30;
+    c->vendor_passive_clamps = 20;
     c->shadow_mode = 0;
     c->gaming_cpu_max_ceiling_khz = 2400000;
     c->camera_hold_enable   = 1;
@@ -465,6 +470,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "thermal_budget_moderate_trim_pct")) c->thermal_budget_moderate_trim_pct = atoi(v);
     else if (!strcmp(k, "thermal_budget_severe_trim_pct")) c->thermal_budget_severe_trim_pct = atoi(v);
     else if (!strcmp(k, "thermal_budget_dwell_s")) c->thermal_budget_dwell_s = atoi(v);
+    else if (!strcmp(k, "vendor_passive_clamps")) c->vendor_passive_clamps = atoi(v);
     else if (!strcmp(k, "shadow_mode")) c->shadow_mode = atoi(v);
     else if (!strcmp(k, "gaming_cpu_max_ceiling_khz")) c->gaming_cpu_max_ceiling_khz = atoi(v);
     else if (!strcmp(k, "camera_hold_enable"))   c->camera_hold_enable   = atoi(v);

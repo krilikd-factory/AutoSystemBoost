@@ -69,6 +69,9 @@ typedef struct {
     unsigned long applied;
     unsigned long failures;
     unsigned long consecutive_failures;
+    /* Consecutive times the kernel reported a floor above what we asked for. Three in a
+     * row means it is vendor policy, not a transient clamp - see the backoff below. */
+    unsigned long floor_holds;
     unsigned long skipped_backoff;
     time_t retry_at;
     int requested;
@@ -193,6 +196,7 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         h->observed = pre;
         h->applied++;
         h->consecutive_failures = 0;
+        h->floor_holds = 0;
         h->retry_at = 0;
         snprintf(h->status, sizeof(h->status), "%s", "already_set");
         return 0;
@@ -278,7 +282,19 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
     if (rc == 0 && writer_node_is_cpu(node) && observed > 0 && observed > requested) {
         h->applied++;
         h->consecutive_failures = 0;
-        h->retry_at = 0;
+        /* Back off once the vendor floor has held repeatedly.
+         *
+         * A floor above our request is not an error - the kernel is doing its job - and
+         * retry_at stayed 0 so the next state change wrote again. On a phone where the
+         * vendor pins cpu_min at 1440000 while the ladder asks for 384000, that is a write
+         * per transition forever: 76 of them in one capture, none of which moved anything.
+         *
+         * Three consecutive holds is enough to call it policy rather than a transient
+         * thermal clamp. After that the node is left alone for an hour; the floor is
+         * re-probed then, so a vendor that lifts it is picked up without a restart.
+         */
+        if (++h->floor_holds >= 3) h->retry_at = now + 3600;
+        else                       h->retry_at = 0;
         snprintf(h->status, sizeof(h->status), "%s", "kernel_floor_higher");
         return 0;
     }
@@ -289,17 +305,43 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         snprintf(h->status, sizeof(h->status), "%s", "vendor_stricter_ceiling");
         return 0;
     }
-    h->failures++;
-    h->consecutive_failures++;
-    /* A WALT readback of INT_MIN is the sysfs reader's invalid sentinel, not
-     * an applied tuning. Fail closed for this daemon lifetime rather than
-     * waking every few minutes to rewrite an unsupported node. */
+    /* An unsupported node is not a failure - check before counting one.
+     *
+     * A WALT readback of INT_MIN is the sysfs reader's invalid sentinel: the node exists
+     * but does not read back, which on this kernel means the tuning is simply absent.
+     * Counting that as a write failure put a permanent FAIL in every report and dragged
+     * the diagnostic pass ratio to 97% on a phone where nothing is wrong - and a report
+     * that always shows one red line teaches people to ignore red lines.
+     *
+     * The status and the day-long backoff were already correct; only the counters ran
+     * first. Fail closed for this daemon lifetime rather than waking every few minutes to
+     * rewrite a node the kernel does not implement. */
+    /* A node that does not exist is unsupported, whichever node it is.
+     *
+     * The check below recognises exactly one case: walt_ravg reading INT_MIN. Every other
+     * absent node goes through the ordinary failure path - counted as a failure, retried
+     * on the backoff schedule, and reported in writer health as if the kernel had refused
+     * a legitimate write. It had not; the file simply is not there.
+     *
+     * The audit asks for this to generalise, and it is the same reasoning as the IPA gate:
+     * a path that does not exist is a fact about the device, not an error to keep retrying
+     * against. Checked once here rather than per node type, so a future node inherits it.
+     */
+    if (path && access(path, F_OK) != 0) {
+        h->retry_at = now + 86400;
+        snprintf(h->status, sizeof(h->status), "%s", "unsupported_absent");
+        writer_write_failure_event(node, path, requested, observed, h->retry_at);
+        return -1;
+    }
     if (node == ASB_WRITE_WALT_RAVG && observed == INT_MIN) {
         h->retry_at = now + 86400;
         snprintf(h->status, sizeof(h->status), "%s", "unsupported_readback");
         writer_write_failure_event(node, path, requested, observed, h->retry_at);
         return -1;
     }
+
+    h->failures++;
+    h->consecutive_failures++;
     /* If CPU policy repeatedly disagrees after a successful write, a vendor
      * PowerHAL/thermal owner is active. Back off for fifteen minutes instead
      * of entering a reassert fight that costs energy and can worsen heat. */
