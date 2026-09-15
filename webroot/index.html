@@ -74,6 +74,26 @@ html, body {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+/* Portrait scrolls, whatever the page height works out to.
+ *
+ * html/body are pinned to height:100% for the layout below, and with only overflow-x
+ * declared the vertical axis follows whatever the browser infers - which on a narrow
+ * portrait viewport can end up clipped rather than scrollable once the floating tab bar
+ * and its clearance are subtracted.
+ *
+ * min-height with 100dvh rather than 100% tracks the dynamic viewport, so the page still
+ * reaches its end when the system bars hide and reappear. Portrait-only: landscape was
+ * never affected and does not need the extra rule. */
+@media (orientation: portrait) {
+  html, body {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+}
+
 html::-webkit-scrollbar,
 body::-webkit-scrollbar,
 .live-page::-webkit-scrollbar {
@@ -3941,7 +3961,15 @@ function profilePaintFrame() {
 async function debugDiagPoll() {
   // asbdiag is bounded but device-dependent. Poll the tiny status file rather than
   // holding the original bridge call open, otherwise the WebView cannot render feedback.
-  for (let attempt = 0; attempt < 90; attempt++) {
+  /* 90 attempts at 350 ms is 31 seconds, and a full asbdiag takes longer than that on a
+   * busy phone - it walks every thermal zone, reads the whole config, dumps battery
+   * stats and formats the report. The file lands in Downloads exactly as it should, but
+   * the UI had already given up and said the action failed.
+   *
+   * 300 attempts is a little over 100 seconds. The poll is cheap - one status read per
+   * cycle - and the loop still exits the moment the collector reports done, so the extra
+   * ceiling costs nothing when the report is quick. */
+  for (let attempt = 0; attempt < 300; attempt++) {
     await debugDelay(350);
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh diag-status 2>/dev/null');
     const info = debugActionText(r);
