@@ -183,7 +183,26 @@ esac
 if _has tc; then
   for _if in $(ls /sys/class/net 2>/dev/null); do
     case "$_if" in lo|dummy*|sit*|ip6tnl*) continue ;; esac
-    [ "$(cat "/sys/class/net/$_if/operstate" 2>/dev/null)" = "up" ] || continue
+    # Accept "unknown" as well as "up" - rmnet never reports "up".
+    #
+    # operstate is only meaningful for devices with a carrier concept. rmnet is a virtual
+    # interface over the modem and the kernel leaves it at "unknown" for its whole life,
+    # so this check silently excluded every mobile link. A capture over three hours of
+    # mobile-only use shows the result: net_qdisc stored, never applied, with the diag
+    # reporting "waiting for a link" while the link was up and carrying 1.5 GB.
+    #
+    # IFF_UP in flags is the authoritative bit; operstate stays as a fast path for real
+    # carriers. "down" is still excluded either way.
+    _ost="$(cat "/sys/class/net/$_if/operstate" 2>/dev/null)"
+    case "$_ost" in
+      up) : ;;
+      unknown)
+        _fl="$(cat "/sys/class/net/$_if/flags" 2>/dev/null)"
+        case "$_fl" in ''|*[!0-9a-fAxX]*) continue ;; esac
+        [ $(( _fl & 1 )) -eq 1 ] 2>/dev/null || continue
+        ;;
+      *) continue ;;
+    esac
     _kind="$(_iface_kind "$_if")"
     [ "$_kind" = "other" ] && continue
     _want="$(_resolve_for net_qdisc "$_kind")"

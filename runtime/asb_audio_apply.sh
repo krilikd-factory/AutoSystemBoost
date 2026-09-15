@@ -97,6 +97,25 @@ if [ "$_mode" = "mirror" ]; then
         # Both legacy and AIDL DSP cores use the same +25 dB ceiling. The effect still
         # protects output with its true-peak limiter and final hard sample clamp.
         [ "$_mapplied" -gt 2500 ] && _mapplied=2500
+        # Back the gain off while the SoC is hot.
+        #
+        # A capture shows audio_bt at 29.8 %/h with the screen off and the amplifier holding
+        # +25 dB for the whole session; audio_bt_scr was the hottest phase at 473 mA / 57 C.
+        # Loudness costs power in the amplifier, and the amplifier is next to the SoC.
+        #
+        # Two steps rather than a curve: a curve would move the gain continuously and be
+        # audible as pumping. One reduction at 55 C and a deeper one at 60 C are each a single
+        # audible event, and both stay well above the point where the effect stops working.
+        #
+        # Reads the live control sensor the governor already publishes - no new probe, and no
+        # second opinion about which zone to trust.
+        _mt="$(sed -n 's/^cpu_max_c=//p' /dev/.asb/state 2>/dev/null | head -1 | tr -dc '0-9')"
+        case "$_mt" in ''|*[!0-9]*) _mt=0 ;; esac
+        if [ "$_mt" -ge 60 ] 2>/dev/null; then
+          [ "$_mapplied" -gt 800 ] && _mapplied=800
+        elif [ "$_mt" -ge 55 ] 2>/dev/null; then
+          [ "$_mapplied" -gt 1200 ] && _mapplied=1200
+        fi
         _persist persist.asb.dsp.gain_requested_mb "$_mrequested"
         _persist persist.asb.dsp.gain_applied_mb "$_mapplied"
         _mhave="$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
