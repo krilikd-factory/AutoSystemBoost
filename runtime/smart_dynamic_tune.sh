@@ -106,8 +106,27 @@ if [ "$_cam_guard" = "0" ]; then
            2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_base" in ''|*[!0-9]*) _base=35 ;; esac
 
-  if [ "$SCREEN" = "0" ]; then
+  # Screen off raises swappiness only when memory is actually tight.
+  #
+  # The old rule was unconditional: +20 whenever the screen went off. A capture shows
+  # what that costs - zram grew by 3.2 GiB during DEEP_IDLE alone. Compressing three
+  # gigabytes is CPU work done while the phone is supposed to be asleep, and every one
+  # of those pages has to be decompressed again when the user picks the phone up.
+  #
+  # Swapping out background apps is worth it when something needs the RAM. With half the
+  # memory free it is pure overhead: the pages are evicted, then faulted straight back.
+  #
+  # 25% free is the line: below it the device is genuinely under pressure and the old
+  # behaviour is right; above it, keep the profile value and let the pages sit.
+  _mt="$(grep -m1 MemTotal /proc/meminfo 2>/dev/null | tr -dc "0-9")"
+  _ma="$(grep -m1 MemAvailable /proc/meminfo 2>/dev/null | tr -dc "0-9")"
+  _freepct=100
+  [ -n "$_mt" ] && [ "$_mt" -gt 0 ] 2>/dev/null && [ -n "$_ma" ] && \
+    _freepct=$(( _ma * 100 / _mt ))
+  if [ "$SCREEN" = "0" ] && [ "$_freepct" -lt 25 ] 2>/dev/null; then
     _swp=$((_base + 20))
+  elif [ "$SCREEN" = "0" ]; then
+    _swp=$_base
   else
     case "$HINT" in
       4|3) _swp=$((_base - 10)) ;;
