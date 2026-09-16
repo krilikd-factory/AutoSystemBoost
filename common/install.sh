@@ -878,7 +878,19 @@ asb_patch_wifi_inplace() {
     # nested sku folders (e.g.
     # Globs only stat the paths they match — exactly the traversal the old `ls` guard did
     # (which never hung) — while still catching the nested-only layouts the old guard skipped.
-    _dst_root="$MODPATH/system${_ws#/system}"
+    # Mirror the live path when the source is not under /system.
+    #
+    # ${_ws#/system} strips a prefix that is not there for /vendor/etc/wifi, so the overlay
+    # landed on /system/vendor/etc/wifi while the Wi-Fi driver reads /vendor/etc/wifi. On
+    # these devices /vendor is its own mount point, not a symlink into /system - the same
+    # defect the camera tone tables had, in a different subsystem.
+    #
+    # Patch both: the live path is what the driver reads, and the system/ variant still
+    # serves devices where /vendor really is a symlink.
+case "$_ws" in
+      /system/*) _dst_root="$MODPATH/system${_ws#/system}" ;;
+      *)         _dst_root="$MODPATH${_ws}" ;;
+    esac
     for _wf in "$_ws"/WCNSS_qcom_cfg*.ini \
                "$_ws"/*/WCNSS_qcom_cfg*.ini \
                "$_ws"/*/*/WCNSS_qcom_cfg*.ini; do
@@ -1288,7 +1300,19 @@ asb_clone_dir_from_live() {
   case "$_canon" in
     /system/*) _canon="${_canon#/system}" ;;
   esac
-  _dest="$MODPATH/system${_canon}"
+  # Mirror the live path when the source is not under /system.
+  #
+  # /vendor/etc/audio has no /system prefix to strip, so the overlay landed on
+  # /system/vendor/etc/audio while audio HAL reads /vendor/etc/audio. On these
+  # devices /vendor is its own mount point - the same defect already found in the
+  # camera tone tables and the Wi-Fi configs, in a third subsystem.
+  #
+  # This is why the IIR0 EQ check reports 5 bands engaged: the flattening ran on a
+  # copy nothing reads.
+  case "$_src" in
+    /system/*) _dest="$MODPATH/system${_canon}" ;;
+    *)         _dest="$MODPATH${_canon}" ;;
+  esac
   rm -rf "$_dest" 2>/dev/null
   mkdir -p "$_dest" 2>/dev/null
   # Copy ONLY the text config files ASB actually patches.
@@ -2337,7 +2361,8 @@ asb_register_dsp_all_configs() {
     [ -f "$_ecl" ] || continue
     case "$_ecl" in
       /system/*) _ecd="$MODPATH/system${_ecl#/system}" ;;
-      *)         _ecd="$MODPATH/system${_ecl}" ;;
+      # audio_effects_config.xml: same live-path rule as the mixer files above. 
+      *)         _ecd="$MODPATH${_ecl}" ;;
     esac
     [ -f "$_ecd" ] && continue
     mkdir -p "$(dirname "$_ecd")" 2>/dev/null || continue
