@@ -916,7 +916,20 @@ case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released fr
     _dsp_requested_mb=$((_dsp_g * 100))
     _dsp_expected_mb="$_dsp_requested_mb"
     [ "$_dsp_expected_mb" -gt 2500 ] && _dsp_expected_mb=2500
-    V "  DSP gain applied (persist.asb.dsp.gain_mb)" "$_dsp_expected_mb" "$(gp persist.asb.dsp.gain_mb)" eq
+    # A thermally reduced gain is correct behaviour, not a failed write.
+    #
+    # asb_audio_apply backs the gain off to 1200 mB above 55C and 800 above 60. This check
+    # compared against the REQUESTED value and reported FAIL on a phone that was simply
+    # warm - the one state where the reduction is the whole point. A diagnostic that calls
+    # a working safeguard a fault teaches the user to ignore it.
+    _dsp_live_mb="$(gp persist.asb.dsp.gain_mb)"
+    _dsp_t="$(grep -m1 '^cpu_max_c=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
+    case "$_dsp_t" in ''|*[!0-9]*) _dsp_t=0 ;; esac
+    if [ "$_dsp_t" -ge 55 ] 2>/dev/null && [ "$_dsp_live_mb" -lt "$_dsp_expected_mb" ] 2>/dev/null; then
+      NOTE "DSP gain ${_dsp_live_mb}mB (requested ${_dsp_expected_mb}) - reduced on purpose, die at ${_dsp_t}C"
+    else
+      V "  DSP gain applied (persist.asb.dsp.gain_mb)" "$_dsp_expected_mb" "$_dsp_live_mb"
+    fi
     [ "$_dsp_requested_mb" -ne "$_dsp_expected_mb" ] && \
       NOTE "  requested ${_dsp_requested_mb}mB is safely capped to ${_dsp_expected_mb}mB (+25 dB compatibility limit)"
     V "  DSP enabled" "1" "$(gp persist.asb.dsp.enable)" eq
