@@ -1098,6 +1098,35 @@ V "  tcp congestion in force" "$(cfg net_congestion | sed 's/^auto$//')" \
   "$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)" present
 NOTE "available congestion algorithms: $(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
 NOTE "qdisc in force: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
+# RPS and tx_queue_len: requested versus live, per interface.
+#
+# Both settings were switched on by the user - net_rps=little, net_txqueue=short - and
+# nothing in this report confirmed either one. A tweak that writes a sysfs node and is
+# never read back is indistinguishable from one that silently does nothing, which is
+# the failure mode this file has hit repeatedly: camera, Wi-Fi, audio and qdisc all
+# looked applied while landing somewhere nothing reads.
+_rps_want="$(grep -m1 '^net_rps=' "$CONF" 2>/dev/null | cut -d= -f2)"
+_txq_want="$(grep -m1 '^net_txqueue=' "$CONF" 2>/dev/null | cut -d= -f2)"
+if [ -n "$_rps_want" ] && [ "$_rps_want" != "stock" ]; then
+  _rps_seen=""
+  for _rd in /sys/class/net/*/queues/rx-0/rps_cpus; do
+    [ -r "$_rd" ] || continue
+    _rn="$(echo "$_rd" | cut -d/ -f5)"
+    case "$_rn" in lo|dummy*) continue ;; esac
+    _rv="$(cat "$_rd" 2>/dev/null | tr -d ' ,0')"
+    [ -n "$_rv" ] && _rps_seen="$_rps_seen $_rn"
+  done
+  if [ -n "$_rps_seen" ]; then
+    NOTE "net_rps=$_rps_want - live on:$_rps_seen"
+  else
+    NOTE "net_rps=$_rps_want - requested but NO interface has a non-zero rps_cpus"
+  fi
+fi
+if [ -n "$_txq_want" ] && [ "$_txq_want" != "stock" ]; then
+  _txq_live="$(cat /sys/class/net/rmnet_data0/tx_queue_len 2>/dev/null \
+               || cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
+  NOTE "net_txqueue=$_txq_want - live tx_queue_len: ${_txq_live:-unreadable}"
+fi
 
 
 # Requested vs accepted, per key.
