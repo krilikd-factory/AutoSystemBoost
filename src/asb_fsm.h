@@ -468,6 +468,21 @@ static void fsm_interpolate_caps(
     if (state == ASB_STATE_DEEP_IDLE &&
         out->gpu_max_pct > ASB_DEEP_IDLE_GPU_MAX_PCT)
         out->gpu_max_pct = ASB_DEEP_IDLE_GPU_MAX_PCT;
+    /* The background tier gets the same treatment as the GPU in DEEP_IDLE.
+     *
+     * DEEP_IDLE is the second-largest phase in every capture - 73 of 214 samples at
+     * 140 mA. The GPU is already pinned there and the CPU rails are low, but the
+     * background uclamp tier still carries the profile value (29% on this device),
+     * so a sync job or a cached app that wakes up may ask the scheduler for nearly a
+     * third of peak capacity while the screen is off and nothing is waiting on it.
+     *
+     * 18, not 0: an empty uclamp tells the scheduler the task needs no CPU at all and
+     * work stops - the defect already fixed once in the profile rails. This leaves a
+     * working floor, and top-app and foreground are untouched, so unlocking the phone
+     * is exactly as fast as before.
+     */
+    if (state == ASB_STATE_DEEP_IDLE && out->uclamp_bg_max > 18)
+        out->uclamp_bg_max = 18;
     /* Smart must start shedding heat before the vendor thermal HAL has to clamp it.  Without
      * this guard the blended Smart ceiling can sit above the vendor's usual 1.50-1.63GHz
      * prime-cluster ceiling; the vendor then wins, and the writer records a clamp/write-war
@@ -2105,6 +2120,43 @@ if (!can_leave &&
             fsm->cooldown_edge = (_cool_active != _cool_was)
                                  ? (_cool_active ? 1 : -1) : 0;
             fsm->cooldown_die_c = _t;
+            /* Screen off and only background work: the prime cluster is not needed.
+             *
+             * Across every capture this session the costliest screen-off phase is audio playback:
+             * 29.8 %/h on Bluetooth, 100% awake, prime sitting at 1.6-1.7 GHz. Decoding a stream
+             * does not need prime cores - it is a steady, small workload that the little cluster
+             * handles, and the scheduler puts it there anyway. The high cap simply allows a
+             * migration that costs energy and heat whenever anything briefly spikes.
+             *
+             * MODERATE with the screen off IS that background work: DEEP_IDLE covers true idle,
+             * and anything the user is watching would have the screen on. Capped to the slot's
+             * own idle rail rather than a fixed number, so a device with different silicon gets
+             * its own floor.
+             *
+             * Little and mid are left alone: they carry the decode, and squeezing them is how an
+             * audio module produces stutter. Only the prime slot is touched.
+             */
+            /* Also require the run queue to be quiet - state alone is not enough.
+             *
+             * Checking the capture that motivated this: every MODERATE sample with the screen off
+             * had load1 at 1.32 per core, none below 0.5. So screen-off MODERATE is NOT reliably
+             * background audio on this device - it also covers sync bursts and app wake-ups that
+             * genuinely want the prime cluster. Capping on state alone would have slowed those.
+             *
+             * The load gate keeps the saving for the case it was built for and leaves busy
+             * screen-off work untouched. Same quiet floor the calm tick cadence uses, so the two
+             * cannot disagree about what "quiet" means. */
+            if (!m->misc.screen_on && !_cool_active &&
+                (fsm->state == ASB_STATE_MODERATE || fsm->state == ASB_STATE_LIGHT_IDLE) &&
+                asb_load_per_core(m) < 0.5f) {
+                int prime_lo = g_cpu_slot_hwmin[2];
+                /* x1.4, not x2: the prime lowest OPP here is 1017 MHz, so x2 lands at 2035 and
+                   snaps down to 1689 - above the 1665 the phase already ran at, changing nothing.
+                   x1.4 gives 1424, which snaps to 1401: a real 15% reduction. */
+                int prime_cap = prime_lo + (prime_lo * 2 / 5);
+                if (new_caps.cpu_max[2] > prime_cap)
+                    new_caps.cpu_max[2] = prime_cap;
+            }
             if (_cool_active) {
                 for (int i = 0; i < 3; i++) {
                     int lo = g_cpu_slot_hwmin[i];
