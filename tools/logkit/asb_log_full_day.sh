@@ -516,14 +516,19 @@ EOF
   [ "$_drx" -lt 0 ] && _drx=0; [ "$_dtx" -lt 0 ] && _dtx=0
   # Appended, never inserted: consumers index this file by column number, and a new
   # field in the middle would silently shift throttle into wakepeak everywhere.
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$LK_CUR_PHASE" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
+  # Averages computed BEFORE the printf, not between its arguments.
+  #
+  # Placing assignments inside a line-continued argument list splits the command: the
+  # first five fields printed and every column after them came out as 0. A whole
+  # capture of phase data was lost that way, and the table still looked well-formed.
   _p6avg="$LK_PH_MAXP6"
   [ "${LK_PH_CNTP6:-0}" -gt 0 ] 2>/dev/null && \
     _p6avg=$(( LK_PH_SUMP6 / LK_PH_CNTP6 ))
     _cavg="$LK_PH_MAXCPU"; _savg="$LK_PH_MAXSURF"
     [ "${LK_PH_CNTCPU:-0}" -gt 0 ] 2>/dev/null && _cavg=$(( LK_PH_SUMCPU / LK_PH_CNTCPU ))
     [ "${LK_PH_CNTSURF:-0}" -gt 0 ] 2>/dev/null && _savg=$(( LK_PH_SUMSURF / LK_PH_CNTSURF ))
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$LK_CUR_PHASE" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
     "$_cavg" "$_savg" "$_p6avg" "$_gavg" \
     "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake" "$_maavg" "$_drx" "$_dtx" \
     "${LK_PH_COOLDOWN:-0}"
