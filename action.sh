@@ -1601,14 +1601,32 @@ done
 _mnt="$(grep -c 'AutoSystemBoost' /proc/mounts 2>/dev/null)"
 case "$_mnt" in ''|*[!0-9]*) _mnt=0 ;; esac
 _ovl_live=0
+# Probe one file PER overlaid domain, not a single DSP library.
+#
+# The old probe checked only libasbdsp.so. On a device where the DSP overlay lands but
+# the camera one does not, this reported "overlay: live" while the camera kept reading
+# the stock tone table - which is exactly the state the user hit: WebUI showed the
+# retouch list enabled, the grader had run, and the camera saw none of it.
+#
+# Counting domains separately turns "the overlay works" into "which parts of it work",
+# which is the question a partial mount actually raises.
+_ovl_dom=0; _ovl_miss=""
 for _op in /vendor/lib64/soundfx/libasbdsp.so /vendor/lib/soundfx/libasbdsp.so; do
-  [ -f "$_op" ] && { _ovl_live=1; break; }
+  [ -f "$_op" ] && { _ovl_live=1; _ovl_dom=$(( _ovl_dom + 1 )); break; }
 done
+if grep -q "org.telegram.messenger" /odm/etc/camera/config/video_beauty_default_config 2>/dev/null; then
+  _ovl_live=1; _ovl_dom=$(( _ovl_dom + 1 ))
+else
+  _ovl_miss="${_ovl_miss} camera"
+fi
 _krn="$(uname -r 2>/dev/null | cut -d- -f1)"
 if [ "$_mnt" -gt 0 ] 2>/dev/null; then
   _sysl="       overlay: ${_mnt} mount$([ "$_mnt" = "1" ] || echo s)"
 elif [ "$_ovl_live" = "1" ]; then
   _sysl="       overlay: live (private namespace)"
+  # Name the domain that did NOT land, or the line reads as full success.
+  [ -n "$_ovl_miss" ] && \
+    _sysl="       overlay: partial -${_ovl_miss} not visible to the system"
 else
   _sysl="       overlay: not detected"
 fi
