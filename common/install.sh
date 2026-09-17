@@ -802,7 +802,13 @@ asb_apply_device_overlay() {
           done
         fi
       done
-      _ctf="$MODPATH/system/vendor/odm/etc/camera/conf_tuning_params.json"
+      # Prefer the live-path copy; fall back to the system/ variant.
+      #
+      # Same hardcoded assumption as the retouch injector further down: the camera files
+      # now mirror the live path, so pointing only at system/vendor/... hands the tweak
+      # engine a file that does not exist on this device.
+      _ctf="$MODPATH/odm/etc/camera/conf_tuning_params.json"
+      [ -f "$_ctf" ] || _ctf="$MODPATH/system/vendor/odm/etc/camera/conf_tuning_params.json"
       _skip_cam_engine=false
       [ "$ASB_IS_OP12" = "true" ] && [ "$ASB_IS_APATCH" = "true" ] && _skip_cam_engine=true
       if [ "$_skip_cam_engine" != "true" ] && [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
@@ -3032,7 +3038,17 @@ asb_register_dsp_all_configs
 if [ "$ASB_CAMERA" = "true" ] && [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
   command -v asb_tw_vb_add_apps >/dev/null 2>&1 || . "$MODPATH/runtime/asb_tweaks.sh"
   _asb_vb_final_n=0
+  # Include the live-path copy, which is where the file actually is now.
+  #
+  # This listed only the system/ variants. Once the camera destination was corrected to
+  # mirror the live path (odm/etc/camera/...), the injector stopped finding any file and
+  # silently added the retouch apps to nothing - the tone grading still worked, so the
+  # breakage looked like it came from somewhere else entirely.
+  #
+  # All three are listed: the live path plus both system/ variants, so a device where
+  # /odm really is a symlink keeps working exactly as before.
   for _asb_vb_final in \
+    "$MODPATH/odm/etc/camera/config/video_beauty_default_config" \
     "$MODPATH/system/odm/etc/camera/config/video_beauty_default_config" \
     "$MODPATH/system/vendor/odm/etc/camera/config/video_beauty_default_config"; do
     [ -f "$_asb_vb_final" ] || continue
