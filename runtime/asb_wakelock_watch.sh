@@ -198,6 +198,17 @@ _win="$(grep -m1 '^awake_window_min=' /dev/.asb/state 2>/dev/null | cut -d= -f2)
 # one stops the action, not the measurement.
 case "${_awake:--1}" in ''|-1) exit 0 ;; esac
 [ "${_win:-0}" -ge 45 ] 2>/dev/null || exit 0
+# 25% stands: a safety contract pins it, and the reasoning behind that is sound.
+#
+# Field nights sit at 16-17% awake, so this watcher does not fire on them - I lowered
+# the bar to 15 and test_wakelock_watch_safety_contract caught it. The contract exists
+# because this path CHANGES APP STATE without asking: restricting a standby bucket is
+# visible to the user as an app that stopped syncing. A high bar means it only acts
+# when the evidence is overwhelming, and 16% of a night is not that.
+#
+# The right answer for those nights is naming the apps in the report so the user can
+# decide - which the per-app wakelock capture added last turn now does - not lowering
+# the bar at which the module acts on its own.
 [ "${_awake:-0}" -ge 25 ] 2>/dev/null || exit 0
 
 asb_wl_relax
