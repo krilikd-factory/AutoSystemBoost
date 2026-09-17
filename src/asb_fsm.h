@@ -1084,7 +1084,22 @@ if (m->gpu.load_pct >= _gpu_gate) {
          * try to grade how hard the game works. Anything genuinely interactive clears it.
          */
         int cpu_busy_enough = (asb_load_per_core(m) >= ASB_GAMING_MIN_LOAD1_PER_CORE);
-        if (g_gaming_confirm_streak >= g_asb_cfg.gaming_confirm_ticks && cpu_busy_enough)
+        /* A game must be confirmed by the package, not by GPU load alone.
+         *
+         * GPU load and a busy CPU describe video playback, map rendering and a heavily
+         * animated feed just as well as a game. A capture with no game running shows one
+         * GAMING sample at GPU 100% and load 1.3 per core - enough to pass both gates.
+         *
+         * GAMING carries the loosest rails in the ladder, so a false positive spends power on
+         * a workload that never asked for it. The Smart package table already classifies the
+         * foreground app; requiring its agreement costs nothing and removes the whole class.
+         *
+         * Where the hint is unavailable (hint 0) the old behaviour stands: the GPU and CPU
+         * gates alone decide, so a device without package detection is no worse off.
+         */
+        int pkg_agrees = (m->misc.app_hint == 0 || m->misc.app_hint >= ASB_APP_GAMING);
+        if (g_gaming_confirm_streak >= g_asb_cfg.gaming_confirm_ticks && cpu_busy_enough &&
+            pkg_agrees)
             return ASB_STATE_GAMING;
         /* Above the gaming GPU threshold but the CPU is not participating: this fell
          * through to HEAVY, which is the same mistake one step down. A feed of autoplaying
