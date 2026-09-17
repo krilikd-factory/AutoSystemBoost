@@ -493,6 +493,20 @@ lk_phase_ledger_row() {
             | sed -n '/Wake lock/,/^$/p' \
             | grep -iE 'wake lock .*realtime' \
             | head -3 | sed 's/^[[:space:]]*/  /'
+            # Also capture the per-UID wakelock block, where app names live.
+            #
+            # The section above only matches "Kernel Wake lock ...", so a sleep phase reports
+            # PowerManagerService and rmnet and nothing a user can act on. A capture shows 155 MiB
+            # of mobile traffic during DEEP_IDLE in 11 bursts - that is apps waking up, and their
+            # names are what turns the report into something actionable: a standby bucket, an
+            # exemption removed, an app uninstalled.
+            #
+            # batterystats lists these under "Wake lock <uid> <package>"; taking the top three
+            # keeps the cost identical to the kernel list above.
+            dumpsys batterystats 2>/dev/null \
+              | sed -n '/Wake lock/,/^$/p' \
+              | grep -iE 'wake lock u[0-9]+' \
+              | head -3 | sed 's/^[[:space:]]*/  app: /'
         } >> "$LK_OUT_DIR/phase_wakeholders.txt" 2>/dev/null || true
       fi
       ;;
