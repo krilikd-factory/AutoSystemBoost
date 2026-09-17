@@ -253,6 +253,24 @@ if _has tc; then
     # Read back: tc accepts a qdisc the kernel has no module for and silently keeps the
     # old one, which is indistinguishable from success unless you look.
     _qd_tried=$(( _qd_tried + 1 ))
+    # One fallback when the kernel simply lacks the qdisc we asked for.
+    #
+    # fq_codel needs sch_fq_codel; cake needs sch_cake. A kernel without them refuses and
+    # the interface keeps pfifo_fast - no queue management at all, which is the outcome
+    # the tweak exists to avoid. A field report shows exactly this on mobile: requested
+    # fq_codel, got a tc error, and the link stayed on the default.
+    #
+    # fq is built into every Android kernel that has fq_codel as a module, and it gives
+    # most of the latency benefit. Tried once, only for the two causes where a different
+    # qdisc can help - a permission or ownership failure would fail identically.
+    case "$_qd_why" in
+      kernel_lacks_qdisc|module_missing)
+        if [ "$_want" != "fq" ] && tc qdisc replace dev "$_if" root fq pacing 2>/dev/null; then
+          _qd_why="fell_back_to_fq"
+          _qd_err=""
+        fi
+        ;;
+    esac
     if tc qdisc show dev "$_if" 2>/dev/null | grep -q "$_want"; then
       _qd_ok=$(( _qd_ok + 1 ))
       _out="$_out qdisc[$_kind:$_if]=$_want"
