@@ -2105,7 +2105,22 @@ if (!can_leave &&
     {
         static int _cool_active = 0;
         int _t = m->therm.cpu_max_c;
+        /* Screen-on clears the clamp, and that is an EXIT edge like any other.
+         *
+         * This reset the flag silently, so a night that engaged the clamp, was interrupted by
+         * a screen-on, and cooled again logged "cooldown: enter" twice with no exit between -
+         * a field capture shows exactly that, six seconds apart. Reading the log literally,
+         * the clamp looked like it was thrashing; it was not, the exit was simply never
+         * recorded.
+         *
+         * Publishing the edge here keeps every enter paired with an exit, which is what makes
+         * the log answer "how long did it hold" instead of only "did it fire".
+         */
         if (m->misc.screen_on || _t <= 0) {
+            if (_cool_active) {
+                fsm->cooldown_edge = -1;
+                fsm->cooldown_die_c = _t;
+            }
             _cool_active = 0;
         } else {
             /* Log the edges, not the state: thermal_cooldown is published every tick, so a
