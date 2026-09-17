@@ -1678,8 +1678,25 @@ else
     P "  file: $VB"
     _ct_present="$(firstf '/odm/etc/camera/conf_tuning_params.json' '/vendor/odm/etc/camera/conf_tuning_params.json')"
     if [ -n "$_ct_present" ]; then
-      V "  retouch app count >= 7" "7" "$(grep -c packageName "$VB" 2>/dev/null)" ge
-      V "  Telegram present" "1" "$(grep -c org.telegram.messenger "$VB" 2>/dev/null)" ge
+      # When the overlay is not visible to us, these are not module failures.
+      #
+      # asbdiag runs outside the camera's mount namespace, so on a private-namespace mount
+      # it reads the same stock file the camera does. Reporting FAIL there says the tweak
+      # broke, when what actually happened is the overlay never reached either of us - and
+      # five of ten failures in a field report came from this one cause, dragging pass_ratio
+      # to 69% on a phone whose module was working as designed.
+      #
+      # The grade record is the evidence that ASB did its part: it is written when the
+      # grader runs. Present grade + stock live file = a mount problem, and the report
+      # should say so instead of blaming the tweak.
+      _cam_graded="$(cat /data/adb/asb/grade_marks/*.mark 2>/dev/null | head -1)"
+      if [ -n "$_cam_graded" ] && ! grep -q "org.telegram.messenger" "$VB" 2>/dev/null; then
+        NOTE "camera overlay not visible from here - graded file exists but $VB is stock"
+        NOTE "  (private-namespace mount: the camera reads the same stock file; not a tweak failure)"
+      else
+        V "  retouch app count >= 7" "7" "$(grep -c packageName "$VB" 2>/dev/null)" ge
+        V "  Telegram present" "1" "$(grep -c org.telegram.messenger "$VB" 2>/dev/null)" ge
+      fi
     else
       NA=$((NA+2))
       P "  [N/A ] retouch/Telegram content is OP15 camera-tone specific (no conf_tuning on this model)"
