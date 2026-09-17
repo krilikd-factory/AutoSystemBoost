@@ -123,7 +123,22 @@ if [ "$_cam_guard" = "0" ]; then
   _freepct=100
   [ -n "$_mt" ] && [ "$_mt" -gt 0 ] 2>/dev/null && [ -n "$_ma" ] && \
     _freepct=$(( _ma * 100 / _mt ))
-  if [ "$SCREEN" = "0" ] && [ "$_freepct" -lt 25 ] 2>/dev/null; then
+  # PSI, not free-memory share: it measures pressure instead of its aftermath.
+#
+# A field snapshot reads available=3883 of 15109 - 25%, right on the threshold - while
+# memory PSI some/avg60 sits at 0.17, which is nothing. The two disagree because zram had
+# already absorbed 6.3 GiB: the system evicted gigabytes, and "available" looks healthy
+# BECAUSE of that work, not instead of it. Gating on the share therefore raises swappiness
+# exactly when the swapping has already happened.
+#
+# PSI "some" is the fraction of time at least one task stalled waiting on memory. Above 5
+# there is real contention worth swapping for; below it the pages would be faulted back.
+# Free share stays as the fallback where PSI is absent.
+_psi="$(sed -n 's/^some .*avg60=\([0-9.]*\).*/\1/p' /proc/pressure/memory 2>/dev/null | head -1)"
+_psi_i="${_psi%%.*}"
+case "$_psi_i" in ''|*[!0-9]*) _psi_i="" ;; esac
+if [ "$SCREEN" = "0" ] && { [ -n "$_psi_i" ] && [ "$_psi_i" -ge 5 ] 2>/dev/null \
+   || { [ -z "$_psi_i" ] && [ "$_freepct" -lt 25 ] 2>/dev/null; }; }; then
     _swp=$((_base + 20))
   elif [ "$SCREEN" = "0" ]; then
     _swp=$_base
