@@ -1177,7 +1177,20 @@ lk_emit_full_day_report() {
   # profile change. Using system uptime made a capture report 29 timer wakeups per hour
   # where the idle tick alone produces 360 - the module looked ten times cheaper than it
   # is, and that is the kind of error that stops a real regression being noticed.
-  _up="$(_mc_get governor_uptime_s)"
+# Take the LARGEST uptime across snapshots, not whichever one we read last.
+  #
+  # The governor restarts on profile changes, so a snapshot taken right after one reports
+  # a few seconds of uptime - a capture came back with governor_uptime_s=21, which divides
+  # every counter to zero and drops the whole block. The counters reset with the daemon
+  # too, so the longest-running snapshot is the one whose numbers are worth reporting.
+  _up=0
+  for _snap in "$LK_OUT_DIR"/snapshot_*.txt "$LK_OUT_DIR/before.txt"; do
+    [ -r "$_snap" ] || continue
+    _u="$(grep -m1 '^governor_uptime_s=' "$_snap" 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
+    case "$_u" in ''|*[!0-9]*) continue ;; esac
+    [ "$_u" -gt "$_up" ] 2>/dev/null && { _up="$_u"; _mc="$_snap"; }
+  done
+  [ "$_up" -gt 0 ] 2>/dev/null || _up="$(_mc_get governor_uptime_s)"
   case "$_up" in ''|0) _up="$(cut -d. -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')" ;; esac
         case "$_up" in ''|0) _up=1 ;; esac
         _h=$(( _up / 3600 )); [ "$_h" -lt 1 ] && _h=1
