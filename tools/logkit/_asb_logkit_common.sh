@@ -974,7 +974,12 @@ lk_wakelock_emit_report() {
         | awk '
           {
             line=$0;
-            if (match(line,/[0-9]+h[0-9]+m[0-9]+s/)||match(line,/[0-9]+m[0-9]+s/)||match(line,/[0-9]+s[0-9]+ms/)) {
+            # Accept spaces between units - batterystats prints "1m 19s 829ms".
+            #
+            # The patterns required h/m/s adjacent, so "1m 19s" matched only the trailing
+            # "19s" and ranked at 19 seconds instead of 79. PowerManagerService, the largest
+            # holder in a field capture, dropped off the list entirely that way.
+            if (match(line,/[0-9]+h[ ]?[0-9]+m[ ]?[0-9]+s/)||match(line,/[0-9]+m[ ]?[0-9]+s/)||match(line,/[0-9]+s[0-9]+ms/)) {
               t=substr(line,RSTART,RLENGTH); tmp=t; h=0;m=0;s=0;
               if(match(tmp,/[0-9]+h/))h=substr(tmp,RSTART,RLENGTH-1)+0;
               if(match(tmp,/[0-9]+m/))m=substr(tmp,RSTART,RLENGTH-1)+0;
