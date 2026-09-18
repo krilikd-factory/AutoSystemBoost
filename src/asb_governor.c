@@ -2109,8 +2109,22 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * describes a disagreement and one that only notes it happened.
      *
      * Slot 0 and the prime slot: enough to see the shape without three more columns. */
+    /* Publish the SNAPPED request, the same value the writer sends.
+     *
+     * current_caps holds the interpolated ceiling before cpu_snap_freq rounds it to a
+     * real OPP step. Reporting that against the snapped effective value guarantees a
+     * mismatch on every tick: a field diag reads "prime 1500174 -> 1132800 (hardware is
+     * stricter)" where 1500174 is not a frequency this SoC has at all, so the gap is
+     * partly our own rounding rather than the vendor.
+     *
+     * Snapping here makes desired-versus-effective answer the question it is meant to:
+     * did our request survive, or did something else overrule it. */
     fprintf(f, "desired_cpu_max0=%d\ndesired_cpu_maxp=%d\n",
-            fsm->current_caps.cpu_max[0], fsm->current_caps.cpu_max[1]);
+            (int)cpu_snap_freq(0, (long)fsm->current_caps.cpu_max[0]),
+            (int)cpu_snap_freq(1, (long)fsm->current_caps.cpu_max[1]));
+    /* Index 1 here, not 2: the effective side reads tick_scaling_max(1), which is the
+       second POLICY. Slot 2 is the prime cluster in the rail vocabulary, and mixing the
+       two would compare different clusters - I made exactly that mistake once. */
     fprintf(f, "effective_cpu_max0=%d\neffective_cpu_maxp=%d\n",
             tick_scaling_max(0), tick_scaling_max(1));
     fprintf(f, "reassert_eligible=%d\n", asb_cap_writes_should_back_off() ? 0 : 1);

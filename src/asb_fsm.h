@@ -2176,6 +2176,24 @@ if (!can_leave &&
              * The load gate keeps the saving for the case it was built for and leaves busy
              * screen-off work untouched. Same quiet floor the calm tick cadence uses, so the two
              * cannot disagree about what "quiet" means. */
+    /* Trim the GPU once the die is hot, before the thermal ladder engages.
+     *
+     * A capture shows screen-on samples at 55 C or above drawing 833 mA against 262 mA
+     * below 45 C - three times the cost - and ASB does nothing in that band: the
+     * SUSTAINED throttle point sits at 64 C, so 20 MODERATE samples ran hot and
+     * unmanaged.
+     *
+     * The CPU is not the lever there: load was 1.60 per core, genuine work that would
+     * only take longer if slowed. The GPU is: it sat at 65% median with headroom to
+     * spare, and it shares the die with the cores that are already too warm.
+     *
+     * 85% at 55 C is a nudge, not a clamp - enough to shed heat before the vendor or the
+     * ladder has to act, small enough that a frame budget at 65% utilisation is untouched.
+     * Above 60 C the existing thermal paths take over and this stops mattering.
+     */
+    if (m->therm.cpu_max_c >= 55 && m->therm.cpu_max_c < 60 &&
+        new_caps.gpu_max_pct > 85)
+        new_caps.gpu_max_pct = 85;
             if (!m->misc.screen_on && !_cool_active &&
                 (fsm->state == ASB_STATE_MODERATE || fsm->state == ASB_STATE_LIGHT_IDLE ||
      fsm->state == ASB_STATE_DEEP_IDLE) &&
