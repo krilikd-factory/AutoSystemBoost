@@ -1157,7 +1157,18 @@ lk_emit_full_day_report() {
       #
       # Rates, not totals: the counters are cumulative since boot, and a total is meaningless
       # without knowing how long the governor has been up.
-      _mc="/dev/.asb/state"
+      # Read the captured snapshot first, the live file second.
+      #
+      # The report is assembled after the capture ends, and /dev/.asb/state may be gone or
+      # reset by then - a release-build capture came back with no ASB COST block at all
+      # even though every counter was present in the snapshots on disk.
+      #
+      # The last snapshot is the state as it was during the run, which is what the block
+      # is supposed to describe. Falling back to the live file keeps the old behaviour
+      # where snapshots are absent.
+      _mc="$(ls -1t "$LK_OUT_DIR"/snapshot_*.txt 2>/dev/null | head -1)"
+      [ -r "$_mc" ] || _mc="$LK_OUT_DIR/before.txt"
+      [ -r "$_mc" ] || _mc="/dev/.asb/state"
       if [ -r "$_mc" ]; then
         _mc_get() { grep -m1 "^$1=" "$_mc" 2>/dev/null | cut -d= -f2 | tr -dc '0-9'; }
         # Divide by the GOVERNOR's uptime, not the system's.
