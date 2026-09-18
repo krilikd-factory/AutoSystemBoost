@@ -2177,8 +2177,14 @@ if (!can_leave &&
              * screen-off work untouched. Same quiet floor the calm tick cadence uses, so the two
              * cannot disagree about what "quiet" means. */
             if (!m->misc.screen_on && !_cool_active &&
-                (fsm->state == ASB_STATE_MODERATE || fsm->state == ASB_STATE_LIGHT_IDLE) &&
-                asb_load_per_core(m) < 0.5f) {
+                (fsm->state == ASB_STATE_MODERATE || fsm->state == ASB_STATE_LIGHT_IDLE ||
+     fsm->state == ASB_STATE_DEEP_IDLE) &&
+                /* 0.9 per core, not 0.5 - load1 is a one-minute average and does not fall that
+       far during sleep. Across a release capture not one screen-off sample was below
+       0.5, including DEEP_IDLE at a median of 0.72, so the gate never opened and the
+       prime cap was never applied. DEEP_IDLE sits at 0.72 and busier screen-off work
+       at 1.26, which puts the dividing line just under 0.9. */
+    asb_load_per_core(m) < 0.9f) {
                 int prime_lo = g_cpu_slot_hwmin[2];
                 /* x1.4, not x2: the prime lowest OPP here is 1017 MHz, so x2 lands at 2035 and
                    snaps down to 1689 - above the 1665 the phase already ran at, changing nothing.
