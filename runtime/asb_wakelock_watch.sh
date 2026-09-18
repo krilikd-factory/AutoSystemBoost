@@ -136,9 +136,24 @@ asb_wl_relax() {
 
   # The same protected classes the doze trim uses. An authenticator or a messenger that
   # cannot wake is worse than a warm phone.
+  # Also consider cumulative holders, not only whoever holds a lock right now.
+  #
+  # dumpsys power is an instantaneous snapshot. A capture shows PedometerLib holding
+  # 574 s across the window in bursts of about 9 s each - the single largest app holder
+  # of the day, and almost certainly absent from any given poll. Sync and job wakelocks
+  # behave the same way: many short grabs that never coincide with the check.
+  #
+  # batterystats keeps the totals, so a holder that adds up to minutes is visible even
+  # when each individual grab is brief. Only entries above 120 s are considered, which
+  # is far beyond ordinary background chatter over a long screen-off window.
+  _wl_cum="$(dumpsys batterystats 2>/dev/null \
+    | sed -n 's/.*Wake lock \(u[0-9a-z]*\) \([a-zA-Z0-9_.]*\).*: \([0-9]*\)m.*/\2 \3/p' \
+    | awk '$2 >= 2 { print $1 }' | sort -u)"
   for _p in $(dumpsys power 2>/dev/null \
               | sed -n 's/.*PARTIAL_WAKE_LOCK.*ACQ.*(\([a-zA-Z0-9_.]*\)).*/\1/p' \
-              | sort -u); do
+              | sort -u
+                 printf '%s\n' "$_wl_cum"
+               ); do
     case "$_third" in *"$_p"*) : ;; *) continue ;; esac
     # Package identifiers rarely contain the literal word `messaging`: WhatsApp, Telegram
     # and Signal are examples in real wake traces. These apps are notification-bearing, so

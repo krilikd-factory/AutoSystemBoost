@@ -40,7 +40,19 @@ _cfg() {
 _ifaces() {
   for _d in /sys/class/net/*; do
     _n="$(basename "$_d")"
-    case "$_n" in lo|dummy*|sit*|ip6tnl*|bond*) continue ;; esac
+    # Skip tunnels, mirrors and stubs - RPS there costs setup and moves no packets.
+    #
+    # A field diag lists RPS applied to erspan0, gre0, gretap0, ifb0-2, ip6_vti0, ip6gre0,
+    # ip_vti0, ovnet0-2 and p2p0 - fourteen interfaces that carry nothing on a phone -
+    # alongside the two that matter. Every one of them is a write and a queue-length read
+    # on every apply, and the report becomes unreadable: the real interfaces are buried.
+    #
+    # ifb* are ingress mirrors, gre/erspan/vti/ip6gre are tunnels, ovnet* are virtual
+    # overlays and p2p0 only exists while Wi-Fi Direct is up.
+    case "$_n" in
+      lo|dummy*|sit*|ip6tnl*|bond*) continue ;;
+      ifb*|gre*|erspan*|*vti*|ovnet*|p2p*|tun*|tap*) continue ;;
+    esac
     [ -d "$_d/queues" ] || continue
     echo "$_n"
   done

@@ -69,8 +69,40 @@ if [ "$_cam_guard" = "0" ]; then
       writef /proc/sys/vm/dirty_background_ratio 10
     fi
     writef /proc/sys/vm/laptop_mode 1
+    # Foreground uclamp tier follows the screen, like the background tier already does.
+    #
+    # With the screen off there is no foreground app by definition - whatever is running
+    # is background or system work. The tier nevertheless keeps its profile value (59 on
+    # this device), so anything the scheduler places there may ask for 59% of peak while
+    # nobody is looking.
+    #
+    # The FSM owns the background tier but has no field for foreground, so this is the
+    # cheapest correct place: the tuner already knows the screen state and already writes
+    # per-screen values. 35 keeps a real working floor - the empty-uclamp defect is not
+    # repeated - and the profile value is restored the moment the screen comes back.
+    _ucfg_node=/dev/cpuctl/foreground/cpu.uclamp.max
+    if [ -w "$_ucfg_node" ]; then
+      _ucfg_now="$(cat "$_ucfg_node" 2>/dev/null | cut -d. -f1 | tr -dc '0-9')"
+      case "$_ucfg_now" in ''|*[!0-9]*) _ucfg_now=0 ;; esac
+      if [ "$_ucfg_now" -gt 35 ] 2>/dev/null; then
+        printf '%s\n' "$_ucfg_now" > /data/adb/asb/ucfg_restore 2>/dev/null
+        writef "$_ucfg_node" 35
+      fi
+    fi
   else
     writef /proc/sys/vm/laptop_mode 0
+    # Screen back on: restore the profile's foreground tier immediately.
+    #
+    # Without this the tier stays at 35 and the first app the user opens is throttled -
+    # a saving that costs responsiveness is not a saving. The saved value is written by
+    # the screen-off branch above; if the file is missing nothing is touched, so a
+    # half-applied state can never leave the tier pinned.
+    _ucfg_node=/dev/cpuctl/foreground/cpu.uclamp.max
+    _ucfg_save="$(cat /data/adb/asb/ucfg_restore 2>/dev/null | tr -dc '0-9')"
+    case "$_ucfg_save" in ''|*[!0-9]*) : ;; *)
+      [ -w "$_ucfg_node" ] && writef "$_ucfg_node" "$_ucfg_save"
+      rm -f /data/adb/asb/ucfg_restore 2>/dev/null ;;
+    esac
     case "$HINT" in
       4|3) _dr=5;  _dbr=2  ; _dby=33554432;  _dbby=8388608  ;;
       *)   _dr=20; _dbr=5  ; _dby=134217728; _dbby=33554432 ;;
