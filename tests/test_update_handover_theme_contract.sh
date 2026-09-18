@@ -47,9 +47,9 @@ need "$WEB" "removeAttribute('data-asb-theme')"
 absent "$WEB" "toggleAttribute('data-asb-theme'"
 # Both buttons are independent compact chips, with a pale semantic tint rather than a full green fill.
 need "$WEB" '.theme-choice { display:grid; place-items:center; width:34px; height:29px;'
-need "$WEB" '<div class="badge badge-a" id="verBadge">V64</div>'
-need "$WEB" '<div class="badge badge-a" id="liveVerBadge">V64</div>'
-need "$WEB" '<div class="badge badge-a" id="cfgVerBadge">V64</div>'
+need "$WEB" '<div class="badge badge-a" id="verBadge">V65</div>'
+need "$WEB" '<div class="badge badge-a" id="liveVerBadge">V65</div>'
+need "$WEB" '<div class="badge badge-a" id="cfgVerBadge">V65</div>'
 need "$WEB" '.theme-choice.active { color:var(--accent); background:rgba(0,240,180,.09);'
 absent "$WEB" '.theme-choice.active { color:#04120f; background:linear-gradient'
 # These cover readable dialog/title copy, Smart monitor telemetry and small configuration text.

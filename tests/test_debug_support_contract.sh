@@ -57,7 +57,7 @@ done
 
 # A release module must refuse both mutations even if someone manufactures a DOM click.
 REL="$TMP/release"; mkdir -p "$REL"
-printf 'id=AutoSystemBoost\nversion=V64\n' > "$REL/module.prop"
+printf 'id=AutoSystemBoost\nversion=V65\n' > "$REL/module.prop"
 REL_OUT="$(ASB_DEBUG_SUPPORT_MODDIR="$REL" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" sh "$HELPER" full-day || true)"
 printf '%s\n' "$REL_OUT" | grep -Fq 'error=debug_only' || {
   echo 'FAIL debug support: release gate did not refuse recorder' >&2; exit 1
@@ -72,7 +72,7 @@ printf '%s\n' "$REL_TL" | grep -Fq 'status=debug_only' || {
 # ownership protocol: it claims the tokenized directory with ITS OWN PID and only removes
 # a guard that still names that PID. This catches launcher-PID and cleanup races on host.
 DBG="$TMP/debug"; mkdir -p "$DBG/system/bin" "$DBG/tools/logkit" "$TMP/out"
-printf 'id=AutoSystemBoost\nversion=V64-debug10\n' > "$DBG/module.prop"
+printf 'id=AutoSystemBoost\nversion=V65-debug10\n' > "$DBG/module.prop"
 TL_STATE="$TMP/timeline-debug"
 ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" begin postfs_begin >/dev/null
 ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" mark service_enter >/dev/null

@@ -151,8 +151,8 @@ fi
 # Public module identity is build-critical. OTA metadata and GitHub-facing changelog are
 # deliberately outside build-time contracts: both are publication documents that may be updated
 # only after the first V64 asset is available, so neither can block debug or release compilation.
-need "$MODULE_PROP" 'version=V64'
-need "$MODULE_PROP" 'versionCode=640'
+need "$MODULE_PROP" 'version=V65'
+need "$MODULE_PROP" 'versionCode=650'
 
 # Release publication must validate the immutable public identity rather than patching it from
 # an arbitrary GitHub tag. Exercise the literal workflow fragment under safe subshell fixtures.
@@ -176,11 +176,11 @@ for _manual_ref in '' main develop maintenance/V64; do
   release_identity_valid "$_manual_ref" workflow_dispatch branch || { echo "FAIL: manual branch build rejected: $_manual_ref" >&2; exit 1; }
 done
 # GitHub Release and tag-ref runs may publish an asset, so only spellings for V64 are valid.
-for _valid_tag in V64 v64 64; do
+for _valid_tag in V65 v65 65; do
   release_identity_valid "$_valid_tag" release tag || { echo "FAIL: accepted release tag rejected: $_valid_tag" >&2; exit 1; }
   release_identity_valid "$_valid_tag" push tag || { echo "FAIL: accepted tag ref rejected: $_valid_tag" >&2; exit 1; }
 done
-for _invalid_tag in '' main V63 v63 63 V65 v65 65 debug10 'V64 '; do
+for _invalid_tag in '' main V64 v64 64 V66 v66 66 debug10 'V65 '; do
   if release_identity_valid "$_invalid_tag" release tag >"$TMP_RELEASE_GATE/invalid-tag.out" 2>&1; then
     echo "FAIL: mismatched release tag accepted: $_invalid_tag" >&2
     exit 1
