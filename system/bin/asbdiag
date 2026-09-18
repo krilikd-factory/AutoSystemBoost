@@ -511,6 +511,20 @@ if [ -r "$_state" ]; then
   _vc="$(grep -m1 '^cap_vendor_slow_clamps=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   [ -n "$_vp" ] && NOTE "vendor contention: passive=${_vp} slow_clamps=${_vc:-0}"
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
+  # Say WHY writes were skipped - a bare count reads as breakage.
+  #
+  # A healthy capture shows attempts=84 applied=83 failures=0 backoff_skips=71: almost
+  # every write deferred, yet nothing wrong. The usual cause is kernel_floor_higher -
+  # the kernel already enforces a minimum above what ASB asked for, so after three
+  # confirmations the writer stops retrying for an hour. That is correct behaviour and
+  # the opposite of a failure, but the number alone cannot say so.
+  _wskip_why="$(grep -m1 -oE 'kernel_floor_higher|unsupported_[a-z]+|vendor_[a-z_]+' \
+               "$_state" 2>/dev/null)"
+  case "$_wskip_why" in
+    kernel_floor_higher) NOTE "  skips are kernel_floor_higher: the kernel enforces a higher minimum than requested - expected, not a fault" ;;
+    unsupported_*)       NOTE "  skips are $_wskip_why: the node does not exist on this kernel" ;;
+    vendor_*)            NOTE "  skips are $_wskip_why: the vendor owns this node right now" ;;
+  esac
   # Separate "this kernel does not have the node" from "the write was refused".
   #
   # walt_ravg reads back INT_MIN on a custom kernel that lacks it. The writer already
@@ -1123,9 +1137,20 @@ if [ -n "$_rps_want" ] && [ "$_rps_want" != "stock" ]; then
   fi
 fi
 if [ -n "$_txq_want" ] && [ "$_txq_want" != "stock" ]; then
-  _txq_live="$(cat /sys/class/net/rmnet_data0/tx_queue_len 2>/dev/null \
-               || cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
-  NOTE "net_txqueue=$_txq_want - live tx_queue_len: ${_txq_live:-unreadable}"
+  # Report every real interface, not one hardcoded name.
+  #
+  # This read rmnet_data0 and fell back to wlan0, so a phone on Wi-Fi with the modem
+  # idle reported the modem's untouched 1000 and looked like the tweak had failed.
+  # Naming each interface with its own value says plainly which ones took the setting.
+  _txq_seen=""
+  for _td in /sys/class/net/*/tx_queue_len; do
+    [ -r "$_td" ] || continue
+    _tn="$(echo "$_td" | cut -d/ -f5)"
+    case "$_tn" in lo|dummy*|ifb*|gre*|erspan*|*vti*|ovnet*|p2p*|sit*|ip6tnl*) continue ;; esac
+    _tv="$(cat "$_td" 2>/dev/null)"
+    [ -n "$_tv" ] && _txq_seen="$_txq_seen $_tn=$_tv"
+  done
+  NOTE "net_txqueue=$_txq_want - live:${_txq_seen:- unreadable}"
 fi
 
 
