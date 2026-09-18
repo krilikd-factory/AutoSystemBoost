@@ -343,6 +343,18 @@ _dspp bass_db "$_bsx"
 [ "$_bsx" = "0" ] && changed="${changed}bass=off " || changed="${changed}bass=+${_bsx}dB "
 
 # ---- go live ----------------------------------------------------------------------
+# Wake the attach helper on every run, not only in "dsp" mode.
+#
+# The helper sleeps 60 s while the effect is off, so a settings change it does not
+# hear about lands up to a minute late - which is exactly the delay reported when
+# turning the gain on and starting music. SIGUSR1 interrupts that sleep.
+#
+# The WebUI calls this script with no mode argument (index.html:5897), so the signal
+# was only sent on the boot path that already passes "dsp". Sending it regardless
+# costs one pkill against a process that may not exist and needs no rebuild of the
+# binary - the handler is already there.
+pkill -USR1 -f asb_dsp_attach 2>/dev/null \
+  || killall -USR1 asb_dsp_attach 2>/dev/null || true
 if [ "$_mode" = "dsp" ]; then
   # No audioserver restart: the attach daemon hands the new gain to the already-running
   # effect over binder, so the change is immediate and the audio never drops out. The
