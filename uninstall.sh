@@ -341,6 +341,18 @@ fi
 [ -w /proc/sys/kernel/sched_util_clamp_min ] \
   && echo 1024 > /proc/sys/kernel/sched_util_clamp_min 2>/dev/null
 
+# Restore the foreground uclamp tier if we left it lowered.
+#
+# smart_dynamic_tune drops it to 35 while the screen is off and puts it back on wake.
+# A user who removes the module with the screen off would otherwise keep a throttled
+# foreground tier until the next reboot - the saved value is right there, so use it.
+_ucfg_save="$(cat /data/adb/asb/ucfg_restore 2>/dev/null | tr -dc '0-9')"
+case "$_ucfg_save" in
+  ''|*[!0-9]*) : ;;
+  *) [ -w /dev/cpuctl/foreground/cpu.uclamp.max ] \
+       && echo "$_ucfg_save" > /dev/cpuctl/foreground/cpu.uclamp.max 2>/dev/null ;;
+esac
+
 # Restore Doze exemptions we removed.
 #
 # Recorded per package rather than replayed wholesale: an exemption the user granted
