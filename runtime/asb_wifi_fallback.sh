@@ -48,7 +48,9 @@ _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
 }
 _radio_policy_enabled() { [ "$(_cfg radio_policy_enable)" = 1 ]; }
-_enabled() { _radio_policy_enabled && [ "$(_cfg net_handover_active)" = 1 ]; }
+# The fallback runs on the top rung of net_wifi_leave, which is what
+# net_handover_active used to mean on its own.
+_enabled() { _radio_policy_enabled && [ "$(_cfg net_wifi_leave)" = aggressive ]; }
 _now() { date +%s 2>/dev/null || echo 0; }
 _log() { mkdir -p "$STATE_DIR" 2>/dev/null; printf '%s wifi_fallback: %s\n' "$(date '+%F %T' 2>/dev/null || echo now)" "$*" >> "$LOG" 2>/dev/null; tail -n 80 "$LOG" > "$LOG.tmp" 2>/dev/null && mv -f "$LOG.tmp" "$LOG" 2>/dev/null || true; }
 
@@ -199,7 +201,16 @@ _try_release() {
 
   # The config key is the user-facing form; the env var stays as an override for testing.
   if [ -z "${ASB_WIFI_LEAVE_ON_RSSI:-}" ]; then
-    _cfg_rssi="$(_cfg net_wifi_leave_rssi)"
+    # Derived from net_wifi_leave now - see asb_lpm.sh for the ladder.
+    #
+    # The separate net_wifi_leave_rssi picker let a user ask for a threshold while the
+    # handover toggles said not to hand over at all. One control, one meaning: the rungs
+    # that leave a weak link carry -80 dBm, which is where a link stops being useful on
+    # every device measured.
+    case "$(_cfg net_wifi_leave)" in
+      weak|unusable|aggressive) _cfg_rssi=-80 ;;
+      *)                        _cfg_rssi=off ;;
+    esac
     case "$_cfg_rssi" in -[0-9]*) ASB_WIFI_LEAVE_ON_RSSI="$_cfg_rssi" ;; esac
   fi
   if [ -n "${ASB_WIFI_LEAVE_ON_RSSI:-}" ]; then

@@ -376,8 +376,28 @@ case "$_btls" in
 esac
 
 _wt="$(_cfg wifi_scan_throttle)"
+# Five rungs now, including one that stops background scanning entirely.
+#
+# The old control was auto/0/1 - throttling on or off. Wi-Fi scanning is a real
+# drain on a phone that sits in one place all day, and the framework exposes an
+# interval, not just a switch, so the user can trade discovery speed for battery
+# instead of choosing between two extremes.
+#
+#   0 - no background scanning at all (networks are found only when you look)
+#   1 - every 10 minutes    2 - every 5 minutes (framework default)
+#   3 - every 2 minutes     4 - unthrottled, the stock pre-throttle behaviour
+#
+# Rung 0 sets the interval to a day rather than writing a disable flag Android does
+# not have: scanning stops in practice and nothing needs a reboot to come back.
 case "$_wt" in
-  0|1)
+  0) _asb_setting_put global wifi_scan_throttle_enabled 1 || true
+     _asb_setting_put global wifi_scan_interval_ms 86400000 || true ;;
+  1) _asb_setting_put global wifi_scan_throttle_enabled 1 || true
+     _asb_setting_put global wifi_scan_interval_ms 600000 || true ;;
+  3) _asb_setting_put global wifi_scan_throttle_enabled 1 || true
+     _asb_setting_put global wifi_scan_interval_ms 120000 || true ;;
+  4) _asb_setting_put global wifi_scan_throttle_enabled 0 || true ;;
+  2|*)
     # Report the failure too, not just the success.
     #
     # The && meant a rejected write produced no token at all, and no token reads as "this
@@ -423,8 +443,17 @@ if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
   #
   # Only written when the user asked for it, and only ever restored to the value the device
   # had: this is a system setting other things may care about.
-  _abw="$(grep -E '^[[:space:]]*net_avoid_bad_wifi=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
-  case "${_abw:-0}" in
+  # Derived from net_wifi_leave - the "unusable" rung and above.
+  #
+  # avoid_bad_wifi tells the framework to abandon a Wi-Fi link that has no working
+  # internet. That is the same decision the ladder makes, so it follows the ladder
+  # rather than being a fourth switch a user could set against it.
+  _nwl="$(sed -n 's/^[[:space:]]*net_wifi_leave=//p' "$CONF" 2>/dev/null | head -1 | tr -d ' \r')"
+  case "$_nwl" in
+    unusable|aggressive) _abw=1 ;;
+    *)                   _abw=0 ;;
+  esac
+  case "$_abw" in
     1)
       # Capture the device's own value before the first write, so uninstall puts back what
       # was there rather than a guess. The recorder is idempotent - a second capture of an

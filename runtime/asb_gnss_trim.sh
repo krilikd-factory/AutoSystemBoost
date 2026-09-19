@@ -93,7 +93,18 @@ for _p in $(dumpsys location 2>/dev/null \
   # Never touched, for the same reason the doze trim spares them: a navigation app that
   # cannot see where you are is broken, and an emergency or safety app doubly so.
   case "$_p" in
-    *maps*|*navigation*|*waze*|*yandex.navi*|*2gis*|*sygic*|*osmand*|\
+    # The pattern list missed several navigators, including two very common ones.
+    #
+    # "yandex.navi" does not match ru.yandex.yandexnavi - there is no dot before navi in
+    # the real package name - and 2gis is published as ru.dublgis.dgismobile, which
+    # contains neither "2gis" nor "maps". A user reported a navigator losing its fix
+    # mid-drive and recovering only after a reboot, which is exactly what a revoked
+    # COARSE_LOCATION looks like from the passenger seat.
+    #
+    # Matching on the vendor stem rather than the product name is the safer form here:
+    # a false exclusion costs a little battery, a false restriction costs navigation.
+    *maps*|*navigation*|*navi*|*waze*|*yandex*|*2gis*|*dgis*|*sygic*|*osmand*|\
+    *tomtom*|*here.app*|*seznam.mapy*|*mapy*|*karta*|*gps*|\
     *fitness*|*strava*|*runtastic*|*komoot*|*tracker*|\
     *emergency*|*sos*|*safety*|*find*my*|*findmy*|*antitheft*) continue ;;
   esac

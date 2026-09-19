@@ -102,11 +102,24 @@ case "$_ka" in ''|*[!0-9]*) _ka="$BASE_KEEPIDLE" ;; esac
 # context to wake after that decision.  The save/night cases below remain authoritative.
 HANDOVER_FAST=0
 HANDOVER_ACTIVE=0
-case "$(_cfg net_handover_fast)" in
-  1) HANDOVER_FAST=1 ;;
-esac
-case "$(_cfg net_handover_active)" in
-  1) HANDOVER_ACTIVE=1; HANDOVER_FAST=1 ;;
+# One ladder instead of three toggles that were never independent.
+#
+# net_handover_active already forced net_handover_fast on, and net_avoid_bad_wifi and
+# net_wifi_leave_rssi answered the same question from a different angle: when to give
+# up on a Wi-Fi link that is present but not working. Four switches for one decision
+# meant a user could set contradictory combinations that the code then silently
+# resolved on its own.
+#
+# net_wifi_leave expands here into the same variables the rest of the file uses, so
+# nothing downstream changes:
+#   off        - stock behaviour, Wi-Fi is released only when it drops
+#   weak       - leave on a weak signal (-80 dBm)
+#   unusable   - the above, plus leave a link that carries no traffic
+#   aggressive - the above, plus hand over to mobile without waiting
+case "$(_cfg net_wifi_leave)" in
+  weak)       HANDOVER_FAST=1 ;;
+  unusable)   HANDOVER_FAST=1 ;;
+  aggressive) HANDOVER_ACTIVE=1; HANDOVER_FAST=1 ;;
 esac
 STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
 

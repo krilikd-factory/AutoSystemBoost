@@ -69,6 +69,34 @@ if [ "$_cam_guard" = "0" ]; then
       writef /proc/sys/vm/dirty_background_ratio 10
     fi
     writef /proc/sys/vm/laptop_mode 1
+    # Wi-Fi power save on while the screen is off.
+    #
+    # The radio otherwise stays fully awake between beacons. Power save lets it sleep in
+    # the gaps and wake on the beacon, which is what the mode exists for - the trade is
+    # a few milliseconds of extra latency on the first packet, invisible with the screen
+    # off and material to nothing running there.
+    #
+    # Only for profiles that left it at auto: battery already forces it on and
+    # performance deliberately forces it off, and neither choice should be overridden
+    # from here. Restored on wake by the branch below, the same way the uclamp tier is.
+    # Driven by the wifi_powersave tweak now, not by profile alone.
+    #
+    #   off        - do nothing, the shipped default
+    #   screen_off - sleep the radio between beacons while the display is off
+    #   always     - leave power save on regardless of screen state
+    #
+    # Default off because this is the user's radio: on a phone that streams or casts with
+    # the screen off, the extra beacon latency is real, and nobody should discover a new
+    # behaviour they did not ask for.
+    _wpm="$(_cfg wifi_powersave)"
+    case "$_wpm" in screen_off|always) : ;; *) _wpm=off ;; esac
+    if [ "$_wpm" != "off" ] && command -v iw >/dev/null 2>&1; then
+      _pm_now="$(iw dev wlan0 get power_save 2>/dev/null | grep -oE 'on|off' | head -1)"
+      if [ "$_pm_now" = "off" ]; then
+        printf 'off\n' > /data/adb/asb/wifipm_restore 2>/dev/null
+        iw dev wlan0 set power_save on >/dev/null 2>&1 || true
+      fi
+    fi
     # Foreground uclamp tier follows the screen, like the background tier already does.
     #
     # With the screen off there is no foreground app by definition - whatever is running
@@ -91,6 +119,16 @@ if [ "$_cam_guard" = "0" ]; then
     fi
   else
     writef /proc/sys/vm/laptop_mode 0
+    # Screen on: put Wi-Fi power save back only if we turned it on.
+    #
+    # The marker is written only when the mode was off beforehand, so a user who set it
+    # on themselves is never flipped, and a missing file means we touched nothing.
+    # "always" means keep it on with the screen up too, so skip the restore there.
+  _wpm="$(_cfg wifi_powersave)"
+  if [ "$_wpm" != "always" ] && [ -f /data/adb/asb/wifipm_restore ] && command -v iw >/dev/null 2>&1; then
+      iw dev wlan0 set power_save off >/dev/null 2>&1 || true
+      rm -f /data/adb/asb/wifipm_restore 2>/dev/null
+    fi
     # Screen back on: restore the profile's foreground tier immediately.
     #
     # Without this the tier stays at 35 and the first app the user opens is throttled -
