@@ -672,7 +672,7 @@ lk_battery_trace_header() {
   # lk_capture_battery_trace_row to work out which field was which. Keep this in sync
   # with that printf if a column is ever added.
   cat <<'EOF' > "$LK_OUT_DIR/battery_trace.txt"
-epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA|bat_uV|bat_dC|cpu_max_c|skin_c|surface_c|brightness|env_iq|bat_drain|bat_level|reserved|bat_wake|heap_pct|heap_val|hires|cpu_zone|fb_zone|wifi_rx|wifi_tx|rmnet_rx|rmnet_tx|load1|dw|mem_free|swap_free|zram_used|wakelocks
+epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA|bat_uV|bat_dC|cpu_max_c|skin_c|surface_c|brightness|env_iq|bat_drain|bat_level|reserved|bat_wake|heap_pct|heap_val|hires|cpu_zone|fb_zone|wifi_rx|wifi_tx|rmnet_rx|rmnet_tx|load1|dw|mem_free|swap_free|zram_used|wakelocks|gpu_busy
 EOF
 }
 
@@ -804,7 +804,13 @@ lk_capture_battery_trace_row() {
   _ct=$(echo "$_j"    | awk -F'"thermal_cpu_type":"'         '{print $2}' | awk -F'"' '{print $1}')
   _fb=$(echo "$_j"    | awk -F'"thermal_cpu_fallback_type":"' '{print $2}' | awk -F'"' '{print $1}')
   _dw=$(echo "$_j"    | awk -F'"dwell_sec":'                 '{print $2}' | awk -F, '{print $1}')
-  echo "${_e}|${_d}|${_st}|${_pr}|${_sc}|${_bpct}|${_bma}|${_bv}|${_btmp}|${_temp}|${_sk}|${_surf}|${_brd}|${_iq}|${_bd}|${_bl}||${_bw}|${_hp}|${_hv}|${_hir}|${_ct}|${_fb}|${_wrx}|${_wtx}|${_rrx}|${_rtx}|${_l1}|${_dw}|${_mfree}|${_swfree}|${_zram_used}|${_wakelocks}" >> "$LK_OUT_DIR/battery_trace.txt"
+  # gpu_busy last, so existing column indices do not move.
+  #
+  # The trace had no GPU column at all, and an analysis of mine read column 18
+  # (bat_wake) as GPU load and drew the wrong conclusion from it. Carrying the real
+  # value removes the temptation to infer it from a neighbouring field.
+  _gpub="$(cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null | tr -dc '0-9')"
+  echo "${_e}|${_d}|${_st}|${_pr}|${_sc}|${_bpct}|${_bma}|${_bv}|${_btmp}|${_temp}|${_sk}|${_surf}|${_brd}|${_iq}|${_bd}|${_bl}||${_bw}|${_hp}|${_hv}|${_hir}|${_ct}|${_fb}|${_wrx}|${_wtx}|${_rrx}|${_rtx}|${_l1}|${_dw}|${_mfree}|${_swfree}|${_zram_used}|${_wakelocks}" >> "$LK_OUT_DIR/battery_trace.txt|${_gpub:-}"
 }
 
 # WAKELOCK / WAKE-SOURCE collection

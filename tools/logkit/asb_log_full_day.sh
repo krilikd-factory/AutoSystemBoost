@@ -374,8 +374,20 @@ lk_throttle_row() {
   _p0=$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null)
   _p6=$(cat "$LK_PRIME_POL/scaling_max_freq" 2>/dev/null)
   _capped=0
-  [ -n "$_p0" ] && [ -n "$LK_P0_HWMAX" ] && [ "$_p0" -lt "$LK_P0_HWMAX" ] 2>/dev/null && _capped=1
-  [ -n "$_p6" ] && [ -n "$LK_P6_HWMAX" ] && [ "$_p6" -lt "$LK_P6_HWMAX" ] 2>/dev/null && _capped=1
+  # Throttling means below what ASB ASKED for, not below hardware maximum.
+  #
+  # A battery or smart profile always caps under hwmax - that is its whole job - so
+  # this counted every ordinary tick as throttled. A capture reports 51-53% throttle
+  # in the active phases, which reads as "the phone spent half its time being held
+  # back" when it only means "a profile was in effect".
+  #
+  # The interesting event is the cap landing BELOW the module's own request: that is
+  # thermal or vendor intervention, the thing a capture is read to find. desired_* is
+  # published for exactly this comparison.
+  _d0="$(sed -n 's/^desired_cpu_max0=//p' /dev/.asb/state 2>/dev/null | head -1 | tr -dc '0-9')"
+  _dp="$(sed -n 's/^desired_cpu_maxp=//p' /dev/.asb/state 2>/dev/null | head -1 | tr -dc '0-9')"
+  [ -n "$_p0" ] && [ -n "$_d0" ] && [ "$_p0" -lt "$_d0" ] 2>/dev/null && _capped=1
+  [ -n "$_p6" ] && [ -n "$_dp" ] && [ "$_p6" -lt "$_dp" ] 2>/dev/null && _capped=1
   [ "$_capped" = "0" ] && return 0
   _j=$(lk_status_json)
   _temp=$(echo "$_j" | awk -F'"temp":' '{print $2}' | awk -F, '{print $1}')
@@ -842,6 +854,21 @@ lk_emit_phase_summary() {
   cat "$_led" > "$_all" 2>/dev/null
   [ -s "$LK_OUT_DIR/.phase_open.tsv" ] && cat "$LK_OUT_DIR/.phase_open.tsv" >> "$_all"
   {
+    # Say how much of the capture had the screen on, before the per-phase numbers.
+    #
+    # A capture averaging 9.17 %/h means very different things at 10% screen time and at
+    # 56%. Without the split, two captures of the same phone look like a regression when
+    # the only thing that changed is how much the phone was used - and that is exactly
+    # the comparison these reports get used for.
+    _scr_min=0; _off_min=0
+    while IFS='|' read -r _e _d _st _pr _sc _rest; do
+      case "$_e" in ''|epoch|\#*) continue ;; esac
+      if [ "$_sc" = "1" ]; then _scr_min=$(( _scr_min + 1 )); else _off_min=$(( _off_min + 1 )); fi
+    done < "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null
+    _tot_s=$(( _scr_min + _off_min ))
+    if [ "$_tot_s" -gt 0 ] 2>/dev/null; then
+      echo "  screen on for $(( 100 * _scr_min / _tot_s ))% of the capture - compare only against captures with a similar share"
+    fi
     echo "===== PER-PHASE SUMMARY ====="
     echo ""
     printf "%-15s %8s %7s %8s %6s %9s %8s %8s %9s %7s %9s %8s\n" \
