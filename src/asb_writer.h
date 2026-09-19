@@ -1707,6 +1707,20 @@ skip_cpu_caps: ;
          * The first version of this read g_wcache, which is only updated on a SUCCESSFUL
          * write - so a tier that never got written reported 0, which is exactly the case
          * the field was added to explain. It has to be captured on the way in. */
+        /* Never write 0 to a uclamp ceiling, whatever the caller computed.
+         *
+         * A zero ceiling means the task may request no CPU at all. The Smart bounds shipped
+         * with unblended uclamp fields for a release, so every tick asked for 0 and the
+         * writer applied it faithfully - status:applied, failures:0, and a phone that felt
+         * slow with nothing in the report to explain why.
+         *
+         * The bounds are fixed, but this is the layer that touches the kernel, and a caller
+         * bug should not reach it. Zero is never a legitimate ceiling here - it is always
+         * either an uninitialised struct or an arithmetic slip. */
+        /* Skip the write instead of pushing a zero ceiling to the kernel. asb_log is not
+           reachable from this header, so the refusal is silent here - the state file still
+           shows the requested value, which is where the caller bug is visible. */
+        if (caps->uclamp_top_max <= 0 || caps->uclamp_bg_max <= 0) return 0;
         g_ucl_want_top = caps->uclamp_top_max;
         g_ucl_want_bg  = caps->uclamp_bg_max;
 

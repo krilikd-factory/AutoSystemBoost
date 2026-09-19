@@ -4773,6 +4773,32 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     if (out.ceil.gpu_max_pct > bal->ceil.gpu_max_pct) out.ceil.gpu_max_pct = bal->ceil.gpu_max_pct;
 
     /* Commit to global slot */
+    /* Blend the uclamp tiers too - they were left at zero.
+     *
+     * Every other field of the Smart bounds is blended from the battery and balanced
+     * rails, but uclamp_top_max and uclamp_bg_max were never assigned, so the struct
+     * carried its zero-initialised value. A device on the Smart profile therefore asked
+     * the writer for uclamp 0 on every tick: the state file reads uclamp_want="0,0" with
+     * status:applied, and cpu.uclamp.max for top-app sits at 0.00.
+     *
+     * A zero ceiling tells the scheduler the foreground app may request nothing, which
+     * is the same empty-uclamp defect fixed once in the profile rails - and the reason a
+     * phone on Smart feels sluggish. Blended the same way as the frequency rails, with
+     * the balanced ceiling as the upper bound.
+     */
+    {
+        int ut_bat[1], ut_bal[1], ut_out[1];
+        ut_bat[0] = bat->ceil.uclamp_top_max; ut_bal[0] = bal->ceil.uclamp_top_max;
+        asb_smart_blend_values_int(ut_bat, ut_bal, 1, alpha, ut_out);
+        out.ceil.uclamp_top_max = ut_out[0];
+        out.floor.uclamp_top_max = bat->floor.uclamp_top_max;
+        ut_bat[0] = bat->ceil.uclamp_bg_max; ut_bal[0] = bal->ceil.uclamp_bg_max;
+        asb_smart_blend_values_int(ut_bat, ut_bal, 1, alpha, ut_out);
+        out.ceil.uclamp_bg_max = ut_out[0];
+        out.floor.uclamp_bg_max = bat->floor.uclamp_bg_max;
+        if (out.ceil.uclamp_top_max > bal->ceil.uclamp_top_max)
+            out.ceil.uclamp_top_max = bal->ceil.uclamp_top_max;
+    }
     g_smart_bounds = out;
     g_smart_bounds_initialized = 1;
 
