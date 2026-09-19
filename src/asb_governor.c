@@ -5604,7 +5604,17 @@ int main(int argc, char **argv) {
             break;
         }
 
-        g_governor_event_wakeups += (unsigned long)nev;
+        /* One wakeup, however many descriptors were ready.
+         *
+         * epoll_wait returns the NUMBER of ready descriptors, and adding that counted a
+         * single wake with five ready fds as five wakeups. A capture reads 10546 against
+         * 1963 timer wakeups, suggesting the event path costs five times the timer - it
+         * does not, the two were measured differently.
+         *
+         * The cost of a wakeup is the wake itself: the process is scheduled, the CPU leaves
+         * idle, the tick body runs once. That is what this counter is read as, so that is
+         * what it should count. */
+        g_governor_event_wakeups++;
         int need_metrics = 0;
         int force_write  = 0;
         int profile_changed = 0;

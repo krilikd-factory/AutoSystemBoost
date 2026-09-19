@@ -1033,10 +1033,16 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
 }
 
 static int g_gaming_confirm_streak = 0;
+static int g_heavy_confirm_streak = 0;
 
 static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     /* Move the learned idle baseline exactly once per evaluation. */
     asb_ui_quiet_floor_update(m);
+    /* The streak counts CONSECUTIVE qualifying ticks, so it must clear whenever this
+       evaluation does not reach the HEAVY gate. Cleared here and re-incremented below;
+       without this it would only ever grow and the second tick would be meaningless. */
+    int _heavy_streak_prev = g_heavy_confirm_streak;
+    g_heavy_confirm_streak = 0;
     if (!m->misc.screen_on) { g_screen_on_since = 0; return ASB_STATE_DEEP_IDLE; }
     if (g_screen_on_since == 0) g_screen_on_since = time(NULL);
 
@@ -1107,7 +1113,22 @@ if (m->gpu.load_pct >= _gpu_gate) {
          * it - the decode is already in hardware. Graded by what the CPU is doing, like
          * every other branch here. */
         if (asb_load_per_core(m) >= ASB_HEAVY_GPU_MIN_LOAD1_PER_CORE)
-            return ASB_STATE_HEAVY;
+            /* Two consecutive ticks before entering HEAVY.
+             *
+             * A capture shows 11 HEAVY episodes of which 8 lasted a single tick - roughly 47
+             * seconds each - and HEAVY->MODERATE fired 9 times against 5 the other way. The
+             * state was being entered on a momentary spike and abandoned immediately, and every
+             * round trip costs a full set of rail writes.
+             *
+             * heavy_min_dwell_s is 8 seconds, far below the tick period, so it cannot filter
+             * anything here. A second confirming tick can: sustained load still reaches HEAVY
+             * one tick later, while a spike that has already passed never gets there.
+             *
+             * Leaving HEAVY is deliberately not gated - backing off from a high state must stay
+             * immediate, or a finished workload keeps its loose rails. */
+            /* fsm_desired_base sees only metrics, so "already in HEAVY" is tracked by the
+                     * streak itself: it is reset wherever the ladder leaves HEAVY below. */
+                    if ((g_heavy_confirm_streak = _heavy_streak_prev + 1) >= 2) return ASB_STATE_HEAVY;
         return ASB_STATE_MODERATE;
     }
 
@@ -2191,9 +2212,16 @@ if (!can_leave &&
      * ladder has to act, small enough that a frame budget at 65% utilisation is untouched.
      * Above 60 C the existing thermal paths take over and this stops mattering.
      */
-    if (m->therm.cpu_max_c >= 55 && m->therm.cpu_max_c < 60 &&
-        new_caps.gpu_max_pct > 85)
-        new_caps.gpu_max_pct = 85;
+    /* GPU trim removed: the load it was built on was misread.
+     *
+     * I justified two trim rungs with "GPU sits at 55-65% with headroom to spare",
+     * taken from column 18 of the battery trace. Column 18 is bat_wake. The real gpu%
+     * column of the phase table reads 10-16% across every phase of the same capture.
+     *
+     * A GPU at 14% is not what heats this phone, and capping it at 70% would cost
+     * frames in exchange for nothing. The thermal band 55-64 C is still unmanaged and
+     * still worth addressing - but with a lever the data actually supports, which this
+     * capture does not yet identify. */
             if (!m->misc.screen_on && !_cool_active &&
                 (fsm->state == ASB_STATE_MODERATE || fsm->state == ASB_STATE_LIGHT_IDLE ||
      fsm->state == ASB_STATE_DEEP_IDLE) &&
@@ -2202,7 +2230,18 @@ if (!can_leave &&
        0.5, including DEEP_IDLE at a median of 0.72, so the gate never opened and the
        prime cap was never applied. DEEP_IDLE sits at 0.72 and busier screen-off work
        at 1.26, which puts the dividing line just under 0.9. */
-    asb_load_per_core(m) < 0.9f) {
+    asb_load_per_core(m) < 0.9f &&
+    /* And no bulk transfer in flight.
+     *
+     * A capture shows 1037 MiB of mobile traffic inside DEEP_IDLE - traffic in every
+     * single sample - and the phase drew 120 mA against 42-50 mA in earlier captures.
+     * That is a download running with the screen off, not an idle phone.
+     *
+     * Capping the prime cluster there makes the transfer take longer at the same radio
+     * power, which costs more energy than it saves. The metric was already collected
+     * and never consulted; 1 Mbit/s is well above keepalive chatter and well below any
+     * real download. */
+    m->misc.rmnet_rx_bps < 125000L) {
                 int prime_lo = g_cpu_slot_hwmin[2];
                 /* x1.4, not x2: the prime lowest OPP here is 1017 MHz, so x2 lands at 2035 and
                    snaps down to 1689 - above the 1665 the phase already ran at, changing nothing.

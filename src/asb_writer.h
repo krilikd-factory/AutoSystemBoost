@@ -72,6 +72,10 @@ typedef struct {
     /* Consecutive times the kernel reported a floor above what we asked for. Three in a
      * row means it is vendor policy, not a transient clamp - see the backoff below. */
     unsigned long floor_holds;
+    /* Highest value the kernel refused to go below, 0 when never observed. */
+    int kernel_floor;
+    /* Requests clamped since the floor was learned; drives the periodic re-test. */
+    unsigned long floor_probe_n;
     unsigned long skipped_backoff;
     time_t retry_at;
     int requested;
@@ -161,6 +165,31 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         h->skipped_backoff++;
         return 1; /* deferred: not an applied write */
     }
+    /* Ask for something the kernel will accept, not the same rejected value again.
+     *
+     * kernel_floor is set when a CPU node reads back above what we asked for. Clamping
+     * to it turns a guaranteed deferral into a write that lands, and the node stops
+     * cycling through backoff forever.
+     *
+     * Only raises the request, never lowers it: if the caller already asks for more
+     * than the floor, that is a legitimate value and nothing here should touch it. */
+    /* Re-test the floor occasionally instead of trusting it forever.
+     *
+     * A remembered floor is a fact about the kernel at one moment, not a permanent
+     * property: a profile change, a thermal HAL decision or a vendor daemon restart can
+     * lift it. Without a re-test the writer would keep raising every request to a limit
+     * that no longer exists, and the phone would never get its low rails back.
+     *
+     * Every tenth clamped request goes through unclamped. If the kernel still refuses,
+     * the floor is simply re-learned on that write; if it has been lifted, the real
+     * value lands and the floor clears below. One probe in ten is cheap against a
+     * permanently wrong ceiling. */
+    if (h->kernel_floor > 0 && ++h->floor_probe_n >= 10) {
+        h->floor_probe_n = 0;
+        h->kernel_floor  = 0;
+    }
+    if (h->kernel_floor > 0 && requested < h->kernel_floor && writer_node_is_cpu(node))
+        requested = h->kernel_floor;
     h->attempts++;
     /* Overhead attribution: one write and one confirming read per attempt. Defined in
        asb_governor.c, which includes this header - see write_state for why they are split
@@ -293,6 +322,17 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
          * thermal clamp. After that the node is left alone for an hour; the floor is
          * re-probed then, so a vendor that lifts it is picked up without a restart.
          */
+        /* Remember the floor the kernel actually enforces.
+         *
+         * Until now only the hold count was kept, so after the hour of backoff expired the
+         * writer asked for the same rejected value again and started the cycle over. A
+         * capture shows 455 deferred writes against 292 real ones - 60% of all requests -
+         * almost entirely this loop.
+         *
+         * With the observed floor stored, the next request can be clamped to it before the
+         * write happens: the kernel gets a value it will accept, and the node stops being
+         * a permanent source of deferrals. */
+        h->kernel_floor = observed;
         if (++h->floor_holds >= 3) h->retry_at = now + 3600;
         else                       h->retry_at = 0;
         snprintf(h->status, sizeof(h->status), "%s", "kernel_floor_higher");
