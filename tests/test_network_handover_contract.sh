@@ -58,7 +58,7 @@ need "$WEB" "key:'radio_policy_enable'"
 need "$WEB" "key:'net_wifi_leave'"
 need "$WEB" "key:'net_wifi_leave'"
 need "$WEB" "radio_policy_enable:'cellular_controls'"
-need "$WEB" "net_wifi_leave:'net'"
+need "$WEB" "net_wifi_leave:'wifileave'"
 need "$WEB" "key === 'radio_policy_enable' || key === 'net_wifi_leave'"
 need "$WEB" "'radio_policy_enable',"
 need "$WEB" 'radio_policy_enable:APPLY_LIVE'
