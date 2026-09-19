@@ -478,6 +478,14 @@ if [ -r "$_state" ]; then
     P "  cap desired/effective : little $_dw0 -> $_ew0 kHz, prime $_dwp -> $_ewp kHz"
     if [ "$_ew0" -lt "$_dw0" ] 2>/dev/null; then
       P "    (hardware is stricter than ASB asked - vendor or thermal owns the cap)"
+      # The reverse case matters more and was silent.
+      #
+      # A capture reads prime 1497600 -> 1747200: the hardware is running ABOVE what ASB
+      # asked for, which means our ceiling did not take at all. Only the stricter direction
+      # was reported, so the louder failure produced no line.
+      if [ "$_ewp" -gt "$_dwp" ] 2>/dev/null; then
+        P "    (hardware is ABOVE the requested prime ceiling - our cap did not take)"
+      fi
     fi ;;
   esac
   _re="$(_rget reassert_eligible "$_state")"
@@ -511,6 +519,18 @@ if [ -r "$_state" ]; then
   _vc="$(grep -m1 '^cap_vendor_slow_clamps=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   [ -n "$_vp" ] && NOTE "vendor contention: passive=${_vp} slow_clamps=${_vc:-0}"
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
+  # Say what the two numbers count, because they do not count the same thing.
+  #
+  # A capture reads attempts=292 backoff_skips=455 - more skips than attempts, which
+  # looks impossible. It is not: a write deferred by backoff returns before attempts
+  # is incremented, so the two are disjoint. Total requests is their sum.
+  #
+  # Printing the total makes the ratio readable instead of alarming.
+  case "${_wattempts:-0}${_wskip:-0}" in
+    *[!0-9]*) : ;;
+    *) [ "${_wskip:-0}" -gt 0 ] 2>/dev/null && \
+         NOTE "  attempts and skips are disjoint: $(( ${_wattempts:-0} + ${_wskip:-0} )) requests total, $(( 100 * ${_wskip:-0} / (${_wattempts:-0} + ${_wskip:-0}) ))% deferred" ;;
+  esac
   # Say WHY writes were skipped - a bare count reads as breakage.
   #
   # A healthy capture shows attempts=84 applied=83 failures=0 backoff_skips=71: almost
@@ -538,7 +558,12 @@ if [ -r "$_state" ]; then
   [ -n "$_w_vendor_ceiling" ] && NOTE "Vendor already holds a stricter CPU ceiling on ${_w_vendor_ceiling}; ASB accepts it and avoids a cap fight."
   P "  energy policy         : shadow=$(_rget shadow_mode "$_state") budget_enabled=$(_rget thermal_budget_enabled "$_state") trim=$(_rget thermal_budget_trim_pct "$_state")% (base=$(_rget thermal_budget_base_trim_pct "$_state")% + envelope=$(_rget thermal_budget_envelope_bonus_pct "$_state")%, stage=$(_rget thermal_budget_stage "$_state")) reason=$(_rget thermal_budget_reason "$_state") dwell=$(_rget thermal_budget_dwell_s "$_state")s"
   P "  active-use runtime    : loaded=$(_rget active_efficiency_active "$_state") tier=$(_rget active_efficiency_tier "$_state") reason=$(_rget active_efficiency_reason "$_state") gpu_idle_bonus=$(_rget active_efficiency_gpu_idle_bonus_pct "$_state")% bg_delta=$(_rget active_efficiency_bg_uclamp_moderate_delta "$_state")/$(_rget active_efficiency_bg_uclamp_severe_delta "$_state")"
-  P "  ASB overhead          : events=$(_rget governor_event_wakeups "$_state") timer_wakeups=$(_rget governor_timer_wakeups "$_state") cpu_ms=$(_rget governor_cpu_ms "$_state")"
+  # "events" read as a generic activity count; it is wakeups caused by an event.
+  #
+  # A capture shows events=10546 next to timer_wakeups=1963, which invites the reading
+  # that the governor handles five events per wake. It does not: both are wakeup
+  # counts, one from epoll and one from the timer, and their sum is the real total.
+  P "  ASB overhead          : event_wakeups=$(_rget governor_event_wakeups "$_state") timer_wakeups=$(_rget governor_timer_wakeups "$_state") cpu_ms=$(_rget governor_cpu_ms "$_state")"
   # Attribution, not just a total.
   #
   # The line above says how much overhead there was; this one says where it came from.
@@ -1033,6 +1058,17 @@ for WF in /vendor/etc/wifi/*/WCNSS_qcom_cfg.ini /vendor/etc/wifi/WCNSS_qcom_cfg.
   _wfound=1
   P "  file: $WF"
   _pmd=$(grep -E '^gRuntimePMDelay=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
+  # Note when the live file is stock because the overlay never mounted.
+  #
+  # asbdiag reads the live /vendor file. With no overlay mounted that file is stock and
+  # every Wi-Fi check reports FAIL although the module wrote its copy correctly - the
+  # same confusion the camera checks had before they learned to name the mount problem.
+  # The checks below still run; this line says which kind of failure they are.
+  _wf_mod="${MODDIR}${WF}"
+  if [ -f "$_wf_mod" ] && grep -qE '^gActiveMaxChannelTime=40' "$_wf_mod" 2>/dev/null &&
+     ! grep -qE '^gActiveMaxChannelTime=40' "$WF" 2>/dev/null; then
+    NOTE "  module copy has the tweak but $WF is stock - the overlay did not mount"
+  fi
   _amc=$(grep -E '^gActiveMaxChannelTime=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
   _bbw=$(grep -E '^gBusBandwidthVeryHighThreshold=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
   # Device-safe clamp semantics: the patch only LOWERS these toward a ceiling and never raises
