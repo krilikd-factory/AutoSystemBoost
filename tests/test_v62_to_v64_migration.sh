@@ -26,7 +26,7 @@ V62_ONLY_MISSING=(
   thermal_budget_dwell_s thermal_budget_enable thermal_budget_light_headroom_pct
   thermal_budget_light_trim_pct thermal_budget_moderate_headroom_pct
   thermal_budget_moderate_trim_pct thermal_budget_severe_headroom_pct
-  thermal_budget_severe_trim_pct wakelock_action radio_policy_enable net_handover_active
+  thermal_budget_severe_trim_pct wakelock_action radio_policy_enable net_wifi_leave
 )
 for key in "${V62_ONLY_MISSING[@]}"; do
   sed -i "/^[[:space:]]*${key}=/d" "$MODDIR/config/governor.conf"

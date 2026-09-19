@@ -19,8 +19,8 @@ cp "$ROOT/config/governor.conf.shipped" "$MODPATH/config/governor.conf"
 cat > "$STATE/governor.conf.snapshot" <<'EOF'
 # ASB WebUI settings snapshot — survives module update/reinstall
 radio_policy_enable=1
-net_handover_active=1
-net_handover_fast=1
+net_wifi_leave=1
+net_wifi_leave=1
 audio_profile=eq_friendly
 sustained_temp_enter=63
 EOF
@@ -51,8 +51,8 @@ set -e
 [ "$ASB_CONFIG_MIGRATION_SOURCE" = snapshot ] || fail "migration source is $ASB_CONFIG_MIGRATION_SOURCE"
 [ "$ASB_CONFIG_MIGRATED_COUNT" -ge 5 ] || fail 'snapshot values were not migrated'
 need_line "$MODPATH/config/governor.conf" 'radio_policy_enable=1'
-need_line "$MODPATH/config/governor.conf" 'net_handover_active=1'
-need_line "$MODPATH/config/governor.conf" 'net_handover_fast=1'
+need_line "$MODPATH/config/governor.conf" 'net_wifi_leave=1'
+need_line "$MODPATH/config/governor.conf" 'net_wifi_leave=1'
 need_line "$MODPATH/config/governor.conf" 'audio_profile=eq_friendly'
 need_line "$MODPATH/config/governor.conf" 'sustained_temp_enter=63'
 need_line "$MODPATH/current_profile" 'smart'

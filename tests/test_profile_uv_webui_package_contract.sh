@@ -159,7 +159,7 @@ need "$UI" "T('lv_vendor_clamps', 'Vendor clamps')"
 need "$UI" "fmt('cap_clamps_val', '{h}/h · {t} total', {h: c1h, t: cTot})"
 absent "$UI" 'Кепы vendor: 1ч / всего'
 need "$UI" "CAMERA_AGGRESSIVE:'camera_aggressive'"
-need "$UI" "net_handover_fast:'handover'"
+need "$UI" "net_wifi_leave:'net'"
 need "$UI" 'grid-template-areas: "ico title" ". hint";'
 need "$UI" '.cfg-section-title {'
 need "$UI" 'min-height: 22px;'

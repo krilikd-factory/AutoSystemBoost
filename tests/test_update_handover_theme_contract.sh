@@ -19,7 +19,7 @@ need "$INSTALL" "-name '*.conf'"
 need "$INSTALL" 'smart_learning='
 need "$SERVICE" 'local _expected_schema=20'
 need "$INSTALL" '"schema_version": 20'
-need "$INSTALL" 'radio_policy_enable net_handover_fast net_handover_active'
+need "$INSTALL" 'radio_policy_enable net_wifi_leave'
 
 # Watcher lifecycle is late-boot, exact-process scoped and restored at uninstall.
 need "$SERVICE" 'asb_wifi_fallback.sh" reconcile'
@@ -27,7 +27,7 @@ need "$ROOT/uninstall.sh" 'asb_wifi_fallback.sh" stop'
 need "$ROOT/action.sh" 'Wi-Fi fallback: active opt-in'
 need "$ROOT/tools/asb_diag.sh" 'Wi-Fi fallback: active opt-in'
 need "$ROOT/runtime/asb_lpm.sh" 'if ! _feat_on LPM || ! _radio_policy_enabled; then'
-need "$ROOT/runtime/asb_wifi_fallback.sh" '_radio_policy_enabled && [ "$(_cfg net_handover_active)" = 1 ]'
+need "$ROOT/runtime/asb_wifi_fallback.sh" '_radio_policy_enabled && [ "$(_cfg net_wifi_leave)" = aggressive ]'
 
 # Preference is decided before first paint and the same compact pair appears beside the
 # version badge on all three surfaces.

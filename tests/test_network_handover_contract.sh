@@ -9,8 +9,8 @@ need() { grep -Fq "$2" "$1" || fail "missing $2 in ${1#$ROOT/}"; }
 
 for f in "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped"; do
   need "$f" 'radio_policy_enable=0'
-  need "$f" 'net_handover_fast=0'
-  need "$f" 'net_handover_active=0'
+  need "$f" 'net_wifi_leave=off'
+  need "$f" 'net_wifi_leave=off'
 done
 
 LPM="$ROOT/runtime/asb_lpm.sh"
@@ -20,14 +20,14 @@ need "$LPM" '_radio_policy_enabled() { [ "$(_cfg radio_policy_enable)" = "1" ]; 
 need "$LPM" 'if ! _feat_on LPM || ! _radio_policy_enabled; then'
 need "$LPM" 'if [ "$MODE" = "refresh" ]; then'
 need "$LPM" 'case "$_saved_mode" in fast|normal|save|night)'
-need "$LPM" 'case "$(_cfg net_handover_fast)" in'
-need "$LPM" 'case "$(_cfg net_handover_active)" in'
+need "$LPM" 'case "$(_cfg net_wifi_leave)" in'
+need "$LPM" 'case "$(_cfg net_wifi_leave)" in'
 need "$LPM" 'HANDOVER_ACTIVE=1; HANDOVER_FAST=1'
 need "$LPM" 'STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"'
 need "$LPM" '_sset mobile_data_always_on 0'
 need "$LPM" '_sset mobile_data_always_on 1'
 need "$FALLBACK" '_radio_policy_enabled() { [ "$(_cfg radio_policy_enable)" = 1 ]; }'
-need "$FALLBACK" '_enabled() { _radio_policy_enabled && [ "$(_cfg net_handover_active)" = 1 ]; }'
+need "$FALLBACK" '_enabled() { _radio_policy_enabled && [ "$(_cfg net_wifi_leave)" = aggressive ]; }'
 need "$FALLBACK" '_screen_on || return 0'
 need "$FALLBACK" '_mobile_allowed || return 0'
 need "$FALLBACK" '_wifi_default || return 0'
@@ -55,16 +55,16 @@ printf '%s\n' "$writers" | grep -qx "$LPM" || fail 'mobile_data_always_on has a 
 
 WEB="$ROOT/webroot/index.html"
 need "$WEB" "key:'radio_policy_enable'"
-need "$WEB" "key:'net_handover_fast'"
-need "$WEB" "key:'net_handover_active'"
+need "$WEB" "key:'net_wifi_leave'"
+need "$WEB" "key:'net_wifi_leave'"
 need "$WEB" "radio_policy_enable:'cellular_controls'"
-need "$WEB" "net_handover_active:'wifi_escape'"
-need "$WEB" "key === 'radio_policy_enable' || key === 'net_handover_fast' || key === 'net_handover_active'"
+need "$WEB" "net_wifi_leave:'net'"
+need "$WEB" "key === 'radio_policy_enable' || key === 'net_wifi_leave'"
 need "$WEB" "'radio_policy_enable',"
 need "$WEB" 'radio_policy_enable:APPLY_LIVE'
 need "$WEB" '/runtime/asb_lpm.sh refresh'
 need "$WEB" "raw.split('|')[0]"
-need "$ROOT/common/install.sh" 'wifi_scan_throttle radio_policy_enable net_handover_fast net_handover_active haptic_touch_strength'
+need "$ROOT/common/install.sh" 'wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength'
 need "$ROOT/runtime/asb_net_apply.sh" 'wifi_fallback=master_off'
 need "$ROOT/action.sh" 'cellular/radio controls: off · profiles leave Android radio policy untouched'
 need "$ROOT/tools/asb_diag.sh" 'profiles leave Android mobile-data context and TCP keepalives untouched'
@@ -76,7 +76,7 @@ for _locale in "$ROOT"/webroot/i18n/*.json; do
   _locale_n=$((_locale_n + 1))
   need "$_locale" '"radio_policy_enable"'
   need "$_locale" '"wb_radio_policy"'
-  need "$_locale" '"net_handover_active"'
+  need "$_locale" '"net_wifi_leave"'
   need "$_locale" '"theme_dark"'
   need "$_locale" '"theme_light"'
   need "$_locale" '"name"'
@@ -96,8 +96,8 @@ LPM=1
 EOF
 cat > "$TMP/mod/config/governor.conf" <<'EOF'
 radio_policy_enable=0
-net_handover_fast=0
-net_handover_active=0
+net_wifi_leave=off
+net_wifi_leave=off
 EOF
 cat > "$TMP/mod/profiles/balanced.sh" <<'EOF'
 NET_TCP_KEEPIDLE=300
@@ -116,7 +116,7 @@ MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" normal
 [ ! -e "$TMP/state/lpm_base" ] || fail 'radio master OFF captured a modem baseline'
 
 # Explicit master ON permits current LPM policy. Fast may warm context while awake; save wins.
-printf 'radio_policy_enable=1\nnet_handover_fast=1\nnet_handover_active=0\n' > "$TMP/mod/config/governor.conf"
+printf 'radio_policy_enable=1\nnet_wifi_leave=weak\n' > "$TMP/mod/config/governor.conf"
 MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" normal
 tail -n 1 "$TMP/settings.log" | grep -qx 'put mobile_data_always_on 1' || fail 'explicit radio master + fast handover did not warm mobile context'
 MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" save
@@ -124,7 +124,7 @@ tail -n 1 "$TMP/settings.log" | grep -qx 'put mobile_data_always_on 0' || fail '
 
 # Turning the independent master OFF restores original Android baseline (mocked 0), removes LPM
 # state and makes a later profile transition a no-op rather than a new implicit radio write.
-printf 'radio_policy_enable=0\nnet_handover_fast=1\nnet_handover_active=1\n' > "$TMP/mod/config/governor.conf"
+printf 'radio_policy_enable=0\nnet_wifi_leave=1\nnet_wifi_leave=1\n' > "$TMP/mod/config/governor.conf"
 MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" refresh
 tail -n 1 "$TMP/settings.log" | grep -qx 'put mobile_data_always_on 0' || fail 'radio master OFF did not restore captured Android baseline'
 [ ! -e "$TMP/state/lpm_base" ] || fail 'radio master OFF retained LPM baseline state'

@@ -9,7 +9,7 @@ TMP="$(mktemp -d)"
 trap 'if [[ -n "${WPID:-}" ]]; then kill "$WPID" 2>/dev/null || true; wait "$WPID" 2>/dev/null || true; fi; rm -rf "$TMP"' EXIT HUP INT TERM
 mkdir -p "$TMP/mod/runtime" "$TMP/mod/config" "$TMP/bin" "$TMP/state"
 cp "$SRC" "$TMP/mod/runtime/asb_wifi_fallback.sh"
-printf 'radio_policy_enable=1\nnet_handover_active=1\n' > "$TMP/mod/config/governor.conf"
+printf 'radio_policy_enable=1\nnet_wifi_leave=aggressive\n' > "$TMP/mod/config/governor.conf"
 cat > "$TMP/bin/dumpsys" <<'EOF'
 #!/bin/sh
 case "$1" in
@@ -81,7 +81,7 @@ wait_for_line 'wifi enable' "$TMP/svc.log" || fail 'did not restore Wi-Fi after 
 [ "$(grep -cx 'wifi disable' "$TMP/svc.log")" -eq 1 ] || fail 'repeated Wi-Fi release during cooldown'
 
 # Turning the feature off via reconcile terminates its watcher and clears only ASB state.
-printf 'radio_policy_enable=1\nnet_handover_active=0\n' > "$TMP/mod/config/governor.conf"
+printf 'radio_policy_enable=1\nnet_wifi_leave=off\n' > "$TMP/mod/config/governor.conf"
 run reconcile
 wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'stale watcher PID after OFF'
 wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'stale watcher lock after OFF'
@@ -90,11 +90,11 @@ kill -0 "$WPID" 2>/dev/null && fail 'reconcile OFF did not stop watcher'
 unset WPID
 
 # If OFF happens during an ASB-owned release window, reconcile returns Wi-Fi immediately.
-printf 'radio_policy_enable=1\nnet_handover_active=1\n' > "$TMP/mod/config/governor.conf"
+printf 'radio_policy_enable=1\nnet_wifi_leave=aggressive\n' > "$TMP/mod/config/governor.conf"
 run reconcile
 wait_for "$TMP/state/wifi_fallback.action" || fail 'did not enter owned release window'
 WPID="$(cat "$TMP/state/wifi_fallback.pid")"
-printf 'radio_policy_enable=1\nnet_handover_active=0\n' > "$TMP/mod/config/governor.conf"
+printf 'radio_policy_enable=1\nnet_wifi_leave=off\n' > "$TMP/mod/config/governor.conf"
 run reconcile
 wait_for_absent "$TMP/state/wifi_fallback.action" || fail 'OFF did not clear ASB action marker after restore'
 wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'watcher PID remained after active-window OFF'
