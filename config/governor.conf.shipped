@@ -1,4 +1,4 @@
-# CONFIG_SHAPE=4a10ee04c0e3
+# CONFIG_SHAPE=80aeed2cbed8
 # Fingerprint of every option list and slider range in the WebUI. asb_lint.sh compares
 # against it: if the shape moves and this does not, a stored value may now mean something
 # different from what the user chose, and the schema number in install.sh needs bumping
@@ -299,6 +299,8 @@ net_qdisc_mobile=auto
 net_qdisc=auto
 
 # WiFi regulatory domain: auto|CR|US|DE|JP|...
+net_wifi_leave=off
+wifi_powersave=off
 wifi_country=auto
 
 # Initial TCP windows per route: auto|off|conservative|aggressive How many segments may go out,
@@ -318,7 +320,7 @@ net_txqueue=stock
 
 # WiFi scan throttle: auto|0|1
 #   0 scans more often (roams sooner, costs battery), 1 is stock, auto leaves it alone.
-wifi_scan_throttle=auto
+wifi_scan_throttle=2
 
 # Cellular/radio policy master: 0|1. OFF means power profiles never write modem context or
 # TCP keepalive settings; existing Android radio policy remains untouched. Turn on only if this
@@ -327,9 +329,7 @@ radio_policy_enable=0
 # Fast WiFi-to-mobile handover: 0|1. Requires the radio policy master above. When enabled, keep
 # the cellular data context ready while the screen is on and modem LPM is normal/fast. It does
 # not disconnect WiFi or alter OEM roaming thresholds; save/night LPM releases the modem.
-net_handover_fast=0
 # Explicit, screen-on only escape from a framework-unvalidated Wi-Fi default route.
-net_handover_active=0
 
 # Leave Wi-Fi when the signal is this weak, in dBm: off, -85, -80, -75, -70, -65
 #   Normally ASB only releases a Wi-Fi network that has stopped passing validation. That
@@ -344,7 +344,6 @@ net_handover_active=0
 #   reattaching at around 15 m, and asked for thresholds that leave before that. They will
 #   also drop networks that were still usable, which is the trade they are choosing.
 #   off is the default: nobody gets a new disconnect reason without asking for it.
-net_wifi_leave_rssi=off
 
 # Let Android leave an unusable Wi-Fi network by itself: 0 = off, 1 = on
 #   Sets network_avoid_bad_wifi, the platform's own switch for "when Wi-Fi stops passing
@@ -356,7 +355,6 @@ net_wifi_leave_rssi=off
 #   Independent of net_handover_active - that one disables the radio outright, which is
 #   heavier and visible to the user. Enabling this one and leaving that off is the calmer
 #   combination.
-net_avoid_bad_wifi=0
 
 haptic_strength=-1
 
