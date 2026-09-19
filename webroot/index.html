@@ -3104,7 +3104,7 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
         <span class="smart-banner-value" id="bnAlpha">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label" data-i18n="lv_avgdrain">Avg drain</span>
+        <span class="smart-banner-label" data-i18n="lv_app">App</span>
         <span class="smart-banner-value" id="bnApp">—</span>
       </div>
       <div class="smart-banner-item">
@@ -3112,7 +3112,7 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
         <span class="smart-banner-value" id="bnSes">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label" data-i18n="lv_drain">Drain</span>
+        <span class="smart-banner-label" data-i18n="lv_avgdrain">Avg drain</span>
         <span class="smart-banner-value" id="bnDrain">—</span>
       </div>
       <div class="smart-banner-item">
@@ -3418,6 +3418,10 @@ const TECH_ICON_PATHS = {
   /* wifipm: the two outer Wi-Fi arcs with a crescent where the dot belongs - the radio
      is still there, the link is still up, it is just asleep between beacons. Same
      stroke weight and 24-box geometry as the other network glyphs. */
+  /* wifileave: Wi-Fi arcs with an arrow breaking away to the right - the link is there,
+     we are choosing to leave it. Was pointing at a 'net' icon that does not exist, so
+     the card rendered whatever the fallback is. */
+  wifileave: '<path d="M3 9.5a11 11 0 0 1 13 -1.8"></path><path d="M6 13a7 7 0 0 1 7.5 -1.2"></path><circle cx="9" cy="17" r="1.2"></circle><path d="M15 16h6"></path><path d="M18.5 13.5 21 16l-2.5 2.5"></path>',
   wifipm: '<path d="M4.5 9.5a11 11 0 0 1 15 0"></path><path d="M7.5 13a7 7 0 0 1 9 0"></path><path d="M13.6 17.2a2.2 2.2 0 1 1-2.4-2.9 1.8 1.8 0 0 0 2.4 2.9z"></path>',
   memhold: '<rect x="6" y="6" width="12" height="12" rx="2"></rect>'
          + '<path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"></path>'
@@ -4462,7 +4466,7 @@ async function cfgLoad() {
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
   wifi_powersave:'net',
-  net_wifi_leave:'net',
+  net_wifi_leave:'wifileave',
   /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
      so the card existed and was never drawn. BG_TRIM and gms_trim - the other RAM tweaks -
      live under battery for the same reason. */
@@ -4516,7 +4520,7 @@ const CFG_GROUPS = [
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
   wifi_powersave:'net',
-  net_wifi_leave:'net',
+  net_wifi_leave:'wifileave',
   /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
      so the card existed in CFG_ITEMS and was never drawn. BG_TRIM_LEVEL and gms_trim -
      the other RAM tweaks - sit under battery for exactly this reason. */
@@ -7862,19 +7866,7 @@ async function pollLive(visible) {
           _el('bnBucket').textContent = '#' + bid + ' ' + (dpNames[dp] || '?') + (we ? '·we' : '·wd');
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
           _el('bnAlpha').textContent = Math.round(alpha / 10) + '% bat';
-          // Average drain for this bucket, not the foreground app class.
-          //
-          // The slot used to show HEAVY/LIGHT/IDLE for the current app, which tells the user
-          // something they can already see by looking at their screen and cannot act on. The
-          // learned drain rate for the bucket is the number that answers "is this phone doing
-          // well right now" - a capture averaging 10.6 %/h means something, a label saying
-          // MEDIUM does not.
-          {
-            const bd = parseInt(kv.smart_bucket_drain_x10, 10);
-            _el('bnApp').textContent = (!isNaN(bd) && bd > 0)
-              ? (bd / 10).toFixed(1) + '%/h'
-              : (warm ? '\u2026' : T('lv_measuring', 'measuring\u2026'));
-          }
+          _el('bnApp').textContent = warm ? '\u2026' : (appNames[appH] || '?');
 
           // Second row: four more Smart-owned readings, so the card is two full rows instead
           // of one row plus an orphan hanging under Bucket.
@@ -7900,24 +7892,17 @@ async function pollLive(visible) {
           // only publishes a rate it considers usable, so gating on window length here
           // would hide exactly the value that fix produces - the banner would still read
           // "measuring..." with a perfectly good number sitting in the state file.
-          if (dr > 0) {
-            _lastDrain = dr;
-            /* Label says "app drain" because that is what this is.
-             *
-             * The value comes from asb_smart_appheat_drain(app_hash) - a rolling figure
-             * for the app in front, not the phone average. It was labelled "Screen drain",
-             * which reads as "what the phone costs with the screen on", and a user
-             * comparing 13.4%/h here against 2%/h in the day log has no way to know they
-             * are different quantities. */
-            _el('bnDrain').textContent = (dr / 10).toFixed(1) + '%/h';
-            { const _dp = _el('bnDrain');
-              if (_dp && _dp.parentElement) _dp.parentElement.title = T('lv_drain_tip', ''); }
-          } else if (kv.charging === '1' || kv.plugged === '1') {
-            _el('bnDrain').textContent = '\u2014';
-          } else if (_lastDrain > 0) {
-            _el('bnDrain').textContent = '~' + (_lastDrain / 10).toFixed(1) + '%/h';
-          } else {
-            _el('bnDrain').textContent = T('lv_measuring', 'measuring\u2026');
+          // Average drain for the learned bucket, not the foreground app's own draw.
+          //
+          // The per-app figure is an attribution the platform itself hedges on, and nobody can
+          // act on "this app is using 3%". The bucket average answers the question people
+          // actually open Monitor to ask: is this phone doing well right now.
+          {
+            const bd = parseInt(kv.smart_bucket_drain_x10, 10);
+            if (!isNaN(bd) && bd > 0) {
+              _lastDrain = bd;
+              _el('bnDrain').textContent = (bd / 10).toFixed(1) + '%/h';
+            }
           }
 
           // Thermal trend is what makes Smart back off, so it explains Alpha moving on its
