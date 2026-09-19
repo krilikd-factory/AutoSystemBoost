@@ -3104,7 +3104,7 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
         <span class="smart-banner-value" id="bnAlpha">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label" data-i18n="lv_app">App</span>
+        <span class="smart-banner-label" data-i18n="lv_avgdrain">Avg drain</span>
         <span class="smart-banner-value" id="bnApp">—</span>
       </div>
       <div class="smart-banner-item">
@@ -3415,6 +3415,10 @@ const TECH_ICON_PATHS = {
   /* memhold: a memory die with a retaining bracket - distinct from `cleaner`, which is a
      brush and means the opposite action. The tweak holds pages in RAM; the icon should not
      look like something that sweeps them out. */
+  /* wifipm: the two outer Wi-Fi arcs with a crescent where the dot belongs - the radio
+     is still there, the link is still up, it is just asleep between beacons. Same
+     stroke weight and 24-box geometry as the other network glyphs. */
+  wifipm: '<path d="M4.5 9.5a11 11 0 0 1 15 0"></path><path d="M7.5 13a7 7 0 0 1 9 0"></path><path d="M13.6 17.2a2.2 2.2 0 1 1-2.4-2.9 1.8 1.8 0 0 0 2.4 2.9z"></path>',
   memhold: '<rect x="6" y="6" width="12" height="12" rx="2"></rect>'
          + '<path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"></path>'
          + '<path d="M9.5 12.5l1.8 1.8 3.4-3.6"></path>',
@@ -4225,6 +4229,8 @@ const CFG_FILE = MD + '/config/governor.conf';
  * Keys mirrored into the external snapshot when changed here.
  */
 const SNAP_KEYS = [
+  'wifi_powersave',
+  'net_wifi_leave',
   'audio_profile',
   'audio_dac_hifi',
   'CAMERA_LEVEL',
@@ -4262,10 +4268,6 @@ const SNAP_KEYS = [
   'wifi_country',
   'wifi_scan_throttle',
   'radio_policy_enable',
-  'net_handover_fast',
-  'net_handover_active',
-  'net_wifi_leave_rssi',
-  'net_avoid_bad_wifi',
   'haptic_touch_strength',
   'media_loudness',
   'dsp_loudness',
@@ -4367,16 +4369,13 @@ const CFG_ITEMS = [
     desc:'How much the phone sends in one burst before waiting for a reply. Smart lets ASB look at your actual WiFi or mobile speed and size it: bigger on a fast link, left at the factory value on a weak one, because a big burst there only causes losses. Moderate uses the factory value everywhere. Aggressive goes one class higher if you trust your link. Stock puts it back. Start with Smart.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
     desc:'The region decides which WiFi channels your phone may use, and that sets the ceiling on link speed. CR opens the widest set of channels - usually the fastest WiFi. Stock keeps the region the phone gets from the SIM. IMPORTANT: using channels not permitted where you are is your call and your responsibility.' },
-  { key:'wifi_scan_throttle', type:'seg', def:'auto', opts:['auto','0','1'], name:'WiFi Scan Rate',
-    desc:'How often the phone looks for WiFi networks in the background. More often switches to a stronger access point sooner as you move around a house or office, at a small battery cost. Stock is the normal Android limit of 4 scans per 2 minutes. If WiFi keeps clinging to a weak AP, pick More often.' },
-  { key:'net_handover_fast', type:'bool', def:'0', stock:'0', name:'Fast WiFi → mobile handover',
-    desc:'Keeps the mobile-data context ready while the screen is on, so Android can move traffic to mobile data without waiting for the modem to wake after WiFi becomes unusable. It does not disconnect WiFi, force mobile data as the active route or change OEM signal/roaming thresholds. Screen-off save/night mode still releases the modem. Costs some battery while the screen is on; use it only if handover delay matters.' },
-  { key:'net_handover_active', type:'bool', def:'0', stock:'0', name:'Active fallback from dead WiFi',
-    desc:'Opt-in escape hatch for a WiFi route Android has marked not validated. Only while the screen is on, ASB temporarily turns WiFi off when it is still the default route but has no validated internet; mobile data can then become the route immediately. WiFi is turned back on after a short window and a cooldown prevents loops. Never acts from weak signal alone, never changes carrier/roaming thresholds, preferred network mode, Bluetooth or audio. Uses mobile data; keep off if you need uninterrupted local WiFi devices.' },
-  { key:'net_wifi_leave_rssi', type:'seg', def:'off', stock:'off', opts:['off','-85','-80','-75','-70','-65'], name:'Leave Wi-Fi On Weak Signal',
-    desc:'Normally ASB only releases a Wi-Fi network that has stopped working - one that answers but carries no traffic. That misses the case people actually notice: walking away from a hotspot. A router at the edge of range still replies, so the network stays technically valid while nothing loads, and the phone holds on.\n\nWith a threshold set, a signal weaker than it releases the route on its own. The same confirmation passes apply, so stepping behind a wall for a moment does not trigger it.\n\n-85 dBm is where Wi-Fi has no usable speed left on any band - at that point staying attached is not a judgement call. -80 and -75 leave sooner and are more likely to drop a network that would still have worked.\n\nOff by default. A phone that disconnects from Wi-Fi by itself is a surprise, and nobody should get that without choosing it.' },
-  { key:'net_avoid_bad_wifi', type:'bool', def:'0', stock:'0', name:'Let Android Leave Bad Wi-Fi',
-    desc:'Turns on the platform switch that moves your data to mobile when a Wi-Fi network stops actually working - the captive portal that never loads, the router that answers but has no internet, the hotel network that dropped out.\n\nAndroid does the switching itself: the Wi-Fi radio stays connected, nothing is turned off, and it moves back on its own the moment the link works again.\n\nThis is the closest a module can get to the Pixel behaviour where tapping the Wi-Fi tile switches networks instead of killing the radio - choosing the active network directly needs a system API no module can reach.\n\nDifferent from Active Fallback above: that one disables Wi-Fi outright, which is faster but visible and blunt. This one is quieter and hands the decision to the system.\n\nYour original value is saved and restored when you turn this off or uninstall ASB.' },
+  { key:'wifi_scan_throttle', type:'range', def:'2', min:0, max:4, step:1,
+    name:'WiFi Scan Rate', cat:'net' },
+  { key:'net_wifi_leave', type:'seg', def:'off', stock:'off',
+    opts:['off','weak','unusable','aggressive'], name:'Leave Bad Wi-Fi',
+    cat:'net' },
+  { key:'wifi_powersave', type:'seg', def:'off', stock:'off',
+    opts:['off','screen_off','always'], name:'WiFi Power Save', cat:'net' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
@@ -4462,6 +4461,8 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
+  wifi_powersave:'net',
+  net_wifi_leave:'net',
   /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
      so the card existed and was never drawn. BG_TRIM and gms_trim - the other RAM tweaks -
      live under battery for the same reason. */
@@ -4482,7 +4483,7 @@ const CFG_CAT = {
   night_quiet_enable:'battery', log_level:'system', phantom_procs:'system',
   sustained_temp_mode:'thermal', doze_level:'battery', doze_trim_whitelist:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
-  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net', net_handover_fast:'net', net_handover_active:'net', net_wifi_leave_rssi:'net', net_avoid_bad_wifi:'net',
+  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net',
   disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
 };
 // Four groups, one screen each.
@@ -4514,6 +4515,8 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
+  wifi_powersave:'net',
+  net_wifi_leave:'net',
   /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
      so the card existed in CFG_ITEMS and was never drawn. BG_TRIM_LEVEL and gms_trim -
      the other RAM tweaks - sit under battery for exactly this reason. */
@@ -4533,7 +4536,7 @@ const CFG_GROUP_OF = {
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
-  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net', net_handover_fast:'net', net_handover_active:'net', net_wifi_leave_rssi:'net', net_avoid_bad_wifi:'net',
+  net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net',
   disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'ui', haptic_touch_strength:'ui'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
@@ -4720,21 +4723,21 @@ async function cfgLoadCaps() {
 }
 
 const CFG_ICONS = {
+  wifi_powersave:'wifipm',
+  net_wifi_leave:'network',
   mglru_hold:'memhold',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_compressor:'compressor', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
-  net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls', net_handover_fast:'handover', net_handover_active:'wifi_escape',
+  net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls',
   auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail',
   /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
    * system instead of by us. Reusing the handover glyph says that at a glance. */
-  net_avoid_bad_wifi:'wifi_auto_leave',
-  net_wifi_leave_rssi:'wifi_weak_leave',
   bt_link_stability:'bt_link_steady',
 };
 // What the kernel actually did with the network keys, read from the file
@@ -5071,8 +5074,6 @@ const WILL_BREAK = {
   sustained_temp_enter:'wb_therm',
   wifi_scan_throttle: 'wb_scan',
   radio_policy_enable:'wb_radio_policy',
-  net_handover_fast:  'wb_handover',
-  net_handover_active:'wb_handover_active',
   gms_trim:           'wb_gms',
   gms_freeze:         'wb_gmsfreeze',
   wakelock_action:    'wb_wl',
@@ -5094,6 +5095,8 @@ function willBreakOf(it, cur) {
 }
 
 const APPLY_MODE = {
+  wifi_powersave: APPLY_LIVE,
+  net_wifi_leave: APPLY_LIVE,
   /* Live: asb_system_tweaks writes the sysfs node on save, and the value can be read
      straight back from /sys/kernel/mm/lru_gen/min_ttl_ms - no reboot, verifiable. */
   mglru_hold: APPLY_LIVE,
@@ -5103,7 +5106,7 @@ const APPLY_MODE = {
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
-  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, net_handover_fast:APPLY_LIVE, net_handover_active:APPLY_LIVE, net_wifi_leave_rssi:APPLY_LIVE, net_avoid_bad_wifi:APPLY_LIVE, log_level:APPLY_LIVE,
+  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, net_wifi_leave:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
@@ -5361,7 +5364,39 @@ const _unav = ASB_CAP_REQUIRES[it.key];
           }
         }
       };
-      rng.onchange = () => cfgSet(it.key, rng.value, wrap);
+      // Commit on drag only - a tap on the track must not change the value.
+      //
+      // A range input fires 'change' for a plain tap anywhere on its track, so scrolling
+      // the tweak list with a finger that grazes a slider silently rewrote a setting. The
+      // user reported exactly that, and on a long list it is easy to not notice.
+      //
+      // A real drag produces pointer movement between down and up. Requiring a few pixels
+      // of travel keeps dragging exactly as it was, ignores taps and grazes, and leaves
+      // keyboard use working because those events carry no pointer at all.
+      let _rngDragged = false, _rngStartX = null, _rngPointer = false, _rngBefore;
+      rng.addEventListener('pointerdown', (e) => {
+        _rngPointer = true; _rngDragged = false; _rngStartX = e.clientX;
+        _rngBefore = rng.value;
+      });
+      rng.addEventListener('pointermove', (e) => {
+        if (_rngPointer && _rngStartX !== null && Math.abs(e.clientX - _rngStartX) > 4)
+          _rngDragged = true;
+      });
+      rng.addEventListener('pointerup', () => { _rngPointer = false; });
+      rng.addEventListener('pointercancel', () => {
+        _rngPointer = false;
+        if (!_rngDragged && _rngBefore !== undefined) rng.value = _rngBefore;
+      });
+      rng.onchange = () => {
+        if (_rngPointer === false && _rngStartX !== null && !_rngDragged) {
+          // A tap: put the thumb back and change nothing.
+          if (_rngBefore !== undefined) { rng.value = _rngBefore; val.textContent = _rngLabel(rng.value); }
+          _rngStartX = null;
+          return;
+        }
+        _rngStartX = null;
+        cfgSet(it.key, rng.value, wrap);
+      };
       wrap.appendChild(rng);
       wrap.appendChild(val);
       top.appendChild(wrap);
@@ -5837,10 +5872,9 @@ async function cfgSet(key, val, ctl) {
       }
       // Fast handover reuses the modem LPM owner and refreshes in its current mode, so
       // save/night remains a hard standby boundary rather than being accidentally woken.
-      if (key === 'radio_policy_enable' || key === 'net_handover_fast' || key === 'net_handover_active' ||
-          /* Same reconcile path: the watcher re-reads the threshold on the spot,
-           * so telling the user to reboot for it was simply wrong. */
-          key === 'net_wifi_leave_rssi') {
+      // Same reconcile path: the watcher re-reads the threshold on the spot,
+      // so telling the user to reboot for it was simply wrong.
+      if (key === 'radio_policy_enable' || key === 'net_wifi_leave') {
         try { await run('sh ' + MD + '/runtime/asb_lpm.sh refresh >/dev/null 2>&1'); } catch (e) {}
         try { await run('sh ' + MD + '/runtime/asb_wifi_fallback.sh reconcile >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' · applied'), cfgToastType(key));
@@ -5935,8 +5969,7 @@ async function cfgSet(key, val, ctl) {
       /* These reach the device through the same net-apply pass as the rest of this list.
        * Left out of it, they fell to the final else and were announced as needing a
        * reboot while their card said "applies immediately" - two answers to the same
-       * question, and the wrong one is the one the user sees after tapping. */
-      'net_avoid_bad_wifi','bt_link_stability'];
+       * question, and the wrong one is the one the user sees after tapping. */'bt_link_stability'];
     var HAPTIC_KEYS = ['haptic_strength','haptic_touch_strength'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
@@ -7829,7 +7862,19 @@ async function pollLive(visible) {
           _el('bnBucket').textContent = '#' + bid + ' ' + (dpNames[dp] || '?') + (we ? '·we' : '·wd');
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
           _el('bnAlpha').textContent = Math.round(alpha / 10) + '% bat';
-          _el('bnApp').textContent = warm ? '\u2026' : (appNames[appH] || '?');
+          // Average drain for this bucket, not the foreground app class.
+          //
+          // The slot used to show HEAVY/LIGHT/IDLE for the current app, which tells the user
+          // something they can already see by looking at their screen and cannot act on. The
+          // learned drain rate for the bucket is the number that answers "is this phone doing
+          // well right now" - a capture averaging 10.6 %/h means something, a label saying
+          // MEDIUM does not.
+          {
+            const bd = parseInt(kv.smart_bucket_drain_x10, 10);
+            _el('bnApp').textContent = (!isNaN(bd) && bd > 0)
+              ? (bd / 10).toFixed(1) + '%/h'
+              : (warm ? '\u2026' : T('lv_measuring', 'measuring\u2026'));
+          }
 
           // Second row: four more Smart-owned readings, so the card is two full rows instead
           // of one row plus an orphan hanging under Bucket.
