@@ -288,6 +288,31 @@ Most columns are reads of /dev/.asb/state with explicit type. `bat_temp_10x` is 
 
 ## Full-day derived report artifacts
 
+`phase_ledger.tsv` columns, in order:
+
+```
+1  phase        phase label (sleep, idle, gap, active, gaming, audio_*, charging_*)
+2  start_epoch  phase start, seconds
+3  end_epoch    phase end, seconds
+4  start_pct    battery percentage at start
+5  end_pct      battery percentage at end
+6  max_cpu_c    highest CPU temperature seen in the phase
+7  max_surf_c   highest surface temperature seen
+8  max_p6_khz   prime-cluster ceiling, duration-weighted mean (not the peak - see below)
+9  gpu_avg_pct  mean GPU load
+10 throttle     throttle events counted
+11 wake_peak    peak wakeup rate
+12 awake_pct    share of the phase the SoC was not suspended
+13 ma_avg       mean of sampled current; biased high, see the caveats below
+14 rmnet_rx     mobile bytes received during the phase
+15 rmnet_tx     mobile bytes sent
+16 cooldown     ticks the screen-off cooldown clamp was engaged
+```
+
+Column 16 is appended rather than inserted for a reason: readers index this file
+positionally, so a new field in the middle shifts every column after it and the shift is
+silent - the file still parses, the numbers just mean something else.
+
 `asb_log_full_day.sh` writes a tab-delimited `phase_ledger.tsv` with one concrete time interval per detected phase. Its phase summary is **not** a causal energy split: temperature and current fields are sampled observations, Android capacity is integer-quantised, and repeated phase labels may represent disjoint intervals.
 
 `sampled_current_distribution.txt` maps each positive raw `battery_trace.txt` discharge-current sample to a concrete ledger interval, then groups the mapped samples by phase. It reports the number of samples, the mean sampled mA, and the **median sampled mA**. The median is intentionally resistant to brief outliers; neither figure is a physical whole-phase current average because suspend and gaps between recorder wake-ups are under-sampled. Charging/zero/invalid samples are excluded, and `current_now` values at or above 100000 are normalized from µA to mA for this derived report.
