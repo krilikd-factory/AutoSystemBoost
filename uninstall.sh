@@ -346,6 +346,15 @@ fi
 # smart_dynamic_tune drops it to 35 while the screen is off and puts it back on wake.
 # A user who removes the module with the screen off would otherwise keep a throttled
 # foreground tier until the next reboot - the saved value is right there, so use it.
+# Undo the screen-off Wi-Fi power save if it is still on.
+#
+# smart_dynamic_tune turns it on with the screen off and back off on wake; a user who
+# removes the module with the screen off would keep it until the next reboot.
+if [ -f /data/adb/asb/wifipm_restore ] && command -v iw >/dev/null 2>&1; then
+  iw dev wlan0 set power_save off >/dev/null 2>&1 || true
+  rm -f /data/adb/asb/wifipm_restore 2>/dev/null
+fi
+
 _ucfg_save="$(cat /data/adb/asb/ucfg_restore 2>/dev/null | tr -dc '0-9')"
 case "$_ucfg_save" in
   ''|*[!0-9]*) : ;;
