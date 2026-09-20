@@ -810,7 +810,7 @@ lk_capture_battery_trace_row() {
   # (bat_wake) as GPU load and drew the wrong conclusion from it. Carrying the real
   # value removes the temptation to infer it from a neighbouring field.
   _gpub="$(cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null | tr -dc '0-9')"
-  echo "${_e}|${_d}|${_st}|${_pr}|${_sc}|${_bpct}|${_bma}|${_bv}|${_btmp}|${_temp}|${_sk}|${_surf}|${_brd}|${_iq}|${_bd}|${_bl}||${_bw}|${_hp}|${_hv}|${_hir}|${_ct}|${_fb}|${_wrx}|${_wtx}|${_rrx}|${_rtx}|${_l1}|${_dw}|${_mfree}|${_swfree}|${_zram_used}|${_wakelocks}" >> "$LK_OUT_DIR/battery_trace.txt|${_gpub:-}"
+  echo "${_e}|${_d}|${_st}|${_pr}|${_sc}|${_bpct}|${_bma}|${_bv}|${_btmp}|${_temp}|${_sk}|${_surf}|${_brd}|${_iq}|${_bd}|${_bl}||${_bw}|${_hp}|${_hv}|${_hir}|${_ct}|${_fb}|${_wrx}|${_wtx}|${_rrx}|${_rtx}|${_l1}|${_dw}|${_mfree}|${_swfree}|${_zram_used}|${_wakelocks}|${_gpub:-}" >> "$LK_OUT_DIR/battery_trace.txt"
 }
 
 # WAKELOCK / WAKE-SOURCE collection
