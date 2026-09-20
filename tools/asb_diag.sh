@@ -716,7 +716,16 @@ if [ -n "$MIX" ]; then
   _rdac=$(grep -c 'HPH[LR]_RDAC Switch" value="1"' "$MIX" 2>/dev/null)
   NOTE "RX/WSA Digital Volume peak: ${_vpeak:-n/a}  (84=0dB unity; SM8650/pineapple caps at 84, sun/canoe accept 88)"
   V "No out-of-range Digital Volume (>88 would break the speaker path)" "0" "$_vclip" eq
-  V "IIR0 EQ bands flattened (engaged=0)" "0" "$_iir" eq
+  # Only ASB's own claim is a verdict.
+  #
+  # With audio_profile=stock the module does not touch the mixer at all, so whatever the
+  # vendor left in IIR0 is the vendor's business - reporting it as FAIL blamed ASB for a
+  # setting it never wrote. The check is still worth printing, just not as a verdict.
+  if [ "$(cfg audio_profile)" = "stock" ]; then
+    NOTE "IIR0 EQ bands engaged = $_iir (audio_profile=stock - vendor owns the mixer)"
+  else
+    V "IIR0 EQ bands flattened (engaged=0)" "0" "$_iir" eq
+  fi
   V "Class-H headphone DAC armed (RDAC=1 present)" "1" "$_rdac" ge
   # aggressive (toggle)
   _aud_aggr="$(cfg audio_dac_hifi)"
@@ -1222,7 +1231,14 @@ if [ -f "$_nvf" ]; then
           permission_or_selinux) V "  $_nk (refused - permission/SELinux)" "$_nw" "failed" eq ;;
           iface_absent)          V "  $_nk (interface was not up)" "$_nw" "failed" eq ;;
           root_qdisc_owned)      V "  $_nk (root qdisc held by vendor stack)" "$_nw" "failed" eq ;;
-          "")                    V "  $_nk (write refused)" "$_nw" "failed" eq ;;
+          # An empty reason is not a refusal - it means nothing was recorded.
+          #
+          # qdisc_failures.log only exists once an apply has actually failed. On a device
+          # where the apply has not run yet the grep returns nothing, and this branch
+          # printed "write refused" and counted a FAIL - pointing at a log file that is
+          # not there. Two sibling keys in the identical position print
+          # "no verdict recorded yet" as a NOTE, which is what this is.
+          "")                    NOTE "$_nk = $_nw - no verdict recorded yet (apply has not run)" ;;
           *)                     V "  $_nk (tc error - see qdisc_failures.log)" "$_nw" "failed" eq ;;
         esac ;;
       pending)     NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
