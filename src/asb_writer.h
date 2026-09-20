@@ -1565,6 +1565,29 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                     }
                 }
             }
+
+            /* Re-clamp against the ceiling as it is NOW, after snapping.
+             *
+             * The ceiling clamp above runs before the OPP snap and before the Smart
+             * branch, and the Smart branch overwrites want_min outright - so whatever
+             * the clamp decided is gone by the time the value is written. Worse, the
+             * ceiling itself moves: the vendor pinned policy6 to 1747200 of a 4608000
+             * hardware maximum mid-session, and a minimum computed a moment earlier was
+             * suddenly above it.
+             *
+             * The kernel refuses a scaling_min_freq above scaling_max_freq and writes
+             * what fits, so the readback never matches and every such write was logged
+             * FAIL: eight of them in one report, from a kernel behaving correctly.
+             *
+             * One extra read per cluster per write, on a path that only runs when the
+             * value actually changed. */
+            if (want_min > 0) {
+                int _now_max = sysfs_read_int(g_cpu_max_paths[i], 0);
+                /* Clamp to the ceiling itself: it is already a valid OPP, because the
+                 * kernel only ever reports a step that exists. No snap needed, and the
+                 * cluster index the snap helper wants is scoped to the block above. */
+                if (_now_max > 0 && want_min > _now_max) want_min = _now_max;
+            }
             /* Compare against what is ON THE DEVICE, not against our own cache.
              *
              * The max path a few lines up reads sysfs and rewrites whenever reality has
