@@ -4353,6 +4353,8 @@ const CFG_ITEMS = [
   // The explicit radio master belongs first: every ASB modem/handover choice below depends on it.
   { key:'radio_policy_enable', type:'bool', def:'0', stock:'0', name:'Cellular / radio controls',
     desc:'Independent master for ASB modem controls. OFF is the default: choosing any power profile leaves Android’s mobile-data context and TCP keepalive settings untouched. This is the recommended setting on WiFi-only or no-SIM devices. Turn it on only if this phone uses a SIM/eSIM and you deliberately want ASB’s separate radio options below. Turning it off immediately restores the Android values recorded before ASB changed them; it never changes airplane mode, carrier selection, roaming, preferred network type, Bluetooth or audio.' },
+  { key:'night_modem_idle', type:'bool', def:'0', name:'Quiet Radio at Night',
+    desc:'Requires Cellular / radio controls above. When they are off, this and every power profile leave Android radio policy untouched. When enabled, it lets the modem settle during the hours the learner worked out from your own nights. Keepalives go to six times the profile value and the probe burst is shortened, so fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.' },
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 other links',
     desc:'How the phone ramps up when downloading - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, Ethernet. WiFi and mobile take their own values from the cards below. Stock is what the device shipped with. bbr paces to the real measured speed, cubic is the classic. Stock kernels usually lack bbr, and the card will say \u201cnot supported\u201d rather than pretend.' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 WiFi',
@@ -4397,8 +4399,6 @@ const CFG_ITEMS = [
     desc:'A wakelock is an app telling Android \u201Cdo not sleep yet\u201D. One app holding one all night is the single most expensive thing that can happen to a battery - more than any setting here can save - and no amount of tuning helps, because the phone never reaches the states those settings govern.\n\nMeasuring is always on; this decides whether ASB acts. With it on, a user-installed app still holding a wakelock after 45+ minutes of screen-off, on a phone that is measurably staying awake, is moved to Android\u2019s restricted bucket.\n\nNever touched: kernel and system sources - modem, display, alarm timer, sensors - and authenticators, dialer, SMS, messaging and clock apps. Nothing is force-stopped; restricted is a state Android manages and can undo.\n\nLeave it off if you would rather see the name and decide yourself. The report names the holder either way.' },
   { key:'gnss_trim', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Background GPS',
     desc:'GPS is one of the most expensive things a phone can do, and Android reports how much of it happens in CACHED processes - apps that are closed and doing nothing you asked for.\n\nIn one field capture that was 53 of 56 mAh of GPS drain, from an app shut minutes earlier. Nobody chose it and nobody benefits from it.\n\nWhen on, a user-installed app still holding location while its process is cached and the screen is off is limited to coarse accuracy. It gets full precision back the moment you open it - Android restores it as soon as the process leaves the cache.\n\nNever touched: maps and navigation, fitness and route tracking, emergency and find-my apps, and anything in the foreground. Permissions are not revoked; every change is recorded and undone when you set this back to off or uninstall ASB.' },
-  { key:'night_modem_idle', type:'bool', def:'0', name:'Quiet Radio at Night',
-    desc:'Requires Cellular / radio controls above. When they are off, this and every power profile leave Android radio policy untouched. When enabled, it lets the modem settle during the hours the learner worked out from your own nights. Keepalives go to six times the profile value and the probe burst is shortened, so fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
     desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
   { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
@@ -7877,7 +7877,18 @@ async function pollLive(visible) {
           // Drain in tenths of a percent per hour.
           const _drEwma = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
           const _drLast = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
-          const dr = (_drEwma > 0) ? _drEwma : _drLast;
+          /* Measured drain first, long-run average second - the order action.sh uses.
+           *
+           * _drEwma is a bucket average: "what this hour of the week usually costs",
+           * built from days of history. _drLast is the drain measured over the current
+           * window. Preferring the average meant the card showed 17.6%/h while the phone
+           * was actually drawing 7.2 - and action.sh, reading the same state file, showed
+           * both correctly labelled.
+           *
+           * A user comparing the two has no way to tell they are different quantities,
+           * and the number they can verify against the battery screen is the measured
+           * one. Fall back to the average only when no window has closed yet. */
+          const dr = (_drLast > 0) ? _drLast : _drEwma;
           // Keep the last real reading instead of blanking.
           // Reported after an auto-switch to Battery, where it is exactly the wrong moment to
           // lose the number.
