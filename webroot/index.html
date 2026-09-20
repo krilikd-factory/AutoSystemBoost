@@ -7321,8 +7321,22 @@ function paintStockLive(stockKv = null) {
   if (stockBanner) stockBanner.style.display = Object.keys(kv).length ? '' : 'none';
   // This is a live, current-derived screen-on estimate while the Monitor is open;
   // it is not a Smart learner forecast or a battery-cause attribution.
+  /* Prefer the measured window over the instantaneous current.
+   *
+   * pctph is current_now scaled by charge_full - a single sample. On a phone drawing
+   * 876 mA at the moment of the read it printed 14.6%/h while the governor's own window
+   * had measured 7.8, and action.sh showed the two side by side with different labels.
+   * The instantaneous value is real but it is a spike, not a rate: it swings by a factor
+   * of two between consecutive reads and cannot be checked against anything.
+   *
+   * smart_drain_pctph_x10 is the drain over the window the governor just closed - the
+   * figure a user can compare with the battery screen. The mA stay on the line because
+   * they are useful, just not as a rate. */
+  const _liveDrain = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
+  const _shownPctph = _liveDrain > 0 ? (_liveDrain / 10) : pctph;
+
   bset('bnStockDrain', (!isCharging && Math.abs(ma) > 0)
-    ? ((pctph > 0 ? pctph.toFixed(1) + '%/h · ' : '') + Math.abs(ma) + ' mA') : '—',
+    ? ((_shownPctph > 0 ? _shownPctph.toFixed(1) + '%/h · ' : '') + Math.abs(ma) + ' mA') : '—',
     'Live read-only screen-on estimate from battery current and charge_full; Stock does not use ASB drain learning.');
   bset('bnStockTrend', trend, 'CPU thermal delta between consecutive direct ROM samples.', trendCls);
   bset('bnStockLpm', lpmHeld ? T('lv_lpm_fast', 'fast') : T('lv_lpm_normal', 'normal'),
