@@ -850,7 +850,7 @@ _we_name=""
 # Box frames and space-padded columns cannot line up there (an emoji is two cells wide but one
 # character), which is why the old ╭──╮ frame came out ragged.
 echo ""
-echo "  🚀  AutoSystemBoost V64"
+echo "  🚀  AutoSystemBoost V65"
 if [ "$_smart_enabled" = "1" ]; then
   _conf_pct=$((_smart_conf / 10))
   echo "  🤖  Smart · bucket ${_smart_bucket} · ${_daypart_name}${_we_name} · conf ${_conf_pct}%"
@@ -1409,11 +1409,22 @@ fi
   # Three things were wrong.
   if [ "$(_feat LPM)" = "1" ] && [ "${_radio_policy:-0}" = "1" ]; then
     _lpm="$(cat /dev/.asb/lpm_mode 2>/dev/null | cut -d'|' -f1)"
+    # Third field of the same tag: "active=1" when handover policy is engaged.
+    _lpm_active="$(cat /dev/.asb/lpm_mode 2>/dev/null | cut -d'|' -f3 | cut -d'=' -f2)"
     case "$_lpm" in
       fast) echo "       modem LPM: fast · data call held up (low latency)" ;;
       save) echo "       modem LPM: save · radio idling, keepalives stretched" ;;
+      night) echo "       modem LPM: night · screen off, radio relaxed" ;;
       '')   : ;;
-      *)    echo "       modem LPM: normal · profile defaults" ;;
+      # "normal" is a decision, not an absence of one: with traffic moving, deep modem
+      # sleep costs latency in a game and stalls a download, so the module leaves the
+      # radio alone. Reported as "normal" with no reason, it read as "nothing happened" -
+      # a tester watching it during a heavy game asked why LPM was doing nothing.
+      *)    if [ "$_lpm_active" = "1" ]; then
+              echo "       modem LPM: normal · handover active, radio left alone"
+            else
+              echo "       modem LPM: normal · profile defaults"
+            fi ;;
     esac
   fi
 
