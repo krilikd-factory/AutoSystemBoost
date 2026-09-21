@@ -83,6 +83,7 @@ for test_file in \
 done
 run_optional 'debug support' tests/test_debug_support_contract.sh bash
 run_optional 'active Wi-Fi fallback runtime' tests/test_active_wifi_fallback_runtime.sh bash
+run_optional 'force-LTPO contract' tests/test_ltpo_contract.sh bash
 run_optional 'update/fallback/theme contract' tests/test_update_handover_theme_contract.sh bash
 run_optional 'snapshot-only update migration' tests/test_update_snapshot_only_migration.sh bash
 run_optional 'Stock profile' tests/test_stock_profile_contract.sh sh
