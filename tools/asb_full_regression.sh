@@ -70,6 +70,10 @@ for test_file in \
   tests/test_release_package_tool_contract.sh \
   tests/test_package_functional_parity_contract.sh \
   tests/test_network_handover_contract.sh \
+  tests/test_uninstall_dsp_prop_cleanup_contract.sh \
+  tests/test_writer_ceiling_below_min_contract.sh \
+  tests/test_wifi_scan_rungs_contract.sh \
+  tests/test_gnss_foreground_contract.sh \
   tests/test_cpu_gpu_portability_contract.sh \
   tests/test_arbiter.sh \
   tests/test_intent_backup.sh \
