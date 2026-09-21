@@ -2336,6 +2336,89 @@ asb_generate_odm_camera_binds() {
   return 0
 }
 
+# Force-LTPO patch staging.
+#
+# Borrowed from the standalone "Force ltpo" module, with its two structural mistakes
+# removed. That module ships ONE static oplus_vrr_config.json captured on a single
+# device and bind-mounts it over /my_product/etc: a table written for one panel's fps
+# ladder, backlight strategy and whitelists is simply wrong for another, and its
+# post-fs-data.sh is syntactically broken (a for loop without do), so only magic mount
+# ever delivered anything.
+#
+# The universal form is to patch the DEVICE'S OWN table: clone the live
+# oplus_vrr_config.json from whichever partition this model keeps it on, flip only the
+# idle frame-drop switches the OEM shipped disabled, and stage the result under
+# /data/adb/asb/ltpo_patched for a runtime bind. Nothing is staged into the module's
+# my_product/ tree on purpose: a magic-mounted path would be always-on, and this tweak
+# is gated by the ltpo_force WebUI toggle, which defaults off. The stock file is never
+# written - the bind shadows it, so toggling off or uninstalling restores stock exactly.
+asb_prepare_ltpo_patch() {
+  [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
+  mkdir -p /data/adb/asb 2>/dev/null
+
+  _lt_live=""
+  for _lt_cand in /my_product/etc/oplus_vrr_config.json \
+                  /odm/etc/oplus_vrr_config.json \
+                  /vendor/etc/oplus_vrr_config.json \
+                  /system_ext/etc/oplus_vrr_config.json \
+                  /product/etc/oplus_vrr_config.json; do
+    [ -f "$_lt_cand" ] && { _lt_live="$_lt_cand"; break; }
+  done
+  if [ -z "$_lt_live" ]; then
+    # Not an OPlus LTPO display stack - the WebUI card will explain it has nothing to do.
+    echo 'unsupported' > /data/adb/asb/ltpo_state 2>/dev/null
+    rm -f /data/adb/asb/ltpo_bind_manifest.txt 2>/dev/null
+    return 0
+  fi
+
+  _lt_payload="/data/adb/asb/ltpo_patched${_lt_live}"
+  mkdir -p "$(dirname "$_lt_payload")" 2>/dev/null || return 0
+  cp -f "$_lt_live" "$_lt_payload" 2>/dev/null || return 0
+
+  # Flip only the switches this table actually carries: a flag absent from the file is
+  # one this display stack does not implement, and adding it would be the static-table
+  # mistake all over again. Each of these gates a path that lets the panel drop to its
+  # low refresh rates at idle; the OEM disabled it, LTPO is what the hardware is for.
+  _lt_n=0
+  for _lt_flag in hw_enable sw_enable adfr_enable touch_idle darkmode_enable \
+                  deferred_mode_change normalized_minfps cvt frtc; do
+    if grep -q "\"$_lt_flag\"[[:space:]]*:[[:space:]]*false" "$_lt_payload" 2>/dev/null; then
+      sed -i "s/\"$_lt_flag\"[[:space:]]*:[[:space:]]*false/\"$_lt_flag\": true/g" "$_lt_payload" 2>/dev/null || continue
+      _lt_n=$((_lt_n + 1))
+    fi
+  done
+
+  if [ "$_lt_n" -eq 0 ] || cmp -s "$_lt_payload" "$_lt_live" 2>/dev/null; then
+    # Everything was already enabled (or nothing patchable) - binding an identical file
+    # would be a mount with no effect, so honestly report there is nothing to toggle.
+    echo 'already' > /data/adb/asb/ltpo_state 2>/dev/null
+    rm -rf /data/adb/asb/ltpo_patched 2>/dev/null
+    rm -f /data/adb/asb/ltpo_bind_manifest.txt 2>/dev/null
+    return 0
+  fi
+
+  # Fail-closed JSON sanity, same rule as the overlay guard: an unbalanced patched
+  # table must never reach a bind mount in front of the display service.
+  _lt_open="$(tr -cd '{' < "$_lt_payload" 2>/dev/null | wc -c)"
+  _lt_close="$(tr -cd '}' < "$_lt_payload" 2>/dev/null | wc -c)"
+  if [ "${_lt_open:-0}" != "${_lt_close:-1}" ] || [ "${_lt_open:-0}" -eq 0 ] 2>/dev/null; then
+    echo 'invalid' > /data/adb/asb/ltpo_state 2>/dev/null
+    rm -rf /data/adb/asb/ltpo_patched 2>/dev/null
+    rm -f /data/adb/asb/ltpo_bind_manifest.txt 2>/dev/null
+    return 0
+  fi
+
+  chmod 0644 "$_lt_payload" 2>/dev/null
+  _lt_ctx="$(ls -Zd "$_lt_live" 2>/dev/null | awk '{print $1}')"
+  case "$_lt_ctx" in
+    ?*:?*:?*:?*) chcon "$_lt_ctx" "$_lt_payload" 2>/dev/null || true ;;
+  esac
+  echo "${_lt_live}|${_lt_payload}" > /data/adb/asb/ltpo_bind_manifest.txt 2>/dev/null
+  echo 'ready' > /data/adb/asb/ltpo_state 2>/dev/null
+  ui_print "      + $(printf "${ASB_L_LTPO_READY:-LTPO: display patch ready (%s switch(es)) - off by default, toggle in WebUI (System)}" "$_lt_n")"
+  return 0
+}
+
 asb_register_dsp_all_configs() {
   # Device-native paths call this from their Audio stage. The later fallback call remains
   # for compatibility paths that do not build an overlay, so it must be idempotent.
@@ -2710,7 +2793,7 @@ bt_absvol_mode mglru_hold BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile net_wifi_leave wifi_powersave wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard bt_link_stability "
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile net_wifi_leave wifi_powersave wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard bt_link_stability ltpo_force "
 
   _migrated=0
   # Which numbering the stored values were written against. Absent means "before schemas
@@ -2806,7 +2889,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable   haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable   haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard ltpo_force"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -3068,6 +3151,11 @@ if [ "$ASB_CAMERA" = "true" ] && [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
   [ "$_asb_vb_final_n" -gt 0 ] && ui_print "      + ${ASB_D_RETOUCH:-retouch apps}: final camera bind payload verified"
 fi
 asb_generate_odm_camera_binds
+
+# Force-LTPO staging: device-local patch of the stock refresh-rate table. Runs
+# unconditionally - the function itself finds the table or reports the device as
+# unsupported, and the bootloop fuse check inside keeps a flagged device untouched.
+asb_prepare_ltpo_patch
 
 # A real install came back with a zero-byte regular file named "vendor" sitting in the module
 # root.
