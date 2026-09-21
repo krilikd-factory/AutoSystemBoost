@@ -597,8 +597,23 @@ if [ -r "$_state" ]; then
       if [ $(( _jw + _js )) -gt 0 ]; then
         P "    json publishes   : written=$_jw skipped=$_js ($(( _js * 100 / (_jw + _js) ))% avoided fsync)"
       fi
-  [ "$_ov_t" -gt 0 ] 2>/dev/null && \
-    P "    writes per transition: $(( _ov_w / _ov_t )) (4+ suggests the ladder is chattering)"
+  if [ "$_ov_t" -gt 0 ] 2>/dev/null; then
+    # One transition legitimately writes ~4-6 nodes (two cluster caps plus the uclamp set),
+    # so a flat "4+" threshold flags healthy devices. And vendor overrides inflate the write
+    # count without any ladder movement at all: every vendor re-clamp forces a reconcile
+    # write. Field captures tripped both ways: 6/transition with 0 overrides (healthy) and
+    # 16/transition with 111 overrides (contention, not chatter) read identically.
+    _ov_vo="$(_rget governor_vendor_overrides "$_state")"
+    case "$_ov_vo" in ''|*[!0-9]*) _ov_vo=0 ;; esac
+    _wpt=$(( _ov_w / _ov_t ))
+    if [ "$_ov_vo" -gt "$_ov_t" ]; then
+      P "    writes per transition: $_wpt - inflated by $_ov_vo vendor-override rewrites; not a chatter signal while vendor contention dominates"
+    elif [ "$_wpt" -gt 8 ]; then
+      P "    writes per transition: $_wpt (8+ with little vendor contention suggests the ladder is chattering)"
+    else
+      P "    writes per transition: $_wpt (normal - a transition writes ~4-6 nodes)"
+    fi
+  fi
   if [ "${_wfail:-0}" = "0" ]; then
     NOTE "All observed native writes have read back successfully."
   else
