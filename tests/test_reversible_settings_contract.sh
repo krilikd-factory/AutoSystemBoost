@@ -83,7 +83,10 @@ need "$AUDIO" '_asb_setting_put secure bluetooth_disable_absolute_volume'
 need "$BLUR" 'runtime/asb_baseline.sh'
 need "$BLUR" 'asb_baseline_restore_setting global disable_window_blurs'
 need "$NET" 'runtime/asb_baseline.sh'
-need "$NET" '_asb_setting_put global wifi_scan_throttle_enabled "$_wt"'
+# The scan-throttle rungs write the boolean and the interval together; rung 2 must write
+# 1/300000, never the rung number itself into the boolean key.
+need "$NET" '_wt_write 1 300000'
+need "$NET" '_asb_setting_put global wifi_scan_throttle_enabled "$1"'
 need "$HAPTICS" 'runtime/asb_baseline.sh'
 need "$HAPTICS" '_asb_setting_put system haptic_feedback_enabled 1'
 need "$HAPTICS" '_asb_setting_put system haptic_feedback_intensity'
