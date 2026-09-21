@@ -345,6 +345,26 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         snprintf(h->status, sizeof(h->status), "%s", "vendor_stricter_ceiling");
         return 0;
     }
+    /* A minimum the kernel clamped down to the ceiling is applied, not failed.
+     *
+     * scaling_min_freq cannot exceed scaling_max_freq; asked for more, the kernel writes
+     * the ceiling. The writer re-reads the ceiling before writing the minimum, but the
+     * ceiling it reads is often the one ASB itself wrote a moment earlier - the vendor
+     * pulls it back down right after, and the minimum lands on the vendor's value. A
+     * report then showed eight FAILs for cpu_min (want 2438400, live 1632000 / 1747200)
+     * on a kernel doing exactly what it should.
+     *
+     * Same treatment as vendor_stricter_ceiling above, plus the floor_holds backoff so a
+     * vendor that holds the ceiling for good is not re-asked on every transition. */
+    if (rc == 0 && node >= ASB_WRITE_CPU_MIN0 && node < ASB_WRITE_CPU_MIN0 + 3 &&
+        observed > 0 && observed < requested) {
+        h->applied++;
+        h->consecutive_failures = 0;
+        if (++h->floor_holds >= 3) h->retry_at = now + 3600;
+        else                       h->retry_at = 0;
+        snprintf(h->status, sizeof(h->status), "%s", "ceiling_below_min");
+        return 0;
+    }
     /* An unsupported node is not a failure - check before counting one.
      *
      * A WALT readback of INT_MIN is the sysfs reader's invalid sentinel: the node exists
