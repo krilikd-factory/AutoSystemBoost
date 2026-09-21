@@ -842,6 +842,15 @@ for _uc_root in /dev/cpuctl /sys/fs/cgroup/cpu; do
   break
 done
 NOTE "(profile rails: top-app should track UCL_TOP_MAX; perf_ceiling_pct no longer scales it)"
+# The global ceiling on what any task may request as its minimum. OxygenOS ships 1024
+# ("anything may demand full capacity"); ASB lowers it to the profile's top-app floor
+# (never below 205). A live 1024 under a non-performance profile means the ROM put it
+# back and per-cgroup ceilings are being outranked - reconcile watches this drift.
+_gmin_live="$(cat /proc/sys/kernel/sched_util_clamp_min 2>/dev/null)"
+case "$_gmin_live" in
+  ''|*[!0-9]*) : ;;
+  *) NOTE "global sched_util_clamp_min = $_gmin_live (ASB target: (UCL_TOP_MIN*1024)/100, floor 205; OxygenOS default 1024)" ;;
+esac
 
 SEC "0f. LSPOSED LOGGING  (read only — ASB never changes another module's settings)"
 # Report it, do not touch it.
