@@ -163,18 +163,26 @@ fi
 
 if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; then
   while IFS= read -r _gp; do
-    case "$_gp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+    case "$_gp" in ''|*[!A-Za-z0-9_.|]*) continue ;; esac
     # Restore the recorded mode, not a blanket allow: the record now carries what the
 
     # app had before ASB touched it, and handing back "allow" to an app the user had
 
     # denied is not an undo.
+    #
+    # Records are pkg|op|mode since the trim covers FINE_LOCATION as well as COARSE;
+    # a legacy pkg|mode line names COARSE_LOCATION.
 
-    _rp="${_gp%%|*}"; _rm="${_gp#*|}"
+    _rp="${_gp%%|*}"; _rest="${_gp#*|}"
+    case "$_rest" in
+      *"|"*) _rop="${_rest%%|*}"; _rm="${_rest#*|}" ;;
+      *)     _rop="COARSE_LOCATION"; _rm="$_rest" ;;
+    esac
+    case "$_rop" in COARSE_LOCATION|FINE_LOCATION) : ;; *) _rop="COARSE_LOCATION" ;; esac
 
     case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
 
-    [ -n "$_rp" ] && appops set "$_rp" COARSE_LOCATION "$_rm" >/dev/null 2>&1
+    [ -n "$_rp" ] && appops set "$_rp" "$_rop" "$_rm" >/dev/null 2>&1
   done < /data/adb/asb/gnss_restricted
   rm -f /data/adb/asb/gnss_restricted 2>/dev/null
 fi
@@ -239,17 +247,26 @@ fi
 # restricted, because undoing their choice would be the same overreach in reverse.
 if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; then
   while IFS= read -r _gp; do
+    case "$_gp" in ''|*[!A-Za-z0-9_.|]*) continue ;; esac
     # Restore the recorded mode, not a blanket allow: the record now carries what the
 
     # app had before ASB touched it, and handing back "allow" to an app the user had
 
     # denied is not an undo.
+    #
+    # Records are pkg|op|mode since the trim covers FINE_LOCATION as well as COARSE;
+    # a legacy pkg|mode line names COARSE_LOCATION.
 
-    _rp="${_gp%%|*}"; _rm="${_gp#*|}"
+    _rp="${_gp%%|*}"; _rest="${_gp#*|}"
+    case "$_rest" in
+      *"|"*) _rop="${_rest%%|*}"; _rm="${_rest#*|}" ;;
+      *)     _rop="COARSE_LOCATION"; _rm="$_rest" ;;
+    esac
+    case "$_rop" in COARSE_LOCATION|FINE_LOCATION) : ;; *) _rop="COARSE_LOCATION" ;; esac
 
     case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
 
-    [ -n "$_rp" ] && appops set "$_rp" COARSE_LOCATION "$_rm" >/dev/null 2>&1
+    [ -n "$_rp" ] && appops set "$_rp" "$_rop" "$_rm" >/dev/null 2>&1
   done < /data/adb/asb/gnss_restricted
   rm -f /data/adb/asb/gnss_restricted 2>/dev/null
 fi
@@ -407,6 +424,26 @@ fi
 # removed; the helper targets only its exact watcher argv and never touches other network tasks.
 [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" stop >/dev/null 2>&1 || true
 rm -rf /data/adb/asb 2>/dev/null
+
+# Remove the module's own persistent properties.
+#
+# asb_audio_apply.sh writes the DSP state with its own resetprop helpers, which bypass
+# asb_persist_safe and therefore never reach baseline.txt - so nothing here restored or
+# removed them. After uninstall they survived on disk under /data/property: enable, gain,
+# route, compressor settings, and the persist.vendor.asb mirror a separate audio process
+# reads. A reinstall then started from the previous session's DSP state.
+#
+# Deleted by namespace, not by a fixed list: the audit that found this listed ten keys
+# and missed four (ceiling_mb, comp, comp_ratio_x10, comp_thresh_mb). persist.asb.* and
+# persist.vendor.asb.* belong to this module alone, so removing the whole namespace cannot
+# touch anything the vendor or another module owns. Vendor audio props such as
+# persist.vendor.audio.hifi are left to the baseline restore, which records their origin.
+if command -v resetprop >/dev/null 2>&1; then
+  getprop 2>/dev/null | sed -n 's/^\[\(persist\.\(vendor\.\)\{0,1\}asb\.[^]]*\)\].*/\1/p' \
+    | while IFS= read -r _asb_p; do
+        [ -n "$_asb_p" ] && resetprop -p --delete "$_asb_p" >/dev/null 2>&1
+      done
+fi
 
 for _legacy in asb_active_profile asb_baseline.txt asb_profile_switches.log \
                asb_user_config asb_v45_cleanup_done asb_v46_athena_cleanup_done \

@@ -1374,9 +1374,15 @@ case "$_wcc" in
      esac ;;
 esac
 _wst="$(_cfg wifi_scan_throttle)"
+# Labels match the five rungs asb_net_apply.sh actually applies. The old table predated
+# the interval-based rewrite: it called rung 0 "unthrottled" when that rung stops
+# background scanning entirely, and said nothing at all for the shipped default (2).
 case "$_wst" in
-  0) echo "       Wi-Fi scan: unthrottled (roams sooner, costs battery)" ;;
-  1) echo "       Wi-Fi scan: stock limit (4 per 2 min)" ;;
+  0) echo "       Wi-Fi scan: background scanning off (networks found only when you look)" ;;
+  1) echo "       Wi-Fi scan: every 10 min" ;;
+  2) echo "       Wi-Fi scan: every 5 min (framework default)" ;;
+  3) echo "       Wi-Fi scan: every 2 min" ;;
+  4) echo "       Wi-Fi scan: unthrottled (roams sooner, costs battery)" ;;
 esac
 _radio_policy="$(_cfg radio_policy_enable)"
 _handover="$(_cfg net_handover_fast)"
