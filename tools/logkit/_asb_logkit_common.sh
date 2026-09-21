@@ -1764,18 +1764,24 @@ lk_asb_feature_row() {
     if grep -aq 'ASB createEffect' /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null; then _fabi="aidl"
     else _fabi="legacy"; fi
   fi
+  # Strip the field separator out of the value, do not let it split the row.
+  #
+  # /dev/.asb/lpm_mode holds "normal|handover=1|active=1" - three pipes inside ONE
+  # field. The row then carried 14 columns against a 12-column header, and every
+  # reader after that point was off by two: an audit read thermal_veto as a constant
+  # 2500 and asked what the number meant. It is dsp_gain_mb, in the wrong column.
+  #
+  # Replacing the separator with a comma keeps the value readable and the row parsable.
+  #
+  # Kept OUTSIDE the printf. A comment line inside a backslash-continued command ends
+  # the command: printf ran with three of its twelve arguments, the rest executed as a
+  # separate command ("Permission denied"), and not one data row was ever written -
+  # asb_features.txt held only its header, and the ASB COST block, which requires more
+  # than one line in that file, never appeared in any report.
   printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
     "$_fe" "$_fd" \
     "$(_fst camera_hold)" \
-    # Strip the field separator out of the value, do not let it split the row.
-    #
-    # /dev/.asb/lpm_mode holds "normal|handover=1|active=1" - three pipes inside ONE
-    # field. The row then carried 14 columns against a 12-column header, and every
-    # reader after that point was off by two: an audit read thermal_veto as a constant
-    # 2500 and asked what the number meant. It is dsp_gain_mb, in the wrong column.
-    #
-    # Replacing the separator with a comma keeps the value readable and the row parsable.
-    "$(cat /dev/.asb/lpm_mode 2>/dev/null | tr '|' ',')" \\
+    "$(cat /dev/.asb/lpm_mode 2>/dev/null | tr '|' ',')" \
     "$(lk_dsp_live_state)" \
     "$(getprop persist.asb.dsp.gain_mb 2>/dev/null)" \
     "$_fabi" \
