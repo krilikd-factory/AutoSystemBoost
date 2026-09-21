@@ -335,6 +335,15 @@
           asb_feature_enabled CPU && apply_screen_aware_caps
         elif [ "$_reason" = "cap-drift-up-p0" ] || [ "$_reason" = "cap-drift-up-p6" ]; then
           asb_feature_enabled CPU && apply_screen_aware_caps
+        elif [ "$_reason" = "uclamp-gmin" ]; then
+          # The stand-down counter must advance on BOTH apply paths: the profile
+          # re-apply below restores the node through asb_apply_uclamp, and without
+          # the increment this branch rewrites it every pass forever - the very
+          # write war the counter exists to stop.
+          apply_runtime_profile_now
+          _gmin_restores=$(( ${_gmin_restores:-0} + 1 ))
+          [ "$_gmin_restores" -ge 3 ] && \
+            asb_log "reconcile: sched_util_clamp_min re-raised 3x - held externally, standing down until profile/screen change"
         else
           apply_runtime_profile_now
           [ "$_reason" = "profile-change" ] && sleep 2 && asb_load_profile && apply_runtime_profile_now
