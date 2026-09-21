@@ -1941,7 +1941,11 @@ asb_write_device_pack_manifest() {
     printf 'domain=properties\n'
     # Camera and audio are claimed only when their overlay exists on disk: a domain
     # granted without the files behind it would authorise writes with nothing to write.
-    if [ -d "$MODPATH/system/odm/etc/camera" ] || [ -d "$MODPATH/system/vendor/odm/etc/camera" ]; then
+    # The corrected camera destination is odm/etc/camera at the module root; a device whose
+    # payload lives only there must still earn the camera domain, or the domain gate hides
+    # an existing overlay from every consumer that asks the manifest.
+    if [ -d "$MODPATH/odm/etc/camera" ] || [ -d "$MODPATH/system/odm/etc/camera" ] \
+       || [ -d "$MODPATH/system/vendor/odm/etc/camera" ]; then
       printf 'domain=camera\n'
     fi
     if [ -d "$MODPATH/system/vendor/etc/audio" ] || [ -d "$MODPATH/system/odm/etc/audio" ]; then
@@ -2303,7 +2307,13 @@ asb_generate_odm_camera_binds() {
   for _obc_rel in conf_tuning_params.json config/video_beauty_default_config; do
     _obc_live="/odm/etc/camera/$_obc_rel"
     [ -f "$_obc_live" ] || continue
-    _obc_src="$MODPATH/system/odm/etc/camera/$_obc_rel"
+    # The corrected camera destination mirrors the live path: odm/etc/camera/... at the
+    # module ROOT (see asb_clone_device_camera_tone). Checking only the system/ variants
+    # here found nothing on a device whose payload lives at the corrected path, so no bind
+    # was ever queued: the install log said "bind payload verified", the live file stayed
+    # stock, and the retouch list never reached the camera. That is the V65 field report.
+    _obc_src="$MODPATH/odm/etc/camera/$_obc_rel"
+    [ -f "$_obc_src" ] || _obc_src="$MODPATH/system/odm/etc/camera/$_obc_rel"
     [ -f "$_obc_src" ] || _obc_src="$MODPATH/system/vendor/odm/etc/camera/$_obc_rel"
     [ -f "$_obc_src" ] || continue
     cmp -s "$_obc_src" "$_obc_live" 2>/dev/null && continue
