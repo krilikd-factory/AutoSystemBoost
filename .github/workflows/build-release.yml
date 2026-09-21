@@ -137,6 +137,7 @@ jobs:
             tests/test_writer_ceiling_below_min_contract.sh \
             tests/test_wifi_scan_rungs_contract.sh \
             tests/test_gnss_foreground_contract.sh \
+            tests/test_uclamp_gmin_drift_contract.sh \
             tests/test_release_package_tool_contract.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
