@@ -1559,7 +1559,11 @@ apply_mobile_qdisc() {
     case "$_if" in
       rmnet*|ccmni*)
         if has tc; then
-          tc qdisc replace dev "$_if" root "$_P_QDISC" >/dev/null 2>&1 || apply_netif_qdisc "$_if"
+          # noqueue links (modem-owned rmnet on current Qualcomm kernels) cannot take a
+          # root qdisc at all - tc only answers "Operation not supported". Skip the two
+          # futile calls; runtime/asb_net_apply.sh reports the link as unsupported.
+          tc qdisc show dev "$_if" 2>/dev/null | grep -q 'qdisc noqueue' || \
+            tc qdisc replace dev "$_if" root "$_P_QDISC" >/dev/null 2>&1 || apply_netif_qdisc "$_if"
         else
           apply_netif_qdisc "$_if"
         fi ;;
