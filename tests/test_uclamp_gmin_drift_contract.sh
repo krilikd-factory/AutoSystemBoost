@@ -33,6 +33,16 @@ need "$REC" 'elif [ "$_reason" = "uclamp-gmin" ]; then'
 absent "$REC" '_reason" = "uclamp-gmin" ] ; then
           asb_apply_uclamp'
 
+# Write-war stand-down: gate on the check, reset on profile/screen change, and the
+# restore counter must advance on BOTH apply paths. Governor mode writes the node
+# directly; without the governor the restore rides apply_runtime_profile_now - and a
+# counter that only increments on one path never arms on the other.
+need "$REC" '[ "${_gmin_restores:-0}" -lt 3 ]'
+need "$REC" '_drift_streak=0; _gmin_restores=0 ;;'
+[ "$(grep -cF '_gmin_restores=$(( ${_gmin_restores:-0} + 1 ))' "$REC")" -ge 2 ] \
+  || fail "uclamp-gmin restore counter advances on only one apply path (write war in the other)"
+need "$REC" 'held externally, standing down until profile/screen change'
+
 # The 20% floor is present in BOTH the writer and the watcher; the formula must be the
 # same shape in both, or one day one of them changes and they silently disagree.
 need "$REC" '_want_gmin=$(( ( ${UCL_TOP_MIN:-50} * 1024 ) / 100 ))'
