@@ -70,16 +70,27 @@ sed -n '/^case "$_tp_set" in/,/^esac$/p' "$ROOT/tools/asb_diag.sh" > "$TMP/throt
 P(){ printf 'P:%s\n' "$1"; }
 NOTE(){ printf 'NOTE:%s\n' "$1"; }
 V(){ printf 'V:%s|%s|%s|%s\n' "$1" "$2" "$3" "$4"; }
-_tp_set=60 _tp_now=60 _tp_n=1
+# The strictly-over branch is mode-aware: a point ASB derived itself (auto/smart) that the
+# live sensor has already passed is the red verdict, while the same temperatures under a
+# MANUAL point are the user's own informed choice and rate a WARN, never a FAIL.
+cfg(){ [ "$1" = "sustained_temp_mode" ] && printf '%s\n' "${_tp_mode:-auto}"; }
+_tp_set=60 _tp_now=60 _tp_n=1 _tp_mode=auto
 _boundary_out="$(. "$TMP/throttle_boundary.sh")"
 printf '%s\n' "$_boundary_out" | grep -Fq 'boundary observed, not a failure' || { printf '%s\n' 'FAIL asbdiag equality boundary message missing' >&2; exit 1; }
 if printf '%s\n' "$_boundary_out" | grep -q '^V:'; then
   printf '%s\n' 'FAIL asbdiag equality invoked red verdict' >&2
   exit 1
 fi
-_tp_set=60 _tp_now=61 _tp_n=1
+_tp_set=60 _tp_now=61 _tp_n=1 _tp_mode=auto
 _over_out="$(. "$TMP/throttle_boundary.sh")"
 printf '%s\n' "$_over_out" | grep -Fq 'V:  throttle point below live CPU sensor' || { printf '%s\n' 'FAIL asbdiag strictly-over-threshold sensor lost verdict' >&2; exit 1; }
+_tp_set=60 _tp_now=61 _tp_n=1 _tp_mode=manual
+_manual_out="$(. "$TMP/throttle_boundary.sh")"
+if printf '%s\n' "$_manual_out" | grep -q '^V:'; then
+  printf '%s\n' 'FAIL asbdiag manual throttle point emitted red verdict' >&2
+  exit 1
+fi
+printf '%s\n' "$_manual_out" | grep -Fq 'P:  [WARN] throttle point below live CPU sensor (manual' || { printf '%s\n' 'FAIL asbdiag manual throttle point lost WARN' >&2; exit 1; }
 # Exercise camera provenance without Android paths. A commented live vendor file is INFO
 # when ASB carries no malformed payload; a commented ASB payload remains a V failure.
 sed -n '/^camera_json_comment_verdict() {/,/^}/p' "$ROOT/tools/asb_diag.sh" > "$TMP/camera_json_verdict.sh"
