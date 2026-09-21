@@ -496,7 +496,10 @@ asb_migrate_governor_conf
     # The bundled DSP chain is selected by actual effect ABI and staged files. It must
     # remain available to supported devices even when no optional fingerprint pack exists;
     # otherwise overlay bind and attacher never run and the loudness slider has no effect.
-    if asb_feature_enabled AUDIO; then
+    # The manifest carries camera binds too (retouch list / tone table), so an audio-off,
+    # camera-on device must still reach the rebind - otherwise its /odm camera payload is
+    # shadowed by the root manager's own /odm overlay mount that lands after post-fs-data.
+    if asb_feature_enabled AUDIO || asb_feature_enabled CAMERA; then
     echo 0 > /data/adb/asb/vendor_boot_counter 2>/dev/null
     # Re-apply the /odm runtime binds.
     # post-fs-data already tries this, but KernelSU mounts its own module overlay on /odm AFTER
