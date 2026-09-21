@@ -1082,6 +1082,31 @@ fi
 
 echo
 echo "═══════════════════════════════"
+# A comment line inside a backslash-continued command.
+#
+# sh -n accepts it: the "#" ends the command and the next lines parse as a new one. That
+# is how lk_asb_feature_row wrote nothing for a whole release - printf ran with three of
+# its twelve arguments, the rest executed as a command ("Permission denied"), the features
+# file kept only its header, and the ASB COST block never printed. Every syntax check
+# passed. This looks for exactly that shape: a line ending in a single backslash followed
+# by a line whose first non-blank character is "#".
+echo ""
+echo "🧷 Comments inside continued commands"
+_cc_hits="$(find "$MODDIR" -name '*.sh' -type f ! -path '*/dsp_stubs/*' 2>/dev/null | while IFS= read -r _cf; do
+  awk -v f="$_cf" '
+    { line=$0 }
+    prev_cont && line ~ /^[[:space:]]*#/ { print f ":" NR }
+    { sub(/[[:space:]]+$/, "", line)
+      prev_cont = (line ~ /\\$/ && line !~ /\\\\$/ && line !~ /^[[:space:]]*#/) }
+  ' "$_cf"
+done)"
+if [ -n "$_cc_hits" ]; then
+  echo "$_cc_hits" | while IFS= read -r _h; do echo "     $_h"; done
+  err "comment line after a trailing backslash ends the command early"
+else
+  ok "no comment lines inside backslash-continued commands"
+fi
+
 echo "  Lint: ❌ $ERRORS errors  ⚠️  $WARNS warnings"
 [ $ERRORS -eq 0 ] && echo "  Config: CLEAN" || echo "  Config: FIX REQUIRED"
 echo "═══════════════════════════════"

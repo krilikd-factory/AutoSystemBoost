@@ -74,6 +74,7 @@ for test_file in \
   tests/test_writer_ceiling_below_min_contract.sh \
   tests/test_wifi_scan_rungs_contract.sh \
   tests/test_gnss_foreground_contract.sh \
+  tests/test_uclamp_gmin_drift_contract.sh \
   tests/test_cpu_gpu_portability_contract.sh \
   tests/test_arbiter.sh \
   tests/test_intent_backup.sh \
