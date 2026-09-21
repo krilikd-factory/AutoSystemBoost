@@ -170,6 +170,14 @@ phantom_procs=relaxed
 #   Costs RAM and a little drain: keeping apps alive is not free.
 athena_service=stock
 
+# Force LTPO (adaptive refresh drop to the panel's lowest rates at idle).
+#   0 = stock behaviour (default). 1 = bind the patched copy of THIS device's own
+#   oplus_vrr_config.json over the stock one at boot - only the idle frame-drop
+#   switches the OEM shipped disabled are flipped, nothing is copied from another
+#   model. The patch is staged at install time; the stock file itself is never written.
+#   No-op on a device whose display stack has no such table (install log says so).
+ltpo_force=0
+
 log_verbosity=0
 bat_heavy_load_enter=20.0
 bat_moderate_load_enter=14.0

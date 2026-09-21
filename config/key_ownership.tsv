@@ -176,3 +176,4 @@ gpu_video_busy_min|internal|engine_or_derived
 gpu_video_max_pct|internal|engine_or_derived
 smart_media_guard|user|webui_standard
 device_bounds_override|internal|engine_or_derived
+ltpo_force|user|webui_standard
