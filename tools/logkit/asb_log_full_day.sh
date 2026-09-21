@@ -1370,6 +1370,10 @@ lk_finalize() {
   lk_emit_phase_summary
   lk_emit_full_day_report
   lk_snapshot_state "after"
+  lk_netstats_uid_capture "end"
+  # The qdisc failure log carries the tc error text (err=). Without it in the bundle a
+  # report can only say "tc refused" - the one line that names the cause stayed on the phone.
+  cp /data/adb/asb/qdisc_failures.log "$LK_OUT_DIR/qdisc_failures.log" 2>/dev/null || true
 }
 trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP
 
@@ -1383,6 +1387,7 @@ lk_sample_gpu_busy
 lk_sample_audio
 # Resolve the live route counters before opening the first phase, so its mobile
 # traffic delta has the same interface identity as later battery-trace rows.
+lk_netstats_uid_capture "start"
 lk_capture_battery_trace_row
 lk_snapshot_audio "before"
 lk_bt_reconnect_snapshot "before"

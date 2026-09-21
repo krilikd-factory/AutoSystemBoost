@@ -221,6 +221,26 @@ lk_discover_zones() {
   . "$LK_OUT_DIR/thermal_zones_aliases.sh"
 }
 
+# Raw per-UID network counters, for attributing mobile data to an app.
+#
+# The full-day report says how much went over the modem in each phase and nothing about
+# who sent it. An audit found 60-86 MiB of mobile traffic in screen-off phases and could
+# only guess ("probably GMS sync, WhatsApp, Telegram") - the log had no way to answer.
+#
+# Stored raw, not parsed: the dumpsys netstats layout differs across Android releases and
+# a parser written without a device to check it against is how a report ends up confidently
+# wrong. Two captures, start and end, so the difference is the session. Capped at 2 MiB each
+# because a busy device's detail dump is large and this runs twice per capture, not per tick.
+lk_netstats_uid_capture() {
+  [ -n "$LK_OUT_DIR" ] || return 0
+  command -v dumpsys >/dev/null 2>&1 || return 0
+  {
+    echo "# netstats uid capture: tag=$1 epoch=$(date +%s)"
+    dumpsys netstats --uid 2>/dev/null || dumpsys netstats detail 2>/dev/null
+  } | head -c 2097152 > "$LK_OUT_DIR/netstats_uid_$1.txt" 2>/dev/null
+  return 0
+}
+
 lk_snapshot_state() {
   _tag="$1"
   _target="$LK_OUT_DIR/${_tag}.txt"
