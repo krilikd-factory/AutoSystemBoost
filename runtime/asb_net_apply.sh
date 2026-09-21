@@ -175,6 +175,7 @@ esac
 _qd="$(_cfg net_qdisc)"
 _qd_tried=0
 _qd_ok=0
+_qd_noqueue=0
 case "$_qd" in
   ''|auto) : ;;
   *) _sysctl_w net.core.default_qdisc "$_qd" ;;
@@ -226,12 +227,24 @@ if _has tc; then
     # Same class as the uclamp fast-path bug: acting without reading first, then judging the
     # outcome by the write instead of by the state. Read, and skip when there is nothing to
     # do - it removes the write, the retry and the false FAIL together.
-    if tc qdisc show dev "$_if" 2>/dev/null | grep -q "qdisc $_want "; then
+    _qd_show="$(tc qdisc show dev "$_if" 2>/dev/null)"
+    if printf '%s\n' "$_qd_show" | grep -q "qdisc $_want "; then
       _qd_tried=$(( _qd_tried + 1 ))
       _qd_ok=$(( _qd_ok + 1 ))
       _out="$_out qdisc[$_kind:$_if]=$_want-already"
       continue
     fi
+    # A noqueue link has no root qdisc to replace at all. rmnet_data* on current Qualcomm
+    # kernels (SM8650/SM8850, Android 15/16) is flagged noqueue - the modem/IPA path owns
+    # the packets - and tc answers "Operation not supported" to any attach attempt. That is
+    # a property of the link, not a failed write: report it as unsupported (diag reads it
+    # as N/A), never as a failure, and do not spend the tc call that can only refuse.
+    case "$_qd_show" in
+      *"qdisc noqueue"*)
+        _qd_noqueue=$(( _qd_noqueue + 1 ))
+        _out="$_out qdisc[$_kind:$_if]=$_want-noqueue-unsupported"
+        continue ;;
+    esac
     # Keep tc's own words: they are the only thing that distinguishes the six causes.
     #
     # The failure was reported as a bare "failed", which covers a kernel without the qdisc
@@ -249,6 +262,7 @@ if _has tc; then
     _qd_why=""
     case "$_qd_err" in
       *"Unknown qdisc"*|*"unknown qdisc"*)  _qd_why="kernel_lacks_qdisc" ;;
+      *"Operation not supported"*|*"Not supported"*) _qd_why="iface_noqueue" ;;
       *"No such file"*|*"not found"*)       _qd_why="module_missing" ;;
       *"Operation not permitted"*|*"Permission denied"*) _qd_why="permission_or_selinux" ;;
       *"Cannot find device"*|*"does not exist"*) _qd_why="iface_absent" ;;
@@ -289,6 +303,15 @@ if _has tc; then
     if tc qdisc show dev "$_if" 2>/dev/null | grep -qw "$_qd_live"; then
       _qd_ok=$(( _qd_ok + 1 ))
       _out="$_out qdisc[$_kind:$_if]=$_qd_live"
+    elif [ "$_qd_why" = "iface_noqueue" ]; then
+      # tc refused because the link has no queue at all (the noqueue pre-check above covers
+      # the common case; this catches kernels whose tc shows a different placeholder but
+      # still answers "Operation not supported"). Same reporting as the pre-check: an
+      # unsupported link, not a failed write - and no cooldown marker or failure-log line,
+      # because there is nothing transient to retry and nothing left to diagnose.
+      _qd_tried=$(( _qd_tried - 1 ))
+      _qd_noqueue=$(( _qd_noqueue + 1 ))
+      _out="$_out qdisc[$_kind:$_if]=$_want-noqueue-unsupported"
     else
       # Report the cause, not just the outcome.
       #
@@ -332,9 +355,15 @@ case "$_qd" in
   ''|auto) : ;;
   *)
     if [ "$_qd_tried" = "0" ]; then
+      if [ "${_qd_noqueue:-0}" -gt 0 ]; then
+        # Every candidate link was noqueue (modem-owned): nothing here can ever take a
+        # qdisc, so "pending" (waiting for a link) would be a lie that never resolves.
+        _out="$_out qdisc=$_qd-unsupported"
+      else
       # Nothing to apply it to yet (no tc, or no link up). The value is stored and will be
       # used by the next interface that appears - that is "pending", not "working".
       _out="$_out qdisc=$_qd-pending"
+      fi
     elif [ "$_qd_ok" = "0" ]; then
       _out="$_out qdisc=$_qd-not-applied"
     else
@@ -515,11 +544,14 @@ mkdir -p /data/adb/asb 2>/dev/null
       cc\[mobile*-unavailable*)     printf 'net_congestion_mobile=unavailable\n' ;;
       cc\[mobile*)                  printf 'net_congestion_mobile=ok\n' ;;
       qdisc=*-pending)              printf 'net_qdisc=pending\n' ;;
+      qdisc=*-unsupported)          printf 'net_qdisc=unsupported\n' ;;
       qdisc=*-not-applied)          printf 'net_qdisc=failed\n' ;;
       qdisc=FAILED)                 printf 'net_qdisc=failed\n' ;;
       qdisc=*)                      printf 'net_qdisc=ok\n' ;;
+      qdisc\[wifi*noqueue-unsupported*)   printf 'net_qdisc_wifi=unsupported\n' ;;
       qdisc\[wifi*not-applied*)     printf 'net_qdisc_wifi=failed\n' ;;
       qdisc\[wifi*)                 printf 'net_qdisc_wifi=ok\n' ;;
+      qdisc\[mobile*noqueue-unsupported*) printf 'net_qdisc_mobile=unsupported\n' ;;
       qdisc\[mobile*not-applied*)   printf 'net_qdisc_mobile=failed\n' ;;
       qdisc\[mobile*)               printf 'net_qdisc_mobile=ok\n' ;;
       wifi_country=FAILED)          printf 'wifi_country=failed\n' ;;
