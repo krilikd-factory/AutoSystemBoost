@@ -234,4 +234,18 @@ if [ "$THERM" = "2" ]; then
   done
 fi
 
+# Re-evaluate the DSP thermal back-off on every thermal-bucket change.
+#
+# asb_audio_apply.sh mirror computes the gain from cpu_max_c - 800 mB above 60 C, 1200
+# above 55 - but it only ran once, from service.sh after boot_completed. A phone that
+# booted warm kept 800 mB for the whole session: seven reports in a row showed
+# requested=2500 applied=800 with the panel at 47 C and the route on the speaker.
+#
+# This script already runs on exactly the trigger that matters, a change of thermal
+# bucket, so the gain now follows the temperature both ways. mirror is idempotent: it
+# rewrites the property only when the computed value differs from what is set.
+if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh ]; then
+  sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh mirror >/dev/null 2>&1 || true
+fi
+
 exit 0
