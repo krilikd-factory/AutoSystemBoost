@@ -2905,7 +2905,7 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
     </div>
     <div class="status-row">
       <div class="dot"></div>
-      <span class="status-label">Profile:&nbsp;</span>
+      <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
       <span class="status-val" id="curProfile">balanced</span>
       <!-- Log tools and the channel, on the profile island.
            Both were duplicated on three pages before this - the same two debug buttons in
@@ -2966,7 +2966,7 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
         <span class="tech-icon-slot" data-tech-icon="smart"></span>
       </div>
       <div class="pinfo">
-        <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" id="smartEngineTag"></span></div>
+        <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" id="smartEngineTag" style="display:none"></span></div>
         <div class="psub" id="smartSubLine">adaptive · learning</div>
       </div>
       <div class="pload"></div>
@@ -3055,7 +3055,7 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
     </div>
     <div class="status-row">
       <div class="dot"></div>
-      <span class="status-label">Profile:&nbsp;</span>
+      <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
       <span class="status-val" id="liveCurProfile">balanced</span>
         <!-- Same pair as the main island, inside the pill so it shares its row instead of
              wrapping to a second one. -->
@@ -3268,7 +3268,7 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
     </div>
     <div class="status-row">
       <div class="dot"></div>
-      <span class="status-label">Profile:&nbsp;</span>
+      <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
       <span class="status-val" id="cfgCurProfile">balanced</span>
         <!-- Same pair as the main island, inside the pill so it shares its row instead of
              wrapping to a second one. -->
@@ -4923,8 +4923,8 @@ function cfgStatus(it, cur) {
   // failure, and calling it either would be wrong: amber says "waiting", which is true.
   if (nr === 'pending')     return { cls:'warn', text:T('st_pending', 'pending') };
   if (it.type === 'bool') {
-    if (cur === '1') return { cls:'good', text:'Enabled' };
-    return { cls:'neutral', text:'Disabled' };
+    if (cur === '1') return { cls:'good', text:T('st_on', 'Enabled') };
+    return { cls:'neutral', text:T('st_off', 'Disabled') };
   }
   // dsp_outputs only means anything while the DSP is actually processing. Showing it in
   // the same active state as a working setting invites the reading that routing is on
@@ -7053,13 +7053,13 @@ function renderSmartSubLine(kv) {
         else engTag.style.display = 'none';
       }
 
-      let sub = dpName + ' · ' + Math.round(alpha/10) + '% battery-lean';
-      if (night)         sub = '🌙 night-safe override';
+      let sub = dpName + ' · ' + Math.round(alpha/10) + T('smart_lean', '% battery-lean');
+      if (night)         sub = T('smart_night', '🌙 night-safe override');
       else if (veto) {
         const caps = parseInt(kv.vendor_clamp_1h || '0', 10);
         sub = caps >= 300
-          ? (ASB_LANG === 'ru' ? '🛡 защитный режим · давление vendor' : '🛡 protective bias · vendor cap pressure')
-          : (ASB_LANG === 'ru' ? '🛡 защитный режим Smart' : '🛡 Smart thermal protection');
+          ? T('smart_veto_vendor', '🛡 protective bias · vendor cap pressure')
+          : T('smart_veto_smart', '🛡 Smart thermal protection');
       }
       else if (fb === 4) {
         /* Cold start says the learner has no history for this bucket. Same reasoning as
@@ -7105,7 +7105,7 @@ function renderSmartSubLine(kv) {
         smartSub.textContent = T('smart_waiting', 'starting \u00b7 needs a screen-on session');
       }
     } else {
-      smartSub.textContent = 'disabled · tap to enable';
+      smartSub.textContent = T('smart_disabled', 'disabled \u00b7 tap to enable');
     }
   } catch(e) {}
 }
@@ -7975,8 +7975,8 @@ async function pollLive(visible) {
               const caps = parseInt(kv.vendor_clamp_1h || '0', 10);
               t.className = 'smart-banner-tag veto';
               t.textContent = caps >= 300
-                ? (ASB_LANG === 'ru' ? '🛡 давление vendor' : '🛡 vendor cap pressure')
-                : (ASB_LANG === 'ru' ? '🛡 защита Smart' : '🛡 Smart thermal protection');
+                ? T('smart_tag_vendor', '🛡 vendor cap pressure')
+                : T('smart_tag_smart', '🛡 Smart thermal protection');
               tagRow.appendChild(t);
             }
           }
@@ -7996,14 +7996,22 @@ _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
   try {
     applyStaticI18n();
     loadDebugSupport();
-    if (ASB_LANG === 'ru') {
-      var dl = I18N.ru.device_line;
+    // Was I18N.ru.device_line under ASB_LANG==='ru' - every other language kept the
+    // English placeholder even when its locale had the string translated.
+    var dl = T('device_line', null);
+    if (dl) {
       ['deviceLine','liveDeviceLine','cfgDeviceLine'].forEach(function(id){
         var el = document.getElementById(id);
         if (el && /OnePlus Device/.test(el.textContent)) el.textContent = dl;
       });
     }
   } catch (e) {}
+  // The bottom navigation markup sits AFTER this script in the document, so the pass
+  // above ran before those nodes existed and the tab labels stayed English in every
+  // non-English locale. Re-run once parsing completes; the pass is idempotent.
+  document.addEventListener('DOMContentLoaded', function () {
+    try { applyStaticI18n(); } catch (e) {}
+  });
 })();
 setTimeout(() => pollLive(false), 1500);
 </script>
