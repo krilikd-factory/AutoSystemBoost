@@ -423,6 +423,9 @@ fi
 # If the active fallback had temporarily released Wi-Fi, restore it before its state is
 # removed; the helper targets only its exact watcher argv and never touches other network tasks.
 [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" stop >/dev/null 2>&1 || true
+# Drop a live LTPO bind now, not at the next reboot: after removal nothing re-applies it,
+# but the stock refresh table should be visible again the moment the module is gone.
+[ -f "$MODDIR/runtime/asb_ltpo_apply.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" remove >/dev/null 2>&1 || true
 rm -rf /data/adb/asb 2>/dev/null
 
 # Remove the module's own persistent properties.

@@ -86,6 +86,11 @@ fi
 if [ -r "$MODDIR/runtime/asb_overlay_guard.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_overlay_guard.sh" >/dev/null 2>&1 || true
 fi
+# Force-LTPO bind: the script itself gates on the ltpo_force toggle (default off) and on
+# the bootloop fuse, and re-validates its manifest fail-closed before mounting anything.
+if [ -r "$MODDIR/runtime/asb_ltpo_apply.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" apply >/dev/null 2>&1 || true
+fi
 # ASB:LOG:BEGIN
 if asb_feature_enabled LOG && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
 asb_persist_safe persist.vendor.radio.adb_log_on 0
@@ -243,6 +248,10 @@ if asb_feature_enabled VENDOR_OVERLAY && command -v asb_device_pack_allows >/dev
     : > /data/adb/asb/vendor_overlay_blocked 2>/dev/null
     rm -f /data/adb/asb/odm_bind_manifest.txt 2>/dev/null
     rm -rf /data/adb/asb/odm_patched 2>/dev/null
+    # The LTPO bind is the same class of file-in-front-of-the-system: if we are here, it
+    # goes too, or a bad patched refresh table would keep landing on every boot.
+    rm -f /data/adb/asb/ltpo_bind_manifest.txt /data/adb/asb/ltpo_bind.active 2>/dev/null
+    rm -rf /data/adb/asb/ltpo_patched 2>/dev/null
     echo "ts=$(date +%s) action=block_odm_binds reason=bootloop_protection" >> "$_mounts_log"
   else
     _next_ctr=$((_cur_ctr + 1))

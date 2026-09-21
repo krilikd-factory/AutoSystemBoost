@@ -627,6 +627,14 @@ asb_migrate_governor_conf
   fi
 ) >/dev/null 2>&1 &
 
+# Force-LTPO rebind, outside the audio/camera gate above: a device with DSP and camera
+# off still owns its display. Same late-bind reasoning as the /odm manifest - a root
+# manager's own /my_product overlay lands after post-fs-data and would shadow the early
+# bind, and the script itself no-ops unless the toggle is on and its manifest validates.
+if [ -r "$MODDIR/runtime/asb_ltpo_apply.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" apply >/dev/null 2>&1 || true
+fi
+
 asb_device_guard() {
   local _soc
   _soc="$(getprop ro.board.platform 2>/dev/null)"
