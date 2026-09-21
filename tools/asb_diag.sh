@@ -1299,6 +1299,11 @@ if [ -f "$_nvf" ]; then
           "")                    V "  $_nk (tc refused - reason not classified)" "$_nw" "failed" eq ;;
           *)                     V "  $_nk (tc error - see qdisc_failures.log)" "$_nw" "failed" eq ;;
         esac ;;
+      unsupported)
+        # The link is flagged noqueue (modem-owned rmnet on current Qualcomm kernels):
+        # there is no root qdisc for ASB to replace, so the tweak is not applicable to
+        # this link at all - an N/A device fact, not a failed write.
+        NA=$((NA+1)); P "  [N/A ] $_nk (link has no queue - the driver owns this interface)" ;;
       pending)     NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
       *)           NOTE "$_nk = $_nw - no verdict recorded yet (apply has not run)" ;;
     esac
@@ -1473,9 +1478,18 @@ case "$_tp_set" in
   ''|*[!0-9]*) : ;;
   *)
     if [ "$_tp_now" -gt 0 ] && [ "$_tp_set" -lt "$_tp_now" ]; then
+      # A manual point is the user's own informed choice: the phone being above it right
+      # now is the clamp doing exactly what was asked, not a value ASB got wrong - WARN,
+      # not FAIL. FAIL stays for the auto/smart path, where ASB picked the point itself.
+      if [ "$(cfg sustained_temp_mode)" = "manual" ]; then
+        P "  [WARN] throttle point below live CPU sensor (manual ${_tp_set}C, live ${_tp_now}C)"
+        NOTE "  manual threshold, so the sustained clamp engaging is the requested behaviour."
+        NOTE "  Raise the point or switch the mode to auto if the clamp is not what you want."
+      else
       V "  throttle point below live CPU sensor" "< ${_tp_now}C" "${_tp_set}C" eq
       NOTE "  a real CPU sensor is already above the selected point; sustained policy may engage."
       NOTE "  Check workload/cooling before raising the threshold."
+      fi
     elif [ "$_tp_now" -gt 0 ] && [ "$_tp_set" -eq "$_tp_now" ]; then
       NOTE "throttle point ${_tp_set}C equals live CPU max ${_tp_now}C across ${_tp_n} sensor(s) - boundary observed, not a failure"
       NOTE "  Equality is a transition edge; the operational policy remains strict-above to avoid threshold chatter."
@@ -2185,6 +2199,7 @@ for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
   _smax=$(cat "$_pol/scaling_max_freq" 2>/dev/null)
   _cur=$(cat "$_pol/scaling_cur_freq" 2>/dev/null)
   _gov=$(cat "$_pol/scaling_governor" 2>/dev/null)
+  _drv="$(cat "$_pol/scaling_driver" 2>/dev/null)"
   # Writability of both cap nodes: a device can expose a frequency table while
   # rejecting writes, in which case ASB must report an OEM/kernel owner rather than claim control.
   if [ -w "$_pol/scaling_max_freq" ]; then _wf="writable"; else _wf="NOT-writable"; fi
@@ -2201,7 +2216,14 @@ for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
     if [ "$_smin" = "$_lowest" ]; then
       P "        smart minimum: [PASS] Smart requested hardware lowest OPP"
     else
-      P "        smart minimum: [WARN] want=$_lowest live=${_smin:-unknown} (vendor/kernel override or write failure)"
+      case "$_drv:$_gov" in
+        *scmi*|*walt*)
+          # SCMI/walt enforces a vendor floor in firmware: the write lands, the driver
+          # clamps it back. Naming the owner here ends the "did ASB fail to write?" hunt.
+          P "        smart minimum: [WARN] want=$_lowest live=${_smin:-unknown} (vendor floor - $_drv/$_gov clamps the minimum, not a write failure)" ;;
+        *)
+          P "        smart minimum: [WARN] want=$_lowest live=${_smin:-unknown} (vendor/kernel override or write failure)" ;;
+      esac
     fi
   else
     P "        smart minimum: not expected (profile=${_prof_live:-none} state=${_state_live:-unknown})"
