@@ -120,6 +120,10 @@ jobs:
             tests/test_v65_efficiency_contract.sh \
             tests/test_project_safety_hardening_contract.sh \
             tests/test_wakelock_watch_safety_contract.sh \
+            tests/test_uninstall_dsp_prop_cleanup_contract.sh \
+            tests/test_writer_ceiling_below_min_contract.sh \
+            tests/test_wifi_scan_rungs_contract.sh \
+            tests/test_gnss_foreground_contract.sh \
             module.prop \
             customize.sh \
             service.sh; do
