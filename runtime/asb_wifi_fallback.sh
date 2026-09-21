@@ -387,9 +387,41 @@ _watch() {
   printf '%s\n' "$$" > "$PID" 2>/dev/null
   trap '_watch_cleanup; exit 0' EXIT HUP INT TERM
   _log 'watcher started'
+  # Arming gate: the fallback may only act on a link that has PROVEN it can validate.
+  #
+  # A watcher that starts at boot meets Wi-Fi mid-connect: the default route is up seconds
+  # before the framework finishes validation, so every boot looked like an "unvalidated
+  # Wi-Fi owns the route" event. On a network whose validation never completes at all
+  # (captive check unreachable in some regions, a router with no WAN) the same logic then
+  # fired in an endless loop - the field report is "Wi-Fi is always off after a reboot",
+  # because the radio was being killed again every few minutes, forever.
+  #
+  # So the watcher arms on the first pass of "default route on Wi-Fi and NOT flagged
+  # unvalidated" - i.e. this attachment demonstrably validated at least once. One clean
+  # framework sample is enough: actually acting still needs the full confirmation streak
+  # below, and a link that drops entirely re-arms from zero so a new attachment must
+  # prove itself too.
+  _armed=0
+  _arm_good=0
   while _enabled; do
     _reconcile_action
-    [ -f "$ACTION" ] || _try_release
+    if [ ! -f "$ACTION" ]; then
+      if ! _wifi_default; then
+        [ "$_armed" = "1" ] && _log 'fallback disarmed (Wi-Fi link gone)'
+        _armed=0; _arm_good=0
+      elif [ "$_armed" = "0" ]; then
+        if _wifi_unvalidated; then
+          _arm_good=0
+        else
+          _arm_good=$(( _arm_good + 1 ))
+          if [ "$_arm_good" -ge 1 ]; then
+            _armed=1
+            _log 'fallback armed (this attachment has validated)'
+          fi
+        fi
+      fi
+      [ "$_armed" = "1" ] && _try_release
+    fi
     sleep "$INTERVAL_S"
   done
   _watch_cleanup
