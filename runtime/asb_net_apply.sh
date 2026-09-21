@@ -102,7 +102,21 @@ if [ "$_congctl_ok" = "1" ]; then
   # switching, so nothing has to notice when the active link changes.
   for _cif in $(ls /sys/class/net 2>/dev/null); do
     case "$_cif" in lo|dummy*|sit*|ip6tnl*) continue ;; esac
-    [ "$(cat "/sys/class/net/$_cif/operstate" 2>/dev/null)" = "up" ] || continue
+    # Same carrier rule as the qdisc loop below: rmnet reports operstate "unknown" for
+    # its whole life (it is a virtual link over the modem IPA path), so requiring "up"
+    # silently excluded every mobile link and net_congestion_mobile was stored but never
+    # applied - the V65 field log shows exactly that verdict. Accept "unknown" when the
+    # IFF_UP flag bit says the link is live; "down" is still excluded either way.
+    _ost="$(cat "/sys/class/net/$_cif/operstate" 2>/dev/null)"
+    case "$_ost" in
+      up) : ;;
+      unknown)
+        _fl="$(cat "/sys/class/net/$_cif/flags" 2>/dev/null)"
+        case "$_fl" in ''|*[!0-9a-fAxX]*) continue ;; esac
+        [ $(( _fl & 1 )) -eq 1 ] 2>/dev/null || continue
+        ;;
+      *) continue ;;
+    esac
     _kind="$(_iface_kind "$_cif")"
     [ "$_kind" = "other" ] && continue
     _want="$(_resolve_for net_congestion "$_kind")"

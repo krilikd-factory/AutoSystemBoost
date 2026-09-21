@@ -182,7 +182,20 @@ _apply() {
     $_ipc route show 2>/dev/null | grep '^default' | while IFS= read -r _rt; do
       _if="$(printf '%s' "$_rt" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
       [ -n "$_if" ] || continue
-      [ "$(cat "/sys/class/net/$_if/operstate" 2>/dev/null)" = "up" ] || continue
+      # The interface came FROM a default route, so it is carrying traffic by definition.
+      # rmnet reports operstate "unknown" even then (virtual link over the modem IPA
+      # path), so requiring "up" skipped every mobile route and net_route_tune silently
+      # never touched them. Accept "unknown" when IFF_UP is set; "down" stays excluded.
+      _ost="$(cat "/sys/class/net/$_if/operstate" 2>/dev/null)"
+      case "$_ost" in
+        up) : ;;
+        unknown)
+          _fl="$(cat "/sys/class/net/$_if/flags" 2>/dev/null)"
+          case "$_fl" in ''|*[!0-9a-fAxX]*) continue ;; esac
+          [ $(( _fl & 1 )) -eq 1 ] 2>/dev/null || continue
+          ;;
+        *) continue ;;
+      esac
 
       _mtu="$(cat "/sys/class/net/$_if/mtu" 2>/dev/null)"
       case "$_mtu" in ''|*[!0-9]*) _mtu=1500 ;; esac
