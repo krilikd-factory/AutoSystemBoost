@@ -90,8 +90,16 @@ kill -0 "$WPID" 2>/dev/null && fail 'reconcile OFF did not stop watcher'
 unset WPID
 
 # If OFF happens during an ASB-owned release window, reconcile returns Wi-Fi immediately.
+# The arming gate applies here too: a fresh watcher only acts on an attachment that has
+# validated at least once, so this phase must let the link validate before it breaks.
 printf 'radio_policy_enable=1\nnet_wifi_leave=aggressive\n' > "$TMP/mod/config/governor.conf"
+printf '%s\n' 'NetworkInfo: VALIDATED=true' > "$TMP/wifi.dump"
 run reconcile
+# The log persists across phases, so a stale 'armed' line proves nothing about THIS
+# watcher. Give the fresh watcher two full passes (INTERVAL_S=1) to arm on the validated
+# link before it breaks.
+sleep 2
+printf '%s\n' 'NetworkInfo: VALIDATED=false' > "$TMP/wifi.dump"
 wait_for "$TMP/state/wifi_fallback.action" || fail 'did not enter owned release window'
 WPID="$(cat "$TMP/state/wifi_fallback.pid")"
 printf 'radio_policy_enable=1\nnet_wifi_leave=off\n' > "$TMP/mod/config/governor.conf"
@@ -101,6 +109,24 @@ wait_for_absent "$TMP/state/wifi_fallback.pid" || fail 'watcher PID remained aft
 wait_for_absent "$TMP/state/wifi_fallback.watch.lock" || fail 'watcher lock remained after active-window OFF'
 [ "$(grep -cx 'wifi enable' "$TMP/svc.log")" -ge 2 ] || fail 'OFF did not return ASB-owned Wi-Fi'
 kill -0 "$WPID" 2>/dev/null && fail 'watcher survived active-window OFF'
+unset WPID
+
+# A network that NEVER validated must never be touched: this is the field-reported loop
+# where a watcher started at boot met validation-pending (or a blocked-region router whose
+# connectivity check never succeeds) and kept killing Wi-Fi forever. The fallback may only
+# act on an attachment that proved it can validate at least once.
+rm -f "$TMP/svc.log"
+printf 'radio_policy_enable=1\nnet_wifi_leave=aggressive\n' > "$TMP/mod/config/governor.conf"
+printf '%s\n' 'NetworkInfo: VALIDATED=false' > "$TMP/wifi.dump"
+run reconcile
+wait_for "$TMP/state/wifi_fallback.pid" || fail 'reconcile did not start watcher for never-validated case'
+WPID="$(cat "$TMP/state/wifi_fallback.pid")"
+sleep 5
+[ ! -s "$TMP/svc.log" ] || fail 'released a Wi-Fi attachment that never validated'
+[ ! -e "$TMP/state/wifi_fallback.action" ] || fail 'actioned a Wi-Fi attachment that never validated'
+printf 'radio_policy_enable=1\nnet_wifi_leave=off\n' > "$TMP/mod/config/governor.conf"
+run reconcile
+kill -0 "$WPID" 2>/dev/null && fail 'never-validated watcher survived OFF'
 unset WPID
 
 # Model an Android shell that execs the script directly: no literal `sh` argument precedes
