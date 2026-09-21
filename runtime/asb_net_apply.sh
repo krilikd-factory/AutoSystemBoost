@@ -532,6 +532,7 @@ fi
 # Without this the UI can only show what the user picked, not what the kernel accepted - so
 # asking for bbr on a stock kernel left the button lit as though it had worked.
 _res="/data/adb/asb/net_apply_result"
+_res_new="$_res.new"
 mkdir -p /data/adb/asb 2>/dev/null
 {
   for _tok in $_out; do
@@ -567,7 +568,25 @@ mkdir -p /data/adb/asb 2>/dev/null
 
     esac
   done
-} > "$_res" 2>/dev/null
+} > "$_res_new" 2>/dev/null
+
+# A run only sees the links that are up right now. Overwriting the whole file erased the
+# verdicts for every other link kind, so the diag and the WebUI badge flipped a working
+# feature to "no verdict recorded" whenever the last apply happened to run on a mobile-only
+# link event (field report: net_qdisc_wifi live on wlan0 for weeks, reported as never
+# applied). New verdicts win; a key this run did not touch keeps its last known state until
+# its own next apply. A key the user returned to auto loses its verdict instead - a stale
+# "ok" on an auto card would be a worse lie than none.
+if [ -s "$_res" ]; then
+  while IFS= read -r _old_line; do
+    case "$_old_line" in ''|*[!A-Za-z0-9_=]*) continue ;; esac
+    _old_key="${_old_line%%=*}"
+    grep -q "^${_old_key}=" "$_res_new" 2>/dev/null && continue
+    case "$(_cfg "$_old_key")" in ''|auto) continue ;; esac
+    printf '%s\n' "$_old_line" >> "$_res_new"
+  done < "$_res"
+fi
+mv "$_res_new" "$_res" 2>/dev/null || { cat "$_res_new" > "$_res" 2>/dev/null; rm -f "$_res_new"; }
 
 [ -n "$_out" ] && echo "net:$_out" || echo "net: nothing to apply (all auto)"
 exit 0
