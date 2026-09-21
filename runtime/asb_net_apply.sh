@@ -183,6 +183,12 @@ esac
 if _has tc; then
   for _if in $(ls /sys/class/net 2>/dev/null); do
     case "$_if" in lo|dummy*|sit*|ip6tnl*) continue ;; esac
+    # A name still carrying a printf template is a driver placeholder, not a link.
+    # The IPA driver registers "rmnet_ipa%d" and the kernel keeps the literal name: it is
+    # flagged UP, classifies as mobile, carries no traffic of its own, and tc refuses a
+    # qdisc on it with an error none of the classifiers recognise - which filed the whole
+    # mobile kind as failed while the real rmnet_data links were fine.
+    case "$_if" in *%*) continue ;; esac
     # Accept "unknown" as well as "up" - rmnet never reports "up".
     #
     # operstate is only meaningful for devices with a carrier concept. rmnet is a virtual

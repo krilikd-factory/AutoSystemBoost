@@ -11,6 +11,7 @@
   _reconcile_fast=3
   _last_wifi_check=0
   _drift_streak=0
+  _gmin_restores=0
   _last_eff_batt="-1"
   _lease_remaining=0
   _lease_delays="2 4 14 40"
@@ -198,6 +199,35 @@
           [ $_need -eq 0 ] && [ -n "$_cur_ucl_bg" ] && [ "$_cur_ucl_bg" != "$_want_ucl_bg" ] \
             && { _need=1; _reason="uclamp-bg"; _drift_saw="$_cur_ucl_bg"; _drift_want="$_want_ucl_bg"; }
         fi
+        # Global uclamp.min ceiling drift.
+        #
+        # asb_apply_uclamp lowers /proc/sys/kernel/sched_util_clamp_min from the OxygenOS
+        # default 1024 to the profile's top-app floor, and nothing watched it afterwards.
+        # A field capture showed it back at 1024 on a phone whose profile applies 512:
+        # every task could again demand full capacity, and the per-cgroup ceilings this
+        # same loop guards were quietly outranked. The C governor never writes this node
+        # (nothing in src/ names it), so the governor-running gate above must NOT skip
+        # this check - in governor mode the per-cgroup ceilings are governor-owned, but
+        # the global ceiling is nobody's, and the ROM reclaims it.
+        # Stop contesting the global ceiling once it is clearly someone else's.
+        #
+        # The per-cgroup uclamp checks share _drift_streak, and that streak only buys a
+        # 120 s pause before the next rewrite - it never ends. A vendor boost framework
+        # that raises this node on purpose (game mode, launch boost) would get it lowered
+        # back every two minutes, indefinitely: the same write war the CPU ceiling had
+        # before cap_vendor_passive. Three restores in a row with no profile or screen
+        # change in between means the value is being held, so the check stands down until
+        # one of those resets it. A single stray 1024 at boot is still corrected.
+        if [ $_need -eq 0 ] && [ "${_gmin_restores:-0}" -lt 3 ] \
+           && [ -r /proc/sys/kernel/sched_util_clamp_min ]; then
+          _cur_gmin="$(cat /proc/sys/kernel/sched_util_clamp_min 2>/dev/null)"
+          case "$_cur_gmin" in ''|*[!0-9]*) _cur_gmin="" ;; esac
+          # Same target as asb_apply_uclamp: profile top-app floor, never below 20%.
+          _want_gmin=$(( ( ${UCL_TOP_MIN:-50} * 1024 ) / 100 ))
+          [ "$_want_gmin" -lt 205 ] && _want_gmin=205
+          [ -n "$_cur_gmin" ] && [ "$_cur_gmin" != "$_want_gmin" ] \
+            && { _need=1; _reason="uclamp-gmin"; _drift_saw="$_cur_gmin"; _drift_want="$_want_gmin"; }
+        fi
       fi
       if [ $_need -eq 0 ] && asb_feature_enabled WIFI; then
         _ts_now="$(date +%s 2>/dev/null || echo 0)"
@@ -229,12 +259,12 @@
     fi
     if [ $_need -eq 1 ]; then
       case "$_reason" in
-        walt-topapp|walt-edboost|walt-ravg|uclamp|uclamp-fg|uclamp-bg)
+        walt-topapp|walt-edboost|walt-ravg|uclamp|uclamp-fg|uclamp-bg|uclamp-gmin)
           _drift_streak=$((_drift_streak + 1)) ;;
         cap-drift-up-p0|cap-drift-up-p6)
           : ;;
         profile-change|screen-state)
-          _drift_streak=0 ;;
+          _drift_streak=0; _gmin_restores=0 ;;
         *)
           : ;; # wifi-pm etc don't affect drift streak
       esac
@@ -255,7 +285,7 @@
       # requested, observed, result. A drift the module corrected is still a drift, and the
       # next capture should show how often and when instead of requiring an archaeologist.
       case "$_reason" in
-        uclamp|uclamp-fg|uclamp-bg)
+        uclamp|uclamp-fg|uclamp-bg|uclamp-gmin)
           if [ -f "$MODDIR/runtime/asb_apply_ledger.sh" ]; then
             # shellcheck source=/dev/null
             . "$MODDIR/runtime/asb_apply_ledger.sh" 2>/dev/null || true
@@ -289,6 +319,16 @@
           fi
         elif [ "$_reason" = "cap-drift-up-p0" ] || [ "$_reason" = "cap-drift-up-p6" ]; then
           asb_feature_enabled CPU && apply_screen_aware_caps
+        elif [ "$_reason" = "uclamp-gmin" ]; then
+          # Only the global ceiling: with the governor running the per-cgroup tiers
+          # are governor-owned, and rewriting them here would fight it.
+          _gmin_fix=$(( ( ${UCL_TOP_MIN:-50} * 1024 ) / 100 ))
+          [ "$_gmin_fix" -lt 205 ] && _gmin_fix=205
+          [ -w /proc/sys/kernel/sched_util_clamp_min ] && \
+            writef_retry /proc/sys/kernel/sched_util_clamp_min "$_gmin_fix" 2 0.06 || true
+          _gmin_restores=$(( ${_gmin_restores:-0} + 1 ))
+          [ "$_gmin_restores" -ge 3 ] && \
+            asb_log "reconcile: sched_util_clamp_min re-raised 3x - held externally, standing down until profile/screen change"
         fi
       else
         if [ "$_reason" = "screen-state" ]; then
