@@ -1231,14 +1231,21 @@ if [ -f "$_nvf" ]; then
           permission_or_selinux) V "  $_nk (refused - permission/SELinux)" "$_nw" "failed" eq ;;
           iface_absent)          V "  $_nk (interface was not up)" "$_nw" "failed" eq ;;
           root_qdisc_owned)      V "  $_nk (root qdisc held by vendor stack)" "$_nw" "failed" eq ;;
-          # An empty reason is not a refusal - it means nothing was recorded.
+          # Empty reason INSIDE the failed branch is still a failure.
           #
-          # qdisc_failures.log only exists once an apply has actually failed. On a device
-          # where the apply has not run yet the grep returns nothing, and this branch
-          # printed "write refused" and counted a FAIL - pointing at a log file that is
-          # not there. Two sibling keys in the identical position print
-          # "no verdict recorded yet" as a NOTE, which is what this is.
-          "")                    NOTE "$_nk = $_nw - no verdict recorded yet (apply has not run)" ;;
+          # This case only runs when the apply reported result=failed, so the apply ran
+          # and tc refused. An empty why means tc printed an error none of the five
+          # patterns above recognise - an unclassified failure, not a missing verdict.
+          #
+          # A previous change turned this into a NOTE on the reasoning that an empty grep
+          # meant "never ran". That was wrong: the outer case on $_nv already separates
+          # "never ran" (the *) branch below) from "failed", so this line hid a real tc
+          # error behind an info marker. Restored to FAIL, with honest wording.
+          # The writer records an unrecognised tc error as why=unclassified, never empty.
+          # Without this branch it fell through to the generic "tc error" line, which sent
+          # the reader to qdisc_failures.log without saying the error text is IN it.
+          unclassified)          V "  $_nk (tc refused - see err= in qdisc_failures.log)" "$_nw" "failed" eq ;;
+          "")                    V "  $_nk (tc refused - reason not classified)" "$_nw" "failed" eq ;;
           *)                     V "  $_nk (tc error - see qdisc_failures.log)" "$_nw" "failed" eq ;;
         esac ;;
       pending)     NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
