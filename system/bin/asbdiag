@@ -721,8 +721,16 @@ if [ -n "$MIX" ]; then
   # With audio_profile=stock the module does not touch the mixer at all, so whatever the
   # vendor left in IIR0 is the vendor's business - reporting it as FAIL blamed ASB for a
   # setting it never wrote. The check is still worth printing, just not as a verdict.
+  # The mixer flatten ships inside the /vendor overlay. With VENDOR_OVERLAY=0 the module
+  # never mounts it, so the live mixer is the vendor's and 5 engaged bands is expected -
+  # the audio block below already says "not checked" for exactly this reason, while this
+  # line two screens earlier still counted a FAIL against the same missing overlay.
+  _iir_vov="$(grep -E '^[[:space:]]*VENDOR_OVERLAY=' "$MODDIR/features.conf" 2>/dev/null \
+             | head -1 | sed 's/.*=//' | tr -d ' \r' | cut -d'#' -f1)"
   if [ "$(cfg audio_profile)" = "stock" ]; then
     NOTE "IIR0 EQ bands engaged = $_iir (audio_profile=stock - vendor owns the mixer)"
+  elif [ "${_iir_vov:-0}" != "1" ]; then
+    NOTE "IIR0 EQ bands engaged = $_iir (flatten needs the /vendor overlay, VENDOR_OVERLAY=0 - not checked)"
   else
     V "IIR0 EQ bands flattened (engaged=0)" "0" "$_iir" eq
   fi
@@ -973,7 +981,20 @@ case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released fr
     _dsp_live_mb="$(gp persist.asb.dsp.gain_mb)"
     _dsp_t="$(grep -m1 '^cpu_max_c=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
     case "$_dsp_t" in ''|*[!0-9]*) _dsp_t=0 ;; esac
-    if [ "$_dsp_t" -ge 55 ] 2>/dev/null && [ "$_dsp_live_mb" -lt "$_dsp_expected_mb" ] 2>/dev/null; then
+    # Grade against what the module DECIDED, which it publishes, not against the request.
+    #
+    # asb_audio_apply.sh writes the thermally reduced target to gain_applied_mb. Guessing
+    # from the die temperature at report time missed every case where the phone had cooled
+    # between the back-off and the report: seven captures showed want 2500, live 800 or
+    # 1200, with the die already under 55 C - a deliberate back-off counted as a failure.
+    # If live matches the published decision, the path works; a mismatch against THAT
+    # value is a real delivery failure and still FAILs below.
+    _dsp_decided_mb="$(gp persist.asb.dsp.gain_applied_mb)"
+    case "$_dsp_decided_mb" in ''|*[!0-9]*) _dsp_decided_mb="" ;; esac
+    if [ -n "$_dsp_decided_mb" ] && [ "$_dsp_decided_mb" -lt "$_dsp_expected_mb" ] 2>/dev/null \
+       && [ "$_dsp_live_mb" = "$_dsp_decided_mb" ]; then
+      NOTE "DSP gain ${_dsp_live_mb}mB (requested ${_dsp_expected_mb}) - thermal back-off, applied as decided"
+    elif [ "$_dsp_t" -ge 55 ] 2>/dev/null && [ "$_dsp_live_mb" -lt "$_dsp_expected_mb" ] 2>/dev/null; then
       NOTE "DSP gain ${_dsp_live_mb}mB (requested ${_dsp_expected_mb}) - reduced on purpose, die at ${_dsp_t}C"
     else
       V "  DSP gain applied (persist.asb.dsp.gain_mb)" "$_dsp_expected_mb" "$_dsp_live_mb"
@@ -1074,17 +1095,33 @@ for WF in /vendor/etc/wifi/*/WCNSS_qcom_cfg.ini /vendor/etc/wifi/WCNSS_qcom_cfg.
   # same confusion the camera checks had before they learned to name the mount problem.
   # The checks below still run; this line says which kind of failure they are.
   _wf_mod="${MODDIR}${WF}"
+  # Say WHY the live file is stock. With VENDOR_OVERLAY=0 the module never mounts
+  # $MODDIR/vendor at all - KernelSU binds only $MODDIR/system by itself - so "did not
+  # mount" read as a mount failure when it is a feature switched off by design.
+  _wf_vov="$(grep -E '^[[:space:]]*VENDOR_OVERLAY=' "$MODDIR/features.conf" 2>/dev/null \
+            | head -1 | sed 's/.*=//' | tr -d ' \r' | cut -d'#' -f1)"
   if [ -f "$_wf_mod" ] && grep -qE '^gActiveMaxChannelTime=40' "$_wf_mod" 2>/dev/null &&
      ! grep -qE '^gActiveMaxChannelTime=40' "$WF" 2>/dev/null; then
-    NOTE "  module copy has the tweak but $WF is stock - the overlay did not mount"
+    if [ "${_wf_vov:-0}" != "1" ]; then
+      NOTE "  module copy has the tweak; $WF stays stock because VENDOR_OVERLAY=0"
+    else
+      NOTE "  module copy has the tweak but $WF is stock - the overlay did not mount"
+    fi
   fi
   _amc=$(grep -E '^gActiveMaxChannelTime=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
   _bbw=$(grep -E '^gBusBandwidthVeryHighThreshold=' "$WF" 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' \r')
   # Device-safe clamp semantics: the patch only LOWERS these toward a ceiling and never raises
   # a device that already ships a better (lower) value.
+  # With the overlay off these read the vendor's own file, so a PASS or FAIL here would
+  # grade the ROM, not ASB: two passed only because stock already sat under the ceiling,
+  # the third failed only because stock is 60. Report the values, count nothing.
+  if [ "${_wf_vov:-0}" != "1" ]; then
+    NOTE "  WCNSS live values (vendor, overlay off): gRuntimePMDelay=${_pmd:-?} gActiveMaxChannelTime=${_amc:-?} gBusBandwidthVeryHighThreshold=${_bbw:-?}"
+  else
   [ -n "$_pmd" ] && V "  gRuntimePMDelay<=2000 (lower=quicker idle)" "2000" "$_pmd" le
   [ -n "$_amc" ] && V "  gActiveMaxChannelTime<=40 (lower=shorter dwell)" "40" "$_amc" le
   [ -n "$_bbw" ] && V "  gBusBandwidthVeryHighThreshold<=12000" "12000" "$_bbw" le
+  fi
 done
 [ "$_wfound" = 0 ] && { NA=$((NA+1)); P "  [N/A ] no WCNSS_qcom_cfg.ini found"; }
 # supplicant safety
@@ -1244,6 +1281,11 @@ if [ -f "$_nvf" ]; then
           # The writer records an unrecognised tc error as why=unclassified, never empty.
           # Without this branch it fell through to the generic "tc error" line, which sent
           # the reader to qdisc_failures.log without saying the error text is IN it.
+          # Two reasons the writer records that this list did not know, so both fell to
+          # the generic "tc error" line below. fell_back_to_fq here means fq was tried and
+          # did not take either - the successful fallback now reports as ok upstream.
+          fell_back_to_fq)       V "  $_nk (fq_codel and fq fallback both refused)" "$_nw" "failed" eq ;;
+          tc_error)              V "  $_nk (tc refused - see err= in qdisc_failures.log)" "$_nw" "failed" eq ;;
           unclassified)          V "  $_nk (tc refused - see err= in qdisc_failures.log)" "$_nw" "failed" eq ;;
           "")                    V "  $_nk (tc refused - reason not classified)" "$_nw" "failed" eq ;;
           *)                     V "  $_nk (tc error - see qdisc_failures.log)" "$_nw" "failed" eq ;;
