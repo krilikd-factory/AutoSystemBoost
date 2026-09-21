@@ -28,9 +28,6 @@ STATE="/data/adb/asb/log_extreme_prev"
 # therefore requires both explicit LOG opt-in and a validated properties domain.
 _log_feature="$(grep -E '^[[:space:]]*LOG=' "$MODDIR/features.conf" 2>/dev/null | tail -1 | sed 's/^[^=]*=//; s/#.*//' | tr -d '[:space:]\r')"
 [ "$_log_feature" = "1" ] || { echo "log suppression disabled by features.conf"; exit 0; }
-[ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
-command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties \
-  || { echo "properties device pack is not validated"; exit 0; }
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
@@ -45,7 +42,11 @@ case "$_lvl" in
 esac
 
 # --- governor verbosity -----------------------------------------------------------------
-# stock and 0 are both quiet; 1 is the old 0; 2 and 3 shift down by one.
+# This block is ASB's OWN config, not a device-side mutation: it syncs log_level into the
+# log_verbosity key the governor reads. It must NOT sit behind the device-pack gate below -
+# on an unvalidated device the whole script used to exit here, so setting log_level=2
+# ("switch this on before sending a battery log") silently did nothing and the user sent
+# a log with no detail in it. The device-side logd/tag suppression stays gated.
 case "$_lvl" in
   stock|0) _verb=0 ;;
   1)       _verb=0 ;;
@@ -57,6 +58,10 @@ if grep -q '^[[:space:]]*log_verbosity=' "$CONF" 2>/dev/null; then
 else
   echo "log_verbosity=$_verb" >> "$CONF" 2>/dev/null
 fi
+
+[ -r "$MODDIR/runtime/asb_device_tier.sh" ] && . "$MODDIR/runtime/asb_device_tier.sh"
+command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties \
+  || { echo "properties device pack is not validated - device logging untouched (governor verbosity synced)"; exit 0; }
 
 # --- device-side logging ------------------------------------------------------------------
 # Only the extreme mode touches this. Everything else - including stock - leaves the

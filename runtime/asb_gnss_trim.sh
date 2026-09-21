@@ -29,12 +29,16 @@ case "$(_cfg gnss_trim)" in
     # Turned off: release anything we restricted, then stop.
     if [ -f "$STATE" ] && _has appops; then
       while IFS= read -r _p; do
-        # Restore the recorded mode, not a blanket allow. Older records have no mode
-        # stored, and for those "allow" is the only thing we can say - but new ones carry
-        # what the app actually had.
-        _rp="${_p%%|*}"; _rm="${_p#*|}"
+        # Restore the recorded mode, not a blanket allow. Records are pkg|op|mode;
+        # a legacy pkg|mode line names COARSE_LOCATION.
+        _rp="${_p%%|*}"; _rest="${_p#*|}"
+        case "$_rest" in
+          *"|"*) _rop="${_rest%%|*}"; _rm="${_rest#*|}" ;;
+          *)            _rop="COARSE_LOCATION"; _rm="$_rest" ;;
+        esac
+        case "$_rop" in COARSE_LOCATION|FINE_LOCATION) : ;; *) _rop="COARSE_LOCATION" ;; esac
         case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
-        [ -n "$_rp" ] && appops set "$_rp" COARSE_LOCATION "$_rm" >/dev/null 2>&1
+        [ -n "$_rp" ] && appops set "$_rp" "$_rop" "$_rm" >/dev/null 2>&1
       done < "$STATE"
       rm -f "$STATE" 2>/dev/null
       echo "gnss trim: off - location restored for the apps ASB had limited"
@@ -66,13 +70,19 @@ if [ -f "$STATE" ] && _has appops && _has dumpsys; then
   _keep=""
   while IFS= read -r _line; do
     [ -n "$_line" ] || continue
-    _rp="${_line%%|*}"; _rm="${_line#*|}"
+    # Records are pkg|op|mode now; a legacy pkg|mode line names COARSE_LOCATION.
+    _rp="${_line%%|*}"; _rest="${_line#*|}"
+    case "$_rest" in
+      *"|"*) _rop="${_rest%%|*}"; _rm="${_rest#*|}" ;;
+      *)            _rop="COARSE_LOCATION"; _rm="$_rest" ;;
+    esac
+    case "$_rop" in COARSE_LOCATION|FINE_LOCATION) : ;; *) _rop="COARSE_LOCATION" ;; esac
     case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
     _st="$(dumpsys activity processes "$_rp" 2>/dev/null \
            | grep -m1 -oE 'cached|foreground|perceptible|visible')"
     if [ -n "$_st" ] && [ "$_st" != "cached" ]; then
-      appops set "$_rp" COARSE_LOCATION "$_rm" >/dev/null 2>&1 \
-        && echo "gnss trim: $_rp is in use again - location restored"
+      appops set "$_rp" "$_rop" "$_rm" >/dev/null 2>&1 \
+        && echo "gnss trim: $_rp ($_rop) is in use again - location restored"
     else
       _keep="${_keep}${_line}
 "
@@ -114,21 +124,38 @@ for _p in $(dumpsys location 2>/dev/null \
   _proc="$(dumpsys activity processes "$_p" 2>/dev/null | grep -m1 -oE 'cached|foreground|perceptible|visible')"
   [ "$_proc" = "cached" ] || continue
 
-  # COARSE only, and only while cached: the app keeps precise location the moment it is
-  # opened again. Android restores it on its own when the process is promoted.
-  # Record what the app had BEFORE changing it.
+  # Both location ops, in FOREGROUND mode - not COARSE only, and not "ignore".
   #
-  # Restore wrote "allow" unconditionally, which is not an undo: an app the user had
-  # already denied location to came back with it granted, and an app on "foreground only"
-  # came back on "always". ASB handed out a permission nobody gave it.
+  # Two defects lived here:
+  #
+  # 1. Only COARSE_LOCATION was set. An app holding a FINE fix (which is what GNSS
+  #    drain actually is - the capture that motivated this file is labelled "gnss")
+  #    notes OP_FINE_LOCATION, so the trim never reached the drain it exists for.
+  #
+  # 2. "ignore" is sticky: the appop survives the process being promoted, and the old
+  #    comment's claim that "Android restores it on its own when the process is
+  #    promoted" was wrong. The restore loop above only runs from the screen-off hourly
+  #    cycle, so a navigation app opened in the morning after an overnight trim had no
+  #    location until the next screen-off pass - potentially never during a screen-on
+  #    drive. A user reported exactly that: fix lost mid-drive, recovered at reboot.
+  #
+  # MODE_FOREGROUND is the self-healing form of the same idea: cached processes are
+  # denied, promoted processes are allowed, and Android flips it with the process state
+  # itself - no restore timing to get wrong. Both ops are recorded per op, so uninstall
+  # restores exactly what each app had, for each op.
   #
   # appops get prints a line like "COARSE_LOCATION: allow"; the mode is the last field.
-  _prev="$(appops get "$_p" COARSE_LOCATION 2>/dev/null | head -1 | awk '{print $NF}')"
-  case "$_prev" in allow|ignore|deny|default|foreground) : ;; *) _prev="allow" ;; esac
-
-  if appops set "$_p" COARSE_LOCATION ignore >/dev/null 2>&1; then
-    grep -qE "^${_p}\|" "$STATE" 2>/dev/null || printf '%s|%s\n' "$_p" "$_prev" >> "$STATE"
-    echo "gnss trim: $_p was holding location while cached - limited until it is opened again"
-  fi
+  for _lop in COARSE_LOCATION FINE_LOCATION; do
+    _prev="$(appops get "$_p" "$_lop" 2>/dev/null | head -1 | awk '{print $NF}')"
+    case "$_prev" in allow|ignore|deny|default|foreground) : ;; *) _prev="allow" ;; esac
+    # An app already on foreground or stricter asked for this itself; do not record or
+    # rewrite the user's own choice.
+    case "$_prev" in ignore|deny|foreground) continue ;; esac
+    if appops set "$_p" "$_lop" foreground >/dev/null 2>&1; then
+      grep -qE "^${_p}\|${_lop}\|" "$STATE" 2>/dev/null \
+        || printf '%s|%s|%s\n' "$_p" "$_lop" "$_prev" >> "$STATE"
+      echo "gnss trim: $_p ($_lop) was holding location while cached - foreground-only now"
+    fi
+  done
 done
 exit 0

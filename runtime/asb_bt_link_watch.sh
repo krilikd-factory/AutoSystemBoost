@@ -42,6 +42,9 @@ LOG="$STATE_DIR/bt_link_watch.log"
 
 _has() { command -v "$1" >/dev/null 2>&1; }
 _cfg() { grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'; }
+# Settings writes must be recorded so they can be undone; fall back to a plain write
+# where the helper is absent rather than silently doing nothing.
+[ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
 _now() { date +%s 2>/dev/null || echo 0; }
 _log() {
   mkdir -p "$STATE_DIR" 2>/dev/null
@@ -86,8 +89,21 @@ fi
 # Already mitigating: nothing more to do.
 [ -f "$APPLIED" ] && exit 0
 
+# An explicit unthrottled choice (rung 4) answers the coexistence question already:
+# the user took the scan cost on purpose, so do not quietly re-enable throttling.
+case "$(_cfg wifi_scan_throttle)" in
+  4) exit 0 ;;
+esac
+
 if _has settings; then
-  settings put global wifi_scan_throttle_enabled 1 >/dev/null 2>&1 || true
+  # Route through the baseline helper when it is there: the plain `settings put` was a
+  # one-way door - no record, so uninstall could not restore the pre-mitigation value,
+  # and the write was invisible to the settings ledger every other ASB write goes through.
+  if command -v asb_settings_put >/dev/null 2>&1; then
+    asb_settings_put global wifi_scan_throttle_enabled 1 || true
+  else
+    settings put global wifi_scan_throttle_enabled 1 >/dev/null 2>&1 || true
+  fi
   printf '%s\n' "$(_now)" > "$APPLIED" 2>/dev/null
   _log "detected $_total audio-link drops - throttling Wi-Fi scans (2.4 GHz coexistence)"
   echo "bt_link: repeated Bluetooth audio drops detected - Wi-Fi scanning throttled"

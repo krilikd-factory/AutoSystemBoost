@@ -271,9 +271,18 @@ if _has tc; then
         fi
         ;;
     esac
-    if tc qdisc show dev "$_if" 2>/dev/null | grep -q "$_want"; then
+    # Verify against what was actually installed, not only what was asked for.
+    #
+    # When fq_codel is missing the fallback above installs fq and marks fell_back_to_fq.
+    # The check below still grepped for "$_want" (fq_codel) in the tc output, found "fq",
+    # and filed a working fallback as a failure: net_qdisc_mobile=failed in every report
+    # on a kernel where the link was in fact running fq. The token now records fq, so the
+    # report shows the qdisc that is live and why.
+    _qd_live="$_want"
+    [ "$_qd_why" = "fell_back_to_fq" ] && _qd_live="fq"
+    if tc qdisc show dev "$_if" 2>/dev/null | grep -qw "$_qd_live"; then
       _qd_ok=$(( _qd_ok + 1 ))
-      _out="$_out qdisc[$_kind:$_if]=$_want"
+      _out="$_out qdisc[$_kind:$_if]=$_qd_live"
     else
       # Report the cause, not just the outcome.
       #
@@ -389,28 +398,34 @@ _wt="$(_cfg wifi_scan_throttle)"
 #
 # Rung 0 sets the interval to a day rather than writing a disable flag Android does
 # not have: scanning stops in practice and nothing needs a reboot to come back.
+# wifi_scan_throttle_enabled is a BOOLEAN key - the framework reads it with getInt and
+# every consumer checks == 1 or != 0 - and wifi_scan_interval_ms is a separate key that
+# keeps whatever a previous rung left in it. The old "2|*)" branch wrote the rung number
+# itself into the boolean ("2" is not a valid boolean: a getInt(...)==1 consumer reads it
+# as disabled, so the shipped default 2 silently ran unthrottled - the status screen showed
+# exactly that on the reference device) and never wrote the 5-minute interval rung 2
+# promises, so a device coming from rung 0 kept a day-long interval with throttling "on".
+# Both keys are now written together per rung, and verified by read-back: `settings put`
+# returns 0 on some ROMs even when the value does not stick.
+_wt_write() {
+  _asb_setting_put global wifi_scan_throttle_enabled "$1" || true
+  _asb_setting_put global wifi_scan_interval_ms "$2" || true
+  if [ "$(settings get global wifi_scan_throttle_enabled 2>/dev/null)" = "$1" ] \
+     && [ "$(settings get global wifi_scan_interval_ms 2>/dev/null)" = "$2" ]; then
+    _out="$_out scan_throttle=$_wt"
+  else
+    _out="$_out scan_throttle=FAILED"
+  fi
+}
 case "$_wt" in
-  0) _asb_setting_put global wifi_scan_throttle_enabled 1 || true
-     _asb_setting_put global wifi_scan_interval_ms 86400000 || true ;;
-  1) _asb_setting_put global wifi_scan_throttle_enabled 1 || true
-     _asb_setting_put global wifi_scan_interval_ms 600000 || true ;;
-  3) _asb_setting_put global wifi_scan_throttle_enabled 1 || true
-     _asb_setting_put global wifi_scan_interval_ms 120000 || true ;;
-  4) _asb_setting_put global wifi_scan_throttle_enabled 0 || true ;;
-  2|*)
-    # Report the failure too, not just the success.
-    #
-    # The && meant a rejected write produced no token at all, and no token reads as "this
-    # setting was never touched" - so the badge stayed green on a device where the write
-    # had been refused. Read back rather than trusting the exit code: `settings put`
-    # returns 0 on some ROMs even when the value does not stick.
-    _asb_setting_put global wifi_scan_throttle_enabled "$_wt" || true
-    if [ "$(settings get global wifi_scan_throttle_enabled 2>/dev/null)" = "$_wt" ]; then
-      _out="$_out scan_throttle=$_wt"
-    else
-      _out="$_out scan_throttle=FAILED"
-    fi
-    ;;
+  0) _wt_write 1 86400000 ;;   # no background scanning at all
+  1) _wt_write 1 600000 ;;     # every 10 minutes
+  2) _wt_write 1 300000 ;;     # every 5 minutes - framework default
+  3) _wt_write 1 120000 ;;     # every 2 minutes
+  4) _wt_write 0 300000 ;;     # unthrottled; interval reset so re-enabling is sane
+  # auto (and anything unrecognised) leaves both keys alone, as the config contract says:
+  # writing an unrecognised token into a boolean key is exactly the bug fixed above.
+  *) : ;;
 esac
 
 # Route windows live in their own script: they need link measurement and a netlink
