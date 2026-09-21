@@ -318,8 +318,11 @@ net_rps=stock
 #   latency under load more than it adds throughput.
 net_txqueue=stock
 
-# WiFi scan throttle: auto|0|1
-#   0 scans more often (roams sooner, costs battery), 1 is stock, auto leaves it alone.
+# WiFi scan throttle: auto|0|1|2|3|4
+#   0 = no background scanning at all (networks are found only when you look)
+#   1 = every 10 minutes    2 = every 5 minutes (framework default)
+#   3 = every 2 minutes     4 = unthrottled (roams sooner, costs battery)
+#   auto leaves both framework keys untouched.
 wifi_scan_throttle=2
 
 # Cellular/radio policy master: 0|1. OFF means power profiles never write modem context or
