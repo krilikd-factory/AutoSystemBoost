@@ -650,9 +650,15 @@ if [ -r "$MODDIR/runtime/asb_callrec.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" apply >/dev/null 2>&1 || true
 fi
 # Call-recording bootloop fuse, confirm half: the pending marker dropped by the
-# post-fs-data apply retires ONLY after a completed boot. This subshell is outside
-# every feature gate on purpose - the fuse must work on a device with nothing else
-# enabled, or a bad patch would re-bind on every boot until the module is deleted.
+# post-fs-data apply retires only after a completed boot PLUS a 120s stability
+# window. The window is the whole point: this tweak's observed failure shape was a
+# crash AFTER boot_completed (screen dies, reboot, repeat) - a plain boot_completed
+# confirm retired the marker every time and the fuse could never trip, so the
+# device looped forever. Now a boot that dies inside the window leaves the marker
+# behind and the next boot locks the tweak down instead of binding again: worst
+# case is ONE bad boot, never a loop. This subshell is outside every feature gate
+# on purpose - the fuse must work on a device with nothing else enabled, or a bad
+# patch would re-bind on every boot until the module is deleted.
 (
   _cr_w=0
   while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_cr_w" -lt 300 ]; do
@@ -660,6 +666,7 @@ fi
     _cr_w=$((_cr_w + 5))
   done
   if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] && [ -r "$MODDIR/runtime/asb_callrec.sh" ]; then
+    sleep 120
     MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" confirm >/dev/null 2>&1 || true
   fi
 ) &
