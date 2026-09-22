@@ -87,6 +87,7 @@ run_optional 'force-LTPO contract' tests/test_ltpo_contract.sh bash
 run_optional 'multimedia-telemetry contract' tests/test_mmfeed_contract.sh bash
 run_optional 'net congestion verdict contract' tests/test_net_verdict_contract.sh bash
 run_optional 'LPM wakeup gate contract' tests/test_lpm_gate_contract.sh bash
+run_optional 'uevent accounting contract' tests/test_uevent_accounting_contract.sh bash
 run_optional 'update/fallback/theme contract' tests/test_update_handover_theme_contract.sh bash
 run_optional 'snapshot-only update migration' tests/test_update_snapshot_only_migration.sh bash
 run_optional 'Stock profile' tests/test_stock_profile_contract.sh sh
