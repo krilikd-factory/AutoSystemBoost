@@ -283,37 +283,41 @@ _cr_stage() {
 # the XML is restored from the live original (that country simply stays stock), and
 # the dir enters the manifest only when at least one file inside actually changed.
 _cr_stage_dir() {
+  # Stage each country file on its own - never bind the directory.
+  #
+  # This copied the whole of my_product/etc/extension, relabelled the entire copy with
+  # the DIRECTORY's SELinux context (chcon -R) and bound it over the live directory.
+  # Every other file in that tree then carried a label it was never meant to have;
+  # system_server reads those files and SELinux denied it. That is the crash the
+  # bootloop fuse caught: "a boot with the callrec binds did not survive".
+  #
+  # The working reference module binds one file per country and never the directory.
+  # Each payload here inherits the context of the exact file it replaces, and files
+  # that were not patched are not covered at all.
   _sd_live="$1"
   [ -d "$_sd_live" ] || return 1
-  _sd_pay="$STATE_DIR/callrec_patched$_sd_live"
-  mkdir -p "$(dirname "$_sd_pay")" 2>/dev/null || return 1
-  # cp -r, not cp -a: toybox cp -a can fail copying xattrs off a read-only
-  # partition (EROFS) and then the whole stage is skipped with nothing bound.
-  cp -r "$_sd_live" "$_sd_pay" 2>/dev/null || { rm -rf "$_sd_pay" 2>/dev/null; return 1; }
-  chmod -R u=rwX,go=rX "$_sd_pay" 2>/dev/null
-  # Fail-closed completeness: a partial copy must never become a bind payload.
-  [ "$(find "$_sd_live" -type f 2>/dev/null | wc -l)" = "$(find "$_sd_pay" -type f 2>/dev/null | wc -l)" ] \
-    || { rm -rf "$_sd_pay" 2>/dev/null; return 1; }
-  for _sd_f in "$_sd_pay"/*/appfeature.country.dynamic_features.xml; do
-    [ -f "$_sd_f" ] || continue
-    _cr_patch_country "$_sd_f"
-    if ! _cr_xml_sane "$_sd_f"; then
-      # Fail-closed per file: a country whose patch broke the XML stays stock.
-      cp -f "$_sd_live/${_sd_f#"$_sd_pay"/}" "$_sd_f" 2>/dev/null
+  _sd_n=0
+  for _sd_src in "$_sd_live"/*/appfeature.country.dynamic_features.xml; do
+    [ -f "$_sd_src" ] || continue
+    _sd_pay="$STATE_DIR/callrec_patched$_sd_src"
+    mkdir -p "$(dirname "$_sd_pay")" 2>/dev/null || continue
+    cp -f "$_sd_src" "$_sd_pay" 2>/dev/null || continue
+    _cr_patch_country "$_sd_pay"
+    if ! _cr_xml_sane "$_sd_pay" || cmp -s "$_sd_pay" "$_sd_src" 2>/dev/null; then
+      rm -f "$_sd_pay" 2>/dev/null
+      continue
     fi
+    chmod 0644 "$_sd_pay" 2>/dev/null
+    # Label from the file being replaced. If it has a real context and the payload
+    # cannot take it, the bind would be mislabelled - skip the file, do not guess.
+    _sd_ctx="$(ls -Z "$_sd_src" 2>/dev/null | awk '{print $1}')"
+    case "$_sd_ctx" in
+      ?*:?*:?*:?*) chcon "$_sd_ctx" "$_sd_pay" 2>/dev/null || { rm -f "$_sd_pay"; continue; } ;;
+    esac
+    echo "$_sd_src|$_sd_pay" >> "$MAN.new" 2>/dev/null
+    _sd_n=$((_sd_n + 1))
   done
-  _sd_changed=0
-  for _sd_f in "$_sd_pay"/*/appfeature.country.dynamic_features.xml; do
-    [ -f "$_sd_f" ] || continue
-    cmp -s "$_sd_f" "$_sd_live/${_sd_f#"$_sd_pay"/}" 2>/dev/null || _sd_changed=$((_sd_changed + 1))
-  done
-  [ "$_sd_changed" -gt 0 ] || { rm -rf "$_sd_pay" 2>/dev/null; return 1; }
-  _sd_ctx="$(ls -Zd "$_sd_live" 2>/dev/null | awk '{print $1}')"
-  case "$_sd_ctx" in
-    ?*:?*:?*:?*) chcon -R "$_sd_ctx" "$_sd_pay" 2>/dev/null || true ;;
-  esac
-  echo "$_sd_live|$_sd_pay" >> "$MAN.new" 2>/dev/null
-  return 0
+  [ "$_sd_n" -gt 0 ]
 }
 
 asb_callrec_prepare() {
@@ -371,16 +375,24 @@ _cr_target_allowed() {
     /my_region/etc/extension/com.oplus.app-features.xml|\
     /my_stock/etc/extension/com.oplus.app-features.xml|\
     /my_stock/etc/config/app_v2.xml|\
-    /my_region/etc/config/app_v2.xml|\
-    /my_product/etc/extension) return 0 ;;
+    /my_region/etc/config/app_v2.xml) return 0 ;;
+    # One country file, never the directory. The directory used to be allowed here and
+    # was bound whole; that relabelled every file under it and crashed system_server.
+    # [A-Z][A-Z]* keeps this to a country code segment - a path that climbs out with ../
+    # or names another file in the tree is still refused.
+    /my_product/etc/extension/[A-Z][A-Z]*/appfeature.country.dynamic_features.xml)
+      case "$1" in *..*) return 1 ;; esac
+      return 0 ;;
   esac
   [ -n "$LIVE_ROOT" ] || return 1
   case "$1" in
     "$LIVE_ROOT"/my_region/etc/extension/com.oplus.app-features.xml|\
     "$LIVE_ROOT"/my_stock/etc/extension/com.oplus.app-features.xml|\
     "$LIVE_ROOT"/my_stock/etc/config/app_v2.xml|\
-    "$LIVE_ROOT"/my_region/etc/config/app_v2.xml|\
-    "$LIVE_ROOT"/my_product/etc/extension) return 0 ;;
+    "$LIVE_ROOT"/my_region/etc/config/app_v2.xml) return 0 ;;
+    "$LIVE_ROOT"/my_product/etc/extension/[A-Z][A-Z]*/appfeature.country.dynamic_features.xml)
+      case "$1" in *..*) return 1 ;; esac
+      return 0 ;;
   esac
   return 1
 }
@@ -527,13 +539,23 @@ _cr_unsilence_prompts() {
 _CR_KNOWN_PKGS="org.telegram.messenger org.thoughtcrime.securesms org.telegram.messenger.web org.telegram.plus com.telegram.plus com.exteragram.messenger com.tgplus.messenger com.elegram.messenger com.telegram.fork com.telegram.alpha com.telegram.beta com.whatsapp com.whatsapp.w4b ru.yandex.telemost us.zoom.videomeetings com.zoom.mymeetings com.vkontakte.android com.vk.android com.microsoft.teams com.viber.voip nu.gpu.nagram ru.oneme.app com.oneme.app com.google.android.dialer"
 
 _cr_pkgs_installed() {
-  pm list packages 2>/dev/null | sed 's/^package://' | tr -d '\r'
+  # Third-party only (-3). System theme overlays such as
+  # com.android.systemui.PuiThemeSignalLOGO live in the full list and were showing up
+  # as "supported apps" in the dialer's recording settings.
+  pm list packages -3 2>/dev/null | sed 's/^package://' | tr -d '\r'
 }
 
 _cr_messenger_list() {
   {
     for _k in $_CR_KNOWN_PKGS; do echo "$_k"; done
-    _cr_pkgs_installed | grep -Ei 'telegram|whatsapp|viber|vkontakte|vk\.android|teams|zoom|securesms|wechat|tencent\.mm|kakao|naver\.line|jp\.line|imo|botim|messenger|orca|oneme|telemost|signal|skype|discord' 2>/dev/null
+    # Match a whole dot-separated segment, never a substring.
+    #
+    # The substring grep put a SystemUI theme overlay (PuiThemeSignalLOGO, via 'signal')
+    # and Apktool M (ru.maximoff.apktool, via 'imo' inside 'maximoff') into the dialer's
+    # list of supported recording apps. Real messengers use these words as a package
+    # segment - com.whatsapp, com.imo.android.imoim, com.discord - so anchoring on the
+    # dots keeps every real one and drops the accidental matches.
+    _cr_pkgs_installed | grep -Ei '(^|\.)(telegram|whatsapp|viber|vkontakte|teams|zoom|securesms|wechat|mm|kakao|line|imo|botim|messenger|orca|oneme|telemost|skype|discord)(\.|$)' 2>/dev/null
   } | awk 'NF && !seen[$0]++'
 }
 
