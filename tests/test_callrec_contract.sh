@@ -2,7 +2,9 @@
 # Call-recording contract: both tweaks default off, the line patch is device-local and
 # re-derived from the live XMLs on every boot (OTA-proof), every lifecycle owner
 # (install, boot, late boot, uninstall, WebUI) reaches the one runtime script, the
-# bind guard is fail-closed, and the messenger half patches the device-shipped
+# bind guard is fail-closed, payloads are structurally validated XML, a one-strike
+# bootloop fuse (pending marker at post-fs-data, confirm after boot_completed) can
+# lock the tweak down by itself, and the messenger half patches the device-shipped
 # VoiceScribe prefs in place - no APK is bundled or installed anywhere.
 # Same shape as the force-LTPO and mmfeed contracts.
 set -euo pipefail
@@ -72,6 +74,14 @@ grep -q 'asb_callrec.sh" apply' "$ROOT/post-fs-data.sh" || fail 'post-fs-data ne
 grep -q 'asb_callrec.sh" apply' "$ROOT/service.sh" || fail 'service.sh never rebinds late'
 grep -q 'asb_callrec.sh" remove' "$ROOT/uninstall.sh" || fail 'uninstall never drops the binds'
 grep -q 'callrec_line_manifest.txt' "$ROOT/post-fs-data.sh" || fail 'bootloop fuse does not clear the callrec manifest'
+
+# --- one-strike bootloop fuse: armed at post-fs-data, confirmed after boot_completed ---
+grep -q 'ASB_CALLREC_BOOT=1' "$ROOT/post-fs-data.sh" || fail 'post-fs-data does not arm the callrec boot fuse'
+grep -q 'asb_callrec.sh" confirm' "$ROOT/service.sh" || fail 'service.sh never confirms a completed boot'
+grep -q '_cr_xml_sane()' "$SRC" || fail 'structural XML validation missing'
+grep -q '_cr_delete_block()' "$SRC" || fail 'bounded block delete missing'
+grep -q 'callrec_blocked' "$SRC" || fail 'one-strike bootloop fuse missing from the engine'
+grep -q 'callrec_boot_pending' "$ROOT/post-fs-data.sh" || fail 'vendor fuse cleanup misses the callrec trial marker'
 
 # --- runtime guard pins: fail-closed allowlist, payload prefix, toggle gates ---
 grep -q '/my_region/etc/extension/com.oplus.app-features.xml|' "$SRC" || fail 'target allowlist missing my_region app-features'
@@ -241,6 +251,38 @@ run prepare
 grep -q 'brand_new_ota_feature' "$C_PAY" || fail 'OTA content not picked up on re-prepare'
 ! grep -q 'no_display_record' "$C_PAY" || fail 'OTA lock not re-removed on re-prepare'
 
+# Unterminated MCC block: a block whose closing tag never comes must NOT become a
+# truncated payload. The bounded block-delete keeps the file byte-identical, cmp
+# rejects it, and the stock file simply leaves the manifest.
+cp "$TMP/live/my_stock/etc/extension/com.oplus.app-features.xml" "$TMP/stock.good"
+cat > "$TMP/live/my_stock/etc/extension/com.oplus.app-features.xml" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<features>
+	<app_feature name="com.android.incallui.hide_call_record_mcc">
+		<string-array name="mcc_list"><item>250</item></string-array>
+	<app_feature name="com.android.incallui.unrelated_feature"/>
+</features>
+EOF
+cp "$TMP/live/my_stock/etc/extension/com.oplus.app-features.xml" "$TMP/stock.unterm"
+run prepare
+! grep -q 'my_stock/etc/extension' "$TMP/state/callrec_line_manifest.txt" || fail 'unterminated MCC block produced a payload'
+grep -q 'my_region/etc/extension' "$TMP/state/callrec_line_manifest.txt" || fail 'sibling entries lost over the unterminated block'
+cmp -s "$TMP/live/my_stock/etc/extension/com.oplus.app-features.xml" "$TMP/stock.unterm" || fail 'live stock file was modified by prepare'
+cp "$TMP/stock.good" "$TMP/live/my_stock/etc/extension/com.oplus.app-features.xml"
+run prepare
+
+# _cr_xml_sane unit: valid passes, truncated and trailing-garbage fail closed.
+sed -n '/^_cr_xml_sane()/,/^}/p' "$SRC" > "$TMP/sane.sh"
+( . "$TMP/sane.sh"
+  printf '<features>\n<a/>\n</features>\n' > "$TMP/ok.xml"
+  _cr_xml_sane "$TMP/ok.xml" ) || fail 'xml_sane rejected a valid file'
+( . "$TMP/sane.sh"
+  printf '<features>\n<a/>\n' > "$TMP/bad.xml"
+  ! _cr_xml_sane "$TMP/bad.xml" ) || fail 'xml_sane accepted a truncated file'
+( . "$TMP/sane.sh"
+  printf '<features>\n<a/>\n</features>\n<extra/>\n' > "$TMP/trail.xml"
+  ! _cr_xml_sane "$TMP/trail.xml" ) || fail 'xml_sane accepted content after the root close'
+
 # === apply: toggle gating, binds, prompt silence, staging ===
 : > "$ASB_CR_LOG"
 run apply
@@ -266,11 +308,62 @@ grep -q "umount $TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$
 grep -q "umount $TMP/live/system_ext/etc/recording-prompt/record_start.pcm" "$ASB_CR_LOG" || fail 'toggle-off did not restore the prompt'
 [ ! -e "$TMP/mod/system" ] || fail 'module system/ tree appeared after toggle-off'
 
+# === one-strike bootloop fuse ===
+# A boot apply drops the trial marker BEFORE mounting; confirm retires it; a boot
+# that finds its own marker still pending tears everything out and blocks the tweak.
+printf 'callrec_line=1\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
+: > "$TMP/mounts"   # fresh boot: nothing is bound yet
+: > "$ASB_CR_LOG"
+ASB_CALLREC_BOOT=1 run apply
+[ -f "$TMP/state/callrec_boot_pending" ] || fail 'boot apply did not drop the trial marker'
+grep -q -- "--bind $R_PAY" "$ASB_CR_LOG" || fail 'boot apply did not bind on a fresh trial'
+run confirm
+[ ! -f "$TMP/state/callrec_boot_pending" ] || fail 'confirm did not retire the trial marker'
+
+# Next boot: fresh trial again, marker down, binds on. Then the boot "dies" (no
+# confirm) and the following boot must lock down instead of binding again.
+: > "$TMP/mounts"
+ASB_CALLREC_BOOT=1 run apply
+[ -f "$TMP/state/callrec_boot_pending" ] || fail 'second boot did not re-arm the trial marker'
+: > "$TMP/mounts"   # the failed boot: nothing survived, marker still down
+: > "$ASB_CR_LOG"
+ASB_CALLREC_BOOT=1 run apply
+! grep -q -- '--bind' "$ASB_CR_LOG" || fail 'fuse tripped but binds still landed'
+[ -f "$TMP/state/callrec_blocked" ] || fail 'fuse did not write callrec_blocked'
+[ "$(cat "$TMP/state/callrec_line_state")" = 'blocked_bootloop' ] || fail 'lockdown state not recorded'
+[ ! -f "$TMP/state/callrec_line_manifest.txt" ] || fail 'lockdown left the manifest behind'
+[ ! -d "$TMP/state/callrec_patched" ] || fail 'lockdown left the payloads behind'
+out="$(run status)"
+echo "$out" | grep -q '^line=blocked' || fail 'status does not report line=blocked'
+
+# While blocked, further boots stay inert; only the user switching the toggle off
+# re-arms the guard for a fresh trial.
+: > "$ASB_CR_LOG"
+ASB_CALLREC_BOOT=1 run apply
+! grep -q -- '--bind' "$ASB_CR_LOG" || fail 'blocked tweak bound again'
+[ -f "$TMP/state/callrec_blocked" ] || fail 'block cleared itself without the user'
+printf 'callrec_line=0\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
+run apply
+[ ! -f "$TMP/state/callrec_blocked" ] || fail 'toggle-off did not re-arm the fuse'
+[ ! -f "$TMP/state/callrec_boot_pending" ] || fail 'toggle-off left a stale trial marker'
+: > "$TMP/mounts"
+printf 'callrec_line=1\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
+: > "$ASB_CR_LOG"
+ASB_CALLREC_BOOT=1 run apply
+grep -q -- "--bind $R_PAY" "$ASB_CR_LOG" || fail 're-armed trial did not bind'
+[ -f "$TMP/state/callrec_boot_pending" ] || fail 're-armed trial did not drop the marker'
+# Back to a clean slate for the sections below.
+printf 'callrec_line=0\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
+run apply
+run confirm
+: > "$TMP/mounts"
+: > "$ASB_CR_LOG"
+
 # === fail-closed guards ===
 # apply re-derives the manifest on every run (that is the OTA-proofing), so a hostile
 # manifest cannot be planted through apply itself - the guard is what stands between a
 # bad manifest and a mount. Exercise the REAL guard function against hostile input.
-sed -n '/^_cr_target_allowed()/,/^}/p; /^_cr_guard()/,/^}/p' "$SRC" > "$TMP/guard.sh"
+sed -n '/^_cr_xml_sane()/,/^}/p; /^_cr_target_allowed()/,/^}/p; /^_cr_guard()/,/^}/p' "$SRC" > "$TMP/guard.sh"
 guard_ok() {
   ( STATE_DIR="$TMP/state" MAN="$TMP/state/callrec_line_manifest.txt" LIVE_ROOT="$TMP/live"
     . "$TMP/guard.sh"; _cr_guard )
