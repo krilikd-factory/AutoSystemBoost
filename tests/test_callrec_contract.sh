@@ -87,7 +87,8 @@ grep -q 'callrec_boot_pending' "$ROOT/post-fs-data.sh" || fail 'vendor fuse clea
 
 # --- runtime guard pins: fail-closed allowlist, payload prefix, toggle gates ---
 grep -q '/my_region/etc/extension/com.oplus.app-features.xml|' "$SRC" || fail 'target allowlist missing my_region app-features'
-grep -q '/my_product/etc/extension/\*/appfeature.country.dynamic_features.xml' "$SRC" || fail 'target allowlist missing country XMLs'
+grep -q '/my_product/etc/extension)' "$SRC" || fail 'target allowlist missing the extension dir'
+grep -q '_cr_stage_dir()' "$SRC" || fail 'directory staging missing (mount-storm fix)'
 grep -q '"\$STATE_DIR/callrec_patched/"\*)' "$SRC" || fail 'payload prefix check missing'
 grep -q '_cfg callrec_line)' "$SRC" || fail 'line toggle gate missing'
 grep -q '_cfg callrec_apps)' "$SRC" || fail 'apps toggle gate missing'
@@ -219,7 +220,7 @@ printf 'callrec_line=0\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
 run prepare
 [ "$(cat "$TMP/state/callrec_line_state")" = 'ready' ] || fail 'prepare did not reach ready'
 [ -f "$TMP/state/callrec_line_manifest.txt" ] || fail 'manifest not written'
-[ "$(grep -c . "$TMP/state/callrec_line_manifest.txt")" = "5" ] || fail 'expected 5 manifest entries (region, stock, 2 countries, app_v2)'
+[ "$(grep -c . "$TMP/state/callrec_line_manifest.txt")" = "4" ] || fail 'expected 4 manifest entries (region, stock, extension dir, app_v2)'
 
 R_PAY="$PAYROOT/my_region/etc/extension/com.oplus.app-features.xml"
 grep -q 'com.android.phone.oplus_dialer_enable' "$R_PAY" || fail 'dialer feature not added (phone)'
@@ -247,6 +248,12 @@ grep -q 'no_display_record' "$TMP/live/my_region/etc/extension/com.oplus.app-fea
 sha1sum "$TMP/state/callrec_line_manifest.txt" > "$TMP/man.sha"
 run prepare
 sha1sum -c "$TMP/man.sha" >/dev/null || fail 'second prepare changed the manifest (not idempotent)'
+
+# Prepare is a full rebuild: a payload planted by hand must not survive it.
+mkdir -p "$TMP/state/callrec_patched/stale"
+printf 'stale' > "$TMP/state/callrec_patched/stale/leftover"
+run prepare
+[ ! -e "$TMP/state/callrec_patched/stale" ] || fail 'prepare kept a stale payload'
 
 # OTA simulation: the OEM rewrites a country file (new content AND the lock back) -
 # the next prepare must re-derive from THAT file, not replay the old payload.
@@ -335,7 +342,7 @@ run apply
 : > "$TMP/mounts"
 ASB_CALLREC_BOOT=1 run apply
 grep -q -- "--bind $R_PAY $TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$ASB_CR_LOG" || fail 'region XML not bound at boot'
-grep -q -- "--bind $C_PAY $TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml" "$ASB_CR_LOG" || fail 'country XML not bound at boot'
+grep -q -- "--bind $TMP/state/callrec_patched$TMP/live/my_product/etc/extension $TMP/live/my_product/etc/extension" "$ASB_CR_LOG" || fail 'extension dir not bound at boot'
 [ -f "$TMP/state/callrec_line.active" ] || fail 'line active marker not written'
 [ -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt active marker not written'
 [ -f "$TMP/state/callrec_boot_pending" ] || fail 'boot apply did not drop the trial marker'
@@ -343,6 +350,17 @@ run confirm
 [ ! -f "$TMP/state/callrec_boot_pending" ] || fail 'confirm did not retire the trial marker'
 # Patch-only: the module's magic-mountable tree must stay untouched.
 [ ! -e "$TMP/mod/system" ] || fail 'module system/ tree was touched - patch-only contract broken'
+
+# An already-bound directory target is never stacked with a second bind (a dir
+# payload cannot be cmp'd - the mount table is the source of truth there).
+: > "$TMP/mounts"
+printf '%s %s f2fs rw 0 0\n' "$TMP/state/callrec_patched$TMP/live/my_product/etc/extension" "$TMP/live/my_product/etc/extension" >> "$TMP/mounts"
+: > "$ASB_CR_LOG"
+ASB_CALLREC_BOOT=1 run apply
+! grep -q -- "--bind $TMP/state/callrec_patched$TMP/live/my_product/etc/extension" "$ASB_CR_LOG" || fail 'directory bind was stacked'
+grep -q -- "--bind $R_PAY" "$ASB_CR_LOG" || fail 'fresh file bind missing'
+run confirm
+: > "$TMP/mounts"
 
 # Toggle off: binds and silence removed, staging pulled back.
 printf '%s %s f2fs rw 0 0\n' "$R_PAY" "$TMP/live/my_region/etc/extension/com.oplus.app-features.xml" > "$TMP/mounts"
