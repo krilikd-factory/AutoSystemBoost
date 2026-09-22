@@ -460,6 +460,68 @@ elif [ "$_mf_state" = "ready" ]; then
   V "MMFEED manifest present (state says ready)" "present" "missing"
 fi
 
+SEC "0b4. CALL RECORDING  (line patch bound? messenger recorder configured?)"
+# Same evidence-first question for both callrec toggles: staged state, toggle, mount
+# table and content compare per manifest entry - plus the recorder app, the prompt
+# silence binds and the VoiceScribe prefs for the messenger half.
+_cr_lstate="$(cat /data/adb/asb/callrec_line_state 2>/dev/null)"
+_cr_astate="$(cat /data/adb/asb/callrec_apps_state 2>/dev/null)"
+_cr_line="$(grep -m1 '^callrec_line=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
+_cr_apps="$(grep -m1 '^callrec_apps=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
+NOTE "line: staged state: ${_cr_lstate:-none}   toggle callrec_line=${_cr_line:-0}"
+if [ -f /data/adb/asb/callrec_line_manifest.txt ]; then
+  _cr_n=0; _cr_bound=0
+  while IFS='|' read -r _cr_t _cr_p; do
+    case "$_cr_t" in ''|'#'*) continue ;; esac
+    _cr_n=$((_cr_n + 1))
+    if [ ! -f "$_cr_p" ]; then
+      V "callrec payload exists ($_cr_t)" "present" "missing"
+    elif grep -q " $_cr_t " /proc/mounts 2>/dev/null; then
+      _cr_bound=$((_cr_bound + 1))
+      cmp -s "$_cr_t" "$_cr_p" 2>/dev/null \
+        && NOTE "  bound, content matches: $_cr_t" \
+        || V "callrec patch live ($_cr_t)" "match" "differs"
+    fi
+  done < /data/adb/asb/callrec_line_manifest.txt
+  NOTE "manifest entries: $_cr_n, bound now: $_cr_bound"
+  if [ "$_cr_line" = "1" ] && [ "$_cr_bound" -eq 0 ]; then
+    V "callrec line binds active (toggle is ON)" "bound" "not bound"
+    NOTE " toggle is on but nothing is mounted - check vendor_mounts.log for callrec_bind lines"
+  fi
+elif [ "$_cr_lstate" = "already" ]; then
+  NOTE "no manifest: this device's feature XMLs already ship open - nothing to patch"
+elif [ "$_cr_lstate" = "unsupported" ]; then
+  NOTE "no manifest: no OPlus feature XMLs found - the line tweak has nothing to bind"
+fi
+_cr_rc="$(pm path com.oplus.callrecorder 2>/dev/null | head -1 | sed 's/^package://' | tr -d '\r')"
+if [ -n "$_cr_rc" ]; then
+  NOTE "recorder app: com.oplus.callrecorder present ($_cr_rc)"
+else
+  NOTE "recorder app: com.oplus.callrecorder not installed - the XML patch opens the dialer"
+  NOTE "  flags, but on a build with no recorder code at all there is nothing to open"
+fi
+if [ -f /data/adb/asb/callrec_prompt.active ]; then
+  NOTE "announcement silence: $(grep -c . /data/adb/asb/callrec_prompt.active 2>/dev/null) prompt file(s) shadowed"
+else
+  NOTE "announcement silence: not active"
+fi
+NOTE "apps: state: ${_cr_astate:-none}   toggle callrec_apps=${_cr_apps:-0}"
+if [ "$_cr_apps" = "1" ]; then
+  _cr_vsp="$(pm path com.coloros.accessibilityassistant 2>/dev/null | head -1 | sed 's/^package://' | tr -d '\r')"
+  if [ -n "$_cr_vsp" ]; then
+    NOTE "VoiceScribe package: present ($_cr_vsp) - nothing was installed, its prefs are patched"
+  else
+    V "VoiceScribe package present (toggle is ON)" "present" "absent"
+    NOTE " the messenger tweak patches the package the device ships; this one has none"
+  fi
+  if [ -f /data/adb/asb/callrec_apps.active ]; then
+    _cr_sw="$(grep -m1 'auto_record_switch_status' /data/user/0/com.coloros.accessibilityassistant/shared_prefs/translatePreferences.xml 2>/dev/null | tr -d ' \r')"
+    NOTE "auto-record prefs: patched (${_cr_sw:-switch unreadable})"
+  else
+    NOTE "auto-record prefs: not patched yet - the next boot pass retries"
+  fi
+fi
+
 SEC "0c. AUDIO CONFIG TREE  (which SKU the platform actually reads)"
 # ColorOS keeps several SKU trees in one image and loads exactly one.
 #
