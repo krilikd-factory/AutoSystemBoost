@@ -639,10 +639,25 @@ if [ -r "$MODDIR/runtime/asb_mmfeed_apply.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_mmfeed_apply.sh" apply >/dev/null 2>&1 || true
 fi
 # Same late-bind reasoning for the call-recording patch; the late pass is also where
-# the messenger-recording half self-heals (sha-checked reinstall, prefs re-apply).
+# the messenger-recording half self-heals (VoiceScribe prefs re-patched in place -
+# an app update that reset the keys is healed here).
 if [ -r "$MODDIR/runtime/asb_callrec.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" apply >/dev/null 2>&1 || true
 fi
+# Call-recording bootloop fuse, confirm half: the pending marker dropped by the
+# post-fs-data apply retires ONLY after a completed boot. This subshell is outside
+# every feature gate on purpose - the fuse must work on a device with nothing else
+# enabled, or a bad patch would re-bind on every boot until the module is deleted.
+(
+  _cr_w=0
+  while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_cr_w" -lt 300 ]; do
+    sleep 5
+    _cr_w=$((_cr_w + 5))
+  done
+  if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] && [ -r "$MODDIR/runtime/asb_callrec.sh" ]; then
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" confirm >/dev/null 2>&1 || true
+  fi
+) &
 
 asb_device_guard() {
   local _soc
