@@ -2872,7 +2872,7 @@ bt_absvol_mode mglru_hold BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile net_wifi_leave wifi_powersave wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard bt_link_stability ltpo_force mmfeed_off "
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile net_wifi_leave wifi_powersave wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard bt_link_stability ltpo_force mmfeed_off callrec_line callrec_apps "
 
   _migrated=0
   # Which numbering the stored values were written against. Absent means "before schemas
@@ -2968,7 +2968,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable   haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard ltpo_force mmfeed_off"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable   haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard ltpo_force mmfeed_off callrec_line callrec_apps"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -3239,6 +3239,19 @@ asb_prepare_ltpo_patch
 # Multimedia feedback telemetry staging: same device-local pattern as LTPO - clone the
 # stock list, close the collector, bind only while the WebUI toggle says so.
 asb_prepare_mmfeed_patch
+
+# Call-recording staging: the runtime script owns the patch logic (single source - it
+# re-derives the patch from the live XMLs on every boot, so an OTA just gets
+# re-patched). Install only runs the same prepare once so the WebUI badge has a state
+# to show before the first boot. Both toggles default off.
+if [ -f "$MODPATH/runtime/asb_callrec.sh" ]; then
+  MODDIR="$MODPATH" sh "$MODPATH/runtime/asb_callrec.sh" prepare >/dev/null 2>&1 || true
+  _cr_state="$(cat /data/adb/asb/callrec_line_state 2>/dev/null)"
+  if [ "$_cr_state" = "ready" ]; then
+    _cr_n="$(grep -c . /data/adb/asb/callrec_line_manifest.txt 2>/dev/null)"
+    ui_print "      + $(printf "${ASB_L_CALLREC_READY:-Call recording: patch ready (%s file(s)) - off by default, toggle in WebUI (System)}" "${_cr_n:-0}")"
+  fi
+fi
 
 # A real install came back with a zero-byte regular file named "vendor" sitting in the module
 # root.
