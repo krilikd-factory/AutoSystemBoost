@@ -2,9 +2,11 @@
 # Call-recording contract: both tweaks default off, the line patch is device-local and
 # re-derived from the live XMLs on every boot (OTA-proof), every lifecycle owner
 # (install, boot, late boot, uninstall, WebUI) reaches the one runtime script, the
-# bind guard is fail-closed, payloads are structurally validated XML, a one-strike
-# bootloop fuse (pending marker at post-fs-data, confirm after boot_completed) can
-# lock the tweak down by itself, and the messenger half patches the device-shipped
+# bind guard is fail-closed, payloads are structurally validated XML, the XML binds
+# land only at boot (never live from the WebUI), the dialer-enable features are
+# gated on the OPlus dialer stack being physically present, a one-strike bootloop
+# fuse (pending marker at post-fs-data, confirm after boot_completed) can lock the
+# tweak down by itself, and the messenger half patches the device-shipped
 # VoiceScribe prefs in place - no APK is bundled or installed anywhere.
 # Same shape as the force-LTPO and mmfeed contracts.
 set -euo pipefail
@@ -90,6 +92,9 @@ grep -q '"\$STATE_DIR/callrec_patched/"\*)' "$SRC" || fail 'payload prefix check
 grep -q '_cfg callrec_line)' "$SRC" || fail 'line toggle gate missing'
 grep -q '_cfg callrec_apps)' "$SRC" || fail 'apps toggle gate missing'
 grep -q 'nsenter -t 1 -m -- mount --bind' "$SRC" || fail 'global-namespace bind missing'
+grep -q 'remount,ro,bind' "$SRC" || fail 'binds are not remounted read-only'
+grep -q '_cr_dialer_stack_present()' "$SRC" || fail 'dialer-stack gate missing'
+grep -q 'ASB_CALLREC_LATE=1' "$ROOT/service.sh" || fail 'service.sh does not mark the late apply'
 grep -q 'ASB_CALLREC_PROC_MOUNTS:-/proc/mounts' "$SRC" || fail 'mounts table not injectable for fixtures'
 grep -q 'ASB_CALLREC_LIVE_ROOT' "$SRC" || fail 'live root not injectable for fixtures'
 
@@ -101,7 +106,11 @@ mkdir -p "$TMP/mod/config" "$TMP/bin" "$TMP/state" \
          "$TMP/live/my_stock/etc/extension" "$TMP/live/my_stock/etc/config" \
          "$TMP/live/my_product/etc/extension/RU" "$TMP/live/my_product/etc/extension/GB" \
          "$TMP/live/system_ext/etc/recording-prompt" \
+         "$TMP/live/my_product/priv-app/OplusInCallUI" \
          "$TMP/user"
+# The fixture device ships the OPlus dialer stack, so the dialer-enable features are
+# expected in the region payload; a later case removes it and expects them gone.
+printf 'apk' > "$TMP/live/my_product/priv-app/OplusInCallUI/OplusInCallUI.apk"
 printf 'name=AutoSystemBoost\n' > "$TMP/mod/module.prop"
 
 # Live feature XMLs with the region locks present, like a GLOBAL-EU build ships them.
@@ -271,6 +280,20 @@ cmp -s "$TMP/live/my_stock/etc/extension/com.oplus.app-features.xml" "$TMP/stock
 cp "$TMP/stock.good" "$TMP/live/my_stock/etc/extension/com.oplus.app-features.xml"
 run prepare
 
+# No OPlus dialer stack on the device: the dialer-enable features must NOT be added
+# (telecom runs inside system_server - enabling OPlus dialer paths without the
+# dialer APKs is the observed instant-crash vector), while the lock removals, which
+# crash nothing, must still apply.
+mv "$TMP/live/my_product/priv-app" "$TMP/privapp.saved"
+run prepare
+! grep -q 'oplus_dialer_enable' "$R_PAY" || fail 'dialer features added without a dialer stack'
+! grep -q 'no_display_record' "$R_PAY" || fail 'lock removals must still apply without a dialer'
+grep -q 'some_other_feature' "$R_PAY" || fail 'unrelated region feature lost'
+mv "$TMP/privapp.saved" "$TMP/live/my_product/priv-app"
+run prepare
+grep -q 'com.android.phone.oplus_dialer_enable' "$R_PAY" || fail 'dialer features not restored with the stack back'
+grep -q 'com.android.server.telecom.oplus_dialer_enable' "$R_PAY" || fail 'telecom dialer feature not restored with the stack back'
+
 # _cr_xml_sane unit: valid passes, truncated and trailing-garbage fail closed.
 sed -n '/^_cr_xml_sane()/,/^}/p' "$SRC" > "$TMP/sane.sh"
 ( . "$TMP/sane.sh"
@@ -288,11 +311,22 @@ sed -n '/^_cr_xml_sane()/,/^}/p' "$SRC" > "$TMP/sane.sh"
 run apply
 [ ! -s "$ASB_CR_LOG" ] || fail 'mounted while both toggles were off'
 
+# Live (WebUI) apply: the XML binds must NOT land on a running system - the card is
+# reboot-to-apply, and a hot-reloaded feature XML is the observed instant-crash
+# vector. The prompt silence is just an audio asset, it stays live.
 printf 'callrec_line=1\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
+: > "$ASB_CR_LOG"
 run apply
-grep -q -- "--bind $R_PAY $TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$ASB_CR_LOG" || fail 'region XML not bound'
-grep -q -- "--bind $C_PAY $TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml" "$ASB_CR_LOG" || fail 'country XML not bound'
-grep -q -- "--bind $TMP/state/callrec_empty.pcm $TMP/live/system_ext/etc/recording-prompt/record_start.pcm" "$ASB_CR_LOG" || fail 'prompt not silenced'
+! grep -q -- "--bind $TMP/state/callrec_patched" "$ASB_CR_LOG" || fail 'live apply bound XML payloads - reboot-to-apply contract broken'
+[ ! -f "$TMP/state/callrec_line.active" ] || fail 'live apply marked the line active without binding'
+grep -q -- "--bind $TMP/state/callrec_empty.pcm $TMP/live/system_ext/etc/recording-prompt/record_start.pcm" "$ASB_CR_LOG" || fail 'prompt silence must still work live'
+out="$(run status)"
+echo "$out" | grep -q '^line=pending_boot' || fail 'live apply should report line=pending_boot'
+
+# The late boot pass (service.sh, ASB_CALLREC_LATE=1) is where the XML binds land.
+ASB_CALLREC_LATE=1 run apply
+grep -q -- "--bind $R_PAY $TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$ASB_CR_LOG" || fail 'region XML not bound on the late pass'
+grep -q -- "--bind $C_PAY $TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml" "$ASB_CR_LOG" || fail 'country XML not bound on the late pass'
 [ -f "$TMP/state/callrec_line.active" ] || fail 'line active marker not written'
 [ -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt active marker not written'
 # Patch-only: the module's magic-mountable tree must stay untouched.
