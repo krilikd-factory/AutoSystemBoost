@@ -638,6 +638,11 @@ fi
 if [ -r "$MODDIR/runtime/asb_mmfeed_apply.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_mmfeed_apply.sh" apply >/dev/null 2>&1 || true
 fi
+# Same late-bind reasoning for the call-recording patch; the late pass is also where
+# the messenger-recording half self-heals (sha-checked reinstall, prefs re-apply).
+if [ -r "$MODDIR/runtime/asb_callrec.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" apply >/dev/null 2>&1 || true
+fi
 
 asb_device_guard() {
   local _soc
