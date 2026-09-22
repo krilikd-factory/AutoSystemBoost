@@ -640,9 +640,11 @@ if [ -r "$MODDIR/runtime/asb_mmfeed_apply.sh" ]; then
 fi
 # Same late-bind reasoning for the call-recording patch; the late pass is also where
 # the messenger-recording half self-heals (VoiceScribe prefs re-patched in place -
-# an app update that reset the keys is healed here).
+# an app update that reset the keys is healed here). ASB_CALLREC_LATE=1 marks this
+# as a boot-time pass: a live WebUI apply never mounts the XMLs (reboot-to-apply),
+# only the post-fs-data and this late pass may bind.
 if [ -r "$MODDIR/runtime/asb_callrec.sh" ]; then
-  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" apply >/dev/null 2>&1 || true
+  ASB_CALLREC_LATE=1 MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" apply >/dev/null 2>&1 || true
 fi
 # Call-recording bootloop fuse, confirm half: the pending marker dropped by the
 # post-fs-data apply retires ONLY after a completed boot. This subshell is outside
