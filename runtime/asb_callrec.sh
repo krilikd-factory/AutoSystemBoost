@@ -37,6 +37,18 @@
 # switching the toggle off and on again. This fuse does NOT rely on the vendor
 # overlay counter: that one only ticks when the VENDOR_OVERLAY feature gate passes,
 # and a callrec-only device would otherwise re-bind the same files forever.
+#
+# Two timing rules make the fuse almost never needed:
+#   - The XML binds land ONLY at boot (ASB_CALLREC_BOOT=1 from post-fs-data) or in
+#     the late boot pass (ASB_CALLREC_LATE=1 from service.sh). A live WebUI apply
+#     never mounts them: the card is labeled reboot-to-apply, and a feature XML the
+#     RUNNING system hot-reloads can crash it on the spot (observed: screen dies
+#     the moment the toggle flips, then a bootloop). Toggle OFF still unbinds live.
+#   - The oplus_dialer_enable features are added only when the device physically
+#     ships the OPlus dialer stack. Telecom runs INSIDE system_server: enabling
+#     OPlus dialer code paths on a build without the dialer APKs takes the whole
+#     system_server down. The region-lock removals stay unconditional - unhiding a
+#     record entry crashes nothing.
 
 MODID="AutoSystemBoost"
 MODDIR="${MODDIR:-/data/adb/modules/$MODID}"
@@ -81,6 +93,32 @@ _log() {
 # mount). _cr_changed counts real edits across all targets.
 
 _cr_n=0
+_CR_DIALER=0
+
+# Does this device physically ship the OPlus dialer stack? The oplus_dialer_enable
+# features switch Phone and Telecom (telecom runs INSIDE system_server) onto OPlus
+# dialer code paths; on a build without the dialer APKs those paths have nothing to
+# run and can take system_server down with them - exactly the "screen dies the
+# moment the toggle flips" failure. Globs stay OPlus-flavored on purpose: a Google
+# or AOSP dialer must NOT count as the stack these features drive.
+_cr_dialer_stack_present() {
+  for _d in "$LIVE_ROOT"/my_product/priv-app "$LIVE_ROOT"/my_product/app \
+            "$LIVE_ROOT"/my_stock/priv-app "$LIVE_ROOT"/my_stock/app \
+            "$LIVE_ROOT"/my_region/priv-app "$LIVE_ROOT"/my_region/app \
+            "$LIVE_ROOT"/my_company/priv-app "$LIVE_ROOT"/my_company/app \
+            "$LIVE_ROOT"/system_ext/priv-app "$LIVE_ROOT"/system_ext/app \
+            "$LIVE_ROOT"/product/priv-app "$LIVE_ROOT"/product/app \
+            "$LIVE_ROOT"/system/priv-app "$LIVE_ROOT"/system/app; do
+    [ -d "$_d" ] || continue
+    for _p in "$_d"/*[Ii]n[Cc]all[Uu][Ii]* \
+              "$_d"/[Oo][Pp]*[Dd]ialer* \
+              "$_d"/[Oo][Pp]*[Cc]ontacts* \
+              "$_d"/[Cc]olor[Oo][Ss]*[Dd]ialer*; do
+      [ -e "$_p" ] && return 0
+    done
+  done
+  return 1
+}
 
 # /my_region/etc/extension/com.oplus.app-features.xml: the dialer feature gates.
 _cr_patch_appfeatures_region() {
@@ -91,6 +129,10 @@ _cr_patch_appfeatures_region() {
     sed -i '/<app_feature name="com.android.incallui.no_display_record"[^>]*\/>/d' "$_p" 2>/dev/null && _cr_n=$((_cr_n + 1)); }
   grep -q 'name="com.android.phone.no_display_record"' "$_p" 2>/dev/null && {
     sed -i '/<app_feature name="com.android.phone.no_display_record"[^>]*\/>/d' "$_p" 2>/dev/null && _cr_n=$((_cr_n + 1)); }
+  # The dialer-enable features are added only when the OPlus dialer stack is
+  # physically present (see _cr_dialer_stack_present); the lock removals above are
+  # unconditional - unhiding a record entry crashes nothing.
+  [ "$_CR_DIALER" = "1" ] || return 0
   # Insert after <extend_features> with awk, not sed: toybox sed does not honor \n in
   # the replacement, and this runs on-device. No <extend_features> line means this XML
   # is not the feature list we know - then nothing is inserted and nothing is counted.
@@ -220,6 +262,7 @@ asb_callrec_prepare() {
   rm -f "$MAN.new" 2>/dev/null
   _cr_n=0
   _cr_seen=0
+  if _cr_dialer_stack_present; then _CR_DIALER=1; else _CR_DIALER=0; fi
 
   _cr_f="$LIVE_ROOT/my_region/etc/extension/com.oplus.app-features.xml"
   if [ -f "$_cr_f" ]; then _cr_seen=1; _cr_stage "$_cr_f" _cr_patch_appfeatures_region || true; fi
@@ -309,9 +352,12 @@ _bind_one() {
   _is_bound "$_b_t" && { cmp -s "$_b_t" "$_b_p" 2>/dev/null && return 0; }
   if command -v nsenter >/dev/null 2>&1 \
      && nsenter -t 1 -m -- mount --bind "$_b_p" "$_b_t" 2>/dev/null; then
+    # Best effort: the payload lives on writable /data, the view of it must not be.
+    nsenter -t 1 -m -- mount -o remount,ro,bind "$_b_t" 2>/dev/null || true
     return 0
   fi
-  mount --bind "$_b_p" "$_b_t" 2>/dev/null
+  mount --bind "$_b_p" "$_b_t" 2>/dev/null \
+    && { mount -o remount,ro,bind "$_b_t" 2>/dev/null || true; }
 }
 
 _unbind_one() {
@@ -611,11 +657,17 @@ case "${1:-apply}" in
     # new OEM ones, and the bind must shadow those, not last release's copy of them.
     asb_callrec_prepare
     _boot_apply="${ASB_CALLREC_BOOT:-0}"
+    _late_apply="${ASB_CALLREC_LATE:-0}"
+    # XML binds are a boot-time act only. A live WebUI apply prepares the patch and
+    # reports pending_boot, but never mounts over files the RUNNING system may
+    # hot-reload - that is the observed instant-crash vector. Unbinding stays live.
+    _may_bind=0
+    if [ "$_boot_apply" = "1" ] || [ "$_late_apply" = "1" ]; then _may_bind=1; fi
     if [ "$(_cfg callrec_line)" = "1" ] && [ ! -f "$BLOCK" ] && [ ! -f "$CR_BLOCK" ]; then
       if [ "$_boot_apply" = "1" ] && [ -f "$PENDING" ]; then
         # We bound these files last boot and boot_completed never came: lockdown.
         _cr_lockdown
-      elif _cr_guard; then
+      elif [ "$_may_bind" = "1" ] && _cr_guard; then
         # The marker goes down BEFORE the first mount: even a mount that wedges the
         # boot outright is caught by the next one.
         [ "$_boot_apply" = "1" ] && : > "$PENDING" 2>/dev/null
