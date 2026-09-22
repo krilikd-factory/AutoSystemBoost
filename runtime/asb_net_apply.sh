@@ -203,6 +203,23 @@ esac
 # --- queue discipline ----------------------------------------------------------------- This
 # one IS per-interface in the kernel, so WiFi and mobile get their own without any tricks.
 #
+# Pick a tc that can actually manage qdiscs, not merely answer to the name.
+#
+# Field log (CPH2745, V65): boot and route-watch contexts resolve `tc` to a limited
+# applet from the root solution's bin dir, which answers every qdisc write with
+# "invalid argument 'root' to 'command'" - while /system/bin/tc on the same phone is
+# full iproute2 and works. Every boot-time apply failed; every WebUI apply succeeded,
+# and the same card showed both. Prefer the system binary, make it prove it can read
+# before trusting it with a write, and let a fixture inject its own. profile_core.sh
+# resolves its own the same way.
+_ASB_TC="${ASB_TC:-}"
+if [ -z "$_ASB_TC" ]; then
+  for _tcc in /system/bin/tc "$(command -v tc 2>/dev/null)"; do
+    [ -n "$_tcc" ] && [ -x "$_tcc" ] || continue
+    "$_tcc" qdisc show dev lo 2>/dev/null | grep -q qdisc && { _ASB_TC="$_tcc"; break; }
+  done
+fi
+#
 # net.core.default_qdisc accepts any name - it is just stored for interfaces that come up later
 # - so writing "cake" on a kernel with no cake module succeeds and means nothing.
 # Reporting that as ok while every interface reported "not applied" is a contradiction the user
@@ -216,7 +233,7 @@ case "$_qd" in
   *) _sysctl_w net.core.default_qdisc "$_qd" ;;
 esac
 
-if _has tc; then
+if [ -n "$_ASB_TC" ]; then
   for _if in $(ls /sys/class/net 2>/dev/null); do
     case "$_if" in lo|dummy*|sit*|ip6tnl*) continue ;; esac
     # A name still carrying a printf template is a driver placeholder, not a link.
@@ -262,7 +279,7 @@ if _has tc; then
     # Same class as the uclamp fast-path bug: acting without reading first, then judging the
     # outcome by the write instead of by the state. Read, and skip when there is nothing to
     # do - it removes the write, the retry and the false FAIL together.
-    _qd_show="$(tc qdisc show dev "$_if" 2>/dev/null)"
+    _qd_show="$("$_ASB_TC" qdisc show dev "$_if" 2>/dev/null)"
     if printf '%s\n' "$_qd_show" | grep -q "qdisc $_want "; then
       _qd_tried=$(( _qd_tried + 1 ))
       _qd_ok=$(( _qd_ok + 1 ))
@@ -288,9 +305,9 @@ if _has tc; then
     # a module bug. Discarding stderr threw away the one sentence that tells them apart.
     _qd_err=""
     case "$_want" in
-      fq)       _qd_err="$(tc qdisc replace dev "$_if" root fq pacing 2>&1 >/dev/null)" ;;
-      fq_codel) _qd_err="$(tc qdisc replace dev "$_if" root fq_codel target 5ms interval 100ms ecn 2>&1 >/dev/null)" ;;
-      cake)     _qd_err="$(tc qdisc replace dev "$_if" root cake besteffort triple-isolate 2>&1 >/dev/null)" ;;
+      fq)       _qd_err="$("$_ASB_TC" qdisc replace dev "$_if" root fq pacing 2>&1 >/dev/null)" ;;
+      fq_codel) _qd_err="$("$_ASB_TC" qdisc replace dev "$_if" root fq_codel target 5ms interval 100ms ecn 2>&1 >/dev/null)" ;;
+      cake)     _qd_err="$("$_ASB_TC" qdisc replace dev "$_if" root cake besteffort triple-isolate 2>&1 >/dev/null)" ;;
       *)        continue ;;
     esac
     # Classify once, here, where the message is still in hand.
@@ -302,6 +319,9 @@ if _has tc; then
       *"Operation not permitted"*|*"Permission denied"*) _qd_why="permission_or_selinux" ;;
       *"Cannot find device"*|*"does not exist"*) _qd_why="iface_absent" ;;
       *"Device or resource busy"*)          _qd_why="root_qdisc_owned" ;;
+      # A limited applet (root-solution bin dir ahead of /system/bin in boot contexts)
+      # rejects the grammar itself, not the qdisc: "invalid argument 'root' to 'command'".
+      *"invalid argument"*)                 _qd_why="tc_binary_limited" ;;
       "")                                   _qd_why="" ;;
       *)                                    _qd_why="tc_error" ;;
     esac
@@ -320,7 +340,7 @@ if _has tc; then
     # qdisc can help - a permission or ownership failure would fail identically.
     case "$_qd_why" in
       kernel_lacks_qdisc|module_missing)
-        if [ "$_want" != "fq" ] && tc qdisc replace dev "$_if" root fq pacing 2>/dev/null; then
+        if [ "$_want" != "fq" ] && "$_ASB_TC" qdisc replace dev "$_if" root fq pacing 2>/dev/null; then
           _qd_why="fell_back_to_fq"
           _qd_err=""
         fi
@@ -335,7 +355,7 @@ if _has tc; then
     # report shows the qdisc that is live and why.
     _qd_live="$_want"
     [ "$_qd_why" = "fell_back_to_fq" ] && _qd_live="fq"
-    if tc qdisc show dev "$_if" 2>/dev/null | grep -qw "$_qd_live"; then
+    if "$_ASB_TC" qdisc show dev "$_if" 2>/dev/null | grep -qw "$_qd_live"; then
       _qd_ok=$(( _qd_ok + 1 ))
       _out="$_out qdisc[$_kind:$_if]=$_qd_live"
     elif [ "$_qd_why" = "iface_noqueue" ]; then
@@ -383,13 +403,19 @@ if _has tc; then
       fi
     fi
   done
+else
+  _qd_tool=0
 fi
 
 # One verdict for the global key, derived from the interfaces.
 case "$_qd" in
   ''|auto) : ;;
   *)
-    if [ "$_qd_tried" = "0" ]; then
+    if [ "${_qd_tool:-1}" = "0" ]; then
+      # No working tc anywhere: not "pending" (no link will fix a missing tool) and not
+      # "failed" (nothing was refused). The default_qdisc sysctl above still applied.
+      _out="$_out qdisc=$_qd-unavailable"
+    elif [ "$_qd_tried" = "0" ]; then
       if [ "${_qd_noqueue:-0}" -gt 0 ]; then
         # Every candidate link was noqueue (modem-owned): nothing here can ever take a
         # qdisc, so "pending" (waiting for a link) would be a lie that never resolves.
@@ -581,6 +607,7 @@ mkdir -p /data/adb/asb 2>/dev/null
       cc\[mobile*-unavailable*)     printf 'net_congestion_mobile=unavailable\n' ;;
       cc\[mobile*-unsupported*)     printf 'net_congestion_mobile=unsupported\n' ;;
       cc\[mobile*)                  printf 'net_congestion_mobile=ok\n' ;;
+      qdisc=*-unavailable)          printf 'net_qdisc=unavailable\n' ;;
       qdisc=*-pending)              printf 'net_qdisc=pending\n' ;;
       qdisc=*-unsupported)          printf 'net_qdisc=unsupported\n' ;;
       qdisc=*-not-applied)          printf 'net_qdisc=failed\n' ;;
@@ -623,6 +650,18 @@ if [ -s "$_res" ]; then
     printf '%s\n' "$_old_line" >> "$_res_new"
   done < "$_res"
 fi
+# One line per key. A run that touches several interfaces of one kind emits a token per
+# interface, and the mapper printed a verdict line for each - the field file carried
+# net_qdisc_mobile four times over, and first-match readers (the diag) could disagree
+# with last-match readers (the WebUI) about the same card. Keep the worst verdict of
+# the set: a partially applied kind is not "ok".
+awk -F= '
+  { k=$1; v=$2
+    r=(v=="failed")?1:(v=="unsupported")?2:(v=="unavailable")?3:(v=="pending")?4:(v=="ok")?5:6
+    if (!(k in seen)) { seen[k]=r; val[k]=v; ord[++n]=k }
+    else if (r < seen[k]) { seen[k]=r; val[k]=v } }
+  END { for (i=1;i<=n;i++) print ord[i] "=" val[ord[i]] }
+' "$_res_new" > "$_res_new.d" 2>/dev/null && mv "$_res_new.d" "$_res_new" || rm -f "$_res_new.d"
 mv "$_res_new" "$_res" 2>/dev/null || { cat "$_res_new" > "$_res" 2>/dev/null; rm -f "$_res_new"; }
 
 [ -n "$_out" ] && echo "net:$_out" || echo "net: nothing to apply (all auto)"

@@ -420,9 +420,19 @@ asb_apply_net() {
   if [ -n "$NET_HAPPY_EYEBALLS" ] && has settings; then
     asb_settings_put system cloud_dns_happy_eyeballs_priority_enabled "$NET_HAPPY_EYEBALLS"
   fi
-  if has tc; then
+  # Resolve tc the way asb_net_apply.sh does: boot contexts can put a limited applet
+  # first in PATH, and it fails every qdisc write while /system/bin/tc (full iproute2)
+  # works. A silent || true hid that for two field captures.
+  _asb_tc="${ASB_TC:-}"
+  if [ -z "$_asb_tc" ]; then
+    for _tcc in /system/bin/tc "$(command -v tc 2>/dev/null)"; do
+      [ -n "$_tcc" ] && [ -x "$_tcc" ] || continue
+      "$_tcc" qdisc show dev lo 2>/dev/null | grep -q qdisc && { _asb_tc="$_tcc"; break; }
+    done
+  fi
+  if [ -n "$_asb_tc" ]; then
     for _if in $(ls /sys/class/net 2>/dev/null | tr '\n' ' '); do
-      case "$_if" in wlan0|rmnet*|ccmni*) tc qdisc replace dev "$_if" root "$NET_QDISC" >/dev/null 2>&1 || true ;; esac
+      case "$_if" in wlan0|rmnet*|ccmni*) "$_asb_tc" qdisc replace dev "$_if" root "$NET_QDISC" >/dev/null 2>&1 || true ;; esac
     done
   fi
 }
