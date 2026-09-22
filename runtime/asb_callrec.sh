@@ -7,7 +7,12 @@
 #                     file: an OTA that rewrites /my_region, /my_product or /my_stock
 #                     just gets re-patched on the next boot from whatever the OEM
 #                     actually installed. Patched copies are bind-mounted over the
-#                     stock files; stock is never written.
+#                     stock files; stock is never written. Real devices carry ~80
+#                     country XMLs under /my_product/etc/extension (observed: an
+#                     82-entry manifest) - binding each file separately is a mount
+#                     storm in init's namespace at post-fs-data, so the country half
+#                     is staged as ONE full directory copy and bound as a single
+#                     directory mount. Four to five mounts total, not 164.
 #   callrec_apps=1  - call recording inside messengers (Telegram/WhatsApp/VK/...),
 #                     by patching the auto-record shared_prefs of the VoiceScribe
 #                     package the device ALREADY ships (com.coloros.accessibility-
@@ -265,37 +270,68 @@ _cr_stage() {
   return 0
 }
 
+# Stage the whole my_product extension dir as ONE directory bind. Real devices carry
+# ~80 country XMLs in it; binding each file separately was an 82-entry manifest and
+# a mount storm in init's namespace at post-fs-data. One full copy, patched inside,
+# bound once. Every country file is patched in the copy; a file whose patch breaks
+# the XML is restored from the live original (that country simply stays stock), and
+# the dir enters the manifest only when at least one file inside actually changed.
+_cr_stage_dir() {
+  _sd_live="$1"
+  [ -d "$_sd_live" ] || return 1
+  _sd_pay="$STATE_DIR/callrec_patched$_sd_live"
+  mkdir -p "$(dirname "$_sd_pay")" 2>/dev/null || return 1
+  cp -a "$_sd_live" "$_sd_pay" 2>/dev/null || { rm -rf "$_sd_pay" 2>/dev/null; return 1; }
+  for _sd_f in "$_sd_pay"/*/appfeature.country.dynamic_features.xml; do
+    [ -f "$_sd_f" ] || continue
+    _cr_patch_country "$_sd_f"
+    if ! _cr_xml_sane "$_sd_f"; then
+      # Fail-closed per file: a country whose patch broke the XML stays stock.
+      cp -f "$_sd_live/${_sd_f#"$_sd_pay"/}" "$_sd_f" 2>/dev/null
+    fi
+  done
+  _sd_changed=0
+  for _sd_f in "$_sd_pay"/*/appfeature.country.dynamic_features.xml; do
+    [ -f "$_sd_f" ] || continue
+    cmp -s "$_sd_f" "$_sd_live/${_sd_f#"$_sd_pay"/}" 2>/dev/null || _sd_changed=$((_sd_changed + 1))
+  done
+  [ "$_sd_changed" -gt 0 ] || { rm -rf "$_sd_pay" 2>/dev/null; return 1; }
+  _sd_ctx="$(ls -Zd "$_sd_live" 2>/dev/null | awk '{print $1}')"
+  case "$_sd_ctx" in
+    ?*:?*:?*:?*) chcon -R "$_sd_ctx" "$_sd_pay" 2>/dev/null || true ;;
+  esac
+  echo "$_sd_live|$_sd_pay" >> "$MAN.new" 2>/dev/null
+  return 0
+}
+
 asb_callrec_prepare() {
   mkdir -p "$STATE_DIR" 2>/dev/null
   rm -f "$MAN.new" 2>/dev/null
+  # Full rebuild every time: no payload from a previous boot (or a previous release,
+  # or a pre-OTA file set) can linger and get bound over fresh OEM files.
+  rm -rf "$STATE_DIR/callrec_patched" 2>/dev/null
   _cr_n=0
   _cr_seen=0
-  if _cr_dialer_stack_present; then _CR_DIALER=1; else _CR_DIALER=0; fi
+  if _cr_dialer_stack_present; then
+    _CR_DIALER=1
+    echo 'present' > "$STATE_DIR/callrec_dialer_stack" 2>/dev/null
+  else
+    _CR_DIALER=0
+    echo 'absent' > "$STATE_DIR/callrec_dialer_stack" 2>/dev/null
+  fi
 
   _cr_f="$LIVE_ROOT/my_region/etc/extension/com.oplus.app-features.xml"
   if [ -f "$_cr_f" ]; then _cr_seen=1; _cr_stage "$_cr_f" _cr_patch_appfeatures_region || true; fi
   _cr_f="$LIVE_ROOT/my_stock/etc/extension/com.oplus.app-features.xml"
   if [ -f "$_cr_f" ]; then _cr_seen=1; _cr_stage "$_cr_f" _cr_patch_appfeatures_stock || true; fi
-  for _cr_d in "$LIVE_ROOT"/my_product/etc/extension/*/; do
-    _cr_f="${_cr_d}appfeature.country.dynamic_features.xml"
-    [ -f "$_cr_f" ] || continue
-    _cr_seen=1
-    _cr_stage "$_cr_f" _cr_patch_country || true
-  done
+  _cr_d="$LIVE_ROOT/my_product/etc/extension"
+  if [ -d "$_cr_d" ]; then _cr_seen=1; _cr_stage_dir "$_cr_d" || true; fi
   for _cr_f in "$LIVE_ROOT/my_stock/etc/config/app_v2.xml" \
                "$LIVE_ROOT/my_region/etc/config/app_v2.xml"; do
     [ -f "$_cr_f" ] || continue
     _cr_seen=1
     _cr_stage "$_cr_f" _cr_patch_appv2 || true
   done
-
-  # A payload staged for a file that no longer exists (or no longer needs a patch)
-  # must not linger: the next apply would bind stale content over a fresh OTA file.
-  if [ -d "$STATE_DIR/callrec_patched" ]; then
-    find "$STATE_DIR/callrec_patched" -type f 2>/dev/null | while IFS= read -r _cr_p; do
-      grep -qF "|$_cr_p" "$MAN.new" 2>/dev/null || rm -f "$_cr_p" 2>/dev/null
-    done
-  fi
 
   if [ -s "$MAN.new" ]; then
     mv -f "$MAN.new" "$MAN" 2>/dev/null
@@ -320,16 +356,16 @@ _cr_target_allowed() {
     /my_region/etc/extension/com.oplus.app-features.xml|\
     /my_stock/etc/extension/com.oplus.app-features.xml|\
     /my_stock/etc/config/app_v2.xml|\
-    /my_region/etc/config/app_v2.xml) return 0 ;;
-    /my_product/etc/extension/*/appfeature.country.dynamic_features.xml) return 0 ;;
+    /my_region/etc/config/app_v2.xml|\
+    /my_product/etc/extension) return 0 ;;
   esac
   [ -n "$LIVE_ROOT" ] || return 1
   case "$1" in
     "$LIVE_ROOT"/my_region/etc/extension/com.oplus.app-features.xml|\
     "$LIVE_ROOT"/my_stock/etc/extension/com.oplus.app-features.xml|\
     "$LIVE_ROOT"/my_stock/etc/config/app_v2.xml|\
-    "$LIVE_ROOT"/my_region/etc/config/app_v2.xml) return 0 ;;
-    "$LIVE_ROOT"/my_product/etc/extension/*/appfeature.country.dynamic_features.xml) return 0 ;;
+    "$LIVE_ROOT"/my_region/etc/config/app_v2.xml|\
+    "$LIVE_ROOT"/my_product/etc/extension) return 0 ;;
   esac
   return 1
 }
@@ -343,9 +379,15 @@ _cr_guard() {
     [ -n "$_g_t" ] && [ -n "$_g_p" ] && [ -z "$_g_x" ] || return 1
     _cr_target_allowed "$_g_t" || return 1
     case "$_g_p" in "$STATE_DIR/callrec_patched/"*) ;; *) return 1 ;; esac
-    [ -s "$_g_p" ] || return 1
     [ -e "$_g_t" ] || return 1
-    _cr_xml_sane "$_g_p" || return 1
+    if [ -d "$_g_p" ]; then
+      # Directory payload (the country-XML tree): its files were validated one by
+      # one at stage time; here the dir itself just has to exist and be ours.
+      :
+    else
+      [ -s "$_g_p" ] || return 1
+      _cr_xml_sane "$_g_p" || return 1
+    fi
     _g_n=$((_g_n + 1))
   done < "$MAN"
   [ "$_g_n" -gt 0 ]
@@ -357,7 +399,9 @@ _is_bound() {
 
 _bind_one() {
   _b_t="$1"; _b_p="$2"
-  _is_bound "$_b_t" && { cmp -s "$_b_t" "$_b_p" 2>/dev/null && return 0; }
+  # Already bound: a directory payload cannot be cmp'd - take the mount table's word
+  # and never stack a second bind over the first.
+  _is_bound "$_b_t" && { [ -d "$_b_p" ] && return 0; cmp -s "$_b_t" "$_b_p" 2>/dev/null && return 0; }
   if command -v nsenter >/dev/null 2>&1 \
      && nsenter -t 1 -m -- mount --bind "$_b_p" "$_b_t" 2>/dev/null; then
     # Best effort: the payload lives on writable /data, the view of it must not be.
