@@ -634,6 +634,10 @@ asb_migrate_governor_conf
 if [ -r "$MODDIR/runtime/asb_ltpo_apply.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" apply >/dev/null 2>&1 || true
 fi
+# Same late-bind reasoning for the multimedia-telemetry bind.
+if [ -r "$MODDIR/runtime/asb_mmfeed_apply.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_mmfeed_apply.sh" apply >/dev/null 2>&1 || true
+fi
 
 asb_device_guard() {
   local _soc

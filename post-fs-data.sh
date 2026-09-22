@@ -91,6 +91,11 @@ fi
 if [ -r "$MODDIR/runtime/asb_ltpo_apply.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" apply >/dev/null 2>&1 || true
 fi
+# Multimedia-telemetry bind: same gating contract as LTPO (mmfeed_off toggle, bootloop
+# fuse, fail-closed manifest re-validation before anything is mounted).
+if [ -r "$MODDIR/runtime/asb_mmfeed_apply.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_mmfeed_apply.sh" apply >/dev/null 2>&1 || true
+fi
 # ASB:LOG:BEGIN
 if asb_feature_enabled LOG && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
 asb_persist_safe persist.vendor.radio.adb_log_on 0
@@ -252,6 +257,9 @@ if asb_feature_enabled VENDOR_OVERLAY && command -v asb_device_pack_allows >/dev
     # goes too, or a bad patched refresh table would keep landing on every boot.
     rm -f /data/adb/asb/ltpo_bind_manifest.txt /data/adb/asb/ltpo_bind.active 2>/dev/null
     rm -rf /data/adb/asb/ltpo_patched 2>/dev/null
+    # The multimedia-telemetry bind is the same class: it goes too.
+    rm -f /data/adb/asb/mmfeed_bind_manifest.txt /data/adb/asb/mmfeed_bind.active 2>/dev/null
+    rm -rf /data/adb/asb/mmfeed_patched 2>/dev/null
     echo "ts=$(date +%s) action=block_odm_binds reason=bootloop_protection" >> "$_mounts_log"
   else
     _next_ctr=$((_cur_ctr + 1))
