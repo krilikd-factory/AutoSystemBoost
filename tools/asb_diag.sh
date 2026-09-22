@@ -469,6 +469,14 @@ _cr_astate="$(cat /data/adb/asb/callrec_apps_state 2>/dev/null)"
 _cr_line="$(grep -m1 '^callrec_line=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
 _cr_apps="$(grep -m1 '^callrec_apps=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
 NOTE "line: staged state: ${_cr_lstate:-none}   toggle callrec_line=${_cr_line:-0}"
+if [ -f /data/adb/asb/callrec_blocked ]; then
+  V "callrec bootloop fuse" "clear" "BLOCKED"
+  NOTE " a boot with the callrec binds never completed - the tweak unbound itself and"
+  NOTE " stays blocked until you switch callrec_line off and on again in the WebUI"
+fi
+if [ -f /data/adb/asb/callrec_boot_pending ]; then
+  NOTE " boot trial marker present: this boot has not confirmed yet (normal during boot)"
+fi
 if [ -f /data/adb/asb/callrec_line_manifest.txt ]; then
   _cr_n=0; _cr_bound=0
   while IFS='|' read -r _cr_t _cr_p; do
