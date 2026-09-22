@@ -757,6 +757,9 @@ _cr_lockdown() {
   rm -f "$MAN" "$ACTIVE" "$PROMPT_ACTIVE" "$PROMPT_ACTIVE.new" "$PENDING" 2>/dev/null
   rm -rf "$STATE_DIR/callrec_patched" 2>/dev/null
   : > "$CR_BLOCK" 2>/dev/null
+  # Same reason as the pending marker: if the lockdown decision is lost to a crash, the
+  # next boot repeats the mount that caused it.
+  sync 2>/dev/null || true
   echo 'blocked_bootloop' > "$LINE_STATE" 2>/dev/null
   _log 'action=callrec_bind result=BLOCKED reason=bootloop_fuse strikes=1'
 }
@@ -809,6 +812,14 @@ case "${1:-apply}" in
           # The marker goes down BEFORE the first mount: even a mount that wedges
           # the boot outright is caught by the next one.
           : > "$PENDING" 2>/dev/null
+          # Force the marker to disk before mounting anything.
+          #
+          # ext4 commits metadata lazily, around every five seconds. The failure this
+          # guards against kills the device faster than that: the marker was still only
+          # in page cache, the reboot lost it, and the next boot saw a clean slate and
+          # mounted again - a loop that ran until KernelSU's own safe mode broke it,
+          # instead of stopping after one bad boot.
+          sync 2>/dev/null || true
           _cr_bind_all && _log 'action=callrec_bind result=applied'
         else
           _log "action=callrec_guard result=reject why=${_CR_GUARD_WHY:-unknown}"
@@ -825,7 +836,18 @@ case "${1:-apply}" in
     # mounts this script ever makes at post-fs-data are the feature-XML binds. The
     # late service.sh pass (and any live apply) asserts the silence instead; the
     # prompt files are read lazily when a recording starts, long after boot.
-    if [ "$_blocked" = "0" ] && [ "$_boot_apply" = "0" ] \
+    # Prompt silencing is a MOUNT, so it belongs where every other mount here lives:
+    # post-fs-data, before the runtime is up.
+    #
+    # This ran on a live system when the toggle was flipped - binding an empty file over
+    # every file in recording-prompt, inside init's mount namespace, while the audio and
+    # telecom services were running. The device froze within seconds, the screen went off
+    # and it hard-rebooted. The XML binds were already boot-only for exactly this reason;
+    # this one was the single live mount left, and it was the one being exercised.
+    #
+    # The cost is that the toggle now needs a reboot to take effect - which it needed
+    # anyway: the feature XMLs are only read at boot.
+    if [ "$_blocked" = "0" ] && [ "$_boot_apply" = "1" ] \
        && { [ "$_line_on" = "1" ] || [ "$_apps_on" = "1" ]; }; then
       _cr_silence_prompts && _log 'action=callrec_prompt result=silenced'
     elif [ "$_blocked" = "1" ] || { [ "$_line_on" = "0" ] && [ "$_apps_on" = "0" ]; }; then
