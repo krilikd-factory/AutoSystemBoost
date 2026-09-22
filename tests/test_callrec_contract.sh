@@ -87,7 +87,11 @@ grep -q 'callrec_boot_pending' "$ROOT/post-fs-data.sh" || fail 'vendor fuse clea
 
 # --- runtime guard pins: fail-closed allowlist, payload prefix, toggle gates ---
 grep -q '/my_region/etc/extension/com.oplus.app-features.xml|' "$SRC" || fail 'target allowlist missing my_region app-features'
-grep -q '/my_product/etc/extension)' "$SRC" || fail 'target allowlist missing the extension dir'
+# The extension DIRECTORY must never be an allowed target. Allowing it is what let the
+# whole tree be bound and relabelled, which crashed system_server on device. Only single
+# country files are allowed, pinned to a country-code segment.
+grep -q '/my_product/etc/extension)' "$SRC" && fail 'the extension directory must not be an allowed bind target'
+grep -q 'extension/\[A-Z\]\[A-Z\]\*/appfeature.country.dynamic_features.xml' "$SRC" || fail 'per-country allowlist entry missing' 
 grep -q '_cr_stage_dir()' "$SRC" || fail 'directory staging missing (mount-storm fix)'
 grep -q '"\$STATE_DIR/callrec_patched/"\*)' "$SRC" || fail 'payload prefix check missing'
 grep -q '_cfg callrec_line)' "$SRC" || fail 'line toggle gate missing'
@@ -234,7 +238,12 @@ printf 'callrec_line=0\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
 run prepare
 [ "$(cat "$TMP/state/callrec_line_state")" = 'ready' ] || fail 'prepare did not reach ready'
 [ -f "$TMP/state/callrec_line_manifest.txt" ] || fail 'manifest not written'
-[ "$(grep -c . "$TMP/state/callrec_line_manifest.txt")" = "4" ] || fail 'expected 4 manifest entries (region, stock, extension dir, app_v2)'
+# One entry per patched country file, never the extension directory as a whole.
+# Binding the directory relabelled every file in it with the directory's SELinux context
+# and crashed system_server on device - the bootloop fuse caught it. Each country file is
+# now its own entry with its own label: RU and GB here, plus region, stock and app_v2.
+[ "$(grep -c . "$TMP/state/callrec_line_manifest.txt")" = "5" ] || fail 'expected 5 manifest entries (region, stock, app_v2, RU, GB)'
+grep -q '/extension|' "$TMP/state/callrec_line_manifest.txt" && fail 'the extension directory must never be bound as a whole' 
 
 R_PAY="$PAYROOT/my_region/etc/extension/com.oplus.app-features.xml"
 # The patch is REMOVALS ONLY: the dialer-enable insertions activated OPlus dialer
@@ -374,7 +383,13 @@ run apply
 rm -f "$TMP/state/callrec_prompt.active"   # isolate: earlier live applies asserted it
 ASB_CALLREC_BOOT=1 run apply
 grep -q -- "--bind $R_PAY $TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$ASB_CR_LOG" || fail 'region XML not bound at boot'
-grep -q -- "--bind $TMP/state/callrec_patched$TMP/live/my_product/etc/extension $TMP/live/my_product/etc/extension" "$ASB_CR_LOG" || fail 'extension dir not bound at boot'
+# Each country file is bound on its own; the directory never is.
+for _cc in RU GB; do
+  _cf="my_product/etc/extension/$_cc/appfeature.country.dynamic_features.xml"
+  grep -q -- "--bind $TMP/state/callrec_patched$TMP/live/$_cf $TMP/live/$_cf" "$ASB_CR_LOG" \
+    || fail "country file $_cc not bound at boot"
+done
+grep -q -- " $TMP/live/my_product/etc/extension\$" "$ASB_CR_LOG" && fail 'the extension directory was bound whole'
 grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'prompt silence not mounted at boot - it is boot-only now'
 [ -f "$TMP/state/callrec_line.active" ] || fail 'line active marker not written'
 [ -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt marker not written at post-fs-data'
@@ -388,13 +403,16 @@ run confirm
 # Patch-only: the module's magic-mountable tree must stay untouched.
 [ ! -e "$TMP/mod/system" ] || fail 'module system/ tree was touched - patch-only contract broken'
 
-# An already-bound directory target is never stacked with a second bind (a dir
-# payload cannot be cmp'd - the mount table is the source of truth there).
+# An already-bound target is never stacked with a second bind. Checked on a country
+# file now, since the directory is no longer a target at all.
 : > "$TMP/mounts"
-printf '%s %s f2fs rw 0 0\n' "$TMP/state/callrec_patched$TMP/live/my_product/etc/extension" "$TMP/live/my_product/etc/extension" >> "$TMP/mounts"
+printf '%s %s f2fs rw 0 0\n' "$TMP/state/callrec_patched$TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml" "$TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml" > "$TMP/mounts"
+# A real bind makes the live path READ as the payload; the fake mount table alone does
+# not, so mirror that here or _bind_one's content check cannot see the bind.
+cp -f "$TMP/state/callrec_patched$TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml" "$TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml"
 : > "$ASB_CR_LOG"
 ASB_CALLREC_BOOT=1 run apply
-! grep -q -- "--bind $TMP/state/callrec_patched$TMP/live/my_product/etc/extension" "$ASB_CR_LOG" || fail 'directory bind was stacked'
+! grep -q -- "--bind $TMP/state/callrec_patched$TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml " "$ASB_CR_LOG" || fail 'an already-bound country file was stacked'
 grep -q -- "--bind $R_PAY" "$ASB_CR_LOG" || fail 'fresh file bind missing'
 run confirm
 : > "$TMP/mounts"
