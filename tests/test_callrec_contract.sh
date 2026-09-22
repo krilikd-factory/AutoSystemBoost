@@ -608,4 +608,14 @@ run prepare
 [ "$(cat "$TMP/state/callrec_line_state")" = 'unsupported' ] || fail 'device without feature XMLs not reported unsupported'
 [ ! -f "$TMP/state/callrec_line_manifest.txt" ] || fail 'unsupported device still wrote a manifest'
 
+# Microphone/storage grants given to VoiceScribe must be taken back on off and uninstall,
+# and only the ones this module actually granted.
+_CR="$ROOT/runtime/asb_callrec.sh"
+[ -n "${ROOT:-}" ] || _CR="$(dirname "$0")/../runtime/asb_callrec.sh"
+grep -q '^_cr_grant_tracked() {' "$_CR"  || fail "tracked grant helper missing"
+grep -q '^_cr_revoke_tracked() {' "$_CR" || fail "tracked revoke helper missing"
+[ "$(grep -c '^ *_cr_revoke_tracked$' "$_CR")" -ge 2 ] || fail "revoke not wired into both off and uninstall paths"
+grep -q 'granted=true' "$_CR" || fail "grant helper no longer checks prior state - would revoke user grants"
+[ "$(grep -c 'pm grant' "$_CR")" -le 1 ] || fail "untracked pm grant reintroduced"
+
 echo 'PASS: call-recording contract'
