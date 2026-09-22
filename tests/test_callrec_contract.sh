@@ -339,15 +339,22 @@ sed -n '/^_cr_xml_sane()/,/^}/p' "$SRC" > "$TMP/sane.sh"
 run apply
 [ ! -s "$ASB_CR_LOG" ] || fail 'mounted while both toggles were off'
 
-# Live (WebUI) apply: the XML binds must NOT land on a running system - the card is
-# reboot-to-apply, and a hot-reloaded feature XML is the observed instant-crash
-# vector. The prompt silence is just an audio asset, it stays live.
+# Live (WebUI) apply: NOTHING may be mounted on a running system.
+#
+# The XML binds were already excluded here. The prompt silence was allowed to stay live
+# on the reasoning that it is "just an audio asset" - but it is still a bind mount, made
+# with nsenter into init's namespace while audio and telecom are running, and that is
+# what the field failure hit: seconds after the toggle the device froze, the screen went
+# off and it hard-rebooted. The asset being harmless does not make the mount harmless.
+#
+# Both mounts now happen at post-fs-data only, which is also the only time the feature
+# XMLs are read. The card is reboot-to-apply either way.
 printf 'callrec_line=1\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
 : > "$ASB_CR_LOG"
 run apply
 ! grep -q -- "--bind $TMP/state/callrec_patched" "$ASB_CR_LOG" || fail 'live apply bound XML payloads - reboot-to-apply contract broken'
 [ ! -f "$TMP/state/callrec_line.active" ] || fail 'live apply marked the line active without binding'
-grep -q -- "--bind $TMP/state/callrec_empty.pcm $TMP/live/system_ext/etc/recording-prompt/record_start.pcm" "$ASB_CR_LOG" || fail 'prompt silence must still work live'
+! grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'live apply mounted the prompt silence - must be boot-only'
 out="$(run status)"
 echo "$out" | grep -q '^line=pending_boot' || fail 'live apply should report line=pending_boot'
 
@@ -359,23 +366,23 @@ run apply
 ! grep -q -- "--bind $TMP/state/callrec_patched" "$ASB_CR_LOG" || fail 'late/live apply bound XML payloads'
 
 # The post-fs-data pass (ASB_CALLREC_BOOT=1) is the only one that binds the XMLs -
-# and it binds ONLY the XMLs: the prompt silence stays out of the boot window (the
-# prompt .pcm files are read lazily when a recording starts, so the late pass can
-# own them on the running system).
+# and it binds BOTH the XMLs and the prompt silence: every mount this feature makes now
+# belongs in the boot window, because a bind on a running system is what froze a device
+# in the field.
 : > "$TMP/mounts"
 : > "$ASB_CR_LOG"
 rm -f "$TMP/state/callrec_prompt.active"   # isolate: earlier live applies asserted it
 ASB_CALLREC_BOOT=1 run apply
 grep -q -- "--bind $R_PAY $TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$ASB_CR_LOG" || fail 'region XML not bound at boot'
 grep -q -- "--bind $TMP/state/callrec_patched$TMP/live/my_product/etc/extension $TMP/live/my_product/etc/extension" "$ASB_CR_LOG" || fail 'extension dir not bound at boot'
-! grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'prompt silence mounted inside the boot window'
+grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'prompt silence not mounted at boot - it is boot-only now'
 [ -f "$TMP/state/callrec_line.active" ] || fail 'line active marker not written'
-[ ! -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt silence asserted at post-fs-data'
+[ -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt marker not written at post-fs-data'
 [ -f "$TMP/state/callrec_boot_pending" ] || fail 'boot apply did not drop the trial marker'
 # The late pass (plain apply, runtime already up) asserts the silence instead.
 run apply
 grep -q -- "--bind $TMP/state/callrec_empty.pcm $TMP/live/system_ext/etc/recording-prompt/record_start.pcm" "$ASB_CR_LOG" || fail 'late pass did not assert the prompt silence'
-[ -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt active marker not written by the late pass'
+: # the boot pass owns the prompt marker now
 run confirm
 [ ! -f "$TMP/state/callrec_boot_pending" ] || fail 'confirm did not retire the trial marker'
 # Patch-only: the module's magic-mountable tree must stay untouched.
@@ -468,15 +475,17 @@ run confirm
 : > "$ASB_CR_LOG"
 
 # The APPS toggle alone mounts NOTHING at boot: the prompt silence moved to the
-# late pass, so an apps-only boot apply drops no trial marker and binds nothing.
-# The fuse only ever covers the line toggle's XML binds now.
+# late pass, so an apps-only boot apply drops no trial marker. It does silence the
+# prompts, because that mount is boot-only for both toggles now; the fuse still only
+# covers the line toggle's XML binds, which are the ones that can wedge a boot.
 printf 'callrec_line=0\ncallrec_apps=1\n' > "$TMP/mod/config/governor.conf"
 : > "$ASB_CR_LOG"
 ASB_CALLREC_BOOT=1 run apply
 [ ! -f "$TMP/state/callrec_boot_pending" ] || fail 'apps-only boot apply dropped a trial marker (nothing to fuse)'
-! grep -q -- '--bind' "$ASB_CR_LOG" || fail 'apps-only boot apply mounted something in the boot window'
+! grep -q -- "--bind $TMP/state/callrec_patched" "$ASB_CR_LOG" || fail 'apps-only boot apply bound XML payloads'
+: > "$ASB_CR_LOG"   # isolate the late pass from the boot pass above
 run apply
-grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'apps-only late pass did not silence prompts'
+! grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'apps-only late pass mounted prompts - boot-only now'
 # Back to a clean slate for the sections below.
 printf 'callrec_line=0\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
 run apply
