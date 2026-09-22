@@ -469,6 +469,7 @@ _cr_astate="$(cat /data/adb/asb/callrec_apps_state 2>/dev/null)"
 _cr_line="$(grep -m1 '^callrec_line=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
 _cr_apps="$(grep -m1 '^callrec_apps=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
 NOTE "line: staged state: ${_cr_lstate:-none}   toggle callrec_line=${_cr_line:-0}"
+NOTE " OPlus dialer stack: $(cat /data/adb/asb/callrec_dialer_stack 2>/dev/null || echo unknown) (dialer-enable features are added only when present)"
 if [ -f /data/adb/asb/callrec_blocked ]; then
   V "callrec bootloop fuse" "clear" "BLOCKED"
   NOTE " a boot with the callrec binds never completed - the tweak unbound itself and"
@@ -482,13 +483,17 @@ if [ -f /data/adb/asb/callrec_line_manifest.txt ]; then
   while IFS='|' read -r _cr_t _cr_p; do
     case "$_cr_t" in ''|'#'*) continue ;; esac
     _cr_n=$((_cr_n + 1))
-    if [ ! -f "$_cr_p" ]; then
+    if [ ! -e "$_cr_p" ]; then
       V "callrec payload exists ($_cr_t)" "present" "missing"
     elif grep -q " $_cr_t " /proc/mounts 2>/dev/null; then
       _cr_bound=$((_cr_bound + 1))
-      cmp -s "$_cr_t" "$_cr_p" 2>/dev/null \
-        && NOTE "  bound, content matches: $_cr_t" \
-        || V "callrec patch live ($_cr_t)" "match" "differs"
+      if [ -d "$_cr_p" ]; then
+        NOTE "  bound (directory): $_cr_t"
+      else
+        cmp -s "$_cr_t" "$_cr_p" 2>/dev/null \
+          && NOTE "  bound, content matches: $_cr_t" \
+          || V "callrec patch live ($_cr_t)" "match" "differs"
+      fi
     fi
   done < /data/adb/asb/callrec_line_manifest.txt
   NOTE "manifest entries: $_cr_n, bound now: $_cr_bound"
