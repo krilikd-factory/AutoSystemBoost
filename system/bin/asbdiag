@@ -1319,6 +1319,11 @@ V "  tcp congestion in force" "$(cfg net_congestion | sed 's/^auto$//')" \
   "$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)" present
 NOTE "available congestion algorithms: $(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
 NOTE "qdisc in force: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
+# Which tc this report sees, and whether it is real iproute2. Boot contexts can resolve
+# tc to a limited applet that rejects the qdisc grammar outright (field log, CPH2745:
+# "invalid argument 'root' to 'command'") while /system/bin/tc works - the apply now
+# prefers the system binary, and this line shows what the diag context got.
+NOTE "tc binary: $(command -v tc 2>/dev/null || echo none) ($(tc -V 2>&1 | head -1))"
 # RPS and tx_queue_len: requested versus live, per interface.
 #
 # Both settings were switched on by the user - net_rps=little, net_txqueue=short - and
@@ -1377,7 +1382,14 @@ if [ -f "$_nvf" ]; then
     _nv="$(grep -E "^$_nk=" "$_nvf" 2>/dev/null | head -1 | sed 's/.*=//')"
     case "$_nv" in
       ok)          V "  $_nk" "$_nw" "$_nw" eq ;;
-      unavailable) V "  $_nk (kernel lacks it)" "$_nw" "unavailable" eq ;;
+      unavailable)
+        # "unavailable" for a qdisc key now also means "no working tc binary anywhere"
+        # (the apply emits qdisc=...-unavailable then); for congestion it still means
+        # the kernel lacks the algorithm. Name the right one.
+        case "$_nk" in
+          net_qdisc*) V "  $_nk (no working tc binary found)" "$_nw" "unavailable" eq ;;
+          *)          V "  $_nk (kernel lacks it)" "$_nw" "unavailable" eq ;;
+        esac ;;
       failed)
         # Name the cause when we have it.
         #
@@ -1385,8 +1397,8 @@ if [ -f "$_nvf" ]; then
         # about the device rather than defects: no qdisc in the kernel, no module, a vendor
         # stack holding the root qdisc, a down interface, or SELinux. asb_net_apply now
         # records which one, so print it instead of sending the reader to guess.
-        _qw="$(grep -m1 "want=${_nw} " /data/adb/asb/qdisc_failures.log 2>/dev/null \
-               | sed -n 's/.*why=\([a-z_]*\).*/\1/p')"
+        _qraw="$(grep -m1 "want=${_nw} " /data/adb/asb/qdisc_failures.log 2>/dev/null)"
+        _qw="$(printf '%s\n' "$_qraw" | sed -n 's/.*why=\([a-z_]*\).*/\1/p')"
         case "$_qw" in
           kernel_lacks_qdisc)    V "  $_nk (kernel has no such qdisc)" "$_nw" "failed" eq ;;
           module_missing)        V "  $_nk (qdisc module not loadable)" "$_nw" "failed" eq ;;
@@ -1410,16 +1422,29 @@ if [ -f "$_nvf" ]; then
           # the generic "tc error" line below. fell_back_to_fq here means fq was tried and
           # did not take either - the successful fallback now reports as ok upstream.
           fell_back_to_fq)       V "  $_nk (fq_codel and fq fallback both refused)" "$_nw" "failed" eq ;;
+          tc_binary_limited)     V "  $_nk (tc is a limited applet, not iproute2)" "$_nw" "failed" eq ;;
           tc_error)              V "  $_nk (tc refused - see err= in qdisc_failures.log)" "$_nw" "failed" eq ;;
           unclassified)          V "  $_nk (tc refused - see err= in qdisc_failures.log)" "$_nw" "failed" eq ;;
           "")                    V "  $_nk (tc refused - reason not classified)" "$_nw" "failed" eq ;;
           *)                     V "  $_nk (tc error - see qdisc_failures.log)" "$_nw" "failed" eq ;;
-        esac ;;
+        esac
+        # Show the raw line instead of only pointing at the file. The sentence tc
+        # printed is the reason the log exists, and "see qdisc_failures.log" defers the
+        # answer by one upload every time - the reader of this report cannot open it.
+        # The line also names the interface, which the verdict alone never did.
+        [ -n "$_qraw" ] && NOTE "  qdisc_failures.log: $_qraw" ;;
       unsupported)
-        # The link is flagged noqueue (modem-owned rmnet on current Qualcomm kernels):
-        # there is no root qdisc for ASB to replace, so the tweak is not applicable to
-        # this link at all - an N/A device fact, not a failed write.
-        NA=$((NA+1)); P "  [N/A ] $_nk (link has no queue - the driver owns this interface)" ;;
+        # An N/A device fact, not a failed write - but the reason differs by key class.
+        # qdisc: the link is flagged noqueue (modem-owned rmnet on current Qualcomm
+        # kernels), there is no root qdisc for ASB to replace. congestion: the kernel
+        # has no per-route congctl, so one algorithm serves every link and a per-link
+        # request that differs from the global value cannot be honoured. Printing the
+        # qdisc wording under a congestion key described the wrong mechanism.
+        NA=$((NA+1))
+        case "$_nk" in
+          net_congestion_*) P "  [N/A ] $_nk (no per-route congctl on this kernel - links share the global algorithm)" ;;
+          *)                P "  [N/A ] $_nk (link has no queue - the driver owns this interface)" ;;
+        esac ;;
       pending)     NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
       *)           NOTE "$_nk = $_nw - no verdict recorded yet (apply has not run)" ;;
     esac
