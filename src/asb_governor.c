@@ -1199,6 +1199,22 @@ static int g_last_cpu_max_c = 0;
 typedef enum { ASB_WAKE_ACTIVE = 0, ASB_WAKE_IDLE, ASB_WAKE_HOURLY, ASB_WAKE_SRC_COUNT } asb_wake_src_t;
 static unsigned long g_wake_by_src[ASB_WAKE_SRC_COUNT];
 static const char *const g_wake_src_name[ASB_WAKE_SRC_COUNT] = { "active", "idle", "hourly" };
+
+/* Uevent bookkeeping: the epoll wake counter says HOW OFTEN the uevent fd fired, but
+ * not WHAT fired it. A one-hour field capture read 14258 event wakeups against 884
+ * timer ticks - 40x the design rate - and nothing on disk could name the source.
+ * Bucket every drained event by subsystem; the metrics line answers the next
+ * capture's question without a repro. Display events are credited by the screen
+ * parser's own verdict, so the bucket always agrees with the state machine. */
+typedef enum {
+    ASB_UEV_DISPLAY = 0, ASB_UEV_POWER, ASB_UEV_NET, ASB_UEV_SOUND,
+    ASB_UEV_USB, ASB_UEV_THERMAL, ASB_UEV_WAKEUP, ASB_UEV_OTHER, ASB_UEV_COUNT
+} asb_uev_src_t;
+static unsigned long g_uev_by_src[ASB_UEV_COUNT];
+static const char *const g_uev_src_name[ASB_UEV_COUNT] = {
+    "display", "power_supply", "net", "sound", "usb", "thermal", "wakeup", "other"
+};
+static unsigned long g_uev_events_total = 0;
 /* Last banked session as it was handed to the learner, for diagnostics. */
 static int  g_ses_last_temp = 0;
 static int  g_ses_last_dur  = 0;
@@ -2067,6 +2083,17 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             if (!g_wake_by_src[_w]) continue;
             fprintf(f, "%s%s:%lu", _wf ? "" : ",", g_wake_src_name[_w], g_wake_by_src[_w]);
             _wf = 0;
+        }
+        fprintf(f, "\"\n");
+
+        /* Uevents by subsystem: governor_event_wakeups counts the epoll wakes, this
+         * names what filled them. */
+        fprintf(f, "uevent_events_total=%lu\n", g_uev_events_total);
+        fprintf(f, "uevent_by_subsys=\"");
+        for (int _u = 0, _uf = 1; _u < ASB_UEV_COUNT; _u++) {
+            if (!g_uev_by_src[_u]) continue;
+            fprintf(f, "%s%s:%lu", _uf ? "" : ",", g_uev_src_name[_u], g_uev_by_src[_u]);
+            _uf = 0;
         }
         fprintf(f, "\"\n");
 
@@ -4167,12 +4194,16 @@ static int make_uevent_fd(void) {
     return fd;
 }
 
-static int parse_uevent_screen(int fd) {
-    char buf[4096];
-    int n = recv(fd, buf, sizeof(buf)-1, MSG_DONTWAIT);
+/* Split recv from parse so the drain loop can also bucket each event by subsystem;
+ * the old shape read the buffer inside the parser and threw the source away. */
+static int recv_uevent(int fd, char *buf, int cap) {
+    int n = recv(fd, buf, cap - 1, MSG_DONTWAIT);
     if (n <= 0) return -1;
     buf[n] = '\0';
+    return n;
+}
 
+static int parse_uevent_screen_buf(char *buf, int n) {
     int is_display = 0, is_power = 0;
     char *p = buf;
     while (p < buf + n) {
@@ -4193,6 +4224,27 @@ static int parse_uevent_screen(int fd) {
     }
     if (!is_display) return -1;
     return is_power;
+}
+
+static asb_uev_src_t uevent_bucket(const char *buf, int n) {
+    /* NUL-separated key=value pairs; SUBSYSTEM= is the authoritative source. */
+    const char *p = buf, *end = buf + n;
+    while (p < end) {
+        if (strncmp(p, "SUBSYSTEM=", 10) == 0) {
+            const char *s = p + 10;
+            if (strncmp(s, "power_supply", 12) == 0) return ASB_UEV_POWER;
+            if (strncmp(s, "backlight", 9) == 0)    return ASB_UEV_DISPLAY;
+            if (strncmp(s, "drm", 3) == 0)          return ASB_UEV_DISPLAY;
+            if (strncmp(s, "net", 3) == 0)          return ASB_UEV_NET;
+            if (strncmp(s, "sound", 5) == 0)        return ASB_UEV_SOUND;
+            if (strncmp(s, "usb", 3) == 0)          return ASB_UEV_USB;
+            if (strncmp(s, "thermal", 7) == 0)      return ASB_UEV_THERMAL;
+            if (strncmp(s, "wakeup", 6) == 0)       return ASB_UEV_WAKEUP;
+            return ASB_UEV_OTHER;
+        }
+        p += strlen(p) + 1;
+    }
+    return ASB_UEV_OTHER;
 }
 
 /*
@@ -5850,14 +5902,16 @@ int main(int argc, char **argv) {
             }
             else if (fd == uefd) {
                 int final_scr = -1;
-                int cur;
                 int drained = 0;
-                while ((cur = parse_uevent_screen(uefd)) >= 0 || drained == 0) {
-                    if (cur >= 0) final_scr = cur;
-                    drained++;
-                    if (drained > 64) break;
-                    cur = parse_uevent_screen(uefd);
-                    if (cur < 0 && drained > 0) break;
+                char ubuf[4096];
+                int un;
+                /* Drain until empty, cap 64 - same contract as before, but every event
+                 * is now bucketed by subsystem instead of vanishing between the two
+                 * recv calls the old loop made per iteration. */
+                while (drained < 64 && (un = recv_uevent(uefd, ubuf, sizeof(ubuf))) > 0) {
+                    int cur = parse_uevent_screen_buf(ubuf, un);
+                    g_uev_events_total++;
+                    g_uev_by_src[cur >= 0 ? ASB_UEV_DISPLAY : uevent_bucket(ubuf, un)]++;
                     if (cur >= 0) final_scr = cur;
                     drained++;
                 }
