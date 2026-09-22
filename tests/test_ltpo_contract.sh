@@ -44,6 +44,19 @@ if grep -q 'MODPATH/my_product' "$INSTALL"; then
   fail 'payload staged under a magic-mount path - that bypasses the toggle'
 fi
 
+# --- install patcher key set: grown from a real OP15 table, telemetry cut, no mvt ---
+grep -q 'pdfr' "$INSTALL" || fail 'patcher does not know the OP15 power-saving keys'
+grep -q 'refreshrate_director' "$INSTALL" || fail 'patcher misses refreshrate_director'
+grep -q 'limit_fps_when_app_exit' "$INSTALL" || fail 'patcher misses limit_fps_when_app_exit'
+grep -q 'vrr_info_record' "$INSTALL" || fail 'patcher does not cut display telemetry'
+grep -q 'big_data' "$INSTALL" || fail 'patcher does not cut big_data telemetry'
+grep -q 're_cache_miss' "$INSTALL" || fail 'patcher does not cut re_cache_miss telemetry'
+# mvt reshapes render division and touch_frame_change buys feel with power: neither may
+# ever be force-flipped, so outside the comment block those names must not appear.
+if sed -n '/^asb_prepare_ltpo_patch()/,/^}/p' "$INSTALL" | grep -v '^  #' | grep -q 'mvt\|touch_frame_change'; then
+  fail 'patcher flips mvt/touch_frame_change - those are a power/feel trade, not a win'
+fi
+
 # --- lifecycle owners ---
 grep -q 'asb_ltpo_apply.sh" apply' "$ROOT/post-fs-data.sh" || fail 'post-fs-data never applies'
 grep -q 'asb_ltpo_apply.sh" apply' "$ROOT/service.sh" || fail 'service.sh never rebinds late'
@@ -166,5 +179,75 @@ grep -q "umount $LIVE" "$ASB_LTPO_LOG" || fail 'remove did not unbind'
 # status vocabulary stays stable for the WebUI/diag readers.
 printf 'ltpo_force=0\n' > "$TMP/mod/config/governor.conf"
 [ "$(run status)" = 'ltpo_off' ] || fail 'status off vocabulary changed'
+
+# --- executable install-patcher fixture: the REAL staging function against fixture
+# tables, with only the state root and live path rewritten to the sandbox ---
+LT_DIR="$TMP/installer"
+mkdir -p "$LT_DIR/asb" "$LT_DIR/live"
+sed -n '/^asb_prepare_ltpo_patch()/,/^}/p' "$INSTALL" |
+  sed "s|/data/adb/asb|$LT_DIR/asb|g; s|/my_product/etc/oplus_vrr_config.json|$LT_DIR/live/oplus_vrr_config.json|" \
+  > "$LT_DIR/func.sh"
+lt_patch() { # $1 = fixture table; prints the resulting ltpo_state
+  rm -rf "$LT_DIR/asb"; mkdir -p "$LT_DIR/asb"
+  cp "$1" "$LT_DIR/live/oplus_vrr_config.json"
+  ( ui_print() { :; }; . "$LT_DIR/func.sh"; asb_prepare_ltpo_patch >/dev/null )
+  cat "$LT_DIR/asb/ltpo_state" 2>/dev/null || echo missing
+}
+LT_PAY="$LT_DIR/asb/ltpo_patched$LT_DIR/live/oplus_vrr_config.json"
+
+# OP15-style: every feature already on, telemetry on -> patch with ONLY telemetry cut.
+cat > "$LT_DIR/case1.json" <<'JSON'
+[
+    { "filter_name": "oplus_adfr_config" },
+    { "touch_idle": true, "hw_enable": true, "sw_enable": true, "adfr_enable": true, "pdfr": true },
+    { "vrr_info_record": true },
+    { "big_data": true, "re_cache_miss": true }
+]
+JSON
+[ "$(lt_patch "$LT_DIR/case1.json")" = 'ready' ] || fail 'OP15-style table did not produce a telemetry-cut patch'
+python3 - "$LT_PAY" <<'PY' || fail 'OP15-style payload is wrong'
+import json, sys
+d = json.load(open(sys.argv[1]))
+flat = {}
+[flat.update(e) for e in d if isinstance(e, dict)]
+assert flat['hw_enable'] is True and flat['adfr_enable'] is True, 'features were changed'
+assert flat['vrr_info_record'] is False, 'vrr_info_record not cut'
+assert flat['big_data'] is False and flat['re_cache_miss'] is False, 'telemetry not cut'
+PY
+
+# Donor-style: features off, telemetry on -> everything lands in the right direction.
+cat > "$LT_DIR/case2.json" <<'JSON'
+[
+    { "hw_enable": false, "sw_enable": false, "adfr_enable": false, "pdfr": false,
+      "refreshrate_director": false, "limit_fps_when_app_exit": false, "feature_hybrid_acc" : false },
+    { "hist_data_enable": true }
+]
+JSON
+[ "$(lt_patch "$LT_DIR/case2.json")" = 'ready' ] || fail 'donor-style table was not patched'
+python3 - "$LT_PAY" <<'PY' || fail 'donor-style payload is wrong'
+import json, sys
+d = json.load(open(sys.argv[1]))
+flat = {}
+[flat.update(e) for e in d if isinstance(e, dict)]
+for k in ('hw_enable','sw_enable','adfr_enable','pdfr','refreshrate_director',
+          'limit_fps_when_app_exit','feature_hybrid_acc'):
+    assert flat[k] is True, f'{k} not enabled'
+assert flat['hist_data_enable'] is False, 'hist_data_enable not cut'
+PY
+
+# Ideal table: features on AND telemetry off -> honestly "already", no manifest.
+cat > "$LT_DIR/case3.json" <<'JSON'
+[
+    { "hw_enable": true, "sw_enable": true },
+    { "vrr_info_record": false, "big_data": false }
+]
+JSON
+[ "$(lt_patch "$LT_DIR/case3.json")" = 'already' ] || fail 'ideal table not reported as already'
+[ ! -f "$LT_DIR/asb/ltpo_bind_manifest.txt" ] || fail 'ideal table still wrote a manifest'
+
+# No table at all -> "unsupported".
+rm -rf "$LT_DIR/asb"; mkdir -p "$LT_DIR/asb"; rm -f "$LT_DIR/live/oplus_vrr_config.json"
+( ui_print() { :; }; . "$LT_DIR/func.sh"; asb_prepare_ltpo_patch >/dev/null )
+[ "$(cat "$LT_DIR/asb/ltpo_state" 2>/dev/null)" = 'unsupported' ] || fail 'missing table not reported unsupported'
 
 echo 'PASS: force-LTPO contract'
