@@ -310,6 +310,29 @@ if [ -d /sys/class/wakeup ]; then
     NOTE "  modem subsystem itself, with no runtime-PM handle exposed"
   fi
 fi
+# And say what the gate itself did the last time it ran.
+#
+# The CPH2745 day log showed night_modem_idle active all night, this section reporting
+# zero gateable sources, and no way to tell whether the gate had even fired - the wakeup
+# state file only exists while something is actually gated, so a no-op pass leaves no
+# trace. asb_lpm.sh now records every pass; printing it here closes the loop between
+# "nothing to gate" and "the gate ran and found nothing".
+_gr=/data/adb/asb/lpm_gate_result
+if [ -f "$_gr" ]; then
+  _gline="$(cat "$_gr" 2>/dev/null)"
+  _gact="$(echo "$_gline" | sed -n 's/.*action=\([^ ]*\).*/\1/p')"
+  _gws="$(echo "$_gline" | sed -n 's/.*wakeup_nodes=\([0-9]*\).*/\1/p')"
+  _gif="$(echo "$_gline" | sed -n 's/.*net_ifaces=\([0-9]*\).*/\1/p')"
+  _gts="$(echo "$_gline" | sed -n 's/.*ts=\([0-9]*\).*/\1/p')"
+  _gwhen="$(date -d "@$_gts" '+%Y-%m-%d %H:%M' 2>/dev/null)"
+  [ -n "$_gwhen" ] || _gwhen="ts=${_gts:-?}"
+  NOTE "last modem wakeup gate: action=${_gact:-?} at $_gwhen - matched ${_gws:-0} wakeup-class node(s), ${_gif:-0} interface(s)"
+  if [ "${_gws:-0}" = "0" ] && [ "${_gif:-0}" = "0" ]; then
+    NOTE "  the gate ran and found nothing to gate - expected on kernels that hide these nodes"
+  fi
+else
+  NOTE "no modem wakeup gate record yet (night mode has not run since install, or LPM is off)"
+fi
 
 SEC "0a2. WEBUI SCALE  (measured, not assumed)"
 # Density is not the number that matters - the CSS viewport width is.
@@ -358,6 +381,84 @@ done
 [ -n "$_cg_live" ] || NOTE "live file: not readable - camera config is not exposed here"
 NOTE "(the module tree is bind-mounted over /odm at boot; a value here that never changes"
 NOTE " between grade levels means the mount did not take, not that the tweak failed)"
+
+SEC "0b2. LTPO REFRESH PATCH  (is the patched table actually in front of the display?)"
+# Same question as the camera section, for the display table: the toggle can be saved
+# and the patch can be staged, and neither says the bind took. Evidence, not status words:
+# the staged state word, the toggle, the mount table, and a content compare of the file
+# the display service reads against the payload that should be shadowing it.
+_lt_state="$(cat /data/adb/asb/ltpo_state 2>/dev/null)"
+_lt_force="$(grep -m1 '^ltpo_force=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
+NOTE "staged state: ${_lt_state:-none - installer never ran on this build}   toggle ltpo_force=${_lt_force:-0}"
+if [ -f /data/adb/asb/ltpo_bind_manifest.txt ]; then
+  _lt_t="$(cut -d'|' -f1 /data/adb/asb/ltpo_bind_manifest.txt 2>/dev/null | head -1)"
+  _lt_p="$(cut -d'|' -f2 /data/adb/asb/ltpo_bind_manifest.txt 2>/dev/null | head -1)"
+  NOTE "manifest target: ${_lt_t:-<malformed>}"
+  if [ -z "$_lt_t" ] || [ -z "$_lt_p" ]; then
+    V "LTPO manifest parses (target|payload)" "well-formed" "malformed"
+  elif [ ! -f "$_lt_p" ]; then
+    V "LTPO payload exists" "present" "missing"
+  elif grep -q " $_lt_t " /proc/mounts 2>/dev/null; then
+    if cmp -s "$_lt_t" "$_lt_p" 2>/dev/null; then
+      V "LTPO patch live (bound, live content matches payload)" "match" "match"
+    else
+      V "LTPO patch live (bound, but live content differs from payload)" "match" "differs"
+    fi
+  elif [ "$_lt_force" = "1" ]; then
+    V "LTPO bind active (toggle is ON)" "bound" "not bound"
+    NOTE " toggle is on but nothing is mounted - check vendor_mounts.log for ltpo_bind lines"
+  else
+    NOTE "toggle is off - nothing should be mounted, and nothing is (correct)"
+  fi
+elif [ "$_lt_state" = "already" ]; then
+  NOTE "no manifest: this device's table already ships with every switch on - nothing to patch"
+elif [ "$_lt_state" = "unsupported" ]; then
+  NOTE "no manifest: no oplus_vrr_config.json found on this device - the tweak has nothing to bind"
+elif [ "$_lt_state" = "ready" ]; then
+  V "LTPO manifest present (state says ready)" "present" "missing"
+fi
+
+SEC "0b3. MULTIMEDIA TELEMETRY PATCH  (is the feedback collector actually closed?)"
+# Same evidence-first question for Multimedia_Feedback_List.xml: staged state, toggle,
+# mount table, and a content compare - plus a direct read of the isOpen line the
+# feedback service sees through the bind.
+_mf_state="$(cat /data/adb/asb/mmfeed_state 2>/dev/null)"
+_mf_off="$(grep -m1 '^mmfeed_off=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
+NOTE "staged state: ${_mf_state:-none - installer never ran on this build}   toggle mmfeed_off=${_mf_off:-0}"
+if [ -f /data/adb/asb/mmfeed_bind_manifest.txt ]; then
+  _mf_t="$(cut -d'|' -f1 /data/adb/asb/mmfeed_bind_manifest.txt 2>/dev/null | head -1)"
+  _mf_p="$(cut -d'|' -f2 /data/adb/asb/mmfeed_bind_manifest.txt 2>/dev/null | head -1)"
+  NOTE "manifest target: ${_mf_t:-<malformed>}"
+  if [ -z "$_mf_t" ] || [ -z "$_mf_p" ]; then
+    V "MMFEED manifest parses (target|payload)" "well-formed" "malformed"
+  elif [ ! -f "$_mf_p" ]; then
+    V "MMFEED payload exists" "present" "missing"
+  elif grep -q " $_mf_t " /proc/mounts 2>/dev/null; then
+    if cmp -s "$_mf_t" "$_mf_p" 2>/dev/null; then
+      V "MMFEED patch live (bound, live content matches payload)" "match" "match"
+    else
+      V "MMFEED patch live (bound, but live content differs from payload)" "match" "differs"
+    fi
+    if [ -n "$_mf_t" ]; then
+      _mf_open="$(grep -m1 '<isOpen>' "$_mf_t" 2>/dev/null | tr -d ' \r')"
+      case "$_mf_open" in
+        *false*) NOTE "isOpen through the bind: ${_mf_open:-<unreadable>} (collector closed)" ;;
+        *)       V "isOpen through the bind is false" "false" "${_mf_open:-<unreadable>}" ;;
+      esac
+    fi
+  elif [ "$_mf_off" = "1" ]; then
+    V "MMFEED bind active (toggle is ON)" "bound" "not bound"
+    NOTE " toggle is on but nothing is mounted - check vendor_mounts.log for mmfeed_bind lines"
+  else
+    NOTE "toggle is off - nothing should be mounted, and nothing is (correct)"
+  fi
+elif [ "$_mf_state" = "already" ]; then
+  NOTE "no manifest: this device's feedback list already ships closed - nothing to patch"
+elif [ "$_mf_state" = "unsupported" ]; then
+  NOTE "no manifest: no Multimedia_Feedback_List.xml found on this device - the tweak has nothing to bind"
+elif [ "$_mf_state" = "ready" ]; then
+  V "MMFEED manifest present (state says ready)" "present" "missing"
+fi
 
 SEC "0c. AUDIO CONFIG TREE  (which SKU the platform actually reads)"
 # ColorOS keeps several SKU trees in one image and loads exactly one.
