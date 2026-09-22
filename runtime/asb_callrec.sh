@@ -649,6 +649,34 @@ _cr_prefs_apply() {
   fi
 }
 
+# Permissions this module granted, so they can be taken back.
+#
+# The messenger path grants VoiceScribe RECORD_AUDIO and storage. Settings are backed up
+# (.asb.bak) and restored on off/uninstall, but the grants were not: after switching the
+# tweak off, or removing the module entirely, an OEM package kept microphone access that
+# the user never gave it. Only permissions that were NOT already granted are recorded, and
+# only those are revoked - a grant the user made themselves before enabling this stays.
+_cr_grant_tracked() {
+  _gt_file="${APPS_ACTIVE}.grants"
+  for _gt_perm in android.permission.RECORD_AUDIO \
+                  android.permission.READ_EXTERNAL_STORAGE \
+                  android.permission.WRITE_EXTERNAL_STORAGE; do
+    if ! dumpsys package "$VS_PKG" 2>/dev/null | grep -q "${_gt_perm}: granted=true"; then
+      pm grant "$VS_PKG" "$_gt_perm" >/dev/null 2>&1 \
+        && { grep -qx "$_gt_perm" "$_gt_file" 2>/dev/null || echo "$_gt_perm" >> "$_gt_file"; }
+    fi
+  done
+}
+_cr_revoke_tracked() {
+  _gt_file="${APPS_ACTIVE}.grants"
+  [ -f "$_gt_file" ] || return 0
+  while IFS= read -r _gt_perm; do
+    case "$_gt_perm" in android.permission.*) pm revoke "$VS_PKG" "$_gt_perm" >/dev/null 2>&1 ;; esac
+  done < "$_gt_file"
+  rm -f "$_gt_file" 2>/dev/null
+  _log 'action=callrec_apps result=grants_revoked'
+}
+
 _cr_apply_apps() {
   if [ "$(_cfg callrec_apps)" != "1" ] || [ -f "$BLOCK" ]; then
     # Toggle off: recordings stop, the app and its data stay - everything else in its
@@ -664,6 +692,7 @@ _cr_apply_apps() {
         restorecon "$_off_dir/shared_prefs" "$_off_dir/shared_prefs/translatePreferences.xml" 2>/dev/null
       fi
       am force-stop "$VS_PKG" 2>/dev/null
+      _cr_revoke_tracked
       rm -f "$APPS_ACTIVE" 2>/dev/null
       echo 'off' > "$APPS_STATE" 2>/dev/null
       _log 'action=callrec_apps result=disabled'
@@ -710,9 +739,7 @@ _cr_apply_apps() {
     _log 'action=callrec_apps result=prefs_failed'
     return 0
   fi
-  pm grant "$VS_PKG" android.permission.RECORD_AUDIO >/dev/null 2>&1
-  pm grant "$VS_PKG" android.permission.READ_EXTERNAL_STORAGE >/dev/null 2>&1
-  pm grant "$VS_PKG" android.permission.WRITE_EXTERNAL_STORAGE >/dev/null 2>&1
+  _cr_grant_tracked
   am force-stop "$VS_PKG" 2>/dev/null
   : > "$APPS_ACTIVE" 2>/dev/null
   echo 'applied' > "$APPS_STATE" 2>/dev/null
@@ -826,6 +853,7 @@ case "${1:-apply}" in
       _rm_dir="${ASB_CALLREC_USER_DIR:-/data/user/0}/$VS_PKG"
       [ -d "$_rm_dir" ] && _cr_prefs_apply "$_rm_dir/shared_prefs/translatePreferences.xml" off 2>/dev/null
       am force-stop "$VS_PKG" 2>/dev/null
+      _cr_revoke_tracked
       rm -f "$APPS_ACTIVE" 2>/dev/null
     fi
     ;;
