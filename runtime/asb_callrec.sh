@@ -39,16 +39,24 @@
 # and a callrec-only device would otherwise re-bind the same files forever.
 #
 # Two timing rules make the fuse almost never needed:
-#   - The XML binds land ONLY at boot (ASB_CALLREC_BOOT=1 from post-fs-data) or in
-#     the late boot pass (ASB_CALLREC_LATE=1 from service.sh). A live WebUI apply
-#     never mounts them: the card is labeled reboot-to-apply, and a feature XML the
-#     RUNNING system hot-reloads can crash it on the spot (observed: screen dies
-#     the moment the toggle flips, then a bootloop). Toggle OFF still unbinds live.
+#   - The XML binds land ONLY in post-fs-data (ASB_CALLREC_BOOT=1), while zygote and
+#     system_server are not running yet. NEVER in the late pass and NEVER live: a
+#     feature XML swapped under a RUNNING system is hot-reloaded by OPlus services
+#     and crashes them on the spot (observed twice: screen dies at the toggle, and
+#     a bootloop when the late pass re-bound at late_start). The module ships no
+#     my_*/system_ext dirs, so magic mount never shadows these binds - no late
+#     rebind is needed at all. Toggle OFF still unbinds live.
 #   - The oplus_dialer_enable features are added only when the device physically
 #     ships the OPlus dialer stack. Telecom runs INSIDE system_server: enabling
 #     OPlus dialer code paths on a build without the dialer APKs takes the whole
 #     system_server down. The region-lock removals stay unconditional - unhiding a
 #     record entry crashes nothing.
+#
+# The fuse covers EVERYTHING this script can mount at boot - the XML binds AND the
+# prompt-silence binds, for EITHER toggle: the pending marker is dropped before the
+# first mount of a boot whenever a bind-owning toggle is on, so a boot killed by
+# any of these mounts locks the whole tweak down on the next one. Re-arming takes
+# both toggles off, so a half-off state cannot silently reset the guard.
 
 MODID="AutoSystemBoost"
 MODDIR="${MODDIR:-/data/adb/modules/$MODID}"
@@ -401,6 +409,12 @@ _cr_silence_prompts() {
   _sp_empty="$STATE_DIR/callrec_empty.pcm"
   : > "$_sp_empty" 2>/dev/null || return 1
   chmod 0644 "$_sp_empty" 2>/dev/null
+  # The payload inherits the prompt dir's SELinux label: a reader denied by context
+  # would get avc noise instead of silence.
+  _sp_ctx="$(ls -Zd "$LIVE_ROOT/system_ext/etc/recording-prompt" 2>/dev/null | awk '{print $1}')"
+  case "$_sp_ctx" in
+    ?*:?*:?*:?*) chcon "$_sp_ctx" "$_sp_empty" 2>/dev/null || true ;;
+  esac
   : > "$PROMPT_ACTIVE.new" 2>/dev/null
   _sp_any=0
   for _sp_d in "$LIVE_ROOT/system_ext/etc/recording-prompt" \
@@ -657,31 +671,43 @@ case "${1:-apply}" in
     # new OEM ones, and the bind must shadow those, not last release's copy of them.
     asb_callrec_prepare
     _boot_apply="${ASB_CALLREC_BOOT:-0}"
-    _late_apply="${ASB_CALLREC_LATE:-0}"
-    # XML binds are a boot-time act only. A live WebUI apply prepares the patch and
-    # reports pending_boot, but never mounts over files the RUNNING system may
-    # hot-reload - that is the observed instant-crash vector. Unbinding stays live.
-    _may_bind=0
-    if [ "$_boot_apply" = "1" ] || [ "$_late_apply" = "1" ]; then _may_bind=1; fi
-    if [ "$(_cfg callrec_line)" = "1" ] && [ ! -f "$BLOCK" ] && [ ! -f "$CR_BLOCK" ]; then
-      if [ "$_boot_apply" = "1" ] && [ -f "$PENDING" ]; then
-        # We bound these files last boot and boot_completed never came: lockdown.
-        _cr_lockdown
-      elif [ "$_may_bind" = "1" ] && _cr_guard; then
-        # The marker goes down BEFORE the first mount: even a mount that wedges the
-        # boot outright is caught by the next one.
-        [ "$_boot_apply" = "1" ] && : > "$PENDING" 2>/dev/null
-        _cr_bind_all && _log 'action=callrec_bind result=applied'
-      fi
+    _line_on=0;  [ "$(_cfg callrec_line)" = "1" ] && _line_on=1
+    _apps_on=0;  [ "$(_cfg callrec_apps)" = "1" ] && _apps_on=1
+    # Re-arm: BOTH toggles off is the only gesture that resets the fuse - a half-off
+    # state must not silently clear a block the other toggle may have caused.
+    if [ "$_line_on" = "0" ] && [ "$_apps_on" = "0" ]; then
+      rm -f "$CR_BLOCK" "$PENDING" 2>/dev/null
+    fi
+    _blocked=0
+    if [ -f "$BLOCK" ] || [ -f "$CR_BLOCK" ]; then _blocked=1; fi
+
+    # One-strike fuse over EVERYTHING this script mounts at boot (XML and prompt
+    # binds alike, for either toggle): a boot that finds its own marker never
+    # completed the previous one - lockdown, before anything is mounted this boot.
+    if [ "$_boot_apply" = "1" ] && [ "$_blocked" = "0" ] && [ -f "$PENDING" ] \
+       && { [ "$_line_on" = "1" ] || [ "$_apps_on" = "1" ]; }; then
+      _cr_lockdown
+      _blocked=1
+    fi
+
+    # XML binds: post-fs-data ONLY, while the runtime is not up. Never in the late
+    # pass, never live - a running system hot-reloads feature XMLs and dies. The
+    # module ships no my_* dirs, so magic mount never shadows these binds.
+    if [ "$_line_on" = "1" ] && [ "$_blocked" = "0" ] && [ "$_boot_apply" = "1" ] && _cr_guard; then
+      # The marker goes down BEFORE the first mount: even a mount that wedges the
+      # boot outright is caught by the next one.
+      : > "$PENDING" 2>/dev/null
+      _cr_bind_all && _log 'action=callrec_bind result=applied'
     else
       if [ -f "$ACTIVE" ]; then
         _cr_unbind_all && _log 'action=callrec_bind result=removed'
       fi
-      # Toggle off is the re-arm gesture: the fuse and the trial marker reset, so the
-      # next enable is a fresh, guarded trial.
-      [ "$(_cfg callrec_line)" != "1" ] && rm -f "$CR_BLOCK" "$PENDING" 2>/dev/null
     fi
-    if [ ! -f "$BLOCK" ] && [ ! -f "$CR_BLOCK" ] && { [ "$(_cfg callrec_line)" = "1" ] || [ "$(_cfg callrec_apps)" = "1" ]; }; then
+
+    # Prompt silence: audio assets, not hot-reloaded config - safe to assert live,
+    # re-asserted at every boot while either toggle is on.
+    if [ "$_blocked" = "0" ] && { [ "$_line_on" = "1" ] || [ "$_apps_on" = "1" ]; }; then
+      [ "$_boot_apply" = "1" ] && : > "$PENDING" 2>/dev/null
       _cr_silence_prompts && _log 'action=callrec_prompt result=silenced'
     else
       # Toggle off or fuse set: our silence binds must not survive the choice that
@@ -689,8 +715,7 @@ case "${1:-apply}" in
       [ -f "$PROMPT_ACTIVE" ] && _cr_unsilence_prompts && _log 'action=callrec_prompt result=restored'
     fi
     # The messenger half talks to pm/am, which do not exist at post-fs-data yet; the
-    # late pass in service.sh owns it there. It also cannot bootloop anything: it
-    # mounts nothing, so it stays outside the fuse by design.
+    # late pass in service.sh owns it there. It mounts nothing itself.
     [ "$_boot_apply" = "1" ] || _cr_apply_apps
     ;;
   confirm)
