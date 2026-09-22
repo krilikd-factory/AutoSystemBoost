@@ -178,3 +178,5 @@ smart_media_guard|user|webui_standard
 device_bounds_override|internal|engine_or_derived
 ltpo_force|user|webui_standard
 mmfeed_off|user|webui_standard
+callrec_line|user|webui_standard
+callrec_apps|user|webui_standard
