@@ -2377,13 +2377,27 @@ asb_prepare_ltpo_patch() {
 
   # Flip only the switches this table actually carries: a flag absent from the file is
   # one this display stack does not implement, and adding it would be the static-table
-  # mistake all over again. Each of these gates a path that lets the panel drop to its
-  # low refresh rates at idle; the OEM disabled it, LTPO is what the hardware is for.
+  # mistake all over again. Direction one turns panel power-saving paths ON where the
+  # OEM left them off; the list is grown from real stock tables (OP15 verified), never
+  # from a foreign file. Direction two turns the display stack's own telemetry OFF -
+  # those flags feed only logging/collection paths (VRR info records, histogram data,
+  # big-data and shader cache-miss upload), so cutting them is free battery with zero
+  # rendering impact. mvt/touch_frame_change are deliberately untouched: they reshape
+  # the render pipeline and the touch boost, which is a power/feel trade, not a win.
   _lt_n=0
   for _lt_flag in hw_enable sw_enable adfr_enable touch_idle darkmode_enable \
-                  deferred_mode_change normalized_minfps cvt frtc; do
+                  deferred_mode_change normalized_minfps cvt frtc pdfr \
+                  refreshrate_director histogram_enable feature_hybrid_acc \
+                  stablize_enable limit_fps_when_app_exit; do
     if grep -q "\"$_lt_flag\"[[:space:]]*:[[:space:]]*false" "$_lt_payload" 2>/dev/null; then
       sed -i "s/\"$_lt_flag\"[[:space:]]*:[[:space:]]*false/\"$_lt_flag\": true/g" "$_lt_payload" 2>/dev/null || continue
+      _lt_n=$((_lt_n + 1))
+    fi
+  done
+  for _lt_flag in vrr_info_record hist_data_enable big_data re_cache_miss \
+                  collect_re_shader_param; do
+    if grep -q "\"$_lt_flag\"[[:space:]]*:[[:space:]]*true" "$_lt_payload" 2>/dev/null; then
+      sed -i "s/\"$_lt_flag\"[[:space:]]*:[[:space:]]*true/\"$_lt_flag\": false/g" "$_lt_payload" 2>/dev/null || continue
       _lt_n=$((_lt_n + 1))
     fi
   done
@@ -2416,6 +2430,71 @@ asb_prepare_ltpo_patch() {
   echo "${_lt_live}|${_lt_payload}" > /data/adb/asb/ltpo_bind_manifest.txt 2>/dev/null
   echo 'ready' > /data/adb/asb/ltpo_state 2>/dev/null
   ui_print "      + $(printf "${ASB_L_LTPO_READY:-LTPO: display patch ready (%s switch(es)) - off by default, toggle in WebUI (System)}" "$_lt_n")"
+  return 0
+}
+
+asb_prepare_mmfeed_patch() {
+  # Multimedia feedback telemetry: Multimedia_Feedback_List.xml opens the OPlus diag
+  # collector for audio/video/display events (dumps, kernel logs, uploads). Flipping
+  # <isOpen> to false closes the whole subsystem; the per-event table is left as-is.
+  [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
+  mkdir -p /data/adb/asb 2>/dev/null
+
+  _mf_live=""
+  for _mf_cand in /my_product/etc/Multimedia_Feedback_List.xml \
+                  /odm/etc/Multimedia_Feedback_List.xml \
+                  /vendor/etc/Multimedia_Feedback_List.xml \
+                  /system_ext/etc/Multimedia_Feedback_List.xml \
+                  /product/etc/Multimedia_Feedback_List.xml; do
+    [ -f "$_mf_cand" ] && { _mf_live="$_mf_cand"; break; }
+  done
+  if [ -z "$_mf_live" ]; then
+    echo 'unsupported' > /data/adb/asb/mmfeed_state 2>/dev/null
+    rm -f /data/adb/asb/mmfeed_bind_manifest.txt 2>/dev/null
+    return 0
+  fi
+
+  # Unknown format: without exactly one isOpen tag we do not know what we are holding,
+  # and fail-closed means leaving it alone.
+  if [ "$(grep -c '<isOpen>' "$_mf_live" 2>/dev/null)" != "1" ]; then
+    echo 'invalid' > /data/adb/asb/mmfeed_state 2>/dev/null
+    rm -rf /data/adb/asb/mmfeed_patched 2>/dev/null
+    rm -f /data/adb/asb/mmfeed_bind_manifest.txt 2>/dev/null
+    return 0
+  fi
+  if ! grep -q '<isOpen>[[:space:]]*true[[:space:]]*</isOpen>' "$_mf_live" 2>/dev/null; then
+    # Already closed by the OEM (or an earlier patch): nothing to bind.
+    echo 'already' > /data/adb/asb/mmfeed_state 2>/dev/null
+    rm -rf /data/adb/asb/mmfeed_patched 2>/dev/null
+    rm -f /data/adb/asb/mmfeed_bind_manifest.txt 2>/dev/null
+    return 0
+  fi
+
+  _mf_payload="/data/adb/asb/mmfeed_patched${_mf_live}"
+  mkdir -p "$(dirname "$_mf_payload")" 2>/dev/null || return 0
+  cp -f "$_mf_live" "$_mf_payload" 2>/dev/null || return 0
+  sed -i 's|<isOpen>[[:space:]]*true[[:space:]]*</isOpen>|<isOpen>false</isOpen>|' "$_mf_payload" 2>/dev/null || return 0
+
+  # Fail-closed XML sanity: the patch must change exactly the isOpen line and keep the
+  # filter-conf root intact, otherwise the payload must never reach a bind mount.
+  if [ "$(grep -c '<isOpen>' "$_mf_payload" 2>/dev/null)" != "1" ] \
+     || ! grep -q '<isOpen>false</isOpen>' "$_mf_payload" 2>/dev/null \
+     || ! grep -q '<filter-conf>' "$_mf_payload" 2>/dev/null \
+     || ! grep -q '</filter-conf>' "$_mf_payload" 2>/dev/null; then
+    echo 'invalid' > /data/adb/asb/mmfeed_state 2>/dev/null
+    rm -rf /data/adb/asb/mmfeed_patched 2>/dev/null
+    rm -f /data/adb/asb/mmfeed_bind_manifest.txt 2>/dev/null
+    return 0
+  fi
+
+  chmod 0644 "$_mf_payload" 2>/dev/null
+  _mf_ctx="$(ls -Zd "$_mf_live" 2>/dev/null | awk '{print $1}')"
+  case "$_mf_ctx" in
+    ?*:?*:?*:?*) chcon "$_mf_ctx" "$_mf_payload" 2>/dev/null || true ;;
+  esac
+  echo "${_mf_live}|${_mf_payload}" > /data/adb/asb/mmfeed_bind_manifest.txt 2>/dev/null
+  echo 'ready' > /data/adb/asb/mmfeed_state 2>/dev/null
+  ui_print "      + ${ASB_L_MMFEED_READY:-Multimedia telemetry: patch ready - off by default, toggle in WebUI (System)}"
   return 0
 }
 
@@ -2793,7 +2872,7 @@ bt_absvol_mode mglru_hold BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile net_wifi_leave wifi_powersave wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard bt_link_stability ltpo_force "
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile net_wifi_leave wifi_powersave wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard bt_link_stability ltpo_force mmfeed_off "
 
   _migrated=0
   # Which numbering the stored values were written against. Absent means "before schemas
@@ -2889,7 +2968,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable   haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard ltpo_force"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable   haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_compressor dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs anim_speed dsp_outputs gms_trim audio_remove_volume_limit purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard ltpo_force mmfeed_off"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
@@ -3156,6 +3235,10 @@ asb_generate_odm_camera_binds
 # unconditionally - the function itself finds the table or reports the device as
 # unsupported, and the bootloop fuse check inside keeps a flagged device untouched.
 asb_prepare_ltpo_patch
+
+# Multimedia feedback telemetry staging: same device-local pattern as LTPO - clone the
+# stock list, close the collector, bind only while the WebUI toggle says so.
+asb_prepare_mmfeed_patch
 
 # A real install came back with a zero-byte regular file named "vendor" sitting in the module
 # root.
