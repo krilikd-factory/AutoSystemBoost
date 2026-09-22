@@ -93,12 +93,26 @@ grep -q '"\$STATE_DIR/callrec_patched/"\*)' "$SRC" || fail 'payload prefix check
 grep -q '_cfg callrec_line)' "$SRC" || fail 'line toggle gate missing'
 grep -q '_cfg callrec_apps)' "$SRC" || fail 'apps toggle gate missing'
 grep -q 'nsenter -t 1 -m -- mount --bind' "$SRC" || fail 'global-namespace bind missing'
-grep -q 'remount,ro,bind' "$SRC" || fail 'binds are not remounted read-only'
-grep -q '_cr_dialer_stack_present()' "$SRC" || fail 'dialer-stack gate missing'
+! grep -q 'mount -o remount,ro,bind' "$SRC" || fail 'remount,ro,bind crept back in (the one mount op both working references avoid)'
+grep -q '_cr_dialer_stack_present()' "$SRC" || fail 'dialer-stack detection missing (diag info)'
+! grep -q 'oplus_dialer_enable"' "$SRC" || fail 'dialer-enable insertions crept back in (post-boot_completed crash vector)'
 ! grep -q 'ASB_CALLREC_LATE' "$ROOT/service.sh" || fail 'service.sh must not late-bind the XMLs (hot-reload crash vector)'
 ! grep -q 'ASB_CALLREC_LATE' "$SRC" || fail 'engine must not late-bind the XMLs (hot-reload crash vector)'
+grep -q 'sleep 120' "$ROOT/service.sh" || fail 'fuse stability window missing from service.sh (post-boot_completed crashes loop forever without it)'
 grep -q 'ASB_CALLREC_PROC_MOUNTS:-/proc/mounts' "$SRC" || fail 'mounts table not injectable for fixtures'
 grep -q 'ASB_CALLREC_LIVE_ROOT' "$SRC" || fail 'live root not injectable for fixtures'
+
+# --- observability pins: every rejection path must name itself in the log ---
+# (observed on device: toggle on, zero binds, zero log lines - an undebuggable guard)
+grep -q '_CR_GUARD_WHY' "$SRC" || fail 'guard rejections carry no reason code'
+grep -q 'action=callrec_apply boot=' "$SRC" || fail 'apply lifecycle log line missing'
+grep -q 'action=callrec_prepare state=' "$SRC" || fail 'prepare outcome log line missing'
+grep -q 'action=callrec_guard result=reject why=' "$SRC" || fail 'guard reject log line missing'
+grep -q 'result=fail target=' "$SRC" || fail 'per-target bind failure log line missing'
+grep -q 'result=bound target=' "$SRC" || fail 'per-target bind success log line missing (a crashing boot must name its mounts)'
+! grep -q '^  *cp -a ' "$SRC" || fail 'cp -a crept back in (toybox xattr EROFS fragility)'
+grep -q 'not bound:' "$ROOT/system/bin/asbdiag" || fail 'diag does not list unbound manifest entries'
+grep -q 'last callrec log lines' "$ROOT/system/bin/asbdiag" || fail 'diag does not tail the callrec log'
 
 # --- runtime fixture: mocked mount/pm/am, no real radio, package manager or mount ---
 TMP="$(mktemp -d)"
@@ -223,8 +237,10 @@ run prepare
 [ "$(grep -c . "$TMP/state/callrec_line_manifest.txt")" = "4" ] || fail 'expected 4 manifest entries (region, stock, extension dir, app_v2)'
 
 R_PAY="$PAYROOT/my_region/etc/extension/com.oplus.app-features.xml"
-grep -q 'com.android.phone.oplus_dialer_enable' "$R_PAY" || fail 'dialer feature not added (phone)'
-grep -q 'com.android.server.telecom.oplus_dialer_enable' "$R_PAY" || fail 'dialer feature not added (telecom)'
+# The patch is REMOVALS ONLY: the dialer-enable insertions activated OPlus dialer
+# code paths inside system_server that stock EU APKs do not ship - the observed
+# post-boot_completed crash. They must never come back, dialer stack or not.
+! grep -q 'oplus_dialer_enable' "$R_PAY" || fail 'dialer-enable feature inserted (post-boot_completed crash vector)'
 ! grep -q 'no_display_record' "$R_PAY" || fail 'region no_display_record locks not removed'
 grep -q 'some_other_feature' "$R_PAY" || fail 'unrelated region feature lost'
 
@@ -288,19 +304,19 @@ cmp -s "$TMP/live/my_stock/etc/extension/com.oplus.app-features.xml" "$TMP/stock
 cp "$TMP/stock.good" "$TMP/live/my_stock/etc/extension/com.oplus.app-features.xml"
 run prepare
 
-# No OPlus dialer stack on the device: the dialer-enable features must NOT be added
-# (telecom runs inside system_server - enabling OPlus dialer paths without the
-# dialer APKs is the observed instant-crash vector), while the lock removals, which
-# crash nothing, must still apply.
+# The dialer-stack detection is informational only: with or without the stack, the
+# payload is identical removals-only content (the detection result is still recorded
+# for diag and the prepare log).
 mv "$TMP/live/my_product/priv-app" "$TMP/privapp.saved"
 run prepare
-! grep -q 'oplus_dialer_enable' "$R_PAY" || fail 'dialer features added without a dialer stack'
+[ "$(cat "$TMP/state/callrec_dialer_stack")" = 'absent' ] || fail 'dialer stack absence not recorded'
+! grep -q 'oplus_dialer_enable' "$R_PAY" || fail 'dialer-enable inserted without a dialer stack'
 ! grep -q 'no_display_record' "$R_PAY" || fail 'lock removals must still apply without a dialer'
 grep -q 'some_other_feature' "$R_PAY" || fail 'unrelated region feature lost'
 mv "$TMP/privapp.saved" "$TMP/live/my_product/priv-app"
 run prepare
-grep -q 'com.android.phone.oplus_dialer_enable' "$R_PAY" || fail 'dialer features not restored with the stack back'
-grep -q 'com.android.server.telecom.oplus_dialer_enable' "$R_PAY" || fail 'telecom dialer feature not restored with the stack back'
+[ "$(cat "$TMP/state/callrec_dialer_stack")" = 'present' ] || fail 'dialer stack presence not recorded'
+! grep -q 'oplus_dialer_enable' "$R_PAY" || fail 'dialer-enable inserted with the stack present'
 
 # _cr_xml_sane unit: valid passes, truncated and trailing-garbage fail closed.
 sed -n '/^_cr_xml_sane()/,/^}/p' "$SRC" > "$TMP/sane.sh"
@@ -313,6 +329,10 @@ sed -n '/^_cr_xml_sane()/,/^}/p' "$SRC" > "$TMP/sane.sh"
 ( . "$TMP/sane.sh"
   printf '<features>\n<a/>\n</features>\n<extra/>\n' > "$TMP/trail.xml"
   ! _cr_xml_sane "$TMP/trail.xml" ) || fail 'xml_sane accepted content after the root close'
+# A trailing OEM comment after the root close is legal and must pass.
+( . "$TMP/sane.sh"
+  printf '<features>\n<a/>\n</features>\n<!-- oem trailing comment -->\n' > "$TMP/cmt.xml"
+  _cr_xml_sane "$TMP/cmt.xml" ) || fail 'xml_sane rejected a trailing OEM comment'
 
 # === apply: toggle gating, binds, prompt silence, staging ===
 : > "$ASB_CR_LOG"
@@ -338,14 +358,24 @@ echo "$out" | grep -q '^line=pending_boot' || fail 'live apply should report lin
 run apply
 ! grep -q -- "--bind $TMP/state/callrec_patched" "$ASB_CR_LOG" || fail 'late/live apply bound XML payloads'
 
-# The post-fs-data pass (ASB_CALLREC_BOOT=1) is the only one that binds the XMLs.
+# The post-fs-data pass (ASB_CALLREC_BOOT=1) is the only one that binds the XMLs -
+# and it binds ONLY the XMLs: the prompt silence stays out of the boot window (the
+# prompt .pcm files are read lazily when a recording starts, so the late pass can
+# own them on the running system).
 : > "$TMP/mounts"
+: > "$ASB_CR_LOG"
+rm -f "$TMP/state/callrec_prompt.active"   # isolate: earlier live applies asserted it
 ASB_CALLREC_BOOT=1 run apply
 grep -q -- "--bind $R_PAY $TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$ASB_CR_LOG" || fail 'region XML not bound at boot'
 grep -q -- "--bind $TMP/state/callrec_patched$TMP/live/my_product/etc/extension $TMP/live/my_product/etc/extension" "$ASB_CR_LOG" || fail 'extension dir not bound at boot'
+! grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'prompt silence mounted inside the boot window'
 [ -f "$TMP/state/callrec_line.active" ] || fail 'line active marker not written'
-[ -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt active marker not written'
+[ ! -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt silence asserted at post-fs-data'
 [ -f "$TMP/state/callrec_boot_pending" ] || fail 'boot apply did not drop the trial marker'
+# The late pass (plain apply, runtime already up) asserts the silence instead.
+run apply
+grep -q -- "--bind $TMP/state/callrec_empty.pcm $TMP/live/system_ext/etc/recording-prompt/record_start.pcm" "$ASB_CR_LOG" || fail 'late pass did not assert the prompt silence'
+[ -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt active marker not written by the late pass'
 run confirm
 [ ! -f "$TMP/state/callrec_boot_pending" ] || fail 'confirm did not retire the trial marker'
 # Patch-only: the module's magic-mountable tree must stay untouched.
@@ -360,6 +390,20 @@ ASB_CALLREC_BOOT=1 run apply
 ! grep -q -- "--bind $TMP/state/callrec_patched$TMP/live/my_product/etc/extension" "$ASB_CR_LOG" || fail 'directory bind was stacked'
 grep -q -- "--bind $R_PAY" "$ASB_CR_LOG" || fail 'fresh file bind missing'
 run confirm
+: > "$TMP/mounts"
+
+# A late/live apply with the toggle ON must NEVER unbind what the boot pass mounted
+# (the regression: the removal branch fired on every non-boot apply and tore the
+# fresh boot binds down at late_start - toggle on, zero binds, zero log lines).
+printf '%s %s f2fs rw 0 0\n' "$R_PAY" "$TMP/live/my_region/etc/extension/com.oplus.app-features.xml" > "$TMP/mounts"
+[ -f "$TMP/state/callrec_line.active" ] || fail 'setup: line active marker missing'
+: > "$ASB_CR_LOG"
+run apply
+! grep -q 'umount' "$ASB_CR_LOG" || fail 'late apply with toggle ON unbound the boot binds'
+[ -f "$TMP/state/callrec_line.active" ] || fail 'late apply with toggle ON dropped the active marker'
+# ...and every apply leaves its lifecycle trace in the log.
+grep -q 'action=callrec_apply boot=0 line=1 apps=0 blocked=0' "$TMP/state/vendor_mounts.log" || fail 'apply lifecycle line not logged'
+grep -q 'action=callrec_prepare state=ready' "$TMP/state/vendor_mounts.log" || fail 'prepare outcome line not logged'
 : > "$TMP/mounts"
 
 # Toggle off: binds and silence removed, staging pulled back.
@@ -423,23 +467,19 @@ run confirm
 : > "$TMP/mounts"
 : > "$ASB_CR_LOG"
 
-# The fuse covers the prompt-silence binds too: the APPS toggle alone mounts them at
-# boot, so an apps-only boot trial must drop the marker and lock down the same way.
+# The APPS toggle alone mounts NOTHING at boot: the prompt silence moved to the
+# late pass, so an apps-only boot apply drops no trial marker and binds nothing.
+# The fuse only ever covers the line toggle's XML binds now.
 printf 'callrec_line=0\ncallrec_apps=1\n' > "$TMP/mod/config/governor.conf"
-ASB_CALLREC_BOOT=1 run apply
-[ -f "$TMP/state/callrec_boot_pending" ] || fail 'apps-only boot apply dropped no trial marker'
-grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'apps-only boot apply did not silence prompts'
-: > "$TMP/mounts"   # the failed boot: nothing survived, marker still down
 : > "$ASB_CR_LOG"
 ASB_CALLREC_BOOT=1 run apply
-[ -f "$TMP/state/callrec_blocked" ] || fail 'apps-only stale marker did not lock down'
-! grep -q -- '--bind' "$ASB_CR_LOG" || fail 'apps-only lockdown still bound'
-# Re-arm needs BOTH toggles off: with apps still on the block must hold.
+[ ! -f "$TMP/state/callrec_boot_pending" ] || fail 'apps-only boot apply dropped a trial marker (nothing to fuse)'
+! grep -q -- '--bind' "$ASB_CR_LOG" || fail 'apps-only boot apply mounted something in the boot window'
 run apply
-[ -f "$TMP/state/callrec_blocked" ] || fail 'block cleared while a toggle was still on'
+grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'apps-only late pass did not silence prompts'
+# Back to a clean slate for the sections below.
 printf 'callrec_line=0\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
 run apply
-[ ! -f "$TMP/state/callrec_blocked" ] || fail 'both-off did not re-arm the fuse'
 run confirm
 : > "$TMP/mounts"
 : > "$ASB_CR_LOG"
@@ -453,18 +493,33 @@ guard_ok() {
   ( STATE_DIR="$TMP/state" MAN="$TMP/state/callrec_line_manifest.txt" LIVE_ROOT="$TMP/live"
     . "$TMP/guard.sh"; _cr_guard )
 }
+guard_why() {
+  ( STATE_DIR="$TMP/state" MAN="$TMP/state/callrec_line_manifest.txt" LIVE_ROOT="$TMP/live"
+    . "$TMP/guard.sh"; _cr_guard; printf '%s' "$_CR_GUARD_WHY" )
+}
 MANF="$TMP/state/callrec_line_manifest.txt"
 guard_ok || fail 'guard rejected the valid manifest'
+[ "$(guard_why)" = 'ok' ] || fail 'guard did not report ok on the valid manifest'
 cp "$MANF" "$TMP/man.good"
 printf '%s|%s|extra\n' "$TMP/live/x" "$TMP/state/callrec_patched/x" > "$MANF"
 guard_ok && fail 'guard accepted a malformed manifest'
+[ "$(guard_why)" = "malformed:$TMP/live/x" ] || fail 'guard did not name the malformed entry'
 printf '%s|%s\n' "$TMP/live/x" "/etc/passwd" > "$MANF"
 guard_ok && fail 'guard accepted an out-of-bounds payload'
+case "$(guard_why)" in target_not_allowed:*) ;; *) fail 'guard did not name the out-of-bounds target' ;; esac
 printf '%s|%s\n' "/system/etc/hosts" "$R_PAY" > "$MANF"
 guard_ok && fail 'guard accepted an out-of-allowlist target'
+[ "$(guard_why)" = 'target_not_allowed:/system/etc/hosts' ] || fail 'guard did not name the rejected target'
 printf '%s|%s\n' "$TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$TMP/state/elsewhere.xml" > "$MANF"
 printf '<x/>\n' > "$TMP/state/elsewhere.xml"
 guard_ok && fail 'guard accepted a payload outside callrec_patched/'
+case "$(guard_why)" in payload_out_of_bounds:*) ;; *) fail 'guard did not name the out-of-bounds payload' ;; esac
+rm -f "$MANF"
+guard_ok && fail 'guard accepted a missing manifest'
+[ "$(guard_why)" = 'no_manifest' ] || fail 'guard did not report no_manifest'
+: > "$MANF"
+guard_ok && fail 'guard accepted an empty manifest'
+[ "$(guard_why)" = 'empty_manifest' ] || fail 'guard did not report empty_manifest'
 cp "$TMP/man.good" "$MANF"
 guard_ok || fail 'guard rejected the restored valid manifest'
 
