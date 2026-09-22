@@ -97,12 +97,16 @@ if [ -r "$MODDIR/runtime/asb_mmfeed_apply.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_mmfeed_apply.sh" apply >/dev/null 2>&1 || true
 fi
 # Call-recording patch: re-derives the feature-XML patch from the CURRENT live files
-# on every boot (an OTA that rewrote them just gets re-patched), stages the recorder
-# priv-app into the module tree BEFORE magic mount when its toggle is on, and binds
-# only through the same fail-closed manifest contract as LTPO/mmfeed. Both toggles
-# default off; the script itself gates on them and on the bootloop fuse.
+# on every boot (an OTA that rewrote them just gets re-patched) and binds only
+# through the same fail-closed manifest contract as LTPO/mmfeed. Both toggles default
+# off. ASB_CALLREC_BOOT=1 arms the script's OWN one-strike bootloop fuse: the pending
+# marker dropped here is retired by service.sh only after boot_completed, so a boot
+# that dies under these binds is the last one that carries them - the next apply
+# unbinds everything and blocks the tweak until the user re-arms it. The vendor
+# overlay counter cannot be reused for this: it only ticks when the VENDOR_OVERLAY
+# feature gate passes, and a callrec-only device would re-bind forever.
 if [ -r "$MODDIR/runtime/asb_callrec.sh" ]; then
-  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" apply >/dev/null 2>&1 || true
+  ASB_CALLREC_BOOT=1 MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" apply >/dev/null 2>&1 || true
 fi
 # ASB:LOG:BEGIN
 if asb_feature_enabled LOG && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
@@ -271,6 +275,7 @@ if asb_feature_enabled VENDOR_OVERLAY && command -v asb_device_pack_allows >/dev
     # And the call-recording binds/staging are the same class again.
     rm -f /data/adb/asb/callrec_line_manifest.txt /data/adb/asb/callrec_line.active 2>/dev/null
     rm -f /data/adb/asb/callrec_prompt.active /data/adb/asb/callrec_apps.active 2>/dev/null
+    rm -f /data/adb/asb/callrec_boot_pending 2>/dev/null
     rm -rf /data/adb/asb/callrec_patched 2>/dev/null
     echo "ts=$(date +%s) action=block_odm_binds reason=bootloop_protection" >> "$_mounts_log"
   else
