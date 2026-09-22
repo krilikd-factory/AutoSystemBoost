@@ -24,9 +24,19 @@
 # announcement by binding an empty file over /system_ext/etc/recording-prompt/*.pcm -
 # a bind, not a delete, so stock sounds are one umount away.
 #
-# Fail-closed throughout: a malformed manifest, an out-of-allowlist target or an
-# out-of-bounds payload must never become a mount. Same contract as the LTPO and
-# mmfeed bind owners.
+# Fail-closed throughout: a malformed manifest, an out-of-allowlist target, an
+# out-of-bounds payload or a structurally broken XML must never become a mount.
+# Same contract as the LTPO and mmfeed bind owners.
+#
+# Bootloop fuse, OWN and independent (one strike): post-fs-data invokes apply with
+# ASB_CALLREC_BOOT=1. Before the first mount of a boot the apply drops a pending
+# marker; service.sh retires it (confirm) only after sys.boot_completed=1. A boot
+# that finds its own marker still pending means the previous boot with these binds
+# never completed - the patch is the prime suspect, so everything is unbound, the
+# payloads are deleted and callrec_blocked stays down until the user re-arms by
+# switching the toggle off and on again. This fuse does NOT rely on the vendor
+# overlay counter: that one only ticks when the VENDOR_OVERLAY feature gate passes,
+# and a callrec-only device would otherwise re-bind the same files forever.
 
 MODID="AutoSystemBoost"
 MODDIR="${MODDIR:-/data/adb/modules/$MODID}"
@@ -47,6 +57,8 @@ APPS_ACTIVE="$STATE_DIR/callrec_apps.active"
 LINE_STATE="$STATE_DIR/callrec_line_state"
 APPS_STATE="$STATE_DIR/callrec_apps_state"
 BLOCK="$STATE_DIR/vendor_overlay_blocked"
+CR_BLOCK="$STATE_DIR/callrec_blocked"
+PENDING="$STATE_DIR/callrec_boot_pending"
 MOUNTS_LOG="$STATE_DIR/vendor_mounts.log"
 CONF="$MODDIR/config/governor.conf"
 VS_PKG="com.coloros.accessibilityassistant"
@@ -118,14 +130,64 @@ _cr_patch_appv2() {
   done
 }
 
+# Structural well-formedness, fail-closed and toybox-safe: the root tag must open and
+# close, the closing root must be the LAST tag of the document (a truncation never
+# ends that way), and root open/close counts must match (a range-delete that ran to
+# EOF breaks exactly this). grep -c '</' alone passed a file beheaded by a bad block
+# delete - that is how a truncated XML could have reached a bind target.
+_cr_xml_sane() {
+  _x_f="$1"
+  [ -s "$_x_f" ] || return 1
+  grep -q '</' "$_x_f" 2>/dev/null || return 1
+  _x_root="$(awk '
+    /^[[:space:]]*<\?/ { next }
+    /^[[:space:]]*<!--/ { next }
+    match($0, /<[A-Za-z_][A-Za-z0-9_.-]*/) { print substr($0, RSTART + 1, RLENGTH - 1); exit }
+  ' "$_x_f" 2>/dev/null)"
+  [ -n "$_x_root" ] || return 1
+  _x_last="$(awk 'NF { last = $0 } END { print last }' "$_x_f" 2>/dev/null | tr -d ' \t\r')"
+  case "$_x_last" in
+    *"</$_x_root>"*) ;; *) return 1 ;;
+  esac
+  [ "$(grep -c "<$_x_root[ >]" "$_x_f" 2>/dev/null)" = "$(grep -c "</$_x_root>" "$_x_f" 2>/dev/null)" ] || return 1
+  return 0
+}
+
+# Delete ONE paired <app_feature name="X"> ... </app_feature> block, but only when its
+# closing tag is actually found. A sed range-delete that never matches its end pattern
+# silently deletes to EOF and ships a truncated XML; this awk version buffers the
+# block, drops it only on a real close, prints the buffer back verbatim on a runaway
+# or unterminated block (file stays unchanged, cmp later rejects it as a payload) and
+# reports whether anything was deleted. $1 = file, $2 = feature name.
+_cr_delete_block() {
+  _db_f="$1"; _db_name="$2"
+  awk -v name="$_db_name" '
+    !inblk && index($0, "<app_feature name=\"" name "\">") { inblk=1; buf=$0; next }
+    inblk {
+      if (index($0, "</app_feature>")) { inblk=0; dropped=1; next }
+      buf = buf "\n" $0
+      if (length(buf) > 16384) { printf "%s\n", buf; inblk=0; buf="" }
+      next
+    }
+    { print }
+    END {
+      if (inblk) printf "%s\n", buf
+      exit (dropped ? 0 : 1)
+    }
+  ' "$_db_f" > "$_db_f.cr.tmp" 2>/dev/null || { rm -f "$_db_f.cr.tmp" 2>/dev/null; return 1; }
+  mv -f "$_db_f.cr.tmp" "$_db_f" 2>/dev/null || { rm -f "$_db_f.cr.tmp" 2>/dev/null; return 1; }
+  return 0
+}
+
 # /my_stock/etc/extension/com.oplus.app-features.xml: whole MCC blocks that hide the
 # record entry or force the prompt for listed carrier codes.
 _cr_patch_appfeatures_stock() {
   _p="$1"
-  grep -q 'name="com.android.incallui.hide_call_record_mcc"' "$_p" 2>/dev/null && {
-    sed -i '/<app_feature name="com.android.incallui.hide_call_record_mcc">/,/<\/app_feature>/d' "$_p" 2>/dev/null && _cr_n=$((_cr_n + 1)); }
-  grep -q 'name="com.android.incallui.support_call_record_prompt_mcc"' "$_p" 2>/dev/null && {
-    sed -i '/<app_feature name="com.android.incallui.support_call_record_prompt_mcc">/,/<\/app_feature>/d' "$_p" 2>/dev/null && _cr_n=$((_cr_n + 1)); }
+  for _f in com.android.incallui.hide_call_record_mcc \
+            com.android.incallui.support_call_record_prompt_mcc; do
+    grep -q "name=\"$_f\"" "$_p" 2>/dev/null || continue
+    _cr_delete_block "$_p" "$_f" && _cr_n=$((_cr_n + 1))
+  done
 }
 
 # Stage one patched pair: $1 live path (fixture-rooted), $2 patcher. Writes the
@@ -143,8 +205,7 @@ _cr_stage() {
     return 1
   fi
   # Structural sanity, fail-closed: a truncated or non-XML payload must never bind.
-  [ -s "$_s_pay" ] || { rm -f "$_s_pay" 2>/dev/null; return 1; }
-  grep -q '</' "$_s_pay" 2>/dev/null || { rm -f "$_s_pay" 2>/dev/null; return 1; }
+  _cr_xml_sane "$_s_pay" || { rm -f "$_s_pay" 2>/dev/null; return 1; }
   chmod 0644 "$_s_pay" 2>/dev/null
   _s_ctx="$(ls -Zd "$_s_live" 2>/dev/null | awk '{print $1}')"
   case "$_s_ctx" in
@@ -233,7 +294,7 @@ _cr_guard() {
     case "$_g_p" in "$STATE_DIR/callrec_patched/"*) ;; *) return 1 ;; esac
     [ -s "$_g_p" ] || return 1
     [ -e "$_g_t" ] || return 1
-    grep -q '</' "$_g_p" 2>/dev/null || return 1
+    _cr_xml_sane "$_g_p" || return 1
     _g_n=$((_g_n + 1))
   done < "$MAN"
   [ "$_g_n" -gt 0 ]
@@ -525,6 +586,20 @@ _cr_apply_apps() {
   return 0
 }
 
+# One-strike lockdown: the previous boot carried our binds and never reached
+# boot_completed. Everything we own comes down, the payloads are deleted so a
+# re-prepare cannot resurrect them silently, and the block file keeps the tweak
+# inert until the user deliberately re-arms it (toggle off clears the block).
+_cr_lockdown() {
+  _cr_unbind_all >/dev/null 2>&1
+  _cr_unsilence_prompts >/dev/null 2>&1
+  rm -f "$MAN" "$ACTIVE" "$PROMPT_ACTIVE" "$PROMPT_ACTIVE.new" "$PENDING" 2>/dev/null
+  rm -rf "$STATE_DIR/callrec_patched" 2>/dev/null
+  : > "$CR_BLOCK" 2>/dev/null
+  echo 'blocked_bootloop' > "$LINE_STATE" 2>/dev/null
+  _log 'action=callrec_bind result=BLOCKED reason=bootloop_fuse strikes=1'
+}
+
 # --- entry points ------------------------------------------------------------------
 
 case "${1:-apply}" in
@@ -535,26 +610,47 @@ case "${1:-apply}" in
     # The XML patch is re-derived on every apply: after an OTA the live files are the
     # new OEM ones, and the bind must shadow those, not last release's copy of them.
     asb_callrec_prepare
-    if [ "$(_cfg callrec_line)" = "1" ] && [ ! -f "$BLOCK" ] && _cr_guard; then
-      _cr_bind_all && _log 'action=callrec_bind result=applied'
+    _boot_apply="${ASB_CALLREC_BOOT:-0}"
+    if [ "$(_cfg callrec_line)" = "1" ] && [ ! -f "$BLOCK" ] && [ ! -f "$CR_BLOCK" ]; then
+      if [ "$_boot_apply" = "1" ] && [ -f "$PENDING" ]; then
+        # We bound these files last boot and boot_completed never came: lockdown.
+        _cr_lockdown
+      elif _cr_guard; then
+        # The marker goes down BEFORE the first mount: even a mount that wedges the
+        # boot outright is caught by the next one.
+        [ "$_boot_apply" = "1" ] && : > "$PENDING" 2>/dev/null
+        _cr_bind_all && _log 'action=callrec_bind result=applied'
+      fi
     else
       if [ -f "$ACTIVE" ]; then
         _cr_unbind_all && _log 'action=callrec_bind result=removed'
       fi
+      # Toggle off is the re-arm gesture: the fuse and the trial marker reset, so the
+      # next enable is a fresh, guarded trial.
+      [ "$(_cfg callrec_line)" != "1" ] && rm -f "$CR_BLOCK" "$PENDING" 2>/dev/null
     fi
-    if [ ! -f "$BLOCK" ] && { [ "$(_cfg callrec_line)" = "1" ] || [ "$(_cfg callrec_apps)" = "1" ]; }; then
+    if [ ! -f "$BLOCK" ] && [ ! -f "$CR_BLOCK" ] && { [ "$(_cfg callrec_line)" = "1" ] || [ "$(_cfg callrec_apps)" = "1" ]; }; then
       _cr_silence_prompts && _log 'action=callrec_prompt result=silenced'
     else
       # Toggle off or fuse set: our silence binds must not survive the choice that
       # removed them - the stock announcement is what the file plays again.
       [ -f "$PROMPT_ACTIVE" ] && _cr_unsilence_prompts && _log 'action=callrec_prompt result=restored'
     fi
-    _cr_apply_apps
+    # The messenger half talks to pm/am, which do not exist at post-fs-data yet; the
+    # late pass in service.sh owns it there. It also cannot bootloop anything: it
+    # mounts nothing, so it stays outside the fuse by design.
+    [ "$_boot_apply" = "1" ] || _cr_apply_apps
+    ;;
+  confirm)
+    # service.sh calls this once sys.boot_completed=1: the binds survived a full
+    # boot, so the one-strike trial marker retires.
+    rm -f "$PENDING" 2>/dev/null
     ;;
   remove)
     # Uninstall path: drop whatever we own regardless of the toggle state.
     _cr_unbind_all && _log 'action=callrec_bind result=removed reason=uninstall'
     _cr_unsilence_prompts && _log 'action=callrec_prompt result=restored reason=uninstall'
+    rm -f "$PENDING" "$CR_BLOCK" 2>/dev/null
     if [ -f "$APPS_ACTIVE" ]; then
       _rm_dir="${ASB_CALLREC_USER_DIR:-/data/user/0}/$VS_PKG"
       [ -d "$_rm_dir" ] && _cr_prefs_apply "$_rm_dir/shared_prefs/translatePreferences.xml" off 2>/dev/null
@@ -563,7 +659,9 @@ case "${1:-apply}" in
     fi
     ;;
   status)
-    if [ ! -f "$MAN" ]; then
+    if [ -f "$CR_BLOCK" ]; then
+      echo 'line=blocked'
+    elif [ ! -f "$MAN" ]; then
       echo 'line=patch_absent'
     elif [ "$(_cfg callrec_line)" != "1" ]; then
       echo 'line=off'
