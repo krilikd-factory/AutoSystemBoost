@@ -35,15 +35,20 @@
 #
 # Bootloop fuse, OWN and independent (one strike): post-fs-data invokes apply with
 # ASB_CALLREC_BOOT=1. Before the first mount of a boot the apply drops a pending
-# marker; service.sh retires it (confirm) only after sys.boot_completed=1. A boot
-# that finds its own marker still pending means the previous boot with these binds
-# never completed - the patch is the prime suspect, so everything is unbound, the
-# payloads are deleted and callrec_blocked stays down until the user re-arms by
-# switching the toggle off and on again. This fuse does NOT rely on the vendor
-# overlay counter: that one only ticks when the VENDOR_OVERLAY feature gate passes,
-# and a callrec-only device would otherwise re-bind the same files forever.
+# marker; service.sh retires it (confirm) only 120s AFTER sys.boot_completed=1 -
+# the stability window. A boot that finds its own marker still pending means the
+# previous boot with these binds did not survive the window - the patch is the
+# prime suspect, so everything is unbound, the payloads are deleted and
+# callrec_blocked stays down until the user re-arms by switching the toggle off
+# and on again. The window matters: this tweak's observed failure shape was a
+# crash AFTER boot_completed (screen dies, reboot, repeat), which a plain
+# boot_completed confirm can never catch - every boot "completed", retired the
+# marker and bound again. Worst case now is ONE bad boot, never a loop. This fuse
+# does NOT rely on the vendor overlay counter: that one only ticks when the
+# VENDOR_OVERLAY feature gate passes, and a callrec-only device would otherwise
+# re-bind the same files forever.
 #
-# Two timing rules make the fuse almost never needed:
+# Three timing/content rules make the fuse almost never needed:
 #   - The XML binds land ONLY in post-fs-data (ASB_CALLREC_BOOT=1), while zygote and
 #     system_server are not running yet. NEVER in the late pass and NEVER live: a
 #     feature XML swapped under a RUNNING system is hot-reloaded by OPlus services
@@ -51,11 +56,18 @@
 #     a bootloop when the late pass re-bound at late_start). The module ships no
 #     my_*/system_ext dirs, so magic mount never shadows these binds - no late
 #     rebind is needed at all. Toggle OFF still unbinds live.
-#   - The oplus_dialer_enable features are added only when the device physically
-#     ships the OPlus dialer stack. Telecom runs INSIDE system_server: enabling
-#     OPlus dialer code paths on a build without the dialer APKs takes the whole
-#     system_server down. The region-lock removals stay unconditional - unhiding a
-#     record entry crashes nothing.
+#   - The patch is REMOVALS ONLY. The oplus_dialer_enable feature insertions were
+#     dropped: they switch phone/telecom (telecom runs INSIDE system_server) onto
+#     OPlus dialer code paths that the or965-style modules can only afford because
+#     they ALSO ship patched InCallUI/Contacts/Mms APKs. Patch-only on stock EU
+#     APKs, those flags activate paths that are not fully there and the boot dies
+#     after boot_completed - the persistent-bootloop mechanism. Removing a lock row
+#     activates nothing and crashes nothing.
+#   - The prompt-silence binds stay OUT of the boot window entirely: the prompt
+#     .pcm files are read lazily when a recording starts, so the late pass asserts
+#     the silence on the running system. The only mounts ever made at post-fs-data
+#     are the feature-XML binds, with the plain nsenter bind the LTPO/mmfeed owners
+#     use (no remount,ro,bind - the one operation both working references avoid).
 #
 # The fuse covers EVERYTHING this script can mount at boot - the XML binds AND the
 # prompt-silence binds, for EITHER toggle: the pending marker is dropped before the
@@ -108,12 +120,11 @@ _log() {
 _cr_n=0
 _CR_DIALER=0
 
-# Does this device physically ship the OPlus dialer stack? The oplus_dialer_enable
-# features switch Phone and Telecom (telecom runs INSIDE system_server) onto OPlus
-# dialer code paths; on a build without the dialer APKs those paths have nothing to
-# run and can take system_server down with them - exactly the "screen dies the
-# moment the toggle flips" failure. Globs stay OPlus-flavored on purpose: a Google
-# or AOSP dialer must NOT count as the stack these features drive.
+# Detects whether the device physically ships the OPlus dialer stack. Since V65-52
+# this is INFORMATIONAL ONLY (diag prints it): the dialer-enable feature flags are
+# no longer inserted anywhere (see _cr_patch_appfeatures_region), so nothing gates
+# on the answer. Globs stay OPlus-flavored on purpose: a Google or AOSP dialer must
+# not count as the OPlus stack.
 _cr_dialer_stack_present() {
   for _d in "$LIVE_ROOT"/my_product/priv-app "$LIVE_ROOT"/my_product/app \
             "$LIVE_ROOT"/my_stock/priv-app "$LIVE_ROOT"/my_stock/app \
@@ -142,23 +153,14 @@ _cr_patch_appfeatures_region() {
     sed -i '/<app_feature name="com.android.incallui.no_display_record"[^>]*\/>/d' "$_p" 2>/dev/null && _cr_n=$((_cr_n + 1)); }
   grep -q 'name="com.android.phone.no_display_record"' "$_p" 2>/dev/null && {
     sed -i '/<app_feature name="com.android.phone.no_display_record"[^>]*\/>/d' "$_p" 2>/dev/null && _cr_n=$((_cr_n + 1)); }
-  # The dialer-enable features are added only when the OPlus dialer stack is
-  # physically present (see _cr_dialer_stack_present); the lock removals above are
-  # unconditional - unhiding a record entry crashes nothing.
-  [ "$_CR_DIALER" = "1" ] || return 0
-  # Insert after <extend_features> with awk, not sed: toybox sed does not honor \n in
-  # the replacement, and this runs on-device. No <extend_features> line means this XML
-  # is not the feature list we know - then nothing is inserted and nothing is counted.
-  grep -q 'name="com.android.phone.oplus_dialer_enable"' "$_p" 2>/dev/null || {
-    awk '{ print } /^[[:space:]]*<extend_features>[[:space:]]*$/ { print "\t<app_feature name=\"com.android.phone.oplus_dialer_enable\"/>" }' \
-      "$_p" > "$_p.cr.tmp" 2>/dev/null && mv -f "$_p.cr.tmp" "$_p" 2>/dev/null \
-      && grep -q 'com.android.phone.oplus_dialer_enable' "$_p" && _cr_n=$((_cr_n + 1))
-    rm -f "$_p.cr.tmp" 2>/dev/null; }
-  grep -q 'name="com.android.server.telecom.oplus_dialer_enable"' "$_p" 2>/dev/null || {
-    awk '{ print } /^[[:space:]]*<extend_features>[[:space:]]*$/ { print "\t<app_feature name=\"com.android.server.telecom.oplus_dialer_enable\"/>" }' \
-      "$_p" > "$_p.cr.tmp" 2>/dev/null && mv -f "$_p.cr.tmp" "$_p" 2>/dev/null \
-      && grep -q 'com.android.server.telecom.oplus_dialer_enable' "$_p" && _cr_n=$((_cr_n + 1))
-    rm -f "$_p.cr.tmp" 2>/dev/null; }
+  # NO feature insertions here, on purpose. The or965-style modules add
+  # com.android.phone/com.android.server.telecom oplus_dialer_enable flags, but those
+  # modules also SHIP patched InCallUI/Contacts/Mms APKs that implement the OPlus
+  # dialer paths the flags switch on. We are patch-only: on a GLOBAL-EU build with
+  # stock EU APKs the flags activate code paths that are not fully there, telecom
+  # runs INSIDE system_server, and the boot dies after boot_completed - the observed
+  # persistent bootloop (screen dies, reboot, repeat). Region-lock REMOVALS are
+  # inert: they unhide a record entry and crash nothing.
 }
 
 # /my_product/etc/extension/<CC>/appfeature.country.dynamic_features.xml: the five
@@ -200,11 +202,15 @@ _cr_xml_sane() {
     match($0, /<[A-Za-z_][A-Za-z0-9_.-]*/) { print substr($0, RSTART + 1, RLENGTH - 1); exit }
   ' "$_x_f" 2>/dev/null)"
   [ -n "$_x_root" ] || return 1
-  _x_last="$(awk 'NF { last = $0 } END { print last }' "$_x_f" 2>/dev/null | tr -d ' \t\r')"
-  case "$_x_last" in
-    *"</$_x_root>"*) ;; *) return 1 ;;
-  esac
-  [ "$(grep -c "<$_x_root[ >]" "$_x_f" 2>/dev/null)" = "$(grep -c "</$_x_root>" "$_x_f" 2>/dev/null)" ] || return 1
+  # The closing root must be the last TAG of the document: only blank lines or
+  # trailing OEM comments may follow it (a truncation never ends that way).
+  _x_close="$(awk -v r="</$_x_root>" 'index($0, r) { last = NR } END { print last + 0 }' "$_x_f" 2>/dev/null)"
+  [ "$_x_close" -gt 0 ] || return 1
+  _x_tail="$(awk -v n="$_x_close" 'NR > n && NF && $0 !~ /^[[:space:]]*<!--/ { bad = 1 } END { print bad + 0 }' "$_x_f" 2>/dev/null)"
+  [ "$_x_tail" = "0" ] || return 1
+  # Root open/close counts, anchored to line starts so an attribute value or a
+  # comment mentioning the tag cannot skew them.
+  [ "$(grep -c "^[[:space:]]*<$_x_root[ >]" "$_x_f" 2>/dev/null)" = "$(grep -c "^[[:space:]]*</$_x_root>" "$_x_f" 2>/dev/null)" ] || return 1
   return 0
 }
 
@@ -281,7 +287,13 @@ _cr_stage_dir() {
   [ -d "$_sd_live" ] || return 1
   _sd_pay="$STATE_DIR/callrec_patched$_sd_live"
   mkdir -p "$(dirname "$_sd_pay")" 2>/dev/null || return 1
-  cp -a "$_sd_live" "$_sd_pay" 2>/dev/null || { rm -rf "$_sd_pay" 2>/dev/null; return 1; }
+  # cp -r, not cp -a: toybox cp -a can fail copying xattrs off a read-only
+  # partition (EROFS) and then the whole stage is skipped with nothing bound.
+  cp -r "$_sd_live" "$_sd_pay" 2>/dev/null || { rm -rf "$_sd_pay" 2>/dev/null; return 1; }
+  chmod -R u=rwX,go=rX "$_sd_pay" 2>/dev/null
+  # Fail-closed completeness: a partial copy must never become a bind payload.
+  [ "$(find "$_sd_live" -type f 2>/dev/null | wc -l)" = "$(find "$_sd_pay" -type f 2>/dev/null | wc -l)" ] \
+    || { rm -rf "$_sd_pay" 2>/dev/null; return 1; }
   for _sd_f in "$_sd_pay"/*/appfeature.country.dynamic_features.xml; do
     [ -f "$_sd_f" ] || continue
     _cr_patch_country "$_sd_f"
@@ -344,6 +356,9 @@ asb_callrec_prepare() {
       echo 'unsupported' > "$LINE_STATE" 2>/dev/null
     fi
   fi
+  _prep_entries=0
+  [ -f "$MAN" ] && _prep_entries="$(grep -c '|' "$MAN" 2>/dev/null)"
+  _log "action=callrec_prepare state=$(cat "$LINE_STATE" 2>/dev/null) entries=${_prep_entries:-0} dialer=${_CR_DIALER:-0} patched=$_cr_n"
   return 0
 }
 
@@ -370,26 +385,34 @@ _cr_target_allowed() {
   return 1
 }
 
-# Fail-closed manifest validation, mirroring the mmfeed owner.
+# Fail-closed manifest validation, mirroring the mmfeed owner. Every rejection
+# names itself in _CR_GUARD_WHY: a silent guard is an undebuggable guard (observed:
+# toggle on, zero binds, zero log lines).
 _cr_guard() {
-  [ -f "$MAN" ] || return 1
+  _CR_GUARD_WHY='ok'
+  [ -f "$MAN" ] || { _CR_GUARD_WHY='no_manifest'; return 1; }
   _g_n=0
   while IFS='|' read -r _g_t _g_p _g_x; do
     case "$_g_t$_g_p$_g_x" in ''|'#'*) continue ;; esac
-    [ -n "$_g_t" ] && [ -n "$_g_p" ] && [ -z "$_g_x" ] || return 1
-    _cr_target_allowed "$_g_t" || return 1
-    case "$_g_p" in "$STATE_DIR/callrec_patched/"*) ;; *) return 1 ;; esac
-    [ -e "$_g_t" ] || return 1
+    if [ -z "$_g_t" ] || [ -z "$_g_p" ] || [ -n "$_g_x" ]; then
+      _CR_GUARD_WHY="malformed:$_g_t"; return 1
+    fi
+    _cr_target_allowed "$_g_t" || { _CR_GUARD_WHY="target_not_allowed:$_g_t"; return 1; }
+    case "$_g_p" in "$STATE_DIR/callrec_patched/"*) ;; *)
+      _CR_GUARD_WHY="payload_out_of_bounds:$_g_p"; return 1 ;;
+    esac
+    [ -e "$_g_t" ] || { _CR_GUARD_WHY="target_missing:$_g_t"; return 1; }
     if [ -d "$_g_p" ]; then
       # Directory payload (the country-XML tree): its files were validated one by
       # one at stage time; here the dir itself just has to exist and be ours.
       :
     else
-      [ -s "$_g_p" ] || return 1
-      _cr_xml_sane "$_g_p" || return 1
+      [ -s "$_g_p" ] || { _CR_GUARD_WHY="payload_empty:$_g_p"; return 1; }
+      _cr_xml_sane "$_g_p" || { _CR_GUARD_WHY="payload_not_xml:$_g_p"; return 1; }
     fi
     _g_n=$((_g_n + 1))
   done < "$MAN"
+  [ "$_g_n" -gt 0 ] || _CR_GUARD_WHY='empty_manifest'
   [ "$_g_n" -gt 0 ]
 }
 
@@ -402,14 +425,16 @@ _bind_one() {
   # Already bound: a directory payload cannot be cmp'd - take the mount table's word
   # and never stack a second bind over the first.
   _is_bound "$_b_t" && { [ -d "$_b_p" ] && return 0; cmp -s "$_b_t" "$_b_p" 2>/dev/null && return 0; }
+  # Plain bind, exactly like the LTPO/mmfeed owners (proven on-device) and the
+  # field-proven or965 module: NO remount,ro,bind afterwards. That extra remount was
+  # the one mount operation both working references avoid - nobody legitimately
+  # writes feature XMLs, so its protection was theoretical and its cost is one more
+  # mount syscall in init's namespace during early boot.
   if command -v nsenter >/dev/null 2>&1 \
      && nsenter -t 1 -m -- mount --bind "$_b_p" "$_b_t" 2>/dev/null; then
-    # Best effort: the payload lives on writable /data, the view of it must not be.
-    nsenter -t 1 -m -- mount -o remount,ro,bind "$_b_t" 2>/dev/null || true
     return 0
   fi
-  mount --bind "$_b_p" "$_b_t" 2>/dev/null \
-    && { mount -o remount,ro,bind "$_b_t" 2>/dev/null || true; }
+  mount --bind "$_b_p" "$_b_t" 2>/dev/null
 }
 
 _unbind_one() {
@@ -429,6 +454,11 @@ _cr_bind_all() {
     if _bind_one "$_a_t" "$_a_p"; then
       _a_any=1
       : > "$ACTIVE" 2>/dev/null
+      # Per-target success line: if the boot dies under these binds, the surviving
+      # log names exactly what was mounted before the crash.
+      _log "action=callrec_bind result=bound target=$_a_t"
+    else
+      _log "action=callrec_bind result=fail target=$_a_t"
     fi
   done < "$MAN"
   [ "$_a_any" = "1" ]
@@ -725,37 +755,57 @@ case "${1:-apply}" in
     _blocked=0
     if [ -f "$BLOCK" ] || [ -f "$CR_BLOCK" ]; then _blocked=1; fi
 
-    # One-strike fuse over EVERYTHING this script mounts at boot (XML and prompt
-    # binds alike, for either toggle): a boot that finds its own marker never
-    # completed the previous one - lockdown, before anything is mounted this boot.
+    # One-strike fuse over EVERYTHING this script mounts at boot (the XML binds):
+    # a boot that finds its own marker never survived the stability window of the
+    # previous one - lockdown, before anything is mounted this boot. The marker
+    # retires 120s AFTER sys.boot_completed (see service.sh), so a crash that comes
+    # late in the boot - after boot_completed, the exact shape this tweak's failures
+    # had - still trips the fuse instead of looping forever.
     if [ "$_boot_apply" = "1" ] && [ "$_blocked" = "0" ] && [ -f "$PENDING" ] \
        && { [ "$_line_on" = "1" ] || [ "$_apps_on" = "1" ]; }; then
       _cr_lockdown
       _blocked=1
     fi
+    # Lifecycle line first: every apply leaves a trace, so an empty log is itself
+    # a diagnosis (the script never ran), not a mystery.
+    _log "action=callrec_apply boot=$_boot_apply line=$_line_on apps=$_apps_on blocked=$_blocked"
 
     # XML binds: post-fs-data ONLY, while the runtime is not up. Never in the late
     # pass, never live - a running system hot-reloads feature XMLs and dies. The
     # module ships no my_* dirs, so magic mount never shadows these binds.
-    if [ "$_line_on" = "1" ] && [ "$_blocked" = "0" ] && [ "$_boot_apply" = "1" ] && _cr_guard; then
-      # The marker goes down BEFORE the first mount: even a mount that wedges the
-      # boot outright is caught by the next one.
-      : > "$PENDING" 2>/dev/null
-      _cr_bind_all && _log 'action=callrec_bind result=applied'
+    # A non-boot apply with the toggle ON must leave the boot binds ALONE: the late
+    # service.sh pass used to fall into the removal branch and unbind what
+    # post-fs-data had just mounted (observed: toggle on, zero binds, zero logs).
+    if [ "$_line_on" = "1" ] && [ "$_blocked" = "0" ]; then
+      if [ "$_boot_apply" = "1" ]; then
+        if _cr_guard; then
+          # The marker goes down BEFORE the first mount: even a mount that wedges
+          # the boot outright is caught by the next one.
+          : > "$PENDING" 2>/dev/null
+          _cr_bind_all && _log 'action=callrec_bind result=applied'
+        else
+          _log "action=callrec_guard result=reject why=${_CR_GUARD_WHY:-unknown}"
+        fi
+      fi
     else
       if [ -f "$ACTIVE" ]; then
         _cr_unbind_all && _log 'action=callrec_bind result=removed'
       fi
     fi
 
-    # Prompt silence: audio assets, not hot-reloaded config - safe to assert live,
-    # re-asserted at every boot while either toggle is on.
-    if [ "$_blocked" = "0" ] && { [ "$_line_on" = "1" ] || [ "$_apps_on" = "1" ]; }; then
-      [ "$_boot_apply" = "1" ] && : > "$PENDING" 2>/dev/null
+    # Prompt silence: audio assets, not hot-reloaded config - safe to assert on a
+    # running system, so it deliberately stays OUT of the boot window: the only
+    # mounts this script ever makes at post-fs-data are the feature-XML binds. The
+    # late service.sh pass (and any live apply) asserts the silence instead; the
+    # prompt files are read lazily when a recording starts, long after boot.
+    if [ "$_blocked" = "0" ] && [ "$_boot_apply" = "0" ] \
+       && { [ "$_line_on" = "1" ] || [ "$_apps_on" = "1" ]; }; then
       _cr_silence_prompts && _log 'action=callrec_prompt result=silenced'
-    else
+    elif [ "$_blocked" = "1" ] || { [ "$_line_on" = "0" ] && [ "$_apps_on" = "0" ]; }; then
       # Toggle off or fuse set: our silence binds must not survive the choice that
-      # removed them - the stock announcement is what the file plays again.
+      # removed them - the stock announcement is what the file plays again. A boot
+      # apply with a toggle ON falls through untouched: the late pass asserts the
+      # silence once the runtime is up.
       [ -f "$PROMPT_ACTIVE" ] && _cr_unsilence_prompts && _log 'action=callrec_prompt result=restored'
     fi
     # The messenger half talks to pm/am, which do not exist at post-fs-data yet; the
@@ -763,8 +813,8 @@ case "${1:-apply}" in
     [ "$_boot_apply" = "1" ] || _cr_apply_apps
     ;;
   confirm)
-    # service.sh calls this once sys.boot_completed=1: the binds survived a full
-    # boot, so the one-strike trial marker retires.
+    # service.sh calls this 120s AFTER sys.boot_completed=1: the binds survived a
+    # full boot plus the stability window, so the one-strike trial marker retires.
     rm -f "$PENDING" 2>/dev/null
     ;;
   remove)
