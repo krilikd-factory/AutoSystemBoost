@@ -151,13 +151,17 @@ case "$_cc" in
     if [ "$_congctl_ok" != "1" ]; then
       _act="$(ip route show 2>/dev/null | grep -m1 '^default' | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
       if [ -n "$_act" ]; then
-        _want="$(_resolve_for net_congestion "$(_iface_kind "$_act")")"
+        _akind="$(_iface_kind "$_act")"
+        _want="$(_resolve_for net_congestion "$_akind")"
         case "$_want" in
           ''|auto) : ;;
           *) case " $_avail " in
                *" $_want "*)
+                 # Name the kind, not "active": the verdict mapper keys on wifi/mobile,
+                 # and an anonymous token meant the badge stayed "not_applied" while the
+                 # link really did get its algorithm through the global switch.
                  _sysctl_w net.ipv4.tcp_congestion_control "$_want" && \
-                   _out="$_out cc[active:$_act]=$_want(global-fallback)" ;;
+                   _out="$_out cc[$_akind:$_act]=$_want(global-fallback)" ;;
              esac ;;
         esac
       fi
@@ -170,6 +174,23 @@ case "$_cc" in
           [ -e /proc/sys/net/ipv6/tcp_congestion_control ] && \
             _sysctl_w net.ipv6.tcp_congestion_control "$_cc"
           _out="$_out congestion=$_cc"
+          # Per-link verdicts when the kernel cannot do per-route congctl: a kind whose
+          # own request equals the value the whole system just got IS served - by the
+          # global knob, which covers every connection including the modem's. A kind
+          # asking for something different cannot be served on this kernel at all.
+          # Staying silent filed both halves as "not_applied" on a phone where mobile
+          # traffic genuinely ran the requested algorithm (OP15 field log, V65).
+          if [ "$_congctl_ok" != "1" ]; then
+            for _k2 in wifi mobile; do
+              _k2want="$(_cfg "net_congestion_$_k2")"
+              case "$_k2want" in ''|auto) continue ;; esac
+              if [ "$_k2want" = "$_cc" ]; then
+                _out="$_out cc[$_k2]=$_cc(global)"
+              else
+                _out="$_out cc[$_k2]=$_k2want-unsupported"
+              fi
+            done
+          fi
         else
           _out="$_out congestion=FAILED"
         fi
@@ -555,8 +576,10 @@ mkdir -p /data/adb/asb 2>/dev/null
       congestion=FAILED)            printf 'net_congestion=failed\n' ;;
       congestion=*)                 printf 'net_congestion=ok\n' ;;
       cc\[wifi*-unavailable*)       printf 'net_congestion_wifi=unavailable\n' ;;
+      cc\[wifi*-unsupported*)       printf 'net_congestion_wifi=unsupported\n' ;;
       cc\[wifi*)                    printf 'net_congestion_wifi=ok\n' ;;
       cc\[mobile*-unavailable*)     printf 'net_congestion_mobile=unavailable\n' ;;
+      cc\[mobile*-unsupported*)     printf 'net_congestion_mobile=unsupported\n' ;;
       cc\[mobile*)                  printf 'net_congestion_mobile=ok\n' ;;
       qdisc=*-pending)              printf 'net_qdisc=pending\n' ;;
       qdisc=*-unsupported)          printf 'net_qdisc=unsupported\n' ;;

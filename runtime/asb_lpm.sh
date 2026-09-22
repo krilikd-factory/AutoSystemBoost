@@ -153,12 +153,21 @@ STATE_TAG="${MODE}|handover=${HANDOVER_FAST}|active=${HANDOVER_ACTIVE}"
 # a device left with wakeup disabled after the module goes away is a phone that silently
 # stops receiving overnight - the worst failure this file could produce.
 _ASB_WAKEUP_STATE=/data/adb/asb/lpm_wakeup_prev
+# Result of the last gate pass. On a CPH2745 the gate runs every night and matches ZERO
+# nodes (no IPA/rmnet wakeup-class entries, no writable interface wakeup attrs), which in
+# a field log is indistinguishable from "never ran". This file makes the difference
+# visible: asbdiag and the day log can say "ran, nothing gateable" instead of guessing.
+_ASB_GATE_RESULT=/data/adb/asb/lpm_gate_result
+# Test hook: fixtures point this at a synthetic sysfs tree. Unset on a real device.
+_SYSCLASS="${ASB_LPM_SYSCLASS:-/sys/class}"
 
 _lpm_wakeup_gate() {
   # $1 = "disabled" to gate, "enabled" to release
   _want="$1"
-  [ -d /sys/class/net ] || return 0
+  [ -d "$_SYSCLASS/net" ] || return 0
   mkdir -p /data/adb/asb 2>/dev/null
+  _g_ws=0
+  _g_if=0
   # Wi-Fi as well as the modem path.
   #
   # The first version covered rmnet* only, because the capture that prompted it was all IPA
@@ -191,7 +200,7 @@ _lpm_wakeup_gate() {
   # /sys/class/wakeup is the canonical index: every wakeup source registers there with a
   # name file, whatever its device path. Matching on the name the wake_reason log itself
   # prints means the lookup follows the kernel rather than my model of it.
-  for _wsdir in /sys/class/wakeup/wakeup*; do
+  for _wsdir in "$_SYSCLASS"/wakeup/wakeup*; do
     [ -d "$_wsdir" ] || continue
     _wsname="$(cat "$_wsdir/name" 2>/dev/null)"
     case "$_wsname" in
@@ -204,6 +213,7 @@ _lpm_wakeup_gate() {
     [ -n "$_ipa" ] && [ -e "$_ipa" ] || continue
     _cur="$(cat "$_ipa" 2>/dev/null)"
     case "$_cur" in enabled|disabled) : ;; *) continue ;; esac
+    _g_ws=$((_g_ws + 1))
     if [ "$1" = "disabled" ]; then
       grep -q "^$_ipa=" "$_ASB_WAKEUP_STATE" 2>/dev/null || \
         printf '%s=%s\n' "$_ipa" "$_cur" >> "$_ASB_WAKEUP_STATE" 2>/dev/null
@@ -211,11 +221,12 @@ _lpm_wakeup_gate() {
     echo "$1" > "$_ipa" 2>/dev/null || true
   done
 
-  for _if in /sys/class/net/rmnet* /sys/class/net/wlan*; do
+  for _if in "$_SYSCLASS"/net/rmnet* "$_SYSCLASS"/net/wlan*; do
     [ -e "$_if/device/power/wakeup" ] || continue
     _n="$(basename "$_if")"
     _cur="$(cat "$_if/device/power/wakeup" 2>/dev/null)"
     case "$_cur" in enabled|disabled) : ;; *) continue ;; esac
+    _g_if=$((_g_if + 1))
     if [ "$_want" = "disabled" ]; then
       # Record the first time only: a second pass must not overwrite the real baseline
       # with a value this script itself wrote.
@@ -223,6 +234,10 @@ _lpm_wakeup_gate() {
     fi
     echo "$_want" > "$_if/device/power/wakeup" 2>/dev/null || true
   done
+  # "Ran and matched nothing" must be on disk, not only in my head: the day-log snapshot
+  # has no other way to tell a no-op gate from a gate that never fired.
+  printf 'ts=%s action=%s wakeup_nodes=%s net_ifaces=%s\n' \
+    "$(date +%s 2>/dev/null)" "$1" "$_g_ws" "$_g_if" > "$_ASB_GATE_RESULT" 2>/dev/null
   return 0
 }
 
@@ -239,7 +254,7 @@ _lpm_wakeup_restore() {
       ''|*[!A-Za-z0-9_]*) continue ;;
     esac
     case "$_v" in enabled|disabled) : ;; *) continue ;; esac
-    [ -e "/sys/class/net/$_n/device/power/wakeup" ] &&       echo "$_v" > "/sys/class/net/$_n/device/power/wakeup" 2>/dev/null || true
+    [ -e "$_SYSCLASS/net/$_n/device/power/wakeup" ] &&       echo "$_v" > "$_SYSCLASS/net/$_n/device/power/wakeup" 2>/dev/null || true
   done < "$_ASB_WAKEUP_STATE"
   rm -f "$_ASB_WAKEUP_STATE" 2>/dev/null
   return 0
