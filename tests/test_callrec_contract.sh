@@ -94,7 +94,8 @@ grep -q '_cfg callrec_apps)' "$SRC" || fail 'apps toggle gate missing'
 grep -q 'nsenter -t 1 -m -- mount --bind' "$SRC" || fail 'global-namespace bind missing'
 grep -q 'remount,ro,bind' "$SRC" || fail 'binds are not remounted read-only'
 grep -q '_cr_dialer_stack_present()' "$SRC" || fail 'dialer-stack gate missing'
-grep -q 'ASB_CALLREC_LATE=1' "$ROOT/service.sh" || fail 'service.sh does not mark the late apply'
+! grep -q 'ASB_CALLREC_LATE' "$ROOT/service.sh" || fail 'service.sh must not late-bind the XMLs (hot-reload crash vector)'
+! grep -q 'ASB_CALLREC_LATE' "$SRC" || fail 'engine must not late-bind the XMLs (hot-reload crash vector)'
 grep -q 'ASB_CALLREC_PROC_MOUNTS:-/proc/mounts' "$SRC" || fail 'mounts table not injectable for fixtures'
 grep -q 'ASB_CALLREC_LIVE_ROOT' "$SRC" || fail 'live root not injectable for fixtures'
 
@@ -323,12 +324,23 @@ grep -q -- "--bind $TMP/state/callrec_empty.pcm $TMP/live/system_ext/etc/recordi
 out="$(run status)"
 echo "$out" | grep -q '^line=pending_boot' || fail 'live apply should report line=pending_boot'
 
-# The late boot pass (service.sh, ASB_CALLREC_LATE=1) is where the XML binds land.
-ASB_CALLREC_LATE=1 run apply
-grep -q -- "--bind $R_PAY $TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$ASB_CR_LOG" || fail 'region XML not bound on the late pass'
-grep -q -- "--bind $C_PAY $TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml" "$ASB_CR_LOG" || fail 'country XML not bound on the late pass'
+# A plain late/live apply still must not bind: XML binds are an EARLY-BOOT act only.
+# The module ships no my_* dirs, so magic mount never shadows the early binds and no
+# late rebind exists - rebinding at late_start hot-swaps configs under a running
+# system_server, which is the exact crash vector this tweak had.
+run apply
+! grep -q -- "--bind $TMP/state/callrec_patched" "$ASB_CR_LOG" || fail 'late/live apply bound XML payloads'
+
+# The post-fs-data pass (ASB_CALLREC_BOOT=1) is the only one that binds the XMLs.
+: > "$TMP/mounts"
+ASB_CALLREC_BOOT=1 run apply
+grep -q -- "--bind $R_PAY $TMP/live/my_region/etc/extension/com.oplus.app-features.xml" "$ASB_CR_LOG" || fail 'region XML not bound at boot'
+grep -q -- "--bind $C_PAY $TMP/live/my_product/etc/extension/RU/appfeature.country.dynamic_features.xml" "$ASB_CR_LOG" || fail 'country XML not bound at boot'
 [ -f "$TMP/state/callrec_line.active" ] || fail 'line active marker not written'
 [ -f "$TMP/state/callrec_prompt.active" ] || fail 'prompt active marker not written'
+[ -f "$TMP/state/callrec_boot_pending" ] || fail 'boot apply did not drop the trial marker'
+run confirm
+[ ! -f "$TMP/state/callrec_boot_pending" ] || fail 'confirm did not retire the trial marker'
 # Patch-only: the module's magic-mountable tree must stay untouched.
 [ ! -e "$TMP/mod/system" ] || fail 'module system/ tree was touched - patch-only contract broken'
 
@@ -389,6 +401,27 @@ grep -q -- "--bind $R_PAY" "$ASB_CR_LOG" || fail 're-armed trial did not bind'
 # Back to a clean slate for the sections below.
 printf 'callrec_line=0\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
 run apply
+run confirm
+: > "$TMP/mounts"
+: > "$ASB_CR_LOG"
+
+# The fuse covers the prompt-silence binds too: the APPS toggle alone mounts them at
+# boot, so an apps-only boot trial must drop the marker and lock down the same way.
+printf 'callrec_line=0\ncallrec_apps=1\n' > "$TMP/mod/config/governor.conf"
+ASB_CALLREC_BOOT=1 run apply
+[ -f "$TMP/state/callrec_boot_pending" ] || fail 'apps-only boot apply dropped no trial marker'
+grep -q -- "--bind $TMP/state/callrec_empty.pcm" "$ASB_CR_LOG" || fail 'apps-only boot apply did not silence prompts'
+: > "$TMP/mounts"   # the failed boot: nothing survived, marker still down
+: > "$ASB_CR_LOG"
+ASB_CALLREC_BOOT=1 run apply
+[ -f "$TMP/state/callrec_blocked" ] || fail 'apps-only stale marker did not lock down'
+! grep -q -- '--bind' "$ASB_CR_LOG" || fail 'apps-only lockdown still bound'
+# Re-arm needs BOTH toggles off: with apps still on the block must hold.
+run apply
+[ -f "$TMP/state/callrec_blocked" ] || fail 'block cleared while a toggle was still on'
+printf 'callrec_line=0\ncallrec_apps=0\n' > "$TMP/mod/config/governor.conf"
+run apply
+[ ! -f "$TMP/state/callrec_blocked" ] || fail 'both-off did not re-arm the fuse'
 run confirm
 : > "$TMP/mounts"
 : > "$ASB_CR_LOG"
