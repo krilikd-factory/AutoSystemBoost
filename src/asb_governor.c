@@ -4196,7 +4196,7 @@ static int make_uevent_fd(void) {
 
 /* Split recv from parse so the drain loop can also bucket each event by subsystem;
  * the old shape read the buffer inside the parser and threw the source away. */
-static int recv_uevent(int fd, char *buf, int cap) {
+static int recv_uevent(int fd, char *buf, size_t cap) {
     int n = recv(fd, buf, cap - 1, MSG_DONTWAIT);
     if (n <= 0) return -1;
     buf[n] = '\0';
