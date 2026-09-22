@@ -469,14 +469,15 @@ _cr_astate="$(cat /data/adb/asb/callrec_apps_state 2>/dev/null)"
 _cr_line="$(grep -m1 '^callrec_line=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
 _cr_apps="$(grep -m1 '^callrec_apps=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
 NOTE "line: staged state: ${_cr_lstate:-none}   toggle callrec_line=${_cr_line:-0}"
-NOTE " OPlus dialer stack: $(cat /data/adb/asb/callrec_dialer_stack 2>/dev/null || echo unknown) (dialer-enable features are added only when present)"
+NOTE " OPlus dialer stack: $(cat /data/adb/asb/callrec_dialer_stack 2>/dev/null || echo unknown) (informational - dialer-enable flags are NOT inserted: patch-only)"
 if [ -f /data/adb/asb/callrec_blocked ]; then
   V "callrec bootloop fuse" "clear" "BLOCKED"
-  NOTE " a boot with the callrec binds never completed - the tweak unbound itself and"
-  NOTE " stays blocked until you switch callrec_line off and on again in the WebUI"
+  NOTE " a boot with the callrec binds did not survive the 2-minute stability window -"
+  NOTE " the tweak unbound itself and stays blocked until you switch callrec_line"
+  NOTE " off and on again in the WebUI"
 fi
 if [ -f /data/adb/asb/callrec_boot_pending ]; then
-  NOTE " boot trial marker present: this boot has not confirmed yet (normal during boot)"
+  NOTE " boot trial marker present: this boot is still inside the 2-minute stability window"
 fi
 if [ -f /data/adb/asb/callrec_line_manifest.txt ]; then
   _cr_n=0; _cr_bound=0
@@ -494,12 +495,21 @@ if [ -f /data/adb/asb/callrec_line_manifest.txt ]; then
           && NOTE "  bound, content matches: $_cr_t" \
           || V "callrec patch live ($_cr_t)" "match" "differs"
       fi
+    else
+      NOTE "  not bound: $_cr_t"
     fi
   done < /data/adb/asb/callrec_line_manifest.txt
   NOTE "manifest entries: $_cr_n, bound now: $_cr_bound"
   if [ "$_cr_line" = "1" ] && [ "$_cr_bound" -eq 0 ]; then
     V "callrec line binds active (toggle is ON)" "bound" "not bound"
-    NOTE " toggle is on but nothing is mounted - check vendor_mounts.log for callrec_bind lines"
+    NOTE " toggle is on but nothing is mounted - the callrec lines below name the cause"
+  fi
+  _cr_log="$(grep 'callrec' /data/adb/asb/vendor_mounts.log 2>/dev/null | tail -6)"
+  if [ -n "$_cr_log" ]; then
+    NOTE "last callrec log lines:"
+    echo "$_cr_log" | while IFS= read -r _cr_l; do NOTE "  $_cr_l"; done
+  else
+    NOTE "no callrec lines in vendor_mounts.log - the apply never ran (check module install)"
   fi
 elif [ "$_cr_lstate" = "already" ]; then
   NOTE "no manifest: this device's feature XMLs already ship open - nothing to patch"
