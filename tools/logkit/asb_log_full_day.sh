@@ -878,6 +878,14 @@ lk_emit_phase_summary() {
       {
         ph=$1; dur=($3-$2); dpct=($4-$5);
         D[ph]+=dur; DP[ph]+=dpct; N[ph]++;
+        # Count phases where the battery GAINED charge.
+        #
+        # A charger connected mid-phase does not change the phase label, so a screen-off
+        # stretch can end with more charge than it started: one capture showed "sleep
+        # 206 min, -0.29 %/h", which then dragged the whole sleep row down to 0.19 %/h and
+        # read like the best night on record. Averaging a charging window into a discharge
+        # figure is how a phone gets credited for power it was given.
+        if (dpct < 0) { CHG[ph]++; CHGD[ph]+=dur }
         # Temperature averaged over the phase, weighted by sample duration - the same
         # basis as pct/h beside it. It was the peak, so one brief spike described a
         # whole night: a capture read "sleep cpuT 67" while the trace behind it sat
@@ -940,6 +948,8 @@ lk_emit_phase_summary() {
           printf "%-15s %8.1f %7d %7.2f%1s %6d %9.1f %8d %8d %9d %7d %9d %8s\n", \
             p, durm, DP[p], rate, conf, (MAD[p]>0?MA[p]/MAD[p]:0), ((RX[p]+TX[p])/1048576.0), (TD[p]>0?CT[p]/TD[p]:0), (TD[p]>0?SF[p]/TD[p]:0), (P6D[p]>0?P6[p]/P6D[p]/1000:0), gavg, TH[p], aws;
         }
+        for (ph in CHG) if (CHG[ph] > 0)
+          printf "  ^ %s: %d of %d samples gained charge (%.0f min) - a charger was connected inside the phase; its pct/h is not a discharge rate\n", ph, CHG[ph], N[ph], CHGD[ph]/60;
       }
     ' "$_all" | sort -k4 -rn
     awk -F'\t' '
@@ -1457,6 +1467,15 @@ while : ; do
   # hourly: full state snapshot + interim reports
   if [ $(( _now - _last_snapshot )) -ge "$LK_SNAPSHOT_S" ]; then
     lk_snapshot_state "snapshot_${_now}"
+    # Refresh the per-UID counters every hour, not only at the very end.
+    #
+    # The end capture lives in lk_finalize, which only runs when the full 24 h elapses or
+    # the capture is stopped cleanly. In practice the folder gets collected after a few
+    # hours, so every bundle so far carried netstats_uid_start.txt and nothing to diff it
+    # against - the one thing these counters exist for.
+    #
+    # "latest" is overwritten each hour, so a bundle pulled at any moment has two points.
+    lk_netstats_uid_capture "latest"
     lk_snapshot_kernel "hourly"
     lk_snapshot_network "hourly"
     lk_snapshot_audio "hourly"
