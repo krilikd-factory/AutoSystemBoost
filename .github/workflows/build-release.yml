@@ -598,7 +598,6 @@ jobs:
             "runtime/asb_wifi_fallback.sh" \
             "runtime/asb_ltpo_apply.sh" \
             "runtime/asb_mmfeed_apply.sh" \
-            "runtime/asb_callrec.sh" \
             "runtime/asb_stock_policy.sh" \
             "runtime/asb_overlay_guard.sh" \
             "runtime/asb_device_pack_manifest.sh" \
