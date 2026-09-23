@@ -242,7 +242,10 @@ run prepare
 # Binding the directory relabelled every file in it with the directory's SELinux context
 # and crashed system_server on device - the bootloop fuse caught it. Each country file is
 # now its own entry with its own label: RU and GB here, plus region, stock and app_v2.
-[ "$(grep -c . "$TMP/state/callrec_line_manifest.txt")" = "5" ] || fail 'expected 5 manifest entries (region, stock, app_v2, RU, GB)'
+# 4 entries: region, stock, RU, GB. app_v2.xml is never staged - removing its disable
+# entries enabled the stock InCallUI and Contacts at boot and bootlooped the device.
+[ "$(grep -c . "$TMP/state/callrec_line_manifest.txt")" = "4" ] || fail 'expected 4 manifest entries (region, stock, RU, GB)'
+grep -q 'app_v2.xml|' "$TMP/state/callrec_line_manifest.txt" && fail 'app_v2.xml must never be bound - it enables the stock dialer' 
 grep -q '/extension|' "$TMP/state/callrec_line_manifest.txt" && fail 'the extension directory must never be bound as a whole' 
 
 R_PAY="$PAYROOT/my_region/etc/extension/com.oplus.app-features.xml"
@@ -262,9 +265,9 @@ C_PAY="$PAYROOT/my_product/etc/extension/RU/appfeature.country.dynamic_features.
 ! grep -q 'no_display_record\|not_support_record\|support_record_prompt' "$C_PAY" || fail 'country locks not removed'
 grep -q 'keep_this_one' "$C_PAY" || fail 'unrelated country feature lost'
 
+# app_v2.xml is never staged, so no payload may exist for it at all.
 V_PAY="$PAYROOT/my_stock/etc/config/app_v2.xml"
-! grep -q 'pkg="com.android.contacts"\|pkg="com.android.incallui"\|pkg="com.oplus.blacklistapp"\|pkg="com.oplus.phonenoareainquire"\|pkg="com.android.mms"' "$V_PAY" || fail 'app_v2 disable rows not removed'
-grep -q 'pkg="com.unrelated.app"' "$V_PAY" || fail 'unrelated app_v2 row lost'
+[ ! -e "$V_PAY" ] || fail 'app_v2.xml payload was staged - it enables the stock dialer at boot'
 
 # Stock files untouched: only payloads carry the patch.
 grep -q 'no_display_record' "$TMP/live/my_region/etc/extension/com.oplus.app-features.xml" || fail 'live region file was modified'
