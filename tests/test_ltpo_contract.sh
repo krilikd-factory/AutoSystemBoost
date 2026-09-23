@@ -37,8 +37,10 @@ grep -q 'asb_prepare_ltpo_patch()' "$INSTALL" || fail 'install staging function 
 grep -q '^asb_prepare_ltpo_patch$' "$INSTALL" || fail 'staging function never called'
 grep -q 'ltpo_patched' "$INSTALL" || fail 'payload staging path missing'
 grep -q 'ltpo_bind_manifest.txt' "$INSTALL" || fail 'manifest write missing'
-grep -q 'ASB_L_LTPO_READY' "$ROOT/common/englishtext.sh" || fail 'English install string missing'
-grep -q 'ASB_L_LTPO_READY' "$ROOT/common/russiantext.sh" || fail 'Russian install string missing'
+# The installer no longer announces LTPO: the tweak ships off, and a "patch ready" line
+# during install reads as if something had been switched on. Staging itself still runs and
+# is asserted above; the WebUI card reports the state when the user goes looking.
+! grep -q 'ASB_L_LTPO_READY' "$ROOT/common/install.sh" || fail 'installer still prints an LTPO line'
 # The payload must NOT live under a magic-mountable module path: that would be always-on.
 if grep -q 'MODPATH/my_product' "$INSTALL"; then
   fail 'payload staged under a magic-mount path - that bypasses the toggle'
