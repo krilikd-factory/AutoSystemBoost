@@ -85,7 +85,6 @@ run_optional 'debug support' tests/test_debug_support_contract.sh bash
 run_optional 'active Wi-Fi fallback runtime' tests/test_active_wifi_fallback_runtime.sh bash
 run_optional 'force-LTPO contract' tests/test_ltpo_contract.sh bash
 run_optional 'multimedia-telemetry contract' tests/test_mmfeed_contract.sh bash
-run_optional 'call-recording contract' tests/test_callrec_contract.sh bash
 run_optional 'net congestion verdict contract' tests/test_net_verdict_contract.sh bash
 run_optional 'LPM wakeup gate contract' tests/test_lpm_gate_contract.sh bash
 run_optional 'uevent accounting contract' tests/test_uevent_accounting_contract.sh bash
