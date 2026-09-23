@@ -2392,14 +2392,42 @@ for _pp in /sys/devices/system/cpu/cpufreq/policy*; do
 done
 _pol_ids="$(echo $_pol_ids | tr ' ' '\n' | sort -n | tr '\n' ' ')"
 P "  governor slot mapping (physical policy -> slot):"
-_first=""; _last=""
-for _id in $_pol_ids; do [ -z "$_first" ] && _first="$_id"; _last="$_id"; done
-for _id in $_pol_ids; do
-  if [ "$_id" = "$_first" ]; then P "    policy$_id -> slot0 (little)"
-  elif [ "$_id" = "$_last" ]; then P "    policy$_id -> slot2 (prime)"
-  else P "    policy$_id -> slot1 (big) [gets BATTERY/BALANCED_CPU_MAX_BIG cap]"; fi
-done
-# per-core: which cluster + online state
+# Read the map the governor publishes instead of re-deriving it.
+#
+# The old rule (first policy slot0, last policy slot2) disagreed with the governor on
+# two-cluster phones, where the second policy is slot1 and slot2 is empty. The report
+# said "policy6 -> slot2 (prime)" while the governor ran the prime as slot1 - the line
+# that should explain the cap numbers contradicted them. The re-derivation stays only
+# as a fallback for a governor too old to publish slot_policy_ids.
+_spm="$(grep -m1 '^slot_policy_ids=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+case "$_spm" in
+  *,*,*)
+    _sn=0; _snames="little mid prime"
+    _ncl=0; for _sp in $(echo "$_spm" | tr ',' ' '); do [ "$_sp" -ge 0 ] 2>/dev/null && _ncl=$((_ncl+1)); done
+    for _sp in $(echo "$_spm" | tr ',' ' '); do
+      if [ "$_sp" -ge 0 ] 2>/dev/null; then
+        # Name by position among the populated slots: the highest populated slot is
+        # always the prime, whatever its index.
+        _role=little
+        [ "$_sn" -gt 0 ] && _role=mid
+        _hi=-1; _k=0; for _q in $(echo "$_spm" | tr ',' ' '); do [ "$_q" -ge 0 ] 2>/dev/null && _hi=$_k; _k=$((_k+1)); done
+        [ "$_sn" -eq "$_hi" ] && [ "$_ncl" -gt 1 ] && _role=prime
+        P "    policy$_sp -> slot$_sn ($_role)"
+      else
+        P "    slot$_sn -> (empty)"
+      fi
+      _sn=$((_sn+1))
+    done ;;
+  *)
+    _first=""; _last=""
+    for _id in $_pol_ids; do [ -z "$_first" ] && _first="$_id"; _last="$_id"; done
+    for _id in $_pol_ids; do
+      if [ "$_id" = "$_first" ]; then P "    policy$_id -> slot0 (little)"
+      elif [ "$_id" = "$_last" ]; then P "    policy$_id -> slot2 (prime)"
+      else P "    policy$_id -> slot1 (big)"; fi
+    done
+    P "    (reconstructed - governor did not publish slot_policy_ids)" ;;
+esac
 P "  PER-CORE map:"
 for _c in /sys/devices/system/cpu/cpu[0-9]*; do
   _cn=$(basename "$_c")
