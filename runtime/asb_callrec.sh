@@ -342,12 +342,20 @@ asb_callrec_prepare() {
   if [ -f "$_cr_f" ]; then _cr_seen=1; _cr_stage "$_cr_f" _cr_patch_appfeatures_stock || true; fi
   _cr_d="$LIVE_ROOT/my_product/etc/extension"
   if [ -d "$_cr_d" ]; then _cr_seen=1; _cr_stage_dir "$_cr_d" || true; fi
-  for _cr_f in "$LIVE_ROOT/my_stock/etc/config/app_v2.xml" \
-               "$LIVE_ROOT/my_region/etc/config/app_v2.xml"; do
-    [ -f "$_cr_f" ] || continue
-    _cr_seen=1
-    _cr_stage "$_cr_f" _cr_patch_appv2 || true
-  done
+  # app_v2.xml is deliberately NOT patched - this is what bootlooped the device.
+  #
+  # Removing its <disable pkg="..."> entries for com.android.incallui, com.android.contacts,
+  # com.android.mms, com.oplus.blacklistapp and com.oplus.phonenoareainquire ENABLES those
+  # packages at boot. On a global OxygenOS build they are disabled for a reason: the
+  # stock copies are not wired to run as the device's dialer. InCallUI binds to the
+  # Telecom service inside system_server, so enabling an incompatible one at boot takes
+  # system_server down with it - the bootloop the fuse kept catching after the directory
+  # bind was already fixed.
+  #
+  # The working reference module removes the same entries, but ships its own Contacts,
+  # InCallUI, Mms and BlackListApp APKs in priv-app so the packages it enables are
+  # working ones. This module ships no APKs by design, so it must not enable them.
+  # Only the feature flags are patched; the stock in-call UI stays exactly as shipped.
 
   if [ -s "$MAN.new" ]; then
     mv -f "$MAN.new" "$MAN" 2>/dev/null
@@ -372,10 +380,10 @@ asb_callrec_prepare() {
 # the fixture root relocates the same suffixes under its sandbox.
 _cr_target_allowed() {
   case "$1" in
+    # app_v2.xml is deliberately absent: binding it enabled the stock InCallUI and
+    # Contacts at boot and crashed system_server. See the staging note above.
     /my_region/etc/extension/com.oplus.app-features.xml|\
-    /my_stock/etc/extension/com.oplus.app-features.xml|\
-    /my_stock/etc/config/app_v2.xml|\
-    /my_region/etc/config/app_v2.xml) return 0 ;;
+    /my_stock/etc/extension/com.oplus.app-features.xml) return 0 ;;
     # One country file, never the directory. The directory used to be allowed here and
     # was bound whole; that relabelled every file under it and crashed system_server.
     # [A-Z][A-Z]* keeps this to a country code segment - a path that climbs out with ../
@@ -387,9 +395,7 @@ _cr_target_allowed() {
   [ -n "$LIVE_ROOT" ] || return 1
   case "$1" in
     "$LIVE_ROOT"/my_region/etc/extension/com.oplus.app-features.xml|\
-    "$LIVE_ROOT"/my_stock/etc/extension/com.oplus.app-features.xml|\
-    "$LIVE_ROOT"/my_stock/etc/config/app_v2.xml|\
-    "$LIVE_ROOT"/my_region/etc/config/app_v2.xml) return 0 ;;
+    "$LIVE_ROOT"/my_stock/etc/extension/com.oplus.app-features.xml) return 0 ;;
     "$LIVE_ROOT"/my_product/etc/extension/[A-Z][A-Z]*/appfeature.country.dynamic_features.xml)
       case "$1" in *..*) return 1 ;; esac
       return 0 ;;
