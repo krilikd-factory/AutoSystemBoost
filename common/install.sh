@@ -2429,7 +2429,8 @@ asb_prepare_ltpo_patch() {
   esac
   echo "${_lt_live}|${_lt_payload}" > /data/adb/asb/ltpo_bind_manifest.txt 2>/dev/null
   echo 'ready' > /data/adb/asb/ltpo_state 2>/dev/null
-  ui_print "      + $(printf "${ASB_L_LTPO_READY:-LTPO: display patch ready (%s switch(es)) - off by default, toggle in WebUI (System)}" "$_lt_n")"
+  # Staged silently: the tweak ships off, so announcing a "patch ready" during install
+  # reads like something was enabled. The WebUI card shows the state when it matters.
   return 0
 }
 
@@ -3250,7 +3251,9 @@ asb_prepare_mmfeed_patch
 _cr_old="/data/adb/modules/AutoSystemBoost/runtime/asb_callrec.sh"
 if [ -f "$_cr_old" ]; then
   MODDIR="/data/adb/modules/AutoSystemBoost" sh "$_cr_old" remove >/dev/null 2>&1 || true
-  ui_print "      + $(printf "${ASB_L_CALLREC_GONE:-Call recording removed - previous state reverted}")"
+  # Silent on purpose: the revert is bookkeeping for a feature that no longer exists,
+  # and a line about call recording in the install log only raises the question of why
+  # a battery module mentions it at all.
 fi
 rm -f /data/adb/asb/callrec_line_manifest.txt /data/adb/asb/callrec_line.active \
       /data/adb/asb/callrec_prompt.active /data/adb/asb/callrec_apps.active \
