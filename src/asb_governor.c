@@ -2146,6 +2146,16 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      *
      * Snapping here makes desired-versus-effective answer the question it is meant to:
      * did our request survive, or did something else overrule it. */
+    /* Publish the slot -> policy map this governor actually uses.
+     *
+     * asbdiag reconstructed it with its own rule - first policy slot0, last policy slot2 -
+     * which disagrees with cpu_topology_discover for two clusters: there the second
+     * policy is slot1 and slot2 is empty. On a two-cluster phone the report printed
+     * "policy6 -> slot2 (prime)" while every rail, cap and desired/effective value used
+     * slot1 for the prime - so the one line meant to explain the numbers contradicted
+     * them. -1 marks an empty slot. */
+    fprintf(f, "slot_policy_ids=%d,%d,%d\n",
+            g_cpu_policy_ids[0], g_cpu_policy_ids[1], g_cpu_policy_ids[2]);
     fprintf(f, "desired_cpu_max0=%d\ndesired_cpu_maxp=%d\n",
             (int)cpu_snap_freq(0, (long)fsm->current_caps.cpu_max[0]),
             (int)cpu_snap_freq(1, (long)fsm->current_caps.cpu_max[1]));
