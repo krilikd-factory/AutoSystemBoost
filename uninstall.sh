@@ -430,7 +430,6 @@ fi
 [ -f "$MODDIR/runtime/asb_mmfeed_apply.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_mmfeed_apply.sh" remove >/dev/null 2>&1 || true
 # Same for the call-recording binds and the silenced announcement prompts; the
 # messenger recorder is switched off via its prefs, its package and data stay.
-[ -f "$MODDIR/runtime/asb_callrec.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" remove >/dev/null 2>&1 || true
 rm -rf /data/adb/asb 2>/dev/null
 
 # Remove the module's own persistent properties.

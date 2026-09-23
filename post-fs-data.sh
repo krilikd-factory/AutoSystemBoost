@@ -96,20 +96,6 @@ fi
 if [ -r "$MODDIR/runtime/asb_mmfeed_apply.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_mmfeed_apply.sh" apply >/dev/null 2>&1 || true
 fi
-# Call-recording patch: re-derives the feature-XML patch from the CURRENT live files
-# on every boot (an OTA that rewrote them just gets re-patched) and binds only
-# through the same fail-closed manifest contract as LTPO/mmfeed. Both toggles default
-# off. ASB_CALLREC_BOOT=1 arms the script's OWN one-strike bootloop fuse: the pending
-# marker dropped here is retired by service.sh only 120s AFTER boot_completed (the
-# stability window - this tweak's crashes came after boot_completed, which a plain
-# confirm could never catch), so a boot that dies under these binds is the last one
-# that carries them - the next apply unbinds everything and blocks the tweak until
-# the user re-arms it. The vendor overlay counter cannot be reused for this: it only
-# ticks when the VENDOR_OVERLAY feature gate passes, and a callrec-only device would
-# re-bind forever.
-if [ -r "$MODDIR/runtime/asb_callrec.sh" ]; then
-  ASB_CALLREC_BOOT=1 MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_callrec.sh" apply >/dev/null 2>&1 || true
-fi
 # ASB:LOG:BEGIN
 if asb_feature_enabled LOG && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
 asb_persist_safe persist.vendor.radio.adb_log_on 0
