@@ -707,8 +707,20 @@ if [ -r "$_state" ]; then
     _ov_vo="$(_rget governor_vendor_overrides "$_state")"
     case "$_ov_vo" in ''|*[!0-9]*) _ov_vo=0 ;; esac
     _wpt=$(( _ov_w / _ov_t ))
-    if [ "$_ov_vo" -gt "$_ov_t" ]; then
-      P "    writes per transition: $_wpt - inflated by $_ov_vo vendor-override rewrites; not a chatter signal while vendor contention dominates"
+    # governor_vendor_overrides is NOT a write count.
+    #
+    # It rises once per evaluation while the governor is passive - asb_governor.c only
+    # increments it under g_cap_vendor_passive - and passive means ASB is deliberately NOT
+    # writing the cap the vendor owns. This used to print "inflated by N vendor-override
+    # rewrites", which on a field capture read 1509 rewrites against 317 writes in total:
+    # impossible, and it blamed the ratio on writes that never happened.
+    #
+    # So the ratio is judged on real writes only, and the override figure is reported for
+    # what it is - time spent deferring to the vendor.
+    _ov_pas="$(_rget cap_vendor_passive "$_state")"
+    if [ "$_ov_pas" = "1" ] && [ "$_ov_vo" -gt 0 ] 2>/dev/null; then
+      P "    writes per transition: $_wpt  ($_ov_w writes / $_ov_t transitions)"
+      P "    vendor-owned ticks   : $_ov_vo spent passive - ASB deferred to the vendor cap, no write"
     elif [ "$_wpt" -gt 8 ]; then
       P "    writes per transition: $_wpt (8+ with little vendor contention suggests the ladder is chattering)"
     else
