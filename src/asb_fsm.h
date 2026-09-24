@@ -2242,13 +2242,25 @@ if (!can_leave &&
      * and never consulted; 1 Mbit/s is well above keepalive chatter and well below any
      * real download. */
     m->misc.rmnet_rx_bps < 125000L) {
-                int prime_lo = g_cpu_slot_hwmin[2];
+                /* The prime is the HIGHEST populated slot, not slot 2.
+                 *
+                 * This hardcoded slot 2. cpu_topology_discover puts a two-cluster phone's prime in
+                 * slot 1 and leaves slot 2 empty, so on the OnePlus 15 prime_lo read the empty slot
+                 * as 0, the cap was written to a slot with no policy, and the writer skipped it. The
+                 * whole screen-off prime cap was a no-op on every two-cluster device - which is why
+                 * the 1665 -> 1401 reduction never appeared in a single capture.
+                 *
+                 * A single-cluster device has no separate prime to lower, so it is left alone. */
+                int _ps = (g_cpu_policy_ids[2] >= 0) ? 2 : ((g_cpu_policy_ids[1] >= 0) ? 1 : -1);
+                if (_ps >= 1) {
+                    int prime_lo = g_cpu_slot_hwmin[_ps];
                 /* x1.4, not x2: the prime lowest OPP here is 1017 MHz, so x2 lands at 2035 and
                    snaps down to 1689 - above the 1665 the phase already ran at, changing nothing.
                    x1.4 gives 1424, which snaps to 1401: a real 15% reduction. */
-                int prime_cap = prime_lo + (prime_lo * 2 / 5);
-                if (new_caps.cpu_max[2] > prime_cap)
-                    new_caps.cpu_max[2] = prime_cap;
+                    int prime_cap = prime_lo + (prime_lo * 2 / 5);
+                    if (prime_lo > 0 && new_caps.cpu_max[_ps] > prime_cap)
+                        new_caps.cpu_max[_ps] = prime_cap;
+                }
             }
             if (_cool_active) {
                 for (int i = 0; i < 3; i++) {
