@@ -97,6 +97,30 @@ if [ "$_cam_guard" = "0" ]; then
         iw dev wlan0 set power_save on >/dev/null 2>&1 || true
       fi
     fi
+    # Relax background reclaim while the screen is off.
+    #
+    # The profiles set vm.watermark_scale_factor well above the kernel default of 10 -
+    # balanced 60, battery 150 - which makes kswapd keep a large free-memory gap: it
+    # wakes early and pushes pages into zram, and every app that wakes pulls them back.
+    # A field capture shows 7.8 GiB compressed and 8.6 GiB decompressed inside DEEP_IDLE
+    # with memory PSI at zero - no pressure at all, just churn - and DEEP_IDLE samples
+    # drew 120 mA while zram moved against 44 mA while it held still.
+    #
+    # That split is a correlation: an app waking both costs current and faults memory
+    # back in. What is not in doubt is that a large watermark gap buys nothing in sleep -
+    # it exists to spare foreground allocations a direct-reclaim stall, and with the
+    # screen off there is no foreground to spare. So sleep runs at the kernel default and
+    # the profile value comes back on wake. Saved only when above 10, so a second
+    # screen-off call cannot overwrite the saved value with the lowered one.
+    _wm_node=/proc/sys/vm/watermark_scale_factor
+    if [ -w "$_wm_node" ]; then
+      _wm_now="$(cat "$_wm_node" 2>/dev/null | tr -dc '0-9')"
+      case "$_wm_now" in ''|*[!0-9]*) _wm_now=0 ;; esac
+      if [ "$_wm_now" -gt 10 ] 2>/dev/null; then
+        printf '%s\n' "$_wm_now" > /data/adb/asb/wmark_restore 2>/dev/null
+        writef "$_wm_node" 10
+      fi
+    fi
     # Foreground uclamp tier follows the screen, like the background tier already does.
     #
     # With the screen off there is no foreground app by definition - whatever is running
@@ -119,6 +143,13 @@ if [ "$_cam_guard" = "0" ]; then
     fi
   else
     writef /proc/sys/vm/laptop_mode 0
+    # Screen on: restore the profile watermark if sleep lowered it. A missing file means
+    # nothing was lowered, so nothing is touched.
+    _wm_save="$(cat /data/adb/asb/wmark_restore 2>/dev/null | tr -dc '0-9')"
+    case "$_wm_save" in ''|*[!0-9]*) : ;; *)
+      [ -w /proc/sys/vm/watermark_scale_factor ] && writef /proc/sys/vm/watermark_scale_factor "$_wm_save"
+      rm -f /data/adb/asb/wmark_restore 2>/dev/null ;;
+    esac
     # Screen on: put Wi-Fi power save back only if we turned it on.
     #
     # The marker is written only when the mode was off beforehand, so a user who set it
