@@ -358,6 +358,15 @@ fi
 [ -w /proc/sys/kernel/sched_util_clamp_min ] \
   && echo 1024 > /proc/sys/kernel/sched_util_clamp_min 2>/dev/null
 
+# Restore the profile watermark if the module was removed with the screen off, while
+# smart_dynamic_tune had it lowered to the kernel default for sleep.
+_wm_save="$(cat /data/adb/asb/wmark_restore 2>/dev/null | tr -dc '0-9')"
+case "$_wm_save" in
+  ''|*[!0-9]*) : ;;
+  *) [ -w /proc/sys/vm/watermark_scale_factor ] \
+       && echo "$_wm_save" > /proc/sys/vm/watermark_scale_factor 2>/dev/null ;;
+esac
+
 # Restore the foreground uclamp tier if we left it lowered.
 #
 # smart_dynamic_tune drops it to 35 while the screen is off and puts it back on wake.
