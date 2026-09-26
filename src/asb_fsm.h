@@ -1203,9 +1203,38 @@ if (m->gpu.load_pct >= _gpu_gate) {
      * CPU activity is a genuinely busy phone, while high current with an idle CPU is a lit
      * screen. Keep it as corroboration, drop it as a trigger.
      */
-    if (ma_valid && m->bat.current_ma >= 120 &&
-        m->cpu.load1 >= ASB_CURRENT_MIN_LOAD1)
-        return ASB_STATE_MODERATE;
+    /* Corroborate against THIS device's quiet level, not a fixed 0.5.
+     *
+     * The pair was meant to separate "busy phone" from "lit screen", but both halves are
+     * satisfied by an idle phone with the display on: 120 mA is what a panel costs, and
+     * load1 >= 0.5 is background noise on Android. A capture bears it out - 128 of 133
+     * screen-on samples cleared the bar, MODERATE held 85% of screen time and LIGHT_IDLE
+     * 2%, on a phone being used for reading and messaging. Smart never got to relax.
+     *
+     * asb_ui_quiet_floor is the load this device actually idles at with the screen on,
+     * learned per device; the same margin is already used for the GPU branch above. Above
+     * that floor there is real work; below it there is a lit screen. The current bar moves
+     * to 250 mA for the same reason - 120 mA does not distinguish anything.
+     *
+     * Falls back to the old constant where no floor has been learned yet. */
+    {
+        /* Near the profile's own MODERATE threshold, not near idle.
+         *
+         * The corroboration is meant for work that load1 under-reports - audio offload,
+         * for instance - so it should fire just BELOW the real threshold, not anywhere
+         * above idle. Measured against a capture of reading and messaging, where the
+         * honest threshold (14.0) was reached in 7% of screen-on samples:
+         *
+         *   current >= 120 and load >= 0.5   96% of samples  (what shipped)
+         *   current >= 250 and load >= floor 52%
+         *   current >= 250 and load >= 60%   30%             (this)
+         *
+         * Tying it to mod_thr also travels: a device with a different threshold gets a
+         * proportional bar instead of one derived from an unrelated idle floor. */
+        if (ma_valid && m->bat.current_ma >= 250 &&
+            m->cpu.load1 >= mod_thr * 0.6f)
+            return ASB_STATE_MODERATE;
+    }
     /*
      * UI-burst escalation: GPU > 12% with screen on = active UI work (scrolling shelf, app
      * menu, transitions).
