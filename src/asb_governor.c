@@ -4501,6 +4501,24 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     if (g_asb_cfg.smart_battery_bias > 0) {
         int bbias = g_asb_cfg.smart_battery_bias;
         if (bbias > 600) bbias = 600;
+
+        /* Ease the nudge off while the phone is actually working.
+         *
+         * This bias is a user preference, not evidence: it is added on top of whatever
+         * the learner concluded, in every state. asbdiag already warns that 400 or more
+         * "can pin active-use alpha into battery-like behaviour", and a field config sits
+         * at the 600 ceiling - so under load Smart rides the battery rail and feels slow,
+         * which is what the sluggishness reports described.
+         *
+         * HEAVY and GAMING are the two states where the user is waiting on the phone, and
+         * they are bounded: they end when the work does. The nudge is halved there rather
+         * than dropped, so the preference still counts - just not at full weight against
+         * someone staring at the screen.
+         *
+         * SUSTAINED keeps the full bias on purpose: that state means sustained heat, and
+         * leaning toward battery is the right answer there. */
+        if (fsm && (fsm->state == ASB_STATE_HEAVY || fsm->state == ASB_STATE_GAMING))
+            bbias /= 2;
         /* scale by confidence so low-confidence Smart isn't over-biased */
         int scaled = (bbias * conf) / 1000;
         int biased = (int)g_smart_rt.alpha_battery_x1000 + scaled;
