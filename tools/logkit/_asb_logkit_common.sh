@@ -234,6 +234,17 @@ lk_discover_zones() {
 lk_netstats_uid_capture() {
   [ -n "$LK_OUT_DIR" ] || return 0
   command -v dumpsys >/dev/null 2>&1 || return 0
+  # Package names for the UIDs, once per capture.
+  #
+  # The netstats dump only names a UID if it happens to appear in one of its own summary
+  # lines, so the heaviest talkers came out as bare "uid=10509" - the report named the
+  # cost and left the user to run pm themselves. "pm list packages -U" maps every
+  # installed package to its uid in one call; written once, reused by every phase.
+  if [ ! -s "$LK_OUT_DIR/uid_map.txt" ] && command -v pm >/dev/null 2>&1; then
+    pm list packages -U 2>/dev/null \
+      | sed -n 's/^package:\([^ ]*\)  *uid:\([0-9]*\)$/\2 \1/p' \
+      > "$LK_OUT_DIR/uid_map.txt" 2>/dev/null
+  fi
   {
     echo "# netstats uid capture: tag=$1 epoch=$(date +%s)"
     dumpsys netstats --uid 2>/dev/null || dumpsys netstats detail 2>/dev/null

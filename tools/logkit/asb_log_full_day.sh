@@ -843,6 +843,62 @@ lk_emit_mobile_traffic_context() {
   echo "Observed mobile traffic may materially contribute to radio energy in a listed phase; it does not prove cause or assign battery percentage."
   echo "Use this as context alongside screen state, current sampling and a longer uncharged screen-off capture."
   echo ""
+  # Which APPS moved that traffic, per screen-off phase.
+  #
+  # The table above says how much went over the modem and never who sent it: two captures
+  # showed 140 and 55 MiB of mobile data inside a sleep phase, and the answer was always a
+  # guess. The per-UID counters are captured at start and hourly; their history carries
+  # 2-hour buckets with absolute byte counts, so a bucket overlapping the phase window can
+  # be attributed to it.
+  #
+  # Names come from the same dump where available. A bare uid= means the package map in
+  # that dump did not cover it - "pm list packages --uid N" resolves it in one command.
+  _ns_file="$LK_OUT_DIR/netstats_uid_latest.txt"
+  [ -s "$_ns_file" ] || _ns_file="$LK_OUT_DIR/netstats_uid_start.txt"
+  if [ -s "$_ns_file" ] && [ -s "$LK_OUT_DIR/phase_ledger.tsv" ]; then
+    echo "===== SCREEN-OFF TRAFFIC BY APP ====="
+    echo "per screen-off phase >=30 min; buckets are 2h, so edges are approximate"
+    awk -F'\t' 'NR>1 && ($1=="sleep" || $1=="idle") && ($3-$2)>=1800 {print $1"\t"$2"\t"$3}' \
+      "$LK_OUT_DIR/phase_ledger.tsv" 2>/dev/null | while IFS="$(printf '\t')" read -r _ph _a _z; do
+      awk -v A="$_a" -v Z="$_z" -v PH="$_ph" -v MAP="$LK_OUT_DIR/uid_map.txt" '
+        # Names from pm first: the netstats dump only knows the UIDs it happened to
+        # mention, which left the biggest talkers anonymous.
+        BEGIN { while ((getline ln < MAP) > 0) { split(ln, f, " "); if (f[1] != "") NAME[f[1]+0]=f[2] } }
+        /\{uid=[0-9]+,package=/ {
+          s=$0
+          while (match(s, /\{uid=[0-9]+,package=[^}]+\}/)) {
+            t=substr(s, RSTART, RLENGTH); sub(/.*uid=/, "", t); u=t; sub(/,.*/, "", u)
+            n=t; sub(/^[0-9]+,package=/, "", n); sub(/\}.*/, "", n)
+            NAME[u+0]=n; s=substr(s, RSTART+RLENGTH)
+          }
+        }
+        # A section header ends the current uid. The dump carries iface/dev histories too,
+        # and without this their buckets were charged to whichever uid came last - one
+        # nameless row held half the total, double-counting the same bytes.
+        /^[A-Za-z][A-Za-z ]*:/ { CUR=""; next }
+        match($0, /uid=[0-9]+[ \t]+set=/) { u=$0; sub(/.*uid=/, "", u); sub(/[ \t].*/, "", u); CUR=u+0; next }
+        match($0, /st=[0-9]+[ \t]+rb=[0-9]+/) {
+          st=$0; sub(/.*st=/, "", st); sub(/[ \t].*/, "", st)
+          rb=$0; sub(/.*rb=/, "", rb); sub(/[ \t].*/, "", rb)
+          tb=$0; sub(/.*tb=/, "", tb); sub(/[ \t].*/, "", tb)
+          if (CUR != "" && st+7200 > A && st < Z) BY[CUR] += rb + tb
+        }
+        END {
+          tot=0; for (u in BY) tot += BY[u]
+          if (tot < 16777216) exit
+          printf "  %s %d min, %.0f MiB total\n", PH, (Z-A)/60, tot/1048576
+          for (i=0; i<5; i++) {
+            best=""; bv=0
+            for (u in BY) if (BY[u]+0 > bv) { bv=BY[u]+0; best=u }
+            if (bv < 8388608) break
+            printf "      %-32s %6.1f MiB\n", (best in NAME ? NAME[best] : "uid=" best), bv/1048576
+            BY[best]=0
+          }
+        }' "$_ns_file" 2>/dev/null
+    done
+    echo ""
+  fi
+
 }
 
 # ── reporting ──────────────────────────────────────────────────────────────
