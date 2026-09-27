@@ -72,6 +72,9 @@ typedef struct {
     /* Consecutive times the kernel reported a floor above what we asked for. Three in a
      * row means it is vendor policy, not a transient clamp - see the backoff below. */
     unsigned long floor_holds;
+    /* Consecutive times this node was found changed by someone else and rewritten.
+     * A node that keeps coming back is owned elsewhere - see the drift backoff. */
+    unsigned long drift_rewrites;
     /* Highest value the kernel refused to go below, 0 when never observed. */
     int kernel_floor;
     /* Requests clamped since the floor was learned; drives the periodic re-test. */
@@ -226,6 +229,7 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         h->applied++;
         h->consecutive_failures = 0;
         h->floor_holds = 0;
+        h->drift_rewrites = 0;
         h->retry_at = 0;
         snprintf(h->status, sizeof(h->status), "%s", "already_set");
         return 0;
@@ -1817,7 +1821,31 @@ skip_cpu_caps: ;
             }
         }
         int _ucl_bg_now = sysfs_read_int(UCLAMP_BG_MAX, -1);
+        /* Stop chasing a background node that something else keeps resetting.
+         *
+         * The write ledger is dominated by these two: uclamp_bg and uclamp_sybg at ~110
+         * writes/h each, against 44 for the busiest CPU node. They are not failing - the
+         * framework rewrites cgroup uclamp whenever processes move between groups, so the
+         * value is legitimately reset, we legitimately put it back, and neither side is
+         * wrong. But re-asserting a background clamp 110 times an hour buys nothing: the
+         * tasks under it are background by definition.
+         *
+         * After 5 consecutive drift rewrites the node is left alone for 10 minutes. A
+         * genuine cap change still writes immediately - the backoff only suppresses the
+         * drift path - and any write that finds the value already correct clears it. */
         int _ucl_bg_drift = (_ucl_bg_now >= 0 && _ucl_bg_now != g_wcache.uclamp_bg_max);
+        if (_ucl_bg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max) {
+            asb_write_health_t *_hbg = &g_write_health[ASB_WRITE_UCL_BG];
+            if (_hbg) {
+                time_t _ucl_now = time(NULL);
+                if (_hbg->retry_at > _ucl_now) _ucl_bg_drift = 0;
+                else if (++_hbg->drift_rewrites >= 5) {
+                    _hbg->retry_at = _ucl_now + 600;
+                    _hbg->drift_rewrites = 0;
+                    _ucl_bg_drift = 0;
+                }
+            }
+        }
         if (force || _ucl_bg_drift || caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
             int bg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_BG, UCLAMP_BG_MAX,
                                                     caps->uclamp_bg_max) == 0;

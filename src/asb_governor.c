@@ -1188,6 +1188,11 @@ static void asb_night_window_tick(int screen_on, time_t now) {
 static int g_last_cpu_max_c = 0;
 /* Last time the caps were re-applied, for the periodic drift re-assert above. */
 static time_t g_last_caps_reassert = 0;
+/* Running mean of modem throughput over the current learner session, KiB/s.
+ * Fed to the bucket update so drain caused by the radio is not read as evidence that the
+ * CPU ceiling is too high. Reset when a session is banked. */
+static long g_ses_net_kib_sum = 0;
+static long g_ses_net_samples = 0;
 
 /* Wakeup ledger, by source.
  *
@@ -3625,6 +3630,10 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         g_ses_last_dur  = (int)dur;
         snprintf(g_ses_last_reason, sizeof(g_ses_last_reason), "%s", reason ? reason : "?");
         sin.max_skin_c = fsm->ses_max_skin_temp;
+        sin.net_kibps = (g_ses_net_samples > 0)
+                      ? (int)(g_ses_net_kib_sum / g_ses_net_samples) : 0;
+        g_ses_net_kib_sum = 0;
+        g_ses_net_samples = 0;
         sin.trust = (bat_trust_val >= 0) ? bat_trust_val : ASB_TRUST_PARTIAL;
         sin.was_heavy = (fsm->ses_time_heavy_sec > 60 || fsm->ses_time_gaming_sec > 60) ? 1 : 0;
         sin.was_thermal_hit = (fsm->ses_thermal_entries > 0) ? 1 : 0;
@@ -6702,6 +6711,10 @@ int main(int argc, char **argv) {
             if ((fsm.profile_idx == PROFILE_BATTERY ||
                  fsm.profile_idx == PROFILE_SMART) && !metrics.misc.screen_on) {
                 long net_bps = metrics.misc.rmnet_rx_bps + metrics.misc.rmnet_tx_bps;
+                /* Same reading, kept for the learner: one running mean per session. */
+                g_ses_net_kib_sum += (metrics.misc.rmnet_rx_bps +
+                                      metrics.misc.rmnet_tx_bps) / 1024;
+                g_ses_net_samples++;
                 if (net_bps > 5000)  /* >5KB/s = active data transfer */
                     fsm.bat_radio_active_ticks++;
             }

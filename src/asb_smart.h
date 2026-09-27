@@ -2084,6 +2084,15 @@ typedef struct {
     int sustained_pct;    /* 0-100 fraction of time in SUSTAINED */
     int idle_q_x10;       /* idle quality if applicable */
     int screen_on_pct;    /* 0-100 */
+    /* Average modem throughput over the session, KiB/s.
+     *
+     * Drain is the learner's main evidence, but not all drain answers to a CPU ceiling.
+     * Two nights in the same bucket on the same phone: 0.43 %/h with 55 MiB of mobile
+     * traffic, 1.32 %/h with 140 MiB - and the expensive one taught the learner to lean
+     * toward battery, which trims frequencies that had nothing to do with the cost. The
+     * radio was the cost. Capping the CPU in that bucket buys nothing and slows the phone
+     * the next time it lands there. */
+    int net_kibps;
 } asb_smart_session_input_t;
 
 static void asb_smart_bucket_update_from_session(
@@ -2191,7 +2200,27 @@ static void asb_smart_bucket_update_from_session(
             int hi = (ewma * ASB_SMART_DRAIN_HI_NUM) / ASB_SMART_DRAIN_HI_DEN;
             int lo = (ewma * ASB_SMART_DRAIN_LO_NUM) / ASB_SMART_DRAIN_LO_DEN;
             int feedback = 0;
-            if (sample > hi && !s->was_thermal_hit) feedback = 60;
+            /* Don't learn from drain the radio caused.
+             *
+             * The bar is set from the captures, not guessed. Sustained modem throughput
+             * across three nights on the same phone:
+             *
+             *    55 MiB / 414 min =  2.3 KiB/s   0.43 %/h   <- cheap, learn from it
+             *   140 MiB / 136 min = 17.6 KiB/s   1.32 %/h   <- radio
+             *   322 MiB / 136 min = 40.4 KiB/s   1.32 %/h   <- radio
+             *
+             * 15 KiB/s separates them. A first attempt used 250 KiB/s on the reasoning
+             * that "a download is fast" - no night came close, and the guard would have
+             * done nothing at all. Overnight sync is slow and constant, not fast.
+             *
+             * Without this, the bucket that happened to catch a sync leans toward battery
+             * for days afterwards, trimming a phone that was never the problem.
+             *
+             * Thermal hits are already excluded above for the same reason - heat is
+             * evidence about the ceiling, traffic is not. The low-drain branch keeps
+             * working: a cheap session is good news whatever the radio did. */
+            int net_dominated = (s->net_kibps >= 15);
+            if (sample > hi && !s->was_thermal_hit && !net_dominated) feedback = 60;
             else if (sample < lo && s->trust == ASB_TRUST_CLEAN) feedback = -30;
             if (feedback != 0) {
                 feedback = (feedback * lr) / 1000;
