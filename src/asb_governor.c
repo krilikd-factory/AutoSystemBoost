@@ -1186,6 +1186,8 @@ static void asb_night_window_tick(int screen_on, time_t now) {
 /* Last valid control temperature, kept so the thermal read can be skipped without
  * losing the distance-to-threshold check that decides whether skipping is safe. */
 static int g_last_cpu_max_c = 0;
+/* Last time the caps were re-applied, for the periodic drift re-assert above. */
+static time_t g_last_caps_reassert = 0;
 
 /* Wakeup ledger, by source.
  *
@@ -7272,11 +7274,28 @@ int main(int argc, char **argv) {
                        !fsm.thermal_cap) {
                 g_cap_detente_skipped++;
                 g_write_skipped_backoff++;
-            } else if (changed || force_write) {
+            } else if (changed || force_write ||
+                       /* Periodic re-assert, because the caps can drift while nothing
+                        * changes on our side.
+                        *
+                        * writer_apply_caps already re-reads the live uclamp node and
+                        * rewrites on drift - but it only runs when the FSM moves or a
+                        * write is forced. In a steady LIGHT_IDLE the module has nothing
+                        * to say, so it says nothing, and a vendor boost framework that
+                        * raises top-app back to its own value keeps it: a capture showed
+                        * the governor asking for 46 while the live node sat at 85, with
+                        * zero write failures - nobody was fighting, nobody was looking.
+                        *
+                        * Every 30 s costs one pass over a handful of sysfs reads, and the
+                        * dedup inside the writer means an undisturbed node is not
+                        * rewritten. Cheap enough to run in the quiet states, which is
+                        * exactly where the drift goes unnoticed. */
+                       (time(NULL) - g_last_caps_reassert) >= 30) {
                 g_write_attempts++;
                 asb_profile_caps_t _effective_caps = fsm.current_caps;
                 asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);
                 asb_smart_media_guard_apply_caps(&_effective_caps);
+                g_last_caps_reassert = time(NULL);
                 int writes = writer_apply_caps(&_effective_caps, force_write, fsm.state, fsm.thermal_cap);
                 if (writes > 0) {
                     g_total_writes += writes;
