@@ -553,8 +553,25 @@ EOF
     _cavg="$LK_PH_MAXCPU"; _savg="$LK_PH_MAXSURF"
     [ "${LK_PH_CNTCPU:-0}" -gt 0 ] 2>/dev/null && _cavg=$(( LK_PH_SUMCPU / LK_PH_CNTCPU ))
     [ "${LK_PH_CNTSURF:-0}" -gt 0 ] 2>/dev/null && _savg=$(( LK_PH_SUMSURF / LK_PH_CNTSURF ))
+  # A "gap" that lasted minutes was not a gap.
+  #
+  # The label is assigned while the phase is open, from "screen has been off under 120 s".
+  # If the phone then suspends, the poll loop stops with it and the phase keeps the label
+  # it had at the last sample - so a screen-off stretch that ran for eight minutes of real
+  # sleep was filed as a gap. One capture spent 24% of its time in eleven such phases, and
+  # that time was missing from the sleep numbers while making "gap" look expensive.
+  #
+  # Relabel on close, by the duration the phase actually had, using the same thresholds
+  # the live classifier uses.
+  _pl_name="$LK_CUR_PHASE"
+  if [ "$_pl_name" = "gap" ]; then
+    _pl_dur=$(( _end - LK_PH_START ))
+    if   [ "$_pl_dur" -ge 1200 ] 2>/dev/null; then _pl_name="sleep"
+    elif [ "$_pl_dur" -ge 120 ]  2>/dev/null; then _pl_name="idle"
+    fi
+  fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$LK_CUR_PHASE" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
+    "$_pl_name" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
     "$_cavg" "$_savg" "$_p6avg" "$_gavg" \
     "$LK_PH_THROTTLE" "$LK_PH_WAKEPEAK" "$_awake" "$_maavg" "$_drx" "$_dtx" \
     "${LK_PH_COOLDOWN:-0}"
