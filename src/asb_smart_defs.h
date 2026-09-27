@@ -22,7 +22,11 @@
  * conclusions are not wrong in the way V1's were (the sign is right), but they were drawn
  * from a device that behaved differently, so the outputs are reset while the measurements
  * carry forward, exactly as in the V1 to V2 migration. */
-#define ASB_SMART_VER         3
+/* V4: the battery-lean nudge became a share of the remaining headroom instead of a
+ * straight addition. Stored alphas were written under the old rule and are saturated at
+ * or near the ceiling - they encode "pure battery", not what the buckets measured - so
+ * the outputs are reset while the measurements carry forward, as in every bump before. */
+#define ASB_SMART_VER         4
 #define ASB_SMART_VER_LEGACY  1
 #define ASB_SMART_MAGIC       0x41534253u
 #define ASB_SMART_BUCKETS     12

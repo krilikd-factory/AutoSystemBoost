@@ -4522,8 +4522,31 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         if (fsm && (fsm->state == ASB_STATE_HEAVY || fsm->state == ASB_STATE_GAMING))
             bbias /= 2;
         /* scale by confidence so low-confidence Smart isn't over-biased */
+        /* V4: the nudge takes a SHARE of the remaining headroom, it does not add.
+         *
+         * Adding saturated the value and erased the learner. With a learned alpha of 500
+         * and a bias of 600 the sum clamps to the 1000 ceiling - and so does a learned
+         * 300, and a learned 800. Every bucket ends up at pure battery, which is what the
+         * captures show: alpha sat at 1000, 971, 908 while the learner had spent 177
+         * sessions working out that these buckets differ. Smart stopped being adaptive
+         * and became Battery with extra steps.
+         *
+         * Taking a fraction of the distance to the ceiling keeps the preference strong
+         * while preserving order and range:
+         *
+         *   learned 300 + bias 600  ->  300 + 700*0.6 = 720
+         *   learned 500 + bias 600  ->  500 + 500*0.6 = 800
+         *   learned 900 + bias 600  ->  900 + 100*0.6 = 960
+         *
+         * A warm bucket still lands higher than a cool one, so the next session's
+         * measurement still changes the outcome - which is the whole point of the
+         * learner. The ceiling is approached, never reached, so there is always somewhere
+         * left for evidence to move. */
         int scaled = (bbias * conf) / 1000;
-        int biased = (int)g_smart_rt.alpha_battery_x1000 + scaled;
+        int alpha  = (int)g_smart_rt.alpha_battery_x1000;
+        int room   = ASB_SMART_ALPHA_BATTERY_MAX_X1000 - alpha;
+        if (room < 0) room = 0;
+        int biased = alpha + (room * scaled) / 1000;
         if (biased > ASB_SMART_ALPHA_BATTERY_MAX_X1000)
             biased = ASB_SMART_ALPHA_BATTERY_MAX_X1000;
         g_smart_rt.alpha_battery_x1000 = biased;
@@ -7263,10 +7286,24 @@ int main(int argc, char **argv) {
                     }
                 }
             }
-            if ((changed || force_write) && g_cap_detente_active) {
+            /* One decision for all three branches below.
+             *
+             * The detente and backoff guards were written as (changed || force_write),
+             * so a re-assert that fires on a timer - with nothing changed and nothing
+             * forced - matched neither and fell straight through to the write. That is
+             * the write war those guards exist to prevent: on a device where the vendor
+             * owns the cap, the module would have gone back to rewriting it every 30 s
+             * while passive mode was supposedly holding it back.
+             *
+             * The periodic pass is for drift the module can legitimately fix, not a way
+             * around the module's own restraint. */
+            int want_apply = (changed || force_write ||
+                              (time(NULL) - g_last_caps_reassert) >= 30);
+
+            if (want_apply && g_cap_detente_active) {
                 g_cap_detente_skipped++;
                 g_write_skipped_detente++;
-            } else if ((changed || force_write) &&
+            } else if (want_apply &&
                        asb_cap_writes_should_back_off() &&
                        !force_write && !metrics.misc.screen_on &&
                        (fsm.state == ASB_STATE_DEEP_IDLE ||
@@ -7274,23 +7311,7 @@ int main(int argc, char **argv) {
                        !fsm.thermal_cap) {
                 g_cap_detente_skipped++;
                 g_write_skipped_backoff++;
-            } else if (changed || force_write ||
-                       /* Periodic re-assert, because the caps can drift while nothing
-                        * changes on our side.
-                        *
-                        * writer_apply_caps already re-reads the live uclamp node and
-                        * rewrites on drift - but it only runs when the FSM moves or a
-                        * write is forced. In a steady LIGHT_IDLE the module has nothing
-                        * to say, so it says nothing, and a vendor boost framework that
-                        * raises top-app back to its own value keeps it: a capture showed
-                        * the governor asking for 46 while the live node sat at 85, with
-                        * zero write failures - nobody was fighting, nobody was looking.
-                        *
-                        * Every 30 s costs one pass over a handful of sysfs reads, and the
-                        * dedup inside the writer means an undisturbed node is not
-                        * rewritten. Cheap enough to run in the quiet states, which is
-                        * exactly where the drift goes unnoticed. */
-                       (time(NULL) - g_last_caps_reassert) >= 30) {
+            } else if (want_apply) {
                 g_write_attempts++;
                 asb_profile_caps_t _effective_caps = fsm.current_caps;
                 asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);
