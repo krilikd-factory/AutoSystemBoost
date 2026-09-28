@@ -891,13 +891,27 @@ fi
 APOL="$(firstf '/vendor/etc/audio_policy_configuration*.xml' '/odm/etc/audio_policy_configuration*.xml' '/vendor/etc/audio/audio_policy_configuration*.xml')"
 [ -n "$APOL" ] && V "Hi-res 384000 present in audio policy" "1" "$(grep -c '384000' "$APOL" 2>/dev/null)" ge || NOTE "audio_policy_configuration not found"
 # runtime audio props
+#
+# The last four are the audio path's power-relevant knobs: how long a track must be to
+# reach the DSP offload path, how large a HAL period is, whether the output can suspend,
+# and the ADM phase shift. Another module ships its own values for all of them (offload
+# from 60 s down to 5, buffer 32 KB up to 200, period multiplier 4) - plausible numbers,
+# but numbers the OEM already chose for this chip.
+#
+# Reported, not changed: the same value that saves power on one device underruns on
+# another, and this project has no way to tell which without seeing what the fleet
+# actually ships. Read them across a few devices first, then decide.
 P "  runtime audio props:"
 for _p in persist.audio.hifi persist.audio.uhqa vendor.audio.hifi.dac \
           vendor.audio.feature.hifi_audio.enable \
           persist.vendor.audio.hifi.dac.enable \
           ro.vendor.audio.sdk.fluencetype \
           vendor.audio.offload.buffer.size.kb \
-          persist.vendor.audio.ull.period.size; do
+          persist.vendor.audio.ull.period.size \
+          vendor.audio.offload.min.duration.secs \
+          vendor.audio_hal.period_multiplier \
+          vendor.audio.hal.output.suspend.supported \
+          vendor.audio.adm.phaseshift.ms; do
   P "    $_p = $(gp $_p)"
 done
 
