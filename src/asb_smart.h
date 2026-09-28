@@ -2143,8 +2143,25 @@ static void asb_smart_bucket_update_from_session(
     if (drainy)    dt_alpha += 30;
     if (sustained_heavy) dt_alpha += 20;
     if (s->was_thermal_hit) {
-        dt_alpha += 100;
-        dt_inter -= 50;
+        /* Weigh the throttle by whether the heat reached the surface.
+         *
+         * max_skin_c was collected every session and never read. It is the one signal
+         * here that differs by model rather than by workload: the die-to-skin gap is a
+         * property of the chassis. Across three captures on this phone it sits at 10-15 C
+         * (die 45 / skin 33), and a device with a vapour chamber will show more, a plastic
+         * mid-ranger less.
+         *
+         * A throttle with the skin still under 40 C means the cooling did its job - the
+         * user felt nothing and the OEM's own limits (typically 43-45 C skin) were not
+         * close. Pushing the full battery lean there trims a phone that was coping. When
+         * the skin IS warm the push stands unchanged, because then the heat is real for
+         * the person holding it.
+         *
+         * Skin of 0 means no sensor on this device: the full push applies, exactly as
+         * before this change. */
+        int skin_cool = (s->max_skin_c > 0 && s->max_skin_c < 40);
+        dt_alpha += skin_cool ? 50 : 100;
+        dt_inter -= skin_cool ? 25 : 50;
     }
     if (clean_cool) {
         dt_alpha -= 60;
@@ -2220,7 +2237,22 @@ static void asb_smart_bucket_update_from_session(
              * evidence about the ceiling, traffic is not. The low-drain branch keeps
              * working: a cheap session is good news whatever the radio did. */
             int net_dominated = (s->net_kibps >= 15);
-            if (sample > hi && !s->was_thermal_hit && !net_dominated) feedback = 60;
+            /* Work the user asked for is not evidence about the ceiling either.
+             *
+             * was_heavy is set when the session held more than a minute of HEAVY or
+             * GAMING. Screen-on work in these captures costs 15.55 %/h against 1.55 %/h
+             * asleep - a tenfold gap that says what the person was doing, not that the
+             * ceiling is too high. Left unguarded, an evening of gaming teaches the
+             * learner that this hour of the week is expensive, and the next evening's
+             * game starts under a trimmed ceiling: the phone gets slower precisely where
+             * the user wanted it fast, and saves nothing, because the work still has to
+             * happen.
+             *
+             * Heat from that session is still learned - was_thermal_hit and the bucket
+             * temperature both keep working. Only the drain figure is set aside, and only
+             * when it is high; a cheap heavy session still counts as good news below. */
+            if (sample > hi && !s->was_thermal_hit && !net_dominated && !s->was_heavy)
+                feedback = 60;
             else if (sample < lo && s->trust == ASB_TRUST_CLEAN) feedback = -30;
             if (feedback != 0) {
                 feedback = (feedback * lr) / 1000;
