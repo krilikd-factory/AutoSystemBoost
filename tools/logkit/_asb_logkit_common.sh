@@ -693,7 +693,17 @@ lk_status_watch_header() {
 }
 
 lk_perf_trace_header() {
+  # 42 columns and, until now, no header at all.
+  #
+  # Every other trace in this kit writes its schema on line one; this one wrote an empty
+  # heredoc, so the file was a wall of pipe-separated numbers that nobody - including the
+  # tooling that reads the other traces - could interpret. Any analysis of it silently
+  # guessed at column positions, which is worse than not having the file.
+  #
+  # The names below are the emitter's own variables at the bottom of this function set,
+  # in the order it prints them.
   cat <<'EOF' > "$LK_OUT_DIR/perf_trace.txt"
+epoch|datetime|soc_die|prime_c|perf_c|cpu_little_c|sf_c|sf_rate|sb_c|st6_c|board_c|btz_c|p0_cur|p0_max|p6_cur|p6_max|gpu_busy|gpu_clk|gpu_max|gpu_min|gpu_gov|bat_mA|bat_uV|load1|load5|load15|temp|therm_valid|therm_avail|therm_reason|cap_temp|cap_zone|skin_zone|surface_zone|skin_c|surface_c|skin_max|surface_max|board_temp|headroom_valid|headroom_invalid_reason|thermal_cpu_fallback_type
 EOF
 }
 

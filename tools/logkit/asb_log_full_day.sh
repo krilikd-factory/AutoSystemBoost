@@ -58,7 +58,13 @@ lk_webui_guard_publish_output() {
 # Claim before creating capture artefacts, so any observer sees a recorder PID rather than
 # a transient launcher PID. A failed claim means a stale/mismatched caller and must exit.
 lk_webui_guard_claim || { echo '[debug-webui] guard claim failed'; exit 2; }
-LK_SNAPSHOT_S=3600          # full state snapshot + interim report every hour
+LK_SNAPSHOT_S=3600          # full state snapshot every hour
+# The report is cheap - awk over files already on disk - and it is what people actually
+# read, so it no longer waits for the hourly snapshot it used to ride along with. A folder
+# collected before the hour was up carried a report that ended an hour earlier: two
+# screen-off phases with 21 and 16 MiB had closed since, and the traffic section was empty
+# while the data for it sat in the same folder.
+LK_REPORT_S=900             # interim report every 15 minutes
 LK_BSTATS_WINDOW_MIN=$(( LK_SNAPSHOT_S / 60 ))
 export LK_BSTATS_WINDOW_MIN
 
@@ -1471,6 +1477,7 @@ trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP
 echo "[$(date '+%H:%M:%S')] FULL-DAY capture running up to ${LK_HOURS}h. Use the phone normally."
 
 _last_snapshot=$(date +%s)
+_last_report=$(date +%s)
 _last_wakesnap=$(date +%s)
 lk_snapshot_kernel "before"
 lk_snapshot_network "before"
@@ -1545,6 +1552,12 @@ while : ; do
     _last_wakesnap=$_now
   fi
 
+  # every 15 min: keep the report current for a folder collected at any moment
+  if [ $(( _now - _last_report )) -ge "$LK_REPORT_S" ]; then
+    lk_emit_phase_summary 2>/dev/null || true
+    lk_emit_full_day_report 2>/dev/null || true
+    _last_report=$_now
+  fi
   # hourly: full state snapshot + interim reports
   if [ $(( _now - _last_snapshot )) -ge "$LK_SNAPSHOT_S" ]; then
     lk_snapshot_state "snapshot_${_now}"
@@ -1562,8 +1575,6 @@ while : ; do
     lk_snapshot_audio "hourly"
     lk_bt_reconnect_snapshot "hourly"
     lk_verify_caps
-    lk_emit_phase_summary 2>/dev/null || true
-    lk_emit_full_day_report 2>/dev/null || true
     # Android-side wakelock attribution snapshot each hour (works without
     # debugfs). Dumps + refreshes the parsed offenders report, then resets the
     # batterystats window so the next hour is attributed cleanly.
