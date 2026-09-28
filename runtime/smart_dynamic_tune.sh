@@ -92,6 +92,10 @@ if [ "$_cam_guard" = "0" ]; then
     case "$_wpm" in screen_off|always) : ;; *) _wpm=off ;; esac
     if [ "$_wpm" != "off" ] && command -v iw >/dev/null 2>&1; then
       _pm_now="$(iw dev wlan0 get power_save 2>/dev/null | grep -oE 'on|off' | head -1)"
+      # What the ROM shipped, written once and never overwritten - the reference for the
+      # marker-less restore above.
+      [ -s /data/adb/asb/wifipm_baseline ] || \
+        printf '%s\n' "$_pm_now" > /data/adb/asb/wifipm_baseline 2>/dev/null
       if [ "$_pm_now" = "off" ]; then
         printf 'off\n' > /data/adb/asb/wifipm_restore 2>/dev/null
         iw dev wlan0 set power_save on >/dev/null 2>&1 || true
@@ -155,7 +159,25 @@ if [ "$_cam_guard" = "0" ]; then
     # The marker is written only when the mode was off beforehand, so a user who set it
     # on themselves is never flipped, and a missing file means we touched nothing.
     # "always" means keep it on with the screen up too, so skip the restore there.
+  # Turn power save back off even when our marker is gone.
+  #
+  # The restore only ran if /data/adb/asb/wifipm_restore existed - the note we drop when
+  # WE turned power save on. Lose that file (a reinstall, a cleared state dir, a reboot
+  # between enable and restore) and the radio keeps sleeping between beacons forever,
+  # with the tweak switched off and nothing to switch it back: a user reported Wi-Fi
+  # dropping and reconnecting every few seconds "regardless of settings", which is what
+  # aggressive power save looks like on an access point that does not tolerate it.
+  #
+  # The baseline recorded at first run says what the ROM shipped. If the ROM had it off
+  # and it is on now with the tweak off, it is ours, marker or not.
   _wpm="$(_cfg wifi_powersave)"
+  if [ "$_wpm" = "off" ] && [ ! -f /data/adb/asb/wifipm_restore ] \
+     && [ "$(cat /data/adb/asb/wifipm_baseline 2>/dev/null)" = "off" ] \
+     && command -v iw >/dev/null 2>&1; then
+    if [ "$(iw dev wlan0 get power_save 2>/dev/null | grep -oE 'on|off' | head -1)" = "on" ]; then
+      iw dev wlan0 set power_save off >/dev/null 2>&1 || true
+    fi
+  fi
   if [ "$_wpm" != "always" ] && [ -f /data/adb/asb/wifipm_restore ] && command -v iw >/dev/null 2>&1; then
       iw dev wlan0 set power_save off >/dev/null 2>&1 || true
       rm -f /data/adb/asb/wifipm_restore 2>/dev/null
