@@ -7329,6 +7329,26 @@ int main(int argc, char **argv) {
                 asb_profile_caps_t _effective_caps = fsm.current_caps;
                 asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);
                 asb_smart_media_guard_apply_caps(&_effective_caps);
+
+                /* Floor the top-app ceiling while the screen is on.
+                 *
+                 * uclamp.max is a CEILING on what a task may ask the scheduler for, not a
+                 * frequency the phone holds: raising it costs nothing while the phone is
+                 * idle and only stops getting in the way when something actually needs a
+                 * burst. A field report of "slideshow" while scrolling a gallery of
+                 * videos, and while watching video alongside another app, came with a
+                 * capture showing top-app uclamp.max at 38 - below even the Battery
+                 * profile's own ceiling of 50. Decode plus UI cannot run on that, and the
+                 * media guard does not help because it only caps the GPU.
+                 *
+                 * 50 is not invented: it is BALANCED_FLOOR_UCLAMP_TOP, the least this
+                 * project has ever considered acceptable for the app in front of the
+                 * user. Screen-off keeps whatever the learner decided - nobody is
+                 * waiting then. */
+                if (metrics.misc.screen_on &&
+                    _effective_caps.uclamp_top_max > 0 &&
+                    _effective_caps.uclamp_top_max < ASB_BALANCED_FLOOR_UCLAMP_TOP)
+                    _effective_caps.uclamp_top_max = ASB_BALANCED_FLOOR_UCLAMP_TOP;
                 g_last_caps_reassert = time(NULL);
                 int writes = writer_apply_caps(&_effective_caps, force_write, fsm.state, fsm.thermal_cap);
                 if (writes > 0) {
