@@ -2172,9 +2172,18 @@ body.config-active #livePage.open {
   transform: translateY(-50%); font-size: 10px; opacity: .75;
   color: var(--accent, #22d3ee);
 }
+/* Opaque on purpose, and stated three ways.
+ *
+ * The list is drawn over cards that carry their own translucent washes and blurs, so
+ * anything less than a solid fill picks them up and the text sits on a moving background. A
+ * report of the menu looking see-through came from a build where this rule was already
+ * #12161a - so the colour alone was not enough: isolation stops it joining the parent's
+ * blend, and opacity:1 overrides any inherited fade from the card or its animation. */
 .cfg-sel-pop {
   position: absolute; top: 42px; right: 0; z-index: 40;
-  background: #12161a; border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: #0b0e12; background-color: #0b0e12;
+  opacity: 1; isolation: isolate; backdrop-filter: none; -webkit-backdrop-filter: none;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
   border-radius: 13px; padding: 5px 0; min-width: 150px;
   max-height: 54vh; overflow: auto;
   box-shadow: 0 12px 32px rgba(0,0,0,0.55);
