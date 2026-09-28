@@ -1821,6 +1821,15 @@ skip_cpu_caps: ;
             }
         }
         int _ucl_bg_now = sysfs_read_int(UCLAMP_BG_MAX, -1);
+        /* system-background drifts on its own, and twice as often.
+         *
+         * Both nodes are written together but only the background one was ever checked,
+         * so a system-background value that moved while background stayed put was left
+         * wrong until some cap change happened to rewrite it. The ledger shows the shape
+         * of it: uclamp_bg 33 writes against uclamp_sybg 62 in the same capture - the
+         * extra 29 are the times the pair was rewritten for bg's sake and sybg turned out
+         * to be the one that was actually stale. */
+        int _ucl_sybg_now = sysfs_read_int(UCLAMP_SYBG_MAX, -1);
         /* Stop chasing a background node that something else keeps resetting.
          *
          * The write ledger is dominated by these two: uclamp_bg and uclamp_sybg at ~110
@@ -1846,7 +1855,21 @@ skip_cpu_caps: ;
                 }
             }
         }
-        if (force || _ucl_bg_drift || caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
+        int _ucl_sybg_drift = (_ucl_sybg_now >= 0 && _ucl_sybg_now != g_wcache.uclamp_bg_max);
+        if (_ucl_sybg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max) {
+            /* Same backoff as the background node: a value something else keeps resetting
+             * is not worth chasing every pass. */
+            asb_write_health_t *_hsy = &g_write_health[ASB_WRITE_UCL_SYBG];
+            time_t _sy_now = time(NULL);
+            if (_hsy->retry_at > _sy_now) _ucl_sybg_drift = 0;
+            else if (++_hsy->drift_rewrites >= 5) {
+                _hsy->retry_at = _sy_now + 600;
+                _hsy->drift_rewrites = 0;
+                _ucl_sybg_drift = 0;
+            }
+        }
+        if (force || _ucl_bg_drift || _ucl_sybg_drift ||
+            caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
             int bg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_BG, UCLAMP_BG_MAX,
                                                     caps->uclamp_bg_max) == 0;
             int sybg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_SYBG, UCLAMP_SYBG_MAX,
