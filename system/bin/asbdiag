@@ -1594,11 +1594,20 @@ case "${_tw:-0}" in
 esac
 # These two drive the thermal lean added in V62. A bucket with zero here has not reached
 # the observation floor yet, which is not a fault - it means the lean is not applied.
+#
+# Compared against the LEARNED marks, not the 420/380 fallbacks.
+#
+# The line above prints what the device worked out - warm above 53.9 C on one capture -
+# and then this test used 42.0 regardless, so a bucket at 50.3 C was reported as "runs
+# warm" while the engine, using the real threshold, treated it as neutral. The report
+# contradicted itself two lines apart, and the wrong half is the one people read.
+#
+# The fallbacks stay as defaults for the case where no learned value is available.
 case "${_sb_t:-0}" in
   0) NOTE "no learned thermal history for this bucket yet - lean inactive" ;;
-  *) if [ "${_sb_t:-0}" -gt 420 ] 2>/dev/null; then
+  *) if [ "${_sb_t:-0}" -gt "${_tw:-420}" ] 2>/dev/null; then
        NOTE "-> leaning toward battery (this bucket historically runs warm)"
-     elif [ "${_sb_t:-0}" -lt 380 ] 2>/dev/null; then
+     elif [ "${_sb_t:-0}" -lt "${_tc:-380}" ] 2>/dev/null; then
        NOTE "-> allowing more headroom (this bucket historically runs cool)"
      else
        NOTE "-> neutral (between the warm and cool marks)"
