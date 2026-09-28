@@ -874,8 +874,14 @@ lk_emit_mobile_traffic_context() {
   [ -s "$_ns_file" ] || _ns_file="$LK_OUT_DIR/netstats_uid_start.txt"
   if [ -s "$_ns_file" ] && [ -s "$LK_OUT_DIR/phase_ledger.tsv" ]; then
     echo "===== SCREEN-OFF TRAFFIC BY APP ====="
-    echo "per screen-off phase >=30 min; buckets are 2h, so edges are approximate"
-    awk -F'\t' 'NR>1 && ($1=="sleep" || $1=="idle") && ($3-$2)>=1800 {print $1"\t"$2"\t"$3}' \
+    echo "per screen-off phase >=10 min; buckets are 2h, so edges are approximate"
+    # 10 minutes, not 30.
+    #
+    # The 30-minute floor was picked to keep the section quiet, and it went too far: a
+    # capture with a 13-minute screen-off phase carrying 26 MiB - 2 MB per minute, with
+    # the device awake 61% of it - printed nothing at all. Short phases are where this
+    # matters most, because that traffic is what ends the sleep.
+    awk -F'\t' 'NR>1 && ($1=="sleep" || $1=="idle") && ($3-$2)>=600 {print $1"\t"$2"\t"$3}' \
       "$LK_OUT_DIR/phase_ledger.tsv" 2>/dev/null | while IFS="$(printf '\t')" read -r _ph _a _z; do
       awk -v A="$_a" -v Z="$_z" -v PH="$_ph" -v MAP="$LK_OUT_DIR/uid_map.txt" '
         # Names from pm first: the netstats dump only knows the UIDs it happened to
@@ -902,7 +908,9 @@ lk_emit_mobile_traffic_context() {
         }
         END {
           tot=0; for (u in BY) tot += BY[u]
-          if (tot < 16777216) exit
+          /* 8 MiB over a short phase is already worth naming; the old 16 MiB floor was
+           * sized for half-hour windows. */
+          if (tot < 8388608) exit
           printf "  %s %d min, %.0f MiB total\n", PH, (Z-A)/60, tot/1048576
           for (i=0; i<5; i++) {
             best=""; bv=0
