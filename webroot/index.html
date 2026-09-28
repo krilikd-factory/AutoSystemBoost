@@ -7717,7 +7717,21 @@ async function pollLive(visible) {
           : profile;
     }
 
-    _el('liveState').textContent = state;
+    /* LIGHT_IDLE with the screen on is not a contradiction, but it reads like one.
+     *
+     * The state is named for the load, not for the display: reading text or a chat is
+     * genuinely light work, and after the classifier stopped treating a lit screen as
+     * load by itself, this is where the phone now spends most of its screen-on time -
+     * which is the point. Saying "idle" while the user is looking at the phone still
+     * invites the question, so the screen state is spelled out next to it rather than a
+     * new FSM state being invented for a case the existing caps already handle. */
+    {
+      const _scrOn = (kv.screen === '1' || kv.screen_on === '1');
+      _el('liveState').textContent =
+        (_scrOn && /^LIGHT_IDLE$/.test(state))
+          ? state + ' · ' + T('fsm_screen_on', 'screen on')
+          : state;
+    }
 
     const cpuT = (st && st.temp) || parseInt(kv.thermal || '0', 10);
     _el('liveCpu').textContent = cpuT ? fmtTempC(cpuT) + '°C' : '—';
