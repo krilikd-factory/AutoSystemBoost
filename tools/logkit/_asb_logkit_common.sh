@@ -231,9 +231,26 @@ lk_discover_zones() {
 # a parser written without a device to check it against is how a report ends up confidently
 # wrong. Two captures, start and end, so the difference is the session. Capped at 2 MiB each
 # because a busy device's detail dump is large and this runs twice per capture, not per tick.
+# dumpsys, found by path and not by PATH.
+#
+# The kit runs from service.sh, from the WebUI and from a shell, and those do not agree on
+# PATH. A smart_daily capture wrote "(wakeup_sources not accessible)" in all seven
+# snapshots on a device where debugfs is closed - the dumpsys fallback right below it was
+# skipped because "command -v dumpsys" found nothing, and not one byte of dumpsys output
+# appears anywhere else in that log either. The binary was there; the lookup was not.
+lk_dumpsys() {
+  if command -v dumpsys >/dev/null 2>&1; then dumpsys "$@"
+  elif [ -x /system/bin/dumpsys ]; then /system/bin/dumpsys "$@"
+  else return 1; fi
+}
+lk_have_dumpsys() {
+  command -v dumpsys >/dev/null 2>&1 || [ -x /system/bin/dumpsys ]
+}
+
 lk_netstats_uid_capture() {
   [ -n "$LK_OUT_DIR" ] || return 0
-  command -v dumpsys >/dev/null 2>&1 || return 0
+  # Same PATH trap as the wake-sources block: found by path, not by PATH.
+  lk_have_dumpsys || return 0
   # Package names for the UIDs, once per capture.
   #
   # The netstats dump only names a UID if it happens to appear in one of its own summary
@@ -247,7 +264,7 @@ lk_netstats_uid_capture() {
   fi
   {
     echo "# netstats uid capture: tag=$1 epoch=$(date +%s)"
-    dumpsys netstats --uid 2>/dev/null || dumpsys netstats detail 2>/dev/null
+    lk_dumpsys netstats --uid 2>/dev/null || lk_dumpsys netstats detail 2>/dev/null
   } | head -c 2097152 > "$LK_OUT_DIR/netstats_uid_$1.txt" 2>/dev/null
   return 0
 }
@@ -388,11 +405,11 @@ lk_snapshot_state() {
     elif [ -r /d/wakeup_sources ]; then
       head -1 /d/wakeup_sources
       tail -n +2 /d/wakeup_sources | sort -k7 -n -r | head -20
-    elif command -v dumpsys >/dev/null 2>&1; then
+    elif lk_have_dumpsys; then
       echo "  (debugfs unavailable, using dumpsys power)"
-      dumpsys power 2>/dev/null | sed -n '/^  Wake Locks:/,/^  Suspend Blockers:/p' | head -30
+      lk_dumpsys power 2>/dev/null | sed -n '/^  Wake Locks:/,/^  Suspend Blockers:/p' | head -30
       echo "  ----"
-      dumpsys power 2>/dev/null | sed -n '/^  Suspend Blockers:/,/^[A-Z]/p' | head -25
+      lk_dumpsys power 2>/dev/null | sed -n '/^  Suspend Blockers:/,/^[A-Z]/p' | head -25
     else
       echo "  (wakeup_sources not accessible)"
     fi
