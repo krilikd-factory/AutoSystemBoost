@@ -1813,6 +1813,29 @@ skip_cpu_caps: ;
 
         int _ucl_top_now = sysfs_read_int(UCLAMP_TOP_MAX, -1);
         int _ucl_drift = (_ucl_top_now >= 0 && _ucl_top_now != g_wcache.uclamp_top_max);
+        /* Stop re-asserting a top-app ceiling that something else owns.
+         *
+         * A capture shows the shape of a fight nobody wins: uclamp_top rewritten 129
+         * times an hour - one per 30 s re-assert pass - while the live node still read 85
+         * against our 51. The OEM boost framework puts its value back between our writes,
+         * so every pass costs a write and changes nothing for more than a moment.
+         *
+         * Five losses in a row is the same bar the background nodes use. The cooloff is
+         * shorter (5 min against 10) because this node matters for responsiveness: if the
+         * other writer stops, ASB should take the ceiling back quickly. A genuine cap
+         * change still writes immediately; only the drift path backs off.
+         */
+        if (_ucl_drift && caps->uclamp_top_max == g_wcache.uclamp_top_max) {
+            asb_write_health_t *_htop = &g_write_health[ASB_WRITE_UCL_TOP];
+            time_t _tp_now = time(NULL);
+            if (_htop->retry_at > _tp_now) _ucl_drift = 0;
+            else if (++_htop->drift_rewrites >= 5) {
+                _htop->retry_at = _tp_now + 300;
+                _htop->drift_rewrites = 0;
+                snprintf(_htop->status, sizeof(_htop->status), "%s", "foreign_owner");
+                _ucl_drift = 0;
+            }
+        }
         if (force || _ucl_drift || caps->uclamp_top_max != g_wcache.uclamp_top_max) {
             if (writer_write_int_confirmed(ASB_WRITE_UCL_TOP, UCLAMP_TOP_MAX,
                                            caps->uclamp_top_max) == 0) {
