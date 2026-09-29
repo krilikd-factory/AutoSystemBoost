@@ -1123,6 +1123,35 @@ else
   ok "no comment lines inside backslash-continued commands"
 fi
 
+# C-style comments inside an embedded awk program.
+#
+# awk reads a leading "/*" as the start of a regular expression and dies with "runaway
+# regular expression". The whole program stops, so an embedded analysis prints its header
+# and nothing else - which reads like "no data matched" rather than a crash. That cost two
+# rounds of chasing the wrong cause in the screen-off traffic section, and the existing
+# check above does not catch it: the line is not a continuation, it is inside awk.
+#
+# Looks for a line whose first non-blank characters are "/*" or "*" inside a file that
+# embeds awk. Shell has no C comments, so a match is either awk or a mistake either way.
+echo ""
+echo "🧷 C comments inside awk programs"
+_ac_hits="$(find "$MODDIR" -name '*.sh' -type f ! -path '*/dsp_stubs/*' 2>/dev/null | while IFS= read -r _af; do
+  grep -q "awk " "$_af" 2>/dev/null || continue
+  awk -v f="$_af" '
+    # Only the opening form, and only where a comment can be: "/*" at the start of a line.
+    # The continuation form " * text" is indistinguishable from a shell case branch
+    # ("*) echo 100 ;;") without parsing, and matching it produced three false hits on
+    # real case statements - a check that cries wolf gets switched off.
+    /^[[:space:]]*\/\*/ { print f ":" NR }
+  ' "$_af"
+done)"
+if [ -n "$_ac_hits" ]; then
+  echo "$_ac_hits" | while IFS= read -r _h; do echo "     $_h"; done
+  err "C-style comment inside an awk program - awk treats /* as a regex"
+else
+  ok "no C comments inside awk programs"
+fi
+
 echo "  Lint: ❌ $ERRORS errors  ⚠️  $WARNS warnings"
 [ $ERRORS -eq 0 ] && echo "  Config: CLEAN" || echo "  Config: FIX REQUIRED"
 echo "═══════════════════════════════"
