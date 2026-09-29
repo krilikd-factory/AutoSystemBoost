@@ -1988,9 +1988,16 @@ body.config-active #livePage.open {
   transition: transform .15s, border-color .15s;
 }
 .cfg-lang-btn:active { transform: scale(.92); }
+/* Same treatment as .cfg-sel-pop - this one was left behind.
+ *
+ * Two popup families share the same look and only one was hardened, so the menu appeared
+ * solid in some places and see-through in others depending on which element opened it.
+ * Matching them removes the inconsistency the report described. */
 .cfg-lang-pop {
   position: absolute; top: 46px; left: 0; z-index: 40;
-  background: #12161a; border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: #0b0e12; background-color: #0b0e12;
+  opacity: 1; isolation: isolate; backdrop-filter: none; -webkit-backdrop-filter: none;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
   border-radius: 14px; padding: 6px 0; min-width: 168px;
   max-height: 62vh; overflow: auto;
   box-shadow: 0 12px 34px rgba(0,0,0,0.55);
