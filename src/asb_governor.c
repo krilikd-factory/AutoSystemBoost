@@ -4609,9 +4609,25 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                                      &g_smart_rt);
     }
     {
+        /* Measure first, remember second.
+         *
+         * The bucket average answers "what this hour of the week usually costs" - a prior
+         * built from past sessions, including the gaming and downloading ones. Used as the
+         * prediction it was wrong by the width of the question: a capture graded itself
+         * score=0/100, error=100%, predicting 10.2 %/h while the battery actually went
+         * 78% to 60% over 3.5 h - 4.96 %/h, less than half.
+         *
+         * That error is not cosmetic. This rate feeds the budget severity, so a
+         * pessimistic number trims a phone that had hours of headroom.
+         *
+         * The live EWMA is what this session is actually doing, so it leads. The bucket
+         * stays as the fallback for the first minutes after boot, before any window has
+         * closed - which is exactly the case it was written for.
+         */
         int _budget_rate = g_smart_drain_rate_ewma_x10;
         g_smart_budget_src = 0;
-        if (g_smart_rt.bucket_id < ASB_SMART_BUCKETS &&
+        if (_budget_rate <= 0 &&
+            g_smart_rt.bucket_id < ASB_SMART_BUCKETS &&
             g_smart_rt.conf_x1000 >= 350) {
             int _bew = (int)g_smart_store.buckets[g_smart_rt.bucket_id].avg_drain_pctph_x10;
             if (_bew > 0) {
