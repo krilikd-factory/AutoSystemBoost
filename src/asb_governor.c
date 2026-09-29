@@ -7988,6 +7988,22 @@ int main(int argc, char **argv) {
      * mode lose its memory when I restart". Everything else in this block persists on the
      * way out; the learner was the one thing that did not.
      */
+    /* Bank the session in flight before the store is written.
+     *
+     * Everything measured since the last bank lived in memory only: drain accumulated
+     * over the window, max temperature, time in heavy states. A restart threw it away,
+     * and a restart is cheap to cause - saving anything in the WebUI reloads the config
+     * and brings the governor back up, so an evening of adjusting settings could discard
+     * one session after another and the learner would see almost nothing from it.
+     *
+     * The same 20-minute floor the periodic path uses applies here: shorter than that and
+     * the drain figure is noise, which is exactly what should not be learned from. */
+    if (g_smart_store_loaded && g_smart_rt.enabled &&
+        fsm.ses_start_ts > 0 &&
+        (long)(time(NULL) - fsm.ses_start_ts) >= 1200) {
+        session_history_append_ex(&fsm, "shutdown");
+        asb_log("smart: session banked on shutdown");
+    }
     if (g_smart_store_loaded) {
         g_smart_store.last_update_ts = (uint32_t)time(NULL);
         if (asb_smart_store_save_atomic(&g_smart_store, ASB_SMART_STORE_FILE) == 0)

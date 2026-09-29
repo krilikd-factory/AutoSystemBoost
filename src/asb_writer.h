@@ -337,7 +337,20 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
          * write happens: the kernel gets a value it will accept, and the node stops being
          * a permanent source of deferrals. */
         h->kernel_floor = observed;
-        if (++h->floor_holds >= 3) h->retry_at = now + 3600;
+        /* Five minutes, not an hour.
+         *
+         * An hour was chosen to end a write war, and it ends one - but it also hands the
+         * cluster to whoever raised the floor for the rest of that hour. A capture shows
+         * what that costs: policy0 min sat at 1785600 in three snapshots out of four,
+         * against the 384000 this module asks for and the 384000 visible in the fourth.
+         * The little cores never idled below 1.8 GHz while the screen was on.
+         *
+         * The vendor's floor here is usually transient - a touch or launch boost - not a
+         * standing policy like the prime ceiling. Backing off for five minutes still stops
+         * the per-tick fight (twelve attempts an hour at worst) while letting the module
+         * take the floor back shortly after a boost ends, instead of at the top of the
+         * next hour. */
+        if (++h->floor_holds >= 3) h->retry_at = now + 300;
         else                       h->retry_at = 0;
         snprintf(h->status, sizeof(h->status), "%s", "kernel_floor_higher");
         return 0;
@@ -1650,6 +1663,17 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                 if (smart_opp > 0) want_min = (int)smart_opp;
             } else {
                 want_min = (int)cpu_snap_freq(j, (long)want_min);
+            }
+            /* Re-clamp after the branch, as the primary path already does.
+             *
+             * The ceiling clamp four lines up runs BEFORE the Smart branch overwrites
+             * want_min, so on this path it was decorative: whatever the branch produced
+             * went to the kernel unchecked. Same defect, same fix - the primary path got
+             * it when a report showed eight FAILs for a minimum above the live ceiling;
+             * this secondary path for the remaining policies was missed then. */
+            {
+                int _now_max = sysfs_read_int(g_cpu_all_max_paths[j], 0);
+                if (_now_max > 0 && want_min > _now_max) want_min = _now_max;
             }
             if (force || sysfs_read_int(g_cpu_all_min_paths[j], 0) != want_min) {
                 if (sysfs_write_int(g_cpu_all_min_paths[j], want_min) == 0)
