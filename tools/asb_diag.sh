@@ -1581,7 +1581,22 @@ _sb_d="$(grep -m1 '^smart_bucket_drain_x10=' /dev/.asb/state 2>/dev/null | cut -
   _sl="$(grep -m1 "^ses_last_temp=" /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _sd="$(grep -m1 "^ses_last_dur=" /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _sr="$(grep -m1 "^ses_last_reason=" /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -d '"')"
-  [ -n "$_sl" ] && NOTE "last banked session: max ${_sl}C over ${_sd}s (${_sr})"
+  # "none" means nothing has been banked SINCE THE GOVERNOR STARTED, so it only says
+  # something next to how long that has been. Three reports in a row showed "none" and I
+  # read it as frozen learning each time - the logs from the same days carry banked
+  # sessions with reasons smart_periodic and smart_bucket_rollover. The governor had
+  # simply restarted, which a config save is enough to do.
+  _sup="$(grep -m1 '^governor_uptime_s=' /dev/.asb/state 2>/dev/null | tr -dc '0-9')"
+  case "$_sup" in ''|*[!0-9]*) _sup="" ;; esac
+  if [ "$_sl" = "0" ] || [ -z "$_sl" ]; then
+    if [ -n "$_sup" ] && [ "$_sup" -lt 1500 ] 2>/dev/null; then
+      NOTE "last banked session: none yet (governor up ${_sup}s; first bank needs ~20 min)"
+    else
+      NOTE "last banked session: none (governor up ${_sup:-?}s - expected one by now)"
+    fi
+  else
+    NOTE "last banked session: max ${_sl}C over ${_sd}s (${_sr}), governor up ${_sup:-?}s"
+  fi
 NOTE "bucket avg temp = ${_sb_t:-0} (tenths C)  ·  avg drain = ${_sb_d:-0} (tenths %/h)"
 _tw="$(grep -m1 '^smart_therm_warm_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _tc="$(grep -m1 '^smart_therm_cool_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
