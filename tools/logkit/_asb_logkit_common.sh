@@ -751,6 +751,14 @@ lk_capture_perf_trace_row() {
   _gmax=$(_f /sys/class/kgsl/kgsl-3d0/max_gpuclk)
   _gmin=$(_f /sys/class/kgsl/kgsl-3d0/min_gpuclk)
   _ggov=$(_f /sys/class/kgsl/kgsl-3d0/devfreq/governor)
+  # Fall back to the pwrlevel interface where devfreq is absent.
+  #
+  # A capture from a pwrlevel-controlled GPU (gpu_devfreq=0 in asbdiag) left two of the
+  # four GPU columns empty in all 145 rows: min_gpuclk and the devfreq governor simply do
+  # not exist there, and the trace recorded nothing rather than what the device does use.
+  # The writer has always known about these paths - only the trace did not.
+  [ -n "$_gmin" ] || _gmin=$(_f /sys/class/kgsl/kgsl-3d0/min_pwrlevel)
+  [ -n "$_ggov" ] || { [ -e /sys/class/kgsl/kgsl-3d0/max_pwrlevel ] && _ggov="pwrlevel"; }
   _bc=$(_f /sys/class/power_supply/battery/current_now)
   _bv=$(_f /sys/class/power_supply/battery/voltage_now)
   read -r _l1 _l5 _l15 _rest < /proc/loadavg

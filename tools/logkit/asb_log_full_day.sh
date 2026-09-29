@@ -914,8 +914,13 @@ lk_emit_mobile_traffic_context() {
         }
         END {
           tot=0; for (u in BY) tot += BY[u]
-          /* 8 MiB over a short phase is already worth naming; the old 16 MiB floor was
-           * sized for half-hour windows. */
+          # 8 MiB over a short phase is already worth naming; the old 16 MiB floor was
+          # sized for half-hour windows.
+          #
+          # This comment used C syntax once, and awk read the leading "/*" as the start of
+          # a regular expression: "runaway regular expression". The whole program died on
+          # every phase, so the section printed its header and nothing else - twice I read
+          # that as "no phase qualified" and went looking for a threshold problem.
           if (tot < 8388608) exit
           printf "  %s %d min, %.0f MiB total\n", PH, (Z-A)/60, tot/1048576
           for (i=0; i<5; i++) {
