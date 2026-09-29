@@ -2186,6 +2186,9 @@ body.config-active #livePage.open {
  * report of the menu looking see-through came from a build where this rule was already
  * #12161a - so the colour alone was not enough: isolation stops it joining the parent's
  * blend, and opacity:1 overrides any inherited fade from the card or its animation. */
+/* A row whose option list is open paints above the rows after it. */
+.cfg-row.sel-open { position: relative; z-index: 60; }
+
 .cfg-sel-pop {
   position: absolute; top: 42px; right: 0; z-index: 40;
   background: #0b0e12; background-color: #0b0e12;
@@ -5592,6 +5595,21 @@ const _unav = ASB_CAP_REQUIRES[it.key];
             /* Close any other open popup first, or two lists overlap. */
             document.querySelectorAll('.cfg-sel-pop').forEach(x => { if (x !== pop) x.hidden = true; });
             pop.hidden = !pop.hidden;
+            /* Lift the whole row while its list is open.
+             *
+             * The list was never translucent - it was being painted OVER by the cards
+             * below it. A screenshot of a collapsed card shows the next card's "СНЯТЬ"
+             * button drawn on top of the menu; the same card expanded shows the menu
+             * solid, because then it fits inside the card's own box. Each row builds its
+             * own stacking context, so z-index inside the row cannot beat the row that
+             * comes after it - the row itself has to win.
+             *
+             * Cleared on close so the rows go back to their natural order. */
+            document.querySelectorAll('.cfg-row.sel-open').forEach(r => r.classList.remove('sel-open'));
+            if (!pop.hidden) {
+              const _row = selWrap.closest('.cfg-row');
+              if (_row) _row.classList.add('sel-open');
+            }
             cfgArmPopDismiss();
           };
           selWrap.appendChild(btn);
@@ -6306,12 +6324,18 @@ function cfgArmPopDismiss() {
   _cfgPopDismissArmed = true;
   document.addEventListener('click', function () {
     document.querySelectorAll('.cfg-sel-pop').forEach(function (x) { x.hidden = true; });
+    /* Drop the lift with the list: a row left at z-index 60 would keep covering the rows
+     * after it long after its menu closed. */
+    document.querySelectorAll('.cfg-row.sel-open').forEach(function (r) { r.classList.remove('sel-open'); });
   });
   /* Escape closes it too - a keyboard is attached often enough on tablets and desktops
    * for this to matter, and it costs one line. */
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       document.querySelectorAll('.cfg-sel-pop').forEach(function (x) { x.hidden = true; });
+    /* Drop the lift with the list: a row left at z-index 60 would keep covering the rows
+     * after it long after its menu closed. */
+    document.querySelectorAll('.cfg-row.sel-open').forEach(function (r) { r.classList.remove('sel-open'); });
     }
   });
 }
