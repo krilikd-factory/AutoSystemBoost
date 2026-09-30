@@ -987,6 +987,12 @@ static int tick_scaling_max(int slot) {
 static void tick_scaling_max_invalidate(void) { g_tick_smax_valid = 0; }
 
 static int    g_cap_vendor_passive    = 0;
+/* asb_priority (experimental): direction of the last vendor cap event on the prime, and how
+ * often priority mode re-asserted over a vendor RAISE instead of standing down. The counter
+ * is the A/B evidence: a large number with no drop in drain means the vendor re-raises
+ * right away and the experiment is only buying a tug-of-war. */
+static int           g_cap_vendor_raise = 0;
+static unsigned long g_prio_reasserts   = 0;
 /* Set once at startup; the denominator for every per-hour rate in the report. */
 static time_t g_governor_start_ts     = 0;
 static int    g_cap_detente_active = 0;
@@ -2173,6 +2179,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             tick_scaling_max(0), tick_scaling_max(1));
     fprintf(f, "reassert_eligible=%d\n", asb_cap_writes_should_back_off() ? 0 : 1);
     fprintf(f, "cap_vendor_passive=%d\n", g_cap_vendor_passive);
+    /* asb_priority A/B evidence: whether the mode is on, which way the vendor last moved the
+     * prime cap, and how many writes priority made that passive mode would have skipped. */
+    fprintf(f, "asb_priority=%d\ncap_vendor_raise=%d\nprio_reasserts=%lu\nprio_ucl_reasserts=%lu\n",
+            g_asb_cfg.asb_priority, g_cap_vendor_raise, g_prio_reasserts, g_prio_ucl_reasserts);
     /* Screen-off cooldown clamp, so a night capture can show whether it engaged.
      *
      * The clamp only fires on a phone that fell asleep warm, which is exactly the night
@@ -2288,6 +2298,14 @@ static int asb_cap_compute_owner(const char *cap_source) {
         owner = ASB_CAP_OWNER_ASB;
     }
     else owner = ASB_CAP_OWNER_UNKNOWN;
+    /* Remember whether the vendor RAISED the cap above ours or clamped it below. Priority
+     * mode only ever resists the first: a clamp is thermal protection or the vendor's own
+     * saving, and both are always honoured. */
+    if (cap_source) {
+        if (strcmp(cap_source, "vendor_raised") == 0 ||
+            strcmp(cap_source, "shell_overridden_up") == 0) g_cap_vendor_raise = 1;
+        else if (strcmp(cap_source, "vendor_clamp") == 0)  g_cap_vendor_raise = 0;
+    }
 
     /*
      * Track recent vendor clamp pattern for anti-thrash.
@@ -7354,10 +7372,27 @@ int main(int argc, char **argv) {
                        !force_write && !metrics.misc.screen_on &&
                        (fsm.state == ASB_STATE_DEEP_IDLE ||
                         fsm.state == ASB_STATE_LIGHT_IDLE) &&
-                       !fsm.thermal_cap) {
+                       !fsm.thermal_cap &&
+                       /* asb_priority: do not stand down when the vendor RAISED the cap.
+                        *
+                        * This gate already applies only with the screen off in the idle
+                        * states, so the vendor's touch and launch boosts on the screen are
+                        * never contested - priority cannot touch them. What it changes is
+                        * the one case the logs showed: the vendor holding the prime ~1.75 GHz
+                        * over an ASB request of 1.02 GHz while the phone sleeps. A clamp
+                        * BELOW ours (g_cap_vendor_raise == 0) is thermal or vendor saving
+                        * and still makes ASB stand down, exactly as without priority. */
+                       !(g_asb_cfg.asb_priority && g_cap_vendor_raise)) {
                 g_cap_detente_skipped++;
                 g_write_skipped_backoff++;
             } else if (want_apply) {
+                /* Count only the writes priority actually caused. The back-off test is
+                 * read from the flags directly: asb_cap_writes_should_back_off() bumps the
+                 * vendor-override counter on every call and would double-count this tick. */
+                if (g_asb_cfg.asb_priority && g_cap_vendor_raise && !metrics.misc.screen_on &&
+                    (g_cap_vendor_passive ||
+                     (g_cap_vendor_hold_until > 0 && time(NULL) < g_cap_vendor_hold_until)))
+                    g_prio_reasserts++;
                 g_write_attempts++;
                 asb_profile_caps_t _effective_caps = fsm.current_caps;
                 asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);

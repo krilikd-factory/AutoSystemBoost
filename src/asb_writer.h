@@ -1206,6 +1206,8 @@ static asb_writer_cache_t g_wcache = { .gpu_min_written = -1 };
 /* Last uclamp values the writer was asked to apply, for diagnostics. Read from the
  * cache rather than the node: the point is to compare intent against reality, and the
  * report already prints reality. */
+/* asb_priority: uclamp rewrites made over a foreign RAISE instead of backing off. */
+static unsigned long g_prio_ucl_reasserts = 0;
 static int g_ucl_want_top = -1;
 static int g_ucl_want_bg  = -1;
 static int writer_last_uclamp_top(void) { return g_ucl_want_top; }
@@ -1849,7 +1851,14 @@ skip_cpu_caps: ;
          * other writer stops, ASB should take the ceiling back quickly. A genuine cap
          * change still writes immediately; only the drift path backs off.
          */
-        if (_ucl_drift && caps->uclamp_top_max == g_wcache.uclamp_top_max) {
+        /* asb_priority: top-app is contested only in DEEP_IDLE - the screen is off by
+         * definition there, so no touch or launch boost can be overridden - and only when
+         * the foreign value is ABOVE ours. A lower value is always accepted. */
+        if (_ucl_drift && caps->uclamp_top_max == g_wcache.uclamp_top_max &&
+            g_asb_cfg.asb_priority && state == ASB_STATE_DEEP_IDLE &&
+            _ucl_top_now > g_wcache.uclamp_top_max) {
+            g_prio_ucl_reasserts++;
+        } else if (_ucl_drift && caps->uclamp_top_max == g_wcache.uclamp_top_max) {
             asb_write_health_t *_htop = &g_write_health[ASB_WRITE_UCL_TOP];
             time_t _tp_now = time(NULL);
             if (_htop->retry_at > _tp_now) _ucl_drift = 0;
@@ -1890,7 +1899,12 @@ skip_cpu_caps: ;
          * genuine cap change still writes immediately - the backoff only suppresses the
          * drift path - and any write that finds the value already correct clears it. */
         int _ucl_bg_drift = (_ucl_bg_now >= 0 && _ucl_bg_now != g_wcache.uclamp_bg_max);
-        if (_ucl_bg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max) {
+        /* asb_priority: the background tier is contested in every state - background work
+         * never needs a vendor boost for smoothness - but again only over a RAISE. */
+        if (_ucl_bg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max &&
+            g_asb_cfg.asb_priority && _ucl_bg_now > g_wcache.uclamp_bg_max) {
+            g_prio_ucl_reasserts++;
+        } else if (_ucl_bg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max) {
             asb_write_health_t *_hbg = &g_write_health[ASB_WRITE_UCL_BG];
             if (_hbg) {
                 time_t _ucl_now = time(NULL);
