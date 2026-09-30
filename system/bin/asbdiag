@@ -619,6 +619,14 @@ if [ -r "$_state" ]; then
   _vp="$(grep -m1 '^cap_vendor_passive=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _vc="$(grep -m1 '^cap_vendor_slow_clamps=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   [ -n "$_vp" ] && NOTE "vendor contention: passive=${_vp} slow_clamps=${_vc:-0}"
+  # asb_priority A/B line. Printed only when the experiment is on, so a normal report is
+  # unchanged. prio_reasserts counts CPU-cap writes priority made that passive mode would
+  # have skipped; prio_ucl_reasserts the same for the uclamp tiers. Climbing counters with
+  # no fall in screen-off drain mean the vendor re-raises at once: a tug-of-war, not a win.
+  _pri="$(_rget asb_priority "$_state")"
+  if [ "$_pri" = "1" ]; then
+    NOTE "engine priority: ON (experimental) - cpu reasserts=$(_rget prio_reasserts "$_state") uclamp reasserts=$(_rget prio_ucl_reasserts "$_state") last vendor move=$( [ "$(_rget cap_vendor_raise "$_state")" = "1" ] && echo raised || echo lowered)"
+  fi
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
   # Say what the two numbers count, because they do not count the same thing.
   #
