@@ -4803,6 +4803,46 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     asb_smart_apply_camera_relax(m->misc.camera_active, &g_smart_rt);
 
     /* 5. Slot-update gating: should we rebuild g_smart_bounds? */
+    /* Run the screen/app tuner on EVERY tick, not only when the slot recomputes.
+     *
+     * This call used to sit below "if (!do_update) return 0;", and the slot recomputes on
+     * bucket, daypart, confidence, thermal, charging and app-tier changes - never on a
+     * screen change. So turning the screen off reached the tuner only when the app tier
+     * happened to change at the same moment. A field night shows the result: hourly
+     * snapshots at 02:39 and 04:27, screen off, still read watermark_scale_factor=60 -
+     * and with it none of the tuner's screen-off work ran either: laptop_mode, dirty
+     * thresholds, read-ahead, the foreground uclamp tier, Wi-Fi power save.
+     *
+     * The call itself stays cheap: it only forks when the signature changes. A screen
+     * change also bypasses the 30 s debounce - with the screen off the governor's timers
+     * are disarmed, so a transition that landed inside the window would otherwise not be
+     * retried until morning. */
+    {
+        int therm_bucket = (cpu_max_c >= 60) ? 2 : (cpu_max_c >= 50 ? 1 : 0);
+        int screen_on_v  = m->misc.screen_on ? 1 : 0;
+        int sig = (g_smart_rt.app_hint << 4) | (therm_bucket << 2) | screen_on_v;
+        int screen_changed = (g_smart_last_tune_sig < 0) ||
+                                 ((sig & 1) != (g_smart_last_tune_sig & 1));
+            if (sig != g_smart_last_tune_sig &&
+                (screen_changed || (now - g_smart_last_tune_ts) >= 30)) {
+            char cmd[256];
+            /*
+             * Run it THROUGH sh.
+             * Exec'ing the path directly therefore failed with EACCES on every device, and
+             * because the command is backgrounded into /dev/null with its return value
+             * discarded, it failed in complete silence: the Smart dynamic tuner has never
+             * actually run.
+             */
+            snprintf(cmd, sizeof(cmd),
+                     "sh /data/adb/modules/AutoSystemBoost/runtime/smart_dynamic_tune.sh "
+                     "%d %d %d >/dev/null 2>&1 &",
+                     g_smart_rt.app_hint, therm_bucket, screen_on_v);
+            int _rc = system(cmd);
+            (void)_rc;
+            g_smart_last_tune_sig = sig;
+            g_smart_last_tune_ts  = now;
+        }
+    }
     int do_update = asb_smart_should_update_slot(&g_smart_rt, now, charging, g_smart_rt.app_hint);
     if (!do_update) return 0;
 
@@ -4937,29 +4977,6 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     /* Dynamic tuner: re-apply readahead/MGLRU/VM/swappiness when the scenario
      * meaningfully changed. Rate-limited to once per 30 seconds and only on
      * a change in hint or thermal bucket or screen-on state. */
-    {
-        int therm_bucket = (cpu_max_c >= 60) ? 2 : (cpu_max_c >= 50 ? 1 : 0);
-        int screen_on_v  = m->misc.screen_on ? 1 : 0;
-        int sig = (g_smart_rt.app_hint << 4) | (therm_bucket << 2) | screen_on_v;
-        if (sig != g_smart_last_tune_sig && (now - g_smart_last_tune_ts) >= 30) {
-            char cmd[256];
-            /*
-             * Run it THROUGH sh.
-             * Exec'ing the path directly therefore failed with EACCES on every device, and
-             * because the command is backgrounded into /dev/null with its return value
-             * discarded, it failed in complete silence: the Smart dynamic tuner has never
-             * actually run.
-             */
-            snprintf(cmd, sizeof(cmd),
-                     "sh /data/adb/modules/AutoSystemBoost/runtime/smart_dynamic_tune.sh "
-                     "%d %d %d >/dev/null 2>&1 &",
-                     g_smart_rt.app_hint, therm_bucket, screen_on_v);
-            int _rc = system(cmd);
-            (void)_rc;
-            g_smart_last_tune_sig = sig;
-            g_smart_last_tune_ts  = now;
-        }
-    }
 
     if (g_asb_cfg.smart_debug_log) {
         asb_log("smart_tick: bucket=%d daypart=%d we=%d fb=%d conf=%d alpha=%d "
