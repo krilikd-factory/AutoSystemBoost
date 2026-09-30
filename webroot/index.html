@@ -1221,6 +1221,11 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   -webkit-overflow-scrolling: touch;
   pointer-events: none;
   visibility: hidden;
+  /* Keep each page on its own compositor layer from the start. Without this the layer is
+     only created when the page turns visible - an extra paint landing on the very first
+     frame of the slide. (contain: paint was considered and left out: it would clip any
+     sheet or popup inside the page to the 420 px column on a wider screen.) */
+  will-change: transform;
 }
 .live-inner {
   width: 100%;
@@ -4537,6 +4542,12 @@ async function cfgLoad() {
   await cfgLoadV64State();
   await loadLtpoStatus();
   await loadMmfeedStatus();
+  /* Never repaint the page while it is still sliding in. openConfigPage already drew
+   * the hub before the slide started; if fresh values arrive mid-motion, wait out the
+   * remainder and paint once the layer has settled. Other callers leave _cfgAnimUntil
+   * in the past, so this adds no delay anywhere else. */
+  const _wait = _cfgAnimUntil - performance.now();
+  if (_wait > 0) await new Promise(function (r) { setTimeout(r, _wait + 16); });
   cfgRender();
 }
 
@@ -7033,11 +7044,20 @@ document.addEventListener('DOMContentLoaded', function () {
   mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 });
 
+/* Page-transition length in ms, read from the same CSS variable the slide uses, so the
+ * two can never drift apart. Falls back to the shipped 320 ms. */
+function _pageAnimMs() {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--page-anim-dur').trim();
+    const n = parseFloat(v);
+    if (!isNaN(n)) return v.endsWith('ms') ? n : n * 1000;
+  } catch (e) {}
+  return 320;
+}
+let _cfgAnimUntil = 0;
+
 function openConfigPage() {
   uiSound('nav');
-  // Loaded before the first render, or a non-reference device would flash "simplified"
-  // for a frame before it is filtered out.
-  loadDeviceClass();
   const p = _el('configPage');
   if (!p) return;
   _cfgGroup = null;   // always open on the hub, never mid-drill from last time
@@ -7047,15 +7067,45 @@ function openConfigPage() {
     _el('cfgVerBadge').textContent   = _el('verBadge').textContent;
     _el('cfgCurProfile').textContent = _el('curProfile').textContent;
   } catch(e) {}
-  p.classList.add('open');
-  document.body.classList.add('live-active');
-  asbTabbarVisibility();
-  document.body.classList.add('config-active');
-  asbTabbarVisibility();
+  /* Build the page BEFORE it moves, then start the slide on the next frame.
+   *
+   * The page used to slide in empty: the hub was only built at the end of cfgLoad, after
+   * four sequential shell round-trips (config file, V64 state, LTPO, mmfeed). Right after
+   * the WebUI opens that queue is still busy with the main page's own start-up reads, so
+   * the render landed at an unpredictable moment - often halfway through the 320 ms slide.
+   * Dozens of cards appearing inside a layer that is being transformed forces a relayout
+   * and repaint mid-motion: that is the stutter seen on Config and never on Monitor, whose
+   * markup already exists and only has its numbers updated.
+   *
+   * So the hub is rendered now from whatever values are already known (defaults on the
+   * very first open), layout is committed, and only then does the slide begin - the
+   * compositor moves a finished layer. Fresh values arrive afterwards and are painted once
+   * the slide has settled (see cfgLoad), never during it. */
+  try { cfgRender(); } catch (e) {}
   p.setAttribute('aria-hidden', 'false');
   p.scrollTop = 0;
   _cfgOpen = true;
+  _cfgAnimUntil = performance.now() + _pageAnimMs() + 50;   // + the two frames before the slide starts
+  /* Body classes stay synchronous, exactly as before. Navigation removes live-active just
+   * before calling this when coming from Monitor; re-adding it in a later frame would leave
+   * the body without it for one frame and flash the main page underneath. Only the page's
+   * own 'open' class - the thing that starts the slide - is deferred.
+   *
+   * Two frames, not one: a single rAF callback can run before the current frame is drawn,
+   * which would put the hub's layout and the start of the slide back into the same frame.
+   * The second callback guarantees one frame has rendered the laid-out hub first. */
+  document.body.classList.add('live-active');
+  document.body.classList.add('config-active');
+  asbTabbarVisibility();
+  requestAnimationFrame(function () {
+    // Guard against a tab switch inside those two frames: closeConfigPage clears _cfgOpen,
+    // and a late 'open' would slide the page back in after the user already left it.
+    requestAnimationFrame(function () { if (_cfgOpen) p.classList.add('open'); });
+  });
   cfgLoad();
+  // Device class is a shell read the page does not need to start moving - defer it past
+  // the slide instead of running it synchronously on the tap.
+  setTimeout(function () { try { loadDeviceClass(); } catch (e) {} }, _pageAnimMs() + 40);
 }
 
 // The section label and the back chip are the only chrome that has to know which screen
