@@ -138,7 +138,15 @@ if [ "$_cam_guard" = "0" ]; then
     # repeated - and the profile value is restored the moment the screen comes back.
     _ucfg_node=/dev/cpuctl/foreground/cpu.uclamp.max
     if [ -w "$_ucfg_node" ]; then
-      _ucfg_now="$(cat "$_ucfg_node" 2>/dev/null | cut -d. -f1 | tr -dc '0-9')"
+      # The kernel prints "max" for 100, and "max" has no digits: the old cut/tr turned it
+      # into an empty string and then 0, so a tier sitting at max when the screen went off
+      # (the camera guard leaves it there during face unlock) was judged "nothing to lower"
+      # and kept uncapped all night. Read "max" as 100 so it is lowered like any other.
+      _ucfg_raw="$(cat "$_ucfg_node" 2>/dev/null | tr -d ' \r\n')"
+      case "$_ucfg_raw" in
+        max*) _ucfg_now=100 ;;
+        *)    _ucfg_now="$(echo "$_ucfg_raw" | cut -d. -f1 | tr -dc '0-9')" ;;
+      esac
       case "$_ucfg_now" in ''|*[!0-9]*) _ucfg_now=0 ;; esac
       if [ "$_ucfg_now" -gt 35 ] 2>/dev/null; then
         printf '%s\n' "$_ucfg_now" > /data/adb/asb/ucfg_restore 2>/dev/null
