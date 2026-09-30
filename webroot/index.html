@@ -3472,6 +3472,9 @@ const TECH_ICON_PATHS = {
      we are choosing to leave it. Was pointing at a 'net' icon that does not exist, so
      the card rendered whatever the fallback is. */
   wifileave: '<path d="M3.5 9.5a12.5 12.5 0 0 1 12-1.6M6.5 13a8.2 8.2 0 0 1 7-.7M9.6 16.3a3.7 3.7 0 0 1 2.3-.3"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/><path d="M15.5 8.5h6M19 6l2.5 2.5L19 11"/>',
+  /* enginepri: a gauge whose needle is pinned by a small lock - the engine holding its own
+     setting instead of letting it drift. Same 24-box geometry and stroke as the rest. */
+  enginepri: '<path d="M4 16a8 8 0 0 1 16 0"></path><path d="M12 16l3.5-4.5"></path><circle cx="12" cy="16" r="1.1"></circle><rect x="15.5" y="4" width="5" height="4" rx="1"></rect><path d="M16.5 4V3a1.5 1.5 0 0 1 3 0v1"></path>',
   wifipm: '<path d="M4 9.5a12.6 12.6 0 0 1 16 0M7.2 13a8 8 0 0 1 9.6 0"/><circle cx="12" cy="16.8" r="1.3"/><path d="M17.3 17.2l2.2 2.3 2.2-2.3"/>',
   memhold: '<rect x="5" y="7" width="14" height="11" rx="2"/><path d="M9 7V4.5M15 7V4.5M9 20.5V18M15 20.5V18"/><path d="M12 10l2.2.9v1.5c0 1.4-.9 2.3-2.2 2.9-1.3-.6-2.2-1.5-2.2-2.9v-1.5z"/>'
          + '<path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"></path>'
@@ -4307,6 +4310,7 @@ const CFG_FILE = MD + '/config/governor.conf';
  * Keys mirrored into the external snapshot when changed here.
  */
 const SNAP_KEYS = [
+  'asb_priority',
   'wifi_powersave',
   'net_wifi_leave',
   'ltpo_force',
@@ -4464,6 +4468,8 @@ const CFG_ITEMS = [
     desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
   { key:'smart_media_guard', type:'bool', def:'0', stock:'0', name:'Smart Media Guard',
     desc:'An opt-in guard for a narrow case: a known video, feed or browser app stays in game-like CPU + GPU load for a full minute while you use it on battery. In Smart only, ASB then keeps the effective GPU ceiling at the same 70% media envelope already used for video. It never limits a known game, an unknown app, charging, thermal protection, CPU ceilings or frequency floors. Start with the 12-hour trial; if a high-refresh stream stutters, turn it back off.' },
+  { key:'asb_priority', type:'bool', def:'0', stock:'0', name:'Engine Priority (experimental)',
+    cat:'battery' },
   // --- Power & battery ---,
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
@@ -4553,6 +4559,7 @@ async function cfgLoad() {
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
 const CFG_CAT = {
+  asb_priority:'battery',
   wifi_powersave:'net',
   net_wifi_leave:'wifileave',
   /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
@@ -4607,6 +4614,7 @@ const CFG_GROUPS = [
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
 const CFG_GROUP_OF = {
+  asb_priority:'battery',
   wifi_powersave:'net',
   /* Was 'wifileave' - an icon name, not a group. The card matched no CFG_GROUPS entry,
    * so it never rendered on the hub or in any category; search was the only way in. */
@@ -4817,6 +4825,7 @@ async function cfgLoadCaps() {
 }
 
 const CFG_ICONS = {
+  asb_priority:'enginepri',
   wifi_powersave:'wifipm',
   net_wifi_leave:'wifileave',
   mglru_hold:'memhold',
@@ -5259,6 +5268,7 @@ function willBreakOf(it, cur) {
 }
 
 const APPLY_MODE = {
+  asb_priority: APPLY_LIVE,
   wifi_powersave: APPLY_LIVE,
   net_wifi_leave: APPLY_LIVE,
   /* Live: asb_system_tweaks writes the sysfs node on save, and the value can be read
