@@ -1835,7 +1835,7 @@ skip_cpu_caps: ;
         g_ucl_want_top = caps->uclamp_top_max;
         g_ucl_want_bg  = caps->uclamp_bg_max;
 
-        int _ucl_top_now = sysfs_read_int(UCLAMP_TOP_MAX, -1);
+        int _ucl_top_now = uclamp_read_pct(UCLAMP_TOP_MAX, -1);
         int _ucl_drift = (_ucl_top_now >= 0 && _ucl_top_now != g_wcache.uclamp_top_max);
         /* Stop re-asserting a top-app ceiling that something else owns.
          *
@@ -1867,7 +1867,7 @@ skip_cpu_caps: ;
                 writes++;
             }
         }
-        int _ucl_bg_now = sysfs_read_int(UCLAMP_BG_MAX, -1);
+        int _ucl_bg_now = uclamp_read_pct(UCLAMP_BG_MAX, -1);
         /* system-background drifts on its own, and twice as often.
          *
          * Both nodes are written together but only the background one was ever checked,
@@ -1876,7 +1876,7 @@ skip_cpu_caps: ;
          * of it: uclamp_bg 33 writes against uclamp_sybg 62 in the same capture - the
          * extra 29 are the times the pair was rewritten for bg's sake and sybg turned out
          * to be the one that was actually stale. */
-        int _ucl_sybg_now = sysfs_read_int(UCLAMP_SYBG_MAX, -1);
+        int _ucl_sybg_now = uclamp_read_pct(UCLAMP_SYBG_MAX, -1);
         /* Stop chasing a background node that something else keeps resetting.
          *
          * The write ledger is dominated by these two: uclamp_bg and uclamp_sybg at ~110
@@ -2020,9 +2020,9 @@ static void writer_camera_guard(int active) {
             sysfs_write_str(CPUSET_FG_CPUS,  present);
             sysfs_write_str(CPUSET_TOP_CPUS, present);
         }
-        g_cam_saved_uc_top = sysfs_read_int(UCLAMP_TOP_MAX, -1);
-        g_cam_saved_uc_fg  = sysfs_read_int(UCLAMP_FG_MAX,  -1);
-        g_cam_saved_uc_bg  = sysfs_read_int(UCLAMP_BG_MAX,  -1);
+        g_cam_saved_uc_top = uclamp_read_pct(UCLAMP_TOP_MAX, -1);
+        g_cam_saved_uc_fg  = uclamp_read_pct(UCLAMP_FG_MAX,  -1);
+        g_cam_saved_uc_bg  = uclamp_read_pct(UCLAMP_BG_MAX,  -1);
         sysfs_write_int(UCLAMP_TOP_MAX,  100);
         sysfs_write_int(UCLAMP_FG_MAX,   100);
         sysfs_write_int(UCLAMP_BG_MAX,   100);

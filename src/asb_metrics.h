@@ -157,6 +157,35 @@ static inline int sysfs_read_int(const char *path, int def) {
     return (int)strtol(buf, NULL, 10);
 }
 
+/* Read a cgroup cpu.uclamp.max / cpu.uclamp.min node as a whole percentage.
+ *
+ * These nodes are not plain integers. The kernel prints "35.00" for a set value and the
+ * literal word "max" for 100 - including right after a write of 100. sysfs_read_int runs
+ * strtol, which parses no digits from "max" and returns 0, not the default. Anything that
+ * saved a uclamp value that way and wrote it back later restored 0: an empty clamp, which
+ * tells the scheduler the tasks may request no CPU at all.
+ *
+ * The camera guard saves all three tiers on entry and restores them on exit, so a tier
+ * that read "max" when the camera opened (a performance profile, or any tier left at 100)
+ * was written to 0 when the camera closed. This returns 100 for "max", the integer part
+ * of "35.00", and def when the node is missing or unreadable. */
+static inline int uclamp_read_pct(const char *path, int def) {
+    char buf[32];
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return def;
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) return def;
+    buf[n] = '\0';
+    const char *q = buf;
+    while (*q == ' ' || *q == '\t') q++;
+    if (strncmp(q, "max", 3) == 0) return 100;
+    if (*q < '0' || *q > '9') return def;
+    long v = strtol(q, NULL, 10);
+    if (v < 0 || v > 100) return def;
+    return (int)v;
+}
+
 static inline long sysfs_read_long(const char *path, long def) {
     char buf[32];
     int fd = open(path, O_RDONLY | O_CLOEXEC);
@@ -1615,6 +1644,12 @@ static time_t            g_cam_scan_ts = 0;
 static unsigned long long g_cam_jif_prev = 0;
 static struct timespec   g_cam_ts_prev = {0};
 static time_t            g_cam_hold_until = 0;
+/* When the screen last turned on, and whether it was on at the previous sample. Set in the
+ * metrics pass right before camera activity is read, so metrics_camera_active can tell a
+ * face-unlock burst from a camera session - see the grace note there. */
+static time_t            g_cam_scr_on_since = 0;
+static int               g_cam_scr_prev     = 0;
+#define ASB_CAM_UNLOCK_WINDOW_S 5
 
 static int cam_cmdline_matches(pid_t pid) {
     char path[64], buf[288];
@@ -1738,6 +1773,24 @@ static int metrics_camera_active(const struct timespec *now) {
     if (busy) {
         int grace = g_asb_cfg.camera_hold_grace_s;
         if (grace < 0) grace = 0;
+        /* No 20 s tail for a burst in the first seconds after the screen turns on.
+         *
+         * Detection is the camera provider's CPU load and nothing else, and face unlock
+         * drives that same provider. So every unlock engaged the guard - uclamp 100 on
+         * top-app, foreground AND background, every core open, swappiness 10 - and the
+         * grace then held it for camera_hold_grace_s after the burst ended. A field capture
+         * shows the foreground tier reading "max" at the wake boundary again and again, with
+         * camera_hold=0: 30 wakes in 289 minutes, roughly 11 minutes of full camera rails,
+         * landing exactly when apps resync after sleep and a background tier at 100 lets
+         * them run uncapped on the big cores.
+         *
+         * The guard itself is unchanged: while the provider is busy it stays engaged, so a
+         * real camera session - including one launched straight from the lock screen - is
+         * boosted as before, because preview keeps the provider busy continuously. Only the
+         * tail after a SHORT burst right after screen-on is dropped. A camera closed later in
+         * the session still gets the full grace. */
+        if (g_cam_scr_on_since > 0 && (wall - g_cam_scr_on_since) < ASB_CAM_UNLOCK_WINDOW_S)
+            grace = 0;
         g_cam_hold_until = wall + grace;
         return 1;
     }
@@ -1752,6 +1805,8 @@ static void metrics_read_all(asb_metrics_t *m, int need_headroom, int need_therm
     if (need_thermal)
         metrics_read_thermal(&m->therm, need_headroom);
     m->misc.screen_on = metrics_screen_on();
+    if (m->misc.screen_on && !g_cam_scr_prev) g_cam_scr_on_since = time(NULL);
+    g_cam_scr_prev = m->misc.screen_on;
     m->misc.camera_active = metrics_camera_active(&m->ts);
     metrics_read_network(&m->misc, &m->ts);
 }
