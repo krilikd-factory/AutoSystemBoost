@@ -274,6 +274,30 @@ extern int g_qn_skip_this_tick;
 /* Which power_supply node supplied the current reading this tick. */
 static char g_batt_current_source[24] = "unknown";
 
+/* 1 when any external supply reports online: USB, mains, wireless. The node set is found
+ * once and cached, so a tick costs one or two small reads - and only on devices whose
+ * battery status is unusable, since an explicit status is checked first. */
+static int asb_supply_online(void) {
+    static const char *cand[] = {
+        "/sys/class/power_supply/usb/online",
+        "/sys/class/power_supply/ac/online",
+        "/sys/class/power_supply/dc/online",
+        "/sys/class/power_supply/wireless/online",
+        "/sys/class/power_supply/wls/online",
+        "/sys/class/power_supply/pc_port/online",
+        NULL
+    };
+    static int  probed = 0;
+    static int  have[8];
+    if (!probed) {
+        for (int i = 0; cand[i]; i++) have[i] = (access(cand[i], R_OK) == 0);
+        probed = 1;
+    }
+    for (int i = 0; cand[i]; i++)
+        if (have[i] && sysfs_read_int(cand[i], 0) == 1) return 1;
+    return 0;
+}
+
 static void metrics_read_battery(asb_battery_t *b) {
     /* Quiet Night: reuse last tick's numbers instead of touching power_supply.
      *
@@ -307,7 +331,23 @@ static void metrics_read_battery(asb_battery_t *b) {
 
     char st[16] = {0};
     sysfs_read_str(PATH_BATT_STATUS, st, sizeof(st));
-    b->charging = (st[0] == 'C') ? 1 : 0;
+    /* Charging state that survives a battery driver which does not report it.
+     *
+     * This read only st[0] == 'C'. On OxygenOS 16 / OnePlus 15 the battery status node
+     * reads "Unknown" in every state, so charging was ALWAYS 0: the governor never knew
+     * the phone was on a charger. And because asb_batt_current_to_ma keeps only the
+     * magnitude of the current, every "ma_valid = current_ma > 0 && !charging" test then
+     * treated the CHARGING current as DISCHARGE current - Smart's drain model and the
+     * high-current comfort logic would both have run on charger current.
+     *
+     * "Full" was also read as not charging, though it means plugged in with a full battery.
+     *
+     * Order: an explicit status wins (Charging/Full -> 1, Discharging/Not charging -> 0);
+     * only when the driver says nothing useful are the supplies asked directly. A device
+     * with neither keeps the old result, 0, so nothing regresses. */
+    if (st[0] == 'C' || st[0] == 'F')      b->charging = 1;
+    else if (st[0] == 'D' || st[0] == 'N') b->charging = 0;
+    else                                   b->charging = asb_supply_online();
 }
 
 static char g_metrics_gpu_freq_path[160]    = {0};
