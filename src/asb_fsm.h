@@ -1522,6 +1522,27 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                 if (fsm->throttle_cap_ticks < 2) throttle_confirmed = 0;
             }
         }
+        /* Smart had no guard here, and it needs a stricter one than Balanced.
+         *
+         * hard_clamp fires when the vendor's LITTLE cap falls under 45% of hardware max. On
+         * the OnePlus 15 the vendor routinely holds LITTLE at 1440-1785 MHz of 3628 MHz in
+         * ordinary daytime use - its own power policy, at 41-51 C, nothing thermal about it.
+         * A capture shows the vendor clamping LITTLE on 98% of ticks. With thermal_floor at
+         * 40 every burst that reached HEAVY then became SUSTAINED: ASB piled its own clamp on
+         * top of the vendor's exactly while the user needed the performance - 11 SUSTAINED
+         * episodes, almost all one or two minutes long.
+         *
+         * They were that short for a reason. SUSTAINED cannot be left while the CPU is at or
+         * above sustained_temp_exit, and here it was entered BELOW it - so its thermal hold
+         * was empty and it let go the moment the burst ended. Entering a thermal state under
+         * the temperature at which it releases itself is a contradiction, so when the signal
+         * is headroom alone the floor is the exit temperature. A real thermal signal
+         * (m->therm.throttling: CPU over thermal_throttle_temp, or skin engagement) is
+         * untouched and still enters at once; so does the own-temperature path at 65 C. */
+        if (fsm->profile_idx == PROFILE_SMART && throttle_confirmed && !m->therm.throttling) {
+            if (sustained_temp_exit > thermal_floor) thermal_floor = sustained_temp_exit;
+            if (fsm->throttle_cap_ticks < 2) throttle_confirmed = 0;
+        }
         /* warmup grace -- don't rush into sustained after session start.
          * Exception: temp >= 60C or headroom < 40% (real emergency). */
         int warmup_grace = 0;
