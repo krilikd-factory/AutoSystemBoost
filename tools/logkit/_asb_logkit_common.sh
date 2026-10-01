@@ -623,27 +623,32 @@ lk_emit_state_transitions() {
 }
 
 lk_emit_cap_source_summary() {
+  # Two awk faults, both silent: a bare "tot>0?a:b" inside a printf argument list parses
+  # ">" as OUTPUT REDIRECTION, so every per-source line went to a stray file literally
+  # named "0" (in the collector's cwd, or nowhere at all on a read-only one - which is
+  # the 0-byte summary seen on device), and the substr offsets dropped the first letter
+  # of every source ("endor_clamp"). Parenthesised, and the offsets corrected.
   _src="$LK_OUT_DIR/status_watch.txt"
   [ -f "$_src" ] || return 0
   awk '
     /"cap_source_p0":"[^"]*"/ {
       match($0, /"cap_source_p0":"[^"]*"/)
-      s=substr($0, RSTART+18, RLENGTH-19)
+      s=substr($0, RSTART+17, RLENGTH-18)
       p0[s]++
       tot0++
     }
     /"cap_source_p6":"[^"]*"/ {
       match($0, /"cap_source_p6":"[^"]*"/)
-      s=substr($0, RSTART+18, RLENGTH-19)
+      s=substr($0, RSTART+17, RLENGTH-18)
       p6[s]++
       tot6++
     }
     END {
       print "===== cap_source summary (tick counts from status_watch) ====="
       printf "policy0 (LITTLE)  total_ticks=%d\n", tot0
-      for (k in p0) printf "  %-16s %6d  (%5.1f%%)\n", k, p0[k], tot0>0?100*p0[k]/tot0:0
+      for (k in p0) printf "  %-16s %6d  (%5.1f%%)\n", k, p0[k], (tot0>0 ? 100*p0[k]/tot0 : 0)
       printf "prime (BIG)       total_ticks=%d\n", tot6
-      for (k in p6) printf "  %-16s %6d  (%5.1f%%)\n", k, p6[k], tot6>0?100*p6[k]/tot6:0
+      for (k in p6) printf "  %-16s %6d  (%5.1f%%)\n", k, p6[k], (tot6>0 ? 100*p6[k]/tot6 : 0)
     }
   ' "$_src" > "$LK_OUT_DIR/cap_source_summary.txt"
 }
@@ -1350,7 +1355,15 @@ lk_capture_smart_trace_row() {
   case "$_chg_raw" in
     Charging|Full) _chg=1 ;;
     Discharging|"Not charging") _chg=0 ;;
-    *) _chg=- ;;
+      *)
+        # OxygenOS 16 reports "Unknown" here in every state, so this column was "-" on
+        # every row - and the drain and off-screen sections of the Smart summary filter on
+        # charging == 0, so they printed "no samples" for the whole capture. Ask the
+        # supplies directly, as the governor now does; 0 when none is online.
+        _chg=0
+        for _ps in usb ac dc wireless wls pc_port; do
+          [ "$(cat /sys/class/power_supply/$_ps/online 2>/dev/null)" = "1" ] && { _chg=1; break; }
+        done ;;
   esac
 
   # --- autonomy fields (added so drain correlates with Smart state in one row) ---
