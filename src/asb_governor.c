@@ -2298,14 +2298,6 @@ static int asb_cap_compute_owner(const char *cap_source) {
         owner = ASB_CAP_OWNER_ASB;
     }
     else owner = ASB_CAP_OWNER_UNKNOWN;
-    /* Remember whether the vendor RAISED the cap above ours or clamped it below. Priority
-     * mode only ever resists the first: a clamp is thermal protection or the vendor's own
-     * saving, and both are always honoured. */
-    if (cap_source) {
-        if (strcmp(cap_source, "vendor_raised") == 0 ||
-            strcmp(cap_source, "shell_overridden_up") == 0) g_cap_vendor_raise = 1;
-        else if (strcmp(cap_source, "vendor_clamp") == 0)  g_cap_vendor_raise = 0;
-    }
 
     /*
      * Track recent vendor clamp pattern for anti-thrash.
@@ -2656,6 +2648,26 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
     const char *cap_src_p6 = cap_source_classify(profile_cap_p6,
                                                  m->therm.perf_cap_p6,
                                                  real_max_p1, hw_ceil_p1);
+    /* asb_priority direction: compare the live cap with what ASB itself asked for.
+     *
+     * This used to read the classifier labels, but those compare scaling_max with the
+     * vendor's msm_performance cap, not with ASB's request. A night capture shows the
+     * result: ASB wanted prime 1017600, the live cap was 1747200 - ASB overridden upward,
+     * the exact case priority exists for - yet the label read "vendor_clamp" (1747200 sat
+     * under the msm_performance cap), the flag stayed 0 and priority never acted once.
+     * Both requests are snapped to real OPP steps, the same way the writer sends them, so
+     * a rounding difference is never mistaken for a vendor move. */
+    {
+        int _want0 = (fsm->current_caps.cpu_max[0] > 0)
+                     ? (int)cpu_snap_freq(0, (long)fsm->current_caps.cpu_max[0]) : 0;
+        int _want1 = (fsm->current_caps.cpu_max[1] > 0)
+                     ? (int)cpu_snap_freq(1, (long)fsm->current_caps.cpu_max[1]) : 0;
+        int _up   = (_want0 > 0 && real_max_p0 > _want0) || (_want1 > 0 && real_max_p1 > _want1);
+        int _down = (_want0 > 0 && real_max_p0 > 0 && real_max_p0 < _want0) ||
+                    (_want1 > 0 && real_max_p1 > 0 && real_max_p1 < _want1);
+        if (_up)        g_cap_vendor_raise = 1;
+        else if (_down) g_cap_vendor_raise = 0;
+    }
     /*
      * record conflicts to /dev/.asb/conflicts.json (written below).
      */

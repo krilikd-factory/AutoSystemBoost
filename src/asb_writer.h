@@ -191,7 +191,8 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         h->floor_probe_n = 0;
         h->kernel_floor  = 0;
     }
-    if (h->kernel_floor > 0 && requested < h->kernel_floor && writer_node_is_cpu(node))
+    if (h->kernel_floor > 0 && requested < h->kernel_floor &&
+        writer_node_is_cpu(node) && !writer_node_is_cpu_max(node))
         requested = h->kernel_floor;
     h->attempts++;
     /* Overhead attribution: one write and one confirming read per attempt. Defined in
@@ -336,7 +337,13 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
          * With the observed floor stored, the next request can be clamped to it before the
          * write happens: the kernel gets a value it will accept, and the node stops being
          * a permanent source of deferrals. */
-        h->kernel_floor = observed;
+        /* Learn a floor only for a MIN node. On a MAX node "observed above requested"
+         * is not a kernel floor at all: it is the vendor RAISING the cap, typically a touch
+         * or launch boost. Learning it made the writer adopt the boost as its own request -
+         * a capture shows desired prime 1017600 written as 1747200 - and keep asking for it
+         * for up to nine requests after the vendor had already dropped the boost, so ASB
+         * itself held the prime high. Max nodes keep the original hold/back-off only. */
+        if (!writer_node_is_cpu_max(node)) h->kernel_floor = observed;
         /* Five minutes, not an hour.
          *
          * An hour was chosen to end a write war, and it ends one - but it also hands the
