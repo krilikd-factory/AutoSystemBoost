@@ -75,10 +75,6 @@ typedef struct {
     /* Consecutive times this node was found changed by someone else and rewritten.
      * A node that keeps coming back is owned elsewhere - see the drift backoff. */
     unsigned long drift_rewrites;
-    /* Highest value the kernel refused to go below, 0 when never observed. */
-    int kernel_floor;
-    /* Requests clamped since the floor was learned; drives the periodic re-test. */
-    unsigned long floor_probe_n;
     unsigned long skipped_backoff;
     time_t retry_at;
     int requested;
@@ -168,32 +164,21 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         h->skipped_backoff++;
         return 1; /* deferred: not an applied write */
     }
-    /* Ask for something the kernel will accept, not the same rejected value again.
+    /* Never rewrite the request to what the kernel last reported.
      *
-     * kernel_floor is set when a CPU node reads back above what we asked for. Clamping
-     * to it turns a guaranteed deferral into a write that lands, and the node stops
-     * cycling through backoff forever.
+     * An earlier change remembered "observed above requested" as a kernel floor and then
+     * asked for that value itself. It was wrong on every CPU node. On a MAX node that
+     * reading is a vendor boost raising the cap; on a MIN node it is the vendor's own
+     * frequency QoS request - scaling_min_freq is the highest of all min requests, so a
+     * touch or scene boost shows up there for a moment. Copying it into ASB's request
+     * turned ASB into the thing holding the floor: when the vendor released its boost,
+     * ASB's request kept the minimum up. A capture shows the prime pinned at 1747 MHz on
+     * 81% of samples with min=max=1747200, while every rail asks for a prime minimum of
+     * 883 MHz or less - the true minimum, 768 MHz, appeared on 1%.
      *
-     * Only raises the request, never lowers it: if the caller already asks for more
-     * than the floor, that is a legitimate value and nothing here should touch it. */
-    /* Re-test the floor occasionally instead of trusting it forever.
-     *
-     * A remembered floor is a fact about the kernel at one moment, not a permanent
-     * property: a profile change, a thermal HAL decision or a vendor daemon restart can
-     * lift it. Without a re-test the writer would keep raising every request to a limit
-     * that no longer exists, and the phone would never get its low rails back.
-     *
-     * Every tenth clamped request goes through unclamped. If the kernel still refuses,
-     * the floor is simply re-learned on that write; if it has been lifted, the real
-     * value lands and the floor clears below. One probe in ten is cheap against a
-     * permanently wrong ceiling. */
-    if (h->kernel_floor > 0 && ++h->floor_probe_n >= 10) {
-        h->floor_probe_n = 0;
-        h->kernel_floor  = 0;
-    }
-    if (h->kernel_floor > 0 && requested < h->kernel_floor &&
-        writer_node_is_cpu(node) && !writer_node_is_cpu_max(node))
-        requested = h->kernel_floor;
+     * The deferred writes it was meant to save cost nothing: a held node simply backs off
+     * (below) and ASB's low request stays in the QoS set, taking effect the moment the
+     * vendor lets go. That is the correct behaviour, so the request is sent as asked. */
     h->attempts++;
     /* Overhead attribution: one write and one confirming read per attempt. Defined in
        asb_governor.c, which includes this header - see write_state for why they are split
@@ -337,13 +322,6 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
          * With the observed floor stored, the next request can be clamped to it before the
          * write happens: the kernel gets a value it will accept, and the node stops being
          * a permanent source of deferrals. */
-        /* Learn a floor only for a MIN node. On a MAX node "observed above requested"
-         * is not a kernel floor at all: it is the vendor RAISING the cap, typically a touch
-         * or launch boost. Learning it made the writer adopt the boost as its own request -
-         * a capture shows desired prime 1017600 written as 1747200 - and keep asking for it
-         * for up to nine requests after the vendor had already dropped the boost, so ASB
-         * itself held the prime high. Max nodes keep the original hold/back-off only. */
-        if (!writer_node_is_cpu_max(node)) h->kernel_floor = observed;
         /* Five minutes, not an hour.
          *
          * An hour was chosen to end a write war, and it ends one - but it also hands the
@@ -1976,6 +1954,20 @@ static void writer_camera_guard_save(void) {
  * any writer to fight the camera while it is active. apply_profile.sh is run
  * asynchronously and only for a recognised profile token.
  */
+/* The profile that was active when the camera guard engaged. Compared at release so
+ * the full profile re-apply runs only when it is actually needed - see the release note. */
+static char g_cam_profile_at_engage[24] = {0};
+static void writer_read_current_profile(char *out, size_t outlen) {
+    out[0] = '\0';
+    FILE *f = fopen("/data/adb/modules/AutoSystemBoost/current_profile", "r");
+    if (!f) return;
+    if (fgets(out, (int)outlen, f)) {
+        size_t n = strlen(out);
+        while (n > 0 && (out[n-1] == '\n' || out[n-1] == '\r' || out[n-1] == ' ')) out[--n] = '\0';
+    }
+    fclose(f);
+}
+
 static void writer_camera_guard_apply_current_profile(void) {
     static const char *cmd =
         "p=$(cat /data/adb/modules/AutoSystemBoost/current_profile 2>/dev/null); "
@@ -2056,6 +2048,7 @@ static void writer_camera_guard(int active) {
         g_cam_guard_on = 1;
         g_cam_guard_since = time(NULL);
         g_cam_guard_expired = 0;
+        writer_read_current_profile(g_cam_profile_at_engage, sizeof(g_cam_profile_at_engage));
         writer_camera_guard_save();
         return;
     }
@@ -2077,7 +2070,27 @@ static void writer_camera_guard(int active) {
             sysfs_write_int(PATH_VM_SWAPPINESS, g_cam_saved_swappiness);
         unlink(CAM_GUARD_STATE);
         g_cam_guard_on = 0;
-        writer_camera_guard_apply_current_profile();
+        /* Re-apply the whole profile only if it changed while the camera was open.
+         *
+         * The lines above already put back every value the guard touched - cpusets, all
+         * three uclamp tiers, swappiness - from what was saved on entry. Running
+         * apply_profile.sh on top rewrote everything else as well: VM settings, the
+         * watermark, dirty thresholds, the foreground tier. Face unlock engages this guard
+         * on every wake, so that full apply ran on every unlock - a heavy script forked at
+         * the very moment responsiveness matters - and, being backgrounded, it often
+         * finished AFTER the screen had gone off again. It then overwrote the tuner's
+         * sleep values: a capture shows the foreground tier at 59 through a 24-sample
+         * screen-off stretch, and at 35 in only 11 of 70 screen-off samples overall.
+         *
+         * The saved values are exact unless the user switched profile mid-session, in
+         * which case they belong to the old profile and a full apply is the right fix. */
+        {
+            char _now_prof[24];
+            writer_read_current_profile(_now_prof, sizeof(_now_prof));
+            if (g_cam_profile_at_engage[0] == '\0' ||
+                strcmp(_now_prof, g_cam_profile_at_engage) != 0)
+                writer_camera_guard_apply_current_profile();
+        }
     }
 }
 
