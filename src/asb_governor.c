@@ -2170,8 +2170,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "slot_policy_ids=%d,%d,%d\n",
             g_cpu_policy_ids[0], g_cpu_policy_ids[1], g_cpu_policy_ids[2]);
     fprintf(f, "desired_cpu_max0=%d\ndesired_cpu_maxp=%d\n",
-            (int)cpu_snap_freq(0, (long)fsm->current_caps.cpu_max[0]),
-            (int)cpu_snap_freq(1, (long)fsm->current_caps.cpu_max[1]));
+            cpu_floor_ceiling(0, (int)cpu_snap_freq(0, (long)fsm->current_caps.cpu_max[0]), fsm->thermal_cap),
+            cpu_floor_ceiling(1, (int)cpu_snap_freq(1, (long)fsm->current_caps.cpu_max[1]), fsm->thermal_cap));
+    /* Published through cpu_floor_ceiling as well: "desired" must be what the writer really
+     * sends. Before, it was the raw FSM wish, so whenever that sat under the race-to-idle
+     * guard the report read "hardware above the request" - the guard's own 1747200 against
+     * a wish of 1017600 - and that was taken for a vendor holding the prime up. */
     /* Index 1 here, not 2: the effective side reads tick_scaling_max(1), which is the
        second POLICY. Slot 2 is the prime cluster in the rail vocabulary, and mixing the
        two would compare different clusters - I made exactly that mistake once. */
@@ -2658,10 +2662,16 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * Both requests are snapped to real OPP steps, the same way the writer sends them, so
      * a rounding difference is never mistaken for a vendor move. */
     {
+        /* Through cpu_floor_ceiling too, exactly as the writer sends it. That guard lifts any
+         * ceiling under 40% of hardware max - 1747200 on this prime - so comparing against the
+         * raw FSM wish (1017600) read ASB's OWN race-to-idle floor as a vendor raise, and
+         * priority spent every reassert fighting the module itself. */
         int _want0 = (fsm->current_caps.cpu_max[0] > 0)
-                     ? (int)cpu_snap_freq(0, (long)fsm->current_caps.cpu_max[0]) : 0;
+                     ? cpu_floor_ceiling(0, (int)cpu_snap_freq(0, (long)fsm->current_caps.cpu_max[0]),
+                                         fsm->thermal_cap) : 0;
         int _want1 = (fsm->current_caps.cpu_max[1] > 0)
-                     ? (int)cpu_snap_freq(1, (long)fsm->current_caps.cpu_max[1]) : 0;
+                     ? cpu_floor_ceiling(1, (int)cpu_snap_freq(1, (long)fsm->current_caps.cpu_max[1]),
+                                         fsm->thermal_cap) : 0;
         int _up   = (_want0 > 0 && real_max_p0 > _want0) || (_want1 > 0 && real_max_p1 > _want1);
         int _down = (_want0 > 0 && real_max_p0 > 0 && real_max_p0 < _want0) ||
                     (_want1 > 0 && real_max_p1 > 0 && real_max_p1 < _want1);

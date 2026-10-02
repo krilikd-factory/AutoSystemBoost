@@ -1338,6 +1338,7 @@ int spike_detected = 0;
         int sv = sysfs_read_int(path, 0);
         t->surface_hotspot_c = thermal_raw_to_c(sv);
     }
+    int _surf_raw = t->surface_hotspot_c;
 
     /* Board must be read before consensus as well. Using last tick's board value in a
      * current-tick decision is exactly the kind of near-miss that makes a guard look like
@@ -1349,6 +1350,29 @@ int spike_detected = 0;
         int bc = thermal_raw_to_c(bv);
         t->board_temp_c = bc;
         if (bc > t->surface_hotspot_c) t->surface_hotspot_c = bc;
+    }
+    /* A surface zone that never moves is not a measurement.
+     *
+     * On the OnePlus 15 sys-therm-6 reads 40-41 C in every state - board 30-48, skin 28-37,
+     * the same zone pinned at 40 across separate captures. surface_hotspot is max(that,
+     * board), so it could never fall below 40: the phase reports printed surfT=40 for
+     * everything, and the thermal advisory's heaviest vote (surface, 40% of the score) was
+     * measured against a baseline the surface never left.
+     *
+     * Range is tracked over a long window, using the board value just read. If the zone
+     * stays within 1 C while the board moves by 4 C or more, it is dropped for the rest of
+     * the session and the surface follows the board. A live sensor moves with the board,
+     * so it is never dropped. */
+    {
+        static int s_lo = 1000, s_hi = -1000, b_lo = 1000, b_hi = -1000, s_ticks = 0, s_dead = 0;
+        if (!s_dead && _surf_raw > 0 && t->board_temp_c > 0) {
+            if (_surf_raw < s_lo) s_lo = _surf_raw;
+            if (_surf_raw > s_hi) s_hi = _surf_raw;
+            if (t->board_temp_c < b_lo) b_lo = t->board_temp_c;
+            if (t->board_temp_c > b_hi) b_hi = t->board_temp_c;
+            if (++s_ticks >= 300 && (s_hi - s_lo) <= 1 && (b_hi - b_lo) >= 4) s_dead = 1;
+        }
+        if (s_dead && t->board_temp_c > 0) t->surface_hotspot_c = t->board_temp_c;
     }
 
     /* Consensus runs only after all current-tick non-CPU evidence is available. */
