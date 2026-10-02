@@ -4561,7 +4561,7 @@ async function cfgLoad() {
 const CFG_CAT = {
   asb_priority:'battery',
   wifi_powersave:'net',
-  net_wifi_leave:'wifileave',
+  net_wifi_leave:'net',
   /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
      so the card existed and was never drawn. BG_TRIM and gms_trim - the other RAM tweaks -
      live under battery for the same reason. */
@@ -4574,16 +4574,16 @@ const CFG_CAT = {
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
-  cool_gaming:'perf',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'thermal',
-  BG_TRIM_LEVEL:'memory', gms_trim:'memory', gms_freeze:'memory',
-  UX_MANAGE_OEM_TOGGLES:'ux', UX_MANAGE_TIMEOUTS:'ux', anim_speed:'ux', UX_ANIM_FORCE_RESTART:'ux',
+  cool_gaming:'battery',
+  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
+  BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery',
+  UX_MANAGE_OEM_TOGGLES:'system', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   camera_hold_enable:'camera',
   night_quiet_enable:'battery', log_level:'system', phantom_procs:'system',
-  sustained_temp_mode:'thermal', doze_level:'battery', doze_trim_whitelist:'battery',
+  sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net',
-  disable_blur:'blur', ui_effects_level:'motion', haptic_strength:'haptic', haptic_touch_strength:'haptic'
+  disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'system', haptic_touch_strength:'system'
 };
 // Four groups, one screen each.
 // These are the four things a user actually comes here to change; the internal CFG_CAT stays
@@ -4651,7 +4651,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
       hint:'Choose the audio path and Bluetooth behaviour.',
-      keys:['audio_profile','audio_dac_hifi','media_loudness','bt_absvol_mode','bt_a2dp_offload'] },
+      keys:['audio_profile','audio_dac_hifi','media_loudness','bt_absvol_mode','bt_a2dp_offload','bt_link_stability'] },
     { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
       title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
       hint:'Optional gain, bass and dynamics processing on the outputs you select.',
@@ -4660,6 +4660,76 @@ const CFG_GROUP_SECTIONS = {
       title:'Listening Safety', hintKey:'cfg_audio_section_safety_hint',
       hint:'The system hearing limit is left untouched unless you explicitly change it.',
       keys:['audio_remove_volume_limit'] }
+  ],
+  battery: [
+    { id:'smart', icon:'smart', titleKey:'cfg_battery_section_smart',
+      title:'Smart & Auto Profile', hintKey:'cfg_battery_section_smart_hint',
+      hint:'How Smart balances battery against performance and when it switches profile.',
+      keys:['auto_battery_enable','smart_battery_bias','charge_aware_enable','smart_media_guard','asb_priority'] },
+    { id:'standby', icon:'doze', titleKey:'cfg_battery_section_standby',
+      title:'Sleep & Background', hintKey:'cfg_battery_section_standby_hint',
+      hint:'What the phone does while the screen is off: doze depth, wakelocks, background GPS.',
+      keys:['doze_level','doze_trim_whitelist','night_quiet_enable','wakelock_action','gnss_trim'] },
+    { id:'thermal', icon:'thermal_point', titleKey:'cfg_battery_section_thermal',
+      title:'Heat & Performance', hintKey:'cfg_battery_section_thermal_hint',
+      hint:'When the phone starts holding back to stay cool, and how far it may go.',
+      keys:['sustained_temp_mode','sustained_temp_enter','perf_ceiling_pct','cool_gaming','bat_suppress_gaming'] },
+    { id:'memory', icon:'cleaner', titleKey:'cfg_battery_section_memory',
+      title:'Memory & Apps', hintKey:'cfg_battery_section_memory_hint',
+      hint:'How long apps stay in memory and how hard background services are limited.',
+      keys:['BG_TRIM_LEVEL','mglru_hold','gms_trim','gms_freeze'] }
+  ],
+  net: [
+    { id:'cellular', icon:'cellular_controls', titleKey:'cfg_net_section_cellular',
+      title:'Mobile Network', hintKey:'cfg_net_section_cellular_hint',
+      hint:'How the modem behaves, including a quieter radio at night.',
+      keys:['radio_policy_enable','night_modem_idle'] },
+    { id:'wifi', icon:'radar', titleKey:'cfg_net_section_wifi',
+      title:'Wi-Fi', hintKey:'cfg_net_section_wifi_hint',
+      hint:'Scanning, power saving, region and when to give up on a bad network.',
+      keys:['wifi_scan_throttle','wifi_powersave','net_wifi_leave','wifi_country'] },
+    { id:'speed', icon:'congestion', titleKey:'cfg_net_section_speed',
+      title:'Download Speed', hintKey:'cfg_net_section_speed_hint',
+      hint:'How fast downloads ramp up and how packets queue, per network type.',
+      keys:['net_congestion_wifi','net_congestion_mobile','net_congestion','net_qdisc_wifi','net_qdisc_mobile','net_qdisc'] },
+    { id:'stack', icon:'route', titleKey:'cfg_net_section_stack',
+      title:'Network Stack', hintKey:'cfg_net_section_stack_hint',
+      hint:'Advanced: how network work is spread across cores and buffered.',
+      keys:['net_rps','net_txqueue','net_route_tune'] }
+  ],
+  ui: [
+    { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
+      title:'System Services', hintKey:'cfg_ui_section_services_hint',
+      hint:'Vendor background services and process limits.',
+      keys:['UX_MANAGE_OEM_TOGGLES','athena_service','phantom_procs','mmfeed_off'] },
+    { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
+      title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
+      hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
+      keys:['ltpo_force','haptic_strength','haptic_touch_strength'] },
+    { id:'diag', icon:'log_detail', titleKey:'cfg_ui_section_diag',
+      title:'Diagnostics', hintKey:'cfg_ui_section_diag_hint',
+      hint:'How much the module writes to its own logs.',
+      keys:['log_level'] }
+  ],
+  camera: [
+    { id:'processing', icon:'camera_level', titleKey:'cfg_camera_section_processing',
+      title:'Photo Processing', hintKey:'cfg_camera_section_processing_hint',
+      hint:'How strongly the camera processes the image: contrast, grain, portraits, low light.',
+      keys:['CAMERA_LEVEL','CAMERA_CONTRAST','CAMERA_GRAIN','CAMERA_PORTRAIT','CAMERA_LOWLIGHT'] },
+    { id:'perf', icon:'camera_hold', titleKey:'cfg_camera_section_perf',
+      title:'Camera Performance', hintKey:'cfg_camera_section_perf_hint',
+      hint:'Keep the phone responsive while the camera is open.',
+      keys:['camera_hold_enable'] }
+  ],
+  iface: [
+    { id:'speed', icon:'anim_speed', titleKey:'cfg_iface_section_speed',
+      title:'Interface Speed', hintKey:'cfg_iface_section_speed_hint',
+      hint:'Animation speed and touch timings.',
+      keys:['UX_MANAGE_TIMEOUTS','anim_speed','UX_ANIM_FORCE_RESTART'] },
+    { id:'effects', icon:'effects', titleKey:'cfg_iface_section_effects',
+      title:'Visual Effects', hintKey:'cfg_iface_section_effects_hint',
+      hint:'Blur and system animation effects.',
+      keys:['disable_blur','ui_effects_level'] }
   ]
 };
 
