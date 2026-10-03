@@ -337,10 +337,6 @@
     "mmfeed_off": {
       "name": "Telemetri Multimedia Nonaktif",
       "desc": "OxygenOS menjalankan pengumpul umpan balik multimedia: peristiwa diagnostik audio, video, dan tampilan dengan dump log dan unggahan, yang dibuka oleh Multimedia_Feedback_List.xml. Patch ini mengambil salinan MILIK perangkatmu atas berkas itu, mengubah hanya saklar isOpen menjadi false, dan memasang hasilnya di atas berkas asli — tidak ada yang disalin dari model lain, dan berkas asli tidak pernah diubah.\n\nPatch disiapkan saat modul dipasang, dan saklar ini menentukan apakah patch diterapkan: mati secara bawaan, dan menyalakannya berlaku setelah reboot. Jika pemasang tidak menemukan berkas itu di perangkatmu, atau OEM sudah mengirimkannya dalam keadaan tertutup, saklar ini tidak melakukan apa-apa — lencana status menunjukkan kasusmu.\n\nLebih sedikit pencatatan peristiwa dan dump berarti baterai gratis dan I/O lebih rendah; audio dan video itu sendiri tidak disentuh."
-    },
-    "asb_priority": {
-      "name": "Prioritas mesin (eksperimental)",
-      "desc": "Biasanya ASB mengalah saat vendor mempertahankan nilai lebih tinggi. Dengan ini aktif, ASB bersikeras pada nilainya, hanya di tempat yang aman: batas CPU saat layar mati, tingkat latar belakang selalu, latar depan saat tidur nyenyak. Penurunan dari vendor (proteksi termal, penghematannya) selalu dihormati dan boost sentuh tidak disentuh. Bandingkan rekaman dengan dan tanpa."
     }
   },
   "nav_live": "Monitor",

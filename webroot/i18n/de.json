@@ -337,10 +337,6 @@
     "mmfeed_off": {
       "name": "Multimedia-Telemetrie aus",
       "desc": "OxygenOS betreibt einen Multimedia-Feedback-Collector: Diagnose-Events für Audio, Video und Display mit Log-Dumps und Uploads, geöffnet über Multimedia_Feedback_List.xml. Dieser Patch nimmt die EIGENE Kopie dieser Datei auf deinem Gerät, stellt nur ihren isOpen-Schalter auf false und bindet das Ergebnis über die Originaldatei – es wird nichts von einem anderen Modell kopiert, und die Originaldatei selbst wird nie verändert.\n\nDer Patch wird während der Modulinstallation vorbereitet, und dieser Schalter entscheidet, ob er angewendet wird: standardmäßig aus, das Einschalten wirkt nach einem Neustart. Falls das Installationsprogramm keine solche Datei gefunden hat oder sie bereits ab Werk geschlossen ist, tut der Schalter nichts – das Status-Badge zeigt, welcher Fall zutrifft.\n\nWeniger Event-Logging und weniger Dumps bedeuten gratis Akkulaufzeit und weniger I/O; Audio und Video selbst bleiben unberührt."
-    },
-    "asb_priority": {
-      "name": "Engine-Priorität (experimentell)",
-      "desc": "Normalerweise gibt ASB nach, wenn der Hersteller einen höheren Wert hält. Mit dieser Option besteht ASB auf seinem Wert – nur wo es sicher ist: CPU-Grenzen bei ausgeschaltetem Bildschirm, Hintergrundstufe immer, Vordergrund im Tiefschlaf. Absenkungen des Herstellers (Thermoschutz, eigene Einsparung) werden immer respektiert, Touch-Boosts nie angetastet. Vergleiche eine Aufzeichnung mit und ohne."
     }
   },
   "nav_live": "Monitor",

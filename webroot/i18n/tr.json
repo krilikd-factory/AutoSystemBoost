@@ -337,10 +337,6 @@
     "mmfeed_off": {
       "name": "Multimedya Telemetrisi Kapalı",
       "desc": "OxygenOS bir multimedya geri bildirim toplayıcısı çalıştırır: Multimedia_Feedback_List.xml ile açılan, günlük dökümleri ve yüklemeler içeren ses, video ve ekran tanılama olayları. Bu yama cihazınızdaki dosyanın KENDİ kopyasını alır, yalnızca isOpen anahtarını false yapar ve sonucu orijinal dosyanın üzerine bağlar — başka bir modelden hiçbir şey kopyalanmaz ve orijinal dosya asla değiştirilmez.\n\nYama modül kurulurken hazırlanır ve bu anahtar uygulanıp uygulanmayacağına karar verir: varsayılan olarak kapalıdır, açılması yeniden başlatmadan sonra etki eder. Kurucu cihazınızda böyle bir dosya bulamadıysa ya da üretici dosyayı zaten kapalı gönderiyorsa anahtar hiçbir şey yapmaz — durum rozeti hangi durum olduğunu söyler.\n\nDaha az olay günlüğü ve daha az döküm, bedava pil ve daha az G/Ç demektir; ses ve videonun kendisine dokunulmaz."
-    },
-    "asb_priority": {
-      "name": "Motor önceliği (deneysel)",
-      "desc": "Normalde üretici daha yüksek bir değer tuttuğunda ASB geri çekilir. Bu açıkken ASB kendi değerinde ısrar eder, yalnızca güvenli yerlerde: ekran kapalıyken CPU sınırları, arka plan katmanı her zaman, derin uykuda ön plan. Üreticinin düşürmeleri (termal koruma, kendi tasarrufu) her zaman korunur, dokunma hızlandırmalarına dokunulmaz. Açık ve kapalı bir kaydı karşılaştırın."
     }
   },
   "nav_live": "İzleme",

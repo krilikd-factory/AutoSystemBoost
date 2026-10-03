@@ -288,10 +288,6 @@
     "mmfeed_off": {
       "name": "Multimedia Telemetry Off",
       "desc": "OxygenOS runs a multimedia feedback collector: audio, video and display diag events with log dumps and uploads, opened by Multimedia_Feedback_List.xml. This patch takes your device's OWN copy of that file, flips only its isOpen switch to false, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no such file on your device, or the OEM already ships it closed, this switch does nothing - the status badge says which.\n\nLess event logging and fewer dumps means free battery and less I/O; audio and video themselves are untouched."
-    },
-    "asb_priority": {
-      "name": "Engine Priority (experimental)",
-      "desc": "Normally ASB steps back when the vendor holds a setting higher than ASB asks. With this on, ASB insists on its own value — but only where it is safe: CPU caps while the screen is off, the background tier always, and the foreground tier in deep sleep. Vendor lowerings (thermal protection, the vendor's own savings) are always respected, and touch or launch boosts on the screen are never touched. Compare a capture with it on against one with it off: if drain does not drop and the reassert counter climbs, the vendor is winning and it is only a tug-of-war."
     }
   },
   "cfg_search": "Search",

@@ -337,10 +337,6 @@
     "mmfeed_off": {
       "name": "Telemetría multimedia desactivada",
       "desc": "OxygenOS ejecuta un recolector de feedback multimedia: eventos de diagnóstico de audio, vídeo y pantalla con volcados de registro y subidas, abierto por Multimedia_Feedback_List.xml. Este parche toma la copia PROPIA de ese archivo en tu dispositivo, cambia solo su interruptor isOpen a false y vincula el resultado sobre el archivo original: no se copia nada de otro modelo y el archivo original nunca se modifica.\n\nEl parche se prepara durante la instalación del módulo, y este interruptor decide si se aplica: apagado por defecto, y activarlo hace efecto tras un reinicio. Si el instalador no encontró ese archivo en tu dispositivo, o el fabricante ya lo entrega cerrado, el interruptor no hace nada: la insignia de estado indica cuál es tu caso.\n\nMenos registro de eventos y menos volcados significan batería gratis y menos E/S; el audio y el vídeo en sí no se tocan."
-    },
-    "asb_priority": {
-      "name": "Prioridad del motor (experimental)",
-      "desc": "Normalmente ASB cede cuando el fabricante mantiene un valor más alto. Con esto activado, ASB insiste en su valor, solo donde es seguro: límites de CPU con pantalla apagada, nivel de fondo siempre, primer plano en reposo profundo. Las bajadas del fabricante (protección térmica, su ahorro) siempre se respetan y los impulsos táctiles no se tocan. Compara una captura con y sin."
     }
   },
   "nav_live": "Monitor",

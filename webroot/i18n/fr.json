@@ -425,10 +425,6 @@
     "mmfeed_off": {
       "name": "Télémétrie multimédia désactivée",
       "desc": "OxygenOS fait tourner un collecteur de retour multimédia : événements de diagnostic audio, vidéo et affichage avec dumps de journaux et envois, ouvert par Multimedia_Feedback_List.xml. Ce correctif prend la copie PROPRE de ce fichier sur votre appareil, ne bascule que son interrupteur isOpen sur false, et monte le résultat par-dessus le fichier d'origine — rien n'est copié depuis un autre modèle, et le fichier d'origine n'est jamais modifié.\n\nLe correctif est préparé pendant l'installation du module, et cet interrupteur décide de son application : désactivé par défaut, son activation prend effet après un redémarrage. Si l'installateur n'a trouvé aucun fichier de ce type sur votre appareil, ou s'il est déjà fermé d'usine, l'interrupteur ne fait rien — le badge d'état indique votre cas.\n\nMoins de journalisation d'événements et moins de dumps, c'est de la batterie gratuite et moins d'E/S ; l'audio et la vidéo eux-mêmes ne sont pas touchés."
-    },
-    "asb_priority": {
-      "name": "Priorité du moteur (expérimental)",
-      "desc": "Normalement ASB cède quand le constructeur maintient une valeur plus haute. Avec cette option, ASB insiste sur sa valeur, uniquement là où c'est sûr : plafonds CPU écran éteint, niveau arrière-plan toujours, premier plan en veille profonde. Les baisses du constructeur (protection thermique, ses économies) sont toujours respectées, les boosts tactiles jamais touchés. Compare une capture avec et sans."
     }
   },
   "opt": {
