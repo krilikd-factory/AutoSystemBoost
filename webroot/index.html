@@ -2431,6 +2431,72 @@ body.config-active #livePage.open {
 @keyframes cfgProfileApplyPulse { 0%,100% { transform:scale(1); filter:brightness(1) saturate(1); } 50% { transform:scale(.94); filter:brightness(1.22) saturate(1.24); } }
 .cfg-profile-progress { margin-top:10px; padding:10px 11px; color:#bdf7ea; border:1px solid rgba(44,214,173,.42); border-radius:11px; background:rgba(44,214,173,.08); font-size:11px; line-height:1.4; }
 .cfg-profile-hint { margin-top:9px; color:rgba(231,234,238,.47); font-size:10.5px; line-height:1.35; }
+/* Folder/file browser for saving and opening configurations anywhere on the device.
+ * Same family as the configuration sheet - true black, teal gradient contour - laid out like
+ * a file manager: a navigation bar (back, clickable path, sort), quick places, the listing,
+ * and a footer that states the single action available. */
+.cfg-fm[hidden] { display:none !important; }
+.cfg-fm { position:fixed; z-index:1420; inset:0; display:flex; align-items:center; justify-content:center; box-sizing:border-box;
+  padding:max(16px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));
+  background:rgba(0,0,0,.72); backdrop-filter:blur(5px); animation:cfgFmFade .18s ease both; }
+@keyframes cfgFmFade { from { opacity:0; } to { opacity:1; } }
+.cfg-fm-box { width:100%; max-width:480px; height:80vh; height:80dvh; max-height:680px; display:flex; flex-direction:column; overflow:hidden; box-sizing:border-box;
+  border:1px solid transparent; border-radius:26px;
+  background:linear-gradient(#000,#000) padding-box, linear-gradient(160deg,#35bb99 0%,#2aa9b3 45%,#1f7d68 100%) border-box;
+  box-shadow:0 20px 60px rgba(0,0,0,.70); animation:cfgFmPop .28s cubic-bezier(.34,1.28,.64,1) both; }
+@keyframes cfgFmPop { from { opacity:0; transform:scale(.94); } to { opacity:1; transform:none; } }
+.cfg-fm-bar { display:flex; align-items:center; gap:8px; padding:14px 12px 8px; }
+.cfg-fm-btn { flex:0 0 auto; height:34px; min-width:34px; display:flex; align-items:center; justify-content:center; padding:0; border-radius:17px;
+  color:#c8d0d2; border:1px solid rgba(255,255,255,.16); background:#050707; cursor:pointer; }
+.cfg-fm-btn svg { width:18px; height:18px; }
+.cfg-fm-btn:disabled { opacity:.38; cursor:default; }
+.cfg-fm-sort { padding:0 12px; font-size:11.5px; font-weight:700; color:#5ce7c3; border-color:rgba(44,214,173,.36); }
+.cfg-fm-crumb { flex:1; min-width:0; overflow-x:auto; white-space:nowrap; font-size:13px; padding:2px; scrollbar-width:none; }
+.cfg-fm-crumb::-webkit-scrollbar { display:none; }
+.cfg-fm-seg { color:#edf2f3; font-weight:600; cursor:pointer; }
+.cfg-fm-seg:last-child { color:rgba(231,234,238,.52); font-weight:500; cursor:default; }
+.cfg-fm-sep { color:rgba(231,234,238,.32); padding:0 6px; }
+.cfg-fm-places { display:flex; gap:7px; padding:0 12px 10px; overflow-x:auto; scrollbar-width:none; }
+.cfg-fm-places::-webkit-scrollbar { display:none; }
+.cfg-fm-place { flex:0 0 auto; min-height:32px; padding:0 13px; border-radius:16px; font-size:12px; font-weight:600;
+  color:rgba(231,234,238,.74); border:1px solid rgba(255,255,255,.13); background:#050707; cursor:pointer; }
+.cfg-fm-place.on { color:#5ce7c3; border-color:rgba(44,214,173,.6); background:rgba(44,214,173,.09); }
+.cfg-fm-list { flex:1; overflow-y:auto; padding:4px 8px 8px; border-top:1px solid rgba(255,255,255,.07);
+  -webkit-overflow-scrolling:touch; transition:transform .15s ease, opacity .15s ease; }
+.cfg-fm-list.switching { transform:scale(.975); opacity:0; }
+.cfg-fm-item { display:flex; align-items:center; gap:12px; padding:10px; border-radius:13px; cursor:pointer; transition:background .12s; }
+.cfg-fm-item:active { background:rgba(44,214,173,.10); }
+.cfg-fm-item.dim { opacity:.42; cursor:default; }
+.cfg-fm-item.dim:active { background:none; }
+.cfg-fm-ic { width:30px; height:30px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border-radius:9px; color:rgba(231,234,238,.55); }
+.cfg-fm-ic svg { width:20px; height:20px; }
+.cfg-fm-ic.dir { color:#5ce7c3; }
+.cfg-fm-ic.conf { color:#04120f; background:linear-gradient(135deg,#2cd6ad,#67e4c8); }
+.cfg-fm-info { flex:1; min-width:0; }
+.cfg-fm-nm { font-size:14px; color:#edf2f3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cfg-fm-sub { margin-top:1px; font-size:11px; color:rgba(231,234,238,.48); font-variant-numeric:tabular-nums; }
+.cfg-fm-empty { padding:40px 18px; text-align:center; color:rgba(231,234,238,.50); font-size:12.5px; line-height:1.45; }
+.cfg-fm-foot { display:flex; align-items:center; gap:10px; padding:10px 12px 12px; border-top:1px solid rgba(255,255,255,.07); }
+.cfg-fm-hint { flex:1; min-width:0; color:rgba(231,234,238,.50); font-size:11px; line-height:1.35; }
+.cfg-fm-cancel { flex:0 0 auto; min-height:40px; padding:0 14px; border-radius:11px; color:#eaf0f1; border:1px solid rgba(255,255,255,.16); background:#050707; font-weight:700; font-size:13px; }
+.cfg-fm-go { flex:0 0 auto; min-height:40px; padding:0 16px; border:0; border-radius:11px; color:#04120f; background:linear-gradient(135deg,#2cd6ad,#67e4c8); font-weight:800; font-size:13px; }
+.cfg-fm-go[hidden] { display:none; }
+.cfg-fm-go:disabled { opacity:.45; }
+/* The chosen folder under the destination buttons: tap to change it. */
+.cfg-profile-dest.two { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.cfg-profile-folder { display:flex; align-items:center; gap:9px; width:100%; margin-top:8px; padding:9px 11px; box-sizing:border-box; text-align:left;
+  color:#bdf7ea; border:1px solid rgba(44,214,173,.36); border-radius:11px; background:rgba(44,214,173,.06); font-size:11.5px; cursor:pointer; }
+.cfg-profile-folder svg { width:16px; height:16px; flex:0 0 auto; color:#5ce7c3; }
+.cfg-profile-folder span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; }
+html[data-asb-theme="light"] .cfg-fm { background:rgba(15,31,27,.58) !important; }
+html[data-asb-theme="light"] .cfg-fm-box { background:linear-gradient(#fff,#fff) padding-box, linear-gradient(160deg,#35bb99 0%,#2aa9b3 45%,#1f7d68 100%) border-box !important; }
+html[data-asb-theme="light"] :is(.cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel) { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] :is(.cfg-fm-place.on,.cfg-fm-sort) { color:var(--accent) !important; border-color:rgba(0,143,112,.42) !important; }
+html[data-asb-theme="light"] :is(.cfg-fm-nm,.cfg-fm-seg) { color:var(--text) !important; }
+html[data-asb-theme="light"] :is(.cfg-fm-sub,.cfg-fm-hint,.cfg-fm-empty,.cfg-fm-seg:last-child) { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .cfg-fm-ic.dir { color:var(--accent) !important; }
+html[data-asb-theme="light"] :is(.cfg-fm-list,.cfg-fm-foot) { border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-profile-folder { color:var(--text) !important; border-color:rgba(0,143,112,.42) !important; background:rgba(0,143,112,.07) !important; }
 /* Reset is a consequential action, so it uses a centred decision dialog instead of a
  * hidden immediate command. It shares the ASB dark/teal language but has neutral and
  * amber choices that tell a configuration reset from a Smart-learning reset apart. */
@@ -3427,6 +3493,26 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
       <button class="cfg-profile-close" id="cfgProfileCloseBtn" type="button" onclick="cfgProfileClose()" aria-label="Close">×</button>
     </div>
     <div id="cfgProfileBody"></div>
+  </div>
+</div>
+
+<!-- File browser for saving and opening configurations in any folder of the device. -->
+<div class="cfg-fm" id="cfgFm" hidden aria-hidden="true">
+  <div class="cfg-fm-box" role="dialog" aria-modal="true" aria-labelledby="cfgFmPath">
+    <div class="cfg-fm-bar">
+      <button class="cfg-fm-btn" id="cfgFmUp" type="button" onclick="cfgFmUp()" aria-label="Up one folder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      </button>
+      <div class="cfg-fm-crumb" id="cfgFmPath"></div>
+      <button class="cfg-fm-btn cfg-fm-sort" id="cfgFmSort" type="button" onclick="cfgFmToggleSort()"></button>
+    </div>
+    <div class="cfg-fm-places" id="cfgFmPlaces"></div>
+    <div class="cfg-fm-list" id="cfgFmList"></div>
+    <div class="cfg-fm-foot">
+      <div class="cfg-fm-hint" id="cfgFmHint"></div>
+      <button class="cfg-fm-cancel" id="cfgFmCancel" type="button" onclick="cfgFmClose()"></button>
+      <button class="cfg-fm-go" id="cfgFmGo" type="button" onclick="cfgFmChooseHere()"></button>
+    </div>
   </div>
 </div>
 
@@ -6663,8 +6749,9 @@ async function dozeSaveKeep(box) {
 }
 
 /* Saved configurations use one in-page manager instead of browser prompt()/confirm(). The
- * canonical profile remains checksum-protected in ASB state; Downloads/Documents are bounded
- * convenience copies, never arbitrary path entry points. */
+ * canonical profile remains checksum-protected in ASB state. Copies can go to, and come from,
+ * any folder the user picks in the file browser; the helper validates the path and the
+ * checksum (export-path / import-path). */
 const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';
 const _cfgProfile = { mode:'', store:'internal', rows:[], selected:'', replace:'', remove:'', draft:'', busy:false };
 function cfgProfileNameOK(name) { return /^[A-Za-z0-9_-]{1,32}$/.test(name || ''); }
@@ -6695,12 +6782,14 @@ function cfgProfileClose() {
 async function cfgProfileOpen(mode) {
   _cfgProfile.mode = mode; _cfgProfile.store = 'internal'; _cfgProfile.rows = [];
   _cfgProfile.selected = ''; _cfgProfile.replace = ''; _cfgProfile.remove = ''; _cfgProfile.draft = ''; _cfgProfile.busy = false;
+  _cfgProfile.dir = ''; cfgFmInit();
   const m = _el('cfgProfileModal'); if (!m) return;
   m.hidden = false; m.setAttribute('aria-hidden', 'false');
   await cfgProfileRefresh();
 }
 async function cfgProfileRefresh() {
-  const external = _cfgProfile.store !== 'internal';
+  // Only the two fixed stores have an external listing; 'device' is handled by the browser.
+  const external = _cfgProfile.store === 'downloads' || _cfgProfile.store === 'documents';
   const cmd = external ? 'list-external ' + _cfgProfile.store : 'list';
   const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' ' + cmd);
   _cfgProfile.rows = (r && r.errno === 0) ? cfgProfileParse(r.stdout, external) : [];
@@ -6717,14 +6806,39 @@ function cfgProfileSelect(name) {
   _cfgProfile.selected = name; _cfgProfile.remove = ''; cfgProfilePaint();
 }
 function cfgProfileDestination(box) {
+  const save = _cfgProfile.mode === 'save';
   const label = document.createElement('div'); label.className = 'cfg-profile-label';
   label.textContent = T('cfg_profile_location', 'Storage location'); box.appendChild(label);
-  const dest = document.createElement('div'); dest.className = 'cfg-profile-dest';
-  [['internal',T('cfg_profile_store_asb','ASB')],['downloads',T('cfg_profile_store_downloads','Downloads')],['documents',T('cfg_profile_store_documents','Documents')]].forEach(function(x) {
-    const b = cfgProfileButton(x[1], _cfgProfile.store === x[0] ? 'active' : '', function() { cfgProfileSetStore(x[0]); });
-    b.disabled = _cfgProfile.busy; dest.appendChild(b);
+  const dest = document.createElement('div'); dest.className = 'cfg-profile-dest two';
+  const asb = cfgProfileButton(T('cfg_profile_store_asb', 'ASB'), _cfgProfile.store === 'internal' ? 'active' : '', function() {
+    if (_cfgProfile.busy) return; _cfgProfile.store = 'internal'; cfgProfilePaint();
   });
-  box.appendChild(dest);
+  // Any folder on the device, chosen in the file browser.
+  const dev = cfgProfileButton(save ? T('cfg_profile_store_folder', 'To a folder…') : T('cfg_profile_store_file', 'From a file…'),
+    _cfgProfile.store === 'device' ? 'active' : '', function() {
+      if (_cfgProfile.busy) return;
+      if (save) cfgFmOpen('folder', function(dir) { _cfgProfile.store = 'device'; _cfgProfile.dir = dir; cfgProfilePaint(); });
+      else {
+        // Adopt pre-V64 single-file backups first: list-external converts a legacy
+        // asb_settings_backup.conf in Download/Documents into a checksummed copy under
+        // ASB-Profiles, which the browser can then open like any other configuration.
+        void run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' list-external downloads >/dev/null 2>&1; sh ' +
+                 shQuote(CFG_PROFILE_HELPER) + ' list-external documents >/dev/null 2>&1');
+        cfgFmOpen('file', function(file) { void cfgProfileImportPath(file); });
+      }
+    });
+  asb.disabled = dev.disabled = _cfgProfile.busy;
+  dest.appendChild(asb); dest.appendChild(dev); box.appendChild(dest);
+  if (save && _cfgProfile.store === 'device' && _cfgProfile.dir) {
+    const f = document.createElement('button'); f.type = 'button'; f.className = 'cfg-profile-folder';
+    f.title = T('cfg_profile_folder_change', 'Change folder');
+    f.innerHTML = CFG_FM_SVG_FOLDER_SMALL + '<span></span>';
+    // Shown right-to-left so a long path keeps its last folder visible - the part that tells
+    // two locations apart.
+    f.querySelector('span').textContent = '\u200E' + _cfgProfile.dir.replace(CFG_FM_HOME, T('cfg_fm_storage', 'Storage'));
+    f.onclick = function() { cfgFmOpen('folder', function(dir) { _cfgProfile.dir = dir; cfgProfilePaint(); }); };
+    box.appendChild(f);
+  }
 }
 function cfgProfilePaint() {
   const close = _el('cfgProfileCloseBtn'); if (close) close.disabled = _cfgProfile.busy;
@@ -6732,7 +6846,7 @@ function cfgProfilePaint() {
   body.textContent = '';
   const save = _cfgProfile.mode === 'save';
   const copy = document.createElement('div'); copy.className = 'cfg-profile-copy';
-  copy.textContent = save ? T('cfg_profile_save_copy','Save the current settings and, when available, Smart learning as a named configuration. You can also copy it to Downloads or Documents.') :
+  copy.textContent = save ? T('cfg_profile_save_copy','Save the current settings and, when available, Smart learning as a named configuration. You can also save a copy to any folder on the device.') :
     T('cfg_profile_open_copy','Select a saved configuration, then press Apply. No profile name needs to be typed.');
   body.appendChild(copy);
   if (save) {
@@ -6781,7 +6895,7 @@ function cfgProfilePaint() {
     progress.textContent = T('cfg_profile_apply_wait','Please wait while ASB restores every saved setting. Do not close this window.'); body.appendChild(progress);
   } else {
     const hint = document.createElement('div'); hint.className = 'cfg-profile-hint';
-    hint.textContent = T('cfg_profile_apply_hint','Apply restores all saved settings at once. Downloads/Documents copies are checksum-checked before they enter ASB.'); body.appendChild(hint);
+    hint.textContent = T('cfg_profile_apply_hint','Apply restores all saved settings at once. Copies opened from a folder are checksum-checked before they enter ASB.'); body.appendChild(hint);
   }
 }
 async function cfgProfileSave() {
@@ -6792,12 +6906,22 @@ async function cfgProfileSave() {
   let r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' ' + verb + ' ' + shQuote(name) + ' ' + cfgProfileArgs());
   if (r && r.errno === 3) { _cfgProfile.replace = name; cfgProfilePaint(); toast(T('cfg_profile_replace_ready','Tap Replace to overwrite this saved configuration.'), 'warn'); return; }
   if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_export_err','Could not save profile'), 'err'); return; }
-  if (_cfgProfile.store !== 'internal') {
-    const ex = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' export ' + shQuote(name) + ' ' + _cfgProfile.store);
-    if (!ex || ex.errno !== 0) { toast(cfgResultText(ex) || T('cfg_profile_export_err','Saved in ASB, but could not copy to selected location'), 'warn'); return; }
+  if (_cfgProfile.store === 'device' && _cfgProfile.dir) {
+    const ex = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' export-path ' + shQuote(name) + ' ' + shQuote(_cfgProfile.dir));
+    if (!ex || ex.errno !== 0) { toast(cfgResultText(ex) || T('cfg_profile_export_err','Saved in ASB, but could not copy to the chosen folder'), 'warn'); return; }
+    toast(T('cfg_profile_saved_to', 'Saved to ') + _cfgProfile.dir.replace(CFG_FM_HOME, T('cfg_fm_storage', 'Storage')) + '/' + name + '.conf', 'ok');
+    return;
   }
   const smartSaved = /(^|\n)smart_learning=saved(\n|$)/.test(String((r && r.stdout) || ''));
   toast(T('cfg_profile_saved','Saved profile ') + name + (smartSaved ? T('cfg_profile_smart_saved_suffix',' · Smart learning included') : ''), 'ok'); cfgProfileClose();
+}
+async function cfgProfileImportPath(file) {
+  const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' import-path ' + shQuote(file));
+  if (!r || r.errno !== 0) { uiSound('error'); toast(cfgResultText(r) || T('cfg_import_err', 'Could not open this configuration'), 'err'); return; }
+  const m = /(^|\n)imported=([A-Za-z0-9_-]+)/.exec(String(r.stdout || ''));
+  _cfgProfile.store = 'internal'; await cfgProfileRefresh();
+  if (m) { _cfgProfile.selected = m[2]; cfgProfilePaint(); }
+  toast(T('cfg_profile_imported', 'Opened ') + (m ? m[2] : '') + T('cfg_profile_imported_tail', ' - press Apply to use it'), 'ok');
 }
 async function cfgProfileEnsureInternal() {
   if (_cfgProfile.store === 'internal') return true;
@@ -6839,6 +6963,162 @@ async function cfgProfileDelete() {
   const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' delete ' + shQuote(_cfgProfile.selected));
   if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_import_err','Could not delete profile'), 'err'); return; }
   _cfgProfile.selected = ''; _cfgProfile.remove = ''; await cfgProfileRefresh();
+}
+/* ---- Folder/file browser for configurations -------------------------------------------
+ * Modelled on the keybox picker in AlwaysStrong: one stat call lists a whole folder, the
+ * list is built as a single string with one delegated listener, and the next fetch starts
+ * while the old list fades so the animation overlaps the shell call. Two modes:
+ *   folder - navigate to a folder and press "Save here";
+ *   file   - navigate and tap a .conf configuration to open it.
+ * Hidden entries, symlinked system trees and files that are not configurations are left
+ * out; in folder mode existing .conf files stay visible but inactive, so a user sees what is
+ * already saved there before writing next to it. */
+const CFG_FM_HOME = '/storage/emulated/0';
+const CFG_FM_SVG_DIR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const CFG_FM_SVG_CONF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10"/><path d="M4 12h6"/><path d="M4 17h10"/><circle cx="17" cy="7" r="2"/><circle cx="13" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></svg>';
+const CFG_FM_SVG_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>';
+const CFG_FM_SVG_FOLDER_SMALL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const _cfgFm = { mode:'folder', path:CFG_FM_HOME, items:[], sort:0, noaccess:false, onPick:null };
+function cfgFmEsc(v) { return String(v).replace(/[&<>"]/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function cfgFmSize(b) { return b >= 1048576 ? (b/1048576).toFixed(1) + ' MB' : b >= 1024 ? (b/1024).toFixed(1) + ' KB' : b + ' B'; }
+function cfgFmDate(sec) {
+  if (!sec) return '';
+  const d = new Date(sec * 1000), p = function(n) { return String(n).padStart(2, '0'); };
+  return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+/* Same rule as _path_ok in asb_config_backup.sh, so a forbidden folder is refused before
+   the user presses anything rather than by an error after it. */
+function cfgFmPathOK(p) {
+  if (!p || p.charAt(0) !== '/' || p === '/') return false;
+  if (/[\n\t]/.test(p) || /(^|\/)\.\.?(\/|$)/.test(p)) return false;
+  return !/^\/(proc|sys|dev|system|system_ext|vendor|product|odm|apex|linkerconfig|config|acct)(\/|$)/.test(p);
+}
+function cfgFmPlaces() {
+  return [
+    [CFG_FM_HOME, T('cfg_fm_storage', 'Storage')],
+    [CFG_FM_HOME + '/Download', 'Download'],
+    [CFG_FM_HOME + '/Documents', 'Documents']
+  ];
+}
+async function cfgFmFetch(path) {
+  const r = await run('cd ' + shQuote(path) + " 2>/dev/null || { echo __ASB_NOACCESS__; exit 0; }; " +
+                      "stat -L -c '%F|%s|%Y|%n' -- * 2>/dev/null; true");
+  const out = String((r && r.stdout) || '');
+  _cfgFm.noaccess = out.indexOf('__ASB_NOACCESS__') === 0;
+  const items = [];
+  out.split('\n').forEach(function(line) {
+    if (!line || line.indexOf('__ASB_') === 0) return;
+    const p = line.split('|'); if (p.length < 4) return;
+    const name = p.slice(3).join('|'); if (!name || name.charAt(0) === '.') return;
+    const dir = p[0] === 'directory';
+    if (!dir && p[0].indexOf('regular') < 0) return;
+    const conf = !dir && /\.conf$/i.test(name);
+    if (!dir && !conf) return;
+    items.push({ dir:dir, conf:conf, size:parseInt(p[1], 10) || 0, mtime:parseInt(p[2], 10) || 0, name:name });
+  });
+  return items;
+}
+function cfgFmPaint() {
+  const sorts = [
+    { lbl:T('cfg_fm_sort_az', 'A–Z'), cmp:function(a, b) { return a.name.localeCompare(b.name, undefined, { numeric:true, sensitivity:'base' }); } },
+    { lbl:T('cfg_fm_sort_new', 'Newest'), cmp:function(a, b) { return b.mtime - a.mtime; } }
+  ];
+  _el('cfgFmSort').textContent = sorts[_cfgFm.sort].lbl;
+  // Path as clickable segments; the last one is where you are.
+  const crumb = _el('cfgFmPath');
+  const parts = _cfgFm.path.split('/').filter(Boolean); let acc = '';
+  crumb.innerHTML = parts.length ? parts.map(function(seg) {
+    acc += '/' + seg;
+    const label = acc === CFG_FM_HOME ? T('cfg_fm_storage', 'Storage') : seg;
+    return '<span class="cfg-fm-seg" data-p="' + cfgFmEsc(acc) + '">' + cfgFmEsc(label) + '</span>';
+  }).filter(function(x, i) { return parts.slice(0, i + 1).join('/') !== 'storage' && parts.slice(0, i + 1).join('/') !== 'storage/emulated'; })
+    .join('<span class="cfg-fm-sep">›</span>') : '<span class="cfg-fm-seg" data-p="/">/</span>';
+  crumb.scrollLeft = crumb.scrollWidth;
+  _el('cfgFmUp').disabled = _cfgFm.path === '/';
+  _el('cfgFmPlaces').innerHTML = cfgFmPlaces().map(function(pl) {
+    return '<button type="button" class="cfg-fm-place' + (_cfgFm.path === pl[0] ? ' on' : '') + '" data-p="' + cfgFmEsc(pl[0]) + '">' + cfgFmEsc(pl[1]) + '</button>';
+  }).join('');
+  const dirs = _cfgFm.items.filter(function(i) { return i.dir; }).sort(sorts[_cfgFm.sort].cmp);
+  const files = _cfgFm.items.filter(function(i) { return !i.dir; }).sort(sorts[_cfgFm.sort].cmp);
+  let html = '';
+  if (_cfgFm.path !== '/') html += '<div class="cfg-fm-item" data-up="1"><div class="cfg-fm-ic dir">' + CFG_FM_SVG_UP + '</div><div class="cfg-fm-info"><div class="cfg-fm-nm">' + cfgFmEsc(T('cfg_fm_up', 'Up one folder')) + '</div></div></div>';
+  if (_cfgFm.noaccess) html += '<div class="cfg-fm-empty">' + cfgFmEsc(T('cfg_fm_noaccess', 'This folder cannot be opened. Go back and choose another one.')) + '</div>';
+  else if (!dirs.length && !files.length) html += '<div class="cfg-fm-empty">' + cfgFmEsc(_cfgFm.mode === 'file' ? T('cfg_fm_empty_file', 'No folders or saved configurations here.') : T('cfg_fm_empty', 'This folder is empty. You can save here.')) + '</div>';
+  dirs.concat(files).forEach(function(it) {
+    const dim = !it.dir && _cfgFm.mode === 'folder';
+    const sub = it.dir ? cfgFmDate(it.mtime) : cfgFmSize(it.size) + ' · ' + cfgFmDate(it.mtime);
+    html += '<div class="cfg-fm-item' + (dim ? ' dim' : '') + '" data-dir="' + (it.dir ? 1 : 0) + '" data-name="' + cfgFmEsc(it.name) + '">' +
+      '<div class="cfg-fm-ic ' + (it.dir ? 'dir' : 'conf') + '">' + (it.dir ? CFG_FM_SVG_DIR : CFG_FM_SVG_CONF) + '</div>' +
+      '<div class="cfg-fm-info"><div class="cfg-fm-nm">' + cfgFmEsc(it.dir ? it.name : it.name.replace(/\.conf$/i, '')) + '</div>' +
+      '<div class="cfg-fm-sub">' + cfgFmEsc(sub) + '</div></div></div>';
+  });
+  const list = _el('cfgFmList'); list.innerHTML = html; list.scrollTop = 0;
+  const go = _el('cfgFmGo'); const folder = _cfgFm.mode === 'folder';
+  go.hidden = !folder;
+  go.disabled = !folder || _cfgFm.noaccess || !cfgFmPathOK(_cfgFm.path);
+  _el('cfgFmHint').textContent = folder
+    ? (cfgFmPathOK(_cfgFm.path) ? T('cfg_fm_hint_folder', 'Open the folder you want, then press Save here.') : T('cfg_fm_hint_forbidden', 'System folders cannot hold backups. Choose a folder in storage.'))
+    : T('cfg_fm_hint_file', 'Tap a saved configuration to open it.');
+}
+async function cfgFmNav(path) {
+  if (path) _cfgFm.path = path;
+  const list = _el('cfgFmList'); list.classList.add('switching');
+  const pending = cfgFmFetch(_cfgFm.path);
+  await new Promise(function(r) { setTimeout(r, 90); });
+  _cfgFm.items = await pending;
+  cfgFmPaint();
+  requestAnimationFrame(function() { list.classList.remove('switching'); });
+}
+function cfgFmUp() {
+  if (_cfgFm.path === '/') return;
+  // From the storage root, one step up is the system tree, which is never a useful place
+  // to save; stop there instead of walking into /storage/emulated.
+  if (_cfgFm.path === CFG_FM_HOME) { void cfgFmNav('/'); return; }
+  void cfgFmNav(_cfgFm.path.replace(/\/[^/]*$/, '') || '/');
+}
+function cfgFmToggleSort() {
+  _cfgFm.sort = _cfgFm.sort ? 0 : 1;
+  const list = _el('cfgFmList'); list.classList.add('switching');
+  setTimeout(function() { cfgFmPaint(); requestAnimationFrame(function() { list.classList.remove('switching'); }); }, 90);
+}
+function cfgFmOpen(mode, onPick) {
+  _cfgFm.mode = mode; _cfgFm.onPick = onPick; _cfgFm.sort = 0;
+  let start = CFG_FM_HOME;
+  try { const last = localStorage.getItem('asb_cfg_fm_last'); if (last && cfgFmPathOK(last)) start = last; } catch (e) {}
+  _el('cfgFmCancel').textContent = T('cfg_fm_cancel', 'Cancel');
+  _el('cfgFmGo').textContent = T('cfg_fm_save_here', 'Save here');
+  const m = _el('cfgFm'); m.hidden = false; m.setAttribute('aria-hidden', 'false');
+  uiSound('option');
+  void cfgFmNav(start);
+}
+function cfgFmClose() {
+  const m = _el('cfgFm'); if (!m) return;
+  m.hidden = true; m.setAttribute('aria-hidden', 'true'); _cfgFm.onPick = null;
+}
+function cfgFmRemember(dir) { try { localStorage.setItem('asb_cfg_fm_last', dir); } catch (e) {} }
+function cfgFmChooseHere() {
+  if (_cfgFm.mode !== 'folder' || !cfgFmPathOK(_cfgFm.path) || _cfgFm.noaccess) return;
+  const cb = _cfgFm.onPick, dir = _cfgFm.path;
+  cfgFmRemember(dir); cfgFmClose(); if (cb) cb(dir);
+}
+function cfgFmInit() {
+  const list = _el('cfgFmList'); if (!list || list._asbBound) return; list._asbBound = true;
+  list.addEventListener('click', function(ev) {
+    const row = ev.target.closest('.cfg-fm-item'); if (!row || row.classList.contains('dim')) return;
+    if (row.dataset.up) { cfgFmUp(); return; }
+    const name = row.dataset.name; if (!name) return;
+    const full = (_cfgFm.path === '/' ? '' : _cfgFm.path) + '/' + name;
+    if (row.dataset.dir === '1') { void cfgFmNav(full); return; }
+    if (_cfgFm.mode === 'file') {
+      const cb = _cfgFm.onPick; cfgFmRemember(_cfgFm.path); cfgFmClose(); if (cb) cb(full);
+    }
+  });
+  _el('cfgFmPath').addEventListener('click', function(ev) {
+    const seg = ev.target.closest('.cfg-fm-seg'); if (seg && seg.dataset.p && seg.dataset.p !== _cfgFm.path) void cfgFmNav(seg.dataset.p);
+  });
+  _el('cfgFmPlaces').addEventListener('click', function(ev) {
+    const b = ev.target.closest('.cfg-fm-place'); if (b && b.dataset.p) void cfgFmNav(b.dataset.p);
+  });
 }
 function cfgExport() { void cfgProfileOpen('save'); }
 function cfgImport() { void cfgProfileOpen('open'); }
