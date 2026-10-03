@@ -207,8 +207,14 @@ _try_release() {
     # handover toggles said not to hand over at all. One control, one meaning: the rungs
     # that leave a weak link carry -80 dBm, which is where a link stops being useful on
     # every device measured.
+    # The level itself is net_wifi_leave_dbm (default -80): an external audit pointed out
+    # that a fixed -80 does not fit every antenna or case. Out-of-range or malformed values
+    # fall back to -80, so a typo cannot make leaving impossible or permanent.
+    _cfg_dbm="$(_cfg net_wifi_leave_dbm)"
+    case "$_cfg_dbm" in -[0-9]|-[0-9][0-9]) : ;; *) _cfg_dbm=-80 ;; esac
+    if [ "$_cfg_dbm" -lt -95 ] 2>/dev/null || [ "$_cfg_dbm" -gt -60 ] 2>/dev/null; then _cfg_dbm=-80; fi
     case "$(_cfg net_wifi_leave)" in
-      weak|unusable|aggressive) _cfg_rssi=-80 ;;
+      weak|unusable|aggressive) _cfg_rssi="$_cfg_dbm" ;;
       *)                        _cfg_rssi=off ;;
     esac
     case "$_cfg_rssi" in -[0-9]*) ASB_WIFI_LEAVE_ON_RSSI="$_cfg_rssi" ;; esac

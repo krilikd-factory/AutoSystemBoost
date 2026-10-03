@@ -84,26 +84,6 @@ _probe() {
       [ -d "$_c" ] && { _audio_sku="$_c"; break; }
     done
   fi
-  # Which audio config tree the platform actually reads.
-  #
-  # ColorOS ships several SKU trees in one image - a captured Ace 5 carries sku_pineapple,
-  # sku_cliffs and their _qssi variants side by side - and the framework loads exactly one,
-  # selected by ro.board.platform. ASB's audio path list has no SKU component, so on such a
-  # device it would patch a file the system never reads: the effect registered in one
-  # config while audioserver loads another. That mismatch is what takes audioserver down,
-  # and SystemUI and the camera follow it.
-  #
-  # This patches nothing. It records which tree is live, so the audio code has a correct
-  # target the day DSP support reaches this platform, and a diag can show it today.
-  _audio_sku=""
-  _plat="$(getprop ro.board.platform 2>/dev/null)"
-  case "$_plat" in ''|*[!a-z0-9_]*) _plat="" ;; esac
-  if [ -n "$_plat" ]; then
-    for _c in "/vendor/etc/audio/sku_${_plat}" "/odm/etc/audio/sku_${_plat}" \
-              "/vendor/etc/audio/sku_${_plat}_qssi"; do
-      [ -d "$_c" ] && { _audio_sku="$_c"; break; }
-    done
-  fi
   _dsp=0
   # Look for the library ASB installs, in every place the installer puts it.
   #
