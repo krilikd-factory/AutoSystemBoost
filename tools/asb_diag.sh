@@ -695,7 +695,7 @@ if [ -r "$_state" ]; then
     _nt="$(_rget noop_ticks "$_state")"
     case "$_nt" in ''|*[!0-9]*) _nt=0 ;; esac
     if [ $(( _nt + _ov_t )) -gt 0 ]; then
-      P "    settled ticks    : $_nt decided nothing ($(( _nt * 100 / (_nt + _ov_t) ))% - high is healthy)"
+      P "    smart re-slots   : $_nt changed nothing (Smart recomputes only, not every tick)"
     fi
       _jw="$(_rget json_written "$_state")"; _js="$(_rget json_skipped "$_state")"
       case "$_jw" in ''|*[!0-9]*) _jw=0 ;; esac
