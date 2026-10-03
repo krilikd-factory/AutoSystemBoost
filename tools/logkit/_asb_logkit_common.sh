@@ -476,6 +476,18 @@ lk_verify_caps() {
   _gov_src_p6=$(echo "$_j" | awk -F'"cap_source_p6":"' '{print $2}' | awk -F'"' '{print $1}')
   _asb_p0_cap="${_asb_p0_cap:-0}"
   _asb_p6_cap="${_asb_p6_cap:-0}"
+  # "asb_declared" must be what ASB itself requests. These two fields used to come from
+  # perf_cap_p0/p6 - the VENDOR's msm_performance cap - so a ceiling ASB had set on its own
+  # (its 40% race-to-idle guard: 1440000 LITTLE, 1747200 prime) was reported as
+  # "DESYNC_vendor_clamp, clamp_depth=2188800". Two external audits read that as the vendor
+  # squeezing the phone and asked for priority mode back. The governor publishes its real,
+  # post-guard request as desired_cpu_max0 / desired_cpu_maxp; use those, and keep the
+  # vendor cap as its own field.
+  _vendor_p0_cap="$_asb_p0_cap"; _vendor_p6_cap="$_asb_p6_cap"
+  _req0="$(grep -m1 '^desired_cpu_max0=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
+  _req6="$(grep -m1 '^desired_cpu_maxp=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
+  [ -n "$_req0" ] && [ "$_req0" -gt 0 ] 2>/dev/null && _asb_p0_cap="$_req0"
+  [ -n "$_req6" ] && [ "$_req6" -gt 0 ] 2>/dev/null && _asb_p6_cap="$_req6"
   _gov_src_p0="${_gov_src_p0:-?}"
   _gov_src_p6="${_gov_src_p6:-?}"
 
@@ -503,6 +515,7 @@ lk_verify_caps() {
         _expect="$CPU_CAP_BIG"
         _label="BIG(prime)"
         _asb_declared="$_asb_p6_cap"
+        _vendor_cap="$_vendor_p6_cap"
         _gov_src="$_gov_src_p6"
       elif [ "${_rel:-0}" -ge 2 ] 2>/dev/null; then
         # Middle clusters are governed, they just have no slot of their own.
@@ -523,6 +536,7 @@ lk_verify_caps() {
         _expect="$CPU_CAP_LITTLE"
         _label="LITTLE"
         _asb_declared="$_asb_p0_cap"
+        _vendor_cap="$_vendor_p0_cap"
         _gov_src="$_gov_src_p0"
       fi
 
@@ -563,7 +577,7 @@ lk_verify_caps() {
           _source="mismatch"
         fi
       fi
-      echo "policy${_p} (${_label}) cpus[first]=${_rel} actual_max=${_smax} hw_ceiling=${_cmax:-?} profile_expected=${_expect:-unset} asb_declared=${_asb_declared:-?} shell_source=${_source} gov_source=${_gov_src} -> $_status"
+      echo "policy${_p} (${_label}) cpus[first]=${_rel} actual_max=${_smax} vendor_perf_cap=${_vendor_cap:-?} hw_ceiling=${_cmax:-?} profile_expected=${_expect:-unset} asb_declared=${_asb_declared:-?} shell_source=${_source} gov_source=${_gov_src} -> $_status"
     done
   } >> "$LK_OUT_DIR/cap_verify.txt"
 }

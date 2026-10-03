@@ -880,7 +880,7 @@ lk_emit_mobile_traffic_context() {
   [ -s "$_ns_file" ] || _ns_file="$LK_OUT_DIR/netstats_uid_start.txt"
   if [ -s "$_ns_file" ] && [ -s "$LK_OUT_DIR/phase_ledger.tsv" ]; then
     echo "===== SCREEN-OFF TRAFFIC BY APP ====="
-    echo "per screen-off phase >=10 min; buckets are 2h, so edges are approximate"
+    echo "per screen-off phase >=10 min; the measured figure is exact, the per-app list comes from 2h buckets"
     # 10 minutes, not 30.
     #
     # The 30-minute floor was picked to keep the section quiet, and it went too far: a
@@ -889,7 +889,18 @@ lk_emit_mobile_traffic_context() {
     # matters most, because that traffic is what ends the sleep.
     awk -F'\t' 'NR>1 && ($1=="sleep" || $1=="idle") && ($3-$2)>=600 {print $1"\t"$2"\t"$3}' \
       "$LK_OUT_DIR/phase_ledger.tsv" 2>/dev/null | while IFS="$(printf '\t')" read -r _ph _a _z; do
-      awk -v A="$_a" -v Z="$_z" -v PH="$_ph" -v MAP="$LK_OUT_DIR/uid_map.txt" '
+      # The honest number first: mobile bytes moved while the screen was really off,
+      # from the interface counters in battery_trace, only between two consecutive
+      # screen-off samples inside this phase. The netstats buckets below are 2 h wide and
+      # are charged whole to any phase they touch; a 31-minute phase once printed 839 MiB
+      # that way while the counters showed 25.8 MiB - two external audits took the 839 for
+      # background traffic and built their top recommendation on it.
+      _meas="$(awk -F'|' -v A="$_a" -v Z="$_z" '$1 ~ /^[0-9]+$/ {
+          b = $26 + $27
+          if (pe != "" && pe >= A && $1 <= Z && ps == "0" && $5 == "0" && b >= pb) m += b - pb
+          pe = $1; ps = $5; pb = b
+        } END { printf "%d", m + 0 }' "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null)"
+      awk -v A="$_a" -v Z="$_z" -v PH="$_ph" -v MAP="$LK_OUT_DIR/uid_map.txt" -v MEAS="${_meas:-0}" '
         # Names from pm first: the netstats dump only knows the UIDs it happened to
         # mention, which left the biggest talkers anonymous.
         BEGIN { while ((getline ln < MAP) > 0) { split(ln, f, " "); if (f[1] != "") NAME[f[1]+0]=f[2] } }
@@ -922,7 +933,11 @@ lk_emit_mobile_traffic_context() {
           # every phase, so the section printed its header and nothing else - twice I read
           # that as "no phase qualified" and went looking for a threshold problem.
           if (tot < 8388608) exit
-          printf "  %s %d min, %.0f MiB total\n", PH, (Z-A)/60, tot/1048576
+          printf "  %s %d min: measured screen-off mobile traffic %.1f MiB (interface counters)\n", PH, (Z-A)/60, MEAS/1048576
+          if (tot > 3 * MEAS)
+            printf "      the 2h usage buckets around it hold %.0f MiB - mostly screen-on use; the apps below\n      used data AROUND this phase, which is not proof of background transfer\n", tot/1048576
+          else
+            printf "      2h usage buckets around it: %.0f MiB; apps active in that window:\n", tot/1048576
           for (i=0; i<5; i++) {
             best=""; bv=0
             for (u in BY) if (BY[u]+0 > bv) { bv=BY[u]+0; best=u }
@@ -1333,7 +1348,9 @@ lk_emit_full_day_report() {
         _h=$(( _up / 3600 )); [ "$_h" -lt 1 ] && _h=1
         echo ""
         echo "── ASB COST (per hour of uptime) ──────────────────────────────"
-        printf "  governor cpu             : %s ms total\n" "$(_mc_get governor_cpu_ms)"
+        # Per hour, like every other line under this header. It printed the lifetime total
+        # here, and an audit read "4371 ms" as 4371 ms/h - three times the real figure.
+        printf "  governor cpu             : %s ms/h (%s ms total)\n" "$(( $(_mc_get governor_cpu_ms || echo 0) / _h ))" "$(_mc_get governor_cpu_ms)"
         printf "  physical writes          : %s/h\n" "$(( $(_mc_get governor_writes || echo 0) / _h ))"
         printf "  fsm transitions          : %s/h\n" "$(( $(_mc_get governor_transitions || echo 0) / _h ))"
         printf "  timer wakeups            : %s/h\n" "$(( $(_mc_get governor_timer_wakeups || echo 0) / _h ))"
@@ -1346,7 +1363,11 @@ lk_emit_full_day_report() {
         case "$_nt" in ''|*[!0-9]*) _nt=0 ;; esac
         case "$_js" in ''|*[!0-9]*) _js=0 ;; esac
         case "$_jw" in ''|*[!0-9]*) _jw=0 ;; esac
-        printf "  settled ticks (no write) : %s/h\n" "$(( _nt / _h ))"
+        # The counter behind this line only moves when Smart RE-SLOTS (bucket, daypart or
+        # confidence change) and the new caps equal the old ones - not on every quiet tick.
+        # Labelled "settled ticks", 1/h looked like a writer that never rests; two audits
+        # flagged it. It is simply how rarely Smart recomputes.
+        printf "  smart re-slots, no change: %s/h  (Smart slot recomputes only, not every tick)\n" "$(( _nt / _h ))"
         if [ $(( _js + _jw )) -gt 0 ]; then
           printf "  json publishes avoided   : %s/h (%s%% of attempts)\n" \
             "$(( _js / _h ))" "$(( _js * 100 / (_js + _jw) ))"
