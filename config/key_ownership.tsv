@@ -117,6 +117,7 @@ net_qdisc_wifi|advanced|webui_sensitive
 net_qdisc_mobile|advanced|webui_sensitive
 net_qdisc|advanced|webui_sensitive
 net_wifi_leave|advanced|webui_sensitive
+net_wifi_leave_dbm|internal|engine_or_derived
 wifi_powersave|advanced|webui_sensitive
 wifi_country|advanced|webui_sensitive
 net_route_tune|advanced|webui_sensitive
@@ -175,7 +176,6 @@ gpu_idle_trim_floor|internal|engine_or_derived
 gpu_video_busy_min|internal|engine_or_derived
 gpu_video_max_pct|internal|engine_or_derived
 smart_media_guard|user|webui_standard
-asb_priority|user|webui_standard
 device_bounds_override|internal|engine_or_derived
 ltpo_force|user|webui_standard
 mmfeed_off|user|webui_standard
