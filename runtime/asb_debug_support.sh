@@ -132,7 +132,18 @@ lock_live_pid() {
   # Once published, both usually name the same `sh asb_log_full_day.sh` process.
   for _lp_file in "$PIDFILE" "$LAUNCHERFILE"; do
     _lp_pid="$(pid_from_file "$_lp_file" 2>/dev/null || true)"
-    if [ -n "$_lp_pid" ] && pid_is_live "$_lp_pid"; then
+    # "A process with that number exists" is not "our recorder is running".
+    #
+    # PIDs are recycled, and the number a dead recorder left behind gets handed to
+    # something else within minutes on a busy phone. From then on the lock looked
+    # occupied by a live owner and nothing could clear it: the button answered "already
+    # running" until a reboot, with no recorder and no output folder anywhere.
+    #
+    # full_day_pid_matches_recorder already confirms identity from the command line; it
+    # was only used on the orphan-cancel path. Shell resolves functions at call time, so
+    # using it here, above its definition, is fine.
+    if [ -n "$_lp_pid" ] && pid_is_live "$_lp_pid" \
+       && full_day_pid_matches_recorder "$_lp_pid"; then
       printf '%s' "$_lp_pid"
       return 0
     fi
@@ -263,7 +274,29 @@ lock_known_dead() {
     _lk_seen=1
     pid_is_live "$_lk_pid" && return 1
   done
-  [ "$_lk_seen" = 1 ] || return 1
+  # No PID was ever recorded: decide by age, not by waiting for a reboot.
+  #
+  # The winner creates the directory first and writes its PID a moment later, so a lock
+  # with no PID is normally a worker that is seconds old - fail closed, as above. But if
+  # the worker dies in exactly that window, nothing ever records a PID and nothing ever
+  # declares the lock dead: every later press answers "already running" until the phone
+  # restarts. A user who had deleted the output folder and pressed again hit precisely
+  # this, and the only cure was a reboot.
+  #
+  # The token carries the epoch the lock was claimed at. Older than five minutes with no
+  # PID on record means the worker never got as far as announcing itself. Five minutes is
+  # far beyond the fraction of a second the real window takes, so a live starter is never
+  # mistaken for debris.
+  if [ "$_lk_seen" != 1 ]; then
+    _lk_tok="$(cat "$TOKENFILE" 2>/dev/null | cut -d. -f1 | tr -dc '0-9')"
+    case "$_lk_tok" in
+      ''|*[!0-9]*) return 1 ;;
+    esac
+    _lk_now="$(date +%s 2>/dev/null | tr -dc '0-9')"
+    case "$_lk_now" in ''|*[!0-9]*) return 1 ;; esac
+    [ $(( _lk_now - _lk_tok )) -ge 300 ] 2>/dev/null && return 0
+    return 1
+  fi
   return 0
 }
 
