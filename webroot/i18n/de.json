@@ -259,7 +259,7 @@
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Welche Kerne eingehende Netzwerkpakete bearbeiten. Der Werkszustand lässt jedes Paket auf dem Kern, auf dem der Interrupt ankam, was den Durchsatz bei schnellem WLAN deckelt und diesen Kern hoch hält. «Kleine» verteilt auf den Effizienzcluster, «alle» nutzt jeden Kern. Einen zweiten Kern zu wecken kostet etwas CPU, es lohnt sich also auf einer schnellen und nicht auf einer langsamen Strecke.",
+      "desc": "Welche Kerne eingehende Netzwerkpakete bearbeiten. Der Werkszustand lässt jedes Paket auf dem Kern, auf dem der Interrupt ankam, was den Durchsatz bei schnellem WLAN deckelt und diesen Kern hoch hält. «Kleine» verteilt auf den Effizienzcluster, «alle» nutzt jeden Kern. Einen zweiten Kern zu wecken kostet etwas CPU, es lohnt sich also auf einer schnellen und nicht auf einer langsamen Strecke. Gilt nur für WLAN: Mobile Daten bleiben bei der hardwareseitigen Verteilung des Telefons, die eine manuelle Maske nur bremsen kann.",
       "descOpt": {
         "stock": "Jedes Paket bleibt auf dem Kern, auf dem sein Interrupt landete — Androids eigenes Verhalten.",
         "little": "Verteilung auf den Effizienz-Cluster. Die sicherere der beiden Optionen.",

@@ -259,7 +259,7 @@
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Inti mana yang menangani paket jaringan masuk. Bawaan membiarkan setiap paket di inti tempat interupsi mendarat, yang membatasi laju pada Wi-Fi cepat dan menahan inti itu tetap tinggi. «Kecil» menyebarkannya ke klaster hemat, «semua» memakai setiap inti. Membangunkan inti kedua memakan sedikit CPU, jadi menguntungkan pada tautan cepat dan merugikan pada yang lambat.",
+      "desc": "Inti mana yang menangani paket jaringan masuk. Bawaan membiarkan setiap paket di inti tempat interupsi mendarat, yang membatasi laju pada Wi-Fi cepat dan menahan inti itu tetap tinggi. «Kecil» menyebarkannya ke klaster hemat, «semua» memakai setiap inti. Membangunkan inti kedua memakan sedikit CPU, jadi menguntungkan pada tautan cepat dan merugikan pada yang lambat. Hanya untuk Wi-Fi: data seluler diserahkan ke distribusi perangkat keras ponsel sendiri, yang hanya bisa diperlambat oleh mask manual.",
       "descOpt": {
         "stock": "Setiap paket tetap di core tempat interupsinya mendarat — perilaku asli Android.",
         "little": "Menyebar di kluster efisiensi. Yang lebih aman dari dua pilihan.",

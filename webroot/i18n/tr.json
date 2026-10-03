@@ -259,7 +259,7 @@
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Gelen ağ paketlerini hangi çekirdeklerin işlediği. Fabrika ayarı her paketi kesmenin düştüğü çekirdekte bırakır; bu hızlı Wi-Fi'da hızı sınırlar ve o çekirdeği yüksek tutar. «Küçükler» verimli kümeye dağıtır, «tümü» her çekirdeği kullanır. İkinci bir çekirdeği uyandırmak biraz işlemci harcar, dolayısıyla hızlı hatta kazandırır, yavaşta kaybettirir.",
+      "desc": "Gelen ağ paketlerini hangi çekirdeklerin işlediği. Fabrika ayarı her paketi kesmenin düştüğü çekirdekte bırakır; bu hızlı Wi-Fi'da hızı sınırlar ve o çekirdeği yüksek tutar. «Küçükler» verimli kümeye dağıtır, «tümü» her çekirdeği kullanır. İkinci bir çekirdeği uyandırmak biraz işlemci harcar, dolayısıyla hızlı hatta kazandırır, yavaşta kaybettirir. Yalnızca Wi-Fi için geçerlidir: mobil veri, telefonun kendi donanım dağıtımına bırakılır; elle ayarlanan maske onu yalnızca yavaşlatabilir.",
       "descOpt": {
         "stock": "Her paket, kesmesinin düştüğü çekirdekte kalır — Android’in kendi davranışı.",
         "little": "Verimlilik kümesine dağıtım. İki seçenekten daha güvenli olanı.",

@@ -259,7 +259,7 @@
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Qué núcleos atienden los paquetes de red entrantes. De fábrica cada paquete se queda en el núcleo donde llegó la interrupción, lo que limita la velocidad en Wi-Fi rápido y mantiene ese núcleo alto. «Pequeños» reparte en el clúster eficiente, «todos» usa cada núcleo. Despertar un segundo núcleo cuesta algo de CPU, así que compensa en un enlace rápido y no en uno lento.",
+      "desc": "Qué núcleos atienden los paquetes de red entrantes. De fábrica cada paquete se queda en el núcleo donde llegó la interrupción, lo que limita la velocidad en Wi-Fi rápido y mantiene ese núcleo alto. «Pequeños» reparte en el clúster eficiente, «todos» usa cada núcleo. Despertar un segundo núcleo cuesta algo de CPU, así que compensa en un enlace rápido y no en uno lento. Solo afecta al Wi-Fi: los datos móviles quedan a cargo de la distribución por hardware del teléfono, que una máscara manual solo puede ralentizar.",
       "descOpt": {
         "stock": "Cada paquete se queda en el núcleo donde cayó su interrupción: el comportamiento propio de Android.",
         "little": "Reparto por el clúster de eficiencia. La opción más segura de las dos.",

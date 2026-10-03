@@ -284,7 +284,7 @@
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Quali core gestiscono i pacchetti di rete in arrivo. L’originale lascia ogni pacchetto sul core su cui è arrivato l’interrupt, il che limita la velocità sul Wi-Fi veloce e tiene quel core alto. «Piccoli» distribuisce sul cluster efficiente, «tutti» usa ogni core. Svegliare un secondo core costa un po’ di CPU, quindi conviene su una linea veloce e non su una lenta.",
+      "desc": "Quali core gestiscono i pacchetti di rete in arrivo. L’originale lascia ogni pacchetto sul core su cui è arrivato l’interrupt, il che limita la velocità sul Wi-Fi veloce e tiene quel core alto. «Piccoli» distribuisce sul cluster efficiente, «tutti» usa ogni core. Svegliare un secondo core costa un po’ di CPU, quindi conviene su una linea veloce e non su una lenta. Vale solo per il Wi-Fi: i dati mobili restano alla distribuzione hardware del telefono, che una maschera manuale può solo rallentare.",
       "descOpt": {
         "stock": "Ogni pacchetto resta sul core dove è arrivato il suo interrupt — il comportamento di Android.",
         "little": "Distribuzione sul cluster ad alta efficienza. La più sicura delle due.",

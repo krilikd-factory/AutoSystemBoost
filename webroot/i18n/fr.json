@@ -351,7 +351,7 @@
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Quels cœurs traitent les paquets réseau entrants. L’origine laisse chaque paquet sur le cœur où l’interruption est arrivée, ce qui plafonne le débit en Wi-Fi rapide et maintient ce cœur haut. «Petits» répartit sur le groupe économe, «tous» utilise chaque cœur. Réveiller un second cœur coûte un peu de processeur : c’est rentable sur un lien rapide et perdant sur un lien lent.",
+      "desc": "Quels cœurs traitent les paquets réseau entrants. L’origine laisse chaque paquet sur le cœur où l’interruption est arrivée, ce qui plafonne le débit en Wi-Fi rapide et maintient ce cœur haut. «Petits» répartit sur le groupe économe, «tous» utilise chaque cœur. Réveiller un second cœur coûte un peu de processeur : c’est rentable sur un lien rapide et perdant sur un lien lent. Ne concerne que le Wi-Fi : les données mobiles restent confiées à la répartition matérielle du téléphone, qu'un masque manuel ne peut que ralentir.",
       "descOpt": {
         "stock": "Chaque paquet reste sur le cœur où son interruption est arrivée — le comportement d’Android.",
         "little": "Répartition sur le cluster d’efficience. La plus sûre des deux options.",

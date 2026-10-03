@@ -259,7 +259,7 @@
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Quais núcleos tratam os pacotes de rede que chegam. O padrão deixa cada pacote no núcleo onde a interrupção caiu, o que limita a velocidade no Wi-Fi rápido e mantém esse núcleo alto. «Pequenos» distribui no cluster eficiente, «todos» usa todos os núcleos. Acordar um segundo núcleo custa um pouco de CPU, então compensa num enlace rápido e não num lento.",
+      "desc": "Quais núcleos tratam os pacotes de rede que chegam. O padrão deixa cada pacote no núcleo onde a interrupção caiu, o que limita a velocidade no Wi-Fi rápido e mantém esse núcleo alto. «Pequenos» distribui no cluster eficiente, «todos» usa todos os núcleos. Acordar um segundo núcleo custa um pouco de CPU, então compensa num enlace rápido e não num lento. Aplica-se só ao Wi-Fi: os dados móveis ficam com a distribuição por hardware do telefone, que uma máscara manual só pode abrandar.",
       "descOpt": {
         "stock": "Cada pacote fica no núcleo onde a sua interrupção caiu — o comportamento do próprio Android.",
         "little": "Distribuição pelo cluster de eficiência. A mais segura das duas opções.",

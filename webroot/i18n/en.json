@@ -210,7 +210,7 @@
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Which cores handle incoming network packets. Stock leaves every packet on the one core the interrupt landed on, which caps throughput on fast WiFi and pins that core high. Little spreads the work across the efficiency cluster; all uses every core. Waking a second core costs a little CPU, so this earns its keep on a fast link and loses on a slow one.",
+      "desc": "Which cores handle incoming network packets. Stock leaves every packet on the one core the interrupt landed on, which caps throughput on fast WiFi and pins that core high. Little spreads the work across the efficiency cluster; all uses every core. Waking a second core costs a little CPU, so this earns its keep on a fast link and loses on a slow one. Applies to Wi-Fi only: mobile data is left to the phone's own hardware distribution, which a manual mask can only slow down.",
       "descOpt": {
         "stock": "Every packet stays on the core its interrupt landed on - Android's own behaviour.",
         "little": "Spread across the efficiency cluster. The safer of the two.",
