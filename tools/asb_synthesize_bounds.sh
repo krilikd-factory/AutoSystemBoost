@@ -147,7 +147,12 @@ _snap() {
   else
     echo "# synthesis skipped: could not resolve first+last cluster hw_max (count=$_pcount) — governor keeps compiled defaults"
   fi
-} > "$OUT" 2>/dev/null
+} > "$OUT.tmp" 2>/dev/null
+# Write-then-rename, so the governor can never read a half-written file. The old form
+# truncated device_bounds.env first and filled it after; a process killed in between (an
+# interrupted boot) left a partial file that the loader applies key by key.
+[ -s "$OUT.tmp" ] && mv -f "$OUT.tmp" "$OUT" 2>/dev/null
+rm -f "$OUT.tmp" 2>/dev/null
 
 chmod 0644 "$OUT" 2>/dev/null
 [ -f "$OUT" ] && echo "asb_synthesize_bounds: wrote $OUT (confidence=$_conf)" \
