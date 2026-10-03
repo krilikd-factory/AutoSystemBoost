@@ -1,6 +1,21 @@
 #!/system/bin/sh
 # smart_dynamic_tune.sh — Smart Mode runtime tuner.
 
+# Legitimate foreground value to restore when the live one is a transient "max":
+# the last ordinary screen-on value seen, else the active profile's own value
+# (Smart blends Battery 55 and Balanced 70, so it falls back to the lower 55).
+_ucfg_fallback() {
+  _ucfb="$(cat /data/adb/asb/ucfg_last_good 2>/dev/null | tr -dc '0-9')"
+  if [ -n "$_ucfb" ] && [ "$_ucfb" -gt 35 ] 2>/dev/null && [ "$_ucfb" -lt 100 ] 2>/dev/null; then
+    echo "$_ucfb"; return 0
+  fi
+  case "$(cat /data/adb/modules/AutoSystemBoost/current_profile 2>/dev/null | tr -d ' \r\n')" in
+    performance) echo 88 ;;
+    balanced)    echo 70 ;;
+    *)           echo 55 ;;
+  esac
+}
+
 set -u
 
 HINT="${1:-2}"
@@ -149,7 +164,21 @@ if [ "$_cam_guard" = "0" ]; then
       esac
       case "$_ucfg_now" in ''|*[!0-9]*) _ucfg_now=0 ;; esac
       if [ "$_ucfg_now" -gt 35 ] 2>/dev/null; then
-        printf '%s\n' "$_ucfg_now" > /data/adb/asb/ucfg_restore 2>/dev/null
+        # Never save "max" as the value to restore.
+        #
+        # 100 is never a profile value for this tier (55-88); it is always a transient boost,
+        # usually the camera guard during face unlock. Saving it made it self-perpetuating: a
+        # capture shows the screen going off at max, the tuner storing 100, every following
+        # wake restoring max for the whole session (8 minutes uncapped at a time), and every
+        # following sleep storing 100 again. A legitimate value is also kept as "last good" in
+        # a file that is not deleted, and that is what a boosted moment saves instead.
+        if [ "$_ucfg_now" -lt 100 ] 2>/dev/null; then
+          _ucfg_keep="$_ucfg_now"
+          printf '%s\n' "$_ucfg_now" > /data/adb/asb/ucfg_last_good 2>/dev/null
+        else
+          _ucfg_keep="$(_ucfg_fallback)"
+        fi
+        printf '%s\n' "$_ucfg_keep" > /data/adb/asb/ucfg_restore 2>/dev/null
         writef "$_ucfg_node" 35
       fi
     fi
@@ -198,6 +227,8 @@ if [ "$_cam_guard" = "0" ]; then
     # half-applied state can never leave the tier pinned.
     _ucfg_node=/dev/cpuctl/foreground/cpu.uclamp.max
     _ucfg_save="$(cat /data/adb/asb/ucfg_restore 2>/dev/null | tr -dc '0-9')"
+    # A 100 stored by an older build is the same self-perpetuating boost: replace it.
+    [ -n "$_ucfg_save" ] && [ "$_ucfg_save" -ge 100 ] 2>/dev/null && _ucfg_save="$(_ucfg_fallback)"
     case "$_ucfg_save" in ''|*[!0-9]*) : ;; *)
       [ -w "$_ucfg_node" ] && writef "$_ucfg_node" "$_ucfg_save"
       rm -f /data/adb/asb/ucfg_restore 2>/dev/null ;;
