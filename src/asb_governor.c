@@ -4196,6 +4196,26 @@ static void disarm_timerfd(int fd) {
     timerfd_settime(fd, 0, &its, NULL);
 }
 
+/* A real one-shot. arm_timerfd above sets it_interval too, so it is periodic despite the
+ * name; a "re-check in one second" armed with it kept firing every second until something
+ * re-armed the timer - with the screen still off, after an always-on-display pulse. */
+static void arm_timerfd_once(int fd, int secs) {
+    struct itimerspec its = {
+        .it_interval = { 0, 0 },
+        .it_value    = { secs, 0 }
+    };
+    timerfd_settime(fd, 0, &its, NULL);
+}
+
+/* 1 when the timer runs periodically, 2 when only a one-shot is pending, 0 when disarmed. */
+static int timerfd_state(int fd) {
+    struct itimerspec cur;
+    if (timerfd_gettime(fd, &cur) != 0) return 0;
+    if (cur.it_interval.tv_sec || cur.it_interval.tv_nsec) return 1;
+    if (cur.it_value.tv_sec || cur.it_value.tv_nsec) return 2;
+    return 0;
+}
+
 static void timerfd_drain(int fd) {
     uint64_t exp;
     ssize_t _r = read(fd, &exp, sizeof(exp));
@@ -6017,6 +6037,26 @@ int main(int argc, char **argv) {
                 if (final_scr >= 0) {
                     int was_on = metrics.misc.screen_on;
                     int real_scr = metrics_screen_on();
+                    /* The display uevent for screen ON arrives as the panel starts to power
+                     * up, often before panel_power_status says so. This used to trust that
+                     * first read outright, so an ON was almost never confirmed: a capture's
+                     * governor log has "screen OFF (uevent)" entries and not one "screen ON".
+                     * The wake was then only noticed on the next timer tick - and with the
+                     * screen off only the slow deep-idle timer is armed - so unlock and its
+                     * animations ran on sleep rails: one wake stayed in DEEP_IDLE for 10 s
+                     * with the screen on.
+                     *
+                     * Re-read briefly (up to ~0.5 s) when the event says ON and the node does
+                     * not yet. If the panel still does not report on - an always-on-display
+                     * pulse, a pocket wake - the event is not trusted, but a one-second
+                     * re-check is armed instead of waiting for the deep-idle tick. */
+                    if (final_scr == 1 && real_scr != 1) {
+                        for (int _ri = 0; _ri < 8 && real_scr != 1; _ri++) {
+                            usleep(60000);
+                            real_scr = metrics_screen_on();
+                        }
+                        if (real_scr != 1) arm_timerfd_once(tfd_active, 1);
+                    }
                     int confirmed = (final_scr == real_scr) ? final_scr : real_scr;
                     metrics.misc.screen_on = confirmed;
 
@@ -6538,6 +6578,30 @@ int main(int argc, char **argv) {
              * and the distance check above needs a value it can trust. */
             if (need_thermal && metrics.therm.cpu_max_c > 0)
                 g_last_cpu_max_c = metrics.therm.cpu_max_c;
+
+            /* Screen-on cadence must not depend on catching the display uevent.
+             *
+             * The active timer (2 s, or 6 s when calm) used to be armed only in the uevent
+             * branch for screen ON, and re-armed only from inside its own handler - so once a
+             * wake was missed, nothing armed it again. The tick that finally saw the screen
+             * on came from the slow idle timer, and the whole screen session then ran on that
+             * 10 s cadence: a capture shows 2097 timer wakeups in five hours where 157 minutes
+             * of screen time alone should have produced well over 1500 active ticks. Load
+             * bursts were noticed three to five times late.
+             *
+             * Whichever path read the screen, make the timers agree with it: screen on with no
+             * periodic active timer -> arm it; screen off with one still running -> disarm it
+             * (a pending one-shot re-check is left alone). */
+            {
+                int _ts = timerfd_state(tfd_active);
+                if (metrics.misc.screen_on && _ts != 1) {
+                    arm_timerfd_periodic(tfd_active, TIMER_ACTIVE_S);
+                    g_active_interval = TIMER_ACTIVE_S;
+                    if (g_asb_cfg.log_level >= 1) asb_log("screen ON seen on a tick - active cadence restored");
+                } else if (!metrics.misc.screen_on && _ts == 1) {
+                    disarm_timerfd(tfd_active);
+                }
+            }
 
             /*
              * low-battery auto-switch.
