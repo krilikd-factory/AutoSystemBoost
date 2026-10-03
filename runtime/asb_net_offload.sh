@@ -51,11 +51,41 @@ _ifaces() {
     # overlays and p2p0 only exists while Wi-Fi Direct is up.
     case "$_n" in
       lo|dummy*|sit*|ip6tnl*|bond*) continue ;;
-      ifb*|gre*|erspan*|*vti*|ovnet*|p2p*|tun*|tap*) continue ;;
+      # ip6gre* listed separately: "gre*" does not match it, and the field list above names it.
+      ifb*|gre*|ip6gre*|erspan*|*vti*|ovnet*|p2p*|tun*|tap*) continue ;;
     esac
     [ -d "$_d/queues" ] || continue
     echo "$_n"
   done
+}
+
+# Cellular data interfaces are left to the platform.
+#
+# Both controls are argued for Wi-Fi in their own descriptions, yet they were applied to every
+# rmnet interface too. On Qualcomm the cellular receive path runs through the IPA hardware and
+# the rmnet driver, which spread flows themselves. A manual "little" mask moved that work onto
+# the LITTLE cluster, whose ceiling sits at 1440 MHz in most states and which the vendor clamps
+# lower still - during a large download the packet processing and TLS work then compete on the
+# slowest cores. A field capture with net_rps=little showed every rmnet queue on that mask while
+# downloads peaked near 20-30 Mbit/s and the user reported slow browser downloads.
+_is_cellular() {
+  case "$1" in rmnet*|r_rmnet*|rev_rmnet*|ccmni*|rmnet_ipa*) return 0 ;; esac
+  return 1
+}
+# Put a cellular interface back on the values it had before ASB (from the saved baseline), so
+# a mask written by an older build does not linger until reboot. Lines are kept in the file:
+# a later full restore applying them again is harmless.
+_restore_iface_stock() {
+  _ri="$1"
+  [ -f "$STATE" ] || return 0
+  while IFS= read -r _line; do
+    case "$_line" in
+      "TXQ:$_ri="*) _v="${_line#*=}"; [ -n "$_v" ] && ip link set dev "$_ri" txqueuelen "$_v" >/dev/null 2>&1 ;;
+      "RPS:/sys/class/net/$_ri/queues/"*)
+        _q="${_line#RPS:}"; _q="${_q%%=*}"; _v="${_line#*=}"
+        [ -w "$_q/rps_cpus" ] && echo "${_v:-0}" > "$_q/rps_cpus" 2>/dev/null ;;
+    esac
+  done < "$STATE"
 }
 
 # CPU mask as hex. little = the first cluster only, all = every online core.
@@ -176,6 +206,7 @@ if [ "$_rps" != "stock" ]; then
     echo 32768 > /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null
   _n=0
   for _i in $(_ifaces); do
+    if _is_cellular "$_i"; then _restore_iface_stock "$_i"; continue; fi
     for _q in /sys/class/net/$_i/queues/rx-*; do
       [ -w "$_q/rps_cpus" ] || continue
       echo "$_m" > "$_q/rps_cpus" 2>/dev/null
@@ -190,6 +221,7 @@ if [ "$_txq" != "stock" ]; then
   case "$_txq" in short) _len=256 ;; shorter) _len=128 ;; esac
   _n=0
   for _i in $(_ifaces); do
+    if _is_cellular "$_i"; then _restore_iface_stock "$_i"; continue; fi
     ip link set dev "$_i" txqueuelen "$_len" >/dev/null 2>&1 && _n=$(( _n + 1 ))
   done
   echo "net offload: tx queue $_len on $_n interface(s)"
