@@ -2045,8 +2045,18 @@ static void writer_camera_guard(int active) {
             sysfs_write_int(UCLAMP_TOP_MAX, g_cam_saved_uc_top);
             g_wcache.uclamp_top_max = g_cam_saved_uc_top;
         }
-        if (g_cam_saved_uc_fg >= 0)
-            sysfs_write_int(UCLAMP_FG_MAX, g_cam_saved_uc_fg);
+        if (g_cam_saved_uc_fg >= 0) {
+            /* Never hand back "max". The foreground tier is 55-88 in every profile; 100 here
+             * means it was already boosted when the camera opened (face unlock right after
+             * another boost). Restoring it left the whole screen session uncapped. Use the
+             * tuner's last ordinary value instead, the same file it falls back to. */
+            int _fg = g_cam_saved_uc_fg;
+            if (_fg >= 100) {
+                int _lg = sysfs_read_int("/data/adb/asb/ucfg_last_good", -1);
+                _fg = (_lg > 35 && _lg < 100) ? _lg : 55;
+            }
+            sysfs_write_int(UCLAMP_FG_MAX, _fg);
+        }
         if (g_cam_saved_uc_bg >= 0) {
             sysfs_write_int(UCLAMP_BG_MAX,   g_cam_saved_uc_bg);
             sysfs_write_int(UCLAMP_SYBG_MAX, g_cam_saved_uc_bg);
