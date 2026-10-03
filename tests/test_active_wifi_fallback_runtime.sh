@@ -98,7 +98,13 @@ run reconcile
 # The log persists across phases, so a stale 'armed' line proves nothing about THIS
 # watcher. Give the fresh watcher two full passes (INTERVAL_S=1) to arm on the validated
 # link before it breaks.
-sleep 2
+# Wait for the watcher to actually take a pass, not for a fixed two seconds.
+#
+# The old "sleep 2" assumed two INTERVAL_S=1 passes fit in two seconds of wall clock. On a
+# loaded machine they do not, and the test failed in the full suite while passing on its
+# own - twice, and both times the first suspicion was a real regression. Wait for the
+# watcher's own evidence instead: the state file it writes once it has armed.
+wait_for "$TMP/state/wifi_fallback.confirm" 100 || sleep 2
 printf '%s\n' 'NetworkInfo: VALIDATED=false' > "$TMP/wifi.dump"
 wait_for "$TMP/state/wifi_fallback.action" || fail 'did not enter owned release window'
 WPID="$(cat "$TMP/state/wifi_fallback.pid")"
