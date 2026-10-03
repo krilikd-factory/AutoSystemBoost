@@ -3226,10 +3226,24 @@ fi
     sleep 5
     _adump="$(dumpsys audio 2>/dev/null)"
     _now=""
-    _d="$(printf '%s\n' "$_adump" | grep -m1 -iE 'Device[s]?: *(speaker|bt|usb|wired|headset|headphone)')"
+    # Where MUSIC is going right now: the "Devices:" line inside the STREAM_MUSIC block.
+    #
+    # This used to take the first "Devices:" line anywhere in the dump. There are dozens - one
+    # per stream (voice call, system, ring, music, alarm...) - so the answer was whichever
+    # stream happened to be listed first, not the music. A capture shows the published route
+    # stuck on "bt" while playback was on the speaker with the screen on: with outputs=bt the
+    # Bluetooth-only gain then landed on the speaker. The STREAM_MUSIC line is the device
+    # AudioService resolved for media, so it is the one that decides. The old scan stays only
+    # as a fallback for a dump without that block.
+    _d="$(printf '%s\n' "$_adump" | awk '/^[[:space:]]*- STREAM_MUSIC:/ { m = 1; next }
+          m && /^[[:space:]]*- STREAM_/ { exit }
+          m && /Devices:/ { print; exit }')"
+    [ -n "$_d" ] || _d="$(printf '%s\n' "$_adump" | grep -m1 -iE 'Device[s]?: *(speaker|bt|ble|usb|wired|headset|headphone)')"
     case "$_d" in
+      # LE Audio first: "ble_headset" would otherwise match *headset* and read as wired.
+      *ble_headset*|*ble_speaker*|*ble_broadcast*|*le_audio*|*BLE_*) _now="bt" ;;
       *bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*|*bt_sco*) _now="bt" ;;
-      *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*) _now="wired" ;;
+      *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*|*headset*|*headphone*) _now="wired" ;;
       *speaker*|*SPEAKER*) _now="speaker" ;;
     esac
     [ -n "$_now" ] || { _adump=""; continue; }
