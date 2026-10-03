@@ -952,14 +952,22 @@ lk_emit_phase_summary() {
     # 56%. Without the split, two captures of the same phone look like a regression when
     # the only thing that changed is how much the phone was used - and that is exactly
     # the comparison these reports get used for.
-    _scr_min=0; _off_min=0
-    while IFS='|' read -r _e _d _st _pr _sc _rest; do
-      case "$_e" in ''|epoch|\#*) continue ;; esac
-      if [ "$_sc" = "1" ]; then _scr_min=$(( _scr_min + 1 )); else _off_min=$(( _off_min + 1 )); fi
-    done < "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null
-    _tot_s=$(( _scr_min + _off_min ))
-    if [ "$_tot_s" -gt 0 ] 2>/dev/null; then
-      echo "  screen on for $(( 100 * _scr_min / _tot_s ))% of the capture - compare only against captures with a similar share"
+    # Weight by TIME, not by sample count.
+    #
+    # Counting samples made sleep almost vanish: while the phone is suspended the recorder
+    # does not wake, so a 159-minute night produced only a handful of rows and a capture
+    # that was mostly asleep reported "screen on for 97%". With the screen on the CPU is
+    # awake and rows arrive about once a minute, so any gap longer than 5 minutes can only
+    # be the phone asleep with the screen off. Each interval is credited to the screen
+    # state at its start, except those long gaps, which count as screen off.
+    _scr_share="$(awk -F'|' '$1 ~ /^[0-9]+$/ {
+        if (pe != "") { dt = $1 - pe; if (dt > 300 || ps != "1") off += dt; else on += dt }
+        pe = $1; ps = $5
+      } END { t = on + off; if (t > 0) printf "%d %d %d", 100*on/t, on/60, off/60 }' \
+      "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null)"
+    if [ -n "$_scr_share" ]; then
+      set -- $_scr_share
+      echo "  screen on for $1% of the capture by time ($2 min on, $3 min off) - compare only against captures with a similar share"
     fi
     echo "===== PER-PHASE SUMMARY ====="
     echo ""
