@@ -18,6 +18,16 @@
 
 :root {
   --window-inset-top: env(safe-area-inset-top, 0px);
+  /* One source for the top gap, so every page starts at the same height.
+   *
+   * .page and .live-page each carried their own 64px, plus a third copy in the landscape
+   * media query. Three numbers that had to agree by hand is how pages drift apart, and
+   * the main page is the one people compare against the rest.
+   *
+   * Scales with the viewport instead of being a fixed count of CSS pixels: on a short
+   * screen 76px of empty space is a quarter of the visible list, on a tall one it is
+   * barely noticeable. clamp keeps it between 56 and 84, so neither end gets silly. */
+  --page-top: clamp(56px, 9vh, 84px);
   --window-inset-bottom: env(safe-area-inset-bottom, 0px);
 
   /*
@@ -125,7 +135,7 @@ body::before, body::after {
   width: 100%;
   max-width: 420px;
   min-height: calc(100vh - var(--window-inset-top) - var(--window-inset-bottom));
-  padding: 64px 20px 22px;
+  padding: var(--page-top) 20px 22px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1209,8 +1219,8 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 64px 20px 22px;
-  padding-top: calc(var(--window-inset-top) + 64px);
+  padding: var(--page-top) 20px 22px;
+  padding-top: calc(var(--window-inset-top) + var(--page-top));
   padding-bottom: calc(var(--window-inset-bottom) + 22px);
   box-sizing: border-box;
   transform: translateX(-50%) translateX(120%);
@@ -1238,6 +1248,18 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   transform: translateX(-50%) translateX(0);
   pointer-events: auto;
   visibility: visible;
+  /* Scrollable once it is the page you are looking at.
+   *
+   * The base rule sets overflow-y:hidden, which is right for a page parked off-screen:
+   * a hidden page must not grow the scrollable area or steal a flick. But the state
+   * never changed when the page came forward, so on a tall card list the bottom was
+   * simply unreachable - and only in portrait, because a landscape media query happened
+   * to switch overflow back on. That is the "strange scrolling" on the main page.
+   *
+   * overscroll-behavior keeps a flick at the end of the list from scrolling the body
+   * underneath, which is what made the page feel like it jumped. */
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   transition: transform var(--page-anim-dur) var(--page-anim-ease),
               visibility 0s linear 0s;
 }
@@ -1496,9 +1518,11 @@ body.config-active #livePage.open {
   .header { margin-bottom: 12px; padding-top: 8px; }
   .logo-c { width: 48px; height: 48px; margin-bottom: 4px; }
   .app-name { font-size: 20px; }
-  .page { padding-top: 32px; }
+  /* Landscape overrides the shared value once, instead of each page separately. */
+  :root { --page-top: 32px; }
+  .page { padding-top: var(--page-top); }
   .live-page {
-    padding-top: calc(var(--window-inset-top) + 32px);
+    padding-top: calc(var(--window-inset-top) + var(--page-top));
     overflow-y: auto;
   }
 }
