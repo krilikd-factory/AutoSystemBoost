@@ -134,7 +134,18 @@ body::before, body::after {
   z-index: 1;
   width: 100%;
   max-width: 420px;
-  min-height: calc(100vh - var(--window-inset-top) - var(--window-inset-bottom));
+  /* Subtract the tab bar too, or the page is always taller than the room it has.
+   *
+   * body reserves space for the floating bar with padding-bottom: tabbar-space + the
+   * bottom inset, and with border-box that padding comes out of the same 100% height. The
+   * page then asked for 100vh minus the insets - which is exactly tabbar-space MORE than
+   * body can give it. Every screen, every page, with or without enough content: a fixed
+   * 78px of overflow that could be dragged and sprang back. That is the jelly.
+   *
+   * The variable is the same one the bar sets on the root element when it switches
+   * between its normal and in-category heights, so the two stay in step. */
+  min-height: calc(100vh - var(--window-inset-top) - var(--window-inset-bottom)
+                   - var(--tabbar-space, 78px));
   padding: var(--page-top) 20px 22px;
   display: flex;
   flex-direction: column;
@@ -1248,18 +1259,6 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   transform: translateX(-50%) translateX(0);
   pointer-events: auto;
   visibility: visible;
-  /* Scrollable once it is the page you are looking at.
-   *
-   * The base rule sets overflow-y:hidden, which is right for a page parked off-screen:
-   * a hidden page must not grow the scrollable area or steal a flick. But the state
-   * never changed when the page came forward, so on a tall card list the bottom was
-   * simply unreachable - and only in portrait, because a landscape media query happened
-   * to switch overflow back on. That is the "strange scrolling" on the main page.
-   *
-   * overscroll-behavior keeps a flick at the end of the list from scrolling the body
-   * underneath, which is what made the page feel like it jumped. */
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
   transition: transform var(--page-anim-dur) var(--page-anim-ease),
               visibility 0s linear 0s;
 }
