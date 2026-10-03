@@ -108,8 +108,12 @@ need "$UI" "return 'asb-' + (p || 'settings');"
 need "$UI" 'function cfgProfileSelect(name)'
 need "$UI" 'cfg-profile-row'
 need "$UI" "'list-external '"
-need "$UI" "' import-external '"
-need "$UI" "' export '"
+# Any-folder flow: the WebUI browser exports and imports through the validated path commands.
+need "$UI" "' export-path '"
+need "$UI" "' import-path '"
+need "$UI" 'id="cfgFm"'
+need "$UI" 'function cfgFmPathOK(p)'
+
 need "$UI" "' restore '"
 need "$UI" 'function cfgProfilePaintYield()'
 need "$UI" "_cfgProfile.busy = true;"
@@ -127,6 +131,9 @@ need "$HELPER" 'downloads)'
 need "$HELPER" 'documents)'
 need "$HELPER" 'list-external)'
 need "$HELPER" 'import-external)'
+need "$HELPER" 'export-path)'
+need "$HELPER" 'import-path)'
+need "$HELPER" '_path_ok()'
 need "$HELPER" '_migrate_legacy_external()'
 need "$HELPER" 'asb_settings_backup.conf'
 
