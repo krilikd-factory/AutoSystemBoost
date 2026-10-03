@@ -1894,7 +1894,11 @@ lk_sample_audio() {
   case "$_ad" in
     *state:started*) LK_AUDIO_PLAY=1 ;;
   esac
-  _rl=$(printf '%s\n' "$_ad" | grep -iE '^[[:space:]]*Devices:' | tr 'A-Z' 'a-z')
+  # The media route is the "Devices:" line of the STREAM_MUSIC block, the same source the
+  # DSP route watcher now uses; joining every stream's Devices line let a ring or alarm
+  # route stand in for the music. The joined form stays as the fallback.
+  _rl=$(printf '%s\n' "$_ad" | awk '/^[[:space:]]*- STREAM_MUSIC:/ { m = 1; next } m && /^[[:space:]]*- STREAM_/ { exit } m && /Devices:/ { print; exit }' | tr 'A-Z' 'a-z')
+  [ -z "$_rl" ] && _rl=$(printf '%s\n' "$_ad" | grep -iE '^[[:space:]]*Devices:' | tr 'A-Z' 'a-z')
   [ -z "$_rl" ] && _rl=$(printf '%s\n' "$_ad" | tr 'A-Z' 'a-z')
   case "$_rl" in
     *ble_headset*|*ble_speaker*|*ble_broadcast*|*le_audio*) LK_AUDIO_ROUTE="bt_le" ;;
