@@ -15,9 +15,10 @@ SMART_STATE="${ASB_SMART_STATE:-$STATE}"
 RUNTIME_STATE="${ASB_RUNTIME_STATE:-$MODDIR/runtime}"
 PROFILES="$STATE/config_profiles"
 SNAPSHOT="$STATE/governor.conf.snapshot"
-# External copies are a convenience for user backup/sharing, never an unvalidated path API.
-# The WebUI can choose only these two common Android locations; the canonical restore source
-# remains the checksum-protected ASB profile store above.
+# External copies are a convenience for user backup/sharing. Downloads/Documents keep their
+# fixed ASB-Profiles subfolder; any other folder goes through export-path/import-path, which
+# validate the path first (see _path_ok). The canonical restore source remains the
+# checksum-protected ASB profile store above.
 EXPORT_ROOT="${ASB_PROFILE_EXPORT_ROOT:-/sdcard}"
 
 hash_file() {
@@ -315,6 +316,99 @@ export_profile() {
   echo "exported=$_dir/$_name.conf"
   echo "smart_learning=$_smart"
 }
+# Arbitrary-folder export/import for the WebUI file browser.
+#
+# The browser lets a user save to, or open from, any folder they can navigate to - the same
+# freedom a file manager gives - so the path itself is now an input and is validated here:
+# absolute, no ".." or "." segments, no control characters, and never inside pseudo or system
+# filesystems where a write could not be a user backup (/proc, /sys, /dev, the system and
+# vendor partitions, the root itself). The payload format is unchanged: NAME.conf, its
+# NAME.conf.sha256 and the optional NAME.smart learning folder, all checksum-verified.
+_path_ok() {
+  _po="${1:-}"
+  case "$_po" in /*) : ;; *) return 1 ;; esac
+  # A literal newline: $(printf '\n') would be stripped to an empty string by the command
+  # substitution, and "**" then matches every path.
+  _nl='
+'
+  case "$_po" in *"$_nl"*|*"$(printf '\t')"*) return 1 ;; esac
+  case "/$_po/" in */../*|*/./*) return 1 ;; esac
+  case "$_po" in
+    /|/proc|/proc/*|/sys|/sys/*|/dev|/dev/*|/system|/system/*|/system_ext|/system_ext/*|\
+    /vendor|/vendor/*|/product|/product/*|/odm|/odm/*|/apex|/apex/*|/linkerconfig|/linkerconfig/*|\
+    /config|/config/*|/acct|/acct/*) return 1 ;;
+  esac
+  return 0
+}
+# Copy profile NAME from the internal store into DIR as NAME.conf + .sha256 [+ .smart].
+_export_into() {
+  _name="$1" _dir="$2"
+  _in="$(verify_profile "$_name")"
+  mkdir -p "$_dir" 2>/dev/null || { echo 'cannot create export directory' >&2; exit 1; }
+  [ -w "$_dir" ] || { echo 'folder is not writable' >&2; exit 1; }
+  cp -f "$_in" "$_dir/$_name.conf" && cp -f "$(_profile_sha "$_name")" "$_dir/$_name.conf.sha256" || {
+    echo 'cannot export profile' >&2; exit 1;
+  }
+  _smart="$(smart_status "$_name")"
+  if [ "$_smart" = saved ]; then
+    _stage="$_dir/.$_name.smart.export.$$"; rm -rf "$_stage"
+    cp -R "$(_smart_dir "$_name")" "$_stage" 2>/dev/null && [ "$(smart_status_dir "$_stage")" = saved ] || {
+      rm -rf "$_stage"; echo 'cannot export Smart learning' >&2; exit 1;
+    }
+    rm -rf "$_dir/$_name.smart"; mv -f "$_stage" "$_dir/$_name.smart" || { rm -rf "$_stage"; echo 'cannot export Smart learning' >&2; exit 1; }
+  else
+    rm -rf "$_dir/$_name.smart"
+  fi
+  chmod 0644 "$_dir/$_name.conf" "$_dir/$_name.conf.sha256" 2>/dev/null || true
+  echo "exported=$_dir/$_name.conf"
+  echo "smart_learning=$_smart"
+}
+# Import DIR/NAME.conf (+ .sha256, optional .smart) into the internal store as NAME.
+_import_from() {
+  _dir="$1" _name="$2"
+  _in="$_dir/$_name.conf" _sum="$_dir/$_name.conf.sha256"
+  [ -r "$_in" ] || { echo 'file not found' >&2; exit 1; }
+  [ -r "$_sum" ] || { echo "the checksum file $_name.conf.sha256 must be next to it" >&2; exit 1; }
+  _bytes="$(_smart_size "$_in")"; case "$_bytes" in ''|*[!0-9]*) _bytes=0 ;; esac
+  [ "$_bytes" -gt 0 ] 2>/dev/null && [ "$_bytes" -le 1048576 ] 2>/dev/null || { echo 'not an ASB configuration' >&2; exit 1; }
+  _expected="$(cat "$_sum" 2>/dev/null | tr -d ' \r\n')"; _actual="$(hash_file "$_in")"
+  [ -n "$_expected" ] && [ "$_expected" = "$_actual" ] || { echo 'checksum mismatch - the file was changed or is incomplete' >&2; exit 1; }
+  _prepare_dir
+  cp -f "$_in" "$(_profile_file "$_name")" && cp -f "$_sum" "$(_profile_sha "$_name")" || {
+    echo 'cannot import exported profile' >&2; exit 1;
+  }
+  _smart="$(smart_status_dir "$_dir/$_name.smart")"
+  if [ "$_smart" = saved ]; then
+    _stage="$PROFILES/.$_name.smart.import.$$"; rm -rf "$_stage"
+    cp -R "$_dir/$_name.smart" "$_stage" 2>/dev/null && [ "$(smart_status_dir "$_stage")" = saved ] || {
+      rm -rf "$_stage"; echo 'cannot import Smart learning' >&2; exit 1;
+    }
+    rm -rf "$(_smart_dir "$_name")"; rm -f "$(_smart_sum "$_name")"
+    mv -f "$_stage" "$(_smart_dir "$_name")" && hash_file "$(_smart_dir "$_name")/manifest" > "$(_smart_sum "$_name")" || {
+      rm -rf "$_stage" "$(_smart_dir "$_name")" "$(_smart_sum "$_name")"; echo 'cannot import Smart learning' >&2; exit 1;
+    }
+  else
+    rm -rf "$(_smart_dir "$_name")"; rm -f "$(_smart_sum "$_name")"
+  fi
+  echo "imported=$_name"
+  echo "smart_learning=$_smart"
+}
+export_path_profile() {
+  _name="$1" _dir="$2"; _profile_ok "$_name" || { echo 'invalid profile name' >&2; exit 2; }
+  _path_ok "$_dir" || { echo 'this folder cannot be used for backups' >&2; exit 2; }
+  [ -d "$_dir" ] || { echo 'folder not found' >&2; exit 1; }
+  _export_into "$_name" "$_dir"
+}
+import_path_profile() {
+  _file="$1"
+  _path_ok "$_file" || { echo 'this location cannot be read' >&2; exit 2; }
+  case "$_file" in *.conf) : ;; *) echo 'choose a .conf file' >&2; exit 2 ;; esac
+  [ -f "$_file" ] || { echo 'file not found' >&2; exit 1; }
+  _base="${_file##*/}"; _base="${_base%.conf}"
+  _profile_ok "$_base" || { echo 'file name must use 1-32 letters, digits, _ or -' >&2; exit 2; }
+  _import_from "${_file%/*}" "$_base"
+}
+
 list_external_profiles() {
   _where="$1"; _dir="$(_export_dir "$_where")" || { echo 'invalid export location' >&2; exit 2; }
   _migrate_legacy_external "$_where"
@@ -401,6 +495,8 @@ case "${1:-}" in
   delete) [ "$#" -eq 2 ] || { echo "usage: $0 delete NAME" >&2; exit 2; }; delete_profile "$2" ;;
   export) [ "$#" -eq 3 ] || { echo "usage: $0 export NAME {downloads|documents}" >&2; exit 2; }; export_profile "$2" "$3" ;;
   list-external) [ "$#" -eq 2 ] || { echo "usage: $0 list-external {downloads|documents}" >&2; exit 2; }; list_external_profiles "$2" ;;
+  export-path) [ "$#" -eq 3 ] || { echo "usage: $0 export-path NAME DIR" >&2; exit 2; }; export_path_profile "$2" "$3" ;;
+  import-path) [ "$#" -eq 2 ] || { echo "usage: $0 import-path FILE.conf" >&2; exit 2; }; import_path_profile "$2" ;;
   import-external) [ "$#" -eq 3 ] || { echo "usage: $0 import-external {downloads|documents} NAME" >&2; exit 2; }; import_external_profile "$2" "$3" ;;
-  *) echo "usage: $0 {list|create|replace|preview|restore|delete|export|list-external|import-external} ..." >&2; exit 2 ;;
+  *) echo "usage: $0 {list|create|replace|preview|restore|delete|export|list-external|import-external|export-path|import-path} ..." >&2; exit 2 ;;
 esac
