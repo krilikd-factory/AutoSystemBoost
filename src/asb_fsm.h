@@ -2307,6 +2307,13 @@ if (!can_leave &&
                 /* x1.4, not x2: the prime lowest OPP here is 1017 MHz, so x2 lands at 2035 and
                    snaps down to 1689 - above the 1665 the phase already ran at, changing nothing.
                    x1.4 gives 1424, which snaps to 1401: a real 15% reduction. */
+                    /* Note: on the OnePlus 15 this cap never reaches the kernel. The writer's
+                     * cpu_floor_ceiling refuses any ceiling below 40% of hardware max (race to
+                     * idle) and lifts 1401 MHz back to 1747 MHz, so the prime ceiling in screen-off
+                     * idle is 1747 regardless of this line. It still matters on a SoC whose
+                     * 1.4 x hw-min sits above 40% of hw-max. Kept for those; do not read a
+                     * 1401 MHz prime ceiling into a capture from this device - the published
+                     * desired_cpu_maxp is post-guard and shows what is really requested. */
                     int prime_cap = prime_lo + (prime_lo * 2 / 5);
                     if (prime_lo > 0 && new_caps.cpu_max[_ps] > prime_cap)
                         new_caps.cpu_max[_ps] = prime_cap;

@@ -106,6 +106,17 @@ typedef struct {
     int fallback_hits;
 } asb_smart_runtime_t;
 
+/* Bounded string copy that always terminates. Replaces strncpy(dst, src, n - 1) plus a
+ * manual NUL: same result, without the -Wstringop-truncation noise that kept the native
+ * build from passing -Werror. */
+static inline void asb_copy_str(char *dst, const char *src, size_t n) {
+    if (!dst || n == 0) return;
+    size_t l = src ? strlen(src) : 0;
+    if (l >= n) l = n - 1;
+    if (l) memcpy(dst, src, l);
+    dst[l] = '\0';
+}
+
 static inline int asb_clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
     if (v > hi) return hi;
@@ -506,8 +517,7 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
     int _ttl = !screen_on_now ? 120 : (interacting_now ? 20 : 25);
         if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < _ttl) {
             if (out_pkg && outsz > 0) {
-                strncpy(out_pkg, g_pkg_cache.pkg, outsz - 1);
-                out_pkg[outsz - 1] = 0;
+                asb_copy_str(out_pkg, g_pkg_cache.pkg, outsz);
             }
             if (out_hash)   *out_hash   = g_pkg_cache.hash;
             if (out_hint)   *out_hint   = g_pkg_cache.hint;
@@ -529,8 +539,7 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
          */
         if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < 20) {
             if (out_pkg && outsz > 0) {
-                strncpy(out_pkg, g_pkg_cache.pkg, outsz - 1);
-                out_pkg[outsz - 1] = '\0';
+                asb_copy_str(out_pkg, g_pkg_cache.pkg, outsz);
             }
             if (out_hash) *out_hash = g_pkg_cache.hash;
             if (out_hint) {
@@ -552,8 +561,7 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
     if (asb_smart_is_system_ui(pkg)) {
         if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < 20) {
             if (out_pkg && outsz > 0) {
-                strncpy(out_pkg, g_pkg_cache.pkg, outsz - 1);
-                out_pkg[outsz - 1] = '\0';
+                asb_copy_str(out_pkg, g_pkg_cache.pkg, outsz);
             }
             if (out_hash) *out_hash = g_pkg_cache.hash;
             if (out_hint) *out_hint = g_pkg_cache.hint;
@@ -561,8 +569,7 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
             return ASB_PKG_SYS_UI;
         }
         if (out_pkg && outsz > 0) {
-            strncpy(out_pkg, pkg, outsz - 1);
-            out_pkg[outsz - 1] = '\0';
+            asb_copy_str(out_pkg, pkg, outsz);
         }
         if (out_hash) *out_hash = 0;  /* sys UI doesn't get a hash */
         if (out_hint) *out_hint = ASB_APP_LIGHT;
@@ -583,8 +590,7 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
     g_pkg_cache.last_source = source;
 
     if (out_pkg && outsz > 0) {
-        strncpy(out_pkg, pkg, outsz - 1);
-        out_pkg[outsz - 1] = '\0';
+        asb_copy_str(out_pkg, pkg, outsz);
     }
     if (out_hash) *out_hash = h;
     if (out_hint) *out_hint = hint;
@@ -1901,7 +1907,9 @@ static int asb_smart_radio_weak_signal(void) {
         if (strncmp(e->d_name, "rmnet", 5) != 0) continue;
         rmnet_total++;
         char path[256];
-        snprintf(path, sizeof(path), "/sys/class/net/%s/operstate", e->d_name);
+        /* A truncated path would point at the wrong node anyway: skip it. */
+        if (snprintf(path, sizeof(path), "/sys/class/net/%s/operstate", e->d_name)
+                >= (int)sizeof(path)) continue;
         FILE *f = fopen(path, "r");
         if (!f) continue;
         char state[32] = {0};
@@ -2284,6 +2292,7 @@ static int asb_smart_should_update_slot(
         int charging,
         int app_hint)
 {
+    (void)now;   /* kept for the call sites' signature */
     if (!rt) return 1;
     if (rt->last_slot_update_ts == 0) return 1;
 

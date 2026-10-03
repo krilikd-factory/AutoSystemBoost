@@ -100,9 +100,6 @@ typedef struct {
     int   shadow_mode;
     int   gaming_cpu_max_ceiling_khz; /* cap declared scaling_max in GAMING (vendor clamps anyway); 0=off */
     int   camera_hold_enable;      /* 1=hold interactive caps while the camera streams */
-    int   asb_priority;            /* 1=experimental: resist vendor RAISES on non-thermal knobs
-                                       (screen-off CPU caps, background uclamp, top-app while in
-                                       deep idle). Lowerings are always accepted. Default 0. */
     int   camera_busy_pct;         /* camera HAL CPU%% of one core that counts as streaming */
     int   camera_hold_grace_s;   /* keep the hold this long after the pipeline goes quiet */
     /* Longest a camera stream may FORCE the heavy state. 0 = unbounded (old behaviour).
@@ -290,7 +287,6 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->shadow_mode = 0;
     c->gaming_cpu_max_ceiling_khz = 2400000;
     c->camera_hold_enable   = 1;
-    c->asb_priority         = 0;
     c->camera_busy_pct      = 15;
     c->camera_hold_grace_s  = 20;
     c->camera_hold_max_s   = 180;
@@ -478,7 +474,6 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "shadow_mode")) c->shadow_mode = atoi(v);
     else if (!strcmp(k, "gaming_cpu_max_ceiling_khz")) c->gaming_cpu_max_ceiling_khz = atoi(v);
     else if (!strcmp(k, "camera_hold_enable"))   c->camera_hold_enable   = atoi(v);
-    else if (!strcmp(k, "asb_priority"))         c->asb_priority         = atoi(v);
     else if (!strcmp(k, "camera_busy_pct"))      c->camera_busy_pct      = atoi(v);
     else if (!strcmp(k, "camera_hold_grace_s"))  c->camera_hold_grace_s  = atoi(v);
     else if (!strcmp(k, "camera_hold_max_s"))    c->camera_hold_max_s = atoi(v);
@@ -676,7 +671,6 @@ static inline int asb_config_validate(const asb_runtime_config_t *c) {
     if (c->gaming_cpu_max_ceiling_khz < 0 ||
         c->gaming_cpu_max_ceiling_khz > 5000000 ||
         (c->camera_hold_enable != 0 && c->camera_hold_enable != 1) ||
-        (c->asb_priority != 0 && c->asb_priority != 1) ||
         c->camera_busy_pct < 1 || c->camera_busy_pct > 100 ||
         c->camera_hold_grace_s < 0 || c->camera_hold_grace_s > 600) return -12;
     if (c->sustained_temp_user_override != 0 &&

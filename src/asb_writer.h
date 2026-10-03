@@ -309,19 +309,18 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
          * per transition forever: 76 of them in one capture, none of which moved anything.
          *
          * Three consecutive holds is enough to call it policy rather than a transient
-         * thermal clamp. After that the node is left alone for an hour; the floor is
-         * re-probed then, so a vendor that lifts it is picked up without a restart.
+         * thermal clamp. After that the node is left alone for a while (five minutes, see
+         * below) and then re-probed, so a vendor that lifts it is picked up without a restart.
          */
-        /* Remember the floor the kernel actually enforces.
+        /* No floor is remembered here, deliberately.
          *
-         * Until now only the hold count was kept, so after the hour of backoff expired the
-         * writer asked for the same rejected value again and started the cycle over. A
-         * capture shows 455 deferred writes against 292 real ones - 60% of all requests -
-         * almost entirely this loop.
-         *
-         * With the observed floor stored, the next request can be clamped to it before the
-         * write happens: the kernel gets a value it will accept, and the node stops being
-         * a permanent source of deferrals. */
+         * A version once stored this observed value and clamped later requests up to it,
+         * to cut the deferred writes this branch produces. It was removed: the value seen
+         * here is usually the vendor's own transient QoS boost, and copying it into ASB's
+         * request made ASB the thing holding the floor - the prime sat at 1747 MHz on 81% of
+         * samples. Deferred writes cost nothing; the request is always sent as asked (see
+         * the note at the top of writer_write_int_confirmed). Only the hold count and the
+         * back-off below remain. */
         /* Five minutes, not an hour.
          *
          * An hour was chosen to end a write war, and it ends one - but it also hands the
@@ -910,9 +909,9 @@ static void writer_discover_generic_gpu_devfreq(void) {
     while ((de = readdir(dir)) != NULL) {
         if (de->d_name[0] == '.' || !writer_gpu_devfreq_name_is_graphics(de->d_name)) continue;
         char max[160], min[160], avail[160];
-        snprintf(max, sizeof(max), "/sys/class/devfreq/%s/max_freq", de->d_name);
-        snprintf(min, sizeof(min), "/sys/class/devfreq/%s/min_freq", de->d_name);
-        snprintf(avail, sizeof(avail), "/sys/class/devfreq/%s/available_frequencies", de->d_name);
+        if (snprintf(max, sizeof(max), "/sys/class/devfreq/%s/max_freq", de->d_name) >= (int)sizeof(max)) continue;
+        if (snprintf(min, sizeof(min), "/sys/class/devfreq/%s/min_freq", de->d_name) >= (int)sizeof(min)) continue;
+        if (snprintf(avail, sizeof(avail), "/sys/class/devfreq/%s/available_frequencies", de->d_name) >= (int)sizeof(avail)) continue;
         if (!gpu_try_probe_write(max)) continue;
         snprintf(g_gpu_max_path, sizeof(g_gpu_max_path), "%s", max);
         g_gpu_uses_pwrlevel = 0;
@@ -1191,8 +1190,6 @@ static asb_writer_cache_t g_wcache = { .gpu_min_written = -1 };
 /* Last uclamp values the writer was asked to apply, for diagnostics. Read from the
  * cache rather than the node: the point is to compare intent against reality, and the
  * report already prints reality. */
-/* asb_priority: uclamp rewrites made over a foreign RAISE instead of backing off. */
-static unsigned long g_prio_ucl_reasserts = 0;
 static int g_ucl_want_top = -1;
 static int g_ucl_want_bg  = -1;
 static int writer_last_uclamp_top(void) { return g_ucl_want_top; }
@@ -1210,6 +1207,7 @@ static int g_last_observed_max_pwrlevel = -1;
 static int g_last_observed_min_pwrlevel = -1;
 
 static void gpu_check_vendor_override(int profile_idx, const char *state_name) {
+    (void)profile_idx; (void)state_name;   /* kept for the call sites' signature */
     if (!g_gpu_paths_ready || !g_gpu_uses_pwrlevel) return;
     if (g_wcache.last_max_pwrlevel_written < 0 &&
         g_wcache.last_min_pwrlevel_written < 0) return;
@@ -1836,14 +1834,7 @@ skip_cpu_caps: ;
          * other writer stops, ASB should take the ceiling back quickly. A genuine cap
          * change still writes immediately; only the drift path backs off.
          */
-        /* asb_priority: top-app is contested only in DEEP_IDLE - the screen is off by
-         * definition there, so no touch or launch boost can be overridden - and only when
-         * the foreign value is ABOVE ours. A lower value is always accepted. */
-        if (_ucl_drift && caps->uclamp_top_max == g_wcache.uclamp_top_max &&
-            g_asb_cfg.asb_priority && state == ASB_STATE_DEEP_IDLE &&
-            _ucl_top_now > g_wcache.uclamp_top_max) {
-            g_prio_ucl_reasserts++;
-        } else if (_ucl_drift && caps->uclamp_top_max == g_wcache.uclamp_top_max) {
+        if (_ucl_drift && caps->uclamp_top_max == g_wcache.uclamp_top_max) {
             asb_write_health_t *_htop = &g_write_health[ASB_WRITE_UCL_TOP];
             time_t _tp_now = time(NULL);
             if (_htop->retry_at > _tp_now) _ucl_drift = 0;
@@ -1884,12 +1875,7 @@ skip_cpu_caps: ;
          * genuine cap change still writes immediately - the backoff only suppresses the
          * drift path - and any write that finds the value already correct clears it. */
         int _ucl_bg_drift = (_ucl_bg_now >= 0 && _ucl_bg_now != g_wcache.uclamp_bg_max);
-        /* asb_priority: the background tier is contested in every state - background work
-         * never needs a vendor boost for smoothness - but again only over a RAISE. */
-        if (_ucl_bg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max &&
-            g_asb_cfg.asb_priority && _ucl_bg_now > g_wcache.uclamp_bg_max) {
-            g_prio_ucl_reasserts++;
-        } else if (_ucl_bg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max) {
+        if (_ucl_bg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max) {
             asb_write_health_t *_hbg = &g_write_health[ASB_WRITE_UCL_BG];
             if (_hbg) {
                 time_t _ucl_now = time(NULL);

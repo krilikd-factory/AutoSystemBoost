@@ -376,9 +376,9 @@ static void metrics_discover_generic_gpu_devfreq(void) {
     while ((de = readdir(dir)) != NULL) {
         if (de->d_name[0] == '.' || !metrics_gpu_devfreq_name_is_graphics(de->d_name)) continue;
         char cur[160], max[160], load[160];
-        snprintf(cur, sizeof(cur), "/sys/class/devfreq/%s/cur_freq", de->d_name);
-        snprintf(max, sizeof(max), "/sys/class/devfreq/%s/max_freq", de->d_name);
-        snprintf(load, sizeof(load), "/sys/class/devfreq/%s/load", de->d_name);
+        if (snprintf(cur, sizeof(cur), "/sys/class/devfreq/%s/cur_freq", de->d_name) >= (int)sizeof(cur)) continue;
+        if (snprintf(max, sizeof(max), "/sys/class/devfreq/%s/max_freq", de->d_name) >= (int)sizeof(max)) continue;
+        if (snprintf(load, sizeof(load), "/sys/class/devfreq/%s/load", de->d_name) >= (int)sizeof(load)) continue;
         if (!g_metrics_gpu_freq_path[0] && access(cur, R_OK) == 0)
             snprintf(g_metrics_gpu_freq_path, sizeof(g_metrics_gpu_freq_path), "%s", cur);
         if (!g_metrics_gpu_maxfreq_path[0] && access(max, R_OK) == 0)
@@ -1113,6 +1113,7 @@ static int    g_last_thermal_value = 0;     /* cached last real temp */
 static time_t g_last_thermal_rescan = 0;    /* periodic rescan if skin zone missing */
 
 static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
+    (void)need_headroom;   /* kept for callers; headroom is now always read */
     char path[128];
 
     /*
