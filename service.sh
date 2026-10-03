@@ -1739,6 +1739,31 @@ fi
 # explicit AUDIO/device-pack gate as the runtime audio configuration.
 # Do not delete HAL suspend policy automatically.  It affects power/call routing and must be
 # left to the ROM unless a dedicated, reversible user action is implemented with a baseline.
+# Screen state for the resident loops, from the governor instead of the framework.
+#
+# Each loop asked `dumpsys deviceidle get screen` on every pass: a process spawn plus a binder
+# call into system_server, about 30 an hour from the network watcher alone with the screen on.
+# The governor already knows the screen state and writes it as screen=0/1 into /dev/.asb/state
+# on every tick, so reading that file answers the same question for free.
+#
+# The file is trusted only while fresh. The governor rewrites it each tick (60 s at most even
+# in quiet night cadence); if it is older than 3 minutes - governor stopped, or the phone just
+# resumed and has not ticked yet - the framework is asked as before. Output keeps the same
+# true/false words the callers already match.
+asb_screen_state() {
+  _ss_f=/dev/.asb/state
+  _ss_m="$(stat -c %Y "$_ss_f" 2>/dev/null)"
+  _ss_n="$(date +%s 2>/dev/null)"
+  case "$_ss_m$_ss_n" in *[!0-9]*|'') _ss_m=0 ;; esac
+  if [ "${_ss_m:-0}" -gt 0 ] && [ $(( _ss_n - _ss_m )) -le 180 ] 2>/dev/null; then
+    case "$(grep -m1 '^screen=' "$_ss_f" 2>/dev/null | cut -d= -f2)" in
+      1) echo true;  return 0 ;;
+      0) echo false; return 0 ;;
+    esac
+  fi
+  dumpsys deviceidle get screen 2>/dev/null
+}
+
 # ASB:BG_TRIM:BEGIN
 
 _BG_TRIM_NEVER="
@@ -3175,58 +3200,45 @@ fi
 (
   _prev_route=""
   while true; do
-    # 5 s while the screen is on, 60 s otherwise.
+    # Cheap checks first; framework calls only when there is work.
     #
-    # This loop now also has to notice playback starting, and a 60 s cadence would hand
-    # the user the same delay the signal was meant to remove. Five seconds is a bounded
-    # wait nobody will call broken.
+    # This pass asked the device-idle service for the screen state twice - before the
+    # sleep and again right after it - every 5 s with the screen on: about 1400 binder
+    # calls and process spawns an hour, even with the default dsp_outputs=all, where the
+    # pass then did nothing at all. With a filter set it also dumped the whole audio
+    # service twice per pass, once for the route and once for the playback state.
     #
-    # The screen-off branch keeps the slow interval and the guard below skips the pass
-    # entirely, so a sleeping phone is not woken any more often than before - the whole
-    # point of the earlier change to this loop.
-    case "$(dumpsys deviceidle get screen 2>/dev/null)" in
-      false|Asleep) sleep 60 ;;
-      *) sleep 5 ;;
-    esac
-    # Skip the whole pass while the screen is off.
+    # Now the config file and the DSP property are read first, and when either says there
+    # is nothing to route the loop sleeps a minute without touching the framework. The
+    # screen is asked once per pass and one audio dump feeds both checks. With a filter
+    # set and DSP on, behaviour is unchanged: 5 s with the screen on, 60 s with it off.
     #
-    # This watches which output the DSP effect should follow, and it ran every 60 seconds
-    # around the clock - 60 wakeups an hour, each one a dumpsys audio call, on a phone that
-    # is supposed to be asleep. Unlike the governor, which waits on CLOCK_MONOTONIC and so
-    # stops during suspend, a shell `sleep` runs on a timer that resumes the SoC.
-    #
-    # Nothing here is needed while the screen is off: the route only matters when audio is
-    # actually being rendered to a user, and a route change with the screen off is picked up
-    # on the first pass after it comes back on. Screen-off audio keeps working - this only
-    # decides which output the effect attaches to, not whether sound plays.
-    case "$(dumpsys deviceidle get screen 2>/dev/null)" in
-      false|Asleep) continue ;;
-    esac
+    # Screen off still skips the pass: the route only matters while audio reaches a user,
+    # and a change made with the screen off is picked up on the first pass after it comes
+    # back. This decides which output the effect follows, never whether sound plays.
     _f="$(grep -E '^[[:space:]]*dsp_outputs=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')"
-    case "$_f" in ''|all) continue ;; esac
-    # Nothing to route while the effect is off.
-    [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] || continue
-
+    case "$_f" in ''|all) sleep 60; continue ;; esac
+    [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] || { sleep 60; continue; }
+    case "$(asb_screen_state)" in
+      false|Asleep) sleep 60; continue ;;
+    esac
+    sleep 5
+    _adump="$(dumpsys audio 2>/dev/null)"
     _now=""
-    _d="$(dumpsys audio 2>/dev/null | grep -m1 -iE 'Device[s]?: *(speaker|bt|usb|wired|headset|headphone)')"
+    _d="$(printf '%s\n' "$_adump" | grep -m1 -iE 'Device[s]?: *(speaker|bt|usb|wired|headset|headphone)')"
     case "$_d" in
       *bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*|*bt_sco*) _now="bt" ;;
       *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*) _now="wired" ;;
       *speaker*|*SPEAKER*) _now="speaker" ;;
     esac
-    [ -n "$_now" ] || continue
-    # Also wake the attacher when playback STARTS, not only when the route changes.
-    #
-    # The attacher polls every 30 s while idle, so opening YouTube gives up to half a
-    # minute of stock volume before the effect lands - audible, and it reads as the
-    # feature being broken. The daemon already handles SIGUSR1 to cut its sleep short;
-    # nothing was sending it on a playback transition, only on a route change.
-    #
-    # This needs no rebuild of the native binary, which matters: the fix inside
-    # asb_dsp_attach.cpp is correct but cannot ship until that workflow can run.
+    [ -n "$_now" ] || { _adump=""; continue; }
+    # Wake the attacher when playback STARTS, not only on a route change: its idle poll is
+    # 30 s, so opening a video otherwise gives up to half a minute of stock volume before
+    # the effect lands, which reads as the feature being broken.
     _play_now=0
-    dumpsys audio 2>/dev/null | grep -qiE "state:started|player piid.*started" && _play_now=1
+    printf '%s\n' "$_adump" | grep -qiE "state:started|player piid.*started" && _play_now=1
+    _adump=""
     if [ "$_play_now" = "1" ] && [ "${_prev_play:-0}" = "0" ]; then
       pkill -USR1 -f asb_dsp_attach 2>/dev/null \
         || killall -USR1 asb_dsp_attach 2>/dev/null || true
@@ -3236,9 +3248,8 @@ fi
     _prev_route="$_now"
     resetprop -n persist.asb.dsp.route "$_now" >/dev/null 2>&1 \
       || setprop persist.asb.dsp.route "$_now" >/dev/null 2>&1
-    # Wake the attach daemon: it is what resolves the filter and pushes the gain, and its
-    # own poll is 30 s. Without this the effect keeps boosting the old output for up to
-    # half a minute after headphones come out, which is exactly when it is most audible.
+    # Wake the attacher on a route change too: without it the effect keeps boosting the old
+    # output for up to 30 s after headphones come out, exactly when that is most audible.
     pkill -USR1 -f asb_dsp_attach 2>/dev/null \
       || killall -USR1 asb_dsp_attach 2>/dev/null || true
     asb_log "dsp route changed to $_now (outputs filter=$_f)"
@@ -3311,7 +3322,7 @@ esac
     # The helpers below collectively make many framework / PackageManager / app-ops calls.
     # Run only during a genuine screen-off window and only once per hour there.  A trial expiry
     # or GNSS cleanup does not justify waking the active user-facing system every 15 minutes.
-    case "$(dumpsys deviceidle get screen 2>/dev/null)" in
+    case "$(asb_screen_state)" in
       false|Asleep)
         _screenoff_pass=$((_screenoff_pass + 1))
         [ $((_screenoff_pass % 2)) -eq 0 ] || continue
@@ -3324,10 +3335,22 @@ esac
     # only checked when the user opens the UI is not a probation.
     # Bluetooth link health rides the same cycle: the evidence accumulates over a session,
     # so checking it once an hour would miss the window it appears in.
-    [ -f "$MODDIR/runtime/asb_bt_link_watch.sh" ] \
-      && sh "$MODDIR/runtime/asb_bt_link_watch.sh" >/dev/null 2>&1
-    [ -f "$MODDIR/runtime/asb_trial.sh" ] \
-      && sh "$MODDIR/runtime/asb_trial.sh" check >/dev/null 2>&1
+      # Gate each helper on its feature BEFORE spawning it, not inside it: a disabled
+      # feature then costs a config read, not a shell process. The wakelock watcher and
+      # the screen-off classifier always run - they record observations the diagnostic
+      # reads whatever the settings are.
+      _ho_cfg() { grep -E "^[[:space:]]*$1=" "$MODDIR/config/governor.conf" 2>/dev/null \
+                    | head -1 | sed 's/.*=//' | tr -d ' \r'; }
+      case "$(_ho_cfg bt_link_stability)" in
+        ''|stable|stock) : ;;
+        *) [ -f "$MODDIR/runtime/asb_bt_link_watch.sh" ] \
+             && sh "$MODDIR/runtime/asb_bt_link_watch.sh" >/dev/null 2>&1 ;;
+      esac
+      # Only with a trial actually pending.
+      if ls /data/adb/asb/trial/*.trial >/dev/null 2>&1; then
+        [ -f "$MODDIR/runtime/asb_trial.sh" ] \
+          && sh "$MODDIR/runtime/asb_trial.sh" check >/dev/null 2>&1
+      fi
     # Classify the screen-off stretch alongside the wakelock snapshot: both answer
     # "what was actually happening", and running them together means the class and the
     # holder come from the same moment rather than from two different ones.
@@ -3335,8 +3358,15 @@ esac
       && sh "$MODDIR/runtime/asb_screenoff_class.sh" >/dev/null 2>&1
     # Same cadence: both look for work that outlived the user's attention, and neither is
     # urgent enough to poll more often than the thing it is trying to save.
-    [ -f "$MODDIR/runtime/asb_gnss_trim.sh" ] \
-      && sh "$MODDIR/runtime/asb_gnss_trim.sh" >/dev/null 2>&1
+      # GNSS: when enabled, or when it was just turned off and apps still need their
+      # location access restored (the helper does that once, then removes the file).
+      case "$(_ho_cfg gnss_trim)" in
+        1|on|true) _ho_gnss=1 ;;
+        *) if [ -f /data/adb/asb/gnss_restricted ]; then _ho_gnss=1; else _ho_gnss=0; fi ;;
+      esac
+      if [ "$_ho_gnss" = "1" ] && [ -f "$MODDIR/runtime/asb_gnss_trim.sh" ]; then
+        sh "$MODDIR/runtime/asb_gnss_trim.sh" >/dev/null 2>&1
+      fi
   done
 ) >/dev/null 2>&1 &
 
@@ -3506,7 +3536,7 @@ esac
       # the user is looking. Ten minutes late is invisible.
       # One screen read, used twice: for the sleep length and for the branch below.
       # Two dumpsys calls per iteration would cost more than the wakeup this loop saves.
-      _nl_scr="$(dumpsys deviceidle get screen 2>/dev/null)"
+      _nl_scr="$(asb_screen_state)"
       case "$_nl_scr" in
         false|Asleep) sleep 600 ;;
         *)            sleep 120 ;;
