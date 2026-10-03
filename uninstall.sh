@@ -382,6 +382,11 @@ if [ -f /data/adb/asb/wifipm_restore ] && command -v iw >/dev/null 2>&1; then
 fi
 
 _ucfg_save="$(cat /data/adb/asb/ucfg_restore 2>/dev/null | tr -dc '0-9')"
+# A stored 100 is a boost an older build saved by mistake, never a profile value:
+# hand back the last ordinary value instead, or leave the tier alone.
+if [ -n "$_ucfg_save" ] && [ "$_ucfg_save" -ge 100 ] 2>/dev/null; then
+  _ucfg_save="$(cat /data/adb/asb/ucfg_last_good 2>/dev/null | tr -dc '0-9')"
+fi
 case "$_ucfg_save" in
   ''|*[!0-9]*) : ;;
   *) [ -w /dev/cpuctl/foreground/cpu.uclamp.max ] \
