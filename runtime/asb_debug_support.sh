@@ -132,18 +132,7 @@ lock_live_pid() {
   # Once published, both usually name the same `sh asb_log_full_day.sh` process.
   for _lp_file in "$PIDFILE" "$LAUNCHERFILE"; do
     _lp_pid="$(pid_from_file "$_lp_file" 2>/dev/null || true)"
-    # "A process with that number exists" is not "our recorder is running".
-    #
-    # PIDs are recycled, and the number a dead recorder left behind gets handed to
-    # something else within minutes on a busy phone. From then on the lock looked
-    # occupied by a live owner and nothing could clear it: the button answered "already
-    # running" until a reboot, with no recorder and no output folder anywhere.
-    #
-    # full_day_pid_matches_recorder already confirms identity from the command line; it
-    # was only used on the orphan-cancel path. Shell resolves functions at call time, so
-    # using it here, above its definition, is fine.
-    if [ -n "$_lp_pid" ] && pid_is_live "$_lp_pid" \
-       && full_day_pid_matches_recorder "$_lp_pid"; then
+    if [ -n "$_lp_pid" ] && full_day_pid_owns_lock "$_lp_pid"; then
       printf '%s' "$_lp_pid"
       return 0
     fi
@@ -209,6 +198,45 @@ full_day_pid_matches_recorder() {
   return 1
 }
 
+# Does this live PID still belong to the capture?
+#
+# kill -0 alone answered "something has this number". Within one boot Android hands PIDs out
+# again, so a recorder that ended long ago left a lock whose number now belongs to an unrelated
+# process: the lock looked alive, the output-missing recovery then (correctly) refused to kill a
+# process that is not ours, and every tap answered "already running" until a reboot - although
+# nothing was recording. A PID owns the lock only while it is our recorder, or the launching
+# helper itself in the instant between fork and exec.
+full_day_pid_owns_lock() {
+  _fpol_pid="${1:-}"
+  pid_is_live "$_fpol_pid" || return 1
+  full_day_pid_matches_recorder "$_fpol_pid" && return 0
+  _fpol_cmd=""
+  [ -r "$PROC_ROOT/$_fpol_pid/cmdline" ] && _fpol_cmd="$(tr '\000' ' ' < "$PROC_ROOT/$_fpol_pid/cmdline" 2>/dev/null || true)"
+  case "$_fpol_cmd" in *asb_debug_support.sh*|'') return 0 ;; esac
+  return 1
+}
+
+# Every descendant of PID (children, grandchildren...), from /proc - the recorder runs its
+# samplers as background subshells, and stopping only the parent left them writing.
+pid_descendants() {
+  _pd_root="${1:-}"; [ -n "$_pd_root" ] || return 0
+  _pd_list="$_pd_root"; _pd_out=""
+  while [ -n "$_pd_list" ]; do
+    _pd_next=""
+    for _pd_stat in "$PROC_ROOT"/[0-9]*/stat; do
+      [ -r "$_pd_stat" ] || continue
+      _pd_line="$(cat "$_pd_stat" 2>/dev/null)" || continue
+      _pd_pid="${_pd_line%% *}"
+      _pd_rest="${_pd_line##*) }"; _pd_ppid="$(printf '%s' "$_pd_rest" | cut -d' ' -f2)"
+      for _pd_p in $_pd_list; do
+        [ "$_pd_ppid" = "$_pd_p" ] && { _pd_next="$_pd_next $_pd_pid"; _pd_out="$_pd_out $_pd_pid"; }
+      done
+    done
+    _pd_list="$_pd_next"
+  done
+  printf '%s' "$_pd_out"
+}
+
 full_day_cancel_orphan() {
   # Deleting the published output directory is an explicit user cancellation of this capture.
   # Never kill an arbitrary reused PID: only a live command line that is our own recorder may
@@ -218,7 +246,15 @@ full_day_cancel_orphan() {
   if ! pid_is_live "$_fdco_pid"; then full_day_recovery_note "skip=pid_dead pid=${_fdco_pid:-none}"; return 1; fi
   if ! full_day_pid_matches_recorder "$_fdco_pid"; then full_day_recovery_note "skip=recorder_unverified pid=$_fdco_pid"; return 1; fi
   full_day_recovery_note "cancel=output_removed pid=$_fdco_pid"
-  kill -TERM "$_fdco_pid" 2>/dev/null || { full_day_recovery_note "skip=term_failed pid=$_fdco_pid"; return 1; }
+  # The folder is gone, so there is nothing to finalize: TERM would make the recorder build
+  # its report and archive into a directory that no longer exists, and outlive the short
+  # wait below. Stop the recorder and every sampler it spawned at once.
+  _fdco_kids="$(pid_descendants "$_fdco_pid")"
+  # Children first and without a status check: a sampler's short-lived "sleep" may already be
+  # gone, and kill with several PIDs fails if any one of them is - which read as "could not
+  # stop the recorder" although it had. Only the recorder's own kill decides.
+  [ -n "$_fdco_kids" ] && kill -KILL $_fdco_kids 2>/dev/null
+  kill -KILL "$_fdco_pid" 2>/dev/null || { full_day_recovery_note "skip=kill_failed pid=$_fdco_pid"; return 1; }
   _fdco_try=0
   while [ "$_fdco_try" -lt 12 ]; do
     pid_is_live "$_fdco_pid" || break
@@ -272,31 +308,9 @@ lock_known_dead() {
     _lk_pid="$(pid_from_file "$_lk_file" 2>/dev/null || true)"
     [ -n "$_lk_pid" ] || continue
     _lk_seen=1
-    pid_is_live "$_lk_pid" && return 1
+    full_day_pid_owns_lock "$_lk_pid" && return 1
   done
-  # No PID was ever recorded: decide by age, not by waiting for a reboot.
-  #
-  # The winner creates the directory first and writes its PID a moment later, so a lock
-  # with no PID is normally a worker that is seconds old - fail closed, as above. But if
-  # the worker dies in exactly that window, nothing ever records a PID and nothing ever
-  # declares the lock dead: every later press answers "already running" until the phone
-  # restarts. A user who had deleted the output folder and pressed again hit precisely
-  # this, and the only cure was a reboot.
-  #
-  # The token carries the epoch the lock was claimed at. Older than five minutes with no
-  # PID on record means the worker never got as far as announcing itself. Five minutes is
-  # far beyond the fraction of a second the real window takes, so a live starter is never
-  # mistaken for debris.
-  if [ "$_lk_seen" != 1 ]; then
-    _lk_tok="$(cat "$TOKENFILE" 2>/dev/null | cut -d. -f1 | tr -dc '0-9')"
-    case "$_lk_tok" in
-      ''|*[!0-9]*) return 1 ;;
-    esac
-    _lk_now="$(date +%s 2>/dev/null | tr -dc '0-9')"
-    case "$_lk_now" in ''|*[!0-9]*) return 1 ;; esac
-    [ $(( _lk_now - _lk_tok )) -ge 300 ] 2>/dev/null && return 0
-    return 1
-  fi
+  [ "$_lk_seen" = 1 ] || return 1
   return 0
 }
 
@@ -540,6 +554,9 @@ start_full_day() {
     else
       echo "status=already_running"
       echo "pid=$_pid"
+      # Where it is writing: deleting that folder is how a user restarts it from the WebUI.
+      _ar_out="$(full_day_output_path 2>/dev/null || true)"
+      [ -n "$_ar_out" ] && echo "output=$_ar_out"
       echo "log=$RUNLOG"
       return 0
     fi
