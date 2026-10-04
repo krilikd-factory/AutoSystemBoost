@@ -361,7 +361,16 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
         observed > 0 && observed < requested) {
         h->applied++;
         h->consecutive_failures = 0;
-        if (++h->floor_holds >= 3) h->retry_at = now + 3600;
+        /* Five minutes, matching the kernel_floor_higher branch above.
+         *
+         * Both branches describe the same situation from two sides - the kernel is not
+         * taking our minimum because something else moved - and both were an hour. That
+         * one got shortened when a capture showed the little cores pinned at 1.8 GHz for
+         * want of a retry; this one was left at 3600 by oversight, so a transient vendor
+         * ceiling still cost a full hour before the module tried again.
+         *
+         * Twelve attempts an hour at worst, against an hour of not asking at all. */
+        if (++h->floor_holds >= 3) h->retry_at = now + 300;
         else                       h->retry_at = 0;
         snprintf(h->status, sizeof(h->status), "%s", "ceiling_below_min");
         return 0;

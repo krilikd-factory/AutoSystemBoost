@@ -2433,12 +2433,38 @@ static int asb_cap_writes_should_back_off(void) {
      * clamp events reaches it constantly, so ASB goes passive and stays there; a quieter
      * ROM may never reach it and keeps fighting a cap it cannot win. The right number is a
      * property of the firmware, which means it belongs in the config, not the binary. */
+    /* Let the counter fall when the clamps stop.
+     *
+     * It is only touched when a clamp happens: the window restarts and it resets to 1, or
+     * it increments. With no clamps at all nothing runs, so it freezes at whatever it
+     * reached - and the release below, which waits for it to drop under 10, waits
+     * forever. Fixing the unreachable else above was only half the problem.
+     *
+     * An elapsed window with no clamp in it means the contention is over, so the count
+     * goes to zero. Same 5-minute window the counting path uses. */
+    if (g_cap_slow_window_start > 0 && (now - g_cap_slow_window_start) > 300 &&
+        g_cap_slow_vendor_clamps > 0) {
+        g_cap_slow_vendor_clamps = 0;
+        g_cap_slow_window_start  = 0;
+    }
     {
         int _vpc = g_asb_cfg.vendor_passive_clamps > 0 ? g_asb_cfg.vendor_passive_clamps : 20;
         if (g_cap_slow_vendor_clamps >= _vpc) g_cap_vendor_passive = 1;
     }
-    if (g_cap_vendor_passive) g_stat_vendor_overrides++;
-    else if (g_cap_slow_vendor_clamps < 10) g_cap_vendor_passive = 0;
+    /* The release has to be checked whether or not we are passive.
+     *
+     * It sat in the else branch of "are we passive", which only runs when we are NOT - so
+     * the one state that needed clearing could never reach the line that clears it. Once
+     * the module stood down it stayed down until the governor restarted: eight snapshots
+     * in a row read vendor_passive=1 on a device whose contention had long since dropped
+     * to a single slow clamp.
+     *
+     * The hysteresis is unchanged: enter at 20 slow clamps, leave below 10. Only the
+     * reachability of the exit is fixed. */
+    if (g_cap_vendor_passive) {
+        g_stat_vendor_overrides++;
+        if (g_cap_slow_vendor_clamps < 10) g_cap_vendor_passive = 0;
+    }
     if (g_cap_vendor_passive) return 1;
     return (g_cap_vendor_hold_until > 0 && now < g_cap_vendor_hold_until) ? 1 : 0;
 }
