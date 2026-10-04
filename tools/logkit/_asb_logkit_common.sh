@@ -149,7 +149,7 @@ lk_dsp_live_state() {
   # Falls back to the setting last, which is what this field used to be. That keeps a
   # device where dumpsys is unavailable reporting something rather than a hole, while no
   # longer claiming an effect is live on the strength of a toggle alone.
-  if dumpsys media.audio_flinger 2>/dev/null \
+  if lk_dumpsys media.audio_flinger 2>/dev/null \
        | grep -qiE 'asbdsp|ASB DSP|effect .*asb'; then
     printf '1'; return 0
   fi
@@ -318,7 +318,7 @@ lk_snapshot_state() {
     cat /sys/class/power_supply/battery/uevent 2>/dev/null
     echo ""
     echo "===== THERMAL SERVICE DUMP ====="
-    dumpsys thermalservice 2>/dev/null | head -200
+    lk_dumpsys thermalservice 2>/dev/null | head -200
     echo ""
     echo "===== BG_TRIM STATE ====="
     echo "--- standby buckets (curated apps) ---"
@@ -331,7 +331,7 @@ lk_snapshot_state() {
     done
     echo ""
     echo "--- top-app (current foreground) ---"
-    dumpsys activity activities 2>/dev/null | grep -E "topResumedActivity|ResumedActivity" | head -3
+    lk_dumpsys activity activities 2>/dev/null | grep -E "topResumedActivity|ResumedActivity" | head -3
     echo ""
     echo "--- memcg v2 state ---"
     if [ -d /sys/fs/cgroup ]; then
@@ -406,7 +406,7 @@ lk_snapshot_state() {
       head -1 /d/wakeup_sources
       tail -n +2 /d/wakeup_sources | sort -k7 -n -r | head -20
     elif lk_have_dumpsys; then
-      echo "  (debugfs unavailable, using dumpsys power)"
+      echo "  (debugfs unavailable, using lk_dumpsys power)"
       lk_dumpsys power 2>/dev/null | sed -n '/^  Wake Locks:/,/^  Suspend Blockers:/p' | head -30
       echo "  ----"
       lk_dumpsys power 2>/dev/null | sed -n '/^  Suspend Blockers:/,/^[A-Z]/p' | head -25
@@ -739,7 +739,7 @@ lk_perf_trace_header() {
   # The names below are the emitter's own variables at the bottom of this function set,
   # in the order it prints them.
   cat <<'EOF' > "$LK_OUT_DIR/perf_trace.txt"
-epoch|datetime|soc_die|prime_c|perf_c|cpu_little_c|sf_c|sf_rate|sb_c|st6_c|board_c|btz_c|p0_cur|p0_max|p6_cur|p6_max|gpu_busy|gpu_clk|gpu_max|gpu_min|gpu_gov|bat_mA|bat_uV|load1|load5|load15|temp|therm_valid|therm_avail|therm_reason|cap_temp|cap_zone|skin_zone|surface_zone|skin_c|surface_c|skin_max|surface_max|board_temp|headroom_valid|headroom_invalid_reason|thermal_cpu_fallback_type
+epoch|datetime|soc_die|prime_c|perf_c|cpu_little_c|sf_c|sf_rate|sb_c|st6_c|board_c|btz_c|p0_cur|p0_max|p6_cur|p6_max|gpu_busy|gpu_clk|gpu_max|gpu_min_hz_or_lvl|gpu_gov|bat_mA|bat_uV|load1|load5|load15|temp|therm_valid|therm_avail|therm_reason|cap_temp|cap_zone|skin_zone|surface_zone|skin_c|surface_c|skin_max|surface_max|board_temp|headroom_valid|headroom_invalid_reason|thermal_cpu_fallback_type
 EOF
 }
 
@@ -793,7 +793,16 @@ lk_capture_perf_trace_row() {
   # four GPU columns empty in all 145 rows: min_gpuclk and the devfreq governor simply do
   # not exist there, and the trace recorded nothing rather than what the device does use.
   # The writer has always known about these paths - only the trace did not.
-  [ -n "$_gmin" ] || _gmin=$(_f /sys/class/kgsl/kgsl-3d0/min_pwrlevel)
+  # Mark the fallback, because it is not the same quantity.
+  #
+  # min_gpuclk is a frequency in Hz; min_pwrlevel is an INDEX into the OPP table, counted
+  # downward - 17 means a low step, not 17 Hz. Dropping it into a column named gpu_min
+  # produced rows reading "min 17, max 1200000000", which invites exactly the wrong
+  # conclusion. The "lvl:" prefix makes the row say which one it is.
+  [ -n "$_gmin" ] || {
+    _gmin_lvl=$(_f /sys/class/kgsl/kgsl-3d0/min_pwrlevel)
+    [ -n "$_gmin_lvl" ] && _gmin="lvl:$_gmin_lvl"
+  }
   [ -n "$_ggov" ] || { [ -e /sys/class/kgsl/kgsl-3d0/max_pwrlevel ] && _ggov="pwrlevel"; }
   _bc=$(_f /sys/class/power_supply/battery/current_now)
   _bv=$(_f /sys/class/power_supply/battery/voltage_now)
@@ -957,8 +966,8 @@ lk_wakelock_kernel_delta() {
 # /sys/kernel/debug/wakeup_sources isn't readable. Call _reset at the start and
 # _dump at the end so the window is just the capture.
 lk_wakelock_batterystats_reset() {
-  lk_have dumpsys || return 0
-  dumpsys batterystats --reset >/dev/null 2>&1 || true
+  lk_have lk_dumpsys || return 0
+  lk_dumpsys batterystats --reset >/dev/null 2>&1 || true
   # record when the window opened so the report can show elapsed
   date +%s > "$LK_OUT_DIR/.bstats_reset_epoch" 2>/dev/null || true
 }
@@ -967,9 +976,9 @@ lk_wakelock_batterystats_reset() {
 # sections out of that single snapshot (cheaper than calling dumpsys repeatedly
 # and keeps all views time-consistent).
 lk_wakelock_batterystats_dump() {
-  lk_have dumpsys || return 0
+  lk_have lk_dumpsys || return 0
   _raw="$LK_OUT_DIR/.bstats_raw.txt"
-  dumpsys batterystats 2>/dev/null > "$_raw" || return 0
+  lk_dumpsys batterystats 2>/dev/null > "$_raw" || return 0
   _self="$LK_WAKELOCK_NAME"
   {
     echo "===== batterystats wakelock/alarm attribution $(date '+%Y-%m-%d %H:%M:%S') ====="
@@ -1036,7 +1045,7 @@ lk_wakelock_emit_report() {
     echo " WAKELOCK / WAKEUP REPORT (Android batterystats) — $(date '+%F %T')"
     echo "==================================================================="
     echo ""
-    echo "Source: dumpsys batterystats (works without kernel debugfs)."
+    echo "Source: lk_dumpsys batterystats (works without kernel debugfs)."
     echo "This names the apps/components that kept the device awake during the"
     echo "capture window, so ASB standby tuning can target a real offender."
     echo ""
@@ -1197,7 +1206,7 @@ lk_wakelock_live_row() {
   # app partial wakelocks currently held (power manager)
   _plock=""
   if lk_have dumpsys; then
-    _plock=$(dumpsys power 2>/dev/null | sed -n '/Wake Locks:/,/^$/p' \
+    _plock=$(lk_dumpsys power 2>/dev/null | sed -n '/Wake Locks:/,/^$/p' \
              | grep -iE "PARTIAL_WAKE_LOCK|FULL_WAKE_LOCK" \
              | grep -iv "$LK_WAKELOCK_NAME" | head -3 \
              | sed 's/^[[:space:]]*//' | tr '\n' ';')
@@ -1357,7 +1366,7 @@ lk_capture_smart_trace_row() {
   _btmp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null)
 
   # Screen state: convert Awake/Asleep/Dozing text to 1/0
-  _scr_raw=$(dumpsys power 2>/dev/null | grep -m1 'mWakefulness=' | sed 's/.*mWakefulness=//;s/ .*//')
+  _scr_raw=$(lk_dumpsys power 2>/dev/null | grep -m1 'mWakefulness=' | sed 's/.*mWakefulness=//;s/ .*//')
   case "$_scr_raw" in
     Awake) _scr=1 ;;
     Asleep|Dozing) _scr=0 ;;
@@ -1889,7 +1898,7 @@ lk_asb_feature_row() {
 lk_sample_audio() {
   LK_AUDIO_PLAY=0
   LK_AUDIO_ROUTE="none"
-  _ad=$(dumpsys audio 2>/dev/null)
+  _ad=$(lk_dumpsys audio 2>/dev/null)
   if [ -z "$_ad" ]; then export LK_AUDIO_PLAY LK_AUDIO_ROUTE; return 0; fi
   case "$_ad" in
     *state:started*) LK_AUDIO_PLAY=1 ;;
@@ -1938,7 +1947,7 @@ lk_snapshot_audio() {
     # unknown; the state emitted below preserves that distinction for a valid future A/B.
     # It is written into every capture rather than a one-off asbdiag run because both sides
     # of an A/B experiment need the same evidence fields.
-    _lk_af="$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -iE 'Offload|Compress' | sed 's/^[[:space:]]*//' | cut -c1-70)"
+    _lk_af="$(lk_dumpsys media.audio_flinger 2>/dev/null | grep -m1 -iE 'Offload|Compress' | sed 's/^[[:space:]]*//' | cut -c1-70)"
     _lk_pdis="$(lk_get_prop persist.bluetooth.a2dp_offload.disabled)"
     _lk_vdis="$(lk_get_prop persist.vendor.bluetooth.a2dp_offload.disabled)"
     echo "  audioflinger.thread = ${_lk_af:-<no offload/compress thread reported>}"
@@ -1952,12 +1961,12 @@ lk_snapshot_audio() {
     # The active track carries a portId; if that portId appears on an offload thread, the
     # association is verified rather than assumed. Where the dump does not expose it we say
     # unknown, which is the honest answer and keeps the field machine-readable.
-    _lk_port="$(dumpsys media.audio_flinger 2>/dev/null \
+    _lk_port="$(lk_dumpsys media.audio_flinger 2>/dev/null \
                 | grep -iE 'portId|port id' | grep -iE 'active|started' \
                 | grep -oE '[0-9]+' | head -1)"
     _lk_ofport=""
     if [ -n "$_lk_port" ]; then
-      dumpsys media.audio_flinger 2>/dev/null \
+      lk_dumpsys media.audio_flinger 2>/dev/null \
         | sed -n '/Offload/,/^$/p' | grep -q "$_lk_port" && _lk_ofport=1
     fi
     if [ -z "$_lk_af" ]; then
@@ -1985,15 +1994,15 @@ lk_snapshot_audio() {
       echo "  offload.state = unknown"
     fi
     echo "# active players"
-    dumpsys audio 2>/dev/null | grep -iE 'state:started|usage=|content Type|piid:|AudioPlaybackConfiguration' | head -20
+    lk_dumpsys audio 2>/dev/null | grep -iE 'state:started|usage=|content Type|piid:|AudioPlaybackConfiguration' | head -20
     echo "# routing / devices"
-    dumpsys audio 2>/dev/null | grep -iE 'Devices for|Device for|Sink:|Communication device|mConnectedDevices|routed|BLE_|A2DP|SPEAKER|WIRED' | head -20
+    lk_dumpsys audio 2>/dev/null | grep -iE 'Devices for|Device for|Sink:|Communication device|mConnectedDevices|routed|BLE_|A2DP|SPEAKER|WIRED' | head -20
     echo "# stream volumes"
-    dumpsys audio 2>/dev/null | grep -iE 'STREAM_MUSIC|Current:|Muted:|- STREAM_' | head -14
+    lk_dumpsys audio 2>/dev/null | grep -iE 'STREAM_MUSIC|Current:|Muted:|- STREAM_' | head -14
     echo "# bt codec"
-    dumpsys bluetooth_manager 2>/dev/null | grep -iE 'codec|sample_?rate|bits_?per|channel|LHDC|LDAC|aptX|SBC|AAC|state: connected' | head -20
+    lk_dumpsys bluetooth_manager 2>/dev/null | grep -iE 'codec|sample_?rate|bits_?per|channel|LHDC|LDAC|aptX|SBC|AAC|state: connected' | head -20
     echo "# audioflinger effects/output"
-    dumpsys media.audio_flinger 2>/dev/null | grep -iE 'Effect|session|viper|Output thread|sampleRate|format|Latency|Frame' | head -25
+    lk_dumpsys media.audio_flinger 2>/dev/null | grep -iE 'Effect|session|viper|Output thread|sampleRate|format|Latency|Frame' | head -25
     echo "# alsa pcm status"
     for c in /proc/asound/card*/pcm*/sub*/status; do
       [ -r "$c" ] || continue
@@ -2073,7 +2082,7 @@ lk_snapshot_network() {
     echo "# carrier / radio"
     echo "  operator: $(lk_get_prop gsm.operator.alpha) numeric: $(lk_get_prop gsm.operator.numeric) roaming: $(lk_get_prop gsm.operator.isroaming)"
     echo "  voice_type: $(lk_get_prop gsm.network.type) data_type: $(lk_get_prop gsm.data.network.type)"
-    _tr=$(dumpsys telephony.registry 2>/dev/null)
+    _tr=$(lk_dumpsys telephony.registry 2>/dev/null)
     printf '%s\n' "$_tr" | grep -oE 'getRilVoiceRadioTechnology=[0-9]+\([A-Za-z]+\)' | head -1 | sed 's/^/  /'
     printf '%s\n' "$_tr" | grep -oE 'getRilDataRadioTechnology=[0-9]+\([A-Za-z]+\)' | head -1 | sed 's/^/  /'
     printf '%s\n' "$_tr" | grep -oE 'mDataConnectionState=-?[0-9]+' | head -1 | sed 's/^/  /'
@@ -2081,7 +2090,7 @@ lk_snapshot_network() {
     printf '%s\n' "$_tr" | grep -oE 'mBands=\[[0-9,]*\]|mEarfcn=[0-9]+|mBandwidth=[0-9]+' | head -3 | tr '\n' ' ' | sed 's/^/  cell: /'
     echo ""
     echo "# wifi link"
-    _wl=$(dumpsys wifi 2>/dev/null)
+    _wl=$(lk_dumpsys wifi 2>/dev/null)
     printf '%s\n' "$_wl" | grep -m1 -oE 'SSID: [^,]*, BSSID: [^,]*, .*RSSI: -?[0-9]+.*Link speed: [0-9]+.*' | cut -c1-200 | sed 's/^/  /'
     printf '%s\n' "$_wl" | grep -m1 -oE 'Wi-Fi is [A-Za-z]+' | sed 's/^/  /'
     printf '%s\n' "$_wl" | grep -m1 -oE 'mFrequency=[0-9]+|Frequency: [0-9]+' | sed 's/^/  /'
@@ -2244,11 +2253,11 @@ lk_bt_reconnect_snapshot() {
     echo "adapter.service=$(lk_get_prop init.svc.bluetooth) bluetooth_on=$(settings get global bluetooth_on 2>/dev/null)"
     echo "audio.playing=${LK_AUDIO_PLAY:-unknown} audio.route=${LK_AUDIO_ROUTE:-unknown} audio.mode=${LK_AUDIO_MODE:-unknown}"
     echo "# connection/profile evidence (MAC addresses redacted)"
-    dumpsys bluetooth_manager 2>/dev/null \
+    lk_dumpsys bluetooth_manager 2>/dev/null \
       | grep -iE 'adapter.*state|connection.*state|connected|connecting|disconnect|a2dp|headset|hfp|le_audio|gatt|avrcp|codec' \
       | head -120 | lk_bt_redact_addr
     echo "# active audio route evidence"
-    dumpsys audio 2>/dev/null \
+    lk_dumpsys audio 2>/dev/null \
       | grep -iE 'Devices:|mConnectedDevices|state:started|A2DP|BLE_|HEADSET|SPEAKER|WIRED' \
       | head -40 | lk_bt_redact_addr
     echo ""
