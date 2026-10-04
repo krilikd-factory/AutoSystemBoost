@@ -1443,9 +1443,22 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             else if (m->therm.skin_temp_c >= g_asb_cfg.thermal_skin_c)
                 asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_moderate_trim_pct, "skin_moderate");
         }
-        if (fsm->thermal_trend >= 10)
+        /* A trend means something only when the CPU is already warm.
+         *
+         * thermal_trend is the sum of the last three tick-to-tick rises of the hottest CPU
+         * sensor, and on screen the ticks are 2-6 s apart. Launching an app lifts that hotspot
+         * from about 40 C to the low 50s in a couple of ticks and lets it fall just as fast,
+         * so the trend read 12-13 and the severe trim cut CPU and GPU ceilings by a third for
+         * the next dwell window - in the middle of the burst, which is exactly when the speed
+         * was wanted. A capture shows two such cuts at 31-34 C skin with the prime near 47 C,
+         * back to 39 C a minute later. Below the temperature at which SUSTAINED itself lets go
+         * there is no thermal case to anticipate; skin, the throttling flag and the
+         * own-temperature path still guard real heat, and they do not depend on this gate. */
+        int _trend_warm = m->therm.temp_valid &&
+            m->therm.cpu_max_c >= asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx);
+        if (_trend_warm && fsm->thermal_trend >= 10)
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "thermal_trend_fast");
-        else if (fsm->thermal_trend >= 6)
+        else if (_trend_warm && fsm->thermal_trend >= 6)
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_moderate_trim_pct, "thermal_trend_rising");
         /* Battery current is a tie-breaker only; it never escalates beyond a
          * light trim and is ignored while charging because its semantics vary. */
@@ -4199,13 +4212,17 @@ static void disarm_timerfd(int fd) {
 /* A real one-shot. arm_timerfd above sets it_interval too, so it is periodic despite the
  * name; a "re-check in one second" armed with it kept firing every second until something
  * re-armed the timer - with the screen still off, after an always-on-display pulse. */
-static void arm_timerfd_once(int fd, int secs) {
+static void arm_timerfd_once_ms(int fd, int ms) {
     struct itimerspec its = {
         .it_interval = { 0, 0 },
-        .it_value    = { secs, 0 }
+        .it_value    = { ms / 1000, (long)(ms % 1000) * 1000000L }
     };
     timerfd_settime(fd, 0, &its, NULL);
 }
+/* Display-event follow-up: when the last display uevent arrived while the screen read off,
+ * and how many quick re-checks have been spent on it. */
+static time_t g_disp_evt_ts = 0;
+static int    g_disp_retry  = 0;
 
 /* 1 when the timer runs periodically, 2 when only a one-shot is pending, 0 when disarmed. */
 static int timerfd_state(int fd) {
@@ -4248,8 +4265,16 @@ static int recv_uevent(int fd, char *buf, size_t cap) {
     return n;
 }
 
+/* Returns 1 (explicit on), 0 (explicit off), -2 (a display event with no power marker:
+ * "something changed, re-read") or -1 (not a display event).
+ *
+ * The no-marker case used to return 0, i.e. "off". Thousands of DRM/panel events a day carry
+ * no POWER=/BLANK= field - including the one sent when the screen turns on - so the ON branch
+ * never ran: the governor log of every capture has "screen OFF (uevent)" lines and not a single
+ * "screen ON (uevent)". The decision was always the sysfs read anyway; what the parse decides is
+ * whether a quick re-check is worth arming, and "unknown" must allow it. */
 static int parse_uevent_screen_buf(char *buf, int n) {
-    int is_display = 0, is_power = 0;
+    int is_display = 0, is_power = -2;
     char *p = buf;
     while (p < buf + n) {
         if (strstr(p, "SUBSYSTEM=backlight") ||
@@ -6030,11 +6055,13 @@ int main(int argc, char **argv) {
                 while (drained < 64 && (un = recv_uevent(uefd, ubuf, sizeof(ubuf))) > 0) {
                     int cur = parse_uevent_screen_buf(ubuf, un);
                     g_uev_events_total++;
-                    g_uev_by_src[cur >= 0 ? ASB_UEV_DISPLAY : uevent_bucket(ubuf, un)]++;
+                    g_uev_by_src[cur != -1 ? ASB_UEV_DISPLAY : uevent_bucket(ubuf, un)]++;
+                    /* An explicit value wins over "changed"; "changed" still counts. */
                     if (cur >= 0) final_scr = cur;
+                    else if (cur == -2 && final_scr == -1) final_scr = -2;
                     drained++;
                 }
-                if (final_scr >= 0) {
+                if (final_scr != -1) {
                     int was_on = metrics.misc.screen_on;
                     int real_scr = metrics_screen_on();
                     /* The display uevent for screen ON arrives as the panel starts to power
@@ -6050,14 +6077,21 @@ int main(int argc, char **argv) {
                      * not yet. If the panel still does not report on - an always-on-display
                      * pulse, a pocket wake - the event is not trusted, but a one-second
                      * re-check is armed instead of waiting for the deep-idle tick. */
-                    if (final_scr == 1 && real_scr != 1) {
-                        for (int _ri = 0; _ri < 8 && real_scr != 1; _ri++) {
-                            usleep(60000);
-                            real_scr = metrics_screen_on();
-                        }
-                        if (real_scr != 1) arm_timerfd_once(tfd_active, 1);
+                    /* Screen read off, and the event is not an explicit "off": the panel may
+                     * be powering up ahead of panel_power_status. Re-check in 0.4 s from a
+                     * one-shot timer (the tick path then retries a few times over ~2 s)
+                     * instead of waiting for the slow deep-idle tick - and without blocking:
+                     * an always-on display sends display events while asleep too, and a
+                     * half-second busy wait on each would cost charge. */
+                    /* At most one follow-up chain per 30 s: an always-on display refreshing
+                     * its clock would otherwise buy up to ~2 s awake every minute. */
+                    if (!was_on && real_scr != 1 && final_scr != 0 && timerfd_state(tfd_active) != 1 &&
+                        time(NULL) - g_disp_evt_ts > 30) {
+                        g_disp_evt_ts = time(NULL); g_disp_retry = 0;
+                        arm_timerfd_once_ms(tfd_active, 400);
                     }
-                    int confirmed = (final_scr == real_scr) ? final_scr : real_scr;
+                    /* sysfs decides; the event only said "look now". */
+                    int confirmed = real_scr;
                     metrics.misc.screen_on = confirmed;
 
                     if (confirmed != was_on) {
@@ -6600,6 +6634,13 @@ int main(int argc, char **argv) {
                     if (g_asb_cfg.log_level >= 1) asb_log("screen ON seen on a tick - active cadence restored");
                 } else if (!metrics.misc.screen_on && _ts == 1) {
                     disarm_timerfd(tfd_active);
+                } else if (!metrics.misc.screen_on && _ts == 0 && g_disp_evt_ts &&
+                           time(NULL) - g_disp_evt_ts <= 3 && g_disp_retry < 3) {
+                    /* A display event just came in and the panel has not reported on yet:
+                     * a few more quick looks (~1.0, 1.6, 2.2 s after it), then give up -
+                     * an always-on-display pulse or a pocket wake simply never turns on. */
+                    g_disp_retry++;
+                    arm_timerfd_once_ms(tfd_active, 600);
                 }
             }
 
