@@ -132,6 +132,12 @@ static int fsm_profile_is_battery = 0;
  * primed IDLE_NOISY.
  */
 static int fsm_profile_is_smart = 0;
+/* Screen state, for the writer.
+ *
+ * The writer clamps cgroups and has never known whether anyone is looking at the phone -
+ * which is the difference between "background work" and "the work the user is waiting
+ * on". Set from the same place the profile flags are set. */
+static int fsm_screen_is_on = 0;
 static int fsm_profile_is_performance = 0;
 #define fsm_profile_tracks_idle (fsm_profile_is_battery || fsm_profile_is_smart)
 static int fsm_profile_is_balanced = 0;

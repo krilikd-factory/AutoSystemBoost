@@ -7210,6 +7210,8 @@ int main(int argc, char **argv) {
              * only ever saw GPU load, and a game that does not push the GPU past the entry
              * threshold never reached GAMING at all. */
             metrics.misc.app_hint = g_smart_rt.app_hint;
+            /* Tell the writer whether anyone is looking, before it writes anything. */
+            fsm_screen_is_on = metrics.misc.screen_on;
             int changed = fsm_update(&fsm, &metrics);
 
             /* rebuild plan on state band cross (idle<->active<->heavy) */

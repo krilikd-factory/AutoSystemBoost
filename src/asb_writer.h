@@ -1887,7 +1887,17 @@ skip_cpu_caps: ;
                 }
             }
         }
-        int _ucl_sybg_drift = (_ucl_sybg_now >= 0 && _ucl_sybg_now != g_wcache.uclamp_bg_max);
+        /* Compare against what we actually write here, not against the background value.
+         *
+         * Since the screen-on floor below, this node's target differs from uclamp_bg -
+         * so checking it against the bg cache would report drift on every single pass and
+         * rewrite the node forever. The expected value has to be computed the same way in
+         * both places. */
+        int _sybg_expect = g_wcache.uclamp_bg_max;
+        if (fsm_screen_is_on && _sybg_expect >= 0 &&
+            _sybg_expect < ASB_BALANCED_FLOOR_UCLAMP_TOP)
+            _sybg_expect = ASB_BALANCED_FLOOR_UCLAMP_TOP;
+        int _ucl_sybg_drift = (_ucl_sybg_now >= 0 && _ucl_sybg_now != _sybg_expect);
         if (_ucl_sybg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max) {
             /* Same backoff as the background node: a value something else keeps resetting
              * is not worth chasing every pass. */
@@ -1904,8 +1914,25 @@ skip_cpu_caps: ;
             caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
             int bg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_BG, UCLAMP_BG_MAX,
                                                     caps->uclamp_bg_max) == 0;
+            /* system-background is not background while the screen is on.
+             *
+             * This cgroup holds system_server's helper threads - the ones that run an app
+             * switch and post a notification. Clamping them to the background ceiling
+             * (25-35% of capacity) means those tasks miss their deadlines, and on a VRR
+             * panel the compositor answers a missed deadline by dropping the refresh
+             * rate: a user reported the display falling to 55 Hz exactly when switching
+             * apps and when notifications appear, recovering once they go away.
+             *
+             * With the screen off this cgroup really is background and keeps the low
+             * ceiling - nobody is waiting then, and that is where the saving was.
+             *
+             * The floor is the same 50 the top-app ceiling uses while the screen is on:
+             * a ceiling, not a frequency, so it costs nothing until something asks. */
+            int _sybg_want = caps->uclamp_bg_max;
+            if (fsm_screen_is_on && _sybg_want < ASB_BALANCED_FLOOR_UCLAMP_TOP)
+                _sybg_want = ASB_BALANCED_FLOOR_UCLAMP_TOP;
             int sybg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_SYBG, UCLAMP_SYBG_MAX,
-                                                      caps->uclamp_bg_max) == 0;
+                                                      _sybg_want) == 0;
             if (bg_ok && sybg_ok) {
                 g_wcache.uclamp_bg_max = caps->uclamp_bg_max;
                 writes += 2;
@@ -1983,8 +2010,20 @@ static void writer_camera_guard_recover(void) {
     if (top[0] && strcmp(top, "-")) sysfs_write_str(CPUSET_TOP_CPUS, top);
     if (uc_top >= 0) sysfs_write_int(UCLAMP_TOP_MAX, uc_top);
     if (uc_fg  >= 0) sysfs_write_int(UCLAMP_FG_MAX,  uc_fg);
-    if (uc_bg  >= 0) { sysfs_write_int(UCLAMP_BG_MAX,   uc_bg);
-                       sysfs_write_int(UCLAMP_SYBG_MAX, uc_bg); }
+    if (uc_bg  >= 0) {
+        sysfs_write_int(UCLAMP_BG_MAX, uc_bg);
+        /* Restore system-background the way the normal path writes it.
+         *
+         * This recovery runs after a camera session and puts back the values saved before
+         * it. Those were plain background numbers, so restoring them verbatim would undo
+         * the screen-on floor and bring the dropped refresh rate straight back - right
+         * after closing the camera, which is exactly when the user is looking at the
+         * phone. */
+        int _sybg_rec = uc_bg;
+        if (fsm_screen_is_on && _sybg_rec < ASB_BALANCED_FLOOR_UCLAMP_TOP)
+            _sybg_rec = ASB_BALANCED_FLOOR_UCLAMP_TOP;
+        sysfs_write_int(UCLAMP_SYBG_MAX, _sybg_rec);
+    }
     if (swap   >= 0) sysfs_write_int(PATH_VM_SWAPPINESS, swap);
     unlink(CAM_GUARD_STATE);
     writer_camera_guard_apply_current_profile();
@@ -2059,7 +2098,12 @@ static void writer_camera_guard(int active) {
         }
         if (g_cam_saved_uc_bg >= 0) {
             sysfs_write_int(UCLAMP_BG_MAX,   g_cam_saved_uc_bg);
-            sysfs_write_int(UCLAMP_SYBG_MAX, g_cam_saved_uc_bg);
+            /* Third and last writer of this node - same floor as the other two, or the
+             * camera release would quietly undo it. */
+            int _sybg_rel = g_cam_saved_uc_bg;
+            if (fsm_screen_is_on && _sybg_rel < ASB_BALANCED_FLOOR_UCLAMP_TOP)
+                _sybg_rel = ASB_BALANCED_FLOOR_UCLAMP_TOP;
+            sysfs_write_int(UCLAMP_SYBG_MAX, _sybg_rel);
             g_wcache.uclamp_bg_max = g_cam_saved_uc_bg;
         }
         if (g_cam_saved_swappiness >= 0)
