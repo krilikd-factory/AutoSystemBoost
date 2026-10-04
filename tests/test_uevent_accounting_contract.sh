@@ -12,7 +12,7 @@ fail() { echo "FAIL uevent accounting contract: $*" >&2; exit 1; }
 # --- source pins ---
 grep -qF 'uevent_by_subsys=\"' "$SRC" || fail 'metrics line uevent_by_subsys missing'
 grep -qF 'uevent_events_total=' "$SRC" || fail 'metrics line uevent_events_total missing'
-grep -qF 'g_uev_by_src[cur >= 0 ? ASB_UEV_DISPLAY : uevent_bucket(ubuf, un)]++' "$SRC" \
+grep -qF 'g_uev_by_src[cur != -1 ? ASB_UEV_DISPLAY : uevent_bucket(ubuf, un)]++' "$SRC" \
   || fail 'drain loop does not bucket by the parser verdict'
 grep -qF 'drained < 64' "$SRC" || fail 'drain cap changed'
 grep -qF '"display", "power_supply", "net", "sound", "usb", "thermal", "wakeup", "other"' "$SRC" \
@@ -56,6 +56,13 @@ int main(void) {
     char e3[] = "change@/x\0SUBSYSTEM=backlight\0brightness=0\0";
     int n3 = sizeof(e3) - 1;
     CHECK(parse_uevent_screen_buf(e3, n3) == 0, "backlight brightness=0 must be screen OFF");
+    /* A display event with no power marker - the kind sent as the screen powers on - is
+     * "changed, re-read" (-2), not "off": reading it as off is why screen ON was never seen. */
+    {
+        char e7[] = "change@/devices/platform/soc/drm/card0\0ACTION=change\0SUBSYSTEM=drm\0HOTPLUG=1\0";
+        CHECK(parse_uevent_screen_buf(e7, sizeof(e7) - 1) == -2, "drm event without marker must be 'changed' (-2)");
+        CHECK(uevent_bucket(e7, sizeof(e7) - 1) == ASB_UEV_DISPLAY, "unmarked drm event still buckets as display");
+    }
     CHECK(uevent_bucket(e3, n3) == ASB_UEV_DISPLAY, "backlight bucket");
 
     /* A modem link appearing - the rmnet_data3 case from the field log. */
