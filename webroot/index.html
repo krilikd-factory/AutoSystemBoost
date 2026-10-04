@@ -1561,7 +1561,9 @@ body.config-active #livePage.open {
   display: flex;
   align-items: center;
   margin: 0;
-  color: rgba(255,122,122,0.96);
+  /* Inherited from the category class on the header; the old red stays as the fallback
+   * for a section whose cards carry no category. */
+  color: var(--section-accent, rgba(255,122,122,0.96));
   font: 800 11px/1.18 var(--mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1628,6 +1630,17 @@ body.config-active #livePage.open {
   background: rgba(255,255,255,0.04);
 }
 .cfg-tile-ico .tech-icon { width: 23px; height: 23px; }
+/* Section headings reuse the tile palette. The icon takes the same value, or the text
+ * would turn and the glyph beside it would stay red. "system" had no colour of its own,
+ * so it gets a neutral accent rather than inheriting Audio's. */
+.cfg-section.cat-audio   { --section-accent: #ff7a7a; --tech-icon: #ff7a7a; }
+.cfg-section.cat-camera  { --section-accent: #7ab8ff; --tech-icon: #7ab8ff; }
+.cfg-section.cat-battery { --section-accent: #7fe3a9; --tech-icon: #7fe3a9; }
+.cfg-section.cat-ux      { --section-accent: #ffc470; --tech-icon: #ffc470; }
+.cfg-section.cat-net     { --section-accent: #5fdcf2; --tech-icon: #5fdcf2; }
+.cfg-section.cat-iface   { --section-accent: #d2a6ff; --tech-icon: #d2a6ff; }
+.cfg-section.cat-system  { --section-accent: #9fb3c8; --tech-icon: #9fb3c8; }
+
 .cfg-tile.cat-audio   { --tech-icon: #ff5f72; }
 .cfg-tile.cat-camera  { --tech-icon: #55a0ff; }
 .cfg-tile.cat-battery { --tech-icon: #63dc91; }
@@ -2991,6 +3004,37 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
   border: 1px solid transparent !important;
 }
 
+
+/* Easter egg: ten quick taps on the logo send the saucer flying.
+ *
+ * Its own element on top of everything rather than the header logo moved around - moving
+ * the real one would reflow the header and shift the page under the user's finger.
+ * Pointer events off so it never swallows a tap; fixed so page scroll does not drag it.
+ *
+ * While it flies, the saucer in the header fades out: it reads as the same object having
+ * left its nest, and leaving a duplicate sitting in the header spoils that. Only the
+ * glyph goes - the ring and glow stay, so the header keeps its shape and nothing moves.
+ *
+ * Reduced-motion is honoured: someone who asked the system for less movement did not ask
+ * for a saucer doing laps. */
+.ufo-fly {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 2000;
+  font-size: 44px;
+  line-height: 1;
+  pointer-events: none;
+  will-change: transform;
+  filter: drop-shadow(0 6px 18px rgba(0,0,0,.55));
+  transition: opacity .35s ease;
+}
+.logo-inner { transition: opacity .3s ease; }
+body.ufo-flying .logo-inner { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .ufo-fly { display: none; }
+  body.ufo-flying .logo-inner { opacity: 1; }
+}
 </style>
 </head>
 <body>
@@ -4824,11 +4868,19 @@ function cfgEnsureCaps() {
   cfgLoadCaps().then(function () { try { cfgRender(); } catch (e) {} });
 }
 
-function cfgRenderSection(list, section) {
+function cfgRenderSection(list, section, catKey) {
   cfgEnsureCaps();
   if (ASB_GRADE === null) { ASB_GRADE = {}; cfgLoadGrade().then(function(){ try { cfgRender(); } catch(e){} }); }
   const head = document.createElement('div');
-  head.className = 'cfg-section';
+  /* The section header takes the colour of the cards under it.
+   *
+   * The title was a hard-coded red - the Audio accent - so every subsection in every
+   * category looked like an audio heading. The per-category palette already existed for
+   * the tiles and the toasts; the heading simply never asked for one.
+   *
+   * The category comes from the section's own first card, so a heading is always the
+   * colour of what it introduces and there is no second table to keep in step. */
+  head.className = 'cfg-section' + (catKey ? ' ' + cfgCatClass(catKey) : '');
   const ico = document.createElement('span');
   ico.className = 'cfg-section-ico';
   ico.innerHTML = techIcon(section.icon);
@@ -4852,7 +4904,7 @@ function cfgRenderGroup(list, groupId) {
   sections.forEach(section => {
     const sectionItems = section.keys.map(key => items.find(it => it.key === key)).filter(Boolean);
     if (!sectionItems.length) return;
-    cfgRenderSection(list, section);
+    cfgRenderSection(list, section, sectionItems[0].key);
     sectionItems.forEach(it => { rendered[it.key] = true; cfgRenderRow(list, it, false); });
   });
   // Future cards still appear rather than silently disappearing when a maintainer forgets
@@ -8645,6 +8697,63 @@ _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
   });
 })();
 setTimeout(() => pollLive(false), 1500);
+
+/* Ten taps within four seconds, then ten seconds of flight.
+ *
+ * The counter resets after any gap longer than 900 ms, so ordinary taps on the logo - and
+ * it sits at the top of every page - never accumulate into a launch. A second launch
+ * while one is running is ignored rather than stacking saucers.
+ *
+ * The listener is delegated from document, so all three headers work without wiring each
+ * one, including any page added later.
+ */
+(function () {
+  var taps = 0, last = 0, flying = false;
+  function launch() {
+    if (flying) return;
+    flying = true;
+    document.body.classList.add('ufo-flying');
+    var el = document.createElement('div');
+    el.className = 'ufo-fly';
+    el.textContent = '\uD83D\uDEF8';
+    document.body.appendChild(el);
+    var t0 = Date.now(), DUR = 10000;
+    function done() {
+      el.style.opacity = '0';
+      document.body.classList.remove('ufo-flying');
+      setTimeout(function () {
+        if (el.parentNode) el.parentNode.removeChild(el);
+        flying = false;
+      }, 400);
+    }
+    /* Two sine waves of different periods: the path does not repeat inside ten seconds,
+     * which reads as flying rather than orbiting. The margin keeps it fully on screen at
+     * its largest scale. */
+    function frame() {
+      var t = (Date.now() - t0) / 1000;
+      if (t >= DUR / 1000) { done(); return; }
+      var w = window.innerWidth, h = window.innerHeight, m = 60;
+      var x = m + (Math.sin(t * 0.9) * 0.5 + 0.5) * Math.max(0, w - m * 2);
+      var y = m + (Math.sin(t * 1.37 + 1.1) * 0.5 + 0.5) * Math.max(0, h - m * 2);
+      var sc = 0.6 + (Math.sin(t * 1.9) * 0.5 + 0.5) * 1.3;
+      var tilt = Math.sin(t * 0.9) * 14;
+      el.style.transform =
+        'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) ' +
+        'translate(-50%,-50%) scale(' + sc.toFixed(3) + ') rotate(' + tilt.toFixed(1) + 'deg)';
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    if (!t.closest('.logo-c')) { taps = 0; return; }
+    var now = Date.now();
+    taps = (now - last > 900) ? 1 : taps + 1;
+    last = now;
+    if (taps >= 10) { taps = 0; launch(); }
+  }, true);
+})();
 </script>
 
 <!-- Bottom navigation.
