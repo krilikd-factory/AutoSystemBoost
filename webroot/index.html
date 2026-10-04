@@ -18,6 +18,15 @@
 
 :root {
   --window-inset-top: env(safe-area-inset-top, 0px);
+  /* One source for the top gap, so every page starts at the same height.
+   *
+   * .page and .live-page each carried their own 64px, plus a third copy in the landscape
+   * media query. Three numbers that have to agree by hand is how pages drift apart.
+   *
+   * Scales with the viewport rather than being a fixed count of CSS pixels: on a short
+   * screen 76px of empty space is a quarter of the visible list, on a tall one it is
+   * barely noticeable. clamp keeps it between 56 and 84. */
+  --page-top: clamp(56px, 9vh, 84px);
   --window-inset-bottom: env(safe-area-inset-bottom, 0px);
 
   /*
@@ -124,8 +133,16 @@ body::before, body::after {
   z-index: 1;
   width: 100%;
   max-width: 420px;
-  min-height: calc(100vh - var(--window-inset-top) - var(--window-inset-bottom));
-  padding: 64px 20px 22px;
+  /* Subtract the tab bar too, or the page is always taller than the room it has.
+   *
+   * body reserves space for the floating bar with padding-bottom: tabbar-space + the
+   * bottom inset, and with border-box that padding comes out of the same 100% height. The
+   * page then asked for 100vh minus the insets - exactly tabbar-space MORE than body can
+   * give it. A fixed 78px of overflow on every screen, with or without enough content:
+   * draggable, springing back. That is the jelly effect users reported. */
+  min-height: calc(100vh - var(--window-inset-top) - var(--window-inset-bottom)
+                   - var(--tabbar-space, 78px));
+  padding: var(--page-top) 20px 22px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1209,8 +1226,8 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 64px 20px 22px;
-  padding-top: calc(var(--window-inset-top) + 64px);
+  padding: var(--page-top) 20px 22px;
+  padding-top: calc(var(--window-inset-top) + var(--page-top));
   padding-bottom: calc(var(--window-inset-bottom) + 22px);
   box-sizing: border-box;
   transform: translateX(-50%) translateX(120%);
@@ -1496,9 +1513,11 @@ body.config-active #livePage.open {
   .header { margin-bottom: 12px; padding-top: 8px; }
   .logo-c { width: 48px; height: 48px; margin-bottom: 4px; }
   .app-name { font-size: 20px; }
-  .page { padding-top: 32px; }
+  /* Landscape overrides the shared value once, instead of each page separately. */
+  :root { --page-top: 32px; }
+  .page { padding-top: var(--page-top); }
   .live-page {
-    padding-top: calc(var(--window-inset-top) + 32px);
+    padding-top: calc(var(--window-inset-top) + var(--page-top));
     overflow-y: auto;
   }
 }
