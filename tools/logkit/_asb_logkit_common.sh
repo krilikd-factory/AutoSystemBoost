@@ -1746,7 +1746,14 @@ lk_config_watch_init() {
   LK_CFG_SNAP="$LK_OUT_DIR/.cfg_snapshot"
   mkdir -p "$LK_CFG_SNAP" 2>/dev/null || true
   : > "$LK_OUT_DIR/config_changes.txt" 2>/dev/null
-  echo "epoch|datetime|source|key|old|new" >> "$LK_OUT_DIR/config_changes.txt"
+  # "file", not "source".
+  #
+  # The column holds which config file the key lives in - governor.conf or features.conf -
+  # and it was labelled "source", which reads as who made the change. A row saying
+  # "source=governor, anim_speed 4 -> 3" sent me looking through the governor for code
+  # that writes a user-owned key; there is none, and there never was. The module only
+  # reads it.
+  echo "epoch|datetime|file|key|old|new" >> "$LK_OUT_DIR/config_changes.txt"
   LK_CFG_MOD="${LK_MODDIR:-$(lk_resolve_moddir)}"
   for _cw in "$LK_CFG_MOD/config/governor.conf:governor" \
              "$LK_CFG_MOD/features.conf:features"; do
