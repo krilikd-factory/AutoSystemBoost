@@ -125,6 +125,13 @@ static long   g_smart_drain_drop_x100 = 0;
 static long   g_smart_drain_last_x10 = 0;
 static time_t g_smart_drain_last_ts  = 0;
 static int    g_smart_drain_rate_ewma_x10 = 0;
+/* Last computed battery-lean verdict, published for the state file.
+ *
+ * It decides whether a HEAVY state still gets the modem's fast LPM mode, so it changes
+ * radio behaviour - and it was computed, used, and thrown away. The logkit has had a
+ * column for it all along: every capture so far wrote that column empty, and any question
+ * about why the modem stayed in "normal" under load had no answer in the data. */
+static int    g_smart_battery_lean_pub = 0;
 static int    g_smart_last_quality = -1;
 static int    g_smart_budget_src = 0;
 static time_t g_gov_start_ts = 0;
@@ -1996,11 +2003,13 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                    "smart_drain_ewma_x10=%d\n"
                    "smart_quality_last=%d\nsmart_quality_avg=%d\n"
                    "smart_app_drain=%d\n"
+                   "smart_battery_lean=%d\n"
                    "anomaly_code=%d\nanomaly_count_1h=%d\n",
                 g_smart_rt.budget_severity, g_smart_rt.budget_pred_h_x10,
                 g_smart_drain_rate_ewma_x10,
                 g_smart_last_quality, g_smart_quality_ewma,
                 asb_smart_appheat_drain(g_smart_rt.app_hash, time(NULL)),
+                g_smart_battery_lean_pub,
                 g_anom_code, g_anom_count_1h);
         fprintf(f, "smart_q_bat=%d\nsmart_q_heat=%d\nsmart_q_stab=%d\n"
                    "smart_q_vendor=%d\nsmart_q_fail=%d\nsmart_budget_src=%d\n",
@@ -7043,6 +7052,7 @@ int main(int argc, char **argv) {
                     g_asb_cfg.smart_battery_bias >= 400 &&
                     !metrics.misc.camera_active && !metrics.bat.charging &&
                     g_smart_rt.app_hint < ASB_APP_GAMING;
+                g_smart_battery_lean_pub = smart_battery_lean;
                 const char *lpm_mode =
                     (g_asb_cfg.night_modem_idle && !metrics.misc.screen_on &&
                      asb_night_window_active(time(NULL)))   ? "night" :
