@@ -821,5 +821,6 @@
   "cfg_profile_folder_change": "Ganti folder",
   "cfg_profile_saved_to": "Disimpan ke ",
   "cfg_profile_imported": "Dibuka: ",
-  "cfg_profile_imported_tail": " - tekan Terapkan untuk memakainya"
+  "cfg_profile_imported_tail": " - tekan Terapkan untuk memakainya",
+  "dbg_log_running_hint": "hapus folder ini untuk memulai yang baru"
 }

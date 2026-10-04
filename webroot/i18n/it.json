@@ -821,5 +821,6 @@
   "cfg_profile_folder_change": "Cambia cartella",
   "cfg_profile_saved_to": "Salvato in ",
   "cfg_profile_imported": "Aperta ",
-  "cfg_profile_imported_tail": " - premi Applica per usarla"
+  "cfg_profile_imported_tail": " - premi Applica per usarla",
+  "dbg_log_running_hint": "elimina questa cartella per avviarne uno nuovo"
 }

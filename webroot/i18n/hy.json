@@ -821,5 +821,6 @@
   "cfg_profile_folder_change": "Փոխել թղթապանակը",
   "cfg_profile_saved_to": "Պահված է՝ ",
   "cfg_profile_imported": "Բացված է՝ ",
-  "cfg_profile_imported_tail": " — սեղմեք «Կիրառել»՝ օգտագործելու համար"
+  "cfg_profile_imported_tail": " — սեղմեք «Կիրառել»՝ օգտագործելու համար",
+  "dbg_log_running_hint": "ջնջեք այս թղթապանակը՝ նորը սկսելու համար"
 }

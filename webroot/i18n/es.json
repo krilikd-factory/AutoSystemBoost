@@ -821,5 +821,6 @@
   "cfg_profile_folder_change": "Cambiar carpeta",
   "cfg_profile_saved_to": "Guardado en ",
   "cfg_profile_imported": "Abierta ",
-  "cfg_profile_imported_tail": " - pulsa Aplicar para usarla"
+  "cfg_profile_imported_tail": " - pulsa Aplicar para usarla",
+  "dbg_log_running_hint": "borra esta carpeta para iniciar uno nuevo"
 }

@@ -637,5 +637,6 @@
   "cfg_profile_folder_change": "Change folder",
   "cfg_profile_saved_to": "Saved to ",
   "cfg_profile_imported": "Opened ",
-  "cfg_profile_imported_tail": " - press Apply to use it"
+  "cfg_profile_imported_tail": " - press Apply to use it",
+  "dbg_log_running_hint": "delete this folder to start a new one"
 }

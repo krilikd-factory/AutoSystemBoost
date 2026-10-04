@@ -821,5 +821,6 @@
   "cfg_profile_folder_change": "Ordner ändern",
   "cfg_profile_saved_to": "Gespeichert in ",
   "cfg_profile_imported": "Geöffnet: ",
-  "cfg_profile_imported_tail": " - tippe auf Anwenden, um sie zu nutzen"
+  "cfg_profile_imported_tail": " - tippe auf Anwenden, um sie zu nutzen",
+  "dbg_log_running_hint": "lösche diesen Ordner, um ein neues zu starten"
 }

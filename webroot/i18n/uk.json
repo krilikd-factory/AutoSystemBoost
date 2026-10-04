@@ -821,5 +821,6 @@
   "cfg_profile_folder_change": "Змінити папку",
   "cfg_profile_saved_to": "Збережено: ",
   "cfg_profile_imported": "Відкрито ",
-  "cfg_profile_imported_tail": " — натисніть «Застосувати», щоб використати"
+  "cfg_profile_imported_tail": " — натисніть «Застосувати», щоб використати",
+  "dbg_log_running_hint": "видаліть цю папку, щоб почати новий"
 }

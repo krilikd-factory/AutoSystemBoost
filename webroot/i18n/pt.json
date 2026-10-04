@@ -821,5 +821,6 @@
   "cfg_profile_folder_change": "Mudar de pasta",
   "cfg_profile_saved_to": "Guardado em ",
   "cfg_profile_imported": "Aberta ",
-  "cfg_profile_imported_tail": " - toque em Aplicar para a usar"
+  "cfg_profile_imported_tail": " - toque em Aplicar para a usar",
+  "dbg_log_running_hint": "apague esta pasta para iniciar um novo"
 }

@@ -821,5 +821,6 @@
   "cfg_profile_folder_change": "更改文件夹",
   "cfg_profile_saved_to": "已保存到 ",
   "cfg_profile_imported": "已打开 ",
-  "cfg_profile_imported_tail": "，点按“应用”即可使用"
+  "cfg_profile_imported_tail": "，点按“应用”即可使用",
+  "dbg_log_running_hint": "删除此文件夹即可开始新的记录"
 }

@@ -821,5 +821,6 @@
   "cfg_profile_folder_change": "Changer de dossier",
   "cfg_profile_saved_to": "Enregistré dans ",
   "cfg_profile_imported": "Ouverte : ",
-  "cfg_profile_imported_tail": " - appuyez sur Appliquer pour l'utiliser"
+  "cfg_profile_imported_tail": " - appuyez sur Appliquer pour l'utiliser",
+  "dbg_log_running_hint": "supprimez ce dossier pour en lancer un nouveau"
 }
