@@ -29,7 +29,16 @@ need "$WRITER" 'h->applied++;'
 need "$WRITER" 'h->consecutive_failures = 0;'
 
 # The backoff: three holds -> leave the vendor alone for an hour; otherwise retry freely.
-need "$WRITER" 'if (++h->floor_holds >= 3) h->retry_at = now + 3600;'
+# The backoff is 300 s, matching the kernel_floor_higher branch.
+#
+# It was 3600 here and 300 there - the same situation seen from two sides, with two
+# different answers. A capture showed the little cores held at 1.8 GHz because the module
+# would not retry for an hour; shortening one branch and not the other left the asymmetry
+# in place, and this assertion was what pinned it there.
+#
+# What the contract is really about is that the branch backs off at all, after three
+# holds. That part is unchanged.
+need "$WRITER" 'if (++h->floor_holds >= 3) h->retry_at = now + 300;'
 
 # floor_holds must be state, not a local: the field lives in the writer state struct and
 # is initialised where the other counters are.
