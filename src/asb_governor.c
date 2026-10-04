@@ -1454,7 +1454,19 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
          * back to 39 C a minute later. Below the temperature at which SUSTAINED itself lets go
          * there is no thermal case to anticipate; skin, the throttling flag and the
          * own-temperature path still guard real heat, and they do not depend on this gate. */
-        int _trend_warm = m->therm.temp_valid &&
+        /* No reading is not the same as a cool phone.
+         *
+         * Gating the trend on temperature is right - a rising trend at 32 C is noise, and
+         * trimming on it costs performance for nothing. But with temp_valid at 0 the gate
+         * closes permanently, and the trend is precisely the signal that still works when
+         * the sensor does not: a capture on this device showed the thermal headroom API
+         * stuck at 100 for 13 of 145 samples, and other devices report no usable CPU
+         * sensor at all. Those are the phones that most need a fallback, and this would
+         * have left them with none.
+         *
+         * So: when the reading is trustworthy, require it to be warm; when there is no
+         * reading, fall back to the old trend-only behaviour. */
+        int _trend_warm = (!m->therm.temp_valid) ||
             m->therm.cpu_max_c >= asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx);
         if (_trend_warm && fsm->thermal_trend >= 10)
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "thermal_trend_fast");
