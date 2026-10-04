@@ -1858,6 +1858,12 @@ lk_asb_feature_header() {
     > "$LK_OUT_DIR/asb_features.txt" 2>/dev/null
 }
 
+# Field names here must match the state file exactly.
+#
+# This row asked for "thermal_veto" while the governor publishes "smart_thermal_veto", so
+# the column came out empty in every capture ever taken - and the veto is what decides
+# whether the interactive bonus is suppressed under heat. A silent miss, because a name
+# that matches nothing reads the same as a feature that never fires.
 lk_asb_feature_row() {
   _fe=$(date +%s); _fd=$(date '+%Y-%m-%d %H:%M:%S')
   _fst() { grep -m1 "^$1=" /dev/.asb/state 2>/dev/null | cut -d= -f2; }
@@ -1887,7 +1893,7 @@ lk_asb_feature_row() {
     "$(lk_dsp_live_state)" \
     "$(getprop persist.asb.dsp.gain_mb 2>/dev/null)" \
     "$_fabi" \
-    "$(_fst thermal_veto)" \
+    "$(_fst smart_thermal_veto)" \
     "$(_fst smart_battery_lean)" \
     "$(cat /proc/sys/vm/swappiness 2>/dev/null)" \
     "$(cat /dev/cpuctl/foreground/cpu.uclamp.max 2>/dev/null)" \
