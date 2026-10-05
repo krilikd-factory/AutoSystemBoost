@@ -3690,6 +3690,9 @@ const TECH_ICON_PATHS = {
   wakelock: '<rect x="5" y="10.5" width="14" height="9.5" rx="2.2"/><path d="M8.2 10.5V7.8a3.8 3.8 0 0 1 7.6 0v2.7"/><path d="M12.4 13l-.9 2h1.8l-.9 2" />',
   satellite: '<circle cx="12" cy="10" r="3.2"/><path d="M12 2.5a7.5 7.5 0 0 1 7.5 7.5c0 5-7.5 11.5-7.5 11.5S4.5 15 4.5 10A7.5 7.5 0 0 1 12 2.5z"/><path d="M4 4l16 16"/>',
   radio_moon: '<path d="M4.5 15.5a2.6 2.6 0 0 1 3.7 0M4.5 19a6 6 0 0 1 0-3.5"/><path d="M2.8 19h.01" /><path d="M19.5 4a5.6 5.6 0 1 0 2.8 7.4A4.5 4.5 0 0 1 19.5 4z"/>',
+  /* lte_screenoff: three signal bars beside a phone outline with its screen dark - the
+     network choice that applies while the display is off. */
+  lte_screenoff: '<path d="M3.5 19v-3M7 19v-6M10.5 19v-9"/><rect x="14" y="5" width="7" height="14" rx="1.6"/><path d="M15.6 7.6h3.8v7.6h-3.8z" fill="currentColor" stroke="none" opacity=".35"/>',
   cellular_controls: '<rect x="6.5" y="3" width="11" height="18" rx="2.4"/><path d="M6.5 8.5 11.5 3.5"/><path d="M9.7 16.8v-2.4M12 16.8v-4M14.3 16.8v-5.6"/>',
   theme_moon: '<path d="M20 13.6A8.2 8.2 0 1 1 10.4 4a6.7 6.7 0 0 0 9.6 9.6z"/>',
   quiet_moon: '<path d="M19.8 12.6A8 8 0 1 1 11 3.5a6.6 6.6 0 0 0 8.8 9.1z"/><path d="M16.5 16.5l4 4M20.5 16.5l-4 4"/>',
@@ -4527,7 +4530,7 @@ const SNAP_KEYS = [
   'athena_service',
   'net_rps',
   'net_txqueue',
-  'night_modem_idle'];
+  'night_modem_idle', 'net_screen_off_lte'];
 const CFG_ITEMS = [
   { key:'audio_profile', type:'seg', def:'stock', opts:['eq_compat','stock','hifi'], name:'Audio Profile',
     desc:'Who processes the sound. EQ-friendly hands the signal to an external EQ/ViPER untouched. Hi-Fi turns UHQA on for when you run no EQ. Stock keeps just the base tweaks. Applies without a reboot.' },
@@ -4549,7 +4552,7 @@ const CFG_ITEMS = [
     desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   // --- Audio ---,
   { key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'], name:'DSP Outputs',
-    desc:'Which outputs the DSP is allowed to work on. It used to attach to all of them at once, so a boost meant for Bluetooth headphones also lifted the loudspeaker - the smallest driver in the phone and the one least able to take extra gain. Pick only what you actually want processed: speaker is the built-in one, wired covers headphone jack and USB DACs, bt is Bluetooth. Outputs this phone does not have are simply never matched.' },
+    desc:'Which outputs the DSP is allowed to work on. It used to attach to all of them at once, so a boost meant for Bluetooth headphones also lifted the loudspeaker - the smallest driver in the phone and the one least able to take extra gain. Pick only what you actually want processed: speaker is the built-in one, wired covers headphone jack and USB DACs, bt is Bluetooth. Outputs this phone does not have are simply never matched. Bluetooth and battery: an audio effect on the wireless output can take the stream off the offloaded playback path, so the CPU stays awake as long as audio plays with the screen off - one full-day capture showed 100% awake during Bluetooth listening with gain on. If battery life during long screen-off listening matters, leave Bluetooth out.' },
   { key:'audio_remove_volume_limit', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Headphone Volume Limit',
     desc:'Android caps headphone output above the level the EU considers unsafe for sustained listening, and warns you when you cross it. Removing that cap lets the existing volume slider go further - it does not make anything louder by itself.\n\nASB used to remove it silently as part of another category. It is now a choice, off by default, because how loud is too loud in your ears is not a decision a performance module should make for you.\n\nHearing damage from sustained loud listening is cumulative and permanent. If you remove the cap, watch the duration as much as the level.' },
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:10, step:1, name:'Camera Grade',
@@ -4581,6 +4584,8 @@ const CFG_ITEMS = [
     desc:'Independent master for ASB modem controls. OFF is the default: choosing any power profile leaves Android’s mobile-data context and TCP keepalive settings untouched. This is the recommended setting on WiFi-only or no-SIM devices. Turn it on only if this phone uses a SIM/eSIM and you deliberately want ASB’s separate radio options below. Turning it off immediately restores the Android values recorded before ASB changed them; it never changes airplane mode, carrier selection, roaming, preferred network type, Bluetooth or audio.' },
   { key:'night_modem_idle', type:'bool', def:'0', name:'Quiet Radio at Night',
     desc:'Requires Cellular / radio controls above. When they are off, this and every power profile leave Android radio policy untouched. When enabled, it lets the modem settle during the hours the learner worked out from your own nights. Keepalives go to six times the profile value and the probe burst is shortened, so fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.' },
+  { key:'net_screen_off_lte', type:'bool', def:'0', name:'LTE While Screen Off',
+    desc:'After the screen has been off for 90 s, drops the 5G leg and keeps data on LTE; 5G comes back as soon as the screen turns on. Off by default: switching allowed network types re-registers the data link.' },
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 other links',
     desc:'How the phone ramps up when downloading - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, Ethernet. WiFi and mobile take their own values from the cards below. Stock is what the device shipped with. bbr paces to the real measured speed, cubic is the classic. Stock kernels usually lack bbr, and the card will say \u201cnot supported\u201d rather than pretend.' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 WiFi',
@@ -4710,7 +4715,7 @@ const CFG_CAT = {
      live under battery for the same reason. */
   mglru_hold: 'battery',
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
-  night_modem_idle:'net', smart_media_guard:'battery',
+  night_modem_idle:'net', net_screen_off_lte:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'system', ltpo_force:'system', mmfeed_off:'system',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
@@ -4765,7 +4770,7 @@ const CFG_GROUP_OF = {
      so the card existed in CFG_ITEMS and was never drawn. BG_TRIM_LEVEL and gms_trim -
      the other RAM tweaks - sit under battery for exactly this reason. */
   mglru_hold:'battery',
-  night_modem_idle:'net', smart_media_guard:'battery',
+  night_modem_idle:'net', net_screen_off_lte:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui', ltpo_force:'ui', mmfeed_off:'ui',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery', gnss_trim:'battery',
@@ -4825,7 +4830,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'cellular', icon:'cellular_controls', titleKey:'cfg_net_section_cellular',
       title:'Mobile Network', hintKey:'cfg_net_section_cellular_hint',
       hint:'How the modem behaves, including a quieter radio at night.',
-      keys:['radio_policy_enable','night_modem_idle'] },
+      keys:['radio_policy_enable','night_modem_idle','net_screen_off_lte'] },
     { id:'wifi', icon:'radar', titleKey:'cfg_net_section_wifi',
       title:'Wi-Fi', hintKey:'cfg_net_section_wifi_hint',
       hint:'Scanning, power saving, region and when to give up on a bad network.',
@@ -5055,7 +5060,7 @@ const CFG_ICONS = {
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
   net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls',
   auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', doze_level:'doze', doze_trim_whitelist:'whitelist',
-  wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
+  wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', ltpo_force:'ltpo', mmfeed_off:'mmfeed',
   /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
@@ -5501,7 +5506,7 @@ const APPLY_MODE = {
   net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, net_wifi_leave:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
-  night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
+  night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, net_screen_off_lte:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
   sustained_temp_enter:APPLY_LIVE, BG_TRIM_LEVEL:APPLY_LIVE, doze_level:APPLY_LIVE,
   UX_MANAGE_OEM_TOGGLES:APPLY_LIVE, UX_MANAGE_TIMEOUTS:APPLY_LIVE,
 
