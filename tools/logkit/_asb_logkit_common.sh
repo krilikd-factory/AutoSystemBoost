@@ -137,6 +137,9 @@ lk_probe_env() {
 # something rather than a hole.
 lk_dsp_live_state() {
   _dls="$(getprop persist.asb.dsp.attached 2>/dev/null)"
+  # Nothing ever wrote "attached". route_allowed is what the module actually publishes:
+  # whether the configured outputs cover the route it detected. Use it when present.
+  [ -n "$_dls" ] || _dls="$(getprop persist.asb.dsp.route_allowed 2>/dev/null)"
   case "$_dls" in
     0|1) printf '%s' "$_dls"; return 0 ;;
   esac
@@ -167,7 +170,10 @@ lk_dump_build_manifest() {
   # hashes object every single time. Every capture we have carries that empty stub, which
   # is why a log cannot be tied back to a build.
   _lk_bm=""
-  for _c in "$MODDIR/runtime/build_manifest.json" "$MODDIR/build_manifest.json"; do
+  # The release workflow writes release-manifest.json at the module root; it was never on
+  # this list, so even release builds fell through to the synthesized stub.
+  for _c in "$MODDIR/runtime/build_manifest.json" "$MODDIR/build_manifest.json" \
+            "$MODDIR/release-manifest.json"; do
     [ -f "$_c" ] && { _lk_bm="$_c"; break; }
   done
   if [ -n "$_lk_bm" ]; then
@@ -176,10 +182,19 @@ lk_dump_build_manifest() {
     {
       echo "{"
       echo "  \"asb_version\":       \"$(awk -F= '/^version=/{print $2}' "$MODDIR/module.prop" 2>/dev/null)\","
-      echo "  \"build_date\":        \"$(date -u '+%Y-%m-%d %H:%M:%S')\","
-      echo "  \"schema_version\":    9,"
+      # The capture date, labelled as such. It used to be called build_date, which an
+      # audit rightly flagged: the moment a log starts says nothing about the build.
+      echo "  \"capture_date\":      \"$(date -u '+%Y-%m-%d %H:%M:%S')\","
+      echo "  \"version_code\":      \"$(awk -F= '/^versionCode=/{print $2}' "$MODDIR/module.prop" 2>/dev/null)\","
+      echo "  \"schema_version\":    10,"
       echo "  \"manifest_source\":   \"logkit_synthesized\","
-      echo "  \"hashes\": {}"
+      # Hash the binary that is actually installed. Debug builds ship no manifest and
+      # carry the same version string build after build, so "V65-debug3" told two logs
+      # nothing about whether they came from the same code. The governor's own sha256 is
+      # an identity that cannot be mislabelled: same hash, same build.
+      _lk_h_gov="$(sha256sum "$MODDIR/bin/asb" 2>/dev/null | awk '{print $1}')"
+      _lk_h_cfg="$(sha256sum "$MODDIR/config/governor.conf" 2>/dev/null | awk '{print $1}')"
+      echo "  \"hashes\": {\"bin/asb\": \"${_lk_h_gov:-unavailable}\", \"config/governor.conf\": \"${_lk_h_cfg:-unavailable}\"}"
       echo "}"
     } > "$LK_OUT_DIR/build_manifest.json"
   fi
