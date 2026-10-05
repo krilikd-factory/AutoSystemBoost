@@ -65,6 +65,14 @@ typedef struct {
 
     int night_safe_override;
     int thermal_veto;
+    /* Which condition raised the veto: 0 none, 1 skin, 2 junction hard limit,
+     * 3 junction fallback (no skin sensor), 4 vendor clamps, 5 recovery.
+     *
+     * A capture showed the veto on for 6-10 minutes roughly once an hour, at the same
+     * skin and die temperatures as when it was off - 33-37 C skin, never at 38-39. Four
+     * different conditions can raise it and the state only said "1", so the cause could
+     * not be read from any log. This names it. */
+    int thermal_veto_reason;
     int low_battery_override;
     int thermal_trend_bump;
     int budget_severity;
@@ -1441,10 +1449,27 @@ static void asb_smart_apply_thermal_veto(
     }
 
     int veto = 0;
-    if (se == 1) veto = 1;                          /* skin hot OR junction hard-limit */
-    else if (se < 0 && dtemp >= dhi) veto = 1;      /* junction fallback (original) */
-    if (vendor_clamp_1h >= ASB_SMART_VETO_VENDOR_CLAMP_1H) veto = 1;
-    if (recovery_active) veto = 1;
+    rt->thermal_veto_reason = 0;
+    if (se == 1) {                                  /* skin hot OR junction hard-limit */
+        veto = 1;
+        rt->thermal_veto_reason = (skin_temp_c >= cfg->thermal_skin_c) ? 1 : 2;
+    }
+    else if (se < 0 && dtemp >= dhi) { veto = 1; rt->thermal_veto_reason = 3; }
+    /* Vendor clamping counts only when the phone is at least warm.
+     *
+     * This is a THERMAL veto. On OPlus the vendor clamps routinely - ~330 times an hour
+     * on the device in the captures, at 42 C die and 36 C skin. That is OEM frequency
+     * policy, not heat, and with an honest rolling count (see v44_clamp_decay) the old
+     * rule would hold the veto on permanently: Smart forced to battery all day on a cool
+     * phone, which is exactly the sluggishness users complain about.
+     *
+     * dlo is the soft pre-lean band this function already defines - eight degrees under
+     * the veto line on the skin sensor, 50 C on the die when there is none. Heavy
+     * clamping above that band is the vendor fighting heat, and the veto still fires. */
+    if (vendor_clamp_1h >= ASB_SMART_VETO_VENDOR_CLAMP_1H && dtemp >= dlo) {
+        veto = 1; rt->thermal_veto_reason = 4;
+    }
+    if (recovery_active) { veto = 1; rt->thermal_veto_reason = 5; }
 
     if (veto) {
         rt->thermal_veto = 1;

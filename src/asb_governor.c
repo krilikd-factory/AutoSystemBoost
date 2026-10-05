@@ -950,7 +950,28 @@ static void session_reset_and_replan(asb_fsm_t *fsm, int screen_on) {
 static unsigned long g_v44_clamp_total = 0;       /* total times we saw "vendor_clamp" */
 static unsigned long g_v44_raised_total = 0;      /* total times we saw "vendor_raised" */
 static unsigned long g_v44_clamp_1h = 0;          /* rolling 1h window */
-static time_t        g_v44_clamp_1h_start = 0;    /* window start ts */
+/* An actual rolling hour, not a tumbling one.
+ *
+ * The comment above always said "rolling", but the code reset the count to zero at a
+ * fixed hour boundary. So the number climbed for sixty minutes and fell off a cliff: on a
+ * device clamping ~300 times an hour the thermal veto, which trips at 300, came on for
+ * the last 6-10 minutes of every hour and went off at the reset - 18:07-18:25, 20:20-
+ * 20:26, 21:17-21:26 - each window ending a minute or two before the hourly snapshot.
+ * The snapshots, taken just after the reset, read 5-9 and made the veto look causeless.
+ *
+ * An exponential decay with a one-hour time constant: steady clamping at R per hour
+ * settles at R, a burst fades smoothly instead of vanishing on the hour, and the veto
+ * follows the actual rate instead of the position of the clock. */
+static double        g_v44_clamp_rate = 0.0;
+static time_t        g_v44_clamp_rate_ts = 0;
+static void v44_clamp_decay(time_t now) {
+    if (g_v44_clamp_rate_ts == 0) { g_v44_clamp_rate_ts = now; return; }
+    long dt = (long)(now - g_v44_clamp_rate_ts);
+    if (dt <= 0) return;
+    g_v44_clamp_rate *= exp(-(double)dt / 3600.0);
+    if (g_v44_clamp_rate < 0.01) g_v44_clamp_rate = 0.0;
+    g_v44_clamp_rate_ts = now;
+}
 static unsigned long v44_clamp_1h_now(void);
 
 /* cap ownership — declared early so write_state can emit them.
@@ -1895,7 +1916,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f,
             "smart_mode=%d\nsmart_bucket_id=%d\nsmart_daypart=%d\nsmart_is_weekend=%d\n"
             "smart_confidence=%d\nsmart_alpha_battery=%d\nsmart_interactive_bonus=%d\n"
-            "smart_sleep_override=%d\nsmart_thermal_veto=%d\n"
+            "smart_sleep_override=%d\nsmart_thermal_veto=%d\nsmart_thermal_veto_reason=%d\n"
             "smart_app_hint=%d\nsmart_fallback_level=%d\n"
             /* Learned per-bucket history, exposed so the effect is observable. Without
              * these two the thermal lean is invisible: alpha moves and nothing says why. */
@@ -1913,6 +1934,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.interactive_bonus_x1000,
             g_smart_rt.night_safe_override ? 1 : 0,
             g_smart_rt.thermal_veto ? 1 : 0,
+            g_smart_rt.thermal_veto_reason,
             g_smart_rt.app_hint,
             g_smart_rt.fallback_level,
             g_smart_rt.bucket_temp_x10,
@@ -2254,12 +2276,8 @@ static void v44_conflict_record(const char *cap_source) {
     int is_thermal = (strcmp(cap_source, "thermal_overlay") == 0);
     if (!is_clamp && !is_raised && !is_thermal) return;
     time_t now = time(NULL);
-    if (g_v44_clamp_1h_start == 0) g_v44_clamp_1h_start = now;
-    if (now - g_v44_clamp_1h_start >= 3600) {
-        g_v44_clamp_1h = 0;
-        g_v44_clamp_1h_start = now;
-    }
-    if (is_clamp)  { g_v44_clamp_total++;  g_v44_clamp_1h++; }
+    v44_clamp_decay(now);
+    if (is_clamp)  { g_v44_clamp_total++;  g_v44_clamp_rate += 1.0; }
     if (is_raised) { g_v44_raised_total++; }
     strncpy(g_v44_last_clamp_source, cap_source, sizeof(g_v44_last_clamp_source) - 1);
     g_v44_last_clamp_source[sizeof(g_v44_last_clamp_source) - 1] = '\0';
@@ -2271,11 +2289,8 @@ static void v44_conflict_record(const char *cap_source) {
  * On a clean night after a noisy evening that next event never came, so a stale count (e.g.
  */
 static unsigned long v44_clamp_1h_now(void) {
-    if (g_v44_clamp_1h_start != 0 &&
-        time(NULL) - g_v44_clamp_1h_start >= 3600) {
-        g_v44_clamp_1h = 0;
-        g_v44_clamp_1h_start = 0;
-    }
+    v44_clamp_decay(time(NULL));
+    g_v44_clamp_1h = (unsigned long)(g_v44_clamp_rate + 0.5);
     return g_v44_clamp_1h;
 }
 
