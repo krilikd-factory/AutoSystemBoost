@@ -1602,6 +1602,14 @@ _sb_d="$(grep -m1 '^smart_bucket_drain_x10=' /dev/.asb/state 2>/dev/null | cut -
   else
     NOTE "last banked session: max ${_sl}C over ${_sd}s (${_sr}), governor up ${_sup:-?}s"
   fi
+_vr="$(grep -m1 '^smart_thermal_veto_reason=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+case "$_vr" in
+  1) NOTE "thermal veto: ON - skin at or above thermal_skin_c" ;;
+  2) NOTE "thermal veto: ON - junction at or above thermal_junction_hard_c" ;;
+  3) NOTE "thermal veto: ON - no skin sensor, junction fallback threshold" ;;
+  4) NOTE "thermal veto: ON - vendor clamps in the last hour over the veto limit" ;;
+  5) NOTE "thermal veto: ON - recovery window" ;;
+esac
 NOTE "bucket avg temp = ${_sb_t:-0} (tenths C)  ·  avg drain = ${_sb_d:-0} (tenths %/h)"
 _tw="$(grep -m1 '^smart_therm_warm_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _tc="$(grep -m1 '^smart_therm_cool_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
