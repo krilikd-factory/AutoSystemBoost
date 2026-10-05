@@ -1454,7 +1454,18 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             } else {
                 _lt_streak = 0;
             }
-            int hyst = (g_budget_trim_pct > 0) ? 4 : 0;
+            /* Enter fast, leave slowly - and leave over a band the sensor cannot jump.
+             *
+             * The headroom figure comes from the thermal HAL's forecast and moves in coarse
+             * steps; a 4-point exit band is narrower than one of those steps, so a reading
+             * sitting near a threshold toggled the stage on consecutive evaluations. Two
+             * audits of the same capture independently flagged the result - trim 0 -> 9
+             * -> 0 and 9 -> 20 -> 9 at 35 C skin, each toggle a round of cap writes - and
+             * both asked for the same shape: quick entry, stable release.
+             *
+             * Entry thresholds are untouched, so protection engages exactly as before. Only
+             * the release needs the reading to clear the line by 8 points instead of 4. */
+            int hyst = (g_budget_trim_pct > 0) ? 8 : 0;
             if (hr <= g_asb_cfg.thermal_budget_severe_headroom_pct + hyst)
                 asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "headroom_severe");
             else if (hr <= g_asb_cfg.thermal_budget_moderate_headroom_pct + hyst)
@@ -1688,9 +1699,24 @@ static void asb_active_efficiency_apply_caps(asb_profile_caps_t *caps,
     }
 }
 
+/* Why the prime ceiling is where it is, for the state file.
+ *
+ * Both audits of the same capture asked the same question - in a 4-hour screen-on video
+ * phase ASB owned the cap in ~90% of the throttle samples, and nothing said whether that
+ * was thermal protection, the efficiency envelope or simply the profile's own ceiling.
+ * One of them proposed exactly this: base, effective, and the stage that lowered it.
+ *
+ * The prime slot is the one that matters for both heat and responsiveness. "profile"
+ * means neither stage below touched it; the figures let anyone see whether the cap ever
+ * bit, which in that capture it did not (1.64 GHz ceiling, 1.13 GHz peak demand). */
+static int  g_cap_prime_base_khz = 0;
+static int  g_cap_prime_eff_khz  = 0;
+static char g_cap_prime_reason[64] = "profile";  /* "thermal_budget:" + 32-byte reason */
 static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
                                            const asb_metrics_t *m,
                                            const asb_fsm_t *fsm) {
+    g_cap_prime_base_khz = caps->cpu_max[2];
+    snprintf(g_cap_prime_reason, sizeof(g_cap_prime_reason), "%s", "profile");
     int trim = asb_adaptive_budget_trim_pct(m, fsm);
     if (trim > 0 && trim < 100) {
         int keep = 100 - trim;
@@ -1704,8 +1730,18 @@ static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
             if (caps->gpu_max_pct < 10) caps->gpu_max_pct = 10;
             if (caps->gpu_min_pct > caps->gpu_max_pct) caps->gpu_min_pct = caps->gpu_max_pct;
         }
+        if (caps->cpu_max[2] > 0 && caps->cpu_max[2] < g_cap_prime_base_khz)
+            snprintf(g_cap_prime_reason, sizeof(g_cap_prime_reason),
+                     "thermal_budget:%s", g_budget_reason);
     }
-    asb_active_efficiency_apply_caps(caps, m, fsm);
+    {
+        int _before_env = caps->cpu_max[2];
+        asb_active_efficiency_apply_caps(caps, m, fsm);
+        if (caps->cpu_max[2] > 0 && caps->cpu_max[2] < _before_env)
+            snprintf(g_cap_prime_reason, sizeof(g_cap_prime_reason),
+                     "%s", "efficiency_envelope");
+    }
+    g_cap_prime_eff_khz = caps->cpu_max[2];
 }
 
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
@@ -2243,6 +2279,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             asb_cap_owner_name(g_cap_owner_eff),
             (long)g_cap_owner_since,
             asb_cap_writes_should_back_off());
+    /* What lowered the prime ceiling, and from what to what (kHz). Its own fprintf so the
+     * field list and the argument list cannot drift apart. */
+    fprintf(f, "cap_prime_reason=%s\ncap_prime_base_khz=%d\ncap_prime_eff_khz=%d\n",
+            g_cap_prime_reason, g_cap_prime_base_khz, g_cap_prime_eff_khz);
     /* Vendor clamp counters for WebUI Live page */
     fprintf(f, "vendor_clamp_1h=%lu\nvendor_clamp_total=%lu\nvendor_raised_total=%lu\n",
             v44_clamp_1h_now(), g_v44_clamp_total, g_v44_raised_total);
@@ -2732,7 +2772,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         "\"capacity\":%d,\"bat_temp_dC\":%d,"
         "\"gpu\":%d,\"load\":%.2f,"
         "\"cpu_max\":[%d,%d,%d],"
-        "\"thermal\":%d,\"temp\":%d,\"temp_valid\":%d,\"temp_age_s\":%d,\"temp_invalid_reason\":\"%s\","
+        "\"thermal\":%d,\"temp\":%d,\"temp_valid\":%d,\"temp_age_s\":%d,\"temp_read_epoch\":%ld,\"temp_invalid_reason\":\"%s\","
         "\"skin_temp\":%d,\"surface_hotspot\":%d,\"board_temp\":%d,"
         /* Confidence travels with the source. A temperature whose sensor could not be
          * cross-checked, or that came from a peer median after socd was rejected, is
@@ -2779,6 +2819,16 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         m->therm.cpu_max_c,
         m->therm.temp_valid,
         m->therm.temp_age_s,
+        /* Absolute time of the last real thermal read.
+         *
+         * temp_age_s is computed when the metrics are collected; this JSON can be
+         * re-published long after that, and a reader then sees a cached night value
+         * labelled "age 0, valid". An audit caught exactly that: control temp 28 C,
+         * temp_valid=1, temp_age_s=0 in the morning while prime/perf/little read
+         * 43/45/46 directly. The governor's own decisions were fine - they use the value
+         * at decision time - but nothing downstream could tell the snapshot was stale.
+         * With the epoch, any reader computes the true age itself. */
+        (long)g_last_thermal_read_ts,
         m->therm.temp_invalid_reason[0] ? m->therm.temp_invalid_reason : "init",
         m->therm.skin_temp_c,
         m->therm.surface_hotspot_c,
@@ -6068,7 +6118,17 @@ int main(int argc, char **argv) {
                              g_ui_quiet_floor > 0.0f &&
                              metrics.cpu.load1 < g_ui_quiet_floor * 1.35f));
                 int want_active = calm ? TIMER_ACTIVE_CALM_S : TIMER_ACTIVE_S;
-                if (want_active != g_active_interval) {
+                /* Not while the screen is off.
+                 *
+                 * The active timer can deliver one expiry that was already queued when a
+                 * screen-off uevent arrived. This branch then re-armed the periodic
+                 * screen-on cadence, and the end-of-tick check disarmed it again a moment
+                 * later - harmless, but it wrote "screen-on interval -> 6s" into the log
+                 * one second after "screen OFF", and an audit reasonably read that as the
+                 * phone polling at screen-on cadence all night. Skipping the re-arm when
+                 * the screen is already off removes the arm/disarm pair and the misleading
+                 * line together. */
+                if (want_active != g_active_interval && metrics.misc.screen_on) {
                     arm_timerfd_periodic(tfd_active, want_active);
                     g_active_interval = want_active;
                     if (g_asb_cfg.log_level >= 1)
