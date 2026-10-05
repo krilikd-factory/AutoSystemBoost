@@ -659,9 +659,23 @@ asb_device_guard() {
 }
 
 asb_probe_paths() {
+  # The top cluster is found, not assumed.
+  #
+  # This probed policy6 by name, which is right for SM8850 (0/6) and wrong for the 0/3/7
+  # parts this module also runs on: there it logged "policy6_max MISSING" on every boot
+  # while the prime cluster sat present and writable at policy7 - a boot log telling the
+  # reader the most important node did not exist. Same discovery the reconcile path
+  # already uses: the policy with the highest cpuinfo_max_freq.
+  _pp_top=""; _pp_hi=0
+  for _pp_d in /sys/devices/system/cpu/cpufreq/policy*; do
+    _pp_h="$(cat "$_pp_d/cpuinfo_max_freq" 2>/dev/null)"
+    case "$_pp_h" in ''|*[!0-9]*) continue ;; esac
+    [ "$_pp_h" -gt "$_pp_hi" ] && { _pp_hi="$_pp_h"; _pp_top="$_pp_d"; }
+  done
+  [ -n "$_pp_top" ] || _pp_top=/sys/devices/system/cpu/cpufreq/policy6
   for _pp in \
     "policy0_max:/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq" \
-    "policy6_max:/sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq" \
+    "$(basename "$_pp_top")_max:$_pp_top/scaling_max_freq" \
     "gpu_max:/sys/class/kgsl/kgsl-3d0/max_pwrlevel" \
     "vm_swappiness:/proc/sys/vm/swappiness" \
     "uclamp_topapp:/dev/cpuctl/top-app/cpu.uclamp.max"; do
