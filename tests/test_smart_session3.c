@@ -327,11 +327,21 @@ static void test_thermal_veto(void) {
     EXPECT(rt.conf_x1000 < 800, "veto downscales confidence");
     EXPECT(rt.interactive_bonus_x1000 <= 50, "veto halves interactive");
 
-    /* Vendor clamping triggers veto */
+    /* Vendor clamping triggers the veto only when the phone is at least warm.
+     *
+     * Routine OEM clamping on a cool phone is policy, not heat: with an honest rolling
+     * count it runs ~330/h at 42 C on the reference device and would otherwise hold the
+     * veto on all day. The two cases below pin both sides of that line. No skin sensor
+     * here (skin=0), so the band is the die fallback: 50 C. */
     asb_smart_runtime_t rt2 = {0};
     rt2.alpha_battery_x1000 = 300;
     asb_smart_apply_thermal_veto(40, 0, &cfg, 400, 0, &rt2);
-    EXPECT(rt2.thermal_veto == 1, "vendor_clamp_1h=400 → veto");
+    EXPECT(rt2.thermal_veto == 0, "vendor_clamp_1h=400 at 40 C → no veto (cool, OEM policy)");
+    asb_smart_runtime_t rt2w = {0};
+    rt2w.alpha_battery_x1000 = 300;
+    asb_smart_apply_thermal_veto(55, 0, &cfg, 400, 0, &rt2w);
+    EXPECT(rt2w.thermal_veto == 1, "vendor_clamp_1h=400 at 55 C → veto (vendor fighting heat)");
+    EXPECT(rt2w.thermal_veto_reason == 4, "reason names vendor clamps");
 
     /* Recovery active triggers veto */
     asb_smart_runtime_t rt3 = {0};
