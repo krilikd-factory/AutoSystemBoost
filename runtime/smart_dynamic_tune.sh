@@ -340,4 +340,16 @@ if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh ]; then
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh mirror >/dev/null 2>&1 || true
 fi
 
+# Prefer LTE with the screen off (opt-in, net_screen_off_lte). The script owns all the
+# safety: delay, call check, save/verify/restore. Screen-off only starts its timer;
+# screen-on always restores, whatever the toggle says, so turning the option off can
+# never strand the modem without 5G.
+if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh ]; then
+  if [ "$SCREEN" = "0" ]; then
+    sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh arm >/dev/null 2>&1
+  else
+    sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh restore >/dev/null 2>&1
+  fi
+fi
+
 exit 0
