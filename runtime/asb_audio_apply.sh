@@ -290,6 +290,27 @@ if [ "$_dsp_ok" = "1" ]; then
       fi
       [ -n "$_asb_route" ] || _asb_route="speaker"
       _dspp route "$_asb_route"
+      # Say whether the effect is supposed to process the CURRENT route, and why not.
+      #
+      # enable=1 only means the gain is configured. With dsp_outputs=bt and the sound on
+      # the speaker the effect correctly does nothing - and every capture showed the DSP
+      # as "off" with no way to tell "disabled", "not this route" and "broken" apart. An
+      # audit read a 4-hour speaker video phase next to "gain 400 mB" and had to rule out
+      # the DSP as the drain by hand.
+      #
+      # route_allowed is what the outputs setting permits for the route detected now;
+      # inactive_reason names the cause when it is 0. Neither claims the effect is
+      # attached - that is the audio HAL's to report - only what ASB asked for.
+      case "$_dsp_out" in
+        all) _dsp_ra=1 ;;
+        *) case "+$_dsp_out+" in *"+$_asb_route+"*) _dsp_ra=1 ;; *) _dsp_ra=0 ;; esac ;;
+      esac
+      _dspp route_allowed "$_dsp_ra"
+      if [ "$_dsp_ra" = "1" ]; then
+        _dspp inactive_reason "none"
+      else
+        _dspp inactive_reason "route_${_asb_route}_not_in_${_dsp_out}"
+      fi
       _dspp ceiling_mb -15
       # Compressor, on unless the user asked for it off.
       #
@@ -313,13 +334,19 @@ if [ "$_dsp_ok" = "1" ]; then
     else
       # The library is only mounted after the overlay comes up.
       _dspp enable 0
+      _dspp route_allowed 0
+      _dspp inactive_reason "needs_reboot"
       changed="${changed}dsp=needs-reboot "
     fi
 elif [ "$_dsp_eq_off" = "1" ]; then
     _dspp enable 0
+    _dspp route_allowed 0
+    _dspp inactive_reason "eq_compat"
     changed="${changed}dsp=off(eq_compat) "
 else
     _dspp enable 0
+    _dspp route_allowed 0
+    _dspp inactive_reason "disabled"
     changed="${changed}dsp=off "
 fi
 
