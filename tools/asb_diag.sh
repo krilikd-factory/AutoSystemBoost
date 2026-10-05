@@ -624,6 +624,12 @@ if [ -r "$_state" ]; then
   _vp="$(grep -m1 '^cap_vendor_passive=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _vc="$(grep -m1 '^cap_vendor_slow_clamps=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   [ -n "$_vp" ] && NOTE "vendor contention: passive=${_vp} slow_clamps=${_vc:-0}"
+  # Which stage set the prime ceiling. "profile" means neither the thermal budget nor the
+  # efficiency envelope lowered it - the ceiling is simply the state's own.
+  _cpr="$(grep -m1 '^cap_prime_reason=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _cpb="$(grep -m1 '^cap_prime_base_khz=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _cpe="$(grep -m1 '^cap_prime_eff_khz=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  [ -n "$_cpr" ] && NOTE "prime ceiling: ${_cpe:-?} kHz (profile ${_cpb:-?}) - set by ${_cpr}"
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
   # Say what the two numbers count, because they do not count the same thing.
   #
