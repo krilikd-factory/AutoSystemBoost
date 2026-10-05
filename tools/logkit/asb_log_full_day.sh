@@ -887,7 +887,13 @@ lk_emit_mobile_traffic_context() {
     # capture with a 13-minute screen-off phase carrying 26 MiB - 2 MB per minute, with
     # the device awake 61% of it - printed nothing at all. Short phases are where this
     # matters most, because that traffic is what ends the sleep.
-    awk -F'\t' 'NR>1 && ($1=="sleep" || $1=="idle") && ($3-$2)>=600 {print $1"\t"$2"\t"$3}' \
+    # Screen-off audio counts as screen-off.
+    #
+    # The filter took sleep and idle only, so audio_bt / audio_spk - screen off, playing -
+    # never appeared, and those are where a capture found 55 MiB in 11 minutes with the
+    # display dark: a video stream being listened to, not music. Every phase that is not
+    # screen-on (no _scr suffix, not active/post_wake/gaming/charging) belongs here.
+    awk -F'\t' 'NR>1 && $1 !~ /_scr$/ && $1!="active" && $1!="post_wake" && $1!="gaming" && $1 !~ /^charging/ && $1!="gap" && ($3-$2)>=600 {print $1"\t"$2"\t"$3}' \
       "$LK_OUT_DIR/phase_ledger.tsv" 2>/dev/null | while IFS="$(printf '\t')" read -r _ph _a _z; do
       # The honest number first: mobile bytes moved while the screen was really off,
       # from the interface counters in battery_trace, only between two consecutive
