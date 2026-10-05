@@ -119,6 +119,7 @@ net_qdisc|advanced|webui_sensitive
 net_wifi_leave|advanced|webui_sensitive
 net_wifi_leave_dbm|internal|engine_or_derived
 wifi_powersave|advanced|webui_sensitive
+net_screen_off_lte|advanced|webui_sensitive
 wifi_country|advanced|webui_sensitive
 net_route_tune|advanced|webui_sensitive
 net_rps|advanced|webui_sensitive
