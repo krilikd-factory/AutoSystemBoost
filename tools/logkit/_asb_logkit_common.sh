@@ -2095,6 +2095,21 @@ lk_snapshot_network() {
     echo "# carrier / radio"
     echo "  operator: $(lk_get_prop gsm.operator.alpha) numeric: $(lk_get_prop gsm.operator.numeric) roaming: $(lk_get_prop gsm.operator.isroaming)"
     echo "  voice_type: $(lk_get_prop gsm.network.type) data_type: $(lk_get_prop gsm.data.network.type)"
+    # The data RAT, from what the status bar itself draws.
+    #
+    # gsm.data.network.type does not exist on this ROM, so data_type above was empty in
+    # every snapshot - and a capture with 1.4 GiB of screen-on video over mobile could not
+    # say whether it ran on LTE or 5G, which differ a lot in modem cost while streaming.
+    #
+    # TelephonyDisplayInfo is the record SystemUI renders the network icon from: network=
+    # is the radio actually carrying data, overrideNetwork= is the 5G NSA/advanced overlay
+    # on top of an LTE anchor. nrState shows whether an NR leg is attached at all. One
+    # dumpsys per hourly network snapshot, nothing in the poll loop.
+    _tdi="$(lk_dumpsys telephony.registry 2>/dev/null \
+            | grep -m1 -oE 'TelephonyDisplayInfo \{network=[A-Z_0-9]+, overrideNetwork=[A-Z_0-9]+' \
+            | sed 's/TelephonyDisplayInfo {//')"
+    _nrs="$(lk_dumpsys telephony.registry 2>/dev/null | grep -m1 -oE 'nrState=[A-Z_]+')"
+    echo "  data_rat: ${_tdi:-unknown} ${_nrs:-}"
     _tr=$(lk_dumpsys telephony.registry 2>/dev/null)
     printf '%s\n' "$_tr" | grep -oE 'getRilVoiceRadioTechnology=[0-9]+\([A-Za-z]+\)' | head -1 | sed 's/^/  /'
     printf '%s\n' "$_tr" | grep -oE 'getRilDataRadioTechnology=[0-9]+\([A-Za-z]+\)' | head -1 | sed 's/^/  /'
