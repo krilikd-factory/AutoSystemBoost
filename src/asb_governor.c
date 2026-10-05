@@ -1715,7 +1715,13 @@ static char g_cap_prime_reason[64] = "profile";  /* "thermal_budget:" + 32-byte 
 static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
                                            const asb_metrics_t *m,
                                            const asb_fsm_t *fsm) {
-    g_cap_prime_base_khz = caps->cpu_max[2];
+    /* The prime is the highest slot that exists, not slot 2.
+     *
+     * SM8850 has two clusters (policy0/policy6), so slot 2 is empty and this read 0: the
+     * first capture after this telemetry landed reported "prime ceiling: 0 kHz (profile
+     * 0)". Same selection the FSM already uses for its own prime cap. */
+    int _ps = (g_cpu_policy_ids[2] >= 0) ? 2 : ((g_cpu_policy_ids[1] >= 0) ? 1 : 0);
+    g_cap_prime_base_khz = caps->cpu_max[_ps];
     snprintf(g_cap_prime_reason, sizeof(g_cap_prime_reason), "%s", "profile");
     int trim = asb_adaptive_budget_trim_pct(m, fsm);
     if (trim > 0 && trim < 100) {
@@ -1730,18 +1736,18 @@ static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
             if (caps->gpu_max_pct < 10) caps->gpu_max_pct = 10;
             if (caps->gpu_min_pct > caps->gpu_max_pct) caps->gpu_min_pct = caps->gpu_max_pct;
         }
-        if (caps->cpu_max[2] > 0 && caps->cpu_max[2] < g_cap_prime_base_khz)
+        if (caps->cpu_max[_ps] > 0 && caps->cpu_max[_ps] < g_cap_prime_base_khz)
             snprintf(g_cap_prime_reason, sizeof(g_cap_prime_reason),
                      "thermal_budget:%s", g_budget_reason);
     }
     {
-        int _before_env = caps->cpu_max[2];
+        int _before_env = caps->cpu_max[_ps];
         asb_active_efficiency_apply_caps(caps, m, fsm);
-        if (caps->cpu_max[2] > 0 && caps->cpu_max[2] < _before_env)
+        if (caps->cpu_max[_ps] > 0 && caps->cpu_max[_ps] < _before_env)
             snprintf(g_cap_prime_reason, sizeof(g_cap_prime_reason),
                      "%s", "efficiency_envelope");
     }
-    g_cap_prime_eff_khz = caps->cpu_max[2];
+    g_cap_prime_eff_khz = caps->cpu_max[_ps];
 }
 
 static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
