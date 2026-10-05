@@ -451,6 +451,12 @@ rm -rf /data/adb/asb 2>/dev/null
 # asb_audio_apply.sh writes the DSP state with its own resetprop helpers, which bypass
 # asb_persist_safe and therefore never reach baseline.txt - so nothing here restored or
 # removed them. After uninstall they survived on disk under /data/property: enable, gain,
+# Put 5G back if the screen-off LTE preference was holding it off. The allowed-types
+# setting survives the module, so leaving it would keep the phone off 5G after removal.
+if [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" restore >/dev/null 2>&1
+fi
+
 # route, compressor settings, and the persist.vendor.asb mirror a separate audio process
 # reads. A reinstall then started from the previous session's DSP state.
 #

@@ -442,6 +442,24 @@ asb_migrate_governor_conf
   fi
 ) &
 
+# Undo a screen-off LTE preference left over from before a reboot.
+#
+# The allowed-network-types setting is stored by telephony and survives a restart, so a
+# phone that rebooted while it was applied would come back without 5G, permanently. A
+# saved mask on disk means exactly that: put it back once telephony is up. The phone
+# service needs a few seconds after boot_completed to accept the command.
+(
+  [ -f /data/adb/asb/lte_screenoff.saved ] || exit 0
+  until [ "$(getprop sys.boot_completed)" = "1" ]; do sleep 5; done
+  sleep 20
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" restore >/dev/null 2>&1
+  [ -f /data/adb/asb/lte_screenoff.saved ] && {
+    sleep 60
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" restore >/dev/null 2>&1
+  }
+  asb_log "lte_screenoff: boot restore $([ -f /data/adb/asb/lte_screenoff.saved ] && echo pending || echo done)"
+) &
+
 (
   until [ "$(getprop sys.boot_completed)" = "1" ]; do
     sleep 5
