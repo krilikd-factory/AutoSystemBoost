@@ -789,13 +789,18 @@ fi
 # that covers four of the five cases it documents. Safe to add: the correct rendering is
 # منظّم التردد, which has no definite article, so the bare form cannot match it.
 _bad_terms="ГУБЕРНАТОР GOBERNADOR GOVERNADOR 调度器 المنظّم"
+# The report body now lives in runtime/i18n/action_<lang>.sh as well, so the same
+# blacklist covers those files - "governor" appears there in a dozen lines, not one.
 for _bt in $_bad_terms; do
-  if grep -q "$_bt" action.sh 2>/dev/null; then
-    err "action.sh contains '$_bt' - 'governor' here is the CPU frequency governor,"
-    err "  not a public official or a task scheduler. See H_GOV."
-  fi
+  for _btf in action.sh runtime/i18n/action_*.sh; do
+    [ -f "$_btf" ] || continue
+    if grep -q "$_bt" "$_btf" 2>/dev/null; then
+      err "$_btf contains '$_bt' - 'governor' here is the CPU frequency governor,"
+      err "  not a public official or a task scheduler. See H_GOV."
+    fi
+  done
 done
-ok "no known term mistranslations in action.sh"
+ok "no known term mistranslations in action.sh or its translations"
 
 # A schema number with no migration branch is worse than no schema at all: install.sh
 # would compare against a version nothing handles, and everyone on the previous one stops
