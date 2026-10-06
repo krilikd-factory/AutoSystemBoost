@@ -607,6 +607,11 @@ typedef struct {
        cleared by the governor, which owns logging. */
     int             cooldown_edge;
     int             cooldown_die_c;
+    /* HEAVY prime escape (Smart): 1 while the prime ceiling is lifted, edge as above,
+       count of bursts this session. Reported; the escape itself lives in fsm_update. */
+    int             prime_escape;
+    int             prime_escape_edge;
+    unsigned long   prime_escape_count;
     int             thermal_trend;
     int             trend_buf[3];
     int             trend_idx;
@@ -2208,12 +2213,23 @@ if (!can_leave &&
          * Publishing the edge here keeps every enter paired with an exit, which is what makes
          * the log answer "how long did it hold" instead of only "did it fire".
          */
+        /* The flag and the edge are rewritten on every tick.
+         *
+         * Both used to be set only inside the screen-off branch. A screen-on cleared the
+         * local _cool_active but left fsm->thermal_cooldown at 1, so the state file said
+         * "cooldown ACTIVE (screen off)" for the whole of the next screen-on session - a
+         * diag taken with the phone in hand showed exactly that - and the logkit counted
+         * those ticks as cooled time in active phases. The edge was never cleared either,
+         * so one exit was replayed as "cooldown: exit" on every later state change. The
+         * caps themselves were right; only what the module reported about them was not. */
+        fsm->cooldown_edge = 0;
         if (m->misc.screen_on || _t <= 0) {
             if (_cool_active) {
                 fsm->cooldown_edge = -1;
                 fsm->cooldown_die_c = _t;
             }
             _cool_active = 0;
+            fsm->thermal_cooldown = 0;
         } else {
             /* Log the edges, not the state: thermal_cooldown is published every tick, so a
                morning diag shows what is true now - the night capture has no record of when
@@ -2357,6 +2373,77 @@ if (!can_leave &&
         }
     }
     
+    /* HEAVY prime escape (Smart only): brief, bounded headroom for work that is plainly
+     * waiting on the prime.
+     *
+     * Smart with a battery lean rides a HEAVY prime ceiling well under Balanced's - on the
+     * captures 1.25-1.75 GHz against hardware maxima of 3.4-4.4 GHz. For steady load that is
+     * the point. For a short burst it is not: an app launch, a heavy page or a photo export
+     * pins the prime at its ceiling, the frame budget is missed, and the work simply takes
+     * longer with the screen lit - which costs the energy the cap was meant to save.
+     *
+     * So when the prime has sat AT its ceiling for two ticks in HEAVY, on a cool phone, the
+     * ceiling is lifted - never above what Balanced itself would allow in HEAVY, so Smart can
+     * never out-run the profile it blends from. It holds for at most 20 s, then rests 40 s
+     * whatever happens, so a long job cannot turn a burst allowance into a new rail.
+     *
+     * Everything thermal stays in charge: the escape is refused when thermal_cap is set, the
+     * die is at or above the sustained-exit mark, the skin is inside the 8 C pre-lean band,
+     * the phone is charging, the camera is open or a game is running (those have their own
+     * paths), and the thermal budget is applied after this, so a rising trend still trims
+     * the lifted ceiling. heavy_prime_escape=0 turns it off. */
+    {
+        static int    _esc_streak = 0;
+        static time_t _esc_since  = 0;
+        static time_t _esc_rest_until = 0;
+        int _was = fsm->prime_escape;
+        int _ps = (g_cpu_policy_ids[2] >= 0) ? 2 : ((g_cpu_policy_ids[1] >= 0) ? 1 : -1);
+        time_t _now = time(NULL);
+        int _skin = m->therm.skin_temp_c;
+        int _skin_ok = !(_skin > 20 && _skin < 70) || (_skin < g_asb_cfg.thermal_skin_c - 8);
+        int _ok = g_asb_cfg.heavy_prime_escape &&
+                  fsm->profile_idx == PROFILE_SMART && _ps >= 1 &&
+                  fsm->state == ASB_STATE_HEAVY && m->misc.screen_on &&
+                  !fsm->thermal_cap && !m->bat.charging && !m->misc.camera_active &&
+                  m->misc.app_hint < ASB_APP_GAMING &&
+                  m->therm.temp_valid &&
+                  m->therm.cpu_max_c < asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx) &&
+                  _skin_ok && _now >= _esc_rest_until;
+        /* "At its ceiling": the live clock within one step-ish (2%) of the live limit.
+         * Both values are MHz here; a zero limit means the node was unreadable. */
+        int _pinned = (_ps >= 1 && m->cpu.max_freq[_ps] > 0 &&
+                       m->cpu.cur_freq[_ps] * 100 >= m->cpu.max_freq[_ps] * 98);
+        if (!_ok) {
+            _esc_streak = 0;
+            if (_was) _esc_rest_until = _now + 40;
+            fsm->prime_escape = 0;
+        } else if (_was) {
+            if (_now - _esc_since >= 20) {           /* burst budget spent: rest */
+                fsm->prime_escape = 0;
+                _esc_streak = 0;
+                _esc_rest_until = _now + 40;
+            }
+        } else {
+            _esc_streak = _pinned ? _esc_streak + 1 : 0;
+            if (_esc_streak >= 2) {
+                fsm->prime_escape = 1;
+                _esc_since = _now;
+                _esc_streak = 0;
+                fsm->prime_escape_count++;
+            }
+        }
+        if (fsm->prime_escape && _ps >= 1) {
+            const asb_profile_bounds_t *_bb = &g_profile_bounds[PROFILE_BALANCED];
+            int _lim = lerp_int(_bb->floor.cpu_max[_ps], _bb->ceil.cpu_max[_ps],
+                                g_state_level[ASB_STATE_HEAVY]);
+            int _hw = g_cpu_slot_hwmax[_ps];
+            if (_hw > 0 && _lim > _hw) _lim = _hw;
+            if (_lim > 0 && new_caps.cpu_max[_ps] > 0 && new_caps.cpu_max[_ps] < _lim)
+                new_caps.cpu_max[_ps] = _lim;
+        }
+        fsm->prime_escape_edge = (fsm->prime_escape != _was) ? (fsm->prime_escape ? 1 : -1) : 0;
+    }
+
     /* Interactive floor: a screen-on phone never gets less than a third of its prime.
      *
      * Settings compose, and nothing checked what they compose into. A field device running

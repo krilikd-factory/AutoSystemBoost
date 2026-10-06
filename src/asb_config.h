@@ -197,6 +197,7 @@ typedef struct {
      */
     int   charge_aware_enable;       /* 1=enable feature (default 1) */
     int   cool_gaming;               /* 1=earlier/stronger thermal lean in games, default 1 */
+    int   heavy_prime_escape;        /* 1=Smart may lift a pinned prime to the Balanced HEAVY rail, briefly */
     int   charge_assist_alpha_max;   /* alpha_battery ceiling while assisting, x1000 (default 450) */
     int   charge_temp_warn_dC;       /* batt temp where assist is dropped (default 390 = 39.0C) */
     int   charge_temp_hot_dC;        /* batt temp where cool-charge guard engages (default 415 = 41.5C) */
@@ -356,6 +357,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->night_quiet_auto_min_samples = 3;
     c->charge_aware_enable          = 1;
     c->cool_gaming                  = 1;
+    c->heavy_prime_escape           = 1;
     c->charge_assist_alpha_max      = 450;
     c->charge_temp_warn_dC          = 390;
     c->charge_temp_hot_dC           = 415;
@@ -570,6 +572,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "night_quiet_auto_min_samples")) c->night_quiet_auto_min_samples = atoi(v);
     else if (!strcmp(k, "charge_aware_enable"))     c->charge_aware_enable     = atoi(v);
     else if (!strcmp(k, "cool_gaming"))             c->cool_gaming             = atoi(v);
+    else if (!strcmp(k, "heavy_prime_escape"))      c->heavy_prime_escape      = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "charge_assist_alpha_max")) c->charge_assist_alpha_max = atoi(v);
     else if (!strcmp(k, "charge_temp_warn_dC"))     c->charge_temp_warn_dC     = atoi(v);
     else if (!strcmp(k, "charge_temp_hot_dC"))      c->charge_temp_hot_dC      = atoi(v);

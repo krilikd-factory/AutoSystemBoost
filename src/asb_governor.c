@@ -2307,6 +2307,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * nobody plans to have - so it cannot be triggered on demand, and without this line
      * the only evidence would be an absence of heat, which proves nothing either way. */
     fprintf(f, "thermal_cooldown=%d\n", fsm->thermal_cooldown);
+    fprintf(f, "prime_escape=%d\nprime_escape_count=%lu\n",
+            fsm->prime_escape, fsm->prime_escape_count);
     fprintf(f, "cap_owner=%s\ncap_owner_since=%ld\ncap_vendor_holddown=%d\n",
             asb_cap_owner_name(g_cap_owner_eff),
             (long)g_cap_owner_since,
@@ -7694,20 +7696,29 @@ int main(int argc, char **argv) {
                 write_conflicts_json();
                 write_learner_state_json(&fsm);
 
+                /* Log the cooldown edges the FSM flagged.
+                 *
+                 * The clamp only fires on a night that began warm, so it cannot be triggered on
+                 * demand - and thermal_cooldown in the state file only ever says what is true right
+                 * now. Without these two lines the night capture carries no record of when the clamp
+                 * engaged or how long it held, which is exactly what a validation run needs.
+                 *
+                 * Outside the state-change block: the clamp usually flips while the FSM stays in
+                 * DEEP_IDLE, and an edge seen only on a state change was logged late or not at all. */
+                if (fsm.cooldown_edge > 0)
+                    asb_log("cooldown: enter die=%dC (screen off, clamping to hw minimum)",
+                            fsm.cooldown_die_c);
+                else if (fsm.cooldown_edge < 0)
+                    asb_log("cooldown: exit die=%dC (screen on or cool enough, profile rails restored)",
+                            fsm.cooldown_die_c);
+                if (fsm.prime_escape_edge > 0)
+                    asb_log("prime_escape: lift (HEAVY, prime pinned at its ceiling, die=%dC)",
+                            metrics.therm.cpu_max_c);
+                else if (fsm.prime_escape_edge < 0)
+                    asb_log("prime_escape: release (burst spent or conditions gone, die=%dC)",
+                            metrics.therm.cpu_max_c);
                 if (fsm.state_changed) {
                     g_stat_transitions++;   /* overhead attribution - see write_state */
-                    /* Log the cooldown edges the FSM flagged.
-                     *
-                     * The clamp only fires on a night that began warm, so it cannot be triggered on
-                     * demand - and thermal_cooldown in the state file only ever says what is true right
-                     * now. Without these two lines the night capture carries no record of when the clamp
-                     * engaged or how long it held, which is exactly what a validation run needs. */
-                    if (fsm.cooldown_edge > 0)
-                        asb_log("cooldown: enter die=%dC (screen off, clamping to hw minimum)",
-                                fsm.cooldown_die_c);
-                    else if (fsm.cooldown_edge < 0)
-                        asb_log("cooldown: exit die=%dC (cool enough, profile rails restored)",
-                                fsm.cooldown_die_c);
                     int ma_v = (metrics.bat.current_ma > 0 && !metrics.bat.charging) ? 1 : 0;
                     int fsm_rmax0 = tick_scaling_max(0);
                     int fsm_rmax1 = tick_scaling_max(1);

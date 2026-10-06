@@ -994,6 +994,7 @@ int cpu_prio = -1;
      */
     {
         int peer_c[24], np = 0;
+        int peers_milli = 0;   /* at least one CPU peer reports millidegrees */
         int fallback_zone = -1;
         int fallback_prio = 99;
         char fallback_type[64] = "";
@@ -1017,6 +1018,7 @@ int cpu_prio = -1;
             int raw = sysfs_read_int(vp, 0);
             int c = thermal_raw_to_c(raw);
             if (c <= 10 || c >= 120) continue;
+            if (raw >= 1000) peers_milli = 1;
 
             peer_c[np] = c;
             np++;
@@ -1051,8 +1053,19 @@ int cpu_prio = -1;
                 int high_gap = socd_c - median;
                 int low_gap = median - socd_c;
 
-                if (high_gap > ASB_SOCD_MAX_ABOVE_PEERS_C || low_gap >= 12) {
-                    const char *kind = (high_gap > ASB_SOCD_MAX_ABOVE_PEERS_C) ? "high" : "low";
+                /* Different scale from the cores = not a temperature.
+                 *
+                 * On the OnePlus devices in the field socd reads 22-27 raw while every core
+                 * zone reports millidegrees (35000+). thermal_raw_to_c passes small values
+                 * through as degrees, so on a cold boot - cores near 30 C - "25 C" sat inside
+                 * the 12 C agreement band and socd was accepted as the control source. It is a
+                 * percentage: it would have stayed at ~25 while the die heated, until a rescan
+                 * up to 60 s later noticed the gap. A raw value two orders of magnitude off its
+                 * peers is rejected on scale alone, whatever the temperature happens to be. */
+                int scale_bad = (socd_raw > 0 && socd_raw < 1000 && peers_milli);
+                if (scale_bad || high_gap > ASB_SOCD_MAX_ABOVE_PEERS_C || low_gap >= 12) {
+                    const char *kind = scale_bad ? "scale" :
+                                       (high_gap > ASB_SOCD_MAX_ABOVE_PEERS_C) ? "high" : "low";
                     int gap = (high_gap > ASB_SOCD_MAX_ABOVE_PEERS_C) ? high_gap : low_gap;
                     /* Publish rejection even when no validated fallback exists: the
                      * retained socd then has conservative semantics, not validation. */
@@ -1100,6 +1113,40 @@ int cpu_prio = -1;
             /* No fallback must never look like a validated source. The caller keeps
              * thermal behaviour conservative until a later rescan finds a real zone. */
             g_thermal_source_confidence = 1;
+        }
+
+        /* A rejected socd does not make a CPU zone that agrees with its peers doubtful.
+         *
+         * On every OnePlus in the captures socd is not a temperature at all - it reads 22-27
+         * raw, a percentage - so it is rejected on every boot and the control moves to a real
+         * core sensor (cpu-1-1-0). That fallback was then marked confidence 1 forever, only
+         * because something else had been rejected. Confidence 1 adds a confirmation tick to
+         * every load-driven state change: ~2 s of extra latency on each ramp-up, on every
+         * device, for a sensor that is in fact fine.
+         *
+         * So the fallback earns full confidence when it is itself a CPU zone and sits within
+         * 6 C of the median of at least three CPU peers - the same kind of cross-check socd
+         * would have had to pass. One that disagrees, or has too few peers, stays at 1. */
+        /* Only when what was rejected was not a temperature at all (raw under 1000: a
+         * percentage, not millidegrees). A socd that reads like a real 70 C and disagrees
+         * with the cores is a genuine dispute, and that one keeps its extra tick. */
+        if (g_thermal_source_confidence == 1 && g_thermal_cpu_zone >= 0 && np >= 3 &&
+            strcmp(g_thermal_cpu_type, "socd") != 0 &&
+            strcmp(g_thermal_rejected_type, "socd") == 0 &&
+            g_thermal_rejected_raw >= 0 && g_thermal_rejected_raw < 1000) {
+            char cp[128];
+            snprintf(cp, sizeof(cp), THERMAL_BASE "/thermal_zone%d/temp", g_thermal_cpu_zone);
+            int cur_c = thermal_raw_to_c(sysfs_read_int(cp, 0));
+            int ordered[24];
+            for (int i = 0; i < np; i++) ordered[i] = peer_c[i];
+            for (int a = 0; a < np - 1; a++)
+                for (int b = a + 1; b < np; b++)
+                    if (ordered[b] < ordered[a]) { int t = ordered[a]; ordered[a] = ordered[b]; ordered[b] = t; }
+            int med = ordered[np / 2];
+            int gap = cur_c - med; if (gap < 0) gap = -gap;
+            if (cur_c > 10 && cur_c < 120 && gap <= 6 &&
+                (strncmp(g_thermal_cpu_type, "cpu", 3) == 0))
+                g_thermal_source_confidence = 2;
         }
     }
 
