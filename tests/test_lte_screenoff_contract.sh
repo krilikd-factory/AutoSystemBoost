@@ -82,4 +82,25 @@ run apply
 grep -q 'asb_lte_screenoff.sh" restore' "$ROOT/uninstall.sh" || fail "uninstall does not restore"
 grep -q 'lte_screenoff.saved' "$ROOT/service.sh" || fail "no boot-time restore"
 
+# A call on the second SIM blocks it too. The registry prints one mCallState per phone and
+# the first version only looked at the first line.
+rm -f "$T/state/lte_screenoff.unsupported"
+cat > "$T/bin/dumpsys" <<'EOF2'
+#!/bin/sh
+echo "mCallState=0"
+echo "mCallState=2"
+EOF2
+chmod +x "$T/bin/dumpsys"
+run apply; [ "$(cat "$T/mask")" = "$ORIG" ] || fail "acted during a call on SIM 2"
+
+# The uninstaller must restore before it deletes /data/adb/asb - the saved mask lives
+# there - and must defer the restore when telephony is not up yet.
+U="$ROOT/uninstall.sh"
+_l_rest="$(grep -n 'asb_lte_screenoff.sh" restore' "$U" | head -1 | cut -d: -f1)"
+_l_rm="$(grep -n '^rm -rf /data/adb/asb 2>/dev/null' "$U" | head -1 | cut -d: -f1)"
+[ -n "$_l_rest" ] && [ -n "$_l_rm" ] && [ "$_l_rest" -lt "$_l_rm" ] \
+  || fail "uninstall restores 5G after removing the saved mask"
+grep -q 'ASB_LTE_STATE_DIR=' "$U" || fail "uninstall has no deferred restore"
+grep -q 'STATE_DIR="${ASB_LTE_STATE_DIR:-/data/adb/asb}"' "$S" || fail "state dir not overridable"
+
 echo "PASS lte_screenoff contract"
