@@ -31,6 +31,11 @@ if [ ! -f "$MODPATH/config/governor.conf" ]; then
   ui_print " "
 fi
 
+# An update may carry a fixed LTE helper, so a previous "unsupported" verdict is not
+# carried over: the first version marked phones unsupported because it addressed the SIM
+# by subscription id instead of slot. The helper re-checks, and re-marks if it must.
+rm -f /data/adb/asb/lte_screenoff.unsupported 2>/dev/null || true
+
 # Collect the "!" lines as they are printed, for the summary at the end.
 #
 # A warning used to scroll past in the middle of 150 lines and then sit behind a 60-line gap,
@@ -213,13 +218,18 @@ asb_end_banner() {
     ui_print "  📋  ${ASB_SEC_CATEGORIES:-ENABLED CATEGORIES}"
     printf '%s\n' "$_en" | while IFS= read -r _l; do ui_print "$_l"; done
   fi
-  # No blank-line gap any more.
+  # Clear the screen before the summary.
   #
-  # Sixty empty lines were printed here to push the report off screen and leave only the
-  # final banner visible. What was left visible was "ASB · installed · reboot" and a logo -
-  # the warnings, the device line and everything else a user might want were behind the
-  # hole, and in a saved install log the hole was simply sixty empty lines. Every manager
-  # scrolls to the end on its own; the summary below is what sits there now.
+  # The installer view does not scroll back on most managers, so whatever sits at the
+  # bottom when it finishes is what the user reads. Sixty blank lines push the detail off a
+  # phone-height window and leave only the summary - device, warnings, reboot hint - and the
+  # logo on screen, above the manager's own closing lines. The warnings that would scroll
+  # away with the detail are repeated in the summary, so nothing worth reading is lost.
+  _i=0
+  while [ "$_i" -lt 60 ]; do
+    echo " "
+    _i=$((_i + 1))
+  done
 
   if [ -n "$INFO" ] && [ -f "$INFO" ] && [ ! -s "$INFO" ]; then
     rm -f "$INFO" 2>/dev/null || true
@@ -2014,9 +2024,8 @@ asb_apply_device_native_tuning() {
   rm -f "$MODPATH/system/odm/etc/audio/default_volume_tables.xml" \
         "$MODPATH/system/vendor/odm/etc/audio/default_volume_tables.xml" 2>/dev/null
 
-  ui_print " "
-
-  ui_print " "
+  # No blank lines here: every following section prints its own single blank line before
+  # its heading, so these two made the AUDIO -> BLUETOOTH gap three lines tall.
 
   # Each stage prints ONE section with an emoji header and a few "+" detail lines, the same
   # shape as the action screen.
@@ -2065,6 +2074,9 @@ if [ "$ASB_BT" = "true" ]; then
   ui_print "  🎧  ${ASB_SEC_BT:-BLUETOOTH}"
   asb_apply_bt_absvol
 fi
+  # One blank line before every heading, MEDIA included - it had none and sat directly
+  # under the Bluetooth note.
+  ui_print " "
   ui_print "  🎬  ${ASB_SEC_MEDIA:-MEDIA}"
   asb_patch_media_profiles_inplace
 
