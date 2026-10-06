@@ -2840,9 +2840,25 @@ asb_preserve_user_config() {
   fi
   _snap_conf="/data/adb/asb/governor.conf.snapshot"
   [ -f "$_new_conf" ] || return 0
-  for _stale_conf in "$_old_conf" "$_snap_conf"; do
-    [ -f "$_stale_conf" ] && sed -i '/^[[:space:]]*device_bounds_override=/d' "$_stale_conf" 2>/dev/null || true
-  done
+  # Drop the stale key from COPIES, never from the files themselves.
+  #
+  # This sed'ed the live config of the module that is still running. The governor reloads
+  # governor.conf when it changes, so from the moment of the update until the reboot it ran
+  # without device_bounds_override - default 0, compiled OP15 bounds - on every phone; a
+  # capture recorded the key vanishing at the minute the update was flashed. The migration
+  # only needs a source without that key, and a copy in TMPDIR gives it one.
+  _mig_tmp="${TMPDIR:-/dev/tmp}/asb_migrate_src"
+  mkdir -p "$_mig_tmp" 2>/dev/null
+  if [ -f "$_old_conf" ] && cp -f "$_old_conf" "$_mig_tmp/old.conf" 2>/dev/null; then
+    sed -i '/^[[:space:]]*device_bounds_override=/d' "$_mig_tmp/old.conf" 2>/dev/null || true
+    _old_conf="$_mig_tmp/old.conf"
+  fi
+  if [ -f "$_snap_conf" ] && cp -f "$_snap_conf" "$_mig_tmp/snapshot.conf" 2>/dev/null; then
+    sed -i '/^[[:space:]]*device_bounds_override=/d' "$_mig_tmp/snapshot.conf" 2>/dev/null || true
+    _snap_src="$_mig_tmp/snapshot.conf"
+  else
+    _snap_src="$_snap_conf"
+  fi
   _src=""
   [ -f "$_old_conf" ] && _src="$_old_conf"
   # Root managers do not agree on update ordering. Some remove modules/<id> before
@@ -2850,8 +2866,8 @@ asb_preserve_user_config() {
   # module-specific and written by ASB only after an atomic config transaction, so it
   # remains a valid source for that update path. A real uninstall runs uninstall.sh and
   # clears /data/adb/asb; a later clean install therefore still starts fresh.
-  if [ -z "$_src" ] && [ -f "$_snap_conf" ]; then
-    _src="$_snap_conf"
+  if [ -z "$_src" ] && [ -f "$_snap_src" ]; then
+    _src="$_snap_src"
   fi
   if [ -z "$_src" ]; then
     # Nothing to migrate from: this is a first install, whatever else is on disk.
@@ -2862,7 +2878,7 @@ asb_preserve_user_config() {
   fi
 
   ASB_CONFIG_MIGRATION_MODE=preserved
-  if [ "$_src" = "$_snap_conf" ]; then ASB_CONFIG_MIGRATION_SOURCE=snapshot; else ASB_CONFIG_MIGRATION_SOURCE=module; fi
+  if [ "$_src" = "$_snap_src" ]; then ASB_CONFIG_MIGRATION_SOURCE=snapshot; else ASB_CONFIG_MIGRATION_SOURCE=module; fi
 
   # Upgrade: carry the power profile across.
   #
@@ -2942,8 +2958,8 @@ region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion
 
   for _k in $_user_keys; do
     _oldval="$(grep -E "^[[:space:]]*$_k=" "$_src" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
-    if [ -z "$_oldval" ] && [ "$_src" != "$_snap_conf" ] && [ -f "$_snap_conf" ]; then
-      _oldval="$(grep -E "^[[:space:]]*$_k=" "$_snap_conf" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
+    if [ -z "$_oldval" ] && [ "$_src" != "$_snap_src" ] && [ -f "$_snap_src" ]; then
+      _oldval="$(grep -E "^[[:space:]]*$_k=" "$_snap_src" 2>/dev/null | head -1 | sed 's/^[^=]*=//' | tr -d '\r')"
     fi
     [ -n "$_oldval" ] || continue
 
