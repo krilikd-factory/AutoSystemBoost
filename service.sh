@@ -3294,6 +3294,16 @@ fi
     _prev_route="$_now"
     resetprop -n persist.asb.dsp.route "$_now" >/dev/null 2>&1 \
       || setprop persist.asb.dsp.route "$_now" >/dev/null 2>&1
+    # route_allowed / inactive_reason describe the SAME route, so they move with it.
+    # Only asb_audio_apply.sh wrote them, at boot or on a settings change: a phone that
+    # booted on the speaker and then connected Bluetooth kept route=bt next to
+    # route_allowed=0, and the action screen said "playing on bt -> not processed" while
+    # the attacher (which decides for itself) was processing it.
+    case "+$_f+" in *"+$_now+"*) _ra=1; _ir="none" ;; *) _ra=0; _ir="route_${_now}_not_in_${_f}" ;; esac
+    resetprop -n persist.asb.dsp.route_allowed "$_ra" >/dev/null 2>&1 \
+      || setprop persist.asb.dsp.route_allowed "$_ra" >/dev/null 2>&1
+    resetprop -n persist.asb.dsp.inactive_reason "$_ir" >/dev/null 2>&1 \
+      || setprop persist.asb.dsp.inactive_reason "$_ir" >/dev/null 2>&1
     # Wake the attacher on a route change too: without it the effect keeps boosting the old
     # output for up to 30 s after headphones come out, exactly when that is most audible.
     pkill -USR1 -f asb_dsp_attach 2>/dev/null \
