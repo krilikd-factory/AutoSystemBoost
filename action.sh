@@ -694,6 +694,63 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_FOREGROUND="foreground" ;;
 esac
 
+# The "watching now" flags. They sit inside the translated learning block and were the last
+# English phrases in it - "this app runs hot" in the middle of a Russian sentence.
+case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
+  *ru-*|*ru_*|ru)
+    M_W_HOT="это приложение греет телефон"; M_W_VETO="тепловой запрет: сдерживается из-за нагрева"
+    M_W_SLEEP="окно сна: минимум активности"; M_W_LOWBAT="низкий заряд: экономия"
+    M_W_CHG="на зарядке: запас мощности, пока прохладно" ;;
+  *uk-*|*uk_*|uk)
+    M_W_HOT="цей застосунок гріє телефон"; M_W_VETO="тепловий запобіжник: стримується через нагрів"
+    M_W_SLEEP="вікно сну: мінімум активності"; M_W_LOWBAT="низький заряд: економія"
+    M_W_CHG="на зарядці: запас потужності, поки прохолодно" ;;
+  *de-*|*de_*|de)
+    M_W_HOT="diese App heizt das Telefon auf"; M_W_VETO="Hitzesperre aktiv: bremst wegen Wärme"
+    M_W_SLEEP="Schlaffenster: minimale Aktivität"; M_W_LOWBAT="Akku niedrig: Sparen"
+    M_W_CHG="lädt: mehr Reserve, solange kühl" ;;
+  *es-*|*es_*|es)
+    M_W_HOT="esta app calienta el teléfono"; M_W_VETO="veto térmico: se contiene por el calor"
+    M_W_SLEEP="ventana de sueño: actividad mínima"; M_W_LOWBAT="batería baja: ahorro"
+    M_W_CHG="cargando: más margen mientras esté fresco" ;;
+  *pt-*|*pt_*|pt)
+    M_W_HOT="este app aquece o telefone"; M_W_VETO="veto térmico: contendo por causa do calor"
+    M_W_SLEEP="janela de sono: atividade mínima"; M_W_LOWBAT="bateria baixa: economia"
+    M_W_CHG="carregando: mais folga enquanto estiver frio" ;;
+  *tr-*|*tr_*|tr)
+    M_W_HOT="bu uygulama telefonu ısıtıyor"; M_W_VETO="ısı vetosu: sıcaklık nedeniyle kısılıyor"
+    M_W_SLEEP="uyku penceresi: asgari etkinlik"; M_W_LOWBAT="pil düşük: tasarruf"
+    M_W_CHG="şarjda: serinken ek pay" ;;
+  *in-*|*id-*|*id_*|id)
+    M_W_HOT="aplikasi ini membuat ponsel panas"; M_W_VETO="veto termal: ditahan karena panas"
+    M_W_SLEEP="jendela tidur: aktivitas minimal"; M_W_LOWBAT="baterai rendah: hemat"
+    M_W_CHG="mengisi daya: ruang ekstra selama masih dingin" ;;
+  *fr-*|*fr_*|fr)
+    M_W_HOT="cette app fait chauffer le téléphone"; M_W_VETO="veto thermique : bridé à cause de la chaleur"
+    M_W_SLEEP="fenêtre de sommeil : activité minimale"; M_W_LOWBAT="batterie faible : économie"
+    M_W_CHG="en charge : plus de marge tant qu'il reste frais" ;;
+  *hy-*|*hy_*|hy)
+    M_W_HOT="այս հավելվածը տաքացնում է հեռախոսը"; M_W_VETO="ջերմային արգելք՝ զսպվում է տաքացման պատճառով"
+    M_W_SLEEP="քնի պատուհան՝ նվազագույն ակտիվություն"; M_W_LOWBAT="ցածր լիցք՝ խնայողություն"
+    M_W_CHG="լիցքավորվում է՝ լրացուցիչ պաշար, քանի դեռ սառն է" ;;
+  *it-*|*it_*|it)
+    M_W_HOT="questa app scalda il telefono"; M_W_VETO="veto termico: frena per il calore"
+    M_W_SLEEP="finestra di sonno: attività minima"; M_W_LOWBAT="batteria bassa: risparmio"
+    M_W_CHG="in carica: più margine finché è fresco" ;;
+  *ar-*|*ar_*|ar)
+    M_W_HOT="هذا التطبيق يسخّن الهاتف"; M_W_VETO="حظر حراري: تقييد بسبب الحرارة"
+    M_W_SLEEP="نافذة النوم: أدنى نشاط"; M_W_LOWBAT="بطارية منخفضة: توفير"
+    M_W_CHG="قيد الشحن: هامش إضافي ما دام باردًا" ;;
+  zh-cn*|zh_cn*|*zh-hans*|zh)
+    M_W_HOT="此应用发热较大"; M_W_VETO="温控否决：因发热而收敛"
+    M_W_SLEEP="睡眠时段：最低活动"; M_W_LOWBAT="电量低：省电"
+    M_W_CHG="充电中：温度低时放宽余量" ;;
+  *)
+    M_W_HOT="this app runs hot"; M_W_VETO="thermal veto ACTIVE - holding back for heat"
+    M_W_SLEEP="sleep window - minimal activity"; M_W_LOWBAT="low battery - saving"
+    M_W_CHG="charging - extra headroom while cool" ;;
+esac
+
 PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
 
 _lvl=$(dumpsys battery 2>/dev/null | grep -m1 ' level:' | awk '{print $2}')
@@ -850,10 +907,15 @@ _we_name=""
 # Box frames and space-padded columns cannot line up there (an emoji is two cells wide but one
 # character), which is why the old ╭──╮ frame came out ragged.
 echo ""
-echo "  🚀  AutoSystemBoost V65"
+# The version from module.prop, not a literal: the header said "V65" on every build, so a
+# screenshot could not tell a tester's debug3 from a release.
+_mver="$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -1)"
+echo "  🚀  AutoSystemBoost ${_mver:-V65}"
 if [ "$_smart_enabled" = "1" ]; then
   _conf_pct=$((_smart_conf / 10))
-  echo "  🤖  Smart · bucket ${_smart_bucket} · ${_daypart_name}${_we_name} · conf ${_conf_pct}%"
+  # 1-based, the same numbering the "WHAT SMART HAS LEARNED" block uses ("7 of 12") - the
+  # header said "bucket 6" for the same slot a few lines above it.
+  echo "  🤖  Smart · slot $((_smart_bucket + 1))/12 · ${_daypart_name}${_we_name} · conf ${_conf_pct}%"
   # The profile still matters under Smart: it is the rail the learner moves within, so
   # "Smart" alone does not tell you what the caps are anchored to.
   echo "  🎛  Profile: ${PROFILE} (Smart picks caps within it)"
@@ -867,8 +929,15 @@ _bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.con
 # runtime weight - so it was showing 60% while the WebUI showed the live 100%, and they looked
 # like a bug.
 _alpha_live="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
-[ -n "$_alpha_live" ] && echo "  ⚖️  Battery lean: $((_alpha_live / 10))% (live)"
-[ -n "$_bias" ] && [ "$_bias" != "0" ] && echo "  🔋  Battery tilt set to: $((_bias / 10))%"
+# One line for both: the live weight and the tilt the user set are related numbers, and three
+# separate lines (lean, tilt, and a "Battery bias" repeat further down) read as three settings.
+if [ -n "$_alpha_live" ]; then
+  _bl_line="  ⚖️  Battery lean: $((_alpha_live / 10))% now"
+  [ -n "$_bias" ] && [ "$_bias" != "0" ] && _bl_line="${_bl_line} (your tilt: $((_bias / 10))%)"
+  echo "$_bl_line"
+elif [ -n "$_bias" ] && [ "$_bias" != "0" ]; then
+  echo "  ⚖️  Battery tilt: $((_bias / 10))%"
+fi
 # The throttling threshold is now user-settable, so it belongs where the profile is - reading a
 # temperature elsewhere in the report and not knowing what it is compared against was the gap.
 #
@@ -898,7 +967,15 @@ if [ "$_btempC" -gt 0 ]; then
 else
   echo "  🌡  ${_cputemp}°C CPU${_cpu_note}"
 fi
-echo "  🔋  ${_lvl:-?}%"
+# Charging state next to the level: "100%" alone does not say whether the phone is on the
+# charger, and the time-to-empty below means nothing while it is.
+_bstat="$(cat /sys/class/power_supply/battery/status 2>/dev/null)"
+case "$_bstat" in
+  Charging) _bst_l="  ·  ⚡ charging" ;;
+  Full)     _bst_l="  ·  ⚡ full, on charger" ;;
+  *)        _bst_l="" ;;
+esac
+echo "  🔋  ${_lvl:-?}%${_bst_l}"
 [ "$_auto_bat" = "1" ] && echo "  🔻 Auto-battery active"
 [ "$_qn_active" = "1" ] && echo "  🌙 Night-quiet active"
 
@@ -906,7 +983,6 @@ if [ "$_smart_enabled" = "1" ]; then
   _alpha_pct=$((_smart_alpha / 10))
   # bucket/daypart/confidence are already on the header line - only print the things
   # that are NOT always true, so the screen stays short and every line carries news.
-  [ "$_alpha_pct" != "100" ] && echo "  ⚖️  Battery bias: ${_alpha_pct}%"
   if [ "$_smart_fb" != "0" ]; then
     _fb_name=""
     case "$_smart_fb" in
@@ -921,8 +997,13 @@ if [ "$_smart_enabled" = "1" ]; then
   [ "$_smart_veto" = "1" ] && echo "  🔥  Thermal veto active"
 fi
 echo ""
-echo "  ⏳  Time to 0% ${_eta_note}"
-echo "       ~${_ton_h}h ${_ton_m}m screen on  ·  ~${_toff_h}h ${_toff_m}m idle"
+case "$_bstat" in
+  Charging|Full)
+    echo "  ⏳  Time to 0%: not estimated while charging" ;;
+  *)
+    echo "  ⏳  Time to 0% ${_eta_note}"
+    echo "       ~${_ton_h}h ${_ton_m}m screen on  ·  ~${_toff_h}h ${_toff_m}m idle" ;;
+esac
 
 # ── Live state ──────────────────────────────────────────────────────────────────
 # Read from the config the daemon reads, not from whatever the WebUI last drew.
@@ -931,6 +1012,9 @@ _a_prof="$(_cfg audio_profile)";  [ -n "$_a_prof" ] || _a_prof="stock"
 _a_dac="$(_cfg audio_dac_hifi)"
 _a_loud="$(_cfg media_loudness)"; [ -n "$_a_loud" ] || _a_loud="stock"
 _a_dsp="$(_cfg dsp_loudness)";    [ -n "$_a_dsp" ]  || _a_dsp="off"
+# 0 is "off" too - the shipped value. Treating it as a gain printed "DSP +0 dB" and then
+# three NOT APPLIED lines telling a user with the DSP switched off to reinstall.
+case "$_a_dsp" in 0|false) _a_dsp="off" ;; esac
 _a_bt="$(_cfg bt_absvol_mode)";   [ -n "$_a_bt" ]   || _a_bt="stock"
 _c_lvl="$(_cfg CAMERA_LEVEL)";    [ -n "$_c_lvl" ]  || _c_lvl="0"
 _blur="$(_cfg disable_blur)"
@@ -978,20 +1062,66 @@ if [ -n "$_g_state" ]; then
   echo "  ⚡  ${H_GOV}"
   # cap_owner is empty until the governor has taken ownership; saying "unknown" is
   # noise, so just omit it and let the state speak.
-  _gl="$_g_state"
-  case "$_g_owner" in ''|unknown|none) : ;; *) _gl="$(_join "$_gl" "caps by ${_g_owner}")" ;; esac
+  # Words, not enum names: "LIGHT_IDLE · caps by vendor" was the governor's vocabulary,
+  # not the reader's.
+  case "$_g_state" in
+    DEEP_IDLE)  _gsn="deep idle" ;;
+    LIGHT_IDLE) _gsn="light idle" ;;
+    MODERATE)   _gsn="moderate load" ;;
+    HEAVY)      _gsn="heavy load" ;;
+    SUSTAINED)  _gsn="sustained load (thermal rail)" ;;
+    GAMING)     _gsn="gaming" ;;
+    *)          _gsn="$_g_state" ;;
+  esac
+  _gl="state: ${_gsn}"
+  [ -n "$_g_dwell" ] && _gl="${_gl} for ${_g_dwell}s"
   echo "       ${_gl}"
+  case "$_g_owner" in
+    ''|unknown|none) : ;;
+    vendor) echo "       CPU ceiling: vendor is stricter right now - ASB yields, no cap fight" ;;
+    shell)  echo "       CPU ceiling: set outside the governor (profile script)" ;;
+    *)      echo "       CPU ceiling: set by ASB" ;;
+  esac
+
+  # The prime is the cluster that decides both heat and responsiveness - say where it sits
+  # and what put it there, using the step the writer really sends.
+  _cpr="$(_st cap_prime_reason)"; _cpe="$(_st cap_prime_eff_khz)"
+  _sp_top=""
+  for _spx in $(_st slot_policy_ids | tr ',' ' '); do
+    [ "$_spx" -ge 0 ] 2>/dev/null && _sp_top="$_spx"
+  done
+  if [ -n "$_cpr" ] && [ "${_cpe:-0}" -gt 0 ] 2>/dev/null; then
+    _cpe_s="$_cpe"
+    if [ -n "$_sp_top" ]; then
+      for _sf in $(cat "/sys/devices/system/cpu/cpufreq/policy${_sp_top}/scaling_available_frequencies" 2>/dev/null); do
+        [ "$_sf" -le "$_cpe" ] 2>/dev/null && [ "$_sf" -gt "${_cpe_b:-0}" ] 2>/dev/null && _cpe_b="$_sf"
+      done
+      [ -n "$_cpe_b" ] && _cpe_s="$_cpe_b"
+    fi
+    case "$_cpr" in
+      profile)             _cpr_t="profile rail" ;;
+      efficiency_envelope) _cpr_t="efficiency envelope" ;;
+      thermal_budget:*)    _cpr_t="heat budget (${_cpr#thermal_budget:})" ;;
+      *)                   _cpr_t="$_cpr" ;;
+    esac
+    echo "       prime ceiling: $((_cpe_s / 1000)) MHz · ${_cpr_t}"
+  fi
+  _pec="$(_st prime_escape_count)"
+  if [ "$(_st prime_escape)" = "1" ]; then
+    echo "       ⚡ burst boost ACTIVE - prime lifted for heavy work (max 20 s)"
+  elif [ "${_pec:-0}" -gt 0 ] 2>/dev/null; then
+    echo "       burst boosts this session: ${_pec}"
+  fi
 
   _gl=""
-  [ "${_g_cpumax:-0}" -gt 0 ] 2>/dev/null && _gl="$(_join "$_gl" "CPU max ${_g_cpumax} MHz")"
-  [ -n "$_g_dwell" ] && _gl="$(_join "$_gl" "dwell ${_g_dwell}s")"
-  [ -n "$_gl" ] && echo "       ${_gl}"
-
-  _gl=""
-  [ -n "$_g_iq" ] && _gl="$(_join "$_gl" "environment iq ${_g_iq}")"
-  [ -n "$_g_head" ] && _gl="$(_join "$_gl" "headroom ${_g_head}%")"
+  [ -n "$_g_head" ] && _gl="$(_join "$_gl" "thermal headroom ${_g_head}%")"
+  case "$(_st thermal_source_confidence)" in
+    2) _gl="$(_join "$_gl" "temp sensor: verified")" ;;
+    1) _gl="$(_join "$_gl" "temp sensor: unverified")" ;;
+  esac
   [ "${_g_thermal:-0}" != "0" ] && _gl="$(_join "$_gl" "🔥 thermal ${_g_thermal}")"
   [ -n "$_gl" ] && echo "       ${_gl}"
+  [ "$(_st thermal_cooldown)" = "1" ] && echo "       ❄️ cooldown clamp: screen off, die still warm - caps at hardware minimum"
 fi
 
 # Show the SAME learner numbers the WebUI shows, so the two screens agree.
@@ -1132,20 +1262,20 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     esac
     [ -n "$_ahn" ] && _wl="${M_APP}: ${_ahn}"
     _hot="$(_st smart_app_hot)"
-    [ "$_hot" = "1" ] && _wl="$(_join "$_wl" "this app runs hot")"
+    [ "$_hot" = "1" ] && _wl="$(_join "$_wl" "$M_W_HOT")"
     _veto="$(_st smart_thermal_veto)"
-    [ "$_veto" = "1" ] && _wl="$(_join "$_wl" "thermal veto ACTIVE - holding back for heat")"
+    [ "$_veto" = "1" ] && _wl="$(_join "$_wl" "$M_W_VETO")"
     _slp="$(_st smart_sleep_override)"
-    [ "$_slp" = "1" ] && _wl="$(_join "$_wl" "sleep window - minimal activity")"
+    [ "$_slp" = "1" ] && _wl="$(_join "$_wl" "$M_W_SLEEP")"
     _lowb="$(_st smart_lowbat_override)"
-    [ "$_lowb" = "1" ] && _wl="$(_join "$_wl" "low battery - saving")"
+    [ "$_lowb" = "1" ] && _wl="$(_join "$_wl" "$M_W_LOWBAT")"
     _chg="$(_st smart_charge_assist)"
-    [ "$_chg" = "1" ] && _wl="$(_join "$_wl" "charging - extra headroom while cool")"
+    [ "$_chg" = "1" ] && _wl="$(_join "$_wl" "$M_W_CHG")"
     [ -n "$_wl" ] && echo "       ${M_WATCHING}: ${_wl}"
 
     _aph="$(_st smart_appheat_n)"
     [ -n "$_aph" ] && [ "$_aph" -gt 0 ] 2>/dev/null \
-      && echo "       ${M_REMEMBERS} ${_aph} ${M_APPS}"
+      && echo "       ${M_REMEMBERS} ${_aph}${M_APPS:+ ${M_APPS}}"
 
     # --- 6. how long the battery is expected to last ---------------------------------
     _bp="$(_st smart_budget_pred_h_x10)"
@@ -1198,10 +1328,6 @@ if [ "$_a_dsp" != "off" ]; then
       _dsp_abi="legacy"
     fi
   fi
-  if [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] \
-     && [ "$(getprop persist.asb.dsp.comp 2>/dev/null)" = "0" ]; then
-    echo "       compressor: off (limiter only)"
-  fi
   echo "       libasbdsp: 64-bit ${_l64}  ·  32-bit ${_l32}  ·  ABI ${_dsp_abi}"
   _dsp_registered=0
   for _ecs in $(_asb_effect_files); do
@@ -1218,6 +1344,18 @@ if [ "$_a_dsp" != "off" ]; then
   _dsp_on="$(getprop persist.asb.dsp.enable 2>/dev/null)"
   [ "$_dsp_registered" = "1" ] && _dsp_reg_mark="✓" || _dsp_reg_mark="✗"
   echo "       DSP status: requested +${_a_dsp}dB · live +${_dsp_live}dB · enabled=${_dsp_on:-0} · attacher ${_dsp_attacher} · registered ${_dsp_reg_mark}"
+  # Whether the sound playing NOW goes through it. dsp_outputs=bt with the speaker playing
+  # is correct and silent, and without this line it looks exactly like a broken DSP.
+  _dsp_out="$(getprop persist.asb.dsp.outputs 2>/dev/null)"
+  _dsp_rt="$(getprop persist.asb.dsp.route 2>/dev/null)"
+  _dsp_ra="$(getprop persist.asb.dsp.route_allowed 2>/dev/null)"
+  if [ -n "$_dsp_rt" ]; then
+    case "$_dsp_ra" in
+      1) echo "       works on: ${_dsp_out:-all} · now playing on ${_dsp_rt} → processed" ;;
+      0) echo "       works on: ${_dsp_out:-all} · now playing on ${_dsp_rt} → not processed (by your choice)" ;;
+      *) echo "       works on: ${_dsp_out:-all} · current route ${_dsp_rt}" ;;
+    esac
+  fi
 fi
 
 echo ""
@@ -1243,11 +1381,14 @@ _cam_ag="$(_cfg CAMERA_AGGRESSIVE)"
 _cam_in="$(_cfg CAMERA_AGGRESSIVE_INJECT)"
 _cam_l=""
 [ "$_cam_ag" = "1" ] && _cam_l="$(_join "$_cam_l" "aggressive tone")"
-case "$_cam_in" in
-  full) _cam_l="$(_join "$_cam_l" "inject: full")" ;;
-  ''|standard) : ;;
-  *) _cam_l="$(_join "$_cam_l" "inject: ${_cam_in}")" ;;
-esac
+# Only with a grade: at level 0 nothing is injected, whatever the mode says.
+if [ "${_c_lvl:-0}" -gt 0 ] 2>/dev/null; then
+  case "$_cam_in" in
+    full) _cam_l="$(_join "$_cam_l" "inject: full")" ;;
+    ''|standard) : ;;
+    *) _cam_l="$(_join "$_cam_l" "inject: ${_cam_in}")" ;;
+  esac
+fi
 [ -n "$_cam_l" ] && echo "       ${_cam_l}"
 # The grade is a ratio applied to the device's own tuning file, so report what it
 # multiplied rather than a bare level number - the level alone says nothing about what
@@ -1256,8 +1397,9 @@ _c_grain="$(_cfg CAMERA_GRAIN)";    case "$_c_grain" in ''|3) _c_grain="" ;; esa
 _c_contr="$(_cfg CAMERA_CONTRAST)"; case "$_c_contr" in ''|3) _c_contr="" ;; esac
 _c_port="$(_cfg CAMERA_PORTRAIT)";  case "$_c_port"  in ''|0) _c_port=""  ;; esac
 _c_low="$(_cfg CAMERA_LOWLIGHT)";   case "$_c_low"   in ''|0) _c_low=""   ;; esac
-[ -n "$_c_grain" ] && echo "       film grain: ${_c_grain}/8 (3 = stock)"
-[ -n "$_c_contr" ] && echo "       contrast & colour depth: ${_c_contr}/8 (3 = stock)"
+# Out of 10: the WebUI sliders run 0-10, and "/8" printed "10/8" for a maxed slider.
+[ -n "$_c_grain" ] && echo "       film grain: ${_c_grain}/10 (3 = stock)"
+[ -n "$_c_contr" ] && echo "       contrast & colour depth: ${_c_contr}/10 (3 = stock)"
 [ -n "$_c_port" ]  && echo "       portrait AI: ${_c_port}/6 (ships off)"
 # Camera hold belongs here, not under SYSTEM.
 #
@@ -1270,7 +1412,7 @@ _c_low="$(_cfg CAMERA_LOWLIGHT)";   case "$_c_low"   in ''|0) _c_low=""   ;; esa
 if [ "$(_st camera_hold)" = "1" ]; then
   echo "       hold ACTIVE · interactive caps held, cpuset + uclamp lifted"
 fi
-[ -n "$_c_low" ]   && echo "       macro / low-light sharpening: ${_c_low}/8"
+[ -n "$_c_low" ]   && echo "       macro / low-light sharpening: ${_c_low}/10"
 # Whether the grade actually landed on the live partition, which is the only claim
 # worth making - the config saying 4 proved nothing until this was checked.
 _c_live="/odm/etc/camera/conf_tuning_params.json"
@@ -1307,7 +1449,7 @@ if [ "$(_feat NET)" = "1" ]; then
   _qd="$(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
   [ -n "$_qd" ] && _nl="$(_join "$_nl" "$_qd")"
   _nb="$(cat /proc/sys/net/core/netdev_budget 2>/dev/null)"
-  [ -n "$_nb" ] && _nl="$(_join "$_nl" "budget ${_nb}")"
+  [ -n "$_nb" ] && _nl="$(_join "$_nl" "rx budget ${_nb}")"
   [ -n "$_nl" ] && echo "       TCP: ${_nl}"
 
 # What the user ASKED for, alongside what the kernel is actually running.
@@ -1324,10 +1466,10 @@ _nfmt() {
     unavailable) echo "       $1: ${_w} requested · NOT SUPPORTED by this kernel" ;;
     failed)      echo "       $1: ${_w} requested · NOT APPLIED" ;;
     pending)     echo "       $1: ${_w} · waiting for a link" ;;
+    # Running as asked: the TCP line above already shows it, so say nothing. Only a
+    # mismatch is news.
     *)           if [ -n "$3" ] && [ "$3" != "$_w" ]; then
                    echo "       $1: ${_w} requested · running ${3}"
-                 else
-                   echo "       $1: ${_w}"
                  fi ;;
   esac
 }
@@ -1336,16 +1478,22 @@ _nfmt "queue (other links)" net_qdisc "$_qd"
 
 # Per-link overrides print only when set, so the section stays short on a default install
 # and grows only for someone who has actually split Wi-Fi from mobile.
-for _pk in net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile; do
-  _pv="$(_cfg "$_pk")"
-  case "$_pv" in ''|auto) continue ;; esac
-  case "$_pk" in *_wifi) _plabel="Wi-Fi" ;; *) _plabel="mobile" ;; esac
-  case "$_pk" in net_congestion_*) _pwhat="ramp" ;; *) _pwhat="queue" ;; esac
-  case "$(_nverd "$_pk")" in
-    unavailable) echo "       ${_pwhat} · ${_plabel}: ${_pv} · NOT SUPPORTED" ;;
-    failed)      echo "       ${_pwhat} · ${_plabel}: ${_pv} · NOT APPLIED" ;;
-    *)           echo "       ${_pwhat} · ${_plabel}: ${_pv}" ;;
-  esac
+# One line per link instead of one per key: four lines for two links was the longest part
+# of the section and said less than "Wi-Fi: cubic + fq_codel".
+for _plk in wifi mobile; do
+  _pcc="$(_cfg net_congestion_${_plk})"; _pqd="$(_cfg net_qdisc_${_plk})"
+  case "$_pcc" in auto) _pcc="" ;; esac
+  case "$_pqd" in auto) _pqd="" ;; esac
+  [ -n "${_pcc}${_pqd}" ] || continue
+  [ "$_plk" = "wifi" ] && _plabel="Wi-Fi" || _plabel="mobile"
+  _pll="       ${_plabel}: ${_pcc:-auto} + ${_pqd:-auto}"
+  for _pk in net_congestion_${_plk} net_qdisc_${_plk}; do
+    case "$(_nverd "$_pk")" in
+      unavailable) _pll="${_pll} · ${_pk#net_} NOT SUPPORTED" ;;
+      failed)      _pll="${_pll} · ${_pk#net_} NOT APPLIED" ;;
+    esac
+  done
+  echo "$_pll"
 done
 
 # Initial windows: read the real route attributes, since that is the only proof the change
@@ -1370,7 +1518,6 @@ case "$_wcc" in
   ''|auto) : ;;
   *) case "$(_nverd wifi_country)" in
        failed) echo "       Wi-Fi region: ${_wcc} · NOT APPLIED" ;;
-       *)      echo "       Wi-Fi region: ${_wcc}" ;;
      esac ;;
 esac
 _wst="$(_cfg wifi_scan_throttle)"
@@ -1385,11 +1532,22 @@ case "$_wst" in
   4) echo "       Wi-Fi scan: unthrottled (roams sooner, costs battery)" ;;
 esac
 _radio_policy="$(_cfg radio_policy_enable)"
-_handover="$(_cfg net_handover_fast)"
-_handover_active="$(_cfg net_handover_active)"
+# Derived from the net_wifi_leave ladder (asb_lpm.sh): the old net_handover_* keys are no
+# longer in governor.conf, so reading them hid both lines on every current install.
+_wleave="$(_cfg net_wifi_leave)"
+case "$_wleave" in
+  weak|unusable) _handover=1; _handover_active=0 ;;
+  aggressive)    _handover=1; _handover_active=1 ;;
+  *)             _handover="$(_cfg net_handover_fast)"; _handover_active="$(_cfg net_handover_active)" ;;
+esac
 case "$_radio_policy" in
   1) echo "       cellular/radio controls: enabled by explicit choice" ;;
   *) echo "       cellular/radio controls: off · profiles leave Android radio policy untouched" ;;
+esac
+case "$_wleave" in
+  weak)       echo "       leave Wi-Fi: on a weak signal (below $(_cfg net_wifi_leave_dbm) dBm)" ;;
+  unusable)   echo "       leave Wi-Fi: weak signal or no working internet" ;;
+  aggressive) echo "       leave Wi-Fi: weak, broken or slow - hands over to mobile at once" ;;
 esac
 case "$_handover:$_radio_policy" in
   1:1) echo "       Wi-Fi → mobile handover: fast (cellular context kept ready while awake)" ;;
@@ -1400,6 +1558,15 @@ case "$_handover_active:$_radio_policy" in
        echo "       Wi-Fi fallback: active opt-in · ${_hf}" ;;
   1:*) echo "       Wi-Fi fallback: stored, inactive (radio controls off)" ;;
 esac
+if [ "$(_cfg net_screen_off_lte)" = "1" ]; then
+  _lte_st="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null)"
+  case "$_lte_st" in
+    *unsupported=1*) echo "       LTE while screen off: on · not supported by this ROM (stopped itself)" ;;
+    *applied=1*)     echo "       LTE while screen off: on · 5G parked right now" ;;
+    *pending=1*)     echo "       LTE while screen off: on · timer running (90 s after screen off)" ;;
+    *)               echo "       LTE while screen off: on · 5G allowed (screen is on)" ;;
+  esac
+fi
   # Which interface is actually carrying traffic - not always rmnet_data0.
   _if="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
   if [ -n "$_if" ]; then
@@ -1444,8 +1611,7 @@ fi
 # camera_hold is still read - it is reported in its own line below, where it belongs.
 _cam_hold="$(_st camera_hold)"
 
-echo ""
-  echo "  📶  ${H_WIFI}"
+_wifi_out=""
 # Read what the DRIVER actually ended up with, not `settings get global wifi_country_code`.
 # That settings key is telephony-derived and the framework keeps rewriting it from the SIM, so
 # it reported the SIM's country (IT) while the module's override was live - which looked
@@ -1468,28 +1634,42 @@ if [ -n "$_cc_drv" ]; then
   _wl="       region: ${_cc_drv}"
   [ "$_cc_forced" = "1" ] && _wl="${_wl} (forced)"
   [ -n "$_cc_tel" ] && [ "$_cc_tel" != "$_cc_drv" ] && _wl="${_wl}  ·  SIM says ${_cc_tel}"
-  echo "$_wl"
+  _wifi_out="${_wifi_out}${_wl}
+"
 elif [ "$_cc_forced" = "1" ]; then
-  echo "       region: forced${_cc_ovr:+ ${_cc_ovr}} (radio off?)"
+  _wifi_out="${_wifi_out}       region: forced${_cc_ovr:+ ${_cc_ovr}} (radio off?)
+"
 fi
   _txq="$(cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
   _lnk="$(echo "$_wifi_dump" | grep -m1 -iE 'mWifiInfo|SSID' | grep -oE '[0-9]+Mbps' | head -1)"
   _wl2=""
   [ -n "$_txq" ] && _wl2="$(_join "$_wl2" "txqueue ${_txq}")"
   [ -n "$_lnk" ] && _wl2="$(_join "$_wl2" "link ${_lnk}")"
-  [ -n "$_wl2" ] && echo "       ${_wl2}"
-# Camera hold, stated plainly instead of being used as an invisible gate.
-[ "$_cam_hold" = "1" ] && echo "       camera hold active - interactive caps held for the capture pipeline"
+  [ -n "$_wl2" ] && _wifi_out="${_wifi_out}       ${_wl2}
+"
+  _wps="$(_cfg wifi_powersave)"
+  case "$_wps" in
+    screen_off) _wifi_out="${_wifi_out}       power save: on while the screen is off
+" ;;
+    on|always)  _wifi_out="${_wifi_out}       power save: always on
+" ;;
+  esac
+if [ -n "$_wifi_out" ]; then
+  echo ""
+  echo "  📶  ${H_WIFI}"
+  printf '%s' "$_wifi_out"
+fi
+# Camera hold is reported once, in the CAMERA section ("hold ACTIVE ..."); printing it here
+# too put a camera line under the Wi-Fi heading.
 
 if [ "$(_feat GPS)" = "1" ]; then
-  echo ""
-  echo "  🛰  ${H_GPS}"
   _agps="$(settings get global assisted_gps_enabled 2>/dev/null)"
   _gl=""
   case "$_agps" in 1) _gl="$(_join "$_gl" "A-GPS on")" ;; 0) _gl="$(_join "$_gl" "A-GPS off")" ;; esac
   _xtra="$(settings get global gps_xtra_server 2>/dev/null)"
   case "$_xtra" in *gpsonextra*) _gl="$(_join "$_gl" "XTRA servers set")" ;; esac
-  [ -n "$_gl" ] && echo "       ${_gl}"
+  # Heading only with something under it - an empty section looks like a failed read.
+  [ -n "$_gl" ] && { echo ""; echo "  🛰  ${H_GPS}"; echo "       ${_gl}"; }
 fi
 
 echo ""
@@ -1600,6 +1780,8 @@ esac
 
 # Every category, not the six that happened to be hard-coded here. Wrapped by hand
 # because a single 20-item line is unreadable on a phone.
+# With a label: a bare "CPU · VM · AUDIO" block under SYSTEM did not say what it listed.
+echo "       enabled modules:"
 _cats=""; _catn=0; _catline=""
 for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
           RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR; do
@@ -1607,11 +1789,11 @@ for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
   _catline="$(_join "$_catline" "$_c")"
   _catn=$((_catn + 1))
   if [ "$_catn" -ge 5 ]; then
-    echo "       ${_catline}"
+    echo "         ${_catline}"
     _catline=""; _catn=0
   fi
 done
-[ -n "$_catline" ] && echo "       ${_catline}"
+[ -n "$_catline" ] && echo "         ${_catline}"
 # Magisk does its magic mounts in a private namespace, so /proc/mounts read from here shows
 # zero entries for the module even when the overlay is perfectly live - on KernelSU the same
 # grep finds them.
