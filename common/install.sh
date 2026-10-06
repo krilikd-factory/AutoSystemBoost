@@ -62,7 +62,9 @@ ui_print() {
       # A deeper-indented line right under a warning is its second half ("reboot and
       # install again"), and the advice is the part worth keeping.
       case "$1" in
-        '        '*) [ "$_asb_note_open" = "1" ] && ASB_NOTES="${ASB_NOTES} ${_asb_ut}" ;;
+        # Joined with a dash: run together with a bare space, "skipping it reboot and
+        # install again" read as one broken sentence in the summary.
+        '        '*) [ "$_asb_note_open" = "1" ] && ASB_NOTES="${ASB_NOTES} — ${_asb_ut}" ;;
         *) _asb_note_open=0 ;;
       esac ;;
   esac
@@ -982,7 +984,7 @@ asb_patch_perf_inplace() {
     sedi 's/\(Id="0x000010A7"[^>]*Timeout="\)2000"/\11600"/g' "$_dst/perfboostsconfig.xml"
   fi
   _pf_n="$(find "$_dst" -type f 2>/dev/null | wc -l)"
-  [ "${_pf_n:-0}" -gt 0 ] && ui_print "      + ${ASB_D_PERF:-perf configs tuned} (${_pf_n} file(s): ${ASB_D_PERF_TAIL:-boost timeouts, game config})"
+  [ "${_pf_n:-0}" -gt 0 ] && ui_print "      + ${ASB_D_PERF:-perf configs tuned} (${_pf_n} ${ASB_D_FILES:-file(s)}: ${ASB_D_PERF_TAIL:-boost timeouts, game config})"
 }
 
 asb_loc_patch_xtwifi() {
@@ -1825,7 +1827,7 @@ asb_audio_ensure_volume_libs() {
       _fixed=1
     fi
   done
-  [ "$_fixed" = "1" ] && ui_print "      + audio_effects: ensured stock volume libs present (device-native)"
+  [ "$_fixed" = "1" ] && ui_print "      + audio_effects: ${ASB_I_AFX_LIBS:-stock volume libraries checked and present (device-native)}"
   return 0
 }
 

@@ -48,7 +48,7 @@ ASB_SEC_BUILDING="сборка device-native оверлея из стоковы�
 
 # --- install progress detail lines (V61) ---
 ASB_D_IDENTIFIED="определено"
-ASB_D_SOC="Процессор"
+ASB_D_SOC="процессор"
 ASB_D_MANAGER="рут-менеджер"
 ASB_D_FULL_PKG="полный device-native пакет для OnePlus 15"
 ASB_D_STOCK_ANALYSIS="анализ стоковых файлов:"
@@ -80,6 +80,8 @@ ASB_D_MEDIA_LIFT="битрейт видео поднят в"
 ASB_D_MEDIA_TAIL="device-native файле(ах)"
 ASB_D_PERF="perf-конфиги настроены"
 ASB_D_PERF_TAIL="таймауты буста, game config"
+ASB_D_FILES="файл(ов)"
+ASB_I_AFX_LIBS="стоковые библиотеки громкости на месте (device-native)"
 ASB_D_GPS="GPS/A-GPS настроен"
 ASB_D_WIFI_OK="конфиг WCNSS Wi-Fi пропатчен (device-native)"
 ASB_D_WIFI_NONE="конфиг WCNSS не найден — Wi-Fi оставлен стоковым"
