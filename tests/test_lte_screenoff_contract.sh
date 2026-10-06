@@ -103,4 +103,6 @@ _l_rm="$(grep -n '^rm -rf /data/adb/asb 2>/dev/null' "$U" | head -1 | cut -d: -f
 grep -q 'ASB_LTE_STATE_DIR=' "$U" || fail "uninstall has no deferred restore"
 grep -q 'STATE_DIR="${ASB_LTE_STATE_DIR:-/data/adb/asb}"' "$S" || fail "state dir not overridable"
 
+grep -q '_tethering && ' "$S" || fail "applies while tethering"
+grep -q 'tail -n 300 "$LOGF"' "$S" || fail "log is unbounded"
 echo "PASS lte_screenoff contract"

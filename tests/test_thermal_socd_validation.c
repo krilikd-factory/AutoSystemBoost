@@ -246,6 +246,34 @@ static void case_periodic_socd_revalidation_recovers(void) {
     check_i("periodic rescan reports live fallback temp", t.cpu_max_c, 35);
 }
 
+/* Field shape: socd reads a percentage (22-27 raw) while the cores report millidegrees.
+ * On a cold boot the cores sit near 30 C, so "25 C" was inside the agreement band and the
+ * percentage became the control temperature. Scale alone must reject it, and the CPU
+ * fallback that agrees with its peers must not be left at confidence 1 for it. */
+static void case_percentage_socd_rejected_on_scale(void) {
+    fixture_reset();
+    add_zone(0, "socd\n", 25);
+    add_three_cpu_peers(29000, 30000, 31000);
+    thermal_discover();
+
+    check_i("percent socd: control moves to a core zone", g_thermal_cpu_zone, 1);
+    check_s("percent socd: core zone type", g_thermal_cpu_type, "cpu-1-1-0");
+    check_s("percent socd: rejection recorded", g_thermal_rejected_type, "socd");
+    check_i("percent socd: raw evidence kept", g_thermal_rejected_raw, 25);
+    check_i("percent socd: agreeing core fallback is full confidence", g_thermal_source_confidence, 2);
+}
+
+/* The promotion needs agreement: a fallback far from its peers stays doubtful. */
+static void case_percentage_socd_disputed_fallback_stays_low(void) {
+    fixture_reset();
+    add_zone(0, "socd\n", 25);
+    add_three_cpu_peers(60000, 40000, 41000);
+    thermal_discover();
+
+    check_s("disputed fallback: still a core zone", g_thermal_cpu_type, "cpu-1-1-0");
+    check_i("disputed fallback: confidence stays 1", g_thermal_source_confidence, 1);
+}
+
 int main(void) {
     puts("P0 thermal socd validation fixtures");
     case_high_socd_rebinds_to_live_peer();
@@ -256,6 +284,8 @@ int main(void) {
     case_non_cpu_peer_never_replaces_cpu_control();
     case_consensus_clears_when_peers_disappear();
     case_periodic_socd_revalidation_recovers();
+    case_percentage_socd_rejected_on_scale();
+    case_percentage_socd_disputed_fallback_stays_low();
 
     fixture_reset();
     if (g_failures) {
