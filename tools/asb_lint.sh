@@ -938,7 +938,11 @@ if [ -f "$_mp" ]; then
   fi
   _ac="$MODDIR/action.sh"
   if [ -f "$_ac" ] && [ -n "$_mp_ver" ]; then
-    if grep -qE "(AutoSystemBoost|ASB)\s+${_mp_ver}\b" "$_ac" 2>/dev/null; then
+    # The banner now reads module.prop itself, which cannot drift; a literal is still
+    # accepted for older trees.
+    if grep -q "s/^version=//p' \"\$MODDIR/module.prop\"" "$_ac" 2>/dev/null; then
+      ok "action.sh banner reads module.prop (always $_mp_ver)"
+    elif grep -qE "(AutoSystemBoost|ASB)\s+${_mp_ver}\b" "$_ac" 2>/dev/null; then
       ok "action.sh banner matches $_mp_ver"
     else
       warn "action.sh banner does not match module.prop:version=$_mp_ver"
