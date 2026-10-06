@@ -54,21 +54,44 @@ _cmd_phone() {
   else return 1; fi
 }
 
-# The SIM that carries data. -1 or empty means none: nothing to do.
-_data_sub() {
+# The SLOT of the SIM that carries data, or "d" for the platform default.
+#
+# `cmd phone ... -s N` takes a SIM slot index (0, 1), not a subscription id - the shell
+# command maps the slot to its subscription itself. The first version passed the data
+# subscription id from multi_sim_data_call (1, 2, ... on most phones), which addresses the
+# wrong slot or an empty one; the readback then failed and the feature marked itself
+# "unsupported" on a ROM that supports it fine.
+#
+# The slot comes from the subscription service's own dump, which prints each active
+# subscription with its id and simSlotIndex. When that cannot be read, "d" leaves -s off
+# and the command uses the default subscription - right on every single-SIM phone.
+_data_slot() {
   _s="$(settings get global multi_sim_data_call 2>/dev/null | tr -dc '0-9-')"
   case "$_s" in ''|-*) return 1 ;; esac
-  printf '%s' "$_s"
+  _sl="$(dumpsys isub 2>/dev/null | tr -d '\r' \
+         | grep -E "(^|[^A-Za-z])id=${_s}([^0-9]|$)" | grep -m1 -oE 'simSlotIndex=[0-9]+' | cut -d= -f2)"
+  case "$_sl" in ''|*[!0-9]*) _sl=d ;; esac
+  printf '%s' "$_sl"
 }
 
+# Slot argument for cmd phone: none for "d".
+_slot_args() { [ "$1" = "d" ] || printf -- '-s %s' "$1"; }
+
 # Type name -> bit, AOSP TelephonyManager.NETWORK_TYPE_* (bit = 1 << (id-1)).
+#
+# The shell prints TelephonyManager.getNetworkTypeName(), and several of those names have
+# spaces and lower case in them - "CDMA - EvDo rev. 0", "iDEN", "HSPA+". The name arrives
+# here upper-cased with spaces removed, so both spellings are listed. An unknown name still
+# fails: rebuilding a mask with a guessed bit could take away a network on restore.
 _name_bit() {
   case "$1" in
     GPRS) echo 1 ;; EDGE) echo 2 ;; UMTS) echo 4 ;; CDMA) echo 8 ;;
-    EVDO_0) echo 16 ;; EVDO_A) echo 32 ;; 1xRTT|1XRTT) echo 64 ;; HSDPA) echo 128 ;;
-    HSUPA) echo 256 ;; HSPA) echo 512 ;; IDEN) echo 1024 ;; EVDO_B) echo 2048 ;;
-    LTE) echo 4096 ;; EHRPD) echo 8192 ;; HSPAP) echo 16384 ;; GSM) echo 32768 ;;
-    TD_SCDMA) echo 65536 ;; IWLAN) echo 131072 ;; LTE_CA) echo 262144 ;; NR) echo 524288 ;;
+    EVDO_0|CDMA-EVDOREV.0) echo 16 ;; EVDO_A|CDMA-EVDOREV.A) echo 32 ;;
+    1XRTT|CDMA-1XRTT) echo 64 ;; HSDPA) echo 128 ;;
+    HSUPA) echo 256 ;; HSPA) echo 512 ;; IDEN) echo 1024 ;; EVDO_B|CDMA-EVDOREV.B) echo 2048 ;;
+    LTE) echo 4096 ;; EHRPD|CDMA-EHRPD) echo 8192 ;; HSPAP|HSPA+) echo 16384 ;; GSM) echo 32768 ;;
+    TD_SCDMA|TD-SCDMA) echo 65536 ;; IWLAN) echo 131072 ;; LTE_CA|LTE-CA) echo 262144 ;; NR) echo 524288 ;;
+    UNKNOWN) echo 0 ;;
     *) echo -1 ;;
   esac
 }
@@ -76,8 +99,9 @@ _name_bit() {
 # Read the allowed mask as a decimal number. Accepts the three shapes ROMs print:
 # a "GSM|LTE|NR" name list, a binary string, or a plain decimal. Anything else fails.
 _get_mask() {
-  _o="$(_cmd_phone get-allowed-network-types-for-users -s "$1" 2>/dev/null | tr -d '\r' | tail -n 1)"
-  _o="$(printf '%s' "$_o" | sed 's/^[^:]*: *//; s/ //g')"
+  # shellcheck disable=SC2046
+  _o="$(_cmd_phone get-allowed-network-types-for-users $(_slot_args "$1") 2>/dev/null | tr -d '\r' | tail -n 1)"
+  _o="$(printf '%s' "$_o" | sed 's/^[^:]*: *//; s/ //g' | tr '[:lower:]' '[:upper:]')"
   case "$_o" in
     '') return 1 ;;
     *[!01]*) : ;;
@@ -110,7 +134,8 @@ _to_binary() {
   printf '%s' "$_b"
 }
 
-_set_mask() { _cmd_phone set-allowed-network-types-for-users -s "$1" "$(_to_binary "$2")" >/dev/null 2>&1; }
+# shellcheck disable=SC2046
+_set_mask() { _cmd_phone set-allowed-network-types-for-users $(_slot_args "$1") "$(_to_binary "$2")" >/dev/null 2>&1; }
 
 _screen_off_now() {
   _st="$(grep -m1 '^screen=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
@@ -142,7 +167,8 @@ do_restore() {
   [ -f "$SAVE" ] || return 0
   _line="$(cat "$SAVE" 2>/dev/null)"
   _sub="${_line%%|*}"; _orig="${_line#*|}"
-  case "$_sub$_orig" in *[!0-9]*|'') rm -f "$SAVE"; _log "restore: bad save file dropped"; return 0 ;; esac
+  case "$_sub" in d|[0-9]|[0-9][0-9]) : ;; *) rm -f "$SAVE"; _log "restore: bad save file dropped"; return 0 ;; esac
+  case "$_orig" in ''|*[!0-9]*) rm -f "$SAVE"; _log "restore: bad save file dropped"; return 0 ;; esac
   _set_mask "$_sub" "$_orig"
   _now="$(_get_mask "$_sub")"
   if [ "$_now" = "$_orig" ]; then
@@ -161,8 +187,11 @@ do_apply() {
   _screen_off_now || return 0
   _in_call && { _log "apply: skipped, call in progress"; return 0; }
   _tethering && { _log "apply: skipped, tethering active"; return 0; }
-  _sub="$(_data_sub)" || return 0
-  _orig="$(_get_mask "$_sub")" || { _log "apply: cannot read allowed types, marking unsupported"; : > "$UNSUP"; return 0; }
+  _sub="$(_data_slot)" || return 0
+  _orig="$(_get_mask "$_sub")" || {
+    _raw="$(_cmd_phone get-allowed-network-types-for-users $(_slot_args "$_sub") 2>&1 | tr -d '\r' | tail -n 1 | cut -c1-120)"
+    _log "apply: cannot read allowed types (slot=$_sub, got: ${_raw:-nothing}), marking unsupported"
+    : > "$UNSUP"; return 0; }
   [ $(( _orig & NR_BIT )) -ne 0 ] || return 0    # 5G not allowed anyway
   _want=$(( _orig & ~NR_BIT ))
   printf '%s|%s\n' "$_sub" "$_orig" > "$SAVE" 2>/dev/null && sync
@@ -212,6 +241,7 @@ case "$1" in
     printf 'applied=%s\n' "$([ -f "$SAVE" ] && echo 1 || echo 0)"
     printf 'pending=%s\n' "$([ -f "$PIDF" ] && echo 1 || echo 0)"
     printf 'unsupported=%s\n' "$([ -f "$UNSUP" ] && echo 1 || echo 0)"
+    printf 'last=%s\n' "$(tail -n 1 "$LOGF" 2>/dev/null | cut -d' ' -f3-)"
     ;;
   *) echo "usage: $0 arm|apply|restore|status" >&2; exit 2 ;;
 esac
