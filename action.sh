@@ -10,6 +10,9 @@ MODDIR="${MODDIR:-${0%/*}}"
 # badly would make a diagnostic report misleading rather than merely foreign.
 _asb_loc="$(settings get system system_locales 2>/dev/null)"
 [ -z "$_asb_loc" ] || [ "$_asb_loc" = "null" ] && _asb_loc="$(getprop persist.sys.locale 2>/dev/null)"
+# system_locales is a list ("en-US,ru-RU"); the first entry is the UI language. Matching the
+# whole list picked Russian on a phone whose primary language was English.
+_asb_loc="${_asb_loc%%,*}"
 case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
   *ru-*|*ru_*|ru) H_AUDIO="АУДИО"; H_CAMERA="КАМЕРА"; H_MEMORY="ПАМЯТЬ"; H_NETWORK="СЕТЬ"
                   H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="СИСТЕМА"; H_IFACE="ИНТЕРФЕЙС"
@@ -751,6 +754,228 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_W_CHG="charging - extra headroom while cool" ;;
 esac
 
+# Every other line of the report, as printf formats.
+#
+# The headings, the learning block and the watch flags were translated; the remaining ~150
+# lines - governor state, audio, camera, network, sleep, system, the NOT APPLIED list - were
+# English on every phone, so a Russian report was a Russian heading over an English body.
+# These are the English defaults; runtime/i18n/action_<lang>.sh overrides any of them.
+# Each value is a printf FORMAT: %s marks a value, a literal percent sign is written %%.
+# Numbers, units, file paths and config values stay as they are - they are what a user
+# compares against the WebUI and the diag report.
+T_SMART_HDR="Smart · slot %s/12 · %s (%s) · conf %s%%"
+T_PROFILE_SMART="Profile: %s (Smart picks caps within it)"
+T_PROFILE_MANUAL="Profile: %s (manual — Smart off)"
+T_LEAN_NOW="Battery lean: %s%% now"
+T_LEAN_TILT=" (your tilt: %s%%)"
+T_TILT_ONLY="Battery tilt: %s%%"
+T_THROTTLE_TEMP="Throttling temperature: %s°C (default 65)"
+T_SAFE_MODE="SAFE MODE: governor disabled (%s)"
+T_RECOVERY="Recovery: %s restart(s) — %s"
+T_HOT="🔥 hot"
+T_CPU_BATT="%s°C CPU  ·  %s°C battery"
+T_CPU_ONLY="%s°C CPU"
+T_CHARGING="⚡ charging"
+T_FULL="⚡ full, on charger"
+T_AUTO_BAT_ACTIVE="Auto-battery active"
+T_NQ_ACTIVE="Night-quiet active"
+T_FB1="daypart fallback"
+T_FB2="class fallback"
+T_FB3="global fallback"
+T_FB4="cold start (safe default)"
+T_LEARNING_FB="Learning: %s"
+T_NIGHT_SAFE="Night-safe override active"
+T_VETO_ACTIVE="Thermal veto active"
+T_ETA_CHG="Time to 0%%: not estimated while charging"
+T_ETA="Time to 0%% %s"
+T_ETA_MEASURED="(measured)"
+T_ETA_HEUR="(heuristic)"
+T_ETA_LINE="~%sh %sm screen on  ·  ~%sh %sm idle"
+T_GS_DEEP="deep idle"
+T_GS_LIGHT="light idle"
+T_GS_MOD="moderate load"
+T_GS_HEAVY="heavy load"
+T_GS_SUST="sustained load (thermal rail)"
+T_GS_GAME="gaming"
+T_STATE="state: %s"
+T_STATE_FOR="state: %s for %ss"
+T_CEIL_VENDOR="CPU ceiling: vendor is stricter right now - ASB yields, no cap fight"
+T_CEIL_SHELL="CPU ceiling: set outside the governor (profile script)"
+T_CEIL_ASB="CPU ceiling: set by ASB"
+T_CPR_PROFILE="profile rail"
+T_CPR_ENV="efficiency envelope"
+T_CPR_HEAT="heat budget (%s)"
+T_PRIME_CEIL="prime ceiling: %s MHz · %s"
+T_BURST_ON="⚡ burst boost ACTIVE - prime lifted for heavy work (max 20 s)"
+T_BURST_N="burst boosts this session: %s"
+T_HEADROOM="thermal headroom %s%%"
+T_SENS_OK="temp sensor: verified"
+T_SENS_UNV="temp sensor: unverified"
+T_THERMAL_N="🔥 thermal %s"
+T_COOLDOWN="❄️ cooldown clamp: screen off, die still warm - caps at hardware minimum"
+T_TIER_STRONG="strong"
+T_TIER_ACTIVE="active"
+T_TIER_LEARN="learning"
+T_A_PROFILE="%s profile"
+T_A_DAC="hi-fi DAC"
+T_A_LOUD="loudness: %s"
+T_A_DSPGAIN="DSP +%s dB"
+T_A_BTVOL="BT volume: phone drives gain (independent scales)"
+T_A_COMP_OFF="compressor: off  ·  limiter only"
+T_A_COMP_ON="compressor: on  ·  6:1 above -24 dBFS"
+T_A_BASS="bass shelf: +%s dB @ 90 Hz"
+T_A_LIB="libasbdsp: 64-bit %s  ·  32-bit %s  ·  ABI %s"
+T_A_REG="effect registered in: %s"
+T_A_STATUS="DSP status: requested +%sdB · live +%sdB · enabled=%s · attacher %s · registered %s"
+T_A_ALL="all"
+T_A_ON_PROC="works on: %s · now playing on %s → processed"
+T_A_ON_NOT="works on: %s · now playing on %s → not processed (by your choice)"
+T_A_ON_ROUTE="works on: %s · current route %s"
+T_C_LEVEL="processing level %s"
+T_C_APPS="%s retouch apps"
+T_C_CFG="retouch config: %s"
+T_C_AGGR="aggressive tone"
+T_C_INJ="inject: %s"
+T_C_GRAIN="film grain: %s/10 (3 = stock)"
+T_C_CONTR="contrast & colour depth: %s/10 (3 = stock)"
+T_C_PORT="portrait AI: %s/6 (ships off)"
+T_C_HOLD="hold ACTIVE · interactive caps held, cpuset + uclamp lifted"
+T_C_LOW="macro / low-light sharpening: %s/10"
+T_C_NOTLIVE="⚠️  grade NOT on the live file (still stock values)"
+T_C_LIVE="✅ live file graded: BlendWeight [%s]"
+T_M_BG="bg trim: level %s"
+T_M_SWAP="swappiness %s"
+T_M_FREE="%s MB free"
+T_M_ZRAM="zram %s MB used"
+T_N_RX="rx budget %s"
+T_N_RAMP="ramp (other links)"
+T_N_QUEUE="queue (other links)"
+T_N_UNSUP="%s: %s requested · NOT SUPPORTED by this kernel"
+T_N_FAILED="%s: %s requested · NOT APPLIED"
+T_N_PENDING="%s: %s · waiting for a link"
+T_N_RUNNING="%s: %s requested · running %s"
+T_N_MOBILE="mobile"
+T_N_SUF_UNSUP="%s NOT SUPPORTED"
+T_N_SUF_FAIL="%s NOT APPLIED"
+T_N_BUF_ON="buffers: %s · %s on the default route"
+T_N_BUF_OFF="buffers: %s · not on the route yet (pending or replaced)"
+T_N_REGION_FAIL="Wi-Fi region: %s · NOT APPLIED"
+T_N_SCAN0="Wi-Fi scan: background scanning off (networks found only when you look)"
+T_N_SCAN1="Wi-Fi scan: every 10 min"
+T_N_SCAN2="Wi-Fi scan: every 5 min (framework default)"
+T_N_SCAN3="Wi-Fi scan: every 2 min"
+T_N_SCAN4="Wi-Fi scan: unthrottled (roams sooner, costs battery)"
+T_N_RADIO_ON="cellular/radio controls: enabled by explicit choice"
+T_N_RADIO_OFF="cellular/radio controls: off · profiles leave Android radio policy untouched"
+T_N_LEAVE_WEAK="leave Wi-Fi: on a weak signal (below %s dBm)"
+T_N_LEAVE_UNUSABLE="leave Wi-Fi: weak signal or no working internet"
+T_N_LEAVE_AGGR="leave Wi-Fi: weak, broken or slow - hands over to mobile at once"
+T_N_HO_FAST="Wi-Fi → mobile handover: fast (cellular context kept ready while awake)"
+T_N_HO_STORED="Wi-Fi → mobile handover: stored, inactive (radio controls off)"
+T_N_FB_ACTIVE="Wi-Fi fallback: active opt-in · %s"
+T_N_FB_STORED="Wi-Fi fallback: stored, inactive (radio controls off)"
+T_N_LTE_STOP="LTE while screen off: on · stopped itself - %s"
+T_N_LTE_PARKED="LTE while screen off: on · 5G parked right now"
+T_N_LTE_TIMER="LTE while screen off: on · timer running (90 s after screen off)"
+T_N_LTE_ALLOWED="LTE while screen off: on · 5G allowed (screen is on)"
+T_N_ROUTE="route via %s"
+T_N_ROUTE_RX="%s MB rx"
+T_L_FAST="modem LPM: fast · data call held up (low latency)"
+T_L_SAVE="modem LPM: save · radio idling, keepalives stretched"
+T_L_NIGHT="modem LPM: night · screen off, radio relaxed"
+T_L_NORMAL_HO="modem LPM: normal · handover active, radio left alone"
+T_L_NORMAL="modem LPM: normal · profile defaults"
+T_W_REGION="region: %s"
+T_W_FORCED=" (forced)"
+T_W_SIM="SIM says %s"
+T_W_REGION_FORCED="region: forced%s (radio off?)"
+T_W_TXQ="txqueue %s"
+T_W_LINK="link %s"
+T_W_PS_SCR="power save: on while the screen is off"
+T_W_PS_ALWAYS="power save: always on"
+T_G_ON="A-GPS on"
+T_G_OFF="A-GPS off"
+T_G_XTRA="XTRA servers set"
+T_BS_HEAD="BOOT SAFETY"
+T_BS_1="ASB removed its display properties after two failed boots."
+T_BS_2="Re-enable blur and animations one at a time to find the culprit."
+T_BS_CNT="(boot-safety counter at %s/2 - last boot did not report completion)"
+T_I_BLUR_OFF="blur: off"
+T_I_BLUR_STOCK="blur: stock"
+T_I_ANIM_SIMPLE="animations: simplified"
+T_I_ANIM_NORMAL="animations: normal"
+T_I_ANIM_SIMPLE_AUTO="animations: simplified (auto, follows blur)"
+T_I_ANIM_NORMAL_AUTO="animations: normal (auto, follows blur)"
+T_I_UISPEED="UI speed: managed (animations and touch windows scaled per profile)"
+T_I_LOCK="lock screen: camera and wallet shortcuts hidden"
+T_S_LEARNING="deep sleep: night mode, still learning your schedule"
+T_S_NIGHT="deep sleep: night mode · %s (learned from %s nights)"
+T_S_AOD="always-on display: paused for the night window"
+T_S_MOD="deep sleep: moderate (idle after 5 min instead of 30)"
+T_S_AGGR="deep sleep: aggressive (idle after 2 min; messages may lag)"
+T_S_STOCK="deep sleep: stock"
+T_S_NQ="night quiet: sensor polling slowed inside the sleep window"
+T_Y_BG_RELAX="background processes: unlimited (phantom monitor off)"
+T_Y_BG_STRICT="background processes: Android default (32 max)"
+T_Y_OEM="OEM toggles: managed (RAM expansion, battery, heat)"
+T_Y_VIB_STOCK="vibration: stock (not managed)"
+T_Y_VIB_OFF="vibration: off"
+T_Y_VIB="vibration: %s/10"
+T_Y_VIB_LIVE="live %s"
+T_Y_TOUCH_FOLLOW="touch: follows"
+T_Y_TOUCH_OFF="touch: off"
+T_Y_TOUCH="touch: %s/10"
+T_Y_MODULES="enabled modules:"
+T_Y_OVL_MNT="overlay: %s mount(s)"
+T_Y_OVL_LIVE="overlay: live (private namespace)"
+T_Y_OVL_PART="overlay: partial -%s not visible to the system"
+T_Y_OVL_NONE="overlay: not detected"
+T_Y_KERNEL="kernel %s"
+T_Y_UP="up %sh %sm"
+T_AB="switched here automatically · returns to %s when charged"
+T_BAD_HEAD="NOT APPLIED"
+T_ALL_OK="All configured tweaks verified applied"
+T_B_GOV="governor is not running"
+T_B_UHQA="hi-fi profile — persist.audio.uhqa is not 1 (restart audioserver?)"
+T_B_LOUD="loudness %s — volume table not reshaped (reboot needed?)"
+T_B_DSP_LIB="DSP +%s dB — libasbdsp.so not installed (reinstall)"
+T_B_DSP_BIND="DSP +%s dB — effect registered but the odm bind is not mounted"
+T_B_DSP_FUSE="  (overlay is blocked by the bootloop fuse — see uninstall/reinstall)"
+T_B_DSP_REG="DSP +%s dB — effect not registered by install (reinstall)"
+T_B_DSP_EN="DSP +%s dB — persist.asb.dsp.enable is not 1"
+T_B_BLUR_PROP="blur — set in system.prop (persist.sys.sf.disable_blurs), applies after a reboot"
+T_B_BLUR_UNSET="blur — persist.sys.sf.disable_blurs not set (%s/%s legacy keys also off)"
+T_B_WIFI="Wi-Fi %s — driver is on %s (override did not take)"
+T_B_CAM="camera — retouch app list not injected (%s apps; %s)"
+T_B_NOCFG="no live config"
+# Plain unit words, not printf formats (a literal % here is fine).
+U_PCTH="%/h"
+U_H="h"
+
+# One translation file per language, loaded over the defaults above. A missing key in
+# a translation simply keeps the English line instead of printing an empty one.
+case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
+  *ru-*|*ru_*|ru) _asb_lang=ru ;;
+  *uk-*|*uk_*|uk) _asb_lang=uk ;;
+  *de-*|*de_*|de) _asb_lang=de ;;
+  *es-*|*es_*|es) _asb_lang=es ;;
+  *pt-*|*pt_*|pt) _asb_lang=pt ;;
+  *tr-*|*tr_*|tr) _asb_lang=tr ;;
+  *in-*|*id-*|*id_*|id|in) _asb_lang=id ;;
+  *fr-*|*fr_*|fr) _asb_lang=fr ;;
+  *hy-*|*hy_*|hy) _asb_lang=hy ;;
+  *it-*|*it_*|it) _asb_lang=it ;;
+  *ar-*|*ar_*|ar) _asb_lang=ar ;;
+  zh-cn*|zh_cn*|*zh-hans*|zh) _asb_lang=zh ;;
+  *) _asb_lang=en ;;
+esac
+[ "$_asb_lang" != "en" ] && [ -r "$MODDIR/runtime/i18n/action_${_asb_lang}.sh" ] \
+  && . "$MODDIR/runtime/i18n/action_${_asb_lang}.sh"
+
+# printf with a translated format. _s returns the text (for _join), _f prints a line.
+_s() { _sfmt="$1"; shift; printf "$_sfmt" "$@"; }
+_f() { _sfmt="$1"; shift; printf "$_sfmt\n" "$@"; }
+
 PROFILE="$(cat "$MODDIR/current_profile" 2>/dev/null || echo balanced)"
 
 _lvl=$(dumpsys battery 2>/dev/null | grep -m1 ' level:' | awk '{print $2}')
@@ -812,7 +1037,7 @@ _on_ma=0
 if [ -n "$_ewma_x10" ] && [ "$_ewma_x10" -gt 0 ] 2>/dev/null && \
    [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null; then
   _on_ma=$(( (_cap_uah / 1000) * _ewma_x10 / 1000 ))
-  _eta_note="(measured)"
+  _eta_note="$T_ETA_MEASURED"
 fi
 if [ "$_on_ma" -lt 50 ] 2>/dev/null; then
   case "$PROFILE" in
@@ -820,7 +1045,7 @@ if [ "$_on_ma" -lt 50 ] 2>/dev/null; then
     battery)     _on_ma=400 ;;
     *)           _on_ma=500 ;;
   esac
-  _eta_note="(heuristic)"
+  _eta_note="$T_ETA_HEUR"
 fi
 _off_ma=$(( _on_ma / 10 ))
 [ "$_off_ma" -lt 40 ] && _off_ma=40
@@ -891,17 +1116,18 @@ if [ "$_smart_enabled" = "1" ] && [ -r /dev/.asb/state ]; then
     case "$_val" in ''|*[!0-9]*) eval "$_v=0" ;; esac
   done
 fi
+# The same daypart words as the learning block below: the header used its own set
+# ("evening") while the block said "afternoon" for the same slot.
 _daypart_name=""
 case "$_smart_daypart" in
-  0) _daypart_name="sleep" ;;
-  1) _daypart_name="wake" ;;
-  2) _daypart_name="morn" ;;
-  3) _daypart_name="day" ;;
-  4) _daypart_name="evening" ;;
-  5) _daypart_name="late" ;;
+  0) _daypart_name="$M_DP0" ;;
+  1) _daypart_name="$M_DP1" ;;
+  2) _daypart_name="$M_DP2" ;;
+  3) _daypart_name="$M_DP3" ;;
+  4) _daypart_name="$M_DP4" ;;
+  5) _daypart_name="$M_DP5" ;;
 esac
-_we_name=""
-[ "$_smart_we" = "1" ] && _we_name=" (weekend)" || _we_name=" (weekday)"
+[ "$_smart_we" = "1" ] && _we_name="$M_WEEKEND" || _we_name="$M_WEEKDAY"
 
 # Everything below is rendered in a PROPORTIONAL font dialog, not a terminal.
 # Box frames and space-padded columns cannot line up there (an emoji is two cells wide but one
@@ -915,12 +1141,12 @@ if [ "$_smart_enabled" = "1" ]; then
   _conf_pct=$((_smart_conf / 10))
   # 1-based, the same numbering the "WHAT SMART HAS LEARNED" block uses ("7 of 12") - the
   # header said "bucket 6" for the same slot a few lines above it.
-  echo "  🤖  Smart · slot $((_smart_bucket + 1))/12 · ${_daypart_name}${_we_name} · conf ${_conf_pct}%"
+  _f "  🤖  $T_SMART_HDR" "$((_smart_bucket + 1))" "$_daypart_name" "$_we_name" "$_conf_pct"
   # The profile still matters under Smart: it is the rail the learner moves within, so
   # "Smart" alone does not tell you what the caps are anchored to.
-  echo "  🎛  Profile: ${PROFILE} (Smart picks caps within it)"
+  _f "  🎛  $T_PROFILE_SMART" "$PROFILE"
 else
-  echo "  🎛  Profile: ${PROFILE} (manual — Smart off)"
+  _f "  🎛  $T_PROFILE_MANUAL" "$PROFILE"
 fi
 _bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
 # Show the LIVE learning weight, the same number the WebUI shows as "battery-lean", so the two
@@ -932,11 +1158,11 @@ _alpha_live="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | cu
 # One line for both: the live weight and the tilt the user set are related numbers, and three
 # separate lines (lean, tilt, and a "Battery bias" repeat further down) read as three settings.
 if [ -n "$_alpha_live" ]; then
-  _bl_line="  ⚖️  Battery lean: $((_alpha_live / 10))% now"
-  [ -n "$_bias" ] && [ "$_bias" != "0" ] && _bl_line="${_bl_line} (your tilt: $((_bias / 10))%)"
-  echo "$_bl_line"
+  _bl_line="  ⚖️  $(_s "$T_LEAN_NOW" "$((_alpha_live / 10))")"
+  [ -n "$_bias" ] && [ "$_bias" != "0" ] && _bl_line="${_bl_line}$(_s "$T_LEAN_TILT" "$((_bias / 10))")"
+  printf '%s\n' "$_bl_line"
 elif [ -n "$_bias" ] && [ "$_bias" != "0" ]; then
-  echo "  ⚖️  Battery tilt: $((_bias / 10))%"
+  _f "  ⚖️  $T_TILT_ONLY" "$((_bias / 10))"
 fi
 # The throttling threshold is now user-settable, so it belongs where the profile is - reading a
 # temperature elsewhere in the report and not knowing what it is compared against was the gap.
@@ -953,31 +1179,31 @@ _feat() {
 }
 
 _ste="$(_cfg sustained_temp_enter)"
-[ -n "$_ste" ] && [ "$_ste" != "65" ] && echo "  🌡️  Throttling temperature: ${_ste}°C (default 65)"
+[ -n "$_ste" ] && [ "$_ste" != "65" ] && _f "  🌡️  $T_THROTTLE_TEMP" "$_ste"
 if [ "$_rec_disabled" = "1" ]; then
-  echo "  ⚠️  SAFE MODE  : governor disabled (${_rec_reason:-recovery})"
+  _f "  ⚠️  $T_SAFE_MODE" "${_rec_reason:-recovery}"
 elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
-  echo "  ⚠️  Recovery  : ${_rec_count} restart(s) — ${_rec_reason:-unknown}"
+  _f "  ⚠️  $T_RECOVERY" "$_rec_count" "${_rec_reason:-unknown}"
 fi
 echo ""
 _cpu_note=""
-[ "${_cputemp:-0}" -ge 80 ] 2>/dev/null && _cpu_note="  🔥 hot"
+[ "${_cputemp:-0}" -ge 80 ] 2>/dev/null && _cpu_note="  $T_HOT"
 if [ "$_btempC" -gt 0 ]; then
-  echo "  🌡  ${_cputemp}°C CPU  ·  ${_btempC}.${_btempCx}°C battery${_cpu_note}"
+  printf '%s%s\n' "  🌡  $(_s "$T_CPU_BATT" "$_cputemp" "${_btempC}.${_btempCx}")" "$_cpu_note"
 else
-  echo "  🌡  ${_cputemp}°C CPU${_cpu_note}"
+  printf '%s%s\n' "  🌡  $(_s "$T_CPU_ONLY" "$_cputemp")" "$_cpu_note"
 fi
 # Charging state next to the level: "100%" alone does not say whether the phone is on the
 # charger, and the time-to-empty below means nothing while it is.
 _bstat="$(cat /sys/class/power_supply/battery/status 2>/dev/null)"
 case "$_bstat" in
-  Charging) _bst_l="  ·  ⚡ charging" ;;
-  Full)     _bst_l="  ·  ⚡ full, on charger" ;;
+  Charging) _bst_l="  ·  $T_CHARGING" ;;
+  Full)     _bst_l="  ·  $T_FULL" ;;
   *)        _bst_l="" ;;
 esac
 echo "  🔋  ${_lvl:-?}%${_bst_l}"
-[ "$_auto_bat" = "1" ] && echo "  🔻 Auto-battery active"
-[ "$_qn_active" = "1" ] && echo "  🌙 Night-quiet active"
+[ "$_auto_bat" = "1" ] && _f "  🔻 $T_AUTO_BAT_ACTIVE"
+[ "$_qn_active" = "1" ] && _f "  🌙 $T_NQ_ACTIVE"
 
 if [ "$_smart_enabled" = "1" ]; then
   _alpha_pct=$((_smart_alpha / 10))
@@ -986,23 +1212,23 @@ if [ "$_smart_enabled" = "1" ]; then
   if [ "$_smart_fb" != "0" ]; then
     _fb_name=""
     case "$_smart_fb" in
-      1) _fb_name="daypart fallback" ;;
-      2) _fb_name="class fallback" ;;
-      3) _fb_name="global fallback" ;;
-      4) _fb_name="cold start (safe default)" ;;
+      1) _fb_name="$T_FB1" ;;
+      2) _fb_name="$T_FB2" ;;
+      3) _fb_name="$T_FB3" ;;
+      4) _fb_name="$T_FB4" ;;
     esac
-    echo "  ↩️  Learning: ${_fb_name}"
+    _f "  ↩️  $T_LEARNING_FB" "$_fb_name"
   fi
-  [ "$_smart_sleep" = "1" ] && echo "  🌙  Night-safe override active"
-  [ "$_smart_veto" = "1" ] && echo "  🔥  Thermal veto active"
+  [ "$_smart_sleep" = "1" ] && _f "  🌙  $T_NIGHT_SAFE"
+  [ "$_smart_veto" = "1" ] && _f "  🔥  $T_VETO_ACTIVE"
 fi
 echo ""
 case "$_bstat" in
   Charging|Full)
-    echo "  ⏳  Time to 0%: not estimated while charging" ;;
+    _f "  ⏳  $T_ETA_CHG" ;;
   *)
-    echo "  ⏳  Time to 0% ${_eta_note}"
-    echo "       ~${_ton_h}h ${_ton_m}m screen on  ·  ~${_toff_h}h ${_toff_m}m idle" ;;
+    _f "  ⏳  $T_ETA" "$_eta_note"
+    _f "       $T_ETA_LINE" "$_ton_h" "$_ton_m" "$_toff_h" "$_toff_m" ;;
 esac
 
 # ── Live state ──────────────────────────────────────────────────────────────────
@@ -1065,22 +1291,21 @@ if [ -n "$_g_state" ]; then
   # Words, not enum names: "LIGHT_IDLE · caps by vendor" was the governor's vocabulary,
   # not the reader's.
   case "$_g_state" in
-    DEEP_IDLE)  _gsn="deep idle" ;;
-    LIGHT_IDLE) _gsn="light idle" ;;
-    MODERATE)   _gsn="moderate load" ;;
-    HEAVY)      _gsn="heavy load" ;;
-    SUSTAINED)  _gsn="sustained load (thermal rail)" ;;
-    GAMING)     _gsn="gaming" ;;
+    DEEP_IDLE)  _gsn="$T_GS_DEEP" ;;
+    LIGHT_IDLE) _gsn="$T_GS_LIGHT" ;;
+    MODERATE)   _gsn="$T_GS_MOD" ;;
+    HEAVY)      _gsn="$T_GS_HEAVY" ;;
+    SUSTAINED)  _gsn="$T_GS_SUST" ;;
+    GAMING)     _gsn="$T_GS_GAME" ;;
     *)          _gsn="$_g_state" ;;
   esac
-  _gl="state: ${_gsn}"
-  [ -n "$_g_dwell" ] && _gl="${_gl} for ${_g_dwell}s"
-  echo "       ${_gl}"
+  if [ -n "$_g_dwell" ]; then _f "       $T_STATE_FOR" "$_gsn" "$_g_dwell"
+  else _f "       $T_STATE" "$_gsn"; fi
   case "$_g_owner" in
     ''|unknown|none) : ;;
-    vendor) echo "       CPU ceiling: vendor is stricter right now - ASB yields, no cap fight" ;;
-    shell)  echo "       CPU ceiling: set outside the governor (profile script)" ;;
-    *)      echo "       CPU ceiling: set by ASB" ;;
+    vendor) _f "       $T_CEIL_VENDOR" ;;
+    shell)  _f "       $T_CEIL_SHELL" ;;
+    *)      _f "       $T_CEIL_ASB" ;;
   esac
 
   # The prime is the cluster that decides both heat and responsiveness - say where it sits
@@ -1099,29 +1324,29 @@ if [ -n "$_g_state" ]; then
       [ -n "$_cpe_b" ] && _cpe_s="$_cpe_b"
     fi
     case "$_cpr" in
-      profile)             _cpr_t="profile rail" ;;
-      efficiency_envelope) _cpr_t="efficiency envelope" ;;
-      thermal_budget:*)    _cpr_t="heat budget (${_cpr#thermal_budget:})" ;;
+      profile)             _cpr_t="$T_CPR_PROFILE" ;;
+      efficiency_envelope) _cpr_t="$T_CPR_ENV" ;;
+      thermal_budget:*)    _cpr_t="$(_s "$T_CPR_HEAT" "${_cpr#thermal_budget:}")" ;;
       *)                   _cpr_t="$_cpr" ;;
     esac
-    echo "       prime ceiling: $((_cpe_s / 1000)) MHz · ${_cpr_t}"
+    _f "       $T_PRIME_CEIL" "$((_cpe_s / 1000))" "$_cpr_t"
   fi
   _pec="$(_st prime_escape_count)"
   if [ "$(_st prime_escape)" = "1" ]; then
-    echo "       ⚡ burst boost ACTIVE - prime lifted for heavy work (max 20 s)"
+    _f "       $T_BURST_ON"
   elif [ "${_pec:-0}" -gt 0 ] 2>/dev/null; then
-    echo "       burst boosts this session: ${_pec}"
+    _f "       $T_BURST_N" "$_pec"
   fi
 
   _gl=""
-  [ -n "$_g_head" ] && _gl="$(_join "$_gl" "thermal headroom ${_g_head}%")"
+  [ -n "$_g_head" ] && _gl="$(_join "$_gl" "$(_s "$T_HEADROOM" "$_g_head")")"
   case "$(_st thermal_source_confidence)" in
-    2) _gl="$(_join "$_gl" "temp sensor: verified")" ;;
-    1) _gl="$(_join "$_gl" "temp sensor: unverified")" ;;
+    2) _gl="$(_join "$_gl" "$T_SENS_OK")" ;;
+    1) _gl="$(_join "$_gl" "$T_SENS_UNV")" ;;
   esac
-  [ "${_g_thermal:-0}" != "0" ] && _gl="$(_join "$_gl" "🔥 thermal ${_g_thermal}")"
+  [ "${_g_thermal:-0}" != "0" ] && _gl="$(_join "$_gl" "$(_s "$T_THERMAL_N" "$_g_thermal")")"
   [ -n "$_gl" ] && echo "       ${_gl}"
-  [ "$(_st thermal_cooldown)" = "1" ] && echo "       ❄️ cooldown clamp: screen off, die still warm - caps at hardware minimum"
+  [ "$(_st thermal_cooldown)" = "1" ] && _f "       $T_COOLDOWN"
 fi
 
 # Show the SAME learner numbers the WebUI shows, so the two screens agree.
@@ -1152,9 +1377,9 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
   fi
   # Confidence tier, worded the same way the WebUI tiers it.
   if [ -n "$_l_conf" ] && [ "$_l_conf" -gt 0 ] 2>/dev/null; then
-    if   [ "$_l_conf" -ge 650 ]; then _tier="strong"
-    elif [ "$_l_conf" -ge 350 ]; then _tier="active"
-    else _tier="learning"; fi
+    if   [ "$_l_conf" -ge 650 ]; then _tier="$T_TIER_STRONG"
+    elif [ "$_l_conf" -ge 350 ]; then _tier="$T_TIER_ACTIVE"
+    else _tier="$T_TIER_LEARN"; fi
     _ll="$(_join "$_ll" "${_tier} $((_l_conf / 10))%")"
   fi
   # What the current bucket has learned, and therefore why Smart is leaning the way it
@@ -1165,7 +1390,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     # escape came out as the four characters "u00b0" on screen.
     _bl="       ${M_THIS_HOUR}: $((_bt / 10)).$((_bt % 10))°C"
     [ -n "$_bd" ] && [ "$_bd" -gt 0 ] 2>/dev/null \
-      && _bl="${_bl}  ·  $((_bd / 10)).$((_bd % 10))%/h"
+      && _bl="${_bl}  ·  $((_bd / 10)).$((_bd % 10))${U_PCTH}"
     printf '%b\n' "$_bl"
     # Compare against this device's learned thresholds, not fixed degrees.
     _tw="$(_st smart_therm_warm_x10)"; _tc="$(_st smart_therm_cool_x10)"
@@ -1177,7 +1402,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
   [ "$_smart_enabled" != "1" ] && _ll="$(_join "$_ll" "$M_BANKED")"
   [ -n "$_ll" ] && echo "       ${_ll}"
   if [ -n "$_l_drain" ] && [ "$_l_drain" -gt 0 ] 2>/dev/null; then
-    echo "       ${M_DRAIN_NOW}: $((_l_drain / 10)).$((_l_drain % 10))%/h"
+    echo "       ${M_DRAIN_NOW}: $((_l_drain / 10)).$((_l_drain % 10))${U_PCTH}"
   fi
   [ -n "$_l_pkg" ] && echo "       ${M_FOREGROUND}: ${_l_pkg}"
 
@@ -1227,7 +1452,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
       # that was never taken, next to a temperature that was: the two numbers on that line
       # had different standing and looked identical.
       if [ "${_bd2:-0}" -gt 0 ] 2>/dev/null; then
-        echo "       ${M_MEASURED}: $((_bt2 / 10)).$((_bt2 % 10))°C ${M_TYP_PEAK}, $((_bd2 / 10)).$((_bd2 % 10))%/h ${M_DRAIN}"
+        echo "       ${M_MEASURED}: $((_bt2 / 10)).$((_bt2 % 10))°C ${M_TYP_PEAK}, $((_bd2 / 10)).$((_bd2 % 10))${U_PCTH} ${M_DRAIN}"
       else
         echo "       ${M_MEASURED}: $((_bt2 / 10)).$((_bt2 % 10))°C ${M_TYP_PEAK} (${M_DRAIN_NOSAMPLE})"
       fi
@@ -1280,7 +1505,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     # --- 6. how long the battery is expected to last ---------------------------------
     _bp="$(_st smart_budget_pred_h_x10)"
     if [ -n "$_bp" ] && [ "$_bp" -gt 0 ] 2>/dev/null; then
-      echo "       ${M_PREDICT}: $((_bp / 10)).$((_bp % 10))h ${M_AT_RATE}"
+      echo "       ${M_PREDICT}: $((_bp / 10)).$((_bp % 10)) ${U_H} ${M_AT_RATE}"
     fi
 
     # --- 7. honest limits ------------------------------------------------------------
@@ -1299,23 +1524,23 @@ fi
 
 echo ""
 echo "  🎵  ${H_AUDIO}"
-_audio_l="       ${_a_prof} profile"
-[ "$_a_dac" = "1" ] && _audio_l="${_audio_l}  ·  hi-fi DAC"
-echo "$_audio_l"
-_loud_l="       loudness: ${_a_loud}"
-[ "$_a_dsp" != "off" ] && _loud_l="${_loud_l}  ·  DSP +${_a_dsp} dB"
-echo "$_loud_l"
-[ "$_a_bt" = "disabled" ] && echo "       BT volume: phone drives gain (independent scales)"
+_audio_l="$(_s "$T_A_PROFILE" "$_a_prof")"
+[ "$_a_dac" = "1" ] && _audio_l="$(_join "$_audio_l" "$T_A_DAC")"
+printf '       %s\n' "$_audio_l"
+_loud_l="$(_s "$T_A_LOUD" "$_a_loud")"
+[ "$_a_dsp" != "off" ] && _loud_l="$(_join "$_loud_l" "$(_s "$T_A_DSPGAIN" "$_a_dsp")")"
+printf '       %s\n' "$_loud_l"
+[ "$_a_bt" = "disabled" ] && _f "       $T_A_BTVOL"
 # The compressor only exists while the DSP is on - saying "compressor: on" next to a
 # disabled DSP describes a setting, not the device.
 if [ "$_a_dsp" != "off" ]; then
   case "$(_cfg dsp_compressor)" in
-    off|0|false) echo "       compressor: off  ·  limiter only" ;;
-    *)           echo "       compressor: on  ·  6:1 above -24 dBFS" ;;
+    off|0|false) _f "       $T_A_COMP_OFF" ;;
+    *)           _f "       $T_A_COMP_ON" ;;
   esac
 fi
 _a_bass="$(_cfg dsp_bass)"
-case "$_a_bass" in ''|off|0) : ;; *) echo "       bass shelf: +${_a_bass} dB @ 90 Hz" ;; esac
+case "$_a_bass" in ''|off|0) : ;; *) _f "       $T_A_BASS" "$_a_bass" ;; esac
 if [ "$_a_dsp" != "off" ]; then
   _l64="✗"; _l32="✗"
   [ -f /vendor/lib64/soundfx/libasbdsp.so ] && _l64="✓"
@@ -1328,12 +1553,12 @@ if [ "$_a_dsp" != "off" ]; then
       _dsp_abi="legacy"
     fi
   fi
-  echo "       libasbdsp: 64-bit ${_l64}  ·  32-bit ${_l32}  ·  ABI ${_dsp_abi}"
+  _f "       $T_A_LIB" "$_l64" "$_l32" "$_dsp_abi"
   _dsp_registered=0
   for _ecs in $(_asb_effect_files); do
     if grep -q 'asb_loudness' "$_ecs" 2>/dev/null; then
       _dsp_registered=1
-      echo "       effect registered in: ${_ecs}"
+      _f "       $T_A_REG" "$_ecs"
       break
     fi
   done
@@ -1343,17 +1568,26 @@ if [ "$_a_dsp" != "off" ]; then
   case "$_dsp_live_mb" in ''|*[!0-9]*) _dsp_live="?" ;; *) _dsp_live="$(( _dsp_live_mb / 100 ))" ;; esac
   _dsp_on="$(getprop persist.asb.dsp.enable 2>/dev/null)"
   [ "$_dsp_registered" = "1" ] && _dsp_reg_mark="✓" || _dsp_reg_mark="✗"
-  echo "       DSP status: requested +${_a_dsp}dB · live +${_dsp_live}dB · enabled=${_dsp_on:-0} · attacher ${_dsp_attacher} · registered ${_dsp_reg_mark}"
+  _f "       $T_A_STATUS" "$_a_dsp" "$_dsp_live" "${_dsp_on:-0}" "$_dsp_attacher" "$_dsp_reg_mark"
   # Whether the sound playing NOW goes through it. dsp_outputs=bt with the speaker playing
   # is correct and silent, and without this line it looks exactly like a broken DSP.
   _dsp_out="$(getprop persist.asb.dsp.outputs 2>/dev/null)"
   _dsp_rt="$(getprop persist.asb.dsp.route 2>/dev/null)"
   _dsp_ra="$(getprop persist.asb.dsp.route_allowed 2>/dev/null)"
+  # Decided here from the two values on screen, the way the attacher decides it. The
+  # published route_allowed can lag the route (older service.sh only refreshed the
+  # route), which printed "playing on bt -> not processed" with outputs=bt.
+  if [ -n "$_dsp_rt" ] && [ -n "$_dsp_out" ]; then
+    case "$_dsp_out" in
+      all) _dsp_ra=1 ;;
+      *) case "+$_dsp_out+" in *"+$_dsp_rt+"*) _dsp_ra=1 ;; *) _dsp_ra=0 ;; esac ;;
+    esac
+  fi
   if [ -n "$_dsp_rt" ]; then
     case "$_dsp_ra" in
-      1) echo "       works on: ${_dsp_out:-all} · now playing on ${_dsp_rt} → processed" ;;
-      0) echo "       works on: ${_dsp_out:-all} · now playing on ${_dsp_rt} → not processed (by your choice)" ;;
-      *) echo "       works on: ${_dsp_out:-all} · current route ${_dsp_rt}" ;;
+      1) _f "       $T_A_ON_PROC" "${_dsp_out:-$T_A_ALL}" "$_dsp_rt" ;;
+      0) _f "       $T_A_ON_NOT" "${_dsp_out:-$T_A_ALL}" "$_dsp_rt" ;;
+      *) _f "       $T_A_ON_ROUTE" "${_dsp_out:-$T_A_ALL}" "$_dsp_rt" ;;
     esac
   fi
 fi
@@ -1373,20 +1607,19 @@ for _vb_try in /odm/etc/camera/config/video_beauty_default_config \
     _vb_n="$_vb_try_n"; _vb_live="$_vb_try"
   fi
 done
-_cam_l="processing level ${_c_lvl}"
-[ "${_vb_n:-0}" -gt 0 ] 2>/dev/null && _cam_l="$(_join "$_cam_l" "${_vb_n} retouch apps")"
+_cam_l="$(_s "$T_C_LEVEL" "$_c_lvl")"
+[ "${_vb_n:-0}" -gt 0 ] 2>/dev/null && _cam_l="$(_join "$_cam_l" "$(_s "$T_C_APPS" "$_vb_n")")"
 echo "       ${_cam_l}"
-[ -n "$_vb_live" ] && echo "       retouch config: $_vb_live"
+[ -n "$_vb_live" ] && _f "       $T_C_CFG" "$_vb_live"
 _cam_ag="$(_cfg CAMERA_AGGRESSIVE)"
 _cam_in="$(_cfg CAMERA_AGGRESSIVE_INJECT)"
 _cam_l=""
-[ "$_cam_ag" = "1" ] && _cam_l="$(_join "$_cam_l" "aggressive tone")"
+[ "$_cam_ag" = "1" ] && _cam_l="$(_join "$_cam_l" "$T_C_AGGR")"
 # Only with a grade: at level 0 nothing is injected, whatever the mode says.
 if [ "${_c_lvl:-0}" -gt 0 ] 2>/dev/null; then
   case "$_cam_in" in
-    full) _cam_l="$(_join "$_cam_l" "inject: full")" ;;
     ''|standard) : ;;
-    *) _cam_l="$(_join "$_cam_l" "inject: ${_cam_in}")" ;;
+    *) _cam_l="$(_join "$_cam_l" "$(_s "$T_C_INJ" "$_cam_in")")" ;;
   esac
 fi
 [ -n "$_cam_l" ] && echo "       ${_cam_l}"
@@ -1398,9 +1631,9 @@ _c_contr="$(_cfg CAMERA_CONTRAST)"; case "$_c_contr" in ''|3) _c_contr="" ;; esa
 _c_port="$(_cfg CAMERA_PORTRAIT)";  case "$_c_port"  in ''|0) _c_port=""  ;; esac
 _c_low="$(_cfg CAMERA_LOWLIGHT)";   case "$_c_low"   in ''|0) _c_low=""   ;; esac
 # Out of 10: the WebUI sliders run 0-10, and "/8" printed "10/8" for a maxed slider.
-[ -n "$_c_grain" ] && echo "       film grain: ${_c_grain}/10 (3 = stock)"
-[ -n "$_c_contr" ] && echo "       contrast & colour depth: ${_c_contr}/10 (3 = stock)"
-[ -n "$_c_port" ]  && echo "       portrait AI: ${_c_port}/6 (ships off)"
+[ -n "$_c_grain" ] && _f "       $T_C_GRAIN" "$_c_grain"
+[ -n "$_c_contr" ] && _f "       $T_C_CONTR" "$_c_contr"
+[ -n "$_c_port" ]  && _f "       $T_C_PORT" "$_c_port"
 # Camera hold belongs here, not under SYSTEM.
 #
 # It reports that the governor is holding interactive caps BECAUSE the camera pipeline is
@@ -1410,17 +1643,17 @@ _c_low="$(_cfg CAMERA_LOWLIGHT)";   case "$_c_low"   in ''|0) _c_low=""   ;; esa
 # line, and it was gated on lpm_mode and the LPM category, which have nothing to do with the
 # camera: on a device with LPM switched off, camera hold was never reported at all.
 if [ "$(_st camera_hold)" = "1" ]; then
-  echo "       hold ACTIVE · interactive caps held, cpuset + uclamp lifted"
+  _f "       $T_C_HOLD"
 fi
-[ -n "$_c_low" ]   && echo "       macro / low-light sharpening: ${_c_low}/10"
+[ -n "$_c_low" ]   && _f "       $T_C_LOW" "$_c_low"
 # Whether the grade actually landed on the live partition, which is the only claim
 # worth making - the config saying 4 proved nothing until this was checked.
 _c_live="/odm/etc/camera/conf_tuning_params.json"
 if [ "${_c_lvl:-0}" -gt 0 ] 2>/dev/null && [ -r "$_c_live" ]; then
   _c_bw="$(grep -m1 -o '"BlendWeight"[^]]*]' "$_c_live" 2>/dev/null | sed 's/.*\[//;s/\]//')"
   case "$_c_bw" in
-    *0.35,*0.5,*0.7*) echo "       ⚠️  grade NOT on the live file (still stock values)" ;;
-    ?*)               echo "       ✅ live file graded: BlendWeight [${_c_bw}]" ;;
+    *0.35,*0.5,*0.7*) _f "       $T_C_NOTLIVE" ;;
+    ?*)               _f "       $T_C_LIVE" "$_c_bw" ;;
   esac
 fi
 
@@ -1429,15 +1662,15 @@ echo ""
 echo "  💾  ${H_MEMORY}"
 _bgl="$(_cfg BG_TRIM_LEVEL)"
 _ml=""
-[ -n "$_bgl" ] && _ml="$(_join "$_ml" "bg trim: level ${_bgl}")"
+[ -n "$_bgl" ] && _ml="$(_join "$_ml" "$(_s "$T_M_BG" "$_bgl")")"
 _swp="$(cat /proc/sys/vm/swappiness 2>/dev/null)"
-[ -n "$_swp" ] && _ml="$(_join "$_ml" "swappiness ${_swp}")"
+[ -n "$_swp" ] && _ml="$(_join "$_ml" "$(_s "$T_M_SWAP" "$_swp")")"
 [ -n "$_ml" ] && echo "       ${_ml}"
 _mfree="$(grep -m1 MemAvailable /proc/meminfo 2>/dev/null | awk '{print int($2/1024)}')"
 _zram="$(awk '/SwapTotal/{t=$2} /SwapFree/{f=$2} END{if(t>0) print int((t-f)/1024)}' /proc/meminfo 2>/dev/null)"
 _ml=""
-[ -n "$_mfree" ] && _ml="$(_join "$_ml" "${_mfree} MB free")"
-[ -n "$_zram" ] && _ml="$(_join "$_ml" "zram ${_zram} MB used")"
+[ -n "$_mfree" ] && _ml="$(_join "$_ml" "$(_s "$T_M_FREE" "$_mfree")")"
+[ -n "$_zram" ] && _ml="$(_join "$_ml" "$(_s "$T_M_ZRAM" "$_zram")")"
 [ -n "$_ml" ] && echo "       ${_ml}"
 
 if [ "$(_feat NET)" = "1" ]; then
@@ -1449,7 +1682,7 @@ if [ "$(_feat NET)" = "1" ]; then
   _qd="$(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
   [ -n "$_qd" ] && _nl="$(_join "$_nl" "$_qd")"
   _nb="$(cat /proc/sys/net/core/netdev_budget 2>/dev/null)"
-  [ -n "$_nb" ] && _nl="$(_join "$_nl" "rx budget ${_nb}")"
+  [ -n "$_nb" ] && _nl="$(_join "$_nl" "$(_s "$T_N_RX" "$_nb")")"
   [ -n "$_nl" ] && echo "       TCP: ${_nl}"
 
 # What the user ASKED for, alongside what the kernel is actually running.
@@ -1463,18 +1696,18 @@ _nfmt() {
   case "$_w" in ''|auto) return 0 ;; esac
   _v="$(_nverd "$2")"
   case "$_v" in
-    unavailable) echo "       $1: ${_w} requested · NOT SUPPORTED by this kernel" ;;
-    failed)      echo "       $1: ${_w} requested · NOT APPLIED" ;;
-    pending)     echo "       $1: ${_w} · waiting for a link" ;;
+    unavailable) _f "       $T_N_UNSUP" "$1" "$_w" ;;
+    failed)      _f "       $T_N_FAILED" "$1" "$_w" ;;
+    pending)     _f "       $T_N_PENDING" "$1" "$_w" ;;
     # Running as asked: the TCP line above already shows it, so say nothing. Only a
     # mismatch is news.
     *)           if [ -n "$3" ] && [ "$3" != "$_w" ]; then
-                   echo "       $1: ${_w} requested · running ${3}"
+                   _f "       $T_N_RUNNING" "$1" "$_w" "$3"
                  fi ;;
   esac
 }
-_nfmt "ramp (other links)" net_congestion "$_cc"
-_nfmt "queue (other links)" net_qdisc "$_qd"
+_nfmt "$T_N_RAMP" net_congestion "$_cc"
+_nfmt "$T_N_QUEUE" net_qdisc "$_qd"
 
 # Per-link overrides print only when set, so the section stays short on a default install
 # and grows only for someone who has actually split Wi-Fi from mobile.
@@ -1485,12 +1718,12 @@ for _plk in wifi mobile; do
   case "$_pcc" in auto) _pcc="" ;; esac
   case "$_pqd" in auto) _pqd="" ;; esac
   [ -n "${_pcc}${_pqd}" ] || continue
-  [ "$_plk" = "wifi" ] && _plabel="Wi-Fi" || _plabel="mobile"
+  [ "$_plk" = "wifi" ] && _plabel="Wi-Fi" || _plabel="$T_N_MOBILE"
   _pll="       ${_plabel}: ${_pcc:-auto} + ${_pqd:-auto}"
   for _pk in net_congestion_${_plk} net_qdisc_${_plk}; do
     case "$(_nverd "$_pk")" in
-      unavailable) _pll="${_pll} · ${_pk#net_} NOT SUPPORTED" ;;
-      failed)      _pll="${_pll} · ${_pk#net_} NOT APPLIED" ;;
+      unavailable) _pll="${_pll} · $(_s "$T_N_SUF_UNSUP" "${_pk#net_}")" ;;
+      failed)      _pll="${_pll} · $(_s "$T_N_SUF_FAIL" "${_pk#net_}")" ;;
     esac
   done
   echo "$_pll"
@@ -1504,9 +1737,9 @@ case "$_rt" in
   *)
     _rtl="$(ip route show 2>/dev/null | grep -m1 -oE 'initcwnd [0-9]+ initrwnd [0-9]+')"
     if [ -n "$_rtl" ]; then
-      echo "       buffers: ${_rt} · ${_rtl} on the default route"
+      _f "       $T_N_BUF_ON" "$_rt" "$_rtl"
     else
-      echo "       buffers: ${_rt} · not on the route yet (pending or replaced)"
+      _f "       $T_N_BUF_OFF" "$_rt"
     fi
     ;;
 esac
@@ -1517,7 +1750,7 @@ _wcc="$(_cfg wifi_country)"
 case "$_wcc" in
   ''|auto) : ;;
   *) case "$(_nverd wifi_country)" in
-       failed) echo "       Wi-Fi region: ${_wcc} · NOT APPLIED" ;;
+       failed) _f "       $T_N_REGION_FAIL" "$_wcc" ;;
      esac ;;
 esac
 _wst="$(_cfg wifi_scan_throttle)"
@@ -1525,11 +1758,11 @@ _wst="$(_cfg wifi_scan_throttle)"
 # the interval-based rewrite: it called rung 0 "unthrottled" when that rung stops
 # background scanning entirely, and said nothing at all for the shipped default (2).
 case "$_wst" in
-  0) echo "       Wi-Fi scan: background scanning off (networks found only when you look)" ;;
-  1) echo "       Wi-Fi scan: every 10 min" ;;
-  2) echo "       Wi-Fi scan: every 5 min (framework default)" ;;
-  3) echo "       Wi-Fi scan: every 2 min" ;;
-  4) echo "       Wi-Fi scan: unthrottled (roams sooner, costs battery)" ;;
+  0) _f "       $T_N_SCAN0" ;;
+  1) _f "       $T_N_SCAN1" ;;
+  2) _f "       $T_N_SCAN2" ;;
+  3) _f "       $T_N_SCAN3" ;;
+  4) _f "       $T_N_SCAN4" ;;
 esac
 _radio_policy="$(_cfg radio_policy_enable)"
 # Derived from the net_wifi_leave ladder (asb_lpm.sh): the old net_handover_* keys are no
@@ -1541,38 +1774,38 @@ case "$_wleave" in
   *)             _handover="$(_cfg net_handover_fast)"; _handover_active="$(_cfg net_handover_active)" ;;
 esac
 case "$_radio_policy" in
-  1) echo "       cellular/radio controls: enabled by explicit choice" ;;
-  *) echo "       cellular/radio controls: off · profiles leave Android radio policy untouched" ;;
+  1) _f "       $T_N_RADIO_ON" ;;
+  *) _f "       $T_N_RADIO_OFF" ;;
 esac
 case "$_wleave" in
-  weak)       echo "       leave Wi-Fi: on a weak signal (below $(_cfg net_wifi_leave_dbm) dBm)" ;;
-  unusable)   echo "       leave Wi-Fi: weak signal or no working internet" ;;
-  aggressive) echo "       leave Wi-Fi: weak, broken or slow - hands over to mobile at once" ;;
+  weak)       _f "       $T_N_LEAVE_WEAK" "$(_cfg net_wifi_leave_dbm)" ;;
+  unusable)   _f "       $T_N_LEAVE_UNUSABLE" ;;
+  aggressive) _f "       $T_N_LEAVE_AGGR" ;;
 esac
 case "$_handover:$_radio_policy" in
-  1:1) echo "       Wi-Fi → mobile handover: fast (cellular context kept ready while awake)" ;;
-  1:*) echo "       Wi-Fi → mobile handover: stored, inactive (radio controls off)" ;;
+  1:1) _f "       $T_N_HO_FAST" ;;
+  1:*) _f "       $T_N_HO_STORED" ;;
 esac
 case "$_handover_active:$_radio_policy" in
   1:1) _hf="$(MODDIR=\"$MODDIR\" sh \"$MODDIR/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo unavailable)"
-       echo "       Wi-Fi fallback: active opt-in · ${_hf}" ;;
-  1:*) echo "       Wi-Fi fallback: stored, inactive (radio controls off)" ;;
+       _f "       $T_N_FB_ACTIVE" "$_hf" ;;
+  1:*) _f "       $T_N_FB_STORED" ;;
 esac
 if [ "$(_cfg net_screen_off_lte)" = "1" ]; then
   _lte_st="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null)"
   case "$_lte_st" in
-    *unsupported=1*) echo "       LTE while screen off: on · stopped itself - $(printf '%s\n' "$_lte_st" | sed -n 's/^last=//p' | cut -c1-90)" ;;
-    *applied=1*)     echo "       LTE while screen off: on · 5G parked right now" ;;
-    *pending=1*)     echo "       LTE while screen off: on · timer running (90 s after screen off)" ;;
-    *)               echo "       LTE while screen off: on · 5G allowed (screen is on)" ;;
+    *unsupported=1*) _f "       $T_N_LTE_STOP" "$(printf '%s\n' "$_lte_st" | sed -n 's/^last=//p' | cut -c1-90)" ;;
+    *applied=1*)     _f "       $T_N_LTE_PARKED" ;;
+    *pending=1*)     _f "       $T_N_LTE_TIMER" ;;
+    *)               _f "       $T_N_LTE_ALLOWED" ;;
   esac
 fi
   # Which interface is actually carrying traffic - not always rmnet_data0.
   _if="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
   if [ -n "$_if" ]; then
     _rx="$(cat "/sys/class/net/$_if/statistics/rx_bytes" 2>/dev/null)"
-    _nl="route via ${_if}"
-    [ -n "$_rx" ] && _nl="${_nl}  ·  $((_rx / 1048576)) MB rx"
+    _nl="$(_s "$T_N_ROUTE" "$_if")"
+    [ -n "$_rx" ] && _nl="$(_join "$_nl" "$(_s "$T_N_ROUTE_RX" "$((_rx / 1048576))")")"
     echo "       ${_nl}"
   fi
 fi
@@ -1585,18 +1818,18 @@ fi
     # Third field of the same tag: "active=1" when handover policy is engaged.
     _lpm_active="$(cat /dev/.asb/lpm_mode 2>/dev/null | cut -d'|' -f3 | cut -d'=' -f2)"
     case "$_lpm" in
-      fast) echo "       modem LPM: fast · data call held up (low latency)" ;;
-      save) echo "       modem LPM: save · radio idling, keepalives stretched" ;;
-      night) echo "       modem LPM: night · screen off, radio relaxed" ;;
+      fast) _f "       $T_L_FAST" ;;
+      save) _f "       $T_L_SAVE" ;;
+      night) _f "       $T_L_NIGHT" ;;
       '')   : ;;
       # "normal" is a decision, not an absence of one: with traffic moving, deep modem
       # sleep costs latency in a game and stalls a download, so the module leaves the
       # radio alone. Reported as "normal" with no reason, it read as "nothing happened" -
       # a tester watching it during a heavy game asked why LPM was doing nothing.
       *)    if [ "$_lpm_active" = "1" ]; then
-              echo "       modem LPM: normal · handover active, radio left alone"
+              _f "       $T_L_NORMAL_HO"
             else
-              echo "       modem LPM: normal · profile defaults"
+              _f "       $T_L_NORMAL"
             fi ;;
     esac
   fi
@@ -1631,27 +1864,27 @@ for _pf in /data/adb/modules/AutoSystemBoost/profiles/*.sh; do
 done
 
 if [ -n "$_cc_drv" ]; then
-  _wl="       region: ${_cc_drv}"
-  [ "$_cc_forced" = "1" ] && _wl="${_wl} (forced)"
-  [ -n "$_cc_tel" ] && [ "$_cc_tel" != "$_cc_drv" ] && _wl="${_wl}  ·  SIM says ${_cc_tel}"
+  _wl="       $(_s "$T_W_REGION" "$_cc_drv")"
+  [ "$_cc_forced" = "1" ] && _wl="${_wl}${T_W_FORCED}"
+  [ -n "$_cc_tel" ] && [ "$_cc_tel" != "$_cc_drv" ] && _wl="${_wl}  ·  $(_s "$T_W_SIM" "$_cc_tel")"
   _wifi_out="${_wifi_out}${_wl}
 "
 elif [ "$_cc_forced" = "1" ]; then
-  _wifi_out="${_wifi_out}       region: forced${_cc_ovr:+ ${_cc_ovr}} (radio off?)
+  _wifi_out="${_wifi_out}       $(_s "$T_W_REGION_FORCED" "${_cc_ovr:+ ${_cc_ovr}}")
 "
 fi
   _txq="$(cat /sys/class/net/wlan0/tx_queue_len 2>/dev/null)"
   _lnk="$(echo "$_wifi_dump" | grep -m1 -iE 'mWifiInfo|SSID' | grep -oE '[0-9]+Mbps' | head -1)"
   _wl2=""
-  [ -n "$_txq" ] && _wl2="$(_join "$_wl2" "txqueue ${_txq}")"
-  [ -n "$_lnk" ] && _wl2="$(_join "$_wl2" "link ${_lnk}")"
+  [ -n "$_txq" ] && _wl2="$(_join "$_wl2" "$(_s "$T_W_TXQ" "$_txq")")"
+  [ -n "$_lnk" ] && _wl2="$(_join "$_wl2" "$(_s "$T_W_LINK" "$_lnk")")"
   [ -n "$_wl2" ] && _wifi_out="${_wifi_out}       ${_wl2}
 "
   _wps="$(_cfg wifi_powersave)"
   case "$_wps" in
-    screen_off) _wifi_out="${_wifi_out}       power save: on while the screen is off
+    screen_off) _wifi_out="${_wifi_out}       $(_s "$T_W_PS_SCR")
 " ;;
-    on|always)  _wifi_out="${_wifi_out}       power save: always on
+    on|always)  _wifi_out="${_wifi_out}       $(_s "$T_W_PS_ALWAYS")
 " ;;
   esac
 if [ -n "$_wifi_out" ]; then
@@ -1665,9 +1898,9 @@ fi
 if [ "$(_feat GPS)" = "1" ]; then
   _agps="$(settings get global assisted_gps_enabled 2>/dev/null)"
   _gl=""
-  case "$_agps" in 1) _gl="$(_join "$_gl" "A-GPS on")" ;; 0) _gl="$(_join "$_gl" "A-GPS off")" ;; esac
+  case "$_agps" in 1) _gl="$(_join "$_gl" "$T_G_ON")" ;; 0) _gl="$(_join "$_gl" "$T_G_OFF")" ;; esac
   _xtra="$(settings get global gps_xtra_server 2>/dev/null)"
-  case "$_xtra" in *gpsonextra*) _gl="$(_join "$_gl" "XTRA servers set")" ;; esac
+  case "$_xtra" in *gpsonextra*) _gl="$(_join "$_gl" "$T_G_XTRA")" ;; esac
   # Heading only with something under it - an empty section looks like a failed read.
   [ -n "$_gl" ] && { echo ""; echo "  🛰  ${H_GPS}"; echo "       ${_gl}"; }
 fi
@@ -1677,14 +1910,14 @@ echo ""
 # working deserves to know the module turned it off rather than that it broke.
 if [ -f /data/adb/asb/prop_blocks_disabled ]; then
   echo ""
-  echo "  ⚠️  BOOT SAFETY"
-  echo "       ASB removed its display properties after two failed boots."
-  echo "       Re-enable blur and animations one at a time to find the culprit."
+  _f "  ⚠️  $T_BS_HEAD"
+  _f "       $T_BS_1"
+  _f "       $T_BS_2"
 fi
 _pbn="$(cat /data/adb/asb/prop_boot_counter 2>/dev/null)"
 case "$_pbn" in
   ''|0) : ;;
-  *) echo "       (boot-safety counter at ${_pbn}/2 - last boot did not report completion)" ;;
+  *) _f "       $T_BS_CNT" "$_pbn" ;;
 esac
 
 # Interface gets its own heading. Blur and animations were reported under SYSTEM next to
@@ -1692,22 +1925,22 @@ esac
 # WebUI has had them as separate categories for a while now. The report should agree with
 # the screen the user just came from.
 echo "  🖥  ${H_IFACE}"
-echo "       blur: $([ "$_blur" = "1" ] && echo off || echo stock)"
+if [ "$_blur" = "1" ]; then _f "       $T_I_BLUR_OFF"; else _f "       $T_I_BLUR_STOCK"; fi
 # Animations: auto follows blur, so resolve it rather than printing "auto" and leaving
 # the reader to work out what that means on this device.
 _ui_fx="$(_cfg ui_effects_level)"
 case "$_ui_fx" in
-  flat|0)  echo "       animations: simplified" ;;
-  stock|1) echo "       animations: normal" ;;
+  flat|0)  _f "       $T_I_ANIM_SIMPLE" ;;
+  stock|1) _f "       $T_I_ANIM_NORMAL" ;;
   *)       [ "$_blur" = "1" ] \
-             && echo "       animations: simplified (auto, follows blur)" \
-             || echo "       animations: normal (auto, follows blur)" ;;
+             && _f "       $T_I_ANIM_SIMPLE_AUTO" \
+             || _f "       $T_I_ANIM_NORMAL_AUTO" ;;
 esac
 case "$(_cfg UX_MANAGE_TIMEOUTS)" in
-  1) echo "       UI speed: managed (animations and touch windows scaled per profile)" ;;
+  1) _f "       $T_I_UISPEED" ;;
 esac
 case "$(_cfg lockscreen_shortcuts)" in
-  clean) echo "       lock screen: camera and wallet shortcuts hidden" ;;
+  clean) _f "       $T_I_LOCK" ;;
 esac
 
 # Sleep. Nothing reported this at all, which is a gap on the one subsystem whose whole
@@ -1731,32 +1964,32 @@ case "$_dz" in
       _nns="$(grep -E '^samples='   "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
     fi
     case "$_nsm$_nwm" in
-      ''|*[!0-9]*) echo "       deep sleep: night mode, still learning your schedule" ;;
+      ''|*[!0-9]*) _f "       $T_S_LEARNING" ;;
       *)
         # Report the window actually used, margins included - printing the raw learned
         # times would not match when the phone changes behaviour.
         _ws=$(( (_nsm + 15) % 1440 )); _we=$(( (_nwm - 20 + 1440) % 1440 ))
-        printf '       deep sleep: night mode · %02d:%02d-%02d:%02d (learned from %s nights)\n' \
-          $((_ws / 60)) $((_ws % 60)) $((_we / 60)) $((_we % 60)) "${_nns:-?}" ;;
+        _f "       $T_S_NIGHT" \
+          "$(printf '%02d:%02d-%02d:%02d' $((_ws / 60)) $((_ws % 60)) $((_we / 60)) $((_we % 60)))" "${_nns:-?}" ;;
     esac
-    [ -f /data/adb/asb/aod_baseline ] && echo "       always-on display: paused for the night window"
+    [ -f /data/adb/asb/aod_baseline ] && _f "       $T_S_AOD"
     ;;
-  moderate)   echo "       deep sleep: moderate (idle after 5 min instead of 30)" ;;
-  aggressive) echo "       deep sleep: aggressive (idle after 2 min; messages may lag)" ;;
-  *)          echo "       deep sleep: stock" ;;
+  moderate)   _f "       $T_S_MOD" ;;
+  aggressive) _f "       $T_S_AGGR" ;;
+  *)          _f "       $T_S_STOCK" ;;
 esac
 case "$(_cfg night_quiet_enable)" in
-  1) echo "       night quiet: sensor polling slowed inside the sleep window" ;;
+  1) _f "       $T_S_NQ" ;;
 esac
 
 echo ""
 echo "  ⚙️  ${H_SYSTEM}"
 case "$(_cfg phantom_procs)" in
-  relaxed) echo "       background processes: unlimited (phantom monitor off)" ;;
-  strict)  echo "       background processes: Android default (32 max)" ;;
+  relaxed) _f "       $T_Y_BG_RELAX" ;;
+  strict)  _f "       $T_Y_BG_STRICT" ;;
 esac
 case "$(_cfg UX_MANAGE_OEM_TOGGLES)" in
-  1) echo "       OEM toggles: managed (RAM expansion, battery, heat)" ;;
+  1) _f "       $T_Y_OEM" ;;
 esac
 
 # Haptics. The numbers that matter are the OEM stepless values actually in force, not
@@ -1764,24 +1997,24 @@ esac
 _hap="$(_cfg haptic_strength)"
 _hap_t="$(_cfg haptic_touch_strength)"
 case "$_hap" in
-  ''|-1|auto|stock) echo "       vibration: stock (not managed)" ;;
-  0|off)            echo "       vibration: off" ;;
+  ''|-1|auto|stock) _f "       $T_Y_VIB_STOCK" ;;
+  0|off)            _f "       $T_Y_VIB_OFF" ;;
   *)
     _hap_live="$(settings get system notification_stepless_vibration_intensity 2>/dev/null)"
-    _hap_l="       vibration: ${_hap}/10"
-    case "$_hap_live" in ''|null) : ;; *) _hap_l="${_hap_l}  ·  live ${_hap_live}" ;; esac
+    _hap_l="$(_s "$T_Y_VIB" "$_hap")"
+    case "$_hap_live" in ''|null) : ;; *) _hap_l="$(_join "$_hap_l" "$(_s "$T_Y_VIB_LIVE" "$_hap_live")")" ;; esac
     case "$_hap_t" in
-      ''|-1|auto) _hap_l="${_hap_l}  ·  touch: follows" ;;
-      0)          _hap_l="${_hap_l}  ·  touch: off" ;;
-      *)          _hap_l="${_hap_l}  ·  touch: ${_hap_t}/10" ;;
+      ''|-1|auto) _hap_l="$(_join "$_hap_l" "$T_Y_TOUCH_FOLLOW")" ;;
+      0)          _hap_l="$(_join "$_hap_l" "$T_Y_TOUCH_OFF")" ;;
+      *)          _hap_l="$(_join "$_hap_l" "$(_s "$T_Y_TOUCH" "$_hap_t")")" ;;
     esac
-    echo "$_hap_l" ;;
+    printf '       %s\n' "$_hap_l" ;;
 esac
 
 # Every category, not the six that happened to be hard-coded here. Wrapped by hand
 # because a single 20-item line is unreadable on a phone.
 # With a label: a bare "CPU · VM · AUDIO" block under SYSTEM did not say what it listed.
-echo "       enabled modules:"
+_f "       $T_Y_MODULES"
 _cats=""; _catn=0; _catline=""
 for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
           RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR; do
@@ -1820,28 +2053,28 @@ else
 fi
 _krn="$(uname -r 2>/dev/null | cut -d- -f1)"
 if [ "$_mnt" -gt 0 ] 2>/dev/null; then
-  _sysl="       overlay: ${_mnt} mount$([ "$_mnt" = "1" ] || echo s)"
+  _sysl="       $(_s "$T_Y_OVL_MNT" "$_mnt")"
 elif [ "$_ovl_live" = "1" ]; then
-  _sysl="       overlay: live (private namespace)"
+  _sysl="       $T_Y_OVL_LIVE"
   # Name the domain that did NOT land, or the line reads as full success.
   [ -n "$_ovl_miss" ] && \
-    _sysl="       overlay: partial -${_ovl_miss} not visible to the system"
+    _sysl="       $(_s "$T_Y_OVL_PART" "$_ovl_miss")"
 else
-  _sysl="       overlay: not detected"
+  _sysl="       $T_Y_OVL_NONE"
 fi
-[ -n "$_krn" ] && _sysl="${_sysl}  ·  kernel ${_krn}"
+[ -n "$_krn" ] && _sysl="${_sysl}  ·  $(_s "$T_Y_KERNEL" "$_krn")"
 _up="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
 if [ -n "$_up" ]; then
-  _sysl="${_sysl}  ·  up $((_up / 3600))h $(((_up % 3600) / 60))m"
+  _sysl="${_sysl}  ·  $(_s "$T_Y_UP" "$((_up / 3600))" "$(((_up % 3600) / 60))")"
 fi
-echo "$_sysl"
+printf '%s\n' "$_sysl"
 
 
 _abo="$(cat /data/adb/asb/auto_battery_origin 2>/dev/null)"
 if [ -n "$_abo" ]; then
   echo ""
   echo "  🔋  ${H_BATT}"
-  echo "       switched here automatically · returns to ${_abo} when charged"
+  _f "       $T_AB" "$_abo"
 fi
 
 
@@ -1854,22 +2087,22 @@ _add_bad() { _bad="${_bad}${_bad:+
 }       $1"; }
 
 # governor process
-pgrep -f 'asb_governor|/asb$' >/dev/null 2>&1 || _add_bad "governor is not running"
+pgrep -f 'asb_governor|/asb$' >/dev/null 2>&1 || _add_bad "$T_B_GOV"
 
 # audio profile -> UHQA property
 if [ "$_a_prof" = "hifi" ] && [ "$(getprop persist.audio.uhqa 2>/dev/null)" != "1" ]; then
-  _add_bad "hi-fi profile — persist.audio.uhqa is not 1 (restart audioserver?)"
+  _add_bad "$T_B_UHQA"
 fi
 
 # media loudness -> the reshape leaves a marker in the table it rewrote
 if [ "$_a_loud" != "stock" ]; then
   grep -q 'ASB:VOLCURVE' /vendor/etc/default_volume_tables.xml 2>/dev/null \
-    || _add_bad "loudness ${_a_loud} — volume table not reshaped (reboot needed?)"
+    || _add_bad "$(_s "$T_B_LOUD" "$_a_loud")"
 fi
 
 # DSP -> library staged AND registered; either half missing means silence
 if [ "$_a_dsp" != "off" ]; then
-  [ "$_dsp_so" = "1" ] || _add_bad "DSP +${_a_dsp} dB — libasbdsp.so not installed (reinstall)"
+  [ "$_dsp_so" = "1" ] || _add_bad "$(_s "$T_B_DSP_LIB" "$_a_dsp")"
   # Two different failures hide behind "not registered", and they need different fixes: the
   # staged copy under /data/adb/asb/odm_patched is what install.sh patches, and a bind mount is
   # what makes it the live file.
@@ -1891,15 +2124,15 @@ if [ "$_a_dsp" != "off" ]; then
   done
   if [ "$_reg_live" != "1" ]; then
     if [ "$_reg_stage" = "1" ]; then
-      _add_bad "DSP +${_a_dsp} dB — effect registered but the odm bind is not mounted"
+      _add_bad "$(_s "$T_B_DSP_BIND" "$_a_dsp")"
       [ -f /data/adb/asb/vendor_overlay_blocked ] \
-        && _add_bad "  (overlay is blocked by the bootloop fuse — see uninstall/reinstall)"
+        && _add_bad "$T_B_DSP_FUSE"
     else
-      _add_bad "DSP +${_a_dsp} dB — effect not registered by install (reinstall)"
+      _add_bad "$(_s "$T_B_DSP_REG" "$_a_dsp")"
     fi
   fi
   [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] \
-    || _add_bad "DSP +${_a_dsp} dB — persist.asb.dsp.enable is not 1"
+    || _add_bad "$(_s "$T_B_DSP_EN" "$_a_dsp")"
 
 fi
 
@@ -1937,9 +2170,9 @@ if [ "$_blur" = "1" ]; then
       grep -q '^persist.sys.sf.disable_blurs=1' "$_spf" 2>/dev/null && { _sp_has=1; break; }
     done
     if [ "$_sp_has" = "1" ]; then
-      _add_bad "blur — set in system.prop (persist.sys.sf.disable_blurs), applies after a reboot"
+      _add_bad "$T_B_BLUR_PROP"
     else
-      _add_bad "blur — persist.sys.sf.disable_blurs not set (${_b_ro_bad}/${_b_ro_n} legacy keys also off)"
+      _add_bad "$(_s "$T_B_BLUR_UNSET" "$_b_ro_bad" "$_b_ro_n")"
     fi
   fi
 fi
@@ -1950,21 +2183,21 @@ fi
 # to two real findings.
 if [ "$(_feat WIFI)" = "1" ] && [ -n "$_cc_drv" ] && [ -n "$_cc_want" ] \
    && [ "$_cc_drv" != "$_cc_want" ]; then
-  _add_bad "Wi-Fi ${_cc_want} — driver is on ${_cc_drv} (override did not take)"
+  _add_bad "$(_s "$T_B_WIFI" "$_cc_want" "$_cc_drv")"
 fi
 
 # camera -> the retouch list is the visible half of the camera patch
 if [ "$(_feat CAMERA)" = "1" ] && [ "${_c_lvl:-0}" -gt 0 ] 2>/dev/null; then
   [ "${_vb_n:-0}" -ge 7 ] 2>/dev/null \
-    || _add_bad "camera — retouch app list not injected (${_vb_n:-0} apps; ${_vb_live:-no live config})"
+    || _add_bad "$(_s "$T_B_CAM" "${_vb_n:-0}" "${_vb_live:-$T_B_NOCFG}")"
 fi
 
 echo ""
 if [ -n "$_bad" ]; then
-  echo "  ⚠️  NOT APPLIED"
-  echo "$_bad"
+  _f "  ⚠️  $T_BAD_HEAD"
+  printf '%s\n' "$_bad"
 else
-  echo "  ✅  All configured tweaks verified applied"
+  _f "  ✅  $T_ALL_OK"
 fi
 
 # The link, not the launch.
