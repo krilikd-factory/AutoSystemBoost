@@ -434,6 +434,45 @@ if [ -f /data/adb/asb/net_stock.env ]; then
   [ -n "$_ns_qd" ] && sysctl -w "net.core.default_qdisc=$_ns_qd" >/dev/null 2>&1
 fi
 
+# Put 5G back if the screen-off LTE preference was holding it off. The allowed-types
+# setting survives the module, so leaving it would keep the phone off 5G after removal.
+#
+# This has to run BEFORE /data/adb/asb is removed: the saved mask lives there
+# (lte_screenoff.saved), and with the directory gone the restore finds nothing to put back
+# and silently does nothing - the phone would stay off 5G for good.
+#
+# The restore itself also needs telephony running. The module manager runs this script on
+# the boot after removal, early, before `cmd phone` answers - so a direct call there would
+# fail its readback, keep the save file, and then lose it to the rm below. When it does not
+# succeed at once, the helper and the saved mask are staged under /data/local/tmp and a
+# detached waiter retries after boot_completed, then deletes the staging directory.
+if [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ] && [ -f /data/adb/asb/lte_screenoff.saved ]; then
+  if [ "$(getprop sys.boot_completed)" = "1" ]; then
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" restore >/dev/null 2>&1
+  fi
+  if [ -f /data/adb/asb/lte_screenoff.saved ]; then
+    _lte_stage=/data/local/tmp/asb_lte_restore
+    rm -rf "$_lte_stage" 2>/dev/null
+    if mkdir -p "$_lte_stage" 2>/dev/null &&
+       cp "$MODDIR/runtime/asb_lte_screenoff.sh" "$_lte_stage/lte.sh" 2>/dev/null &&
+       cp /data/adb/asb/lte_screenoff.saved "$_lte_stage/lte_screenoff.saved" 2>/dev/null; then
+      (
+        _w=0
+        until [ "$(getprop sys.boot_completed)" = "1" ] || [ "$_w" -ge 600 ]; do
+          sleep 5; _w=$((_w + 5))
+        done
+        sleep 20
+        for _try in 1 2 3; do
+          ASB_LTE_STATE_DIR="$_lte_stage" MODDIR=/nonexistent sh "$_lte_stage/lte.sh" restore >/dev/null 2>&1
+          [ -f "$_lte_stage/lte_screenoff.saved" ] || break
+          sleep 60
+        done
+        rm -rf "$_lte_stage" 2>/dev/null
+      ) </dev/null >/dev/null 2>&1 &
+    fi
+  fi
+fi
+
 # If the active fallback had temporarily released Wi-Fi, restore it before its state is
 # removed; the helper targets only its exact watcher argv and never touches other network tasks.
 [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" stop >/dev/null 2>&1 || true
@@ -442,8 +481,6 @@ fi
 [ -f "$MODDIR/runtime/asb_ltpo_apply.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" remove >/dev/null 2>&1 || true
 # Same for a live multimedia-telemetry bind: stock list visible the moment we are gone.
 [ -f "$MODDIR/runtime/asb_mmfeed_apply.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_mmfeed_apply.sh" remove >/dev/null 2>&1 || true
-# Same for the call-recording binds and the silenced announcement prompts; the
-# messenger recorder is switched off via its prefs, its package and data stay.
 rm -rf /data/adb/asb 2>/dev/null
 
 # Remove the module's own persistent properties.
@@ -451,12 +488,6 @@ rm -rf /data/adb/asb 2>/dev/null
 # asb_audio_apply.sh writes the DSP state with its own resetprop helpers, which bypass
 # asb_persist_safe and therefore never reach baseline.txt - so nothing here restored or
 # removed them. After uninstall they survived on disk under /data/property: enable, gain,
-# Put 5G back if the screen-off LTE preference was holding it off. The allowed-types
-# setting survives the module, so leaving it would keep the phone off 5G after removal.
-if [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ]; then
-  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" restore >/dev/null 2>&1
-fi
-
 # route, compressor settings, and the persist.vendor.asb mirror a separate audio process
 # reads. A reinstall then started from the previous session's DSP state.
 #
