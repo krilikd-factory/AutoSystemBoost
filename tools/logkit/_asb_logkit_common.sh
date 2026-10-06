@@ -10,7 +10,11 @@ lk_resolve_moddir() {
     "/data/adb/ksu/modules/$MODID" \
     "/data/adb/ksu/modules_update/$MODID"; do
     [ -n "$d" ] || continue
-    [ -f "$d/module.prop" ] && { echo "$d"; return 0; }
+    # The module.prop has to be ASB's own. A capture's manifest came out with an empty
+    # version, no governor.conf hash and empty "requested=" network values while bin/asb
+    # still hashed - MODDIR had resolved to a directory that was not this module's root.
+    [ -f "$d/module.prop" ] && grep -q "^id=${MODID}\$" "$d/module.prop" 2>/dev/null \
+      && [ -f "$d/config/governor.conf" ] && { echo "$d"; return 0; }
   done
   echo "/data/adb/modules/$MODID"
 }
@@ -69,6 +73,10 @@ lk_probe_env() {
     echo "hardware:        $(lk_get_prop ro.hardware)"
     echo "platform:        $(lk_get_prop ro.board.platform)"
     echo "soc_model:       $(lk_get_prop ro.soc.model)"
+    echo ""
+    echo "# capture"
+    echo "moddir:          $MODDIR"
+    echo "module_version:  $(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -1)"
     echo ""
     echo "# os"
     echo "android_release: $(lk_get_prop ro.build.version.release)"
@@ -136,29 +144,20 @@ lk_probe_env() {
 # setting only when the attacher has published nothing, so an older build still reports
 # something rather than a hole.
 lk_dsp_live_state() {
-  _dls="$(getprop persist.asb.dsp.attached 2>/dev/null)"
-  # Nothing ever wrote "attached". route_allowed is what the module actually publishes:
-  # whether the configured outputs cover the route it detected. Use it when present.
-  [ -n "$_dls" ] || _dls="$(getprop persist.asb.dsp.route_allowed 2>/dev/null)"
-  case "$_dls" in
-    0|1) printf '%s' "$_dls"; return 0 ;;
-  esac
-  # No published flag yet: derive it without needing the native binary rebuilt.
+  # Live = switched on AND an ASB effect is attached in AudioFlinger.
   #
-  # The attacher tracks this internally but does not export it, and rebuilding it needs a
-  # workflow run that is not always available. AudioFlinger already knows the answer - an
-  # attached effect appears in its dump - so read that instead of waiting.
-  #
-  # Falls back to the setting last, which is what this field used to be. That keeps a
-  # device where dumpsys is unavailable reporting something rather than a hole, while no
-  # longer claiming an effect is live on the strength of a toggle alone.
+  # route_allowed answers a different question - whether the effect processes the route
+  # playing right now - and using it here counted a working DSP as "0%" for a whole
+  # capture with dsp_outputs=bt and the speaker playing. The AudioFlinger pattern also
+  # missed the effect's real name, "ASB Loudness". Route coverage is reported on its own
+  # in the audio trace (route_allowed / inactive_reason).
+  [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] || { printf '0'; return 0; }
   if lk_dumpsys media.audio_flinger 2>/dev/null \
-       | grep -qiE 'asbdsp|ASB DSP|effect .*asb'; then
-    printf '1'; return 0
+       | grep -qiE 'ASB Loudness|AsbLoudness|asbdsp|ASB DSP'; then
+    printf '1'
+  else
+    printf '0'
   fi
-  # Enabled but not attached is the case worth surfacing, and it reports as 0 - which is
-  # the whole point of the change: the toggle being on is not evidence of anything.
-  printf '0'
 }
 
 lk_dump_build_manifest() {
@@ -764,7 +763,7 @@ lk_battery_trace_header() {
   # lk_capture_battery_trace_row to work out which field was which. Keep this in sync
   # with that printf if a column is ever added.
   cat <<'EOF' > "$LK_OUT_DIR/battery_trace.txt"
-epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA|bat_uV|bat_dC|cpu_max_c|skin_c|surface_c|brightness|env_iq|bat_drain|bat_level|reserved|bat_wake|heap_pct|heap_val|hires|cpu_zone|fb_zone|wifi_rx|wifi_tx|rmnet_rx|rmnet_tx|load1|dw|mem_free|swap_free|zram_used|wakelocks|gpu_busy
+epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA|bat_uV|bat_dC|cpu_max_c|skin_c|surface_c|board_c|env_iq|bat_deep_idle_s|bat_light_idle_s|reserved|bat_wake|headroom_pct|headroom_valid|headroom_reason|cpu_zone|fb_zone|wifi_rx|wifi_tx|rmnet_rx|rmnet_tx|load1|dw|mem_free|swap_free|zram_used|wakelocks|gpu_busy
 EOF
 }
 
@@ -773,7 +772,15 @@ lk_capture_perf_trace_row() {
   _d=$(date '+%Y-%m-%d %H:%M:%S')
   _f() { cat "$1" 2>/dev/null; }
   _tz() { _id="$1"; [ -z "$_id" ] && { echo ""; return; }; _r=$(cat "/sys/class/thermal/thermal_zone${_id}/temp" 2>/dev/null); [ -n "$_r" ] && echo $((_r / 1000)) || echo ""; }
-  _socd=$(_tz "$TZ_SOCD")
+  # socd is a state-of-charge figure on these phones (raw 14-27), not millidegrees, so
+  # the generic /1000 turned it into a column of zeros that read like a temperature.
+  # Empty when the raw value is not in millidegrees.
+  _socd_raw=$(cat "/sys/class/thermal/thermal_zone${TZ_SOCD}/temp" 2>/dev/null)
+  if [ -n "$TZ_SOCD" ] && [ -n "$_socd_raw" ] && [ "$_socd_raw" -ge 1000 ] 2>/dev/null; then
+    _socd=$((_socd_raw / 1000))
+  else
+    _socd=""
+  fi
   _prime=$(_tz "$TZ_CPU_PRIME")
   _perf=$(_tz "$TZ_CPU_PERF")
   _cpullc=$(_tz "$TZ_CPULLC")
@@ -2326,6 +2333,7 @@ lk_bt_reconnect_stop() {
 
 lk_init() {
   MODDIR="$(lk_resolve_moddir)"
+  LK_MODDIR="$MODDIR"
   LK_GOV_LOG="$(lk_resolve_gov_log)"
   mkdir -p "$LK_OUT_DIR" || { echo "Cannot create $LK_OUT_DIR"; exit 1; }
   LK_START_EPOCH=$(date +%s)

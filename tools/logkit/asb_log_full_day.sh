@@ -1403,7 +1403,7 @@ lk_emit_full_day_report() {
           printf "  samples                  : %d\n", n
           printf "  camera hold active       : %d (%.1f%%)\n", cam+0, (cam*100.0)/n
           printf "  thermal veto active      : %d (%.1f%%)\n", veto+0, (veto*100.0)/n
-          printf "  DSP enabled              : %d (%.1f%%)  abi=%s\n", dsp+0, (dsp*100.0)/n, abi
+          printf "  DSP live (effect attached): %d (%.1f%%)  abi=%s\n", dsp+0, (dsp*100.0)/n, abi
           printf "  modem LPM mode           : "
           for (k in lpm) if (k!="") printf "%s(%d) ", k, lpm[k]
           printf "\n"
