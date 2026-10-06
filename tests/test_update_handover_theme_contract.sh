@@ -11,7 +11,11 @@ WEB="$ROOT/webroot/index.html"
 
 # A manager that removes the old modules/<id> directory before customize.sh must still
 # accept ASB's durable, module-specific snapshot. A true uninstall clears that state.
-need "$INSTALL" 'if [ -z "$_src" ] && [ -f "$_snap_conf" ]; then'
+need "$INSTALL" 'if [ -z "$_src" ] && [ -f "$_snap_src" ]; then'
+# The migration strips device_bounds_override from COPIES: editing the running module's
+# live governor.conf made the governor drop device bounds until the next reboot.
+need "$INSTALL" 'sed -i '"'"'/^[[:space:]]*device_bounds_override=/d'"'"' "$_mig_tmp/old.conf"'
+grep -q 'sed -i .*device_bounds_override=/d.*"\$_stale_conf"' "$INSTALL" && fail 'installer edits the live config in place again'
 need "$INSTALL" 'Root managers do not agree on update ordering'
 need "$INSTALL" 'update_snapshot_state'
 need "$INSTALL" 'named_profiles=$(find /data/adb/asb/config_profiles'
