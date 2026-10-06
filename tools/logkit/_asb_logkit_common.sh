@@ -1957,6 +1957,12 @@ lk_snapshot_audio() {
     echo "  asb.bt_a2dp_offload.requested = $(_acfg bt_a2dp_offload)"
     echo "  asb.dsp.enable = $(lk_get_prop persist.asb.dsp.enable)"
     echo "  asb.dsp.route_published = $(lk_get_prop persist.asb.dsp.route)"
+    # Whether the configured outputs cover that route, and why not. Printed directly: the
+    # features column derived from these read 0 in every row of a capture whose route was
+    # bt with outputs=bt, and without the raw values there was no telling "not allowed"
+    # from "property never written".
+    echo "  asb.dsp.route_allowed = $(lk_get_prop persist.asb.dsp.route_allowed)"
+    echo "  asb.dsp.inactive_reason = $(lk_get_prop persist.asb.dsp.inactive_reason)"
     echo "  asb.dsp.outputs = $(lk_get_prop persist.asb.dsp.outputs)"
     echo "  asb.dsp.gain_requested_mb = $(lk_get_prop persist.asb.dsp.gain_requested_mb)"
     echo "  asb.dsp.gain_applied_mb = $(lk_get_prop persist.asb.dsp.gain_applied_mb)"

@@ -945,6 +945,14 @@ lk_emit_mobile_traffic_context() {
           # that as "no phase qualified" and went looking for a threshold problem.
           if (tot < 8388608) exit
           printf "  %s %d min: measured screen-off mobile traffic %.1f MiB (interface counters)\n", PH, (Z-A)/60, MEAS/1048576
+          # Under 1 MiB measured there is nothing to attribute. Listing apps from the
+          # surrounding 2h buckets beside "0.0 MiB" reads as blame however carefully the
+          # caveat is worded - a sleep phase showed Instagram and WhatsApp under a measured
+          # zero. Say what was measured and stop.
+          if (MEAS < 1048576) {
+            printf "      nothing to attribute: the radio was idle in this phase\n"
+            exit
+          }
           if (tot > 3 * MEAS)
             printf "      the 2h usage buckets around it hold %.0f MiB - mostly screen-on use; the apps below\n      used data AROUND this phase, which is not proof of background transfer\n", tot/1048576
           else
