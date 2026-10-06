@@ -1272,13 +1272,24 @@ _dsp_map=""
 [ -n "$_dsp_pid" ] && _dsp_map="$(grep -c asbdsp /proc/$_dsp_pid/maps 2>/dev/null | grep -v '^0$')"
 _dsp_reg="$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -oiE 'ASB Loudness|AsbLoudness|asbdsp')"
 if [ "$_dsp_on" = "1" ]; then
+  # Present = PASS, absent = FAIL. ("has" mode looked for the literal word "present"
+  # inside the value, so a library mapped 3 times and an effect named "ASB Loudness" were
+  # both reported as failures.)
   if [ -n "$_dsp_pid" ]; then
-    V "  library mapped into the audio HAL" "present" "${_dsp_map:-absent}" has
+    if [ -n "$_dsp_map" ]; then
+      V "  library mapped into the audio HAL" "present" "$_dsp_map" present
+    else
+      V "  library mapped into the audio HAL" "present" "absent" eq
+    fi
   fi
   # Enabled, configured, and not registered means the sound is NOT being processed - the
   # gain and bass PASS lines above only show what ASB asked for. This used to print N/A,
   # which hid the one result that says the DSP does nothing on this phone.
-  V "  effect registered with audioflinger" "present" "${_dsp_reg:-absent}" has
+  if [ -n "$_dsp_reg" ]; then
+    V "  effect registered with audioflinger" "present" "$_dsp_reg" present
+  else
+    V "  effect registered with audioflinger" "present" "absent" eq
+  fi
   if [ -z "$_dsp_reg" ]; then
     NOTE "  DSP is enabled but no ASB effect is attached: what you hear is stock audio"
     NOTE "  installed ABI: $(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null) - try dsp_effect_abi=legacy/aidl and reboot, then rerun asbdiag"
