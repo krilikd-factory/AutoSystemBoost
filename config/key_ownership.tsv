@@ -3,6 +3,7 @@
 # internal = engine, derived or safety parameter with no direct user card. Lint requires exact key-set equality.
 heavy_gpu_enter|internal|engine_or_derived
 heavy_load_enter|internal|engine_or_derived
+heavy_prime_escape|internal|engine_or_derived
 gaming_gpu_enter|internal|engine_or_derived
 gaming_confirm_ticks|internal|engine_or_derived
 sustained_gpu_min|internal|engine_or_derived

@@ -461,6 +461,10 @@ night_modem_idle=0
 night_quiet_auto_min_samples=3
 charge_aware_enable=1
 cool_gaming=1
+# Smart only: when HEAVY work keeps the prime pinned at its ceiling on a cool phone, lift
+# that ceiling for up to 20 s - never above what Balanced allows in HEAVY - then rest 40 s.
+# 1 = on (default), 0 = off.
+heavy_prime_escape=1
 
 # Media loudness: stock|mild|strong|max Reshapes the audio-policy volume CURVES so every slider
 # position is genuinely louder.
