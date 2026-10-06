@@ -2177,3 +2177,47 @@ static void writer_init_cache(void) {
     g_wcache.last_min_pwrlevel_written = -1;
     g_wcache.initialized = 1;
 }
+
+/* Foreground uclamp guard.
+ *
+ * Nobody owned this node while the governor ran. The writer manages top-app, background
+ * and system-background; asb_reconcile.sh checks foreground too, but skips every
+ * per-cgroup check while the governor is running, on the reasoning that those ceilings
+ * are the governor's. So when the ROM put foreground back to "max" it stayed there until
+ * the next screen-off: 21 minutes in one capture, 15 in another, 43% of a day on an OP12.
+ * Foreground holds what keeps running behind the visible app - music, navigation,
+ * downloads - which is exactly what the profile's foreground limit is for.
+ *
+ * Only "max" is corrected, only with the screen on, never while the camera guard holds
+ * it, and only after it has persisted for 60 s: a vendor launch boost lifts foreground
+ * for a second or two and must not be cut short. The value put back is the last
+ * legitimate one ASB saw (below 100), else the tuner's saved value, else 70 - the
+ * Balanced rail. Five corrections inside ten minutes means something keeps reasserting
+ * it, and the guard then stands down for ten minutes rather than fight. */
+static int    g_fg_last_good = -1;
+static time_t g_fg_max_since = 0;
+static int    g_fg_fix_n = 0;
+static time_t g_fg_fix_window = 0;
+static time_t g_fg_backoff_until = 0;
+static unsigned long g_fg_fix_total = 0;
+static void writer_fg_guard(int screen_on) {
+    time_t now = time(NULL);
+    if (!screen_on || g_cam_guard_on) { g_fg_max_since = 0; return; }
+    int cur = uclamp_read_pct(UCLAMP_FG_MAX, -1);
+    if (cur < 0) return;
+    if (cur < 100) { g_fg_last_good = cur; g_fg_max_since = 0; return; }
+    if (g_fg_max_since == 0) { g_fg_max_since = now; return; }
+    if (now - g_fg_max_since < 60) return;
+    if (now < g_fg_backoff_until) return;
+    if (g_fg_fix_window == 0 || now - g_fg_fix_window > 600) { g_fg_fix_window = now; g_fg_fix_n = 0; }
+    if (++g_fg_fix_n > 5) { g_fg_backoff_until = now + 600; return; }
+    int want = g_fg_last_good;
+    if (want <= 0 || want >= 100) {
+        want = -1;
+        FILE *f = fopen("/data/adb/asb/ucfg_last_good", "r");
+        if (f) { if (fscanf(f, "%d", &want) != 1) want = -1; fclose(f); }
+        if (want <= 0 || want >= 100) want = 70;
+    }
+    if (sysfs_write_int(UCLAMP_FG_MAX, want) == 0) g_fg_fix_total++;
+    g_fg_max_since = 0;
+}

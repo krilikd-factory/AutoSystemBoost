@@ -2309,6 +2309,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "thermal_cooldown=%d\n", fsm->thermal_cooldown);
     fprintf(f, "prime_escape=%d\nprime_escape_count=%lu\n",
             fsm->prime_escape, fsm->prime_escape_count);
+    fprintf(f, "fg_guard_fixes=%lu\n", g_fg_fix_total);
     fprintf(f, "cap_owner=%s\ncap_owner_since=%ld\ncap_vendor_holddown=%d\n",
             asb_cap_owner_name(g_cap_owner_eff),
             (long)g_cap_owner_since,
@@ -6328,7 +6329,15 @@ int main(int argc, char **argv) {
                 int n = asb_sock_recv(sockfd, cmd, sizeof(cmd), &src, &srclen);
                 if (n <= 0) continue;
 
-                if (g_asb_cfg.log_level >= 1) asb_log("cmd: %s", cmd);
+                /* "status" is a read-only query, and the logkit sampler and the WebUI
+                 * ask it every ~45 s - two or three times per poll. Logging each one
+                 * filled the governor log with "cmd: status": a capture's 50-line tail
+                 * was nothing else, so the transitions and audits worth reading had
+                 * scrolled out before anyone looked. Commands that change something are
+                 * still logged; status only at the most verbose level. */
+                if (strcmp(cmd, "status") == 0 ? g_asb_cfg.log_level >= 3
+                                               : g_asb_cfg.log_level >= 1)
+                    asb_log("cmd: %s", cmd);
 
                 if (strncmp(cmd, "profile:", 8) == 0) {
                     const char *pname = cmd + 8;
@@ -8066,13 +8075,22 @@ int main(int argc, char **argv) {
              * shell_overridden_up watchdog Anti-clamp above handles vendor DOWN-clamps (gap >
              * 0).
              */
+            /* Foreground has no other owner while the governor runs - see writer_fg_guard. */
+            if (fsm.profile_idx != PROFILE_PERFORMANCE)
+                writer_fg_guard(metrics.misc.screen_on);
             if (fsm.profile_idx != PROFILE_PERFORMANCE &&
                 (fsm.state == ASB_STATE_DEEP_IDLE || fsm.state == ASB_STATE_LIGHT_IDLE ||
                  fsm.state == ASB_STATE_MODERATE  || fsm.state == ASB_STATE_HEAVY)) {
                 int actual_p0 = tick_scaling_max(0);
                 int actual_p1 = tick_scaling_max(1);
-                int want_p0 = fsm.current_caps.cpu_max[0];
-                int want_p1 = fsm.current_caps.cpu_max[1];
+                /* Compare against what the writer really sends - snapped and lifted to the
+                 * race-to-idle floor - the same figure published as desired_cpu_max*. The raw
+                 * FSM wish sits under that floor in idle states, so every idle stretch logged
+                 * "leak_observed p0=1440000(want 1269183) p1=1747200(want 1374780)": both
+                 * "leaks" were ASB's own floor, and the counter grew on a device where
+                 * nothing had raised a cap at all. */
+                int want_p0 = cpu_floor_ceiling(0, (int)cpu_snap_freq(0, (long)fsm.current_caps.cpu_max[0]), fsm.thermal_cap);
+                int want_p1 = cpu_floor_ceiling(1, (int)cpu_snap_freq(1, (long)fsm.current_caps.cpu_max[1]), fsm.thermal_cap);
                 int leak0 = (actual_p0 > 0 && want_p0 > 0 && actual_p0 > want_p0 + 100000) ? 1 : 0;
                 int leak1 = (actual_p1 > 0 && want_p1 > 0 && actual_p1 > want_p1 + 100000) ? 1 : 0;
 
