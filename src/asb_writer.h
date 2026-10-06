@@ -1907,6 +1907,22 @@ skip_cpu_caps: ;
             _sybg_expect < ASB_BALANCED_FLOOR_UCLAMP_TOP)
             _sybg_expect = ASB_BALANCED_FLOOR_UCLAMP_TOP;
         int _ucl_sybg_drift = (_ucl_sybg_now >= 0 && _ucl_sybg_now != _sybg_expect);
+        /* A screen change is a new target, not drift.
+         *
+         * The floor makes this node's target follow the screen, so every screen-on and
+         * screen-off moves the expected value while the node still holds the old one. On
+         * the drift path that looked exactly like the framework resetting the node: it
+         * counted toward the 5-rewrite backoff, and the counter is never cleared for
+         * uclamp nodes (the already_set fast path skips them). With ~100 screen cycles a
+         * day the node went into its 10-minute backoff every few cycles - and a backoff
+         * that starts right after screen-on leaves system-background at the low ceiling,
+         * which is the dropped-refresh-rate case the floor was added to fix.
+         *
+         * So a flip is written straight away, bypasses the backoff and is not counted.
+         * Only a change with the screen state unchanged is drift. */
+        static int s_sybg_screen = -1;
+        int _sybg_flip = (s_sybg_screen != (fsm_screen_is_on ? 1 : 0));
+        if (_sybg_flip) _ucl_sybg_drift = 0;
         if (_ucl_sybg_drift && caps->uclamp_bg_max == g_wcache.uclamp_bg_max) {
             /* Same backoff as the background node: a value something else keeps resetting
              * is not worth chasing every pass. */
@@ -1919,7 +1935,7 @@ skip_cpu_caps: ;
                 _ucl_sybg_drift = 0;
             }
         }
-        if (force || _ucl_bg_drift || _ucl_sybg_drift ||
+        if (force || _ucl_bg_drift || _ucl_sybg_drift || _sybg_flip ||
             caps->uclamp_bg_max != g_wcache.uclamp_bg_max) {
             int bg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_BG, UCLAMP_BG_MAX,
                                                     caps->uclamp_bg_max) == 0;
@@ -1942,6 +1958,10 @@ skip_cpu_caps: ;
                 _sybg_want = ASB_BALANCED_FLOOR_UCLAMP_TOP;
             int sybg_ok = writer_write_int_confirmed(ASB_WRITE_UCL_SYBG, UCLAMP_SYBG_MAX,
                                                       _sybg_want) == 0;
+            /* Recorded whether or not the write took: a node that cannot be written must
+             * not turn every tick into a "flip" and a fresh attempt. Failures have their own
+             * back-off in writer_write_int_confirmed. */
+            s_sybg_screen = fsm_screen_is_on ? 1 : 0;
             if (bg_ok && sybg_ok) {
                 g_wcache.uclamp_bg_max = caps->uclamp_bg_max;
                 writes += 2;
