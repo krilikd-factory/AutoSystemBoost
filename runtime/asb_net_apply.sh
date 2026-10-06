@@ -536,7 +536,6 @@ fi
 # mobile_data_always_on writer.
 if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
   _rp="$(grep -E '^[[:space:]]*radio_policy_enable=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
-  _wf="$(grep -E '^[[:space:]]*net_handover_active=' "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" reconcile >/dev/null 2>&1 || true
 
   # Hand the decision to Android instead of pulling the radio down.
@@ -583,7 +582,10 @@ if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
       _out="$_out avoid_bad_wifi=off" ;;
   esac
   case "$_rp" in
-    1) _out="$_out radio_policy=on wifi_fallback=${_wf:-0}" ;;
+    # The fallback is the top rung of net_wifi_leave; the old net_handover_active key is
+    # gone from the config, so reading it always printed wifi_fallback=0.
+    1) case "$_nwl" in aggressive) _wf=1 ;; *) _wf=0 ;; esac
+       _out="$_out radio_policy=on wifi_fallback=$_wf" ;;
     *) _out="$_out radio_policy=off wifi_fallback=master_off" ;;
   esac
 fi

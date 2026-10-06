@@ -38,7 +38,14 @@ NR_BIT=524288                                   # 1 << (NETWORK_TYPE_NR - 1)
 
 mkdir -p "$STATE_DIR" 2>/dev/null
 
-_log() { printf '%s %s\n' "$(date '+%m-%d %H:%M:%S')" "$*" >> "$LOGF" 2>/dev/null; }
+# Two lines per screen cycle is a few hundred a day, forever. Keep the tail only.
+_log() {
+  printf '%s %s\n' "$(date '+%m-%d %H:%M:%S')" "$*" >> "$LOGF" 2>/dev/null
+  _ls="$(wc -c < "$LOGF" 2>/dev/null)"
+  if [ "${_ls:-0}" -gt 65536 ] 2>/dev/null; then
+    tail -n 300 "$LOGF" > "$LOGF.tmp" 2>/dev/null && mv -f "$LOGF.tmp" "$LOGF" 2>/dev/null
+  fi
+}
 _cfg() { grep -m1 "^$1=" "$MODDIR/config/governor.conf" 2>/dev/null | cut -d= -f2 | tr -d '\r '; }
 
 _cmd_phone() {
@@ -116,6 +123,21 @@ _in_call() {
   dumpsys telephony.registry 2>/dev/null | grep -oE 'mCallState=[0-9]+' | grep -qv '=0$'
 }
 
+# Hotspot / USB / Bluetooth tethering: the phone is someone else's uplink, and with the
+# screen off that is the normal way to use it. Dropping 5G there slows every client on the
+# hotspot for the length of the session - the opposite of a saving nobody can see.
+_tethering() {
+  for _ti in /sys/class/net/*; do
+    _tn="${_ti##*/}"
+    case "$_tn" in
+      ap[0-9]*|swlan[0-9]*|softap[0-9]*|rndis[0-9]*|ncm[0-9]*|usb[0-9]*|bt-pan|bnep[0-9]*) : ;;
+      *) continue ;;
+    esac
+    [ "$(cat "$_ti/operstate" 2>/dev/null)" = "up" ] && return 0
+  done
+  return 1
+}
+
 do_restore() {
   [ -f "$SAVE" ] || return 0
   _line="$(cat "$SAVE" 2>/dev/null)"
@@ -138,6 +160,7 @@ do_apply() {
   [ -f "$SAVE" ] && return 0                     # already applied
   _screen_off_now || return 0
   _in_call && { _log "apply: skipped, call in progress"; return 0; }
+  _tethering && { _log "apply: skipped, tethering active"; return 0; }
   _sub="$(_data_sub)" || return 0
   _orig="$(_get_mask "$_sub")" || { _log "apply: cannot read allowed types, marking unsupported"; : > "$UNSUP"; return 0; }
   [ $(( _orig & NR_BIT )) -ne 0 ] || return 0    # 5G not allowed anyway
