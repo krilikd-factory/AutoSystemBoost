@@ -25,21 +25,27 @@ echo 1
 EOF
 cat > "$T/bin/dumpsys" <<EOF
 #!/bin/sh
-echo "mCallState=\$(cat $T/callstate 2>/dev/null || echo 0)"
+case "\$1" in
+  isub) echo "[SubscriptionInfoInternal: id=1 iccId=8939 simSlotIndex=1 displayName=SIM2]" ;;
+  *)    echo "mCallState=\$(cat $T/callstate 2>/dev/null || echo 0)" ;;
+esac
 EOF
 cat > "$T/bin/cmd" <<EOF
 #!/bin/sh
 shift
 case "\$1" in
   get-allowed-network-types-for-users)
+    echo "\$*" >> $T/calls
     m=\$(cat $T/mask); out=""
-    for p in "GPRS 1" "EDGE 2" "UMTS 4" "LTE 4096" "GSM 32768" "LTE_CA 262144" "NR 524288"; do
-      n=\${p% *}; b=\${p#* }; [ \$(( m & b )) -ne 0 ] && out="\${out:+\$out|}\$n"
+    # Real AOSP spellings, spaces included.
+    for p in "GPRS:1" "EDGE:2" "UMTS:4" "CDMA - EvDo rev. 0:16" "HSPA+:16384" "LTE:4096" "GSM:32768" "LTE_CA:262144" "NR:524288"; do
+      n=\${p%:*}; b=\${p##*:}; [ \$(( m & b )) -ne 0 ] && out="\${out:+\$out|}\$n"
     done
     echo "\$out" ;;
   set-allowed-network-types-for-users)
+    echo "\$*" >> $T/calls
     [ -f $T/ignore_writes ] && exit 0
-    r="\$4"; v=0
+    for r in "\$@"; do :; done; v=0
     while [ -n "\$r" ]; do c="\${r%"\${r#?}"}"; r="\${r#?}"; v=\$(( v*2 + c )); done
     echo "\$v" > $T/mask ;;
 esac
@@ -49,7 +55,7 @@ sed "s|/data/adb/asb|$T/state|; s|/dev/.asb/state|$T/dev/state|" "$S" > "$T/run.
 export PATH="$T/bin:$PATH" MODDIR="$T/mod"
 run() { sh "$T/run.sh" "$@" </dev/null >/dev/null 2>&1; }
 
-ORIG=786439          # GPRS|EDGE|UMTS|LTE|GSM|LTE_CA|NR
+ORIG=839703          # GPRS|EDGE|UMTS|EVDO_0|HSPA+|LTE|GSM|LTE_CA|NR
 echo "$ORIG" > "$T/mask"; echo "screen=0" > "$T/dev/state"
 
 echo "net_screen_off_lte=0" > "$T/mod/config/governor.conf"
@@ -65,7 +71,8 @@ rm -f "$T/callstate"
 
 run apply
 [ "$(cat "$T/mask")" = "$(( ORIG & ~524288 ))" ] || fail "did not remove exactly the NR bit"
-[ "$(cat "$T/state/lte_screenoff.saved")" = "1|$ORIG" ] || fail "original mask not saved"
+[ "$(cat "$T/state/lte_screenoff.saved")" = "1|$ORIG" ] || fail "original mask not saved under the data SIM's SLOT"
+grep -q -- '-s 1' "$T/calls" || fail "slot index not passed to cmd phone (subId 1 lives in slot 1)"
 
 run restore
 [ "$(cat "$T/mask")" = "$ORIG" ] || fail "restore did not put the original back"
