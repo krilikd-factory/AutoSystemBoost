@@ -26,7 +26,9 @@
 # Commands: arm | apply | restore | status
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
-STATE_DIR=/data/adb/asb
+# Overridable only so the uninstaller can run a deferred restore from a staged copy after
+# /data/adb/asb is gone (see uninstall.sh). Normal callers never set it.
+STATE_DIR="${ASB_LTE_STATE_DIR:-/data/adb/asb}"
 SAVE="$STATE_DIR/lte_screenoff.saved"          # subid|decimal_mask
 PIDF="$STATE_DIR/lte_screenoff.pid"
 UNSUP="$STATE_DIR/lte_screenoff.unsupported"
@@ -108,9 +110,10 @@ _screen_off_now() {
   [ "$_st" = "0" ]
 }
 
+# Any SIM in a call counts. The registry prints one mCallState per phone; taking only the
+# first line checked SIM 1 alone, so a call on the second SIM was invisible here.
 _in_call() {
-  _cs="$(dumpsys telephony.registry 2>/dev/null | grep -m1 -oE 'mCallState=[0-9]+' | cut -d= -f2)"
-  [ -n "$_cs" ] && [ "$_cs" != "0" ]
+  dumpsys telephony.registry 2>/dev/null | grep -oE 'mCallState=[0-9]+' | grep -qv '=0$'
 }
 
 do_restore() {
