@@ -1561,7 +1561,7 @@ esac
 if [ "$(_cfg net_screen_off_lte)" = "1" ]; then
   _lte_st="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null)"
   case "$_lte_st" in
-    *unsupported=1*) echo "       LTE while screen off: on · not supported by this ROM (stopped itself)" ;;
+    *unsupported=1*) echo "       LTE while screen off: on · stopped itself - $(printf '%s\n' "$_lte_st" | sed -n 's/^last=//p' | cut -c1-90)" ;;
     *applied=1*)     echo "       LTE while screen off: on · 5G parked right now" ;;
     *pending=1*)     echo "       LTE while screen off: on · timer running (90 s after screen off)" ;;
     *)               echo "       LTE while screen off: on · 5G allowed (screen is on)" ;;
