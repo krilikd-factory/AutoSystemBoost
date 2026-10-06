@@ -38,7 +38,7 @@ P()  { printf '%s\n' "$1"; [ -n "$OUT1" ] && printf '%s\n' "$1" >> "$OUT1"; [ -n
 HR() { P "----------------------------------------------------------------"; }
 SEC(){ P ""; P "================================================================"; P " $1"; P "================================================================"; }
 
-PASS=0; FAIL=0; NA=0; INFO=0
+PASS=0; FAIL=0; NA=0; INFO=0; OFFN=0; OFF_LIST=""
 # verdict: $1 label  $2 expected  $3 actual  $4 mode(eq|has|ge|present)
 V() {
   _l="$1"; _e="$2"; _a="$3"; _m="${4:-eq}"; _st="FAIL"
@@ -56,6 +56,14 @@ V() {
   [ "$_m" != "info" ] && P "         want: $_e   live: ${_a:-<none>}"
 }
 NOTE(){ P "  (i) $1"; INFO=$((INFO+1)); }
+# A check that was not run because the user's setting turns the feature off (or leaves it
+# on "auto", i.e. the system default). Counted apart from N/A and listed in the summary.
+#
+# Without this the totals said "16 PASS" on one phone and "30 PASS" on another and nothing
+# explained the gap: most of it was camera grading, per-link network choices and media
+# loudness switched off on the first phone - settings, not defects. A reader comparing two
+# reports needs to see that at a glance instead of diffing them line by line.
+OFF(){ P "  [OFF ] $1"; OFFN=$((OFFN+1)); OFF_LIST="${OFF_LIST:+$OFF_LIST, }$2"; }
 
 gp() { getprop "$1" 2>/dev/null; }
 firstf() { for _g in $@; do for _f in $_g; do [ -f "$_f" ] && { printf '%s' "$_f"; return 0; }; done; done; return 1; }
@@ -403,6 +411,17 @@ if [ -f /data/adb/asb/ltpo_bind_manifest.txt ]; then
     V "LTPO manifest parses (target|payload)" "well-formed" "malformed"
   elif [ ! -f "$_lt_p" ]; then
     V "LTPO payload exists" "present" "missing"
+  elif grep -q " $_lt_t " /proc/mounts 2>/dev/null &&
+       [ "$_lt_force" != "1" ] && [ ! -f /data/adb/asb/ltpo_bind.active ]; then
+    # Toggle off and no bind of ours on record, yet the file is a mountpoint: something
+    # else shadows it - another refresh-rate module or a root-manager overlay. A field report
+    # showed exactly this as FAIL "bound, but live content differs" on a phone where ASB had
+    # never bound anything, which blamed the module for another module's file.
+    NOTE "toggle is off and ASB holds no bind, but $_lt_t is a mountpoint"
+    NOTE "  another module or the root manager shadows this file - not ASB's patch"
+    if cmp -s "$_lt_t" "$_lt_p" 2>/dev/null; then
+      NOTE "  (its content happens to equal ASB's payload)"
+    fi
   elif grep -q " $_lt_t " /proc/mounts 2>/dev/null; then
     if cmp -s "$_lt_t" "$_lt_p" 2>/dev/null; then
       V "LTPO patch live (bound, live content matches payload)" "match" "match"
@@ -581,7 +600,12 @@ if [ -r "$_state" ]; then
   _dw0="$(_rget desired_cpu_max0 "$_state")"; _ew0="$(_rget effective_cpu_max0 "$_state")"
   _dwp="$(_rget desired_cpu_maxp "$_state")"; _ewp="$(_rget effective_cpu_maxp "$_state")"
   case "$_dw0$_ew0" in ''|*[!0-9]*) : ;; *)
-    P "  cap desired/effective : little $_dw0 -> $_ew0 kHz, prime $_dwp -> $_ewp kHz"
+    # The second figure is governor slot 1. That is the prime on a two-cluster SoC
+    # (OP13/OP15) but the first mid cluster on a 1+3+2+1 part (OP12), where calling it
+    # "prime" put a mid-core number next to the word prime.
+    _sp2="$(_rget slot_policy_ids "$_state" | cut -d, -f3)"
+    case "$_sp2" in ''|-1) _s1n="prime" ;; *) _s1n="mid" ;; esac
+    P "  cap desired/effective : little $_dw0 -> $_ew0 kHz, $_s1n $_dwp -> $_ewp kHz"
     if [ "$_ew0" -lt "$_dw0" ] 2>/dev/null; then
       P "    (hardware is stricter than ASB asked - vendor or thermal owns the cap)"
       # The reverse case matters more and was silent.
@@ -629,7 +653,37 @@ if [ -r "$_state" ]; then
   _cpr="$(grep -m1 '^cap_prime_reason=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _cpb="$(grep -m1 '^cap_prime_base_khz=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _cpe="$(grep -m1 '^cap_prime_eff_khz=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
-  [ -n "$_cpr" ] && NOTE "prime ceiling: ${_cpe:-?} kHz (profile ${_cpb:-?}) - set by ${_cpr}"
+  # 0 means the profile sets no ceiling for that slot: the cluster runs to its hardware
+  # (or vendor) limit. Printing "0 kHz" read as if the prime were switched off.
+  if [ -n "$_cpr" ]; then
+    if [ "${_cpb:-0}" = "0" ] && [ "${_cpe:-0}" = "0" ]; then
+      NOTE "prime ceiling: none from ASB - the top cluster runs to its hardware/vendor limit"
+    else
+      # The governor publishes the ceiling before it is rounded to an OPP step, so the
+      # figure could be a frequency the SoC does not have (1467648). Show the step the
+      # writer actually sends: the largest available frequency at or below it.
+      _sp_all="$(grep -m1 '^slot_policy_ids=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+      _sp_top=""
+      for _spx in $(printf '%s' "$_sp_all" | tr ',' ' '); do
+        [ "$_spx" -ge 0 ] 2>/dev/null && _sp_top="$_spx"
+      done
+      _snapf() {
+        _sw="$1"; _sb=""
+        for _sf in $(cat "/sys/devices/system/cpu/cpufreq/policy${_sp_top}/scaling_available_frequencies" 2>/dev/null); do
+          [ "$_sf" -le "$_sw" ] 2>/dev/null && { [ -z "$_sb" ] || [ "$_sf" -gt "$_sb" ]; } && _sb="$_sf"
+        done
+        printf '%s' "${_sb:-$1}"
+      }
+      if [ -n "$_sp_top" ]; then
+        NOTE "prime ceiling: $(_snapf "${_cpe:-0}") kHz (profile $(_snapf "${_cpb:-0}")) - set by ${_cpr}"
+      else
+        NOTE "prime ceiling: ${_cpe:-?} kHz (profile ${_cpb:-?}) - set by ${_cpr}"
+      fi
+    fi
+  fi
+  _pe="$(grep -m1 '^prime_escape=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _pec="$(grep -m1 '^prime_escape_count=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  [ -n "$_pe" ] && NOTE "HEAVY prime escape: $([ "$_pe" = 1 ] && echo ACTIVE || echo idle) · bursts this session: ${_pec:-0} (heavy_prime_escape=$(cfg heavy_prime_escape))"
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
   # Say what the two numbers count, because they do not count the same thing.
   #
@@ -846,7 +900,12 @@ done
 
 # =====================================================================
 SEC "1. AUDIO  (mixer files + runtime props)"
-MIX="$(firstf '/vendor/etc/audio/sku_*/mixer_paths_*_cdp.xml' '/odm/etc/audio/sku_*/mixer_paths_*_cdp.xml' '/vendor/etc/audio/mixer_paths*.xml' '/odm/etc/audio/mixer_paths*.xml')"
+# The SKU the platform reads first. A device can carry several sku_* trees side by side
+# (pineapple next to cliffs on OP12/Ace 5); the plain glob took the alphabetically first one,
+# so the report quoted a mixer file the audio HAL never loads.
+MIX=""
+[ -n "$_ad_live" ] && MIX="$(firstf "$_ad_live/mixer_paths_*_cdp.xml" "$_ad_live/mixer_paths*.xml")"
+[ -n "$MIX" ] || MIX="$(firstf '/vendor/etc/audio/sku_*/mixer_paths_*_cdp.xml' '/odm/etc/audio/sku_*/mixer_paths_*_cdp.xml' '/vendor/etc/audio/mixer_paths*.xml' '/odm/etc/audio/mixer_paths*.xml')"
 if [ -n "$MIX" ]; then
   P "  mixer file: $MIX"
   _vpeak=$(grep -oE '(RX_RX[012]|WSA_RX[01]) Digital Volume" value="[0-9]+"' "$MIX" 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1)
@@ -958,9 +1017,14 @@ NOTE "audio_profile = $(cfg audio_profile)"
 # whether the curve file carries our marker - a config value alone proves nothing here.
 NOTE "media_loudness = $(cfg media_loudness)"
 _vt="$(firstf '/vendor/etc/default_volume_tables.xml' '/odm/etc/default_volume_tables.xml')"
-if [ -n "$_vt" ]; then
-  V "  volume curves rebuilt by ASB" "present" "$(grep -m1 -o 'ASB:VOLCURVE' "$_vt" 2>/dev/null)" present
-fi
+case "$(cfg media_loudness)" in
+  ''|stock|off|0)
+    OFF "volume curves rebuilt by ASB - media_loudness=stock, curves are left alone" "media_loudness" ;;
+  *)
+    if [ -n "$_vt" ]; then
+      V "  volume curves rebuilt by ASB" "present" "$(grep -m1 -o 'ASB:VOLCURVE' "$_vt" 2>/dev/null)" present
+    fi ;;
+esac
 _a2dp_req="$(cfg bt_a2dp_offload)"
 _a2dp_set="$(settings get global bluetooth_a2dp_offload_enabled 2>/dev/null)"
 NOTE "bt_a2dp_offload: requested=${_a2dp_req:-auto}  ·  setting=${_a2dp_set:-<unavailable>}  ·  platform_disabled=$(gp persist.bluetooth.a2dp_offload.disabled)  ·  vendor_disabled=$(gp persist.vendor.bluetooth.a2dp_offload.disabled)"
@@ -1177,24 +1241,51 @@ _dsp_o="$(cfg dsp_outputs)"
 # with dsp_loudness=off - the effect is released from the audio path entirely, so the
 # routing property is unset by design. Flagging that as a failure trains people to skim
 # past red lines, which costs more than the check is worth.
-if [ "$(cfg dsp_loudness)" = "off" ] || [ "$(gp persist.asb.dsp.enable)" != "1" ]; then
+if [ "$(cfg dsp_loudness)" = "off" ] || [ "$(cfg dsp_loudness)" = "0" ] || [ "$(gp persist.asb.dsp.enable)" != "1" ]; then
   NOTE "  DSP outputs: not applicable - the engine is off, so routing is unset by design"
 else
   V "  DSP outputs live (persist.asb.dsp.outputs)" "${_dsp_o:-all}" "$(gp persist.asb.dsp.outputs)" eq
 fi
 NOTE "  DSP requested/applied gain: requested=$(gp persist.asb.dsp.gain_requested_mb)mB  ·  applied=$(gp persist.asb.dsp.gain_applied_mb)mB  ·  published_route=$(gp persist.asb.dsp.route)"
-case "$(gp persist.asb.dsp.outputs)" in
-  '') NOTE "outputs property unset - library may predate per-output routing (rebuild libasbdsp)" ;;
-esac
+# Unset is expected while the engine is off - routing is not published then.
+if [ "$(gp persist.asb.dsp.enable)" = "1" ]; then
+  case "$(gp persist.asb.dsp.outputs)" in
+    '') NOTE "outputs property unset - library may predate per-output routing (rebuild libasbdsp)" ;;
+  esac
+fi
 _sfx64="$(ls -l /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null | awk '{print $5}')"
 NOTE "installed library: ${_sfx64:-<absent>} bytes 64-bit  ·  ABI $(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null)"
-_dsp_pid="$(pidof audiohalservice.qti 2>/dev/null)"
-if [ -n "$_dsp_pid" ]; then
-  V "  library mapped into the audio HAL" "present" \
-    "$(grep -c asbdsp /proc/$_dsp_pid/maps 2>/dev/null | grep -v '^0$')" present
+# The process that loads effects has a different name per HAL generation: QTI's AIDL
+# service on newer builds, the AOSP HIDL service (and its _64 variant) on OP12-era vendor
+# images. Only the first name was tried, so on those phones the check silently vanished
+# from the report instead of answering.
+_dsp_pid=""
+for _dsp_hn in audiohalservice.qti android.hardware.audio.service \
+               android.hardware.audio.service_64 vendor.audio-hal vendor.audio-hal-aidl \
+               android.hardware.audio.service.qti; do
+  _dsp_pid="$(pidof "$_dsp_hn" 2>/dev/null | awk '{print $1}')"
+  [ -n "$_dsp_pid" ] && { NOTE "audio HAL process: $_dsp_hn (pid $_dsp_pid)"; break; }
+done
+_dsp_on=0
+case "$(cfg dsp_loudness)" in ''|0|off) : ;; *) [ "$(gp persist.asb.dsp.enable)" = "1" ] && _dsp_on=1 ;; esac
+_dsp_map=""
+[ -n "$_dsp_pid" ] && _dsp_map="$(grep -c asbdsp /proc/$_dsp_pid/maps 2>/dev/null | grep -v '^0$')"
+_dsp_reg="$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -oiE 'ASB Loudness|AsbLoudness|asbdsp')"
+if [ "$_dsp_on" = "1" ]; then
+  if [ -n "$_dsp_pid" ]; then
+    V "  library mapped into the audio HAL" "present" "${_dsp_map:-absent}" has
+  fi
+  # Enabled, configured, and not registered means the sound is NOT being processed - the
+  # gain and bass PASS lines above only show what ASB asked for. This used to print N/A,
+  # which hid the one result that says the DSP does nothing on this phone.
+  V "  effect registered with audioflinger" "present" "${_dsp_reg:-absent}" has
+  if [ -z "$_dsp_reg" ]; then
+    NOTE "  DSP is enabled but no ASB effect is attached: what you hear is stock audio"
+    NOTE "  installed ABI: $(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null) - try dsp_effect_abi=legacy/aidl and reboot, then rerun asbdiag"
+  fi
+else
+  OFF "DSP effect registration - the DSP engine is off" "dsp"
 fi
-V "  effect registered with audioflinger" "present" \
-  "$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -o 'ASB Loudness')" present
 
 # =====================================================================
 SEC "2. BLUETOOTH"
@@ -1352,8 +1443,19 @@ if [ -f /data/adb/asb/net_stock.env ]; then
 else
   NOTE "net_stock.env missing - auto has no stock value to resolve to yet (captured on next boot)"
 fi
-V "  tcp congestion in force" "$(cfg net_congestion | sed 's/^auto$//')" \
-  "$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)" present
+_tcp_w="$(cfg net_congestion)"
+case "$_tcp_w" in
+  ''|auto)
+    # auto keeps the device's own algorithm: name what that is instead of a blank "want".
+    _tcp_stock="$(sed -n 's/^STOCK_TCP_CC=//p' /data/adb/asb/net_stock.env 2>/dev/null | head -1)"
+    V "  tcp congestion in force (auto = stock ${_tcp_stock:-?})" "present" \
+      "$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)" present ;;
+  *)
+    # Presence only: whether the requested algorithm took is the net_congestion verdict
+    # line below, and judging it here as well would count one refusal twice.
+    V "  tcp congestion in force" "$_tcp_w" \
+      "$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)" present ;;
+esac
 NOTE "available congestion algorithms: $(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
 NOTE "qdisc in force: $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
 # Which tc this report sees, and whether it is real iproute2. Boot contexts can resolve
@@ -1415,7 +1517,7 @@ if [ -f "$_nvf" ]; then
   for _nk in net_congestion net_qdisc net_congestion_wifi net_congestion_mobile \
              net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle; do
     _nw="$(cfg "$_nk")"
-    case "$_nw" in ''|auto) continue ;; esac
+    case "$_nw" in ''|auto) _net_auto="${_net_auto:+$_net_auto }$_nk"; continue ;; esac
     _nv="$(grep -E "^$_nk=" "$_nvf" 2>/dev/null | head -1 | sed 's/.*=//')"
     case "$_nv" in
       ok)          V "  $_nk" "$_nw" "$_nw" eq ;;
@@ -1486,6 +1588,7 @@ if [ -f "$_nvf" ]; then
       *)           NOTE "$_nk = $_nw - no verdict recorded yet (apply has not run)" ;;
     esac
   done
+  [ -n "${_net_auto:-}" ] && OFF "network keys on auto (system default, nothing to verify): $_net_auto" "net:auto"
 else
   NOTE "net_apply_result missing - no network key applied through the WebUI yet"
 fi
@@ -1499,12 +1602,22 @@ case "$_radio_policy" in
 esac
 # Fast handover is owned by modem LPM rather than the route-tuning script. Report both the
 # stored request and the master gate; save/night correctly defer it until the screen is awake.
-case "$(cfg net_handover_fast):$_radio_policy" in
+# Both are derived from the net_wifi_leave ladder now (asb_lpm.sh / asb_wifi_fallback.sh);
+# the old net_handover_fast / net_handover_active keys are no longer in governor.conf, so
+# reading them reported "off" on a phone whose fallback watcher was plainly running.
+_nwl_d="$(cfg net_wifi_leave)"
+case "$_nwl_d" in
+  weak|unusable) _ho_fast=1; _ho_active=0 ;;
+  aggressive)    _ho_fast=1; _ho_active=1 ;;
+  *)             _ho_fast="$(cfg net_handover_fast)"; _ho_active="$(cfg net_handover_active)" ;;
+esac
+NOTE "net_wifi_leave = ${_nwl_d:-off}"
+case "${_ho_fast:-0}:$_radio_policy" in
   1:1) NOTE "Wi-Fi → mobile handover: fast requested; LPM state: $(cat /dev/.asb/lpm_mode 2>/dev/null || echo not-written)" ;;
   1:*) NOTE "Wi-Fi → mobile handover: stored but inactive (cellular/radio controls off)" ;;
   *) NOTE "Wi-Fi → mobile handover: stock/off" ;;
 esac
-case "$(cfg net_handover_active):$_radio_policy" in
+case "${_ho_active:-0}:$_radio_policy" in
   1:1) NOTE "Wi-Fi fallback: active opt-in; $(MODDIR=\"${MODDIR:-/data/adb/modules/AutoSystemBoost}\" sh \"${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo status-unavailable)" ;;
   1:*) NOTE "Wi-Fi fallback: stored but inactive (cellular/radio controls off)" ;;
   *) NOTE "Wi-Fi fallback: off" ;;
@@ -2127,6 +2240,8 @@ else
           V "  grade(lvl$_clvl) blueSatParam=$_exp_bsat" "$_exp_bsat" "$(grep -o '"blueSatParam": *[0-9.]*' "$CT" 2>/dev/null | head -1 | grep -o '[0-9.]*$')" eq
         fi
       fi
+    else
+      OFF "camera grade checks - CAMERA_LEVEL=0, the tone table is left stock" "CAMERA_LEVEL"
     fi
   else
     NOTE "conf_tuning_params.json absent"
@@ -2341,8 +2456,20 @@ NOTE "force animation restart = $(cfg UX_ANIM_FORCE_RESTART) (SystemUI is never 
 SEC "8a. SLEEP / DOZE  (the subsystem nobody can observe directly)"
 _dz="$(cfg doze_level)"
 NOTE "doze_level = ${_dz:-stock}"
-V "  device_idle_constants in force" "present" \
-  "$(settings get global device_idle_constants 2>/dev/null)" present
+_dz_live="$(settings get global device_idle_constants 2>/dev/null)"
+case "$_dz_live" in null) _dz_live="" ;; esac
+case "${_dz:-stock}" in
+  stock) OFF "device_idle_constants - doze_level=stock, Android's own timings" "doze_level" ;;
+  night)
+    # "night" sets the constants inside the learned sleep window only and is stock during
+    # the day, so an empty value in the afternoon is the design, not a failed write.
+    if [ -n "$_dz_live" ]; then
+      V "  device_idle_constants in force (night window)" "present" "$_dz_live" present
+    else
+      OFF "device_idle_constants - doze_level=night is stock outside the sleep window" "doze_level(night,day)"
+    fi ;;
+  *) V "  device_idle_constants in force" "present" "$_dz_live" present ;;
+esac
 if [ -r /data/adb/asb/night_window.conf ]; then
   _ns="$(grep -E '^sleep_min=' /data/adb/asb/night_window.conf | head -1 | sed 's/.*=//')"
   _nw="$(grep -E '^wake_min='  /data/adb/asb/night_window.conf | head -1 | sed 's/.*=//')"
@@ -2702,7 +2829,8 @@ P "      'available' table. If a battery cap doesn't line up with an actual"
 P "      frequency step for THIS SoC's clusters, the governor may be pinning the"
 P "      wrong cluster low (the likely cause of OP12 battery-mode sluggishness)."
 
-P "  PASS=$PASS   FAIL=$FAIL   N/A=$NA   info=$INFO"
+P "  PASS=$PASS   FAIL=$FAIL   N/A=$NA   OFF=$OFFN   info=$INFO"
+[ "$OFFN" -gt 0 ] && P "  OFF = checks not run because the setting is off/auto here: $OFF_LIST"
 # Normalized score so devices are comparable. Raw PASS counts mislead (a device
 # with more applicable checks, e.g. bt_absvol=on + aggressive toggles, racks up
 # more PASS without being "better optimized"). pass_ratio = PASS / applicable.
@@ -2721,7 +2849,10 @@ P "             (or the camera reads a partition ASB can't overlay, e.g."
 P "              /odm on OP12 — see notes by each item)."
 P "   - N/A   = that file/feature doesn't exist on this model (often"
 P "             expected: conf_tuning/qape are absent on OP12/Gen3)."
-P "   - (i)   = informational (toggle states, live props, link info)."
+P "   - (i)   = informational (toggle states, live props, link info).
+   - OFF   = not checked because your setting turns that feature off (or
+             leaves it on auto). Two phones with different settings will
+             show different PASS counts - compare pass_ratio, not PASS."
 P ""
 P "  Report saved to:"
 [ -n "$OUT1" ] && P "    $OUT1"
