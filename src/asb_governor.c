@@ -1466,12 +1466,38 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
              * Entry thresholds are untouched, so protection engages exactly as before. Only
              * the release needs the reading to clear the line by 8 points instead of 4. */
             int hyst = (g_budget_trim_pct > 0) ? 8 : 0;
+            /* The LIGHT stage needs the phone to be at least warm.
+             *
+             * The HAL headroom is a forecast, and this device's HAL forecasts early: it
+             * reads 83-100 when idle and drops to 55-65 under ordinary use with the skin at
+             * 33-36 C. The light threshold is 70, so the stage was on in every snapshot of
+             * a capture - and the new cap telemetry showed exactly what it cost: the prime
+             * ceiling cut from 1.61 to 1.47 GHz, reason headroom_light, on a cool phone.
+             * That is a permanent 9% performance trim with no heat behind it.
+             *
+             * Moderate and severe stay headroom-only: when the HAL forecasts real throttling
+             * the module should get ahead of it. The light stage is a gentle early nudge, and
+             * a nudge is only worth paying for when the surface is getting warm - eight
+             * degrees under the skin limit, the same pre-lean band the thermal veto uses. No
+             * usable skin reading falls back to the die against the sustained-exit mark; no
+             * valid reading at all keeps the old behaviour, as the trend gate does. */
+            int _light_warm;
+            {
+                int _sk = m->therm.skin_temp_c;
+                if (_sk > 20 && _sk < 70)
+                    _light_warm = (_sk >= g_asb_cfg.thermal_skin_c - 8);
+                else if (m->therm.temp_valid)
+                    _light_warm = (m->therm.cpu_max_c >=
+                        asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx));
+                else
+                    _light_warm = 1;
+            }
             if (hr <= g_asb_cfg.thermal_budget_severe_headroom_pct + hyst)
                 asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "headroom_severe");
             else if (hr <= g_asb_cfg.thermal_budget_moderate_headroom_pct + hyst)
                 asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_moderate_trim_pct, "headroom_moderate");
             else if (hr <= g_asb_cfg.thermal_budget_light_headroom_pct + hyst &&
-                     _lt_streak >= 2)
+                     _lt_streak >= 2 && _light_warm)
                 asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_light_trim_pct, "headroom_light");
         }
         /* Skin is the user-facing safety signal. A fast trend anticipates heat
@@ -2339,6 +2365,27 @@ static unsigned long v44_clamp_1h_now(void) {
     g_v44_clamp_1h = (unsigned long)(g_v44_clamp_rate + 0.5);
     return g_v44_clamp_1h;
 }
+/* A steadier copy of the rate, for the published conflicts file only.
+ *
+ * That file is rewritten only when its content changes, and the decaying rate changes on
+ * almost every tick after a burst - from 285 it loses two or three clamps per poll for
+ * the best part of an hour. Two captures in a row then skipped only 53% of publishes
+ * against 73% before the rolling count landed: the file was "different" every time
+ * because one number in it was sliding.
+ *
+ * Here the published figure moves only when the rate has changed by 10% (at least 5).
+ * Every decision - the thermal veto, the anomaly check - still reads the exact value
+ * from v44_clamp_1h_now(); this only stops a display number from defeating the
+ * unchanged-content check. */
+static unsigned long v44_clamp_1h_pub(void) {
+    static unsigned long pub = 0;
+    unsigned long now = v44_clamp_1h_now();
+    unsigned long diff = (now > pub) ? now - pub : pub - now;
+    unsigned long step = pub / 10;
+    if (step < 5) step = 5;
+    if (diff >= step || (now == 0 && pub != 0)) pub = now;
+    return pub;
+}
 
 /*
  * — Cap ownership model.
@@ -2561,7 +2608,7 @@ static void write_conflicts_json(void) {
         (long long)g_v44_last_clamp_ts,
         g_v44_clamp_total,
         g_v44_raised_total,
-        v44_clamp_1h_now(),
+        v44_clamp_1h_pub(),
         asb_cap_owner_name(g_cap_owner_eff),
         (long)g_cap_owner_since,
         asb_cap_writes_should_back_off(),
@@ -4823,7 +4870,20 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
          * with, so grading — and especially the self-correction — must not learn from it, or
          * it would drag the daytime rate down and then under-predict once normal use resumes.
          */
-        if (charging || battery_pct < 0 || g_smart_rt.night_safe_override) {
+        /* Screen-off is not the regime being predicted either.
+         *
+         * The budget forecasts from the ACTIVE drain rate, and grading was suspended only at
+         * night and on charge - not for an ordinary hour with the screen off. So a window
+         * opened at 16.6 %/h while the phone was in use, ran on through an hour in a
+         * pocket, and closed against a drop of one or two percent: error 100%, score 0, in
+         * every graded window of a capture whose real average was 1.3 %/h. The forecast was
+         * fine for what it forecasts; the grade compared it with a different regime.
+         *
+         * Only the anchor is dropped here. The self-correction streak is still reset only
+         * by night and charging, as before - a screen-off pause does not make the daytime
+         * evidence collected so far untrustworthy. */
+        if (charging || battery_pct < 0 || g_smart_rt.night_safe_override ||
+            !m->misc.screen_on) {
             g_budget_acc_anchor_ts = 0;
             g_budget_acc_anchor_pct = -1;
             if (g_smart_rt.night_safe_override || charging) {
