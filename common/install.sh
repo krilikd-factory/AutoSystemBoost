@@ -6,10 +6,11 @@
 set +x 2>/dev/null
 set +v 2>/dev/null
 
-asb_push_old_output() {
-  local i=0
-  while [ $i -lt 3 ]; do
-    # Make sure the module has a config before anything else runs.
+# Make sure the module has a config before anything else runs - at top level.
+#
+# This block used to sit INSIDE asb_push_old_output, inside its three-iteration blank-line
+# loop: it ran only when the banner was drawn, three times over, and everything the script
+# did before that point read a config that a release ZIP does not ship.
 #
 # The release workflow deliberately excludes config/governor.conf and ships
 # config/governor.conf.shipped instead, so the flashable ZIP has no working config until
@@ -30,21 +31,47 @@ if [ ! -f "$MODPATH/config/governor.conf" ]; then
   ui_print " "
 fi
 
-ui_print " "
-    i=$((i+1))
-  done
+# Collect the "!" lines as they are printed, for the summary at the end.
+#
+# A warning used to scroll past in the middle of 150 lines and then sit behind a 60-line gap,
+# so the one thing a user should read - "camera colour was processed by an older build,
+# install again after reboot" - was the thing least likely to be seen. Only boot mode reaches
+# this script (recovery exits in the template), and every supported manager's ui_print is a
+# plain echo there, so redefining it keeps the output identical.
+ASB_NOTES=""; ASB_NOTES_N=0
+_asb_note_open=0
+ui_print() {
+  echo "$1"
+  _asb_ut="${1#"${1%%[! ]*}"}"
+  case "$_asb_ut" in
+    '! '*)
+      ASB_NOTES_N=$((ASB_NOTES_N + 1))
+      _asb_note_open=0
+      if [ "$ASB_NOTES_N" -le 6 ]; then
+        ASB_NOTES="${ASB_NOTES}${ASB_NOTES:+
+}${_asb_ut#! }"
+        _asb_note_open=1
+      fi ;;
+    ''|'+ '*|'['*|'─'*) _asb_note_open=0 ;;
+    *)
+      # A deeper-indented line right under a warning is its second half ("reboot and
+      # install again"), and the advice is the part worth keeping.
+      case "$1" in
+        '        '*) [ "$_asb_note_open" = "1" ] && ASB_NOTES="${ASB_NOTES} ${_asb_ut}" ;;
+        *) _asb_note_open=0 ;;
+      esac ;;
+  esac
 }
 
+# Pushes the previous screenful up a little so the banner starts on a clean line.
+asb_push_old_output() {
+  ui_print " "
+}
+
+# The logo is drawn once, by the template header (common/functions.sh) a few lines
+# earlier. Drawing it again here put two identical banners on one screen.
 asb_big_banner() {
   asb_push_old_output
-ui_print " "
-ui_print "    █████╗    ███████╗██████╗ "
-ui_print "  ██╔══██╗██╔════╝██╔══██╗"
-ui_print "  ███████║███████╗██████╔╝"
-ui_print "  ██╔══██║╚════██║██╔══██╗"
-ui_print "  ██║      ██║███████║██████╔╝"
-ui_print "  ╚═╝      ╚═╝╚══════╝╚═════╝ "
-ui_print " "
   ui_print "${SEPARATOR}"
 }
 
@@ -186,29 +213,13 @@ asb_end_banner() {
     ui_print "  📋  ${ASB_SEC_CATEGORIES:-ENABLED CATEGORIES}"
     printf '%s\n' "$_en" | while IFS= read -r _l; do ui_print "$_l"; done
   fi
-  # Scroll the detail off screen, leaving the summary alone at the end.
+  # No blank-line gap any more.
   #
-  # The installer view does not scroll back on most managers, so whatever sits at the
-  # bottom when it finishes is what the user reads. The per-section detail - WI-FI,
-  # BATTERY, MEMORY, PREPARED COMPONENTS - is useful while it streams past and noise once
-  # the summary is there to replace it.
-  #
-  # 60 lines. The tail after this gap - summary, banner, the manager's own output - is
-  # 17 lines, so a window taller than 77 lines would still show BATTERY and MEMORY at 26.
-  # A tablet or a landscape phone is easily that tall, and the report was still visible
-  # there.
-  #
-  # Sizing this by counting is the wrong instinct anyway: there is no height to count
-  # against, and a blank line costs nothing. Enough to clear any plausible window beats
-  # exactly enough for the one that was measured.
-  #
-  # It used to sit ABOVE the component list, which put the hole in the middle of the
-  # report instead of at its end.
-  _i=0
-  while [ "$_i" -lt 60 ]; do
-    ui_print " "
-    _i=$((_i + 1))
-  done
+  # Sixty empty lines were printed here to push the report off screen and leave only the
+  # final banner visible. What was left visible was "ASB · installed · reboot" and a logo -
+  # the warnings, the device line and everything else a user might want were behind the
+  # hole, and in a saved install log the hole was simply sixty empty lines. Every manager
+  # scrolls to the end on its own; the summary below is what sits there now.
 
   if [ -n "$INFO" ] && [ -f "$INFO" ] && [ ! -s "$INFO" ]; then
     rm -f "$INFO" 2>/dev/null || true
@@ -217,19 +228,34 @@ asb_end_banner() {
     && rm -f "$NVBASE/modules/.$MODID-files" 2>/dev/null || true
 
   ui_print " "
+  ui_print "${SEPARATOR}"
+  ui_print "  ✅  ${ASB_DONE_TITLE:-AutoSystemBoost installed}"
+  _asb_sv="$(sed -n 's/^version=//p' "$MODPATH/module.prop" 2>/dev/null | head -1)"
+  _asb_sp="$(cat "$MODPATH/current_profile" 2>/dev/null)"
+  case "$_asb_sp" in none|'') _asb_sp="" ;; esac
+  ui_print "      ${ASB_DEVICE_NAME:-OnePlus}${_asb_sv:+  ·  ${_asb_sv}}${_asb_sp:+  ·  ${ASB_SUM_PROFILE:-profile}: ${_asb_sp}}"
+  if [ "${ASB_NOTES_N:-0}" -gt 0 ] 2>/dev/null; then
+    ui_print " "
+    ui_print "  ⚠️  ${ASB_SUM_NOTES:-Worth reading} (${ASB_NOTES_N}):"
+    printf '%s\n' "$ASB_NOTES" | while IFS= read -r _nl; do
+      [ -n "$_nl" ] && echo "      • ${_nl}"
+    done
+    [ "$ASB_NOTES_N" -gt 6 ] && echo "      • …"
+  fi
   ui_print " "
+  ui_print "  🔄  ${ASB_DONE_MSG:-Reboot to activate.}"
+  ui_print "  🌐  ${ASB_SUM_WEBUI:-Settings: open the module's WebUI after reboot}"
   ui_print "${SEPARATOR}"
-  ui_print "  ${ASB_DONE_TITLE:-✓ AutoSystemBoost installed}"
-  ui_print "  ${ASB_DONE_MSG:-Reboot to activate.}"
-  ui_print "${SEPARATOR}"
-ui_print " "
-ui_print "    █████╗    ███████╗██████╗ "
-ui_print "  ██╔══██╗██╔════╝██╔══██╗"
-ui_print "  ███████║███████╗██████╔╝"
-ui_print "  ██╔══██║╚════██║██╔══██╗"
-ui_print "  ██║      ██║███████║██████╔╝"
-ui_print "  ╚═╝      ╚═╝╚══════╝╚═════╝ "
-ui_print " "
+  # The brand mark closes the install, under the summary - the same logo the template draws
+  # at the top, so the last thing on screen is the module's own signature.
+  ui_print " "
+  ui_print "    █████╗    ███████╗██████╗ "
+  ui_print "  ██╔══██╗██╔════╝██╔══██╗"
+  ui_print "  ███████║███████╗██████╔╝"
+  ui_print "  ██╔══██║╚════██║██╔══██╗"
+  ui_print "  ██║      ██║███████║██████╔╝"
+  ui_print "  ╚═╝      ╚═╝╚══════╝╚═════╝ "
+  ui_print " "
 }
 
 asb_install_prebuilt_governor() {
@@ -706,7 +732,6 @@ asb_identify_device() {
   fi
   [ -z "$ASB_DEVICE_NAME" ] && [ -n "$ASB_MODEL_RAW" ] && ASB_DEVICE_NAME="$ASB_MANUFACTURER_RAW $ASB_MODEL_RAW"
   [ -z "$ASB_DEVICE_NAME" ] && ASB_DEVICE_NAME="OnePlus device"
-  ui_print "[*] Device identified: ${ASB_DEVICE_NAME}"
 }
 
 ASB_IS_APATCH=false
@@ -1296,7 +1321,7 @@ asb_patch_location_inplace() {
       }
     fi
   done
-  ui_print "      + GPS/A-GPS tuned (gps.conf$([ "$_loc_izat" = "1" ] && echo " + izat.conf"))"
+  ui_print "      + ${ASB_D_GPS:-GPS/A-GPS tuned} (gps.conf$([ "$_loc_izat" = "1" ] && echo " + izat.conf"))"
 }
 
 asb_clone_dir_from_live() {
@@ -1688,7 +1713,7 @@ asb_install_dsp_lib() {
   # and setting the card back to auto left the legacy library staged while the config claimed
   # otherwise.
   echo "$ASB_DSP_ABI" > "$MODPATH/dsp_abi_installed" 2>/dev/null
-  ui_print "      + ASB DSP: ${ASB_DSP_ABI} effect selected for this device"
+  ui_print "      + ASB DSP: ${ASB_DSP_ABI} — ${ASB_I_DSP_ABI:-effect selected for this device}"
 
   [ -n "$_dsp_s64" ] || return 1
   for _dsp_pair in \
@@ -1825,7 +1850,7 @@ asb_patch_audio_inplace() {
     # because OxygenOS does not apply the config's <postprocess> section.
     if [ -f "$MODPATH/bin/asb_dsp_attach" ]; then
       chmod 0755 "$MODPATH/bin/asb_dsp_attach" 2>/dev/null
-      ui_print "      + ASB DSP attacher staged (creates the effect on the global mix)"
+      ui_print "      + ASB DSP: ${ASB_I_DSP_ATTACH:-attacher staged (creates the effect on the global mix)}"
     else
       ui_print "    ! ASB DSP attacher missing - effect will register but not attach"
     fi
@@ -1954,7 +1979,7 @@ asb_write_device_pack_manifest() {
   } > "$_dpm_tmp" 2>/dev/null && mv -f "$_dpm_tmp" /data/adb/asb/device_pack_verified 2>/dev/null
 
   if [ -r /data/adb/asb/device_pack_verified ]; then
-    ui_print "      + device pack certified for this build ($_dpm_pack)"
+    ui_print "      + ${ASB_I_PACK_CERT:-device pack certified for this build} ($_dpm_pack)"
   fi
 }
 
@@ -2102,7 +2127,7 @@ fi
               rm -f "$MODPATH/$_ct_dst.graded" 2>/dev/null
             fi
           done
-          [ "$_ct_done" -gt 0 ] && ui_print "      + Camera tuning: level ${_ASB_CAMERA_LEVEL:-0} / independent controls applied to ${_ct_done} file(s)"
+          [ "$_ct_done" -gt 0 ] && ui_print "      + $(printf "${ASB_I_CAM_TUNING:-camera tuning: level %s, applied to %s file(s)}" "${_ASB_CAMERA_LEVEL:-0}" "${_ct_done}")"
         fi
 
   if [ "$ASB_AUDIO" = "true" ] || [ "$ASB_CAMERA" = "true" ]; then
@@ -2495,6 +2520,9 @@ asb_prepare_mmfeed_patch() {
   esac
   echo "${_mf_live}|${_mf_payload}" > /data/adb/asb/mmfeed_bind_manifest.txt 2>/dev/null
   echo 'ready' > /data/adb/asb/mmfeed_state 2>/dev/null
+  # Its own heading: this ran right after the camera block and read as a camera line.
+  ui_print " "
+  ui_print "  ⚙️  ${ASB_SEC_SYSTEM:-SYSTEM}"
   ui_print "      + ${ASB_L_MMFEED_READY:-Multimedia telemetry: patch ready - off by default, toggle in WebUI (System)}"
   return 0
 }
@@ -2574,7 +2602,7 @@ asb_register_dsp_all_configs() {
     fi
   done
   if [ "$_dsp_reg" -gt 0 ]; then
-    ui_print "      + ${ASB_SEC_AUDIO:-AUDIO} · ${ASB_SEC_DSP:-DSP ENGINE}: $(printf "${ASB_L_DSP_REG_N:-registered in %s audio config file(s)}" "$_dsp_reg")"
+    ui_print "      + DSP: $(printf "${ASB_L_DSP_REG_N:-registered in %s audio config file(s)}" "$_dsp_reg")"
   elif [ "$_dsp_seen" -gt 0 ]; then
     ui_print "    ! ASB DSP: $_dsp_seen config(s) present but none registered"
   fi
@@ -2645,7 +2673,7 @@ asb_bind_register_odm_effects() {
       || echo "${_oecl}|$_oecs" >> "$_oecm"
     # Printed once per patched config with identical wording, so a device with two of
     # them showed the same sentence twice and no way to tell them apart. Name the file.
-    ui_print "      + ${ASB_SEC_AUDIO:-AUDIO} · ${ASB_SEC_DSP:-DSP ENGINE}: ${ASB_L_DSP_ODM:-registered in the config Android actually reads}: $_oecl"
+    ui_print "        → ${ASB_L_DSP_ODM:-read by Android}: $_oecl"
     return 0
   fi
   rm -f "$_oecs" 2>/dev/null
@@ -2729,7 +2757,7 @@ asb_capture_oem_toggles() {
     printf '%s|%s\n' "$_ok" "$_ov" >> /data/adb/asb/oem_preinstall 2>/dev/null
   done
   [ -s /data/adb/asb/oem_preinstall ] \
-    && ui_print "      + remembered your OEM toggles as they are now"
+    && ui_print "      + ${ASB_I_OEM_KEPT:-remembered your OEM toggles as they are now}"
 }
 
 asb_neutralise_fresh_install() {
@@ -2837,7 +2865,7 @@ asb_preserve_user_config() {
     case "$_cp_val" in
       stock|performance|battery|balanced|smart|none)
         printf '%s\n' "$_cp_val" > "$MODPATH/current_profile" 2>/dev/null
-        ui_print "      + kept your power profile: $_cp_val"
+        ui_print "      + ${ASB_I_PROFILE_KEPT:-kept your power profile}: $_cp_val"
         break ;;
     esac
   done
@@ -3139,7 +3167,9 @@ if [ -f "$MODPATH/tools/asb_install_probe.sh" ]; then
   cp -f "$MODPATH/install_probe.txt" /data/adb/asb/install_probe.txt 2>/dev/null || true
   if [ -f "$MODPATH/install_probe.txt" ]; then
     ui_print "      + ${ASB_D_STOCK_ANALYSIS:-stock-file analysis:}"
-    sed -n '/SUMMARY (what ASB can tune/,/Inventory only/p' "$MODPATH/install_probe.txt" 2>/dev/null \
+    # The probe's header reads "SUMMARY (what ASB will actually tune ...)". This matched
+    # "can tune", found nothing, and printed the heading with an empty list under it.
+    sed -n '/----- SUMMARY/,/Inventory only/p' "$MODPATH/install_probe.txt" 2>/dev/null \
       | grep -E '^[[:space:]]+(audio|wifi|perf|gps|camera|cpu)[[:space:]]+:' \
       | while IFS= read -r _line; do ui_print "        $_line"; done
   fi
@@ -3228,7 +3258,7 @@ if [ "$ASB_CAMERA" = "true" ] && [ -r "$MODPATH/runtime/asb_tweaks.sh" ]; then
     asb_tw_vb_add_apps "$_asb_vb_final"
     _asb_vb_final_n=$((_asb_vb_final_n + 1))
   done
-  [ "$_asb_vb_final_n" -gt 0 ] && ui_print "      + ${ASB_D_RETOUCH:-retouch apps}: final camera bind payload verified"
+  [ "$_asb_vb_final_n" -gt 0 ] && ui_print "      + ${ASB_D_RETOUCH:-retouch apps}: ${ASB_I_RETOUCH_OK:-final camera payload verified}"
 fi
 asb_generate_odm_camera_binds
 
@@ -4239,7 +4269,7 @@ AutoSystemBoost' $APIOCXM
 	  if [ "$(grep -E '^[[:space:]]*audio_remove_volume_limit=' "$MODPATH/config/governor.conf" 2>/dev/null \
 	          | head -1 | sed 's/.*=//' | tr -d ' \r')" = "1" ]; then
 	    settings put global audio_safe_volume_state 0
-	    ui_print "      ! headphone volume limiter removed - protect your hearing"
+	    ui_print "      ! ${ASB_SEC_AUDIO:-AUDIO}: ${ASB_I_HP_LIMIT:-headphone volume limiter removed - protect your hearing}"
 	  fi
 	fi
 	

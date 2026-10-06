@@ -184,7 +184,15 @@ $KSU && { [ $KSU_VER_CODE -lt 11184 ] && require_new_ksu; }
 [ -z $APATCH ] && APATCH=false
 [ "$APATCH" == "true" ] && KSU=true
 
-set -x
+# Shell tracing only on request.
+#
+# The template turned on set -x here for every install, so the manager's log carried ~50
+# lines of "+ '[' -z ]" between the banner and the first real line, and the user saw them.
+# Touch /data/adb/asb/install_trace (or export ASB_INSTALL_TRACE=1) to get it back.
+if [ "${ASB_INSTALL_TRACE:-0}" = "1" ] || [ -f /data/adb/asb/install_trace ]; then
+  ASB_INSTALL_TRACE=1
+  set -x
+fi
 
 [ -z $ARCH32 ] && ARCH32="$(echo $ABI32 | cut -c-3)"
 [ $API -lt 26 ] && DYNLIB=false
@@ -241,7 +249,13 @@ if ! $BOOTMODE; then
   exit 0
 fi
 
-unzip -o "$ZIPFILE" -x 'META-INF/*' 'common/functions.sh' -d $MODPATH >&2
+# Quiet unless tracing: the file-by-file listing was 150 lines of "inflating: ..." in the
+# install log. Errors still reach stderr either way.
+if [ "${ASB_INSTALL_TRACE:-0}" = "1" ]; then
+  unzip -o "$ZIPFILE" -x 'META-INF/*' 'common/functions.sh' -d $MODPATH >&2
+else
+  unzip -qo "$ZIPFILE" -x 'META-INF/*' 'common/functions.sh' -d $MODPATH >&2
+fi
 [ -f "$MODPATH/common/addon.tar.xz" ] && tar -xf $MODPATH/common/addon.tar.xz -C $MODPATH/common 2>/dev/null
 
 if [ "$(ls -A $MODPATH/common/addon/*/install.sh 2>/dev/null)" ]; then
