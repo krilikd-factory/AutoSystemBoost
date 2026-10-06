@@ -448,16 +448,10 @@ lk_mono_s() {
   [ -n "$_m" ] && echo "$_m" || echo -1
 }
 
-# The common battery trace resolves LK_NET_RMNET_IF once per capture. Reuse that
-# counter for phase attribution rather than polling a second interface or assuming
-# rmnet_data0 exists on every modem.
+# Same summed counter as the battery trace (lk_mobile_bytes), so the phase table and the
+# trace agree on how much mobile traffic a phase carried.
 lk_phase_rmnet_bytes() {
-  _if="${LK_NET_RMNET_IF:-rmnet_data0}"
-  _rx=$(cat "/sys/class/net/$_if/statistics/rx_bytes" 2>/dev/null)
-  _tx=$(cat "/sys/class/net/$_if/statistics/tx_bytes" 2>/dev/null)
-  case "$_rx" in ''|*[!0-9]*) _rx=0 ;; esac
-  case "$_tx" in ''|*[!0-9]*) _tx=0 ;; esac
-  printf '%s %s' "$_rx" "$_tx"
+  lk_mobile_bytes
 }
 
 lk_phase_ledger_row() {
@@ -1291,9 +1285,12 @@ lk_emit_full_day_report() {
           n++
           if (first=="") { first=$2; fpct=$8; fcc=$12 }
           last=$2; lpct=$8; lcc=$12
-          mA=$9/1000; if (mA<0) mA=-mA
-          if (mA>peak) peak=mA
-          sum+=mA
+          # current_now is already mA on OnePlus (uA elsewhere); charge is negative.
+          # A positive sample while "Charging" means the phone drew more than the
+          # charger delivered - counted separately instead of folded into the average.
+          mA=$9+0; if (mA>=100000 || mA<=-100000) mA=mA/1000
+          if (mA<0) { c=-mA; if (c>peak) peak=c; sum+=c; nc++ }
+          else if (mA>0) { nd++; dsum+=mA }
           t=$11/10; if (t>tmax) tmax=t
           if ($4!="" && $4!="?") type[$4]++
           if ($14!="" && $14!="?") { icl=$14/1000; if (iclmin==0 || icl<iclmin) iclmin=icl; if (icl>iclmax) iclmax=icl }
@@ -1303,7 +1300,8 @@ lk_emit_full_day_report() {
           printf "  samples while plugged in : %d\n", n
           printf "  battery                  : %s%% -> %s%%\n", fpct, lpct
           if (fcc+0>0 && lcc+0>0) printf "  charge counter delta     : %.0f mAh\n", (lcc-fcc)/1000
-          printf "  charge current  avg/peak : %.0f / %.0f mA\n", sum/n, peak
+          if (nc>0) printf "  charge current  avg/peak : %.0f / %.0f mA  (%d charging samples)\n", sum/nc, peak, nc
+          if (nd>0) printf "  net DRAIN while plugged  : %d of %d samples, avg %.0f mA  (weak charger/cable or OEM input limit)\n", nd, n, dsum/nd
           if (iclmax>0) printf "  input current limit rng  : %.0f - %.0f mA  (OEM thermal pulls this back)\n", iclmin, iclmax
           printf "  peak battery temperature : %.1f C\n", tmax
           printf "  charge types seen        : "

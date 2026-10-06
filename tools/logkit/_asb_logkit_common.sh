@@ -849,6 +849,27 @@ lk_capture_perf_trace_row() {
   echo "${_e}|${_d}|${_socd}|${_prime}|${_perf}|${_cpullc}|${_sf}|${_sfr}|${_sb}|${_st6}|${_board}|${_btz}|${_p0cur}|${_p0max}|${_p6cur}|${_p6max}|${_gb}|${_gclk}|${_gmax}|${_gmin}|${_ggov}|${_bc}|${_bv}|${_l1}|${_l5}|${_l15}|${_temp}|${_tv}|${_ta}|${_tr}|${_ct}|${_cz}|${_sz}|${_surfz}|${_sk}|${_surf}|${_smax}|${_ssurfmax}|${_brd}|${_hv}|${_hir}|${_fb}" >> "$LK_OUT_DIR/perf_trace.txt"
 }
 
+# Mobile RX/TX bytes summed over every data link the modem exposes.
+#
+# The trace used to follow ONE interface, picked once per run (the default route, else the
+# rmnet_data* with the most RX at that moment) and cached in an exported variable. The cache
+# lived in the recorder's subshell, so the phase ledger never saw it and fell back to
+# rmnet_data0; and with a VPN the default route is tun0, so the pick was a guess. A field
+# capture (OP12, VPN, LTE) showed 41 GB on the battery trace and 16 GB in the phase table
+# for the same six hours. rmnet_ipa*/rmnet_mhi* are the parent transport and carry the same
+# bytes again, so they are left out; the sum of the children is the mobile traffic.
+lk_mobile_bytes() {
+  _mrx=0; _mtx=0
+  for _c in /sys/class/net/rmnet_data* /sys/class/net/ccmni*; do
+    [ -d "$_c" ] || continue
+    _a=$(cat "$_c/statistics/rx_bytes" 2>/dev/null); _b=$(cat "$_c/statistics/tx_bytes" 2>/dev/null)
+    case "$_a" in ''|*[!0-9]*) _a=0 ;; esac
+    case "$_b" in ''|*[!0-9]*) _b=0 ;; esac
+    _mrx=$(( _mrx + _a )); _mtx=$(( _mtx + _b ))
+  done
+  printf '%s %s' "$_mrx" "$_mtx"
+}
+
 lk_capture_battery_trace_row() {
   _e=$(date +%s)
   _d=$(date '+%Y-%m-%d %H:%M:%S')
@@ -864,25 +885,8 @@ lk_capture_battery_trace_row() {
   # NOTE: every logkit entry script runs `set -u`, so these MUST use ${VAR:-} - a bare
   # $VAR on the not-yet-set cache is a fatal "parameter not set" that aborts this whole
   # function before it ever appends a row.
-  if [ -z "${LK_NET_RMNET_IF:-}" ]; then
-    LK_NET_RMNET_IF="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
-    case "$LK_NET_RMNET_IF" in
-      rmnet*|ccmni*) : ;;
-      *) LK_NET_RMNET_IF="" ;;
-    esac
-    if [ -z "${LK_NET_RMNET_IF:-}" ]; then
-      _cbest=0
-      for _c in /sys/class/net/rmnet_data*; do
-        [ -d "$_c" ] || continue
-        _cn="$(basename "$_c")"
-        _cb="$(cat "$_c/statistics/rx_bytes" 2>/dev/null)"
-        [ -n "$_cb" ] || continue
-        [ "${_cb:-0}" -gt "${_cbest:-0}" ] 2>/dev/null && { _cbest="$_cb"; LK_NET_RMNET_IF="$_cn"; }
-      done
-    fi
-    [ -n "${LK_NET_RMNET_IF:-}" ] || LK_NET_RMNET_IF="rmnet_data0"
-    export LK_NET_RMNET_IF
-  fi
+  # Mobile counters are the SUM of every rmnet_data*/ccmni* link (see lk_mobile_bytes);
+  # one picked interface missed most of the traffic once the modem moved the route.
   if [ -z "${LK_NET_WLAN_IF:-}" ]; then
     for _c in /sys/class/net/wlan*; do
       [ -d "$_c" ] && { LK_NET_WLAN_IF="$(basename "$_c")"; break; }
@@ -892,8 +896,9 @@ lk_capture_battery_trace_row() {
   fi
   _wrx=$(cat "/sys/class/net/$LK_NET_WLAN_IF/statistics/rx_bytes" 2>/dev/null)
   _wtx=$(cat "/sys/class/net/$LK_NET_WLAN_IF/statistics/tx_bytes" 2>/dev/null)
-  _rrx=$(cat "/sys/class/net/$LK_NET_RMNET_IF/statistics/rx_bytes" 2>/dev/null)
-  _rtx=$(cat "/sys/class/net/$LK_NET_RMNET_IF/statistics/tx_bytes" 2>/dev/null)
+  read -r _rrx _rtx <<EOF_LKMB
+$(lk_mobile_bytes)
+EOF_LKMB
   read -r _l1 _rest < /proc/loadavg
   _mfree=$(awk '/^MemAvailable:/{print $2; exit}' /proc/meminfo 2>/dev/null)
   _swfree=$(awk '/^SwapFree:/{print $2; exit}' /proc/meminfo 2>/dev/null)
