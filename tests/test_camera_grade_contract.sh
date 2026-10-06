@@ -44,7 +44,7 @@ need "$TWEAKS" '[ "$_lv" -gt 10 ] 2>/dev/null && _lv=10'
 need "$TWEAKS" 'asb_tw_camera_grade_needed()'
 need "$TWEAKS" '_cam_grade_needed=0'
 need "$TWEAKS" 'asb_tw_vb_add_apps()'
-need "$INSTALL" 'final camera bind payload verified'
+need "$INSTALL" 'final camera payload verified'
 need "$ACTION" '/odm/etc/camera/config/video_beauty_default_config'
 need "$ACTION" '/vendor/odm/etc/camera/config/video_beauty_default_config'
 
