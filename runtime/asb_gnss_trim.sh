@@ -14,7 +14,8 @@
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
-STATE=/data/adb/asb/gnss_restricted
+D="${ASB_GNSS_DIR:-/data/adb/asb}"
+STATE="$D/gnss_restricted"
 [ -f "$CONF" ] || exit 0
 
 _cfg() {
@@ -49,6 +50,8 @@ esac
 _has dumpsys || exit 0
 _has pm || exit 0
 _has appops || exit 0
+. "$MODDIR/runtime/asb_procstate.sh" 2>/dev/null || exit 0
+asb_lru_load
 
 # Screen must be off. A cached process can still be serving something the user set up
 # moments ago; waiting for the screen to go dark removes that ambiguity entirely.
@@ -78,9 +81,7 @@ if [ -f "$STATE" ] && _has appops && _has dumpsys; then
     esac
     case "$_rop" in COARSE_LOCATION|FINE_LOCATION) : ;; *) _rop="COARSE_LOCATION" ;; esac
     case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
-    _st="$(dumpsys activity processes "$_rp" 2>/dev/null \
-           | grep -m1 -oE 'cached|foreground|perceptible|visible')"
-    if [ -n "$_st" ] && [ "$_st" != "cached" ]; then
+    if [ "$(asb_pkg_proc_class "$_rp")" = active ]; then
       appops set "$_rp" "$_rop" "$_rm" >/dev/null 2>&1 \
         && echo "gnss trim: $_rp ($_rop) is in use again - location restored"
     else
@@ -93,12 +94,32 @@ fi
 
 _third="$(pm list packages -3 2>/dev/null | sed 's/^package://')"
 [ -n "$_third" ] || exit 0
-mkdir -p /data/adb/asb 2>/dev/null
+mkdir -p "$D" 2>/dev/null
 
-# Apps holding a location request while cached, per Android's own accounting.
-for _p in $(dumpsys location 2>/dev/null \
-            | sed -n 's/.*package=\([a-zA-Z0-9_.]*\).*/\1/p' | sort -u); do
-  case "$_third" in *"$_p"*) : ;; *) continue ;; esac
+# Apps holding a location request, per Android's own accounting.
+#
+# Android 12+ writes each registration with its caller identity, "10234/com.foo[tag]";
+# older releases wrote "package=com.foo". Both are read. The event log and history at the
+# end of the dump name apps that asked hours ago and have since stopped, so reading stops
+# there - only live registrations are candidates.
+_asb_loc_holders() {
+  dumpsys location 2>/dev/null | awk '
+    /[Ee]vent [Ll]og|[Hh]istorical/ { exit }
+    {
+      s = $0
+      while (match(s, /[0-9]+\/[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+/)) {
+        t = substr(s, RSTART, RLENGTH); sub(/^[0-9]+\//, "", t); print t
+        s = substr(s, RSTART + RLENGTH)
+      }
+      s = $0
+      while (match(s, /package=[A-Za-z][A-Za-z0-9_.]*/)) {
+        print substr(s, RSTART + 8, RLENGTH - 8); s = substr(s, RSTART + RLENGTH)
+      }
+    }' | sort -u
+}
+for _p in $(_asb_loc_holders); do
+  # Exact match: a substring test let "com.foo" pass because "com.foobar" was installed.
+  printf '%s\n' "$_third" | grep -qxF "$_p" || continue
 
   # Never touched, for the same reason the doze trim spares them: a navigation app that
   # cannot see where you are is broken, and an emergency or safety app doubly so.
@@ -121,8 +142,7 @@ for _p in $(dumpsys location 2>/dev/null \
 
   # Only if the process is actually cached. A foreground or perceptible process is doing
   # something visible, whatever the battery accounting says.
-  _proc="$(dumpsys activity processes "$_p" 2>/dev/null | grep -m1 -oE 'cached|foreground|perceptible|visible')"
-  [ "$_proc" = "cached" ] || continue
+  [ "$(asb_pkg_proc_class "$_p")" = cached ] || continue
 
   # Both location ops, in FOREGROUND mode - not COARSE only, and not "ignore".
   #

@@ -293,7 +293,10 @@ if [ "$_lvl" = "stock" ] || [ -z "$_c" ]; then
     asb_doze_restore_whitelist
     echo "doze: stock - Android's own timings, nothing set by ASB"
   else
-    echo "doze: stock (nothing had been set)"
+    # The exemptions are their own record: a constants write the ROM refused still left
+    # trimmed apps behind, and they came back only on uninstall.
+    asb_doze_restore_whitelist
+    echo "doze: stock (no constants had been set)"
   fi
   exit 0
 fi

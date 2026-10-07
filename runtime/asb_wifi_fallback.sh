@@ -8,6 +8,10 @@
 # screen-on only, has a cooldown and turns Wi‑Fi back on afterwards.
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+# `settings` through the fallback wrapper: on some OnePlus builds the cmd bridge answers
+# "Failure calling service settings: Failed transaction" while exiting 0, and a script run
+# as its own process does not inherit the wrapper from service.sh.
+[ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
 CONF="$MODDIR/config/governor.conf"
 STATE_DIR="${ASB_WIFI_FALLBACK_STATE_DIR:-/data/adb/asb}"
 PID="$STATE_DIR/wifi_fallback.pid"

@@ -6,6 +6,10 @@
 # opinion the user never agreed to, and letting them disagree.
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+# `settings` through the fallback wrapper: on some OnePlus builds the cmd bridge answers
+# "Failure calling service settings: Failed transaction" while exiting 0, and a script run
+# as its own process does not inherit the wrapper from service.sh.
+[ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
 CONF="$MODDIR/config/governor.conf"
 [ -f "$CONF" ] || exit 0
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"
@@ -76,7 +80,24 @@ case "$(_cfg phantom_procs)" in
     #
     # asb_settings_put recorded the original before the first write, so it is there to be
     # restored. When no record exists ASB never wrote the key, and leaving it is correct.
-    if [ -f "${ASB_PROFILE_BASELINE:-/data/adb/asb/profile_runtime_baseline.v1}" ]; then
+    #
+    # The record is in baseline.txt ("settings|global|<key>|<value>"), which is where
+    # asb_settings_put writes it. This branch used to read profile_runtime_baseline.v1 -
+    # a different file, written only during profile transactions and cleared on a Stock
+    # transition - so it never found the value and strict -> stock was still one-way.
+    _pp_bl="${ASB_BASELINE:-/data/adb/asb/baseline.txt}"
+    _pp_line="$(grep -m1 '^settings|global|settings_enable_monitor_phantom_procs|' "$_pp_bl" 2>/dev/null)"
+    if [ -n "$_pp_line" ]; then
+      _pp_orig="${_pp_line#settings|global|settings_enable_monitor_phantom_procs|}"
+      if [ -n "$_pp_orig" ]; then
+        settings put global settings_enable_monitor_phantom_procs "$_pp_orig" >/dev/null 2>&1 \
+          && _changed="${_changed}phantom=stock(restored) "
+      else
+        # Unset before ASB: absent is the ROM's own default, a stored value is not.
+        settings delete global settings_enable_monitor_phantom_procs >/dev/null 2>&1 \
+          && _changed="${_changed}phantom=stock(cleared) "
+      fi
+    elif [ -f "${ASB_PROFILE_BASELINE:-/data/adb/asb/profile_runtime_baseline.v1}" ]; then
       _pp_orig="$(grep -m1 '^setting|global:settings_enable_monitor_phantom_procs|' \
                   "${ASB_PROFILE_BASELINE:-/data/adb/asb/profile_runtime_baseline.v1}" \
                   2>/dev/null | cut -d'|' -f3)"

@@ -229,7 +229,12 @@ asb_tw_vb_add_apps() {
   if command -v ui_print >/dev/null 2>&1; then
     _vb_after="$(grep -c '"packageName"' "$_f" 2>/dev/null)"
     _vb_before=$((_vb_after - $(printf '%s' "$_vb_add" | grep -c '|')))
-    [ "${_vb_after:-0}" -gt 0 ] && ui_print "      + ${ASB_D_RETOUCH:-retouch apps}: ${_vb_before} -> ${_vb_after}"
+    # One line per distinct result: the same list is injected into each copy of the config
+    # (odm, vendor/odm, the staged one), and the install log printed "4 -> 19" three times.
+    if [ "${_vb_after:-0}" -gt 0 ] && [ "${_ASB_VB_LAST:-}" != "${_vb_before}>${_vb_after}" ]; then
+      ui_print "      + ${ASB_D_RETOUCH:-retouch apps}: ${_vb_before} -> ${_vb_after}"
+      _ASB_VB_LAST="${_vb_before}>${_vb_after}"
+    fi
   fi
   return 0
 }

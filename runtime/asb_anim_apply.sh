@@ -9,6 +9,10 @@
 # the new value. UX_ANIM_FORCE_RESTART existed to make that immediate and is not needed.
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+# `settings` through the fallback wrapper: on some OnePlus builds the cmd bridge answers
+# "Failure calling service settings: Failed transaction" while exiting 0, and a script run
+# as its own process does not inherit the wrapper from service.sh.
+[ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
 CONF="$MODDIR/config/governor.conf"
 [ -f "$CONF" ] || exit 0
 [ -r "$MODDIR/runtime/asb_baseline.sh" ] && . "$MODDIR/runtime/asb_baseline.sh"

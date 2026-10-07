@@ -34,6 +34,10 @@
 #     firmware update stops paying for it.
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+# `settings` through the fallback wrapper: on some OnePlus builds the cmd bridge answers
+# "Failure calling service settings: Failed transaction" while exiting 0, and a script run
+# as its own process does not inherit the wrapper from service.sh.
+[ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
 STATE_DIR="${ASB_CONFIG_STATE:-/data/adb/asb}"
 CONF="$MODDIR/config/governor.conf"
 EVIDENCE="$STATE_DIR/bt_link_evidence"

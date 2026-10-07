@@ -137,10 +137,23 @@ _window_for() {
 }
 
 # --- record originals once, so "off" and uninstall can put them back --------------------
+# Default routes from EVERY table.
+#
+# Android keeps no default route in the main table: each network gets its own table
+# ("default via 10.46.26.44 dev rmnet_data2 table rmnet_data2 proto static"), and ip rules
+# pick the table per uid and mark. `ip route show` reads only main, so on every Android
+# phone this tuning found no route, applied nothing, and the report said "waiting for a
+# link" forever. The lines from `table all` carry their "table X" token, so passing one
+# back to `ip route change` addresses exactly the route it came from.
+_defaults() {
+  if [ "$1" = 6 ]; then ip -6 route show table all 2>/dev/null
+  else ip route show table all 2>/dev/null; fi | grep '^default'
+}
+
 _save_orig() {
-  [ -f "$STATE" ] && return 0
+  [ -f "$STATE" ] && grep -q ' table ' "$STATE" 2>/dev/null && return 0
   mkdir -p /data/adb/asb 2>/dev/null
-  { ip route show 2>/dev/null; ip -6 route show 2>/dev/null; } > "$STATE" 2>/dev/null
+  { _defaults 4; _defaults 6; } > "$STATE" 2>/dev/null
 }
 
 _restore() {
@@ -179,9 +192,12 @@ _apply() {
   # on-link subnet route achieves nothing and multiplies the chances of mangling one.
   for _fam in 4 6; do
     if [ "$_fam" = "4" ]; then _ipc="ip"; else _ipc="ip -6"; fi
-    $_ipc route show 2>/dev/null | grep '^default' | while IFS= read -r _rt; do
+    _defaults "$_fam" | while IFS= read -r _rt; do
       _if="$(printf '%s' "$_rt" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
       [ -n "$_if" ] || continue
+      # Placeholder and loopback tables carry a default too; none of them moves traffic.
+      case "$_if" in lo|dummy*|ifb*|sit*|ip6tnl*|tun*|vgate*) continue ;; esac
+      _tbl="$(printf '%s' "$_rt" | sed -n 's/.* table \([^ ]*\).*/\1/p')"
       # The interface came FROM a default route, so it is carrying traffic by definition.
       # rmnet reports operstate "unknown" even then (virtual link over the modem IPA
       # path), so requiring "up" skipped every mobile route and net_route_tune silently
@@ -222,7 +238,8 @@ _apply() {
         # Read it back. A route change can be accepted and silently not stick when the
         # route is replaced by the connectivity stack a moment later, and a tuning that
         # reports success without checking is how "it does nothing" reports start.
-        if $_ipc route show 2>/dev/null | grep -q "initcwnd $_cwnd"; then
+        if $_ipc route show table "${_tbl:-main}" 2>/dev/null | grep '^default' \
+             | grep -E " dev $_if( |\$)" | grep -q "initcwnd $_cwnd"; then
           echo "net_routes: $_if ipv$_fam $_class mtu=$_mtu cwnd=$_cwnd rwnd=$_rwnd"
         else
           echo "net_routes: $_if ipv$_fam applied but did not stick (route replaced?)"
@@ -242,6 +259,21 @@ _apply() {
 # `ip monitor` blocks on a netlink socket and wakes only when a route actually changes.
 # That is a few events a day instead of a wakeup every N seconds forever - the reason this
 # does not need the sleep loop the usual implementations run.
+# Default routes with the tokens ASB itself writes removed, as one checksum.
+_route_fp() {
+  { _defaults 4; _defaults 6; } \
+    | sed -e 's/ initcwnd [0-9]*//' -e 's/ initrwnd [0-9]*//' -e 's/ congctl [a-z_]*//' \
+    | cksum 2>/dev/null
+}
+# Windows, then the per-route congestion algorithm: a re-created route has lost both.
+_reapply() {
+  # Route windows only when they are on: the watcher also runs for per-link congctl alone,
+  # and "off" would otherwise replay the restore on every reconnect.
+  case "$(_cfg net_route_tune)" in auto|conservative|aggressive) _apply >/dev/null 2>&1 ;; esac
+  [ -f "$MODDIR/runtime/asb_net_apply.sh" ] && \
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_apply.sh" routes >/dev/null 2>&1
+}
+
 _watch() {
   # Record why this stops, so a later diag can say more than "NOT running".
   #
@@ -256,7 +288,13 @@ _watch() {
   }
   _has ip || { _nrw_note "missing_ip"; exit 0; }
   rm -f /data/adb/asb/net_routes_watch.exit 2>/dev/null
-  ip monitor route 2>/dev/null | while IFS= read -r _ev; do
+  mkdir -p /data/adb/asb 2>/dev/null
+  echo monitor > /data/adb/asb/net_routes_watch.mode 2>/dev/null
+  _w0="$(date +%s 2>/dev/null || echo 0)"
+  _fp="$(_route_fp)"
+  # stderr kept: "rc=0" alone said nothing about why the monitor stopped (the pipeline's
+  # status is the while loop's, not ip's), and the cause decides the fix.
+  ip monitor route 2>/data/adb/asb/net_routes_watch.err | while IFS= read -r _ev; do
     case "$_ev" in
       # A route change is the one event that can change a qdisc verdict.
       #
@@ -265,12 +303,40 @@ _watch() {
       # by whatever could make the answer different - a new default route means a new or
       # re-created interface, which is exactly that case. Clearing it here rather than on
       # a timer keeps the retry event-driven, which is the point of this watcher.
-      *default*) rm -rf /data/adb/asb/qdisc_cool 2>/dev/null
-                 sleep 2; _apply >/dev/null 2>&1 ;;
+      # Only when the set of default routes really changed. Our own `ip route change`
+      # is itself a route event, so reacting to every *default* line re-applied, which
+      # raised another event, which re-applied - a loop every two seconds for as long
+      # as the monitor lived. The fingerprint strips the tokens we write.
+      *default*)
+        _nfp="$(_route_fp)"
+        [ "$_nfp" = "$_fp" ] && continue
+        rm -rf /data/adb/asb/qdisc_cool 2>/dev/null
+        sleep 2; _reapply
+        _fp="$(_route_fp)" ;;
     esac
   done
+  _w1="$(date +%s 2>/dev/null || echo 0)"
+  _werr="$(head -c 120 /data/adb/asb/net_routes_watch.err 2>/dev/null | tr '\n' ' ')"
   # Reached only if ip monitor terminated: a healthy watcher never gets here.
-  _nrw_note "ip_monitor_ended rc=$?"
+  _nrw_note "ip_monitor_ended after $((_w1 - _w0))s${_werr:+: $_werr}"
+
+  # A monitor that dies within a minute will die the same way when the half-hour pass
+  # restarts it (a field diag shows it ending 7 s after boot), leaving routes untuned
+  # after every reconnect in between. Fall back to a slow poll of the default routes:
+  # one ip call a minute, on a sleep that does not wake a suspended phone, and work only
+  # when the fingerprint changes. The window and congctl tokens are stripped so our own
+  # tuning does not register as a change.
+  [ $((_w1 - _w0)) -lt 60 ] 2>/dev/null || exit 0
+  echo poll > /data/adb/asb/net_routes_watch.mode 2>/dev/null
+  _fp="$(_route_fp)"
+  while :; do
+    sleep 60
+    _nfp="$(_route_fp)"
+    [ "$_nfp" = "$_fp" ] && continue
+    rm -rf /data/adb/asb/qdisc_cool 2>/dev/null
+    sleep 2; _reapply
+    _fp="$(_route_fp)"
+  done
 }
 
 case "$MODE" in

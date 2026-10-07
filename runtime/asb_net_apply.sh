@@ -49,6 +49,8 @@ _sysctl_w() {
 }
 
 _out=""
+# "routes": only the per-route congestion pass, for the route watcher after a reconnect.
+ASB_NET_MODE="${1:-all}"
 
 # --- link type -------------------------------------------------------------------------
 # wifi | mobile | other. Names are the reliable signal here: Android is consistent about
@@ -79,11 +81,26 @@ _resolve_for() {
 # Does this kernel take a per-route congestion algorithm? Probe once against the real
 # default route: `ip route change ... congctl X` either works or errors out, and knowing
 # which decides between genuinely simultaneous per-link algorithms and the global switch.
+#
+# Every route read here goes through `table all`. Android has no default route in the main
+# table - each network lives in its own ("... dev rmnet_data2 table rmnet_data2") - so the
+# probe that read `ip route show` found nothing, concluded the kernel had no per-route
+# congctl, and every phone got the global switch plus a "NOT SUPPORTED by this kernel"
+# verdict for whichever link wanted a different algorithm. The kernel was never asked.
+_defaults() { ip route show table all 2>/dev/null | grep '^default'; }
+# The interface the phone is using right now: the route the kernel picks for an outside
+# address, through the ip rules. First default in table order is not that.
+_active_dev() {
+  ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -1
+}
 _congctl_ok=""
 _probe_congctl() {
   [ -n "$_congctl_ok" ] && return 0
   _congctl_ok=0
-  _pr="$(ip route show 2>/dev/null | grep -m1 '^default')"
+  _pa="$(_active_dev)"
+  _pr=""
+  [ -n "$_pa" ] && _pr="$(_defaults | grep -E -m1 " dev $_pa( |\$)")"
+  [ -n "$_pr" ] || _pr="$(_defaults | grep -vE ' dev (lo|dummy[^ ]*|ifb[^ ]*|vgate[^ ]*)( |$)' | head -1)"
   [ -n "$_pr" ] || return 0
   _pc="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
   [ -n "$_pc" ] || return 0
@@ -133,7 +150,7 @@ if [ "$_congctl_ok" = "1" ]; then
       *" $_want "*) : ;;
       *) _out="$_out cc[$_kind]=$_want-unavailable"; continue ;;
     esac
-    ip route show 2>/dev/null | grep "^default.* dev $_cif" | while IFS= read -r _crt; do
+    _defaults | grep -E " dev $_cif( |\$)" | while IFS= read -r _crt; do
       _cclean="$(printf '%s' "$_crt" | sed -e 's/ congctl [a-z_]*//')"
       ip route change $_cclean congctl "$_want" >/dev/null 2>&1
     done
@@ -141,6 +158,9 @@ if [ "$_congctl_ok" = "1" ]; then
     _cc_any=1
   done
 fi
+# A new route (Wi-Fi rejoined, mobile data re-attached) arrives without our congctl;
+# the route watcher calls this mode to put it back without redoing everything else.
+[ "$ASB_NET_MODE" = routes ] && exit 0
 
 # Global setting: the only option when the kernel has no congctl, and still the right
 # thing to write when the user set one value for everything.
@@ -149,7 +169,7 @@ case "$_cc" in
   ''|auto)
     # No global choice, but a per-link one may still need the global switch as fallback.
     if [ "$_congctl_ok" != "1" ]; then
-      _act="$(ip route show 2>/dev/null | grep -m1 '^default' | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
+      _act="$(_active_dev)"
       if [ -n "$_act" ]; then
         _akind="$(_iface_kind "$_act")"
         _want="$(_resolve_for net_congestion "$_akind")"
@@ -400,6 +420,13 @@ if [ -n "$_ASB_TC" ]; then
           "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$_if" "$_want" \
           "${_qd_why:-unclassified}" "$_qd_err" \
           >> /data/adb/asb/qdisc_failures.log 2>/dev/null || true
+        # Bounded: the once-per-link marker is cleared on every real route change, so a
+        # link the kernel always refuses adds a line per reconnect for the life of the
+        # install. Forty lines is weeks of reconnects and still one screen in a diag.
+        if [ "$(wc -l < /data/adb/asb/qdisc_failures.log 2>/dev/null || echo 0)" -gt 40 ] 2>/dev/null; then
+          tail -n 40 /data/adb/asb/qdisc_failures.log > /data/adb/asb/qdisc_failures.log.tmp 2>/dev/null \
+            && mv -f /data/adb/asb/qdisc_failures.log.tmp /data/adb/asb/qdisc_failures.log 2>/dev/null
+        fi
       fi
     fi
   done
