@@ -758,7 +758,10 @@ lk_emit_current_soc_consistency() {
       if(dur<1800 || dp<=0 || ma<=0) next
       soc=dp*3600.0/dur; cur=ma*100.0/cap
       hi=(soc>cur)?soc:cur; diff=(hi>0)?(100.0*((soc>cur)?soc-cur:cur-soc)/hi):0
-      verdict=(diff>30)?"CHECK (>30%)":"aligned"
+      # Which way it is off matters: current BELOW the SOC rate is the known supply-path
+      # blind spot, current ABOVE it in a sleep block is the recorder sampling only the
+      # moments it woke the phone itself (a 585-min night read 2.23 %/h by current, 0.51 by %).
+      verdict=(diff>30)?((cur<soc)?"CHECK low (>30%)":"CHECK high (>30%)"):"aligned"
       printf "%-17s %7.1f %6.2f %13.2f %9.1f%%  %s\n", ph,dur/60.0,soc,cur,diff,verdict
       n++
     }
@@ -766,10 +769,11 @@ lk_emit_current_soc_consistency() {
   ' "$_cc_led" | sort
   echo "current_pct/h uses the reported charge_full capacity and sampled discharge current."
   echo "A CHECK result is a measurement-consistency warning, not causal energy attribution."
-  echo "A CHECK means avg_mA under-reports: current_now sees the main supply path, while"
-  echo "modem TX, display and peripherals draw partly outside it. Compare phases to each"
-  echo "other by mA - the bias is systematic - but take absolute mA as a lower bound. The"
-  echo "honest figure is d_pct x capacity / hours, which is what pct/h already is."
+  echo "CHECK low (>30%): avg_mA under-reports - current_now sees the main supply path, while"
+  echo "  modem TX, display and peripherals draw partly outside it; take mA as a lower bound."
+  echo "CHECK high (>30%): avg_mA over-reports - in sleep/idle the recorder only samples while it has"
+  echo "  woken the phone itself, so every sample is an awake one; trust pct/h there."
+  echo "Either way the honest figure is d_pct x capacity / hours, which is what pct/h is."
   echo ""
 }
 
@@ -1127,7 +1131,11 @@ lk_emit_screenoff_sleep() {
         printf "  screen-off: %.1fh realtime, CPU awake %.0fm -> awake %.1f%% (deep sleep %.1f%%)\n", r/3600.0, u/60.0, aw, 100-aw
         printf "  NOTE: batterystats is reset every %s min, so this covers only the last\n", ENVIRON["LK_BSTATS_WINDOW_MIN"]
         printf "        window, NOT the whole night. For the overnight number read the\n"
-        printf "        awake%% column of night(longest) in the per-phase summary.\n" } }'
+        printf "        awake%% column of night(longest) in the per-phase summary.\n"; done=1 } }
+    # The report ends while the screen is on, often seconds after a batterystats reset:
+    # the line exists with 0 realtime, and the section printed nothing at all under its
+    # heading, which read as a failed probe.
+    END { if (!done) printf "  no screen-off time in the current batterystats window (screen on since the last reset)\n  -> the overnight figure is night(longest) in the per-phase summary below\n" }'
 }
 
 lk_emit_full_day_report() {

@@ -411,6 +411,18 @@ lk_snapshot_state() {
     echo "  udp_mem: $(cat /proc/sys/net/ipv4/udp_mem 2>/dev/null)"
     echo "  tcp_rmem: $(cat /proc/sys/net/ipv4/tcp_rmem 2>/dev/null)"
     echo "  tcp_wmem: $(cat /proc/sys/net/ipv4/tcp_wmem 2>/dev/null)"
+    # LTE-while-screen-off: whether 5G was actually parked, not just whether the switch is
+    # on. A night capture showed data_rat=LTE all night and no way to tell "5G parked by
+    # ASB" from "no NR coverage here" - the script's own status and log are the answer.
+    _lk_lte_md="${LK_MODDIR:-$(lk_resolve_moddir 2>/dev/null)}"
+    if [ -n "$_lk_lte_md" ] && [ -f "$_lk_lte_md/runtime/asb_lte_screenoff.sh" ]; then
+      echo "  lte_screenoff status:"
+      MODDIR="$_lk_lte_md" sh "$_lk_lte_md/runtime/asb_lte_screenoff.sh" status 2>/dev/null | sed 's/^/    /'
+      if [ -f /data/adb/asb/lte_screenoff.log ]; then
+        echo "  lte_screenoff log (last 8):"
+        tail -n 8 /data/adb/asb/lte_screenoff.log 2>/dev/null | sed 's/^/    /'
+      fi
+    fi
     echo ""
     echo "===== WAKELOCKS (top 20 by active time) ====="
     if [ -r /sys/kernel/debug/wakeup_sources ]; then
