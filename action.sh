@@ -814,6 +814,8 @@ T_SENS_OK="temp sensor: verified"
 T_SENS_UNV="temp sensor: unverified"
 T_THERMAL_N="🔥 thermal %s"
 T_COOLDOWN="❄️ cooldown clamp: screen off, die still warm - caps at hardware minimum"
+T_VC_UNUSED="vendor ceiling above ASB's in %s checks - the clock never went above ASB's limit, so it cost nothing"
+T_VC_USED="vendor ceiling above ASB's in %s checks - the clock really ran above ASB's limit in %s of them"
 T_TIER_STRONG="strong"
 T_TIER_ACTIVE="active"
 T_TIER_LEARN="learning"
@@ -1349,6 +1351,12 @@ if [ -n "$_g_state" ]; then
   [ "${_g_thermal:-0}" != "0" ] && _gl="$(_join "$_gl" "$(_s "$T_THERMAL_N" "$_g_thermal")")"
   [ -n "$_gl" ] && echo "       ${_gl}"
   [ "$(_st thermal_cooldown)" = "1" ] && _f "       $T_COOLDOWN"
+  # Whether a vendor-raised ceiling actually cost anything: raised vs really used.
+  _vct="$(_st vendor_ceiling_ticks)"; _vcu="$(_st vendor_ceiling_used_ticks)"
+  if [ "${_vct:-0}" -gt 0 ] 2>/dev/null; then
+    if [ "${_vcu:-0}" -gt 0 ] 2>/dev/null; then _f "       $T_VC_USED" "$_vct" "$_vcu"
+    else _f "       $T_VC_UNUSED" "$_vct"; fi
+  fi
 fi
 
 # Show the SAME learner numbers the WebUI shows, so the two screens agree.
