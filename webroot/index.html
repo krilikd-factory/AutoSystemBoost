@@ -4658,7 +4658,7 @@ const CFG_ITEMS = [
   { key:'bat_suppress_gaming', type:'bool', def:'1', name:'No Game Mode on Battery Profile',
     desc:'On the Battery profile, treat a game as ordinary heavy load rather than entering the gaming state. Gaming mode raises frequency ceilings, which is the opposite of what the Battery profile is for - so this keeps that profile honest. Off lets games get the full gaming treatment even on Battery. Affects the Battery profile only; the other three are untouched.' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['off','safe','aggressive'], name:'Background Trim Level',
-    desc:'How hard cached background apps are trimmed. Aggressive frees more RAM but cold-restarts apps more often.' },
+    desc:'How hard background apps are trimmed. Heavy apps are demoted only when Android says they are not in daily use. Aggressive adds a 6-hourly re-check, a memory ceiling and a screen-off trim; package disabling needs the opt-in file /data/adb/asb/allow_disruptive_bg_trim. Off returns every app to the bucket it had before ASB.' },
   { key:'mglru_hold', type:'seg', def:'stock', stock:'stock',
     opts:['stock','hold','aggressive'], name:'Keep Apps In Memory',
     cat:'battery' },
@@ -6188,7 +6188,11 @@ async function cfgSet(key, val, ctl) {
     ? ('sh ' + shQuote(safeWriter) + ' set-many --snapshot ' + shQuote(snap) + ' ' +
        shQuote(key) + ' ' + shQuote(val) + ' ' +
        shQuote('sustained_temp_ceiling') + ' ' + shQuote(val) + ' ' +
-       shQuote('sustained_temp_mode') + ' ' + shQuote('manual'))
+       shQuote('sustained_temp_mode') + ' ' + shQuote('manual') + ' ' +
+       /* The governor lets the slider beat the profile preset only with this flag, which
+        * was published at boot alone - so a live slider move on Smart did nothing until a
+        * restart while the toast said "applied". */
+       shQuote('sustained_temp_user_override') + ' ' + shQuote('1'))
     : ('sh ' + shQuote(safeWriter) + ' set ' + shQuote(key) + ' ' +
        shQuote(val) + ' ' + shQuote(snap));
   const r = await run(cmd);
@@ -6359,14 +6363,22 @@ async function cfgSet(key, val, ctl) {
       }
       if (key === 'gnss_trim') {
         try { await run('sh ' + MD + '/runtime/asb_gnss_trim.sh >/dev/null 2>&1'); } catch (e) {}
-        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        /* On: it acts only on a long screen-off, so "applied" would be untrue right now.
+         * Off: the release runs immediately, so "applied" is. */
+        toast(cfgToastText(key, val) + (String(val) === '1'
+          ? T('t_cfg_screenoff', ' \u00b7 acts while the screen is off')
+          : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
       }
       if (key === 'wakelock_action') {
         try { await run('sh ' + MD + '/runtime/asb_wakelock_watch.sh >/dev/null 2>&1'); } catch (e) {}
-        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        /* On: it acts only on a long screen-off, so "applied" would be untrue right now.
+         * Off: the release runs immediately, so "applied" is. */
+        toast(cfgToastText(key, val) + (String(val) === '1'
+          ? T('t_cfg_screenoff', ' \u00b7 acts while the screen is off')
+          : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
@@ -6399,6 +6411,35 @@ async function cfgSet(key, val, ctl) {
         toast(cfgToastText(key, val) +
               T('t_cfg_next', ' \u00b7 restart the app'),
               cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      /* Same flag, other direction: leaving manual must hand the point back to the
+       * profile now, not at the next boot. */
+      if (key === 'sustained_temp_mode') {
+        try { await run('sh ' + shQuote(MD + '/runtime/asb_config_safe.sh') + ' set sustained_temp_user_override ' +
+                        (String(val) === 'manual' ? '1' : '0') + ' ' + shQuote(snap) + ' >/dev/null 2>&1'); } catch (e) {}
+      }
+      /* BG_TRIM_LEVEL is applied by service.sh at boot, not by the governor. Off has a live
+       * half - hand the buckets back now; safe/aggressive take the next boot, and the toast
+       * says so instead of "applied". */
+      if (key === 'BG_TRIM_LEVEL') {
+        if (String(val) === 'off') {
+          try { await run('sh ' + MD + '/runtime/asb_bg_buckets.sh restore >/dev/null 2>&1'); } catch (e) {}
+          toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        } else {
+          toast(cfgToastText(key, val) + T('t_cfg_saved', ' \u00b7 reboot to apply'), cfgToastType(key));
+        }
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      /* The UX toggles are read by the profile apply, not by the governor: re-apply the
+       * current profile, the same way perf_ceiling_pct does. */
+      if (key === 'UX_MANAGE_OEM_TOGGLES' || key === 'UX_MANAGE_TIMEOUTS') {
+        try { await run('sh ' + MD + '/apply_profile.sh $(cat ' + MD + '/current_profile 2>/dev/null || echo balanced) >/dev/null 2>&1'); } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
@@ -8105,6 +8146,11 @@ async function pollStockTelemetry(visible, force = false) {
 }
 
 async function pollLive(visible) {
+  /* Nothing to draw for nobody. The manager keeps this WebView alive in the background,
+   * and its timers keep firing there: the Live page polled every 3 s and the home screen
+   * every 30 s, each pass spawning root shells, while the user was in another app with the
+   * screen on. A hidden page is caught up the moment it is shown again (listener below). */
+  if (document.hidden) return;
   try {
     if (_selectedProfile === 'stock') {
       // Terminal boundary: never read /dev/.asb/state, learner_state.json, native status or
@@ -8733,6 +8779,9 @@ async function pollLive(visible) {
 }
 
 _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) pollLive(_liveOpen);
+});
 
 // ── apply Russian localization on load (no-op for en) ──
 (function() {
