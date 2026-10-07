@@ -8,8 +8,16 @@ MODDIR="${MODDIR:-${0%/*}}"
 # phone's locale, while the installer and the WebUI were translated. Headings only: the
 # detail lines under them carry measured values and unit names, and translating those
 # badly would make a diagnostic report misleading rather than merely foreign.
+#
+# Through the settings wrapper, and never trusting an error string as a locale. On the
+# OnePlus 15 the cmd bridge can answer "cmd: Failure calling service settings: Failed
+# transaction" with exit 0; that text matched no language, so the whole report fell back
+# to English on a Russian phone.
+[ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
 _asb_loc="$(settings get system system_locales 2>/dev/null)"
+case "$_asb_loc" in *[Ff]ailure*|*[Ee]xception*|*rror*|*' '*) _asb_loc="" ;; esac
 [ -z "$_asb_loc" ] || [ "$_asb_loc" = "null" ] && _asb_loc="$(getprop persist.sys.locale 2>/dev/null)"
+[ -n "$_asb_loc" ] || _asb_loc="$(getprop ro.product.locale 2>/dev/null)"
 # system_locales is a list ("en-US,ru-RU"); the first entry is the UI language. Matching the
 # whole list picked Russian on a phone whose primary language was English.
 _asb_loc="${_asb_loc%%,*}"
@@ -793,6 +801,8 @@ T_ETA_HEUR="(heuristic)"
 T_ETA_AVG="(average drain)"
 T_ETA_IDLE_MEAS="idle figure measured: %s%%/h with the screen off"
 T_ETA_LINE="~%sh %sm screen on  ·  ~%sh %sm idle"
+T_ETA_LINE_CAP="~%sh %sm screen on  ·  > 72h idle"
+T_CUR_SCALE="battery current sensor reads x%s of the real drain (%s measurements) - mA values on this phone are understated"
 T_GS_DEEP="deep idle"
 T_GS_LIGHT="light idle"
 T_GS_MOD="moderate load"
@@ -849,6 +859,7 @@ T_C_LOW="macro / low-light sharpening: %s/10"
 T_C_NOTLIVE="⚠️  grade NOT on the live file (still stock values)"
 T_C_LIVE="✅ live file graded: BlendWeight [%s]"
 T_M_BG="bg trim: level %s"
+T_M_BG_ASSAFE="(smart: idle apps only, no hard steps)"
 T_M_SWAP="swappiness %s"
 T_M_FREE="%s MB free"
 T_M_ZRAM="zram %s MB used"
@@ -920,6 +931,13 @@ T_S_MOD="deep sleep: moderate (idle after 5 min instead of 30)"
 T_S_AGGR="deep sleep: aggressive (idle after 2 min; messages may lag)"
 T_S_STOCK="deep sleep: stock"
 T_S_NQ="night quiet: sensor polling slowed inside the sleep window"
+T_S_WL_APP="keeps the CPU awake: %s · %s min since unplug (%s)"
+T_WLV_RESTRICTED="restricted by ASB"
+T_WLV_PROTECTED="protected - your call in Settings"
+T_WLV_INUSE="in use - left alone"
+T_WLV_REPORT="report only"
+T_S_MC="Wi-Fi multicast held %s min since unplug - the Wi-Fi radio cannot doze (now: %s)"
+T_S_MC_NONE="nobody"
 T_Y_BG_RELAX="background processes: unlimited (phantom monitor off)"
 T_Y_BG_STRICT="background processes: Android default (32 max)"
 T_Y_OEM="OEM toggles: managed (RAM expansion, battery, heat)"
@@ -1252,10 +1270,22 @@ case "$_bstat" in
     _f "  ⏳  $T_ETA" "$_eta_note"
     # Same 72 h ceiling as the WebUI: past three days the idle figure is arithmetic, not a
     # forecast, and the two screens should never disagree about it.
-    if [ "$(( _toff_h * 60 + _toff_m ))" -gt 4320 ] 2>/dev/null; then _toff_h=">72"; _toff_m=0; fi
-    _f "       $T_ETA_LINE" "$_ton_h" "$_ton_m" "$_toff_h" "$_toff_m"
+    if [ "$(( _toff_h * 60 + _toff_m ))" -gt 4320 ] 2>/dev/null; then
+      _f "       $T_ETA_LINE_CAP" "$_ton_h" "$_ton_m"
+    else
+      _f "       $T_ETA_LINE" "$_ton_h" "$_ton_m" "$_toff_h" "$_toff_m"
+    fi
     [ "$_idle_measured" = 1 ] && _f "       $T_ETA_IDLE_MEAS" "$((_offx / 100)).$(printf '%02d' $((_offx % 100)))" ;;
 esac
+# The gauge's own scale, measured by the governor from screen-on discharge (current vs the
+# falling SOC). Shown only when it is clearly not 1: on the OnePlus 15 it is about 0.5, so
+# any milliamp figure on this screen or in a log reads half of what the battery delivers.
+_csx="$(_st current_scale_x100)"; _csn="$(_st current_scale_windows)"
+case "$_csx$_csn" in *[!0-9-]*|'') _csx=-1 ;; esac
+if [ "${_csx:--1}" -gt 0 ] 2>/dev/null && [ "${_csn:-0}" -ge 2 ] 2>/dev/null \
+   && { [ "$_csx" -lt 80 ] || [ "$_csx" -gt 125 ]; }; then
+  _f "       $T_CUR_SCALE" "$((_csx / 100)).$(printf '%02d' $((_csx % 100)))" "$_csn"
+fi
 
 # ── Live state ──────────────────────────────────────────────────────────────────
 # Read from the config the daemon reads, not from whatever the WebUI last drew.
@@ -1703,7 +1733,11 @@ echo ""
 echo "  💾  ${H_MEMORY}"
 _bgl="$(_cfg BG_TRIM_LEVEL)"
 _ml=""
-[ -n "$_bgl" ] && _ml="$(_join "$_ml" "$(_s "$T_M_BG" "$_bgl")")"
+# aggressive without the opt-in file is the smart variant (service.sh): idle-only demotion,
+# six-hour re-check, screen-off trim, no package disabling. Say which one is in force.
+_bgl_s="$_bgl"
+[ "$_bgl" = aggressive ] && [ ! -f /data/adb/asb/allow_disruptive_bg_trim ] && _bgl_s="$_bgl $T_M_BG_ASSAFE"
+[ -n "$_bgl" ] && _ml="$(_join "$_ml" "$(_s "$T_M_BG" "$_bgl_s")")"
 _swp="$(cat /proc/sys/vm/swappiness 2>/dev/null)"
 [ -n "$_swp" ] && _ml="$(_join "$_ml" "$(_s "$T_M_SWAP" "$_swp")")"
 [ -n "$_ml" ] && echo "       ${_ml}"
@@ -1776,7 +1810,9 @@ _rt="$(_cfg net_route_tune)"
 case "$_rt" in
   ''|off) : ;;
   *)
-    _rtl="$(ip route show 2>/dev/null | grep -m1 -oE 'initcwnd [0-9]+ initrwnd [0-9]+')"
+    # table all: Android keeps each network's default route in its own table, never in
+    # main, so reading main reported "no route yet" on every phone.
+    _rtl="$(ip route show table all 2>/dev/null | grep '^default' | grep -m1 -oE 'initcwnd [0-9]+ initrwnd [0-9]+')"
     if [ -n "$_rtl" ]; then
       _f "       $T_N_BUF_ON" "$_rt" "$_rtl"
     else
@@ -1994,6 +2030,32 @@ echo "  🌙  ${H_SLEEP}"
   if [ -n "$_aw" ] && [ "$_aw" -ge 0 ] 2>/dev/null; then
     echo "       ${M_AWAKE}: ${_aw}% (${_awm:-0} ${M_MIN})"
     [ "$_aw" -gt 15 ] 2>/dev/null && echo "       ${M_AWAKE_BAD}"
+  fi
+  # Who did it, by package. Two rows at most: the action report is a summary, asbdiag
+  # has the full list. Named whether or not ASB may act on it - a holder the user can
+  # see is one they can deal with.
+  if [ -s /data/adb/asb/wakelock_apps ]; then
+    head -2 /data/adb/asb/wakelock_apps | while IFS='|' read -r _wp _ws _wh _wv; do
+      case "$_ws" in ''|*[!0-9]*) continue ;; esac
+      [ "$_ws" -ge 120 ] 2>/dev/null || continue
+      case "$_wv" in
+        restricted) _wvt="$T_WLV_RESTRICTED" ;;
+        protected)  _wvt="$T_WLV_PROTECTED" ;;
+        in_use)     _wvt="$T_WLV_INUSE" ;;
+        *)          _wvt="$T_WLV_REPORT" ;;
+      esac
+      _f "       $T_S_WL_APP" "$_wp" "$((_ws / 60))" "$_wvt"
+    done
+  fi
+  # Multicast keeps the Wi-Fi chip receiving every packet on the network. Ten minutes
+  # since the unplug is the same bar the watcher acts at; below it, nothing to say.
+  if [ -s /data/adb/asb/wakelock_multicast ]; then
+    _mct="$(sed -n 's/^total|//p' /data/adb/asb/wakelock_multicast | head -1)"
+    case "$_mct" in ''|*[!0-9]*) _mct=0 ;; esac
+    if [ "$_mct" -ge 600 ]; then
+      _mch="$(grep -v '^total|' /data/adb/asb/wakelock_multicast | cut -d'|' -f1 | head -2 | tr '\n' ',' | sed 's/,$//; s/,/, /g')"
+      _f "       $T_S_MC" "$((_mct / 60))" "${_mch:-$T_S_MC_NONE}"
+    fi
   fi
 _dz="$(_cfg doze_level)"
 case "$_dz" in

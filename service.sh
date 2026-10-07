@@ -1903,36 +1903,89 @@ asb_bg_trim_pkg() {
   done
 }
 
+# Record each app's bucket the first time ASB moves it, so it can be handed back.
+#
+# A bucket set from the shell is "forced by user": Android keeps it until something forces
+# it again. uninstall.sh never restored these, so Instagram, Facebook, TikTok and the rest
+# of the heavy list stayed in "rare" after ASB was removed - jobs and alarms batched to a
+# few times a day, notifications late - with nothing left on the phone to explain it.
+# Only installed packages are recorded (get-standby-bucket answers a number for those).
+ASB_BG_BUCKETS_ORIG=/data/adb/asb/bg_buckets_orig
+asb_bg_bucket_set() {   # <pkg> <bucket>
+  local _cur
+  if ! grep -q "^$1|" "$ASB_BG_BUCKETS_ORIG" 2>/dev/null; then
+    _cur="$(am get-standby-bucket "$1" 2>/dev/null | tr -dc '0-9')"
+    case "$_cur" in
+      ''|*[!0-9]*) return 0 ;;   # not installed for this user
+    esac
+    mkdir -p /data/adb/asb 2>/dev/null
+    echo "$1|$_cur" >> "$ASB_BG_BUCKETS_ORIG" 2>/dev/null
+  fi
+  am set-standby-bucket "$1" "$2" >/dev/null 2>&1 || true
+}
+# Put every recorded bucket back. 5 (exempted) and 50+ (never) cannot be set from the
+# shell; those apps are left alone rather than forced somewhere they never were.
+asb_bg_bucket_restore() {
+  [ -f "$ASB_BG_BUCKETS_ORIG" ] || return 1
+  local _rp _rb
+  while IFS='|' read -r _rp _rb; do
+    [ -n "$_rp" ] || continue
+    case "$_rb" in 10|20|30|40|45) am set-standby-bucket "$_rp" "$_rb" >/dev/null 2>&1 || true ;; esac
+  done < "$ASB_BG_BUCKETS_ORIG"
+  rm -f "$ASB_BG_BUCKETS_ORIG" 2>/dev/null
+  return 0
+}
+
 asb_bg_trim_apply_buckets() {
   local _p
   for _p in $_BG_TRIM_MESSENGER; do
-    am set-standby-bucket "$_p" active >/dev/null 2>&1 || true
+    asb_bg_bucket_set "$_p" active
   done
   for _p in $_BG_TRIM_RECENT_WORKSET; do
-    am set-standby-bucket "$_p" working_set >/dev/null 2>&1 || true
+    asb_bg_bucket_set "$_p" working_set
   done
   for _p in $_BG_TRIM_HEAVY; do
-    am set-standby-bucket "$_p" rare >/dev/null 2>&1 || true
+    asb_bg_bucket_demote_idle "$_p" rare
   done
+}
+
+# Demote a heavy app only when Android itself says it is not in daily use.
+#
+# The heavy list is a list of apps that are expensive in the background, not of apps the
+# user does not use. Forcing "rare" on Instagram for someone who opens it fifty times a
+# day batches its jobs and alarms to a few windows a day - DMs arrive late - for no saving
+# Android would not make on its own an hour later. The current bucket is Android's own
+# usage verdict: active (10) and working_set (20) mean "used today", so those are left
+# exactly where they are. frequent (30) and below are demoted. The check repeats on every
+# pass, so an app the user starts using again is left alone from then on.
+asb_bg_bucket_demote_idle() {   # <pkg> <bucket>
+  local _cur
+  _cur="$(am get-standby-bucket "$1" 2>/dev/null | tr -dc '0-9')"
+  case "$_cur" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_cur" -ge 30 ] 2>/dev/null || return 0
+  asb_bg_bucket_set "$1" "$2"
 }
 
 asb_bg_trim_apply_memcg() {
   [ -d /sys/fs/cgroup ] || return 0
+  command -v asb_pkg_uid >/dev/null 2>&1 || . "$MODDIR/runtime/asb_procstate.sh" 2>/dev/null || return 0
   [ -e /sys/fs/cgroup/cgroup.controllers ] || return 0
 
   local _pkg _uid _path
   for _pkg in $_BG_TRIM_NEVER $_BG_TRIM_MESSENGER; do
-    _uid=$(dumpsys package "$_pkg" 2>/dev/null \
-      | grep -m1 'userId=' | cut -d= -f2 | tr -d ' ')
+    _uid=$(asb_pkg_uid "$_pkg")
     case "$_uid" in ''|*[!0-9]*) continue ;; esac
     _path=/sys/fs/cgroup/uid_${_uid}
     [ -d "$_path" ] || continue
     [ -w "$_path/memory.low" ] && echo 67108864 > "$_path/memory.low" 2>/dev/null
   done
 
+  # The 256 MB ceiling caps the app whether or not it is on screen - a reel feed held
+  # under it reclaims constantly while the user scrolls. Aggressive only; safe keeps the
+  # memory.low protection above and nothing else.
+  [ "${_bg_level:-safe}" = aggressive ] || return 0
   for _pkg in $_BG_TRIM_HEAVY; do
-    _uid=$(dumpsys package "$_pkg" 2>/dev/null \
-      | grep -m1 'userId=' | cut -d= -f2 | tr -d ' ')
+    _uid=$(asb_pkg_uid "$_pkg")
     case "$_uid" in ''|*[!0-9]*) continue ;; esac
     _path=/sys/fs/cgroup/uid_${_uid}
     [ -d "$_path" ] || continue
@@ -1977,8 +2030,15 @@ asb_bg_trim_gms_wakelock_throttle() {
 }
 
 asb_bg_trim_reclaim_once() {
-  local _p
+  local _p _cls
+  # Process state first: a heavy app playing audio or showing a foreground notification is
+  # in use even when it is not the top activity, and trimming it costs a reload the user
+  # notices. Only cached or plain-background processes are asked to give memory back.
+  command -v asb_pkg_proc_class >/dev/null 2>&1 || . "$MODDIR/runtime/asb_procstate.sh" 2>/dev/null
+  command -v asb_lru_load >/dev/null 2>&1 && asb_lru_load
   for _p in $_BG_TRIM_HEAVY; do
+    _cls="$(asb_pkg_proc_class "$_p" 2>/dev/null)"
+    case "$_cls" in active|unknown) continue ;; esac
     asb_bg_trim_pkg "$_p" 40
   done
   if asb_bg_trim_screen_off; then
@@ -2007,7 +2067,11 @@ apply_bg_trim_runtime() {
     #
     # active is where an unmanaged app sits; the scheduler demotes it again on its own if
     # the app really is idle.
-    if command -v am >/dev/null 2>&1 && command -v pm >/dev/null 2>&1; then
+    # The recorded buckets when there are any; the blanket reset only for installs from
+    # before the record existed.
+    if command -v am >/dev/null 2>&1 && asb_bg_bucket_restore; then
+      :
+    elif command -v am >/dev/null 2>&1 && command -v pm >/dev/null 2>&1; then
       for _bgp in $(pm list packages -3 2>/dev/null | sed 's/^package://'); do
         [ -n "$_bgp" ] || continue
         am set-standby-bucket "$_bgp" active >/dev/null 2>&1 || true
@@ -2032,10 +2096,19 @@ apply_bg_trim_runtime() {
   # battery optimisation: they can delay notifications, trigger vendor restart loops and make a
   # userspace reboot visibly slower.  Keep the legacy aggressive path available only after an
   # explicit local opt-in, never merely because an old preserved config says "aggressive".
+  # Aggressive without the opt-in is not "safe under another name" any more: it adds the
+  # parts of the old aggressive path that cost nothing the user can notice -
+  #   - the memory ceiling for heavy apps (asb_bg_trim_apply_memcg, aggressive only),
+  #   - a re-evaluation every six hours, so an app that fell out of daily use is demoted
+  #     without waiting for a reboot, and
+  #   - a screen-off memory trim of heavy apps that are cached or idle.
+  # It never disables a package, stops a vendor service or touches Wi-Fi scanning; those
+  # stay behind the explicit opt-in file below.
   if [ ! -f /data/adb/asb/allow_disruptive_bg_trim ]; then
     asb_bg_trim_apply_buckets
     asb_bg_trim_apply_memcg
-    asb_log "bg_trim: aggressive disruptive actions skipped (create /data/adb/asb/allow_disruptive_bg_trim to opt in)"
+    asb_log "bg_trim: aggressive (smart: idle-only demotion, 6 h re-check, screen-off trim; no disruptive steps)"
+    asb_bg_trim_periodic
     return 0
   fi
 
@@ -2073,10 +2146,23 @@ apply_bg_trim_runtime() {
   asb_bg_trim_apply_memcg
   asb_log "bg_trim: level=$_bg_level (disruptive opt-in)"
 
-  ( sleep 30; asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
+  asb_bg_trim_periodic
+}
+
+# The six-hour pass, shared by both aggressive variants.
+asb_bg_trim_periodic() {
+  ( sleep 30; asb_bg_trim_screen_off && asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
   (
     while : ; do
       sleep 21600
+      # Re-read the level: this loop was started at boot and kept forcing buckets every
+      # six hours after the user switched trimming off in the WebUI.
+      case "$(grep -E '^[[:space:]]*BG_TRIM_LEVEL=' "$MODDIR/config/governor.conf" 2>/dev/null \
+              | head -1 | sed 's/.*=//' | tr -d ' \r')" in
+        off) asb_bg_bucket_restore >/dev/null 2>&1; break ;;
+        aggressive) : ;;
+        *) break ;;   # back to safe: the boot-time buckets stand, the periodic part stops
+      esac
       asb_bg_trim_apply_buckets >/dev/null 2>&1
       if asb_bg_trim_screen_off; then
         asb_bg_trim_reclaim_once >/dev/null 2>&1
@@ -3255,7 +3341,28 @@ fi
     case "$(asb_screen_state)" in
       false|Asleep) sleep 60; continue ;;
     esac
+    # Back off while nothing moves. A dump of the audio service every 5 s is about 720
+    # framework dumps an hour of screen-on time - each one a process spawn plus a
+    # system_server walk of every stream, player and device - and on most passes the
+    # answer is the same as last time. The interval doubles on each unchanged pass up to
+    # 30 s and drops back to 5 s the moment the route changes or playback starts, so a
+    # video starting is caught within seconds, a route change during playback within 15 s,
+    # and an idle screen costs two dumps a minute instead of twelve.
+    #
+    # Between dumps, the kernel's own PCM state is watched: /proc/asound lists every open
+    # playback substream with "state: RUNNING", a plain file read with no binder call. A
+    # stream opening or closing there means playback started, stopped or moved, and forces
+    # a dump on this pass whatever the interval - so backing off never delays the effect
+    # landing on a video that just started.
     sleep 5
+    _since=$(( ${_since:-0} + 5 ))
+    _sig="$(grep -l RUNNING /proc/asound/card*/pcm*p/sub*/status 2>/dev/null | tr '\n' ' ')"
+    if [ "$_sig" != "${_prev_sig:-}" ]; then
+      _prev_sig="$_sig"; _iv=5
+    elif [ "$_since" -lt "${_iv:-5}" ]; then
+      continue
+    fi
+    _since=0
     _adump="$(dumpsys audio 2>/dev/null)"
     _now=""
     # Where MUSIC is going right now: the "Devices:" line inside the STREAM_MUSIC block.
@@ -3278,7 +3385,7 @@ fi
       *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*|*headset*|*headphone*) _now="wired" ;;
       *speaker*|*SPEAKER*) _now="speaker" ;;
     esac
-    [ -n "$_now" ] || { _adump=""; continue; }
+    [ -n "$_now" ] || { _adump=""; _iv=$(( ${_iv:-5} * 2 )); [ "$_iv" -gt 30 ] && _iv=30; continue; }
     # Wake the attacher when playback STARTS, not only on a route change: its idle poll is
     # 30 s, so opening a video otherwise gives up to half a minute of stock volume before
     # the effect lands, which reads as the feature being broken.
@@ -3288,6 +3395,14 @@ fi
     if [ "$_play_now" = "1" ] && [ "${_prev_play:-0}" = "0" ]; then
       pkill -USR1 -f asb_dsp_attach 2>/dev/null \
         || killall -USR1 asb_dsp_attach 2>/dev/null || true
+    fi
+    if [ "$_now" = "$_prev_route" ] && { [ "$_play_now" = "${_prev_play:-0}" ] || [ "$_play_now" = 0 ]; }; then
+      # 15 s ceiling while something plays: a Bluetooth link dropping mid-song moves the
+      # sound to the speaker, and the Bluetooth-only gain should not follow it for long.
+      _ivmax=30; [ "$_play_now" = 1 ] && _ivmax=15
+      _iv=$(( ${_iv:-5} * 2 )); [ "$_iv" -gt "$_ivmax" ] && _iv=$_ivmax
+    else
+      _iv=5
     fi
     _prev_play="$_play_now"
     [ "$_now" = "$_prev_route" ] && continue
@@ -3366,8 +3481,12 @@ fi
 # gets nothing started behind their back. pgrep costs one process every half hour.
 _rw_mode="$(grep -E '^[[:space:]]*net_route_tune=' "$MODDIR/config/governor.conf" 2>/dev/null \
             | head -1 | sed 's/.*=//' | tr -d ' \r')"
+case "$(grep -E '^[[:space:]]*net_congestion_(wifi|mobile)=' "$MODDIR/config/governor.conf" 2>/dev/null \
+        | sed 's/.*=//' | tr -d ' \r' | grep -v '^auto$' | head -1)" in
+  ?*) case "$_rw_mode" in auto|conservative|aggressive) : ;; *) _rw_mode=cc_only ;; esac ;;
+esac
 case "$_rw_mode" in
-  auto|conservative|aggressive)
+  auto|conservative|aggressive|cc_only)
     if [ -f "$MODDIR/runtime/asb_net_routes.sh" ] && command -v ip >/dev/null 2>&1 \
        && ! pgrep -f "asb_net_routes.sh watch" >/dev/null 2>&1; then
       ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_routes.sh" watch >/dev/null 2>&1 & ) &
@@ -3630,7 +3749,11 @@ esac
 
   if [ -f "$MODDIR/runtime/asb_net_apply.sh" ]; then
     _asb_net_any=0
-    for _nk in net_congestion net_qdisc wifi_country wifi_scan_throttle; do
+    # Per-link keys too: a config with the global switch on auto and only Wi-Fi or mobile
+    # pinned never ran the apply at boot, so the per-link choice the WebUI showed was not
+    # in force until the user touched a network setting again.
+    for _nk in net_congestion net_qdisc wifi_country wifi_scan_throttle \
+               net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile; do
       _nv="$(grep -E "^[[:space:]]*$_nk=" "$MODDIR/config/governor.conf" 2>/dev/null \
              | head -1 | sed 's/.*=//' | tr -d ' \r')"
       case "$_nv" in ''|auto) : ;; *) _asb_net_any=1 ;; esac
@@ -3643,8 +3766,14 @@ esac
     # Route windows follow the link, so start their watcher only after framework networking settles.
     _asb_rt="$(grep -E '^[[:space:]]*net_route_tune=' "$MODDIR/config/governor.conf" 2>/dev/null \
                | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    # The watcher also puts per-route congctl back after a reconnect, so it is needed
+    # whenever a per-link algorithm is pinned, even with route windows off.
+    case "$(grep -E '^[[:space:]]*net_congestion_(wifi|mobile)=' "$MODDIR/config/governor.conf" 2>/dev/null \
+            | sed 's/.*=//' | tr -d ' \r' | grep -v '^auto$' | head -1)" in
+      ?*) case "$_asb_rt" in auto|conservative|aggressive) : ;; *) _asb_rt=cc_only ;; esac ;;
+    esac
     case "$_asb_rt" in
-      auto|conservative|aggressive)
+      auto|conservative|aggressive|cc_only)
         if [ -f "$MODDIR/runtime/asb_net_routes.sh" ] && command -v ip >/dev/null 2>&1; then
           if ! pgrep -f "asb_net_routes.sh watch" >/dev/null 2>&1; then
             ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_routes.sh" watch >/dev/null 2>&1 & ) &

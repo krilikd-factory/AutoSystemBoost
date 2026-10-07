@@ -282,6 +282,30 @@ if [ -f /data/adb/asb/wakelock_restricted ] && command -v am >/dev/null 2>&1; th
   rm -f /data/adb/asb/wakelock_restricted 2>/dev/null
 fi
 
+# Hand back the standby buckets background trimming forced.
+#
+# Recorded per package with the bucket it had before ASB first moved it. Without this the
+# heavy list (Instagram, Facebook, TikTok...) stayed "rare" after removal - Android keeps a
+# shell-forced bucket until something forces it again. Installs from before the record
+# existed get the heavy list released from rare only, which is the one setting that hurts.
+if command -v am >/dev/null 2>&1; then
+  if [ -f /data/adb/asb/bg_buckets_orig ]; then
+    while IFS='|' read -r _bp _bb; do
+      [ -n "$_bp" ] || continue
+      case "$_bb" in 10|20|30|40|45) am set-standby-bucket "$_bp" "$_bb" >/dev/null 2>&1 ;; esac
+    done < /data/adb/asb/bg_buckets_orig
+    rm -f /data/adb/asb/bg_buckets_orig 2>/dev/null
+  else
+    for _bp in com.facebook.katana com.instagram.android com.snapchat.android \
+               com.zhiliaoapp.musically com.ss.android.ugc.trill com.netflix.mediaclient \
+               com.amazon.mShop.android.shopping com.aliexpress.buyer com.heytap.htms \
+               com.heytap.pictorial com.heytap.market; do
+      [ "$(am get-standby-bucket "$_bp" 2>/dev/null | tr -dc '0-9')" = 40 ] \
+        && am set-standby-bucket "$_bp" active >/dev/null 2>&1
+    done
+  fi
+fi
+
 # Un-freeze GMS components.
 #
 # Recorded per component with the state it was found in: something the user had already
