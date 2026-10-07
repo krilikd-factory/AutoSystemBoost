@@ -27,4 +27,11 @@ need "$C" '"heavy_prime_escape"' 'config key not parsed'
 grep -q '^heavy_prime_escape=1$' "$ROOT/config/governor.conf.shipped" || fail 'shipped config lacks the key'
 need "$G" 'prime_escape=%d' 'state file does not publish the escape'
 need "$G" 'prime_escape: lift' 'lift edge not logged'
+# Multi-cluster: on 3+ cluster SoCs the middle slot is part of the burst (trigger and lift),
+# and two-cluster devices must not grow a slot - the mid index exists only when slot 2 does.
+need "$F" 'int _ms = (g_cpu_policy_ids[2] >= 0 && g_cpu_policy_ids[1] >= 0) ? 1 : -1;' 'mid slot not derived from topology'
+need "$F" 'int _pinned = _pinned_prime || _pinned_mid;' 'mid cluster cannot trigger the burst'
+need "$F" 'int _slots[2] = { _ps, _ms };' 'burst does not lift the mid cluster'
+need "$F" 'if (_hw > 0 && _lim > _hw) _lim = _hw;' 'lift not bounded by hardware max'
+need "$G" 'prime_escape_mid=%d' 'mid lift not published'
 echo "PASS heavy prime escape contract"
