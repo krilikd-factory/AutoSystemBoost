@@ -808,6 +808,7 @@ T_CPR_HEAT="heat budget (%s)"
 T_PRIME_CEIL="prime ceiling: %s MHz · %s"
 T_BURST_ON="⚡ burst boost ACTIVE - prime lifted for heavy work (max 20 s)"
 T_BURST_N="burst boosts this session: %s"
+T_BURST_MID="  + middle cluster lifted too (this SoC has more than two clusters)"
 T_HEADROOM="thermal headroom %s%%"
 T_SENS_OK="temp sensor: verified"
 T_SENS_UNV="temp sensor: unverified"
@@ -1334,6 +1335,7 @@ if [ -n "$_g_state" ]; then
   _pec="$(_st prime_escape_count)"
   if [ "$(_st prime_escape)" = "1" ]; then
     _f "       $T_BURST_ON"
+    [ "$(_st prime_escape_mid)" = "1" ] && _f "       $T_BURST_MID"
   elif [ "${_pec:-0}" -gt 0 ] 2>/dev/null; then
     _f "       $T_BURST_N" "$_pec"
   fi
