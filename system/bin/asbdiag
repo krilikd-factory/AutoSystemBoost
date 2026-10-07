@@ -1927,6 +1927,14 @@ case "${_awk_pct:--1}" in
       NOTE "-> suspending normally."
     fi ;;
 esac
+# The measured screen-off drain the governor learns (windows of 60+ min on battery). This
+# is what action and the WebUI now use for the idle forecast instead of a fixed guess.
+_odx="$(grep -m1 '^offdrain_pctph_x100=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_odn="$(grep -m1 '^offdrain_windows=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+case "${_odx:--1}" in
+  -1|''|0) NOTE "screen-off drain: not measured yet - needs one screen-off stretch of 60+ min on battery" ;;
+  *) NOTE "screen-off drain: $((_odx / 100)).$(printf '%02d' $((_odx % 100)))%/h measured over ${_odn:-1} window(s)  (good night: 0.3-0.7%/h)" ;;
+esac
 
 SEC "5a6. SCREEN-OFF CLASS  (what the last screen-off stretch actually was)"
 # Two identical-looking idle hours can be deep sleep or Bluetooth playback. Naming which
