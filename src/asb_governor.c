@@ -270,6 +270,89 @@ static void asb_offdrain_track(int screen_on, int pct, int charging) {
     }
 }
 
+/* Battery current gauge scale, measured on this device.
+ *
+ * current_now is not the same quantity on every phone. Full-day captures show it: on the
+ * OnePlus 15 the sampled current integrates to 0.44-0.57 of what the falling SOC says was
+ * drawn, in every screen-on phase type alike, while the OnePlus 12 lines up within 2-8%.
+ * A ratio that does not depend on the load is a property of the gauge (one cell of a
+ * dual-cell pack is the likely reading), and it means every milliamp threshold in this
+ * file is effectively twice as high on one model as on the other.
+ *
+ * This measures the ratio and publishes it; it does not yet rescale anything. Thresholds
+ * were tuned on raw readings, mostly from one model, so applying a factor blind would move
+ * every current-gated decision at once. With the scale on record from several devices the
+ * thresholds can be expressed in real milliamps.
+ *
+ * Screen-on only. With the screen off the CPU suspends between ticks and the integral only
+ * sees the moments it was awake - the recorder's own "CHECK high" in sleep phases is that
+ * bias. Screen-on, the device is awake and every tick is a fair sample. Segments are summed
+ * until the SOC has fallen 5 whole steps, so one quantisation step is at most a 20% error
+ * per window, and the EWMA over windows smooths the rest. */
+#define ASB_CURSCALE_FILE "/data/adb/asb/current_scale_x100"
+static int    g_curscale_x100 = -1;      /* sampled / SOC-derived drain x100; -1 = not yet */
+static int    g_curscale_n = 0;
+static int    g_curscale_loaded = 0;
+static long   g_cs_last_ms = 0;          /* previous screen-on discharge tick */
+static int    g_cs_seg_pct = -1;         /* SOC at the start of the current screen-on segment */
+static double g_cs_mas = 0;              /* mA x seconds integrated over finished segments */
+static double g_cs_seg_mas = 0;          /* ... and over the open one */
+static int    g_cs_dpct = 0;             /* whole SOC steps fallen over finished segments */
+static long   g_cs_cap_mah = 0;
+
+static void asb_curscale_close_segment(int pct) {
+    if (g_cs_seg_pct > 0 && pct > 0 && pct <= g_cs_seg_pct) {
+        g_cs_dpct += g_cs_seg_pct - pct;
+        g_cs_mas  += g_cs_seg_mas;
+    }
+    g_cs_seg_pct = -1; g_cs_seg_mas = 0; g_cs_last_ms = 0;
+}
+
+static void asb_curscale_track(int screen_on, int pct, int charging, int current_ma) {
+    if (!g_curscale_loaded) {
+        g_curscale_loaded = 1;
+        FILE *f = fopen(ASB_CURSCALE_FILE, "r");
+        if (f) {
+            int v = -1, n = 0;
+            if (fscanf(f, "%d %d", &v, &n) >= 1 && v > 10 && v < 500) { g_curscale_x100 = v; g_curscale_n = n > 0 ? n : 1; }
+            fclose(f);
+        }
+        long cf = sysfs_read_long("/sys/class/power_supply/battery/charge_full", 0);
+        if (cf <= 0) cf = sysfs_read_long("/sys/class/power_supply/battery/charge_full_design", 0);
+        if (cf > 100000L) g_cs_cap_mah = cf / 1000L;            /* uAh */
+        else if (cf > 500L && cf < 30000L) g_cs_cap_mah = cf;   /* already mAh */
+    }
+    if (g_cs_cap_mah < 800 || pct <= 0 || pct > 100) return;
+    if (charging) {          /* the charger invalidates the whole window, not just a segment */
+        g_cs_seg_pct = -1; g_cs_seg_mas = 0; g_cs_last_ms = 0; g_cs_mas = 0; g_cs_dpct = 0;
+        return;
+    }
+    if (!screen_on || current_ma <= 0) { asb_curscale_close_segment(pct); return; }
+    long now = asb_clock_ms(CLOCK_BOOTTIME);
+    if (g_cs_seg_pct < 0) { g_cs_seg_pct = pct; g_cs_last_ms = now; return; }
+    long dt = now - g_cs_last_ms;
+    g_cs_last_ms = now;
+    if (dt <= 0 || dt > 120000L) { asb_curscale_close_segment(pct); return; }   /* a gap is not a sample */
+    g_cs_seg_mas += (double)current_ma * (double)dt / 1000.0;
+    if (g_cs_dpct + (g_cs_seg_pct - pct) < 5) return;
+    asb_curscale_close_segment(pct);
+    /* sampled mAh against the mAh the SOC drop represents */
+    double meas_mah = g_cs_mas / 3600.0;
+    double soc_mah  = (double)g_cs_dpct * (double)g_cs_cap_mah / 100.0;
+    g_cs_mas = 0; g_cs_dpct = 0;
+    if (soc_mah <= 0) return;
+    long r = (long)(meas_mah * 100.0 / soc_mah + 0.5);
+    if (r < 15 || r > 400) return;                   /* not a gauge, a broken window */
+    g_curscale_x100 = (g_curscale_x100 > 0) ? (int)((g_curscale_x100 * 3L + r) / 4L) : (int)r;
+    g_curscale_n++;
+    FILE *f = fopen(ASB_CURSCALE_FILE ".tmp", "w");
+    if (f) {
+        fprintf(f, "%d %d\n", g_curscale_x100, g_curscale_n);
+        fclose(f);
+        rename(ASB_CURSCALE_FILE ".tmp", ASB_CURSCALE_FILE);
+    }
+}
+
 /* Called once per tick. screen_on resets the window: the figure is only meaningful
  * across a continuous screen-off stretch, and mixing screen-on time into it would
  * dilute exactly the problem it exists to expose. */
@@ -2384,6 +2467,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             fsm->prime_escape, fsm->prime_escape_mid, fsm->prime_escape_count);
     /* The suspend-aware companion to load1: how much of the last tick the CPU was up. */
     fprintf(f, "awake_tick_pct=%d\n", m->cpu.awake_tick_pct);
+    fprintf(f, "current_scale_x100=%d\ncurrent_scale_windows=%d\n", g_curscale_x100, g_curscale_n);
+    fprintf(f, "surface_source=%s\n", g_surface_from_skin ? "skin" :
+               (g_thermal_surface_zone >= 0 ? "zone" : (g_thermal_board_zone >= 0 ? "board" : "none")));
     fprintf(f, "vendor_ceiling_ticks=%lu\nvendor_ceiling_used_ticks=%lu\n",
             g_leak_ceiling_ticks, g_leak_used_ticks);
     fprintf(f, "fg_guard_fixes=%lu\n", g_fg_fix_total);
@@ -5751,6 +5837,7 @@ int main(int argc, char **argv) {
          * clocks, not from the metrics, so they are valid even when a probe failed. */
         asb_awake_track(metrics.misc.screen_on);
         asb_offdrain_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging);
+        asb_curscale_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging, metrics.bat.current_ma);
         int _smart_updated = asb_smart_tick(&metrics, &fsm);
         if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
             asb_profile_caps_t _new_caps;
@@ -6131,6 +6218,7 @@ int main(int argc, char **argv) {
                      */
                     asb_awake_track(metrics.misc.screen_on);
                     asb_offdrain_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging);
+                    asb_curscale_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging, metrics.bat.current_ma);
                     int _smart_updated = asb_smart_tick(&metrics, &fsm);
                     if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
                         asb_profile_caps_t _new_caps;

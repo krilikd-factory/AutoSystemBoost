@@ -809,6 +809,7 @@ static int g_thermal_source_confidence = 0;
 static int g_thermal_cpu_zone     = -1;
 static int g_thermal_skin_zone    = -1;  /* literal shell_front/frame/back only */
 static int g_thermal_surface_zone = -1;  /* hottest body-adjacent zone (sys-therm-6 etc) */
+static int g_surface_from_skin = 0;        /* 1 = no surface/board zone, shell sensor stands in */
 static int g_thermal_board_zone  = -1;
 static int g_thermal_cpu_fallback_zone = -1;
 static char g_thermal_cpu_fallback_type[64] = "";
@@ -1452,6 +1453,23 @@ int spike_detected = 0;
         }
         if (s_dead && t->board_temp_c > 0) t->surface_hotspot_c = t->board_temp_c;
     }
+    /* No sys-therm and no board_temp zone at all: use the shell sensor.
+     *
+     * The OnePlus 12 (SM8650) exposes shell_front/shell_frame/shell_back but neither of
+     * the zones the surface channel looks for, so surface_hotspot stayed 0 for the whole
+     * session. Everything that reads it went quiet on that phone without saying so: the
+     * screen-on surface-comfort trim never engaged, the thermal advisory lost its heaviest
+     * vote, and capture reports printed surfT 0. A shell sensor IS the body temperature,
+     * just read through the vendor's estimator, so it is a fair stand-in - and a
+     * conservative one, because shell readings sit below the board, so the 46 C comfort
+     * mark is reached later rather than sooner. Published as surface_source so a report
+     * can say which it was. */
+    g_surface_from_skin = 0;
+    if (g_thermal_surface_zone < 0 && g_thermal_board_zone < 0 &&
+        t->skin_temp_c > 20 && t->skin_temp_c < 70) {
+        t->surface_hotspot_c = t->skin_temp_c;
+        g_surface_from_skin = 1;
+    }
 
     /* Consensus runs only after all current-tick non-CPU evidence is available. */
     /* Thermal consensus v2: cross-check the control temperature against the other
@@ -1489,7 +1507,10 @@ int spike_detected = 0;
         int peer[4], np = 0;
         if (t->skin_temp_c        > 10 && t->skin_temp_c        < 90) peer[np++] = t->skin_temp_c;
         if (t->board_temp_c       > 10 && t->board_temp_c       < 90) peer[np++] = t->board_temp_c;
-        if (t->surface_hotspot_c  > 10 && t->surface_hotspot_c  < 90) peer[np++] = t->surface_hotspot_c;
+        /* A surface borrowed from the shell sensor is the same reading as skin: counting it
+         * twice would give one sensor two votes in the consensus. */
+        if (!g_surface_from_skin &&
+            t->surface_hotspot_c  > 10 && t->surface_hotspot_c  < 90) peer[np++] = t->surface_hotspot_c;
 
         if (np >= 2 && t->cpu_max_c > 0) {
             int hi = peer[0], lo = peer[0];
