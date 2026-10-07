@@ -441,6 +441,16 @@ elif [ "$_lt_state" = "unsupported" ]; then
 elif [ "$_lt_state" = "ready" ]; then
   V "LTPO manifest present (state says ready)" "present" "missing"
 fi
+# Refresh range (ltpo_force range half) and the video watcher.
+if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_apply.sh ]; then
+  NOTE "refresh range: $(MODDIR=/data/adb/modules/AutoSystemBoost sh /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_apply.sh range 2>/dev/null)"
+fi
+if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_video.sh ]; then
+  NOTE "video refresh (ltpo_video=$(cfg ltpo_video)): $(MODDIR=/data/adb/modules/AutoSystemBoost sh /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_video.sh status 2>/dev/null)"
+  if [ "$(cfg ltpo_video)" = 1 ] && [ -s /data/adb/asb/ltpo_video.log ]; then
+    tail -n 3 /data/adb/asb/ltpo_video.log 2>/dev/null | while IFS= read -r _lv; do P "    $_lv"; done
+  fi
+fi
 
 SEC "0b3. MULTIMEDIA TELEMETRY PATCH  (is the feedback collector actually closed?)"
 # Same evidence-first question for Multimedia_Feedback_List.xml: staged state, toggle,
@@ -643,6 +653,17 @@ if [ -r "$_state" ]; then
     5)   NOTE "screen source: NONE readable - assuming on (idle cadence will be wrong)" ;;
     0)   NOTE "screen source: not sampled yet" ;;
   esac
+  # How each wake was noticed. "tick" is the slow path: until then the governor is still on
+  # screen-off rails while the phone is in someone's hand. A tick share near zero is the
+  # goal; the late figure is an upper bound (time since the screen went off).
+  _sod="$(grep -m1 '^screen_on_detect=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
+  if [ -n "$_sod" ]; then
+    _sot="$(printf '%s' "$_sod" | sed -n 's/.*tick:\([0-9]*\).*/\1/p')"
+    _sol="$(grep -m1 '^screen_on_tick_late_max_s=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+    _sos="$(grep -m1 '^screen_on_single_rechecks=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+    NOTE "screen-on noticed by: $_sod  (single re-checks armed: ${_sos:-0}; slowest tick catch <= ${_sol:-0} s after screen-off)"
+    [ "${_sot:-0}" -gt 3 ] 2>/dev/null && NOTE "WARN: screen wakes still found by the idle tick ($_sot) - send this diag: the display event path misses them on this ROM"
+  fi
   [ -n "$_wbn" ] && NOTE "writes by node: $_wbn"
   # Vendor contention beside it: passive=1 means ASB stopped reasserting on purpose.
   _vp="$(grep -m1 '^cap_vendor_passive=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
@@ -683,7 +704,7 @@ if [ -r "$_state" ]; then
   fi
   _pe="$(grep -m1 '^prime_escape=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _pec="$(grep -m1 '^prime_escape_count=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
-  [ -n "$_pe" ] && NOTE "HEAVY prime escape: $([ "$_pe" = 1 ] && echo ACTIVE || echo idle) · bursts this session: ${_pec:-0} (heavy_prime_escape=$(cfg heavy_prime_escape))"
+  [ -n "$_pe" ] && NOTE "HEAVY prime escape: $([ "$_pe" = 1 ] && echo ACTIVE || echo idle) · bursts this session: ${_pec:-0} · lifted $(_rget prime_escape_total_s /dev/.asb/state 2>/dev/null || echo 0) s in total (heavy_prime_escape=$(cfg heavy_prime_escape), burst $(cfg prime_escape_burst_s) s / rest $(cfg prime_escape_rest_s) s)"
   # 3+ cluster SoCs lift the middle cluster with the prime; say which this device is.
   if [ -n "$_pe" ]; then
     _pcl=$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | wc -l)
@@ -868,6 +889,11 @@ SEC "0a2. DEVICE-ADAPTIVE BOUNDS  (OP15-ratio synthesis — device_bounds.env)"
 _dbounds="/data/adb/asb/device_bounds.env"
 _ovr_flag="$(cfg device_bounds_override)"
 P "  override active       : ${_ovr_flag:-0}  (governor consumes device_bounds.env only when =1)"
+_dba="$(_rget device_bounds_applied /dev/.asb/state)"
+case "${_ovr_flag:-0}:${_dba:-}" in
+  1:0) P "  [WARN] override=1 but the governor loaded 0 values - it runs the compiled OP15 reference rails (snapped to this device's table)" ;;
+  1:[1-9]*) P "  governor loaded       : ${_dba} value(s) at start" ;;
+esac
 if [ -f "$_dbounds" ]; then
   _dconf="$(grep -E '^# confidence=' "$_dbounds" 2>/dev/null | head -1 | sed 's/^# confidence=//')"
   P "  synthesis confidence  : ${_dconf:-unknown}"
@@ -1171,7 +1197,7 @@ NOTE "audioflinger thread: ${_ev_af:-<no offload/compress thread reported>}"
 # route is Bluetooth, and something is actually playing. Short of that the honest
 # answer is what is printed - the evidence, and "unknown".
 _ev_route="$(echo "$_ap" | grep -m1 -icE 'Devices?:.*BLUETOOTH')"
-_ev_play="$(dumpsys audio 2>/dev/null | grep -m1 -icE 'state:started|player piid.*started')"
+_ev_play="$(dumpsys audio 2>/dev/null | grep -m1 -cE 'AudioPlaybackConfiguration .*state:started')"
 # Conflict first, in the same order the shared logkit uses.
 #
 # The previous order set "off" from the properties and then let the thread branch
@@ -1666,9 +1692,18 @@ esac
 
 # Per-interface reality. The global sysctls say nothing about what each link is doing, and
 # here they can legitimately differ: congestion is set per route, the queue per interface.
-if command -v ip >/dev/null 2>&1; then
+# iproute2, not the root manager's BusyBox applet: BusyBox `ip` does not print initcwnd or
+# congctl, so every link read "no-window-tuning" whatever was set.
+# Screen-off LTE: how often it engaged and how long the phone stayed on LTE, so an A/B of
+# the switch has numbers (external audit R-3).
+if [ "$(cfg net_screen_off_lte)" = 1 ] && [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ]; then
+  _lst="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null)"
+  NOTE "screen-off LTE: applied $(printf '%s\n' "$_lst" | sed -n 's/^applies=//p') time(s), restored $(printf '%s\n' "$_lst" | sed -n 's/^restores=//p'), $(printf '%s\n' "$_lst" | sed -n 's/^lte_minutes=//p') min on LTE in total; now applied=$(printf '%s\n' "$_lst" | sed -n 's/^applied=//p') unsupported=$(printf '%s\n' "$_lst" | sed -n 's/^unsupported=//p')"
+fi
+_dip=ip; for _ipb in /system/bin/ip /vendor/bin/ip; do [ -x "$_ipb" ] && { _dip="$_ipb"; break; }; done
+if command -v ip >/dev/null 2>&1 || [ -x "$_dip" ]; then
   # table all: Android has no default route in main - one table per network.
-  ip route show table all 2>/dev/null | grep '^default' | while IFS= read -r _dr; do
+  "$_dip" route show table all 2>/dev/null | grep '^default' | while IFS= read -r _dr; do
     _di="$(printf '%s' "$_dr" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
     [ -n "$_di" ] || continue
     case "$_di" in lo|dummy*|ifb*|vgate*|sit*|ip6tnl*) continue ;; esac
@@ -1681,7 +1716,7 @@ fi
 
 # Route-window support is a kernel capability, not a setting, and it decides whether the
 # per-link congestion choice is genuinely simultaneous or a global switch in disguise.
-if command -v ip >/dev/null 2>&1 && ip route show table all 2>/dev/null | grep '^default' | grep -q 'congctl'; then
+if "$_dip" route show table all 2>/dev/null | grep '^default' | grep -q 'congctl'; then
   NOTE "per-route congctl: SUPPORTED (Wi-Fi and mobile can differ at the same time)"
 else
   NOTE "per-route congctl: not in use (per-link choice falls back to the global switch)"
@@ -1856,6 +1891,9 @@ fi
 # command. A value here that the governor has not picked up looks applied and is not -
 # the single most common way a setting appears to do nothing.
 NOTE "auto_battery = $(cfg auto_battery_enable)  ·  charge_aware = $(cfg charge_aware_enable)"
+if [ "$(cfg sustained_temp_mode)" = manual ] && [ "$(cfg sustained_temp_user_override)" != 1 ]; then
+  P "  [WARN] throttle mode is manual but sustained_temp_user_override=$(cfg sustained_temp_user_override): on Smart/Balanced/Performance the profile preset still wins over the slider (republished at boot)"
+fi
 # Gauge scale: what current_now integrates to against the falling SOC, screen-on only.
 _csx="$(_rget current_scale_x100 /dev/.asb/state)"; _csn="$(_rget current_scale_windows /dev/.asb/state)"
 case "${_csx:--1}" in
@@ -2125,6 +2163,7 @@ if [ -s /data/adb/asb/wakelock_apps ]; then
       restricted) _avt="restricted by ASB (undone on uninstall)" ;;
       protected)  _avt="protected class (messenger/alarm/fitness) - never auto-restricted" ;;
       in_use)     _avt="visible or audible to you - left alone" ;;
+      limited)    _avt="wakelocks ignored by your wakelock_fitness=limit (undone on protect/uninstall)" ;;
       *)          _avt="report only" ;;
     esac
     P "    $_ap  ·  $_al  ·  $_avt"
@@ -2139,6 +2178,12 @@ if [ -s /data/adb/asb/wakelock_multicast ]; then
   done
 fi
 NOTE "wakelock_action = $(cfg wakelock_action)  (0 = report only)"
+NOTE "wakelock_fitness = $(cfg wakelock_fitness)  (protect = fitness/step apps never touched)"
+if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
+  while IFS='|' read -r _fp _fo; do
+    [ -n "$_fp" ] && P "    WAKE_LOCK ignored: $_fp  (was: ${_fo:-default})"
+  done < /data/adb/asb/wakelock_fitness_limited
+fi
 if [ -s /data/adb/asb/wakelock_restricted ]; then
   NOTE "$(wc -l < /data/adb/asb/wakelock_restricted) app(s) moved to restricted by ASB - undone on uninstall"
 fi
