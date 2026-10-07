@@ -241,6 +241,15 @@ if [ -f /data/adb/asb/multicast_restricted ] && command -v appops >/dev/null 2>&
   rm -f /data/adb/asb/multicast_restricted 2>/dev/null
 fi
 
+# Give wakelocks back to fitness apps limited by wakelock_fitness=limit, each to the
+# app-op mode it had before (recorded as pkg|mode).
+if [ -f /data/adb/asb/wakelock_fitness_limited ] && command -v appops >/dev/null 2>&1; then
+  while IFS='|' read -r _fp _fo; do
+    [ -n "$_fp" ] && appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
+  done < /data/adb/asb/wakelock_fitness_limited
+  rm -f /data/adb/asb/wakelock_fitness_limited 2>/dev/null
+fi
+
 # Give location back to apps ASB limited.
 #
 # Recorded per package: an app the user restricted themselves in Android settings stays
@@ -495,6 +504,39 @@ if [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ] && [ -f /data/adb/asb/lte_scree
       ) </dev/null >/dev/null 2>&1 &
     fi
   fi
+fi
+
+# Refresh range: what ltpo_force (range half) and ltpo_video changed in Settings.
+#
+# Both live in Settings, which outlives the module, and both are recorded under
+# /data/adb/asb - removed below. Values are read into variables first, so a waiter that
+# runs after boot_completed needs no file at all. The video watcher's record wins for the
+# peak only when no range record exists: the range record holds the user's own value.
+[ -f "$MODDIR/runtime/asb_ltpo_video.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_video.sh" stop >/dev/null 2>&1 || true
+_rr_peak=""; _rr_min=""
+if [ -f /data/adb/asb/ltpo_video.lowered ]; then
+  _rr_peak="$(sed -n 's/^orig=//p' /data/adb/asb/ltpo_video.lowered 2>/dev/null | head -1)"
+fi
+if [ -f /data/adb/asb/ltpo_range.orig ]; then
+  _rr_peak="$(sed -n 's/^peak=//p' /data/adb/asb/ltpo_range.orig 2>/dev/null | head -1)"
+  _rr_min="$(sed -n 's/^min=//p' /data/adb/asb/ltpo_range.orig 2>/dev/null | head -1)"
+fi
+if [ -n "$_rr_peak$_rr_min" ]; then
+  (
+    _w=0
+    until [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || [ "$_w" -ge 600 ]; do
+      sleep 5; _w=$((_w + 5))
+    done
+    case "$_rr_peak" in
+      '') : ;;
+      __unset) settings delete system peak_refresh_rate >/dev/null 2>&1 ;;
+      *) settings put system peak_refresh_rate "$_rr_peak" >/dev/null 2>&1 ;;
+    esac
+    case "$_rr_min" in
+      ''|__unset) : ;;
+      *) settings put system min_refresh_rate "$_rr_min" >/dev/null 2>&1 ;;
+    esac
+  ) </dev/null >/dev/null 2>&1 &
 fi
 
 # If the active fallback had temporarily released Wi-Fi, restore it before its state is

@@ -68,7 +68,7 @@ done
 # ── V56 learning-reset boot sweep ──────────────────────────────────────────── Must run BEFORE
 # asb_utils.sh is sourced below (sourcing it auto-starts the governor), i.e.
 if [ -f /data/adb/asb/learning_reset_pending ]; then
-  rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak \
+  rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak /data/adb/asb/learn.bin \
         /data/adb/asb/pstats_balanced.json /data/adb/asb/pstats_battery.json \
         /data/adb/asb/smart_appheat.bin /data/adb/asb/auto_battery_state \
         /data/adb/asb/session_history.jsonl \
@@ -1259,7 +1259,10 @@ asb_thermal_mode_apply() {
   # number on purpose, and that has to beat a default.
   _tm_ovr=0
   case "$_tm" in manual) _tm_ovr=1 ;; esac
-  if [ -x "$MODDIR/runtime/asb_config_safe.sh" ]; then
+  # -f, not -x: the writer is run with `sh`, and module files are installed 0644. The -x test
+  # skipped every publish here in silence - a fix44 diag shows mode=manual next to
+  # sustained_temp_user_override=0, so the slider never outranked the profile preset.
+  if [ -f "$MODDIR/runtime/asb_config_safe.sh" ]; then
     sh "$MODDIR/runtime/asb_config_safe.sh" set sustained_temp_user_override "$_tm_ovr" >/dev/null 2>&1 || \
       asb_log "config: could not atomically publish sustained_temp_user_override"
   fi
@@ -1298,7 +1301,7 @@ asb_thermal_mode_apply() {
   _cur="$(grep -E '^[[:space:]]*sustained_temp_enter=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')"
   [ "$_cur" = "$_tsv" ] && return 0
-  if [ -x "$MODDIR/runtime/asb_config_safe.sh" ]; then
+  if [ -f "$MODDIR/runtime/asb_config_safe.sh" ]; then
     sh "$MODDIR/runtime/asb_config_safe.sh" set sustained_temp_enter "$_tsv" >/dev/null 2>&1 || \
       { asb_log "config: rejected resolved sustained_temp_enter=$_tsv"; return 0; }
   fi
@@ -1307,7 +1310,7 @@ asb_thermal_mode_apply() {
     smart) _tceil=68 ;;
     *)     _tceil="$_tsv" ;;
   esac
-  if [ -x "$MODDIR/runtime/asb_config_safe.sh" ]; then
+  if [ -f "$MODDIR/runtime/asb_config_safe.sh" ]; then
     sh "$MODDIR/runtime/asb_config_safe.sh" set sustained_temp_ceiling "$_tceil" >/dev/null 2>&1 || \
       asb_log "config: could not atomically publish sustained_temp_ceiling=$_tceil"
   fi
@@ -3390,7 +3393,7 @@ fi
     # 30 s, so opening a video otherwise gives up to half a minute of stock volume before
     # the effect lands, which reads as the feature being broken.
     _play_now=0
-    printf '%s\n' "$_adump" | grep -qiE "state:started|player piid.*started" && _play_now=1
+    printf '%s\n' "$_adump" | grep -qE "AudioPlaybackConfiguration .*state:started" && _play_now=1
     _adump=""
     if [ "$_play_now" = "1" ] && [ "${_prev_play:-0}" = "0" ]; then
       pkill -USR1 -f asb_dsp_attach 2>/dev/null \
@@ -3494,6 +3497,13 @@ case "$_rw_mode" in
     fi
     ;;
 esac
+    # Same for the video-refresh watcher. Its reconcile is idempotent: it starts the watcher
+    # only when ltpo_video=1 and none is alive, and repairs a lowered peak a dead watcher
+    # left behind - which is the case that matters, since nothing else would undo it.
+    if [ -f "$MODDIR/runtime/asb_ltpo_video.sh" ] && \
+       grep -qE '^[[:space:]]*ltpo_video=1' "$MODDIR/config/governor.conf" 2>/dev/null; then
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_video.sh" reconcile >/dev/null 2>&1
+    fi
     # The helpers below collectively make many framework / PackageManager / app-ops calls.
     # Run only during a genuine screen-off window and only once per hour there.  A trial expiry
     # or GNSS cleanup does not justify waking the active user-facing system every 15 minutes.
@@ -3789,6 +3799,16 @@ esac
   # radio mode, carrier setting or roaming threshold.
   if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
     MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" reconcile >/dev/null 2>&1
+  fi
+  # Refresh rate, in this order. The video watcher first: a reboot in the middle of a
+  # video leaves its lowered peak in Settings, and its reconcile puts the recorded value
+  # back. Only then the LTPO range half, which needs Settings (the early apply above runs
+  # before boot_completed and skips it) and must not record a lowered peak as the user's.
+  if [ -f "$MODDIR/runtime/asb_ltpo_video.sh" ]; then
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_video.sh" reconcile >/dev/null 2>&1
+  fi
+  if [ -r "$MODDIR/runtime/asb_ltpo_apply.sh" ]; then
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" apply >/dev/null 2>&1 || true
   fi
   asb_log "post_boot_tweaks: complete"
   asb_timeline_mark post_boot_tweaks_complete

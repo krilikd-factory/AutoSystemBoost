@@ -800,6 +800,7 @@ T_ETA_MEASURED="(measured)"
 T_ETA_HEUR="(heuristic)"
 T_ETA_AVG="(average drain)"
 T_ETA_IDLE_MEAS="idle figure measured: %s%%/h with the screen off"
+T_ETA_IDLE_N=" (from %s screen-off window(s) of 1 h+)"
 T_ETA_LINE="~%sh %sm screen on  ·  ~%sh %sm idle"
 T_ETA_LINE_CAP="~%sh %sm screen on  ·  > 72h idle"
 T_CUR_SCALE="battery current sensor reads x%s of the real drain (%s measurements) - mA values on this phone are understated"
@@ -924,6 +925,7 @@ T_I_ANIM_SIMPLE_AUTO="animations: simplified (auto, follows blur)"
 T_I_ANIM_NORMAL_AUTO="animations: normal (auto, follows blur)"
 T_I_UISPEED="UI speed: managed (animations and touch windows scaled per profile)"
 T_I_LOCK="lock screen: camera and wallet shortcuts hidden"
+T_I_VIDHZ="Video refresh: lowered %s times, %s min at the lower rate"
 T_S_LEARNING="deep sleep: night mode, still learning your schedule"
 T_S_NIGHT="deep sleep: night mode · %s (learned from %s nights)"
 T_S_AOD="always-on display: paused for the night window"
@@ -936,6 +938,7 @@ T_WLV_RESTRICTED="restricted by ASB"
 T_WLV_PROTECTED="protected - your call in Settings"
 T_WLV_INUSE="in use - left alone"
 T_WLV_REPORT="report only"
+T_WLV_LIMITED="wakelocks limited by your fitness setting"
 T_S_MC="Wi-Fi multicast held %s min since unplug - the Wi-Fi radio cannot doze (now: %s)"
 T_S_MC_NONE="nobody"
 T_Y_BG_RELAX="background processes: unlimited (phantom monitor off)"
@@ -1275,12 +1278,21 @@ case "$_bstat" in
     else
       _f "       $T_ETA_LINE" "$_ton_h" "$_ton_m" "$_toff_h" "$_toff_m"
     fi
-    [ "$_idle_measured" = 1 ] && _f "       $T_ETA_IDLE_MEAS" "$((_offx / 100)).$(printf '%02d' $((_offx % 100)))" ;;
+    if [ "$_idle_measured" = 1 ]; then
+      # How many windows stand behind the figure: one night is a point, not a rate.
+      _offn="$(grep -m1 '^offdrain_windows=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+      case "$_offn" in ''|*[!0-9]*) _offn="" ;; esac
+      printf '       %s%s\n' "$(_s "$T_ETA_IDLE_MEAS" "$((_offx / 100)).$(printf '%02d' $((_offx % 100)))")" \
+        "${_offn:+$(_s "$T_ETA_IDLE_N" "$_offn")}"
+    fi ;;
 esac
 # The gauge's own scale, measured by the governor from screen-on discharge (current vs the
 # falling SOC). Shown only when it is clearly not 1: on the OnePlus 15 it is about 0.5, so
 # any milliamp figure on this screen or in a log reads half of what the battery delivers.
-_csx="$(_st current_scale_x100)"; _csn="$(_st current_scale_windows)"
+# Direct reads: _st is defined further down, and calling it here printed "_st: not found"
+# twice into the report (field action log, fix44).
+_csx="$(grep -m1 '^current_scale_x100=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_csn="$(grep -m1 '^current_scale_windows=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 case "$_csx$_csn" in *[!0-9-]*|'') _csx=-1 ;; esac
 if [ "${_csx:--1}" -gt 0 ] 2>/dev/null && [ "${_csn:-0}" -ge 2 ] 2>/dev/null \
    && { [ "$_csx" -lt 80 ] || [ "$_csx" -gt 125 ]; }; then
@@ -1616,6 +1628,9 @@ if [ "$_a_dsp" != "off" ]; then
   _l64="✗"; _l32="✗"
   [ -f /vendor/lib64/soundfx/libasbdsp.so ] && _l64="✓"
   [ -f /vendor/lib/soundfx/libasbdsp.so ] && _l32="✓"
+  # A phone with no 32-bit ABI has no 32-bit audio client to load it: "—", not a failure
+  # mark. SM8850 builds ship 64-bit only, and the ✗ read as a broken install.
+  [ "$_l32" = "✗" ] && [ -z "$(getprop ro.product.cpu.abilist32 2>/dev/null)" ] && _l32="—"
   _dsp_abi="?"
   if [ -f /vendor/lib64/soundfx/libasbdsp.so ]; then
     if grep -aq 'ASB createEffect' /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null; then
@@ -1812,7 +1827,9 @@ case "$_rt" in
   *)
     # table all: Android keeps each network's default route in its own table, never in
     # main, so reading main reported "no route yet" on every phone.
-    _rtl="$(ip route show table all 2>/dev/null | grep '^default' | grep -m1 -oE 'initcwnd [0-9]+ initrwnd [0-9]+')"
+    # iproute2: the root manager's BusyBox `ip` neither sets nor prints initcwnd.
+    _aip=ip; for _ipb in /system/bin/ip /vendor/bin/ip; do [ -x "$_ipb" ] && { _aip="$_ipb"; break; }; done
+    _rtl="$("$_aip" route show table all 2>/dev/null | grep '^default' | grep -m1 -oE 'initcwnd [0-9]+ initrwnd [0-9]+')"
     if [ -n "$_rtl" ]; then
       _f "       $T_N_BUF_ON" "$_rt" "$_rtl"
     else
@@ -2019,6 +2036,13 @@ esac
 case "$(_cfg lockscreen_shortcuts)" in
   clean) _f "       $T_I_LOCK" ;;
 esac
+# ltpo_video: what it actually did, from its own counters (lowers|touch restores|seconds).
+if [ "$(_cfg ltpo_video)" = 1 ] && [ -s /data/adb/asb/ltpo_video.stats ]; then
+  IFS='|' read -r _vl _vt _vs < /data/adb/asb/ltpo_video.stats 2>/dev/null
+  case "${_vl:-0}${_vs:-0}" in *[!0-9]*) : ;; *)
+    _f "       $T_I_VIDHZ" "${_vl:-0}" "$(( ${_vs:-0} / 60 ))" ;;
+  esac
+fi
 
 # Sleep. Nothing reported this at all, which is a gap on the one subsystem whose whole
 # purpose is what happens while nobody is looking - and the night window is learned, so
@@ -2042,6 +2066,7 @@ echo "  🌙  ${H_SLEEP}"
         restricted) _wvt="$T_WLV_RESTRICTED" ;;
         protected)  _wvt="$T_WLV_PROTECTED" ;;
         in_use)     _wvt="$T_WLV_INUSE" ;;
+        limited)    _wvt="$T_WLV_LIMITED" ;;
         *)          _wvt="$T_WLV_REPORT" ;;
       esac
       _f "       $T_S_WL_APP" "$_wp" "$((_ws / 60))" "$_wvt"
