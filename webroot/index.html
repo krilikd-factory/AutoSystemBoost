@@ -3655,6 +3655,11 @@ const TECH_ICON_PATHS = {
   /* ltpo: a phone display whose refresh waveform visibly steps DOWN - the panel dropping
      to its low rates at idle is the whole point of the tweak. Not a lightning bolt
      (that is performance) and not a gauge: this is a waveform settling, not rising. */
+  ltpo_video: '<rect x="3.5" y="5" width="17" height="12" rx="2"/><path d="M10.2 8.6v5l4.2-2.5z"/><path d="M8 20h8"/>',
+  prime_lift: '<rect x="6" y="9" width="12" height="11" rx="2"/><path d="M12 7V2.8M9.6 5.2 12 2.8l2.4 2.4"/><path d="M9.5 14.5h5"/>',
+  prime_burst: '<circle cx="12" cy="13.5" r="7"/><path d="M12 13.5V9.8"/><path d="M10 3h4"/><path d="M12 3v3.5"/>',
+  prime_rest: '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.8v6.4M14 8.8v6.4"/>',
+  fitness_pulse: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M7.5 12h2.5l1.2-2.2 1.6 4 1.2-1.8h2.5"/>',
   ltpo: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M7.3 11.5h2l1.2-3.4 1.8 6.8 1.2-3.4h3.2"/>',
   /* mmfeed: a telemetry bar-chart struck through - the feedback collector being shut
      off. Not an eye: this kills event reporting and dumps, not visibility. */
@@ -4488,6 +4493,11 @@ const SNAP_KEYS = [
   'CAMERA_AGGRESSIVE',
   'CAMERA_AGGRESSIVE_INJECT',
   'smart_battery_bias',
+  'heavy_prime_escape',
+  'prime_escape_burst_s',
+  'prime_escape_rest_s',
+  'wakelock_fitness',
+  'ltpo_video',
   'smart_media_guard',
   'bt_absvol_mode',
   'bt_link_stability',
@@ -4631,6 +4641,12 @@ const CFG_ITEMS = [
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
     desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
+  { key:'heavy_prime_escape', type:'bool', def:'1', stock:'1', name:'Prime Core Lift',
+    desc:'Smart only. When heavy work keeps the prime cores pinned at their ceiling on a cool phone, ASB briefly lifts that ceiling - never above what Balanced allows for the same load - and then rests. Off keeps the prime cores at Smart\u2019s ceiling all the time: a little cooler and more frugal, but long heavy tasks (installs, exports, big pages) take longer, and work that takes longer keeps the whole chip awake longer too. The lift already stops on its own when the phone is warm.' },
+  { key:'prime_escape_burst_s', type:'range', def:'20', stock:'20', min:5, max:60, step:5, name:'Prime Lift Length',
+    desc:'How long one prime-core lift may last, in seconds. Longer lets a long heavy task finish sooner; shorter keeps heat and drain down. 20 is the default. Used only while Prime Core Lift is on.' },
+  { key:'prime_escape_rest_s', type:'range', def:'40', stock:'40', min:10, max:300, step:10, name:'Pause Between Lifts',
+    desc:'How long ASB waits after a lift before another one may start, in seconds. Longer = cooler and more economical under sustained heavy work; shorter = snappier. 40 is the default. Used only while Prime Core Lift is on.' },
   { key:'smart_media_guard', type:'bool', def:'0', stock:'0', name:'Smart Media Guard',
     desc:'An opt-in guard for a narrow case: a known video, feed or browser app stays in game-like CPU + GPU load for a full minute while you use it on battery. In Smart only, ASB then keeps the effective GPU ceiling at the same 70% media envelope already used for video. It never limits a known game, an unknown app, charging, thermal protection, CPU ceilings or frequency floors. Start with the 12-hour trial; if a high-refresh stream stutters, turn it back off.' },
   // --- Power & battery ---,
@@ -4642,6 +4658,8 @@ const CFG_ITEMS = [
     desc:'Deep Sleep decides how soon Doze starts. This decides who ignores it.\n\nApps on Android\u2019s exemption list keep their alarms and network through every idle window, so a phone can sit in deep doze all night while three exempted apps wake it anyway - which is why tuning only the timings can look like it changed nothing.\n\nOnly user-installed apps are touched. The dialer, SMS app, clock and your root manager are never removed, because that is how a module ends up blamed for a missed alarm. Every removal is recorded and put back when you set this to 0 or uninstall ASB.\n\nApplies with Deep Sleep set to aggressive or night.' },
   { key:'wakelock_action', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Act on Wakelocks',
     desc:'A wakelock is an app telling Android \u201Cdo not sleep yet\u201D. One app holding one all night is the single most expensive thing that can happen to a battery - more than any setting here can save - and no amount of tuning helps, because the phone never reaches the states those settings govern.\n\nMeasuring is always on; this decides whether ASB acts. With it on, a user-installed app still holding a wakelock after 45+ minutes of screen-off, on a phone that is measurably staying awake, is moved to Android\u2019s restricted bucket.\n\nNever touched: kernel and system sources - modem, display, alarm timer, sensors - and authenticators, dialer, SMS, messaging and clock apps. Nothing is force-stopped; restricted is a state Android manages and can undo.\n\nLeave it off if you would rather see the name and decide yourself. The report names the holder either way.' },
+  { key:'wakelock_fitness', type:'seg', def:'protect', stock:'protect', opts:['protect','limit'], name:'Fitness Apps & Wakelocks',
+    desc:'Step counters and fitness trackers are protected from every wakelock rule by default, because a tracker that cannot wake loses what it was installed for. In field captures one of them - Samsung Health\u2019s pedometer - was still the largest single thing keeping the phone awake at night, minutes of CPU every night.\n\nLimit tells Android to ignore wakelocks from a fitness app seen holding one for 2+ minutes. The app keeps running whenever the phone is awake anyway; it just cannot keep the CPU up by itself. The step sensor counts in its own low-power chip regardless, so the daily total usually survives.\n\nWHAT CAN SUFFER: the minute-by-minute step timeline, and a workout recorded with the screen off. Watch and band companion apps are never included - they would stop delivering notifications to your wrist. The previous state is recorded and restored on Protect or uninstall. Independent of Act on Wakelocks.' },
   { key:'gnss_trim', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Background GPS',
     desc:'GPS is one of the most expensive things a phone can do, and Android reports how much of it happens in CACHED processes - apps that are closed and doing nothing you asked for.\n\nIn one field capture that was 53 of 56 mAh of GPS drain, from an app shut minutes earlier. Nobody chose it and nobody benefits from it.\n\nWhen on, a user-installed app still holding location while its process is cached and the screen is off is limited to coarse accuracy. It gets full precision back the moment you open it - Android restores it as soon as the process leaves the cache.\n\nNever touched: maps and navigation, fitness and route tracking, emergency and find-my apps, and anything in the foreground. Permissions are not revoked; every change is recorded and undone when you set this back to off or uninstall ASB.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
@@ -4670,7 +4688,9 @@ const CFG_ITEMS = [
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'athena_service', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
-    desc:'LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device\u2019s OWN refresh-rate table (oplus_vrr_config.json), flips only the idle frame-drop switches the OEM left disabled, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, this switch does nothing - the install log says which.\n\nOn a table the OEM already ships fully enabled the switch also does nothing: binding an identical file would be a mount with no effect.' },
+    desc:'LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device\u2019s OWN refresh-rate table (oplus_vrr_config.json), flips only the idle frame-drop switches the OEM left disabled, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, this switch does nothing - the install log says which.\n\nOn a table the OEM already ships fully enabled the switch also does nothing: binding an identical file would be a mount with no effect.\n\nThe switch also opens the Android side of the range, and that part applies at once, without a reboot: no refresh floor, and the peak set to the highest mode this panel reports (165 Hz on the OnePlus 15). The low end - the panel\u2019s own idle rates below 60 Hz - is the table\u2019s job, because Android does not list those rates at all. What was set before is recorded and restored when you switch off. The OEM\u2019s own cap on the render rate (90 Hz on some builds) is left alone.' },
+  { key:'ltpo_video', type:'bool', def:'0', stock:'0', name:'Lowest Refresh for Video',
+    desc:'While a video plays, the panel stays at the rate the system picked for everything else - on this phone family 90 Hz for a 30 fps stream, which is three refreshes per frame where two would do.\n\nWith this on, ASB lowers the peak refresh rate to the smallest panel mode that is an exact multiple of the video (60 Hz for 30 and 60 fps), so motion stays judder-free. It acts only when: the screen is on, audio is playing, a video layer asks for 30 or 60 fps, no layer asks for high smoothness, and the screen has not been touched for 3 seconds.\n\nThe first touch restores the previous value at once, as do the end of playback, the video closing and the screen turning off - so scrolling and animations run at full rate. The honest catch: the very first frames after that touch (about 0.1-0.2 s) can still be at the lower rate. 24, 25 and 50 fps video has no lower judder-free mode and is left alone. Applies immediately.' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
     desc:'Android kills so-called phantom processes - the ones an app spawns outside the normal lifecycle - once there are more than 32. It is why long compiles, emulators and terminal sessions die halfway through on Android 12 and later.\n\nno limit turns the monitor off. limit 32 switches Android\u2019s own ceiling back on explicitly.\n\nleave alone is not the same as limit 32: it keeps whatever the device currently holds, which past ASB versions or another module may have changed. Pick one of the first two if you want a predictable result.\n\nThe app needs restarting because Android reads the limit when a process starts - apps already running keep the old behaviour.' },
   { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
@@ -4731,7 +4751,8 @@ const CFG_CAT = {
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
   night_modem_idle:'net', net_screen_off_lte:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
-  athena_service:'system', ltpo_force:'system', mmfeed_off:'system',
+  athena_service:'system', ltpo_force:'system', ltpo_video:'system', mmfeed_off:'system',
+  heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
@@ -4786,7 +4807,8 @@ const CFG_GROUP_OF = {
   mglru_hold:'battery',
   night_modem_idle:'net', net_screen_off_lte:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
-  athena_service:'ui', ltpo_force:'ui', mmfeed_off:'ui',
+  athena_service:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
+  heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery', gnss_trim:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui',
@@ -4826,11 +4848,11 @@ const CFG_GROUP_SECTIONS = {
     { id:'smart', icon:'smart', titleKey:'cfg_battery_section_smart',
       title:'Smart & Auto Profile', hintKey:'cfg_battery_section_smart_hint',
       hint:'How Smart balances battery against performance and when it switches profile.',
-      keys:['auto_battery_enable','smart_battery_bias','charge_aware_enable','smart_media_guard'] },
+      keys:['auto_battery_enable','smart_battery_bias','heavy_prime_escape','prime_escape_burst_s','prime_escape_rest_s','charge_aware_enable','smart_media_guard'] },
     { id:'standby', icon:'doze', titleKey:'cfg_battery_section_standby',
       title:'Sleep & Background', hintKey:'cfg_battery_section_standby_hint',
       hint:'What the phone does while the screen is off: doze depth, wakelocks, background GPS.',
-      keys:['doze_level','doze_trim_whitelist','night_quiet_enable','wakelock_action','gnss_trim'] },
+      keys:['doze_level','doze_trim_whitelist','night_quiet_enable','wakelock_action','wakelock_fitness','gnss_trim'] },
     { id:'thermal', icon:'thermal_point', titleKey:'cfg_battery_section_thermal',
       title:'Heat & Performance', hintKey:'cfg_battery_section_thermal_hint',
       hint:'When the phone starts holding back to stay cool, and how far it may go.',
@@ -4866,7 +4888,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
       title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
       hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
-      keys:['ltpo_force','haptic_strength','haptic_touch_strength'] },
+      keys:['ltpo_force','ltpo_video','haptic_strength','haptic_touch_strength'] },
     { id:'diag', icon:'log_detail', titleKey:'cfg_ui_section_diag',
       title:'Diagnostics', hintKey:'cfg_ui_section_diag_hint',
       hint:'How much the module writes to its own logs.',
@@ -5076,7 +5098,8 @@ const CFG_ICONS = {
   auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
-  UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', ltpo_force:'ltpo', mmfeed_off:'mmfeed',
+  UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
+  heavy_prime_escape:'prime_lift', prime_escape_burst_s:'prime_burst', prime_escape_rest_s:'prime_rest', wakelock_fitness:'fitness_pulse',
   /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
    * system instead of by us. Reusing the handover glyph says that at a glance. */
   bt_link_stability:'bt_link_steady',
@@ -5088,7 +5111,7 @@ let _netResult = {};
 // LTPO patch status: the staged state word (ready/already/unsupported) and the live bind
 // verdict from the apply script. Loaded with the config so the card can say "active",
 // "waiting for a reboot" or "nothing to patch on this device" instead of just "Enabled".
-let _ltpoStatus = '', _ltpoState = '';
+let _ltpoStatus = '', _ltpoState = '', _ltpoVideoStatus = '';
 let _mmfeedStatus = '', _mmfeedState = '';
 // Is this the reference model the flat-effects option was validated on?
 //
@@ -5135,11 +5158,14 @@ async function loadNetResult() {
 // against; this keeps the LTPO card to the same standard.
 async function loadLtpoStatus() {
   try {
-    const r = await run('sh ' + MD + '/runtime/asb_ltpo_apply.sh status 2>/dev/null; echo ---; cat /data/adb/asb/ltpo_state 2>/dev/null');
+    const r = await run('sh ' + MD + '/runtime/asb_ltpo_apply.sh status 2>/dev/null; echo ---; cat /data/adb/asb/ltpo_state 2>/dev/null; echo ---; sh ' + MD + '/runtime/asb_ltpo_video.sh status 2>/dev/null');
     const parts = (((r && r.stdout) || '')).split('---');
     _ltpoStatus = (parts[0] || '').trim().split(/\r?\n/)[0] || '';
     _ltpoState = ((parts[1] || '').trim().split(/\r?\n/)[0]) || '';
-  } catch (e) { _ltpoStatus = ''; _ltpoState = ''; }
+    /* "state=lowered:60.0 lowers=.. " - only the state word matters for the badge. */
+    const _vm = /state=([a-z_]+)(?::([0-9.]+))?/.exec(parts[2] || '');
+    _ltpoVideoStatus = _vm ? (_vm[1] + (_vm[2] ? ':' + Math.round(parseFloat(_vm[2])) : '')) : '';
+  } catch (e) { _ltpoStatus = ''; _ltpoState = ''; _ltpoVideoStatus = ''; }
 }
 
 // Multimedia telemetry: the same honesty standard as the LTPO card - the badge reads
@@ -5296,6 +5322,16 @@ function cfgStatus(it, cur) {
   // of the display, not merely that the toggle is stored. On means on only when the apply
   // script sees its own bind; pending means the bind waits for the reboot the display
   // stack needs to re-read the config; absent means this device had nothing to patch.
+  // ltpo_video: the badge reports the watcher, not the toggle - "on" with no watcher
+  // running would be the same lie the LTPO card was fixed for.
+  if (it.key === 'ltpo_video') {
+    if (cur !== '1') return { cls:'neutral', text:T('st_off', 'Disabled') };
+    if (_ltpoVideoStatus.indexOf('lowered:') === 0)
+      return { cls:'good', text:T('st_ltpo_vid_low', 'now') + ' ' + _ltpoVideoStatus.split(':')[1] + ' Hz' };
+    if (_ltpoVideoStatus === 'watching') return { cls:'good', text:T('st_on', 'Enabled') };
+    if (_ltpoVideoStatus === 'not_running') return { cls:'warn', text:T('st_not_running', 'not running') };
+    return { cls:'warn', text:T('st_pending', 'pending') };
+  }
   if (it.key === 'ltpo_force') {
     if (cur === '1') {
       if (_ltpoStatus === 'ltpo_active') return { cls:'good', text:T('st_on', 'Enabled') };
@@ -5519,6 +5555,8 @@ const APPLY_MODE = {
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
   net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, net_wifi_leave:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
+  heavy_prime_escape:APPLY_LIVE, prime_escape_burst_s:APPLY_LIVE, prime_escape_rest_s:APPLY_LIVE,
+  wakelock_fitness:APPLY_LIVE, ltpo_video:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, net_screen_off_lte:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
   sustained_temp_enter:APPLY_LIVE, BG_TRIM_LEVEL:APPLY_LIVE, doze_level:APPLY_LIVE,
@@ -6245,7 +6283,9 @@ async function cfgSet(key, val, ctl) {
                     'UX_MANAGE_TIMEOUTS',
                     /* Read by the governor on reload like the rest of this list. Its card
                      * said "applies immediately" while the toast sent the user to reboot. */
-                    'smart_media_guard'];
+                    'smart_media_guard',
+                    /* Prime-core lift: the governor reads all three on reload. */
+                    'heavy_prime_escape','prime_escape_burst_s','prime_escape_rest_s'];
       if (key === 'log_level') {
         // Applied live: extreme mode changes device properties, and leaving it restores
         // them - waiting for a reboot would leave the phone in whichever state it was.
@@ -6367,6 +6407,25 @@ async function cfgSet(key, val, ctl) {
          * Off: the release runs immediately, so "applied" is. */
         toast(cfgToastText(key, val) + (String(val) === '1'
           ? T('t_cfg_screenoff', ' \u00b7 acts while the screen is off')
+          : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      if (key === 'wakelock_fitness') {
+        try { await run('sh ' + MD + '/runtime/asb_wakelock_watch.sh >/dev/null 2>&1'); } catch (e) {}
+        /* Both directions run now: limit acts on fitness apps already seen holding a
+         * wakelock since the last unplug, protect gives back what limit took. */
+        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      if (key === 'ltpo_video') {
+        try { await run('sh ' + MD + '/runtime/asb_ltpo_video.sh reconcile >/dev/null 2>&1; sleep 1'); } catch (e) {}
+        await loadLtpoStatus();
+        toast(cfgToastText(key, val) + (String(val) === '1'
+          ? T('t_cfg_video', ' \u00b7 acts during video playback')
           : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
