@@ -791,6 +791,7 @@ T_ETA="Time to 0%% %s"
 T_ETA_MEASURED="(measured)"
 T_ETA_HEUR="(heuristic)"
 T_ETA_AVG="(average drain)"
+T_ETA_IDLE_MEAS="idle figure measured: %s%%/h with the screen off"
 T_ETA_LINE="~%sh %sm screen on  ·  ~%sh %sm idle"
 T_GS_DEEP="deep idle"
 T_GS_LIGHT="light idle"
@@ -1077,7 +1078,16 @@ if [ "$_remain_mah" -gt 0 ] 2>/dev/null && [ "$_on_ma" -gt 0 ] 2>/dev/null; then
   _ton_h=$(( _ton_min / 60 ))
   _ton_m=$(( _ton_min % 60 ))
 fi
-if [ "$_remain_mah" -gt 0 ] 2>/dev/null && [ "$_off_ma" -gt 0 ] 2>/dev/null; then
+# Idle half: the governor's MEASURED screen-off drain when it has one (offdrain, %/h x100,
+# learned from real screen-off windows of an hour or more). The tenth-of-screen-on guess
+# above stays only as the fallback - it sat at its 40 mA floor on a phone measured at ~37.
+_offx="$(grep -m1 '^offdrain_pctph_x100=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+case "$_offx" in ''|*[!0-9]*) _offx=0 ;; esac
+_idle_measured=0
+if [ "$_offx" -gt 0 ] 2>/dev/null && [ -n "$_lvl" ] && [ "$_lvl" -gt 0 ] 2>/dev/null; then
+  _toff_min=$(( _lvl * 6000 / _offx ))
+  _toff_h=$(( _toff_min / 60 )); _toff_m=$(( _toff_min % 60 )); _idle_measured=1
+elif [ "$_remain_mah" -gt 0 ] 2>/dev/null && [ "$_off_ma" -gt 0 ] 2>/dev/null; then
   _toff_min=$(( _remain_mah * 60 / _off_ma ))
   _toff_h=$(( _toff_min / 60 ))
   _toff_m=$(( _toff_min % 60 ))
@@ -1240,7 +1250,11 @@ case "$_bstat" in
     _f "  ⏳  $T_ETA_CHG" ;;
   *)
     _f "  ⏳  $T_ETA" "$_eta_note"
-    _f "       $T_ETA_LINE" "$_ton_h" "$_ton_m" "$_toff_h" "$_toff_m" ;;
+    # Same 72 h ceiling as the WebUI: past three days the idle figure is arithmetic, not a
+    # forecast, and the two screens should never disagree about it.
+    if [ "$(( _toff_h * 60 + _toff_m ))" -gt 4320 ] 2>/dev/null; then _toff_h=">72"; _toff_m=0; fi
+    _f "       $T_ETA_LINE" "$_ton_h" "$_ton_m" "$_toff_h" "$_toff_m"
+    [ "$_idle_measured" = 1 ] && _f "       $T_ETA_IDLE_MEAS" "$((_offx / 100)).$(printf '%02d' $((_offx % 100)))" ;;
 esac
 
 # ── Live state ──────────────────────────────────────────────────────────────────
