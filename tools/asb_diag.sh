@@ -684,6 +684,15 @@ if [ -r "$_state" ]; then
   _pe="$(grep -m1 '^prime_escape=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _pec="$(grep -m1 '^prime_escape_count=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   [ -n "$_pe" ] && NOTE "HEAVY prime escape: $([ "$_pe" = 1 ] && echo ACTIVE || echo idle) · bursts this session: ${_pec:-0} (heavy_prime_escape=$(cfg heavy_prime_escape))"
+  # 3+ cluster SoCs lift the middle cluster with the prime; say which this device is.
+  if [ -n "$_pe" ]; then
+    _pcl=$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | wc -l)
+    if [ "${_pcl:-0}" -ge 3 ] 2>/dev/null; then
+      NOTE "  burst scope: prime + middle cluster (${_pcl} clusters)$([ "$(grep -m1 '^prime_escape_mid=' /dev/.asb/state 2>/dev/null | cut -d= -f2)" = 1 ] && echo ' · mid lifted now')"
+    else
+      NOTE "  burst scope: big cluster (${_pcl:-?} clusters)"
+    fi
+  fi
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
   # Say what the two numbers count, because they do not count the same thing.
   #
