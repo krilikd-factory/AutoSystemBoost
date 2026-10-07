@@ -8283,10 +8283,16 @@ async function pollLive(visible) {
     // 500 mA: two numbers on one screen disagreeing by a factor of two, with only the
     // small "(est.)" to explain why. Use the measured rate when there is one.
     let ewma_x10 = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
-    if (ewma_x10 <= 0) ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
-    // Below the 10-minute window the rate is arithmetic noise, and a forecast built on it
-    // would be worse than the flat estimate it replaced.
+    // Below the 10-minute window the live rate is arithmetic noise. Fall back to the
+    // learner's SMOOTHED drain - measured, just averaged - before the per-profile constant;
+    // zeroing both sent a phone with a learned 7.3 %/h to a fixed 500 mA "model".
+    // action.sh applies the same order, so the two screens print the same forecast.
+    let eta_avg = false;
     if (parseInt(kv.smart_drain_window_s || '0', 10) < 600) ewma_x10 = 0;
+    if (ewma_x10 <= 0) {
+      ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
+      eta_avg = ewma_x10 > 0;
+    }
     /*
      * Two very different numbers used to arrive with almost the same suffix.
      *
@@ -8305,9 +8311,15 @@ async function pollLive(visible) {
     let eta_title;
     if (ewma_x10 > 0) {
       on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
-      eta_note = ' · ' + T('eta_measured', 'measured');
-      eta_title = T('eta_measured_tip',
-        'Based on the measured drain rate over the last ' + Math.round(drain_win_s / 60) + ' min.');
+      if (eta_avg) {
+        eta_note = ' · ' + T('eta_average', 'average');
+        eta_title = T('eta_average_tip',
+          'Based on your smoothed screen-on drain; the live rate replaces it once the drain window reaches 10 minutes.');
+      } else {
+        eta_note = ' · ' + T('eta_measured', 'measured');
+        eta_title = T('eta_measured_tip',
+          'Based on the measured drain rate over the last ' + Math.round(drain_win_s / 60) + ' min.');
+      }
     } else {
       if (profile === 'performance') { on_ma = 650; }
       else if (profile === 'battery') { on_ma = 400; }
