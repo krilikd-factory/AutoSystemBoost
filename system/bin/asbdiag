@@ -1667,9 +1667,11 @@ esac
 # Per-interface reality. The global sysctls say nothing about what each link is doing, and
 # here they can legitimately differ: congestion is set per route, the queue per interface.
 if command -v ip >/dev/null 2>&1; then
-  ip route show 2>/dev/null | grep '^default' | while IFS= read -r _dr; do
+  # table all: Android has no default route in main - one table per network.
+  ip route show table all 2>/dev/null | grep '^default' | while IFS= read -r _dr; do
     _di="$(printf '%s' "$_dr" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
     [ -n "$_di" ] || continue
+    case "$_di" in lo|dummy*|ifb*|vgate*|sit*|ip6tnl*) continue ;; esac
     _dcc="$(printf '%s' "$_dr" | grep -oE 'congctl [a-z_]+' | cut -d' ' -f2)"
     _dw="$(printf '%s' "$_dr" | grep -oE 'initcwnd [0-9]+ initrwnd [0-9]+')"
     _dq="$(tc qdisc show dev "$_di" 2>/dev/null | head -1 | awk '{print $2}')"
@@ -1679,7 +1681,7 @@ fi
 
 # Route-window support is a kernel capability, not a setting, and it decides whether the
 # per-link congestion choice is genuinely simultaneous or a global switch in disguise.
-if command -v ip >/dev/null 2>&1 && ip route show 2>/dev/null | grep -q 'congctl'; then
+if command -v ip >/dev/null 2>&1 && ip route show table all 2>/dev/null | grep '^default' | grep -q 'congctl'; then
   NOTE "per-route congctl: SUPPORTED (Wi-Fi and mobile can differ at the same time)"
 else
   NOTE "per-route congctl: not in use (per-link choice falls back to the global switch)"
@@ -1694,7 +1696,11 @@ fi
 # refused it - and they need opposite responses. A single negative sentence sent two people
 # hunting for a runtime defect when the answer was a config value.
 if pgrep -f "asb_net_routes.sh watch" >/dev/null 2>&1; then
-  NOTE "route link watcher: running (event-driven on ip monitor; no polling)"
+  if [ "$(cat /data/adb/asb/net_routes_watch.mode 2>/dev/null)" = poll ]; then
+    NOTE "route link watcher: running in fallback poll (1 check/min; ip monitor ended: $(cat /data/adb/asb/net_routes_watch.exit 2>/dev/null))"
+  else
+    NOTE "route link watcher: running (event-driven on ip monitor; no polling)"
+  fi
 else
   _rw_cfg="$(cfg net_route_tune)"
   case "$_rw_cfg" in
@@ -1850,6 +1856,15 @@ fi
 # command. A value here that the governor has not picked up looks applied and is not -
 # the single most common way a setting appears to do nothing.
 NOTE "auto_battery = $(cfg auto_battery_enable)  ·  charge_aware = $(cfg charge_aware_enable)"
+# Gauge scale: what current_now integrates to against the falling SOC, screen-on only.
+_csx="$(_rget current_scale_x100 /dev/.asb/state)"; _csn="$(_rget current_scale_windows /dev/.asb/state)"
+case "${_csx:--1}" in
+  ''|-1|*[!0-9]*) NOTE "battery current gauge: scale not measured yet (needs 5% of screen-on discharge)" ;;
+  *) NOTE "battery current gauge: current_now integrates to x$((_csx / 100)).$(printf '%02d' $((_csx % 100))) of the SOC-derived drain (${_csn:-0} window(s), screen-on)"
+     if [ "$_csx" -lt 80 ] || [ "$_csx" -gt 125 ]; then
+       NOTE "-> a gauge property, not a load: every mA figure and mA threshold on this phone is off by that factor"
+     fi ;;
+esac
 NOTE "cool_gaming = $(cfg cool_gaming)  ·  suppress_gaming_on_battery = $(cfg bat_suppress_gaming)"
 NOTE "night_quiet = $(cfg night_quiet_enable)  ·  bg_trim = $(cfg BG_TRIM_LEVEL)"
 NOTE "throttle mode = $(cfg sustained_temp_mode) at $(cfg sustained_temp_enter)°C"
@@ -1888,6 +1903,12 @@ esac
 if [ -n "$_trej" ]; then
   NOTE "rejected source: $_trej (raw=${_traw:-?}; raw is not displayed as degrees because scale may differ)"
 fi
+case "$(_rget surface_source /dev/.asb/state)" in
+  zone)  NOTE "surface (body) temperature: dedicated zone (sys-therm)" ;;
+  board) NOTE "surface (body) temperature: board_temp zone" ;;
+  skin)  NOTE "surface (body) temperature: shell sensor - this phone has no sys-therm/board zone, so the shell reading stands in" ;;
+  none)  NOTE "surface (body) temperature: NOT AVAILABLE - surface-based heat trims cannot engage on this phone" ;;
+esac
 if [ "${_sq:-0}" -gt 0 ] 2>/dev/null; then
   NOTE "startup quarantine: $_sq sample(s) excluded from Smart learning during boot settle"
 fi
@@ -2051,7 +2072,20 @@ if [ -s "$_led" ]; then
   NOTE "totals: $(awk -F'|' '{c[$7]++} END{for(k in c) printf "%s=%d ", k, c[k]}' "$_led" 2>/dev/null)"
   _bad="$(awk -F'|' '$7=="readback_mismatch"||$7=="not_writable"{n++} END{print n+0}' "$_led" 2>/dev/null)"
   if [ "${_bad:-0}" -gt 0 ] 2>/dev/null; then
-    NOTE "-> ${_bad} write(s) the device did not accept - those tweaks are not in effect"
+    # Name them. A count says the device is fighting the module; only the keys say where.
+    # The verdict is each key's LAST result, so a key that failed once at boot and was
+    # applied later is not reported as broken - and repeated attempts count once.
+    _badk="$(awk -F'|' '{ k = $2 "/" $3; last[k] = $7; why[k] = $8; req[k] = $4; now[k] = $6; n[k]++ }
+      END { for (k in last) if (last[k] == "readback_mismatch" || last[k] == "not_writable")
+              printf "%s|%s|%s|%s|%s|%d\n", k, last[k], why[k], req[k], now[k], n[k] }' "$_led" 2>/dev/null | sort)"
+    if [ -n "$_badk" ]; then
+      NOTE "-> $(printf '%s\n' "$_badk" | grep -c .) key(s) the device did not accept - not in effect (key: result - wanted -> device has):"
+      printf '%s\n' "$_badk" | head -15 | while IFS='|' read -r _bk _br _bw _bq _bn _bc; do
+        P "    ${_bk}: ${_br}${_bw:+ (${_bw})} - ${_bq:-?} -> ${_bn:-?}  [${_bc}x]"
+      done
+    else
+      NOTE "-> ${_bad} earlier rejection(s), all applied on a later attempt - nothing is outstanding"
+    fi
   fi
 else
   NOTE "no writes recorded yet"
@@ -2079,6 +2113,30 @@ if [ -s /data/adb/asb/wakelock_top ]; then
   NOTE "a package name here is an app you can restrict, uninstall or exempt yourself"
 else
   NOTE "no snapshot yet - taken every 15 min, needs /sys/kernel/debug to be readable"
+fi
+# Apps, resolved by uid. The kernel list above names sources; this names who asked.
+if [ -s /data/adb/asb/wakelock_apps ]; then
+  NOTE "apps holding the CPU since the last unplug (package | held | verdict):"
+  while IFS='|' read -r _ap _as _ah _av; do
+    [ -n "$_ap" ] || continue
+    case "$_as" in ''|*[!0-9]*) _as=0 ;; esac
+    _al="$(( _as / 60 )) min"; [ "$_ah" = 1 ] && _al="$_al, holding now"
+    case "$_av" in
+      restricted) _avt="restricted by ASB (undone on uninstall)" ;;
+      protected)  _avt="protected class (messenger/alarm/fitness) - never auto-restricted" ;;
+      in_use)     _avt="visible or audible to you - left alone" ;;
+      *)          _avt="report only" ;;
+    esac
+    P "    $_ap  ·  $_al  ·  $_avt"
+  done < /data/adb/asb/wakelock_apps
+fi
+if [ -s /data/adb/asb/wakelock_multicast ]; then
+  _mct="$(sed -n 's/^total|//p' /data/adb/asb/wakelock_multicast | head -1)"
+  case "$_mct" in ''|*[!0-9]*) _mct=0 ;; esac
+  NOTE "Wi-Fi multicast held $(( _mct / 60 )) min since the last unplug (radio cannot use its packet filter while held)"
+  grep -v '^total|' /data/adb/asb/wakelock_multicast | while IFS='|' read -r _mp _mv; do
+    [ -n "$_mp" ] && P "    holding now: $_mp  ·  $_mv"
+  done
 fi
 NOTE "wakelock_action = $(cfg wakelock_action)  (0 = report only)"
 if [ -s /data/adb/asb/wakelock_restricted ]; then
