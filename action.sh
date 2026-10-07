@@ -97,7 +97,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_IDLE="простой"; M_LIGHT="лёгкая нагрузка"; M_NORMAL_USE="обычная нагрузка"
     M_HEAVY="высокая нагрузка"; M_GAMING="игра"
     M_REMEMBERS="Помнит тепловое поведение приложений:"; M_APPS=""
-    M_PREDICT="Прогноз времени экрана"; M_AT_RATE="при текущем расходе"
+    M_PREDICT="Прогноз времени экрана"; M_AT_RATE="при среднем расходе"
     M_NOTE_PARTIAL="Примечание: работает на неполных данных для этого слота"
     M_NOTE_NEIGHBOUR="Примечание: используется соседний слот"
     M_NOTE_NODATA="Примечание: истории пока нет — безопасные значения"
@@ -146,7 +146,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="Памʼятає теплову поведінку застосунків:"
     M_APPS=""
     M_PREDICT="Прогноз часу екрана"
-    M_AT_RATE="за поточної витрати"
+    M_AT_RATE="за середньої витрати"
     M_NOTE_PARTIAL="Примітка: працює на неповних даних для цього слота"
     M_NOTE_NEIGHBOUR="Примітка: використовується сусідній слот"
     M_NOTE_NODATA="Примітка: історії ще немає — безпечні значення"
@@ -201,7 +201,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="Kennt das Wärmeverhalten von Apps:"
     M_APPS=""
     M_PREDICT="Geschätzte Bildschirmzeit"
-    M_AT_RATE="bei aktuellem Verbrauch"
+    M_AT_RATE="bei durchschnittlichem Verbrauch von"
     M_NOTE_PARTIAL="Hinweis: unvollständige Daten für dieses Fenster"
     M_NOTE_NEIGHBOUR="Hinweis: Rückgriff auf ein Nachbarfenster"
     M_NOTE_NODATA="Hinweis: noch keine Historie - sichere Standardwerte"
@@ -256,7 +256,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="Recuerda el comportamiento térmico de apps:"
     M_APPS=""
     M_PREDICT="Tiempo de pantalla estimado"
-    M_AT_RATE="al ritmo actual"
+    M_AT_RATE="con un consumo medio de"
     M_NOTE_PARTIAL="Nota: datos parciales para esta franja"
     M_NOTE_NEIGHBOUR="Nota: usando una franja vecina"
     M_NOTE_NODATA="Nota: sin historial aún - valores seguros"
@@ -311,7 +311,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="Lembra o comportamento térmico de apps:"
     M_APPS=""
     M_PREDICT="Tempo de tela estimado"
-    M_AT_RATE="no ritmo atual"
+    M_AT_RATE="com consumo médio de"
     M_NOTE_PARTIAL="Nota: dados parciais para esta faixa"
     M_NOTE_NEIGHBOUR="Nota: usando uma faixa vizinha"
     M_NOTE_NODATA="Nota: sem histórico ainda - valores seguros"
@@ -366,7 +366,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="Uygulamaların ısı davranışını hatırlıyor:"
     M_APPS=""
     M_PREDICT="Tahmini ekran süresi"
-    M_AT_RATE="mevcut hızda"
+    M_AT_RATE="ortalama tüketimde"
     M_NOTE_PARTIAL="Not: bu dilim için kısmi veri"
     M_NOTE_NEIGHBOUR="Not: komşu dilime geri dönülüyor"
     M_NOTE_NODATA="Not: henüz geçmiş yok - güvenli değerler"
@@ -421,7 +421,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="Connaît le comportement thermique de"
     M_APPS="appli(s) vues"
     M_PREDICT="Temps d’écran estimé"
-    M_AT_RATE="au rythme actuel"
+    M_AT_RATE="à la consommation moyenne de"
     M_NOTE_PARTIAL="Note : données partielles pour ce créneau"
     M_NOTE_NEIGHBOUR="Note : repli sur un créneau voisin"
     M_NOTE_NODATA="Note : pas encore d’historique — valeurs sûres"
@@ -476,7 +476,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="Հիշում է հավելվածների ջերմային վարքը՝"
     M_APPS=""
     M_PREDICT="Էկրանի կանխատեսվող ժամանակ"
-    M_AT_RATE="ընթացիկ ծախսի դեպքում"
+    M_AT_RATE="միջին ծախսի դեպքում՝"
     M_NOTE_PARTIAL="Նշում. այս հատվածի համար տվյալները թերի են"
     M_NOTE_NEIGHBOUR="Նշում. օգտագործվում է հարևան հատվածը"
     M_NOTE_NODATA="Նշում. պատմություն դեռ չկա — անվտանգ արժեքներ"
@@ -531,7 +531,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="Ricorda il comportamento termico delle app:"
     M_APPS=""
     M_PREDICT="Tempo schermo stimato"
-    M_AT_RATE="al ritmo attuale"
+    M_AT_RATE="al consumo medio di"
     M_NOTE_PARTIAL="Nota: dati parziali per questa fascia"
     M_NOTE_NEIGHBOUR="Nota: si usa una fascia vicina"
     M_NOTE_NODATA="Nota: nessuno storico - valori sicuri"
@@ -586,7 +586,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="يتذكر السلوك الحراري للتطبيقات:"
     M_APPS=""
     M_PREDICT="وقت الشاشة المتوقع"
-    M_AT_RATE="بالمعدل الحالي"
+    M_AT_RATE="بمعدل الاستهلاك المتوسط"
     M_NOTE_PARTIAL="ملاحظة: بيانات جزئية لهذه الفترة"
     M_NOTE_NEIGHBOUR="ملاحظة: يُستخدم فترة مجاورة"
     M_NOTE_NODATA="ملاحظة: لا يوجد سجل بعد — قيم آمنة"
@@ -641,7 +641,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_REMEMBERS="已记住这些应用的发热特性："
     M_APPS=""
     M_PREDICT="预计亮屏时间"
-    M_AT_RATE="按当前速度"
+    M_AT_RATE="按平均耗电"
     M_NOTE_PARTIAL="注意：该时段数据不完整"
     M_NOTE_NEIGHBOUR="注意：改用相邻时段"
     M_NOTE_NODATA="注意：暂无历史 —— 使用安全默认值"
@@ -682,7 +682,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_IDLE="idle"; M_LIGHT="light use"; M_NORMAL_USE="normal use"
     M_HEAVY="heavy use"; M_GAMING="gaming"
     M_REMEMBERS="Remembers the heat behaviour of"; M_APPS="app(s) it has seen"
-    M_PREDICT="Predicted screen time left"; M_AT_RATE="at the current rate"
+    M_PREDICT="Predicted screen time left"; M_AT_RATE="at the average drain of"
     M_NOTE_PARTIAL="Note: running on partial data for this slot"
     M_NOTE_NEIGHBOUR="Note: falling back to a neighbouring slot"
     M_NOTE_NODATA="Note: no usable history yet - safe defaults in use"
@@ -790,6 +790,7 @@ T_ETA_CHG="Time to 0%%: not estimated while charging"
 T_ETA="Time to 0%% %s"
 T_ETA_MEASURED="(measured)"
 T_ETA_HEUR="(heuristic)"
+T_ETA_AVG="(average drain)"
 T_ETA_LINE="~%sh %sm screen on  ·  ~%sh %sm idle"
 T_GS_DEEP="deep idle"
 T_GS_LIGHT="light idle"
@@ -1029,18 +1030,26 @@ fi
 # first, so this does too - agreeing on a number matters more here than which of the two
 # is the better estimate, because a user comparing screens cannot see the difference.
 _ewma_x10=$(grep "^smart_drain_pctph_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
-case "$_ewma_x10" in ''|0|*[!0-9]*) _ewma_x10=""; esac
-[ -n "$_ewma_x10" ] || _ewma_x10=$(grep "^smart_drain_ewma_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
-# The WebUI also discards the rate when the measurement window is short; matching that
-# keeps "(measured)" honest on both screens rather than only on one.
+case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
+# The live window rate is only a measurement once the window is 10 minutes long (the
+# WebUI applies the same rule). Below that, fall back to the SMOOTHED drain the learner
+# keeps - also measured, just averaged - instead of jumping straight to a per-profile
+# constant. The old code zeroed both, so a screen showing "drain now 25%/h" and a learned
+# 7.3%/h still printed a forecast built from a fixed 500 mA, marked "(heuristic)".
 _dwin=$(grep "^smart_drain_window_s=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
 case "$_dwin" in ''|*[!0-9]*) _dwin=0 ;; esac
 [ "$_dwin" -lt 600 ] 2>/dev/null && _ewma_x10=0
+_eta_kind=measured
+if [ "$_ewma_x10" -le 0 ] 2>/dev/null; then
+  _ewma_x10=$(grep "^smart_drain_ewma_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+  case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
+  _eta_kind=average
+fi
 _on_ma=0
-if [ -n "$_ewma_x10" ] && [ "$_ewma_x10" -gt 0 ] 2>/dev/null && \
+if [ "$_ewma_x10" -gt 0 ] 2>/dev/null && \
    [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null; then
   _on_ma=$(( (_cap_uah / 1000) * _ewma_x10 / 1000 ))
-  _eta_note="$T_ETA_MEASURED"
+  [ "$_eta_kind" = measured ] && _eta_note="$T_ETA_MEASURED" || _eta_note="$T_ETA_AVG"
 fi
 if [ "$_on_ma" -lt 50 ] 2>/dev/null; then
   case "$PROFILE" in
@@ -1515,7 +1524,15 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     # --- 6. how long the battery is expected to last ---------------------------------
     _bp="$(_st smart_budget_pred_h_x10)"
     if [ -n "$_bp" ] && [ "$_bp" -gt 0 ] 2>/dev/null; then
-      echo "       ${M_PREDICT}: $((_bp / 10)).$((_bp % 10)) ${U_H} ${M_AT_RATE}"
+      # The prediction divides by the SMOOTHED drain, not the live one - say so and show the
+      # rate. It sat two lines under "drain now: 25.1%/h" labelled "at the current rate"
+      # while dividing by 7.3%/h, which read as a contradiction on the same screen.
+      _ew="$(_st smart_drain_ewma_x10)"
+      if [ "${_ew:-0}" -gt 0 ] 2>/dev/null; then
+        echo "       ${M_PREDICT}: $((_bp / 10)).$((_bp % 10)) ${U_H} ${M_AT_RATE} $((_ew / 10)).$((_ew % 10))${U_PCTH}"
+      else
+        echo "       ${M_PREDICT}: $((_bp / 10)).$((_bp % 10)) ${U_H}"
+      fi
     fi
 
     # --- 7. honest limits ------------------------------------------------------------
