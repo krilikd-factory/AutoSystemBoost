@@ -33,6 +33,17 @@ _cfg() {
 }
 
 _has() { command -v "$1" >/dev/null 2>&1; }
+# iproute2, never the root manager's BusyBox applet. KernelSU and Magisk put their BusyBox
+# first on PATH, and its `ip` has no `monitor`, `initcwnd` or `congctl`: a fix44 diag shows
+# "ip_monitor_ended after 0s: BusyBox v1.36.1.1 ... Usage: ip [OPTIONS]", every window
+# change refused, and per-route congctl reported "not in use". Android's own binary is
+# /system/bin/ip; PATH is only the fallback.
+ASB_IP=""
+for _ipb in /system/bin/ip /system/xbin/ip /vendor/bin/ip; do
+  [ -x "$_ipb" ] && { ASB_IP="$_ipb"; break; }
+done
+[ -n "$ASB_IP" ] || ASB_IP="$(command -v ip 2>/dev/null)"
+[ -n "$ASB_IP" ] || ASB_IP=ip
 _asb_setting_put() {
   if command -v asb_settings_put >/dev/null 2>&1; then asb_settings_put "$@"; else settings put "$@" >/dev/null 2>&1; fi
 }
@@ -87,11 +98,11 @@ _resolve_for() {
 # probe that read `ip route show` found nothing, concluded the kernel had no per-route
 # congctl, and every phone got the global switch plus a "NOT SUPPORTED by this kernel"
 # verdict for whichever link wanted a different algorithm. The kernel was never asked.
-_defaults() { ip route show table all 2>/dev/null | grep '^default'; }
+_defaults() { "$ASB_IP" route show table all 2>/dev/null | grep '^default'; }
 # The interface the phone is using right now: the route the kernel picks for an outside
 # address, through the ip rules. First default in table order is not that.
 _active_dev() {
-  ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -1
+  "$ASB_IP" route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -1
 }
 _congctl_ok=""
 _probe_congctl() {
@@ -105,7 +116,7 @@ _probe_congctl() {
   _pc="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
   [ -n "$_pc" ] || return 0
   _pclean="$(printf '%s' "$_pr" | sed -e 's/ congctl [a-z_]*//')"
-  ip route change $_pclean congctl "$_pc" >/dev/null 2>&1 && _congctl_ok=1
+  "$ASB_IP" route change $_pclean congctl "$_pc" >/dev/null 2>&1 && _congctl_ok=1
   return 0
 }
 
@@ -152,7 +163,7 @@ if [ "$_congctl_ok" = "1" ]; then
     esac
     _defaults | grep -E " dev $_cif( |\$)" | while IFS= read -r _crt; do
       _cclean="$(printf '%s' "$_crt" | sed -e 's/ congctl [a-z_]*//')"
-      ip route change $_cclean congctl "$_want" >/dev/null 2>&1
+      "$ASB_IP" route change $_cclean congctl "$_want" >/dev/null 2>&1
     done
     _out="$_out cc[$_kind:$_cif]=$_want"
     _cc_any=1

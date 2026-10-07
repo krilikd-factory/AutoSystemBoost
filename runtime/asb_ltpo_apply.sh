@@ -124,6 +124,87 @@ _ltpo_unbind_all() {
   [ "$_r_any" = "1" ]
 }
 
+# --- Refresh range: the Android half of "1 Hz up to the panel maximum" -----------------
+#
+# The patched table governs the BOTTOM of the range: the panel's own idle frame-drop
+# (ADFR) that takes a still screen down to its lowest rates. Android does not see those
+# rates at all - on the OnePlus 15 it lists 60/90/120/144/165 and nothing below - so no
+# setting can ask for 1 Hz; the table is the only lever, and it is what the bind changes.
+#
+# The TOP of the range is Android's: peak_refresh_rate, plus min_refresh_rate as a floor.
+# A ROM update, a power-save mode or an older tweak can leave the peak below what the
+# panel can do, or a floor that keeps the panel from idling down at all. ltpo_force=1 now
+# also makes sure the range is open at both ends: no floor, peak = the highest mode this
+# panel reports. Recorded first and restored exactly when the toggle goes off or ASB is
+# removed. Applied at boot and when toggled, never in a loop: a later choice in Settings
+# is the user's and is not fought over.
+[ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
+RANGE_ORIG="$STATE_DIR/ltpo_range.orig"
+VIDEO_LOWERED="$STATE_DIR/ltpo_video.lowered"
+
+_ltpo_max_mode() {
+  if [ -n "${ASB_LTPO_DISPLAY_DUMP:-}" ]; then cat "$ASB_LTPO_DISPLAY_DUMP" 2>/dev/null
+  else dumpsys display 2>/dev/null; fi \
+    | sed -n 's/.*DisplayMode{id=[0-9]*,.*peakRefreshRate=\([0-9.]*\).*/\1/p' \
+    | awk '{ v = int($1 + 0.5); if (v > m) m = v } END { if (m >= 30 && m <= 480) print m }'
+}
+_ltpo_get() { command -v asb_set_get >/dev/null 2>&1 && asb_set_get system "$1" || settings get system "$1" 2>/dev/null | sed 's/^null$//'; }
+_ltpo_put() { command -v asb_set_put >/dev/null 2>&1 && asb_set_put system "$1" "$2" || settings put system "$1" "$2" >/dev/null 2>&1; }
+_ltpo_del() { command -v asb_set_del >/dev/null 2>&1 && asb_set_del system "$1" || settings delete system "$1" >/dev/null 2>&1; }
+
+_ltpo_framework_up() {
+  [ -n "${ASB_LTPO_DISPLAY_DUMP:-}" ] && return 0
+  [ "$(getprop sys.boot_completed 2>/dev/null)" = 1 ]
+}
+
+_ltpo_range_open() {
+  _max="$(_ltpo_max_mode)"
+  [ -n "$_max" ] || { _log 'action=ltpo_range result=skipped reason=no_modes'; return 0; }
+  _peak="$(_ltpo_get peak_refresh_rate)"
+  _min="$(_ltpo_get min_refresh_rate)"
+  # A video lowering in progress (or left by a reboot mid-video) is not the user's peak.
+  if [ -f "$VIDEO_LOWERED" ]; then
+    _vo="$(sed -n 's/^orig=//p' "$VIDEO_LOWERED" 2>/dev/null | head -1)"
+    [ -n "$_vo" ] && _peak="$_vo"
+  fi
+  if [ ! -f "$RANGE_ORIG" ]; then
+    printf 'peak=%s\nmin=%s\n' "${_peak:-__unset}" "${_min:-__unset}" > "$RANGE_ORIG" 2>/dev/null
+  fi
+  _pk="$(printf '%s' "$_peak" | awk '{ print int($1 + 0.5) }')"
+  if [ "${_pk:-0}" -lt "$_max" ] 2>/dev/null; then
+    if [ -f "$VIDEO_LOWERED" ]; then
+      # Not while a video holds it low: hand the open value to the video record, which
+      # writes it back the moment the video lets go.
+      _tmp="$(sed "s/^orig=.*/orig=$_max.0/" "$VIDEO_LOWERED" 2>/dev/null)" && printf '%s\n' "$_tmp" > "$VIDEO_LOWERED"
+    else
+      _ltpo_put peak_refresh_rate "$_max.0" && _log "action=ltpo_range peak=${_peak:-unset}->$_max"
+    fi
+  fi
+  _mn="$(printf '%s' "$_min" | awk '{ print int($1 + 0.5) }')"
+  if [ "${_mn:-0}" -gt 0 ] 2>/dev/null; then
+    _ltpo_del min_refresh_rate && _log "action=ltpo_range min=$_min->none"
+  fi
+  return 0
+}
+
+_ltpo_range_restore() {
+  [ -f "$RANGE_ORIG" ] || return 0
+  _op="$(sed -n 's/^peak=//p' "$RANGE_ORIG" | head -1)"
+  _om="$(sed -n 's/^min=//p' "$RANGE_ORIG" | head -1)"
+  if [ -f "$VIDEO_LOWERED" ]; then
+    # The video watcher will put back what it recorded; make that the user's original.
+    _tmp="$(sed "s/^orig=.*/orig=${_op}/" "$VIDEO_LOWERED" 2>/dev/null)" && printf '%s\n' "$_tmp" > "$VIDEO_LOWERED"
+  else
+    case "$_op" in
+      __unset|'') _ltpo_del peak_refresh_rate ;;
+      *) _ltpo_put peak_refresh_rate "$_op" || return 0 ;;   # keep the record for a retry
+    esac
+  fi
+  case "$_om" in __unset|'') : ;; *) _ltpo_put min_refresh_rate "$_om" || return 0 ;; esac
+  rm -f "$RANGE_ORIG" 2>/dev/null
+  _log "action=ltpo_range result=restored peak=$_op min=$_om"
+}
+
 case "${1:-apply}" in
   apply)
     if [ "$(_cfg ltpo_force)" = "1" ] && [ ! -f "$BLOCK" ] && _ltpo_guard; then
@@ -137,10 +218,27 @@ case "${1:-apply}" in
         _ltpo_unbind_all && _log 'action=ltpo_bind result=removed'
       fi
     fi
+    # The range does not need the patch: a device without a VRR table still benefits from
+    # an open Android range, and the fuse guards mounts, not a setting. Only once the
+    # framework is up - post-fs-data runs this too, before Settings exists.
+    if _ltpo_framework_up; then
+      if [ "$(_cfg ltpo_force)" = "1" ]; then
+        _ltpo_range_open
+      else
+        _ltpo_range_restore
+      fi
+    fi
     ;;
   remove)
     # Uninstall path: drop whatever we own regardless of the toggle state.
     _ltpo_unbind_all && _log 'action=ltpo_bind result=removed reason=uninstall'
+    _ltpo_framework_up && _ltpo_range_restore
+    ;;
+  range)
+    # Diagnostics: what the range half did.
+    printf 'max_mode=%s peak=%s min=%s recorded=%s\n' "$(_ltpo_max_mode)" \
+      "$(_ltpo_get peak_refresh_rate)" "$(_ltpo_get min_refresh_rate)" \
+      "$( [ -f "$RANGE_ORIG" ] && tr '\n' ' ' < "$RANGE_ORIG" || echo no)"
     ;;
   status)
     if [ ! -f "$MAN" ]; then

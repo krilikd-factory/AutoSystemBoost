@@ -37,12 +37,21 @@ SAVE="$STATE_DIR/lte_screenoff.saved"          # subid|decimal_mask
 PIDF="$STATE_DIR/lte_screenoff.pid"
 UNSUP="$STATE_DIR/lte_screenoff.unsupported"
 LOGF="$STATE_DIR/lte_screenoff.log"
+# applies|restores|seconds_on_lte - what an A/B needs: how often it engaged and for how long.
+STATS="$STATE_DIR/lte_screenoff.stats"
+SINCE="$STATE_DIR/lte_screenoff.since"
 DELAY="${ASB_LTE_DELAY_S:-90}"
 NR_BIT=524288                                   # 1 << (NETWORK_TYPE_NR - 1)
 
 mkdir -p "$STATE_DIR" 2>/dev/null
 
 # Two lines per screen cycle is a few hundred a day, forever. Keep the tail only.
+_stats_add() {   # <applies> <restores> <seconds>
+  _sa=0; _sr=0; _ss=0
+  [ -f "$STATS" ] && IFS='|' read -r _sa _sr _ss < "$STATS"
+  case "$_sa$_sr$_ss" in *[!0-9]*|'') _sa=0; _sr=0; _ss=0 ;; esac
+  printf '%s|%s|%s\n' $((_sa + $1)) $((_sr + $2)) $((_ss + $3)) > "$STATS" 2>/dev/null
+}
 _log() {
   printf '%s %s\n' "$(date '+%m-%d %H:%M:%S')" "$*" >> "$LOGF" 2>/dev/null
   _ls="$(wc -c < "$LOGF" 2>/dev/null)"
@@ -177,7 +186,10 @@ do_restore() {
   _now="$(_get_mask "$_sub")"
   if [ "$_now" = "$_orig" ]; then
     rm -f "$SAVE"
-    _log "restore: sub=$_sub mask=$_orig (5G allowed again)"
+    _t0="$(cat "$SINCE" 2>/dev/null)"; rm -f "$SINCE"
+    case "$_t0" in ''|*[!0-9]*) _dt=0 ;; *) _dt=$(( $(date +%s) - _t0 )); [ "$_dt" -lt 0 ] && _dt=0 ;; esac
+    _stats_add 0 1 "$_dt"
+    _log "restore: sub=$_sub mask=$_orig (5G allowed again after ${_dt}s on LTE)"
   else
     # Keep the save file: the next screen-on, boot or toggle-off tries again.
     _log "restore: readback $_now != $_orig, will retry"
@@ -202,6 +214,8 @@ do_apply() {
   _set_mask "$_sub" "$_want"
   _now="$(_get_mask "$_sub")"
   if [ "$_now" = "$_want" ]; then
+    date +%s > "$SINCE" 2>/dev/null
+    _stats_add 1 0 0
     _log "apply: sub=$_sub $_orig -> $_want (LTE preferred, screen off)"
   else
     _log "apply: readback $_now != $_want, restoring and marking unsupported"
@@ -246,6 +260,9 @@ case "$1" in
     printf 'pending=%s\n' "$([ -f "$PIDF" ] && echo 1 || echo 0)"
     printf 'unsupported=%s\n' "$([ -f "$UNSUP" ] && echo 1 || echo 0)"
     printf 'last=%s\n' "$(tail -n 1 "$LOGF" 2>/dev/null | cut -d' ' -f3-)"
+    _sa=0; _sr=0; _ss=0
+    [ -f "$STATS" ] && IFS='|' read -r _sa _sr _ss < "$STATS"
+    printf 'applies=%s\nrestores=%s\nlte_minutes=%s\n' "${_sa:-0}" "${_sr:-0}" $(( ${_ss:-0} / 60 ))
     ;;
   *) echo "usage: $0 arm|apply|restore|status" >&2; exit 2 ;;
 esac

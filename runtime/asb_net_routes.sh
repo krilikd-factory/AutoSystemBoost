@@ -30,7 +30,18 @@ _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
 }
 _has() { command -v "$1" >/dev/null 2>&1; }
-_has ip || { echo "net_routes: no ip(8), nothing to do"; exit 0; }
+# iproute2, never the root manager's BusyBox applet. KernelSU and Magisk put their BusyBox
+# first on PATH, and its `ip` has no `monitor`, `initcwnd` or `congctl`: a fix44 diag shows
+# "ip_monitor_ended after 0s: BusyBox v1.36.1.1 ... Usage: ip [OPTIONS]", every window
+# change refused, and per-route congctl reported "not in use". Android's own binary is
+# /system/bin/ip; PATH is only the fallback.
+ASB_IP=""
+for _ipb in /system/bin/ip /system/xbin/ip /vendor/bin/ip; do
+  [ -x "$_ipb" ] && { ASB_IP="$_ipb"; break; }
+done
+[ -n "$ASB_IP" ] || ASB_IP="$(command -v ip 2>/dev/null)"
+[ -n "$ASB_IP" ] || ASB_IP=ip
+[ -x "$ASB_IP" ] || _has "$ASB_IP" || { echo "net_routes: no ip(8), nothing to do"; exit 0; }
 
 # --- link classification --------------------------------------------------------------
 #
@@ -146,8 +157,8 @@ _window_for() {
 # link" forever. The lines from `table all` carry their "table X" token, so passing one
 # back to `ip route change` addresses exactly the route it came from.
 _defaults() {
-  if [ "$1" = 6 ]; then ip -6 route show table all 2>/dev/null
-  else ip route show table all 2>/dev/null; fi | grep '^default'
+  if [ "$1" = 6 ]; then "$ASB_IP" -6 route show table all 2>/dev/null
+  else "$ASB_IP" route show table all 2>/dev/null; fi | grep '^default'
 }
 
 _save_orig() {
@@ -163,8 +174,8 @@ _restore() {
     [ -n "$_rl" ] || continue
     case "$_rl" in *initcwnd*|*initrwnd*) : ;; *) : ;; esac
     case "$_rl" in
-      *:*) ip -6 route change $_rl >/dev/null 2>&1 && _rn=$((_rn+1)) ;;
-      *)   ip route change $_rl    >/dev/null 2>&1 && _rn=$((_rn+1)) ;;
+      *:*) "$ASB_IP" -6 route change $_rl >/dev/null 2>&1 && _rn=$((_rn+1)) ;;
+      *)   "$ASB_IP" route change $_rl    >/dev/null 2>&1 && _rn=$((_rn+1)) ;;
     esac
   done < "$STATE"
   rm -f "$STATE" 2>/dev/null
@@ -191,7 +202,7 @@ _apply() {
   # Only default routes: those are the ones carrying traffic off-device. Rewriting every
   # on-link subnet route achieves nothing and multiplies the chances of mangling one.
   for _fam in 4 6; do
-    if [ "$_fam" = "4" ]; then _ipc="ip"; else _ipc="ip -6"; fi
+    if [ "$_fam" = "4" ]; then _ipc="$ASB_IP"; else _ipc="$ASB_IP -6"; fi
     _defaults "$_fam" | while IFS= read -r _rt; do
       _if="$(printf '%s' "$_rt" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
       [ -n "$_if" ] || continue
@@ -286,7 +297,7 @@ _watch() {
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$1" \
       > /data/adb/asb/net_routes_watch.exit 2>/dev/null || true
   }
-  _has ip || { _nrw_note "missing_ip"; exit 0; }
+  [ -x "$ASB_IP" ] || _has "$ASB_IP" || { _nrw_note "missing_ip"; exit 0; }
   rm -f /data/adb/asb/net_routes_watch.exit 2>/dev/null
   mkdir -p /data/adb/asb 2>/dev/null
   echo monitor > /data/adb/asb/net_routes_watch.mode 2>/dev/null
@@ -294,7 +305,7 @@ _watch() {
   _fp="$(_route_fp)"
   # stderr kept: "rc=0" alone said nothing about why the monitor stopped (the pipeline's
   # status is the while loop's, not ip's), and the cause decides the fix.
-  ip monitor route 2>/data/adb/asb/net_routes_watch.err | while IFS= read -r _ev; do
+  "$ASB_IP" monitor route 2>/data/adb/asb/net_routes_watch.err | while IFS= read -r _ev; do
     case "$_ev" in
       # A route change is the one event that can change a qdisc verdict.
       #

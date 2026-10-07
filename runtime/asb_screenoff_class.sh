@@ -42,9 +42,10 @@ done
 # Media: an audio session with the screen off is not idle, whatever the CPU is doing.
 _media=0
 if _has dumpsys; then
-  # Only a live player's state. "playing" (case-insensitive) also matches history and
-  # field names in the dump, which can label every screen-off stretch as media.
-  dumpsys audio 2>/dev/null | grep -qE 'state:started' && _media=1
+  # Only a live player's line ("AudioPlaybackConfiguration piid:.. state:started"). The event
+  # history in the same dump keeps past starts, and "playing" matches field names - either
+  # could label every screen-off stretch as media.
+  dumpsys audio 2>/dev/null | grep -qE 'AudioPlaybackConfiguration .*state:started' && _media=1
 fi
 
 # Network: a tunnel or an active mobile route means current tells you about the radio,

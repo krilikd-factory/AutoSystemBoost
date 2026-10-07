@@ -242,6 +242,60 @@ _wl_protected() {
   return 1
 }
 
+# Step counters and workout trackers - the narrow subset of the protected list that
+# wakelock_fitness=limit may act on. Watch and band companions are NOT in it: a companion
+# that cannot wake stops forwarding notifications to the wrist, which is a different and
+# worse loss than a coarser step timeline.
+_wl_fitness() {
+  case "$1" in
+    *health*|*fitness*|*pedometer*|*stepcounter*|*fitbit*|*garmin*|*strava*) return 0 ;;
+  esac
+  return 1
+}
+
+# wakelock_fitness: protect (default) | limit.
+#
+# Samsung Health's PedometerLib was the largest single night holder in three captures -
+# minutes of CPU held awake, every night. It is protected above for a good reason: a
+# tracker that cannot wake loses what it was installed for. But the choice belongs to the
+# user, and someone who does not use step counting should be able to say so.
+#
+# limit = app-op WAKE_LOCK ignore for a fitness app seen holding one (2+ minutes since the
+# last unplug, or LONG right now). Android then treats its wakelocks as released: the app
+# keeps running whenever the phone is awake for any other reason, it just cannot keep the
+# CPU up by itself. The step sensor counts in the sensor hub regardless, so the daily total
+# usually survives; what can suffer is the minute-by-minute timeline, and a workout
+# recorded with the screen off. The mode the app had before is recorded and given back on
+# protect or uninstall - an app the user limited themselves stays as they left it.
+FIT="$D/wakelock_fitness_limited"
+_wl_fit_mode() { _cfg wakelock_fitness; }
+_wl_fit_orig() {
+  _o="$(appops get "$1" WAKE_LOCK 2>/dev/null | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+  printf '%s' "${_o:-default}"
+}
+_wl_fit_limit() {
+  _has appops || return 1
+  grep -q "^$1|" "$FIT" 2>/dev/null && return 0
+  _orig="$(_wl_fit_orig "$1")"
+  # Already ignored by someone else (the user, another tool): not ours to record or undo.
+  [ "$_orig" = ignore ] && return 1
+  appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
+  [ "$(_wl_fit_orig "$1")" = ignore ] || return 1
+  echo "$1|$_orig" >> "$FIT"
+  echo "wakelock: $1 may no longer hold the CPU awake (wakelock_fitness=limit)"
+  return 0
+}
+_wl_fit_release() {
+  [ -s "$FIT" ] || return 0
+  _has appops || return 0
+  while IFS='|' read -r _fp _fo; do
+    [ -n "$_fp" ] || continue
+    appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
+  done < "$FIT"
+  rm -f "$FIT" 2>/dev/null
+  echo "wakelock: fitness apps may hold wakelocks again (wakelock_fitness=protect)"
+}
+
 # Writes $APPS: pkg|seconds|held_now(0/1)|verdict, worst first, at most eight.
 # Always runs - the report names the holder whether or not anything is done about it.
 # Acts only when $1 is 1 (switch on, long screen-off, awake share over the bar).
@@ -251,6 +305,7 @@ asb_wl_relax() {
   _has pm || return 0
   [ -n "$_map" ] || return 0
   mkdir -p "$D" 2>/dev/null
+  _fitmode="$(_wl_fit_mode)"
   printf '%s\n' "$_map" > "$APPS.map" 2>/dev/null || return 0
   _rows="$( { _wl_bs_uid_secs; _wl_power_long_uids | sed 's/$/ L/'; } | awk '
     NR == FNR { pkg[$1] = (pkg[$1] ? pkg[$1] "," : "") $2; next }
@@ -270,6 +325,13 @@ asb_wl_relax() {
     for _p in $(printf '%s' "$_pl" | tr ',' ' '); do
       if grep -qxF "$_p" "$D/wakelock_restricted" 2>/dev/null; then
         _v=restricted
+      elif grep -q "^$_p|" "$FIT" 2>/dev/null; then
+        _v=limited
+      elif [ "$_fitmode" = limit ] && _wl_fitness "$_p" && _wl_fit_limit "$_p"; then
+        # The user's explicit choice for this class of app, so it does not wait for the
+        # awake-share gate the generic path needs: that gate exists because the generic
+        # path acts on apps nobody named.
+        _v=limited
       elif _wl_protected "$_p"; then
         _v=protected
       elif _wl_in_use "$_p"; then
@@ -373,6 +435,12 @@ case "$(_cfg wakelock_action)" in
       rm -f "$D/multicast_restricted" 2>/dev/null
     fi
     ;;
+esac
+
+# wakelock_fitness is independent of wakelock_action: either may be on without the other.
+case "$(_wl_fit_mode)" in
+  limit) : ;;
+  *) _wl_fit_release ;;
 esac
 
 if _wl_may_act; then
