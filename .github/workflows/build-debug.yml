@@ -78,6 +78,7 @@ jobs:
             runtime/asb_ltpo_apply.sh \
             runtime/asb_lte_screenoff.sh \
             runtime/asb_mmfeed_apply.sh \
+            runtime/asb_ltpo_video.sh \
             runtime/asb_stock_policy.sh \
             runtime/asb_overlay_guard.sh \
             tools/asb_config_backup.sh \
@@ -529,6 +530,7 @@ jobs:
             "runtime/asb_ltpo_apply.sh" \
             "runtime/asb_lte_screenoff.sh" \
             "runtime/asb_mmfeed_apply.sh" \
+            "runtime/asb_ltpo_video.sh" \
             "runtime/asb_stock_policy.sh" \
             "runtime/asb_overlay_guard.sh" \
             "runtime/asb_active_efficiency_envelope.sh" \
