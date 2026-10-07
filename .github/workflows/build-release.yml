@@ -581,6 +581,8 @@ jobs:
             "runtime/asb_screenoff_class.sh" \
             "runtime/asb_smart_reset.sh" \
             "runtime/asb_gnss_trim.sh" \
+            "runtime/asb_procstate.sh" \
+            "runtime/asb_bg_buckets.sh" \
             "runtime/asb_net_apply.sh" \
             "runtime/asb_net_routes.sh" \
             "runtime/asb_log_apply.sh" \
