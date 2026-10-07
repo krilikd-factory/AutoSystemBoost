@@ -3041,18 +3041,38 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
   left: 0;
   top: 0;
   z-index: 2000;
-  font-size: 44px;
   line-height: 1;
   pointer-events: none;
-  will-change: transform;
-  filter: drop-shadow(0 6px 18px rgba(0,0,0,.55));
-  transition: opacity .35s ease;
+  will-change: transform, opacity;
+  transition: opacity .28s ease;
 }
-.logo-inner { transition: opacity .3s ease; }
-body.ufo-flying .logo-inner { opacity: 0; }
+.ufo-fly .ufo-body {
+  display: block;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 6px 18px rgba(0,0,0,.55)) drop-shadow(0 0 var(--ufo-glow, 0px) rgba(0,255,200,.75));
+}
+/* Tractor beam: shown while the saucer leaves its nest and while it comes back to it. */
+.ufo-fly .ufo-beam {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: 1.15em;
+  height: 1.7em;
+  margin-left: -0.575em;
+  transform-origin: 50% 0;
+  clip-path: polygon(32% 0, 68% 0, 100% 100%, 0 100%);
+  background: linear-gradient(to bottom, rgba(120,255,225,.70), rgba(120,255,225,.20) 60%, rgba(120,255,225,0));
+  opacity: 0;
+  pointer-events: none;
+}
+/* Only the glyph leaves the header: the ring, glow and box stay, so nothing reflows and the
+ * nest is still there to come back to. */
+.logo-glyph { display: inline-block; transition: opacity .28s ease; }
+body.ufo-flying .logo-glyph { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   .ufo-fly { display: none; }
-  body.ufo-flying .logo-inner { opacity: 1; }
+  body.ufo-flying .logo-glyph { opacity: 1; }
 }
 </style>
 </head>
@@ -3073,7 +3093,7 @@ body.ufo-flying .logo-inner { opacity: 0; }
     <div class="logo-c">
       <div class="logo-glow"></div>
       <div class="logo-ring"></div>
-      <div class="logo-inner">🛸</div>
+      <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
@@ -3223,7 +3243,7 @@ body.ufo-flying .logo-inner { opacity: 0; }
     <div class="logo-c">
       <div class="logo-glow"></div>
       <div class="logo-ring"></div>
-      <div class="logo-inner">🛸</div>
+      <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
@@ -3436,7 +3456,7 @@ body.ufo-flying .logo-inner { opacity: 0; }
     <div class="logo-c">
       <div class="logo-glow"></div>
       <div class="logo-ring"></div>
-      <div class="logo-inner">🛸</div>
+      <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
@@ -8722,60 +8742,230 @@ _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
 })();
 setTimeout(() => pollLive(false), 1500);
 
-/* Ten taps within four seconds, then ten seconds of flight.
+/* Ten quick taps on the logo: the saucer leaves its nest, flies, and lands back in it.
  *
  * The counter resets after any gap longer than 900 ms, so ordinary taps on the logo - and
- * it sits at the top of every page - never accumulate into a launch. A second launch
- * while one is running is ignored rather than stacking saucers.
+ * it sits at the top of every page - never accumulate into a launch. A second launch while
+ * one is running is ignored rather than stacking saucers. The listener is delegated from
+ * document, so all three headers work without wiring each one.
  *
- * The listener is delegated from document, so all three headers work without wiring each
- * one, including any page added later.
+ * The flight is one continuous path, not a Lissajous that is cut off at ten seconds: a
+ * wandering path is blended in from the header glyph's own position and blended back out
+ * into it, with a smootherstep weight, so position, size and tilt all leave from and
+ * return to exactly the glyph the user tapped. Tilt follows horizontal velocity through a
+ * low-pass filter, so the saucer banks into turns instead of rocking on a timer. On landing
+ * the overlay and the header glyph cross-fade in the same place at the same size, which
+ * reads as one object settling back, not one disappearing and another appearing.
+ *
+ * Sound is synthesised, no file: a theremin-style sine with a 7 Hz vibrato (the classic
+ * film-saucer warble), a quiet fifth above it and a low hum with tremolo. Pitch rises on
+ * take-off, wanders with the flight and falls on landing; loudness follows the saucer's
+ * size (nearer = louder) and it pans with its horizontal position. The context is created
+ * inside the tap that launches it, which is what WebViews require before audio may start.
  */
 (function () {
   var taps = 0, last = 0, flying = false;
-  function launch() {
+  var DUR = 10.0, LIFT = 1.1, IN_END = 2.6, OUT_START = DUR - 3.4, LAND = DUR - 1.0;
+
+  function smoother(x) { x = x < 0 ? 0 : (x > 1 ? 1 : x); return x * x * x * (x * (x * 6 - 15) + 10); }
+  function lerp(a, b, k) { return a + (b - a) * k; }
+
+  function ufoSound() {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try {
+      if (typeof _uiAudioCtx !== 'undefined' && _uiAudioCtx) { var ctx = _uiAudioCtx; }
+      else { ctx = new AC(); try { _uiAudioCtx = ctx; } catch (e) {} }
+      if (ctx.state === 'suspended') ctx.resume();
+      var now = ctx.currentTime;
+      var master = ctx.createGain(); master.gain.setValueAtTime(0.0001, now);
+      var out = master;
+      var pan = null;
+      if (ctx.createStereoPanner) { pan = ctx.createStereoPanner(); master.connect(pan); out = pan; }
+      out.connect(ctx.destination);
+
+      var lead = ctx.createOscillator(); lead.type = 'sine';
+      var fifth = ctx.createOscillator(); fifth.type = 'triangle';
+      var hum = ctx.createOscillator(); hum.type = 'sine'; hum.frequency.setValueAtTime(72, now);
+      var vib = ctx.createOscillator(); vib.type = 'sine'; vib.frequency.setValueAtTime(7.2, now);
+      var vibDepth = ctx.createGain(); vibDepth.gain.setValueAtTime(18, now);
+      var vibDepth5 = ctx.createGain(); vibDepth5.gain.setValueAtTime(27, now);
+      var trem = ctx.createOscillator(); trem.type = 'sine'; trem.frequency.setValueAtTime(11, now);
+      var tremDepth = ctx.createGain(); tremDepth.gain.setValueAtTime(0.35, now);
+
+      var gLead = ctx.createGain(); gLead.gain.setValueAtTime(0.55, now);
+      var gFifth = ctx.createGain(); gFifth.gain.setValueAtTime(0.10, now);
+      var gHum = ctx.createGain(); gHum.gain.setValueAtTime(0.45, now);
+
+      vib.connect(vibDepth); vibDepth.connect(lead.frequency);
+      vib.connect(vibDepth5); vibDepth5.connect(fifth.frequency);
+      trem.connect(tremDepth); tremDepth.connect(gHum.gain);
+      lead.connect(gLead); fifth.connect(gFifth); hum.connect(gHum);
+      gLead.connect(master); gFifth.connect(master); gHum.connect(master);
+
+      /* take-off sweep: a low hum swelling into the warble */
+      lead.frequency.setValueAtTime(240, now);
+      lead.frequency.exponentialRampToValueAtTime(640, now + LIFT + 0.4);
+      fifth.frequency.setValueAtTime(360, now);
+      fifth.frequency.exponentialRampToValueAtTime(960, now + LIFT + 0.4);
+      master.gain.exponentialRampToValueAtTime(0.11, now + 0.45);
+
+      [lead, fifth, hum, vib, trem].forEach(function (o) { o.start(now); });
+      var stopped = false;
+      return {
+        update: function (t, b, sc, xNorm) {
+          if (stopped) return;
+          var at = ctx.currentTime;
+          if (t > LIFT + 0.4 && t < OUT_START + 1.6) {
+            var f = 520 + 260 * b + 90 * Math.sin(t * 0.85);
+            lead.frequency.setTargetAtTime(f, at, 0.08);
+            fifth.frequency.setTargetAtTime(f * 1.5, at, 0.08);
+            master.gain.setTargetAtTime(0.06 + 0.06 * Math.min(1.5, Math.max(0, sc - 0.5)), at, 0.1);
+          }
+          if (pan) pan.pan.setTargetAtTime(Math.max(-0.8, Math.min(0.8, xNorm * 0.8)), at, 0.1);
+        },
+        land: function () {
+          if (stopped) return;
+          var at = ctx.currentTime;
+          lead.frequency.cancelScheduledValues(at);
+          fifth.frequency.cancelScheduledValues(at);
+          lead.frequency.setValueAtTime(Math.max(200, lead.frequency.value), at);
+          fifth.frequency.setValueAtTime(Math.max(300, fifth.frequency.value), at);
+          lead.frequency.exponentialRampToValueAtTime(210, at + 1.6);
+          fifth.frequency.exponentialRampToValueAtTime(315, at + 1.6);
+          vib.frequency.setTargetAtTime(4.5, at, 0.4);
+        },
+        stop: function (fadeS) {
+          if (stopped) return; stopped = true;
+          var at = ctx.currentTime, f = fadeS || 0.6;
+          master.gain.cancelScheduledValues(at);
+          master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), at);
+          master.gain.exponentialRampToValueAtTime(0.0001, at + f);
+          setTimeout(function () {
+            [lead, fifth, hum, vib, trem].forEach(function (o) { try { o.stop(); o.disconnect(); } catch (e) {} });
+            try { out.disconnect(); master.disconnect(); } catch (e) {}
+          }, f * 1000 + 120);
+        }
+      };
+    } catch (e) { return null; }
+  }
+
+  function launch(logoC) {
     if (flying) return;
+    try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) {}
+    var glyph = logoC && logoC.querySelector('.logo-glyph');
+    if (!glyph) return;
     flying = true;
-    document.body.classList.add('ufo-flying');
+
+    function home() {
+      var r = glyph.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    var fs = parseFloat(getComputedStyle(glyph).fontSize) || 32;
+
     var el = document.createElement('div');
     el.className = 'ufo-fly';
-    el.textContent = '\uD83D\uDEF8';
+    el.style.fontSize = fs + 'px';
+    var beam = document.createElement('div'); beam.className = 'ufo-beam';
+    var body = document.createElement('span'); body.className = 'ufo-body';
+    body.textContent = '🛸';
+    el.appendChild(beam); el.appendChild(body);
     document.body.appendChild(el);
-    var t0 = Date.now(), DUR = 10000;
-    function done() {
-      el.style.opacity = '0';
+    /* Map screen coordinates into the overlay's own space. The WebUI zooms <body> on narrow
+     * screens (--asb-ui-scale), and a fixed child of a zoomed body is translated in unzoomed
+     * pixels while getBoundingClientRect reports zoomed ones - the saucer landed 12 px off
+     * its nest on a 412 px-wide screen. Two probe positions give offset and scale directly,
+     * whatever produced them. */
+    el.style.transform = 'translate(0px,0px)';
+    var p0 = el.getBoundingClientRect();
+    el.style.transform = 'translate(100px,100px)';
+    var p1 = el.getBoundingClientRect();
+    var kx = (p1.left - p0.left) / 100 || 1, ky = (p1.top - p0.top) / 100 || 1;
+    function local(x, y) { return { x: (x - p0.left) / kx, y: (y - p0.top) / ky }; }
+    /* Same box height as the header glyph, so the two centres are the same point. */
+    var gr = glyph.getBoundingClientRect();
+    el.style.lineHeight = (gr.height / ky).toFixed(2) + 'px';
+    var h0 = home();
+    var l0 = local(h0.x, h0.y);
+    el.style.transform = 'translate(' + l0.x + 'px,' + l0.y + 'px) translate(-50%,-50%)';
+    document.body.classList.add('ufo-flying');
+
+    var snd = ufoSound();
+    var t0 = performance.now(), prevX = l0.x, tilt = 0, landedSound = false, ended = false;
+
+    function finish(fast) {
+      if (ended) return; ended = true;
+      document.removeEventListener('visibilitychange', onVis);
+      if (snd) snd.stop(fast ? 0.15 : 0.7);
+      /* cross-fade in place: the header glyph fades in while the overlay fades out */
       document.body.classList.remove('ufo-flying');
+      el.style.opacity = '0';
       setTimeout(function () {
         if (el.parentNode) el.parentNode.removeChild(el);
         flying = false;
-      }, 400);
+      }, 320);
     }
-    /* Two sine waves of different periods: the path does not repeat inside ten seconds,
-     * which reads as flying rather than orbiting. The margin keeps it fully on screen at
-     * its largest scale. */
-    function frame() {
-      var t = (Date.now() - t0) / 1000;
-      if (t >= DUR / 1000) { done(); return; }
-      var w = window.innerWidth, h = window.innerHeight, m = 60;
-      var x = m + (Math.sin(t * 0.9) * 0.5 + 0.5) * Math.max(0, w - m * 2);
-      var y = m + (Math.sin(t * 1.37 + 1.1) * 0.5 + 0.5) * Math.max(0, h - m * 2);
-      var sc = 0.6 + (Math.sin(t * 1.9) * 0.5 + 0.5) * 1.3;
-      var tilt = Math.sin(t * 0.9) * 14;
+    function onVis() { if (document.hidden) finish(true); }
+    document.addEventListener('visibilitychange', onVis);
+
+    function frame(ts) {
+      if (ended) return;
+      var t = (ts - t0) / 1000;
+      var hs = home(), h = local(hs.x, hs.y);
+      if (t >= DUR) {
+        el.style.transform = 'translate(' + h.x.toFixed(1) + 'px,' + h.y.toFixed(1) + 'px) translate(-50%,-50%)';
+        finish(false);
+        return;
+      }
+      var w = window.innerWidth / kx, hh = window.innerHeight / ky, m = 64;
+
+      /* wander weight: 0 at home, 1 in free flight */
+      var b = smoother((t - LIFT) / (IN_END - LIFT)) * (1 - smoother((t - OUT_START) / (LAND - OUT_START)));
+
+      /* free-flight path, two incommensurate periods so it never visibly repeats */
+      var wx = m + (Math.sin(t * 0.92 + 0.4) * 0.5 + 0.5) * Math.max(0, w - m * 2);
+      var wy = m + (Math.sin(t * 1.31 + 1.9) * 0.5 + 0.5) * Math.max(0, hh - m * 2);
+      var wsc = 0.75 + (Math.sin(t * 1.7 + 0.6) * 0.5 + 0.5) * 1.05;
+
+      /* hover above the nest at take-off and landing: rise, then sink back with a damped bob */
+      var up = smoother(t / LIFT) * (1 - smoother((t - LAND) / (DUR - LAND)));
+      var bob = Math.sin(t * 6.0) * 2.2 * up * (1 - b);
+      var hx = h.x, hy = h.y - fs * 0.55 * up + bob;
+
+      var x = lerp(hx, wx, b), y = lerp(hy, wy, b);
+      var sc = lerp(1 + 0.12 * up, wsc, b);
+
+      /* bank into turns: tilt follows horizontal speed, smoothed */
+      var vx = x - prevX; prevX = x;
+      var want = Math.max(-18, Math.min(18, vx * 1.6));
+      tilt += (want - tilt) * 0.12;
+
       el.style.transform =
-        'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) ' +
-        'translate(-50%,-50%) scale(' + sc.toFixed(3) + ') rotate(' + tilt.toFixed(1) + 'deg)';
+        'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%,-50%) ' +
+        'scale(' + sc.toFixed(3) + ') rotate(' + tilt.toFixed(2) + 'deg)';
+      var beamK = up * (1 - b);
+      beam.style.opacity = (0.85 * beamK).toFixed(3);
+      beam.style.transform = 'scaleY(' + (0.3 + 0.7 * beamK).toFixed(3) + ')';
+      body.style.setProperty('--ufo-glow', (4 + 10 * Math.max(b, beamK)).toFixed(1) + 'px');
+
+      if (snd) {
+        snd.update(t, b, sc, (x / Math.max(1, w)) * 2 - 1);
+        if (!landedSound && t >= OUT_START + 1.4) { landedSound = true; snd.land(); }
+      }
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   }
+
   document.addEventListener('click', function (ev) {
     var t = ev.target;
     if (!t || !t.closest) return;
-    if (!t.closest('.logo-c')) { taps = 0; return; }
+    var logo = t.closest('.logo-c');
+    if (!logo) { taps = 0; return; }
     var now = Date.now();
     taps = (now - last > 900) ? 1 : taps + 1;
     last = now;
-    if (taps >= 10) { taps = 0; launch(); }
+    if (taps >= 10) { taps = 0; launch(logo); }
   }, true);
 })();
 </script>
