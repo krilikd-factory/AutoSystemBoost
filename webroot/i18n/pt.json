@@ -826,5 +826,7 @@
   "cfg_profile_saved_to": "Guardado em ",
   "cfg_profile_imported": "Aberta ",
   "cfg_profile_imported_tail": " - toque em Aplicar para a usar",
-  "dbg_log_running_hint": "apague esta pasta para iniciar um novo"
+  "dbg_log_running_hint": "apague esta pasta para iniciar um novo",
+  "eta_average": "média",
+  "eta_average_tip": "Com base no seu consumo suavizado com a tela ligada; a taxa ao vivo o substitui quando a janela chega a 10 minutos."
 }

@@ -826,5 +826,7 @@
   "cfg_profile_saved_to": "Gespeichert in ",
   "cfg_profile_imported": "Geöffnet: ",
   "cfg_profile_imported_tail": " - tippe auf Anwenden, um sie zu nutzen",
-  "dbg_log_running_hint": "lösche diesen Ordner, um ein neues zu starten"
+  "dbg_log_running_hint": "lösche diesen Ordner, um ein neues zu starten",
+  "eta_average": "Durchschnitt",
+  "eta_average_tip": "Aus deinem geglätteten Verbrauch bei eingeschaltetem Display; die Live-Rate ersetzt ihn, sobald das Messfenster 10 Minuten erreicht."
 }

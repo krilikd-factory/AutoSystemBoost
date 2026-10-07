@@ -642,5 +642,7 @@
   "cfg_profile_saved_to": "Saved to ",
   "cfg_profile_imported": "Opened ",
   "cfg_profile_imported_tail": " - press Apply to use it",
-  "dbg_log_running_hint": "delete this folder to start a new one"
+  "dbg_log_running_hint": "delete this folder to start a new one",
+  "eta_average": "average",
+  "eta_average_tip": "Based on your smoothed screen-on drain; the live rate replaces it once the drain window reaches 10 minutes."
 }

@@ -826,5 +826,7 @@
   "cfg_profile_saved_to": "Kaydedildi: ",
   "cfg_profile_imported": "Açıldı: ",
   "cfg_profile_imported_tail": " - kullanmak için Uygula'ya dokunun",
-  "dbg_log_running_hint": "yenisini başlatmak için bu klasörü silin"
+  "dbg_log_running_hint": "yenisini başlatmak için bu klasörü silin",
+  "eta_average": "ortalama",
+  "eta_average_tip": "Ekran açıkken yumuşatılmış tüketiminize göre; ölçüm penceresi 10 dakikaya ulaşınca canlı oran bunun yerini alır."
 }

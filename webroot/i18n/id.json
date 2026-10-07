@@ -826,5 +826,7 @@
   "cfg_profile_saved_to": "Disimpan ke ",
   "cfg_profile_imported": "Dibuka: ",
   "cfg_profile_imported_tail": " - tekan Terapkan untuk memakainya",
-  "dbg_log_running_hint": "hapus folder ini untuk memulai yang baru"
+  "dbg_log_running_hint": "hapus folder ini untuk memulai yang baru",
+  "eta_average": "rata-rata",
+  "eta_average_tip": "Berdasarkan konsumsi layar menyala yang dihaluskan; laju langsung menggantikannya saat jendela mencapai 10 menit."
 }

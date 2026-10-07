@@ -826,5 +826,7 @@
   "cfg_profile_saved_to": "Salvato in ",
   "cfg_profile_imported": "Aperta ",
   "cfg_profile_imported_tail": " - premi Applica per usarla",
-  "dbg_log_running_hint": "elimina questa cartella per avviarne uno nuovo"
+  "dbg_log_running_hint": "elimina questa cartella per avviarne uno nuovo",
+  "eta_average": "media",
+  "eta_average_tip": "Basata sul consumo livellato a schermo acceso; il valore in tempo reale la sostituisce quando la finestra arriva a 10 minuti."
 }
