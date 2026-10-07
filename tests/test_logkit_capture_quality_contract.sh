@@ -118,7 +118,7 @@ LK_OUT_DIR="$TMP" LK_BATTERY_CAPACITY_MAH=5000
 . "$TMP/current_soc_summary.sh"
 _consistency="$(lk_emit_current_soc_consistency)"
 printf '%s\n' "$_consistency" | grep -Eq '^sleep[[:space:]]+60\.0[[:space:]]+2\.00[[:space:]]+2\.00[[:space:]]+0\.0%[[:space:]]+aligned$' || { echo 'FAIL logkit capture-quality: aligned current/SOC verdict' >&2; exit 1; }
-printf '%s\n' "$_consistency" | grep -Eq '^idle[[:space:]]+60\.0[[:space:]]+1\.00[[:space:]]+8\.00[[:space:]]+87\.5%[[:space:]]+CHECK \(>30%\)$' || { echo 'FAIL logkit capture-quality: current/SOC check verdict' >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -Eq '^idle[[:space:]]+60\.0[[:space:]]+1\.00[[:space:]]+8\.00[[:space:]]+87\.5%[[:space:]]+CHECK high \(>30%\)$' || { echo 'FAIL logkit capture-quality: current/SOC check verdict' >&2; exit 1; }
 printf '%s\n' "$_consistency" | grep -Fq 'not causal energy attribution' || { echo 'FAIL logkit capture-quality: current/SOC causal disclaimer missing' >&2; exit 1; }
 
 # Per-phase distribution must use raw battery samples mapped to each concrete ledger interval,

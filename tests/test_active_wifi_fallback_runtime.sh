@@ -132,6 +132,10 @@ sleep 5
 [ ! -e "$TMP/state/wifi_fallback.action" ] || fail 'actioned a Wi-Fi attachment that never validated'
 printf 'radio_policy_enable=1\nnet_wifi_leave=off\n' > "$TMP/mod/config/governor.conf"
 run reconcile
+# Same race as above: the OFF signal is delivered, the watcher exits on its next pass.
+# Checking the PID the instant reconcile returns failed about one run in three under load.
+wait_for_absent "$TMP/state/wifi_fallback.pid" || true
+_wv=0; while kill -0 "$WPID" 2>/dev/null && [ "$_wv" -lt 50 ]; do sleep 0.1; _wv=$((_wv + 1)); done
 kill -0 "$WPID" 2>/dev/null && fail 'never-validated watcher survived OFF'
 unset WPID
 
