@@ -2560,10 +2560,41 @@ if (floor_hz <= 0) floor_hz = hw / 3;
     }
     
     {
-        if (fsm->prev_temp == 0) {
+        /* A trend is degrees per TICK, and ticks are not evenly spaced: 2-6 s with the
+         * screen on, 45 s or a whole suspended stretch with it off. Two consequences seen
+         * in a OnePlus 15 day:
+         *  - the first tick after unlock compared a die cooled in sleep against the unlock
+         *    burst (40 -> 50 C) and summed it as a fast climb: thermal_trend_fast, a 34%
+         *    trim at the exact moment the user starts touching the phone, gone as "cool"
+         *    30 s later. Four of five trend-triggered trims in the capture were this shape.
+         *  - the warm anchor, seeded while asleep, read the same burst as a 6 C net rise.
+         * So a delta over a long gap is scaled down to what it would be over a normal
+         * screen-on tick (never scaled UP - short ticks keep their existing tuning), and
+         * the screen-on edge starts a fresh trend and a fresh anchor. Absolute limits
+         * (sustained entry, hot guard, junction) are untouched; this only stops the
+         * PRE-emptive budget from firing on a transient. Boottime, because monotonic time
+         * stops in suspend and would make a night look like a 45 s gap. */
+        static long _tr_last_s = 0;
+        static int  _tr_prev_screen = -1;
+        long _tr_now_s = 0;
+        {
+            struct timespec _tts;
+            if (clock_gettime(CLOCK_BOOTTIME, &_tts) == 0) _tr_now_s = (long)_tts.tv_sec;
+        }
+        long _tr_gap = (_tr_last_s > 0 && _tr_now_s > _tr_last_s) ? (_tr_now_s - _tr_last_s) : 0;
+        _tr_last_s = _tr_now_s;
+        int _tr_wake = (m->misc.screen_on && _tr_prev_screen == 0);
+        _tr_prev_screen = m->misc.screen_on ? 1 : 0;
+        if (_tr_wake && m->therm.cpu_max_c > 0) {
+            fsm->trend_buf[0] = fsm->trend_buf[1] = fsm->trend_buf[2] = 0;
+            fsm->thermal_trend = 0;
+            fsm->prev_temp = m->therm.cpu_max_c;
+            fsm->warm_anchor_c = m->therm.cpu_max_c;
+        } else if (fsm->prev_temp == 0) {
             fsm->prev_temp = m->therm.cpu_max_c;
         } else {
             int delta = m->therm.cpu_max_c - fsm->prev_temp;
+            if (_tr_gap > 6) delta = (int)((long)delta * 6L / _tr_gap);
             fsm->prev_temp = m->therm.cpu_max_c;
             fsm->trend_buf[fsm->trend_idx % 3] = delta;
             fsm->trend_idx++;
