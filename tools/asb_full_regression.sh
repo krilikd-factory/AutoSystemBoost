@@ -6,7 +6,9 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT"
 
 run() { printf '\n== %s ==\n' "$1"; shift; "$@"; }
-if command -v gcc >/dev/null 2>&1; then
+if [ -n "${CC:-}" ] && command -v "$CC" >/dev/null 2>&1; then
+  HOST_CC="$CC"            # an explicit choice (CI passes clang) wins
+elif command -v gcc >/dev/null 2>&1; then
   HOST_CC=gcc
 elif command -v clang >/dev/null 2>&1; then
   HOST_CC=clang
@@ -22,7 +24,9 @@ run_optional() {
 
 run 'schema sync' bash tools/asb_schema_sync.sh check
 run 'lint' env MODDIR="$ROOT" bash tools/asb_lint.sh
-run 'native warning budget' env CC=clang bash tools/asb_native_warning_budget.sh
+# The compiler selected above, not a hard-coded clang: a host with gcc only failed the whole
+# regression here although every check passes (external audit, fix44).
+run 'native warning budget' env CC="$HOST_CC" bash tools/asb_native_warning_budget.sh
 run 'DSP syntax' bash tools/dsp_stubs/asb_dsp_syntax_check.sh
 
 run_optional 'smart learner session 2' tests/test_smart_session2.sh bash
@@ -40,7 +44,7 @@ run 'Quiet Night behaviour' /tmp/asb_quiet_night
 run 'native config safety build' "$HOST_CC" -O2 -Wall -Wextra -Werror -o /tmp/asb_config_safety tests/test_config_safety.c
 run 'native config safety' /tmp/asb_config_safety
 run_optional 'config writer' tests/test_config_writer.sh bash
-run 'native thermal fixture' bash -c 'clang -D_GNU_SOURCE -std=c11 -O2 -Wno-unused-function -I src tests/test_thermal_socd_validation.c -lm -o /tmp/asb_thermal && /tmp/asb_thermal'
+run 'native thermal fixture' env HOST_CC="$HOST_CC" bash -c '"$HOST_CC" -D_GNU_SOURCE -std=c11 -O2 -Wno-unused-function -I src tests/test_thermal_socd_validation.c -lm -o /tmp/asb_thermal && /tmp/asb_thermal'
 
 run_optional 'P0 provenance' tests/test_p0_provenance_contract.sh sh
 run_optional 'V64 P0' tests/test_v64_p0_contract.sh sh
@@ -92,6 +96,14 @@ run_optional 'update/fallback/theme contract' tests/test_update_handover_theme_c
 run_optional 'snapshot-only update migration' tests/test_update_snapshot_only_migration.sh bash
 run_optional 'Stock profile' tests/test_stock_profile_contract.sh sh
 run_optional 'V62-to-V64 migration' tests/test_v62_to_v64_migration.sh bash
+# Every remaining contract, so a new test is a CI gate the day it is added. The explicit
+# list above kept its order and shells; a test missing from it used to run only by hand -
+# fifteen field-fix contracts were outside CI that way (external audit, fix44).
+_listed="$(grep -oE 'tests/test_[A-Za-z0-9_]+\.sh' "$0" | sort -u)"
+for test_file in tests/test_*.sh; do
+  printf '%s\n' "$_listed" | grep -qxF "$test_file" && continue
+  run "$(basename "$test_file" .sh)" bash "$test_file"
+done
 run 'effective policy JSON' bash -c 'MODDIR="$1" sh tools/asb_effective_policy.sh | python3 -m json.tool >/dev/null' _ "$ROOT"
 cmp -s tools/asb_diag.sh system/bin/asbdiag || { echo 'ERROR: asbdiag copies differ' >&2; exit 1; }
 printf '\nALL ASB HOST REGRESSIONS PASSED\n'

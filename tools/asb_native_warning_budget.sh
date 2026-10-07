@@ -19,6 +19,11 @@ trap 'rm -f "$TMP"' EXIT HUP INT TERM
 #
 # Recorded here rather than silently raised so the next person can tell a deliberate bump
 # from a slipped one.
+#
+# 80 -> 62: the read()/write()/recv() return values and their size arguments now carry
+# explicit casts (ssize_t -> int, int -> size_t) - 18 of the 80 were those, all at call
+# sites whose buffers are a few hundred bytes. gcc reports 61, clang 62; the ratchet holds
+# the higher of the two so either compiler passes.
 BASELINE=$(tr -d ' \r\n' < "$BASELINE_FILE")
 case "$BASELINE" in ''|*[!0-9]*) echo "invalid warning baseline: $BASELINE" >&2; exit 1 ;; esac
 
