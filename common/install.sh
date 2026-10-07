@@ -2534,9 +2534,6 @@ asb_prepare_mmfeed_patch() {
   esac
   echo "${_mf_live}|${_mf_payload}" > /data/adb/asb/mmfeed_bind_manifest.txt 2>/dev/null
   echo 'ready' > /data/adb/asb/mmfeed_state 2>/dev/null
-  # Its own heading: this ran right after the camera block and read as a camera line.
-  ui_print " "
-  ui_print "  ⚙️  ${ASB_SEC_SYSTEM:-SYSTEM}"
   ui_print "      + ${ASB_L_MMFEED_READY:-Multimedia telemetry: patch ready - off by default, toggle in WebUI (System)}"
   return 0
 }
@@ -3296,6 +3293,13 @@ asb_generate_odm_camera_binds
 # unconditionally - the function itself finds the table or reports the device as
 # unsupported, and the bootloop fuse check inside keeps a flagged device untouched.
 asb_prepare_ltpo_patch
+
+# The SYSTEM heading is printed here, not inside the mmfeed step: it used to live there,
+# so on a device whose feedback list already ships closed (nothing to patch, no line) the
+# heading vanished and the system lines after it - device-adaptive bounds, the headphone
+# limiter warning - were printed under CAMERA.
+ui_print " "
+ui_print "  ⚙️  ${ASB_SEC_SYSTEM:-SYSTEM}"
 
 # Multimedia feedback telemetry staging: same device-local pattern as LTPO - clone the
 # stock list, close the collector, bind only while the WebUI toggle says so.
@@ -4412,7 +4416,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_bt_link_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh asb_wifi_fallback.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_boot_timeline.sh asb_debug_support.sh asb_stock_policy.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_bt_link_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh asb_wifi_fallback.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_boot_timeline.sh asb_debug_support.sh asb_stock_policy.sh asb_procstate.sh asb_bg_buckets.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
