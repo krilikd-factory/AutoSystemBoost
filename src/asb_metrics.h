@@ -86,6 +86,9 @@ typedef struct {
     float   load5;
     int     cur_freq[3];
     int     max_freq[3];
+    /* Share of the time since the previous tick that the CPU was NOT suspended, 0-100
+     * (CLOCK_MONOTONIC delta over CLOCK_BOOTTIME delta). -1 until two ticks exist. */
+    int     awake_tick_pct;
 } asb_cpu_t;
 
 typedef struct {
@@ -743,6 +746,33 @@ static void metrics_read_cpu(asb_cpu_t *c) {
     char buf[64] = {0};
     sysfs_read_str(PATH_LOADAVG, buf, sizeof(buf));
     sscanf(buf, "%f %f", &c->load1, &c->load5);
+
+    /* Was the CPU actually up since the last tick?
+     *
+     * loadavg cannot answer that on these kernels: it counts tasks in uninterruptible sleep
+     * (modem, IPC and storage waiters that never use a cycle) and it is frozen across
+     * suspend, so it reads whatever it was at the last wake. A OnePlus 15 night capture had
+     * load1 at 40-112 while the phone was suspended 96% of the time, and the screen-off
+     * "real work" rule promoted DEEP_IDLE to LIGHT_IDLE on that number for hours. Idle
+     * loadavg also differs per kernel (5-15 on SM8650, 4-25 on SM8850), so a fixed
+     * threshold alone is not portable. Monotonic time stops in suspend and boottime does
+     * not; their ratio is the awake share, the same measure the night awake% uses. */
+    {
+        static long _last_mono = 0, _last_boot = 0;
+        struct timespec _ts;
+        long _mono = 0, _boot = 0;
+        if (clock_gettime(CLOCK_MONOTONIC, &_ts) == 0) _mono = (long)_ts.tv_sec * 1000L + _ts.tv_nsec / 1000000L;
+        if (clock_gettime(CLOCK_BOOTTIME, &_ts) == 0)  _boot = (long)_ts.tv_sec * 1000L + _ts.tv_nsec / 1000000L;
+        c->awake_tick_pct = -1;
+        if (_last_boot > 0 && _boot > _last_boot && _mono >= _last_mono) {
+            long _db = _boot - _last_boot, _dm = _mono - _last_mono;
+            if (_db >= 1000) {   /* a sub-second gap says nothing about suspend */
+                long _p = (_dm * 100L) / _db;
+                c->awake_tick_pct = (int)(_p > 100 ? 100 : _p);
+            }
+        }
+        _last_mono = _mono; _last_boot = _boot;
+    }
 
     const char *cur_paths[3] = {
         cpu_policy_path(0, "scaling_cur_freq"),

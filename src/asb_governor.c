@@ -2309,6 +2309,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "thermal_cooldown=%d\n", fsm->thermal_cooldown);
     fprintf(f, "prime_escape=%d\nprime_escape_mid=%d\nprime_escape_count=%lu\n",
             fsm->prime_escape, fsm->prime_escape_mid, fsm->prime_escape_count);
+    /* The suspend-aware companion to load1: how much of the last tick the CPU was up. */
+    fprintf(f, "awake_tick_pct=%d\n", m->cpu.awake_tick_pct);
     fprintf(f, "fg_guard_fixes=%lu\n", g_fg_fix_total);
     fprintf(f, "cap_owner=%s\ncap_owner_since=%ld\ncap_vendor_holddown=%d\n",
             asb_cap_owner_name(g_cap_owner_eff),

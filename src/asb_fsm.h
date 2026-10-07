@@ -1388,8 +1388,14 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
      * minute; a burst of shell commands does not. The counter resets the moment load falls
      * back, so nothing accumulates across unrelated wakeups.
      */
+    /* And the CPU has to have been awake for it. loadavg alone stayed above 8 all night on
+     * a suspended OnePlus 15 (40-112, uninterruptible waiters and a value frozen across
+     * suspend), which held LIGHT_IDLE for hours. Real screen-off work - a decode, a sync -
+     * keeps the CPU up; a phone that slept through most of the tick did no such work.
+     * Unknown (-1, first tick) keeps the old load-only rule. */
     static int _off_busy_streak = 0;
-    if (m->cpu.load1 >= 8.0f) {
+    int _awake_ok = (m->cpu.awake_tick_pct < 0 || m->cpu.awake_tick_pct >= 50);
+    if (m->cpu.load1 >= 8.0f && _awake_ok) {
         if (_off_busy_streak < 3) _off_busy_streak++;
     } else {
         _off_busy_streak = 0;
@@ -2303,7 +2309,11 @@ if (!can_leave &&
        0.5, including DEEP_IDLE at a median of 0.72, so the gate never opened and the
        prime cap was never applied. DEEP_IDLE sits at 0.72 and busier screen-off work
        at 1.26, which puts the dividing line just under 0.9. */
-    asb_load_per_core(m) < 0.9f &&
+    /* ...or the phone slept through most of the tick: loadavg is frozen across suspend and
+     * counts idle waiters, so a sleeping SM8850 can read 5-14 per core and keep this gate
+     * shut all night. A CPU that was suspended did no work worth protecting. */
+    (asb_load_per_core(m) < 0.9f ||
+     (m->cpu.awake_tick_pct >= 0 && m->cpu.awake_tick_pct < 50)) &&
     /* And no bulk transfer in flight.
      *
      * A capture shows 1037 MiB of mobile traffic inside DEEP_IDLE - traffic in every
