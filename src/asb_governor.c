@@ -2307,8 +2307,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * nobody plans to have - so it cannot be triggered on demand, and without this line
      * the only evidence would be an absence of heat, which proves nothing either way. */
     fprintf(f, "thermal_cooldown=%d\n", fsm->thermal_cooldown);
-    fprintf(f, "prime_escape=%d\nprime_escape_count=%lu\n",
-            fsm->prime_escape, fsm->prime_escape_count);
+    fprintf(f, "prime_escape=%d\nprime_escape_mid=%d\nprime_escape_count=%lu\n",
+            fsm->prime_escape, fsm->prime_escape_mid, fsm->prime_escape_count);
     fprintf(f, "fg_guard_fixes=%lu\n", g_fg_fix_total);
     fprintf(f, "cap_owner=%s\ncap_owner_since=%ld\ncap_vendor_holddown=%d\n",
             asb_cap_owner_name(g_cap_owner_eff),
@@ -7721,7 +7721,8 @@ int main(int argc, char **argv) {
                     asb_log("cooldown: exit die=%dC (screen on or cool enough, profile rails restored)",
                             fsm.cooldown_die_c);
                 if (fsm.prime_escape_edge > 0)
-                    asb_log("prime_escape: lift (HEAVY, prime pinned at its ceiling, die=%dC)",
+                    asb_log("prime_escape: lift (HEAVY, big cores pinned at their ceiling%s, die=%dC)",
+                            fsm.prime_escape_mid ? ", mid cluster lifted too" : "",
                             metrics.therm.cpu_max_c);
                 else if (fsm.prime_escape_edge < 0)
                     asb_log("prime_escape: release (burst spent or conditions gone, die=%dC)",

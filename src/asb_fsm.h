@@ -612,6 +612,7 @@ typedef struct {
     int             prime_escape;
     int             prime_escape_edge;
     unsigned long   prime_escape_count;
+    int             prime_escape_mid;   /* 1 while the burst also lifts the middle cluster */
     int             thermal_trend;
     int             trend_buf[3];
     int             trend_idx;
@@ -2398,6 +2399,15 @@ if (!can_leave &&
         static time_t _esc_rest_until = 0;
         int _was = fsm->prime_escape;
         int _ps = (g_cpu_policy_ids[2] >= 0) ? 2 : ((g_cpu_policy_ids[1] >= 0) ? 1 : -1);
+        /* The middle cluster, which only exists on 3+ cluster SoCs (SM8650: OnePlus 12,
+         * Ace 5 - 1+3+2+... where slot 1 governs every mid policy).
+         *
+         * The burst was written on a 6+2 part, where "the prime" is the whole big side. On a
+         * 4-cluster SoC the heavy part of an app launch or a page render lands on the five
+         * mid cores first, and those stayed at the Smart rail while only the single prime
+         * core was lifted - the escape helped one core in eight. Two-cluster devices have no
+         * slot here and are unchanged. */
+        int _ms = (g_cpu_policy_ids[2] >= 0 && g_cpu_policy_ids[1] >= 0) ? 1 : -1;
         time_t _now = time(NULL);
         int _skin = m->therm.skin_temp_c;
         int _skin_ok = !(_skin > 20 && _skin < 70) || (_skin < g_asb_cfg.thermal_skin_c - 8);
@@ -2411,8 +2421,11 @@ if (!can_leave &&
                   _skin_ok && _now >= _esc_rest_until;
         /* "At its ceiling": the live clock within one step-ish (2%) of the live limit.
          * Both values are MHz here; a zero limit means the node was unreadable. */
-        int _pinned = (_ps >= 1 && m->cpu.max_freq[_ps] > 0 &&
+        int _pinned_prime = (_ps >= 1 && m->cpu.max_freq[_ps] > 0 &&
                        m->cpu.cur_freq[_ps] * 100 >= m->cpu.max_freq[_ps] * 98);
+        int _pinned_mid = (_ms >= 1 && m->cpu.max_freq[_ms] > 0 &&
+                       m->cpu.cur_freq[_ms] * 100 >= m->cpu.max_freq[_ms] * 98);
+        int _pinned = _pinned_prime || _pinned_mid;
         if (!_ok) {
             _esc_streak = 0;
             if (_was) _esc_rest_until = _now + 40;
@@ -2432,14 +2445,24 @@ if (!can_leave &&
                 fsm->prime_escape_count++;
             }
         }
+        fsm->prime_escape_mid = 0;
         if (fsm->prime_escape && _ps >= 1) {
+            /* Same bound for every lifted slot: Balanced's own HEAVY rail for THAT slot,
+             * never above its hardware maximum. Thermal budget still trims afterwards. */
             const asb_profile_bounds_t *_bb = &g_profile_bounds[PROFILE_BALANCED];
-            int _lim = lerp_int(_bb->floor.cpu_max[_ps], _bb->ceil.cpu_max[_ps],
-                                g_state_level[ASB_STATE_HEAVY]);
-            int _hw = g_cpu_slot_hwmax[_ps];
-            if (_hw > 0 && _lim > _hw) _lim = _hw;
-            if (_lim > 0 && new_caps.cpu_max[_ps] > 0 && new_caps.cpu_max[_ps] < _lim)
-                new_caps.cpu_max[_ps] = _lim;
+            int _slots[2] = { _ps, _ms };
+            for (int _k = 0; _k < 2; _k++) {
+                int _sl = _slots[_k];
+                if (_sl < 0) continue;
+                int _lim = lerp_int(_bb->floor.cpu_max[_sl], _bb->ceil.cpu_max[_sl],
+                                    g_state_level[ASB_STATE_HEAVY]);
+                int _hw = g_cpu_slot_hwmax[_sl];
+                if (_hw > 0 && _lim > _hw) _lim = _hw;
+                if (_lim > 0 && new_caps.cpu_max[_sl] > 0 && new_caps.cpu_max[_sl] < _lim) {
+                    new_caps.cpu_max[_sl] = _lim;
+                    if (_sl == _ms) fsm->prime_escape_mid = 1;
+                }
+            }
         }
         fsm->prime_escape_edge = (fsm->prime_escape != _was) ? (fsm->prime_escape ? 1 : -1) : 0;
     }
