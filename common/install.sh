@@ -2355,7 +2355,19 @@ asb_generate_odm_camera_binds() {
     [ -f "$_obc_src" ] || _obc_src="$MODPATH/system/odm/etc/camera/$_obc_rel"
     [ -f "$_obc_src" ] || _obc_src="$MODPATH/system/vendor/odm/etc/camera/$_obc_rel"
     [ -f "$_obc_src" ] || continue
-    cmp -s "$_obc_src" "$_obc_live" 2>/dev/null && continue
+    # "Identical to the live file" means "nothing to bind" only when the live file IS the
+    # partition's own. Installed over a running module it is not: /odm/etc/camera/... is
+    # still the previous build's bind of this very payload, so the comparison matched our
+    # own output, nothing was queued - and asb_generate_odm_binds had just deleted the old
+    # manifest. After the reboot the camera read stock: a field action log showed the
+    # retouch list at 19 apps after one install and at the stock 4 after the next, with
+    # "Camera: N config(s) will be linked in at boot" missing from the second install log.
+    # Skip only when the live path is not a mount point in either namespace.
+    if cmp -s "$_obc_src" "$_obc_live" 2>/dev/null; then
+      if ! grep -qs " ${_obc_live} " /proc/1/mountinfo /proc/self/mountinfo; then
+        continue
+      fi
+    fi
 
     _obc_dst="/data/adb/asb/odm_patched$_obc_live"
     mkdir -p "$(dirname "$_obc_dst")" 2>/dev/null
