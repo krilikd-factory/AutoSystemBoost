@@ -24,7 +24,7 @@ ab_route() {
 }
 
 ab_playing() {
-  dumpsys audio 2>/dev/null | grep -q 'state:started' && echo 1 || echo 0
+  dumpsys audio 2>/dev/null | grep -qE 'AudioPlaybackConfiguration .*state:started' && echo 1 || echo 0
 }
 
 ab_capture() {

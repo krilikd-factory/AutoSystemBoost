@@ -67,6 +67,8 @@ LK_SNAPSHOT_S=3600          # full state snapshot every hour
 LK_REPORT_S=900             # interim report every 15 minutes
 LK_BSTATS_WINDOW_MIN=$(( LK_SNAPSHOT_S / 60 ))
 export LK_BSTATS_WINDOW_MIN
+LK_BSTATS_RESET="${ASB_LK_BSTATS_RESET:-0}"
+export LK_BSTATS_RESET
 
 # Phase-adaptive poll cadence (seconds)
 LK_POLL_FAST=15             # gaming / visible charging — catch user-visible transients
@@ -499,7 +501,7 @@ lk_phase_ledger_row() {
           # 13m48s; reading that as local attribution - which an audit did, and which I did
           # in an earlier analysis - turns a cumulative counter into a culprit. Say so on
           # the header itself, where nobody can miss it.
-          printf 'phase=%s awake=%s%% dur=%ss  (holders below: cumulative since batterystats reset, NOT time within this phase)\n' "$LK_CUR_PHASE" "$_awake" "$_elapsed"
+          printf 'phase=%s awake=%s%% dur=%ss  (holders below: batterystats cumulative totals, NOT time within this phase)\n' "$LK_CUR_PHASE" "$_awake" "$_elapsed"
             # Match 'realtime' alone - this build does not print 'partial' on the line.
             #
             # The pattern required both words on one line. Real output reads "Wake lock
@@ -1158,8 +1160,13 @@ lk_emit_screenoff_sleep() {
     { rt=$1; sub(/ \(.*\)/,"",rt); r=tosec(rt); u=tosec($2)
       if(r>0){ aw=u*100.0/r
         printf "  screen-off: %.1fh realtime, CPU awake %.0fm -> awake %.1f%% (deep sleep %.1f%%)\n", r/3600.0, u/60.0, aw, 100-aw
-        printf "  NOTE: batterystats is reset every %s min, so this covers only the last\n", ENVIRON["LK_BSTATS_WINDOW_MIN"]
-        printf "        window, NOT the whole night. For the overnight number read the\n"
+        if (ENVIRON["LK_BSTATS_RESET"] == "1") {
+          printf "  NOTE: batterystats is reset every %s min, so this covers only the last\n", ENVIRON["LK_BSTATS_WINDOW_MIN"]
+          printf "        window, NOT the whole night. For the overnight number read the\n"
+        } else {
+          printf "  NOTE: this is Android'"'"'s window (since the last unplug/charge), which may start\n"
+          printf "        before the capture. For the capture'"'"'s own night read the\n"
+        }
         printf "        awake%% column of night(longest) in the per-phase summary.\n"; done=1 } }
     # The report ends while the screen is on, often seconds after a batterystats reset:
     # the line exists with 0 realtime, and the section printed nothing at all under its
@@ -1195,6 +1202,13 @@ lk_emit_display_summary() {
       print "refresh '?' = the rate could not be read on this build; brightness is the panel'"'"'s raw backlight share."
       print "Compare mA across refresh rates at similar brightness before crediting or blaming LTPO."
     }' "$_dt"
+  # What the video-refresh watcher did over its lifetime (counters: lowers|touch|seconds).
+  # Lifetime, not this capture: the counters are the watcher's own and are never reset here.
+  if [ -s /data/adb/asb/ltpo_video.stats ]; then
+    IFS='|' read -r _lvl _lvt _lvs < /data/adb/asb/ltpo_video.stats 2>/dev/null
+    printf 'ltpo_video (lifetime): lowered %s times, %s min at the lower rate, %s restored by touch\n' \
+      "${_lvl:-0}" "$(( ${_lvs:-0} / 60 ))" "${_lvt:-0}"
+  fi
   echo ""
 }
 

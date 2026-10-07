@@ -304,7 +304,7 @@ lk_snapshot_state() {
     cat "$_md/current_profile" 2>/dev/null
     echo ""
     echo "===== PSTATS ====="
-    for f in "$_md/runtime/pstats_"*.json; do
+    for f in "$_md/runtime/pstats_"*.json /data/adb/asb/pstats_*.json; do
       [ -f "$f" ] || continue
       echo "--- $(basename "$f") ---"
       cat "$f"
@@ -458,11 +458,11 @@ lk_copy_runtime_artifacts() {
   for f in \
     /data/adb/asb/session_history.jsonl \
     "$MODDIR/runtime/last_sessions_v9.jsonl" \
-    "$MODDIR/runtime/learn.bin" \
-    "$MODDIR/runtime/session_stats.json" \
-    "$MODDIR/runtime/pstats_performance.json" \
-    "$MODDIR/runtime/pstats_balanced.json" \
-    "$MODDIR/runtime/pstats_battery.json" \
+    "$MODDIR/runtime/learn.bin" /data/adb/asb/learn.bin \
+    "$MODDIR/runtime/session_stats.json" /data/adb/asb/session_stats.json \
+    "$MODDIR/runtime/pstats_performance.json" /data/adb/asb/pstats_performance.json \
+    "$MODDIR/runtime/pstats_balanced.json" /data/adb/asb/pstats_balanced.json \
+    "$MODDIR/runtime/pstats_battery.json" /data/adb/asb/pstats_battery.json \
     "/dev/.asb/runtime_apply.log" \
     "/dev/.asb/thermal_pl_audit" \
     "/dev/.asb/drift_rate" \
@@ -1077,11 +1077,54 @@ lk_wakelock_kernel_delta() {
 # it works with NO debugfs access, which is the common case on OP15 where
 # /sys/kernel/debug/wakeup_sources isn't readable. Call _reset at the start and
 # _dump at the end so the window is just the capture.
+# Resetting is OFF by default (ASB_LK_BSTATS_RESET=1 brings it back).
+#
+# The capture used to run `dumpsys batterystats --reset` at the start and again every hour.
+# That is not a read-only act: it wipes the phone's own battery history - the per-app usage
+# Android shows in Settings - for the whole capture, every hour. It also emptied the window
+# ASB's own wakelock watcher reads ("since the last unplug"), so during a night capture,
+# exactly when that watcher matters, it saw at most the last hour; one report's TOP APPS
+# section came out empty for that reason. Instead, the per-app totals are recorded at the
+# start and the report shows the difference: the capture window, without touching anything.
+LK_BSTATS_RESET="${ASB_LK_BSTATS_RESET:-0}"
+
+# Per-uid partial-wakelock seconds from a raw batterystats dump: "uid secs top_tag".
+# The longest of each tag's lines counts (the same tag appears per-process and in totals).
+lk_bstats_uid_totals() {
+  grep -E '^[[:space:]]*Wake lock u[0-9]+a[0-9]+ ' "$1" 2>/dev/null | grep -ivE "${LK_WAKELOCK_NAME:-__none__}" | awk '
+    function dur(s,  n, t, i, v, tot) {
+      tot = 0; n = split(s, t, " ")
+      for (i = 1; i <= n; i++) { v = t[i]
+        if (v ~ /^\(/) break
+        if (v ~ /^[0-9]+d$/) tot += (v + 0) * 86400
+        else if (v ~ /^[0-9]+h$/) tot += (v + 0) * 3600
+        else if (v ~ /^[0-9]+m$/) tot += (v + 0) * 60
+        else if (v ~ /^[0-9]+s$/) tot += v + 0 }
+      return tot }
+    { u = $3; sub(/^u/, "", u); split(u, p, "a"); uid = p[1] * 100000 + 10000 + p[2]
+      x = $0; sub(/^[ \t]*Wake lock [^ ]+ /, "", x)
+      if (!match(x, /: [0-9]/)) next
+      tag = substr(x, 1, RSTART - 1); d = dur(substr(x, RSTART + 2))
+      k = uid SUBSEP tag; if (d > best[k]) best[k] = d }
+    END { for (k in best) { split(k, q, SUBSEP); sum[q[1]] += best[k]; if (best[k] > top[q[1]]) { top[q[1]] = best[k]; tt[q[1]] = q[2] } }
+          for (u in sum) printf "%d %d %s\n", u, sum[u], tt[u] }'
+}
+
 lk_wakelock_batterystats_reset() {
   lk_have lk_dumpsys || return 0
-  lk_dumpsys batterystats --reset >/dev/null 2>&1 || true
-  # record when the window opened so the report can show elapsed
-  date +%s > "$LK_OUT_DIR/.bstats_reset_epoch" 2>/dev/null || true
+  if [ "$LK_BSTATS_RESET" = 1 ]; then
+    lk_dumpsys batterystats --reset >/dev/null 2>&1 || true
+    # record when the window opened so the report can show elapsed
+    date +%s > "$LK_OUT_DIR/.bstats_reset_epoch" 2>/dev/null || true
+    rm -f "$LK_OUT_DIR/.wl_uid_base" 2>/dev/null
+    return 0
+  fi
+  # Baseline once, at the start; the hourly call has nothing to do.
+  [ -f "$LK_OUT_DIR/.wl_uid_base" ] && return 0
+  lk_dumpsys batterystats 2>/dev/null > "$LK_OUT_DIR/.bstats_base_raw.txt" || return 0
+  lk_bstats_uid_totals "$LK_OUT_DIR/.bstats_base_raw.txt" > "$LK_OUT_DIR/.wl_uid_base" 2>/dev/null
+  rm -f "$LK_OUT_DIR/.bstats_base_raw.txt" 2>/dev/null
+  date +%s > "$LK_OUT_DIR/.bstats_base_epoch" 2>/dev/null || true
 }
 
 # Capture the raw batterystats once to a file, then parse several distinct
@@ -1098,6 +1141,8 @@ lk_wakelock_batterystats_dump() {
       _re=$(cat "$LK_OUT_DIR/.bstats_reset_epoch" 2>/dev/null)
       _now=$(date +%s)
       echo "# window: $(( (_now - _re) / 60 )) min since reset"
+    else
+      echo "# window: Android's own (since the last unplug/charge) - batterystats is not reset by the capture"
     fi
     echo ""
 
@@ -1167,29 +1212,29 @@ lk_wakelock_emit_report() {
     # owner as u<user>a<app> on every partial wakelock line, so the uid - and from it the
     # package - is right there; summed per uid with real durations ("4m 4s 955ms", spaces
     # included), this answers "which app kept the CPU up" directly.
-    echo "----- TOP APPS BY HELD WAKELOCK TIME (per uid, since the last batterystats reset) -----"
     _wl_map="$LK_OUT_DIR/.uid_package_map.tsv"
-    grep -E '^[[:space:]]*Wake lock u[0-9]+a[0-9]+ ' "$_raw" 2>/dev/null | grep -ivE "$_self" | awk '
-      function dur(s,  n, t, i, v, tot) {
-        tot = 0; n = split(s, t, " ")
-        for (i = 1; i <= n; i++) { v = t[i]
-          if (v ~ /^\(/) break
-          if (v ~ /^[0-9]+d$/) tot += (v + 0) * 86400
-          else if (v ~ /^[0-9]+h$/) tot += (v + 0) * 3600
-          else if (v ~ /^[0-9]+m$/) tot += (v + 0) * 60
-          else if (v ~ /^[0-9]+s$/) tot += v + 0 }
-        return tot }
-      { u = $3; sub(/^u/, "", u); split(u, p, "a"); uid = p[1] * 100000 + 10000 + p[2]
-        x = $0; sub(/^[ \t]*Wake lock [^ ]+ /, "", x)
-        if (!match(x, /: [0-9]/)) next
-        tag = substr(x, 1, RSTART - 1); d = dur(substr(x, RSTART + 2))
-        k = uid SUBSEP tag; if (d > best[k]) best[k] = d }
-      END { for (k in best) { split(k, q, SUBSEP); sum[q[1]] += best[k]; if (best[k] > top[q[1]]) { top[q[1]] = best[k]; tt[q[1]] = q[2] } }
-            for (u in sum) if (sum[u] >= 5) printf "%d %d %s\n", sum[u], u, tt[u] }' \
-      | sort -rn | head -10 | while read -r _ws _wu _wt; do
+    lk_bstats_uid_totals "$_raw" > "$LK_OUT_DIR/.wl_uid_now" 2>/dev/null
+    if [ -s "$LK_OUT_DIR/.wl_uid_base" ] || [ -f "$LK_OUT_DIR/.bstats_base_epoch" ]; then
+      echo "----- TOP APPS BY HELD WAKELOCK TIME (per uid, during this capture) -----"
+      # Difference against the start. A uid whose total went DOWN was reset by Android
+      # itself (unplug after a charge resets batterystats) - its current total is then
+      # all inside the capture.
+      awk 'FILENAME == ARGV[1] { b[$1] = $2; next }
+           { d = $2 - (b[$1] + 0); if (d < 0) d = $2; if (d >= 5) printf "%d %d %s\n", d, $1, $3 }' \
+        "$LK_OUT_DIR/.wl_uid_base" "$LK_OUT_DIR/.wl_uid_now" 2>/dev/null \
+        | sort -rn | head -10 > "$LK_OUT_DIR/.wl_apps.tmp" 2>/dev/null
+    else
+      echo "----- TOP APPS BY HELD WAKELOCK TIME (per uid, since the last batterystats reset) -----"
+      awk '$2 >= 5 { printf "%d %d %s\n", $2, $1, $3 }' "$LK_OUT_DIR/.wl_uid_now" 2>/dev/null \
+        | sort -rn | head -10 > "$LK_OUT_DIR/.wl_apps.tmp" 2>/dev/null
+    fi
+    rm -f "$LK_OUT_DIR/.wl_uid_now" 2>/dev/null
+    [ -s "$LK_OUT_DIR/.wl_apps.tmp" ] || echo "  (no app held a partial wakelock for 5 s or more in this window)"
+    cat "$LK_OUT_DIR/.wl_apps.tmp" 2>/dev/null | while read -r _ws _wu _wt; do
           _wp="$(awk -F'|' -v u="$_wu" '$1 == u { print $2; exit }' "$_wl_map" 2>/dev/null)"
           printf '  %4dm %02ds  %-45s top tag: %s\n' $((_ws / 60)) $((_ws % 60)) "${_wp:-uid $_wu}" "$_wt"
         done
+    rm -f "$LK_OUT_DIR/.wl_apps.tmp" 2>/dev/null
     echo ""
     echo "----- TOP PARTIAL WAKELOCK HOLDERS -----"
     echo "(app/component held a partial wakelock = CPU couldn't fully sleep)"
@@ -2054,9 +2099,10 @@ lk_sample_audio() {
   LK_AUDIO_ROUTE="none"
   _ad=$(lk_dumpsys audio 2>/dev/null)
   if [ -z "$_ad" ]; then export LK_AUDIO_PLAY LK_AUDIO_ROUTE; return 0; fi
-  case "$_ad" in
-    *state:started*) LK_AUDIO_PLAY=1 ;;
-  esac
+  # A live player only: "AudioPlaybackConfiguration piid:.. state:started". The event history
+  # further down the same dump records past starts ("player piid:63 state:started" on older
+  # releases), and matching those labelled phases as audio after playback had stopped.
+  printf '%s\n' "$_ad" | grep -qE 'AudioPlaybackConfiguration .*state:started' && LK_AUDIO_PLAY=1
   # The media route is the "Devices:" line of the STREAM_MUSIC block, the same source the
   # DSP route watcher now uses; joining every stream's Devices line let a ring or alarm
   # route stand in for the music. The joined form stays as the fallback.
@@ -2331,6 +2377,10 @@ lk_bt_lifecycle_kind() {
     # Static feature/config labels are not disconnect events (this exact false positive existed
     # in V63 audio_trace archives and must never enter lifecycle TSV evidence).
     *disconnect_hid_channels_serially*) return 0 ;;
+    # Java stack frames and state QUERIES are not lifecycle events. A capture logged one
+    # SystemUI debug stack ("BluetoothA2dp: \tat ...getConnectionState(...)") as 240
+    # connect_generic rows in two seconds, and the report counted a "generic" storm.
+    *": 	at "*|*":	at "*|*" 	at "*|*getConnectionState*|*getProfileConnectionState*|*"isConnected("*|*fetchConnectionStatus*) return 0 ;;
     *reconnect*|*Reconnect*|*RECONNECT*) printf '%s' 'reconnect_literal' ;;
     *HeadsetService:*disconnectAudio:*|*BluetoothHeadset:*disconnectAudio:*) printf '%s' 'hfp_audio_disconnect' ;;
     *HeadsetService:*connectAudio:*|*BluetoothHeadset:*connectAudio:*) printf '%s' 'hfp_audio_connect' ;;
