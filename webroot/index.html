@@ -8357,15 +8357,25 @@ async function pollLive(visible) {
      */
     const ETA_IDLE_CAP_MIN = 72 * 60;
     const ton_min = (remain_mah > 0 && on_ma > 0) ? Math.floor(remain_mah * 60 / on_ma) : 0;
-    const toff_min = (remain_mah > 0 && off_ma > 0) ? Math.floor(remain_mah * 60 / off_ma) : 0;
+    /* Idle half from the governor's MEASURED screen-off drain when it has one (offdrain,
+     * %/h x100, from real screen-off windows of an hour or more); the tenth-of-screen-on
+     * guess above is only the fallback. action.sh uses the same order. */
+    const _offx = parseInt(kv.offdrain_pctph_x100 || '0', 10);
+    const _idleMeasured = _offx > 0 && bcap > 0;
+    const toff_min = _idleMeasured
+      ? Math.floor(bcap * 6000 / _offx)
+      : ((remain_mah > 0 && off_ma > 0) ? Math.floor(remain_mah * 60 / off_ma) : 0);
     const etaOnEl = _el('liveEtaOn');
     const etaOffEl = _el('liveEtaOff');
     etaOnEl.textContent = fmtHm(ton_min) + eta_note;
     etaOnEl.title = eta_title;
+    const off_note = _idleMeasured ? ' · ' + T('eta_measured', 'measured') : eta_note;
     etaOffEl.textContent = (toff_min > ETA_IDLE_CAP_MIN)
-      ? '> ' + fmtHm(ETA_IDLE_CAP_MIN) + eta_note
-      : fmtHm(toff_min) + eta_note;
-    etaOffEl.title = eta_title;
+      ? '> ' + fmtHm(ETA_IDLE_CAP_MIN) + off_note
+      : fmtHm(toff_min) + off_note;
+    etaOffEl.title = _idleMeasured
+      ? T('eta_idle_measured_tip', 'Measured screen-off drain: ') + (_offx / 100).toFixed(2) + ' %/h'
+      : eta_title;
 
     const CAP_SRC_LABELS = {
       'asb': 'ASB',
