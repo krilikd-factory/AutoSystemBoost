@@ -75,8 +75,8 @@ lk_probe_env() {
     echo "soc_model:       $(lk_get_prop ro.soc.model)"
     echo ""
     echo "# capture"
-    echo "moddir:          $MODDIR"
-    echo "module_version:  $(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -1)"
+    echo "moddir:          ${LK_MODDIR:-$MODDIR}"
+    echo "module_version:  $(sed -n 's/^version=//p' "${LK_MODDIR:-$MODDIR}/module.prop" 2>/dev/null | head -1)"
     echo ""
     echo "# os"
     echo "android_release: $(lk_get_prop ro.build.version.release)"
@@ -285,6 +285,10 @@ lk_netstats_uid_capture() {
 
 lk_snapshot_state() {
   _tag="$1"
+  # Never an empty module path. Captures from the field show "ASB RUNTIME DIR", "CURRENT
+  # PROFILE" and "PSTATS" empty in every snapshot while the governor was running - MODDIR
+  # was empty in the recorder's environment, so "$_md/runtime" read /runtime.
+  _md="${LK_MODDIR:-${MODDIR:-/data/adb/modules/${MODID:-AutoSystemBoost}}}"
   _target="$LK_OUT_DIR/${_tag}.txt"
   {
     echo "===== SNAPSHOT $_tag $(date) ====="
@@ -294,13 +298,13 @@ lk_snapshot_state() {
     echo ""
     echo ""
     echo "===== ASB RUNTIME DIR ====="
-    ls -la "$MODDIR/runtime" 2>/dev/null
+    ls -la "$_md/runtime" 2>/dev/null
     echo ""
     echo "===== CURRENT PROFILE ====="
-    cat "$MODDIR/current_profile" 2>/dev/null
+    cat "$_md/current_profile" 2>/dev/null
     echo ""
     echo "===== PSTATS ====="
-    for f in "$MODDIR/runtime/pstats_"*.json; do
+    for f in "$_md/runtime/pstats_"*.json; do
       [ -f "$f" ] || continue
       echo "--- $(basename "$f") ---"
       cat "$f"
@@ -424,6 +428,7 @@ lk_snapshot_state() {
       fi
     fi
     echo ""
+    lk_display_votes
     echo "===== WAKELOCKS (top 20 by active time) ====="
     if [ -r /sys/kernel/debug/wakeup_sources ]; then
       head -1 /sys/kernel/debug/wakeup_sources
@@ -433,9 +438,12 @@ lk_snapshot_state() {
       tail -n +2 /d/wakeup_sources | sort -k7 -n -r | head -20
     elif lk_have_dumpsys; then
       echo "  (debugfs unavailable, using lk_dumpsys power)"
-      lk_dumpsys power 2>/dev/null | sed -n '/^  Wake Locks:/,/^  Suspend Blockers:/p' | head -30
+      # PowerManagerService prints these headers at column 0 ("Wake Locks: size=3"). The
+      # old patterns required two leading spaces, so this section came out empty in every
+      # capture - the snapshot showed only the separator.
+      lk_dumpsys power 2>/dev/null | sed -n '/^ *Wake Locks:/,/^ *Suspend Blockers:/p' | head -30
       echo "  ----"
-      lk_dumpsys power 2>/dev/null | sed -n '/^  Suspend Blockers:/,/^[A-Z]/p' | head -25
+      lk_dumpsys power 2>/dev/null | sed -n '/^ *Suspend Blockers:/,/^[A-Z]/p' | head -25
     else
       echo "  (wakeup_sources not accessible)"
     fi
@@ -787,6 +795,36 @@ EOF
 lk_display_trace_header() {
   echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA" > "$LK_OUT_DIR/display_trace.txt"
 }
+# Once per capture: everything that decides the refresh rate, so a phase stuck at 90 Hz
+# during video can be traced to a setting, an app vote or the OEM table instead of guessed.
+lk_display_config_capture() {
+  {
+    echo "# display refresh configuration $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    echo "## settings mentioning refresh / frame rate"
+    for _ns in system secure global; do
+      settings list "$_ns" 2>/dev/null | grep -iE 'refresh|frame_rate|fps|ltpo|vrr' | sed "s/^/$_ns: /"
+    done
+    echo "## dumpsys display (modes and rates)"
+    dumpsys display 2>/dev/null | grep -iE 'refresh|frameRate|fps=|supportedModes|mActiveMode|modeId' | head -60
+    echo "## LTPO table in front of the display stack"
+    for _vc in /my_product/etc/oplus_vrr_config.json /odm/etc/oplus_vrr_config.json \
+               /vendor/etc/oplus_vrr_config.json /system_ext/etc/oplus_vrr_config.json \
+               /product/etc/oplus_vrr_config.json; do
+      [ -f "$_vc" ] || continue
+      echo "live: $_vc ($(wc -c < "$_vc" 2>/dev/null) bytes)"
+      cp -f "$_vc" "$LK_OUT_DIR/oplus_vrr_config.live.json" 2>/dev/null
+      break
+    done
+  } > "$LK_OUT_DIR/display_config.txt" 2>/dev/null
+}
+
+# Hourly, from the snapshot: who is voting for which rate right now.
+lk_display_votes() {
+  echo "===== DISPLAY RATE VOTES ====="
+  dumpsys SurfaceFlinger 2>/dev/null | grep -iE 'frameRate|frame rate|refresh rate|vote' | head -40
+  echo ""
+}
+
 lk_capture_display_trace_row() {
   _dph="$1"
   _dscr=0
@@ -1124,6 +1162,35 @@ lk_wakelock_emit_report() {
     echo "capture window, so ASB standby tuning can target a real offender."
     echo ""
 
+    # By app, by held time. The tag ranking below counts how often a name appears, and
+    # tags like *launch* or *alarm* do not say whose they were. batterystats prints the
+    # owner as u<user>a<app> on every partial wakelock line, so the uid - and from it the
+    # package - is right there; summed per uid with real durations ("4m 4s 955ms", spaces
+    # included), this answers "which app kept the CPU up" directly.
+    echo "----- TOP APPS BY HELD WAKELOCK TIME (per uid, since the last batterystats reset) -----"
+    _wl_map="$LK_OUT_DIR/.uid_package_map.tsv"
+    grep -E '^[[:space:]]*Wake lock u[0-9]+a[0-9]+ ' "$_raw" 2>/dev/null | grep -ivE "$_self" | awk '
+      function dur(s,  n, t, i, v, tot) {
+        tot = 0; n = split(s, t, " ")
+        for (i = 1; i <= n; i++) { v = t[i]
+          if (v ~ /^\(/) break
+          if (v ~ /^[0-9]+d$/) tot += (v + 0) * 86400
+          else if (v ~ /^[0-9]+h$/) tot += (v + 0) * 3600
+          else if (v ~ /^[0-9]+m$/) tot += (v + 0) * 60
+          else if (v ~ /^[0-9]+s$/) tot += v + 0 }
+        return tot }
+      { u = $3; sub(/^u/, "", u); split(u, p, "a"); uid = p[1] * 100000 + 10000 + p[2]
+        x = $0; sub(/^[ \t]*Wake lock [^ ]+ /, "", x)
+        if (!match(x, /: [0-9]/)) next
+        tag = substr(x, 1, RSTART - 1); d = dur(substr(x, RSTART + 2))
+        k = uid SUBSEP tag; if (d > best[k]) best[k] = d }
+      END { for (k in best) { split(k, q, SUBSEP); sum[q[1]] += best[k]; if (best[k] > top[q[1]]) { top[q[1]] = best[k]; tt[q[1]] = q[2] } }
+            for (u in sum) if (sum[u] >= 5) printf "%d %d %s\n", sum[u], u, tt[u] }' \
+      | sort -rn | head -10 | while read -r _ws _wu _wt; do
+          _wp="$(awk -F'|' -v u="$_wu" '$1 == u { print $2; exit }' "$_wl_map" 2>/dev/null)"
+          printf '  %4dm %02ds  %-45s top tag: %s\n' $((_ws / 60)) $((_ws % 60)) "${_wp:-uid $_wu}" "$_wt"
+        done
+    echo ""
     echo "----- TOP PARTIAL WAKELOCK HOLDERS -----"
     echo "(app/component held a partial wakelock = CPU couldn't fully sleep)"
     # OxygenOS batterystats lists these two ways depending on section/build:
@@ -2385,7 +2452,12 @@ lk_bt_reconnect_stop() {
 
 lk_init() {
   MODDIR="$(lk_resolve_moddir)"
+  [ -n "$MODDIR" ] || MODDIR="/data/adb/modules/${MODID:-AutoSystemBoost}"
   LK_MODDIR="$MODDIR"
+  export MODDIR LK_MODDIR
+  # Same settings fallback the module uses: a capture's snapshot printed "cmd: Failure
+  # calling service settings: Failed transaction" where the doze constants belonged.
+  [ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
   LK_GOV_LOG="$(lk_resolve_gov_log)"
   mkdir -p "$LK_OUT_DIR" || { echo "Cannot create $LK_OUT_DIR"; exit 1; }
   LK_START_EPOCH=$(date +%s)

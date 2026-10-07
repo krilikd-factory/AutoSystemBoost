@@ -610,7 +610,12 @@ lk_phase_ledger_accumulate() {
   _j=$(lk_status_json)
   _temp=$(echo "$_j" | awk -F'"temp":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
   _surf=$(echo "$_j" | awk -F'"surface_hotspot":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
-  _p6=$(cat /sys/devices/system/cpu/cpufreq/policy6/scaling_cur_freq 2>/dev/null)
+  # The top cluster wherever it is: a hard-coded policy6 read nothing on a 4-cluster SoC
+  # (SM8650 is policy0/2/5/7), and an OnePlus 12 capture printed p6MHz 0 for every phase.
+  _p6=$(cat "${LK_PRIME_POL:-/sys/devices/system/cpu/cpufreq/policy6}/scaling_cur_freq" 2>/dev/null)
+  # 0 means "no surface sensor found", not 0 degC: averaged in, it printed surfT 0 for
+  # every phase on the same phone.
+  [ "${_surf:-0}" -gt 0 ] 2>/dev/null || _surf=""
   _gb="$LK_GPU_NOW"
   # Accumulate means as well as peaks - the legend promises averages.
   #
@@ -751,22 +756,41 @@ lk_emit_current_soc_consistency() {
     return 0
   fi
   echo "phase             dur_min  pct/h  current_pct/h  difference  verdict"
+  # Per phase TYPE, summed over every discharging row of that type.
+  #
+  # One row per contiguous phase demanded 30 unbroken minutes, and real use alternates
+  # every few minutes (video, a reply, video again): a capture with 161 min of
+  # audio_spk_scr in 1-5 minute pieces printed "no comparable discharge phase" and the
+  # section said nothing. Summing the pieces is the same arithmetic the per-phase table
+  # uses for pct/h, so both figures stay on one basis. Charging pieces are left out.
   awk -F'\t' -v cap="$_cc_cap" '
     !/^#/ {
       ph=$1; dur=$3-$2; dp=$4-$5; ma=$13
-      # A 30-minute floor prevents one capacity step from dominating a very short sample.
-      if(dur<1800 || dp<=0 || ma<=0) next
-      soc=dp*3600.0/dur; cur=ma*100.0/cap
-      hi=(soc>cur)?soc:cur; diff=(hi>0)?(100.0*((soc>cur)?soc-cur:cur-soc)/hi):0
-      # Which way it is off matters: current BELOW the SOC rate is the known supply-path
-      # blind spot, current ABOVE it in a sleep block is the recorder sampling only the
-      # moments it woke the phone itself (a 585-min night read 2.23 %/h by current, 0.51 by %).
-      verdict=(diff>30)?((cur<soc)?"CHECK low (>30%)":"CHECK high (>30%)"):"aligned"
-      printf "%-17s %7.1f %6.2f %13.2f %9.1f%%  %s\n", ph,dur/60.0,soc,cur,diff,verdict
-      n++
+      if(dur<=0 || dp<0 || ma<=0) next
+      D[ph]+=dur; DP[ph]+=dp; MA[ph]+=ma*dur
     }
-    END { if(n==0) print "no comparable discharge phase >=30 min with both SOC and current evidence." }
-  ' "$_cc_led" | sort
+    END {
+      for (ph in D) {
+        # 30 minutes and two whole SOC steps: below that one step dominates the rate.
+        if (D[ph] < 1800 || DP[ph] < 2) continue
+        soc=DP[ph]*3600.0/D[ph]; cur=(MA[ph]/D[ph])*100.0/cap
+        hi=(soc>cur)?soc:cur; diff=(hi>0)?(100.0*((soc>cur)?soc-cur:cur-soc)/hi):0
+        # Which way it is off matters: current BELOW the SOC rate is the known supply-path
+        # blind spot, current ABOVE it in a sleep block is the recorder sampling only the
+        # moments it woke the phone itself (a 585-min night read 2.23 %/h by current, 0.51 by %).
+        verdict=(diff>30)?((cur<soc)?"CHECK low (>30%)":"CHECK high (>30%)"):"aligned"
+        printf "%-17s %7.1f %6.2f %13.2f %9.1f%%  %s\n", ph,D[ph]/60.0,soc,cur,diff,verdict
+        n++
+        r=(soc>0)?cur/soc:0; R+=r; if(n==1||r<RL)RL=r; if(n==1||r>RH)RH=r
+      }
+      if(n==0) print "no phase type with >=30 min of discharge and >=2 SOC steps in this capture."
+      # One ratio across very different loads is a property of the gauge, not of any load.
+      # A sampling gap would differ between screen-on and idle; a scale does not. When at
+      # least two phase types agree within 35%, name the factor so mA columns can be read.
+      if (n>=2 && RL>0 && (RH-RL)/RL<=0.35 && (R/n<0.77 || R/n>1.3))
+        printf "~scale: current_now reads x%.2f of the SOC-derived drain in every phase type (%.2f-%.2f) - a gauge property (e.g. one cell of a dual-cell pack), not a load; multiply mA by %.1f to compare.\n", R/n, RL, RH, n/R
+    }
+  ' "$_cc_led" | sort | sed 's/^~scale: /scale: /'
   echo "current_pct/h uses the reported charge_full capacity and sampled discharge current."
   echo "A CHECK result is a measurement-consistency warning, not causal energy attribution."
   echo "CHECK low (>30%): avg_mA under-reports - current_now sees the main supply path, while"
@@ -1023,7 +1047,8 @@ lk_emit_phase_summary() {
         # whole night: a capture read "sleep cpuT 67" while the trace behind it sat
         # mostly at 38-44. Peaks keep their place in the hotspots section, where a
         # single moment is exactly the point.
-        CT[ph]+=$6*dur; SF[ph]+=$7*dur; TD[ph]+=dur;
+        CT[ph]+=$6*dur; TD[ph]+=dur;
+        if($7>0){ SF[ph]+=$7*dur; SFD[ph]+=dur }
         # Average the prime ceiling, do not take its peak.
         #
         # if($8>P6[ph]) kept the highest value seen in the phase. Every phase here is long -
@@ -1077,8 +1102,12 @@ lk_emit_phase_summary() {
           # relative test, so it scales: a fast drain can be measured over a shorter window
           # than a slow one, which is exactly right.
           conf=(rate>0 && step<=rate/4.0)?"":"~";
-          printf "%-15s %8.1f %7d %7.2f%1s %6d %9.1f %8d %8d %9d %7d %9d %8s\n", \
-            p, durm, DP[p], rate, conf, (MAD[p]>0?MA[p]/MAD[p]:0), ((RX[p]+TX[p])/1048576.0), (TD[p]>0?CT[p]/TD[p]:0), (TD[p]>0?SF[p]/TD[p]:0), (P6D[p]>0?P6[p]/P6D[p]/1000:0), gavg, TH[p], aws;
+          # No reading is "-", never 0: a phone without a surface sensor, or a policy the
+          # recorder could not read, is not a phone at 0 degC with its prime parked at 0 MHz.
+          sfs=(SFD[p]>0)?sprintf("%d",SF[p]/SFD[p]):"-";
+          p6s=(P6D[p]>0)?sprintf("%d",P6[p]/P6D[p]/1000):"-";
+          printf "%-15s %8.1f %7d %7.2f%1s %6d %9.1f %8d %8s %9s %7d %9d %8s\n", \
+            p, durm, DP[p], rate, conf, (MAD[p]>0?MA[p]/MAD[p]:0), ((RX[p]+TX[p])/1048576.0), (TD[p]>0?CT[p]/TD[p]:0), sfs, p6s, gavg, TH[p], aws;
         }
         for (ph in CHG) if (CHG[ph] > 0)
           printf "  ^ %s: %d of %d samples gained charge (%.0f min) - a charger was connected inside the phase; its pct/h is not a discharge rate\n", ph, CHG[ph], N[ph], CHGD[ph]/60;
@@ -1092,8 +1121,8 @@ lk_emit_phase_summary() {
       # what makes it worth fixing rather than tolerating.
       !/^#/ && ($1=="idle" || $1=="sleep") { d=$3-$2; if(d>DUR){DUR=d;SP=$4;EP=$5;CT=$6;SF=$7;P6=$8;AW=$12;MAV=$13} }
       END{ if(DUR>=10800){ aws=(AW>=0)?sprintf("%.1f",AW):"-";
-        printf "%-15s %8.1f %7d %8.2f %6d %9s %8d %8d %9d %7s %9s %8s\n", \
-        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, MAV, "-", CT, SF, (P6/1000), "-", "-", aws } }
+        printf "%-15s %8.1f %7d %8.2f %6d %9s %8d %8s %9s %7s %9s %8s\n", \
+        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, MAV, "-", CT, (SF>0?sprintf("%d",SF):"-"), (P6>0?sprintf("%d",P6/1000):"-"), "-", "-", aws } }
     ' "$_all"
     echo ""
     echo "Legend: '~' after pct/h = below measurement resolution: the phase was too short or"
@@ -1238,8 +1267,12 @@ lk_emit_full_day_report() {
     if [ -s "$LK_OUT_DIR/_wakelock_report.txt" ]; then
       echo "Android batterystats attribution (works without debugfs):"
       echo "see _wakelock_report.txt for the ranked offenders. Top of it:"
-      sed -n '/TOP PARTIAL WAKELOCK HOLDERS/,/TOP ALARM/p' \
+      # Apps by held time first (named, with durations), then the tag counts.
+      sed -n '/TOP APPS BY HELD WAKELOCK TIME/,/TOP PARTIAL WAKELOCK HOLDERS/p' \
         "$LK_OUT_DIR/_wakelock_report.txt" 2>/dev/null | head -12
+      sed -n '/TOP PARTIAL WAKELOCK HOLDERS/,/TOP ALARM/p' \
+        "$LK_OUT_DIR/_wakelock_report.txt" 2>/dev/null | sed -n '2,10p'
+
     elif [ -s "$LK_OUT_DIR/wake_sources.txt" ]; then
       echo "see wake_sources.txt for full detail. DELTA (active time gained"
       echo "during capture) is the actionable part — top offenders:"
@@ -1529,6 +1562,7 @@ lk_bt_reconnect_start
 lk_perf_trace_header
 lk_battery_trace_header
 lk_display_trace_header
+lk_display_config_capture
 lk_charge_trace_header
 lk_asb_feature_header
 lk_config_watch_init
