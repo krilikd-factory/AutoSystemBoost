@@ -2214,6 +2214,31 @@ _cam_plat="$(gp ro.board.platform)"
 _is_pineapple=0
 case "$_cam_plat" in pineapple|sm8650*) _is_pineapple=1 ;; esac
 
+# --- 6.0 Camera bind evidence: where the retouch list / tone table should come from ---
+# The live view depends on the namespace you read it from, so name all three: the bind
+# manifest, the payload it points at, and what init's namespace (the one the camera HAL
+# lives in) shows at the live path.
+_cbm=/data/adb/asb/odm_bind_manifest.txt
+if [ -f "$_cbm" ]; then
+  _cbn=0
+  while IFS='|' read -r _cbt _cbp; do
+    case "$_cbt" in */camera/*) : ;; *) continue ;; esac
+    _cbn=$((_cbn + 1))
+    _cbpa="$(grep -c '"packageName"' "$_cbp" 2>/dev/null)"
+    _cbmnt=no; grep -qs " $_cbt " /proc/1/mountinfo && _cbmnt=yes
+    _cbinit=""
+    command -v nsenter >/dev/null 2>&1 && _cbinit="$(nsenter -t 1 -m -- grep -c '"packageName"' "$_cbt" 2>/dev/null)"
+    case "$_cbt" in
+      *video_beauty*) NOTE "camera bind: $_cbt  payload apps=${_cbpa:-?}  bound in init ns=$_cbmnt  init-ns apps=${_cbinit:-?}" ;;
+      *) NOTE "camera bind: $_cbt  payload=$([ -f "$_cbp" ] && echo present || echo MISSING)  bound in init ns=$_cbmnt" ;;
+    esac
+  done < "$_cbm"
+  [ "$_cbn" = 0 ] && NOTE "camera bind: none queued in odm_bind_manifest.txt (the camera reads stock files)"
+else
+  NOTE "camera bind: no odm_bind_manifest.txt"
+fi
+grep 'odm_bind' /data/adb/asb/vendor_mounts.log 2>/dev/null | tail -n 3 | while IFS= read -r _cbl; do P "    $_cbl"; done
+
 # --- 6a. Multicamera HAL props (the crash is in ChiMcxRoiTranslator) ---
 P "  multicamera / HAL props:"
 for _p in \
