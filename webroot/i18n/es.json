@@ -189,7 +189,7 @@
     },
     "BG_TRIM_LEVEL": {
       "name": "Limpieza en segundo plano",
-      "desc": "Cuánto limitar las apps en segundo plano.\n\n«off»: no tocarlas en absoluto: Android decide solo. Elígelo si quieres ASB por la CPU y la temperatura y te va bien el comportamiento del fondo.\n\n«safe»: buckets de espera moderados para apps que no abres desde hace tiempo. Las notificaciones siguen llegando, nada se congela.\n\n«aggressive»: más fuerte: las apps en fondo pueden perder estado y despertar menos. Los autenticadores, el teléfono y la pila Bluetooth están protegidos en todos los niveles.\n\nAl cambiar a «off» los buckets vuelven a active; el sistema toma el control desde ahí."
+      "desc": "Cuánto limitar las apps en segundo plano.\n\n«off»: no tocarlas en absoluto: Android decide solo. Elígelo si quieres ASB por la CPU y la temperatura y te va bien el comportamiento del fondo.\n\n«safe»: buckets de espera moderados para apps que no abres desde hace tiempo. Las notificaciones siguen llegando, nada se congela.\n\n«aggressive»: más fuerte: las apps en fondo pueden perder estado y despertar menos. Los autenticadores, el teléfono y la pila Bluetooth están protegidos en todos los niveles.\n\nAl cambiar a «off», cada app vuelve al bucket que tenía antes de ASB.\n\nLas apps pesadas (Instagram, Facebook, TikTok…) pasan a «rare» solo cuando el propio Android indica que no las usas a diario; una app que abres todos los días no se toca.\n\n«aggressive» añade una nueva comprobación cada 6 horas, un techo de memoria para apps pesadas y liberación de memoria de las que están inactivas con la pantalla apagada. Desactivar paquetes y detener servicios del fabricante solo con el archivo de consentimiento explícito /data/adb/asb/allow_disruptive_bg_trim."
     },
     "gms_trim": {
       "name": "Limitar servicios de Google",
@@ -358,6 +358,7 @@
   "am_next": "⏭ al instante, reinicia la app",
   "t_pending_reboot": "↻ Cambios pendientes de reinicio",
   "t_cfg_live": " · aplicado",
+  "t_cfg_screenoff": " · actúa con la pantalla apagada",
   "t_cfg_saved": " · tras reiniciar",
   "t_cfg_next": " · reinicia la app",
   "t_not_applied": "no aplicado",

@@ -247,7 +247,7 @@
       "desc": "For phones where Bluetooth headphones disconnect on their own during playback. Most devices never do this, so it is off by default.\n\nOn stable, Wi-Fi stops scanning for new networks while audio is playing: the 2.4 GHz band and Bluetooth share one antenna, and a scan sweeps the whole band - a stream that misses its slot disconnects.\n\nThe cost is that new Wi-Fi networks appear more slowly. Nothing else changes.\n\nNo codec is forced."
     },
     "BG_TRIM_LEVEL": {
-      "desc": "How hard to limit background apps.\n\noff - do not touch them at all: Android alone decides. Pick this if you want ASB for CPU and thermals and are happy with how background apps behave.\n\nsafe - moderate standby buckets for apps you have not opened in a while. Notifications still arrive, nothing freezes.\n\naggressive - stronger: background apps may lose state and wake less often. Authenticators, the dialer and the Bluetooth stack are protected at every level.\n\nSwitching to off puts the buckets back to active; the system takes over from there."
+      "desc": "How hard to limit background apps.\n\noff - do not touch them at all: Android alone decides. Pick this if you want ASB for CPU and thermals and are happy with how background apps behave.\n\nsafe - moderate standby buckets for apps you have not opened in a while. Notifications still arrive, nothing freezes.\n\naggressive - stronger: background apps may lose state and wake less often. Authenticators, the dialer and the Bluetooth stack are protected at every level.\n\nSwitching to off returns every app to the bucket it had before ASB moved it.\n\nHeavy apps (Instagram, Facebook, TikTok…) are moved to \"rare\" only when Android itself says they are not in daily use; an app you open every day is left alone.\n\nAggressive adds a re-check every 6 hours, a memory ceiling for heavy apps and a memory trim of idle heavy apps while the screen is off. Package disabling and vendor service stops happen only with the explicit opt-in file /data/adb/asb/allow_disruptive_bg_trim."
     },
     "mglru_hold": {
       "name": "Keep Apps In Memory",
@@ -371,6 +371,7 @@
   "t_cfg_blur": " · shade now, rest after reboot",
   "t_cfg_err": "✗ Failed to write config",
   "t_cfg_live": " · applied",
+  "t_cfg_screenoff": " · acts while the screen is off",
   "t_cfg_next": " · restart the app",
   "t_cfg_saved": " · reboot to apply",
   "t_not_applied": "not applied",

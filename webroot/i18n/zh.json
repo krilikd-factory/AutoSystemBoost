@@ -14,6 +14,7 @@
   "am_next": "⏭ 立即生效，需重启应用",
   "t_pending_reboot": "↻ 更改等待重启",
   "t_cfg_live": " · 已应用",
+  "t_cfg_screenoff": " · 在屏幕关闭时生效",
   "t_cfg_saved": " · 重启后生效",
   "t_cfg_next": " · 请重启应用",
   "t_not_applied": "未应用",
@@ -214,7 +215,7 @@
     },
     "BG_TRIM_LEVEL": {
       "name": "后台清理",
-      "desc": "限制后台应用的力度。\n\noff — 完全不动：由 Android 自行决定。如果你只想要 ASB 的 CPU 和温控效果，且对后台现状满意，选这个。\n\nsafe — 对很久没打开的应用使用适度的待机桶。通知照常到达，不会有应用被冻结。\n\naggressive — 更强：后台应用可能丢失状态、唤醒更少。身份验证器、拨号器和蓝牙协议栈在所有级别都受保护。\n\n切回 off 时，待机桶恢复为 active；之后由系统自行接管。"
+      "desc": "限制后台应用的力度。\n\noff — 完全不动：由 Android 自行决定。如果你只想要 ASB 的 CPU 和温控效果，且对后台现状满意，选这个。\n\nsafe — 对很久没打开的应用使用适度的待机桶。通知照常到达，不会有应用被冻结。\n\naggressive — 更强：后台应用可能丢失状态、唤醒更少。身份验证器、拨号器和蓝牙协议栈在所有级别都受保护。\n\n切回 off 时，每个应用都会回到 ASB 改动之前所在的待机桶。\n\n重型应用（Instagram、Facebook、TikTok…）只有在 Android 自身判断你并非每天使用时才会被移入 \"rare\"；你每天打开的应用不会被改动。\n\naggressive 另外增加：每 6 小时重新检查、为重型应用设置内存上限、在屏幕关闭时回收闲置重型应用的内存。停用软件包和停止厂商服务只有在存在明确授权文件 /data/adb/asb/allow_disruptive_bg_trim 时才会执行。"
     },
     "gms_trim": {
       "name": "限制谷歌服务",

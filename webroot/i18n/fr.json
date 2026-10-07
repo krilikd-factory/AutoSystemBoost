@@ -247,7 +247,7 @@
       "name": "Profil batterie automatique"
     },
     "BG_TRIM_LEVEL": {
-      "desc": "À quel point limiter les applications en arrière-plan.\n\n« off » — ne pas y toucher : Android décide seul. Choisissez ceci si vous voulez ASB pour le CPU et la température et que l’arrière-plan vous convient tel quel.\n\n« safe » — buckets de veille modérés pour les apps non ouvertes depuis longtemps. Les notifications arrivent, rien ne gèle.\n\n« aggressive » — plus fort : les apps d’arrière-plan peuvent perdre leur état et se réveiller moins souvent. Authentificateurs, téléphone et pile Bluetooth sont protégés à tous les niveaux.\n\nEn passant à « off », les buckets reviennent à active ; le système reprend la main.",
+      "desc": "À quel point limiter les applications en arrière-plan.\n\n« off » — ne pas y toucher : Android décide seul. Choisissez ceci si vous voulez ASB pour le CPU et la température et que l’arrière-plan vous convient tel quel.\n\n« safe » — buckets de veille modérés pour les apps non ouvertes depuis longtemps. Les notifications arrivent, rien ne gèle.\n\n« aggressive » — plus fort : les apps d’arrière-plan peuvent perdre leur état et se réveiller moins souvent. Authentificateurs, téléphone et pile Bluetooth sont protégés à tous les niveaux.\n\nEn passant à « off », chaque application retrouve le bucket qu’elle avait avant ASB.\n\nLes applis lourdes (Instagram, Facebook, TikTok…) passent en « rare » seulement si Android lui-même estime que vous ne les utilisez pas chaque jour ; une appli ouverte tous les jours n’est pas touchée.\n\n« aggressive » ajoute une nouvelle vérification toutes les 6 heures, un plafond mémoire pour les applis lourdes et une libération de mémoire des applis lourdes inactives écran éteint. Désactivation de paquets et arrêt de services constructeur uniquement avec le fichier d’accord explicite /data/adb/asb/allow_disruptive_bg_trim.",
       "name": "Nettoyage de l’arrière-plan"
     },
     "UX_MANAGE_TIMEOUTS": {
@@ -612,6 +612,7 @@
   "learn_tip_none": "Aucune session terminée pour ce profil pour l’instant.",
   "lv_sessions_short": "ses",
   "t_cfg_live": " · appliqué",
+  "t_cfg_screenoff": " · agit écran éteint",
   "t_prof_applied": " appliqué",
   "grp_audio": "Audio",
   "grp_camera": "Appareil photo",

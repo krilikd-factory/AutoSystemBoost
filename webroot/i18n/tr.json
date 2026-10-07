@@ -189,7 +189,7 @@
     },
     "BG_TRIM_LEVEL": {
       "name": "Arka plan temizleme",
-      "desc": "Arka plan uygulamaları ne kadar sınırlanacak.\n\noff — hiç dokunma: kararı yalnızca Android verir. ASB’yi CPU ve sıcaklık için istiyor, arka plandan memnunsanız bunu seçin.\n\nsafe — bir süredir açmadığınız uygulamalar için ılımlı bekleme grupları. Bildirimler gelmeye devam eder, hiçbir şey donmaz.\n\naggressive — daha sert: arka plan uygulamaları durumunu kaybedebilir ve daha seyrek uyanabilir. Kimlik doğrulayıcılar, telefon uygulaması ve Bluetooth yığını her seviyede korunur.\n\noff’a geçince gruplar active’e döner; oradan sonrasını sistem yönetir."
+      "desc": "Arka plan uygulamaları ne kadar sınırlanacak.\n\noff — hiç dokunma: kararı yalnızca Android verir. ASB’yi CPU ve sıcaklık için istiyor, arka plandan memnunsanız bunu seçin.\n\nsafe — bir süredir açmadığınız uygulamalar için ılımlı bekleme grupları. Bildirimler gelmeye devam eder, hiçbir şey donmaz.\n\naggressive — daha sert: arka plan uygulamaları durumunu kaybedebilir ve daha seyrek uyanabilir. Kimlik doğrulayıcılar, telefon uygulaması ve Bluetooth yığını her seviyede korunur.\n\noff’a geçince her uygulama ASB’den önceki grubuna döner.\n\nAğır uygulamalar (Instagram, Facebook, TikTok…) yalnızca Android onları günlük kullanılmıyor saydığında \"rare\" grubuna alınır; her gün açtığınız bir uygulamaya dokunulmaz.\n\naggressive; 6 saatte bir yeniden kontrol, ağır uygulamalar için bellek tavanı ve ekran kapalıyken boştaki ağır uygulamaların belleğinin boşaltılmasını ekler. Paket devre dışı bırakma ve üretici servislerini durdurma yalnızca /data/adb/asb/allow_disruptive_bg_trim onay dosyasıyla yapılır."
     },
     "gms_trim": {
       "name": "Google hizmetlerini kısıtla",
@@ -358,6 +358,7 @@
   "am_next": "⏭ anında, uygulamayı yeniden başlatın",
   "t_pending_reboot": "↻ Değişiklikler yeniden başlatma bekliyor",
   "t_cfg_live": " · uygulandı",
+  "t_cfg_screenoff": " · ekran kapalıyken devreye girer",
   "t_cfg_saved": " · yeniden başlatınca",
   "t_cfg_next": " · uygulamayı yeniden başlatın",
   "t_not_applied": "uygulanmadı",

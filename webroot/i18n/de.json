@@ -189,7 +189,7 @@
     },
     "BG_TRIM_LEVEL": {
       "name": "Hintergrund-Bereinigung",
-      "desc": "Wie stark Hintergrund-Apps begrenzt werden.\n\n„off“ — gar nicht anfassen: Android allein entscheidet. Wählen Sie dies, wenn Sie ASB für CPU und Temperaturen wollen und mit dem Hintergrundverhalten zufrieden sind.\n\n„safe“ — moderate Standby-Buckets für Apps, die Sie länger nicht geöffnet haben. Benachrichtigungen kommen an, nichts friert ein.\n\n„aggressive“ — stärker: Hintergrund-Apps können ihren Zustand verlieren und seltener aufwachen. Authenticator, Telefon-App und der Bluetooth-Stack sind auf jeder Stufe geschützt.\n\nBeim Umschalten auf „off“ gehen die Buckets zurück auf active; das System übernimmt von dort."
+      "desc": "Wie stark Hintergrund-Apps begrenzt werden.\n\n„off“ — gar nicht anfassen: Android allein entscheidet. Wählen Sie dies, wenn Sie ASB für CPU und Temperaturen wollen und mit dem Hintergrundverhalten zufrieden sind.\n\n„safe“ — moderate Standby-Buckets für Apps, die Sie länger nicht geöffnet haben. Benachrichtigungen kommen an, nichts friert ein.\n\n„aggressive“ — stärker: Hintergrund-Apps können ihren Zustand verlieren und seltener aufwachen. Authenticator, Telefon-App und der Bluetooth-Stack sind auf jeder Stufe geschützt.\n\nBeim Umschalten auf „off“ kehrt jede App in den Bucket zurück, den sie vor ASB hatte.\n\nSchwere Apps (Instagram, Facebook, TikTok…) kommen nur dann auf „rare“, wenn Android selbst sie nicht als täglich genutzt einstuft; eine App, die Sie jeden Tag öffnen, bleibt unberührt.\n\n„aggressive“ ergänzt eine erneute Prüfung alle 6 Stunden, eine Speicherobergrenze für schwere Apps und eine Speicherfreigabe ungenutzter schwerer Apps bei ausgeschaltetem Bildschirm. Pakete deaktivieren und Herstellerdienste stoppen nur mit der ausdrücklichen Freigabedatei /data/adb/asb/allow_disruptive_bg_trim."
     },
     "gms_trim": {
       "name": "Google-Dienste drosseln",
@@ -358,6 +358,7 @@
   "am_next": "⏭ sofort, App neu starten",
   "t_pending_reboot": "↻ Änderungen warten auf Neustart",
   "t_cfg_live": " · angewendet",
+  "t_cfg_screenoff": " · wirkt bei ausgeschaltetem Bildschirm",
   "t_cfg_saved": " · nach Neustart",
   "t_cfg_next": " · App neu starten",
   "t_not_applied": "nicht angewendet",

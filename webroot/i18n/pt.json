@@ -189,7 +189,7 @@
     },
     "BG_TRIM_LEVEL": {
       "name": "Limpeza em segundo plano",
-      "desc": "Quão fortemente limitar as apps em segundo plano.\n\noff — não lhes tocar: o Android decide sozinho. Escolha isto se quer o ASB para CPU e temperaturas e está satisfeito com o comportamento de fundo.\n\nsafe — buckets de espera moderados para apps que não abre há algum tempo. As notificações continuam a chegar, nada congela.\n\naggressive — mais forte: as apps de fundo podem perder estado e acordar menos vezes. Autenticadores, telefone e pilha Bluetooth estão protegidos em todos os níveis.\n\nAo mudar para off, os buckets voltam a active; o sistema assume a partir daí."
+      "desc": "Quão fortemente limitar as apps em segundo plano.\n\noff — não lhes tocar: o Android decide sozinho. Escolha isto se quer o ASB para CPU e temperaturas e está satisfeito com o comportamento de fundo.\n\nsafe — buckets de espera moderados para apps que não abre há algum tempo. As notificações continuam a chegar, nada congela.\n\naggressive — mais forte: as apps de fundo podem perder estado e acordar menos vezes. Autenticadores, telefone e pilha Bluetooth estão protegidos em todos os níveis.\n\nAo mudar para off, cada app volta ao bucket que tinha antes do ASB.\n\nApps pesados (Instagram, Facebook, TikTok…) vão para \"rare\" só quando o próprio Android indica que você não os usa diariamente; um app que você abre todo dia não é tocado.\n\naggressive acrescenta uma nova verificação a cada 6 horas, um teto de memória para apps pesados e liberação de memória dos inativos com a tela desligada. Desativar pacotes e parar serviços do fabricante só com o arquivo de consentimento explícito /data/adb/asb/allow_disruptive_bg_trim."
     },
     "gms_trim": {
       "name": "Limitar serviços Google",
@@ -358,6 +358,7 @@
   "am_next": "⏭ imediato, reinicie o app",
   "t_pending_reboot": "↻ Alterações aguardam reinício",
   "t_cfg_live": " · aplicado",
+  "t_cfg_screenoff": " · atua com a tela desligada",
   "t_cfg_saved": " · após reiniciar",
   "t_cfg_next": " · reinicie o app",
   "t_not_applied": "não aplicado",

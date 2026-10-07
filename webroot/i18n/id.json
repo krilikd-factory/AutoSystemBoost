@@ -189,7 +189,7 @@
     },
     "BG_TRIM_LEVEL": {
       "name": "Pembersihan latar belakang",
-      "desc": "Seberapa keras membatasi aplikasi latar belakang.\n\noff - jangan sentuh sama sekali: Android yang memutuskan. Pilih ini jika Anda memakai ASB demi CPU dan suhu, dan sudah puas dengan perilaku latar belakang.\n\nsafe - bucket siaga moderat untuk aplikasi yang lama tidak dibuka. Notifikasi tetap masuk, tidak ada yang macet.\n\naggressive - lebih kuat: aplikasi latar dapat kehilangan status dan lebih jarang bangun. Autentikator, aplikasi telepon, dan tumpukan Bluetooth terlindungi di semua level.\n\nSaat beralih ke off, bucket dikembalikan ke active; sistem mengambil alih dari sana."
+      "desc": "Seberapa keras membatasi aplikasi latar belakang.\n\noff - jangan sentuh sama sekali: Android yang memutuskan. Pilih ini jika Anda memakai ASB demi CPU dan suhu, dan sudah puas dengan perilaku latar belakang.\n\nsafe - bucket siaga moderat untuk aplikasi yang lama tidak dibuka. Notifikasi tetap masuk, tidak ada yang macet.\n\naggressive - lebih kuat: aplikasi latar dapat kehilangan status dan lebih jarang bangun. Autentikator, aplikasi telepon, dan tumpukan Bluetooth terlindungi di semua level.\n\nSaat beralih ke off, setiap aplikasi kembali ke bucket yang dimilikinya sebelum ASB.\n\nAplikasi berat (Instagram, Facebook, TikTok…) dipindah ke \"rare\" hanya jika Android sendiri menilai Anda tidak memakainya setiap hari; aplikasi yang Anda buka tiap hari dibiarkan.\n\naggressive menambahkan pemeriksaan ulang tiap 6 jam, batas memori untuk aplikasi berat, dan pelepasan memori aplikasi berat yang menganggur saat layar mati. Menonaktifkan paket dan menghentikan layanan vendor hanya dengan file persetujuan eksplisit /data/adb/asb/allow_disruptive_bg_trim."
     },
     "gms_trim": {
       "name": "Batasi layanan Google",
@@ -358,6 +358,7 @@
   "am_next": "⏭ langsung, mulai ulang aplikasi",
   "t_pending_reboot": "↻ Perubahan menunggu mulai ulang",
   "t_cfg_live": " · diterapkan",
+  "t_cfg_screenoff": " · bekerja saat layar mati",
   "t_cfg_saved": " · setelah mulai ulang",
   "t_cfg_next": " · mulai ulang aplikasi",
   "t_not_applied": "tidak diterapkan",

@@ -14,6 +14,7 @@
   "am_next": "⏭ subito, riavvia l’app",
   "t_pending_reboot": "↻ Modifiche in attesa di riavvio",
   "t_cfg_live": " · applicato",
+  "t_cfg_screenoff": " · agisce a schermo spento",
   "t_cfg_saved": " · dopo il riavvio",
   "t_cfg_next": " · riavvia l’app",
   "t_not_applied": "non applicato",
@@ -214,7 +215,7 @@
     },
     "BG_TRIM_LEVEL": {
       "name": "Pulizia in background",
-      "desc": "Quanto limitare le app in background.\n\noff — non toccarle affatto: decide solo Android. Sceglilo se vuoi ASB per CPU e temperature e il comportamento in background ti va bene così.\n\nsafe — bucket di standby moderati per le app che non apri da tempo. Le notifiche arrivano, nulla si blocca.\n\naggressive — più forte: le app in background possono perdere lo stato e svegliarsi meno spesso. Autenticatori, telefono e stack Bluetooth sono protetti a ogni livello.\n\nPassando a off, i bucket tornano ad active; da lì se ne occupa il sistema."
+      "desc": "Quanto limitare le app in background.\n\noff — non toccarle affatto: decide solo Android. Sceglilo se vuoi ASB per CPU e temperature e il comportamento in background ti va bene così.\n\nsafe — bucket di standby moderati per le app che non apri da tempo. Le notifiche arrivano, nulla si blocca.\n\naggressive — più forte: le app in background possono perdere lo stato e svegliarsi meno spesso. Autenticatori, telefono e stack Bluetooth sono protetti a ogni livello.\n\nPassando a off, ogni app torna nel bucket che aveva prima di ASB.\n\nLe app pesanti (Instagram, Facebook, TikTok…) passano a \"rare\" solo quando Android stesso indica che non le usi ogni giorno; un’app che apri tutti i giorni resta com’è.\n\naggressive aggiunge un nuovo controllo ogni 6 ore, un tetto di memoria per le app pesanti e la liberazione della memoria di quelle inattive a schermo spento. Disattivazione di pacchetti e arresto di servizi del produttore solo con il file di consenso esplicito /data/adb/asb/allow_disruptive_bg_trim."
     },
     "gms_trim": {
       "name": "Limita servizi Google",
