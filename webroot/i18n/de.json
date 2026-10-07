@@ -332,7 +332,7 @@
     },
     "ltpo_force": {
       "name": "LTPO erzwingen",
-      "desc": "LTPO-Panels können die Bildwiederholrate auf das Minimum senken, wenn sich nichts auf dem Bildschirm bewegt; OxygenOS liefert Teile dieses Pfads deaktiviert aus. Dieser Patch nimmt die EIGENE Bildwiederholraten-Tabelle deines Geräts (oplus_vrr_config.json), aktiviert jeden Energiespar-Schalter des Panels, den der Hersteller deaktiviert gelassen hat (ADFR, PDFR, Refresh-Rate-Director, Histogramm-Helligkeitssteuerung u. a.), und schaltet zusätzlich die eigene Telemetrie des Display-Stacks AB (VRR-Info-Aufzeichnungen, Histogramm-Sampling, Big-Data- und Shader-Cache-Miss-Uploads) – gratis Akkulaufzeit ohne Einfluss auf das Bild. Es wird nichts von einem anderen Modell kopiert, und die Originaldatei wird nie verändert.\n\nDer Patch wird während der Modulinstallation vorbereitet, und dieser Schalter entscheidet, ob er angewendet wird: standardmäßig aus, das Einschalten wirkt nach einem Neustart. Falls das Installationsprogramm keine Tabelle auf deinem Gerät gefunden hat oder nichts mehr zu verbessern war, tut der Schalter nichts – Installationsprotokoll und Status-Badge zeigen, welcher Fall zutrifft.\n\nIst die Tabelle ab Werk vollständig aktiviert (wie beim OnePlus 15), lohnt sich der Patch trotzdem: Eine identische Kopie wird eingebunden, in der nur die Telemetrie-Schalter deaktiviert sind."
+      "desc": "LTPO-Panels können die Bildwiederholrate auf das Minimum senken, wenn sich nichts auf dem Bildschirm bewegt; OxygenOS liefert Teile dieses Pfads deaktiviert aus. Dieser Patch nimmt die EIGENE Bildwiederholraten-Tabelle deines Geräts (oplus_vrr_config.json), aktiviert jeden Energiespar-Schalter des Panels, den der Hersteller deaktiviert gelassen hat (ADFR, PDFR, Refresh-Rate-Director, Histogramm-Helligkeitssteuerung u. a.), und schaltet zusätzlich die eigene Telemetrie des Display-Stacks AB (VRR-Info-Aufzeichnungen, Histogramm-Sampling, Big-Data- und Shader-Cache-Miss-Uploads) – gratis Akkulaufzeit ohne Einfluss auf das Bild. Es wird nichts von einem anderen Modell kopiert, und die Originaldatei wird nie verändert.\n\nDer Patch wird während der Modulinstallation vorbereitet, und dieser Schalter entscheidet, ob er angewendet wird: standardmäßig aus, das Einschalten wirkt nach einem Neustart. Falls das Installationsprogramm keine Tabelle auf deinem Gerät gefunden hat oder nichts mehr zu verbessern war, tut der Schalter nichts – Installationsprotokoll und Status-Badge zeigen, welcher Fall zutrifft.\n\nIst die Tabelle ab Werk vollständig aktiviert (wie beim OnePlus 15), lohnt sich der Patch trotzdem: Eine identische Kopie wird eingebunden, in der nur die Telemetrie-Schalter deaktiviert sind.\n\nDer Schalter öffnet außerdem die Android-Seite des Bereichs, und dieser Teil wirkt sofort, ohne Neustart: keine Untergrenze, und die Spitze auf den höchsten Modus, den dieses Panel meldet (165 Hz beim OnePlus 15). Das untere Ende - die eigenen Leerlaufraten des Panels unter 60 Hz - ist Aufgabe der Tabelle, denn Android listet diese Raten gar nicht. Vorherige Werte werden gespeichert und beim Ausschalten wiederhergestellt. Die eigene Obergrenze des Herstellers für die Renderrate (90 Hz auf manchen Builds) bleibt unberührt."
     },
     "mmfeed_off": {
       "name": "Multimedia-Telemetrie aus",
@@ -341,6 +341,26 @@
     "net_screen_off_lte": {
       "name": "LTE bei ausgeschaltetem Bildschirm",
       "desc": "Schaltet 90 Sekunden nach dem Ausschalten des Bildschirms den 5G-Zweig ab und lässt Daten über LTE laufen; beim Einschalten kommt 5G sofort zurück. 5G NSA hält zwei Funkteile gleichzeitig aktiv, für einen Stream bei dunklem Bildschirm reicht LTE allein bei Weitem. Greift nie während eines Anrufs. Standardmäßig aus: Das Ändern der erlaubten Netztypen baut die Datenverbindung neu auf. Akzeptiert das ROM die Änderung nicht, stellt das Modul den Ursprungswert wieder her und versucht es nicht erneut."
+    },
+    "heavy_prime_escape": {
+      "name": "Prime-Kern-Anhebung",
+      "desc": "Nur Smart. Wenn schwere Last die Prime-Kerne auf einem kühlen Telefon an ihrer Obergrenze hält, hebt ASB diese Grenze kurz an - nie über das, was Balanced bei derselben Last erlaubt - und pausiert dann. Aus hält die Prime-Kerne dauerhaft an der Smart-Grenze: etwas kühler und sparsamer, aber lange schwere Aufgaben (Installationen, Exporte, große Seiten) dauern länger, und längere Arbeit hält auch den ganzen Chip länger wach. Auf einem warmen Telefon endet die Anhebung ohnehin von selbst."
+    },
+    "prime_escape_burst_s": {
+      "name": "Dauer der Anhebung",
+      "desc": "Wie lange eine Prime-Kern-Anhebung dauern darf, in Sekunden. Länger lässt eine lange schwere Aufgabe früher fertig werden; kürzer hält Wärme und Verbrauch niedrig. Standard 20. Nur wirksam, solange die Prime-Kern-Anhebung an ist."
+    },
+    "prime_escape_rest_s": {
+      "name": "Pause zwischen Anhebungen",
+      "desc": "Wie lange ASB nach einer Anhebung wartet, bevor die nächste beginnen darf, in Sekunden. Länger = kühler und sparsamer bei Dauerlast; kürzer = reaktionsfreudiger. Standard 40. Nur wirksam, solange die Prime-Kern-Anhebung an ist."
+    },
+    "wakelock_fitness": {
+      "name": "Fitness-Apps & Wakelocks",
+      "desc": "Schrittzähler und Fitness-Tracker sind standardmäßig von allen Wakelock-Regeln ausgenommen, denn ein Tracker, der nicht aufwachen kann, verliert das, wofür er installiert ist. In Feldaufzeichnungen war einer davon - der Schrittzähler von Samsung Health - trotzdem der größte einzelne Grund, warum das Telefon nachts wach blieb: Minuten CPU-Zeit jede Nacht.\n\nBegrenzen weist Android an, Wakelocks einer Fitness-App zu ignorieren, die 2+ Minuten lang einen hielt. Die App läuft weiter, wann immer das Telefon ohnehin wach ist; sie kann die CPU nur nicht selbst wach halten. Der Schrittsensor zählt ohnehin in seinem eigenen Stromspar-Chip, daher bleibt die Tagessumme meist erhalten.\n\nWAS LEIDEN KANN: der minutengenaue Schrittverlauf und ein bei ausgeschaltetem Bildschirm aufgezeichnetes Training. Begleit-Apps für Uhren und Bänder sind nie betroffen - sie würden sonst keine Benachrichtigungen mehr ans Handgelenk liefern. Der vorherige Zustand wird gespeichert und bei Schützen oder Deinstallation wiederhergestellt. Unabhängig von „Auf Wakelocks reagieren“."
+    },
+    "ltpo_video": {
+      "name": "Niedrigste Bildrate für Video",
+      "desc": "Während ein Video läuft, bleibt das Panel bei der Rate, die das System für alles andere gewählt hat - bei dieser Telefonfamilie 90 Hz für einen 30-fps-Stream, also drei Bildwiederholungen pro Frame, wo zwei genügen.\n\nIst dies an, senkt ASB die Spitzenrate auf den kleinsten Panelmodus, der ein exaktes Vielfaches des Videos ist (60 Hz für 30 und 60 fps), sodass die Bewegung ruckelfrei bleibt. Es greift nur, wenn: der Bildschirm an ist, Ton spielt, eine Videoebene 30 oder 60 fps anfordert, keine Ebene hohe Flüssigkeit anfordert und der Bildschirm 3 Sekunden nicht berührt wurde.\n\nDie erste Berührung stellt den vorherigen Wert sofort wieder her, ebenso das Ende der Wiedergabe, das Schließen des Videos und das Ausschalten des Bildschirms - Scrollen und Animationen laufen also mit voller Rate. Der ehrliche Haken: die allerersten Frames nach der Berührung (etwa 0,1-0,2 s) können noch mit der niedrigeren Rate laufen. Für 24-, 25- und 50-fps-Video gibt es keinen niedrigeren ruckelfreien Modus, es bleibt unverändert. Wirkt sofort."
     }
   },
   "nav_live": "Monitor",
@@ -479,6 +499,10 @@
       "0": "ungedrosselt",
       "1": "drosseln",
       "auto": "Stock"
+    },
+    "wakelock_fitness": {
+      "protect": "schützen",
+      "limit": "begrenzen"
     }
   },
   "prof_none": "nicht gewählt",
@@ -830,5 +854,8 @@
   "dbg_log_running_hint": "lösche diesen Ordner, um ein neues zu starten",
   "eta_average": "Durchschnitt",
   "eta_average_tip": "Aus deinem geglätteten Verbrauch bei eingeschaltetem Display; die Live-Rate ersetzt ihn, sobald das Messfenster 10 Minuten erreicht.",
-  "eta_idle_measured_tip": "Gemessener Verbrauch bei ausgeschaltetem Display: "
+  "eta_idle_measured_tip": "Gemessener Verbrauch bei ausgeschaltetem Display: ",
+  "t_cfg_video": " · greift während der Videowiedergabe",
+  "st_ltpo_vid_low": "jetzt",
+  "st_not_running": "läuft nicht"
 }

@@ -332,7 +332,7 @@
     },
     "ltpo_force": {
       "name": "Forzar refresco LTPO",
-      "desc": "Los paneles LTPO pueden bajar a su frecuencia mínima cuando nada se mueve en pantalla; OxygenOS trae partes de ese camino desactivadas. Este parche toma la tabla de frecuencias PROPIA de tu dispositivo (oplus_vrr_config.json), activa todos los interruptores de ahorro del panel que el fabricante dejó apagados (ADFR, PDFR, director de frecuencia, control de retroiluminación por histograma y más), y además DESACTIVA la telemetría propia de la pila de pantalla (registros VRR, muestreo de histograma, big-data y subida de fallos de caché de shaders): batería gratis sin impacto en la imagen. No se copia nada de otro modelo y el archivo original nunca se modifica.\n\nEl parche se prepara durante la instalación del módulo, y este interruptor decide si se aplica: apagado por defecto, y activarlo hace efecto tras un reinicio. Si el instalador no encontró la tabla en tu dispositivo, o no quedó nada que mejorar, el interruptor no hace nada: el registro de instalación y la insignia de estado indican cuál es tu caso.\n\nEn una tabla que el fabricante ya entrega totalmente activada (el OnePlus 15 lo es), el parche sigue siendo útil: se vincula una copia idéntica con solo los interruptores de telemetría desactivados."
+      "desc": "Los paneles LTPO pueden bajar a su frecuencia mínima cuando nada se mueve en pantalla; OxygenOS trae partes de ese camino desactivadas. Este parche toma la tabla de frecuencias PROPIA de tu dispositivo (oplus_vrr_config.json), activa todos los interruptores de ahorro del panel que el fabricante dejó apagados (ADFR, PDFR, director de frecuencia, control de retroiluminación por histograma y más), y además DESACTIVA la telemetría propia de la pila de pantalla (registros VRR, muestreo de histograma, big-data y subida de fallos de caché de shaders): batería gratis sin impacto en la imagen. No se copia nada de otro modelo y el archivo original nunca se modifica.\n\nEl parche se prepara durante la instalación del módulo, y este interruptor decide si se aplica: apagado por defecto, y activarlo hace efecto tras un reinicio. Si el instalador no encontró la tabla en tu dispositivo, o no quedó nada que mejorar, el interruptor no hace nada: el registro de instalación y la insignia de estado indican cuál es tu caso.\n\nEn una tabla que el fabricante ya entrega totalmente activada (el OnePlus 15 lo es), el parche sigue siendo útil: se vincula una copia idéntica con solo los interruptores de telemetría desactivados.\n\nEl interruptor también abre el lado Android del rango, y esa parte se aplica al instante, sin reiniciar: sin suelo de frecuencia, y el máximo fijado en el modo más alto que informa este panel (165 Hz en el OnePlus 15). El extremo inferior - las frecuencias de reposo propias del panel por debajo de 60 Hz - es tarea de la tabla, porque Android ni siquiera enumera esas frecuencias. Lo que había antes se registra y se restaura al desactivar. El límite propio del fabricante para la frecuencia de renderizado (90 Hz en algunas versiones) no se toca."
     },
     "mmfeed_off": {
       "name": "Telemetría multimedia desactivada",
@@ -341,6 +341,26 @@
     "net_screen_off_lte": {
       "name": "LTE con la pantalla apagada",
       "desc": "A los 90 segundos de apagar la pantalla desactiva la rama 5G y mantiene los datos en LTE; el 5G vuelve en cuanto se enciende la pantalla. 5G NSA mantiene dos radios activas a la vez, y para escuchar un stream con la pantalla apagada LTE basta de sobra. Nunca actúa durante una llamada. Desactivado por defecto: cambiar los tipos de red permitidos reconecta los datos. Si la ROM no acepta el cambio, el módulo restaura el valor original y deja de intentarlo."
+    },
+    "heavy_prime_escape": {
+      "name": "Elevación de núcleos prime",
+      "desc": "Solo Smart. Cuando una carga pesada mantiene los núcleos prime en su techo con el teléfono frío, ASB eleva ese techo brevemente - nunca por encima de lo que Balanced permite con la misma carga - y luego descansa. Desactivado mantiene los núcleos prime siempre en el techo de Smart: algo más fresco y ahorrador, pero las tareas pesadas largas (instalaciones, exportaciones, páginas grandes) tardan más, y un trabajo que tarda más también mantiene despierto todo el chip más tiempo. Con el teléfono caliente la elevación ya se detiene sola."
+    },
+    "prime_escape_burst_s": {
+      "name": "Duración de la elevación",
+      "desc": "Cuánto puede durar una elevación de los núcleos prime, en segundos. Más largo permite terminar antes una tarea pesada larga; más corto reduce calor y consumo. 20 por defecto. Solo se usa con la Elevación de núcleos prime activada."
+    },
+    "prime_escape_rest_s": {
+      "name": "Pausa entre elevaciones",
+      "desc": "Cuánto espera ASB tras una elevación antes de permitir otra, en segundos. Más largo = más fresco y económico con carga sostenida; más corto = más ágil. 40 por defecto. Solo se usa con la Elevación de núcleos prime activada."
+    },
+    "wakelock_fitness": {
+      "name": "Apps de fitness y wakelocks",
+      "desc": "Los podómetros y rastreadores de actividad están protegidos por defecto de todas las reglas de wakelock, porque un rastreador que no puede despertar pierde aquello para lo que se instaló. En capturas de campo uno de ellos - el podómetro de Samsung Health - seguía siendo lo que más mantenía despierto el teléfono de noche: minutos de CPU cada noche.\n\nLimitar indica a Android que ignore los wakelocks de una app de fitness vista reteniendo uno 2+ minutos. La app sigue funcionando siempre que el teléfono esté despierto por otro motivo; solo que no puede mantener la CPU activa por sí misma. El sensor de pasos cuenta en su propio chip de bajo consumo de todos modos, así que el total diario suele conservarse.\n\nLO QUE PUEDE RESENTIRSE: la línea de tiempo de pasos minuto a minuto y un entrenamiento grabado con la pantalla apagada. Las apps compañeras de relojes y pulseras nunca se incluyen: dejarían de enviar notificaciones a la muñeca. El estado anterior se registra y se restaura con Proteger o al desinstalar. Independiente de «Actuar sobre wakelocks»."
+    },
+    "ltpo_video": {
+      "name": "Frecuencia mínima para vídeo",
+      "desc": "Mientras se reproduce un vídeo, el panel se queda en la frecuencia que el sistema eligió para todo lo demás: en esta familia de teléfonos 90 Hz para un vídeo de 30 fps, tres refrescos por fotograma donde bastarían dos.\n\nCon esto activado, ASB baja la frecuencia máxima al modo de panel más bajo que sea múltiplo exacto del vídeo (60 Hz para 30 y 60 fps), de modo que el movimiento sigue sin tirones. Solo actúa si: la pantalla está encendida, suena audio, una capa de vídeo pide 30 o 60 fps, ninguna capa pide alta fluidez y no se ha tocado la pantalla en 3 segundos.\n\nEl primer toque restaura el valor anterior al instante, igual que el fin de la reproducción, el cierre del vídeo y el apagado de la pantalla, así que el desplazamiento y las animaciones van a frecuencia completa. La pega honesta: los primerísimos fotogramas tras ese toque (unos 0,1-0,2 s) aún pueden ir a la frecuencia baja. El vídeo de 24, 25 y 50 fps no tiene un modo inferior sin tirones y no se toca. Se aplica al momento."
     }
   },
   "nav_live": "Monitor",
@@ -479,6 +499,10 @@
       "0": "sin límite",
       "1": "limitar",
       "auto": "stock"
+    },
+    "wakelock_fitness": {
+      "protect": "proteger",
+      "limit": "limitar"
     }
   },
   "prof_none": "sin seleccionar",
@@ -830,5 +854,8 @@
   "dbg_log_running_hint": "borra esta carpeta para iniciar uno nuevo",
   "eta_average": "promedio",
   "eta_average_tip": "Según tu consumo suavizado con pantalla encendida; la tasa en vivo lo sustituye cuando la ventana llega a 10 minutos.",
-  "eta_idle_measured_tip": "Consumo medido con la pantalla apagada: "
+  "eta_idle_measured_tip": "Consumo medido con la pantalla apagada: ",
+  "t_cfg_video": " · actúa durante la reproducción de vídeo",
+  "st_ltpo_vid_low": "ahora",
+  "st_not_running": "no se ejecuta"
 }

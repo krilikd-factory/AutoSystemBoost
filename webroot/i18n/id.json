@@ -332,7 +332,7 @@
     },
     "ltpo_force": {
       "name": "Paksa LTPO",
-      "desc": "Panel LTPO bisa turun ke laju penyegaran terendah saat tidak ada yang bergerak di layar; OxygenOS mengirimkan sebagian jalur itu dalam keadaan mati. Patch ini mengambil tabel laju penyegaran MILIK perangkatmu sendiri (oplus_vrr_config.json), mengaktifkan semua saklar hemat daya panel yang dibiarkan mati oleh OEM (ADFR, PDFR, direktur laju penyegaran, kontrol lampu latar histogram, dan lainnya), dan sekaligus MEMATIKAN telemetri bawaan stack tampilan (rekaman info VRR, sampling histogram, big-data, dan unggahan cache-miss shader) — baterai gratis tanpa dampak pada gambar. Tidak ada yang disalin dari model lain, dan berkas asli tidak pernah diubah.\n\nPatch disiapkan saat modul dipasang, dan saklar ini menentukan apakah patch diterapkan: mati secara bawaan, dan menyalakannya berlaku setelah reboot. Jika pemasang tidak menemukan tabel di perangkatmu, atau tidak ada lagi yang bisa diperbaiki, saklar ini tidak melakukan apa-apa — log pemasangan dan lencana status akan menunjukkan kasusmu.\n\nPada tabel yang sudah diaktifkan penuh oleh OEM (OnePlus 15 salah satunya), patch tetap berguna: salinan identik dipasang dengan hanya saklar telemetri yang diputus."
+      "desc": "Panel LTPO bisa turun ke laju penyegaran terendah saat tidak ada yang bergerak di layar; OxygenOS mengirimkan sebagian jalur itu dalam keadaan mati. Patch ini mengambil tabel laju penyegaran MILIK perangkatmu sendiri (oplus_vrr_config.json), mengaktifkan semua saklar hemat daya panel yang dibiarkan mati oleh OEM (ADFR, PDFR, direktur laju penyegaran, kontrol lampu latar histogram, dan lainnya), dan sekaligus MEMATIKAN telemetri bawaan stack tampilan (rekaman info VRR, sampling histogram, big-data, dan unggahan cache-miss shader) — baterai gratis tanpa dampak pada gambar. Tidak ada yang disalin dari model lain, dan berkas asli tidak pernah diubah.\n\nPatch disiapkan saat modul dipasang, dan saklar ini menentukan apakah patch diterapkan: mati secara bawaan, dan menyalakannya berlaku setelah reboot. Jika pemasang tidak menemukan tabel di perangkatmu, atau tidak ada lagi yang bisa diperbaiki, saklar ini tidak melakukan apa-apa — log pemasangan dan lencana status akan menunjukkan kasusmu.\n\nPada tabel yang sudah diaktifkan penuh oleh OEM (OnePlus 15 salah satunya), patch tetap berguna: salinan identik dipasang dengan hanya saklar telemetri yang diputus.\n\nSakelar ini juga membuka sisi Android dari rentang, dan bagian itu berlaku seketika tanpa reboot: tanpa batas bawah refresh, dan puncak diatur ke mode tertinggi yang dilaporkan panel ini (165 Hz pada OnePlus 15). Ujung bawah - laju idle panel sendiri di bawah 60 Hz - adalah tugas tabel, karena Android sama sekali tidak mencantumkan laju itu. Nilai sebelumnya dicatat dan dikembalikan saat dimatikan. Batas laju render milik produsen (90 Hz pada beberapa build) tidak disentuh."
     },
     "mmfeed_off": {
       "name": "Telemetri Multimedia Nonaktif",
@@ -341,6 +341,26 @@
     "net_screen_off_lte": {
       "name": "LTE saat layar mati",
       "desc": "Setelah layar mati 90 detik, mematikan jalur 5G dan menjaga data tetap di LTE; 5G kembali begitu layar menyala. 5G NSA menjalankan dua radio sekaligus, padahal mendengarkan stream dengan layar gelap cukup dengan LTE. Tidak pernah aktif saat panggilan. Mati secara bawaan: mengubah jenis jaringan yang diizinkan menyambungkan ulang data. Jika ROM menolak perubahan, modul mengembalikan nilai asli dan berhenti mencoba."
+    },
+    "heavy_prime_escape": {
+      "name": "Angkat inti prime",
+      "desc": "Hanya Smart. Saat beban berat menahan inti prime di batas atasnya pada ponsel yang masih dingin, ASB menaikkan batas itu sebentar - tidak pernah melebihi yang diizinkan Balanced untuk beban yang sama - lalu beristirahat. Mati: inti prime selalu di batas Smart; sedikit lebih dingin dan hemat, tetapi tugas berat yang panjang (instalasi, ekspor, halaman besar) lebih lama selesai, dan kerja yang lebih lama juga membuat seluruh chip terjaga lebih lama. Saat ponsel hangat, pengangkatan sudah berhenti dengan sendirinya."
+    },
+    "prime_escape_burst_s": {
+      "name": "Durasi pengangkatan",
+      "desc": "Berapa detik satu pengangkatan inti prime boleh berlangsung. Lebih lama membuat tugas berat yang panjang lebih cepat selesai; lebih singkat menjaga panas dan konsumsi tetap rendah. Bawaan 20. Hanya dipakai saat Angkat inti prime aktif."
+    },
+    "prime_escape_rest_s": {
+      "name": "Jeda antar pengangkatan",
+      "desc": "Berapa detik ASB menunggu setelah pengangkatan sebelum yang berikutnya boleh dimulai. Lebih lama = lebih dingin dan hemat saat beban berat berkelanjutan; lebih singkat = lebih gesit. Bawaan 40. Hanya dipakai saat Angkat inti prime aktif."
+    },
+    "wakelock_fitness": {
+      "name": "Aplikasi kebugaran & wakelock",
+      "desc": "Penghitung langkah dan pelacak kebugaran secara bawaan dilindungi dari semua aturan wakelock, karena pelacak yang tidak bisa bangun kehilangan fungsi utamanya. Dalam rekaman lapangan, salah satunya - pedometer Samsung Health - tetap menjadi penyebab terbesar ponsel terjaga di malam hari: bermenit-menit CPU setiap malam.\n\nBatasi memberi tahu Android untuk mengabaikan wakelock dari aplikasi kebugaran yang terlihat menahannya 2+ menit. Aplikasi tetap berjalan setiap kali ponsel terjaga karena hal lain; hanya saja ia tidak bisa menahan CPU sendiri. Sensor langkah tetap menghitung di chip hemat dayanya sendiri, jadi total harian biasanya tetap utuh.\n\nYANG BISA TERDAMPAK: linimasa langkah per menit dan latihan yang direkam dengan layar mati. Aplikasi pendamping jam dan gelang tidak pernah disertakan - mereka akan berhenti mengirim notifikasi ke pergelangan Anda. Status sebelumnya dicatat dan dikembalikan saat Lindungi atau saat dihapus. Tidak bergantung pada «Tindak wakelock»."
+    },
+    "ltpo_video": {
+      "name": "Refresh terendah untuk video",
+      "desc": "Saat video diputar, panel tetap pada laju yang dipilih sistem untuk hal lain: pada keluarga ponsel ini 90 Hz untuk streaming 30 fps - tiga penyegaran per frame padahal dua sudah cukup.\n\nJika aktif, ASB menurunkan laju refresh puncak ke mode panel terkecil yang merupakan kelipatan tepat dari video (60 Hz untuk 30 dan 60 fps), sehingga gerakan tetap tanpa patah-patah. Hanya bertindak bila: layar menyala, audio diputar, lapisan video meminta 30 atau 60 fps, tidak ada lapisan yang meminta kelancaran tinggi, dan layar tidak disentuh selama 3 detik.\n\nSentuhan pertama langsung mengembalikan nilai sebelumnya, begitu juga akhir pemutaran, video ditutup, dan layar dimatikan - jadi gulir dan animasi berjalan pada laju penuh. Catatan jujur: beberapa frame pertama setelah sentuhan itu (sekitar 0,1-0,2 dtk) masih bisa pada laju rendah. Video 24, 25 dan 50 fps tidak punya mode lebih rendah yang mulus, jadi dibiarkan. Berlaku seketika."
     }
   },
   "nav_live": "Monitor",
@@ -479,6 +499,10 @@
       "0": "tanpa batas",
       "1": "batasi",
       "auto": "stok"
+    },
+    "wakelock_fitness": {
+      "protect": "lindungi",
+      "limit": "batasi"
     }
   },
   "prof_none": "belum dipilih",
@@ -830,5 +854,8 @@
   "dbg_log_running_hint": "hapus folder ini untuk memulai yang baru",
   "eta_average": "rata-rata",
   "eta_average_tip": "Berdasarkan konsumsi layar menyala yang dihaluskan; laju langsung menggantikannya saat jendela mencapai 10 menit.",
-  "eta_idle_measured_tip": "Konsumsi terukur saat layar mati: "
+  "eta_idle_measured_tip": "Konsumsi terukur saat layar mati: ",
+  "t_cfg_video": " · bertindak saat video diputar",
+  "st_ltpo_vid_low": "kini",
+  "st_not_running": "tidak berjalan"
 }

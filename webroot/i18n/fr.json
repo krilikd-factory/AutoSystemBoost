@@ -420,7 +420,7 @@
     },
     "ltpo_force": {
       "name": "Forcer le LTPO",
-      "desc": "Les dalles LTPO peuvent descendre à leur fréquence minimale quand rien ne bouge à l'écran ; OxygenOS livre une partie de ce chemin désactivée. Ce correctif prend la table de fréquences PROPRE à votre appareil (oplus_vrr_config.json), active tous les interrupteurs d'économie de la dalle laissés désactivés par le constructeur (ADFR, PDFR, directeur de fréquence, contrôle du rétroéclairage par histogramme, etc.), et coupe en plus la télémétrie propre à la pile d'affichage (enregistrements VRR, échantillonnage d'histogramme, big-data et envoi des défauts de cache de shaders) — de la batterie gratuite sans aucun impact sur l'image. Rien n'est copié depuis un autre modèle, et le fichier d'origine n'est jamais modifié.\n\nLe correctif est préparé pendant l'installation du module, et cet interrupteur décide de son application : désactivé par défaut, son activation prend effet après un redémarrage. Si l'installateur n'a trouvé aucune table sur votre appareil, ou rien à y améliorer, l'interrupteur ne fait rien — le journal d'installation et le badge d'état indiquent votre cas.\n\nSur une table déjà entièrement activée par le constructeur (le OnePlus 15 en fait partie), le correctif reste utile : une copie identique est montée, dont seuls les interrupteurs de télémétrie sont coupés."
+      "desc": "Les dalles LTPO peuvent descendre à leur fréquence minimale quand rien ne bouge à l'écran ; OxygenOS livre une partie de ce chemin désactivée. Ce correctif prend la table de fréquences PROPRE à votre appareil (oplus_vrr_config.json), active tous les interrupteurs d'économie de la dalle laissés désactivés par le constructeur (ADFR, PDFR, directeur de fréquence, contrôle du rétroéclairage par histogramme, etc.), et coupe en plus la télémétrie propre à la pile d'affichage (enregistrements VRR, échantillonnage d'histogramme, big-data et envoi des défauts de cache de shaders) — de la batterie gratuite sans aucun impact sur l'image. Rien n'est copié depuis un autre modèle, et le fichier d'origine n'est jamais modifié.\n\nLe correctif est préparé pendant l'installation du module, et cet interrupteur décide de son application : désactivé par défaut, son activation prend effet après un redémarrage. Si l'installateur n'a trouvé aucune table sur votre appareil, ou rien à y améliorer, l'interrupteur ne fait rien — le journal d'installation et le badge d'état indiquent votre cas.\n\nSur une table déjà entièrement activée par le constructeur (le OnePlus 15 en fait partie), le correctif reste utile : une copie identique est montée, dont seuls les interrupteurs de télémétrie sont coupés.\n\nL'interrupteur ouvre aussi le côté Android de la plage, et cette partie s'applique immédiatement, sans redémarrage : aucun plancher de fréquence, et le maximum réglé sur le mode le plus élevé que signale cette dalle (165 Hz sur le OnePlus 15). Le bas de la plage - les fréquences de repos propres à la dalle sous 60 Hz - relève de la table, car Android ne liste même pas ces fréquences. Les valeurs précédentes sont enregistrées et rétablies à la désactivation. La limite propre au fabricant pour la fréquence de rendu (90 Hz sur certaines versions) n'est pas touchée."
     },
     "mmfeed_off": {
       "name": "Télémétrie multimédia désactivée",
@@ -429,6 +429,26 @@
     "net_screen_off_lte": {
       "name": "LTE écran éteint",
       "desc": "90 secondes après l'extinction de l'écran, coupe la branche 5G et garde les données en LTE ; la 5G revient dès que l'écran se rallume. La 5G NSA garde deux radios actives en même temps, alors qu'écouter un flux écran éteint ne demande qu'une fraction de ce que porte le LTE. N'agit jamais pendant un appel. Désactivé par défaut : changer les types de réseau autorisés reconnecte les données. Si la ROM refuse le changement, le module restaure la valeur d'origine et ne réessaie plus."
+    },
+    "heavy_prime_escape": {
+      "name": "Relève des cœurs prime",
+      "desc": "Smart uniquement. Quand une charge lourde maintient les cœurs prime à leur plafond sur un téléphone frais, ASB relève brièvement ce plafond - jamais au-delà de ce que Balanced autorise pour la même charge - puis marque une pause. Désactivé : les cœurs prime restent en permanence au plafond Smart ; un peu plus frais et économe, mais les longues tâches lourdes (installations, exports, grandes pages) prennent plus de temps, et un travail plus long garde aussi toute la puce éveillée plus longtemps. Sur un téléphone chaud, la relève s'arrête déjà d'elle-même."
+    },
+    "prime_escape_burst_s": {
+      "name": "Durée de la relève",
+      "desc": "Durée maximale d'une relève des cœurs prime, en secondes. Plus long : une longue tâche lourde se termine plus tôt ; plus court : chaleur et consommation restent basses. 20 par défaut. Utilisé seulement quand la Relève des cœurs prime est activée."
+    },
+    "prime_escape_rest_s": {
+      "name": "Pause entre relèves",
+      "desc": "Temps d'attente d'ASB après une relève avant d'en autoriser une autre, en secondes. Plus long = plus frais et économe sous charge soutenue ; plus court = plus réactif. 40 par défaut. Utilisé seulement quand la Relève des cœurs prime est activée."
+    },
+    "wakelock_fitness": {
+      "name": "Applis fitness et wakelocks",
+      "desc": "Les podomètres et traceurs d'activité sont protégés par défaut de toutes les règles de wakelock, car un traceur qui ne peut pas se réveiller perd ce pour quoi il a été installé. Dans des captures terrain, l'un d'eux - le podomètre de Samsung Health - restait pourtant la première cause de réveil du téléphone la nuit : des minutes de CPU chaque nuit.\n\nLimiter demande à Android d'ignorer les wakelocks d'une appli fitness vue en tenir un pendant 2+ minutes. L'appli continue de fonctionner dès que le téléphone est éveillé pour une autre raison ; elle ne peut simplement plus garder le CPU actif d'elle-même. Le capteur de pas compte de toute façon dans sa propre puce basse consommation, donc le total quotidien est généralement préservé.\n\nCE QUI PEUT EN PÂTIR : la chronologie des pas minute par minute, et un entraînement enregistré écran éteint. Les applis compagnons de montres et bracelets ne sont jamais concernées - elles cesseraient de transmettre les notifications au poignet. L'état précédent est enregistré et rétabli avec Protéger ou à la désinstallation. Indépendant de « Agir sur les wakelocks »."
+    },
+    "ltpo_video": {
+      "name": "Fréquence minimale pour la vidéo",
+      "desc": "Pendant une vidéo, la dalle reste à la fréquence que le système a choisie pour tout le reste : sur cette famille de téléphones 90 Hz pour un flux à 30 i/s, soit trois rafraîchissements par image là où deux suffiraient.\n\nActivé, ASB abaisse la fréquence maximale au plus petit mode de la dalle qui soit un multiple exact de la vidéo (60 Hz pour 30 et 60 i/s), pour un mouvement sans saccades. Il n'agit que si : l'écran est allumé, du son est lu, une couche vidéo demande 30 ou 60 i/s, aucune couche ne demande une fluidité élevée, et l'écran n'a pas été touché depuis 3 secondes.\n\nLe premier toucher rétablit aussitôt la valeur précédente, de même que la fin de la lecture, la fermeture de la vidéo et l'extinction de l'écran - le défilement et les animations tournent donc à pleine fréquence. La limite honnête : les toutes premières images après ce toucher (environ 0,1-0,2 s) peuvent encore être à la fréquence basse. Les vidéos à 24, 25 et 50 i/s n'ont pas de mode inférieur sans saccades et ne sont pas touchées. S'applique immédiatement."
     }
   },
   "opt": {
@@ -563,6 +583,10 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
+    },
+    "wakelock_fitness": {
+      "protect": "protéger",
+      "limit": "limiter"
     }
   },
   "prof_none": "non sélectionné",
@@ -830,5 +854,8 @@
   "dbg_log_running_hint": "supprimez ce dossier pour en lancer un nouveau",
   "eta_average": "moyenne",
   "eta_average_tip": "Basé sur votre consommation lissée écran allumé ; le taux en direct la remplace quand la fenêtre atteint 10 minutes.",
-  "eta_idle_measured_tip": "Consommation mesurée écran éteint : "
+  "eta_idle_measured_tip": "Consommation mesurée écran éteint : ",
+  "t_cfg_video": " · agit pendant la lecture vidéo",
+  "st_ltpo_vid_low": "maintenant",
+  "st_not_running": "non lancé"
 }

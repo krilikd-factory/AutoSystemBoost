@@ -127,6 +127,10 @@
       "stock": "stock",
       "short": "short",
       "shorter": "shorter"
+    },
+    "wakelock_fitness": {
+      "protect": "protect",
+      "limit": "limit"
     }
   },
   "prof_none": "not selected",
@@ -283,7 +287,7 @@
     },
     "ltpo_force": {
       "name": "Force LTPO Refresh",
-      "desc": "LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device's OWN refresh-rate table (oplus_vrr_config.json), enables every panel power-saving switch the OEM left disabled (ADFR, PDFR, refresh-rate director, histogram backlight control and more), and additionally turns OFF the display stack's own telemetry (VRR info records, histogram sampling, big-data and shader cache-miss upload) - free battery with zero impact on the picture. Nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, or nothing left to improve in it, the switch does nothing - the install log and the status badge say which.\n\nOn a table the OEM already ships fully enabled (OnePlus 15 is one) the patch still earns its keep: an identical copy is bound with only the telemetry switches cut."
+      "desc": "LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device's OWN refresh-rate table (oplus_vrr_config.json), enables every panel power-saving switch the OEM left disabled (ADFR, PDFR, refresh-rate director, histogram backlight control and more), and additionally turns OFF the display stack's own telemetry (VRR info records, histogram sampling, big-data and shader cache-miss upload) - free battery with zero impact on the picture. Nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, or nothing left to improve in it, the switch does nothing - the install log and the status badge say which.\n\nOn a table the OEM already ships fully enabled (OnePlus 15 is one) the patch still earns its keep: an identical copy is bound with only the telemetry switches cut.\n\nThe switch also opens the Android side of the range, and that part applies at once, without a reboot: no refresh floor, and the peak set to the highest mode this panel reports (165 Hz on the OnePlus 15). The low end - the panel's own idle rates below 60 Hz - is the table's job, because Android does not list those rates at all. What was set before is recorded and restored when you switch off. The OEM's own cap on the render rate (90 Hz on some builds) is left alone."
     },
     "mmfeed_off": {
       "name": "Multimedia Telemetry Off",
@@ -646,5 +650,7 @@
   "dbg_log_running_hint": "delete this folder to start a new one",
   "eta_average": "average",
   "eta_average_tip": "Based on your smoothed screen-on drain; the live rate replaces it once the drain window reaches 10 minutes.",
-  "eta_idle_measured_tip": "Measured screen-off drain: "
+  "eta_idle_measured_tip": "Measured screen-off drain: ",
+  "st_ltpo_vid_low": "now",
+  "st_not_running": "not running"
 }

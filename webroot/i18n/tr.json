@@ -332,7 +332,7 @@
     },
     "ltpo_force": {
       "name": "LTPO'yu Zorla",
-      "desc": "LTPO paneller, ekranda hiçbir şey kımıldamadığında yenileme hızını en düşüğe indirebilir; OxygenOS bu yolun bir kısmını kapalı gönderir. Bu yama cihazınızın KENDİ yenileme tablosunu (oplus_vrr_config.json) alır, üreticinin kapalı bıraktığı tüm panel güç-tasarrufu anahtarlarını açar (ADFR, PDFR, yenileme yöneticisi, histogram tabanlı arka ışık kontrolü vb.) ve ayrıca ekran yığınının kendi telemetrisini KAPATIR (VRR kayıtları, histogram örnekleme, big-data ve shader önbellek ıskalama yüklemeleri) — görüntüye sıfır etkiyle bedava pil. Başka bir modelden hiçbir şey kopyalanmaz ve orijinal dosya asla değiştirilmez.\n\nYama modül kurulurken hazırlanır ve bu anahtar uygulanıp uygulanmayacağına karar verir: varsayılan olarak kapalıdır, açılması yeniden başlatmadan sonra etki eder. Kurucu cihazınızda tablo bulamadıysa ya da iyileştirilecek bir şey kalmadıysa anahtar hiçbir şey yapmaz — kurulum günlüğü ve durum rozeti hangi durum olduğunu söyler.\n\nÜreticinin zaten tamamen açık gönderdiği tablolarda (OnePlus 15 böyledir) yama yine işe yarar: yalnızca telemetri anahtarları kesilmiş özdeş bir kopya bağlanır."
+      "desc": "LTPO paneller, ekranda hiçbir şey kımıldamadığında yenileme hızını en düşüğe indirebilir; OxygenOS bu yolun bir kısmını kapalı gönderir. Bu yama cihazınızın KENDİ yenileme tablosunu (oplus_vrr_config.json) alır, üreticinin kapalı bıraktığı tüm panel güç-tasarrufu anahtarlarını açar (ADFR, PDFR, yenileme yöneticisi, histogram tabanlı arka ışık kontrolü vb.) ve ayrıca ekran yığınının kendi telemetrisini KAPATIR (VRR kayıtları, histogram örnekleme, big-data ve shader önbellek ıskalama yüklemeleri) — görüntüye sıfır etkiyle bedava pil. Başka bir modelden hiçbir şey kopyalanmaz ve orijinal dosya asla değiştirilmez.\n\nYama modül kurulurken hazırlanır ve bu anahtar uygulanıp uygulanmayacağına karar verir: varsayılan olarak kapalıdır, açılması yeniden başlatmadan sonra etki eder. Kurucu cihazınızda tablo bulamadıysa ya da iyileştirilecek bir şey kalmadıysa anahtar hiçbir şey yapmaz — kurulum günlüğü ve durum rozeti hangi durum olduğunu söyler.\n\nÜreticinin zaten tamamen açık gönderdiği tablolarda (OnePlus 15 böyledir) yama yine işe yarar: yalnızca telemetri anahtarları kesilmiş özdeş bir kopya bağlanır.\n\nAnahtar ayrıca aralığın Android tarafını da açar ve bu kısım yeniden başlatmadan hemen uygulanır: alt yenileme sınırı yok, en yüksek değer bu panelin bildirdiği en yüksek moda ayarlanır (OnePlus 15'te 165 Hz). Alt uç - panelin 60 Hz altındaki kendi boşta hızları - tablonun işidir, çünkü Android bu hızları hiç listelemez. Önceki değerler kaydedilir ve kapatınca geri verilir. Üreticinin çizim hızı için kendi sınırına (bazı sürümlerde 90 Hz) dokunulmaz."
     },
     "mmfeed_off": {
       "name": "Multimedya Telemetrisi Kapalı",
@@ -341,6 +341,26 @@
     "net_screen_off_lte": {
       "name": "Ekran kapalıyken LTE",
       "desc": "Ekran 90 saniye kapalı kaldıktan sonra 5G bacağını kapatır ve veriyi LTE üzerinde tutar; ekran açılınca 5G hemen geri gelir. 5G NSA iki radyoyu aynı anda çalıştırır; ekran kapalıyken bir yayını dinlemek için LTE fazlasıyla yeter. Arama sırasında asla devreye girmez. Varsayılan olarak kapalı: izin verilen ağ türlerini değiştirmek veri bağlantısını yeniden kurar. ROM değişikliği kabul etmezse modül özgün değeri geri yükler ve tekrar denemez."
+    },
+    "heavy_prime_escape": {
+      "name": "Prime çekirdek yükseltme",
+      "desc": "Yalnızca Smart. Ağır iş, serin bir telefonda prime çekirdekleri tavanlarında tuttuğunda ASB bu tavanı kısa süreliğine yükseltir - aynı yükte Balanced'ın izin verdiğinin asla üstüne çıkmadan - ve sonra dinlenir. Kapalı: prime çekirdekler sürekli Smart tavanında kalır; biraz daha serin ve tutumlu, ama uzun ağır işler (kurulum, dışa aktarma, büyük sayfalar) daha uzun sürer ve daha uzun süren iş tüm çipi de daha uzun uyanık tutar. Telefon ısındığında yükseltme zaten kendiliğinden durur."
+    },
+    "prime_escape_burst_s": {
+      "name": "Yükseltme süresi",
+      "desc": "Tek bir prime çekirdek yükseltmesinin kaç saniye sürebileceği. Daha uzun, uzun bir ağır işin daha erken bitmesini sağlar; daha kısa, ısıyı ve tüketimi düşük tutar. Varsayılan 20. Yalnızca Prime çekirdek yükseltme açıkken kullanılır."
+    },
+    "prime_escape_rest_s": {
+      "name": "Yükseltmeler arası mola",
+      "desc": "ASB'nin bir yükseltmeden sonra yenisine izin vermeden önce kaç saniye beklediği. Daha uzun = sürekli ağır yükte daha serin ve tutumlu; daha kısa = daha çevik. Varsayılan 40. Yalnızca Prime çekirdek yükseltme açıkken kullanılır."
+    },
+    "wakelock_fitness": {
+      "name": "Fitness uygulamaları ve wakelock",
+      "desc": "Adımsayarlar ve fitness izleyicileri varsayılan olarak tüm wakelock kurallarından korunur, çünkü uyanamayan bir izleyici kurulma amacını kaybeder. Saha kayıtlarında bunlardan biri - Samsung Health adımsayarı - yine de telefonu geceleri en çok uyanık tutan tek şeydi: her gece dakikalarca CPU.\n\nSınırla, 2+ dakika wakelock tuttuğu görülen bir fitness uygulamasının wakelock'larını yok saymasını Android'e söyler. Uygulama, telefon başka bir nedenle uyanıkken çalışmaya devam eder; yalnızca CPU'yu kendi başına uyanık tutamaz. Adım sensörü her durumda kendi düşük güçlü çipinde sayar, bu yüzden günlük toplam genelde korunur.\n\nZARAR GÖREBİLECEKLER: dakika dakika adım zaman çizelgesi ve ekran kapalıyken kaydedilen bir antrenman. Saat ve bileklik eşlik uygulamaları asla dahil edilmez - aksi halde bileğinize bildirim iletmeyi bırakırlardı. Önceki durum kaydedilir ve Koru seçildiğinde ya da kaldırmada geri verilir. «Wakelock'lara müdahale» ayarından bağımsızdır."
+    },
+    "ltpo_video": {
+      "name": "Video için en düşük yenileme",
+      "desc": "Bir video oynarken panel, sistemin geri kalan her şey için seçtiği hızda kalır: bu telefon ailesinde 30 fps bir yayın için 90 Hz - ikisinin yeteceği yerde kare başına üç yenileme.\n\nBu açıkken ASB, en yüksek yenileme hızını videonun tam katı olan en küçük panel moduna düşürür (30 ve 60 fps için 60 Hz), böylece hareket takılmasız kalır. Yalnızca şu durumda devreye girer: ekran açık, ses çalıyor, bir video katmanı 30 veya 60 fps istiyor, hiçbir katman yüksek akıcılık istemiyor ve ekrana 3 saniyedir dokunulmadı.\n\nİlk dokunuş önceki değeri hemen geri getirir; oynatmanın bitmesi, videonun kapanması ve ekranın kapanması da öyle - bu yüzden kaydırma ve animasyonlar tam hızda çalışır. Dürüst not: o dokunuştan sonraki ilk kareler (yaklaşık 0,1-0,2 sn) hâlâ düşük hızda olabilir. 24, 25 ve 50 fps videonun daha düşük takılmasız modu yoktur, dokunulmaz. Hemen uygulanır."
     }
   },
   "nav_live": "İzleme",
@@ -479,6 +499,10 @@
       "0": "sınırsız",
       "1": "kısıtla",
       "auto": "stok"
+    },
+    "wakelock_fitness": {
+      "protect": "koru",
+      "limit": "sınırla"
     }
   },
   "prof_none": "seçilmedi",
@@ -830,5 +854,8 @@
   "dbg_log_running_hint": "yenisini başlatmak için bu klasörü silin",
   "eta_average": "ortalama",
   "eta_average_tip": "Ekran açıkken yumuşatılmış tüketiminize göre; ölçüm penceresi 10 dakikaya ulaşınca canlı oran bunun yerini alır.",
-  "eta_idle_measured_tip": "Ekran kapalıyken ölçülen tüketim: "
+  "eta_idle_measured_tip": "Ekran kapalıyken ölçülen tüketim: ",
+  "t_cfg_video": " · video oynatılırken devreye girer",
+  "st_ltpo_vid_low": "şimdi",
+  "st_not_running": "çalışmıyor"
 }

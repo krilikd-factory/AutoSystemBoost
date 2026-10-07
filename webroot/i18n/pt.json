@@ -332,7 +332,7 @@
     },
     "ltpo_force": {
       "name": "Forçar LTPO",
-      "desc": "Os painéis LTPO conseguem cair para a taxa mínima quando nada se move no ecrã; o OxygenOS traz partes desse caminho desligadas. Este patch usa a tabela de frequências PRÓPRIA do teu dispositivo (oplus_vrr_config.json), ativa todos os interruptores de poupança do painel que o fabricante deixou desligados (ADFR, PDFR, diretor de taxa, controlo de brilho por histograma e mais) e ainda DESLIGA a telemetria própria da stack de ecrã (registos VRR, amostragem de histograma, big-data e envio de falhas de cache de shaders) — bateria grátis sem impacto na imagem. Nada é copiado de outro modelo e o ficheiro original nunca é modificado.\n\nO patch é preparado durante a instalação do módulo, e este interruptor decide se é aplicado: desligado por defeito, e ligar faz efeito após um reinício. Se o instalador não encontrou a tabela no teu dispositivo, ou não havia nada a melhorar, o interruptor não faz nada — o registo de instalação e o emblema de estado dizem qual é o teu caso.\n\nNuma tabela já totalmente ativa de fábrica (o OnePlus 15 é um caso), o patch continua útil: é montada uma cópia idêntica apenas com a telemetria cortada."
+      "desc": "Os painéis LTPO conseguem cair para a taxa mínima quando nada se move no ecrã; o OxygenOS traz partes desse caminho desligadas. Este patch usa a tabela de frequências PRÓPRIA do teu dispositivo (oplus_vrr_config.json), ativa todos os interruptores de poupança do painel que o fabricante deixou desligados (ADFR, PDFR, diretor de taxa, controlo de brilho por histograma e mais) e ainda DESLIGA a telemetria própria da stack de ecrã (registos VRR, amostragem de histograma, big-data e envio de falhas de cache de shaders) — bateria grátis sem impacto na imagem. Nada é copiado de outro modelo e o ficheiro original nunca é modificado.\n\nO patch é preparado durante a instalação do módulo, e este interruptor decide se é aplicado: desligado por defeito, e ligar faz efeito após um reinício. Se o instalador não encontrou a tabela no teu dispositivo, ou não havia nada a melhorar, o interruptor não faz nada — o registo de instalação e o emblema de estado dizem qual é o teu caso.\n\nNuma tabela já totalmente ativa de fábrica (o OnePlus 15 é um caso), o patch continua útil: é montada uma cópia idêntica apenas com a telemetria cortada.\n\nO interruptor também abre o lado Android do intervalo, e essa parte aplica-se de imediato, sem reiniciar: sem piso de taxa, e o máximo definido no modo mais alto que este painel indica (165 Hz no OnePlus 15). O extremo inferior - as taxas de repouso do próprio painel abaixo de 60 Hz - é tarefa da tabela, porque o Android nem sequer lista essas taxas. O que estava definido antes é registado e reposto ao desligar. O limite próprio do fabricante para a taxa de renderização (90 Hz em algumas versões) não é tocado."
     },
     "mmfeed_off": {
       "name": "Telemetria multimédia desligada",
@@ -341,6 +341,26 @@
     "net_screen_off_lte": {
       "name": "LTE com o ecrã apagado",
       "desc": "Após 90 segundos com o ecrã apagado, desliga o ramo 5G e mantém os dados em LTE; o 5G volta assim que o ecrã liga. O 5G NSA mantém dois rádios ativos ao mesmo tempo, e para ouvir um stream com o ecrã apagado o LTE chega com folga. Nunca atua durante uma chamada. Desligado por padrão: alterar os tipos de rede permitidos reconecta os dados. Se a ROM não aceitar a alteração, o módulo repõe o valor original e não tenta novamente."
+    },
+    "heavy_prime_escape": {
+      "name": "Elevação dos núcleos prime",
+      "desc": "Só Smart. Quando uma carga pesada mantém os núcleos prime no teto com o telemóvel frio, o ASB eleva esse teto por pouco tempo - nunca acima do que o Balanced permite para a mesma carga - e depois descansa. Desligado mantém os núcleos prime sempre no teto do Smart: um pouco mais fresco e económico, mas tarefas pesadas longas (instalações, exportações, páginas grandes) demoram mais, e trabalho que demora mais também mantém o chip inteiro acordado por mais tempo. Com o telemóvel quente a elevação já para sozinha."
+    },
+    "prime_escape_burst_s": {
+      "name": "Duração da elevação",
+      "desc": "Quanto tempo pode durar uma elevação dos núcleos prime, em segundos. Mais longo deixa uma tarefa pesada longa terminar mais cedo; mais curto mantém calor e consumo baixos. Padrão 20. Usado apenas com a Elevação dos núcleos prime ligada."
+    },
+    "prime_escape_rest_s": {
+      "name": "Pausa entre elevações",
+      "desc": "Quanto tempo o ASB espera após uma elevação antes de permitir outra, em segundos. Mais longo = mais fresco e económico sob carga contínua; mais curto = mais ágil. Padrão 40. Usado apenas com a Elevação dos núcleos prime ligada."
+    },
+    "wakelock_fitness": {
+      "name": "Apps de fitness e wakelocks",
+      "desc": "Contadores de passos e rastreadores de fitness estão protegidos por padrão de todas as regras de wakelock, porque um rastreador que não consegue acordar perde aquilo para que foi instalado. Em capturas de campo um deles - o pedómetro do Samsung Health - continuava a ser o maior responsável por manter o telemóvel acordado à noite: minutos de CPU todas as noites.\n\nLimitar diz ao Android para ignorar os wakelocks de uma app de fitness vista a segurar um por 2+ minutos. A app continua a funcionar sempre que o telemóvel está acordado por outro motivo; apenas não consegue manter a CPU ativa sozinha. O sensor de passos conta no seu próprio chip de baixo consumo de qualquer forma, por isso o total diário costuma manter-se.\n\nO QUE PODE SOFRER: a linha temporal de passos minuto a minuto e um treino gravado com o ecrã desligado. Apps companheiras de relógios e pulseiras nunca são incluídas - deixariam de entregar notificações ao pulso. O estado anterior é registado e reposto em Proteger ou na desinstalação. Independente de «Agir sobre wakelocks»."
+    },
+    "ltpo_video": {
+      "name": "Taxa mínima para vídeo",
+      "desc": "Enquanto um vídeo é reproduzido, o painel fica na taxa que o sistema escolheu para tudo o resto: nesta família de telemóveis 90 Hz para um vídeo de 30 fps, três atualizações por fotograma onde duas bastariam.\n\nCom isto ligado, o ASB baixa a taxa máxima para o menor modo do painel que seja múltiplo exato do vídeo (60 Hz para 30 e 60 fps), para que o movimento continue sem solavancos. Só atua quando: o ecrã está ligado, há áudio a tocar, uma camada de vídeo pede 30 ou 60 fps, nenhuma camada pede alta fluidez e o ecrã não foi tocado há 3 segundos.\n\nO primeiro toque repõe o valor anterior de imediato, tal como o fim da reprodução, o fecho do vídeo e o desligar do ecrã - por isso o deslizar e as animações correm à taxa completa. O senão honesto: os primeiríssimos fotogramas após esse toque (cerca de 0,1-0,2 s) ainda podem estar na taxa baixa. Vídeo de 24, 25 e 50 fps não tem modo inferior sem solavancos e não é tocado. Aplica-se de imediato."
     }
   },
   "nav_live": "Monitor",
@@ -479,6 +499,10 @@
       "0": "sem limite",
       "1": "limitar",
       "auto": "stock"
+    },
+    "wakelock_fitness": {
+      "protect": "proteger",
+      "limit": "limitar"
     }
   },
   "prof_none": "não selecionado",
@@ -830,5 +854,8 @@
   "dbg_log_running_hint": "apague esta pasta para iniciar um novo",
   "eta_average": "média",
   "eta_average_tip": "Com base no seu consumo suavizado com a tela ligada; a taxa ao vivo o substitui quando a janela chega a 10 minutos.",
-  "eta_idle_measured_tip": "Consumo medido com a tela desligada: "
+  "eta_idle_measured_tip": "Consumo medido com a tela desligada: ",
+  "t_cfg_video": " · atua durante a reprodução de vídeo",
+  "st_ltpo_vid_low": "agora",
+  "st_not_running": "não está a correr"
 }
