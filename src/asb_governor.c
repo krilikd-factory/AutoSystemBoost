@@ -245,6 +245,12 @@ static int    g_leak_streak_p0        = 0;
 static int    g_leak_streak_p1        = 0;
 static time_t g_last_leak_reassert    = 0;
 static int    g_leak_reassert_count   = 0;
+/* A raised ceiling only costs energy if the cluster actually runs above our limit.
+ * ceiling = ticks the vendor's ceiling sat above ours; used = ticks the clock was really
+ * above ours. Published so a capture says whether a vendor raise mattered, not just
+ * that it happened. */
+static unsigned long g_leak_ceiling_ticks = 0;
+static unsigned long g_leak_used_ticks    = 0;
 static int g_msm_boost_active = 0;
 
 #define AC_STAGE_IDLE    0
@@ -2311,6 +2317,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             fsm->prime_escape, fsm->prime_escape_mid, fsm->prime_escape_count);
     /* The suspend-aware companion to load1: how much of the last tick the CPU was up. */
     fprintf(f, "awake_tick_pct=%d\n", m->cpu.awake_tick_pct);
+    fprintf(f, "vendor_ceiling_ticks=%lu\nvendor_ceiling_used_ticks=%lu\n",
+            g_leak_ceiling_ticks, g_leak_used_ticks);
     fprintf(f, "fg_guard_fixes=%lu\n", g_fg_fix_total);
     fprintf(f, "cap_owner=%s\ncap_owner_since=%ld\ncap_vendor_holddown=%d\n",
             asb_cap_owner_name(g_cap_owner_eff),
@@ -8100,18 +8108,36 @@ int main(int argc, char **argv) {
                 g_leak_streak_p0 = leak0 ? (g_leak_streak_p0 + 1) : 0;
                 g_leak_streak_p1 = leak1 ? (g_leak_streak_p1 + 1) : 0;
 
-                /* Reporter: log when a streak crosses the old reassert threshold,
-                 * so deploys still surface vendor-up-clamp events even though
-                 * we no longer write here. Rate-limited to 1/minute to avoid
-                 * log spam. */
-                if ((g_leak_streak_p0 == 2 || g_leak_streak_p1 == 2) &&
-                    g_asb_cfg.log_level >= 1) {
+                /* Did the raised ceiling actually get used? cur_freq is MHz, want is kHz.
+                 *
+                 * The old line logged every raise as "leak_observed ... reconcile.sh handles"
+                 * - neither true (during sleep detente nothing rewrites the cap, by design)
+                 * nor useful: a OnePlus 15 night logged the little cluster at 1.79-1.90 GHz
+                 * against a 1.44 GHz wish while its clock sat above 1.44 GHz in 3 of 64
+                 * screen-off samples. A ceiling nobody climbs to costs nothing, and fighting
+                 * the vendor over it is the write war this module already learned to avoid.
+                 * What matters is whether the clock went above OUR limit; that is what is
+                 * now counted, published and logged. */
+                int used0 = leak0 && metrics.cpu.cur_freq[0] > 0 &&
+                            (long)metrics.cpu.cur_freq[0] * 1000L > (long)want_p0 + 100000L;
+                int used1 = leak1 && metrics.cpu.cur_freq[1] > 0 &&
+                            (long)metrics.cpu.cur_freq[1] * 1000L > (long)want_p1 + 100000L;
+                if (leak0 || leak1) g_leak_ceiling_ticks++;
+                if (used0 || used1) g_leak_used_ticks++;
+
+                /* Reporter, rate-limited to 1/minute. A ceiling raise the clock never used is
+                 * debug detail (log_level 3); a clock actually running above our limit is the
+                 * case worth a line at the normal level. */
+                if (g_leak_streak_p0 == 2 || g_leak_streak_p1 == 2) {
                     time_t leak_now = time(NULL);
-                    if (leak_now - g_last_leak_reassert >= 60) {
-                        asb_log("leak_observed[%s/%s]: p0=%d(want %d) p1=%d(want %d) — reconcile.sh handles",
+                    int _lvl = (used0 || used1) ? 1 : 3;
+                    if (g_asb_cfg.log_level >= _lvl && leak_now - g_last_leak_reassert >= 60) {
+                        asb_log("vendor_ceiling[%s/%s]: p0=%d(want %d, cur %d MHz) p1=%d(want %d, cur %d MHz) — %s",
                                 asb_state_names[fsm.state],
                                 asb_profile_name(fsm.profile_idx),
-                                actual_p0, want_p0, actual_p1, want_p1);
+                                actual_p0, want_p0, metrics.cpu.cur_freq[0],
+                                actual_p1, want_p1, metrics.cpu.cur_freq[1],
+                                (used0 || used1) ? "clock ABOVE our limit" : "raised but unused, not contested");
                         g_last_leak_reassert = leak_now;
                         g_leak_reassert_count++;
                     }
