@@ -289,6 +289,10 @@ static void asb_offdrain_track(int screen_on, int pct, int charging) {
  * bias. Screen-on, the device is awake and every tick is a fair sample. Segments are summed
  * until the SOC has fallen 5 whole steps, so one quantisation step is at most a 20% error
  * per window, and the EWMA over windows smooths the rest. */
+static int  g_device_bounds_applied = -1;  /* overrides loaded from device_bounds.env at start */
+static long g_prime_escape_since_ms = 0;   /* boottime ms of the open lift, 0 = none */
+static long g_prime_escape_total_ms = 0;   /* lifted time this session */
+
 #define ASB_CURSCALE_FILE "/data/adb/asb/current_scale_x100"
 static int    g_curscale_x100 = -1;      /* sampled / SOC-derived drain x100; -1 = not yet */
 static int    g_curscale_n = 0;
@@ -800,8 +804,15 @@ static void asb_log(const char *fmt, ...) {
     fflush(g_logf);
 }
 
-#define PERSISTENT_STATS_DIR  "/data/adb/modules/AutoSystemBoost/runtime"
-#define PERSISTENT_STATS_FILE "/data/adb/modules/AutoSystemBoost/runtime/session_stats.json"
+/* Persistent stats live beside session_history.jsonl in /data/adb/asb, for the same reason:
+ * the module directory is replaced on every update. Kept there, the per-profile stats, the
+ * session aggregate and the OTA-quarantine fingerprint were all wiped by each update - so
+ * the quarantine never saw an "old" fingerprint to compare against, and the learning reset
+ * in install.sh/service.sh (which already deletes /data/adb/asb/pstats_*) aimed at files
+ * that were never there. The old directory is read once as a fallback. */
+#define PERSISTENT_STATS_DIR        "/data/adb/asb"
+#define PERSISTENT_STATS_DIR_LEGACY "/data/adb/modules/AutoSystemBoost/runtime"
+#define PERSISTENT_STATS_FILE       PERSISTENT_STATS_DIR "/session_stats.json"
 static const char *g_pstats_files[3] = {
     PERSISTENT_STATS_DIR "/pstats_battery.json",
     PERSISTENT_STATS_DIR "/pstats_balanced.json",
@@ -1388,6 +1399,14 @@ static long g_ses_net_samples = 0;
  * this is the owner half, which is the part that can be acted on. */
 typedef enum { ASB_WAKE_ACTIVE = 0, ASB_WAKE_IDLE, ASB_WAKE_HOURLY, ASB_WAKE_SRC_COUNT } asb_wake_src_t;
 static unsigned long g_wake_by_src[ASB_WAKE_SRC_COUNT];
+/* How each screen-on was noticed: directly from a display uevent, by the quick re-check
+ * a display uevent armed, or only by a later timer tick. The last one is the slow path:
+ * two field captures show 22 of 54 wakes found that way, each exactly one 45 s idle tick
+ * after the previous one, with the governor still on deep-idle rails meanwhile. */
+static unsigned long g_scr_on_by_uevent = 0, g_scr_on_by_recheck = 0, g_scr_on_by_tick = 0;
+static unsigned long g_scr_recheck_single = 0;
+static long          g_scr_tick_late_max_s = 0;
+static time_t        g_scr_off_since = 0;
 static const char *const g_wake_src_name[ASB_WAKE_SRC_COUNT] = { "active", "idle", "hourly" };
 
 /* Uevent bookkeeping: the epoll wake counter says HOW OFTEN the uevent fd fired, but
@@ -2363,6 +2382,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
          * module ran the entire session on the 10 s idle cadence. "screen_on=?" in the
          * report gave nothing to work with - this names the path that answered. */
         fprintf(f, "screen_src=%d\n", metrics_screen_src());
+        fprintf(f, "screen_on_detect=\"uevent:%lu,recheck:%lu,tick:%lu\"\n",
+                g_scr_on_by_uevent, g_scr_on_by_recheck, g_scr_on_by_tick);
+        fprintf(f, "screen_on_single_rechecks=%lu\nscreen_on_tick_late_max_s=%ld\n",
+                g_scr_recheck_single, g_scr_tick_late_max_s);
 
         /* Wakeups by source, same shape as the write breakdown below. */
         fprintf(f, "wake_by_src=\"");
@@ -2465,9 +2488,15 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "thermal_cooldown=%d\n", fsm->thermal_cooldown);
     fprintf(f, "prime_escape=%d\nprime_escape_mid=%d\nprime_escape_count=%lu\n",
             fsm->prime_escape, fsm->prime_escape_mid, fsm->prime_escape_count);
+    {
+        long _pe_t = g_prime_escape_total_ms;
+        if (g_prime_escape_since_ms > 0) _pe_t += asb_clock_ms(CLOCK_BOOTTIME) - g_prime_escape_since_ms;
+        fprintf(f, "prime_escape_total_s=%ld\n", _pe_t / 1000L);
+    }
     /* The suspend-aware companion to load1: how much of the last tick the CPU was up. */
     fprintf(f, "awake_tick_pct=%d\n", m->cpu.awake_tick_pct);
     fprintf(f, "current_scale_x100=%d\ncurrent_scale_windows=%d\n", g_curscale_x100, g_curscale_n);
+    fprintf(f, "device_bounds_applied=%d\n", g_device_bounds_applied);
     fprintf(f, "surface_source=%s\n", g_surface_from_skin ? "skin" :
                (g_thermal_surface_zone >= 0 ? "zone" : (g_thermal_board_zone >= 0 ? "board" : "none")));
     fprintf(f, "vendor_ceiling_ticks=%lu\nvendor_ceiling_used_ticks=%lu\n",
@@ -3249,10 +3278,20 @@ static void pstats_save_one(const char *path, const asb_persistent_stats_t *ps) 
         asb_log("pstats: atomic write failed for %s", path);
 }
 
+/* Load from the current path, or once from the pre-move module directory. */
+static void pstats_load_migrating(const char *path, asb_persistent_stats_t *ps) {
+    if (access(path, F_OK) == 0) { pstats_load_one(path, ps); return; }
+    const char *base = strrchr(path, '/');
+    if (!base) return;
+    char legacy[256];
+    snprintf(legacy, sizeof(legacy), "%s%s", PERSISTENT_STATS_DIR_LEGACY, base);
+    if (access(legacy, F_OK) == 0) pstats_load_one(legacy, ps);
+}
+
 static void persistent_stats_load(void) {
-    pstats_load_one(PERSISTENT_STATS_FILE, &g_pstats);
+    pstats_load_migrating(PERSISTENT_STATS_FILE, &g_pstats);
     for (int i = 0; i < 3; i++)
-        pstats_load_one(g_pstats_files[i], &g_pstats_per[i]);
+        pstats_load_migrating(g_pstats_files[i], &g_pstats_per[i]);
 }
 
 #define BAT_TRUST_DIRTY   0
@@ -4491,7 +4530,7 @@ static int read_profile_idx(void) {
     char buf[32] = {0};
     int fd = open(PROFILE_FILE, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return PROFILE_BALANCED;
-    int n = read(fd, buf, sizeof(buf)-1);
+    int n = (int)read(fd, buf, sizeof(buf)-1);
     close(fd);
     if (n <= 0) return PROFILE_BALANCED;
     buf[n] = '\0';
@@ -4554,6 +4593,7 @@ static void arm_timerfd_once_ms(int fd, int ms) {
  * and how many quick re-checks have been spent on it. */
 static time_t g_disp_evt_ts = 0;
 static int    g_disp_retry  = 0;
+static time_t g_disp_single_ts = 0;   /* when the last single (budget-time) re-check was armed */
 
 /* 1 when the timer runs periodically, 2 when only a one-shot is pending, 0 when disarmed. */
 static int timerfd_state(int fd) {
@@ -4590,7 +4630,7 @@ static int make_uevent_fd(void) {
 /* Split recv from parse so the drain loop can also bucket each event by subsystem;
  * the old shape read the buffer inside the parser and threw the source away. */
 static int recv_uevent(int fd, char *buf, size_t cap) {
-    int n = recv(fd, buf, cap - 1, MSG_DONTWAIT);
+    int n = (int)recv(fd, buf, (size_t)(cap - 1), MSG_DONTWAIT);
     if (n <= 0) return -1;
     buf[n] = '\0';
     return n;
@@ -5574,6 +5614,14 @@ int main(int argc, char **argv) {
                                                    _bounds_defaults);
         if (_ovr > 0) asb_log("device_bounds: applied %d per-device override(s) from %s",
                               _ovr, ASB_DEVICE_BOUNDS_FILE);
+        /* Say so when the switch is on and nothing loaded: the compiled rails are the OP15
+         * reference, and running them on another SoC must not look like a synthesised fit
+         * (external audit P1). The writer still snaps every value to this device's own
+         * frequency table, so nothing invalid reaches sysfs either way. */
+        else if (g_asb_cfg.device_bounds_override)
+            asb_log_critical("device_bounds: override=1 but %s gave no usable values - compiled reference rails in force",
+                             ASB_DEVICE_BOUNDS_FILE);
+        g_device_bounds_applied = _ovr;
     }
     asb_active_efficiency_load();
     asb_night_window_load();
@@ -6443,10 +6491,26 @@ int main(int argc, char **argv) {
                      * half-second busy wait on each would cost charge. */
                     /* At most one follow-up chain per 30 s: an always-on display refreshing
                      * its clock would otherwise buy up to ~2 s awake every minute. */
-                    if (!was_on && real_scr != 1 && final_scr != 0 && timerfd_state(tfd_active) != 1 &&
-                        time(NULL) - g_disp_evt_ts > 30) {
-                        g_disp_evt_ts = time(NULL); g_disp_retry = 0;
-                        arm_timerfd_once_ms(tfd_active, 400);
+                    if (!was_on && real_scr != 1 && final_scr != 0 && timerfd_state(tfd_active) != 1) {
+                        if (time(NULL) - g_disp_evt_ts > 30) {
+                            g_disp_evt_ts = time(NULL); g_disp_retry = 0;
+                            arm_timerfd_once_ms(tfd_active, 400);
+                        } else if (timerfd_state(tfd_active) == 0 &&
+                                   time(NULL) - g_disp_single_ts >= 10) {
+                            /* Inside the 30 s budget, the old code did nothing at all - and
+                             * the budget is what an earlier display event (an always-on
+                             * display pulse, the screen going off) had just spent. A real
+                             * wake landing there was then found only by the 45 s idle tick,
+                             * on sleep rails the whole time: the field signature is every
+                             * "seen on a tick" line sitting exactly 45 s after the last one.
+                             * One single look, 1 s later, is one timer wakeup - not the
+                             * ~2 s chain the budget exists to ration. The retry counter is
+                             * left spent so this never grows into a chain. */
+                            g_disp_retry = 3;
+                            g_disp_single_ts = time(NULL);
+                            g_scr_recheck_single++;
+                            arm_timerfd_once_ms(tfd_active, 1000);
+                        }
                     }
                     /* sysfs decides; the event only said "look now". */
                     int confirmed = real_scr;
@@ -6455,6 +6519,8 @@ int main(int argc, char **argv) {
                     if (confirmed != was_on) {
                         if (g_asb_cfg.log_level >= 1) asb_log("screen %s (uevent, drained=%d events)",
                                 confirmed ? "ON" : "OFF", drained);
+                        if (confirmed) g_scr_on_by_uevent++;
+                        else g_scr_off_since = time(NULL);
                         need_metrics = 1;
                         if (confirmed) {
                             /* Screen just came on: full cadence immediately, and reset
@@ -6759,8 +6825,39 @@ int main(int argc, char **argv) {
 
             /* Quiet Night Baseline -- after sustained quiet DEEP_IDLE,
              * enter ultra-quiet mode: even less reads, longer ticks. */
+            /* Which night window applies right now (0 = none): 3 = the learned per-user
+             * window, 2 = the static hours. Computed before the eligibility test because
+             * it is now part of it. */
+            int _qn_window = 0;
+            if (g_asb_cfg.night_quiet_enable && fsm.state == ASB_STATE_DEEP_IDLE &&
+                !metrics.misc.screen_on) {
+                time_t _t = time(NULL);
+                if (asb_night_window_ready()) {
+                    /* V50: learned per-user window replaces static hours */
+                    if (asb_night_window_active(_t)) _qn_window = 3;
+                } else {
+                    struct tm _tm;
+                    if (localtime_r(&_t, &_tm)) {
+                        int _h = _tm.tm_hour;
+                        int _hs = g_asb_cfg.night_quiet_hour_start;
+                        int _he = g_asb_cfg.night_quiet_hour_end;
+                        int _in_window = (_hs > _he)
+                                         ? (_h >= _hs || _h < _he)   /* crosses midnight */
+                                         : (_h >= _hs && _h < _he);  /* same-day window */
+                        if (_in_window) _qn_window = 2;
+                    }
+                }
+            }
+            /* Eligibility. This used to require a battery-like profile only - and Smart
+             * counts as battery-like only while its learned battery weight is >= 0.8. A full
+             * OP15 night (23:23-06:36, Smart, weight 0.45-0.79) never entered Quiet Night at
+             * all, while two daytime screen-offs did: the mode named for the night ran by
+             * day and not at night. What it saves is the governor's OWN footprint (longer
+             * ticks, fewer reads) on a sleeping phone, which has nothing to do with how
+             * performance-leaning the profile is - so inside the night window, with the
+             * switch on, any profile qualifies. Outside it the old rule stands unchanged. */
             if (fsm.state == ASB_STATE_DEEP_IDLE &&
-                asb_profile_battery_like(fsm.profile_idx) &&
+                (asb_profile_battery_like(fsm.profile_idx) || _qn_window) &&
                 !metrics.misc.screen_on) {
                 g_quiet_night_ticks++;
                 g_quiet_noise_ticks = 0;  /* reset hysteresis -- we're quiet again */
@@ -6768,24 +6865,7 @@ int main(int argc, char **argv) {
                  * night-window acceleration.
                  */
                 int _use_fast = g_last_bat_clean_night;
-                if (g_asb_cfg.night_quiet_enable && !_use_fast) {
-                    time_t _t = time(NULL);
-                    if (asb_night_window_ready()) {
-                        /* V50: learned per-user window replaces static hours */
-                        if (asb_night_window_active(_t)) _use_fast = 3;
-                    } else {
-                        struct tm _tm;
-                        if (localtime_r(&_t, &_tm)) {
-                            int _h = _tm.tm_hour;
-                            int _hs = g_asb_cfg.night_quiet_hour_start;
-                            int _he = g_asb_cfg.night_quiet_hour_end;
-                            int _in_window = (_hs > _he)
-                                             ? (_h >= _hs || _h < _he)   /* crosses midnight */
-                                             : (_h >= _hs && _h < _he);  /* same-day window */
-                            if (_in_window) _use_fast = 2;  /* 2=night-window source, distinct from clean-reward */
-                        }
-                    }
-                }
+                if (!_use_fast) _use_fast = _qn_window;
                 int threshold = _use_fast
                                 ? g_asb_cfg.quiet_fast_ticks   /* 5min with reward or night-window */
                                 : g_asb_cfg.quiet_entry_ticks; /* 10min normal */
@@ -6997,9 +7077,23 @@ int main(int argc, char **argv) {
                 if (metrics.misc.screen_on && _ts != 1) {
                     arm_timerfd_periodic(tfd_active, TIMER_ACTIVE_S);
                     g_active_interval = TIMER_ACTIVE_S;
-                    if (g_asb_cfg.log_level >= 1) asb_log("screen ON seen on a tick - active cadence restored");
+                    /* A re-check a display event armed (fired within ~3 s of it) is the
+                     * fast path working; anything later is the slow path the counters exist
+                     * to expose. "late" is an upper bound: the wake happened somewhere
+                     * between the last screen-off and this tick. */
+                    if ((g_disp_evt_ts && time(NULL) - g_disp_evt_ts <= 3) ||
+                        (g_disp_single_ts && time(NULL) - g_disp_single_ts <= 3)) {
+                        g_scr_on_by_recheck++;
+                        if (g_asb_cfg.log_level >= 1) asb_log("screen ON confirmed by the display re-check");
+                    } else {
+                        g_scr_on_by_tick++;
+                        long _late = g_scr_off_since ? (long)(time(NULL) - g_scr_off_since) : 0;
+                        if (_late > g_scr_tick_late_max_s && _late < 86400) g_scr_tick_late_max_s = _late;
+                        if (g_asb_cfg.log_level >= 1) asb_log("screen ON seen on a tick - active cadence restored");
+                    }
                 } else if (!metrics.misc.screen_on && _ts == 1) {
                     disarm_timerfd(tfd_active);
+                    g_scr_off_since = time(NULL);
                 } else if (!metrics.misc.screen_on && _ts == 0 && g_disp_evt_ts &&
                            time(NULL) - g_disp_evt_ts <= 3 && g_disp_retry < 3) {
                     /* A display event just came in and the panel has not reported on yet:
@@ -7887,6 +7981,15 @@ int main(int argc, char **argv) {
                 else if (fsm.cooldown_edge < 0)
                     asb_log("cooldown: exit die=%dC (screen on or cool enough, profile rails restored)",
                             fsm.cooldown_die_c);
+                /* Time spent lifted, so a report can tell a short burst from a ceiling that
+                 * stayed up (external audit R-6). Boottime: a lift never spans suspend, but
+                 * the clock must not run backwards if one did. */
+                if (fsm.prime_escape_edge > 0) g_prime_escape_since_ms = asb_clock_ms(CLOCK_BOOTTIME);
+                else if (fsm.prime_escape_edge < 0 && g_prime_escape_since_ms > 0) {
+                    long _pe_d = asb_clock_ms(CLOCK_BOOTTIME) - g_prime_escape_since_ms;
+                    if (_pe_d > 0) g_prime_escape_total_ms += _pe_d;
+                    g_prime_escape_since_ms = 0;
+                }
                 if (fsm.prime_escape_edge > 0)
                     asb_log("prime_escape: lift (HEAVY, big cores pinned at their ceiling%s, die=%dC)",
                             fsm.prime_escape_mid ? ", mid cluster lifted too" : "",

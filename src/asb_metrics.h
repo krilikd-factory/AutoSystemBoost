@@ -153,7 +153,7 @@ static inline int sysfs_read_int(const char *path, int def) {
     char buf[32];
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return def;
-    int n = read(fd, buf, sizeof(buf) - 1);
+    int n = (int)read(fd, buf, sizeof(buf) - 1);
     close(fd);
     if (n <= 0) return def;
     buf[n] = '\0';
@@ -193,7 +193,7 @@ static inline long sysfs_read_long(const char *path, long def) {
     char buf[32];
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return def;
-    int n = read(fd, buf, sizeof(buf) - 1);
+    int n = (int)read(fd, buf, sizeof(buf) - 1);
     close(fd);
     if (n <= 0) return def;
     buf[n] = '\0';
@@ -203,7 +203,7 @@ static inline long sysfs_read_long(const char *path, long def) {
 static inline int sysfs_read_str(const char *path, char *out, int maxlen) {
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return -1;
-    int n = read(fd, out, maxlen - 1);
+    int n = (int)read(fd, out, (size_t)(maxlen - 1));
     close(fd);
     if (n > 0) {
         out[n] = '\0';
@@ -592,7 +592,7 @@ static void cpu_topology_discover(void) {
         int fd = open(path, O_RDONLY | O_CLOEXEC);
         if (fd < 0) continue;
         char b[32] = {0};
-        int n = read(fd, b, sizeof(b) - 1); close(fd);
+        int n = (int)read(fd, b, sizeof(b) - 1); close(fd);
         if (n > 0) { int v = atoi(b); if (v > mid_best) { mid_best = v; mid = found[i]; } }
     }
     g_cpu_policy_ids[0] = first;
@@ -630,7 +630,7 @@ static void cpu_capture_slot_hwmax(void) {
         int fd = open(path, O_RDONLY | O_CLOEXEC);
         if (fd < 0) continue;
         char b[32] = {0};
-        int n = read(fd, b, sizeof(b) - 1); close(fd);
+        int n = (int)read(fd, b, sizeof(b) - 1); close(fd);
         if (n > 0) g_cpu_slot_hwmax[s] = atoi(b);
     
     /* Lowest OPP the cluster offers, read in the same pass.
@@ -646,7 +646,7 @@ static void cpu_capture_slot_hwmax(void) {
     fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd >= 0) {
       char lb[32] = {0};
-      int ln = read(fd, lb, sizeof(lb) - 1); close(fd);
+      int ln = (int)read(fd, lb, sizeof(lb) - 1); close(fd);
       if (ln > 0) {
         int lo = atoi(lb);
         if (lo > 0 && lo < g_cpu_slot_hwmax[s]) g_cpu_slot_hwmin[s] = lo;
@@ -1558,7 +1558,7 @@ int spike_detected = 0;
         int fd = open("/sys/kernel/msm_performance/parameters/cpu_max_freq",
                        O_RDONLY | O_CLOEXEC);
         if (fd >= 0) {
-            int n = read(fd, buf, sizeof(buf) - 1);
+            int n = (int)read(fd, buf, sizeof(buf) - 1);
             close(fd);
             if (n > 0) {
                 buf[n] = '\0';

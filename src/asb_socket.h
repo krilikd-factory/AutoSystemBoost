@@ -32,7 +32,7 @@ static int asb_sock_recv(int fd, char *buf, int maxlen,
                          struct sockaddr_un *src, socklen_t *srclen)
 {
     *srclen = sizeof(struct sockaddr_un);
-    int n = recvfrom(fd, buf, maxlen-1, MSG_DONTWAIT,
+    int n = (int)recvfrom(fd, buf, (size_t)(maxlen-1), MSG_DONTWAIT,
                      (struct sockaddr *)src, srclen);
     if (n > 0) buf[n] = '\0';
     return n;
@@ -66,7 +66,7 @@ static int asb_sock_send_cmd(const char *cmd, char *reply, int reply_len) {
     if (reply && reply_len > 0) {
         struct timeval tv = {1, 0};
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-        int n = recv(fd, reply, reply_len-1, 0);
+        int n = (int)recv(fd, reply, (size_t)(reply_len-1), 0);
         if (n > 0) reply[n] = '\0';
         else if (reply_len > 0) reply[0] = '\0';
     }

@@ -19,7 +19,7 @@ static inline int sysfs_write_int(const char *path, int val) {
     int len = snprintf(buf, sizeof(buf), "%d\n", val);
     int fd  = open(path, O_WRONLY | O_CLOEXEC);
     if (fd < 0) return -1;
-    int r = write(fd, buf, len);
+    int r = (int)write(fd, buf, (size_t)len);
     close(fd);
     return (r == len) ? 0 : -1;
 }
@@ -29,7 +29,7 @@ static inline int sysfs_write_long(const char *path, long val) {
     int len = snprintf(buf, sizeof(buf), "%ld\n", val);
     int fd  = open(path, O_WRONLY | O_CLOEXEC);
     if (fd < 0) return -1;
-    int r = write(fd, buf, len);
+    int r = (int)write(fd, buf, (size_t)len);
     close(fd);
     return (r == len) ? 0 : -1;
 }

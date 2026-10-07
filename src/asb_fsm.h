@@ -2419,6 +2419,14 @@ if (!can_leave &&
          * slot here and are unchanged. */
         int _ms = (g_cpu_policy_ids[2] >= 0 && g_cpu_policy_ids[1] >= 0) ? 1 : -1;
         time_t _now = time(NULL);
+        /* Burst and rest are user settings now (WebUI); clamped so a typo cannot turn the
+         * burst into a rail (burst <= 60 s) or make the rest meaningless (>= 10 s). */
+        int _esc_burst = g_asb_cfg.prime_escape_burst_s;
+        int _esc_rest  = g_asb_cfg.prime_escape_rest_s;
+        if (_esc_burst < 5) _esc_burst = 5;
+        if (_esc_burst > 60) _esc_burst = 60;
+        if (_esc_rest < 10) _esc_rest = 10;
+        if (_esc_rest > 300) _esc_rest = 300;
         int _skin = m->therm.skin_temp_c;
         int _skin_ok = !(_skin > 20 && _skin < 70) || (_skin < g_asb_cfg.thermal_skin_c - 8);
         int _ok = g_asb_cfg.heavy_prime_escape &&
@@ -2438,13 +2446,13 @@ if (!can_leave &&
         int _pinned = _pinned_prime || _pinned_mid;
         if (!_ok) {
             _esc_streak = 0;
-            if (_was) _esc_rest_until = _now + 40;
+            if (_was) _esc_rest_until = _now + _esc_rest;
             fsm->prime_escape = 0;
         } else if (_was) {
-            if (_now - _esc_since >= 20) {           /* burst budget spent: rest */
+            if (_now - _esc_since >= _esc_burst) {   /* burst budget spent: rest */
                 fsm->prime_escape = 0;
                 _esc_streak = 0;
-                _esc_rest_until = _now + 40;
+                _esc_rest_until = _now + _esc_rest;
             }
         } else {
             _esc_streak = _pinned ? _esc_streak + 1 : 0;

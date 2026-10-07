@@ -7,9 +7,21 @@
 
 #define LEARN_SLOTS     168
 #define LEARN_ALPHA     0.15f
-#define LEARN_FILE      "/data/adb/modules/AutoSystemBoost/runtime/learn.bin"
-#define LEARN_IDLE_MA   30
-#define LEARN_LIGHT_MA  70
+/* Outside the module directory: a module update replaces that directory wholesale, so the
+ * learner lost its 168 hour-of-week slots on every update and - needing 3 samples per slot,
+ * i.e. three weeks - in practice never produced a prediction at all. The old path is still
+ * read once, so whatever survived there is carried over. */
+#define LEARN_FILE        "/data/adb/asb/learn.bin"
+#define LEARN_FILE_LEGACY "/data/adb/modules/AutoSystemBoost/runtime/learn.bin"
+/* Prediction thresholds, as a share of ticks with the screen on in that hour of the week.
+ *
+ * They used to be milliamps: < 30 mA idle, < 70 mA light. No hour of a real day averages
+ * that - the samples are taken while the governor is awake, so even a sleeping hour reads
+ * hundreds of mA (an OP15 night hour: 502 mA), and the OP15 gauge reads about half the true
+ * current besides. Every slot would have become ACTIVE. Screen share is what the windows are
+ * really about (will someone be using the phone this hour?) and no gauge distorts it. */
+#define LEARN_IDLE_SCREEN   0.15f
+#define LEARN_LIGHT_SCREEN  0.45f
 
 typedef struct {
     float drain_ma_ema;
@@ -44,8 +56,8 @@ static inline int learner_slot(void) {
     return tm->tm_wday * 24 + tm->tm_hour;
 }
 
-static int learner_load(asb_learn_db_t *db) {
-    FILE *f = fopen(LEARN_FILE, "rb");
+static int learner_load_from(asb_learn_db_t *db, const char *path) {
+    FILE *f = fopen(path, "rb");
     if (!f) return 0;
     size_t n = fread(db, 1, sizeof(*db), f);
     fclose(f);
@@ -53,6 +65,11 @@ static int learner_load(asb_learn_db_t *db) {
     if (db->magic != LEARN_MAGIC || db->version != 1) return 0;
     uint32_t crc = crc32_simple(db->slots, sizeof(db->slots));
     return (crc == db->crc32) ? 1 : 0;
+}
+
+static int learner_load(asb_learn_db_t *db) {
+    if (learner_load_from(db, LEARN_FILE)) return 1;
+    return learner_load_from(db, LEARN_FILE_LEGACY);
 }
 
 static void learner_save(asb_learn_db_t *db) {
@@ -134,8 +151,8 @@ static asb_prediction_t learner_predict(const asb_learn_db_t *db) {
 
     if (s->samples < 3) return LEARN_PREDICT_UNKNOWN;
 
-    if (s->drain_ma_ema < LEARN_IDLE_MA)  return LEARN_PREDICT_IDLE;
-    if (s->drain_ma_ema < LEARN_LIGHT_MA) return LEARN_PREDICT_LIGHT;
+    if (s->screen_on_ema < LEARN_IDLE_SCREEN)  return LEARN_PREDICT_IDLE;
+    if (s->screen_on_ema < LEARN_LIGHT_SCREEN) return LEARN_PREDICT_LIGHT;
     return LEARN_PREDICT_ACTIVE;
 }
 
@@ -144,17 +161,20 @@ static void learner_adjust_windows(const asb_learn_db_t *db,
 {
     asb_prediction_t p = learner_predict(db);
     switch (p) {
+        /* No prediction ever makes ramping UP slower than the default 2 ticks. The IDLE
+         * row used to wait 5: an hour you rarely use the phone is exactly the hour a sudden
+         * unlock should not stutter in. What a quiet hour may do is settle down sooner. */
         case LEARN_PREDICT_IDLE:
-            *up_window   = 5;
+            *up_window   = 2;
             *down_window = 3;
             break;
         case LEARN_PREDICT_LIGHT:
-            *up_window   = 3;
+            *up_window   = 2;
             *down_window = 5;
             break;
         case LEARN_PREDICT_ACTIVE:
             *up_window   = 1;
-            *down_window = 8;
+            *down_window = 6;
             break;
         default:
             *up_window   = 2;
