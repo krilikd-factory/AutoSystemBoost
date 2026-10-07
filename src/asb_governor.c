@@ -204,6 +204,72 @@ static long asb_clock_ms(clockid_t which) {
     return (long)ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
 }
 
+/* Measured screen-off drain, in %/h x100, learned across real screen-off stretches.
+ *
+ * The "idle" half of every time-to-empty on the action screen and in the WebUI was a guess:
+ * a tenth of the screen-on draw, clamped to 40-90 mA. Nothing measured it, though this
+ * governor already watches every screen-off window. A OnePlus 15 night drained 0.51 %/h
+ * (about 37 mA) - below the guess's own floor - so the idle forecast was wrong in the same
+ * direction on every phone that sleeps well, and on a phone that sleeps badly it was wrong
+ * the other way with nothing to say so.
+ *
+ * A window opens when the screen goes off on battery and closes when the screen comes on
+ * or a charger is attached (that window is thrown away - it measures the charger). Only a
+ * window of 60+ minutes that lost at least 2 whole percent counts: capacity is quantised to
+ * whole percent, and anything shorter is rounding, not drain. Smoothed 3:1 and kept on disk
+ * so one good night survives a reboot. */
+#define ASB_OFFDRAIN_FILE "/data/adb/asb/offdrain_pctph_x100"
+static int    g_offdrain_x100 = -1;      /* -1 = never measured */
+static int    g_offdrain_n = 0;          /* windows that counted */
+static int    g_offdrain_loaded = 0;
+static long   g_offdrain_start_ms = 0;   /* boottime ms at window open, 0 = closed */
+static int    g_offdrain_start_pct = -1;
+static long   g_offdrain_on_ms = 0;      /* boottime ms the screen came on, 0 = still off */
+static int    g_offdrain_on_pct = -1;
+static void asb_offdrain_track(int screen_on, int pct, int charging) {
+    if (!g_offdrain_loaded) {
+        g_offdrain_loaded = 1;
+        FILE *f = fopen(ASB_OFFDRAIN_FILE, "r");
+        if (f) {
+            int v = -1, n = 0;
+            if (fscanf(f, "%d %d", &v, &n) >= 1 && v > 0 && v < 5000) { g_offdrain_x100 = v; g_offdrain_n = n > 0 ? n : 1; }
+            fclose(f);
+        }
+    }
+    long now = asb_clock_ms(CLOCK_BOOTTIME);
+    if (pct <= 0 || pct > 100) return;
+    if (charging) { g_offdrain_start_ms = 0; g_offdrain_on_ms = 0; return; }   /* the charger */
+    /* A glance at the clock at 3 am must not split the night into two windows too short
+     * to count: a screen-on of under two minutes is folded into the surrounding window. */
+    if (!screen_on) {
+        g_offdrain_on_ms = 0;
+        if (g_offdrain_start_ms == 0) { g_offdrain_start_ms = now; g_offdrain_start_pct = pct; }
+        return;
+    }
+    if (g_offdrain_start_ms > 0 && g_offdrain_on_ms == 0) {
+        g_offdrain_on_ms = now; g_offdrain_on_pct = pct;          /* remember where it ended */
+    }
+    if (g_offdrain_start_ms > 0 && now - g_offdrain_on_ms >= 120000L) {
+        long dur = g_offdrain_on_ms - g_offdrain_start_ms;
+        int dpct = g_offdrain_start_pct - g_offdrain_on_pct;
+        g_offdrain_start_ms = 0;
+        g_offdrain_on_ms = 0;
+        if (dur >= 3600000L && dpct >= 2) {
+            long r = (long)dpct * 100L * 3600000L / dur;
+            if (r > 0 && r < 5000) {
+                g_offdrain_x100 = (g_offdrain_x100 > 0) ? (int)((g_offdrain_x100 * 3L + r) / 4L) : (int)r;
+                g_offdrain_n++;
+                FILE *f = fopen(ASB_OFFDRAIN_FILE ".tmp", "w");
+                if (f) {
+                    fprintf(f, "%d %d\n", g_offdrain_x100, g_offdrain_n);
+                    fclose(f);
+                    rename(ASB_OFFDRAIN_FILE ".tmp", ASB_OFFDRAIN_FILE);
+                }
+            }
+        }
+    }
+}
+
 /* Called once per tick. screen_on resets the window: the figure is only meaningful
  * across a continuous screen-off stretch, and mixing screen-on time into it would
  * dilute exactly the problem it exists to expose. */
@@ -2033,6 +2099,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * showing a drain figure and leaving the user to guess why. */
     fprintf(f, "awake_pct_screenoff=%d\nawake_window_min=%ld\n",
             g_awake_pct, g_awake_win_boot_ms / 60000L);
+    fprintf(f, "offdrain_pctph_x100=%d\noffdrain_windows=%d\n", g_offdrain_x100, g_offdrain_n);
     fprintf(f, "smart_sessions_total=%d\nsmart_last_confidence=%d\n",
             g_smart_sessions_total, g_smart_last_confidence);
     {
@@ -5683,6 +5750,7 @@ int main(int argc, char **argv) {
         /* Track suspend before anything else this tick: the numbers come from the
          * clocks, not from the metrics, so they are valid even when a probe failed. */
         asb_awake_track(metrics.misc.screen_on);
+        asb_offdrain_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging);
         int _smart_updated = asb_smart_tick(&metrics, &fsm);
         if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
             asb_profile_caps_t _new_caps;
@@ -6062,6 +6130,7 @@ int main(int argc, char **argv) {
                      * was computed in the wrong place.
                      */
                     asb_awake_track(metrics.misc.screen_on);
+                    asb_offdrain_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging);
                     int _smart_updated = asb_smart_tick(&metrics, &fsm);
                     if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
                         asb_profile_caps_t _new_caps;
