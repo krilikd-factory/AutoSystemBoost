@@ -3,7 +3,9 @@
 # internal = engine, derived or safety parameter with no direct user card. Lint requires exact key-set equality.
 heavy_gpu_enter|internal|engine_or_derived
 heavy_load_enter|internal|engine_or_derived
-heavy_prime_escape|internal|engine_or_derived
+heavy_prime_escape|advanced|webui_sensitive
+prime_escape_burst_s|advanced|webui_sensitive
+prime_escape_rest_s|advanced|webui_sensitive
 gaming_gpu_enter|internal|engine_or_derived
 gaming_confirm_ticks|internal|engine_or_derived
 sustained_gpu_min|internal|engine_or_derived
@@ -55,6 +57,7 @@ moderate_load_enter|internal|engine_or_derived
 doze_level|advanced|webui_sensitive
 doze_trim_whitelist|advanced|webui_sensitive
 wakelock_action|advanced|webui_sensitive
+wakelock_fitness|advanced|webui_sensitive
 gnss_trim|advanced|webui_sensitive
 log_level|user|webui_standard
 phantom_procs|advanced|webui_sensitive
@@ -180,4 +183,5 @@ gpu_video_max_pct|internal|engine_or_derived
 smart_media_guard|user|webui_standard
 device_bounds_override|internal|engine_or_derived
 ltpo_force|user|webui_standard
+ltpo_video|user|webui_standard
 mmfeed_off|user|webui_standard
