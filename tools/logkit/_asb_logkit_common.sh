@@ -779,6 +779,41 @@ epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA|bat_uV|bat_dC|cpu_max_c|s
 EOF
 }
 
+# Display: brightness and refresh rate, the two biggest screen-on costs and the two this
+# kit never recorded. ASB ships an LTPO patch whose whole point is dropping the refresh
+# rate when nothing moves, and no capture could say whether it did - a video phase at a
+# locked 120 Hz and one at 60 Hz looked identical in every trace. Brightness is a sysfs
+# read; the refresh rate needs one `dumpsys display` per poll, only with the screen on.
+lk_display_trace_header() {
+  echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA" > "$LK_OUT_DIR/display_trace.txt"
+}
+lk_capture_display_trace_row() {
+  _dph="$1"
+  _dscr=0
+  case "$(dumpsys power 2>/dev/null | grep -m1 -oE 'mWakefulness=[A-Za-z]+' | cut -d= -f2)" in
+    Awake) _dscr=1 ;;
+  esac
+  _blr=""; _blm=""
+  for _bld in /sys/class/backlight/*; do
+    [ -r "$_bld/brightness" ] || continue
+    _blr="$(cat "$_bld/brightness" 2>/dev/null)"; _blm="$(cat "$_bld/max_brightness" 2>/dev/null)"
+    break
+  done
+  _blp=""
+  case "$_blr:$_blm" in *[!0-9:]*|:*|*:) : ;; *) [ "$_blm" -gt 0 ] 2>/dev/null && _blp=$(( _blr * 100 / _blm )) ;; esac
+  _hz=""
+  if [ "$_dscr" = 1 ]; then
+    _dd="$(dumpsys display 2>/dev/null)"
+    _hz="$(printf '%s\n' "$_dd" | grep -m1 -oE 'renderFrameRate[ =]+[0-9.]+' | grep -oE '[0-9.]+$')"
+    [ -n "$_hz" ] || _hz="$(printf '%s\n' "$_dd" | grep -m1 -oE 'fps=[0-9.]+' | cut -d= -f2)"
+    _dd=""
+    case "$_hz" in *.*) _hz="${_hz%%.*}" ;; esac
+  fi
+  _dma="$(cat /sys/class/power_supply/battery/current_now 2>/dev/null)"
+  case "$_dma" in ''|*[!0-9-]*) _dma='' ;; *) { [ "$_dma" -ge 100000 ] || [ "$_dma" -le -100000 ]; } 2>/dev/null && _dma=$(( _dma / 1000 )) ;; esac
+  echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|${_dph}|${_dscr}|${_blr}|${_blm}|${_blp}|${_hz}|${_dma}" >> "$LK_OUT_DIR/display_trace.txt"
+}
+
 lk_capture_perf_trace_row() {
   _e=$(date +%s)
   _d=$(date '+%Y-%m-%d %H:%M:%S')

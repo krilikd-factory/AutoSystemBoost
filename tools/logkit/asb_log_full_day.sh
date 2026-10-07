@@ -1138,6 +1138,37 @@ lk_emit_screenoff_sleep() {
     END { if (!done) printf "  no screen-off time in the current batterystats window (screen on since the last reset)\n  -> the overnight figure is night(longest) in the per-phase summary below\n" }'
 }
 
+# Screen-on cost by refresh rate and brightness. Answers "did the LTPO patch actually drop
+# the rate" and "how much of this drain is just the panel", per device, from the capture.
+lk_emit_display_summary() {
+  _dt="$LK_OUT_DIR/display_trace.txt"
+  [ -s "$_dt" ] || return 0
+  echo "===== DISPLAY (screen-on samples) ====="
+  awk -F'|' '
+    NR == 1 { next }
+    $4 != 1 { next }
+    { n++
+      hz = ($8 == "") ? "?" : $8; c[hz]++
+      if ($7 != "") { bs[hz] += $7; bn[hz]++; ball += $7; balln++ }
+      if ($9 + 0 > 0) { ms[hz] += $9; mn[hz]++ }
+      if ($7 != "") { b = ($7 < 25) ? "0-24" : ($7 < 50) ? "25-49" : ($7 < 75) ? "50-74" : "75-100"
+                      bc[b]++; if ($9 + 0 > 0) { bm[b] += $9; bmn[b]++ } } }
+    END {
+      if (n == 0) { print "no screen-on samples"; exit }
+      printf "refresh_hz  samples  share   avg_brightness%%  avg_mA\n"
+      for (h in c) printf "%-10s %8d %5.0f%%   %14s  %6s\n", h, c[h], 100.0*c[h]/n,
+        (bn[h] ? sprintf("%.0f", bs[h]/bn[h]) : "-"), (mn[h] ? sprintf("%.0f", ms[h]/mn[h]) : "-")
+      printf "brightness%%  samples  avg_mA\n"
+      split("0-24 25-49 50-74 75-100", o, " ")
+      for (i = 1; i <= 4; i++) if (bc[o[i]]) printf "%-11s %8d  %6s\n", o[i], bc[o[i]],
+        (bmn[o[i]] ? sprintf("%.0f", bm[o[i]]/bmn[o[i]]) : "-")
+      if (balln) printf "average brightness while on: %.0f%%\n", ball/balln
+      print "refresh '?' = the rate could not be read on this build; brightness is the panel'"'"'s raw backlight share."
+      print "Compare mA across refresh rates at similar brightness before crediting or blaming LTPO."
+    }' "$_dt"
+  echo ""
+}
+
 lk_emit_full_day_report() {
   _led="$LK_OUT_DIR/phase_ledger.tsv"
   _out="$LK_OUT_DIR/_full_day_report.txt"
@@ -1154,6 +1185,7 @@ lk_emit_full_day_report() {
     echo ""
     lk_emit_screenoff_class_summary
     lk_emit_current_soc_consistency
+    lk_emit_display_summary
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
       cat "$LK_OUT_DIR/phase_summary.txt"
     fi
@@ -1496,6 +1528,7 @@ lk_bt_reconnect_start
 # trace headers
 lk_perf_trace_header
 lk_battery_trace_header
+lk_display_trace_header
 lk_charge_trace_header
 lk_asb_feature_header
 lk_config_watch_init
@@ -1603,6 +1636,7 @@ while : ; do
   # per-poll capture
   lk_capture_perf_trace_row
   lk_capture_battery_trace_row
+  lk_capture_display_trace_row "$_phase"
   lk_capture_screenoff_class_row "$_phase"
   lk_capture_fsm_media_trace_row "$_phase"
   lk_wakelock_live_row
