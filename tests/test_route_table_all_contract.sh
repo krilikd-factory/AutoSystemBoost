@@ -28,11 +28,18 @@ done
 # A re-created route lost its congctl too; the watcher restores it through the routes mode.
 grep -q 'asb_net_apply.sh" routes' "$R" || f "watcher does not re-apply per-route congctl"
 grep -q '\[ "$ASB_NET_MODE" = routes \] && exit 0' "$ROOT/runtime/asb_net_apply.sh" || f "net_apply has no routes mode"
-grep -q 'ip route get 1.1.1.1' "$ROOT/runtime/asb_net_apply.sh" || f "active link not taken from the kernel's own route choice"
+grep -q 'route get 1.1.1.1' "$ROOT/runtime/asb_net_apply.sh" || f "active link not taken from the kernel's own route choice"
 # Per-link congestion alone must still run the boot apply and keep the watcher alive.
 grep -q 'net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile; do' "$ROOT/service.sh" \
   || f "boot apply ignores per-link network keys"
 [ "$(grep -c "_rw_mode=cc_only\|_asb_rt=cc_only" "$ROOT/service.sh")" -ge 2 ] || f "watcher not started for per-link congctl alone"
 grep -q 'in auto|conservative|aggressive) _apply' "$R" || f "watcher replays route windows while they are off"
+# iproute2, not BusyBox: the root manager's applet has no monitor/initcwnd/congctl.
+for file in runtime/asb_net_routes.sh runtime/asb_net_apply.sh; do
+  grep -q 'for _ipb in /system/bin/ip' "$ROOT/$file" || f "$file does not prefer /system/bin/ip"
+  if grep -vE '^[[:space:]]*#' "$ROOT/$file" | grep -qE '(^|[;|&(]|then|else|do)[[:space:]]*ip (route|-6|monitor)'; then
+    f "$file still calls a bare ip"
+  fi
+done
 [ "$fail" = 0 ] && echo "PASS route table contract"
 exit "$fail"

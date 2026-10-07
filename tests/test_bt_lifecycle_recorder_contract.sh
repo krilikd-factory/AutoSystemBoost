@@ -29,6 +29,9 @@ printf '%s\n' '# epoch<TAB>iso_utc<TAB>event<TAB>source' > "$LK_BT_RECONNECT_EVE
 [ "$(lk_bt_lifecycle_kind '1.0 AdapterService: reconnect requested')" = "reconnect_literal" ] || fail "literal reconnect classification"
 [ "$(lk_bt_lifecycle_kind '1.0 HeadsetService: disconnectAudio: device AA:BB:CC:DD:EE:FF')" = "hfp_audio_disconnect" ] || fail "HFP audio detach classification"
 [ "$(lk_bt_lifecycle_kind '1.0 HeadsetService: connectAudio: device AA:BB:CC:DD:EE:FF')" = "hfp_audio_connect" ] || fail "HFP audio attach classification"
+# A Java stack frame or a state query is not an event (fix44 capture: 240 rows from one trace).
+[ -z "$(lk_bt_lifecycle_kind "$(printf '1.0 10675 12397 D BluetoothA2dp: \tat android.bluetooth.BluetoothA2dp.getConnectionState(BluetoothA2dp.java:449)')")" ] || fail "stack frame counted as an event"
+[ -z "$(lk_bt_lifecycle_kind '1.0 SystemUI: CachedBluetoothDevice.isConnected() true')" ] || fail "connection-state query counted as an event"
 [ "$(lk_bt_lifecycle_kind '1.0 A2dpService: connectionStateChanged, state: 2->3')" = "a2dp_profile_disconnect" ] || fail "A2DP profile disconnect classification"
 [ "$(lk_bt_lifecycle_kind '1.0 A2dpService: connectionStateChanged, state: 1->2')" = "a2dp_profile_connect" ] || fail "A2DP profile connect classification"
 [ "$(lk_bt_lifecycle_kind '1.0 A2dpService: device disconnected')" = "disconnect_generic" ] || fail "generic disconnect classification"
