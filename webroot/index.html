@@ -3033,9 +3033,7 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
  * While it flies, the saucer in the header fades out: it reads as the same object having
  * left its nest, and leaving a duplicate sitting in the header spoils that. Only the
  * glyph goes - the ring and glow stay, so the header keeps its shape and nothing moves.
- *
- * Reduced-motion is honoured: someone who asked the system for less movement did not ask
- * for a saucer doing laps. */
+ */
 .ufo-fly {
   position: fixed;
   left: 0;
@@ -3070,10 +3068,6 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
  * nest is still there to come back to. */
 .logo-glyph { display: inline-block; transition: opacity .28s ease; }
 body.ufo-flying .logo-glyph { opacity: 0; }
-@media (prefers-reduced-motion: reduce) {
-  .ufo-fly { display: none; }
-  body.ufo-flying .logo-glyph { opacity: 1; }
-}
 </style>
 </head>
 <body>
@@ -8852,7 +8846,11 @@ setTimeout(() => pollLive(false), 1500);
 
   function launch(logoC) {
     if (flying) return;
-    try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) {}
+    /* No reduced-motion opt-out here on purpose. Ten deliberate taps ARE the request for the
+     * animation, which is the case accessibility guidance allows. And a WebView reports
+     * reduced motion whenever the system animator scale is 0 (developer options, or another
+     * module), so the check silently disabled the egg for people who never asked for less
+     * motion - it simply looked broken. */
     var glyph = logoC && logoC.querySelector('.logo-glyph');
     if (!glyph) return;
     flying = true;
