@@ -828,5 +828,6 @@
   "cfg_profile_imported_tail": " - pulsa Aplicar para usarla",
   "dbg_log_running_hint": "borra esta carpeta para iniciar uno nuevo",
   "eta_average": "promedio",
-  "eta_average_tip": "Según tu consumo suavizado con pantalla encendida; la tasa en vivo lo sustituye cuando la ventana llega a 10 minutos."
+  "eta_average_tip": "Según tu consumo suavizado con pantalla encendida; la tasa en vivo lo sustituye cuando la ventana llega a 10 minutos.",
+  "eta_idle_measured_tip": "Consumo medido con la pantalla apagada: "
 }

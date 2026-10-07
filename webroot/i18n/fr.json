@@ -828,5 +828,6 @@
   "cfg_profile_imported_tail": " - appuyez sur Appliquer pour l'utiliser",
   "dbg_log_running_hint": "supprimez ce dossier pour en lancer un nouveau",
   "eta_average": "moyenne",
-  "eta_average_tip": "Basé sur votre consommation lissée écran allumé ; le taux en direct la remplace quand la fenêtre atteint 10 minutes."
+  "eta_average_tip": "Basé sur votre consommation lissée écran allumé ; le taux en direct la remplace quand la fenêtre atteint 10 minutes.",
+  "eta_idle_measured_tip": "Consommation mesurée écran éteint : "
 }

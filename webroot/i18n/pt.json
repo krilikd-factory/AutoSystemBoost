@@ -828,5 +828,6 @@
   "cfg_profile_imported_tail": " - toque em Aplicar para a usar",
   "dbg_log_running_hint": "apague esta pasta para iniciar um novo",
   "eta_average": "média",
-  "eta_average_tip": "Com base no seu consumo suavizado com a tela ligada; a taxa ao vivo o substitui quando a janela chega a 10 minutos."
+  "eta_average_tip": "Com base no seu consumo suavizado com a tela ligada; a taxa ao vivo o substitui quando a janela chega a 10 minutos.",
+  "eta_idle_measured_tip": "Consumo medido com a tela desligada: "
 }

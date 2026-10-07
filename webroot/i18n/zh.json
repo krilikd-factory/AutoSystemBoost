@@ -828,5 +828,6 @@
   "cfg_profile_imported_tail": "，点按“应用”即可使用",
   "dbg_log_running_hint": "删除此文件夹即可开始新的记录",
   "eta_average": "平均",
-  "eta_average_tip": "基于亮屏时的平滑耗电；耗电窗口满 10 分钟后改用实时速率。"
+  "eta_average_tip": "基于亮屏时的平滑耗电；耗电窗口满 10 分钟后改用实时速率。",
+  "eta_idle_measured_tip": "实测熄屏耗电："
 }
