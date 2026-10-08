@@ -2295,7 +2295,7 @@ asb_generate_odm_binds() {
   ui_print "    . odm-bind: volume libs"
   [ "$ASB_AUDIO" = "true" ] && asb_audio_ensure_volume_libs "$_ob_root/odm/etc"
   ui_print "    . odm-bind: building manifest"
-  : > "$_ob_man"
+  true > "$_ob_man"
   for _ob_p in $(find "$_ob_root" -type f 2>/dev/null); do
     _ob_t="${_ob_p#$_ob_root}"
     if $_ob_to cmp -s "$_ob_p" "$_ob_t" 2>/dev/null; then
@@ -2747,10 +2747,10 @@ asb_reset_learning_on_upgrade_to_v56() {
         "$_asb_dir/session_history_migrated_v47" \
         "$_asb_dir/auto_battery_state" 2>/dev/null || true
 
-  : > "$_asb_dir/learning_reset_pending" 2>/dev/null || true
+  true > "$_asb_dir/learning_reset_pending" 2>/dev/null || true
 
   mkdir -p "$_asb_dir" 2>/dev/null
-  : > "$_marker" 2>/dev/null
+  true > "$_marker" 2>/dev/null
   ui_print "      + learning reset; settings and device data preserved"
 }
 
@@ -2776,7 +2776,7 @@ asb_reset_learning_on_upgrade_to_v56() {
 asb_capture_oem_toggles() {
   command -v settings >/dev/null 2>&1 || return 0
   mkdir -p /data/adb/asb 2>/dev/null
-  : > /data/adb/asb/oem_preinstall 2>/dev/null
+  true > /data/adb/asb/oem_preinstall 2>/dev/null
   for _ok in ram_expand_size ram_expand_size_list ram_expand_switch_state; do
     _ov="$(settings get global "$_ok" 2>/dev/null)"
     # Record "unset" too, as the literal word null.
@@ -2814,7 +2814,7 @@ asb_neutralise_fresh_install() {
   # /data/adb/asb/active_profile - which outlives module removal - would put the old
   # profile straight back and the module card would show it.
   mkdir -p /data/adb/asb 2>/dev/null
-  : > /data/adb/asb/no_profile_chosen 2>/dev/null
+  true > /data/adb/asb/no_profile_chosen 2>/dev/null
   rm -f /data/adb/asb/active_profile /data/adb/asb/current_profile.bak 2>/dev/null
   ui_print "      + first install: Stock profile active; ASB CPU/GPU/governor policy is off"
   ui_print "        open the WebUI whenever you want to choose an ASB profile"
@@ -3259,7 +3259,7 @@ else
   if [ "$ASB_IS_ONEPLUS" = "true" ]; then
     if [ -f /data/adb/asb/vendor_overlay_blocked ] && [ ! -f /data/adb/asb/vendor_overlay_retry_done ]; then
       rm -f /data/adb/asb/vendor_overlay_blocked 2>/dev/null
-      : > /data/adb/asb/vendor_overlay_retry_done 2>/dev/null
+      true > /data/adb/asb/vendor_overlay_retry_done 2>/dev/null
       ui_print "[*] Non-reference OnePlus: retrying the device overlay once with the odm-safe generator"
     fi
     if [ -f /data/adb/asb/vendor_overlay_blocked ]; then
@@ -3480,7 +3480,7 @@ asb_apply_blur_prop() {
     if command -v asb_settings_put >/dev/null 2>&1; then asb_settings_put "$@"; else settings put "$@" >/dev/null 2>&1; fi
   }
   _prop="$MODPATH/system.prop"
-  [ -f "$_prop" ] || : > "$_prop"
+  [ -f "$_prop" ] || true > "$_prop"
   _db="$(grep -E '^[[:space:]]*disable_blur=' "$MODPATH/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
   # stock | light | off, with 0/1 still meaning stock/off.
   # install-time and runtime must agree on the vocabulary or the setting reverts on the next
