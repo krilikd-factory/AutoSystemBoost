@@ -1682,6 +1682,13 @@ fi
 
 echo ""
 echo "  📷  ${H_CAMERA}"
+# Self-heal before reporting: if a camera bind from the manifest is not what init's namespace
+# reads, put it back now (one read-back per file when it already is). The report below then
+# describes the state the camera will actually use, not a boot-time race we could fix.
+if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -r "$MODDIR/runtime/asb_odm_rebind.sh" ] \
+   && grep -q '/camera/' /data/adb/asb/odm_bind_manifest.txt 2>/dev/null; then
+  sh "$MODDIR/runtime/asb_odm_rebind.sh" apply camera >/dev/null 2>&1
+fi
 # OxygenOS variants may expose the effective retouch config under either /odm or /vendor/odm.
 # Do not report a staged/secondary root as live merely because it is checked first: select the
 # readable candidate with the largest app list and retain its path for an actionable verdict.

@@ -524,22 +524,21 @@ asb_migrate_governor_conf
     # post-fs-data runs, so that early bind gets shadowed and the framework still reads the
     # stock config (observed: the boot log said action=boot, yet grep asb
     # /odm/etc/audio_effects_config.xml stayed 0 until a manual mount --bind).
-    if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ]; then
-      _rb_any=0
-      while IFS='|' read -r _rb_t _rb_p; do
-        case "$_rb_t" in ''|'#'*) continue ;; esac
-        [ -f "$_rb_t" ] && [ -f "$_rb_p" ] || continue
-        cmp -s "$_rb_t" "$_rb_p" 2>/dev/null && continue
-        if command -v nsenter >/dev/null 2>&1 \
-           && nsenter -t 1 -m -- mount --bind "$_rb_p" "$_rb_t" 2>/dev/null; then
-          _rb_any=1
-        elif mount --bind "$_rb_p" "$_rb_t" 2>/dev/null; then
-          _rb_any=1
-        fi
-      done < /data/adb/asb/odm_bind_manifest.txt
-      if [ "$_rb_any" = "1" ]; then
-        echo "ts=$(date +%s) action=odm_bind_late result=applied" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
-        setprop ctl.restart audioserver 2>/dev/null || true
+    # Each line is bound and then read back through init's namespace (asb_odm_rebind.sh):
+    # "applied" used to mean "some mount returned 0", and a field diag showed it for a boot
+    # in which neither camera file reached the camera. Exit 10 = an audio file changed.
+    if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -f /data/adb/asb/odm_bind_manifest.txt ] \
+       && [ -r "$MODDIR/runtime/asb_odm_rebind.sh" ]; then
+      sh "$MODDIR/runtime/asb_odm_rebind.sh" apply >/dev/null 2>&1
+      [ "$?" = 10 ] && { setprop ctl.restart audioserver 2>/dev/null || true; }
+      # A second camera-only pass a minute later: a layer the root manager adds at its own
+      # boot-completed stage lands after us and can sit in front of the first bind. The pass
+      # is a read-back per file when everything is already live, so it costs nothing then.
+      if grep -q '/camera/' /data/adb/asb/odm_bind_manifest.txt 2>/dev/null; then
+        ( exec </dev/null >/dev/null 2>&1
+          sleep 60
+          sh "$MODDIR/runtime/asb_odm_rebind.sh" apply camera
+        ) &
       fi
     fi
     # Close the boot-cost measurement started above.
