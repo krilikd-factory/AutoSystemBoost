@@ -18,6 +18,15 @@ _ucfg_fallback() {
 
 set -u
 
+# Config reader. The Wi-Fi power-save block below called _cfg, which this script never
+# defined: the call failed with "_cfg: not found", the mode read as empty, and
+# wifi_powersave=screen_off/always never took effect - found by running the tuner under a
+# built mksh with the module present.
+_cfg() {
+  grep -E "^[[:space:]]*$1=" /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null \
+    | head -1 | sed 's/.*=//' | tr -d ' \r'
+}
+
 HINT="${1:-2}"
 THERM="${2:-0}"
 SCREEN="${3:-1}"

@@ -442,7 +442,7 @@ asb_apply_net() {
 asb_oem_baseline_save() {
   _ob_log="/data/adb/asb/oem_restore.log"
   mkdir -p /data/adb/asb 2>/dev/null || true
-  [ -f "$_ob_log" ] || : > "$_ob_log" 2>/dev/null
+  [ -f "$_ob_log" ] || true > "$_ob_log" 2>/dev/null
   grep -q "^$1|" "$_ob_log" 2>/dev/null && return 0
   echo "$1|$(settings get global "$1" 2>/dev/null)" >> "$_ob_log" 2>/dev/null || true
 }
@@ -634,7 +634,7 @@ asb_apply_ux() {
     else
       # Leave a marker; the screen-off pass picks it up rather than dropping the change.
       mkdir -p /data/adb/asb 2>/dev/null
-      : > /data/adb/asb/anim_broadcast_pending 2>/dev/null || true
+      true > /data/adb/asb/anim_broadcast_pending 2>/dev/null || true
     fi
   fi
   # SystemUI caches the animation scales at process start, so a restart is only meaningful when

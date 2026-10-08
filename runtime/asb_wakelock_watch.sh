@@ -316,7 +316,7 @@ asb_wl_relax() {
       for (u in held) if ((u in pkg) && !(u in secs)) print 0, 1, pkg[u]
     }' "$APPS.map" - | sort -rn | head -8)"
   rm -f "$APPS.map" 2>/dev/null
-  : > "$APPS.tmp" 2>/dev/null || return 0
+  true > "$APPS.tmp" 2>/dev/null || return 0
   printf '%s\n' "$_rows" | while read -r _s _h _pl; do
     [ -n "$_pl" ] || continue
     # Two minutes since the last unplug, or a lock held past the framework's LONG mark
