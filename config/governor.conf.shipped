@@ -143,8 +143,8 @@ wakelock_action=0
 
 # Fitness and step-counter apps: protect | limit
 #   protect (default) = never touched, like every other tracking app.
-#   limit = a fitness app seen holding the CPU awake (2+ minutes since the last unplug) may
-#   no longer do so: app-op WAKE_LOCK ignore. It still runs whenever the phone is awake for
+#   limit = the step/fitness apps installed on this phone may no longer hold the CPU awake:
+#   app-op WAKE_LOCK ignore. It still runs whenever the phone is awake for
 #   another reason, and the step sensor keeps counting in the sensor hub, so the daily
 #   total usually survives; the minute-by-minute timeline and screen-off workout recording
 #   may not. Watch/band companion apps are never included. The previous mode is recorded
