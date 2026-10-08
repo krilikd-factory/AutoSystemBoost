@@ -56,15 +56,15 @@ for _i in tun0 ppp0 ipsec0; do
   [ -d "/sys/class/net/$_i" ] && _net=1
 done
 if [ "$_net" = "0" ]; then
-  _rx1=0
-  for _r in /sys/class/net/rmnet_data*/statistics/rx_bytes; do
-    [ -r "$_r" ] && _rx1=$(( _rx1 + $(cat "$_r" 2>/dev/null || echo 0) ))
-  done
+  # Byte counters in awk, not $(( )): Android's sh (mksh) does 32-bit arithmetic, so past
+  # 2 GiB received since boot the sum went negative, the saved value then failed the digit
+  # check, and "network" was never detected again until a reboot.
+  _rx1="$(cat /sys/class/net/rmnet_data*/statistics/rx_bytes 2>/dev/null | awk '{ s += $1 } END { printf "%.0f", s + 0 }')"
   _prev="$(cat /dev/.asb/screenoff_rx 2>/dev/null || echo 0)"
   case "$_prev" in ''|*[!0-9]*) _prev=0 ;; esac
   echo "$_rx1" > /dev/.asb/screenoff_rx 2>/dev/null
   # A megabyte between samples is transfer, not keepalive chatter.
-  [ "$_prev" -gt 0 ] && [ $(( _rx1 - _prev )) -gt 1048576 ] && _net=1
+  awk -v a="$_rx1" -v b="$_prev" 'BEGIN { exit !(b > 0 && a - b > 1048576) }' && _net=1
 fi
 
 # Noisy: something is holding the CPU awake and it is not one of the above.

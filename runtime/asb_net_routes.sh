@@ -133,7 +133,7 @@ _window_for() {
   case "$_wf_rate" in
     ''|*[!0-9]*) : ;;
     *) [ "$_wf_rate" -gt 0 ] 2>/dev/null && \
-         _wf_bdp_seg=$(( _wf_rate * 125000 * 60 / 1000 / _wf_mss )) ;;
+         _wf_bdp_seg=$(( _wf_rate * 7500 / _wf_mss )) ;;   # = rate*125000*60/1000, reordered: 32-bit safe
   esac
 
   _wf_rwnd="$_wf_buf_seg"

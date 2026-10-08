@@ -284,7 +284,7 @@ if [ "$_cam_guard" = "0" ]; then
   _ma="$(grep -m1 MemAvailable /proc/meminfo 2>/dev/null | tr -dc "0-9")"
   _freepct=100
   [ -n "$_mt" ] && [ "$_mt" -gt 0 ] 2>/dev/null && [ -n "$_ma" ] && \
-    _freepct=$(( _ma * 100 / _mt ))
+    _freepct=$(( _ma / (_mt / 100 + 1) ))   # divide first: _ma*100 overflows mksh's 32 bits on 24 GB phones
   # PSI, not free-memory share: it measures pressure instead of its aftermath.
 #
 # A field snapshot reads available=3883 of 15109 - 25%, right on the threshold - while
