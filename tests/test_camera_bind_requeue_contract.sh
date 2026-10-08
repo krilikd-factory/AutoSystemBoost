@@ -11,5 +11,7 @@ printf '%s\n' "$body" | grep -Fq 'grep -qs " ${_obc_live} " /proc/1/mountinfo /p
 printf '%s\n' "$body" | grep -Eq '^[[:space:]]*cmp -s "\$_obc_src" "\$_obc_live" 2>/dev/null && continue' \
   && f 'unconditional cmp-skip is back'
 grep -Fq 'camera bind: ' "$ROOT/tools/asb_diag.sh" || f 'asbdiag does not show camera bind evidence'
+grep -Fq 'nsenter -t 1 -m -- umount "$_ct_live"' "$I" || f 'installer does not take down its own camera bind before declaring the live tone table dirty'
+grep -q 'ASB_L_CAM_LIVE_DIRTY2=".*root' "$ROOT/common/englishtext.sh" || f 'dirty-camera advice still says only "reboot and install again"'
 [ "$fail" = 0 ] && echo "PASS camera bind requeue contract"
 exit "$fail"
