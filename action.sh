@@ -1689,6 +1689,17 @@ if [ ! -f /data/adb/asb/vendor_overlay_blocked ] && [ -r "$MODDIR/runtime/asb_od
    && grep -q '/camera/' /data/adb/asb/odm_bind_manifest.txt 2>/dev/null; then
   sh "$MODDIR/runtime/asb_odm_rebind.sh" apply camera >/dev/null 2>&1
 fi
+# Read camera files the way the camera HAL does: through init's mount namespace. The
+# action script (like any su shell) can run in a namespace of its own, where a bind made
+# in init's namespace after it was cloned never appears - a field action log said "grade NOT
+# on the live file" while init's namespace held the bound, graded table.
+_camg() {
+  if command -v nsenter >/dev/null 2>&1 && nsenter -t 1 -m -- true 2>/dev/null; then
+    nsenter -t 1 -m -- grep "$@"
+  else
+    grep "$@"
+  fi
+}
 # OxygenOS variants may expose the effective retouch config under either /odm or /vendor/odm.
 # Do not report a staged/secondary root as live merely because it is checked first: select the
 # readable candidate with the largest app list and retain its path for an actionable verdict.
@@ -1696,7 +1707,7 @@ _vb_n=0; _vb_live=""
 for _vb_try in /odm/etc/camera/config/video_beauty_default_config \
                /vendor/odm/etc/camera/config/video_beauty_default_config; do
   [ -r "$_vb_try" ] || continue
-  _vb_try_n="$(grep -c '"packageName"' "$_vb_try" 2>/dev/null)"
+  _vb_try_n="$(_camg -c '"packageName"' "$_vb_try" 2>/dev/null)"
   case "$_vb_try_n" in ''|*[!0-9]*) _vb_try_n=0 ;; esac
   if [ "$_vb_try_n" -gt "$_vb_n" ] 2>/dev/null; then
     _vb_n="$_vb_try_n"; _vb_live="$_vb_try"
@@ -1745,7 +1756,7 @@ fi
 # worth making - the config saying 4 proved nothing until this was checked.
 _c_live="/odm/etc/camera/conf_tuning_params.json"
 if [ "${_c_lvl:-0}" -gt 0 ] 2>/dev/null && [ -r "$_c_live" ]; then
-  _c_bw="$(grep -m1 -o '"BlendWeight"[^]]*]' "$_c_live" 2>/dev/null | sed 's/.*\[//;s/\]//')"
+  _c_bw="$(_camg -m1 -o '"BlendWeight"[^]]*]' "$_c_live" 2>/dev/null | sed 's/.*\[//;s/\]//')"
   case "$_c_bw" in
     *0.35,*0.5,*0.7*) _f "       $T_C_NOTLIVE" ;;
     ?*)               _f "       $T_C_LIVE" "$_c_bw" ;;
@@ -2193,7 +2204,7 @@ _ovl_dom=0; _ovl_miss=""
 for _op in /vendor/lib64/soundfx/libasbdsp.so /vendor/lib/soundfx/libasbdsp.so; do
   [ -f "$_op" ] && { _ovl_live=1; _ovl_dom=$(( _ovl_dom + 1 )); break; }
 done
-if grep -q "org.telegram.messenger" /odm/etc/camera/config/video_beauty_default_config 2>/dev/null; then
+if _camg -q "org.telegram.messenger" /odm/etc/camera/config/video_beauty_default_config 2>/dev/null; then
   _ovl_live=1; _ovl_dom=$(( _ovl_dom + 1 ))
 else
   _ovl_miss="${_ovl_miss} camera"
