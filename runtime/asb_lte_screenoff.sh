@@ -176,12 +176,57 @@ _tethering() {
   return 1
 }
 
+# One-time repair for phones hit by the dropped-record bug above: the log says a restore
+# dropped its record, so NR may still be missing now. Give it back once, only if it is in
+# fact missing, then never again - a user who turns 5G off later keeps that choice.
+do_repair_dropped() {
+  [ -f "$STATE_DIR/lte_screenoff.repaired" ] && return 0
+  grep -q 'restore: bad save file dropped' "$LOGF" 2>/dev/null || { : > "$STATE_DIR/lte_screenoff.repaired"; return 0; }
+  _rs="$(_data_slot)" || _rs=d
+  _rc="$(_get_mask "$_rs")" || return 0
+  if [ $(( _rc & NR_BIT )) -eq 0 ]; then
+    _set_mask "$_rs" $(( _rc | NR_BIT ))
+    _rn="$(_get_mask "$_rs")"
+    if [ -n "$_rn" ] && [ $(( _rn & NR_BIT )) -ne 0 ]; then
+      _log "repair: 5G given back (a previous restore had dropped its record; mask $_rc -> $_rn)"
+    else
+      _log "repair: could not give 5G back (readback ${_rn:-none}) - will try at the next screen-on"
+      return 0
+    fi
+  fi
+  : > "$STATE_DIR/lte_screenoff.repaired"
+}
+
 do_restore() {
-  [ -f "$SAVE" ] || return 0
-  _line="$(cat "$SAVE" 2>/dev/null)"
-  _sub="${_line%%|*}"; _orig="${_line#*|}"
-  case "$_sub" in d|[0-9]|[0-9][0-9]) : ;; *) rm -f "$SAVE"; _log "restore: bad save file dropped"; return 0 ;; esac
-  case "$_orig" in ''|*[!0-9]*) rm -f "$SAVE"; _log "restore: bad save file dropped"; return 0 ;; esac
+  [ -f "$SAVE" ] || { do_repair_dropped; return 0; }
+  # IFS-split, not ${line%%|*}. Every restore on the OP15 logged "bad save file dropped"
+  # right after an apply that wrote a well-formed "0|916479" - four in a row across three
+  # days - and since the drop also deleted the file, 5G was never given back: the modem
+  # stayed on LTE with the screen on, and after a reboot too, the setting being persistent.
+  # The parameter-expansion split is the only part of this that depends on the shell's
+  # pattern dialect (a bare | inside the pattern), and the identical record parses fine
+  # through read.
+  _sub=""; _orig=""
+  IFS='|' read -r _sub _orig < "$SAVE" 2>/dev/null
+  _sub="$(printf '%s' "$_sub" | tr -d ' \r')"; _orig="$(printf '%s' "$_orig" | tr -d ' \r')"
+  _bad=0
+  case "$_sub" in d|[0-9]|[0-9][0-9]) : ;; *) _bad=1 ;; esac
+  case "$_orig" in ''|*[!0-9]*) _bad=1 ;; esac
+  if [ "$_bad" = 1 ]; then
+    # Never just drop it: the one thing apply ever removed is the NR bit, so give that
+    # back on whatever the modem holds now. Only then is the record gone.
+    _fs="$_sub"; case "$_fs" in d|[0-9]|[0-9][0-9]) : ;; *) _fs="$(_data_slot)" || _fs=d ;; esac
+    _cur="$(_get_mask "$_fs")"
+    if [ -n "$_cur" ] && [ $(( _cur & NR_BIT )) -eq 0 ]; then
+      _set_mask "$_fs" $(( _cur | NR_BIT ))
+      _log "restore: unreadable save ($(head -c 40 "$SAVE" 2>/dev/null | tr -c '[:print:]' '?')) - NR given back on the current mask $_cur"
+    else
+      _log "restore: unreadable save, 5G already allowed - record dropped"
+    fi
+    rm -f "$SAVE" "$SINCE"
+    _stats_add 0 1 0
+    return 0
+  fi
   _set_mask "$_sub" "$_orig"
   _now="$(_get_mask "$_sub")"
   if [ "$_now" = "$_orig" ]; then
