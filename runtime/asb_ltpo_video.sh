@@ -48,6 +48,11 @@ STAT="$STATE_DIR/ltpo_video.stats"
 LOG="$STATE_DIR/ltpo_video.log"
 TOUCHDEV="$STATE_DIR/ltpo_video.touchdev"
 QUIET_S="${ASB_LTPO_QUIET_S:-3}"
+# While lowered, how often the SurfaceFlinger dump re-checks that the video is still there
+# at the same rate. Playback stopping, the screen going off and a touch are all noticed
+# without it (PCM state, backlight, the touch guard), so it only has to catch a change of
+# content under continuing audio - 30 s is enough, and each dump runs on SF's own thread.
+LOWERED_RECHECK_S="${ASB_LTPO_RECHECK_S:-30}"
 
 _cfg() { grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'; }
 _has() { command -v "$1" >/dev/null 2>&1; }
@@ -245,14 +250,14 @@ _watch() {
     rm -f "$PIDF" 2>/dev/null
     return 0
   fi
-  _sf_ts=0; _sf_pick=""; _sf_rates=""; _nov=10; _err_logged=0; _lt=0
+  _sf_ts=0; _sf_pick=""; _sf_rates=""; _nov=10; _err_logged=0; _lt=0; _cur=""; _cur_ts=0
   while _enabled; do
     _tnow="$(_now)"
     if [ -f "$LOWERED" ]; then
       if ! _screen_on; then _restore screen_off
       elif ! _audio_live; then _restore playback_stopped
       elif _gaming; then _restore gaming
-      elif [ $(( _tnow - _lt )) -ge 15 ]; then
+      elif [ $(( _tnow - _lt )) -ge "$LOWERED_RECHECK_S" ]; then
         _lt="$_tnow"
         _r="$(_video_rates)"
         _m="$(_modes | _pick "$_r")"
@@ -278,14 +283,30 @@ _watch() {
     _audio_live || { _sf_ts=0; _nov=10; sleep 5; continue; }
     _gaming && { sleep 10; continue; }
     # Nothing to gain when the ceiling is already at or below the lowest rate this ever
-    # picks - checked before the expensive dump, not after it.
-    _cur="$(_get)"
+    # picks. The peak setting is read through `settings` - a process spawn and a binder
+    # call - and it almost never changes, so the value is kept for 30 s (and dropped after
+    # every lower/restore). Scrolling a feed with sound used to read it on every touch.
+    if [ $(( _tnow - _cur_ts )) -ge 30 ]; then _cur="$(_get)"; _cur_ts="$_tnow"; fi
     _ci="$(_int "${_cur:-0}")"
     # Unset peak means "the system default", which on these panels is the maximum.
     [ -z "$_cur" ] && _ci=999
     [ "$_ci" -gt 60 ] 2>/dev/null || { sleep 30; continue; }
-    # The SurfaceFlinger dump is the one expensive read here. Cache its verdict so a
-    # touch-and-wait cycle during playback does not re-dump on every touch.
+    # Quiet first, SurfaceFlinger second.
+    #
+    # The SurfaceFlinger dump is the one expensive read here, and SurfaceFlinger serves it
+    # from the thread that composes frames. It was taken every 10 s during any playback,
+    # touched or not - so scrolling Reels or Shorts for an hour (never quiet, nothing
+    # would ever be lowered) paid ~360 dumps on the exact thread that has to keep the
+    # scroll smooth. Now the touchscreen has to be quiet for QUIET_S before the dump is
+    # even considered; a touch costs a getevent wake, nothing more.
+    _quiet "$_dev"
+    case $? in
+      0) : ;;
+      1) sleep 1; continue ;;
+      *) [ "$_err_logged" = 1 ] || _log "cannot watch the touchscreen (timeout/getevent) - not lowering"
+         _err_logged=1; sleep 30; continue ;;
+    esac
+    _tnow="$(_now)"
     if [ $(( _tnow - _sf_ts )) -ge "$_nov" ]; then
       _sf_ts="$_tnow"
       _sf_rates="$(_video_rates)"
@@ -295,13 +316,8 @@ _watch() {
     fi
     [ -n "$_sf_pick" ] || { sleep 5; continue; }
     [ "$_ci" -gt "$_sf_pick" ] 2>/dev/null || { sleep 10; continue; }
-    _quiet "$_dev"
-    case $? in
-      0) _lower "$_sf_pick" "$_sf_rates" ;;
-      1) sleep 1 ;;
-      *) [ "$_err_logged" = 1 ] || _log "cannot watch the touchscreen (timeout/getevent) - not lowering"
-         _err_logged=1; sleep 30 ;;
-    esac
+    _lower "$_sf_pick" "$_sf_rates"
+    _cur_ts=0
   done
   _restore switched_off
   rm -f "$PIDF" 2>/dev/null

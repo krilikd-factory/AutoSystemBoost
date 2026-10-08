@@ -201,6 +201,9 @@ _wl_bs_uid_secs() {
 # uids holding a partial wakelock right now that the framework has flagged LONG (> 1 min).
 _wl_power_long_uids() {
   dumpsys power 2>/dev/null | awk '
+    # A DISABLED lock is one PowerManager no longer honours (app-op, idle, standby): it
+    # does not hold the CPU, so it is not a holder.
+    /DISABLED/ { next }
     /PARTIAL_WAKE_LOCK/ && / LONG / {
       uid = ""
       if (match($0, /\(uid=[0-9]+/)) uid = substr($0, RSTART + 5, RLENGTH - 5) + 0
@@ -268,6 +271,7 @@ _wl_fitness() {
 # recorded with the screen off. The mode the app had before is recorded and given back on
 # protect or uninstall - an app the user limited themselves stays as they left it.
 FIT="$D/wakelock_fitness_limited"
+FIT_IGN="$D/wakelock_fitness_ignored"
 _wl_fit_mode() { _cfg wakelock_fitness; }
 _wl_fit_orig() {
   _o="$(appops get "$1" WAKE_LOCK 2>/dev/null | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
@@ -292,7 +296,7 @@ _wl_fit_release() {
     [ -n "$_fp" ] || continue
     appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
   done < "$FIT"
-  rm -f "$FIT" 2>/dev/null
+  rm -f "$FIT" "$FIT_IGN" 2>/dev/null
   echo "wakelock: fitness apps may hold wakelocks again (wakelock_fitness=protect)"
 }
 
@@ -326,7 +330,19 @@ asb_wl_relax() {
       if grep -qxF "$_p" "$D/wakelock_restricted" 2>/dev/null; then
         _v=restricted
       elif grep -q "^$_p|" "$FIT" 2>/dev/null; then
-        _v=limited
+        # Verified, not assumed. A lock PowerManager still honours (LONG, not DISABLED) on a
+        # later pass than the one that set the op means this Android does not enforce the
+        # WAKE_LOCK app-op - a field capture had Samsung Health holding PedometerLib for
+        # 17 minutes, not DISABLED, hours after "limited". Say so instead of claiming it.
+        if grep -qxF "$_p" "$FIT_IGN" 2>/dev/null; then
+          _v=limit_ignored
+        elif [ "$_h" = 1 ]; then
+          echo "$_p" >> "$FIT_IGN"
+          echo "wakelock: $_p still holds the CPU although WAKE_LOCK is ignored - this Android does not enforce the app-op"
+          _v=limit_ignored
+        else
+          _v=limited
+        fi
       elif [ "$_fitmode" = limit ] && _wl_fitness "$_p" && _wl_fit_limit "$_p"; then
         # The user's explicit choice for this class of app, so it does not wait for the
         # awake-share gate the generic path needs: that gate exists because the generic

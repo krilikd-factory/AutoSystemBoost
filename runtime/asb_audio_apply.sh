@@ -276,8 +276,13 @@ if [ "$_dsp_ok" = "1" ]; then
       _asb_route=""
       if _has dumpsys; then
         _rt_dump="$(dumpsys audio 2>/dev/null | grep -m1 -iE 'Device[s]?: *(speaker|bt|usb|wired|headset|headphone)')"
+        # bt_sco is the CALL link (HFP), not the media one: an app opened a voice channel
+        # and the headset was moved off A2DP. Treating it as "bt" let a Bluetooth music
+        # boost (a field config had +25 dB) process whatever reached the mix during a VoIP
+        # call or voice note. It gets a route of its own that no dsp_outputs value names.
         case "$_rt_dump" in
-          *bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*|*bt_sco*) _asb_route="bt" ;;
+          *bt_sco*|*BLUETOOTH_SCO*) _asb_route="call" ;;
+          *bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*) _asb_route="bt" ;;
           *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*) _asb_route="wired" ;;
           *speaker*|*SPEAKER*) _asb_route="speaker" ;;
         esac
@@ -301,8 +306,9 @@ if [ "$_dsp_ok" = "1" ]; then
       # route_allowed is what the outputs setting permits for the route detected now;
       # inactive_reason names the cause when it is 0. Neither claims the effect is
       # attached - that is the audio HAL's to report - only what ASB asked for.
-      case "$_dsp_out" in
-        all) _dsp_ra=1 ;;
+      case "$_asb_route:$_dsp_out" in
+        call:*) _dsp_ra=0 ;;
+        *:all) _dsp_ra=1 ;;
         *) case "+$_dsp_out+" in *"+$_asb_route+"*) _dsp_ra=1 ;; *) _dsp_ra=0 ;; esac ;;
       esac
       _dspp route_allowed "$_dsp_ra"

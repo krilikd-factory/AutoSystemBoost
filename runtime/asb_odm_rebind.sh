@@ -66,17 +66,26 @@ _sync_payload() {   # $1 target $2 payload
     _src=""
   done
   [ -n "$_src" ] && [ -f "$2" ] || return 0
-  cmp -s "$_src" "$2" 2>/dev/null && return 0
+  # Whole-line // comments are stripped on the way, as the installer does: the payload is
+  # meant to be strict JSON, and a module copy that kept them must not undo that.
+  if grep -q '^[[:space:]]*//' "$_src" 2>/dev/null; then
+    _clean="$2.sync.$$"
+    sed -e '/^[[:space:]]*\/\//d' -e 's#[[:space:]]//[^"]*$##' "$_src" > "$_clean" 2>/dev/null \
+      || { rm -f "$_clean"; return 0; }
+    _src="$_clean"
+  fi
+  if cmp -s "$_src" "$2" 2>/dev/null; then rm -f "$2.sync.$$"; return 0; fi
   # Same structural gate the overlay guard applies to every payload.
   _so="$(tr -cd '{' < "$_src" 2>/dev/null | wc -c)"
   _sc="$(tr -cd '}' < "$_src" 2>/dev/null | wc -c)"
-  [ "$_so" = "$_sc" ] && [ "${_so:-0}" -gt 0 ] 2>/dev/null || { _log "action=odm_payload_sync target=$1 result=rejected_unbalanced"; return 0; }
+  [ "$_so" = "$_sc" ] && [ "${_so:-0}" -gt 0 ] 2>/dev/null || { rm -f "$2.sync.$$"; _log "action=odm_payload_sync target=$1 result=rejected_unbalanced"; return 0; }
   if cat "$_src" > "$2" 2>/dev/null; then
-    _log "action=odm_payload_sync target=$1 result=updated src=$_src"
+    _log "action=odm_payload_sync target=$1 result=updated"
     _synced=1
   else
     _log "action=odm_payload_sync target=$1 result=write_failed"
   fi
+  rm -f "$2.sync.$$" 2>/dev/null
 }
 
 _one() {   # $1 target $2 payload -> prints the verdict
@@ -150,8 +159,75 @@ do_status() {
   done < "$MAN"
 }
 
+# Effects-config crash fuse.
+#
+# fix73 registers the DSP in the effects config a HIDL audio HAL actually reads
+# (/odm/etc/audio_effects.xml on SM8650). That is the first time the library is loaded by
+# that HAL generation, and a library the HAL cannot take shows up as audioserver dying over
+# and over - no sound, and SystemUI/camera stalling behind it - while the phone itself
+# boots fine, so the boot fuse never sees it.
+# Watched for a few minutes after boot: three or more audioserver restarts while an
+# effects config is bound means the effect goes. Every effects-config line leaves the
+# manifest and is unmounted, a flag stops the next install from registering it again, and
+# audioserver is restarted once on stock configs.
+# audioserver and the HAL that loads effects: a library the HAL cannot take kills the HAL,
+# and audioserver follows it. A poll counts once when either pid moved to a new value; a
+# pid missing mid-restart is not a change (it would double-count one restart).
+_hal_pid() {
+  for _an in audiohalservice.qti android.hardware.audio.service \
+             android.hardware.audio.service_64; do
+    _hp="$(pidof "$_an" 2>/dev/null | awk '{print $1}')"
+    [ -n "$_hp" ] && { echo "$_hp"; return 0; }
+  done
+  echo ""
+}
+
+do_effects_guard() {
+  grep -q 'audio_effects' "$MAN" 2>/dev/null || return 0
+  _polls="${ASB_ODM_GUARD_POLLS:-18}"; _gap="${ASB_ODM_GUARD_SLEEP:-10}"
+  _la="$(pidof audioserver 2>/dev/null | awk '{print $1}')"; _lh="$(_hal_pid)"
+  _deaths=0; _i=0
+  while [ "$_i" -lt "$_polls" ]; do
+    sleep "$_gap"
+    _na="$(pidof audioserver 2>/dev/null | awk '{print $1}')"; _nh="$(_hal_pid)"
+    _moved=0
+    [ -n "$_na" ] && [ -n "$_la" ] && [ "$_na" != "$_la" ] && _moved=1
+    [ -n "$_nh" ] && [ -n "$_lh" ] && [ "$_nh" != "$_lh" ] && _moved=1
+    [ "$_moved" = 1 ] && _deaths=$((_deaths + 1))
+    [ -n "$_na" ] && _la="$_na"
+    [ -n "$_nh" ] && _lh="$_nh"
+    _i=$((_i + 1))
+  done
+  if [ "$_deaths" -lt 3 ]; then
+    _log "action=effects_guard result=stable restarts=$_deaths"
+    return 0
+  fi
+  _keep="$MAN.keep.$$"; true > "$_keep"
+  while IFS='|' read -r _t _p; do
+    case "$_t" in
+      */audio_effects*.xml)
+        _pl=0
+        while [ "$_pl" -lt 4 ] && _mounted "$_t"; do
+          _ns umount "$_t" 2>/dev/null || umount "$_t" 2>/dev/null || break
+          _pl=$((_pl + 1))
+        done
+        rm -f "$_p" 2>/dev/null
+        _log "action=effects_guard target=$_t result=unbound" ;;
+      '') ;;
+      *) echo "$_t|$_p" >> "$_keep" ;;
+    esac
+  done < "$MAN"
+  if [ -s "$_keep" ]; then cat "$_keep" > "$MAN"; else rm -f "$MAN"; fi
+  rm -f "$_keep" 2>/dev/null
+  echo "ts=$(date +%s) restarts=$_deaths" > "${ASB_ODM_STATE:-/data/adb/asb}/dsp_effects_blocked" 2>/dev/null
+  _log "action=effects_guard result=tripped restarts=$_deaths"
+  setprop ctl.restart audioserver 2>/dev/null
+  return 0
+}
+
 case "${1:-apply}" in
   apply)  do_apply "${2:-}" ;;
   status) do_status ;;
-  *) echo "usage: $0 apply [camera] | status" >&2; exit 2 ;;
+  effects-guard) do_effects_guard ;;
+  *) echo "usage: $0 apply [camera] | status | effects-guard" >&2; exit 2 ;;
 esac
