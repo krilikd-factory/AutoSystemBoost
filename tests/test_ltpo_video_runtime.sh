@@ -101,6 +101,15 @@ echo "60.0" > "$T/peak"
 sh "$V" reconcile
 [ "$(cat "$T/peak")" = 144.0 ] || f "reconcile did not repair a lowered peak left by a crash"
 
+# Cost: while not lowered, the SurfaceFlinger dump only happens after the touchscreen was
+# quiet (scrolling a feed must not dump SF every 10 s on its compositing thread), and the
+# peak setting is cached rather than read through `settings` on every touch.
+_ql="$(grep -n '^    _quiet "$_dev"$' "$ROOT/runtime/asb_ltpo_video.sh" | head -1 | cut -d: -f1)"
+_dl="$(grep -n '_sf_rates="$(_video_rates)"' "$ROOT/runtime/asb_ltpo_video.sh" | head -1 | cut -d: -f1)"
+[ -n "$_ql" ] && [ -n "$_dl" ] && [ "$_ql" -lt "$_dl" ] || f "SurfaceFlinger is dumped before the touch-quiet check"
+grep -q 'if \[ \$(( _tnow - _cur_ts )) -ge 30 \]; then _cur="\$(_get)"' "$ROOT/runtime/asb_ltpo_video.sh" || f "peak setting not cached"
+grep -q 'LOWERED_RECHECK_S="${ASB_LTPO_RECHECK_S:-30}"' "$ROOT/runtime/asb_ltpo_video.sh" || f "lowered re-check interval not 30 s"
+
 grep -q 'asb_ltpo_video.sh" stop' "$ROOT/uninstall.sh" || f "uninstall does not stop the watcher"
 grep -q 'asb_ltpo_video.sh" reconcile' "$ROOT/service.sh" || f "boot does not reconcile the watcher"
 

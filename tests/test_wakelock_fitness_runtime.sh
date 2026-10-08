@@ -111,6 +111,26 @@ run limit
 grep -q "^com.sec.android.app.shealth|" "$T/d/wakelock_fitness_limited" 2>/dev/null && f "recorded an app that was already ignored"
 grep -q 'set com.sec.android.app.shealth WAKE_LOCK' "$T/am.log" && f "re-set an externally ignored app"
 
+# Enforcement is verified. A lock PowerManager still honours (LONG, not DISABLED) after the
+# op was set means the ROM ignores the op: reported as limit_ignored, never as "limited".
+echo "com.sec.android.app.shealth WAKE_LOCK allow" > "$T/ops"; rm -f "$T/d/wakelock_fitness_limited" "$T/d/wakelock_fitness_ignored"
+run limit
+grep -q '^com.sec.android.app.shealth|244|0|limited$' "$A" || f "first pass after limiting must say limited"
+sed -i "s/^    PARTIAL_WAKE_LOCK                 'Short'/    PARTIAL_WAKE_LOCK                 'PedometerLib:tag' ACQ=-17m49s LONG (uid=10493 pid=21501)\n    PARTIAL_WAKE_LOCK                 'Short'/" "$T/bin/dumpsys"
+run limit
+grep -q '^com.sec.android.app.shealth|244|1|limit_ignored$' "$A" || f "a still-honoured lock after the op was not reported: $(grep shealth "$A")"
+grep -qx 'com.sec.android.app.shealth' "$T/d/wakelock_fitness_ignored" || f "ignored state not recorded"
+# A DISABLED lock does not hold the CPU and is not a holder.
+sed -i "s/'PedometerLib:tag' ACQ=-17m49s LONG (uid=10493 pid=21501)/'PedometerLib:tag' ACQ=-17m49s LONG DISABLED (uid=10493 pid=21501)/" "$T/bin/dumpsys"
+rm -f "$T/d/wakelock_fitness_ignored"
+run limit
+grep -q '^com.sec.android.app.shealth|244|0|limited$' "$A" || f "a DISABLED lock was counted as held: $(grep shealth "$A")"
+run protect
+[ -f "$T/d/wakelock_fitness_ignored" ] && f "ignored record kept after protect"
+grep -q 'limit_ignored)' "$ROOT/action.sh" || f "action has no wording for limit_ignored"
+grep -q 'limit_ignored)' "$ROOT/tools/asb_diag.sh" || f "asbdiag has no wording for limit_ignored"
+for _l in "$ROOT"/runtime/i18n/action_*.sh; do grep -q '^T_WLV_LIMIT_IGNORED=' "$_l" || f "$(basename "$_l") lacks T_WLV_LIMIT_IGNORED"; done
+
 grep -q 'wakelock_fitness_limited' "$ROOT/uninstall.sh" || f "uninstall does not restore limited fitness apps"
 
 [ "$fail" = 0 ] && echo "PASS wakelock fitness runtime"

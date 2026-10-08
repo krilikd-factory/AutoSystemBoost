@@ -97,6 +97,17 @@ echo '{ "broken": [' > "$T/mod/odm/etc/camera/tune"
 ASB_ODM_MODDIR="$T/mod" sh "$S" apply camera
 grep -q '0.9, 0.9, 0.9' "$T/p/odm/etc/camera/tune" || f "an unbalanced module copy replaced the payload"
 grep -q 'result=rejected_unbalanced' "$T/log" || f "unbalanced copy not reported"
+# A module copy with whole-line // comments reaches the payload stripped.
+mkdir -p "$T/mod/odm/etc/camera/config" "$T/p/odm/etc/camera/config" "$T/odm/etc/camera/config"
+printf '{\n// vendor note\n"a": 1\n}\n' > "$T/mod/odm/etc/camera/config/vb"
+echo '{ "a": 0 }' > "$T/p/odm/etc/camera/config/vb"; echo '{ "a": 0 }' > "$T/odm/etc/camera/config/vb"
+echo "$T/odm/etc/camera/config/vb|$T/p/odm/etc/camera/config/vb" > "$T/man"
+ASB_ODM_MODDIR="$T/mod" sh "$S" apply camera
+grep -q '//' "$T/p/odm/etc/camera/config/vb" && f "comments copied into the payload"
+grep -q '"a": 1' "$T/p/odm/etc/camera/config/vb" || f "commented module copy not synced"
+ls "$T/p/odm/etc/camera/config/" | grep -q 'sync\.' && f "sync temp file left behind"
+grep -Fq 'find "$MODPATH/odm" "$MODPATH/system" "$MODPATH/deferred_overlay"' "$ROOT/common/install.sh" \
+  || f "installer does not strip comments from the module-root camera copy"
 mv "$T/man.keep" "$T/man"
 # Second run: everything live, nothing mounted.
 true > "$T/calls"
