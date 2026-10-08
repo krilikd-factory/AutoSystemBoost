@@ -38,5 +38,8 @@ sh "$L" restore
 [ "$(cat "$MASK")" = "$NR_ON" ] || f "dropped-record repair did not give 5G back"
 echo "$NR_OFF" > "$MASK"; sh "$L" restore
 [ "$(cat "$MASK")" = "$NR_OFF" ] || f "repair ran twice (a later user choice must stand)"
+echo "$NR_OFF" > "$MASK"; [ "$(sh "$L" nr)" = no ] || f "nr does not report 5G missing"
+echo "$NR_ON" > "$MASK"; [ "$(sh "$L" nr)" = yes ] || f "nr does not report 5G allowed"
+grep -Fq 'asb_lte_screenoff.sh" nr' "$ROOT/action.sh" || f "action claims 5G allowed without checking"
 [ "$fail" = 0 ] && echo "PASS lte screen-off restore runtime"
 exit "$fail"

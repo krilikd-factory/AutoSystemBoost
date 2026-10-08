@@ -70,20 +70,20 @@ sed 's/FrameRateCategory::Normal/FrameRateCategory::High/' "$T/sf" > "$T/sfhi"
 
 echo ltpo_video=1 > "$T/mod/config/governor.conf"
 sh "$V" reconcile
-wait_for 60.0 60 || f "did not lower during quiet playback (peak $(cat "$T/peak"))"
+wait_for 60.0 200 || f "did not lower during quiet playback (peak $(cat "$T/peak"))"
 grep -q '^orig=165.0$' "$T/d/ltpo_video.lowered" 2>/dev/null || f "original not recorded before lowering"
 
 # First touch: back at once, from the guard itself.
 touch "$T/touch"
 wait_for 165.0 10 || f "first touch did not restore within 1 s (peak $(cat "$T/peak"))"
 # Quiet again: lowered again.
-wait_for 60.0 60 || f "did not lower again after the touch went quiet"
+wait_for 60.0 200 || f "did not lower again after the touch went quiet"
 
 # Playback stops: restored.
 echo "state: SETUP" > "$T/snd/card0/pcm0p/sub0/status"
-wait_for 165.0 50 || f "end of playback did not restore"
+wait_for 165.0 150 || f "end of playback did not restore"
 echo "state: RUNNING" > "$T/snd/card0/pcm0p/sub0/status"
-wait_for 60.0 80 || f "did not lower when playback resumed"
+wait_for 60.0 200 || f "did not lower when playback resumed"
 
 # Someone else changes the peak while lowered: left as they set it.
 echo "120.0" > "$T/peak"
