@@ -64,14 +64,14 @@ _one() {   # $1 target $2 payload -> prints the verdict
 
 do_apply() {
   [ -f "$MAN" ] || return 0
-  _any=0; _aud=0; _bad=0
+  _any=0; _aud=0; _bad=0; _camnew=0
   while IFS='|' read -r _t _p; do
     case "$_t" in ''|'#'*) continue ;; esac
     case "$_t" in */camera/*) _is_cam=1 ;; *) _is_cam=0 ;; esac
     [ "${1:-}" = camera ] && [ "$_is_cam" = 0 ] && continue
     _v="$(_one "$_t" "$_p")"
     case "$_v" in
-      ok|retry_ok) _any=1; [ "$_is_cam" = 0 ] && _aud=1 ;;
+      ok|retry_ok) _any=1; if [ "$_is_cam" = 0 ]; then _aud=1; else _camnew=1; fi ;;
       hidden|failed) _bad=1 ;;
     esac
     if [ "$_v" = hidden ]; then
@@ -83,6 +83,16 @@ do_apply() {
   done < "$MAN"
   [ "$_any" = 1 ] && _log "action=odm_bind_late result=applied${1:+ scope=$1}"
   [ "$_bad" = 1 ] && _log "action=odm_bind_late result=incomplete${1:+ scope=$1}"
+  # A camera file that changed under a running camera stack: the provider may hold the
+  # table it read at start. Restart it (and cameraserver) once - only at boot, where the
+  # caller asks for it and nobody is in the camera yet; the action screen never does.
+  if [ "$_camnew" = 1 ] && [ "${ASB_ODM_RESTART_CAM:-0}" = 1 ]; then
+    for _svc in $(getprop 2>/dev/null | sed -n 's/^\[init\.svc\.\(vendor\.camera[^]]*provider[^]]*\)\]: \[running\]$/\1/p'); do
+      setprop ctl.restart "$_svc" 2>/dev/null
+    done
+    setprop ctl.restart cameraserver 2>/dev/null
+    _log "action=odm_bind_late camera_stack=restarted"
+  fi
   # Exit 10 = an audio-side file changed: the caller restarts audioserver for that only.
   [ "$_aud" = 1 ] && return 10
   return 0
