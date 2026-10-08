@@ -550,7 +550,7 @@ asb_migrate_governor_conf
     if [ "${_asb_boot_t0:-0}" != "0" ]; then
       _asb_boot_t1="$(date +%s%N 2>/dev/null || echo 0)"
       [ "$_asb_boot_t1" != "0" ] && \
-        asb_log "boot: post-boot policy took $(( (_asb_boot_t1 - _asb_boot_t0) / 1000000 )) ms"
+        asb_log "boot: post-boot policy took $(awk -v a="$_asb_boot_t1" -v b="$_asb_boot_t0" 'BEGIN { printf "%d", (a - b) / 1000000 }') ms"
     fi
     # Launch the attacher daemon from OUR data dir (post-fs-data staged it there and made it
     # executable; the copy inside the module dir stays 0644 because the root manager resets
@@ -3062,7 +3062,9 @@ apply_zram() {
   CPU_CORES=$(nproc 2>/dev/null || echo 8)
   ZRAM_SIZE_MB=8192
   _cur_disksize=$(cat /sys/block/zram0/disksize 2>/dev/null || echo 0)
-  _want_bytes=$((ZRAM_SIZE_MB * 1024 * 1024))
+  # awk: 8 GiB in bytes does not fit mksh's 32-bit arithmetic, so the comparison below
+  # never matched and the opt-in rebuild ran on every boot.
+  _want_bytes="$(awk -v m="$ZRAM_SIZE_MB" 'BEGIN { printf "%.0f", m * 1048576 }')"
   if [ "$_cur_disksize" = "$_want_bytes" ] && \
      grep -q "/dev/block/zram0" /proc/swaps 2>/dev/null; then
     return 0

@@ -1899,7 +1899,7 @@ fi
   if [ -n "$_if" ]; then
     _rx="$(cat "/sys/class/net/$_if/statistics/rx_bytes" 2>/dev/null)"
     _nl="$(_s "$T_N_ROUTE" "$_if")"
-    [ -n "$_rx" ] && _nl="$(_join "$_nl" "$(_s "$T_N_ROUTE_RX" "$((_rx / 1048576))")")"
+    [ -n "$_rx" ] && _nl="$(_join "$_nl" "$(_s "$T_N_ROUTE_RX" "$(awk -v b="$_rx" 'BEGIN { printf "%d", b / 1048576 }')")")"
     echo "       ${_nl}"
   fi
 fi
