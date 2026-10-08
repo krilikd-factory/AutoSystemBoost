@@ -1731,10 +1731,10 @@ asb_install_dsp_lib() {
   for _dsp_pair in \
     "$_dsp_s64|$MODPATH/system/vendor/lib64/soundfx|/vendor/lib64/soundfx" \
     "$_dsp_s32|$MODPATH/system/vendor/lib/soundfx|/vendor/lib/soundfx"; do
-    _dsp_src="${_dsp_pair%%|*}"
-    _dsp_rest="${_dsp_pair#*|}"
-    _dsp_dir="${_dsp_rest%%|*}"
-    _dsp_live="${_dsp_rest##*|}"
+    _dsp_src="${_dsp_pair%%\|*}"
+    _dsp_rest="${_dsp_pair#*\|}"
+    _dsp_dir="${_dsp_rest%%\|*}"
+    _dsp_live="${_dsp_rest##*\|}"
     [ -f "$_dsp_src" ] || continue
     mkdir -p "$_dsp_dir" 2>/dev/null || continue
     cp -f "$_dsp_src" "$_dsp_dir/libasbdsp.so" 2>/dev/null || continue
