@@ -300,6 +300,19 @@ lk_snapshot_state() {
     echo "===== ASB RUNTIME DIR ====="
     ls -la "$_md/runtime" 2>/dev/null
     echo ""
+    # What the watchers decided, from their own records. A capture without these could
+    # show the pedometer holding the CPU all night and not say whether the fitness limit
+    # had been applied, or what the video-refresh watcher did.
+    echo "===== ASB WATCHER STATE ====="
+    for _sf in wakelock_apps wakelock_fitness_limited wakelock_restricted multicast_restricted \
+               ltpo_video.stats ltpo_range.orig ltpo_video.lowered; do
+      [ -f "/data/adb/asb/$_sf" ] || continue
+      echo "--- $_sf ---"
+      head -20 "/data/adb/asb/$_sf" 2>/dev/null
+    done
+    [ -f /data/adb/asb/ltpo_video.log ] && { echo "--- ltpo_video.log (tail) ---"; tail -n 8 /data/adb/asb/ltpo_video.log 2>/dev/null; }
+    grep -E '^screen_on_' /dev/.asb/state 2>/dev/null
+    echo ""
     echo "===== CURRENT PROFILE ====="
     cat "$_md/current_profile" 2>/dev/null
     echo ""

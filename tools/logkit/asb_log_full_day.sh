@@ -1171,7 +1171,12 @@ lk_emit_screenoff_sleep() {
     # The report ends while the screen is on, often seconds after a batterystats reset:
     # the line exists with 0 realtime, and the section printed nothing at all under its
     # heading, which read as a failed probe.
-    END { if (!done) printf "  no screen-off time in the current batterystats window (screen on since the last reset)\n  -> the overnight figure is night(longest) in the per-phase summary below\n" }'
+    END { if (!done) {
+            if (ENVIRON["LK_BSTATS_RESET"] == "1")
+              printf "  no screen-off time in the current batterystats window (screen on since the last reset)\n"
+            else
+              printf "  batterystats reported no screen-off total on this build\n"
+            printf "  -> the overnight figure is night(longest) in the per-phase summary below\n" } }'
 }
 
 # Screen-on cost by refresh rate and brightness. Answers "did the LTPO patch actually drop
