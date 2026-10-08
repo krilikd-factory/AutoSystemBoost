@@ -260,8 +260,8 @@ _wl_fitness() {
 # tracker that cannot wake loses what it was installed for. But the choice belongs to the
 # user, and someone who does not use step counting should be able to say so.
 #
-# limit = app-op WAKE_LOCK ignore for a fitness app seen holding one (2+ minutes since the
-# last unplug, or LONG right now). Android then treats its wakelocks as released: the app
+# limit = app-op WAKE_LOCK ignore for the installed step/fitness apps (see the pass at the
+# bottom of this file). Android then treats its wakelocks as released: the app
 # keeps running whenever the phone is awake for any other reason, it just cannot keep the
 # CPU up by itself. The step sensor counts in the sensor hub regardless, so the daily total
 # usually survives; what can suffer is the minute-by-minute timeline, and a workout
@@ -438,8 +438,21 @@ case "$(_cfg wakelock_action)" in
 esac
 
 # wakelock_fitness is independent of wakelock_action: either may be on without the other.
+#
+# limit acts on every installed step/fitness app, not only on one caught holding a lock.
+# The first version waited to SEE the hold - 2+ minutes in batterystats or LONG in
+# dumpsys power at the moment the hourly screen-off pass ran. On the OP15 the batterystats
+# dump carries no per-app durations, and the pedometer's 35-minute hold that night ended
+# before the pass came round, so nothing was ever limited although the user had chosen it.
+# The choice is about a class of app the user named, so it applies to that class.
 case "$(_wl_fit_mode)" in
-  limit) : ;;
+  limit)
+    if [ -n "$_map" ]; then
+      printf '%s\n' "$_map" | while read -r _fu _fp; do
+        [ -n "$_fp" ] && _wl_fitness "$_fp" && _wl_fit_limit "$_fp" >/dev/null
+      done
+    fi
+    ;;
   *) _wl_fit_release ;;
 esac
 
