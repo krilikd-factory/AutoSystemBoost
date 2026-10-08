@@ -1233,8 +1233,20 @@ asb_clone_device_camera_tone() {
           # install - after the reboot the user is about to do anyway - finds real stock.
           if [ "$_ct_checkable" = "1" ] && [ "$_ct_src" = "$_ct_live" ]; then
             if [ -z "$(asb_cam_chroma_ok "$_ct_live")" ]; then
-              ASB_CAM_LIVE_DIRTY=1
-              continue
+              # The graded file in front of us is usually our OWN previous bind, not a
+              # damaged partition: odm binds are re-applied on every boot, so "reboot and
+              # install again" (what this used to ask) met the same bind again - the
+              # warning repeated on every install in the field logs. Take that bind down
+              # (it would not survive the reboot after this install anyway) and look at
+              # what the partition really holds.
+              if grep -qs " ${_ct_live} " /proc/1/mountinfo /proc/self/mountinfo; then
+                command -v nsenter >/dev/null 2>&1 && nsenter -t 1 -m -- umount "$_ct_live" >/dev/null 2>&1
+                umount "$_ct_live" >/dev/null 2>&1
+              fi
+              if [ -z "$(asb_cam_chroma_ok "$_ct_live")" ]; then
+                ASB_CAM_LIVE_DIRTY=1
+                continue
+              fi
             fi
           fi
           cp -f "$_ct_src" "$MODPATH/$_ct_dst" 2>/dev/null \
