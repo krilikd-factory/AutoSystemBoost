@@ -2156,8 +2156,14 @@ apply_bg_trim_runtime() {
 asb_bg_trim_periodic() {
   ( sleep 30; asb_bg_trim_screen_off && asb_bg_trim_reclaim_once ) >/dev/null 2>&1 &
   (
+    # Six hours of WALL time: sleep counts only awake time, so a plain "sleep 21600" on a
+    # phone that sleeps well spanned days. Checked every 10 min of awake time.
+    _bgp_last="$(date +%s 2>/dev/null || echo 0)"
     while : ; do
-      sleep 21600
+      sleep 600
+      _bgp_now="$(date +%s 2>/dev/null || echo 0)"
+      [ $(( _bgp_now - _bgp_last )) -ge 21600 ] 2>/dev/null || continue
+      _bgp_last="$_bgp_now"
       # Re-read the level: this loop was started at boot and kept forcing buckets every
       # six hours after the user switched trimming off in the WebUI.
       case "$(grep -E '^[[:space:]]*BG_TRIM_LEVEL=' "$MODDIR/config/governor.conf" 2>/dev/null \
