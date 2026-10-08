@@ -177,6 +177,47 @@ else
 fi
 
 # =====================================================================
+# Other modules that set the same properties.
+#
+# Audio/Bluetooth tweak modules (AIST and its relatives) ship long system.prop lists, and
+# ASB's managed list overlaps them heavily - 141 shared keys with AIST v2.1, 16 of them with
+# a different value (codec ABR on/off, sniff intervals, BLE power class, LPA). With two
+# modules setting one key the boot order decides, the user sees neither module's intent,
+# and a Bluetooth complaint can come from either. Name every enabled module that sets a
+# key ASB manages to a different value, and what the phone holds now.
+SEC "0a0. MODULE OVERLAP  (other modules setting properties ASB manages)"
+_ov_asb="$MODDIR/runtime/asb_managed.props"
+_ov_any=0
+if [ -r "$_ov_asb" ]; then
+  for _ov_m in /data/adb/modules/*; do
+    [ -d "$_ov_m" ] || continue
+    [ "$_ov_m" = "$MODDIR" ] && continue
+    [ -f "$_ov_m/disable" ] || [ -f "$_ov_m/remove" ] && continue
+    [ -r "$_ov_m/system.prop" ] || continue
+    _ov_rows="$(awk -F= '
+      FNR == NR { if ($0 !~ /^[[:space:]]*#/ && NF >= 2) { k = $1; sub(/^[[:space:]]+/, "", k); sub(/[[:space:]]+$/, "", k); v = substr($0, index($0, "=") + 1); a[k] = v }; next }
+      $0 !~ /^[[:space:]]*#/ && NF >= 2 {
+        k = $1; sub(/^[[:space:]]+/, "", k); sub(/[[:space:]]+$/, "", k); v = substr($0, index($0, "=") + 1)
+        if (k in a) { both++; if (a[k] != v) { diff++; print k "|" a[k] "|" v } }
+      }
+      END { print "#|" both + 0 "|" diff + 0 }' "$_ov_asb" "$_ov_m/system.prop" 2>/dev/null)"
+    _ov_sum="$(printf '%s\n' "$_ov_rows" | grep '^#|' | tail -1)"
+    _ov_both="$(printf '%s' "$_ov_sum" | cut -d'|' -f2)"; _ov_diff="$(printf '%s' "$_ov_sum" | cut -d'|' -f3)"
+    [ "${_ov_both:-0}" -gt 0 ] 2>/dev/null || continue
+    _ov_any=1
+    NOTE "$(basename "$_ov_m"): sets ${_ov_both} propert(ies) ASB also manages, ${_ov_diff:-0} to a different value"
+    printf '%s\n' "$_ov_rows" | grep -v '^#|' | head -n 20 | while IFS='|' read -r _ok _oa _oo; do
+      [ -n "$_ok" ] || continue
+      P "    $_ok  ASB=$_oa  $(basename "$_ov_m")=$_oo  live=$(getprop "$_ok" 2>/dev/null)"
+    done
+    case "$(basename "$_ov_m")" in
+      AIST*|aist*) NOTE "  AIST also deletes persist.bluetooth.a2dp_offload.disabled and media.resolution.limit.* from its service script, after ASB's own boot pass" ;;
+    esac
+  done
+fi
+[ "$_ov_any" = 1 ] || NOTE "no other enabled module sets a property ASB manages"
+
+# =====================================================================
 SEC "0a. EXTERNAL KERNEL / UV COEXISTENCE  (read-only evidence; ASB owns no voltage policy)"
 _uv_tool="$MODDIR/tools/asb_kernel_uv_coexist.sh"
 _uv_tmp="/data/local/tmp/asb_uv_coexist.$$"
@@ -664,8 +705,22 @@ if [ -r "$_state" ]; then
     _sol="$(grep -m1 '^screen_on_tick_late_max_s=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
     _sos="$(grep -m1 '^screen_on_single_rechecks=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
     NOTE "screen-on noticed by: $_sod  (single re-checks armed: ${_sos:-0}; slowest tick catch <= ${_sol:-0} s after screen-off)"
-    [ "${_sot:-0}" -gt 3 ] 2>/dev/null && NOTE "WARN: screen wakes still found by the idle tick ($_sot) - send this diag: the display event path misses them on this ROM"
+    # A share, not a count: 5 of 201 wakes over a day is the occasional AOD/pocket case,
+    # not a ROM whose display events never arrive - an absolute "> 3" warned on both.
+    _sou="$(printf '%s' "$_sod" | sed -n 's/.*uevent:\([0-9]*\).*/\1/p')"
+    _sor="$(printf '%s' "$_sod" | sed -n 's/.*recheck:\([0-9]*\).*/\1/p')"
+    _sall=$(( ${_sou:-0} + ${_sor:-0} + ${_sot:-0} ))
+    if [ "${_sot:-0}" -gt 3 ] 2>/dev/null && [ $(( ${_sot:-0} * 10 )) -gt "$_sall" ] 2>/dev/null; then
+      NOTE "WARN: $_sot of $_sall screen wakes were found only by the idle tick - send this diag: the display event path misses them on this ROM"
+    fi
   fi
+  # Display uevents and the parking that keeps them from waking the governor with the
+  # screen on (the active tick watches the panel then).
+  _uet="$(grep -m1 '^uevent_events_total=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _ueb="$(grep -m1 '^uevent_by_subsys=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
+  _uep="$(grep -m1 '^uevent_parks=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _ued="$(grep -m1 '^uevent_dropped_while_parked=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  [ -n "$_uet" ] && NOTE "uevents handled: ${_uet} (${_ueb:-?})  ·  skipped while the screen was on: ${_ued:-n/a} over ${_uep:-0} screen-on period(s)"
   [ -n "$_wbn" ] && NOTE "writes by node: $_wbn"
   # Vendor contention beside it: passive=1 means ASB stopped reasserting on purpose.
   _vp="$(grep -m1 '^cap_vendor_passive=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
@@ -818,6 +873,10 @@ if [ -r "$_state" ]; then
     if [ "$_ov_pas" = "1" ] && [ "$_ov_vo" -gt 0 ] 2>/dev/null; then
       P "    writes per transition: $_wpt  ($_ov_w writes / $_ov_t transitions)"
       P "    vendor-owned ticks   : $_ov_vo spent passive - ASB deferred to the vendor cap, no write"
+    elif [ "$_ov_t" -lt 10 ] 2>/dev/null; then
+      # The boot pass writes every node once before the first transition: a field diag
+      # read "11 per transition - chattering" from 23 writes over 2 transitions.
+      P "    writes per transition: $_wpt  ($_ov_w writes / $_ov_t transitions - too few to judge; the boot pass writes every node once)"
     elif [ "$_wpt" -gt 8 ]; then
       P "    writes per transition: $_wpt (8+ with little vendor contention suggests the ladder is chattering)"
     else
@@ -1330,6 +1389,42 @@ if [ "$_dsp_on" = "1" ]; then
   if [ -z "$_dsp_reg" ]; then
     NOTE "  DSP is enabled but no ASB effect is attached: what you hear is stock audio"
     NOTE "  installed ABI: $(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null) - try dsp_effect_abi=legacy/aidl and reboot, then rerun asbdiag"
+    # Which of the three ways it can fail: no config the HAL reads lists the library, the
+    # file is not visible / labelled for the HAL, or the HAL tried and refused it (dlopen,
+    # symbol, version). A field report on an OnePlus 12 had only "absent" twice and nothing
+    # to act on.
+    for _dcfg in /odm/etc/audio_effects_config.xml /vendor/odm/etc/audio_effects_config.xml \
+                 /vendor/etc/audio_effects_config.xml /vendor/etc/audio/sku_*/audio_effects_config.xml \
+                 /odm/etc/audio_effects.xml /vendor/odm/etc/audio_effects.xml \
+                 /vendor/etc/audio/sku_*/audio_effects.xml \
+                 /vendor/etc/audio_effects.xml /system/etc/audio_effects.xml; do
+      [ -f "$_dcfg" ] || continue
+      if grep -q 'asb' "$_dcfg" 2>/dev/null; then NOTE "  effects config lists ASB: $_dcfg"
+      else NOTE "  effects config WITHOUT ASB: $_dcfg"; fi
+    done
+    # The file the HAL loads is the FIRST hit in AOSP's order, per name (audio_effects.xml
+    # for a HIDL HAL, audio_effects_config.xml for AIDL). Name it, so "registered in three
+    # files" cannot hide that the one being read is the fourth.
+    _dsku="$(gp ro.boot.product.vendor.sku)"
+    for _dn in audio_effects.xml audio_effects_config.xml; do
+      _dwin=""
+      for _dd in ${_dsku:+/odm/etc/audio/sku_$_dsku /vendor/etc/audio/sku_$_dsku} /odm/etc /vendor/etc /system/etc; do
+        [ -f "$_dd/$_dn" ] && { _dwin="$_dd/$_dn"; break; }
+      done
+      [ -n "$_dwin" ] || continue
+      if grep -q 'asbdsp' "$_dwin" 2>/dev/null; then NOTE "  first $_dn in lookup order (read by the HAL): $_dwin - lists ASB"
+      else NOTE "  first $_dn in lookup order (read by the HAL): $_dwin - does NOT list ASB"; fi
+    done
+    if [ -f /data/adb/asb/dsp_effects_blocked ]; then
+      NOTE "  effects crash fuse TRIPPED ($(cat /data/adb/asb/dsp_effects_blocked 2>/dev/null)): audioserver kept restarting with the effect registered, so it was removed"
+      NOTE "  to try again: delete /data/adb/asb/dsp_effects_blocked and reinstall"
+    fi
+    grep -s 'action=effects_guard' /data/adb/asb/vendor_mounts.log | tail -n 3 | while IFS= read -r _dl; do P "    $_dl"; done
+    for _dlib in /vendor/lib64/soundfx/libasbdsp.so /vendor/lib/soundfx/libasbdsp.so; do
+      [ -f "$_dlib" ] && NOTE "  $(ls -Z "$_dlib" 2>/dev/null | awk '{print $1}')  $_dlib"
+    done
+    logcat -d -t 4000 2>/dev/null | grep -iE 'asbdsp|asb_loudness|EffectsFactory.*(fail|error|cannot|could not)|loadLibrary|dlopen.*soundfx' \
+      | tail -n 8 | while IFS= read -r _dl; do P "    log: $(printf '%s' "$_dl" | cut -c1-200)"; done
   fi
 else
   OFF "DSP effect registration - the DSP engine is off" "dsp"
@@ -2174,6 +2269,7 @@ if [ -s /data/adb/asb/wakelock_apps ]; then
       protected)  _avt="protected class (messenger/alarm/fitness) - never auto-restricted" ;;
       in_use)     _avt="visible or audible to you - left alone" ;;
       limited)    _avt="wakelocks ignored by your wakelock_fitness=limit (undone on protect/uninstall)" ;;
+      limit_ignored) _avt="wakelock_fitness=limit is set, but this Android does not enforce the WAKE_LOCK app-op - the app still held the CPU (not DISABLED) after it was set" ;;
       *)          _avt="report only" ;;
     esac
     P "    $_ap  ·  $_al  ·  $_avt"
