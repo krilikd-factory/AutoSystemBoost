@@ -250,7 +250,7 @@ if asb_feature_enabled VENDOR_OVERLAY && command -v asb_device_pack_allows >/dev
     # before regenerating, and install.sh even tells the user to delete it to try
     # again. Nothing in the module ever created it: six places read it, none wrote it,
     # so the safety valve had never once been opened. This is where it belongs.
-    : > /data/adb/asb/vendor_overlay_blocked 2>/dev/null
+    true > /data/adb/asb/vendor_overlay_blocked 2>/dev/null
     rm -f /data/adb/asb/odm_bind_manifest.txt 2>/dev/null
     rm -rf /data/adb/asb/odm_patched 2>/dev/null
     # The LTPO bind is the same class of file-in-front-of-the-system: if we are here, it

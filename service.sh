@@ -74,12 +74,12 @@ if [ -f /data/adb/asb/learning_reset_pending ]; then
         /data/adb/asb/session_history.jsonl \
         /data/adb/asb/session_history_migrated_v47 2>/dev/null
   rm -f /data/adb/asb/learning_reset_pending 2>/dev/null
-  : > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
+  true > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
 elif [ -f /data/adb/asb/v56_learning_reset_done ] && [ ! -f /data/adb/asb/v56_resurrect_sweep_done ]; then
   rm -f /data/adb/asb/buckets.bin /data/adb/asb/buckets.bin.bak \
         /data/adb/asb/pstats_balanced.json /data/adb/asb/pstats_battery.json \
         /data/adb/asb/smart_appheat.bin /data/adb/asb/auto_battery_state 2>/dev/null
-  : > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
+  true > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
 fi
 
 # Build capability-derived policy before asb_utils.sh starts the native governor.  These
@@ -584,7 +584,7 @@ asb_migrate_governor_conf
     _att_log="/dev/null"
     if [ -f /data/adb/asb/debug ] || [ "$(getprop persist.asb.debug 2>/dev/null)" = "1" ]; then
       _att_log="/data/adb/asb/dsp_attach.log"
-      : > "$_att_log" 2>/dev/null
+      true > "$_att_log" 2>/dev/null
     else
       # Reclaim whatever an earlier build left behind, on the first boot after updating.
       rm -f /data/adb/asb/dsp_attach.log 2>/dev/null
@@ -2912,7 +2912,7 @@ asb_feature_enabled LOG && apply_logd_props
 apply_tracking_block() {
   _trk_log="/data/adb/asb/tracking_restore.log"
   # NOT truncated per boot any more.
-  [ -f "$_trk_log" ] || : > "$_trk_log" 2>/dev/null
+  [ -f "$_trk_log" ] || true > "$_trk_log" 2>/dev/null
   _sp() {
     # _sp <key> <value> — save the old value the FIRST time only, then set the new one.
     if ! grep -q "^$1|" "$_trk_log" 2>/dev/null; then
