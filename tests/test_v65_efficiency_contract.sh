@@ -24,9 +24,10 @@ need "$SERVICE" 'allow_service_stops'
 
 # The observer must not run package-manager/dumpsys/appops work while the screen is
 # on, and the screen-off interval must be at least an hour between expensive passes.
-need "$SERVICE" 'sleep 1800'
-need "$SERVICE" '_screenoff_pass=$((_screenoff_pass + 1))'
-need "$SERVICE" '[ $((_screenoff_pass % 2)) -eq 0 ] || continue'
+# Wall-clock gates (an awake-time sleep of 1800 s took ~12 h on a phone that sleeps well):
+# watchdogs every 30 min, the expensive screen-off pass at most once per hour.
+need "$SERVICE" '[ $(( _ho_now - _wd_last )) -ge 1800 ] 2>/dev/null || continue'
+need "$SERVICE" '[ $(( _ho_now - _ho_last )) -ge 3600 ] 2>/dev/null || continue'
 
 # DSP route correction is a fallback poll; normal setting changes still signal the
 # attacher immediately.  A 60-second cadence prevents permanent 20-second IPC churn.
