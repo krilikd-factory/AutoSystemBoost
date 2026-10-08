@@ -6214,8 +6214,108 @@ function shQuote(v) {
   return "'" + String(v).replace(/'/g, "'\\''") + "'";
 }
 
+/* Tweak conflicts and dependencies.
+ *
+ * CFG_CONFLICTS: two settings that cannot both be in force. Choosing one side turns the
+ * other off IN THE SAME atomic write (set-many), so the config never holds both and two
+ * cards never show "on" for a pair the runtime would silently resolve. Only pairs the
+ * runtime really resolves belong here - each entry names the code that proves it.
+ *
+ * CFG_REQUIRES: a setting that does nothing unless another one is in a given state. These
+ * are never switched automatically (the master is a deliberate choice: radio controls on a
+ * no-SIM phone, a Doze level that delays messages) - the toast says what is missing. */
+const CFG_CONFLICTS = [
+  /* asb_audio_apply.sh: "eq_compat wins and the DSP is turned off outright" - the profile
+   * hands the stream to an external engine, and our effect on that output would hide it. */
+  { a:{ key:'audio_profile', on:function(v){ return String(v) === 'eq_compat'; }, off:'stock' },
+    b:{ key:'dsp_loudness',  on:function(v){ return Number(v) > 0; },            off:'0' } }
+];
+const CFG_REQUIRES = [
+  /* asb_lpm.sh: exits unless radio_policy_enable=1. */
+  { key:'night_modem_idle', on:function(v){ return String(v) === '1'; },
+    needs:'radio_policy_enable', ok:function(v){ return String(v) === '1'; } },
+  /* asb_doze_apply.sh: trims the whitelist only for aggressive|night. */
+  { key:'doze_trim_whitelist', on:function(v){ return String(v) === '1'; },
+    needs:'doze_level', ok:function(v){ return v === 'aggressive' || v === 'night'; } },
+  /* libasbdsp: the bass shelf and compressor sit inside the gain stage. */
+  { key:'dsp_bass', on:function(v){ return Number(v) > 0; },
+    needs:'dsp_loudness', ok:function(v){ return Number(v) > 0; } },
+  /* asb_fsm.h: burst/rest are read only while the lift itself is enabled. */
+  { key:'prime_escape_burst_s', on:function(){ return true; },
+    needs:'heavy_prime_escape', ok:function(v){ return String(v) === '1'; } },
+  { key:'prime_escape_rest_s', on:function(){ return true; },
+    needs:'heavy_prime_escape', ok:function(v){ return String(v) === '1'; } }
+];
+function cfgCurVal(key) {
+  if (_cfgVals[key] !== undefined) return _cfgVals[key];
+  const it = CFG_ITEMS.filter(function(x) { return x.key === key; })[0];
+  return it ? it.def : undefined;
+}
+/* What else must change when KEY becomes VAL: [{key, val, from}] for every conflicting
+ * setting that is currently on. Pure, so the contract test runs it as written. */
+function cfgConflictResolve(key, val, cur) {
+  const out = [];
+  CFG_CONFLICTS.forEach(function(r) {
+    [[r.a, r.b], [r.b, r.a]].forEach(function(p) {
+      const me = p[0], other = p[1];
+      if (me.key !== key || !me.on(val)) return;
+      const ov = cur(other.key);
+      if (ov !== undefined && other.on(ov)) out.push({ key: other.key, val: other.off, from: ov });
+    });
+  });
+  return out;
+}
+/* Dependency notes for KEY=VAL: a dependent switched on while its master is off, or a
+ * master switched off while a dependent is on. Text only - nothing is written. */
+function cfgRequireNotes(key, val, cur) {
+  const out = [];
+  CFG_REQUIRES.forEach(function(r) {
+    if (r.key === key && r.on(val) && !r.ok(cur(r.needs))) out.push({ kind:'needs', key: r.key, other: r.needs });
+    if (r.needs === key && !r.ok(val) && r.on(cur(r.key)) &&
+        String(cur(r.key)) !== String(cfgDefOf(r.key))) out.push({ kind:'idle', key: r.key, other: r.needs });
+  });
+  return out;
+}
+function cfgDefOf(key) {
+  const it = CFG_ITEMS.filter(function(x) { return x.key === key; })[0];
+  return it ? it.def : undefined;
+}
+function cfgShortName(key) {
+  var n = Tcfg(key, 'name', '') || key;
+  n = n.replace(/\s+/g, ' ').replace(/^[·•]\s*/, '').trim();
+  return n.length > 28 ? n.slice(0, 27).replace(/[\s·-]+$/, '') + '…' : n;
+}
+/* Shown after the regular confirmation, so neither hides the other. */
+function cfgRuleNotice(key, fixed, notes) {
+  var parts = [];
+  fixed.forEach(function(c) {
+    parts.push(T('t_cfg_conflict_off', '⇄ {other}: {val} — conflicts with {key}')
+      .replace('{other}', cfgShortName(c.key)).replace('{val}', Topt(String(c.val), c.key))
+      .replace('{key}', cfgShortName(key)));
+  });
+  notes.forEach(function(n) {
+    var tpl = (n.kind === 'needs')
+      ? T('t_cfg_needs', 'ⓘ {key} works only with {other}')
+      : T('t_cfg_idle', 'ⓘ {key} now has no effect without {other}');
+    parts.push(tpl.replace('{key}', cfgShortName(n.key)).replace('{other}', cfgShortName(n.other)));
+  });
+  if (!parts.length) return;
+  setTimeout(function() {
+    toast(parts.join('  ·  '), fixed.length ? cfgToastType(key) : 'err');
+    /* toast() hides after 2.2 s; two names and a reason need longer to read. */
+    clearTimeout(_stockRestoreToastTimer);
+    _stockRestoreToastTimer = setTimeout(function() {
+      const t = document.getElementById('toast'); if (t) t.classList.remove('show');
+    }, 4200);
+  }, 2300);
+}
+
 async function cfgSet(key, val, ctl) {
+  /* Conflicts are settled before the write so the writer commits one coherent set. */
+  const _fix = cfgConflictResolve(key, val, cfgCurVal);
+  const _notes = cfgRequireNotes(key, val, cfgCurVal);
   cfgMarkPending(key, val);
+  _fix.forEach(function(c) { cfgMarkPending(c.key, c.val); });
   if (ctl) ctl.classList.add('busy');
   const safeWriter = MD + '/runtime/asb_config_safe.sh';
   const snap = '/data/adb/asb/governor.conf.snapshot';
@@ -6234,12 +6334,21 @@ async function cfgSet(key, val, ctl) {
         * was published at boot alone - so a live slider move on Smart did nothing until a
         * restart while the toast said "applied". */
        shQuote('sustained_temp_user_override') + ' ' + shQuote('1'))
+    : _fix.length
+    /* A conflict: the chosen value and the switched-off counterpart in one locked write. */
+    ? ('sh ' + shQuote(safeWriter) + ' set-many --snapshot ' + shQuote(snap) + ' ' +
+       shQuote(key) + ' ' + shQuote(val) +
+       _fix.map(function(c) { return ' ' + shQuote(c.key) + ' ' + shQuote(c.val); }).join(''))
     : ('sh ' + shQuote(safeWriter) + ' set ' + shQuote(key) + ' ' +
        shQuote(val) + ' ' + shQuote(snap));
   const r = await run(cmd);
   if (ctl) ctl.classList.remove('busy');
   if (r.errno === 0) {
     _cfgVals[key] = val;
+    _fix.forEach(function(c) { _cfgVals[c.key] = c.val; });
+    /* The other card changed too: re-draw so it no longer shows "on", then explain why. */
+    if (_fix.length) { try { cfgRender(); } catch (e) {} }
+    cfgRuleNotice(key, _fix, _notes);
     // Sync the card highlight straight away. A full cfgRender() would work too but it
     // would collapse whatever description the user currently has expanded.
     try {
@@ -6534,7 +6643,9 @@ async function cfgSet(key, val, ctl) {
     var HAPTIC_KEYS = ['haptic_strength','haptic_touch_strength'];
     if (AUDIO_LIVE_KEYS.indexOf(key) >= 0) {
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_audio_live', ' \u00b7 applying\u2026'), cfgToastType(key));
-      var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0) ? ' dsp' : '';
+      /* The DSP-only fast path skips the profile half; a resolved audio_profile conflict
+       * needs the full pass. */
+      var _m = (AUDIO_DSP_KEYS.indexOf(key) >= 0 && !_fix.length) ? ' dsp' : '';
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh' + _m + ' >/dev/null 2>&1 &'); } catch(e) {}
     } else if (NET_KEYS.indexOf(key) >= 0) {
       // Handled INSIDE this chain instead of returning early above it: the tail of the chain
