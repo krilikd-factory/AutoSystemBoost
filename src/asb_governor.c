@@ -1405,6 +1405,7 @@ static unsigned long g_wake_by_src[ASB_WAKE_SRC_COUNT];
  * after the previous one, with the governor still on deep-idle rails meanwhile. */
 static unsigned long g_scr_on_by_uevent = 0, g_scr_on_by_recheck = 0, g_scr_on_by_tick = 0;
 static unsigned long g_scr_recheck_single = 0;
+static unsigned long g_scr_resume_chains = 0;   /* re-check chains armed because a tick followed a resume */
 static long          g_scr_tick_late_max_s = 0;
 static time_t        g_scr_off_since = 0;
 static const char *const g_wake_src_name[ASB_WAKE_SRC_COUNT] = { "active", "idle", "hourly" };
@@ -2384,8 +2385,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "screen_src=%d\n", metrics_screen_src());
         fprintf(f, "screen_on_detect=\"uevent:%lu,recheck:%lu,tick:%lu\"\n",
                 g_scr_on_by_uevent, g_scr_on_by_recheck, g_scr_on_by_tick);
-        fprintf(f, "screen_on_single_rechecks=%lu\nscreen_on_tick_late_max_s=%ld\n",
-                g_scr_recheck_single, g_scr_tick_late_max_s);
+        fprintf(f, "screen_on_single_rechecks=%lu\nscreen_on_resume_chains=%lu\nscreen_on_tick_late_max_s=%ld\n",
+                g_scr_recheck_single, g_scr_resume_chains, g_scr_tick_late_max_s);
 
         /* Wakeups by source, same shape as the write breakdown below. */
         fprintf(f, "wake_by_src=\"");
@@ -4542,8 +4543,9 @@ static int read_profile_idx(void) {
     return PROFILE_BALANCED;
 }
 
-static int make_timerfd(int secs) {
-    int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+static int make_timerfd_clock(int clk, int secs) {
+    int fd = timerfd_create(clk, TFD_NONBLOCK | TFD_CLOEXEC);
+    if (fd < 0 && clk != CLOCK_MONOTONIC) fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     if (fd < 0) return -1;
     struct itimerspec its = {
         .it_interval = { secs, 0 },
@@ -4552,6 +4554,7 @@ static int make_timerfd(int secs) {
     timerfd_settime(fd, 0, &its, NULL);
     return fd;
 }
+static int make_timerfd(int secs) { return make_timerfd_clock(CLOCK_MONOTONIC, secs); }
 
 /* Change a periodic timer's interval in place, keeping it periodic.
  *
@@ -5823,7 +5826,13 @@ int main(int argc, char **argv) {
        epoch and every rate comes out as zero. */
     g_governor_start_ts = time(NULL);
     int tfd_active = make_timerfd(TIMER_ACTIVE_S);
-    int tfd_idle   = make_timerfd(TIMER_IDLE_S);
+    /* The screen-off tick runs on CLOCK_BOOTTIME (plain, not _ALARM): it never wakes the
+     * phone, but it counts time spent suspended, so the first resume after the interval
+     * has passed delivers a tick at once. On CLOCK_MONOTONIC the interval only advanced
+     * while the CPU was awake: after a night in suspend the first tick came up to 45 s of
+     * AWAKE time after the screen turned on, and an OP15 capture shows exactly that - a
+     * 07:12 wake noticed by the tick, deep-idle rails until then. */
+    int tfd_idle   = make_timerfd_clock(CLOCK_BOOTTIME, TIMER_IDLE_S);
     int tfd_hourly = make_timerfd(TIMER_HOURLY_S);
     int uefd       = make_uevent_fd();
     int sockfd     = asb_sock_create();
@@ -7094,7 +7103,28 @@ int main(int argc, char **argv) {
                 } else if (!metrics.misc.screen_on && _ts == 1) {
                     disarm_timerfd(tfd_active);
                     g_scr_off_since = time(NULL);
-                } else if (!metrics.misc.screen_on && _ts == 0 && g_disp_evt_ts &&
+                }
+                /* A tick right after a resume, with the screen still reading off: the
+                 * resume may BE the wake (power key, fingerprint, lift), with the panel a
+                 * few hundred ms behind. Run the same short re-check chain a display event
+                 * would. The one-shots hold no wakelock - if the phone goes back to sleep
+                 * they simply fire at the next resume - so a maintenance wake costs nothing. */
+                {
+                    static struct timespec _rb_prev = {0}, _rm_prev = {0};
+                    struct timespec _rb, _rm;
+                    clock_gettime(CLOCK_BOOTTIME, &_rb);
+                    clock_gettime(CLOCK_MONOTONIC, &_rm);
+                    long _slept = 0;
+                    if (_rb_prev.tv_sec)
+                        _slept = (long)((_rb.tv_sec - _rb_prev.tv_sec) - (_rm.tv_sec - _rm_prev.tv_sec));
+                    _rb_prev = _rb; _rm_prev = _rm;
+                    if (_slept >= 5 && !metrics.misc.screen_on && timerfd_state(tfd_active) == 0) {
+                        g_disp_evt_ts = time(NULL); g_disp_retry = 0;
+                        g_scr_resume_chains++;
+                        arm_timerfd_once_ms(tfd_active, 400);
+                    }
+                }
+                if (!metrics.misc.screen_on && timerfd_state(tfd_active) == 0 && g_disp_evt_ts &&
                            time(NULL) - g_disp_evt_ts <= 3 && g_disp_retry < 3) {
                     /* A display event just came in and the panel has not reported on yet:
                      * a few more quick looks (~1.0, 1.6, 2.2 s after it), then give up -
