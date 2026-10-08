@@ -911,6 +911,7 @@ T_W_TXQ="txqueue %s"
 T_W_LINK="link %s"
 T_W_PS_SCR="power save: on while the screen is off"
 T_W_PS_ALWAYS="power save: always on"
+T_W_PS_NA="Wi-Fi power save: set, but this ROM has no iw tool to apply it"
 T_G_ON="A-GPS on"
 T_G_OFF="A-GPS off"
 T_G_XTRA="XTRA servers set"
@@ -1982,7 +1983,11 @@ fi
   [ -n "$_wl2" ] && _wifi_out="${_wifi_out}       ${_wl2}
 "
   _wps="$(_cfg wifi_powersave)"
+  # Applied through `iw`; a ROM without it cannot honour the setting, so do not claim it.
+  case "$_wps" in screen_off|on|always) command -v iw >/dev/null 2>&1 || _wps=unavailable ;; esac
   case "$_wps" in
+    unavailable) _wifi_out="${_wifi_out}       $(_s "$T_W_PS_NA")
+" ;;
     screen_off) _wifi_out="${_wifi_out}       $(_s "$T_W_PS_SCR")
 " ;;
     on|always)  _wifi_out="${_wifi_out}       $(_s "$T_W_PS_ALWAYS")
