@@ -2652,10 +2652,33 @@ asb_register_dsp_all_configs() {
   find "$MODPATH/system" -type d -empty -delete 2>/dev/null || true
 
   [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
+  # The effects crash fuse tripped on this phone: audioserver kept dying with the effect
+  # registered. Stay off until the user removes the flag (asbdiag says how).
+  if [ -f /data/adb/asb/dsp_effects_blocked ]; then
+    ui_print "    ! ASB DSP: not registered - audioserver crashed with it on this phone"
+    ui_print "      (delete /data/adb/asb/dsp_effects_blocked to try again)"
+    return 0
+  fi
 
   _dsp_bind_reg=0
+  # Both file names, not only the AIDL one.
+  #
+  # A HIDL audio HAL (OnePlus 12 / Ace 5, SM8650: android.hardware.audio.service_64) looks
+  # for audio_effects.xml; the AIDL HAL of the newer phones for audio_effects_config.xml.
+  # AOSP tries /odm/etc/audio/sku_<ro.boot.product.vendor.sku> and the /vendor twin first,
+  # then /odm/etc, /vendor/etc, /system/etc - first hit wins. The SM8650 stock image ships
+  # /odm/etc/audio_effects.xml, which beats every /vendor copy the overlay patched, so the
+  # library sat in soundfx with no config naming it: field OP12 diag "library mapped into
+  # the audio HAL: absent" with the DSP switched on, and the capture "DSP live 0.0%".
+  # A registered copy the HAL does not read is inert, so every candidate is patched.
+  _dsp_sku="$(getprop ro.boot.product.vendor.sku 2>/dev/null)"
+  case "$_dsp_sku" in *[!A-Za-z0-9_.-]*) _dsp_sku="" ;; esac
   for _oecl in /odm/etc/audio_effects_config.xml \
-               /vendor/odm/etc/audio_effects_config.xml; do
+               /vendor/odm/etc/audio_effects_config.xml \
+               /odm/etc/audio_effects.xml \
+               /vendor/odm/etc/audio_effects.xml \
+               ${_dsp_sku:+/odm/etc/audio/sku_$_dsp_sku/audio_effects.xml} \
+               ${_dsp_sku:+/odm/etc/audio/sku_$_dsp_sku/audio_effects_config.xml}; do
     [ -f "$_oecl" ] || continue
     asb_bind_register_odm_effects "$_oecl" && _dsp_bind_reg=$((_dsp_bind_reg + 1))
   done
@@ -4595,7 +4618,11 @@ asb_guard_v4a_effects
 # runs, so stripping only the overlay left the bound copy exactly as it was.
 # asb_diag reported it honestly: "strict JSON (no // comments) want 0 live 1" on both /odm and
 # /vendor/odm, while the module's own overlay copy was clean.
-for _vb in $(find "$MODPATH/system" "$MODPATH/deferred_overlay" /data/adb/asb/odm_patched \
+# $MODPATH/odm is listed too: it is the live-path mirror the payload is copied from, and
+# asb_normalize_module_layout (right below) copies it into system/odm when that variant is
+# missing - so an unstripped root copy came back as an unstripped system/odm copy after
+# this loop had run, and asbdiag reported "ASB-managed camera payload has // comments".
+for _vb in $(find "$MODPATH/odm" "$MODPATH/system" "$MODPATH/deferred_overlay" /data/adb/asb/odm_patched \
                   -type f -name "video_beauty_default_config" 2>/dev/null); do
   if grep -q '//' "$_vb" 2>/dev/null; then
     _vbt="${_vb}.asbc$$"
