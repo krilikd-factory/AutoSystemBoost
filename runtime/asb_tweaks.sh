@@ -24,8 +24,24 @@ asb_tw_sedi() {
 
 # Map a module file path to its baseline store path (flatten / -> _).
 asb_tw_base_path() {
-  _rel="${1#*/system/}"
+  # Module-root partition copies (odm/etc/camera/... - the live-path mirror) and the
+  # system/ variants map to the same name, from either the installed module or the
+  # modules_update staging dir: one stock baseline per stock file. "${1#*/system/}" alone
+  # gave the root copy a name that embedded the module path, so the baseline captured at
+  # install (modules_update) was never found at boot (modules) and the orphan prune
+  # deleted it on the next install.
+  case "$1" in
+    */AutoSystemBoost/*) _rel="${1#*/AutoSystemBoost/}"; _rel="${_rel#system/}" ;;
+    *) _rel="${1#*/system/}" ;;
+  esac
   printf '%s/%s.asbbase' "$ASB_TWEAK_BASE_DIR" "$(echo "$_rel" | tr '/' '_')"
+}
+
+# True when a conf_tuning_params.json still carries the stock BT.601 chroma matrix, i.e.
+# it is safe to use as the pristine baseline. A graded file must never become a baseline:
+# grading from it compounds on every boot.
+asb_tw_cam_stock() {
+  grep -m1 -o '"Main1x_Rgb2YuvParams"[^]]*]' "$1" 2>/dev/null | grep -q -- '-0\.1687[0-9]*'
 }
 
 # Read a key's value from governor.conf (default 0). $1=key $2=conf-path
@@ -313,10 +329,20 @@ asb_apply_dynamic_tweaks() {
   # Legacy AUDIO_AGGRESSIVE is honoured so an un-migrated config keeps working.
   _audio_aggr="$(asb_tw_flag audio_dac_hifi "$_conf")"
   [ "$_audio_aggr" = "1" ] || _audio_aggr="$(asb_tw_flag AUDIO_AGGRESSIVE "$_conf")"
-  _cam_inject="$(asb_tw_flag CAMERA_AGGRESSIVE_INJECT "$_conf")"
-  _cam_level="$(asb_tw_camera_level "$_conf")"
+  # Camera settings come from the user's config. During an install $_md is the staging
+  # dir whose governor.conf is still the shipped one (the user's answers are carried over
+  # much later), so grading from it would write a STOCK table over the copy the installer
+  # had just graded. Read the running module's config instead when there is one.
+  _cam_conf="$_conf"
+  case "$_md" in
+    */modules_update/*)
+      [ -f /data/adb/modules/AutoSystemBoost/config/governor.conf ] \
+        && _cam_conf=/data/adb/modules/AutoSystemBoost/config/governor.conf ;;
+  esac
+  _cam_inject="$(asb_tw_flag CAMERA_AGGRESSIVE_INJECT "$_cam_conf")"
+  _cam_level="$(asb_tw_camera_level "$_cam_conf")"
   _cam_grade_needed=0
-  asb_tw_camera_grade_needed "$_conf" && _cam_grade_needed=1
+  asb_tw_camera_grade_needed "$_cam_conf" && _cam_grade_needed=1
 
   # --- AUDIO mixer files --- Respect the installer categories individually.
   # The caller only checks "AUDIO or CAMERA", so without this a user who kept CAMERA but
@@ -338,7 +364,8 @@ asb_apply_dynamic_tweaks() {
   # Gated on CAMERA like the rest, but deliberately NOT on _cam_level: the level scales
   # the tone grading, whereas this only makes apps visible in the Settings screen.
   if asb_tw_feature_on CAMERA; then
-    for _vbf in "$_md/system/vendor/odm/etc/camera/config/video_beauty_default_config" \
+    for _vbf in "$_md/odm/etc/camera/config/video_beauty_default_config" \
+                "$_md/system/vendor/odm/etc/camera/config/video_beauty_default_config" \
                 "$_md/system/odm/etc/camera/config/video_beauty_default_config"; do
       [ -f "$_vbf" ] || continue
       asb_tw_vb_add_apps "$_vbf"
@@ -360,13 +387,23 @@ asb_apply_dynamic_tweaks() {
   #
   # By the time we run, that old overlay is gone: this boot mounted the NEW module, which has
   # no camera file.
-  if [ "$_cam_grade_needed" = 1 ] \
-     && [ ! -f "$_md/system/odm/etc/camera/conf_tuning_params.json" ] \
-     && [ ! -f "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" ]; then
+  # Also when the baseline that exists is not stock (an install up to fix65 overwrote the
+  # clone-time baseline with the graded file): drop it and capture stock again.
+  for _cam_bchk in "$_md/odm/etc/camera/conf_tuning_params.json" \
+                   "$_md/system/odm/etc/camera/conf_tuning_params.json" \
+                   "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json"; do
+    _cam_bp="$(asb_tw_base_path "$_cam_bchk")"
+    if [ -f "$_cam_bp" ] && ! asb_tw_cam_stock "$_cam_bp"; then
+      rm -f "$_cam_bp" 2>/dev/null
+      asb_log "camera: dropped a graded baseline ($_cam_bp)" 2>/dev/null
+    fi
+  done
+  if [ "$_cam_grade_needed" = 1 ]; then
     for _cam_rescue in /odm/etc/camera/conf_tuning_params.json \
                        /vendor/odm/etc/camera/conf_tuning_params.json; do
       [ -f "$_cam_rescue" ] || continue
-      _cam_rb="$ASB_TWEAK_BASE_DIR/$(printf '%s' "${_cam_rescue#/}" | tr '/' '_').asbbase"
+      # Same name the module copies use (odm/etc/camera/... -> odm_etc_camera_...).
+      _cam_rb="$ASB_TWEAK_BASE_DIR/$(printf '%s' "${_cam_rescue#/vendor/}" | sed 's|^/||' | tr '/' '_').asbbase"
       [ -f "$_cam_rb" ] && continue
       # Only ever store something that still looks like the untouched matrix.
       grep -m1 -o '"Main1x_Rgb2YuvParams"[^]]*]' "$_cam_rescue" 2>/dev/null \
@@ -378,10 +415,12 @@ asb_apply_dynamic_tweaks() {
     done
   fi
 
-  for _cf in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
+  for _cf in "$_md/odm/etc/camera/conf_tuning_params.json" \
+             "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
              "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
     [ -f "$_cf" ] || continue
-    asb_tw_save_base "$_cf"          # no-op if a baseline already exists
+    # Only a stock file may become the baseline; a graded one is left as it is.
+    asb_tw_cam_stock "$_cf" && asb_tw_save_base "$_cf"
     _bp="$(asb_tw_base_path "$_cf")"
     [ -f "$_bp" ] || continue
     # Build the DESIRED final conf in a temp from the clean baseline, apply the
@@ -407,6 +446,10 @@ asb_apply_dynamic_tweaks() {
           _cam_grade_src="$_bp"
         fi
         MODDIR="$_md" ASB_CAMERA_LEVEL_IN="$_cam_level" \
+          ASB_CAM_GRAIN_IN="$(asb_tw_int CAMERA_GRAIN "$_cam_conf" 3)" \
+          ASB_CAM_CONTRAST_IN="$(asb_tw_int CAMERA_CONTRAST "$_cam_conf" 3)" \
+          ASB_CAM_PORTRAIT_IN="$(asb_tw_int CAMERA_PORTRAIT "$_cam_conf" 0)" \
+          ASB_CAM_LOWLIGHT_IN="$(asb_tw_int CAMERA_LOWLIGHT "$_cam_conf" 0)" \
           sh "$_md/runtime/asb_camera_grade.sh" "$_cam_grade_src" "$_des" >/dev/null 2>&1 \
           && _cam_graded=1
         [ "$_cam_grade_src" = "$_bp" ] || rm -f "$_cam_grade_src" 2>/dev/null
@@ -448,10 +491,15 @@ asb_save_dynamic_baselines() {
     asb_tw_save_base "$_mx" force
     _valid_bases="$_valid_bases $(basename "$(asb_tw_base_path "$_mx")")"
   done
-  for _cam in "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
+  for _cam in "$_md/odm/etc/camera/conf_tuning_params.json" \
+              "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json" \
               "$_md/system/odm/etc/camera/conf_tuning_params.json"; do
     [ -f "$_cam" ] || continue
-    asb_tw_save_base "$_cam" force
+    # NOT forced: the installer captured the pristine baseline when it cloned the file and
+    # graded the copy right after - by the time this runs the module file IS graded, and a
+    # forced save here replaced the stock baseline with it (every boot then graded a graded
+    # table). Save only when none exists and the file is still stock.
+    asb_tw_cam_stock "$_cam" && asb_tw_save_base "$_cam"
     _valid_bases="$_valid_bases $(basename "$(asb_tw_base_path "$_cam")")"
   done
   # Orphan prune: remove any .asbbase whose source file is no longer shipped by

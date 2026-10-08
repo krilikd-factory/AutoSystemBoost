@@ -45,6 +45,40 @@ _bind() {   # $1 payload $2 target
   mount --bind "$1" "$2" 2>/dev/null
 }
 
+MD="${ASB_ODM_MODDIR:-${MODDIR:-/data/adb/modules/AutoSystemBoost}}"
+
+# Camera payloads follow the module's own copy.
+#
+# The payload under /data/adb/asb/odm_patched was written once, at install, and nothing
+# refreshed it: a field diag showed the module copy graded (BlendWeight 1, 1, 1) while the
+# bound payload held the stock table (0.35, 0.5, 0.7) - the bind was perfect and delivered
+# the wrong file. The module copy is the one post-fs-data re-grades from the stock baseline
+# with the current settings on every boot, so it is the source of truth; the payload is
+# rewritten in place (same inode), which also updates a bind that is already mounted.
+_sync_payload() {   # $1 target $2 payload
+  case "$1" in
+    */odm/etc/camera/*) _rel="${1#*/odm/etc/camera/}" ;;
+    *) return 0 ;;
+  esac
+  for _src in "$MD/odm/etc/camera/$_rel" "$MD/system/odm/etc/camera/$_rel" \
+              "$MD/system/vendor/odm/etc/camera/$_rel"; do
+    [ -s "$_src" ] && break
+    _src=""
+  done
+  [ -n "$_src" ] && [ -f "$2" ] || return 0
+  cmp -s "$_src" "$2" 2>/dev/null && return 0
+  # Same structural gate the overlay guard applies to every payload.
+  _so="$(tr -cd '{' < "$_src" 2>/dev/null | wc -c)"
+  _sc="$(tr -cd '}' < "$_src" 2>/dev/null | wc -c)"
+  [ "$_so" = "$_sc" ] && [ "${_so:-0}" -gt 0 ] 2>/dev/null || { _log "action=odm_payload_sync target=$1 result=rejected_unbalanced"; return 0; }
+  if cat "$_src" > "$2" 2>/dev/null; then
+    _log "action=odm_payload_sync target=$1 result=updated src=$_src"
+    _synced=1
+  else
+    _log "action=odm_payload_sync target=$1 result=write_failed"
+  fi
+}
+
 _one() {   # $1 target $2 payload -> prints the verdict
   if ! _ns test -f "$1" 2>/dev/null || [ ! -f "$2" ]; then echo missing; return; fi
   if _ns cmp -s "$2" "$1" 2>/dev/null; then echo already; return; fi
@@ -69,7 +103,12 @@ do_apply() {
     case "$_t" in ''|'#'*) continue ;; esac
     case "$_t" in */camera/*) _is_cam=1 ;; *) _is_cam=0 ;; esac
     [ "${1:-}" = camera ] && [ "$_is_cam" = 0 ] && continue
+    _synced=0
+    [ "$_is_cam" = 1 ] && _sync_payload "$_t" "$_p"
     _v="$(_one "$_t" "$_p")"
+    # A payload rewritten under a bind that was already in place reads "already", yet the
+    # camera now sees new content - count it as a change.
+    [ "$_synced" = 1 ] && [ "$_v" = already ] && _camnew=1
     case "$_v" in
       ok|retry_ok) _any=1; if [ "$_is_cam" = 0 ]; then _aud=1; else _camnew=1; fi ;;
       hidden|failed) _bad=1 ;;
