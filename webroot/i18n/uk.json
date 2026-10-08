@@ -857,5 +857,8 @@
   "eta_idle_measured_tip": "Виміряна витрата з вимкненим екраном: ",
   "t_cfg_video": " · спрацьовує під час відео",
   "st_ltpo_vid_low": "зараз",
-  "st_not_running": "не запущено"
+  "st_not_running": "не запущено",
+  "t_cfg_conflict_off": "⇄ {other}: {val} — конфліктує з «{key}»",
+  "t_cfg_needs": "ⓘ «{key}» працює лише разом із «{other}»",
+  "t_cfg_idle": "ⓘ «{key}» тепер не діє без «{other}»"
 }

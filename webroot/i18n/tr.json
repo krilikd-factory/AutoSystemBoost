@@ -857,5 +857,8 @@
   "eta_idle_measured_tip": "Ekran kapalıyken ölçülen tüketim: ",
   "t_cfg_video": " · video oynatılırken devreye girer",
   "st_ltpo_vid_low": "şimdi",
-  "st_not_running": "çalışmıyor"
+  "st_not_running": "çalışmıyor",
+  "t_cfg_conflict_off": "⇄ {other}: {val} — «{key}» ile çakışıyor",
+  "t_cfg_needs": "ⓘ «{key}» yalnızca «{other}» ile çalışır",
+  "t_cfg_idle": "ⓘ «{key}», «{other}» olmadan artık etkisiz"
 }

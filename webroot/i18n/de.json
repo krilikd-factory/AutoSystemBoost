@@ -857,5 +857,8 @@
   "eta_idle_measured_tip": "Gemessener Verbrauch bei ausgeschaltetem Display: ",
   "t_cfg_video": " · greift während der Videowiedergabe",
   "st_ltpo_vid_low": "jetzt",
-  "st_not_running": "läuft nicht"
+  "st_not_running": "läuft nicht",
+  "t_cfg_conflict_off": "⇄ {other}: {val} — kollidiert mit „{key}“",
+  "t_cfg_needs": "ⓘ „{key}“ wirkt nur zusammen mit „{other}“",
+  "t_cfg_idle": "ⓘ „{key}“ wirkt ohne „{other}“ jetzt nicht mehr"
 }

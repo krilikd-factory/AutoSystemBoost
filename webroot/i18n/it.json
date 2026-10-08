@@ -857,5 +857,8 @@
   "eta_idle_measured_tip": "Consumo misurato a schermo spento: ",
   "t_cfg_video": " · agisce durante la riproduzione video",
   "st_ltpo_vid_low": "ora",
-  "st_not_running": "non in esecuzione"
+  "st_not_running": "non in esecuzione",
+  "t_cfg_conflict_off": "⇄ {other}: {val} — in conflitto con «{key}»",
+  "t_cfg_needs": "ⓘ «{key}» funziona solo insieme a «{other}»",
+  "t_cfg_idle": "ⓘ «{key}» ora non ha effetto senza «{other}»"
 }

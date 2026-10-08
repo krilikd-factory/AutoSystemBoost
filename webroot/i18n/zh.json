@@ -857,5 +857,8 @@
   "eta_idle_measured_tip": "实测熄屏耗电：",
   "t_cfg_video": " · 在视频播放时生效",
   "st_ltpo_vid_low": "当前",
-  "st_not_running": "未运行"
+  "st_not_running": "未运行",
+  "t_cfg_conflict_off": "⇄ {other}：{val} — 与「{key}」冲突",
+  "t_cfg_needs": "ⓘ 「{key}」仅在开启「{other}」时生效",
+  "t_cfg_idle": "ⓘ 没有「{other}」，「{key}」现在不起作用"
 }

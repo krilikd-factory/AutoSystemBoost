@@ -857,5 +857,8 @@
   "eta_idle_measured_tip": "الاستهلاك المُقاس والشاشة مطفأة: ",
   "t_cfg_video": " · يعمل أثناء تشغيل الفيديو",
   "st_ltpo_vid_low": "الآن",
-  "st_not_running": "لا يعمل"
+  "st_not_running": "لا يعمل",
+  "t_cfg_conflict_off": "⇄ {other}: {val} — يتعارض مع «{key}»",
+  "t_cfg_needs": "ⓘ «{key}» يعمل فقط مع «{other}»",
+  "t_cfg_idle": "ⓘ «{key}» لم يعد له تأثير بدون «{other}»"
 }

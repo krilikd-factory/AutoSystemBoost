@@ -652,5 +652,8 @@
   "eta_average_tip": "Based on your smoothed screen-on drain; the live rate replaces it once the drain window reaches 10 minutes.",
   "eta_idle_measured_tip": "Measured screen-off drain: ",
   "st_ltpo_vid_low": "now",
-  "st_not_running": "not running"
+  "st_not_running": "not running",
+  "t_cfg_conflict_off": "⇄ {other}: {val} — conflicts with {key}",
+  "t_cfg_needs": "ⓘ {key} works only with {other}",
+  "t_cfg_idle": "ⓘ {key} now has no effect without {other}"
 }

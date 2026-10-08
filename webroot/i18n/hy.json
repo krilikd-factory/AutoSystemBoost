@@ -857,5 +857,8 @@
   "eta_idle_measured_tip": "Չափված ծախսը անջատված էկրանով՝ ",
   "t_cfg_video": " · գործում է տեսանյութի ժամանակ",
   "st_ltpo_vid_low": "հիմա",
-  "st_not_running": "չի աշխատում"
+  "st_not_running": "չի աշխատում",
+  "t_cfg_conflict_off": "⇄ {other}: {val} — հակասում է «{key}»-ին",
+  "t_cfg_needs": "ⓘ «{key}»-ն աշխատում է միայն «{other}»-ի հետ",
+  "t_cfg_idle": "ⓘ «{key}»-ն այլևս չի գործում առանց «{other}»-ի"
 }

@@ -857,5 +857,8 @@
   "eta_idle_measured_tip": "Konsumsi terukur saat layar mati: ",
   "t_cfg_video": " · bertindak saat video diputar",
   "st_ltpo_vid_low": "kini",
-  "st_not_running": "tidak berjalan"
+  "st_not_running": "tidak berjalan",
+  "t_cfg_conflict_off": "⇄ {other}: {val} — bertentangan dengan «{key}»",
+  "t_cfg_needs": "ⓘ «{key}» hanya bekerja bersama «{other}»",
+  "t_cfg_idle": "ⓘ «{key}» kini tidak berpengaruh tanpa «{other}»"
 }
