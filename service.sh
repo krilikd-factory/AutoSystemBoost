@@ -3472,9 +3472,22 @@ fi
 # Watch what holds the phone awake. This is a night-scale problem, so it must never turn
 # into a periodic screen-on job or be the source of the wakeups it measures.
 (
-  _screenoff_pass=0
+  # Scheduled on WALL time, checked every 5 min of awake time.
+  #
+  # This was "sleep 1800", and sleep counts only time the CPU is awake: on a phone that
+  # sleeps well (4 % awake in an OP15 night capture) 30 min of sleep took ~12 h, so the
+  # wakelock watcher, the screen-off classifier and GNSS trim never ran overnight at all -
+  # that capture has an empty screen-off class trace, and the fitness limit chosen at
+  # 00:53 was not applied while the pedometer held the CPU. A 5-min sleep that compares
+  # the wall clock costs nothing extra (it never wakes the phone; it runs when the phone is
+  # awake anyway) and lets the hourly pass happen at the first wake after the hour.
+  _ho_last="$(date +%s 2>/dev/null || echo 0)"
+  _wd_last="$_ho_last"
   while true; do
-    sleep 1800
+    sleep 300
+    _ho_now="$(date +%s 2>/dev/null || echo 0)"
+    [ $(( _ho_now - _wd_last )) -ge 1800 ] 2>/dev/null || continue
+    _wd_last="$_ho_now"
     # Bring the route link watcher back if it died.
 #
 # It is started once, post-boot, and never checked again. `ip monitor` blocks on a netlink
@@ -3511,8 +3524,8 @@ esac
     # or GNSS cleanup does not justify waking the active user-facing system every 15 minutes.
     case "$(asb_screen_state)" in
       false|Asleep)
-        _screenoff_pass=$((_screenoff_pass + 1))
-        [ $((_screenoff_pass % 2)) -eq 0 ] || continue
+        [ $(( _ho_now - _ho_last )) -ge 3600 ] 2>/dev/null || continue
+        _ho_last="$_ho_now"
         ;;
       *) continue ;;
     esac
