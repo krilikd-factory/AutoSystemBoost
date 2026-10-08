@@ -1425,6 +1425,48 @@ static const char *const g_uev_src_name[ASB_UEV_COUNT] = {
     "display", "power_supply", "net", "sound", "usb", "thermal", "wakeup", "other"
 };
 static unsigned long g_uev_events_total = 0;
+
+/* Uevent parking while the screen is on.
+ *
+ * The uevent socket exists to notice the screen coming ON while every timer is slow. With
+ * the screen on, the active tick (2-6 s) reads the panel state anyway - and a field OP15
+ * capture shows what listening costs then: 29298 display uevents in about seven hours
+ * (brightness / refresh / DRM chatter, ~1.1 a second), each one an epoll wake plus a sysfs
+ * read of the panel, against ~3800 active ticks. So while the screen is on the socket is
+ * taken out of epoll; the tick that sees the screen go off puts it back, discarding what
+ * queued meanwhile (nothing in it matters once the state is known). Screen-on detection is
+ * unchanged, and screen-off is noticed by the next active tick instead of the event - a
+ * few seconds, on rails that are already set for an awake screen. */
+static int           g_uev_parked = 0;
+static unsigned long g_uev_parks = 0, g_uev_unpark_dropped = 0;
+
+static void uev_park(int epfd, int uefd) {
+    if (uefd < 0 || g_uev_parked) return;
+    if (epoll_ctl(epfd, EPOLL_CTL_DEL, uefd, NULL) == 0) {
+        g_uev_parked = 1;
+        g_uev_parks++;
+    }
+}
+
+static void uev_unpark(int epfd, int uefd) {
+    if (uefd < 0 || !g_uev_parked) return;
+    char _ub[4096];
+    int _k = 0, _guard = 0;
+    while (_k < 8192 && _guard < 8) {
+        ssize_t _r = recv(uefd, _ub, sizeof(_ub), MSG_DONTWAIT);
+        if (_r > 0) { _k++; continue; }
+        /* A buffer that overflowed while parked reports ENOBUFS once; the queue behind it
+         * is still readable. */
+        if (_r < 0 && errno == ENOBUFS) { _guard++; continue; }
+        break;
+    }
+    g_uev_unpark_dropped += (unsigned long)_k;
+    struct epoll_event _ev;
+    memset(&_ev, 0, sizeof(_ev));
+    _ev.events = EPOLLIN;
+    _ev.data.fd = uefd;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, uefd, &_ev) == 0) g_uev_parked = 0;
+}
 /* Last banked session as it was handed to the learner, for diagnostics. */
 static int  g_ses_last_temp = 0;
 static int  g_ses_last_dur  = 0;
@@ -2400,6 +2442,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         /* Uevents by subsystem: governor_event_wakeups counts the epoll wakes, this
          * names what filled them. */
         fprintf(f, "uevent_events_total=%lu\n", g_uev_events_total);
+        fprintf(f, "uevent_parked=%d\nuevent_parks=%lu\nuevent_dropped_while_parked=%lu\n",
+                g_uev_parked, g_uev_parks, g_uev_unpark_dropped);
         fprintf(f, "uevent_by_subsys=\"");
         for (int _u = 0, _uf = 1; _u < ASB_UEV_COUNT; _u++) {
             if (!g_uev_by_src[_u]) continue;
@@ -5855,6 +5899,8 @@ int main(int argc, char **argv) {
     ev.data.fd = tfd_hourly; epoll_ctl(epfd, EPOLL_CTL_ADD, tfd_hourly, &ev);
     if (uefd  >= 0) { ev.data.fd = uefd;   epoll_ctl(epfd, EPOLL_CTL_ADD, uefd,   &ev); }
     if (sockfd >= 0) { ev.data.fd = sockfd; epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &ev); }
+    /* Started with the screen on: the active tick owns screen detection until it goes off. */
+    if (screen_on) uev_park(epfd, uefd);
 
     asb_metrics_t metrics;
     memset(&metrics, 0, sizeof(metrics));
@@ -6537,6 +6583,7 @@ int main(int argc, char **argv) {
                              * assuming it is still where it left off. */
                             arm_timerfd_periodic(tfd_active, TIMER_ACTIVE_S);
                             g_active_interval = TIMER_ACTIVE_S;
+                            uev_park(epfd, uefd);
                             /* Clear storm shield on screen wake */
                             if (g_storm_shield_active) {
                                 storm_shield_reset();
@@ -7100,9 +7147,22 @@ int main(int argc, char **argv) {
                         if (_late > g_scr_tick_late_max_s && _late < 86400) g_scr_tick_late_max_s = _late;
                         if (g_asb_cfg.log_level >= 1) asb_log("screen ON seen on a tick - active cadence restored");
                     }
+                    uev_park(epfd, uefd);
                 } else if (!metrics.misc.screen_on && _ts == 1) {
                     disarm_timerfd(tfd_active);
                     g_scr_off_since = time(NULL);
+                    /* The tick found the screen off before any uevent did - always the
+                     * case while the socket is parked, and before that whenever the event
+                     * was missed. Run what the uevent path runs on screen-off, which this
+                     * branch used to skip: stats saved, and the screen-off session plan
+                     * built and pre-armed, so the sleep rails are not left to chance. */
+                    uev_unpark(epfd, uefd);
+                    if (g_asb_cfg.log_level >= 1) asb_log("screen OFF (tick)");
+                    persistent_stats_save(&fsm);
+                    if (fsm_profile_is_battery)
+                        fsm.bat_screen_off_count++;
+                    session_plan_build(&fsm, 0);
+                    session_plan_apply_prearm(&fsm);
                 }
                 /* A tick right after a resume, with the screen still reading off: the
                  * resume may BE the wake (power key, fingerprint, lift), with the panel a

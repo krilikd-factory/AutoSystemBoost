@@ -379,6 +379,40 @@ static inline int lerp_int(int a, int b, float t) {
 #define ASB_SMART_PROACTIVE_P0_SUSTAINED_MAX 1785600
 #define ASB_SMART_PROACTIVE_P6_SUSTAINED_MAX 1382400
 
+/* Smart's ceiling for the PRIME core of a 3/4-cluster phone (OP12 / Ace 5 class:
+ * every part whose prime sits in its own slot 2).
+ *
+ * The proactive guard below holds slot 0 and slot 1 during ordinary work. On a 6+2 part
+ * slot 1 is the whole big side, so that is the prime. On a 1+3+2+1 part slot 2 is a single
+ * prime core with nothing holding it: no compiled rail (Balanced and Performance leave it
+ * unmanaged on purpose), so the Smart blend yields 0 = "run to the vendor limit". A field
+ * OP12 diag in Smart: "prime ceiling: none from ASB", policy7 at 2496000 of 3302400 while
+ * little and middle sat at 40-57%. The prime is the least efficient core on the die; a
+ * scheduler that wakes it for a burst runs it at the top of its curve.
+ *
+ * So Smart gives it the same kind of restraint the 2-cluster parts already have - as a
+ * share of its own maximum, kept above the middle cores' MODERATE share (58%) so it is
+ * still the fastest core in the phone:
+ *   LIGHT_IDLE (screen on)   55%
+ *   MODERATE / HEAVY         62%   (HEAVY prime escape still lifts it when pinned)
+ *   SUSTAINED                50%   (the cooling state)
+ * Nothing in DEEP_IDLE (the screen-off prime cap handles that), nothing in GAMING, nothing
+ * while a known game is busy loading, nothing on a 2-cluster part. Returns 0 = no cap. */
+static int asb_smart_prime_slot_cap_khz(int state, int hw_prime_khz, int policy_count,
+                                        int game_busy, int screen_on) {
+    if (policy_count < 3 || hw_prime_khz <= 0 || game_busy) return 0;
+    int pct = 0;
+    switch (state) {
+        case ASB_STATE_LIGHT_IDLE: pct = screen_on ? 55 : 0; break;
+        case ASB_STATE_MODERATE:
+        case ASB_STATE_HEAVY:      pct = 62; break;
+        case ASB_STATE_SUSTAINED:  pct = 50; break;
+        default:                   pct = 0;  break;
+    }
+    if (pct <= 0) return 0;
+    return (int)((long)hw_prime_khz * pct / 100);
+}
+
 static void fsm_interpolate_caps(
     const asb_profile_bounds_t *bounds, int profile_idx, asb_state_t state,
     /* App class and CPU load, so the proactive guard can stand down while a known game
@@ -580,6 +614,14 @@ static void fsm_interpolate_caps(
         }
         if (out->cpu_max[0] > _p0) out->cpu_max[0] = _p0;
         if (out->cpu_max[1] > _p6) out->cpu_max[1] = _p6;
+    }
+    /* The separate prime core of a 3/4-cluster part (see asb_smart_prime_slot_cap_khz).
+     * 0 in out->cpu_max means "unmanaged", so a cap replaces it outright. */
+    if (profile_idx == PROFILE_SMART) {
+        int _pc = asb_smart_prime_slot_cap_khz((int)state, g_cpu_slot_hwmax[2],
+                                               g_cpu_policy_count, _game_busy, fsm_screen_is_on);
+        if (_pc > 0 && (out->cpu_max[2] <= 0 || out->cpu_max[2] > _pc))
+            out->cpu_max[2] = _pc;
     }
 
     out->ravg_ticks     = lerp_int(f->ravg_ticks,     c->ravg_ticks,     t > 0.5f ? 1.0f : 0.0f);
@@ -2475,6 +2517,9 @@ if (!can_leave &&
                 int _lim = lerp_int(_bb->floor.cpu_max[_sl], _bb->ceil.cpu_max[_sl],
                                     g_state_level[ASB_STATE_HEAVY]);
                 int _hw = g_cpu_slot_hwmax[_sl];
+                /* Balanced leaves a separate prime core unmanaged (0): its HEAVY rail is
+                 * then the hardware maximum, and the Smart prime cap must lift to it. */
+                if (_lim <= 0) _lim = _hw;
                 if (_hw > 0 && _lim > _hw) _lim = _hw;
                 if (_lim > 0 && new_caps.cpu_max[_sl] > 0 && new_caps.cpu_max[_sl] < _lim) {
                     new_caps.cpu_max[_sl] = _lim;
