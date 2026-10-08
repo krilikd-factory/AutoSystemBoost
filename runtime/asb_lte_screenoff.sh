@@ -310,6 +310,13 @@ case "$1" in
     [ -f "$STATS" ] && IFS='|' read -r _sa _sr _ss < "$STATS"
     printf 'applies=%s\nrestores=%s\nlte_minutes=%s\n' "${_sa:-0}" "${_sr:-0}" $(( ${_ss:-0} / 60 ))
     ;;
-  *) echo "usage: $0 arm|apply|restore|status" >&2; exit 2 ;;
+  # Whether the data SIM allows 5G right now: yes | no | unknown. Read with the same parser
+  # restore uses, so the answer matches what the script itself would see.
+  nr)
+    _ns="$(_data_slot)" || _ns=d
+    _nm="$(_get_mask "$_ns")" || { echo unknown; exit 0; }
+    if [ $(( _nm & NR_BIT )) -ne 0 ]; then echo yes; else echo no; fi
+    ;;
+  *) echo "usage: $0 arm|apply|restore|status|nr" >&2; exit 2 ;;
 esac
 exit 0
