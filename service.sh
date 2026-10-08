@@ -275,7 +275,7 @@ if [ ! -f /data/adb/asb/stale_props_cleaned ]; then
     [ -n "$(getprop "$_stale_p" 2>/dev/null)" ] || continue
     _stale_rec="$(grep -m1 "^prop|${_stale_p}|" "$_asb_bl" 2>/dev/null)"
     [ -n "$_stale_rec" ] || continue                 # not ours - do not touch
-    _stale_orig="${_stale_rec#prop|${_stale_p}|}"
+    _stale_orig="${_stale_rec#prop\|${_stale_p}\|}"
     if [ -n "$_stale_orig" ]; then
       resetprop "$_stale_p" "$_stale_orig" >/dev/null 2>&1 || true
     else

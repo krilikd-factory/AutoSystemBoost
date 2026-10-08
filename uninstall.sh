@@ -61,7 +61,7 @@ if [ -f "$_BL_TMP" ] || [ "$_CC_FORCED" = "1" ]; then
         "gms|AdsIdentity__enable_mendel_property_update" \
         "measurement|measurement.service.disable" \
         "measurement|measurement.collection.enabled"; do
-        cmd device_config delete "${_dc_pair%%|*}" "${_dc_pair#*|}" >/dev/null 2>&1 || true
+        cmd device_config delete "${_dc_pair%%\|*}" "${_dc_pair#*\|}" >/dev/null 2>&1 || true
       done
     fi
   ) &
@@ -173,9 +173,9 @@ if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; th
     # Records are pkg|op|mode since the trim covers FINE_LOCATION as well as COARSE;
     # a legacy pkg|mode line names COARSE_LOCATION.
 
-    _rp="${_gp%%|*}"; _rest="${_gp#*|}"
+    _rp="${_gp%%\|*}"; _rest="${_gp#*\|}"
     case "$_rest" in
-      *"|"*) _rop="${_rest%%|*}"; _rm="${_rest#*|}" ;;
+      *"|"*) _rop="${_rest%%\|*}"; _rm="${_rest#*\|}" ;;
       *)     _rop="COARSE_LOCATION"; _rm="$_rest" ;;
     esac
     case "$_rop" in COARSE_LOCATION|FINE_LOCATION) : ;; *) _rop="COARSE_LOCATION" ;; esac
@@ -266,9 +266,9 @@ if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; th
     # Records are pkg|op|mode since the trim covers FINE_LOCATION as well as COARSE;
     # a legacy pkg|mode line names COARSE_LOCATION.
 
-    _rp="${_gp%%|*}"; _rest="${_gp#*|}"
+    _rp="${_gp%%\|*}"; _rest="${_gp#*\|}"
     case "$_rest" in
-      *"|"*) _rop="${_rest%%|*}"; _rm="${_rest#*|}" ;;
+      *"|"*) _rop="${_rest%%\|*}"; _rm="${_rest#*\|}" ;;
       *)     _rop="COARSE_LOCATION"; _rm="$_rest" ;;
     esac
     case "$_rop" in COARSE_LOCATION|FINE_LOCATION) : ;; *) _rop="COARSE_LOCATION" ;; esac
@@ -490,6 +490,7 @@ if [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ] && [ -f /data/adb/asb/lte_scree
        cp "$MODDIR/runtime/asb_lte_screenoff.sh" "$_lte_stage/lte.sh" 2>/dev/null &&
        cp /data/adb/asb/lte_screenoff.saved "$_lte_stage/lte_screenoff.saved" 2>/dev/null; then
       (
+        exec </dev/null >/dev/null 2>&1   # detach here, not with a redirect on the ( ): mksh then waits for a body that uses $(...)
         _w=0
         until [ "$(getprop sys.boot_completed)" = "1" ] || [ "$_w" -ge 600 ]; do
           sleep 5; _w=$((_w + 5))
@@ -501,7 +502,7 @@ if [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ] && [ -f /data/adb/asb/lte_scree
           sleep 60
         done
         rm -rf "$_lte_stage" 2>/dev/null
-      ) </dev/null >/dev/null 2>&1 &
+      ) &
     fi
   fi
 fi
@@ -523,6 +524,7 @@ if [ -f /data/adb/asb/ltpo_range.orig ]; then
 fi
 if [ -n "$_rr_peak$_rr_min" ]; then
   (
+    exec </dev/null >/dev/null 2>&1   # detach here, not with a redirect on the ( ): mksh then waits for a body that uses $(...)
     _w=0
     until [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || [ "$_w" -ge 600 ]; do
       sleep 5; _w=$((_w + 5))
@@ -536,7 +538,7 @@ if [ -n "$_rr_peak$_rr_min" ]; then
       ''|__unset) : ;;
       *) settings put system min_refresh_rate "$_rr_min" >/dev/null 2>&1 ;;
     esac
-  ) </dev/null >/dev/null 2>&1 &
+  ) &
 fi
 
 # If the active fallback had temporarily released Wi-Fi, restore it before its state is
