@@ -32,9 +32,9 @@ case "$(_cfg gnss_trim)" in
       while IFS= read -r _p; do
         # Restore the recorded mode, not a blanket allow. Records are pkg|op|mode;
         # a legacy pkg|mode line names COARSE_LOCATION.
-        _rp="${_p%%|*}"; _rest="${_p#*|}"
+        _rp="${_p%%\|*}"; _rest="${_p#*\|}"
         case "$_rest" in
-          *"|"*) _rop="${_rest%%|*}"; _rm="${_rest#*|}" ;;
+          *"|"*) _rop="${_rest%%\|*}"; _rm="${_rest#*\|}" ;;
           *)            _rop="COARSE_LOCATION"; _rm="$_rest" ;;
         esac
         case "$_rop" in COARSE_LOCATION|FINE_LOCATION) : ;; *) _rop="COARSE_LOCATION" ;; esac
@@ -74,9 +74,9 @@ if [ -f "$STATE" ] && _has appops && _has dumpsys; then
   while IFS= read -r _line; do
     [ -n "$_line" ] || continue
     # Records are pkg|op|mode now; a legacy pkg|mode line names COARSE_LOCATION.
-    _rp="${_line%%|*}"; _rest="${_line#*|}"
+    _rp="${_line%%\|*}"; _rest="${_line#*\|}"
     case "$_rest" in
-      *"|"*) _rop="${_rest%%|*}"; _rm="${_rest#*|}" ;;
+      *"|"*) _rop="${_rest%%\|*}"; _rm="${_rest#*\|}" ;;
       *)            _rop="COARSE_LOCATION"; _rm="$_rest" ;;
     esac
     case "$_rop" in COARSE_LOCATION|FINE_LOCATION) : ;; *) _rop="COARSE_LOCATION" ;; esac

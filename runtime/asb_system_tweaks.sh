@@ -88,7 +88,7 @@ case "$(_cfg phantom_procs)" in
     _pp_bl="${ASB_BASELINE:-/data/adb/asb/baseline.txt}"
     _pp_line="$(grep -m1 '^settings|global|settings_enable_monitor_phantom_procs|' "$_pp_bl" 2>/dev/null)"
     if [ -n "$_pp_line" ]; then
-      _pp_orig="${_pp_line#settings|global|settings_enable_monitor_phantom_procs|}"
+      _pp_orig="${_pp_line#settings\|global\|settings_enable_monitor_phantom_procs\|}"
       if [ -n "$_pp_orig" ]; then
         settings put global settings_enable_monitor_phantom_procs "$_pp_orig" >/dev/null 2>&1 \
           && _changed="${_changed}phantom=stock(restored) "

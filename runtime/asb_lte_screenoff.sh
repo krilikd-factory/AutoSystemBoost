@@ -199,7 +199,7 @@ do_repair_dropped() {
 
 do_restore() {
   [ -f "$SAVE" ] || { do_repair_dropped; return 0; }
-  # IFS-split, not ${line%%|*}. Every restore on the OP15 logged "bad save file dropped"
+  # IFS-split, not a parameter-expansion split on "|". Every restore on the OP15 logged "bad save file dropped"
   # right after an apply that wrote a well-formed "0|916479" - four in a row across three
   # days - and since the drop also deleted the file, 5G was never given back: the modem
   # stayed on LTE with the screen on, and after a reboot too, the setting being persistent.
@@ -280,6 +280,7 @@ do_arm() {
     [ -n "$_p" ] && kill -0 "$_p" 2>/dev/null && return 0
   fi
   (
+    exec </dev/null >/dev/null 2>&1   # detach here, not with a redirect on the ( ): mksh then waits for a body that uses $(...)
     sleep "$DELAY"
     rm -f "$PIDF"
     do_apply

@@ -149,7 +149,7 @@ _restore_if_owned() {
 _reconcile_action() {
   [ -f "$ACTION" ] || return 0
   _line="$(cat "$ACTION" 2>/dev/null)"
-  _until="${_line#*|}"
+  _until="${_line#*\|}"
   case "$_until" in ''|*[!0-9]*) _until=0 ;; esac
   _nowv="$(_now)"
   if ! _enabled || [ "$_nowv" -ge "$_until" ] 2>/dev/null; then

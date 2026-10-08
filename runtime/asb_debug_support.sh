@@ -501,6 +501,7 @@ diag_start() {
   # stdout/stderr/stdin are detached BEFORE backgrounding. KSU can therefore return to
   # WebView immediately; the caller gets a real PID and paints its modal on the next frame.
   (
+    exec </dev/null >/dev/null 2>&1   # detach here, not with a redirect on the ( ): mksh then waits for a body that uses $(...)
     _owner_token="$_token"
     # In a POSIX shell $$ in a subshell may still name the parent launcher. Wait for
     # the parent to publish the actual background PID instead of writing an ambiguous
@@ -520,7 +521,7 @@ diag_start() {
       diag_status_write "$_result" 'status=failed'
     fi
     [ "$(cat "$DIAG_TOKENFILE" 2>/dev/null || true)" = "$_owner_token" ] && rm -rf "$DIAG_LOCKDIR" 2>/dev/null || true
-  ) </dev/null >/dev/null 2>&1 &
+  ) &
   _pid=$!
     # The worker is already running - do not report failure for a bookkeeping miss.
     #

@@ -54,8 +54,8 @@ fi
 _n=0
 for _pair in "$_s64|$MODDIR/system/vendor/lib64/soundfx|/vendor/lib64/soundfx" \
              "$_s32|$MODDIR/system/vendor/lib/soundfx|/vendor/lib/soundfx"; do
-  _src="${_pair%%|*}"; _rest="${_pair#*|}"
-  _dir="${_rest%%|*}"; _live="${_rest##*|}"
+  _src="${_pair%%\|*}"; _rest="${_pair#*\|}"
+  _dir="${_rest%%\|*}"; _live="${_rest##*\|}"
   [ -f "$_src" ] || continue
   mkdir -p "$_dir" 2>/dev/null || continue
   cp -f "$_src" "$_dir/libasbdsp.so" 2>/dev/null || continue

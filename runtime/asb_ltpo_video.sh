@@ -190,6 +190,7 @@ _lower() {   # $1 = mode Hz, $2 = content rate(s)
   # The first touch puts the old value back straight from here - no polling interval in
   # between - and only then tells the loop. Fastest path: one settings put, no reads.
   (
+    exec </dev/null >/dev/null 2>&1   # detach here, not with a redirect on the ( ): mksh then waits for a body that uses $(...)
     getevent -qc 1 "$_dev" >/dev/null 2>&1 &
     _g=$!
     printf '%s\n' "$_g" > "$GUARD" 2>/dev/null
@@ -206,7 +207,7 @@ _lower() {   # $1 = mode Hz, $2 = content rate(s)
     rm -f "$LOWERED" "$GUARD" 2>/dev/null
     _stat_bump touch 1
     [ -n "$_since" ] && _stat_bump secs $(( $(_now) - _since ))
-  ) </dev/null >/dev/null 2>&1 &
+  ) &
   return 0
 }
 

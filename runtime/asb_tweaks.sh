@@ -178,7 +178,7 @@ asb_tw_vb_add_apps() {
     "Snapchat|com.snapchat.android|snapchat" \
     "Line|jp.naver.line.android|line" \
     "KakaoTalk|com.kakao.talk|kakao"; do
-    _vb_pkg="${_vb_e#*|}"; _vb_pkg="${_vb_pkg%%|*}"
+    _vb_pkg="${_vb_e#*\|}"; _vb_pkg="${_vb_pkg%%\|*}"
     grep -q "\"$_vb_pkg\"" "$_f" 2>/dev/null && continue
     _vb_add="${_vb_add}${_vb_e}
 "
