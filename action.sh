@@ -941,6 +941,7 @@ T_WLV_PROTECTED="protected - your call in Settings"
 T_WLV_INUSE="in use - left alone"
 T_WLV_REPORT="report only"
 T_WLV_LIMITED="wakelocks limited by your fitness setting"
+T_WLV_LIMIT_IGNORED="limit set, but this Android ignores it - the app still holds the CPU"
 T_S_MC="Wi-Fi multicast held %s min since unplug - the Wi-Fi radio cannot doze (now: %s)"
 T_S_MC_NONE="nobody"
 T_Y_BG_RELAX="background processes: unlimited (phantom monitor off)"
@@ -2097,6 +2098,7 @@ echo "  🌙  ${H_SLEEP}"
         protected)  _wvt="$T_WLV_PROTECTED" ;;
         in_use)     _wvt="$T_WLV_INUSE" ;;
         limited)    _wvt="$T_WLV_LIMITED" ;;
+        limit_ignored) _wvt="$T_WLV_LIMIT_IGNORED" ;;
         *)          _wvt="$T_WLV_REPORT" ;;
       esac
       _f "       $T_S_WL_APP" "$_wp" "$((_ws / 60))" "$_wvt"

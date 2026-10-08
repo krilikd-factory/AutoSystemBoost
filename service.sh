@@ -531,6 +531,14 @@ asb_migrate_governor_conf
        && [ -r "$MODDIR/runtime/asb_odm_rebind.sh" ]; then
       ASB_ODM_RESTART_CAM=1 sh "$MODDIR/runtime/asb_odm_rebind.sh" apply >/dev/null 2>&1
       [ "$?" = 10 ] && { setprop ctl.restart audioserver 2>/dev/null || true; }
+      # Crash fuse for the bound effects configs (see asb_odm_rebind.sh effects-guard):
+      # three minutes of watching, a few pidof calls, then it exits.
+      if grep -q 'audio_effects' /data/adb/asb/odm_bind_manifest.txt 2>/dev/null; then
+        ( exec </dev/null >/dev/null 2>&1
+          sleep 5
+          sh "$MODDIR/runtime/asb_odm_rebind.sh" effects-guard
+        ) &
+      fi
       # A second camera-only pass a minute later: a layer the root manager adds at its own
       # boot-completed stage lands after us and can sit in front of the first bind. The pass
       # is a read-back per file when everything is already live, so it costs nothing then.
@@ -3369,9 +3377,16 @@ fi
     _sig="$(grep -l RUNNING /proc/asound/card*/pcm*p/sub*/status 2>/dev/null | tr '\n' ' ')"
     if [ "$_sig" != "${_prev_sig:-}" ]; then
       _prev_sig="$_sig"; _iv=5
+    elif [ -z "$_sig" ] && [ -n "${_pcm_known:-}" ] && [ -n "$_prev_route" ]; then
+      # Nothing is playing and nothing started: the route cannot matter to the effect until
+      # a stream opens, and opening one changes $_sig above and forces a dump at once. The
+      # 30 s back-off still dumped the audio service twice a minute for as long as the
+      # screen was on with nothing playing. Only where the kernel exposes PCM state at all.
+      continue
     elif [ "$_since" -lt "${_iv:-5}" ]; then
       continue
     fi
+    [ -n "${_pcm_known:-}" ] || { ls /proc/asound/card*/pcm*p/sub*/status >/dev/null 2>&1 && _pcm_known=1; }
     _since=0
     _adump="$(dumpsys audio 2>/dev/null)"
     _now=""
@@ -3390,8 +3405,12 @@ fi
     [ -n "$_d" ] || _d="$(printf '%s\n' "$_adump" | grep -m1 -iE 'Device[s]?: *(speaker|bt|ble|usb|wired|headset|headphone)')"
     case "$_d" in
       # LE Audio first: "ble_headset" would otherwise match *headset* and read as wired.
+      # The call link first: bt_sco means a voice channel is open (VoIP call, voice note,
+      # assistant). It is not the media route a Bluetooth boost was chosen for, and no
+      # dsp_outputs value names it, so the attacher passes it through at unity.
+      *bt_sco*|*BLUETOOTH_SCO*) _now="call" ;;
       *ble_headset*|*ble_speaker*|*ble_broadcast*|*le_audio*|*BLE_*) _now="bt" ;;
-      *bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*|*bt_sco*) _now="bt" ;;
+      *bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*) _now="bt" ;;
       *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*|*headset*|*headphone*) _now="wired" ;;
       *speaker*|*SPEAKER*) _now="speaker" ;;
     esac
