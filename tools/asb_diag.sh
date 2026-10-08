@@ -1699,6 +1699,16 @@ esac
 if [ "$(cfg net_screen_off_lte)" = 1 ] && [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ]; then
   _lst="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null)"
   NOTE "screen-off LTE: applied $(printf '%s\n' "$_lst" | sed -n 's/^applies=//p') time(s), restored $(printf '%s\n' "$_lst" | sed -n 's/^restores=//p'), $(printf '%s\n' "$_lst" | sed -n 's/^lte_minutes=//p') min on LTE in total; now applied=$(printf '%s\n' "$_lst" | sed -n 's/^applied=//p') unsupported=$(printf '%s\n' "$_lst" | sed -n 's/^unsupported=//p')"
+  # Whether 5G is allowed on the data SIM right now - the thing that matters if a restore
+  # ever failed. Read the same way the script reads it.
+  _l5="$(cmd phone get-allowed-network-types-for-users 2>/dev/null | tail -n 1 | tr -d '\r')"
+  case "$_l5" in
+    *NR*|*nr*) NOTE "5G allowed now: yes ($_l5)" ;;
+    1[01][01][01][01][01][01][01][01][01][01][01][01][01][01][01][01][01][01][01]) NOTE "5G allowed now: yes (mask $_l5)" ;;
+    ''|*rror*|*xception*) : ;;
+    *) NOTE "5G allowed now: NO ($_l5)$([ -f /data/adb/asb/lte_screenoff.saved ] || echo ' - and ASB holds no record of removing it: if you did not turn 5G off yourself, turn it back on in Settings')" ;;
+  esac
+  grep -E 'restore:|repair:' /data/adb/asb/lte_screenoff.log 2>/dev/null | tail -n 2 | while IFS= read -r _l5l; do P "    $_l5l"; done
 fi
 _dip=ip; for _ipb in /system/bin/ip /vendor/bin/ip; do [ -x "$_ipb" ] && { _dip="$_ipb"; break; }; done
 if command -v ip >/dev/null 2>&1 || [ -x "$_dip" ]; then
