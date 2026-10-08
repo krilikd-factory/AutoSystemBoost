@@ -100,7 +100,7 @@ esac
 #
 # The old code wrote the baseline once and never looked at it again ("if [ !
 mkdir -p /data/adb/asb 2>/dev/null
-[ -f "$BASE" ] || : > "$BASE" 2>/dev/null
+[ -f "$BASE" ] || true > "$BASE" 2>/dev/null
 for _k in $_keys; do
   grep -q "^$_k|" "$BASE" 2>/dev/null && continue
   echo "$_k|$(settings get system "$_k" 2>/dev/null)" >> "$BASE" 2>/dev/null

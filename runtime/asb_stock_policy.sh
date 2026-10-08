@@ -43,7 +43,7 @@ asb_stock_restore_profile_runtime() {
 
 asb_stock_enter() {
   mkdir -p /data/adb/asb 2>/dev/null || true
-  : > /data/adb/asb/stock_profile_active 2>/dev/null || true
+  true > /data/adb/asb/stock_profile_active 2>/dev/null || true
   asb_stock_stop_governor
   asb_stock_release_profile_leases
   asb_stock_restore_profile_runtime

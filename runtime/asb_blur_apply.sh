@@ -141,7 +141,7 @@ elif [ "$ASB_BLUR_BOOT_SYNC" != "1" ]; then
 fi
 
 # --- boot half: SurfaceFlinger, needs the reboot ------------------------------
-[ -f "$PROP" ] || : > "$PROP"
+[ -f "$PROP" ] || true > "$PROP"
 _pt="${PROP}.asbblur$$"
 sed -e '/^# ASB:BLUR:BEGIN$/,/^# ASB:BLUR:END$/d' \
     -e '/^ro\.surface_flinger\.supports_background_blur=/d' \

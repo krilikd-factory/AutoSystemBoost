@@ -89,7 +89,7 @@ if _has dumpsys; then
   # to give back.
   if dumpsys deviceidle whitelist 2>/dev/null | grep -q ",$GMS,"; then
     dumpsys deviceidle whitelist -"$GMS" >/dev/null 2>&1 \
-      && { mkdir -p "${GMS_WL_MARK%/*}" 2>/dev/null; : > "$GMS_WL_MARK"; }
+      && { mkdir -p "${GMS_WL_MARK%/*}" 2>/dev/null; true > "$GMS_WL_MARK"; }
   fi
 fi
 cmd appops set "$GMS" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 || true

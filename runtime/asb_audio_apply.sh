@@ -65,7 +65,7 @@ _mode="${1:-all}"
 case "$_mode" in
   all|dsp)
     mkdir -p /data/adb/asb 2>/dev/null || true
-    : > /data/adb/asb/audio_user_policy_enabled 2>/dev/null || true
+    true > /data/adb/asb/audio_user_policy_enabled 2>/dev/null || true
     ;;
 esac
 

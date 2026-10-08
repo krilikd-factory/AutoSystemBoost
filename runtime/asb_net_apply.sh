@@ -421,7 +421,7 @@ if [ -n "$_ASB_TC" ]; then
         _qd_logged=1
       else
         _qd_logged=0
-        : > "$_qd_mark" 2>/dev/null
+        true > "$_qd_mark" 2>/dev/null
       fi
       # Keep the raw sentence too - the classifier above only knows the messages it has
       # seen, and an unrecognised one is exactly the case worth reading in full.

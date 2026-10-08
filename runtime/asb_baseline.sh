@@ -19,7 +19,7 @@ asb_profile_baseline_record() {
   # Use the configured snapshot directory. Production keeps /data/adb/asb, while host
   # contracts inject a temporary path and must not need permission to create /data.
   mkdir -p "$(dirname "$ASB_PROFILE_BASELINE")" 2>/dev/null || return 1
-  [ -f "$ASB_PROFILE_BASELINE" ] || : > "$ASB_PROFILE_BASELINE" 2>/dev/null || return 1
+  [ -f "$ASB_PROFILE_BASELINE" ] || true > "$ASB_PROFILE_BASELINE" 2>/dev/null || return 1
   grep -Fq "$_pb_type|$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/null && return 0
   # Trim the trailing newline rather than rewriting every one.
   #
@@ -66,7 +66,7 @@ asb_profile_baseline_restore() {
 asb_baseline_init() {
   [ -f "$ASB_BASELINE" ] && return 0
   mkdir -p "$(dirname "$ASB_BASELINE")" 2>/dev/null
-  : > "$ASB_BASELINE" 2>/dev/null || true
+  true > "$ASB_BASELINE" 2>/dev/null || true
   chmod 0644 "$ASB_BASELINE" 2>/dev/null || true
 }
 

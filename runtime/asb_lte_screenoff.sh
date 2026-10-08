@@ -181,7 +181,7 @@ _tethering() {
 # fact missing, then never again - a user who turns 5G off later keeps that choice.
 do_repair_dropped() {
   [ -f "$STATE_DIR/lte_screenoff.repaired" ] && return 0
-  grep -q 'restore: bad save file dropped' "$LOGF" 2>/dev/null || { : > "$STATE_DIR/lte_screenoff.repaired"; return 0; }
+  grep -q 'restore: bad save file dropped' "$LOGF" 2>/dev/null || { true > "$STATE_DIR/lte_screenoff.repaired"; return 0; }
   _rs="$(_data_slot)" || _rs=d
   _rc="$(_get_mask "$_rs")" || return 0
   if [ $(( _rc & NR_BIT )) -eq 0 ]; then
@@ -194,7 +194,7 @@ do_repair_dropped() {
       return 0
     fi
   fi
-  : > "$STATE_DIR/lte_screenoff.repaired"
+  true > "$STATE_DIR/lte_screenoff.repaired"
 }
 
 do_restore() {
@@ -252,7 +252,7 @@ do_apply() {
   _orig="$(_get_mask "$_sub")" || {
     _raw="$(_cmd_phone get-allowed-network-types-for-users $(_slot_args "$_sub") 2>&1 | tr -d '\r' | tail -n 1 | cut -c1-120)"
     _log "apply: cannot read allowed types (slot=$_sub, got: ${_raw:-nothing}), marking unsupported"
-    : > "$UNSUP"; return 0; }
+    true > "$UNSUP"; return 0; }
   [ $(( _orig & NR_BIT )) -ne 0 ] || return 0    # 5G not allowed anyway
   _want=$(( _orig & ~NR_BIT ))
   printf '%s|%s\n' "$_sub" "$_orig" > "$SAVE" 2>/dev/null && sync
@@ -265,7 +265,7 @@ do_apply() {
   else
     _log "apply: readback $_now != $_want, restoring and marking unsupported"
     do_restore
-    : > "$UNSUP"
+    true > "$UNSUP"
   fi
 }
 

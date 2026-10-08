@@ -107,7 +107,7 @@ _ltpo_bind_all() {
     case "$_a_t" in ''|'#'*) continue ;; esac
     if _bind_one "$_a_t" "$_a_p"; then
       _a_any=1
-      : > "$ACTIVE" 2>/dev/null
+      true > "$ACTIVE" 2>/dev/null
     fi
   done < "$MAN"
   [ "$_a_any" = "1" ]

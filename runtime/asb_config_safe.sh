@@ -375,7 +375,7 @@ _apply_pairs_locked() {
   _stmp=""
   if [ -n "$_snapshot" ]; then
     _stmp="$_snapshot.tmp.$$"
-    if [ -f "$_snapshot" ]; then cp "$_snapshot" "$_stmp"; else : > "$_stmp"; fi
+    if [ -f "$_snapshot" ]; then cp "$_snapshot" "$_stmp"; else true > "$_stmp"; fi
     for _key in $_changed; do
       _val="$(_num "$_key" "$_tmp" 2>/dev/null || true)"
       # Non-numeric scalar tokens (enums) are copied directly from the staged file.
@@ -432,7 +432,7 @@ _import_backup() {
   mkdir -p "$STATE" 2>/dev/null || _die "cannot create state directory"
   _allowed=" $* "
   _pairs="$STATE/import_pairs.$$"
-  : > "$_pairs" || _die "cannot stage import"
+  true > "$_pairs" || _die "cannot stage import"
   _seen=""
   while IFS= read -r _line || [ -n "$_line" ]; do
     _line="$(printf '%s' "$_line" | tr -d '\r')"

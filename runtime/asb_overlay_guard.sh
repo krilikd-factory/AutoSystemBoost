@@ -24,7 +24,7 @@ _write_state() {
 
 _fail() {
   mkdir -p "$STATE_DIR" 2>/dev/null || true
-  : > "$BLOCK" 2>/dev/null || true
+  true > "$BLOCK" 2>/dev/null || true
   _write_state blocked "$1" "${2:-0}"
   exit 1
 }
