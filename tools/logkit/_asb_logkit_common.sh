@@ -957,15 +957,11 @@ lk_capture_perf_trace_row() {
 # for the same six hours. rmnet_ipa*/rmnet_mhi* are the parent transport and carry the same
 # bytes again, so they are left out; the sum of the children is the mobile traffic.
 lk_mobile_bytes() {
-  _mrx=0; _mtx=0
+  # Summed in awk: mksh arithmetic is 32-bit and these counters pass 2 GiB within a day.
   for _c in /sys/class/net/rmnet_data* /sys/class/net/ccmni*; do
     [ -d "$_c" ] || continue
-    _a=$(cat "$_c/statistics/rx_bytes" 2>/dev/null); _b=$(cat "$_c/statistics/tx_bytes" 2>/dev/null)
-    case "$_a" in ''|*[!0-9]*) _a=0 ;; esac
-    case "$_b" in ''|*[!0-9]*) _b=0 ;; esac
-    _mrx=$(( _mrx + _a )); _mtx=$(( _mtx + _b ))
-  done
-  printf '%s %s' "$_mrx" "$_mtx"
+    printf '%s %s\n' "$(cat "$_c/statistics/rx_bytes" 2>/dev/null)" "$(cat "$_c/statistics/tx_bytes" 2>/dev/null)"
+  done | awk '{ if ($1 ~ /^[0-9]+$/) r += $1; if ($2 ~ /^[0-9]+$/) t += $2 } END { printf "%.0f %.0f", r + 0, t + 0 }'
 }
 
 lk_capture_battery_trace_row() {

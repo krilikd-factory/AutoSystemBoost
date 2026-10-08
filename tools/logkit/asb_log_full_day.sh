@@ -545,8 +545,9 @@ lk_phase_ledger_row() {
   read -r _rmrx _rmtx <<EOF
 $(lk_phase_rmnet_bytes)
 EOF
-  _drx=$(( _rmrx - LK_PH_START_RMNET_RX )); _dtx=$(( _rmtx - LK_PH_START_RMNET_TX ))
-  [ "$_drx" -lt 0 ] && _drx=0; [ "$_dtx" -lt 0 ] && _dtx=0
+  # awk, not $(( )): the byte counters exceed mksh's 32-bit arithmetic.
+  _drx="$(awk -v a="${_rmrx:-0}" -v b="${LK_PH_START_RMNET_RX:-0}" 'BEGIN { d = a - b; printf "%.0f", (d < 0 ? 0 : d) }')"
+  _dtx="$(awk -v a="${_rmtx:-0}" -v b="${LK_PH_START_RMNET_TX:-0}" 'BEGIN { d = a - b; printf "%.0f", (d < 0 ? 0 : d) }')"
   # Appended, never inserted: consumers index this file by column number, and a new
   # field in the middle would silently shift throttle into wakepeak everywhere.
   # Averages computed BEFORE the printf, not between its arguments.
