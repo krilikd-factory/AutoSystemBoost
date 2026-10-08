@@ -16,6 +16,8 @@ need 'arm_timerfd_once_ms(tfd_active, 1000);' 'no single re-check inside the fol
 need 'g_disp_retry = 3;' 'single re-check can grow into a chain'
 need 'screen_on_detect=' 'screen-on detection path not published'
 need 'g_scr_on_by_tick++' 'slow-path wakes not counted'
+need 'make_timerfd_clock(CLOCK_BOOTTIME, TIMER_IDLE_S)' 'screen-off tick still on CLOCK_MONOTONIC (stalls through suspend)'
+need 'g_scr_resume_chains++' 'no re-check chain after a resume'
 grep -Fq 'screen_on_detect=' "$ROOT/tools/asb_diag.sh" || f 'asbdiag does not show how wakes were noticed'
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || f 'asbdiag copy out of date'
 [ "$fail" = 0 ] && echo "PASS screen wake re-check contract"

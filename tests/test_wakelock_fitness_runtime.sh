@@ -71,6 +71,7 @@ S
 chmod +x "$T/bin/"*
 cat >> "$T/bin/pm" <<'S'
 echo "package:com.google.android.apps.wearables.watch uid:10960"
+echo "package:com.strava.idle uid:10961"
 S
 # A watch companion holding a long wakelock too.
 sed -i 's/^  Wake lock u0a700 SyncLoop/  Wake lock u0a960 WatchSync: 5m 0s 1ms (4 times) realtime\n  Wake lock u0a700 SyncLoop/' "$T/bin/dumpsys"
@@ -90,6 +91,8 @@ grep -q '^com.sec.android.app.shealth|244|0|protected$' "$A" || f "pedometer not
 echo "com.sec.android.app.shealth WAKE_LOCK allow" > "$T/ops"
 run limit
 grep -q 'appops set com.sec.android.app.shealth WAKE_LOCK ignore' "$T/am.log" || f "limit did not deny the pedometer"
+# Proactive: an installed fitness app that held nothing is limited too.
+grep -q 'appops set com.strava.idle WAKE_LOCK ignore' "$T/am.log" || f "installed fitness app not limited proactively"
 grep -q '^com.sec.android.app.shealth|244|0|limited$' "$A" || f "verdict not limited"
 grep -qx 'com.sec.android.app.shealth|allow' "$T/d/wakelock_fitness_limited" || f "previous mode not recorded"
 grep -q 'wearables.watch WAKE_LOCK' "$T/am.log" && f "watch companion touched"
@@ -105,7 +108,7 @@ grep -q 'appops set com.sec.android.app.shealth WAKE_LOCK allow' "$T/am.log" || 
 # An app someone else already set to ignore is not ours to record or undo.
 echo "com.sec.android.app.shealth WAKE_LOCK ignore" > "$T/ops"; : > "$T/am.log"
 run limit
-[ -s "$T/d/wakelock_fitness_limited" ] && f "recorded an app that was already ignored"
+grep -q "^com.sec.android.app.shealth|" "$T/d/wakelock_fitness_limited" 2>/dev/null && f "recorded an app that was already ignored"
 grep -q 'set com.sec.android.app.shealth WAKE_LOCK' "$T/am.log" && f "re-set an externally ignored app"
 
 grep -q 'wakelock_fitness_limited' "$ROOT/uninstall.sh" || f "uninstall does not restore limited fitness apps"
