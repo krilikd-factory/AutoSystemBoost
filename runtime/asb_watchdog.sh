@@ -159,7 +159,10 @@ while true; do
   # ASB_WD_ONCE still bypasses the wait entirely, so the contract tests are unaffected.
   if [ "$ASB_WD_ONCE" != "1" ]; then
     case "$(dumpsys deviceidle get screen 2>/dev/null)" in
-      false|Asleep) sleep 1800 ;;
+      # sleep counts only awake time and never wakes the phone, so a long screen-off
+      # sleep saved nothing - it only meant that a governor that died overnight could go
+      # unnoticed for up to 30 min of use after the user picked the phone up.
+      false|Asleep) sleep 600 ;;
       *)            sleep 300 ;;
     esac
   fi
