@@ -2181,7 +2181,17 @@ NOTE "wakelock_action = $(cfg wakelock_action)  (0 = report only)"
 NOTE "wakelock_fitness = $(cfg wakelock_fitness)  (protect = fitness/step apps never touched)"
 if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
   while IFS='|' read -r _fp _fo; do
-    [ -n "$_fp" ] && P "    WAKE_LOCK ignored: $_fp  (was: ${_fo:-default})"
+    [ -n "$_fp" ] || continue
+    # Proof, not the record: the app-op as Android reads it now, and whether PowerManager
+    # actually marks this app's held locks disabled (it prints DISABLED on such a line).
+    _fnow="$(appops get "$_fp" WAKE_LOCK 2>/dev/null | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+    _fuid="$(pm list packages -U "$_fp" 2>/dev/null | sed -n "s/^package:$_fp uid:\([0-9]*\).*/\1/p" | head -1)"
+    _fheld=""; _fdis=""
+    if [ -n "$_fuid" ]; then
+      _fheld="$(dumpsys power 2>/dev/null | grep -c "PARTIAL_WAKE_LOCK.*uid=$_fuid")"
+      _fdis="$(dumpsys power 2>/dev/null | grep "PARTIAL_WAKE_LOCK.*uid=$_fuid" | grep -c DISABLED)"
+    fi
+    P "    WAKE_LOCK ignored: $_fp  (was: ${_fo:-default}; now: ${_fnow:-?}; held now: ${_fheld:-0}, of them disabled: ${_fdis:-0})"
   done < /data/adb/asb/wakelock_fitness_limited
 fi
 if [ -s /data/adb/asb/wakelock_restricted ]; then
