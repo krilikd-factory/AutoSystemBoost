@@ -2374,12 +2374,13 @@ asb_generate_odm_camera_binds() {
     # manifest. After the reboot the camera read stock: a field action log showed the
     # retouch list at 19 apps after one install and at the stock 4 after the next, with
     # "Camera: N config(s) will be linked in at boot" missing from the second install log.
-    # Skip only when the live path is not a mount point in either namespace.
-    if cmp -s "$_obc_src" "$_obc_live" 2>/dev/null; then
-      if ! grep -qs " ${_obc_live} " /proc/1/mountinfo /proc/self/mountinfo; then
-        continue
-      fi
-    fi
+    # fix64: no comparison at all. Whatever the live path shows during an install - stock,
+    # the previous bind, the root manager's own layer, or a file that layer just took down -
+    # says nothing about what it will show after the reboot, and every guess made here has
+    # cost the camera its payload once (fix54: retouch 19 -> 4; fix63: both files stock).
+    # Queue whatever the module staged; the boot-time rebind compares with what init's
+    # namespace really reads and binds only on a difference, so an unchanged file costs a
+    # read-back, never a mount.
 
     _obc_dst="/data/adb/asb/odm_patched$_obc_live"
     mkdir -p "$(dirname "$_obc_dst")" 2>/dev/null
@@ -4440,7 +4441,7 @@ EOF
 		chmod 0755 "$MODPATH/runtime/profile_core.sh"
 	fi
 
-	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_bt_link_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh asb_wifi_fallback.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_boot_timeline.sh asb_debug_support.sh asb_stock_policy.sh asb_procstate.sh asb_bg_buckets.sh; do
+	for _rt in asb_media_apply.sh asb_volume_curves.sh asb_audio_apply.sh asb_blur_apply.sh asb_lpm.sh asb_dsp_abi_apply.sh asb_haptics_apply.sh asb_camera_grade.sh asb_system_tweaks.sh asb_anim_apply.sh asb_gms_trim.sh asb_gms_freeze.sh asb_wakelock_watch.sh asb_bt_link_watch.sh asb_apply_ledger.sh asb_trial.sh asb_policy_preview.sh asb_screenoff_class.sh asb_smart_reset.sh asb_gnss_trim.sh asb_log_apply.sh asb_doze_apply.sh asb_net_offload.sh asb_athena_apply.sh asb_settings.sh asb_net_apply.sh asb_net_routes.sh asb_wifi_fallback.sh smart_dynamic_tune.sh asb_reconcile.sh asb_watchdog.sh asb_config_safe.sh asb_device_tier.sh asb_device_pack_manifest.sh asb_apply_managed_props.sh asb_quick_restart.sh asb_boot_timeline.sh asb_debug_support.sh asb_stock_policy.sh asb_procstate.sh asb_bg_buckets.sh asb_odm_rebind.sh; do
 		[ -f "$MODPATH/runtime/$_rt" ] && chmod 0755 "$MODPATH/runtime/$_rt"
 	done
 
