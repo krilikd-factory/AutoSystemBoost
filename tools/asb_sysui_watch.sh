@@ -28,7 +28,7 @@ if [ -z "$OUT" ]; then
   [ -n "$OUT" ] || OUT="/data/adb/asb/asb_sysui_watch.txt"
 fi
 mkdir -p "$(dirname "$OUT")" 2>/dev/null
-: > "$OUT" 2>/dev/null || OUT=""
+true > "$OUT" 2>/dev/null || OUT=""
 
 # Print to the terminal AND to the file, so a session that gets closed still leaves the
 # evidence behind.

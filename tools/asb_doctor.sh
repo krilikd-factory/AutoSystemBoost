@@ -141,7 +141,7 @@ if [ $IS_SOURCE -eq 1 ]; then
 else
   if [ -d "$RTDIR" ] && [ -w "$RTDIR" ]; then
     _touch="$RTDIR/.doctor.$$"
-    if : > "$_touch" 2>/dev/null; then
+    if true > "$_touch" 2>/dev/null; then
       rm -f "$_touch"
       ok "runtime/ directory writable"
     else

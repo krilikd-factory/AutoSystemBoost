@@ -141,7 +141,7 @@ smart_restore() {
     case "$_f" in ''|'#'*) continue ;; esac
     _target="$(_smart_target "$_f")"
     if [ -e "$_target" ]; then cp -pf "$_target" "$_rollback/$_f" 2>/dev/null || _ok=0
-    else : > "$_rollback/$_f.absent" 2>/dev/null || _ok=0
+    else true > "$_rollback/$_f.absent" 2>/dev/null || _ok=0
     fi
   done < "$_src/manifest"
   if [ "$_ok" = 1 ]; then

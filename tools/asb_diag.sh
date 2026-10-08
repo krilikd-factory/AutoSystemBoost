@@ -31,8 +31,8 @@ WRITE_TEST=0
 [ "${1:-}" = "--write-test" ] && WRITE_TEST=1
 OUT1="/sdcard/asb_diag_report.txt"
 OUT2="/data/local/tmp/asb_diag_report.txt"
-: > "$OUT1" 2>/dev/null || OUT1=""
-: > "$OUT2" 2>/dev/null || OUT2=""
+true > "$OUT1" 2>/dev/null || OUT1=""
+true > "$OUT2" 2>/dev/null || OUT2=""
 
 P()  { printf '%s\n' "$1"; [ -n "$OUT1" ] && printf '%s\n' "$1" >> "$OUT1"; [ -n "$OUT2" ] && printf '%s\n' "$1" >> "$OUT2"; }
 HR() { P "----------------------------------------------------------------"; }

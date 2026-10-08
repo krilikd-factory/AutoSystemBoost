@@ -18,8 +18,8 @@ OUT_PRIMARY="/sdcard/asb_verify_report.txt"
 OUT_FALLBACK="/data/local/tmp/asb_verify_report.txt"
 
 # ---- output plumbing: tee everything to the report file ----------------
-: > "$OUT_PRIMARY" 2>/dev/null || OUT_PRIMARY=""
-: > "$OUT_FALLBACK" 2>/dev/null || OUT_FALLBACK=""
+true > "$OUT_PRIMARY" 2>/dev/null || OUT_PRIMARY=""
+true > "$OUT_FALLBACK" 2>/dev/null || OUT_FALLBACK=""
 
 emit() {
   # print to stdout and append to whichever report files are writable
