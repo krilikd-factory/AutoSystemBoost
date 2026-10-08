@@ -2372,8 +2372,23 @@ else
     camera_json_comment_verdict "$VB"
   done
   CT="$(firstf '/odm/etc/camera/conf_tuning_params.json' '/vendor/odm/etc/camera/conf_tuning_params.json')"
+  # Judge the tone table as the camera HAL reads it: through init's namespace. asbdiag can
+  # run in a namespace of its own where a bind made later in init's never shows - the field
+  # diag read stock here while init's namespace held the bound, graded copy.
+  if [ -n "$CT" ] && command -v nsenter >/dev/null 2>&1; then
+    _ct_init="${TMPDIR:-/data/local/tmp}/asbdiag_ct_init.$$"
+    if nsenter -t 1 -m -- cat "$CT" > "$_ct_init" 2>/dev/null && [ -s "$_ct_init" ]; then
+      cmp -s "$_ct_init" "$CT" 2>/dev/null \
+        || NOTE "tone table differs between this shell and init's namespace - checks below use init's (what the camera HAL reads)"
+      CT_SHOWN="$CT"; CT="$_ct_init"
+    else
+      rm -f "$_ct_init" 2>/dev/null
+    fi
+  fi
+  _ctp=/data/adb/asb/odm_patched/odm/etc/camera/conf_tuning_params.json
+  [ -f "$_ctp" ] && NOTE "bind payload BlendWeight: $(grep -m1 -o '"BlendWeight"[^]]*]' "$_ctp" 2>/dev/null | sed 's/.*\[//;s/\]//')"
   if [ -n "$CT" ]; then
-    P "  file: $CT"
+    P "  file: ${CT_SHOWN:-$CT}"
     # sunsetBrightScale is deliberately NOT written any more.
     #
     # The old sed grader pinned it to 0.9 so boosted warm skies would not clip.
@@ -2463,6 +2478,7 @@ else
     fi
   fi
 fi
+[ -n "${_ct_init:-}" ] && rm -f "$_ct_init" 2>/dev/null
 
 # =====================================================================
 SEC "7. PERFORMANCE / CPU / GPU"
