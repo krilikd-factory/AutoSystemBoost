@@ -591,7 +591,7 @@ lk_phase_ledger_flush() {
 }
 
 lk_phase_ledger_snapshot_open() {
-  : > "$LK_OUT_DIR/.phase_open.tsv"
+  true > "$LK_OUT_DIR/.phase_open.tsv"
   lk_phase_ledger_row >> "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null || true
 }
 

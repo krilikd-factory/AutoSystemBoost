@@ -1349,7 +1349,7 @@ lk_wakelock_emit_report() {
 # reads it; it is only used to make an AudioMix WorkSource actionable in a user-supplied log.
 lk_audio_wakelock_attribution_init() {
   _map="$LK_OUT_DIR/.uid_package_map.tsv"
-  : > "$_map" 2>/dev/null || return 0
+  true > "$_map" 2>/dev/null || return 0
   { cmd package list packages -U 2>/dev/null || pm list packages -U 2>/dev/null; } \
     | sed -n 's/^package:\([^ ]*\).* uid:\([0-9][0-9]*\).*$/\2|\1/p' \
     | sort -u > "$_map" 2>/dev/null || true
@@ -1940,7 +1940,7 @@ LK_AUDIO_ROUTE="none"
 lk_config_watch_init() {
   LK_CFG_SNAP="$LK_OUT_DIR/.cfg_snapshot"
   mkdir -p "$LK_CFG_SNAP" 2>/dev/null || true
-  : > "$LK_OUT_DIR/config_changes.txt" 2>/dev/null
+  true > "$LK_OUT_DIR/config_changes.txt" 2>/dev/null
   # "file", not "source".
   #
   # The column holds which config file the key lives in - governor.conf or features.conf -
