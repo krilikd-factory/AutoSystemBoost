@@ -1411,6 +1411,41 @@ lk_wakelock_live_row() {
 }
 
 # OEM toggle state tracker — records the LIVE value of the OnePlus toggles ASB
+# SystemUI restarts, with the system's own account of why.
+#
+# A user reported "SystemUI restarted while I was watching Reels"; the capture had nothing
+# to say, because nothing recorded SystemUI. One pidof per poll (a /proc walk, no binder) is
+# enough to notice the PID change; only then are the crash/ANR records fetched - the
+# dropbox entries and the crash log buffer are where Android writes the reason (exception,
+# ANR, watchdog, low memory kill) - so the normal cost stays at one cheap call.
+lk_sysui_watch_row() {
+  _sw_f="$LK_OUT_DIR/sysui_restarts.txt"
+  _sw_pid="$(pidof com.android.systemui 2>/dev/null | awk '{print $1}')"
+  [ -n "$_sw_pid" ] || return 0
+  if [ -z "${LK_SYSUI_PID:-}" ]; then
+    LK_SYSUI_PID="$_sw_pid"
+    echo "# SystemUI pid at capture start: $_sw_pid" > "$_sw_f" 2>/dev/null
+    return 0
+  fi
+  [ "$_sw_pid" = "$LK_SYSUI_PID" ] && return 0
+  {
+    echo "===== SYSTEMUI RESTART $(date '+%F %T') pid $LK_SYSUI_PID -> $_sw_pid phase=${_phase:-?} fsm=$(grep -m1 '^state=' /dev/.asb/state 2>/dev/null | cut -d= -f2) ====="
+    echo "--- dropbox system_app_crash (latest) ---"
+    lk_dumpsys dropbox --print system_app_crash 2>/dev/null | tail -n 60
+    echo "--- dropbox system_app_anr (latest) ---"
+    lk_dumpsys dropbox --print system_app_anr 2>/dev/null | tail -n 40
+    echo "--- dropbox system_app_native_crash (latest) ---"
+    lk_dumpsys dropbox --print system_app_native_crash 2>/dev/null | tail -n 30
+    echo "--- logcat crash buffer ---"
+    logcat -d -b crash -t 200 2>/dev/null | tail -n 80
+    echo "--- logcat main/system: systemui / ActivityManager around the restart ---"
+    logcat -d -b main,system -t 3000 2>/dev/null \
+      | grep -iE 'systemui|Process com\.android\.systemui|has died|ANR in|FATAL|lowmemorykiller|watchdog' | tail -n 60
+  } >> "$_sw_f" 2>/dev/null
+  LK_SYSUI_PID="$_sw_pid"
+  LK_SYSUI_RESTARTS=$(( ${LK_SYSUI_RESTARTS:-0} + 1 ))
+}
+
 lk_oem_toggle_row() {
   _e=$(date +%s)
   lk_have settings || return 0
@@ -2118,14 +2153,25 @@ lk_sample_audio() {
   _rl=$(printf '%s\n' "$_ad" | awk '/^[[:space:]]*- STREAM_MUSIC:/ { m = 1; next } m && /^[[:space:]]*- STREAM_/ { exit } m && /Devices:/ { print; exit }' | tr 'A-Z' 'a-z')
   [ -z "$_rl" ] && _rl=$(printf '%s\n' "$_ad" | grep -iE '^[[:space:]]*Devices:' | tr 'A-Z' 'a-z')
   [ -z "$_rl" ] && _rl=$(printf '%s\n' "$_ad" | tr 'A-Z' 'a-z')
+  # bt_sco is the call profile (HFP): an app opened a voice channel (VoIP call, voice note,
+  # assistant) and the headset was switched from A2DP to the call link. It printed as
+  # route=none, which read like a dropped headset when it was the profile switch that
+  # precedes the "reconnect" users hear when the call ends.
   case "$_rl" in
+    *bt_sco*|*bluetooth_sco*) LK_AUDIO_ROUTE="bt_sco" ;;
     *ble_headset*|*ble_speaker*|*ble_broadcast*|*le_audio*) LK_AUDIO_ROUTE="bt_le" ;;
     *bt_a2dp*|*bluetooth_a2dp*) LK_AUDIO_ROUTE="bt" ;;
     *usb_headset*|*usb_device*) LK_AUDIO_ROUTE="usb" ;;
     *headset*|*headphone*|*wired*) LK_AUDIO_ROUTE="wired" ;;
     *speaker*|*earpiece*) LK_AUDIO_ROUTE="speaker" ;;
   esac
-  export LK_AUDIO_PLAY LK_AUDIO_ROUTE
+  # Audio mode and its owner: MODE_IN_COMMUNICATION / IN_CALL is what pulls a headset onto
+  # the call link, and the owner names the app that asked. audio.mode was printed in every
+  # Bluetooth snapshot and never filled in.
+  LK_AUDIO_MODE="$(printf '%s\n' "$_ad" | grep -m1 -E 'mode \(internal\)|mode \(external\)|mMode' \
+                   | grep -oE 'MODE_[A-Z_]+' | head -1)"
+  LK_AUDIO_MODE_OWNER="$(printf '%s\n' "$_ad" | grep -m1 -i 'mode owner' | sed 's/^[[:space:]]*//' | cut -c1-120)"
+  export LK_AUDIO_PLAY LK_AUDIO_ROUTE LK_AUDIO_MODE LK_AUDIO_MODE_OWNER
 }
 
 lk_snapshot_audio() {
@@ -2486,6 +2532,7 @@ lk_bt_reconnect_snapshot() {
     echo "===== BLUETOOTH [$_bt_tag] $_bt_iso ====="
     echo "adapter.service=$(lk_get_prop init.svc.bluetooth) bluetooth_on=$(settings get global bluetooth_on 2>/dev/null)"
     echo "audio.playing=${LK_AUDIO_PLAY:-unknown} audio.route=${LK_AUDIO_ROUTE:-unknown} audio.mode=${LK_AUDIO_MODE:-unknown}"
+    [ -n "${LK_AUDIO_MODE_OWNER:-}" ] && echo "audio.mode_owner: $LK_AUDIO_MODE_OWNER"
     echo "# connection/profile evidence (MAC addresses redacted)"
     lk_dumpsys bluetooth_manager 2>/dev/null \
       | grep -iE 'adapter.*state|connection.*state|connected|connecting|disconnect|a2dp|headset|hfp|le_audio|gatt|avrcp|codec' \
@@ -2509,7 +2556,31 @@ lk_bt_reconnect_stop() {
   LK_BT_RECONNECT_PID=""
 }
 
+# Leave the launching app's process group.
+#
+# A capture started from the root manager's WebUI inherits the manager app's cgroup
+# (uid_<app>/pid_<n> on cgroup v2, the same under /acct on v1). Android treats everything in
+# that group as the app: when the manager is backgrounded the cached-app freezer stops the
+# whole group, and when it is killed ActivityManager kills the group. setsid/nohup change the
+# session, not the cgroup. Field result on a KernelSU (non-Next) phone: a "24 h" capture with
+# ten minutes of samples and no report, while KernelSU-Next - whose daemon, not the app,
+# runs WebUI commands - was fine. Move this recorder (and with it every child it starts) to
+# the root groups, which nothing freezes or kills as an app.
+# Prints what it did: moved:<n> / not_needed / failed.
+lk_escape_app_cgroup() {
+  _ec_pid="${1:-$$}"
+  _ec_cg="${ASB_LK_CG_FILE:-/proc/$_ec_pid/cgroup}"
+  grep -qE 'uid_[0-9]+|/apps/|frozen' "$_ec_cg" 2>/dev/null || { echo not_needed; return 0; }
+  _ec_n=0
+  for _ec_g in ${ASB_LK_CG_ROOTS:-/sys/fs/cgroup/cgroup.procs /acct/cgroup.procs /dev/freezer/cgroup.procs}; do
+    [ -w "$_ec_g" ] || continue
+    echo "$_ec_pid" > "$_ec_g" 2>/dev/null && _ec_n=$((_ec_n + 1))
+  done
+  if grep -qE 'uid_[0-9]+' "$_ec_cg" 2>/dev/null; then echo "failed"; else echo "moved:$_ec_n"; fi
+}
+
 lk_init() {
+  [ "${ASB_LK_NO_CGROUP_ESCAPE:-0}" = 1 ] || LK_CGROUP_ESCAPE="$(lk_escape_app_cgroup $$)"
   MODDIR="$(lk_resolve_moddir)"
   [ -n "$MODDIR" ] || MODDIR="/data/adb/modules/${MODID:-AutoSystemBoost}"
   LK_MODDIR="$MODDIR"
@@ -2531,7 +2602,8 @@ lk_init() {
   fi
   echo "$LK_GOV_LOG_OFFSET" > "$LK_OUT_DIR/_govlog_start_offset.txt"
 
-  echo "[$(date '+%H:%M:%S')] logkit init: moddir=$MODDIR scenario=$LK_SCENARIO out=$LK_OUT_DIR gov_offset=$LK_GOV_LOG_OFFSET"
+  echo "[$(date '+%H:%M:%S')] logkit init: moddir=$MODDIR scenario=$LK_SCENARIO out=$LK_OUT_DIR gov_offset=$LK_GOV_LOG_OFFSET cgroup=${LK_CGROUP_ESCAPE:-skipped}"
+  { echo "cgroup_escape=${LK_CGROUP_ESCAPE:-skipped}"; cat "/proc/$$/cgroup" 2>/dev/null; } > "$LK_OUT_DIR/_recorder_cgroup.txt" 2>/dev/null || true
   lk_probe_env
   lk_dump_build_manifest
   lk_discover_zones

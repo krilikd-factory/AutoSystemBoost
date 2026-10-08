@@ -184,7 +184,7 @@ lk_sample_gpu_busy() {
 # thrown away, because it is what the user actually experiences.
 lk_audio_phase_name() {
   case "$LK_AUDIO_ROUTE" in
-    bt|bt_le) _apn="audio_bt" ;;
+    bt|bt_le|bt_sco) _apn="audio_bt" ;;
     speaker)  _apn="audio_spk" ;;
     wired|usb) _apn="audio_wired" ;;
     *) _apn="audio" ;;
@@ -1314,6 +1314,18 @@ lk_emit_full_day_report() {
     echo "no AudioMix partial wakelock observed in live power-manager samples."
   fi
   echo ""
+    echo "----- SYSTEMUI RESTARTS -----"
+    _sw_f="$LK_OUT_DIR/sysui_restarts.txt"
+    _sw_n=$(grep -c '^===== SYSTEMUI RESTART' "$_sw_f" 2>/dev/null)
+    case "$_sw_n" in ''|*[!0-9]*) _sw_n=0 ;; esac
+    if [ "$_sw_n" -gt 0 ]; then
+      echo "SystemUI restarted $_sw_n time(s) during the capture:"
+      grep '^===== SYSTEMUI RESTART' "$_sw_f" | sed 's/^===== SYSTEMUI RESTART /  /; s/ =====$//'
+      echo "the reason Android recorded (crash / ANR / kill) is in sysui_restarts.txt"
+    else
+      echo "none observed (SystemUI kept the same process for the whole capture)"
+    fi
+    echo ""
     echo "----- BLUETOOTH LIFECYCLE (read-only, addresses redacted) -----"
     _bt_ev="$LK_OUT_DIR/bt_lifecycle_events.tsv"
     _bt_ctx="$LK_OUT_DIR/bt_lifecycle_context.tsv"
@@ -1695,6 +1707,7 @@ while : ; do
   lk_capture_fsm_media_trace_row "$_phase"
   lk_wakelock_live_row
   lk_oem_toggle_row
+  lk_sysui_watch_row
   lk_throttle_row "$_phase"
   # What the user changed, what the charger is doing, and which ASB features are
   # engaged. The first is the one that was missing most: without it a trace shows an
