@@ -5619,8 +5619,11 @@ function cfgVerify(key, badge) {
     // The first version checked for a marker file under a path built from the module's staging
     // directory - a path that never existed, so every camera card claimed "not applied" while
     // the action screen correctly reported the grade as live.
-    run("grep -m1 -o '\"BlendWeight\"[^]]*]' /odm/etc/camera/conf_tuning_params.json 2>/dev/null" +
-        " | grep -q '0.35, 0.5, 0.7' && echo no || echo yes")
+    // Through init's namespace when nsenter exists: the camera HAL reads the file there, and
+    // the WebUI shell can sit in a namespace where a bind made at boot never shows.
+    run("_f=/odm/etc/camera/conf_tuning_params.json; { if command -v nsenter >/dev/null 2>&1" +
+        " && nsenter -t 1 -m -- true 2>/dev/null; then nsenter -t 1 -m -- cat $_f; else cat $_f; fi; } 2>/dev/null" +
+        " | grep -m1 -o '\"BlendWeight\"[^]]*]' | grep -q '0.35, 0.5, 0.7' && echo no || echo yes")
       .then(function(r) {
         _verifyCache = (String((r && r.stdout) || '').indexOf('yes') >= 0) ? 'ok' : 'no';
         cfgRender();
