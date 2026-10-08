@@ -382,8 +382,10 @@ else
   NOTE "recorded grade: none - the grader has not run on this install"
 fi
 _cg_live=""
-for _f in /odm/etc/camera/config/video_beauty_default_config \
-          /vendor/odm/etc/camera/config/video_beauty_default_config; do
+# The tone keys live in conf_tuning_params.json; video_beauty_default_config is the retouch
+# app list and never carries them, so reading it here always printed two empty values.
+for _f in /odm/etc/camera/conf_tuning_params.json \
+          /vendor/odm/etc/camera/conf_tuning_params.json; do
   [ -r "$_f" ] || continue
   _cg_live="$_f"
   NOTE "live file: $_f"
@@ -2255,7 +2257,27 @@ if [ -f "$_cbm" ]; then
 else
   NOTE "camera bind: no odm_bind_manifest.txt"
 fi
-grep 'odm_bind' /data/adb/asb/vendor_mounts.log 2>/dev/null | tail -n 3 | while IFS= read -r _cbl; do P "    $_cbl"; done
+grep 'odm_bind' /data/adb/asb/vendor_mounts.log 2>/dev/null | tail -n 6 | while IFS= read -r _cbl; do P "    $_cbl"; done
+# Read-back per manifest line (live = init's namespace reads the payload).
+if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_odm_rebind.sh ]; then
+  sh /data/adb/modules/AutoSystemBoost/runtime/asb_odm_rebind.sh status 2>/dev/null \
+    | while IFS= read -r _cbl; do NOTE "bind read-back: $_cbl"; done
+fi
+# Every layer on the camera paths, as init sees them, and the module's own copies - if a
+# root-manager layer (magic mount, NoMount, overlayfs) sits in front of the bind, this is
+# the line that names it.
+grep -s '/camera' /proc/1/mountinfo | awk '{print "    mount: " $5 "  fs=" $(NF-2) "  src=" $(NF-1)}' | head -n 8 \
+  | while IFS= read -r _cbl; do P "$_cbl"; done
+for _cbf in /data/adb/modules/AutoSystemBoost/odm/etc/camera/config/video_beauty_default_config \
+            /data/adb/modules/AutoSystemBoost/odm/etc/camera/conf_tuning_params.json; do
+  [ -f "$_cbf" ] || { NOTE "module copy absent: $_cbf"; continue; }
+  case "$_cbf" in
+    *video_beauty*) NOTE "module copy: video_beauty apps=$(grep -c '"packageName"' "$_cbf" 2>/dev/null)" ;;
+    *) NOTE "module copy: conf_tuning BlendWeight=$(grep -m1 -o '"BlendWeight"[^]]*]' "$_cbf" 2>/dev/null | sed 's/.*\[//')" ;;
+  esac
+done
+_cbmm="$(ls /data/adb/metamodule/module.prop 2>/dev/null && grep -m1 '^id=' /data/adb/metamodule/module.prop 2>/dev/null)"
+NOTE "metamodule: ${_cbmm:-none}"
 
 # --- 6a. Multicamera HAL props (the crash is in ChiMcxRoiTranslator) ---
 P "  multicamera / HAL props:"
