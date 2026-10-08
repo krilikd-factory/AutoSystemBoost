@@ -32,8 +32,16 @@ rm -f "$t.shadow"
 grep -v " $t " "$MI" > "$MI.n"; mv "$MI.n" "$MI"
 exit 0
 X
+cat > "$T/bin/getprop" <<'X'
+#!/bin/sh
+printf '%s\n' '[init.svc.cameraserver]: [running]' '[init.svc.vendor.camera-provider]: [running]' '[init.svc.vendor.camera-provider-ext]: [stopped]'
+X
+cat > "$T/bin/setprop" <<'X'
+#!/bin/sh
+echo "$*" >> "$PROPS"
+X
 chmod +x "$T/bin/"*
-export PATH="$T/bin:$PATH" CALLS="$T/calls" MI="$T/mi" ASB_ODM_NS=none \
+export PROPS="$T/props" PATH="$T/bin:$PATH" CALLS="$T/calls" MI="$T/mi" ASB_ODM_NS=none \
        ASB_ODM_MAN="$T/man" ASB_ODM_LOG="$T/log" ASB_ODM_MOUNTINFO="$T/mi"
 true > "$T/mi"; true > "$T/calls"
 
@@ -58,6 +66,15 @@ grep -q "target=$T/odm/audio/fx result=already" "$T/log" || f "unchanged file no
 grep -q "$T/odm/audio/fx" "$T/calls" && f "mounted over a file that already read the payload"
 [ "$rc" = 0 ] || f "camera-only change must not ask for an audioserver restart (rc=$rc)"
 
+[ -s "$T/props" ] && f "camera stack restarted without being asked: $(cat "$T/props")"
+# Boot asks for it: a newly bound camera file restarts the running provider + cameraserver.
+echo stock9 > "$T/odm/camera/vb"; true > "$T/mi"; true > "$T/props"
+ASB_ODM_RESTART_CAM=1 sh "$S" apply camera
+grep -q '^ctl.restart vendor.camera-provider$' "$T/props" || f "provider not restarted after a new camera bind: $(cat "$T/props")"
+grep -q '^ctl.restart cameraserver$' "$T/props" || f "cameraserver not restarted"
+grep -q 'camera-provider-ext' "$T/props" && f "restarted a stopped service"
+true > "$T/props"; ASB_ODM_RESTART_CAM=1 sh "$S" apply camera
+[ -s "$T/props" ] && f "camera restarted although nothing changed"
 # Second run: everything live, nothing mounted.
 true > "$T/calls"
 sh "$S" apply
@@ -97,6 +114,13 @@ grep -q 'odm_bind_late result=applied" >>' "$ROOT/service.sh" && f "service.sh s
 sed -n '/^asb_generate_odm_camera_binds()/,/^}/p' "$ROOT/common/install.sh" | grep -q 'cmp -s' \
   && f "install still skips a camera bind on a live-file comparison"
 grep -q 'runtime/asb_odm_rebind.sh' "$ROOT/.github/workflows/build-release.yml" || f "release workflow misses the script"
+
+# Verdicts read the camera files through init's namespace (where the HAL reads them).
+grep -q '_c_bw="$(_camg ' "$ROOT/action.sh" || f "action judges the tone table in its own namespace"
+grep -q '_vb_try_n="$(_camg ' "$ROOT/action.sh" || f "action counts retouch apps in its own namespace"
+grep -q 'nsenter -t 1 -m -- cat "$CT"' "$ROOT/tools/asb_diag.sh" || f "asbdiag judges the tone table in its own namespace"
+grep -q 'nsenter -t 1 -m -- cat \$_f' "$ROOT/webroot/index.html" || f "WebUI camera badge reads its own namespace"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || f "system/bin/asbdiag out of sync"
 
 [ "$fail" = 0 ] && echo "PASS odm rebind runtime"
 exit "$fail"
