@@ -895,6 +895,7 @@ T_N_LTE_STOP="LTE while screen off: on · stopped itself - %s"
 T_N_LTE_PARKED="LTE while screen off: on · 5G parked right now"
 T_N_LTE_TIMER="LTE while screen off: on · timer running (90 s after screen off)"
 T_N_LTE_ALLOWED="LTE while screen off: on · 5G allowed (screen is on)"
+T_N_LTE_NO5G="LTE while screen off: on · 5G is NOT allowed right now - if you did not turn it off, turn it on in the SIM settings"
 T_N_ROUTE="route via %s"
 T_N_ROUTE_RX="%s MB rx"
 T_L_FAST="modem LPM: fast · data call held up (low latency)"
@@ -1891,7 +1892,13 @@ if [ "$(_cfg net_screen_off_lte)" = "1" ]; then
     *unsupported=1*) _f "       $T_N_LTE_STOP" "$(printf '%s\n' "$_lte_st" | sed -n 's/^last=//p' | cut -c1-90)" ;;
     *applied=1*)     _f "       $T_N_LTE_PARKED" ;;
     *pending=1*)     _f "       $T_N_LTE_TIMER" ;;
-    *)               _f "       $T_N_LTE_ALLOWED" ;;
+    *)
+      # "Allowed" is checked, not assumed from "nothing applied": a restore that failed
+      # left 5G off while this line kept saying it was allowed.
+      case "$(sh "$MODDIR/runtime/asb_lte_screenoff.sh" nr 2>/dev/null)" in
+        no) _f "       $T_N_LTE_NO5G" ;;
+        *)  _f "       $T_N_LTE_ALLOWED" ;;
+      esac ;;
   esac
 fi
   # Which interface is actually carrying traffic - not always rmnet_data0.
