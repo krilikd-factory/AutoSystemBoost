@@ -75,6 +75,29 @@ grep -q '^ctl.restart cameraserver$' "$T/props" || f "cameraserver not restarted
 grep -q 'camera-provider-ext' "$T/props" && f "restarted a stopped service"
 true > "$T/props"; ASB_ODM_RESTART_CAM=1 sh "$S" apply camera
 [ -s "$T/props" ] && f "camera restarted although nothing changed"
+# Payload sync: the bound payload follows the module's own (boot-graded) copy, in place,
+# and a change under an existing bind still counts as a camera change.
+mkdir -p "$T/odm/etc/camera" "$T/mod/odm/etc/camera" "$T/p/odm/etc/camera"
+echo '{ "BlendWeight": [0.35, 0.5, 0.7] }' > "$T/odm/etc/camera/tune"
+echo '{ "BlendWeight": [0.35, 0.5, 0.7] }' > "$T/p/odm/etc/camera/tune"
+echo '{ "BlendWeight": [1, 1, 1] }' > "$T/mod/odm/etc/camera/tune"
+cp "$T/man" "$T/man.keep"
+echo "$T/odm/etc/camera/tune|$T/p/odm/etc/camera/tune" > "$T/man"
+# Simulate "already bound": the stub's mount copies, so bind once and then change the module copy.
+ASB_ODM_MODDIR="$T/mod" sh "$S" apply camera
+grep -q 'BlendWeight": \[1, 1, 1\]' "$T/p/odm/etc/camera/tune" || f "payload not synced from the module copy"
+grep -q 'BlendWeight": \[1, 1, 1\]' "$T/odm/etc/camera/tune" || f "synced payload not live"
+grep -q "action=odm_payload_sync target=$T/odm/etc/camera/tune result=updated" "$T/log" || f "payload sync not logged"
+echo '{ "BlendWeight": [0.9, 0.9, 0.9] }' > "$T/mod/odm/etc/camera/tune"
+cp "$T/mod/odm/etc/camera/tune" "$T/odm/etc/camera/tune"   # in-place payload = live bind content
+true > "$T/props"
+ASB_ODM_MODDIR="$T/mod" ASB_ODM_RESTART_CAM=1 sh "$S" apply camera
+grep -q 'ctl.restart cameraserver' "$T/props" || f "a payload rewritten under a live bind did not restart the camera stack"
+echo '{ "broken": [' > "$T/mod/odm/etc/camera/tune"
+ASB_ODM_MODDIR="$T/mod" sh "$S" apply camera
+grep -q '0.9, 0.9, 0.9' "$T/p/odm/etc/camera/tune" || f "an unbalanced module copy replaced the payload"
+grep -q 'result=rejected_unbalanced' "$T/log" || f "unbalanced copy not reported"
+mv "$T/man.keep" "$T/man"
 # Second run: everything live, nothing mounted.
 true > "$T/calls"
 sh "$S" apply
