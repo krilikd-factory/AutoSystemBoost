@@ -18,7 +18,7 @@ grep -q '_dspp voice "$_vox"' "$ROOT/runtime/asb_audio_apply.sh" || fail "apply 
 grep -q 'bass_db voice; do' "$ROOT/runtime/asb_audio_apply.sh" || fail "voice prop not mirrored into the vendor namespace"
 grep -q 'asb_core_set_voice(&c->core, asb_dsp_prop("voice", 0), rate);' "$ROOT/src/DSP/asb_dsp.c" || fail "legacy effect ignores voice"
 grep -q 'asb_core_set_voice(&mCore, voice' "$ROOT/src/DSP_AIDL/asb_effect_aidl.cpp" || fail "AIDL effect ignores voice"
-grep -q '"ASB process" " voice="' "$ROOT/src/build_ndk_release.sh" || fail "freshness gate does not catch a pre-voice AIDL prebuilt"
+grep -q 'for _lit in " voice="; do' "$ROOT/src/build_ndk_release.sh" || fail "build does not warn about a pre-voice AIDL prebuilt"
 UI="$ROOT/webroot/index.html"
 grep -q "{ key:'dsp_voice', type:'range', def:'0', min:0, max:10" "$UI" || fail "WebUI card missing"
 grep -q "dsp_voice:APPLY_LIVE" "$UI" || fail "WebUI apply mode missing"
