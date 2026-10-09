@@ -601,8 +601,8 @@ else
   P "  active-use envelope  : unavailable (generated at boot; generic ASB policy remains active)"
 fi
 if [ -r "$_stock_thermal" ]; then
-  P "  stock thermal        : source=$(_rget SOURCE \"$_stock_thermal\") zone=$(_rget ZONE \"$_stock_thermal\") trip=$(_rget INDEX \"$_stock_thermal\") type=$(_rget TYPE \"$_stock_thermal\") raw=$(_rget RAW \"$_stock_thermal\") resolved=$(_rget RESOLVED \"$_stock_thermal\")C"
-  [ "$(_rget SOURCE \"$_stock_thermal\")" = "passive_trip_point" ] || NOTE "No passive CPU trip was confirmed: stock/smart mode keeps the configured threshold unchanged."
+  P "  stock thermal        : source=$(_rget SOURCE "$_stock_thermal") zone=$(_rget ZONE "$_stock_thermal") trip=$(_rget INDEX "$_stock_thermal") type=$(_rget TYPE "$_stock_thermal") raw=$(_rget RAW "$_stock_thermal") resolved=$(_rget RESOLVED "$_stock_thermal")C"
+  [ "$(_rget SOURCE "$_stock_thermal")" = "passive_trip_point" ] || NOTE "No passive CPU trip was confirmed: stock/smart mode keeps the configured threshold unchanged."
 else
   P "  stock thermal        : unavailable (captured on next boot)"
 fi
@@ -1327,6 +1327,26 @@ case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released fr
     ;;
 esac
 NOTE "dsp_bass = $(cfg dsp_bass)  ·  live: $(gp persist.asb.dsp.bass_db)"
+NOTE "dsp_voice = $(cfg dsp_voice)  ·  live: $(gp persist.asb.dsp.voice)"
+# The voice-tone stage lives in the native library: a library built before it ignores the
+# setting while the WebUI shows the slider. AIDL logs " voice=", the legacy one reads "voice".
+case "$(cfg dsp_voice)" in
+  ''|0|off) : ;;
+  *)
+    _vt_lib=""
+    for _vt_c in /vendor/lib64/soundfx/libasbdsp.so /vendor/lib/soundfx/libasbdsp.so; do
+      [ -f "$_vt_c" ] && { _vt_lib="$_vt_c"; break; }
+    done
+    if [ -n "$_vt_lib" ]; then
+      if grep -aq ' voice=' "$_vt_lib" 2>/dev/null || grep -aq 'persist.vendor.asb.dsp.%s' "$_vt_lib" 2>/dev/null \
+           && grep -aq 'voice' "$_vt_lib" 2>/dev/null; then
+        NOTE "  voice tone: supported by $_vt_lib"
+      else
+        NOTE "  voice tone: $_vt_lib predates it - the slider has no effect until the DSP library is rebuilt"
+      fi
+    fi
+    ;;
+esac
 NOTE "dsp_compressor = $(cfg dsp_compressor)  ·  live comp: $(gp persist.asb.dsp.comp)"
 # Output routing needs the rebuilt library to take effect; a config that says bt with a
 # library that predates the feature will process everything and look correct here.
@@ -1367,7 +1387,11 @@ case "$(cfg dsp_loudness)" in ''|0|off) : ;; *) [ "$(gp persist.asb.dsp.enable)"
 _dsp_map=""
 [ -n "$_dsp_pid" ] && _dsp_map="$(grep -c asbdsp /proc/$_dsp_pid/maps 2>/dev/null | grep -v '^0$')"
 _dsp_reg="$(dumpsys media.audio_flinger 2>/dev/null | grep -m1 -oiE 'ASB Loudness|AsbLoudness|asbdsp')"
-if [ "$_dsp_on" = "1" ]; then
+if [ "$_dsp_on" = "1" ] && [ "$(gp persist.asb.dsp.route_allowed)" = "0" ] && [ -z "$_dsp_reg" ]; then
+  # fix77: off the selected outputs the attach daemon releases the effect, so the stream can
+  # use the offload path. Not attached is the intended state here, not a failure.
+  NOTE "  DSP released on purpose: route $(gp persist.asb.dsp.route) is not in dsp_outputs=$(gp persist.asb.dsp.outputs) (audio stays on the low-power offload path)"
+elif [ "$_dsp_on" = "1" ]; then
   # Present = PASS, absent = FAIL. ("has" mode looked for the literal word "present"
   # inside the value, so a library mapped 3 times and an effect named "ASB Loudness" were
   # both reported as failures.)
@@ -1761,7 +1785,7 @@ case "${_ho_fast:-0}:$_radio_policy" in
   *) NOTE "Wi-Fi → mobile handover: stock/off" ;;
 esac
 case "${_ho_active:-0}:$_radio_policy" in
-  1:1) NOTE "Wi-Fi fallback: active opt-in; $(MODDIR=\"${MODDIR:-/data/adb/modules/AutoSystemBoost}\" sh \"${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo status-unavailable)" ;;
+  1:1) NOTE "Wi-Fi fallback: active opt-in; $(MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}" sh "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_wifi_fallback.sh" status 2>/dev/null || echo status-unavailable)" ;;
   1:*) NOTE "Wi-Fi fallback: stored but inactive (cellular/radio controls off)" ;;
   *) NOTE "Wi-Fi fallback: off" ;;
 esac
