@@ -164,6 +164,7 @@ cool_gaming|user|webui_standard
 media_loudness|user|webui_standard
 dsp_loudness|advanced|webui_sensitive
 dsp_bass|advanced|webui_sensitive
+dsp_voice|advanced|webui_sensitive
 dsp_compressor|advanced|webui_sensitive
 dsp_outputs|advanced|webui_sensitive
 audio_remove_volume_limit|advanced|webui_sensitive
