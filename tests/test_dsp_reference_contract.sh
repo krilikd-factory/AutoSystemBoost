@@ -37,7 +37,8 @@ grep -q 'DSP status: requested' "$ROOT/action.sh" || {
 }
 # WebUI already permits 25 dB; every runtime/core/diagnostic path must now deliver that
 # same ceiling rather than silently reporting requested +25 but applying legacy +18.
-grep -Fq '#define ASB_GAIN_MB_MAX    2500' "$ROOT/src/DSP/asb_dsp.c" || { echo 'FAIL: legacy DSP cap is not +25 dB' >&2; exit 1; }
+# fix74: the legacy effect runs the shared core, so its cap IS the core's cap.
+grep -Fq '#include "asb_dsp_core.h"' "$ROOT/src/DSP/asb_dsp.c" || { echo 'FAIL: legacy DSP does not use the shared core (+25 dB cap)' >&2; exit 1; }
 grep -Fq '#define ASB_GAIN_MB_MAX    2500' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" || { echo 'FAIL: AIDL DSP cap is not +25 dB' >&2; exit 1; }
 grep -Fq '[ "$_dsp_applied_mb" -gt 2500 ] && _dsp_applied_mb=2500' "$ROOT/runtime/asb_audio_apply.sh" || { echo 'FAIL: runtime DSP cap is not +25 dB' >&2; exit 1; }
 grep -Fq '[ "$_dsp_expected_mb" -gt 2500 ] && _dsp_expected_mb=2500' "$ROOT/tools/asb_diag.sh" || { echo 'FAIL: diagnostic DSP cap is not +25 dB' >&2; exit 1; }

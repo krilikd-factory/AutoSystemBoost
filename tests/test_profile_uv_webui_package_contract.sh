@@ -142,7 +142,7 @@ need "$HELPER" 'asb_settings_backup.conf'
 need "$UI" "const CFG_GROUP_SECTIONS = {"
 need "$UI" "audio: ["
 need "$UI" "titleKey:'cfg_audio_section_dsp'"
-need "$UI" "keys:['dsp_loudness','dsp_bass','dsp_compressor','dsp_outputs']"
+need "$UI" "keys:['dsp_loudness','dsp_bass','dsp_voice','dsp_compressor','dsp_outputs']"
 need "$UI" 'function cfgRenderGroup(list, groupId)'
 need "$UI" 'cfgRenderGroup(list, _cfgGroup);'
 need "$UI" '.cfg-section-hint'
@@ -180,7 +180,7 @@ need "$UI" "uiSound('profile');"
 need "$UI" "uiSound('capture');"
 need "$UI" "tile.onclick = () => { uiSound('nav');"
 need "$UI" "if (CFG_SILENT_KEYS.indexOf(key) < 0) uiSound(cfgSoundKind(key, val));"
-need "$UI" "const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass'];"
+need "$UI" "const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice'];"
 
 python3 - "$UI" <<'PY'
 import re, sys
