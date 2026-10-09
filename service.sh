@@ -3357,7 +3357,17 @@ fi
     case "$_f" in ''|all) sleep 60; continue ;; esac
     [ "$(getprop persist.asb.dsp.enable 2>/dev/null)" = "1" ] || { sleep 60; continue; }
     case "$(asb_screen_state)" in
-      false|Asleep) sleep 60; continue ;;
+      false|Asleep)
+        # Screen off: no timed dumps, but a playback stream that opened, closed or moved
+        # still gets one pass. Bluetooth connecting with the screen off moves music to a
+        # new PCM; without this the published route stayed on the old output until the
+        # screen came on, and with a filter set the effect kept boosting (or kept
+        # releasing - fix77) for the wrong output for the whole listening session. One
+        # file read a minute, no binder call unless the PCM set really changed.
+        sleep 60
+        _sig_off="$(grep -l RUNNING /proc/asound/card*/pcm*p/sub*/status 2>/dev/null | tr '\n' ' ')"
+        [ "$_sig_off" != "${_prev_sig:-}" ] || continue
+        ;;
     esac
     # Back off while nothing moves. A dump of the audio service every 5 s is about 720
     # framework dumps an hour of screen-on time - each one a process spawn plus a

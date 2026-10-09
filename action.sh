@@ -1902,7 +1902,7 @@ case "$_handover:$_radio_policy" in
   1:*) _f "       $T_N_HO_STORED" ;;
 esac
 case "$_handover_active:$_radio_policy" in
-  1:1) _hf="$(MODDIR=\"$MODDIR\" sh \"$MODDIR/runtime/asb_wifi_fallback.sh\" status 2>/dev/null || echo unavailable)"
+  1:1) _hf="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" status 2>/dev/null || echo unavailable)"
        _f "       $T_N_FB_ACTIVE" "$_hf" ;;
   1:*) _f "       $T_N_FB_STORED" ;;
 esac
