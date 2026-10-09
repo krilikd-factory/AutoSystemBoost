@@ -34,6 +34,10 @@
       "name": "Reforço de graves DSP",
       "desc": "Ganho de graves do mesmo motor. Atua na saída escolhida em «Saídas DSP»."
     },
+    "dsp_voice": {
+      "name": "DSP\nTimbre da voz",
+      "desc": "Requer o Volume DSP. Para vozes finas ou estridentes no alto-falante do telefone. Duas bandas largas movem-se juntas: o corpo em 350 Hz sobe (+0,5 dB por passo) e a aspereza em 3 kHz desce (−0,6 dB por passo); nível 10 = +5 / −6 dB. O reforço de graves atua em 90 Hz, quase abaixo do que um alto-falante de telefone reproduz; esta banda está onde ele ainda soa. Fica antes do limitador, não distorce. Comece em 4–6; só no alto-falante, use Saídas DSP."
+    },
     "dsp_compressor": {
       "name": "Compressor DSP",
       "desc": "Comprime a faixa dinâmica: o baixo fica audível, o alto deixa de bater. Útil no transporte e na rua, dispensável para uma escuta atenta em casa."

@@ -226,6 +226,10 @@
       "desc": "Gain des basses fréquences par le même moteur. Agit sur la sortie choisie dans «Sorties DSP».",
       "name": "Renfort de basses DSP"
     },
+    "dsp_voice": {
+      "name": "DSP\nTimbre de voix",
+      "desc": "Nécessite le volume DSP. Pour les voix qui sonnent fines ou criardes sur le haut-parleur du téléphone. Deux larges bandes bougent ensemble : le corps à 350 Hz monte (+0,5 dB par cran), l’agressivité à 3 kHz baisse (−0,6 dB par cran) ; niveau 10 = +5 / −6 dB. Le renfort de basses agit à 90 Hz, surtout sous ce que reproduit un haut-parleur de téléphone ; cette bande est là où il sonne encore. Placé avant le limiteur, ne peut pas saturer. Commencez à 4–6 ; pour le haut-parleur seul, utilisez Sorties DSP."
+    },
     "dsp_compressor": {
       "desc": "Comprime la dynamique : les sons faibles deviennent audibles, les forts cessent de frapper. Utile en déplacement et dans la rue, superflu pour une écoute attentive à la maison.",
       "name": "Compresseur DSP"

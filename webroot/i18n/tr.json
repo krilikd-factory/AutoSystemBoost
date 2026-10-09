@@ -34,6 +34,10 @@
       "name": "DSP bas yükseltme",
       "desc": "Aynı motorla bas kazancı. «DSP çıkışları»nda seçilen çıkışta çalışır."
     },
+    "dsp_voice": {
+      "name": "DSP\nSes tonu",
+      "desc": "DSP Ses Yüksekliği gerekir. Telefon hoparlöründe ince veya cırtlak duyulan sesler için. İki geniş bant birlikte hareket eder: 350 Hz’deki gövde yükselir (adım başına +0,5 dB), 3 kHz’deki sertlik azalır (adım başına −0,6 dB); seviye 10 = +5 / −6 dB. Bas güçlendirme 90 Hz’de çalışır, çoğunlukla telefon hoparlörünün çalabildiğinin altında; bu bant hoparlörün hâlâ ses verdiği yerdedir. Sınırlayıcıdan önce çalışır, kırpma yapmaz. 4–6 ile başlayın; yalnızca hoparlör için DSP Çıkışları’nı kullanın."
+    },
     "dsp_compressor": {
       "name": "DSP kompresör",
       "desc": "Dinamik aralığı sıkıştırır: kısık sesler duyulur olur, yüksekler vurmayı bırakır. Yolda ve sokakta faydalı, evde dikkatli dinlemede gereksiz."

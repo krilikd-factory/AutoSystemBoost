@@ -34,6 +34,10 @@
       "name": "Penguat bass DSP",
       "desc": "Penguatan frekuensi rendah oleh mesin yang sama. Bekerja pada keluaran yang dipilih di «Keluaran DSP»."
     },
+    "dsp_voice": {
+      "name": "DSP\nWarna suara",
+      "desc": "Perlu Volume DSP. Untuk suara yang terdengar tipis atau melengking di speaker ponsel. Dua pita lebar bergerak bersama: badan suara di 350 Hz naik (+0,5 dB per langkah), ketajaman di 3 kHz turun (−0,6 dB per langkah); level 10 = +5 / −6 dB. Penguat bass bekerja di 90 Hz, sebagian besar di bawah kemampuan speaker ponsel; pita ini berada di tempat speaker masih bersuara. Berjalan sebelum limiter, tidak bisa clipping. Mulai di 4–6; untuk speaker saja, gunakan Output DSP."
+    },
     "dsp_compressor": {
       "name": "Kompresor DSP",
       "desc": "Memampatkan rentang dinamis: yang pelan menjadi terdengar, yang keras berhenti memukul. Berguna di perjalanan dan di jalan, tidak perlu untuk mendengarkan dengan saksama di rumah."

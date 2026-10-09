@@ -60,6 +60,10 @@
       "name": "Enfasi bassi DSP",
       "desc": "Guadagno delle basse frequenze dello stesso motore. Agisce sull’uscita selezionata in «Uscite DSP»."
     },
+    "dsp_voice": {
+      "name": "DSP\nTimbro della voce",
+      "desc": "Richiede il volume DSP. Per voci sottili o stridule sull’altoparlante del telefono. Due bande ampie si muovono insieme: il corpo a 350 Hz sale (+0,5 dB per passo), l’asprezza a 3 kHz scende (−0,6 dB per passo); livello 10 = +5 / −6 dB. Il potenziamento bassi agisce a 90 Hz, per lo più sotto ciò che un altoparlante di telefono riproduce; questa banda è dove suona ancora. Sta prima del limitatore, non può saturare. Parti da 4–6; solo per l’altoparlante usa Uscite DSP."
+    },
     "dsp_compressor": {
       "name": "Compressore DSP",
       "desc": "Comprime la gamma dinamica: i suoni deboli diventano udibili, quelli forti smettono di colpire. Utile in viaggio e per strada, superfluo per un ascolto attento a casa."
