@@ -1312,6 +1312,20 @@ lk_wakelock_emit_report() {
       | sed 's/wake_reason=[0-9]*://' \
       | sort | uniq -c | sort -rn | head -8 \
       | awk '{n=$1; $1=""; sub(/^ /,""); printf "  x%-4d  %s\n", n+0, $0}'
+    # Name the subsystem behind the commonest tokens. "291 hs_uart_wakeup" topped a
+    # CPH2769 capture at x406 and reads like a module fault; it is the Bluetooth chip
+    # waking the SoC (a paired watch was connected), which no CPU tweak can change.
+    grep -oE 'wake_reason=[0-9]*:"[^"]+"' "$_raw" 2>/dev/null | sed 's/wake_reason=[0-9]*://' \
+      | awk '
+          /hs_uart|bt_host_wake|bluetooth|btfmslim/ { s["Bluetooth chip (watch / headset / BLE traffic)"]++; next }
+          /IPA_|rmnet|smp2p-modem|modem|mpss/        { s["modem / mobile data"]++; next }
+          /wlan|cnss|WLAN|wcnss/                      { s["Wi-Fi chip"]++; next }
+          /alarmtimer|rtc/                            { s["RTC alarm"]++; next }
+          /pwrkey|gpio_keys|touch|fts_|goodix/        { s["button / touch"]++; next }
+          /usb|charger|battery|pmic.*chg/             { s["USB / charger"]++; next }
+        END { for (k in s) if (s[k] >= 5) printf "%d\t%s\n", s[k], k }' \
+      | sort -rn | head -5 \
+      | awk -F'\t' 'NR==1 {print "  (by subsystem)"} {printf "  x%-4d  = %s\n", $1, $2}'
     # Separate the devices that REFUSED to suspend from the ones that woke us.
     #
     # "Abort: Device 0000:01:00.0 failed to suspend: error -11" sits in the list above
