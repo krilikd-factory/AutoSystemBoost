@@ -138,7 +138,17 @@ if [ "$_mode" = "mirror" ]; then
       fi
       ;;
   esac
-  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db; do
+  _mvoice="$(_cfg dsp_voice)"
+  case "$_mvoice" in
+    ''|off|*[!0-9]*) : ;;
+    *)
+      if [ "$_mvoice" -ge 0 ] 2>/dev/null && [ "$_mvoice" -le 10 ] 2>/dev/null; then
+        _mvhave="$(getprop persist.asb.dsp.voice 2>/dev/null)"
+        [ "$_mvhave" != "$_mvoice" ] && _persist persist.asb.dsp.voice "$_mvoice"
+      fi
+      ;;
+  esac
+  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db voice; do
     _v="$(getprop "persist.asb.dsp.$_k" 2>/dev/null)"
     [ -n "$_v" ] && _persist_ctx "persist.vendor.asb.dsp.$_k" "$_v"
   done
@@ -374,6 +384,19 @@ case "$_bs" in
 esac
 _dspp bass_db "$_bsx"
 [ "$_bsx" = "0" ] && changed="${changed}bass=off " || changed="${changed}bass=+${_bsx}dB "
+
+# ---- dsp_voice (voice tone) ------------------------------------------------------- Two
+# broad bands in the shared core: +0.5 dB/step of body at 350 Hz, -0.6 dB/step of presence
+# at 3.2 kHz. For the "tinny / shrill voice on the speaker" complaint: a phone speaker
+# barely reproduces the 90 Hz bass shelf, but it does reproduce the body band.
+_vo="$(_cfg dsp_voice)"
+case "$_vo" in
+  ''|off|0)  _vox=0 ;;
+  *[!0-9]*)  _vox=0 ;;
+  *) if [ "$_vo" -ge 1 ] 2>/dev/null && [ "$_vo" -le 10 ] 2>/dev/null; then _vox="$_vo"; else _vox=0; fi ;;
+esac
+_dspp voice "$_vox"
+[ "$_vox" = "0" ] && changed="${changed}voice=off " || changed="${changed}voice=${_vox} "
 
 # ---- go live ----------------------------------------------------------------------
 # Wake the attach helper on every run, not only in "dsp" mode.
