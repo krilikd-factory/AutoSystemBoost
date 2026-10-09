@@ -29,6 +29,21 @@
 #define ASB_BASS_DB_MAX    10
 #define ASB_BASS_FREQ_HZ   90.0f   /* shelf corner: body of the bass, not sub rumble */
 #define ASB_BASS_SLOPE     0.9f    /* gentle slope; 1.0 is the steepest without a bump */
+/* Voice tone ("dsp_voice", 0..10): two broad peaking bands, both scaled by one level.
+ *   body     +0.5 dB per step at 350 Hz, Q 0.7  - the chest of a voice, 200..600 Hz, the
+ *                                                  band a phone speaker still reproduces
+ *   presence -0.6 dB per step at 3.2 kHz, Q 1.0 - the 2..5 kHz edge that makes a small
+ *                                                  speaker sound shrill
+ * Level 10 = +5 dB / -6 dB. Bass (90 Hz) is a separate knob: below ~400 Hz a phone speaker
+ * produces little, so on the speaker the bass shelf mostly costs headroom while this band
+ * is what a listener hears as a fuller, less "tinny" voice. */
+#define ASB_VOICE_MAX       10
+#define ASB_VOICE_BODY_HZ   350.0f
+#define ASB_VOICE_BODY_Q    0.7f
+#define ASB_VOICE_BODY_DB   0.5f
+#define ASB_VOICE_PRES_HZ   3200.0f
+#define ASB_VOICE_PRES_Q    1.0f
+#define ASB_VOICE_PRES_DB  (-0.6f)
 #define ASB_CEIL_MB_MIN   (-600)
 #define ASB_CEIL_MB_MAX   (-30)
 #define ASB_RATIO_MIN      10
@@ -40,6 +55,7 @@
 #define ASB_COMP_ATK_MS  8.0f
 #define ASB_COMP_REL_MS  180.0f
 #define ASB_COMP_KNEE_DB 8.0f
+#define ASB_COMP_EVERY   16
 
 typedef struct {
     float    gain;
@@ -53,6 +69,14 @@ typedef struct {
     float    catk;
     float    crel;
     float    cenv;
+    /* Compressor gain is a log10f + powf per call. It follows an envelope smoothed over
+     * 8 ms / 180 ms, so evaluating it on every frame (48000 times a second) bought nothing
+     * audible and cost most of the effect's CPU time during playback. It is now evaluated
+     * every ASB_COMP_EVERY frames (0.33 ms at 48 kHz) and skipped outright below the knee,
+     * where it is exactly 1. The limiter still runs per frame, so the ceiling is unchanged. */
+    float    knee_lo_lin;   /* envelope below this -> compressor gain is exactly 1 */
+    float    cg_hold;       /* last evaluated compressor gain incl. make-up */
+    int      cg_count;
     int      channels;
     int      bypass;
     /* Soft-clip (saturation) mode. The brick-wall limiter below has ZERO attack: any
@@ -70,6 +94,12 @@ typedef struct {
     float    bb0, bb1, bb2, ba1, ba2;              /* coefficients, a0-normalised */
     float    bx1[ASB_MAX_CH], bx2[ASB_MAX_CH];     /* per-channel input history */
     float    by1[ASB_MAX_CH], by2[ASB_MAX_CH];     /* per-channel output history */
+    /* Voice tone: two peaking biquads after the bass shelf, same placement rule - before
+     * the detector, so the limiter sees what they add. */
+    int      voice_on;
+    float    vc[2][5];                              /* b0 b1 b2 a1 a2 per band, a0-normalised */
+    float    vx1[2][ASB_MAX_CH], vx2[2][ASB_MAX_CH];
+    float    vy1[2][ASB_MAX_CH], vy2[2][ASB_MAX_CH];
 } asb_core_t;
 
 static inline int  asb_core_clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -107,6 +137,9 @@ static inline void asb_core_configure_ex(asb_core_t *c, int enabled, int gain_mb
     } else {
         c->cmakeup = 1.0f;
     }
+    c->knee_lo_lin = powf(10.0f, (c->thresh_db - ASB_COMP_KNEE_DB * 0.5f) / 20.0f);
+    c->cg_hold  = c->cmakeup;
+    c->cg_count = 0;
     c->rel      = asb_core_coef(ASB_RELEASE_MS, rate);
     c->catk     = asb_core_coef(ASB_COMP_ATK_MS, rate);
     c->crel     = asb_core_coef(ASB_COMP_REL_MS, rate);
@@ -186,10 +219,60 @@ static inline float asb_core_bass_step(asb_core_t *c, int k, float x) {
     return y;
 }
 
-static inline void asb_core_reset(asb_core_t *c) { c->env = 0.0f; c->cenv = 0.0f; }
+/* RBJ peaking band. Returns 0 when the coefficients are unusable. */
+static inline int asb_core_peak_coefs(float *o, float f0, float q, float db, uint32_t rate) {
+    if (rate == 0 || f0 <= 0.0f || f0 >= 0.45f * (float)rate || q <= 0.0f) return 0;
+    float A     = powf(10.0f, db / 40.0f);
+    float w0    = 2.0f * 3.14159265358979f * f0 / (float)rate;
+    float cosw  = cosf(w0);
+    float alpha = sinf(w0) / (2.0f * q);
+    float a0    = 1.0f + alpha / A;
+    if (a0 == 0.0f) return 0;
+    o[0] = (1.0f + alpha * A) / a0;
+    o[1] = (-2.0f * cosw) / a0;
+    o[2] = (1.0f - alpha * A) / a0;
+    o[3] = (-2.0f * cosw) / a0;
+    o[4] = (1.0f - alpha / A) / a0;
+    return 1;
+}
+
+/* Voice tone level 0..10; 0 disables the stage and the samples pass untouched.
+ * Called after asb_core_configure*(), like asb_core_set_bass(). */
+static inline void asb_core_set_voice(asb_core_t *c, int level, uint32_t rate) {
+    for (int b = 0; b < 2; b++)
+        for (int k = 0; k < ASB_MAX_CH; k++)
+            c->vx1[b][k] = c->vx2[b][k] = c->vy1[b][k] = c->vy2[b][k] = 0.0f;
+    if (level < 0) level = 0;
+    if (level > ASB_VOICE_MAX) level = ASB_VOICE_MAX;
+    c->voice_on = 0;
+    if (level == 0 || c->channels > ASB_MAX_CH) return;
+    if (!asb_core_peak_coefs(c->vc[0], ASB_VOICE_BODY_HZ, ASB_VOICE_BODY_Q,
+                             ASB_VOICE_BODY_DB * (float)level, rate)) return;
+    if (!asb_core_peak_coefs(c->vc[1], ASB_VOICE_PRES_HZ, ASB_VOICE_PRES_Q,
+                             ASB_VOICE_PRES_DB * (float)level, rate)) return;
+    c->voice_on = 1;
+}
+
+static inline float asb_core_voice_step(asb_core_t *c, int k, float x) {
+    for (int b = 0; b < 2; b++) {
+        const float *q = c->vc[b];
+        float y = q[0] * x + q[1] * c->vx1[b][k] + q[2] * c->vx2[b][k]
+                  - q[3] * c->vy1[b][k] - q[4] * c->vy2[b][k];
+        c->vx2[b][k] = c->vx1[b][k]; c->vx1[b][k] = x;
+        c->vy2[b][k] = c->vy1[b][k]; c->vy1[b][k] = y;
+        x = y;
+    }
+    return x;
+}
+
+static inline void asb_core_reset(asb_core_t *c) {
+    c->env = 0.0f; c->cenv = 0.0f; c->cg_hold = c->cmakeup; c->cg_count = 0;
+}
+
 
 static inline float asb_core_comp_gain(asb_core_t *c, float env) {
     if (!c->comp_on || env < 1e-7f) return 1.0f;
+    if (env <= c->knee_lo_lin) return 1.0f;     /* below the knee: no log/pow needed */
     float db   = 20.0f * log10f(env);
     float over = db - c->thresh_db;
     float half = ASB_COMP_KNEE_DB * 0.5f;
@@ -209,6 +292,16 @@ static inline float asb_core_step_cenv(asb_core_t *c, float peak) {
     c->cenv = peak + (c->cenv - peak) * coef;
     if (c->cenv < 1e-9f) c->cenv = 0.0f;
     return c->cenv;
+}
+/* Step the compressor envelope every frame, evaluate its gain every ASB_COMP_EVERY. */
+static inline float asb_core_comp_step(asb_core_t *c, float peak) {
+    float e = asb_core_step_cenv(c, peak);
+    if (c->cg_count <= 0) {
+        c->cg_hold = asb_core_comp_gain(c, e) * c->cmakeup;
+        c->cg_count = ASB_COMP_EVERY;
+    }
+    c->cg_count--;
+    return c->cg_hold;
 }
 
 static inline float asb_core_step_gr(asb_core_t *c, float peak) {
@@ -238,13 +331,16 @@ static inline void asb_core_process_f32(asb_core_t *c, const float *in, float *o
         /* Bass first: the detector below must measure the boosted signal, otherwise the
          * extra low end bypasses the compressor and the limiter and clips on output. */
         float bs[ASB_MAX_CH];
-        if (c->bass_on) {
-            for (int k = 0; k < ch; k++) bs[k] = asb_core_bass_step(c, k, src[k]);
+        if (c->bass_on || c->voice_on) {
+            for (int k = 0; k < ch; k++) {
+                float x = c->bass_on ? asb_core_bass_step(c, k, src[k]) : src[k];
+                bs[k] = c->voice_on ? asb_core_voice_step(c, k, x) : x;
+            }
             src = bs;
         }
         float peak = 0.0f;
         for (int k = 0; k < ch; k++) { float a = fabsf(src[k]); if (a > peak) peak = a; }
-        float cg = asb_core_comp_gain(c, asb_core_step_cenv(c, peak)) * c->cmakeup;
+        float cg = asb_core_comp_step(c, peak);
         if (c->softclip) {
             /* Saturation path: no gain reduction at all, tanh rounds the peaks. Bounded
              * by design (|tanh| < 1), so the clamp below can only ever catch the
@@ -278,16 +374,22 @@ static inline void asb_core_process_s16(asb_core_t *c, const int16_t *in, int16_
         float bs[ASB_MAX_CH];
         for (int k = 0; k < ch; k++) {
             float x = (float)src[k] / 32768.0f;
-            bs[k] = c->bass_on ? asb_core_bass_step(c, k, x) : x;
+            if (c->bass_on)  x = asb_core_bass_step(c, k, x);
+            if (c->voice_on) x = asb_core_voice_step(c, k, x);
+            bs[k] = x;
         }
         float peak = 0.0f;
         for (int k = 0; k < ch; k++) { float a = fabsf(bs[k]); if (a > peak) peak = a; }
-        float cg = asb_core_comp_gain(c, asb_core_step_cenv(c, peak)) * c->cmakeup;
+        float cg = asb_core_comp_step(c, peak);
         if (c->softclip) {
             for (int k = 0; k < ch; k++) {
                 float v = tanhf(bs[k] * cg * g * c->postgain) * c->ceiling;
                 if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;
-                dst[k] = (int16_t)lrintf(v * 32767.0f);
+                /* Honour accumulate here too: the legacy effect runs this path with the
+                 * framework's ACCUMULATE access mode, and overwriting there drops the mix. */
+                int32_t s = (int32_t)lrintf(v * 32767.0f);
+                if (accumulate) s += (int32_t)dst[k];
+                dst[k] = (int16_t)(s > 32767 ? 32767 : (s < -32768 ? -32768 : s));
             }
             continue;
         }

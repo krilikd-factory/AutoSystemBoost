@@ -136,6 +136,7 @@ class AsbLoudnessContext final : public EffectContext {
         int soft   = asb_dsp_prop("softclip", 0);
         int post   = asb_dsp_prop("postgain_x100", 300);
         int bass   = asb_dsp_prop("bass_db", 0);
+        int voice  = asb_dsp_prop("voice", 0);
         if (gainOverrideMb >= 0) {
             gain = gainOverrideMb;
             if (gain > 0) enable = 1;
@@ -144,12 +145,14 @@ class AsbLoudnessContext final : public EffectContext {
                      << " ceiling_mb=" << ceil << " comp=" << comp << " ratio=" << ratio
                      << " thresh_mb=" << thresh << " softclip=" << soft
                      << " postgain_x100=" << post << " bass_db=" << bass
+                     << " voice=" << voice
                      << " rate=" << rate << " ch=" << ch
                      << (gainOverrideMb >= 0 ? " (gain from parameter)" : " (gain from property)");
         asb_core_configure_ex(&mCore, enable, gain, ceil, comp, ratio, thresh, ch,
                               (uint32_t)rate, /*fmt_ok=*/1, soft, post);
         // After configure: it is what sets the channel count the shelf needs.
         asb_core_set_bass(&mCore, bass, (uint32_t)rate);
+        asb_core_set_voice(&mCore, voice, (uint32_t)rate);
         mGainMb = gain;
     }
 
@@ -168,7 +171,11 @@ class AsbLoudnessContext final : public EffectContext {
         // but bypassed (bypass=1, props not visible in the HAL process), or whether we do
         // amplify and the gain is undone further down the chain (outPeak > inPeak yet no
         // audible change). Every 500th buffer keeps this to a few lines per second.
-        const bool trace = ((mCalls++ % 500) == 0);
+        // Three lines right after creation (enough to see bypass/gain), then one a minute.
+        // Every 500th buffer was a logcat write every ~5 s for the whole of every playback -
+        // a logd wake-up each time, in the one process that must never be late.
+        const unsigned long _n = mCalls++;
+        const bool trace = (_n < 1500) ? ((_n % 500) == 0) : ((_n % 6000) == 0);
         float inPeak = 0.0f;
         if (trace) {
             for (int i = 0; i < samples; i++) { float a = fabsf(in[i]); if (a > inPeak) inPeak = a; }

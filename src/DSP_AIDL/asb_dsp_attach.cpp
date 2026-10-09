@@ -137,7 +137,7 @@ static void on_wake(int) { g_wake = 1; }
 static void asb_tunables_sig(char *out, size_t n) {
     char a[PROP_VALUE_MAX] = {0}, b[PROP_VALUE_MAX] = {0}, c[PROP_VALUE_MAX] = {0};
     char d[PROP_VALUE_MAX] = {0}, e[PROP_VALUE_MAX] = {0}, f[PROP_VALUE_MAX] = {0};
-    char g[PROP_VALUE_MAX] = {0};
+    char g[PROP_VALUE_MAX] = {0}, h[PROP_VALUE_MAX] = {0};
     __system_property_get("persist.asb.dsp.ceiling_mb", a);
     __system_property_get("persist.asb.dsp.comp", b);
     __system_property_get("persist.asb.dsp.comp_ratio_x10", c);
@@ -145,7 +145,8 @@ static void asb_tunables_sig(char *out, size_t n) {
     __system_property_get("persist.asb.dsp.softclip", e);
     __system_property_get("persist.asb.dsp.postgain_x100", f);
     __system_property_get("persist.asb.dsp.bass_db", g);
-    snprintf(out, n, "%s|%s|%s|%s|%s|%s|%s", a, b, c, d, e, f, g);
+    __system_property_get("persist.asb.dsp.voice", h);   // fix75 voice tone
+    snprintf(out, n, "%s|%s|%s|%s|%s|%s|%s|%s", a, b, c, d, e, f, g, h);
 }
 
 int main(int /*argc*/, char** /*argv*/) {
@@ -163,7 +164,7 @@ int main(int /*argc*/, char** /*argv*/) {
     int was_on = -1;
     int fails = 0;   // consecutive failures, used to back off
     int pushed_gain = -1;   // gain last handed to the effect over binder
-    char pushed_sig[192] = "";  // tunables last handed over, so any edit triggers a push
+    char pushed_sig[224] = "";  // tunables last handed over, so any edit triggers a push
 
     for (;;) {
         // Battery: only hold the effect while the DSP is actually on. An attached effect
@@ -183,6 +184,26 @@ int main(int /*argc*/, char** /*argv*/) {
         if (want_on != was_on) {
             logline("dsp %s (gain_mb=%d)", want_on ? "enabled" : "disabled", gain);
             was_on = want_on;
+        }
+
+        // Route not selected: let go of the effect instead of keeping it attached at gain 0.
+        //
+        // Gain 0 makes the effect a bit-exact pass-through, but an ENABLED effect on the
+        // global mix still counts as non-offloadable for the audio policy, so the stream
+        // stays off the DSP offload path and the CPU stays awake for every buffer. With
+        // dsp_outputs=speaker and music on Bluetooth with the screen off that is the
+        // whole listening session at 90-100% awake for no processing at all. Released,
+        // the output can go back to offload; service.sh sends SIGUSR1 on every route
+        // change, so the effect is back the moment a selected output is in use.
+        int route_ok = route_allows_dsp();
+        if (want_on && !route_ok) {
+            if (fx != nullptr) {
+                logline("released (route not selected)");
+                fx.clear(); attached = 0; pushed_gain = -1; pushed_sig[0] = 0;
+            }
+            g_wake = 0;
+            sleep(60);
+            continue;
         }
 
         if (!want_on) {
@@ -248,7 +269,7 @@ int main(int /*argc*/, char** /*argv*/) {
         // postgain and compressor edits too. Previously this only fired when the gain
         // itself differed, so the saturation slider changed the properties and nothing
         // else - the effect kept running with whatever it had read at creation.
-        char _sig[192];
+        char _sig[224];
         asb_tunables_sig(_sig, sizeof(_sig));
         int _forced = g_wake;
         g_wake = 0;
