@@ -103,6 +103,9 @@ jobs:
           path: asb-src
 
       - name: Reclaim disk space
+        # GitHub-hosted only: on a self-hosted runner (your own PC) this step would delete
+        # system toolchains / turn off your swap. Bring your own disk and swap there.
+        if: ${{ runner.environment == 'github-hosted' }}
         run: |
           echo "Before:"; df -h /
           # The full (shallow) AOSP manifest is larger than the old minimal set, so reclaim
@@ -396,6 +399,9 @@ jobs:
           echo "sources are current"
 
       - name: Add swap (cover ninja-generation peak)
+        # GitHub-hosted only: on a self-hosted runner (your own PC) this step would delete
+        # system toolchains / turn off your swap. Bring your own disk and swap there.
+        if: ${{ runner.environment == 'github-hosted' }}
         run: |
           # The soong "generating ninja" phase was SIGTERM-killed (exit 143) on the 32 GB
           # runner: soong_build finished (130/131) then the analyze phase peaked and the
