@@ -125,11 +125,20 @@ if [ -n "$DSP_SRC" ]; then
       # if one is missing, the prebuilt is from an older build than the sources next to it.
       _src_fx="$SCRIPT_DIR/DSP_AIDL/asb_effect_aidl.cpp"
       _missing=""
-      # " voice=" (fix75): the voice-tone stage. A prebuilt without it ignores dsp_voice while
-      # the WebUI offers the slider, so it has to be rebuilt (build-dsp-aidl workflow).
-      for _lit in "ASB queryEffect" "ASB createEffect" "ASB configure" "ASB process" " voice="; do
+      for _lit in "ASB queryEffect" "ASB createEffect" "ASB configure" "ASB process"; do
         grep -q "$_lit" "$_src_fx" 2>/dev/null || continue
         grep -aq "$_lit" "$_dout/libasbdsp.so" 2>/dev/null || _missing="$_missing \"$_lit\""
+      done
+      # Newer features are a WARNING, not a stop: the AIDL library needs a soong/AOSP build
+      # that a free GitHub runner cannot host, so a hard stop would block every module build
+      # until one is available. Without the rebuild these features are simply absent on AIDL
+      # phones; asbdiag says so ("voice tone: ... predates it").
+      #   " voice=" (fix75): the voice-tone stage
+      for _lit in " voice="; do
+        grep -q "$_lit" "$_src_fx" 2>/dev/null || continue
+        grep -aq "$_lit" "$_dout/libasbdsp.so" 2>/dev/null && continue
+        echo "[ASB] WARNING: $_abi prebuilt libasbdsp lacks \"$_lit\" - rebuild it (build-dsp-aidl)"
+        echo "[ASB]   for that feature; the module itself builds and works without it."
       done
       if [ -n "$_missing" ]; then
         echo "[ASB] ERROR: $_abi prebuilt libasbdsp_aidl.so is STALE." >&2
@@ -202,11 +211,16 @@ if [ -n "$DSP_SRC" ]; then
     # behaves like the code was never changed.
     _src_att="$SCRIPT_DIR/DSP_AIDL/asb_dsp_attach.cpp"
     _att_missing=""
-    # "route not selected" (fix77): the daemon releases the effect off the selected outputs
-    # so the stream can return to offload; an older daemon keeps it attached at gain 0.
-    for _lit in "pushed gain_mb" "settings change" "attached to session" "released (route not selected)"; do
+    for _lit in "pushed gain_mb" "settings change" "attached to session"; do
       grep -q "$_lit" "$_src_att" 2>/dev/null || continue
       grep -aq "$_lit" "$_att_pre" 2>/dev/null || _att_missing="$_att_missing \"$_lit\""
+    done
+    # Newer behaviour: warn only (see the library gate above).
+    #   "released (route not selected)" (fix77): release the effect off the selected outputs
+    for _lit in "released (route not selected)"; do
+      grep -q "$_lit" "$_src_att" 2>/dev/null || continue
+      grep -aq "$_lit" "$_att_pre" 2>/dev/null && continue
+      echo "[ASB] WARNING: prebuilt asb_dsp_attach lacks \"$_lit\" - rebuild it for that behaviour."
     done
     if [ -n "$_att_missing" ]; then
       echo "[ASB] ERROR: prebuilt asb_dsp_attach is STALE." >&2
