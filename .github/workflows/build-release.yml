@@ -75,6 +75,7 @@ jobs:
             src/build_ndk_release.sh \
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
+            src/DSP_AIDL/asb_dsp_core.h \
             module.prop \
             customize.sh \
             service.sh \

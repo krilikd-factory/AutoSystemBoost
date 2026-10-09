@@ -71,6 +71,7 @@ jobs:
             src/build_ndk_release.sh \
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
+            src/DSP_AIDL/asb_dsp_core.h \
             runtime/asb_active_efficiency_envelope.sh \
             runtime/asb_boot_timeline.sh \
             runtime/asb_debug_support.sh \
