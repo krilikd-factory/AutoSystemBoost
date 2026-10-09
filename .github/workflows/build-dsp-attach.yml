@@ -19,19 +19,14 @@ name: Build DSP attacher only
 # Trigger manually (workflow_dispatch) so it never runs on every push.
 
 on:
-  # The attacher has its own source and its own build, so it gets its own trigger.
-  # Cheap: no AOSP tree, unlike the AIDL library. Excluding prebuilt/ for the same
-  # reason as the other workflow - that directory is where the result lands, and a
-  # workflow that rebuilds on its own output loops.
-  push:
-    paths:
-      - 'src/DSP_AIDL/asb_dsp_attach.cpp'
-      - '.github/workflows/build-dsp-attach.yml'
-      - '!src/DSP_AIDL/prebuilt/**'
-  pull_request:
-    paths:
-      - 'src/DSP_AIDL/asb_dsp_attach.cpp'
-
+  # Manual only (fix83). "Cheap: no AOSP tree" was no longer true - this job syncs the same
+  # Android 16 tree as Build DSP AIDL and runs the same memory-bound soong analysis, on a
+  # paid larger runner. A push touching asb_dsp_attach.cpp started it automatically; on
+  # 2026-10-09 that run healed three unrelated Android.bp errors (device/google/sdv,
+  # cuttlefish) and then thrashed 31 GB RAM + 32 GB swap for 23 minutes until the runner
+  # was shut down (exit 143) - billed and useless. "Build DSP AIDL (.so)" already builds
+  # asb_dsp_attach in the same invocation (m libasbdsp_aidl asb_dsp_attach) and collects
+  # it into prebuilt/arm64-v8a, so this workflow is only a manual fallback.
   workflow_dispatch:
     inputs:
       aosp_tag:

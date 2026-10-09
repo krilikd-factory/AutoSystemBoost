@@ -349,6 +349,10 @@ jobs:
           # type". compatibility_matrices was already being healed by hand on the good run -
           # the reference-device ones simply were not present in that sync.
           neutralize_bp_for 'vintf_compatibility_matrix'
+          # cuttlefish vkms_controller depends on a team-ownership module the filtered sync
+          # does not carry (seen 2026-10-09: undefined module "trendy_team_desktop_display").
+          # Each such miss costs one more full soong analysis on a memory-bound runner.
+          neutralize_bp_for 'trendy_team_desktop_display'
           # Confirm the release configs are present; list them so the build step (and we)
           # can see which release names actually exist on this branch.
           if [ -d build/release/aconfig ]; then
