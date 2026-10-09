@@ -89,6 +89,7 @@ if [ -n "$DSP_SRC" ]; then
     echo "[ASB] $_abi: using $(basename "$_dcc")"
     _dout="$ROOT_DIR/bin/$_abi"
     mkdir -p "$_dout"
+    # -I DSP_AIDL: the legacy effect runs the shared core asb_dsp_core.h (fix74).
     DSP_CFLAGS=(
       -O2 -fPIC -shared
       -fstack-protector-strong
@@ -96,6 +97,7 @@ if [ -n "$DSP_SRC" ]; then
       -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
       -fvisibility=hidden
       -I"$DSP_INC"
+      -I"$SCRIPT_DIR/DSP_AIDL"
     )
     # Prefer a VERSIONED prebuilt over the generic name.
     #
@@ -123,7 +125,9 @@ if [ -n "$DSP_SRC" ]; then
       # if one is missing, the prebuilt is from an older build than the sources next to it.
       _src_fx="$SCRIPT_DIR/DSP_AIDL/asb_effect_aidl.cpp"
       _missing=""
-      for _lit in "ASB queryEffect" "ASB createEffect" "ASB configure" "ASB process"; do
+      # " voice=" (fix75): the voice-tone stage. A prebuilt without it ignores dsp_voice while
+      # the WebUI offers the slider, so it has to be rebuilt (build-dsp-aidl workflow).
+      for _lit in "ASB queryEffect" "ASB createEffect" "ASB configure" "ASB process" " voice="; do
         grep -q "$_lit" "$_src_fx" 2>/dev/null || continue
         grep -aq "$_lit" "$_dout/libasbdsp.so" 2>/dev/null || _missing="$_missing \"$_lit\""
       done
@@ -198,7 +202,9 @@ if [ -n "$DSP_SRC" ]; then
     # behaves like the code was never changed.
     _src_att="$SCRIPT_DIR/DSP_AIDL/asb_dsp_attach.cpp"
     _att_missing=""
-    for _lit in "pushed gain_mb" "settings change" "attached to session"; do
+    # "route not selected" (fix77): the daemon releases the effect off the selected outputs
+    # so the stream can return to offload; an older daemon keeps it attached at gain 0.
+    for _lit in "pushed gain_mb" "settings change" "attached to session" "released (route not selected)"; do
       grep -q "$_lit" "$_src_att" 2>/dev/null || continue
       grep -aq "$_lit" "$_att_pre" 2>/dev/null || _att_missing="$_att_missing \"$_lit\""
     done

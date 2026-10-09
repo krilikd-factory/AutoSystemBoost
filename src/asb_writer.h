@@ -1325,25 +1325,64 @@ static int msm_perf_check(void) {
     return 0;
 }
 
-static int g_msm_cur_max[2] = {0, 0};
+static int g_msm_cur_max[3] = {0, 0, 0};
+static int g_msm_holding = 0;   /* ASB has a boost-time registration in the node */
 
-static int msm_perf_write_all_max(int c0_freq, int c1_freq) {
+/* Register per-slot ceilings with msm_performance, one "cpu:freq" pair per Linux CPU of
+ * that slot.
+ *
+ * The node is indexed by CPU, and this used to write cpus 0-5 with the little cap and 6-7
+ * with the big one - the layout of a 6+2 part. On a 1+3+2+1 part (OnePlus 12 / Ace 5,
+ * clusters 0-1, 2-4, 5-6, 7) that put the LITTLE ceiling on four mid cores and the MID
+ * ceiling on the prime core, in exactly the states (HEAVY, GAMING) meant to lift them. The
+ * field OP12 capture then read its own prime cap back as perf_cap p6=1075200 of 3302400.
+ *
+ * Now each CPU gets its own slot's value; a slot ASB does not manage gets the hardware
+ * maximum (i.e. no request), and a CPU outside any discovered policy is left out. With no
+ * topology there is no write at all - guessing the layout is how the bug happened. */
+static int msm_perf_write_caps(int c0_freq, int c1_freq, int c2_freq) {
     if (!msm_perf_check()) return -1;
     if (c0_freq > 0) g_msm_cur_max[0] = c0_freq;
     if (c1_freq > 0) g_msm_cur_max[1] = c1_freq;
+    if (c2_freq > 0) g_msm_cur_max[2] = c2_freq;
     if (!g_msm_cur_max[0] || !g_msm_cur_max[1]) return -1;
-    char buf[256] = {0};
-    int pos = 0;
-    for (int c = 0; c <= 5; c++)
-        pos += snprintf(buf+pos, sizeof(buf)-pos, "%d:%d ", c, g_msm_cur_max[0]);
-    for (int c = 6; c <= 7; c++)
-        pos += snprintf(buf+pos, sizeof(buf)-pos, "%d:%d ", c, g_msm_cur_max[1]);
-    if (pos > 0) buf[pos-1] = 0;
+    char buf[320] = {0};
+    int pos = 0, any = 0;
+    int put[3] = {0, 0, 0};
+    for (int c = 0; c < 16 && pos < (int)sizeof(buf) - 24; c++) {
+        int s = cpu_slot_of(c);
+        if (s < 0) continue;
+        int v = g_msm_cur_max[s] > 0 ? g_msm_cur_max[s] : g_cpu_slot_hwmax[s];
+        if (v <= 0) continue;
+        pos += snprintf(buf + pos, sizeof(buf) - pos, "%d:%d ", c, v);
+        put[s] = v;
+        any = 1;
+    }
+    if (!any) return -1;
+    if (pos > 0) buf[pos - 1] = 0;
     int fd = open(PATH_MSM_PERF_CPU_MAX, O_WRONLY | O_CLOEXEC);
     if (fd < 0) return -1;
     ssize_t r = write(fd, buf, strlen(buf));
     close(fd);
-    return (r > 0) ? 0 : -1;
+    if (r <= 0) return -1;
+    for (int s = 0; s < 3; s++) g_asb_msm_written[s] = put[s];
+    g_msm_holding = 1;
+    return 0;
+}
+
+/* Drop ASB's boost-time registration when the writer stops using the node.
+ *
+ * Outside HEAVY/GAMING the ceilings go to scaling_max_freq only, but the node kept the
+ * last boost-time values - a second, hidden ceiling under the one ASB was managing. They
+ * are replaced with the hardware maximum (no request from ASB) once, on the way out. */
+static void msm_perf_release(void) {
+    if (!g_msm_holding) return;
+    g_msm_cur_max[0] = g_msm_cur_max[1] = g_msm_cur_max[2] = 0;
+    if (g_cpu_slot_hwmax[0] > 0 && g_cpu_slot_hwmax[1] > 0 &&
+        msm_perf_write_caps(g_cpu_slot_hwmax[0], g_cpu_slot_hwmax[1], g_cpu_slot_hwmax[2]) == 0) {
+        g_msm_cur_max[0] = g_msm_cur_max[1] = g_msm_cur_max[2] = 0;
+    }
+    g_msm_holding = 0;
 }
 
 static const int g_cluster_first_cpu[3] = {0, 6, -1};
@@ -1429,7 +1468,9 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             if (use_msm) {
                 int msm_c0 = (c0_target > 0) ? c0_target : g_msm_cur_max[0];
                 int msm_c1 = (c1_target > 0) ? c1_target : g_msm_cur_max[1];
-                msm_perf_write_all_max(msm_c0, msm_c1);
+                msm_perf_write_caps(msm_c0, msm_c1, cmax[2] > 0 ? cmax[2] : 0);
+            } else {
+                msm_perf_release();
             }
         }
         for (int i = 0; i < 3; i++) {
@@ -1553,7 +1594,15 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
         for (int i = 0; i < 3; i++) {
             if (!g_cpu_min_paths[i][0]) continue;
             int want_min = caps->cpu_min[i];
-            if (want_min <= 0) continue;
+            /* Smart's floor is "the cluster's lowest OPP" whatever the profile table says,
+             * and the profile tables carry no prime-slot floor at all (cpu_min[2] = 0). So
+             * on a part where the prime has its own slot (OnePlus 12 / Ace 5, policy7) the
+             * floor was never written or repaired: a field OP12 diag shows policy7 at
+             * min=672000 against a lowest OPP of 480000 - "smart minimum: WARN" - while the
+             * other three clusters sat at their lowest step. A raised floor on the core
+             * that clocks highest is the costliest one to leave in place. */
+            int _smart_floor = (fsm_profile_is_smart && state <= ASB_STATE_SUSTAINED);
+            if (want_min <= 0 && !_smart_floor) continue;
             /* Clamp against what WE are asking for, and against what is actually there.
              *
              * Reading only the current sysfs value has two holes. If the min is written
@@ -1596,6 +1645,7 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                     }
                 }
             }
+            if (want_min <= 0) continue;   /* Smart floor wanted but no OPP table */
 
             /* Re-clamp against the ceiling as it is NOW, after snapping.
              *
@@ -1649,7 +1699,7 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             if (g_cpu_min_paths[slot][0] &&
                 strcmp(g_cpu_all_min_paths[j], g_cpu_min_paths[slot]) == 0) continue;
             int want_min = caps->cpu_min[slot];
-            if (want_min <= 0) continue;
+            if (want_min <= 0 && !(fsm_profile_is_smart && state <= ASB_STATE_SUSTAINED)) continue;
             int cur_max = sysfs_read_int(g_cpu_all_max_paths[j], 0);
             if (cur_max > 0 && want_min > cur_max) want_min = cur_max;
             if (fsm_profile_is_smart && state <= ASB_STATE_SUSTAINED) {
@@ -1658,6 +1708,7 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             } else {
                 want_min = (int)cpu_snap_freq(j, (long)want_min);
             }
+            if (want_min <= 0) continue;
             /* Re-clamp after the branch, as the primary path already does.
              *
              * The ceiling clamp four lines up runs BEFORE the Smart branch overwrites
@@ -1683,6 +1734,7 @@ skip_cpu_caps: ;
     long gmin = hw_max * caps->gpu_min_pct / 100;
 
     int gpu_vendor_backoff = gpu_vendor_override_backoff_active();
+    int _gmax_pl_this_tick = -1;   /* pwrlevel ceiling written on this pass, for the re-check below */
     if (!gpu_vendor_backoff && (force || caps->gpu_max_pct != g_wcache.gpu_max_pct)) {
         int gpu_ok = 0;
         if (g_gpu_max_path[0]) {
@@ -1697,7 +1749,7 @@ skip_cpu_caps: ;
                     gpu_ok = 1;
                 } else {
                     gpu_ok = (sysfs_write_int(g_gpu_max_path, pl) == 0);
-                    if (gpu_ok) g_wcache.last_max_pwrlevel_written = pl;
+                    if (gpu_ok) { g_wcache.last_max_pwrlevel_written = pl; _gmax_pl_this_tick = pl; }
                 }
             } else {
                 gpu_ok = (sysfs_write_long(g_gpu_max_path, gmax) == 0);
@@ -1769,6 +1821,27 @@ skip_cpu_caps: ;
         if (_gmin_ok) {
             g_wcache.gpu_min_pct = caps->gpu_min_pct;
             writes++;
+        }
+    }
+    /* Ceiling first, floor second is the wrong order when the ceiling goes DOWN past the
+     * floor the GPU holds right now.
+     *
+     * KGSL will not let max_pwrlevel sit below min_pwrlevel (a higher index is a lower
+     * clock): a ceiling of 17 written while the floor is 8 lands as 8. The floor write that
+     * follows then succeeds, and the pair ends as max=8 min=17 - our own ceiling undone by
+     * our own write order. gpu_check_vendor_override() saw max_written=17 observed=8 on the
+     * next tick, called it a vendor override and held every GPU write for 15 s. Field OP15:
+     * max_overrides=323 backoffs=492 in one evening, the readings matching this sequence
+     * exactly (written 17/observed 8 and written 12/observed 9, floor 17 = 17).
+     *
+     * Once the floor is where we want it, put the ceiling back - only when the pair is now
+     * consistent, so a genuine vendor floor above our ceiling is left alone. */
+    if (_gmax_pl_this_tick >= 0 && g_gpu_uses_pwrlevel && g_gpu_max_path[0]) {
+        int _gmax_now = sysfs_read_int(g_gpu_max_path, -1);
+        if (_gmax_now >= 0 && _gmax_now != _gmax_pl_this_tick) {
+            int _gmin_now = g_gpu_min_path[0] ? sysfs_read_int(g_gpu_min_path, -1) : -1;
+            if (_gmin_now < 0 || _gmin_now >= _gmax_pl_this_tick)
+                (void)sysfs_write_int(g_gpu_max_path, _gmax_pl_this_tick);
         }
     }
 

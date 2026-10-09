@@ -849,9 +849,30 @@ static inline const char *sustained_reason_name(int r) {
 static inline const char *cap_source_classify(int profile_cap,
                                               int runtime_declared,
                                               int actual_sysfs,
-                                              int hw_ceiling) {
+                                              int hw_ceiling,
+                                              int asb_written) {
     if (actual_sysfs <= 0)  return "policy_unknown";
     if (hw_ceiling > 0 && actual_sysfs > hw_ceiling + 50000) return "policy_unknown";
+
+    /*
+     * The ceiling ASB itself wrote to scaling_max_freq is ASB's, whatever msm_performance says.
+     *
+     * runtime_declared is read back from msm_performance, and the writer only goes through
+     * msm_performance in HEAVY/GAMING (msm_perf_boost_only). In every other state it writes
+     * scaling_max_freq directly and the msm_performance cap stays at the hardware maximum -
+     * so the live ceiling sat below runtime_declared on every Smart tick and fell through to
+     * "vendor_clamp" below. Field OP15 capture, LIGHT_IDLE at 35 C: cpu_max 1440000/1747200
+     * (exactly what ASB wrote), cap_source vendor_clamp on both clusters, vendor_clamp_1h=424,
+     * cap_vendor_holddown_active=1 - the governor backing off from its own writes, the
+     * thermal veto counting them as vendor pressure, and the logkit's throttle owner split
+     * reading "vendor" for an ASB cap.
+     *
+     * Equal is the only test: a live value below ours is still somebody else's clamp (a
+     * freq QoS request lower than ours), a value above ours is somebody rewriting the node.
+     */
+    if (asb_written > 0 && actual_sysfs == asb_written) {
+        return (profile_cap > 0 && actual_sysfs == profile_cap) ? "asb" : "asb_dynamic";
+    }
 
     /*
      * Shell-only branch: runtime_declared==0 means governor didn't register caps via
@@ -3046,10 +3067,12 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
      */
     const char *cap_src_p0 = cap_source_classify(profile_cap_p0,
                                                  m->therm.perf_cap_p0,
-                                                 real_max_p0, hw_ceil_p0);
+                                                 real_max_p0, hw_ceil_p0,
+                                                 g_wcache.cpu_max[0]);
     const char *cap_src_p6 = cap_source_classify(profile_cap_p6,
                                                  m->therm.perf_cap_p6,
-                                                 real_max_p1, hw_ceil_p1);
+                                                 real_max_p1, hw_ceil_p1,
+                                                 g_wcache.cpu_max[1]);
     /*
      * record conflicts to /dev/.asb/conflicts.json (written below).
      */
@@ -8298,9 +8321,10 @@ int main(int argc, char **argv) {
                         pre_p1 = tick_scaling_max(1);
                     }
                     /* Write msm_performance */
-                    int ok = msm_perf_write_all_max(
+                    int ok = msm_perf_write_caps(
                                 fsm.current_caps.cpu_max[0],
-                                fsm.current_caps.cpu_max[1]);
+                                fsm.current_caps.cpu_max[1],
+                                fsm.current_caps.cpu_max[2]);
                     /* Anti-clamp: force scaling_max_freq on both clusters */
                     if (vendor_clamping) {
                         for (int ci = 0; ci < 2; ci++) {

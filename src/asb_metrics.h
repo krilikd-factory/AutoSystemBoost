@@ -655,6 +655,48 @@ static void cpu_capture_slot_hwmax(void) {
     }
 }
 
+/* What ASB itself last registered with msm_performance, per slot. Filled by the writer
+ * (asb_writer.h is included after this file). The headroom reader below needs it: the
+ * msm_performance node holds ASB's OWN boost-time ceilings as well as the vendor's, and a
+ * headroom computed from our own cap is not a "kernel thermal cap". */
+static int g_asb_msm_written[3] = {0, 0, 0};
+
+/* Linux CPU -> ASB slot (0 little, 1 big/mid, 2 prime), from every discovered policy's
+ * related_cpus. -1 = not part of any managed policy. Built once, after topology discovery. */
+static int g_cpu_to_slot[16];
+static int g_cpu_to_slot_ready = 0;
+static void cpu_to_slot_build(void) {
+    int any = 0;
+    for (int c = 0; c < 16; c++) g_cpu_to_slot[c] = -1;
+    for (int i = 0; i < g_cpu_all_count && i < 16; i++) {
+        char path[128], buf[128] = {0};
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpufreq/policy%d/related_cpus", g_cpu_all_ids[i]);
+        int fd = open(path, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) continue;
+        ssize_t n = read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        if (n <= 0) continue;
+        char *p = buf;
+        while (*p) {
+            char *end = NULL;
+            long id = strtol(p, &end, 10);
+            if (end == p) { p++; continue; }
+            if (id >= 0 && id < 16 && g_cpu_all_slot[i] >= 0 && g_cpu_all_slot[i] <= 2) {
+                g_cpu_to_slot[id] = g_cpu_all_slot[i];
+                any = 1;
+            }
+            p = end;
+        }
+    }
+    g_cpu_to_slot_ready = any;
+}
+static int cpu_slot_of(int cpu) {
+    if (cpu < 0 || cpu >= 16) return -1;
+    if (!g_cpu_to_slot_ready) cpu_to_slot_build();
+    return g_cpu_to_slot_ready ? g_cpu_to_slot[cpu] : -1;
+}
+
 /* msm_performance reports caps by Linux CPU number, not logical ASB slot. Never
  * divide a CPU-0 cap by slot-0 max until the discovered policy confirms that CPU 0
  * actually belongs there; policy numbering is not a portable topology contract. */
@@ -1612,6 +1654,19 @@ int spike_detected = 0;
                 /* Remember what parsed, for a later tick that cannot read the node. */
                 if (t->perf_cap_p0 > 0) _last_perf_cap_p0 = t->perf_cap_p0;
                 if (t->perf_cap_p6 > 0) _last_perf_cap_p6 = t->perf_cap_p6;
+                /* Our own boost-time registration is not headroom lost to the kernel.
+                 *
+                 * In HEAVY/GAMING the writer registers ASB's ceilings with msm_performance,
+                 * and the node keeps them afterwards. Read back here, they became "headroom
+                 * 34%" -> hard_clamp -> thermal_cap and SUSTAINED, logged on an OP12 as
+                 * "kernel thermal cap detected before temp threshold" (perf_cap p0=787200
+                 * p6=1075200) at 49 C. A cap equal to what ASB wrote says nothing about the
+                 * vendor; headroom stays at its "unknown" default for that tick. */
+                int _own_msm = (t->perf_cap_p0 > 0 && g_asb_msm_written[0] > 0 &&
+                                t->perf_cap_p0 == g_asb_msm_written[0]);
+                if (_own_msm) {
+                    snprintf(t->headroom_invalid_reason, sizeof(t->headroom_invalid_reason), "own_cap");
+                } else
                 if (t->perf_cap_p0 > 0 && cpu_slot_contains_cpu(0, 0) &&
                     metrics_headroom_pct_from_cap(t->perf_cap_p0, g_cpu_slot_hwmax[0],
                                                   &t->headroom_pct) == 0) {
