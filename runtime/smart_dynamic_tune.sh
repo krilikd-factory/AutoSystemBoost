@@ -319,6 +319,23 @@ if [ "$SCREEN" = "0" ] && { [ -n "$_psi_i" ] && [ "$_psi_i" -ge 5 ] 2>/dev/null 
       1|0) _swp=$((_base + 10)) ;;
       *)   _swp=$_base ;;
     esac
+    # Screen on and the system is STALLING on memory (fix107): favour zram over the file
+    # cache, never the other way round.
+    #
+    # PSI "full" is the share of time in which every runnable task waited on memory - the
+    # phone is frozen for that fraction. With low swappiness the kernel answers pressure by
+    # dropping file pages, i.e. app code and dex that the very next frame needs again: each
+    # is re-read from storage (a refault) while the UI waits. On a 12-16 GB OnePlus with lz4
+    # zram, parking idle anon pages in zram is far cheaper than that. The HEAVY/GAMING "-10"
+    # above is right on a calm system and exactly wrong on a stalling one; the OP15 debug6
+    # boot read full avg10 4.78 at swappiness 25. Only the stall raises it; a calm phone
+    # keeps the profile's value.
+    _psf="$(sed -n 's/^full .*avg10=\([0-9.]*\).*/\1/p' /proc/pressure/memory 2>/dev/null | head -1)"
+    _psf_i="${_psf%%.*}"
+    case "$_psf_i" in ''|*[!0-9]*) _psf_i=0 ;; esac
+    if [ "$_psf_i" -ge 2 ] 2>/dev/null && [ "$_swp" -lt $((_base + 20)) ]; then
+      _swp=$((_base + 20))
+    fi
   fi
   [ "$_swp" -lt 0 ]   && _swp=0
   [ "$_swp" -gt 100 ] && _swp=100
