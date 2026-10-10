@@ -1947,6 +1947,12 @@ _sb_d="$(grep -m1 '^smart_bucket_drain_x10=' /dev/.asb/state 2>/dev/null | cut -
   else
     NOTE "last banked session: max ${_sl}C over ${_sd}s (${_sr}), governor up ${_sup:-?}s"
   fi
+# What the learner is taught vs the raw single sample (fix110). A large gap means the
+# session's "peak" was a launch / dexopt blip, which the learner now ignores.
+_spr="$(grep -m1 '^ses_max_temp_raw=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_sps="$(grep -m1 '^ses_max_temp_smooth=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+[ -n "$_spr" ] && [ -n "$_sps" ] && \
+  NOTE "current session peak: raw ${_spr}C, smoothed ${_sps}C (the learner uses the smoothed one)"
 _vr="$(grep -m1 '^smart_thermal_veto_reason=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 case "$_vr" in
   1) NOTE "thermal veto: ON - skin at or above thermal_skin_c" ;;
@@ -2779,6 +2785,11 @@ if [ -r /proc/pressure/memory ]; then
   if [ "$_psi_up" -lt 600 ]; then
     NOTE "  phone booted ${_psi_up}s ago: avg10/avg60 reflect boot-time app restore - compare avg300 or re-run after ~10 min"
   fi
+  # Screen-on memory stalls the Smart tuner reacted to (fix108/fix111): swappiness is
+  # raised to profile+20 while PSI full avg10 >= 2.
+  _msn="$(grep -m1 '^mem_stall_now=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _mse="$(grep -m1 '^mem_stall_entries=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  [ -n "$_mse" ] && NOTE "  screen-on memory stalls since governor start: ${_mse} (now: ${_msn:-0}) - swappiness raised while one lasts"
 else
   NOTE "memory PSI unavailable on this kernel (no policy is changed)"
 fi
