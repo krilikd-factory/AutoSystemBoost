@@ -2310,7 +2310,7 @@ lk_snapshot_kernel() {
     echo "# kernel.sched"
     for k in sched_latency_ns sched_min_granularity_ns sched_wakeup_granularity_ns \
              sched_migration_cost_ns sched_util_clamp_min sched_util_clamp_max \
-             sched_energy_aware sched_schedstats; do
+             sched_energy_aware sched_schedstats panic panic_on_oops hung_task_timeout_secs; do
       _v=$(cat "/proc/sys/kernel/$k" 2>/dev/null); [ -n "$_v" ] && echo "  kernel.$k = $_v"
     done
     echo "# cpu boost / walt (custom-kernel markers)"
