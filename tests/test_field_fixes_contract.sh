@@ -259,4 +259,15 @@ r15="$(CPUS="$T/op15" cpu_max=7 little_end=5 sh -c '. "$1"; echo $bat_fg_end' _ 
 [ "$r15" = 5 ] || fail "OP15 battery foreground end $r15, want 5"
 echo "PASS: fix104 contract"
 ) || exit 1
+# ---- fix107 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix107: $*"; exit 1; }
+D="$ROOT/runtime/smart_dynamic_tune.sh"
+grep -q "s/^full .*avg10=" "$D" || fail "screen-on swappiness ignores memory stalls"
+grep -q 'if \[ "$_psf_i" -ge 2 \] 2>/dev/null && \[ "$_swp" -lt $((_base + 20)) \]; then' "$D" || fail "stall gate changed"
+sh -n "$D" || fail "smart_dynamic_tune.sh syntax"
+grep -q 'fsm.state == ASB_STATE_MODERATE ? "MODERATE" : "HEAVY"' "$ROOT/src/asb_governor.c" || fail "lift log does not name the state"
+echo "PASS: fix107 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
