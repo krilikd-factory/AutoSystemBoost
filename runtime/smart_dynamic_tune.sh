@@ -374,7 +374,11 @@ if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh ]; then
   if [ "$SCREEN" = "0" ]; then
     sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh arm >/dev/null 2>&1
   else
-    sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh restore >/dev/null 2>&1
+    # screen_on, not restore (fix114): it gives back what the screen-off mode took and
+    # starts the light-traffic watcher (net_lte_light). This tuner runs on every app-tier,
+    # heat-band and memory-stall change too, so a plain restore here would undo a light
+    # LTE choice within minutes of making it.
+    sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh screen_on >/dev/null 2>&1
   fi
 fi
 

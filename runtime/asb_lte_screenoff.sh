@@ -23,7 +23,17 @@
 # Uses the platform's own interface, `cmd phone set/get-allowed-network-types-for-users`,
 # the same one the Settings 5G switch drives. No properties, no modem files.
 #
-# Commands: arm | apply | restore | status
+# Second mode, net_lte_light (fix114): "5G only when it is needed" with the screen ON.
+#   An OP15 capture (24817) spent 80 min on BT audio + feeds with the screen on at 12 %/h,
+#   moving 512 MiB over mobile data - about 0.9 Mbit/s on average - on LTE + 5G NSA. NSA
+#   keeps the LTE anchor AND the NR leg up for that trickle, and its tail timers keep both
+#   awake between bursts. A watcher samples the mobile interfaces every 30 s while the
+#   screen is on: after 3 minutes under 4 Mbit/s it drops the NR leg (same save/verify/
+#   restore path as the screen-off mode, recorded as reason "light"); any 30 s window over
+#   12 Mbit/s gives 5G back at once and holds it for 10 minutes. Never during a call,
+#   tethering, a game in front, or on Wi-Fi. Opt-in, off by default.
+#
+# Commands: arm | apply | restore | screen_on | status | nr
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 # `settings` through the fallback wrapper: on some OnePlus builds the cmd bridge answers
@@ -45,6 +55,13 @@ RETRYF="$STATE_DIR/lte_screenoff.retry"
 RETRY_S="${ASB_LTE_RETRY_S:-300}"
 RETRY_MAX=24
 NR_BIT=524288                                   # 1 << (NETWORK_TYPE_NR - 1)
+LPIDF="$STATE_DIR/lte_light.pid"                 # light-traffic watcher (screen on)
+LHOLD="$STATE_DIR/lte_light.hold"               # epoch before which light must not re-apply
+LIGHT_LOW_KBPS="${ASB_LTE_LIGHT_LOW_KBPS:-4000}"
+LIGHT_HIGH_KBPS="${ASB_LTE_LIGHT_HIGH_KBPS:-12000}"
+LIGHT_TICK_S="${ASB_LTE_LIGHT_TICK_S:-30}"
+LIGHT_LOW_TICKS="${ASB_LTE_LIGHT_LOW_TICKS:-6}"
+LIGHT_HOLD_S="${ASB_LTE_LIGHT_HOLD_S:-600}"
 
 mkdir -p "$STATE_DIR" 2>/dev/null
 
@@ -185,6 +202,42 @@ _tethering() {
   return 1
 }
 
+# Why the mask was changed: "off" (screen-off mode) or "light" (light traffic, screen on).
+# Old two-field records are screen-off ones.
+_saved_reason() {
+  _r=""
+  [ -f "$SAVE" ] && IFS='|' read -r _x1 _x2 _r < "$SAVE" 2>/dev/null
+  _r="$(printf '%s' "$_r" | tr -d ' \r')"
+  printf '%s' "${_r:-off}"
+}
+
+# KiB moved over the mobile data interfaces so far (rx + tx, every rmnet_data*). Summed in
+# awk: the byte counters pass 2^31 within a day, and mksh arithmetic is 32-bit.
+_rmnet_kib() {
+  for _ri in "${ASB_NET_SYS:-/sys/class/net}"/rmnet_data*; do
+    [ -d "$_ri" ] || continue
+    cat "$_ri/statistics/rx_bytes" "$_ri/statistics/tx_bytes" 2>/dev/null
+  done | awk '/^[0-9]+$/ { s += $1 } END { printf "%d", s / 1024 }'
+}
+
+# Default route over mobile data (not Wi-Fi, not a VPN on Wi-Fi).
+_on_mobile() {
+  _dev="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
+  case "$_dev" in rmnet*|ccmni*) return 0 ;; esac
+  # A VPN tunnel on top: look at what the tunnel itself rides on.
+  case "$_dev" in tun*|wg*|ppp*)
+    ip route 2>/dev/null | grep -q '^default.*dev rmnet' && return 0 ;;
+  esac
+  return 1
+}
+
+# A game in front: latency matters more than the radio there.
+_game_front() {
+  _h="$(grep -m1 '^smart_app_hint=' "${ASB_STATE_FILE:-/dev/.asb/state}" 2>/dev/null | cut -d= -f2)"
+  case "$_h" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$_h" -ge 4 ]
+}
+
 # One-time repair for phones hit by the dropped-record bug above: the log says a restore
 # dropped its record, so NR may still be missing now. Give it back once, only if it is in
 # fact missing, then never again - a user who turns 5G off later keeps that choice.
@@ -215,8 +268,10 @@ do_restore() {
   # The parameter-expansion split is the only part of this that depends on the shell's
   # pattern dialect (a bare | inside the pattern), and the identical record parses fine
   # through read.
-  _sub=""; _orig=""
-  IFS='|' read -r _sub _orig < "$SAVE" 2>/dev/null
+  _sub=""; _orig=""; _rsn=""
+  # Third field (fix114): the reason, "off" or "light". Reading two fields put
+  # "916479|light" into _orig and the record read as corrupt.
+  IFS='|' read -r _sub _orig _rsn < "$SAVE" 2>/dev/null
   _sub="$(printf '%s' "$_sub" | tr -d ' \r')"; _orig="$(printf '%s' "$_orig" | tr -d ' \r')"
   _bad=0
   case "$_sub" in d|[0-9]|[0-9][0-9]) : ;; *) _bad=1 ;; esac
@@ -258,20 +313,26 @@ do_apply() {
   _in_call && { _retry_later "call in progress"; return 0; }
   _tethering && { _retry_later "tethering active"; return 0; }
   rm -f "$RETRYF" 2>/dev/null
+  _apply_nr_off off "LTE preferred, screen off"
+}
+
+# Drop the NR bit, save the original, verify. $1 = reason recorded with the save.
+_apply_nr_off() {
+  _reason="$1"; _why="$2"
   _sub="$(_data_slot)" || return 0
   _orig="$(_get_mask "$_sub")" || {
     _raw="$(_cmd_phone get-allowed-network-types-for-users $(_slot_args "$_sub") 2>&1 | tr -d '\r' | tail -n 1 | cut -c1-120)"
     _unsup_strike "cannot read allowed types (slot=$_sub, got: ${_raw:-nothing})"; return 0; }
   [ $(( _orig & NR_BIT )) -ne 0 ] || return 0    # 5G not allowed anyway
   _want=$(( _orig & ~NR_BIT ))
-  printf '%s|%s\n' "$_sub" "$_orig" > "$SAVE" 2>/dev/null && sync
+  printf '%s|%s|%s\n' "$_sub" "$_orig" "$_reason" > "$SAVE" 2>/dev/null && sync
   _set_mask "$_sub" "$_want"
   _now="$(_get_mask "$_sub")"
   if [ "$_now" = "$_want" ]; then
     date +%s > "$SINCE" 2>/dev/null
     rm -f "$UNSUP.n" 2>/dev/null
     _stats_add 1 0 0
-    _log "apply: sub=$_sub $_orig -> $_want (LTE preferred, screen off)"
+    _log "apply: sub=$_sub $_orig -> $_want ($_why)"
   else
     do_restore
     _unsup_strike "readback $_now != $_want after the write (restored)"
@@ -339,13 +400,109 @@ do_disarm() {
   fi
 }
 
+# ---- light-traffic mode (screen on) ------------------------------------------------------
+do_light_stop() {
+  if [ -f "$LPIDF" ]; then
+    _lp="$(cat "$LPIDF" 2>/dev/null)"
+    [ -n "$_lp" ] && kill "$_lp" 2>/dev/null
+    rm -f "$LPIDF"
+  fi
+}
+
+_light_tick() {   # $1 = kbit/s over the last window; $2 = low-window streak (in/out via _lowN)
+  _kb="$1"
+  if [ -f "$SAVE" ] && [ "$(_saved_reason)" = "light" ]; then
+    if [ "$_kb" -gt "$LIGHT_HIGH_KBPS" ] 2>/dev/null; then
+      do_restore
+      echo $(( $(date +%s) + LIGHT_HOLD_S )) > "$LHOLD" 2>/dev/null
+      _log "light: ${_kb} kbit/s - 5G back for at least ${LIGHT_HOLD_S}s"
+    fi
+    _lowN=0
+    return 0
+  fi
+  [ -f "$SAVE" ] && { _lowN=0; return 0; }   # a screen-off record is not ours to touch
+  if [ "$_kb" -lt "$LIGHT_LOW_KBPS" ] 2>/dev/null; then _lowN=$(( _lowN + 1 )); else _lowN=0; fi
+  [ "$_lowN" -ge "$LIGHT_LOW_TICKS" ] || return 0
+  _hu="$(cat "$LHOLD" 2>/dev/null)"; case "$_hu" in ''|*[!0-9]*) _hu=0 ;; esac
+  [ "$(date +%s)" -ge "$_hu" ] || return 0
+  _in_call && return 0
+  _tethering && return 0
+  _game_front && return 0
+  _apply_nr_off light "LTE preferred, light traffic ${_kb} kbit/s with the screen on"
+  _lowN=0
+}
+
+do_light_loop() {
+  _prev="$(_rmnet_kib)"; _lowN=0
+  while :; do
+    sleep "$LIGHT_TICK_S" & _sp=$!
+    wait "$_sp"
+    [ "$(_cfg net_lte_light)" = "1" ] || {
+      [ -f "$SAVE" ] && [ "$(_saved_reason)" = "light" ] && do_restore
+      break; }
+    [ -f "$UNSUP" ] && break
+    # Screen off: the record (if any) simply stays; the tuner's "arm" stops this loop too.
+    # The state file only - no dumpsys power every 30 s with the screen on.
+    [ "$(grep -m1 '^screen=' "${ASB_STATE_FILE:-/dev/.asb/state}" 2>/dev/null | cut -d= -f2)" = "0" ] && break
+    _cur="$(_rmnet_kib)"
+    case "$_cur" in ''|*[!0-9]*) _cur="$_prev" ;; esac
+    _d=$(( _cur - _prev )); _prev="$_cur"
+    [ "$_d" -lt 0 ] && _d=0           # an interface went away and its counters with it
+    if ! _on_mobile; then _lowN=0; continue; fi
+    # KiB per window -> kbit/s (x8; the 1.024 is noise next to the 4/12 Mbit/s marks).
+    _light_tick $(( _d * 8 / LIGHT_TICK_S ))
+  done
+  rm -f "$LPIDF"
+}
+
+do_light_start() {
+  [ "$(_cfg net_lte_light)" = "1" ] || return 0
+  [ -f "$UNSUP" ] && return 0
+  if [ -f "$LPIDF" ]; then
+    _lp="$(cat "$LPIDF" 2>/dev/null)"
+    [ -n "$_lp" ] && kill -0 "$_lp" 2>/dev/null && return 0
+  fi
+  (
+    exec </dev/null >/dev/null 2>&1
+    trap 'kill "$_sp" 2>/dev/null; exit 0' TERM INT
+    do_light_loop
+  ) &
+  printf '%s\n' "$!" > "$LPIDF" 2>/dev/null
+}
+
+# Screen on: give back what the SCREEN-OFF mode took, keep a light-traffic record (the
+# watcher decides about it), and start the watcher when the light mode is on.
+do_screen_on() {
+  do_disarm; rm -f "$RETRYF" 2>/dev/null
+  if [ -f "$SAVE" ]; then
+    if [ "$(_saved_reason)" != "light" ] || [ "$(_cfg net_lte_light)" != "1" ]; then
+      do_restore
+    fi
+  else
+    do_repair_dropped
+  fi
+  do_light_start
+}
+
 case "$1" in
-  arm)     do_arm ;;
+  screen_on) do_screen_on ;;
+  arm)
+    do_light_stop
+    # Screen off over a light-traffic record: keep it when the screen-off mode wants LTE
+    # anyway; otherwise give 5G back - LTE with the screen off is its own toggle, and with
+    # the watcher stopped nothing would notice a big download until the next screen-on.
+    if [ -f "$SAVE" ] && [ "$(_saved_reason)" = "light" ] && [ "$(_cfg net_screen_off_lte)" != "1" ]; then
+      do_restore
+    fi
+    do_arm ;;
   apply)   do_apply ;;
-  restore) do_disarm; rm -f "$RETRYF" 2>/dev/null; do_restore ;;
+  restore) do_disarm; do_light_stop; rm -f "$RETRYF" 2>/dev/null; do_restore ;;
   status)
     printf 'enabled=%s\n' "$(_cfg net_screen_off_lte)"
     printf 'applied=%s\n' "$([ -f "$SAVE" ] && echo 1 || echo 0)"
+    printf 'reason=%s\n' "$([ -f "$SAVE" ] && _saved_reason || echo none)"
+    printf 'light=%s\n' "$(_cfg net_lte_light)"
+    printf 'light_watch=%s\n' "$([ -f "$LPIDF" ] && kill -0 "$(cat "$LPIDF" 2>/dev/null)" 2>/dev/null && echo 1 || echo 0)"
     printf 'pending=%s\n' "$([ -f "$PIDF" ] && echo 1 || echo 0)"
     printf 'unsupported=%s\n' "$([ -f "$UNSUP" ] && echo 1 || echo 0)"
     printf 'last=%s\n' "$(tail -n 1 "$LOGF" 2>/dev/null | cut -d' ' -f3-)"
@@ -360,6 +517,6 @@ case "$1" in
     _nm="$(_get_mask "$_ns")" || { echo unknown; exit 0; }
     if [ $(( _nm & NR_BIT )) -ne 0 ]; then echo yes; else echo no; fi
     ;;
-  *) echo "usage: $0 arm|apply|restore|status|nr" >&2; exit 2 ;;
+  *) echo "usage: $0 arm|apply|restore|screen_on|status|nr" >&2; exit 2 ;;
 esac
 exit 0
