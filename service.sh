@@ -2680,16 +2680,17 @@ apply_cpufreq_caps() {
 # apply_cpufreq_caps must run ONLY via apply_screen_aware_caps, which first sets
 
 asb_screen_on() {
+  # Same rule as the governor (fix115): Android's display state 3/4 (doze) is the always-on
+  # display, which keeps the backlight lit - screen off, whatever the panel nodes say.
+  case "$(getprop debug.tracing.screen_state 2>/dev/null)" in 3|4) return 1 ;; esac
   for _dp in /sys/kernel/oplus_display/panel_power_status               /sys/kernel/oplus_display/disp_on_notify; do
     [ -r "$_dp" ] || continue
     _dpv="$(cat "$_dp" 2>/dev/null)"
     case "$_dpv" in 1|on|ON) return 0 ;; 0|off|OFF) return 1 ;; esac
   done
-  for _df in /sys/class/drm/card0-DSI-1/status /sys/class/drm/card0-DSI-2/status; do
-    [ -r "$_df" ] || continue
-    [ "$(cat "$_df" 2>/dev/null)" = "connected" ] && return 0
-    return 1
-  done
+  # No DRM connector check: card0-DSI-1/status says "connected" whenever the panel exists,
+  # screen on or off, so it answered "on" for good and the backlight below was never read -
+  # the reconcile loop's screen-off battery network profile could not engage on such phones.
   for _bl in /sys/class/backlight/panel0-backlight/brightness               /sys/class/leds/lcd-backlight/brightness; do
     [ -r "$_bl" ] || continue
     _blv="$(cat "$_bl" 2>/dev/null)"

@@ -861,6 +861,7 @@ T_A_BTVOL="BT volume: phone drives gain (independent scales)"
 T_A_COMP_OFF="compressor: off  ·  limiter only"
 T_A_COMP_ON="compressor: on  ·  6:1 above -24 dBFS"
 T_A_BASS="bass shelf: +%s dB @ 90 Hz"
+T_A_VOICE="voice tone: level %s (+%s dB @ 350 Hz, -%s dB @ 3 kHz)"
 T_A_LIB="libasbdsp: 64-bit %s  ·  32-bit %s  ·  ABI %s"
 T_A_REG="effect registered in: %s"
 T_A_STATUS="DSP status: requested +%sdB · live +%sdB · enabled=%s · attacher %s · registered %s"
@@ -916,6 +917,8 @@ T_N_LTE_STOP="LTE while screen off: on · stopped itself - %s"
 T_N_LTE_PARKED="LTE while screen off: on · 5G parked right now"
 T_N_LTE_TIMER="LTE while screen off: on · timer running (90 s after screen off)"
 T_N_LTE_ALLOWED="LTE while screen off: on · 5G allowed (screen is on)"
+T_N_LTE_LIGHT_LTE="5G only when needed: on · LTE now (light traffic), 5G returns on a heavy download"
+T_N_LTE_LIGHT_5G="5G only when needed: on · 5G in use, watching the traffic"
 T_N_LTE_NO5G="LTE while screen off: on · 5G is NOT allowed right now - if you did not turn it off, turn it on in the SIM settings"
 T_N_ROUTE="route via %s"
 T_N_ROUTE_RX="%s MB rx"
@@ -962,7 +965,7 @@ T_WLV_PROTECTED="protected - your call in Settings"
 T_WLV_INUSE="in use - left alone"
 T_WLV_REPORT="report only"
 T_WLV_LIMITED="wakelocks limited by your fitness setting"
-T_WLV_LIMIT_IGNORED="limit set, but this Android ignores it - the app still holds the CPU"
+T_WLV_LIMIT_IGNORED="limit set, but this Android ignores it - the app still holds the CPU (turn it off in the app itself, or Battery -> Restricted)"
 T_S_MC="Wi-Fi multicast held %s min since unplug - the Wi-Fi radio cannot doze (now: %s)"
 T_S_MC_NONE="nobody"
 T_S_VPN="VPN is on (%s) and the mobile data path (rmnet/IPA) is what keeps the phone awake most: the tunnel's keepalives wake the modem and CPU all night. ASB cannot change that - the VPN app's keepalive / always-on settings, split tunnelling or Wi-Fi at night can"
@@ -1671,6 +1674,19 @@ if [ "$_a_dsp" != "off" ]; then
 fi
 _a_bass="$(_cfg dsp_bass)"
 case "$_a_bass" in ''|off|0) : ;; *) _f "       $T_A_BASS" "$_a_bass" ;; esac
+# DSP voice tone (dsp_voice 0-10): two wide bands that move together - the voice "body" at
+# 350 Hz +0.5 dB per step, the harsh 3 kHz band -0.6 dB per step. It was the one DSP control
+# the action screen never mentioned, so a level set in the WebUI was invisible here.
+_a_voice="$(_cfg dsp_voice)"
+# Part of the DSP chain: with the DSP off the level is a setting, not something running.
+[ "$_a_dsp" = "off" ] && _a_voice=0
+case "$_a_voice" in
+  ''|off|0|*[!0-9]*) : ;;
+  *)
+    _vb=$((_a_voice * 5)); _vh=$((_a_voice * 6))
+    _f "       $T_A_VOICE" "$_a_voice" "$((_vb / 10)).$((_vb % 10))" "$((_vh / 10)).$((_vh % 10))"
+    ;;
+esac
 if [ "$_a_dsp" != "off" ]; then
   _l64="✗"; _l32="✗"
   [ -f /vendor/lib64/soundfx/libasbdsp.so ] && _l64="✓"
@@ -1950,6 +1966,13 @@ case "$_handover_active:$_radio_policy" in
        _f "       $T_N_FB_ACTIVE" "$_hf" ;;
   1:*) _f "       $T_N_FB_STORED" ;;
 esac
+# 5G only when needed (net_lte_light, fix114): what the screen-on watcher decided.
+if [ "$(_cfg net_lte_light)" = "1" ]; then
+  case "$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null | grep -m1 '^reason=')" in
+    reason=light) _f "       $T_N_LTE_LIGHT_LTE" ;;
+    *)            _f "       $T_N_LTE_LIGHT_5G" ;;
+  esac
+fi
 if [ "$(_cfg net_screen_off_lte)" = "1" ]; then
   _lte_st="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null)"
   case "$_lte_st" in
