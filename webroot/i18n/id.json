@@ -346,6 +346,10 @@
       "name": "LTE saat layar mati",
       "desc": "Setelah layar mati 90 detik, mematikan jalur 5G dan menjaga data tetap di LTE; 5G kembali begitu layar menyala. 5G NSA menjalankan dua radio sekaligus, padahal mendengarkan stream dengan layar gelap cukup dengan LTE. Tidak pernah aktif saat panggilan. Mati secara bawaan: mengubah jenis jaringan yang diizinkan menyambungkan ulang data. Jika ROM menolak perubahan, modul mengembalikan nilai asli dan berhenti mencoba."
     },
+    "net_lte_light": {
+      "name": "5G hanya saat perlu",
+      "desc": "Saat layar menyala: setelah 3 menit lalu lintas seluler ringan (di bawah 4 Mbit/s - feed, musik, video) kaki 5G dimatikan dan tetap di LTE yang mudah menanganinya; unduhan berat (di atas 12 Mbit/s) segera mengembalikan 5G dan menahannya 10 menit. 5G NSA menyalakan dua radio sekaligus hanya untuk aliran data kecil. Tidak pernah saat panggilan, tethering, game, atau di Wi-Fi. Mati secara bawaan: tiap peralihan mendaftar ulang koneksi data selama satu-dua detik."
+    },
     "heavy_prime_escape": {
       "name": "Angkat inti prime",
       "desc": "Hanya Smart. Saat beban - berat atau sehari-hari seperti menggulir feed - menahan inti prime di batas atasnya pada ponsel yang masih dingin, ASB menaikkan batas itu sebentar - tidak pernah melebihi yang diizinkan Balanced untuk beban yang sama - lalu beristirahat. Mati: inti prime selalu di batas Smart; sedikit lebih dingin dan hemat, tetapi tugas berat yang panjang (instalasi, ekspor, halaman besar) lebih lama selesai, dan kerja yang lebih lama juga membuat seluruh chip terjaga lebih lama. Saat ponsel hangat, pengangkatan sudah berhenti dengan sendirinya."

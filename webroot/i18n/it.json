@@ -372,6 +372,10 @@
       "name": "LTE a schermo spento",
       "desc": "Dopo 90 secondi a schermo spento disattiva il ramo 5G e mantiene i dati su LTE; il 5G torna appena si accende lo schermo. Il 5G NSA tiene attive due radio insieme, mentre per ascoltare uno stream a schermo spento LTE basta ampiamente. Non interviene mai durante una chiamata. Disattivato di default: cambiare i tipi di rete consentiti riconnette i dati. Se la ROM non accetta la modifica, il modulo ripristina il valore originale e non riprova."
     },
+    "net_lte_light": {
+      "name": "5G solo quando serve",
+      "desc": "Con lo schermo acceso: dopo 3 minuti di traffico mobile leggero (sotto 4 Mbit/s - feed, musica, video) toglie la gamba 5G e resta in LTE, che lo regge senza fatica; un download pesante (oltre 12 Mbit/s) riporta subito il 5G e lo tiene 10 minuti. Il 5G NSA tiene accese due radio per un filo di dati. Mai durante una chiamata, il tethering, un gioco o in Wi-Fi. Disattivato di default: ogni cambio riregistra la connessione dati per un secondo o due."
+    },
     "heavy_prime_escape": {
       "name": "Spinta dei core prime",
       "desc": "Solo Smart. Quando un carico - pesante o quotidiano, come scorrere un feed - tiene i core prime al loro tetto su un telefono fresco, ASB alza brevemente quel tetto - mai oltre quanto Balanced consente per lo stesso carico - e poi si ferma. Disattivato: i core prime restano sempre al tetto di Smart; un po' più fresco e parsimonioso, ma i lavori pesanti lunghi (installazioni, esportazioni, pagine grandi) durano di più, e un lavoro più lungo tiene sveglio più a lungo anche l'intero chip. Con il telefono caldo la spinta si interrompe già da sola."

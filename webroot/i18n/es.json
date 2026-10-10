@@ -346,6 +346,10 @@
       "name": "LTE con la pantalla apagada",
       "desc": "A los 90 segundos de apagar la pantalla desactiva la rama 5G y mantiene los datos en LTE; el 5G vuelve en cuanto se enciende la pantalla. 5G NSA mantiene dos radios activas a la vez, y para escuchar un stream con la pantalla apagada LTE basta de sobra. Nunca actúa durante una llamada. Desactivado por defecto: cambiar los tipos de red permitidos reconecta los datos. Si la ROM no acepta el cambio, el módulo restaura el valor original y deja de intentarlo."
     },
+    "net_lte_light": {
+      "name": "5G solo cuando hace falta",
+      "desc": "Con la pantalla encendida: tras 3 minutos de tráfico móvil ligero (menos de 4 Mbit/s: feeds, música, vídeo) quita la pata 5G y se queda en LTE, que lo lleva de sobra; una descarga pesada (más de 12 Mbit/s) devuelve el 5G al instante y lo mantiene 10 minutos. El 5G NSA mantiene dos radios activas para un hilo de datos. Nunca durante una llamada, al compartir conexión, en un juego ni en Wi-Fi. Desactivado por defecto: cada cambio vuelve a registrar los datos durante un segundo o dos."
+    },
     "heavy_prime_escape": {
       "name": "Elevación de núcleos prime",
       "desc": "Solo Smart. Cuando una carga - pesada o cotidiana, como desplazarse por un feed - mantiene los núcleos prime en su techo con el teléfono frío, ASB eleva ese techo brevemente - nunca por encima de lo que Balanced permite con la misma carga - y luego descansa. Desactivado mantiene los núcleos prime siempre en el techo de Smart: algo más fresco y ahorrador, pero las tareas pesadas largas (instalaciones, exportaciones, páginas grandes) tardan más, y un trabajo que tarda más también mantiene despierto todo el chip más tiempo. Con el teléfono caliente la elevación ya se detiene sola."

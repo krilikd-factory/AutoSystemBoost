@@ -346,6 +346,10 @@
       "name": "Ekran kapalıyken LTE",
       "desc": "Ekran 90 saniye kapalı kaldıktan sonra 5G bacağını kapatır ve veriyi LTE üzerinde tutar; ekran açılınca 5G hemen geri gelir. 5G NSA iki radyoyu aynı anda çalıştırır; ekran kapalıyken bir yayını dinlemek için LTE fazlasıyla yeter. Arama sırasında asla devreye girmez. Varsayılan olarak kapalı: izin verilen ağ türlerini değiştirmek veri bağlantısını yeniden kurar. ROM değişikliği kabul etmezse modül özgün değeri geri yükler ve tekrar denemez."
     },
+    "net_lte_light": {
+      "name": "Yalnızca gerektiğinde 5G",
+      "desc": "Ekran açıkken: 3 dakika hafif mobil trafikten sonra (4 Mbit/s altı - akışlar, müzik, video) 5G bacağını kapatır ve bunu rahatça taşıyan LTE'de kalır; ağır bir indirme (12 Mbit/s üstü) 5G'yi hemen geri getirir ve 10 dakika tutar. 5G NSA ince bir veri akışı için iki radyoyu birden açık tutar. Arama, paylaşım, oyun sırasında ve Wi-Fi'de asla çalışmaz. Varsayılan kapalı: her geçiş veri bağlantısını bir iki saniye yeniden kaydeder."
+    },
     "heavy_prime_escape": {
       "name": "Prime çekirdek yükseltme",
       "desc": "Yalnızca Smart. Ağır ya da akışta kaydırma gibi gündelik iş, serin bir telefonda prime çekirdekleri tavanlarında tuttuğunda ASB bu tavanı kısa süreliğine yükseltir - aynı yükte Balanced'ın izin verdiğinin asla üstüne çıkmadan - ve sonra dinlenir. Kapalı: prime çekirdekler sürekli Smart tavanında kalır; biraz daha serin ve tutumlu, ama uzun ağır işler (kurulum, dışa aktarma, büyük sayfalar) daha uzun sürer ve daha uzun süren iş tüm çipi de daha uzun uyanık tutar. Telefon ısındığında yükseltme zaten kendiliğinden durur."

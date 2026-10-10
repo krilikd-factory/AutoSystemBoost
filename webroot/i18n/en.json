@@ -296,6 +296,10 @@
     "net_screen_off_lte": {
       "name": "LTE While Screen Off",
       "desc": "After the screen has been off for 90 seconds, drops the 5G leg and keeps data on LTE; 5G comes back the moment the screen turns on. 5G NSA keeps two radios busy at once, while listening to a stream with the screen dark needs far less than LTE alone carries. Never acts during a call. Off by default: changing the allowed network types re-registers the data link, which takes a few seconds on some ROMs. If the ROM does not accept the change, the module restores the original value and stops trying."
+    },
+    "net_lte_light": {
+      "name": "5G Only When Needed",
+      "desc": "With the screen on: after 3 minutes of light mobile traffic (under 4 Mbit/s - feeds, music, video) drops the 5G leg and stays on LTE, which carries that easily; a heavy download (over 12 Mbit/s) brings 5G back at once and keeps it for 10 minutes. 5G NSA keeps two radios busy for a trickle of data. Never during a call, tethering or a game, never on Wi-Fi. Off by default: each switch re-registers the data link for a second or two."
     }
   },
   "cfg_search": "Search",
