@@ -17,4 +17,10 @@ grep -Fq 'light_idle_pin_escalations=' "$ROOT/src/asb_governor.c" || fail "escal
 grep -q 'resetprop -n tombstoned.max_tombstone_count 0' "$ROOT/post-fs-data.sh" && fail "native crash records still thrown away"
 grep -Eq 'for _svc in .*(minidump|mtdoopslog|bootstat)' "$ROOT/service.sh" && fail "bg_trim still stops the crash recorders"
 grep -Fq 'kernel panic policy' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show the panic policy"
+for _k in persist.sys.crash_dumps persist.sys.pstore_dumps persist.sys.mdlog_dumpback \
+          persist.sys.oom_crash_on_watchdog persist.sys.stability.nativehang.enable \
+          persist.sys.stability.nativehangII.enable persist.sys.stability.qcom_hang_task.enable \
+          persist.sys.stability.scout.enable persist.sys.stability.enable_res_leak_abort; do
+  grep -q "^$_k=" "$ROOT/runtime/asb_managed.props" && fail "managed props still set $_k"
+done
 echo "PASS fix90: panic reboot left to the vendor, pinned light idle escalates"
