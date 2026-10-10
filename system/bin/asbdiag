@@ -2002,6 +2002,10 @@ _pl_ac="$(grep -E '^plan_ac=' /dev/.asb/state 2>/dev/null | head -1 | sed 's/.*=
 # screen_on is not in the state file; read the display the way metrics does.
 _pl_scr="$(cat /sys/kernel/oplus_display/panel_power_status 2>/dev/null | head -1)"
 case "$_pl_scr" in 1|2) _pl_scr=1 ;; 0) _pl_scr=0 ;; *) _pl_scr="" ;; esac
+# OnePlus 15 has no panel_power_status node, so the plan line read "screen_on=?" on every
+# report from it. The governor's own status JSON (a line of the state file) carries what
+# its screen detector decided - the uevent/key/dumpsys chain - so use that answer.
+[ -z "$_pl_scr" ] && _pl_scr="$(grep -o '"screen":[01]' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)"
 if [ -n "$_pl_cls" ]; then
   # Compare the configured point with actual live CPU sensors, not with hardware
   # trip/setpoint zones. On this OP15, `cpu-hw-trip-*` is a constant 95C shutdown
@@ -2023,6 +2027,8 @@ if [ -n "$_pl_cls" ]; then
     _tp_n=$((_tp_n + 1))
     [ "$_tv" -gt "$_tp_now" ] && _tp_now="$_tv"
   done
+_tp_up="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+case "$_tp_up" in ''|*[!0-9]*) _tp_up=99999 ;; esac
 case "$_tp_set" in
   ''|*[!0-9]*) : ;;
   *)
@@ -2034,10 +2040,12 @@ case "$_tp_set" in
         P "  [WARN] throttle point below live CPU sensor (manual ${_tp_set}C, live ${_tp_now}C)"
         NOTE "  manual threshold, so the sustained clamp engaging is the requested behaviour."
         NOTE "  Raise the point or switch the mode to auto if the clamp is not what you want."
+        if [ "${_tp_up:-99999}" -lt 600 ] 2>/dev/null; then NOTE "  phone booted ${_tp_up:-?}s ago: post-boot dexopt/indexing heat, not a steady-state reading - re-check after ~10 min."; fi
       else
       V "  throttle point below live CPU sensor" "< ${_tp_now}C" "${_tp_set}C" eq
       NOTE "  a real CPU sensor is already above the selected point; sustained policy may engage."
       NOTE "  Check workload/cooling before raising the threshold."
+      if [ "${_tp_up:-99999}" -lt 600 ] 2>/dev/null; then NOTE "  phone booted ${_tp_up:-?}s ago: post-boot dexopt/indexing heat, not a steady-state reading - re-check after ~10 min."; fi
       fi
     elif [ "$_tp_now" -gt 0 ] && [ "$_tp_set" -eq "$_tp_now" ]; then
       NOTE "throttle point ${_tp_set}C equals live CPU max ${_tp_now}C across ${_tp_n} sensor(s) - boundary observed, not a failure"
@@ -2367,7 +2375,10 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
       _fheld="$(dumpsys power 2>/dev/null | grep -c "PARTIAL_WAKE_LOCK.*uid=$_fuid")"
       _fdis="$(dumpsys power 2>/dev/null | grep "PARTIAL_WAKE_LOCK.*uid=$_fuid" | grep -c DISABLED)"
     fi
-    P "    WAKE_LOCK ignored: $_fp  (was: ${_fo:-default}; now: ${_fnow:-?}; held now: ${_fheld:-0}, of them disabled: ${_fdis:-0})"
+    P "    WAKE_LOCK ignored: $_fp  (was: ${_fo:-default}; now: ${_fnow:-default}; held now: ${_fheld:-0}, of them disabled: ${_fdis:-0})"
+    # No WAKE_LOCK entry means the op is back at default: the system reset it (app update,
+    # permission reset, boot sweep). The wakelock watcher re-applies it on its next pass.
+    [ "${_fnow:-default}" != ignore ] && NOTE "  limit lapsed - the system reset this app-op; the wakelock watcher re-applies it on its next pass"
   done < /data/adb/asb/wakelock_fitness_limited
 fi
 if [ -s /data/adb/asb/wakelock_restricted ]; then
@@ -2762,20 +2773,27 @@ done
 if [ -r /proc/pressure/memory ]; then
   P "  memory PSI (read-only):"
   sed 's/^/    /' /proc/pressure/memory 2>/dev/null
+  # avg10/avg60 straight after boot measure app restore and dexopt, not steady use.
+  _psi_up="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+  case "$_psi_up" in ''|*[!0-9]*) _psi_up=99999 ;; esac
+  if [ "$_psi_up" -lt 600 ]; then
+    NOTE "  phone booted ${_psi_up}s ago: avg10/avg60 reflect boot-time app restore - compare avg300 or re-run after ~10 min"
+  fi
 else
   NOTE "memory PSI unavailable on this kernel (no policy is changed)"
 fi
-# LMKD tunables ASB may touch
+# LMKD tunables ASB may touch. The two headers used to print back to back, so the lmk
+# props appeared under "OEM toggles" and the LMKD header stood empty.
 P "  LMKD / vmpressure props:"
-# OEM system toggles ASB can optionally manage (only when UX_MANAGE_OEM_TOGGLES=1).
-P "  OEM toggles (managed only if UX_MANAGE_OEM_TOGGLES=1):"
-for _ot in ram_expand_size adaptive_battery_management_enabled sem_low_heat_mode; do
-  P "    settings global $_ot = $(settings get global $_ot 2>/dev/null)"
-done
 for _p in ro.lmk.use_psi ro.lmk.thrashing_limit ro.lmk.swap_util_max \
           persist.device_config.lmkd_native.thrashing_limit \
           persist.sys.lmkd.camera_adaptive_lmk.enable; do
   P "    $_p = $(gp $_p)"
+done
+# OEM system toggles ASB can optionally manage (only when UX_MANAGE_OEM_TOGGLES=1).
+P "  OEM toggles (managed only if UX_MANAGE_OEM_TOGGLES=1):"
+for _ot in ram_expand_size adaptive_battery_management_enabled sem_low_heat_mode; do
+  P "    settings global $_ot = $(settings get global $_ot 2>/dev/null)"
 done
 # kernel VM tunables
 P "  kernel VM:"
