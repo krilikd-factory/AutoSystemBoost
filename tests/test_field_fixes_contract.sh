@@ -426,4 +426,16 @@ grep -q 'display-state waiter:' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does 
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix116 contract"
 ) || exit 1
+# ---- fix117 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix117: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"
+grep -q 'asb_bit_test(absb, ABS_MT_POSITION_X) && asb_bit_test(absb, ABS_MT_TRACKING_ID)' "$G" || fail "touch panel not identified by multitouch axes"
+grep -q 'INPUT_PROP_DIRECT' "$G" || fail "touchpads/digitisers not excluded"
+grep -q 'EVIOCGRAB' "$G" && fail "the touch node must never be grabbed"
+grep -q 'touch watch:' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report the touch watch"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix117 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
