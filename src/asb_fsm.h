@@ -2542,7 +2542,8 @@ if (!can_leave &&
         int _skin_ok = !(_skin > 20 && _skin < 70) || (_skin < g_asb_cfg.thermal_skin_c - 8);
         int _ok = g_asb_cfg.heavy_prime_escape &&
                   fsm->profile_idx == PROFILE_SMART && _ps >= 1 &&
-                  fsm->state == ASB_STATE_HEAVY && m->misc.screen_on &&
+                  (fsm->state == ASB_STATE_HEAVY || fsm->state == ASB_STATE_MODERATE) &&
+                  m->misc.screen_on &&
                   !fsm->thermal_cap && !m->bat.charging && !m->misc.camera_active &&
                   m->misc.app_hint < ASB_APP_GAMING &&
                   m->therm.temp_valid &&
@@ -2567,7 +2568,9 @@ if (!can_leave &&
             }
         } else {
             _esc_streak = _pinned ? _esc_streak + 1 : 0;
-            if (_esc_streak >= 2) {
+            /* MODERATE needs one more pinned tick than HEAVY (fix105): it is where most
+             * screen time is spent, so a single busy frame must not open a burst. */
+            if (_esc_streak >= (fsm->state == ASB_STATE_MODERATE ? 3 : 2)) {
                 fsm->prime_escape = 1;
                 _esc_since = _now;
                 _esc_streak = 0;
@@ -2583,8 +2586,19 @@ if (!can_leave &&
             for (int _k = 0; _k < 2; _k++) {
                 int _sl = _slots[_k];
                 if (_sl < 0) continue;
+                /* MODERATE escape (fix105).
+                 *
+                 * The HEAVY-only escape missed where the time actually goes. The OP15 24770
+                 * capture has the prime AT its 1747 MHz Smart ceiling in nearly every
+                 * MODERATE sample at 36-48 C (and the main cores at theirs in about half):
+                 * the scheduler asking for more on a cool phone, every touch clipped - the
+                 * "Smart feels a bit laggy" reports from OP12/OP13/OP15 alike. A MODERATE
+                 * burst lifts only to Balanced's own MODERATE rail, not HEAVY, under the
+                 * same burst/rest budget and every thermal refusal above. */
+                int _lvl_state = (fsm->state == ASB_STATE_MODERATE) ? ASB_STATE_MODERATE
+                                                                      : ASB_STATE_HEAVY;
                 int _lim = lerp_int(_bb->floor.cpu_max[_sl], _bb->ceil.cpu_max[_sl],
-                                    g_state_level[ASB_STATE_HEAVY]);
+                                    g_state_level[_lvl_state]);
                 int _hw = g_cpu_slot_hwmax[_sl];
                 /* Balanced leaves a separate prime core unmanaged (0): its HEAVY rail is
                  * then the hardware maximum, and the Smart prime cap must lift to it. */
