@@ -292,6 +292,9 @@ static void asb_offdrain_track(int screen_on, int pct, int charging) {
  * until the SOC has fallen 5 whole steps, so one quantisation step is at most a 20% error
  * per window, and the EWMA over windows smooths the rest. */
 static int  g_device_bounds_applied = -1;  /* overrides loaded from device_bounds.env at start */
+/* Screen-on memory stalls seen by the tuner signature (fix108), published (fix111). */
+static unsigned long g_mem_stall_entries = 0;
+static int g_mem_stall_now = 0;
 static long g_prime_escape_since_ms = 0;   /* boottime ms of the open lift, 0 = none */
 static long g_prime_escape_total_ms = 0;   /* lifted time this session */
 
@@ -2605,6 +2608,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
          * so a report shows how much of the "peak" was a one-tick spike. */
         fprintf(f, "ses_max_temp_raw=%d\nses_max_temp_smooth=%d\n",
                 fsm->ses_max_temp, fsm->ses_max_temp_sm);
+        fprintf(f, "mem_stall_now=%d\nmem_stall_entries=%lu\n",
+                g_mem_stall_now, g_mem_stall_entries);
 
         /* Wakeups by source, same shape as the write breakdown below. */
         fprintf(f, "wake_by_src=\"");
@@ -5549,11 +5554,15 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         static int _mem_stall = 0;
         if (screen_on_v) {
             int _pf = asb_read_mem_psi_full_x100();
-            if (_pf >= 200) _mem_stall = 1;
+            if (_pf >= 200) {
+                if (!_mem_stall) g_mem_stall_entries++;
+                _mem_stall = 1;
+            }
             else if (_pf >= 0 && _pf < 100) _mem_stall = 0;
         } else {
             _mem_stall = 0;
         }
+        g_mem_stall_now = _mem_stall;
         int sig = (g_smart_rt.app_hint << 4) | (therm_bucket << 2) | (_mem_stall << 1) | screen_on_v;
         int screen_changed = (g_smart_last_tune_sig < 0) ||
                                  ((sig & 1) != (g_smart_last_tune_sig & 1));
