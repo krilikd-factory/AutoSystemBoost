@@ -23,7 +23,7 @@ CC_BIN=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC_BIN
 if [ -z "$CC_BIN" ]; then echo "PASS uevent parking contract (no C compiler: source pins only)"; exit 0; fi
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 {
-  printf '#include <stdio.h>\n#include <string.h>\n#include <errno.h>\n#include <unistd.h>\n#include <sys/epoll.h>\n#include <sys/socket.h>\n'
+  printf '#include <stdio.h>\n#include <string.h>\n#include <errno.h>\n#include <unistd.h>\n#include <fcntl.h>\n#include <sys/ioctl.h>\n#include <linux/input.h>\n#include <sys/epoll.h>\n#include <sys/socket.h>\n'
   sed -n '/^static int           g_uev_parked = 0;$/,/^static void uev_unpark(int epfd, int uefd) {$/p' "$SRC" | sed '$d'
   sed -n '/^static void uev_unpark(int epfd, int uefd) {$/,/^}$/p' "$SRC"
   cat <<'EOF'
@@ -49,6 +49,6 @@ int main(void) {
 }
 EOF
 } > "$TMP/t.c"
-"$CC_BIN" -O2 -Wall -Werror -o "$TMP/t" "$TMP/t.c" 2> "$TMP/err" || { cat "$TMP/err"; fail "fixture did not compile"; }
+"$CC_BIN" -O2 -Wall -Werror -Wno-unused-function -Wno-unused-variable -o "$TMP/t" "$TMP/t.c" 2> "$TMP/err" || { cat "$TMP/err"; fail "fixture did not compile"; }
 "$TMP/t" || fail "park/unpark fixture failed"
 echo "PASS uevent parking contract"

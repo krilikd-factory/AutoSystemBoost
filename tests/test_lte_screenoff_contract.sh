@@ -81,7 +81,9 @@ run restore
 : > "$T/ignore_writes"
 run apply
 [ "$(cat "$T/mask")" = "$ORIG" ] || fail "mask changed although the ROM ignored the write"
-[ -e "$T/state/lte_screenoff.unsupported" ] || fail "ignored write did not mark unsupported"
+[ -e "$T/state/lte_screenoff.unsupported" ] && fail "one ignored write already marked unsupported (needs three)"
+run apply; run apply
+[ -e "$T/state/lte_screenoff.unsupported" ] || fail "three ignored writes did not mark unsupported"
 rm -f "$T/ignore_writes"
 run apply
 [ "$(cat "$T/mask")" = "$ORIG" ] || fail "acted again after being marked unsupported"

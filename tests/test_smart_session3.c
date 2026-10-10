@@ -1011,6 +1011,19 @@ static void test_slot_update_gating(void) {
     /* But same-tier app change should NOT trigger (IDLE → LIGHT both = tier 0) */
     asb_smart_mark_slot_updated(&rt, 1030, 1, ASB_APP_GAMING);
     EXPECT(asb_smart_should_update_slot(&rt, 1040, 1, ASB_APP_HEAVY) == 0, "same tier (heavy/gaming) → no update");
+
+    /* The lean moved with nothing else changing - the screen-off floor (850) lifting when
+     * the screen comes back - must re-blend, or the phone keeps Battery rails while used. */
+    rt.alpha_battery_x1000 = 850;
+    rt.interactive_bonus_x1000 = 20;
+    asb_smart_mark_slot_updated(&rt, 1040, 1, ASB_APP_HEAVY);
+    rt.alpha_battery_x1000 = 620;
+    EXPECT(asb_smart_should_update_slot(&rt, 1050, 1, ASB_APP_HEAVY) == 1, "alpha dropped after wake → update");
+    asb_smart_mark_slot_updated(&rt, 1050, 1, ASB_APP_HEAVY);
+    rt.alpha_battery_x1000 = 650;
+    EXPECT(asb_smart_should_update_slot(&rt, 1060, 1, ASB_APP_HEAVY) == 0, "small alpha wobble → no update");
+    rt.interactive_bonus_x1000 = 98;
+    EXPECT(asb_smart_should_update_slot(&rt, 1070, 1, ASB_APP_HEAVY) == 1, "interactive bonus restored → update");
 }
 
 static void test_daypart_smoothing_factor(void) {

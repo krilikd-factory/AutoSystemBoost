@@ -30,6 +30,10 @@ run_probe
 printf '%s\n' '[bluetooth.profile.opp.enabled]: [true]' > "$TMP/props"
 run_probe
 [ "$(value status "$TMP/out")" = "not_observable" ] || fail "Bluetooth OPP property is not UV evidence"
+# Stock battery shutdown threshold: has "voltage" in its name, says nothing about CPU tables.
+printf '%s\n' '[ro.cutoff_voltage_mv]: [3100]' '[persist.vendor.battery.voltage_max]: [4500]' > "$TMP/props"
+run_probe
+[ "$(value status "$TMP/out")" = "not_observable" ] || fail "battery voltage property is not UV evidence"
 printf '%s\n' '[persist.kernel.cpu_voltage_offset]: [1]' > "$TMP/props"
 run_probe
 [ "$(value status "$TMP/out")" = "external_uv_hint" ] || fail "explicit voltage property should remain a hint"
