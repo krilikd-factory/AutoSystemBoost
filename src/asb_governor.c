@@ -4472,6 +4472,24 @@ static int asb_read_mem_psi_x100(void) {
     return out;
 }
 
+/* 'full avg10' x100: the share of time EVERY runnable task waited on memory (fix108). */
+static int asb_read_mem_psi_full_x100(void) {
+    FILE *f = fopen("/proc/pressure/memory", "r");
+    if (!f) return -1;
+    char line[256];
+    int out = -1;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "full ", 5) != 0) continue;
+        char *p = strstr(line, "avg10=");
+        int whole = 0, frac = 0;
+        if (p && sscanf(p + 6, "%d.%d", &whole, &frac) >= 1)
+            out = whole * 100 + frac;
+        break;
+    }
+    fclose(f);
+    return out;
+}
+
 static int classify_environment(const asb_fsm_t *fsm) {
     long dur = (fsm->ses_start_ts > 0) ? (time(NULL) - fsm->ses_start_ts) : 0;
     if (dur < 60) return ENV_QUIET;
@@ -5517,7 +5535,19 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     {
         int therm_bucket = (cpu_max_c >= 60) ? 2 : (cpu_max_c >= 50 ? 1 : 0);
         int screen_on_v  = m->misc.screen_on ? 1 : 0;
-        int sig = (g_smart_rt.app_hint << 4) | (therm_bucket << 2) | screen_on_v;
+        /* Memory-stall bit (fix108). The tuner decides swappiness from PSI "full" (fix107),
+         * but it only ran when app tier, heat band or screen changed - so a stall that
+         * started inside an app never reached it. Hysteresis 2.00 on / 1.00 off, screen on
+         * only (the screen-off branch has its own PSI rule). One small read per tick. */
+        static int _mem_stall = 0;
+        if (screen_on_v) {
+            int _pf = asb_read_mem_psi_full_x100();
+            if (_pf >= 200) _mem_stall = 1;
+            else if (_pf >= 0 && _pf < 100) _mem_stall = 0;
+        } else {
+            _mem_stall = 0;
+        }
+        int sig = (g_smart_rt.app_hint << 4) | (therm_bucket << 2) | (_mem_stall << 1) | screen_on_v;
         int screen_changed = (g_smart_last_tune_sig < 0) ||
                                  ((sig & 1) != (g_smart_last_tune_sig & 1));
             if (sig != g_smart_last_tune_sig &&
