@@ -1103,7 +1103,13 @@ static int g_heavy_confirm_streak = 0;
 
 /* LIGHT_IDLE -> MODERATE when the main cores are pinned at the light-idle ceiling
  * (see the end of fsm_desired_base). Held this long after the last sign of need. */
-#define ASB_LI_PIN_HOLD_S 20
+/* 40 s, not 20 (fix113). The OP15 capture after fix109 shows the escalation working - 51
+ * times in ~100 min of screen-on - but a 20 s hold let the state drop back and re-escalate
+ * about every two minutes: two FSM transitions and a rewrite of every cap node each time,
+ * which took ASB's own writes from 265/h to 363/h and transitions from 21/h to 50/h. The
+ * main cores were pinned again almost as soon as the hold ended; a longer hold costs one
+ * cap step for twenty more seconds and saves the churn. */
+#define ASB_LI_PIN_HOLD_S 40
 static unsigned long g_li_pin_escalations = 0;
 
 static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
@@ -2715,7 +2721,17 @@ if (floor_hz <= 0) floor_hz = hw / 3;
      * of 46-54 C and Smart sat at a 876/1000 battery lean in ordinary use - clipped ceilings
      * for the whole slot, earned by a few seconds of heat. An EMA over about four ticks
      * (8-25 s at screen-on cadence) keeps any heat that lasts and drops the blips. */
-    if (m->therm.temp_valid && m->therm.cpu_max_c > 0 && m->therm.cpu_max_c < 130) {
+    /* Not during the first five minutes after the governor starts (fix113): that is boot -
+     * dexopt, app restore, the media scanner - and its heat is not this slot's. The startup
+     * quarantine only drops a session that ENDS inside the window; the session that begins
+     * at boot runs on for twenty minutes and carried the boot peak into learning (OP15
+     * fix112 capture: "current session peak: raw 74C, smoothed 74C" 82 s after boot). The
+     * raw peak still records it for the safety paths. */
+    static time_t _sm_t0 = 0;
+    time_t _sm_now = time(NULL);
+    if (_sm_t0 == 0) _sm_t0 = _sm_now;
+    int _sm_boot = ((long)(_sm_now - _sm_t0) < 300);
+    if (!_sm_boot && m->therm.temp_valid && m->therm.cpu_max_c > 0 && m->therm.cpu_max_c < 130) {
         int _t10 = m->therm.cpu_max_c * 10;
         fsm->ses_temp_ema_x10 = (fsm->ses_temp_ema_x10 <= 0)
             ? _t10 : fsm->ses_temp_ema_x10 + (_t10 - fsm->ses_temp_ema_x10) / 4;

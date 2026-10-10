@@ -2598,6 +2598,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
          * module ran the entire session on the 10 s idle cadence. "screen_on=?" in the
          * report gave nothing to work with - this names the path that answered. */
         fprintf(f, "screen_src=%d\n", metrics_screen_src());
+        /* Android's display state (1 off, 2 on, 3/4 doze, -1 unavailable) and the seconds
+         * a lit always-on display was counted as screen-off (fix115). */
+        fprintf(f, "display_state=%d\nscreen_aod_s=%ld\n", g_display_state, g_scr_aod_s);
         fprintf(f, "screen_on_detect=\"uevent:%lu,recheck:%lu,tick:%lu\"\n",
                 g_scr_on_by_uevent, g_scr_on_by_recheck, g_scr_on_by_tick);
         fprintf(f, "screen_on_single_rechecks=%lu\nscreen_on_resume_chains=%lu\nscreen_on_tick_late_max_s=%ld\n",
@@ -4278,6 +4281,8 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
          * launch spike must not teach the whole slot to lean toward battery. Falls back to
          * the raw peak only when no valid sample was smoothed. */
         sin.max_temp_c = (fsm->ses_max_temp_sm > 0) ? fsm->ses_max_temp_sm : fsm->ses_max_temp;
+        /* A session with no smoothed sample at all lay entirely in the boot window; the
+         * startup quarantine below marks it DIRTY, so the raw fallback never teaches. */
         /* Record it as handed over, before anything downstream can average it away. */
         g_ses_last_temp = sin.max_temp_c;
         g_ses_last_dur  = (int)dur;

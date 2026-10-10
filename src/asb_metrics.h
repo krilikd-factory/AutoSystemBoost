@@ -11,6 +11,9 @@
 #include <dirent.h>
 #include <ctype.h>
 #include <sys/types.h>
+#if defined(__ANDROID__)
+#include <sys/system_properties.h>
+#endif
 #include "asb_config.h"
 extern asb_runtime_config_t g_asb_cfg;
 
@@ -1775,13 +1778,64 @@ int spike_detected = 0;
  * "screen_on=?" and there was no way to tell whether the vendor node was missing, the
  * generic fallback answered, or nothing was readable at all.
  *
- * 0 = unknown, 1..3 = vendor paths, 4 = generic backlight, 5 = default. */
+ * 0 = unknown, 1..3 = vendor paths, 4 = generic backlight, 5 = default,
+ * 6 = Android display state said doze (always-on display: screen off, fix115). */
 static int g_screen_src = 0;
 
 /* Read accessor for the screen-source tag. */
 static int metrics_screen_src(void) { return g_screen_src; }
 
+/* Android's own display power state (fix115).
+ *
+ * The framework publishes android.view.Display.STATE_* in debug.tracing.screen_state on
+ * every display transition - the property perfetto's display-state probe reads: 1 OFF,
+ * 2 ON, 3 DOZE, 4 DOZE_SUSPEND, 5 VR, 6 ON_SUSPEND. -1 = not available (host build,
+ * property absent, or not a single digit). A shared-memory read, no fork, no binder. */
+#ifndef ASB_DISPLAY_STATE_FIXTURE
+static int asb_display_state_read(void) {
+#if defined(__ANDROID__)
+    char v[PROP_VALUE_MAX];
+    v[0] = 0;
+    if (__system_property_get("debug.tracing.screen_state", v) <= 0) return -1;
+    if (v[0] < '0' || v[0] > '9' || v[1] != 0) return -1;
+    return v[0] - '0';
+#else
+    return -1;
+#endif
+}
+#endif
+
+/* Last state read, and how long a lit panel was really the always-on display. */
+static int    g_display_state = -1;
+static long   g_scr_aod_s = 0;
+static time_t g_scr_aod_last = 0;
+
 static int metrics_screen_on(void) {
+    /* An always-on display is a screen that is OFF.
+     *
+     * Every OnePlus in the field captures answers this question from panel0-backlight
+     * (screen_src=3): the oplus_display nodes are not there. An always-on display keeps
+     * that backlight lit - an OnePlus 13R capture had it at 493/4094 for 43 minutes of a
+     * night, Android itself "Dozing" - so the governor ran screen-ON: LIGHT_IDLE ceilings
+     * instead of deep idle, the 2-6 s active tick, no quiet night, the tuner's screen-on
+     * branch, and Smart learning those hours as screen time. 247 of 379 screen-off samples
+     * on that phone looked like this; the sleep phase stayed 64% awake.
+     *
+     * Only DOZE / DOZE_SUSPEND decide here, and only towards "off": the framework sets
+     * them for the always-on and ambient displays, which take no input. Everything else
+     * (property missing, OFF, ON) goes on to the panel nodes exactly as before, so a ROM
+     * without the property behaves as it did. */
+    int ds = asb_display_state_read();
+    g_display_state = ds;
+    if (ds == 3 || ds == 4) {
+        time_t now = time(NULL);
+        if (g_scr_aod_last > 0 && now > g_scr_aod_last && now - g_scr_aod_last <= 300)
+            g_scr_aod_s += (long)(now - g_scr_aod_last);
+        g_scr_aod_last = now;
+        g_screen_src = 6;
+        return 0;
+    }
+    g_scr_aod_last = 0;
     const char *paths[] = { PATH_SCREEN_STATUS, PATH_SCREEN_STATUS2, NULL };
     for (int i = 0; paths[i]; i++) {
         int v = sysfs_read_int(paths[i], -1);
