@@ -162,7 +162,10 @@ if [ "$_boot_debug" = "1" ]; then
   if [ -r "$_boot_timeline" ]; then
     _boot_rows="$(grep -cv '^#' "$_boot_timeline" 2>/dev/null)"
     P "  recorder             : debug active · ${_boot_rows:-0} marker(s)"
-    P "  boot reason           : $(grep '^# bootreason=' "$_boot_timeline" 2>/dev/null | head -1 | cut -d= -f2-)"
+    # ro.boot.bootreason is empty on current OnePlus builds (the reason lives in
+    # sys.boot.reason, set later by bootstat); say where to look instead of a blank.
+    _tl_br="$(grep '^# bootreason=' "$_boot_timeline" 2>/dev/null | head -1 | cut -d= -f2-)"
+    P "  boot reason           : ${_tl_br:-(not in ro.boot.bootreason - see 'last boot reason' below)}"
     P "  latest lifecycle rows:"
     tail -n 16 "$_boot_timeline" 2>/dev/null | while IFS= read -r _boot_row; do
       case "$_boot_row" in '#'*|'') continue ;; esac
@@ -192,7 +195,11 @@ P "  last boot reason      : ${_lb_reason:-unknown}"
 # fix89; another module or a custom kernel may still do it. 0/0 turns a crash the phone would
 # reboot out of into a hang that needs a forced restart (black screen, alarm missed).
 _kp="$(cat /proc/sys/kernel/panic 2>/dev/null)"; _kpo="$(cat /proc/sys/kernel/panic_on_oops 2>/dev/null)"
-P "  kernel panic policy   : panic=${_kp:-?} panic_on_oops=${_kpo:-?}  (tombstones kept: $(getprop tombstoned.max_tombstone_count 2>/dev/null || echo default))"
+# getprop prints an empty line, with status 0, for an unset prop - so "|| echo default"
+# never fired and the line read "tombstones kept: " once fix94 stopped setting it.
+_tbk="$(getprop tombstoned.max_tombstone_count 2>/dev/null)"
+P "  kernel panic policy   : panic=${_kp:-?} panic_on_oops=${_kpo:-?}  (tombstones kept: ${_tbk:-platform default})"
+[ "$_tbk" = "0" ] && NOTE "native crash records (tombstones) are thrown away: tombstoned.max_tombstone_count=0. ASB no longer sets it since fix94; after a reboot on this build it should read 'platform default' - if not, another module sets it."
 if [ "$_kp" = "0" ] || [ "$_kpo" = "0" ]; then
   NOTE "a kernel crash will NOT reboot this phone (panic=0 waits forever / panic_on_oops=0 runs on after an oops) - a hang then looks like a frozen black screen until a forced restart. ASB no longer sets these; if they stay 0 after a reboot, another module or the kernel does."
 fi
