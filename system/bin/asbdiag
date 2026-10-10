@@ -733,6 +733,7 @@ if [ -r "$_state" ]; then
     4)   NOTE "screen source: generic backlight" ;;
     5)   NOTE "screen source: NONE readable - assuming on (idle cadence will be wrong)" ;;
     6)   NOTE "screen source: Android display state (always-on display = screen off)" ;;
+    7)   NOTE "screen source: Android display state (just switched on, panel still dark)" ;;
     0)   NOTE "screen source: not sampled yet" ;;
   esac
   # Android's own display state next to it (fix115): 3/4 = doze, the always-on display. Before
@@ -744,6 +745,13 @@ if [ -r "$_state" ]; then
     5) _dsn="vr" ;; 6) _dsn="on-suspend" ;; -1) _dsn="not published by this ROM - panel nodes decide" ;; *) _dsn="" ;;
   esac
   [ -n "$_dsn" ] && NOTE "Android display state: ${_dsn} · always-on display counted as screen-off: $(( ${_aod:-0} / 60 )) min since governor start"
+  # The display-state waiter (fix116): wakes seen the moment Android switches the display on.
+  _dwu="$(grep -m1 '^display_waiter=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _dwe="$(grep -m1 '^display_state_events=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  case "${_dwu:-}" in
+    2|1) NOTE "display-state waiter: running · ${_dwe:-0} on/off transition(s) delivered" ;;
+    -1)  NOTE "display-state waiter: unavailable on this ROM - wakes found by display events, keys and re-checks" ;;
+  esac
   # How each wake was noticed. "tick" is the slow path: until then the governor is still on
   # screen-off rails while the phone is in someone's hand. A tick share near zero is the
   # goal; the late figure is an upper bound (time since the screen went off).
