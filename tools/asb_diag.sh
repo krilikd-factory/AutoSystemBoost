@@ -732,8 +732,18 @@ if [ -r "$_state" ]; then
     3)   NOTE "screen source: panel0-backlight" ;;
     4)   NOTE "screen source: generic backlight" ;;
     5)   NOTE "screen source: NONE readable - assuming on (idle cadence will be wrong)" ;;
+    6)   NOTE "screen source: Android display state (always-on display = screen off)" ;;
     0)   NOTE "screen source: not sampled yet" ;;
   esac
+  # Android's own display state next to it (fix115): 3/4 = doze, the always-on display. Before
+  # fix115 a lit AOD backlight ran the governor screen-ON all night (OP13R: 43 min at a time).
+  _dst="$(grep -m1 '^display_state=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _aod="$(grep -m1 '^screen_aod_s=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  case "${_dst:-}" in
+    1) _dsn="off" ;; 2) _dsn="on" ;; 3) _dsn="doze (always-on display)" ;; 4) _dsn="doze-suspend (always-on display)" ;;
+    5) _dsn="vr" ;; 6) _dsn="on-suspend" ;; -1) _dsn="not published by this ROM - panel nodes decide" ;; *) _dsn="" ;;
+  esac
+  [ -n "$_dsn" ] && NOTE "Android display state: ${_dsn} · always-on display counted as screen-off: $(( ${_aod:-0} / 60 )) min since governor start"
   # How each wake was noticed. "tick" is the slow path: until then the governor is still on
   # screen-off rails while the phone is in someone's hand. A tick share near zero is the
   # goal; the late figure is an upper bound (time since the screen went off).
@@ -1860,17 +1870,23 @@ esac
 # congctl, so every link read "no-window-tuning" whatever was set.
 # Screen-off LTE: how often it engaged and how long the phone stayed on LTE, so an A/B of
 # the switch has numbers (external audit R-3).
-if [ "$(cfg net_screen_off_lte)" = 1 ] && [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ]; then
+# "5G only when needed" (net_lte_light, fix114) shares the record and the counters.
+if { [ "$(cfg net_screen_off_lte)" = 1 ] || [ "$(cfg net_lte_light)" = 1 ]; } && [ -f "$MODDIR/runtime/asb_lte_screenoff.sh" ]; then
   _lst="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null)"
+  if [ "$(cfg net_lte_light)" = 1 ]; then
+    _lla="$(grep -c 'light traffic' /data/adb/asb/lte_screenoff.log 2>/dev/null)"
+    _llb="$(grep -c 'light: .* 5G back' /data/adb/asb/lte_screenoff.log 2>/dev/null)"
+    NOTE "5G only when needed: LTE chosen ${_lla:-0} time(s) on light traffic, 5G given back ${_llb:-0} time(s) for heavy traffic; now reason=$(printf '%s\n' "$_lst" | sed -n 's/^reason=//p') watcher=$(printf '%s\n' "$_lst" | sed -n 's/^light_watch=//p')"
+  fi
   NOTE "screen-off LTE: applied $(printf '%s\n' "$_lst" | sed -n 's/^applies=//p') time(s), restored $(printf '%s\n' "$_lst" | sed -n 's/^restores=//p'), $(printf '%s\n' "$_lst" | sed -n 's/^lte_minutes=//p') min on LTE in total; now applied=$(printf '%s\n' "$_lst" | sed -n 's/^applied=//p') unsupported=$(printf '%s\n' "$_lst" | sed -n 's/^unsupported=//p')"
   # Whether 5G is allowed on the data SIM right now - the thing that matters if a restore
   # ever failed. Read the same way the script reads it.
   _l5="$(sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh nr 2>/dev/null)"
   case "$_l5" in
     yes) NOTE "5G allowed now: yes" ;;
-    no)  NOTE "5G allowed now: NO$([ -f /data/adb/asb/lte_screenoff.saved ] && echo ' (parked by ASB, screen off)' || echo ' - and ASB holds no record of removing it: if you did not turn 5G off yourself, turn it back on in Settings')" ;;
+    no)  NOTE "5G allowed now: NO$([ -f /data/adb/asb/lte_screenoff.saved ] && { grep -q '|light$' /data/adb/asb/lte_screenoff.saved 2>/dev/null && echo ' (parked by ASB, light traffic)' || echo ' (parked by ASB, screen off)'; } || echo ' - and ASB holds no record of removing it: if you did not turn 5G off yourself, turn it back on in Settings')" ;;
   esac
-  grep -E 'restore:|repair:' /data/adb/asb/lte_screenoff.log 2>/dev/null | tail -n 2 | while IFS= read -r _l5l; do P "    $_l5l"; done
+  grep -E 'restore:|repair:|light' /data/adb/asb/lte_screenoff.log 2>/dev/null | tail -n 3 | while IFS= read -r _l5l; do P "    $_l5l"; done
 fi
 _dip=ip; for _ipb in /system/bin/ip /vendor/bin/ip; do [ -x "$_ipb" ] && { _dip="$_ipb"; break; }; done
 if command -v ip >/dev/null 2>&1 || [ -x "$_dip" ]; then
@@ -2018,7 +2034,11 @@ case "$_pl_scr" in 1|2) _pl_scr=1 ;; 0) _pl_scr=0 ;; *) _pl_scr="" ;; esac
 # OnePlus 15 has no panel_power_status node, so the plan line read "screen_on=?" on every
 # report from it. The governor's own status JSON (a line of the state file) carries what
 # its screen detector decided - the uevent/key/dumpsys chain - so use that answer.
-[ -z "$_pl_scr" ] && _pl_scr="$(grep -o '"screen":[01]' /dev/.asb/state 2>/dev/null | head -1 | cut -d: -f2)"
+# The state file's own "screen=" line (fix113): fix95 grepped the "screen" key of the status
+# JSON, which comes from `asb status` and is never in this file, so the line kept "?".
+[ -z "$_pl_scr" ] && _pl_scr="$(grep -m1 '^screen=[01]$' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+[ -z "$_pl_scr" ] && [ -x "$MODDIR/bin/asb" ] && \
+  _pl_scr="$("$MODDIR/bin/asb" status 2>/dev/null | head -1 | grep -o '"screen":[01]' | head -1 | cut -d: -f2)"
 if [ -n "$_pl_cls" ]; then
   # Compare the configured point with actual live CPU sensors, not with hardware
   # trip/setpoint zones. On this OP15, `cpu-hw-trip-*` is a constant 95C shutdown
