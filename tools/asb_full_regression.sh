@@ -16,10 +16,48 @@ else
   echo 'ERROR: gcc or clang is required for host C fixtures' >&2
   exit 1
 fi
+# Test scripts run in parallel (fix97).
+#
+# Run one after another the suite took ~2 minutes, and three runtime tests that wait on real
+# timers (Wi-Fi fallback ~34 s, debug support ~18 s, LTPO video ~13 s) were 60 % of it. The
+# scripts are independent - each works in its own mktemp directory - so they are queued here
+# and run N at a time at the end. Output is buffered per test and printed in queue order, so
+# the log reads exactly as before; a failure still names the test and fails the run.
+# ASB_REGRESSION_JOBS=1 restores strictly sequential execution.
+_Q_TITLE=(); _Q_CMD=()
+queue() { _Q_TITLE+=("$1"); shift; _Q_CMD+=("$(printf '%q ' "$@")"); }
 run_optional() {
   local title="$1" file="$2" shell="$3"
   [ -f "$file" ] || { printf 'ERROR: required regression file missing: %s\n' "$file" >&2; exit 1; }
-  run "$title" "$shell" "$file"
+  queue "$title" "$shell" "$file"
+}
+run_queue() {
+  local jobs="${ASB_REGRESSION_JOBS:-}"
+  if [ -z "$jobs" ]; then
+    jobs="$(nproc 2>/dev/null || echo 2)"
+    [ "$jobs" -lt 4 ] && jobs=4
+    [ "$jobs" -gt 12 ] && jobs=12
+  fi
+  local out; out="$(mktemp -d)"
+  local i n=${#_Q_CMD[@]} running=0
+  for ((i = 0; i < n; i++)); do
+    ( set +e; eval "${_Q_CMD[$i]}" >"$out/$i.log" 2>&1; echo $? >"$out/$i.rc" ) &
+    running=$((running + 1))
+    if [ "$running" -ge "$jobs" ]; then wait -n 2>/dev/null || true; running=$((running - 1)); fi
+  done
+  wait
+  local failed=0 rc
+  for ((i = 0; i < n; i++)); do
+    printf '\n== %s ==\n' "${_Q_TITLE[$i]}"
+    cat "$out/$i.log" 2>/dev/null
+    rc="$(cat "$out/$i.rc" 2>/dev/null || echo 99)"
+    if [ "$rc" != 0 ]; then
+      printf 'FAILED: %s (exit %s)\n' "${_Q_TITLE[$i]}" "$rc" >&2
+      failed=$((failed + 1))
+    fi
+  done
+  rm -rf "$out"
+  [ "$failed" -eq 0 ] || { printf '\n%d regression test(s) failed\n' "$failed" >&2; exit 1; }
 }
 
 run 'schema sync' bash tools/asb_schema_sync.sh check
@@ -102,8 +140,9 @@ run_optional 'V62-to-V64 migration' tests/test_v62_to_v64_migration.sh bash
 _listed="$(grep -oE 'tests/test_[A-Za-z0-9_]+\.sh' "$0" | sort -u)"
 for test_file in tests/test_*.sh; do
   printf '%s\n' "$_listed" | grep -qxF "$test_file" && continue
-  run "$(basename "$test_file" .sh)" bash "$test_file"
+  queue "$(basename "$test_file" .sh)" bash "$test_file"
 done
+run_queue
 run 'effective policy JSON' bash -c 'MODDIR="$1" sh tools/asb_effective_policy.sh | python3 -m json.tool >/dev/null' _ "$ROOT"
 cmp -s tools/asb_diag.sh system/bin/asbdiag || { echo 'ERROR: asbdiag copies differ' >&2; exit 1; }
 printf '\nALL ASB HOST REGRESSIONS PASSED\n'

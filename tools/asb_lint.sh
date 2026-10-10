@@ -1135,7 +1135,9 @@ fi
 # embeds awk. Shell has no C comments, so a match is either awk or a mistake either way.
 echo ""
 echo "🧷 C comments inside awk programs"
-_ac_hits="$(find "$MODDIR" -name '*.sh' -type f ! -path '*/dsp_stubs/*' 2>/dev/null | while IFS= read -r _af; do
+# tests/ is skipped like the escaped-quote check below: test scripts embed C fixtures in
+# heredocs, and a file holding both a fixture and an awk call is not an awk comment.
+_ac_hits="$(find "$MODDIR" -name '*.sh' -type f ! -path '*/dsp_stubs/*' ! -path '*/tests/*' 2>/dev/null | while IFS= read -r _af; do
   grep -q "awk " "$_af" 2>/dev/null || continue
   awk -v f="$_af" '
     # Only the opening form, and only where a comment can be: "/*" at the start of a line.
