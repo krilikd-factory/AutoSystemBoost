@@ -270,4 +270,25 @@ sh -n "$D" || fail "smart_dynamic_tune.sh syntax"
 grep -q 'fsm.state == ASB_STATE_MODERATE ? "MODERATE" : "HEAVY"' "$ROOT/src/asb_governor.c" || fail "lift log does not name the state"
 echo "PASS: fix107 contract"
 ) || exit 1
+# ---- fix108 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix108: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"
+grep -q '(_mem_stall << 1) | screen_on_v;' "$G" || fail "tuner signature has no memory-stall bit"
+grep -q 'if (_pf >= 200) _mem_stall = 1;' "$G" || fail "stall entry threshold changed"
+grep -q 'else if (_pf >= 0 && _pf < 100) _mem_stall = 0;' "$G" || fail "stall exit hysteresis missing"
+CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "PASS: fix108 contract (source pins only)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{ printf '#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n'
+  sed -n '/^static int asb_read_mem_psi_full_x100(void) {/,/^}$/p' "$G" | sed 's#"/proc/pressure/memory"#getenv("PSI")#'
+  printf 'int main(void){printf("%%d\\n", asb_read_mem_psi_full_x100());return 0;}\n'; } > "$T/t.c"
+"$CC" -O2 -o "$T/t" "$T/t.c" 2>"$T/e" || { cat "$T/e"; fail "PSI fixture did not compile"; }
+printf 'some avg10=7.39 avg60=8.41 avg300=2.74 total=9449753\nfull avg10=4.78 avg60=4.16 avg300=1.26 total=4448849\n' > "$T/p"
+[ "$(PSI="$T/p" "$T/t")" = 478 ] || fail "full avg10 parsed as $(PSI="$T/p" "$T/t")"
+printf 'some avg10=0.00 avg60=0.00 avg300=0.00 total=1\n' > "$T/p"
+[ "$(PSI="$T/p" "$T/t")" = -1 ] || fail "missing full line must read -1"
+echo "PASS: fix108 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
