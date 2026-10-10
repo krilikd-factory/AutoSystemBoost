@@ -276,7 +276,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix108: $*"; exit 1; }
 G="$ROOT/src/asb_governor.c"
 grep -q '(_mem_stall << 1) | screen_on_v;' "$G" || fail "tuner signature has no memory-stall bit"
-grep -q 'if (_pf >= 200) _mem_stall = 1;' "$G" || fail "stall entry threshold changed"
+grep -q 'if (_pf >= 200) {' "$G" || fail "stall entry threshold changed"
 grep -q 'else if (_pf >= 0 && _pf < 100) _mem_stall = 0;' "$G" || fail "stall exit hysteresis missing"
 CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
 [ -n "$CC" ] || { echo "PASS: fix108 contract (source pins only)"; exit 0; }
@@ -318,5 +318,17 @@ e=450; pk=0; for t in 45 45 94 45 45 45; do e=$(( e + (t*10 - e) / 4 )); s=$(( (
 e=450; pk=0; for t in 72 72 72 72 72 72 72 72 72 72 72 72; do e=$(( e + (t*10 - e) / 4 )); s=$(( (e+5)/10 )); [ $s -gt $pk ] && pk=$s; done
 [ "$pk" -ge 70 ] || fail "sustained 72 C (12 ticks) reached only $pk C"
 echo "PASS: fix110 contract"
+) || exit 1
+# ---- fix111 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix111: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"; D="$ROOT/tools/asb_diag.sh"
+grep -Fq 'if (!_mem_stall) g_mem_stall_entries++;' "$G" || fail "stall entries not counted on the rising edge"
+grep -Fq 'mem_stall_now=%d\nmem_stall_entries=%lu\n' "$G" || fail "stall counters not published"
+grep -Fq 'screen-on memory stalls since governor start' "$D" || fail "asbdiag does not show memory stalls"
+grep -Fq 'current session peak: raw ${_spr}C, smoothed ${_sps}C' "$D" || fail "asbdiag does not show raw vs smoothed peak"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix111 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
