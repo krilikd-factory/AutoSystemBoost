@@ -752,6 +752,15 @@ if [ -r "$_state" ]; then
     2|1) NOTE "display-state waiter: running · ${_dwe:-0} on/off transition(s) delivered" ;;
     -1)  NOTE "display-state waiter: unavailable on this ROM - wakes found by display events, keys and re-checks" ;;
   esac
+  # Screen-on touch watch (fix117): touches that started after a calm spell, and how many
+  # lifted light idle on the spot instead of after two confirming ticks.
+  _tw="$(grep -m1 '^touch_watch=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _ts="$(grep -m1 '^touch_starts=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _tl="$(grep -m1 '^touch_lifts=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  case "${_tw:-}" in
+    1) NOTE "touch watch: on · ${_ts:-0} touch(es) after a calm spell · ${_tl:-0} lifted light idle at once" ;;
+    0) NOTE "touch watch: no direct-touch panel found - interaction is read from load and GPU only" ;;
+  esac
   # How each wake was noticed. "tick" is the slow path: until then the governor is still on
   # screen-off rails while the phone is in someone's hand. A tick share near zero is the
   # goal; the late figure is an upper bound (time since the screen went off).
