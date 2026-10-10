@@ -331,4 +331,18 @@ grep -Fq 'current session peak: raw ${_spr}C, smoothed ${_sps}C' "$D" || fail "a
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix111 contract"
 ) || exit 1
+# ---- fix112 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix112: $*"; exit 1; }
+D="$ROOT/tools/asb_diag.sh"
+grep -Fq '(tombstones kept: ${_tbk:-platform default})' "$D" || fail "unset tombstone prop still prints blank"
+grep -Fq "see 'last boot reason' below" "$D" || fail "blank boot reason in the timeline"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+for f in "$ROOT"/common/*text.sh; do
+  grep -q '^ASB_L_CAM_LIVE_DIRTY2=' "$f" || fail "$(basename "$f") lacks the camera advice"
+  grep -qiE '^ASB_L_CAM_LIVE_DIRTY2=.*(disable ASB|отключите ASB|вимкніть ASB)' "$f" && fail "$(basename "$f") still asks to disable ASB first"
+done
+echo "PASS: fix112 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
