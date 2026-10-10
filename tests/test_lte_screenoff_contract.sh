@@ -71,7 +71,7 @@ rm -f "$T/callstate"
 
 run apply
 [ "$(cat "$T/mask")" = "$(( ORIG & ~524288 ))" ] || fail "did not remove exactly the NR bit"
-[ "$(cat "$T/state/lte_screenoff.saved")" = "1|$ORIG" ] || fail "original mask not saved under the data SIM's SLOT"
+[ "$(cat "$T/state/lte_screenoff.saved")" = "1|$ORIG|off" ] || fail "original mask not saved under the data SIM's SLOT (with the screen-off reason)"
 grep -q -- '-s 1' "$T/calls" || fail "slot index not passed to cmd phone (subId 1 lives in slot 1)"
 
 run restore

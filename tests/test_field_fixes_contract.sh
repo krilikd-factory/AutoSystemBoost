@@ -15,7 +15,7 @@ grep -rnE 'sysctlw kernel\.panic(_on_oops)? |/proc/sys/kernel/panic(_on_oops)?' 
   "$ROOT/service.sh" "$ROOT/post-fs-data.sh" "$ROOT/runtime" "$ROOT/profiles" 2>/dev/null \
   | grep -v '^\s*#' | grep -v ':[0-9]*: *#' && fail "a script still writes kernel.panic / panic_on_oops"
 F="$ROOT/src/asb_fsm.h"
-grep -Fq '#define ASB_LI_PIN_HOLD_S 20' "$F" || fail "pin hold constant"
+grep -Fq '#define ASB_LI_PIN_HOLD_S 40' "$F" || fail "pin hold constant"
 grep -Fq 'if (_cm > 0 && _cc > 0 && _cc * 100 >= _cm * 98) _sl = _c;' "$F" || fail "pinned test"
 grep -Fq 'if (m->misc.screen_on && !fsm_profile_is_battery && !m->misc.camera_active) {' "$F" || fail "escalation must be screen-on, not Battery, not camera"
 grep -Fq 'light_idle_pin_escalations=' "$ROOT/src/asb_governor.c" || fail "escalations not published"
@@ -82,7 +82,7 @@ gcc -O0 -o "$T/t" "$T/t.c" 2>"$T/err" || { cat "$T/err"; rm -rf "$T"; fail "guar
 "$T/t" || { rm -rf "$T"; fail "guard result wrong"; }
 rm -rf "$T"
 D="$ROOT/tools/asb_diag.sh"
-grep -q "grep -o '\"screen\":\[01\]' /dev/.asb/state" "$D" || fail "diag plan line has no governor screen fallback"
+grep -q "grep -m1 '^screen=\[01\]\$' /dev/.asb/state" "$D" || fail "diag plan line has no governor screen fallback"
 grep -q 'post-boot dexopt/indexing heat' "$D" || fail "throttle warning does not flag post-boot heat"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix95 contract"
@@ -344,5 +344,86 @@ for f in "$ROOT"/common/*text.sh; do
   grep -qiE '^ASB_L_CAM_LIVE_DIRTY2=.*(disable ASB|отключите ASB|вимкніть ASB)' "$f" && fail "$(basename "$f") still asks to disable ASB first"
 done
 echo "PASS: fix112 contract"
+) || exit 1
+# ---- fix113 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix113: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"; F="$ROOT/src/asb_fsm.h"; A="$ROOT/action.sh"
+grep -Fq 'int _sm_boot = ((long)(_sm_now - _sm_t0) < 300);' "$F" || fail "boot window still feeds the smoothed peak"
+grep -Fq 'if (!_sm_boot && m->therm.temp_valid' "$F" || fail "boot gate not applied"
+grep -q '^T_A_VOICE=' "$A" || fail "no English voice-tone line"
+for l in ar de es fr hy id it pt ru tr uk zh; do
+  grep -q '^T_A_VOICE=' "$ROOT/runtime/i18n/action_$l.sh" || fail "T_A_VOICE missing: $l"
+done
+# Runtime: level 4 prints +2.0 / -2.4, level 0 and DSP off print nothing.
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+sed -n '/^_a_voice=/,/^esac$/p' "$A" > "$T/v.sh"
+run() { sh -c '_f() { _sfmt="$1"; shift; printf "$_sfmt\n" "$@"; }; _cfg(){ echo "$V"; }; T_A_VOICE="v %s +%s -%s"; _a_dsp="$D"; . "$1"' _ "$T/v.sh"; }
+[ "$(V=4 D=5 run | sed 's/^ *//')" = "v 4 +2.0 -2.4" ] || fail "level 4 rendered as '$(V=4 D=5 run)'"
+[ -z "$(V=0 D=5 run)" ] || fail "level 0 printed a line"
+[ -z "$(V=4 D=off run)" ] || fail "voice line printed with the DSP off"
+echo "PASS: fix113 contract"
+) || exit 1
+# ---- fix114 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix114: $*"; exit 1; }
+L="$ROOT/runtime/asb_lte_screenoff.sh"
+grep -q '^LIGHT_LOW_KBPS="${ASB_LTE_LIGHT_LOW_KBPS:-4000}"' "$L" || fail "light low mark not 4 Mbit/s"
+grep -q '^LIGHT_HIGH_KBPS="${ASB_LTE_LIGHT_HIGH_KBPS:-12000}"' "$L" || fail "light high mark not 12 Mbit/s"
+grep -q '^  screen_on) do_screen_on ;;' "$L" || fail "no screen_on entry"
+grep -Fq 'asb_lte_screenoff.sh screen_on' "$ROOT/runtime/smart_dynamic_tune.sh" || fail "tuner still restores on every screen-on tick"
+grep -Fq 'asb_lte_screenoff.sh restore' "$ROOT/runtime/smart_dynamic_tune.sh" && fail "tuner would undo a light LTE choice"
+for c in config/governor.conf config/governor.conf.shipped; do
+  grep -q '^net_lte_light=0$' "$ROOT/$c" || fail "$c: net_lte_light not off by default"
+done
+grep -q '^net_lte_light|' "$ROOT/config/key_ownership.tsv" || fail "key ownership missing"
+[ "$(grep -c "net_screen_off_lte net_lte_light" "$ROOT/common/install.sh")" -ge 2 ] || fail "installer does not keep the toggle"
+grep -Fq "key:'net_lte_light'" "$ROOT/webroot/index.html" || fail "no WebUI item"
+grep -Fq "if (key === 'net_lte_light')" "$ROOT/webroot/index.html" || fail "WebUI toggle not live"
+for j in "$ROOT"/webroot/i18n/*.json; do
+  grep -q '"net_lte_light"' "$j" || fail "$(basename "$j") lacks net_lte_light"
+done
+for l in ar de es fr hy id it pt ru tr uk zh; do
+  for k in T_N_LTE_LIGHT_LTE T_N_LTE_LIGHT_5G; do
+    grep -q "^$k=" "$ROOT/runtime/i18n/action_$l.sh" || fail "$k missing: $l"
+  done
+done
+grep -Fq 'fprintf(f, "screen_on=%d' "$ROOT/src/asb_governor.c" && fail "redundant screen_on= key is back (state has screen=)"
+grep -Fq "5G only when needed: LTE chosen" "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report the light mode"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix114 contract"
+) || exit 1
+# ---- fix115 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix115: $*"; exit 1; }
+M="$ROOT/src/asb_metrics.h"
+grep -q '#include <sys/system_properties.h>' "$M" || fail "property API not included on Android"
+grep -q '^#if defined(__ANDROID__)$' "$M" || fail "property include not guarded for host builds"
+# the doze veto runs before every panel node
+awk '/^static int metrics_screen_on\(/{f=1} f&&/asb_display_state_read\(\)/{print "prop"; exit} f&&/PATH_SCREEN_STATUS/{print "node"; exit}' "$M" | grep -qx prop \
+  || fail "a panel node is read before Android's display state"
+grep -q 'display_state|' "$ROOT/tools/logkit/_asb_logkit_common.sh" || grep -q '|wake|disp_state"' "$ROOT/tools/logkit/_asb_logkit_common.sh" \
+  || fail "logkit display trace lacks wake/disp_state"
+grep -q 'always-on display: %d of %d' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "full-day report does not count lit screen-off samples"
+grep -q 'always-on display counted as screen-off' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report AOD time"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix115 contract"
+) || exit 1
+# ---- fix116 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix116: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"
+grep -q '^#include <sys/eventfd.h>$' "$G" || fail "eventfd header missing"
+grep -q 'dlsym(RTLD_DEFAULT, "__system_property_wait")' "$G" || fail "waiter not resolved at run time (API 24 target)"
+grep -q 'asb_disp_waiter_start();' "$G" || fail "waiter never started"
+grep -q '^LDFLAGS=(-lm -ldl)' "$ROOT/src/build_ndk_release.sh" || fail "NDK build does not link libdl"
+grep -q '^LDFLAGS="-lm -ldl"$' "$ROOT/src/build_termux.sh" || fail "Termux build does not link libdl"
+grep -q 'display-state waiter:' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report the waiter"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix116 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
