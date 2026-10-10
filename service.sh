@@ -821,6 +821,21 @@ fi
 [ "$_big_start" -ge "$N" ] && _big_start=$((N / 2))
 [ "$_big_start" -lt 2 ] && _big_start=2
 little_end=$((_big_start - 1))
+# Battery foreground: every core below the PRIME cluster (fix103/fix104). It was
+# 0-$little_end, which on SM8650 parts (OP12, Ace 3/5, 13R: clusters 0-1/2-4/5-6/7) pinned the
+# app on screen to the two A520 cores. Same rule as profile_core.sh's asb_cpu_cluster_init.
+_prime_hi=0; _prime_start=""
+_i=0
+while [ $_i -le $cpu_max ]; do
+  _f="$(cat /sys/devices/system/cpu/cpu${_i}/cpufreq/cpuinfo_max_freq 2>/dev/null)"
+  case "$_f" in ''|*[!0-9]*) : ;; *) [ "$_f" -gt "$_prime_hi" ] && { _prime_hi="$_f"; _prime_start=$_i; } ;; esac
+  _i=$((_i + 1))
+done
+bat_fg_end="$little_end"
+case "$_prime_start" in
+  ''|*[!0-9]*) : ;;
+  *) [ "$_prime_start" -gt "$((little_end + 1))" ] && [ "$_prime_start" -ge 4 ] && bat_fg_end=$((_prime_start - 1)) ;;
+esac
 LITTLE_POLICY="/sys/devices/system/cpu/cpufreq/policy0"
 BIG_POLICY="/sys/devices/system/cpu/cpufreq/policy${_big_start}"
 [ -d "$BIG_POLICY" ] || BIG_POLICY="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n | tail -1)"
@@ -843,8 +858,8 @@ apply_cpuset_groups() {
     return 0
   fi
   if [ "$ASB_PROFILE" = "battery" ]; then
-    writef_retry /dev/cpuset/foreground/cpus      "0-${little_end}" 2 0.06 || true
-    writef_retry /dev/cpuset/top-app/cpus         "0-${little_end}" 2 0.06 || true
+    writef_retry /dev/cpuset/foreground/cpus      "0-${bat_fg_end}" 2 0.06 || true
+    writef_retry /dev/cpuset/top-app/cpus         "0-${bat_fg_end}" 2 0.06 || true
   else
     writef_retry /dev/cpuset/foreground/cpus      "0-${cpu_max}" 2 0.06 || true
     writef_retry /dev/cpuset/top-app/cpus         "0-${cpu_max}" 2 0.06 || true
@@ -857,7 +872,7 @@ apply_cpuset_groups_all() {
     _bg="0-${little_end}"
     _fg="0-${cpu_max}"
     if [ "$ASB_PROFILE" = "battery" ]; then
-      _fg="0-${little_end}"
+      _fg="0-${bat_fg_end}"
     fi
     for _grp in background system-background; do
       [ -e "$_cg_root/$_grp/cpus" ] && writef_retry "$_cg_root/$_grp/cpus" "$_bg" 2 0.06 || true

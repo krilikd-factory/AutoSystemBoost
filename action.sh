@@ -21,6 +21,20 @@ case "$_asb_loc" in *[Ff]ailure*|*[Ee]xception*|*rror*|*' '*) _asb_loc="" ;; esa
 # system_locales is a list ("en-US,ru-RU"); the first entry is the UI language. Matching the
 # whole list picked Russian on a phone whose primary language was English.
 _asb_loc="${_asb_loc%%,*}"
+# Count word with Slavic plural forms (fix99). "1 сессий изучено" / "2 сессий" read as
+# broken Russian; a language that defines <VAR>_1 and <VAR>_2 gets one/few/many, every
+# other language keeps its single form. Usage: _npl COUNT VARNAME
+_npl() {
+  _np_n="$1"; _np_v="$2"
+  eval "_np_m=\${$_np_v:-}; _np_o=\${${_np_v}_1:-}; _np_f=\${${_np_v}_2:-}"
+  case "$_np_n" in ''|*[!0-9]*) printf '%s' "$_np_m"; return ;; esac
+  if [ -z "$_np_o" ]; then printf '%s' "$_np_m"; return; fi
+  _np_h=$((_np_n % 100)); _np_t=$((_np_n % 10))
+  if [ "$_np_h" -ge 11 ] && [ "$_np_h" -le 14 ]; then printf '%s' "$_np_m"
+  elif [ "$_np_t" -eq 1 ]; then printf '%s' "$_np_o"
+  elif [ "$_np_t" -ge 2 ] && [ "$_np_t" -le 4 ]; then printf '%s' "${_np_f:-$_np_m}"
+  else printf '%s' "$_np_m"; fi
+}
 case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
   *ru-*|*ru_*|ru) H_AUDIO="АУДИО"; H_CAMERA="КАМЕРА"; H_MEMORY="ПАМЯТЬ"; H_NETWORK="СЕТЬ"
                   H_WIFI="WI-FI"; H_GPS="GPS"; H_SYSTEM="СИСТЕМА"; H_IFACE="ИНТЕРФЕЙС"
@@ -114,6 +128,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="тепло для этого телефона — Smart склоняется к экономии"
     M_COOL_HERE="прохладно для этого телефона — Smart разрешает чуть больше"
     M_SES_LEARNED="сессий изучено"; M_DRAIN_NOW="расход сейчас"
+    M_SES_LEARNED_1="сессия изучена"; M_SES_LEARNED_2="сессии изучено"
+    M_SES_BANK_1="сессия накоплена всего"; M_SES_BANK_2="сессии накоплено всего"
+    M_DISCARDED_1="сессия отброшена как ненадёжная"; M_DISCARDED_2="сессии отброшено как ненадёжные"
     M_BANKED="накоплено — Smart не управляет на этом профиле"
     M_DP0="ночь"; M_DP1="раннее утро"; M_DP2="утро"; M_DP3="день"; M_DP4="вечер"; M_DP5="поздний вечер"
     M_WEEKEND="выходной"; M_WEEKDAY="будний день"
@@ -163,6 +180,9 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="тепло для цього телефона — Smart схиляється до економії"
     M_COOL_HERE="прохолодно для цього телефона — Smart дозволяє трохи більше"
     M_SES_LEARNED="сесій вивчено"
+    M_SES_LEARNED_1="сесію вивчено"; M_SES_LEARNED_2="сесії вивчено"
+    M_SES_BANK_1="сесію накопичено загалом"; M_SES_BANK_2="сесії накопичено загалом"
+    M_DISCARDED_1="сесію відкинуто як ненадійну"; M_DISCARDED_2="сесії відкинуто як ненадійні"
     M_DRAIN_NOW="витрата зараз"
     M_BANKED="накопичено — Smart не керує на цьому профілі"
     M_FOREGROUND="активний застосунок"
@@ -799,6 +819,7 @@ T_ETA="Time to 0%% %s"
 T_ETA_MEASURED="(measured)"
 T_ETA_HEUR="(heuristic)"
 T_ETA_AVG="(average drain)"
+T_ETA_SLOT="(typical drain for this hour)"
 T_ETA_IDLE_MEAS="idle figure measured: %s%%/h with the screen off"
 T_ETA_IDLE_N=" (from %s screen-off window(s) of 1 h+)"
 T_ETA_LINE="~%sh %sm screen on  ·  ~%sh %sm idle"
@@ -1071,11 +1092,27 @@ if [ "$_ewma_x10" -le 0 ] 2>/dev/null; then
   case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
   _eta_kind=average
 fi
+# Third rung: what this time slot typically drains, as the learner measured it over many
+# sessions. Right after a boot both live figures are 0, and the header fell straight to a
+# fixed 500 mA - "~9 h 20 min" - while twenty lines lower the Smart card printed the slot's
+# own learned 19.1 %/h as a 3.3 h forecast. Same screen, same battery, two answers.
+# Same gate the governor's budget uses: a slot under 35 % confidence is mostly defaults.
+_sconf=$(grep "^smart_confidence=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+case "$_sconf" in ''|*[!0-9]*) _sconf=0 ;; esac
+if [ "$_ewma_x10" -le 0 ] 2>/dev/null && [ "$_sconf" -ge 350 ]; then
+  _ewma_x10=$(grep "^smart_bucket_drain_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+  case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
+  _eta_kind=slot
+fi
 _on_ma=0
 if [ "$_ewma_x10" -gt 0 ] 2>/dev/null && \
    [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null; then
   _on_ma=$(( (_cap_uah / 1000) * _ewma_x10 / 1000 ))
-  [ "$_eta_kind" = measured ] && _eta_note="$T_ETA_MEASURED" || _eta_note="$T_ETA_AVG"
+  case "$_eta_kind" in
+    measured) _eta_note="$T_ETA_MEASURED" ;;
+    slot)     _eta_note="$T_ETA_SLOT" ;;
+    *)        _eta_note="$T_ETA_AVG" ;;
+  esac
 fi
 if [ "$_on_ma" -lt 50 ] 2>/dev/null; then
   case "$PROFILE" in
@@ -1371,6 +1408,8 @@ if [ -n "$_g_state" ]; then
     GAMING)     _gsn="$T_GS_GAME" ;;
     *)          _gsn="$_g_state" ;;
   esac
+  # "for 0s" read as a glitch on a state that had just been entered (debug6 report).
+  case "$_g_dwell" in ''|*[!0-9]*) _g_dwell="" ;; *) [ "$_g_dwell" -lt 5 ] && _g_dwell="" ;; esac
   if [ -n "$_g_dwell" ]; then _f "       $T_STATE_FOR" "$_gsn" "$_g_dwell"
   else _f "       $T_STATE" "$_gsn"; fi
   case "$_g_owner" in
@@ -1451,8 +1490,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
   echo "  🧠  ${H_LEARN}"
   _ll=""
   if [ -n "$_l_sess" ]; then
-    [ "$_l_sess" = "1" ] && _ll="1 ${M_SES_LEARNED}" \
-                         || _ll="${_l_sess} ${M_SES_LEARNED}"
+    _ll="${_l_sess} $(_npl "$_l_sess" M_SES_LEARNED)"
   fi
   # Confidence tier, worded the same way the WebUI tiers it.
   if [ -n "$_l_conf" ] && [ "$_l_conf" -gt 0 ] 2>/dev/null; then
@@ -1514,7 +1552,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     # --- 2. how sure it is -----------------------------------------------------------
     _conf="$(_st smart_confidence)"; _ses="$(_st smart_sessions_total)"
     if [ -n "$_conf" ] && [ "$_conf" -gt 0 ] 2>/dev/null; then
-      echo "       ${M_CONF}: $((_conf / 10))%  ·  ${_ses:-0} ${M_SES_BANK}"
+      echo "       ${M_CONF}: $((_conf / 10))%  ·  ${_ses:-0} $(_npl "${_ses:-0}" M_SES_BANK)"
       # These two were left in English inside an otherwise translated block - visible on a
       # Russian screenshot as one stray sentence among the rest.
       [ "$_conf" -lt 350 ] 2>/dev/null && echo "         ${M_CONF_LOW}"
@@ -1588,6 +1626,11 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
       # rate. It sat two lines under "drain now: 25.1%/h" labelled "at the current rate"
       # while dividing by 7.3%/h, which read as a contradiction on the same screen.
       _ew="$(_st smart_drain_ewma_x10)"
+      # The budget falls back to the slot's learned drain when the EWMA is still 0
+      # (smart_budget_src=1); print that rate too, or the 3.3 h stands with no basis shown.
+      if [ "${_ew:-0}" -le 0 ] 2>/dev/null && [ "$(_st smart_budget_src)" = "1" ]; then
+        _ew="$(_st smart_bucket_drain_x10)"
+      fi
       if [ "${_ew:-0}" -gt 0 ] 2>/dev/null; then
         echo "       ${M_PREDICT}: $((_bp / 10)).$((_bp % 10)) ${U_H} ${M_AT_RATE} $((_ew / 10)).$((_ew % 10))${U_PCTH}"
       else
@@ -1605,7 +1648,7 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
     esac
     _qf="$(_st smart_q_fail)"
     [ -n "$_qf" ] && [ "$_qf" -gt 0 ] 2>/dev/null \
-      && echo "       ${_qf} ${M_DISCARDED}"
+      && echo "       ${_qf} $(_npl "$_qf" M_DISCARDED)"
   fi
 fi
 
