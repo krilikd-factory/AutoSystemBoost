@@ -1365,15 +1365,35 @@ if (m->gpu.load_pct >= _gpu_gate) {
      * light idle; the camera and GAMING paths are elsewhere. */
     if (m->misc.screen_on && !fsm_profile_is_battery && !m->misc.camera_active) {
         static int    _li_pin_streak = 0;
-        static int    _li_pin_cap = 0;        /* slot-0 ceiling (MHz) the cores were pinned at */
+        static int    _li_pin_cap = 0;        /* ceiling (MHz) the watched cores were pinned at */
+        static int    _li_pin_slot = -1;      /* which slot that was */
         static time_t _li_pin_until = 0;
         time_t _now = time(NULL);
-        int _cur = m->cpu.cur_freq[0], _max = m->cpu.max_freq[0];
-        int _pinned = (_max > 0 && _cur > 0 && _cur * 100 >= _max * 98);
-        int _need_more = (_li_pin_cap > 0 && _cur * 100 >= _li_pin_cap * 98);
+        /* Which cores carry the UI (fix109).
+         *
+         * Slot 0 is right on a 2-cluster part (OP13/OP15/Ace 5 Pro: six main cores). On a
+         * 3/4-cluster part (OP12, 13R, Ace 3/5: SM8650 0/2/5/7) slot 0 is the pair of A520
+         * efficiency cores, where UI threads do not run - the 13R capture (2798) has the
+         * PRIME core at its light-idle ceiling in 85% of screen-on LIGHT_IDLE samples while
+         * the little pair was pinned in 36%, so this escalation was watching the wrong cores
+         * on every 4-cluster OnePlus. There it watches the mid cluster and the prime. */
+        int _multi = (g_cpu_policy_ids[2] >= 0 && g_cpu_policy_ids[1] >= 0);
+        int _cand[2] = { _multi ? 1 : 0, _multi ? 2 : -1 };
+        int _sl = -1;
+        for (int _k = 0; _k < 2 && _sl < 0; _k++) {
+            int _c = _cand[_k];
+            if (_c < 0) continue;
+            int _cc = m->cpu.cur_freq[_c], _cm = m->cpu.max_freq[_c];
+            if (_cm > 0 && _cc > 0 && _cc * 100 >= _cm * 98) _sl = _c;
+        }
+        int _max = (_sl >= 0) ? m->cpu.max_freq[_sl] : 0;
+        int _pinned = (_sl >= 0) && (_li_pin_slot < 0 || _li_pin_slot == _sl);
+        int _wcur = (_li_pin_slot >= 0) ? m->cpu.cur_freq[_li_pin_slot] : 0;
+        int _need_more = (_li_pin_cap > 0 && _wcur * 100 >= _li_pin_cap * 98);
         if (_pinned && (_li_pin_cap == 0 || _max <= _li_pin_cap)) {
             if (++_li_pin_streak >= 2) {
                 _li_pin_cap = _max;
+                _li_pin_slot = _sl;
                 _li_pin_until = _now + ASB_LI_PIN_HOLD_S;
             }
         } else {
@@ -1384,7 +1404,7 @@ if (m->gpu.load_pct >= _gpu_gate) {
             g_li_pin_escalations += (_li_pin_streak == 2);
             return ASB_STATE_MODERATE;
         }
-        if (_li_pin_until > 0 && _now >= _li_pin_until) { _li_pin_until = 0; _li_pin_cap = 0; }
+        if (_li_pin_until > 0 && _now >= _li_pin_until) { _li_pin_until = 0; _li_pin_cap = 0; _li_pin_slot = -1; }
     }
 
     return ASB_STATE_LIGHT_IDLE;
