@@ -1112,6 +1112,14 @@ static int g_heavy_confirm_streak = 0;
 #define ASB_LI_PIN_HOLD_S 40
 static unsigned long g_li_pin_escalations = 0;
 
+/* Screen-on touch (fix117), fed by the governor's sampled touchscreen watch.
+ * g_touch_last_ts: last time a touch was seen; g_touch_kick: a touch began after a quiet
+ * spell and this tick should answer it at once. Battery and the camera are left alone. */
+#define ASB_TOUCH_RECENT_S 3
+static time_t        g_touch_last_ts = 0;
+static int           g_touch_kick = 0;
+static unsigned long g_touch_lifts = 0;
+
 static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     /* Move the learned idle baseline exactly once per evaluation. */
     asb_ui_quiet_floor_update(m);
@@ -1361,6 +1369,18 @@ if (m->gpu.load_pct >= _gpu_gate) {
             return ASB_STATE_MODERATE;
     }
 
+    /* A finger on the glass is interaction (fix117).
+     *
+     * Everything above decides from load and GPU sampled every 2-6 s, and light idle is
+     * left only after two ticks agree - so the first seconds of a scroll that starts from
+     * a calm screen ran on light-idle ceilings: up to 6 s to notice on the calm cadence,
+     * and the pin escalation below wants a second pinned tick on top. An OP15 day counted
+     * 51 such escalations. While the panel reports touches (and 3 s after the last one) the
+     * floor is MODERATE; the governor also answers the first touch with an immediate tick. */
+    if (m->misc.screen_on && !fsm_profile_is_battery && !m->misc.camera_active &&
+        g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S)
+        return ASB_STATE_MODERATE;
+
     /* The light-idle ceiling is binding: the main cores sit at it while the screen is on.
      *
      * load1 is a one-minute average and on an OP15 it idles near 7 of the 14 MODERATE needs,
@@ -1545,6 +1565,16 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         fsm->pending = ASB_STATE_MODERATE;
         fsm->pending_ticks = 0;
         fsm->state_changed = 1;
+    }
+    /* The first touch after a calm spell lifts light idle now, not after the usual two
+     * confirming ticks (fix117). Leaving MODERATE again goes through the normal down window. */
+    else if (m->misc.screen_on && g_touch_kick && fsm->state == ASB_STATE_LIGHT_IDLE &&
+             !fsm_profile_is_battery && !m->misc.camera_active) {
+        fsm->state   = ASB_STATE_MODERATE;
+        fsm->pending = ASB_STATE_MODERATE;
+        fsm->pending_ticks = 0;
+        fsm->state_changed = 1;
+        g_touch_lifts++;
     }
     else {
         asb_state_t desired = fsm_desired(m);

@@ -1667,7 +1667,82 @@ static void wake_keys_park(int epfd, int park) {
     }
 }
 
+/* Screen-on touch watch (fix117).
+ *
+ * The governor learnt about interaction only from load and GPU, sampled every 2 s - or 6 s
+ * once the screen had been calm - so the start of a scroll after reading ran on light-idle
+ * ceilings until two ticks agreed. The touchscreen says it directly. Its evdev node is
+ * opened read-only (never grabbed; Android's InputReader gets every event as before) and
+ * SAMPLED: in epoll only while the screen is on, and taken out again after each touch until
+ * the next active tick, so a long scroll costs one extra wakeup per tick, not one per frame. */
+static int           g_touch_fd = -1;
+static int           g_touch_in_epoll = 0;
+static int           g_touch_rearm = 0;      /* sampled out; put back on the next active tick */
+static unsigned long g_touch_starts = 0;     /* touches that began after a quiet spell */
+
+static int touch_open(void) {
+    for (int i = 0; i < 32; i++) {
+        char path[48];
+        snprintf(path, sizeof(path), "/dev/input/event%d", i);
+        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) continue;
+        unsigned long evb[(EV_MAX + 8 * sizeof(long)) / (8 * sizeof(long))];
+        unsigned long absb[(ABS_MAX + 8 * sizeof(long)) / (8 * sizeof(long))];
+        memset(evb, 0, sizeof(evb)); memset(absb, 0, sizeof(absb));
+        int ok = ioctl(fd, EVIOCGBIT(0, sizeof(evb)), evb) >= 0 &&
+                 asb_bit_test(evb, EV_ABS) &&
+                 ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(absb)), absb) >= 0 &&
+                 asb_bit_test(absb, ABS_MT_POSITION_X) && asb_bit_test(absb, ABS_MT_TRACKING_ID);
+        if (ok) {
+            /* A direct-touch panel, not a touchpad or a pen digitiser's hover-only node. */
+            unsigned long propb[(INPUT_PROP_MAX + 8 * sizeof(long)) / (8 * sizeof(long))];
+            memset(propb, 0, sizeof(propb));
+            if (ioctl(fd, EVIOCGPROP(sizeof(propb)), propb) >= 0 &&
+                !asb_bit_test(propb, INPUT_PROP_DIRECT))
+                ok = 0;
+        }
+        if (ok) { g_touch_fd = fd; return fd; }
+        close(fd);
+    }
+    return -1;
+}
+
+/* Drain the node; 1 if anything said a finger is (or was just) on the panel. */
+static int touch_drain(int fd) {
+    struct input_event iev[32];
+    int touched = 0, guard = 0;
+    ssize_t r;
+    while (guard++ < 16 && (r = read(fd, iev, sizeof(iev))) > 0) {
+        int n = (int)(r / (ssize_t)sizeof(iev[0]));
+        for (int k = 0; k < n; k++)
+            if (iev[k].type == EV_ABS ||
+                (iev[k].type == EV_KEY && iev[k].code == BTN_TOUCH && iev[k].value == 1))
+                touched = 1;
+    }
+    return touched;
+}
+
+/* Returns 1 when turning the watch on found touches queued while it was out. */
+static int touch_watch_set(int epfd, int on) {
+    int queued = 0;
+    if (g_touch_fd < 0) return 0;
+    if (on && !g_touch_in_epoll) {
+        queued = touch_drain(g_touch_fd);       /* touched while sampled out */
+        struct epoll_event e;
+        memset(&e, 0, sizeof(e));
+        e.events = EPOLLIN;
+        e.data.fd = g_touch_fd;
+        if (epoll_ctl(epfd, EPOLL_CTL_ADD, g_touch_fd, &e) == 0) g_touch_in_epoll = 1;
+    } else if (!on && g_touch_in_epoll) {
+        epoll_ctl(epfd, EPOLL_CTL_DEL, g_touch_fd, NULL);
+        g_touch_in_epoll = 0;
+    }
+    if (!on) g_touch_rearm = 0;
+    return queued;
+}
+
 static void uev_park(int epfd, int uefd) {
+    (void)touch_watch_set(epfd, 1);   /* screen on: watch touches (fix117) */
     if (uefd < 0 || g_uev_parked) return;
     if (epoll_ctl(epfd, EPOLL_CTL_DEL, uefd, NULL) == 0) {
         g_uev_parked = 1;
@@ -1677,6 +1752,7 @@ static void uev_park(int epfd, int uefd) {
 }
 
 static void uev_unpark(int epfd, int uefd) {
+    (void)touch_watch_set(epfd, 0);   /* screen off: the panel is in gesture mode */
     if (uefd < 0 || !g_uev_parked) return;
     char _ub[4096];
     int _k = 0, _guard = 0;
@@ -2703,6 +2779,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "screen_on_detect=\"uevent:%lu,recheck:%lu,tick:%lu,display:%lu\"\n",
                 g_scr_on_by_uevent, g_scr_on_by_recheck, g_scr_on_by_tick, g_scr_on_by_display);
         fprintf(f, "display_waiter=%d\ndisplay_state_events=%lu\n", g_disp_waiter_up, g_disp_prop_events);
+        /* Screen-on touch watch (fix117): device found, touches that started after a calm
+         * spell, and how many of them lifted light idle on the spot. */
+        fprintf(f, "touch_watch=%d\ntouch_starts=%lu\ntouch_lifts=%lu\n",
+                g_touch_fd >= 0 ? 1 : 0, g_touch_starts, g_touch_lifts);
         fprintf(f, "screen_on_single_rechecks=%lu\nscreen_on_resume_chains=%lu\nscreen_on_tick_late_max_s=%ld\n",
                 g_scr_recheck_single, g_scr_resume_chains, g_scr_tick_late_max_s);
         fprintf(f, "screen_on_key_devices=%d\nscreen_on_key_hints=%lu\n", g_wake_key_n, g_wake_key_hints);
@@ -6279,6 +6359,8 @@ int main(int argc, char **argv) {
         asb_log("wake keys: %d input device(s) watched for power/wakeup while the screen is off",
                 g_wake_key_n);
     }
+    if (touch_open() >= 0)
+        asb_log("touch watch: touchscreen found - a touch on a calm screen is answered at once");
     /* Started with the screen on: the active tick owns screen detection until it goes off. */
     if (screen_on) uev_park(epfd, uefd);
 
@@ -6831,7 +6913,14 @@ int main(int argc, char **argv) {
                  *
                  * Anything above that, and GAMING, HEAVY, SUSTAINED and the camera, keep
                  * the 2-second tick: those are the states where a late decision is felt. */
+                /* Sampled touch watch back in epoll for the next touch (fix117). */
+                if (g_touch_rearm && metrics.misc.screen_on) {
+                    /* Touches that came while it was out still count as "touching now". */
+                    if (touch_watch_set(epfd, 1)) g_touch_last_ts = time(NULL);
+                    g_touch_rearm = 0;
+                }
                 int calm = !metrics.misc.camera_active &&
+                           !(g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S) &&
                            (fsm.state <= ASB_STATE_LIGHT_IDLE ||
                             (fsm.state == ASB_STATE_MODERATE &&
                              g_ui_quiet_floor > 0.0f &&
@@ -6883,6 +6972,29 @@ int main(int argc, char **argv) {
                     accum.drain_count     = 0;
                     accum.screen_on_ticks = 0;
                     accum.total_ticks     = 0;
+                }
+            }
+            else if (g_touch_fd >= 0 && fd == g_touch_fd) {
+                /* A touch with the screen on (fix117). Sampled: out of epoll until the
+                 * next active tick puts it back. */
+                int _touched = touch_drain(fd);
+                (void)touch_watch_set(epfd, 0);
+                g_touch_rearm = 1;
+                if (_touched && metrics.misc.screen_on) {
+                    time_t _tn = time(NULL);
+                    int _fresh = (g_touch_last_ts == 0 || _tn - g_touch_last_ts > ASB_TOUCH_RECENT_S);
+                    g_touch_last_ts = _tn;
+                    if (_fresh) {
+                        g_touch_starts++;
+                        g_touch_kick = 1;
+                        need_metrics = 1;
+                        if (g_active_interval != TIMER_ACTIVE_S) {
+                            arm_timerfd_periodic(tfd_active, TIMER_ACTIVE_S);
+                            g_active_interval = TIMER_ACTIVE_S;
+                            if (g_asb_cfg.log_level >= 2)
+                                asb_log("adaptive_tick: screen-on interval -> %ds (touch)", TIMER_ACTIVE_S);
+                        }
+                    }
                 }
             }
             else if (g_disp_prop_evfd >= 0 && fd == g_disp_prop_evfd) {
@@ -8164,6 +8276,7 @@ int main(int argc, char **argv) {
             /* Tell the writer whether anyone is looking, before it writes anything. */
             fsm_screen_is_on = metrics.misc.screen_on;
             int changed = fsm_update(&fsm, &metrics);
+            g_touch_kick = 0;   /* answered (fix117) */
 
             /* rebuild plan on state band cross (idle<->active<->heavy) */
             if (changed) {
