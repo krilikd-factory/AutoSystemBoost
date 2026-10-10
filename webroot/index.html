@@ -4645,7 +4645,7 @@ const CFG_ITEMS = [
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
   { key:'smart_battery_bias', type:'range', def:'0', min:0, max:600, step:50, name:'Smart Battery Bias',
-    desc:'Nudges Smart mode toward battery saving (0 = off, higher = more economy, slightly less snappy). Only affects Smart.' },
+    desc:'Nudges Smart toward battery saving. The value is a share of the remaining way from what Smart learned to pure Battery: 300 moves it 30% of that way, 600 moves it 60%. A learned 50% lean becomes 65% at 300 and 80% at 600 - at 400 and above Smart behaves almost like Battery during ordinary use. Halved during heavy work and games. 0 = off. Only affects Smart.' },
   { key:'heavy_prime_escape', type:'bool', def:'1', stock:'1', name:'Prime Core Lift',
     desc:'Smart only. When heavy work keeps the prime cores pinned at their ceiling on a cool phone, ASB briefly lifts that ceiling - never above what Balanced allows for the same load - and then rests. Off keeps the prime cores at Smart\u2019s ceiling all the time: a little cooler and more frugal, but long heavy tasks (installs, exports, big pages) take longer, and work that takes longer keeps the whole chip awake longer too. The lift already stops on its own when the phone is warm.' },
   { key:'prime_escape_burst_s', type:'range', def:'20', stock:'20', min:5, max:60, step:5, name:'Prime Lift Length',
