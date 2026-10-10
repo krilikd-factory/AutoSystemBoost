@@ -1208,6 +1208,16 @@ lk_emit_display_summary() {
       print "refresh '?' = the rate could not be read on this build; brightness is the panel'"'"'s raw backlight share."
       print "Compare mA across refresh rates at similar brightness before crediting or blaming LTPO."
     }' "$_dt"
+  # Always-on display (fix115): screen-off samples with the panel still lit. Before fix115 the
+  # governor counted these as screen-ON; now Android's doze state (disp_state 3/4) decides.
+  awk -F'|' '
+    NR == 1 { next }
+    $4 != 0 { next }
+    { n++; if ($5 + 0 > 0) { lit++; if ($11 == 3 || $11 == 4) doze++ } }
+    END {
+      if (n == 0 || lit == 0) exit
+      printf "always-on display: %d of %d screen-off samples had the panel lit (%d with Android display state doze)\n", lit, n, doze
+    }' "$_dt"
   # What the video-refresh watcher did over its lifetime (counters: lowers|touch|seconds).
   # Lifetime, not this capture: the counters are the watcher's own and are never reset here.
   if [ -s /data/adb/asb/ltpo_video.stats ]; then

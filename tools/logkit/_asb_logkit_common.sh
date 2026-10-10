@@ -806,7 +806,10 @@ EOF
 # locked 120 Hz and one at 60 Hz looked identical in every trace. Brightness is a sysfs
 # read; the refresh rate needs one `dumpsys display` per poll, only with the screen on.
 lk_display_trace_header() {
-  echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA" > "$LK_OUT_DIR/display_trace.txt"
+  # wake / disp_state (fix115): PowerManager wakefulness and Android's display state
+  # (debug.tracing.screen_state: 1 off, 2 on, 3/4 doze) - a lit backlight with "Dozing" and
+  # 3/4 is the always-on display, which the governor must count as screen-off.
+  echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA|wake|disp_state" > "$LK_OUT_DIR/display_trace.txt"
 }
 # Once per capture: everything that decides the refresh rate, so a phase stuck at 90 Hz
 # during video can be traced to a setting, an app vote or the OEM table instead of guessed.
@@ -841,9 +844,11 @@ lk_display_votes() {
 lk_capture_display_trace_row() {
   _dph="$1"
   _dscr=0
-  case "$(dumpsys power 2>/dev/null | grep -m1 -oE 'mWakefulness=[A-Za-z]+' | cut -d= -f2)" in
+  _dwk="$(dumpsys power 2>/dev/null | grep -m1 -oE 'mWakefulness=[A-Za-z]+' | cut -d= -f2)"
+  case "$_dwk" in
     Awake) _dscr=1 ;;
   esac
+  _dst="$(getprop debug.tracing.screen_state 2>/dev/null)"
   _blr=""; _blm=""
   for _bld in /sys/class/backlight/*; do
     [ -r "$_bld/brightness" ] || continue
@@ -862,7 +867,7 @@ lk_capture_display_trace_row() {
   fi
   _dma="$(cat /sys/class/power_supply/battery/current_now 2>/dev/null)"
   case "$_dma" in ''|*[!0-9-]*) _dma='' ;; *) { [ "$_dma" -ge 100000 ] || [ "$_dma" -le -100000 ]; } 2>/dev/null && _dma=$(( _dma / 1000 )) ;; esac
-  echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|${_dph}|${_dscr}|${_blr}|${_blm}|${_blp}|${_hz}|${_dma}" >> "$LK_OUT_DIR/display_trace.txt"
+  echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|${_dph}|${_dscr}|${_blr}|${_blm}|${_blp}|${_hz}|${_dma}|${_dwk}|${_dst}" >> "$LK_OUT_DIR/display_trace.txt"
 }
 
 lk_capture_perf_trace_row() {
