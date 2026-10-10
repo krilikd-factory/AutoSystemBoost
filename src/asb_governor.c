@@ -8323,7 +8323,8 @@ int main(int argc, char **argv) {
                     g_prime_escape_since_ms = 0;
                 }
                 if (fsm.prime_escape_edge > 0)
-                    asb_log("prime_escape: lift (HEAVY, big cores pinned at their ceiling%s, die=%dC)",
+                    asb_log("prime_escape: lift (%s, big cores pinned at their ceiling%s, die=%dC)",
+                            fsm.state == ASB_STATE_MODERATE ? "MODERATE" : "HEAVY",
                             fsm.prime_escape_mid ? ", mid cluster lifted too" : "",
                             metrics.therm.cpu_max_c);
                 else if (fsm.prime_escape_edge < 0)
