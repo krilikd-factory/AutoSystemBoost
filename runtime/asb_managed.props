@@ -771,8 +771,9 @@ persist.vendor.ssr.enable_ramdumps=0
 persist.vendor.sys.rawdump_copy=0
 persist.vendor.crash.dump=false
 persist.radio.ramdump=0
-ro.tombstoned.crash.dump=0
-tombstoned.max_tombstone_count=0
+# tombstoned.* is left to the platform (fix94). fix91 removed the post-fs-data write of
+# max_tombstone_count=0, but this file set it again on every boot - asbdiag on an OP15
+# still printed "tombstones kept: 0" next to three SYSTEM_TOMBSTONE entries nobody could read.
 ro.boot.ramdump=disable
 ro.dbg.coresight.stm_cfg_done=0
 ro.vendor.dbg.coresight.enable=0

@@ -102,6 +102,13 @@ asb_wl_relax_multicast() {
     for _p in $_pl; do
       if grep -qxF "$_p" "$D/multicast_restricted" 2>/dev/null; then
         _v=restricted
+        # Holding multicast although ASB denied it: the op was reset (app update, permission
+        # reset, boot sweep). Re-assert instead of reporting a restriction that is not in
+        # force (fix100, same failure as the fitness WAKE_LOCK limit).
+        if _has appops && ! appops get "$_p" WIFI_MULTICAST 2>/dev/null | grep -q 'WIFI_MULTICAST: ignore'; then
+          appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1 \
+            && echo "wakelock: $_p had WIFI_MULTICAST reset by the system - denial re-applied"
+        fi
       else
         # Casting, printing and local-device control need multicast the moment the user
         # opens them; breaking those is a worse outcome than the battery cost.
@@ -279,7 +286,27 @@ _wl_fit_orig() {
 }
 _wl_fit_limit() {
   _has appops || return 1
-  grep -q "^$1|" "$FIT" 2>/dev/null && return 0
+  # Recorded is not the same as in force (fix100). An app update, a ROM "reset app
+  # permissions" pass or OPlus' own boot-time app-op sweep puts WAKE_LOCK back to default,
+  # and this returned 0 on the record alone - so the op stayed lapsed for good while the
+  # report kept saying "limited". An OP15 asbdiag showed exactly that: "now: ?" (no
+  # WAKE_LOCK entry at all) for both fitness apps. Re-assert, keeping the ORIGINAL mode on
+  # record - the one to hand back is still what the app had before ASB, not "default".
+  if grep -q "^$1|" "$FIT" 2>/dev/null; then
+    [ "$(_wl_fit_orig "$1")" = ignore ] && return 0
+    appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
+    [ "$(_wl_fit_orig "$1")" = ignore ] || return 1
+    # Any "Android does not enforce it" verdict was drawn while the op was not set.
+    if [ -s "$FIT_IGN" ]; then
+      grep -vxF "$1" "$FIT_IGN" > "$FIT_IGN.tmp" 2>/dev/null
+      mv -f "$FIT_IGN.tmp" "$FIT_IGN" 2>/dev/null
+    fi
+    echo "wakelock: $1 had WAKE_LOCK reset by the system - limit re-applied"
+    # Marked for this pass's verdict (the proactive pass runs in a pipeline subshell, so a
+    # variable would not reach asb_wl_relax).
+    echo "$1" >> "$FIT.reapplied" 2>/dev/null
+    return 0
+  fi
   _orig="$(_wl_fit_orig "$1")"
   # Already ignored by someone else (the user, another tool): not ours to record or undo.
   [ "$_orig" = ignore ] && return 1
@@ -329,12 +356,17 @@ asb_wl_relax() {
     for _p in $(printf '%s' "$_pl" | tr ',' ' '); do
       if grep -qxF "$_p" "$D/wakelock_restricted" 2>/dev/null; then
         _v=restricted
-      elif grep -q "^$_p|" "$FIT" 2>/dev/null; then
+      elif grep -q "^$_p|" "$FIT" 2>/dev/null && { [ "$_fitmode" != limit ] || _wl_fit_limit "$_p" >/dev/null; }; then
+        # (_wl_fit_limit above re-asserts a lapsed op before any verdict is drawn: a lock
+        # held while the op had been reset says nothing about enforcement.)
         # Verified, not assumed. A lock PowerManager still honours (LONG, not DISABLED) on a
         # later pass than the one that set the op means this Android does not enforce the
         # WAKE_LOCK app-op - a field capture had Samsung Health holding PedometerLib for
         # 17 minutes, not DISABLED, hours after "limited". Say so instead of claiming it.
-        if grep -qxF "$_p" "$FIT_IGN" 2>/dev/null; then
+        if grep -qxF "$_p" "$FIT.reapplied" 2>/dev/null; then
+          # Just re-asserted: whatever it held, it held without the op in force.
+          _v=limited
+        elif grep -qxF "$_p" "$FIT_IGN" 2>/dev/null; then
           _v=limit_ignored
         elif [ "$_h" = 1 ]; then
           echo "$_p" >> "$FIT_IGN"
@@ -461,6 +493,7 @@ esac
 # dump carries no per-app durations, and the pedometer's 35-minute hold that night ended
 # before the pass came round, so nothing was ever limited although the user had chosen it.
 # The choice is about a class of app the user named, so it applies to that class.
+rm -f "$FIT.reapplied" 2>/dev/null
 case "$(_wl_fit_mode)" in
   limit)
     if [ -n "$_map" ]; then
@@ -479,4 +512,5 @@ else
   asb_wl_relax 0
   asb_wl_relax_multicast 0
 fi
+rm -f "$FIT.reapplied" 2>/dev/null
 exit 0
