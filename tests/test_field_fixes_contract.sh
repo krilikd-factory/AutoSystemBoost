@@ -301,4 +301,22 @@ grep -Fq '_li_pin_slot = _sl;' "$F" || fail "pinned slot not remembered for the 
 grep -Fq '_li_pin_cap = 0; _li_pin_slot = -1; }' "$F" || fail "pinned slot not cleared when the hold ends"
 echo "PASS: fix109 contract"
 ) || exit 1
+# ---- fix110 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix110: $*"; exit 1; }
+F="$ROOT/src/asb_fsm.h"; G="$ROOT/src/asb_governor.c"
+grep -Fq '? _t10 : fsm->ses_temp_ema_x10 + (_t10 - fsm->ses_temp_ema_x10) / 4;' "$F" || fail "session temperature EMA missing"
+grep -Fq 'fsm->ses_max_temp_sm         = 0;' "$F" || fail "smoothed peak not reset per session"
+grep -Fq 'sin.max_temp_c = (fsm->ses_max_temp_sm > 0) ? fsm->ses_max_temp_sm : fsm->ses_max_temp;' "$G" || fail "learner still taught the raw single-sample peak"
+grep -Fq 'ses_max_temp_raw=%d\nses_max_temp_smooth=%d\n' "$G" || fail "raw/smooth peaks not published"
+# Safety thresholds keep the RAW peak.
+grep -Fq 'if (fsm->ses_max_temp >= 90) cur_cause = 5;' "$G" || fail "safety classification moved off the raw peak"
+# EMA arithmetic: a one-tick 94 C spike over a 45 C session must not reach 70 C.
+e=450; pk=0; for t in 45 45 94 45 45 45; do e=$(( e + (t*10 - e) / 4 )); s=$(( (e+5)/10 )); [ $s -gt $pk ] && pk=$s; done
+[ "$pk" -lt 70 ] || fail "one-tick 94 C spike reached $pk C"
+e=450; pk=0; for t in 72 72 72 72 72 72 72 72 72 72 72 72; do e=$(( e + (t*10 - e) / 4 )); s=$(( (e+5)/10 )); [ $s -gt $pk ] && pk=$s; done
+[ "$pk" -ge 70 ] || fail "sustained 72 C (12 ticks) reached only $pk C"
+echo "PASS: fix110 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
