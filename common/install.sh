@@ -1258,9 +1258,15 @@ asb_clone_device_camera_tone() {
       done
       if [ "${ASB_CAM_LIVE_DIRTY:-0}" = "1" ] && [ "${_ASB_CAM_WARNED:-0}" != "1" ]; then
         # This one needs the user to act, so say so plainly rather than reassuring them.
+        #
+        # The act is one more install, not disable-reboot-install (fix112). This install
+        # ships NO camera tone file (the `continue` above), so after its reboot nothing of
+        # ASB covers the partition file any more and the next install clones real stock.
+        # Under KernelSU's NoMount metainstall the umount above cannot take the old overlay
+        # down, so the warning appeared once per install until the user found the detour.
         _ASB_CAM_WARNED=1
         ui_print "      ! ${ASB_L_CAM_LIVE_DIRTY1:-camera tuning on this device is still graded from an older build}"
-        ui_print "        ${ASB_L_CAM_LIVE_DIRTY2:-camera left untouched. To restore it: remove ASB, reboot, install again}"
+        ui_print "        ${ASB_L_CAM_LIVE_DIRTY2:-this install skips camera colour; after the reboot just install ASB once more}"
       elif [ "${ASB_CAM_BASE_REPAIRED:-0}" = "1" ] && [ "${_ASB_CAM_WARNED:-0}" != "1" ]; then
         _ASB_CAM_WARNED=1
         ui_print "      ! ${ASB_L_CAM_BASE_FIX1:-camera baseline from an older build was already graded - discarded}"

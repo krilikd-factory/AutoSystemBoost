@@ -134,7 +134,7 @@ ASB_L_MEM_TRIM="background trimming: %s"
 ASB_L_CAM_BASE_FIX1="camera baseline from an older build was already graded - discarded"
 ASB_L_CAM_BASE_FIX2="it will be re-captured from stock after this reboot"
 ASB_L_CAM_LIVE_DIRTY1="camera colour on this device is graded from a previous build - skipping it"
-ASB_L_CAM_LIVE_DIRTY2="disable ASB in the root manager, reboot, then install again - the baseline is then taken from the stock file"
+ASB_L_CAM_LIVE_DIRTY2="this install skips camera colour; after the reboot just install ASB once more (no need to disable it) - the baseline is then taken from the stock file"
 ASB_L_FIX_SYSSYS="removed a stray system/system overlay path from an earlier build"
 # Installer lines that used to be English literals in install.sh
 ASB_I_OEM_KEPT="remembered your OEM toggles as they are now"
