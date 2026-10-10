@@ -348,7 +348,7 @@
     },
     "heavy_prime_escape": {
       "name": "Prime-Kern-Anhebung",
-      "desc": "Nur Smart. Wenn schwere Last die Prime-Kerne auf einem kühlen Telefon an ihrer Obergrenze hält, hebt ASB diese Grenze kurz an - nie über das, was Balanced bei derselben Last erlaubt - und pausiert dann. Aus hält die Prime-Kerne dauerhaft an der Smart-Grenze: etwas kühler und sparsamer, aber lange schwere Aufgaben (Installationen, Exporte, große Seiten) dauern länger, und längere Arbeit hält auch den ganzen Chip länger wach. Auf einem warmen Telefon endet die Anhebung ohnehin von selbst."
+      "desc": "Nur Smart. Wenn Last - schwere oder alltägliche wie Scrollen im Feed - die Prime-Kerne auf einem kühlen Telefon an ihrer Obergrenze hält, hebt ASB diese Grenze kurz an - nie über das, was Balanced bei derselben Last erlaubt - und pausiert dann. Aus hält die Prime-Kerne dauerhaft an der Smart-Grenze: etwas kühler und sparsamer, aber lange schwere Aufgaben (Installationen, Exporte, große Seiten) dauern länger, und längere Arbeit hält auch den ganzen Chip länger wach. Auf einem warmen Telefon endet die Anhebung ohnehin von selbst."
     },
     "prime_escape_burst_s": {
       "name": "Dauer der Anhebung",

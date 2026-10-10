@@ -348,7 +348,7 @@
     },
     "heavy_prime_escape": {
       "name": "Prime çekirdek yükseltme",
-      "desc": "Yalnızca Smart. Ağır iş, serin bir telefonda prime çekirdekleri tavanlarında tuttuğunda ASB bu tavanı kısa süreliğine yükseltir - aynı yükte Balanced'ın izin verdiğinin asla üstüne çıkmadan - ve sonra dinlenir. Kapalı: prime çekirdekler sürekli Smart tavanında kalır; biraz daha serin ve tutumlu, ama uzun ağır işler (kurulum, dışa aktarma, büyük sayfalar) daha uzun sürer ve daha uzun süren iş tüm çipi de daha uzun uyanık tutar. Telefon ısındığında yükseltme zaten kendiliğinden durur."
+      "desc": "Yalnızca Smart. Ağır ya da akışta kaydırma gibi gündelik iş, serin bir telefonda prime çekirdekleri tavanlarında tuttuğunda ASB bu tavanı kısa süreliğine yükseltir - aynı yükte Balanced'ın izin verdiğinin asla üstüne çıkmadan - ve sonra dinlenir. Kapalı: prime çekirdekler sürekli Smart tavanında kalır; biraz daha serin ve tutumlu, ama uzun ağır işler (kurulum, dışa aktarma, büyük sayfalar) daha uzun sürer ve daha uzun süren iş tüm çipi de daha uzun uyanık tutar. Telefon ısındığında yükseltme zaten kendiliğinden durur."
     },
     "prime_escape_burst_s": {
       "name": "Yükseltme süresi",

@@ -440,7 +440,7 @@
     },
     "heavy_prime_escape": {
       "name": "Relève des cœurs prime",
-      "desc": "Smart uniquement. Quand une charge lourde maintient les cœurs prime à leur plafond sur un téléphone frais, ASB relève brièvement ce plafond - jamais au-delà de ce que Balanced autorise pour la même charge - puis marque une pause. Désactivé : les cœurs prime restent en permanence au plafond Smart ; un peu plus frais et économe, mais les longues tâches lourdes (installations, exports, grandes pages) prennent plus de temps, et un travail plus long garde aussi toute la puce éveillée plus longtemps. Sur un téléphone chaud, la relève s'arrête déjà d'elle-même."
+      "desc": "Smart uniquement. Quand une charge - lourde ou ordinaire, comme le défilement d’un fil - maintient les cœurs prime à leur plafond sur un téléphone frais, ASB relève brièvement ce plafond - jamais au-delà de ce que Balanced autorise pour la même charge - puis marque une pause. Désactivé : les cœurs prime restent en permanence au plafond Smart ; un peu plus frais et économe, mais les longues tâches lourdes (installations, exports, grandes pages) prennent plus de temps, et un travail plus long garde aussi toute la puce éveillée plus longtemps. Sur un téléphone chaud, la relève s'arrête déjà d'elle-même."
     },
     "prime_escape_burst_s": {
       "name": "Durée de la relève",

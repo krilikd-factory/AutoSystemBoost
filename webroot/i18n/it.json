@@ -374,7 +374,7 @@
     },
     "heavy_prime_escape": {
       "name": "Spinta dei core prime",
-      "desc": "Solo Smart. Quando un carico pesante tiene i core prime al loro tetto su un telefono fresco, ASB alza brevemente quel tetto - mai oltre quanto Balanced consente per lo stesso carico - e poi si ferma. Disattivato: i core prime restano sempre al tetto di Smart; un po' più fresco e parsimonioso, ma i lavori pesanti lunghi (installazioni, esportazioni, pagine grandi) durano di più, e un lavoro più lungo tiene sveglio più a lungo anche l'intero chip. Con il telefono caldo la spinta si interrompe già da sola."
+      "desc": "Solo Smart. Quando un carico - pesante o quotidiano, come scorrere un feed - tiene i core prime al loro tetto su un telefono fresco, ASB alza brevemente quel tetto - mai oltre quanto Balanced consente per lo stesso carico - e poi si ferma. Disattivato: i core prime restano sempre al tetto di Smart; un po' più fresco e parsimonioso, ma i lavori pesanti lunghi (installazioni, esportazioni, pagine grandi) durano di più, e un lavoro più lungo tiene sveglio più a lungo anche l'intero chip. Con il telefono caldo la spinta si interrompe già da sola."
     },
     "prime_escape_burst_s": {
       "name": "Durata della spinta",

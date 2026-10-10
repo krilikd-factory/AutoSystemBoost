@@ -348,7 +348,7 @@
     },
     "heavy_prime_escape": {
       "name": "Elevação dos núcleos prime",
-      "desc": "Só Smart. Quando uma carga pesada mantém os núcleos prime no teto com o telemóvel frio, o ASB eleva esse teto por pouco tempo - nunca acima do que o Balanced permite para a mesma carga - e depois descansa. Desligado mantém os núcleos prime sempre no teto do Smart: um pouco mais fresco e económico, mas tarefas pesadas longas (instalações, exportações, páginas grandes) demoram mais, e trabalho que demora mais também mantém o chip inteiro acordado por mais tempo. Com o telemóvel quente a elevação já para sozinha."
+      "desc": "Só Smart. Quando uma carga - pesada ou do dia a dia, como percorrer um feed - mantém os núcleos prime no teto com o telemóvel frio, o ASB eleva esse teto por pouco tempo - nunca acima do que o Balanced permite para a mesma carga - e depois descansa. Desligado mantém os núcleos prime sempre no teto do Smart: um pouco mais fresco e económico, mas tarefas pesadas longas (instalações, exportações, páginas grandes) demoram mais, e trabalho que demora mais também mantém o chip inteiro acordado por mais tempo. Com o telemóvel quente a elevação já para sozinha."
     },
     "prime_escape_burst_s": {
       "name": "Duração da elevação",

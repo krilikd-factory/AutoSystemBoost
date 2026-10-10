@@ -348,7 +348,7 @@
     },
     "heavy_prime_escape": {
       "name": "Angkat inti prime",
-      "desc": "Hanya Smart. Saat beban berat menahan inti prime di batas atasnya pada ponsel yang masih dingin, ASB menaikkan batas itu sebentar - tidak pernah melebihi yang diizinkan Balanced untuk beban yang sama - lalu beristirahat. Mati: inti prime selalu di batas Smart; sedikit lebih dingin dan hemat, tetapi tugas berat yang panjang (instalasi, ekspor, halaman besar) lebih lama selesai, dan kerja yang lebih lama juga membuat seluruh chip terjaga lebih lama. Saat ponsel hangat, pengangkatan sudah berhenti dengan sendirinya."
+      "desc": "Hanya Smart. Saat beban - berat atau sehari-hari seperti menggulir feed - menahan inti prime di batas atasnya pada ponsel yang masih dingin, ASB menaikkan batas itu sebentar - tidak pernah melebihi yang diizinkan Balanced untuk beban yang sama - lalu beristirahat. Mati: inti prime selalu di batas Smart; sedikit lebih dingin dan hemat, tetapi tugas berat yang panjang (instalasi, ekspor, halaman besar) lebih lama selesai, dan kerja yang lebih lama juga membuat seluruh chip terjaga lebih lama. Saat ponsel hangat, pengangkatan sudah berhenti dengan sendirinya."
     },
     "prime_escape_burst_s": {
       "name": "Durasi pengangkatan",
