@@ -525,7 +525,8 @@ F="$ROOT/src/asb_fsm.h"; G="$ROOT/src/asb_governor.c"; C="$ROOT/src/asb_config.h
 fail() { echo "FAIL heavy prime escape contract: $*"; exit 1; }
 need() { grep -Fq -- "$2" "$1" || fail "$3"; }
 need "$F" 'fsm->profile_idx == PROFILE_SMART' 'not limited to Smart'
-need "$F" 'fsm->state == ASB_STATE_HEAVY && m->misc.screen_on' 'not limited to HEAVY with the screen on'
+need "$F" '(fsm->state == ASB_STATE_HEAVY || fsm->state == ASB_STATE_MODERATE) &&' 'not limited to HEAVY/MODERATE'
+need "$F" '                  m->misc.screen_on &&' 'not limited to screen on'
 need "$F" '!fsm->thermal_cap && !m->bat.charging && !m->misc.camera_active' 'thermal/charging/camera gates missing'
 need "$F" 'm->misc.app_hint < ASB_APP_GAMING' 'games are not excluded'
 need "$F" 'asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx) &&' 'die temperature gate missing'
@@ -537,9 +538,10 @@ need "$F" 'if (_esc_burst > 60) _esc_burst = 60;' 'burst not capped at 60 s'
 need "$F" 'if (_esc_rest < 10) _esc_rest = 10;' 'rest not floored at 10 s'
 need "$ROOT/src/asb_config.h" 'c->prime_escape_burst_s         = 20;' 'burst default is not 20 s'
 need "$ROOT/src/asb_config.h" 'c->prime_escape_rest_s          = 40;' 'rest default is not 40 s'
-need "$F" 'if (_esc_streak >= 2)' 'escape does not require the prime to stay pinned'
+need "$F" 'if (_esc_streak >= (fsm->state == ASB_STATE_MODERATE ? 3 : 2))' 'escape does not require the prime to stay pinned (3 ticks in MODERATE)'
 need "$F" 'g_profile_bounds[PROFILE_BALANCED]' 'ceiling is not bounded by Balanced'
-need "$F" 'g_state_level[ASB_STATE_HEAVY]' 'bound is not the Balanced HEAVY rail'
+need "$F" 'g_state_level[_lvl_state]' 'bound is not the Balanced rail of the current state'
+need "$F" 'int _lvl_state = (fsm->state == ASB_STATE_MODERATE) ? ASB_STATE_MODERATE' 'MODERATE burst may reach the HEAVY rail'
 # The escape must sit before the caps are committed and before the thermal budget runs
 # (the budget lives in the governor and is applied to the committed caps afterwards).
 _e="$(grep -n 'HEAVY prime escape (Smart only)' "$F" | head -1 | cut -d: -f1)"
