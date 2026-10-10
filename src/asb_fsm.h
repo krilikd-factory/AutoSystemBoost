@@ -374,6 +374,10 @@ static inline int lerp_int(int a, int b, float t) {
  * a menu well below. */
 #define ASB_PROACTIVE_CPU_BUSY 2.0f
 
+/* Degrees under the SUSTAINED entry point a busy known game must reach before it may go
+ * back to GAMING (see the exit path in fsm_update). */
+#define ASB_GAME_SUS_HYST_C 3
+
 #define ASB_SMART_PROACTIVE_P0_MODERATE_MAX 1996800
 #define ASB_SMART_PROACTIVE_P6_MODERATE_MAX 1632000
 #define ASB_SMART_PROACTIVE_P0_SUSTAINED_MAX 1785600
@@ -628,6 +632,7 @@ static void fsm_interpolate_caps(
     out->idle_enough    = lerp_int(f->idle_enough,    c->idle_enough,    t);
     out->uclamp_top_max = lerp_int(f->uclamp_top_max, c->uclamp_top_max, t);
     out->uclamp_bg_max  = lerp_int(f->uclamp_bg_max,  c->uclamp_bg_max,  t);
+
 }
 
 typedef struct {
@@ -1089,6 +1094,11 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
 static int g_gaming_confirm_streak = 0;
 static int g_heavy_confirm_streak = 0;
 
+/* LIGHT_IDLE -> MODERATE when the main cores are pinned at the light-idle ceiling
+ * (see the end of fsm_desired_base). Held this long after the last sign of need. */
+#define ASB_LI_PIN_HOLD_S 20
+static unsigned long g_li_pin_escalations = 0;
+
 static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     /* Move the learned idle baseline exactly once per evaluation. */
     asb_ui_quiet_floor_update(m);
@@ -1336,6 +1346,45 @@ if (m->gpu.load_pct >= _gpu_gate) {
         if (g_screen_on_since > 0 &&
             (time(NULL) - g_screen_on_since) <= ASB_BAT_SCREENON_GRACE_S)
             return ASB_STATE_MODERATE;
+    }
+
+    /* The light-idle ceiling is binding: the main cores sit at it while the screen is on.
+     *
+     * load1 is a one-minute average and on an OP15 it idles near 7 of the 14 MODERATE needs,
+     * so ordinary interaction - scrolling a feed with music playing - stays LIGHT_IDLE. An
+     * OP15 day shows what that costs: in 323 screen-on LIGHT_IDLE samples the six main cores
+     * ran AT their 1440 MHz ceiling in 169 (52%), i.e. the scheduler wanted more and every
+     * touch boost was clipped. That is the "a bit laggy in Smart" feeling, and work held
+     * at a ceiling also takes longer to finish.
+     *
+     * The live clock against the live limit is the direct signal. Two consecutive pinned
+     * ticks ask for MODERATE; the request then holds while the cores still run at or above
+     * the light-idle ceiling they were pinned at (MODERATE's higher ceiling means they no
+     * longer touch it, so "still needs more than light idle gives" is the right test), and
+     * for ASB_LI_PIN_HOLD_S after that, so the state does not bounce. Battery keeps its
+     * light idle; the camera and GAMING paths are elsewhere. */
+    if (m->misc.screen_on && !fsm_profile_is_battery && !m->misc.camera_active) {
+        static int    _li_pin_streak = 0;
+        static int    _li_pin_cap = 0;        /* slot-0 ceiling (MHz) the cores were pinned at */
+        static time_t _li_pin_until = 0;
+        time_t _now = time(NULL);
+        int _cur = m->cpu.cur_freq[0], _max = m->cpu.max_freq[0];
+        int _pinned = (_max > 0 && _cur > 0 && _cur * 100 >= _max * 98);
+        int _need_more = (_li_pin_cap > 0 && _cur * 100 >= _li_pin_cap * 98);
+        if (_pinned && (_li_pin_cap == 0 || _max <= _li_pin_cap)) {
+            if (++_li_pin_streak >= 2) {
+                _li_pin_cap = _max;
+                _li_pin_until = _now + ASB_LI_PIN_HOLD_S;
+            }
+        } else {
+            _li_pin_streak = 0;
+        }
+        if (_li_pin_until > 0 && _need_more) _li_pin_until = _now + ASB_LI_PIN_HOLD_S;
+        if (_li_pin_until > 0 && _now < _li_pin_until) {
+            g_li_pin_escalations += (_li_pin_streak == 2);
+            return ASB_STATE_MODERATE;
+        }
+        if (_li_pin_until > 0 && _now >= _li_pin_until) { _li_pin_until = 0; _li_pin_cap = 0; }
     }
 
     return ASB_STATE_LIGHT_IDLE;
@@ -1760,7 +1809,18 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             thermal_to_sustained = 1;
             fsm->sustained_reason = 0;
         }
+        /* The early, trend-based entry is for workloads that are about to get hot. A known
+         * game that is busy already has its own rule - it may stay out of SUSTAINED until
+         * the entry temperature itself (the exception in the exit path below) - so the trend
+         * path must not pull it in five degrees earlier: the two together are the
+         * GAMING/SUSTAINED ping-pong. Above the entry point the game is handled exactly as
+         * before. */
+        int _trend_game_exempt = (desired == ASB_STATE_GAMING &&
+                                  m->misc.app_hint >= ASB_APP_GAMING &&
+                                  sustained_temp_enter > 0 &&
+                                  m->therm.cpu_max_c < sustained_temp_enter);
         if (!thermal_to_sustained && !sustained_reentry_blocked &&
+            !_trend_game_exempt &&
             fsm->thermal_trend >= 6 &&
             m->therm.cpu_max_c >= (sustained_temp_enter - 5) &&
             fsm->state >= ASB_STATE_HEAVY &&
@@ -1980,10 +2040,19 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                  * a video would also produce), and the die must still be under the profile's own
                  * throttle point. Above that, the guard stands exactly as before - protection follows
                  * the temperature, not the label on the workload. */
+                /* With real hysteresis: three degrees under the entry point, not one.
+                 *
+                 * "Below the throttle point" was literally one degree below it, and every
+                 * re-entry path fires at or under that same point (own temperature at the
+                 * entry threshold, the trend path five degrees below it). A PLQ110 game
+                 * session shows the loop: enter at 50-52 C, leave at 49 C a few seconds
+                 * later, back in after the 24 s re-entry cooldown - twenty-odd round trips
+                 * in 40 minutes, each one a full cap rewrite in the middle of a game, which
+                 * is felt as a stutter every half minute. */
                 if (!can_leave && desired == ASB_STATE_GAMING &&
                     m->misc.app_hint >= ASB_APP_GAMING &&
                     sustained_temp_enter > 0 &&
-                    m->therm.cpu_max_c < sustained_temp_enter)
+                    m->therm.cpu_max_c <= sustained_temp_enter - ASB_GAME_SUS_HYST_C)
                     can_leave = 1;
 if (!can_leave &&
                 fsm->state == ASB_STATE_SUSTAINED &&

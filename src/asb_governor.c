@@ -16,6 +16,8 @@
 #include <math.h>
 #include <stdint.h>
 #include <linux/netlink.h>
+#include <linux/input.h>
+#include <sys/ioctl.h>
 
 #include "asb_metrics.h"
 #include "asb_fsm.h"
@@ -1461,11 +1463,93 @@ static unsigned long g_uev_events_total = 0;
 static int           g_uev_parked = 0;
 static unsigned long g_uev_parks = 0, g_uev_unpark_dropped = 0;
 
+/* Wake keys as a screen-on hint.
+ *
+ * The display uevent is the fast path for noticing a wake, and on some panels it is not
+ * sent for every wake: an OP15 day logged 10 wakes found by the uevent, 6-8 by the display
+ * re-check and 5-14 only by the next idle tick - up to 45 s on deep-idle rails (GPU at 15%,
+ * screen-off CPU caps) while the user was already unlocking. The CPH2769 and PLQ110 caught
+ * every wake by uevent, so it is the panel, not the module.
+ *
+ * Most wakes start with a key: the power key, or the KEY_WAKEUP a double-tap or fingerprint
+ * gesture reports. Those input devices are read-only listened to while the screen is off
+ * (never grabbed - Android's InputReader still gets every event), and a press only arms the
+ * same short re-check chain a display event arms; sysfs still decides whether the screen is
+ * on. Devices with absolute axes (touchscreens) are skipped, so nothing floods epoll, and
+ * the fds are parked together with the uevent socket while the screen is on. */
+#define ASB_WAKE_KEY_MAX 4
+static int           g_wake_key_fd[ASB_WAKE_KEY_MAX];
+static int           g_wake_key_n = 0;
+static unsigned long g_wake_key_hints = 0;
+
+static int asb_bit_test(const unsigned long *bits, int bit) {
+    return (bits[bit / (8 * (int)sizeof(long))] >> (bit % (8 * (int)sizeof(long)))) & 1UL;
+}
+
+static void wake_keys_open(int epfd) {
+    for (int i = 0; i < 32 && g_wake_key_n < ASB_WAKE_KEY_MAX; i++) {
+        char path[48];
+        snprintf(path, sizeof(path), "/dev/input/event%d", i);
+        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) continue;
+        unsigned long evb[(EV_MAX + 8 * sizeof(long)) / (8 * sizeof(long))];
+        unsigned long keyb[(KEY_MAX + 8 * sizeof(long)) / (8 * sizeof(long))];
+        memset(evb, 0, sizeof(evb)); memset(keyb, 0, sizeof(keyb));
+        int ok = ioctl(fd, EVIOCGBIT(0, sizeof(evb)), evb) >= 0 &&
+                 asb_bit_test(evb, EV_KEY) && !asb_bit_test(evb, EV_ABS) &&
+                 ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keyb)), keyb) >= 0 &&
+                 (asb_bit_test(keyb, KEY_POWER) || asb_bit_test(keyb, KEY_WAKEUP));
+        if (!ok) { close(fd); continue; }
+        struct epoll_event e;
+        memset(&e, 0, sizeof(e));
+        e.events = EPOLLIN;
+        e.data.fd = fd;
+        if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &e) != 0) { close(fd); continue; }
+        g_wake_key_fd[g_wake_key_n++] = fd;
+    }
+}
+
+static int wake_key_is_fd(int fd) {
+    for (int i = 0; i < g_wake_key_n; i++) if (g_wake_key_fd[i] == fd) return 1;
+    return 0;
+}
+
+/* Drain one device; 1 if a wake key was pressed. */
+static int wake_key_drain(int fd) {
+    struct input_event iev[16];
+    int pressed = 0, guard = 0;
+    ssize_t r;
+    while (guard++ < 8 && (r = read(fd, iev, sizeof(iev))) > 0) {
+        int n = (int)(r / (ssize_t)sizeof(iev[0]));
+        for (int k = 0; k < n; k++)
+            if (iev[k].type == EV_KEY && iev[k].value == 1 &&
+                (iev[k].code == KEY_POWER || iev[k].code == KEY_WAKEUP))
+                pressed = 1;
+    }
+    return pressed;
+}
+
+static void wake_keys_park(int epfd, int park) {
+    for (int i = 0; i < g_wake_key_n; i++) {
+        if (park) {
+            epoll_ctl(epfd, EPOLL_CTL_DEL, g_wake_key_fd[i], NULL);
+        } else {
+            (void)wake_key_drain(g_wake_key_fd[i]);   /* what queued while on is stale */
+            struct epoll_event e;
+            memset(&e, 0, sizeof(e));
+            e.events = EPOLLIN;
+            e.data.fd = g_wake_key_fd[i];
+            epoll_ctl(epfd, EPOLL_CTL_ADD, g_wake_key_fd[i], &e);
+        }
+    }
+}
+
 static void uev_park(int epfd, int uefd) {
     if (uefd < 0 || g_uev_parked) return;
     if (epoll_ctl(epfd, EPOLL_CTL_DEL, uefd, NULL) == 0) {
         g_uev_parked = 1;
         g_uev_parks++;
+        wake_keys_park(epfd, 1);
     }
 }
 
@@ -1486,7 +1570,10 @@ static void uev_unpark(int epfd, int uefd) {
     memset(&_ev, 0, sizeof(_ev));
     _ev.events = EPOLLIN;
     _ev.data.fd = uefd;
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD, uefd, &_ev) == 0) g_uev_parked = 0;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, uefd, &_ev) == 0) {
+        g_uev_parked = 0;
+        wake_keys_park(epfd, 0);
+    }
 }
 /* Last banked session as it was handed to the learner, for diagnostics. */
 static int  g_ses_last_temp = 0;
@@ -1649,6 +1736,23 @@ static void asb_budget_raise(int *candidate, const char **reason, int trim, cons
     }
 }
 
+/* Battery current on the scale the thresholds were tuned on.
+ *
+ * Every mA gate in the thermal budget (250 / 350 / 450 / 600 / 1800) was tuned on OnePlus 15
+ * readings, and the OP15 gauge integrates to x0.38 of the real drain (measured above over
+ * 40+ screen-on windows; a PLQ110 reads the same). A CPH2769 gauge reads x0.88 - the same
+ * workload shows 2.3 times the milliamps - so the comfort trims fired on ordinary use: 27
+ * "screenon_comfort_smart_high_cur" trims in one evening against 3 on the OP15.
+ *
+ * Once this phone's own ratio is on record (5+ windows) the reading is converted to the
+ * reference scale; before that, and for nonsense ratios, the raw value is used unchanged. */
+#define ASB_CURSCALE_REF_X100 38
+static int asb_ma_ref(int raw_ma) {
+    if (raw_ma <= 0 || g_curscale_n < 5 || g_curscale_x100 < 15 || g_curscale_x100 > 400)
+        return raw_ma;
+    return (int)((long)raw_ma * ASB_CURSCALE_REF_X100 / g_curscale_x100);
+}
+
 static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int candidate = 0;
     int base_candidate = 0;
@@ -1769,15 +1873,28 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
          *
          * So: when the reading is trustworthy, require it to be warm; when there is no
          * reading, fall back to the old trend-only behaviour. */
-        int _trend_warm = (!m->therm.temp_valid) ||
-            m->therm.cpu_max_c >= asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx);
+        /* Smart: "warm" is this phone's own warm, when it has been measured.
+         *
+         * The fixed mark is the sustained-exit temperature (48 C in Smart). A CPH2769 runs
+         * its ordinary day at 45-53 C - that is what Smart learned as its normal band - so a
+         * launch nudging the die from 46 to 49 read as a rising trend on a phone doing
+         * nothing unusual: a diag shows the prime cut from 1248 to 1018 MHz in HEAVY at
+         * 49 C, reason thermal_trend_rising. The learned warm mark (bucket peak median +4 C)
+         * is the same line the Smart lean already uses for "this phone is running hot", so
+         * the trend now starts counting from there. Unlearned devices keep the fixed mark,
+         * since the fallback warm mark (42 C) is below it. */
+        int _trend_mark = asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx);
+        if (fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
+            g_smart_rt.therm_warm_x10 / 10 > _trend_mark)
+            _trend_mark = g_smart_rt.therm_warm_x10 / 10;
+        int _trend_warm = (!m->therm.temp_valid) || m->therm.cpu_max_c >= _trend_mark;
         if (_trend_warm && fsm->thermal_trend >= 10)
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "thermal_trend_fast");
         else if (_trend_warm && fsm->thermal_trend >= 6)
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_moderate_trim_pct, "thermal_trend_rising");
         /* Battery current is a tie-breaker only; it never escalates beyond a
          * light trim and is ignored while charging because its semantics vary. */
-        if (!m->bat.charging && m->bat.current_ma >= 1800)
+        if (!m->bat.charging && asb_ma_ref(m->bat.current_ma) >= 1800)
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_light_trim_pct, "battery_current");
         /* Screen-on comfort is intentionally a tie-breaker, not a generic cap.
          *
@@ -1799,7 +1916,7 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
         if (!m->bat.charging && m->misc.screen_on && !m->misc.camera_active &&
             fsm->state != ASB_STATE_GAMING && m->therm.temp_valid &&
             m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp &&
-            m->bat.current_ma >= comfort_current_ma &&
+            asb_ma_ref(m->bat.current_ma) >= comfort_current_ma &&
             (fsm->profile_idx == PROFILE_BATTERY || smart_screenon_comfort))
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_light_trim_pct,
@@ -1818,7 +1935,7 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             fsm->state != ASB_STATE_GAMING && fsm->state != ASB_STATE_SUSTAINED;
         if (smart_high_current_comfort && !m->bat.charging && m->misc.screen_on &&
             !m->misc.camera_active && m->therm.temp_valid &&
-            m->therm.cpu_max_c >= 42 && m->bat.current_ma >= 600)
+            m->therm.cpu_max_c >= 42 && asb_ma_ref(m->bat.current_ma) >= 600)
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_light_trim_pct,
                              "screenon_comfort_smart_high_current");
@@ -1849,7 +1966,7 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             !m->misc.camera_active && fsm->state != ASB_STATE_GAMING &&
             m->therm.temp_valid &&
             m->therm.surface_hotspot_c >= (g_budget_surface_engaged ? 42 : 46) &&
-            m->bat.current_ma >= 250 &&
+            asb_ma_ref(m->bat.current_ma) >= 250 &&
             (fsm->state != ASB_STATE_SUSTAINED || surface_comfort_sustained))
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_moderate_trim_pct,
@@ -1878,7 +1995,7 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
         fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
         m->misc.screen_on && !m->misc.camera_active && !m->bat.charging &&
         m->therm.temp_valid && m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp &&
-        m->bat.current_ma >= 450 &&
+        asb_ma_ref(m->bat.current_ma) >= 450 &&
         g_pkg_detect_ok && g_smart_media_pkg_known &&
         g_smart_rt.app_hint < ASB_APP_GAMING) {
         asb_budget_raise(&candidate, &reason,
@@ -1934,7 +2051,7 @@ static void asb_active_efficiency_apply_caps(asb_profile_caps_t *caps,
                      fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
                      m && m->misc.screen_on && !m->misc.camera_active && !m->bat.charging &&
                      m->therm.temp_valid && m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp &&
-                     m->bat.current_ma >= 450 && g_pkg_detect_ok &&
+                     asb_ma_ref(m->bat.current_ma) >= 450 && g_pkg_detect_ok &&
                      g_smart_media_pkg_known && g_smart_rt.app_hint < ASB_APP_GAMING;
     if (fsm->state == ASB_STATE_SUSTAINED && !media_recovery) return;
 
@@ -2450,6 +2567,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 g_scr_on_by_uevent, g_scr_on_by_recheck, g_scr_on_by_tick);
         fprintf(f, "screen_on_single_rechecks=%lu\nscreen_on_resume_chains=%lu\nscreen_on_tick_late_max_s=%ld\n",
                 g_scr_recheck_single, g_scr_resume_chains, g_scr_tick_late_max_s);
+        fprintf(f, "screen_on_key_devices=%d\nscreen_on_key_hints=%lu\n", g_wake_key_n, g_wake_key_hints);
+        fprintf(f, "light_idle_pin_escalations=%lu\n", g_li_pin_escalations);
 
         /* Wakeups by source, same shape as the write breakdown below. */
         fprintf(f, "wake_by_src=\"");
@@ -3663,6 +3782,12 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
     pstats_save_one(PERSISTENT_STATS_FILE, &g_pstats);
 }
 
+/* More than half the session spent in the screen-off idle states. */
+static int asb_smart_session_idle_dominant(const asb_fsm_t *fsm, long dur) {
+    long idle = fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec;
+    return dur > 0 && idle * 2 >= dur;
+}
+
 static const char *classify_confidence(
     const asb_fsm_t *fsm, long dur, int hr_n, int idle_quality)
 {
@@ -3680,6 +3805,22 @@ static const char *classify_confidence(
         int trust = battery_session_trust(fsm);
         if (trust == BAT_TRUST_CLEAN && dur >= 300) return "high";
         if (trust != BAT_TRUST_DIRTY && dur >= 120) return "medium";
+        return "low";
+    }
+    /* Smart had no branch, so every Smart session - 500 of 500 in an OP15 history, the
+     * profile nearly everyone runs - was "low" and its signature "mixed", and the session
+     * report had nothing to sort them by. A Smart session is judged by what it mostly was:
+     * screen-off time by the battery rules, screen-on time by the duration/headroom rules. */
+    if (fsm->profile_idx == PROFILE_SMART) {
+        if (asb_smart_session_idle_dominant(fsm, dur)) {
+            int trust = battery_session_trust(fsm);
+            if (trust == BAT_TRUST_CLEAN && dur >= 300) return "high";
+            if (trust != BAT_TRUST_DIRTY && dur >= 120) return "medium";
+            return "low";
+        }
+        if (dur < 120) return "low";
+        if (dur >= 300 && hr_n >= 30) return "high";
+        if (dur >= 120 && hr_n >= 10) return "medium";
         return "low";
     }
     return "low";
@@ -3714,6 +3855,19 @@ static const char *classify_signature(
         if (strcmp(bat_reason, "wake_noise") == 0) return "wake_noisy";
         if (strcmp(bat_reason, "screen_on") == 0) return "screen_on_drag";
         if (strcmp(bat_reason, "no_settle") == 0) return "no_settle";
+        return "mixed";
+    }
+    if (fsm->profile_idx == PROFILE_SMART) {
+        if (fsm->ses_max_temp >= 80 || strcmp(limiter, "thermal") == 0) return "thermal_limited";
+        if (fsm->ses_time_to_first_sus > 0 && fsm->ses_time_to_first_sus < 60) return "early_collapse";
+        if (idle_quality >= 70 && strcmp(conf, "high") == 0 && fsm->ses_time_heavy_sec == 0)
+            return "clean_sleep";
+        if (idle_quality >= 0 && idle_quality < 20 && fsm->ses_time_heavy_sec == 0 &&
+            fsm->bat_time_deep_idle_sec + fsm->bat_time_light_idle_sec > 0 &&
+            fsm->bat_wake_screen == 0)
+            return "no_settle";
+        if (sus_pct >= 60) return "stable_dominant";
+        if (fsm->ses_time_heavy_sec > 0 || fsm->ses_time_gaming_sec > 0) return "active_burst";
         return "mixed";
     }
     return "mixed";
@@ -5922,6 +6076,11 @@ int main(int argc, char **argv) {
     ev.data.fd = tfd_hourly; epoll_ctl(epfd, EPOLL_CTL_ADD, tfd_hourly, &ev);
     if (uefd  >= 0) { ev.data.fd = uefd;   epoll_ctl(epfd, EPOLL_CTL_ADD, uefd,   &ev); }
     if (sockfd >= 0) { ev.data.fd = sockfd; epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &ev); }
+    if (uefd >= 0) {
+        wake_keys_open(epfd);
+        asb_log("wake keys: %d input device(s) watched for power/wakeup while the screen is off",
+                g_wake_key_n);
+    }
     /* Started with the screen on: the active tick owns screen detection until it goes off. */
     if (screen_on) uev_park(epfd, uefd);
 
@@ -6528,6 +6687,16 @@ int main(int argc, char **argv) {
                     accum.total_ticks     = 0;
                 }
             }
+            else if (wake_key_is_fd(fd)) {
+                /* A wake key while the screen reads off: look now, then the usual short
+                 * re-check chain. sysfs decides; the key only says "look". */
+                if (wake_key_drain(fd) && !metrics.misc.screen_on &&
+                    timerfd_state(tfd_active) != 1) {
+                    g_wake_key_hints++;
+                    g_disp_evt_ts = time(NULL); g_disp_retry = 0;
+                    arm_timerfd_once_ms(tfd_active, 250);
+                }
+            }
             else if (fd == uefd) {
                 int final_scr = -1;
                 int drained = 0;
@@ -6631,6 +6800,7 @@ int main(int argc, char **argv) {
                         }
                         session_plan_build(&fsm, confirmed);
                         session_plan_apply_prearm(&fsm);
+                        write_state(&fsm, &metrics, cur_pred);
                     }
                 }
             }
@@ -7171,6 +7341,8 @@ int main(int argc, char **argv) {
                         if (g_asb_cfg.log_level >= 1) asb_log("screen ON seen on a tick - active cadence restored");
                     }
                     uev_park(epfd, uefd);
+                    /* Publish the transition now (see the screen-off branch below). */
+                    write_state(&fsm, &metrics, cur_pred);
                 } else if (!metrics.misc.screen_on && _ts == 1) {
                     disarm_timerfd(tfd_active);
                     g_scr_off_since = time(NULL);
@@ -7186,6 +7358,13 @@ int main(int argc, char **argv) {
                         fsm.bat_screen_off_count++;
                     session_plan_build(&fsm, 0);
                     session_plan_apply_prearm(&fsm);
+                    /* The state file is what the shell helpers read for "is the screen off",
+                     * and it was only rewritten when caps were applied - which in deep idle,
+                     * under the write backoff or the vendor detente, can be many minutes later.
+                     * Screen-off LTE then found screen=1 when its 90 s timer fired and quietly
+                     * did nothing: an OP15 evening shows applies 7, 7.5 and 37 minutes after
+                     * the screen went off instead of 90 s. A transition is always published. */
+                    write_state(&fsm, &metrics, cur_pred);
                 }
                 /* A tick right after a resume, with the screen still reading off: the
                  * resume may BE the wake (power key, fingerprint, lift), with the panel a

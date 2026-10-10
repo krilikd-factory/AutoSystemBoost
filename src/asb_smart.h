@@ -105,6 +105,9 @@ typedef struct {
     int last_app_hint_tier;
     int last_night_override;
     int last_thermal_veto;
+    /* The alpha and interactive bonus the current g_smart_bounds were blended with. */
+    int last_alpha_x1000;
+    int last_bonus_x1000;
 
     time_t smoothing_start_ts;
     int smoothing_active;
@@ -2336,6 +2339,25 @@ static int asb_smart_should_update_slot(
     /* Charging state changed */
     if (charging != rt->last_charging) return 1;
 
+    /* The lean itself moved.
+     *
+     * Everything above is a proxy for "the inputs changed"; none of them is the output. The
+     * screen-off overrides raise alpha to 600/700/850 and cap the interactive bonus at 20,
+     * the night and low-battery layers do the same - and when the screen comes back on
+     * those floors simply stop applying, which changes alpha without changing any tier this
+     * gate watched. So the bounds stayed blended at the screen-off value.
+     *
+     * A CPH2769 capture shows it: two hours in the cinema with the screen off, then on
+     * wake the phone ran MODERATE with the six main cores at 1267 MHz of 3322 and the
+     * prime pair at 1248 of 3802 - pure Battery rails - for the whole half hour the user
+     * described as "terrible freezes across the interface". The learner's own alpha for
+     * that hour was well below that; the blend just never heard about it.
+     *
+     * 50 (5%) is one OPP step or less on every rail, so a smaller wobble cannot churn
+     * the writer. */
+    if (abs(rt->alpha_battery_x1000 - rt->last_alpha_x1000) >= 50) return 1;
+    if (abs(rt->interactive_bonus_x1000 - rt->last_bonus_x1000) >= 50) return 1;
+
     /* App hint tier changed (group app hints into 3 tiers for fewer churn:
      * 0=idle/light, 1=medium, 2=heavy/gaming) */
     int cur_app_tier = (app_hint <= ASB_APP_LIGHT) ? 0 :
@@ -2361,6 +2383,8 @@ static void asb_smart_mark_slot_updated(
                              (app_hint == ASB_APP_MEDIUM) ? 1 : 2;
     rt->last_night_override = rt->night_safe_override;
     rt->last_thermal_veto = rt->thermal_veto;
+    rt->last_alpha_x1000 = rt->alpha_battery_x1000;
+    rt->last_bonus_x1000 = rt->interactive_bonus_x1000;
     rt->prev_bucket_id = rt->bucket_id;
     rt->prev_daypart   = rt->daypart;
 }
