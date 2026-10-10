@@ -47,7 +47,13 @@ done
 
 # 2) Explicit property names. Only the property key is reported; values are intentionally not
 # treated as proof and are not printed into user diagnostics.
-_prop_keys="$(_props | sed -n 's/^\[\([^]]*\)\]:.*$/\1/p' | grep -iE 'undervolt|under.?volt|(^|[._-])uv([._-]|$)|voltage|overclock' | head -3)"
+# Battery, charger and radio properties carry "voltage" in their names on every stock
+# OnePlus build (ro.cutoff_voltage_mv is the battery shutdown threshold) and say nothing about
+# CPU/GPU voltage tables. An OP12 report was labelled "external UV" on that key alone, which
+# then told the reader not to trust ASB's own evidence about a hang. They are excluded first.
+_prop_keys="$(_props | sed -n 's/^\[\([^]]*\)\]:.*$/\1/p' \
+  | grep -viE 'cutoff|batt|bms|charg|vbat|vbus|usb|fuel|gauge|shutdown|bluetooth|audio|wlan|wifi|modem|radio|camera|display|panel|vibrat|haptic' \
+  | grep -iE 'undervolt|under.?volt|(^|[._-])uv([._-]|$)|voltage|overclock' | head -3)"
 for _pk in $_prop_keys; do _add "property:${_pk}"; done
 
 # 3) Readable kernel surfaces whose names explicitly expose voltage/UV data. Generic OPP

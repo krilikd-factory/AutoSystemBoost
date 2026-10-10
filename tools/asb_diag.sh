@@ -176,6 +176,37 @@ else
   P "  recorder             : release build — disabled by design"
 fi
 
+# Why did the LAST boot end? Readable on every build, debug or not.
+#
+# An OP12 report: in the morning the launcher was black with only the clock, the alarm did
+# not ring, the power button clicked but the screen stayed on; a reboot fixed it and nobody
+# had logs. Everything that explains such a night is gone after the reboot except what the
+# platform keeps on its own: the boot reason, and the dropbox entries for a system_server
+# watchdog, a kernel panic or a tombstone. Counting them here costs one dumpsys call and
+# turns "the phone hung" into "system_server watchdog at 06:41" or "nothing recorded".
+_lb_reason="$(getprop sys.boot.reason 2>/dev/null)"
+[ -n "$_lb_reason" ] || _lb_reason="$(getprop ro.boot.bootreason 2>/dev/null)"
+_lb_hist="$(getprop persist.sys.boot.reason.history 2>/dev/null | tr '\n' ' ' | cut -c1-160)"
+P "  last boot reason      : ${_lb_reason:-unknown}"
+# Whether a kernel crash reboots the phone or leaves it hanging. ASB set both to 0 up to
+# fix89; another module or a custom kernel may still do it. 0/0 turns a crash the phone would
+# reboot out of into a hang that needs a forced restart (black screen, alarm missed).
+_kp="$(cat /proc/sys/kernel/panic 2>/dev/null)"; _kpo="$(cat /proc/sys/kernel/panic_on_oops 2>/dev/null)"
+P "  kernel panic policy   : panic=${_kp:-?} panic_on_oops=${_kpo:-?}  (tombstones kept: $(getprop tombstoned.max_tombstone_count 2>/dev/null || echo default))"
+if [ "$_kp" = "0" ] || [ "$_kpo" = "0" ]; then
+  NOTE "a kernel crash will NOT reboot this phone (panic=0 waits forever / panic_on_oops=0 runs on after an oops) - a hang then looks like a frozen black screen until a forced restart. ASB no longer sets these; if they stay 0 after a reboot, another module or the kernel does."
+fi
+[ -n "$_lb_hist" ] && P "  boot reason history   : $_lb_hist"
+if command -v dumpsys >/dev/null 2>&1; then
+  _lb_db="$(dumpsys dropbox 2>/dev/null)"
+  for _lb_tag in system_server_watchdog system_server_crash SYSTEM_TOMBSTONE SYSTEM_LAST_KMSG system_app_anr system_server_anr; do
+    _lb_last="$(printf '%s\n' "$_lb_db" | grep -E "^[0-9-]+ [0-9:.]+ $_lb_tag( |$)" | tail -1 | cut -c1-19)"
+    _lb_n="$(printf '%s\n' "$_lb_db" | grep -cE "^[0-9-]+ [0-9:.]+ $_lb_tag( |$)")"
+    [ "${_lb_n:-0}" -gt 0 ] && P "  dropbox $_lb_tag : ${_lb_n} (latest ${_lb_last})"
+  done
+  NOTE "After a hang or a forced reboot, export asbdiag BEFORE using the phone further: the dropbox keeps only a few entries per tag."
+fi
+
 # =====================================================================
 # Other modules that set the same properties.
 #
@@ -705,6 +736,11 @@ if [ -r "$_state" ]; then
     _sol="$(grep -m1 '^screen_on_tick_late_max_s=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
     _sos="$(grep -m1 '^screen_on_single_rechecks=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
     NOTE "screen-on noticed by: $_sod  (single re-checks armed: ${_sos:-0}; slowest tick catch <= ${_sol:-0} s after screen-off)"
+    _skd="$(grep -m1 '^screen_on_key_devices=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+    _skh="$(grep -m1 '^screen_on_key_hints=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+    [ -n "$_skd" ] && NOTE "wake keys watched: ${_skd} input device(s) · ${_skh:-0} power/wakeup press(es) started a re-check"
+    _lpe="$(grep -m1 '^light_idle_pin_escalations=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+    [ -n "$_lpe" ] && NOTE "light idle -> moderate because the main cores sat at the light-idle ceiling: ${_lpe} time(s)"
     # A share, not a count: 5 of 201 wakes over a day is the occasional AOD/pocket case,
     # not a ROM whose display events never arrive - an absolute "> 3" warned on both.
     _sou="$(printf '%s' "$_sod" | sed -n 's/.*uevent:\([0-9]*\).*/\1/p')"
@@ -2307,6 +2343,16 @@ if [ -s /data/adb/asb/wakelock_multicast ]; then
     [ -n "$_mp" ] && P "    holding now: $_mp  ·  $_mv"
   done
 fi
+_vpn_if=""
+for _vi in /sys/class/net/tun* /sys/class/net/wg* /sys/class/net/ppp*; do
+  [ -e "$_vi" ] || continue
+  [ "$(cat "$_vi/operstate" 2>/dev/null)" = "down" ] && continue
+  _vpn_if="${_vi##*/}"; break
+done
+if [ -n "$_vpn_if" ] && [ -s /data/adb/asb/wakelock_top ] && \
+   head -n 3 /data/adb/asb/wakelock_top | grep -qE '^(rmnet|IPA_CLIENT_APPS_WAN|qcom_rx_wakelock)'; then
+  NOTE "VPN is up ($_vpn_if) and the mobile data path (rmnet/IPA) leads the wake sources: the tunnel's keepalives wake the modem and CPU through the night. Not something ASB can change - the VPN app's keepalive / always-on settings, split tunnelling or Wi-Fi at night can."
+fi
 NOTE "wakelock_action = $(cfg wakelock_action)  (0 = report only)"
 NOTE "wakelock_fitness = $(cfg wakelock_fitness)  (protect = fitness/step apps never touched)"
 if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
@@ -2632,12 +2678,13 @@ for _pol in $_pol_dirs; do
 done
 _gpu_gov="$(cat /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null)"
 _gpu_pwr="$(cat /sys/class/kgsl/kgsl-3d0/max_pwrlevel 2>/dev/null)"
-_gpu_floor="$(cat /data/adb/asb/gpu_pwrlevel_floor 2>/dev/null)"
+_gpu_floor="$(cat /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel 2>/dev/null)"
+[ "$_gpu_floor" = "0" ] && _gpu_floor=""
 if [ -n "$_gpu_gov" ]; then
   P "  GPU: $_gpu_gov  max_pwrlevel=$_gpu_pwr (devfreq-capped)"
 else
   # devfreq freq nodes empty (e.g. OP15 Adreno 840) -> ASB caps via pwrlevel.
-  P "  GPU: pwrlevel-controlled  max_pwrlevel=$_gpu_pwr${_gpu_floor:+ (vendor floor=$_gpu_floor)}"
+  P "  GPU: pwrlevel-controlled  max_pwrlevel=$_gpu_pwr${_gpu_floor:+ (thermal limit=level $_gpu_floor)}"
 fi
 NOTE "tier shows the governor's cluster role; %-of-hw shows the active cap. In"
 NOTE "performance every cluster should read ~100%; in battery the prime cluster"

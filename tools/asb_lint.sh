@@ -911,18 +911,9 @@ if [ -f "$_mp" ]; then
   _mp_code="$(grep '^versionCode=' "$_mp" | head -1 | cut -d= -f2)"
   if [ -n "$_mp_ver" ] && [ -n "$_mp_code" ]; then
     ok "module identity present: version=$_mp_ver versionCode=$_mp_code"
-    # update.json is what the manager reads to offer an update, so a stale copy tells
-    # every installed user there is nothing new. It was two releases behind - V63/630
-    # against a V64/640 module - and nothing in the build checked.
-    if [ -f "$MODDIR/update.json" ]; then
-      _uj_ver="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$MODDIR/update.json" | head -1)"
-      _uj_code="$(sed -n 's/.*"versionCode"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$MODDIR/update.json" | head -1)"
-      if [ "$_uj_ver" = "$_mp_ver" ] && [ "$_uj_code" = "$_mp_code" ]; then
-        ok "update.json matches module.prop"
-      else
-        err "update.json says $_uj_ver/$_uj_code but module.prop says $_mp_ver/$_mp_code"
-      fi
-    fi
+    # update.json is NOT compared with module.prop: it points at the release users are
+    # offered, which is legitimately behind a module still in testing. The comparison made
+    # every V65 test build fail on a V64 manifest (fix83 CI), so it was removed on request.
   else
     err "module.prop missing version or versionCode"
   fi
@@ -1161,6 +1152,37 @@ else
   ok "no C comments inside awk programs"
 fi
 
+# Escaped quotes inside a command substitution.
+#
+# Inside "$( ... )" the quoting starts over, so \"$f\" is not a quoted variable - it is the
+# variable with two literal quote characters glued on. The command then opens a file whose
+# name starts with a quote and fails quietly. That emptied asbdiag's "stock thermal" line on
+# every phone (and printed "no passive trip confirmed" as a finding), and made the Wi-Fi
+# fallback status read "unavailable" on the action screen and in asbdiag. sh -n accepts it.
+echo ""
+echo "🧷 Escaped quotes inside \$( )"
+_eq_hits="$(find "$MODDIR" -name '*.sh' -type f ! -path '*/dsp_stubs/*' ! -path '*/tests/*' 2>/dev/null \
+  | while IFS= read -r _ef; do
+      grep -nE '\$\([^)]*(^|[[:space:]])([A-Za-z_][A-Za-z0-9_]*=)?\\"\$' "$_ef" 2>/dev/null | sed "s|^|$_ef:|"
+    done)"
+for _ef in "$MODDIR/action.sh" "$MODDIR/service.sh" "$MODDIR/system/bin/asbdiag"; do
+  [ -f "$_ef" ] || continue
+  _h="$(grep -nE '\$\([^)]*(^|[[:space:]])([A-Za-z_][A-Za-z0-9_]*=)?\\"\$' "$_ef" 2>/dev/null | sed "s|^|$_ef:|")"
+  [ -n "$_h" ] && _eq_hits="${_eq_hits:+$_eq_hits
+}$_h"
+done
+if [ -n "$_eq_hits" ]; then
+  echo "$_eq_hits" | sort -u | while IFS= read -r _h; do echo "     $_h"; done
+  err "escaped quotes inside \$( ) become part of the argument"
+else
+  ok "no escaped quotes inside command substitutions"
+fi
+
 echo "  Lint: ❌ $ERRORS errors  ⚠️  $WARNS warnings"
 [ $ERRORS -eq 0 ] && echo "  Config: CLEAN" || echo "  Config: FIX REQUIRED"
 echo "═══════════════════════════════"
+# An error has to stop the build. The lint printed "FIX REQUIRED" and exited 0, so CI and
+# tools/asb_full_regression.sh went green over it: fix75 added a card without moving the
+# config-shape fingerprint, and two new tests tripped the awk C-comment check, and every
+# run still said ALL PASSED. Warnings stay advisory.
+[ "$ERRORS" -eq 0 ] || exit 1
