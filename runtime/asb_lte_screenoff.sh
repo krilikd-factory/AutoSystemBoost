@@ -41,6 +41,9 @@ LOGF="$STATE_DIR/lte_screenoff.log"
 STATS="$STATE_DIR/lte_screenoff.stats"
 SINCE="$STATE_DIR/lte_screenoff.since"
 DELAY="${ASB_LTE_DELAY_S:-90}"
+RETRYF="$STATE_DIR/lte_screenoff.retry"
+RETRY_S="${ASB_LTE_RETRY_S:-300}"
+RETRY_MAX=24
 NR_BIT=524288                                   # 1 << (NETWORK_TYPE_NR - 1)
 
 mkdir -p "$STATE_DIR" 2>/dev/null
@@ -150,9 +153,15 @@ _to_binary() {
 # shellcheck disable=SC2046
 _set_mask() { _cmd_phone set-allowed-network-types-for-users $(_slot_args "$1") "$(_to_binary "$2")" >/dev/null 2>&1; }
 
+# The governor's state file first (cheap). If it still says "on", ask the power manager
+# before giving up: older governors only refreshed the file when they wrote caps, so 90 s
+# after a screen-off it could still read screen=1 and the apply silently never happened.
 _screen_off_now() {
-  _st="$(grep -m1 '^screen=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
-  [ "$_st" = "0" ]
+  _st="$(grep -m1 '^screen=' "${ASB_STATE_FILE:-/dev/.asb/state}" 2>/dev/null | cut -d= -f2)"
+  [ "$_st" = "0" ] && return 0
+  _wk="$(dumpsys power 2>/dev/null | grep -m1 -oE 'mWakefulness=[A-Za-z]+' | cut -d= -f2)"
+  case "$_wk" in Asleep|Dozing) return 0 ;; esac
+  return 1
 }
 
 # Any SIM in a call counts. The registry prints one mCallState per phone; taking only the
@@ -246,13 +255,13 @@ do_apply() {
   [ -f "$UNSUP" ] && return 0
   [ -f "$SAVE" ] && return 0                     # already applied
   _screen_off_now || return 0
-  _in_call && { _log "apply: skipped, call in progress"; return 0; }
-  _tethering && { _log "apply: skipped, tethering active"; return 0; }
+  _in_call && { _retry_later "call in progress"; return 0; }
+  _tethering && { _retry_later "tethering active"; return 0; }
+  rm -f "$RETRYF" 2>/dev/null
   _sub="$(_data_slot)" || return 0
   _orig="$(_get_mask "$_sub")" || {
     _raw="$(_cmd_phone get-allowed-network-types-for-users $(_slot_args "$_sub") 2>&1 | tr -d '\r' | tail -n 1 | cut -c1-120)"
-    _log "apply: cannot read allowed types (slot=$_sub, got: ${_raw:-nothing}), marking unsupported"
-    true > "$UNSUP"; return 0; }
+    _unsup_strike "cannot read allowed types (slot=$_sub, got: ${_raw:-nothing})"; return 0; }
   [ $(( _orig & NR_BIT )) -ne 0 ] || return 0    # 5G not allowed anyway
   _want=$(( _orig & ~NR_BIT ))
   printf '%s|%s\n' "$_sub" "$_orig" > "$SAVE" 2>/dev/null && sync
@@ -260,16 +269,46 @@ do_apply() {
   _now="$(_get_mask "$_sub")"
   if [ "$_now" = "$_want" ]; then
     date +%s > "$SINCE" 2>/dev/null
+    rm -f "$UNSUP.n" 2>/dev/null
     _stats_add 1 0 0
     _log "apply: sub=$_sub $_orig -> $_want (LTE preferred, screen off)"
   else
-    _log "apply: readback $_now != $_want, restoring and marking unsupported"
     do_restore
-    true > "$UNSUP"
+    _unsup_strike "readback $_now != $_want after the write (restored)"
   fi
 }
 
+# Three strikes, not one. A single failed read used to switch the feature off until the next
+# reinstall: an OP15 logged "cannot read allowed types, marking unsupported" at 01:21 one
+# night - the phone service was mid-restart - and the next apply came 18 hours later, after
+# a reinstall cleared the flag. Only three failures in a row mean "this device cannot".
+_unsup_strike() {
+  _sn="$(cat "$UNSUP.n" 2>/dev/null)"; case "$_sn" in ''|*[!0-9]*) _sn=0 ;; esac
+  _sn=$(( _sn + 1 ))
+  if [ "$_sn" -ge 3 ]; then
+    _log "apply: $1 - third time in a row, marking unsupported"
+    true > "$UNSUP"; rm -f "$UNSUP.n" 2>/dev/null
+  else
+    _log "apply: $1 - attempt $_sn of 3, will try again at the next screen-off"
+    echo "$_sn" > "$UNSUP.n" 2>/dev/null
+  fi
+}
+
+# A skipped apply used to be final for the whole screen-off. An OP15 night shows it: at
+# 03:12 "apply: skipped, call in progress", then nothing until the screen came on at 11:10 -
+# eight hours on 5G with the option on, for a check that is only true for the length of a
+# call. The skip now re-arms itself every RETRY_S while the screen stays off, at most
+# RETRY_MAX times (two hours), and logs only the first skip of a run.
+_retry_later() {
+  _rn="$(cat "$RETRYF" 2>/dev/null)"; case "$_rn" in ''|*[!0-9]*) _rn=0 ;; esac
+  [ "$_rn" -eq 0 ] && _log "apply: skipped, $1 - will retry every ${RETRY_S}s while the screen is off"
+  [ "$_rn" -ge "$RETRY_MAX" ] && { _log "apply: still $1 after $_rn retries, giving up until the next screen-off"; rm -f "$RETRYF"; return 0; }
+  echo $(( _rn + 1 )) > "$RETRYF" 2>/dev/null
+  do_arm "$RETRY_S"
+}
+
 do_arm() {
+  _arm_delay="${1:-$DELAY}"
   [ "$(_cfg net_screen_off_lte)" = "1" ] || return 0
   [ -f "$UNSUP" ] && return 0
   [ -f "$SAVE" ] && return 0
@@ -281,7 +320,11 @@ do_arm() {
   fi
   (
     exec </dev/null >/dev/null 2>&1   # detach here, not with a redirect on the ( ): mksh then waits for a body that uses $(...)
-    sleep "$DELAY"
+    # The sleep runs as a child the timer can take down with it: a disarm (screen on) kills
+    # this subshell, and a plain foreground sleep would be left behind as an orphan.
+    trap 'kill "$_sp" 2>/dev/null; exit 0' TERM INT
+    sleep "$_arm_delay" & _sp=$!
+    wait "$_sp"
     rm -f "$PIDF"
     do_apply
   ) &
@@ -299,7 +342,7 @@ do_disarm() {
 case "$1" in
   arm)     do_arm ;;
   apply)   do_apply ;;
-  restore) do_disarm; do_restore ;;
+  restore) do_disarm; rm -f "$RETRYF" 2>/dev/null; do_restore ;;
   status)
     printf 'enabled=%s\n' "$(_cfg net_screen_off_lte)"
     printf 'applied=%s\n' "$([ -f "$SAVE" ] && echo 1 || echo 0)"

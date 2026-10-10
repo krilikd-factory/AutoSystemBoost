@@ -29,7 +29,7 @@ _has() { command -v "$1" >/dev/null 2>&1; }
 _has pm || exit 0
 
 GMS=com.google.android.gms
-STATE=/data/adb/asb/gms_components_frozen
+STATE="${ASB_GMS_STATE:-/data/adb/asb/gms_components_frozen}"
 
 # --- component sets -------------------------------------------------------------------
 #
@@ -56,27 +56,6 @@ STATE=/data/adb/asb/gms_components_frozen
 # a factory reset, or an app registering for push the first time can quietly fail. Nobody
 # would connect that to a battery tweak, and it buys one wakeup a day.
 _SAFE="
-com.google.android.gms/.stats.service.DropBoxEntryAddedService
-com.google.android.gms/.stats.PlatformStatsCollectorService
-com.google.android.gms/.usagereporting.service.UsageReportingService
-com.google.android.gms/.playlog.service.PlayLogBrokerService
-com.google.android.gms/.playlog.uploader.PlayLogUploaderService
-com.google.android.gms/.clearcut.service.ClearcutLoggerService
-com.google.android.gms/.analytics.service.AnalyticsService
-com.google.android.gms/.analytics.AnalyticsReceiver
-com.google.android.gms/.feedback.FeedbackAsyncService
-"no" needed a
-# footnote, and a footnote is not good enough for notifications.
-#
-# Checkin is the daily device registration: config, feature flags, timezone. It is not the
-# push transport, and freezing it on a phone that is already registered does not stop
-# delivery. The problem is the edge: FIRST push registration goes through checkin, so a
-# new device, a factory reset, or an app registering for push for the first time can
-# quietly fail to arrive at all. Nobody would connect that to a battery tweak, and the
-# saving it buys is one wakeup a day.
-#
-# com.google.android.gms/.checkin.CheckinService
-# com.google.android.gms/.checkin.CheckinChimeraService
 com.google.android.gms/.stats.service.DropBoxEntryAddedService
 com.google.android.gms/.stats.PlatformStatsCollectorService
 com.google.android.gms/.usagereporting.service.UsageReportingService
@@ -139,7 +118,7 @@ if [ "$_lvl" = "off" ]; then
   if [ -f "$STATE" ]; then
     _n=0
     while IFS='|' read -r _c _was; do
-      [ -n "$_c" ] || continue
+      case "$_c" in "$GMS"/.?*) ;; *) continue ;; esac
       # pkg-disabled means the whole package was off when we started - putting the
       # component back to "enabled" would be inventing a state that never existed.
       [ "$_was" = "pkg-disabled" ] && continue
@@ -158,7 +137,7 @@ if pm list packages -d 2>/dev/null | grep -q "^package:${GMS}$"; then
   exit 0
 fi
 
-mkdir -p /data/adb/asb 2>/dev/null
+mkdir -p "${STATE%/*}" 2>/dev/null
 _list="$_SAFE"
 # Levels are cumulative: max includes more, which includes safe.
 case "$_lvl" in
@@ -178,6 +157,11 @@ esac
 #
 # Set difference against the recorded state: anything on record but not in the new list
 # goes back to what it was before ASB touched it.
+# Drop junk rows left by the old word-split bug before reading the record.
+if [ -f "$STATE" ] && grep -qv "^${GMS}/" "$STATE" 2>/dev/null; then
+  grep "^${GMS}/" "$STATE" > "$STATE.tmp" 2>/dev/null
+  mv -f "$STATE.tmp" "$STATE" 2>/dev/null
+fi
 if [ -f "$STATE" ]; then
   _keep=""
   while IFS='|' read -r _sc _sw; do
@@ -203,7 +187,11 @@ fi
 
 _done=0
 for _c in $_list; do
-  [ -n "$_c" ] || continue
+  # Only real component names. A comment block once got pasted inside _SAFE's quotes, and
+  # word splitting turned every word of it into a "component": ~100 pairs of pm calls (a
+  # JVM start each) on every apply, and junk rows in the state file. Anything that is not
+  # a GMS component is ignored rather than trusted to the list staying tidy.
+  case "$_c" in "$GMS"/.?*) ;; *) continue ;; esac
   _freeze_one "$_c" && _done=$((_done + 1))
 done
 echo "gms freeze: $_lvl - $_done component(s) processed (package itself untouched)"

@@ -98,7 +98,11 @@ _probe() {
   for _d in /vendor/lib64/soundfx /vendor/lib/soundfx \
             /system/vendor/lib64/soundfx /system/vendor/lib/soundfx \
             /system/lib64/soundfx /system/lib/soundfx \
-            /odm/lib64/soundfx /odm/lib/soundfx; do
+            /odm/lib64/soundfx /odm/lib/soundfx \
+            "$MODDIR/system/vendor/lib64/soundfx" "$MODDIR/system/vendor/lib/soundfx"; do
+    # The module's own staged copy counts too: the probe runs in post-fs-data, before the
+    # root manager has mounted the overlay, so the live path is still empty at that moment
+    # (OP15 capabilities.env: dsp_soundfx=0 on a phone with the effect attached and audible).
     for _l in "$_d"/libasbdsp*.so; do
       [ -f "$_l" ] && { _dsp=1; break 2; }
     done

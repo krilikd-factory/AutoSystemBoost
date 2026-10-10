@@ -30,6 +30,7 @@
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
+_DZ_DIR="${ASB_DOZE_STATE_DIR:-/data/adb/asb}"
 
 [ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
 
@@ -205,68 +206,79 @@ esac
 # alarm clock and the root manager, and dropping those is how a module ends up being
 # blamed for a missed alarm. Only user-installed packages, and only ones the user has not
 # separately marked as unrestricted in Android's own battery settings.
+# Packages that keep their exemption whatever the level. 0 = protected.
+#
+# Authenticators: a 2FA push that arrives late is a login that fails (user report, Microsoft
+# Authenticator). The Bluetooth stack and telecom: a trimmed A2DP stack showed up as
+# headphones dropping in 1-5 minute fragments. Wearable companions ride the same link: an
+# OP15 had com.samsung.wearable.watch7plugin trimmed, and a watch plugin under Doze loses
+# its Bluetooth session and the notifications it forwards. Caller-ID / call blockers act on
+# an incoming call in real time - Truecaller was trimmed on the same phone.
+#
+# Matched on substring so vendor variants and regional builds are covered without
+# maintaining an exhaustive list of package names.
+_doze_protected() {
+  case "$1" in
+    *authenticator*|*.auth.*|*.otp.*|*twofactor*|*two_factor*|\
+    com.azure.authenticator|com.google.android.apps.authenticator*|\
+    com.duosecurity.duomobile|org.fedorahosted.freeotp|com.authy.authy|\
+    com.beemdevelopment.aegis|com.yubico.yubioath|com.symantec.mobile.idsafe|\
+    *.mfa.*|*passkey*|\
+    com.android.bluetooth|com.google.android.bluetooth|*.bluetooth.*|\
+    *bluetoothmidiservice*|com.android.server.telecom|\
+    *wearable*|*.wear.*|*.wearos.*|*watch*plugin*|*galaxywatch*|*.watch.*|\
+    *fitbit*|*garmin*|*amazfit*|*zepp*|*huami*|*huawei.health*|*heytap.health*|\
+    *oplus.health*|*xiaomi.wearable*|*mi.health*|*polar.*|*suunto*|*withings*|\
+    *truecaller*|*callerid*|*callblock*|*whoscall*|*getcontact*|com.webascender.callerid)
+      return 0 ;;
+  esac
+  if [ -f "${_DZ_DIR}/doze_whitelist_keep" ] && \
+     grep -qxF "$1" "${_DZ_DIR}/doze_whitelist_keep" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
 asb_doze_trim_whitelist() {
   command -v dumpsys >/dev/null 2>&1 || return 0
   command -v pm >/dev/null 2>&1 || return 0
-  _wl_file="/data/adb/asb/doze_whitelist_removed"
-  mkdir -p /data/adb/asb 2>/dev/null
+  _wl_file="${_DZ_DIR}/doze_whitelist_removed"
+  mkdir -p "$_DZ_DIR" 2>/dev/null
   # Third-party packages only: pm list packages -3 is the definition Android itself uses.
   _third="$(pm list packages -3 2>/dev/null | sed 's/^package://')"
   [ -n "$_third" ] || return 0
+
+  # Give back what an earlier run trimmed and the rules now protect (or the user has since
+  # put on the keep-list, or a system app the old substring test let through): the record
+  # says we took it, so we return it.
+  if [ -s "$_wl_file" ]; then
+    _wl_keep=""
+    while IFS= read -r _p; do
+      [ -n "$_p" ] || continue
+      if _doze_protected "$_p" || ! printf '%s\n' "$_third" | grep -qxF "$_p"; then
+        dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1
+        echo "doze: $_p exempt again (protected or not a user app)"
+      else
+        _wl_keep="${_wl_keep}${_p}
+"
+      fi
+    done < "$_wl_file"
+    printf '%s' "$_wl_keep" > "$_wl_file" 2>/dev/null
+  fi
+
   for _p in $(dumpsys deviceidle whitelist 2>/dev/null \
               | grep -E '^user,' | cut -d, -f2); do
-    case "$_third" in
-      *"$_p"*) : ;;
-      *) continue ;;   # not user-installed - leave it alone
-    esac
     # A package name is [A-Za-z0-9_.] and nothing else. It reaches a shell command, and the
-    # keep-list below is a user-editable file, so anything carrying a quote, a slash or a
-    # space is refused outright rather than escaped.
+    # keep-list is a user-editable file, so anything carrying a quote, a slash or a space is
+    # refused outright rather than escaped.
     case "$_p" in
       *[!A-Za-z0-9_.]*|'') continue ;;
     esac
-    # Never trim an authenticator, whatever the user has or has not configured.
-    #
-    # The Bluetooth stack is here for the same reason. A user reported headphones dropping
-    # twice in ten minutes, and their phase ledger shows the shape of it: audio_bt sessions
-    # arriving as 0.8, 0.9, 3.1 and 5.4 minute fragments instead of one continuous stretch.
-    # Doze defers work for packages removed from the exempt list, and an A2DP link that
-    # misses its timing does not degrade gracefully - it disconnects, and the user hears the
-    # music stop. Telecom is included because a call rides the same stack at a higher cost.
-    #
-    # Reported by a user with Microsoft Authenticator: it is a third-party package, so it
-    # was trimmed like any other - and a 2FA push that arrives late is a login that fails.
-    # Unlike a chat message, there is no "read it in the morning" for a one-time code: the
-    # code expires, and the person is locked out of their own account at the moment they
-    # are trying to use it.
-    #
-    # The keep-list would cover this, but only for someone who already knew to add it -
-    # and by the time they find out, they have been locked out once. This is the class of
-    # app where the safe default has to be built in, like the dialer and the alarm clock.
-    #
-    # Matched on substring so vendor variants and regional builds are covered without
-    # maintaining an exhaustive list of package names.
-    case "$_p" in
-      *authenticator*|*.auth.*|*.otp.*|*twofactor*|*two_factor*|\
-      com.azure.authenticator|com.google.android.apps.authenticator*|\
-      com.duosecurity.duomobile|org.fedorahosted.freeotp|com.authy.authy|\
-      com.beemdevelopment.aegis|com.yubico.yubioath|com.symantec.mobile.idsafe|\
-      *.mfa.*|*passkey*|\
-      com.android.bluetooth|com.google.android.bluetooth|*.bluetooth.*|\
-      *bluetoothmidiservice*|com.android.server.telecom)
-        continue ;;
-    esac
-
-    # Apps the user chose to keep exempt, one package per line.
-    #
-    # "Remove every user app" is the right default and the wrong rule for everyone: an
-    # alarm clock, a work chat or a health tracker are exactly the apps someone needs to
-    # reach them late, and the only way to express that was to switch the tweak off
-    # entirely. The editor in the WebUI writes this file.
-    if [ -f /data/adb/asb/doze_whitelist_keep ] && \
-       grep -qxF "$_p" /data/adb/asb/doze_whitelist_keep 2>/dev/null; then
-      continue
-    fi
+    # Whole-line match against the third-party list. A substring test let the system
+    # Gboard (com.google.android.inputmethod.latin) through because a third-party fork is
+    # named dev.jason.com.google.android.inputmethod.latin - an OP15 had both trimmed.
+    printf '%s\n' "$_third" | grep -qxF "$_p" || continue
+    _doze_protected "$_p" && continue
     if dumpsys deviceidle whitelist "-$_p" >/dev/null 2>&1; then
       grep -qxF "$_p" "$_wl_file" 2>/dev/null || echo "$_p" >> "$_wl_file"
     fi
@@ -277,7 +289,7 @@ asb_doze_trim_whitelist() {
 # Put them all back. Called when the level returns to stock and from uninstall.sh - an
 # exemption the user granted deliberately must survive the module being removed.
 asb_doze_restore_whitelist() {
-  _wl_file="/data/adb/asb/doze_whitelist_removed"
+  _wl_file="${_DZ_DIR}/doze_whitelist_removed"
   [ -f "$_wl_file" ] || return 0
   command -v dumpsys >/dev/null 2>&1 || return 0
   while IFS= read -r _p; do
