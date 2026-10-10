@@ -16,7 +16,7 @@ grep -rnE 'sysctlw kernel\.panic(_on_oops)? |/proc/sys/kernel/panic(_on_oops)?' 
   | grep -v '^\s*#' | grep -v ':[0-9]*: *#' && fail "a script still writes kernel.panic / panic_on_oops"
 F="$ROOT/src/asb_fsm.h"
 grep -Fq '#define ASB_LI_PIN_HOLD_S 20' "$F" || fail "pin hold constant"
-grep -Fq 'int _pinned = (_max > 0 && _cur > 0 && _cur * 100 >= _max * 98);' "$F" || fail "pinned test"
+grep -Fq 'if (_cm > 0 && _cc > 0 && _cc * 100 >= _cm * 98) _sl = _c;' "$F" || fail "pinned test"
 grep -Fq 'if (m->misc.screen_on && !fsm_profile_is_battery && !m->misc.camera_active) {' "$F" || fail "escalation must be screen-on, not Battery, not camera"
 grep -Fq 'light_idle_pin_escalations=' "$ROOT/src/asb_governor.c" || fail "escalations not published"
 grep -q 'resetprop -n tombstoned.max_tombstone_count 0' "$ROOT/post-fs-data.sh" && fail "native crash records still thrown away"
@@ -290,5 +290,15 @@ printf 'some avg10=7.39 avg60=8.41 avg300=2.74 total=9449753\nfull avg10=4.78 av
 printf 'some avg10=0.00 avg60=0.00 avg300=0.00 total=1\n' > "$T/p"
 [ "$(PSI="$T/p" "$T/t")" = -1 ] || fail "missing full line must read -1"
 echo "PASS: fix108 contract"
+) || exit 1
+# ---- fix109 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix109: $*"; exit 1; }
+F="$ROOT/src/asb_fsm.h"
+grep -Fq 'int _cand[2] = { _multi ? 1 : 0, _multi ? 2 : -1 };' "$F" || fail "light-idle pin still watches only slot 0 on 3/4-cluster parts"
+grep -Fq '_li_pin_slot = _sl;' "$F" || fail "pinned slot not remembered for the hold"
+grep -Fq '_li_pin_cap = 0; _li_pin_slot = -1; }' "$F" || fail "pinned slot not cleared when the hold ends"
+echo "PASS: fix109 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
