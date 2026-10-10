@@ -2136,8 +2136,11 @@ apply_bg_trim_runtime() {
 
   # Stop debug/crash-dump/telemetry daemons that run in the background but serve no purpose on
   # a user's daily driver.
-  for _svc in minidump minidump32 minidump64 qseelogd wlanramdumpcollector \
-              mqsasd bootstat poweroff_charger_log mtdoopslog ostatsd \
+  # Not the crash recorders: minidump*, mtdoopslog (kernel oops log) and bootstat (boot
+  # reason) sleep until something has already gone wrong, cost nothing in normal use, and
+  # are what tells a hang from a ROM bug afterwards.
+  for _svc in qseelogd wlanramdumpcollector \
+              mqsasd poweroff_charger_log ostatsd \
               charge_logger cnss_diag tcpdump; do
     stop "$_svc" >/dev/null 2>&1 || true
   done
@@ -2351,8 +2354,16 @@ apply_kernel() {
   sysctlw kernel.perf_cpu_time_max_percent 25
   sysctlw kernel.sched_schedstats 0
   sysctlw kernel.timer_migration 0
-  sysctlw kernel.panic 0
-  sysctlw kernel.panic_on_oops 0
+  # kernel.panic and kernel.panic_on_oops are NOT touched any more.
+  #
+  # Both were written to 0. panic=0 means "after a kernel panic, never reboot - wait
+  # forever", and panic_on_oops=0 lets the kernel carry on after an oops with a driver in an
+  # undefined state. Neither saves a single milliamp; together they turn a crash the phone
+  # would recover from in seconds into a hang that needs a forced restart. An OP12 report
+  # fits it exactly: black launcher with only the clock, power key clicks but the screen
+  # stays on, the morning alarm never rings, a reboot fixes everything. Whatever the root
+  # cause of that night, a phone must not be left wedged by this module - the vendor
+  # values apply again from the next boot.
   sysctlw vm.panic_on_oom 0
   [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
   writef_retry /proc/sys/kernel/printk_devkmsg off 1 0 || true
@@ -2527,12 +2538,14 @@ apply_gpu_caps() {
   _pmax_node="/sys/class/kgsl/kgsl-3d0/max_pwrlevel"
   _nlvl="$(cat /sys/class/kgsl/kgsl-3d0/num_pwrlevels 2>/dev/null)"
   if [ -w "$_pmax_node" ] && [ -n "$_nlvl" ] && [ "$_nlvl" -gt 1 ] 2>/dev/null; then
-    _floor_file="/data/adb/asb/gpu_pwrlevel_floor"
-    if [ ! -f "$_floor_file" ]; then
-      mkdir -p /data/adb/asb 2>/dev/null
-      cat "$_pmax_node" 2>/dev/null > "$_floor_file" 2>/dev/null || true
-    fi
-    _vfloor="$(cat "$_floor_file" 2>/dev/null)"
+    # The "vendor floor" was a one-time snapshot of max_pwrlevel taken the first time this
+    # ran - which is whatever the node held at that moment, ASB's own earlier write
+    # included. An OP15 recorded 9 of 18 and kept it for good: every profile apply after
+    # that, Performance included, was clamped to level 9 or slower before the governor's
+    # first tick, and asbdiag printed it as the vendor's limit. The vendor's real limit is
+    # the live thermal level, so that is what is respected now; the stale file goes.
+    rm -f /data/adb/asb/gpu_pwrlevel_floor 2>/dev/null
+    _vfloor="$(cat /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel 2>/dev/null)"
     case "$_vfloor" in ''|*[!0-9]*) _vfloor=0 ;; esac
     _pct="${_P_GPU_MAX_PCT:-100}"
     [ "$_pct" -gt 100 ] 2>/dev/null && _pct=100
@@ -3250,7 +3263,12 @@ apply_extra_settings() {
   settings delete global app_usage_enabled >/dev/null 2>&1 || true
   settings delete global package_usage_stats_enabled >/dev/null 2>&1 || true
   asb_settings_put global bluetooth_voip_support 1
-  asb_settings_put global dropbox_max_files 5
+  # 50, not 5. Five entries in total is a few minutes of routine traffic (netstats, keymaster,
+  # strict-mode), so by the time anyone looks, the record of a crash, an ANR or a system_server
+  # watchdog is gone: an OP12 hang ("black launcher, alarm missed") left nothing to read after
+  # the reboot, and the full-day recorder's SystemUI restart check found "Drop box contents:
+  # 4 entries, Max entries: 5" with no crash among them. The saving was a few small files.
+  asb_settings_put global dropbox_max_files 50
   asb_settings_put global network_recommendations_enabled 0
   asb_settings_put global activity_starts_logging_enabled 0
   # Moved to runtime/asb_system_tweaks.sh, driven by phantom_procs. Setting it here as

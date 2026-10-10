@@ -775,7 +775,7 @@ T_SMART_HDR="Smart · slot %s/12 · %s (%s) · conf %s%%"
 T_PROFILE_SMART="Profile: %s (Smart picks caps within it)"
 T_PROFILE_MANUAL="Profile: %s (manual — Smart off)"
 T_LEAN_NOW="Battery lean: %s%% now"
-T_LEAN_TILT=" (your tilt: %s%%)"
+T_LEAN_TILT=" (your tilt: +%s%% of the remaining way to Battery)"
 T_TILT_ONLY="Battery tilt: %s%%"
 T_THROTTLE_TEMP="Throttling temperature: %s°C (default 65)"
 T_SAFE_MODE="SAFE MODE: governor disabled (%s)"
@@ -944,6 +944,7 @@ T_WLV_LIMITED="wakelocks limited by your fitness setting"
 T_WLV_LIMIT_IGNORED="limit set, but this Android ignores it - the app still holds the CPU"
 T_S_MC="Wi-Fi multicast held %s min since unplug - the Wi-Fi radio cannot doze (now: %s)"
 T_S_MC_NONE="nobody"
+T_S_VPN="VPN is on (%s) and the mobile data path (rmnet/IPA) is what keeps the phone awake most: the tunnel's keepalives wake the modem and CPU all night. ASB cannot change that - the VPN app's keepalive / always-on settings, split tunnelling or Wi-Fi at night can"
 T_Y_BG_RELAX="background processes: unlimited (phantom monitor off)"
 T_Y_BG_STRICT="background processes: Android default (32 max)"
 T_Y_OEM="OEM toggles: managed (RAM expansion, battery, heat)"
@@ -2113,6 +2114,19 @@ echo "  🌙  ${H_SLEEP}"
       _mch="$(grep -v '^total|' /data/adb/asb/wakelock_multicast | cut -d'|' -f1 | head -2 | tr '\n' ',' | sed 's/,$//; s/,/, /g')"
       _f "       $T_S_MC" "$((_mct / 60))" "${_mch:-$T_S_MC_NONE}"
     fi
+  fi
+  # A VPN over mobile data is the commonest screen-off drain ASB cannot fix: a CPH2769 and an
+  # OP12 that both reported worse battery had rmnet/IPA wakelocks at the top for an hour of
+  # screen-off, with a VPN app running. Say so, so the drain is not blamed on the module.
+  _vpn_if=""
+  for _vi in /sys/class/net/tun* /sys/class/net/wg* /sys/class/net/ppp*; do
+    [ -e "$_vi" ] || continue
+    [ "$(cat "$_vi/operstate" 2>/dev/null)" = "down" ] && continue
+    _vpn_if="${_vi##*/}"; break
+  done
+  if [ -n "$_vpn_if" ] && [ -s /data/adb/asb/wakelock_top ] && \
+     head -n 3 /data/adb/asb/wakelock_top | grep -qE '^(rmnet|IPA_CLIENT_APPS_WAN|qcom_rx_wakelock)'; then
+    _f "       $T_S_VPN" "$_vpn_if"
   fi
 _dz="$(_cfg doze_level)"
 case "$_dz" in

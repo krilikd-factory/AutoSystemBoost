@@ -120,7 +120,10 @@ fi
 if command -v resetprop >/dev/null 2>&1; then
   # ASB:LOG:BEGIN
   if asb_feature_enabled LOG && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
-  resetprop -n tombstoned.max_tombstone_count 0 >/dev/null 2>&1 || true
+  # tombstoned.max_tombstone_count is left at the platform default. Setting it to 0 threw
+  # away every native crash record - the one thing that explains a hang or a dead service
+  # after the reboot that cleared it - and saved nothing: tombstoned only writes when a
+  # process actually crashes.
   resetprop -n ro.lmk.log_stats false >/dev/null 2>&1 || true
   resetprop -n ro.lmk.debug false >/dev/null 2>&1 || true
   fi
