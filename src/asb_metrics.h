@@ -1779,7 +1779,8 @@ int spike_detected = 0;
  * generic fallback answered, or nothing was readable at all.
  *
  * 0 = unknown, 1..3 = vendor paths, 4 = generic backlight, 5 = default,
- * 6 = Android display state said doze (always-on display: screen off, fix115). */
+ * 6 = Android display state said doze (always-on display: screen off, fix115),
+ * 7 = Android display state just switched ON (fix116). */
 static int g_screen_src = 0;
 
 /* Read accessor for the screen-source tag. */
@@ -1809,6 +1810,8 @@ static int asb_display_state_read(void) {
 static int    g_display_state = -1;
 static long   g_scr_aod_s = 0;
 static time_t g_scr_aod_last = 0;
+/* When the display-state waiter (fix116) last saw Android switch the display ON. */
+static time_t g_disp_prop_on_ts = 0;
 
 static int metrics_screen_on(void) {
     /* An always-on display is a screen that is OFF.
@@ -1836,6 +1839,15 @@ static int metrics_screen_on(void) {
         return 0;
     }
     g_scr_aod_last = 0;
+    /* Android switched the display ON within the last 3 s (fix116): on, even while the
+     * backlight is still at 0 - it rises a few hundred ms after the state, and that gap is
+     * what sent unlocks through re-check chains or, missed, a 45 s deep-idle tick. Only a
+     * fresh transition counts; after 3 s the panel nodes decide again, so a property that
+     * stopped moving can never hold the phone on screen-on rails. */
+    if (ds == 2 && g_disp_prop_on_ts > 0) {
+        time_t now = time(NULL);
+        if (now >= g_disp_prop_on_ts && now - g_disp_prop_on_ts <= 3) { g_screen_src = 7; return 1; }
+    }
     const char *paths[] = { PATH_SCREEN_STATUS, PATH_SCREEN_STATUS2, NULL };
     for (int i = 0; paths[i]; i++) {
         int v = sysfs_read_int(paths[i], -1);

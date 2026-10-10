@@ -40,7 +40,7 @@ CFLAGS=(
 if [ "$ASB_BUILD_MODE" = "debug" ]; then
   CFLAGS+=(-DASB_DEBUG_BUILD=1)
 fi
-LDFLAGS=(-lm)
+LDFLAGS=(-lm -ldl)   # -ldl: dlsym for __system_property_wait (fix116)
 
 "$CC" "${CFLAGS[@]}" "$SCRIPT_DIR/asb_governor.c" "${LDFLAGS[@]}" -o "$OUT_DIR/$ASB_BIN_NAME"
 "$STRIP" "$OUT_DIR/$ASB_BIN_NAME" || true

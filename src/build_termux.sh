@@ -23,7 +23,7 @@ CFLAGS="-O2 -fstack-protector-strong -fPIE -pie"
 CFLAGS="$CFLAGS -D_FORTIFY_SOURCE=2"
 CFLAGS="$CFLAGS -Wall -Wextra -Wno-unused-parameter"
 CFLAGS="$CFLAGS -I$SRCDIR"
-LDFLAGS="-lm"
+LDFLAGS="-lm -ldl"
 
 clang $CFLAGS \
     "$SRCDIR/asb_governor.c" \

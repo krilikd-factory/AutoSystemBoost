@@ -18,6 +18,11 @@
 #include <linux/netlink.h>
 #include <linux/input.h>
 #include <sys/ioctl.h>
+#include <sys/eventfd.h>
+#if defined(__ANDROID__)
+#include <pthread.h>
+#include <dlfcn.h>
+#endif
 
 #include "asb_metrics.h"
 #include "asb_fsm.h"
@@ -1430,6 +1435,100 @@ static unsigned long g_wake_by_src[ASB_WAKE_SRC_COUNT];
  * two field captures show 22 of 54 wakes found that way, each exactly one 45 s idle tick
  * after the previous one, with the governor still on deep-idle rails meanwhile. */
 static unsigned long g_scr_on_by_uevent = 0, g_scr_on_by_recheck = 0, g_scr_on_by_tick = 0;
+/* ... and by Android's own display state, through the waiter below (fix116). */
+static unsigned long g_scr_on_by_display = 0;
+static unsigned long g_disp_prop_events = 0;
+static int           g_disp_prop_evfd = -1;
+/* 0 = not started, 1 = started, 2 = waiting on the property, -1 = unavailable / gave up.
+ * Written by the waiter thread too; a plain flag for the state file, nothing waits on it. */
+static volatile int  g_disp_waiter_up = 0;
+
+/* Display-state waiter (fix116).
+ *
+ * The display uevent misses wakes on some panels, and the fallbacks behind it (a wake key,
+ * a re-check after a resume) miss the rest: OnePlus 15 captures show 6 of 31 and 14 of 35
+ * wakes found only by the next idle tick - up to 45 s of unlock and launch animations on
+ * deep-idle rails, the kind of lag users report as "the phone is slow right after unlock".
+ * The OnePlus 13R: 19 of 30.
+ *
+ * Android publishes every display transition in debug.tracing.screen_state (fix115). One
+ * thread blocks in __system_property_wait on that property - a futex: no polling, no timer,
+ * nothing while the phone sleeps - and pokes an eventfd only when the display enters or
+ * leaves ON. Doze <-> doze-suspend flips of an always-on display (one a minute) wake the
+ * thread but never the main loop. Resolved with dlsym: the binary targets API 24 and the
+ * call is API 26; where it is missing nothing starts and the old paths work as before. */
+#if defined(__ANDROID__)
+typedef _Bool (*asb_prop_wait_fn)(const prop_info *, uint32_t, uint32_t *, const struct timespec *);
+
+static void *asb_disp_waiter(void *arg) {
+    (void)arg;
+    asb_prop_wait_fn w = (asb_prop_wait_fn)dlsym(RTLD_DEFAULT, "__system_property_wait");
+    if (!w) { g_disp_waiter_up = -1; return NULL; }
+    const prop_info *pi = NULL;
+    /* Normally there from early boot; give a late framework ten minutes. */
+    for (int i = 0; i < 20 && !pi; i++) {
+        pi = __system_property_find("debug.tracing.screen_state");
+        if (!pi) sleep(30);
+    }
+    if (!pi) { g_disp_waiter_up = -1; return NULL; }
+    g_disp_waiter_up = 2;
+    uint32_t serial = __system_property_serial(pi);
+    int prev = asb_display_state_read();
+    int idle_fail = 0;
+    for (;;) {
+        uint32_t ns = serial;
+        if (!w(pi, serial, &ns, NULL)) {
+            /* A NULL timeout never times out; a false return is unexpected - back off
+             * rather than spin, and stop after a few in a row. */
+            if (++idle_fail >= 5) { g_disp_waiter_up = -1; return NULL; }
+            sleep(5);
+            continue;
+        }
+        idle_fail = 0;
+        serial = ns;
+        int cur = asb_display_state_read();
+        if (cur != prev && (cur == 2 || prev == 2)) {
+            uint64_t one = 1;
+            ssize_t _r = write(g_disp_prop_evfd, &one, sizeof(one));
+            (void)_r;
+        }
+        prev = cur;
+    }
+    return NULL;
+}
+#endif
+
+/* Start the waiter; returns the eventfd to watch, or -1. */
+static int asb_disp_waiter_start(void) {
+#if defined(__ANDROID__)
+    if (!dlsym(RTLD_DEFAULT, "__system_property_wait")) {
+        g_disp_waiter_up = -1;
+        return -1;
+    }
+    int efd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (efd < 0) { g_disp_waiter_up = -1; return -1; }
+    g_disp_prop_evfd = efd;
+    /* No signal may land on this thread: SIGTERM's handler only clears g_running, and the
+     * main loop has to be the one interrupted out of epoll_wait. */
+    sigset_t all, old;
+    sigfillset(&all);
+    pthread_sigmask(SIG_BLOCK, &all, &old);
+    pthread_attr_t at;
+    pthread_attr_init(&at);
+    pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setstacksize(&at, 64 * 1024);
+    pthread_t th;
+    int rc = pthread_create(&th, &at, asb_disp_waiter, NULL);
+    pthread_attr_destroy(&at);
+    pthread_sigmask(SIG_SETMASK, &old, NULL);
+    if (rc != 0) { close(efd); g_disp_prop_evfd = -1; g_disp_waiter_up = -1; return -1; }
+    g_disp_waiter_up = 1;
+    return efd;
+#else
+    g_disp_waiter_up = -1;
+    return -1;
+#endif
+}
 static unsigned long g_scr_recheck_single = 0;
 static unsigned long g_scr_resume_chains = 0;   /* re-check chains armed because a tick followed a resume */
 static long          g_scr_tick_late_max_s = 0;
@@ -2601,8 +2700,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         /* Android's display state (1 off, 2 on, 3/4 doze, -1 unavailable) and the seconds
          * a lit always-on display was counted as screen-off (fix115). */
         fprintf(f, "display_state=%d\nscreen_aod_s=%ld\n", g_display_state, g_scr_aod_s);
-        fprintf(f, "screen_on_detect=\"uevent:%lu,recheck:%lu,tick:%lu\"\n",
-                g_scr_on_by_uevent, g_scr_on_by_recheck, g_scr_on_by_tick);
+        fprintf(f, "screen_on_detect=\"uevent:%lu,recheck:%lu,tick:%lu,display:%lu\"\n",
+                g_scr_on_by_uevent, g_scr_on_by_recheck, g_scr_on_by_tick, g_scr_on_by_display);
+        fprintf(f, "display_waiter=%d\ndisplay_state_events=%lu\n", g_disp_waiter_up, g_disp_prop_events);
         fprintf(f, "screen_on_single_rechecks=%lu\nscreen_on_resume_chains=%lu\nscreen_on_tick_late_max_s=%ld\n",
                 g_scr_recheck_single, g_scr_resume_chains, g_scr_tick_late_max_s);
         fprintf(f, "screen_on_key_devices=%d\nscreen_on_key_hints=%lu\n", g_wake_key_n, g_wake_key_hints);
@@ -6167,6 +6267,13 @@ int main(int argc, char **argv) {
     ev.data.fd = tfd_hourly; epoll_ctl(epfd, EPOLL_CTL_ADD, tfd_hourly, &ev);
     if (uefd  >= 0) { ev.data.fd = uefd;   epoll_ctl(epfd, EPOLL_CTL_ADD, uefd,   &ev); }
     if (sockfd >= 0) { ev.data.fd = sockfd; epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &ev); }
+    {
+        int _dpe = asb_disp_waiter_start();
+        if (_dpe >= 0) {
+            ev.data.fd = _dpe; epoll_ctl(epfd, EPOLL_CTL_ADD, _dpe, &ev);
+            asb_log("display waiter: watching Android's display state for wakes");
+        }
+    }
     if (uefd >= 0) {
         wake_keys_open(epfd);
         asb_log("wake keys: %d input device(s) watched for power/wakeup while the screen is off",
@@ -6776,6 +6883,25 @@ int main(int argc, char **argv) {
                     accum.drain_count     = 0;
                     accum.screen_on_ticks = 0;
                     accum.total_ticks     = 0;
+                }
+            }
+            else if (g_disp_prop_evfd >= 0 && fd == g_disp_prop_evfd) {
+                /* Android entered or left display ON (fix116). Entering: on now - the
+                 * metrics pass trusts a fresh ON for 3 s - and the usual re-check chain as
+                 * the backstop. Leaving: look now instead of at the next active tick. */
+                uint64_t _dv;
+                ssize_t _dr = read(fd, &_dv, sizeof(_dv));
+                (void)_dr;
+                g_disp_prop_events++;
+                if (asb_display_state_read() == 2) {
+                    g_disp_prop_on_ts = time(NULL);
+                    if (!metrics.misc.screen_on) {
+                        g_disp_evt_ts = time(NULL); g_disp_retry = 0;
+                        need_metrics = 1;
+                    }
+                } else {
+                    g_disp_prop_on_ts = 0;
+                    if (metrics.misc.screen_on) need_metrics = 1;
                 }
             }
             else if (wake_key_is_fd(fd)) {
@@ -7421,7 +7547,10 @@ int main(int argc, char **argv) {
                      * fast path working; anything later is the slow path the counters exist
                      * to expose. "late" is an upper bound: the wake happened somewhere
                      * between the last screen-off and this tick. */
-                    if ((g_disp_evt_ts && time(NULL) - g_disp_evt_ts <= 3) ||
+                    if (g_disp_prop_on_ts && time(NULL) - g_disp_prop_on_ts <= 3) {
+                        g_scr_on_by_display++;
+                        if (g_asb_cfg.log_level >= 1) asb_log("screen ON (Android display state)");
+                    } else if ((g_disp_evt_ts && time(NULL) - g_disp_evt_ts <= 3) ||
                         (g_disp_single_ts && time(NULL) - g_disp_single_ts <= 3)) {
                         g_scr_on_by_recheck++;
                         if (g_asb_cfg.log_level >= 1) asb_log("screen ON confirmed by the display re-check");

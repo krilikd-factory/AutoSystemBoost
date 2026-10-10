@@ -10,7 +10,7 @@ TARGET  = $(BINDIR)/asb
 CFLAGS  = -O2 -fstack-protector-strong -fPIE -pie -I$(SRCDIR)
 CFLAGS += -D_FORTIFY_SOURCE=2
 CFLAGS += -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
-LDFLAGS = -lm
+LDFLAGS = -lm -ldl
 
 ifdef DEBUG
 CFLAGS  = -g -O0 -fPIE -pie -I$(SRCDIR) -DASB_DEBUG_BUILD=1
