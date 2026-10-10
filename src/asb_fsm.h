@@ -694,6 +694,11 @@ typedef struct {
     int             ses_max_gap_p0;
     int             ses_max_gap_p1;
     int             ses_max_temp;
+    /* Session peak of a ~4-tick moving average of the die temperature (fix110). What the
+     * Smart learner is taught; ses_max_temp stays the raw single-sample maximum for the
+     * safety thresholds and reports. */
+    int             ses_max_temp_sm;
+    int             ses_temp_ema_x10;
     int             ses_max_skin_temp;
     int             ses_max_surface_temp;  /* surface hotspot (ghost hotspot channel) */
     int             ses_max_board_temp;    /* board_temp peak for long-gaming heat analysis */
@@ -1027,6 +1032,8 @@ static inline void fsm_session_reset(asb_fsm_t *fsm) {
     fsm->ses_max_gap_p0          = 0;
     fsm->ses_max_gap_p1          = 0;
     fsm->ses_max_temp            = 0;
+    fsm->ses_max_temp_sm         = 0;
+    fsm->ses_temp_ema_x10        = 0;
     fsm->ses_max_skin_temp       = 0;
     fsm->ses_max_surface_temp    = 0;
     fsm->ses_max_board_temp      = 0;
@@ -2699,6 +2706,22 @@ if (floor_hz <= 0) floor_hz = hw / 3;
 
     if (m->therm.cpu_max_c > fsm->ses_max_temp)
         fsm->ses_max_temp = m->therm.cpu_max_c;
+    /* Smoothed peak for the learner (fix110).
+     *
+     * The bucket's "typical peak" was the average of each session's single hottest sample.
+     * On current OnePlus dies that sample is a launch or dexopt spike lasting one tick:
+     * an OP15 session opened at 94 C right after boot (load 43) and the 24770 capture read
+     * 61-66 C for the first minute only. The slot then learned 63.6 C against a phone norm
+     * of 46-54 C and Smart sat at a 876/1000 battery lean in ordinary use - clipped ceilings
+     * for the whole slot, earned by a few seconds of heat. An EMA over about four ticks
+     * (8-25 s at screen-on cadence) keeps any heat that lasts and drops the blips. */
+    if (m->therm.temp_valid && m->therm.cpu_max_c > 0 && m->therm.cpu_max_c < 130) {
+        int _t10 = m->therm.cpu_max_c * 10;
+        fsm->ses_temp_ema_x10 = (fsm->ses_temp_ema_x10 <= 0)
+            ? _t10 : fsm->ses_temp_ema_x10 + (_t10 - fsm->ses_temp_ema_x10) / 4;
+        int _sm = (fsm->ses_temp_ema_x10 + 5) / 10;
+        if (_sm > fsm->ses_max_temp_sm) fsm->ses_max_temp_sm = _sm;
+    }
     if (m->therm.skin_temp_c > fsm->ses_max_skin_temp)
         fsm->ses_max_skin_temp = m->therm.skin_temp_c;
     if (m->therm.surface_hotspot_c > fsm->ses_max_surface_temp)

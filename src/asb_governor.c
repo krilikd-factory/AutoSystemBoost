@@ -2601,6 +2601,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 g_scr_recheck_single, g_scr_resume_chains, g_scr_tick_late_max_s);
         fprintf(f, "screen_on_key_devices=%d\nscreen_on_key_hints=%lu\n", g_wake_key_n, g_wake_key_hints);
         fprintf(f, "light_idle_pin_escalations=%lu\n", g_li_pin_escalations);
+        /* Raw single-sample session peak next to the smoothed one the learner uses (fix110),
+         * so a report shows how much of the "peak" was a one-tick spike. */
+        fprintf(f, "ses_max_temp_raw=%d\nses_max_temp_smooth=%d\n",
+                fsm->ses_max_temp, fsm->ses_max_temp_sm);
 
         /* Wakeups by source, same shape as the write breakdown below. */
         fprintf(f, "wake_by_src=\"");
@@ -4265,9 +4269,12 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
     if (g_smart_rt.enabled && g_smart_store_loaded && dur > 0) {
         asb_smart_session_input_t sin = {0};
         sin.dur_s = (int)dur;
-        sin.max_temp_c = fsm->ses_max_temp;
+        /* The smoothed session peak (fix110), not the single hottest sample: a one-tick
+         * launch spike must not teach the whole slot to lean toward battery. Falls back to
+         * the raw peak only when no valid sample was smoothed. */
+        sin.max_temp_c = (fsm->ses_max_temp_sm > 0) ? fsm->ses_max_temp_sm : fsm->ses_max_temp;
         /* Record it as handed over, before anything downstream can average it away. */
-        g_ses_last_temp = fsm->ses_max_temp;
+        g_ses_last_temp = sin.max_temp_c;
         g_ses_last_dur  = (int)dur;
         snprintf(g_ses_last_reason, sizeof(g_ses_last_reason), "%s", reason ? reason : "?");
         sin.max_skin_c = fsm->ses_max_skin_temp;
@@ -4317,7 +4324,7 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             }
             asb_smart_quality_t _qb;
             int _q = asb_smart_session_quality_ex(sin.drain_pctph_x10, _qv,
-                                               fsm->ses_max_temp,
+                                               sin.max_temp_c,
                                                fsm->ses_thermal_entries,
                                                fsm->ses_recovery_count,
                                                _vph,
