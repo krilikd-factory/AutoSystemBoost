@@ -1,0 +1,71 @@
+#!/usr/bin/env sh
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT HUP INT TERM
+
+# Device-pack producer must make absence explicit without authorizing broad
+# properties by device model/fingerprint guesswork.
+mkdir -p "$TMP/bin" "$TMP/state"
+cat > "$TMP/bin/getprop" <<'EOF'
+#!/usr/bin/env sh
+[ "${1:-}" = "ro.build.fingerprint" ] && printf '%s\n' 'test/vendor/device:16/TEST/1:user/release-keys'
+EOF
+chmod 0755 "$TMP/bin/getprop"
+PATH="$TMP/bin:$PATH" ASB_CONFIG_STATE="$TMP/state" MODDIR="$ROOT" \
+  sh "$ROOT/runtime/asb_device_pack_manifest.sh"
+grep -qx 'status=blocked' "$TMP/state/device_pack.state"
+grep -qx 'reason=no_certified_domain_manifest' "$TMP/state/device_pack.state"
+test ! -e "$TMP/state/device_pack_verified"
+
+# A stale validated manifest must be invalidated rather than authorizing another OTA.
+cat > "$TMP/state/device_pack_verified" <<'EOF'
+fingerprint=other/vendor/device:16/OLD/1:user/release-keys
+tier=validated
+domain=properties
+EOF
+PATH="$TMP/bin:$PATH" ASB_CONFIG_STATE="$TMP/state" MODDIR="$ROOT" \
+  sh "$ROOT/runtime/asb_device_pack_manifest.sh"
+test ! -e "$TMP/state/device_pack_verified"
+
+# Profile switches are transactional: each request obtains an epoch and workers
+# serialise through a module lock while observing supersession between passes.
+grep -q '^profile_next_epoch()' "$ROOT/apply_profile.sh"
+grep -q '^profile_worker_lock()' "$ROOT/apply_profile.sh"
+grep -q 'worker superseded' "$ROOT/apply_profile.sh"
+grep -q 'WORKER_EPOCH="${4:-}"' "$ROOT/apply_profile.sh"
+
+# Device evidence showed an invalid WALT sentinel and external CPU policy
+# disagreement. Both must be classified and bounded, not retried aggressively.
+grep -q 'unsupported_readback' "$ROOT/src/asb_writer.h"
+grep -q 'external_policy_holddown' "$ROOT/src/asb_writer.h"
+grep -q 'vendor_stricter_ceiling' "$ROOT/src/asb_writer.h"
+grep -q 'writer_node_is_cpu_max' "$ROOT/src/asb_writer.h"
+grep -q 'live_max > cmax\[i\]' "$ROOT/src/asb_writer.h"
+grep -q 'consecutive_failures' "$ROOT/src/asb_writer.h"
+grep -q 'retry_at = now + 86400' "$ROOT/src/asb_writer.h"
+# The vendor-disagreement holddown must exist and be short enough to act within one
+# thermal episode.
+#
+# This asserted the literal string "now + 900". That pinned a number, not a behaviour, and
+# the number turned out to be the bug: at fifteen minutes the governor was silent for most
+# of its life - a field diag read attempts=34 applied=23 backoff_skips=25, with cap_owner
+# vendor 92% / asb 0%. Asserting the constant meant the suite defended the defect.
+#
+# What matters is that the holddown is present (so no tick-by-tick write war) and bounded
+# (so the governor still gets to act). 300 s is the ceiling: longer than most thermal
+# episodes, which is what made 900 useless.
+grep -qE 'retry_at = now \+ (9|[1-9][0-9]|[12][0-9][0-9]|300);' "$ROOT/src/asb_writer.h"
+grep -q 'external_policy_holddown' "$ROOT/src/asb_writer.h"
+! grep -q 'asb_settings_put global google_core_control 0' "$ROOT/runtime/profile_core.sh"
+
+# Diagnostics must expose the safely blocked property state and the DSP clamp.
+grep -q 'device-pack state' "$ROOT/tools/asb_diag.sh"
+grep -q 'managed properties' "$ROOT/tools/asb_diag.sh"
+grep -q 'DSP gain applied' "$ROOT/tools/asb_diag.sh"
+grep -q '\[ -r "\$MODDIR/runtime/asb_device_pack_manifest.sh" \]' "$ROOT/post-fs-data.sh"
+grep -q 'sh "\$MODDIR/runtime/asb_device_pack_manifest.sh"' "$ROOT/post-fs-data.sh"
+grep -q '\[ -r "\$MODDIR/runtime/asb_capabilities.sh" \]' "$ROOT/post-fs-data.sh"
+grep -q '\[ -r "\$MODDIR/runtime/asb_apply_managed_props.sh" \]' "$ROOT/service.sh"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag"
+printf '%s\n' 'PASS device safety contract'
