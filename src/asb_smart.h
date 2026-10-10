@@ -1912,9 +1912,18 @@ static int asb_smart_memory_pressure_shift(void) {
     return shift;
 }
 
-static void asb_smart_apply_memory_pressure(asb_smart_runtime_t *rt) {
+static void asb_smart_apply_memory_pressure(asb_smart_runtime_t *rt, int screen_on) {
     if (!rt) return;
     if (rt->night_safe_override || rt->thermal_veto) return;  /* higher prio wins */
+    /* Not while the screen is on (fix101).
+     *
+     * Memory pressure is reclaim work: kswapd, lmkd and zram compression, all of it CPU-bound.
+     * Leaning toward Battery lowers the ceilings exactly while that work queues behind the
+     * app the user is looking at, so the stall lasts longer - on every OnePlus, because they
+     * all run large zram with lz4/zstd. The CPH2769 "freezes after the cinema" report and the
+     * OP15 debug6 capture (PSI some 7.4 / full 4.8 right after boot, alpha 876) are both this
+     * shape. With the screen off nobody waits on the reclaim, so the lean stays there. */
+    if (screen_on) return;
     int shift = asb_smart_memory_pressure_shift();
     if (shift > 0) {
         int a = rt->alpha_battery_x1000 + shift;
@@ -1979,13 +1988,22 @@ static int asb_smart_refresh_rate_hz(void) {
     for (int i = 0; paths[i]; i++) {
         FILE *f = fopen(paths[i], "r");
         if (!f) continue;
-        int fps = 0;
-        if (fscanf(f, "%d", &fps) == 1) {
-            fclose(f);
-            if (fps > 0) return fps;
-        } else {
-            fclose(f);
-        }
+        char buf[96] = {0};
+        int ok = (fgets(buf, sizeof(buf), f) != NULL);
+        fclose(f);
+        if (!ok) continue;
+        /* Qualcomm's SDE driver prints "fps: 59.9 duration:500000 frame_count:30", so the
+         * old fscanf("%d") never matched on any OnePlus and this modifier was dead. Accept
+         * both that form and a bare number. */
+        const char *q = strstr(buf, "fps:");
+        q = q ? q + 4 : buf;
+        while (*q == ' ' || *q == '\t') q++;
+        int fps = atoi(q);
+        /* An LTPO panel at rest reports 1-30 fps (OP12/13/15 all drop that low on a static
+         * screen). That is the panel idling, not a 60 Hz setting, and reading it as one cut
+         * the touch bonus on every static frame. Only a rate a user can select counts. */
+        if (fps >= 50) return fps;
+        if (fps > 0) return 0;
     }
     return 0;
 }
@@ -2044,10 +2062,11 @@ static void asb_smart_apply_camera_relax(int camera_active,
 static void asb_smart_apply_v48_modifiers(
         int app_hint,
         int cpu_max_c,
+        int screen_on,
         asb_smart_runtime_t *rt)
 {
     if (!rt) return;
-    asb_smart_apply_memory_pressure(rt);
+    asb_smart_apply_memory_pressure(rt, screen_on);
     asb_smart_apply_signal_aware(rt);
     asb_smart_apply_refresh_rate(rt);
     asb_smart_apply_gaming_relax(app_hint, cpu_max_c, rt);

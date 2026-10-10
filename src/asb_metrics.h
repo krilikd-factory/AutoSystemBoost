@@ -1857,7 +1857,17 @@ static void metrics_read_network(asb_misc_t *m, const struct timespec *now) {
  * arrive within a few seconds rather than up to half a minute. */
 #define ASB_CAM_RESCAN_SCREEN_ON_S 5
 
-static pid_t             g_cam_pid = 0;
+static pid_t             g_cam_pid = 0;      /* first match; 0 = rescan needed */
+/* Every camera process, not only the first one /proc lists (fix102).
+ *
+ * cameraserver, the vendor provider and OPlus' camerahalext all match, and which comes first
+ * is pid order - different on every model and every boot. When that first one was the
+ * framework's cameraserver (a few % while recording) or an idle secondary provider, the
+ * provider doing the real work was never measured and the camera guard never engaged on
+ * that phone. The load is now the sum over all of them. */
+#define ASB_CAM_PID_MAX 8
+static pid_t             g_cam_pids[ASB_CAM_PID_MAX];
+static int               g_cam_npid = 0;
 static time_t            g_cam_scan_ts = 0;
 static unsigned long long g_cam_jif_prev = 0;
 static struct timespec   g_cam_ts_prev = {0};
@@ -1892,6 +1902,7 @@ static pid_t cam_find_pid(void) {
     if (!d) return 0;
     struct dirent *e;
     pid_t found = 0;
+    g_cam_npid = 0;
     while ((e = readdir(d)) != NULL) {
         const char *nm = e->d_name;
         if (nm[0] < '1' || nm[0] > '9') continue;
@@ -1901,7 +1912,11 @@ static pid_t cam_find_pid(void) {
         }
         if (!numeric) continue;
         pid_t pid = (pid_t)atoi(nm);
-        if (cam_cmdline_matches(pid)) { found = pid; break; }
+        if (cam_cmdline_matches(pid)) {
+            if (!found) found = pid;
+            g_cam_pids[g_cam_npid++] = pid;
+            if (g_cam_npid >= ASB_CAM_PID_MAX) break;
+        }
     }
     closedir(d);
     return found;
@@ -1932,12 +1947,30 @@ static unsigned long long cam_read_jiffies(pid_t pid) {
     return ut + st;
 }
 
+/* Sum over every camera process found at the last scan. 0 only when ALL of them are gone,
+ * which is what triggers a rescan; one exited helper does not throw the others away. */
+static unsigned long long cam_read_jiffies_all(void) {
+    unsigned long long sum = 0ULL;
+    int alive = 0;
+    for (int i = 0; i < g_cam_npid; i++) {
+        unsigned long long j = cam_read_jiffies(g_cam_pids[i]);
+        if (j) { sum += j; alive++; }
+    }
+    return alive ? sum : 0ULL;
+}
+
 static int metrics_camera_active(const struct timespec *now) {
     if (!g_asb_cfg.camera_hold_enable) {
         g_cam_hold_until = 0;
         return 0;
     }
     time_t wall = time(NULL);
+    /* The set is refreshed every five minutes even while one member lives: cameraserver
+     * outlives a provider that crashed and restarted under a new pid, and the sum would
+     * otherwise keep measuring only the survivors. Not mid-session (busy hold active). */
+    if (g_cam_pid > 0 && wall - g_cam_scan_ts >= 300 && wall >= g_cam_hold_until) {
+        g_cam_pid = 0; g_cam_npid = 0; g_cam_jif_prev = 0ULL;
+    }
     if (g_cam_pid <= 0) {
         /* Rescan sooner while the screen is on.
          *
@@ -1967,7 +2000,7 @@ static int metrics_camera_active(const struct timespec *now) {
     }
     if (g_cam_pid <= 0) return 0;
 
-    unsigned long long jif = cam_read_jiffies(g_cam_pid);
+    unsigned long long jif = g_cam_npid > 0 ? cam_read_jiffies_all() : cam_read_jiffies(g_cam_pid);
     if (jif == 0ULL) {
         g_cam_pid      = 0;
         g_cam_jif_prev = 0ULL;

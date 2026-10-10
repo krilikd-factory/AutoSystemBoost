@@ -771,8 +771,21 @@ static int cpu_floor_ceiling(int path_idx, int want, int thermal_emergency) {
     if (hw <= 0) return want;
     long guard = hw * ASB_MIN_CEILING_PCT_OF_HW / 100;
     if ((long)want >= guard) return want;
-    /* Snap the guard itself to a real step, otherwise the kernel rounds it up and the
-     * floor ends up higher than intended. */
+    /* Snap the guard UP to the first real step at or above it (fix95).
+     *
+     * It used to go through cpu_snap_freq, which rounds DOWN - so the "never below 40%"
+     * floor published the step under 40%: 1747200 of 4608000 (37.9%) on the OP15 prime and
+     * 1440000 of 3628800 (39.7%) on the little cluster. A full-day capture shows exactly
+     * those two values held for ten minutes at 41-46 C with no thermal cap. A real OPP
+     * above the guard is still a value the kernel takes as written, so the concern that
+     * once justified rounding down (the kernel rounding an arbitrary number up) does not
+     * apply to it. */
+    long up = 0;
+    for (int i = 0; i < n; i++) {
+        long v = g_cpu_freq_tables[path_idx][i];
+        if (v >= guard && (up == 0 || v < up)) up = v;
+    }
+    if (up > 0) return (int)up;
     return (int)cpu_snap_freq(path_idx, guard);
 }
 

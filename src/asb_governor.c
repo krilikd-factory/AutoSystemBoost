@@ -1477,8 +1477,10 @@ static unsigned long g_uev_parks = 0, g_uev_unpark_dropped = 0;
  * same short re-check chain a display event arms; sysfs still decides whether the screen is
  * on. Devices with absolute axes (touchscreens) are skipped, so nothing floods epoll, and
  * the fds are parked together with the uevent socket while the screen is on. */
-#define ASB_WAKE_KEY_MAX 4
+#define ASB_WAKE_KEY_MAX 6
 static int           g_wake_key_fd[ASB_WAKE_KEY_MAX];
+/* 1 = a touch panel admitted only for its gesture keys (fix101). */
+static int           g_wake_key_touch[ASB_WAKE_KEY_MAX];
 static int           g_wake_key_n = 0;
 static unsigned long g_wake_key_hints = 0;
 
@@ -1495,16 +1497,32 @@ static void wake_keys_open(int epfd) {
         unsigned long evb[(EV_MAX + 8 * sizeof(long)) / (8 * sizeof(long))];
         unsigned long keyb[(KEY_MAX + 8 * sizeof(long)) / (8 * sizeof(long))];
         memset(evb, 0, sizeof(evb)); memset(keyb, 0, sizeof(keyb));
-        int ok = ioctl(fd, EVIOCGBIT(0, sizeof(evb)), evb) >= 0 &&
-                 asb_bit_test(evb, EV_KEY) && !asb_bit_test(evb, EV_ABS) &&
-                 ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keyb)), keyb) >= 0 &&
+        int caps = ioctl(fd, EVIOCGBIT(0, sizeof(evb)), evb) >= 0 &&
+                   asb_bit_test(evb, EV_KEY) &&
+                   ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keyb)), keyb) >= 0;
+        int is_abs = caps && asb_bit_test(evb, EV_ABS);
+        int ok = caps && !is_abs &&
                  (asb_bit_test(keyb, KEY_POWER) || asb_bit_test(keyb, KEY_WAKEUP));
+        /* Touch panels too, but only for their screen-off gesture keys (fix101).
+         *
+         * OPlus panels report double-tap-to-wake and the other off-screen gestures as a key
+         * on the touchscreen's OWN input device (KEY_F4 in the oplus touchpanel driver,
+         * KEY_WAKEUP on some vendors) - and that device has absolute axes, so the first
+         * version skipped it and a double-tap wake on OP12/OP13/OP15 had no hint at all.
+         * Safe to listen: these fds are parked with the uevent socket while the screen is
+         * on, and with the screen off the panel is in gesture mode and sends no motion. */
+        int touch = 0;
+        if (!ok && is_abs &&
+            (asb_bit_test(keyb, KEY_WAKEUP) || asb_bit_test(keyb, KEY_F4))) {
+            ok = 1; touch = 1;
+        }
         if (!ok) { close(fd); continue; }
         struct epoll_event e;
         memset(&e, 0, sizeof(e));
         e.events = EPOLLIN;
         e.data.fd = fd;
         if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &e) != 0) { close(fd); continue; }
+        g_wake_key_touch[g_wake_key_n] = touch;
         g_wake_key_fd[g_wake_key_n++] = fd;
     }
 }
@@ -1517,13 +1535,16 @@ static int wake_key_is_fd(int fd) {
 /* Drain one device; 1 if a wake key was pressed. */
 static int wake_key_drain(int fd) {
     struct input_event iev[16];
-    int pressed = 0, guard = 0;
+    int pressed = 0, guard = 0, touch = 0;
+    for (int i = 0; i < g_wake_key_n; i++)
+        if (g_wake_key_fd[i] == fd) { touch = g_wake_key_touch[i]; break; }
     ssize_t r;
     while (guard++ < 8 && (r = read(fd, iev, sizeof(iev))) > 0) {
         int n = (int)(r / (ssize_t)sizeof(iev[0]));
         for (int k = 0; k < n; k++)
             if (iev[k].type == EV_KEY && iev[k].value == 1 &&
-                (iev[k].code == KEY_POWER || iev[k].code == KEY_WAKEUP))
+                (iev[k].code == KEY_POWER || iev[k].code == KEY_WAKEUP ||
+                 (touch && iev[k].code == KEY_F4)))
                 pressed = 1;
     }
     return pressed;
@@ -2387,6 +2408,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_sessions_total, g_smart_last_confidence);
     {
         long live_x10 = 0;
+        int _live_stale = 0;
         if (g_smart_drain_on_sec >= 300 && g_smart_drain_drop_x100 > 0) {
             live_x10 = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
         } else if (g_drain_roll_sec >= 300 && g_drain_roll_x100 > 0) {
@@ -2401,12 +2423,19 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         if (g_drain_roll_sec >= 7200) {
             g_drain_roll_sec  /= 2;
             g_drain_roll_x100 /= 2;
-        } else if (g_smart_drain_last_x10 > 0 &&
+        }
+        /* fix94: this used to be an `else` of the halving above, so whenever the rolling
+         * window was under two hours the PREVIOUS session's rate replaced the live one - even
+         * mid-session with 31 minutes of real data. An OP15 went 53 -> 44 % in an hour while
+         * the banner said 3.3 %/h and the WebUI forecast "13h 56m · measured". The old rate
+         * is only a fallback for when nothing current exists. */
+        if (live_x10 <= 0 && g_smart_drain_last_x10 > 0 &&
                    (time(NULL) - g_smart_drain_last_ts) < ASB_DRAIN_STALE_SEC) {
             /* Nothing measurable in the current session yet - report the previous one
              * rather than nothing. Expires after a few hours: a rate from this morning
              * says little about this evening. */
             live_x10 = g_smart_drain_last_x10;
+            _live_stale = 1;
         }
         int hot = (asb_smart_appheat_score(g_smart_rt.app_hash, time(NULL))
                    >= ASB_SMART_APPHEAT_HOT_SCORE);
@@ -2414,6 +2443,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         for (int i = 0; i < ASB_SMART_APPHEAT_N; i++)
             if (g_smart_appheat.entries[i].hash != 0) known++;
         long _pub_win = (g_smart_drain_on_sec >= 300) ? g_smart_drain_on_sec : g_drain_roll_sec;
+        /* A carried-over rate has no window of its own: publishing the current one next to
+         * it let both screens label an old session's figure "measured over the last N min". */
+        if (_live_stale) _pub_win = 0;
         /* P0-4: confidence travels with the measurement.
          *
          * A %/h number is only as good as the window it came from. A short window, a SOC
@@ -5335,9 +5367,17 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
             long _elapsed = (long)(now - g_budget_acc_anchor_ts);
             int _actual_drop = g_budget_acc_anchor_pct - battery_pct;
             if (_actual_drop > 0 && g_budget_acc_pred_h_x10 > 0) {
-                /* predicted drop over the window = elapsed_h / pred_h * 100 */
+                /* predicted drop over the window = elapsed_h / pred_h * anchor_pct.
+                 *
+                 * fix96: pred_h is hours to EMPTY FROM THE ANCHOR LEVEL (battery_pct /
+                 * drain in asb_smart_apply_energy_budget), not hours per 100 %. Scaling by
+                 * 100 over-predicted every window by 100/pct - x1.9 at 53 %, x2.3 at 44 % -
+                 * so every grade read "over-predicted", error pinned at 100, and the
+                 * self-correction streak built in the -1 direction: the drain fed to the
+                 * budget was nudged DOWN by up to 12 % on a phone draining 9-12 %/h, the
+                 * opposite of the evidence. */
                 long _pred_drop_x100 =
-                    (_elapsed * 100L * 100L) /
+                    (_elapsed * (long)g_budget_acc_anchor_pct * 100L) /
                     ((long)g_budget_acc_pred_h_x10 * 360L);
                 long _actual_x100 = (long)_actual_drop * 100L;
                 long _err = _actual_x100 - _pred_drop_x100;
@@ -5453,7 +5493,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     /* intelligent modifiers — memory pressure, signal-aware net, refresh-rate,
      * gaming relax. Each is a no-op if its signal is unavailable on this device,
      * and all skip when night_override or thermal_veto fired (those keep priority). */
-    asb_smart_apply_v48_modifiers(g_smart_rt.app_hint, cpu_max_c, &g_smart_rt);
+    asb_smart_apply_v48_modifiers(g_smart_rt.app_hint, cpu_max_c, m->misc.screen_on, &g_smart_rt);
 
     /* camera relax runs last: it is the only modifier allowed to override the
      * soft thermal lean, and it must not be undone by one that runs after it. */
