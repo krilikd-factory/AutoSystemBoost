@@ -3614,7 +3614,10 @@ body.ufo-flying .logo-glyph { opacity: 0; }
 </div>
 
 <script>
-const clickAudio = new Audio("switch.mp3"); clickAudio.preload = "auto"; try { clickAudio.load(); } catch(e) {}
+/* switch.mp3 is gone (fix97): every UI sound is synthesised with WebAudio, which every
+ * root-manager WebView has. The mp3 was only a fallback for a WebView without AudioContext,
+ * yet it was fetched and decoded on every WebUI open. Without WebAudio the UI is silent;
+ * haptics are unaffected. */
 // Cards whose value goes straight into the live audio path. The click would be played
 // through the very output being reconfigured - amplified by whatever gain was just set,
 // or cut mid-sample by the parameter push - so these change silently. Haptic stays.
@@ -3811,9 +3814,7 @@ function uiSound(kind) {
       });
       offset += dur * 0.72;
     });
-  } catch (e) {
-    try { clickAudio.currentTime = 0; clickAudio.play(); } catch (_) {}
-  }
+  } catch (e) { /* no WebAudio: stay silent */ }
 }function cfgSoundKind(key, val) {
   const it = CFG_ITEMS.filter(function(x) { return x.key === key; })[0];
   if (!it) return 'option';
@@ -8194,6 +8195,8 @@ function paintStockLive(stockKv = null) {
    * every phone under load, because heat travels outward. The old wording made a normal
    * gap look like a fault. */
   set('liveSurface', hotT ? hotT + '°C' : '—');
+  { const _sl = _el('liveSurface') && _el('liveSurface').parentElement.querySelector('.live-cell-label');
+    if (_sl) _sl.textContent = T('lv_hotspot', 'Die · max'); }
   { const _hs = _el('liveSurface');
     if (_hs && _hs.parentElement) _hs.parentElement.title = T('lv_hotspot_tip', ''); }
   set('liveEtaOn', capPct ? (capPct + '% · ' + Math.abs(ma) + ' mA') : '—',
@@ -8521,6 +8524,14 @@ async function pollLive(visible) {
       ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
       eta_avg = ewma_x10 > 0;
     }
+    // Third rung (fix96): the slot's learned drain, gated like the governor's budget
+    // (confidence >= 350). After a boot both live figures are 0 and this fell to a fixed
+    // per-profile mA while the Smart card already showed a forecast from the slot's rate.
+    let eta_slot = false;
+    if (ewma_x10 <= 0 && parseInt(kv.smart_confidence || '0', 10) >= 350) {
+      ewma_x10 = parseInt(kv.smart_bucket_drain_x10 || '0', 10);
+      eta_slot = ewma_x10 > 0;
+    }
     /*
      * Two very different numbers used to arrive with almost the same suffix.
      *
@@ -8539,7 +8550,11 @@ async function pollLive(visible) {
     let eta_title;
     if (ewma_x10 > 0) {
       on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
-      if (eta_avg) {
+      if (eta_slot) {
+        eta_note = ' · ' + T('eta_slot', 'typical for this hour');
+        eta_title = T('eta_slot_tip',
+          'No drain measured since the governor started. Based on what this time slot typically drains, learned from earlier sessions.');
+      } else if (eta_avg) {
         eta_note = ' · ' + T('eta_average', 'average');
         eta_title = T('eta_average_tip',
           'Based on your smoothed screen-on drain; the live rate replaces it once the drain window reaches 10 minutes.');
@@ -8771,6 +8786,13 @@ async function pollLive(visible) {
       if (surfaceEl) {
         const surf = (st && st.surface_hotspot) || 0;
         surfaceEl.textContent = surf > 0 ? surf + '°C' : '—';
+        /* fix94: surface_hotspot is max(sys-therm surface, board) - the BODY of the phone,
+         * not the silicon. Under the "Die · max" label an OP15 showed 39 C next to a CPU
+         * at 42 C: a "hottest zone" below the CPU reads as a broken sensor. The Stock path
+         * really computes max(cpu, gpu, ddr), so only this path is relabelled. */
+        const _sl = surfaceEl.parentElement && surfaceEl.parentElement.querySelector('.live-cell-label');
+        if (_sl) _sl.textContent = T('lv_board', 'Board');
+        if (surfaceEl.parentElement) surfaceEl.parentElement.title = T('lv_board_tip', '');
       }
 
       // Vendor cap period — `vendor_clamp_1h` is a poll-observation counter, not a count of
