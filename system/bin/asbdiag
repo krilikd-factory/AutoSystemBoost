@@ -749,7 +749,8 @@ if [ -r "$_state" ]; then
   _dwu="$(grep -m1 '^display_waiter=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _dwe="$(grep -m1 '^display_state_events=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   case "${_dwu:-}" in
-    2|1) NOTE "display-state waiter: running · ${_dwe:-0} on/off transition(s) delivered" ;;
+    2)   NOTE "display-state waiter: live · ${_dwe:-0} on/off transition(s) delivered · uevent socket parked · $(grep -m1 '^screen_on_resume_skipped=' /dev/.asb/state 2>/dev/null | cut -d= -f2) resume re-check(s) skipped (Android said off/doze)" ;;
+    1)   NOTE "display-state waiter: started, waiting for Android to publish the display state (appears at the first screen off/on after boot)" ;;
     -1)  NOTE "display-state waiter: unavailable on this ROM - wakes found by display events, keys and re-checks" ;;
   esac
   # Screen-on touch watch (fix117): touches that started after a calm spell, and how many
@@ -909,6 +910,12 @@ if [ -r "$_state" ]; then
   if [ $(( _ph + _pm )) -gt 0 ]; then
     P "    probe cache      : hits=$_ph misses=$_pm ($(( _ph * 100 / (_ph + _pm) ))% avoided forks)"
   fi
+  # fix124: the foreground app read from the top-app cgroup - no fork, no dumpsys, nothing
+  # asked of the app. Misses above are the dumpsys fallbacks (split screen, unreadable cgroup).
+  _pt="$(_rget probe_topapp "$_state")"
+  case "$_pt" in ''|*[!0-9]*) : ;; *)
+    P "    foreground app   : $_pt answer(s) from the top-app cgroup (no dumpsys, the app is never asked to dump its views)" ;;
+  esac
     _nt="$(_rget noop_ticks "$_state")"
     case "$_nt" in ''|*[!0-9]*) _nt=0 ;; esac
     if [ $(( _nt + _ov_t )) -gt 0 ]; then
@@ -1896,6 +1903,7 @@ if { [ "$(cfg net_screen_off_lte)" = 1 ] || [ "$(cfg net_lte_light)" = 1 ]; } &&
     NOTE "5G only when needed: LTE chosen ${_lla:-0} time(s) on light traffic, 5G given back ${_llb:-0} time(s) for heavy traffic; now reason=$(printf '%s\n' "$_lst" | sed -n 's/^reason=//p') watcher=$(printf '%s\n' "$_lst" | sed -n 's/^light_watch=//p')"
   fi
   NOTE "screen-off LTE: applied $(printf '%s\n' "$_lst" | sed -n 's/^applies=//p') time(s), restored $(printf '%s\n' "$_lst" | sed -n 's/^restores=//p'), $(printf '%s\n' "$_lst" | sed -n 's/^lte_minutes=//p') min on LTE in total; now applied=$(printf '%s\n' "$_lst" | sed -n 's/^applied=//p') unsupported=$(printf '%s\n' "$_lst" | sed -n 's/^unsupported=//p')"
+  NOTE "screen-off LTE: 5G kept in $(printf '%s\n' "$_lst" | sed -n 's/^quiet_windows=//p') screen-off window(s) with no mobile data moving - nothing to save there, and no switch back at the unlock (fix122)"
   # Whether 5G is allowed on the data SIM right now - the thing that matters if a restore
   # ever failed. Read the same way the script reads it.
   _l5="$(sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh nr 2>/dev/null)"
@@ -2904,6 +2912,55 @@ for _as in window_animation_scale transition_animation_scale animator_duration_s
   P "    live $_as = $(settings get global $_as 2>/dev/null)"
 done
 NOTE "force animation restart = $(cfg UX_ANIM_FORCE_RESTART) (SystemUI is never restarted on a profile switch since V62)"
+# UI smoothness today (fix121): Android's own frame counters, every HWUI app. "Lags" was the
+# one complaint no report could answer - this is what the user actually saw, not what ASB set.
+# asb_gfx_today_begin
+asb_gfx_today() {   # stdin: dumpsys graphicsstats; stdout: report lines (nothing if no frames)
+  awk '
+    { sub(/^[ \t]+/, "") }
+    /^Package:/               { flush(); pkg = $2; since = ""; f = j = u = i = 0; next }
+    /^Stats since:/           { since = $3; sub(/ns$/, "", since); next }
+    /^Total frames rendered:/ { f = $4; next }
+    /^Janky frames:/          { j = $3; next }
+    /^Number Slow UI thread:/ { u = $5; next }
+    /^Number High input latency:/ { i = $5; next }
+    function flush() {
+      if (pkg == "" || since == "") return
+      nb++; bp[nb] = pkg; bs[nb] = since + 0; bf[nb] = f; bj[nb] = j; bu[nb] = u; bi[nb] = i
+      if (since + 0 > top) top = since + 0
+      pkg = ""
+    }
+    END {
+      flush()
+      for (k = 1; k <= nb; k++) {
+        if (bs[k] < top) continue
+        F += bf[k]; J += bj[k]; U += bu[k]; I += bi[k]
+        pf[bp[k]] += bf[k]; pj[bp[k]] += bj[k]
+      }
+      if (F <= 0) exit
+      printf "frames %d  ·  janky %.1f%%  ·  slow UI thread %.1f%%  ·  high input latency %.1f%%\n", \
+        F, 100.0 * J / F, 100.0 * U / F, 100.0 * I / F
+      line = ""
+      for (r = 1; r <= 5; r++) {
+        best = ""; bj_ = -1
+        for (p in pf) if (!(p in done) && pf[p] >= 300 && pj[p] > bj_) { best = p; bj_ = pj[p] }
+        if (best == "" || bj_ <= 0) break
+        done[best] = 1
+        line = line (line == "" ? "" : "  ·  ") sprintf("%s %.1f%% of %d", best, 100.0 * pj[best] / pf[best], pf[best])
+      }
+      if (line != "") print "most janky: " line
+    }'
+}
+# asb_gfx_today_end
+_gfx_lines="$(dumpsys graphicsstats 2>/dev/null | asb_gfx_today)"
+if [ -n "$_gfx_lines" ]; then
+  P "  UI smoothness today (Android's frame counters, every app):"
+  printf '%s\n' "$_gfx_lines" | while IFS= read -r _gl; do P "    $_gl"; done
+  NOTE "janky = a frame that missed its deadline. Games on their own GL/Vulkan surface are not counted."
+  NOTE "For lags: run this right after they happen; the full-day capture splits the same counters by ASB state (jank_trace.tsv)."
+else
+  NOTE "UI smoothness: no frame counters available (dumpsys graphicsstats empty)"
+fi
 
 SEC "8a. SLEEP / DOZE  (the subsystem nobody can observe directly)"
 _dz="$(cfg doze_level)"
