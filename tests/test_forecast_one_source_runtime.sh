@@ -49,27 +49,34 @@ console.log(__out);
 X
 run_web() { node "$T/run.js" "$ROOT/webroot/i18n/ru.json" "$1" "$T/w.js"; }
 
-# 1. The governor's forecast: recent drain 9.4 %/h at 55 %.
-printf 'forecast_rate_x10=94\nforecast_basis=recent\nsmart_drain_pctph_x10=103\nsmart_drain_window_s=5908\nsmart_drain_ewma_x10=94\nsmart_bucket_drain_x10=129\nsmart_confidence=1000\n' > "$T/s1"
+# 1. The actual drain (fix128): 15.4 %/h measured over the last minutes, at 55 %.
+printf 'forecast_rate_x10=154\nforecast_basis=now\nsmart_drain_pctph_x10=154\nsmart_drain_window_s=698\nsmart_drain_ewma_x10=162\nsmart_bucket_drain_x10=93\nsmart_confidence=1000\n' > "$T/s0"
+a="$(run_action "$T/s0")"; w="$(run_web "$T/s0")"
+[ "${a%%|*}" = 214 ] || fail "action minutes $a, want 214 (55 % / 15.4 %/h)"
+[ "${w%%|*}" = 214 ] || fail "WebUI minutes $w, want 214"
+printf '%s' "$a" | grep -q '(по факту 15.4%/ч)' || fail "action note for the actual drain: $a"
+printf '%s' "$a" | grep -q '|~3 ч 34 мин$' || fail "Smart card time differs from the header: $a"
+[ "${w#*|}" = ' · по факту' ] || fail "WebUI note must be short - '· по факту': $w"
+# 2. An estimate from recent sessions: 9.4 %/h.
+printf 'forecast_rate_x10=94\nforecast_basis=recent\nsmart_drain_pctph_x10=103\nsmart_drain_window_s=300\nsmart_drain_ewma_x10=94\nsmart_bucket_drain_x10=129\nsmart_confidence=1000\n' > "$T/s1"
 a="$(run_action "$T/s1")"; w="$(run_web "$T/s1")"
-[ "${a%%|*}" = 351 ] || fail "action minutes $a, want 351 (55 % / 9.4 %/h)"
-[ "${w%%|*}" = 351 ] || fail "WebUI minutes $w, want 351"
-printf '%s' "$a" | grep -q '(недавний расход 9.4%/ч)' || fail "action note does not name the rate: $a"
-printf '%s' "$a" | grep -q '|~5 ч 51 мин$' || fail "Smart card time differs from the header: $a"
-printf '%s' "$w" | grep -q 'недавний расход 9.4%/ч' || fail "WebUI note does not name the rate: $w"
-# 2. Slot basis right after boot.
+[ "${a%%|*}" = 351 ] && [ "${w%%|*}" = 351 ] || fail "estimate minutes: action $a, WebUI $w (want 351)"
+printf '%s' "$a" | grep -q '(оценка по прошлым сессиям 9.4%/ч)' || fail "action estimate note: $a"
+[ "${w#*|}" = ' · оценка' ] || fail "WebUI estimate note must be short: $w"
+# 3. Slot basis right after boot.
 printf 'forecast_rate_x10=129\nforecast_basis=slot\nsmart_drain_window_s=0\n' > "$T/s2"
 a="$(run_action "$T/s2")"; w="$(run_web "$T/s2")"
 [ "${a%%|*}" = "${w%%|*}" ] || fail "slot forecast differs: action $a, WebUI $w"
-printf '%s' "$a" | grep -q '(обычно в этот час 12.9%/ч)' || fail "slot note wrong: $a"
-printf '%s' "$w" | grep -q 'обычно в этот час 12.9%/ч' || fail "WebUI slot note wrong: $w"
-# 3. No governor forecast (another profile): both fall back to the same live rate.
-printf 'forecast_rate_x10=0\nforecast_basis=none\nsmart_drain_pctph_x10=103\nsmart_drain_window_s=1200\n' > "$T/s3"
+printf '%s' "$a" | grep -q '(оценка по этому часу 12.9%/ч)' || fail "slot note wrong: $a"
+[ "${w#*|}" = ' · оценка' ] || fail "WebUI slot note wrong: $w"
+# 4. An older governor without forecast keys: both fall back to the same live rate.
+printf 'smart_drain_pctph_x10=103\nsmart_drain_window_s=1200\n' > "$T/s3"
 a="$(run_action "$T/s3")"; w="$(run_web "$T/s3")"
 [ "${a%%|*}" = 320 ] && [ "${w%%|*}" = 320 ] || fail "fallback differs: action $a, WebUI $w (want 320)"
-printf '%s' "$a" | grep -q '(расход сейчас 10.3%/ч)' || fail "live note wrong: $a"
-# 4. The Monitor tile is "usual this hour", not "average drain".
-grep -q '"lv_avgdrain": "Обычно в этот час"' "$ROOT/webroot/i18n/ru.json" || fail "slot tile still called average"
-grep -q '"eta_average": "недавний расход"' "$ROOT/webroot/i18n/ru.json" || fail "forecast basis still called average"
+printf '%s' "$a" | grep -q '(по факту 10.3%/ч)' || fail "live note wrong: $a"
+# 5. The Monitor tile shows the actual drain, in one word.
+grep -q '"lv_avgdrain": "Расход"' "$ROOT/webroot/i18n/ru.json" || fail "drain tile not the actual drain"
+grep -q "if (String(kv.forecast_basis || '') === 'now') _act = parseInt(kv.forecast_rate_x10" "$W" || fail "tile does not show the actual rate"
+grep -q '_fb = "now";' "$G" || fail "governor forecast does not lead with the actual drain"
 
-echo "PASS forecast one source: action and WebUI print the same minutes from the governor's rate, each rate named"
+echo "PASS forecast one source: actual drain first, same minutes on every screen, short labels"

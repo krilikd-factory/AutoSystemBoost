@@ -622,4 +622,21 @@ grep -q '\*conf_tuning_params.json.asbbase) asb_tw_cam_stock "$_bf" && asb_tw_ba
 grep -q '\*conf_tuning_params.json.asbbase) asb_tw_base_rom_stamp "$_bp" ;;' "$ROOT/runtime/asb_tweaks.sh" || fail "camera baseline saved without a ROM stamp"
 echo "PASS: fix127 contract"
 ) || exit 1
+# ---- fix128 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix128: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"; P="$ROOT/runtime/profile_core.sh"
+grep -q 'if (!_live_stale && live_x10 > 0 && _pub_win >= 600 && _bconf >= 2) {' "$G" || fail "forecast does not lead with the actual drain"
+grep -q '"lv_avgdrain": "Расход"' "$ROOT/webroot/i18n/ru.json" || fail "Monitor tile is not the actual drain"
+grep -q '"eta_measured": "по факту"' "$ROOT/webroot/i18n/ru.json" || fail "actual forecast label not short"
+grep -q '^T_ETA_MEASURED="(по факту %s)"' "$ROOT/runtime/i18n/action_ru.sh" || fail "action actual label"
+grep -q 'rm -f "$_ux_base" 2>/dev/null' "$P" || fail "UX baseline restored on every run"
+grep -q '\[ "$_cur_anim" = "$_mine" \] && _restore=1' "$P" || fail "restore ignores what the user set afterwards"
+grep -q 'true > "$_ux_legacy"' "$P" || fail "legacy 0.8/0.9 cleanup not one-shot"
+grep -q 'asb_anim_apply.sh" --if-changed' "$P" || fail "explicit Animation Speed loses to the profile"
+grep -q 'animation scales: yours - ASB does not change them' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not name the owner"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix128 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
