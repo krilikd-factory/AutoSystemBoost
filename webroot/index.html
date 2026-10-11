@@ -3310,7 +3310,7 @@ body.ufo-flying .logo-glyph { opacity: 0; }
         <span class="smart-banner-value" id="bnSes">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label" data-i18n="lv_avgdrain">Avg drain</span>
+        <span class="smart-banner-label" data-i18n="lv_avgdrain">Usual this hour</span>
         <span class="smart-banner-value" id="bnDrain">—</span>
       </div>
       <div class="smart-banner-item">
@@ -8529,69 +8529,57 @@ async function pollLive(visible) {
     const bma = bma_raw < 0 ? -bma_raw : bma_raw;
     const cap_full_mah = _batCapFullMah || 7300;
     let on_ma, eta_note;
-    // Prefer the field that actually carries a number.
-    //
-    // smart_drain_ewma_x10 reads 0 on this governor - the same field that made the drain
-    // line vanish - so this always fell through to the fixed per-profile estimate. The
-    // banner then showed a measured 14.9 %/h next to a 13 h forecast built from an assumed
-    // 500 mA: two numbers on one screen disagreeing by a factor of two, with only the
-    // small "(est.)" to explain why. Use the measured rate when there is one.
-    let ewma_x10 = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
-    // Below the 10-minute window the live rate is arithmetic noise. Fall back to the
-    // learner's SMOOTHED drain - measured, just averaged - before the per-profile constant;
-    // zeroing both sent a phone with a learned 7.3 %/h to a fixed 500 mA "model".
-    // action.sh applies the same order, so the two screens print the same forecast.
-    let eta_avg = false;
-    if (parseInt(kv.smart_drain_window_s || '0', 10) < 600) ewma_x10 = 0;
-    if (ewma_x10 <= 0) {
-      ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
-      eta_avg = ewma_x10 > 0;
+    /* One forecast for every screen (fix127): the governor's own - the budget Smart acts
+     * on - published with the rate it divided by and where that rate came from. The card
+     * used to divide by the live window rate and call it "average", under a tile also
+     * called "average drain" that showed this hour's history: an OP15 read "5 h 44 m ·
+     * average" beneath "Average drain 12.9 %/h" while action.sh said "5.7 h at an average
+     * drain of 9.4 %/h". The rate is now printed beside the time, with its own name. The
+     * older chain stays for a governor that publishes no forecast (another profile). */
+    let ewma_x10 = 0;
+    let eta_basis = '';
+    const _fRate = parseInt(kv.forecast_rate_x10 || '0', 10);
+    const _fBasis = String(kv.forecast_basis || '');
+    if (_fRate > 0 && (_fBasis === 'recent' || _fBasis === 'slot')) {
+      ewma_x10 = _fRate;
+      eta_basis = _fBasis;
+    } else {
+      ewma_x10 = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
+      if (parseInt(kv.smart_drain_window_s || '0', 10) < 600) ewma_x10 = 0;
+      if (ewma_x10 > 0) eta_basis = 'now';
+      if (ewma_x10 <= 0) {
+        ewma_x10 = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
+        if (ewma_x10 > 0) eta_basis = 'recent';
+      }
+      if (ewma_x10 <= 0 && parseInt(kv.smart_confidence || '0', 10) >= 350) {
+        ewma_x10 = parseInt(kv.smart_bucket_drain_x10 || '0', 10);
+        if (ewma_x10 > 0) eta_basis = 'slot';
+      }
     }
-    // Third rung (fix96): the slot's learned drain, gated like the governor's budget
-    // (confidence >= 350). After a boot both live figures are 0 and this fell to a fixed
-    // per-profile mA while the Smart card already showed a forecast from the slot's rate.
-    let eta_slot = false;
-    if (ewma_x10 <= 0 && parseInt(kv.smart_confidence || '0', 10) >= 350) {
-      ewma_x10 = parseInt(kv.smart_bucket_drain_x10 || '0', 10);
-      eta_slot = ewma_x10 > 0;
-    }
-    /*
-     * Two very different numbers used to arrive with almost the same suffix.
-     *
-     * When the drain window has not closed yet, on_ma is a CONSTANT picked by profile -
-     * 400 / 500 / 650 mA. Nothing about the running device enters the result: the whole
-     * forecast is battery percent x a table value. On a 7300 mAh device at 82 % that
-     * prints "14h 57m (est.)" on Battery and "12h 07m (est.)" on Balanced, and the figure
-     * changes the instant you tap a profile - which reads exactly like a measurement
-     * reacting to the switch, when in fact nothing has been measured at all.
-     *
-     * The number is still worth showing (it is a reasonable envelope), but it must not be
-     * dressed as an observation. "(est.)" in 11px did not carry that weight; a word plus a
-     * tooltip does, and the measuring state now says so out loud while the window fills.
-     */
     const drain_win_s = parseInt(kv.smart_drain_window_s || '0', 10);
     let eta_title;
     if (ewma_x10 > 0) {
       on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
-      if (eta_slot) {
-        eta_note = ' · ' + T('eta_slot', 'typical for this hour');
+      const _rateTxt = ' ' + (ewma_x10 / 10).toFixed(1) + T('unit_pcth', '%/h');
+      if (eta_basis === 'slot') {
+        eta_note = ' · ' + T('eta_slot', 'usual for this hour') + _rateTxt;
         eta_title = T('eta_slot_tip',
-          'No drain measured since the governor started. Based on what this time slot typically drains, learned from earlier sessions.');
-      } else if (eta_avg) {
-        eta_note = ' · ' + T('eta_average', 'average');
+          'No screen-on session measured yet since the governor started: based on what this hour usually costs, learned from earlier sessions.');
+      } else if (eta_basis === 'recent') {
+        eta_note = ' · ' + T('eta_average', 'recent drain') + _rateTxt;
         eta_title = T('eta_average_tip',
-          'Based on your smoothed screen-on drain; the live rate replaces it once the drain window reaches 10 minutes.');
+          'Based on the smoothed drain of your recent screen-on sessions - the same forecast Smart uses for its battery budget.');
       } else {
-        eta_note = ' · ' + T('eta_measured', 'measured');
+        eta_note = ' · ' + T('eta_measured', 'drain now') + _rateTxt;
         eta_title = T('eta_measured_tip',
-          'Based on the measured drain rate over the last ' + Math.round(drain_win_s / 60) + ' min.');
+          'Based on the drain measured over the last ' + Math.round(drain_win_s / 60) + ' min.');
       }
     } else {
       if (profile === 'performance') { on_ma = 650; }
       else if (profile === 'battery') { on_ma = 400; }
       else { on_ma = 500; }
       eta_note = (drain_win_s > 0)
-        ? ' · ' + T('lv_measuring', 'measuring\u2026')
+        ? ' · ' + T('lv_measuring', 'measuring…')
         : ' · ' + T('eta_modelled', 'model');
       eta_title = T('eta_modelled_tip',
         'Not a measurement. Derived from battery level and a fixed per-profile draw (' +
@@ -8622,7 +8610,11 @@ async function pollLive(visible) {
      * precision implies a confidence nothing here has. Show the ceiling instead.
      */
     const ETA_IDLE_CAP_MIN = 72 * 60;
-    const ton_min = (remain_mah > 0 && on_ma > 0) ? Math.floor(remain_mah * 60 / on_ma) : 0;
+    /* Same arithmetic as action.sh - percent over rate - so the two screens agree to the
+     * minute when they read the same state. */
+    const ton_min = (ewma_x10 > 0 && bcap > 0)
+      ? Math.floor(bcap * 600 / ewma_x10)
+      : ((remain_mah > 0 && on_ma > 0) ? Math.floor(remain_mah * 60 / on_ma) : 0);
     /* Idle half from the governor's MEASURED screen-off drain when it has one (offdrain,
      * %/h x100, from real screen-off windows of an hour or more); the tenth-of-screen-on
      * guess above is only the fallback. action.sh uses the same order. */
@@ -8942,7 +8934,12 @@ async function pollLive(visible) {
             const bd = parseInt(kv.smart_bucket_drain_x10, 10);
             if (!isNaN(bd) && bd > 0) {
               _lastDrain = bd;
-              _el('bnDrain').textContent = (bd / 10).toFixed(1) + '%/h';
+              const _bdEl = _el('bnDrain');
+              _bdEl.textContent = (bd / 10).toFixed(1) + T('unit_pcth', '%/h');
+              /* This hour's history, not today's drain (fix127) - the tile was labelled
+               * "average drain" next to a forecast built from a different rate. */
+              _bdEl.title = T('lv_avgdrain_tip',
+                'What this hour of the week usually costs, learned from earlier sessions - not today\u2019s drain. The forecast below uses your recent drain.');
             }
           }
 
