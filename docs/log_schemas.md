@@ -151,6 +151,10 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
 - `prime_escape_skip_warm`, `prime_escape_skip_foreign` — prime bursts not opened: the die
   within 3 C of the sustained-exit mark that would end the burst, or the cores pinned at a
   lower ceiling ASB does not hold (fix126).
+- `main_parity_khz`, `main_parity_lifts`, `main_parity_capacity="MAIN,PRIME"` — the main-core
+  ceiling Smart raised to the prime's capacity in light idle / moderate on a two-cluster SoC
+  (0 = not raised now), how many raises started this session, and the `cpu_capacity` values
+  it used (-2 not read yet, -1 unreadable). `desired_cpu_max0` includes the raise (fix130).
 
 **Screen detection**
 - `screen_on_detect="uevent:N,recheck:N,tick:N,display:N"` — which path noticed each wake.
@@ -374,6 +378,13 @@ was slot 1, a middle cluster on 1+3+2+1 parts). `main_by` / `prime_by` (fix126):
 above the rail, `asb_trim` the live ceiling is ASB's own trimmed request, `vendor` it is
 below what ASB wrote (PowerHAL or kernel thermal), `?` no request published. They are
 appended, so readers that split on `cap_owner=` keep working.
+
+`_full_day_report.txt` (fix130): **SCREEN-ON WORK BY CLUSTER** (two-cluster phones) - the
+share of screen-on samples with each cluster above a quarter of its top clock, split by whether
+the main ceiling's capacity (`cpu_capacity` x ceiling / hardware max) is at least the prime's.
+**LIVE WAKELOCK HOLDERS** - partial wakelocks from the `wake_live.txt` power-manager samples
+with the screen off: share of samples and the longest single hold, package from `uid_map.txt`
+(system uids are named as such). Unlike batterystats it also works while charging.
 
 `mobile_traffic_context.txt` aggregates the existing ledger's selected-rmnet RX+TX counters by phase and lists only phases with at least **32 MiB**. It keeps the phase duration and screen context so a reviewer can identify a potentially material transfer window. It is a report-only context flag: observed bytes may contribute to radio energy in that phase, but they do not prove cause or assign a battery percentage.
 
