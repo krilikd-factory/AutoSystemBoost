@@ -880,6 +880,35 @@ if [ -r "$_state" ]; then
       NOTE "  burst scope: big cluster (${_pcl:-?} clusters)"
     fi
   fi
+  # Which cluster looks bigger to the scheduler right now (fix130). Work goes where the
+  # capacity at the CURRENT ceiling is larger; on a 6+2 part the 40% floors made that the two
+  # prime cores. MHz keeps the products inside mksh's 32-bit arithmetic.
+  _cpn=$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | wc -l)
+  if [ "${_cpn:-0}" -eq 2 ] 2>/dev/null; then
+    _cpt=""; for _cpd in /sys/devices/system/cpu/cpufreq/policy*; do _cpt="$_cpd"; done
+    _cpf="$(awk '{print $1; exit}' "$_cpt/related_cpus" 2>/dev/null)"
+    _cc0="$(cat /sys/devices/system/cpu/cpu0/cpu_capacity 2>/dev/null)"
+    _cc1="$(cat "/sys/devices/system/cpu/cpu${_cpf:-6}/cpu_capacity" 2>/dev/null)"
+    _cm0="$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null)"
+    _ch0="$(cat /sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq 2>/dev/null)"
+    _cm1="$(cat "$_cpt/scaling_max_freq" 2>/dev/null)"
+    _ch1="$(cat "$_cpt/cpuinfo_max_freq" 2>/dev/null)"
+    case "$_cc0$_cc1$_cm0$_ch0$_cm1$_ch1" in ''|*[!0-9]*) : ;; *)
+      if [ "$_ch0" -ge 1000 ] && [ "$_ch1" -ge 1000 ]; then
+        _ck0=$(( _cc0 * (_cm0 / 1000) / (_ch0 / 1000) ))
+        _ck1=$(( _cc1 * (_cm1 / 1000) / (_ch1 / 1000) ))
+        if [ "$_ck0" -ge "$_ck1" ]; then _cks="everyday work stays on the main cores"
+        else _cks="the prime looks bigger - everyday work moves to the two prime cores"; fi
+        NOTE "capacity at the ceilings: main $_cm0 kHz = $_ck0, prime $_cm1 kHz = $_ck1 (of 1024) - $_cks"
+      fi ;;
+    esac
+    _mpl="$(_rget main_parity_lifts /dev/.asb/state 2>/dev/null)"
+    if [ -n "$_mpl" ]; then
+      _mpk="$(_rget main_parity_khz /dev/.asb/state 2>/dev/null)"
+      if [ "${_mpk:-0}" -gt 0 ] 2>/dev/null; then _mps="now - main ceiling held at $_mpk kHz"; else _mps="not needed right now"; fi
+      NOTE "  main kept level with the prime: $_mps · started $_mpl times this session (main_capacity_parity=$(cfg main_capacity_parity))"
+    fi
+  fi
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
   # Say what the two numbers count, because they do not count the same thing.
   #
