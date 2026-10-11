@@ -1293,7 +1293,11 @@ body.live-active .page:not(.live-page) {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 8px 12px;
-  height: 54px;
+  /* min-height, not height (fix125): a value that wraps to two lines - "10h 10m · typical
+     for this hour" - did not fit a fixed 54 px, and the centred column spilled over the top
+     edge, printing the value over its own label. The row now grows; cells in one row still
+     share its height (grid stretch). */
+  min-height: 54px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1309,6 +1313,7 @@ body.live-active .page:not(.live-page) {
   color: var(--text-tertiary);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  flex-shrink: 0;
   margin-bottom: 3px;
   white-space: nowrap;
   overflow: hidden;
@@ -7238,7 +7243,10 @@ async function cfgProfileSave() {
   if (_cfgProfile.store === 'device' && _cfgProfile.dir) {
     const ex = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' export-path ' + shQuote(name) + ' ' + shQuote(_cfgProfile.dir));
     if (!ex || ex.errno !== 0) { toast(cfgResultText(ex) || T('cfg_profile_export_err','Saved in ASB, but could not copy to the chosen folder'), 'warn'); return; }
-    toast(T('cfg_profile_saved_to', 'Saved to ') + _cfgProfile.dir.replace(CFG_FM_HOME, T('cfg_fm_storage', 'Storage')) + '/' + name + '.conf', 'ok');
+    // The helper names the file it wrote: NAME.asb, or NAME.conf where the device has no tar.
+    const exm = /(^|\n)exported=([^\n]+)/.exec(String((ex && ex.stdout) || ''));
+    const outFile = exm ? exm[2].replace(/^.*\//, '') : name + '.asb';
+    toast(T('cfg_profile_saved_to', 'Saved to ') + _cfgProfile.dir.replace(CFG_FM_HOME, T('cfg_fm_storage', 'Storage')) + '/' + outFile, 'ok');
     return;
   }
   const smartSaved = /(^|\n)smart_learning=saved(\n|$)/.test(String((r && r.stdout) || ''));
@@ -7341,7 +7349,8 @@ async function cfgFmFetch(path) {
     const name = p.slice(3).join('|'); if (!name || name.charAt(0) === '.') return;
     const dir = p[0] === 'directory';
     if (!dir && p[0].indexOf('regular') < 0) return;
-    const conf = !dir && /\.conf$/i.test(name);
+    // .asb: one file per saved configuration (fix125); .conf: older three-part copies.
+    const conf = !dir && /\.(asb|conf)$/i.test(name);
     if (!dir && !conf) return;
     items.push({ dir:dir, conf:conf, size:parseInt(p[1], 10) || 0, mtime:parseInt(p[2], 10) || 0, name:name });
   });
@@ -7378,7 +7387,7 @@ function cfgFmPaint() {
     const sub = it.dir ? cfgFmDate(it.mtime) : cfgFmSize(it.size) + ' · ' + cfgFmDate(it.mtime);
     html += '<div class="cfg-fm-item' + (dim ? ' dim' : '') + '" data-dir="' + (it.dir ? 1 : 0) + '" data-name="' + cfgFmEsc(it.name) + '">' +
       '<div class="cfg-fm-ic ' + (it.dir ? 'dir' : 'conf') + '">' + (it.dir ? CFG_FM_SVG_DIR : CFG_FM_SVG_CONF) + '</div>' +
-      '<div class="cfg-fm-info"><div class="cfg-fm-nm">' + cfgFmEsc(it.dir ? it.name : it.name.replace(/\.conf$/i, '')) + '</div>' +
+      '<div class="cfg-fm-info"><div class="cfg-fm-nm">' + cfgFmEsc(it.dir ? it.name : it.name.replace(/\.(asb|conf)$/i, '')) + '</div>' +
       '<div class="cfg-fm-sub">' + cfgFmEsc(sub) + '</div></div></div>';
   });
   const list = _el('cfgFmList'); list.innerHTML = html; list.scrollTop = 0;
