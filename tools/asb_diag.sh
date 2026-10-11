@@ -697,8 +697,27 @@ if [ -r "$_state" ]; then
     _sp2="$(_rget slot_policy_ids "$_state" | cut -d, -f3)"
     case "$_sp2" in ''|-1) _s1n="prime" ;; *) _s1n="mid" ;; esac
     P "  cap desired/effective : little $_dw0 -> $_ew0 kHz, $_s1n $_dwp -> $_ewp kHz"
+    # The prime itself on 3+ cluster parts (fix126) - slot 1 above is a middle cluster there.
+    if [ "$_s1n" = "mid" ]; then
+      _dpp="$(_rget desired_cpu_max_prime "$_state")"; _epp="$(_rget effective_cpu_max_prime "$_state")"
+      [ -n "$_dpp" ] && P "                          prime $_dpp -> ${_epp:-?} kHz"
+    fi
+    # What ASB actually wrote, after its own thermal budget (fix126): live below this is a
+    # ceiling ASB did not write; live equal to it but below "desired" is ASB's own trim.
+    _rq0="$(_rget requested_cpu_max0 "$_state")"; _rqp="$(_rget requested_cpu_max_prime "$_state")"
+    case "$_rq0$_rqp" in ''|*[!0-9]*) : ;; *)
+      P "  cap written by ASB    : little $_rq0 kHz, prime $_rqp kHz (after the thermal budget; 0 = not written yet)" ;;
+    esac
     if [ "$_ew0" -lt "$_dw0" ] 2>/dev/null; then
-      P "    (hardware is stricter than ASB asked - vendor or thermal owns the cap)"
+      # "desired" is the rail before ASB's own thermal budget. When the live ceiling equals
+      # what ASB wrote, the cut is ASB's trim, not the vendor's (fix126) - the boot diag
+      # blamed the vendor for ASB's own surface-comfort trim (1670400 -> 1555200).
+      _rqa="$(_rget requested_cpu_max0 "$_state")"
+      if [ -n "$_rqa" ] && [ "$_rqa" = "$_ew0" ] 2>/dev/null; then
+        P "    (little: ASB's own thermal-budget trim - the live ceiling is what ASB wrote)"
+      else
+        P "    (hardware is stricter than ASB asked - vendor or thermal owns the cap)"
+      fi
       # The reverse case matters more and was silent.
       #
       # A capture reads prime 1497600 -> 1747200: the hardware is running ABOVE what ASB
@@ -771,6 +790,9 @@ if [ -r "$_state" ]; then
     _sol="$(grep -m1 '^screen_on_tick_late_max_s=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
     _sos="$(grep -m1 '^screen_on_single_rechecks=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
     NOTE "screen-on noticed by: $_sod  (single re-checks armed: ${_sos:-0}; slowest tick catch <= ${_sol:-0} s after screen-off)"
+    # And screen-off (fix126): "tick" means the sleep rails waited for the next active tick.
+    _sfd="$(grep -m1 '^screen_off_detect=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
+    [ -n "$_sfd" ] && NOTE "screen-off noticed by: $_sfd"
     _skd="$(grep -m1 '^screen_on_key_devices=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
     _skh="$(grep -m1 '^screen_on_key_hints=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
     [ -n "$_skd" ] && NOTE "wake keys watched: ${_skd} input device(s) · ${_skh:-0} power/wakeup press(es) started a re-check"
@@ -823,8 +845,18 @@ if [ -r "$_state" ]; then
         done
         printf '%s' "${_sb:-$1}"
       }
+      # The figure above is the stage's wish. The writer then lifts anything under 40% of
+      # the hardware maximum to the race-to-idle floor, so the boot-time fix124 diag read
+      # "prime ceiling: 1017600 (surface_comfort)" while the prime was written - and held -
+      # at 1862400. Say what was written when the floor moved it (fix126).
+      _rqx="$(_rget requested_cpu_max_prime /dev/.asb/state 2>/dev/null)"
       if [ -n "$_sp_top" ]; then
-        NOTE "prime ceiling: $(_snapf "${_cpe:-0}") kHz (profile $(_snapf "${_cpb:-0}")) - set by ${_cpr}"
+        _cpes="$(_snapf "${_cpe:-0}")"
+        if [ -n "$_rqx" ] && [ "$_rqx" -gt "${_cpes:-0}" ] 2>/dev/null && [ "${_cpes:-0}" -gt 0 ] 2>/dev/null; then
+          NOTE "prime ceiling: $_rqx kHz written - ${_cpr} asked ${_cpes}, lifted to the race-to-idle floor (40% of hardware max); profile $(_snapf "${_cpb:-0}")"
+        else
+          NOTE "prime ceiling: ${_cpes} kHz (profile $(_snapf "${_cpb:-0}")) - set by ${_cpr}"
+        fi
       else
         NOTE "prime ceiling: ${_cpe:-?} kHz (profile ${_cpb:-?}) - set by ${_cpr}"
       fi
@@ -833,6 +865,12 @@ if [ -r "$_state" ]; then
   _pe="$(grep -m1 '^prime_escape=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _pec="$(grep -m1 '^prime_escape_count=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   [ -n "$_pe" ] && NOTE "HEAVY prime escape: $([ "$_pe" = 1 ] && echo ACTIVE || echo idle) · bursts this session: ${_pec:-0} · lifted $(_rget prime_escape_total_s /dev/.asb/state 2>/dev/null || echo 0) s in total (heavy_prime_escape=$(cfg heavy_prime_escape), burst $(cfg prime_escape_burst_s) s / rest $(cfg prime_escape_rest_s) s)"
+  # Bursts the gates kept shut (fix126) - a pinned prime the escape deliberately left alone.
+  _psw="$(_rget prime_escape_skip_warm /dev/.asb/state 2>/dev/null)"
+  _psf="$(_rget prime_escape_skip_foreign /dev/.asb/state 2>/dev/null)"
+  if [ -n "$_pe" ] && [ "${_psw:-0}${_psf:-0}" != "00" ]; then
+    NOTE "  not opened: ${_psw:-0} x die within 3 C of the burst's own exit mark · ${_psf:-0} x pinned at a lower ceiling ASB does not hold (lifting ASB's request would change nothing)"
+  fi
   # 3+ cluster SoCs lift the middle cluster with the prime; say which this device is.
   if [ -n "$_pe" ]; then
     _pcl=$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | wc -l)
@@ -2932,8 +2970,15 @@ asb_gfx_today() {   # stdin: dumpsys graphicsstats; stdout: report lines (nothin
     }
     END {
       flush()
+      # "Today" is the UTC day of the newest block (GraphicsStatsService rotates at UTC
+      # midnight). Each process'"'"'s block starts when that process first drew, not at the
+      # day boundary, so equality with the newest start kept one late-starting app and
+      # dropped the rest - asbdiag printed "no frame counters" with hours of frames there
+      # (fix125). The unit of "Stats since" is read from its size: ns, ms or s.
+      day = (top > 1e15) ? 86400e9 : (top > 1e11) ? 86400000 : 86400
+      dstart = int(top / day) * day
       for (k = 1; k <= nb; k++) {
-        if (bs[k] < top) continue
+        if (bs[k] < dstart) continue
         F += bf[k]; J += bj[k]; U += bu[k]; I += bi[k]
         pf[bp[k]] += bf[k]; pj[bp[k]] += bj[k]
       }

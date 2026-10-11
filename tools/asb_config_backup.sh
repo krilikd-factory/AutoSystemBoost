@@ -340,6 +340,98 @@ _path_ok() {
   esac
   return 0
 }
+# ---- One file per saved configuration (fix125) ----------------------------------------
+#
+# A copy in a folder used to be NAME.conf, NAME.conf.sha256 and a NAME.smart folder with a
+# manifest, its checksum and up to eleven learning files - fourteen entries for one saved
+# configuration, any of which a file manager, a cloud sync or a messenger could drop on the
+# way. Now it is one file, NAME.asb: a tar archive (gzip-compressed where tar can) holding
+# exactly those pieces, unchanged. Nothing about the checks is new: on import the archive is
+# listed first and refused if it holds anything but those names for one profile, unpacked
+# into a private folder, refused if it contains a link, and then goes through the same
+# checksum and manifest verification as before. Old multi-file copies still import.
+BUNDLE_MAX_BYTES=33554432
+_bundle_have_tar() { command -v tar >/dev/null 2>&1; }
+_bundle_gz() { [ "$(head -c 2 "$1" 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')" = 1f8b ]; }
+_bundle_list() { if _bundle_gz "$1"; then tar -tzf "$1"; else tar -tf "$1"; fi; }
+_bundle_extract() { if _bundle_gz "$1"; then tar -xzf "$1" -C "$2"; else tar -xf "$1" -C "$2"; fi; }
+# Write profile NAME (internal store) to FILE as one archive.
+_bundle_write() {
+  _bn="$1" _bout="$2"
+  _bin="$(verify_profile "$_bn")"
+  _bstage="$PROFILES/.bundle.$_bn.$$"; rm -rf "$_bstage"
+  mkdir -p "$_bstage" 2>/dev/null || { echo 'cannot stage the configuration' >&2; exit 1; }
+  {
+    echo 'ASB_BUNDLE=1'
+    echo "name=$_bn"
+    echo "created_at=$(_now)"
+    echo "module_version=$(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | cut -d= -f2)"
+    echo "device=$(_smart_prop ro.product.model) / $(_smart_prop ro.board.platform)"
+  } > "$_bstage/ASB_BUNDLE"
+  cp -f "$_bin" "$_bstage/$_bn.conf" && cp -f "$(_profile_sha "$_bn")" "$_bstage/$_bn.conf.sha256" || {
+    rm -rf "$_bstage"; echo 'cannot export profile' >&2; exit 1; }
+  _bsmart="$(smart_status "$_bn")"; _bparts="ASB_BUNDLE $_bn.conf $_bn.conf.sha256"
+  if [ "$_bsmart" = saved ]; then
+    cp -R "$(_smart_dir "$_bn")" "$_bstage/$_bn.smart" 2>/dev/null && [ "$(smart_status_dir "$_bstage/$_bn.smart")" = saved ] || {
+      rm -rf "$_bstage"; echo 'cannot export Smart learning' >&2; exit 1; }
+    _bparts="$_bparts $_bn.smart"
+  fi
+  _btmp="${_bout%/*}/.${_bout##*/}.tmp.$$"; rm -f "$_btmp"
+  # shellcheck disable=SC2086
+  ( cd "$_bstage" && tar -czf "$_btmp" $_bparts ) 2>/dev/null || \
+    ( rm -f "$_btmp"; cd "$_bstage" && tar -cf "$_btmp" $_bparts ) 2>/dev/null || {
+    rm -rf "$_bstage"; rm -f "$_btmp"; echo 'cannot write the configuration file' >&2; exit 1; }
+  rm -rf "$_bstage"
+  mv -f "$_btmp" "$_bout" || { rm -f "$_btmp"; echo 'cannot write the configuration file' >&2; exit 1; }
+  chmod 0644 "$_bout" 2>/dev/null || true
+  echo "exported=$_bout"
+  echo "smart_learning=$_bsmart"
+}
+# Import FILE.asb into the internal store; the profile name comes from inside the archive.
+_bundle_import() {
+  _bf="$1"
+  _bundle_have_tar || { echo 'this device has no tar - cannot open .asb configurations' >&2; exit 1; }
+  _bbytes="$(_smart_size "$_bf")"; case "$_bbytes" in ''|*[!0-9]*) _bbytes=0 ;; esac
+  [ "$_bbytes" -gt 0 ] 2>/dev/null && [ "$_bbytes" -le "$BUNDLE_MAX_BYTES" ] 2>/dev/null || { echo 'not an ASB configuration' >&2; exit 1; }
+  _blist="$(_bundle_list "$_bf" 2>/dev/null)" || { echo 'not an ASB configuration' >&2; exit 1; }
+  _bname=""; _bhead=0; _bconf=0; _bsum=0
+  _nl='
+'
+  _oifs="$IFS"; IFS="$_nl"; set -f
+  for _bm in $_blist; do
+    IFS="$_oifs"
+    _bm="${_bm#./}"
+    case "$_bm" in ''|.|./) continue ;; esac
+    _bmn=""
+    case "$_bm" in
+      ASB_BUNDLE) _bhead=1 ;;
+      */*/*) echo 'not an ASB configuration (unexpected entry)' >&2; exit 1 ;;
+      *.smart/|*.smart) _bmn="${_bm%/}"; _bmn="${_bmn%.smart}" ;;
+      *.smart/*)
+        _bmd="${_bm%%/*}"; _bmf="${_bm#*/}"; _bmn="${_bmd%.smart}"
+        case "$_bmf" in manifest|manifest.sha256) : ;; *) _smart_file_ok "$_bmf" || { echo 'not an ASB configuration (unexpected entry)' >&2; exit 1; } ;; esac ;;
+      *.conf.sha256) _bmn="${_bm%.conf.sha256}"; _bsum=1 ;;
+      *.conf) _bmn="${_bm%.conf}"; _bconf=1 ;;
+      *) echo 'not an ASB configuration (unexpected entry)' >&2; exit 1 ;;
+    esac
+    if [ -n "$_bmn" ]; then
+      _profile_ok "$_bmn" || { echo 'not an ASB configuration (bad name inside)' >&2; exit 1; }
+      [ -z "$_bname" ] && _bname="$_bmn"
+      [ "$_bmn" = "$_bname" ] || { echo 'not an ASB configuration (two profiles inside)' >&2; exit 1; }
+    fi
+  done
+  IFS="$_oifs"; set +f
+  [ "$_bhead" = 1 ] && [ "$_bconf" = 1 ] && [ "$_bsum" = 1 ] && [ -n "$_bname" ] || { echo 'not an ASB configuration' >&2; exit 1; }
+  _prepare_dir
+  _bunpack="$PROFILES/.unpack.$$"; rm -rf "$_bunpack"; mkdir -p "$_bunpack" || { echo 'cannot unpack the configuration' >&2; exit 1; }
+  trap 'rm -rf "$_bunpack"' EXIT
+  _bundle_extract "$_bf" "$_bunpack" 2>/dev/null || { echo 'the configuration file is damaged' >&2; exit 1; }
+  [ -z "$(find "$_bunpack" -type l 2>/dev/null | head -n 1)" ] || { echo 'not an ASB configuration (link inside)' >&2; exit 1; }
+  [ -z "$(find "$_bunpack" ! -type f ! -type d 2>/dev/null | head -n 1)" ] || { echo 'not an ASB configuration (special file inside)' >&2; exit 1; }
+  grep -qx 'ASB_BUNDLE=1' "$_bunpack/ASB_BUNDLE" 2>/dev/null || { echo 'not an ASB configuration' >&2; exit 1; }
+  _import_from "$_bunpack" "$_bname"
+}
+
 # Copy profile NAME from the internal store into DIR as NAME.conf + .sha256 [+ .smart].
 _export_into() {
   _name="$1" _dir="$2"
@@ -397,13 +489,26 @@ export_path_profile() {
   _name="$1" _dir="$2"; _profile_ok "$_name" || { echo 'invalid profile name' >&2; exit 2; }
   _path_ok "$_dir" || { echo 'this folder cannot be used for backups' >&2; exit 2; }
   [ -d "$_dir" ] || { echo 'folder not found' >&2; exit 1; }
-  _export_into "$_name" "$_dir"
+  [ -w "$_dir" ] || { echo 'folder is not writable' >&2; exit 1; }
+  # One file (fix125); the old three-part copy only where this device has no tar.
+  _bundle_have_tar || { _export_into "$_name" "$_dir"; return; }
+  _bundle_write "$_name" "$_dir/$_name.asb"
+  # An older multi-part copy of the same name in this folder is ours and now superseded:
+  # removed, so the folder holds one file per configuration. Only when its .conf carries the
+  # ASB profile header - a user's own file of that name is never touched.
+  if head -n 1 "$_dir/$_name.conf" 2>/dev/null | grep -q '^# ASB_PROFILE_SCHEMA='; then
+    rm -f "$_dir/$_name.conf" "$_dir/$_name.conf.sha256"; rm -rf "$_dir/$_name.smart"
+  fi
 }
 import_path_profile() {
   _file="$1"
   _path_ok "$_file" || { echo 'this location cannot be read' >&2; exit 2; }
-  case "$_file" in *.conf) : ;; *) echo 'choose a .conf file' >&2; exit 2 ;; esac
   [ -f "$_file" ] || { echo 'file not found' >&2; exit 1; }
+  case "$_file" in
+    *.asb) _bundle_import "$_file"; return ;;
+    *.conf) : ;;
+    *) echo 'choose an .asb (or older .conf) configuration' >&2; exit 2 ;;
+  esac
   _base="${_file##*/}"; _base="${_base%.conf}"
   _profile_ok "$_base" || { echo 'file name must use 1-32 letters, digits, _ or -' >&2; exit 2; }
   _import_from "${_file%/*}" "$_base"
@@ -496,7 +601,7 @@ case "${1:-}" in
   export) [ "$#" -eq 3 ] || { echo "usage: $0 export NAME {downloads|documents}" >&2; exit 2; }; export_profile "$2" "$3" ;;
   list-external) [ "$#" -eq 2 ] || { echo "usage: $0 list-external {downloads|documents}" >&2; exit 2; }; list_external_profiles "$2" ;;
   export-path) [ "$#" -eq 3 ] || { echo "usage: $0 export-path NAME DIR" >&2; exit 2; }; export_path_profile "$2" "$3" ;;
-  import-path) [ "$#" -eq 2 ] || { echo "usage: $0 import-path FILE.conf" >&2; exit 2; }; import_path_profile "$2" ;;
+  import-path) [ "$#" -eq 2 ] || { echo "usage: $0 import-path FILE.asb|FILE.conf" >&2; exit 2; }; import_path_profile "$2" ;;
   import-external) [ "$#" -eq 3 ] || { echo "usage: $0 import-external {downloads|documents} NAME" >&2; exit 2; }; import_external_profile "$2" "$3" ;;
   *) echo "usage: $0 {list|create|replace|preview|restore|delete|export|list-external|import-external|export-path|import-path} ..." >&2; exit 2 ;;
 esac
