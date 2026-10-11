@@ -81,7 +81,7 @@ _classify_link() {
 
   # Mobile with no rate exposed: use the radio technology as a coarse stand-in.
   case "$_cl_if" in
-    rmnet*|ccmni*|wwan*)
+    rmnet*|ccmni*|wwan*|v4-rmnet*|v4-ccmni*)
       _cl_rat="$(getprop gsm.network.type 2>/dev/null)"
       case "$_cl_rat" in
         # Most specific first. *LTE_CA* after *LTE* was unreachable - carrier aggregation

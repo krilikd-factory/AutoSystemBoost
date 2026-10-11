@@ -10,7 +10,9 @@
 # Why opt-in and careful: this changes the modem's allowed network types, and the switch
 # re-registers the data connection. Done at the wrong moment it can drop a call or stall
 # a download for a few seconds. So:
-#   - only after the screen has been off for DELAY seconds (brief glances never trigger);
+#   - only after the screen has been off for DELAY seconds (brief glances never trigger),
+#     and only while mobile data is actually moving (fix122) - an idle phone keeps 5G;
+#   - settled and re-checked against the power manager right before the switch (fix122);
 #   - never during a call;
 #   - only the default-data SIM, only if NR is currently allowed;
 #   - the exact previous mask is saved and put back on screen-on, on toggle-off, at boot
@@ -52,6 +54,12 @@ STATS="$STATE_DIR/lte_screenoff.stats"
 SINCE="$STATE_DIR/lte_screenoff.since"
 DELAY="${ASB_LTE_DELAY_S:-90}"
 RETRYF="$STATE_DIR/lte_screenoff.retry"
+# fix122: an apply needs mobile data to save (KiB per DELAY seconds of wall time), and waits
+# SETTLE_S before switching so a timer that fires as the phone wakes cannot apply under the
+# user's thumb. QUIETF counts the screen-off windows that kept 5G because nothing moved.
+OFF_MIN_KIB="${ASB_LTE_OFF_MIN_KIB:-512}"
+SETTLE_S="${ASB_LTE_SETTLE_S:-3}"
+QUIETF="$STATE_DIR/lte_screenoff.quiet"
 RETRY_S="${ASB_LTE_RETRY_S:-300}"
 RETRY_MAX=24
 NR_BIT=524288                                   # 1 << (NETWORK_TYPE_NR - 1)
@@ -174,11 +182,26 @@ _set_mask() { _cmd_phone set-allowed-network-types-for-users $(_slot_args "$1") 
 # before giving up: older governors only refreshed the file when they wrote caps, so 90 s
 # after a screen-off it could still read screen=1 and the apply silently never happened.
 _screen_off_now() {
+  # Android's own display state first (fix122): ON there is ON, whatever the governor's file
+  # still says - at a wake the file lags the display by up to a tick.
+  [ "$(getprop debug.tracing.screen_state 2>/dev/null)" = "2" ] && return 1
   _st="$(grep -m1 '^screen=' "${ASB_STATE_FILE:-/dev/.asb/state}" 2>/dev/null | cut -d= -f2)"
   [ "$_st" = "0" ] && return 0
   _wk="$(dumpsys power 2>/dev/null | grep -m1 -oE 'mWakefulness=[A-Za-z]+' | cut -d= -f2)"
   case "$_wk" in Asleep|Dozing) return 0 ;; esac
   return 1
+}
+
+# The check made right before the switch (fix122): the power manager and the display state,
+# not the governor's file. The power manager turns Awake at the button press, before the
+# panel and before the governor notices; the file is only the last resort.
+_screen_off_strict() {
+  _ds="$(getprop debug.tracing.screen_state 2>/dev/null)"
+  [ "$_ds" = "2" ] && return 1
+  _wk="$(dumpsys power 2>/dev/null | grep -m1 -oE 'mWakefulness=[A-Za-z]+' | cut -d= -f2)"
+  case "$_wk" in Asleep|Dozing) return 0 ;; Awake|Dreaming) return 1 ;; esac
+  case "$_ds" in 1|3|4) return 0 ;; esac
+  [ "$(grep -m1 '^screen=' "${ASB_STATE_FILE:-/dev/.asb/state}" 2>/dev/null | cut -d= -f2)" = "0" ]
 }
 
 # Any SIM in a call counts. The registry prints one mCallState per phone; taking only the
@@ -211,22 +234,46 @@ _saved_reason() {
   printf '%s' "${_r:-off}"
 }
 
-# KiB moved over the mobile data interfaces so far (rx + tx, every rmnet_data*). Summed in
-# awk: the byte counters pass 2^31 within a day, and mksh arithmetic is 32-bit.
+# KiB moved over the mobile data interfaces so far (rx + tx, every rmnet_data* - and every
+# ccmni*, MediaTek's name for the same thing (fix122): with rmnet only, a Dimensity phone
+# read 0 kbit/s forever, so the light mode dropped 5G under any download and never gave it
+# back). Summed in awk: the byte counters pass 2^31 within a day, and mksh arithmetic is
+# 32-bit.
 _rmnet_kib() {
-  for _ri in "${ASB_NET_SYS:-/sys/class/net}"/rmnet_data*; do
+  for _ri in "${ASB_NET_SYS:-/sys/class/net}"/rmnet_data* "${ASB_NET_SYS:-/sys/class/net}"/ccmni*; do
     [ -d "$_ri" ] || continue
     cat "$_ri/statistics/rx_bytes" "$_ri/statistics/tx_bytes" 2>/dev/null
   done | awk '/^[0-9]+$/ { s += $1 } END { printf "%d", s / 1024 }'
 }
+# Whether there is any mobile data interface to count at all.
+_mobile_counters() {
+  for _ri in "${ASB_NET_SYS:-/sys/class/net}"/rmnet_data* "${ASB_NET_SYS:-/sys/class/net}"/ccmni*; do
+    [ -r "$_ri/statistics/rx_bytes" ] && return 0
+  done
+  return 1
+}
+
+# Android's own ip(8): the root manager's BusyBox applet does not know "table all".
+_IPB=""
+for _ipb in /system/bin/ip /system/xbin/ip /vendor/bin/ip; do
+  [ -x "$_ipb" ] && { _IPB="$_ipb"; break; }
+done
+[ -n "$_IPB" ] || _IPB=ip
 
 # Default route over mobile data (not Wi-Fi, not a VPN on Wi-Fi).
 _on_mobile() {
-  _dev="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_]+' | head -1 | cut -d' ' -f2)"
-  case "$_dev" in rmnet*|ccmni*) return 0 ;; esac
-  # A VPN tunnel on top: look at what the tunnel itself rides on.
-  case "$_dev" in tun*|wg*|ppp*)
-    ip route 2>/dev/null | grep -q '^default.*dev rmnet' && return 0 ;;
+  _dev="$("$_IPB" route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_.-]+' | head -1 | cut -d' ' -f2)"
+  # v4-rmnet*: 464XLAT on an IPv6-only mobile network - the IPv4 route is the CLAT interface
+  # on top of rmnet (fix119; it read as "not mobile" and the light mode never engaged).
+  case "$_dev" in rmnet*|ccmni*|v4-rmnet*|v4-ccmni*) return 0 ;; esac
+  # A VPN tunnel on top: look at what the tunnel itself rides on (fix119). Android keeps
+  # each network's default route in its own table and the main table has none, so the old
+  # plain "ip route" look never matched: for VPN users the mode was dead. Every table, then:
+  # mobile underneath when a cellular default exists and a Wi-Fi one does not.
+  case "$_dev" in tun*|wg*|ppp*|ipsec*)
+    _defs="$("$_IPB" route show table all 2>/dev/null | grep '^default')"
+    printf '%s\n' "$_defs" | grep -q ' dev wlan' && return 1
+    printf '%s\n' "$_defs" | grep -qE ' dev (rmnet|ccmni|v4-rmnet|v4-ccmni)' && return 0 ;;
   esac
   return 1
 }
@@ -313,7 +360,21 @@ do_apply() {
   _in_call && { _retry_later "call in progress"; return 0; }
   _tethering && { _retry_later "tethering active"; return 0; }
   rm -f "$RETRYF" 2>/dev/null
+  # Settle, then look again (fix122). The timer sleeps on the monotonic clock, which stops
+  # while the phone is suspended, so it often runs out in the first moments of a wake - and
+  # the wake that resumes a sleeping phone for long enough is usually the user's. An OP15
+  # evening shows it: "apply" at 18:59:45, "screen ON" the same second, "restore" two
+  # seconds later - two network-type changes and a data stall right at the unlock. Three
+  # seconds are enough for the power manager to say Awake.
+  [ "$SETTLE_S" -gt 0 ] 2>/dev/null && sleep "$SETTLE_S"
+  _screen_off_strict || return 0
   _apply_nr_off off "LTE preferred, screen off"
+  # The screen came on while the modem was being switched: give it straight back rather
+  # than leave LTE under the user until the next screen cycle.
+  if [ -f "$SAVE" ] && ! _screen_off_strict; then
+    _log "apply: the screen came on during the switch - 5G given back"
+    do_restore
+  fi
 }
 
 # Drop the NR bit, save the original, verify. $1 = reason recorded with the save.
@@ -384,8 +445,36 @@ do_arm() {
     # The sleep runs as a child the timer can take down with it: a disarm (screen on) kills
     # this subshell, and a plain foreground sleep would be left behind as an orphan.
     trap 'kill "$_sp" 2>/dev/null; exit 0' TERM INT
-    sleep "$_arm_delay" & _sp=$!
-    wait "$_sp"
+    # Only when there is mobile data to save (fix122).
+    #
+    # With the screen off and nothing moving, the modem sits in RRC idle on the LTE anchor -
+    # the 5G NSA leg is not up, and dropping it saves nothing. It still costs two network-
+    # type changes, the second one at the unlock, where the re-registration is a data stall
+    # the user sees. An OP15 day: 14 screen-off cycles, 9 of them back on 5G within a minute
+    # (2, 4, 6, 12, 16, 33, 39, 45, 49 s), on a phone that was idle in its pocket.
+    #
+    # So each window (DELAY seconds on the monotonic clock) is judged by the mobile data it
+    # moved per second of wall time: a stream or a download passes at once - the case this
+    # mode was written for, 47 MiB in 11 minutes - while a phone that slept through the
+    # window moved a few KiB over a long wall time and keeps 5G. The next window starts
+    # where this one ended, for as long as the screen stays off.
+    _k0="$(_rmnet_kib)"; _t0="$(date +%s)"
+    while :; do
+      sleep "$_arm_delay" & _sp=$!
+      wait "$_sp"
+      _k1="$(_rmnet_kib)"; _t1="$(date +%s)"
+      _dk=0; _dt=$(( _t1 - _t0 ))
+      case "$_k0$_k1" in *[!0-9]*|'') : ;; *) _dk=$(( _k1 - _k0 )) ;; esac
+      [ "$_dt" -lt "$_arm_delay" ] && _dt="$_arm_delay"
+      [ "$_dk" -gt 0 ] && [ $(( _dk * DELAY )) -ge $(( OFF_MIN_KIB * _dt )) ] && break
+      # Nothing to count on this phone: keep the old behaviour, apply after one window.
+      _mobile_counters || break
+      [ -f "$SAVE" ] && { rm -f "$PIDF"; exit 0; }
+      _screen_off_now || { rm -f "$PIDF"; exit 0; }
+      _qn="$(cat "$QUIETF" 2>/dev/null)"; case "$_qn" in ''|*[!0-9]*) _qn=0 ;; esac
+      echo $(( _qn + 1 )) > "$QUIETF" 2>/dev/null
+      _k0="$_k1"; _t0="$_t1"; _arm_delay="$DELAY"
+    done
     rm -f "$PIDF"
     do_apply
   ) &
@@ -509,6 +598,8 @@ case "$1" in
     _sa=0; _sr=0; _ss=0
     [ -f "$STATS" ] && IFS='|' read -r _sa _sr _ss < "$STATS"
     printf 'applies=%s\nrestores=%s\nlte_minutes=%s\n' "${_sa:-0}" "${_sr:-0}" $(( ${_ss:-0} / 60 ))
+    _qn="$(cat "$QUIETF" 2>/dev/null)"; case "$_qn" in ''|*[!0-9]*) _qn=0 ;; esac
+    printf 'quiet_windows=%s\n' "$_qn"
     ;;
   # Whether the data SIM allows 5G right now: yes | no | unknown. Read with the same parser
   # restore uses, so the answer matches what the script itself would see.

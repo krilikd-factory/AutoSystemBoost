@@ -69,7 +69,8 @@ ASB_NET_MODE="${1:-all}"
 _iface_kind() {
   case "$1" in
     wlan*|p2p*|ap*)          echo wifi ;;
-    rmnet*|ccmni*|wwan*|ppp*) echo mobile ;;
+    # v4-rmnet*: the 464XLAT interface on an IPv6-only mobile network (fix119).
+    rmnet*|ccmni*|wwan*|ppp*|v4-rmnet*|v4-ccmni*) echo mobile ;;
     *)                        echo other ;;
   esac
 }

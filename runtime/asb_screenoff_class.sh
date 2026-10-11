@@ -59,7 +59,8 @@ if [ "$_net" = "0" ]; then
   # Byte counters in awk, not $(( )): Android's sh (mksh) does 32-bit arithmetic, so past
   # 2 GiB received since boot the sum went negative, the saved value then failed the digit
   # check, and "network" was never detected again until a reboot.
-  _rx1="$(cat /sys/class/net/rmnet_data*/statistics/rx_bytes 2>/dev/null | awk '{ s += $1 } END { printf "%.0f", s + 0 }')"
+  # ccmni*: MediaTek's mobile data links (fix122).
+  _rx1="$(cat /sys/class/net/rmnet_data*/statistics/rx_bytes /sys/class/net/ccmni*/statistics/rx_bytes 2>/dev/null | awk '{ s += $1 } END { printf "%.0f", s + 0 }')"
   _prev="$(cat /dev/.asb/screenoff_rx 2>/dev/null || echo 0)"
   case "$_prev" in ''|*[!0-9]*) _prev=0 ;; esac
   echo "$_rx1" > /dev/.asb/screenoff_rx 2>/dev/null
