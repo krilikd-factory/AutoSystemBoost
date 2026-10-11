@@ -3791,6 +3791,26 @@ const UI_SONIC = {
   error:[[233,0.06,'sawtooth',196],[175,0.1,'triangle',147]]
 };
 let _uiAudioCtx = null;
+/* The context is suspended 1.5 s after the last sound ends (fix130). A running AudioContext
+ * keeps an output stream open and rendering silence for as long as the page lives - the
+ * mixer and the audio path stay up while someone reads the Monitor, and an OP15 capture
+ * found AudioMix held for the root manager's WebView. The next tap resumes it. */
+let _uiAudioIdle = 0, _uiAudioUntil = 0;
+function uiAudioRelease(ctx, endAt) {
+  if (!ctx) return;
+  if (endAt > _uiAudioUntil) _uiAudioUntil = endAt;
+  clearTimeout(_uiAudioIdle);
+  const wait = Math.max(0, _uiAudioUntil - ctx.currentTime) + 1.5;
+  _uiAudioIdle = setTimeout(function () {
+    try {
+      if (ctx.state === 'running' && ctx.currentTime + 0.05 < _uiAudioUntil) { uiAudioRelease(ctx, _uiAudioUntil); return; }
+      if (ctx.state === 'running') ctx.suspend();
+    } catch (e) { /* nothing to release */ }
+  }, wait * 1000);
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden && _uiAudioCtx) { try { _uiAudioCtx.suspend(); } catch (e) { /* already gone */ } }
+});
 function uiSound(kind) {
   const seq = UI_SONIC[kind] || UI_SONIC.option;
   try {
@@ -3800,7 +3820,7 @@ function uiSound(kind) {
     const ctx = _uiAudioCtx;
     if (ctx.state === 'suspended') ctx.resume();
     const start = ctx.currentTime + 0.008;
-    let offset = 0;
+    let offset = 0, endAt = start;
     seq.forEach(function(part) {
       const f0 = part[0], dur = part[1], type = part[2], f1 = part[3];
       const t0 = start + offset;
@@ -3820,8 +3840,10 @@ function uiSound(kind) {
         osc.connect(gain); gain.connect(ctx.destination);
         osc.start(t0); osc.stop(t0 + dur + 0.015);
       });
+      if (t0 + dur + 0.015 > endAt) endAt = t0 + dur + 0.015;
       offset += dur * 0.72;
     });
+    uiAudioRelease(ctx, endAt);
   } catch (e) { /* no WebAudio: stay silent */ }
 }function cfgSoundKind(key, val) {
   const it = CFG_ITEMS.filter(function(x) { return x.key === key; })[0];
@@ -9076,6 +9098,7 @@ setTimeout(() => pollLive(false), 1500);
       master.gain.exponentialRampToValueAtTime(0.11, now + 0.45);
 
       [lead, fifth, hum, vib, trem].forEach(function (o) { o.start(now); });
+      if (typeof uiAudioRelease === 'function') uiAudioRelease(ctx, now + DUR + 1);
       var stopped = false;
       return {
         update: function (t, b, sc, xNorm) {
@@ -9106,6 +9129,7 @@ setTimeout(() => pollLive(false), 1500);
           master.gain.cancelScheduledValues(at);
           master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), at);
           master.gain.exponentialRampToValueAtTime(0.0001, at + f);
+          if (typeof uiAudioRelease === 'function') uiAudioRelease(ctx, at + f + 0.2);
           setTimeout(function () {
             [lead, fifth, hum, vib, trem].forEach(function (o) { try { o.stop(); o.disconnect(); } catch (e) {} });
             try { out.disconnect(); master.disconnect(); } catch (e) {}
