@@ -1257,6 +1257,7 @@ lk_emit_full_day_report() {
     lk_emit_screenoff_class_summary
     lk_emit_current_soc_consistency
     lk_emit_display_summary
+    lk_emit_cluster_work_summary
     lk_emit_jank_summary
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
       cat "$LK_OUT_DIR/phase_summary.txt"
@@ -1327,6 +1328,8 @@ lk_emit_full_day_report() {
     fi
     echo ""
   lk_emit_charging_idle_anomaly
+  echo ""
+  lk_emit_live_wakelock_holders
   echo ""
   echo "----- AUDIOMIX LIVE ATTRIBUTION -----"
   _amix="$LK_OUT_DIR/audio_wakelock_attribution.tsv"
@@ -1602,7 +1605,7 @@ lk_emit_charging_idle_anomaly() {
   echo "----- CHARGING-IDLE AWAKE VERDICT -----"
   echo "charging_idle: $((_lci_sec / 60)) min, awake ${_lci_awake}%, audio samples ${_lci_audio_pct}%, debounce-coalesced samples ${LK_CHG_IDLE_COALESCED}"
   if [ "$_lci_sec" -ge 900 ] && awk -v a="$_lci_awake" 'BEGIN{exit !(a >= 50)}' && [ "$_lci_audio_pct" -le 10 ]; then
-    echo "anomaly: sustained screen-off charging idle stayed awake. Inspect ranked partial wakelocks below; ASB does not alter charge current or kill apps automatically."
+    echo "anomaly: sustained screen-off charging idle stayed awake. LIVE WAKELOCK HOLDERS below names who held the CPU (batterystats counts nothing while charging); ASB does not alter charge current or kill apps automatically."
   else
     echo "verdict: no sustained no-audio charging-idle awake anomaly established."
   fi

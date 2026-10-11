@@ -1010,6 +1010,126 @@ lk_capture_jank_row() {
   LK_JANK_PREV="$_jt"; LK_JANK_PREV_TS="$_jnow"; LK_JANK_PREV_STATE="$_jst"; LK_JANK_PREV_TOUCH="$_jtc"
 }
 
+# Which cluster carried the screen-on work (fix130). The scheduler sends a task to the
+# cluster with more capacity at its CURRENT ceiling; on a 6+2 part with both clusters on
+# ASB's 40% floors that was the two prime cores. "Working" = above a quarter of the
+# cluster's top clock. Two-cluster phones only; the sysfs root is overridable for tests.
+lk_emit_cluster_work_summary() {
+  _cwp="$LK_OUT_DIR/perf_trace.txt"; _cwd="$LK_OUT_DIR/display_trace.txt"
+  [ -s "$_cwp" ] && [ -s "$_cwd" ] || return 0
+  _cws="${LK_CPU_SYSFS:-/sys/devices/system/cpu}"
+  _cwn=0; _cwt=""
+  for _cwq in "$_cws"/cpufreq/policy*; do [ -d "$_cwq" ] || continue; _cwn=$((_cwn + 1)); _cwt="$_cwq"; done
+  [ "$_cwn" -eq 2 ] || return 0
+  _cwf="$(awk '{print $1; exit}' "$_cwt/related_cpus" 2>/dev/null)"
+  _cw0="$(cat "$_cws/cpu0/cpu_capacity" 2>/dev/null)"
+  _cw1="$(cat "$_cws/cpu${_cwf:-6}/cpu_capacity" 2>/dev/null)"
+  _cwh0="$(cat "$_cws/cpufreq/policy0/cpuinfo_max_freq" 2>/dev/null)"
+  _cwh1="$(cat "$_cwt/cpuinfo_max_freq" 2>/dev/null)"
+  case "$_cw0$_cw1$_cwh0$_cwh1" in ''|*[!0-9]*) return 0 ;; esac
+  awk -F'|' -v C0="$_cw0" -v C1="$_cw1" -v H0="$_cwh0" -v H1="$_cwh1" '
+    BEGIN { lo = 1 }
+    FNR == 1 { f++; next }
+    f == 1 { de[++nd] = $1 + 0; ds[nd] = $4; next }
+    {
+      e = $1 + 0; best = 0; bd = 99
+      for (i = lo; i <= nd; i++) { d = de[i] - e; if (d < 0) d = -d; if (d < bd) { bd = d; best = i }; if (de[i] > e + 5) break }
+      if (best > 3) lo = best - 3
+      if (!best || bd > 5 || ds[best] != 1) next
+      if ($14 + 0 <= 0 || $16 + 0 <= 0 || $13 == "" || $15 == "") next
+      n++
+      w0 = ($13 * 4 >= H0); w1 = ($15 * 4 >= H1)
+      lev = (C0 * $14 / H0 >= C1 * $16 / H1) ? 1 : 0
+      p0 += w0; p1 += w1; kn[lev]++; kb[lev] += w1
+    }
+    END {
+      if (n < 10) exit
+      print "===== SCREEN-ON WORK BY CLUSTER (2 clusters) ====="
+      printf "screen-on samples %d: prime cores working in %d%%, main cores in %d%%\n", n, 100 * p1 / n, 100 * p0 / n
+      if (kn[1]) printf "  main ceiling level with the prime (capacity at the ceilings): %4d samples, prime working in %d%%\n", kn[1], 100 * kb[1] / kn[1]
+      if (kn[0]) printf "  main ceiling below the prime'"'"'s:                              %4d samples, prime working in %d%%\n", kn[0], 100 * kb[0] / kn[0]
+      print "working = above a quarter of the cluster'"'"'s top clock. The scheduler sends work to the cluster"
+      print "with more capacity at its ceiling, and the two prime cores do the same work at a higher cost:"
+      print "a high prime share with the main ceiling below the prime'"'"'s is the ceilings choosing the dearer"
+      print "cores. Smart keeps them level in light idle and moderate use (fix130)."
+      print ""
+    }' "$_cwd" "$_cwp"
+}
+
+# Who held a partial wakelock, from the power-manager samples (fix130). batterystats does
+# not account wakelocks while the phone is plugged in, so a charging capture ranked nothing
+# while the live samples showed a proxy app holding one for 24 minutes at a stretch.
+lk_emit_live_wakelock_holders() {
+  _lwl="$LK_OUT_DIR/wake_live.txt"; _lwd="$LK_OUT_DIR/display_trace.txt"
+  [ -s "$_lwl" ] || return 0
+  [ -s "$_lwd" ] || _lwd=/dev/null
+  _lwo="$(awk -v MAP="$LK_OUT_DIR/uid_map.txt" -v Q="'" -v DT="$_lwd" '
+    function secs(s,   t, v) {
+      t = 0
+      if (match(s, /[0-9]+h/)) { v = substr(s, RSTART, RLENGTH - 1); t += v * 3600 }
+      if (match(s, /[0-9]+m[0-9]/)) { v = substr(s, RSTART, RLENGTH - 2); t += v * 60 }
+      if (match(s, /[0-9]+s/)) { v = substr(s, RSTART, RLENGTH - 1); t += v }
+      return t
+    }
+    BEGIN {
+      lo = 1
+      while ((getline l < MAP) > 0) { split(l, a, " "); if (a[1] != "" && !(a[1] in pk)) pk[a[1]] = a[2] }
+      hd = 1
+      while ((getline l < DT) > 0) { if (hd) { hd = 0; continue }; split(l, d, "|"); de[++nd] = d[1] + 0; ds[nd] = d[4] }
+    }
+    {
+      split($0, r, "|"); e = r[1] + 0; scr = -1
+      if (nd) {
+        best = 0; bd = 99
+        for (i = lo; i <= nd; i++) { x = de[i] - e; if (x < 0) x = -x; if (x < bd) { bd = x; best = i }; if (de[i] > e + 5) break }
+        if (best > 3) lo = best - 3
+        if (best && bd <= 5) scr = ds[best]
+      }
+      if (scr == 1) next
+      n++
+      p = index($0, "plocks="); if (!p) next
+      m = split(substr($0, p + 7), L, ";")
+      split("", seen)
+      for (j = 1; j <= m; j++) {
+        s = L[j]; if (s !~ /WAKE_LOCK/) continue
+        q1 = index(s, Q); if (!q1) continue
+        rest = substr(s, q1 + 1); q2 = index(rest, Q); if (!q2) continue
+        tag = substr(rest, 1, q2 - 1); uid = "-"
+        if (match(s, /WorkChain[{][(][0-9]+/)) { uid = substr(s, RSTART, RLENGTH); sub(/.*[(]/, "", uid) }
+        else if (match(s, /WorkSource[{][0-9]+/)) { uid = substr(s, RSTART, RLENGTH); sub(/.*[{]/, "", uid) }
+        else if (match(s, /uid=[0-9]+/)) uid = substr(s, RSTART + 4, RLENGTH - 4)
+        age = 0
+        if (match(s, /ACQ=-[0-9hms]+/)) age = secs(substr(s, RSTART + 5, RLENGTH - 5))
+        k = tag "|" uid
+        if (k in seen) continue
+        seen[k] = 1; cnt[k]++; if (age > mx[k]) mx[k] = age
+      }
+    }
+    END {
+      printf "#n=%d\n", n
+      if (!n) exit
+      for (k in cnt) if (cnt[k] * 10 >= n || mx[k] >= 600) {
+        split(k, z, "|"); app = (z[2] + 0 >= 10000 && (z[2] in pk)) ? pk[z[2]] : ((z[2] + 0 > 0 && z[2] + 0 < 10000) ? "system uid " z[2] : "uid " z[2])
+        printf "%d|%d|%s|%s\n", 100 * cnt[k] / n, mx[k] / 60, z[1], app
+      }
+    }' "$_lwl" 2>/dev/null)"
+  _lwn="$(printf '%s\n' "$_lwo" | sed -n 's/^#n=//p')"
+  echo "----- LIVE WAKELOCK HOLDERS (power-manager samples, screen off) -----"
+  if [ "${_lwn:-0}" -gt 0 ] 2>/dev/null; then
+    echo "screen-off samples: $_lwn"
+    _lwr="$(printf '%s\n' "$_lwo" | grep -v '^#' | grep . | sort -t'|' -k1,1nr -k2,2nr | head -8)"
+    if [ -n "$_lwr" ]; then
+      printf '%s\n' "$_lwr" | awk -F'|' '{ printf "  held in %3d%% of samples, longest hold %4d min  %s  (%s)\n", $1, $2, $3, $4 }'
+    else
+      echo "  no partial wakelock held in 10% of the samples or for 10 minutes at a stretch"
+    fi
+    echo "batterystats does not count wakelocks while the phone is charging; these samples do."
+    echo "A foreground service you rely on (a proxy, a VPN, music) is left alone by ASB on purpose."
+  else
+    echo "no screen-off power-manager samples in this capture"
+  fi
+}
+
 lk_emit_jank_summary() {
   _jk="$LK_OUT_DIR/jank_trace.tsv"
   [ -s "$_jk" ] || return 0
