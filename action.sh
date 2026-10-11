@@ -124,7 +124,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_NOTE_NEIGHBOUR="Примечание: используется соседний слот"
     M_NOTE_NODATA="Примечание: истории пока нет — безопасные значения"
     M_DISCARDED="сессий отброшено как ненадёжные"
-    M_THIS_HOUR="в этот час обычно"
+    M_THIS_HOUR="обычно в этот час"
     M_WARM_HERE="тепло для этого телефона — Smart склоняется к экономии"
     M_COOL_HERE="прохладно для этого телефона — Smart разрешает чуть больше"
     M_SES_LEARNED="сессий изучено"; M_DRAIN_NOW="расход сейчас"
@@ -816,10 +816,11 @@ T_NIGHT_SAFE="Night-safe override active"
 T_VETO_ACTIVE="Thermal veto active"
 T_ETA_CHG="Time to 0%%: not estimated while charging"
 T_ETA="Time to 0%% %s"
-T_ETA_MEASURED="(measured)"
+T_ETA_MEASURED="(drain now %s)"
 T_ETA_HEUR="(heuristic)"
-T_ETA_AVG="(average drain)"
-T_ETA_SLOT="(typical drain for this hour)"
+T_ETA_AVG="(recent drain %s)"
+T_ETA_SLOT="(usual for this hour %s)"
+T_ETA_SCREEN="~%sh %sm"
 T_ETA_IDLE_MEAS="idle figure measured: %s%%/h with the screen off"
 T_ETA_IDLE_N=" (from %s screen-off window(s) of 1 h+)"
 T_ETA_LINE="~%sh %sm screen on  ·  ~%sh %sm idle"
@@ -1070,53 +1071,52 @@ else
   _btempCx=0
 fi
 
-# Same source as the WebUI, in the same order of preference.
-#
-# This read smart_drain_ewma_x10 while the WebUI reads smart_drain_pctph_x10 and only falls
-# back to the ewma. Two different rates, both labelled "measured", both feeding the same
-# formula - so the two screens showed 6h13m and 10h21m six seconds apart. Neither was
-# wrong; they were answering with different inputs.
-#
-# pctph is the current session's rate, ewma is the smoothed one. The WebUI picks pctph
-# first, so this does too - agreeing on a number matters more here than which of the two
-# is the better estimate, because a user comparing screens cannot see the difference.
-_ewma_x10=$(grep "^smart_drain_pctph_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
-case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
-# The live window rate is only a measurement once the window is 10 minutes long (the
-# WebUI applies the same rule). Below that, fall back to the SMOOTHED drain the learner
-# keeps - also measured, just averaged - instead of jumping straight to a per-profile
-# constant. The old code zeroed both, so a screen showing "drain now 25%/h" and a learned
-# 7.3%/h still printed a forecast built from a fixed 500 mA, marked "(heuristic)".
-_dwin=$(grep "^smart_drain_window_s=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
-case "$_dwin" in ''|*[!0-9]*) _dwin=0 ;; esac
-[ "$_dwin" -lt 600 ] 2>/dev/null && _ewma_x10=0
+# One forecast for every screen: the governor's (forecast_rate_x10 / forecast_basis), the
+# same pair the WebUI reads; the older chain only when the governor publishes none.
+_frx=$(grep -m1 "^forecast_rate_x10=" /dev/.asb/state 2>/dev/null | cut -d= -f2)
+_frb=$(grep -m1 "^forecast_basis=" /dev/.asb/state 2>/dev/null | cut -d= -f2)
+case "$_frx" in ''|*[!0-9]*) _frx=0 ;; esac
+_eta_gov=0
+_ewma_x10=0
 _eta_kind=measured
-if [ "$_ewma_x10" -le 0 ] 2>/dev/null; then
-  _ewma_x10=$(grep "^smart_drain_ewma_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+if [ "$_frx" -gt 0 ] 2>/dev/null && { [ "$_frb" = recent ] || [ "$_frb" = slot ]; }; then
+  _ewma_x10=$_frx
+  _eta_gov=1
+  if [ "$_frb" = slot ]; then _eta_kind=slot; else _eta_kind=average; fi
+else
+  _ewma_x10=$(grep "^smart_drain_pctph_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
   case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
-  _eta_kind=average
-fi
-# Third rung: what this time slot typically drains, as the learner measured it over many
-# sessions. Right after a boot both live figures are 0, and the header fell straight to a
-# fixed 500 mA - "~9 h 20 min" - while twenty lines lower the Smart card printed the slot's
-# own learned 19.1 %/h as a 3.3 h forecast. Same screen, same battery, two answers.
-# Same gate the governor's budget uses: a slot under 35 % confidence is mostly defaults.
-_sconf=$(grep "^smart_confidence=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
-case "$_sconf" in ''|*[!0-9]*) _sconf=0 ;; esac
-if [ "$_ewma_x10" -le 0 ] 2>/dev/null && [ "$_sconf" -ge 350 ]; then
-  _ewma_x10=$(grep "^smart_bucket_drain_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
-  case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
-  _eta_kind=slot
+  _dwin=$(grep "^smart_drain_window_s=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+  case "$_dwin" in ''|*[!0-9]*) _dwin=0 ;; esac
+  [ "$_dwin" -lt 600 ] 2>/dev/null && _ewma_x10=0
+  if [ "$_ewma_x10" -le 0 ] 2>/dev/null; then
+    _ewma_x10=$(grep "^smart_drain_ewma_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+    case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
+    _eta_kind=average
+  fi
+  _sconf=$(grep "^smart_confidence=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+  case "$_sconf" in ''|*[!0-9]*) _sconf=0 ;; esac
+  if [ "$_ewma_x10" -le 0 ] 2>/dev/null && [ "$_sconf" -ge 350 ]; then
+    _ewma_x10=$(grep "^smart_bucket_drain_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
+    case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
+    _eta_kind=slot
+  fi
 fi
 _on_ma=0
-if [ "$_ewma_x10" -gt 0 ] 2>/dev/null && \
-   [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null; then
-  _on_ma=$(( (_cap_uah / 1000) * _ewma_x10 / 1000 ))
+_eta_rate=0
+if [ "$_ewma_x10" -gt 0 ] 2>/dev/null; then
+  _eta_rate=$_ewma_x10
+  _rate_txt="$((_ewma_x10 / 10)).$((_ewma_x10 % 10))${U_PCTH}"
   case "$_eta_kind" in
-    measured) _eta_note="$T_ETA_MEASURED" ;;
-    slot)     _eta_note="$T_ETA_SLOT" ;;
-    *)        _eta_note="$T_ETA_AVG" ;;
+    measured) _eta_note="$(_s "$T_ETA_MEASURED" "$_rate_txt")" ;;
+    slot)     _eta_note="$(_s "$T_ETA_SLOT" "$_rate_txt")" ;;
+    *)        _eta_note="$(_s "$T_ETA_AVG" "$_rate_txt")" ;;
   esac
+  if [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null; then
+    _on_ma=$(( (_cap_uah / 1000) * _ewma_x10 / 1000 ))
+  else
+    _on_ma=500
+  fi
 fi
 if [ "$_on_ma" -lt 50 ] 2>/dev/null; then
   case "$PROFILE" in
@@ -1125,6 +1125,7 @@ if [ "$_on_ma" -lt 50 ] 2>/dev/null; then
     *)           _on_ma=500 ;;
   esac
   _eta_note="$T_ETA_HEUR"
+  _eta_rate=0
 fi
 _off_ma=$(( _on_ma / 10 ))
 [ "$_off_ma" -lt 40 ] && _off_ma=40
@@ -1139,7 +1140,11 @@ _ton_h=0
 _ton_m=0
 _toff_h=0
 _toff_m=0
-if [ "$_remain_mah" -gt 0 ] 2>/dev/null && [ "$_on_ma" -gt 0 ] 2>/dev/null; then
+if [ "$_eta_rate" -gt 0 ] 2>/dev/null && [ -n "$_lvl" ] && [ "$_lvl" -gt 0 ] 2>/dev/null; then
+  _ton_min=$(( _lvl * 600 / _eta_rate ))
+  _ton_h=$(( _ton_min / 60 ))
+  _ton_m=$(( _ton_min % 60 ))
+elif [ "$_remain_mah" -gt 0 ] 2>/dev/null && [ "$_on_ma" -gt 0 ] 2>/dev/null; then
   _ton_min=$(( _remain_mah * 60 / _on_ma ))
   _ton_h=$(( _ton_min / 60 ))
   _ton_m=$(( _ton_min % 60 ))
@@ -1625,7 +1630,9 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
 
     # --- 6. how long the battery is expected to last ---------------------------------
     _bp="$(_st smart_budget_pred_h_x10)"
-    if [ -n "$_bp" ] && [ "$_bp" -gt 0 ] 2>/dev/null; then
+    if [ "$_eta_gov" = 1 ] && [ "${_ton_min:-0}" -gt 0 ] 2>/dev/null; then
+      echo "       ${M_PREDICT}: $(_s "$T_ETA_SCREEN" "$_ton_h" "$_ton_m") ${_eta_note}"
+    elif [ -n "$_bp" ] && [ "$_bp" -gt 0 ] 2>/dev/null; then
       # The prediction divides by the SMOOTHED drain, not the live one - say so and show the
       # rate. It sat two lines under "drain now: 25.1%/h" labelled "at the current rate"
       # while dividing by 7.3%/h, which read as a contradiction on the same screen.
