@@ -1575,6 +1575,14 @@ lk_emit_cap_ownership_verdict() {
   else
     echo "verdict: no foreign-owner dominance established in this capture."
   fi
+  _lc_n=$(grep -c 'prime_by=' "$_lc_trace" 2>/dev/null)
+  _lc_pv=$(grep -c 'prime_by=vendor' "$_lc_trace" 2>/dev/null)
+  _lc_mv=$(grep -c 'main_by=vendor' "$_lc_trace" 2>/dev/null)
+  if [ "${_lc_n:-0}" -ge 3 ] 2>/dev/null; then
+    [ $(( _lc_pv * 2 )) -gt "$_lc_n" ] && echo "per cluster: the prime sat under a ceiling ASB did not write in $_lc_pv of $_lc_n samples - there the prime clock is the vendor's (PowerHAL or kernel thermal), not ASB's."
+    [ $(( _lc_mv * 2 )) -gt "$_lc_n" ] && echo "per cluster: the main cores sat under a ceiling ASB did not write in $_lc_mv of $_lc_n samples."
+  fi
+  return 0
 }
 
 lk_charge_idle_observe() {
