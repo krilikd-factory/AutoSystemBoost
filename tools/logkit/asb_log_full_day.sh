@@ -392,8 +392,12 @@ lk_throttle_row() {
   # The interesting event is the cap landing BELOW the module's own request: that is
   # thermal or vendor intervention, the thing a capture is read to find. desired_* is
   # published for exactly this comparison.
-  _d0="$(sed -n 's/^desired_cpu_max0=//p' /dev/.asb/state 2>/dev/null | head -1 | tr -dc '0-9')"
-  _dp="$(sed -n 's/^desired_cpu_maxp=//p' /dev/.asb/state 2>/dev/null | head -1 | tr -dc '0-9')"
+  _d0="$(lk_state_kv desired_cpu_max0 | head -1 | tr -dc '0-9')"
+  # The prime's own request (fix126). desired_cpu_maxp is governor slot 1 - the prime on a
+  # two-cluster SoC but a middle cluster on a 1+3+2+1 part (OP12, Ace 5) - and it was
+  # compared with the LAST policy's ceiling here. Older governors only have the slot-1 key.
+  _dp="$(lk_state_kv desired_cpu_max_prime | head -1 | tr -dc '0-9')"
+  [ -n "$_dp" ] || _dp="$(lk_state_kv desired_cpu_maxp | head -1 | tr -dc '0-9')"
   [ -n "$_p0" ] && [ -n "$_d0" ] && [ "$_p0" -lt "$_d0" ] 2>/dev/null && _capped=1
   [ -n "$_p6" ] && [ -n "$_dp" ] && [ "$_p6" -lt "$_dp" ] 2>/dev/null && _capped=1
   [ "$_capped" = "0" ] && return 0
@@ -401,7 +405,15 @@ lk_throttle_row() {
   _temp=$(echo "$_j" | awk -F'"temp":' '{print $2}' | awk -F, '{print $1}')
   _surf=$(echo "$_j" | awk -F'"surface_hotspot":' '{print $2}' | awk -F, '{print $1}')
   _own=$(echo "$_j"  | awk -F'"cap_owner":"' '{print $2}' | awk -F'"' '{print $1}')
-  echo "${_e}|${_ph}|p0_max=${_p0}/${LK_P0_HWMAX}|p6_max=${_p6}/${LK_P6_HWMAX}|cpu_temp=${_temp}|surface=${_surf}|cap_owner=${_own}" >> "$LK_OUT_DIR/throttle_trace.txt"
+  # Per cluster, who put the ceiling under the rail (fix126). cap_owner is one word for the
+  # whole phone: the fix124 capture logged 20 minutes as owner=asb while the prime sat at a
+  # 1632000 vendor ceiling under ASB's 1862400 request, and the main cores under ASB's own
+  # thermal-budget trim - two different causes behind one label.
+  _r0="$(lk_state_kv requested_cpu_max0 | head -1 | tr -dc '0-9')"
+  _rp="$(lk_state_kv requested_cpu_max_prime | head -1 | tr -dc '0-9')"
+  _mb="$(lk_cap_cause "$_p0" "$_d0" "$_r0")"
+  _pb="$(lk_cap_cause "$_p6" "$_dp" "$_rp")"
+  echo "${_e}|${_ph}|p0_max=${_p0}/${LK_P0_HWMAX}|p6_max=${_p6}/${LK_P6_HWMAX}|cpu_temp=${_temp}|surface=${_surf}|cap_owner=${_own}|main_by=${_mb}|prime_by=${_pb}" >> "$LK_OUT_DIR/throttle_trace.txt"
   # Count it for the summary as well as the trace.
   #
   # LK_PH_THROTTLE was declared, reset per phase and printed - and incremented nowhere.
@@ -1256,7 +1268,7 @@ lk_emit_full_day_report() {
       cat "$LK_OUT_DIR/mobile_traffic_context.txt"
     fi
     echo ""
-    echo "----- THROTTLE HOTSPOTS (prime capped below hardware max) -----"
+    echo "----- THROTTLE HOTSPOTS (a ceiling below ASB's profile rail) -----"
     if [ -s "$LK_OUT_DIR/throttle_trace.txt" ]; then
       # One trace row is one scheduled poll where a ceiling was already below hardware max;
       # it is not one independent thermal incident. Count data rows only and group continuous
@@ -1285,6 +1297,7 @@ lk_emit_full_day_report() {
       echo "by cap owner:"
       awk -F'cap_owner=' 'NR>1 && NF>1{split($2,a,"|"); print a[1]}' "$LK_OUT_DIR/throttle_trace.txt" \
         | sort | uniq -c | sort -rn | head
+      lk_emit_cap_cause_split "$LK_OUT_DIR/throttle_trace.txt"
       echo "sample (first + worst-temp few):"
       head -3 "$LK_OUT_DIR/throttle_trace.txt"
     else

@@ -891,7 +891,7 @@ lk_capture_display_trace_row() {
 lk_jank_trace_header() {
   {
     echo "# UI smoothness - one row per screen-on poll interval; HWUI frames of every app (dumpsys graphicsstats deltas)"
-    echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input"
+    echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg"
   } > "$LK_OUT_DIR/jank_trace.tsv"
 }
 
@@ -908,6 +908,52 @@ lk_gfx_totals() {
     END { if (seen) printf "%.0f %.0f %.0f %.0f %.0f\n", f, j, d, u, i }'
 }
 
+# Share of the interval the cluster's clock sat at its ceiling, in percent (fix125), from the
+# kernel's cpufreq time_in_state (cumulative time per frequency). $1 = policy dir, $2 = file
+# holding the previous reading. "-" on the first interval or where the kernel keeps no stats.
+# The end-of-interval at_cap flag above is one instant; this is the whole 47 s.
+lk_cap_share() {
+  _tis="$1/stats/time_in_state"
+  [ -r "$_tis" ] || { rm -f "$2"; echo -; return; }
+  _cap="$(cat "$1/scaling_max_freq" 2>/dev/null | tr -dc '0-9')"
+  cat "$_tis" > "$2.now" 2>/dev/null || { echo -; return; }
+  if [ -s "$2" ] && [ -n "$_cap" ]; then
+    awk -v cap="$_cap" 'NR == FNR { p[$1] = $2; next }
+      { d = $2 - p[$1]; if (d < 0) d = 0; t += d; if ($1 * 100 >= cap * 98) c += d }
+      END { if (t > 0) printf "%d\n", 100 * c / t; else print "-" }' "$2" "$2.now"
+  else
+    echo -
+  fi
+  mv -f "$2.now" "$2" 2>/dev/null
+}
+
+# The app in front, read the way the governor reads it since fix124: the top-app cgroup, a
+# regular app uid, the process name up to ':', one package or the one at oom_score_adj 0.
+# "-" when nothing app-like is in front, "multi" for two apps (split screen).
+lk_topapp_pkg() {
+  _tp="$(cat "${ASB_LK_TOPAPP_PROCS:-/dev/cpuset/top-app/cgroup.procs}" 2>/dev/null)"
+  [ -n "$_tp" ] || _tp="$(cat /dev/cpuctl/top-app/cgroup.procs 2>/dev/null)"
+  _pr="${ASB_LK_PROC_ROOT:-/proc}"
+  _all=""; _adj0=""
+  for _p in $_tp; do
+    case "$_p" in ''|*[!0-9]*) continue ;; esac
+    _u="$(sed -n 's/^Uid:[[:space:]]*\([0-9]*\).*/\1/p' "$_pr/$_p/status" 2>/dev/null | head -1)"
+    case "$_u" in ''|*[!0-9]*) continue ;; esac
+    _a=$(( _u % 100000 )); [ "$_a" -ge 10000 ] && [ "$_a" -le 19999 ] || continue
+    _n="$(tr '\0' '\n' < "$_pr/$_p/cmdline" 2>/dev/null | head -1)"; _n="${_n%%:*}"
+    case "$_n" in *.*) : ;; *) continue ;; esac
+    case " $_all " in *" $_n "*) : ;; *) _all="$_all $_n" ;; esac
+    if [ "$(cat "$_pr/$_p/oom_score_adj" 2>/dev/null)" = 0 ]; then
+      case " $_adj0 " in *" $_n "*) : ;; *) _adj0="$_adj0 $_n" ;; esac
+    fi
+  done
+  set -- $_all
+  if [ "$#" = 1 ]; then echo "$1"; return; fi
+  [ "$#" = 0 ] && { echo -; return; }
+  set -- $_adj0
+  if [ "$#" = 1 ]; then echo "$1"; else echo multi; fi
+}
+
 # 1 when the policy's clock sits within 2% of its ceiling, 0 otherwise, "-" when unreadable.
 lk_policy_at_cap() {
   _pc="$(cat "$1/scaling_cur_freq" 2>/dev/null)"; _pm="$(cat "$1/scaling_max_freq" 2>/dev/null)"
@@ -919,12 +965,28 @@ lk_policy_at_cap() {
 # $1 = phase, $2 = 1 when the screen is on (the display row's wakefulness read).
 lk_capture_jank_row() {
   _jph="$1"
-  if [ "${2:-0}" != 1 ]; then LK_JANK_PREV=""; return 0; fi
+  if [ "${2:-0}" != 1 ]; then
+    LK_JANK_PREV=""; rm -f "$LK_OUT_DIR/.jank_tis_lo" "$LK_OUT_DIR/.jank_tis_hi" 2>/dev/null; return 0
+  fi
   _jt="$(lk_gfx_totals)"
   if [ -z "$_jt" ]; then LK_JANK_PREV=""; return 0; fi
   _jnow="$(date +%s)"
   _jst="$(lk_state_kv state)"; [ -n "$_jst" ] || _jst="-"
   _jtc="$(lk_state_kv touch_starts | tr -dc '0-9')"
+  _jroot="${ASB_LK_CPUFREQ_ROOT:-/sys/devices/system/cpu/cpufreq}"
+  _jlo=""; _jhi=""; _jlon=999; _jhin=-1
+  for _jp in "$_jroot"/policy*; do
+    [ -d "$_jp" ] || continue
+    _jn="${_jp##*policy}"
+    case "$_jn" in ''|*[!0-9]*) continue ;; esac
+    [ "$_jn" -lt "$_jlon" ] && { _jlon="$_jn"; _jlo="$_jp"; }
+    [ "$_jn" -gt "$_jhin" ] && { _jhin="$_jn"; _jhi="$_jp"; }
+  done
+  # Time at the ceiling over the interval (fix125); read on every screen-on poll so the next
+  # interval has its baseline.
+  _jmcs="-"; _jpcs="-"
+  [ -n "$_jlo" ] && _jmcs="$(lk_cap_share "$_jlo" "$LK_OUT_DIR/.jank_tis_lo")"
+  [ -n "$_jhi" ] && [ "$_jhi" != "$_jlo" ] && _jpcs="$(lk_cap_share "$_jhi" "$LK_OUT_DIR/.jank_tis_hi")"
   if [ -n "${LK_JANK_PREV:-}" ] && [ $(( _jnow - ${LK_JANK_PREV_TS:-0} )) -le "${ASB_LK_JANK_MAX_GAP_S:-180}" ]; then
     set -- $LK_JANK_PREV; _pf=$1; _pj=$2; _pd=$3; _pu=$4; _pi=$5
     set -- $_jt;          _cf=$1; _cj=$2; _cd=$3; _cu=$4; _ci=$5
@@ -932,15 +994,6 @@ lk_capture_jank_row() {
     _du=$(( _cu - _pu )); _di=$(( _ci - _pi ))
     # A negative step is GraphicsStatsService pruning an old day: no interval to report.
     if [ "$_df" -ge 0 ] && [ "$_dj" -ge 0 ] && [ "$_dd" -ge 0 ] && [ "$_du" -ge 0 ] && [ "$_di" -ge 0 ]; then
-      _jroot="${ASB_LK_CPUFREQ_ROOT:-/sys/devices/system/cpu/cpufreq}"
-      _jlo=""; _jhi=""; _jlon=999; _jhin=-1
-      for _jp in "$_jroot"/policy*; do
-        [ -d "$_jp" ] || continue
-        _jn="${_jp##*policy}"
-        case "$_jn" in ''|*[!0-9]*) continue ;; esac
-        [ "$_jn" -lt "$_jlon" ] && { _jlon="$_jn"; _jlo="$_jp"; }
-        [ "$_jn" -gt "$_jhin" ] && { _jhin="$_jn"; _jhi="$_jp"; }
-      done
       _jmc="-"; _jpc="-"
       [ -n "$_jlo" ] && _jmc="$(lk_policy_at_cap "$_jlo")"
       [ -n "$_jhi" ] && [ "$_jhi" != "$_jlo" ] && _jpc="$(lk_policy_at_cap "$_jhi")"
@@ -948,9 +1001,10 @@ lk_capture_jank_row() {
       _jto="-"
       [ -n "$_jtc" ] && [ -n "${LK_JANK_PREV_TOUCH:-}" ] && [ "$_jtc" -ge "$LK_JANK_PREV_TOUCH" ] 2>/dev/null && \
         _jto=$(( _jtc - LK_JANK_PREV_TOUCH ))
-      printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+      printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
         "$_jnow" "$(date '+%Y-%m-%dT%H:%M:%S')" "$_jph" "$_jsa" "$(( _jnow - LK_JANK_PREV_TS ))" \
-        "$_jmc" "$_jpc" "$_jto" "$_df" "$_dj" "$_dd" "$_du" "$_di" >> "$LK_OUT_DIR/jank_trace.tsv"
+        "$_jmc" "$_jpc" "$_jto" "$_df" "$_dj" "$_dd" "$_du" "$_di" \
+        "$_jmcs" "$_jpcs" "$(lk_topapp_pkg)" >> "$LK_OUT_DIR/jank_trace.tsv"
     fi
   fi
   LK_JANK_PREV="$_jt"; LK_JANK_PREV_TS="$_jnow"; LK_JANK_PREV_STATE="$_jst"; LK_JANK_PREV_TOUCH="$_jtc"
@@ -963,16 +1017,22 @@ lk_emit_jank_summary() {
   awk -F'|' '
     /^#/ { next }
     NF < 13 { next }
-    { n++; F += $9; J += $10; D += $11; U += $12; I += $13
+    { n++; F += $9; J += $10; D += $11; U += $12; I += $13; S += $5
       ph[$3] += $9; phj[$3] += $10; phn[$3]++
       st[$4] += $9; stj[$4] += $10; stn[$4]++
       if ($6 == "1" || $6 == "0") { mc[$6] += $9; mcj[$6] += $10; mcn[$6]++ }
-      if ($7 == "1" || $7 == "0") { pc[$7] += $9; pcj[$7] += $10; pcn[$7]++ } }
+      if ($7 == "1" || $7 == "0") { pc[$7] += $9; pcj[$7] += $10; pcn[$7]++ }
+      # fix125: share of the interval at the ceiling (time_in_state), and the app in front.
+      if (NF >= 14 && $14 ~ /^[0-9]+$/) { b = ($14 < 20) ? "<20%" : ($14 < 60) ? "20-60%" : ">=60%"; mb[b] += $9; mbj[b] += $10; mbn[b]++ }
+      if (NF >= 15 && $15 ~ /^[0-9]+$/) { b = ($15 < 20) ? "<20%" : ($15 < 60) ? "20-60%" : ">=60%"; pb[b] += $9; pbj[b] += $10; pbn[b]++ }
+      if (NF >= 16 && $16 != "") { ap[$16] += $9; apj[$16] += $10; apn[$16]++ } }
     function pct(a, b) { return b > 0 ? sprintf("%.1f%%", 100.0 * a / b) : "-" }
     END {
       if (n == 0 || F == 0) { print "no frames recorded with the screen on"; print ""; exit }
-      printf "all screen-on intervals: %d  frames %d  janky %s  deadline missed %s  slow UI thread %s  high input latency %s\n", \
-        n, F, pct(J, F), pct(D, F), pct(U, F), pct(I, F)
+      printf "all screen-on intervals: %d  frames %d  janky %s  deadline missed %s  slow UI thread %s\n", \
+        n, F, pct(J, F), pct(D, F), pct(U, F)
+      if (S > 0) printf "high-input-latency events: %.0f per screen-on minute (count, not a share of frames - see below)\n", 60.0 * I / S
+      else printf "high-input-latency events: %d (count, not a share of frames - see below)\n", I
       printf "%-16s %9s %9s %8s\n", "phase", "intervals", "frames", "janky"
       for (p in ph) printf "%-16s %9d %9d %8s\n", p, phn[p], ph[p], pct(phj[p], ph[p])
       printf "%-16s %9s %9s %8s\n", "ASB state", "intervals", "frames", "janky"
@@ -983,10 +1043,28 @@ lk_emit_jank_summary() {
       if (pcn["1"] + pcn["0"] > 0)
         printf "prime cores at the ASB ceiling (end of interval): yes %s of %d frames, no %s of %d frames\n", \
           pct(pcj["1"], pc["1"]), pc["1"], pct(pcj["0"], pc["0"]), pc["0"]
+      split("<20% 20-60% >=60%", o, " ")
+      line = ""; for (i = 1; i <= 3; i++) if (mbn[o[i]]) line = line sprintf("  %s: %s of %d", o[i], pct(mbj[o[i]], mb[o[i]]), mb[o[i]])
+      if (line != "") print "main cores, share of the interval AT the ceiling ->" line
+      line = ""; for (i = 1; i <= 3; i++) if (pbn[o[i]]) line = line sprintf("  %s: %s of %d", o[i], pct(pbj[o[i]], pb[o[i]]), pb[o[i]])
+      if (line != "") print "prime cores, share of the interval AT the ceiling ->" line
+      # Apps in front, most frames first (at most eight).
+      shown = 0
+      while (shown < 8) {
+        best = ""; bf = 0
+        for (a in ap) if (!(a in done) && ap[a] > bf) { best = a; bf = ap[a] }
+        if (best == "") break
+        done[best] = 1
+        if (shown == 0) printf "%-40s %9s %8s\n", "app in front", "frames", "janky"
+        printf "%-40s %9d %8s\n", best, ap[best], pct(apj[best], ap[best]); shown++
+      }
       print "janky = a frame that missed its deadline, as Android counts it (dumpsys graphicsstats)."
       print "Games on their own GL/Vulkan surface are not HWUI frames and are not in these numbers."
       print "A janky share that is clearly higher with a cluster at the ceiling points at the ceiling;"
       print "the same share either way says the lag, if any, is not the cap."
+      print "High input latency is HWUI'"'"'s own flag for an input event older than 1.5 frame intervals"
+      print "at the frame'"'"'s vsync (12 ms at 120 Hz) and is counted per event, not per frame - on a"
+      print "120/165 Hz panel it is high for every app and says little about lag by itself."
       print ""
     }' "$_jk"
 }
@@ -1670,6 +1748,56 @@ lk_smart_trace_header() {
 lk_state_kv() {
   _k="$1"
   grep -m1 "^${_k}=" "${ASB_LK_STATE_FILE:-/dev/.asb/state}" 2>/dev/null | sed "s/^${_k}=//"
+}
+
+# Who set a ceiling that sits under ASB's profile rail (fix126).
+#   $1 live scaling_max_freq  $2 desired (the rail, before the thermal budget)
+#   $3 requested (what ASB last wrote and kept: after the budget and the floor)
+# Prints "-" (not below the rail), "asb_trim" (live == ASB's own trimmed request),
+# "vendor" (live below ASB's request: a ceiling ASB did not write - PowerHAL or kernel
+# thermal), or "?" (no request published - an older governor or a manual profile).
+lk_cap_cause() {
+  _cl="$1"; _cd="$2"; _cr="$3"
+  case "$_cl" in ''|*[!0-9]*) echo '?'; return 0 ;; esac
+  case "$_cd" in ''|*[!0-9]*) echo '?'; return 0 ;; esac
+  [ "$_cl" -lt "$_cd" ] || { echo '-'; return 0; }
+  case "$_cr" in ''|*[!0-9]*|0) echo '?'; return 0 ;; esac
+  if [ "$_cl" -lt "$_cr" ]; then echo vendor; else echo asb_trim; fi
+}
+
+# Report: per cluster, how many throttle samples were ASB's own trim and how many a ceiling
+# ASB did not write (fix126). Rows from older captures have no *_by fields and are skipped.
+lk_emit_cap_cause_split() {
+  _ccf="$1"
+  [ -s "$_ccf" ] || return 0
+  awk -F'|' '
+    NR == 1 && $0 ~ /^#/ { next }
+    {
+      mb = ""; pb = ""
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^main_by=/)  mb = substr($i, 9)
+        if ($i ~ /^prime_by=/) pb = substr($i, 10)
+      }
+      if (mb == "" && pb == "") next
+      n++
+      if (mb != "" && mb != "-") m[mb]++
+      if (pb != "" && pb != "-") p[pb]++
+    }
+    function line(name, a,   s, j, k) {
+      s = ""
+      for (j = 1; j <= 3; j++) {
+        k = (j == 1) ? "asb_trim" : (j == 2) ? "vendor" : "?"
+        if (a[k] > 0) s = s sprintf("%s%s %d", (s == "" ? "" : ", "), k, a[k])
+      }
+      printf "  %-6s %s\n", name ":", (s == "" ? "at or above the rail" : s)
+    }
+    END {
+      if (n == 0) exit
+      print "who held the lower ceiling, per cluster (" n " samples):"
+      line("main", m); line("prime", p)
+      print "  asb_trim = ASB'"'"'s own thermal-budget/comfort trim (live == what ASB wrote)"
+      print "  vendor   = a ceiling ASB did not write - PowerHAL or kernel thermal (live < what ASB wrote)"
+    }' "$_ccf"
 }
 
 lk_fsm_media_trace_header() {
